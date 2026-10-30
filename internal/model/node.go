@@ -78,11 +78,14 @@ func mappingOf(old *yaml.Node, f Fields) *yaml.Node {
 		}
 	}
 	for _, x := range f {
+		if x.Value == nil {
+			x.Value = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!null", Value: "null"}
+		}
 		k, ok := keys[x.Key]
 		if !ok {
 			k = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: x.Key}
 		}
-		if k.LineComment != "" && x.Value != nil && !keyCommentFits(x.Value) {
+		if k.LineComment != "" && !keyCommentFits(x.Value) {
 			// "key: # c" puts the comment on the key. Written before a value
 			// that is not a block collection it would break the YAML, so
 			// move it to the end of the value's line.
@@ -317,12 +320,21 @@ func (e *Encoder) Put(key string, v any, zero bool) {
 	e.fields = append(e.fields, Field{key, nv})
 }
 
-// Bytes returns the YAML, with extra after the known keys.
+// Bytes returns the YAML, with extra after the known keys. A key written
+// twice is an error, since the file could not be read back.
 func (e *Encoder) Bytes(extra Fields) ([]byte, error) {
 	if e.err != nil {
 		return nil, e.err
 	}
-	e.d.root.Content[0] = mappingOf(e.d.mapping(), slices.Concat(e.fields, extra))
+	all := slices.Concat(e.fields, extra)
+	seen := map[string]bool{}
+	for _, x := range all {
+		if seen[x.Key] {
+			return nil, fmt.Errorf("key %q is written twice", x.Key)
+		}
+		seen[x.Key] = true
+	}
+	e.d.root.Content[0] = mappingOf(e.d.mapping(), all)
 	return yaml.Dump(e.d.root, yaml.WithLineWidth(-1))
 }
 

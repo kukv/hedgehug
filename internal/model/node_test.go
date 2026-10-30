@@ -252,3 +252,27 @@ func TestParseDocRejects(t *testing.T) {
 		t.Errorf("dup error = %#v, want DecodeError a at line 13", err)
 	}
 }
+
+func TestNilFieldValueWritesNull(t *testing.T) {
+	if _, err := yaml.Dump(Fields{{"a", nil}}); err != nil {
+		t.Fatalf("Dump(Fields with nil) = %v", err)
+	}
+	e := NewDoc().Encoder()
+	e.Put("k", "v", false)
+	if got, want := encode(t, e, Fields{{"x", nil}}), "k: v\nx: null\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestBytesRejectsDuplicateKeys(t *testing.T) {
+	for name, extra := range map[string]Fields{
+		"extra repeats a put key": {{"k", node(t, 1)}},
+		"extra has a key twice":   {{"x", node(t, 1)}, {"x", node(t, 2)}},
+	} {
+		e := NewDoc().Encoder()
+		e.Put("k", "v", false)
+		if out, err := e.Bytes(extra); err == nil {
+			t.Errorf("%s: Bytes = %q, want an error", name, out)
+		}
+	}
+}
