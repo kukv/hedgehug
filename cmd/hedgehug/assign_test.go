@@ -154,7 +154,7 @@ func TestApplyAssign(t *testing.T) {
 		for _, s := range []string{
 			"parent=x", "rank=x", "id=x", "created=x", "deleted_at=x", "key=x", "sprint=x", "props=x",
 			"nope=1", "due=tomorrow", "points=many", "flag=maybe", "at=today", "estimate=long",
-			"due+=2026-11-01", "duplicates+=nope",
+			"due+=2026-11-01", "duplicates+=nope", "duplicates+=", "duplicates-=", "tags+=", "tags-=",
 		} {
 			if err := apply(t, newTask(), s); err == nil {
 				t.Errorf("%s succeeded", s)

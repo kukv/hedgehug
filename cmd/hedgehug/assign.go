@@ -142,6 +142,9 @@ func setProp(t *model.Task, p schema.Prop, a assign, resolve func(string) (model
 	if !multi && a.op != "=" {
 		return fmt.Errorf("%s holds one value; use %s=<value>", a.key, a.key)
 	}
+	if multi && a.op != "=" && a.value == "" {
+		return fmt.Errorf("%s%s: the value is missing", a.key, a.op)
+	}
 	n, err := propValue(p, a.value, resolve)
 	if err != nil {
 		return err
