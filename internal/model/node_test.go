@@ -189,3 +189,66 @@ func TestNodeEqual(t *testing.T) {
 		t.Error("NodeEqual mishandles nil")
 	}
 }
+
+type pair struct {
+	Type string `yaml:"type"`
+	Ref  string `yaml:"ref"`
+}
+
+func TestPutKeepsBlockMappingsInList(t *testing.T) {
+	d := parse(t, "links:\n- type: x\n  ref: r\n")
+	e := d.Encoder()
+	e.Put("links", []pair{{"x", "r"}, {"a", "b"}}, false)
+	want := "links:\n- type: x\n  ref: r\n- type: a\n  ref: b\n"
+	if got := encode(t, e, nil); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestPutAppendsFlowMappingToFlowList(t *testing.T) {
+	d := parse(t, "links:\n- {type: x, ref: r}\n")
+	e := d.Encoder()
+	e.Put("links", []pair{{"x", "r"}, {"a", "b"}}, false)
+	want := "links:\n- {type: x, ref: r}\n- {type: a, ref: b}\n"
+	if got := encode(t, e, nil); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestParseDocCommentOnly(t *testing.T) {
+	d, err := ParseDoc([]byte("# just a comment\n"), 5)
+	if err != nil || d.Get("x") != nil || d.line != 5 {
+		t.Errorf("ParseDoc(comment) = %+v, %v", d, err)
+	}
+}
+
+func TestParseDocErrorLines(t *testing.T) {
+	_, err := ParseDoc([]byte("\n- a\n"), 3)
+	var de *DecodeError
+	if !errors.As(err, &de) || de.Line != 5 {
+		t.Errorf("shape error = %#v, want DecodeError at line 5", err)
+	}
+	_, err = ParseDoc([]byte("a: [\n"), 3)
+	if err == nil || !strings.Contains(err.Error(), "starting at line 4") {
+		t.Errorf("syntax error = %v, want it to mention line 4", err)
+	}
+}
+
+func TestParseDocRejects(t *testing.T) {
+	for name, src := range map[string]string{
+		"anchor":    "a: &x 1\n",
+		"alias":     "a: &x 1\nb: *x\n",
+		"merge":     "m:\n  <<: {k: v}\n",
+		"dup":       "a: 1\nb: 2\na: 3\n",
+		"dupnested": "x:\n  k: 1\n  k: 2\n",
+	} {
+		if _, err := ParseDoc([]byte(src), 0); err == nil {
+			t.Errorf("%s: ParseDoc accepted %q", name, src)
+		}
+	}
+	_, err := ParseDoc([]byte("a: 1\nb: 2\na: 3\n"), 10)
+	var de *DecodeError
+	if !errors.As(err, &de) || de.Field != "a" || de.Line != 13 {
+		t.Errorf("dup error = %#v, want DecodeError a at line 13", err)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"go.yaml.in/yaml/v4"
 )
@@ -120,16 +121,68 @@ type Doc struct {
 // the number of file lines before src, used in DecodeError.
 func ParseDoc(src []byte, lineOffset int) (*Doc, error) {
 	if len(bytes.TrimSpace(src)) == 0 {
-		return NewDoc(), nil
+		return newDocAt(lineOffset), nil
 	}
 	var root yaml.Node
 	if err := yaml.Load(src, &root); err != nil {
-		return nil, err
+		if strings.Contains(err.Error(), "no documents") {
+			return newDocAt(lineOffset), nil
+		}
+		return nil, fmt.Errorf("YAML starting at line %d: %w", lineOffset+1, err)
+	}
+	if root.Kind == 0 || (root.Kind == yaml.DocumentNode && len(root.Content) == 0) {
+		return newDocAt(lineOffset), nil
 	}
 	if root.Kind != yaml.DocumentNode || len(root.Content) != 1 || root.Content[0].Kind != yaml.MappingNode {
-		return nil, errors.New("want a YAML mapping")
+		line := root.Line
+		if len(root.Content) > 0 {
+			line = root.Content[0].Line
+		}
+		return nil, &DecodeError{Line: line + lineOffset, Err: errors.New("want a YAML mapping")}
+	}
+	if err := checkNode(&root, lineOffset); err != nil {
+		return nil, err
 	}
 	return &Doc{root: &root, line: lineOffset}, nil
+}
+
+func newDocAt(lineOffset int) *Doc {
+	d := NewDoc()
+	d.line = lineOffset
+	return d
+}
+
+// checkNode rejects anchors, aliases, merge keys and duplicate keys, which
+// Hedgehug files do not use and which can make rewritten output invalid.
+func checkNode(n *yaml.Node, off int) error {
+	if n.Anchor != "" {
+		return &DecodeError{Line: n.Line + off, Err: errors.New("YAML anchors are not supported")}
+	}
+	if n.Kind == yaml.AliasNode {
+		return &DecodeError{Line: n.Line + off, Err: errors.New("YAML aliases are not supported")}
+	}
+	if n.Kind == yaml.MappingNode {
+		seen := map[string]bool{}
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			k := n.Content[i]
+			if k.Kind != yaml.ScalarNode {
+				continue
+			}
+			if k.ShortTag() == "!!merge" || (k.Value == "<<" && k.Style == 0) {
+				return &DecodeError{Line: k.Line + off, Err: errors.New("YAML merge keys are not supported")}
+			}
+			if seen[k.Value] {
+				return &DecodeError{Field: k.Value, Line: k.Line + off, Err: fmt.Errorf("duplicate key %q", k.Value)}
+			}
+			seen[k.Value] = true
+		}
+	}
+	for _, c := range n.Content {
+		if err := checkNode(c, off); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // NewDoc returns an empty Doc, for values made in code.
@@ -255,8 +308,21 @@ func (e *Encoder) Bytes(extra Fields) ([]byte, error) {
 // written in flow style, as in [a, b] and {type: x, ref: y}.
 func styleLike(nv, old *yaml.Node) {
 	if nv.Kind == yaml.SequenceNode {
+		var tmpl *yaml.Node
+		if old != nil && old.Kind == yaml.SequenceNode {
+			for _, it := range old.Content {
+				if it.Kind == yaml.MappingNode {
+					tmpl = it
+					break
+				}
+			}
+		}
 		for _, it := range nv.Content {
-			if it.Kind == yaml.MappingNode && short(it) {
+			switch {
+			case it.Kind != yaml.MappingNode:
+			case tmpl != nil:
+				it.Style = tmpl.Style
+			case short(it):
 				it.Style = yaml.FlowStyle
 			}
 		}
