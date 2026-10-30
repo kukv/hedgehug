@@ -224,7 +224,7 @@ func (ix *Index) Problems(id model.ID) []Problem
 func (ix *Index) Schema() *schema.Schema
 ```
 
-- `Reverse(id, rel)` は `rel` の関連で `id` を指しているタスクを返す。`rel` は `blocked_by` か task_ref 型の props の名前。symmetric の関連は、どちら側から張ったものも返し、重複はまとめる。
+- `Reverse(id, rel)` は `rel` の関連で `id` を指しているタスクを ID の順で返す。`rel` は `blocked_by` か task_ref 型の props の名前。symmetric の関連は、どちら側から張ったものも返し、重複はまとめる。
 - 削除済みのタスクも返す。絞り込みは呼び出し側（クエリ）が行う。
 
 ### グラフをたどる処理
@@ -269,12 +269,12 @@ type Problem struct {
 
 | キー | 意味 |
 | --- | --- |
-| `status` | ステータス名かカテゴリ名（`todo` / `doing` / `done` / `canceled`） |
+| `status` | ステータス名かカテゴリ名（`todo` / `doing` / `done` / `canceled`）。両方に当たる名前（既定の `todo` など）はカテゴリとして扱う |
 | `kind` | 種類の名前 |
 | `label` | ラベルのどれかが一致 |
 | `assignee` | 担当者のどれかが一致。`@me` は `Options.Me` のどれかに展開する |
 | `parent` | 直接の親。値は `Resolve` で解決する |
-| `project` | 祖先のどれか。値は `Resolve` で解決する |
+| `project` | 祖先のどれか。値は `Resolve` で解決する。`none` は使えない |
 | props の名前 | 型に応じて比べる（下の「値の比べ方」） |
 | `blocked_by` / `blocks` | `blocked_by:X` は X にブロックされているタスク、`blocks:X` は X をブロックしているタスク |
 | task_ref 型の props の名前、`inverse` の表示名 | 関連で引く。`duplicates:X` は X を重複しているタスク、`inverse` の名前では逆方向。symmetric の関連は両方向とも一致する |
