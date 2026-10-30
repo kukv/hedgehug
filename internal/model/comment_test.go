@@ -47,6 +47,18 @@ func TestWorklogRoundTrip(t *testing.T) {
 	}
 }
 
+func TestWorklogWithoutDuration(t *testing.T) {
+	src := "---\nid: 01JBZ8K3QW7M2X9V4T6R5N8P0C\nauthor: x\n---\n"
+	w, err := DecodeWorklog([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := w.Encode()
+	if err != nil || string(out) != src {
+		t.Errorf("round trip = %q, %v; want %q", out, err, src)
+	}
+}
+
 func TestCommentAndWorklogNeedID(t *testing.T) {
 	if _, err := DecodeComment([]byte("---\nauthor: x\n---\n")); err == nil {
 		t.Error("DecodeComment without id succeeded")

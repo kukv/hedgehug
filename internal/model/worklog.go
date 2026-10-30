@@ -54,7 +54,7 @@ func (w *Worklog) Encode() ([]byte, error) {
 	e.Put("id", w.ID, false)
 	e.Put("author", w.Author, w.Author == "")
 	e.Put("date", w.Date, w.Date.IsZero())
-	e.Put("duration", w.Duration, false)
+	e.Put("duration", w.Duration, w.Duration == 0)
 	e.Put("created", w.Created, w.Created.IsZero())
 	e.Put("updated", w.Updated, w.Updated.IsZero())
 	e.Put("deleted_at", w.DeletedAt, w.DeletedAt == nil)
