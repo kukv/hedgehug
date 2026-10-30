@@ -158,7 +158,6 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 		}
 		return out
 	}
-	field("id", e.ID.String())
 	if !e.Workspace.IsZero() {
 		ws := e.Workspace.String()
 		if w, ok := ix.Workspace(e.Workspace); ok {
