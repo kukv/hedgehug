@@ -10,10 +10,9 @@ CI must pass.
 
 ## Verification
 
-<!-- The exact commands you ran and what they printed. The checks listed in
-     CONTRIBUTING.md are the minimum. For a change to the GUI, passing tests are not
-     enough: say how you ran it and what you saw. A screenshot is welcome.
-     "I tested it" is not enough on its own. -->
+<!-- The exact commands you ran and what they printed. `make check` is the minimum.
+     For a change to the GUI, passing tests are not enough: say how you ran it and what
+     you saw. A screenshot is welcome. "I tested it" is not enough on its own. -->
 
 ## Scope
 

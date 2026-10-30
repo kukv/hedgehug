@@ -9,28 +9,21 @@ hedgehug is a single Go binary for Linux, macOS and Windows. You need:
 - the Go version in `go.mod`
 - [golangci-lint](https://golangci-lint.run/) v2 (the version CI uses is pinned in
   `.github/workflows/ci.yaml`)
-- [GoReleaser](https://goreleaser.com/) v2 to check the release configuration
-
-These are the checks CI runs. Do not commit while any of them fails:
-
-```bash
-go mod tidy && git diff --exit-code -- go.mod go.sum  # go.mod and go.sum are tidy
-golangci-lint run ./...                               # lint
-golangci-lint fmt --diff ./...                        # format check; `golangci-lint fmt ./...` fixes it
-go test -race -cover ./...                            # tests
-```
-
-CI does not check the release configuration. After changing `.goreleaser.yaml`, run:
+- [gotestsum](https://github.com/gotestyourself/gotestsum) for `make test`
+- [GoReleaser](https://goreleaser.com/) v2 for `make release-check`
 
 ```bash
-goreleaser check
-```
+make check          # everything CI checks: tidy, lint, fmt, test
+make test           # tests with the race detector and coverage
+make fmt            # format with gofumpt + goimports
+make release-check  # goreleaser config and cross-compiling for 3 OSes
+make build          # bin/hedgehug
 
-To run it:
-
-```bash
 go run ./cmd/hedgehug --version
 ```
+
+Do not commit while `make check` fails. CI does not check the release configuration, so
+run `make release-check` too when you change `.goreleaser.yaml`.
 
 ## Before you change code
 
@@ -129,8 +122,7 @@ handling.
 
 ## Reporting problems
 
-- A security issue: report it privately through the **Security** tab of this repository
-  (*Report a vulnerability*). Do not open a public issue for it.
+- A security issue: see [SECURITY.md](SECURITY.md).
 - A bug or a feature request: open an issue from the templates.
 
 By contributing you agree that your contributions are licensed under the

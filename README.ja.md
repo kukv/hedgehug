@@ -8,7 +8,7 @@ git を保存と同期の層に使う、ローカルファーストのタスク�
 
 ## コントリビュート
 
-[CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
+[CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。セキュリティの問題の報告方法は [SECURITY.md](SECURITY.md) にあります。
 
 ## ライセンス
 

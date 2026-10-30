@@ -7,7 +7,8 @@ body:
       value: |
         **A security issue does not belong here.** A task file or repository that makes
         hedgehug run something, a credential for a git remote showing up in output or in a
-        commit — report it privately through the **Security** tab (*Report a vulnerability*).
+        commit — report it privately through the **Security** tab (*Report a vulnerability*);
+        see [SECURITY.md](https://github.com/kukv/hedgehug/blob/main/SECURITY.md).
 
         **Do not paste private tasks, remote URLs or tokens.** Replace them with placeholders
         such as `https://git.example.com/me/tasks.git` before posting.
