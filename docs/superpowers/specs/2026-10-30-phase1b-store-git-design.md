@@ -93,8 +93,8 @@ func (s *Store) Schema() *schema.Schema
 ```
 
 - `Create` は、`dir` が存在しないか空のときだけ作る。それ以外ならエラー。
-  1. `gitrepo.Init`
-  2. `.hedgehug/store.yaml`（`meta`）、`schema.yaml`（`schema.Default()`）、`.gitignore`（`.hedgehug/local/` の1行）を書く
+  1. `gitrepo.Init`（既定のブランチは `main`）
+  2. `.hedgehug/store.yaml`（`meta`。`format` は `model.StoreFormat` にそろえる）、`schema.yaml`（`schema.Default()`）、`.gitignore`（`.hedgehug/local/` の1行）を書く
   3. 初回コミットを作る（件名 `hedgehug: init`、trailer `Hedgehug-Op: init`）
 - `Open` は `store.yaml` と `schema.yaml` を読む。`store.yaml` の `format` が対応より新しいときのエラーは、1a の `DecodeStoreMeta` が返す。
 - `Meta()` と `Schema()` は `Open` 時点の値を返す。`Update` で `schema.yaml` を書いたら、成功したあとに差し替える。
@@ -186,7 +186,7 @@ func (tx *Tx) PutSchema(sc *schema.Schema) error
 func ValidateWrite(old, new *model.Task, parentKind string, e *Effective) []Violation
 ```
 
-- `ValidateTask`、`ValidatePlacement`、`ValidateTransition`（`old` があり、ステータスが変わったときだけ）をまとめてかける。
+- `ValidateTask`、`ValidatePlacement`、`ValidateTransition` をまとめてかける。`ValidateTransition` は、新規なら `from` を空にして（入る先のステータスの必須項目を見る）、既存ならステータスが変わったときだけかける。2つの検査が同じ違反（`unknown_kind` など）を返したら1つにまとめる。
 - `old` に同じ検査をかけて出た違反は、結果から差し引く。違反を比べるときは `Code` と `Field` の組で見る。こうして、その書き込みで新しく生じた違反だけを返す。フェーズ2の同期のあとで違反を抱えたタスクが生じても、それと関係のない編集はできる。
 - `old` が nil（新規）なら、差し引くものはない。
 - スキーマにない props は、1a の方針どおり違反にしない。
@@ -195,14 +195,14 @@ Store の側（`store/validate.go`）では、`PutTask` で積んだタスクの
 
 - `old`: `Tx` を反映する前のディスク上のタスク。
 - `parentKind`: 親タスクの `kind`。親は `Tx` を反映したあとの状態から引く（テンプレートを展開するとき、同じ操作で親と子を作るため）。親が見つからなければ、`ErrNotFound` を wrap したエラーで拒否する。親がなければ空文字（`root` として扱われる）。
-- `e`: 祖先の ID を近い順に集めて、`Schema().For(ancestors)` を呼ぶ。同じ操作で `PutSchema` したときは、新しいスキーマを使う。祖先は parent をたどってファイルを読む。同じ ID に戻ってきたら、循環としてエラーにする（本格的な循環の検出は 1c）。
+- `e`: 祖先の ID を近い順に集めて、`Schema().For(ancestors)` を呼ぶ。同じ操作で `PutSchema` したときは、新しいスキーマを使う。祖先は parent をたどってファイルを読む。同じ ID に戻ってきたら、`ErrCycle` を返す（本格的な循環の検出は 1c）。
 - 違反があれば `*ValidationError{Task model.ID; Violations []schema.Violation}` を返す。
 
 スプリント・リリース・テンプレート・コメント・作業時間には、スキーマの検査をかけない（Encode できればよい）。
 
 ### 原子的な書き込み
 
-- 書き込み先と同じディレクトリに一時ファイル（`.<名前>.tmp-<乱数>`）を作り、書いて fsync してから rename で置き換える。親ディレクトリがなければ作る。
+- 書き込み先と同じディレクトリに一時ファイル（`.<名前>.tmp-<乱数>`）を作り、書いて fsync してから rename で置き換える。親ディレクトリがなければ作る。パーミッションはディレクトリが 0750、ファイルが 0600（`os.CreateTemp` の既定）。git が記録するモードは実行ビットだけなので、clone した側には影響しない。
 - rename に失敗したら、一時ファイルは消す。
 - Windows の rename は、`ERROR_ACCESS_DENIED` か `ERROR_SHARING_VIOLATION` のときだけ、50ms 間隔で最大10回まで再試行する。ほかのエラーはすぐ返す。
 - Windows で Hedgehug がファイルを読むときは、`FILE_SHARE_DELETE` 付きで開く。自分の読み込みが rename を妨げないようにするため。
@@ -222,6 +222,8 @@ Store の側（`store/validate.go`）では、`PutTask` で積んだタスクの
 | `ErrNotFound` | 指定したファイルがない（`errors.Is` で判定） |
 | `ErrLocked` | 10秒以内にロックを取れなかった |
 | `*ValidationError` | 書き込み時の検査で違反があった |
+| `*SchemaError` | `PutSchema` したスキーマが `Check()` で問題を返した |
+| `ErrCycle` | 書き込み時の検査で、parent をたどったら同じタスクに戻った |
 | `gitrepo.ErrNothingToCommit` | 空のパスでコミットしようとした（Store からは呼ばない） |
 
 ## テスト
