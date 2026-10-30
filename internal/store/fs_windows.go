@@ -35,6 +35,7 @@ func readFile(path string) ([]byte, error) {
 		return nil, &fs.PathError{Op: "open", Path: path, Err: err}
 	}
 	f := os.NewFile(uintptr(h), path)
-	defer f.Close()
+	// The handle is read-only, so a Close error cannot lose data.
+	defer func() { _ = f.Close() }()
 	return io.ReadAll(f)
 }
