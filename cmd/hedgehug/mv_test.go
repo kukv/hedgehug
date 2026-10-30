@@ -89,3 +89,30 @@ func TestMvRefusesADeletedParent(t *testing.T) {
 		t.Error("the task was moved")
 	}
 }
+
+func TestMvWorkspace(t *testing.T) {
+	te := newStoreEnv(t)
+	te.ok("workspace", "add", "api", "--prefix", "API")
+	p := te.addJSON("p", "--workspace", "me")
+	c := te.addJSON("c", "--parent", p.Key)
+	out := te.ok("mv", p.Key, "--workspace", "api")
+	if !strings.Contains(out, "ME-1 → API-1") || !strings.Contains(out, "ME-2 → API-2") {
+		t.Errorf("mv =\n%s", out)
+	}
+	got := te.task(c.ID)
+	if got.Key != "API-2" || got.Parent == nil || got.Parent.String() != p.ID {
+		t.Errorf("child after mv: %+v", got)
+	}
+	other := te.addJSON("o", "--workspace", "me") // ME-1 and ME-2 are not reused
+	if other.Key != "ME-3" {
+		t.Errorf("key = %s", other.Key)
+	}
+	te.ok("mv", other.Key, "--parent", p.Key) // into api by its parent
+	if got := te.task(other.ID); got.Key != "API-3" {
+		t.Errorf("mv --parent across workspaces: %s", got.Key)
+	}
+	code, _, stderr := te.run("mv", other.Key, "--parent", p.Key, "--workspace", "me")
+	if code != 1 || !strings.Contains(stderr, "the parent is in workspace api") {
+		t.Errorf("exit %d, stderr %q", code, stderr)
+	}
+}

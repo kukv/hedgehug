@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -122,6 +123,10 @@ func checkEdit(id model.ID, old *model.Task, edited []byte) (*model.Task, error)
 		return nil, moved("parent")
 	case t.Rank != old.Rank:
 		return nil, moved("rank")
+	case !slices.Equal(t.FormerKeys, old.FormerKeys):
+		return nil, fixed("former_keys")
+	case t.Workspace != old.Workspace:
+		return nil, fmt.Errorf("workspace cannot be changed here; use hedgehug mv --workspace")
 	}
 	return t, nil
 }

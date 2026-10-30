@@ -75,7 +75,10 @@ func (a *app) add(title, parentArg, workspaceArg, kind, status string, assigns [
 			return err
 		}
 		if parentArg != "" && w.ID != t.Workspace {
-			pw, _ := ix.Workspace(t.Workspace)
+			pw, ok := ix.Workspace(t.Workspace)
+			if !ok {
+				return fmt.Errorf("the parent's workspace %s is not in this store", t.Workspace)
+			}
 			return fmt.Errorf("the parent is in workspace %s", pw.Name)
 		}
 		t.Workspace = w.ID

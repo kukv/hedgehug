@@ -135,6 +135,8 @@ func TestEditRefused(t *testing.T) {
 		{"deleted_at", "2020-01-01T00:00:00Z", "deleted_at cannot be changed"},
 		{"parent", "", "parent cannot be changed here; use hedgehug mv"},
 		{"rank", "a5V", "rank cannot be changed here; use hedgehug mv"},
+		{"former_keys", "[ME-9]", "former_keys cannot be changed"},
+		{"workspace", "", "workspace cannot be changed here; use hedgehug mv --workspace"},
 	} {
 		t.Run(tc.key, func(t *testing.T) {
 			te := newStoreEnv(t)
