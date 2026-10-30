@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"time"
@@ -27,11 +28,18 @@ func ParseDuration(s string) (Duration, error) {
 		if m[i+1] == "" {
 			continue
 		}
-		v, err := strconv.ParseInt(m[i+1], 10, 32)
+		v, err := strconv.ParseInt(m[i+1], 10, 64)
 		if err != nil {
 			return 0, fmt.Errorf("invalid duration %q: %w", s, err)
 		}
-		total += time.Duration(v) * unit
+		if v > math.MaxInt64/int64(unit) {
+			return 0, fmt.Errorf("invalid duration %q: too long", s)
+		}
+		part := time.Duration(v) * unit
+		if total > math.MaxInt64-part {
+			return 0, fmt.Errorf("invalid duration %q: too long", s)
+		}
+		total += part
 	}
 	return Duration(total), nil
 }

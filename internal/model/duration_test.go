@@ -24,7 +24,7 @@ func TestParseDuration(t *testing.T) {
 			t.Errorf("ParseDuration(%q) = %v (%s), %v; want %v (%s)", tc.in, time.Duration(got), got, err, tc.want, tc.str)
 		}
 	}
-	for _, bad := range []string{"", "1d", "1w", "1.5h", "h", "30m1h", "-1h", "1h 30m", "99999999999999999999h"} {
+	for _, bad := range []string{"", "1d", "1w", "1.5h", "h", "30m1h", "-1h", "1h 30m", "99999999999999999999h", "3000000h", "9999999999m"} {
 		if _, err := ParseDuration(bad); err == nil {
 			t.Errorf("ParseDuration(%q) succeeded", bad)
 		}
