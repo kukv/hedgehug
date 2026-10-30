@@ -193,7 +193,7 @@ func ValidateWrite(old, new *model.Task, parentKind string, e *Effective) []Viol
 
 Store の側（`store/validate.go`）では、`PutTask` で積んだタスクのそれぞれについて、`fn` を抜けたあとに次を行う。
 
-- `old`: `Tx` を反映する前のディスク上のタスク。
+- `old`: `Tx` を反映する前のディスク上のタスク。デコードできなければ nil（新規）として扱い、新しい内容をすべて検査する。壊れたファイルを書き込みで直せるようにするため。
 - `parentKind`: 親タスクの `kind`。親は `Tx` を反映したあとの状態から引く（テンプレートを展開するとき、同じ操作で親と子を作るため）。親が見つからなければ、`ErrNotFound` を wrap したエラーで拒否する。親がなければ空文字（`root` として扱われる）。
 - `e`: 祖先の ID を近い順に集めて、`Schema().For(ancestors)` を呼ぶ。同じ操作で `PutSchema` したときは、新しいスキーマを使う。祖先は parent をたどってファイルを読む。同じ ID に戻ってきたら、`ErrCycle` を返す（本格的な循環の検出は 1c）。
 - 違反があれば `*ValidationError{Task model.ID; Violations []schema.Violation}` を返す。

@@ -47,7 +47,9 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 			continue // removed in the same operation
 		}
 		old, err := tx.s.Task(id)
-		if errors.Is(err, ErrNotFound) {
+		// A file that does not decode is checked like a new task, so a
+		// write can repair it.
+		if errors.Is(err, ErrNotFound) || errors.As(err, new(*model.DecodeError)) {
 			old = nil
 		} else if err != nil {
 			return err

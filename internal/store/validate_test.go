@@ -61,6 +61,18 @@ func TestUpdateRemoveThenPutIsValidated(t *testing.T) {
 	}
 }
 
+func TestUpdateRepairsCorruptTask(t *testing.T) {
+	s := newTestStore(t)
+	task := newTask("repaired")
+	mustWrite(t, s, model.TaskPath(task.ID), "not a task file\n")
+	if err := s.Update(Op{Name: "update", Task: task.ID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(task) }); err != nil {
+		t.Fatalf("repairing a corrupt task failed: %v", err)
+	}
+	if got, err := s.Task(task.ID); err != nil || got.Title != "repaired" {
+		t.Errorf("task = %+v, %v", got, err)
+	}
+}
+
 func TestUpdatePlacement(t *testing.T) {
 	s := newTestStore(t)
 	parent := newTask("parent")
