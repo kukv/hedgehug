@@ -244,6 +244,24 @@ func TestEncodeScopedKeepsNotes(t *testing.T) {
 	}
 }
 
+func TestEncodeKeepsEmptyListOfSibling(t *testing.T) {
+	src := "kinds: [{name: a, role: work, parents: []}, {name: b, role: work}]\n"
+	s, err := Decode([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Kinds[1].Label = "B"
+	want := "kinds: [{name: a, role: work, parents: []}, {name: b, label: B, role: work}]\n"
+	if got := encodeString(t, s); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	s.Kinds[0].Label = "A"
+	want = "kinds: [{name: a, label: A, role: work, parents: []}, {name: b, label: B, role: work}]\n"
+	if got := encodeString(t, s); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 func TestEncodeChangedItemKeepsZeroKnownKey(t *testing.T) {
 	s, src := decodeNotes(t)
 	s.Statuses[2].Label = "完了"

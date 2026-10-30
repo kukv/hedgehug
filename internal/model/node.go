@@ -311,7 +311,7 @@ func (e *Encoder) Put(key string, v any, zero bool) {
 		return
 	}
 	nv, ok := v.(*yaml.Node)
-	if !ok && old != nil && decodesTo(old, v) {
+	if !ok && old != nil && decodesTo(old, reflect.ValueOf(v)) {
 		e.fields = append(e.fields, Field{key, old})
 		return
 	}
@@ -327,7 +327,7 @@ func (e *Encoder) Put(key string, v any, zero bool) {
 	}
 	switch {
 	case !ok:
-		nv = mergeNode(old, nv, reflect.TypeOf(v))
+		nv = mergeNode(old, nv, reflect.ValueOf(v))
 	case NodeEqual(old, nv):
 		nv = old
 	default:
@@ -336,17 +336,17 @@ func (e *Encoder) Put(key string, v any, zero bool) {
 	e.fields = append(e.fields, Field{key, nv})
 }
 
-// decodesTo reports whether n decodes to a value deeply equal to v.
-func decodesTo(n *yaml.Node, v any) bool {
-	t := reflect.TypeOf(v)
-	if t == nil {
+// decodesTo reports whether n decodes to a value deeply equal to v. An
+// invalid v matches nothing.
+func decodesTo(n *yaml.Node, v reflect.Value) bool {
+	if !v.IsValid() || !v.CanInterface() {
 		return false
 	}
-	p := reflect.New(t)
+	p := reflect.New(v.Type())
 	if n.Decode(p.Interface()) != nil {
 		return false
 	}
-	return reflect.DeepEqual(p.Elem().Interface(), v)
+	return reflect.DeepEqual(p.Elem().Interface(), v.Interface())
 }
 
 var (
@@ -354,59 +354,61 @@ var (
 	marshalerType = reflect.TypeFor[yaml.Marshaler]()
 )
 
-// mergeNode returns the node to write for nv, the new value of a Go value of
-// type t, in place of old, the node in the file. The parts of old that hold
-// the same value are kept as written, with their comments, and so are the
-// keys of a mapping that t does not know. A nil t knows every key.
-func mergeNode(old, nv *yaml.Node, t reflect.Type) *yaml.Node {
+// mergeNode returns the node to write for nv, the encoding of the Go value v,
+// in place of old, the node in the file. The parts of old that decode to the
+// same value as the matching part of v are kept as written, with their
+// comments, and so are the keys of a mapping that v's type does not know. An
+// invalid v (a *yaml.Node, or no Go value) knows every key and matches only
+// equal nodes.
+func mergeNode(old, nv *yaml.Node, v reflect.Value) *yaml.Node {
 	if old == nil {
 		styleLike(nv, nil)
 		return nv
 	}
-	for t != nil && t.Kind() == reflect.Pointer {
-		t = t.Elem()
-	}
-	if t == nodeType {
-		t = nil
-	}
-	if NodeEqual(old, nv) || sameValue(old, nv, t) {
+	v = deref(v)
+	if NodeEqual(old, nv) || decodesTo(old, v) {
 		return old
 	}
 	switch {
 	case old.Kind == yaml.MappingNode && nv.Kind == yaml.MappingNode:
-		if t != nil && t.Kind() == reflect.Struct && !marshals(t) {
-			return mergeStruct(old, nv, structKeys(t))
+		if v.IsValid() && v.Kind() == reflect.Struct && !marshals(v.Type()) {
+			return mergeStruct(old, nv, v)
 		}
 		// A Go map has no order of its own, so it keeps the file's.
-		keepOrder := t != nil && t.Kind() == reflect.Map
-		return mergeMapping(old, nv, valueType(t), keepOrder)
+		keepOrder := v.IsValid() && v.Kind() == reflect.Map
+		return mergeMapping(old, nv, valuesOf(v), keepOrder)
 	case old.Kind == yaml.SequenceNode && nv.Kind == yaml.SequenceNode:
-		return mergeSeq(old, nv, t)
+		return mergeSeq(old, nv, v)
 	}
 	styleLike(nv, old)
 	return nv
 }
 
-// sameValue reports whether a and b decode to equal values of type t.
-func sameValue(a, b *yaml.Node, t reflect.Type) bool {
-	if t == nil {
-		return false
+// deref follows pointers and interfaces. A nil one, or a yaml.Node, gives
+// an invalid value.
+func deref(v reflect.Value) reflect.Value {
+	for v.IsValid() && (v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface) {
+		if v.IsNil() {
+			return reflect.Value{}
+		}
+		v = v.Elem()
 	}
-	pa, pb := reflect.New(t), reflect.New(t)
-	if a.Decode(pa.Interface()) != nil || b.Decode(pb.Interface()) != nil {
-		return false
+	if v.IsValid() && v.Type() == nodeType {
+		return reflect.Value{}
 	}
-	return reflect.DeepEqual(pa.Elem().Interface(), pb.Elem().Interface())
+	return v
 }
 
 func marshals(t reflect.Type) bool {
 	return t.Implements(marshalerType) || reflect.PointerTo(t).Implements(marshalerType)
 }
 
-// structKeys returns the YAML keys of the struct t and their types.
-func structKeys(t reflect.Type) map[string]reflect.Type {
-	keys := map[string]reflect.Type{}
-	for _, f := range reflect.VisibleFields(t) {
+// structKeys returns the YAML keys of the struct t and the indexes of their
+// fields.
+func structKeys(t reflect.Type) map[string]int {
+	keys := map[string]int{}
+	for i := range t.NumField() {
+		f := t.Field(i)
 		if !f.IsExported() || f.Anonymous {
 			continue
 		}
@@ -417,57 +419,76 @@ func structKeys(t reflect.Type) map[string]reflect.Type {
 		case "":
 			name = strings.ToLower(f.Name)
 		}
-		keys[name] = f.Type
+		keys[name] = i
 	}
 	return keys
 }
 
-// valueType returns the type of the values of a mapping that a Go value of
-// type t is written as, where every key is data: a map, or a list of structs
-// with its own MarshalYAML that is keyed by the field tagged yaml:"-". Such
-// a struct is the value, unless it has one field besides the key, which then
-// is. It returns nil when it cannot tell.
-func valueType(t reflect.Type) reflect.Type {
+// valuesOf returns a lookup of the Go values of a mapping that v is written
+// as, where every key is data: a map, or a list of structs with its own
+// MarshalYAML that is keyed by the string field tagged yaml:"-". Such a
+// struct is the value, unless it has one field besides the key, which then
+// is. The lookup gives an invalid value when it cannot tell.
+func valuesOf(v reflect.Value) func(key string) reflect.Value {
+	none := func(string) reflect.Value { return reflect.Value{} }
 	switch {
-	case t == nil:
-		return nil
-	case t.Kind() == reflect.Map && !marshals(t):
-		return t.Elem()
-	case t.Kind() != reflect.Slice || !marshals(t) || t.Elem().Kind() != reflect.Struct:
-		return nil
+	case !v.IsValid():
+		return none
+	case v.Kind() == reflect.Map && !marshals(v.Type()) && v.Type().Key().Kind() == reflect.String:
+		return func(key string) reflect.Value {
+			return v.MapIndex(reflect.ValueOf(key).Convert(v.Type().Key()))
+		}
+	case v.Kind() != reflect.Slice || !marshals(v.Type()) || v.Type().Elem().Kind() != reflect.Struct:
+		return none
 	}
-	s := t.Elem()
-	var keyed bool
-	var rest []reflect.StructField
-	for _, f := range reflect.VisibleFields(s) {
+	s := v.Type().Elem()
+	keyField := -1
+	var rest []int
+	for i := range s.NumField() {
+		f := s.Field(i)
 		switch {
 		case !f.IsExported() || f.Anonymous:
-		case f.Tag.Get("yaml") == "-":
-			keyed = true
+		case f.Tag.Get("yaml") == "-" && f.Type.Kind() == reflect.String:
+			keyField = i
 		default:
-			rest = append(rest, f)
+			rest = append(rest, i)
 		}
 	}
-	switch {
-	case !keyed:
-		return nil
-	case len(rest) == 1:
-		return rest[0].Type
+	if keyField < 0 {
+		return none
 	}
-	return s
+	return func(key string) reflect.Value {
+		for i := range v.Len() {
+			if it := v.Index(i); it.Field(keyField).String() == key {
+				if len(rest) == 1 {
+					return it.Field(rest[0])
+				}
+				return it
+			}
+		}
+		return reflect.Value{}
+	}
 }
 
-// mergeStruct merges the mapping of a struct whose YAML keys are known. The
-// keys of nv come in its order; the keys of old that nv lacks are kept in
-// their place when they are unknown, or known but zero, as omitempty drops.
-func mergeStruct(old, nv *yaml.Node, known map[string]reflect.Type) *yaml.Node {
+// mergeStruct merges the mapping of the struct v, whose YAML keys are known.
+// The keys of nv come in its order; the keys of old that nv lacks are kept
+// in their place when they are unknown, or decode to v's field, as one that
+// omitempty dropped does.
+func mergeStruct(old, nv *yaml.Node, v reflect.Value) *yaml.Node {
 	of, nf := fieldsOf(old), fieldsOf(nv)
+	known := structKeys(v.Type())
+	field := func(key string) reflect.Value {
+		if i, ok := known[key]; ok {
+			return v.Field(i)
+		}
+		return reflect.Value{}
+	}
 	keep := func(x Field) bool {
 		if nf.Get(x.Key) != nil {
 			return false
 		}
-		ft, ok := known[x.Key]
-		return !ok || isZero(x.Value, ft)
+		_, ok := known[x.Key]
+		return !ok || decodesTo(x.Value, field(x.Key))
 	}
 	var f Fields
 	next := 0
@@ -481,7 +502,7 @@ func mergeStruct(old, nv *yaml.Node, known map[string]reflect.Type) *yaml.Node {
 			}
 			next = j + 1
 		}
-		f = append(f, Field{x.Key, mergeNode(of.Get(x.Key), x.Value, known[x.Key])})
+		f = append(f, Field{x.Key, mergeNode(of.Get(x.Key), x.Value, field(x.Key))})
 	}
 	for _, o := range of[next:] {
 		if keep(o) {
@@ -491,19 +512,13 @@ func mergeStruct(old, nv *yaml.Node, known map[string]reflect.Type) *yaml.Node {
 	return mappingOf(old, f)
 }
 
-// isZero reports whether n decodes to the zero value of t.
-func isZero(n *yaml.Node, t reflect.Type) bool {
-	p := reflect.New(t)
-	return n.Decode(p.Interface()) == nil && p.Elem().IsZero()
-}
-
-// mergeMapping merges a mapping whose keys are all data, with values of type
-// t. Keys that nv lacks are dropped. With keepOrder, the keys in old stay in
-// its order and the new keys follow.
-func mergeMapping(old, nv *yaml.Node, t reflect.Type, keepOrder bool) *yaml.Node {
+// mergeMapping merges a mapping whose keys are all data, with the Go value
+// of each key given by value. Keys that nv lacks are dropped. With
+// keepOrder, the keys in old stay in its order and the new keys follow.
+func mergeMapping(old, nv *yaml.Node, value func(string) reflect.Value, keepOrder bool) *yaml.Node {
 	of, nf := fieldsOf(old), fieldsOf(nv)
 	for i := range nf {
-		nf[i].Value = mergeNode(of.Get(nf[i].Key), nf[i].Value, t)
+		nf[i].Value = mergeNode(of.Get(nf[i].Key), nf[i].Value, value(nf[i].Key))
 	}
 	if keepOrder {
 		pos := func(x Field) int {
@@ -517,15 +532,25 @@ func mergeMapping(old, nv *yaml.Node, t reflect.Type, keepOrder bool) *yaml.Node
 	return mappingOf(old, nf)
 }
 
-// mergeSeq merges a list of type t. Each new item takes the old item with
-// the same value or, for structs, the same name (or where); then the struct
-// items left over are paired in order, so a renamed item keeps its node.
-// Each old item is used once.
-func mergeSeq(old, nv *yaml.Node, t reflect.Type) *yaml.Node {
+// mergeSeq merges the list v. Each new item takes the old item that decodes
+// to the same value or, for structs, has the same name (or where); then the
+// struct items left over are paired in order, so a renamed item keeps its
+// node. Each old item is used once.
+func mergeSeq(old, nv *yaml.Node, v reflect.Value) *yaml.Node {
 	styleLike(nv, old)
+	if !v.IsValid() || (v.Kind() != reflect.Slice && v.Kind() != reflect.Array) ||
+		marshals(v.Type()) || v.Len() != len(nv.Content) {
+		v = reflect.Value{}
+	}
+	item := func(i int) reflect.Value {
+		if !v.IsValid() {
+			return reflect.Value{}
+		}
+		return v.Index(i)
+	}
 	var elem reflect.Type
-	if t != nil && (t.Kind() == reflect.Slice || t.Kind() == reflect.Array) && !marshals(t) {
-		elem = t.Elem()
+	if v.IsValid() {
+		elem = v.Type().Elem()
 		for elem.Kind() == reflect.Pointer {
 			elem = elem.Elem()
 		}
@@ -537,29 +562,29 @@ func mergeSeq(old, nv *yaml.Node, t reflect.Type) *yaml.Node {
 	}
 	match := make([]*yaml.Node, len(nv.Content))
 	used := make([]bool, len(old.Content))
-	pair := func(same func(o, n *yaml.Node) bool) {
-		for i, n := range nv.Content {
+	pair := func(same func(o *yaml.Node, i int) bool) {
+		for i := range nv.Content {
 			for j, o := range old.Content {
-				if match[i] == nil && !used[j] && same(o, n) {
+				if match[i] == nil && !used[j] && same(o, i) {
 					match[i], used[j] = o, true
 				}
 			}
 		}
 	}
 	if id != "" {
-		pair(func(o, n *yaml.Node) bool {
-			a, b := mapValue(o, id), mapValue(n, id)
+		pair(func(o *yaml.Node, i int) bool {
+			a, b := mapValue(o, id), mapValue(nv.Content[i], id)
 			return a != nil && b != nil && a.Kind == yaml.ScalarNode && b.Kind == yaml.ScalarNode && a.Value == b.Value
 		})
 	} else {
-		pair(func(o, n *yaml.Node) bool { return NodeEqual(o, n) || sameValue(o, n, elem) })
+		pair(func(o *yaml.Node, i int) bool { return NodeEqual(o, nv.Content[i]) || decodesTo(o, item(i)) })
 	}
 	if isStruct {
-		pair(func(_, _ *yaml.Node) bool { return true })
+		pair(func(*yaml.Node, int) bool { return true })
 	}
 	for i, o := range match {
 		if o != nil {
-			nv.Content[i] = mergeNode(o, nv.Content[i], elem)
+			nv.Content[i] = mergeNode(o, nv.Content[i], item(i))
 		}
 	}
 	return nv

@@ -230,6 +230,23 @@ func TestPutMergesMapValues(t *testing.T) {
 	}
 }
 
+func TestTaskLinkChangeKeepsOtherLinks(t *testing.T) {
+	src := "---\nid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nlinks:\n- type: github_pr # PR\n  ref: r1\n  sync: \"\"\n  x: keep\n- {type: github_issue, ref: r2, x: keep} # issue\n---\n"
+	task, err := DecodeTask([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	task.Links[1].Ref = "r3"
+	out, err := task.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Replace(src, "ref: r2", "ref: r3", 1)
+	if string(out) != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
 func TestTaskPropChangeKeepsOtherComments(t *testing.T) {
 	task, err := DecodeTask(readFile(t, "testdata/task/full.md"))
 	if err != nil {
