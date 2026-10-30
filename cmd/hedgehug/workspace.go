@@ -211,10 +211,14 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 	var w *model.Workspace
 	var tasks []*model.Task
 	var oldIDs []string
-	if _, err := a.update(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
+	committed, err := a.update(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
 		var err error
 		if w, err = tx.Workspace(ws.ULID); err != nil {
 			return err
+		}
+		// Another process may have set this prefix since the check above.
+		if w.IDPrefix == prefix {
+			return nil
 		}
 		tx.SetDetail(fmt.Sprintf("prefix %s %s → %s", w.Name, w.IDPrefix, prefix))
 		w.IDPrefix = prefix
@@ -254,8 +258,12 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 			}
 		}
 		return nil
-	}); err != nil {
+	})
+	if err != nil {
 		return err
+	}
+	if !committed {
+		return a.printWorkspace(ix, w, fmt.Sprintf("%s: %s already has the id prefix %s (%s)", verb(false, ""), w.Name, w.IDPrefix, w.ULID))
 	}
 	if a.jsonOut {
 		return a.printWorkspace(ix, w, "")

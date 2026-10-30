@@ -28,7 +28,7 @@ func (te *testEnv) meanwhile(fn func(tx *store.Tx) error) {
 }
 
 // putChild returns a write of a new task under parent, in its workspace and
-// deleted when it is, and points *id at the new task.
+// deleted when it is, and points *ulid at the new task.
 func putChild(parent string, ulid *model.ULID) func(*store.Tx) error {
 	return func(tx *store.Tx) error {
 		parentULID, err := model.ParseULID(parent)
@@ -260,5 +260,50 @@ func TestWorkspaceSubjectsSeeARenameMeanwhile(t *testing.T) {
 	te.ok("workspace", "rm", "tmp")
 	if subj, _ := te.lastCommit(); subj != "hedgehug: workspace rm tmp2 (TMP)" {
 		t.Errorf("rm subject = %q", subj)
+	}
+}
+
+func TestWorkspacePrefixToAPrefixSetMeanwhileChangesNothing(t *testing.T) {
+	te := newStoreEnv(t)
+	te.addJSON("p")
+	var ls []map[string]any
+	te.wsJSON(&ls, "ls")
+	ulid, err := model.ParseULID(ls[0]["ulid"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var set time.Time
+	te.meanwhile(func(tx *store.Tx) error {
+		w, err := tx.Workspace(ulid)
+		if err != nil {
+			return err
+		}
+		w.IDPrefix = "NEW"
+		w.PrefixSet = time.Now()
+		set = w.PrefixSet
+		return tx.PutWorkspace(w)
+	})
+	before := len(te.log("me"))
+	out := te.ok("workspace", "prefix", "me", "NEW")
+	if !strings.HasPrefix(out, "No changes") || strings.Contains(out, "→") {
+		t.Errorf("prefix =\n%s", out)
+	}
+	// Only the commit made meanwhile is new.
+	if n := len(te.log("me")); n != before+1 {
+		t.Errorf("commits = %d, want %d", n, before+1)
+	}
+	if subject, _ := te.lastCommit(); strings.Contains(subject, "workspace prefix") {
+		t.Errorf("last commit = %q, want the one made meanwhile", subject)
+	}
+	s, err := store.Open(te.storeDir("me"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := s.Workspace(ulid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.IDPrefix != "NEW" || !w.PrefixSet.Equal(set) {
+		t.Errorf("workspace = %s set %v, want NEW set %v", w.IDPrefix, w.PrefixSet, set)
 	}
 }
