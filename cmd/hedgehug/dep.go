@@ -53,6 +53,9 @@ func (a *app) dep(arg, blockerArg string, add bool) error {
 	if err != nil {
 		return err
 	}
+	if err := notDeleted(ix, e); err != nil {
+		return err
+	}
 	b, err := a.resolve(ix, blockerArg)
 	if err != nil {
 		return err

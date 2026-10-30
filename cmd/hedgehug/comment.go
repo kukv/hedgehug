@@ -185,8 +185,8 @@ func (a *app) commentAdd(arg string, text []string) error {
 	if err != nil {
 		return err
 	}
-	if e.DeletedAt != nil {
-		return fmt.Errorf("%s is deleted; restore %s first", refName(ix, e.ID), ix.ShortID(e.ID))
+	if err := notDeleted(ix, e); err != nil {
+		return err
 	}
 	var body, path string // path is the file of the editor, if any
 	if len(text) > 0 {

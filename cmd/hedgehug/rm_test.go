@@ -15,6 +15,30 @@ func tree3(te *testEnv) (p, c, g taskJSON) {
 	return p, c, g
 }
 
+// The commands that change a task refuse a deleted one and point to
+// restore.
+func TestChangeDeletedTask(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("Alpha")
+	b := te.addJSON("Blocker")
+	te.ok("rm", x.Short)
+	before := len(te.log("me"))
+	for _, args := range [][]string{
+		{"set", x.Short, "title=Renamed"},
+		{"status", x.Short, "in_progress"},
+		{"done", x.Short},
+		{"dep", "add", x.Short, "--blocked-by", b.Short},
+	} {
+		code, _, stderr := te.run(args...)
+		if code != 1 || !strings.Contains(stderr, "is deleted; restore "+x.Short+" first") {
+			t.Errorf("%v: exit %d (want 1), stderr %q", args, code, stderr)
+		}
+	}
+	if n := len(te.log("me")); n != before {
+		t.Errorf("commits = %d, want %d", n, before)
+	}
+}
+
 func TestRmAndRestore(t *testing.T) {
 	te := newStoreEnv(t)
 	p, c, g := tree3(te)
