@@ -40,8 +40,9 @@ internal/store/
   store.go         Create の修正
 cmd/hedgehug/
   main.go          main と run
-  root.go          ルートコマンド、全体フラグ、Store と index を開く共通処理、エラーの出し方
-  output.go        表・ツリー・JSON・テンプレートの出力、色
+  app.go           ルートコマンド、全体フラグ、使い方の誤り、Store と index を開く共通処理、エラーの出し方
+  output.go        表・JSON・テンプレートの出力、色
+  tree.go          ls --tree
   assign.go        k=v / k+=v / k-=v / k= の解釈（add の -p と set で共用）
   store_init.go    store init
   add.go ls.go show.go set.go status.go rm.go mv.go dep.go
@@ -91,7 +92,8 @@ stores:
 
 ## 作者
 
-- `Op.Author` には git のグローバル設定の `user.name` と `user.email` を使う。go-git の `config.LoadConfig(config.GlobalScope)` で読む。
+- `Op.Author` には git のグローバル設定の `user.name` と `user.email` を使う。go-git の `LoadConfig` はプロセスの環境変数を読み、テストから注入できない。そこで `getenv` から決めたパスの gitconfig を読む。
+- 読むファイルは、`GIT_CONFIG_GLOBAL` があればそのファイルだけ。なければ `$XDG_CONFIG_HOME/git/config`（なければ `~/.config/git/config`）、`~/.gitconfig` の順に読み、後のファイルが勝つ（git と同じ）。
 - どちらかが空なら、`git config --global user.name` / `user.email` での設定を案内するエラーにする。読み出しは書き込みをするコマンドでだけ行う（読むだけのコマンドは git の設定がなくても動く）。
 - アカウントによる作者の決定はフェーズ3。それまで `query.Options.Me` は空にする（1c で決めたとおり）。
 
@@ -113,6 +115,9 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 - 書き込みは1コマンドで `Store.Update` を1回呼び、1コミットにする。`Op.Name` は下の表のとおり。`Op.Task` は主になるタスク。
 - 読むだけのコマンドは `index.Open` で開く。書き込むコマンドは、参照の解決のために `index.Open` してから `Store.Update` する。CLI は毎回 `index.Open` する（1c で決めたとおり）。
 - 全体フラグ: `--store <name>`、`--json`、`--no-color`。
+- 引数なしのルート `hedgehug` は使い方を出して終了コード 2。`hedgehug store` と `hedgehug dep` はサブコマンドなしならヘルプを出して 0。
+- cobra の既定の `completion` コマンドは、フェーズ 7 まで無効にする。
+- `add` / `rm` / `mv` は、rank を Store のロックを取る前に index から計算する。同じ親の下で同時に2つ `add` すると rank が等しくなりうる。その並びは ID の順になる。
 
 | コマンド | Op |
 | --- | --- |
@@ -135,7 +140,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 
 ### `add <title> [--parent <id>] [--kind <kind>] [--status <status>] [-p k=v]...`
 
-- `kind` の既定は `schema.DefaultKind()`。`status` の既定は、置き場所で有効なスキーマ（`Schema.For(祖先)`）の todo カテゴリの既定のステータス。
+- `kind` の既定は `schema.DefaultKind()`。`status` の既定は `Schema.DefaultStatus(todo)` で引く。プロジェクトの上書きでカテゴリの既定は外せないので、置き場所によらず同じになる。
 - `rank` は兄弟（同じ親の、削除されていないタスク）の最後の rank と空の間に作る（`model.Between(last, "")`）。兄弟がなければ `Between("", "")`。
 - `-p` は `set` と同じ書き方（下の `set`）。
 - 種類に紐づくテンプレートは展開しない（フェーズ6）。
@@ -144,17 +149,18 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 ### `ls [query] [--tree] [--ids-only] [--format <template>]`
 
 - 引数は1つのクエリ文字列として `query.Parse` に渡す。複数の引数は空白でつないでから渡す。
-- 既定の表の列は、短縮 ID、ステータス、種類、タイトル、担当者、ラベル。`group:` があれば、グループごとに見出しを付ける。
+- 既定の表の列は、短縮 ID、ステータス、種類、担当者、ラベル、タイトルの順。幅の広い文字を含むタイトルで列がずれないよう、タイトルを最後にした。`group:` があれば、グループごとに見出しを付ける。
 - `--ids-only` は短縮 ID を1行に1つ出す。`--format` は Go の `text/template` で、1タスクごとに JSON と同じ形の値を渡す。`--json` / `--ids-only` / `--format` は同時に指定できない。
 - `--tree`:
   - クエリに一致したタスクと、それを根からつなぐのに要る祖先を出す。一致しなかった祖先は薄く表示する（色なしのときは括弧で囲む）。
-  - 兄弟は rank の順（同じ rank なら ID の順）に並べる。`sort:` は兄弟の並びに使う。`group:` との併用はエラーにする。
-  - parent の循環に入っていて `Roots` から届かないタスクは、末尾の「循環」の見出しの下に1段で出す（1c の持ち越し）。
-  - `--json` と併用したときは、子を `children` に入れた入れ子の JSON を出す。
+  - 兄弟は常に rank の順（同じ rank なら ID の順）に並べる。`sort:` と `group:` はどちらも `--tree` と併用するとエラー（使い方の誤り、終了コード 2）。
+  - parent の循環に入っていて `Roots` から届かないタスクは、末尾の `== in a parent cycle` の見出しの下に1段で出す（1c の持ち越し）。見出しは英語の出力にした。
+  - `--json` と併用したときは、子を `children` に入れた入れ子の JSON を出す。各タスクは `children`、`context`（つなぐために出した祖先）、`in_cycle`（循環のタスク）を持つ。
 
 ### `show <id>`
 
 - 出すもの: フィールド（短縮 ID、キー、種類、タイトル、ステータス、親、担当者、ウォッチャー、ラベル、repos、blocked_by、props、作成・更新・削除の日時と作成者）、本文、コメント（`Store.Comments`）、問題（`Index.Problems`）、逆方向の関連（`blocks` と、task_ref の `inverse`）。
+- ファイルが読めない（decode できない）壊れたタスクは、本文とコメントの代わりに index の値と `broken: <理由>` の行を出す。コメントは読まない。
 - 参照先のタスクは短縮 ID とタイトルで出す。参照先がなければ ID のまま出して「見つからない」と添える。
 - 直近の履歴は 1d-2 で足す。
 
@@ -179,7 +185,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 ### `status <id> <status>` / `done <id>`
 
 - `status` は名前で指定する。スキーマにない名前はエラー（カテゴリ名への読み替えはしない）。
-- `done` は、置き場所で有効なスキーマの done カテゴリの既定のステータスにする。
+- `done` は `Schema.DefaultStatus(done)` で引いたステータスにする。置き場所によらず同じになる。
 - 遷移と必須項目の検査は Store の書き込みの検査に任せ、`ValidationError` をそのまま出す。
 
 ### `rm <id>`
@@ -190,6 +196,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 ### `restore <id>`
 
 - 本人と、`deleted_at` が本人と同じ子孫の `deleted_at` を外す。同じ `rm` で消えたものだけが戻り、それ以前に別に消したものは戻らない。
+- `deleted_at` は秒の精度。同じ秒のうちに子の `rm` と親の `rm` をすると、まとめて戻る。
 - 親が削除済みならエラーにして、先に親を戻すよう案内する。
 - 削除されていなければエラー。
 
@@ -230,11 +237,13 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 
 - `props` の値は、単一値なら文字列、複数値なら文字列の配列にする。
 - `show --json` はこれに `body`、`watchers`、`repos`、`comments`、`reverse`（関連名ごとの短縮 ID とタイトルの列）を足す。
+- `ls --tree --json` の各タスクは、これに `children`、`context`、`in_cycle` を足す。
 - 壊れたファイル（`Entry.Broken`）のタスクは、表では種類とステータスを `?` にし、JSON では `broken` に理由を入れる。
 
 ## エラー
 
 - stderr に `hedgehug: <理由>` を出して、終了コード 1 で終わる。フラグや引数の誤りは 2。`-h` は 0。
+- 書き込みを拒むエラーは、Store の違反のテキストをそのまま出す（循環なら「... leads back to this task」）。
 - `ValidationError` は違反を1行に1つずつ（フィールドとメッセージ）出す。`AmbiguousError` は候補の短縮 ID とタイトルを並べる。`ErrLocked` は、ほかのプロセスが書き込み中である旨を出す。
 - `--json` のときもエラーは stderr のテキストで出す。
 
