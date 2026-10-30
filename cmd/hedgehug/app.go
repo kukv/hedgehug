@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -50,13 +52,13 @@ func (a *app) rootCmd() *cobra.Command {
 	pf.StringVar(&a.storeName, "store", "", "the store to work on, by name")
 	pf.BoolVar(&a.jsonOut, "json", false, "print JSON")
 	pf.BoolVar(&a.noColor, "no-color", false, "do not color the output")
-	root.AddCommand(a.storeCmd(), a.lsCmd())
+	root.AddCommand(a.storeCmd(), a.addCmd(), a.lsCmd())
 	return root
 }
 
 // exactArgs and minArgs are cobra's, with the error as a usageError.
 func exactArgs(n int) cobra.PositionalArgs { return asUsage(cobra.ExactArgs(n)) }
-func minArgs(n int) cobra.PositionalArgs   { return asUsage(cobra.MinimumNArgs(n)) } //nolint:unused // used by the commands that follow in phase 1d-1
+func minArgs(n int) cobra.PositionalArgs   { return asUsage(cobra.MinimumNArgs(n)) }
 
 func asUsage(f cobra.PositionalArgs) cobra.PositionalArgs {
 	return func(cmd *cobra.Command, args []string) error {
@@ -103,7 +105,7 @@ func (a *app) open() (*store.Store, *index.Index, error) {
 }
 
 // update runs one operation, named name and about task, as one commit.
-func (a *app) update(s *store.Store, name string, task model.ID, fn func(*store.Tx) error) error { //nolint:unused // used by the commands that follow in phase 1d-1
+func (a *app) update(s *store.Store, name string, task model.ID, fn func(*store.Tx) error) error {
 	author, err := config.Author(a.getenv)
 	if err != nil {
 		return err
@@ -111,9 +113,28 @@ func (a *app) update(s *store.Store, name string, task model.ID, fn func(*store.
 	return s.Update(store.Op{Name: name, Task: task, Author: author}, fn)
 }
 
+// ambiguousError is index.AmbiguousError with the candidates spelled out.
+type ambiguousError struct {
+	input string
+	lines []string // "<short>  <title>" per candidate
+}
+
+func (e *ambiguousError) Error() string {
+	return fmt.Sprintf("%q matches %d tasks:\n  %s", e.input, len(e.lines), strings.Join(e.lines, "\n  "))
+}
+
 // resolve finds the task arg names.
-func (a *app) resolve(ix *index.Index, arg string) (*index.Entry, error) { //nolint:unused // used by the commands that follow in phase 1d-1
+func (a *app) resolve(ix *index.Index, arg string) (*index.Entry, error) {
 	id, err := ix.Resolve(arg)
+	var ae *index.AmbiguousError
+	if errors.As(err, &ae) {
+		lines := make([]string, len(ae.Candidates))
+		for i, c := range ae.Candidates {
+			e, _ := ix.Task(c)
+			lines[i] = ix.ShortID(c) + "  " + e.Title
+		}
+		return nil, &ambiguousError{input: arg, lines: lines}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -121,8 +142,31 @@ func (a *app) resolve(ix *index.Index, arg string) (*index.Entry, error) { //nol
 	return e, nil
 }
 
-// describe turns err into the text after "hedgehug: ". Task 6 makes it
-// list violations and candidates.
+// resolveID is resolve for applyAssign.
+func (a *app) resolveID(ix *index.Index) func(string) (model.ID, error) {
+	return func(s string) (model.ID, error) {
+		e, err := a.resolve(ix, s)
+		if err != nil {
+			return model.ID{}, err
+		}
+		return e.ID, nil
+	}
+}
+
+// describe turns err into the text after "hedgehug: ", with the violations
+// of a refused write on the lines after it.
 func describe(err error) string {
+	var ve *store.ValidationError
+	if errors.As(err, &ve) {
+		var b strings.Builder
+		b.WriteString("the change breaks the schema:")
+		for _, v := range ve.Violations {
+			b.WriteString("\n  " + v.String())
+		}
+		return b.String()
+	}
+	if errors.Is(err, store.ErrLocked) {
+		return "another hedgehug is writing to the store; try again"
+	}
 	return err.Error()
 }

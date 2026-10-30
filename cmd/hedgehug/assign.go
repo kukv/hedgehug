@@ -38,7 +38,7 @@ func parseAssign(s string) (assign, error) {
 	return a, nil
 }
 
-func parseAssigns(ss []string) ([]assign, error) { //nolint:unused // used by add in the next commit
+func parseAssigns(ss []string) ([]assign, error) {
 	out := make([]assign, 0, len(ss))
 	for _, s := range ss {
 		a, err := parseAssign(s)

@@ -1,0 +1,106 @@
+package main
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
+
+func TestLs(t *testing.T) {
+	te := newStoreEnv(t)
+	a := te.addJSON("Alpha", "-p", "labels+=ui")
+	b := te.addJSON("Beta", "--status", "done")
+
+	out := te.ok("ls")
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) != 3 || !strings.HasPrefix(lines[0], "ID") {
+		t.Fatalf("ls =\n%s", out)
+	}
+	for _, s := range []string{a.Short, "Alpha", "ui", b.Short, "Beta", "done"} {
+		if !strings.Contains(out, s) {
+			t.Errorf("ls does not show %q:\n%s", s, out)
+		}
+	}
+	if strings.Contains(out, "\x1b[") {
+		t.Error("ls colored output that is not a terminal")
+	}
+
+	if out := te.ok("ls", "status:done"); !strings.Contains(out, "Beta") || strings.Contains(out, "Alpha") {
+		t.Errorf("ls status:done =\n%s", out)
+	}
+	if out := te.ok("ls", "status:todo", "label:ui"); !strings.Contains(out, "Alpha") || strings.Contains(out, "Beta") {
+		t.Errorf("ls with two args =\n%s", out)
+	}
+	if out := te.ok("ls", "--ids-only"); out != a.Short+"\n"+b.Short+"\n" && out != b.Short+"\n"+a.Short+"\n" {
+		t.Errorf("--ids-only = %q", out)
+	}
+	if out := te.ok("ls", "--format", "{{.title}}|{{.status}}", "sort:title"); out != "Alpha|todo\nBeta|done\n" {
+		t.Errorf("--format = %q", out)
+	}
+	var got []taskJSON
+	if err := json.Unmarshal([]byte(te.ok("ls", "--json", "sort:title")), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Title != "Alpha" || got[1].Title != "Beta" || got[0].Labels[0] != "ui" {
+		t.Errorf("--json = %+v", got)
+	}
+	if got[1].Assignees == nil || got[1].Problems == nil || got[1].Props == nil {
+		t.Error("empty lists in JSON must be [] or {}, not null")
+	}
+}
+
+func TestLsGroups(t *testing.T) {
+	te := newStoreEnv(t)
+	te.addJSON("Alpha")
+	te.addJSON("Beta", "--status", "done")
+	out := te.ok("ls", "group:status")
+	if !strings.Contains(out, "== done") || !strings.Contains(out, "== todo") {
+		t.Errorf("ls group:status =\n%s", out)
+	}
+}
+
+func TestLsColor(t *testing.T) {
+	te := newStoreEnv(t)
+	te.addJSON("Alpha")
+	te.terminal = true
+	if out := te.ok("ls"); !strings.Contains(out, "\x1b[") {
+		t.Errorf("ls on a terminal is not colored:\n%q", out)
+	}
+	if out := te.ok("ls", "--no-color"); strings.Contains(out, "\x1b[") {
+		t.Error("--no-color still colors")
+	}
+}
+
+func TestLsErrors(t *testing.T) {
+	te := newStoreEnv(t)
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"ls", "nope:x"}, "nope"},
+		{[]string{"ls", "--json", "--ids-only"}, "only one of"},
+		{[]string{"ls", "--format", "{{"}, "--format"},
+	} {
+		code, _, stderr := te.run(tc.args...)
+		if code != 2 || !strings.Contains(stderr, tc.want) {
+			t.Errorf("%v: exit %d, stderr %q (want 2 and %q)", tc.args, code, stderr, tc.want)
+		}
+	}
+}
+
+func TestUnknownID(t *testing.T) {
+	te := newStoreEnv(t)
+	// An ambiguous input cannot be made reliably (short IDs match the
+	// random end of ULIDs), so only the not-found case is run here.
+	code, _, stderr := te.run("add", "x", "--parent", "zzzzzzzz")
+	if code != 1 || !strings.Contains(stderr, "not found") {
+		t.Errorf("exit %d, stderr %q", code, stderr)
+	}
+}
+
+func TestDescribe(t *testing.T) {
+	err := &ambiguousError{input: "ab", lines: []string{"1234  Alpha", "5678  Beta"}}
+	if got := describe(err); got != "\"ab\" matches 2 tasks:\n  1234  Alpha\n  5678  Beta" {
+		t.Errorf("describe = %q", got)
+	}
+}
