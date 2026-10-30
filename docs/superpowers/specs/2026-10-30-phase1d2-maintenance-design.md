@@ -139,7 +139,7 @@ func (s *Store) CommentIDs() ([]CommentRef, error)
 - 空白だけの本文は「空のコメント」でエラー、コミットしない。
 - 削除済みのタスクにはエラーにして `restore` を案内する。壊れたタスクには付けられる（index に Entry があればよい）。
 - 新しい ULID でコメントを作り、author は空にする（フェーズ3まで）。Op は `comment`、Task はコメントのタスク。
-- 出力はコメントの短縮 ID。`--json` はコメント（`id`、`short`、`task`、`author`、`created`、`updated`、`deleted_at`、`body`）。
+- 出力は `Added <コメントの短縮 ID>` の1行。`--json` はコメント（`id`、`short`、`task`、`author`、`created`、`updated`、`deleted_at`、`body`）。
 
 ### `comment edit <comment-id>` / `comment rm <comment-id>`
 
@@ -194,7 +194,7 @@ type Finding struct {
 - テキストは1件1行 `<where>: <msg>`。Hint があれば次の行に `  hint: <hint>`。最後に `N problems`。0 件なら `No problems`。
 - `--json` は Finding の配列（キーは小文字。Hint が空なら省く）。
 - 1件でもあれば終了コード 1、なければ 0。
-- 並びは、検査の順（下の番号）、その中では Where の順。
+- 並びは、上の表の順（`schema`、`template`、`prop_name`、`override`、`task`、`file`、`worktree`、`git`）、その中では Where の順。`schema check` と `doctor` で同じ。下の番号は検査をする順で、並びの順ではない。
 
 ### `schema check`
 
@@ -234,8 +234,8 @@ hh schema migrate value <prop> <old> <new> [--dry-run]
 - `kind` の統合も同じで、`<old>` が既定のとき、`<new>` が同じ `role` ならその既定を `<new>` に移す。違う `role` なら `Schema.Check` が拒否する。
 - `prop` の統合は、型（`type` と `multi`）が同じでなければエラー。`<old>` と `<new>` の両方に値を持つタスクがあればエラーにして、そのタスクを並べる。
 - `value` は `enum` か `multi_enum` の props だけ。ほかの型はエラー。
-- 削除済みのタスクも書き換える。デコードできない壊れたタスクは書き換えずに、短縮 ID を並べた警告を出す（`doctor` でも分かる）。
-- 移行は遷移ではないので、`workflow.transitions` の検査はしない（Store の `Op` に遷移の検査を飛ばす指定を足す）。ほかの検査（必須項目、置き場所、値）はふだんどおりで、新しく違反になるタスクがあれば全体を拒否する。
+- 削除済みのタスクも書き換える。デコードできない壊れたタスクと、中の id がパスの id と違うファイル（別のタスクの写しなど）は書き換えずに、パスの短縮 ID を並べた警告を出す（`doctor` でも分かる）。写しを書き換えると、中の id のタスクの本物のファイルを上書きしてしまう。
+- 移行は遷移ではないので、`workflow.transitions` の検査はしない（Store の `Op` に遷移の検査を飛ばす指定を足す）。ほかの検査（必須項目、置き場所、値）はふだんどおりで、新しく違反になるタスクがあれば全体を拒否する。ただし必須項目は、書き換える前のタスクがその項目を持っていたときだけ新しい違反とみなす（`SkipTransitions` の規則）。移行はステータスに入る遷移ではないので、もとから項目を欠いていたタスクは、改名でも統合でも拒否しない。
 - 出力は、書き換えたタスクの数と短縮 ID・タイトルの一覧。`--dry-run` は同じ一覧を出して何も書かない（schema の `Check` はするが、Store がするタスクの検査はしないので、本番では拒否されることがある）。`--json` は `{"changed": [タスク...], "skipped": [短縮 ID...]}`。
 
 ### `doctor`
@@ -282,6 +282,7 @@ index は HEAD のツリーを読み、2 は作業ツリーを読む。未コミ
 - 1d-1 の決まり（stderr に `hedgehug: <理由>`、終了コード 1、使い方の誤りは 2）に従う。
 - `schema check` と `doctor` の問題の一覧は stdout に出す（エラーではなく結果）。終了コードは 1。
 - エディタが見つからない、起動できないときは、`$EDITOR` の設定を案内するエラー。
+- 削除済みのタスクは、`set`・`status`・`done`・`dep`・`edit`・`mv`・`comment` で変えられない。`<短縮 ID> <タイトル> is deleted; restore <短縮 ID> first` のエラーにして `restore` を案内し、コミットしない（`add --parent` と `mv --parent` の削除済みの親と同じ文言）。`dep` が確かめるのは変更するタスクで、`--blocked-by` に削除済みのタスクを指すときはこれまでの規則に従う。
 
 ## テスト
 
