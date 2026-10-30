@@ -47,6 +47,9 @@ func (a *app) mv(arg, parentArg string, root bool, before, after string) error {
 	if err != nil {
 		return err
 	}
+	if e.DeletedAt != nil {
+		return fmt.Errorf("%s is deleted; restore %s first", refName(ix, e.ID), ix.ShortID(e.ID))
+	}
 	parent := e.Parent
 	switch {
 	case root:
