@@ -1,6 +1,10 @@
 package model
 
-import "testing"
+import (
+	"testing"
+
+	"go.yaml.in/yaml/v4"
+)
 
 func FuzzFrontmatter(f *testing.F) {
 	for _, s := range []string{"---\na: 1\n---\nbody\n", "---\n---\n", "---\r\na: 1\r\n---", "x", ""} {
@@ -36,9 +40,27 @@ func FuzzBetween(f *testing.F) {
 	})
 }
 
+// denull returns a copy of n in which nulls and empty strings are the same
+// node, so that NodeEqual ignores null normalization.
+func denull(n *yaml.Node) *yaml.Node {
+	if n == nil {
+		return nil
+	}
+	if n.Kind == yaml.ScalarNode && (n.ShortTag() == "!!null" || (n.ShortTag() == "!!str" && n.Value == "")) {
+		return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!null"}
+	}
+	c := *n
+	c.Content = make([]*yaml.Node, len(n.Content))
+	for i, x := range n.Content {
+		c.Content[i] = denull(x)
+	}
+	return &c
+}
+
 func FuzzDecodeTask(f *testing.F) {
 	f.Add("---\nid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\ntitle: x\n---\nbody\n")
 	f.Add("---\nid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nlabels: [a, b]\nprops: {p: 1}\n---\n")
+	f.Add("---\nid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nlinks:\n- {type: a, ref: b, x: 1} # c\n---\n")
 	f.Fuzz(func(t *testing.T, s string) {
 		task, err := DecodeTask([]byte(s))
 		if err != nil {
@@ -51,6 +73,23 @@ func FuzzDecodeTask(f *testing.F) {
 		task2, err := DecodeTask(out)
 		if err != nil {
 			t.Fatalf("Decode of our own output %q: %v", out, err)
+		}
+		// Every key of the input must come back with the same value. A
+		// null may be normalized: a null key to [], and yaml writes the
+		// empty null of {k: } as ''. Encode rewrites task.doc, so the input
+		// is parsed again here.
+		front, _, _ := splitFrontmatter([]byte(s))
+		in, err := ParseDoc(front, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, x := range fieldsOf(in.mapping()) {
+			if x.Value.ShortTag() == "!!null" {
+				continue
+			}
+			if got := task2.doc.Get(x.Key); !NodeEqual(denull(x.Value), denull(got)) {
+				t.Errorf("key %q changed in a round trip of %q:\n%s", x.Key, s, out)
+			}
 		}
 		out2, err := task2.Encode()
 		if err != nil || string(out2) != string(out) {
