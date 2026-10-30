@@ -1,0 +1,41 @@
+# kinds は「種類と階層」、workflow は「ワークフローの制約」を参照
+statuses:
+- {name: backlog, label: バックログ, category: todo}
+- {name: todo, label: 未着手, category: todo, default: true}
+- {name: on_hold, label: 保留, category: todo}
+- {name: in_progress, label: 進行中, category: doing, color: '#3451D1', default: true}
+- {name: waiting, label: 待機中, category: doing}
+- {name: done, label: 完了, category: done, default: true}
+- {name: canceled, label: 中止, category: canceled, default: true}
+kinds:
+- {name: project, label: プロジェクト, role: container}
+- {name: epic, label: エピック, role: container, parents: [root, project]}
+- {name: story, label: ストーリー, role: work, parents: [root, project, epic]}
+- {name: task, label: タスク, role: work, parents: [root, project, epic, story, task], default: true}
+- {name: bug, label: バグ, role: work, parents: [root, project, epic, story], template: bug-report}
+props:
+  priority: {type: enum, values: [low, mid, high, urgent]}
+  start: {type: date}
+  estimate: {type: duration}
+  area: {type: multi_enum, values: [backend, frontend, infra, ops]}
+  duplicates: {type: task_ref, multi: true, label: 重複している, inverse: 重複されている}
+  relates: {type: task_ref, multi: true, label: 関連, symmetric: true}
+workflow:
+  transitions:
+    backlog: [todo, canceled]
+    done: [todo]
+  required:
+    in_progress: [assignees]
+    done: [points]
+scoped:
+- where: project:01JBZ8K3QW7M2X9V4T6R5N8P0B # リリース準備 v2.4
+  workflow:
+    transitions:
+      waiting: [in_progress, canceled]
+    required:
+      done: [points, estimate]
+  templates:
+    only: [release-checklist, api-change]
+    default:
+      task: release-checklist
+- {where: 'project:01JBZ8K3QW7M2X9V4T6R5N8P0C', statuses: [todo, on_hold, in_progress, done, canceled]}
