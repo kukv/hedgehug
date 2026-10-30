@@ -849,7 +849,7 @@ func (ix *Index) KeyNumbers() (map[string]int, error) {
 ```
 
 - `query/eval.go`: `case "workspace": return c.workspace(t)` を足し、`c.project` と同じ作りで、値ごとに `c.ix.ResolveWorkspace(v)`（解決できなければ `c.fail`）して `e.Workspace` と比べる述語を作る
-- 呼び出し側の仮置き（Interfaces の上の Modify 参照）: `cmd/hedgehug` と `internal/doctor` の `ix.ShortID(id)` を `id.String()` に、`commentIndex` は `short` フィールドと `Short` を消して `id.String()` を使い、`Resolve` の末尾一致の分岐を消す。テストで `.Short` を期待しているものは、この時点では `ID` を使うように直す（最終の形は Task 8 で決まるので最小限に）
+- 呼び出し側の仮置き（Interfaces の上の Modify 参照）: `cmd/hedgehug` と `internal/doctor` の `ix.ShortID(id)` を `id.String()` に、`commentIndex` は `short` フィールドと `Short` を消して `id.String()` を使い、`Resolve` の末尾一致の分岐を消す。テストで `.Short` を期待しているものは、この時点では `ID` を使うように直す（最終の形は Task 8 で決まるので最小限に）。特に、長さや末尾一致を見ているもの（`add_test.go:65` の `len(got.Short) < 4`、`comment_test.go:49` の `len(got.Short) < 4`、`comment_test.go:52` の `HasSuffix(got.ID, got.Short)`）と、短い ID でコメントやタスクを指しているテストは、この Task で直す（`Short` は ULID 全体になる）
 
 - [ ] **Step 4: 通るのを確かめる** — `go build ./... && go test ./...`
 
@@ -1270,14 +1270,18 @@ func TestLogShowsCurrentKey(t *testing.T) {
 
 ```go
 func TestNoShortIDs(t *testing.T) {
-	out, err := exec.Command("grep", "-rnE", `ShortID|ShortLengths|minShort|"short"|\.Short\b`, "--include=*.go", "../../cmd", "../../internal").CombinedOutput()
+	// Built so that this file does not match itself.
+	s := "Short"
+	pattern := s + "ID|" + s + "Lengths|min" + s + `|"short"|\.` + s + `\b`
+	// repo_test.go calls go-git's ref.Name().Short(), which is not a short ID.
+	out, err := exec.Command("grep", "-rnE", pattern, "--include=*.go", "--exclude=repo_test.go", "../../cmd", "../../internal", "../../tools").CombinedOutput()
 	if err == nil {
 		t.Errorf("short IDs are still in the code:\n%s", out)
 	}
 }
 ```
 
-（cobra の `Short:` フィールドに当たらないよう、正規表現は `\.Short\b` で `Short:` を除く。当たってしまう場合は `grep -v 'Short:'` を挟む）
+（`\.Short\b` は cobra の `Short:` フィールドにも yaml の `ShortTag()` にも当たらない）
 
 - [ ] **Step 2: 失敗を確かめる** — `go test ./cmd/hedgehug/`
 
