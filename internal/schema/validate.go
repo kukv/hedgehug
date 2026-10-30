@@ -175,3 +175,47 @@ func checkScalar(p Prop, n *yaml.Node) error {
 	}
 	return err
 }
+
+// ValidateWrite checks a write of cur over old, which is nil for a new task.
+// parentKind is the kind of cur's parent, empty at the root. It returns only
+// the violations the write brings in: ones old already had are left out, so
+// a task that a sync left broken can still be edited.
+func ValidateWrite(old, cur *model.Task, parentKind string, e *Effective) []Violation {
+	vs := taskViolations(cur, parentKind, e)
+	switch {
+	case old == nil:
+		vs = append(vs, ValidateTransition("", cur.Status, cur, e)...)
+	case old.Status != cur.Status:
+		vs = append(vs, ValidateTransition(old.Status, cur.Status, cur, e)...)
+	}
+	var had []Violation
+	if old != nil {
+		had = taskViolations(old, parentKind, e)
+	}
+	return newViolations(vs, had)
+}
+
+func taskViolations(t *model.Task, parentKind string, e *Effective) []Violation {
+	vs, _ := ValidateTask(t, e)
+	return append(vs, ValidatePlacement(t.Kind, parentKind, e)...)
+}
+
+// newViolations returns vs without the ones in had, and without repeats:
+// two checks may report the same unknown kind or status. Violations are the
+// same when their Code and Field are.
+func newViolations(vs, had []Violation) []Violation {
+	seen := make(map[[2]string]bool, len(had))
+	for _, v := range had {
+		seen[[2]string{v.Code, v.Field}] = true
+	}
+	var out []Violation
+	for _, v := range vs {
+		k := [2]string{v.Code, v.Field}
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, v)
+	}
+	return out
+}
