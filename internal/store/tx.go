@@ -193,9 +193,13 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (err error) {
 	if err != nil {
 		return err
 	}
+	// A release error is dropped when the operation succeeded: release
+	// closes the file, which drops the OS lock on Unix and Windows anyway,
+	// and the caller must not think a committed operation failed. When the
+	// operation failed, the release error is joined to its error.
 	defer func() {
-		if rerr := l.release(); err == nil {
-			err = rerr
+		if rerr := l.release(); rerr != nil && err != nil {
+			err = errors.Join(err, rerr)
 		}
 	}()
 
