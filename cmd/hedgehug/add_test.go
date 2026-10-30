@@ -120,3 +120,16 @@ func TestAddErrors(t *testing.T) {
 		t.Errorf("commits = %d, want 1: failed adds must not commit", n)
 	}
 }
+
+func TestAddRefusesADeletedParent(t *testing.T) {
+	te := newStoreEnv(t)
+	p := te.addJSON("P", "--kind", "project")
+	te.ok("rm", p.Short)
+	code, _, stderr := te.run("add", "E", "--parent", p.Short)
+	if code != 1 || !strings.Contains(stderr, "is deleted; restore "+p.Short+" first") {
+		t.Errorf("exit %d, stderr %q", code, stderr)
+	}
+	if n := len(te.log("me")); n != 3 {
+		t.Errorf("commits = %d, want 3 (init, add, rm)", n)
+	}
+}

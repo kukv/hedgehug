@@ -61,6 +61,9 @@ func (a *app) add(title, parentArg, kind, status string, assigns []assign) error
 		if err != nil {
 			return err
 		}
+		if err := liveParent(ix, p); err != nil {
+			return err
+		}
 		t.Parent = &p.ID
 	}
 	for _, as := range assigns {

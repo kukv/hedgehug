@@ -56,6 +56,9 @@ func (a *app) mv(arg, parentArg string, root bool, before, after string) error {
 		if err != nil {
 			return err
 		}
+		if err := liveParent(ix, p); err != nil {
+			return err
+		}
 		parent = &p.ID
 	}
 	rank, err := a.rankAt(ix, e.ID, parent, before, after)

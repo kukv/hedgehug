@@ -102,6 +102,15 @@ func (a *app) rm(arg string) error {
 	return a.printAffected(ix, e, targets, "Deleted", true)
 }
 
+// liveParent refuses a deleted task as a parent: live tasks under it would
+// block its purge and the restore of its other children.
+func liveParent(ix *index.Index, p *index.Entry) error {
+	if p.DeletedAt != nil {
+		return fmt.Errorf("the parent %s is deleted; restore %s first", refName(ix, p.ID), ix.ShortID(p.ID))
+	}
+	return nil
+}
+
 func (a *app) restore(arg string) error {
 	s, ix, err := a.open()
 	if err != nil {
@@ -115,8 +124,10 @@ func (a *app) restore(arg string) error {
 		return fmt.Errorf("%s is not deleted", refName(ix, e.ID))
 	}
 	if e.Parent != nil {
-		if p, ok := ix.Task(*e.Parent); ok && p.DeletedAt != nil {
-			return fmt.Errorf("the parent %s is deleted; restore %s first", refName(ix, p.ID), ix.ShortID(p.ID))
+		if p, ok := ix.Task(*e.Parent); ok {
+			if err := liveParent(ix, p); err != nil {
+				return err
+			}
 		}
 	}
 	at := *e.DeletedAt

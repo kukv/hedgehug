@@ -75,3 +75,17 @@ func TestMvErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestMvRefusesADeletedParent(t *testing.T) {
+	te := newStoreEnv(t)
+	p := te.addJSON("P", "--kind", "project")
+	d := te.addJSON("D")
+	te.ok("rm", p.Short)
+	code, _, stderr := te.run("mv", d.Short, "--parent", p.Short)
+	if code != 1 || !strings.Contains(stderr, "is deleted; restore "+p.Short+" first") {
+		t.Errorf("exit %d, stderr %q", code, stderr)
+	}
+	if te.task(d.ID).Parent != nil {
+		t.Error("the task was moved")
+	}
+}
