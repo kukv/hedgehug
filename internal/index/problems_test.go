@@ -6,6 +6,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 func problemCodes(ps []Problem) []string {
@@ -90,5 +91,44 @@ func TestTargets(t *testing.T) {
 	}
 	if got := e.Targets("duplicates"); !slices.Equal(got, []model.ID{b}) {
 		t.Errorf("Targets(duplicates) = %v", got)
+	}
+}
+
+func TestKeyAndWorkspaceProblems(t *testing.T) {
+	s, dir := newStore(t)
+	ws := firstWorkspace(t, s)
+	a := newTask("a")
+	put(t, s, a) // TST-1
+	b := model.NewID()
+	commitRaw(t, s, dir, model.TaskPath(b), rawTask(b, "key: TST-1\nworkspace: "+ws.String()+"\nkind: task\ntitle: b\nstatus: todo\n"))
+	c := model.NewID()
+	commitRaw(t, s, dir, model.TaskPath(c), rawTask(c, "kind: task\ntitle: c\nstatus: todo\n"))
+	d := model.NewID()
+	commitRaw(t, s, dir, model.TaskPath(d), rawTask(d, "key: XX-1\nworkspace: "+ws.String()+"\nkind: task\ntitle: d\nstatus: todo\n"))
+	e := model.NewID()
+	commitRaw(t, s, dir, model.TaskPath(e), rawTask(e, "key: TST-9\nworkspace: "+model.NewID().String()+"\nkind: task\ntitle: e\nstatus: todo\n"))
+	f := model.NewID()
+	commitRaw(t, s, dir, model.TaskPath(f), rawTask(f, "key: TST-10\nworkspace: "+ws.String()+"\nparent: "+e.String()+"\nkind: task\ntitle: f\nstatus: todo\n"))
+	ix := mustOpen(t, s)
+	has := func(id model.ID, code string) bool {
+		return slices.ContainsFunc(ix.Problems(id), func(p Problem) bool { return p.Code == code })
+	}
+	if !has(a.ID, CodeDuplicateKey) || !has(b, CodeDuplicateKey) {
+		t.Error("duplicate keys are not found")
+	}
+	if !has(c, CodeNoKey) || !has(c, store.CodeNoWorkspace) {
+		t.Error("a task without key and workspace is not found")
+	}
+	if !has(d, CodeKeyPrefix) {
+		t.Error("a key with another prefix is not found")
+	}
+	if !has(e, store.CodeNoWorkspace) {
+		t.Error("a task in a workspace that is not in the store is not found")
+	}
+	if !has(f, store.CodeWorkspaceMismatch) {
+		t.Error("a task in another workspace than its parent is not found")
+	}
+	if has(a.ID, CodeNoKey) || has(a.ID, store.CodeNoWorkspace) || has(a.ID, CodeKeyPrefix) {
+		t.Errorf("problems of a good task = %v", ix.Problems(a.ID))
 	}
 }

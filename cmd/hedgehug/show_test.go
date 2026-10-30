@@ -20,8 +20,8 @@ func TestShow(t *testing.T) {
 	te := newStoreEnv(t)
 	p := te.addJSON("Project", "--kind", "project")
 	other := te.addJSON("Other")
-	a := te.addJSON("Write the spec", "--parent", p.Short, "-p", "blocked_by+="+other.Short, "-p", "due=2026-11-01", "-p", "labels+=ui")
-	waiting := te.addJSON("Waiting", "-p", "blocked_by+="+a.Short)
+	a := te.addJSON("Write the spec", "--parent", p.Key, "-p", "blocked_by+="+other.Key, "-p", "due=2026-11-01", "-p", "labels+=ui")
+	waiting := te.addJSON("Waiting", "-p", "blocked_by+="+a.Key)
 
 	// Add a body and a comment through the store; the CLI for them is 1d-2.
 	s, err := store.Open(te.storeDir("me"))
@@ -43,15 +43,16 @@ func TestShow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out := te.ok("show", a.Short)
+	out := te.ok("show", a.Key)
 	for _, want := range []string{
-		a.Short + "  Write the spec",
-		"parent      " + p.Short + " Project",
-		"blocked_by  " + other.Short + " Other",
+		label(a) + "  Write the spec",
+		"workspace   me (ME, ",
+		"parent      " + label(p) + " Project",
+		"blocked_by  " + label(other) + " Other",
 		"due         2026-11-01",
 		"labels      ui",
 		"Related:",
-		"blocks      " + waiting.Short + " Waiting",
+		"blocks      " + label(waiting) + " Waiting",
 		"The body.",
 		"Comments:",
 		"github.com/alice",
@@ -61,7 +62,7 @@ func TestShow(t *testing.T) {
 			t.Errorf("show does not contain %q:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "Problems:") || strings.Contains(out, "deleted ") {
+	if strings.Contains(out, "Problems:") || strings.Contains(out, "deleted ") || strings.Contains(out, "  key ") || strings.Contains(out, "former_keys") {
 		t.Errorf("show has sections it should not:\n%s", out)
 	}
 
@@ -71,12 +72,12 @@ func TestShow(t *testing.T) {
 		Comments []struct {
 			Author, Body string
 		} `json:"comments"`
-		Reverse map[string][]struct{ Short, Title string } `json:"reverse"`
+		Reverse map[string][]refJSON `json:"reverse"`
 	}
-	if err := json.Unmarshal([]byte(te.ok("show", a.Short, "--json")), &got); err != nil {
+	if err := json.Unmarshal([]byte(te.ok("show", a.Key, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Title != "Write the spec" || got.Body != "The body.\n" || len(got.Comments) != 1 || len(got.Reverse["blocks"]) != 1 || got.Reverse["blocks"][0].Title != "Waiting" {
+	if got.Title != "Write the spec" || got.Body != "The body.\n" || len(got.Comments) != 1 || len(got.Reverse["blocks"]) != 1 || got.Reverse["blocks"][0] != (refJSON{waiting.ID, waiting.Key, "Waiting"}) {
 		t.Errorf("show --json = %+v", got)
 	}
 }
@@ -149,7 +150,7 @@ func TestShowDeleted(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if out := te.ok("show", x.Short); !strings.Contains(out, "  deleted     ") {
+	if out := te.ok("show", x.Key); !strings.Contains(out, "  deleted     ") {
 		t.Errorf("show of a deleted task has no deleted line:\n%s", out)
 	}
 }
@@ -157,10 +158,10 @@ func TestShowDeleted(t *testing.T) {
 func TestShowInverseLabel(t *testing.T) {
 	te := newStoreEnv(t)
 	other := te.addJSON("Other")
-	a := te.addJSON("A", "-p", "duplicates+="+other.Short)
-	out := te.ok("show", other.Short)
+	a := te.addJSON("A", "-p", "duplicates+="+other.Key)
+	out := te.ok("show", other.Key)
 	// The label is wider than the column: one space follows it.
-	if want := "  重複されている " + a.Short + " A"; !strings.Contains(out, want) {
+	if want := "  重複されている " + label(a) + " A"; !strings.Contains(out, want) {
 		t.Errorf("show does not contain %q:\n%s", want, out)
 	}
 }
@@ -168,10 +169,10 @@ func TestShowInverseLabel(t *testing.T) {
 func TestShowWideLabel(t *testing.T) {
 	te := newStoreEnv(t)
 	other := te.addJSON("Other")
-	a := te.addJSON("A", "-p", "relates+="+other.Short)
-	out := te.ok("show", other.Short)
+	a := te.addJSON("A", "-p", "relates+="+other.Key)
+	out := te.ok("show", other.Key)
 	// 関連 is 4 columns wide; the values start at column 14, as after id.
-	if want := "  関連        " + a.Short + " A"; !strings.Contains(out, want) {
+	if want := "  関連        " + label(a) + " A"; !strings.Contains(out, want) {
 		t.Errorf("show does not contain %q:\n%s", want, out)
 	}
 	if want := "  id          " + other.ID; !strings.Contains(out, want) {

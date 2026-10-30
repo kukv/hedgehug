@@ -12,7 +12,7 @@ import (
 
 func TestStoreInit(t *testing.T) {
 	te := newTestEnv(t)
-	out := te.ok("store", "init", "me")
+	out := te.ok("store", "init", "me", "--prefix", "ME")
 	if !strings.Contains(out, "me") || !strings.Contains(out, te.storeDir("me")) {
 		t.Errorf("stdout = %q, want the name and the path", out)
 	}
@@ -43,7 +43,7 @@ func TestStoreInit(t *testing.T) {
 
 func TestStoreInitDev(t *testing.T) {
 	te := newTestEnv(t)
-	te.ok("store", "init", "dev", "--template", "dev")
+	te.ok("store", "init", "dev", "--prefix", "DV", "--template", "dev")
 	s, err := store.Open(te.storeDir("dev"))
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +56,7 @@ func TestStoreInitDev(t *testing.T) {
 func TestStoreInitJSON(t *testing.T) {
 	te := newTestEnv(t)
 	var got struct{ Name, Path string }
-	if err := json.Unmarshal([]byte(te.ok("store", "init", "me", "--json")), &got); err != nil {
+	if err := json.Unmarshal([]byte(te.ok("store", "init", "me", "--prefix", "ME", "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.Name != "me" || got.Path != te.storeDir("me") {
@@ -66,17 +66,17 @@ func TestStoreInitJSON(t *testing.T) {
 
 func TestStoreInitErrors(t *testing.T) {
 	te := newTestEnv(t)
-	te.ok("store", "init", "me")
+	te.ok("store", "init", "me", "--prefix", "ME")
 	for _, tc := range []struct {
 		name     string
 		args     []string
 		wantCode int
 		want     string
 	}{
-		{"a name twice", []string{"store", "init", "me"}, 1, `"me"`},
-		{"a bad name", []string{"store", "init", "Bad"}, 2, "cannot name a store"},
-		{"a name with a space", []string{"store", "init", "Bad Name"}, 2, "cannot name a store"},
-		{"an unknown template", []string{"store", "init", "x", "--template", "nope"}, 2, "--template"},
+		{"a name twice", []string{"store", "init", "me", "--prefix", "ME"}, 1, `"me"`},
+		{"a bad name", []string{"store", "init", "Bad", "--prefix", "BD"}, 2, "cannot name a store"},
+		{"a name with a space", []string{"store", "init", "Bad Name", "--prefix", "BD"}, 2, "cannot name a store"},
+		{"an unknown template", []string{"store", "init", "x", "--prefix", "XX", "--template", "nope"}, 2, "--template"},
 		{"no name", []string{"store", "init"}, 2, "accepts 1 arg"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -100,8 +100,8 @@ func TestStoreSelection(t *testing.T) {
 	if code != 1 || !strings.Contains(stderr, "store init") {
 		t.Errorf("ls with no store: exit %d, stderr %q", code, stderr)
 	}
-	te.ok("store", "init", "a")
-	te.ok("store", "init", "b")
+	te.ok("store", "init", "a", "--prefix", "AA")
+	te.ok("store", "init", "b", "--prefix", "BB")
 	code, _, stderr = te.run("ls")
 	if code != 1 || !strings.Contains(stderr, "--store") {
 		t.Errorf("ls with two stores: exit %d, stderr %q", code, stderr)
@@ -114,11 +114,30 @@ func TestStoreInitNoAuthor(t *testing.T) {
 	if err := os.Remove(filepath.Join(te.home, ".gitconfig")); err != nil {
 		t.Fatal(err)
 	}
-	code, _, stderr := te.run("store", "init", "me")
+	code, _, stderr := te.run("store", "init", "me", "--prefix", "ME")
 	if code != 1 || !strings.Contains(stderr, "user.name") {
 		t.Errorf("exit %d, stderr %q", code, stderr)
 	}
 	if _, err := os.Stat(te.storeDir("me")); err == nil {
 		t.Error("a store was made with no author")
 	}
+}
+
+func TestStoreInitNeedsPrefix(t *testing.T) {
+	te := newTestEnv(t)
+	if code, _, errs := te.run("store", "init", "me"); code == 0 || !strings.Contains(errs, "--prefix") {
+		t.Errorf("init without --prefix: %d %s", code, errs)
+	}
+	te.ok("store", "init", "me", "--prefix", "ME")
+	out := te.ok("workspace", "ls")
+	if !strings.Contains(out, "me") || !strings.Contains(out, "ME") {
+		t.Errorf("workspace ls =\n%s", out)
+	}
+	if code, _, errs := te.run("store", "init", "other", "--prefix", "me"); code == 0 || !strings.Contains(errs, "prefix") {
+		t.Errorf("bad prefix: %d %s", code, errs)
+	}
+	if code, _, errs := te.run("store", "init", "other", "--prefix", "ME"); code == 0 || !strings.Contains(errs, "store me") {
+		t.Errorf("prefix of another store: %d %s", code, errs)
+	}
+	te.ok("store", "init", "other", "--prefix", "OT", "--workspace", "main")
 }

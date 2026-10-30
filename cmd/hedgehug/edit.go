@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -46,7 +48,7 @@ func (a *app) edit(arg string) error {
 	if err != nil || old.ID != e.ID {
 		old = nil
 	}
-	path, edited, err := a.editFile(ix.ShortID(e.ID), orig)
+	path, edited, err := a.editFile(taskFileName(e), orig)
 	if err != nil {
 		return err
 	}
@@ -57,7 +59,7 @@ func (a *app) edit(arg string) error {
 			}
 			return a.printTask(ix, e.ID, verb(false, ""))
 		}
-		t, err := checkEdit(e.ID, old, edited)
+		t, err := checkEdit(ix, e.ID, old, edited)
 		if err == nil {
 			var committed bool
 			committed, err = a.update(s, store.Op{Name: "edit", Task: e.ID}, func(tx *store.Tx) error {
@@ -93,8 +95,9 @@ func (a *app) edit(arg string) error {
 
 // checkEdit decodes the edited file of task id and refuses the changes
 // edit does not make. old is the task before the edit, nil when it was
-// broken; then only the id is checked.
-func checkEdit(id model.ID, old *model.Task, edited []byte) (*model.Task, error) {
+// broken; then only the id is checked. The workspace can be changed only
+// when the old one is missing or not a workspace of ix, to repair it.
+func checkEdit(ix *index.Index, id model.ID, old *model.Task, edited []byte) (*model.Task, error) {
 	t, err := model.DecodeTask(edited)
 	if err != nil {
 		return nil, fmt.Errorf("the file does not decode: %w", err)
@@ -122,8 +125,18 @@ func checkEdit(id model.ID, old *model.Task, edited []byte) (*model.Task, error)
 		return nil, moved("parent")
 	case t.Rank != old.Rank:
 		return nil, moved("rank")
+	case !slices.Equal(t.FormerKeys, old.FormerKeys):
+		return nil, fixed("former_keys")
+	case t.Workspace != old.Workspace && hasWorkspace(ix, old.Workspace):
+		return nil, fmt.Errorf("workspace cannot be changed here; use hedgehug mv --workspace")
 	}
 	return t, nil
+}
+
+// hasWorkspace reports whether id is a workspace of ix.
+func hasWorkspace(ix *index.Index, id model.ID) bool {
+	_, ok := ix.Workspace(id)
+	return ok
 }
 
 func sameTime(a, b *time.Time) bool {

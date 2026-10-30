@@ -119,8 +119,11 @@ func TestDefaultEncodesAndDecodes(t *testing.T) {
 	if st, ok := Dev().Status("review"); !ok || st.Category != CategoryDoing {
 		t.Errorf("Dev review = %+v, %v", st, ok)
 	}
-	if k, ok := Default().Kind("project"); !ok || k.Parents != nil {
-		t.Errorf("project kind = %+v: parents must be omitted (anywhere)", k)
+	if k, ok := Default().Kind("project"); !ok || len(k.Parents) != 1 || k.Parents[0] != Root {
+		t.Errorf("project kind = %+v: parents must be only root", k)
+	}
+	if k, ok := Dev().Kind("project"); !ok || len(k.Parents) != 1 || k.Parents[0] != Root {
+		t.Errorf("Dev project kind = %+v: parents must be only root", k)
 	}
 }
 

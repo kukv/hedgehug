@@ -16,18 +16,35 @@ import (
 var (
 	testNow    = time.Date(2026, 10, 30, 12, 0, 0, 0, time.FixedZone("", 9*60*60))
 	testAuthor = gitrepo.Signature{Name: "Test", Email: "test@example.com"}
+
+	// testWorkspaceID is the id of the workspace of every store newTestStore
+	// makes, so newTask can name it without a store at hand.
+	testWorkspaceID = model.NewID()
 )
 
 // newTestStore creates a store in a temporary directory, with a fixed clock.
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
 	meta := &model.StoreMeta{ID: model.NewID(), Name: "test"}
-	s, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, testAuthor)
+	s, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, &model.Workspace{ID: testWorkspaceID, Name: "test", KeyPrefix: "TST"}, testAuthor)
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.now = func() time.Time { return testNow }
 	return s
+}
+
+// testWorkspace returns the workspace newTestStore made.
+func testWorkspace(t *testing.T, s *Store) *model.Workspace {
+	t.Helper()
+	for w, err := range s.Workspaces() {
+		if err != nil {
+			t.Fatal(err)
+		}
+		return w
+	}
+	t.Fatal("the store has no workspace")
+	return nil
 }
 
 // headLog returns the commits reachable from HEAD, newest first.

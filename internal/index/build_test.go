@@ -143,7 +143,7 @@ func TestRefreshRevalidatesOnSchemaChange(t *testing.T) {
 	s, dir := newStore(t)
 	task := newTask("x")
 	put(t, s, task)
-	commitRaw(t, s, dir, model.TaskPath(task.ID), rawTask(task.ID, "kind: task\ntitle: x\nstatus: todo\nprops:\n  priority: high\n"))
+	commitRaw(t, s, dir, model.TaskPath(task.ID), rawTask(task.ID, "key: TST-1\nworkspace: "+firstWorkspace(t, s).String()+"\nkind: task\ntitle: x\nstatus: todo\nprops:\n  priority: high\n"))
 	ix := mustOpen(t, s)
 	if e, _ := ix.Task(task.ID); len(e.Violations) != 0 {
 		t.Fatalf("violations = %v", e.Violations)
@@ -209,7 +209,7 @@ func TestProblemsFollowRefresh(t *testing.T) {
 	s, dir := newStore(t)
 	task := newTask("x")
 	put(t, s, task)
-	commitRaw(t, s, dir, model.TaskPath(task.ID), rawTask(task.ID, "kind: task\ntitle: x\nstatus: todo\nprops:\n  priority: high\n"))
+	commitRaw(t, s, dir, model.TaskPath(task.ID), rawTask(task.ID, "key: TST-1\nworkspace: "+firstWorkspace(t, s).String()+"\nkind: task\ntitle: x\nstatus: todo\nprops:\n  priority: high\n"))
 	ix := mustOpen(t, s)
 	if len(ix.Problems(task.ID)) != 0 {
 		t.Fatalf("Problems = %v", ix.Problems(task.ID))

@@ -200,9 +200,10 @@ func TestRunIndexProblems(t *testing.T) {
 	a := newTask("A")
 	missing := model.NewID()
 	a.Parent = &missing
+	a.Key = "TST-1"
 	putRaw(t, s, dir, a)
 	fs := run(t, dir)
-	if len(fs) != 1 || fs[0].Check != "task" || !strings.HasSuffix(fs[0].Where, " A") || !strings.Contains(fs[0].Msg, "parent") {
+	if len(fs) != 1 || fs[0].Check != "task" || fs[0].Where != "TST-1 ("+a.ID.String()+") A" || !strings.Contains(fs[0].Msg, "parent") {
 		t.Errorf("findings = %+v", fs)
 	}
 }
@@ -274,5 +275,85 @@ func TestRunIgnoresLockAndGitignore(t *testing.T) {
 	}
 	if fs := run(t, dir); len(fs) != 0 {
 		t.Errorf("findings = %+v, want none", fs)
+	}
+}
+
+func TestRunWorkspaces(t *testing.T) {
+	s, dir := newStore(t)
+	w := &model.Workspace{ID: model.NewID(), Name: "other", KeyPrefix: "TST"}
+	b, err := w.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, dir, model.WorkspacePath(w.ID), string(b))
+	if _, err := s.Repo().Commit(commitOf(model.WorkspacePath(w.ID))); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, f := range run(t, dir) {
+		if f.Check == "workspace" && strings.Contains(f.Msg, "key prefix TST") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("%d workspace findings, want 1", n)
+	}
+	writeFile(t, dir, "workspaces/nope.md", "x")
+	find(t, run(t, dir), "file", "workspaces/nope.md")
+}
+
+func TestRunWorkspaceFields(t *testing.T) {
+	_, dir := newStore(t)
+	set := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		w    model.Workspace
+		want string
+	}{
+		{model.Workspace{Name: "a", KeyPrefix: "me", PrefixSet: set}, "key prefix"},
+		{model.Workspace{Name: "B", KeyPrefix: "BB", PrefixSet: set}, "cannot name a workspace"},
+		{model.Workspace{KeyPrefix: "CC", PrefixSet: set}, "name is missing"},
+		{model.Workspace{Name: "d", PrefixSet: set}, "key_prefix is missing"},
+		{model.Workspace{Name: "e", KeyPrefix: "EE"}, "prefix_set is missing"},
+	} {
+		tc.w.ID = model.NewID()
+		b, err := tc.w.Encode()
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, dir, model.WorkspacePath(tc.w.ID), string(b))
+		if f := find(t, run(t, dir), "file", model.WorkspacePath(tc.w.ID)); !strings.Contains(f.Msg, tc.want) {
+			t.Errorf("finding = %+v, want %q", f, tc.want)
+		}
+	}
+}
+
+func TestRunNumbers(t *testing.T) {
+	s, dir := newStore(t)
+	for _, tt := range []string{"TST: [\n", "t: 3\n", "TST: 0\n"} {
+		writeFile(t, dir, model.NumbersPath, tt)
+		if _, err := s.Repo().Commit(commitOf(model.NumbersPath)); err != nil {
+			t.Fatal(err)
+		}
+		find(t, run(t, dir), "file", model.NumbersPath)
+	}
+	writeFile(t, dir, model.NumbersPath, "TST: 3\n")
+	if _, err := s.Repo().Commit(commitOf(model.NumbersPath)); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range run(t, dir) {
+		if f.Where == model.NumbersPath {
+			t.Errorf("good numbers.yaml reported: %+v", f)
+		}
+	}
+}
+
+func TestRunKeyProblems(t *testing.T) {
+	s, dir := newStore(t)
+	a := newTask("A")
+	a.Key = "XX-1"
+	putRaw(t, s, dir, a)
+	fs := run(t, dir)
+	if f := find(t, fs, "task", "XX-1 ("+a.ID.String()+") A"); !strings.Contains(f.Msg, "key prefix") {
+		t.Errorf("finding = %+v", f)
 	}
 }

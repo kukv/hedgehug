@@ -42,3 +42,6 @@ dist/
 
 ### devenv ###
 /.devenv/
+
+### build ###
+/cmd/hedgehug/hedgehug

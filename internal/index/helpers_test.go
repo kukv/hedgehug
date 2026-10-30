@@ -18,7 +18,7 @@ var testAuthor = gitrepo.Signature{Name: "Test", Email: "test@example.com"}
 func newStore(t *testing.T) (*store.Store, string) {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "store")
-	s, err := store.Create(dir, &model.StoreMeta{ID: model.NewID(), Name: "test"}, nil, testAuthor)
+	s, err := store.Create(dir, &model.StoreMeta{ID: model.NewID(), Name: "test"}, nil, &model.Workspace{ID: model.NewID(), Name: "test", KeyPrefix: "TST"}, testAuthor)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,8 +32,12 @@ func newTask(title string) *model.Task {
 // put writes tasks in one operation.
 func put(t *testing.T, s *store.Store, tasks ...*model.Task) {
 	t.Helper()
+	ws := firstWorkspace(t, s)
 	if _, err := s.Update(store.Op{Name: "update", Author: testAuthor}, func(tx *store.Tx) error {
 		for _, task := range tasks {
+			if task.Workspace.IsZero() {
+				task.Workspace = ws
+			}
 			if err := tx.PutTask(task); err != nil {
 				return err
 			}
@@ -42,6 +46,19 @@ func put(t *testing.T, s *store.Store, tasks ...*model.Task) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// firstWorkspace returns the ID of the first workspace of s.
+func firstWorkspace(t *testing.T, s *store.Store) model.ID {
+	t.Helper()
+	for w, err := range s.Workspaces() {
+		if err != nil {
+			t.Fatal(err)
+		}
+		return w.ID
+	}
+	t.Fatal("the store has no workspace")
+	return model.ID{}
 }
 
 // commitRaw writes a file as given and commits it past the store's checks,

@@ -12,12 +12,12 @@ import (
 
 func TestRunErrorUnwraps(t *testing.T) {
 	s := newStore(t)
-	for _, id := range []string{"01JBZ8K3QW7M2X9V4T6RAAA001", "01JBZ8K3QW7M2X9V4T6RBBA001"} {
+	for _, id := range []string{"01JBZ8K3QW7M2X9V4T6RAAA001", "01JBZ8K3QW7M2X9V4T6RBBB001"} {
 		pid, err := model.ParseID(id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		writeRaw(t, s, model.TaskPath(pid), "---\nid: "+id+"\nkind: task\ntitle: t\nstatus: todo\n---\n")
+		writeRaw(t, s, model.TaskPath(pid), "---\nid: "+id+"\nkind: task\nkey: WEB-1\ntitle: t\nstatus: todo\n---\n")
 	}
 	ix := mustOpen(t, s)
 	runQ := func(q string) error {
@@ -29,11 +29,11 @@ func TestRunErrorUnwraps(t *testing.T) {
 		return err
 	}
 	var amb *index.AmbiguousError
-	if err := runQ("parent:A001"); !errors.As(err, &amb) || len(amb.Candidates) != 2 {
-		t.Errorf("parent:A001 err = %v, want an AmbiguousError of 2 candidates", err)
+	if err := runQ("parent:WEB-1"); !errors.As(err, &amb) || len(amb.Candidates) != 2 {
+		t.Errorf("parent:WEB-1 err = %v, want an AmbiguousError of 2 candidates", err)
 	}
-	if err := runQ("parent:ZZZZ"); !errors.Is(err, store.ErrNotFound) {
-		t.Errorf("parent:ZZZZ err = %v, want ErrNotFound", err)
+	if err := runQ("parent:WEB-9"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("parent:WEB-9 err = %v, want ErrNotFound", err)
 	}
 }
 

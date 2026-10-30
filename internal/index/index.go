@@ -1,6 +1,6 @@
 // Package index keeps an index of the tasks of a store, for queries and for
-// telling tasks apart by short IDs. It reads task files from the tree of
-// HEAD, so a change that is not committed is not seen.
+// finding a task by its key. It reads task files from the tree of HEAD, so a
+// change that is not committed is not seen.
 package index
 
 import (
@@ -25,10 +25,12 @@ type Index struct {
 	sc    *schema.Schema // schema.yaml as tree has it
 	tasks map[model.ID]*Entry
 
+	// Read from the tree each time it changes; the cache does not hold them.
+	workspaces map[model.ID]*model.Workspace
+
 	// Derived from tasks by derive.
 	children map[model.ID][]*Entry
 	roots    []*Entry
-	short    map[model.ID]int // length of the short ID of each task
 	problems map[model.ID][]Problem
 }
 
@@ -39,6 +41,10 @@ func Open(s *store.Store) (*Index, error) {
 	ix := &Index{s: s, repo: s.Repo()}
 	head, err := ix.repo.HeadTree()
 	if err != nil {
+		return nil, err
+	}
+	// The problems depend on the workspaces, so read them first.
+	if err := ix.readWorkspaces(head); err != nil {
 		return nil, err
 	}
 	tree, ok := ix.load()
@@ -56,6 +62,7 @@ func Open(s *store.Store) (*Index, error) {
 	if rebuilt || tree != head {
 		ix.save()
 	}
+	s.SetKeyNumbers(ix.KeyNumbers)
 	return ix, nil
 }
 
@@ -68,6 +75,9 @@ func (ix *Index) Refresh() error {
 	}
 	if head == ix.tree {
 		return nil
+	}
+	if err := ix.readWorkspaces(head); err != nil {
+		return err
 	}
 	err = ix.update(ix.tree, head)
 	if errors.Is(err, gitrepo.ErrTreeNotFound) {
@@ -116,7 +126,6 @@ func (ix *Index) derive() {
 		sortByRank(cs)
 	}
 	sortByRank(ix.roots)
-	ix.short = ShortLengths(slices.Collect(maps.Keys(ix.tasks)))
 }
 
 func sortByRank(es []*Entry) {

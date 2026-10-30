@@ -4,13 +4,24 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
-// CodeBroken is the problem of a task file that does not decode.
-const CodeBroken = "broken"
+const (
+	// CodeBroken is the problem of a task file that does not decode.
+	CodeBroken = "broken"
+	// CodeNoKey is the problem of a task whose key is missing or not a key.
+	CodeNoKey = "no_key"
+	// CodeDuplicateKey is the problem of tasks that share a key.
+	CodeDuplicateKey = "duplicate_key"
+	// CodeKeyPrefix is the problem of a key whose prefix is not the one of
+	// the task's workspace.
+	CodeKeyPrefix = "key_prefix"
+)
 
 // Problem is something wrong with a task: what is:invalid finds, and what is
 // shown as a warning after a sync.
@@ -25,10 +36,11 @@ func (ix *Index) Problems(id model.ID) []Problem { return slices.Clone(ix.proble
 
 // findProblems finds what is wrong with each task: a file that does not
 // decode, schema violations, references to tasks not in the store, and
-// cycles of parents or blockers.
+// cycles of parents or blockers, and keys and workspaces that do not fit.
 func (ix *Index) findProblems() map[model.ID][]Problem {
 	out := map[model.ID][]Problem{}
 	add := func(id model.ID, p Problem) { out[id] = append(out[id], p) }
+	byKey := map[string][]model.ID{}
 	for _, e := range ix.tasks {
 		if e.Broken != "" {
 			add(e.ID, Problem{CodeBroken, "", e.Broken})
@@ -41,6 +53,34 @@ func (ix *Index) findProblems() map[model.ID][]Problem {
 			if ix.tasks[r.id] == nil {
 				add(e.ID, Problem{schema.CodeMissingRef, r.field, fmt.Sprintf("task %s is not in this store", r.id)})
 			}
+		}
+		if _, _, ok := model.ParseKey(e.Key); !ok {
+			add(e.ID, Problem{CodeNoKey, "key", "missing or not a key such as WEB-42; the next write gives one"})
+		} else {
+			byKey[e.Key] = append(byKey[e.Key], e.ID)
+		}
+		ws, wsOK := ix.workspaces[e.Workspace]
+		switch {
+		case e.Workspace.IsZero() || !wsOK:
+			add(e.ID, Problem{store.CodeNoWorkspace, "workspace", "missing or not a workspace of this store; set it with hedgehug edit"})
+		case e.Key != "":
+			if p, _, ok := model.ParseKey(e.Key); ok && p != ws.KeyPrefix {
+				add(e.ID, Problem{CodeKeyPrefix, "key", fmt.Sprintf("the key prefix is not the one of workspace %s (%s); the next write renumbers it", ws.Name, ws.KeyPrefix)})
+			}
+		}
+		if e.Parent != nil {
+			if p := ix.tasks[*e.Parent]; p != nil && p.Broken == "" && p.Workspace != e.Workspace {
+				add(e.ID, Problem{store.CodeWorkspaceMismatch, "workspace", "differs from the workspace of the parent"})
+			}
+		}
+	}
+	for key, ids := range byKey {
+		if len(ids) < 2 {
+			continue
+		}
+		for _, id := range ids {
+			others := slices.DeleteFunc(slices.Clone(ids), func(o model.ID) bool { return o == id })
+			add(id, Problem{CodeDuplicateKey, "key", fmt.Sprintf("key %s is also the key of %s", key, joinIDs(others))})
 		}
 	}
 	parents := func(e *Entry) []model.ID {
@@ -56,6 +96,16 @@ func (ix *Index) findProblems() map[model.ID][]Problem {
 		add(id, Problem{schema.CodeCycle, "blocked_by", "the blockers form a cycle"})
 	}
 	return out
+}
+
+// joinIDs lists ids in order, separated by commas.
+func joinIDs(ids []model.ID) string {
+	strs := make([]string, len(ids))
+	for i, id := range ids {
+		strs[i] = id.String()
+	}
+	slices.Sort(strs)
+	return strings.Join(strs, ", ")
 }
 
 // ref is one reference from a task to another.

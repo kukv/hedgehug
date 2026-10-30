@@ -33,6 +33,8 @@ type Store struct {
 	meta   *model.StoreMeta
 	schema atomic.Pointer[schema.Schema] // replaced by Update; read without mu
 
+	keyNumbers KeyNumbers // counts key numbers for Update; nil reads every task
+
 	// Replaced by tests.
 	now      func() time.Time
 	lockWait time.Duration
@@ -60,9 +62,16 @@ var newStoreHook = func(*Store) {}
 
 // Create makes a new store in dir, which must be missing or empty: a git
 // repository holding store.yaml, sc as schema.yaml (the default schema when
-// sc is nil) and a .gitignore, in one commit. meta is copied, not changed.
+// sc is nil), the workspace ws and a .gitignore, in one commit. meta and ws
+// are copied, not changed.
 // When Create fails it removes what it made, so it can be run again.
-func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo.Signature) (_ *Store, err error) {
+func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Workspace, author gitrepo.Signature) (_ *Store, err error) {
+	if ws == nil {
+		return nil, errors.New("the store needs a workspace")
+	}
+	if err := model.ValidKeyPrefix(ws.KeyPrefix); err != nil {
+		return nil, err
+	}
 	made, err := ensureEmpty(dir)
 	if err != nil {
 		return nil, err
@@ -84,11 +93,23 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 	s := newStore(dir, repo, &m, sc)
 	newStoreHook(s)
 
+	now := s.now().Truncate(time.Second)
+	w := *ws
+	for _, t := range []*time.Time{&w.Created, &w.Updated, &w.PrefixSet} {
+		if t.IsZero() {
+			*t = now
+		}
+	}
+
 	mb, err := m.Encode()
 	if err != nil {
 		return nil, err
 	}
 	sb, err := s.Schema().Encode()
+	if err != nil {
+		return nil, err
+	}
+	wb, err := w.Encode()
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +119,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 	}{
 		{model.StoreMetaPath, mb},
 		{schemaPath, sb},
+		{model.WorkspacePath(w.ID), wb},
 		{gitignorePath, []byte(".hedgehug/local/\n")},
 	}
 	paths := make([]string, 0, len(files))
@@ -112,7 +134,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 		Subject:  "hedgehug: init",
 		Trailers: []gitrepo.Trailer{{Key: "Hedgehug-Op", Value: "init"}},
 		Author:   author,
-		When:     s.now().Truncate(time.Second),
+		When:     now,
 	}); err != nil {
 		return nil, err
 	}

@@ -12,7 +12,7 @@ import (
 // every CRUD operation and the tree work, and each is one commit.
 func TestScenario(t *testing.T) {
 	te := newTestEnv(t)
-	te.ok("store", "init", "me")
+	te.ok("store", "init", "me", "--prefix", "ME")
 	step := func(op string, args ...string) {
 		t.Helper()
 		before := len(te.log("me"))
@@ -28,8 +28,8 @@ func TestScenario(t *testing.T) {
 	}
 
 	p := te.addJSON("Website", "--kind", "project")
-	c := te.addJSON("Login page", "--parent", p.Short)
-	g := te.addJSON("Form", "--parent", c.Short)
+	c := te.addJSON("Login page", "--parent", p.Key)
+	g := te.addJSON("Form", "--parent", c.Key)
 	o := te.addJSON("Other")
 
 	tree := te.ok("ls", "--tree", "--no-color")
@@ -38,23 +38,22 @@ func TestScenario(t *testing.T) {
 			t.Fatalf("tree lacks %q:\n%s", s, tree)
 		}
 	}
-	step("set", "set", g.Short, "labels+=ui", "due=2026-11-01")
+	step("set", "set", g.Key, "labels+=ui", "due=2026-11-01")
 	// The editor writes its contents in turn: the task for edit, then the
 	// body for comment edit.
 	te.editWith(setLine(te.raw(g.ID), "title", "Form fields"), "second\n")
-	step("edit", "edit", g.Short)
-	step("comment", "comment", g.Short, "first")
+	step("edit", "edit", g.Key)
+	step("comment", "comment", g.Key, "first")
 	cm := te.comments(g.ID)
 	if len(cm) != 1 {
 		t.Fatalf("comments = %d, want 1", len(cm))
 	}
-	cid := cm[0].ID.String()[len(cm[0].ID.String())-6:]
-	step("comment", "comment", "edit", cid)
+	step("comment", "comment", "edit", cm[0].ID.String())
 	if cs := te.comments(g.ID); len(cs) != 1 || cs[0].Body != "second\n" {
 		t.Fatalf("comments after edit = %+v", cs)
 	}
-	out := te.ok("show", g.Short)
-	for _, w := range []string{"Form fields", cid[len(cid)-4:], "second", "\nHistory:\n", "hedgehug: edit "} {
+	out := te.ok("show", g.Key)
+	for _, w := range []string{"Form fields", cm[0].ID.String(), "second", "\nHistory:\n", "hedgehug: edit "} {
 		if !strings.Contains(out, w) {
 			t.Errorf("show lacks %q:\n%s", w, out)
 		}
@@ -62,29 +61,29 @@ func TestScenario(t *testing.T) {
 	var sj struct {
 		History []logJSON `json:"history"`
 	}
-	if err := json.Unmarshal([]byte(te.ok("show", g.Short, "--json")), &sj); err != nil {
+	if err := json.Unmarshal([]byte(te.ok("show", g.Key, "--json")), &sj); err != nil {
 		t.Fatal(err)
 	}
 	if len(sj.History) == 0 || !slices.ContainsFunc(sj.History, func(l logJSON) bool { return strings.HasPrefix(l.Subject, "hedgehug: edit ") }) {
 		t.Errorf("show --json history = %+v, want the edit commit", sj.History)
 	}
-	step("comment", "comment", "rm", cid)
-	if out := te.ok("log", g.Short); !strings.Contains(out, "hedgehug: edit ") || !strings.Contains(out, "hedgehug: comment ") || len(strings.Split(strings.TrimRight(out, "\n"), "\n")) < 4 {
+	step("comment", "comment", "rm", cm[0].ID.String())
+	if out := te.ok("log", g.Key); !strings.Contains(out, "hedgehug: edit ") || !strings.Contains(out, "hedgehug: comment ") || len(strings.Split(strings.TrimRight(out, "\n"), "\n")) < 4 {
 		t.Errorf("log for the task:\n%s", out)
 	}
-	step("status", "status", g.Short, "in_progress")
-	step("status", "done", g.Short)
-	step("mv", "mv", o.Short, "--parent", p.Short, "--before", c.Short)
-	step("dep", "dep", "add", c.Short, "--blocked-by", o.Short)
-	step("dep", "dep", "rm", c.Short, "--blocked-by", o.Short)
+	step("status", "status", g.Key, "in_progress")
+	step("status", "done", g.Key)
+	step("mv", "mv", o.Key, "--parent", p.Key, "--before", c.Key)
+	step("dep", "dep", "add", c.Key, "--blocked-by", o.Key)
+	step("dep", "dep", "rm", c.Key, "--blocked-by", o.Key)
 	step("migrate", "schema", "migrate", "status", "done", "closed")
-	if out := te.ok("ls", "status:closed", "--ids-only"); !strings.Contains(out, g.Short) {
-		t.Errorf("ls status:closed = %q, want %s", out, g.Short)
+	if out := te.ok("ls", "status:closed", "--ids-only"); !strings.Contains(out, g.ID) {
+		t.Errorf("ls status:closed = %q, want %s", out, g.ID)
 	}
-	step("rm", "rm", p.Short)
-	step("restore", "restore", p.Short)
-	step("rm", "rm", p.Short)
-	step("purge", "purge", p.Short, "--yes")
+	step("rm", "rm", p.Key)
+	step("restore", "restore", p.Key)
+	step("rm", "rm", p.Key)
+	step("purge", "purge", p.Key, "--yes")
 	if out := te.ok("ls", "is:deleted", "--ids-only"); out != "" {
 		t.Errorf("deleted tasks remain after purge: %q", out)
 	}

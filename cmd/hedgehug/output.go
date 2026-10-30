@@ -29,7 +29,7 @@ func (s style) wrap(code, t string) string {
 	return "\x1b[" + code + "m" + t + "\x1b[0m"
 }
 
-// id colors a short ID.
+// id colors the key and ID of a task, or the ID of a comment.
 func (s style) id(t string) string { return s.wrap("33", t) }
 
 // dim marks text that is context, not a result. Without color it is put in
@@ -50,28 +50,42 @@ func (a *app) printJSON(v any) error {
 
 // taskJSON is a task as --json prints it.
 type taskJSON struct {
-	ID        string         `json:"id"`
-	Short     string         `json:"short"`
-	Key       string         `json:"key"`
-	Kind      string         `json:"kind"`
-	Title     string         `json:"title"`
-	Parent    *string        `json:"parent"`
-	Rank      string         `json:"rank"`
-	Status    string         `json:"status"`
-	Assignees []string       `json:"assignees"`
-	Labels    []string       `json:"labels"`
-	BlockedBy []string       `json:"blocked_by"`
-	Props     map[string]any `json:"props"`
-	Created   time.Time      `json:"created"`
-	Updated   time.Time      `json:"updated"`
-	DeletedAt *time.Time     `json:"deleted_at"`
-	Problems  []problemJSON  `json:"problems"`
-	Broken    string         `json:"broken,omitempty"`
+	ID        string            `json:"id"`
+	Key       string            `json:"key"`
+	Workspace *workspaceRefJSON `json:"workspace"`
+	Kind      string            `json:"kind"`
+	Title     string            `json:"title"`
+	Parent    *string           `json:"parent"`
+	Rank      string            `json:"rank"`
+	Status    string            `json:"status"`
+	Assignees []string          `json:"assignees"`
+	Labels    []string          `json:"labels"`
+	BlockedBy []refJSON         `json:"blocked_by"`
+	Props     map[string]any    `json:"props"`
+	Created   time.Time         `json:"created"`
+	Updated   time.Time         `json:"updated"`
+	DeletedAt *time.Time        `json:"deleted_at"`
+	Problems  []problemJSON     `json:"problems"`
+	Broken    string            `json:"broken,omitempty"`
 
 	// Only in ls --tree --json.
 	Context  bool        `json:"context,omitempty"`  // shown only to connect the tasks found
 	InCycle  bool        `json:"in_cycle,omitempty"` // in a parent cycle, out of reach of the roots
 	Children []*taskJSON `json:"children,omitempty"`
+}
+
+// workspaceRefJSON names the workspace of a task.
+type workspaceRefJSON struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	KeyPrefix string `json:"key_prefix"`
+}
+
+// refJSON names a task that another task points at.
+type refJSON struct {
+	ID    string `json:"id"`
+	Key   string `json:"key"`
+	Title string `json:"title"`
 }
 
 type problemJSON struct {
@@ -83,7 +97,6 @@ type problemJSON struct {
 func entryJSON(ix *index.Index, e *index.Entry) *taskJSON {
 	j := &taskJSON{
 		ID:        e.ID.String(),
-		Short:     ix.ShortID(e.ID),
 		Key:       e.Key,
 		Kind:      e.Kind,
 		Title:     e.Title,
@@ -91,7 +104,7 @@ func entryJSON(ix *index.Index, e *index.Entry) *taskJSON {
 		Status:    e.Status,
 		Assignees: orEmpty(e.Assignees),
 		Labels:    orEmpty(e.Labels),
-		BlockedBy: []string{},
+		BlockedBy: []refJSON{},
 		Props:     map[string]any{},
 		Created:   e.Created,
 		Updated:   e.Updated,
@@ -103,8 +116,14 @@ func entryJSON(ix *index.Index, e *index.Entry) *taskJSON {
 		p := e.Parent.String()
 		j.Parent = &p
 	}
+	if !e.Workspace.IsZero() {
+		j.Workspace = &workspaceRefJSON{ID: e.Workspace.String()}
+		if w, ok := ix.Workspace(e.Workspace); ok {
+			j.Workspace.Name, j.Workspace.KeyPrefix = w.Name, w.KeyPrefix
+		}
+	}
 	for _, b := range e.BlockedBy {
-		j.BlockedBy = append(j.BlockedBy, b.String())
+		j.BlockedBy = append(j.BlockedBy, refOf(ix, b))
 	}
 	sc := ix.Schema()
 	for _, p := range e.Props {
@@ -123,6 +142,16 @@ func entryJSON(ix *index.Index, e *index.Entry) *taskJSON {
 		j.Problems = append(j.Problems, problemJSON{p.Code, p.Field, p.Msg})
 	}
 	return j
+}
+
+// refOf names the task id, with an empty key and title when the index does
+// not have it.
+func refOf(ix *index.Index, id model.ID) refJSON {
+	r := refJSON{ID: id.String()}
+	if e, ok := ix.Task(id); ok {
+		r.Key, r.Title = e.Key, e.Title
+	}
+	return r
 }
 
 func orEmpty(s []string) []string {
@@ -161,16 +190,45 @@ func writeTable(w io.Writer, header []string, rows [][]string, paint func(r, c i
 	return err
 }
 
-var taskHeader = []string{"ID", "STATUS", "KIND", "ASSIGNEES", "LABELS", "TITLE"}
+var taskHeader = []string{"KEY", "ID", "STATUS", "KIND", "ASSIGNEES", "LABELS", "TITLE"}
 
 // taskRow is one task in the table. The title is last, so wide characters
 // in it do not shift other columns.
-func taskRow(ix *index.Index, e *index.Entry) []string {
-	kind, status := e.Kind, e.Status
+func taskRow(e *index.Entry) []string {
+	key, kind, status := e.Key, e.Kind, e.Status
+	if key == "" {
+		key = "?"
+	}
 	if e.Broken != "" {
 		kind, status = "?", "?"
 	}
-	return []string{ix.ShortID(e.ID), status, kind, strings.Join(e.Assignees, ","), strings.Join(e.Labels, ","), e.Title}
+	return []string{key, e.ID.String(), status, kind, strings.Join(e.Assignees, ","), strings.Join(e.Labels, ","), e.Title}
+}
+
+// taskLabel names a task for a reader: its key and full ULID, or the ULID
+// alone when the task has no key (a file that does not decode).
+func taskLabel(e *index.Entry) string {
+	if e.Key == "" {
+		return e.ID.String()
+	}
+	return e.Key + " (" + e.ID.String() + ")"
+}
+
+// taskFileName names the temporary file that edits task e: its key, or its
+// ULID when it has no key.
+func taskFileName(e *index.Entry) string {
+	if e.Key == "" {
+		return e.ID.String()
+	}
+	return e.Key
+}
+
+// refName names the task id for a reader: its key, ULID and title.
+func refName(ix *index.Index, id model.ID) string {
+	if e, ok := ix.Task(id); ok {
+		return taskLabel(e) + " " + e.Title
+	}
+	return id.String() + " (not found)"
 }
 
 // printTasks prints es as JSON or as a table.
@@ -187,11 +245,11 @@ func (a *app) printTasks(ix *index.Index, es []*index.Entry) error {
 	}
 	rows := make([][]string, len(es))
 	for i, e := range es {
-		rows[i] = taskRow(ix, e)
+		rows[i] = taskRow(e)
 	}
 	st := a.style()
 	return writeTable(a.stdout, taskHeader, rows, func(r, c int, s string) string {
-		if r >= 0 && c == 0 {
+		if r >= 0 && c <= 1 {
 			return st.id(s)
 		}
 		return s
@@ -211,7 +269,7 @@ func (a *app) printTask(ix *index.Index, id model.ID, verb string) error {
 	if a.jsonOut {
 		return a.printJSON(entryJSON(ix, e))
 	}
-	_, err := fmt.Fprintf(a.stdout, "%s %s %s\n", verb, a.style().id(ix.ShortID(id)), e.Title)
+	_, err := fmt.Fprintf(a.stdout, "%s %s %s\n", verb, a.style().id(taskLabel(e)), e.Title)
 	return err
 }
 

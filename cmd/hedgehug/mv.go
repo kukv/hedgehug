@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -12,10 +13,10 @@ import (
 )
 
 func (a *app) mvCmd() *cobra.Command {
-	var parent, before, after string
+	var parent, before, after, workspace string
 	var root bool
 	cmd := &cobra.Command{
-		Use:   "mv <id> [--parent <id> | --root] [--before <id> | --after <id>]",
+		Use:   "mv <id> [--workspace <ws>] [--parent <id> | --root] [--before <id> | --after <id>]",
 		Short: "Move a task under another parent or among its siblings",
 		Args:  exactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
@@ -24,13 +25,14 @@ func (a *app) mvCmd() *cobra.Command {
 				return usageErrorf("give --parent or --root, not both")
 			case before != "" && after != "":
 				return usageErrorf("give --before or --after, not both")
-			case parent == "" && !root && before == "" && after == "":
-				return usageErrorf("say where to: --parent, --root, --before or --after")
+			case parent == "" && !root && before == "" && after == "" && workspace == "":
+				return usageErrorf("say where to: --workspace, --parent, --root, --before or --after")
 			}
-			return a.mv(args[0], parent, root, before, after)
+			return a.mv(args[0], workspace, parent, root, before, after)
 		},
 	}
 	f := cmd.Flags()
+	f.StringVar(&workspace, "workspace", "", "move it with its subtree to this workspace and renumber")
 	f.StringVar(&parent, "parent", "", "the new parent")
 	f.BoolVar(&root, "root", false, "move to the top level")
 	f.StringVar(&before, "before", "", "put it just before this sibling")
@@ -38,7 +40,7 @@ func (a *app) mvCmd() *cobra.Command {
 	return cmd
 }
 
-func (a *app) mv(arg, parentArg string, root bool, before, after string) error {
+func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after string) error {
 	s, ix, err := a.open()
 	if err != nil {
 		return err
@@ -51,6 +53,7 @@ func (a *app) mv(arg, parentArg string, root bool, before, after string) error {
 		return err
 	}
 	parent := e.Parent
+	dest := e.Workspace
 	switch {
 	case root:
 		parent = nil
@@ -63,23 +66,71 @@ func (a *app) mv(arg, parentArg string, root bool, before, after string) error {
 			return err
 		}
 		parent = &p.ID
+		dest = p.Workspace
+	}
+	if workspaceArg != "" {
+		w, err := resolveWorkspace(ix, workspaceArg)
+		if err != nil {
+			return err
+		}
+		switch {
+		case parentArg != "" && w.ID != dest:
+			pw, ok := ix.Workspace(dest)
+			if !ok {
+				return fmt.Errorf("the parent's workspace %s is not in this store", dest)
+			}
+			return fmt.Errorf("the parent is in workspace %s", pw.Name)
+		case parentArg == "" && w.ID != e.Workspace:
+			// The old parent stays behind, so the task goes to the top level.
+			parent = nil
+		}
+		dest = w.ID
 	}
 	rank, err := a.rankAt(ix, e.ID, parent, before, after)
 	if err != nil {
 		return err
 	}
+	// A task and its subtree are in one workspace, so they move together.
+	targets := []*index.Entry{e}
+	if dest != e.Workspace {
+		targets = append(targets, descendants(ix, e.ID, func(*index.Entry) bool { return true })...)
+	}
+	oldKeys := make([]string, len(targets))
+	for i, x := range targets {
+		oldKeys[i] = x.Key
+	}
 	committed, err := a.update(s, store.Op{Name: "mv", Task: e.ID}, func(tx *store.Tx) error {
-		t, err := tx.Task(e.ID)
-		if err != nil {
-			return err
+		for _, x := range targets {
+			t, err := tx.Task(x.ID)
+			if err != nil {
+				return err
+			}
+			t.Workspace = dest
+			if x.ID == e.ID {
+				t.Parent, t.Rank = parent, rank
+			}
+			if err := tx.PutTask(t); err != nil {
+				return err
+			}
 		}
-		t.Parent, t.Rank = parent, rank
-		return tx.PutTask(t)
+		return nil
 	})
 	if err != nil {
 		return err
 	}
-	return a.printTask(ix, e.ID, verb(committed, "Moved"))
+	if err := a.printTask(ix, e.ID, verb(committed, "Moved")); err != nil || a.jsonOut || dest == e.Workspace {
+		return err
+	}
+	var b strings.Builder
+	for i, x := range targets {
+		n, ok := ix.Task(x.ID)
+		if !ok {
+			return fmt.Errorf("%s is missing after the move", oldKeys[i])
+		}
+		fmt.Fprintf(&b, "  %s → %s\n", oldKeys[i], n.Key)
+	}
+	_, err = fmt.Fprint(a.stdout, b.String())
+	return err
 }
 
 // rankAt returns the rank for id under parent: just before or after a

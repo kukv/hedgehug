@@ -11,9 +11,9 @@ import (
 // Task is one task file. A project is a task too.
 type Task struct {
 	ID         ID
-	Key        string   // human-readable key such as WEB-42, fixed by a sync
+	Key        string   // human-readable key such as WEB-42, given when the task is written
 	FormerKeys []string // keys before renumbering
-	KeyPrefix  string   // prefix for descendants; container kinds only
+	Workspace  ID       // zero when not set
 	Kind       string
 	Title      string
 	Parent     *ID
@@ -47,7 +47,7 @@ type Link struct {
 }
 
 var taskKeys = []string{
-	"id", "key", "former_keys", "key_prefix", "kind", "title", "parent", "rank", "status",
+	"id", "key", "former_keys", "workspace", "kind", "title", "parent", "rank", "status",
 	"assignees", "watchers", "labels", "repos", "blocked_by", "sprint", "releases", "links",
 	"props", "gh", "created", "created_by", "updated", "deleted_at",
 }
@@ -74,7 +74,7 @@ func DecodeTask(data []byte) (*Task, error) {
 		{"id", &t.ID},
 		{"key", &t.Key},
 		{"former_keys", &t.FormerKeys},
-		{"key_prefix", &t.KeyPrefix},
+		{"workspace", &t.Workspace},
 		{"kind", &t.Kind},
 		{"title", &t.Title},
 		{"parent", &t.Parent},
@@ -116,7 +116,7 @@ func (t *Task) Encode() ([]byte, error) {
 	e.Put("id", t.ID, false)
 	e.Put("key", t.Key, t.Key == "")
 	e.Put("former_keys", t.FormerKeys, len(t.FormerKeys) == 0)
-	e.Put("key_prefix", t.KeyPrefix, t.KeyPrefix == "")
+	e.Put("workspace", t.Workspace, t.Workspace.IsZero())
 	e.Put("kind", t.Kind, t.Kind == "")
 	e.Put("title", t.Title, t.Title == "")
 	e.Put("parent", t.Parent, t.Parent == nil)

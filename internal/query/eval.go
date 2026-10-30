@@ -121,6 +121,8 @@ func (c *compiler) term(t Term) (pred, error) {
 		})
 	case "project":
 		return c.project(t)
+	case "workspace":
+		return c.workspace(t)
 	case "blocked_by":
 		return c.ref(t, func(e *index.Entry) []model.ID { return e.BlockedBy })
 	case "blocks":
@@ -278,6 +280,19 @@ func (c *compiler) project(t Term) (pred, error) {
 		}
 		return false
 	}, nil
+}
+
+// workspace matches tasks that sit in one of the term's workspaces.
+func (c *compiler) workspace(t Term) (pred, error) {
+	ids := map[model.ID]bool{}
+	for _, v := range t.Values {
+		w, err := c.ix.ResolveWorkspace(v)
+		if err != nil {
+			return nil, c.failWith(t, err)
+		}
+		ids[w.ID] = true
+	}
+	return func(e *index.Entry) bool { return ids[e.Workspace] }, nil
 }
 
 // inverse matches tasks that one of the term's tasks points at through rel,

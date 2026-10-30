@@ -255,7 +255,7 @@ func Default() *Schema {
 			{Name: "canceled", Label: "中止", Category: CategoryCanceled, Default: true},
 		},
 		Kinds: []Kind{
-			{Name: "project", Label: "プロジェクト", Role: RoleContainer},
+			{Name: "project", Label: "プロジェクト", Role: RoleContainer, Parents: []string{Root}},
 			{Name: "epic", Label: "エピック", Role: RoleContainer, Parents: []string{Root, "project"}},
 			{Name: "story", Label: "ストーリー", Role: RoleWork, Parents: []string{Root, "project", "epic"}},
 			{Name: "task", Label: "タスク", Role: RoleWork, Parents: []string{Root, "project", "epic", "story", "task"}, Default: true},

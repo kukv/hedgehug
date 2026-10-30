@@ -25,15 +25,9 @@ func (a *app) showCmd() *cobra.Command {
 
 type commentJSON struct {
 	ID      string    `json:"id"`
-	Short   string    `json:"short"`
 	Author  string    `json:"author"`
 	Created time.Time `json:"created"`
 	Body    string    `json:"body"`
-}
-
-type refJSON struct {
-	Short string `json:"short"`
-	Title string `json:"title"`
 }
 
 type showJSON struct {
@@ -72,15 +66,9 @@ func (a *app) show(arg string) error {
 		}
 	}
 	var comments []*model.Comment
-	var ci *commentIndex
 	if e.Broken == "" {
 		if comments, err = liveComments(s, e.ID); err != nil {
 			return err
-		}
-		if len(comments) > 0 {
-			if ci, err = loadComments(s); err != nil {
-				return err
-			}
 		}
 	}
 	rels := reverse(ix, e.ID)
@@ -89,9 +77,9 @@ func (a *app) show(arg string) error {
 		return err
 	}
 	if a.jsonOut {
-		return a.printJSON(showOf(ix, e, t, comments, ci, rels, history))
+		return a.printJSON(showOf(ix, e, t, comments, rels, history))
 	}
-	_, err = fmt.Fprint(a.stdout, a.showText(ix, e, t, comments, ci, rels, history))
+	_, err = fmt.Fprint(a.stdout, a.showText(ix, e, t, comments, rels, history))
 	return err
 }
 
@@ -136,34 +124,26 @@ func reverse(ix *index.Index, id model.ID) []relation {
 	return out
 }
 
-// refName names the task id for a reader: its short ID and title.
-func refName(ix *index.Index, id model.ID) string {
-	if e, ok := ix.Task(id); ok {
-		return ix.ShortID(id) + " " + e.Title
-	}
-	return id.String() + " (not found)"
-}
-
-func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, ci *commentIndex, rels []relation, history []gitrepo.LogEntry) *showJSON {
-	j := &showJSON{taskJSON: entryJSON(ix, e), Watchers: []string{}, Repos: []string{}, Comments: []commentJSON{}, Reverse: map[string][]refJSON{}, History: logJSONs(history)}
+func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []relation, history []gitrepo.LogEntry) *showJSON {
+	j := &showJSON{taskJSON: entryJSON(ix, e), Watchers: []string{}, Repos: []string{}, Comments: []commentJSON{}, Reverse: map[string][]refJSON{}, History: logJSONs(ix, history)}
 	if t != nil {
 		j.Body, j.Watchers, j.Repos = t.Body, orEmpty(t.Watchers), orEmpty(t.Repos)
 	}
 	for _, c := range comments {
-		j.Comments = append(j.Comments, commentJSON{c.ID.String(), ci.Short(c.ID), c.Author, c.Created, c.Body})
+		j.Comments = append(j.Comments, commentJSON{c.ID.String(), c.Author, c.Created, c.Body})
 	}
 	for _, r := range rels {
 		for _, x := range r.tasks {
-			j.Reverse[r.key] = append(j.Reverse[r.key], refJSON{ix.ShortID(x.ID), x.Title})
+			j.Reverse[r.key] = append(j.Reverse[r.key], refJSON{x.ID.String(), x.Key, x.Title})
 		}
 	}
 	return j
 }
 
-func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, ci *commentIndex, rels []relation, history []gitrepo.LogEntry) string {
+func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []relation, history []gitrepo.LogEntry) string {
 	st := a.style()
 	var b strings.Builder
-	b.WriteString(st.id(ix.ShortID(e.ID)) + "  " + e.Title + "\n")
+	b.WriteString(st.id(taskLabel(e)) + "  " + e.Title + "\n")
 	field := func(k string, vs ...string) {
 		v := strings.Join(vs, ", ")
 		if v == "" {
@@ -179,7 +159,16 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 		return out
 	}
 	field("id", e.ID.String())
-	field("key", e.Key)
+	if !e.Workspace.IsZero() {
+		ws := e.Workspace.String()
+		if w, ok := ix.Workspace(e.Workspace); ok {
+			ws = w.Name + " (" + w.KeyPrefix + ", " + ws + ")"
+		}
+		field("workspace", ws)
+	}
+	if len(e.FormerKeys) > 0 {
+		field("former_keys", e.FormerKeys...)
+	}
 	field("kind", e.Kind)
 	field("status", e.Status)
 	if e.Parent != nil {
@@ -224,7 +213,7 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 		for _, r := range rels {
 			names := make([]string, len(r.tasks))
 			for i, x := range r.tasks {
-				names[i] = ix.ShortID(x.ID) + " " + x.Title
+				names[i] = refName(ix, x.ID)
 			}
 			field(r.label, names...)
 		}
@@ -242,14 +231,14 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 			if author == "" {
 				author = "-"
 			}
-			fmt.Fprintf(&b, "  %s  %s  %s\n", st.id(ci.Short(c.ID)), author, c.Created.Format(time.RFC3339))
+			fmt.Fprintf(&b, "  %s  %s  %s\n", st.id(c.ID.String()), author, c.Created.Format(time.RFC3339))
 			for _, l := range strings.Split(strings.TrimRight(c.Body, "\n"), "\n") {
 				b.WriteString("    " + l + "\n")
 			}
 		}
 	}
 	if len(history) > 0 {
-		b.WriteString("\nHistory:\n" + logText(history))
+		b.WriteString("\nHistory:\n" + logText(ix, history))
 	}
 	return b.String()
 }

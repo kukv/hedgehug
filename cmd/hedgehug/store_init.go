@@ -30,12 +30,15 @@ func (a *app) storeCmd() *cobra.Command {
 }
 
 func (a *app) storeInitCmd() *cobra.Command {
-	var template string
+	var template, prefix, wsName string
 	cmd := &cobra.Command{
 		Use:   "init <name>",
 		Short: "Create a store",
 		Args:  exactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
+			if prefix == "" {
+				return usageErrorf("--prefix is required: the key prefix of the first workspace, such as WEB")
+			}
 			var sc *schema.Schema
 			switch template {
 			case "":
@@ -44,15 +47,26 @@ func (a *app) storeInitCmd() *cobra.Command {
 			default:
 				return usageErrorf("--template: %q is not a template; the one there is is dev", template)
 			}
-			return a.storeInit(args[0], sc)
+			return a.storeInit(args[0], prefix, wsName, sc)
 		},
 	}
+	cmd.Flags().StringVar(&prefix, "prefix", "", "the key prefix of the first workspace, such as WEB")
+	cmd.Flags().StringVar(&wsName, "workspace", "", "the name of the first workspace (default: the store's name)")
 	cmd.Flags().StringVar(&template, "template", "", "start from a template: dev adds a review status")
 	return cmd
 }
 
-func (a *app) storeInit(name string, sc *schema.Schema) error {
+func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema) error {
 	if err := config.ValidStoreName(name); err != nil {
+		return usageError{err}
+	}
+	if err := model.ValidKeyPrefix(prefix); err != nil {
+		return usageError{err}
+	}
+	if wsName == "" {
+		wsName = name
+	}
+	if err := model.ValidWorkspaceName(wsName); err != nil {
 		return usageError{err}
 	}
 	c, p, err := a.config()
@@ -64,12 +78,16 @@ func (a *app) storeInit(name string, sc *schema.Schema) error {
 			return fmt.Errorf("a store named %q is already set up", name)
 		}
 	}
+	if err := a.checkPrefixElsewhere(prefix, name); err != nil {
+		return err
+	}
 	author, err := config.Author(a.getenv)
 	if err != nil {
 		return err
 	}
 	dir := filepath.Join(p.StoresDir, name)
-	if _, err := store.Create(dir, &model.StoreMeta{ID: model.NewID(), Name: name}, sc, author); err != nil {
+	ws := &model.Workspace{ID: model.NewID(), Name: wsName, KeyPrefix: prefix}
+	if _, err := store.Create(dir, &model.StoreMeta{ID: model.NewID(), Name: name}, sc, ws, author); err != nil {
 		return err
 	}
 	if err := c.AddStore(name, dir); err != nil {
@@ -79,11 +97,17 @@ func (a *app) storeInit(name string, sc *schema.Schema) error {
 		return errors.Join(err, os.RemoveAll(dir))
 	}
 	if a.jsonOut {
+		type wsJSON struct {
+			ID        string `json:"id"`
+			Name      string `json:"name"`
+			KeyPrefix string `json:"key_prefix"`
+		}
 		return a.printJSON(struct {
-			Name string `json:"name"`
-			Path string `json:"path"`
-		}{name, dir})
+			Name      string `json:"name"`
+			Path      string `json:"path"`
+			Workspace wsJSON `json:"workspace"`
+		}{name, dir, wsJSON{ws.ID.String(), ws.Name, ws.KeyPrefix}})
 	}
-	_, err = fmt.Fprintf(a.stdout, "Created store %s at %s\n", name, dir)
+	_, err = fmt.Fprintf(a.stdout, "Created store %s at %s with workspace %s (%s)\n", name, dir, ws.Name, ws.KeyPrefix)
 	return err
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
+	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -40,10 +41,11 @@ type logJSON struct {
 	} `json:"author"`
 	Op      *string `json:"op"`
 	Task    *string `json:"task"`
+	Key     *string `json:"key"` // the current key of the task
 	Subject string  `json:"subject"`
 }
 
-func toLogJSON(e gitrepo.LogEntry) logJSON {
+func toLogJSON(ix *index.Index, e gitrepo.LogEntry) logJSON {
 	j := logJSON{Hash: e.Hash.String(), Date: e.When, Subject: e.Subject}
 	j.Author.Name, j.Author.Email = e.Author.Name, e.Author.Email
 	if v, ok := e.Trailer("Hedgehug-Op"); ok {
@@ -51,22 +53,51 @@ func toLogJSON(e gitrepo.LogEntry) logJSON {
 	}
 	if v, ok := e.Trailer("Hedgehug-Task"); ok {
 		j.Task = &v
+		if id, err := model.ParseID(v); err == nil {
+			if t, ok := ix.Task(id); ok && t.Key != "" {
+				j.Key = &t.Key
+			}
+		}
 	}
 	return j
 }
 
-func logJSONs(entries []gitrepo.LogEntry) []logJSON {
+func logJSONs(ix *index.Index, entries []gitrepo.LogEntry) []logJSON {
 	out := make([]logJSON, len(entries))
 	for i, e := range entries {
-		out[i] = toLogJSON(e)
+		out[i] = toLogJSON(ix, e)
 	}
 	return out
 }
 
-func logText(entries []gitrepo.LogEntry) string {
+// subjectNow gives the subject of a Hedgehug commit with the task's current
+// key and ULID in place of the label it was written with: the subject is
+// "hedgehug: <op> <label> <title>". Other subjects, and tasks the index does
+// not have, keep the subject as it is.
+func subjectNow(ix *index.Index, le gitrepo.LogEntry) string {
+	op, ok1 := le.Trailer("Hedgehug-Op")
+	tid, ok2 := le.Trailer("Hedgehug-Task")
+	head := "hedgehug: " + op + " "
+	rest, ok3 := strings.CutPrefix(le.Subject, head)
+	if !ok1 || !ok2 || !ok3 {
+		return le.Subject
+	}
+	id, err := model.ParseID(tid)
+	if err != nil {
+		return le.Subject
+	}
+	e, ok := ix.Task(id)
+	if !ok {
+		return le.Subject
+	}
+	_, title, _ := strings.Cut(rest, " ")
+	return strings.TrimRight(head+taskLabel(e)+" "+title, " ")
+}
+
+func logText(ix *index.Index, entries []gitrepo.LogEntry) string {
 	var b strings.Builder
 	for _, e := range entries {
-		fmt.Fprintf(&b, "%s  %s  %s  %s\n", e.Hash.String()[:7], e.When.In(time.Local).Format("2006-01-02 15:04"), e.Author.Name, e.Subject)
+		fmt.Fprintf(&b, "%s  %s  %s  %s\n", e.Hash.String()[:7], e.When.In(time.Local).Format("2006-01-02 15:04"), e.Author.Name, subjectNow(ix, e))
 	}
 	return b.String()
 }
@@ -90,9 +121,9 @@ func (a *app) log(args []string, limit int) error {
 		return err
 	}
 	if a.jsonOut {
-		return a.printJSON(logJSONs(entries))
+		return a.printJSON(logJSONs(ix, entries))
 	}
-	_, err = fmt.Fprint(a.stdout, logText(entries))
+	_, err = fmt.Fprint(a.stdout, logText(ix, entries))
 	return err
 }
 

@@ -140,6 +140,30 @@ func (s *Store) Sprints() iter.Seq2[*model.Sprint, error] {
 	return walk(s, "sprints", flatMatch(model.SprintPath), ignoreRel(model.DecodeSprint))
 }
 
+func (s *Store) Workspace(id model.ID) (*model.Workspace, error) {
+	return readDecode(s.dir, model.WorkspacePath(id), model.DecodeWorkspace)
+}
+
+func (s *Store) Workspaces() iter.Seq2[*model.Workspace, error] {
+	return walk(s, "workspaces", flatMatch(model.WorkspacePath), ignoreRel(model.DecodeWorkspace))
+}
+
+// Numbers returns the record of purged numbers; empty when there is none.
+func (s *Store) Numbers() (model.Numbers, error) {
+	b, err := readFile(s.path(model.NumbersPath))
+	if errors.Is(err, fs.ErrNotExist) {
+		return model.Numbers{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	n, err := model.DecodeNumbers(b)
+	if err != nil {
+		return nil, &FileError{Path: model.NumbersPath, Err: err}
+	}
+	return n, nil
+}
+
 func (s *Store) Release(id model.ID) (*model.Release, error) {
 	return readDecode(s.dir, model.ReleasePath(id), model.DecodeRelease)
 }

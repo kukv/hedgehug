@@ -49,7 +49,7 @@ func (a *app) lsCmd() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.BoolVar(&tree, "tree", false, "show the tasks found under their ancestors")
-	f.BoolVar(&idsOnly, "ids-only", false, "print only the short IDs")
+	f.BoolVar(&idsOnly, "ids-only", false, "print only the full IDs")
 	f.StringVar(&format, "format", "", "print each task with a Go template over its JSON fields")
 	return cmd
 }
@@ -73,7 +73,7 @@ func (a *app) ls(q *query.Query, idsOnly bool, tmpl *template.Template) error {
 	}
 	switch {
 	case idsOnly:
-		return a.printIDs(ix, all)
+		return a.printIDs(all)
 	case tmpl != nil:
 		return a.printFormat(ix, all, tmpl, nil)
 	case a.jsonOut || !hasTerm(q, "group"):
@@ -108,10 +108,10 @@ func hasTerm(q *query.Query, key string) bool {
 	return false
 }
 
-func (a *app) printIDs(ix *index.Index, es []*index.Entry) error {
+func (a *app) printIDs(es []*index.Entry) error {
 	var b strings.Builder
 	for _, e := range es {
-		b.WriteString(ix.ShortID(e.ID) + "\n")
+		b.WriteString(e.ID.String() + "\n")
 	}
 	_, err := fmt.Fprint(a.stdout, b.String())
 	return err

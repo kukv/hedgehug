@@ -16,6 +16,7 @@ type Entry struct {
 	ID         model.ID
 	Key        string
 	FormerKeys []string
+	Workspace  model.ID
 	Kind       string
 	Title      string
 	Parent     *model.ID
@@ -70,6 +71,7 @@ func EntryOf(t *model.Task) *Entry {
 		ID:         t.ID,
 		Key:        t.Key,
 		FormerKeys: t.FormerKeys,
+		Workspace:  t.Workspace,
 		Kind:       t.Kind,
 		Title:      t.Title,
 		Parent:     t.Parent,

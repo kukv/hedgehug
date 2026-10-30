@@ -8,11 +8,11 @@ import (
 func TestStatusAndDone(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
-	te.ok("status", a.Short, "in_progress")
+	te.ok("status", a.Key, "in_progress")
 	if s := te.task(a.ID).Status; s != "in_progress" {
 		t.Errorf("status = %q, want in_progress", s)
 	}
-	te.ok("done", a.Short)
+	te.ok("done", a.Key)
 	if s := te.task(a.ID).Status; s != "done" {
 		t.Errorf("status = %q, want done", s)
 	}
@@ -25,10 +25,10 @@ func TestStatusAndDone(t *testing.T) {
 func TestStatusErrors(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
-	if code, _, stderr := te.run("status", a.Short, "doing"); code != 1 || !strings.Contains(stderr, "in_progress") {
+	if code, _, stderr := te.run("status", a.Key, "doing"); code != 1 || !strings.Contains(stderr, "in_progress") {
 		t.Errorf("a category name: exit %d, stderr %q (want the status names listed)", code, stderr)
 	}
-	if code, _, _ := te.run("status", a.Short); code != 2 {
+	if code, _, _ := te.run("status", a.Key); code != 2 {
 		t.Errorf("status with no status: exit %d, want 2", code)
 	}
 }

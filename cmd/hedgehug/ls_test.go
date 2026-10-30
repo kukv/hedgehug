@@ -13,10 +13,10 @@ func TestLs(t *testing.T) {
 
 	out := te.ok("ls")
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	if len(lines) != 3 || !strings.HasPrefix(lines[0], "ID") {
+	if len(lines) != 3 || !strings.HasPrefix(lines[0], "KEY") {
 		t.Fatalf("ls =\n%s", out)
 	}
-	for _, s := range []string{a.Short, "Alpha", "ui", b.Short, "Beta", "done"} {
+	for _, s := range []string{a.Key, a.ID, "Alpha", "ui", b.Key, b.ID, "Beta", "done"} {
 		if !strings.Contains(out, s) {
 			t.Errorf("ls does not show %q:\n%s", s, out)
 		}
@@ -31,7 +31,7 @@ func TestLs(t *testing.T) {
 	if out := te.ok("ls", "status:todo", "label:ui"); !strings.Contains(out, "Alpha") || strings.Contains(out, "Beta") {
 		t.Errorf("ls with two args =\n%s", out)
 	}
-	if out := te.ok("ls", "--ids-only"); out != a.Short+"\n"+b.Short+"\n" && out != b.Short+"\n"+a.Short+"\n" {
+	if out := te.ok("ls", "--ids-only"); out != a.ID+"\n"+b.ID+"\n" && out != b.ID+"\n"+a.ID+"\n" {
 		t.Errorf("--ids-only = %q", out)
 	}
 	if out := te.ok("ls", "--format", "{{.title}}|{{.status}}", "sort:title"); out != "Alpha|todo\nBeta|done\n" {
@@ -44,8 +44,14 @@ func TestLs(t *testing.T) {
 	if len(got) != 2 || got[0].Title != "Alpha" || got[1].Title != "Beta" || got[0].Labels[0] != "ui" {
 		t.Errorf("--json = %+v", got)
 	}
-	if got[1].Assignees == nil || got[1].Problems == nil || got[1].Props == nil {
+	if got[1].Assignees == nil || got[1].Problems == nil || got[1].Props == nil || got[1].BlockedBy == nil {
 		t.Error("empty lists in JSON must be [] or {}, not null")
+	}
+
+	// blocked_by names each task by its ID, key and title.
+	te.ok("dep", "add", a.Key, "--blocked-by", b.Key)
+	if out := te.ok("ls", "--format", "{{range .blocked_by}}{{.id}} {{.key}} {{.title}}{{end}}", "sort:title"); out != b.ID+" "+b.Key+" Beta\n\n" {
+		t.Errorf("--format over blocked_by = %q", out)
 	}
 }
 
@@ -64,6 +70,30 @@ func TestLsFormatBroken(t *testing.T) {
 	te.commitFile(b.ID, "not a task\n")
 	if out := te.ok("ls", "--format", "{{if .broken}}BROKEN{{else}}{{.title}}{{end}}", "sort:title"); !strings.Contains(out, "BROKEN\n") || !strings.Contains(out, "Alpha\n") {
 		t.Errorf("ls --format with a broken task = %q", out)
+	}
+}
+
+// A broken task has no readable key, so ls shows ? in the KEY column and
+// "? <ULID>" in the tree.
+func TestLsBrokenKey(t *testing.T) {
+	te := newStoreEnv(t)
+	te.addJSON("Alpha")
+	b := te.addJSON("Beta")
+	te.commitFile(b.ID, "not a task\n")
+	var found bool
+	for _, line := range strings.Split(te.ok("ls"), "\n") {
+		if strings.Contains(line, b.ID) {
+			found = true
+			if f := strings.Fields(line); f[0] != "?" {
+				t.Errorf("ls line of a broken task = %q", line)
+			}
+		}
+	}
+	if !found {
+		t.Error("ls does not list the broken task")
+	}
+	if out := te.ok("ls", "--tree"); !strings.Contains(out, "? "+b.ID) {
+		t.Errorf("ls --tree has no %q:\n%s", "? "+b.ID, out)
 	}
 }
 
@@ -116,8 +146,8 @@ func TestLsErrors(t *testing.T) {
 
 func TestUnknownID(t *testing.T) {
 	te := newStoreEnv(t)
-	// An ambiguous input cannot be made reliably (short IDs match the
-	// random end of ULIDs), so only the not-found case is run here.
+	// An ambiguous input needs two tasks with one key, which only a raw
+	// edit makes, so only the not-found case is run here.
 	code, _, stderr := te.run("add", "x", "--parent", "zzzzzzzz")
 	if code != 1 || !strings.Contains(stderr, "not found") {
 		t.Errorf("exit %d, stderr %q", code, stderr)

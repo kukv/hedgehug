@@ -62,7 +62,7 @@ func TestSchemaCheckProblems(t *testing.T) {
 	want := []string{
 		`schema.yaml: kinds[0].template: template "nope" does not exist`,
 		"  hint: add templates/nope.md or change the name",
-		a.Short + " Alpha: status: unknown status \"todo\"",
+		label(a) + " Alpha: status: unknown status \"todo\"",
 		"2 problems",
 	}
 	lines := strings.Split(strings.TrimSpace(out), "\n")

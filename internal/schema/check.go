@@ -21,7 +21,7 @@ func (p Problem) String() string { return p.Path + ": " + p.Msg }
 // requirableFields are the built-in task fields that workflow.required may
 // name, besides properties.
 var requirableFields = []string{
-	"key_prefix", "parent", "assignees", "watchers", "labels", "repos",
+	"parent", "assignees", "watchers", "labels", "repos",
 	"blocked_by", "sprint", "releases", "links",
 }
 
@@ -29,8 +29,6 @@ var requirableFields = []string{
 // ok is false when name is not a requirable built-in field.
 func builtinFilled(t *model.Task, name string) (filled, ok bool) {
 	switch name {
-	case "key_prefix":
-		return t.KeyPrefix != "", true
 	case "parent":
 		return t.Parent != nil, true
 	case "assignees":

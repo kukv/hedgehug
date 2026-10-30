@@ -14,7 +14,7 @@ import (
 )
 
 func newTask(title string) *model.Task {
-	return &model.Task{ID: model.NewID(), Kind: "task", Title: title, Status: "todo"}
+	return &model.Task{ID: model.NewID(), Workspace: testWorkspaceID, Kind: "task", Title: title, Status: "todo"}
 }
 
 func addTask(t *testing.T, s *Store, task *model.Task) {
@@ -42,7 +42,7 @@ func TestUpdateCommitsOnce(t *testing.T) {
 	if len(log) != 2 {
 		t.Fatalf("commits = %d, want 2 (init + add)", len(log))
 	}
-	want := "hedgehug: add " + task.ID.String() + " リリース準備\n\nHedgehug-Op: add\nHedgehug-Task: " + task.ID.String() + "\n"
+	want := "hedgehug: add TST-1 リリース準備\n\nHedgehug-Op: add\nHedgehug-Task: " + task.ID.String() + "\n"
 	if log[0].Message != want {
 		t.Errorf("message = %q, want %q", log[0].Message, want)
 	}
@@ -54,9 +54,9 @@ func TestUpdateCommitsOnce(t *testing.T) {
 func TestUpdateSubjectUsesKey(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("x")
-	task.Key = "WEB-42"
+	task.Key = "TST-42"
 	addTask(t, s, task)
-	if msg := headLog(t, s.dir)[0].Message; !strings.HasPrefix(msg, "hedgehug: add WEB-42 x\n") {
+	if msg := headLog(t, s.dir)[0].Message; !strings.HasPrefix(msg, "hedgehug: add TST-42 x\n") {
 		t.Errorf("message = %q", msg)
 	}
 }
@@ -329,6 +329,21 @@ func TestPutTemplateBadName(t *testing.T) {
 	}
 }
 
+func TestPurgeSubjectUsesKey(t *testing.T) {
+	s := newTestStore(t)
+	task := newTask("title")
+	task.Key = "TST-3"
+	addTask(t, s, task)
+	if _, err := s.Update(Op{Name: "purge", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+		return tx.RemoveTask(task.ID)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if msg := headLog(t, s.dir)[0].Message; !strings.HasPrefix(msg, "hedgehug: purge TST-3 title\n") {
+		t.Errorf("message = %q", msg)
+	}
+}
+
 func TestRemoveTask(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("x")
@@ -355,7 +370,7 @@ func TestRemoveTask(t *testing.T) {
 	if len(log) != 3 {
 		t.Fatalf("commits = %d, want 3", len(log))
 	}
-	if want := "hedgehug: purge " + task.ID.String() + "\n"; !strings.HasPrefix(log[0].Message, want) {
+	if want := "hedgehug: purge TST-1 x\n"; !strings.HasPrefix(log[0].Message, want) {
 		t.Errorf("message = %q, want prefix %q", log[0].Message, want)
 	}
 	tree, err := log[0].Tree()

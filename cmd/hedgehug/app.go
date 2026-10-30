@@ -52,7 +52,7 @@ func (a *app) rootCmd() *cobra.Command {
 	pf.StringVar(&a.storeName, "store", "", "the store to work on, by name")
 	pf.BoolVar(&a.jsonOut, "json", false, "print JSON")
 	pf.BoolVar(&a.noColor, "no-color", false, "do not color the output")
-	root.AddCommand(a.storeCmd(), a.addCmd(), a.lsCmd(), a.showCmd(), a.setCmd(), a.statusCmd(), a.doneCmd(), a.depCmd(), a.rmCmd(), a.restoreCmd(), a.purgeCmd(), a.mvCmd(), a.editCmd(), a.commentCmd(), a.logCmd(), a.schemaCmd(), a.doctorCmd())
+	root.AddCommand(a.storeCmd(), a.addCmd(), a.lsCmd(), a.showCmd(), a.setCmd(), a.statusCmd(), a.doneCmd(), a.depCmd(), a.rmCmd(), a.restoreCmd(), a.purgeCmd(), a.mvCmd(), a.editCmd(), a.commentCmd(), a.logCmd(), a.schemaCmd(), a.doctorCmd(), a.workspaceCmd())
 	return root
 }
 
@@ -128,7 +128,7 @@ func verb(committed bool, heading string) string {
 type ambiguousError struct {
 	input string
 	noun  string   // what the candidates are, "tasks" when empty
-	lines []string // "<short>  <title>" per candidate
+	lines []string // "<key> (<ULID>) <title>" per candidate
 }
 
 func (e *ambiguousError) Error() string {
@@ -146,8 +146,7 @@ func (a *app) resolve(ix *index.Index, arg string) (*index.Entry, error) {
 	if errors.As(err, &ae) {
 		lines := make([]string, len(ae.Candidates))
 		for i, c := range ae.Candidates {
-			e, _ := ix.Task(c)
-			lines[i] = ix.ShortID(c) + "  " + e.Title
+			lines[i] = refName(ix, c)
 		}
 		return nil, &ambiguousError{input: arg, lines: lines}
 	}

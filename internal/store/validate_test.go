@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/model"
@@ -30,7 +31,7 @@ func TestUpdateAllowsOldViolation(t *testing.T) {
 	task := newTask("x")
 	addTask(t, s, task)
 	// A sync may bring a kind this schema does not know.
-	mustWrite(t, s, model.TaskPath(task.ID), "---\nid: "+task.ID.String()+"\nkind: nope\ntitle: x\nstatus: todo\n---\n")
+	mustWrite(t, s, model.TaskPath(task.ID), "---\nid: "+task.ID.String()+"\nworkspace: "+testWorkspaceID.String()+"\nkind: nope\ntitle: x\nstatus: todo\n---\n")
 
 	got, err := s.Task(task.ID)
 	if err != nil {
@@ -268,4 +269,54 @@ func TestUpdateMoveUsesProjectSchema(t *testing.T) {
 		m.Parent = &project.ID
 		m.Status = "in_progress"
 	})
+}
+
+func TestValidateWorkspace(t *testing.T) {
+	s := newTestStore(t)
+	ws := testWorkspace(t, s)
+	write := func(task *model.Task) error {
+		_, err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(task) })
+		return err
+	}
+	var ve *ValidationError
+	if err := write(&model.Task{ID: model.NewID(), Kind: "task", Title: "x", Status: "todo"}); !errors.As(err, &ve) || ve.Violations[0].Code != CodeNoWorkspace {
+		t.Errorf("no workspace: %v", err)
+	}
+	if err := write(&model.Task{ID: model.NewID(), Workspace: model.NewID(), Kind: "task", Title: "x", Status: "todo"}); !errors.As(err, &ve) || ve.Violations[0].Code != CodeNoWorkspace {
+		t.Errorf("unknown workspace: %v", err)
+	}
+	api := &model.Workspace{ID: model.NewID(), Name: "api", KeyPrefix: "API"}
+	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(api) }); err != nil {
+		t.Fatal(err)
+	}
+	parent := newTaskIn(ws, "p")
+	mustPut(t, s, parent)
+	child := newTaskIn(api, "c")
+	child.Parent = &parent.ID
+	if err := write(child); !errors.As(err, &ve) || ve.Violations[0].Code != CodeWorkspaceMismatch {
+		t.Errorf("mismatch: %v", err)
+	}
+	dup := &model.Workspace{ID: model.NewID(), Name: "other", KeyPrefix: "API"}
+	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(dup) }); err == nil {
+		t.Error("a duplicate prefix is accepted")
+	}
+	same := &model.Workspace{ID: model.NewID(), Name: "test", KeyPrefix: "APX"}
+	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(same) }); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("a duplicate name: %v", err)
+	}
+	// A file written by hand may have an upper-case name; the same name in
+	// lower case is still the same name.
+	upper := &model.Workspace{ID: model.NewID(), Name: "Web", KeyPrefix: "WEB"}
+	b, err := upper.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, s, model.WorkspacePath(upper.ID), string(b))
+	lower := &model.Workspace{ID: model.NewID(), Name: "web", KeyPrefix: "WBX"}
+	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(lower) }); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("a duplicate name in another case: %v", err)
+	}
+	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveWorkspace(ws.ID) }); err == nil {
+		t.Error("a workspace with tasks is removed")
+	}
 }

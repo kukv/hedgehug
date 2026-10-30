@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -34,5 +36,19 @@ func TestRun(t *testing.T) {
 				t.Errorf("stderr = %q, want it to contain %q", stderr, tc.wantStderr)
 			}
 		})
+	}
+}
+
+// The name is not TestNoShort + "IDs", which the pattern would match.
+func TestNoShortIdentifiers(t *testing.T) {
+	// Built so that this file does not match itself.
+	s := "Short"
+	pattern := s + "ID|" + s + "Lengths|min" + s + `|"` + strings.ToLower(s) + `"|\.` + s + `\b`
+	// repo_test.go calls the method of go-git that shortens a reference
+	// name, which is not a short ID.
+	out, err := exec.Command("grep", "-rnE", pattern, "--include=*.go", "--exclude=repo_test.go", "../../cmd", "../../internal", "../../tools").CombinedOutput()
+	// grep exits 1 when nothing matches, and 2 on an error.
+	if ee := (*exec.ExitError)(nil); !errors.As(err, &ee) || ee.ExitCode() != 1 {
+		t.Errorf("short IDs are still in the code, or grep failed: %v\n%s", err, out)
 	}
 }

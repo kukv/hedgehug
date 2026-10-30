@@ -1,6 +1,7 @@
 package doctor
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,7 +20,7 @@ var testAuthor = gitrepo.Signature{Name: "Test", Email: "test@example.com"}
 func newStore(t *testing.T) (*store.Store, string) {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "store")
-	s, err := store.Create(dir, &model.StoreMeta{ID: model.NewID(), Name: "test"}, schema.Default(), testAuthor)
+	s, err := store.Create(dir, &model.StoreMeta{ID: model.NewID(), Name: "test"}, schema.Default(), &model.Workspace{ID: model.NewID(), Name: "test", KeyPrefix: "TST"}, testAuthor)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,8 +57,12 @@ func newTask(title string) *model.Task {
 // put writes tasks in one operation, past the checks of transitions.
 func put(t *testing.T, s *store.Store, tasks ...*model.Task) {
 	t.Helper()
+	ws := firstWorkspace(t, s)
 	if _, err := s.Update(store.Op{Name: "update", Author: testAuthor, SkipTransitions: true}, func(tx *store.Tx) error {
 		for _, task := range tasks {
+			if task.Workspace.IsZero() {
+				task.Workspace = ws
+			}
 			if err := tx.PutTask(task); err != nil {
 				return err
 			}
@@ -68,10 +73,33 @@ func put(t *testing.T, s *store.Store, tasks ...*model.Task) {
 	}
 }
 
+// firstWorkspace returns the ID of the first workspace of s.
+func firstWorkspace(t *testing.T, s *store.Store) model.ID {
+	t.Helper()
+	for w, err := range s.Workspaces() {
+		if err != nil {
+			t.Fatal(err)
+		}
+		return w.ID
+	}
+	t.Fatal("the store has no workspace")
+	return model.ID{}
+}
+
+// rawKeys numbers the keys putRaw gives to tasks without one.
+var rawKeys int
+
 // putRaw commits a task file past the checks of the store, as a sync or a
 // hand edit could.
 func putRaw(t *testing.T, s *store.Store, dir string, task *model.Task) {
 	t.Helper()
+	if task.Workspace.IsZero() {
+		task.Workspace = firstWorkspace(t, s)
+	}
+	if task.Key == "" {
+		rawKeys++
+		task.Key = fmt.Sprintf("TST-%d", 1000+rawKeys)
+	}
 	b, err := task.Encode()
 	if err != nil {
 		t.Fatal(err)

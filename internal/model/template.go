@@ -39,7 +39,6 @@ func (a *Assignees) UnmarshalYAML(n *yaml.Node) error {
 // TemplateItem is a task to create from a template. The parent and the rank
 // are decided when the template is expanded.
 type TemplateItem struct {
-	KeyPrefix string         `yaml:"key_prefix,omitempty"`
 	Kind      string         `yaml:"kind,omitempty"`
 	Title     string         `yaml:"title,omitempty"`
 	Status    string         `yaml:"status,omitempty"`
@@ -60,7 +59,7 @@ type TemplateItem struct {
 // with its children. body is not among them: a file's body is its Markdown.
 func (it *TemplateItem) targets() map[string]any {
 	return map[string]any{
-		"key_prefix": &it.KeyPrefix, "kind": &it.Kind, "title": &it.Title, "status": &it.Status,
+		"kind": &it.Kind, "title": &it.Title, "status": &it.Status,
 		"assignees": &it.Assignees, "watchers": &it.Watchers, "labels": &it.Labels,
 		"repos": &it.Repos, "blocked_by": &it.BlockedBy, "sprint": &it.Sprint,
 		"releases": &it.Releases, "links": &it.Links, "props": &it.Props,
@@ -94,7 +93,7 @@ type Template struct {
 }
 
 var templateKeys = []string{
-	"key_prefix", "kind", "title", "status", "assignees", "watchers", "labels", "repos",
+	"kind", "title", "status", "assignees", "watchers", "labels", "repos",
 	"blocked_by", "sprint", "releases", "links", "props", "children", "created", "updated",
 }
 
@@ -128,7 +127,6 @@ func (t *Template) Encode() ([]byte, error) {
 	}
 	it := t.Item
 	e := t.doc.Encoder()
-	e.Put("key_prefix", it.KeyPrefix, it.KeyPrefix == "")
 	e.Put("kind", it.Kind, it.Kind == "")
 	e.Put("title", it.Title, it.Title == "")
 	e.Put("status", it.Status, it.Status == "")
