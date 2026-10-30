@@ -50,6 +50,8 @@ func TestSetErrors(t *testing.T) {
 		{"parent", []string{"set", a.Short, "parent=x"}, 1, "mv"},
 		{"unknown key", []string{"set", a.Short, "nope=1"}, 1, "nope"},
 		{"a value not in the enum", []string{"set", a.Short, "priority=nope"}, 1, "breaks the schema"},
+		{"NaN is not a number", []string{"set", a.Short, "points=NaN"}, 1, "is not a number"},
+		{"Inf is not a number", []string{"set", a.Short, "points=Inf"}, 1, "is not a number"},
 		{"an unknown status", []string{"set", a.Short, "status=nope"}, 1, "breaks the schema"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

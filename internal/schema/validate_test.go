@@ -77,6 +77,12 @@ func TestValidateTaskViolations(t *testing.T) {
 		{"  start: 2026-13-01\n", "bad_value:start"},
 		{"  estimate: 1d\n", "bad_value:estimate"},
 		{"  points: many\n", "bad_value:points"},
+		{"  points: NaN\n", "bad_value:points"},
+		{"  points: .nan\n", "bad_value:points"},
+		{"  points: Inf\n", "bad_value:points"},
+		{"  points: -Inf\n", "bad_value:points"},
+		{"  points: +Inf\n", "bad_value:points"},
+		{"  points: .inf\n", "bad_value:points"},
 		{"  duplicates: 01JBZ8K3QW7M2X9V4T6R5N8P0B\n", "bad_value:duplicates"}, // multi needs a list
 		{"  duplicates: [nope]\n", "bad_value:duplicates"},
 		{"  area: [ops]\n", "bad_value:area"},
@@ -97,6 +103,15 @@ func TestValidateTaskViolations(t *testing.T) {
 	want := map[string]bool{"unknown_kind:kind": true, "unknown_status:status": true, "missing_title:title": true}
 	if got := codes(vs); len(got) != 3 || !want[got[0]] || !want[got[1]] || !want[got[2]] {
 		t.Errorf("violations = %v", got)
+	}
+}
+
+func TestValidateTaskNumberOK(t *testing.T) {
+	for _, v := range []string{"1.5", "-3", "1e3"} {
+		vs, _ := ValidateTask(taskWith(t, "  points: "+v+"\n"), Default().For(nil))
+		if len(vs) != 0 {
+			t.Errorf("points: %s: violations = %v, want none", v, codes(vs))
+		}
 	}
 }
 

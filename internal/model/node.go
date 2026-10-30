@@ -179,11 +179,16 @@ func newDocAt(lineOffset int) *Doc {
 	return d
 }
 
-// checkNode rejects anchors, aliases, merge keys and duplicate keys, which
+// checkNode rejects anchors, aliases, tags, merge keys and duplicate keys, which
 // Hedgehug files do not use and which can make rewritten output invalid.
 func checkNode(n *yaml.Node, off int) error {
 	if n.Anchor != "" {
 		return &DecodeError{Line: n.Line + off, Err: errors.New("YAML anchors are not supported")}
+	}
+	// The decoder sets TaggedStyle only for a tag the writer typed; the tags
+	// it resolves on its own (!!str, !!int, ...) leave it unset.
+	if n.Style&yaml.TaggedStyle != 0 {
+		return &DecodeError{Line: n.Line + off, Err: errors.New("YAML tags are not supported")}
 	}
 	if n.Kind == yaml.AliasNode {
 		return &DecodeError{Line: n.Line + off, Err: errors.New("YAML aliases are not supported")}

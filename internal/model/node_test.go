@@ -270,6 +270,34 @@ func TestParseDocRejects(t *testing.T) {
 	}
 }
 
+func TestParseDocRejectsTags(t *testing.T) {
+	for name, src := range map[string]string{
+		"binary": "a: 1\ntitle: !!binary aGk=\n",
+		"str":    "a: 1\nx: !!str 12\n",
+		"custom": "a: 1\nx: !custom v\n",
+		"root":   "!!map {a: 1}\n",
+	} {
+		_, err := ParseDoc([]byte(src), 10)
+		var de *DecodeError
+		if !errors.As(err, &de) || !strings.Contains(err.Error(), "YAML tags are not supported") {
+			t.Errorf("%s: err = %v, want tag DecodeError", name, err)
+			continue
+		}
+		want := 12
+		if name == "root" {
+			want = 11
+		}
+		if de.Line != want {
+			t.Errorf("%s: Line = %d, want %d", name, de.Line, want)
+		}
+	}
+	for _, src := range []string{"x: 12\n", "x: \"12\"\n"} {
+		if _, err := ParseDoc([]byte(src), 0); err != nil {
+			t.Errorf("ParseDoc(%q) = %v", src, err)
+		}
+	}
+}
+
 func TestNilFieldValueWritesNull(t *testing.T) {
 	if _, err := yaml.Dump(Fields{{"a", nil}}); err != nil {
 		t.Fatalf("Dump(Fields with nil) = %v", err)

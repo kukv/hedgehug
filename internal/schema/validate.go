@@ -3,6 +3,7 @@ package schema
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"regexp"
 	"slices"
@@ -153,7 +154,11 @@ func checkScalar(p Prop, n *yaml.Node) error {
 	switch p.Type {
 	case TypeText:
 	case TypeNumber:
-		_, err = strconv.ParseFloat(v, 64)
+		var x float64
+		x, err = strconv.ParseFloat(v, 64)
+		if err == nil && (math.IsNaN(x) || math.IsInf(x, 0)) {
+			err = errors.New("want a finite number")
+		}
 	case TypeBool:
 		if n.ShortTag() != "!!bool" {
 			err = errors.New("want true or false")
