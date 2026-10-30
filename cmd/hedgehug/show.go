@@ -65,9 +65,11 @@ func (a *app) show(arg string) error {
 			return err
 		}
 	}
-	comments, err := liveComments(s, e.ID)
-	if err != nil {
-		return err
+	var comments []*model.Comment
+	if e.Broken == "" {
+		if comments, err = liveComments(s, e.ID); err != nil {
+			return err
+		}
 	}
 	rels := reverse(ix, e.ID)
 	if a.jsonOut {
@@ -195,9 +197,6 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 	if e.DeletedAt != nil {
 		field("deleted", e.DeletedAt.Format(time.RFC3339))
 	}
-	if e.Broken != "" {
-		field("broken", e.Broken)
-	}
 	if ps := ix.Problems(e.ID); len(ps) > 0 {
 		b.WriteString("\nProblems:\n")
 		for _, p := range ps {
@@ -213,6 +212,9 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 			}
 			field(r.label, names...)
 		}
+	}
+	if e.Broken != "" {
+		b.WriteString("\nbroken: " + e.Broken + "\n")
 	}
 	if t != nil && strings.TrimSpace(t.Body) != "" {
 		b.WriteString("\n" + strings.TrimRight(t.Body, "\n") + "\n")
