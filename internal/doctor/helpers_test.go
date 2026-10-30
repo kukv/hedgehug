@@ -105,3 +105,7 @@ func checks(fs []Finding) []string {
 	}
 	return out
 }
+
+func commitOf(paths ...string) gitrepo.Commit {
+	return gitrepo.Commit{Paths: paths, Subject: "raw", Author: testAuthor, When: time.Now()}
+}
