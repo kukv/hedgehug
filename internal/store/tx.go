@@ -214,7 +214,7 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (err error) {
 			return &SchemaError{Problems: ps}
 		}
 	}
-	sc := s.schema
+	sc := s.Schema()
 	if tx.schema != nil {
 		sc = tx.schema
 	}
@@ -238,7 +238,7 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (err error) {
 		return errors.Join(err, s.rollback(changes))
 	}
 	if tx.schema != nil {
-		s.schema = tx.schema
+		s.schema.Store(tx.schema)
 	}
 	return nil
 }

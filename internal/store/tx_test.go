@@ -394,6 +394,29 @@ func TestPutSchema(t *testing.T) {
 	}
 }
 
+func TestSchemaWhileUpdating(t *testing.T) {
+	s := newTestStore(t)
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				_ = s.Schema()
+			}
+		}
+	})
+	for _, sc := range []*schema.Schema{schema.Dev(), schema.Default()} {
+		if err := s.Update(Op{Name: "schema", Author: testAuthor}, func(tx *Tx) error { return tx.PutSchema(sc) }); err != nil {
+			t.Error(err)
+		}
+	}
+	close(done)
+	wg.Wait()
+}
+
 func TestPutRefusesZeroID(t *testing.T) {
 	s := newTestStore(t)
 	id := model.NewID()

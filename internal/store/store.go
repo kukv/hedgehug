@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
@@ -30,7 +31,7 @@ type Store struct {
 
 	mu     sync.Mutex // serializes Update within this Store
 	meta   *model.StoreMeta
-	schema *schema.Schema
+	schema atomic.Pointer[schema.Schema] // replaced by Update; read without mu
 
 	// Replaced by tests.
 	now      func() time.Time
@@ -39,11 +40,10 @@ type Store struct {
 }
 
 func newStore(dir string, repo *gitrepo.Repo, meta *model.StoreMeta, sc *schema.Schema) *Store {
-	return &Store{
+	s := &Store{
 		dir:      dir,
 		repo:     repo,
 		meta:     meta,
-		schema:   sc,
 		now:      time.Now,
 		lockWait: lockWait,
 		commit: func(c gitrepo.Commit) error {
@@ -51,6 +51,8 @@ func newStore(dir string, repo *gitrepo.Repo, meta *model.StoreMeta, sc *schema.
 			return err
 		},
 	}
+	s.schema.Store(sc)
+	return s
 }
 
 // Create makes a new store in dir, which must be missing or empty: a git
@@ -71,7 +73,7 @@ func Create(dir string, meta *model.StoreMeta, author gitrepo.Signature) (*Store
 	if err != nil {
 		return nil, err
 	}
-	sb, err := s.schema.Encode()
+	sb, err := s.Schema().Encode()
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +137,7 @@ func Open(dir string) (*Store, error) {
 }
 
 func (s *Store) Meta() *model.StoreMeta { return s.meta }
-func (s *Store) Schema() *schema.Schema { return s.schema }
+func (s *Store) Schema() *schema.Schema { return s.schema.Load() }
 
 // path turns rel, slash-separated and relative to the store root, into a
 // path on disk.
