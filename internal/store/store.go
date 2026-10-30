@@ -28,7 +28,7 @@ type Store struct {
 	dir  string
 	repo *gitrepo.Repo
 
-	mu     sync.Mutex //nolint:unused // serializes Update within this Store; used in a later task
+	mu     sync.Mutex // serializes Update within this Store
 	meta   *model.StoreMeta
 	schema *schema.Schema
 
