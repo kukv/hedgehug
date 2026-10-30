@@ -44,10 +44,10 @@ func run(args []string, stdout, stderr io.Writer, cwd string) int {
 	case err == nil, errors.Is(err, flag.ErrHelp):
 		return 0
 	case errors.As(err, &ue):
-		fmt.Fprintln(stderr, "devenv:", err)
+		_, _ = fmt.Fprintln(stderr, "devenv:", err) // nothing useful to do if stderr is unwritable
 		return 2
 	default:
-		fmt.Fprintln(stderr, "devenv:", err)
+		_, _ = fmt.Fprintln(stderr, "devenv:", err) // nothing useful to do if stderr is unwritable
 		return 1
 	}
 }
@@ -133,13 +133,13 @@ func findRoot(dir string) (string, error) {
 }
 
 func initEnv(dir string, stdout io.Writer) error {
-	if _, err := os.Lstat(dir); err == nil {
+	if _, err := os.Lstat(dir); err == nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return fmt.Errorf("%s already exists; run `devenv reset` to recreate it", dir)
 	}
-	if err := os.MkdirAll(dir, 0o750); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(dir, markerFile), nil, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, markerFile), nil, 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return err
 	}
 	for _, u := range users {
@@ -153,11 +153,11 @@ func initEnv(dir string, stdout io.Writer) error {
 }
 
 func initUser(home, u string) error {
-	if err := os.MkdirAll(home, 0o750); err != nil {
+	if err := os.MkdirAll(home, 0o750); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return err
 	}
 	gitconfig := "[user]\n\tname = " + u + "\n\temail = " + u + "@example.com\n"
-	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte(gitconfig), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte(gitconfig), 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return err
 	}
 	getenv := func(k string) string {
@@ -189,11 +189,11 @@ func initUser(home, u string) error {
 // reset removes dir when it is a devenv (it holds the marker file) and
 // creates it again. A missing dir is only created.
 func reset(dir string, stdout io.Writer) error {
-	if _, err := os.Lstat(dir); err == nil {
-		if _, err := os.Stat(filepath.Join(dir, markerFile)); err != nil {
+	if _, err := os.Lstat(dir); err == nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+		if _, err := os.Stat(filepath.Join(dir, markerFile)); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 			return fmt.Errorf("%s was not made by devenv (no %s in it); not removing it", dir, markerFile)
 		}
-		if err := os.RemoveAll(dir); err != nil {
+		if err := os.RemoveAll(dir); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 			return err
 		}
 	}
@@ -209,7 +209,7 @@ func printEnv(dir, user string, stdout io.Writer) error {
 	if !known {
 		return fmt.Errorf("no user named %q (users: %s)", user, strings.Join(users, ", "))
 	}
-	if _, err := os.Stat(home); err != nil {
+	if _, err := os.Stat(home); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return fmt.Errorf("%s: %w; run `devenv init` first", home, err)
 	}
 	_, err := fmt.Fprintf(stdout, "export HEDGEHUG_HOME=%s\nexport GIT_CONFIG_GLOBAL=%s\n",
