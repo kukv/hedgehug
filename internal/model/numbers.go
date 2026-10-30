@@ -15,6 +15,9 @@ const NumbersPath = ".hedgehug/numbers.yaml"
 // Numbering counts it, so a purged task's number is never given again.
 type Numbers map[string]int
 
+// DecodeNumbers decodes numbers.yaml: a map from key prefix to number. An
+// empty file is an empty record. The prefixes and numbers are not checked
+// here; doctor reports the bad ones.
 func DecodeNumbers(data []byte) (Numbers, error) {
 	n := Numbers{}
 	if err := yaml.Unmarshal(data, &n); err != nil {

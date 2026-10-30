@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -29,5 +30,22 @@ func TestWorkspaceRoundTrip(t *testing.T) {
 	}
 	if id, err := ParseWorkspacePath(WorkspacePath(w.ID)); err != nil || id != w.ID {
 		t.Errorf("ParseWorkspacePath = %v %v", id, err)
+	}
+}
+
+func TestValidName(t *testing.T) {
+	for _, ok := range []string{"a", "web", "web-2", "my_ws", "0x"} {
+		if err := ValidName("store", ok); err != nil {
+			t.Errorf("%q: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"", "Web", "-a", "_a", "a b", "a/b", "é"} {
+		err := ValidName("store", bad)
+		if err == nil || !strings.Contains(err.Error(), "cannot name a store") {
+			t.Errorf("%q: %v", bad, err)
+		}
+		if err := ValidWorkspaceName(bad); err == nil || !strings.Contains(err.Error(), "cannot name a workspace") {
+			t.Errorf("workspace %q: %v", bad, err)
+		}
 	}
 }

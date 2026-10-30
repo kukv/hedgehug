@@ -7,16 +7,20 @@ import (
 	"time"
 )
 
-var workspaceNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
+var nameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 
-// ValidWorkspaceName reports whether name can name a workspace: lower-case
-// letters, digits, - and _, starting with a letter or a digit.
-func ValidWorkspaceName(name string) error {
-	if !workspaceNameRE.MatchString(name) {
-		return fmt.Errorf("%q cannot name a workspace: use lower-case letters, digits, - and _, starting with a letter or a digit", name)
+// ValidName reports whether name can name a thing of the kind what, such as
+// a workspace or a store: lower-case letters, digits, - and _, starting with
+// a letter or a digit.
+func ValidName(what, name string) error {
+	if !nameRE.MatchString(name) {
+		return fmt.Errorf("%q cannot name a %s: use lower-case letters, digits, - and _, starting with a letter or a digit", name, what)
 	}
 	return nil
 }
+
+// ValidWorkspaceName is ValidName for a workspace.
+func ValidWorkspaceName(name string) error { return ValidName("workspace", name) }
 
 // Workspace is one workspace file. It owns a key prefix, and the tasks in
 // it are numbered under that prefix. The body holds notes.
@@ -35,6 +39,10 @@ type Workspace struct {
 
 var workspaceKeys = []string{"id", "name", "key_prefix", "prefix_set", "created", "updated"}
 
+// DecodeWorkspace decodes a workspace file. Only the id is required; the
+// other fields are checked by those who write the file (Store.Update) and
+// by doctor, so a file with a bad prefix or name can still be read and
+// fixed.
 func DecodeWorkspace(data []byte) (*Workspace, error) {
 	front, body, err := splitFrontmatter(data)
 	if err != nil {
