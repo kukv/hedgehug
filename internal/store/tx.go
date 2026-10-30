@@ -163,6 +163,10 @@ func (tx *Tx) RemoveWorkspace(ulid model.ULID) error {
 	return nil
 }
 
+// SetDetail replaces the Detail of the operation, so fn can say what changed
+// from what it read under the lock.
+func (tx *Tx) SetDetail(s string) { tx.op.Detail = s }
+
 // Workspace reads a workspace as it will be after the writes queued so far.
 func (tx *Tx) Workspace(ulid model.ULID) (*model.Workspace, error) {
 	if tx.done {
@@ -351,7 +355,7 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
 	if len(changes) == 0 {
 		return false, nil
 	}
-	commit := tx.commitFor(op, changes, now)
+	commit := tx.commitFor(tx.op, changes, now)
 	if err := s.apply(changes); err != nil {
 		return false, err
 	}

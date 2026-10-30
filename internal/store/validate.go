@@ -188,13 +188,15 @@ func (tx *Tx) validateWorkspaces() error {
 			}
 			// Its workspace cannot be read. Removing the workspace it names
 			// would leave it pointing nowhere once it is fixed, so a file
-			// that holds the line is taken to be in that workspace.
+			// that holds the ULID anywhere, in any case, is taken to be in
+			// that workspace: refusing too often is the safe side.
 			b, err := readFile(tx.s.path(fe.Path))
 			if err != nil {
 				return err
 			}
+			b = bytes.ToUpper(b)
 			for ulid, w := range tx.workspaces {
-				if w == nil && bytes.Contains(b, []byte("workspace: "+ulid.String())) {
+				if w == nil && bytes.Contains(b, []byte(ulid.String())) {
 					broken[ulid] = fe.Path
 				}
 			}

@@ -80,6 +80,22 @@ func TestWorkspaceCommitSubject(t *testing.T) {
 			t.Errorf("message lacks %q:\n%s", want, msg)
 		}
 	}
+
+	// fn can set the detail under the lock, from what it read there.
+	if _, err := s.Update(Op{Name: "workspace", Workspace: w.ULID, Author: testAuthor}, func(tx *Tx) error {
+		cur, err := tx.Workspace(w.ULID)
+		if err != nil {
+			return err
+		}
+		tx.SetDetail("rename " + cur.Name + " → web (API)")
+		cur.Name = "web"
+		return tx.PutWorkspace(cur)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if subj, _ := subjectAndBody(t, s); subj != "hedgehug: workspace rename api → web (API)" {
+		t.Errorf("subject with SetDetail = %q", subj)
+	}
 }
 
 func TestCreateRefusesZeroWorkspaceULID(t *testing.T) {
@@ -98,17 +114,58 @@ func TestRemoveWorkspaceRefusesBrokenTaskNamingIt(t *testing.T) {
 	}
 	other := model.TaskPath(model.NewULID())
 	mustWrite(t, s, other, "not a task\n") // names no workspace: does not block
-	broken := model.TaskPath(model.NewULID())
-	mustWrite(t, s, broken, "---\nworkspace: "+w.ULID.String()+"\ntitle: [unclosed\n---\n")
-	_, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveWorkspace(w.ULID) })
-	if err == nil || !strings.Contains(err.Error(), broken) || strings.Contains(err.Error(), other) {
-		t.Fatalf("err = %v", err)
-	}
-	if err := os.Remove(s.path(broken)); err != nil {
-		t.Fatal(err)
+	// The ULID anywhere in the file counts, however it is written.
+	for _, line := range []string{
+		"workspace: " + w.ULID.String(),
+		`workspace: "` + w.ULID.String() + `"`,
+		"workspace: " + strings.ToLower(w.ULID.String()),
+	} {
+		broken := model.TaskPath(model.NewULID())
+		mustWrite(t, s, broken, "---\n"+line+"\ntitle: [unclosed\n---\n")
+		_, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveWorkspace(w.ULID) })
+		if err == nil || !strings.Contains(err.Error(), broken) || strings.Contains(err.Error(), other) {
+			t.Fatalf("%s: err = %v", line, err)
+		}
+		if err := os.Remove(s.path(broken)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveWorkspace(w.ULID) }); err != nil {
 		t.Errorf("after the broken file is gone: %v", err)
+	}
+}
+
+// A broken file the operation repairs or removes does not block removing
+// the workspace it names.
+func TestRemoveWorkspaceWithTheBrokenTaskNamingIt(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		fix  func(tx *Tx, ulid model.ULID) error
+	}{
+		{"repaired", func(tx *Tx, ulid model.ULID) error {
+			task := newTask("repaired")
+			task.ULID = ulid
+			return tx.PutTask(task)
+		}},
+		{"removed", func(tx *Tx, ulid model.ULID) error { return tx.RemoveTask(ulid) }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s := newTestStore(t)
+			w := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
+			if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(w) }); err != nil {
+				t.Fatal(err)
+			}
+			ulid := model.NewULID()
+			mustWrite(t, s, model.TaskPath(ulid), "---\nworkspace: "+w.ULID.String()+"\ntitle: [unclosed\n---\n")
+			if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error {
+				if err := c.fix(tx, ulid); err != nil {
+					return err
+				}
+				return tx.RemoveWorkspace(w.ULID)
+			}); err != nil {
+				t.Errorf("err = %v", err)
+			}
+		})
 	}
 }
 
