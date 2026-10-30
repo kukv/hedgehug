@@ -12,7 +12,7 @@ import (
 var ErrLocked = errors.New("the store is locked by another process")
 
 // lockWait is how long a write waits for the lock, trying every lockPoll.
-const lockWait = 10 * time.Second //nolint:unused // used by the Store's writes in a later task
+const lockWait = 10 * time.Second
 
 var lockPoll = 50 * time.Millisecond
 
