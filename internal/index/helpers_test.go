@@ -18,7 +18,7 @@ var testAuthor = gitrepo.Signature{Name: "Test", Email: "test@example.com"}
 func newStore(t *testing.T) (*store.Store, string) {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "store")
-	s, err := store.Create(dir, &model.StoreMeta{ID: model.NewID(), Name: "test"}, nil, testAuthor)
+	s, err := store.Create(dir, &model.StoreMeta{ID: model.NewID(), Name: "test"}, nil, &model.Workspace{ID: model.NewID(), Name: "test", KeyPrefix: "TST"}, testAuthor)
 	if err != nil {
 		t.Fatal(err)
 	}

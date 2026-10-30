@@ -69,7 +69,7 @@ func (a *app) storeInit(name string, sc *schema.Schema) error {
 		return err
 	}
 	dir := filepath.Join(p.StoresDir, name)
-	if _, err := store.Create(dir, &model.StoreMeta{ID: model.NewID(), Name: name}, sc, author); err != nil {
+	if _, err := store.Create(dir, &model.StoreMeta{ID: model.NewID(), Name: name}, sc, &model.Workspace{ID: model.NewID(), Name: name, KeyPrefix: "ME"}, author); err != nil {
 		return err
 	}
 	if err := c.AddStore(name, dir); err != nil {

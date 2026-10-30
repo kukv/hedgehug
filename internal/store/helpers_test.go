@@ -22,12 +22,25 @@ var (
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
 	meta := &model.StoreMeta{ID: model.NewID(), Name: "test"}
-	s, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, testAuthor)
+	s, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, &model.Workspace{ID: model.NewID(), Name: "test", KeyPrefix: "TST"}, testAuthor)
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.now = func() time.Time { return testNow }
 	return s
+}
+
+// testWorkspace returns the workspace newTestStore made.
+func testWorkspace(t *testing.T, s *Store) *model.Workspace {
+	t.Helper()
+	for w, err := range s.Workspaces() {
+		if err != nil {
+			t.Fatal(err)
+		}
+		return w
+	}
+	t.Fatal("the store has no workspace")
+	return nil
 }
 
 // headLog returns the commits reachable from HEAD, newest first.

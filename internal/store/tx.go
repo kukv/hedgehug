@@ -43,6 +43,9 @@ type Tx struct {
 	removed   map[model.ID]bool        // tasks given to RemoveTask
 	taskOrder []model.ID
 	schema    *schema.Schema // set by PutSchema
+
+	workspaces map[model.ID]*model.Workspace // put workspaces; nil for a removed one
+	numbers    model.Numbers                 // the purged numbers; nil until read
 }
 
 // pending is one queued write. created and updated point into the value
@@ -134,6 +137,43 @@ func (tx *Tx) PutSprint(sp *model.Sprint) error {
 	return tx.put(model.SprintPath(sp.ID), &pending{encode: sp.Encode, created: &sp.Created, updated: &sp.Updated})
 }
 
+func (tx *Tx) PutWorkspace(w *model.Workspace) error {
+	if w.ID.IsZero() {
+		return errors.New("the workspace has no id")
+	}
+	if err := tx.put(model.WorkspacePath(w.ID), &pending{encode: w.Encode, created: &w.Created, updated: &w.Updated}); err != nil {
+		return err
+	}
+	tx.workspaces[w.ID] = w
+	return nil
+}
+
+func (tx *Tx) RemoveWorkspace(id model.ID) error {
+	if err := tx.put(model.WorkspacePath(id), &pending{remove: true}); err != nil {
+		return err
+	}
+	tx.workspaces[id] = nil
+	return nil
+}
+
+// Workspace reads a workspace as it will be after the writes queued so far.
+func (tx *Tx) Workspace(id model.ID) (*model.Workspace, error) {
+	if tx.done {
+		return nil, errTxDone
+	}
+	return tx.workspace(id)
+}
+
+func (tx *Tx) workspace(id model.ID) (*model.Workspace, error) {
+	if w, ok := tx.workspaces[id]; ok {
+		if w == nil {
+			return nil, fmt.Errorf("%s: %w", model.WorkspacePath(id), ErrNotFound)
+		}
+		return w, nil
+	}
+	return tx.s.Workspace(id)
+}
+
 func (tx *Tx) PutRelease(r *model.Release) error {
 	if r.ID.IsZero() {
 		return errors.New("the release has no id")
@@ -167,6 +207,14 @@ func (tx *Tx) RemoveTask(id model.ID) error {
 	}
 	if id.IsZero() {
 		return errors.New("the task has no id")
+	}
+	var de *model.DecodeError
+	if t, err := tx.task(id); err == nil {
+		if err := tx.recordNumbers(t); err != nil {
+			return err
+		}
+	} else if !errors.Is(err, ErrNotFound) && !errors.As(err, &de) {
+		return err
 	}
 	rels := []string{model.TaskPath(id)}
 	// Files put earlier in this operation are removed too.
@@ -204,6 +252,29 @@ func (tx *Tx) RemoveTask(id model.ID) error {
 	return nil
 }
 
+// recordNumbers raises the record of purged numbers to the numbers of t's
+// keys, so numbering never gives them again.
+func (tx *Tx) recordNumbers(t *model.Task) error {
+	if tx.numbers == nil {
+		n, err := tx.s.Numbers()
+		if err != nil {
+			return err
+		}
+		tx.numbers = n
+	}
+	changed := false
+	for _, k := range append([]string{t.Key}, t.FormerKeys...) {
+		if p, n, ok := model.ParseKey(k); ok && n > tx.numbers[p] {
+			tx.numbers[p] = n
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return tx.put(model.NumbersPath, &pending{encode: tx.numbers.Encode})
+}
+
 // Update runs one operation: under the store lock it runs fn, stamps and
 // writes the files fn put, and commits them as one commit. When fn fails
 // nothing is written; when writing or committing fails the files are put
@@ -236,7 +307,7 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
 	}
 	s.schema.Store(cached)
 
-	tx := &Tx{s: s, op: op, pending: map[string]*pending{}, tasks: map[model.ID]*model.Task{}}
+	tx := &Tx{s: s, op: op, pending: map[string]*pending{}, tasks: map[model.ID]*model.Task{}, workspaces: map[model.ID]*model.Workspace{}}
 	err = fn(tx)
 	tx.done = true
 	if err != nil {
