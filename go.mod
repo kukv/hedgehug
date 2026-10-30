@@ -4,6 +4,7 @@ go 1.27.3
 
 require (
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376
+	github.com/go-git/gcfg/v2 v2.0.2
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/oklog/ulid/v2 v2.1.2
 	github.com/spf13/cobra v1.10.2
