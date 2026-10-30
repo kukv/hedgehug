@@ -237,3 +237,35 @@ func TestValidateWrite(t *testing.T) {
 		}
 	}
 }
+
+// With skipTransitions, as in a migration, a required field counts only
+// when the write empties it: a task that lacked it before is not refused.
+func TestValidateWriteSkipTransitionsRequired(t *testing.T) {
+	s := Default()
+	s.Statuses = append(s.Statuses, Status{Name: "doing", Category: CategoryDoing})
+	s.Workflow = Workflow{Required: Lists{{"doing", []string{"assignees"}}}}
+	e := s.For(nil)
+	me := []string{"github.com/me"}
+
+	for _, tc := range []struct {
+		name         string
+		oldAssignees []string
+		curAssignees []string
+		skip         bool
+		want         []string
+	}{
+		{"lacked it before", nil, nil, true, nil},
+		{"the write empties it", me, nil, true, []string{"required:assignees"}},
+		{"kept", me, me, true, nil},
+		{"without skip it is checked", nil, nil, false, []string{"required:assignees"}},
+	} {
+		old := taskWith(t, "")
+		old.Status, old.Assignees = "in_progress", tc.oldAssignees
+		cur := taskWith(t, "")
+		cur.Status, cur.Assignees = "doing", tc.curAssignees
+		got := codes(ValidateWrite(old, "", e, cur, "", e, tc.skip))
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s: violations = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

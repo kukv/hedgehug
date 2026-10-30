@@ -174,22 +174,55 @@ func TestSchemaMigratePropOnBoth(t *testing.T) {
 
 func TestSchemaMigrateRejectsNewViolation(t *testing.T) {
 	te := newStoreEnv(t)
-	a := te.addJSON("Alpha")
-	te.ok("status", a.Short, "backlog")
-	te.putSchema(func(sc *schema.Schema) {
-		sc.Workflow.Required = schema.Lists{{Key: "todo", Values: []string{"points"}}}
-	})
+	p := te.addJSON("Parent")
+	c := te.addJSON("Child", "--parent", p.Short)
 	before := len(te.log("me"))
 	sf := te.schemaFile()
-	code, _, stderr := te.run("schema", "migrate", "status", "backlog", "todo")
-	if code != 1 || !strings.Contains(stderr, "breaks the schema") || !strings.Contains(stderr, "points") || !strings.Contains(stderr, a.Short+" Alpha") {
+	// A bug may not sit under a bug.
+	code, _, stderr := te.run("schema", "migrate", "kind", "task", "bug")
+	if code != 1 || !strings.Contains(stderr, "breaks the schema") || !strings.Contains(stderr, "cannot be placed") || !strings.Contains(stderr, c.Short+" Child") {
 		t.Errorf("exit %d, stderr %q", code, stderr)
 	}
 	if n := len(te.log("me")); n != before {
 		t.Errorf("commits = %d, want %d", n, before)
 	}
-	if te.schemaFile() != sf || te.task(a.ID).Status != "backlog" {
+	if te.schemaFile() != sf || te.task(c.ID).Kind != "task" {
 		t.Error("the store changed")
+	}
+}
+
+// Merging into a status with required fields keeps the tasks that lack
+// them: a migration is not a transition, and they did not have them before.
+func TestSchemaMigrateMergeIntoRequired(t *testing.T) {
+	te := newStoreEnv(t)
+	a := te.addJSON("Alpha")
+	te.ok("status", a.Short, "backlog")
+	te.putSchema(func(sc *schema.Schema) {
+		sc.Workflow.Required = schema.Lists{{Key: "todo", Values: []string{"points"}}}
+	})
+	te.ok("schema", "migrate", "status", "backlog", "todo")
+	if st := te.task(a.ID).Status; st != "todo" {
+		t.Errorf("status = %q, want todo", st)
+	}
+}
+
+// A rename keeps a task that already lacked a required field of the status.
+func TestSchemaMigrateKeepsMissingRequired(t *testing.T) {
+	te := newStoreEnv(t)
+	a := te.addJSON("Alpha")
+	te.ok("status", a.Short, "in_progress")
+	te.putSchema(func(sc *schema.Schema) {
+		sc.Workflow.Required = schema.Lists{{Key: "in_progress", Values: []string{"assignees"}}}
+	})
+	code, out, stderr := te.run("schema", "migrate", "status", "in_progress", "doing")
+	if code != 0 || !strings.HasPrefix(out, "Migrated 1 task\n") {
+		t.Fatalf("exit %d, stdout %q, stderr %q", code, out, stderr)
+	}
+	if st := te.task(a.ID).Status; st != "doing" {
+		t.Errorf("status = %q, want doing", st)
+	}
+	if sf := te.schemaFile(); !strings.Contains(sf, "doing: [assignees]") {
+		t.Errorf("schema.yaml:\n%s", sf)
 	}
 }
 

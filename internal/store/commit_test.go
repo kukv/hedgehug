@@ -113,6 +113,7 @@ func forbidTodoToDone() *schema.Schema {
 func TestUpdateSkipTransitions(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("x")
+	task.Assignees = []string{"github.com/me"} // so that a write can empty them
 	addTask(t, s, task)
 	sc := forbidTodoToDone()
 	if _, err := s.Update(Op{Name: "schema", Author: testAuthor}, func(tx *Tx) error { return tx.PutSchema(sc) }); err != nil {
@@ -142,7 +143,7 @@ func TestUpdateSkipTransitions(t *testing.T) {
 		t.Errorf("without skip: err = %v, want a transition violation", err)
 	}
 	if err := move(true, nil); code(err) != schema.CodeRequired {
-		t.Errorf("skip with a required field empty: err = %v, want a required violation", err)
+		t.Errorf("skip emptying a required field: err = %v, want a required violation", err)
 	}
 	if err := move(true, []string{"github.com/me"}); err != nil {
 		t.Errorf("skip: %v", err)

@@ -207,7 +207,15 @@ func ValidateWrite(old *model.Task, oldParentKind string, oldE *Effective, cur *
 		if skipTransitions {
 			from = "" // no workflow check; the required fields are still checked
 		}
-		vs = append(vs, ValidateTransition(from, cur.Status, cur, e)...)
+		for _, v := range ValidateTransition(from, cur.Status, cur, e) {
+			// Without the workflow, as in a migration, the status is not
+			// entered but renamed: a field is newly missing only when old
+			// had it.
+			if skipTransitions && v.Code == CodeRequired && !filled(old, v.Field) {
+				continue
+			}
+			vs = append(vs, v)
+		}
 	}
 	var had []Violation
 	if old != nil {

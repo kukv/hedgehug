@@ -23,8 +23,9 @@ type Op struct {
 	Name   string   // add, update, rm, mv...; the Hedgehug-Op trailer
 	Task   model.ID // the main task of the operation; zero if none
 	Author gitrepo.Signature
-	// SkipTransitions skips the check of workflow.transitions; the required
-	// fields of the new status are still checked.
+	// SkipTransitions skips the check of workflow.transitions; a required
+	// field of the new status is still checked, but only when the task had
+	// it before the write.
 	SkipTransitions bool
 }
 
