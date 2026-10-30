@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest something new hedgehug should do
+labels: ["Kind: Feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        hedgehug is a local-first task manager that uses git as its storage and sync layer,
+        with a CLI and a GUI in a single binary. It ships for Linux, macOS and Windows, so a
+        proposal has to work on all three.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem you want solved
+      description: What you are trying to do today, and where hedgehug gets in the way or falls short.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you have in mind
+      description: How it would look or behave. An example command line or a rough sketch of the screen is welcome.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do instead today
+      description: The workaround you use now (a text file, another task manager, plain git), if any.

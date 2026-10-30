@@ -1,0 +1,41 @@
+### JetBrains IDEs ###
+.fleet/
+.idea/
+*.iws
+*.iml
+*.ipr
+
+### VSCode ###
+.vscode/
+
+### OS ###
+.DS_Store
+**/.DS_Store
+Thumbs.db
+
+### env ###
+.env*
+!.env.example
+
+### AI agents ###
+.claude/settings.local.json
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+.superpowers/
+CLAUDE.local.md
+
+### Tempfiles ###
+.tmp/
+tmp/*
+!tmp/.gitkeep
+
+### go ###
+coverage.out
+*.exe
+/bin/
+
+### Test / coverage artifacts ###
+test-report.xml
+
+### GoReleaser ###
+dist/

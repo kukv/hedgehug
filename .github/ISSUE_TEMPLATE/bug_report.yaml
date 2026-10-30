@@ -1,0 +1,63 @@
+name: Bug report
+description: Something does not work as the README describes
+labels: ["Kind: Bug Fix"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **A security issue does not belong here.** A task file or repository that makes
+        hedgehug run something, a credential for a git remote showing up in output or in a
+        commit — report it privately through the **Security** tab (*Report a vulnerability*).
+
+        **Do not paste private tasks, remote URLs or tokens.** Replace them with placeholders
+        such as `https://git.example.com/me/tasks.git` before posting.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: What `hedgehug --version` prints.
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+    validations:
+      required: true
+  - type: dropdown
+    id: interface
+    attributes:
+      label: Where it happened
+      options:
+        - CLI
+        - GUI
+        - Both
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: How you ran it
+      description: |
+        For the CLI, the full command line. For the GUI, the steps you took in it.
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The steps that lead to it, what you expected, and what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Screenshot or output
+      description: |
+        For the GUI, a screenshot. For an error, the message as text. Remove anything
+        private before pasting.

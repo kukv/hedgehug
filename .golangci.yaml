@@ -1,0 +1,31 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - revive
+    - gosec
+    - misspell
+    - gocritic
+    - bodyclose
+    - unconvert
+    - unparam
+    # depguard は層を分けるパッケージができたときに、そのルールと一緒に有効にする。
+    # ルール無しで有効にすると、標準ライブラリ以外の import をすべて拒否する。
+  exclusions:
+    rules:
+      - linters:
+          - revive
+        text: "^(exported|unused-parameter):"
+      - path: _test\.go
+        linters:
+          - gosec
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
