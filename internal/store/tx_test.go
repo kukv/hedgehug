@@ -14,12 +14,12 @@ import (
 )
 
 func newTask(title string) *model.Task {
-	return &model.Task{ID: model.NewID(), Workspace: testWorkspaceID, Kind: "task", Title: title, Status: "todo"}
+	return &model.Task{ULID: model.NewULID(), Workspace: testWorkspaceULID, Kind: "task", Title: title, Status: "todo"}
 }
 
 func addTask(t *testing.T, s *Store, task *model.Task) {
 	t.Helper()
-	if _, err := s.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+	if _, err := s.Update(Op{Name: "add", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error {
 		return tx.PutTask(task)
 	}); err != nil {
 		t.Fatal(err)
@@ -31,7 +31,7 @@ func TestUpdateCommitsOnce(t *testing.T) {
 	task := newTask("リリース準備")
 	addTask(t, s, task)
 
-	got, err := s.Task(task.ID)
+	got, err := s.Task(task.ULID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestUpdateCommitsOnce(t *testing.T) {
 	if len(log) != 2 {
 		t.Fatalf("commits = %d, want 2 (init + add)", len(log))
 	}
-	want := "hedgehug: add TST-1 リリース準備\n\nHedgehug-Op: add\nHedgehug-Task: " + task.ID.String() + "\n"
+	want := "hedgehug: add TST-1 リリース準備\n\nHedgehug-Op: add\nHedgehug-Task: " + task.ULID.String() + "\n"
 	if log[0].Message != want {
 		t.Errorf("message = %q, want %q", log[0].Message, want)
 	}
@@ -79,11 +79,11 @@ func TestUpdateNoChange(t *testing.T) {
 
 	later := testNow.Add(time.Hour)
 	s.now = func() time.Time { return later }
-	same, err := s.Task(task.ID)
+	same, err := s.Task(task.ULID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Update(Op{Name: "update", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+	if _, err := s.Update(Op{Name: "update", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error {
 		return tx.PutTask(same)
 	}); err != nil {
 		t.Fatal(err)
@@ -91,7 +91,7 @@ func TestUpdateNoChange(t *testing.T) {
 	if n := len(headLog(t, s.dir)); n != 2 {
 		t.Errorf("commits = %d, want 2: an unchanged write must not commit", n)
 	}
-	got, err := s.Task(task.ID)
+	got, err := s.Task(task.ULID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,12 +100,12 @@ func TestUpdateNoChange(t *testing.T) {
 	}
 
 	got.Title = "y"
-	if _, err := s.Update(Op{Name: "update", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+	if _, err := s.Update(Op{Name: "update", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error {
 		return tx.PutTask(got)
 	}); err != nil {
 		t.Fatal(err)
 	}
-	again, err := s.Task(task.ID)
+	again, err := s.Task(task.ULID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestUpdateFnError(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("x")
 	boom := errors.New("boom")
-	_, err := s.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+	_, err := s.Update(Op{Name: "add", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error {
 		if err := tx.PutTask(task); err != nil {
 			return err
 		}
@@ -127,7 +127,7 @@ func TestUpdateFnError(t *testing.T) {
 	if !errors.Is(err, boom) {
 		t.Fatalf("err = %v, want boom", err)
 	}
-	if _, err := os.Stat(s.path(model.TaskPath(task.ID))); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(s.path(model.TaskPath(task.ULID))); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("task file exists after a failed fn: %v", err)
 	}
 	if n := len(headLog(t, s.dir)); n != 1 {
@@ -139,14 +139,14 @@ func TestUpdateCommitFailureRollsBack(t *testing.T) {
 	s := newTestStore(t)
 	kept := newTask("kept")
 	addTask(t, s, kept)
-	before, err := os.ReadFile(s.path(model.TaskPath(kept.ID)))
+	before, err := os.ReadFile(s.path(model.TaskPath(kept.ULID)))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	boom := errors.New("commit failed")
 	s.commit = func(gitrepo.Commit) error { return boom }
-	edited, err := s.Task(kept.ID)
+	edited, err := s.Task(kept.ULID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,11 +161,11 @@ func TestUpdateCommitFailureRollsBack(t *testing.T) {
 	if !errors.Is(err, boom) {
 		t.Fatalf("err = %v, want the commit error", err)
 	}
-	after, err := os.ReadFile(s.path(model.TaskPath(kept.ID)))
+	after, err := os.ReadFile(s.path(model.TaskPath(kept.ULID)))
 	if err != nil || string(after) != string(before) {
 		t.Errorf("edited file was not restored: %q, %v", after, err)
 	}
-	if _, err := os.Stat(s.path(model.TaskPath(added.ID))); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(s.path(model.TaskPath(added.ULID))); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("new file was not removed: %v", err)
 	}
 }
@@ -177,7 +177,7 @@ func TestTxReadsItsWrites(t *testing.T) {
 		if err := tx.PutTask(task); err != nil {
 			return err
 		}
-		got, err := tx.Task(task.ID)
+		got, err := tx.Task(task.ULID)
 		if err != nil {
 			return err
 		}
@@ -231,7 +231,7 @@ func TestUpdateFromTwoStores(t *testing.T) {
 		wg.Go(func() {
 			for range perStore {
 				task := newTask("x")
-				_, err := st.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+				_, err := st.Update(Op{Name: "add", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error {
 					return tx.PutTask(task)
 				})
 				errs <- err
@@ -270,18 +270,18 @@ func TestUpdateNeedsOpName(t *testing.T) {
 func TestPutEveryFileType(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("x")
-	c := &model.Comment{ID: model.NewID(), Author: "github.com/me", Body: "コメント\n"}
-	w := &model.Worklog{ID: model.NewID(), Author: "github.com/me", Body: "作業\n"}
-	sp := &model.Sprint{ID: model.NewID(), Name: "S1", State: "planned"}
-	r := &model.Release{ID: model.NewID(), Name: "v1", State: "unreleased"}
+	c := &model.Comment{ULID: model.NewULID(), Author: "github.com/me", Body: "コメント\n"}
+	w := &model.Worklog{ULID: model.NewULID(), Author: "github.com/me", Body: "作業\n"}
+	sp := &model.Sprint{ULID: model.NewULID(), Name: "S1", State: "planned"}
+	r := &model.Release{ULID: model.NewULID(), Name: "v1", State: "unreleased"}
 	tp := &model.Template{Name: "bug"}
 	tp.Item.Kind = "bug"
 
-	if _, err := s.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+	if _, err := s.Update(Op{Name: "add", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error {
 		return errors.Join(
 			tx.PutTask(task),
-			tx.PutComment(task.ID, c),
-			tx.PutWorklog(task.ID, w),
+			tx.PutComment(task.ULID, c),
+			tx.PutWorklog(task.ULID, w),
 			tx.PutSprint(sp),
 			tx.PutRelease(r),
 			tx.PutTemplate(tp),
@@ -294,7 +294,7 @@ func TestPutEveryFileType(t *testing.T) {
 	}
 
 	n := 0
-	for got, err := range s.Comments(task.ID) {
+	for got, err := range s.Comments(task.ULID) {
 		if err != nil || got.Body != "コメント\n" || !got.Created.Equal(testNow) {
 			t.Errorf("comment = %+v, %v", got, err)
 		}
@@ -303,15 +303,15 @@ func TestPutEveryFileType(t *testing.T) {
 	if n != 1 {
 		t.Errorf("comments = %d", n)
 	}
-	for got, err := range s.Worklogs(task.ID) {
+	for got, err := range s.Worklogs(task.ULID) {
 		if err != nil || !got.Updated.Equal(testNow) {
 			t.Errorf("worklog = %+v, %v", got, err)
 		}
 	}
-	if got, err := s.Sprint(sp.ID); err != nil || got.Name != "S1" || !got.Created.Equal(testNow) {
+	if got, err := s.Sprint(sp.ULID); err != nil || got.Name != "S1" || !got.Created.Equal(testNow) {
 		t.Errorf("sprint = %+v, %v", got, err)
 	}
-	if got, err := s.Release(r.ID); err != nil || got.Name != "v1" {
+	if got, err := s.Release(r.ULID); err != nil || got.Name != "v1" {
 		t.Errorf("release = %+v, %v", got, err)
 	}
 	if got, err := s.Template("bug"); err != nil || !got.Updated.Equal(testNow) {
@@ -334,8 +334,8 @@ func TestPurgeSubjectUsesKey(t *testing.T) {
 	task := newTask("title")
 	task.Key = "TST-3"
 	addTask(t, s, task)
-	if _, err := s.Update(Op{Name: "purge", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
-		return tx.RemoveTask(task.ID)
+	if _, err := s.Update(Op{Name: "purge", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error {
+		return tx.RemoveTask(task.ULID)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -347,23 +347,23 @@ func TestPurgeSubjectUsesKey(t *testing.T) {
 func TestRemoveTask(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("x")
-	c := &model.Comment{ID: model.NewID(), Author: "github.com/me"}
-	w := &model.Worklog{ID: model.NewID(), Author: "github.com/me"}
-	if _, err := s.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
-		return errors.Join(tx.PutTask(task), tx.PutComment(task.ID, c), tx.PutWorklog(task.ID, w))
+	c := &model.Comment{ULID: model.NewULID(), Author: "github.com/me"}
+	w := &model.Worklog{ULID: model.NewULID(), Author: "github.com/me"}
+	if _, err := s.Update(Op{Name: "add", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error {
+		return errors.Join(tx.PutTask(task), tx.PutComment(task.ULID, c), tx.PutWorklog(task.ULID, w))
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := s.Update(Op{Name: "purge", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
-		return tx.RemoveTask(task.ID)
+	if _, err := s.Update(Op{Name: "purge", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error {
+		return tx.RemoveTask(task.ULID)
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Task(task.ID); !errors.Is(err, ErrNotFound) {
+	if _, err := s.Task(task.ULID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("task still readable: %v", err)
 	}
-	for got, err := range s.Comments(task.ID) {
+	for got, err := range s.Comments(task.ULID) {
 		t.Errorf("a comment is left: %+v, %v", got, err)
 	}
 	log := headLog(t, s.dir)
@@ -377,7 +377,7 @@ func TestRemoveTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range []string{model.TaskPath(task.ID), model.CommentPath(task.ID, c.ID), model.WorklogPath(task.ID, w.ID)} {
+	for _, p := range []string{model.TaskPath(task.ULID), model.CommentPath(task.ULID, c.ULID), model.WorklogPath(task.ULID, w.ULID)} {
 		if _, err := tree.File(p); err == nil {
 			t.Errorf("%s is still in the tree", p)
 		}
@@ -421,7 +421,7 @@ func TestUpdateRereadsSchema(t *testing.T) {
 	}
 	task := newTask("x")
 	task.Status = "review"
-	if _, err := b.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(task) }); err != nil {
+	if _, err := b.Update(Op{Name: "add", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(task) }); err != nil {
 		t.Errorf("the other store did not see the new schema: %v", err)
 	}
 	if _, ok := b.Schema().Status("review"); !ok {
@@ -460,23 +460,23 @@ func TestSchemaWhileUpdating(t *testing.T) {
 	wg.Wait()
 }
 
-func TestPutRefusesZeroID(t *testing.T) {
+func TestPutRefusesZeroULID(t *testing.T) {
 	s := newTestStore(t)
-	id := model.NewID()
+	id := model.NewULID()
 	for _, tc := range []struct {
 		name string
 		put  func(*Tx) error
 	}{
-		{"PutComment task", func(tx *Tx) error { return tx.PutComment(model.ID{}, &model.Comment{ID: model.NewID()}) }},
+		{"PutComment task", func(tx *Tx) error { return tx.PutComment(model.ULID{}, &model.Comment{ULID: model.NewULID()}) }},
 		{"PutComment entry", func(tx *Tx) error { return tx.PutComment(id, &model.Comment{}) }},
-		{"PutWorklog task", func(tx *Tx) error { return tx.PutWorklog(model.ID{}, &model.Worklog{ID: model.NewID()}) }},
+		{"PutWorklog task", func(tx *Tx) error { return tx.PutWorklog(model.ULID{}, &model.Worklog{ULID: model.NewULID()}) }},
 		{"PutWorklog entry", func(tx *Tx) error { return tx.PutWorklog(id, &model.Worklog{}) }},
 		{"PutSprint", func(tx *Tx) error { return tx.PutSprint(&model.Sprint{Name: "S1", State: "planned"}) }},
 		{"PutRelease", func(tx *Tx) error { return tx.PutRelease(&model.Release{Name: "v1", State: "unreleased"}) }},
-		{"RemoveTask", func(tx *Tx) error { return tx.RemoveTask(model.ID{}) }},
+		{"RemoveTask", func(tx *Tx) error { return tx.RemoveTask(model.ULID{}) }},
 	} {
 		if _, err := s.Update(Op{Name: "add", Author: testAuthor}, tc.put); err == nil {
-			t.Errorf("%s accepted a zero ID", tc.name)
+			t.Errorf("%s accepted a zero ULID", tc.name)
 		}
 	}
 	if n := len(headLog(t, s.dir)); n != 1 {

@@ -13,15 +13,15 @@ import (
 func TestUpdateReportsCommitted(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("x")
-	committed, err := s.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(task) })
+	committed, err := s.Update(Op{Name: "add", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(task) })
 	if err != nil || !committed {
 		t.Fatalf("add: committed, err = %v, %v; want true, nil", committed, err)
 	}
-	same, err := s.Task(task.ID)
+	same, err := s.Task(task.ULID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	committed, err = s.Update(Op{Name: "update", Task: task.ID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(same) })
+	committed, err = s.Update(Op{Name: "update", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(same) })
 	if err != nil || committed {
 		t.Errorf("same content: committed, err = %v, %v; want false, nil", committed, err)
 	}
@@ -31,7 +31,7 @@ func TestUpdateSameAsHeadWithDirtyWorkTree(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("x")
 	addTask(t, s, task)
-	rel := model.TaskPath(task.ID)
+	rel := model.TaskPath(task.ULID)
 	want, err := os.ReadFile(s.path(rel))
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +44,7 @@ func TestUpdateSameAsHeadWithDirtyWorkTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	committed, err := s.Update(Op{Name: "update", Task: task.ID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(same) })
+	committed, err := s.Update(Op{Name: "update", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(same) })
 	if err != nil || committed {
 		t.Fatalf("committed, err = %v, %v; want false, nil", committed, err)
 	}
@@ -64,20 +64,20 @@ func TestRemoveTaskDropsQueuedChildren(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("x")
 	addTask(t, s, task)
-	c := &model.Comment{ID: model.NewID(), Author: "github.com/me"}
-	if _, err := s.Update(Op{Name: "purge", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
-		return errors.Join(tx.PutComment(task.ID, c), tx.RemoveTask(task.ID))
+	c := &model.Comment{ULID: model.NewULID(), Author: "github.com/me"}
+	if _, err := s.Update(Op{Name: "purge", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error {
+		return errors.Join(tx.PutComment(task.ULID, c), tx.RemoveTask(task.ULID))
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(s.path(model.CommentPath(task.ID, c.ID))); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(s.path(model.CommentPath(task.ULID, c.ULID))); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("the comment file was left: %v", err)
 	}
 	tree, err := headLog(t, s.dir)[0].Tree()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tree.File(model.CommentPath(task.ID, c.ID)); err == nil {
+	if _, err := tree.File(model.CommentPath(task.ULID, c.ULID)); err == nil {
 		t.Error("the comment is in the commit")
 	}
 }
@@ -86,14 +86,14 @@ func TestPutChildOfRemovedTask(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("x")
 	addTask(t, s, task)
-	_, err := s.Update(Op{Name: "purge", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
-		if err := tx.RemoveTask(task.ID); err != nil {
+	_, err := s.Update(Op{Name: "purge", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error {
+		if err := tx.RemoveTask(task.ULID); err != nil {
 			return err
 		}
-		if err := tx.PutComment(task.ID, &model.Comment{ID: model.NewID(), Author: "github.com/me"}); err == nil {
+		if err := tx.PutComment(task.ULID, &model.Comment{ULID: model.NewULID(), Author: "github.com/me"}); err == nil {
 			t.Error("PutComment after RemoveTask succeeded")
 		}
-		if err := tx.PutWorklog(task.ID, &model.Worklog{ID: model.NewID(), Author: "github.com/me"}); err == nil {
+		if err := tx.PutWorklog(task.ULID, &model.Worklog{ULID: model.NewULID(), Author: "github.com/me"}); err == nil {
 			t.Error("PutWorklog after RemoveTask succeeded")
 		}
 		return nil
@@ -120,8 +120,8 @@ func TestUpdateSkipTransitions(t *testing.T) {
 		t.Fatal(err)
 	}
 	move := func(skip bool, assignees []string) error {
-		_, err := s.Update(Op{Name: "update", Task: task.ID, Author: testAuthor, SkipTransitions: skip}, func(tx *Tx) error {
-			t, err := tx.Task(task.ID)
+		_, err := s.Update(Op{Name: "update", Task: task.ULID, Author: testAuthor, SkipTransitions: skip}, func(tx *Tx) error {
+			t, err := tx.Task(task.ULID)
 			if err != nil {
 				return err
 			}
@@ -155,28 +155,28 @@ func TestTaskBytes(t *testing.T) {
 	task := newTask("x")
 	addTask(t, s, task)
 	broken := "---\n: :\n---\n"
-	mustWrite(t, s, model.TaskPath(task.ID), broken)
-	got, err := s.TaskBytes(task.ID)
+	mustWrite(t, s, model.TaskPath(task.ULID), broken)
+	got, err := s.TaskBytes(task.ULID)
 	if err != nil || string(got) != broken {
 		t.Errorf("TaskBytes = %q, %v; want %q", got, err, broken)
 	}
-	if _, err := s.TaskBytes(model.NewID()); !errors.Is(err, ErrNotFound) {
+	if _, err := s.TaskBytes(model.NewULID()); !errors.Is(err, ErrNotFound) {
 		t.Errorf("missing: err = %v, want ErrNotFound", err)
 	}
 }
 
-func TestCommentIDs(t *testing.T) {
+func TestCommentULIDs(t *testing.T) {
 	s := newTestStore(t)
 	a, b := newTask("a"), newTask("b")
 	refs := []CommentRef{
-		{a.ID, model.NewID()}, {a.ID, model.NewID()}, {b.ID, model.NewID()},
+		{a.ULID, model.NewULID()}, {a.ULID, model.NewULID()}, {b.ULID, model.NewULID()},
 	}
 	if _, err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error {
 		if err := errors.Join(tx.PutTask(a), tx.PutTask(b)); err != nil {
 			return err
 		}
 		for _, r := range refs {
-			if err := tx.PutComment(r.Task, &model.Comment{ID: r.Comment, Author: "github.com/me"}); err != nil {
+			if err := tx.PutComment(r.Task, &model.Comment{ULID: r.Comment, Author: "github.com/me"}); err != nil {
 				return err
 			}
 		}
@@ -186,7 +186,7 @@ func TestCommentIDs(t *testing.T) {
 	}
 	mustWrite(t, s, "comments/x/y/zzz/abc.md", "x")
 
-	got, err := s.CommentIDs()
+	got, err := s.CommentULIDs()
 	if err != nil {
 		t.Fatal(err)
 	}

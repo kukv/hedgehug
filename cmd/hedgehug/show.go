@@ -24,7 +24,7 @@ func (a *app) showCmd() *cobra.Command {
 }
 
 type commentJSON struct {
-	ID      string    `json:"id"`
+	ULID    string    `json:"ulid"`
 	Author  string    `json:"author"`
 	Created time.Time `json:"created"`
 	Body    string    `json:"body"`
@@ -61,18 +61,18 @@ func (a *app) show(arg string) error {
 	}
 	var t *model.Task
 	if e.Broken == "" {
-		if t, err = s.Task(e.ID); err != nil {
+		if t, err = s.Task(e.ULID); err != nil {
 			return err
 		}
 	}
 	var comments []*model.Comment
 	if e.Broken == "" {
-		if comments, err = liveComments(s, e.ID); err != nil {
+		if comments, err = liveComments(s, e.ULID); err != nil {
 			return err
 		}
 	}
-	rels := reverse(ix, e.ID)
-	history, err := a.taskLog(s, e.ID, showHistory)
+	rels := reverse(ix, e.ULID)
+	history, err := a.taskLog(s, e.ULID, showHistory)
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func (a *app) show(arg string) error {
 	return err
 }
 
-func liveComments(s *store.Store, id model.ID) ([]*model.Comment, error) {
+func liveComments(s *store.Store, id model.ULID) ([]*model.Comment, error) {
 	var out []*model.Comment
 	for c, err := range s.Comments(id) {
 		if err != nil {
@@ -97,7 +97,7 @@ func liveComments(s *store.Store, id model.ID) ([]*model.Comment, error) {
 }
 
 // reverse finds the tasks that point at id, by relation.
-func reverse(ix *index.Index, id model.ID) []relation {
+func reverse(ix *index.Index, id model.ULID) []relation {
 	var out []relation
 	if es := ix.Reverse(id, "blocked_by"); len(es) > 0 {
 		out = append(out, relation{"blocks", "blocks", es})
@@ -130,11 +130,11 @@ func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Co
 		j.Body, j.Watchers, j.Repos = t.Body, orEmpty(t.Watchers), orEmpty(t.Repos)
 	}
 	for _, c := range comments {
-		j.Comments = append(j.Comments, commentJSON{c.ID.String(), c.Author, c.Created, c.Body})
+		j.Comments = append(j.Comments, commentJSON{c.ULID.String(), c.Author, c.Created, c.Body})
 	}
 	for _, r := range rels {
 		for _, x := range r.tasks {
-			j.Reverse[r.key] = append(j.Reverse[r.key], refJSON{x.ID.String(), x.Key, x.Title})
+			j.Reverse[r.key] = append(j.Reverse[r.key], refJSON{x.ULID.String(), x.Key, x.Title})
 		}
 	}
 	return j
@@ -155,7 +155,7 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 		}
 		b.WriteString("  " + k + strings.Repeat(" ", max(0, 11-displayWidth(k))) + " " + v + "\n")
 	}
-	refs := func(ids []model.ID) []string {
+	refs := func(ids []model.ULID) []string {
 		out := make([]string, len(ids))
 		for i, id := range ids {
 			out[i] = refName(ix, id)
@@ -163,7 +163,7 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 		return out
 	}
 	field("key", e.Key)
-	field("id", e.ID.String())
+	field("ulid", e.ULID.String())
 	if !e.Workspace.IsZero() {
 		ws := e.Workspace.String()
 		if w, ok := ix.Workspace(e.Workspace); ok {
@@ -207,7 +207,7 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 	if e.DeletedAt != nil {
 		field("deleted", e.DeletedAt.Format(time.RFC3339))
 	}
-	if ps := ix.Problems(e.ID); len(ps) > 0 {
+	if ps := ix.Problems(e.ULID); len(ps) > 0 {
 		b.WriteString("\nProblems:\n")
 		for _, p := range ps {
 			fmt.Fprintf(&b, "  %s %s: %s\n", p.Code, p.Field, p.Msg)
@@ -218,7 +218,7 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 		for _, r := range rels {
 			names := make([]string, len(r.tasks))
 			for i, x := range r.tasks {
-				names[i] = refName(ix, x.ID)
+				names[i] = refName(ix, x.ULID)
 			}
 			field(r.label, names...)
 		}
@@ -236,7 +236,7 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 			if author == "" {
 				author = "-"
 			}
-			fmt.Fprintf(&b, "  %s  %s  %s\n", st.id(c.ID.String()), author, c.Created.Format(time.RFC3339))
+			fmt.Fprintf(&b, "  %s  %s  %s\n", st.id(c.ULID.String()), author, c.Created.Format(time.RFC3339))
 			for _, l := range strings.Split(strings.TrimRight(c.Body, "\n"), "\n") {
 				b.WriteString("    " + l + "\n")
 			}

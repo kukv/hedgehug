@@ -32,7 +32,7 @@ func TestWorkspaceCommands(t *testing.T) {
 	if !strings.Contains(out, "API-1 → BE-1") || !strings.Contains(out, "API-2 → BE-2") {
 		t.Errorf("prefix =\n%s", out)
 	}
-	if got := te.task(a.ID); got.Key != "BE-1" || !slices.Equal(got.FormerKeys, []string{"API-1"}) {
+	if got := te.task(a.ULID); got.Key != "BE-1" || !slices.Equal(got.FormerKeys, []string{"API-1"}) {
 		t.Errorf("after prefix: %s %v", got.Key, got.FormerKeys)
 	}
 	te.ok("show", "API-1") // a former key still resolves
@@ -93,7 +93,7 @@ func TestWorkspaceCommitSubjects(t *testing.T) {
 	te.wsJSON(&ls, "ls")
 	ids := map[string]string{}
 	for _, w := range ls {
-		ids[w["name"].(string)] = w["id"].(string)
+		ids[w["name"].(string)] = w["ulid"].(string)
 	}
 	for _, c := range []struct {
 		args []string
@@ -134,7 +134,7 @@ func fieldNames(m map[string]any) []string {
 func TestWorkspaceJSON(t *testing.T) {
 	te := newStoreEnv(t)
 	te.addJSON("a")
-	want := []string{"id", "key_prefix", "name", "prefix_set", "tasks"}
+	want := []string{"key_prefix", "name", "prefix_set", "tasks", "ulid"}
 	var added map[string]any
 	te.wsJSON(&added, "add", "web", "--prefix", "WEB")
 	if !slices.Equal(fieldNames(added), want) || added["name"] != "web" || added["key_prefix"] != "WEB" || added["tasks"] != 0.0 {
@@ -147,7 +147,7 @@ func TestWorkspaceJSON(t *testing.T) {
 	}
 	var renamed map[string]any
 	te.wsJSON(&renamed, "rename", "web", "front")
-	if !slices.Equal(fieldNames(renamed), want) || renamed["name"] != "front" || renamed["id"] != added["id"] {
+	if !slices.Equal(fieldNames(renamed), want) || renamed["name"] != "front" || renamed["ulid"] != added["ulid"] {
 		t.Errorf("rename --json = %v", renamed)
 	}
 	var prefixed map[string]any
@@ -171,11 +171,11 @@ func TestStoreInitJSONHasTheWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	w := got.Workspace
-	if !slices.Equal(fieldNames(w), []string{"id", "key_prefix", "name"}) || w["name"] != "main" || w["key_prefix"] != "ME" {
+	if !slices.Equal(fieldNames(w), []string{"key_prefix", "name", "ulid"}) || w["name"] != "main" || w["key_prefix"] != "ME" {
 		t.Fatalf("workspace = %v", w)
 	}
-	if _, err := model.ParseID(w["id"].(string)); err != nil {
-		t.Errorf("id: %v", err)
+	if _, err := model.ParseULID(w["ulid"].(string)); err != nil {
+		t.Errorf("ulid: %v", err)
 	}
 }
 
@@ -190,8 +190,8 @@ func TestAmbiguousWorkspace(t *testing.T) {
 	}
 	for _, want := range []string{
 		`"api" matches 2 workspaces:`,
-		"\n  api (BE, " + api["id"].(string) + ")",
-		"\n  be (API, " + be["id"].(string) + ")",
+		"\n  api (BE, " + api["ulid"].(string) + ")",
+		"\n  be (API, " + be["ulid"].(string) + ")",
 	} {
 		if !strings.Contains(errs, want) {
 			t.Errorf("stderr lacks %q:\n%s", want, errs)
@@ -217,8 +217,8 @@ func TestCheckPrefixElsewhereSkipsABrokenStore(t *testing.T) {
 func TestAddUnderAParentInAMissingWorkspace(t *testing.T) {
 	te := newStoreEnv(t)
 	p := te.addJSON("p")
-	gone := model.NewID().String()
-	te.commitFile(p.ID, setLine(te.raw(p.ID), "workspace", gone))
+	gone := model.NewULID().String()
+	te.commitFile(p.ULID, setLine(te.raw(p.ULID), "workspace", gone))
 	if code, _, errs := te.run("add", "c", "--parent", p.Key, "--workspace", "me"); code != 1 || !strings.Contains(errs, "the parent's workspace "+gone+" is not in this store") {
 		t.Errorf("with --workspace: exit %d, stderr %q", code, errs)
 	}
@@ -230,13 +230,13 @@ func TestAddUnderAParentInAMissingWorkspace(t *testing.T) {
 func TestTaskInAMissingWorkspace(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("x")
-	gone := model.NewID().String()
-	te.commitFile(x.ID, setLine(te.raw(x.ID), "workspace", gone))
+	gone := model.NewULID().String()
+	te.commitFile(x.ULID, setLine(te.raw(x.ULID), "workspace", gone))
 	var got taskJSON
 	if err := json.Unmarshal([]byte(te.ok("show", x.Key, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Workspace == nil || *got.Workspace != (workspaceRefJSON{ID: gone}) {
+	if got.Workspace == nil || *got.Workspace != (workspaceRefJSON{ULID: gone}) {
 		t.Errorf("workspace = %+v", got.Workspace)
 	}
 	if out := te.ok("show", x.Key); !strings.Contains(out, "  workspace   "+gone+"\n") {
@@ -248,15 +248,15 @@ func TestAmbiguousTask(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("first")
 	b := te.addJSON("second")
-	te.commitFile(b.ID, setLine(te.raw(b.ID), "key", a.Key))
+	te.commitFile(b.ULID, setLine(te.raw(b.ULID), "key", a.Key))
 	code, _, errs := te.run("show", a.Key)
 	if code != 1 {
 		t.Errorf("exit %d", code)
 	}
 	for _, want := range []string{
 		`"` + a.Key + `" matches 2 tasks:`,
-		"\n  " + a.Key + " (" + a.ID + ") first",
-		"\n  " + a.Key + " (" + b.ID + ") second",
+		"\n  " + a.Key + " (" + a.ULID + ") first",
+		"\n  " + a.Key + " (" + b.ULID + ") second",
 	} {
 		if !strings.Contains(errs, want) {
 			t.Errorf("stderr lacks %q:\n%s", want, errs)

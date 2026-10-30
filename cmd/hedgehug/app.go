@@ -162,14 +162,14 @@ func (a *app) resolve(ix *index.Index, arg string) (*index.Entry, error) {
 	return e, nil
 }
 
-// resolveID is resolve for applyAssign.
-func (a *app) resolveID(ix *index.Index) func(string) (model.ID, error) {
-	return func(s string) (model.ID, error) {
+// resolveULID is resolve for applyAssign.
+func (a *app) resolveULID(ix *index.Index) func(string) (model.ULID, error) {
+	return func(s string) (model.ULID, error) {
 		e, err := a.resolve(ix, s)
 		if err != nil {
-			return model.ID{}, err
+			return model.ULID{}, err
 		}
-		return e.ID, nil
+		return e.ULID, nil
 	}
 }
 

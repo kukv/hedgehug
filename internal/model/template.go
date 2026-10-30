@@ -46,9 +46,9 @@ type TemplateItem struct {
 	Watchers  []string       `yaml:"watchers,omitempty"`
 	Labels    []string       `yaml:"labels,omitempty"`
 	Repos     []string       `yaml:"repos,omitempty"`
-	BlockedBy []ID           `yaml:"blocked_by,omitempty"`
-	Sprint    *ID            `yaml:"sprint,omitempty"`
-	Releases  []ID           `yaml:"releases,omitempty"`
+	BlockedBy []ULID         `yaml:"blocked_by,omitempty"`
+	Sprint    *ULID          `yaml:"sprint,omitempty"`
+	Releases  []ULID         `yaml:"releases,omitempty"`
 	Links     []Link         `yaml:"links,omitempty"`
 	Props     Fields         `yaml:"props,omitempty"`
 	Body      string         `yaml:"body,omitempty"`

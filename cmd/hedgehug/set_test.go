@@ -16,8 +16,8 @@ func TestSet(t *testing.T) {
 	if !strings.Contains(out, "Renamed") {
 		t.Errorf("stdout = %q", out)
 	}
-	tk := te.task(a.ID)
-	if tk.Title != "Renamed" || !slices.Equal(tk.Labels, []string{"api"}) || len(tk.BlockedBy) != 1 || tk.BlockedBy[0].String() != other.ID {
+	tk := te.task(a.ULID)
+	if tk.Title != "Renamed" || !slices.Equal(tk.Labels, []string{"api"}) || len(tk.BlockedBy) != 1 || tk.BlockedBy[0].String() != other.ULID {
 		t.Errorf("task = %+v", tk)
 	}
 	if n := tk.Props.Get("due"); n == nil || n.Value != "2026-11-01" {

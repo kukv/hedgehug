@@ -36,14 +36,14 @@ func TestMv(t *testing.T) {
 	if got := order(); got != "P,A,Loose,B,C" {
 		t.Errorf("after --parent --after: %s", got)
 	}
-	if tk := te.task(loose.ID); tk.Parent == nil || tk.Parent.String() != p.ID {
-		t.Errorf("parent = %v, want %s", tk.Parent, p.ID)
+	if tk := te.task(loose.ULID); tk.Parent == nil || tk.Parent.String() != p.ULID {
+		t.Errorf("parent = %v, want %s", tk.Parent, p.ULID)
 	}
 	te.ok("mv", loose.Key, "--root")
 	if got := order(); got != "P,A,B,C,Loose" {
 		t.Errorf("after --root: %s", got)
 	}
-	if te.task(loose.ID).Parent != nil {
+	if te.task(loose.ULID).Parent != nil {
 		t.Error("--root left a parent")
 	}
 	if !strings.Contains(te.log("me")[0].Message, "Hedgehug-Op: mv") {
@@ -86,7 +86,7 @@ func TestMvRefusesADeletedParent(t *testing.T) {
 	if code != 1 || !strings.Contains(stderr, "is deleted; restore "+p.Key+" first") {
 		t.Errorf("exit %d, stderr %q", code, stderr)
 	}
-	if te.task(d.ID).Parent != nil {
+	if te.task(d.ULID).Parent != nil {
 		t.Error("the task was moved")
 	}
 }
@@ -100,8 +100,8 @@ func TestMvWorkspace(t *testing.T) {
 	if !strings.Contains(out, "ME-1 → API-1") || !strings.Contains(out, "ME-2 → API-2") {
 		t.Errorf("mv =\n%s", out)
 	}
-	got := te.task(c.ID)
-	if got.Key != "API-2" || got.Parent == nil || got.Parent.String() != p.ID {
+	got := te.task(c.ULID)
+	if got.Key != "API-2" || got.Parent == nil || got.Parent.String() != p.ULID {
 		t.Errorf("child after mv: %+v", got)
 	}
 	other := te.addJSON("o", "--workspace", "me") // ME-1 and ME-2 are not reused
@@ -109,7 +109,7 @@ func TestMvWorkspace(t *testing.T) {
 		t.Errorf("key = %s", other.Key)
 	}
 	te.ok("mv", other.Key, "--parent", p.Key) // into api by its parent
-	if got := te.task(other.ID); got.Key != "API-3" {
+	if got := te.task(other.ULID); got.Key != "API-3" {
 		t.Errorf("mv --parent across workspaces: %s", got.Key)
 	}
 	code, _, stderr := te.run("mv", other.Key, "--parent", p.Key, "--workspace", "me")
@@ -135,7 +135,7 @@ func TestMvWorkspaceMovesADeletedDescendant(t *testing.T) {
 	c := te.addJSON("c", "--parent", p.Key)
 	te.ok("rm", c.Key)
 	te.ok("mv", p.Key, "--workspace", "api")
-	got := te.task(c.ID)
+	got := te.task(c.ULID)
 	if got.Key != "API-2" || !slices.Equal(got.FormerKeys, []string{c.Key}) {
 		t.Errorf("deleted child: %s %v", got.Key, got.FormerKeys)
 	}

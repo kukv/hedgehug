@@ -13,11 +13,11 @@ import (
 // ref is one reference from a task to another task of the store.
 type ref struct {
 	field string // parent, blocked_by or the name of a task_ref property
-	id    model.ID
+	id    model.ULID
 }
 
 // refsOf returns the references of t: its parent, its blockers and the
-// values of its task_ref properties. Property values that are not IDs are
+// values of its task_ref properties. Property values that are not ULIDs are
 // left out; ValidateTask reports them.
 func refsOf(t *model.Task, sc *schema.Schema) []ref {
 	var out []ref
@@ -40,7 +40,7 @@ func refsOf(t *model.Task, sc *schema.Schema) []ref {
 			if n.Kind != yaml.ScalarNode {
 				continue
 			}
-			if id, err := model.ParseID(n.Value); err == nil {
+			if id, err := model.ParseULID(n.Value); err == nil {
 				out = append(out, ref{f.Key, id})
 			}
 		}
@@ -78,7 +78,7 @@ func (tx *Tx) checkRefs(old, t *model.Task, sc *schema.Schema) ([]schema.Violati
 		if r.field != "parent" && r.field != "blocked_by" {
 			continue
 		}
-		cycle, err := tx.reaches(r.id, t.ID, r.field)
+		cycle, err := tx.reaches(r.id, t.ULID, r.field)
 		if err != nil {
 			return nil, err
 		}
@@ -92,7 +92,7 @@ func (tx *Tx) checkRefs(old, t *model.Task, sc *schema.Schema) ([]schema.Violati
 // exists reports whether the task id is in the store as the operation
 // leaves it. A deleted task counts, and so does a file that does not
 // decode: the task is there, only broken.
-func (tx *Tx) exists(id model.ID) (bool, error) {
+func (tx *Tx) exists(id model.ULID) (bool, error) {
 	_, err := tx.task(id)
 	switch {
 	case err == nil, errors.As(err, new(*model.DecodeError)):
@@ -105,12 +105,12 @@ func (tx *Tx) exists(id model.ID) (bool, error) {
 
 // edges returns the tasks t points at through field: its parent or its
 // blockers.
-func edges(t *model.Task, field string) []model.ID {
+func edges(t *model.Task, field string) []model.ULID {
 	if field == "parent" {
 		if t.Parent == nil {
 			return nil
 		}
-		return []model.ID{*t.Parent}
+		return []model.ULID{*t.Parent}
 	}
 	return t.BlockedBy
 }
@@ -118,9 +118,9 @@ func edges(t *model.Task, field string) []model.ID {
 // reaches reports whether following field from the task from leads to
 // target, as the operation leaves the tasks. The walk stops at tasks that
 // are missing or do not decode.
-func (tx *Tx) reaches(from, target model.ID, field string) (bool, error) {
-	seen := map[model.ID]bool{}
-	stack := []model.ID{from}
+func (tx *Tx) reaches(from, target model.ULID, field string) (bool, error) {
+	seen := map[model.ULID]bool{}
+	stack := []model.ULID{from}
 	for len(stack) > 0 {
 		id := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]

@@ -169,7 +169,7 @@ func checkStore(dir string) []Finding {
 	fs = slices.DeleteFunc(fs, func(f Finding) bool { return f.Check == "schema" })
 	fs = append(fs, checkWorkspaces(ix)...)
 	for _, e := range ix.Tasks() {
-		for _, p := range ix.Problems(e.ID) {
+		for _, p := range ix.Problems(e.ULID) {
 			if !slices.Contains(indexCodes, p.Code) {
 				continue
 			}
@@ -201,8 +201,8 @@ func checkWorkspaces(ix *index.Index) []Finding {
 			}
 			for _, pair := range [][2]*model.Workspace{{a, b}, {b, a}} {
 				out = append(out, Finding{
-					Check: "workspace", Where: model.WorkspacePath(pair[0].ID),
-					Msg:  fmt.Sprintf("has the same %s as workspace %s (%s)", what, pair[1].Name, pair[1].ID),
+					Check: "workspace", Where: model.WorkspacePath(pair[0].ULID),
+					Msg:  fmt.Sprintf("has the same %s as workspace %s (%s)", what, pair[1].Name, pair[1].ULID),
 					Hint: "change one with hedgehug workspace prefix (or rename)",
 				})
 			}
@@ -215,9 +215,9 @@ func checkWorkspaces(ix *index.Index) []Finding {
 // ULID and title when it has no key (a file that does not decode).
 func taskWhere(e *index.Entry) string {
 	if e.Key == "" {
-		return strings.TrimSpace(e.ID.String() + " " + e.Title)
+		return strings.TrimSpace(e.ULID.String() + " " + e.Title)
 	}
-	return strings.TrimSpace(e.Key + " (" + e.ID.String() + ") " + e.Title)
+	return strings.TrimSpace(e.Key + " (" + e.ULID.String() + ") " + e.Title)
 }
 
 // checkFiles reads every file under the directories of fileRoots.
@@ -272,11 +272,11 @@ func checkFile(dir, root, rel string) (string, error) {
 		if err != nil {
 			return bad("does not decode: %v", err)
 		}
-		if t.ID != id {
-			return bad("the id in the file is %s, which differs from the id in the path", t.ID)
+		if t.ULID != id {
+			return bad("the ulid in the file is %s, which differs from the ulid in the path", t.ULID)
 		}
 	case "comments", "worklogs":
-		var task, child, got model.ID
+		var task, child, got model.ULID
 		if root == "comments" {
 			task, child, err = model.ParseCommentPath(rel)
 		} else {
@@ -290,16 +290,16 @@ func checkFile(dir, root, rel string) (string, error) {
 			if derr != nil {
 				return bad("does not decode: %v", derr)
 			}
-			got = c.ID
+			got = c.ULID
 		} else {
 			w, derr := model.DecodeWorklog(data)
 			if derr != nil {
 				return bad("does not decode: %v", derr)
 			}
-			got = w.ID
+			got = w.ULID
 		}
 		if got != child {
-			return bad("the id in the file is %s, which differs from the id in the path", got)
+			return bad("the ulid in the file is %s, which differs from the ulid in the path", got)
 		}
 		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(model.TaskPath(task)))); errors.Is(err, fs.ErrNotExist) {
 			return bad("there is no task file for task %s", task)
@@ -308,7 +308,7 @@ func checkFile(dir, root, rel string) (string, error) {
 		}
 	case "sprints", "releases":
 		name := path.Base(rel)
-		id, perr := model.ParseID(strings.TrimSuffix(name, ".md"))
+		id, perr := model.ParseULID(strings.TrimSuffix(name, ".md"))
 		build := model.SprintPath
 		if root == "releases" {
 			build = model.ReleasePath
@@ -316,22 +316,22 @@ func checkFile(dir, root, rel string) (string, error) {
 		if perr != nil || build(id) != rel {
 			return bad("the name does not follow the rule of %s files", root)
 		}
-		var got model.ID
+		var got model.ULID
 		if root == "sprints" {
 			sp, derr := model.DecodeSprint(data)
 			if derr != nil {
 				return bad("does not decode: %v", derr)
 			}
-			got = sp.ID
+			got = sp.ULID
 		} else {
 			r, derr := model.DecodeRelease(data)
 			if derr != nil {
 				return bad("does not decode: %v", derr)
 			}
-			got = r.ID
+			got = r.ULID
 		}
 		if got != id {
-			return bad("the id in the file is %s, which differs from the id in the path", got)
+			return bad("the ulid in the file is %s, which differs from the ulid in the path", got)
 		}
 	case "workspaces":
 		id, err := model.ParseWorkspacePath(rel)
@@ -342,8 +342,8 @@ func checkFile(dir, root, rel string) (string, error) {
 		if err != nil {
 			return bad("does not decode: %v", err)
 		}
-		if w.ID != id {
-			return bad("the id in the file is %s, which differs from the id in the path", w.ID)
+		if w.ULID != id {
+			return bad("the ulid in the file is %s, which differs from the ulid in the path", w.ULID)
 		}
 		switch {
 		case w.Name == "":

@@ -23,13 +23,13 @@ func (a *app) commentCmd() *cobra.Command {
 	}
 	cmd.AddCommand(
 		&cobra.Command{
-			Use:   "edit <comment-id>",
+			Use:   "edit <comment-ulid>",
 			Short: "Edit the body of a comment in $EDITOR",
 			Args:  exactArgs(1),
 			RunE:  func(_ *cobra.Command, args []string) error { return a.commentEdit(args[0]) },
 		},
 		&cobra.Command{
-			Use:   "rm <comment-id>",
+			Use:   "rm <comment-ulid>",
 			Short: "Delete a comment",
 			Args:  exactArgs(1),
 			RunE:  func(_ *cobra.Command, args []string) error { return a.commentRm(args[0]) },
@@ -39,13 +39,13 @@ func (a *app) commentCmd() *cobra.Command {
 }
 
 // commentIndex lists the comments of a store, deleted ones included, to
-// resolve their IDs.
+// resolve their ULIDs.
 type commentIndex struct {
 	refs []store.CommentRef
 }
 
 func loadComments(s *store.Store) (*commentIndex, error) {
-	refs, err := s.CommentIDs()
+	refs, err := s.CommentULIDs()
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func loadComments(s *store.Store) (*commentIndex, error) {
 // Resolve finds the comment arg names: a full ULID, in any case.
 func (ci *commentIndex) Resolve(arg string) (store.CommentRef, error) {
 	if len(arg) != 26 {
-		return store.CommentRef{}, fmt.Errorf("comment %q: give the full ID of the comment: %w", arg, store.ErrNotFound)
+		return store.CommentRef{}, fmt.Errorf("comment %q: give the full ULID of the comment: %w", arg, store.ErrNotFound)
 	}
 	u := strings.ToUpper(arg)
 	for _, r := range ci.refs {
@@ -68,7 +68,7 @@ func (ci *commentIndex) Resolve(arg string) (store.CommentRef, error) {
 
 // commentOut is a comment as --json prints it.
 type commentOut struct {
-	ID        string     `json:"id"`
+	ULID      string     `json:"ulid"`
 	Task      string     `json:"task"`
 	Author    string     `json:"author"`
 	Created   time.Time  `json:"created"`
@@ -103,7 +103,7 @@ func findComment(s *store.Store, ref store.CommentRef) (*model.Comment, error) {
 		if err != nil {
 			return nil, err
 		}
-		if c.ID == ref.Comment {
+		if c.ULID == ref.Comment {
 			return c, nil
 		}
 	}
@@ -149,9 +149,9 @@ func (a *app) commentAdd(arg string, text []string) error {
 	if body == "" {
 		return errEmptyComment
 	}
-	c := &model.Comment{ID: model.NewID(), Body: body}
-	if _, err := a.update(s, store.Op{Name: "comment", Task: e.ID}, func(tx *store.Tx) error {
-		return tx.PutComment(e.ID, c)
+	c := &model.Comment{ULID: model.NewULID(), Body: body}
+	if _, err := a.update(s, store.Op{Name: "comment", Task: e.ULID}, func(tx *store.Tx) error {
+		return tx.PutComment(e.ULID, c)
 	}); err != nil {
 		if path != "" {
 			return fmt.Errorf("%s; the comment is kept at %s", describe(err), path)
@@ -163,7 +163,7 @@ func (a *app) commentAdd(arg string, text []string) error {
 			return err
 		}
 	}
-	return a.printComment(s, store.CommentRef{Task: e.ID, Comment: c.ID}, "Added")
+	return a.printComment(s, store.CommentRef{Task: e.ULID, Comment: c.ULID}, "Added")
 }
 
 func (a *app) commentEdit(arg string) error {
@@ -239,7 +239,7 @@ func (a *app) commentRm(arg string) error {
 }
 
 // printComment prints the comment ref after a write: as JSON, or as one
-// line of verb and its ID.
+// line of verb and its ULID.
 func (a *app) printComment(s *store.Store, ref store.CommentRef, verb string) error {
 	var err error
 	if a.jsonOut {
@@ -248,7 +248,7 @@ func (a *app) printComment(s *store.Store, ref store.CommentRef, verb string) er
 			return err
 		}
 		return a.printJSON(commentOut{
-			ID: c.ID.String(), Task: ref.Task.String(), Author: c.Author,
+			ULID: c.ULID.String(), Task: ref.Task.String(), Author: c.Author,
 			Created: c.Created, Updated: c.Updated, DeletedAt: c.DeletedAt, Body: c.Body,
 		})
 	}

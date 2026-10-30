@@ -20,7 +20,7 @@ var testAuthor = gitrepo.Signature{Name: "Test", Email: "test@example.com"}
 func newStore(t *testing.T) (*store.Store, string) {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "store")
-	s, err := store.Create(dir, &model.StoreMeta{ID: model.NewID(), Name: "test"}, schema.Default(), &model.Workspace{ID: model.NewID(), Name: "test", KeyPrefix: "TST"}, testAuthor)
+	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "test"}, schema.Default(), &model.Workspace{ULID: model.NewULID(), Name: "test", KeyPrefix: "TST"}, testAuthor)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func rewriteSchema(t *testing.T, dir string, edit func(*schema.Schema)) *store.S
 }
 
 func newTask(title string) *model.Task {
-	return &model.Task{ID: model.NewID(), Kind: "task", Title: title, Status: "todo"}
+	return &model.Task{ULID: model.NewULID(), Kind: "task", Title: title, Status: "todo"}
 }
 
 // put writes tasks in one operation, past the checks of transitions.
@@ -73,17 +73,17 @@ func put(t *testing.T, s *store.Store, tasks ...*model.Task) {
 	}
 }
 
-// firstWorkspace returns the ID of the first workspace of s.
-func firstWorkspace(t *testing.T, s *store.Store) model.ID {
+// firstWorkspace returns the ULID of the first workspace of s.
+func firstWorkspace(t *testing.T, s *store.Store) model.ULID {
 	t.Helper()
 	for w, err := range s.Workspaces() {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return w.ID
+		return w.ULID
 	}
 	t.Fatal("the store has no workspace")
-	return model.ID{}
+	return model.ULID{}
 }
 
 // rawKeys numbers the keys putRaw gives to tasks without one.
@@ -104,7 +104,7 @@ func putRaw(t *testing.T, s *store.Store, dir string, task *model.Task) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rel := model.TaskPath(task.ID)
+	rel := model.TaskPath(task.ULID)
 	p := filepath.Join(dir, filepath.FromSlash(rel))
 	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
 		t.Fatal(err)

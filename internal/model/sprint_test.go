@@ -38,11 +38,11 @@ func TestReleaseRoundTrip(t *testing.T) {
 	}
 }
 
-func TestSprintAndReleaseNeedID(t *testing.T) {
+func TestSprintAndReleaseNeedULID(t *testing.T) {
 	if _, err := DecodeSprint([]byte("---\nname: x\n---\n")); err == nil {
-		t.Error("DecodeSprint without id succeeded")
+		t.Error("DecodeSprint without ulid succeeded")
 	}
 	if _, err := DecodeRelease([]byte("---\nname: x\n---\n")); err == nil {
-		t.Error("DecodeRelease without id succeeded")
+		t.Error("DecodeRelease without ulid succeeded")
 	}
 }

@@ -9,11 +9,11 @@ func TestStatusAndDone(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	te.ok("status", a.Key, "in_progress")
-	if s := te.task(a.ID).Status; s != "in_progress" {
+	if s := te.task(a.ULID).Status; s != "in_progress" {
 		t.Errorf("status = %q, want in_progress", s)
 	}
 	te.ok("done", a.Key)
-	if s := te.task(a.ID).Status; s != "done" {
+	if s := te.task(a.ULID).Status; s != "done" {
 		t.Errorf("status = %q, want done", s)
 	}
 	log := te.log("me")

@@ -48,7 +48,7 @@ func TestWorklogRoundTrip(t *testing.T) {
 }
 
 func TestWorklogWithoutDuration(t *testing.T) {
-	src := "---\nid: 01JBZ8K3QW7M2X9V4T6R5N8P0C\nauthor: x\n---\n"
+	src := "---\nulid: 01JBZ8K3QW7M2X9V4T6R5N8P0C\nauthor: x\n---\n"
 	w, err := DecodeWorklog([]byte(src))
 	if err != nil {
 		t.Fatal(err)
@@ -59,11 +59,11 @@ func TestWorklogWithoutDuration(t *testing.T) {
 	}
 }
 
-func TestCommentAndWorklogNeedID(t *testing.T) {
+func TestCommentAndWorklogNeedULID(t *testing.T) {
 	if _, err := DecodeComment([]byte("---\nauthor: x\n---\n")); err == nil {
-		t.Error("DecodeComment without id succeeded")
+		t.Error("DecodeComment without ulid succeeded")
 	}
-	if _, err := DecodeWorklog([]byte("---\nduration: 1d\nid: 01JBZ8K3QW7M2X9V4T6R5N8P0C\n---\n")); err == nil {
+	if _, err := DecodeWorklog([]byte("---\nduration: 1d\nulid: 01JBZ8K3QW7M2X9V4T6R5N8P0C\n---\n")); err == nil {
 		t.Error("DecodeWorklog accepted 1d")
 	}
 }

@@ -60,7 +60,7 @@ func Schema(s *store.Store, ix *index.Index) ([]Finding, error) {
 		}
 	}
 	for _, e := range ix.Tasks() {
-		for _, p := range ix.Problems(e.ID) {
+		for _, p := range ix.Problems(e.ULID) {
 			if slices.Contains(schemaCodes, p.Code) {
 				fs = append(fs, Finding{Check: "task", Where: taskWhere(e), Msg: p.Field + ": " + p.Msg})
 			}
@@ -71,7 +71,7 @@ func Schema(s *store.Store, ix *index.Index) ([]Finding, error) {
 		if !ok {
 			continue // Check has reported it
 		}
-		id, err := model.ParseID(s)
+		id, err := model.ParseULID(s)
 		if err != nil {
 			continue
 		}

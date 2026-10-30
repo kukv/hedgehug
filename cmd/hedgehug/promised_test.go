@@ -58,7 +58,7 @@ func TestStatusRejectedByTransitionAddsNoCommit(t *testing.T) {
 	if n := len(te.log("me")); n != before {
 		t.Errorf("commits = %d, want %d", n, before)
 	}
-	if st := te.task(a.ID).Status; st != "todo" {
+	if st := te.task(a.ULID).Status; st != "todo" {
 		t.Errorf("status = %q, want todo", st)
 	}
 }

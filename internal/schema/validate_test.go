@@ -10,7 +10,7 @@ import (
 
 func taskWith(t *testing.T, props string) *model.Task {
 	t.Helper()
-	src := "---\nid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nkind: task\ntitle: x\nstatus: todo\n"
+	src := "---\nulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nkind: task\ntitle: x\nstatus: todo\n"
 	if props != "" {
 		src += "props:\n" + props
 	}

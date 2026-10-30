@@ -18,24 +18,24 @@ func problemCodes(ps []Problem) []string {
 	return out
 }
 
-func ptr(id model.ID) *model.ID { return &id }
+func ptr(id model.ULID) *model.ULID { return &id }
 
 func TestProblems(t *testing.T) {
-	a, b, c, d := model.NewID(), model.NewID(), model.NewID(), model.NewID()
-	x, y, z, self := model.NewID(), model.NewID(), model.NewID(), model.NewID()
-	missing := model.NewID()
+	a, b, c, d := model.NewULID(), model.NewULID(), model.NewULID(), model.NewULID()
+	x, y, z, self := model.NewULID(), model.NewULID(), model.NewULID(), model.NewULID()
+	missing := model.NewULID()
 	ix := indexOf(
-		&Entry{ID: a, Broken: "bad yaml"},
-		&Entry{ID: b, Violations: []schema.Violation{{Code: schema.CodeUnknownKind, Field: "kind", Msg: "m"}}},
-		&Entry{ID: c, Parent: ptr(missing), BlockedBy: []model.ID{missing}, Props: []Prop{{Key: "duplicates", Values: []string{missing.String(), b.String()}}}},
-		&Entry{ID: d, Parent: ptr(x)}, // points into the cycle, is not on it
-		&Entry{ID: x, Parent: ptr(y)},
-		&Entry{ID: y, Parent: ptr(x), BlockedBy: []model.ID{z}},
-		&Entry{ID: z, BlockedBy: []model.ID{y}},
-		&Entry{ID: self, BlockedBy: []model.ID{self}},
+		&Entry{ULID: a, Broken: "bad yaml"},
+		&Entry{ULID: b, Violations: []schema.Violation{{Code: schema.CodeUnknownKind, Field: "kind", Msg: "m"}}},
+		&Entry{ULID: c, Parent: ptr(missing), BlockedBy: []model.ULID{missing}, Props: []Prop{{Key: "duplicates", Values: []string{missing.String(), b.String()}}}},
+		&Entry{ULID: d, Parent: ptr(x)}, // points into the cycle, is not on it
+		&Entry{ULID: x, Parent: ptr(y)},
+		&Entry{ULID: y, Parent: ptr(x), BlockedBy: []model.ULID{z}},
+		&Entry{ULID: z, BlockedBy: []model.ULID{y}},
+		&Entry{ULID: self, BlockedBy: []model.ULID{self}},
 	)
 	tests := []struct {
-		id   model.ID
+		id   model.ULID
 		want []string
 	}{
 		{a, []string{"broken:"}},
@@ -55,14 +55,14 @@ func TestProblems(t *testing.T) {
 }
 
 func TestReverse(t *testing.T) {
-	a, b, c := model.NewID(), model.NewID(), model.NewID()
+	a, b, c := model.NewULID(), model.NewULID(), model.NewULID()
 	ix := indexOf(
-		&Entry{ID: a, Title: "a", BlockedBy: []model.ID{c}, Props: []Prop{
+		&Entry{ULID: a, Title: "a", BlockedBy: []model.ULID{c}, Props: []Prop{
 			{Key: "duplicates", Values: []string{c.String()}},
 			{Key: "relates", Values: []string{b.String()}},
 		}},
-		&Entry{ID: b, Title: "b", BlockedBy: []model.ID{c}, Props: []Prop{{Key: "relates", Values: []string{a.String()}}}},
-		&Entry{ID: c, Title: "c", Props: []Prop{{Key: "relates", Values: []string{a.String()}}}},
+		&Entry{ULID: b, Title: "b", BlockedBy: []model.ULID{c}, Props: []Prop{{Key: "relates", Values: []string{a.String()}}}},
+		&Entry{ULID: c, Title: "c", Props: []Prop{{Key: "relates", Values: []string{a.String()}}}},
 	)
 	want := func(es []*Entry, titles ...string) {
 		t.Helper()
@@ -84,12 +84,12 @@ func TestReverse(t *testing.T) {
 }
 
 func TestTargets(t *testing.T) {
-	a, b := model.NewID(), model.NewID()
-	e := &Entry{BlockedBy: []model.ID{a}, Props: []Prop{{Key: "duplicates", Values: []string{b.String(), "not an id"}}}}
-	if got := e.Targets("blocked_by"); !slices.Equal(got, []model.ID{a}) {
+	a, b := model.NewULID(), model.NewULID()
+	e := &Entry{BlockedBy: []model.ULID{a}, Props: []Prop{{Key: "duplicates", Values: []string{b.String(), "not an ulid"}}}}
+	if got := e.Targets("blocked_by"); !slices.Equal(got, []model.ULID{a}) {
 		t.Errorf("Targets(blocked_by) = %v", got)
 	}
-	if got := e.Targets("duplicates"); !slices.Equal(got, []model.ID{b}) {
+	if got := e.Targets("duplicates"); !slices.Equal(got, []model.ULID{b}) {
 		t.Errorf("Targets(duplicates) = %v", got)
 	}
 }
@@ -99,21 +99,21 @@ func TestKeyAndWorkspaceProblems(t *testing.T) {
 	ws := firstWorkspace(t, s)
 	a := newTask("a")
 	put(t, s, a) // TST-1
-	b := model.NewID()
+	b := model.NewULID()
 	commitRaw(t, s, dir, model.TaskPath(b), rawTask(b, "key: TST-1\nworkspace: "+ws.String()+"\nkind: task\ntitle: b\nstatus: todo\n"))
-	c := model.NewID()
+	c := model.NewULID()
 	commitRaw(t, s, dir, model.TaskPath(c), rawTask(c, "kind: task\ntitle: c\nstatus: todo\n"))
-	d := model.NewID()
+	d := model.NewULID()
 	commitRaw(t, s, dir, model.TaskPath(d), rawTask(d, "key: XX-1\nworkspace: "+ws.String()+"\nkind: task\ntitle: d\nstatus: todo\n"))
-	e := model.NewID()
-	commitRaw(t, s, dir, model.TaskPath(e), rawTask(e, "key: TST-9\nworkspace: "+model.NewID().String()+"\nkind: task\ntitle: e\nstatus: todo\n"))
-	f := model.NewID()
+	e := model.NewULID()
+	commitRaw(t, s, dir, model.TaskPath(e), rawTask(e, "key: TST-9\nworkspace: "+model.NewULID().String()+"\nkind: task\ntitle: e\nstatus: todo\n"))
+	f := model.NewULID()
 	commitRaw(t, s, dir, model.TaskPath(f), rawTask(f, "key: TST-10\nworkspace: "+ws.String()+"\nparent: "+e.String()+"\nkind: task\ntitle: f\nstatus: todo\n"))
 	ix := mustOpen(t, s)
-	has := func(id model.ID, code string) bool {
+	has := func(id model.ULID, code string) bool {
 		return slices.ContainsFunc(ix.Problems(id), func(p Problem) bool { return p.Code == code })
 	}
-	if !has(a.ID, CodeDuplicateKey) || !has(b, CodeDuplicateKey) {
+	if !has(a.ULID, CodeDuplicateKey) || !has(b, CodeDuplicateKey) {
 		t.Error("duplicate keys are not found")
 	}
 	if !has(c, CodeNoKey) || !has(c, store.CodeNoWorkspace) {
@@ -128,7 +128,7 @@ func TestKeyAndWorkspaceProblems(t *testing.T) {
 	if !has(f, store.CodeWorkspaceMismatch) {
 		t.Error("a task in another workspace than its parent is not found")
 	}
-	if has(a.ID, CodeNoKey) || has(a.ID, store.CodeNoWorkspace) || has(a.ID, CodeKeyPrefix) {
-		t.Errorf("problems of a good task = %v", ix.Problems(a.ID))
+	if has(a.ULID, CodeNoKey) || has(a.ULID, store.CodeNoWorkspace) || has(a.ULID, CodeKeyPrefix) {
+		t.Errorf("problems of a good task = %v", ix.Problems(a.ULID))
 	}
 }

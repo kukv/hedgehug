@@ -20,7 +20,7 @@ func TestStoreInit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Meta().Name != "me" || s.Meta().ID.IsZero() {
+	if s.Meta().Name != "me" || s.Meta().ULID.IsZero() {
 		t.Errorf("meta = %+v", s.Meta())
 	}
 	if _, ok := s.Schema().Status("review"); ok {

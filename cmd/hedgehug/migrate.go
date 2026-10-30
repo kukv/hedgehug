@@ -103,7 +103,7 @@ func (a *app) migrate(m schema.Migration, dryRun bool) error {
 type migrationPlan struct {
 	schema  *schema.Schema
 	changed []*model.Task
-	skipped []model.ID
+	skipped []model.ULID
 }
 
 // planMigration applies m to the schema of s and to its tasks, without
@@ -131,7 +131,7 @@ func planMigration(s *store.Store, ix *index.Index, m schema.Migration) (*migrat
 		ok, err := m.ApplyTask(t, sc)
 		switch {
 		case err != nil:
-			refused = append(refused, refName(ix, t.ID)+": "+err.Error())
+			refused = append(refused, refName(ix, t.ULID)+": "+err.Error())
 		case ok:
 			p.changed = append(p.changed, t)
 		}
@@ -140,17 +140,17 @@ func planMigration(s *store.Store, ix *index.Index, m schema.Migration) (*migrat
 		slices.Sort(refused)
 		return nil, fmt.Errorf("cannot migrate %s:\n  %s", count(len(refused)), strings.Join(refused, "\n  "))
 	}
-	slices.SortFunc(p.changed, func(x, y *model.Task) int { return strings.Compare(x.ID.String(), y.ID.String()) })
-	slices.SortFunc(p.skipped, func(x, y model.ID) int { return strings.Compare(x.String(), y.String()) })
+	slices.SortFunc(p.changed, func(x, y *model.Task) int { return strings.Compare(x.ULID.String(), y.ULID.String()) })
+	slices.SortFunc(p.skipped, func(x, y model.ULID) int { return strings.Compare(x.String(), y.String()) })
 	return p, nil
 }
 
-// brokenTask returns the ID of the task file that err, from Store.Tasks,
+// brokenTask returns the ULID of the task file that err, from Store.Tasks,
 // says does not decode or holds another task.
-func brokenTask(err error) (model.ID, bool) {
+func brokenTask(err error) (model.ULID, bool) {
 	var fe *store.FileError
-	if !errors.As(err, &fe) || !errors.As(err, new(*model.DecodeError)) && !errors.Is(err, store.ErrIDMismatch) {
-		return model.ID{}, false
+	if !errors.As(err, &fe) || !errors.As(err, new(*model.DecodeError)) && !errors.Is(err, store.ErrULIDMismatch) {
+		return model.ULID{}, false
 	}
 	id, perr := model.ParseTaskPath(fe.Path)
 	return id, perr == nil
@@ -182,7 +182,7 @@ func (a *app) printMigrated(ix *index.Index, p *migrationPlan, dryRun bool) erro
 			Skipped []string    `json:"skipped"`
 		}{Changed: []*taskJSON{}, Skipped: skipped}
 		for _, t := range changed {
-			e, ok := ix.Task(t.ID)
+			e, ok := ix.Task(t.ULID)
 			if dryRun || !ok {
 				e = index.EntryOf(t)
 			}

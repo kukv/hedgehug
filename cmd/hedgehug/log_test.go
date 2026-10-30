@@ -74,8 +74,8 @@ func TestLogJSON(t *testing.T) {
 	if len(e.Hash) != 40 || e.Date == "" || e.Author.Name != "Alice" || e.Author.Email != "alice@example.com" {
 		t.Errorf("entry = %+v", e)
 	}
-	if e.Op == nil || *e.Op != "add" || e.Task == nil || *e.Task != a.ID || !strings.HasPrefix(e.Subj, "hedgehug: add ") {
-		t.Errorf("entry = %+v, want op add and task %s", e, a.ID)
+	if e.Op == nil || *e.Op != "add" || e.Task == nil || *e.Task != a.ULID || !strings.HasPrefix(e.Subj, "hedgehug: add ") {
+		t.Errorf("entry = %+v, want op add and task %s", e, a.ULID)
 	}
 	if got[1].Op == nil || *got[1].Op != "init" || got[1].Task != nil || got[1].Key != nil {
 		t.Errorf("init entry = %+v, want op init and no task", got[1])
@@ -95,11 +95,11 @@ func TestLogShowsCurrentKey(t *testing.T) {
 	te.ok("status", a.Key, "done")
 	te.ok("mv", a.Key, "--workspace", "api") // now API-1
 	out := te.ok("log", "API-1")
-	if strings.Contains(out, "ME-1") || !strings.Contains(out, "status API-1 ("+a.ID+") Alpha") {
+	if strings.Contains(out, "ME-1") || !strings.Contains(out, "status API-1 ("+a.ULID+") Alpha") {
 		t.Errorf("log =\n%s", out)
 	}
 	show := te.ok("show", "API-1")
-	if _, hist, _ := strings.Cut(show, "\nHistory:\n"); strings.Contains(hist, "ME-1") || !strings.Contains(hist, "status API-1 ("+a.ID+") Alpha") {
+	if _, hist, _ := strings.Cut(show, "\nHistory:\n"); strings.Contains(hist, "ME-1") || !strings.Contains(hist, "status API-1 ("+a.ULID+") Alpha") {
 		t.Errorf("show =\n%s", show)
 	}
 	if !strings.Contains(show, "  former_keys ME-1\n") || !strings.Contains(show, "  workspace   api (API, ") {

@@ -48,18 +48,18 @@ func (a *app) purgeCmd() *cobra.Command {
 // descendants returns the tasks under id for which follow is true, going
 // down only through those, depth first in rank order. A parent cycle stops
 // the walk.
-func descendants(ix *index.Index, id model.ID, follow func(*index.Entry) bool) []*index.Entry {
-	seen := map[model.ID]bool{id: true}
+func descendants(ix *index.Index, id model.ULID, follow func(*index.Entry) bool) []*index.Entry {
+	seen := map[model.ULID]bool{id: true}
 	var out []*index.Entry
-	var walk func(model.ID)
-	walk = func(p model.ID) {
+	var walk func(model.ULID)
+	walk = func(p model.ULID) {
 		for _, c := range ix.Children(p) {
-			if seen[c.ID] || !follow(c) {
+			if seen[c.ULID] || !follow(c) {
 				continue
 			}
-			seen[c.ID] = true
+			seen[c.ULID] = true
 			out = append(out, c)
-			walk(c.ID)
+			walk(c.ULID)
 		}
 	}
 	walk(id)
@@ -76,23 +76,23 @@ func (a *app) rm(arg string) error {
 		return err
 	}
 	if e.DeletedAt != nil {
-		return fmt.Errorf("%s is already deleted", refName(ix, e.ID))
+		return fmt.Errorf("%s is already deleted", refName(ix, e.ULID))
 	}
 	var targets []*index.Entry
 	now := a.now().Truncate(time.Second)
-	if _, err := a.update(s, store.Op{Name: "rm", Task: e.ID}, func(tx *store.Tx) error {
+	if _, err := a.update(s, store.Op{Name: "rm", Task: e.ULID}, func(tx *store.Tx) error {
 		// Read under the lock, so a child added since is deleted too.
 		if err := ix.Refresh(); err != nil {
 			return err
 		}
 		targets = []*index.Entry{e}
-		for _, d := range descendants(ix, e.ID, func(*index.Entry) bool { return true }) {
+		for _, d := range descendants(ix, e.ULID, func(*index.Entry) bool { return true }) {
 			if d.DeletedAt == nil {
 				targets = append(targets, d)
 			}
 		}
 		for _, x := range targets {
-			t, err := tx.Task(x.ID)
+			t, err := tx.Task(x.ULID)
 			if err != nil {
 				return err
 			}
@@ -112,7 +112,7 @@ func (a *app) rm(arg string) error {
 // to restore.
 func notDeleted(ix *index.Index, e *index.Entry) error {
 	if e.DeletedAt != nil {
-		return fmt.Errorf("%s is deleted; restore %s first", refName(ix, e.ID), taskFileName(e))
+		return fmt.Errorf("%s is deleted; restore %s first", refName(ix, e.ULID), taskFileName(e))
 	}
 	return nil
 }
@@ -136,7 +136,7 @@ func (a *app) restore(arg string) error {
 		return err
 	}
 	if e.DeletedAt == nil {
-		return fmt.Errorf("%s is not deleted", refName(ix, e.ID))
+		return fmt.Errorf("%s is not deleted", refName(ix, e.ULID))
 	}
 	if e.Parent != nil {
 		if p, ok := ix.Task(*e.Parent); ok {
@@ -147,17 +147,17 @@ func (a *app) restore(arg string) error {
 	}
 	at := *e.DeletedAt
 	var targets []*index.Entry
-	if _, err := a.update(s, store.Op{Name: "restore", Task: e.ID}, func(tx *store.Tx) error {
+	if _, err := a.update(s, store.Op{Name: "restore", Task: e.ULID}, func(tx *store.Tx) error {
 		// Read under the lock, so a child the same rm deleted is restored
 		// even when it came in after the index was read.
 		if err := ix.Refresh(); err != nil {
 			return err
 		}
-		targets = append([]*index.Entry{e}, descendants(ix, e.ID, func(d *index.Entry) bool {
+		targets = append([]*index.Entry{e}, descendants(ix, e.ULID, func(d *index.Entry) bool {
 			return d.DeletedAt != nil && d.DeletedAt.Equal(at)
 		})...)
 		for _, x := range targets {
-			t, err := tx.Task(x.ID)
+			t, err := tx.Task(x.ULID)
 			if err != nil {
 				return err
 			}
@@ -183,7 +183,7 @@ func (a *app) purge(arg string, yes bool) error {
 		return err
 	}
 	if e.DeletedAt == nil {
-		return fmt.Errorf("%s is not deleted; delete it with hedgehug rm first", refName(ix, e.ID))
+		return fmt.Errorf("%s is not deleted; delete it with hedgehug rm first", refName(ix, e.ULID))
 	}
 	targets, err := purgeTargets(ix, e)
 	if err != nil {
@@ -195,7 +195,7 @@ func (a *app) purge(arg string, yes bool) error {
 		}
 	}
 	confirmed := targets
-	if _, err := a.update(s, store.Op{Name: "purge", Task: e.ID}, func(tx *store.Tx) error {
+	if _, err := a.update(s, store.Op{Name: "purge", Task: e.ULID}, func(tx *store.Tx) error {
 		// Read again under the lock: a task added under it since must not
 		// be purged unchecked, nor left behind.
 		if err := ix.Refresh(); err != nil {
@@ -209,7 +209,7 @@ func (a *app) purge(arg string, yes bool) error {
 			return errors.New("the tasks under it changed after the confirmation; run purge again")
 		}
 		for _, x := range targets {
-			if err := tx.RemoveTask(x.ID); err != nil {
+			if err := tx.RemoveTask(x.ULID); err != nil {
 				return err
 			}
 		}
@@ -223,10 +223,10 @@ func (a *app) purge(arg string, yes bool) error {
 // purgeTargets returns e and every task under it, refusing when one of them
 // is not deleted.
 func purgeTargets(ix *index.Index, e *index.Entry) ([]*index.Entry, error) {
-	targets := append([]*index.Entry{e}, descendants(ix, e.ID, func(*index.Entry) bool { return true })...)
+	targets := append([]*index.Entry{e}, descendants(ix, e.ULID, func(*index.Entry) bool { return true })...)
 	for _, d := range targets[1:] {
 		if d.DeletedAt == nil {
-			return nil, fmt.Errorf("%s under it is not deleted", refName(ix, d.ID))
+			return nil, fmt.Errorf("%s under it is not deleted", refName(ix, d.ULID))
 		}
 	}
 	return targets, nil
@@ -237,7 +237,7 @@ func sameTasks(a, b []*index.Entry) bool {
 	ids := func(es []*index.Entry) []string {
 		out := make([]string, len(es))
 		for i, e := range es {
-			out[i] = e.ID.String()
+			out[i] = e.ULID.String()
 		}
 		slices.Sort(out)
 		return out
@@ -253,7 +253,7 @@ func (a *app) confirm(ix *index.Index, targets []*index.Entry) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Purge %d tasks for good?\n", len(targets))
 	for _, x := range targets {
-		b.WriteString("  " + refName(ix, x.ID) + "\n")
+		b.WriteString("  " + refName(ix, x.ULID) + "\n")
 	}
 	b.WriteString("[y/N] ")
 	if _, err := fmt.Fprint(a.stderr, b.String()); err != nil {
@@ -283,7 +283,7 @@ func (a *app) printAffected(ix *index.Index, e *index.Entry, targets []*index.En
 		for _, x := range targets {
 			cur := x
 			if refresh {
-				cur, _ = ix.Task(x.ID)
+				cur, _ = ix.Task(x.ULID)
 			}
 			out = append(out, entryJSON(ix, cur))
 		}

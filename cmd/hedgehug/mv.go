@@ -65,7 +65,7 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 		if err := liveParent(ix, p); err != nil {
 			return err
 		}
-		parent = &p.ID
+		parent = &p.ULID
 		dest = p.Workspace
 	}
 	if workspaceArg != "" {
@@ -74,36 +74,36 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 			return err
 		}
 		switch {
-		case parentArg != "" && w.ID != dest:
+		case parentArg != "" && w.ULID != dest:
 			pw, ok := ix.Workspace(dest)
 			if !ok {
 				return fmt.Errorf("the parent's workspace %s is not in this store", dest)
 			}
 			return fmt.Errorf("the parent is in workspace %s", pw.Name)
-		case parentArg == "" && w.ID != e.Workspace:
+		case parentArg == "" && w.ULID != e.Workspace:
 			// The old parent stays behind, so the task goes to the top level.
 			parent = nil
 		}
-		dest = w.ID
+		dest = w.ULID
 	}
-	rank, err := a.rankAt(ix, e.ID, parent, before, after)
+	rank, err := a.rankAt(ix, e.ULID, parent, before, after)
 	if err != nil {
 		return err
 	}
 	// The tasks put; assignKeys gives them their new keys in place.
 	var tasks []*model.Task
 	var oldKeys []string
-	committed, err := a.update(s, store.Op{Name: "mv", Task: e.ID}, func(tx *store.Tx) error {
+	committed, err := a.update(s, store.Op{Name: "mv", Task: e.ULID}, func(tx *store.Tx) error {
 		// A task and its subtree are in one workspace, so they move
 		// together. The subtree is read under the lock, so a child added
 		// since the index was read moves too.
-		ids := []model.ID{e.ID}
+		ids := []model.ULID{e.ULID}
 		if dest != e.Workspace {
 			if err := ix.Refresh(); err != nil {
 				return err
 			}
-			for _, d := range descendants(ix, e.ID, func(*index.Entry) bool { return true }) {
-				ids = append(ids, d.ID)
+			for _, d := range descendants(ix, e.ULID, func(*index.Entry) bool { return true }) {
+				ids = append(ids, d.ULID)
 			}
 		}
 		for _, id := range ids {
@@ -113,7 +113,7 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 			}
 			oldKeys = append(oldKeys, t.Key)
 			t.Workspace = dest
-			if id == e.ID {
+			if id == e.ULID {
 				t.Parent, t.Rank = parent, rank
 			}
 			if err := tx.PutTask(t); err != nil {
@@ -126,7 +126,7 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 	if err != nil {
 		return err
 	}
-	if err := a.printTask(ix, e.ID, verb(committed, "Moved")); err != nil || a.jsonOut || dest == e.Workspace {
+	if err := a.printTask(ix, e.ULID, verb(committed, "Moved")); err != nil || a.jsonOut || dest == e.Workspace {
 		return err
 	}
 	var b strings.Builder
@@ -139,7 +139,7 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 
 // rankAt returns the rank for id under parent: just before or after a
 // sibling, or after every sibling.
-func (a *app) rankAt(ix *index.Index, id model.ID, parent *model.ID, before, after string) (model.Rank, error) {
+func (a *app) rankAt(ix *index.Index, id model.ULID, parent *model.ULID, before, after string) (model.Rank, error) {
 	if before == "" && after == "" {
 		return endRank(ix, parent, id)
 	}
@@ -152,9 +152,9 @@ func (a *app) rankAt(ix *index.Index, id model.ID, parent *model.ID, before, aft
 		return "", err
 	}
 	sib := siblings(ix, parent, id)
-	i := slices.IndexFunc(sib, func(e *index.Entry) bool { return e.ID == x.ID })
+	i := slices.IndexFunc(sib, func(e *index.Entry) bool { return e.ULID == x.ULID })
 	if i < 0 {
-		return "", fmt.Errorf("%s is not under the same parent", refName(ix, x.ID))
+		return "", fmt.Errorf("%s is not under the same parent", refName(ix, x.ULID))
 	}
 	if before != "" {
 		var prev model.Rank

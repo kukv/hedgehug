@@ -29,7 +29,7 @@ func (s style) wrap(code, t string) string {
 	return "\x1b[" + code + "m" + t + "\x1b[0m"
 }
 
-// id colors the key and ID of a task, or the ID of a comment.
+// id colors the key and ULID of a task, or the ULID of a comment.
 func (s style) id(t string) string { return s.wrap("33", t) }
 
 // dim marks text that is context, not a result. Without color it is put in
@@ -50,7 +50,7 @@ func (a *app) printJSON(v any) error {
 
 // taskJSON is a task as --json prints it.
 type taskJSON struct {
-	ID        string            `json:"id"`
+	ULID      string            `json:"ulid"`
 	Key       string            `json:"key"`
 	Workspace *workspaceRefJSON `json:"workspace"`
 	Kind      string            `json:"kind"`
@@ -76,14 +76,14 @@ type taskJSON struct {
 
 // workspaceRefJSON names the workspace of a task.
 type workspaceRefJSON struct {
-	ID        string `json:"id"`
+	ULID      string `json:"ulid"`
 	Name      string `json:"name"`
 	KeyPrefix string `json:"key_prefix"`
 }
 
 // refJSON names a task that another task points at.
 type refJSON struct {
-	ID    string `json:"id"`
+	ULID  string `json:"ulid"`
 	Key   string `json:"key"`
 	Title string `json:"title"`
 }
@@ -96,7 +96,7 @@ type problemJSON struct {
 
 func entryJSON(ix *index.Index, e *index.Entry) *taskJSON {
 	j := &taskJSON{
-		ID:        e.ID.String(),
+		ULID:      e.ULID.String(),
 		Key:       e.Key,
 		Kind:      e.Kind,
 		Title:     e.Title,
@@ -117,7 +117,7 @@ func entryJSON(ix *index.Index, e *index.Entry) *taskJSON {
 		j.Parent = &p
 	}
 	if !e.Workspace.IsZero() {
-		j.Workspace = &workspaceRefJSON{ID: e.Workspace.String()}
+		j.Workspace = &workspaceRefJSON{ULID: e.Workspace.String()}
 		if w, ok := ix.Workspace(e.Workspace); ok {
 			j.Workspace.Name, j.Workspace.KeyPrefix = w.Name, w.KeyPrefix
 		}
@@ -138,7 +138,7 @@ func entryJSON(ix *index.Index, e *index.Entry) *taskJSON {
 			j.Props[p.Key] = nil
 		}
 	}
-	for _, p := range ix.Problems(e.ID) {
+	for _, p := range ix.Problems(e.ULID) {
 		j.Problems = append(j.Problems, problemJSON{p.Code, p.Field, p.Msg})
 	}
 	return j
@@ -146,8 +146,8 @@ func entryJSON(ix *index.Index, e *index.Entry) *taskJSON {
 
 // refOf names the task id, with an empty key and title when the index does
 // not have it.
-func refOf(ix *index.Index, id model.ID) refJSON {
-	r := refJSON{ID: id.String()}
+func refOf(ix *index.Index, id model.ULID) refJSON {
+	r := refJSON{ULID: id.String()}
 	if e, ok := ix.Task(id); ok {
 		r.Key, r.Title = e.Key, e.Title
 	}
@@ -190,7 +190,7 @@ func writeTable(w io.Writer, header []string, rows [][]string, paint func(r, c i
 	return err
 }
 
-var taskHeader = []string{"KEY", "ID", "STATUS", "KIND", "ASSIGNEES", "LABELS", "TITLE"}
+var taskHeader = []string{"KEY", "ULID", "STATUS", "KIND", "ASSIGNEES", "LABELS", "TITLE"}
 
 // taskRow is one task in the table. The title is last, so wide characters
 // in it do not shift other columns.
@@ -202,29 +202,29 @@ func taskRow(e *index.Entry) []string {
 	if e.Broken != "" {
 		kind, status = "?", "?"
 	}
-	return []string{key, e.ID.String(), status, kind, strings.Join(e.Assignees, ","), strings.Join(e.Labels, ","), e.Title}
+	return []string{key, e.ULID.String(), status, kind, strings.Join(e.Assignees, ","), strings.Join(e.Labels, ","), e.Title}
 }
 
 // taskLabel names a task for a reader: its key and full ULID, or the ULID
 // alone when the task has no key (a file that does not decode).
 func taskLabel(e *index.Entry) string {
 	if e.Key == "" {
-		return e.ID.String()
+		return e.ULID.String()
 	}
-	return e.Key + " (" + e.ID.String() + ")"
+	return e.Key + " (" + e.ULID.String() + ")"
 }
 
 // taskFileName names the temporary file that edits task e: its key, or its
 // ULID when it has no key.
 func taskFileName(e *index.Entry) string {
 	if e.Key == "" {
-		return e.ID.String()
+		return e.ULID.String()
 	}
 	return e.Key
 }
 
 // refName names the task id for a reader: its key, ULID and title.
-func refName(ix *index.Index, id model.ID) string {
+func refName(ix *index.Index, id model.ULID) string {
 	if e, ok := ix.Task(id); ok {
 		return taskLabel(e) + " " + e.Title
 	}
@@ -258,7 +258,7 @@ func (a *app) printTasks(ix *index.Index, es []*index.Entry) error {
 
 // printTask prints the task id after a write: as JSON, or as one line that
 // starts with verb.
-func (a *app) printTask(ix *index.Index, id model.ID, verb string) error {
+func (a *app) printTask(ix *index.Index, id model.ULID, verb string) error {
 	if err := ix.Refresh(); err != nil {
 		return err
 	}

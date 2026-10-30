@@ -53,7 +53,7 @@ func toLogJSON(ix *index.Index, e gitrepo.LogEntry) logJSON {
 	}
 	if v, ok := e.Trailer("Hedgehug-Task"); ok {
 		j.Task = &v
-		if id, err := model.ParseID(v); err == nil {
+		if id, err := model.ParseULID(v); err == nil {
 			if t, ok := ix.Task(id); ok && t.Key != "" {
 				j.Key = &t.Key
 			}
@@ -82,7 +82,7 @@ func subjectNow(ix *index.Index, le gitrepo.LogEntry) string {
 	if !ok1 || !ok2 || !ok3 {
 		return le.Subject
 	}
-	id, err := model.ParseID(tid)
+	id, err := model.ParseULID(tid)
 	if err != nil {
 		return le.Subject
 	}
@@ -115,7 +115,7 @@ func (a *app) log(args []string, limit int) error {
 		if rerr != nil {
 			return rerr
 		}
-		entries, err = a.taskLog(s, e.ID, limit)
+		entries, err = a.taskLog(s, e.ULID, limit)
 	}
 	if err != nil {
 		return err
@@ -129,10 +129,10 @@ func (a *app) log(args []string, limit int) error {
 
 // taskLog returns the commits that touched the task, its comments or its
 // work logs.
-func (a *app) taskLog(s *store.Store, id model.ID, limit int) ([]gitrepo.LogEntry, error) {
+func (a *app) taskLog(s *store.Store, id model.ULID, limit int) ([]gitrepo.LogEntry, error) {
 	return s.Repo().Log([]string{
 		model.TaskPath(id),
-		path.Dir(model.CommentPath(id, model.ID{})) + "/",
-		path.Dir(model.WorklogPath(id, model.ID{})) + "/",
+		path.Dir(model.CommentPath(id, model.ULID{})) + "/",
+		path.Dir(model.WorklogPath(id, model.ULID{})) + "/",
 	}, limit)
 }

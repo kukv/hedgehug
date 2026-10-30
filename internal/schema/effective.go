@@ -17,7 +17,7 @@ type Effective struct {
 // first (include the task itself first when it is a container). The override
 // of the nearest ancestor that has one applies; overrides of farther
 // ancestors are not combined with it.
-func (s *Schema) For(ancestors []model.ID) *Effective {
+func (s *Schema) For(ancestors []model.ULID) *Effective {
 	for _, a := range ancestors {
 		for i := range s.Scoped {
 			if w, err := parseWhere(s.Scoped[i].Where); err == nil && w == a {

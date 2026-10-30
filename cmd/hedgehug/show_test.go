@@ -28,7 +28,7 @@ func TestShow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	aid, _ := model.ParseID(a.ID)
+	aid, _ := model.ParseULID(a.ULID)
 	if _, err := s.Update(store.Op{Name: "update", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
 		tk, err := tx.Task(aid)
 		if err != nil {
@@ -38,7 +38,7 @@ func TestShow(t *testing.T) {
 		if err := tx.PutTask(tk); err != nil {
 			return err
 		}
-		return tx.PutComment(aid, &model.Comment{ID: model.NewID(), Author: "github.com/alice", Body: "Looks good.\nShip it.\n"})
+		return tx.PutComment(aid, &model.Comment{ULID: model.NewULID(), Author: "github.com/alice", Body: "Looks good.\nShip it.\n"})
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestShow(t *testing.T) {
 	out := te.ok("show", a.Key)
 	for _, want := range []string{
 		// The heading is the title; the key and the ULID are the first fields.
-		"Write the spec\n  key         " + a.Key + "\n  id          " + a.ID + "\n  workspace   me (ME, ",
+		"Write the spec\n  key         " + a.Key + "\n  ulid        " + a.ULID + "\n  workspace   me (ME, ",
 		"workspace   me (ME, ",
 		"parent      " + label(p) + " Project",
 		"blocked_by  " + label(other) + " Other",
@@ -63,7 +63,7 @@ func TestShow(t *testing.T) {
 			t.Errorf("show does not contain %q:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "Problems:") || strings.Contains(out, "deleted ") || strings.Contains(out, "former_keys") || strings.Contains(out, a.Key+" ("+a.ID+")  ") {
+	if strings.Contains(out, "Problems:") || strings.Contains(out, "deleted ") || strings.Contains(out, "former_keys") || strings.Contains(out, a.Key+" ("+a.ULID+")  ") {
 		t.Errorf("show has sections it should not:\n%s", out)
 	}
 
@@ -78,7 +78,7 @@ func TestShow(t *testing.T) {
 	if err := json.Unmarshal([]byte(te.ok("show", a.Key, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Title != "Write the spec" || got.Body != "The body.\n" || len(got.Comments) != 1 || len(got.Reverse["blocks"]) != 1 || got.Reverse["blocks"][0] != (refJSON{waiting.ID, waiting.Key, "Waiting"}) {
+	if got.Title != "Write the spec" || got.Body != "The body.\n" || len(got.Comments) != 1 || len(got.Reverse["blocks"]) != 1 || got.Reverse["blocks"][0] != (refJSON{waiting.ULID, waiting.Key, "Waiting"}) {
 		t.Errorf("show --json = %+v", got)
 	}
 }
@@ -97,7 +97,7 @@ func TestShowBroken(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("X")
 	dir := te.storeDir("me")
-	rel := model.TaskPath(mustID(t, x.ID))
+	rel := model.TaskPath(mustULID(t, x.ULID))
 	if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(rel)), []byte("not a task\x00\n: [\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestShowBroken(t *testing.T) {
 	if _, err := w.Commit("break a task", &git.CommitOptions{Author: &object.Signature{Name: "T", Email: "t@example.com", When: time.Now()}}); err != nil {
 		t.Fatal(err)
 	}
-	out := te.ok("show", x.ID)
+	out := te.ok("show", x.ULID)
 	if !strings.Contains(out, "\nbroken: ") {
 		t.Errorf("show of a broken task has no broken line:\n%s", out)
 	}
@@ -124,7 +124,7 @@ func TestShowBroken(t *testing.T) {
 		Body     string        `json:"body"`
 		Comments []interface{} `json:"comments"`
 	}
-	if err := json.Unmarshal([]byte(te.ok("show", x.ID, "--json")), &got); err != nil {
+	if err := json.Unmarshal([]byte(te.ok("show", x.ULID, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.Broken == "" || got.Body != "" || len(got.Comments) != 0 {
@@ -139,7 +139,7 @@ func TestShowDeleted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id := mustID(t, x.ID)
+	id := mustULID(t, x.ULID)
 	if _, err := s.Update(store.Op{Name: "rm", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
 		tk, err := tx.Task(id)
 		if err != nil {
@@ -176,7 +176,7 @@ func TestShowWideLabel(t *testing.T) {
 	if want := "  関連        " + label(a) + " A"; !strings.Contains(out, want) {
 		t.Errorf("show does not contain %q:\n%s", want, out)
 	}
-	if want := "  id          " + other.ID; !strings.Contains(out, want) {
+	if want := "  ulid        " + other.ULID; !strings.Contains(out, want) {
 		t.Errorf("show does not contain %q:\n%s", want, out)
 	}
 }
@@ -199,9 +199,9 @@ func TestDisplayWidth(t *testing.T) {
 	}
 }
 
-func mustID(t *testing.T, s string) model.ID {
+func mustULID(t *testing.T, s string) model.ULID {
 	t.Helper()
-	id, err := model.ParseID(s)
+	id, err := model.ParseULID(s)
 	if err != nil {
 		t.Fatal(err)
 	}

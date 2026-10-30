@@ -30,7 +30,7 @@ func (te *testEnv) addJSON(args ...string) taskJSON {
 }
 
 // label is how the CLI names task j: its key and full ULID.
-func label(j taskJSON) string { return j.Key + " (" + j.ID + ")" }
+func label(j taskJSON) string { return j.Key + " (" + j.ULID + ")" }
 
 // task reads the task file of id from the store.
 func (te *testEnv) task(id string) *model.Task {
@@ -39,7 +39,7 @@ func (te *testEnv) task(id string) *model.Task {
 	if err != nil {
 		te.t.Fatal(err)
 	}
-	mid, err := model.ParseID(id)
+	mid, err := model.ParseULID(id)
 	if err != nil {
 		te.t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestAdd(t *testing.T) {
 
 	got := te.addJSON("Second")
 	if got.Kind != "task" || got.Status != "todo" || got.Parent != nil || got.Key != "ME-2" ||
-		got.Workspace == nil || got.Workspace.Name != "me" || got.Workspace.KeyPrefix != "ME" || len(got.Workspace.ID) != 26 {
+		got.Workspace == nil || got.Workspace.Name != "me" || got.Workspace.KeyPrefix != "ME" || len(got.Workspace.ULID) != 26 {
 		t.Errorf("task = %+v", got)
 	}
 }
@@ -77,8 +77,8 @@ func TestAddRanksAtTheEnd(t *testing.T) {
 	p := te.addJSON("Parent", "--kind", "project")
 	a := te.addJSON("A", "--parent", p.Key)
 	b := te.addJSON("B", "--parent", p.Key)
-	if a.Parent == nil || *a.Parent != p.ID {
-		t.Errorf("a.parent = %v, want %s", a.Parent, p.ID)
+	if a.Parent == nil || *a.Parent != p.ULID {
+		t.Errorf("a.parent = %v, want %s", a.Parent, p.ULID)
 	}
 	if a.Rank >= b.Rank {
 		t.Errorf("ranks: a %q, b %q; want a before b", a.Rank, b.Rank)
@@ -95,7 +95,7 @@ func TestAddProps(t *testing.T) {
 	if got.Kind != "bug" || got.Status != "backlog" || got.Props["due"] != "2026-11-01" || len(got.Labels) != 1 || got.Labels[0] != "ui" {
 		t.Errorf("task = %+v", got)
 	}
-	if tk := te.task(got.ID); tk.Title != "Bug" {
+	if tk := te.task(got.ULID); tk.Title != "Bug" {
 		t.Errorf("file title = %q", tk.Title)
 	}
 }

@@ -13,7 +13,7 @@ import (
 // AmbiguousError means an input matches more than one task.
 type AmbiguousError struct {
 	Input      string
-	Candidates []model.ID // in ID order
+	Candidates []model.ULID // in ULID order
 }
 
 func (e *AmbiguousError) Error() string {
@@ -23,9 +23,9 @@ func (e *AmbiguousError) Error() string {
 // Resolve finds the task s names, ignoring case. It tries in order a key, a
 // former key, and a full ULID, and returns what the first stage that matches
 // finds. Deleted tasks count.
-func (ix *Index) Resolve(s string) (model.ID, error) {
+func (ix *Index) Resolve(s string) (model.ULID, error) {
 	if s == "" {
-		return model.ID{}, fmt.Errorf("%q: %w", s, store.ErrNotFound)
+		return model.ULID{}, fmt.Errorf("%q: %w", s, store.ErrNotFound)
 	}
 	u := strings.ToUpper(s)
 	stages := []func(*Entry) bool{
@@ -33,13 +33,13 @@ func (ix *Index) Resolve(s string) (model.ID, error) {
 		func(e *Entry) bool {
 			return slices.ContainsFunc(e.FormerKeys, func(k string) bool { return strings.EqualFold(k, s) })
 		},
-		func(e *Entry) bool { return len(u) == 26 && e.ID.String() == u },
+		func(e *Entry) bool { return len(u) == 26 && e.ULID.String() == u },
 	}
 	for _, match := range stages {
-		var hits []model.ID
+		var hits []model.ULID
 		for _, e := range ix.tasks {
 			if match(e) {
-				hits = append(hits, e.ID)
+				hits = append(hits, e.ULID)
 			}
 		}
 		switch len(hits) {
@@ -48,10 +48,10 @@ func (ix *Index) Resolve(s string) (model.ID, error) {
 		case 1:
 			return hits[0], nil
 		}
-		slices.SortFunc(hits, func(a, b model.ID) int { return cmp.Compare(a.String(), b.String()) })
-		return model.ID{}, &AmbiguousError{Input: s, Candidates: hits}
+		slices.SortFunc(hits, func(a, b model.ULID) int { return cmp.Compare(a.String(), b.String()) })
+		return model.ULID{}, &AmbiguousError{Input: s, Candidates: hits}
 	}
-	return model.ID{}, fmt.Errorf("%q: %w", s, store.ErrNotFound)
+	return model.ULID{}, fmt.Errorf("%q: %w", s, store.ErrNotFound)
 }
 
 // KeyNumbers returns, for each key prefix, the largest number of the keys

@@ -188,7 +188,7 @@ func first(vs []string) string {
 	return vs[0]
 }
 
-// sortEntries sorts es by o, then by rank and ID; by rank and ID alone when
+// sortEntries sorts es by o, then by rank and ULID; by rank and ULID alone when
 // o is nil.
 func sortEntries(es []*index.Entry, o *sortSpec) {
 	slices.SortFunc(es, func(a, b *index.Entry) int {

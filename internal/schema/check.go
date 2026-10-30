@@ -52,12 +52,12 @@ func builtinFilled(t *model.Task, name string) (filled, ok bool) {
 }
 
 // parseWhere reads the target of a scoped override: project:<ULID>.
-func parseWhere(w string) (model.ID, error) {
+func parseWhere(w string) (model.ULID, error) {
 	s, ok := strings.CutPrefix(w, "project:")
 	if !ok {
-		return model.ID{}, errors.New(`where must be "project:<ULID>"`)
+		return model.ULID{}, errors.New(`where must be "project:<ULID>"`)
 	}
-	return model.ParseID(s)
+	return model.ParseULID(s)
 }
 
 // Check lists the defects of s. A schema with defects may still be read, so
@@ -174,7 +174,7 @@ func (s *Schema) Check() []Problem {
 	}
 	checkWorkflow("workflow", s.Workflow)
 
-	wheres := map[model.ID]bool{}
+	wheres := map[model.ULID]bool{}
 	for i, sc := range s.Scoped {
 		p := fmt.Sprintf("scoped[%d]", i)
 		id, err := parseWhere(sc.Where)

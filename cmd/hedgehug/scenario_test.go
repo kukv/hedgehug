@@ -41,19 +41,19 @@ func TestScenario(t *testing.T) {
 	step("set", "set", g.Key, "labels+=ui", "due=2026-11-01")
 	// The editor writes its contents in turn: the task for edit, then the
 	// body for comment edit.
-	te.editWith(setLine(te.raw(g.ID), "title", "Form fields"), "second\n")
+	te.editWith(setLine(te.raw(g.ULID), "title", "Form fields"), "second\n")
 	step("edit", "edit", g.Key)
 	step("comment", "comment", g.Key, "first")
-	cm := te.comments(g.ID)
+	cm := te.comments(g.ULID)
 	if len(cm) != 1 {
 		t.Fatalf("comments = %d, want 1", len(cm))
 	}
-	step("comment", "comment", "edit", cm[0].ID.String())
-	if cs := te.comments(g.ID); len(cs) != 1 || cs[0].Body != "second\n" {
+	step("comment", "comment", "edit", cm[0].ULID.String())
+	if cs := te.comments(g.ULID); len(cs) != 1 || cs[0].Body != "second\n" {
 		t.Fatalf("comments after edit = %+v", cs)
 	}
 	out := te.ok("show", g.Key)
-	for _, w := range []string{"Form fields", cm[0].ID.String(), "second", "\nHistory:\n", "hedgehug: edit "} {
+	for _, w := range []string{"Form fields", cm[0].ULID.String(), "second", "\nHistory:\n", "hedgehug: edit "} {
 		if !strings.Contains(out, w) {
 			t.Errorf("show lacks %q:\n%s", w, out)
 		}
@@ -67,7 +67,7 @@ func TestScenario(t *testing.T) {
 	if len(sj.History) == 0 || !slices.ContainsFunc(sj.History, func(l logJSON) bool { return strings.HasPrefix(l.Subject, "hedgehug: edit ") }) {
 		t.Errorf("show --json history = %+v, want the edit commit", sj.History)
 	}
-	step("comment", "comment", "rm", cm[0].ID.String())
+	step("comment", "comment", "rm", cm[0].ULID.String())
 	if out := te.ok("log", g.Key); !strings.Contains(out, "hedgehug: edit ") || !strings.Contains(out, "hedgehug: comment ") || len(strings.Split(strings.TrimRight(out, "\n"), "\n")) < 4 {
 		t.Errorf("log for the task:\n%s", out)
 	}
@@ -77,8 +77,8 @@ func TestScenario(t *testing.T) {
 	step("dep", "dep", "add", c.Key, "--blocked-by", o.Key)
 	step("dep", "dep", "rm", c.Key, "--blocked-by", o.Key)
 	step("migrate", "schema", "migrate", "status", "done", "closed")
-	if out := te.ok("ls", "status:closed", "--ids-only"); !strings.Contains(out, g.ID) {
-		t.Errorf("ls status:closed = %q, want %s", out, g.ID)
+	if out := te.ok("ls", "status:closed", "--ids-only"); !strings.Contains(out, g.ULID) {
+		t.Errorf("ls status:closed = %q, want %s", out, g.ULID)
 	}
 	step("rm", "rm", p.Key)
 	step("restore", "restore", p.Key)

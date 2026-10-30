@@ -113,18 +113,18 @@ func (c *compiler) term(t Term) (pred, error) {
 	case "assignee":
 		return c.assignee(t)
 	case "parent":
-		return c.ref(t, func(e *index.Entry) []model.ID {
+		return c.ref(t, func(e *index.Entry) []model.ULID {
 			if e.Parent == nil {
 				return nil
 			}
-			return []model.ID{*e.Parent}
+			return []model.ULID{*e.Parent}
 		})
 	case "project":
 		return c.project(t)
 	case "workspace":
 		return c.workspace(t)
 	case "blocked_by":
-		return c.ref(t, func(e *index.Entry) []model.ID { return e.BlockedBy })
+		return c.ref(t, func(e *index.Entry) []model.ULID { return e.BlockedBy })
 	case "blocks":
 		return c.inverse(t, "blocked_by")
 	case "is":
@@ -218,8 +218,8 @@ func (c *compiler) assignee(t Term) (pred, error) {
 }
 
 // resolve turns the values of t into tasks; none is reported apart.
-func (c *compiler) resolve(t Term) (none bool, ids map[model.ID]bool, err error) {
-	ids = map[model.ID]bool{}
+func (c *compiler) resolve(t Term) (none bool, ids map[model.ULID]bool, err error) {
+	ids = map[model.ULID]bool{}
 	for _, v := range t.Values {
 		if v == "none" {
 			none = true
@@ -236,7 +236,7 @@ func (c *compiler) resolve(t Term) (none bool, ids map[model.ID]bool, err error)
 
 // ref matches when the task points at one of the term's tasks through get;
 // none matches a task that points at none.
-func (c *compiler) ref(t Term, get func(*index.Entry) []model.ID) (pred, error) {
+func (c *compiler) ref(t Term, get func(*index.Entry) []model.ULID) (pred, error) {
 	none, ids, err := c.resolve(t)
 	if err != nil {
 		return nil, err
@@ -266,7 +266,7 @@ func (c *compiler) project(t Term) (pred, error) {
 		return nil, c.fail(t, "project does not take none")
 	}
 	return func(e *index.Entry) bool {
-		seen := map[model.ID]bool{e.ID: true}
+		seen := map[model.ULID]bool{e.ULID: true}
 		for p := e.Parent; p != nil && !seen[*p]; {
 			if ids[*p] {
 				return true
@@ -284,13 +284,13 @@ func (c *compiler) project(t Term) (pred, error) {
 
 // workspace matches tasks that sit in one of the term's workspaces.
 func (c *compiler) workspace(t Term) (pred, error) {
-	ids := map[model.ID]bool{}
+	ids := map[model.ULID]bool{}
 	for _, v := range t.Values {
 		w, err := c.ix.ResolveWorkspace(v)
 		if err != nil {
 			return nil, c.failWith(t, err)
 		}
-		ids[w.ID] = true
+		ids[w.ULID] = true
 	}
 	return func(e *index.Entry) bool { return ids[e.Workspace] }, nil
 }
@@ -304,11 +304,11 @@ func (c *compiler) inverse(t Term, rel string) (pred, error) {
 	}
 	pointed := c.targeted(rel)
 	return func(e *index.Entry) bool {
-		if none && !pointed[e.ID] {
+		if none && !pointed[e.ULID] {
 			return true
 		}
 		for id := range ids {
-			if x, ok := c.ix.Task(id); ok && slices.Contains(x.Targets(rel), e.ID) {
+			if x, ok := c.ix.Task(id); ok && slices.Contains(x.Targets(rel), e.ULID) {
 				return true
 			}
 		}
@@ -317,8 +317,8 @@ func (c *compiler) inverse(t Term, rel string) (pred, error) {
 }
 
 // targeted returns the tasks some task points at through rel.
-func (c *compiler) targeted(rel string) map[model.ID]bool {
-	out := map[model.ID]bool{}
+func (c *compiler) targeted(rel string) map[model.ULID]bool {
+	out := map[model.ULID]bool{}
 	for _, e := range c.ix.Tasks() {
 		for _, id := range e.Targets(rel) {
 			out[id] = true
@@ -335,13 +335,13 @@ func (c *compiler) taskRef(t Term, p schema.Prop) (pred, error) {
 	if err != nil {
 		return nil, err
 	}
-	var back map[model.ID]bool
+	var back map[model.ULID]bool
 	if p.Symmetric {
 		back = c.targeted(p.Name)
 	}
 	return func(e *index.Entry) bool {
 		got := e.Targets(p.Name)
-		if none && len(got) == 0 && !back[e.ID] {
+		if none && len(got) == 0 && !back[e.ULID] {
 			return true
 		}
 		for _, g := range got {
@@ -351,7 +351,7 @@ func (c *compiler) taskRef(t Term, p schema.Prop) (pred, error) {
 		}
 		if p.Symmetric {
 			for id := range ids {
-				if x, ok := c.ix.Task(id); ok && slices.Contains(x.Targets(p.Name), e.ID) {
+				if x, ok := c.ix.Task(id); ok && slices.Contains(x.Targets(p.Name), e.ULID) {
 					return true
 				}
 			}
@@ -474,7 +474,7 @@ func (c *compiler) is(t Term) (pred, error) {
 		case "blocked":
 			ps = append(ps, c.blocked)
 		case "invalid":
-			ps = append(ps, func(e *index.Entry) bool { return len(c.ix.Problems(e.ID)) > 0 })
+			ps = append(ps, func(e *index.Entry) bool { return len(c.ix.Problems(e.ULID)) > 0 })
 		case "deleted":
 			c.deleted = true
 			ps = append(ps, func(e *index.Entry) bool { return e.DeletedAt != nil })
@@ -534,5 +534,5 @@ func byRank(a, b *index.Entry) int {
 	if c := cmp.Compare(a.Rank, b.Rank); c != 0 {
 		return c
 	}
-	return cmp.Compare(a.ID.String(), b.ID.String())
+	return cmp.Compare(a.ULID.String(), b.ULID.String())
 }

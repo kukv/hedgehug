@@ -12,7 +12,7 @@ import (
 )
 
 // fixture is a store with tasks P, E, a, b, c and the deleted d, made in
-// that order so that their IDs, and with no rank their order, follow it.
+// that order so that their ULIDs, and with no rank their order, follow it.
 //
 //	P (project, todo)
 //	└── E (epic, todo)
@@ -25,7 +25,7 @@ import (
 //	d (task, todo, deleted)
 type fixture struct {
 	ix  *index.Index
-	ids map[string]model.ID
+	ids map[string]model.ULID
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -33,29 +33,29 @@ func newFixture(t *testing.T) *fixture {
 	s := newStore(t)
 	p, e, a, b, c, d := newTask("P"), newTask("E"), newTask("a"), newTask("b"), newTask("c"), newTask("d")
 	p.Kind = "project"
-	e.Kind, e.Parent = "epic", &p.ID
-	a.Parent, a.Status = &e.ID, "in_progress"
+	e.Kind, e.Parent = "epic", &p.ULID
+	a.Parent, a.Status = &e.ULID, "in_progress"
 	a.Labels, a.Assignees = []string{"backend"}, []string{"github.com/alice"}
 	setProp(a, "priority", "high")
 	setProp(a, "due", "2026-11-05")
 	setProp(a, "estimate", "2h")
 	setProp(a, "points", "3")
-	a.BlockedBy = []model.ID{b.ID}
-	setRefs(a, "duplicates", c.ID)
+	a.BlockedBy = []model.ULID{b.ULID}
+	setRefs(a, "duplicates", c.ULID)
 	a.Body = "検索語 で探す\n"
 	b.Status, b.Key = "backlog", "WEB-1"
 	setProp(b, "priority", "urgent")
 	setProp(b, "due", "2026-11-20")
-	setRefs(b, "relates", c.ID)
+	setRefs(b, "relates", c.ULID)
 	b.Body = "Fix LOGIN 検索語\n"
 	c.Status, c.Labels = "done", []string{"wip"}
 	setProp(c, "priority", "low")
 	at := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 	d.DeletedAt = &at
 	put(t, s, p, e, a, b, c, d)
-	f := &fixture{ix: mustOpen(t, s), ids: map[string]model.ID{}}
+	f := &fixture{ix: mustOpen(t, s), ids: map[string]model.ULID{}}
 	for _, task := range []*model.Task{p, e, a, b, c, d} {
-		f.ids[task.Title] = task.ID
+		f.ids[task.Title] = task.ULID
 	}
 	return f
 }
@@ -119,8 +119,8 @@ func TestRunIsInvalid(t *testing.T) {
 	s := newStore(t)
 	ok := newTask("ok")
 	put(t, s, ok)
-	bad := model.NewID()
-	writeRaw(t, s, model.TaskPath(bad), "---\nid: "+bad.String()+"\nkind: nope\ntitle: bad\nstatus: todo\n---\n")
+	bad := model.NewULID()
+	writeRaw(t, s, model.TaskPath(bad), "---\nulid: "+bad.String()+"\nkind: nope\ntitle: bad\nstatus: todo\n---\n")
 	if got := run(t, mustOpen(t, s), "is:invalid", Options{}); len(got) != 1 || !slices.Equal(got[0], []string{"bad"}) {
 		t.Errorf("is:invalid = %v, want [[bad]]", got)
 	}
@@ -161,12 +161,12 @@ func TestRunErrors(t *testing.T) {
 
 func TestRunWorkspace(t *testing.T) {
 	s := newStore(t)
-	api := &model.Workspace{ID: model.NewID(), Name: "api", KeyPrefix: "API"}
+	api := &model.Workspace{ULID: model.NewULID(), Name: "api", KeyPrefix: "API"}
 	if _, err := s.Update(store.Op{Name: "workspace", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutWorkspace(api) }); err != nil {
 		t.Fatal(err)
 	}
 	a, b := newTask("a"), newTask("b")
-	b.Workspace = api.ID
+	b.Workspace = api.ULID
 	put(t, s, a, b)
 	ix := mustOpen(t, s)
 	tests := []struct {

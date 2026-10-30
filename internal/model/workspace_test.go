@@ -7,7 +7,7 @@ import (
 )
 
 func TestWorkspaceRoundTrip(t *testing.T) {
-	in := "---\nid: 01JC0A1B2C3D4E5F6G7H8J9K0M\nname: web\nkey_prefix: WEB\nprefix_set: 2026-10-31T10:00:00+09:00\ncreated: 2026-10-31T10:00:00+09:00\nupdated: 2026-10-31T10:00:00+09:00\n---\nWeb のタスク。\n"
+	in := "---\nulid: 01JC0A1B2C3D4E5F6G7H8J9K0M\nname: web\nkey_prefix: WEB\nprefix_set: 2026-10-31T10:00:00+09:00\ncreated: 2026-10-31T10:00:00+09:00\nupdated: 2026-10-31T10:00:00+09:00\n---\nWeb のタスク。\n"
 	w, err := DecodeWorkspace([]byte(in))
 	if err != nil {
 		t.Fatal(err)
@@ -23,12 +23,12 @@ func TestWorkspaceRoundTrip(t *testing.T) {
 		t.Errorf("Encode =\n%s", out)
 	}
 	if _, err := DecodeWorkspace([]byte("---\nname: x\n---\n")); !errors.As(err, new(*DecodeError)) {
-		t.Errorf("no id: %v", err)
+		t.Errorf("no ulid: %v", err)
 	}
-	if WorkspacePath(w.ID) != "workspaces/01JC0A1B2C3D4E5F6G7H8J9K0M.md" {
-		t.Error(WorkspacePath(w.ID))
+	if WorkspacePath(w.ULID) != "workspaces/01JC0A1B2C3D4E5F6G7H8J9K0M.md" {
+		t.Error(WorkspacePath(w.ULID))
 	}
-	if id, err := ParseWorkspacePath(WorkspacePath(w.ID)); err != nil || id != w.ID {
+	if id, err := ParseWorkspacePath(WorkspacePath(w.ULID)); err != nil || id != w.ULID {
 		t.Errorf("ParseWorkspacePath = %v %v", id, err)
 	}
 }

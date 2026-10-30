@@ -43,13 +43,13 @@ func (a *app) set(arg string, assigns []assign) error {
 	if err := notDeleted(ix, e); err != nil {
 		return err
 	}
-	committed, err := a.update(s, store.Op{Name: "set", Task: e.ID}, func(tx *store.Tx) error {
-		t, err := tx.Task(e.ID)
+	committed, err := a.update(s, store.Op{Name: "set", Task: e.ULID}, func(tx *store.Tx) error {
+		t, err := tx.Task(e.ULID)
 		if err != nil {
 			return err
 		}
 		for _, as := range assigns {
-			if err := applyAssign(t, as, ix.Schema(), a.resolveID(ix)); err != nil {
+			if err := applyAssign(t, as, ix.Schema(), a.resolveULID(ix)); err != nil {
 				return err
 			}
 		}
@@ -58,5 +58,5 @@ func (a *app) set(arg string, assigns []assign) error {
 	if err != nil {
 		return err
 	}
-	return a.printTask(ix, e.ID, verb(committed, "Updated"))
+	return a.printTask(ix, e.ULID, verb(committed, "Updated"))
 }

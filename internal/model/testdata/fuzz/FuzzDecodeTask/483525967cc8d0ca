@@ -1,2 +1,2 @@
 go test fuzz v1
-string("---\nid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nlamels: [a, b]\nprops: #00000\n---\n")
+string("---\nulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nlamels: [a, b]\nprops: #00000\n---\n")

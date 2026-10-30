@@ -16,7 +16,7 @@ func TestOpenIndexesTasks(t *testing.T) {
 	epic := newTask("Epic")
 	epic.Kind = "epic"
 	first, second := newTask("First"), newTask("Second")
-	first.Parent, second.Parent = &epic.ID, &epic.ID
+	first.Parent, second.Parent = &epic.ULID, &epic.ULID
 	first.Rank, second.Rank = "a1", "a0"
 	first.Labels = []string{"backend"}
 	first.Body = "Some BODY text\n"
@@ -24,11 +24,11 @@ func TestOpenIndexesTasks(t *testing.T) {
 	put(t, s, epic, first, second)
 
 	ix := mustOpen(t, s)
-	e, ok := ix.Task(first.ID)
+	e, ok := ix.Task(first.ULID)
 	if !ok {
 		t.Fatal("first is not in the index")
 	}
-	if e.Title != "First" || e.Kind != "task" || e.Parent == nil || *e.Parent != epic.ID || e.Rank != "a1" || !slices.Equal(e.Labels, []string{"backend"}) {
+	if e.Title != "First" || e.Kind != "task" || e.Parent == nil || *e.Parent != epic.ULID || e.Rank != "a1" || !slices.Equal(e.Labels, []string{"backend"}) {
 		t.Errorf("entry = %+v", e)
 	}
 	if got := e.Prop("priority"); !slices.Equal(got, []string{"high"}) {
@@ -40,7 +40,7 @@ func TestOpenIndexesTasks(t *testing.T) {
 	if e.Created.IsZero() || e.Broken != "" || len(e.Violations) != 0 {
 		t.Errorf("entry = %+v", e)
 	}
-	if got := titles(ix.Children(epic.ID)); !slices.Equal(got, []string{"Second", "First"}) {
+	if got := titles(ix.Children(epic.ULID)); !slices.Equal(got, []string{"Second", "First"}) {
 		t.Errorf("children = %v, want [Second First] (by rank)", got)
 	}
 	if got := titles(ix.Roots()); !slices.Equal(got, []string{"Epic"}) {
@@ -56,13 +56,13 @@ func TestOpenIndexesTasks(t *testing.T) {
 
 func TestOpenBrokenFile(t *testing.T) {
 	s, dir := newStore(t)
-	id := model.NewID()
+	id := model.NewULID()
 	commitRaw(t, s, dir, model.TaskPath(id), "not a task file\n")
-	other := model.NewID()
-	commitRaw(t, s, dir, model.TaskPath(other), rawTask(model.NewID(), "kind: task\ntitle: x\nstatus: todo\n"))
+	other := model.NewULID()
+	commitRaw(t, s, dir, model.TaskPath(other), rawTask(model.NewULID(), "kind: task\ntitle: x\nstatus: todo\n"))
 
 	ix := mustOpen(t, s)
-	for _, want := range []model.ID{id, other} {
+	for _, want := range []model.ULID{id, other} {
 		e, ok := ix.Task(want)
 		if !ok || e.Broken == "" {
 			t.Errorf("entry %s = %+v, want a broken entry", want, e)
@@ -77,15 +77,15 @@ func TestOpenViolations(t *testing.T) {
 	s, dir := newStore(t)
 	parent := newTask("parent")
 	put(t, s, parent)
-	unknown, misplaced, orphan := model.NewID(), model.NewID(), model.NewID()
+	unknown, misplaced, orphan := model.NewULID(), model.NewULID(), model.NewULID()
 	commitRaw(t, s, dir, model.TaskPath(unknown), rawTask(unknown, "kind: nope\ntitle: x\nstatus: todo\n"))
 	// A bug cannot sit under a task.
-	commitRaw(t, s, dir, model.TaskPath(misplaced), rawTask(misplaced, "kind: bug\ntitle: x\nstatus: todo\nparent: "+parent.ID.String()+"\n"))
+	commitRaw(t, s, dir, model.TaskPath(misplaced), rawTask(misplaced, "kind: bug\ntitle: x\nstatus: todo\nparent: "+parent.ULID.String()+"\n"))
 	// The parent is missing, so its kind is unknown: placement is not checked.
-	commitRaw(t, s, dir, model.TaskPath(orphan), rawTask(orphan, "kind: epic\ntitle: x\nstatus: todo\nparent: "+model.NewID().String()+"\n"))
+	commitRaw(t, s, dir, model.TaskPath(orphan), rawTask(orphan, "kind: epic\ntitle: x\nstatus: todo\nparent: "+model.NewULID().String()+"\n"))
 
 	ix := mustOpen(t, s)
-	check := func(id model.ID, want ...string) {
+	check := func(id model.ULID, want ...string) {
 		t.Helper()
 		e, _ := ix.Task(id)
 		var got []string
@@ -99,5 +99,5 @@ func TestOpenViolations(t *testing.T) {
 	check(unknown, schema.CodeUnknownKind+":kind") // once, though two checks report it
 	check(misplaced, schema.CodePlacement+":parent")
 	check(orphan)
-	check(parent.ID)
+	check(parent.ULID)
 }

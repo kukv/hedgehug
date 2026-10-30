@@ -10,7 +10,7 @@ func TestDep(t *testing.T) {
 	a := te.addJSON("Alpha")
 	b := te.addJSON("Beta")
 	te.ok("dep", "add", a.Key, "--blocked-by", b.Key)
-	if bb := te.task(a.ID).BlockedBy; len(bb) != 1 || bb[0].String() != b.ID {
+	if bb := te.task(a.ULID).BlockedBy; len(bb) != 1 || bb[0].String() != b.ULID {
 		t.Errorf("blocked_by = %v", bb)
 	}
 	if !strings.Contains(te.log("me")[0].Message, "Hedgehug-Op: dep") {
@@ -23,7 +23,7 @@ func TestDep(t *testing.T) {
 		t.Errorf("a cycle: exit %d, stderr %q", code, stderr)
 	}
 	te.ok("dep", "rm", a.Key, "--blocked-by", b.Key)
-	if bb := te.task(a.ID).BlockedBy; len(bb) != 0 {
+	if bb := te.task(a.ULID).BlockedBy; len(bb) != 0 {
 		t.Errorf("blocked_by = %v after dep rm", bb)
 	}
 	if code, _, stderr := te.run("dep", "rm", a.Key, "--blocked-by", b.Key); code != 1 || !strings.Contains(stderr, "not blocked") {

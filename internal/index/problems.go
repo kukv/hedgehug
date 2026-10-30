@@ -32,44 +32,44 @@ type Problem struct {
 }
 
 // Problems returns what is wrong with the task id.
-func (ix *Index) Problems(id model.ID) []Problem { return slices.Clone(ix.problems[id]) }
+func (ix *Index) Problems(id model.ULID) []Problem { return slices.Clone(ix.problems[id]) }
 
 // findProblems finds what is wrong with each task: a file that does not
 // decode, schema violations, references to tasks not in the store, and
 // cycles of parents or blockers, and keys and workspaces that do not fit.
-func (ix *Index) findProblems() map[model.ID][]Problem {
-	out := map[model.ID][]Problem{}
-	add := func(id model.ID, p Problem) { out[id] = append(out[id], p) }
-	byKey := map[string][]model.ID{}
+func (ix *Index) findProblems() map[model.ULID][]Problem {
+	out := map[model.ULID][]Problem{}
+	add := func(id model.ULID, p Problem) { out[id] = append(out[id], p) }
+	byKey := map[string][]model.ULID{}
 	for _, e := range ix.tasks {
 		if e.Broken != "" {
-			add(e.ID, Problem{CodeBroken, "", e.Broken})
+			add(e.ULID, Problem{CodeBroken, "", e.Broken})
 			continue
 		}
 		for _, v := range e.Violations {
-			add(e.ID, Problem{v.Code, v.Field, v.Msg})
+			add(e.ULID, Problem{v.Code, v.Field, v.Msg})
 		}
 		for _, r := range ix.refs(e) {
 			if ix.tasks[r.id] == nil {
-				add(e.ID, Problem{schema.CodeMissingRef, r.field, fmt.Sprintf("task %s is not in this store", r.id)})
+				add(e.ULID, Problem{schema.CodeMissingRef, r.field, fmt.Sprintf("task %s is not in this store", r.id)})
 			}
 		}
 		prefix, _, keyOK := model.ParseKey(e.Key)
 		if !keyOK {
-			add(e.ID, Problem{CodeNoKey, "key", "missing or not a key such as WEB-42; the next write gives one"})
+			add(e.ULID, Problem{CodeNoKey, "key", "missing or not a key such as WEB-42; the next write gives one"})
 		} else {
-			byKey[e.Key] = append(byKey[e.Key], e.ID)
+			byKey[e.Key] = append(byKey[e.Key], e.ULID)
 		}
 		ws, wsOK := ix.workspaces[e.Workspace]
 		switch {
 		case e.Workspace.IsZero() || !wsOK:
-			add(e.ID, Problem{store.CodeNoWorkspace, "workspace", "missing or not a workspace of this store; set it with hedgehug edit"})
+			add(e.ULID, Problem{store.CodeNoWorkspace, "workspace", "missing or not a workspace of this store; set it with hedgehug edit"})
 		case keyOK && prefix != ws.KeyPrefix:
-			add(e.ID, Problem{CodeKeyPrefix, "key", fmt.Sprintf("the key prefix is not the one of workspace %s (%s); the next write renumbers it", ws.Name, ws.KeyPrefix)})
+			add(e.ULID, Problem{CodeKeyPrefix, "key", fmt.Sprintf("the key prefix is not the one of workspace %s (%s); the next write renumbers it", ws.Name, ws.KeyPrefix)})
 		}
 		if e.Parent != nil {
 			if p := ix.tasks[*e.Parent]; p != nil && p.Broken == "" && p.Workspace != e.Workspace {
-				add(e.ID, Problem{store.CodeWorkspaceMismatch, "workspace", "differs from the workspace of the parent"})
+				add(e.ULID, Problem{store.CodeWorkspaceMismatch, "workspace", "differs from the workspace of the parent"})
 			}
 		}
 	}
@@ -78,27 +78,27 @@ func (ix *Index) findProblems() map[model.ID][]Problem {
 			continue
 		}
 		for _, id := range ids {
-			others := slices.DeleteFunc(slices.Clone(ids), func(o model.ID) bool { return o == id })
-			add(id, Problem{CodeDuplicateKey, "key", fmt.Sprintf("key %s is also the key of %s", key, joinIDs(others))})
+			others := slices.DeleteFunc(slices.Clone(ids), func(o model.ULID) bool { return o == id })
+			add(id, Problem{CodeDuplicateKey, "key", fmt.Sprintf("key %s is also the key of %s", key, joinULIDs(others))})
 		}
 	}
-	parents := func(e *Entry) []model.ID {
+	parents := func(e *Entry) []model.ULID {
 		if e.Parent == nil {
 			return nil
 		}
-		return []model.ID{*e.Parent}
+		return []model.ULID{*e.Parent}
 	}
 	for _, id := range ix.cycles(parents) {
 		add(id, Problem{schema.CodeCycle, "parent", "the parents form a cycle"})
 	}
-	for _, id := range ix.cycles(func(e *Entry) []model.ID { return e.BlockedBy }) {
+	for _, id := range ix.cycles(func(e *Entry) []model.ULID { return e.BlockedBy }) {
 		add(id, Problem{schema.CodeCycle, "blocked_by", "the blockers form a cycle"})
 	}
 	return out
 }
 
-// joinIDs lists ids in order, separated by commas.
-func joinIDs(ids []model.ID) string {
+// joinULIDs lists ids in order, separated by commas.
+func joinULIDs(ids []model.ULID) string {
 	strs := make([]string, len(ids))
 	for i, id := range ids {
 		strs[i] = id.String()
@@ -110,7 +110,7 @@ func joinIDs(ids []model.ID) string {
 // ref is one reference from a task to another.
 type ref struct {
 	field string
-	id    model.ID
+	id    model.ULID
 }
 
 // refs returns the references of e: its parent, its blockers and its
@@ -137,13 +137,13 @@ func (ix *Index) refs(e *Entry) []ref {
 // algorithm for strongly connected components: a component of more than
 // one task, or a task that points at itself. Edges to tasks not in the
 // index are ignored.
-func (ix *Index) cycles(next func(*Entry) []model.ID) []model.ID {
-	order := map[model.ID]int{}
-	low := map[model.ID]int{}
-	onStack := map[model.ID]bool{}
-	var stack, out []model.ID
-	var visit func(id model.ID)
-	visit = func(id model.ID) {
+func (ix *Index) cycles(next func(*Entry) []model.ULID) []model.ULID {
+	order := map[model.ULID]int{}
+	low := map[model.ULID]int{}
+	onStack := map[model.ULID]bool{}
+	var stack, out []model.ULID
+	var visit func(id model.ULID)
+	visit = func(id model.ULID) {
 		n := len(order)
 		order[id], low[id] = n, n
 		stack = append(stack, id)
@@ -164,7 +164,7 @@ func (ix *Index) cycles(next func(*Entry) []model.ID) []model.ID {
 		if low[id] != order[id] {
 			return
 		}
-		var comp []model.ID
+		var comp []model.ULID
 		for {
 			top := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]
@@ -193,13 +193,13 @@ func hasKey[K comparable, V any](m map[K]V, k K) bool {
 
 // Reverse returns the tasks that point at id through rel: blocked_by or a
 // task_ref property. For a symmetric property it also returns the tasks id
-// points at. Each task appears once, in ID order.
-func (ix *Index) Reverse(id model.ID, rel string) []*Entry {
-	seen := map[model.ID]bool{}
+// points at. Each task appears once, in ULID order.
+func (ix *Index) Reverse(id model.ULID, rel string) []*Entry {
+	seen := map[model.ULID]bool{}
 	var out []*Entry
 	add := func(e *Entry) {
-		if e != nil && !seen[e.ID] {
-			seen[e.ID] = true
+		if e != nil && !seen[e.ULID] {
+			seen[e.ULID] = true
 			out = append(out, e)
 		}
 	}
@@ -215,6 +215,6 @@ func (ix *Index) Reverse(id model.ID, rel string) []*Entry {
 			}
 		}
 	}
-	slices.SortFunc(out, func(a, b *Entry) int { return cmp.Compare(a.ID.String(), b.ID.String()) })
+	slices.SortFunc(out, func(a, b *Entry) int { return cmp.Compare(a.ULID.String(), b.ULID.String()) })
 	return out
 }

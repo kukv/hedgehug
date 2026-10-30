@@ -2,9 +2,9 @@ package model
 
 import "testing"
 
-func mustID(t *testing.T, s string) ID {
+func mustID(t *testing.T, s string) ULID {
 	t.Helper()
-	id, err := ParseID(s)
+	id, err := ParseULID(s)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -25,8 +25,8 @@ func TestLsTree(t *testing.T) {
 
 	out := te.ok("ls", "--tree")
 	want := []string{
-		p.Key + " " + p.ID + "  todo  project  Project",
-		"├─ " + a.Key + " " + a.ID + "  todo  task  Alpha",
+		p.Key + " " + p.ULID + "  todo  project  Project",
+		"├─ " + a.Key + " " + a.ULID + "  todo  task  Alpha",
 		"│  └─ ",
 		"└─ ",
 		"Loose",
@@ -58,15 +58,15 @@ func TestLsTree(t *testing.T) {
 	}
 }
 
-func TestLsTreeIDsAndFormat(t *testing.T) {
+func TestLsTreeULIDsAndFormat(t *testing.T) {
 	te := newStoreEnv(t)
 	p := te.addJSON("Project", "--kind", "project")
 	a := te.addJSON("Alpha", "--parent", p.Key)
 	c := te.addJSON("Alpha child", "--parent", a.Key, "--status", "done")
 
 	// --ids-only prints the tasks found, not the ancestors drawn for them.
-	if got := te.ok("ls", "--tree", "--ids-only", "status:done"); got != c.ID+"\n" {
-		t.Errorf("--tree --ids-only = %q, want only %s", got, c.ID)
+	if got := te.ok("ls", "--tree", "--ids-only", "status:done"); got != c.ULID+"\n" {
+		t.Errorf("--tree --ids-only = %q, want only %s", got, c.ULID)
 	}
 	// --format gets every drawn task, marked as context or not.
 	got := te.ok("ls", "--tree", "--format", "{{.title}} {{.context}} {{.in_cycle}}", "status:done")
@@ -76,7 +76,7 @@ func TestLsTreeIDsAndFormat(t *testing.T) {
 	}
 }
 
-func TestLsTreeIDsInCycle(t *testing.T) {
+func TestLsTreeULIDsInCycle(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("X")
 	y := te.addJSON("Y", "--parent", x.Key, "--status", "done")
@@ -84,12 +84,12 @@ func TestLsTreeIDsInCycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	xid, _ := model.ParseID(x.ID)
-	yid, _ := model.ParseID(y.ID)
+	xid, _ := model.ParseULID(x.ULID)
+	yid, _ := model.ParseULID(y.ULID)
 	writeCycle(t, te, s, xid, yid)
 
-	if got := te.ok("ls", "--tree", "--ids-only", "status:done"); got != y.ID+"\n" {
-		t.Errorf("--tree --ids-only = %q, want only %s", got, y.ID)
+	if got := te.ok("ls", "--tree", "--ids-only", "status:done"); got != y.ULID+"\n" {
+		t.Errorf("--tree --ids-only = %q, want only %s", got, y.ULID)
 	}
 	got := te.ok("ls", "--tree", "--format", "{{.title}} {{.context}} {{.in_cycle}}", "status:done")
 	if !strings.Contains(got, "Y false true\n") || !strings.Contains(got, "X true true\n") {
@@ -107,8 +107,8 @@ func TestLsTreeCycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	xid, _ := model.ParseID(x.ID)
-	yid, _ := model.ParseID(y.ID)
+	xid, _ := model.ParseULID(x.ULID)
+	yid, _ := model.ParseULID(y.ULID)
 	writeCycle(t, te, s, xid, yid)
 
 	out := te.ok("ls", "--tree")
@@ -127,7 +127,7 @@ func TestLsTreeCycleNested(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeCycle(t, te, s, mustID(t, x.ID), mustID(t, y.ID))
+	writeCycle(t, te, s, mustULID(t, x.ULID), mustULID(t, y.ULID))
 
 	// Text: X and Y at the left under the header, C as Y's child.
 	out := te.ok("ls", "--tree")
@@ -191,11 +191,11 @@ func TestLsTreeCycleNested(t *testing.T) {
 	}
 
 	// --ids-only: only the tasks found, in drawn order.
-	if got := te.ok("ls", "--tree", "--ids-only", "status:done"); got != c.ID+"\n" {
-		t.Errorf("--tree --ids-only = %q, want only %s", got, c.ID)
+	if got := te.ok("ls", "--tree", "--ids-only", "status:done"); got != c.ULID+"\n" {
+		t.Errorf("--tree --ids-only = %q, want only %s", got, c.ULID)
 	}
 	got = te.ok("ls", "--tree", "--ids-only")
-	if !strings.Contains(got, y.ID+"\n"+c.ID+"\n") || strings.Count(got, "\n") != 3 {
+	if !strings.Contains(got, y.ULID+"\n"+c.ULID+"\n") || strings.Count(got, "\n") != 3 {
 		t.Errorf("--tree --ids-only = %q, want X, Y and C with C after Y", got)
 	}
 }
@@ -212,10 +212,10 @@ func TestLsTreeErrors(t *testing.T) {
 
 // writeCycle makes x the parent of y and y the parent of x, by writing the
 // files and committing them with go-git, past the store's checks.
-func writeCycle(t *testing.T, te *testEnv, s *store.Store, x, y model.ID) {
+func writeCycle(t *testing.T, te *testEnv, s *store.Store, x, y model.ULID) {
 	t.Helper()
 	dir := te.storeDir("me")
-	for _, pair := range [][2]model.ID{{x, y}, {y, x}} {
+	for _, pair := range [][2]model.ULID{{x, y}, {y, x}} {
 		tk, err := s.Task(pair[0])
 		if err != nil {
 			t.Fatal(err)
@@ -239,7 +239,7 @@ func writeCycle(t *testing.T, te *testEnv, s *store.Store, x, y model.ID) {
 		t.Fatal(err)
 	}
 	// Add only the two files: .hedgehug/local/ holds the index cache.
-	for _, id := range []model.ID{x, y} {
+	for _, id := range []model.ULID{x, y} {
 		if _, err := w.Add(model.TaskPath(id)); err != nil {
 			t.Fatal(err)
 		}

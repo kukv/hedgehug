@@ -7,7 +7,7 @@ import (
 
 // Comment is one comment on a task. The task is known from the file's path.
 type Comment struct {
-	ID        ID
+	ULID      ULID
 	Author    string
 	Created   time.Time
 	Updated   time.Time
@@ -18,7 +18,7 @@ type Comment struct {
 	doc *Doc
 }
 
-var commentKeys = []string{"id", "author", "created", "updated", "deleted_at"}
+var commentKeys = []string{"ulid", "author", "created", "updated", "deleted_at"}
 
 func DecodeComment(data []byte) (*Comment, error) {
 	front, body, err := splitFrontmatter(data)
@@ -31,13 +31,13 @@ func DecodeComment(data []byte) (*Comment, error) {
 	}
 	c := &Comment{Body: body, doc: d}
 	if err := decodeAll(d, map[string]any{
-		"id": &c.ID, "author": &c.Author, "created": &c.Created,
+		"ulid": &c.ULID, "author": &c.Author, "created": &c.Created,
 		"updated": &c.Updated, "deleted_at": &c.DeletedAt,
 	}); err != nil {
 		return nil, err
 	}
-	if c.ID.IsZero() {
-		return nil, &DecodeError{Field: "id", Err: errors.New("missing")}
+	if c.ULID.IsZero() {
+		return nil, &DecodeError{Field: "ulid", Err: errors.New("missing")}
 	}
 	c.Extra = d.Extra(commentKeys)
 	return c, nil
@@ -48,7 +48,7 @@ func (c *Comment) Encode() ([]byte, error) {
 		c.doc = NewDoc()
 	}
 	e := c.doc.Encoder()
-	e.Put("id", c.ID, false)
+	e.Put("ulid", c.ULID, false)
 	e.Put("author", c.Author, c.Author == "")
 	e.Put("created", c.Created, c.Created.IsZero())
 	e.Put("updated", c.Updated, c.Updated.IsZero())

@@ -10,26 +10,26 @@ import (
 	"go.yaml.in/yaml/v4"
 )
 
-func TestNewIDIsParseable(t *testing.T) {
-	a, b := NewID(), NewID()
+func TestNewULIDIsParseable(t *testing.T) {
+	a, b := NewULID(), NewULID()
 	if a.String() >= b.String() {
-		t.Errorf("NewID is not increasing: %s then %s", a, b)
+		t.Errorf("NewULIDis not increasing: %s then %s", a, b)
 	}
-	got, err := ParseID(a.String())
+	got, err := ParseULID(a.String())
 	if err != nil || got != a {
-		t.Errorf("ParseID(%s) = %v, %v", a, got, err)
+		t.Errorf("ParseULID(%s) = %v, %v", a, got, err)
 	}
 }
 
-func TestIDGob(t *testing.T) {
+func TestULIDGob(t *testing.T) {
 	type holder struct {
-		ID     ID
-		Parent *ID
-		List   []ID
-		Zero   ID
+		ULID   ULID
+		Parent *ULID
+		List   []ULID
+		Zero   ULID
 	}
-	a, b := NewID(), NewID()
-	in := holder{ID: a, Parent: &b, List: []ID{b, a}}
+	a, b := NewULID(), NewULID()
+	in := holder{ULID: a, Parent: &b, List: []ULID{b, a}}
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(in); err != nil {
 		t.Fatal(err)
@@ -38,12 +38,12 @@ func TestIDGob(t *testing.T) {
 	if err := gob.NewDecoder(&buf).Decode(&out); err != nil {
 		t.Fatal(err)
 	}
-	if out.ID != a || out.Parent == nil || *out.Parent != b || len(out.List) != 2 || out.List[0] != b || out.List[1] != a || !out.Zero.IsZero() {
+	if out.ULID != a || out.Parent == nil || *out.Parent != b || len(out.List) != 2 || out.List[0] != b || out.List[1] != a || !out.Zero.IsZero() {
 		t.Errorf("round trip = %+v, want %+v", out, in)
 	}
 }
 
-func TestParseID(t *testing.T) {
+func TestParseULID(t *testing.T) {
 	const s = "01JBZ8K3QW7M2X9V4T6R5N8P0A"
 	for _, tc := range []struct {
 		in      string
@@ -57,36 +57,36 @@ func TestParseID(t *testing.T) {
 		{"01JBZ8K3QW7M2X9V4T6R5N8P0U", "", true}, // U is not Crockford
 		{"81JBZ8K3QW7M2X9V4T6R5N8P0A", "", true}, // overflows 128 bits
 	} {
-		got, err := ParseID(tc.in)
+		got, err := ParseULID(tc.in)
 		if (err != nil) != tc.wantErr {
-			t.Errorf("ParseID(%q) error = %v, wantErr %v", tc.in, err, tc.wantErr)
+			t.Errorf("ParseULID(%q) error = %v, wantErr %v", tc.in, err, tc.wantErr)
 			continue
 		}
 		if !tc.wantErr && got.String() != tc.want {
-			t.Errorf("ParseID(%q) = %s, want %s", tc.in, got, tc.want)
+			t.Errorf("ParseULID(%q) = %s, want %s", tc.in, got, tc.want)
 		}
 	}
 }
 
-func TestIDYAML(t *testing.T) {
+func TestULIDYAML(t *testing.T) {
 	type doc struct {
-		ID ID `yaml:"id"`
+		ULID ULID `yaml:"ulid"`
 	}
 	var d doc
-	if err := yaml.Load([]byte("id: 01JBZ8K3QW7M2X9V4T6R5N8P0A\n"), &d); err != nil {
+	if err := yaml.Load([]byte("ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\n"), &d); err != nil {
 		t.Fatal(err)
 	}
 	out, err := yaml.Dump(d)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := string(out), "id: 01JBZ8K3QW7M2X9V4T6R5N8P0A\n"; got != want {
+	if got, want := string(out), "ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\n"; got != want {
 		t.Errorf("Dump = %q, want %q", got, want)
 	}
-	if err := yaml.Load([]byte("id: nope\n"), &d); err == nil {
-		t.Error("Load of a bad ID succeeded")
+	if err := yaml.Load([]byte("ulid: nope\n"), &d); err == nil {
+		t.Error("Load of a bad ULID succeeded")
 	}
-	if !(ID{}).IsZero() || d.ID.IsZero() {
+	if !(ULID{}).IsZero() || d.ULID.IsZero() {
 		t.Error("IsZero is wrong")
 	}
 }
@@ -100,7 +100,7 @@ func TestDecodeError(t *testing.T) {
 	if !errors.Is(e, inner) {
 		t.Error("DecodeError does not unwrap")
 	}
-	if got, want := (&DecodeError{Field: "id", Err: inner}).Error(), "id: boom"; got != want {
+	if got, want := (&DecodeError{Field: "ulid", Err: inner}).Error(), "ulid: boom"; got != want {
 		t.Errorf("Error() = %q, want %q", got, want)
 	}
 }

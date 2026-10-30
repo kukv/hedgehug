@@ -10,22 +10,22 @@ import (
 
 // Task is one task file. A project is a task too.
 type Task struct {
-	ID         ID
+	ULID       ULID
 	Key        string   // human-readable key such as WEB-42, given when the task is written
 	FormerKeys []string // keys before renumbering
-	Workspace  ID       // zero when not set
+	Workspace  ULID     // zero when not set
 	Kind       string
 	Title      string
-	Parent     *ID
+	Parent     *ULID
 	Rank       Rank
 	Status     string
 	Assignees  []string
 	Watchers   []string
 	Labels     []string
 	Repos      []string
-	BlockedBy  []ID
-	Sprint     *ID
-	Releases   []ID
+	BlockedBy  []ULID
+	Sprint     *ULID
+	Releases   []ULID
 	Links      []Link
 	Props      Fields     // typed by the schema, not here
 	GH         *yaml.Node // values from GitHub, read-only; typed in phase 5
@@ -47,7 +47,7 @@ type Link struct {
 }
 
 var taskKeys = []string{
-	"id", "key", "former_keys", "workspace", "kind", "title", "parent", "rank", "status",
+	"ulid", "key", "former_keys", "workspace", "kind", "title", "parent", "rank", "status",
 	"assignees", "watchers", "labels", "repos", "blocked_by", "sprint", "releases", "links",
 	"props", "gh", "created", "created_by", "updated", "deleted_at",
 }
@@ -55,7 +55,7 @@ var taskKeys = []string{
 // TaskKeys returns the keys of a task file, in the order they are written.
 func TaskKeys() []string { return slices.Clone(taskKeys) }
 
-// DecodeTask reads a task file. Only id is required; other checks belong to
+// DecodeTask reads a task file. Only ulid is required; other checks belong to
 // the schema.
 func DecodeTask(data []byte) (*Task, error) {
 	front, body, err := splitFrontmatter(data)
@@ -71,7 +71,7 @@ func DecodeTask(data []byte) (*Task, error) {
 		key string
 		out any
 	}{
-		{"id", &t.ID},
+		{"ulid", &t.ULID},
 		{"key", &t.Key},
 		{"former_keys", &t.FormerKeys},
 		{"workspace", &t.Workspace},
@@ -99,8 +99,8 @@ func DecodeTask(data []byte) (*Task, error) {
 			return nil, err
 		}
 	}
-	if t.ID.IsZero() {
-		return nil, &DecodeError{Field: "id", Err: errors.New("missing")}
+	if t.ULID.IsZero() {
+		return nil, &DecodeError{Field: "ulid", Err: errors.New("missing")}
 	}
 	t.Extra = d.Extra(taskKeys)
 	return t, nil
@@ -113,7 +113,7 @@ func (t *Task) Encode() ([]byte, error) {
 		t.doc = NewDoc()
 	}
 	e := t.doc.Encoder()
-	e.Put("id", t.ID, false)
+	e.Put("ulid", t.ULID, false)
 	e.Put("key", t.Key, t.Key == "")
 	e.Put("former_keys", t.FormerKeys, len(t.FormerKeys) == 0)
 	e.Put("workspace", t.Workspace, t.Workspace.IsZero())

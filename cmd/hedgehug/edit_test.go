@@ -18,7 +18,7 @@ import (
 // taskFile returns the path of the task file of id in the store me.
 func (te *testEnv) taskFile(id string) string {
 	te.t.Helper()
-	return filepath.Join(te.storeDir("me"), filepath.FromSlash(model.TaskPath(mustID(te.t, id))))
+	return filepath.Join(te.storeDir("me"), filepath.FromSlash(model.TaskPath(mustULID(te.t, id))))
 }
 
 // raw returns the task file of id as it is.
@@ -45,7 +45,7 @@ func (te *testEnv) commitFile(id, data string) {
 	if err != nil {
 		te.t.Fatal(err)
 	}
-	if _, err := w.Add(model.TaskPath(mustID(te.t, id))); err != nil {
+	if _, err := w.Add(model.TaskPath(mustULID(te.t, id))); err != nil {
 		te.t.Fatal(err)
 	}
 	if _, err := w.Commit("by hand", &git.CommitOptions{Author: &object.Signature{Name: "T", Email: "t@example.com", When: time.Now()}}); err != nil {
@@ -53,7 +53,7 @@ func (te *testEnv) commitFile(id, data string) {
 	}
 }
 
-// setLine sets the line key: value of a task file, adding it after the id
+// setLine sets the line key: value of a task file, adding it after the ulid
 // line when there is none.
 func setLine(file, key, value string) string {
 	lines := strings.SplitAfter(file, "\n")
@@ -64,18 +64,18 @@ func setLine(file, key, value string) string {
 		}
 	}
 	for i, l := range lines {
-		if strings.HasPrefix(l, "id:") {
+		if strings.HasPrefix(l, "ulid:") {
 			return strings.Join(slices.Insert(lines, i+1, key+": "+value+"\n"), "")
 		}
 	}
-	panic("no id line in " + file)
+	panic("no ulid line in " + file)
 }
 
 func TestEdit(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
 	before := len(te.log("me"))
-	te.editWith(setLine(te.raw(x.ID), "title", "Renamed"))
+	te.editWith(setLine(te.raw(x.ULID), "title", "Renamed"))
 
 	out := te.ok("edit", x.Key)
 	if !strings.HasPrefix(out, "Updated ") || !strings.Contains(out, "Renamed") {
@@ -93,7 +93,7 @@ func TestEdit(t *testing.T) {
 	}
 
 	// --json prints the task as written.
-	te.editWith(setLine(te.raw(x.ID), "title", "Again"))
+	te.editWith(setLine(te.raw(x.ULID), "title", "Again"))
 	var got taskJSON
 	if err := json.Unmarshal([]byte(te.ok("edit", x.Key, "--json")), &got); err != nil {
 		t.Fatal(err)
@@ -107,7 +107,7 @@ func TestEditNoChanges(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
 	before := len(te.log("me"))
-	seen := te.editWith(te.raw(x.ID))
+	seen := te.editWith(te.raw(x.ULID))
 
 	out := te.ok("edit", x.Key)
 	if !strings.HasPrefix(out, "No changes") {
@@ -119,7 +119,7 @@ func TestEditNoChanges(t *testing.T) {
 	if fs := te.tempFiles(); len(fs) != 0 {
 		t.Errorf("temporary files left: %v", fs)
 	}
-	if s := seen(); len(s) != 1 || s[0] != te.raw(x.ID) {
+	if s := seen(); len(s) != 1 || s[0] != te.raw(x.ULID) {
 		t.Errorf("the editor saw %q, want the task file", s)
 	}
 }
@@ -128,7 +128,7 @@ func TestEditRefused(t *testing.T) {
 	for _, tc := range []struct {
 		key, value, want string
 	}{
-		{"id", "", "id cannot be changed"},
+		{"ulid", "", "ulid cannot be changed"},
 		{"key", "WEB-1", "key cannot be changed"},
 		{"created", "2020-01-01T00:00:00Z", "created cannot be changed"},
 		{"updated", "2020-01-01T00:00:00Z", "updated cannot be changed"},
@@ -144,9 +144,9 @@ func TestEditRefused(t *testing.T) {
 			other := te.addJSON("Other")
 			value := tc.value
 			if value == "" {
-				value = other.ID
+				value = other.ULID
 			}
-			edited := setLine(te.raw(x.ID), tc.key, value)
+			edited := setLine(te.raw(x.ULID), tc.key, value)
 			te.editWith(edited)
 			before := len(te.log("me"))
 
@@ -172,17 +172,17 @@ func TestEditRefused(t *testing.T) {
 }
 
 func TestEditRepairsWorkspace(t *testing.T) {
-	for _, broken := range []string{"", model.NewID().String()} {
+	for _, broken := range []string{"", model.NewULID().String()} {
 		te := newStoreEnv(t)
 		x := te.addJSON("Alpha")
-		ws := te.task(x.ID).Workspace
-		te.commitFile(x.ID, setLine(te.raw(x.ID), "workspace", broken))
-		te.editWith(setLine(te.raw(x.ID), "workspace", ws.String()))
+		ws := te.task(x.ULID).Workspace
+		te.commitFile(x.ULID, setLine(te.raw(x.ULID), "workspace", broken))
+		te.editWith(setLine(te.raw(x.ULID), "workspace", ws.String()))
 
 		if code, _, stderr := te.run("edit", x.Key); code != 0 {
 			t.Fatalf("workspace %q: exit %d, stderr %q", broken, code, stderr)
 		}
-		if got := te.task(x.ID); got.Workspace != ws || got.Key != x.Key {
+		if got := te.task(x.ULID); got.Workspace != ws || got.Key != x.Key {
 			t.Errorf("workspace %q: after the edit %s %s, want %s %s", broken, got.Workspace, got.Key, ws, x.Key)
 		}
 	}
@@ -193,8 +193,8 @@ func TestEditRetry(t *testing.T) {
 	x := te.addJSON("Alpha")
 	other := te.addJSON("Other")
 	before := len(te.log("me"))
-	bad := setLine(te.raw(x.ID), "id", other.ID)
-	good := setLine(te.raw(x.ID), "title", "Fixed")
+	bad := setLine(te.raw(x.ULID), "ulid", other.ULID)
+	good := setLine(te.raw(x.ULID), "title", "Fixed")
 	seen := te.editWith(bad, good)
 	te.terminal, te.stdin = true, "y\n"
 
@@ -220,7 +220,7 @@ func TestEditValidation(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
 	before := len(te.log("me"))
-	te.editWith(setLine(te.raw(x.ID), "status", "nope"))
+	te.editWith(setLine(te.raw(x.ULID), "status", "nope"))
 	te.terminal, te.stdin = true, "n\n"
 
 	code, _, stderr := te.run("edit", x.Key)
@@ -249,13 +249,13 @@ func TestEditDecodeError(t *testing.T) {
 func TestEditBroken(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	good := te.raw(x.ID)
+	good := te.raw(x.ULID)
 	broken := "not a task\x00\n: [\n"
-	te.commitFile(x.ID, broken)
+	te.commitFile(x.ULID, broken)
 	before := len(te.log("me"))
 	seen := te.editWith(setLine(good, "title", "Mended"))
 
-	te.ok("edit", x.ID) // a broken task has no key to give
+	te.ok("edit", x.ULID) // a broken task has no key to give
 	if s := seen(); len(s) != 1 || s[0] != broken {
 		t.Errorf("the editor saw %q, want the broken bytes", s)
 	}
@@ -266,11 +266,11 @@ func TestEditBroken(t *testing.T) {
 		t.Errorf("commits = %d (want %d), last %q", len(log), before+1, log[0].Message)
 	}
 
-	// A broken task still keeps its id.
+	// A broken task still keeps its ulid.
 	other := te.addJSON("Other")
-	te.commitFile(x.ID, broken)
-	te.editWith(setLine(good, "id", other.ID))
-	if code, _, stderr := te.run("edit", x.ID); code != 1 || !strings.Contains(stderr, "the id must stay "+x.ID) {
+	te.commitFile(x.ULID, broken)
+	te.editWith(setLine(good, "ulid", other.ULID))
+	if code, _, stderr := te.run("edit", x.ULID); code != 1 || !strings.Contains(stderr, "the ulid must stay "+x.ULID) {
 		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
 	}
 }
@@ -279,7 +279,7 @@ func TestEditChangedWhileEditing(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
 	before := len(te.log("me"))
-	te.editWith(setLine(te.raw(x.ID), "title", "Mine") + "TOUCH " + te.taskFile(x.ID) + "\n")
+	te.editWith(setLine(te.raw(x.ULID), "title", "Mine") + "TOUCH " + te.taskFile(x.ULID) + "\n")
 	te.terminal, te.stdin = true, "y\n"
 
 	code, _, stderr := te.run("edit", x.Key)

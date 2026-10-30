@@ -8,7 +8,7 @@ import (
 // Worklog is one entry of time spent on a task. The task is known from the
 // file's path.
 type Worklog struct {
-	ID        ID
+	ULID      ULID
 	Author    string
 	Date      Date
 	Duration  Duration
@@ -21,7 +21,7 @@ type Worklog struct {
 	doc *Doc
 }
 
-var worklogKeys = []string{"id", "author", "date", "duration", "created", "updated", "deleted_at"}
+var worklogKeys = []string{"ulid", "author", "date", "duration", "created", "updated", "deleted_at"}
 
 func DecodeWorklog(data []byte) (*Worklog, error) {
 	front, body, err := splitFrontmatter(data)
@@ -34,13 +34,13 @@ func DecodeWorklog(data []byte) (*Worklog, error) {
 	}
 	w := &Worklog{Body: body, doc: d}
 	if err := decodeAll(d, map[string]any{
-		"id": &w.ID, "author": &w.Author, "date": &w.Date, "duration": &w.Duration,
+		"ulid": &w.ULID, "author": &w.Author, "date": &w.Date, "duration": &w.Duration,
 		"created": &w.Created, "updated": &w.Updated, "deleted_at": &w.DeletedAt,
 	}); err != nil {
 		return nil, err
 	}
-	if w.ID.IsZero() {
-		return nil, &DecodeError{Field: "id", Err: errors.New("missing")}
+	if w.ULID.IsZero() {
+		return nil, &DecodeError{Field: "ulid", Err: errors.New("missing")}
 	}
 	w.Extra = d.Extra(worklogKeys)
 	return w, nil
@@ -51,7 +51,7 @@ func (w *Worklog) Encode() ([]byte, error) {
 		w.doc = NewDoc()
 	}
 	e := w.doc.Encoder()
-	e.Put("id", w.ID, false)
+	e.Put("ulid", w.ULID, false)
 	e.Put("author", w.Author, w.Author == "")
 	e.Put("date", w.Date, w.Date.IsZero())
 	e.Put("duration", w.Duration, w.Duration == 0)

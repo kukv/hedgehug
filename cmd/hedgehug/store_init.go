@@ -86,8 +86,8 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema) error {
 		return err
 	}
 	dir := filepath.Join(p.StoresDir, name)
-	ws := &model.Workspace{ID: model.NewID(), Name: wsName, KeyPrefix: prefix}
-	if _, err := store.Create(dir, &model.StoreMeta{ID: model.NewID(), Name: name}, sc, ws, author); err != nil {
+	ws := &model.Workspace{ULID: model.NewULID(), Name: wsName, KeyPrefix: prefix}
+	if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, sc, ws, author); err != nil {
 		return err
 	}
 	if err := c.AddStore(name, dir); err != nil {
@@ -98,7 +98,7 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema) error {
 	}
 	if a.jsonOut {
 		type wsJSON struct {
-			ID        string `json:"id"`
+			ULID      string `json:"ulid"`
 			Name      string `json:"name"`
 			KeyPrefix string `json:"key_prefix"`
 		}
@@ -106,7 +106,7 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema) error {
 			Name      string `json:"name"`
 			Path      string `json:"path"`
 			Workspace wsJSON `json:"workspace"`
-		}{name, dir, wsJSON{ws.ID.String(), ws.Name, ws.KeyPrefix}})
+		}{name, dir, wsJSON{ws.ULID.String(), ws.Name, ws.KeyPrefix}})
 	}
 	_, err = fmt.Fprintf(a.stdout, "Created store %s at %s with workspace %s (%s)\n", name, dir, ws.Name, ws.KeyPrefix)
 	return err

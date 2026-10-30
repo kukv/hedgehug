@@ -69,8 +69,8 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 	if ws == nil {
 		return nil, errors.New("the store needs a workspace")
 	}
-	if ws.ID.IsZero() {
-		return nil, errors.New("the workspace has no id")
+	if ws.ULID.IsZero() {
+		return nil, errors.New("the workspace has no ulid")
 	}
 	if err := model.ValidKeyPrefix(ws.KeyPrefix); err != nil {
 		return nil, err
@@ -122,7 +122,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 	}{
 		{model.StoreMetaPath, mb},
 		{schemaPath, sb},
-		{model.WorkspacePath(w.ID), wb},
+		{model.WorkspacePath(w.ULID), wb},
 		{gitignorePath, []byte(".hedgehug/local/\n")},
 	}
 	paths := make([]string, 0, len(files))

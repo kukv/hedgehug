@@ -43,7 +43,7 @@ func (a *app) add(title, parentArg, workspaceArg, kind, status string, assigns [
 		return err
 	}
 	sc := ix.Schema()
-	t := &model.Task{ID: model.NewID(), Title: title, Kind: kind, Status: status}
+	t := &model.Task{ULID: model.NewULID(), Title: title, Kind: kind, Status: status}
 	if t.Kind == "" {
 		k, ok := sc.DefaultKind()
 		if !ok {
@@ -66,7 +66,7 @@ func (a *app) add(title, parentArg, workspaceArg, kind, status string, assigns [
 		if err := liveParent(ix, p); err != nil {
 			return err
 		}
-		t.Parent = &p.ID
+		t.Parent = &p.ULID
 		t.Workspace = p.Workspace
 	}
 	if workspaceArg != "" {
@@ -74,14 +74,14 @@ func (a *app) add(title, parentArg, workspaceArg, kind, status string, assigns [
 		if err != nil {
 			return err
 		}
-		if parentArg != "" && w.ID != t.Workspace {
+		if parentArg != "" && w.ULID != t.Workspace {
 			pw, ok := ix.Workspace(t.Workspace)
 			if !ok {
 				return fmt.Errorf("the parent's workspace %s is not in this store", t.Workspace)
 			}
 			return fmt.Errorf("the parent is in workspace %s", pw.Name)
 		}
-		t.Workspace = w.ID
+		t.Workspace = w.ULID
 	} else if parentArg == "" {
 		wss := ix.Workspaces()
 		if len(wss) == 0 {
@@ -94,26 +94,26 @@ func (a *app) add(title, parentArg, workspaceArg, kind, status string, assigns [
 			}
 			return errors.New("there are several workspaces; give one with --workspace: " + strings.Join(names, ", "))
 		}
-		t.Workspace = wss[0].ID
+		t.Workspace = wss[0].ULID
 	}
 	for _, as := range assigns {
-		if err := applyAssign(t, as, sc, a.resolveID(ix)); err != nil {
+		if err := applyAssign(t, as, sc, a.resolveULID(ix)); err != nil {
 			return err
 		}
 	}
-	if t.Rank, err = endRank(ix, t.Parent, t.ID); err != nil {
+	if t.Rank, err = endRank(ix, t.Parent, t.ULID); err != nil {
 		return err
 	}
-	committed, err := a.update(s, store.Op{Name: "add", Task: t.ID}, func(tx *store.Tx) error { return tx.PutTask(t) })
+	committed, err := a.update(s, store.Op{Name: "add", Task: t.ULID}, func(tx *store.Tx) error { return tx.PutTask(t) })
 	if err != nil {
 		return err
 	}
-	return a.printTask(ix, t.ID, verb(committed, "Added"))
+	return a.printTask(ix, t.ULID, verb(committed, "Added"))
 }
 
 // siblings returns the tasks under parent (the root when nil) that are not
 // deleted, leaving out skip, by rank.
-func siblings(ix *index.Index, parent *model.ID, skip model.ID) []*index.Entry {
+func siblings(ix *index.Index, parent *model.ULID, skip model.ULID) []*index.Entry {
 	var all []*index.Entry
 	if parent == nil {
 		for _, e := range ix.Roots() {
@@ -126,7 +126,7 @@ func siblings(ix *index.Index, parent *model.ID, skip model.ID) []*index.Entry {
 	}
 	out := all[:0:0]
 	for _, e := range all {
-		if e.DeletedAt == nil && e.ID != skip {
+		if e.DeletedAt == nil && e.ULID != skip {
 			out = append(out, e)
 		}
 	}
@@ -134,7 +134,7 @@ func siblings(ix *index.Index, parent *model.ID, skip model.ID) []*index.Entry {
 }
 
 // endRank returns a rank after every sibling under parent.
-func endRank(ix *index.Index, parent *model.ID, skip model.ID) (model.Rank, error) {
+func endRank(ix *index.Index, parent *model.ULID, skip model.ULID) (model.Rank, error) {
 	sib := siblings(ix, parent, skip)
 	var last model.Rank
 	if len(sib) > 0 {

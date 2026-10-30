@@ -55,7 +55,7 @@ func TestRmAndRestore(t *testing.T) {
 	if n := len(te.log("me")); n != before+1 {
 		t.Errorf("commits = %d, want %d: rm is one commit", n, before+1)
 	}
-	pd, cd, gd := te.task(p.ID).DeletedAt, te.task(c.ID).DeletedAt, te.task(g.ID).DeletedAt
+	pd, cd, gd := te.task(p.ULID).DeletedAt, te.task(c.ULID).DeletedAt, te.task(g.ULID).DeletedAt
 	if pd == nil || cd == nil || gd == nil || !pd.Equal(*cd) || pd.Equal(*gd) {
 		t.Fatalf("deleted_at: p %v, c %v, g %v", pd, cd, gd)
 	}
@@ -68,10 +68,10 @@ func TestRmAndRestore(t *testing.T) {
 
 	// restore brings back what the same rm deleted, not G.
 	te.ok("restore", p.Key)
-	if te.task(p.ID).DeletedAt != nil || te.task(c.ID).DeletedAt != nil {
+	if te.task(p.ULID).DeletedAt != nil || te.task(c.ULID).DeletedAt != nil {
 		t.Error("P or C is still deleted")
 	}
-	if te.task(g.ID).DeletedAt == nil {
+	if te.task(g.ULID).DeletedAt == nil {
 		t.Error("G came back, but it was deleted by another rm")
 	}
 	if !strings.Contains(te.log("me")[0].Message, "Hedgehug-Op: restore") {
@@ -101,7 +101,7 @@ func TestRmJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(te.ok("rm", p.Key, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 3 || got[0].ID != p.ID || got[0].DeletedAt == nil {
+	if len(got) != 3 || got[0].ULID != p.ULID || got[0].DeletedAt == nil {
 		t.Errorf("rm --json = %+v", got)
 	}
 }

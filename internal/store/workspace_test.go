@@ -28,28 +28,28 @@ func TestCreateWritesWorkspace(t *testing.T) {
 
 func TestPutAndRemoveWorkspace(t *testing.T) {
 	s := newTestStore(t)
-	w := &model.Workspace{ID: model.NewID(), Name: "api", KeyPrefix: "API"}
+	w := &model.Workspace{ULID: model.NewULID(), Name: "api", KeyPrefix: "API"}
 	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(w) }); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := s.Workspace(w.ID); err != nil || got.KeyPrefix != "API" {
+	if got, err := s.Workspace(w.ULID); err != nil || got.KeyPrefix != "API" {
 		t.Fatalf("Workspace = %+v %v", got, err)
 	}
-	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveWorkspace(w.ID) }); err != nil {
+	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveWorkspace(w.ULID) }); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Workspace(w.ID); !errors.Is(err, ErrNotFound) {
+	if _, err := s.Workspace(w.ULID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("after remove: %v", err)
 	}
 }
 
 func TestPurgeRecordsNumbers(t *testing.T) {
 	s := newTestStore(t)
-	task := &model.Task{ID: model.NewID(), Workspace: testWorkspace(t, s).ID, Kind: "task", Title: "x", Status: "todo", Key: "TST-9", FormerKeys: []string{"OLD-12"}}
+	task := &model.Task{ULID: model.NewULID(), Workspace: testWorkspace(t, s).ULID, Kind: "task", Title: "x", Status: "todo", Key: "TST-9", FormerKeys: []string{"OLD-12"}}
 	if err := put(s, task); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Update(Op{Name: "purge", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveTask(task.ID) }); err != nil {
+	if _, err := s.Update(Op{Name: "purge", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveTask(task.ULID) }); err != nil {
 		t.Fatal(err)
 	}
 	n, err := s.Numbers()
@@ -67,65 +67,65 @@ func subjectAndBody(t *testing.T, s *Store) (string, string) {
 
 func TestWorkspaceCommitSubject(t *testing.T) {
 	s := newTestStore(t)
-	w := &model.Workspace{ID: model.NewID(), Name: "api", KeyPrefix: "API"}
-	if _, err := s.Update(Op{Name: "workspace", Detail: "add api (API)", Workspace: w.ID, Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(w) }); err != nil {
+	w := &model.Workspace{ULID: model.NewULID(), Name: "api", KeyPrefix: "API"}
+	if _, err := s.Update(Op{Name: "workspace", Detail: "add api (API)", Workspace: w.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(w) }); err != nil {
 		t.Fatal(err)
 	}
 	subj, msg := subjectAndBody(t, s)
 	if subj != "hedgehug: workspace add api (API)" {
 		t.Errorf("subject = %q", subj)
 	}
-	for _, want := range []string{"Hedgehug-Op: workspace", "Hedgehug-Workspace: " + w.ID.String()} {
+	for _, want := range []string{"Hedgehug-Op: workspace", "Hedgehug-Workspace: " + w.ULID.String()} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("message lacks %q:\n%s", want, msg)
 		}
 	}
 }
 
-func TestCreateRefusesZeroWorkspaceID(t *testing.T) {
-	meta := &model.StoreMeta{ID: model.NewID(), Name: "test"}
+func TestCreateRefusesZeroWorkspaceULID(t *testing.T) {
+	meta := &model.StoreMeta{ULID: model.NewULID(), Name: "test"}
 	_, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, &model.Workspace{Name: "test", KeyPrefix: "TST"}, testAuthor)
-	if err == nil || !strings.Contains(err.Error(), "no id") {
+	if err == nil || !strings.Contains(err.Error(), "no ulid") {
 		t.Errorf("err = %v", err)
 	}
 }
 
 func TestRemoveWorkspaceRefusesBrokenTaskNamingIt(t *testing.T) {
 	s := newTestStore(t)
-	w := &model.Workspace{ID: model.NewID(), Name: "api", KeyPrefix: "API"}
+	w := &model.Workspace{ULID: model.NewULID(), Name: "api", KeyPrefix: "API"}
 	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(w) }); err != nil {
 		t.Fatal(err)
 	}
-	other := model.TaskPath(model.NewID())
+	other := model.TaskPath(model.NewULID())
 	mustWrite(t, s, other, "not a task\n") // names no workspace: does not block
-	broken := model.TaskPath(model.NewID())
-	mustWrite(t, s, broken, "---\nworkspace: "+w.ID.String()+"\ntitle: [unclosed\n---\n")
-	_, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveWorkspace(w.ID) })
+	broken := model.TaskPath(model.NewULID())
+	mustWrite(t, s, broken, "---\nworkspace: "+w.ULID.String()+"\ntitle: [unclosed\n---\n")
+	_, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveWorkspace(w.ULID) })
 	if err == nil || !strings.Contains(err.Error(), broken) || strings.Contains(err.Error(), other) {
 		t.Fatalf("err = %v", err)
 	}
 	if err := os.Remove(s.path(broken)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveWorkspace(w.ID) }); err != nil {
+	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveWorkspace(w.ULID) }); err != nil {
 		t.Errorf("after the broken file is gone: %v", err)
 	}
 }
 
 func TestTxWorkspaceSeesTheOperation(t *testing.T) {
 	s := newTestStore(t)
-	w := &model.Workspace{ID: model.NewID(), Name: "api", KeyPrefix: "API"}
+	w := &model.Workspace{ULID: model.NewULID(), Name: "api", KeyPrefix: "API"}
 	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error {
 		if err := tx.PutWorkspace(w); err != nil {
 			return err
 		}
-		if got, err := tx.Workspace(w.ID); err != nil || got != w {
+		if got, err := tx.Workspace(w.ULID); err != nil || got != w {
 			t.Errorf("put earlier: %v %v", got, err)
 		}
-		if err := tx.RemoveWorkspace(testWorkspaceID); err != nil {
+		if err := tx.RemoveWorkspace(testWorkspaceULID); err != nil {
 			return err
 		}
-		if _, err := tx.Workspace(testWorkspaceID); !errors.Is(err, ErrNotFound) {
+		if _, err := tx.Workspace(testWorkspaceULID); !errors.Is(err, ErrNotFound) {
 			t.Errorf("removed earlier: %v", err)
 		}
 		return nil
@@ -142,7 +142,7 @@ func TestNumbersWithoutFile(t *testing.T) {
 }
 
 // purge runs one purge operation removing ids.
-func purge(t *testing.T, s *Store, ids ...model.ID) {
+func purge(t *testing.T, s *Store, ids ...model.ULID) {
 	t.Helper()
 	if _, err := s.Update(Op{Name: "purge", Author: testAuthor}, func(tx *Tx) error {
 		for _, id := range ids {
@@ -176,12 +176,12 @@ func TestPurgeKeepsLargerNumbers(t *testing.T) {
 	big, small := newTaskIn(ws, "big"), newTaskIn(ws, "small")
 	big.Key, small.Key = "TST-50", "TST-3"
 	mustPut(t, s, big, small)
-	purge(t, s, big.ID)
+	purge(t, s, big.ULID)
 	before, err := os.ReadFile(s.path(model.NumbersPath))
 	if err != nil {
 		t.Fatal(err)
 	}
-	purge(t, s, small.ID)
+	purge(t, s, small.ULID)
 	after, err := os.ReadFile(s.path(model.NumbersPath))
 	if err != nil {
 		t.Fatal(err)
@@ -201,35 +201,35 @@ func TestPurgeRecordsNumbersOfSeveralTasksInOneCommit(t *testing.T) {
 	a.Key = "TST-4"
 	b.Key, b.FormerKeys = "TST-2", []string{"OLD-9"}
 	mustPut(t, s, a, b)
-	purge(t, s, a.ID, b.ID)
+	purge(t, s, a.ULID, b.ULID)
 	n, err := s.Numbers()
 	if err != nil || n["TST"] != 4 || n["OLD"] != 9 {
 		t.Errorf("Numbers = %v %v", n, err)
 	}
 	paths := committedPaths(t, s)
-	for _, want := range []string{model.NumbersPath, model.TaskPath(a.ID), model.TaskPath(b.ID)} {
+	for _, want := range []string{model.NumbersPath, model.TaskPath(a.ULID), model.TaskPath(b.ULID)} {
 		if !slices.Contains(paths, want) {
 			t.Errorf("the commit lacks %s: %v", want, paths)
 		}
 	}
 }
 
-func TestPurgeSubjectWithoutKeyUsesID(t *testing.T) {
+func TestPurgeSubjectWithoutKeyUsesULID(t *testing.T) {
 	s := newTestStore(t)
 	x := newTaskIn(testWorkspace(t, s), "keyless")
 	b, err := x.Encode()
 	if err != nil {
 		t.Fatal(err)
 	}
-	rel := model.TaskPath(x.ID)
+	rel := model.TaskPath(x.ULID)
 	mustWrite(t, s, rel, string(b))
 	if err := s.commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: testAuthor, When: testNow}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Update(Op{Name: "purge", Task: x.ID, Author: testAuthor}, func(tx *Tx) error { return tx.RemoveTask(x.ID) }); err != nil {
+	if _, err := s.Update(Op{Name: "purge", Task: x.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.RemoveTask(x.ULID) }); err != nil {
 		t.Fatal(err)
 	}
-	if subj, _ := subjectAndBody(t, s); subj != "hedgehug: purge "+x.ID.String()+" keyless" {
+	if subj, _ := subjectAndBody(t, s); subj != "hedgehug: purge "+x.ULID.String()+" keyless" {
 		t.Errorf("subject = %q", subj)
 	}
 }

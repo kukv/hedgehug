@@ -14,7 +14,7 @@ const (
 
 // Sprint is one sprint file. The body holds notes such as a retrospective.
 type Sprint struct {
-	ID      ID
+	ULID    ULID
 	Name    string
 	Start   Date
 	End     Date
@@ -28,7 +28,7 @@ type Sprint struct {
 	doc *Doc
 }
 
-var sprintKeys = []string{"id", "name", "start", "end", "state", "goal", "created", "updated"}
+var sprintKeys = []string{"ulid", "name", "start", "end", "state", "goal", "created", "updated"}
 
 func DecodeSprint(data []byte) (*Sprint, error) {
 	front, body, err := splitFrontmatter(data)
@@ -41,13 +41,13 @@ func DecodeSprint(data []byte) (*Sprint, error) {
 	}
 	s := &Sprint{Body: body, doc: d}
 	if err := decodeAll(d, map[string]any{
-		"id": &s.ID, "name": &s.Name, "start": &s.Start, "end": &s.End, "state": &s.State,
+		"ulid": &s.ULID, "name": &s.Name, "start": &s.Start, "end": &s.End, "state": &s.State,
 		"goal": &s.Goal, "created": &s.Created, "updated": &s.Updated,
 	}); err != nil {
 		return nil, err
 	}
-	if s.ID.IsZero() {
-		return nil, &DecodeError{Field: "id", Err: errors.New("missing")}
+	if s.ULID.IsZero() {
+		return nil, &DecodeError{Field: "ulid", Err: errors.New("missing")}
 	}
 	s.Extra = d.Extra(sprintKeys)
 	return s, nil
@@ -58,7 +58,7 @@ func (s *Sprint) Encode() ([]byte, error) {
 		s.doc = NewDoc()
 	}
 	e := s.doc.Encoder()
-	e.Put("id", s.ID, false)
+	e.Put("ulid", s.ULID, false)
 	e.Put("name", s.Name, s.Name == "")
 	e.Put("start", s.Start, s.Start.IsZero())
 	e.Put("end", s.End, s.End.IsZero())

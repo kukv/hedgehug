@@ -13,7 +13,7 @@ import (
 )
 
 func newTaskIn(ws *model.Workspace, title string) *model.Task {
-	return &model.Task{ID: model.NewID(), Workspace: ws.ID, Kind: "task", Title: title, Status: "todo"}
+	return &model.Task{ULID: model.NewULID(), Workspace: ws.ULID, Kind: "task", Title: title, Status: "todo"}
 }
 
 func mustPut(t *testing.T, s *Store, tasks ...*model.Task) {
@@ -33,7 +33,7 @@ func TestAssignKeys(t *testing.T) {
 	if a.Key != "TST-1" || b.Key != "TST-2" || c.Key != "TST-3" {
 		t.Fatalf("keys = %s %s %s", a.Key, b.Key, c.Key)
 	}
-	if got, _ := s.Task(c.ID); got.Key != "TST-3" {
+	if got, _ := s.Task(c.ULID); got.Key != "TST-3" {
 		t.Errorf("file key = %s", got.Key)
 	}
 }
@@ -52,7 +52,7 @@ func TestAssignKeysCountsKeysGivenInTheOperation(t *testing.T) {
 func TestCommitSubjectUsesNewKey(t *testing.T) {
 	s := newTestStore(t)
 	x := newTaskIn(testWorkspace(t, s), "x")
-	if _, err := s.Update(Op{Name: "add", Task: x.ID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(x) }); err != nil {
+	if _, err := s.Update(Op{Name: "add", Task: x.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(x) }); err != nil {
 		t.Fatal(err)
 	}
 	if subj := strings.SplitN(headLog(t, s.dir)[0].Message, "\n", 2)[0]; subj != "hedgehug: add TST-1 x" {
@@ -69,7 +69,7 @@ func TestAssignKeysCountsFormerAndNumbers(t *testing.T) {
 	gone := newTaskIn(ws, "gone")
 	gone.Key = "TST-30"
 	mustPut(t, s, gone)
-	if _, err := s.Update(Op{Name: "purge", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveTask(gone.ID) }); err != nil {
+	if _, err := s.Update(Op{Name: "purge", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveTask(gone.ULID) }); err != nil {
 		t.Fatal(err)
 	}
 	n := newTaskIn(ws, "new")
@@ -82,13 +82,13 @@ func TestAssignKeysCountsFormerAndNumbers(t *testing.T) {
 func TestRenumberOnPrefixMismatch(t *testing.T) {
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
-	api := &model.Workspace{ID: model.NewID(), Name: "api", KeyPrefix: "API"}
+	api := &model.Workspace{ULID: model.NewULID(), Name: "api", KeyPrefix: "API"}
 	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(api) }); err != nil {
 		t.Fatal(err)
 	}
 	x := newTaskIn(ws, "x")
 	mustPut(t, s, x)
-	x.Workspace = api.ID
+	x.Workspace = api.ULID
 	mustPut(t, s, x)
 	if x.Key != "API-1" || !slices.Equal(x.FormerKeys, []string{"TST-1"}) {
 		t.Errorf("key = %s, former = %v", x.Key, x.FormerKeys)
@@ -109,9 +109,9 @@ func TestAssignKeysRefusesABadPrefix(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		mustWrite(t, s, model.WorkspacePath(ws.ID), string(b)) // as if edited by hand
+		mustWrite(t, s, model.WorkspacePath(ws.ULID), string(b)) // as if edited by hand
 		err = put(s, newTaskIn(ws, "x"))
-		if err == nil || !strings.Contains(err.Error(), model.WorkspacePath(ws.ID)) || !strings.Contains(err.Error(), "hedgehug workspace prefix") {
+		if err == nil || !strings.Contains(err.Error(), model.WorkspacePath(ws.ULID)) || !strings.Contains(err.Error(), "hedgehug workspace prefix") {
 			t.Errorf("prefix %q: err = %v", prefix, err)
 		}
 	}
@@ -172,7 +172,7 @@ func TestConcurrentAddsGetDistinctKeys(t *testing.T) {
 func TestAssignKeysCountsBrokenFiles(t *testing.T) {
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
-	mustWrite(t, s, model.TaskPath(model.NewID()), "---\nkey: TST-7\ntitle: [unclosed\n---\nsee OLD-3\n")
+	mustWrite(t, s, model.TaskPath(model.NewULID()), "---\nkey: TST-7\ntitle: [unclosed\n---\nsee OLD-3\n")
 	x := newTaskIn(ws, "x")
 	mustPut(t, s, x)
 	if x.Key != "TST-8" {
