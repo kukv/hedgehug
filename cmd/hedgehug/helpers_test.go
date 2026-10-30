@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +23,8 @@ type testEnv struct {
 	stdin    string
 	terminal bool // what isTerminal reports for every stream
 	now      time.Time
+	env      map[string]string // more variables, looked up after the fixed ones
+	tmp      string            // the directory of temporary files, set by editWith
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -48,7 +52,7 @@ func (te *testEnv) getenv(k string) string {
 	case "HEDGEHUG_HOME":
 		return te.hhHome
 	}
-	return ""
+	return te.env[k]
 }
 
 func (te *testEnv) run(args ...string) (code int, stdout, stderr string) {
@@ -99,6 +103,138 @@ func (te *testEnv) log(name string) []*object.Commit { //nolint:unparam // every
 		return nil
 	}); err != nil {
 		te.t.Fatal(err)
+	}
+	return out
+}
+
+// TestMain runs the tests, or acts as the editor when HH_TEST_EDITOR_SCRIPT
+// is set: editWith points $EDITOR at this test binary.
+func TestMain(m *testing.M) {
+	if script := os.Getenv("HH_TEST_EDITOR_SCRIPT"); script != "" {
+		os.Exit(testEditor(script, os.Args[len(os.Args)-1]))
+	}
+	os.Exit(m.Run())
+}
+
+// editorStepSep separates the steps of a test editor script, and the
+// contents in its .seen file.
+const editorStepSep = "\n---next---\n"
+
+var errExit1 = errors.New("exit 1")
+
+// testEditor takes the first step of script and does it to file: it
+// appends what file holds to <script>.seen, then writes the step to file.
+// A step that starts with EXIT1 writes nothing and exits 1. A line
+// TOUCH <path> in a step is left out of file, and x is appended to path
+// after file is written.
+func testEditor(script, file string) int {
+	err := doTestEditor(script, file)
+	switch {
+	case err == nil:
+		return 0
+	case errors.Is(err, errExit1):
+		return 1
+	}
+	fmt.Fprintln(os.Stderr, "test editor:", err)
+	return 2
+}
+
+func doTestEditor(script, file string) error {
+	b, err := os.ReadFile(script) //nolint:gosec // the script of the test
+	if err != nil {
+		return err
+	}
+	if len(b) == 0 {
+		return errors.New("no steps left")
+	}
+	steps := strings.Split(string(b), editorStepSep)
+	if err := os.WriteFile(script, []byte(strings.Join(steps[1:], editorStepSep)), 0o600); err != nil {
+		return err
+	}
+	cur, err := os.ReadFile(file) //nolint:gosec // the file hedgehug opens in the editor
+	if err != nil {
+		return err
+	}
+	if err := appendFile(script+".seen", string(cur)+editorStepSep); err != nil {
+		return err
+	}
+	step := steps[0]
+	if strings.HasPrefix(step, "EXIT1") {
+		return errExit1
+	}
+	var touch, lines []string
+	for _, l := range strings.SplitAfter(step, "\n") {
+		if p, ok := strings.CutPrefix(l, "TOUCH "); ok {
+			touch = append(touch, strings.TrimSuffix(p, "\n"))
+			continue
+		}
+		lines = append(lines, l)
+	}
+	if err := os.WriteFile(file, []byte(strings.Join(lines, "")), 0o600); err != nil {
+		return err
+	}
+	for _, p := range touch {
+		if err := appendFile(p, "x"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func appendFile(name, s string) error {
+	f, err := os.OpenFile(name, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // a path the test gave
+	if err != nil {
+		return err
+	}
+	if _, err := f.WriteString(s); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+// editWith makes $EDITOR the test editor, which writes contents in turn,
+// one each time it is opened, and puts the temporary files of the command
+// in te.tmp. seen returns what the file held each time the editor opened
+// it. It sets process variables, so the test must not be parallel.
+func (te *testEnv) editWith(contents ...string) (seen func() []string) {
+	te.t.Helper()
+	d := te.t.TempDir()
+	script := filepath.Join(d, "script")
+	if err := os.WriteFile(script, []byte(strings.Join(contents, editorStepSep)), 0o600); err != nil {
+		te.t.Fatal(err)
+	}
+	te.t.Setenv("HH_TEST_EDITOR_SCRIPT", script)
+	te.tmp = filepath.Join(d, "tmp")
+	if err := os.Mkdir(te.tmp, 0o750); err != nil {
+		te.t.Fatal(err)
+	}
+	for _, k := range []string{"TMPDIR", "TMP", "TEMP"} {
+		te.t.Setenv(k, te.tmp)
+	}
+	if te.env == nil {
+		te.env = map[string]string{}
+	}
+	te.env["EDITOR"] = os.Args[0]
+	return func() []string {
+		b, err := os.ReadFile(script + ".seen") //nolint:gosec // the file of the test editor
+		if err != nil {
+			te.t.Fatal(err)
+		}
+		return strings.Split(strings.TrimSuffix(string(b), editorStepSep), editorStepSep)
+	}
+}
+
+// tempFiles lists the files left in te.tmp.
+func (te *testEnv) tempFiles() []string {
+	te.t.Helper()
+	es, err := os.ReadDir(te.tmp)
+	if err != nil {
+		te.t.Fatal(err)
+	}
+	var out []string
+	for _, e := range es {
+		out = append(out, filepath.Join(te.tmp, e.Name()))
 	}
 	return out
 }
