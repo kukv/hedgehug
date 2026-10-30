@@ -33,6 +33,8 @@ type Store struct {
 	meta   *model.StoreMeta
 	schema atomic.Pointer[schema.Schema] // replaced by Update; read without mu
 
+	keyNumbers KeyNumbers // counts key numbers for Update; nil reads every task
+
 	// Replaced by tests.
 	now      func() time.Time
 	lockWait time.Duration

@@ -309,6 +309,9 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
 
 	tx := &Tx{s: s, op: op, pending: map[string]*pending{}, tasks: map[model.ID]*model.Task{}, workspaces: map[model.ID]*model.Workspace{}}
 	err = fn(tx)
+	if err == nil {
+		err = tx.assignKeys()
+	}
 	tx.done = true
 	if err != nil {
 		return false, err
