@@ -1113,7 +1113,7 @@ func TestUpdateRefusesNewCycles(t *testing.T) {
 			c.BlockedBy = []model.ID{a.ID}
 			w := *a
 			w.BlockedBy = []model.ID{b.ID}
-			return []*model.Task{a, b, c}, &w
+			return []*model.Task{a, c, b}, &w // each after what it points at
 		}},
 	}
 	for _, tt := range tests {
