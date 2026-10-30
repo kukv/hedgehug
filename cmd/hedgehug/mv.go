@@ -49,9 +49,17 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 	if err != nil {
 		return err
 	}
+	// The checks come in the order of the arguments; mvTargetOf repeats
+	// them.
+	if err := notDeleted(ix, e); err != nil {
+		return err
+	}
 	var p *index.Entry
 	if parentArg != "" {
 		if p, err = a.resolve(ix, parentArg); err != nil {
+			return err
+		}
+		if err := liveParent(ix, p); err != nil {
 			return err
 		}
 	}
