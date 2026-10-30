@@ -30,8 +30,15 @@ func (tx *Tx) usedNumbers() (map[string]int, error) {
 	} else {
 		out = map[string]int{}
 		for t, err := range tx.s.Tasks() {
-			var de *model.DecodeError
-			if errors.As(err, &de) {
+			var fe *FileError
+			if errors.As(err, &fe) {
+				// Its keys cannot be read, but a number it holds must not
+				// be given again.
+				b, err := readFile(tx.s.path(fe.Path))
+				if err != nil {
+					return nil, err
+				}
+				raise(out, model.KeyNumbersIn(b))
 				continue
 			}
 			if err != nil {
@@ -47,17 +54,22 @@ func (tx *Tx) usedNumbers() (map[string]int, error) {
 		}
 		tx.numbers = n
 	}
-	for p, n := range tx.numbers {
-		if n > out[p] {
-			out[p] = n
-		}
-	}
+	raise(out, tx.numbers)
 	for _, t := range tx.tasks {
 		if t != nil {
 			countKeys(out, t)
 		}
 	}
 	return out, nil
+}
+
+// raise raises used to the numbers of more.
+func raise(used, more map[string]int) {
+	for p, n := range more {
+		if n > used[p] {
+			used[p] = n
+		}
+	}
 }
 
 // countKeys raises used to the numbers of t's key and former keys.
@@ -98,10 +110,25 @@ func (tx *Tx) assignKeys() error {
 			}
 		}
 		used[ws.KeyPrefix]++
+		tx.oldKeys = append(tx.oldKeys, oldKey{t, t.Key, slices.Clone(t.FormerKeys)})
 		if t.Key != "" && !slices.Contains(t.FormerKeys, t.Key) {
 			t.FormerKeys = append(t.FormerKeys, t.Key)
 		}
 		t.Key = model.FormatKey(ws.KeyPrefix, used[ws.KeyPrefix])
 	}
 	return nil
+}
+
+// oldKey is the key and former keys a task had before assignKeys.
+type oldKey struct {
+	t      *model.Task
+	key    string
+	former []string
+}
+
+// restoreKeys puts back the keys assignKeys changed.
+func (tx *Tx) restoreKeys() {
+	for _, o := range tx.oldKeys {
+		o.t.Key, o.t.FormerKeys = o.key, o.former
+	}
 }

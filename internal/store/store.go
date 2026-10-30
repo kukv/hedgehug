@@ -69,6 +69,9 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 	if ws == nil {
 		return nil, errors.New("the store needs a workspace")
 	}
+	if ws.ID.IsZero() {
+		return nil, errors.New("the workspace has no id")
+	}
 	if err := model.ValidKeyPrefix(ws.KeyPrefix); err != nil {
 		return nil, err
 	}

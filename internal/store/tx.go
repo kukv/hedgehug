@@ -22,7 +22,13 @@ var errTxDone = errors.New("the transaction is used after Update returned")
 type Op struct {
 	Name   string   // add, update, rm, mv...; the Hedgehug-Op trailer
 	Task   model.ID // the main task of the operation; zero if none
-	Author gitrepo.Signature
+	// Detail ends the subject when there is no Task, saying what changed,
+	// such as "add web (WEB)".
+	Detail string
+	// Workspace is the workspace the operation changes, for the
+	// Hedgehug-Workspace trailer; zero if none.
+	Workspace model.ID
+	Author    gitrepo.Signature
 	// SkipTransitions skips the check of workflow.transitions; a required
 	// field of the new status is still checked, but only when the task had
 	// it before the write.
@@ -46,6 +52,7 @@ type Tx struct {
 
 	workspaces map[model.ID]*model.Workspace // put workspaces; nil for a removed one
 	numbers    model.Numbers                 // the purged numbers; nil until read
+	oldKeys    []oldKey                      // what assignKeys changed
 }
 
 // pending is one queued write. created and updated point into the value
@@ -308,6 +315,13 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
 	s.schema.Store(cached)
 
 	tx := &Tx{s: s, op: op, pending: map[string]*pending{}, tasks: map[model.ID]*model.Task{}, workspaces: map[model.ID]*model.Workspace{}}
+	// assignKeys changes the caller's tasks; a failed operation leaves them
+	// as they were given.
+	defer func() {
+		if err != nil {
+			tx.restoreKeys()
+		}
+	}()
 	err = fn(tx)
 	if err == nil {
 		err = tx.assignKeys()
@@ -396,10 +410,17 @@ func (tx *Tx) changes(now time.Time) ([]change, error) {
 }
 
 // commitFor builds the commit of op. The subject names the task by its key,
-// or by its ID when it has none, and gives its title as op leaves it.
+// or by its ID when it has none, and gives its title as op leaves it; with
+// no task it ends with op.Detail.
 func (tx *Tx) commitFor(op Op, cs []change, now time.Time) gitrepo.Commit {
 	subject := "hedgehug: " + op.Name
 	trailers := []gitrepo.Trailer{{Key: "Hedgehug-Op", Value: op.Name}}
+	if op.Task.IsZero() && op.Detail != "" {
+		subject += " " + op.Detail
+	}
+	if !op.Workspace.IsZero() {
+		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Workspace", Value: op.Workspace.String()})
+	}
 	if !op.Task.IsZero() {
 		label, title := op.Task.String(), ""
 		t, err := tx.task(op.Task)

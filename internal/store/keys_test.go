@@ -1,12 +1,14 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
 )
 
@@ -164,5 +166,39 @@ func TestConcurrentAddsGetDistinctKeys(t *testing.T) {
 			t.Errorf("key %s given twice", task.Key)
 		}
 		seen[task.Key] = true
+	}
+}
+
+func TestAssignKeysCountsBrokenFiles(t *testing.T) {
+	s := newTestStore(t)
+	ws := testWorkspace(t, s)
+	mustWrite(t, s, model.TaskPath(model.NewID()), "---\nkey: TST-7\ntitle: [unclosed\n---\nsee OLD-3\n")
+	x := newTaskIn(ws, "x")
+	mustPut(t, s, x)
+	if x.Key != "TST-8" {
+		t.Errorf("key = %s, want TST-8 (after TST-7 of the broken file)", x.Key)
+	}
+}
+
+func TestUpdateRestoresKeysOnFailure(t *testing.T) {
+	s := newTestStore(t)
+	ws := testWorkspace(t, s)
+	x := newTaskIn(ws, "x")
+	x.Key, x.FormerKeys = "OLD-3", []string{"OLD-1"}
+	x.Status = "no-such-status"
+	if err := put(s, x); err == nil {
+		t.Fatal("the write was not refused")
+	}
+	if x.Key != "OLD-3" || !slices.Equal(x.FormerKeys, []string{"OLD-1"}) {
+		t.Errorf("after a refused write: key = %s, former = %v", x.Key, x.FormerKeys)
+	}
+
+	y := newTaskIn(ws, "y")
+	s.commit = func(gitrepo.Commit) error { return errors.New("commit fails") }
+	if err := put(s, y); err == nil {
+		t.Fatal("the commit did not fail")
+	}
+	if y.Key != "" || y.FormerKeys != nil {
+		t.Errorf("after a failed commit: key = %s, former = %v", y.Key, y.FormerKeys)
 	}
 }

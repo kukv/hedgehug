@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strings"
@@ -176,7 +177,29 @@ func (tx *Tx) validateWorkspaces() error {
 			count[t.Workspace]++
 		}
 	}
+	broken := map[model.ID]string{} // a task file that does not decode and names the workspace
 	for t, err := range tx.s.Tasks() {
+		var fe *FileError
+		if errors.As(err, &fe) {
+			if id, perr := model.ParseTaskPath(fe.Path); perr == nil {
+				if _, put := tx.tasks[id]; put {
+					continue // written or removed in the operation
+				}
+			}
+			// Its workspace cannot be read. Removing the workspace it names
+			// would leave it pointing nowhere once it is fixed, so a file
+			// that holds the line is taken to be in that workspace.
+			b, err := readFile(tx.s.path(fe.Path))
+			if err != nil {
+				return err
+			}
+			for id, w := range tx.workspaces {
+				if w == nil && bytes.Contains(b, []byte("workspace: "+id.String())) {
+					broken[id] = fe.Path
+				}
+			}
+			continue
+		}
 		if err != nil {
 			continue
 		}
@@ -185,8 +208,14 @@ func (tx *Tx) validateWorkspaces() error {
 		}
 	}
 	for id, w := range tx.workspaces {
-		if w == nil && count[id] > 0 {
+		if w != nil {
+			continue
+		}
+		if count[id] > 0 {
 			return fmt.Errorf("workspace %s still has %d tasks", id, count[id])
+		}
+		if rel, ok := broken[id]; ok {
+			return fmt.Errorf("workspace %s may still have a task: %s does not decode and names it; fix or remove the file first", id, rel)
 		}
 	}
 	return nil

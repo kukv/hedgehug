@@ -28,3 +28,10 @@ func TestParseKey(t *testing.T) {
 		t.Error(FormatKey("API", 7))
 	}
 }
+
+func TestKeyNumbersIn(t *testing.T) {
+	got := KeyNumbersIn([]byte("key: WEB-7\nformer_keys: [WEB-12, API-3]\nsee WEB-2, xWEB-99, WEB-0, WEB-5x and api-4\n"))
+	if len(got) != 2 || got["WEB"] != 12 || got["API"] != 3 {
+		t.Errorf("KeyNumbersIn = %v", got)
+	}
+}

@@ -9,6 +9,8 @@ import (
 var (
 	prefixRE = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
 	keyRE    = regexp.MustCompile(`^([A-Z][A-Z0-9]{1,9})-([1-9][0-9]*)$`)
+	// keyWordRE finds words of the form of a key anywhere in a text.
+	keyWordRE = regexp.MustCompile(`\b([A-Z][A-Z0-9]{1,9})-([1-9][0-9]*)\b`)
 )
 
 // ValidKeyPrefix checks a key prefix: 2 to 10 upper-case letters and
@@ -35,3 +37,17 @@ func ParseKey(k string) (prefix string, n int, ok bool) {
 
 // FormatKey makes the key of number n under prefix.
 func FormatKey(prefix string, n int) string { return prefix + "-" + strconv.Itoa(n) }
+
+// KeyNumbersIn returns, for each key prefix, the largest number of the words
+// of data that have the form of a key. It is for a task file that does not
+// decode, whose keys cannot be told from the rest: counting a word that is
+// not a key only skips numbers, which is safe.
+func KeyNumbersIn(data []byte) map[string]int {
+	out := map[string]int{}
+	for _, m := range keyWordRE.FindAllSubmatch(data, -1) {
+		if n, err := strconv.Atoi(string(m[2])); err == nil && n > out[string(m[1])] {
+			out[string(m[1])] = n
+		}
+	}
+	return out
+}
