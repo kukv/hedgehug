@@ -46,6 +46,36 @@ func TestNewTemplateEncode(t *testing.T) {
 	}
 }
 
+func TestTemplateChildrenReadStringsRaw(t *testing.T) {
+	src := "---\nchildren: [{title: 2026-11-03, labels: [2026-11-05], body: 2026-11-06, children: [{title: 2026-11-04}]}]\n---\n"
+	tp, err := DecodeTemplate("x", []byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := tp.Item.Children[0]
+	if c.Title != "2026-11-03" || len(c.Labels) != 1 || c.Labels[0] != "2026-11-05" || c.Body != "2026-11-06" ||
+		len(c.Children) != 1 || c.Children[0].Title != "2026-11-04" {
+		t.Errorf("children = %+v", tp.Item.Children)
+	}
+	out, err := tp.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, err := DecodeTemplate("x", out)
+	if err != nil || back.Item.Children[0].Title != "2026-11-03" || back.Item.Children[0].Children[0].Title != "2026-11-04" {
+		t.Errorf("re-decoded %q = %+v, %v", out, back, err)
+	}
+	if _, err := DecodeTemplate("x", []byte("---\nchildren: [{title: a, sprint: nope}]\n---\n")); err == nil {
+		t.Error("DecodeTemplate accepted a bad sprint in a child")
+	}
+	if _, err := DecodeTemplate("x", []byte("---\nchildren: [a]\n---\n")); err == nil {
+		t.Error("DecodeTemplate accepted a scalar child")
+	}
+	if _, err := DecodeTemplate("x", []byte("---\nchildren: [&a {title: x}]\n---\n")); err == nil {
+		t.Error("DecodeTemplate accepted an anchor in a child")
+	}
+}
+
 func TestDecodeTemplateRejectsBadName(t *testing.T) {
 	for _, name := range []string{"", "../x", "a/b"} {
 		if _, err := DecodeTemplate(name, []byte("---\nkind: task\n---\n")); err == nil {

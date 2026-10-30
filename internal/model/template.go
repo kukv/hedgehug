@@ -56,6 +56,31 @@ type TemplateItem struct {
 	Children  []TemplateItem `yaml:"children,omitempty"`
 }
 
+// targets returns the decode targets of the keys a template file shares
+// with its children. body is not among them: a file's body is its Markdown.
+func (it *TemplateItem) targets() map[string]any {
+	return map[string]any{
+		"key_prefix": &it.KeyPrefix, "kind": &it.Kind, "title": &it.Title, "status": &it.Status,
+		"assignees": &it.Assignees, "watchers": &it.Watchers, "labels": &it.Labels,
+		"repos": &it.Repos, "blocked_by": &it.BlockedBy, "sprint": &it.Sprint,
+		"releases": &it.Releases, "links": &it.Links, "props": &it.Props,
+		"children": &it.Children,
+	}
+}
+
+// UnmarshalYAML reads a child item the way DecodeTemplate reads the file, so
+// that a title such as 2026-11-03 stays a string.
+func (it *TemplateItem) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind != yaml.MappingNode {
+		return fmt.Errorf("line %d: want a mapping", n.Line)
+	}
+	*it = TemplateItem{}
+	targets := it.targets()
+	targets["body"] = &it.Body
+	d := &Doc{root: &yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{n}}}
+	return decodeAll(d, targets)
+}
+
 // Template is one template file. Its name is the file name. Item.Body is the
 // body of the file.
 type Template struct {
@@ -87,13 +112,9 @@ func DecodeTemplate(name string, data []byte) (*Template, error) {
 	}
 	t := &Template{Name: name, doc: d}
 	it := &t.Item
-	if err := decodeAll(d, map[string]any{
-		"key_prefix": &it.KeyPrefix, "kind": &it.Kind, "title": &it.Title, "status": &it.Status,
-		"assignees": &it.Assignees, "watchers": &it.Watchers, "labels": &it.Labels,
-		"repos": &it.Repos, "blocked_by": &it.BlockedBy, "sprint": &it.Sprint,
-		"releases": &it.Releases, "links": &it.Links, "props": &it.Props,
-		"children": &it.Children, "created": &t.Created, "updated": &t.Updated,
-	}); err != nil {
+	targets := it.targets()
+	targets["created"], targets["updated"] = &t.Created, &t.Updated
+	if err := decodeAll(d, targets); err != nil {
 		return nil, err
 	}
 	it.Body = body
