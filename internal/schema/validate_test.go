@@ -100,6 +100,19 @@ func TestValidateTaskViolations(t *testing.T) {
 	}
 }
 
+func TestValidateTaskRank(t *testing.T) {
+	task := taskWith(t, "")
+	task.Rank = "a0"
+	if vs, _ := ValidateTask(task, Default().For(nil)); len(vs) != 0 {
+		t.Errorf("valid rank: violations %v", codes(vs))
+	}
+	task.Rank = "!"
+	vs, _ := ValidateTask(task, Default().For(nil))
+	if got := codes(vs); len(got) != 1 || got[0] != "bad_value:rank" {
+		t.Errorf("bad rank: violations %v, want [bad_value:rank]", got)
+	}
+}
+
 func TestValidatePlacement(t *testing.T) {
 	e := Default().For(nil)
 	for _, tc := range []struct {
