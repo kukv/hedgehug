@@ -64,17 +64,13 @@ func Load(p Paths) (*Config, error) {
 		return nil, c.errAt(root, "want a mapping")
 	}
 	c.doc = &doc
+	c.flush = detectFlush(root)
 	seq := valueOf(root, "stores")
 	if seq == nil || seq.Tag == "!!null" {
 		return c, nil
 	}
 	if seq.Kind != yaml.SequenceNode {
 		return nil, c.errAt(seq, "stores: want a list")
-	}
-	if len(seq.Content) > 0 {
-		// An item's mapping starts after "- ", so it is 2 columns right of
-		// a flush list and more than 2 right of an indented one.
-		c.flush = seq.Content[0].Column-keyNode(root, "stores").Column <= 2
 	}
 	seen := map[string]bool{}
 	for _, it := range seq.Content {
@@ -220,6 +216,51 @@ func (c *Config) shorten(p string) string {
 		return "~/" + filepath.ToSlash(rel)
 	}
 	return filepath.ToSlash(p)
+}
+
+// detectFlush reports whether the file writes block lists flush with their
+// key. It looks at stores first, then at the first block list in document
+// order; a file without one is not flush.
+func detectFlush(root *yaml.Node) bool {
+	if k := keyNode(root, "stores"); k != nil {
+		if flush, ok := listStyle(k, valueOf(root, "stores")); ok {
+			return flush
+		}
+	}
+	flush, _ := firstListStyle(root)
+	return flush
+}
+
+// listStyle tells the style of the block list v under the key k. An item
+// starts after "- ", so it is 2 columns right of a flush list and more than
+// 2 right of an indented one.
+func listStyle(k, v *yaml.Node) (flush, ok bool) {
+	if v.Kind != yaml.SequenceNode || v.Style&yaml.FlowStyle != 0 || len(v.Content) == 0 {
+		return false, false
+	}
+	return v.Content[0].Column-k.Column <= 2, true
+}
+
+// firstListStyle finds the first block list under a key, in document order.
+func firstListStyle(n *yaml.Node) (flush, ok bool) {
+	switch n.Kind {
+	case yaml.MappingNode:
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			if flush, ok := listStyle(n.Content[i], n.Content[i+1]); ok {
+				return flush, true
+			}
+			if flush, ok := firstListStyle(n.Content[i+1]); ok {
+				return flush, true
+			}
+		}
+	case yaml.SequenceNode:
+		for _, it := range n.Content {
+			if flush, ok := firstListStyle(it); ok {
+				return flush, true
+			}
+		}
+	}
+	return false, false
 }
 
 // keyNode returns the key node of key in the mapping m, or nil.

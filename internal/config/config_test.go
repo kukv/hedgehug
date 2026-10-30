@@ -252,6 +252,8 @@ func TestSaveKeepsSequenceIndent(t *testing.T) {
 		{"indented", "stores:\n  - name: a\n    path: /x\n", "stores:\n  - name: a\n    path: /x\n  - name: b\n    path: /elsewhere/b\n"},
 		{"flush", "stores:\n- name: a\n  path: /x\n", "stores:\n- name: a\n  path: /x\n- name: b\n  path: /elsewhere/b\n"},
 		{"no file", "", "stores:\n  - name: b\n    path: /elsewhere/b\n"},
+		{"other list flush, no stores", "other:\n- x\n", "other:\n- x\nstores:\n- name: b\n  path: /elsewhere/b\n"},
+		{"other list indented, no stores", "other:\n  - x\n", "other:\n  - x\nstores:\n  - name: b\n    path: /elsewhere/b\n"},
 		{"empty stores", "stores:\n", "stores:\n  - name: b\n    path: /elsewhere/b\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

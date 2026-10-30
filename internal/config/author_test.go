@@ -122,6 +122,20 @@ func TestAuthorInclude(t *testing.T) {
 			t.Errorf("Author = %v", got)
 		}
 	})
+	t.Run("~/ is skipped without a home directory", func(t *testing.T) {
+		d := t.TempDir()
+		g := filepath.Join(d, "gc")
+		writeFile(t, g, "[user]\n\tname = Base\n\temail = b@example.com\n[include]\n\tpath = ~/x.conf\n")
+		t.Chdir(d)
+		writeFile(t, filepath.Join(d, "x.conf"), "[user]\n\tname = Cwd\n")
+		got, err := Author(envOf(map[string]string{"GIT_CONFIG_GLOBAL": g}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Name != "Base" {
+			t.Errorf("Name = %q, want Base", got.Name)
+		}
+	})
 	t.Run("the later setting wins", func(t *testing.T) {
 		d := t.TempDir()
 		g := filepath.Join(d, "gc")

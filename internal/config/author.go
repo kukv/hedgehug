@@ -56,7 +56,7 @@ const maxIncludeDepth = 10
 // into sig, in the order they appear, following [include] path = ... where
 // it stands. A missing file is skipped. [includeIf] is not read.
 func readGitConfig(f, home string, depth int, sig *gitrepo.Signature) error {
-	if depth > maxIncludeDepth {
+	if f == "" || depth > maxIncludeDepth {
 		return nil
 	}
 	r, err := os.Open(f) //nolint:gosec // the path is the user's own git config
@@ -91,6 +91,9 @@ func readGitConfig(f, home string, depth int, sig *gitrepo.Signature) error {
 // relative path is relative to the file that includes it.
 func includePath(from, home, p string) string {
 	if rest, ok := strings.CutPrefix(p, "~/"); ok {
+		if home == "" {
+			return "" // no home directory: the include is skipped
+		}
 		return filepath.Join(home, filepath.FromSlash(rest))
 	}
 	p = filepath.FromSlash(p)
