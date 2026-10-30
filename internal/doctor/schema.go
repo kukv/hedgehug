@@ -62,7 +62,7 @@ func Schema(s *store.Store, ix *index.Index) ([]Finding, error) {
 	for _, e := range ix.Tasks() {
 		for _, p := range ix.Problems(e.ID) {
 			if slices.Contains(schemaCodes, p.Code) {
-				fs = append(fs, Finding{Check: "task", Where: ix.ShortID(e.ID) + " " + e.Title, Msg: p.Field + ": " + p.Msg})
+				fs = append(fs, Finding{Check: "task", Where: e.ID.String() + " " + e.Title, Msg: p.Field + ": " + p.Msg})
 			}
 		}
 	}

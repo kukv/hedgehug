@@ -147,7 +147,7 @@ func (a *app) resolve(ix *index.Index, arg string) (*index.Entry, error) {
 		lines := make([]string, len(ae.Candidates))
 		for i, c := range ae.Candidates {
 			e, _ := ix.Task(c)
-			lines[i] = ix.ShortID(c) + "  " + e.Title
+			lines[i] = c.String() + "  " + e.Title
 		}
 		return nil, &ambiguousError{input: arg, lines: lines}
 	}

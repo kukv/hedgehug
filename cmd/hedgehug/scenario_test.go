@@ -48,13 +48,12 @@ func TestScenario(t *testing.T) {
 	if len(cm) != 1 {
 		t.Fatalf("comments = %d, want 1", len(cm))
 	}
-	cid := cm[0].ID.String()[len(cm[0].ID.String())-6:]
-	step("comment", "comment", "edit", cid)
+	step("comment", "comment", "edit", cm[0].ID.String())
 	if cs := te.comments(g.ID); len(cs) != 1 || cs[0].Body != "second\n" {
 		t.Fatalf("comments after edit = %+v", cs)
 	}
 	out := te.ok("show", g.Short)
-	for _, w := range []string{"Form fields", cid[len(cid)-4:], "second", "\nHistory:\n", "hedgehug: edit "} {
+	for _, w := range []string{"Form fields", cm[0].ID.String(), "second", "\nHistory:\n", "hedgehug: edit "} {
 		if !strings.Contains(out, w) {
 			t.Errorf("show lacks %q:\n%s", w, out)
 		}
@@ -68,7 +67,7 @@ func TestScenario(t *testing.T) {
 	if len(sj.History) == 0 || !slices.ContainsFunc(sj.History, func(l logJSON) bool { return strings.HasPrefix(l.Subject, "hedgehug: edit ") }) {
 		t.Errorf("show --json history = %+v, want the edit commit", sj.History)
 	}
-	step("comment", "comment", "rm", cid)
+	step("comment", "comment", "rm", cm[0].ID.String())
 	if out := te.ok("log", g.Short); !strings.Contains(out, "hedgehug: edit ") || !strings.Contains(out, "hedgehug: comment ") || len(strings.Split(strings.TrimRight(out, "\n"), "\n")) < 4 {
 		t.Errorf("log for the task:\n%s", out)
 	}

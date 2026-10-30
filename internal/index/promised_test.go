@@ -58,25 +58,6 @@ func TestOpenParentCycleOfThree(t *testing.T) {
 	}
 }
 
-func TestShortIDCountsDeletedTasks(t *testing.T) {
-	s, dir := newStore(t)
-	live := mustID(t, "01JBZ8K3QW7M2X9V4T6RAAA001")
-	gone := mustID(t, "01JBZ8K3QW7M2X9V4T6RCAA001") // shares AA001 with live
-	commitRaw(t, s, dir, model.TaskPath(live), rawTask(live, "kind: task\ntitle: x\nstatus: todo\n"))
-	commitRaw(t, s, dir, model.TaskPath(gone), rawTask(gone, "kind: task\ntitle: y\nstatus: todo\ndeleted_at: 2026-01-01T00:00:00Z\n"))
-
-	ix := mustOpen(t, s)
-	if e, _ := ix.Task(gone); e == nil || e.DeletedAt == nil {
-		t.Fatalf("the deleted task is not indexed as deleted: %+v", e)
-	}
-	if got := ix.ShortID(live); got != "AAA001" {
-		t.Errorf("ShortID(live) = %q, want AAA001", got)
-	}
-	if got := ix.ShortID(gone); got != "CAA001" {
-		t.Errorf("ShortID(gone) = %q, want CAA001", got)
-	}
-}
-
 func TestOpenCacheEqualsRebuild(t *testing.T) {
 	s, dir := newStore(t)
 	p := &model.Task{ID: model.NewID(), Kind: "project", Title: "P", Status: "todo"}

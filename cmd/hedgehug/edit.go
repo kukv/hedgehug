@@ -46,7 +46,7 @@ func (a *app) edit(arg string) error {
 	if err != nil || old.ID != e.ID {
 		old = nil
 	}
-	path, edited, err := a.editFile(ix.ShortID(e.ID), orig)
+	path, edited, err := a.editFile(e.ID.String(), orig)
 	if err != nil {
 		return err
 	}

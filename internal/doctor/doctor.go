@@ -139,7 +139,7 @@ func checkStore(dir string) []Finding {
 			if p.Field != "" {
 				msg = p.Field + ": " + msg
 			}
-			fs = append(fs, Finding{Check: "task", Where: strings.TrimSpace(ix.ShortID(e.ID) + " " + e.Title), Msg: msg})
+			fs = append(fs, Finding{Check: "task", Where: strings.TrimSpace(e.ID.String() + " " + e.Title), Msg: msg})
 		}
 	}
 	return fs

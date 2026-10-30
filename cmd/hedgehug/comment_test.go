@@ -46,11 +46,8 @@ func TestCommentAddFromArgs(t *testing.T) {
 	before := len(te.log("me"))
 
 	got := te.commentJSON("comment", x.Short, "hello", "world")
-	if got.Body != "hello world\n" || got.Task != x.ID || len(got.Short) < 4 || got.Author != "" || got.DeletedAt != nil {
+	if got.Body != "hello world\n" || got.Task != x.ID || got.Short != got.ID || got.Author != "" || got.DeletedAt != nil {
 		t.Errorf("comment = %+v", got)
-	}
-	if !strings.HasSuffix(got.ID, got.Short) {
-		t.Errorf("short %q is not the end of %q", got.Short, got.ID)
 	}
 	cs := te.comments(x.ID)
 	if len(cs) != 1 || cs[0].Body != "hello world\n" {
@@ -328,31 +325,17 @@ func (te *testEnv) putComments(id string, cids ...string) {
 	}
 }
 
-func TestCommentShortIDs(t *testing.T) {
+func TestCommentIDMustBeFull(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	y := te.addJSON("Beta")
-	const a, b = "01HZZZZZZZZZZZZZZZZZZZ0001", "01HYYYYYYYYYYYYYYYYYYY0001"
+	const a = "01HZZZZZZZZZZZZZZZZZZZ0001"
 	te.putComments(x.ID, a)
-	te.putComments(y.ID, b)
 
-	code, _, errs := te.run("comment", "rm", "0001")
-	if code != 1 || !strings.Contains(errs, "matches 2") || !strings.Contains(errs, "Z0001  Alpha") || !strings.Contains(errs, "Y0001  Beta") {
-		t.Errorf("exit %d, stderr %q, want both candidates with the titles", code, errs)
+	if code, _, errs := te.run("comment", "rm", "0001"); code != 1 || !strings.Contains(errs, "not found") {
+		t.Errorf("the end of a ULID: exit %d, stderr %q, want not found", code, errs)
 	}
-	if out := te.ok("show", x.Short); !strings.Contains(out, "Z0001") {
-		t.Errorf("show has no short ID Z0001:\n%s", out)
-	}
-	te.ok("comment", "rm", "z0001")
-	cs := te.comments(x.ID)
-	if len(cs) != 1 || cs[0].DeletedAt == nil {
-		t.Errorf("comments = %+v, want the first deleted", cs)
-	}
-	if cs := te.comments(y.ID); cs[0].DeletedAt != nil {
-		t.Errorf("the other comment was deleted")
-	}
-	// A full ULID resolves too, in any case.
-	te.ok("comment", "rm", strings.ToLower(b))
+	// A full ULID resolves, in any case.
+	te.ok("comment", "rm", strings.ToLower(a))
 }
 
 func TestShowCommentShort(t *testing.T) {

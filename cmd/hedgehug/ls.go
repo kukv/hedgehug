@@ -108,10 +108,10 @@ func hasTerm(q *query.Query, key string) bool {
 	return false
 }
 
-func (a *app) printIDs(ix *index.Index, es []*index.Entry) error {
+func (a *app) printIDs(ix *index.Index, es []*index.Entry) error { //nolint:unparam // the display of Task 8 uses ix
 	var b strings.Builder
 	for _, e := range es {
-		b.WriteString(ix.ShortID(e.ID) + "\n")
+		b.WriteString(e.ID.String() + "\n")
 	}
 	_, err := fmt.Fprint(a.stdout, b.String())
 	return err

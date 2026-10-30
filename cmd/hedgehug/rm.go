@@ -106,7 +106,7 @@ func (a *app) rm(arg string) error {
 // to restore.
 func notDeleted(ix *index.Index, e *index.Entry) error {
 	if e.DeletedAt != nil {
-		return fmt.Errorf("%s is deleted; restore %s first", refName(ix, e.ID), ix.ShortID(e.ID))
+		return fmt.Errorf("%s is deleted; restore %s first", refName(ix, e.ID), e.ID.String())
 	}
 	return nil
 }
@@ -241,7 +241,7 @@ func (a *app) printAffected(ix *index.Index, e *index.Entry, targets []*index.En
 		}
 		return a.printJSON(out)
 	}
-	line := fmt.Sprintf("%s %s %s", verb, a.style().id(ix.ShortID(e.ID)), e.Title)
+	line := fmt.Sprintf("%s %s %s", verb, a.style().id(e.ID.String()), e.Title)
 	switch n := len(targets) - 1; n {
 	case 0:
 	case 1:

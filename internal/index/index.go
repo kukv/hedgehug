@@ -1,6 +1,6 @@
 // Package index keeps an index of the tasks of a store, for queries and for
-// telling tasks apart by short IDs. It reads task files from the tree of
-// HEAD, so a change that is not committed is not seen.
+// finding a task by its key. It reads task files from the tree of HEAD, so a
+// change that is not committed is not seen.
 package index
 
 import (
@@ -25,10 +25,12 @@ type Index struct {
 	sc    *schema.Schema // schema.yaml as tree has it
 	tasks map[model.ID]*Entry
 
+	// Read from the tree each time it changes; the cache does not hold them.
+	workspaces map[model.ID]*model.Workspace
+
 	// Derived from tasks by derive.
 	children map[model.ID][]*Entry
 	roots    []*Entry
-	short    map[model.ID]int // length of the short ID of each task
 	problems map[model.ID][]Problem
 }
 
@@ -53,9 +55,13 @@ func Open(s *store.Store) (*Index, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := ix.readWorkspaces(head); err != nil {
+		return nil, err
+	}
 	if rebuilt || tree != head {
 		ix.save()
 	}
+	s.SetKeyNumbers(ix.KeyNumbers)
 	return ix, nil
 }
 
@@ -74,6 +80,9 @@ func (ix *Index) Refresh() error {
 		err = ix.rebuild(head)
 	}
 	if err != nil {
+		return err
+	}
+	if err := ix.readWorkspaces(head); err != nil {
 		return err
 	}
 	ix.save()
@@ -116,7 +125,6 @@ func (ix *Index) derive() {
 		sortByRank(cs)
 	}
 	sortByRank(ix.roots)
-	ix.short = ShortLengths(slices.Collect(maps.Keys(ix.tasks)))
 }
 
 func sortByRank(es []*Entry) {

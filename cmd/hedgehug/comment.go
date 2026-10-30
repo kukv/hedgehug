@@ -10,7 +10,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -41,10 +40,9 @@ func (a *app) commentCmd() *cobra.Command {
 }
 
 // commentIndex lists the comments of a store, deleted ones included, to
-// resolve their IDs and to give the short ones.
+// resolve their IDs.
 type commentIndex struct {
-	refs  []store.CommentRef
-	short map[model.ID]int
+	refs []store.CommentRef
 	// title names the task of a comment in an ambiguity error.
 	title func(model.ID) string
 }
@@ -54,36 +52,15 @@ func loadComments(s *store.Store) (*commentIndex, error) {
 	if err != nil {
 		return nil, err
 	}
-	ids := make([]model.ID, len(refs))
-	for i, r := range refs {
-		ids[i] = r.Comment
-	}
-	return &commentIndex{refs: refs, short: index.ShortLengths(ids)}, nil
+	return &commentIndex{refs: refs}, nil
 }
 
-// Short returns the end of the ID of a comment that tells it apart from the
-// other comments.
-func (ci *commentIndex) Short(id model.ID) string {
-	s := id.String()
-	n, ok := ci.short[id]
-	if !ok {
-		return s
-	}
-	return s[len(s)-n:]
-}
-
-// minCommentInput is the shortest input that names a comment by its end.
-const minCommentInput = 4
-
-// Resolve finds the comment arg names: a full ULID or the end of one, in
-// any case.
+// Resolve finds the comment arg names: a full ULID, in any case.
 func (ci *commentIndex) Resolve(arg string) (store.CommentRef, error) {
 	u := strings.ToUpper(arg)
 	var hits []store.CommentRef
 	if len(u) == 26 {
 		hits = ci.matching(func(id string) bool { return id == u })
-	} else if len(u) >= minCommentInput {
-		hits = ci.matching(func(id string) bool { return strings.HasSuffix(id, u) })
 	}
 	switch len(hits) {
 	case 0:
@@ -97,7 +74,7 @@ func (ci *commentIndex) Resolve(arg string) (store.CommentRef, error) {
 		if ci.title != nil {
 			title = ci.title(h.Task)
 		}
-		lines[i] = ci.Short(h.Comment) + "  " + title
+		lines[i] = h.Comment.String() + "  " + title
 	}
 	return store.CommentRef{}, &ambiguousError{input: arg, noun: "comments", lines: lines}
 }
@@ -129,7 +106,7 @@ var errCommentChanged = errors.New("the comment changed while editing")
 
 // openComment opens the store and resolves arg to a comment that is read
 // from its file.
-func (a *app) openComment(arg string) (*store.Store, *commentIndex, store.CommentRef, *model.Comment, error) {
+func (a *app) openComment(arg string) (*store.Store, *commentIndex, store.CommentRef, *model.Comment, error) { //nolint:unparam // the display of Task 8 uses the comment index
 	s, ix, err := a.open()
 	if err != nil {
 		return nil, nil, store.CommentRef{}, nil, err
@@ -193,7 +170,7 @@ func (a *app) commentAdd(arg string, text []string) error {
 		body = commentBody(strings.Join(text, " "))
 	} else {
 		var edited []byte
-		if path, edited, err = a.editFile(ix.ShortID(e.ID), nil); err != nil {
+		if path, edited, err = a.editFile(e.ID.String(), nil); err != nil {
 			return err
 		}
 		if body = commentBody(string(edited)); body == "" {
@@ -221,11 +198,11 @@ func (a *app) commentAdd(arg string, text []string) error {
 }
 
 func (a *app) commentEdit(arg string) error {
-	s, ci, ref, c, err := a.openComment(arg)
+	s, _, ref, c, err := a.openComment(arg)
 	if err != nil {
 		return err
 	}
-	short := ci.Short(ref.Comment)
+	short := ref.Comment.String()
 	if c.DeletedAt != nil {
 		return fmt.Errorf("comment %s is deleted and cannot be edited", short)
 	}
@@ -264,11 +241,11 @@ func (a *app) commentEdit(arg string) error {
 }
 
 func (a *app) commentRm(arg string) error {
-	s, ci, ref, c, err := a.openComment(arg)
+	s, _, ref, c, err := a.openComment(arg)
 	if err != nil {
 		return err
 	}
-	errDeleted := fmt.Errorf("comment %s is already deleted", ci.Short(ref.Comment))
+	errDeleted := fmt.Errorf("comment %s is already deleted", ref.Comment.String())
 	if c.DeletedAt != nil {
 		return errDeleted
 	}
@@ -295,11 +272,8 @@ func (a *app) commentRm(arg string) error {
 // printComment prints the comment ref after a write: as JSON, or as one
 // line of verb and its short ID.
 func (a *app) printComment(s *store.Store, ref store.CommentRef, verb string) error {
-	ci, err := loadComments(s)
-	if err != nil {
-		return err
-	}
-	short := ci.Short(ref.Comment)
+	short := ref.Comment.String()
+	var err error
 	if a.jsonOut {
 		c, err := findComment(s, ref)
 		if err != nil {

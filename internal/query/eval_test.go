@@ -8,6 +8,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 // fixture is a store with tasks P, E, a, b, c and the deleted d, made in
@@ -155,5 +156,39 @@ func TestRunErrors(t *testing.T) {
 		if !errors.As(err, &qe) || qe.Pos != tt.pos {
 			t.Errorf("Run(%q) err = %v, want an Error at term %d", tt.q, err, tt.pos)
 		}
+	}
+}
+
+func TestRunWorkspace(t *testing.T) {
+	s := newStore(t)
+	api := &model.Workspace{ID: model.NewID(), Name: "api", KeyPrefix: "API"}
+	if _, err := s.Update(store.Op{Name: "workspace", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutWorkspace(api) }); err != nil {
+		t.Fatal(err)
+	}
+	a, b := newTask("a"), newTask("b")
+	b.Workspace = api.ID
+	put(t, s, a, b)
+	ix := mustOpen(t, s)
+	tests := []struct {
+		q    string
+		want []string
+	}{
+		{"workspace:api", []string{"b"}},
+		{"workspace:API", []string{"b"}},
+		{"workspace:test", []string{"a"}},
+		{"workspace:api,test", []string{"a", "b"}},
+		{"-workspace:api", []string{"a"}},
+	}
+	for _, tt := range tests {
+		if got := run(t, ix, tt.q, Options{}); len(got) != 1 || !slices.Equal(got[0], tt.want) {
+			t.Errorf("%q = %v, want [%v]", tt.q, got, tt.want)
+		}
+	}
+	parsed, err := Parse("workspace:nope")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Run(ix, parsed, Options{}); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("workspace:nope err = %v, want ErrNotFound", err)
 	}
 }

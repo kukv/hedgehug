@@ -169,7 +169,7 @@ func (a *app) printMigrated(ix *index.Index, p *migrationPlan, dryRun bool) erro
 	changed := p.changed
 	shorts := make([]string, len(p.skipped))
 	for i, id := range p.skipped {
-		shorts[i] = ix.ShortID(id)
+		shorts[i] = id.String()
 	}
 	if len(shorts) > 0 {
 		if _, err := fmt.Fprintf(a.stderr, "warning: not migrated, since they do not decode: %s\n", strings.Join(shorts, ", ")); err != nil {
@@ -198,7 +198,7 @@ func (a *app) printMigrated(ix *index.Index, p *migrationPlan, dryRun bool) erro
 	fmt.Fprintf(&b, "%s %s\n", heading, count(len(changed)))
 	st := a.style()
 	for _, t := range changed {
-		fmt.Fprintf(&b, "  %s  %s\n", st.id(ix.ShortID(t.ID)), t.Title)
+		fmt.Fprintf(&b, "  %s  %s\n", st.id(t.ID.String()), t.Title)
 	}
 	_, err := fmt.Fprint(a.stdout, b.String())
 	return err

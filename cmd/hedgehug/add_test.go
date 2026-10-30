@@ -62,7 +62,7 @@ func TestAdd(t *testing.T) {
 	}
 
 	got := te.addJSON("Second")
-	if got.Kind != "task" || got.Status != "todo" || got.Parent != nil || got.Short == "" || len(got.Short) < 4 {
+	if got.Kind != "task" || got.Status != "todo" || got.Parent != nil || got.Short != got.ID {
 		t.Errorf("task = %+v", got)
 	}
 }

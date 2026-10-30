@@ -116,8 +116,8 @@ func TestLsErrors(t *testing.T) {
 
 func TestUnknownID(t *testing.T) {
 	te := newStoreEnv(t)
-	// An ambiguous input cannot be made reliably (short IDs match the
-	// random end of ULIDs), so only the not-found case is run here.
+	// An ambiguous input needs two tasks with one key, which only a raw
+	// edit makes, so only the not-found case is run here.
 	code, _, stderr := te.run("add", "x", "--parent", "zzzzzzzz")
 	if code != 1 || !strings.Contains(stderr, "not found") {
 		t.Errorf("exit %d, stderr %q", code, stderr)

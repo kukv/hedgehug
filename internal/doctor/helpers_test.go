@@ -56,8 +56,12 @@ func newTask(title string) *model.Task {
 // put writes tasks in one operation, past the checks of transitions.
 func put(t *testing.T, s *store.Store, tasks ...*model.Task) {
 	t.Helper()
+	ws := firstWorkspace(t, s)
 	if _, err := s.Update(store.Op{Name: "update", Author: testAuthor, SkipTransitions: true}, func(tx *store.Tx) error {
 		for _, task := range tasks {
+			if task.Workspace.IsZero() {
+				task.Workspace = ws
+			}
 			if err := tx.PutTask(task); err != nil {
 				return err
 			}
@@ -66,6 +70,19 @@ func put(t *testing.T, s *store.Store, tasks ...*model.Task) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// firstWorkspace returns the ID of the first workspace of s.
+func firstWorkspace(t *testing.T, s *store.Store) model.ID {
+	t.Helper()
+	for w, err := range s.Workspaces() {
+		if err != nil {
+			t.Fatal(err)
+		}
+		return w.ID
+	}
+	t.Fatal("the store has no workspace")
+	return model.ID{}
 }
 
 // putRaw commits a task file past the checks of the store, as a sync or a

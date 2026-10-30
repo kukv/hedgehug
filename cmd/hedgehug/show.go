@@ -139,31 +139,31 @@ func reverse(ix *index.Index, id model.ID) []relation {
 // refName names the task id for a reader: its short ID and title.
 func refName(ix *index.Index, id model.ID) string {
 	if e, ok := ix.Task(id); ok {
-		return ix.ShortID(id) + " " + e.Title
+		return id.String() + " " + e.Title
 	}
 	return id.String() + " (not found)"
 }
 
-func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, ci *commentIndex, rels []relation, history []gitrepo.LogEntry) *showJSON {
+func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, ci *commentIndex, rels []relation, history []gitrepo.LogEntry) *showJSON { //nolint:unparam // the display of Task 8 uses ci
 	j := &showJSON{taskJSON: entryJSON(ix, e), Watchers: []string{}, Repos: []string{}, Comments: []commentJSON{}, Reverse: map[string][]refJSON{}, History: logJSONs(history)}
 	if t != nil {
 		j.Body, j.Watchers, j.Repos = t.Body, orEmpty(t.Watchers), orEmpty(t.Repos)
 	}
 	for _, c := range comments {
-		j.Comments = append(j.Comments, commentJSON{c.ID.String(), ci.Short(c.ID), c.Author, c.Created, c.Body})
+		j.Comments = append(j.Comments, commentJSON{c.ID.String(), c.ID.String(), c.Author, c.Created, c.Body})
 	}
 	for _, r := range rels {
 		for _, x := range r.tasks {
-			j.Reverse[r.key] = append(j.Reverse[r.key], refJSON{ix.ShortID(x.ID), x.Title})
+			j.Reverse[r.key] = append(j.Reverse[r.key], refJSON{x.ID.String(), x.Title})
 		}
 	}
 	return j
 }
 
-func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, ci *commentIndex, rels []relation, history []gitrepo.LogEntry) string {
+func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, ci *commentIndex, rels []relation, history []gitrepo.LogEntry) string { //nolint:unparam // the display of Task 8 uses ci
 	st := a.style()
 	var b strings.Builder
-	b.WriteString(st.id(ix.ShortID(e.ID)) + "  " + e.Title + "\n")
+	b.WriteString(st.id(e.ID.String()) + "  " + e.Title + "\n")
 	field := func(k string, vs ...string) {
 		v := strings.Join(vs, ", ")
 		if v == "" {
@@ -224,7 +224,7 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 		for _, r := range rels {
 			names := make([]string, len(r.tasks))
 			for i, x := range r.tasks {
-				names[i] = ix.ShortID(x.ID) + " " + x.Title
+				names[i] = x.ID.String() + " " + x.Title
 			}
 			field(r.label, names...)
 		}
@@ -242,7 +242,7 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 			if author == "" {
 				author = "-"
 			}
-			fmt.Fprintf(&b, "  %s  %s  %s\n", st.id(ci.Short(c.ID)), author, c.Created.Format(time.RFC3339))
+			fmt.Fprintf(&b, "  %s  %s  %s\n", st.id(c.ID.String()), author, c.Created.Format(time.RFC3339))
 			for _, l := range strings.Split(strings.TrimRight(c.Body, "\n"), "\n") {
 				b.WriteString("    " + l + "\n")
 			}

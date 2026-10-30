@@ -83,7 +83,7 @@ type problemJSON struct {
 func entryJSON(ix *index.Index, e *index.Entry) *taskJSON {
 	j := &taskJSON{
 		ID:        e.ID.String(),
-		Short:     ix.ShortID(e.ID),
+		Short:     e.ID.String(),
 		Key:       e.Key,
 		Kind:      e.Kind,
 		Title:     e.Title,
@@ -165,12 +165,12 @@ var taskHeader = []string{"ID", "STATUS", "KIND", "ASSIGNEES", "LABELS", "TITLE"
 
 // taskRow is one task in the table. The title is last, so wide characters
 // in it do not shift other columns.
-func taskRow(ix *index.Index, e *index.Entry) []string {
+func taskRow(ix *index.Index, e *index.Entry) []string { //nolint:unparam // the display of Task 8 uses ix
 	kind, status := e.Kind, e.Status
 	if e.Broken != "" {
 		kind, status = "?", "?"
 	}
-	return []string{ix.ShortID(e.ID), status, kind, strings.Join(e.Assignees, ","), strings.Join(e.Labels, ","), e.Title}
+	return []string{e.ID.String(), status, kind, strings.Join(e.Assignees, ","), strings.Join(e.Labels, ","), e.Title}
 }
 
 // printTasks prints es as JSON or as a table.
@@ -211,7 +211,7 @@ func (a *app) printTask(ix *index.Index, id model.ID, verb string) error {
 	if a.jsonOut {
 		return a.printJSON(entryJSON(ix, e))
 	}
-	_, err := fmt.Fprintf(a.stdout, "%s %s %s\n", verb, a.style().id(ix.ShortID(id)), e.Title)
+	_, err := fmt.Fprintf(a.stdout, "%s %s %s\n", verb, a.style().id(id.String()), e.Title)
 	return err
 }
 
