@@ -268,13 +268,23 @@ func (a *app) commentRm(arg string) error {
 	if err != nil {
 		return err
 	}
+	errDeleted := fmt.Errorf("comment %s is already deleted", ci.Short(ref.Comment))
 	if c.DeletedAt != nil {
-		return fmt.Errorf("comment %s is already deleted", ci.Short(ref.Comment))
+		return errDeleted
 	}
 	now := a.now()
+	// The comment is read again under the lock, so that an edit made since
+	// is not lost.
 	committed, err := a.update(s, store.Op{Name: "comment", Task: ref.Task}, func(tx *store.Tx) error {
-		c.DeletedAt = &now
-		return tx.PutComment(ref.Task, c)
+		cur, err := findComment(s, ref)
+		if err != nil {
+			return err
+		}
+		if cur.DeletedAt != nil {
+			return errDeleted
+		}
+		cur.DeletedAt = &now
+		return tx.PutComment(ref.Task, cur)
 	})
 	if err != nil {
 		return err

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
@@ -243,6 +244,60 @@ func TestCommentRm(t *testing.T) {
 	}
 	if n := len(te.log("me")); n != before+1 {
 		t.Errorf("commits = %d, want %d", n, before+1)
+	}
+}
+
+// comment rm writes the comment as it is under the lock: an edit that
+// lands between its first read and the lock is kept.
+func TestCommentRmRereadsUnderLock(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("Alpha")
+	c := te.commentJSON("comment", x.Short, "first")
+	s, err := store.Open(te.storeDir("me"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := mustID(t, x.ID)
+	locked, proceed := make(chan struct{}), make(chan struct{})
+	edited := make(chan error, 1)
+	go func() {
+		author := gitrepo.Signature{Name: "Bob", Email: "bob@example.com"}
+		_, err := s.Update(store.Op{Name: "comment", Author: author}, func(tx *store.Tx) error {
+			close(locked)
+			<-proceed
+			for cur, err := range s.Comments(task) {
+				if err != nil {
+					return err
+				}
+				cur.Body = "second\n"
+				return tx.PutComment(task, cur)
+			}
+			return nil
+		})
+		edited <- err
+	}()
+	<-locked
+	type result struct {
+		code   int
+		stderr string
+	}
+	rm := make(chan result, 1)
+	go func() {
+		code, _, stderr := te.run("comment", "rm", c.Short)
+		rm <- result{code, stderr}
+	}()
+	// Let comment rm read the comment and wait for the lock.
+	time.Sleep(300 * time.Millisecond)
+	close(proceed)
+	if err := <-edited; err != nil {
+		t.Fatal(err)
+	}
+	if r := <-rm; r.code != 0 {
+		t.Fatalf("comment rm: exit %d, stderr %q", r.code, r.stderr)
+	}
+	cs := te.comments(x.ID)
+	if len(cs) != 1 || cs[0].Body != "second\n" || cs[0].DeletedAt == nil {
+		t.Errorf("comments = %+v, want the edited body, deleted", cs)
 	}
 }
 
