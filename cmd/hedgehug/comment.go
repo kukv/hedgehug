@@ -188,18 +188,16 @@ func (a *app) commentAdd(arg string, text []string) error {
 	if e.DeletedAt != nil {
 		return fmt.Errorf("%s is deleted; restore %s first", refName(ix, e.ID), ix.ShortID(e.ID))
 	}
-	var body string
+	var body, path string // path is the file of the editor, if any
 	if len(text) > 0 {
 		body = commentBody(strings.Join(text, " "))
 	} else {
-		path, edited, err := a.editFile(ix.ShortID(e.ID), nil)
-		if err != nil {
+		var edited []byte
+		if path, edited, err = a.editFile(ix.ShortID(e.ID), nil); err != nil {
 			return err
 		}
 		if body = commentBody(string(edited)); body == "" {
 			_ = os.Remove(path)
-		} else if err := os.Remove(path); err != nil {
-			return err
 		}
 	}
 	if body == "" {
@@ -209,7 +207,15 @@ func (a *app) commentAdd(arg string, text []string) error {
 	if _, err := a.update(s, store.Op{Name: "comment", Task: e.ID}, func(tx *store.Tx) error {
 		return tx.PutComment(e.ID, c)
 	}); err != nil {
+		if path != "" {
+			return fmt.Errorf("%s; the comment is kept at %s", describe(err), path)
+		}
 		return err
+	}
+	if path != "" {
+		if err := os.Remove(path); err != nil {
+			return err
+		}
 	}
 	return a.printComment(s, store.CommentRef{Task: e.ID, Comment: c.ID}, "Added")
 }
@@ -227,14 +233,14 @@ func (a *app) commentEdit(arg string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.Remove(path); err != nil {
-		return err
-	}
 	body := commentBody(string(edited))
-	if body == "" {
-		return fmt.Errorf("the comment is empty; delete it with hedgehug comment rm %s", short)
-	}
-	if body == c.Body {
+	if body == "" || body == c.Body {
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+		if body == "" {
+			return fmt.Errorf("the comment is empty; delete it with hedgehug comment rm %s", short)
+		}
 		return a.printComment(s, ref, verb(false, ""))
 	}
 	committed, err := a.update(s, store.Op{Name: "comment", Task: ref.Task}, func(tx *store.Tx) error {
@@ -249,6 +255,9 @@ func (a *app) commentEdit(arg string) error {
 		return tx.PutComment(ref.Task, cur)
 	})
 	if err != nil {
+		return fmt.Errorf("%s; the edited comment is kept at %s", describe(err), path)
+	}
+	if err := os.Remove(path); err != nil {
 		return err
 	}
 	return a.printComment(s, ref, verb(committed, "Updated"))

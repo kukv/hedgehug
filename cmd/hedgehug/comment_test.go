@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -82,6 +84,31 @@ func TestCommentAddInEditor(t *testing.T) {
 	}
 }
 
+// When the comment cannot be written, the text typed in the editor is kept
+// in its file, which the error names.
+func TestCommentAddKeepsFileOnFailure(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("Alpha")
+	before := len(te.log("me"))
+	// A file named comments makes the directory of the comment impossible.
+	te.editWith("from the editor\nTOUCH " + filepath.Join(te.storeDir("me"), "comments") + "\n")
+
+	code, _, stderr := te.run("comment", x.Short)
+	if code != 1 {
+		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
+	}
+	fs := te.tempFiles()
+	if len(fs) != 1 || !strings.Contains(stderr, fs[0]) {
+		t.Fatalf("temporary files %v, stderr %q: want one, named in stderr", fs, stderr)
+	}
+	if b, err := os.ReadFile(fs[0]); err != nil || string(b) != "from the editor\n" {
+		t.Errorf("kept file = %q, %v", b, err)
+	}
+	if n := len(te.log("me")); n != before {
+		t.Errorf("commits = %d, want %d", n, before)
+	}
+}
+
 func TestCommentEmptyBody(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
@@ -139,6 +166,30 @@ func TestCommentEdit(t *testing.T) {
 	}
 	if fs := te.tempFiles(); len(fs) != 0 {
 		t.Errorf("temporary files left: %v", fs)
+	}
+}
+
+func TestCommentEditChangedWhileEditing(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("Alpha")
+	c := te.commentJSON("comment", x.Short, "first")
+	before := len(te.log("me"))
+	file := filepath.Join(te.storeDir("me"), filepath.FromSlash(model.CommentPath(mustID(t, x.ID), mustID(t, c.ID))))
+	te.editWith("second\nTOUCH " + file + "\n")
+
+	code, _, stderr := te.run("comment", "edit", c.Short)
+	if code != 1 || !strings.Contains(stderr, "changed while editing") {
+		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
+	}
+	fs := te.tempFiles()
+	if len(fs) != 1 || !strings.Contains(stderr, fs[0]) {
+		t.Fatalf("temporary files %v, stderr %q: want one, named in stderr", fs, stderr)
+	}
+	if b, err := os.ReadFile(fs[0]); err != nil || string(b) != "second\n" {
+		t.Errorf("kept file = %q, %v", b, err)
+	}
+	if n := len(te.log("me")); n != before {
+		t.Errorf("commits = %d, want %d", n, before)
 	}
 }
 
