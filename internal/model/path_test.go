@@ -29,6 +29,19 @@ func TestPaths(t *testing.T) {
 	}
 }
 
+func TestValidTemplateName(t *testing.T) {
+	for _, ok := range []string{"bug-report", "release-checklist", "リリース", "v2.4"} {
+		if err := ValidTemplateName(ok); err != nil {
+			t.Errorf("ValidTemplateName(%q) = %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"", "a/b", `a\b`, "..", "a..b", "../x", ".hidden", "a\x00b", "a\nb", "a\x7fb"} {
+		if err := ValidTemplateName(bad); err == nil {
+			t.Errorf("ValidTemplateName(%q) succeeded", bad)
+		}
+	}
+}
+
 func TestParseTaskPath(t *testing.T) {
 	want := mustID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0A")
 	got, err := ParseTaskPath(TaskPath(want))

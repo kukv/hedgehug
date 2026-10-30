@@ -1,8 +1,10 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 // StoreMetaPath is where a store keeps its metadata.
@@ -32,8 +34,28 @@ func WorklogPath(task, log ID) string {
 func SprintPath(id ID) string  { return "sprints/" + id.String() + ".md" }
 func ReleasePath(id ID) string { return "releases/" + id.String() + ".md" }
 
-// TemplatePath returns the path of the template called name.
+// TemplatePath returns the path of the template called name. name must
+// pass ValidTemplateName, or the path may point outside templates/.
 func TemplatePath(name string) string { return "templates/" + name + ".md" }
+
+// ValidTemplateName reports whether name can be used as a template file
+// name: not empty, no path separators, no "..", no leading "." and no
+// control characters.
+func ValidTemplateName(name string) error {
+	switch {
+	case name == "":
+		return errors.New("template name is empty")
+	case strings.ContainsAny(name, `/\`):
+		return fmt.Errorf("template name %q contains a path separator", name)
+	case strings.Contains(name, ".."):
+		return fmt.Errorf("template name %q contains \"..\"", name)
+	case strings.HasPrefix(name, "."):
+		return fmt.Errorf("template name %q starts with a dot", name)
+	case strings.IndexFunc(name, unicode.IsControl) >= 0:
+		return fmt.Errorf("template name %q contains a control character", name)
+	}
+	return nil
+}
 
 // ParseTaskPath returns the ID of the task file at p.
 func ParseTaskPath(p string) (ID, error) {

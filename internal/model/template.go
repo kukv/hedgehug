@@ -74,6 +74,9 @@ var templateKeys = []string{
 }
 
 func DecodeTemplate(name string, data []byte) (*Template, error) {
+	if err := ValidTemplateName(name); err != nil {
+		return nil, &DecodeError{Field: "name", Err: err}
+	}
 	front, body, err := splitFrontmatter(data)
 	if err != nil {
 		return nil, err

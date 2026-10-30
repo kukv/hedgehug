@@ -111,6 +111,11 @@ func (s *Schema) Check() []Problem {
 		if k.Default && k.Role == RoleWork {
 			workDefaults++
 		}
+		if k.Template != "" {
+			if err := model.ValidTemplateName(k.Template); err != nil {
+				add(p+".template", "%v", err)
+			}
+		}
 	}
 	for i, k := range s.Kinds {
 		for _, parent := range k.Parents {
@@ -198,6 +203,11 @@ func (s *Schema) Check() []Problem {
 			checkWorkflow(p+".workflow", *sc.Workflow)
 		}
 		if sc.Templates != nil {
+			for _, name := range sc.Templates.Only {
+				if err := model.ValidTemplateName(name); err != nil {
+					add(p+".templates.only", "%v", err)
+				}
+			}
 			keys := make([]string, 0, len(sc.Templates.Default))
 			for k := range sc.Templates.Default {
 				keys = append(keys, k)
@@ -206,6 +216,9 @@ func (s *Schema) Check() []Problem {
 			for _, k := range keys {
 				if !kinds[k] {
 					add(p+".templates.default", "unknown kind %q", k)
+				}
+				if err := model.ValidTemplateName(sc.Templates.Default[k]); err != nil {
+					add(p+".templates.default", "%v", err)
 				}
 			}
 		}

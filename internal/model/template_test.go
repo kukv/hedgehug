@@ -46,6 +46,14 @@ func TestNewTemplateEncode(t *testing.T) {
 	}
 }
 
+func TestDecodeTemplateRejectsBadName(t *testing.T) {
+	for _, name := range []string{"", "../x", "a/b"} {
+		if _, err := DecodeTemplate(name, []byte("---\nkind: task\n---\n")); err == nil {
+			t.Errorf("DecodeTemplate(%q) succeeded", name)
+		}
+	}
+}
+
 func TestAssigneesYAML(t *testing.T) {
 	tp, err := DecodeTemplate("x", []byte("---\nassignees: [github.com/a]\n---\n"))
 	if err != nil || tp.Item.Assignees.Inherit || len(tp.Item.Assignees.Logins) != 1 {
