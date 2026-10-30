@@ -84,7 +84,7 @@ func (a *app) rm(arg string) error {
 		}
 	}
 	now := a.now().Truncate(time.Second)
-	if err := a.update(s, "rm", e.ID, func(tx *store.Tx) error {
+	if _, err := a.update(s, store.Op{Name: "rm", Task: e.ID}, func(tx *store.Tx) error {
 		for _, x := range targets {
 			t, err := tx.Task(x.ID)
 			if err != nil {
@@ -134,7 +134,7 @@ func (a *app) restore(arg string) error {
 	targets := append([]*index.Entry{e}, descendants(ix, e.ID, func(d *index.Entry) bool {
 		return d.DeletedAt != nil && d.DeletedAt.Equal(at)
 	})...)
-	if err := a.update(s, "restore", e.ID, func(tx *store.Tx) error {
+	if _, err := a.update(s, store.Op{Name: "restore", Task: e.ID}, func(tx *store.Tx) error {
 		for _, x := range targets {
 			t, err := tx.Task(x.ID)
 			if err != nil {
@@ -175,7 +175,7 @@ func (a *app) purge(arg string, yes bool) error {
 			return err
 		}
 	}
-	if err := a.update(s, "purge", e.ID, func(tx *store.Tx) error {
+	if _, err := a.update(s, store.Op{Name: "purge", Task: e.ID}, func(tx *store.Tx) error {
 		for _, x := range targets {
 			if err := tx.RemoveTask(x.ID); err != nil {
 				return err

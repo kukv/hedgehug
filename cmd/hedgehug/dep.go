@@ -48,7 +48,7 @@ func (a *app) dep(arg, blockerArg string, add bool) error {
 	if err != nil {
 		return err
 	}
-	if err := a.update(s, "dep", e.ID, func(tx *store.Tx) error {
+	committed, err := a.update(s, store.Op{Name: "dep", Task: e.ID}, func(tx *store.Tx) error {
 		t, err := tx.Task(e.ID)
 		if err != nil {
 			return err
@@ -65,8 +65,9 @@ func (a *app) dep(arg, blockerArg string, add bool) error {
 			t.BlockedBy = slices.DeleteFunc(t.BlockedBy, func(x model.ID) bool { return x == b.ID })
 		}
 		return tx.PutTask(t)
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
-	return a.printTask(ix, e.ID, "Updated")
+	return a.printTask(ix, e.ID, verb(committed, "Updated"))
 }

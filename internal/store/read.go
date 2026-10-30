@@ -142,6 +142,47 @@ func (s *Store) Templates() iter.Seq2[*model.Template, error] {
 	return walk(s, "templates", match, decode)
 }
 
+// TaskBytes returns the file of task id as it is, without decoding it.
+func (s *Store) TaskBytes(id model.ID) ([]byte, error) {
+	rel := model.TaskPath(id)
+	b, err := readFile(s.path(rel))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("%s: %w", rel, ErrNotFound)
+	}
+	return b, err
+}
+
+// CommentRef names one comment file.
+type CommentRef struct{ Task, Comment model.ID }
+
+// CommentIDs lists every comment in the store, in path order. Files under
+// comments/ whose names are not comment paths are left out.
+func (s *Store) CommentIDs() ([]CommentRef, error) {
+	var out []CommentRef
+	err := filepath.WalkDir(s.path("comments"), func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(s.dir, p)
+		if err != nil {
+			return err
+		}
+		task, comment, err := model.ParseCommentPath(filepath.ToSlash(rel))
+		if err != nil {
+			return nil //nolint:nilerr // a file that is not a comment path is skipped
+		}
+		out = append(out, CommentRef{Task: task, Comment: comment})
+		return nil
+	})
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	return out, nil
+}
+
 func templateName(rel string) (string, bool) {
 	if path.Dir(rel) != "templates" || path.Ext(rel) != ".md" {
 		return "", false

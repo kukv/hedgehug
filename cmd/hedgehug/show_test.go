@@ -29,7 +29,7 @@ func TestShow(t *testing.T) {
 		t.Fatal(err)
 	}
 	aid, _ := model.ParseID(a.ID)
-	if err := s.Update(store.Op{Name: "update", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
+	if _, err := s.Update(store.Op{Name: "update", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
 		tk, err := tx.Task(aid)
 		if err != nil {
 			return err
@@ -138,7 +138,7 @@ func TestShowDeleted(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := mustID(t, x.ID)
-	if err := s.Update(store.Op{Name: "rm", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
+	if _, err := s.Update(store.Op{Name: "rm", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
 		tk, err := tx.Task(id)
 		if err != nil {
 			return err

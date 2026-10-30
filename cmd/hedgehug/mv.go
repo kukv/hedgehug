@@ -65,17 +65,18 @@ func (a *app) mv(arg, parentArg string, root bool, before, after string) error {
 	if err != nil {
 		return err
 	}
-	if err := a.update(s, "mv", e.ID, func(tx *store.Tx) error {
+	committed, err := a.update(s, store.Op{Name: "mv", Task: e.ID}, func(tx *store.Tx) error {
 		t, err := tx.Task(e.ID)
 		if err != nil {
 			return err
 		}
 		t.Parent, t.Rank = parent, rank
 		return tx.PutTask(t)
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
-	return a.printTask(ix, e.ID, "Moved")
+	return a.printTask(ix, e.ID, verb(committed, "Moved"))
 }
 
 // rankAt returns the rank for id under parent: just before or after a

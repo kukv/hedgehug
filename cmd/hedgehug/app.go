@@ -104,13 +104,24 @@ func (a *app) open() (*store.Store, *index.Index, error) {
 	return s, ix, nil
 }
 
-// update runs one operation, named name and about task, as one commit.
-func (a *app) update(s *store.Store, name string, task model.ID, fn func(*store.Tx) error) error {
+// update runs one operation as one commit, with the author from the
+// environment. committed is false when the operation changed nothing.
+func (a *app) update(s *store.Store, op store.Op, fn func(*store.Tx) error) (bool, error) {
 	author, err := config.Author(a.getenv)
 	if err != nil {
-		return err
+		return false, err
 	}
-	return s.Update(store.Op{Name: name, Task: task, Author: author}, fn)
+	op.Author = author
+	return s.Update(op, fn)
+}
+
+// verb is the heading of a command that printed what it wrote: heading, or
+// "No changes" when nothing was committed.
+func verb(committed bool, heading string) string {
+	if !committed {
+		return "No changes"
+	}
+	return heading
 }
 
 // ambiguousError is index.AmbiguousError with the candidates spelled out.

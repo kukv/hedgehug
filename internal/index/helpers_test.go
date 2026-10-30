@@ -32,7 +32,7 @@ func newTask(title string) *model.Task {
 // put writes tasks in one operation.
 func put(t *testing.T, s *store.Store, tasks ...*model.Task) {
 	t.Helper()
-	if err := s.Update(store.Op{Name: "update", Author: testAuthor}, func(tx *store.Tx) error {
+	if _, err := s.Update(store.Op{Name: "update", Author: testAuthor}, func(tx *store.Tx) error {
 		for _, task := range tasks {
 			if err := tx.PutTask(task); err != nil {
 				return err

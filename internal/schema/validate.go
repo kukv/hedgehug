@@ -197,13 +197,17 @@ func checkScalar(p Prop, n *yaml.Node) error {
 // violations the write brings in: ones old already had where it was are left
 // out, so a task that a sync left broken can still be edited, while a move
 // is checked in its new place.
-func ValidateWrite(old *model.Task, oldParentKind string, oldE *Effective, cur *model.Task, parentKind string, e *Effective) []Violation {
+func ValidateWrite(old *model.Task, oldParentKind string, oldE *Effective, cur *model.Task, parentKind string, e *Effective, skipTransitions bool) []Violation {
 	vs := taskViolations(cur, parentKind, e)
 	switch {
 	case old == nil:
 		vs = append(vs, ValidateTransition("", cur.Status, cur, e)...)
 	case old.Status != cur.Status:
-		vs = append(vs, ValidateTransition(old.Status, cur.Status, cur, e)...)
+		from := old.Status
+		if skipTransitions {
+			from = "" // no workflow check; the required fields are still checked
+		}
+		vs = append(vs, ValidateTransition(from, cur.Status, cur, e)...)
 	}
 	var had []Violation
 	if old != nil {

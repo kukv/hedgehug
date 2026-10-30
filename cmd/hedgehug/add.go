@@ -74,10 +74,11 @@ func (a *app) add(title, parentArg, kind, status string, assigns []assign) error
 	if t.Rank, err = endRank(ix, t.Parent, t.ID); err != nil {
 		return err
 	}
-	if err := a.update(s, "add", t.ID, func(tx *store.Tx) error { return tx.PutTask(t) }); err != nil {
+	committed, err := a.update(s, store.Op{Name: "add", Task: t.ID}, func(tx *store.Tx) error { return tx.PutTask(t) })
+	if err != nil {
 		return err
 	}
-	return a.printTask(ix, t.ID, "Added")
+	return a.printTask(ix, t.ID, verb(committed, "Added"))
 }
 
 // siblings returns the tasks under parent (the root when nil) that are not

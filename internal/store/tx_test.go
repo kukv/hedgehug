@@ -19,7 +19,7 @@ func newTask(title string) *model.Task {
 
 func addTask(t *testing.T, s *Store, task *model.Task) {
 	t.Helper()
-	if err := s.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+	if _, err := s.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
 		return tx.PutTask(task)
 	}); err != nil {
 		t.Fatal(err)
@@ -64,7 +64,7 @@ func TestUpdateSubjectUsesKey(t *testing.T) {
 func TestUpdateWithoutTask(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("x")
-	if err := s.Update(Op{Name: "bulk", Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(task) }); err != nil {
+	if _, err := s.Update(Op{Name: "bulk", Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(task) }); err != nil {
 		t.Fatal(err)
 	}
 	if msg := headLog(t, s.dir)[0].Message; msg != "hedgehug: bulk\n\nHedgehug-Op: bulk\n" {
@@ -83,7 +83,7 @@ func TestUpdateNoChange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Update(Op{Name: "update", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+	if _, err := s.Update(Op{Name: "update", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
 		return tx.PutTask(same)
 	}); err != nil {
 		t.Fatal(err)
@@ -100,7 +100,7 @@ func TestUpdateNoChange(t *testing.T) {
 	}
 
 	got.Title = "y"
-	if err := s.Update(Op{Name: "update", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+	if _, err := s.Update(Op{Name: "update", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
 		return tx.PutTask(got)
 	}); err != nil {
 		t.Fatal(err)
@@ -118,7 +118,7 @@ func TestUpdateFnError(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("x")
 	boom := errors.New("boom")
-	err := s.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+	_, err := s.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
 		if err := tx.PutTask(task); err != nil {
 			return err
 		}
@@ -152,7 +152,7 @@ func TestUpdateCommitFailureRollsBack(t *testing.T) {
 	}
 	edited.Title = "changed"
 	added := newTask("added")
-	err = s.Update(Op{Name: "update", Author: testAuthor}, func(tx *Tx) error {
+	_, err = s.Update(Op{Name: "update", Author: testAuthor}, func(tx *Tx) error {
 		if err := tx.PutTask(edited); err != nil {
 			return err
 		}
@@ -173,7 +173,7 @@ func TestUpdateCommitFailureRollsBack(t *testing.T) {
 func TestTxReadsItsWrites(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("x")
-	if err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error {
+	if _, err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error {
 		if err := tx.PutTask(task); err != nil {
 			return err
 		}
@@ -193,7 +193,7 @@ func TestTxReadsItsWrites(t *testing.T) {
 func TestTxUnusableAfterUpdate(t *testing.T) {
 	s := newTestStore(t)
 	var saved *Tx
-	if err := s.Update(Op{Name: "noop", Author: testAuthor}, func(tx *Tx) error {
+	if _, err := s.Update(Op{Name: "noop", Author: testAuthor}, func(tx *Tx) error {
 		saved = tx
 		return nil
 	}); err != nil {
@@ -212,7 +212,7 @@ func TestUpdateLockedElsewhere(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = l.release() }()
-	err = s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(newTask("x")) })
+	_, err = s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(newTask("x")) })
 	if !errors.Is(err, ErrLocked) {
 		t.Errorf("err = %v, want ErrLocked", err)
 	}
@@ -231,9 +231,10 @@ func TestUpdateFromTwoStores(t *testing.T) {
 		wg.Go(func() {
 			for range perStore {
 				task := newTask("x")
-				errs <- st.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+				_, err := st.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
 					return tx.PutTask(task)
 				})
+				errs <- err
 			}
 		})
 	}
@@ -261,7 +262,7 @@ func TestUpdateFromTwoStores(t *testing.T) {
 
 func TestUpdateNeedsOpName(t *testing.T) {
 	s := newTestStore(t)
-	if err := s.Update(Op{Author: testAuthor}, func(*Tx) error { return nil }); err == nil {
+	if _, err := s.Update(Op{Author: testAuthor}, func(*Tx) error { return nil }); err == nil {
 		t.Error("Update without Op.Name succeeded")
 	}
 }
@@ -276,7 +277,7 @@ func TestPutEveryFileType(t *testing.T) {
 	tp := &model.Template{Name: "bug"}
 	tp.Item.Kind = "bug"
 
-	if err := s.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+	if _, err := s.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
 		return errors.Join(
 			tx.PutTask(task),
 			tx.PutComment(task.ID, c),
@@ -320,7 +321,7 @@ func TestPutEveryFileType(t *testing.T) {
 
 func TestPutTemplateBadName(t *testing.T) {
 	s := newTestStore(t)
-	err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error {
+	_, err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error {
 		return tx.PutTemplate(&model.Template{Name: "../x"})
 	})
 	if err == nil {
@@ -333,13 +334,13 @@ func TestRemoveTask(t *testing.T) {
 	task := newTask("x")
 	c := &model.Comment{ID: model.NewID(), Author: "github.com/me"}
 	w := &model.Worklog{ID: model.NewID(), Author: "github.com/me"}
-	if err := s.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+	if _, err := s.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
 		return errors.Join(tx.PutTask(task), tx.PutComment(task.ID, c), tx.PutWorklog(task.ID, w))
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := s.Update(Op{Name: "purge", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+	if _, err := s.Update(Op{Name: "purge", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
 		return tx.RemoveTask(task.ID)
 	}); err != nil {
 		t.Fatal(err)
@@ -371,7 +372,7 @@ func TestRemoveTask(t *testing.T) {
 func TestPutSchema(t *testing.T) {
 	s := newTestStore(t)
 	sc := schema.Dev()
-	if err := s.Update(Op{Name: "schema", Author: testAuthor}, func(tx *Tx) error { return tx.PutSchema(sc) }); err != nil {
+	if _, err := s.Update(Op{Name: "schema", Author: testAuthor}, func(tx *Tx) error { return tx.PutSchema(sc) }); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := s.Schema().Status("review"); !ok {
@@ -387,7 +388,7 @@ func TestPutSchema(t *testing.T) {
 
 	bad := schema.Default()
 	bad.Statuses = append(bad.Statuses, bad.Statuses[0]) // a duplicate name
-	err = s.Update(Op{Name: "schema", Author: testAuthor}, func(tx *Tx) error { return tx.PutSchema(bad) })
+	_, err = s.Update(Op{Name: "schema", Author: testAuthor}, func(tx *Tx) error { return tx.PutSchema(bad) })
 	var se *SchemaError
 	if !errors.As(err, &se) || len(se.Problems) == 0 {
 		t.Errorf("err = %v, want a *SchemaError", err)
@@ -400,12 +401,12 @@ func TestUpdateRereadsSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := a.Update(Op{Name: "schema", Author: testAuthor}, func(tx *Tx) error { return tx.PutSchema(schema.Dev()) }); err != nil {
+	if _, err := a.Update(Op{Name: "schema", Author: testAuthor}, func(tx *Tx) error { return tx.PutSchema(schema.Dev()) }); err != nil {
 		t.Fatal(err)
 	}
 	task := newTask("x")
 	task.Status = "review"
-	if err := b.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(task) }); err != nil {
+	if _, err := b.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(task) }); err != nil {
 		t.Errorf("the other store did not see the new schema: %v", err)
 	}
 	if _, ok := b.Schema().Status("review"); !ok {
@@ -416,7 +417,7 @@ func TestUpdateRereadsSchema(t *testing.T) {
 func TestUpdateFailsOnBadSchemaFile(t *testing.T) {
 	s := newTestStore(t)
 	mustWrite(t, s, schemaPath, "statuses: [\n")
-	if err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(newTask("x")) }); err == nil {
+	if _, err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(newTask("x")) }); err == nil {
 		t.Error("Update succeeded with a schema.yaml that does not decode")
 	}
 }
@@ -436,7 +437,7 @@ func TestSchemaWhileUpdating(t *testing.T) {
 		}
 	})
 	for _, sc := range []*schema.Schema{schema.Dev(), schema.Default()} {
-		if err := s.Update(Op{Name: "schema", Author: testAuthor}, func(tx *Tx) error { return tx.PutSchema(sc) }); err != nil {
+		if _, err := s.Update(Op{Name: "schema", Author: testAuthor}, func(tx *Tx) error { return tx.PutSchema(sc) }); err != nil {
 			t.Error(err)
 		}
 	}
@@ -459,7 +460,7 @@ func TestPutRefusesZeroID(t *testing.T) {
 		{"PutRelease", func(tx *Tx) error { return tx.PutRelease(&model.Release{Name: "v1", State: "unreleased"}) }},
 		{"RemoveTask", func(tx *Tx) error { return tx.RemoveTask(model.ID{}) }},
 	} {
-		if err := s.Update(Op{Name: "add", Author: testAuthor}, tc.put); err == nil {
+		if _, err := s.Update(Op{Name: "add", Author: testAuthor}, tc.put); err == nil {
 			t.Errorf("%s accepted a zero ID", tc.name)
 		}
 	}

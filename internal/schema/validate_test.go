@@ -231,7 +231,7 @@ func TestValidateWrite(t *testing.T) {
 		}
 		cur := taskWith(t, "")
 		tc.cur(cur)
-		got := codes(ValidateWrite(old, tc.oldParentKind, oldE, cur, tc.parentKind, e))
+		got := codes(ValidateWrite(old, tc.oldParentKind, oldE, cur, tc.parentKind, e, false))
 		if !slices.Equal(got, tc.want) {
 			t.Errorf("%s: violations = %v, want %v", tc.name, got, tc.want)
 		}
