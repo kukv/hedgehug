@@ -55,6 +55,8 @@ internal/schema/
   - 既知キーは型ごとに決めた順に並べ、未知のキーは元の順のまま既知キーの後ろに置く。
   - 元の Node にないキーは、値がゼロ値でなければ追加する。元の Node にあったキーは、値が空になっても残す（`null` や `[]` を書く）。
   - 新規作成した値（Node を持たない）は空の Node から始める。
+- 未知のキーは `Extra`（キーの順序付きで値 Node を持つ）として公開する。フェーズ2のマージが未知のキーも片側の変更を取り込めるようにするため。値 Node どうしを比べる補助関数（`NodeEqual`）もあわせて持つ。
+- `Decode` が必須とするのは `id` だけ（テンプレートと `store.yaml` を除く）。`title` などの欠けは検証の層で扱う。フェーズ3の転送ファイル（`id` と `moved_to` だけを持つタスクファイル）を読めるようにするため。
 - 空行など Node で保持しきれない部分は、ゴールデンテストで出力を固定する。
 - 本文は Markdown のまま `Body string` に持つ。読み込み時に CRLF を LF にそろえる。
 
@@ -63,7 +65,7 @@ internal/schema/
 ### 共通
 
 - 日時は RFC 3339 でオフセット付き（`2026-10-29T10:00:00+09:00`）。日付は `YYYY-MM-DD`。
-- `tasks/`・`comments/`・`worklogs/`・`sprints/`・`releases/` の Markdown ファイルはすべて `id`・`created`・`updated` を持つ。`store.yaml` とテンプレートは持たない。`updated` はフェーズ2の LWW に使う。
+- `tasks/`・`comments/`・`worklogs/`・`sprints/`・`releases/` の Markdown ファイルはすべて `id`・`created`・`updated` を持つ。テンプレートは `id` を持たず（名前がファイル名で決まる）、`created`・`updated` を持つ。`updated` は親設計のマージ規則（テンプレートはフィールドごとに LWW）に使う。`store.yaml` はどれも持たない。`updated` はフェーズ2の LWW に使う。
 - 論理削除できるものは `deleted_at` を持つ。
 
 ### タスク `tasks/<a>/<b>/<ULID>.md`
@@ -104,7 +106,7 @@ frontmatter は `id, author, date, duration, created, updated, deleted_at`。本
 
 ### テンプレート `templates/<name>.md`
 
-タスクの frontmatter から `id`・`key`・`former_keys`・`parent`・`rank`・`created`・`created_by`・`updated`・`deleted_at`・`gh` を除き（親と並び順は展開時に決まる）、`children` を足した形。
+タスクの frontmatter から `id`・`key`・`former_keys`・`parent`・`rank`・`created_by`・`deleted_at`・`gh` を除き（親と並び順は展開時に決まる）、`children` を足した形。`created`・`updated` はテンプレート自体の日時として持つ（`children` の要素は持たない）。
 
 ```markdown
 ---
@@ -163,8 +165,15 @@ children:
 ### codec と既定値
 
 - `schema.yaml` も案A の方式で読み書きする。対象は `statuses`・`kinds`・`props`・`workflow`・`scoped`。
+- 各要素が持つフィールド:
+  - ステータス: `name`・`label`・`category`・`color`・`default`。並び順は配列の順。
+  - 種類: `name`・`label`・`role`・`parents`・`icon`・`template`・`default`。`parents` を省略した種類はどこにでも置ける。
+  - props: `type`・`values`・`multi`・`label`・`inverse`・`symmetric`。
+  - `workflow`: `transitions`（ステータス → 移れるステータスの列）と `required`（ステータス → 必須の項目の列）。`required` には組み込みのフィールド（`assignees` など）と props のキーの両方を書ける。
+  - `scoped`: `where`・`statuses`・`workflow`・`templates`（`only` と、種類 → テンプレートの `default`）。
+- 既定を引く API として `DefaultStatus(category)` と `DefaultKind()`（work 役割の既定）を持つ。`hh start`、自動化の `set: {category: …}`、Store 間の移動で使う。
 - `schema.Default()` は親設計の既定（ステータス7つ、種類5つ、props の `priority`・`start`・`due`・`estimate`・`points`・`duplicates`・`causes`・`relates`）を返す。
-- 親設計の既定の `kinds` は `project` の `parents` を省略しており、どこにでも置ける。1a では GUI デザインに合わせて `project` を `parents: [root]` にする（1a で決めたこと）。
+- `kinds` は親設計の既定どおりにする。`project` は `parents` を省略しているので、どこにでも置ける。
 - `schema.Dev()` は `Default()` に `review` ステータス（doing カテゴリ）を足したもの。
 
 ### スキーマ自体の検査 `(*Schema).Check() []Problem`
@@ -172,13 +181,14 @@ children:
 - ステータス: 名前が一意、カテゴリが `todo / doing / done / canceled` のどれか、各カテゴリに `default: true` がちょうど1つ
 - 種類: 名前が一意、`role` が `container / work` のどれか、`parents` が既存の種類か `root`、work 役割に `default: true` がちょうど1つ
 - props: 型が既知、enum と multi_enum の `values` が空でない、`inverse` と `symmetric` を同時に指定しない、組み込みのフィールド名と重ならない
-- workflow: `transitions` と `required` に出てくるステータスとプロパティが存在する
+- workflow: `transitions` に出てくるステータスが存在する。`required` の項目が組み込みのフィールドか定義済みの props である
 - scoped: `where` が `project:<ULID>` の形、`where` が重複しない、`statuses` が各カテゴリの既定を含む
 
-### プロジェクトの実効スキーマ `(*Schema).For(project ID) *Effective`
+### プロジェクトの実効スキーマ `(*Schema).For(ancestors []ID) *Effective`
 
-- `scoped` の該当要素を適用した結果を返す。該当がなければ Store の定義そのもの。
-- 引数は、タスクから見て最も近い container 役割の祖先。祖先を引くのは呼び出し側。プロジェクトが入れ子になったとき複数の `scoped` を合成することは 1a では扱わない。
+- `ancestors` はタスクの祖先の ID を近い順に並べたもの（タスク自身が container ならそれを先頭に含める）。祖先を引くのは呼び出し側。
+- `scoped` の要素を持つ祖先のうち、最も近いものを適用した結果を返す。該当がなければ Store の定義そのもの。エピックなど途中の container に `scoped` がなくても、その上のプロジェクトの上書きが効く（親設計の「そのプロジェクトの子孫すべてに効く」）。
+- 複数の祖先がそれぞれ `scoped` を持つとき、それらを合成することは 1a では扱わない（最も近いものだけを使う）。
 - 遷移は Store とプロジェクトの両方で許されたものだけ。必須プロパティは両方の和。`statuses` は表示・選択の絞り込み。
 - `templates` の絞り込みと種類ごとの既定も持つ。
 
@@ -206,6 +216,11 @@ children:
 - **fuzz テスト**: frontmatter の分割、`Rank.Between` の性質（`a < 結果 < b`）。
 - **rank の互換性**: rocicorp のテストベクタ。
 - **スキーマ検査**: 検査項目ごとのテーブル駆動テスト。
+
+## 後続への申し送り
+
+- フェーズ2: `schema.yaml` と `automations.yaml` の「キーごとに LWW」で比べる時刻が、親設計では決まっていない（ファイルに `updated` がない）。
+- 親設計ドキュメント: 「コメント」の節のパス（`comments/<タスクULID>/…`）が「ファイルレイアウト」の節（`comments/<a>/<b>/<タスクULID>/…`）と食い違う。本書は後者に合わせた。
 
 ## 完了条件
 
