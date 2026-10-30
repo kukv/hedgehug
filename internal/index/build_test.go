@@ -188,3 +188,58 @@ func TestRefreshWithoutChange(t *testing.T) {
 		t.Errorf("Refresh = %v", err)
 	}
 }
+
+func hasProblem(ix *Index, id model.ID, code string) bool {
+	return slices.ContainsFunc(ix.Problems(id), func(p Problem) bool { return p.Code == code })
+}
+
+func TestProblemsIncludeViolationsOnOpen(t *testing.T) {
+	s, dir := newStore(t)
+	id := model.NewID()
+	commitRaw(t, s, dir, model.TaskPath(id), rawTask(id, "kind: nope\ntitle: x\nstatus: todo\n"))
+	if ix := mustOpen(t, s); !hasProblem(ix, id, schema.CodeUnknownKind) {
+		t.Errorf("Problems after a rebuild = %v, want unknown_kind", ix.Problems(id))
+	}
+	if ix := mustOpen(t, s); !hasProblem(ix, id, schema.CodeUnknownKind) { // from the cache
+		t.Errorf("Problems after a cached Open = %v, want unknown_kind", ix.Problems(id))
+	}
+}
+
+func TestProblemsFollowRefresh(t *testing.T) {
+	s, dir := newStore(t)
+	task := newTask("x")
+	put(t, s, task)
+	commitRaw(t, s, dir, model.TaskPath(task.ID), rawTask(task.ID, "kind: task\ntitle: x\nstatus: todo\nprops:\n  priority: high\n"))
+	ix := mustOpen(t, s)
+	if len(ix.Problems(task.ID)) != 0 {
+		t.Fatalf("Problems = %v", ix.Problems(task.ID))
+	}
+	sc := schema.Default()
+	sc.Props[0].Values = []string{"low", "mid"}
+	if err := s.Update(store.Op{Name: "schema", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
+		t.Fatal(err)
+	}
+	if err := ix.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	if !hasProblem(ix, task.ID, schema.CodeBadValue) {
+		t.Errorf("Problems after a schema change = %v, want bad_value", ix.Problems(task.ID))
+	}
+}
+
+func TestProblemsFollowParentKind(t *testing.T) {
+	s, _ := newStore(t)
+	parent, child := newTask("parent"), newTask("child")
+	parent.Kind, child.Kind = "epic", "story"
+	child.Parent = &parent.ID
+	put(t, s, parent, child)
+	ix := mustOpen(t, s)
+	parent.Kind = "task"
+	put(t, s, parent)
+	if err := ix.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	if !hasProblem(ix, child.ID, schema.CodePlacement) {
+		t.Errorf("child Problems = %v, want placement", ix.Problems(child.ID))
+	}
+}
