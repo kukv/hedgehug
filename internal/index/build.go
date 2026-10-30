@@ -1,12 +1,15 @@
 package index
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
 	"maps"
 	"slices"
 
 	"github.com/go-git/go-git/v5/plumbing"
 
+	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
 )
@@ -121,6 +124,115 @@ func (ix *Index) ancestors(t *model.Task) []model.ID {
 		}
 		out = append(out, e.ID)
 		p = e.Parent
+	}
+	return out
+}
+
+const (
+	cacheName   = "index" // in .hedgehug/local
+	cacheFormat = 1       // bump when Entry or cache changes
+)
+
+// cache is the index as it is kept on disk, for one tree of HEAD.
+type cache struct {
+	Format int
+	Tree   plumbing.Hash
+	Tasks  []*Entry
+}
+
+// load reads the cache into tasks and returns the tree it is for. It
+// reports false when there is no usable cache.
+func (ix *Index) load() (plumbing.Hash, bool) {
+	b, err := ix.s.ReadLocal(cacheName)
+	if err != nil {
+		return plumbing.ZeroHash, false
+	}
+	var c cache
+	if err := gob.NewDecoder(bytes.NewReader(b)).Decode(&c); err != nil || c.Format != cacheFormat {
+		return plumbing.ZeroHash, false
+	}
+	ix.tasks = make(map[model.ID]*Entry, len(c.Tasks))
+	for _, e := range c.Tasks {
+		ix.tasks[e.ID] = e
+	}
+	return c.Tree, true
+}
+
+// save writes the cache. A failure is ignored: the next Open rebuilds. It
+// takes no lock, since a cache is right for its tree whoever writes last.
+func (ix *Index) save() {
+	c := cache{Format: cacheFormat, Tree: ix.tree, Tasks: slices.Collect(maps.Values(ix.tasks))}
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(&c); err != nil {
+		return
+	}
+	_ = ix.s.WriteLocal(cacheName, buf.Bytes())
+}
+
+// update brings the index from tree from, which tasks match, to tree to: it
+// reads the task files that changed, and checks again the tasks whose
+// violations may have changed. A change to schema.yaml checks every task.
+func (ix *Index) update(from, to plumbing.Hash) error {
+	sc, err := ix.readSchema(to)
+	if err != nil {
+		return err
+	}
+	var changes []gitrepo.Change
+	if from != to {
+		if changes, err = ix.repo.DiffTrees(from, to, ""); err != nil {
+			return err
+		}
+	}
+	ix.tree, ix.sc = to, sc
+	decoded := map[model.ID]*model.Task{}
+	var touched []model.ID
+	all := false
+	for _, c := range changes {
+		if c.Path == schema.Path {
+			all = true
+			continue
+		}
+		id, err := model.ParseTaskPath(c.Path)
+		if err != nil {
+			continue
+		}
+		touched = append(touched, id)
+		if c.Deleted {
+			delete(ix.tasks, id)
+			continue
+		}
+		b, err := ix.repo.ReadFile(to, c.Path)
+		if err != nil {
+			return err
+		}
+		ix.tasks[id], decoded[id] = newEntry(id, b)
+	}
+	ix.derive()
+	if all {
+		return ix.revalidate(slices.Collect(maps.Keys(ix.tasks)), decoded)
+	}
+	// A task's placement depends on its parent's kind, and its schema on its
+	// ancestors, so the descendants of a changed task are checked again.
+	return ix.revalidate(ix.descendants(touched), decoded)
+}
+
+// descendants returns ids and all their descendants, each once. A cycle of
+// parents is walked once.
+func (ix *Index) descendants(ids []model.ID) []model.ID {
+	seen := map[model.ID]bool{}
+	var out []model.ID
+	stack := slices.Clone(ids)
+	for len(stack) > 0 {
+		id := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+		for _, c := range ix.children[id] {
+			stack = append(stack, c.ID)
+		}
 	}
 	return out
 }

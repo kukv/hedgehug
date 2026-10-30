@@ -5,6 +5,7 @@ package index
 
 import (
 	"cmp"
+	"errors"
 	"maps"
 	"slices"
 
@@ -29,17 +30,48 @@ type Index struct {
 	roots    []*Entry
 }
 
-// Open builds the index of s from the tree of HEAD.
+// Open opens the index of s. It reads the cache in .hedgehug/local and
+// brings it to the tree of HEAD, reading only the task files that changed;
+// with no usable cache it reads every task file. It writes the cache back.
 func Open(s *store.Store) (*Index, error) {
 	ix := &Index{s: s, repo: s.Repo()}
 	head, err := ix.repo.HeadTree()
 	if err != nil {
 		return nil, err
 	}
-	if err := ix.rebuild(head); err != nil {
+	tree, ok := ix.load()
+	if ok {
+		err = ix.update(tree, head)
+	}
+	if !ok || errors.Is(err, gitrepo.ErrTreeNotFound) {
+		err = ix.rebuild(head)
+	}
+	if err != nil {
 		return nil, err
 	}
+	ix.save()
 	return ix, nil
+}
+
+// Refresh brings the index to the tree of HEAD when HEAD has moved, as after
+// a write or a sync. After an error, Open the index again.
+func (ix *Index) Refresh() error {
+	head, err := ix.repo.HeadTree()
+	if err != nil {
+		return err
+	}
+	if head == ix.tree {
+		return nil
+	}
+	err = ix.update(ix.tree, head)
+	if errors.Is(err, gitrepo.ErrTreeNotFound) {
+		err = ix.rebuild(head)
+	}
+	if err != nil {
+		return err
+	}
+	ix.save()
+	return nil
 }
 
 // Schema returns schema.yaml as the indexed tree has it.
