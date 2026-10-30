@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -292,7 +293,9 @@ func (d *Doc) Encoder() *Encoder { return &Encoder{d: d} }
 
 // Put sets key to v. A *yaml.Node is used as is; a nil one writes null. When
 // the key is absent from the file and zero is true, the key is left out.
-// When v equals the value in the file, the file's node is kept as written.
+// When v equals the value in the file, the file's node is kept as written,
+// with its comments and the keys v does not know. When v is a list, the
+// items that did not change keep their nodes in the same way.
 func (e *Encoder) Put(key string, v any, zero bool) {
 	if e.err != nil {
 		return
@@ -302,6 +305,10 @@ func (e *Encoder) Put(key string, v any, zero bool) {
 		return
 	}
 	nv, ok := v.(*yaml.Node)
+	if !ok && old != nil && decodesTo(old, v) {
+		e.fields = append(e.fields, Field{key, old})
+		return
+	}
 	if !ok || nv == nil {
 		if ok {
 			v = nil
@@ -316,8 +323,45 @@ func (e *Encoder) Put(key string, v any, zero bool) {
 		nv = old
 	} else {
 		styleLike(nv, old)
+		if !ok {
+			reuseItems(nv, old, v)
+		}
 	}
 	e.fields = append(e.fields, Field{key, nv})
+}
+
+// decodesTo reports whether n decodes to a value deeply equal to v.
+func decodesTo(n *yaml.Node, v any) bool {
+	t := reflect.TypeOf(v)
+	if t == nil {
+		return false
+	}
+	p := reflect.New(t)
+	if n.Decode(p.Interface()) != nil {
+		return false
+	}
+	return reflect.DeepEqual(p.Elem().Interface(), v)
+}
+
+// reuseItems puts the file's node back for each item of the list v that is
+// in the old list, so that its comments and unknown keys survive. Each old
+// item is used once, the first that matches.
+func reuseItems(nv, old *yaml.Node, v any) {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Slice || old == nil || old.Kind != yaml.SequenceNode ||
+		nv.Kind != yaml.SequenceNode || len(nv.Content) != rv.Len() {
+		return
+	}
+	used := make([]bool, len(old.Content))
+	for i := range rv.Len() {
+		for j, it := range old.Content {
+			if !used[j] && decodesTo(it, rv.Index(i).Interface()) {
+				used[j] = true
+				nv.Content[i] = it
+				break
+			}
+		}
+	}
 }
 
 // Bytes returns the YAML, with extra after the known keys. A key written

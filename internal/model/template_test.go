@@ -1,6 +1,7 @@
 package model
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -19,6 +20,49 @@ func TestTemplateRoundTrip(t *testing.T) {
 	out, err := tp.Encode()
 	if err != nil || string(out) != string(src) {
 		t.Errorf("round trip = %q, %v", out, err)
+	}
+}
+
+func TestTemplateChildrenKeepUnknownKeys(t *testing.T) {
+	src := readFile(t, "testdata/template/children.md")
+	tp, err := DecodeTemplate("children", src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := tp.Encode()
+	if err != nil || string(out) != string(src) {
+		t.Fatalf("round trip changed the file (%v):\n%s", err, out)
+	}
+	tp.Item.Children = append(tp.Item.Children, TemplateItem{Title: "公開"})
+	out, err = tp.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"- {title: 設計, assignees: inherit, owner: lead} # 未知のキー\n",
+		"# ブロックの子\n- title: 実装\n  estimate_hint: 3d # 未知のキー\n",
+		"  - {title: API, custom: 1}\n",
+		"- {title: レビュー}\n- {title: 公開}\n---\n",
+	} {
+		if !contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+// Encoder.Put compares values with reflect.DeepEqual. Values holding Fields
+// must compare equal when decoded twice from the same node.
+func TestTemplateItemsDecodeEqualTwice(t *testing.T) {
+	d := parse(t, "children:\n- {title: a, props: {points: 2, area: [x]}}\n")
+	var a, b []TemplateItem
+	if err := d.Get("children").Decode(&a); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Get("children").Decode(&b); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(a, b) {
+		t.Errorf("decoded twice: %+v != %+v", a, b)
 	}
 }
 

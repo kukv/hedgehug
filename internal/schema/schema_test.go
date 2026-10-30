@@ -59,6 +59,43 @@ func TestSchemaEditKeepsComments(t *testing.T) {
 	}
 }
 
+func TestSchemaKeepsUnknownKeys(t *testing.T) {
+	src, err := os.ReadFile("testdata/extras.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Decode(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := s.Encode()
+	if err != nil || string(out) != string(src) {
+		t.Fatalf("round trip changed the file (%v):\n%s", err, out)
+	}
+	s.Statuses = append(s.Statuses, Status{Name: "review", Category: CategoryDoing})
+	s.Kinds = append(s.Kinds, Kind{Name: "bug", Role: RoleWork})
+	s.Scoped = append(s.Scoped, Scoped{Where: "project:01JBZ8K3QW7M2X9V4T6R5N8P0C"})
+	out, err = s.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"- {name: backlog, category: todo, default: false, hint: 未知のキー}\n",
+		"# 既定の未着手\n- name: todo\n  label: 未着手 # ラベル\n  category: todo\n  default: true\n  sla: 3d\n",
+		"- {name: canceled, category: canceled, default: true}\n- {name: review, category: doing}\n",
+		"- {name: project, role: container, default: false, color: blue}\n",
+		"  role: work # 作業\n  default: true\n  wip_limit: 5\n",
+		"  owner: github.com/yourname # 未知のキー\n",
+		"    default:\n      task: release-checklist\n      project: kickoff\n",
+		"  priority: {type: enum, values: [low, high], order: desc} # 未知のキー\n",
+		"  note: 未知のキー\n",
+	} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestDefaultEncodesAndDecodes(t *testing.T) {
 	for name, s := range map[string]*Schema{"Default": Default(), "Dev": Dev()} {
 		out, err := s.Encode()

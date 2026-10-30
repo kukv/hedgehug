@@ -41,6 +41,33 @@ func TestTaskRoundTrip(t *testing.T) {
 	}
 }
 
+func TestTaskLinksKeepUnknownKeys(t *testing.T) {
+	src := readFile(t, "testdata/task/links.md")
+	task, err := DecodeTask(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := task.Encode()
+	if err != nil || string(out) != string(src) {
+		t.Fatalf("round trip changed the file (%v):\n%s", err, out)
+	}
+	task.Links = append(task.Links, Link{Type: "github_pr", Ref: "github.com/org-a/web/pull/124"})
+	out, err = task.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"links:\n# 最初のリンク\n- type: github_pr # PR\n",
+		"  reviewed: true # 未知のキー\n",
+		"- {type: github_issue, ref: github.com/org-a/web/issues/7, note: 調査中} # flow\n",
+		"- type: github_pr\n  ref: github.com/org-a/web/pull/124\n---\n",
+	} {
+		if !contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestTaskEncodeChanges(t *testing.T) {
 	task, err := DecodeTask(readFile(t, "testdata/task/full.md"))
 	if err != nil {
