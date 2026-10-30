@@ -22,13 +22,13 @@ var errTxDone = errors.New("the transaction is used after Update returned")
 type Op struct {
 	Name   string   // add, update, rm, mv...; the Hedgehug-Op trailer
 	Task   model.ID // the main task of the operation; zero if none
+	Author gitrepo.Signature
 	// Detail ends the subject when there is no Task, saying what changed,
 	// such as "add web (WEB)".
 	Detail string
 	// Workspace is the workspace the operation changes, for the
 	// Hedgehug-Workspace trailer; zero if none.
 	Workspace model.ID
-	Author    gitrepo.Signature
 	// SkipTransitions skips the check of workflow.transitions; a required
 	// field of the new status is still checked, but only when the task had
 	// it before the write.

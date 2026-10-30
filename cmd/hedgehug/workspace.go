@@ -148,7 +148,8 @@ func (a *app) workspaceAdd(name, prefix string) error {
 		return err
 	}
 	w := &model.Workspace{ID: model.NewID(), Name: name, KeyPrefix: prefix, PrefixSet: a.now()}
-	if _, err := a.update(s, store.Op{Name: "workspace"}, func(tx *store.Tx) error { return tx.PutWorkspace(w) }); err != nil {
+	op := workspaceOp(w.ID, "add %s (%s)", w.Name, w.KeyPrefix)
+	if _, err := a.update(s, op, func(tx *store.Tx) error { return tx.PutWorkspace(w) }); err != nil {
 		return err
 	}
 	return a.printWorkspace(ix, w, fmt.Sprintf("Added workspace %s (%s, %s)", w.Name, w.KeyPrefix, w.ID))
@@ -168,7 +169,8 @@ func (a *app) workspaceRename(arg, name string) error {
 	}
 	old := ws.Name
 	var w *model.Workspace
-	if _, err := a.update(s, store.Op{Name: "workspace"}, func(tx *store.Tx) error {
+	op := workspaceOp(ws.ID, "rename %s → %s (%s)", old, name, ws.KeyPrefix)
+	if _, err := a.update(s, op, func(tx *store.Tx) error {
 		var err error
 		if w, err = tx.Workspace(ws.ID); err != nil {
 			return err
@@ -203,26 +205,11 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 	if err := a.checkPrefixElsewhere(prefix, self); err != nil {
 		return err
 	}
-	// Every task of the workspace, deleted ones too, in the order of its old
-	// number; assignKeys numbers them in the order they are put.
-	var ids []model.ID
-	for _, e := range ix.Tasks() {
-		if e.Workspace == ws.ID && e.Broken == "" {
-			ids = append(ids, e.ID)
-		}
-	}
-	number := func(id model.ID) int {
-		e, _ := ix.Task(id)
-		_, n, _ := model.ParseKey(e.Key)
-		return n
-	}
-	slices.SortFunc(ids, func(x, y model.ID) int {
-		return cmp.Or(cmp.Compare(number(x), number(y)), cmp.Compare(x.String(), y.String()))
-	})
 	var w *model.Workspace
 	var tasks []*model.Task
 	var oldKeys []string
-	if _, err := a.update(s, store.Op{Name: "workspace"}, func(tx *store.Tx) error {
+	op := workspaceOp(ws.ID, "prefix %s %s → %s", ws.Name, ws.KeyPrefix, prefix)
+	if _, err := a.update(s, op, func(tx *store.Tx) error {
 		var err error
 		if w, err = tx.Workspace(ws.ID); err != nil {
 			return err
@@ -232,6 +219,26 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 		if err := tx.PutWorkspace(w); err != nil {
 			return err
 		}
+		// Every task of the workspace, deleted ones too, in the order of
+		// its old number; assignKeys numbers them in the order they are
+		// put. Read under the lock, so a task added since is renumbered too.
+		if err := ix.Refresh(); err != nil {
+			return err
+		}
+		var ids []model.ID
+		for _, e := range ix.Tasks() {
+			if e.Workspace == ws.ID && e.Broken == "" {
+				ids = append(ids, e.ID)
+			}
+		}
+		number := func(id model.ID) int {
+			e, _ := ix.Task(id)
+			_, n, _ := model.ParseKey(e.Key)
+			return n
+		}
+		slices.SortFunc(ids, func(x, y model.ID) int {
+			return cmp.Or(cmp.Compare(number(x), number(y)), cmp.Compare(x.String(), y.String()))
+		})
 		for _, id := range ids {
 			t, err := tx.Task(id)
 			if err != nil {
@@ -271,10 +278,17 @@ func (a *app) workspaceRm(arg string) error {
 	if n := countTasks(ix, ws.ID, true); n > 0 {
 		return fmt.Errorf("workspace %s still has %d tasks; move them with hedgehug mv --workspace or purge them", ws.Name, n)
 	}
-	if _, err := a.update(s, store.Op{Name: "workspace"}, func(tx *store.Tx) error { return tx.RemoveWorkspace(ws.ID) }); err != nil {
+	op := workspaceOp(ws.ID, "rm %s (%s)", ws.Name, ws.KeyPrefix)
+	if _, err := a.update(s, op, func(tx *store.Tx) error { return tx.RemoveWorkspace(ws.ID) }); err != nil {
 		return err
 	}
 	return a.printWorkspace(ix, ws, fmt.Sprintf("Removed workspace %s (%s, %s)", ws.Name, ws.KeyPrefix, ws.ID))
+}
+
+// workspaceOp is the operation of a workspace command on the workspace id.
+// The subject says what changes, as the command read it before the lock.
+func workspaceOp(id model.ID, format string, args ...any) store.Op {
+	return store.Op{Name: "workspace", Detail: fmt.Sprintf(format, args...), Workspace: id}
 }
 
 func (a *app) workspaceLs() error {

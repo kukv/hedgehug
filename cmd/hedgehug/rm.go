@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -77,14 +78,19 @@ func (a *app) rm(arg string) error {
 	if e.DeletedAt != nil {
 		return fmt.Errorf("%s is already deleted", refName(ix, e.ID))
 	}
-	targets := []*index.Entry{e}
-	for _, d := range descendants(ix, e.ID, func(*index.Entry) bool { return true }) {
-		if d.DeletedAt == nil {
-			targets = append(targets, d)
-		}
-	}
+	var targets []*index.Entry
 	now := a.now().Truncate(time.Second)
 	if _, err := a.update(s, store.Op{Name: "rm", Task: e.ID}, func(tx *store.Tx) error {
+		// Read under the lock, so a child added since is deleted too.
+		if err := ix.Refresh(); err != nil {
+			return err
+		}
+		targets = []*index.Entry{e}
+		for _, d := range descendants(ix, e.ID, func(*index.Entry) bool { return true }) {
+			if d.DeletedAt == nil {
+				targets = append(targets, d)
+			}
+		}
 		for _, x := range targets {
 			t, err := tx.Task(x.ID)
 			if err != nil {
@@ -140,10 +146,16 @@ func (a *app) restore(arg string) error {
 		}
 	}
 	at := *e.DeletedAt
-	targets := append([]*index.Entry{e}, descendants(ix, e.ID, func(d *index.Entry) bool {
-		return d.DeletedAt != nil && d.DeletedAt.Equal(at)
-	})...)
+	var targets []*index.Entry
 	if _, err := a.update(s, store.Op{Name: "restore", Task: e.ID}, func(tx *store.Tx) error {
+		// Read under the lock, so a child the same rm deleted is restored
+		// even when it came in after the index was read.
+		if err := ix.Refresh(); err != nil {
+			return err
+		}
+		targets = append([]*index.Entry{e}, descendants(ix, e.ID, func(d *index.Entry) bool {
+			return d.DeletedAt != nil && d.DeletedAt.Equal(at)
+		})...)
 		for _, x := range targets {
 			t, err := tx.Task(x.ID)
 			if err != nil {
@@ -173,18 +185,29 @@ func (a *app) purge(arg string, yes bool) error {
 	if e.DeletedAt == nil {
 		return fmt.Errorf("%s is not deleted; delete it with hedgehug rm first", refName(ix, e.ID))
 	}
-	targets := append([]*index.Entry{e}, descendants(ix, e.ID, func(*index.Entry) bool { return true })...)
-	for _, d := range targets[1:] {
-		if d.DeletedAt == nil {
-			return fmt.Errorf("%s under it is not deleted", refName(ix, d.ID))
-		}
+	targets, err := purgeTargets(ix, e)
+	if err != nil {
+		return err
 	}
 	if !yes {
 		if err := a.confirm(ix, targets); err != nil {
 			return err
 		}
 	}
+	confirmed := targets
 	if _, err := a.update(s, store.Op{Name: "purge", Task: e.ID}, func(tx *store.Tx) error {
+		// Read again under the lock: a task added under it since must not
+		// be purged unchecked, nor left behind.
+		if err := ix.Refresh(); err != nil {
+			return err
+		}
+		var err error
+		if targets, err = purgeTargets(ix, e); err != nil {
+			return err
+		}
+		if !yes && !sameTasks(targets, confirmed) {
+			return errors.New("the tasks under it changed after the confirmation; run purge again")
+		}
 		for _, x := range targets {
 			if err := tx.RemoveTask(x.ID); err != nil {
 				return err
@@ -195,6 +218,31 @@ func (a *app) purge(arg string, yes bool) error {
 		return err
 	}
 	return a.printAffected(ix, e, targets, "Purged", false)
+}
+
+// purgeTargets returns e and every task under it, refusing when one of them
+// is not deleted.
+func purgeTargets(ix *index.Index, e *index.Entry) ([]*index.Entry, error) {
+	targets := append([]*index.Entry{e}, descendants(ix, e.ID, func(*index.Entry) bool { return true })...)
+	for _, d := range targets[1:] {
+		if d.DeletedAt == nil {
+			return nil, fmt.Errorf("%s under it is not deleted", refName(ix, d.ID))
+		}
+	}
+	return targets, nil
+}
+
+// sameTasks reports whether a and b hold the same tasks.
+func sameTasks(a, b []*index.Entry) bool {
+	ids := func(es []*index.Entry) []string {
+		out := make([]string, len(es))
+		for i, e := range es {
+			out[i] = e.ID.String()
+		}
+		slices.Sort(out)
+		return out
+	}
+	return slices.Equal(ids(a), ids(b))
 }
 
 // confirm asks on the terminal before a purge.

@@ -104,6 +104,10 @@ func (a *app) open() (*store.Store, *index.Index, error) {
 	return s, ix, nil
 }
 
+// beforeUpdate lets tests write to the store after a command read its index
+// and before it writes, as another process could.
+var beforeUpdate = func() {}
+
 // update runs one operation as one commit, with the author from the
 // environment. committed is false when the operation changed nothing.
 func (a *app) update(s *store.Store, op store.Op, fn func(*store.Tx) error) (bool, error) {
@@ -112,6 +116,7 @@ func (a *app) update(s *store.Store, op store.Op, fn func(*store.Tx) error) (boo
 		return false, err
 	}
 	op.Author = author
+	beforeUpdate()
 	return s.Update(op, fn)
 }
 

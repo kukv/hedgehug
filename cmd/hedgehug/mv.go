@@ -90,28 +90,36 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 	if err != nil {
 		return err
 	}
-	// A task and its subtree are in one workspace, so they move together.
-	targets := []*index.Entry{e}
-	if dest != e.Workspace {
-		targets = append(targets, descendants(ix, e.ID, func(*index.Entry) bool { return true })...)
-	}
-	oldKeys := make([]string, len(targets))
-	for i, x := range targets {
-		oldKeys[i] = x.Key
-	}
+	// The tasks put; assignKeys gives them their new keys in place.
+	var tasks []*model.Task
+	var oldKeys []string
 	committed, err := a.update(s, store.Op{Name: "mv", Task: e.ID}, func(tx *store.Tx) error {
-		for _, x := range targets {
-			t, err := tx.Task(x.ID)
+		// A task and its subtree are in one workspace, so they move
+		// together. The subtree is read under the lock, so a child added
+		// since the index was read moves too.
+		ids := []model.ID{e.ID}
+		if dest != e.Workspace {
+			if err := ix.Refresh(); err != nil {
+				return err
+			}
+			for _, d := range descendants(ix, e.ID, func(*index.Entry) bool { return true }) {
+				ids = append(ids, d.ID)
+			}
+		}
+		for _, id := range ids {
+			t, err := tx.Task(id)
 			if err != nil {
 				return err
 			}
+			oldKeys = append(oldKeys, t.Key)
 			t.Workspace = dest
-			if x.ID == e.ID {
+			if id == e.ID {
 				t.Parent, t.Rank = parent, rank
 			}
 			if err := tx.PutTask(t); err != nil {
 				return err
 			}
+			tasks = append(tasks, t)
 		}
 		return nil
 	})
@@ -122,12 +130,8 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 		return err
 	}
 	var b strings.Builder
-	for i, x := range targets {
-		n, ok := ix.Task(x.ID)
-		if !ok {
-			return fmt.Errorf("%s is missing after the move", oldKeys[i])
-		}
-		fmt.Fprintf(&b, "  %s → %s\n", oldKeys[i], n.Key)
+	for i, t := range tasks {
+		fmt.Fprintf(&b, "  %s → %s\n", oldKeys[i], t.Key)
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())
 	return err
