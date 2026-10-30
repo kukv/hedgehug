@@ -111,6 +111,67 @@ func TestUpdateMissingParent(t *testing.T) {
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
+	if _, err := os.Stat(s.path(model.TaskPath(child.ID))); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("refused task was written: %v", err)
+	}
+
+	// Moving an existing task under a missing parent is refused too.
+	moved := newTask("moved")
+	addTask(t, s, moved)
+	before, err := os.ReadFile(s.path(model.TaskPath(moved.ID)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved.Parent = &missing
+	err = s.Update(Op{Name: "mv", Task: moved.ID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(moved) })
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("move: err = %v, want ErrNotFound", err)
+	}
+	if after, err := os.ReadFile(s.path(model.TaskPath(moved.ID))); err != nil || string(after) != string(before) {
+		t.Errorf("refused move was written: %q, %v", after, err)
+	}
+	if n := len(headLog(t, s.dir)); n != 2 {
+		t.Errorf("commits = %d, want 2 (init + add)", n)
+	}
+}
+
+// purgeAndRename purges gone, then renames task, whose parent or farther
+// ancestor gone was.
+func purgeAndRename(t *testing.T, s *Store, gone, task *model.Task) error {
+	t.Helper()
+	if err := s.Update(Op{Name: "purge", Task: gone.ID, Author: testAuthor}, func(tx *Tx) error { return tx.RemoveTask(gone.ID) }); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Task(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got.Title = "renamed"
+	return s.Update(Op{Name: "update", Task: task.ID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(got) })
+}
+
+func TestUpdateUnderPurgedParent(t *testing.T) {
+	s := newTestStore(t)
+	parent, child := newTask("parent"), newTask("child")
+	child.Parent = &parent.ID
+	addTask(t, s, parent)
+	addTask(t, s, child)
+	if err := purgeAndRename(t, s, parent, child); err != nil {
+		t.Errorf("renaming a task whose parent was purged failed: %v", err)
+	}
+}
+
+func TestUpdateUnderPurgedGrandparent(t *testing.T) {
+	s := newTestStore(t)
+	grand, parent, child := newTask("grand"), newTask("parent"), newTask("child")
+	parent.Parent = &grand.ID
+	child.Parent = &parent.ID
+	addTask(t, s, grand)
+	addTask(t, s, parent)
+	addTask(t, s, child)
+	if err := purgeAndRename(t, s, grand, child); err != nil {
+		t.Errorf("renaming a task whose grandparent was purged failed: %v", err)
+	}
 }
 
 func TestUpdateParentCycle(t *testing.T) {
