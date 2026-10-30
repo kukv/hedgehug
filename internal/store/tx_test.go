@@ -10,6 +10,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/schema"
 )
 
 func newTask(title string) *model.Task {
@@ -262,5 +263,133 @@ func TestUpdateNeedsOpName(t *testing.T) {
 	s := newTestStore(t)
 	if err := s.Update(Op{Author: testAuthor}, func(*Tx) error { return nil }); err == nil {
 		t.Error("Update without Op.Name succeeded")
+	}
+}
+
+func TestPutEveryFileType(t *testing.T) {
+	s := newTestStore(t)
+	task := newTask("x")
+	c := &model.Comment{ID: model.NewID(), Author: "github.com/me", Body: "コメント\n"}
+	w := &model.Worklog{ID: model.NewID(), Author: "github.com/me", Body: "作業\n"}
+	sp := &model.Sprint{ID: model.NewID(), Name: "S1", State: "planned"}
+	r := &model.Release{ID: model.NewID(), Name: "v1", State: "unreleased"}
+	tp := &model.Template{Name: "bug"}
+	tp.Item.Kind = "bug"
+
+	if err := s.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+		return errors.Join(
+			tx.PutTask(task),
+			tx.PutComment(task.ID, c),
+			tx.PutWorklog(task.ID, w),
+			tx.PutSprint(sp),
+			tx.PutRelease(r),
+			tx.PutTemplate(tp),
+		)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(headLog(t, s.dir)); n != 2 {
+		t.Errorf("commits = %d, want 2", n)
+	}
+
+	n := 0
+	for got, err := range s.Comments(task.ID) {
+		if err != nil || got.Body != "コメント\n" || !got.Created.Equal(testNow) {
+			t.Errorf("comment = %+v, %v", got, err)
+		}
+		n++
+	}
+	if n != 1 {
+		t.Errorf("comments = %d", n)
+	}
+	for got, err := range s.Worklogs(task.ID) {
+		if err != nil || !got.Updated.Equal(testNow) {
+			t.Errorf("worklog = %+v, %v", got, err)
+		}
+	}
+	if got, err := s.Sprint(sp.ID); err != nil || got.Name != "S1" || !got.Created.Equal(testNow) {
+		t.Errorf("sprint = %+v, %v", got, err)
+	}
+	if got, err := s.Release(r.ID); err != nil || got.Name != "v1" {
+		t.Errorf("release = %+v, %v", got, err)
+	}
+	if got, err := s.Template("bug"); err != nil || !got.Updated.Equal(testNow) {
+		t.Errorf("template = %+v, %v", got, err)
+	}
+}
+
+func TestPutTemplateBadName(t *testing.T) {
+	s := newTestStore(t)
+	err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error {
+		return tx.PutTemplate(&model.Template{Name: "../x"})
+	})
+	if err == nil {
+		t.Error("PutTemplate accepted a name outside templates/")
+	}
+}
+
+func TestRemoveTask(t *testing.T) {
+	s := newTestStore(t)
+	task := newTask("x")
+	c := &model.Comment{ID: model.NewID(), Author: "github.com/me"}
+	w := &model.Worklog{ID: model.NewID(), Author: "github.com/me"}
+	if err := s.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+		return errors.Join(tx.PutTask(task), tx.PutComment(task.ID, c), tx.PutWorklog(task.ID, w))
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Update(Op{Name: "purge", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+		return tx.RemoveTask(task.ID)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Task(task.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("task still readable: %v", err)
+	}
+	for got, err := range s.Comments(task.ID) {
+		t.Errorf("a comment is left: %+v, %v", got, err)
+	}
+	log := headLog(t, s.dir)
+	if len(log) != 3 {
+		t.Fatalf("commits = %d, want 3", len(log))
+	}
+	if want := "hedgehug: purge " + task.ID.String() + "\n"; !strings.HasPrefix(log[0].Message, want) {
+		t.Errorf("message = %q, want prefix %q", log[0].Message, want)
+	}
+	tree, err := log[0].Tree()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{model.TaskPath(task.ID), model.CommentPath(task.ID, c.ID), model.WorklogPath(task.ID, w.ID)} {
+		if _, err := tree.File(p); err == nil {
+			t.Errorf("%s is still in the tree", p)
+		}
+	}
+}
+
+func TestPutSchema(t *testing.T) {
+	s := newTestStore(t)
+	sc := schema.Dev()
+	if err := s.Update(Op{Name: "schema", Author: testAuthor}, func(tx *Tx) error { return tx.PutSchema(sc) }); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.Schema().Status("review"); !ok {
+		t.Error("Schema() was not replaced")
+	}
+	o, err := Open(s.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := o.Schema().Status("review"); !ok {
+		t.Error("schema.yaml was not written")
+	}
+
+	bad := schema.Default()
+	bad.Statuses = append(bad.Statuses, bad.Statuses[0]) // a duplicate name
+	err = s.Update(Op{Name: "schema", Author: testAuthor}, func(tx *Tx) error { return tx.PutSchema(bad) })
+	var se *SchemaError
+	if !errors.As(err, &se) || len(se.Problems) == 0 {
+		t.Errorf("err = %v, want a *SchemaError", err)
 	}
 }

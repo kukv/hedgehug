@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"slices"
 	"time"
 
@@ -98,6 +99,70 @@ func (tx *Tx) PutTask(t *model.Task) error {
 	return nil
 }
 
+func (tx *Tx) PutComment(task model.ID, c *model.Comment) error {
+	return tx.put(model.CommentPath(task, c.ID), &pending{encode: c.Encode, created: &c.Created, updated: &c.Updated})
+}
+
+func (tx *Tx) PutWorklog(task model.ID, w *model.Worklog) error {
+	return tx.put(model.WorklogPath(task, w.ID), &pending{encode: w.Encode, created: &w.Created, updated: &w.Updated})
+}
+
+func (tx *Tx) PutSprint(sp *model.Sprint) error {
+	return tx.put(model.SprintPath(sp.ID), &pending{encode: sp.Encode, created: &sp.Created, updated: &sp.Updated})
+}
+
+func (tx *Tx) PutRelease(r *model.Release) error {
+	return tx.put(model.ReleasePath(r.ID), &pending{encode: r.Encode, created: &r.Created, updated: &r.Updated})
+}
+
+func (tx *Tx) PutTemplate(t *model.Template) error {
+	if err := model.ValidTemplateName(t.Name); err != nil {
+		return err
+	}
+	return tx.put(model.TemplatePath(t.Name), &pending{encode: t.Encode, created: &t.Created, updated: &t.Updated})
+}
+
+// PutSchema queues a write of schema.yaml. Update refuses a schema that
+// fails its own Check, and checks the tasks of the same operation against
+// the new schema.
+func (tx *Tx) PutSchema(sc *schema.Schema) error {
+	if err := tx.put(schemaPath, &pending{encode: sc.Encode}); err != nil {
+		return err
+	}
+	tx.schema = sc
+	return nil
+}
+
+// RemoveTask queues the removal of a task file with its comments and
+// worklog entries, for purging. Soft deletion is a PutTask with DeletedAt.
+func (tx *Tx) RemoveTask(id model.ID) error {
+	if tx.done {
+		return errTxDone
+	}
+	rels := []string{model.TaskPath(id)}
+	for _, dir := range []string{path.Dir(model.CommentPath(id, model.ID{})), path.Dir(model.WorklogPath(id, model.ID{}))} {
+		entries, err := os.ReadDir(tx.s.path(dir))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			if !e.IsDir() {
+				rels = append(rels, dir+"/"+e.Name())
+			}
+		}
+	}
+	for _, rel := range rels {
+		if err := tx.put(rel, &pending{remove: true}); err != nil {
+			return err
+		}
+	}
+	tx.tasks[id] = nil
+	return nil
+}
+
 // Update runs one operation: under the store lock it runs fn, stamps and
 // writes the files fn put, and commits them as one commit. When fn fails
 // nothing is written; when writing or committing fails the files are put
@@ -123,6 +188,11 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (err error) {
 	tx.done = true
 	if err != nil {
 		return err
+	}
+	if tx.schema != nil {
+		if ps := tx.schema.Check(); len(ps) > 0 {
+			return &SchemaError{Problems: ps}
+		}
 	}
 
 	now := s.now().Truncate(time.Second)
