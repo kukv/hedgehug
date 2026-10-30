@@ -167,12 +167,12 @@ func count(n int) string {
 // index after a write, and from the migrated tasks in a dry run.
 func (a *app) printMigrated(ix *index.Index, p *migrationPlan, dryRun bool) error {
 	changed := p.changed
-	shorts := make([]string, len(p.skipped))
+	skipped := make([]string, len(p.skipped))
 	for i, id := range p.skipped {
-		shorts[i] = id.String()
+		skipped[i] = id.String()
 	}
-	if len(shorts) > 0 {
-		if _, err := fmt.Fprintf(a.stderr, "warning: not migrated, since they do not decode: %s\n", strings.Join(shorts, ", ")); err != nil {
+	if len(skipped) > 0 {
+		if _, err := fmt.Fprintf(a.stderr, "warning: not migrated, since they do not decode: %s\n", strings.Join(skipped, ", ")); err != nil {
 			return err
 		}
 	}
@@ -180,7 +180,7 @@ func (a *app) printMigrated(ix *index.Index, p *migrationPlan, dryRun bool) erro
 		out := struct {
 			Changed []*taskJSON `json:"changed"`
 			Skipped []string    `json:"skipped"`
-		}{Changed: []*taskJSON{}, Skipped: shorts}
+		}{Changed: []*taskJSON{}, Skipped: skipped}
 		for _, t := range changed {
 			e, ok := ix.Task(t.ID)
 			if dryRun || !ok {
@@ -198,7 +198,7 @@ func (a *app) printMigrated(ix *index.Index, p *migrationPlan, dryRun bool) erro
 	fmt.Fprintf(&b, "%s %s\n", heading, count(len(changed)))
 	st := a.style()
 	for _, t := range changed {
-		fmt.Fprintf(&b, "  %s  %s\n", st.id(t.ID.String()), t.Title)
+		fmt.Fprintf(&b, "  %s  %s\n", st.id(taskLabel(index.EntryOf(t))), t.Title)
 	}
 	_, err := fmt.Fprint(a.stdout, b.String())
 	return err

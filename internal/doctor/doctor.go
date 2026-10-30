@@ -139,10 +139,19 @@ func checkStore(dir string) []Finding {
 			if p.Field != "" {
 				msg = p.Field + ": " + msg
 			}
-			fs = append(fs, Finding{Check: "task", Where: strings.TrimSpace(e.ID.String() + " " + e.Title), Msg: msg})
+			fs = append(fs, Finding{Check: "task", Where: taskWhere(e), Msg: msg})
 		}
 	}
 	return fs
+}
+
+// taskWhere names the task e in a finding: its key, ULID and title, or the
+// ULID and title when it has no key (a file that does not decode).
+func taskWhere(e *index.Entry) string {
+	if e.Key == "" {
+		return strings.TrimSpace(e.ID.String() + " " + e.Title)
+	}
+	return strings.TrimSpace(e.Key + " (" + e.ID.String() + ") " + e.Title)
 }
 
 // checkFiles reads every file under the directories of fileRoots.

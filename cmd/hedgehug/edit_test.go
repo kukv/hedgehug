@@ -77,7 +77,7 @@ func TestEdit(t *testing.T) {
 	before := len(te.log("me"))
 	te.editWith(setLine(te.raw(x.ID), "title", "Renamed"))
 
-	out := te.ok("edit", x.Short)
+	out := te.ok("edit", x.Key)
 	if !strings.HasPrefix(out, "Updated ") || !strings.Contains(out, "Renamed") {
 		t.Errorf("stdout = %q", out)
 	}
@@ -85,7 +85,7 @@ func TestEdit(t *testing.T) {
 	if len(log) != before+1 || !strings.Contains(log[0].Message, "Hedgehug-Op: edit") {
 		t.Errorf("commits = %d (want %d), last %q", len(log), before+1, log[0].Message)
 	}
-	if out := te.ok("show", x.Short); !strings.Contains(out, "Renamed") {
+	if out := te.ok("show", x.Key); !strings.Contains(out, "Renamed") {
 		t.Errorf("show = %q", out)
 	}
 	if fs := te.tempFiles(); len(fs) != 0 {
@@ -95,7 +95,7 @@ func TestEdit(t *testing.T) {
 	// --json prints the task as written.
 	te.editWith(setLine(te.raw(x.ID), "title", "Again"))
 	var got taskJSON
-	if err := json.Unmarshal([]byte(te.ok("edit", x.Short, "--json")), &got); err != nil {
+	if err := json.Unmarshal([]byte(te.ok("edit", x.Key, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.Title != "Again" {
@@ -109,7 +109,7 @@ func TestEditNoChanges(t *testing.T) {
 	before := len(te.log("me"))
 	seen := te.editWith(te.raw(x.ID))
 
-	out := te.ok("edit", x.Short)
+	out := te.ok("edit", x.Key)
 	if !strings.HasPrefix(out, "No changes") {
 		t.Errorf("stdout = %q, want No changes", out)
 	}
@@ -150,7 +150,7 @@ func TestEditRefused(t *testing.T) {
 			te.editWith(edited)
 			before := len(te.log("me"))
 
-			code, _, stderr := te.run("edit", x.Short)
+			code, _, stderr := te.run("edit", x.Key)
 			if code != 1 || !strings.Contains(stderr, tc.want) {
 				t.Errorf("exit %d (want 1), stderr %q (want %q)", code, stderr, tc.want)
 			}
@@ -181,7 +181,7 @@ func TestEditRetry(t *testing.T) {
 	seen := te.editWith(bad, good)
 	te.terminal, te.stdin = true, "y\n"
 
-	code, out, stderr := te.run("edit", x.Short)
+	code, out, stderr := te.run("edit", x.Key)
 	if code != 0 || !strings.Contains(out, "Fixed") {
 		t.Fatalf("exit %d, stdout %q, stderr %q", code, out, stderr)
 	}
@@ -206,12 +206,12 @@ func TestEditValidation(t *testing.T) {
 	te.editWith(setLine(te.raw(x.ID), "status", "nope"))
 	te.terminal, te.stdin = true, "n\n"
 
-	code, _, stderr := te.run("edit", x.Short)
+	code, _, stderr := te.run("edit", x.Key)
 	if code != 1 || !strings.Contains(stderr, "breaks the schema") || !strings.Contains(stderr, "[Y/n]") {
 		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
 	}
-	if fs := te.tempFiles(); len(fs) != 1 || !strings.Contains(stderr, fs[0]) {
-		t.Errorf("temporary files %v, stderr %q: want one, named in stderr", fs, stderr)
+	if fs := te.tempFiles(); len(fs) != 1 || !strings.Contains(stderr, fs[0]) || !strings.HasPrefix(filepath.Base(fs[0]), "hedgehug-"+x.Key+"-") {
+		t.Errorf("temporary files %v, stderr %q: want one named after the key, named in stderr", fs, stderr)
 	}
 	if n := len(te.log("me")); n != before {
 		t.Errorf("commits = %d, want %d", n, before)
@@ -223,7 +223,7 @@ func TestEditDecodeError(t *testing.T) {
 	x := te.addJSON("Alpha")
 	te.editWith("not a task\n")
 
-	code, _, stderr := te.run("edit", x.Short)
+	code, _, stderr := te.run("edit", x.Key)
 	if code != 1 || !strings.Contains(stderr, "decode") {
 		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
 	}
@@ -238,11 +238,11 @@ func TestEditBroken(t *testing.T) {
 	before := len(te.log("me"))
 	seen := te.editWith(setLine(good, "title", "Mended"))
 
-	te.ok("edit", x.Short)
+	te.ok("edit", x.ID) // a broken task has no key to give
 	if s := seen(); len(s) != 1 || s[0] != broken {
 		t.Errorf("the editor saw %q, want the broken bytes", s)
 	}
-	if out := te.ok("show", x.Short); strings.Contains(out, "broken:") || !strings.Contains(out, "Mended") {
+	if out := te.ok("show", x.Key); strings.Contains(out, "broken:") || !strings.Contains(out, "Mended") {
 		t.Errorf("show = %q", out)
 	}
 	if log := te.log("me"); len(log) != before+1 || !strings.Contains(log[0].Message, "Hedgehug-Op: edit") {
@@ -253,7 +253,7 @@ func TestEditBroken(t *testing.T) {
 	other := te.addJSON("Other")
 	te.commitFile(x.ID, broken)
 	te.editWith(setLine(good, "id", other.ID))
-	if code, _, stderr := te.run("edit", x.Short); code != 1 || !strings.Contains(stderr, "the id must stay "+x.ID) {
+	if code, _, stderr := te.run("edit", x.ID); code != 1 || !strings.Contains(stderr, "the id must stay "+x.ID) {
 		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
 	}
 }
@@ -265,7 +265,7 @@ func TestEditChangedWhileEditing(t *testing.T) {
 	te.editWith(setLine(te.raw(x.ID), "title", "Mine") + "TOUCH " + te.taskFile(x.ID) + "\n")
 	te.terminal, te.stdin = true, "y\n"
 
-	code, _, stderr := te.run("edit", x.Short)
+	code, _, stderr := te.run("edit", x.Key)
 	if code != 1 || !strings.Contains(stderr, "changed while editing") {
 		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
 	}
@@ -283,11 +283,11 @@ func TestEditChangedWhileEditing(t *testing.T) {
 func TestEditDeleted(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	te.ok("rm", x.Short)
+	te.ok("rm", x.Key)
 	te.editWith()
 
-	code, _, stderr := te.run("edit", x.Short)
-	if code != 1 || !strings.Contains(stderr, "is deleted; restore "+x.Short+" first") {
+	code, _, stderr := te.run("edit", x.Key)
+	if code != 1 || !strings.Contains(stderr, "is deleted; restore "+label(x)+" first") {
 		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
 	}
 	if fs := te.tempFiles(); len(fs) != 0 {
@@ -301,7 +301,7 @@ func TestEditEditorFails(t *testing.T) {
 	before := len(te.log("me"))
 	te.editWith("EXIT1")
 
-	code, _, stderr := te.run("edit", x.Short)
+	code, _, stderr := te.run("edit", x.Key)
 	if code != 1 || !strings.Contains(stderr, "editor") {
 		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
 	}
@@ -320,7 +320,7 @@ func TestEditBlankEditor(t *testing.T) {
 	te.editWith()
 	te.env["EDITOR"] = "   "
 
-	code, _, stderr := te.run("edit", x.Short)
+	code, _, stderr := te.run("edit", x.Key)
 	if code != 1 || !strings.Contains(stderr, "$EDITOR is blank") {
 		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
 	}

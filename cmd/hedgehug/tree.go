@@ -55,7 +55,7 @@ func (a *app) lsTree(q *query.Query, idsOnly bool, tmpl *template.Template) erro
 				hit = append(hit, n.e)
 			}
 		}
-		return a.printIDs(ix, hit)
+		return a.printIDs(hit)
 	case tmpl != nil:
 		node := map[model.ID]*treeNode{}
 		es := make([]*index.Entry, len(drawn))
@@ -75,12 +75,12 @@ func (a *app) lsTree(q *query.Query, idsOnly bool, tmpl *template.Template) erro
 	var b strings.Builder
 	st := a.style()
 	for _, n := range roots {
-		writeNode(&b, ix, st, n, "", "")
+		writeNode(&b, st, n, "", "")
 	}
 	if len(cycle) > 0 {
 		b.WriteString("\n== in a parent cycle\n")
 		for _, n := range cycle {
-			writeNode(&b, ix, st, n, "", "")
+			writeNode(&b, st, n, "", "")
 		}
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())
@@ -152,25 +152,26 @@ func inParentCycle(ix *index.Index, id model.ID) bool {
 	return false
 }
 
-func writeNode(b *strings.Builder, ix *index.Index, st style, n *treeNode, lead, childLead string) {
-	b.WriteString(lead + treeLine(ix, st, n.e, n.context) + "\n")
+func writeNode(b *strings.Builder, st style, n *treeNode, lead, childLead string) {
+	b.WriteString(lead + treeLine(st, n.e, n.context) + "\n")
 	for i, c := range n.children {
 		if i == len(n.children)-1 {
-			writeNode(b, ix, st, c, childLead+"└─ ", childLead+"   ")
+			writeNode(b, st, c, childLead+"└─ ", childLead+"   ")
 		} else {
-			writeNode(b, ix, st, c, childLead+"├─ ", childLead+"│  ")
+			writeNode(b, st, c, childLead+"├─ ", childLead+"│  ")
 		}
 	}
 }
 
-// treeLine is one task of the tree: short ID, status, kind and title.
-func treeLine(ix *index.Index, st style, e *index.Entry, context bool) string {
-	r := taskRow(ix, e)
-	line := r[0] + "  " + r[1] + "  " + r[2] + "  " + r[5]
+// treeLine is one task of the tree: key and ULID, status, kind and title.
+func treeLine(st style, e *index.Entry, context bool) string {
+	r := taskRow(e)
+	name := r[0] + " " + r[1]
+	line := name + "  " + r[2] + "  " + r[3] + "  " + r[6]
 	if context {
 		return st.dim(line)
 	}
-	return st.id(r[0]) + line[len(r[0]):]
+	return st.id(name) + line[len(name):]
 }
 
 func nodeJSON(ix *index.Index, n *treeNode) *taskJSON {

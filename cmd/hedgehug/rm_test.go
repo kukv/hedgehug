@@ -10,8 +10,8 @@ import (
 // tree3 adds a project with a child and a grandchild.
 func tree3(te *testEnv) (p, c, g taskJSON) {
 	p = te.addJSON("P", "--kind", "project")
-	c = te.addJSON("C", "--parent", p.Short)
-	g = te.addJSON("G", "--parent", c.Short)
+	c = te.addJSON("C", "--parent", p.Key)
+	g = te.addJSON("G", "--parent", c.Key)
 	return p, c, g
 }
 
@@ -21,16 +21,16 @@ func TestChangeDeletedTask(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
 	b := te.addJSON("Blocker")
-	te.ok("rm", x.Short)
+	te.ok("rm", x.Key)
 	before := len(te.log("me"))
 	for _, args := range [][]string{
-		{"set", x.Short, "title=Renamed"},
-		{"status", x.Short, "in_progress"},
-		{"done", x.Short},
-		{"dep", "add", x.Short, "--blocked-by", b.Short},
+		{"set", x.Key, "title=Renamed"},
+		{"status", x.Key, "in_progress"},
+		{"done", x.Key},
+		{"dep", "add", x.Key, "--blocked-by", b.Key},
 	} {
 		code, _, stderr := te.run(args...)
-		if code != 1 || !strings.Contains(stderr, "is deleted; restore "+x.Short+" first") {
+		if code != 1 || !strings.Contains(stderr, "is deleted; restore "+label(x)+" first") {
 			t.Errorf("%v: exit %d (want 1), stderr %q", args, code, stderr)
 		}
 	}
@@ -45,10 +45,10 @@ func TestRmAndRestore(t *testing.T) {
 
 	// G is deleted on its own first, then P with what is left under it.
 	te.now = te.now.Add(time.Minute)
-	te.ok("rm", g.Short)
+	te.ok("rm", g.Key)
 	te.now = te.now.Add(time.Minute)
 	before := len(te.log("me"))
-	out := te.ok("rm", p.Short)
+	out := te.ok("rm", p.Key)
 	if !strings.Contains(out, "P") || !strings.Contains(out, "1 task under it") {
 		t.Errorf("stdout = %q", out)
 	}
@@ -67,7 +67,7 @@ func TestRmAndRestore(t *testing.T) {
 	}
 
 	// restore brings back what the same rm deleted, not G.
-	te.ok("restore", p.Short)
+	te.ok("restore", p.Key)
 	if te.task(p.ID).DeletedAt != nil || te.task(c.ID).DeletedAt != nil {
 		t.Error("P or C is still deleted")
 	}
@@ -82,14 +82,14 @@ func TestRmAndRestore(t *testing.T) {
 func TestRmRestoreErrors(t *testing.T) {
 	te := newStoreEnv(t)
 	p, c, _ := tree3(te)
-	if code, _, stderr := te.run("restore", p.Short); code != 1 || !strings.Contains(stderr, "not deleted") {
+	if code, _, stderr := te.run("restore", p.Key); code != 1 || !strings.Contains(stderr, "not deleted") {
 		t.Errorf("restore of a live task: exit %d, stderr %q", code, stderr)
 	}
-	te.ok("rm", p.Short)
-	if code, _, stderr := te.run("rm", p.Short); code != 1 || !strings.Contains(stderr, "already deleted") {
+	te.ok("rm", p.Key)
+	if code, _, stderr := te.run("rm", p.Key); code != 1 || !strings.Contains(stderr, "already deleted") {
 		t.Errorf("rm twice: exit %d, stderr %q", code, stderr)
 	}
-	if code, _, stderr := te.run("restore", c.Short); code != 1 || !strings.Contains(stderr, "restore "+p.Short) {
+	if code, _, stderr := te.run("restore", c.Key); code != 1 || !strings.Contains(stderr, "restore "+label(p)) {
 		t.Errorf("restore under a deleted parent: exit %d, stderr %q", code, stderr)
 	}
 }
@@ -98,7 +98,7 @@ func TestRmJSON(t *testing.T) {
 	te := newStoreEnv(t)
 	p, _, _ := tree3(te)
 	var got []taskJSON
-	if err := json.Unmarshal([]byte(te.ok("rm", p.Short, "--json")), &got); err != nil {
+	if err := json.Unmarshal([]byte(te.ok("rm", p.Key, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 3 || got[0].ID != p.ID || got[0].DeletedAt == nil {
@@ -109,25 +109,25 @@ func TestRmJSON(t *testing.T) {
 func TestPurge(t *testing.T) {
 	te := newStoreEnv(t)
 	p, c, g := tree3(te)
-	if code, _, stderr := te.run("purge", p.Short, "--yes"); code != 1 || !strings.Contains(stderr, "hedgehug rm") {
+	if code, _, stderr := te.run("purge", p.Key, "--yes"); code != 1 || !strings.Contains(stderr, "hedgehug rm") {
 		t.Errorf("purge of a live task: exit %d, stderr %q", code, stderr)
 	}
-	te.ok("rm", g.Short)
-	if code, _, stderr := te.run("purge", c.Short, "--yes"); code != 1 || !strings.Contains(stderr, "not deleted") {
+	te.ok("rm", g.Key)
+	if code, _, stderr := te.run("purge", c.Key, "--yes"); code != 1 || !strings.Contains(stderr, "not deleted") {
 		t.Errorf("purge with a live descendant: exit %d, stderr %q", code, stderr)
 	}
-	te.ok("rm", p.Short)
-	if code, _, stderr := te.run("purge", p.Short); code != 2 || !strings.Contains(stderr, "--yes") {
+	te.ok("rm", p.Key)
+	if code, _, stderr := te.run("purge", p.Key); code != 2 || !strings.Contains(stderr, "--yes") {
 		t.Errorf("purge without --yes off a terminal: exit %d, stderr %q", code, stderr)
 	}
 
 	// On a terminal it asks; anything but y keeps the files.
 	te.terminal, te.stdin = true, "n\n"
-	if code, _, stderr := te.run("purge", p.Short); code != 1 || !strings.Contains(stderr, "3 tasks") {
+	if code, _, stderr := te.run("purge", p.Key); code != 1 || !strings.Contains(stderr, "3 tasks") {
 		t.Errorf("purge answered n: exit %d, stderr %q", code, stderr)
 	}
 	te.stdin = "y\n"
-	te.ok("purge", p.Short)
+	te.ok("purge", p.Key)
 	te.terminal, te.stdin = false, ""
 	if !strings.Contains(te.log("me")[0].Message, "Hedgehug-Op: purge") {
 		t.Error("not a purge commit")

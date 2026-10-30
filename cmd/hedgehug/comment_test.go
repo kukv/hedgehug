@@ -45,8 +45,8 @@ func TestCommentAddFromArgs(t *testing.T) {
 	x := te.addJSON("Alpha")
 	before := len(te.log("me"))
 
-	got := te.commentJSON("comment", x.Short, "hello", "world")
-	if got.Body != "hello world\n" || got.Task != x.ID || got.Short != got.ID || got.Author != "" || got.DeletedAt != nil {
+	got := te.commentJSON("comment", x.Key, "hello", "world")
+	if got.Body != "hello world\n" || got.Task != x.ID || len(got.ID) != 26 || got.Author != "" || got.DeletedAt != nil {
 		t.Errorf("comment = %+v", got)
 	}
 	cs := te.comments(x.ID)
@@ -58,9 +58,9 @@ func TestCommentAddFromArgs(t *testing.T) {
 		t.Errorf("commits = %d (want %d), last %q", len(log), before+1, log[0].Message)
 	}
 
-	out := te.ok("comment", x.Short, "again")
-	if !strings.HasPrefix(out, "Added ") || len(strings.Fields(out)) != 2 {
-		t.Errorf("stdout = %q, want Added <short>", out)
+	out := te.ok("comment", x.Key, "again")
+	if f := strings.Fields(out); len(f) != 2 || f[0] != "Added" || len(f[1]) != 26 {
+		t.Errorf("stdout = %q, want Added <ULID>", out)
 	}
 }
 
@@ -69,7 +69,7 @@ func TestCommentAddInEditor(t *testing.T) {
 	x := te.addJSON("Alpha")
 	seen := te.editWith("from the editor\n")
 
-	te.ok("comment", x.Short)
+	te.ok("comment", x.Key)
 	if got := seen(); len(got) != 1 || got[0] != "" {
 		t.Errorf("the editor saw %q, want an empty file", got)
 	}
@@ -91,13 +91,13 @@ func TestCommentAddKeepsFileOnFailure(t *testing.T) {
 	// A file named comments makes the directory of the comment impossible.
 	te.editWith("from the editor\nTOUCH " + filepath.Join(te.storeDir("me"), "comments") + "\n")
 
-	code, _, stderr := te.run("comment", x.Short)
+	code, _, stderr := te.run("comment", x.Key)
 	if code != 1 {
 		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
 	}
 	fs := te.tempFiles()
-	if len(fs) != 1 || !strings.Contains(stderr, fs[0]) {
-		t.Fatalf("temporary files %v, stderr %q: want one, named in stderr", fs, stderr)
+	if len(fs) != 1 || !strings.Contains(stderr, fs[0]) || !strings.HasPrefix(filepath.Base(fs[0]), "hedgehug-"+x.Key+"-") {
+		t.Fatalf("temporary files %v, stderr %q: want one named after the key, named in stderr", fs, stderr)
 	}
 	if b, err := os.ReadFile(fs[0]); err != nil || string(b) != "from the editor\n" {
 		t.Errorf("kept file = %q, %v", b, err)
@@ -112,12 +112,12 @@ func TestCommentEmptyBody(t *testing.T) {
 	x := te.addJSON("Alpha")
 	before := len(te.log("me"))
 
-	code, _, errs := te.run("comment", x.Short, "  ", "\t")
+	code, _, errs := te.run("comment", x.Key, "  ", "\t")
 	if code != 1 || !strings.Contains(errs, "empty") {
 		t.Errorf("args: exit %d, stderr %q", code, errs)
 	}
 	te.editWith("  \n\n")
-	code, _, errs = te.run("comment", x.Short)
+	code, _, errs = te.run("comment", x.Key)
 	if code != 1 || !strings.Contains(errs, "empty") {
 		t.Errorf("editor: exit %d, stderr %q", code, errs)
 	}
@@ -132,9 +132,9 @@ func TestCommentEmptyBody(t *testing.T) {
 func TestCommentDeletedTask(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	te.ok("rm", x.Short)
+	te.ok("rm", x.Key)
 
-	code, _, errs := te.run("comment", x.Short, "hi")
+	code, _, errs := te.run("comment", x.Key, "hi")
 	if code != 1 || !strings.Contains(errs, "restore") {
 		t.Errorf("exit %d, stderr %q, want a pointer to restore", code, errs)
 	}
@@ -143,11 +143,11 @@ func TestCommentDeletedTask(t *testing.T) {
 func TestCommentEdit(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	c := te.commentJSON("comment", x.Short, "first")
+	c := te.commentJSON("comment", x.Key, "first")
 	before := len(te.log("me"))
 	seen := te.editWith("second\n")
 
-	out := te.ok("comment", "edit", c.Short)
+	out := te.ok("comment", "edit", c.ID)
 	if got := seen(); len(got) != 1 || got[0] != "first\n" {
 		t.Errorf("the editor saw %q, want only the body", got)
 	}
@@ -170,18 +170,18 @@ func TestCommentEdit(t *testing.T) {
 func TestCommentEditChangedWhileEditing(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	c := te.commentJSON("comment", x.Short, "first")
+	c := te.commentJSON("comment", x.Key, "first")
 	before := len(te.log("me"))
 	file := filepath.Join(te.storeDir("me"), filepath.FromSlash(model.CommentPath(mustID(t, x.ID), mustID(t, c.ID))))
 	te.editWith("second\nTOUCH " + file + "\n")
 
-	code, _, stderr := te.run("comment", "edit", c.Short)
+	code, _, stderr := te.run("comment", "edit", c.ID)
 	if code != 1 || !strings.Contains(stderr, "changed while editing") {
 		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
 	}
 	fs := te.tempFiles()
-	if len(fs) != 1 || !strings.Contains(stderr, fs[0]) {
-		t.Fatalf("temporary files %v, stderr %q: want one, named in stderr", fs, stderr)
+	if len(fs) != 1 || !strings.Contains(stderr, fs[0]) || !strings.HasPrefix(filepath.Base(fs[0]), "hedgehug-comment-"+c.ID+"-") {
+		t.Fatalf("temporary files %v, stderr %q: want one named after the comment, named in stderr", fs, stderr)
 	}
 	if b, err := os.ReadFile(fs[0]); err != nil || string(b) != "second\n" {
 		t.Errorf("kept file = %q, %v", b, err)
@@ -194,15 +194,15 @@ func TestCommentEditChangedWhileEditing(t *testing.T) {
 func TestCommentEditNoChangesAndEmpty(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	c := te.commentJSON("comment", x.Short, "first")
+	c := te.commentJSON("comment", x.Key, "first")
 	before := len(te.log("me"))
 
 	te.editWith("first\n")
-	if out := te.ok("comment", "edit", c.Short); !strings.HasPrefix(out, "No changes") {
+	if out := te.ok("comment", "edit", c.ID); !strings.HasPrefix(out, "No changes") {
 		t.Errorf("stdout = %q, want No changes", out)
 	}
 	te.editWith(" \n")
-	code, _, errs := te.run("comment", "edit", c.Short)
+	code, _, errs := te.run("comment", "edit", c.ID)
 	if code != 1 || !strings.Contains(errs, "comment rm") {
 		t.Errorf("exit %d, stderr %q, want a pointer to comment rm", code, errs)
 	}
@@ -214,10 +214,10 @@ func TestCommentEditNoChangesAndEmpty(t *testing.T) {
 func TestCommentRm(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	c := te.commentJSON("comment", x.Short, "gone soon")
+	c := te.commentJSON("comment", x.Key, "gone soon")
 	before := len(te.log("me"))
 
-	out := te.ok("comment", "rm", c.Short)
+	out := te.ok("comment", "rm", c.ID)
 	if !strings.HasPrefix(out, "Deleted ") {
 		t.Errorf("stdout = %q", out)
 	}
@@ -229,14 +229,14 @@ func TestCommentRm(t *testing.T) {
 	if len(log) != before+1 || !strings.Contains(log[0].Message, "Hedgehug-Op: comment") {
 		t.Errorf("last commit %q", log[0].Message)
 	}
-	if out := te.ok("show", x.Short); strings.Contains(out, "gone soon") || strings.Contains(out, "Comments:") {
+	if out := te.ok("show", x.Key); strings.Contains(out, "gone soon") || strings.Contains(out, "Comments:") {
 		t.Errorf("show still has the comment:\n%s", out)
 	}
-	if code, _, errs := te.run("comment", "rm", c.Short); code != 1 || !strings.Contains(errs, "deleted") {
+	if code, _, errs := te.run("comment", "rm", c.ID); code != 1 || !strings.Contains(errs, "deleted") {
 		t.Errorf("second rm: exit %d, stderr %q", code, errs)
 	}
 	te.editWith("x\n")
-	if code, _, errs := te.run("comment", "edit", c.Short); code != 1 || !strings.Contains(errs, "deleted") {
+	if code, _, errs := te.run("comment", "edit", c.ID); code != 1 || !strings.Contains(errs, "deleted") {
 		t.Errorf("edit of a deleted comment: exit %d, stderr %q", code, errs)
 	}
 	if n := len(te.log("me")); n != before+1 {
@@ -249,7 +249,7 @@ func TestCommentRm(t *testing.T) {
 func TestCommentRmRereadsUnderLock(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	c := te.commentJSON("comment", x.Short, "first")
+	c := te.commentJSON("comment", x.Key, "first")
 	s, err := store.Open(te.storeDir("me"))
 	if err != nil {
 		t.Fatal(err)
@@ -280,7 +280,7 @@ func TestCommentRmRereadsUnderLock(t *testing.T) {
 	}
 	rm := make(chan result, 1)
 	go func() {
-		code, _, stderr := te.run("comment", "rm", c.Short)
+		code, _, stderr := te.run("comment", "rm", c.ID)
 		rm <- result{code, stderr}
 	}()
 	// Let comment rm read the comment and wait for the lock.
@@ -331,29 +331,32 @@ func TestCommentIDMustBeFull(t *testing.T) {
 	const a = "01HZZZZZZZZZZZZZZZZZZZ0001"
 	te.putComments(x.ID, a)
 
-	if code, _, errs := te.run("comment", "rm", "0001"); code != 1 || !strings.Contains(errs, "not found") {
-		t.Errorf("the end of a ULID: exit %d, stderr %q, want not found", code, errs)
+	for _, in := range []string{"0001", a[1:]} {
+		if code, _, errs := te.run("comment", "rm", in); code != 1 || !strings.Contains(errs, "give the full ID of the comment") || !strings.Contains(errs, "not found") {
+			t.Errorf("%s: exit %d, stderr %q, want the full ID asked for", in, code, errs)
+		}
 	}
 	// A full ULID resolves, in any case.
 	te.ok("comment", "rm", strings.ToLower(a))
 }
 
-func TestShowCommentShort(t *testing.T) {
+func TestShowCommentID(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	c := te.commentJSON("comment", x.Short, "has an author-less comment")
+	c := te.commentJSON("comment", x.Key, "has an author-less comment")
 
-	out := te.ok("show", x.Short)
-	if !strings.Contains(out, "\n  "+c.Short+"  -  2026-") {
-		t.Errorf("show does not print the short ID and - for the author:\n%s", out)
+	out := te.ok("show", x.Key)
+	if !strings.Contains(out, "\n  "+c.ID+"  -  2026-") {
+		t.Errorf("show does not print the ID and - for the author:\n%s", out)
 	}
 	var got struct {
-		Comments []struct{ ID, Short string } `json:"comments"`
+		Comments []map[string]any `json:"comments"`
 	}
-	if err := json.Unmarshal([]byte(te.ok("show", x.Short, "--json")), &got); err != nil {
+	if err := json.Unmarshal([]byte(te.ok("show", x.Key, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Comments) != 1 || got.Comments[0].Short != c.Short || got.Comments[0].ID != c.ID {
-		t.Errorf("comments = %+v, want short %q", got.Comments, c.Short)
+	// id, author, created and body.
+	if len(got.Comments) != 1 || got.Comments[0]["id"] != c.ID || len(got.Comments[0]) != 4 {
+		t.Errorf("comments = %+v, want only id %q, author, created and body", got.Comments, c.ID)
 	}
 }

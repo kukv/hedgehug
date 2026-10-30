@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -28,6 +29,9 @@ func (te *testEnv) addJSON(args ...string) taskJSON {
 	return got
 }
 
+// label is how the CLI names task j: its key and full ULID.
+func label(j taskJSON) string { return j.Key + " (" + j.ID + ")" }
+
 // task reads the task file of id from the store.
 func (te *testEnv) task(id string) *model.Task {
 	te.t.Helper()
@@ -49,7 +53,7 @@ func (te *testEnv) task(id string) *model.Task {
 func TestAdd(t *testing.T) {
 	te := newStoreEnv(t)
 	out := te.ok("add", "Write", "the", "spec")
-	if !strings.Contains(out, "Write the spec") {
+	if !regexp.MustCompile(`^Added ME-1 \([0-9A-Z]{26}\) Write the spec\n$`).MatchString(out) {
 		t.Errorf("stdout = %q", out)
 	}
 	log := te.log("me")
@@ -62,7 +66,8 @@ func TestAdd(t *testing.T) {
 	}
 
 	got := te.addJSON("Second")
-	if got.Kind != "task" || got.Status != "todo" || got.Parent != nil || got.Short != got.ID {
+	if got.Kind != "task" || got.Status != "todo" || got.Parent != nil || got.Key != "ME-2" ||
+		got.Workspace == nil || got.Workspace.Name != "me" || got.Workspace.KeyPrefix != "ME" || len(got.Workspace.ID) != 26 {
 		t.Errorf("task = %+v", got)
 	}
 }
@@ -70,8 +75,8 @@ func TestAdd(t *testing.T) {
 func TestAddRanksAtTheEnd(t *testing.T) {
 	te := newStoreEnv(t)
 	p := te.addJSON("Parent", "--kind", "project")
-	a := te.addJSON("A", "--parent", p.Short)
-	b := te.addJSON("B", "--parent", p.Short)
+	a := te.addJSON("A", "--parent", p.Key)
+	b := te.addJSON("B", "--parent", p.Key)
 	if a.Parent == nil || *a.Parent != p.ID {
 		t.Errorf("a.parent = %v, want %s", a.Parent, p.ID)
 	}
@@ -124,9 +129,9 @@ func TestAddErrors(t *testing.T) {
 func TestAddRefusesADeletedParent(t *testing.T) {
 	te := newStoreEnv(t)
 	p := te.addJSON("P", "--kind", "project")
-	te.ok("rm", p.Short)
-	code, _, stderr := te.run("add", "E", "--parent", p.Short)
-	if code != 1 || !strings.Contains(stderr, "is deleted; restore "+p.Short+" first") {
+	te.ok("rm", p.Key)
+	code, _, stderr := te.run("add", "E", "--parent", p.Key)
+	if code != 1 || !strings.Contains(stderr, "is deleted; restore "+label(p)+" first") {
 		t.Errorf("exit %d, stderr %q", code, stderr)
 	}
 	if n := len(te.log("me")); n != 3 {

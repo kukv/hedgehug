@@ -200,9 +200,10 @@ func TestRunIndexProblems(t *testing.T) {
 	a := newTask("A")
 	missing := model.NewID()
 	a.Parent = &missing
+	a.Key = "TST-1"
 	putRaw(t, s, dir, a)
 	fs := run(t, dir)
-	if len(fs) != 1 || fs[0].Check != "task" || !strings.HasSuffix(fs[0].Where, " A") || !strings.Contains(fs[0].Msg, "parent") {
+	if len(fs) != 1 || fs[0].Check != "task" || fs[0].Where != "TST-1 ("+a.ID.String()+") A" || !strings.Contains(fs[0].Msg, "parent") {
 		t.Errorf("findings = %+v", fs)
 	}
 }

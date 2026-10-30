@@ -128,7 +128,7 @@ func verb(committed bool, heading string) string {
 type ambiguousError struct {
 	input string
 	noun  string   // what the candidates are, "tasks" when empty
-	lines []string // "<short>  <title>" per candidate
+	lines []string // "<key> (<ULID>) <title>" per candidate
 }
 
 func (e *ambiguousError) Error() string {
@@ -146,8 +146,7 @@ func (a *app) resolve(ix *index.Index, arg string) (*index.Entry, error) {
 	if errors.As(err, &ae) {
 		lines := make([]string, len(ae.Candidates))
 		for i, c := range ae.Candidates {
-			e, _ := ix.Task(c)
-			lines[i] = c.String() + "  " + e.Title
+			lines[i] = refName(ix, c)
 		}
 		return nil, &ambiguousError{input: arg, lines: lines}
 	}

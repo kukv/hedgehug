@@ -46,9 +46,9 @@ func TestSchemaMigrateStatus(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	b := te.addJSON("Beta")
-	te.ok("rm", b.Short)
+	te.ok("rm", b.Key)
 	c := te.addJSON("Gamma")
-	te.ok("status", c.Short, "done")
+	te.ok("status", c.Key, "done")
 	d := te.addJSON("Broken")
 	te.commitFile(d.ID, "not a task\n")
 	te.putSchema(func(sc *schema.Schema) {
@@ -61,11 +61,11 @@ func TestSchemaMigrateStatus(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d, stderr %q", code, stderr)
 	}
-	if !strings.HasPrefix(out, "Migrated 2 tasks\n") || !strings.Contains(out, a.Short+"  Alpha\n") || !strings.Contains(out, b.Short+"  Beta\n") || strings.Contains(out, "Gamma") {
+	if !strings.HasPrefix(out, "Migrated 2 tasks\n") || !strings.Contains(out, label(a)+"  Alpha\n") || !strings.Contains(out, label(b)+"  Beta\n") || strings.Contains(out, "Gamma") {
 		t.Errorf("stdout = %q", out)
 	}
-	if !strings.Contains(stderr, "warning: not migrated, since they do not decode: "+d.Short+"\n") {
-		t.Errorf("stderr = %q, want a warning about %s", stderr, d.Short)
+	if !strings.Contains(stderr, "warning: not migrated, since they do not decode: "+d.ID+"\n") {
+		t.Errorf("stderr = %q, want a warning about %s", stderr, d.ID)
 	}
 	log := te.log("me")
 	if len(log) != before+1 || !strings.Contains(log[0].Message, "Hedgehug-Op: migrate") {
@@ -97,17 +97,17 @@ func TestSchemaMigrateSkipsMismatchedID(t *testing.T) {
 	d := te.addJSON("Delta")
 	stale := te.raw(a.ID)
 	te.commitFile(d.ID, stale)
-	te.ok("set", a.Short, "title=Alpha2")
+	te.ok("set", a.Key, "title=Alpha2")
 
 	code, out, stderr := te.run("schema", "migrate", "status", "todo", "ready")
 	if code != 0 {
 		t.Fatalf("exit %d, stderr %q", code, stderr)
 	}
-	if !strings.HasPrefix(out, "Migrated 1 task\n") || !strings.Contains(out, a.Short+"  Alpha2\n") {
+	if !strings.HasPrefix(out, "Migrated 1 task\n") || !strings.Contains(out, label(a)+"  Alpha2\n") {
 		t.Errorf("stdout = %q", out)
 	}
-	if !strings.Contains(stderr, "warning: not migrated, since they do not decode: "+d.Short+"\n") {
-		t.Errorf("stderr = %q, want a warning about %s only", stderr, d.Short)
+	if !strings.Contains(stderr, "warning: not migrated, since they do not decode: "+d.ID+"\n") {
+		t.Errorf("stderr = %q, want a warning about %s only", stderr, d.ID)
 	}
 	if x := te.task(a.ID); x.Title != "Alpha2" || x.Status != "ready" {
 		t.Errorf("Alpha = title %q, status %q; want Alpha2, ready", x.Title, x.Status)
@@ -120,7 +120,7 @@ func TestSchemaMigrateSkipsMismatchedID(t *testing.T) {
 func TestSchemaMigrateJSON(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
-	te.ok("set", a.Short, "priority=mid")
+	te.ok("set", a.Key, "priority=mid")
 	te.addJSON("Beta")
 	d := te.addJSON("Broken")
 	te.commitFile(d.ID, "not a task\n")
@@ -130,11 +130,11 @@ func TestSchemaMigrateJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
-	if len(got.Changed) != 1 || got.Changed[0].Short != a.Short || got.Changed[0].Props["priority"] != "medium" {
+	if len(got.Changed) != 1 || got.Changed[0].Key != a.Key || got.Changed[0].Props["priority"] != "medium" {
 		t.Errorf("changed = %+v", got.Changed)
 	}
-	if len(got.Skipped) != 1 || got.Skipped[0] != d.Short {
-		t.Errorf("skipped = %v, want [%s]", got.Skipped, d.Short)
+	if len(got.Skipped) != 1 || got.Skipped[0] != d.ID {
+		t.Errorf("skipped = %v, want [%s]", got.Skipped, d.ID)
 	}
 	if !strings.Contains(te.schemaFile(), "values: [low, medium, high, urgent]") {
 		t.Errorf("schema.yaml:\n%s", te.schemaFile())
@@ -144,7 +144,7 @@ func TestSchemaMigrateJSON(t *testing.T) {
 func TestSchemaMigrateKindAndProp(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha", "--kind", "bug")
-	te.ok("set", a.Short, "start=2026-11-01")
+	te.ok("set", a.Key, "start=2026-11-01")
 	te.ok("schema", "migrate", "kind", "bug", "task")
 	te.ok("schema", "migrate", "prop", "start", "begin")
 	x := te.task(a.ID)
@@ -159,12 +159,12 @@ func TestSchemaMigrateKindAndProp(t *testing.T) {
 func TestSchemaMigratePropOnBoth(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
-	te.ok("set", a.Short, "start=2026-11-01", "due=2026-11-30")
+	te.ok("set", a.Key, "start=2026-11-01", "due=2026-11-30")
 	b := te.addJSON("Beta")
-	te.ok("set", b.Short, "start=2026-11-01", "due=2026-11-30")
+	te.ok("set", b.Key, "start=2026-11-01", "due=2026-11-30")
 	before := len(te.log("me"))
 	code, _, stderr := te.run("schema", "migrate", "prop", "start", "due")
-	if code != 1 || !strings.Contains(stderr, a.Short) || !strings.Contains(stderr, b.Short) || !strings.Contains(stderr, "both start and due") {
+	if code != 1 || !strings.Contains(stderr, label(a)) || !strings.Contains(stderr, label(b)) || !strings.Contains(stderr, "both start and due") {
 		t.Errorf("exit %d, stderr %q", code, stderr)
 	}
 	if n := len(te.log("me")); n != before {
@@ -175,12 +175,12 @@ func TestSchemaMigratePropOnBoth(t *testing.T) {
 func TestSchemaMigrateRejectsNewViolation(t *testing.T) {
 	te := newStoreEnv(t)
 	p := te.addJSON("Parent")
-	c := te.addJSON("Child", "--parent", p.Short)
+	c := te.addJSON("Child", "--parent", p.Key)
 	before := len(te.log("me"))
 	sf := te.schemaFile()
 	// A bug may not sit under a bug.
 	code, _, stderr := te.run("schema", "migrate", "kind", "task", "bug")
-	if code != 1 || !strings.Contains(stderr, "breaks the schema") || !strings.Contains(stderr, "cannot be placed") || !strings.Contains(stderr, c.Short+" Child") {
+	if code != 1 || !strings.Contains(stderr, "breaks the schema") || !strings.Contains(stderr, "cannot be placed") || !strings.Contains(stderr, label(c)+" Child") {
 		t.Errorf("exit %d, stderr %q", code, stderr)
 	}
 	if n := len(te.log("me")); n != before {
@@ -196,7 +196,7 @@ func TestSchemaMigrateRejectsNewViolation(t *testing.T) {
 func TestSchemaMigrateMergeIntoRequired(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
-	te.ok("status", a.Short, "backlog")
+	te.ok("status", a.Key, "backlog")
 	te.putSchema(func(sc *schema.Schema) {
 		sc.Workflow.Required = schema.Lists{{Key: "todo", Values: []string{"points"}}}
 	})
@@ -210,7 +210,7 @@ func TestSchemaMigrateMergeIntoRequired(t *testing.T) {
 func TestSchemaMigrateKeepsMissingRequired(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
-	te.ok("status", a.Short, "in_progress")
+	te.ok("status", a.Key, "in_progress")
 	te.putSchema(func(sc *schema.Schema) {
 		sc.Workflow.Required = schema.Lists{{Key: "in_progress", Values: []string{"assignees"}}}
 	})
@@ -245,7 +245,7 @@ func TestSchemaMigrateDryRun(t *testing.T) {
 	before := len(te.log("me"))
 	sf := te.schemaFile()
 	out := te.ok("schema", "migrate", "status", "todo", "ready", "--dry-run")
-	if !strings.HasPrefix(out, "Would migrate 1 task\n") || !strings.Contains(out, a.Short+"  Alpha\n") {
+	if !strings.HasPrefix(out, "Would migrate 1 task\n") || !strings.Contains(out, label(a)+"  Alpha\n") {
 		t.Errorf("stdout = %q", out)
 	}
 	if n := len(te.log("me")); n != before {
@@ -260,7 +260,7 @@ func TestSchemaMigrateDryRun(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
-	if len(got.Changed) != 1 || got.Changed[0].Short != a.Short || got.Changed[0].Status != "ready" {
+	if len(got.Changed) != 1 || got.Changed[0].Key != a.Key || got.Changed[0].Status != "ready" {
 		t.Errorf("changed = %+v, want Alpha as migrated", got.Changed)
 	}
 	if n := len(te.log("me")); n != before {

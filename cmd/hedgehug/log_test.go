@@ -12,8 +12,8 @@ func TestLog(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("First")
 	b := te.addJSON("Second")
-	te.ok("set", a.Short, "labels+=x")
-	te.ok("comment", a.Short, "hello")
+	te.ok("set", a.Key, "labels+=x")
+	te.ok("comment", a.Key, "hello")
 
 	lines := func(args ...string) []string {
 		return strings.Split(strings.TrimRight(te.ok(args...), "\n"), "\n")
@@ -37,10 +37,10 @@ func TestLog(t *testing.T) {
 		t.Errorf("first line = %q, want prefix %q", all[0], want)
 	}
 
-	if got := lines("log", a.Short); len(got) != 3 {
+	if got := lines("log", a.Key); len(got) != 3 {
 		t.Errorf("log <id> has %d lines, want 3:\n%s", len(got), strings.Join(got, "\n"))
 	}
-	if got := lines("log", b.Short); len(got) != 1 {
+	if got := lines("log", b.Key); len(got) != 1 {
 		t.Errorf("log <other> has %d lines, want 1", len(got))
 	}
 	if got := lines("log", "-n", "1"); len(got) != 1 {
@@ -60,6 +60,7 @@ func TestLogJSON(t *testing.T) {
 		Author struct{ Name, Email string }
 		Op     *string
 		Task   *string
+		Key    *string
 		Subj   string `json:"subject"`
 	}
 	out := te.ok("log", "--json")
@@ -76,11 +77,40 @@ func TestLogJSON(t *testing.T) {
 	if e.Op == nil || *e.Op != "add" || e.Task == nil || *e.Task != a.ID || !strings.HasPrefix(e.Subj, "hedgehug: add ") {
 		t.Errorf("entry = %+v, want op add and task %s", e, a.ID)
 	}
-	if got[1].Op == nil || *got[1].Op != "init" || got[1].Task != nil {
+	if got[1].Op == nil || *got[1].Op != "init" || got[1].Task != nil || got[1].Key != nil {
 		t.Errorf("init entry = %+v, want op init and no task", got[1])
+	}
+	if e.Key == nil || *e.Key != a.Key {
+		t.Errorf("entry key = %v, want %s", e.Key, a.Key)
 	}
 	if !strings.Contains(out, `"task": null`) {
 		t.Errorf("task null is not printed:\n%s", out)
+	}
+}
+
+func TestLogShowsCurrentKey(t *testing.T) {
+	te := newStoreEnv(t)
+	te.ok("workspace", "add", "api", "--prefix", "API")
+	a := te.addJSON("Alpha", "--workspace", "me") // ME-1
+	te.ok("status", a.Key, "done")
+	te.ok("mv", a.Key, "--workspace", "api") // now API-1
+	out := te.ok("log", "API-1")
+	if strings.Contains(out, "ME-1") || !strings.Contains(out, "status API-1 ("+a.ID+") Alpha") {
+		t.Errorf("log =\n%s", out)
+	}
+	show := te.ok("show", "API-1")
+	if _, hist, _ := strings.Cut(show, "\nHistory:\n"); strings.Contains(hist, "ME-1") || !strings.Contains(hist, "status API-1 ("+a.ID+") Alpha") {
+		t.Errorf("show =\n%s", show)
+	}
+	if !strings.Contains(show, "  former_keys ME-1\n") || !strings.Contains(show, "  workspace   api (API, ") {
+		t.Errorf("show has no former_keys or workspace line:\n%s", show)
+	}
+	var js []logJSON
+	if err := json.Unmarshal([]byte(te.ok("log", "API-1", "--json")), &js); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(js[len(js)-1].Subject, "ME-1") || js[0].Key == nil || *js[0].Key != "API-1" {
+		t.Errorf("--json keeps the subject and adds the key: %+v", js)
 	}
 }
 
@@ -88,9 +118,9 @@ func TestShowHistory(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("First")
 	for range 6 {
-		te.ok("comment", a.Short, "c")
+		te.ok("comment", a.Key, "c")
 	}
-	out := te.ok("show", a.Short)
+	out := te.ok("show", a.Key)
 	_, hist, ok := strings.Cut(out, "\nHistory:\n")
 	if !ok {
 		t.Fatalf("show has no History:\n%s", out)
@@ -99,7 +129,7 @@ func TestShowHistory(t *testing.T) {
 		t.Errorf("History has %d lines, want 5:\n%s", n, hist)
 	}
 	var j struct{ History []struct{ Hash string } }
-	if err := json.Unmarshal([]byte(te.ok("show", a.Short, "--json")), &j); err != nil {
+	if err := json.Unmarshal([]byte(te.ok("show", a.Key, "--json")), &j); err != nil {
 		t.Fatal(err)
 	}
 	if len(j.History) != 5 || len(j.History[0].Hash) != 40 {

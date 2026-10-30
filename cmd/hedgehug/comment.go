@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 	"time"
 
@@ -43,8 +42,6 @@ func (a *app) commentCmd() *cobra.Command {
 // resolve their IDs.
 type commentIndex struct {
 	refs []store.CommentRef
-	// title names the task of a comment in an ambiguity error.
-	title func(model.ID) string
 }
 
 func loadComments(s *store.Store) (*commentIndex, error) {
@@ -57,43 +54,21 @@ func loadComments(s *store.Store) (*commentIndex, error) {
 
 // Resolve finds the comment arg names: a full ULID, in any case.
 func (ci *commentIndex) Resolve(arg string) (store.CommentRef, error) {
+	if len(arg) != 26 {
+		return store.CommentRef{}, fmt.Errorf("comment %q: give the full ID of the comment: %w", arg, store.ErrNotFound)
+	}
 	u := strings.ToUpper(arg)
-	var hits []store.CommentRef
-	if len(u) == 26 {
-		hits = ci.matching(func(id string) bool { return id == u })
-	}
-	switch len(hits) {
-	case 0:
-		return store.CommentRef{}, fmt.Errorf("comment %q: %w", arg, store.ErrNotFound)
-	case 1:
-		return hits[0], nil
-	}
-	lines := make([]string, len(hits))
-	for i, h := range hits {
-		title := ""
-		if ci.title != nil {
-			title = ci.title(h.Task)
-		}
-		lines[i] = h.Comment.String() + "  " + title
-	}
-	return store.CommentRef{}, &ambiguousError{input: arg, noun: "comments", lines: lines}
-}
-
-func (ci *commentIndex) matching(f func(string) bool) []store.CommentRef {
-	var hits []store.CommentRef
 	for _, r := range ci.refs {
-		if f(r.Comment.String()) {
-			hits = append(hits, r)
+		if r.Comment.String() == u {
+			return r, nil
 		}
 	}
-	slices.SortFunc(hits, func(a, b store.CommentRef) int { return strings.Compare(a.Comment.String(), b.Comment.String()) })
-	return hits
+	return store.CommentRef{}, fmt.Errorf("comment %q: %w", arg, store.ErrNotFound)
 }
 
 // commentOut is a comment as --json prints it.
 type commentOut struct {
 	ID        string     `json:"id"`
-	Short     string     `json:"short"`
 	Task      string     `json:"task"`
 	Author    string     `json:"author"`
 	Created   time.Time  `json:"created"`
@@ -106,27 +81,21 @@ var errCommentChanged = errors.New("the comment changed while editing")
 
 // openComment opens the store and resolves arg to a comment that is read
 // from its file.
-func (a *app) openComment(arg string) (*store.Store, *commentIndex, store.CommentRef, *model.Comment, error) { //nolint:unparam // the display of Task 8 uses the comment index
-	s, ix, err := a.open()
+func (a *app) openComment(arg string) (*store.Store, store.CommentRef, *model.Comment, error) {
+	s, _, err := a.open()
 	if err != nil {
-		return nil, nil, store.CommentRef{}, nil, err
+		return nil, store.CommentRef{}, nil, err
 	}
 	ci, err := loadComments(s)
 	if err != nil {
-		return nil, nil, store.CommentRef{}, nil, err
-	}
-	ci.title = func(id model.ID) string {
-		if e, ok := ix.Task(id); ok {
-			return e.Title
-		}
-		return ""
+		return nil, store.CommentRef{}, nil, err
 	}
 	ref, err := ci.Resolve(arg)
 	if err != nil {
-		return nil, nil, ref, nil, err
+		return nil, ref, nil, err
 	}
 	c, err := findComment(s, ref)
-	return s, ci, ref, c, err
+	return s, ref, c, err
 }
 
 func findComment(s *store.Store, ref store.CommentRef) (*model.Comment, error) {
@@ -170,7 +139,7 @@ func (a *app) commentAdd(arg string, text []string) error {
 		body = commentBody(strings.Join(text, " "))
 	} else {
 		var edited []byte
-		if path, edited, err = a.editFile(e.ID.String(), nil); err != nil {
+		if path, edited, err = a.editFile(taskFileName(e), nil); err != nil {
 			return err
 		}
 		if body = commentBody(string(edited)); body == "" {
@@ -198,15 +167,15 @@ func (a *app) commentAdd(arg string, text []string) error {
 }
 
 func (a *app) commentEdit(arg string) error {
-	s, _, ref, c, err := a.openComment(arg)
+	s, ref, c, err := a.openComment(arg)
 	if err != nil {
 		return err
 	}
-	short := ref.Comment.String()
+	cid := ref.Comment.String()
 	if c.DeletedAt != nil {
-		return fmt.Errorf("comment %s is deleted and cannot be edited", short)
+		return fmt.Errorf("comment %s is deleted and cannot be edited", cid)
 	}
-	path, edited, err := a.editFile("comment-"+short, []byte(c.Body))
+	path, edited, err := a.editFile("comment-"+cid, []byte(c.Body))
 	if err != nil {
 		return err
 	}
@@ -216,7 +185,7 @@ func (a *app) commentEdit(arg string) error {
 			return err
 		}
 		if body == "" {
-			return fmt.Errorf("the comment is empty; delete it with hedgehug comment rm %s", short)
+			return fmt.Errorf("the comment is empty; delete it with hedgehug comment rm %s", cid)
 		}
 		return a.printComment(s, ref, verb(false, ""))
 	}
@@ -241,7 +210,7 @@ func (a *app) commentEdit(arg string) error {
 }
 
 func (a *app) commentRm(arg string) error {
-	s, _, ref, c, err := a.openComment(arg)
+	s, ref, c, err := a.openComment(arg)
 	if err != nil {
 		return err
 	}
@@ -270,9 +239,8 @@ func (a *app) commentRm(arg string) error {
 }
 
 // printComment prints the comment ref after a write: as JSON, or as one
-// line of verb and its short ID.
+// line of verb and its ID.
 func (a *app) printComment(s *store.Store, ref store.CommentRef, verb string) error {
-	short := ref.Comment.String()
 	var err error
 	if a.jsonOut {
 		c, err := findComment(s, ref)
@@ -280,14 +248,14 @@ func (a *app) printComment(s *store.Store, ref store.CommentRef, verb string) er
 			return err
 		}
 		return a.printJSON(commentOut{
-			ID: c.ID.String(), Short: short, Task: ref.Task.String(), Author: c.Author,
+			ID: c.ID.String(), Task: ref.Task.String(), Author: c.Author,
 			Created: c.Created, Updated: c.Updated, DeletedAt: c.DeletedAt, Body: c.Body,
 		})
 	}
 	if verb == "No changes" {
 		_, err = fmt.Fprintln(a.stdout, verb)
 	} else {
-		_, err = fmt.Fprintf(a.stdout, "%s %s\n", verb, a.style().id(short))
+		_, err = fmt.Fprintf(a.stdout, "%s %s\n", verb, a.style().id(ref.Comment.String()))
 	}
 	return err
 }

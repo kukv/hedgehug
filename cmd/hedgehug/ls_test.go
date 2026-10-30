@@ -13,10 +13,10 @@ func TestLs(t *testing.T) {
 
 	out := te.ok("ls")
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	if len(lines) != 3 || !strings.HasPrefix(lines[0], "ID") {
+	if len(lines) != 3 || !strings.HasPrefix(lines[0], "KEY") {
 		t.Fatalf("ls =\n%s", out)
 	}
-	for _, s := range []string{a.Short, "Alpha", "ui", b.Short, "Beta", "done"} {
+	for _, s := range []string{a.Key, a.ID, "Alpha", "ui", b.Key, b.ID, "Beta", "done"} {
 		if !strings.Contains(out, s) {
 			t.Errorf("ls does not show %q:\n%s", s, out)
 		}
@@ -31,7 +31,7 @@ func TestLs(t *testing.T) {
 	if out := te.ok("ls", "status:todo", "label:ui"); !strings.Contains(out, "Alpha") || strings.Contains(out, "Beta") {
 		t.Errorf("ls with two args =\n%s", out)
 	}
-	if out := te.ok("ls", "--ids-only"); out != a.Short+"\n"+b.Short+"\n" && out != b.Short+"\n"+a.Short+"\n" {
+	if out := te.ok("ls", "--ids-only"); out != a.ID+"\n"+b.ID+"\n" && out != b.ID+"\n"+a.ID+"\n" {
 		t.Errorf("--ids-only = %q", out)
 	}
 	if out := te.ok("ls", "--format", "{{.title}}|{{.status}}", "sort:title"); out != "Alpha|todo\nBeta|done\n" {
@@ -44,8 +44,14 @@ func TestLs(t *testing.T) {
 	if len(got) != 2 || got[0].Title != "Alpha" || got[1].Title != "Beta" || got[0].Labels[0] != "ui" {
 		t.Errorf("--json = %+v", got)
 	}
-	if got[1].Assignees == nil || got[1].Problems == nil || got[1].Props == nil {
+	if got[1].Assignees == nil || got[1].Problems == nil || got[1].Props == nil || got[1].BlockedBy == nil {
 		t.Error("empty lists in JSON must be [] or {}, not null")
+	}
+
+	// blocked_by names each task by its ID, key and title.
+	te.ok("dep", "add", a.Key, "--blocked-by", b.Key)
+	if out := te.ok("ls", "--format", "{{range .blocked_by}}{{.id}} {{.key}} {{.title}}{{end}}", "sort:title"); out != b.ID+" "+b.Key+" Beta\n\n" {
+		t.Errorf("--format over blocked_by = %q", out)
 	}
 }
 
