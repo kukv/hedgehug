@@ -513,23 +513,57 @@ func mergeStruct(old, nv *yaml.Node, v reflect.Value) *yaml.Node {
 }
 
 // mergeMapping merges a mapping whose keys are all data, with the Go value
-// of each key given by value. Keys that nv lacks are dropped. With
-// keepOrder, the keys in old stay in its order and the new keys follow.
+// of each key given by value. Each new key takes the old key of the same
+// name; then the keys left over are paired in order, so a renamed key keeps
+// its node and its key's comments, with the new name. Keys that nv lacks
+// are dropped. With keepOrder, the keys in old stay in its order and the
+// new keys follow.
 func mergeMapping(old, nv *yaml.Node, value func(string) reflect.Value, keepOrder bool) *yaml.Node {
 	of, nf := fieldsOf(old), fieldsOf(nv)
+	pair := make([]int, len(nf)) // the index in of, or -1
+	used := make([]bool, len(of))
 	for i := range nf {
-		nf[i].Value = mergeNode(of.Get(nf[i].Key), nf[i].Value, value(nf[i].Key))
+		pair[i] = slices.IndexFunc(of, func(o Field) bool { return o.Key == nf[i].Key })
+		if pair[i] >= 0 {
+			used[pair[i]] = true
+		}
+	}
+	j := 0
+	for i := range nf {
+		for j < len(of) && used[j] {
+			j++
+		}
+		if pair[i] < 0 && j < len(of) {
+			pair[i], used[j] = j, true
+		}
+	}
+	// The old mapping with the paired keys renamed, for mappingOf to take
+	// the key nodes from.
+	keys := *old
+	keys.Content = slices.Clone(old.Content)
+	for i := range nf {
+		var ov *yaml.Node
+		if p := pair[i]; p >= 0 {
+			ov = of[p].Value
+			if of[p].Key != nf[i].Key {
+				k := *old.Content[2*p]
+				k.Value = nf[i].Key
+				keys.Content[2*p] = &k
+			}
+		}
+		nf[i].Value = mergeNode(ov, nf[i].Value, value(nf[i].Key))
 	}
 	if keepOrder {
-		pos := func(x Field) int {
-			if j := slices.IndexFunc(of, func(o Field) bool { return o.Key == x.Key }); j >= 0 {
-				return j
+		pos := make(map[string]int, len(nf))
+		for i, x := range nf {
+			pos[x.Key] = len(of)
+			if pair[i] >= 0 {
+				pos[x.Key] = pair[i]
 			}
-			return len(of)
 		}
-		slices.SortStableFunc(nf, func(a, b Field) int { return pos(a) - pos(b) })
+		slices.SortStableFunc(nf, func(a, b Field) int { return pos[a.Key] - pos[b.Key] })
 	}
-	return mappingOf(old, nf)
+	return mappingOf(&keys, nf)
 }
 
 // mergeSeq merges the list v. Each new item takes the old item that decodes

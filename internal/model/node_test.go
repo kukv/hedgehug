@@ -230,6 +230,16 @@ func TestPutMergesMapValues(t *testing.T) {
 	}
 }
 
+func TestPutMergesRenamedMapKeyByPosition(t *testing.T) {
+	src := "m:\n  # head\n  a: {name: a, x: keep} # first\n  b: {name: b} # second\n"
+	e := parse(t, src).Encoder()
+	e.Put("m", map[string]named{"z": {Name: "a"}, "b": {Name: "b"}}, false)
+	want := "m:\n  # head\n  z: {name: a, x: keep} # first\n  b: {name: b} # second\n"
+	if got := encode(t, e, nil); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 func TestTaskLinkChangeKeepsOtherLinks(t *testing.T) {
 	src := "---\nid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nlinks:\n- type: github_pr # PR\n  ref: r1\n  sync: \"\"\n  x: keep\n- {type: github_issue, ref: r2, x: keep} # issue\n---\n"
 	task, err := DecodeTask([]byte(src))
