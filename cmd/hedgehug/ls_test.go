@@ -73,6 +73,30 @@ func TestLsFormatBroken(t *testing.T) {
 	}
 }
 
+// A broken task has no readable key, so ls shows ? in the KEY column and
+// "? <ULID>" in the tree.
+func TestLsBrokenKey(t *testing.T) {
+	te := newStoreEnv(t)
+	te.addJSON("Alpha")
+	b := te.addJSON("Beta")
+	te.commitFile(b.ID, "not a task\n")
+	var found bool
+	for _, line := range strings.Split(te.ok("ls"), "\n") {
+		if strings.Contains(line, b.ID) {
+			found = true
+			if f := strings.Fields(line); f[0] != "?" {
+				t.Errorf("ls line of a broken task = %q", line)
+			}
+		}
+	}
+	if !found {
+		t.Error("ls does not list the broken task")
+	}
+	if out := te.ok("ls", "--tree"); !strings.Contains(out, "? "+b.ID) {
+		t.Errorf("ls --tree has no %q:\n%s", "? "+b.ID, out)
+	}
+}
+
 func TestLsGroups(t *testing.T) {
 	te := newStoreEnv(t)
 	te.addJSON("Alpha")

@@ -30,7 +30,7 @@ func TestChangeDeletedTask(t *testing.T) {
 		{"dep", "add", x.Key, "--blocked-by", b.Key},
 	} {
 		code, _, stderr := te.run(args...)
-		if code != 1 || !strings.Contains(stderr, "is deleted; restore "+label(x)+" first") {
+		if code != 1 || !strings.Contains(stderr, "is deleted; restore "+x.Key+" first") {
 			t.Errorf("%v: exit %d (want 1), stderr %q", args, code, stderr)
 		}
 	}
@@ -89,7 +89,7 @@ func TestRmRestoreErrors(t *testing.T) {
 	if code, _, stderr := te.run("rm", p.Key); code != 1 || !strings.Contains(stderr, "already deleted") {
 		t.Errorf("rm twice: exit %d, stderr %q", code, stderr)
 	}
-	if code, _, stderr := te.run("restore", c.Key); code != 1 || !strings.Contains(stderr, "restore "+label(p)) {
+	if code, _, stderr := te.run("restore", c.Key); code != 1 || !strings.Contains(stderr, "restore "+p.Key+" first") {
 		t.Errorf("restore under a deleted parent: exit %d, stderr %q", code, stderr)
 	}
 }

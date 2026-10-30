@@ -287,7 +287,7 @@ func TestEditDeleted(t *testing.T) {
 	te.editWith()
 
 	code, _, stderr := te.run("edit", x.Key)
-	if code != 1 || !strings.Contains(stderr, "is deleted; restore "+label(x)+" first") {
+	if code != 1 || !strings.Contains(stderr, "is deleted; restore "+x.Key+" first") {
 		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
 	}
 	if fs := te.tempFiles(); len(fs) != 0 {

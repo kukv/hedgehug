@@ -83,7 +83,7 @@ func TestMvRefusesADeletedParent(t *testing.T) {
 	d := te.addJSON("D")
 	te.ok("rm", p.Key)
 	code, _, stderr := te.run("mv", d.Key, "--parent", p.Key)
-	if code != 1 || !strings.Contains(stderr, "is deleted; restore "+label(p)+" first") {
+	if code != 1 || !strings.Contains(stderr, "is deleted; restore "+p.Key+" first") {
 		t.Errorf("exit %d, stderr %q", code, stderr)
 	}
 	if te.task(d.ID).Parent != nil {

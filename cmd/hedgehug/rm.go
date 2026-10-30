@@ -106,7 +106,7 @@ func (a *app) rm(arg string) error {
 // to restore.
 func notDeleted(ix *index.Index, e *index.Entry) error {
 	if e.DeletedAt != nil {
-		return fmt.Errorf("%s is deleted; restore %s first", refName(ix, e.ID), taskLabel(e))
+		return fmt.Errorf("%s is deleted; restore %s first", refName(ix, e.ID), taskFileName(e))
 	}
 	return nil
 }

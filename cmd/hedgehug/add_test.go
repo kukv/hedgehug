@@ -131,7 +131,7 @@ func TestAddRefusesADeletedParent(t *testing.T) {
 	p := te.addJSON("P", "--kind", "project")
 	te.ok("rm", p.Key)
 	code, _, stderr := te.run("add", "E", "--parent", p.Key)
-	if code != 1 || !strings.Contains(stderr, "is deleted; restore "+label(p)+" first") {
+	if code != 1 || !strings.Contains(stderr, "is deleted; restore "+p.Key+" first") {
 		t.Errorf("exit %d, stderr %q", code, stderr)
 	}
 	if n := len(te.log("me")); n != 3 {
