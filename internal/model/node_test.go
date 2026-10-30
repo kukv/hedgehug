@@ -195,6 +195,58 @@ type pair struct {
 	Ref  string `yaml:"ref"`
 }
 
+type named struct {
+	Name  string `yaml:"name"`
+	Label string `yaml:"label,omitempty"`
+}
+
+func TestPutMergesChangedItemByName(t *testing.T) {
+	src := "items:\n# head\n- name: a # first\n  x: keep\n  label: A\n- {name: b, x: keep} # second\n"
+	e := parse(t, src).Encoder()
+	e.Put("items", []named{{"b", "B"}, {"a", "AA"}}, false)
+	want := "items:\n- {name: b, label: B, x: keep} # second\n# head\n- name: a # first\n  x: keep\n  label: AA\n"
+	if got := encode(t, e, nil); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestPutMergesRenamedItemByPosition(t *testing.T) {
+	src := "items:\n- name: a # first\n  x: keep\n- {name: b, x: keep} # second\n"
+	e := parse(t, src).Encoder()
+	e.Put("items", []named{{Name: "z"}, {Name: "b"}}, false)
+	want := "items:\n- name: z # first\n  x: keep\n- {name: b, x: keep} # second\n"
+	if got := encode(t, e, nil); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestPutMergesMapValues(t *testing.T) {
+	src := "m:\n  # head\n  a: {name: a, x: keep} # first\n  b: {name: b} # second\n"
+	e := parse(t, src).Encoder()
+	e.Put("m", map[string]named{"a": {"a", "A"}, "b": {Name: "b"}}, false)
+	want := "m:\n  # head\n  a: {name: a, label: A, x: keep} # first\n  b: {name: b} # second\n"
+	if got := encode(t, e, nil); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestTaskPropChangeKeepsOtherComments(t *testing.T) {
+	task, err := DecodeTask(readFile(t, "testdata/task/full.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	task.Props.Set("points", node(t, 8))
+	out, err := task.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"  priority: high # 優先度\n", "  points: 8\n", "custom: kept # 未知のキー\n"} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestPutKeepsBlockMappingsInList(t *testing.T) {
 	d := parse(t, "links:\n- type: x\n  ref: r\n")
 	e := d.Encoder()

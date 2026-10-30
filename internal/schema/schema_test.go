@@ -151,3 +151,104 @@ func TestDecodeErrors(t *testing.T) {
 		}
 	}
 }
+
+func decodeNotes(t *testing.T) (*Schema, string) {
+	t.Helper()
+	src, err := os.ReadFile("testdata/notes.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Decode(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s, string(src)
+}
+
+func encodeString(t *testing.T, s *Schema) string {
+	t.Helper()
+	out, err := s.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
+
+func TestEncodeKeepsNotesOfOtherItems(t *testing.T) {
+	s, src := decodeNotes(t)
+	if got := encodeString(t, s); got != src {
+		t.Fatalf("round trip changed the file:\n%s", got)
+	}
+
+	s.Props[1].Label = "ポイント"
+	want := strings.Replace(src, "label: 点", "label: ポイント", 1)
+	if got := encodeString(t, s); got != want {
+		t.Errorf("prop label change:\n%s\nwant:\n%s", got, want)
+	}
+
+	s, _ = decodeNotes(t)
+	s.Props[0].Values = append(s.Props[0].Values, "mid")
+	want = strings.Replace(src, "values: [low, high]", "values: [low, high, mid]", 1)
+	if got := encodeString(t, s); got != want {
+		t.Errorf("prop values change:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestEncodeRenameKeepsNotes(t *testing.T) {
+	s, src := decodeNotes(t)
+	s.Statuses[0].Name = "open"
+	want := strings.Replace(src, "- name: todo # 最初", "- name: open # 最初", 1)
+	if got := encodeString(t, s); got != want {
+		t.Errorf("rename:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestEncodeAddAndRemoveItems(t *testing.T) {
+	s, src := decodeNotes(t)
+	s.Statuses = append(s.Statuses, Status{Name: "canceled", Category: CategoryCanceled})
+	want := strings.Replace(src, "  x-note: keep\nkinds:", "  x-note: keep\n- name: canceled\n  category: canceled\nkinds:", 1)
+	if got := encodeString(t, s); got != want {
+		t.Errorf("add:\n%s\nwant:\n%s", got, want)
+	}
+
+	s, _ = decodeNotes(t)
+	s.Statuses = append(s.Statuses[:1:1], s.Statuses[2])
+	want = strings.Replace(src, "- {name: doing, category: doing, x-note: keep} # 作業中\n", "", 1)
+	if got := encodeString(t, s); got != want {
+		t.Errorf("remove:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestEncodeTransitionKeepsOtherComments(t *testing.T) {
+	s, src := decodeNotes(t)
+	s.Workflow.Transitions[0].Values = append(s.Workflow.Transitions[0].Values, "done")
+	want := strings.Replace(src, "todo: [doing] # 開始", "todo: [doing, done] # 開始", 1)
+	if got := encodeString(t, s); got != want {
+		t.Errorf("transition:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestEncodeScopedKeepsNotes(t *testing.T) {
+	src, err := os.ReadFile("testdata/extras.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Decode(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Scoped[0].Templates.Default["task"] = "other"
+	want := strings.Replace(string(src), "task: release-checklist", "task: other", 1)
+	if got := encodeString(t, s); got != want {
+		t.Errorf("scoped:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestEncodeChangedItemKeepsZeroKnownKey(t *testing.T) {
+	s, src := decodeNotes(t)
+	s.Statuses[2].Label = "完了"
+	want := strings.Replace(src, "- name: done\n  category: done\n", "- name: done\n  label: 完了\n  category: done\n", 1)
+	if got := encodeString(t, s); got != want {
+		t.Errorf("changed item:\n%s\nwant:\n%s", got, want)
+	}
+}

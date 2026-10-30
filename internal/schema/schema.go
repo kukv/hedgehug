@@ -121,7 +121,7 @@ func (p Props) MarshalYAML() (any, error) {
 
 // List is one key of Lists.
 type List struct {
-	Key    string
+	Key    string `yaml:"-"`
 	Values []string
 }
 
