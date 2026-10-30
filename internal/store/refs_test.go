@@ -13,7 +13,7 @@ import (
 
 // wantViolation checks that err is a ValidationError on task with a
 // violation of code on field.
-func wantViolation(t *testing.T, err error, task model.ID, code, field string) { //nolint:unparam // Task 5 passes other codes
+func wantViolation(t *testing.T, err error, task model.ID, code, field string) {
 	t.Helper()
 	var ve *ValidationError
 	if !errors.As(err, &ve) || ve.Task != task {
@@ -129,5 +129,82 @@ func TestUpdateUnderBrokenParent(t *testing.T) {
 	got.Title = "renamed"
 	if err := put(s, got); err != nil {
 		t.Errorf("editing a task under a broken parent failed: %v", err)
+	}
+}
+
+func TestUpdateRefusesNewCycles(t *testing.T) {
+	tests := []struct {
+		name  string
+		field string
+		build func(a, b, c *model.Task) (setup []*model.Task, write *model.Task)
+	}{
+		{"parent self", "parent", func(a, _, _ *model.Task) ([]*model.Task, *model.Task) {
+			a.Parent = &a.ID
+			return nil, a
+		}},
+		{"parent move under own child", "parent", func(a, b, _ *model.Task) ([]*model.Task, *model.Task) {
+			b.Parent = &a.ID
+			w := *a
+			w.Parent = &b.ID
+			return []*model.Task{a, b}, &w
+		}},
+		{"blocked_by self", "blocked_by", func(a, _, _ *model.Task) ([]*model.Task, *model.Task) {
+			a.BlockedBy = []model.ID{a.ID}
+			return nil, a
+		}},
+		{"blocked_by two", "blocked_by", func(a, b, _ *model.Task) ([]*model.Task, *model.Task) {
+			b.BlockedBy = []model.ID{a.ID}
+			w := *a
+			w.BlockedBy = []model.ID{b.ID}
+			return []*model.Task{a, b}, &w
+		}},
+		{"blocked_by three", "blocked_by", func(a, b, c *model.Task) ([]*model.Task, *model.Task) {
+			b.BlockedBy = []model.ID{c.ID}
+			c.BlockedBy = []model.ID{a.ID}
+			w := *a
+			w.BlockedBy = []model.ID{b.ID}
+			return []*model.Task{a, c, b}, &w // each after what it points at
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestStore(t)
+			a, b, c := newTask("a"), newTask("b"), newTask("c")
+			setup, write := tt.build(a, b, c)
+			for _, task := range setup {
+				addTask(t, s, task)
+			}
+			// The setup wrote a; write a fresh copy so the write is a change.
+			write.Title = "written"
+			wantViolation(t, put(s, write), write.ID, schema.CodeCycle, tt.field)
+		})
+	}
+}
+
+func TestUpdateAllowsEditInOldCycle(t *testing.T) {
+	s := newTestStore(t)
+	a, b := newTask("a"), newTask("b")
+	// A sync or a hand edit may leave cycles; write them past Update.
+	mustWrite(t, s, model.TaskPath(a.ID), "---\nid: "+a.ID.String()+"\nkind: task\ntitle: a\nstatus: todo\nparent: "+b.ID.String()+"\nblocked_by: ["+b.ID.String()+"]\n---\n")
+	mustWrite(t, s, model.TaskPath(b.ID), "---\nid: "+b.ID.String()+"\nkind: task\ntitle: b\nstatus: todo\nparent: "+a.ID.String()+"\nblocked_by: ["+a.ID.String()+"]\n---\n")
+	got, err := s.Task(a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got.Title = "renamed"
+	if err := put(s, got); err != nil {
+		t.Errorf("editing a task in an old cycle failed: %v", err)
+	}
+}
+
+func TestUpdateAllowsBlockerChain(t *testing.T) {
+	s := newTestStore(t)
+	a, b, c := newTask("a"), newTask("b"), newTask("c")
+	b.BlockedBy = []model.ID{c.ID}
+	addTask(t, s, c)
+	addTask(t, s, b)
+	a.BlockedBy = []model.ID{b.ID, c.ID}
+	if err := put(s, a); err != nil {
+		t.Errorf("a chain without a cycle was refused: %v", err)
 	}
 }

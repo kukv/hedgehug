@@ -51,7 +51,9 @@ func refsOf(t *model.Task, sc *schema.Schema) []ref {
 // checkRefs returns the violations of the references that a write of t over
 // old adds; old is nil for a new task. A reference old already had is not
 // checked, so a task left with a missing reference by a purge or a sync can
-// still be edited.
+// still be edited. A new parent or blocker that leads back to t through the
+// same kind of reference is a cycle; cycles made only of references that were
+// already there are let through.
 func (tx *Tx) checkRefs(old, t *model.Task, sc *schema.Schema) ([]schema.Violation, error) {
 	had := map[ref]bool{}
 	if old != nil {
@@ -71,6 +73,17 @@ func (tx *Tx) checkRefs(old, t *model.Task, sc *schema.Schema) ([]schema.Violati
 		}
 		if !ok {
 			vs = append(vs, schema.Violation{Code: schema.CodeMissingRef, Field: r.field, Msg: fmt.Sprintf("task %s is not in this store", r.id)})
+			continue
+		}
+		if r.field != "parent" && r.field != "blocked_by" {
+			continue
+		}
+		cycle, err := tx.reaches(r.id, t.ID, r.field)
+		if err != nil {
+			return nil, err
+		}
+		if cycle {
+			vs = append(vs, schema.Violation{Code: schema.CodeCycle, Field: r.field, Msg: fmt.Sprintf("%s %s leads back to this task", r.field, r.id)})
 		}
 	}
 	return vs, nil
@@ -88,4 +101,44 @@ func (tx *Tx) exists(id model.ID) (bool, error) {
 		return false, nil
 	}
 	return false, err
+}
+
+// edges returns the tasks t points at through field: its parent or its
+// blockers.
+func edges(t *model.Task, field string) []model.ID {
+	if field == "parent" {
+		if t.Parent == nil {
+			return nil
+		}
+		return []model.ID{*t.Parent}
+	}
+	return t.BlockedBy
+}
+
+// reaches reports whether following field from the task from leads to
+// target, as the operation leaves the tasks. The walk stops at tasks that
+// are missing or do not decode.
+func (tx *Tx) reaches(from, target model.ID, field string) (bool, error) {
+	seen := map[model.ID]bool{}
+	stack := []model.ID{from}
+	for len(stack) > 0 {
+		id := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if id == target {
+			return true, nil
+		}
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		t, err := tx.task(id)
+		if errors.Is(err, ErrNotFound) || errors.As(err, new(*model.DecodeError)) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		stack = append(stack, edges(t, field)...)
+	}
+	return false, nil
 }

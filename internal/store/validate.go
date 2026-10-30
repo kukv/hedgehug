@@ -20,9 +20,6 @@ func (e *SchemaError) Error() string {
 	return "invalid schema: " + strings.Join(msgs, "; ")
 }
 
-// ErrCycle means following a task's parents led back to a task already seen.
-var ErrCycle = errors.New("the parents of the task form a cycle")
-
 // ValidationError means a write would bring violations into a task.
 type ValidationError struct {
 	Task       model.ID
@@ -90,6 +87,7 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 // keeps the ancestors found so far, with an empty parentKind when the direct
 // parent is the one missing. So a task whose parent was purged or broken can
 // still be edited; checkRefs refuses a write that adds a missing parent.
+// It also stops when it comes back to a task it has seen.
 func lineage(t *model.Task, sc *schema.Schema, read func(model.ID) (*model.Task, error)) (parentKind string, ancestors []model.ID, err error) {
 	if k, ok := sc.Kind(t.Kind); ok && k.Role == schema.RoleContainer {
 		ancestors = append(ancestors, t.ID)
@@ -98,7 +96,7 @@ func lineage(t *model.Task, sc *schema.Schema, read func(model.ID) (*model.Task,
 	for cur := t; cur.Parent != nil; {
 		id := *cur.Parent
 		if seen[id] {
-			return "", nil, fmt.Errorf("task %s: %w", t.ID, ErrCycle)
+			break // a cycle the store already had; checkRefs refuses new ones
 		}
 		seen[id] = true
 		p, err := read(id)

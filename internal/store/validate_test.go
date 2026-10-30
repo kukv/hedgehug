@@ -177,9 +177,7 @@ func TestUpdateParentCycle(t *testing.T) {
 	err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error {
 		return errors.Join(tx.PutTask(a), tx.PutTask(b))
 	})
-	if !errors.Is(err, ErrCycle) {
-		t.Errorf("err = %v, want ErrCycle", err)
-	}
+	wantViolation(t, err, a.ID, schema.CodeCycle, "parent")
 }
 
 func TestUpdateUsesProjectSchema(t *testing.T) {
