@@ -39,7 +39,9 @@ func (e *ValidationError) Error() string {
 
 // validate checks every task put in the operation against sc. The rules are
 // schema.ValidateWrite's; this only gathers what it needs: the task as it is
-// on disk, the kind of its parent and its ancestors.
+// on disk, and for both it and the task being written the kind of the
+// parent and the ancestors. The old task's are read from disk, so a move is
+// checked in its new place.
 func (tx *Tx) validate(sc *schema.Schema) error {
 	for _, id := range tx.taskOrder {
 		t := tx.tasks[id]
@@ -54,11 +56,20 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 		} else if err != nil {
 			return err
 		}
-		parentKind, ancestors, err := tx.lineage(t, sc, old == nil || !sameParent(old.Parent, t.Parent))
+		parentKind, ancestors, err := lineage(t, sc, tx.task, old == nil || !sameParent(old.Parent, t.Parent))
 		if err != nil {
 			return err
 		}
-		if vs := schema.ValidateWrite(old, t, parentKind, sc.For(ancestors)); len(vs) > 0 {
+		var oldParentKind string
+		var oldE *schema.Effective
+		if old != nil {
+			var oldAncestors []model.ID
+			if oldParentKind, oldAncestors, err = lineage(old, sc, tx.s.Task, false); err != nil {
+				return err
+			}
+			oldE = sc.For(oldAncestors)
+		}
+		if vs := schema.ValidateWrite(old, oldParentKind, oldE, t, parentKind, sc.For(ancestors)); len(vs) > 0 {
 			return &ValidationError{Task: id, Violations: vs}
 		}
 	}
@@ -67,14 +78,15 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 
 // lineage returns the kind of t's parent, empty at the root, and the IDs
 // For needs: t's ancestors nearest first, led by t itself when t is a
-// container. Parents are read as the operation leaves them.
+// container. Parents are read with read: as the operation leaves them for
+// the task being written, from disk for the task as it was.
 //
 // A missing direct parent is an error when newParent is set: the write puts
 // t under a task that is not there. Otherwise, and for any farther ancestor,
 // the walk stops at the first missing task and keeps the ancestors found so
 // far, with an empty parentKind when the direct parent is the missing one.
 // So a task whose parent or ancestor was purged can still be edited.
-func (tx *Tx) lineage(t *model.Task, sc *schema.Schema, newParent bool) (parentKind string, ancestors []model.ID, err error) {
+func lineage(t *model.Task, sc *schema.Schema, read func(model.ID) (*model.Task, error), newParent bool) (parentKind string, ancestors []model.ID, err error) {
 	if k, ok := sc.Kind(t.Kind); ok && k.Role == schema.RoleContainer {
 		ancestors = append(ancestors, t.ID)
 	}
@@ -85,7 +97,7 @@ func (tx *Tx) lineage(t *model.Task, sc *schema.Schema, newParent bool) (parentK
 			return "", nil, fmt.Errorf("task %s: %w", t.ID, ErrCycle)
 		}
 		seen[id] = true
-		p, err := tx.task(id)
+		p, err := read(id)
 		if errors.Is(err, ErrNotFound) && (cur != t || !newParent) {
 			break
 		}

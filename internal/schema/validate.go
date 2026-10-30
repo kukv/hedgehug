@@ -177,10 +177,13 @@ func checkScalar(p Prop, n *yaml.Node) error {
 }
 
 // ValidateWrite checks a write of cur over old, which is nil for a new task.
-// parentKind is the kind of cur's parent, empty at the root. It returns only
-// the violations the write brings in: ones old already had are left out, so
-// a task that a sync left broken can still be edited.
-func ValidateWrite(old, cur *model.Task, parentKind string, e *Effective) []Violation {
+// parentKind is the kind of cur's parent, empty at the root, and e the
+// schema for cur where it is written; oldParentKind and oldE are the same
+// for old where it was, and are unused when old is nil. It returns only the
+// violations the write brings in: ones old already had where it was are left
+// out, so a task that a sync left broken can still be edited, while a move
+// is checked in its new place.
+func ValidateWrite(old *model.Task, oldParentKind string, oldE *Effective, cur *model.Task, parentKind string, e *Effective) []Violation {
 	vs := taskViolations(cur, parentKind, e)
 	switch {
 	case old == nil:
@@ -190,7 +193,7 @@ func ValidateWrite(old, cur *model.Task, parentKind string, e *Effective) []Viol
 	}
 	var had []Violation
 	if old != nil {
-		had = taskViolations(old, parentKind, e)
+		had = taskViolations(old, oldParentKind, oldE)
 	}
 	return newViolations(vs, had)
 }

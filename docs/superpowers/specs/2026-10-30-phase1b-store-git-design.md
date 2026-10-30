@@ -183,12 +183,13 @@ func (tx *Tx) PutSchema(sc *schema.Schema) error
 
 ```go
 // schema/validate.go
-func ValidateWrite(old, new *model.Task, parentKind string, e *Effective) []Violation
+func ValidateWrite(old *model.Task, oldParentKind string, oldE *Effective, cur *model.Task, parentKind string, e *Effective) []Violation
 ```
 
 - `ValidateTask`、`ValidatePlacement`、`ValidateTransition` をまとめてかける。`ValidateTransition` は、新規なら `from` を空にして（入る先のステータスの必須項目を見る）、既存ならステータスが変わったときだけかける。2つの検査が同じ違反（`unknown_kind` など）を返したら1つにまとめる。
 - `old` に同じ検査をかけて出た違反は、結果から差し引く。違反を比べるときは `Code` と `Field` の組で見る。こうして、その書き込みで新しく生じた違反だけを返す。フェーズ2の同期のあとで違反を抱えたタスクが生じても、それと関係のない編集はできる。
-- `old` が nil（新規）なら、差し引くものはない。
+- `old` は変更前の親と祖先の文脈（`oldParentKind` と `oldE`）で検査する。移動で新しく生じた配置の違反は差し引かない。
+- `old` が nil（新規）なら、差し引くものはない。`oldParentKind` と `oldE` は使わない。
 - スキーマにない props は、1a の方針どおり違反にしない。
 
 Store の側（`store/validate.go`）では、`PutTask` で積んだタスクのそれぞれについて、`fn` を抜けたあとに次を行う。
@@ -196,6 +197,7 @@ Store の側（`store/validate.go`）では、`PutTask` で積んだタスクの
 - `old`: `Tx` を反映する前のディスク上のタスク。デコードできなければ nil（新規）として扱い、新しい内容をすべて検査する。壊れたファイルを書き込みで直せるようにするため。
 - `parentKind`: 親タスクの `kind`。親は `Tx` を反映したあとの状態から引く（テンプレートを展開するとき、同じ操作で親と子を作るため）。親が見つからないときは、親を変える書き込み（新規も含む）なら `ErrNotFound` を wrap したエラーで拒否する。親を変えない書き込みなら拒否せず、空文字にする。親が purge されたタスクも編集できるようにするため。親がなければ空文字（`root` として扱われる）。
 - `e`: 祖先の ID を近い順に集めて、`Schema().For(ancestors)` を呼ぶ。同じ操作で `PutSchema` したときは、新しいスキーマを使う。祖先は parent をたどってファイルを読む。見つからない祖先があれば、そこでたどるのをやめ、それまでに集めた祖先を使う。同じ ID に戻ってきたら、`ErrCycle` を返す（本格的な循環の検出は 1c）。
+- `oldParentKind` と `oldE`: `old` について、`parentKind` と `e` と同じものを求める。ただし親と祖先は `Tx` を反映する前のディスクから引く。親や祖先が見つからなければ、そこでたどるのをやめる（親が見つからなければ `oldParentKind` は空文字）。
 - 違反があれば `*ValidationError{Task model.ID; Violations []schema.Violation}` を返す。
 
 スプリント・リリース・テンプレート・コメント・作業時間には、スキーマの検査をかけない（Encode できればよい）。
@@ -245,7 +247,7 @@ Store の側（`store/validate.go`）では、`PutTask` で積んだタスクの
   - `RemoveTask` でタスクとコメント・作業時間が消え、コミットされる
   - 走査が、解釈できないパスを読み飛ばす
 - **書き込み時の検査**
-  - `ValidateWrite` のテーブル駆動テスト: 新規、新しく生じた違反、もともとあった違反、遷移、必須
+  - `ValidateWrite` のテーブル駆動テスト: 新規、新しく生じた違反、もともとあった違反、移動、遷移、必須
   - Store 経由: 違反で拒否されて何も残らない。親がない。parent の循環
 - **ロック**
   - 別々の `Store` から同時に `Update` すると、直列に処理される（コミット数と内容で確かめる）

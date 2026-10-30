@@ -216,3 +216,61 @@ func TestUpdateUsesProjectSchema(t *testing.T) {
 		t.Errorf("outside the project: %v", err)
 	}
 }
+
+// refusedMove moves task as fn changes it and expects a violation of code,
+// with nothing written.
+func refusedMove(t *testing.T, s *Store, task *model.Task, code string, fn func(*model.Task)) {
+	t.Helper()
+	before, err := os.ReadFile(s.path(model.TaskPath(task.ID)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := len(headLog(t, s.dir))
+	got, err := s.Task(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn(got)
+	err = s.Update(Op{Name: "mv", Task: task.ID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(got) })
+	var ve *ValidationError
+	if !errors.As(err, &ve) || ve.Task != task.ID || ve.Violations[0].Code != code {
+		t.Errorf("err = %v, want a %s violation", err, code)
+	}
+	if after, err := os.ReadFile(s.path(model.TaskPath(task.ID))); err != nil || string(after) != string(before) {
+		t.Errorf("refused move was written: %q, %v", after, err)
+	}
+	if m := len(headLog(t, s.dir)); m != n {
+		t.Errorf("commits = %d, want %d", m, n)
+	}
+}
+
+func TestUpdateMoveChecksPlacement(t *testing.T) {
+	s := newTestStore(t)
+	parent := newTask("parent")
+	bug := newTask("bug")
+	bug.Kind = "bug" // fine at the root, not under a task
+	addTask(t, s, parent)
+	addTask(t, s, bug)
+	refusedMove(t, s, bug, schema.CodePlacement, func(b *model.Task) { b.Parent = &parent.ID })
+}
+
+func TestUpdateMoveUsesProjectSchema(t *testing.T) {
+	s := newTestStore(t)
+	project := newTask("project")
+	project.Kind = "project"
+	addTask(t, s, project)
+	sc := schema.Default()
+	sc.Scoped = append(sc.Scoped, schema.Scoped{
+		Where:    "project:" + project.ID.String(),
+		Workflow: &schema.Workflow{Required: schema.Lists{{Key: "in_progress", Values: []string{"assignees"}}}},
+	})
+	if err := s.Update(Op{Name: "schema", Author: testAuthor}, func(tx *Tx) error { return tx.PutSchema(sc) }); err != nil {
+		t.Fatal(err)
+	}
+	task := newTask("task")
+	addTask(t, s, task)
+	refusedMove(t, s, task, schema.CodeRequired, func(m *model.Task) {
+		m.Parent = &project.ID
+		m.Status = "in_progress"
+	})
+}
