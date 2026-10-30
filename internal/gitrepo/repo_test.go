@@ -137,6 +137,44 @@ func TestCommitNothing(t *testing.T) {
 	}
 }
 
+func TestFailedCommitKeepsIndex(t *testing.T) {
+	dir := t.TempDir()
+	r, err := Init(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, dir, "a.md", "one")
+	if _, err := r.Commit(Commit{Paths: []string{"a.md"}, Subject: "one", Author: author, When: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, dir, "a.md", "two")
+	// A NUL byte makes Lstat fail with something other than "not exist",
+	// after a.md has already been staged.
+	if _, err := r.Commit(Commit{Paths: []string{"a.md", "bad\x00.md"}, Subject: "two", Author: author, When: time.Now()}); err == nil {
+		t.Fatal("Commit with an invalid path succeeded")
+	}
+
+	want, err := head(t, dir).File("a.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := git.PlainOpen(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	idx, err := repo.Storer.Index()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := idx.Entry("a.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Hash != want.Hash {
+		t.Errorf("index a.md = %s, want HEAD's %s", e.Hash, want.Hash)
+	}
+}
+
 func TestOpen(t *testing.T) {
 	dir := t.TempDir()
 	if _, err := Init(dir); err != nil {

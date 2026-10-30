@@ -39,10 +39,24 @@ type Commit struct {
 // Paths are staged one by one so that a commit costs the same however many
 // files the store holds: go-git's plain Add takes the status of the whole
 // work tree.
-func (r *Repo) Commit(c Commit) (plumbing.Hash, error) {
+//
+// If the commit fails, the index is put back as it was before the call, so
+// that staged paths do not leak into the next commit.
+func (r *Repo) Commit(c Commit) (h plumbing.Hash, err error) {
 	if len(c.Paths) == 0 {
 		return plumbing.ZeroHash, ErrNothingToCommit
 	}
+	before, err := r.r.Storer.Index()
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+	defer func() {
+		if err != nil {
+			if rerr := r.r.Storer.SetIndex(before); rerr != nil {
+				err = errors.Join(err, rerr)
+			}
+		}
+	}()
 	w, err := r.r.Worktree()
 	if err != nil {
 		return plumbing.ZeroHash, err
