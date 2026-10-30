@@ -45,7 +45,8 @@ func TestShow(t *testing.T) {
 
 	out := te.ok("show", a.Key)
 	for _, want := range []string{
-		label(a) + "  Write the spec",
+		// The heading is the title; the key and the ULID are the first fields.
+		"Write the spec\n  key         " + a.Key + "\n  id          " + a.ID + "\n  workspace   me (ME, ",
 		"workspace   me (ME, ",
 		"parent      " + label(p) + " Project",
 		"blocked_by  " + label(other) + " Other",
@@ -62,8 +63,7 @@ func TestShow(t *testing.T) {
 			t.Errorf("show does not contain %q:\n%s", want, out)
 		}
 	}
-	// The heading gives the key and the ULID; no line repeats them.
-	if strings.Contains(out, "Problems:") || strings.Contains(out, "deleted ") || strings.Contains(out, "  key ") || strings.Contains(out, "  id ") || strings.Contains(out, "former_keys") {
+	if strings.Contains(out, "Problems:") || strings.Contains(out, "deleted ") || strings.Contains(out, "former_keys") || strings.Contains(out, a.Key+" ("+a.ID+")  ") {
 		t.Errorf("show has sections it should not:\n%s", out)
 	}
 
@@ -172,11 +172,11 @@ func TestShowWideLabel(t *testing.T) {
 	other := te.addJSON("Other")
 	a := te.addJSON("A", "-p", "relates+="+other.Key)
 	out := te.ok("show", other.Key)
-	// 関連 is 4 columns wide; the values start at column 14, as after kind.
+	// 関連 is 4 columns wide; the values start at column 14, as after id.
 	if want := "  関連        " + label(a) + " A"; !strings.Contains(out, want) {
 		t.Errorf("show does not contain %q:\n%s", want, out)
 	}
-	if want := "  kind        task"; !strings.Contains(out, want) {
+	if want := "  id          " + other.ID; !strings.Contains(out, want) {
 		t.Errorf("show does not contain %q:\n%s", want, out)
 	}
 }

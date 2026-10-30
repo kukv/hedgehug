@@ -143,7 +143,11 @@ func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Co
 func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []relation, history []gitrepo.LogEntry) string {
 	st := a.style()
 	var b strings.Builder
-	b.WriteString(st.id(taskLabel(e)) + "  " + e.Title + "\n")
+	title := e.Title
+	if title == "" {
+		title = "-" // a file that does not decode
+	}
+	b.WriteString(title + "\n")
 	field := func(k string, vs ...string) {
 		v := strings.Join(vs, ", ")
 		if v == "" {
@@ -158,6 +162,8 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 		}
 		return out
 	}
+	field("key", e.Key)
+	field("id", e.ID.String())
 	if !e.Workspace.IsZero() {
 		ws := e.Workspace.String()
 		if w, ok := ix.Workspace(e.Workspace); ok {
