@@ -20,9 +20,6 @@ func (e *SchemaError) Error() string {
 	return "invalid schema: " + strings.Join(msgs, "; ")
 }
 
-// ErrCycle means following a task's parents led back to a task already seen.
-var ErrCycle = errors.New("the parents of the task form a cycle")
-
 // ValidationError means a write would bring violations into a task.
 type ValidationError struct {
 	Task       model.ID
@@ -56,7 +53,7 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 		} else if err != nil {
 			return err
 		}
-		parentKind, ancestors, err := lineage(t, sc, tx.task, old == nil || !sameParent(old.Parent, t.Parent))
+		parentKind, ancestors, err := lineage(t, sc, tx.task)
 		if err != nil {
 			return err
 		}
@@ -64,12 +61,17 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 		var oldE *schema.Effective
 		if old != nil {
 			var oldAncestors []model.ID
-			if oldParentKind, oldAncestors, err = lineage(old, sc, tx.s.Task, false); err != nil {
+			if oldParentKind, oldAncestors, err = lineage(old, sc, tx.s.Task); err != nil {
 				return err
 			}
 			oldE = sc.For(oldAncestors)
 		}
-		if vs := schema.ValidateWrite(old, oldParentKind, oldE, t, parentKind, sc.For(ancestors)); len(vs) > 0 {
+		vs := schema.ValidateWrite(old, oldParentKind, oldE, t, parentKind, sc.For(ancestors))
+		rvs, err := tx.checkRefs(old, t, sc)
+		if err != nil {
+			return err
+		}
+		if vs = append(vs, rvs...); len(vs) > 0 {
 			return &ValidationError{Task: id, Violations: vs}
 		}
 	}
@@ -81,12 +83,12 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 // container. Parents are read with read: as the operation leaves them for
 // the task being written, from disk for the task as it was.
 //
-// A missing direct parent is an error when newParent is set: the write puts
-// t under a task that is not there. Otherwise, and for any farther ancestor,
-// the walk stops at the first missing task and keeps the ancestors found so
-// far, with an empty parentKind when the direct parent is the missing one.
-// So a task whose parent or ancestor was purged can still be edited.
-func lineage(t *model.Task, sc *schema.Schema, read func(model.ID) (*model.Task, error), newParent bool) (parentKind string, ancestors []model.ID, err error) {
+// The walk stops at the first task that is missing or does not decode, and
+// keeps the ancestors found so far, with an empty parentKind when the direct
+// parent is the one missing. So a task whose parent was purged or broken can
+// still be edited; checkRefs refuses a write that adds a missing parent.
+// It also stops when it comes back to a task it has seen.
+func lineage(t *model.Task, sc *schema.Schema, read func(model.ID) (*model.Task, error)) (parentKind string, ancestors []model.ID, err error) {
 	if k, ok := sc.Kind(t.Kind); ok && k.Role == schema.RoleContainer {
 		ancestors = append(ancestors, t.ID)
 	}
@@ -94,11 +96,11 @@ func lineage(t *model.Task, sc *schema.Schema, read func(model.ID) (*model.Task,
 	for cur := t; cur.Parent != nil; {
 		id := *cur.Parent
 		if seen[id] {
-			return "", nil, fmt.Errorf("task %s: %w", t.ID, ErrCycle)
+			break // a cycle the store already had; checkRefs refuses new ones
 		}
 		seen[id] = true
 		p, err := read(id)
-		if errors.Is(err, ErrNotFound) && (cur != t || !newParent) {
+		if errors.Is(err, ErrNotFound) || errors.As(err, new(*model.DecodeError)) {
 			break
 		}
 		if err != nil {
@@ -111,11 +113,4 @@ func lineage(t *model.Task, sc *schema.Schema, read func(model.ID) (*model.Task,
 		cur = p
 	}
 	return parentKind, ancestors, nil
-}
-
-func sameParent(a, b *model.ID) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return *a == *b
 }

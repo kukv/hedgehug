@@ -1,0 +1,103 @@
+package index
+
+import (
+	"slices"
+	"strings"
+	"testing"
+
+	"go.yaml.in/yaml/v4"
+
+	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/schema"
+)
+
+func TestOpenIndexesTasks(t *testing.T) {
+	s, _ := newStore(t)
+	epic := newTask("Epic")
+	epic.Kind = "epic"
+	first, second := newTask("First"), newTask("Second")
+	first.Parent, second.Parent = &epic.ID, &epic.ID
+	first.Rank, second.Rank = "a1", "a0"
+	first.Labels = []string{"backend"}
+	first.Body = "Some BODY text\n"
+	first.Props.Set("priority", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "high"})
+	put(t, s, epic, first, second)
+
+	ix := mustOpen(t, s)
+	e, ok := ix.Task(first.ID)
+	if !ok {
+		t.Fatal("first is not in the index")
+	}
+	if e.Title != "First" || e.Kind != "task" || e.Parent == nil || *e.Parent != epic.ID || e.Rank != "a1" || !slices.Equal(e.Labels, []string{"backend"}) {
+		t.Errorf("entry = %+v", e)
+	}
+	if got := e.Prop("priority"); !slices.Equal(got, []string{"high"}) {
+		t.Errorf("priority = %v, want [high]", got)
+	}
+	if !strings.Contains(e.Text, "first") || !strings.Contains(e.Text, "some body text") {
+		t.Errorf("text = %q, want the title and body in lower case", e.Text)
+	}
+	if e.Created.IsZero() || e.Broken != "" || len(e.Violations) != 0 {
+		t.Errorf("entry = %+v", e)
+	}
+	if got := titles(ix.Children(epic.ID)); !slices.Equal(got, []string{"Second", "First"}) {
+		t.Errorf("children = %v, want [Second First] (by rank)", got)
+	}
+	if got := titles(ix.Roots()); !slices.Equal(got, []string{"Epic"}) {
+		t.Errorf("roots = %v, want [Epic]", got)
+	}
+	if len(ix.Tasks()) != 3 {
+		t.Errorf("tasks = %d, want 3", len(ix.Tasks()))
+	}
+	if ix.Schema() == nil || len(ix.Schema().Statuses) == 0 {
+		t.Error("schema not read")
+	}
+}
+
+func TestOpenBrokenFile(t *testing.T) {
+	s, dir := newStore(t)
+	id := model.NewID()
+	commitRaw(t, s, dir, model.TaskPath(id), "not a task file\n")
+	other := model.NewID()
+	commitRaw(t, s, dir, model.TaskPath(other), rawTask(model.NewID(), "kind: task\ntitle: x\nstatus: todo\n"))
+
+	ix := mustOpen(t, s)
+	for _, want := range []model.ID{id, other} {
+		e, ok := ix.Task(want)
+		if !ok || e.Broken == "" {
+			t.Errorf("entry %s = %+v, want a broken entry", want, e)
+		}
+	}
+	if len(ix.Roots()) != 2 {
+		t.Errorf("roots = %d, want the 2 broken entries", len(ix.Roots()))
+	}
+}
+
+func TestOpenViolations(t *testing.T) {
+	s, dir := newStore(t)
+	parent := newTask("parent")
+	put(t, s, parent)
+	unknown, misplaced, orphan := model.NewID(), model.NewID(), model.NewID()
+	commitRaw(t, s, dir, model.TaskPath(unknown), rawTask(unknown, "kind: nope\ntitle: x\nstatus: todo\n"))
+	// A bug cannot sit under a task.
+	commitRaw(t, s, dir, model.TaskPath(misplaced), rawTask(misplaced, "kind: bug\ntitle: x\nstatus: todo\nparent: "+parent.ID.String()+"\n"))
+	// The parent is missing, so its kind is unknown: placement is not checked.
+	commitRaw(t, s, dir, model.TaskPath(orphan), rawTask(orphan, "kind: epic\ntitle: x\nstatus: todo\nparent: "+model.NewID().String()+"\n"))
+
+	ix := mustOpen(t, s)
+	check := func(id model.ID, want ...string) {
+		t.Helper()
+		e, _ := ix.Task(id)
+		var got []string
+		for _, v := range e.Violations {
+			got = append(got, v.Code+":"+v.Field)
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("violations of %s = %v, want %v", e.Title, got, want)
+		}
+	}
+	check(unknown, schema.CodeUnknownKind+":kind") // once, though two checks report it
+	check(misplaced, schema.CodePlacement+":parent")
+	check(orphan)
+	check(parent.ID)
+}

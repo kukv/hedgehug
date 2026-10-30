@@ -22,6 +22,10 @@ const (
 	CodePlacement     = "placement"
 	CodeTransition    = "transition"
 	CodeRequired      = "required"
+	// The store and the index report these: they need every task of the
+	// store, which the checks here do not see.
+	CodeMissingRef = "missing_ref"
+	CodeCycle      = "cycle"
 )
 
 // Violation is a way a task breaks its schema. Writes refuse violations;
@@ -47,6 +51,11 @@ func ValidateTask(t *model.Task, e *Effective) (violations []Violation, undefine
 	}
 	if t.Title == "" {
 		violations = append(violations, Violation{CodeMissingTitle, "title", "title is empty"})
+	}
+	if t.Rank != "" {
+		if err := t.Rank.Validate(); err != nil {
+			violations = append(violations, Violation{CodeBadValue, "rank", err.Error()})
+		}
 	}
 	for _, f := range t.Props {
 		p, ok := s.Prop(f.Key)

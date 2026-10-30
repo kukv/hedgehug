@@ -29,6 +29,13 @@ func (id ID) String() string { return id.u.String() }
 // IsZero reports whether id is the zero ID, which no file uses.
 func (id ID) IsZero() bool { return id.u == ulid.ULID{} }
 
+// MarshalBinary writes id as its 16 bytes, so that the index can keep it in
+// a gob cache.
+func (id ID) MarshalBinary() ([]byte, error) { return id.u.MarshalBinary() }
+
+// UnmarshalBinary reads what MarshalBinary wrote.
+func (id *ID) UnmarshalBinary(b []byte) error { return id.u.UnmarshalBinary(b) }
+
 func (id ID) MarshalYAML() (any, error) { return id.String(), nil }
 
 // UnmarshalYAML reads the scalar as written, so an ID of digits only is not

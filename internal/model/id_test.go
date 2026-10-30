@@ -1,6 +1,8 @@
 package model
 
 import (
+	"bytes"
+	"encoding/gob"
 	"errors"
 	"strings"
 	"testing"
@@ -16,6 +18,28 @@ func TestNewIDIsParseable(t *testing.T) {
 	got, err := ParseID(a.String())
 	if err != nil || got != a {
 		t.Errorf("ParseID(%s) = %v, %v", a, got, err)
+	}
+}
+
+func TestIDGob(t *testing.T) {
+	type holder struct {
+		ID     ID
+		Parent *ID
+		List   []ID
+		Zero   ID
+	}
+	a, b := NewID(), NewID()
+	in := holder{ID: a, Parent: &b, List: []ID{b, a}}
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(in); err != nil {
+		t.Fatal(err)
+	}
+	var out holder
+	if err := gob.NewDecoder(&buf).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if out.ID != a || out.Parent == nil || *out.Parent != b || len(out.List) != 2 || out.List[0] != b || out.List[1] != a || !out.Zero.IsZero() {
+		t.Errorf("round trip = %+v, want %+v", out, in)
 	}
 }
 
