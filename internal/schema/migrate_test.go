@@ -2,6 +2,8 @@ package schema
 
 import (
 	"fmt"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -242,6 +244,69 @@ func TestMigrateRenameKeepsNotes(t *testing.T) {
 	out = encodeString(t, got)
 	if want := "statuses:\n- name: ready # 準備\n  category: todo\n  default: true\n  x-note: keep\n- {name: doing"; !strings.Contains(out, want) {
 		t.Errorf("output lacks %q:\n%s", want, out)
+	}
+
+	// A renamed key of a mapping keeps its node: the property's block
+	// style, comment and unknown key, and the comment of a transition.
+	for _, tc := range []struct {
+		m       Migration
+		from    string
+		to      string
+		unmoved string
+	}{
+		{Migration{Target: TargetProp, Old: "points", New: "pts"}, "  points:\n    type: number # 数値\n    min: 0\n", "  pts:\n    type: number # 数値\n    min: 0\n", "  priority: {type: enum, values: [low, high], order: desc} # 未知のキー\n"},
+		{Migration{Target: TargetStatus, Old: "todo", New: "open"}, "    todo: [in_progress] # 開始\n", "    open: [in_progress] # 開始\n", "# 既定の未着手\n- name: open\n  label: 未着手 # ラベル\n"},
+		{Migration{Target: TargetKind, Old: "task", New: "work"}, "      task: release-checklist\n", "      work: release-checklist\n", "  role: work # 作業\n  default: true\n  wip_limit: 5\n"},
+	} {
+		src, err := os.ReadFile("testdata/extras.yaml")
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := Decode(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := s.Migrate(tc.m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := strings.Replace(string(src), tc.from, tc.to, 1)
+		if tc.m.Target == TargetStatus {
+			want = strings.Replace(want, "- name: todo\n", "- name: open\n", 1)
+		}
+		if tc.m.Target == TargetKind {
+			want = strings.Replace(want, "- name: task\n", "- name: work\n", 1)
+		}
+		if out := encodeString(t, got); out != want || !strings.Contains(out, tc.unmoved) {
+			t.Errorf("%+v:\n%s\nwant:\n%s", tc.m, out, want)
+		}
+	}
+}
+
+func TestMigrateKindMergeDefault(t *testing.T) {
+	got, err := decodeMigrate(t).Migrate(Migration{Target: TargetKind, Old: "task", New: "bug"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k, _ := got.Kind("bug"); !k.Default {
+		t.Errorf("bug = %+v, want the default", k)
+	}
+	if ps := got.Check(); len(ps) > 0 {
+		t.Errorf("Check() = %v", ps)
+	}
+
+	got, err = decodeMigrate(t).Migrate(Migration{Target: TargetKind, Old: "task", New: "epic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k, _ := got.Kind("epic"); k.Default {
+		t.Errorf("epic = %+v: a container took the default of work", k)
+	}
+	ps := got.Check()
+	if !slices.ContainsFunc(ps, func(p Problem) bool {
+		return strings.Contains(p.Msg, "the work role needs exactly one default kind, has 0")
+	}) {
+		t.Errorf("Check() = %v, want no default kind", ps)
 	}
 }
 

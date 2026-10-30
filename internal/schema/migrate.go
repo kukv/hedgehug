@@ -32,7 +32,10 @@ type Migration struct {
 
 // Migrate returns s with the migration applied: the definition renamed, or
 // removed in a merge, and every reference to it in the schema rewritten.
-// A list that a merge leaves with a name twice keeps the first. s is not
+// A list that a merge leaves with a name twice keeps the first. A merged
+// status or kind that was a default hands it to the one it merges into,
+// when that has the same category or role; otherwise Check reports the
+// missing default. s is not
 // changed, but the result shares s's file, so that Encode keeps its
 // comments; encoding the result writes into that file, so s is not to be
 // encoded after it.
@@ -135,7 +138,10 @@ func (s *Schema) migrateKind(from, to string) error {
 	if i < 0 {
 		return fmt.Errorf("kind %q is not defined", from)
 	}
-	if _, ok := s.Kind(to); ok {
+	if j := slices.IndexFunc(s.Kinds, func(x Kind) bool { return x.Name == to }); j >= 0 {
+		if s.Kinds[i].Default && s.Kinds[j].Role == s.Kinds[i].Role {
+			s.Kinds[j].Default = true
+		}
 		s.Kinds = slices.Delete(s.Kinds, i, i+1)
 	} else {
 		s.Kinds[i].Name = to

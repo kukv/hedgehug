@@ -193,6 +193,18 @@ func TestSchemaMigrateDryRun(t *testing.T) {
 	if te.schemaFile() != sf || te.task(a.ID).Status != "todo" {
 		t.Error("the store changed")
 	}
+
+	var got migrateOut
+	out = te.ok("schema", "migrate", "status", "todo", "ready", "--dry-run", "--json")
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if len(got.Changed) != 1 || got.Changed[0].Short != a.Short || got.Changed[0].Status != "ready" {
+		t.Errorf("changed = %+v, want Alpha as migrated", got.Changed)
+	}
+	if n := len(te.log("me")); n != before {
+		t.Errorf("commits = %d, want %d", n, before)
+	}
 }
 
 func TestSchemaMigrateArgs(t *testing.T) {
