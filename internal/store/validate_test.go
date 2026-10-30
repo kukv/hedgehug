@@ -42,6 +42,25 @@ func TestUpdateAllowsOldViolation(t *testing.T) {
 	}
 }
 
+func TestUpdateRemoveThenPutIsValidated(t *testing.T) {
+	s := newTestStore(t)
+	task := newTask("x")
+	addTask(t, s, task)
+
+	bad := newTask("")
+	bad.ID = task.ID
+	err := s.Update(Op{Name: "update", Task: task.ID, Author: testAuthor}, func(tx *Tx) error {
+		return errors.Join(tx.RemoveTask(task.ID), tx.PutTask(bad))
+	})
+	var ve *ValidationError
+	if !errors.As(err, &ve) || ve.Violations[0].Code != schema.CodeMissingTitle {
+		t.Errorf("err = %v, want a ValidationError for the empty title", err)
+	}
+	if n := len(headLog(t, s.dir)); n != 2 {
+		t.Errorf("commits = %d, want 2", n)
+	}
+}
+
 func TestUpdatePlacement(t *testing.T) {
 	s := newTestStore(t)
 	parent := newTask("parent")

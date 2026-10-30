@@ -92,7 +92,8 @@ func (tx *Tx) PutTask(t *model.Task) error {
 	if err := tx.put(model.TaskPath(t.ID), &pending{encode: t.Encode, created: &t.Created, updated: &t.Updated}); err != nil {
 		return err
 	}
-	if _, ok := tx.tasks[t.ID]; !ok {
+	// Not the tasks map: a task removed earlier in the operation is in it.
+	if !slices.Contains(tx.taskOrder, t.ID) {
 		tx.taskOrder = append(tx.taskOrder, t.ID)
 	}
 	tx.tasks[t.ID] = t
