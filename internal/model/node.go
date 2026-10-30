@@ -82,9 +82,32 @@ func mappingOf(old *yaml.Node, f Fields) *yaml.Node {
 		if !ok {
 			k = &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: x.Key}
 		}
+		if k.LineComment != "" && x.Value != nil && !keyCommentFits(x.Value) {
+			// "key: # c" puts the comment on the key. Written before a value
+			// that is not a block collection it would break the YAML, so
+			// move it to the end of the value's line.
+			kc := *k
+			kc.LineComment = ""
+			if x.Value.LineComment == "" {
+				x.Value.LineComment = k.LineComment
+			}
+			k = &kc
+		}
 		m.Content = append(m.Content, k, x.Value)
 	}
 	return m
+}
+
+// keyCommentFits reports whether a line comment on a key can be written in
+// front of the value v: v is a block collection with items, or an empty null.
+func keyCommentFits(v *yaml.Node) bool {
+	switch v.Kind {
+	case yaml.MappingNode, yaml.SequenceNode:
+		return v.Style&yaml.FlowStyle == 0 && len(v.Content) > 0
+	case yaml.ScalarNode:
+		return v.ShortTag() == "!!null" && v.Value == ""
+	}
+	return false
 }
 
 // NodeEqual reports whether a and b hold the same YAML value. Styles,

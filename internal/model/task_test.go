@@ -133,6 +133,23 @@ func TestDecodeTaskErrors(t *testing.T) {
 	}
 }
 
+func TestTaskEncodeKeepsValidYAMLWithKeyComment(t *testing.T) {
+	// "props: # c" holds a null; the comment sits on the key. Encoding an
+	// empty mapping in its place must still give a file we can read.
+	src := "---\nid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nprops: #c\n---\n"
+	task, err := DecodeTask([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := task.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DecodeTask(out); err != nil {
+		t.Fatalf("own output %q: %v", out, err)
+	}
+}
+
 func TestTaskKeysIsACopy(t *testing.T) {
 	k := TaskKeys()
 	k[0] = "changed"
