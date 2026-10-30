@@ -55,7 +55,8 @@ func (ix *Index) Resolve(s string) (model.ID, error) {
 }
 
 // KeyNumbers returns, for each key prefix, the largest number of the keys
-// and former keys of the tasks at HEAD, deleted ones included. It is the
+// and former keys of the tasks at HEAD, deleted ones included, and of the
+// BrokenNumbers of the files that do not decode. It is the
 // store's KeyNumbers: Update calls it under the lock. Every call returns a
 // new map, since the store changes the one it gets.
 func (ix *Index) KeyNumbers() (map[string]int, error) {
@@ -66,6 +67,11 @@ func (ix *Index) KeyNumbers() (map[string]int, error) {
 	for _, e := range ix.tasks {
 		for _, k := range append([]string{e.Key}, e.FormerKeys...) {
 			if p, n, ok := model.ParseKey(k); ok && n > out[p] {
+				out[p] = n
+			}
+		}
+		for p, n := range e.BrokenNumbers {
+			if n > out[p] {
 				out[p] = n
 			}
 		}

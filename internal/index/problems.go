@@ -54,7 +54,8 @@ func (ix *Index) findProblems() map[model.ID][]Problem {
 				add(e.ID, Problem{schema.CodeMissingRef, r.field, fmt.Sprintf("task %s is not in this store", r.id)})
 			}
 		}
-		if _, _, ok := model.ParseKey(e.Key); !ok {
+		prefix, _, keyOK := model.ParseKey(e.Key)
+		if !keyOK {
 			add(e.ID, Problem{CodeNoKey, "key", "missing or not a key such as WEB-42; the next write gives one"})
 		} else {
 			byKey[e.Key] = append(byKey[e.Key], e.ID)
@@ -63,10 +64,8 @@ func (ix *Index) findProblems() map[model.ID][]Problem {
 		switch {
 		case e.Workspace.IsZero() || !wsOK:
 			add(e.ID, Problem{store.CodeNoWorkspace, "workspace", "missing or not a workspace of this store; set it with hedgehug edit"})
-		case e.Key != "":
-			if p, _, ok := model.ParseKey(e.Key); ok && p != ws.KeyPrefix {
-				add(e.ID, Problem{CodeKeyPrefix, "key", fmt.Sprintf("the key prefix is not the one of workspace %s (%s); the next write renumbers it", ws.Name, ws.KeyPrefix)})
-			}
+		case keyOK && prefix != ws.KeyPrefix:
+			add(e.ID, Problem{CodeKeyPrefix, "key", fmt.Sprintf("the key prefix is not the one of workspace %s (%s); the next write renumbers it", ws.Name, ws.KeyPrefix)})
 		}
 		if e.Parent != nil {
 			if p := ix.tasks[*e.Parent]; p != nil && p.Broken == "" && p.Workspace != e.Workspace {

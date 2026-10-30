@@ -32,6 +32,10 @@ type Entry struct {
 	Text       string             // title and body in lower case, for free-text search
 	Violations []schema.Violation // against the schema where the task sits
 	Broken     string             // why the file did not decode; empty when it did
+	// BrokenNumbers is, for a file that did not decode, the largest number
+	// of each prefix among its words of the form of a key; numbering counts
+	// them, since the file's keys cannot be read.
+	BrokenNumbers map[string]int
 }
 
 // Prop is one property of a task.
@@ -59,7 +63,7 @@ func newEntry(id model.ID, data []byte) (*Entry, *model.Task) {
 		err = fmt.Errorf("id %s does not match the file name", t.ID)
 	}
 	if err != nil {
-		return &Entry{ID: id, Broken: err.Error()}, nil
+		return &Entry{ID: id, Broken: err.Error(), BrokenNumbers: model.KeyNumbersIn(data)}, nil
 	}
 	return EntryOf(t), t
 }
