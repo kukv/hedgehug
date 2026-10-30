@@ -11,6 +11,7 @@ import (
 	"github.com/go-git/go-git/v5"
 
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 func writeFile(t *testing.T, dir, rel, content string) {
@@ -278,9 +279,9 @@ func TestRunIgnoresLockAndGitignore(t *testing.T) {
 	}
 }
 
-func TestRunWorkspaces(t *testing.T) {
-	s, dir := newStore(t)
-	w := &model.Workspace{ID: model.NewID(), Name: "other", KeyPrefix: "TST"}
+// commitWorkspace writes w into the store and commits it.
+func commitWorkspace(t *testing.T, s *store.Store, dir string, w *model.Workspace) {
+	t.Helper()
 	b, err := w.Encode()
 	if err != nil {
 		t.Fatal(err)
@@ -289,17 +290,44 @@ func TestRunWorkspaces(t *testing.T) {
 	if _, err := s.Repo().Commit(commitOf(model.WorkspacePath(w.ID))); err != nil {
 		t.Fatal(err)
 	}
-	n := 0
+}
+
+// duplicateFindings returns, by where they are, the workspace findings that
+// say what.
+func duplicateFindings(t *testing.T, dir, what string) map[string]Finding {
+	t.Helper()
+	out := map[string]Finding{}
 	for _, f := range run(t, dir) {
-		if f.Check == "workspace" && strings.Contains(f.Msg, "key prefix TST") {
-			n++
+		if f.Check == "workspace" && strings.Contains(f.Msg, what) {
+			out[f.Where] = f
 		}
 	}
-	if n != 1 {
-		t.Errorf("%d workspace findings, want 1", n)
+	return out
+}
+
+func TestRunWorkspaces(t *testing.T) {
+	s, dir := newStore(t)
+	first := firstWorkspace(t, s)
+	w := &model.Workspace{ID: model.NewID(), Name: "other", KeyPrefix: "TST"}
+	commitWorkspace(t, s, dir, w)
+	got := duplicateFindings(t, dir, "key prefix TST")
+	// Both are reported, each naming the other.
+	if len(got) != 2 || !strings.Contains(got[model.WorkspacePath(first)].Msg, w.ID.String()) || !strings.Contains(got[model.WorkspacePath(w.ID)].Msg, first.String()) {
+		t.Errorf("findings = %+v", got)
 	}
 	writeFile(t, dir, "workspaces/nope.md", "x")
 	find(t, run(t, dir), "file", "workspaces/nope.md")
+}
+
+func TestRunWorkspaceNames(t *testing.T) {
+	s, dir := newStore(t)
+	first := firstWorkspace(t, s)
+	w := &model.Workspace{ID: model.NewID(), Name: "test", KeyPrefix: "OTHER"} // as the first one
+	commitWorkspace(t, s, dir, w)
+	got := duplicateFindings(t, dir, "name test")
+	if len(got) != 2 || !strings.Contains(got[model.WorkspacePath(first)].Msg, w.ID.String()) || !strings.Contains(got[model.WorkspacePath(w.ID)].Msg, first.String()) {
+		t.Errorf("findings = %+v", got)
+	}
 }
 
 func TestRunWorkspaceFields(t *testing.T) {
@@ -329,12 +357,18 @@ func TestRunWorkspaceFields(t *testing.T) {
 
 func TestRunNumbers(t *testing.T) {
 	s, dir := newStore(t)
-	for _, tt := range []string{"TST: [\n", "t: 3\n", "TST: 0\n"} {
-		writeFile(t, dir, model.NumbersPath, tt)
+	for _, tt := range []struct{ data, want string }{
+		{"TST: [\n", "does not decode: "},
+		{"t: 3\n", "has an invalid entry: t: "},
+		{"TST: 0\n", "has an invalid entry: TST: the number 0 is less than 1"},
+	} {
+		writeFile(t, dir, model.NumbersPath, tt.data)
 		if _, err := s.Repo().Commit(commitOf(model.NumbersPath)); err != nil {
 			t.Fatal(err)
 		}
-		find(t, run(t, dir), "file", model.NumbersPath)
+		if f := find(t, run(t, dir), "file", model.NumbersPath); !strings.HasPrefix(f.Msg, tt.want) {
+			t.Errorf("%q: msg = %q, want it to start with %q", tt.data, f.Msg, tt.want)
+		}
 	}
 	writeFile(t, dir, model.NumbersPath, "TST: 3\n")
 	if _, err := s.Repo().Commit(commitOf(model.NumbersPath)); err != nil {

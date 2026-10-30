@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -43,9 +44,13 @@ func Run(dir string) ([]Finding, error) {
 			Hint: "restore it with `git restore " + model.StoreMetaPath + "`, or fix it by hand and commit",
 		})
 	}
-	if err := readCheck(dir, model.NumbersPath, checkNumbers); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	msg, err := checkNumbers(dir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		msg = err.Error()
+	}
+	if msg != "" {
 		out = append(out, Finding{
-			Check: "file", Where: model.NumbersPath, Msg: err.Error(),
+			Check: "file", Where: model.NumbersPath, Msg: msg,
 			Hint: "fix the file by hand and commit, or restore it with `git restore " + model.NumbersPath + "`",
 		})
 	}
@@ -122,22 +127,27 @@ func readCheck[T any](dir, rel string, decode func([]byte) (T, error)) error {
 	return nil
 }
 
-// checkNumbers decodes numbers.yaml and checks each entry is a key prefix
-// with a number of 1 or more.
-func checkNumbers(data []byte) (model.Numbers, error) {
+// checkNumbers returns what is wrong with numbers.yaml, or "" if nothing
+// is: that it does not decode, or an entry that is not a key prefix with a
+// number of 1 or more. The error is for a file that cannot be read.
+func checkNumbers(dir string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(model.NumbersPath))) //nolint:gosec // G304: the path is built from the store root and a fixed name
+	if err != nil {
+		return "", err
+	}
 	n, err := model.DecodeNumbers(data)
 	if err != nil {
-		return nil, err
+		return "does not decode: " + err.Error(), nil
 	}
-	for p, v := range n {
+	for _, p := range slices.Sorted(maps.Keys(n)) {
 		if err := model.ValidKeyPrefix(p); err != nil {
-			return nil, fmt.Errorf("%s: %w", p, err)
+			return fmt.Sprintf("has an invalid entry: %s: %v", p, err), nil
 		}
-		if v < 1 {
-			return nil, fmt.Errorf("%s: the number %d is less than 1", p, v)
+		if n[p] < 1 {
+			return fmt.Sprintf("has an invalid entry: %s: the number %d is less than 1", p, n[p]), nil
 		}
 	}
-	return n, nil
+	return "", nil
 }
 
 // checkStore opens the store and the index and finds what step 5 of Run
@@ -173,7 +183,8 @@ func checkStore(dir string) []Finding {
 	return fs
 }
 
-// checkWorkspaces finds workspaces that share a key prefix or a name.
+// checkWorkspaces finds workspaces that share a key prefix or a name. Each
+// of them gets a finding that names the other.
 func checkWorkspaces(ix *index.Index) []Finding {
 	var out []Finding
 	ws := ix.Workspaces()
@@ -188,11 +199,13 @@ func checkWorkspaces(ix *index.Index) []Finding {
 			default:
 				continue
 			}
-			out = append(out, Finding{
-				Check: "workspace", Where: model.WorkspacePath(a.ID),
-				Msg:  fmt.Sprintf("has the same %s as workspace %s (%s)", what, b.Name, b.ID),
-				Hint: "change one with hedgehug workspace prefix (or rename)",
-			})
+			for _, pair := range [][2]*model.Workspace{{a, b}, {b, a}} {
+				out = append(out, Finding{
+					Check: "workspace", Where: model.WorkspacePath(pair[0].ID),
+					Msg:  fmt.Sprintf("has the same %s as workspace %s (%s)", what, pair[1].Name, pair[1].ID),
+					Hint: "change one with hedgehug workspace prefix (or rename)",
+				})
+			}
 		}
 	}
 	return out
