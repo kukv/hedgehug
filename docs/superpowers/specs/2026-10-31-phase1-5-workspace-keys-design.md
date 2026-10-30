@@ -148,7 +148,7 @@ func (s *Store) SetKeyNumbers(f KeyNumbers)
 - 子と親でワークスペースが違う
 - ワークスペースの `key_prefix` の形式が違う、Store の中で重複している、`name` が重複している
 - タスクが残っているワークスペースを消そうとしている（削除済みのタスクも数える）
-- 採番の後にキーが他のタスクの `key` と重複している（採番の誤りに対する最後の砦）
+- キーの重複は書き込み時には検査しない。振る番号は使われた最大より大きいので、採番が重複を生むことはない。手で編集したファイルや同期による重複は doctor（`duplicate_key`）で知らせる
 
 ### Tx に足すもの
 
@@ -188,6 +188,7 @@ func (s *Store) SetKeyNumbers(f KeyNumbers)
 
 - `hh mv <id> --workspace <ws>`: 配下ごと別のワークスペースのルートへ移し、振り直す。`--parent` と一緒に使うと、その親（指定したワークスペースのタスク）の下へ移す
 - `--parent` で別のワークスペースのタスクを親にした場合も、同じく配下ごと移して振り直す
+- `mv <id> --workspace <今いるワークスペース>` を `--parent` なしで指定したときは、親を変えない
 - ワークスペースが変わるときは、移す件数とキーの変化（`WEB-3 → API-12` など）を表示する
 
 ### edit
@@ -246,6 +247,7 @@ a1b2c3d  2026-10-31 10:00  kukv  hedgehug: status API-7 (01JBZ8K3QW7M2X9V4T6R5N8
 
 ## 入力
 
+- 利用者が打つコマンドの案内（「先に X を restore する」など）はタスクをキーだけで示す。説明として名指しするときは「キー (ULID)」と併記する
 - タスクの指定は、キー、古いキー、完全な ULID のどれでも受け付ける。大文字小文字は区別しない。`index.Resolve` は「キー → 古いキー → ULID」の順で引き、末尾一致の段を消す
 - 短縮 ID を削除する: `index.ShortID`、`index.ShortLengths`、`Index.short`、`minShort`、`commentIndex.Short`、`minCommentInput`、`--json` の `short`
 
@@ -260,6 +262,9 @@ a1b2c3d  2026-10-31 10:00  kukv  hedgehug: status API-7 (01JBZ8K3QW7M2X9V4T6R5N8
 - 親と違うワークスペースに属する子
 - Store の中での接頭辞やワークスペース名の重複
 - 壊れたワークスペースファイルや `numbers.yaml`
+- `numbers.yaml` の接頭辞の形式が違うもの、番号が 1 未満のもの
+
+問題コード `no_key`・`duplicate_key`・`key_prefix`・`no_workspace`・`workspace_mismatch` は index の問題で、`is:invalid` と `ls --json` の `problems` にも出る。
 
 ## テスト
 

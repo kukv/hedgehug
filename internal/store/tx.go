@@ -402,7 +402,12 @@ func (tx *Tx) commitFor(op Op, cs []change, now time.Time) gitrepo.Commit {
 	trailers := []gitrepo.Trailer{{Key: "Hedgehug-Op", Value: op.Name}}
 	if !op.Task.IsZero() {
 		label, title := op.Task.String(), ""
-		if t, err := tx.task(op.Task); err == nil {
+		t, err := tx.task(op.Task)
+		if errors.Is(err, ErrNotFound) {
+			// Removed in this operation (purge); the file is still on disk.
+			t, err = tx.s.Task(op.Task)
+		}
+		if err == nil {
 			if t.Key != "" {
 				label = t.Key
 			}
