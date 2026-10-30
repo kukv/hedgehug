@@ -2,12 +2,13 @@ package doctor
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-git/go-git/v5"
 
 	"github.com/kukv/hedgehug/internal/model"
 )
@@ -148,10 +149,16 @@ func TestRunWorktree(t *testing.T) {
 	put(t, s, newTask("A"))
 	writeFile(t, dir, "untracked.md", "x")
 	writeFile(t, dir, "staged.md", "x")
-	cmd := exec.Command("git", "add", "staged.md")
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git add: %v\n%s", err, out)
+	r, err := git.PlainOpen(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := r.Worktree()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Add("staged.md"); err != nil {
+		t.Fatal(err)
 	}
 	fs := run(t, dir)
 	u := find(t, fs, "worktree", "untracked.md")
@@ -180,8 +187,11 @@ func TestRunVerifyFails(t *testing.T) {
 		}
 	}
 	fs := run(t, dir)
-	if !slices.Contains(checks(fs), "git") {
-		t.Errorf("findings = %+v, want a git finding", fs)
+	// Status fails on the same objects, so there may be two git findings.
+	if !slices.ContainsFunc(fs, func(f Finding) bool {
+		return f.Check == "git" && strings.HasPrefix(f.Msg, "a git object cannot be read")
+	}) {
+		t.Errorf("findings = %+v, want the Verify finding", fs)
 	}
 }
 
@@ -225,5 +235,44 @@ func TestRunBrokenHead(t *testing.T) {
 	g := slices.IndexFunc(fs, func(f Finding) bool { return f.Check == "git" })
 	if g < 0 {
 		t.Fatalf("findings = %+v, want a git finding", fs)
+	}
+}
+
+func TestRunCycleAndBroken(t *testing.T) {
+	s, dir := newStore(t)
+	a, b := newTask("A"), newTask("B")
+	a.Parent, b.Parent = &b.ID, &a.ID
+	putRaw(t, s, dir, a)
+	putRaw(t, s, dir, b)
+	rel := model.TaskPath(model.NewID())
+	writeFile(t, dir, rel, "not a task")
+	if _, err := s.Repo().Commit(commitOf(rel)); err != nil {
+		t.Fatal(err)
+	}
+	fs := run(t, dir)
+	var cycles, others int
+	for _, f := range fs {
+		if f.Check != "task" {
+			continue
+		}
+		if strings.Contains(f.Msg, "cycle") {
+			cycles++
+		} else {
+			others++
+		}
+	}
+	if cycles != 2 || others != 1 {
+		t.Errorf("cycles = %d, others = %d, want 2 and 1\n%+v", cycles, others, fs)
+	}
+}
+
+func TestRunIgnoresLockAndGitignore(t *testing.T) {
+	s, dir := newStore(t)
+	put(t, s, newTask("A"))
+	if _, err := os.Stat(filepath.Join(dir, ".hedgehug", "local", "lock")); err != nil {
+		t.Fatalf("the lock file is missing: %v", err)
+	}
+	if fs := run(t, dir); len(fs) != 0 {
+		t.Errorf("findings = %+v, want none", fs)
 	}
 }
