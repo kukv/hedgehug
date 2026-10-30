@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -37,6 +39,8 @@ func TestScenario(t *testing.T) {
 		}
 	}
 	step("set", "set", g.Short, "labels+=ui", "due=2026-11-01")
+	// The editor writes its contents in turn: the task for edit, then the
+	// body for comment edit.
 	te.editWith(setLine(te.raw(g.ID), "title", "Form fields"), "second\n")
 	step("edit", "edit", g.Short)
 	step("comment", "comment", g.Short, "first")
@@ -49,8 +53,23 @@ func TestScenario(t *testing.T) {
 	if cs := te.comments(g.ID); len(cs) != 1 || cs[0].Body != "second\n" {
 		t.Fatalf("comments after edit = %+v", cs)
 	}
+	out := te.ok("show", g.Short)
+	for _, w := range []string{"Form fields", cid[len(cid)-4:], "second", "\nHistory:\n", "hedgehug: edit "} {
+		if !strings.Contains(out, w) {
+			t.Errorf("show lacks %q:\n%s", w, out)
+		}
+	}
+	var sj struct {
+		History []logJSON `json:"history"`
+	}
+	if err := json.Unmarshal([]byte(te.ok("show", g.Short, "--json")), &sj); err != nil {
+		t.Fatal(err)
+	}
+	if len(sj.History) == 0 || !slices.ContainsFunc(sj.History, func(l logJSON) bool { return strings.HasPrefix(l.Subject, "hedgehug: edit ") }) {
+		t.Errorf("show --json history = %+v, want the edit commit", sj.History)
+	}
 	step("comment", "comment", "rm", cid)
-	if out := te.ok("log", g.Short); !strings.Contains(out, "hedgehug: ") || len(strings.Split(strings.TrimRight(out, "\n"), "\n")) < 4 {
+	if out := te.ok("log", g.Short); !strings.Contains(out, "hedgehug: edit ") || !strings.Contains(out, "hedgehug: comment ") || len(strings.Split(strings.TrimRight(out, "\n"), "\n")) < 4 {
 		t.Errorf("log for the task:\n%s", out)
 	}
 	step("status", "status", g.Short, "in_progress")
