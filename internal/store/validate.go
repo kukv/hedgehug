@@ -9,6 +9,12 @@ import (
 	"github.com/kukv/hedgehug/internal/schema"
 )
 
+// Codes of the violations validate adds to the schema's.
+const (
+	CodeNoWorkspace       = "no_workspace"
+	CodeWorkspaceMismatch = "workspace_mismatch"
+)
+
 // SchemaError means a schema written with PutSchema has problems.
 type SchemaError struct{ Problems []schema.Problem }
 
@@ -40,6 +46,9 @@ func (e *ValidationError) Error() string {
 // parent and the ancestors. The old task's are read from disk, so a move is
 // checked in its new place.
 func (tx *Tx) validate(sc *schema.Schema) error {
+	if err := tx.validateWorkspaces(); err != nil {
+		return err
+	}
 	for _, id := range tx.taskOrder {
 		t := tx.tasks[id]
 		if t == nil {
@@ -67,12 +76,117 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 			oldE = sc.For(oldAncestors)
 		}
 		vs := schema.ValidateWrite(old, oldParentKind, oldE, t, parentKind, sc.For(ancestors), tx.op.SkipTransitions)
+		wvs, err := tx.workspaceViolations(t)
+		if err != nil {
+			return err
+		}
 		rvs, err := tx.checkRefs(old, t, sc)
 		if err != nil {
 			return err
 		}
+		vs = append(vs, wvs...)
 		if vs = append(vs, rvs...); len(vs) > 0 {
 			return &ValidationError{Task: id, Violations: vs}
+		}
+	}
+	return nil
+}
+
+// workspaceViolations checks that t belongs to a workspace that exists, the
+// one of its parent.
+func (tx *Tx) workspaceViolations(t *model.Task) ([]schema.Violation, error) {
+	if t.Workspace.IsZero() {
+		return []schema.Violation{{Code: CodeNoWorkspace, Field: "workspace", Msg: "missing"}}, nil
+	}
+	if _, err := tx.workspace(t.Workspace); errors.Is(err, ErrNotFound) {
+		return []schema.Violation{{Code: CodeNoWorkspace, Field: "workspace", Msg: fmt.Sprintf("workspace %s is not in this store", t.Workspace)}}, nil
+	} else if err != nil {
+		return nil, err
+	}
+	if t.Parent == nil {
+		return nil, nil
+	}
+	p, err := tx.task(*t.Parent)
+	if errors.Is(err, ErrNotFound) || errors.As(err, new(*model.DecodeError)) {
+		return nil, nil // checkRefs deals with a missing parent
+	}
+	if err != nil {
+		return nil, err
+	}
+	if p.Workspace != t.Workspace {
+		return []schema.Violation{{Code: CodeWorkspaceMismatch, Field: "workspace", Msg: "differs from the workspace of the parent; move the task with hedgehug mv --workspace"}}, nil
+	}
+	return nil, nil
+}
+
+// validateWorkspaces checks the workspaces put in the operation: the form of
+// the prefix and the name, and that no other workspace, as the operation
+// leaves them, has the same prefix or the same name (ignoring case). A
+// workspace removed in the operation must have no task left.
+func (tx *Tx) validateWorkspaces() error {
+	if len(tx.workspaces) == 0 {
+		return nil
+	}
+	all := map[model.ID]*model.Workspace{}
+	for w, err := range tx.s.Workspaces() {
+		if err != nil {
+			continue // a broken file cannot be compared with
+		}
+		all[w.ID] = w
+	}
+	removed := false
+	for id, w := range tx.workspaces {
+		if w == nil {
+			delete(all, id)
+			removed = true
+		} else {
+			all[id] = w
+		}
+	}
+	for id, w := range tx.workspaces {
+		if w == nil {
+			continue
+		}
+		if err := model.ValidKeyPrefix(w.KeyPrefix); err != nil {
+			return err
+		}
+		if err := model.ValidWorkspaceName(w.Name); err != nil {
+			return err
+		}
+		for oid, o := range all {
+			if oid == id {
+				continue
+			}
+			if o.KeyPrefix == w.KeyPrefix {
+				return fmt.Errorf("the key prefix %s is already used by workspace %s", w.KeyPrefix, o.Name)
+			}
+			if strings.EqualFold(o.Name, w.Name) {
+				return fmt.Errorf("a workspace named %s already exists", o.Name)
+			}
+		}
+	}
+	if !removed {
+		return nil
+	}
+	// The tasks written in the operation count as they will be; the others
+	// as they are on disk.
+	count := map[model.ID]int{}
+	for _, id := range tx.taskOrder {
+		if t := tx.tasks[id]; t != nil {
+			count[t.Workspace]++
+		}
+	}
+	for t, err := range tx.s.Tasks() {
+		if err != nil {
+			continue
+		}
+		if _, put := tx.tasks[t.ID]; !put {
+			count[t.Workspace]++
+		}
+	}
+	for id, w := range tx.workspaces {
+		if w == nil && count[id] > 0 {
+			return fmt.Errorf("workspace %s still has %d tasks", id, count[id])
 		}
 	}
 	return nil

@@ -16,13 +16,17 @@ import (
 var (
 	testNow    = time.Date(2026, 10, 30, 12, 0, 0, 0, time.FixedZone("", 9*60*60))
 	testAuthor = gitrepo.Signature{Name: "Test", Email: "test@example.com"}
+
+	// testWorkspaceID is the id of the workspace of every store newTestStore
+	// makes, so newTask can name it without a store at hand.
+	testWorkspaceID = model.NewID()
 )
 
 // newTestStore creates a store in a temporary directory, with a fixed clock.
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
 	meta := &model.StoreMeta{ID: model.NewID(), Name: "test"}
-	s, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, &model.Workspace{ID: model.NewID(), Name: "test", KeyPrefix: "TST"}, testAuthor)
+	s, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, &model.Workspace{ID: testWorkspaceID, Name: "test", KeyPrefix: "TST"}, testAuthor)
 	if err != nil {
 		t.Fatal(err)
 	}

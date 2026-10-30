@@ -186,8 +186,8 @@ func TestUpdateAllowsEditInOldCycle(t *testing.T) {
 	s := newTestStore(t)
 	a, b := newTask("a"), newTask("b")
 	// A sync or a hand edit may leave cycles; write them past Update.
-	mustWrite(t, s, model.TaskPath(a.ID), "---\nid: "+a.ID.String()+"\nkind: task\ntitle: a\nstatus: todo\nparent: "+b.ID.String()+"\nblocked_by: ["+b.ID.String()+"]\n---\n")
-	mustWrite(t, s, model.TaskPath(b.ID), "---\nid: "+b.ID.String()+"\nkind: task\ntitle: b\nstatus: todo\nparent: "+a.ID.String()+"\nblocked_by: ["+a.ID.String()+"]\n---\n")
+	mustWrite(t, s, model.TaskPath(a.ID), "---\nid: "+a.ID.String()+"\nworkspace: "+testWorkspaceID.String()+"\nkind: task\ntitle: a\nstatus: todo\nparent: "+b.ID.String()+"\nblocked_by: ["+b.ID.String()+"]\n---\n")
+	mustWrite(t, s, model.TaskPath(b.ID), "---\nid: "+b.ID.String()+"\nworkspace: "+testWorkspaceID.String()+"\nkind: task\ntitle: b\nstatus: todo\nparent: "+a.ID.String()+"\nblocked_by: ["+a.ID.String()+"]\n---\n")
 	got, err := s.Task(a.ID)
 	if err != nil {
 		t.Fatal(err)

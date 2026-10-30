@@ -65,6 +65,13 @@ func (a *app) add(title, parentArg, kind, status string, assigns []assign) error
 			return err
 		}
 		t.Parent = &p.ID
+		t.Workspace = p.Workspace
+	} else {
+		wss := ix.Workspaces()
+		if len(wss) != 1 {
+			return errors.New("there are several workspaces; give one with --workspace")
+		}
+		t.Workspace = wss[0].ID
 	}
 	for _, as := range assigns {
 		if err := applyAssign(t, as, sc, a.resolveID(ix)); err != nil {

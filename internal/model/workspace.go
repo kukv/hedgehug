@@ -2,8 +2,21 @@ package model
 
 import (
 	"errors"
+	"fmt"
+	"regexp"
 	"time"
 )
+
+var workspaceNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
+
+// ValidWorkspaceName reports whether name can name a workspace: lower-case
+// letters, digits, - and _, starting with a letter or a digit.
+func ValidWorkspaceName(name string) error {
+	if !workspaceNameRE.MatchString(name) {
+		return fmt.Errorf("%q cannot name a workspace: use lower-case letters, digits, - and _, starting with a letter or a digit", name)
+	}
+	return nil
+}
 
 // Workspace is one workspace file. It owns a key prefix, and the tasks in
 // it are numbered under that prefix. The body holds notes.
