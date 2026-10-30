@@ -10,16 +10,22 @@
 | --- | --- |
 | 1a〜1c（完了） | 型とファイル形式、Store と git、インデックスとクエリ |
 | 1d-1（完了） | 設定と場所、`store init`、タスクの CRUD とツリー表示、出力形式 |
-| 1d-2（本書） | `edit`、`comment`（追加・編集・削除）、`log`、`schema check`、`doctor`、`show` の直近の履歴、devenv |
+| 1d-2（本書） | `edit`、`comment`（追加・編集・削除）、`log`、`schema check`、`schema migrate`、`doctor`、`show` の直近の履歴、devenv、1a〜1d-1 の持ち越しの回収 |
+
+1d-2 でフェーズ1を閉じる。1a〜1d-1 の持ち越しは、後のフェーズの機能がないと決められないものを除いて、すべてここで扱う。
 
 ### 1d-2 で扱わないもの
 
-- `schema migrate`: 後のフェーズ（1d-1 の表のとおり `schema check` だけを扱う）
-- `doctor` による修復: 検査だけにする。直し方は各問題に添える。`undo` と `restore --at` はフェーズ2
+後のフェーズの機能が要るものだけ。
+
+- `doctor` による修復: 検査だけにする（利用者の決定）。直し方は各問題に添える。`undo` と `restore --at` はフェーズ2
 - merge driver の登録の確認: フェーズ2（merge driver と一緒に作る）
+- go-git が `index.lock` の手順を使わない件（1b）: Store への書き込みは Store のロックで直列になるので、フェーズ1では問題にならない。手で git を操作するときとの共存を設計するフェーズ2で、要るかを決める
+- schema.yaml / automations.yaml の「キーごとに LWW」で比べる時刻（1a）: フェーズ2のマージの設計で決める
 - purge したタスクの `log`: index から ID を引けないため扱わない
 - コメントの author と、コメントの編集・削除の本人確認: アカウントが要るのでフェーズ3
 - devenv の bare リポジトリ、URL の書き換え、fakegh: フェーズ2・3・5
+- 性能（1c の全件再構築の重さ）: フェーズ7の目標と一緒に測る
 
 ## パッケージ構成
 
@@ -34,9 +40,11 @@ internal/doctor/
   finding.go   Finding
   schema.go    schema check の検査
   doctor.go    doctor の検査（store.Open に頼らない）
+internal/schema/
+  migrate.go   定義の改名と統合（Schema の値を変えるだけ。タスクは cmd が書き換える）
 cmd/hedgehug/
   editor.go    $EDITOR で一時ファイルを開く共通処理と、再編集の確認
-  edit.go comment.go log.go schema.go doctor.go
+  edit.go comment.go log.go schema.go migrate.go doctor.go
 tools/devenv/
   main.go      init / reset / env
 ```
@@ -199,6 +207,36 @@ type Finding struct {
 
 `schema check` は `store.Open` と `index.Open` で開く。schema.yaml が壊れていて開けないときは、1 だけを出す（schema.yaml を自分で読んで判定する）。
 
+### `schema migrate`
+
+```
+hh schema migrate status <old> <new> [--dry-run]
+hh schema migrate kind <old> <new> [--dry-run]
+hh schema migrate prop <old> <new> [--dry-run]
+hh schema migrate value <prop> <old> <new> [--dry-run]
+```
+
+定義の名前（`value` は enum の値）を変え、それを使っているタスクも書き換えて、schema.yaml とタスクを1コミットにする。Op は `migrate`、Task はなし。
+
+- `<old>` が定義されていなければエラー。`<old>` と `<new>` が同じならエラー。
+- `<new>` が定義されていなければ改名（定義の名前だけを変え、ほかの項目はそのまま）。定義されていれば統合（`<old>` の定義を消し、使っている箇所を `<new>` に寄せる）。
+- 書き換えるもの:
+
+| 対象 | タスク | schema.yaml |
+| --- | --- | --- |
+| `status` | `status` | `workflow.transitions` のキーと値、`workflow.required` のキー、`scoped[].statuses`、`scoped[].workflow` の同じ箇所 |
+| `kind` | `kind` | `kinds[].parents`、`scoped[].templates.default` のキー |
+| `prop` | `props` のキー | `props` のキー、`workflow.required` の値（`scoped[]` も） |
+| `value` | その props の値（複数値なら要素） | その props の `values` |
+
+- 統合で同じ値が列に2つになったら、1つにまとめる（先に出てきた位置に残す）。
+- `status` の統合で `<old>` がカテゴリの既定だったとき、`<new>` が同じカテゴリならその既定を `<new>` に移す。違うカテゴリなら、`Schema.Check` が「既定がない」で拒否する（そのまま拒否のエラーを出す）。
+- `prop` の統合は、型（`type` と `multi`）が同じでなければエラー。`<old>` と `<new>` の両方に値を持つタスクがあればエラーにして、そのタスクを並べる。
+- `value` は `enum` か `multi_enum` の props だけ。ほかの型はエラー。
+- 削除済みのタスクも書き換える。デコードできない壊れたタスクは書き換えずに、短縮 ID を並べた警告を出す（`doctor` でも分かる）。
+- 移行は遷移ではないので、`workflow.transitions` の検査はしない（Store の `Op` に遷移の検査を飛ばす指定を足す）。ほかの検査（必須項目、置き場所、値）はふだんどおりで、新しく違反になるタスクがあれば全体を拒否する。
+- 出力は、書き換えたタスクの数と短縮 ID・タイトルの一覧。`--dry-run` は同じ一覧を出して何も書かない。`--json` は `{"changed": [タスク...], "skipped": [短縮 ID...]}`。
+
 ### `doctor`
 
 config から決めた Store のディレクトリを直接見る。`store.Open` は schema.yaml が壊れていると失敗するため、最初は使わない。
@@ -254,10 +292,64 @@ index は HEAD のツリーを読み、2 は作業ツリーを読む。未コミ
   - `comment`: 引数での追加、エディタでの追加、空の本文、`edit`、`rm`、短縮 ID の解決と曖昧さ、削除済みのタスク。
   - `log`: Store 全体と1タスク、`-n`、`--json`。`show` の `History` と `history`。
   - `schema check` / `doctor`: テキストと JSON の形、終了コード。
+  - `schema migrate`: 4つの対象それぞれの改名と統合、schema.yaml の参照の書き換え、既定のステータスの引き継ぎと拒否、prop の型の違いと両方に値があるタスク、削除済みと壊れたタスク、遷移の検査を飛ばすこと、新しい違反での拒否、`--dry-run`、schema.yaml の未知のキーとコメントが残ること、1コミット。
 - **devenv**: `init` の中身（2人分の .gitconfig と Store と config.yaml）、既存の dir での `init` のエラー、`reset`、目印のない dir を `reset` が消さないこと、`env` の出力。
 - **シナリオ**: 1d-1 のシナリオに、`edit`、`comment`（追加・編集・削除）、`log`、`schema check`、`doctor` を足す。全操作が git 履歴に1コミットずつ残り、最後に `doctor` が問題なしで終わることを確かめる。
 
-## 持ち越しの回収
+## 持ち越しの直し
+
+1a〜1d-1 で、レビューの指摘として記録だけして直さなかったもの。どれも後のフェーズの機能を要しない。
+
+### 形式（model / schema）
+
+- **schema.yaml の書き込みで未知のキーとコメントを残す**（1a）。今は `props` や `workflow` の1項目を変えると、その値全体が作り直され、ほかの項目の未知のキーとコメントが消える。`schema migrate` が schema.yaml を書くので、ここで直す。
+  - 列（`statuses`、`kinds`、`scoped`）の要素は名前（`scoped` は `where`）で、mapping（`props`、`workflow.transitions`、`workflow.required`）の要素はキーで、元のノードと対応させる。名前で対応しない要素は、残った要素どうしを順番に対応させる（改名した要素も元のノードを引き継ぐ）。
+  - 対応した要素は、値の変わらないキーの元のノード（コメント付き）を使い、型が知らないキー（構造体の yaml タグにないキー）を残す。変わったキーだけを新しいノードにする。
+  - 対応しない新しい要素は、今と同じく新しいノードにする。消えた要素は消す。
+  - これは `model.Encoder` の一般の仕組みとして作り、タスクの `props` などほかの mapping にも同じ規則で効かせる。
+- **明示タグを拒否する**（1a）。`!!binary` などのタグを付けた値は、書き換えても変更が検出されないことがある。`ParseDoc` の `checkNode` で、アンカーやエイリアスと同じく、明示タグ（`!!str` などの標準のものも含め、書き手が付けたタグ）を `DecodeError` にする。
+- **number の NaN と Inf を拒否する**（1d-1）。`schema.ValidateTask` の number の検査で `bad_value` にする。`set` の値の解釈も同じく拒否する。
+
+### store / gitrepo
+
+- **空のコミット**（1b）。`gitrepo.Commit` は go-git の `ErrEmptyCommit` を `ErrNothingToCommit` に寄せる。`Store.Update` は、ファイルは変わったが HEAD と同じになった（作業ツリーが HEAD からずれていた）ときに `ErrNothingToCommit` を受けたら、コミットなしの成功として扱う。
+- **`RemoveTask` と同じ Update で積んだコメント・作業時間**（1b）。`RemoveTask` は、そのタスクのコメント・作業時間のディレクトリの下に積まれた書き込みも、消す指定に変える。`RemoveTask` の後に同じタスクへ `PutComment` / `PutWorklog` したらエラー。
+- **コミットしたかを返す**（1d-1。変更のない `set` / `status` が「Updated」と出る件）。`Store.Update` は、コミットしたかどうかを呼び出し側に返す。CLI は、コミットしなかったら `No changes` と出す（`--json` は今と同じくタスクを出す）。
+- **遷移の検査を飛ばす指定**（`schema migrate` のため）。`Op` に足す。
+
+### config
+
+- **再インデントしない**（1d-1）。`Save` が `  - name` を `- name` に書き換える。読み込んだファイルの列の字下げを調べ、同じ字下げで書く（`yaml.WithIndent` と列の字下げの指定）。ファイルがなかったときは、親設計の例と同じ `  - name` にする。
+- **symlink を壊さない**（1d-1）。config.yaml が symlink なら、リンク先のファイルを一時ファイルからの rename で置き換える。
+- **コメントだけの config.yaml**（1d-1）。`AddStore` でコメントが消える。中身のないドキュメントでも、コメントを残したまま `stores` を足す。
+- **相対の `path:`**（1d-1）。config.yaml のあるディレクトリからの相対として読む（利用者の決定）。書くときは今と同じ（ホームの下なら `~/`、ほかは絶対パス）。
+- **git の `[include]`**（1d-1）。作者の読み出しで `[include] path = ...` をたどる。相対のパスは include を書いたファイルのディレクトリから、`~/` はホームに展開する。たどるのは深さ 10 まで（git と同じ）。`[includeIf]` は読まない。条件の `gitdir:` は Store のリポジトリでは一致しないことが多く、`onbranch:` などは作者の決定に向かないため。
+
+### CLI
+
+- **使い方の誤りの終了コードを揃える**（1d-1、利用者の決定）。引数の誤りはすべて 2 にする。`hedgehug store` と `hedgehug dep` を単体で実行したら、使い方を stderr に出して 2（ルートと同じ）。`store init` の名前の形の誤りも 2。登録済みの名前と重なるのは実行時のエラーとして 1 のまま。
+- **`--format` の未知のキー**（1d-1）。今は `<no value>` と出る。`missingkey=error` で実行し、テンプレートの誤り（解析と実行）を使い方の誤り（2）にする。
+- **`show` のラベルの幅**（1d-1）。ルーン数でなく表示幅で揃える。East Asian Width が W と F の文字を幅 2 として数える（`golang.org/x/text/width`）。
+- **`ls --tree` の循環の見出し**（1d-1、利用者の決定）。`== in a parent cycle` の下に、parent の循環に入っているタスクを ID の順に並べ、それぞれの配下（循環に入っていない子孫）をふつうのツリーとして子に出す。`in_cycle` は循環に入っているタスクだけに付ける。`--json` も同じ入れ子にする。
+
+### テスト
+
+挙げたまま書かなかったもの。
+
+- 1c: parent の3つ組の循環、削除済みを含む短縮 ID の一意性、全件再構築とキャッシュからの読み込みで `Entry` が全部一致すること、循環を含む Store の `Open`、`update` が途中で失敗した後に `Open` し直すと正しい状態になること。
+- 1d-1: `store init` で `Create` の後の config.yaml の書き込みに失敗したときの巻き戻し、`status` と `dep` が拒否されたときにコミットしないこと、`mv` で自分自身を `--before` に指定、削除済みのタスクの `mv`、自分自身を `--blocked-by` に指定。
+
+### 親設計ドキュメント
+
+- パッケージ構成の表に `internal/gitrepo`、`internal/index`、`internal/config`、`internal/doctor` を足す（1b・1c で分けた分）。
+- 「コメント」の節のパスを、ファイルレイアウトと実装に合わせて `comments/<a>/<b>/<タスクULID>/<コメントULID>.md` に直す。
+
+### 直さないもの
+
+- 1a〜1d-1 で意図して決めたもの（restore の秒精度、rank をロックの外で計算すること、`status:todo` をカテゴリとして扱うことなど）は、それぞれの spec のとおりにする。
+- コミットの Co-Authored-By の混在は、履歴を書き換えないと直らないのでそのままにする。
+
+## 持ち越しの回収（新しい機能で扱うもの）
 
 | 持ち越し | 出どころ | 扱い |
 | --- | --- | --- |
@@ -269,7 +361,10 @@ index は HEAD のツリーを読み、2 は作業ツリーを読む。未コミ
 | `show` の直近の履歴 | 1d-1 | `show` の `History` |
 | `edit` は作業ツリーのファイルを直接開かない | 1d-1 | 一時ファイルで開く。生のバイトを使うのは壊れたタスクを直すため |
 
+1b の「親が purge されたタスクが壊れていると、修復の書き込みが ErrNotFound になる」と、1a の「Rank を検証していない」は 1c で直っている。
+
 ## 完了条件
 
 - 1d-2 の全コマンドと devenv が動き、テストが通る（`make check`）。
-- シナリオテストで、フェーズ1の CLI（add / ls / show / edit / set / mv / status / done / rm / restore / purge / dep / comment / log / schema / doctor）がすべて動き、全操作が git 履歴に残る。
+- 「持ち越しの直し」がすべて入り、それぞれにテストがある。
+- シナリオテストで、フェーズ1の CLI（add / ls / show / edit / set / mv / status / done / rm / restore / purge / dep / comment / log / schema check / schema migrate / doctor）がすべて動き、全操作が git 履歴に残る。
