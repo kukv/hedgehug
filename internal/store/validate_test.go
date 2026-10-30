@@ -108,9 +108,7 @@ func TestUpdateMissingParent(t *testing.T) {
 	missing := model.NewID()
 	child.Parent = &missing
 	err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(child) })
-	if !errors.Is(err, ErrNotFound) {
-		t.Errorf("err = %v, want ErrNotFound", err)
-	}
+	wantViolation(t, err, child.ID, schema.CodeMissingRef, "parent")
 	if _, err := os.Stat(s.path(model.TaskPath(child.ID))); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("refused task was written: %v", err)
 	}
@@ -124,9 +122,7 @@ func TestUpdateMissingParent(t *testing.T) {
 	}
 	moved.Parent = &missing
 	err = s.Update(Op{Name: "mv", Task: moved.ID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(moved) })
-	if !errors.Is(err, ErrNotFound) {
-		t.Errorf("move: err = %v, want ErrNotFound", err)
-	}
+	wantViolation(t, err, moved.ID, schema.CodeMissingRef, "parent")
 	if after, err := os.ReadFile(s.path(model.TaskPath(moved.ID))); err != nil || string(after) != string(before) {
 		t.Errorf("refused move was written: %q, %v", after, err)
 	}
