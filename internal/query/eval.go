@@ -36,15 +36,24 @@ type compiler struct {
 	ix      *index.Index
 	sc      *schema.Schema
 	opt     Options
-	deleted bool // the query names is:deleted
+	deleted bool      // the query names is:deleted
+	order   *sortSpec // sort:, if any
+	group   *field    // group:, if any
 }
 
-// Run finds the tasks of ix that match every term of q. Deleted tasks are
-// left out unless q names is:deleted.
+// Run finds the tasks of ix that match every term of q, sorted and grouped
+// as its sort: and group: say. Deleted tasks are left out unless q names
+// is:deleted.
 func Run(ix *index.Index, q *Query, opt Options) (*Result, error) {
 	c := &compiler{ix: ix, sc: ix.Schema(), opt: opt}
 	var preds []pred
 	for _, t := range q.Terms {
+		if t.Key == "sort" || t.Key == "group" {
+			if err := c.orderBy(t); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		p, err := c.term(t)
 		if err != nil {
 			return nil, err
@@ -60,8 +69,11 @@ func Run(ix *index.Index, q *Query, opt Options) (*Result, error) {
 			hits = append(hits, e)
 		}
 	}
-	slices.SortFunc(hits, byRank)
-	return &Result{Groups: []Group{{Tasks: hits}}}, nil
+	sortEntries(hits, c.order)
+	if c.group == nil {
+		return &Result{Groups: []Group{{Tasks: hits}}}, nil
+	}
+	return &Result{Groups: groupEntries(hits, *c.group)}, nil
 }
 
 func (c *compiler) fail(t Term, format string, args ...any) error {
