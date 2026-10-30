@@ -49,6 +49,24 @@ func TestLs(t *testing.T) {
 	}
 }
 
+// broken is in every task for --format, empty when the task is not broken,
+// so that {{if .broken}} works on a key that must be there.
+func TestLsFormatBroken(t *testing.T) {
+	te := newStoreEnv(t)
+	te.addJSON("Alpha")
+	if out := te.ok("ls", "--format", "{{if .broken}}BROKEN {{end}}{{.title}}"); out != "Alpha\n" {
+		t.Errorf("ls --format = %q", out)
+	}
+	if out := te.ok("ls", "--tree", "--format", "{{if .broken}}BROKEN {{end}}{{.title}}"); out != "Alpha\n" {
+		t.Errorf("ls --tree --format = %q", out)
+	}
+	b := te.addJSON("Beta")
+	te.commitFile(b.ID, "not a task\n")
+	if out := te.ok("ls", "--format", "{{if .broken}}BROKEN{{else}}{{.title}}{{end}}", "sort:title"); !strings.Contains(out, "BROKEN\n") || !strings.Contains(out, "Alpha\n") {
+		t.Errorf("ls --format with a broken task = %q", out)
+	}
+}
+
 func TestLsGroups(t *testing.T) {
 	te := newStoreEnv(t)
 	te.addJSON("Alpha")

@@ -132,6 +132,11 @@ func (a *app) printFormat(ix *index.Index, es []*index.Entry, tmpl *template.Tem
 		if err := json.Unmarshal(b, &m); err != nil {
 			return err
 		}
+		// --json leaves broken out of a task that is not broken; a
+		// template needs the key to test it.
+		if _, ok := m["broken"]; !ok {
+			m["broken"] = ""
+		}
 		if extra != nil {
 			extra(m, e)
 		}
