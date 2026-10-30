@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -13,7 +14,7 @@ import (
 )
 
 func (a *app) addCmd() *cobra.Command {
-	var parent, kind, status string
+	var parent, kind, status, workspace string
 	var props []string
 	cmd := &cobra.Command{
 		Use:   "add <title>",
@@ -24,18 +25,19 @@ func (a *app) addCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return a.add(strings.Join(args, " "), parent, kind, status, assigns)
+			return a.add(strings.Join(args, " "), parent, workspace, kind, status, assigns)
 		},
 	}
 	f := cmd.Flags()
 	f.StringVar(&parent, "parent", "", "the parent task")
 	f.StringVar(&kind, "kind", "", "the kind (default: the schema's default kind)")
 	f.StringVar(&status, "status", "", "the status (default: the default status of the todo category)")
+	f.StringVar(&workspace, "workspace", "", "the workspace (default: the parent's, or the only one)")
 	f.StringArrayVarP(&props, "prop", "p", nil, "set a field or a property, as in hedgehug set (repeatable)")
 	return cmd
 }
 
-func (a *app) add(title, parentArg, kind, status string, assigns []assign) error {
+func (a *app) add(title, parentArg, workspaceArg, kind, status string, assigns []assign) error {
 	s, ix, err := a.open()
 	if err != nil {
 		return err
@@ -66,10 +68,25 @@ func (a *app) add(title, parentArg, kind, status string, assigns []assign) error
 		}
 		t.Parent = &p.ID
 		t.Workspace = p.Workspace
-	} else {
+	}
+	if workspaceArg != "" {
+		w, err := resolveWorkspace(ix, workspaceArg)
+		if err != nil {
+			return err
+		}
+		if parentArg != "" && w.ID != t.Workspace {
+			pw, _ := ix.Workspace(t.Workspace)
+			return fmt.Errorf("the parent is in workspace %s", pw.Name)
+		}
+		t.Workspace = w.ID
+	} else if parentArg == "" {
 		wss := ix.Workspaces()
 		if len(wss) != 1 {
-			return errors.New("there are several workspaces; give one with --workspace")
+			names := make([]string, len(wss))
+			for i, w := range wss {
+				names[i] = fmt.Sprintf("%s (%s)", w.Name, w.KeyPrefix)
+			}
+			return errors.New("there are several workspaces; give one with --workspace: " + strings.Join(names, ", "))
 		}
 		t.Workspace = wss[0].ID
 	}

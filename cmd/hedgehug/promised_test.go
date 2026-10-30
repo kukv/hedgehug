@@ -28,7 +28,7 @@ func TestStoreInitConfigWriteFailureLeavesNoStore(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(te.hhHome, 0o750) }) //nolint:gosec // let TempDir remove it
 
-	code, _, stderr := te.run("store", "init", "me")
+	code, _, stderr := te.run("store", "init", "me", "--prefix", "ME")
 	if code != 1 {
 		t.Errorf("exit = %d, want 1 (stderr %q)", code, stderr)
 	}

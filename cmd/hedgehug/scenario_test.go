@@ -12,7 +12,7 @@ import (
 // every CRUD operation and the tree work, and each is one commit.
 func TestScenario(t *testing.T) {
 	te := newTestEnv(t)
-	te.ok("store", "init", "me")
+	te.ok("store", "init", "me", "--prefix", "ME")
 	step := func(op string, args ...string) {
 		t.Helper()
 		before := len(te.log("me"))

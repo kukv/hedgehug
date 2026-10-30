@@ -13,7 +13,7 @@ import (
 func newStoreEnv(t *testing.T) *testEnv {
 	t.Helper()
 	te := newTestEnv(t)
-	te.ok("store", "init", "me")
+	te.ok("store", "init", "me", "--prefix", "ME")
 	return te
 }
 
