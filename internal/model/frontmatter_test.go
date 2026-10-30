@@ -1,6 +1,9 @@
 package model
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestSplitFrontmatter(t *testing.T) {
 	for _, tc := range []struct {
@@ -19,8 +22,10 @@ func TestSplitFrontmatter(t *testing.T) {
 		}
 	}
 	for _, bad := range []string{"a: 1\n", "---\na: 1\n", ""} {
-		if _, _, err := splitFrontmatter([]byte(bad)); err == nil {
-			t.Errorf("split(%q) succeeded", bad)
+		_, _, err := splitFrontmatter([]byte(bad))
+		var de *DecodeError
+		if !errors.As(err, &de) || de.Field != "frontmatter" || de.Line != 1 {
+			t.Errorf("split(%q) error = %#v, want DecodeError frontmatter at line 1", bad, err)
 		}
 	}
 }

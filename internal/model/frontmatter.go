@@ -24,7 +24,7 @@ func splitFrontmatter(data []byte) (front []byte, body string, err error) {
 	s := normalizeNewlines(string(data))
 	rest, ok := strings.CutPrefix(s, fence)
 	if !ok {
-		return nil, "", errors.New("missing frontmatter: the file must start with ---")
+		return nil, "", &DecodeError{Field: "frontmatter", Line: 1, Err: errors.New("missing: the file must start with ---")}
 	}
 	if b, ok := strings.CutPrefix(rest, fence); ok {
 		return nil, b, nil
@@ -38,7 +38,7 @@ func splitFrontmatter(data []byte) (front []byte, body string, err error) {
 	if f, ok := strings.CutSuffix(rest, "\n---"); ok {
 		return []byte(f + "\n"), "", nil
 	}
-	return nil, "", errors.New("unterminated frontmatter: no closing ---")
+	return nil, "", &DecodeError{Field: "frontmatter", Line: 1, Err: errors.New("unterminated: no closing ---")}
 }
 
 // joinFrontmatter is the reverse of splitFrontmatter. front must end in a

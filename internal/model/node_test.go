@@ -229,8 +229,25 @@ func TestParseDocErrorLines(t *testing.T) {
 		t.Errorf("shape error = %#v, want DecodeError at line 5", err)
 	}
 	_, err = ParseDoc([]byte("a: [\n"), 3)
-	if err == nil || !strings.Contains(err.Error(), "starting at line 4") {
-		t.Errorf("syntax error = %v, want it to mention line 4", err)
+	if !errors.As(err, &de) || de.Field != "frontmatter" || de.Line != 4 || !strings.Contains(err.Error(), "did not find expected") {
+		t.Errorf("syntax error = %#v (%v), want DecodeError frontmatter at line 4 with the parser's message", err, err)
+	}
+}
+
+func TestDecodeErrorString(t *testing.T) {
+	inner := errors.New("bad")
+	for _, tc := range []struct {
+		e    DecodeError
+		want string
+	}{
+		{DecodeError{Field: "a", Line: 3, Err: inner}, "a (line 3): bad"},
+		{DecodeError{Field: "a", Err: inner}, "a: bad"},
+		{DecodeError{Line: 3, Err: inner}, "line 3: bad"},
+		{DecodeError{Err: inner}, "bad"},
+	} {
+		if got := tc.e.Error(); got != tc.want {
+			t.Errorf("Error() = %q, want %q", got, tc.want)
+		}
 	}
 }
 

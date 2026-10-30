@@ -13,10 +13,15 @@ type DecodeError struct {
 }
 
 func (e *DecodeError) Error() string {
-	if e.Line > 0 {
+	switch {
+	case e.Field != "" && e.Line > 0:
 		return fmt.Sprintf("%s (line %d): %v", e.Field, e.Line, e.Err)
+	case e.Field != "":
+		return fmt.Sprintf("%s: %v", e.Field, e.Err)
+	case e.Line > 0:
+		return fmt.Sprintf("line %d: %v", e.Line, e.Err)
 	}
-	return fmt.Sprintf("%s: %v", e.Field, e.Err)
+	return e.Err.Error()
 }
 
 func (e *DecodeError) Unwrap() error { return e.Err }

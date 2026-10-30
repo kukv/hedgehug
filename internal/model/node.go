@@ -154,7 +154,7 @@ func ParseDoc(src []byte, lineOffset int) (*Doc, error) {
 		if strings.Contains(err.Error(), "no documents") {
 			return newDocAt(lineOffset), nil
 		}
-		return nil, fmt.Errorf("YAML starting at line %d: %w", lineOffset+1, err)
+		return nil, &DecodeError{Field: "frontmatter", Line: lineOffset + 1, Err: err}
 	}
 	if root.Kind == 0 || (root.Kind == yaml.DocumentNode && len(root.Content) == 0) {
 		return newDocAt(lineOffset), nil
