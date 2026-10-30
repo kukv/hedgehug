@@ -52,7 +52,7 @@ Web フロントエンドのタスク。
 
 - `id`・`name`・`key_prefix`・`prefix_set` は必須
 - `prefix_set` は接頭辞を最後に設定した時刻。Store 間の重複で先勝ちを判定するのに使う。`hh workspace prefix` で更新する
-- `name` は Store の中で一意（大文字小文字を区別しない）。使える文字は Store 名と同じ規則（`config.ValidStoreName`）
+- `name` は Store の中で一意（大文字小文字を区別しない）。使える文字は Store 名と同じ規則で、定義は `model.ValidName` の1つ（`config.ValidStoreName` と `model.ValidWorkspaceName` はこれを使う）
 - `model.Workspace` を `model.Sprint` と同じ作りで足し、`model.WorkspacePath(id)` を `workspaces/<ULID>.md` とする
 
 ### タスク
@@ -75,6 +75,7 @@ Web フロントエンドのタスク。
 - 形式は `{接頭辞}-{番号}`。番号は 1 から始まる10進数で、先頭に 0 を付けない
 - 番号は接頭辞ごとの連番で、Store 全体で数える。次の番号は、次のうち最大のものに 1 を足した値
   - 全タスク（削除済みを含む）の `key` と `former_keys` のうち、その接頭辞の番号
+  - 読めない（デコードできない）タスクファイルの中の、キーの形（`\b[A-Z][A-Z0-9]{1,9}-[1-9][0-9]*\b`）をした語の番号。キーを読み分けられないので、形の合う語をすべて数える。数えすぎても番号が飛ぶだけで、重複は生まない
   - `.hedgehug/numbers.yaml` のその接頭辞の値
   - 同じ操作の中ですでに振った番号
 - ワークスペースごとではなく接頭辞ごとに数える。違いが出るのは、あるワークスペースが手放した接頭辞を別のワークスペースが使ったときで、その場合も続きから振るので番号は再利用されない
@@ -131,7 +132,8 @@ func (s *Store) SetKeyNumbers(f KeyNumbers)
 ```
 
 - `index.Open` が `s.SetKeyNumbers(ix.keyNumbers)` を呼ぶ。`keyNumbers` は `Refresh` してから、エントリの `Key` と `FormerKeys` から接頭辞ごとの最大を返す。ロックの中では HEAD が動かないので、差分の更新で済む
-- 設定されていなければ、`Store` は全タスクファイルを読んで数える（index を使わないテストや devenv のため）
+- 読めないタスクファイルのエントリは、ファイルの中のキーの形の語の番号を `Entry.BrokenNumbers` に持ち（インデックスのキャッシュにも入る）、`keyNumbers` はそれも数える
+- 設定されていなければ、`Store` は全タスクファイルを読んで数える（index を使わないテストや devenv のため）。読めないファイルは中身からキーの形の語を数える
 - 数えた結果に `numbers.yaml` と、同じ操作の中で振った番号を合わせる
 
 ### Update の流れ
@@ -142,12 +144,16 @@ func (s *Store) SetKeyNumbers(f KeyNumbers)
 2. キーがない、または接頭辞が違えば番号を振る。古いキーは `former_keys` へ
 3. 最大番号は、最初に必要になったときに一度だけ `KeyNumbers` で取り、以後は手元で増やす
 
+`assignKeys` は呼び出し側が渡した `*model.Task` の `Key` と `FormerKeys` をその場で書き換える。採番の後の検査や書き込み、コミットが失敗したときは、書き換える前の値に戻してからエラーを返す。失敗した操作が呼び出し側のタスクを変えたままにしないため。
+
+コミットの件名は `hedgehug: <操作> <キー> <タイトル>`。タスクのない操作（ワークスペースの操作など）は `Op.Detail` に変更の内容を入れ、`hedgehug: <操作> <Detail>` にする。ワークスペースを変える操作は、`Op.Workspace` でそのワークスペースの ULID を trailer `Hedgehug-Workspace` に入れる（`Hedgehug-Op: workspace` はそのまま）。
+
 ### 書き込み時の検査（`tx.validate` に足す）
 
 - `workspace` がない、または存在しないワークスペースを指している
 - 子と親でワークスペースが違う
 - ワークスペースの `key_prefix` の形式が違う、Store の中で重複している、`name` が重複している
-- タスクが残っているワークスペースを消そうとしている（削除済みのタスクも数える）
+- タスクが残っているワークスペースを消そうとしている（削除済みのタスクも数える）。読めないタスクファイルは所属を読めないが、中身に `workspace: <消すワークスペースの ULID>` があれば、そのワークスペースのタスクとみなして拒否し、エラーでファイルを示す。直したときに存在しないワークスペースを指すタスクにならないように
 - キーの重複は書き込み時には検査しない。振る番号は使われた最大より大きいので、採番が重複を生むことはない。手で編集したファイルや同期による重複は doctor（`duplicate_key`）で知らせる
 
 ### Tx に足すもの
@@ -177,6 +183,8 @@ func (s *Store) SetKeyNumbers(f KeyNumbers)
 
 - `<ws>` は名前・接頭辞・ULID のどれでも指定でき、大文字小文字を区別しない
 - `--json` に対応する
+- コミットの件名は何を変えたかを示す: `hedgehug: workspace add web (WEB)`、`hedgehug: workspace rename web → front (WEB)`、`hedgehug: workspace prefix api API → BE`、`hedgehug: workspace rm web (WEB)`。trailer は `Hedgehug-Op: workspace` と `Hedgehug-Workspace: <ULID>`。件名の古い名前や接頭辞は、コマンドがロックの前に読んだもの
+- `prefix` が振り直すタスクは、`Update` の中（Store のロックの中）でインデックスを `Refresh` してから集める。インデックスを読んだ後に並行して足されたタスクも振り直すため。古いキーもロックの中で読み、新しいキーはトランザクションに入れたタスクから出す
 
 ### add
 
@@ -189,7 +197,8 @@ func (s *Store) SetKeyNumbers(f KeyNumbers)
 - `hh mv <id> --workspace <ws>`: 配下ごと別のワークスペースのルートへ移し、振り直す。`--parent` と一緒に使うと、その親（指定したワークスペースのタスク）の下へ移す
 - `--parent` で別のワークスペースのタスクを親にした場合も、同じく配下ごと移して振り直す
 - `mv <id> --workspace <今いるワークスペース>` を `--parent` なしで指定したときは、親を変えない
-- ワークスペースが変わるときは、移したタスクごとにキーの変化を1行ずつ（`WEB-3 → API-12` など）表示する
+- ワークスペースが変わるときは、移したタスクごとにキーの変化を1行ずつ（`WEB-3 → API-12` など）表示する。新しいキーは、コミットの後にインデックスを引かず、トランザクションに入れたタスク（`assignKeys` がその場でキーを入れる）から出す
+- 配下のタスクは `Update` の中でインデックスを `Refresh` してから集める（削除済みも含む）。インデックスを読んだ後に並行して足された子も一緒に移すため。`rm`・`restore`・`purge` も配下を同じくロックの中で集める。`purge` は確認の前に一度集めて一覧を示し、ロックの中で集め直す。生きているタスクが加わっていれば拒否し、確認した一覧と変わっていれば「もう一度 purge する」よう案内して止める（`--yes` のときは集め直したものを消す）
 
 ### edit
 
@@ -225,7 +234,7 @@ a1b2c3d  2026-10-31 10:00  kukv  hedgehug: status API-7 (01JBZ8K3QW7M2X9V4T6R5N8
 ```
 
 - 確認メッセージ: `Added WEB-42 (01JBZ8K3QW7M2X9V4T6R5N8P0D) リリース準備`
-- `hh show`: 見出しにキーと ULID を出し、`workspace` の行を足す。parent・blocked_by・関連・子・逆参照も `WEB-42 (01JB…全桁) タイトル` の形にする。`key` の行は見出しに出るので消し、`former_keys` があれば出す
+- `hh show`: 見出しにキーと ULID を出し、`workspace` の行を足す。parent・blocked_by・関連・子・逆参照も `WEB-42 (01JB…全桁) タイトル` の形にする。`key` と `id` の行は見出しに出るので出さない（`--json` の `id` はそのまま）。`former_keys` があれば出す
 - 「候補が複数ある」エラー、`refName`、doctor と migrate の一覧も、キーと ULID にする
 - エディタの一時ファイル名は `WEB-42-*.md`
 - ファイルが壊れていてキーを読めないタスクは、キーの列を `?` にし、ULID だけを出す
@@ -261,9 +270,9 @@ a1b2c3d  2026-10-31 10:00  kukv  hedgehug: status API-7 (01JBZ8K3QW7M2X9V4T6R5N8
 - キーの重複
 - キーの接頭辞と所属するワークスペースの接頭辞の不一致（そのタスクを次に書き込むと振り直される）
 - 親と違うワークスペースに属する子
-- Store の中での接頭辞やワークスペース名の重複
-- 壊れたワークスペースファイルや `numbers.yaml`
-- `numbers.yaml` の接頭辞の形式が違うもの、番号が 1 未満のもの
+- Store の中での接頭辞やワークスペース名の重複。重複したワークスペースのファイルそれぞれに、相手を名指して出す
+- 壊れたワークスペースファイルや `numbers.yaml`（読めないものは `does not decode: …`）
+- `numbers.yaml` の接頭辞の形式が違うもの、番号が 1 未満のもの。ファイルは読めているので `has an invalid entry: <接頭辞>: …` として、読めないものと分ける
 
 問題コード `no_key`・`duplicate_key`・`key_prefix`・`no_workspace`・`workspace_mismatch` は index の問題で、`is:invalid` と `ls --json` の `problems` にも出る。
 
