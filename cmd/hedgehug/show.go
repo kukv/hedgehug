@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
@@ -42,7 +43,11 @@ type showJSON struct {
 	Repos    []string             `json:"repos"`
 	Comments []commentJSON        `json:"comments"`
 	Reverse  map[string][]refJSON `json:"reverse"`
+	History  []logJSON            `json:"history"`
 }
+
+// showHistory is how many commits show lists under History.
+const showHistory = 5
 
 // relation is one kind of task pointing at the task shown.
 type relation struct {
@@ -79,10 +84,14 @@ func (a *app) show(arg string) error {
 		}
 	}
 	rels := reverse(ix, e.ID)
-	if a.jsonOut {
-		return a.printJSON(showOf(ix, e, t, comments, ci, rels))
+	history, err := a.taskLog(s, e.ID, showHistory)
+	if err != nil {
+		return err
 	}
-	_, err = fmt.Fprint(a.stdout, a.showText(ix, e, t, comments, ci, rels))
+	if a.jsonOut {
+		return a.printJSON(showOf(ix, e, t, comments, ci, rels, history))
+	}
+	_, err = fmt.Fprint(a.stdout, a.showText(ix, e, t, comments, ci, rels, history))
 	return err
 }
 
@@ -135,8 +144,8 @@ func refName(ix *index.Index, id model.ID) string {
 	return id.String() + " (not found)"
 }
 
-func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, ci *commentIndex, rels []relation) *showJSON {
-	j := &showJSON{taskJSON: entryJSON(ix, e), Watchers: []string{}, Repos: []string{}, Comments: []commentJSON{}, Reverse: map[string][]refJSON{}}
+func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, ci *commentIndex, rels []relation, history []gitrepo.LogEntry) *showJSON {
+	j := &showJSON{taskJSON: entryJSON(ix, e), Watchers: []string{}, Repos: []string{}, Comments: []commentJSON{}, Reverse: map[string][]refJSON{}, History: logJSONs(history)}
 	if t != nil {
 		j.Body, j.Watchers, j.Repos = t.Body, orEmpty(t.Watchers), orEmpty(t.Repos)
 	}
@@ -151,7 +160,7 @@ func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Co
 	return j
 }
 
-func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, ci *commentIndex, rels []relation) string {
+func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, ci *commentIndex, rels []relation, history []gitrepo.LogEntry) string {
 	st := a.style()
 	var b strings.Builder
 	b.WriteString(st.id(ix.ShortID(e.ID)) + "  " + e.Title + "\n")
@@ -238,6 +247,9 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 				b.WriteString("    " + l + "\n")
 			}
 		}
+	}
+	if len(history) > 0 {
+		b.WriteString("\nHistory:\n" + logText(history))
 	}
 	return b.String()
 }
