@@ -116,7 +116,7 @@ func (ix *Index) derive() {
 		sortByRank(cs)
 	}
 	sortByRank(ix.roots)
-	ix.short = shortLengths(ix.tasks)
+	ix.short = ShortLengths(slices.Collect(maps.Keys(ix.tasks)))
 }
 
 func sortByRank(es []*Entry) {

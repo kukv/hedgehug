@@ -52,7 +52,7 @@ func (a *app) rootCmd() *cobra.Command {
 	pf.StringVar(&a.storeName, "store", "", "the store to work on, by name")
 	pf.BoolVar(&a.jsonOut, "json", false, "print JSON")
 	pf.BoolVar(&a.noColor, "no-color", false, "do not color the output")
-	root.AddCommand(a.storeCmd(), a.addCmd(), a.lsCmd(), a.showCmd(), a.setCmd(), a.statusCmd(), a.doneCmd(), a.depCmd(), a.rmCmd(), a.restoreCmd(), a.purgeCmd(), a.mvCmd(), a.editCmd())
+	root.AddCommand(a.storeCmd(), a.addCmd(), a.lsCmd(), a.showCmd(), a.setCmd(), a.statusCmd(), a.doneCmd(), a.depCmd(), a.rmCmd(), a.restoreCmd(), a.purgeCmd(), a.mvCmd(), a.editCmd(), a.commentCmd())
 	return root
 }
 
@@ -127,11 +127,16 @@ func verb(committed bool, heading string) string {
 // ambiguousError is index.AmbiguousError with the candidates spelled out.
 type ambiguousError struct {
 	input string
+	noun  string   // what the candidates are, "tasks" when empty
 	lines []string // "<short>  <title>" per candidate
 }
 
 func (e *ambiguousError) Error() string {
-	return fmt.Sprintf("%q matches %d tasks:\n  %s", e.input, len(e.lines), strings.Join(e.lines, "\n  "))
+	noun := e.noun
+	if noun == "" {
+		noun = "tasks"
+	}
+	return fmt.Sprintf("%q matches %d %s:\n  %s", e.input, len(e.lines), noun, strings.Join(e.lines, "\n  "))
 }
 
 // resolve finds the task arg names.

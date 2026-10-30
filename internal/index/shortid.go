@@ -27,16 +27,18 @@ func (ix *Index) ShortID(id model.ID) string {
 	return s[len(s)-n:]
 }
 
-// shortLengths returns the length of the short ID of each task. Sorting the
-// reversed IDs puts the IDs that share the longest ending next to each
-// other, so each needs comparing with its neighbors only.
-func shortLengths(tasks map[model.ID]*Entry) map[model.ID]int {
+// ShortLengths returns the length of the short ID of each of ids, by the
+// rule of ShortID: at least minShort characters of the end, and as many more
+// as it takes to differ from the others. Sorting the reversed IDs puts the
+// IDs that share the longest ending next to each other, so each needs
+// comparing with its neighbors only.
+func ShortLengths(ids []model.ID) map[model.ID]int {
 	type item struct {
 		rev string
 		id  model.ID
 	}
-	items := make([]item, 0, len(tasks))
-	for id := range tasks {
+	items := make([]item, 0, len(ids))
+	for _, id := range ids {
 		items = append(items, item{reverse(id.String()), id})
 	}
 	slices.SortFunc(items, func(a, b item) int { return cmp.Compare(a.rev, b.rev) })

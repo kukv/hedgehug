@@ -24,6 +24,7 @@ func (a *app) showCmd() *cobra.Command {
 
 type commentJSON struct {
 	ID      string    `json:"id"`
+	Short   string    `json:"short"`
 	Author  string    `json:"author"`
 	Created time.Time `json:"created"`
 	Body    string    `json:"body"`
@@ -66,16 +67,22 @@ func (a *app) show(arg string) error {
 		}
 	}
 	var comments []*model.Comment
+	var ci *commentIndex
 	if e.Broken == "" {
 		if comments, err = liveComments(s, e.ID); err != nil {
 			return err
 		}
+		if len(comments) > 0 {
+			if ci, err = loadComments(s); err != nil {
+				return err
+			}
+		}
 	}
 	rels := reverse(ix, e.ID)
 	if a.jsonOut {
-		return a.printJSON(showOf(ix, e, t, comments, rels))
+		return a.printJSON(showOf(ix, e, t, comments, ci, rels))
 	}
-	_, err = fmt.Fprint(a.stdout, a.showText(ix, e, t, comments, rels))
+	_, err = fmt.Fprint(a.stdout, a.showText(ix, e, t, comments, ci, rels))
 	return err
 }
 
@@ -128,13 +135,13 @@ func refName(ix *index.Index, id model.ID) string {
 	return id.String() + " (not found)"
 }
 
-func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []relation) *showJSON {
+func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, ci *commentIndex, rels []relation) *showJSON {
 	j := &showJSON{taskJSON: entryJSON(ix, e), Watchers: []string{}, Repos: []string{}, Comments: []commentJSON{}, Reverse: map[string][]refJSON{}}
 	if t != nil {
 		j.Body, j.Watchers, j.Repos = t.Body, orEmpty(t.Watchers), orEmpty(t.Repos)
 	}
 	for _, c := range comments {
-		j.Comments = append(j.Comments, commentJSON{c.ID.String(), c.Author, c.Created, c.Body})
+		j.Comments = append(j.Comments, commentJSON{c.ID.String(), ci.Short(c.ID), c.Author, c.Created, c.Body})
 	}
 	for _, r := range rels {
 		for _, x := range r.tasks {
@@ -144,7 +151,7 @@ func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Co
 	return j
 }
 
-func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []relation) string {
+func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, ci *commentIndex, rels []relation) string {
 	st := a.style()
 	var b strings.Builder
 	b.WriteString(st.id(ix.ShortID(e.ID)) + "  " + e.Title + "\n")
@@ -222,7 +229,11 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 	if len(comments) > 0 {
 		b.WriteString("\nComments:\n")
 		for _, c := range comments {
-			fmt.Fprintf(&b, "  %s  %s\n", c.Author, c.Created.Format(time.RFC3339))
+			author := c.Author
+			if author == "" {
+				author = "-"
+			}
+			fmt.Fprintf(&b, "  %s  %s  %s\n", st.id(ci.Short(c.ID)), author, c.Created.Format(time.RFC3339))
 			for _, l := range strings.Split(strings.TrimRight(c.Body, "\n"), "\n") {
 				b.WriteString("    " + l + "\n")
 			}
