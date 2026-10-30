@@ -51,7 +51,7 @@ func (ix *Index) rebuild(tree plumbing.Hash) error {
 	}
 	ix.tree, ix.sc, ix.tasks = tree, sc, tasks
 	ix.derive()
-	return ix.revalidate(slices.Collect(maps.Keys(tasks)), decoded)
+	return ix.revalidateAndFindProblems(slices.Collect(maps.Keys(tasks)), decoded)
 }
 
 // revalidate checks the tasks ids against the schema and keeps the
@@ -209,11 +209,21 @@ func (ix *Index) update(from, to plumbing.Hash) error {
 	}
 	ix.derive()
 	if all {
-		return ix.revalidate(slices.Collect(maps.Keys(ix.tasks)), decoded)
+		return ix.revalidateAndFindProblems(slices.Collect(maps.Keys(ix.tasks)), decoded)
 	}
 	// A task's placement depends on its parent's kind, and its schema on its
 	// ancestors, so the descendants of a changed task are checked again.
-	return ix.revalidate(ix.descendants(touched), decoded)
+	return ix.revalidateAndFindProblems(ix.descendants(touched), decoded)
+}
+
+// revalidateAndFindProblems revalidates ids, then finds the problems again:
+// derive ran before the violations were set, so it missed them.
+func (ix *Index) revalidateAndFindProblems(ids []model.ID, decoded map[model.ID]*model.Task) error {
+	if err := ix.revalidate(ids, decoded); err != nil {
+		return err
+	}
+	ix.problems = ix.findProblems()
+	return nil
 }
 
 // descendants returns ids and all their descendants, each once. A cycle of
