@@ -60,8 +60,9 @@ cmd/hedgehug/
 | --- | --- | --- |
 | `HEDGEHUG_HOME` あり | `$HEDGEHUG_HOME/config.yaml` | `$HEDGEHUG_HOME/stores/<name>` |
 | なし、XDG あり | `$XDG_CONFIG_HOME/hedgehug/config.yaml` | `$XDG_DATA_HOME/hedgehug/stores/<name>` |
-| どちらもなし | `os.UserConfigDir()/hedgehug/config.yaml` | Linux / macOS は `~/.local/share/hedgehug/stores/<name>`、Windows は `%LOCALAPPDATA%\hedgehug\stores\<name>` |
+| どちらもなし | OS の既定の設定ディレクトリ（下記）の `hedgehug/config.yaml` | Linux / macOS は `~/.local/share/hedgehug/stores/<name>`、Windows は `%LOCALAPPDATA%\hedgehug\stores\<name>` |
 
+- OS の既定の設定ディレクトリは、`os.UserConfigDir()` を呼ばず、注入された環境変数から同じ場所を求める。Windows は `%APPDATA%`、macOS は `~/Library/Application Support`、それ以外は `~/.config`。
 - `XDG_CONFIG_HOME` と `XDG_DATA_HOME` はそれぞれ独立に見る。片方だけあればその片方だけを使う。
 - 環境変数の値が相対パスなら無視する（XDG の仕様どおり）。`HEDGEHUG_HOME` も同じ。
 - `HEDGEHUG_HOME` を1つのディレクトリにまとめるのは、devenv の `users/alice` をそのまま `HEDGEHUG_HOME` にするため。
@@ -96,6 +97,7 @@ stores:
 - 読むファイルは、`GIT_CONFIG_GLOBAL` があればそのファイルだけ。なければ `$XDG_CONFIG_HOME/git/config`（なければ `~/.config/git/config`）、`~/.gitconfig` の順に読み、後のファイルが勝つ（git と同じ）。
 - どちらかが空なら、`git config --global user.name` / `user.email` での設定を案内するエラーにする。読み出しは書き込みをするコマンドでだけ行う（読むだけのコマンドは git の設定がなくても動く）。
 - アカウントによる作者の決定はフェーズ3。それまで `query.Options.Me` は空にする（1c で決めたとおり）。
+- `created_by` の値にはアカウントが要るので、フェーズ3までは空のままにする。`show` は `by -` と出す。
 
 ## store.Create の修正
 
@@ -117,7 +119,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 - 全体フラグ: `--store <name>`、`--json`、`--no-color`。
 - 引数なしのルート `hedgehug` は使い方を出して終了コード 2。`hedgehug store` と `hedgehug dep` はサブコマンドなしならヘルプを出して 0。
 - cobra の既定の `completion` コマンドは、フェーズ 7 まで無効にする。
-- `add` / `rm` / `mv` は、rank を Store のロックを取る前に index から計算する。同じ親の下で同時に2つ `add` すると rank が等しくなりうる。その並びは ID の順になる。
+- `add` / `mv` は、rank を Store のロックを取る前に index から計算する。同じ親の下で同時に2つ `add` すると rank が等しくなりうる。その並びは ID の順になる。
 
 | コマンド | Op |
 | --- | --- |
@@ -141,6 +143,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 ### `add <title> [--parent <id>] [--kind <kind>] [--status <status>] [-p k=v]...`
 
 - `kind` の既定は `schema.DefaultKind()`。`status` の既定は `Schema.DefaultStatus(todo)` で引く。プロジェクトの上書きでカテゴリの既定は外せないので、置き場所によらず同じになる。
+- `--parent` が削除済みのタスクならエラーにして、先に戻すよう案内する（`restore` と同じ文言）。
 - `rank` は兄弟（同じ親の、削除されていないタスク）の最後の rank と空の間に作る（`model.Between(last, "")`）。兄弟がなければ `Between("", "")`。
 - `-p` は `set` と同じ書き方（下の `set`）。
 - 種類に紐づくテンプレートは展開しない（フェーズ6）。
@@ -156,6 +159,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
   - 兄弟は常に rank の順（同じ rank なら ID の順）に並べる。`sort:` と `group:` はどちらも `--tree` と併用するとエラー（使い方の誤り、終了コード 2）。
   - parent の循環に入っていて `Roots` から届かないタスクは、末尾の `== in a parent cycle` の見出しの下に1段で出す（1c の持ち越し）。見出しは英語の出力にした。
   - `--json` と併用したときは、子を `children` に入れた入れ子の JSON を出す。各タスクは `children`、`context`（つなぐために出した祖先）、`in_cycle`（循環のタスク）を持つ。
+  - `--ids-only` は、クエリに一致したタスクだけを描く順に出す（循環の中で一致したものも含む）。祖先は出さない（`ls --tree --ids-only status:todo | xargs hh done` で祖先まで閉じないため）。`--format` は描くタスクすべてに渡し、その値には `context`（bool）と `in_cycle`（bool）のキーが加わる。
 
 ### `show <id>`
 
@@ -211,6 +215,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 - `--parent` / `--root` がなければ親は変えない。
 - `--before` / `--after` の相手は、移動先の兄弟でなければエラー。指定がなければ末尾に置く。rank は前後の兄弟の rank の間に作る（`model.Between`）。
 - 親も位置も指定がなければエラー。
+- 削除済みのタスクを `--parent` に指定したらエラーにして、先に戻すよう案内する（`restore` と同じ文言）。
 - 循環と置き場所の検査は Store の書き込みに任せる。
 
 ### `dep add|rm <id> --blocked-by <id>`
@@ -237,7 +242,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 
 - `props` の値は、単一値なら文字列、複数値なら文字列の配列にする。
 - `show --json` はこれに `body`、`watchers`、`repos`、`comments`、`reverse`（関連名ごとの短縮 ID とタイトルの列）を足す。
-- `ls --tree --json` の各タスクは、これに `children`、`context`、`in_cycle` を足す。
+- `ls --tree --json` の各タスクは、これに `children`、`context`、`in_cycle` を足す。3つとも、空でないとき、または true のときだけ現れる。
 - 壊れたファイル（`Entry.Broken`）のタスクは、表では種類とステータスを `?` にし、JSON では `broken` に理由を入れる。
 
 ## エラー
