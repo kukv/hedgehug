@@ -2,6 +2,7 @@ package index
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -21,8 +22,17 @@ func mustID(t *testing.T, s string) model.ID {
 
 // indexOf builds an index of entries without a store.
 func indexOf(es ...*Entry) *Index {
-	ix := &Index{sc: schema.Default(), tasks: map[model.ID]*Entry{}}
-	for _, e := range es {
+	ws := &model.Workspace{ID: model.NewID(), Name: "test", KeyPrefix: "TST"}
+	ix := &Index{sc: schema.Default(), tasks: map[model.ID]*Entry{}, workspaces: map[model.ID]*model.Workspace{ws.ID: ws}}
+	for i, e := range es {
+		// An entry without a key or a workspace gets one, so the problems of
+		// the tests are only the ones they are about.
+		if e.Key == "" {
+			e.Key = fmt.Sprintf("TST-%d", i+1)
+		}
+		if e.Workspace.IsZero() {
+			e.Workspace = ws.ID
+		}
 		ix.tasks[e.ID] = e
 	}
 	ix.derive()

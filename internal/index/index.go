@@ -43,6 +43,10 @@ func Open(s *store.Store) (*Index, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The problems depend on the workspaces, so read them first.
+	if err := ix.readWorkspaces(head); err != nil {
+		return nil, err
+	}
 	tree, ok := ix.load()
 	rebuilt := !ok
 	if ok {
@@ -53,9 +57,6 @@ func Open(s *store.Store) (*Index, error) {
 		rebuilt = true
 	}
 	if err != nil {
-		return nil, err
-	}
-	if err := ix.readWorkspaces(head); err != nil {
 		return nil, err
 	}
 	if rebuilt || tree != head {
@@ -75,14 +76,14 @@ func (ix *Index) Refresh() error {
 	if head == ix.tree {
 		return nil
 	}
+	if err := ix.readWorkspaces(head); err != nil {
+		return err
+	}
 	err = ix.update(ix.tree, head)
 	if errors.Is(err, gitrepo.ErrTreeNotFound) {
 		err = ix.rebuild(head)
 	}
 	if err != nil {
-		return err
-	}
-	if err := ix.readWorkspaces(head); err != nil {
 		return err
 	}
 	ix.save()

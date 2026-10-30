@@ -4,6 +4,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
@@ -125,5 +126,23 @@ func TestConcurrentAddsThroughIndexes(t *testing.T) {
 	}
 	if len(keys) != 2*per {
 		t.Errorf("%d keys, want %d", len(keys), 2*per)
+	}
+}
+
+// Numbering must not give again a number of a deleted task or a former key.
+func TestKeyNumbersCountsDeletedAndFormerKeys(t *testing.T) {
+	s, _ := newStore(t)
+	gone, moved := newTask("gone"), newTask("moved")
+	put(t, s, gone, moved) // TST-1, TST-2
+	now := time.Now()
+	gone.DeletedAt = &now
+	moved.FormerKeys = []string{"OLD-7", "TST-8"}
+	put(t, s, gone, moved)
+	n, err := mustOpen(t, s).KeyNumbers()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n["TST"] != 8 || n["OLD"] != 7 {
+		t.Errorf("KeyNumbers = %v, want TST 8 and OLD 7", n)
 	}
 }

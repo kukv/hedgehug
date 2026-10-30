@@ -1,6 +1,7 @@
 package doctor
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -85,10 +86,20 @@ func firstWorkspace(t *testing.T, s *store.Store) model.ID {
 	return model.ID{}
 }
 
+// rawKeys numbers the keys putRaw gives to tasks without one.
+var rawKeys int
+
 // putRaw commits a task file past the checks of the store, as a sync or a
 // hand edit could.
 func putRaw(t *testing.T, s *store.Store, dir string, task *model.Task) {
 	t.Helper()
+	if task.Workspace.IsZero() {
+		task.Workspace = firstWorkspace(t, s)
+	}
+	if task.Key == "" {
+		rawKeys++
+		task.Key = fmt.Sprintf("TST-%d", 1000+rawKeys)
+	}
 	b, err := task.Encode()
 	if err != nil {
 		t.Fatal(err)

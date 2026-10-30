@@ -277,3 +277,58 @@ func TestRunIgnoresLockAndGitignore(t *testing.T) {
 		t.Errorf("findings = %+v, want none", fs)
 	}
 }
+
+func TestRunWorkspaces(t *testing.T) {
+	s, dir := newStore(t)
+	w := &model.Workspace{ID: model.NewID(), Name: "other", KeyPrefix: "TST"}
+	b, err := w.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, dir, model.WorkspacePath(w.ID), string(b))
+	if _, err := s.Repo().Commit(commitOf(model.WorkspacePath(w.ID))); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, f := range run(t, dir) {
+		if f.Check == "workspace" && strings.Contains(f.Msg, "key prefix TST") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("%d workspace findings, want 1", n)
+	}
+	writeFile(t, dir, "workspaces/nope.md", "x")
+	find(t, run(t, dir), "file", "workspaces/nope.md")
+}
+
+func TestRunNumbers(t *testing.T) {
+	s, dir := newStore(t)
+	for _, tt := range []string{"TST: [\n", "t: 3\n", "TST: 0\n"} {
+		writeFile(t, dir, model.NumbersPath, tt)
+		if _, err := s.Repo().Commit(commitOf(model.NumbersPath)); err != nil {
+			t.Fatal(err)
+		}
+		find(t, run(t, dir), "file", model.NumbersPath)
+	}
+	writeFile(t, dir, model.NumbersPath, "TST: 3\n")
+	if _, err := s.Repo().Commit(commitOf(model.NumbersPath)); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range run(t, dir) {
+		if f.Where == model.NumbersPath {
+			t.Errorf("good numbers.yaml reported: %+v", f)
+		}
+	}
+}
+
+func TestRunKeyProblems(t *testing.T) {
+	s, dir := newStore(t)
+	a := newTask("A")
+	a.Key = "XX-1"
+	putRaw(t, s, dir, a)
+	fs := run(t, dir)
+	if f := find(t, fs, "task", "XX-1 ("+a.ID.String()+") A"); !strings.Contains(f.Msg, "key prefix") {
+		t.Errorf("finding = %+v", f)
+	}
+}

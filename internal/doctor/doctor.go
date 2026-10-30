@@ -18,11 +18,14 @@ import (
 )
 
 // fileRoots are the directories of a store whose files doctor reads.
-var fileRoots = []string{"tasks", "comments", "worklogs", "sprints", "releases", "templates"}
+var fileRoots = []string{"tasks", "comments", "worklogs", "sprints", "releases", "templates", "workspaces"}
 
 // indexCodes are the problems of a task that come from the shape of the
 // store, not from the schema.
-var indexCodes = []string{schema.CodeMissingRef, schema.CodeCycle, index.CodeBroken}
+var indexCodes = []string{
+	schema.CodeMissingRef, schema.CodeCycle, index.CodeBroken,
+	index.CodeNoKey, index.CodeDuplicateKey, index.CodeKeyPrefix, store.CodeNoWorkspace, store.CodeWorkspaceMismatch,
+}
 
 // Run checks the store in dir without opening it with store.Open, which
 // refuses a store whose schema.yaml is broken. The findings are sorted. The
@@ -38,6 +41,12 @@ func Run(dir string) ([]Finding, error) {
 			Check: "file", Where: model.StoreMetaPath,
 			Msg:  err.Error() + "; the tasks are not checked against the schema",
 			Hint: "restore it with `git restore " + model.StoreMetaPath + "`, or fix it by hand and commit",
+		})
+	}
+	if err := readCheck(dir, model.NumbersPath, checkNumbers); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		out = append(out, Finding{
+			Check: "file", Where: model.NumbersPath, Msg: err.Error(),
+			Hint: "fix the file by hand and commit, or restore it with `git restore " + model.NumbersPath + "`",
 		})
 	}
 	schemaOK := false
@@ -113,6 +122,24 @@ func readCheck[T any](dir, rel string, decode func([]byte) (T, error)) error {
 	return nil
 }
 
+// checkNumbers decodes numbers.yaml and checks each entry is a key prefix
+// with a number of 1 or more.
+func checkNumbers(data []byte) (model.Numbers, error) {
+	n, err := model.DecodeNumbers(data)
+	if err != nil {
+		return nil, err
+	}
+	for p, v := range n {
+		if err := model.ValidKeyPrefix(p); err != nil {
+			return nil, fmt.Errorf("%s: %w", p, err)
+		}
+		if v < 1 {
+			return nil, fmt.Errorf("%s: the number %d is less than 1", p, v)
+		}
+	}
+	return n, nil
+}
+
 // checkStore opens the store and the index and finds what step 5 of Run
 // finds. A failure to open becomes a finding.
 func checkStore(dir string) []Finding {
@@ -130,6 +157,7 @@ func checkStore(dir string) []Finding {
 	fs, _ := Schema(s, ix) // the error is for checks that read files; it is nil
 	// schema.yaml was checked in step 1.
 	fs = slices.DeleteFunc(fs, func(f Finding) bool { return f.Check == "schema" })
+	fs = append(fs, checkWorkspaces(ix)...)
 	for _, e := range ix.Tasks() {
 		for _, p := range ix.Problems(e.ID) {
 			if !slices.Contains(indexCodes, p.Code) {
@@ -143,6 +171,31 @@ func checkStore(dir string) []Finding {
 		}
 	}
 	return fs
+}
+
+// checkWorkspaces finds workspaces that share a key prefix or a name.
+func checkWorkspaces(ix *index.Index) []Finding {
+	var out []Finding
+	ws := ix.Workspaces()
+	for i, a := range ws {
+		for _, b := range ws[:i] {
+			var what string
+			switch {
+			case a.KeyPrefix == b.KeyPrefix:
+				what = "key prefix " + a.KeyPrefix
+			case strings.EqualFold(a.Name, b.Name):
+				what = "name " + a.Name
+			default:
+				continue
+			}
+			out = append(out, Finding{
+				Check: "workspace", Where: model.WorkspacePath(a.ID),
+				Msg:  fmt.Sprintf("has the same %s as workspace %s (%s)", what, b.Name, b.ID),
+				Hint: "change one with hedgehug workspace prefix (or rename)",
+			})
+		}
+	}
+	return out
 }
 
 // taskWhere names the task e in a finding: its key, ULID and title, or the
@@ -266,6 +319,18 @@ func checkFile(dir, root, rel string) (string, error) {
 		}
 		if got != id {
 			return bad("the id in the file is %s, which differs from the id in the path", got)
+		}
+	case "workspaces":
+		id, err := model.ParseWorkspacePath(rel)
+		if err != nil {
+			return bad("the name does not follow the rule of workspace files")
+		}
+		w, err := model.DecodeWorkspace(data)
+		if err != nil {
+			return bad("does not decode: %v", err)
+		}
+		if w.ID != id {
+			return bad("the id in the file is %s, which differs from the id in the path", w.ID)
 		}
 	case "templates":
 		name, ok := strings.CutSuffix(path.Base(rel), ".md")
