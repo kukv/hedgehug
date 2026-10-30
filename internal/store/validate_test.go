@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/model"
@@ -299,9 +300,21 @@ func TestValidateWorkspace(t *testing.T) {
 	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(dup) }); err == nil {
 		t.Error("a duplicate prefix is accepted")
 	}
-	same := &model.Workspace{ID: model.NewID(), Name: "API", KeyPrefix: "APX"}
-	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(same) }); err == nil {
-		t.Error("a duplicate name is accepted")
+	same := &model.Workspace{ID: model.NewID(), Name: "test", KeyPrefix: "APX"}
+	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(same) }); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("a duplicate name: %v", err)
+	}
+	// A file written by hand may have an upper-case name; the same name in
+	// lower case is still the same name.
+	upper := &model.Workspace{ID: model.NewID(), Name: "Web", KeyPrefix: "WEB"}
+	b, err := upper.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, s, model.WorkspacePath(upper.ID), string(b))
+	lower := &model.Workspace{ID: model.NewID(), Name: "web", KeyPrefix: "WBX"}
+	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(lower) }); err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("a duplicate name in another case: %v", err)
 	}
 	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveWorkspace(ws.ID) }); err == nil {
 		t.Error("a workspace with tasks is removed")
