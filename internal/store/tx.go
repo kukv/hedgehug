@@ -100,18 +100,30 @@ func (tx *Tx) PutTask(t *model.Task) error {
 }
 
 func (tx *Tx) PutComment(task model.ID, c *model.Comment) error {
+	if task.IsZero() || c.ID.IsZero() {
+		return errors.New("the comment has no id or no task")
+	}
 	return tx.put(model.CommentPath(task, c.ID), &pending{encode: c.Encode, created: &c.Created, updated: &c.Updated})
 }
 
 func (tx *Tx) PutWorklog(task model.ID, w *model.Worklog) error {
+	if task.IsZero() || w.ID.IsZero() {
+		return errors.New("the worklog entry has no id or no task")
+	}
 	return tx.put(model.WorklogPath(task, w.ID), &pending{encode: w.Encode, created: &w.Created, updated: &w.Updated})
 }
 
 func (tx *Tx) PutSprint(sp *model.Sprint) error {
+	if sp.ID.IsZero() {
+		return errors.New("the sprint has no id")
+	}
 	return tx.put(model.SprintPath(sp.ID), &pending{encode: sp.Encode, created: &sp.Created, updated: &sp.Updated})
 }
 
 func (tx *Tx) PutRelease(r *model.Release) error {
+	if r.ID.IsZero() {
+		return errors.New("the release has no id")
+	}
 	return tx.put(model.ReleasePath(r.ID), &pending{encode: r.Encode, created: &r.Created, updated: &r.Updated})
 }
 
@@ -138,6 +150,9 @@ func (tx *Tx) PutSchema(sc *schema.Schema) error {
 func (tx *Tx) RemoveTask(id model.ID) error {
 	if tx.done {
 		return errTxDone
+	}
+	if id.IsZero() {
+		return errors.New("the task has no id")
 	}
 	rels := []string{model.TaskPath(id)}
 	for _, dir := range []string{path.Dir(model.CommentPath(id, model.ID{})), path.Dir(model.WorklogPath(id, model.ID{}))} {

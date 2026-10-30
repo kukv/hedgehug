@@ -393,3 +393,27 @@ func TestPutSchema(t *testing.T) {
 		t.Errorf("err = %v, want a *SchemaError", err)
 	}
 }
+
+func TestPutRefusesZeroID(t *testing.T) {
+	s := newTestStore(t)
+	id := model.NewID()
+	for _, tc := range []struct {
+		name string
+		put  func(*Tx) error
+	}{
+		{"PutComment task", func(tx *Tx) error { return tx.PutComment(model.ID{}, &model.Comment{ID: model.NewID()}) }},
+		{"PutComment entry", func(tx *Tx) error { return tx.PutComment(id, &model.Comment{}) }},
+		{"PutWorklog task", func(tx *Tx) error { return tx.PutWorklog(model.ID{}, &model.Worklog{ID: model.NewID()}) }},
+		{"PutWorklog entry", func(tx *Tx) error { return tx.PutWorklog(id, &model.Worklog{}) }},
+		{"PutSprint", func(tx *Tx) error { return tx.PutSprint(&model.Sprint{Name: "S1", State: "planned"}) }},
+		{"PutRelease", func(tx *Tx) error { return tx.PutRelease(&model.Release{Name: "v1", State: "unreleased"}) }},
+		{"RemoveTask", func(tx *Tx) error { return tx.RemoveTask(model.ID{}) }},
+	} {
+		if err := s.Update(Op{Name: "add", Author: testAuthor}, tc.put); err == nil {
+			t.Errorf("%s accepted a zero ID", tc.name)
+		}
+	}
+	if n := len(headLog(t, s.dir)); n != 1 {
+		t.Errorf("commits = %d, want 1", n)
+	}
+}
