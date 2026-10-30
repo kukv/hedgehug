@@ -8,7 +8,7 @@
 
 設計ドキュメント rev 232〜234 で、ID の採番が「同期の push で確定」から「作成時に採番」に変わった。フェーズ2（同期とマージ）の前に、ID の採番と、CLI のすべての表示・入力を ID にすることを済ませる。
 
-検討の中で、接頭辞を container の種類のタスク（`id_prefix`）に持たせる設計が破綻していることがわかった。project に置き場所の制限がなく、ストーリーやタスクの下にも置けるため、「接頭辞はプロジェクトに紐づく」という想定と合わない。そこで、接頭辞を持つ単位として**ワークスペース**を新しく作る。
+検討の中で、接頭辞を container の種類のタスク（旧 `key_prefix`）に持たせる設計が破綻していることがわかった。project に置き場所の制限がなく、ストーリーやタスクの下にも置けるため、「接頭辞はプロジェクトに紐づく」という想定と合わない。そこで、接頭辞を持つ単位として**ワークスペース**を新しく作る。
 
 | 段階 | 内容 |
 | --- | --- |
@@ -53,18 +53,18 @@ Web フロントエンドのタスク。
 - `ulid`・`name`・`id_prefix`・`prefix_set` は必須
 - `prefix_set` は接頭辞を最後に設定した時刻。Store 間の重複で先勝ちを判定するのに使う。`hh workspace prefix` で更新する
 - `name` は Store の中で一意（大文字小文字を区別しない）。使える文字は Store 名と同じ規則で、定義は `model.ValidName` の1つ（`config.ValidStoreName` と `model.ValidWorkspaceName` はこれを使う）
-- `model.Workspace` を `model.Sprint` と同じ作りで足し、`model.WorkspacePath(id)` を `workspaces/<ULID>.md` とする
+- `model.Workspace` を `model.Sprint` と同じ作りで足し、`model.WorkspacePath(ulid)` を `workspaces/<ULID>.md` とする
 
 ### タスク
 
 - `workspace: <ULID>` を必須のフィールドとして足す。書き出す順は `ulid`・`id`・`former_ids`・`workspace`・`kind`…
-- `id_prefix` を削除する（`Task.IDPrefix`、`taskKeys` から外す）
+- タスクが持っていた接頭辞（旧 `key_prefix`）は削除した（`Task` のフィールドと `taskKeys` から外した）
 - `id` は必須。`former_ids` はこれまでどおり
 - 子は親と同じワークスペースに属する。ワークスペースをまたぐ `mv` では配下の全ファイルを書き換える
 
 ### store.yaml
 
-- `id_prefix` を削除する（`StoreMeta.IDPrefix`、`storeMetaKeys` から外す）。未リリースなので互換の処理は作らず、フォーマットのバージョンも 1 のままにする
+- store.yaml が持っていた接頭辞（旧 `key_prefix`）は削除した（`StoreMeta` のフィールドと `storeMetaKeys` から外した）。未リリースなので互換の処理は作らず、フォーマットのバージョンも 1 のままにする
 
 ### 種類
 
@@ -146,20 +146,21 @@ func (s *Store) SetIDNumbers(f IDNumbers)
 
 `assignIDs` は呼び出し側が渡した `*model.Task` の `ID` と `FormerIDs` をその場で書き換える。採番の後の検査や書き込み、コミットが失敗したときは、書き換える前の値に戻してからエラーを返す。失敗した操作が呼び出し側のタスクを変えたままにしないため。
 
-コミットの件名は `hedgehug: <操作> <ID> <タイトル>`。タスクのない操作（ワークスペースの操作など）は `Op.Detail` に変更の内容を入れ、`hedgehug: <操作> <Detail>` にする。ワークスペースを変える操作は、`Op.Workspace` でそのワークスペースの ULID を trailer `Hedgehug-Workspace` に入れる（`Hedgehug-Op: workspace` はそのまま）。
+コミットの件名は `hedgehug: <操作> <ID> <タイトル>`。タスクのない操作（ワークスペースの操作など）は `Op.Detail` に変更の内容を入れ、`hedgehug: <操作> <Detail>` にする。ワークスペースの操作は、ロックの中で読んだワークスペースから `Tx.SetDetail` で入れる。ワークスペースを変える操作は、`Op.Workspace` でそのワークスペースの ULID を trailer `Hedgehug-Workspace` に入れる（`Hedgehug-Op: workspace` はそのまま）。
 
 ### 書き込み時の検査（`tx.validate` に足す）
 
 - `workspace` がない、または存在しないワークスペースを指している
 - 子と親でワークスペースが違う
 - ワークスペースの `id_prefix` の形式が違う、Store の中で重複している、`name` が重複している
-- タスクが残っているワークスペースを消そうとしている（削除済みのタスクも数える）。読めないタスクファイルは所属を読めないが、中身に `workspace: <消すワークスペースの ULID>` があれば、そのワークスペースのタスクとみなして拒否し、エラーでファイルを示す。直したときに存在しないワークスペースを指すタスクにならないように
+- タスクが残っているワークスペースを消そうとしている（削除済みのタスクも数える）。読めないタスクファイルは所属を読めないが、中身のどこかに消すワークスペースの ULID があれば（引用符の有無や大文字小文字は問わない）、そのワークスペースのタスクとみなして拒否し、エラーでファイルを示す。直したときに存在しないワークスペースを指すタスクにならないように。拒否しすぎるほうが安全なので、`workspace:` の行に限らない。同じ操作で書き直す、または消すファイルは数えない。読めないファイルを読むのは、ワークスペースを消す操作のときだけ
 - ID の重複は書き込み時には検査しない。振る番号は使われた最大より大きいので、採番が重複を生むことはない。手で編集したファイルや同期による重複は doctor（`duplicate_id`）で知らせる
 
 ### Tx に足すもの
 
-- `PutWorkspace(*model.Workspace)`、`RemoveWorkspace(id)`、`Workspace(id)`（同じ操作で書いたものを優先して読む）
-- `Store.Workspaces()`、`Store.Workspace(id)`、`Store.Numbers()`（`numbers.yaml`）
+- `PutWorkspace(*model.Workspace)`、`RemoveWorkspace(ulid)`、`Workspace(ulid)`（同じ操作で書いたものを優先して読む）
+- `SetDetail(s)`: `Op.Detail` を置き換える。`fn` がロックの中で読んだ値から件名を作るため
+- `Store.Workspaces()`、`Store.Workspace(ulid)`、`Store.Numbers()`（`numbers.yaml`）
 
 ## コマンド
 
@@ -183,14 +184,14 @@ func (s *Store) SetIDNumbers(f IDNumbers)
 
 - `<ws>` は名前・接頭辞・ULID のどれでも指定でき、大文字小文字を区別しない
 - `--json` に対応する
-- コミットの件名は何を変えたかを示す: `hedgehug: workspace add web (WEB)`、`hedgehug: workspace rename web → front (WEB)`、`hedgehug: workspace prefix api API → BE`、`hedgehug: workspace rm web (WEB)`。trailer は `Hedgehug-Op: workspace` と `Hedgehug-Workspace: <ULID>`。件名の古い名前や接頭辞は、コマンドがロックの前に読んだもの
+- コミットの件名は何を変えたかを示す: `hedgehug: workspace add web (WEB)`、`hedgehug: workspace rename web → front (WEB)`、`hedgehug: workspace prefix api API → BE`、`hedgehug: workspace rm web (WEB)`。trailer は `Hedgehug-Op: workspace` と `Hedgehug-Workspace: <ULID>`。件名の古い名前や接頭辞は、ロックの中で `tx.Workspace` で読んだもの（変える前の値）。インデックスを読んだ後に別のプロセスが名前を変えていても、件名は実際に変えた値を示す
 - `prefix` が振り直すタスクは、`Update` の中（Store のロックの中）でインデックスを `Refresh` してから集める。インデックスを読んだ後に並行して足されたタスクも振り直すため。古い ID もロックの中で読み、新しい ID はトランザクションに入れたタスクから出す
 
 ### add
 
 - `--parent` を指定したら、親のワークスペースに入れる。`--workspace` も指定して親と違えばエラー
 - 親がなければ `--workspace` で指定する。ワークスペースが1つだけなら省略できる。2つ以上あって指定がなければ、ワークスペースの一覧を添えてエラーにする
-- `-p id_prefix=...` は廃止（タスクに `id_prefix` がなくなる）
+- タスクの接頭辞を `-p` で指定すること（旧 `-p key_prefix=...`）は廃止した（タスクが接頭辞を持たなくなったため）
 
 ### mv
 
@@ -199,6 +200,7 @@ func (s *Store) SetIDNumbers(f IDNumbers)
 - `mv <id> --workspace <今いるワークスペース>` を `--parent` なしで指定したときは、親を変えない
 - ワークスペースが変わるときは、移したタスクごとに ID の変化を1行ずつ（`WEB-3 → API-12` など）表示する。新しい ID は、コミットの後にインデックスを引かず、トランザクションに入れたタスク（`assignIDs` がその場で ID を入れる）から出す
 - 配下のタスクは `Update` の中でインデックスを `Refresh` してから集める（削除済みも含む）。インデックスを読んだ後に並行して足された子も一緒に移すため。`rm`・`restore`・`purge` も配下を同じくロックの中で集める。`purge` は確認の前に一度集めて一覧を示し、ロックの中で集め直す。生きているタスクが加わっていれば拒否し、確認した一覧と変わっていれば「もう一度 purge する」よう案内して止める（`--yes` のときは集め直したものを消す）
+- 対象のタスク自身も、ロックの中で `Refresh` したインデックスから読み直して検査し直す。インデックスを読んだ後に別のプロセスが変えていることがあるため: `rm` は削除済みなら拒否する。`restore` は削除済みでなければ拒否し、配下を選ぶ削除時刻もロックの中で読んだ値を使う。`purge` は削除済みでなければ拒否する。`mv` は移し先（親、ワークスペース、順位）と配下ごと移すかどうかを、ロックの中で読んだタスクと親から決め直す
 
 ### edit
 
@@ -294,7 +296,7 @@ a1b2c3d  2026-10-31 10:00  kukv  hedgehug: status API-7 (01JBZ8K3QW7M2X9V4T6R5N8
 本書の決定に合わせて、親設計の次の節を書き換える。
 
 - 人が読める ID: 全面的に書き換える（ワークスペース、Store 全体での接頭辞ごとの連番、purge の記録、振り直しの決まり、衝突、Store 間の先勝ち、表示の併記）。「番号は同期の push で確定します」「次の採番で振り直す」「採番機能を入れるときに既存のタスクにも振る」を消す
-- データ形式: Store のファイル（`workspaces/`、`.hedgehug/numbers.yaml`）、タスクファイル（`workspace`、`id_prefix` の削除）、種類と階層（project はルートだけ）
+- データ形式: Store のファイル（`workspaces/`、`.hedgehug/numbers.yaml`）、タスクファイル（`workspace` の追加、接頭辞（旧 `key_prefix`）の削除）、種類と階層（project はルートだけ）
 - 新しい節「ワークスペース」
 - コンテキスト解決: 最後の段を「ワークスペースが1つならそのルート、2つ以上なら選ばせる（端末でなければエラー）」にする
 - マージ後の不変条件: 接頭辞の重複は `prefix_set` が後の側に変更を案内する。ID の衝突は先に push した側を残す

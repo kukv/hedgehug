@@ -75,14 +75,19 @@ func (a *app) rm(arg string) error {
 	if err != nil {
 		return err
 	}
-	if e.DeletedAt != nil {
-		return fmt.Errorf("%s is already deleted", refName(ix, e.ULID))
+	if err := notDeletedYet(ix, e); err != nil {
+		return err
 	}
 	var targets []*index.Entry
 	now := a.now().Truncate(time.Second)
 	if _, err := a.update(s, store.Op{Name: "rm", Task: e.ULID}, func(tx *store.Tx) error {
-		// Read under the lock, so a child added since is deleted too.
-		if err := ix.Refresh(); err != nil {
+		// Read under the lock, so a child added since is deleted too, and
+		// a task deleted since is not deleted again.
+		var err error
+		if e, err = current(ix, e); err != nil {
+			return err
+		}
+		if err := notDeletedYet(ix, e); err != nil {
 			return err
 		}
 		targets = []*index.Entry{e}
@@ -108,6 +113,36 @@ func (a *app) rm(arg string) error {
 	return a.printAffected(ix, e, targets, "Deleted", true)
 }
 
+// current refreshes ix, as a command does under the lock, and returns e as
+// it is now.
+func current(ix *index.Index, e *index.Entry) (*index.Entry, error) {
+	if err := ix.Refresh(); err != nil {
+		return nil, err
+	}
+	cur, ok := ix.Task(e.ULID)
+	if !ok {
+		return nil, fmt.Errorf("%s is no longer in the store", taskLabel(e))
+	}
+	return cur, nil
+}
+
+// notDeletedYet refuses to delete the task e again.
+func notDeletedYet(ix *index.Index, e *index.Entry) error {
+	if e.DeletedAt != nil {
+		return fmt.Errorf("%s is already deleted", refName(ix, e.ULID))
+	}
+	return nil
+}
+
+// isDeleted refuses to restore or purge the task e when it is not deleted;
+// hint ends the message.
+func isDeleted(ix *index.Index, e *index.Entry, hint string) error {
+	if e.DeletedAt == nil {
+		return fmt.Errorf("%s is not deleted%s", refName(ix, e.ULID), hint)
+	}
+	return nil
+}
+
 // notDeleted refuses to change the task e when it is deleted, and points
 // to restore.
 func notDeleted(ix *index.Index, e *index.Entry) error {
@@ -126,6 +161,19 @@ func liveParent(ix *index.Index, p *index.Entry) error {
 	return nil
 }
 
+// restorable refuses to restore e when it is not deleted or its parent is.
+func restorable(ix *index.Index, e *index.Entry) error {
+	if err := isDeleted(ix, e, ""); err != nil {
+		return err
+	}
+	if e.Parent != nil {
+		if p, ok := ix.Task(*e.Parent); ok {
+			return liveParent(ix, p)
+		}
+	}
+	return nil
+}
+
 func (a *app) restore(arg string) error {
 	s, ix, err := a.open()
 	if err != nil {
@@ -135,24 +183,22 @@ func (a *app) restore(arg string) error {
 	if err != nil {
 		return err
 	}
-	if e.DeletedAt == nil {
-		return fmt.Errorf("%s is not deleted", refName(ix, e.ULID))
+	if err := restorable(ix, e); err != nil {
+		return err
 	}
-	if e.Parent != nil {
-		if p, ok := ix.Task(*e.Parent); ok {
-			if err := liveParent(ix, p); err != nil {
-				return err
-			}
-		}
-	}
-	at := *e.DeletedAt
 	var targets []*index.Entry
 	if _, err := a.update(s, store.Op{Name: "restore", Task: e.ULID}, func(tx *store.Tx) error {
 		// Read under the lock, so a child the same rm deleted is restored
-		// even when it came in after the index was read.
-		if err := ix.Refresh(); err != nil {
+		// even when it came in after the index was read, and a task
+		// restored since is refused.
+		var err error
+		if e, err = current(ix, e); err != nil {
 			return err
 		}
+		if err := restorable(ix, e); err != nil {
+			return err
+		}
+		at := *e.DeletedAt
 		targets = append([]*index.Entry{e}, descendants(ix, e.ULID, func(d *index.Entry) bool {
 			return d.DeletedAt != nil && d.DeletedAt.Equal(at)
 		})...)
@@ -182,9 +228,6 @@ func (a *app) purge(arg string, yes bool) error {
 	if err != nil {
 		return err
 	}
-	if e.DeletedAt == nil {
-		return fmt.Errorf("%s is not deleted; delete it with hedgehug rm first", refName(ix, e.ULID))
-	}
 	targets, err := purgeTargets(ix, e)
 	if err != nil {
 		return err
@@ -196,12 +239,12 @@ func (a *app) purge(arg string, yes bool) error {
 	}
 	confirmed := targets
 	if _, err := a.update(s, store.Op{Name: "purge", Task: e.ULID}, func(tx *store.Tx) error {
-		// Read again under the lock: a task added under it since must not
-		// be purged unchecked, nor left behind.
-		if err := ix.Refresh(); err != nil {
+		// Read again under the lock: a task restored or added under it
+		// since must not be purged unchecked, nor left behind.
+		var err error
+		if e, err = current(ix, e); err != nil {
 			return err
 		}
-		var err error
 		if targets, err = purgeTargets(ix, e); err != nil {
 			return err
 		}
@@ -223,6 +266,9 @@ func (a *app) purge(arg string, yes bool) error {
 // purgeTargets returns e and every task under it, refusing when one of them
 // is not deleted.
 func purgeTargets(ix *index.Index, e *index.Entry) ([]*index.Entry, error) {
+	if err := isDeleted(ix, e, "; delete it with hedgehug rm first"); err != nil {
+		return nil, err
+	}
 	targets := append([]*index.Entry{e}, descendants(ix, e.ULID, func(*index.Entry) bool { return true })...)
 	for _, d := range targets[1:] {
 		if d.DeletedAt == nil {

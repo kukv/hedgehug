@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
@@ -140,5 +141,124 @@ func TestPurgeSeesChildrenAddedMeanwhile(t *testing.T) {
 	}
 	if _, err := s.Task(c); err != nil {
 		t.Errorf("a task that was not confirmed is purged: %v", err)
+	}
+}
+
+// changeTask returns a write that changes the task ulid with fn.
+func changeTask(ulid string, fn func(*model.Task)) func(*store.Tx) error {
+	return func(tx *store.Tx) error {
+		u, err := model.ParseULID(ulid)
+		if err != nil {
+			return err
+		}
+		t, err := tx.Task(u)
+		if err != nil {
+			return err
+		}
+		fn(t)
+		return tx.PutTask(t)
+	}
+}
+
+func TestRmRefusesATaskDeletedMeanwhile(t *testing.T) {
+	te := newStoreEnv(t)
+	p := te.addJSON("p")
+	at := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	te.meanwhile(changeTask(p.ULID, func(t *model.Task) { t.DeletedAt = &at }))
+	if code, _, stderr := te.run("rm", p.ID); code != 1 || !strings.Contains(stderr, "already deleted") {
+		t.Errorf("rm: exit %d, stderr %q", code, stderr)
+	}
+	if got := te.task(p.ULID); got.DeletedAt == nil || !got.DeletedAt.Equal(at) {
+		t.Errorf("deleted_at = %v, want %v", got.DeletedAt, at)
+	}
+}
+
+func TestRestoreRefusesATaskRestoredMeanwhile(t *testing.T) {
+	te := newStoreEnv(t)
+	p := te.addJSON("p")
+	te.ok("rm", p.ID)
+	te.meanwhile(changeTask(p.ULID, func(t *model.Task) { t.DeletedAt = nil }))
+	if code, _, stderr := te.run("restore", p.ID); code != 1 || !strings.Contains(stderr, "not deleted") {
+		t.Errorf("restore: exit %d, stderr %q", code, stderr)
+	}
+}
+
+func TestPurgeRefusesATaskRestoredMeanwhile(t *testing.T) {
+	te := newStoreEnv(t)
+	p := te.addJSON("p")
+	te.ok("rm", p.ID)
+	te.meanwhile(changeTask(p.ULID, func(t *model.Task) { t.DeletedAt = nil }))
+	if code, _, stderr := te.run("purge", p.ID, "--yes"); code != 1 || !strings.Contains(stderr, "not deleted") {
+		t.Errorf("purge: exit %d, stderr %q", code, stderr)
+	}
+	if got := te.task(p.ULID); got.DeletedAt != nil {
+		t.Error("the task restored meanwhile is changed")
+	}
+}
+
+func TestMvSeesAWorkspaceMoveMeanwhile(t *testing.T) {
+	te := newStoreEnv(t)
+	var api workspaceJSON
+	te.wsJSON(&api, "add", "api", "--prefix", "API")
+	apiULID := mustULID(t, api.ULID)
+	p := te.addJSON("p", "--workspace", "me")
+	c := te.addJSON("c", "--parent", p.ID)
+	// Another process moves p and its child to api; mv then moves p back.
+	te.meanwhile(func(tx *store.Tx) error {
+		for _, u := range []string{p.ULID, c.ULID} {
+			if err := changeTask(u, func(t *model.Task) { t.Workspace = apiULID })(tx); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	te.ok("mv", p.ULID, "--workspace", "me")
+	if got := te.task(c.ULID); got.Workspace == apiULID || !strings.HasPrefix(got.ID, "ME-") {
+		t.Errorf("the child is left in workspace %s with id %s", got.Workspace, got.ID)
+	}
+}
+
+func TestMvParentInAnotherWorkspaceMovesAChildAddedMeanwhile(t *testing.T) {
+	te := newStoreEnv(t)
+	te.ok("workspace", "add", "api", "--prefix", "API")
+	q := te.addJSON("q", "--workspace", "api")
+	p := te.addJSON("p", "--workspace", "me")
+	var c model.ULID
+	te.meanwhile(putChild(p.ULID, &c))
+	te.ok("mv", p.ID, "--parent", q.ID)
+	if got := te.task(c.String()); !strings.HasPrefix(got.ID, "API-") {
+		t.Errorf("the child added meanwhile: id %s", got.ID)
+	}
+}
+
+func TestWorkspaceSubjectsSeeARenameMeanwhile(t *testing.T) {
+	te := newStoreEnv(t)
+	me := mustULID(t, te.addJSON("a").Workspace.ULID)
+	var tmp workspaceJSON
+	te.wsJSON(&tmp, "add", "tmp", "--prefix", "TMP")
+	rename := func(ulid model.ULID, name string) func(*store.Tx) error {
+		return func(tx *store.Tx) error {
+			w, err := tx.Workspace(ulid)
+			if err != nil {
+				return err
+			}
+			w.Name = name
+			return tx.PutWorkspace(w)
+		}
+	}
+	te.meanwhile(rename(me, "mid"))
+	te.ok("workspace", "rename", "me", "last")
+	if subj, _ := te.lastCommit(); subj != "hedgehug: workspace rename mid → last (ME)" {
+		t.Errorf("rename subject = %q", subj)
+	}
+	te.meanwhile(rename(me, "other"))
+	te.ok("workspace", "prefix", "last", "NEW")
+	if subj, _ := te.lastCommit(); subj != "hedgehug: workspace prefix other ME → NEW" {
+		t.Errorf("prefix subject = %q", subj)
+	}
+	te.meanwhile(rename(mustULID(t, tmp.ULID), "tmp2"))
+	te.ok("workspace", "rm", "tmp")
+	if subj, _ := te.lastCommit(); subj != "hedgehug: workspace rm tmp2 (TMP)" {
+		t.Errorf("rm subject = %q", subj)
 	}
 }

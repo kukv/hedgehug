@@ -148,8 +148,10 @@ func (a *app) workspaceAdd(name, prefix string) error {
 		return err
 	}
 	w := &model.Workspace{ULID: model.NewULID(), Name: name, IDPrefix: prefix, PrefixSet: a.now()}
-	op := workspaceOp(w.ULID, "add %s (%s)", w.Name, w.IDPrefix)
-	if _, err := a.update(s, op, func(tx *store.Tx) error { return tx.PutWorkspace(w) }); err != nil {
+	if _, err := a.update(s, workspaceOp(w.ULID), func(tx *store.Tx) error {
+		tx.SetDetail(fmt.Sprintf("add %s (%s)", w.Name, w.IDPrefix))
+		return tx.PutWorkspace(w)
+	}); err != nil {
 		return err
 	}
 	return a.printWorkspace(ix, w, fmt.Sprintf("Added workspace %s (%s, %s)", w.Name, w.IDPrefix, w.ULID))
@@ -167,14 +169,15 @@ func (a *app) workspaceRename(arg, name string) error {
 	if err != nil {
 		return err
 	}
-	old := ws.Name
+	var old string
 	var w *model.Workspace
-	op := workspaceOp(ws.ULID, "rename %s → %s (%s)", old, name, ws.IDPrefix)
-	if _, err := a.update(s, op, func(tx *store.Tx) error {
+	if _, err := a.update(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
 		var err error
 		if w, err = tx.Workspace(ws.ULID); err != nil {
 			return err
 		}
+		old = w.Name
+		tx.SetDetail(fmt.Sprintf("rename %s → %s (%s)", old, name, w.IDPrefix))
 		w.Name = name
 		return tx.PutWorkspace(w)
 	}); err != nil {
@@ -208,12 +211,12 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 	var w *model.Workspace
 	var tasks []*model.Task
 	var oldIDs []string
-	op := workspaceOp(ws.ULID, "prefix %s %s → %s", ws.Name, ws.IDPrefix, prefix)
-	if _, err := a.update(s, op, func(tx *store.Tx) error {
+	if _, err := a.update(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
 		var err error
 		if w, err = tx.Workspace(ws.ULID); err != nil {
 			return err
 		}
+		tx.SetDetail(fmt.Sprintf("prefix %s %s → %s", w.Name, w.IDPrefix, prefix))
 		w.IDPrefix = prefix
 		w.PrefixSet = a.now()
 		if err := tx.PutWorkspace(w); err != nil {
@@ -278,17 +281,25 @@ func (a *app) workspaceRm(arg string) error {
 	if n := countTasks(ix, ws.ULID, true); n > 0 {
 		return fmt.Errorf("workspace %s still has %d tasks; move them with hedgehug mv --workspace or purge them", ws.Name, n)
 	}
-	op := workspaceOp(ws.ULID, "rm %s (%s)", ws.Name, ws.IDPrefix)
-	if _, err := a.update(s, op, func(tx *store.Tx) error { return tx.RemoveWorkspace(ws.ULID) }); err != nil {
+	w := ws
+	if _, err := a.update(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
+		var err error
+		if w, err = tx.Workspace(ws.ULID); err != nil {
+			return err
+		}
+		tx.SetDetail(fmt.Sprintf("rm %s (%s)", w.Name, w.IDPrefix))
+		return tx.RemoveWorkspace(ws.ULID)
+	}); err != nil {
 		return err
 	}
-	return a.printWorkspace(ix, ws, fmt.Sprintf("Removed workspace %s (%s, %s)", ws.Name, ws.IDPrefix, ws.ULID))
+	return a.printWorkspace(ix, w, fmt.Sprintf("Removed workspace %s (%s, %s)", w.Name, w.IDPrefix, w.ULID))
 }
 
 // workspaceOp is the operation of a workspace command on the workspace ulid.
-// The subject says what changes, as the command read it before the lock.
-func workspaceOp(ulid model.ULID, format string, args ...any) store.Op {
-	return store.Op{Name: "workspace", Detail: fmt.Sprintf(format, args...), Workspace: ulid}
+// Its fn sets the detail of the subject with SetDetail, from the workspace
+// as it reads it under the lock.
+func workspaceOp(ulid model.ULID) store.Op {
+	return store.Op{Name: "workspace", Workspace: ulid}
 }
 
 func (a *app) workspaceLs() error {
