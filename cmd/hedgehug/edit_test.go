@@ -311,6 +311,22 @@ func TestEditEditorFails(t *testing.T) {
 	}
 }
 
+// A blank $EDITOR is refused before any temporary file is made.
+func TestEditBlankEditor(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("Alpha")
+	te.editWith()
+	te.env["EDITOR"] = "   "
+
+	code, _, stderr := te.run("edit", x.Short)
+	if code != 1 || !strings.Contains(stderr, "$EDITOR is blank") {
+		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
+	}
+	if fs := te.tempFiles(); len(fs) != 0 {
+		t.Errorf("temporary files left: %v", fs)
+	}
+}
+
 func TestEditorCommand(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {

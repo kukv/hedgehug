@@ -40,6 +40,10 @@ func (a *app) editor() ([]string, error) {
 // left for the caller to remove when it is done with it; when the editor
 // fails, the error names the file.
 func (a *app) editFile(name string, content []byte) (path string, edited []byte, err error) {
+	// A bad $EDITOR is told before a file is made that would be left.
+	if _, err := a.editor(); err != nil {
+		return "", nil, err
+	}
 	f, err := os.CreateTemp("", "hedgehug-"+name+"-*.md")
 	if err != nil {
 		return "", nil, err
