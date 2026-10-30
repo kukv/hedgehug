@@ -73,6 +73,8 @@ func TestLsColor(t *testing.T) {
 
 func TestLsErrors(t *testing.T) {
 	te := newStoreEnv(t)
+	// A task, so that the templates are run.
+	te.addJSON("Alpha")
 	for _, tc := range []struct {
 		args []string
 		want string
@@ -80,10 +82,16 @@ func TestLsErrors(t *testing.T) {
 		{[]string{"ls", "nope:x"}, "nope"},
 		{[]string{"ls", "--json", "--ids-only"}, "only one of"},
 		{[]string{"ls", "--format", "{{"}, "--format"},
+		{[]string{"ls", "--format", "{{.nosuch}}"}, "nosuch"},
+		{[]string{"ls", "--tree", "--format", "{{"}, "--format"},
+		{[]string{"ls", "--tree", "--format", "{{.nosuch}}"}, "nosuch"},
 	} {
-		code, _, stderr := te.run(tc.args...)
+		code, stdout, stderr := te.run(tc.args...)
 		if code != 2 || !strings.Contains(stderr, tc.want) {
 			t.Errorf("%v: exit %d, stderr %q (want 2 and %q)", tc.args, code, stderr, tc.want)
+		}
+		if stdout != "" {
+			t.Errorf("%v: stdout = %q, want nothing", tc.args, stdout)
 		}
 	}
 }

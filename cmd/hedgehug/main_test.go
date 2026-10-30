@@ -18,6 +18,8 @@ func TestRun(t *testing.T) {
 		{"no arguments prints usage and fails", nil, 2, "", "Usage:"},
 		{"an unknown flag fails", []string{"--nope"}, 2, "", "unknown flag: --nope"},
 		{"an unknown command fails", []string{"nope"}, 2, "", "unknown command"},
+		{"store alone prints usage and fails", []string{"store"}, 2, "", "Usage:"},
+		{"dep alone prints usage and fails", []string{"dep"}, 2, "", "Usage:"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			te := newTestEnv(t)

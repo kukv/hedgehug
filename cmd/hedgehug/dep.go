@@ -11,7 +11,16 @@ import (
 )
 
 func (a *app) depCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "dep", Short: "Manage what blocks a task", Args: cobra.NoArgs}
+	cmd := &cobra.Command{
+		Use:   "dep",
+		Short: "Manage what blocks a task",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.SetOut(cmd.ErrOrStderr())
+			_ = cmd.Usage()
+			return usageErrorf("a subcommand is needed")
+		},
+	}
 	for _, add := range []bool{true, false} {
 		var blockedBy string
 		use, short := "add <id> --blocked-by <id>", "Make a task blocked by another"

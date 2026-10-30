@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,7 +33,7 @@ func (a *app) lsCmd() *cobra.Command {
 			var tmpl *template.Template
 			if format != "" {
 				var err error
-				if tmpl, err = template.New("format").Parse(format); err != nil {
+				if tmpl, err = template.New("format").Option("missingkey=error").Parse(format); err != nil {
 					return usageErrorf("--format: %w", err)
 				}
 			}
@@ -117,8 +118,11 @@ func (a *app) printIDs(ix *index.Index, es []*index.Entry) error {
 }
 
 // printFormat runs tmpl on each task, with the task as --json has it: a map
-// of the JSON field names. extra, when not nil, adds keys to each map.
+// of the JSON field names. extra, when not nil, adds keys to each map. A
+// template that fails, as on a key that is not there, is a usage error; the
+// output is held until every task is done, so none of it is printed then.
 func (a *app) printFormat(ix *index.Index, es []*index.Entry, tmpl *template.Template, extra func(m map[string]any, e *index.Entry)) error {
+	var out bytes.Buffer
 	for _, e := range es {
 		b, err := json.Marshal(entryJSON(ix, e))
 		if err != nil {
@@ -131,12 +135,11 @@ func (a *app) printFormat(ix *index.Index, es []*index.Entry, tmpl *template.Tem
 		if extra != nil {
 			extra(m, e)
 		}
-		if err := tmpl.Execute(a.stdout, m); err != nil {
-			return err
+		if err := tmpl.Execute(&out, m); err != nil {
+			return usageErrorf("--format: %w", err)
 		}
-		if _, err := fmt.Fprintln(a.stdout); err != nil {
-			return err
-		}
+		out.WriteByte('\n')
 	}
-	return nil
+	_, err := a.stdout.Write(out.Bytes())
+	return err
 }

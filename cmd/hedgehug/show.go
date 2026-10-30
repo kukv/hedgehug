@@ -153,7 +153,7 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 		if v == "" {
 			v = "-"
 		}
-		fmt.Fprintf(&b, "  %-11s %s\n", k, v)
+		b.WriteString("  " + k + strings.Repeat(" ", max(0, 11-displayWidth(k))) + " " + v + "\n")
 	}
 	refs := func(ids []model.ID) []string {
 		out := make([]string, len(ids))
