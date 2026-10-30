@@ -226,3 +226,96 @@ func TestValidStoreName(t *testing.T) {
 		}
 	}
 }
+
+// addAndRead loads the config, adds a store, saves, and returns the file.
+func addAndRead(t *testing.T, p Paths) string {
+	t.Helper()
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AddStore("b", "/elsewhere/b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(p.ConfigFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestSaveKeepsSequenceIndent(t *testing.T) {
+	for _, tc := range []struct{ name, in, want string }{
+		{"indented", "stores:\n  - name: a\n    path: /x\n", "stores:\n  - name: a\n    path: /x\n  - name: b\n    path: /elsewhere/b\n"},
+		{"flush", "stores:\n- name: a\n  path: /x\n", "stores:\n- name: a\n  path: /x\n- name: b\n  path: /elsewhere/b\n"},
+		{"no file", "", "stores:\n  - name: b\n    path: /elsewhere/b\n"},
+		{"empty stores", "stores:\n", "stores:\n  - name: b\n    path: /elsewhere/b\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testPaths(t)
+			if tc.in != "" {
+				writeConfig(t, p, tc.in)
+			}
+			if got := addAndRead(t, p); got != tc.want {
+				t.Errorf("config.yaml =\n%s\nwant\n%s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSaveFollowsSymlink(t *testing.T) {
+	p := testPaths(t)
+	target := filepath.Join(filepath.Dir(p.ConfigFile), "real", "dotfiles.yaml")
+	writeConfig(t, p, "")
+	if err := os.Remove(p.ConfigFile); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("stores:\n  - name: a\n    path: /x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, p.ConfigFile); err != nil {
+		t.Skipf("cannot create a symlink: %v", err)
+	}
+	addAndRead(t, p)
+	if fi, err := os.Lstat(p.ConfigFile); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("config.yaml is no longer a symlink: %v, %v", fi, err)
+	}
+	b, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "name: b") {
+		t.Errorf("target was not rewritten:\n%s", b)
+	}
+}
+
+func TestSaveKeepsCommentOnlyFile(t *testing.T) {
+	p := testPaths(t)
+	writeConfig(t, p, "# my config\n")
+	got := addAndRead(t, p)
+	if !strings.Contains(got, "# my config") || !strings.Contains(got, "name: b") {
+		t.Errorf("config.yaml =\n%s", got)
+	}
+}
+
+func TestRelativePathIsUnderConfigDir(t *testing.T) {
+	p := testPaths(t)
+	writeConfig(t, p, "stores:\n  - name: me\n    path: stores/me\n")
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := c.Select("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(filepath.Dir(p.ConfigFile), "stores", "me"); s.Path != want {
+		t.Errorf("Path = %q, want %q", s.Path, want)
+	}
+}

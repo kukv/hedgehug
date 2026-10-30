@@ -86,3 +86,86 @@ func TestAuthor(t *testing.T) {
 		}
 	})
 }
+
+func TestAuthorInclude(t *testing.T) {
+	old := goos
+	goos = "linux"
+	defer func() { goos = old }()
+	author := func(t *testing.T, h, g string) (gitrepo.Signature, error) {
+		t.Helper()
+		return Author(envOf(map[string]string{"HOME": h, "GIT_CONFIG_GLOBAL": g}))
+	}
+
+	t.Run("relative to the including file", func(t *testing.T) {
+		d := t.TempDir()
+		g := filepath.Join(d, "gc")
+		writeFile(t, g, "[include]\n\tpath = inc.conf\n")
+		writeFile(t, filepath.Join(d, "inc.conf"), "[user]\n\tname = Inc\n\temail = inc@example.com\n")
+		got, err := author(t, d, g)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Name != "Inc" || got.Email != "inc@example.com" {
+			t.Errorf("Author = %v", got)
+		}
+	})
+	t.Run("~/ is expanded", func(t *testing.T) {
+		h, d := t.TempDir(), t.TempDir()
+		g := filepath.Join(d, "gc")
+		writeFile(t, g, "[include]\n\tpath = ~/x.conf\n")
+		writeFile(t, filepath.Join(h, "x.conf"), "[user]\n\tname = X\n\temail = x@example.com\n")
+		got, err := author(t, h, g)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Name != "X" {
+			t.Errorf("Author = %v", got)
+		}
+	})
+	t.Run("the later setting wins", func(t *testing.T) {
+		d := t.TempDir()
+		g := filepath.Join(d, "gc")
+		writeFile(t, g, "[user]\n\tname = Before\n\temail = e@example.com\n[include]\n\tpath = inc.conf\n[user]\n\tname = After\n")
+		writeFile(t, filepath.Join(d, "inc.conf"), "[user]\n\tname = Inc\n")
+		got, err := author(t, d, g)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Name != "After" {
+			t.Errorf("Name = %q, want After", got.Name)
+		}
+		writeFile(t, g, "[user]\n\tname = Before\n\temail = e@example.com\n[include]\n\tpath = inc.conf\n")
+		got, err = author(t, d, g)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Name != "Inc" {
+			t.Errorf("Name = %q, want Inc", got.Name)
+		}
+	})
+	t.Run("a loop stops without an error", func(t *testing.T) {
+		d := t.TempDir()
+		g := filepath.Join(d, "gc")
+		writeFile(t, g, "[user]\n\tname = Loop\n\temail = l@example.com\n[include]\n\tpath = gc\n")
+		got, err := author(t, d, g)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Name != "Loop" {
+			t.Errorf("Author = %v", got)
+		}
+	})
+	t.Run("includeIf is not read", func(t *testing.T) {
+		d := t.TempDir()
+		g := filepath.Join(d, "gc")
+		writeFile(t, g, "[user]\n\tname = Base\n\temail = b@example.com\n[includeIf \"gitdir:"+filepath.ToSlash(d)+"/\"]\n\tpath = inc.conf\n")
+		writeFile(t, filepath.Join(d, "inc.conf"), "[user]\n\tname = Cond\n")
+		got, err := author(t, d, g)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Name != "Base" {
+			t.Errorf("Name = %q, want Base", got.Name)
+		}
+	})
+}
