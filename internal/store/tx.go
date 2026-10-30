@@ -194,6 +194,13 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (err error) {
 			return &SchemaError{Problems: ps}
 		}
 	}
+	sc := s.schema
+	if tx.schema != nil {
+		sc = tx.schema
+	}
+	if err := tx.validate(sc); err != nil {
+		return err
+	}
 
 	now := s.now().Truncate(time.Second)
 	changes, err := tx.changes(now)
