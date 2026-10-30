@@ -20,6 +20,21 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Tag}}
 
+  - id: hh
+    main: ./cmd/hedgehug
+    binary: hh
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Tag}}
+
 archives:
   - formats: [tar.gz]
     format_overrides:
