@@ -55,10 +55,10 @@ func setProp(task *model.Task, key, value string) {
 	task.Props.Set(key, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value})
 }
 
-func setRefs(task *model.Task, key string, ids ...model.ULID) {
+func setRefs(task *model.Task, key string, ulids ...model.ULID) {
 	n := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
-	for _, id := range ids {
-		n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: id.String()})
+	for _, ulid := range ulids {
+		n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: ulid.String()})
 	}
 	task.Props.Set(key, n)
 }

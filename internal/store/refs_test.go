@@ -28,11 +28,11 @@ func wantViolation(t *testing.T, err error, task model.ULID, code, field string)
 	t.Errorf("violations = %v, want %s on %s", ve.Violations, code, field)
 }
 
-// idList is a property value listing ids.
-func idList(ids ...model.ULID) *yaml.Node {
+// ulidList is a property value listing ULIDs.
+func ulidList(ulids ...model.ULID) *yaml.Node {
 	n := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
-	for _, id := range ids {
-		n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: id.String()})
+	for _, ulid := range ulids {
+		n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: ulid.String()})
 	}
 	return n
 }
@@ -59,7 +59,7 @@ func TestUpdateMissingBlocker(t *testing.T) {
 func TestUpdateMissingTaskRefProp(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("x")
-	task.Props.Set("duplicates", idList(model.NewULID()))
+	task.Props.Set("duplicates", ulidList(model.NewULID()))
 	wantViolation(t, put(s, task), task.ULID, schema.CodeMissingRef, "duplicates")
 }
 

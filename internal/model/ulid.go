@@ -24,23 +24,23 @@ func ParseULID(s string) (ULID, error) {
 	return ULID{u}, nil
 }
 
-func (id ULID) String() string { return id.u.String() }
+func (x ULID) String() string { return x.u.String() }
 
-// IsZero reports whether id is the zero ULID, which no file uses.
-func (id ULID) IsZero() bool { return id.u == ulid.ULID{} }
+// IsZero reports whether x is the zero ULID, which no file uses.
+func (x ULID) IsZero() bool { return x.u == ulid.ULID{} }
 
-// MarshalBinary writes id as its 16 bytes, so that the index can keep it in
+// MarshalBinary writes x as its 16 bytes, so that the index can keep it in
 // a gob cache.
-func (id ULID) MarshalBinary() ([]byte, error) { return id.u.MarshalBinary() }
+func (x ULID) MarshalBinary() ([]byte, error) { return x.u.MarshalBinary() }
 
 // UnmarshalBinary reads what MarshalBinary wrote.
-func (id *ULID) UnmarshalBinary(b []byte) error { return id.u.UnmarshalBinary(b) }
+func (x *ULID) UnmarshalBinary(b []byte) error { return x.u.UnmarshalBinary(b) }
 
-func (id ULID) MarshalYAML() (any, error) { return id.String(), nil }
+func (x ULID) MarshalYAML() (any, error) { return x.String(), nil }
 
 // UnmarshalYAML reads the scalar as written, so a ULID of digits only is not
 // taken for a number.
-func (id *ULID) UnmarshalYAML(n *yaml.Node) error {
+func (x *ULID) UnmarshalYAML(n *yaml.Node) error {
 	if n.Kind != yaml.ScalarNode {
 		return fmt.Errorf("line %d: want a ULID", n.Line)
 	}
@@ -48,6 +48,6 @@ func (id *ULID) UnmarshalYAML(n *yaml.Node) error {
 	if err != nil {
 		return err
 	}
-	*id = p
+	*x = p
 	return nil
 }

@@ -13,7 +13,7 @@ import (
 // ref is one reference from a task to another task of the store.
 type ref struct {
 	field string // parent, blocked_by or the name of a task_ref property
-	id    model.ULID
+	ulid  model.ULID
 }
 
 // refsOf returns the references of t: its parent, its blockers and the
@@ -24,8 +24,8 @@ func refsOf(t *model.Task, sc *schema.Schema) []ref {
 	if t.Parent != nil {
 		out = append(out, ref{"parent", *t.Parent})
 	}
-	for _, id := range t.BlockedBy {
-		out = append(out, ref{"blocked_by", id})
+	for _, ulid := range t.BlockedBy {
+		out = append(out, ref{"blocked_by", ulid})
 	}
 	for _, f := range t.Props {
 		p, ok := sc.Prop(f.Key)
@@ -40,8 +40,8 @@ func refsOf(t *model.Task, sc *schema.Schema) []ref {
 			if n.Kind != yaml.ScalarNode {
 				continue
 			}
-			if id, err := model.ParseULID(n.Value); err == nil {
-				out = append(out, ref{f.Key, id})
+			if ulid, err := model.ParseULID(n.Value); err == nil {
+				out = append(out, ref{f.Key, ulid})
 			}
 		}
 	}
@@ -67,33 +67,33 @@ func (tx *Tx) checkRefs(old, t *model.Task, sc *schema.Schema) ([]schema.Violati
 			continue
 		}
 		had[r] = true // a reference written twice is checked once
-		ok, err := tx.exists(r.id)
+		ok, err := tx.exists(r.ulid)
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
-			vs = append(vs, schema.Violation{Code: schema.CodeMissingRef, Field: r.field, Msg: fmt.Sprintf("task %s is not in this store", r.id)})
+			vs = append(vs, schema.Violation{Code: schema.CodeMissingRef, Field: r.field, Msg: fmt.Sprintf("task %s is not in this store", r.ulid)})
 			continue
 		}
 		if r.field != "parent" && r.field != "blocked_by" {
 			continue
 		}
-		cycle, err := tx.reaches(r.id, t.ULID, r.field)
+		cycle, err := tx.reaches(r.ulid, t.ULID, r.field)
 		if err != nil {
 			return nil, err
 		}
 		if cycle {
-			vs = append(vs, schema.Violation{Code: schema.CodeCycle, Field: r.field, Msg: fmt.Sprintf("%s %s leads back to this task", r.field, r.id)})
+			vs = append(vs, schema.Violation{Code: schema.CodeCycle, Field: r.field, Msg: fmt.Sprintf("%s %s leads back to this task", r.field, r.ulid)})
 		}
 	}
 	return vs, nil
 }
 
-// exists reports whether the task id is in the store as the operation
+// exists reports whether the task ulid is in the store as the operation
 // leaves it. A deleted task counts, and so does a file that does not
 // decode: the task is there, only broken.
-func (tx *Tx) exists(id model.ULID) (bool, error) {
-	_, err := tx.task(id)
+func (tx *Tx) exists(ulid model.ULID) (bool, error) {
+	_, err := tx.task(ulid)
 	switch {
 	case err == nil, errors.As(err, new(*model.DecodeError)):
 		return true, nil
@@ -122,16 +122,16 @@ func (tx *Tx) reaches(from, target model.ULID, field string) (bool, error) {
 	seen := map[model.ULID]bool{}
 	stack := []model.ULID{from}
 	for len(stack) > 0 {
-		id := stack[len(stack)-1]
+		ulid := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
-		if id == target {
+		if ulid == target {
 			return true, nil
 		}
-		if seen[id] {
+		if seen[ulid] {
 			continue
 		}
-		seen[id] = true
-		t, err := tx.task(id)
+		seen[ulid] = true
+		t, err := tx.task(ulid)
 		if errors.Is(err, ErrNotFound) || errors.As(err, new(*model.DecodeError)) {
 			continue
 		}

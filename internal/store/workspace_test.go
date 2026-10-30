@@ -141,12 +141,12 @@ func TestNumbersWithoutFile(t *testing.T) {
 	}
 }
 
-// purge runs one purge operation removing ids.
-func purge(t *testing.T, s *Store, ids ...model.ULID) {
+// purge runs one purge operation removing ulids.
+func purge(t *testing.T, s *Store, ulids ...model.ULID) {
 	t.Helper()
 	if _, err := s.Update(Op{Name: "purge", Author: testAuthor}, func(tx *Tx) error {
-		for _, id := range ids {
-			if err := tx.RemoveTask(id); err != nil {
+		for _, ulid := range ulids {
+			if err := tx.RemoveTask(ulid); err != nil {
 				return err
 			}
 		}

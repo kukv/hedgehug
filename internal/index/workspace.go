@@ -35,9 +35,9 @@ func (ix *Index) Workspaces() []*model.Workspace {
 	return out
 }
 
-// Workspace returns the workspace of id.
-func (ix *Index) Workspace(id model.ULID) (*model.Workspace, bool) {
-	w, ok := ix.workspaces[id]
+// Workspace returns the workspace of ulid.
+func (ix *Index) Workspace(ulid model.ULID) (*model.Workspace, bool) {
+	w, ok := ix.workspaces[ulid]
 	return w, ok
 }
 

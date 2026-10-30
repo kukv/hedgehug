@@ -177,14 +177,14 @@ func (s *Schema) Check() []Problem {
 	wheres := map[model.ULID]bool{}
 	for i, sc := range s.Scoped {
 		p := fmt.Sprintf("scoped[%d]", i)
-		id, err := parseWhere(sc.Where)
+		ulid, err := parseWhere(sc.Where)
 		switch {
 		case err != nil:
 			add(p+".where", "%v", err)
-		case wheres[id]:
+		case wheres[ulid]:
 			add(p+".where", "%s has two overrides", sc.Where)
 		}
-		wheres[id] = true
+		wheres[ulid] = true
 		for _, name := range sc.Statuses {
 			if !statuses[name] {
 				add(p+".statuses", "unknown status %q", name)

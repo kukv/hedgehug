@@ -22,8 +22,8 @@ func byULID(es []*Entry) []*Entry {
 func TestOpenParentCycleOfThree(t *testing.T) {
 	s, dir := newStore(t)
 	a, b, c := model.NewULID(), model.NewULID(), model.NewULID()
-	for id, parent := range map[model.ULID]model.ULID{a: b, b: c, c: a} {
-		commitRaw(t, s, dir, model.TaskPath(id), rawTask(id, "kind: task\ntitle: x\nstatus: todo\nparent: "+parent.String()+"\n"))
+	for ulid, parent := range map[model.ULID]model.ULID{a: b, b: c, c: a} {
+		commitRaw(t, s, dir, model.TaskPath(ulid), rawTask(ulid, "kind: task\ntitle: x\nstatus: todo\nparent: "+parent.String()+"\n"))
 	}
 	loose := newTask("loose")
 	put(t, s, loose)
@@ -32,9 +32,9 @@ func TestOpenParentCycleOfThree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []model.ULID{a, b, c} {
-		if !hasProblem(ix, id, "cycle") {
-			t.Errorf("task %s has no cycle problem: %v", id, ix.Problems(id))
+	for _, ulid := range []model.ULID{a, b, c} {
+		if !hasProblem(ix, ulid, "cycle") {
+			t.Errorf("task %s has no cycle problem: %v", ulid, ix.Problems(ulid))
 		}
 	}
 	if hasProblem(ix, loose.ULID, "cycle") {

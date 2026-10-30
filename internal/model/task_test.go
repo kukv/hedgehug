@@ -122,10 +122,10 @@ func TestTaskCRLF(t *testing.T) {
 }
 
 func TestNewTaskEncode(t *testing.T) {
-	id, _ := ParseULID("01JBZ8K3QW7M2X9V4T6R5N8P0A")
+	ulid, _ := ParseULID("01JBZ8K3QW7M2X9V4T6R5N8P0A")
 	created := time.Date(2026, 10, 29, 10, 0, 0, 0, time.FixedZone("", 9*3600))
 	task := &Task{
-		ULID: id, Kind: "task", Title: "新しいタスク", Rank: "a0", Status: "todo",
+		ULID: ulid, Kind: "task", Title: "新しいタスク", Rank: "a0", Status: "todo",
 		Labels: []string{"x"}, Created: created, CreatedBy: "github.com/me", Updated: created, Body: "本文\n",
 	}
 	out, err := task.Encode()

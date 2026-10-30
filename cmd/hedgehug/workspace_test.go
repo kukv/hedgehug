@@ -91,9 +91,9 @@ func TestWorkspaceCommitSubjects(t *testing.T) {
 	te.ok("workspace", "add", "web", "--prefix", "WEB")
 	var ls []map[string]any
 	te.wsJSON(&ls, "ls")
-	ids := map[string]string{}
+	ulids := map[string]string{}
 	for _, w := range ls {
-		ids[w["name"].(string)] = w["ulid"].(string)
+		ulids[w["name"].(string)] = w["ulid"].(string)
 	}
 	for _, c := range []struct {
 		args []string
@@ -115,7 +115,7 @@ func TestWorkspaceCommitSubjects(t *testing.T) {
 		if !strings.Contains(msg, "Hedgehug-Op: workspace") {
 			t.Errorf("%q: no Hedgehug-Op trailer:\n%s", c.want, msg)
 		}
-		if !strings.Contains(msg, "Hedgehug-Workspace: "+ids[c.ws]) {
+		if !strings.Contains(msg, "Hedgehug-Workspace: "+ulids[c.ws]) {
 			t.Errorf("%q: no Hedgehug-Workspace trailer:\n%s", c.want, msg)
 		}
 	}

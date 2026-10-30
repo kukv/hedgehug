@@ -462,15 +462,15 @@ func TestSchemaWhileUpdating(t *testing.T) {
 
 func TestPutRefusesZeroULID(t *testing.T) {
 	s := newTestStore(t)
-	id := model.NewULID()
+	ulid := model.NewULID()
 	for _, tc := range []struct {
 		name string
 		put  func(*Tx) error
 	}{
 		{"PutComment task", func(tx *Tx) error { return tx.PutComment(model.ULID{}, &model.Comment{ULID: model.NewULID()}) }},
-		{"PutComment entry", func(tx *Tx) error { return tx.PutComment(id, &model.Comment{}) }},
+		{"PutComment entry", func(tx *Tx) error { return tx.PutComment(ulid, &model.Comment{}) }},
 		{"PutWorklog task", func(tx *Tx) error { return tx.PutWorklog(model.ULID{}, &model.Worklog{ULID: model.NewULID()}) }},
-		{"PutWorklog entry", func(tx *Tx) error { return tx.PutWorklog(id, &model.Worklog{}) }},
+		{"PutWorklog entry", func(tx *Tx) error { return tx.PutWorklog(ulid, &model.Worklog{}) }},
 		{"PutSprint", func(tx *Tx) error { return tx.PutSprint(&model.Sprint{Name: "S1", State: "planned"}) }},
 		{"PutRelease", func(tx *Tx) error { return tx.PutRelease(&model.Release{Name: "v1", State: "unreleased"}) }},
 		{"RemoveTask", func(tx *Tx) error { return tx.RemoveTask(model.ULID{}) }},

@@ -54,16 +54,16 @@ func (e *Entry) Prop(key string) []string {
 	return nil
 }
 
-// newEntry decodes the task file data, found at the path of id. A file that
+// newEntry decodes the task file data, found at the path of ulid. A file that
 // does not decode, or whose ULID is not the one of its path, gives a broken
 // entry and no task.
-func newEntry(id model.ULID, data []byte) (*Entry, *model.Task) {
+func newEntry(ulid model.ULID, data []byte) (*Entry, *model.Task) {
 	t, err := model.DecodeTask(data)
-	if err == nil && t.ULID != id {
+	if err == nil && t.ULID != ulid {
 		err = fmt.Errorf("ulid %s does not match the file name", t.ULID)
 	}
 	if err != nil {
-		return &Entry{ULID: id, Broken: err.Error(), BrokenNumbers: model.IDNumbersIn(data)}, nil
+		return &Entry{ULID: ulid, Broken: err.Error(), BrokenNumbers: model.IDNumbersIn(data)}, nil
 	}
 	return EntryOf(t), t
 }
@@ -124,8 +124,8 @@ func (e *Entry) Targets(rel string) []model.ULID {
 	}
 	var out []model.ULID
 	for _, v := range e.Prop(rel) {
-		if id, err := model.ParseULID(v); err == nil {
-			out = append(out, id)
+		if ulid, err := model.ParseULID(v); err == nil {
+			out = append(out, ulid)
 		}
 	}
 	return out

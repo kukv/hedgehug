@@ -124,9 +124,9 @@ func treeOf(ix *index.Index, found []*index.Entry) (roots, cycle []*treeNode) {
 	// What the roots do not reach lies in a cycle or under one. Mark the
 	// tasks in the cycle seen first, so that none is drawn under another.
 	var members []*index.Entry
-	for id := range show {
-		if !seen[id] && inParentCycle(ix, id) {
-			e, _ := ix.Task(id)
+	for ulid := range show {
+		if !seen[ulid] && inParentCycle(ix, ulid) {
+			e, _ := ix.Task(ulid)
 			members = append(members, e)
 		}
 	}
@@ -142,9 +142,9 @@ func treeOf(ix *index.Index, found []*index.Entry) (roots, cycle []*treeNode) {
 	return roots, cycle
 }
 
-// inParentCycle reports whether the parents of id lead back to it.
-func inParentCycle(ix *index.Index, id model.ULID) bool {
-	for _, p := range ix.Problems(id) {
+// inParentCycle reports whether the parents of ulid lead back to it.
+func inParentCycle(ix *index.Index, ulid model.ULID) bool {
+	for _, p := range ix.Problems(ulid) {
 		if p.Code == schema.CodeCycle && p.Field == "parent" {
 			return true
 		}

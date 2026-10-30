@@ -13,13 +13,13 @@ const StoreMetaPath = ".hedgehug/store.yaml"
 // shard splits files into 32×32 directories by the last and the second to
 // last character of the ULID. The first characters are a timestamp and
 // cluster, so the random tail is used instead.
-func shard(id ULID) string {
-	s := id.String()
+func shard(ulid ULID) string {
+	s := ulid.String()
 	return s[25:] + "/" + s[24:25]
 }
 
 // TaskPath returns the path of a task file, relative to the store root.
-func TaskPath(id ULID) string { return "tasks/" + shard(id) + "/" + id.String() + ".md" }
+func TaskPath(ulid ULID) string { return "tasks/" + shard(ulid) + "/" + ulid.String() + ".md" }
 
 // CommentPath returns the path of a comment on task.
 func CommentPath(task, comment ULID) string {
@@ -31,9 +31,9 @@ func WorklogPath(task, log ULID) string {
 	return "worklogs/" + shard(task) + "/" + task.String() + "/" + log.String() + ".md"
 }
 
-func SprintPath(id ULID) string    { return "sprints/" + id.String() + ".md" }
-func ReleasePath(id ULID) string   { return "releases/" + id.String() + ".md" }
-func WorkspacePath(id ULID) string { return "workspaces/" + id.String() + ".md" }
+func SprintPath(ulid ULID) string    { return "sprints/" + ulid.String() + ".md" }
+func ReleasePath(ulid ULID) string   { return "releases/" + ulid.String() + ".md" }
+func WorkspacePath(ulid ULID) string { return "workspaces/" + ulid.String() + ".md" }
 
 // TemplatePath returns the path of the template called name. name must
 // pass ValidTemplateName, or the path may point outside templates/.
@@ -64,11 +64,11 @@ func ParseTaskPath(p string) (ULID, error) {
 	if len(parts) != 4 || parts[0] != "tasks" {
 		return ULID{}, fmt.Errorf("%q is not a task path", p)
 	}
-	id, err := parseFileULID(parts[3])
-	if err != nil || TaskPath(id) != p {
+	ulid, err := parseFileULID(parts[3])
+	if err != nil || TaskPath(ulid) != p {
 		return ULID{}, fmt.Errorf("%q is not a task path", p)
 	}
-	return id, nil
+	return ulid, nil
 }
 
 // ParseWorkspacePath returns the ULID of the workspace file at p.
@@ -77,11 +77,11 @@ func ParseWorkspacePath(p string) (ULID, error) {
 	if len(parts) != 2 || parts[0] != "workspaces" {
 		return ULID{}, fmt.Errorf("%q is not a workspace path", p)
 	}
-	id, err := parseFileULID(parts[1])
-	if err != nil || WorkspacePath(id) != p {
+	ulid, err := parseFileULID(parts[1])
+	if err != nil || WorkspacePath(ulid) != p {
 		return ULID{}, fmt.Errorf("%q is not a workspace path", p)
 	}
-	return id, nil
+	return ulid, nil
 }
 
 // ParseCommentPath returns the task and comment ULIDs of the comment file at p.

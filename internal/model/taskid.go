@@ -23,8 +23,8 @@ func ValidIDPrefix(p string) error {
 }
 
 // ParseTaskID splits an id such as WEB-42 into its prefix and number.
-func ParseTaskID(k string) (prefix string, n int, ok bool) {
-	m := idRE.FindStringSubmatch(k)
+func ParseTaskID(id string) (prefix string, n int, ok bool) {
+	m := idRE.FindStringSubmatch(id)
 	if m == nil {
 		return "", 0, false
 	}

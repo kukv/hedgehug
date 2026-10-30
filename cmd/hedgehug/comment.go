@@ -171,11 +171,11 @@ func (a *app) commentEdit(arg string) error {
 	if err != nil {
 		return err
 	}
-	cid := ref.Comment.String()
+	commentULID := ref.Comment.String()
 	if c.DeletedAt != nil {
-		return fmt.Errorf("comment %s is deleted and cannot be edited", cid)
+		return fmt.Errorf("comment %s is deleted and cannot be edited", commentULID)
 	}
-	path, edited, err := a.editFile("comment-"+cid, []byte(c.Body))
+	path, edited, err := a.editFile("comment-"+commentULID, []byte(c.Body))
 	if err != nil {
 		return err
 	}
@@ -185,7 +185,7 @@ func (a *app) commentEdit(arg string) error {
 			return err
 		}
 		if body == "" {
-			return fmt.Errorf("the comment is empty; delete it with hedgehug comment rm %s", cid)
+			return fmt.Errorf("the comment is empty; delete it with hedgehug comment rm %s", commentULID)
 		}
 		return a.printComment(s, ref, verb(false, ""))
 	}

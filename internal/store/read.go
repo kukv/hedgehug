@@ -81,8 +81,8 @@ func walk[T any](s *Store, root string, match func(rel string) bool, decode func
 // name, like sprints/<ULID>.md.
 func flatMatch(build func(model.ULID) string) func(string) bool {
 	return func(rel string) bool {
-		id, err := model.ParseULID(strings.TrimSuffix(path.Base(rel), ".md"))
-		return err == nil && build(id) == rel
+		ulid, err := model.ParseULID(strings.TrimSuffix(path.Base(rel), ".md"))
+		return err == nil && build(ulid) == rel
 	}
 }
 
@@ -90,8 +90,8 @@ func ignoreRel[T any](decode func([]byte) (T, error)) func(string, []byte) (T, e
 	return func(_ string, b []byte) (T, error) { return decode(b) }
 }
 
-func (s *Store) Task(id model.ULID) (*model.Task, error) {
-	return readDecode(s.dir, model.TaskPath(id), model.DecodeTask)
+func (s *Store) Task(ulid model.ULID) (*model.Task, error) {
+	return readDecode(s.dir, model.TaskPath(ulid), model.DecodeTask)
 }
 
 // Tasks returns every task file. One that does not decode, or holds a task
@@ -132,16 +132,16 @@ func (s *Store) Worklogs(task model.ULID) iter.Seq2[*model.Worklog, error] {
 	return walk(s, path.Dir(model.WorklogPath(task, model.ULID{})), match, ignoreRel(model.DecodeWorklog))
 }
 
-func (s *Store) Sprint(id model.ULID) (*model.Sprint, error) {
-	return readDecode(s.dir, model.SprintPath(id), model.DecodeSprint)
+func (s *Store) Sprint(ulid model.ULID) (*model.Sprint, error) {
+	return readDecode(s.dir, model.SprintPath(ulid), model.DecodeSprint)
 }
 
 func (s *Store) Sprints() iter.Seq2[*model.Sprint, error] {
 	return walk(s, "sprints", flatMatch(model.SprintPath), ignoreRel(model.DecodeSprint))
 }
 
-func (s *Store) Workspace(id model.ULID) (*model.Workspace, error) {
-	return readDecode(s.dir, model.WorkspacePath(id), model.DecodeWorkspace)
+func (s *Store) Workspace(ulid model.ULID) (*model.Workspace, error) {
+	return readDecode(s.dir, model.WorkspacePath(ulid), model.DecodeWorkspace)
 }
 
 func (s *Store) Workspaces() iter.Seq2[*model.Workspace, error] {
@@ -164,8 +164,8 @@ func (s *Store) Numbers() (model.Numbers, error) {
 	return n, nil
 }
 
-func (s *Store) Release(id model.ULID) (*model.Release, error) {
-	return readDecode(s.dir, model.ReleasePath(id), model.DecodeRelease)
+func (s *Store) Release(ulid model.ULID) (*model.Release, error) {
+	return readDecode(s.dir, model.ReleasePath(ulid), model.DecodeRelease)
 }
 
 func (s *Store) Releases() iter.Seq2[*model.Release, error] {
@@ -193,9 +193,9 @@ func (s *Store) Templates() iter.Seq2[*model.Template, error] {
 	return walk(s, "templates", match, decode)
 }
 
-// TaskBytes returns the file of task id as it is, without decoding it.
-func (s *Store) TaskBytes(id model.ULID) ([]byte, error) {
-	rel := model.TaskPath(id)
+// TaskBytes returns the file of task ulid as it is, without decoding it.
+func (s *Store) TaskBytes(ulid model.ULID) ([]byte, error) {
+	rel := model.TaskPath(ulid)
 	b, err := readFile(s.path(rel))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("%s: %w", rel, ErrNotFound)

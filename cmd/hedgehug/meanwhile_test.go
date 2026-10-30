@@ -28,18 +28,18 @@ func (te *testEnv) meanwhile(fn func(tx *store.Tx) error) {
 
 // putChild returns a write of a new task under parent, in its workspace and
 // deleted when it is, and points *id at the new task.
-func putChild(parent string, id *model.ULID) func(*store.Tx) error {
+func putChild(parent string, ulid *model.ULID) func(*store.Tx) error {
 	return func(tx *store.Tx) error {
-		pid, err := model.ParseULID(parent)
+		parentULID, err := model.ParseULID(parent)
 		if err != nil {
 			return err
 		}
-		p, err := tx.Task(pid)
+		p, err := tx.Task(parentULID)
 		if err != nil {
 			return err
 		}
 		c := &model.Task{ULID: model.NewULID(), Workspace: p.Workspace, Parent: &p.ULID, Kind: "task", Title: "meanwhile", Status: "todo", DeletedAt: p.DeletedAt}
-		*id = c.ULID
+		*ulid = c.ULID
 		return tx.PutTask(c)
 	}
 }

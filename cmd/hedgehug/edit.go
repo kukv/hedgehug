@@ -93,18 +93,18 @@ func (a *app) edit(arg string) error {
 	}
 }
 
-// checkEdit decodes the edited file of task id and refuses the changes
+// checkEdit decodes the edited file of task ulid and refuses the changes
 // edit does not make. old is the task before the edit, nil when it was
 // broken; then only the ulid is checked. The workspace can be changed only
 // when the old one is missing or not a workspace of ix, to repair it.
-func checkEdit(ix *index.Index, id model.ULID, old *model.Task, edited []byte) (*model.Task, error) {
+func checkEdit(ix *index.Index, ulid model.ULID, old *model.Task, edited []byte) (*model.Task, error) {
 	t, err := model.DecodeTask(edited)
 	if err != nil {
 		return nil, fmt.Errorf("the file does not decode: %w", err)
 	}
 	if old == nil {
-		if t.ULID != id {
-			return nil, fmt.Errorf("the ulid must stay %s", id)
+		if t.ULID != ulid {
+			return nil, fmt.Errorf("the ulid must stay %s", ulid)
 		}
 		return t, nil
 	}
@@ -133,9 +133,9 @@ func checkEdit(ix *index.Index, id model.ULID, old *model.Task, edited []byte) (
 	return t, nil
 }
 
-// hasWorkspace reports whether id is a workspace of ix.
-func hasWorkspace(ix *index.Index, id model.ULID) bool {
-	_, ok := ix.Workspace(id)
+// hasWorkspace reports whether ulid is a workspace of ix.
+func hasWorkspace(ix *index.Index, ulid model.ULID) bool {
+	_, ok := ix.Workspace(ulid)
 	return ok
 }
 

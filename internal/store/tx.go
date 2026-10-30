@@ -84,21 +84,21 @@ func (tx *Tx) put(rel string, p *pending) error {
 }
 
 // Task reads a task as it will be after the writes queued so far.
-func (tx *Tx) Task(id model.ULID) (*model.Task, error) {
+func (tx *Tx) Task(ulid model.ULID) (*model.Task, error) {
 	if tx.done {
 		return nil, errTxDone
 	}
-	return tx.task(id)
+	return tx.task(ulid)
 }
 
-func (tx *Tx) task(id model.ULID) (*model.Task, error) {
-	if t, ok := tx.tasks[id]; ok {
+func (tx *Tx) task(ulid model.ULID) (*model.Task, error) {
+	if t, ok := tx.tasks[ulid]; ok {
 		if t == nil {
-			return nil, fmt.Errorf("%s: %w", model.TaskPath(id), ErrNotFound)
+			return nil, fmt.Errorf("%s: %w", model.TaskPath(ulid), ErrNotFound)
 		}
 		return t, nil
 	}
-	return tx.s.Task(id)
+	return tx.s.Task(ulid)
 }
 
 // PutTask queues a write of t. Update fills in created and updated.
@@ -155,30 +155,30 @@ func (tx *Tx) PutWorkspace(w *model.Workspace) error {
 	return nil
 }
 
-func (tx *Tx) RemoveWorkspace(id model.ULID) error {
-	if err := tx.put(model.WorkspacePath(id), &pending{remove: true}); err != nil {
+func (tx *Tx) RemoveWorkspace(ulid model.ULID) error {
+	if err := tx.put(model.WorkspacePath(ulid), &pending{remove: true}); err != nil {
 		return err
 	}
-	tx.workspaces[id] = nil
+	tx.workspaces[ulid] = nil
 	return nil
 }
 
 // Workspace reads a workspace as it will be after the writes queued so far.
-func (tx *Tx) Workspace(id model.ULID) (*model.Workspace, error) {
+func (tx *Tx) Workspace(ulid model.ULID) (*model.Workspace, error) {
 	if tx.done {
 		return nil, errTxDone
 	}
-	return tx.workspace(id)
+	return tx.workspace(ulid)
 }
 
-func (tx *Tx) workspace(id model.ULID) (*model.Workspace, error) {
-	if w, ok := tx.workspaces[id]; ok {
+func (tx *Tx) workspace(ulid model.ULID) (*model.Workspace, error) {
+	if w, ok := tx.workspaces[ulid]; ok {
 		if w == nil {
-			return nil, fmt.Errorf("%s: %w", model.WorkspacePath(id), ErrNotFound)
+			return nil, fmt.Errorf("%s: %w", model.WorkspacePath(ulid), ErrNotFound)
 		}
 		return w, nil
 	}
-	return tx.s.Workspace(id)
+	return tx.s.Workspace(ulid)
 }
 
 func (tx *Tx) PutRelease(r *model.Release) error {
@@ -208,31 +208,31 @@ func (tx *Tx) PutSchema(sc *schema.Schema) error {
 
 // RemoveTask queues the removal of a task file with its comments and
 // worklog entries, for purging. Soft deletion is a PutTask with DeletedAt.
-func (tx *Tx) RemoveTask(id model.ULID) error {
+func (tx *Tx) RemoveTask(ulid model.ULID) error {
 	if tx.done {
 		return errTxDone
 	}
-	if id.IsZero() {
+	if ulid.IsZero() {
 		return errors.New("the task has no ulid")
 	}
 	var de *model.DecodeError
-	if t, err := tx.task(id); err == nil {
+	if t, err := tx.task(ulid); err == nil {
 		if err := tx.recordNumbers(t); err != nil {
 			return err
 		}
 	} else if !errors.Is(err, ErrNotFound) && !errors.As(err, &de) {
 		return err
 	}
-	rels := []string{model.TaskPath(id)}
+	rels := []string{model.TaskPath(ulid)}
 	// Files put earlier in this operation are removed too.
 	for _, rel := range tx.order {
-		for _, root := range []string{model.CommentPath(id, model.ULID{}), model.WorklogPath(id, model.ULID{})} {
+		for _, root := range []string{model.CommentPath(ulid, model.ULID{}), model.WorklogPath(ulid, model.ULID{})} {
 			if strings.HasPrefix(rel, path.Dir(root)+"/") && !slices.Contains(rels, rel) {
 				rels = append(rels, rel)
 			}
 		}
 	}
-	for _, dir := range []string{path.Dir(model.CommentPath(id, model.ULID{})), path.Dir(model.WorklogPath(id, model.ULID{}))} {
+	for _, dir := range []string{path.Dir(model.CommentPath(ulid, model.ULID{})), path.Dir(model.WorklogPath(ulid, model.ULID{}))} {
 		entries, err := os.ReadDir(tx.s.path(dir))
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
@@ -251,11 +251,11 @@ func (tx *Tx) RemoveTask(id model.ULID) error {
 			return err
 		}
 	}
-	tx.tasks[id] = nil
+	tx.tasks[ulid] = nil
 	if tx.removed == nil {
 		tx.removed = map[model.ULID]bool{}
 	}
-	tx.removed[id] = true
+	tx.removed[ulid] = true
 	return nil
 }
 

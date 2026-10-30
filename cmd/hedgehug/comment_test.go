@@ -23,15 +23,15 @@ func (te *testEnv) commentJSON(args ...string) commentOut {
 	return got
 }
 
-// comments returns every comment of task id, deleted ones included.
-func (te *testEnv) comments(id string) []*model.Comment {
+// comments returns every comment of task ulid, deleted ones included.
+func (te *testEnv) comments(ulid string) []*model.Comment {
 	te.t.Helper()
 	s, err := store.Open(te.storeDir("me"))
 	if err != nil {
 		te.t.Fatal(err)
 	}
 	var out []*model.Comment
-	for c, err := range s.Comments(mustULID(te.t, id)) {
+	for c, err := range s.Comments(mustULID(te.t, ulid)) {
 		if err != nil {
 			te.t.Fatal(err)
 		}
@@ -306,16 +306,16 @@ func TestCommentUnknown(t *testing.T) {
 	}
 }
 
-// putComments writes comments with the given ULIDs on task id.
-func (te *testEnv) putComments(id string, cids ...string) {
+// putComments writes comments with the given ULIDs on task ulid.
+func (te *testEnv) putComments(ulid string, commentULIDs ...string) {
 	te.t.Helper()
 	s, err := store.Open(te.storeDir("me"))
 	if err != nil {
 		te.t.Fatal(err)
 	}
 	if _, err := s.Update(store.Op{Name: "comment", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
-		for _, cid := range cids {
-			if err := tx.PutComment(mustULID(te.t, id), &model.Comment{ULID: mustULID(te.t, cid), Body: "body " + cid + "\n"}); err != nil {
+		for _, commentULID := range commentULIDs {
+			if err := tx.PutComment(mustULID(te.t, ulid), &model.Comment{ULID: mustULID(te.t, commentULID), Body: "body " + commentULID + "\n"}); err != nil {
 				return err
 			}
 		}

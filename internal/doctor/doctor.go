@@ -264,7 +264,7 @@ func checkFile(dir, root, rel string) (string, error) {
 	}
 	switch root {
 	case "tasks":
-		id, err := model.ParseTaskPath(rel)
+		ulid, err := model.ParseTaskPath(rel)
 		if err != nil {
 			return bad("the name does not follow the rule of task files")
 		}
@@ -272,7 +272,7 @@ func checkFile(dir, root, rel string) (string, error) {
 		if err != nil {
 			return bad("does not decode: %v", err)
 		}
-		if t.ULID != id {
+		if t.ULID != ulid {
 			return bad("the ulid in the file is %s, which differs from the ulid in the path", t.ULID)
 		}
 	case "comments", "worklogs":
@@ -308,12 +308,12 @@ func checkFile(dir, root, rel string) (string, error) {
 		}
 	case "sprints", "releases":
 		name := path.Base(rel)
-		id, perr := model.ParseULID(strings.TrimSuffix(name, ".md"))
+		ulid, perr := model.ParseULID(strings.TrimSuffix(name, ".md"))
 		build := model.SprintPath
 		if root == "releases" {
 			build = model.ReleasePath
 		}
-		if perr != nil || build(id) != rel {
+		if perr != nil || build(ulid) != rel {
 			return bad("the name does not follow the rule of %s files", root)
 		}
 		var got model.ULID
@@ -330,11 +330,11 @@ func checkFile(dir, root, rel string) (string, error) {
 			}
 			got = r.ULID
 		}
-		if got != id {
+		if got != ulid {
 			return bad("the ulid in the file is %s, which differs from the ulid in the path", got)
 		}
 	case "workspaces":
-		id, err := model.ParseWorkspacePath(rel)
+		ulid, err := model.ParseWorkspacePath(rel)
 		if err != nil {
 			return bad("the name does not follow the rule of workspace files")
 		}
@@ -342,7 +342,7 @@ func checkFile(dir, root, rel string) (string, error) {
 		if err != nil {
 			return bad("does not decode: %v", err)
 		}
-		if w.ULID != id {
+		if w.ULID != ulid {
 			return bad("the ulid in the file is %s, which differs from the ulid in the path", w.ULID)
 		}
 		switch {

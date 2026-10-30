@@ -50,12 +50,12 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 	if err := tx.validateWorkspaces(); err != nil {
 		return err
 	}
-	for _, id := range tx.taskOrder {
-		t := tx.tasks[id]
+	for _, ulid := range tx.taskOrder {
+		t := tx.tasks[ulid]
 		if t == nil {
 			continue // removed in the same operation
 		}
-		old, err := tx.s.Task(id)
+		old, err := tx.s.Task(ulid)
 		// A file that does not decode is checked like a new task, so a
 		// write can repair it.
 		if errors.Is(err, ErrNotFound) || errors.As(err, new(*model.DecodeError)) {
@@ -87,7 +87,7 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 		}
 		vs = append(vs, wvs...)
 		if vs = append(vs, rvs...); len(vs) > 0 {
-			return &ValidationError{Task: id, Violations: vs}
+			return &ValidationError{Task: ulid, Violations: vs}
 		}
 	}
 	return nil
@@ -136,15 +136,15 @@ func (tx *Tx) validateWorkspaces() error {
 		all[w.ULID] = w
 	}
 	removed := false
-	for id, w := range tx.workspaces {
+	for ulid, w := range tx.workspaces {
 		if w == nil {
-			delete(all, id)
+			delete(all, ulid)
 			removed = true
 		} else {
-			all[id] = w
+			all[ulid] = w
 		}
 	}
-	for id, w := range tx.workspaces {
+	for ulid, w := range tx.workspaces {
 		if w == nil {
 			continue
 		}
@@ -154,8 +154,8 @@ func (tx *Tx) validateWorkspaces() error {
 		if err := model.ValidWorkspaceName(w.Name); err != nil {
 			return err
 		}
-		for oid, o := range all {
-			if oid == id {
+		for otherULID, o := range all {
+			if otherULID == ulid {
 				continue
 			}
 			if o.IDPrefix == w.IDPrefix {
@@ -172,8 +172,8 @@ func (tx *Tx) validateWorkspaces() error {
 	// The tasks written in the operation count as they will be; the others
 	// as they are on disk.
 	count := map[model.ULID]int{}
-	for _, id := range tx.taskOrder {
-		if t := tx.tasks[id]; t != nil {
+	for _, ulid := range tx.taskOrder {
+		if t := tx.tasks[ulid]; t != nil {
 			count[t.Workspace]++
 		}
 	}
@@ -181,8 +181,8 @@ func (tx *Tx) validateWorkspaces() error {
 	for t, err := range tx.s.Tasks() {
 		var fe *FileError
 		if errors.As(err, &fe) {
-			if id, perr := model.ParseTaskPath(fe.Path); perr == nil {
-				if _, put := tx.tasks[id]; put {
+			if ulid, perr := model.ParseTaskPath(fe.Path); perr == nil {
+				if _, put := tx.tasks[ulid]; put {
 					continue // written or removed in the operation
 				}
 			}
@@ -193,9 +193,9 @@ func (tx *Tx) validateWorkspaces() error {
 			if err != nil {
 				return err
 			}
-			for id, w := range tx.workspaces {
-				if w == nil && bytes.Contains(b, []byte("workspace: "+id.String())) {
-					broken[id] = fe.Path
+			for ulid, w := range tx.workspaces {
+				if w == nil && bytes.Contains(b, []byte("workspace: "+ulid.String())) {
+					broken[ulid] = fe.Path
 				}
 			}
 			continue
@@ -207,15 +207,15 @@ func (tx *Tx) validateWorkspaces() error {
 			count[t.Workspace]++
 		}
 	}
-	for id, w := range tx.workspaces {
+	for ulid, w := range tx.workspaces {
 		if w != nil {
 			continue
 		}
-		if count[id] > 0 {
-			return fmt.Errorf("workspace %s still has %d tasks", id, count[id])
+		if count[ulid] > 0 {
+			return fmt.Errorf("workspace %s still has %d tasks", ulid, count[ulid])
 		}
-		if rel, ok := broken[id]; ok {
-			return fmt.Errorf("workspace %s may still have a task: %s does not decode and names it; fix or remove the file first", id, rel)
+		if rel, ok := broken[ulid]; ok {
+			return fmt.Errorf("workspace %s may still have a task: %s does not decode and names it; fix or remove the file first", ulid, rel)
 		}
 	}
 	return nil
@@ -237,12 +237,12 @@ func lineage(t *model.Task, sc *schema.Schema, read func(model.ULID) (*model.Tas
 	}
 	seen := map[model.ULID]bool{t.ULID: true}
 	for cur := t; cur.Parent != nil; {
-		id := *cur.Parent
-		if seen[id] {
+		ulid := *cur.Parent
+		if seen[ulid] {
 			break // a cycle the store already had; checkRefs refuses new ones
 		}
-		seen[id] = true
-		p, err := read(id)
+		seen[ulid] = true
+		p, err := read(ulid)
 		if errors.Is(err, ErrNotFound) || errors.As(err, new(*model.DecodeError)) {
 			break
 		}
@@ -252,7 +252,7 @@ func lineage(t *model.Task, sc *schema.Schema, read func(model.ULID) (*model.Tas
 		if cur == t {
 			parentKind = p.Kind
 		}
-		ancestors = append(ancestors, id)
+		ancestors = append(ancestors, ulid)
 		cur = p
 	}
 	return parentKind, ancestors, nil

@@ -83,9 +83,9 @@ func (a *app) show(arg string) error {
 	return err
 }
 
-func liveComments(s *store.Store, id model.ULID) ([]*model.Comment, error) {
+func liveComments(s *store.Store, ulid model.ULID) ([]*model.Comment, error) {
 	var out []*model.Comment
-	for c, err := range s.Comments(id) {
+	for c, err := range s.Comments(ulid) {
 		if err != nil {
 			return nil, err
 		}
@@ -96,17 +96,17 @@ func liveComments(s *store.Store, id model.ULID) ([]*model.Comment, error) {
 	return out, nil
 }
 
-// reverse finds the tasks that point at id, by relation.
-func reverse(ix *index.Index, id model.ULID) []relation {
+// reverse finds the tasks that point at ulid, by relation.
+func reverse(ix *index.Index, ulid model.ULID) []relation {
 	var out []relation
-	if es := ix.Reverse(id, "blocked_by"); len(es) > 0 {
+	if es := ix.Reverse(ulid, "blocked_by"); len(es) > 0 {
 		out = append(out, relation{"blocks", "blocks", es})
 	}
 	for _, p := range ix.Schema().Props {
 		if p.Type != schema.TypeTaskRef {
 			continue
 		}
-		es := ix.Reverse(id, p.Name)
+		es := ix.Reverse(ulid, p.Name)
 		if len(es) == 0 {
 			continue
 		}
@@ -155,10 +155,10 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 		}
 		b.WriteString("  " + k + strings.Repeat(" ", max(0, 11-displayWidth(k))) + " " + v + "\n")
 	}
-	refs := func(ids []model.ULID) []string {
-		out := make([]string, len(ids))
-		for i, id := range ids {
-			out[i] = refName(ix, id)
+	refs := func(ulids []model.ULID) []string {
+		out := make([]string, len(ulids))
+		for i, ulid := range ulids {
+			out[i] = refName(ix, ulid)
 		}
 		return out
 	}

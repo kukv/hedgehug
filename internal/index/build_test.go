@@ -189,19 +189,19 @@ func TestRefreshWithoutChange(t *testing.T) {
 	}
 }
 
-func hasProblem(ix *Index, id model.ULID, code string) bool {
-	return slices.ContainsFunc(ix.Problems(id), func(p Problem) bool { return p.Code == code })
+func hasProblem(ix *Index, ulid model.ULID, code string) bool {
+	return slices.ContainsFunc(ix.Problems(ulid), func(p Problem) bool { return p.Code == code })
 }
 
 func TestProblemsIncludeViolationsOnOpen(t *testing.T) {
 	s, dir := newStore(t)
-	id := model.NewULID()
-	commitRaw(t, s, dir, model.TaskPath(id), rawTask(id, "kind: nope\ntitle: x\nstatus: todo\n"))
-	if ix := mustOpen(t, s); !hasProblem(ix, id, schema.CodeUnknownKind) {
-		t.Errorf("Problems after a rebuild = %v, want unknown_kind", ix.Problems(id))
+	ulid := model.NewULID()
+	commitRaw(t, s, dir, model.TaskPath(ulid), rawTask(ulid, "kind: nope\ntitle: x\nstatus: todo\n"))
+	if ix := mustOpen(t, s); !hasProblem(ix, ulid, schema.CodeUnknownKind) {
+		t.Errorf("Problems after a rebuild = %v, want unknown_kind", ix.Problems(ulid))
 	}
-	if ix := mustOpen(t, s); !hasProblem(ix, id, schema.CodeUnknownKind) { // from the cache
-		t.Errorf("Problems after a cached Open = %v, want unknown_kind", ix.Problems(id))
+	if ix := mustOpen(t, s); !hasProblem(ix, ulid, schema.CodeUnknownKind) { // from the cache
+		t.Errorf("Problems after a cached Open = %v, want unknown_kind", ix.Problems(ulid))
 	}
 }
 

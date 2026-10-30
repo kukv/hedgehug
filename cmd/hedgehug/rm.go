@@ -45,11 +45,11 @@ func (a *app) purgeCmd() *cobra.Command {
 	return cmd
 }
 
-// descendants returns the tasks under id for which follow is true, going
+// descendants returns the tasks under ulid for which follow is true, going
 // down only through those, depth first in rank order. A parent cycle stops
 // the walk.
-func descendants(ix *index.Index, id model.ULID, follow func(*index.Entry) bool) []*index.Entry {
-	seen := map[model.ULID]bool{id: true}
+func descendants(ix *index.Index, ulid model.ULID, follow func(*index.Entry) bool) []*index.Entry {
+	seen := map[model.ULID]bool{ulid: true}
 	var out []*index.Entry
 	var walk func(model.ULID)
 	walk = func(p model.ULID) {
@@ -62,7 +62,7 @@ func descendants(ix *index.Index, id model.ULID, follow func(*index.Entry) bool)
 			walk(c.ULID)
 		}
 	}
-	walk(id)
+	walk(ulid)
 	return out
 }
 
@@ -234,7 +234,7 @@ func purgeTargets(ix *index.Index, e *index.Entry) ([]*index.Entry, error) {
 
 // sameTasks reports whether a and b hold the same tasks.
 func sameTasks(a, b []*index.Entry) bool {
-	ids := func(es []*index.Entry) []string {
+	ulids := func(es []*index.Entry) []string {
 		out := make([]string, len(es))
 		for i, e := range es {
 			out[i] = e.ULID.String()
@@ -242,7 +242,7 @@ func sameTasks(a, b []*index.Entry) bool {
 		slices.Sort(out)
 		return out
 	}
-	return slices.Equal(ids(a), ids(b))
+	return slices.Equal(ulids(a), ulids(b))
 }
 
 // confirm asks on the terminal before a purge.

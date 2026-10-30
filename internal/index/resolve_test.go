@@ -13,11 +13,11 @@ import (
 
 func mustULID(t *testing.T, s string) model.ULID {
 	t.Helper()
-	id, err := model.ParseULID(s)
+	ulid, err := model.ParseULID(s)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return id
+	return ulid
 }
 
 // indexOf builds an index of entries without a store.

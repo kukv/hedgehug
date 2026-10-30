@@ -28,9 +28,9 @@ func TestShow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	aid, _ := model.ParseULID(a.ULID)
+	aULID, _ := model.ParseULID(a.ULID)
 	if _, err := s.Update(store.Op{Name: "update", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
-		tk, err := tx.Task(aid)
+		tk, err := tx.Task(aULID)
 		if err != nil {
 			return err
 		}
@@ -38,7 +38,7 @@ func TestShow(t *testing.T) {
 		if err := tx.PutTask(tk); err != nil {
 			return err
 		}
-		return tx.PutComment(aid, &model.Comment{ULID: model.NewULID(), Author: "github.com/alice", Body: "Looks good.\nShip it.\n"})
+		return tx.PutComment(aULID, &model.Comment{ULID: model.NewULID(), Author: "github.com/alice", Body: "Looks good.\nShip it.\n"})
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -141,9 +141,9 @@ func TestShowDeleted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id := mustULID(t, x.ULID)
+	ulid := mustULID(t, x.ULID)
 	if _, err := s.Update(store.Op{Name: "rm", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
-		tk, err := tx.Task(id)
+		tk, err := tx.Task(ulid)
 		if err != nil {
 			return err
 		}
@@ -203,9 +203,9 @@ func TestDisplayWidth(t *testing.T) {
 
 func mustULID(t *testing.T, s string) model.ULID {
 	t.Helper()
-	id, err := model.ParseULID(s)
+	ulid, err := model.ParseULID(s)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return id
+	return ulid
 }

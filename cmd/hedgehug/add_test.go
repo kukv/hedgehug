@@ -32,18 +32,18 @@ func (te *testEnv) addJSON(args ...string) taskJSON {
 // label is how the CLI names task j: its id and full ULID.
 func label(j taskJSON) string { return j.ID + " (" + j.ULID + ")" }
 
-// task reads the task file of id from the store.
-func (te *testEnv) task(id string) *model.Task {
+// task reads the task file of ulid from the store.
+func (te *testEnv) task(ulid string) *model.Task {
 	te.t.Helper()
 	s, err := store.Open(te.storeDir("me"))
 	if err != nil {
 		te.t.Fatal(err)
 	}
-	mid, err := model.ParseULID(id)
+	taskULID, err := model.ParseULID(ulid)
 	if err != nil {
 		te.t.Fatal(err)
 	}
-	t, err := s.Task(mid)
+	t, err := s.Task(taskULID)
 	if err != nil {
 		te.t.Fatal(err)
 	}

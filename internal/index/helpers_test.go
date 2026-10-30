@@ -78,8 +78,8 @@ func commitRaw(t *testing.T, s *store.Store, dir, rel, content string) {
 }
 
 // rawTask is a task file with the given extra frontmatter lines.
-func rawTask(id model.ULID, lines string) string {
-	return "---\nulid: " + id.String() + "\n" + lines + "---\n"
+func rawTask(ulid model.ULID, lines string) string {
+	return "---\nulid: " + ulid.String() + "\n" + lines + "---\n"
 }
 
 func mustOpen(t *testing.T, s *store.Store) *Index {

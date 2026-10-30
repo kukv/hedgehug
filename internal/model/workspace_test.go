@@ -28,8 +28,8 @@ func TestWorkspaceRoundTrip(t *testing.T) {
 	if WorkspacePath(w.ULID) != "workspaces/01JC0A1B2C3D4E5F6G7H8J9K0M.md" {
 		t.Error(WorkspacePath(w.ULID))
 	}
-	if id, err := ParseWorkspacePath(WorkspacePath(w.ULID)); err != nil || id != w.ULID {
-		t.Errorf("ParseWorkspacePath = %v %v", id, err)
+	if ulid, err := ParseWorkspacePath(WorkspacePath(w.ULID)); err != nil || ulid != w.ULID {
+		t.Errorf("ParseWorkspacePath = %v %v", ulid, err)
 	}
 }
 

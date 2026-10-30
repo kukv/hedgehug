@@ -146,7 +146,7 @@ func (e *ambiguousError) Error() string {
 
 // resolve finds the task arg names.
 func (a *app) resolve(ix *index.Index, arg string) (*index.Entry, error) {
-	id, err := ix.Resolve(arg)
+	ulid, err := ix.Resolve(arg)
 	var ae *index.AmbiguousError
 	if errors.As(err, &ae) {
 		lines := make([]string, len(ae.Candidates))
@@ -158,7 +158,7 @@ func (a *app) resolve(ix *index.Index, arg string) (*index.Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	e, _ := ix.Task(id)
+	e, _ := ix.Task(ulid)
 	return e, nil
 }
 

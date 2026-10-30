@@ -225,22 +225,22 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 		if err := ix.Refresh(); err != nil {
 			return err
 		}
-		var ids []model.ULID
+		var ulids []model.ULID
 		for _, e := range ix.Tasks() {
 			if e.Workspace == ws.ULID && e.Broken == "" {
-				ids = append(ids, e.ULID)
+				ulids = append(ulids, e.ULID)
 			}
 		}
-		number := func(id model.ULID) int {
-			e, _ := ix.Task(id)
+		number := func(ulid model.ULID) int {
+			e, _ := ix.Task(ulid)
 			_, n, _ := model.ParseTaskID(e.ID)
 			return n
 		}
-		slices.SortFunc(ids, func(x, y model.ULID) int {
+		slices.SortFunc(ulids, func(x, y model.ULID) int {
 			return cmp.Or(cmp.Compare(number(x), number(y)), cmp.Compare(x.String(), y.String()))
 		})
-		for _, id := range ids {
-			t, err := tx.Task(id)
+		for _, ulid := range ulids {
+			t, err := tx.Task(ulid)
 			if err != nil {
 				return err
 			}
@@ -285,10 +285,10 @@ func (a *app) workspaceRm(arg string) error {
 	return a.printWorkspace(ix, ws, fmt.Sprintf("Removed workspace %s (%s, %s)", ws.Name, ws.IDPrefix, ws.ULID))
 }
 
-// workspaceOp is the operation of a workspace command on the workspace id.
+// workspaceOp is the operation of a workspace command on the workspace ulid.
 // The subject says what changes, as the command read it before the lock.
-func workspaceOp(id model.ULID, format string, args ...any) store.Op {
-	return store.Op{Name: "workspace", Detail: fmt.Sprintf(format, args...), Workspace: id}
+func workspaceOp(ulid model.ULID, format string, args ...any) store.Op {
+	return store.Op{Name: "workspace", Detail: fmt.Sprintf(format, args...), Workspace: ulid}
 }
 
 func (a *app) workspaceLs() error {

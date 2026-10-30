@@ -151,10 +151,10 @@ func TestIDNumbersCountsDeletedAndFormerIDs(t *testing.T) {
 func TestIDNumbersCountsBrokenFiles(t *testing.T) {
 	s, dir := newStore(t)
 	put(t, s, newTask("a")) // TST-1
-	id := model.NewULID()
-	commitRaw(t, s, dir, model.TaskPath(id), "---\nulid: "+id.String()+"\nid: TST-7\ntitle: [unclosed\n---\nsee OLD-3\n")
+	ulid := model.NewULID()
+	commitRaw(t, s, dir, model.TaskPath(ulid), "---\nulid: "+ulid.String()+"\nid: TST-7\ntitle: [unclosed\n---\nsee OLD-3\n")
 	ix := mustOpen(t, s)
-	if e, _ := ix.Task(id); e == nil || e.Broken == "" {
+	if e, _ := ix.Task(ulid); e == nil || e.Broken == "" {
 		t.Fatalf("entry = %+v, want a broken one", e)
 	}
 	n, err := ix.IDNumbers()

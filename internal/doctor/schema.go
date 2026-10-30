@@ -71,11 +71,11 @@ func Schema(s *store.Store, ix *index.Index) ([]Finding, error) {
 		if !ok {
 			continue // Check has reported it
 		}
-		id, err := model.ParseULID(s)
+		ulid, err := model.ParseULID(s)
 		if err != nil {
 			continue
 		}
-		if e, found := ix.Task(id); !found || e.DeletedAt != nil {
+		if e, found := ix.Task(ulid); !found || e.DeletedAt != nil {
 			fs = append(fs, Finding{
 				Check: "override", Where: fmt.Sprintf("%s: scoped[%d].where", schema.Path, i),
 				Msg:  sco.Where + " is not a project of this store, or is deleted",

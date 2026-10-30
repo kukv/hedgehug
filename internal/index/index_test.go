@@ -56,13 +56,13 @@ func TestOpenIndexesTasks(t *testing.T) {
 
 func TestOpenBrokenFile(t *testing.T) {
 	s, dir := newStore(t)
-	id := model.NewULID()
-	commitRaw(t, s, dir, model.TaskPath(id), "not a task file\n")
+	ulid := model.NewULID()
+	commitRaw(t, s, dir, model.TaskPath(ulid), "not a task file\n")
 	other := model.NewULID()
 	commitRaw(t, s, dir, model.TaskPath(other), rawTask(model.NewULID(), "kind: task\ntitle: x\nstatus: todo\n"))
 
 	ix := mustOpen(t, s)
-	for _, want := range []model.ULID{id, other} {
+	for _, want := range []model.ULID{ulid, other} {
 		e, ok := ix.Task(want)
 		if !ok || e.Broken == "" {
 			t.Errorf("entry %s = %+v, want a broken entry", want, e)
@@ -85,9 +85,9 @@ func TestOpenViolations(t *testing.T) {
 	commitRaw(t, s, dir, model.TaskPath(orphan), rawTask(orphan, "kind: epic\ntitle: x\nstatus: todo\nparent: "+model.NewULID().String()+"\n"))
 
 	ix := mustOpen(t, s)
-	check := func(id model.ULID, want ...string) {
+	check := func(ulid model.ULID, want ...string) {
 		t.Helper()
-		e, _ := ix.Task(id)
+		e, _ := ix.Task(ulid)
 		var got []string
 		for _, v := range e.Violations {
 			got = append(got, v.Code+":"+v.Field)

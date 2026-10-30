@@ -218,26 +218,26 @@ func (c *compiler) assignee(t Term) (pred, error) {
 }
 
 // resolve turns the values of t into tasks; none is reported apart.
-func (c *compiler) resolve(t Term) (none bool, ids map[model.ULID]bool, err error) {
-	ids = map[model.ULID]bool{}
+func (c *compiler) resolve(t Term) (none bool, ulids map[model.ULID]bool, err error) {
+	ulids = map[model.ULID]bool{}
 	for _, v := range t.Values {
 		if v == "none" {
 			none = true
 			continue
 		}
-		id, err := c.ix.Resolve(v)
+		ulid, err := c.ix.Resolve(v)
 		if err != nil {
 			return false, nil, c.failWith(t, err)
 		}
-		ids[id] = true
+		ulids[ulid] = true
 	}
-	return none, ids, nil
+	return none, ulids, nil
 }
 
 // ref matches when the task points at one of the term's tasks through get;
 // none matches a task that points at none.
 func (c *compiler) ref(t Term, get func(*index.Entry) []model.ULID) (pred, error) {
-	none, ids, err := c.resolve(t)
+	none, ulids, err := c.resolve(t)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +247,7 @@ func (c *compiler) ref(t Term, get func(*index.Entry) []model.ULID) (pred, error
 			return true
 		}
 		for _, g := range got {
-			if ids[g] {
+			if ulids[g] {
 				return true
 			}
 		}
@@ -258,7 +258,7 @@ func (c *compiler) ref(t Term, get func(*index.Entry) []model.ULID) (pred, error
 // project matches tasks that have one of the term's tasks among their
 // ancestors.
 func (c *compiler) project(t Term) (pred, error) {
-	none, ids, err := c.resolve(t)
+	none, ulids, err := c.resolve(t)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +268,7 @@ func (c *compiler) project(t Term) (pred, error) {
 	return func(e *index.Entry) bool {
 		seen := map[model.ULID]bool{e.ULID: true}
 		for p := e.Parent; p != nil && !seen[*p]; {
-			if ids[*p] {
+			if ulids[*p] {
 				return true
 			}
 			seen[*p] = true
@@ -284,21 +284,21 @@ func (c *compiler) project(t Term) (pred, error) {
 
 // workspace matches tasks that sit in one of the term's workspaces.
 func (c *compiler) workspace(t Term) (pred, error) {
-	ids := map[model.ULID]bool{}
+	ulids := map[model.ULID]bool{}
 	for _, v := range t.Values {
 		w, err := c.ix.ResolveWorkspace(v)
 		if err != nil {
 			return nil, c.failWith(t, err)
 		}
-		ids[w.ULID] = true
+		ulids[w.ULID] = true
 	}
-	return func(e *index.Entry) bool { return ids[e.Workspace] }, nil
+	return func(e *index.Entry) bool { return ulids[e.Workspace] }, nil
 }
 
 // inverse matches tasks that one of the term's tasks points at through rel,
 // as blocks: does for blocked_by; none matches a task no task points at.
 func (c *compiler) inverse(t Term, rel string) (pred, error) {
-	none, ids, err := c.resolve(t)
+	none, ulids, err := c.resolve(t)
 	if err != nil {
 		return nil, err
 	}
@@ -307,8 +307,8 @@ func (c *compiler) inverse(t Term, rel string) (pred, error) {
 		if none && !pointed[e.ULID] {
 			return true
 		}
-		for id := range ids {
-			if x, ok := c.ix.Task(id); ok && slices.Contains(x.Targets(rel), e.ULID) {
+		for ulid := range ulids {
+			if x, ok := c.ix.Task(ulid); ok && slices.Contains(x.Targets(rel), e.ULID) {
 				return true
 			}
 		}
@@ -320,8 +320,8 @@ func (c *compiler) inverse(t Term, rel string) (pred, error) {
 func (c *compiler) targeted(rel string) map[model.ULID]bool {
 	out := map[model.ULID]bool{}
 	for _, e := range c.ix.Tasks() {
-		for _, id := range e.Targets(rel) {
-			out[id] = true
+		for _, ulid := range e.Targets(rel) {
+			out[ulid] = true
 		}
 	}
 	return out
@@ -331,7 +331,7 @@ func (c *compiler) targeted(rel string) map[model.ULID]bool {
 // tasks. For a symmetric property the tasks those point back at match too,
 // and none matches a task with no such relation either way.
 func (c *compiler) taskRef(t Term, p schema.Prop) (pred, error) {
-	none, ids, err := c.resolve(t)
+	none, ulids, err := c.resolve(t)
 	if err != nil {
 		return nil, err
 	}
@@ -345,13 +345,13 @@ func (c *compiler) taskRef(t Term, p schema.Prop) (pred, error) {
 			return true
 		}
 		for _, g := range got {
-			if ids[g] {
+			if ulids[g] {
 				return true
 			}
 		}
 		if p.Symmetric {
-			for id := range ids {
-				if x, ok := c.ix.Task(id); ok && slices.Contains(x.Targets(p.Name), e.ULID) {
+			for ulid := range ulids {
+				if x, ok := c.ix.Task(ulid); ok && slices.Contains(x.Targets(p.Name), e.ULID) {
 					return true
 				}
 			}
@@ -488,8 +488,8 @@ func (c *compiler) is(t Term) (pred, error) {
 // blocked reports whether a blocker of e is open: in the index, readable,
 // not deleted, and not in the done or canceled category.
 func (c *compiler) blocked(e *index.Entry) bool {
-	for _, id := range e.BlockedBy {
-		b, ok := c.ix.Task(id)
+	for _, ulid := range e.BlockedBy {
+		b, ok := c.ix.Task(ulid)
 		if !ok || b.Broken != "" || b.DeletedAt != nil {
 			continue
 		}

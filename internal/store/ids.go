@@ -86,8 +86,8 @@ func countIDs(used map[string]int, t *model.Task) {
 // former ids. Tasks without a workspace that exists are left to validate.
 func (tx *Tx) assignIDs() error {
 	var used map[string]int
-	for _, id := range tx.taskOrder {
-		t := tx.tasks[id]
+	for _, ulid := range tx.taskOrder {
+		t := tx.tasks[ulid]
 		if t == nil || t.Workspace.IsZero() {
 			continue
 		}

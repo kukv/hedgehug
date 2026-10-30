@@ -93,17 +93,17 @@ func (ix *Index) Refresh() error {
 // Schema returns schema.yaml as the indexed tree has it.
 func (ix *Index) Schema() *schema.Schema { return ix.sc }
 
-// Task returns the entry of id. Deleted tasks are in the index too.
-func (ix *Index) Task(id model.ULID) (*Entry, bool) {
-	e, ok := ix.tasks[id]
+// Task returns the entry of ulid. Deleted tasks are in the index too.
+func (ix *Index) Task(ulid model.ULID) (*Entry, bool) {
+	e, ok := ix.tasks[ulid]
 	return e, ok
 }
 
 // Tasks returns every entry, deleted ones included. The order is not fixed.
 func (ix *Index) Tasks() []*Entry { return slices.Collect(maps.Values(ix.tasks)) }
 
-// Children returns the tasks whose parent is id, by rank then ULID.
-func (ix *Index) Children(id model.ULID) []*Entry { return slices.Clone(ix.children[id]) }
+// Children returns the tasks whose parent is ulid, by rank then ULID.
+func (ix *Index) Children(ulid model.ULID) []*Entry { return slices.Clone(ix.children[ulid]) }
 
 // Roots returns the tasks with no parent, and those whose parent is not in
 // the index, by rank then ULID.

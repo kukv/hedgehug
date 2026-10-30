@@ -117,19 +117,19 @@ func setULIDs(dst *[]model.ULID, a assign, resolve func(string) (model.ULID, err
 		*dst = nil
 		return nil
 	}
-	id, err := resolve(a.value)
+	ulid, err := resolve(a.value)
 	if err != nil {
 		return fmt.Errorf("%s: %w", a.key, err)
 	}
 	switch a.op {
 	case "=":
-		*dst = []model.ULID{id}
+		*dst = []model.ULID{ulid}
 	case "+=":
-		if !slices.Contains(*dst, id) {
-			*dst = append(*dst, id)
+		if !slices.Contains(*dst, ulid) {
+			*dst = append(*dst, ulid)
 		}
 	default:
-		*dst = slices.DeleteFunc(*dst, func(v model.ULID) bool { return v == id })
+		*dst = slices.DeleteFunc(*dst, func(v model.ULID) bool { return v == ulid })
 	}
 	return nil
 }
@@ -215,11 +215,11 @@ func propValue(p schema.Prop, v string, resolve func(string) (model.ULID, error)
 			return nil, bad("a duration (like 2h30m)")
 		}
 	case schema.TypeTaskRef:
-		id, err := resolve(v)
+		ulid, err := resolve(v)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", p.Name, err)
 		}
-		v = id.String()
+		v = ulid.String()
 	}
 	return &yaml.Node{Kind: yaml.ScalarNode, Tag: tag, Value: v}, nil
 }

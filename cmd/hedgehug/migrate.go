@@ -121,11 +121,11 @@ func planMigration(s *store.Store, ix *index.Index, m schema.Migration) (*migrat
 	var refused []string
 	for t, err := range s.Tasks() {
 		if err != nil {
-			id, ok := brokenTask(err)
+			ulid, ok := brokenTask(err)
 			if !ok {
 				return nil, err
 			}
-			p.skipped = append(p.skipped, id)
+			p.skipped = append(p.skipped, ulid)
 			continue
 		}
 		ok, err := m.ApplyTask(t, sc)
@@ -152,8 +152,8 @@ func brokenTask(err error) (model.ULID, bool) {
 	if !errors.As(err, &fe) || !errors.As(err, new(*model.DecodeError)) && !errors.Is(err, store.ErrULIDMismatch) {
 		return model.ULID{}, false
 	}
-	id, perr := model.ParseTaskPath(fe.Path)
-	return id, perr == nil
+	ulid, perr := model.ParseTaskPath(fe.Path)
+	return ulid, perr == nil
 }
 
 func count(n int) string {
@@ -168,8 +168,8 @@ func count(n int) string {
 func (a *app) printMigrated(ix *index.Index, p *migrationPlan, dryRun bool) error {
 	changed := p.changed
 	skipped := make([]string, len(p.skipped))
-	for i, id := range p.skipped {
-		skipped[i] = id.String()
+	for i, ulid := range p.skipped {
+		skipped[i] = ulid.String()
 	}
 	if len(skipped) > 0 {
 		if _, err := fmt.Fprintf(a.stderr, "warning: not migrated, since they do not decode: %s\n", strings.Join(skipped, ", ")); err != nil {

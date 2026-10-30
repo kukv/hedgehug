@@ -84,9 +84,9 @@ func TestLsTreeULIDsInCycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	xid, _ := model.ParseULID(x.ULID)
-	yid, _ := model.ParseULID(y.ULID)
-	writeCycle(t, te, s, xid, yid)
+	xULID, _ := model.ParseULID(x.ULID)
+	yULID, _ := model.ParseULID(y.ULID)
+	writeCycle(t, te, s, xULID, yULID)
 
 	if got := te.ok("ls", "--tree", "--ulids-only", "status:done"); got != y.ULID+"\n" {
 		t.Errorf("--tree --ulids-only = %q, want only %s", got, y.ULID)
@@ -107,9 +107,9 @@ func TestLsTreeCycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	xid, _ := model.ParseULID(x.ULID)
-	yid, _ := model.ParseULID(y.ULID)
-	writeCycle(t, te, s, xid, yid)
+	xULID, _ := model.ParseULID(x.ULID)
+	yULID, _ := model.ParseULID(y.ULID)
+	writeCycle(t, te, s, xULID, yULID)
 
 	out := te.ok("ls", "--tree")
 	i := strings.Index(out, "== in a parent cycle")
@@ -239,8 +239,8 @@ func writeCycle(t *testing.T, te *testEnv, s *store.Store, x, y model.ULID) {
 		t.Fatal(err)
 	}
 	// Add only the two files: .hedgehug/local/ holds the index cache.
-	for _, id := range []model.ULID{x, y} {
-		if _, err := w.Add(model.TaskPath(id)); err != nil {
+	for _, ulid := range []model.ULID{x, y} {
+		if _, err := w.Add(model.TaskPath(ulid)); err != nil {
 			t.Fatal(err)
 		}
 	}

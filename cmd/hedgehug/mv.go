@@ -97,23 +97,23 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 		// A task and its subtree are in one workspace, so they move
 		// together. The subtree is read under the lock, so a child added
 		// since the index was read moves too.
-		ids := []model.ULID{e.ULID}
+		ulids := []model.ULID{e.ULID}
 		if dest != e.Workspace {
 			if err := ix.Refresh(); err != nil {
 				return err
 			}
 			for _, d := range descendants(ix, e.ULID, func(*index.Entry) bool { return true }) {
-				ids = append(ids, d.ULID)
+				ulids = append(ulids, d.ULID)
 			}
 		}
-		for _, id := range ids {
-			t, err := tx.Task(id)
+		for _, ulid := range ulids {
+			t, err := tx.Task(ulid)
 			if err != nil {
 				return err
 			}
 			oldIDs = append(oldIDs, t.ID)
 			t.Workspace = dest
-			if id == e.ULID {
+			if ulid == e.ULID {
 				t.Parent, t.Rank = parent, rank
 			}
 			if err := tx.PutTask(t); err != nil {
@@ -137,11 +137,11 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 	return err
 }
 
-// rankAt returns the rank for id under parent: just before or after a
+// rankAt returns the rank for ulid under parent: just before or after a
 // sibling, or after every sibling.
-func (a *app) rankAt(ix *index.Index, id model.ULID, parent *model.ULID, before, after string) (model.Rank, error) {
+func (a *app) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, before, after string) (model.Rank, error) {
 	if before == "" && after == "" {
-		return endRank(ix, parent, id)
+		return endRank(ix, parent, ulid)
 	}
 	ref := before
 	if ref == "" {
@@ -151,7 +151,7 @@ func (a *app) rankAt(ix *index.Index, id model.ULID, parent *model.ULID, before,
 	if err != nil {
 		return "", err
 	}
-	sib := siblings(ix, parent, id)
+	sib := siblings(ix, parent, ulid)
 	i := slices.IndexFunc(sib, func(e *index.Entry) bool { return e.ULID == x.ULID })
 	if i < 0 {
 		return "", fmt.Errorf("%s is not under the same parent", refName(ix, x.ULID))

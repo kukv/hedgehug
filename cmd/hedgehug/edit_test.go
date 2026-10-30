@@ -15,26 +15,26 @@ import (
 	"github.com/kukv/hedgehug/internal/model"
 )
 
-// taskFile returns the path of the task file of id in the store me.
-func (te *testEnv) taskFile(id string) string {
+// taskFile returns the path of the task file of ulid in the store me.
+func (te *testEnv) taskFile(ulid string) string {
 	te.t.Helper()
-	return filepath.Join(te.storeDir("me"), filepath.FromSlash(model.TaskPath(mustULID(te.t, id))))
+	return filepath.Join(te.storeDir("me"), filepath.FromSlash(model.TaskPath(mustULID(te.t, ulid))))
 }
 
-// raw returns the task file of id as it is.
-func (te *testEnv) raw(id string) string {
+// raw returns the task file of ulid as it is.
+func (te *testEnv) raw(ulid string) string {
 	te.t.Helper()
-	b, err := os.ReadFile(te.taskFile(id))
+	b, err := os.ReadFile(te.taskFile(ulid))
 	if err != nil {
 		te.t.Fatal(err)
 	}
 	return string(b)
 }
 
-// commitFile writes data to the task file of id and commits it by hand.
-func (te *testEnv) commitFile(id, data string) {
+// commitFile writes data to the task file of ulid and commits it by hand.
+func (te *testEnv) commitFile(ulid, data string) {
 	te.t.Helper()
-	if err := os.WriteFile(te.taskFile(id), []byte(data), 0o600); err != nil {
+	if err := os.WriteFile(te.taskFile(ulid), []byte(data), 0o600); err != nil {
 		te.t.Fatal(err)
 	}
 	r, err := git.PlainOpen(te.storeDir("me"))
@@ -45,7 +45,7 @@ func (te *testEnv) commitFile(id, data string) {
 	if err != nil {
 		te.t.Fatal(err)
 	}
-	if _, err := w.Add(model.TaskPath(mustULID(te.t, id))); err != nil {
+	if _, err := w.Add(model.TaskPath(mustULID(te.t, ulid))); err != nil {
 		te.t.Fatal(err)
 	}
 	if _, err := w.Commit("by hand", &git.CommitOptions{Author: &object.Signature{Name: "T", Email: "t@example.com", When: time.Now()}}); err != nil {

@@ -144,11 +144,11 @@ func entryJSON(ix *index.Index, e *index.Entry) *taskJSON {
 	return j
 }
 
-// refOf names the task id, with an empty id and title when the index does
+// refOf names the task ulid, with an empty id and title when the index does
 // not have it.
-func refOf(ix *index.Index, id model.ULID) refJSON {
-	r := refJSON{ULID: id.String()}
-	if e, ok := ix.Task(id); ok {
+func refOf(ix *index.Index, ulid model.ULID) refJSON {
+	r := refJSON{ULID: ulid.String()}
+	if e, ok := ix.Task(ulid); ok {
 		r.ID, r.Title = e.ID, e.Title
 	}
 	return r
@@ -223,12 +223,12 @@ func taskFileName(e *index.Entry) string {
 	return e.ID
 }
 
-// refName names the task id for a reader: its id, ULID and title.
-func refName(ix *index.Index, id model.ULID) string {
-	if e, ok := ix.Task(id); ok {
+// refName names the task ulid for a reader: its id, ULID and title.
+func refName(ix *index.Index, ulid model.ULID) string {
+	if e, ok := ix.Task(ulid); ok {
 		return taskLabel(e) + " " + e.Title
 	}
-	return id.String() + " (not found)"
+	return ulid.String() + " (not found)"
 }
 
 // printTasks prints es as JSON or as a table.
@@ -256,15 +256,15 @@ func (a *app) printTasks(ix *index.Index, es []*index.Entry) error {
 	})
 }
 
-// printTask prints the task id after a write: as JSON, or as one line that
+// printTask prints the task ulid after a write: as JSON, or as one line that
 // starts with verb.
-func (a *app) printTask(ix *index.Index, id model.ULID, verb string) error {
+func (a *app) printTask(ix *index.Index, ulid model.ULID, verb string) error {
 	if err := ix.Refresh(); err != nil {
 		return err
 	}
-	e, ok := ix.Task(id)
+	e, ok := ix.Task(ulid)
 	if !ok {
-		return fmt.Errorf("task %s is not in the index after the write", id)
+		return fmt.Errorf("task %s is not in the index after the write", ulid)
 	}
 	if a.jsonOut {
 		return a.printJSON(entryJSON(ix, e))

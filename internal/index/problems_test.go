@@ -18,7 +18,7 @@ func problemCodes(ps []Problem) []string {
 	return out
 }
 
-func ptr(id model.ULID) *model.ULID { return &id }
+func ptr(ulid model.ULID) *model.ULID { return &ulid }
 
 func TestProblems(t *testing.T) {
 	a, b, c, d := model.NewULID(), model.NewULID(), model.NewULID(), model.NewULID()
@@ -35,7 +35,7 @@ func TestProblems(t *testing.T) {
 		&Entry{ULID: self, BlockedBy: []model.ULID{self}},
 	)
 	tests := []struct {
-		id   model.ULID
+		ulid model.ULID
 		want []string
 	}{
 		{a, []string{"broken:"}},
@@ -48,8 +48,8 @@ func TestProblems(t *testing.T) {
 		{self, []string{"cycle:blocked_by"}},
 	}
 	for _, tt := range tests {
-		if got := problemCodes(ix.Problems(tt.id)); !slices.Equal(got, tt.want) {
-			t.Errorf("problems of %s = %v, want %v", tt.id, got, tt.want)
+		if got := problemCodes(ix.Problems(tt.ulid)); !slices.Equal(got, tt.want) {
+			t.Errorf("problems of %s = %v, want %v", tt.ulid, got, tt.want)
 		}
 	}
 }
@@ -110,8 +110,8 @@ func TestIDAndWorkspaceProblems(t *testing.T) {
 	f := model.NewULID()
 	commitRaw(t, s, dir, model.TaskPath(f), rawTask(f, "id: TST-10\nworkspace: "+ws.String()+"\nparent: "+e.String()+"\nkind: task\ntitle: f\nstatus: todo\n"))
 	ix := mustOpen(t, s)
-	has := func(id model.ULID, code string) bool {
-		return slices.ContainsFunc(ix.Problems(id), func(p Problem) bool { return p.Code == code })
+	has := func(ulid model.ULID, code string) bool {
+		return slices.ContainsFunc(ix.Problems(ulid), func(p Problem) bool { return p.Code == code })
 	}
 	if !has(a.ULID, CodeDuplicateID) || !has(b, CodeDuplicateID) {
 		t.Error("duplicate ids are not found")
