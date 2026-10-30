@@ -2,11 +2,14 @@ package store
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/schema"
 )
 
 func TestCreateAndOpen(t *testing.T) {
@@ -53,7 +56,7 @@ func TestCreateRefusesNonEmpty(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "x"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Create(dir, &model.StoreMeta{ID: model.NewID(), Name: "x"}, testAuthor); err == nil {
+	if _, err := Create(dir, &model.StoreMeta{ID: model.NewID(), Name: "x"}, nil, testAuthor); err == nil {
 		t.Error("Create into a non-empty directory succeeded")
 	}
 }
@@ -61,5 +64,74 @@ func TestCreateRefusesNonEmpty(t *testing.T) {
 func TestOpenNotAStore(t *testing.T) {
 	if _, err := Open(t.TempDir()); !errors.Is(err, ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestCreateUsesTheGivenSchema(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "store")
+	s, err := Create(dir, &model.StoreMeta{ID: model.NewID(), Name: "x"}, schema.Dev(), testAuthor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.Schema().Status("review"); !ok {
+		t.Error("the store does not have the review status of schema.Dev")
+	}
+	s2, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s2.Schema().Status("review"); !ok {
+		t.Error("schema.yaml on disk does not have the review status")
+	}
+}
+
+func TestCreateLeavesMetaAlone(t *testing.T) {
+	meta := &model.StoreMeta{ID: model.NewID(), Name: "x"}
+	if _, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, testAuthor); err != nil {
+		t.Fatal(err)
+	}
+	if meta.Format != 0 {
+		t.Errorf("meta.Format = %d, want 0: Create must not change the caller's meta", meta.Format)
+	}
+}
+
+func TestCreateCleansUpOnFailure(t *testing.T) {
+	boom := errors.New("commit failed")
+	newStoreHook = func(s *Store) { s.commit = func(gitrepo.Commit) error { return boom } }
+	t.Cleanup(func() { newStoreHook = func(*Store) {} })
+
+	t.Run("a directory Create made is removed", func(t *testing.T) {
+		dir := filepath.Join(t.TempDir(), "store")
+		if _, err := Create(dir, &model.StoreMeta{ID: model.NewID(), Name: "x"}, nil, testAuthor); !errors.Is(err, boom) {
+			t.Fatalf("err = %v, want %v", err, boom)
+		}
+		if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("Stat(dir) err = %v, want ErrNotExist", err)
+		}
+	})
+	t.Run("an empty directory is emptied again", func(t *testing.T) {
+		dir := t.TempDir()
+		if _, err := Create(dir, &model.StoreMeta{ID: model.NewID(), Name: "x"}, nil, testAuthor); !errors.Is(err, boom) {
+			t.Fatalf("err = %v, want %v", err, boom)
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(entries) != 0 {
+			t.Errorf("dir has %d entries after a failed Create, want 0", len(entries))
+		}
+	})
+}
+
+func TestCreateCanRetryAfterFailure(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "store")
+	newStoreHook = func(s *Store) { s.commit = func(gitrepo.Commit) error { return errors.New("boom") } }
+	if _, err := Create(dir, &model.StoreMeta{ID: model.NewID(), Name: "x"}, nil, testAuthor); err == nil {
+		t.Fatal("Create with a failing commit succeeded")
+	}
+	newStoreHook = func(*Store) {}
+	if _, err := Create(dir, &model.StoreMeta{ID: model.NewID(), Name: "x"}, nil, testAuthor); err != nil {
+		t.Errorf("retry: %v", err)
 	}
 }
