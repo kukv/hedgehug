@@ -40,7 +40,10 @@ func (a *app) set(arg string, assigns []assign) error {
 	if err != nil {
 		return err
 	}
-	if err := a.update(s, "set", e.ID, func(tx *store.Tx) error {
+	if err := notDeleted(ix, e); err != nil {
+		return err
+	}
+	committed, err := a.update(s, store.Op{Name: "set", Task: e.ID}, func(tx *store.Tx) error {
 		t, err := tx.Task(e.ID)
 		if err != nil {
 			return err
@@ -51,8 +54,9 @@ func (a *app) set(arg string, assigns []assign) error {
 			}
 		}
 		return tx.PutTask(t)
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
-	return a.printTask(ix, e.ID, "Updated")
+	return a.printTask(ix, e.ID, verb(committed, "Updated"))
 }

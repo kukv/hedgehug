@@ -3,6 +3,7 @@ package schema
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"regexp"
 	"slices"
@@ -153,7 +154,11 @@ func checkScalar(p Prop, n *yaml.Node) error {
 	switch p.Type {
 	case TypeText:
 	case TypeNumber:
-		_, err = strconv.ParseFloat(v, 64)
+		var x float64
+		x, err = strconv.ParseFloat(v, 64)
+		if err == nil && (math.IsNaN(x) || math.IsInf(x, 0)) {
+			err = errors.New("want a finite number")
+		}
 	case TypeBool:
 		if n.ShortTag() != "!!bool" {
 			err = errors.New("want true or false")
@@ -192,13 +197,25 @@ func checkScalar(p Prop, n *yaml.Node) error {
 // violations the write brings in: ones old already had where it was are left
 // out, so a task that a sync left broken can still be edited, while a move
 // is checked in its new place.
-func ValidateWrite(old *model.Task, oldParentKind string, oldE *Effective, cur *model.Task, parentKind string, e *Effective) []Violation {
+func ValidateWrite(old *model.Task, oldParentKind string, oldE *Effective, cur *model.Task, parentKind string, e *Effective, skipTransitions bool) []Violation {
 	vs := taskViolations(cur, parentKind, e)
 	switch {
 	case old == nil:
 		vs = append(vs, ValidateTransition("", cur.Status, cur, e)...)
 	case old.Status != cur.Status:
-		vs = append(vs, ValidateTransition(old.Status, cur.Status, cur, e)...)
+		from := old.Status
+		if skipTransitions {
+			from = "" // no workflow check; the required fields are still checked
+		}
+		for _, v := range ValidateTransition(from, cur.Status, cur, e) {
+			// Without the workflow, as in a migration, the status is not
+			// entered but renamed: a field is newly missing only when old
+			// had it.
+			if skipTransitions && v.Code == CodeRequired && !filled(old, v.Field) {
+				continue
+			}
+			vs = append(vs, v)
+		}
 	}
 	var had []Violation
 	if old != nil {

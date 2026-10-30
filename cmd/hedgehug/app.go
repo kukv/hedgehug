@@ -52,7 +52,7 @@ func (a *app) rootCmd() *cobra.Command {
 	pf.StringVar(&a.storeName, "store", "", "the store to work on, by name")
 	pf.BoolVar(&a.jsonOut, "json", false, "print JSON")
 	pf.BoolVar(&a.noColor, "no-color", false, "do not color the output")
-	root.AddCommand(a.storeCmd(), a.addCmd(), a.lsCmd(), a.showCmd(), a.setCmd(), a.statusCmd(), a.doneCmd(), a.depCmd(), a.rmCmd(), a.restoreCmd(), a.purgeCmd(), a.mvCmd())
+	root.AddCommand(a.storeCmd(), a.addCmd(), a.lsCmd(), a.showCmd(), a.setCmd(), a.statusCmd(), a.doneCmd(), a.depCmd(), a.rmCmd(), a.restoreCmd(), a.purgeCmd(), a.mvCmd(), a.editCmd(), a.commentCmd(), a.logCmd(), a.schemaCmd(), a.doctorCmd())
 	return root
 }
 
@@ -104,23 +104,39 @@ func (a *app) open() (*store.Store, *index.Index, error) {
 	return s, ix, nil
 }
 
-// update runs one operation, named name and about task, as one commit.
-func (a *app) update(s *store.Store, name string, task model.ID, fn func(*store.Tx) error) error {
+// update runs one operation as one commit, with the author from the
+// environment. committed is false when the operation changed nothing.
+func (a *app) update(s *store.Store, op store.Op, fn func(*store.Tx) error) (bool, error) {
 	author, err := config.Author(a.getenv)
 	if err != nil {
-		return err
+		return false, err
 	}
-	return s.Update(store.Op{Name: name, Task: task, Author: author}, fn)
+	op.Author = author
+	return s.Update(op, fn)
+}
+
+// verb is the heading of a command that printed what it wrote: heading, or
+// "No changes" when nothing was committed.
+func verb(committed bool, heading string) string {
+	if !committed {
+		return "No changes"
+	}
+	return heading
 }
 
 // ambiguousError is index.AmbiguousError with the candidates spelled out.
 type ambiguousError struct {
 	input string
+	noun  string   // what the candidates are, "tasks" when empty
 	lines []string // "<short>  <title>" per candidate
 }
 
 func (e *ambiguousError) Error() string {
-	return fmt.Sprintf("%q matches %d tasks:\n  %s", e.input, len(e.lines), strings.Join(e.lines, "\n  "))
+	noun := e.noun
+	if noun == "" {
+		noun = "tasks"
+	}
+	return fmt.Sprintf("%q matches %d %s:\n  %s", e.input, len(e.lines), noun, strings.Join(e.lines, "\n  "))
 }
 
 // resolve finds the task arg names.

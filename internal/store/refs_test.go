@@ -38,7 +38,7 @@ func idList(ids ...model.ID) *yaml.Node {
 }
 
 func put(s *Store, tasks ...*model.Task) error {
-	return s.Update(Op{Name: "update", Author: testAuthor}, func(tx *Tx) error {
+	_, err := s.Update(Op{Name: "update", Author: testAuthor}, func(tx *Tx) error {
 		for _, t := range tasks {
 			if err := tx.PutTask(t); err != nil {
 				return err
@@ -46,6 +46,7 @@ func put(s *Store, tasks ...*model.Task) error {
 		}
 		return nil
 	})
+	return err
 }
 
 func TestUpdateMissingBlocker(t *testing.T) {
@@ -68,7 +69,7 @@ func TestUpdateKeepsOldMissingRef(t *testing.T) {
 	task.BlockedBy = []model.ID{blocker.ID}
 	addTask(t, s, blocker)
 	addTask(t, s, task)
-	if err := s.Update(Op{Name: "purge", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveTask(blocker.ID) }); err != nil {
+	if _, err := s.Update(Op{Name: "purge", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveTask(blocker.ID) }); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.Task(task.ID)
@@ -100,7 +101,7 @@ func TestUpdateRefToTaskRemovedInSameOp(t *testing.T) {
 	addTask(t, s, blocker)
 	task := newTask("task")
 	task.BlockedBy = []model.ID{blocker.ID}
-	err := s.Update(Op{Name: "update", Author: testAuthor}, func(tx *Tx) error {
+	_, err := s.Update(Op{Name: "update", Author: testAuthor}, func(tx *Tx) error {
 		return errors.Join(tx.RemoveTask(blocker.ID), tx.PutTask(task))
 	})
 	wantViolation(t, err, task.ID, schema.CodeMissingRef, "blocked_by")

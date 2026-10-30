@@ -77,6 +77,46 @@ func TestTasksSkipsOtherFiles(t *testing.T) {
 	}
 }
 
+// Tasks yields a FileError naming the path for a file that does not decode
+// or that holds a task of another id, and no task for it.
+func TestTasksBrokenFiles(t *testing.T) {
+	s := newTestStore(t)
+	a, b := id(t, taskA), id(t, taskB)
+	mustWrite(t, s, model.TaskPath(a), taskFile(taskA, "A"))
+	mustWrite(t, s, model.TaskPath(b), taskFile(taskA, "stale copy of A"))
+	c := id(t, cmt1)
+	mustWrite(t, s, model.TaskPath(c), "not a task\n")
+
+	var titles []string
+	bad := map[string]error{}
+	for task, err := range s.Tasks() {
+		if err != nil {
+			var fe *FileError
+			if !errors.As(err, &fe) {
+				t.Fatalf("err = %v, want a *FileError", err)
+			}
+			if task != nil {
+				t.Errorf("%s: task = %+v, want nil", fe.Path, task)
+			}
+			bad[fe.Path] = fe.Err
+			continue
+		}
+		titles = append(titles, task.Title)
+	}
+	if !slices.Equal(titles, []string{"A"}) {
+		t.Errorf("titles = %v, want [A]", titles)
+	}
+	if err := bad[model.TaskPath(b)]; !errors.Is(err, ErrIDMismatch) {
+		t.Errorf("stale copy: err = %v, want ErrIDMismatch", err)
+	}
+	if err := bad[model.TaskPath(c)]; !errors.As(err, new(*model.DecodeError)) {
+		t.Errorf("not a task: err = %v, want a *model.DecodeError", err)
+	}
+	if len(bad) != 2 {
+		t.Errorf("errors = %v, want two", bad)
+	}
+}
+
 func TestTasksEmptyStore(t *testing.T) {
 	s := newTestStore(t)
 	for _, err := range s.Tasks() {

@@ -1,0 +1,24 @@
+statuses:
+# 未着手
+- name: todo # 最初
+  category: todo
+  x-note: keep
+- {name: doing, category: doing, x-note: keep} # 作業中
+# 完了
+- name: done
+  category: done
+  default: false
+  x-note: keep
+kinds:
+- {name: task, role: work, x-note: keep} # タスク
+props:
+  # 優先度
+  priority: {type: enum, values: [low, high], x-note: keep} # 選択
+  points:
+    type: number # 数値
+    label: 点
+    x-note: keep
+workflow:
+  transitions:
+    todo: [doing] # 開始
+    doing: [done] # 完了へ

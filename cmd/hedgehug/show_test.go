@@ -29,7 +29,7 @@ func TestShow(t *testing.T) {
 		t.Fatal(err)
 	}
 	aid, _ := model.ParseID(a.ID)
-	if err := s.Update(store.Op{Name: "update", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
+	if _, err := s.Update(store.Op{Name: "update", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
 		tk, err := tx.Task(aid)
 		if err != nil {
 			return err
@@ -138,7 +138,7 @@ func TestShowDeleted(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := mustID(t, x.ID)
-	if err := s.Update(store.Op{Name: "rm", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
+	if _, err := s.Update(store.Op{Name: "rm", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
 		tk, err := tx.Task(id)
 		if err != nil {
 			return err
@@ -159,8 +159,41 @@ func TestShowInverseLabel(t *testing.T) {
 	other := te.addJSON("Other")
 	a := te.addJSON("A", "-p", "duplicates+="+other.Short)
 	out := te.ok("show", other.Short)
-	if want := "重複されている     " + a.Short + " A"; !strings.Contains(out, want) {
+	// The label is wider than the column: one space follows it.
+	if want := "  重複されている " + a.Short + " A"; !strings.Contains(out, want) {
 		t.Errorf("show does not contain %q:\n%s", want, out)
+	}
+}
+
+func TestShowWideLabel(t *testing.T) {
+	te := newStoreEnv(t)
+	other := te.addJSON("Other")
+	a := te.addJSON("A", "-p", "relates+="+other.Short)
+	out := te.ok("show", other.Short)
+	// 関連 is 4 columns wide; the values start at column 14, as after id.
+	if want := "  関連        " + a.Short + " A"; !strings.Contains(out, want) {
+		t.Errorf("show does not contain %q:\n%s", want, out)
+	}
+	if want := "  id          " + other.ID; !strings.Contains(out, want) {
+		t.Errorf("show does not contain %q:\n%s", want, out)
+	}
+}
+
+func TestDisplayWidth(t *testing.T) {
+	for _, tc := range []struct {
+		s    string
+		want int
+	}{
+		{"", 0},
+		{"abc", 3},
+		{"関連", 4},
+		{"ＡＢ", 4},
+		{"a関b", 4},
+		{"ｶﾅ", 2},
+	} {
+		if got := displayWidth(tc.s); got != tc.want {
+			t.Errorf("displayWidth(%q) = %d, want %d", tc.s, got, tc.want)
+		}
 	}
 }
 

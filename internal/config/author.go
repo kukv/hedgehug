@@ -6,8 +6,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
-	gitconfig "github.com/go-git/go-git/v5/plumbing/format/config"
+	"github.com/go-git/gcfg"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
 )
@@ -31,27 +32,11 @@ func Author(getenv func(string) string) (gitrepo.Signature, error) {
 		}
 		files = []string{filepath.Join(x, "git", "config"), filepath.Join(h, ".gitconfig")}
 	}
+	h, _ := home(getenv) // only needed for ~/ in an include path
 	var sig gitrepo.Signature
 	for _, f := range files {
-		b, err := os.Open(f) //nolint:gosec // the path is the user's own git config
-		if errors.Is(err, fs.ErrNotExist) {
-			continue
-		}
-		if err != nil {
+		if err := readGitConfig(f, h, 0, &sig); err != nil {
 			return gitrepo.Signature{}, err
-		}
-		cfg := gitconfig.New()
-		err = gitconfig.NewDecoder(b).Decode(cfg)
-		_ = b.Close()
-		if err != nil {
-			return gitrepo.Signature{}, fmt.Errorf("%s: %w", f, err)
-		}
-		u := cfg.Section("user")
-		if v := u.Option("name"); v != "" {
-			sig.Name = v
-		}
-		if v := u.Option("email"); v != "" {
-			sig.Email = v
 		}
 	}
 	switch {
@@ -61,4 +46,59 @@ func Author(getenv func(string) string) (gitrepo.Signature, error) {
 		return sig, errors.New("the author is not known: set it with git config --global user.email <email>")
 	}
 	return sig, nil
+}
+
+// maxIncludeDepth is how deep [include] files are followed; git stops at 10
+// too, which also ends an include loop.
+const maxIncludeDepth = 10
+
+// readGitConfig reads user.name and user.email from the git config file f
+// into sig, in the order they appear, following [include] path = ... where
+// it stands. A missing file is skipped. [includeIf] is not read.
+func readGitConfig(f, home string, depth int, sig *gitrepo.Signature) error {
+	if f == "" || depth > maxIncludeDepth {
+		return nil
+	}
+	r, err := os.Open(f) //nolint:gosec // the path is the user's own git config
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer func() { _ = r.Close() }()
+	err = gcfg.ReadWithCallback(r, func(section, sub, key, value string, blank bool) error {
+		if sub != "" || blank {
+			return nil
+		}
+		switch {
+		case strings.EqualFold(section, "user") && strings.EqualFold(key, "name") && value != "":
+			sig.Name = value
+		case strings.EqualFold(section, "user") && strings.EqualFold(key, "email") && value != "":
+			sig.Email = value
+		case strings.EqualFold(section, "include") && strings.EqualFold(key, "path") && value != "":
+			return readGitConfig(includePath(f, home, value), home, depth+1, sig)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("%s: %w", f, err)
+	}
+	return nil
+}
+
+// includePath resolves an include path: ~/ is the home directory, and a
+// relative path is relative to the file that includes it.
+func includePath(from, home, p string) string {
+	if rest, ok := strings.CutPrefix(p, "~/"); ok {
+		if home == "" {
+			return "" // no home directory: the include is skipped
+		}
+		return filepath.Join(home, filepath.FromSlash(rest))
+	}
+	p = filepath.FromSlash(p)
+	if filepath.IsAbs(p) {
+		return p
+	}
+	return filepath.Join(filepath.Dir(from), p)
 }

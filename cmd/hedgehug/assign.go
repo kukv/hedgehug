@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -184,11 +185,11 @@ func propValue(p schema.Prop, v string, resolve func(string) (model.ID, error)) 
 	switch p.Type {
 	case schema.TypeNumber:
 		_, ierr := strconv.ParseInt(v, 10, 64)
-		_, ferr := strconv.ParseFloat(v, 64)
+		f, ferr := strconv.ParseFloat(v, 64)
 		switch {
 		case ierr == nil:
 			tag = "!!int"
-		case ferr == nil:
+		case ferr == nil && !math.IsNaN(f) && !math.IsInf(f, 0):
 			tag = "!!float"
 		default:
 			return nil, bad("a number")

@@ -8,6 +8,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"golang.org/x/text/width"
+
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
@@ -211,4 +213,19 @@ func (a *app) printTask(ix *index.Index, id model.ID, verb string) error {
 	}
 	_, err := fmt.Fprintf(a.stdout, "%s %s %s\n", verb, a.style().id(ix.ShortID(id)), e.Title)
 	return err
+}
+
+// displayWidth is the number of terminal columns s takes: two for East
+// Asian wide and fullwidth characters, one for the others.
+func displayWidth(s string) int {
+	n := 0
+	for _, r := range s {
+		switch width.LookupRune(r).Kind() {
+		case width.EastAsianWide, width.EastAsianFullwidth:
+			n += 2
+		default:
+			n++
+		}
+	}
+	return n
 }

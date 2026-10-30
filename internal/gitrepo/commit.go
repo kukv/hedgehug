@@ -15,7 +15,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
-// ErrNothingToCommit means a commit named no paths.
+// ErrNothingToCommit means a commit named no paths, or its paths are the
+// same as in HEAD.
 var ErrNothingToCommit = errors.New("nothing to commit")
 
 // Signature is the author of a commit. The committer is the same.
@@ -79,7 +80,11 @@ func (r *Repo) Commit(c Commit) (h plumbing.Hash, err error) {
 		}
 	}
 	sig := &object.Signature{Name: c.Author.Name, Email: c.Author.Email, When: c.When}
-	return w.Commit(message(c), &git.CommitOptions{Author: sig, Committer: sig})
+	h, err = w.Commit(message(c), &git.CommitOptions{Author: sig, Committer: sig})
+	if errors.Is(err, git.ErrEmptyCommit) {
+		return plumbing.ZeroHash, ErrNothingToCommit
+	}
+	return h, err
 }
 
 // unstage drops p from the index without taking the status of the work tree.

@@ -109,7 +109,7 @@ func TestRefreshReadsOnlyChanges(t *testing.T) {
 	added := newTask("added")
 	edited.Title = "edited again"
 	put(t, s, added, edited)
-	if err := s.Update(store.Op{Name: "purge", Author: testAuthor}, func(tx *store.Tx) error { return tx.RemoveTask(purged.ID) }); err != nil {
+	if _, err := s.Update(store.Op{Name: "purge", Author: testAuthor}, func(tx *store.Tx) error { return tx.RemoveTask(purged.ID) }); err != nil {
 		t.Fatal(err)
 	}
 	if err := ix.Refresh(); err != nil {
@@ -151,7 +151,7 @@ func TestRefreshRevalidatesOnSchemaChange(t *testing.T) {
 
 	sc := schema.Default()
 	sc.Props[0].Values = []string{"low", "mid"} // priority without high
-	if err := s.Update(store.Op{Name: "schema", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
+	if _, err := s.Update(store.Op{Name: "schema", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
 		t.Fatal(err)
 	}
 	if err := ix.Refresh(); err != nil {
@@ -216,7 +216,7 @@ func TestProblemsFollowRefresh(t *testing.T) {
 	}
 	sc := schema.Default()
 	sc.Props[0].Values = []string{"low", "mid"}
-	if err := s.Update(store.Op{Name: "schema", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
+	if _, err := s.Update(store.Op{Name: "schema", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
 		t.Fatal(err)
 	}
 	if err := ix.Refresh(); err != nil {

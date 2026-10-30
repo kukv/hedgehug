@@ -66,7 +66,7 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 			}
 			oldE = sc.For(oldAncestors)
 		}
-		vs := schema.ValidateWrite(old, oldParentKind, oldE, t, parentKind, sc.For(ancestors))
+		vs := schema.ValidateWrite(old, oldParentKind, oldE, t, parentKind, sc.For(ancestors), tx.op.SkipTransitions)
 		rvs, err := tx.checkRefs(old, t, sc)
 		if err != nil {
 			return err

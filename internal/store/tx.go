@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
@@ -22,18 +23,24 @@ type Op struct {
 	Name   string   // add, update, rm, mv...; the Hedgehug-Op trailer
 	Task   model.ID // the main task of the operation; zero if none
 	Author gitrepo.Signature
+	// SkipTransitions skips the check of workflow.transitions; a required
+	// field of the new status is still checked, but only when the task had
+	// it before the write.
+	SkipTransitions bool
 }
 
 // Tx collects the writes of one operation. Its Put methods only queue a
 // write; Update writes them all after fn returns.
 type Tx struct {
 	s    *Store
+	op   Op
 	done bool
 
 	order   []string // paths in the order first put
 	pending map[string]*pending
 
 	tasks     map[model.ID]*model.Task // put tasks; nil for a removed one
+	removed   map[model.ID]bool        // tasks given to RemoveTask
 	taskOrder []model.ID
 	schema    *schema.Schema // set by PutSchema
 }
@@ -104,12 +111,18 @@ func (tx *Tx) PutComment(task model.ID, c *model.Comment) error {
 	if task.IsZero() || c.ID.IsZero() {
 		return errors.New("the comment has no id or no task")
 	}
+	if tx.removed[task] {
+		return fmt.Errorf("task %s is removed in this operation", task)
+	}
 	return tx.put(model.CommentPath(task, c.ID), &pending{encode: c.Encode, created: &c.Created, updated: &c.Updated})
 }
 
 func (tx *Tx) PutWorklog(task model.ID, w *model.Worklog) error {
 	if task.IsZero() || w.ID.IsZero() {
 		return errors.New("the worklog entry has no id or no task")
+	}
+	if tx.removed[task] {
+		return fmt.Errorf("task %s is removed in this operation", task)
 	}
 	return tx.put(model.WorklogPath(task, w.ID), &pending{encode: w.Encode, created: &w.Created, updated: &w.Updated})
 }
@@ -156,6 +169,14 @@ func (tx *Tx) RemoveTask(id model.ID) error {
 		return errors.New("the task has no id")
 	}
 	rels := []string{model.TaskPath(id)}
+	// Files put earlier in this operation are removed too.
+	for _, rel := range tx.order {
+		for _, root := range []string{model.CommentPath(id, model.ID{}), model.WorklogPath(id, model.ID{})} {
+			if strings.HasPrefix(rel, path.Dir(root)+"/") && !slices.Contains(rels, rel) {
+				rels = append(rels, rel)
+			}
+		}
+	}
 	for _, dir := range []string{path.Dir(model.CommentPath(id, model.ID{})), path.Dir(model.WorklogPath(id, model.ID{}))} {
 		entries, err := os.ReadDir(tx.s.path(dir))
 		if errors.Is(err, fs.ErrNotExist) {
@@ -165,8 +186,8 @@ func (tx *Tx) RemoveTask(id model.ID) error {
 			return err
 		}
 		for _, e := range entries {
-			if !e.IsDir() {
-				rels = append(rels, dir+"/"+e.Name())
+			if rel := dir + "/" + e.Name(); !e.IsDir() && !slices.Contains(rels, rel) {
+				rels = append(rels, rel)
 			}
 		}
 	}
@@ -176,22 +197,27 @@ func (tx *Tx) RemoveTask(id model.ID) error {
 		}
 	}
 	tx.tasks[id] = nil
+	if tx.removed == nil {
+		tx.removed = map[model.ID]bool{}
+	}
+	tx.removed[id] = true
 	return nil
 }
 
 // Update runs one operation: under the store lock it runs fn, stamps and
 // writes the files fn put, and commits them as one commit. When fn fails
 // nothing is written; when writing or committing fails the files are put
-// back as they were. An operation that changes nothing makes no commit.
-func (s *Store) Update(op Op, fn func(*Tx) error) (err error) {
+// back as they were. An operation that changes nothing makes no commit, and
+// committed is false.
+func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
 	if op.Name == "" {
-		return errors.New("the operation has no name")
+		return false, errors.New("the operation has no name")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	l, err := acquire(s.path(lockPath), s.lockWait)
 	if err != nil {
-		return err
+		return false, err
 	}
 	// A release error is dropped when the operation succeeded: release
 	// closes the file, which drops the OS lock on Unix and Windows anyway,
@@ -206,19 +232,19 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (err error) {
 	// Another Store or a sync may have changed schema.yaml since it was read.
 	cached, err := readDecode(s.dir, schemaPath, schema.Decode)
 	if err != nil {
-		return err
+		return false, err
 	}
 	s.schema.Store(cached)
 
-	tx := &Tx{s: s, pending: map[string]*pending{}, tasks: map[model.ID]*model.Task{}}
+	tx := &Tx{s: s, op: op, pending: map[string]*pending{}, tasks: map[model.ID]*model.Task{}}
 	err = fn(tx)
 	tx.done = true
 	if err != nil {
-		return err
+		return false, err
 	}
 	if tx.schema != nil {
 		if ps := tx.schema.Check(); len(ps) > 0 {
-			return &SchemaError{Problems: ps}
+			return false, &SchemaError{Problems: ps}
 		}
 	}
 	sc := cached
@@ -226,28 +252,34 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (err error) {
 		sc = tx.schema
 	}
 	if err := tx.validate(sc); err != nil {
-		return err
+		return false, err
 	}
 
 	now := s.now().Truncate(time.Second)
 	changes, err := tx.changes(now)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if len(changes) == 0 {
-		return nil
+		return false, nil
 	}
 	commit := tx.commitFor(op, changes, now)
 	if err := s.apply(changes); err != nil {
-		return err
+		return false, err
 	}
 	if err := s.commit(commit); err != nil {
-		return errors.Join(err, s.rollback(changes))
+		// The files written equal HEAD's, so there is nothing to undo.
+		if !errors.Is(err, gitrepo.ErrNothingToCommit) {
+			return false, errors.Join(err, s.rollback(changes))
+		}
+		committed = false
+	} else {
+		committed = true
 	}
 	if tx.schema != nil {
 		s.schema.Store(tx.schema)
 	}
-	return nil
+	return committed, nil
 }
 
 // changes stamps the queued writes and returns those that alter a file.

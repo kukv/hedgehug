@@ -1,0 +1,107 @@
+package main
+
+import (
+	"fmt"
+	"path"
+	"strings"
+	"time"
+
+	"github.com/spf13/cobra"
+
+	"github.com/kukv/hedgehug/internal/gitrepo"
+	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/store"
+)
+
+func (a *app) logCmd() *cobra.Command {
+	var limit int
+	cmd := &cobra.Command{
+		Use:   "log [id]",
+		Short: "Show the commits of the store, or of one task",
+		Args:  asUsage(cobra.MaximumNArgs(1)),
+		RunE: func(_ *cobra.Command, args []string) error {
+			if limit < 0 {
+				return usageErrorf("-n must not be negative")
+			}
+			return a.log(args, limit)
+		},
+	}
+	cmd.Flags().IntVarP(&limit, "limit", "n", 0, "show at most this many commits (0 for all)")
+	return cmd
+}
+
+// logJSON is a commit as --json prints it.
+type logJSON struct {
+	Hash   string    `json:"hash"`
+	Date   time.Time `json:"date"`
+	Author struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	} `json:"author"`
+	Op      *string `json:"op"`
+	Task    *string `json:"task"`
+	Subject string  `json:"subject"`
+}
+
+func toLogJSON(e gitrepo.LogEntry) logJSON {
+	j := logJSON{Hash: e.Hash.String(), Date: e.When, Subject: e.Subject}
+	j.Author.Name, j.Author.Email = e.Author.Name, e.Author.Email
+	if v, ok := e.Trailer("Hedgehug-Op"); ok {
+		j.Op = &v
+	}
+	if v, ok := e.Trailer("Hedgehug-Task"); ok {
+		j.Task = &v
+	}
+	return j
+}
+
+func logJSONs(entries []gitrepo.LogEntry) []logJSON {
+	out := make([]logJSON, len(entries))
+	for i, e := range entries {
+		out[i] = toLogJSON(e)
+	}
+	return out
+}
+
+func logText(entries []gitrepo.LogEntry) string {
+	var b strings.Builder
+	for _, e := range entries {
+		fmt.Fprintf(&b, "%s  %s  %s  %s\n", e.Hash.String()[:7], e.When.In(time.Local).Format("2006-01-02 15:04"), e.Author.Name, e.Subject)
+	}
+	return b.String()
+}
+
+func (a *app) log(args []string, limit int) error {
+	s, ix, err := a.open()
+	if err != nil {
+		return err
+	}
+	var entries []gitrepo.LogEntry
+	if len(args) == 0 {
+		entries, err = s.Repo().Log(nil, limit)
+	} else {
+		e, rerr := a.resolve(ix, args[0])
+		if rerr != nil {
+			return rerr
+		}
+		entries, err = a.taskLog(s, e.ID, limit)
+	}
+	if err != nil {
+		return err
+	}
+	if a.jsonOut {
+		return a.printJSON(logJSONs(entries))
+	}
+	_, err = fmt.Fprint(a.stdout, logText(entries))
+	return err
+}
+
+// taskLog returns the commits that touched the task, its comments or its
+// work logs.
+func (a *app) taskLog(s *store.Store, id model.ID, limit int) ([]gitrepo.LogEntry, error) {
+	return s.Repo().Log([]string{
+		model.TaskPath(id),
+		path.Dir(model.CommentPath(id, model.ID{})) + "/",
+		path.Dir(model.WorklogPath(id, model.ID{})) + "/",
+	}, limit)
+}

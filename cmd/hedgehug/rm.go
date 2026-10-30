@@ -84,7 +84,7 @@ func (a *app) rm(arg string) error {
 		}
 	}
 	now := a.now().Truncate(time.Second)
-	if err := a.update(s, "rm", e.ID, func(tx *store.Tx) error {
+	if _, err := a.update(s, store.Op{Name: "rm", Task: e.ID}, func(tx *store.Tx) error {
 		for _, x := range targets {
 			t, err := tx.Task(x.ID)
 			if err != nil {
@@ -102,11 +102,20 @@ func (a *app) rm(arg string) error {
 	return a.printAffected(ix, e, targets, "Deleted", true)
 }
 
+// notDeleted refuses to change the task e when it is deleted, and points
+// to restore.
+func notDeleted(ix *index.Index, e *index.Entry) error {
+	if e.DeletedAt != nil {
+		return fmt.Errorf("%s is deleted; restore %s first", refName(ix, e.ID), ix.ShortID(e.ID))
+	}
+	return nil
+}
+
 // liveParent refuses a deleted task as a parent: live tasks under it would
 // block its purge and the restore of its other children.
 func liveParent(ix *index.Index, p *index.Entry) error {
-	if p.DeletedAt != nil {
-		return fmt.Errorf("the parent %s is deleted; restore %s first", refName(ix, p.ID), ix.ShortID(p.ID))
+	if err := notDeleted(ix, p); err != nil {
+		return fmt.Errorf("the parent %w", err)
 	}
 	return nil
 }
@@ -134,7 +143,7 @@ func (a *app) restore(arg string) error {
 	targets := append([]*index.Entry{e}, descendants(ix, e.ID, func(d *index.Entry) bool {
 		return d.DeletedAt != nil && d.DeletedAt.Equal(at)
 	})...)
-	if err := a.update(s, "restore", e.ID, func(tx *store.Tx) error {
+	if _, err := a.update(s, store.Op{Name: "restore", Task: e.ID}, func(tx *store.Tx) error {
 		for _, x := range targets {
 			t, err := tx.Task(x.ID)
 			if err != nil {
@@ -175,7 +184,7 @@ func (a *app) purge(arg string, yes bool) error {
 			return err
 		}
 	}
-	if err := a.update(s, "purge", e.ID, func(tx *store.Tx) error {
+	if _, err := a.update(s, store.Op{Name: "purge", Task: e.ID}, func(tx *store.Tx) error {
 		for _, x := range targets {
 			if err := tx.RemoveTask(x.ID); err != nil {
 				return err

@@ -60,6 +60,12 @@ func newEntry(id model.ID, data []byte) (*Entry, *model.Task) {
 	if err != nil {
 		return &Entry{ID: id, Broken: err.Error()}, nil
 	}
+	return EntryOf(t), t
+}
+
+// EntryOf returns what the index keeps of t, as read from its file. A
+// command uses it for a task that is not yet written.
+func EntryOf(t *model.Task) *Entry {
 	e := &Entry{
 		ID:         t.ID,
 		Key:        t.Key,
@@ -80,7 +86,7 @@ func newEntry(id model.ID, data []byte) (*Entry, *model.Task) {
 	for _, f := range t.Props {
 		e.Props = append(e.Props, Prop{Key: f.Key, Values: scalars(f.Value)})
 	}
-	return e, t
+	return e
 }
 
 // scalars returns the values of a property node: one for a scalar, one per

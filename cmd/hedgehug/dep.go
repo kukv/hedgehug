@@ -11,7 +11,16 @@ import (
 )
 
 func (a *app) depCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "dep", Short: "Manage what blocks a task", Args: cobra.NoArgs}
+	cmd := &cobra.Command{
+		Use:   "dep",
+		Short: "Manage what blocks a task",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.SetOut(cmd.ErrOrStderr())
+			_ = cmd.Usage()
+			return usageErrorf("a subcommand is needed")
+		},
+	}
 	for _, add := range []bool{true, false} {
 		var blockedBy string
 		use, short := "add <id> --blocked-by <id>", "Make a task blocked by another"
@@ -44,11 +53,14 @@ func (a *app) dep(arg, blockerArg string, add bool) error {
 	if err != nil {
 		return err
 	}
+	if err := notDeleted(ix, e); err != nil {
+		return err
+	}
 	b, err := a.resolve(ix, blockerArg)
 	if err != nil {
 		return err
 	}
-	if err := a.update(s, "dep", e.ID, func(tx *store.Tx) error {
+	committed, err := a.update(s, store.Op{Name: "dep", Task: e.ID}, func(tx *store.Tx) error {
 		t, err := tx.Task(e.ID)
 		if err != nil {
 			return err
@@ -65,8 +77,9 @@ func (a *app) dep(arg, blockerArg string, add bool) error {
 			t.BlockedBy = slices.DeleteFunc(t.BlockedBy, func(x model.ID) bool { return x == b.ID })
 		}
 		return tx.PutTask(t)
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
-	return a.printTask(ix, e.ID, "Updated")
+	return a.printTask(ix, e.ID, verb(committed, "Updated"))
 }

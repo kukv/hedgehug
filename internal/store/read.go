@@ -12,8 +12,23 @@ import (
 	"github.com/kukv/hedgehug/internal/model"
 )
 
+// ErrIDMismatch means a file holds a task whose id is not the one its path
+// names, as a copy of another task's file would.
+var ErrIDMismatch = errors.New("the id does not match the file name")
+
+// FileError means the file at Path, relative to the store, could not be
+// decoded, or holds what its path does not name.
+type FileError struct {
+	Path string
+	Err  error
+}
+
+func (e *FileError) Error() string { return e.Path + ": " + e.Err.Error() }
+
+func (e *FileError) Unwrap() error { return e.Err }
+
 // readDecode reads the file rel under dir and decodes it. A missing file is
-// ErrNotFound; other errors carry rel.
+// ErrNotFound; a decode error is a *FileError.
 func readDecode[T any](dir, rel string, decode func([]byte) (T, error)) (T, error) {
 	var zero T
 	b, err := readFile(filepath.Join(dir, filepath.FromSlash(rel)))
@@ -25,7 +40,7 @@ func readDecode[T any](dir, rel string, decode func([]byte) (T, error)) (T, erro
 	}
 	v, err := decode(b)
 	if err != nil {
-		return zero, fmt.Errorf("%s: %w", rel, err)
+		return zero, &FileError{Path: rel, Err: err}
 	}
 	return v, nil
 }
@@ -79,12 +94,24 @@ func (s *Store) Task(id model.ID) (*model.Task, error) {
 	return readDecode(s.dir, model.TaskPath(id), model.DecodeTask)
 }
 
+// Tasks returns every task file. One that does not decode, or holds a task
+// of another id, yields a *FileError and no task.
 func (s *Store) Tasks() iter.Seq2[*model.Task, error] {
 	match := func(rel string) bool {
 		_, err := model.ParseTaskPath(rel)
 		return err == nil
 	}
-	return walk(s, "tasks", match, ignoreRel(model.DecodeTask))
+	decode := func(rel string, b []byte) (*model.Task, error) {
+		t, err := model.DecodeTask(b)
+		if err != nil {
+			return nil, err
+		}
+		if model.TaskPath(t.ID) != rel {
+			return nil, fmt.Errorf("%w (id %s)", ErrIDMismatch, t.ID)
+		}
+		return t, nil
+	}
+	return walk(s, "tasks", match, decode)
 }
 
 // Comments returns the comments on task.
@@ -140,6 +167,47 @@ func (s *Store) Templates() iter.Seq2[*model.Template, error] {
 		return model.DecodeTemplate(name, b)
 	}
 	return walk(s, "templates", match, decode)
+}
+
+// TaskBytes returns the file of task id as it is, without decoding it.
+func (s *Store) TaskBytes(id model.ID) ([]byte, error) {
+	rel := model.TaskPath(id)
+	b, err := readFile(s.path(rel))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("%s: %w", rel, ErrNotFound)
+	}
+	return b, err
+}
+
+// CommentRef names one comment file.
+type CommentRef struct{ Task, Comment model.ID }
+
+// CommentIDs lists every comment in the store, in path order. Files under
+// comments/ whose names are not comment paths are left out.
+func (s *Store) CommentIDs() ([]CommentRef, error) {
+	var out []CommentRef
+	err := filepath.WalkDir(s.path("comments"), func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(s.dir, p)
+		if err != nil {
+			return err
+		}
+		task, comment, err := model.ParseCommentPath(filepath.ToSlash(rel))
+		if err != nil {
+			return nil //nolint:nilerr // a file that is not a comment path is skipped
+		}
+		out = append(out, CommentRef{Task: task, Comment: comment})
+		return nil
+	})
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	return out, nil
 }
 
 func templateName(rel string) (string, bool) {

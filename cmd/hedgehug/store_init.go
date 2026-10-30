@@ -15,7 +15,16 @@ import (
 )
 
 func (a *app) storeCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "store", Short: "Manage stores", Args: cobra.NoArgs}
+	cmd := &cobra.Command{
+		Use:   "store",
+		Short: "Manage stores",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.SetOut(cmd.ErrOrStderr())
+			_ = cmd.Usage()
+			return usageErrorf("a subcommand is needed")
+		},
+	}
 	cmd.AddCommand(a.storeInitCmd())
 	return cmd
 }
@@ -44,7 +53,7 @@ func (a *app) storeInitCmd() *cobra.Command {
 
 func (a *app) storeInit(name string, sc *schema.Schema) error {
 	if err := config.ValidStoreName(name); err != nil {
-		return err
+		return usageError{err}
 	}
 	c, p, err := a.config()
 	if err != nil {

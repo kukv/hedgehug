@@ -39,3 +39,6 @@ test-report.xml
 
 ### GoReleaser ###
 dist/
+
+### devenv ###
+/.devenv/

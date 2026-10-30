@@ -29,6 +29,10 @@ type Config struct {
 	file string
 	home string
 	doc  *yaml.Node // the document; nil when the file does not exist
+
+	// flush is true when the file writes its list items at the column of
+	// the key ("stores:\n- name: a"), and false for the indented style.
+	flush bool
 }
 
 // Load reads config.yaml. A missing file is a config with no stores.
@@ -44,6 +48,10 @@ func Load(p Paths) (*Config, error) {
 	var doc yaml.Node
 	if err := yaml.Load(b, &doc); err != nil {
 		if strings.Contains(err.Error(), "no documents") {
+			// Only comments (or nothing): keep the comments for Save.
+			if t := strings.TrimSpace(string(b)); t != "" {
+				c.doc = &yaml.Node{Kind: yaml.DocumentNode, HeadComment: t}
+			}
 			return c, nil
 		}
 		return nil, fmt.Errorf("%s: %w", c.file, err)
@@ -56,6 +64,7 @@ func Load(p Paths) (*Config, error) {
 		return nil, c.errAt(root, "want a mapping")
 	}
 	c.doc = &doc
+	c.flush = detectFlush(root)
 	seq := valueOf(root, "stores")
 	if seq == nil || seq.Tag == "!!null" {
 		return c, nil
@@ -114,7 +123,10 @@ func (c *Config) AddStore(name, path string) error {
 		}
 	}
 	if c.doc == nil {
-		c.doc = &yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}}
+		c.doc = &yaml.Node{Kind: yaml.DocumentNode}
+	}
+	if len(c.doc.Content) == 0 {
+		c.doc.Content = []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}
 	}
 	root := c.doc.Content[0]
 	seq := valueOf(root, "stores")
@@ -136,14 +148,18 @@ func (c *Config) AddStore(name, path string) error {
 
 // Save writes config.yaml through a temporary file and a rename.
 func (c *Config) Save() error {
-	if c.doc == nil {
+	if c.doc == nil || len(c.doc.Content) == 0 {
 		return nil
 	}
-	b, err := yaml.Dump(c.doc, yaml.WithLineWidth(-1))
+	b, err := yaml.Dump(c.doc, yaml.WithLineWidth(-1), yaml.WithIndent(2), yaml.WithCompactSeqIndent(c.flush))
 	if err != nil {
 		return err
 	}
-	dir := filepath.Dir(c.file)
+	file := c.file
+	if r, err := filepath.EvalSymlinks(file); err == nil {
+		file = r // write the link's target and keep the link
+	}
+	dir := filepath.Dir(file)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
@@ -157,7 +173,7 @@ func (c *Config) Save() error {
 		err = cerr
 	}
 	if err == nil {
-		err = os.Rename(tmp, c.file)
+		err = os.Rename(tmp, file)
 	}
 	if err != nil {
 		_ = os.Remove(tmp)
@@ -186,7 +202,12 @@ func (c *Config) expand(p string) string {
 	if rest, ok := strings.CutPrefix(p, "~/"); ok {
 		return filepath.Join(c.home, filepath.FromSlash(rest))
 	}
-	return filepath.Clean(filepath.FromSlash(p))
+	p = filepath.FromSlash(p)
+	if !filepath.IsAbs(p) {
+		// A relative path is relative to config.yaml, not the working directory.
+		p = filepath.Join(filepath.Dir(c.file), p)
+	}
+	return filepath.Clean(p)
 }
 
 // shorten writes p under the home directory as ~/..., with slashes.
@@ -195,6 +216,61 @@ func (c *Config) shorten(p string) string {
 		return "~/" + filepath.ToSlash(rel)
 	}
 	return filepath.ToSlash(p)
+}
+
+// detectFlush reports whether the file writes block lists flush with their
+// key. It looks at stores first, then at the first block list in document
+// order; a file without one is not flush.
+func detectFlush(root *yaml.Node) bool {
+	if k := keyNode(root, "stores"); k != nil {
+		if flush, ok := listStyle(k, valueOf(root, "stores")); ok {
+			return flush
+		}
+	}
+	flush, _ := firstListStyle(root)
+	return flush
+}
+
+// listStyle tells the style of the block list v under the key k. An item
+// starts after "- ", so it is 2 columns right of a flush list and more than
+// 2 right of an indented one.
+func listStyle(k, v *yaml.Node) (flush, ok bool) {
+	if v.Kind != yaml.SequenceNode || v.Style&yaml.FlowStyle != 0 || len(v.Content) == 0 {
+		return false, false
+	}
+	return v.Content[0].Column-k.Column <= 2, true
+}
+
+// firstListStyle finds the first block list under a key, in document order.
+func firstListStyle(n *yaml.Node) (flush, ok bool) {
+	switch n.Kind {
+	case yaml.MappingNode:
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			if flush, ok := listStyle(n.Content[i], n.Content[i+1]); ok {
+				return flush, true
+			}
+			if flush, ok := firstListStyle(n.Content[i+1]); ok {
+				return flush, true
+			}
+		}
+	case yaml.SequenceNode:
+		for _, it := range n.Content {
+			if flush, ok := firstListStyle(it); ok {
+				return flush, true
+			}
+		}
+	}
+	return false, false
+}
+
+// keyNode returns the key node of key in the mapping m, or nil.
+func keyNode(m *yaml.Node, key string) *yaml.Node {
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == key {
+			return m.Content[i]
+		}
+	}
+	return nil
 }
 
 // valueOf returns the value of key in the mapping m, or nil.

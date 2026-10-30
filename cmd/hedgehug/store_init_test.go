@@ -74,7 +74,8 @@ func TestStoreInitErrors(t *testing.T) {
 		want     string
 	}{
 		{"a name twice", []string{"store", "init", "me"}, 1, `"me"`},
-		{"a bad name", []string{"store", "init", "Bad"}, 1, "cannot name a store"},
+		{"a bad name", []string{"store", "init", "Bad"}, 2, "cannot name a store"},
+		{"a name with a space", []string{"store", "init", "Bad Name"}, 2, "cannot name a store"},
 		{"an unknown template", []string{"store", "init", "x", "--template", "nope"}, 2, "--template"},
 		{"no name", []string{"store", "init"}, 2, "accepts 1 arg"},
 	} {

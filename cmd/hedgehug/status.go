@@ -53,15 +53,19 @@ func (a *app) setStatus(arg, name string) error {
 	if err != nil {
 		return err
 	}
-	if err := a.update(s, "status", e.ID, func(tx *store.Tx) error {
+	if err := notDeleted(ix, e); err != nil {
+		return err
+	}
+	committed, err := a.update(s, store.Op{Name: "status", Task: e.ID}, func(tx *store.Tx) error {
 		t, err := tx.Task(e.ID)
 		if err != nil {
 			return err
 		}
 		t.Status = name
 		return tx.PutTask(t)
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
-	return a.printTask(ix, e.ID, "Updated")
+	return a.printTask(ix, e.ID, verb(committed, "Updated"))
 }

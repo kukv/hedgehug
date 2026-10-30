@@ -77,6 +77,12 @@ func TestValidateTaskViolations(t *testing.T) {
 		{"  start: 2026-13-01\n", "bad_value:start"},
 		{"  estimate: 1d\n", "bad_value:estimate"},
 		{"  points: many\n", "bad_value:points"},
+		{"  points: NaN\n", "bad_value:points"},
+		{"  points: .nan\n", "bad_value:points"},
+		{"  points: Inf\n", "bad_value:points"},
+		{"  points: -Inf\n", "bad_value:points"},
+		{"  points: +Inf\n", "bad_value:points"},
+		{"  points: .inf\n", "bad_value:points"},
 		{"  duplicates: 01JBZ8K3QW7M2X9V4T6R5N8P0B\n", "bad_value:duplicates"}, // multi needs a list
 		{"  duplicates: [nope]\n", "bad_value:duplicates"},
 		{"  area: [ops]\n", "bad_value:area"},
@@ -97,6 +103,15 @@ func TestValidateTaskViolations(t *testing.T) {
 	want := map[string]bool{"unknown_kind:kind": true, "unknown_status:status": true, "missing_title:title": true}
 	if got := codes(vs); len(got) != 3 || !want[got[0]] || !want[got[1]] || !want[got[2]] {
 		t.Errorf("violations = %v", got)
+	}
+}
+
+func TestValidateTaskNumberOK(t *testing.T) {
+	for _, v := range []string{"1.5", "-3", "1e3"} {
+		vs, _ := ValidateTask(taskWith(t, "  points: "+v+"\n"), Default().For(nil))
+		if len(vs) != 0 {
+			t.Errorf("points: %s: violations = %v, want none", v, codes(vs))
+		}
 	}
 }
 
@@ -216,7 +231,39 @@ func TestValidateWrite(t *testing.T) {
 		}
 		cur := taskWith(t, "")
 		tc.cur(cur)
-		got := codes(ValidateWrite(old, tc.oldParentKind, oldE, cur, tc.parentKind, e))
+		got := codes(ValidateWrite(old, tc.oldParentKind, oldE, cur, tc.parentKind, e, false))
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s: violations = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// With skipTransitions, as in a migration, a required field counts only
+// when the write empties it: a task that lacked it before is not refused.
+func TestValidateWriteSkipTransitionsRequired(t *testing.T) {
+	s := Default()
+	s.Statuses = append(s.Statuses, Status{Name: "doing", Category: CategoryDoing})
+	s.Workflow = Workflow{Required: Lists{{"doing", []string{"assignees"}}}}
+	e := s.For(nil)
+	me := []string{"github.com/me"}
+
+	for _, tc := range []struct {
+		name         string
+		oldAssignees []string
+		curAssignees []string
+		skip         bool
+		want         []string
+	}{
+		{"lacked it before", nil, nil, true, nil},
+		{"the write empties it", me, nil, true, []string{"required:assignees"}},
+		{"kept", me, me, true, nil},
+		{"without skip it is checked", nil, nil, false, []string{"required:assignees"}},
+	} {
+		old := taskWith(t, "")
+		old.Status, old.Assignees = "in_progress", tc.oldAssignees
+		cur := taskWith(t, "")
+		cur.Status, cur.Assignees = "doing", tc.curAssignees
+		got := codes(ValidateWrite(old, "", e, cur, "", e, tc.skip))
 		if !slices.Equal(got, tc.want) {
 			t.Errorf("%s: violations = %v, want %v", tc.name, got, tc.want)
 		}

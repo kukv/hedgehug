@@ -118,6 +118,88 @@ func TestLsTreeCycle(t *testing.T) {
 	}
 }
 
+func TestLsTreeCycleNested(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("X")
+	y := te.addJSON("Y", "--parent", x.Short)
+	c := te.addJSON("C", "--parent", y.Short, "--status", "done")
+	s, err := store.Open(te.storeDir("me"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeCycle(t, te, s, mustID(t, x.ID), mustID(t, y.ID))
+
+	// Text: X and Y at the left under the header, C as Y's child.
+	out := te.ok("ls", "--tree")
+	_, after, ok := strings.Cut(out, "== in a parent cycle\n")
+	if !ok {
+		t.Fatalf("no cycle header:\n%s", out)
+	}
+	lines := strings.Split(strings.TrimRight(after, "\n"), "\n")
+	at := map[string]int{}
+	for i, l := range lines {
+		for _, sh := range []string{x.Short, y.Short, c.Short} {
+			if strings.Contains(l, sh) {
+				at[sh] = i
+			}
+		}
+	}
+	if len(lines) != 3 || len(at) != 3 {
+		t.Fatalf("cycle section = %q, want three lines with X, Y and C", lines)
+	}
+	if !strings.HasPrefix(lines[at[x.Short]], x.Short) || !strings.HasPrefix(lines[at[y.Short]], y.Short) {
+		t.Errorf("cycle members are not at the left: %q", lines)
+	}
+	if at[c.Short] != at[y.Short]+1 || !strings.HasPrefix(lines[at[c.Short]], "└─ "+c.Short) {
+		t.Errorf("C is not drawn as Y's child: %q", lines)
+	}
+
+	// JSON: the same nesting; in_cycle only on X and Y.
+	raw := te.ok("ls", "--tree", "--json")
+	var roots []taskJSON
+	if err := json.Unmarshal([]byte(raw), &roots); err != nil {
+		t.Fatal(err)
+	}
+	if len(roots) != 2 {
+		t.Fatalf("tree JSON has %d roots, want 2: %+v", len(roots), roots)
+	}
+	for _, r := range roots {
+		if !r.InCycle {
+			t.Errorf("%s: in_cycle = false, want true", r.Title)
+		}
+		switch r.Short {
+		case x.Short:
+			if len(r.Children) != 0 {
+				t.Errorf("X children = %+v, want none", r.Children)
+			}
+		case y.Short:
+			if len(r.Children) != 1 || r.Children[0].Short != c.Short || r.Children[0].InCycle {
+				t.Errorf("Y children = %+v, want C out of the cycle", r.Children)
+			}
+		default:
+			t.Errorf("unexpected root %s", r.Title)
+		}
+	}
+	if n := strings.Count(raw, `"in_cycle"`); n != 2 {
+		t.Errorf("in_cycle appears %d times in the JSON, want 2", n)
+	}
+
+	// --format: in_cycle as in JSON.
+	got := te.ok("ls", "--tree", "--format", "{{.title}} {{.context}} {{.in_cycle}}")
+	if !strings.Contains(got, "X false true\n") || !strings.Contains(got, "Y false true\nC false false\n") {
+		t.Errorf("--tree --format = %q, want X and Y in the cycle and C after Y", got)
+	}
+
+	// --ids-only: only the tasks found, in drawn order.
+	if got := te.ok("ls", "--tree", "--ids-only", "status:done"); got != c.Short+"\n" {
+		t.Errorf("--tree --ids-only = %q, want only %s", got, c.Short)
+	}
+	got = te.ok("ls", "--tree", "--ids-only")
+	if !strings.Contains(got, y.Short+"\n"+c.Short+"\n") || strings.Count(got, "\n") != 3 {
+		t.Errorf("--tree --ids-only = %q, want X, Y and C with C after Y", got)
+	}
+}
+
 func TestLsTreeErrors(t *testing.T) {
 	te := newStoreEnv(t)
 	for _, q := range []string{"group:status", "sort:title"} {

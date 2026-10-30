@@ -195,6 +195,85 @@ type pair struct {
 	Ref  string `yaml:"ref"`
 }
 
+type named struct {
+	Name  string `yaml:"name"`
+	Label string `yaml:"label,omitempty"`
+}
+
+func TestPutMergesChangedItemByName(t *testing.T) {
+	src := "items:\n# head\n- name: a # first\n  x: keep\n  label: A\n- {name: b, x: keep} # second\n"
+	e := parse(t, src).Encoder()
+	e.Put("items", []named{{"b", "B"}, {"a", "AA"}}, false)
+	want := "items:\n- {name: b, label: B, x: keep} # second\n# head\n- name: a # first\n  x: keep\n  label: AA\n"
+	if got := encode(t, e, nil); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestPutMergesRenamedItemByPosition(t *testing.T) {
+	src := "items:\n- name: a # first\n  x: keep\n- {name: b, x: keep} # second\n"
+	e := parse(t, src).Encoder()
+	e.Put("items", []named{{Name: "z"}, {Name: "b"}}, false)
+	want := "items:\n- name: z # first\n  x: keep\n- {name: b, x: keep} # second\n"
+	if got := encode(t, e, nil); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestPutMergesMapValues(t *testing.T) {
+	src := "m:\n  # head\n  a: {name: a, x: keep} # first\n  b: {name: b} # second\n"
+	e := parse(t, src).Encoder()
+	e.Put("m", map[string]named{"a": {"a", "A"}, "b": {Name: "b"}}, false)
+	want := "m:\n  # head\n  a: {name: a, label: A, x: keep} # first\n  b: {name: b} # second\n"
+	if got := encode(t, e, nil); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestPutMergesRenamedMapKeyByPosition(t *testing.T) {
+	src := "m:\n  # head\n  a: {name: a, x: keep} # first\n  b: {name: b} # second\n"
+	e := parse(t, src).Encoder()
+	e.Put("m", map[string]named{"z": {Name: "a"}, "b": {Name: "b"}}, false)
+	want := "m:\n  # head\n  z: {name: a, x: keep} # first\n  b: {name: b} # second\n"
+	if got := encode(t, e, nil); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestTaskLinkChangeKeepsOtherLinks(t *testing.T) {
+	src := "---\nid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nlinks:\n- type: github_pr # PR\n  ref: r1\n  sync: \"\"\n  x: keep\n- {type: github_issue, ref: r2, x: keep} # issue\n---\n"
+	task, err := DecodeTask([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	task.Links[1].Ref = "r3"
+	out, err := task.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Replace(src, "ref: r2", "ref: r3", 1)
+	if string(out) != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
+func TestTaskPropChangeKeepsOtherComments(t *testing.T) {
+	task, err := DecodeTask(readFile(t, "testdata/task/full.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	task.Props.Set("points", node(t, 8))
+	out, err := task.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"  priority: high # 優先度\n", "  points: 8\n", "custom: kept # 未知のキー\n"} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestPutKeepsBlockMappingsInList(t *testing.T) {
 	d := parse(t, "links:\n- type: x\n  ref: r\n")
 	e := d.Encoder()
@@ -267,6 +346,34 @@ func TestParseDocRejects(t *testing.T) {
 	var de *DecodeError
 	if !errors.As(err, &de) || de.Field != "a" || de.Line != 13 {
 		t.Errorf("dup error = %#v, want DecodeError a at line 13", err)
+	}
+}
+
+func TestParseDocRejectsTags(t *testing.T) {
+	for name, src := range map[string]string{
+		"binary": "a: 1\ntitle: !!binary aGk=\n",
+		"str":    "a: 1\nx: !!str 12\n",
+		"custom": "a: 1\nx: !custom v\n",
+		"root":   "!!map {a: 1}\n",
+	} {
+		_, err := ParseDoc([]byte(src), 10)
+		var de *DecodeError
+		if !errors.As(err, &de) || !strings.Contains(err.Error(), "YAML tags are not supported") {
+			t.Errorf("%s: err = %v, want tag DecodeError", name, err)
+			continue
+		}
+		want := 12
+		if name == "root" {
+			want = 11
+		}
+		if de.Line != want {
+			t.Errorf("%s: Line = %d, want %d", name, de.Line, want)
+		}
+	}
+	for _, src := range []string{"x: 12\n", "x: \"12\"\n"} {
+		if _, err := ParseDoc([]byte(src), 0); err != nil {
+			t.Errorf("ParseDoc(%q) = %v", src, err)
+		}
 	}
 }
 

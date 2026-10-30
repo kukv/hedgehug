@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
@@ -24,6 +25,7 @@ func (a *app) showCmd() *cobra.Command {
 
 type commentJSON struct {
 	ID      string    `json:"id"`
+	Short   string    `json:"short"`
 	Author  string    `json:"author"`
 	Created time.Time `json:"created"`
 	Body    string    `json:"body"`
@@ -41,7 +43,11 @@ type showJSON struct {
 	Repos    []string             `json:"repos"`
 	Comments []commentJSON        `json:"comments"`
 	Reverse  map[string][]refJSON `json:"reverse"`
+	History  []logJSON            `json:"history"`
 }
+
+// showHistory is how many commits show lists under History.
+const showHistory = 5
 
 // relation is one kind of task pointing at the task shown.
 type relation struct {
@@ -66,16 +72,26 @@ func (a *app) show(arg string) error {
 		}
 	}
 	var comments []*model.Comment
+	var ci *commentIndex
 	if e.Broken == "" {
 		if comments, err = liveComments(s, e.ID); err != nil {
 			return err
 		}
+		if len(comments) > 0 {
+			if ci, err = loadComments(s); err != nil {
+				return err
+			}
+		}
 	}
 	rels := reverse(ix, e.ID)
-	if a.jsonOut {
-		return a.printJSON(showOf(ix, e, t, comments, rels))
+	history, err := a.taskLog(s, e.ID, showHistory)
+	if err != nil {
+		return err
 	}
-	_, err = fmt.Fprint(a.stdout, a.showText(ix, e, t, comments, rels))
+	if a.jsonOut {
+		return a.printJSON(showOf(ix, e, t, comments, ci, rels, history))
+	}
+	_, err = fmt.Fprint(a.stdout, a.showText(ix, e, t, comments, ci, rels, history))
 	return err
 }
 
@@ -128,13 +144,13 @@ func refName(ix *index.Index, id model.ID) string {
 	return id.String() + " (not found)"
 }
 
-func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []relation) *showJSON {
-	j := &showJSON{taskJSON: entryJSON(ix, e), Watchers: []string{}, Repos: []string{}, Comments: []commentJSON{}, Reverse: map[string][]refJSON{}}
+func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, ci *commentIndex, rels []relation, history []gitrepo.LogEntry) *showJSON {
+	j := &showJSON{taskJSON: entryJSON(ix, e), Watchers: []string{}, Repos: []string{}, Comments: []commentJSON{}, Reverse: map[string][]refJSON{}, History: logJSONs(history)}
 	if t != nil {
 		j.Body, j.Watchers, j.Repos = t.Body, orEmpty(t.Watchers), orEmpty(t.Repos)
 	}
 	for _, c := range comments {
-		j.Comments = append(j.Comments, commentJSON{c.ID.String(), c.Author, c.Created, c.Body})
+		j.Comments = append(j.Comments, commentJSON{c.ID.String(), ci.Short(c.ID), c.Author, c.Created, c.Body})
 	}
 	for _, r := range rels {
 		for _, x := range r.tasks {
@@ -144,7 +160,7 @@ func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Co
 	return j
 }
 
-func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []relation) string {
+func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, ci *commentIndex, rels []relation, history []gitrepo.LogEntry) string {
 	st := a.style()
 	var b strings.Builder
 	b.WriteString(st.id(ix.ShortID(e.ID)) + "  " + e.Title + "\n")
@@ -153,7 +169,7 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 		if v == "" {
 			v = "-"
 		}
-		fmt.Fprintf(&b, "  %-11s %s\n", k, v)
+		b.WriteString("  " + k + strings.Repeat(" ", max(0, 11-displayWidth(k))) + " " + v + "\n")
 	}
 	refs := func(ids []model.ID) []string {
 		out := make([]string, len(ids))
@@ -222,11 +238,18 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 	if len(comments) > 0 {
 		b.WriteString("\nComments:\n")
 		for _, c := range comments {
-			fmt.Fprintf(&b, "  %s  %s\n", c.Author, c.Created.Format(time.RFC3339))
+			author := c.Author
+			if author == "" {
+				author = "-"
+			}
+			fmt.Fprintf(&b, "  %s  %s  %s\n", st.id(ci.Short(c.ID)), author, c.Created.Format(time.RFC3339))
 			for _, l := range strings.Split(strings.TrimRight(c.Body, "\n"), "\n") {
 				b.WriteString("    " + l + "\n")
 			}
 		}
+	}
+	if len(history) > 0 {
+		b.WriteString("\nHistory:\n" + logText(history))
 	}
 	return b.String()
 }
