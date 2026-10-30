@@ -97,7 +97,7 @@ func (s *Store) Schema() *schema.Schema
   2. `.hedgehug/store.yaml`（`meta`。`format` は `model.StoreFormat` にそろえる）、`schema.yaml`（`schema.Default()`）、`.gitignore`（`.hedgehug/local/` の1行）を書く
   3. 初回コミットを作る（件名 `hedgehug: init`、trailer `Hedgehug-Op: init`）
 - `Open` は `store.yaml` と `schema.yaml` を読む。`store.yaml` の `format` が対応より新しいときのエラーは、1a の `DecodeStoreMeta` が返す。
-- `Meta()` と `Schema()` は `Open` 時点の値を返す。`Update` で `schema.yaml` を書いたら、成功したあとに差し替える。
+- `Meta()` は `Open` 時点の値を返す。`Schema()` は最後に読んだスキーマを返す。`Update` はロックを取ったあとに `schema.yaml` を読み直して差し替え、検査にはそれを使う。ほかの `Store` や同期が書き換えたスキーマも、次の `Update` で反映される。読み直したスキーマをデコードできなければ、`Update` はエラーを返す。`Update` で `schema.yaml` を書いたら、成功したあとに差し替える。
 
 ### 読み出し
 
@@ -151,7 +151,7 @@ func (tx *Tx) PutSchema(sc *schema.Schema) error
 
 流れ:
 
-1. `.hedgehug/local/lock` のロックを取る（「ロック」の節）。同じ `Store` の中では、ロックの前に `sync.Mutex` でも直列にする。
+1. `.hedgehug/local/lock` のロックを取る（「ロック」の節）。同じ `Store` の中では、ロックの前に `sync.Mutex` でも直列にする。ロックを取ったら `schema.yaml` を読み直す。
 2. `fn(tx)` を実行する。エラーなら何も書かずに返す。
 3. 書き込み時の検査をかける（「書き込み時の検査」の節）。違反があれば何も書かずに `*ValidationError` を返す。`PutSchema` のスキーマは `Check()` にかけ、問題があれば拒否する。
 4. 日時を付けて、変更を検出する（「日時の付与と変更の検出」の節）。変更が1つもなければ、コミットせずに `nil` を返す。

@@ -203,6 +203,13 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (err error) {
 		}
 	}()
 
+	// Another Store or a sync may have changed schema.yaml since it was read.
+	cached, err := readDecode(s.dir, schemaPath, schema.Decode)
+	if err != nil {
+		return err
+	}
+	s.schema.Store(cached)
+
 	tx := &Tx{s: s, pending: map[string]*pending{}, tasks: map[model.ID]*model.Task{}}
 	err = fn(tx)
 	tx.done = true
@@ -214,7 +221,7 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (err error) {
 			return &SchemaError{Problems: ps}
 		}
 	}
-	sc := s.Schema()
+	sc := cached
 	if tx.schema != nil {
 		sc = tx.schema
 	}

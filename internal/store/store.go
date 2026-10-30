@@ -119,7 +119,8 @@ func ensureEmpty(dir string) error {
 }
 
 // Open opens the store in dir. It reads store.yaml and schema.yaml now;
-// Meta and Schema return what it read.
+// Meta returns what it read. Update reads schema.yaml again, and Schema
+// returns the schema read last.
 func Open(dir string) (*Store, error) {
 	meta, err := readDecode(dir, model.StoreMetaPath, model.DecodeStoreMeta)
 	if err != nil {

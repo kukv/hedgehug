@@ -394,6 +394,33 @@ func TestPutSchema(t *testing.T) {
 	}
 }
 
+func TestUpdateRereadsSchema(t *testing.T) {
+	a := newTestStore(t)
+	b, err := Open(a.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Update(Op{Name: "schema", Author: testAuthor}, func(tx *Tx) error { return tx.PutSchema(schema.Dev()) }); err != nil {
+		t.Fatal(err)
+	}
+	task := newTask("x")
+	task.Status = "review"
+	if err := b.Update(Op{Name: "add", Task: task.ID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(task) }); err != nil {
+		t.Errorf("the other store did not see the new schema: %v", err)
+	}
+	if _, ok := b.Schema().Status("review"); !ok {
+		t.Error("Schema() of the other store was not refreshed")
+	}
+}
+
+func TestUpdateFailsOnBadSchemaFile(t *testing.T) {
+	s := newTestStore(t)
+	mustWrite(t, s, schemaPath, "statuses: [\n")
+	if err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(newTask("x")) }); err == nil {
+		t.Error("Update succeeded with a schema.yaml that does not decode")
+	}
+}
+
 func TestSchemaWhileUpdating(t *testing.T) {
 	s := newTestStore(t)
 	done := make(chan struct{})
