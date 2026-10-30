@@ -20,8 +20,8 @@ func TestShow(t *testing.T) {
 	te := newStoreEnv(t)
 	p := te.addJSON("Project", "--kind", "project")
 	other := te.addJSON("Other")
-	a := te.addJSON("Write the spec", "--parent", p.Key, "-p", "blocked_by+="+other.Key, "-p", "due=2026-11-01", "-p", "labels+=ui")
-	waiting := te.addJSON("Waiting", "-p", "blocked_by+="+a.Key)
+	a := te.addJSON("Write the spec", "--parent", p.ID, "-p", "blocked_by+="+other.ID, "-p", "due=2026-11-01", "-p", "labels+=ui")
+	waiting := te.addJSON("Waiting", "-p", "blocked_by+="+a.ID)
 
 	// Add a body and a comment through the store; the CLI for them is 1d-2.
 	s, err := store.Open(te.storeDir("me"))
@@ -43,10 +43,12 @@ func TestShow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out := te.ok("show", a.Key)
+	out := te.ok("show", a.ID)
+	// The heading is the title alone; the id and the ULID are the first fields.
+	if want := "Write the spec\n  id          " + a.ID + "\n  ulid        " + a.ULID + "\n  workspace   me (ME, "; !strings.HasPrefix(out, want) {
+		t.Errorf("show does not start with %q:\n%s", want, out)
+	}
 	for _, want := range []string{
-		// The heading is the title; the key and the ULID are the first fields.
-		"Write the spec\n  key         " + a.Key + "\n  ulid        " + a.ULID + "\n  workspace   me (ME, ",
 		"workspace   me (ME, ",
 		"parent      " + label(p) + " Project",
 		"blocked_by  " + label(other) + " Other",
@@ -63,7 +65,7 @@ func TestShow(t *testing.T) {
 			t.Errorf("show does not contain %q:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "Problems:") || strings.Contains(out, "deleted ") || strings.Contains(out, "former_keys") || strings.Contains(out, a.Key+" ("+a.ULID+")  ") {
+	if strings.Contains(out, "Problems:") || strings.Contains(out, "deleted ") || strings.Contains(out, "former_ids") || strings.Contains(out, a.ID+" ("+a.ULID+")  ") {
 		t.Errorf("show has sections it should not:\n%s", out)
 	}
 
@@ -75,10 +77,10 @@ func TestShow(t *testing.T) {
 		} `json:"comments"`
 		Reverse map[string][]refJSON `json:"reverse"`
 	}
-	if err := json.Unmarshal([]byte(te.ok("show", a.Key, "--json")), &got); err != nil {
+	if err := json.Unmarshal([]byte(te.ok("show", a.ID, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Title != "Write the spec" || got.Body != "The body.\n" || len(got.Comments) != 1 || len(got.Reverse["blocks"]) != 1 || got.Reverse["blocks"][0] != (refJSON{waiting.ULID, waiting.Key, "Waiting"}) {
+	if got.Title != "Write the spec" || got.Body != "The body.\n" || len(got.Comments) != 1 || len(got.Reverse["blocks"]) != 1 || got.Reverse["blocks"][0] != (refJSON{waiting.ULID, waiting.ID, "Waiting"}) {
 		t.Errorf("show --json = %+v", got)
 	}
 }
@@ -151,7 +153,7 @@ func TestShowDeleted(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if out := te.ok("show", x.Key); !strings.Contains(out, "  deleted     ") {
+	if out := te.ok("show", x.ID); !strings.Contains(out, "  deleted     ") {
 		t.Errorf("show of a deleted task has no deleted line:\n%s", out)
 	}
 }
@@ -159,8 +161,8 @@ func TestShowDeleted(t *testing.T) {
 func TestShowInverseLabel(t *testing.T) {
 	te := newStoreEnv(t)
 	other := te.addJSON("Other")
-	a := te.addJSON("A", "-p", "duplicates+="+other.Key)
-	out := te.ok("show", other.Key)
+	a := te.addJSON("A", "-p", "duplicates+="+other.ID)
+	out := te.ok("show", other.ID)
 	// The label is wider than the column: one space follows it.
 	if want := "  重複されている " + label(a) + " A"; !strings.Contains(out, want) {
 		t.Errorf("show does not contain %q:\n%s", want, out)
@@ -170,9 +172,9 @@ func TestShowInverseLabel(t *testing.T) {
 func TestShowWideLabel(t *testing.T) {
 	te := newStoreEnv(t)
 	other := te.addJSON("Other")
-	a := te.addJSON("A", "-p", "relates+="+other.Key)
-	out := te.ok("show", other.Key)
-	// 関連 is 4 columns wide; the values start at column 14, as after id.
+	a := te.addJSON("A", "-p", "relates+="+other.ID)
+	out := te.ok("show", other.ID)
+	// 関連 is 4 columns wide; the values start at column 14, as after ulid.
 	if want := "  関連        " + label(a) + " A"; !strings.Contains(out, want) {
 		t.Errorf("show does not contain %q:\n%s", want, out)
 	}

@@ -19,7 +19,7 @@ import (
 //	    └── a (task, in_progress, label backend, assignee alice,
 //	           priority high, due 2026-11-05, estimate 2h, points 3,
 //	           blocked by b, duplicates c, body "検索語 で探す")
-//	b (task, backlog, key WEB-1, priority urgent, due 2026-11-20,
+//	b (task, backlog, id WEB-1, priority urgent, due 2026-11-20,
 //	   relates c, body "Fix LOGIN 検索語")
 //	c (task, done, label wip, priority low)
 //	d (task, todo, deleted)
@@ -43,7 +43,7 @@ func newFixture(t *testing.T) *fixture {
 	a.BlockedBy = []model.ULID{b.ULID}
 	setRefs(a, "duplicates", c.ULID)
 	a.Body = "検索語 で探す\n"
-	b.Status, b.Key = "backlog", "WEB-1"
+	b.Status, b.ID = "backlog", "WEB-1"
 	setProp(b, "priority", "urgent")
 	setProp(b, "due", "2026-11-20")
 	setRefs(b, "relates", c.ULID)
@@ -161,7 +161,7 @@ func TestRunErrors(t *testing.T) {
 
 func TestRunWorkspace(t *testing.T) {
 	s := newStore(t)
-	api := &model.Workspace{ULID: model.NewULID(), Name: "api", KeyPrefix: "API"}
+	api := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
 	if _, err := s.Update(store.Op{Name: "workspace", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutWorkspace(api) }); err != nil {
 		t.Fatal(err)
 	}

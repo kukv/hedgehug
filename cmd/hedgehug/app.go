@@ -133,7 +133,7 @@ func verb(committed bool, heading string) string {
 type ambiguousError struct {
 	input string
 	noun  string   // what the candidates are, "tasks" when empty
-	lines []string // "<key> (<ULID>) <title>" per candidate
+	lines []string // "<id> (<ULID>) <title>" per candidate
 }
 
 func (e *ambiguousError) Error() string {

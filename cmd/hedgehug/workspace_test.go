@@ -18,24 +18,24 @@ func TestWorkspaceCommands(t *testing.T) {
 		t.Errorf("add with two workspaces: %d %s", code, errs)
 	}
 	a := te.addJSON("a", "--workspace", "api")
-	if a.Key != "API-1" {
-		t.Errorf("key = %s", a.Key)
+	if a.ID != "API-1" {
+		t.Errorf("id = %s", a.ID)
 	}
-	child := te.addJSON("c", "--parent", a.Key)
-	if child.Key != "API-2" {
-		t.Errorf("child key = %s", child.Key)
+	child := te.addJSON("c", "--parent", a.ID)
+	if child.ID != "API-2" {
+		t.Errorf("child id = %s", child.ID)
 	}
-	if code, _, _ := te.run("add", "y", "--parent", a.Key, "--workspace", "me"); code == 0 {
+	if code, _, _ := te.run("add", "y", "--parent", a.ID, "--workspace", "me"); code == 0 {
 		t.Error("a parent in another workspace is accepted")
 	}
 	out := te.ok("workspace", "prefix", "api", "BE")
 	if !strings.Contains(out, "API-1 → BE-1") || !strings.Contains(out, "API-2 → BE-2") {
 		t.Errorf("prefix =\n%s", out)
 	}
-	if got := te.task(a.ULID); got.Key != "BE-1" || !slices.Equal(got.FormerKeys, []string{"API-1"}) {
-		t.Errorf("after prefix: %s %v", got.Key, got.FormerKeys)
+	if got := te.task(a.ULID); got.ID != "BE-1" || !slices.Equal(got.FormerIDs, []string{"API-1"}) {
+		t.Errorf("after prefix: %s %v", got.ID, got.FormerIDs)
 	}
-	te.ok("show", "API-1") // a former key still resolves
+	te.ok("show", "API-1") // a former id still resolves
 	te.ok("workspace", "rename", "be", "backend")
 	if code, _, errs := te.run("workspace", "rm", "backend"); code == 0 || !strings.Contains(errs, "2 tasks") {
 		t.Errorf("rm with tasks: %d %s", code, errs)
@@ -134,10 +134,10 @@ func fieldNames(m map[string]any) []string {
 func TestWorkspaceJSON(t *testing.T) {
 	te := newStoreEnv(t)
 	te.addJSON("a")
-	want := []string{"key_prefix", "name", "prefix_set", "tasks", "ulid"}
+	want := []string{"id_prefix", "name", "prefix_set", "tasks", "ulid"}
 	var added map[string]any
 	te.wsJSON(&added, "add", "web", "--prefix", "WEB")
-	if !slices.Equal(fieldNames(added), want) || added["name"] != "web" || added["key_prefix"] != "WEB" || added["tasks"] != 0.0 {
+	if !slices.Equal(fieldNames(added), want) || added["name"] != "web" || added["id_prefix"] != "WEB" || added["tasks"] != 0.0 {
 		t.Errorf("add --json = %v", added)
 	}
 	var ls []map[string]any
@@ -152,12 +152,12 @@ func TestWorkspaceJSON(t *testing.T) {
 	}
 	var prefixed map[string]any
 	te.wsJSON(&prefixed, "prefix", "me", "BE")
-	if !slices.Equal(fieldNames(prefixed), want) || prefixed["key_prefix"] != "BE" || prefixed["name"] != "me" {
+	if !slices.Equal(fieldNames(prefixed), want) || prefixed["id_prefix"] != "BE" || prefixed["name"] != "me" {
 		t.Errorf("prefix --json = %v", prefixed)
 	}
 	var removed map[string]any
 	te.wsJSON(&removed, "rm", "front")
-	if !slices.Equal(fieldNames(removed), want) || removed["name"] != "front" || removed["key_prefix"] != "WEB" {
+	if !slices.Equal(fieldNames(removed), want) || removed["name"] != "front" || removed["id_prefix"] != "WEB" {
 		t.Errorf("rm --json = %v", removed)
 	}
 }
@@ -171,7 +171,7 @@ func TestStoreInitJSONHasTheWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	w := got.Workspace
-	if !slices.Equal(fieldNames(w), []string{"key_prefix", "name", "ulid"}) || w["name"] != "main" || w["key_prefix"] != "ME" {
+	if !slices.Equal(fieldNames(w), []string{"id_prefix", "name", "ulid"}) || w["name"] != "main" || w["id_prefix"] != "ME" {
 		t.Fatalf("workspace = %v", w)
 	}
 	if _, err := model.ParseULID(w["ulid"].(string)); err != nil {
@@ -206,7 +206,7 @@ func TestCheckPrefixElsewhereSkipsABrokenStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, _, errs := te.run("--store", "me", "workspace", "add", "web", "--prefix", "WEB")
-	if code != 0 || !strings.Contains(errs, "warning: store other is not checked for key prefixes") {
+	if code != 0 || !strings.Contains(errs, "warning: store other is not checked for id prefixes") {
 		t.Errorf("exit %d, stderr %q", code, errs)
 	}
 	if out := te.ok("--store", "me", "workspace", "ls"); !strings.Contains(out, "web") {
@@ -219,10 +219,10 @@ func TestAddUnderAParentInAMissingWorkspace(t *testing.T) {
 	p := te.addJSON("p")
 	gone := model.NewULID().String()
 	te.commitFile(p.ULID, setLine(te.raw(p.ULID), "workspace", gone))
-	if code, _, errs := te.run("add", "c", "--parent", p.Key, "--workspace", "me"); code != 1 || !strings.Contains(errs, "the parent's workspace "+gone+" is not in this store") {
+	if code, _, errs := te.run("add", "c", "--parent", p.ID, "--workspace", "me"); code != 1 || !strings.Contains(errs, "the parent's workspace "+gone+" is not in this store") {
 		t.Errorf("with --workspace: exit %d, stderr %q", code, errs)
 	}
-	if code, _, errs := te.run("add", "c", "--parent", p.Key); code != 1 || !strings.Contains(errs, "workspace "+gone+" is not in this store") {
+	if code, _, errs := te.run("add", "c", "--parent", p.ID); code != 1 || !strings.Contains(errs, "workspace "+gone+" is not in this store") {
 		t.Errorf("without --workspace: exit %d, stderr %q", code, errs)
 	}
 }
@@ -233,13 +233,13 @@ func TestTaskInAMissingWorkspace(t *testing.T) {
 	gone := model.NewULID().String()
 	te.commitFile(x.ULID, setLine(te.raw(x.ULID), "workspace", gone))
 	var got taskJSON
-	if err := json.Unmarshal([]byte(te.ok("show", x.Key, "--json")), &got); err != nil {
+	if err := json.Unmarshal([]byte(te.ok("show", x.ID, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
 	if got.Workspace == nil || *got.Workspace != (workspaceRefJSON{ULID: gone}) {
 		t.Errorf("workspace = %+v", got.Workspace)
 	}
-	if out := te.ok("show", x.Key); !strings.Contains(out, "  workspace   "+gone+"\n") {
+	if out := te.ok("show", x.ID); !strings.Contains(out, "  workspace   "+gone+"\n") {
 		t.Errorf("show:\n%s", out)
 	}
 }
@@ -248,15 +248,15 @@ func TestAmbiguousTask(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("first")
 	b := te.addJSON("second")
-	te.commitFile(b.ULID, setLine(te.raw(b.ULID), "key", a.Key))
-	code, _, errs := te.run("show", a.Key)
+	te.commitFile(b.ULID, setLine(te.raw(b.ULID), "id", a.ID))
+	code, _, errs := te.run("show", a.ID)
 	if code != 1 {
 		t.Errorf("exit %d", code)
 	}
 	for _, want := range []string{
-		`"` + a.Key + `" matches 2 tasks:`,
-		"\n  " + a.Key + " (" + a.ULID + ") first",
-		"\n  " + a.Key + " (" + b.ULID + ") second",
+		`"` + a.ID + `" matches 2 tasks:`,
+		"\n  " + a.ID + " (" + a.ULID + ") first",
+		"\n  " + a.ID + " (" + b.ULID + ") second",
 	} {
 		if !strings.Contains(errs, want) {
 			t.Errorf("stderr lacks %q:\n%s", want, errs)

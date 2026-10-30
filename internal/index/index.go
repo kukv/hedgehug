@@ -1,5 +1,5 @@
 // Package index keeps an index of the tasks of a store, for queries and for
-// finding a task by its key. It reads task files from the tree of HEAD, so a
+// finding a task by its id. It reads task files from the tree of HEAD, so a
 // change that is not committed is not seen.
 package index
 
@@ -62,7 +62,7 @@ func Open(s *store.Store) (*Index, error) {
 	if rebuilt || tree != head {
 		ix.save()
 	}
-	s.SetKeyNumbers(ix.KeyNumbers)
+	s.SetIDNumbers(ix.IDNumbers)
 	return ix, nil
 }
 

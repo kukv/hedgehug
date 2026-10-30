@@ -173,7 +173,7 @@ func initUser(home, u string) error {
 	}
 	storeDir := filepath.Join(p.StoresDir, storeName)
 	author := gitrepo.Signature{Name: u, Email: u + "@example.com"}
-	if _, err := store.Create(storeDir, &model.StoreMeta{ULID: model.NewULID(), Name: storeName}, nil, &model.Workspace{ULID: model.NewULID(), Name: storeName, KeyPrefix: "DEV"}, author); err != nil {
+	if _, err := store.Create(storeDir, &model.StoreMeta{ULID: model.NewULID(), Name: storeName}, nil, &model.Workspace{ULID: model.NewULID(), Name: storeName, IDPrefix: "DEV"}, author); err != nil {
 		return err
 	}
 	c, err := config.Load(p)

@@ -10,8 +10,8 @@ func TestWriteWithoutChangeSaysSo(t *testing.T) {
 	a := te.addJSON("Alpha")
 
 	for _, args := range [][]string{
-		{"set", a.Key, "title=same"},
-		{"status", a.Key, "in_progress"},
+		{"set", a.ID, "title=same"},
+		{"status", a.ID, "in_progress"},
 	} {
 		te.ok(args...)
 		before := len(te.log("me"))

@@ -51,7 +51,7 @@ func TestStatusRejectedByTransitionAddsNoCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := len(te.log("me"))
-	code, _, stderr := te.run("status", a.Key, "done")
+	code, _, stderr := te.run("status", a.ID, "done")
 	if code != 1 || !strings.HasPrefix(stderr, "hedgehug: ") {
 		t.Errorf("exit %d, stderr %q, want 1 and an error", code, stderr)
 	}
@@ -67,9 +67,9 @@ func TestDepAddCycleAddsNoCommit(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	b := te.addJSON("Beta")
-	te.ok("dep", "add", a.Key, "--blocked-by", b.Key)
+	te.ok("dep", "add", a.ID, "--blocked-by", b.ID)
 	before := len(te.log("me"))
-	code, _, stderr := te.run("dep", "add", b.Key, "--blocked-by", a.Key)
+	code, _, stderr := te.run("dep", "add", b.ID, "--blocked-by", a.ID)
 	if code != 1 || !strings.Contains(stderr, "leads back") {
 		t.Errorf("exit %d, stderr %q", code, stderr)
 	}
@@ -82,7 +82,7 @@ func TestDepAddSelfIsAnError(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	before := len(te.log("me"))
-	code, _, stderr := te.run("dep", "add", a.Key, "--blocked-by", a.Key)
+	code, _, stderr := te.run("dep", "add", a.ID, "--blocked-by", a.ID)
 	if code == 0 || !strings.HasPrefix(stderr, "hedgehug: ") {
 		t.Errorf("exit %d, stderr %q, want an error", code, stderr)
 	}
@@ -97,7 +97,7 @@ func TestMvAgainstItself(t *testing.T) {
 	te.addJSON("Beta")
 	before := len(te.log("me"))
 	for _, flag := range []string{"--before", "--after"} {
-		code, _, stderr := te.run("mv", a.Key, flag, a.Key)
+		code, _, stderr := te.run("mv", a.ID, flag, a.ID)
 		if code == 0 || !strings.HasPrefix(stderr, "hedgehug: ") {
 			t.Errorf("mv %s itself: exit %d, stderr %q, want an error", flag, code, stderr)
 		}
@@ -111,9 +111,9 @@ func TestMvDeletedTask(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	te.addJSON("Beta")
-	te.ok("rm", a.Key)
+	te.ok("rm", a.ID)
 	before := len(te.log("me"))
-	code, _, stderr := te.run("mv", a.Key, "--root")
+	code, _, stderr := te.run("mv", a.ID, "--root")
 	if code != 1 || !strings.Contains(stderr, "restore") {
 		t.Errorf("exit %d, stderr %q, want 1 and a pointer to restore", code, stderr)
 	}

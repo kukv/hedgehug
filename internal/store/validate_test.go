@@ -285,7 +285,7 @@ func TestValidateWorkspace(t *testing.T) {
 	if err := write(&model.Task{ULID: model.NewULID(), Workspace: model.NewULID(), Kind: "task", Title: "x", Status: "todo"}); !errors.As(err, &ve) || ve.Violations[0].Code != CodeNoWorkspace {
 		t.Errorf("unknown workspace: %v", err)
 	}
-	api := &model.Workspace{ULID: model.NewULID(), Name: "api", KeyPrefix: "API"}
+	api := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
 	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(api) }); err != nil {
 		t.Fatal(err)
 	}
@@ -296,23 +296,23 @@ func TestValidateWorkspace(t *testing.T) {
 	if err := write(child); !errors.As(err, &ve) || ve.Violations[0].Code != CodeWorkspaceMismatch {
 		t.Errorf("mismatch: %v", err)
 	}
-	dup := &model.Workspace{ULID: model.NewULID(), Name: "other", KeyPrefix: "API"}
+	dup := &model.Workspace{ULID: model.NewULID(), Name: "other", IDPrefix: "API"}
 	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(dup) }); err == nil {
 		t.Error("a duplicate prefix is accepted")
 	}
-	same := &model.Workspace{ULID: model.NewULID(), Name: "test", KeyPrefix: "APX"}
+	same := &model.Workspace{ULID: model.NewULID(), Name: "test", IDPrefix: "APX"}
 	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(same) }); err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("a duplicate name: %v", err)
 	}
 	// A file written by hand may have an upper-case name; the same name in
 	// lower case is still the same name.
-	upper := &model.Workspace{ULID: model.NewULID(), Name: "Web", KeyPrefix: "WEB"}
+	upper := &model.Workspace{ULID: model.NewULID(), Name: "Web", IDPrefix: "WEB"}
 	b, err := upper.Encode()
 	if err != nil {
 		t.Fatal(err)
 	}
 	mustWrite(t, s, model.WorkspacePath(upper.ULID), string(b))
-	lower := &model.Workspace{ULID: model.NewULID(), Name: "web", KeyPrefix: "WBX"}
+	lower := &model.Workspace{ULID: model.NewULID(), Name: "web", IDPrefix: "WBX"}
 	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(lower) }); err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("a duplicate name in another case: %v", err)
 	}

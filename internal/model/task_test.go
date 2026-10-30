@@ -22,7 +22,7 @@ func TestTaskRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if task.Key != "WEB-42" || task.Title != "ログイン画面の改修" || task.Rank != "a0V" ||
+	if task.ID != "WEB-42" || task.Title != "ログイン画面の改修" || task.Rank != "a0V" ||
 		task.Parent == nil || task.Sprint == nil || len(task.BlockedBy) != 1 ||
 		len(task.Links) != 1 || task.Links[0].Sync != "mirror" ||
 		task.Props.Get("points").Value != "5" || task.GH == nil || task.DeletedAt != nil ||
@@ -73,7 +73,7 @@ func TestTaskEncodeChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	task.Key = "WEB-43"
+	task.ID = "WEB-43"
 	task.Labels = append(task.Labels, "api")
 	task.Props.Delete("points")
 	task.Extra.Delete("custom")
@@ -82,7 +82,7 @@ func TestTaskEncodeChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(out)
-	for _, want := range []string{"key: WEB-43 # 人が読めるキー\n", "labels: [frontend, api]\n", "  priority: high # 優先度\n"} {
+	for _, want := range []string{"id: WEB-43 # 人が読める ID\n", "labels: [frontend, api]\n", "  priority: high # 優先度\n"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("output lacks %q:\n%s", want, s)
 		}

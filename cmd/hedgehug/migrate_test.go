@@ -46,9 +46,9 @@ func TestSchemaMigrateStatus(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	b := te.addJSON("Beta")
-	te.ok("rm", b.Key)
+	te.ok("rm", b.ID)
 	c := te.addJSON("Gamma")
-	te.ok("status", c.Key, "done")
+	te.ok("status", c.ID, "done")
 	d := te.addJSON("Broken")
 	te.commitFile(d.ULID, "not a task\n")
 	te.putSchema(func(sc *schema.Schema) {
@@ -97,7 +97,7 @@ func TestSchemaMigrateSkipsMismatchedULID(t *testing.T) {
 	d := te.addJSON("Delta")
 	stale := te.raw(a.ULID)
 	te.commitFile(d.ULID, stale)
-	te.ok("set", a.Key, "title=Alpha2")
+	te.ok("set", a.ID, "title=Alpha2")
 
 	code, out, stderr := te.run("schema", "migrate", "status", "todo", "ready")
 	if code != 0 {
@@ -120,7 +120,7 @@ func TestSchemaMigrateSkipsMismatchedULID(t *testing.T) {
 func TestSchemaMigrateJSON(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
-	te.ok("set", a.Key, "priority=mid")
+	te.ok("set", a.ID, "priority=mid")
 	te.addJSON("Beta")
 	d := te.addJSON("Broken")
 	te.commitFile(d.ULID, "not a task\n")
@@ -130,7 +130,7 @@ func TestSchemaMigrateJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
-	if len(got.Changed) != 1 || got.Changed[0].Key != a.Key || got.Changed[0].Props["priority"] != "medium" {
+	if len(got.Changed) != 1 || got.Changed[0].ID != a.ID || got.Changed[0].Props["priority"] != "medium" {
 		t.Errorf("changed = %+v", got.Changed)
 	}
 	if len(got.Skipped) != 1 || got.Skipped[0] != d.ULID {
@@ -144,7 +144,7 @@ func TestSchemaMigrateJSON(t *testing.T) {
 func TestSchemaMigrateKindAndProp(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha", "--kind", "bug")
-	te.ok("set", a.Key, "start=2026-11-01")
+	te.ok("set", a.ID, "start=2026-11-01")
 	te.ok("schema", "migrate", "kind", "bug", "task")
 	te.ok("schema", "migrate", "prop", "start", "begin")
 	x := te.task(a.ULID)
@@ -159,9 +159,9 @@ func TestSchemaMigrateKindAndProp(t *testing.T) {
 func TestSchemaMigratePropOnBoth(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
-	te.ok("set", a.Key, "start=2026-11-01", "due=2026-11-30")
+	te.ok("set", a.ID, "start=2026-11-01", "due=2026-11-30")
 	b := te.addJSON("Beta")
-	te.ok("set", b.Key, "start=2026-11-01", "due=2026-11-30")
+	te.ok("set", b.ID, "start=2026-11-01", "due=2026-11-30")
 	before := len(te.log("me"))
 	code, _, stderr := te.run("schema", "migrate", "prop", "start", "due")
 	if code != 1 || !strings.Contains(stderr, label(a)) || !strings.Contains(stderr, label(b)) || !strings.Contains(stderr, "both start and due") {
@@ -175,7 +175,7 @@ func TestSchemaMigratePropOnBoth(t *testing.T) {
 func TestSchemaMigrateRejectsNewViolation(t *testing.T) {
 	te := newStoreEnv(t)
 	p := te.addJSON("Parent")
-	c := te.addJSON("Child", "--parent", p.Key)
+	c := te.addJSON("Child", "--parent", p.ID)
 	before := len(te.log("me"))
 	sf := te.schemaFile()
 	// A bug may not sit under a bug.
@@ -196,7 +196,7 @@ func TestSchemaMigrateRejectsNewViolation(t *testing.T) {
 func TestSchemaMigrateMergeIntoRequired(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
-	te.ok("status", a.Key, "backlog")
+	te.ok("status", a.ID, "backlog")
 	te.putSchema(func(sc *schema.Schema) {
 		sc.Workflow.Required = schema.Lists{{Key: "todo", Values: []string{"points"}}}
 	})
@@ -210,7 +210,7 @@ func TestSchemaMigrateMergeIntoRequired(t *testing.T) {
 func TestSchemaMigrateKeepsMissingRequired(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
-	te.ok("status", a.Key, "in_progress")
+	te.ok("status", a.ID, "in_progress")
 	te.putSchema(func(sc *schema.Schema) {
 		sc.Workflow.Required = schema.Lists{{Key: "in_progress", Values: []string{"assignees"}}}
 	})
@@ -260,7 +260,7 @@ func TestSchemaMigrateDryRun(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
-	if len(got.Changed) != 1 || got.Changed[0].Key != a.Key || got.Changed[0].Status != "ready" {
+	if len(got.Changed) != 1 || got.Changed[0].ID != a.ID || got.Changed[0].Status != "ready" {
 		t.Errorf("changed = %+v, want Alpha as migrated", got.Changed)
 	}
 	if n := len(te.log("me")); n != before {

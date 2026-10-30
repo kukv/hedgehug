@@ -52,7 +52,7 @@ type Tx struct {
 
 	workspaces map[model.ULID]*model.Workspace // put workspaces; nil for a removed one
 	numbers    model.Numbers                   // the purged numbers; nil until read
-	oldKeys    []oldKey                        // what assignKeys changed
+	oldIDs     []oldID                         // what assignIDs changed
 }
 
 // pending is one queued write. created and updated point into the value
@@ -260,7 +260,7 @@ func (tx *Tx) RemoveTask(id model.ULID) error {
 }
 
 // recordNumbers raises the record of purged numbers to the numbers of t's
-// keys, so numbering never gives them again.
+// ids, so numbering never gives them again.
 func (tx *Tx) recordNumbers(t *model.Task) error {
 	if tx.numbers == nil {
 		n, err := tx.s.Numbers()
@@ -270,8 +270,8 @@ func (tx *Tx) recordNumbers(t *model.Task) error {
 		tx.numbers = n
 	}
 	changed := false
-	for _, k := range append([]string{t.Key}, t.FormerKeys...) {
-		if p, n, ok := model.ParseKey(k); ok && n > tx.numbers[p] {
+	for _, k := range append([]string{t.ID}, t.FormerIDs...) {
+		if p, n, ok := model.ParseTaskID(k); ok && n > tx.numbers[p] {
 			tx.numbers[p] = n
 			changed = true
 		}
@@ -315,16 +315,16 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
 	s.schema.Store(cached)
 
 	tx := &Tx{s: s, op: op, pending: map[string]*pending{}, tasks: map[model.ULID]*model.Task{}, workspaces: map[model.ULID]*model.Workspace{}}
-	// assignKeys changes the caller's tasks; a failed operation leaves them
+	// assignIDs changes the caller's tasks; a failed operation leaves them
 	// as they were given.
 	defer func() {
 		if err != nil {
-			tx.restoreKeys()
+			tx.restoreIDs()
 		}
 	}()
 	err = fn(tx)
 	if err == nil {
-		err = tx.assignKeys()
+		err = tx.assignIDs()
 	}
 	tx.done = true
 	if err != nil {
@@ -409,7 +409,7 @@ func (tx *Tx) changes(now time.Time) ([]change, error) {
 	return out, nil
 }
 
-// commitFor builds the commit of op. The subject names the task by its key,
+// commitFor builds the commit of op. The subject names the task by its id,
 // or by its ULID when it has none, and gives its title as op leaves it; with
 // no task it ends with op.Detail.
 func (tx *Tx) commitFor(op Op, cs []change, now time.Time) gitrepo.Commit {
@@ -429,8 +429,8 @@ func (tx *Tx) commitFor(op Op, cs []change, now time.Time) gitrepo.Commit {
 			t, err = tx.s.Task(op.Task)
 		}
 		if err == nil {
-			if t.Key != "" {
-				label = t.Key
+			if t.ID != "" {
+				label = t.ID
 			}
 			title = t.Title
 		}

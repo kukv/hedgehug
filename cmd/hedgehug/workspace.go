@@ -19,7 +19,7 @@ import (
 type workspaceJSON struct {
 	ULID      string    `json:"ulid"`
 	Name      string    `json:"name"`
-	KeyPrefix string    `json:"key_prefix"`
+	IDPrefix  string    `json:"id_prefix"`
 	PrefixSet time.Time `json:"prefix_set"`
 	Tasks     int       `json:"tasks"` // not deleted
 }
@@ -42,12 +42,12 @@ func (a *app) workspaceCmd() *cobra.Command {
 		Args:  exactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			if prefix == "" {
-				return usageErrorf("--prefix is required: the key prefix of the workspace, such as WEB")
+				return usageErrorf("--prefix is required: the id prefix of the workspace, such as WEB")
 			}
 			return a.workspaceAdd(args[0], prefix)
 		},
 	}
-	add.Flags().StringVar(&prefix, "prefix", "", "the key prefix of the workspace, such as WEB")
+	add.Flags().StringVar(&prefix, "prefix", "", "the id prefix of the workspace, such as WEB")
 	cmd.AddCommand(add,
 		&cobra.Command{
 			Use:   "ls",
@@ -63,7 +63,7 @@ func (a *app) workspaceCmd() *cobra.Command {
 		},
 		&cobra.Command{
 			Use:   "prefix <workspace> <P>",
-			Short: "Change the key prefix of a workspace and renumber its tasks",
+			Short: "Change the id prefix of a workspace and renumber its tasks",
 			Args:  exactArgs(2),
 			RunE:  func(_ *cobra.Command, args []string) error { return a.workspacePrefix(args[0], args[1]) },
 		},
@@ -84,14 +84,14 @@ func resolveWorkspace(ix *index.Index, arg string) (*model.Workspace, error) {
 	if errors.As(err, &ae) {
 		lines := make([]string, len(ae.Candidates))
 		for i, c := range ae.Candidates {
-			lines[i] = fmt.Sprintf("%s (%s, %s)", c.Name, c.KeyPrefix, c.ULID)
+			lines[i] = fmt.Sprintf("%s (%s, %s)", c.Name, c.IDPrefix, c.ULID)
 		}
 		return nil, &ambiguousError{input: arg, noun: "workspaces", lines: lines}
 	}
 	return w, err
 }
 
-// checkPrefixElsewhere refuses a key prefix that a workspace of another store
+// checkPrefixElsewhere refuses an id prefix that a workspace of another store
 // of the config has. A store that cannot be opened is skipped with a warning.
 func (a *app) checkPrefixElsewhere(prefix, self string) error {
 	c, _, err := a.config()
@@ -104,15 +104,15 @@ func (a *app) checkPrefixElsewhere(prefix, self string) error {
 		}
 		s, err := store.Open(e.Path)
 		if err != nil {
-			_, _ = fmt.Fprintf(a.stderr, "warning: store %s is not checked for key prefixes: %v\n", e.Name, err)
+			_, _ = fmt.Fprintf(a.stderr, "warning: store %s is not checked for id prefixes: %v\n", e.Name, err)
 			continue
 		}
 		for w, err := range s.Workspaces() {
 			if err != nil {
 				continue
 			}
-			if strings.EqualFold(w.KeyPrefix, prefix) {
-				return fmt.Errorf("key prefix %s is used by workspace %s of store %s", prefix, w.Name, e.Name)
+			if strings.EqualFold(w.IDPrefix, prefix) {
+				return fmt.Errorf("id prefix %s is used by workspace %s of store %s", prefix, w.Name, e.Name)
 			}
 		}
 	}
@@ -133,7 +133,7 @@ func (a *app) workspaceAdd(name, prefix string) error {
 	if err := model.ValidWorkspaceName(name); err != nil {
 		return usageError{err}
 	}
-	if err := model.ValidKeyPrefix(prefix); err != nil {
+	if err := model.ValidIDPrefix(prefix); err != nil {
 		return usageError{err}
 	}
 	self, err := a.selectedStoreName()
@@ -147,12 +147,12 @@ func (a *app) workspaceAdd(name, prefix string) error {
 	if err != nil {
 		return err
 	}
-	w := &model.Workspace{ULID: model.NewULID(), Name: name, KeyPrefix: prefix, PrefixSet: a.now()}
-	op := workspaceOp(w.ULID, "add %s (%s)", w.Name, w.KeyPrefix)
+	w := &model.Workspace{ULID: model.NewULID(), Name: name, IDPrefix: prefix, PrefixSet: a.now()}
+	op := workspaceOp(w.ULID, "add %s (%s)", w.Name, w.IDPrefix)
 	if _, err := a.update(s, op, func(tx *store.Tx) error { return tx.PutWorkspace(w) }); err != nil {
 		return err
 	}
-	return a.printWorkspace(ix, w, fmt.Sprintf("Added workspace %s (%s, %s)", w.Name, w.KeyPrefix, w.ULID))
+	return a.printWorkspace(ix, w, fmt.Sprintf("Added workspace %s (%s, %s)", w.Name, w.IDPrefix, w.ULID))
 }
 
 func (a *app) workspaceRename(arg, name string) error {
@@ -169,7 +169,7 @@ func (a *app) workspaceRename(arg, name string) error {
 	}
 	old := ws.Name
 	var w *model.Workspace
-	op := workspaceOp(ws.ULID, "rename %s → %s (%s)", old, name, ws.KeyPrefix)
+	op := workspaceOp(ws.ULID, "rename %s → %s (%s)", old, name, ws.IDPrefix)
 	if _, err := a.update(s, op, func(tx *store.Tx) error {
 		var err error
 		if w, err = tx.Workspace(ws.ULID); err != nil {
@@ -180,11 +180,11 @@ func (a *app) workspaceRename(arg, name string) error {
 	}); err != nil {
 		return err
 	}
-	return a.printWorkspace(ix, w, fmt.Sprintf("Renamed workspace %s to %s (%s, %s)", old, w.Name, w.KeyPrefix, w.ULID))
+	return a.printWorkspace(ix, w, fmt.Sprintf("Renamed workspace %s to %s (%s, %s)", old, w.Name, w.IDPrefix, w.ULID))
 }
 
 func (a *app) workspacePrefix(arg, prefix string) error {
-	if err := model.ValidKeyPrefix(prefix); err != nil {
+	if err := model.ValidIDPrefix(prefix); err != nil {
 		return usageError{err}
 	}
 	s, ix, err := a.open()
@@ -195,8 +195,8 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 	if err != nil {
 		return err
 	}
-	if ws.KeyPrefix == prefix {
-		return a.printWorkspace(ix, ws, fmt.Sprintf("%s: %s already has the key prefix %s (%s)", verb(false, ""), ws.Name, ws.KeyPrefix, ws.ULID))
+	if ws.IDPrefix == prefix {
+		return a.printWorkspace(ix, ws, fmt.Sprintf("%s: %s already has the id prefix %s (%s)", verb(false, ""), ws.Name, ws.IDPrefix, ws.ULID))
 	}
 	self, err := a.selectedStoreName()
 	if err != nil {
@@ -207,20 +207,20 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 	}
 	var w *model.Workspace
 	var tasks []*model.Task
-	var oldKeys []string
-	op := workspaceOp(ws.ULID, "prefix %s %s → %s", ws.Name, ws.KeyPrefix, prefix)
+	var oldIDs []string
+	op := workspaceOp(ws.ULID, "prefix %s %s → %s", ws.Name, ws.IDPrefix, prefix)
 	if _, err := a.update(s, op, func(tx *store.Tx) error {
 		var err error
 		if w, err = tx.Workspace(ws.ULID); err != nil {
 			return err
 		}
-		w.KeyPrefix = prefix
+		w.IDPrefix = prefix
 		w.PrefixSet = a.now()
 		if err := tx.PutWorkspace(w); err != nil {
 			return err
 		}
 		// Every task of the workspace, deleted ones too, in the order of
-		// its old number; assignKeys numbers them in the order they are
+		// its old number; assignIDs numbers them in the order they are
 		// put. Read under the lock, so a task added since is renumbered too.
 		if err := ix.Refresh(); err != nil {
 			return err
@@ -233,7 +233,7 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 		}
 		number := func(id model.ULID) int {
 			e, _ := ix.Task(id)
-			_, n, _ := model.ParseKey(e.Key)
+			_, n, _ := model.ParseTaskID(e.ID)
 			return n
 		}
 		slices.SortFunc(ids, func(x, y model.ULID) int {
@@ -244,7 +244,7 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 			if err != nil {
 				return err
 			}
-			oldKeys = append(oldKeys, t.Key)
+			oldIDs = append(oldIDs, t.ID)
 			tasks = append(tasks, t)
 			if err := tx.PutTask(t); err != nil {
 				return err
@@ -258,9 +258,9 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 		return a.printWorkspace(ix, w, "")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Changed the key prefix of %s to %s (%s); renumbered %d tasks\n", w.Name, w.KeyPrefix, w.ULID, len(tasks))
+	fmt.Fprintf(&b, "Changed the id prefix of %s to %s (%s); renumbered %d tasks\n", w.Name, w.IDPrefix, w.ULID, len(tasks))
 	for i, t := range tasks {
-		fmt.Fprintf(&b, "  %s → %s\n", oldKeys[i], t.Key)
+		fmt.Fprintf(&b, "  %s → %s\n", oldIDs[i], t.ID)
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())
 	return err
@@ -278,11 +278,11 @@ func (a *app) workspaceRm(arg string) error {
 	if n := countTasks(ix, ws.ULID, true); n > 0 {
 		return fmt.Errorf("workspace %s still has %d tasks; move them with hedgehug mv --workspace or purge them", ws.Name, n)
 	}
-	op := workspaceOp(ws.ULID, "rm %s (%s)", ws.Name, ws.KeyPrefix)
+	op := workspaceOp(ws.ULID, "rm %s (%s)", ws.Name, ws.IDPrefix)
 	if _, err := a.update(s, op, func(tx *store.Tx) error { return tx.RemoveWorkspace(ws.ULID) }); err != nil {
 		return err
 	}
-	return a.printWorkspace(ix, ws, fmt.Sprintf("Removed workspace %s (%s, %s)", ws.Name, ws.KeyPrefix, ws.ULID))
+	return a.printWorkspace(ix, ws, fmt.Sprintf("Removed workspace %s (%s, %s)", ws.Name, ws.IDPrefix, ws.ULID))
 }
 
 // workspaceOp is the operation of a workspace command on the workspace id.
@@ -306,7 +306,7 @@ func (a *app) workspaceLs() error {
 	}
 	rows := make([][]string, len(wss))
 	for i, w := range wss {
-		rows[i] = []string{w.Name, w.KeyPrefix, w.ULID.String(), fmt.Sprint(countTasks(ix, w.ULID, false))}
+		rows[i] = []string{w.Name, w.IDPrefix, w.ULID.String(), fmt.Sprint(countTasks(ix, w.ULID, false))}
 	}
 	return writeTable(a.stdout, []string{"NAME", "PREFIX", "ULID", "TASKS"}, rows, nil)
 }
@@ -324,7 +324,7 @@ func countTasks(ix *index.Index, ws model.ULID, withDeleted bool) int {
 }
 
 func workspaceToJSON(ix *index.Index, w *model.Workspace) workspaceJSON {
-	return workspaceJSON{ULID: w.ULID.String(), Name: w.Name, KeyPrefix: w.KeyPrefix, PrefixSet: w.PrefixSet, Tasks: countTasks(ix, w.ULID, false)}
+	return workspaceJSON{ULID: w.ULID.String(), Name: w.Name, IDPrefix: w.IDPrefix, PrefixSet: w.PrefixSet, Tasks: countTasks(ix, w.ULID, false)}
 }
 
 // printWorkspace prints w as JSON, or line as text. ix is the index from

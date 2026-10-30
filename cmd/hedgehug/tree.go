@@ -22,7 +22,7 @@ type treeNode struct {
 	children []*treeNode
 }
 
-func (a *app) lsTree(q *query.Query, idsOnly bool, tmpl *template.Template) error {
+func (a *app) lsTree(q *query.Query, ulidsOnly bool, tmpl *template.Template) error {
 	if hasTerm(q, "group") || hasTerm(q, "sort") {
 		return usageErrorf("--tree orders tasks by rank; it takes neither group: nor sort:")
 	}
@@ -46,7 +46,7 @@ func (a *app) lsTree(q *query.Query, idsOnly bool, tmpl *template.Template) erro
 	tops := append(slices.Clone(roots), cycle...)
 	drawn := flatten(tops)
 	switch {
-	case idsOnly:
+	case ulidsOnly:
 		// Only the tasks found: the ancestors drawn for them must not
 		// reach a command such as done.
 		var hit []*index.Entry
@@ -163,7 +163,7 @@ func writeNode(b *strings.Builder, st style, n *treeNode, lead, childLead string
 	}
 }
 
-// treeLine is one task of the tree: key and ULID, status, kind and title.
+// treeLine is one task of the tree: id and ULID, status, kind and title.
 func treeLine(st style, e *index.Entry, context bool) string {
 	r := taskRow(e)
 	name := r[0] + " " + r[1]

@@ -7,12 +7,12 @@ import (
 )
 
 func TestWorkspaceRoundTrip(t *testing.T) {
-	in := "---\nulid: 01JC0A1B2C3D4E5F6G7H8J9K0M\nname: web\nkey_prefix: WEB\nprefix_set: 2026-10-31T10:00:00+09:00\ncreated: 2026-10-31T10:00:00+09:00\nupdated: 2026-10-31T10:00:00+09:00\n---\nWeb のタスク。\n"
+	in := "---\nulid: 01JC0A1B2C3D4E5F6G7H8J9K0M\nname: web\nid_prefix: WEB\nprefix_set: 2026-10-31T10:00:00+09:00\ncreated: 2026-10-31T10:00:00+09:00\nupdated: 2026-10-31T10:00:00+09:00\n---\nWeb のタスク。\n"
 	w, err := DecodeWorkspace([]byte(in))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w.Name != "web" || w.KeyPrefix != "WEB" || w.PrefixSet.IsZero() || w.Body != "Web のタスク。\n" {
+	if w.Name != "web" || w.IDPrefix != "WEB" || w.PrefixSet.IsZero() || w.Body != "Web のタスク。\n" {
 		t.Errorf("%+v", w)
 	}
 	out, err := w.Encode()

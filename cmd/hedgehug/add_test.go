@@ -29,8 +29,8 @@ func (te *testEnv) addJSON(args ...string) taskJSON {
 	return got
 }
 
-// label is how the CLI names task j: its key and full ULID.
-func label(j taskJSON) string { return j.Key + " (" + j.ULID + ")" }
+// label is how the CLI names task j: its id and full ULID.
+func label(j taskJSON) string { return j.ID + " (" + j.ULID + ")" }
 
 // task reads the task file of id from the store.
 func (te *testEnv) task(id string) *model.Task {
@@ -66,8 +66,8 @@ func TestAdd(t *testing.T) {
 	}
 
 	got := te.addJSON("Second")
-	if got.Kind != "task" || got.Status != "todo" || got.Parent != nil || got.Key != "ME-2" ||
-		got.Workspace == nil || got.Workspace.Name != "me" || got.Workspace.KeyPrefix != "ME" || len(got.Workspace.ULID) != 26 {
+	if got.Kind != "task" || got.Status != "todo" || got.Parent != nil || got.ID != "ME-2" ||
+		got.Workspace == nil || got.Workspace.Name != "me" || got.Workspace.IDPrefix != "ME" || len(got.Workspace.ULID) != 26 {
 		t.Errorf("task = %+v", got)
 	}
 }
@@ -75,8 +75,8 @@ func TestAdd(t *testing.T) {
 func TestAddRanksAtTheEnd(t *testing.T) {
 	te := newStoreEnv(t)
 	p := te.addJSON("Parent", "--kind", "project")
-	a := te.addJSON("A", "--parent", p.Key)
-	b := te.addJSON("B", "--parent", p.Key)
+	a := te.addJSON("A", "--parent", p.ID)
+	b := te.addJSON("B", "--parent", p.ID)
 	if a.Parent == nil || *a.Parent != p.ULID {
 		t.Errorf("a.parent = %v, want %s", a.Parent, p.ULID)
 	}
@@ -129,9 +129,9 @@ func TestAddErrors(t *testing.T) {
 func TestAddRefusesADeletedParent(t *testing.T) {
 	te := newStoreEnv(t)
 	p := te.addJSON("P", "--kind", "project")
-	te.ok("rm", p.Key)
-	code, _, stderr := te.run("add", "E", "--parent", p.Key)
-	if code != 1 || !strings.Contains(stderr, "is deleted; restore "+p.Key+" first") {
+	te.ok("rm", p.ID)
+	code, _, stderr := te.run("add", "E", "--parent", p.ID)
+	if code != 1 || !strings.Contains(stderr, "is deleted; restore "+p.ID+" first") {
 		t.Errorf("exit %d, stderr %q", code, stderr)
 	}
 	if n := len(te.log("me")); n != 3 {

@@ -11,11 +11,11 @@ import (
 // NumbersPath is the record of the numbers of purged tasks.
 const NumbersPath = ".hedgehug/numbers.yaml"
 
-// Numbers is, for each key prefix, the largest number of a purged task.
+// Numbers is, for each id prefix, the largest number of a purged task.
 // Numbering counts it, so a purged task's number is never given again.
 type Numbers map[string]int
 
-// DecodeNumbers decodes numbers.yaml: a map from key prefix to number. An
+// DecodeNumbers decodes numbers.yaml: a map from id prefix to number. An
 // empty file is an empty record. The prefixes and numbers are not checked
 // here; doctor reports the bad ones.
 func DecodeNumbers(data []byte) (Numbers, error) {
@@ -33,7 +33,7 @@ func DecodeNumbers(data []byte) (Numbers, error) {
 // file is.
 func (n Numbers) Encode() ([]byte, error) {
 	var b strings.Builder
-	b.WriteString("# The largest number of the purged tasks, for each key prefix. Numbering\n# never gives these numbers again.\n")
+	b.WriteString("# The largest number of the purged tasks, for each id prefix. Numbering\n# never gives these numbers again.\n")
 	keys := make([]string, 0, len(n))
 	for k := range n {
 		keys = append(keys, k)

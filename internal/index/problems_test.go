@@ -85,7 +85,7 @@ func TestReverse(t *testing.T) {
 
 func TestTargets(t *testing.T) {
 	a, b := model.NewULID(), model.NewULID()
-	e := &Entry{BlockedBy: []model.ULID{a}, Props: []Prop{{Key: "duplicates", Values: []string{b.String(), "not an ulid"}}}}
+	e := &Entry{BlockedBy: []model.ULID{a}, Props: []Prop{{Key: "duplicates", Values: []string{b.String(), "not a ulid"}}}}
 	if got := e.Targets("blocked_by"); !slices.Equal(got, []model.ULID{a}) {
 		t.Errorf("Targets(blocked_by) = %v", got)
 	}
@@ -94,33 +94,33 @@ func TestTargets(t *testing.T) {
 	}
 }
 
-func TestKeyAndWorkspaceProblems(t *testing.T) {
+func TestIDAndWorkspaceProblems(t *testing.T) {
 	s, dir := newStore(t)
 	ws := firstWorkspace(t, s)
 	a := newTask("a")
 	put(t, s, a) // TST-1
 	b := model.NewULID()
-	commitRaw(t, s, dir, model.TaskPath(b), rawTask(b, "key: TST-1\nworkspace: "+ws.String()+"\nkind: task\ntitle: b\nstatus: todo\n"))
+	commitRaw(t, s, dir, model.TaskPath(b), rawTask(b, "id: TST-1\nworkspace: "+ws.String()+"\nkind: task\ntitle: b\nstatus: todo\n"))
 	c := model.NewULID()
 	commitRaw(t, s, dir, model.TaskPath(c), rawTask(c, "kind: task\ntitle: c\nstatus: todo\n"))
 	d := model.NewULID()
-	commitRaw(t, s, dir, model.TaskPath(d), rawTask(d, "key: XX-1\nworkspace: "+ws.String()+"\nkind: task\ntitle: d\nstatus: todo\n"))
+	commitRaw(t, s, dir, model.TaskPath(d), rawTask(d, "id: XX-1\nworkspace: "+ws.String()+"\nkind: task\ntitle: d\nstatus: todo\n"))
 	e := model.NewULID()
-	commitRaw(t, s, dir, model.TaskPath(e), rawTask(e, "key: TST-9\nworkspace: "+model.NewULID().String()+"\nkind: task\ntitle: e\nstatus: todo\n"))
+	commitRaw(t, s, dir, model.TaskPath(e), rawTask(e, "id: TST-9\nworkspace: "+model.NewULID().String()+"\nkind: task\ntitle: e\nstatus: todo\n"))
 	f := model.NewULID()
-	commitRaw(t, s, dir, model.TaskPath(f), rawTask(f, "key: TST-10\nworkspace: "+ws.String()+"\nparent: "+e.String()+"\nkind: task\ntitle: f\nstatus: todo\n"))
+	commitRaw(t, s, dir, model.TaskPath(f), rawTask(f, "id: TST-10\nworkspace: "+ws.String()+"\nparent: "+e.String()+"\nkind: task\ntitle: f\nstatus: todo\n"))
 	ix := mustOpen(t, s)
 	has := func(id model.ULID, code string) bool {
 		return slices.ContainsFunc(ix.Problems(id), func(p Problem) bool { return p.Code == code })
 	}
-	if !has(a.ULID, CodeDuplicateKey) || !has(b, CodeDuplicateKey) {
-		t.Error("duplicate keys are not found")
+	if !has(a.ULID, CodeDuplicateID) || !has(b, CodeDuplicateID) {
+		t.Error("duplicate ids are not found")
 	}
-	if !has(c, CodeNoKey) || !has(c, store.CodeNoWorkspace) {
-		t.Error("a task without key and workspace is not found")
+	if !has(c, CodeNoID) || !has(c, store.CodeNoWorkspace) {
+		t.Error("a task without id and workspace is not found")
 	}
-	if !has(d, CodeKeyPrefix) {
-		t.Error("a key with another prefix is not found")
+	if !has(d, CodeIDPrefix) {
+		t.Error("an id with another prefix is not found")
 	}
 	if !has(e, store.CodeNoWorkspace) {
 		t.Error("a task in a workspace that is not in the store is not found")
@@ -128,7 +128,7 @@ func TestKeyAndWorkspaceProblems(t *testing.T) {
 	if !has(f, store.CodeWorkspaceMismatch) {
 		t.Error("a task in another workspace than its parent is not found")
 	}
-	if has(a.ULID, CodeNoKey) || has(a.ULID, store.CodeNoWorkspace) || has(a.ULID, CodeKeyPrefix) {
+	if has(a.ULID, CodeNoID) || has(a.ULID, store.CodeNoWorkspace) || has(a.ULID, CodeIDPrefix) {
 		t.Errorf("problems of a good task = %v", ix.Problems(a.ULID))
 	}
 }

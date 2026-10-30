@@ -22,12 +22,12 @@ func ValidName(what, name string) error {
 // ValidWorkspaceName is ValidName for a workspace.
 func ValidWorkspaceName(name string) error { return ValidName("workspace", name) }
 
-// Workspace is one workspace file. It owns a key prefix, and the tasks in
+// Workspace is one workspace file. It owns an id prefix, and the tasks in
 // it are numbered under that prefix. The body holds notes.
 type Workspace struct {
 	ULID      ULID
 	Name      string
-	KeyPrefix string
+	IDPrefix  string
 	PrefixSet time.Time // when the prefix was last set
 	Created   time.Time
 	Updated   time.Time
@@ -37,7 +37,7 @@ type Workspace struct {
 	doc *Doc
 }
 
-var workspaceKeys = []string{"ulid", "name", "key_prefix", "prefix_set", "created", "updated"}
+var workspaceKeys = []string{"ulid", "name", "id_prefix", "prefix_set", "created", "updated"}
 
 // DecodeWorkspace decodes a workspace file. Only the ulid is required; the
 // other fields are checked by those who write the file (Store.Update) and
@@ -54,7 +54,7 @@ func DecodeWorkspace(data []byte) (*Workspace, error) {
 	}
 	w := &Workspace{Body: body, doc: d}
 	if err := decodeAll(d, map[string]any{
-		"ulid": &w.ULID, "name": &w.Name, "key_prefix": &w.KeyPrefix, "prefix_set": &w.PrefixSet,
+		"ulid": &w.ULID, "name": &w.Name, "id_prefix": &w.IDPrefix, "prefix_set": &w.PrefixSet,
 		"created": &w.Created, "updated": &w.Updated,
 	}); err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func (w *Workspace) Encode() ([]byte, error) {
 	e := w.doc.Encoder()
 	e.Put("ulid", w.ULID, false)
 	e.Put("name", w.Name, w.Name == "")
-	e.Put("key_prefix", w.KeyPrefix, w.KeyPrefix == "")
+	e.Put("id_prefix", w.IDPrefix, w.IDPrefix == "")
 	e.Put("prefix_set", w.PrefixSet, w.PrefixSet.IsZero())
 	e.Put("created", w.Created, w.Created.IsZero())
 	e.Put("updated", w.Updated, w.Updated.IsZero())

@@ -18,15 +18,15 @@ import (
 func TestLsTree(t *testing.T) {
 	te := newStoreEnv(t)
 	p := te.addJSON("Project", "--kind", "project")
-	a := te.addJSON("Alpha", "--parent", p.Key)
-	te.addJSON("Alpha child", "--parent", a.Key, "--status", "done")
-	te.addJSON("Beta", "--parent", p.Key)
+	a := te.addJSON("Alpha", "--parent", p.ID)
+	te.addJSON("Alpha child", "--parent", a.ID, "--status", "done")
+	te.addJSON("Beta", "--parent", p.ID)
 	te.addJSON("Loose")
 
 	out := te.ok("ls", "--tree")
 	want := []string{
-		p.Key + " " + p.ULID + "  todo  project  Project",
-		"├─ " + a.Key + " " + a.ULID + "  todo  task  Alpha",
+		p.ID + " " + p.ULID + "  todo  project  Project",
+		"├─ " + a.ID + " " + a.ULID + "  todo  task  Alpha",
 		"│  └─ ",
 		"└─ ",
 		"Loose",
@@ -42,7 +42,7 @@ func TestLsTree(t *testing.T) {
 
 	// Ancestors that do not match are shown as context.
 	out = te.ok("ls", "--tree", "status:done")
-	if !strings.Contains(out, "("+p.Key) || !strings.Contains(out, "("+a.Key) || !strings.Contains(out, "Alpha child") {
+	if !strings.Contains(out, "("+p.ID) || !strings.Contains(out, "("+a.ID) || !strings.Contains(out, "Alpha child") {
 		t.Errorf("context ancestors are missing or not marked:\n%s", out)
 	}
 	if strings.Contains(out, "Beta") || strings.Contains(out, "Loose") {
@@ -61,12 +61,12 @@ func TestLsTree(t *testing.T) {
 func TestLsTreeULIDsAndFormat(t *testing.T) {
 	te := newStoreEnv(t)
 	p := te.addJSON("Project", "--kind", "project")
-	a := te.addJSON("Alpha", "--parent", p.Key)
-	c := te.addJSON("Alpha child", "--parent", a.Key, "--status", "done")
+	a := te.addJSON("Alpha", "--parent", p.ID)
+	c := te.addJSON("Alpha child", "--parent", a.ID, "--status", "done")
 
-	// --ids-only prints the tasks found, not the ancestors drawn for them.
-	if got := te.ok("ls", "--tree", "--ids-only", "status:done"); got != c.ULID+"\n" {
-		t.Errorf("--tree --ids-only = %q, want only %s", got, c.ULID)
+	// --ulids-only prints the tasks found, not the ancestors drawn for them.
+	if got := te.ok("ls", "--tree", "--ulids-only", "status:done"); got != c.ULID+"\n" {
+		t.Errorf("--tree --ulids-only = %q, want only %s", got, c.ULID)
 	}
 	// --format gets every drawn task, marked as context or not.
 	got := te.ok("ls", "--tree", "--format", "{{.title}} {{.context}} {{.in_cycle}}", "status:done")
@@ -79,7 +79,7 @@ func TestLsTreeULIDsAndFormat(t *testing.T) {
 func TestLsTreeULIDsInCycle(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("X")
-	y := te.addJSON("Y", "--parent", x.Key, "--status", "done")
+	y := te.addJSON("Y", "--parent", x.ID, "--status", "done")
 	s, err := store.Open(te.storeDir("me"))
 	if err != nil {
 		t.Fatal(err)
@@ -88,8 +88,8 @@ func TestLsTreeULIDsInCycle(t *testing.T) {
 	yid, _ := model.ParseULID(y.ULID)
 	writeCycle(t, te, s, xid, yid)
 
-	if got := te.ok("ls", "--tree", "--ids-only", "status:done"); got != y.ULID+"\n" {
-		t.Errorf("--tree --ids-only = %q, want only %s", got, y.ULID)
+	if got := te.ok("ls", "--tree", "--ulids-only", "status:done"); got != y.ULID+"\n" {
+		t.Errorf("--tree --ulids-only = %q, want only %s", got, y.ULID)
 	}
 	got := te.ok("ls", "--tree", "--format", "{{.title}} {{.context}} {{.in_cycle}}", "status:done")
 	if !strings.Contains(got, "Y false true\n") || !strings.Contains(got, "X true true\n") {
@@ -100,7 +100,7 @@ func TestLsTreeULIDsInCycle(t *testing.T) {
 func TestLsTreeCycle(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("X")
-	y := te.addJSON("Y", "--parent", x.Key)
+	y := te.addJSON("Y", "--parent", x.ID)
 	// A sync can leave a parent cycle that writes refuse; make one by
 	// writing the files behind the store's back and committing them.
 	s, err := store.Open(te.storeDir("me"))
@@ -113,7 +113,7 @@ func TestLsTreeCycle(t *testing.T) {
 
 	out := te.ok("ls", "--tree")
 	i := strings.Index(out, "== in a parent cycle")
-	if i < 0 || !strings.Contains(out[i:], x.Key) || !strings.Contains(out[i:], y.Key) {
+	if i < 0 || !strings.Contains(out[i:], x.ID) || !strings.Contains(out[i:], y.ID) {
 		t.Errorf("the cycle is not listed at the end:\n%s", out)
 	}
 }
@@ -121,8 +121,8 @@ func TestLsTreeCycle(t *testing.T) {
 func TestLsTreeCycleNested(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("X")
-	y := te.addJSON("Y", "--parent", x.Key)
-	c := te.addJSON("C", "--parent", y.Key, "--status", "done")
+	y := te.addJSON("Y", "--parent", x.ID)
+	c := te.addJSON("C", "--parent", y.ID, "--status", "done")
 	s, err := store.Open(te.storeDir("me"))
 	if err != nil {
 		t.Fatal(err)
@@ -138,7 +138,7 @@ func TestLsTreeCycleNested(t *testing.T) {
 	lines := strings.Split(strings.TrimRight(after, "\n"), "\n")
 	at := map[string]int{}
 	for i, l := range lines {
-		for _, sh := range []string{x.Key, y.Key, c.Key} {
+		for _, sh := range []string{x.ID, y.ID, c.ID} {
 			if strings.Contains(l, sh) {
 				at[sh] = i
 			}
@@ -147,10 +147,10 @@ func TestLsTreeCycleNested(t *testing.T) {
 	if len(lines) != 3 || len(at) != 3 {
 		t.Fatalf("cycle section = %q, want three lines with X, Y and C", lines)
 	}
-	if !strings.HasPrefix(lines[at[x.Key]], x.Key) || !strings.HasPrefix(lines[at[y.Key]], y.Key) {
+	if !strings.HasPrefix(lines[at[x.ID]], x.ID) || !strings.HasPrefix(lines[at[y.ID]], y.ID) {
 		t.Errorf("cycle members are not at the left: %q", lines)
 	}
-	if at[c.Key] != at[y.Key]+1 || !strings.HasPrefix(lines[at[c.Key]], "└─ "+c.Key) {
+	if at[c.ID] != at[y.ID]+1 || !strings.HasPrefix(lines[at[c.ID]], "└─ "+c.ID) {
 		t.Errorf("C is not drawn as Y's child: %q", lines)
 	}
 
@@ -167,13 +167,13 @@ func TestLsTreeCycleNested(t *testing.T) {
 		if !r.InCycle {
 			t.Errorf("%s: in_cycle = false, want true", r.Title)
 		}
-		switch r.Key {
-		case x.Key:
+		switch r.ID {
+		case x.ID:
 			if len(r.Children) != 0 {
 				t.Errorf("X children = %+v, want none", r.Children)
 			}
-		case y.Key:
-			if len(r.Children) != 1 || r.Children[0].Key != c.Key || r.Children[0].InCycle {
+		case y.ID:
+			if len(r.Children) != 1 || r.Children[0].ID != c.ID || r.Children[0].InCycle {
 				t.Errorf("Y children = %+v, want C out of the cycle", r.Children)
 			}
 		default:
@@ -190,13 +190,13 @@ func TestLsTreeCycleNested(t *testing.T) {
 		t.Errorf("--tree --format = %q, want X and Y in the cycle and C after Y", got)
 	}
 
-	// --ids-only: only the tasks found, in drawn order.
-	if got := te.ok("ls", "--tree", "--ids-only", "status:done"); got != c.ULID+"\n" {
-		t.Errorf("--tree --ids-only = %q, want only %s", got, c.ULID)
+	// --ulids-only: only the tasks found, in drawn order.
+	if got := te.ok("ls", "--tree", "--ulids-only", "status:done"); got != c.ULID+"\n" {
+		t.Errorf("--tree --ulids-only = %q, want only %s", got, c.ULID)
 	}
-	got = te.ok("ls", "--tree", "--ids-only")
+	got = te.ok("ls", "--tree", "--ulids-only")
 	if !strings.Contains(got, y.ULID+"\n"+c.ULID+"\n") || strings.Count(got, "\n") != 3 {
-		t.Errorf("--tree --ids-only = %q, want X, Y and C with C after Y", got)
+		t.Errorf("--tree --ulids-only = %q, want X, Y and C with C after Y", got)
 	}
 }
 

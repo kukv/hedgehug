@@ -13,7 +13,7 @@ import (
 
 func TestWorkspacesAndResolveWorkspace(t *testing.T) {
 	s, _ := newStore(t)
-	api := &model.Workspace{ULID: model.NewULID(), Name: "api", KeyPrefix: "API"}
+	api := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
 	if _, err := s.Update(store.Op{Name: "workspace", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutWorkspace(api) }); err != nil {
 		t.Fatal(err)
 	}
@@ -35,18 +35,18 @@ func TestWorkspacesAndResolveWorkspace(t *testing.T) {
 	if err := ix.Refresh(); err != nil {
 		t.Fatal(err)
 	}
-	if e, _ := ix.Task(x.ULID); e.Workspace != api.ULID || e.Key != "API-1" {
+	if e, _ := ix.Task(x.ULID); e.Workspace != api.ULID || e.ID != "API-1" {
 		t.Errorf("entry = %+v", e)
 	}
-	if n, err := ix.KeyNumbers(); err != nil || n["API"] != 1 || n["TST"] != 0 {
-		t.Errorf("KeyNumbers = %v %v", n, err)
+	if n, err := ix.IDNumbers(); err != nil || n["API"] != 1 || n["TST"] != 0 {
+		t.Errorf("IDNumbers = %v %v", n, err)
 	}
 }
 
 func TestResolveWorkspaceAmbiguous(t *testing.T) {
 	s, _ := newStore(t)
 	// The name of one workspace is the prefix of another.
-	other := &model.Workspace{ULID: model.NewULID(), Name: "tst", KeyPrefix: "OTH"}
+	other := &model.Workspace{ULID: model.NewULID(), Name: "tst", IDPrefix: "OTH"}
 	if _, err := s.Update(store.Op{Name: "workspace", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutWorkspace(other) }); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestResolveWorkspaceAmbiguous(t *testing.T) {
 func TestWorkspacesAfterRefresh(t *testing.T) {
 	s, _ := newStore(t)
 	ix := mustOpen(t, s)
-	api := &model.Workspace{ULID: model.NewULID(), Name: "api", KeyPrefix: "API"}
+	api := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
 	if _, err := s.Update(store.Op{Name: "workspace", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutWorkspace(api) }); err != nil {
 		t.Fatal(err)
 	}
@@ -76,18 +76,18 @@ func TestWorkspacesAfterRefresh(t *testing.T) {
 	}
 }
 
-func TestKeyNumbersIsAFreshMap(t *testing.T) {
+func TestIDNumbersIsAFreshMap(t *testing.T) {
 	s, _ := newStore(t)
 	put(t, s, newTask("a"))
 	ix := mustOpen(t, s)
-	n, _ := ix.KeyNumbers()
+	n, _ := ix.IDNumbers()
 	n["TST"] = 99
-	if n2, _ := ix.KeyNumbers(); n2["TST"] != 1 {
-		t.Errorf("KeyNumbers shares its map: %v", n2)
+	if n2, _ := ix.IDNumbers(); n2["TST"] != 1 {
+		t.Errorf("IDNumbers shares its map: %v", n2)
 	}
 }
 
-// Two handles of one store, each with an index, add tasks at once: the keys
+// Two handles of one store, each with an index, add tasks at once: the ids
 // stay distinct because Update counts with the index under the store's lock.
 func TestConcurrentAddsThroughIndexes(t *testing.T) {
 	s1, dir := newStore(t)
@@ -115,56 +115,56 @@ func TestConcurrentAddsThroughIndexes(t *testing.T) {
 		}
 	}
 	wg.Wait()
-	keys := map[string]bool{}
+	ids := map[string]bool{}
 	for task, err := range s1.Tasks() {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if keys[task.Key] {
-			t.Errorf("key %s is given twice", task.Key)
+		if ids[task.ID] {
+			t.Errorf("id %s is given twice", task.ID)
 		}
-		keys[task.Key] = true
+		ids[task.ID] = true
 	}
-	if len(keys) != 2*per {
-		t.Errorf("%d keys, want %d", len(keys), 2*per)
+	if len(ids) != 2*per {
+		t.Errorf("%d ids, want %d", len(ids), 2*per)
 	}
 }
 
-// Numbering must not give again a number of a deleted task or a former key.
-func TestKeyNumbersCountsDeletedAndFormerKeys(t *testing.T) {
+// Numbering must not give again a number of a deleted task or a former id.
+func TestIDNumbersCountsDeletedAndFormerIDs(t *testing.T) {
 	s, _ := newStore(t)
 	gone, moved := newTask("gone"), newTask("moved")
 	put(t, s, gone, moved) // TST-1, TST-2
 	now := time.Now()
 	gone.DeletedAt = &now
-	moved.FormerKeys = []string{"OLD-7", "TST-8"}
+	moved.FormerIDs = []string{"OLD-7", "TST-8"}
 	put(t, s, gone, moved)
-	n, err := mustOpen(t, s).KeyNumbers()
+	n, err := mustOpen(t, s).IDNumbers()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if n["TST"] != 8 || n["OLD"] != 7 {
-		t.Errorf("KeyNumbers = %v, want TST 8 and OLD 7", n)
+		t.Errorf("IDNumbers = %v, want TST 8 and OLD 7", n)
 	}
 }
 
-func TestKeyNumbersCountsBrokenFiles(t *testing.T) {
+func TestIDNumbersCountsBrokenFiles(t *testing.T) {
 	s, dir := newStore(t)
 	put(t, s, newTask("a")) // TST-1
 	id := model.NewULID()
-	commitRaw(t, s, dir, model.TaskPath(id), "---\nulid: "+id.String()+"\nkey: TST-7\ntitle: [unclosed\n---\nsee OLD-3\n")
+	commitRaw(t, s, dir, model.TaskPath(id), "---\nulid: "+id.String()+"\nid: TST-7\ntitle: [unclosed\n---\nsee OLD-3\n")
 	ix := mustOpen(t, s)
 	if e, _ := ix.Task(id); e == nil || e.Broken == "" {
 		t.Fatalf("entry = %+v, want a broken one", e)
 	}
-	n, err := ix.KeyNumbers()
+	n, err := ix.IDNumbers()
 	if err != nil || n["TST"] != 7 || n["OLD"] != 3 {
-		t.Errorf("KeyNumbers = %v %v, want TST 7 and OLD 3", n, err)
+		t.Errorf("IDNumbers = %v %v, want TST 7 and OLD 3", n, err)
 	}
 	x := newTask("x")
 	put(t, s, x)
-	if x.Key != "TST-8" {
-		t.Errorf("key = %s, want TST-8", x.Key)
+	if x.ID != "TST-8" {
+		t.Errorf("id = %s, want TST-8", x.ID)
 	}
 }
 
@@ -173,8 +173,8 @@ func TestRefreshAfterAWorkspaceChange(t *testing.T) {
 	a := newTask("a")
 	put(t, s, a) // TST-1
 	ix := mustOpen(t, s)
-	hasKeyPrefix := func() bool {
-		return slices.ContainsFunc(ix.Problems(a.ULID), func(p Problem) bool { return p.Code == CodeKeyPrefix })
+	hasIDPrefix := func() bool {
+		return slices.ContainsFunc(ix.Problems(a.ULID), func(p Problem) bool { return p.Code == CodeIDPrefix })
 	}
 	setPrefix := func(p string) {
 		t.Helper()
@@ -183,7 +183,7 @@ func TestRefreshAfterAWorkspaceChange(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			w.KeyPrefix = p
+			w.IDPrefix = p
 			return tx.PutWorkspace(w)
 		}); err != nil {
 			t.Fatal(err)
@@ -193,11 +193,11 @@ func TestRefreshAfterAWorkspaceChange(t *testing.T) {
 		}
 	}
 	setPrefix("NEW")
-	if !hasKeyPrefix() {
+	if !hasIDPrefix() {
 		t.Errorf("after the prefix changed: problems = %v", ix.Problems(a.ULID))
 	}
 	setPrefix("TST")
-	if hasKeyPrefix() {
+	if hasIDPrefix() {
 		t.Errorf("after the prefix changed back: problems = %v", ix.Problems(a.ULID))
 	}
 }

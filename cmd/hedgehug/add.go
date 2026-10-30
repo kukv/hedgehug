@@ -90,7 +90,7 @@ func (a *app) add(title, parentArg, workspaceArg, kind, status string, assigns [
 		if len(wss) != 1 {
 			names := make([]string, len(wss))
 			for i, w := range wss {
-				names[i] = fmt.Sprintf("%s (%s)", w.Name, w.KeyPrefix)
+				names[i] = fmt.Sprintf("%s (%s)", w.Name, w.IDPrefix)
 			}
 			return errors.New("there are several workspaces; give one with --workspace: " + strings.Join(names, ", "))
 		}

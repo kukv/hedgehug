@@ -8,7 +8,7 @@ func TestNumbers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "# The largest number of the purged tasks, for each key prefix. Numbering\n# never gives these numbers again.\nAPI: 7\nWEB: 42\n"
+	want := "# The largest number of the purged tasks, for each id prefix. Numbering\n# never gives these numbers again.\nAPI: 7\nWEB: 42\n"
 	if string(b) != want {
 		t.Errorf("Encode =\n%s", b)
 	}

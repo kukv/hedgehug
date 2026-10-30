@@ -22,13 +22,13 @@ func mustULID(t *testing.T, s string) model.ULID {
 
 // indexOf builds an index of entries without a store.
 func indexOf(es ...*Entry) *Index {
-	ws := &model.Workspace{ULID: model.NewULID(), Name: "test", KeyPrefix: "TST"}
+	ws := &model.Workspace{ULID: model.NewULID(), Name: "test", IDPrefix: "TST"}
 	ix := &Index{sc: schema.Default(), tasks: map[model.ULID]*Entry{}, workspaces: map[model.ULID]*model.Workspace{ws.ULID: ws}}
 	for i, e := range es {
-		// An entry without a key or a workspace gets one, so the problems of
+		// An entry without an id or a workspace gets one, so the problems of
 		// the tests are only the ones they are about.
-		if e.Key == "" {
-			e.Key = fmt.Sprintf("TST-%d", i+1)
+		if e.ID == "" {
+			e.ID = fmt.Sprintf("TST-%d", i+1)
 		}
 		if e.Workspace.IsZero() {
 			e.Workspace = ws.ULID
@@ -45,7 +45,7 @@ func TestResolve(t *testing.T) {
 	a := newTask("a")
 	put(t, s, a) // gets TST-1
 	b := newTask("b")
-	b.FormerKeys = []string{"OLD-3"}
+	b.FormerIDs = []string{"OLD-3"}
 	put(t, s, b) // gets TST-2
 	ix := mustOpen(t, s)
 	for in, want := range map[string]model.ULID{"TST-1": a.ULID, "tst-2": b.ULID, "old-3": b.ULID, a.ULID.String(): a.ULID, strings.ToLower(b.ULID.String()): b.ULID} {
@@ -66,9 +66,9 @@ func TestResolveAmbiguous(t *testing.T) {
 	a := mustULID(t, "01JBZ8K3QW7M2X9V4T6RAAA001")
 	d := mustULID(t, "01JBZ8K3QW7M2X9V4T6RCAA001")
 	ix := indexOf(
-		&Entry{ULID: a, Key: "WEB-42"},
-		&Entry{ULID: d, Key: "WEB-42"},
-		&Entry{ULID: mustULID(t, "01JBZ8K3QW7M2X9V4T6RDDD001"), Key: "API-1"},
+		&Entry{ULID: a, ID: "WEB-42"},
+		&Entry{ULID: d, ID: "WEB-42"},
+		&Entry{ULID: mustULID(t, "01JBZ8K3QW7M2X9V4T6RDDD001"), ID: "API-1"},
 	)
 	var amb *AmbiguousError
 	if _, err := ix.Resolve("WEB-42"); !errors.As(err, &amb) {

@@ -152,7 +152,7 @@ func TestApplyAssign(t *testing.T) {
 	})
 	t.Run("errors", func(t *testing.T) {
 		for _, s := range []string{
-			"parent=x", "rank=x", "ulid=x", "created=x", "deleted_at=x", "key=x", "sprint=x", "props=x",
+			"parent=x", "rank=x", "ulid=x", "created=x", "deleted_at=x", "id=x", "sprint=x", "props=x",
 			"nope=1", "due=tomorrow", "points=many", "flag=maybe", "at=today", "estimate=long",
 			"due+=2026-11-01", "duplicates+=nope", "duplicates+=", "duplicates-=", "tags+=", "tags-=",
 		} {

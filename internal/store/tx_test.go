@@ -51,10 +51,10 @@ func TestUpdateCommitsOnce(t *testing.T) {
 	}
 }
 
-func TestUpdateSubjectUsesKey(t *testing.T) {
+func TestUpdateSubjectUsesID(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("x")
-	task.Key = "TST-42"
+	task.ID = "TST-42"
 	addTask(t, s, task)
 	if msg := headLog(t, s.dir)[0].Message; !strings.HasPrefix(msg, "hedgehug: add TST-42 x\n") {
 		t.Errorf("message = %q", msg)
@@ -329,10 +329,10 @@ func TestPutTemplateBadName(t *testing.T) {
 	}
 }
 
-func TestPurgeSubjectUsesKey(t *testing.T) {
+func TestPurgeSubjectUsesID(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("title")
-	task.Key = "TST-3"
+	task.ID = "TST-3"
 	addTask(t, s, task)
 	if _, err := s.Update(Op{Name: "purge", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error {
 		return tx.RemoveTask(task.ULID)

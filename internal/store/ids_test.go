@@ -23,33 +23,33 @@ func mustPut(t *testing.T, s *Store, tasks ...*model.Task) {
 	}
 }
 
-func TestAssignKeys(t *testing.T) {
+func TestAssignIDs(t *testing.T) {
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	a, b := newTaskIn(ws, "a"), newTaskIn(ws, "b")
 	mustPut(t, s, a, b) // one operation: numbers given in it count
 	c := newTaskIn(ws, "c")
 	mustPut(t, s, c)
-	if a.Key != "TST-1" || b.Key != "TST-2" || c.Key != "TST-3" {
-		t.Fatalf("keys = %s %s %s", a.Key, b.Key, c.Key)
+	if a.ID != "TST-1" || b.ID != "TST-2" || c.ID != "TST-3" {
+		t.Fatalf("ids = %s %s %s", a.ID, b.ID, c.ID)
 	}
-	if got, _ := s.Task(c.ULID); got.Key != "TST-3" {
-		t.Errorf("file key = %s", got.Key)
+	if got, _ := s.Task(c.ULID); got.ID != "TST-3" {
+		t.Errorf("file id = %s", got.ID)
 	}
 }
 
-func TestAssignKeysCountsKeysGivenInTheOperation(t *testing.T) {
+func TestAssignIDsCountsIDsGivenInTheOperation(t *testing.T) {
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	a, b := newTaskIn(ws, "a"), newTaskIn(ws, "b")
-	b.Key = "TST-5"
+	b.ID = "TST-5"
 	mustPut(t, s, a, b)
-	if a.Key != "TST-6" {
-		t.Errorf("key = %s, want TST-6", a.Key)
+	if a.ID != "TST-6" {
+		t.Errorf("id = %s, want TST-6", a.ID)
 	}
 }
 
-func TestCommitSubjectUsesNewKey(t *testing.T) {
+func TestCommitSubjectUsesNewID(t *testing.T) {
 	s := newTestStore(t)
 	x := newTaskIn(testWorkspace(t, s), "x")
 	if _, err := s.Update(Op{Name: "add", Task: x.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(x) }); err != nil {
@@ -60,29 +60,29 @@ func TestCommitSubjectUsesNewKey(t *testing.T) {
 	}
 }
 
-func TestAssignKeysCountsFormerAndNumbers(t *testing.T) {
+func TestAssignIDsCountsFormerAndNumbers(t *testing.T) {
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	old := newTaskIn(ws, "old")
-	old.Key, old.FormerKeys = "TST-1", []string{"TST-20"}
+	old.ID, old.FormerIDs = "TST-1", []string{"TST-20"}
 	mustPut(t, s, old)
 	gone := newTaskIn(ws, "gone")
-	gone.Key = "TST-30"
+	gone.ID = "TST-30"
 	mustPut(t, s, gone)
 	if _, err := s.Update(Op{Name: "purge", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveTask(gone.ULID) }); err != nil {
 		t.Fatal(err)
 	}
 	n := newTaskIn(ws, "new")
 	mustPut(t, s, n)
-	if n.Key != "TST-31" {
-		t.Errorf("key = %s, want TST-31 (after the purged TST-30)", n.Key)
+	if n.ID != "TST-31" {
+		t.Errorf("id = %s, want TST-31 (after the purged TST-30)", n.ID)
 	}
 }
 
 func TestRenumberOnPrefixMismatch(t *testing.T) {
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
-	api := &model.Workspace{ULID: model.NewULID(), Name: "api", KeyPrefix: "API"}
+	api := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
 	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(api) }); err != nil {
 		t.Fatal(err)
 	}
@@ -90,21 +90,21 @@ func TestRenumberOnPrefixMismatch(t *testing.T) {
 	mustPut(t, s, x)
 	x.Workspace = api.ULID
 	mustPut(t, s, x)
-	if x.Key != "API-1" || !slices.Equal(x.FormerKeys, []string{"TST-1"}) {
-		t.Errorf("key = %s, former = %v", x.Key, x.FormerKeys)
+	if x.ID != "API-1" || !slices.Equal(x.FormerIDs, []string{"TST-1"}) {
+		t.Errorf("id = %s, former = %v", x.ID, x.FormerIDs)
 	}
 	y := newTaskIn(ws, "y")
 	mustPut(t, s, y)
-	if y.Key != "TST-2" {
-		t.Errorf("TST-1 was reused: %s", y.Key)
+	if y.ID != "TST-2" {
+		t.Errorf("TST-1 was reused: %s", y.ID)
 	}
 }
 
-func TestAssignKeysRefusesABadPrefix(t *testing.T) {
+func TestAssignIDsRefusesABadPrefix(t *testing.T) {
 	for _, prefix := range []string{"me", ""} {
 		s := newTestStore(t)
 		ws := testWorkspace(t, s)
-		ws.KeyPrefix = prefix
+		ws.IDPrefix = prefix
 		b, err := ws.Encode()
 		if err != nil {
 			t.Fatal(err)
@@ -117,26 +117,26 @@ func TestAssignKeysRefusesABadPrefix(t *testing.T) {
 	}
 }
 
-func TestKeyNumbersHook(t *testing.T) {
+func TestIDNumbersHook(t *testing.T) {
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	calls := 0
-	s.SetKeyNumbers(func() (map[string]int, error) {
+	s.SetIDNumbers(func() (map[string]int, error) {
 		calls++
 		return map[string]int{"TST": 41}, nil
 	})
 	x := newTaskIn(ws, "x")
 	mustPut(t, s, x)
-	if x.Key != "TST-42" || calls != 1 {
-		t.Errorf("key = %s, calls = %d", x.Key, calls)
+	if x.ID != "TST-42" || calls != 1 {
+		t.Errorf("id = %s, calls = %d", x.ID, calls)
 	}
-	mustPut(t, s, x) // has a key that fits: no count
+	mustPut(t, s, x) // has an id that fits: no count
 	if calls != 1 {
-		t.Errorf("counted for a task that keeps its key")
+		t.Errorf("counted for a task that keeps its id")
 	}
 }
 
-func TestConcurrentAddsGetDistinctKeys(t *testing.T) {
+func TestConcurrentAddsGetDistinctIDs(t *testing.T) {
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	other, err := Open(s.dir) // a second handle: only the file lock serializes them
@@ -162,35 +162,35 @@ func TestConcurrentAddsGetDistinctKeys(t *testing.T) {
 	wg.Wait()
 	seen := map[string]bool{}
 	for _, task := range tasks {
-		if seen[task.Key] {
-			t.Errorf("key %s given twice", task.Key)
+		if seen[task.ID] {
+			t.Errorf("id %s given twice", task.ID)
 		}
-		seen[task.Key] = true
+		seen[task.ID] = true
 	}
 }
 
-func TestAssignKeysCountsBrokenFiles(t *testing.T) {
+func TestAssignIDsCountsBrokenFiles(t *testing.T) {
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
-	mustWrite(t, s, model.TaskPath(model.NewULID()), "---\nkey: TST-7\ntitle: [unclosed\n---\nsee OLD-3\n")
+	mustWrite(t, s, model.TaskPath(model.NewULID()), "---\nid: TST-7\ntitle: [unclosed\n---\nsee OLD-3\n")
 	x := newTaskIn(ws, "x")
 	mustPut(t, s, x)
-	if x.Key != "TST-8" {
-		t.Errorf("key = %s, want TST-8 (after TST-7 of the broken file)", x.Key)
+	if x.ID != "TST-8" {
+		t.Errorf("id = %s, want TST-8 (after TST-7 of the broken file)", x.ID)
 	}
 }
 
-func TestUpdateRestoresKeysOnFailure(t *testing.T) {
+func TestUpdateRestoresIDsOnFailure(t *testing.T) {
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	x := newTaskIn(ws, "x")
-	x.Key, x.FormerKeys = "OLD-3", []string{"OLD-1"}
+	x.ID, x.FormerIDs = "OLD-3", []string{"OLD-1"}
 	x.Status = "no-such-status"
 	if err := put(s, x); err == nil {
 		t.Fatal("the write was not refused")
 	}
-	if x.Key != "OLD-3" || !slices.Equal(x.FormerKeys, []string{"OLD-1"}) {
-		t.Errorf("after a refused write: key = %s, former = %v", x.Key, x.FormerKeys)
+	if x.ID != "OLD-3" || !slices.Equal(x.FormerIDs, []string{"OLD-1"}) {
+		t.Errorf("after a refused write: id = %s, former = %v", x.ID, x.FormerIDs)
 	}
 
 	y := newTaskIn(ws, "y")
@@ -198,7 +198,7 @@ func TestUpdateRestoresKeysOnFailure(t *testing.T) {
 	if err := put(s, y); err == nil {
 		t.Fatal("the commit did not fail")
 	}
-	if y.Key != "" || y.FormerKeys != nil {
-		t.Errorf("after a failed commit: key = %s, former = %v", y.Key, y.FormerKeys)
+	if y.ID != "" || y.FormerIDs != nil {
+		t.Errorf("after a failed commit: id = %s, former = %v", y.ID, y.FormerIDs)
 	}
 }

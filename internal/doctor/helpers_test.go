@@ -20,7 +20,7 @@ var testAuthor = gitrepo.Signature{Name: "Test", Email: "test@example.com"}
 func newStore(t *testing.T) (*store.Store, string) {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "store")
-	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "test"}, schema.Default(), &model.Workspace{ULID: model.NewULID(), Name: "test", KeyPrefix: "TST"}, testAuthor)
+	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "test"}, schema.Default(), &model.Workspace{ULID: model.NewULID(), Name: "test", IDPrefix: "TST"}, testAuthor)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,8 +86,8 @@ func firstWorkspace(t *testing.T, s *store.Store) model.ULID {
 	return model.ULID{}
 }
 
-// rawKeys numbers the keys putRaw gives to tasks without one.
-var rawKeys int
+// rawIDs numbers the ids putRaw gives to tasks without one.
+var rawIDs int
 
 // putRaw commits a task file past the checks of the store, as a sync or a
 // hand edit could.
@@ -96,9 +96,9 @@ func putRaw(t *testing.T, s *store.Store, dir string, task *model.Task) {
 	if task.Workspace.IsZero() {
 		task.Workspace = firstWorkspace(t, s)
 	}
-	if task.Key == "" {
-		rawKeys++
-		task.Key = fmt.Sprintf("TST-%d", 1000+rawKeys)
+	if task.ID == "" {
+		rawIDs++
+		task.ID = fmt.Sprintf("TST-%d", 1000+rawIDs)
 	}
 	b, err := task.Encode()
 	if err != nil {

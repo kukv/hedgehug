@@ -45,7 +45,7 @@ func TestCommentAddFromArgs(t *testing.T) {
 	x := te.addJSON("Alpha")
 	before := len(te.log("me"))
 
-	got := te.commentJSON("comment", x.Key, "hello", "world")
+	got := te.commentJSON("comment", x.ID, "hello", "world")
 	if got.Body != "hello world\n" || got.Task != x.ULID || len(got.ULID) != 26 || got.Author != "" || got.DeletedAt != nil {
 		t.Errorf("comment = %+v", got)
 	}
@@ -58,7 +58,7 @@ func TestCommentAddFromArgs(t *testing.T) {
 		t.Errorf("commits = %d (want %d), last %q", len(log), before+1, log[0].Message)
 	}
 
-	out := te.ok("comment", x.Key, "again")
+	out := te.ok("comment", x.ID, "again")
 	if f := strings.Fields(out); len(f) != 2 || f[0] != "Added" || len(f[1]) != 26 {
 		t.Errorf("stdout = %q, want Added <ULID>", out)
 	}
@@ -69,7 +69,7 @@ func TestCommentAddInEditor(t *testing.T) {
 	x := te.addJSON("Alpha")
 	seen := te.editWith("from the editor\n")
 
-	te.ok("comment", x.Key)
+	te.ok("comment", x.ID)
 	if got := seen(); len(got) != 1 || got[0] != "" {
 		t.Errorf("the editor saw %q, want an empty file", got)
 	}
@@ -91,13 +91,13 @@ func TestCommentAddKeepsFileOnFailure(t *testing.T) {
 	// A file named comments makes the directory of the comment impossible.
 	te.editWith("from the editor\nTOUCH " + filepath.Join(te.storeDir("me"), "comments") + "\n")
 
-	code, _, stderr := te.run("comment", x.Key)
+	code, _, stderr := te.run("comment", x.ID)
 	if code != 1 {
 		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
 	}
 	fs := te.tempFiles()
-	if len(fs) != 1 || !strings.Contains(stderr, fs[0]) || !strings.HasPrefix(filepath.Base(fs[0]), "hedgehug-"+x.Key+"-") {
-		t.Fatalf("temporary files %v, stderr %q: want one named after the key, named in stderr", fs, stderr)
+	if len(fs) != 1 || !strings.Contains(stderr, fs[0]) || !strings.HasPrefix(filepath.Base(fs[0]), "hedgehug-"+x.ID+"-") {
+		t.Fatalf("temporary files %v, stderr %q: want one named after the id, named in stderr", fs, stderr)
 	}
 	if b, err := os.ReadFile(fs[0]); err != nil || string(b) != "from the editor\n" {
 		t.Errorf("kept file = %q, %v", b, err)
@@ -112,12 +112,12 @@ func TestCommentEmptyBody(t *testing.T) {
 	x := te.addJSON("Alpha")
 	before := len(te.log("me"))
 
-	code, _, errs := te.run("comment", x.Key, "  ", "\t")
+	code, _, errs := te.run("comment", x.ID, "  ", "\t")
 	if code != 1 || !strings.Contains(errs, "empty") {
 		t.Errorf("args: exit %d, stderr %q", code, errs)
 	}
 	te.editWith("  \n\n")
-	code, _, errs = te.run("comment", x.Key)
+	code, _, errs = te.run("comment", x.ID)
 	if code != 1 || !strings.Contains(errs, "empty") {
 		t.Errorf("editor: exit %d, stderr %q", code, errs)
 	}
@@ -132,9 +132,9 @@ func TestCommentEmptyBody(t *testing.T) {
 func TestCommentDeletedTask(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	te.ok("rm", x.Key)
+	te.ok("rm", x.ID)
 
-	code, _, errs := te.run("comment", x.Key, "hi")
+	code, _, errs := te.run("comment", x.ID, "hi")
 	if code != 1 || !strings.Contains(errs, "restore") {
 		t.Errorf("exit %d, stderr %q, want a pointer to restore", code, errs)
 	}
@@ -143,7 +143,7 @@ func TestCommentDeletedTask(t *testing.T) {
 func TestCommentEdit(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	c := te.commentJSON("comment", x.Key, "first")
+	c := te.commentJSON("comment", x.ID, "first")
 	before := len(te.log("me"))
 	seen := te.editWith("second\n")
 
@@ -170,7 +170,7 @@ func TestCommentEdit(t *testing.T) {
 func TestCommentEditChangedWhileEditing(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	c := te.commentJSON("comment", x.Key, "first")
+	c := te.commentJSON("comment", x.ID, "first")
 	before := len(te.log("me"))
 	file := filepath.Join(te.storeDir("me"), filepath.FromSlash(model.CommentPath(mustULID(t, x.ULID), mustULID(t, c.ULID))))
 	te.editWith("second\nTOUCH " + file + "\n")
@@ -194,7 +194,7 @@ func TestCommentEditChangedWhileEditing(t *testing.T) {
 func TestCommentEditNoChangesAndEmpty(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	c := te.commentJSON("comment", x.Key, "first")
+	c := te.commentJSON("comment", x.ID, "first")
 	before := len(te.log("me"))
 
 	te.editWith("first\n")
@@ -214,7 +214,7 @@ func TestCommentEditNoChangesAndEmpty(t *testing.T) {
 func TestCommentRm(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	c := te.commentJSON("comment", x.Key, "gone soon")
+	c := te.commentJSON("comment", x.ID, "gone soon")
 	before := len(te.log("me"))
 
 	out := te.ok("comment", "rm", c.ULID)
@@ -229,7 +229,7 @@ func TestCommentRm(t *testing.T) {
 	if len(log) != before+1 || !strings.Contains(log[0].Message, "Hedgehug-Op: comment") {
 		t.Errorf("last commit %q", log[0].Message)
 	}
-	if out := te.ok("show", x.Key); strings.Contains(out, "gone soon") || strings.Contains(out, "Comments:") {
+	if out := te.ok("show", x.ID); strings.Contains(out, "gone soon") || strings.Contains(out, "Comments:") {
 		t.Errorf("show still has the comment:\n%s", out)
 	}
 	if code, _, errs := te.run("comment", "rm", c.ULID); code != 1 || !strings.Contains(errs, "deleted") {
@@ -249,7 +249,7 @@ func TestCommentRm(t *testing.T) {
 func TestCommentRmRereadsUnderLock(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	c := te.commentJSON("comment", x.Key, "first")
+	c := te.commentJSON("comment", x.ID, "first")
 	s, err := store.Open(te.storeDir("me"))
 	if err != nil {
 		t.Fatal(err)
@@ -343,16 +343,16 @@ func TestCommentULIDMustBeFull(t *testing.T) {
 func TestShowCommentULID(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	c := te.commentJSON("comment", x.Key, "has an author-less comment")
+	c := te.commentJSON("comment", x.ID, "has an author-less comment")
 
-	out := te.ok("show", x.Key)
+	out := te.ok("show", x.ID)
 	if !strings.Contains(out, "\n  "+c.ULID+"  -  2026-") {
 		t.Errorf("show does not print the ULID and - for the author:\n%s", out)
 	}
 	var got struct {
 		Comments []map[string]any `json:"comments"`
 	}
-	if err := json.Unmarshal([]byte(te.ok("show", x.Key, "--json")), &got); err != nil {
+	if err := json.Unmarshal([]byte(te.ok("show", x.ID, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
 	// ulid, author, created and body.

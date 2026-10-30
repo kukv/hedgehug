@@ -17,7 +17,7 @@ func TestRunErrorUnwraps(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		writeRaw(t, s, model.TaskPath(pid), "---\nulid: "+id+"\nkind: task\nkey: WEB-1\ntitle: t\nstatus: todo\n---\n")
+		writeRaw(t, s, model.TaskPath(pid), "---\nulid: "+id+"\nkind: task\nid: WEB-1\ntitle: t\nstatus: todo\n---\n")
 	}
 	ix := mustOpen(t, s)
 	runQ := func(q string) error {

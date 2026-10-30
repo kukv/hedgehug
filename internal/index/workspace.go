@@ -42,12 +42,12 @@ func (ix *Index) Workspace(id model.ULID) (*model.Workspace, bool) {
 }
 
 // ResolveWorkspace finds the workspace s names, ignoring case: by a full
-// ULID, or by its name or its key prefix.
+// ULID, or by its name or its id prefix.
 func (ix *Index) ResolveWorkspace(s string) (*model.Workspace, error) {
 	var hits []*model.Workspace
 	for _, w := range ix.Workspaces() {
 		if len(s) == 26 && strings.EqualFold(w.ULID.String(), s) ||
-			s != "" && (strings.EqualFold(w.Name, s) || strings.EqualFold(w.KeyPrefix, s)) {
+			s != "" && (strings.EqualFold(w.Name, s) || strings.EqualFold(w.IDPrefix, s)) {
 			hits = append(hits, w)
 		}
 	}

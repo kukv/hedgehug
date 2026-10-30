@@ -12,7 +12,7 @@ func TestSet(t *testing.T) {
 	other := te.addJSON("Other")
 	before := len(te.log("me"))
 
-	out := te.ok("set", a.Key, "title=Renamed", "labels+=ui", "labels+=api", "labels-=ui", "due=2026-11-01", "blocked_by+="+other.Key)
+	out := te.ok("set", a.ID, "title=Renamed", "labels+=ui", "labels+=api", "labels-=ui", "due=2026-11-01", "blocked_by+="+other.ID)
 	if !strings.Contains(out, "Renamed") {
 		t.Errorf("stdout = %q", out)
 	}
@@ -29,7 +29,7 @@ func TestSet(t *testing.T) {
 	}
 
 	// A set that changes nothing makes no commit.
-	te.ok("set", a.Key, "title=Renamed")
+	te.ok("set", a.ID, "title=Renamed")
 	if n := len(te.log("me")); n != before+1 {
 		t.Errorf("commits = %d after a no-op set, want %d", n, before+1)
 	}
@@ -45,14 +45,14 @@ func TestSetErrors(t *testing.T) {
 		wantCode int
 		want     string
 	}{
-		{"no assignment", []string{"set", a.Key}, 2, "requires at least 2 arg"},
-		{"not key=value", []string{"set", a.Key, "title"}, 2, "key=value"},
-		{"parent", []string{"set", a.Key, "parent=x"}, 1, "mv"},
-		{"unknown key", []string{"set", a.Key, "nope=1"}, 1, "nope"},
-		{"a value not in the enum", []string{"set", a.Key, "priority=nope"}, 1, "breaks the schema"},
-		{"NaN is not a number", []string{"set", a.Key, "points=NaN"}, 1, "is not a number"},
-		{"Inf is not a number", []string{"set", a.Key, "points=Inf"}, 1, "is not a number"},
-		{"an unknown status", []string{"set", a.Key, "status=nope"}, 1, "breaks the schema"},
+		{"no assignment", []string{"set", a.ID}, 2, "requires at least 2 arg"},
+		{"not key=value", []string{"set", a.ID, "title"}, 2, "key=value"},
+		{"parent", []string{"set", a.ID, "parent=x"}, 1, "mv"},
+		{"unknown key", []string{"set", a.ID, "nope=1"}, 1, "nope"},
+		{"a value not in the enum", []string{"set", a.ID, "priority=nope"}, 1, "breaks the schema"},
+		{"NaN is not a number", []string{"set", a.ID, "points=NaN"}, 1, "is not a number"},
+		{"Inf is not a number", []string{"set", a.ID, "points=Inf"}, 1, "is not a number"},
+		{"an unknown status", []string{"set", a.ID, "status=nope"}, 1, "breaks the schema"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			code, _, stderr := te.run(tc.args...)

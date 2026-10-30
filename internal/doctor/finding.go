@@ -10,7 +10,7 @@ import (
 // Finding is one problem that hh schema check or hh doctor reports.
 type Finding struct {
 	Check string `json:"check"`          // the kind of check, one of checkOrder
-	Where string `json:"where"`          // a file and the place in it, or a task: its key, ULID and title
+	Where string `json:"where"`          // a file and the place in it, or a task: its id, ULID and title
 	Msg   string `json:"msg"`            //
 	Hint  string `json:"hint,omitempty"` // how to fix it; empty when there is no advice
 }

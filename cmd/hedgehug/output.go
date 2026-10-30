@@ -29,7 +29,7 @@ func (s style) wrap(code, t string) string {
 	return "\x1b[" + code + "m" + t + "\x1b[0m"
 }
 
-// id colors the key and ULID of a task, or the ULID of a comment.
+// id colors the id and ULID of a task, or the ULID of a comment.
 func (s style) id(t string) string { return s.wrap("33", t) }
 
 // dim marks text that is context, not a result. Without color it is put in
@@ -51,7 +51,7 @@ func (a *app) printJSON(v any) error {
 // taskJSON is a task as --json prints it.
 type taskJSON struct {
 	ULID      string            `json:"ulid"`
-	Key       string            `json:"key"`
+	ID        string            `json:"id"`
 	Workspace *workspaceRefJSON `json:"workspace"`
 	Kind      string            `json:"kind"`
 	Title     string            `json:"title"`
@@ -76,15 +76,15 @@ type taskJSON struct {
 
 // workspaceRefJSON names the workspace of a task.
 type workspaceRefJSON struct {
-	ULID      string `json:"ulid"`
-	Name      string `json:"name"`
-	KeyPrefix string `json:"key_prefix"`
+	ULID     string `json:"ulid"`
+	Name     string `json:"name"`
+	IDPrefix string `json:"id_prefix"`
 }
 
 // refJSON names a task that another task points at.
 type refJSON struct {
 	ULID  string `json:"ulid"`
-	Key   string `json:"key"`
+	ID    string `json:"id"`
 	Title string `json:"title"`
 }
 
@@ -97,7 +97,7 @@ type problemJSON struct {
 func entryJSON(ix *index.Index, e *index.Entry) *taskJSON {
 	j := &taskJSON{
 		ULID:      e.ULID.String(),
-		Key:       e.Key,
+		ID:        e.ID,
 		Kind:      e.Kind,
 		Title:     e.Title,
 		Rank:      string(e.Rank),
@@ -119,7 +119,7 @@ func entryJSON(ix *index.Index, e *index.Entry) *taskJSON {
 	if !e.Workspace.IsZero() {
 		j.Workspace = &workspaceRefJSON{ULID: e.Workspace.String()}
 		if w, ok := ix.Workspace(e.Workspace); ok {
-			j.Workspace.Name, j.Workspace.KeyPrefix = w.Name, w.KeyPrefix
+			j.Workspace.Name, j.Workspace.IDPrefix = w.Name, w.IDPrefix
 		}
 	}
 	for _, b := range e.BlockedBy {
@@ -144,12 +144,12 @@ func entryJSON(ix *index.Index, e *index.Entry) *taskJSON {
 	return j
 }
 
-// refOf names the task id, with an empty key and title when the index does
+// refOf names the task id, with an empty id and title when the index does
 // not have it.
 func refOf(ix *index.Index, id model.ULID) refJSON {
 	r := refJSON{ULID: id.String()}
 	if e, ok := ix.Task(id); ok {
-		r.Key, r.Title = e.Key, e.Title
+		r.ID, r.Title = e.ID, e.Title
 	}
 	return r
 }
@@ -190,40 +190,40 @@ func writeTable(w io.Writer, header []string, rows [][]string, paint func(r, c i
 	return err
 }
 
-var taskHeader = []string{"KEY", "ULID", "STATUS", "KIND", "ASSIGNEES", "LABELS", "TITLE"}
+var taskHeader = []string{"ID", "ULID", "STATUS", "KIND", "ASSIGNEES", "LABELS", "TITLE"}
 
 // taskRow is one task in the table. The title is last, so wide characters
 // in it do not shift other columns.
 func taskRow(e *index.Entry) []string {
-	key, kind, status := e.Key, e.Kind, e.Status
-	if key == "" {
-		key = "?"
+	id, kind, status := e.ID, e.Kind, e.Status
+	if id == "" {
+		id = "?"
 	}
 	if e.Broken != "" {
 		kind, status = "?", "?"
 	}
-	return []string{key, e.ULID.String(), status, kind, strings.Join(e.Assignees, ","), strings.Join(e.Labels, ","), e.Title}
+	return []string{id, e.ULID.String(), status, kind, strings.Join(e.Assignees, ","), strings.Join(e.Labels, ","), e.Title}
 }
 
-// taskLabel names a task for a reader: its key and full ULID, or the ULID
-// alone when the task has no key (a file that does not decode).
+// taskLabel names a task for a reader: its id and full ULID, or the ULID
+// alone when the task has no id (a file that does not decode).
 func taskLabel(e *index.Entry) string {
-	if e.Key == "" {
+	if e.ID == "" {
 		return e.ULID.String()
 	}
-	return e.Key + " (" + e.ULID.String() + ")"
+	return e.ID + " (" + e.ULID.String() + ")"
 }
 
-// taskFileName names the temporary file that edits task e: its key, or its
-// ULID when it has no key.
+// taskFileName names the temporary file that edits task e: its id, or its
+// ULID when it has no id.
 func taskFileName(e *index.Entry) string {
-	if e.Key == "" {
+	if e.ID == "" {
 		return e.ULID.String()
 	}
-	return e.Key
+	return e.ID
 }
 
-// refName names the task id for a reader: its key, ULID and title.
+// refName names the task id for a reader: its id, ULID and title.
 func refName(ix *index.Index, id model.ULID) string {
 	if e, ok := ix.Task(id); ok {
 		return taskLabel(e) + " " + e.Title

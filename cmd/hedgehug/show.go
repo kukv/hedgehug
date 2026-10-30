@@ -134,7 +134,7 @@ func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Co
 	}
 	for _, r := range rels {
 		for _, x := range r.tasks {
-			j.Reverse[r.key] = append(j.Reverse[r.key], refJSON{x.ULID.String(), x.Key, x.Title})
+			j.Reverse[r.key] = append(j.Reverse[r.key], refJSON{x.ULID.String(), x.ID, x.Title})
 		}
 	}
 	return j
@@ -162,17 +162,17 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 		}
 		return out
 	}
-	field("key", e.Key)
+	field("id", e.ID)
 	field("ulid", e.ULID.String())
 	if !e.Workspace.IsZero() {
 		ws := e.Workspace.String()
 		if w, ok := ix.Workspace(e.Workspace); ok {
-			ws = w.Name + " (" + w.KeyPrefix + ", " + ws + ")"
+			ws = w.Name + " (" + w.IDPrefix + ", " + ws + ")"
 		}
 		field("workspace", ws)
 	}
-	if len(e.FormerKeys) > 0 {
-		field("former_keys", e.FormerKeys...)
+	if len(e.FormerIDs) > 0 {
+		field("former_ids", e.FormerIDs...)
 	}
 	field("kind", e.Kind)
 	field("status", e.Status)

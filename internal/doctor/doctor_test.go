@@ -201,7 +201,7 @@ func TestRunIndexProblems(t *testing.T) {
 	a := newTask("A")
 	missing := model.NewULID()
 	a.Parent = &missing
-	a.Key = "TST-1"
+	a.ID = "TST-1"
 	putRaw(t, s, dir, a)
 	fs := run(t, dir)
 	if len(fs) != 1 || fs[0].Check != "task" || fs[0].Where != "TST-1 ("+a.ULID.String()+") A" || !strings.Contains(fs[0].Msg, "parent") {
@@ -308,9 +308,9 @@ func duplicateFindings(t *testing.T, dir, what string) map[string]Finding {
 func TestRunWorkspaces(t *testing.T) {
 	s, dir := newStore(t)
 	first := firstWorkspace(t, s)
-	w := &model.Workspace{ULID: model.NewULID(), Name: "other", KeyPrefix: "TST"}
+	w := &model.Workspace{ULID: model.NewULID(), Name: "other", IDPrefix: "TST"}
 	commitWorkspace(t, s, dir, w)
-	got := duplicateFindings(t, dir, "key prefix TST")
+	got := duplicateFindings(t, dir, "id prefix TST")
 	// Both are reported, each naming the other.
 	if len(got) != 2 || !strings.Contains(got[model.WorkspacePath(first)].Msg, w.ULID.String()) || !strings.Contains(got[model.WorkspacePath(w.ULID)].Msg, first.String()) {
 		t.Errorf("findings = %+v", got)
@@ -322,7 +322,7 @@ func TestRunWorkspaces(t *testing.T) {
 func TestRunWorkspaceNames(t *testing.T) {
 	s, dir := newStore(t)
 	first := firstWorkspace(t, s)
-	w := &model.Workspace{ULID: model.NewULID(), Name: "test", KeyPrefix: "OTHER"} // as the first one
+	w := &model.Workspace{ULID: model.NewULID(), Name: "test", IDPrefix: "OTHER"} // as the first one
 	commitWorkspace(t, s, dir, w)
 	got := duplicateFindings(t, dir, "name test")
 	if len(got) != 2 || !strings.Contains(got[model.WorkspacePath(first)].Msg, w.ULID.String()) || !strings.Contains(got[model.WorkspacePath(w.ULID)].Msg, first.String()) {
@@ -337,11 +337,11 @@ func TestRunWorkspaceFields(t *testing.T) {
 		w    model.Workspace
 		want string
 	}{
-		{model.Workspace{Name: "a", KeyPrefix: "me", PrefixSet: set}, "key prefix"},
-		{model.Workspace{Name: "B", KeyPrefix: "BB", PrefixSet: set}, "cannot name a workspace"},
-		{model.Workspace{KeyPrefix: "CC", PrefixSet: set}, "name is missing"},
-		{model.Workspace{Name: "d", PrefixSet: set}, "key_prefix is missing"},
-		{model.Workspace{Name: "e", KeyPrefix: "EE"}, "prefix_set is missing"},
+		{model.Workspace{Name: "a", IDPrefix: "me", PrefixSet: set}, "id prefix"},
+		{model.Workspace{Name: "B", IDPrefix: "BB", PrefixSet: set}, "cannot name a workspace"},
+		{model.Workspace{IDPrefix: "CC", PrefixSet: set}, "name is missing"},
+		{model.Workspace{Name: "d", PrefixSet: set}, "id_prefix is missing"},
+		{model.Workspace{Name: "e", IDPrefix: "EE"}, "prefix_set is missing"},
 	} {
 		tc.w.ULID = model.NewULID()
 		b, err := tc.w.Encode()
@@ -381,13 +381,13 @@ func TestRunNumbers(t *testing.T) {
 	}
 }
 
-func TestRunKeyProblems(t *testing.T) {
+func TestRunIDProblems(t *testing.T) {
 	s, dir := newStore(t)
 	a := newTask("A")
-	a.Key = "XX-1"
+	a.ID = "XX-1"
 	putRaw(t, s, dir, a)
 	fs := run(t, dir)
-	if f := find(t, fs, "task", "XX-1 ("+a.ULID.String()+") A"); !strings.Contains(f.Msg, "key prefix") {
+	if f := find(t, fs, "task", "XX-1 ("+a.ULID.String()+") A"); !strings.Contains(f.Msg, "id prefix") {
 		t.Errorf("finding = %+v", f)
 	}
 }

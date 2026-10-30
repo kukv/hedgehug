@@ -90,9 +90,9 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 	if err != nil {
 		return err
 	}
-	// The tasks put; assignKeys gives them their new keys in place.
+	// The tasks put; assignIDs gives them their new ids in place.
 	var tasks []*model.Task
-	var oldKeys []string
+	var oldIDs []string
 	committed, err := a.update(s, store.Op{Name: "mv", Task: e.ULID}, func(tx *store.Tx) error {
 		// A task and its subtree are in one workspace, so they move
 		// together. The subtree is read under the lock, so a child added
@@ -111,7 +111,7 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 			if err != nil {
 				return err
 			}
-			oldKeys = append(oldKeys, t.Key)
+			oldIDs = append(oldIDs, t.ID)
 			t.Workspace = dest
 			if id == e.ULID {
 				t.Parent, t.Rank = parent, rank
@@ -131,7 +131,7 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 	}
 	var b strings.Builder
 	for i, t := range tasks {
-		fmt.Fprintf(&b, "  %s → %s\n", oldKeys[i], t.Key)
+		fmt.Fprintf(&b, "  %s → %s\n", oldIDs[i], t.ID)
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())
 	return err

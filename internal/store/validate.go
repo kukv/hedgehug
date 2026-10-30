@@ -148,7 +148,7 @@ func (tx *Tx) validateWorkspaces() error {
 		if w == nil {
 			continue
 		}
-		if err := model.ValidKeyPrefix(w.KeyPrefix); err != nil {
+		if err := model.ValidIDPrefix(w.IDPrefix); err != nil {
 			return err
 		}
 		if err := model.ValidWorkspaceName(w.Name); err != nil {
@@ -158,8 +158,8 @@ func (tx *Tx) validateWorkspaces() error {
 			if oid == id {
 				continue
 			}
-			if o.KeyPrefix == w.KeyPrefix {
-				return fmt.Errorf("the key prefix %s is already used by workspace %s", w.KeyPrefix, o.Name)
+			if o.IDPrefix == w.IDPrefix {
+				return fmt.Errorf("the id prefix %s is already used by workspace %s", w.IDPrefix, o.Name)
 			}
 			if strings.EqualFold(o.Name, w.Name) {
 				return fmt.Errorf("a workspace named %s already exists", o.Name)

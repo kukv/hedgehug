@@ -50,9 +50,9 @@ func TestMvWorkspaceMovesAChildAddedMeanwhile(t *testing.T) {
 	p := te.addJSON("p", "--workspace", "me")
 	var c model.ULID
 	te.meanwhile(putChild(p.ULID, &c))
-	out := te.ok("mv", p.Key, "--workspace", "api")
-	if got := te.task(c.String()); got.Key != "API-2" {
-		t.Errorf("the child added meanwhile: key %s", got.Key)
+	out := te.ok("mv", p.ID, "--workspace", "api")
+	if got := te.task(c.String()); got.ID != "API-2" {
+		t.Errorf("the child added meanwhile: id %s", got.ID)
 	}
 	if !strings.Contains(out, "ME-2 → API-2") {
 		t.Errorf("mv =\n%s", out)
@@ -65,8 +65,8 @@ func TestWorkspacePrefixRenumbersATaskAddedMeanwhile(t *testing.T) {
 	var c model.ULID
 	te.meanwhile(putChild(p.ULID, &c))
 	out := te.ok("workspace", "prefix", "me", "NEW")
-	if got := te.task(c.String()); got.Key != "NEW-2" {
-		t.Errorf("the task added meanwhile: key %s", got.Key)
+	if got := te.task(c.String()); got.ID != "NEW-2" {
+		t.Errorf("the task added meanwhile: id %s", got.ID)
 	}
 	if !strings.Contains(out, "renumbered 2 tasks") || !strings.Contains(out, "ME-2 → NEW-2") {
 		t.Errorf("prefix =\n%s", out)
@@ -78,7 +78,7 @@ func TestRmDeletesAChildAddedMeanwhile(t *testing.T) {
 	p := te.addJSON("p")
 	var c model.ULID
 	te.meanwhile(putChild(p.ULID, &c))
-	if out := te.ok("rm", p.Key); !strings.Contains(out, "and 1 task under it") {
+	if out := te.ok("rm", p.ID); !strings.Contains(out, "and 1 task under it") {
 		t.Errorf("rm = %s", out)
 	}
 	if got := te.task(c.String()); got.DeletedAt == nil {
@@ -89,10 +89,10 @@ func TestRmDeletesAChildAddedMeanwhile(t *testing.T) {
 func TestRestoreRestoresAChildDeletedMeanwhile(t *testing.T) {
 	te := newStoreEnv(t)
 	p := te.addJSON("p")
-	te.ok("rm", p.Key)
+	te.ok("rm", p.ID)
 	var c model.ULID
 	te.meanwhile(putChild(p.ULID, &c)) // deleted at the same time as p
-	te.ok("restore", p.Key)
+	te.ok("restore", p.ID)
 	if got := te.task(c.String()); got.DeletedAt != nil {
 		t.Error("the child deleted with p meanwhile is not restored")
 	}
@@ -101,10 +101,10 @@ func TestRestoreRestoresAChildDeletedMeanwhile(t *testing.T) {
 func TestPurgeSeesChildrenAddedMeanwhile(t *testing.T) {
 	te := newStoreEnv(t)
 	p := te.addJSON("p")
-	te.ok("rm", p.Key)
+	te.ok("rm", p.ID)
 	var c model.ULID
 	te.meanwhile(putChild(p.ULID, &c)) // deleted, so it goes with p
-	te.ok("purge", p.Key, "--yes")
+	te.ok("purge", p.ID, "--yes")
 	s, err := store.Open(te.storeDir("me"))
 	if err != nil {
 		t.Fatal(err)
@@ -114,7 +114,7 @@ func TestPurgeSeesChildrenAddedMeanwhile(t *testing.T) {
 	}
 
 	q := te.addJSON("q")
-	te.ok("rm", q.Key)
+	te.ok("rm", q.ID)
 	te.meanwhile(func(tx *store.Tx) error {
 		if err := putChild(q.ULID, &c)(tx); err != nil {
 			return err
@@ -126,16 +126,16 @@ func TestPurgeSeesChildrenAddedMeanwhile(t *testing.T) {
 		live.DeletedAt = nil
 		return tx.PutTask(live)
 	})
-	if code, _, stderr := te.run("purge", q.Key, "--yes"); code != 1 || !strings.Contains(stderr, "not deleted") {
+	if code, _, stderr := te.run("purge", q.ID, "--yes"); code != 1 || !strings.Contains(stderr, "not deleted") {
 		t.Errorf("purge over a live child added meanwhile: exit %d, stderr %q", code, stderr)
 	}
 
 	// After a confirmation, a change to what is purged stops the purge.
 	r := te.addJSON("r")
-	te.ok("rm", r.Key)
+	te.ok("rm", r.ID)
 	te.terminal, te.stdin = true, "y\n"
 	te.meanwhile(putChild(r.ULID, &c))
-	if code, _, stderr := te.run("purge", r.Key); code != 1 || !strings.Contains(stderr, "run purge again") {
+	if code, _, stderr := te.run("purge", r.ID); code != 1 || !strings.Contains(stderr, "run purge again") {
 		t.Errorf("purge after a change: exit %d, stderr %q", code, stderr)
 	}
 	if _, err := s.Task(c); err != nil {

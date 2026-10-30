@@ -113,8 +113,8 @@ func checkEdit(ix *index.Index, id model.ULID, old *model.Task, edited []byte) (
 	switch {
 	case t.ULID != old.ULID:
 		return nil, fixed("ulid")
-	case t.Key != old.Key:
-		return nil, fixed("key")
+	case t.ID != old.ID:
+		return nil, fixed("id")
 	case !t.Created.Equal(old.Created):
 		return nil, fixed("created")
 	case !t.Updated.Equal(old.Updated):
@@ -125,8 +125,8 @@ func checkEdit(ix *index.Index, id model.ULID, old *model.Task, edited []byte) (
 		return nil, moved("parent")
 	case t.Rank != old.Rank:
 		return nil, moved("rank")
-	case !slices.Equal(t.FormerKeys, old.FormerKeys):
-		return nil, fixed("former_keys")
+	case !slices.Equal(t.FormerIDs, old.FormerIDs):
+		return nil, fixed("former_ids")
 	case t.Workspace != old.Workspace && hasWorkspace(ix, old.Workspace):
 		return nil, fmt.Errorf("workspace cannot be changed here; use hedgehug mv --workspace")
 	}

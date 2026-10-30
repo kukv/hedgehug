@@ -41,7 +41,7 @@ type logJSON struct {
 	} `json:"author"`
 	Op      *string `json:"op"`
 	Task    *string `json:"task"`
-	Key     *string `json:"key"` // the current key of the task
+	ID      *string `json:"id"` // the current id of the task
 	Subject string  `json:"subject"`
 }
 
@@ -54,8 +54,8 @@ func toLogJSON(ix *index.Index, e gitrepo.LogEntry) logJSON {
 	if v, ok := e.Trailer("Hedgehug-Task"); ok {
 		j.Task = &v
 		if id, err := model.ParseULID(v); err == nil {
-			if t, ok := ix.Task(id); ok && t.Key != "" {
-				j.Key = &t.Key
+			if t, ok := ix.Task(id); ok && t.ID != "" {
+				j.ID = &t.ID
 			}
 		}
 	}
@@ -71,7 +71,7 @@ func logJSONs(ix *index.Index, entries []gitrepo.LogEntry) []logJSON {
 }
 
 // subjectNow gives the subject of a Hedgehug commit with the task's current
-// key and ULID in place of the label it was written with: the subject is
+// id and ULID in place of the label it was written with: the subject is
 // "hedgehug: <op> <label> <title>". Other subjects, and tasks the index does
 // not have, keep the subject as it is.
 func subjectNow(ix *index.Index, le gitrepo.LogEntry) string {
