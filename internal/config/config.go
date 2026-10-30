@@ -57,7 +57,7 @@ func Load(p Paths) (*Config, error) {
 	}
 	c.doc = &doc
 	seq := valueOf(root, "stores")
-	if seq == nil {
+	if seq == nil || seq.Tag == "!!null" {
 		return c, nil
 	}
 	if seq.Kind != yaml.SequenceNode {
@@ -118,9 +118,13 @@ func (c *Config) AddStore(name, path string) error {
 	}
 	root := c.doc.Content[0]
 	seq := valueOf(root, "stores")
-	if seq == nil {
+	switch {
+	case seq == nil:
 		seq = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
 		root.Content = append(root.Content, scalar("stores"), seq)
+	case seq.Tag == "!!null":
+		// A bare "stores:" has a null value; put a list in its place.
+		*seq = yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
 	}
 	seq.Content = append(seq.Content, &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map", Content: []*yaml.Node{
 		scalar("name"), scalar(name),

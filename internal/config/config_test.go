@@ -138,6 +138,32 @@ func TestAddStoreToMissingFile(t *testing.T) {
 	}
 }
 
+func TestNullStoresIsEmpty(t *testing.T) {
+	p := testPaths(t)
+	writeConfig(t, p, "stores:\n")
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Stores) != 0 {
+		t.Errorf("Stores = %v, want none", c.Stores)
+	}
+	outside := filepath.Join(filepath.Dir(p.Home), "elsewhere", "a")
+	if err := c.AddStore("a", outside); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	c2, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c2.Stores) != 1 || c2.Stores[0] != (StoreEntry{"a", outside}) {
+		t.Errorf("Stores = %v", c2.Stores)
+	}
+}
+
 func TestAddStoreRefusesDuplicates(t *testing.T) {
 	p := testPaths(t)
 	c, _ := Load(p)
