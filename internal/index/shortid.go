@@ -82,6 +82,9 @@ func (e *AmbiguousError) Error() string {
 // characters, and returns what the first stage that matches finds. Deleted
 // tasks count.
 func (ix *Index) Resolve(s string) (model.ID, error) {
+	if s == "" {
+		return model.ID{}, fmt.Errorf("%q: %w", s, store.ErrNotFound)
+	}
 	u := strings.ToUpper(s)
 	stages := []func(*Entry) bool{
 		func(e *Entry) bool { return e.Key != "" && strings.EqualFold(e.Key, s) },

@@ -27,9 +27,12 @@ type Error struct {
 	Pos  int
 	Term string
 	Msg  string
+	Err  error // the error Msg tells of, when there is one
 }
 
 func (e *Error) Error() string { return fmt.Sprintf("term %d (%s): %s", e.Pos, e.Term, e.Msg) }
+
+func (e *Error) Unwrap() error { return e.Err }
 
 // Parse parses s. It checks the syntax only; Run checks keys and values
 // against the store's schema.

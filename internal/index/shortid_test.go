@@ -25,6 +25,7 @@ func indexOf(es ...*Entry) *Index {
 		ix.tasks[e.ID] = e
 	}
 	ix.derive()
+	ix.problems = ix.findProblems()
 	return ix
 }
 

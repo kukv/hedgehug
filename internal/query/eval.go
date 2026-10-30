@@ -3,6 +3,7 @@ package query
 import (
 	"cmp"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -80,6 +81,11 @@ func (c *compiler) fail(t Term, format string, args ...any) error {
 	return &Error{Pos: t.Pos, Term: t.Raw, Msg: fmt.Sprintf(format, args...)}
 }
 
+// failWith is fail for an underlying error, which callers can unwrap.
+func (c *compiler) failWith(t Term, err error) error {
+	return &Error{Pos: t.Pos, Term: t.Raw, Msg: err.Error(), Err: err}
+}
+
 func (c *compiler) term(t Term) (pred, error) {
 	if t.Key == "" {
 		text := strings.ToLower(t.Values[0])
@@ -146,7 +152,7 @@ func (c *compiler) matchText(t Term, get func(*index.Entry) []string, check func
 		}
 		if check != nil {
 			if err := check(v); err != nil {
-				return nil, c.fail(t, "%v", err)
+				return nil, c.failWith(t, err)
 			}
 		}
 		want = append(want, v)
@@ -219,7 +225,7 @@ func (c *compiler) resolve(t Term) (none bool, ids map[model.ID]bool, err error)
 		}
 		id, err := c.ix.Resolve(v)
 		if err != nil {
-			return false, nil, c.fail(t, "%v", err)
+			return false, nil, c.failWith(t, err)
 		}
 		ids[id] = true
 	}
@@ -369,7 +375,13 @@ func (c *compiler) prop(t Term, p schema.Prop) (pred, error) {
 // parsers turn values of the types that can be compared into numbers:
 // dates and times into Unix seconds, durations into minutes.
 var parsers = map[schema.PropType]func(string) (float64, error){
-	schema.TypeNumber: func(s string) (float64, error) { return strconv.ParseFloat(s, 64) },
+	schema.TypeNumber: func(s string) (float64, error) {
+		x, err := strconv.ParseFloat(s, 64)
+		if err == nil && (math.IsNaN(x) || math.IsInf(x, 0)) {
+			return 0, fmt.Errorf("%q is not a finite number", s)
+		}
+		return x, err
+	},
 	schema.TypeDate: func(s string) (float64, error) {
 		d, err := model.ParseDate(s)
 		return float64(d.Time().Unix()), err
@@ -400,7 +412,7 @@ func (c *compiler) compare(t Term, p schema.Prop) (pred, error) {
 		}
 		x, err := parse(v)
 		if err != nil {
-			return nil, c.fail(t, "%v", err)
+			return nil, c.failWith(t, err)
 		}
 		want = append(want, x)
 	}
@@ -458,12 +470,12 @@ func (c *compiler) is(t Term) (pred, error) {
 	return anyOf(ps), nil
 }
 
-// blocked reports whether a blocker of e is open: in the index and not in
-// the done or canceled category.
+// blocked reports whether a blocker of e is open: in the index, readable,
+// not deleted, and not in the done or canceled category.
 func (c *compiler) blocked(e *index.Entry) bool {
 	for _, id := range e.BlockedBy {
 		b, ok := c.ix.Task(id)
-		if !ok {
+		if !ok || b.Broken != "" || b.DeletedAt != nil {
 			continue
 		}
 		st, _ := c.sc.Status(b.Status)

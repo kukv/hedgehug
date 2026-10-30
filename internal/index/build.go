@@ -49,16 +49,19 @@ func (ix *Index) rebuild(tree plumbing.Hash) error {
 		}
 		tasks[id], decoded[id] = newEntry(id, b)
 	}
-	ix.tree, ix.sc, ix.tasks = tree, sc, tasks
+	ix.sc, ix.tasks = sc, tasks
 	ix.derive()
-	return ix.revalidateAndFindProblems(slices.Collect(maps.Keys(tasks)), decoded)
+	if err := ix.revalidateAndFindProblems(tree, slices.Collect(maps.Keys(tasks)), decoded); err != nil {
+		return err
+	}
+	ix.tree = tree // only now: a failed rebuild must not look like a done one
+	return nil
 }
 
 // revalidate checks the tasks ids against the schema and keeps the
 // violations in their entries. decoded holds tasks already decoded; the
-// others are read from the tree again. Broken and missing entries are
-// skipped.
-func (ix *Index) revalidate(ids []model.ID, decoded map[model.ID]*model.Task) error {
+// others are read from tree again. Broken and missing entries are skipped.
+func (ix *Index) revalidate(tree plumbing.Hash, ids []model.ID, decoded map[model.ID]*model.Task) error {
 	for _, id := range ids {
 		e := ix.tasks[id]
 		if e == nil || e.Broken != "" {
@@ -66,7 +69,7 @@ func (ix *Index) revalidate(ids []model.ID, decoded map[model.ID]*model.Task) er
 		}
 		t := decoded[id]
 		if t == nil {
-			b, err := ix.repo.ReadFile(ix.tree, model.TaskPath(id))
+			b, err := ix.repo.ReadFile(tree, model.TaskPath(id))
 			if err != nil {
 				return err
 			}
@@ -183,7 +186,7 @@ func (ix *Index) update(from, to plumbing.Hash) error {
 			return err
 		}
 	}
-	ix.tree, ix.sc = to, sc
+	ix.sc = sc
 	decoded := map[model.ID]*model.Task{}
 	var touched []model.ID
 	all := false
@@ -208,18 +211,23 @@ func (ix *Index) update(from, to plumbing.Hash) error {
 		ix.tasks[id], decoded[id] = newEntry(id, b)
 	}
 	ix.derive()
+	ids := ix.descendants(touched)
 	if all {
-		return ix.revalidateAndFindProblems(slices.Collect(maps.Keys(ix.tasks)), decoded)
+		ids = slices.Collect(maps.Keys(ix.tasks))
 	}
 	// A task's placement depends on its parent's kind, and its schema on its
 	// ancestors, so the descendants of a changed task are checked again.
-	return ix.revalidateAndFindProblems(ix.descendants(touched), decoded)
+	if err := ix.revalidateAndFindProblems(to, ids, decoded); err != nil {
+		return err
+	}
+	ix.tree = to // only now: after an error, from stays the tree the tasks match
+	return nil
 }
 
-// revalidateAndFindProblems revalidates ids, then finds the problems again:
-// derive ran before the violations were set, so it missed them.
-func (ix *Index) revalidateAndFindProblems(ids []model.ID, decoded map[model.ID]*model.Task) error {
-	if err := ix.revalidate(ids, decoded); err != nil {
+// revalidateAndFindProblems revalidates ids against tree, then finds the
+// problems, which depend on the violations.
+func (ix *Index) revalidateAndFindProblems(tree plumbing.Hash, ids []model.ID, decoded map[model.ID]*model.Task) error {
+	if err := ix.revalidate(tree, ids, decoded); err != nil {
 		return err
 	}
 	ix.problems = ix.findProblems()

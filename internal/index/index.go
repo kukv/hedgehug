@@ -42,16 +42,20 @@ func Open(s *store.Store) (*Index, error) {
 		return nil, err
 	}
 	tree, ok := ix.load()
+	rebuilt := !ok
 	if ok {
 		err = ix.update(tree, head)
 	}
 	if !ok || errors.Is(err, gitrepo.ErrTreeNotFound) {
 		err = ix.rebuild(head)
+		rebuilt = true
 	}
 	if err != nil {
 		return nil, err
 	}
-	ix.save()
+	if rebuilt || tree != head {
+		ix.save()
+	}
 	return ix, nil
 }
 
@@ -113,7 +117,6 @@ func (ix *Index) derive() {
 	}
 	sortByRank(ix.roots)
 	ix.short = shortLengths(ix.tasks)
-	ix.problems = ix.findProblems()
 }
 
 func sortByRank(es []*Entry) {
