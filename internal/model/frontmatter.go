@@ -8,7 +8,14 @@ import (
 const fence = "---\n"
 
 // normalizeNewlines turns CRLF into LF. Editors on Windows may save CRLF.
-func normalizeNewlines(s string) string { return strings.ReplaceAll(s, "\r\n", "\n") }
+// It repeats until no CRLF is left so that it is idempotent: "\r\r\n" must
+// not leave a new "\r\n" behind.
+func normalizeNewlines(s string) string {
+	for strings.Contains(s, "\r\n") {
+		s = strings.ReplaceAll(s, "\r\n", "\n")
+	}
+	return s
+}
 
 // splitFrontmatter splits a Markdown file into its YAML frontmatter and its
 // body. The file must start with a "---" line, and the next "---" line ends
