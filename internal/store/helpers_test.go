@@ -22,7 +22,7 @@ var (
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
 	meta := &model.StoreMeta{ID: model.NewID(), Name: "test"}
-	s, err := Create(filepath.Join(t.TempDir(), "store"), meta, testAuthor)
+	s, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, testAuthor)
 	if err != nil {
 		t.Fatal(err)
 	}

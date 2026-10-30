@@ -55,21 +55,36 @@ func newStore(dir string, repo *gitrepo.Repo, meta *model.StoreMeta, sc *schema.
 	return s
 }
 
+// newStoreHook lets tests change the store Create made before it writes.
+var newStoreHook = func(*Store) {}
+
 // Create makes a new store in dir, which must be missing or empty: a git
-// repository holding store.yaml, the default schema and a .gitignore, in
-// one commit.
-func Create(dir string, meta *model.StoreMeta, author gitrepo.Signature) (*Store, error) {
-	if err := ensureEmpty(dir); err != nil {
+// repository holding store.yaml, sc as schema.yaml (the default schema when
+// sc is nil) and a .gitignore, in one commit. meta is copied, not changed.
+// When Create fails it removes what it made, so it can be run again.
+func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo.Signature) (_ *Store, err error) {
+	made, err := ensureEmpty(dir)
+	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, undoCreate(dir, made))
+		}
+	}()
 	repo, err := gitrepo.Init(dir)
 	if err != nil {
 		return nil, err
 	}
-	meta.Format = model.StoreFormat
-	s := newStore(dir, repo, meta, schema.Default())
+	m := *meta
+	m.Format = model.StoreFormat
+	if sc == nil {
+		sc = schema.Default()
+	}
+	s := newStore(dir, repo, &m, sc)
+	newStoreHook(s)
 
-	mb, err := meta.Encode()
+	mb, err := m.Encode()
 	if err != nil {
 		return nil, err
 	}
@@ -104,18 +119,37 @@ func Create(dir string, meta *model.StoreMeta, author gitrepo.Signature) (*Store
 	return s, nil
 }
 
-func ensureEmpty(dir string) error {
+// ensureEmpty makes sure dir is an empty directory, creating it when it is
+// missing. made tells whether it created it.
+func ensureEmpty(dir string) (made bool, err error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
-		return os.MkdirAll(dir, 0o750)
+		return true, os.MkdirAll(dir, 0o750)
 	}
+	if err != nil {
+		return false, err
+	}
+	if len(entries) > 0 {
+		return false, fmt.Errorf("%s is not empty", dir)
+	}
+	return false, nil
+}
+
+// undoCreate removes what a failed Create left in dir: dir itself when
+// Create made it, its contents otherwise.
+func undoCreate(dir string, made bool) error {
+	if made {
+		return os.RemoveAll(dir)
+	}
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return err
 	}
-	if len(entries) > 0 {
-		return fmt.Errorf("%s is not empty", dir)
+	var errs []error
+	for _, e := range entries {
+		errs = append(errs, os.RemoveAll(filepath.Join(dir, e.Name())))
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // Open opens the store in dir. It reads store.yaml and schema.yaml now;
