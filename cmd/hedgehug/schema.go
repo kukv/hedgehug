@@ -1,6 +1,22 @@
 package main
 
-import "github.com/spf13/cobra"
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/spf13/cobra"
+
+	"github.com/kukv/hedgehug/internal/doctor"
+	"github.com/kukv/hedgehug/internal/index"
+	"github.com/kukv/hedgehug/internal/schema"
+	"github.com/kukv/hedgehug/internal/store"
+)
+
+// errFindings is what a command that found problems returns: the problems
+// are printed, so run exits 1 without a message of its own.
+var errFindings = errors.New("problems found")
 
 func (a *app) schemaCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -13,6 +29,77 @@ func (a *app) schemaCmd() *cobra.Command {
 			return usageErrorf("a subcommand is needed")
 		},
 	}
-	cmd.AddCommand(a.migrateCmd())
+	cmd.AddCommand(a.checkCmd(), a.migrateCmd())
 	return cmd
+}
+
+func (a *app) checkCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "check",
+		Short: "Find where the schema does not fit the store and its tasks",
+		Args:  exactArgs(0),
+		RunE: func(*cobra.Command, []string) error {
+			fs, err := a.checkSchema()
+			if err != nil {
+				return err
+			}
+			return a.printFindings(fs)
+		},
+	}
+}
+
+// checkSchema opens the store and checks its schema. A schema.yaml that does
+// not decode keeps the store from opening; that is then the one finding.
+func (a *app) checkSchema() ([]doctor.Finding, error) {
+	c, _, err := a.config()
+	if err != nil {
+		return nil, err
+	}
+	e, err := c.Select(a.storeName)
+	if err != nil {
+		return nil, err
+	}
+	s, err := store.Open(e.Path)
+	if err != nil {
+		if data, rerr := os.ReadFile(filepath.Join(e.Path, schema.Path)); rerr == nil {
+			if sc, fs := doctor.SchemaFile(data); sc == nil {
+				return fs, nil
+			}
+		}
+		return nil, err
+	}
+	ix, err := index.Open(s)
+	if err != nil {
+		return nil, err
+	}
+	return doctor.Schema(s, ix)
+}
+
+// printFindings prints what a check found. It returns errFindings when there
+// is anything to report.
+func (a *app) printFindings(fs []doctor.Finding) error {
+	if a.jsonOut {
+		if fs == nil {
+			fs = []doctor.Finding{}
+		}
+		if err := a.printJSON(fs); err != nil {
+			return err
+		}
+	} else {
+		if len(fs) == 0 {
+			_, err := fmt.Fprintln(a.stdout, "No problems")
+			return err
+		}
+		for _, f := range fs {
+			_, _ = fmt.Fprintf(a.stdout, "%s: %s\n", f.Where, f.Msg)
+			if f.Hint != "" {
+				_, _ = fmt.Fprintf(a.stdout, "  hint: %s\n", f.Hint)
+			}
+		}
+		_, _ = fmt.Fprintf(a.stdout, "%d problems\n", len(fs))
+	}
+	if len(fs) > 0 {
+		return errFindings
+	}
+	return nil
 }

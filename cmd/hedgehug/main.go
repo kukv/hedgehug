@@ -55,6 +55,9 @@ func run(args []string, e *env) int {
 	if err == nil {
 		return 0
 	}
+	if errors.Is(err, errFindings) {
+		return 1 // the findings are printed already
+	}
 	writeErr(e.stderr, err)
 	var ue usageError
 	if errors.As(err, &ue) || strings.HasPrefix(err.Error(), "unknown command") {
