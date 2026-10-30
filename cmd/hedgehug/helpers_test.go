@@ -79,7 +79,7 @@ func (te *testEnv) ok(args ...string) string {
 func (te *testEnv) storeDir(name string) string { return filepath.Join(te.hhHome, "stores", name) }
 
 // log returns the commits of the store, newest first.
-func (te *testEnv) log(name string) []*object.Commit {
+func (te *testEnv) log(name string) []*object.Commit { //nolint:unparam // every test uses the one store "me"; the name keeps call sites readable
 	te.t.Helper()
 	r, err := git.PlainOpen(te.storeDir(name))
 	if err != nil {
