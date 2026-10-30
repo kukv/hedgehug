@@ -58,6 +58,45 @@ func TestLsTree(t *testing.T) {
 	}
 }
 
+func TestLsTreeIDsAndFormat(t *testing.T) {
+	te := newStoreEnv(t)
+	p := te.addJSON("Project", "--kind", "project")
+	a := te.addJSON("Alpha", "--parent", p.Short)
+	c := te.addJSON("Alpha child", "--parent", a.Short, "--status", "done")
+
+	// --ids-only prints the tasks found, not the ancestors drawn for them.
+	if got := te.ok("ls", "--tree", "--ids-only", "status:done"); got != c.Short+"\n" {
+		t.Errorf("--tree --ids-only = %q, want only %s", got, c.Short)
+	}
+	// --format gets every drawn task, marked as context or not.
+	got := te.ok("ls", "--tree", "--format", "{{.title}} {{.context}} {{.in_cycle}}", "status:done")
+	want := "Project true false\nAlpha true false\nAlpha child false false\n"
+	if got != want {
+		t.Errorf("--tree --format = %q, want %q", got, want)
+	}
+}
+
+func TestLsTreeIDsInCycle(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("X")
+	y := te.addJSON("Y", "--parent", x.Short, "--status", "done")
+	s, err := store.Open(te.storeDir("me"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	xid, _ := model.ParseID(x.ID)
+	yid, _ := model.ParseID(y.ID)
+	writeCycle(t, te, s, xid, yid)
+
+	if got := te.ok("ls", "--tree", "--ids-only", "status:done"); got != y.Short+"\n" {
+		t.Errorf("--tree --ids-only = %q, want only %s", got, y.Short)
+	}
+	got := te.ok("ls", "--tree", "--format", "{{.title}} {{.context}} {{.in_cycle}}", "status:done")
+	if !strings.Contains(got, "Y false true\n") || !strings.Contains(got, "X true true\n") {
+		t.Errorf("--tree --format = %q", got)
+	}
+}
+
 func TestLsTreeCycle(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("X")

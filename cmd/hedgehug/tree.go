@@ -41,11 +41,29 @@ func (a *app) lsTree(q *query.Query, idsOnly bool, tmpl *template.Template) erro
 		found = append(found, g.Tasks...)
 	}
 	roots, cycle := treeOf(ix, found)
+	match := map[model.ID]bool{}
+	for _, e := range found {
+		match[e.ID] = true
+	}
 	switch {
 	case idsOnly:
-		return a.printIDs(ix, flatten(roots, cycle))
+		// Only the tasks found: the ancestors drawn for them must not
+		// reach a command such as done.
+		var hit []*index.Entry
+		for _, e := range flatten(roots, cycle) {
+			if match[e.ID] {
+				hit = append(hit, e)
+			}
+		}
+		return a.printIDs(ix, hit)
 	case tmpl != nil:
-		return a.printFormat(ix, flatten(roots, cycle), tmpl)
+		inCycle := map[model.ID]bool{}
+		for _, e := range cycle {
+			inCycle[e.ID] = true
+		}
+		return a.printFormat(ix, flatten(roots, cycle), tmpl, func(m map[string]any, e *index.Entry) {
+			m["context"], m["in_cycle"] = !match[e.ID], inCycle[e.ID]
+		})
 	case a.jsonOut:
 		out := make([]*taskJSON, 0, len(roots)+len(cycle))
 		for _, n := range roots {

@@ -74,7 +74,7 @@ func (a *app) ls(q *query.Query, idsOnly bool, tmpl *template.Template) error {
 	case idsOnly:
 		return a.printIDs(ix, all)
 	case tmpl != nil:
-		return a.printFormat(ix, all, tmpl)
+		return a.printFormat(ix, all, tmpl, nil)
 	case a.jsonOut || !hasTerm(q, "group"):
 		return a.printTasks(ix, all)
 	}
@@ -117,8 +117,8 @@ func (a *app) printIDs(ix *index.Index, es []*index.Entry) error {
 }
 
 // printFormat runs tmpl on each task, with the task as --json has it: a map
-// of the JSON field names.
-func (a *app) printFormat(ix *index.Index, es []*index.Entry, tmpl *template.Template) error {
+// of the JSON field names. extra, when not nil, adds keys to each map.
+func (a *app) printFormat(ix *index.Index, es []*index.Entry, tmpl *template.Template, extra func(m map[string]any, e *index.Entry)) error {
 	for _, e := range es {
 		b, err := json.Marshal(entryJSON(ix, e))
 		if err != nil {
@@ -127,6 +127,9 @@ func (a *app) printFormat(ix *index.Index, es []*index.Entry, tmpl *template.Tem
 		var m map[string]any
 		if err := json.Unmarshal(b, &m); err != nil {
 			return err
+		}
+		if extra != nil {
+			extra(m, e)
 		}
 		if err := tmpl.Execute(a.stdout, m); err != nil {
 			return err
