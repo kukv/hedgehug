@@ -138,7 +138,8 @@ func TestValidatePlacement(t *testing.T) {
 		{"task", "task", true},
 		{"epic", "story", false},
 		{"bug", "task", false},
-		{"project", "epic", true}, // parents omitted: anywhere
+		{"project", "", true},
+		{"project", "epic", false}, // a project is at the root only
 		{"nope", "", false},
 	} {
 		vs := ValidatePlacement(tc.kind, tc.parent, e)

@@ -31,8 +31,9 @@ func WorklogPath(task, log ID) string {
 	return "worklogs/" + shard(task) + "/" + task.String() + "/" + log.String() + ".md"
 }
 
-func SprintPath(id ID) string  { return "sprints/" + id.String() + ".md" }
-func ReleasePath(id ID) string { return "releases/" + id.String() + ".md" }
+func SprintPath(id ID) string    { return "sprints/" + id.String() + ".md" }
+func ReleasePath(id ID) string   { return "releases/" + id.String() + ".md" }
+func WorkspacePath(id ID) string { return "workspaces/" + id.String() + ".md" }
 
 // TemplatePath returns the path of the template called name. name must
 // pass ValidTemplateName, or the path may point outside templates/.
@@ -66,6 +67,19 @@ func ParseTaskPath(p string) (ID, error) {
 	id, err := parseFileID(parts[3])
 	if err != nil || TaskPath(id) != p {
 		return ID{}, fmt.Errorf("%q is not a task path", p)
+	}
+	return id, nil
+}
+
+// ParseWorkspacePath returns the ID of the workspace file at p.
+func ParseWorkspacePath(p string) (ID, error) {
+	parts := strings.Split(p, "/")
+	if len(parts) != 2 || parts[0] != "workspaces" {
+		return ID{}, fmt.Errorf("%q is not a workspace path", p)
+	}
+	id, err := parseFileID(parts[1])
+	if err != nil || WorkspacePath(id) != p {
+		return ID{}, fmt.Errorf("%q is not a workspace path", p)
 	}
 	return id, nil
 }

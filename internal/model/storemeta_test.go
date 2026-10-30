@@ -6,12 +6,12 @@ import (
 )
 
 func TestStoreMetaRoundTrip(t *testing.T) {
-	src := "id: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nname: shared\nformat: 1\nkey_prefix: SH\naudience: backend と frontend の両チーム\n"
+	src := "id: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nname: shared\nformat: 1\naudience: backend と frontend の両チーム\n"
 	m, err := DecodeStoreMeta([]byte(src))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.Name != "shared" || m.Format != 1 || m.KeyPrefix != "SH" || m.Audience == "" {
+	if m.Name != "shared" || m.Format != 1 || m.Audience == "" {
 		t.Errorf("decoded = %+v", m)
 	}
 	out, err := m.Encode()

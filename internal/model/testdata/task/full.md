@@ -2,7 +2,7 @@
 id: 01JBZ8K3QW7M2X9V4T6R5N8P0A
 key: WEB-42 # 人が読めるキー
 former_keys: [API-17]
-key_prefix: WEB
+workspace: 01JC0A1B2C3D4E5F6G7H8J9K0M
 kind: story
 title: ログイン画面の改修
 parent: 01JBZ8K3QW7M2X9V4T6R5N8P0B
