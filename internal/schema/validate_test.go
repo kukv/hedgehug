@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/model"
@@ -151,5 +152,60 @@ func TestValidateTransition(t *testing.T) {
 	}
 	if vs := ValidateTransition("todo", "nope", task, e); len(vs) != 1 || vs[0].Code != CodeUnknownStatus {
 		t.Errorf("to an unknown status = %v", codes(vs))
+	}
+}
+
+func TestValidateWrite(t *testing.T) {
+	s := Default()
+	s.Workflow = Workflow{
+		Transitions: Lists{{"backlog", []string{"todo"}}},
+		Required:    Lists{{"in_progress", []string{"assignees"}}},
+	}
+	e := s.For(nil)
+
+	for _, tc := range []struct {
+		name          string
+		old           func(*model.Task) // nil: a new task
+		cur           func(*model.Task)
+		oldParentKind string
+		parentKind    string
+		want          []string
+	}{
+		{"new and valid", nil, func(*model.Task) {}, "", "", nil},
+		{"new with a bad value", nil, func(t *model.Task) {
+			t.Props.Set("priority", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "none"})
+		}, "", "", []string{"bad_value:priority"}},
+		{"new needs required fields", nil, func(t *model.Task) { t.Status = "in_progress" }, "", "", []string{"required:assignees"}},
+		{"new in a wrong place", nil, func(t *model.Task) { t.Kind = "bug" }, "", "task", []string{"placement:parent"}},
+		{"unknown status is reported once", nil, func(t *model.Task) { t.Status = "nope" }, "", "", []string{"unknown_status:status"}},
+		{"edit brings a violation", func(*model.Task) {}, func(t *model.Task) { t.Title = "" }, "", "", []string{"missing_title:title"}},
+		{"old violation is left out", func(t *model.Task) { t.Kind = "nope" }, func(t *model.Task) {
+			t.Kind = "nope"
+			t.Title = "renamed"
+		}, "", "", nil},
+		{"old placement violation is subtracted when the parent did not change", func(t *model.Task) { t.Kind = "bug" }, func(t *model.Task) {
+			t.Kind = "bug"
+			t.Title = "renamed"
+		}, "task", "task", nil},
+		{"a move brings a placement violation", func(t *model.Task) { t.Kind = "bug" }, func(t *model.Task) { t.Kind = "bug" }, "", "task", []string{"placement:parent"}},
+		{"transition not allowed", func(t *model.Task) { t.Status = "backlog" }, func(t *model.Task) { t.Status = "done" }, "", "", []string{"transition:status"}},
+		{"same status skips the workflow", func(t *model.Task) { t.Status = "in_progress" }, func(t *model.Task) {
+			t.Status = "in_progress"
+			t.Title = "renamed"
+		}, "", "", nil},
+	} {
+		var old *model.Task
+		var oldE *Effective
+		if tc.old != nil {
+			old = taskWith(t, "")
+			tc.old(old)
+			oldE = e
+		}
+		cur := taskWith(t, "")
+		tc.cur(cur)
+		got := codes(ValidateWrite(old, tc.oldParentKind, oldE, cur, tc.parentKind, e))
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s: violations = %v, want %v", tc.name, got, tc.want)
+		}
 	}
 }
