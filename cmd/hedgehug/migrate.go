@@ -146,13 +146,13 @@ func planMigration(s *store.Store, ix *index.Index, m schema.Migration) (*migrat
 }
 
 // brokenTask returns the ID of the task file that err, from Store.Tasks,
-// says does not decode. The error starts with the path of the file.
+// says does not decode or holds another task.
 func brokenTask(err error) (model.ID, bool) {
-	if !errors.As(err, new(*model.DecodeError)) {
+	var fe *store.FileError
+	if !errors.As(err, &fe) || !errors.As(err, new(*model.DecodeError)) && !errors.Is(err, store.ErrIDMismatch) {
 		return model.ID{}, false
 	}
-	rel, _, _ := strings.Cut(err.Error(), ": ")
-	id, perr := model.ParseTaskPath(rel)
+	id, perr := model.ParseTaskPath(fe.Path)
 	return id, perr == nil
 }
 

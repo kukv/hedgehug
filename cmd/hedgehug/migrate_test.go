@@ -89,6 +89,34 @@ func TestSchemaMigrateStatus(t *testing.T) {
 	}
 }
 
+// A file at the path of one task that holds another, as a stale copy, is
+// left alone: writing it would overwrite the real file of the other task.
+func TestSchemaMigrateSkipsMismatchedID(t *testing.T) {
+	te := newStoreEnv(t)
+	a := te.addJSON("Alpha")
+	d := te.addJSON("Delta")
+	stale := te.raw(a.ID)
+	te.commitFile(d.ID, stale)
+	te.ok("set", a.Short, "title=Alpha2")
+
+	code, out, stderr := te.run("schema", "migrate", "status", "todo", "ready")
+	if code != 0 {
+		t.Fatalf("exit %d, stderr %q", code, stderr)
+	}
+	if !strings.HasPrefix(out, "Migrated 1 task\n") || !strings.Contains(out, a.Short+"  Alpha2\n") {
+		t.Errorf("stdout = %q", out)
+	}
+	if !strings.Contains(stderr, "warning: not migrated, since they do not decode: "+d.Short+"\n") {
+		t.Errorf("stderr = %q, want a warning about %s only", stderr, d.Short)
+	}
+	if x := te.task(a.ID); x.Title != "Alpha2" || x.Status != "ready" {
+		t.Errorf("Alpha = title %q, status %q; want Alpha2, ready", x.Title, x.Status)
+	}
+	if got := te.raw(d.ID); got != stale {
+		t.Errorf("the file at Delta's path = %q, want it unchanged", got)
+	}
+}
+
 func TestSchemaMigrateJSON(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
