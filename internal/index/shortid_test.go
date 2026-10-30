@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -19,7 +20,7 @@ func mustID(t *testing.T, s string) model.ID {
 
 // indexOf builds an index of entries without a store.
 func indexOf(es ...*Entry) *Index {
-	ix := &Index{tasks: map[model.ID]*Entry{}}
+	ix := &Index{sc: schema.Default(), tasks: map[model.ID]*Entry{}}
 	for _, e := range es {
 		ix.tasks[e.ID] = e
 	}

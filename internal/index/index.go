@@ -29,6 +29,7 @@ type Index struct {
 	children map[model.ID][]*Entry
 	roots    []*Entry
 	short    map[model.ID]int // length of the short ID of each task
+	problems map[model.ID][]Problem
 }
 
 // Open opens the index of s. It reads the cache in .hedgehug/local and
@@ -112,6 +113,7 @@ func (ix *Index) derive() {
 	}
 	sortByRank(ix.roots)
 	ix.short = shortLengths(ix.tasks)
+	ix.problems = ix.findProblems()
 }
 
 func sortByRank(es []*Entry) {

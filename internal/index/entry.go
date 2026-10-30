@@ -103,3 +103,18 @@ func scalars(n *yaml.Node) []string {
 	}
 	return nil
 }
+
+// Targets returns the tasks e points at through rel: blocked_by, or a
+// task_ref property. Property values that are not IDs are left out.
+func (e *Entry) Targets(rel string) []model.ID {
+	if rel == "blocked_by" {
+		return e.BlockedBy
+	}
+	var out []model.ID
+	for _, v := range e.Prop(rel) {
+		if id, err := model.ParseID(v); err == nil {
+			out = append(out, id)
+		}
+	}
+	return out
+}
