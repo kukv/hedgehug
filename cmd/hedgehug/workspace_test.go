@@ -41,3 +41,23 @@ func TestWorkspaceCommands(t *testing.T) {
 		t.Error("a duplicate prefix is accepted")
 	}
 }
+
+func TestAddWithoutWorkspaces(t *testing.T) {
+	te := newStoreEnv(t)
+	te.ok("workspace", "rm", "me")
+	if code, _, errs := te.run("add", "x"); code == 0 || !strings.Contains(errs, "the store has no workspace; add one with hedgehug workspace add") {
+		t.Errorf("add with no workspace: %d %s", code, errs)
+	}
+}
+
+func TestWorkspacePrefixSame(t *testing.T) {
+	te := newStoreEnv(t)
+	te.addJSON("a")
+	before := len(te.log("me"))
+	if out := te.ok("workspace", "prefix", "me", "ME"); !strings.HasPrefix(out, "No changes") || strings.Contains(out, "→") {
+		t.Errorf("prefix to the same =\n%s", out)
+	}
+	if n := len(te.log("me")); n != before {
+		t.Errorf("commits = %d, want %d", n, before)
+	}
+}

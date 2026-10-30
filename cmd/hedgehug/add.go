@@ -84,6 +84,9 @@ func (a *app) add(title, parentArg, workspaceArg, kind, status string, assigns [
 		t.Workspace = w.ID
 	} else if parentArg == "" {
 		wss := ix.Workspaces()
+		if len(wss) == 0 {
+			return errors.New("the store has no workspace; add one with hedgehug workspace add <name> --prefix <PREFIX>")
+		}
 		if len(wss) != 1 {
 			names := make([]string, len(wss))
 			for i, w := range wss {

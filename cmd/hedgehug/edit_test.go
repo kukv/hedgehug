@@ -171,6 +171,23 @@ func TestEditRefused(t *testing.T) {
 	}
 }
 
+func TestEditRepairsWorkspace(t *testing.T) {
+	for _, broken := range []string{"", model.NewID().String()} {
+		te := newStoreEnv(t)
+		x := te.addJSON("Alpha")
+		ws := te.task(x.ID).Workspace
+		te.commitFile(x.ID, setLine(te.raw(x.ID), "workspace", broken))
+		te.editWith(setLine(te.raw(x.ID), "workspace", ws.String()))
+
+		if code, _, stderr := te.run("edit", x.Key); code != 0 {
+			t.Fatalf("workspace %q: exit %d, stderr %q", broken, code, stderr)
+		}
+		if got := te.task(x.ID); got.Workspace != ws || got.Key != x.Key {
+			t.Errorf("workspace %q: after the edit %s %s, want %s %s", broken, got.Workspace, got.Key, ws, x.Key)
+		}
+	}
+}
+
 func TestEditRetry(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")

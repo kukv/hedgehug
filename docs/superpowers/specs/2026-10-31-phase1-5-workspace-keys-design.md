@@ -189,11 +189,12 @@ func (s *Store) SetKeyNumbers(f KeyNumbers)
 - `hh mv <id> --workspace <ws>`: 配下ごと別のワークスペースのルートへ移し、振り直す。`--parent` と一緒に使うと、その親（指定したワークスペースのタスク）の下へ移す
 - `--parent` で別のワークスペースのタスクを親にした場合も、同じく配下ごと移して振り直す
 - `mv <id> --workspace <今いるワークスペース>` を `--parent` なしで指定したときは、親を変えない
-- ワークスペースが変わるときは、移す件数とキーの変化（`WEB-3 → API-12` など）を表示する
+- ワークスペースが変わるときは、移したタスクごとにキーの変化を1行ずつ（`WEB-3 → API-12` など）表示する
 
 ### edit
 
 - `key` と `former_keys` の変更は拒否する
+- `workspace` の変更は `mv --workspace` を案内して拒否する。ただし、元の `workspace` が空か、このストアのワークスペースでないときは、直すための変更として受け付ける
 - `workspace` の変更は「`hedgehug mv --workspace` を使う」と拒否する
 
 ### set
@@ -234,7 +235,7 @@ a1b2c3d  2026-10-31 10:00  kukv  hedgehug: status API-7 (01JBZ8K3QW7M2X9V4T6R5N8
 - `hh log` と `hh show` の履歴は、件名 `hedgehug: <操作> <キー> <タイトル>` のキーの部分を、trailer `Hedgehug-Task` の ULID からインデックスで引いた今のキーと ULID に置き換える
 - 件名がこの形でないとき、trailer がないとき（store init など）、ULID がインデックスにないとき（purge 済み）は件名のまま出す
 - `--json` の `subject` は件名のまま（加工しない）。`task` に ULID、`key` に今のキー（引けなければ `null`）を足す
-- コミットの件名を作る処理（`commitFor`）は、採番の後のキーを使う。キーは必須なので、ULID で代用する分岐は消す
+- コミットの件名を作る処理（`commitFor`）は、採番の後のキーを使う。ULID で代用するのは、キーのないタスク（ファイルが壊れているなど）のときだけ。purge で消すタスクのキーは、ディスクに残っているファイルから読む
 
 ### --json と --ids-only
 

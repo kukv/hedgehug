@@ -193,6 +193,9 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 	if err != nil {
 		return err
 	}
+	if ws.KeyPrefix == prefix {
+		return a.printWorkspace(ix, ws, fmt.Sprintf("%s: %s already has the key prefix %s (%s)", verb(false, ""), ws.Name, ws.KeyPrefix, ws.ID))
+	}
 	self, err := a.selectedStoreName()
 	if err != nil {
 		return err
