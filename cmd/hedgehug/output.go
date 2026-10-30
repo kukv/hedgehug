@@ -32,7 +32,7 @@ func (s style) id(t string) string { return s.wrap("33", t) }
 
 // dim marks text that is context, not a result. Without color it is put in
 // parentheses.
-func (s style) dim(t string) string { //nolint:unused // used by ls --tree in Task 8
+func (s style) dim(t string) string {
 	if !s.on {
 		return "(" + t + ")"
 	}
