@@ -118,12 +118,15 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 	if err != nil {
 		return err
 	}
-	if err := a.printTask(ix, e.ID, verb(committed, "Moved")); err != nil || a.jsonOut || len(targets) == 1 {
+	if err := a.printTask(ix, e.ID, verb(committed, "Moved")); err != nil || a.jsonOut || dest == e.Workspace {
 		return err
 	}
 	var b strings.Builder
 	for i, x := range targets {
-		n, _ := ix.Task(x.ID)
+		n, ok := ix.Task(x.ID)
+		if !ok {
+			return fmt.Errorf("%s is missing after the move", oldKeys[i])
+		}
 		fmt.Fprintf(&b, "  %s → %s\n", oldKeys[i], n.Key)
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -114,5 +115,28 @@ func TestMvWorkspace(t *testing.T) {
 	code, _, stderr := te.run("mv", other.Key, "--parent", p.Key, "--workspace", "me")
 	if code != 1 || !strings.Contains(stderr, "the parent is in workspace api") {
 		t.Errorf("exit %d, stderr %q", code, stderr)
+	}
+}
+
+func TestMvWorkspaceLeafShowsKeyChange(t *testing.T) {
+	te := newStoreEnv(t)
+	te.ok("workspace", "add", "api", "--prefix", "API")
+	x := te.addJSON("x", "--workspace", "me")
+	out := te.ok("mv", x.Key, "--workspace", "api")
+	if !strings.Contains(out, x.Key+" → API-1") {
+		t.Errorf("mv =\n%s", out)
+	}
+}
+
+func TestMvWorkspaceMovesADeletedDescendant(t *testing.T) {
+	te := newStoreEnv(t)
+	te.ok("workspace", "add", "api", "--prefix", "API")
+	p := te.addJSON("p", "--workspace", "me")
+	c := te.addJSON("c", "--parent", p.Key)
+	te.ok("rm", c.Key)
+	te.ok("mv", p.Key, "--workspace", "api")
+	got := te.task(c.ID)
+	if got.Key != "API-2" || !slices.Equal(got.FormerKeys, []string{c.Key}) {
+		t.Errorf("deleted child: %s %v", got.Key, got.FormerKeys)
 	}
 }
