@@ -98,6 +98,23 @@ func TestRenumberOnPrefixMismatch(t *testing.T) {
 	}
 }
 
+func TestAssignKeysRefusesABadPrefix(t *testing.T) {
+	for _, prefix := range []string{"me", ""} {
+		s := newTestStore(t)
+		ws := testWorkspace(t, s)
+		ws.KeyPrefix = prefix
+		b, err := ws.Encode()
+		if err != nil {
+			t.Fatal(err)
+		}
+		mustWrite(t, s, model.WorkspacePath(ws.ID), string(b)) // as if edited by hand
+		err = put(s, newTaskIn(ws, "x"))
+		if err == nil || !strings.Contains(err.Error(), model.WorkspacePath(ws.ID)) || !strings.Contains(err.Error(), "hedgehug workspace prefix") {
+			t.Errorf("prefix %q: err = %v", prefix, err)
+		}
+	}
+}
+
 func TestKeyNumbersHook(t *testing.T) {
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)

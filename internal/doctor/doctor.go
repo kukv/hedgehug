@@ -332,6 +332,20 @@ func checkFile(dir, root, rel string) (string, error) {
 		if w.ID != id {
 			return bad("the id in the file is %s, which differs from the id in the path", w.ID)
 		}
+		switch {
+		case w.Name == "":
+			return bad("name is missing")
+		case w.KeyPrefix == "":
+			return bad("key_prefix is missing")
+		case w.PrefixSet.IsZero():
+			return bad("prefix_set is missing")
+		}
+		if err := model.ValidWorkspaceName(w.Name); err != nil {
+			return bad("%v", err)
+		}
+		if err := model.ValidKeyPrefix(w.KeyPrefix); err != nil {
+			return bad("%v", err)
+		}
 	case "templates":
 		name, ok := strings.CutSuffix(path.Base(rel), ".md")
 		if !ok || path.Dir(rel) != "templates" || model.ValidTemplateName(name) != nil {

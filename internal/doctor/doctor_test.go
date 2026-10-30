@@ -302,6 +302,31 @@ func TestRunWorkspaces(t *testing.T) {
 	find(t, run(t, dir), "file", "workspaces/nope.md")
 }
 
+func TestRunWorkspaceFields(t *testing.T) {
+	_, dir := newStore(t)
+	set := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		w    model.Workspace
+		want string
+	}{
+		{model.Workspace{Name: "a", KeyPrefix: "me", PrefixSet: set}, "key prefix"},
+		{model.Workspace{Name: "B", KeyPrefix: "BB", PrefixSet: set}, "cannot name a workspace"},
+		{model.Workspace{KeyPrefix: "CC", PrefixSet: set}, "name is missing"},
+		{model.Workspace{Name: "d", PrefixSet: set}, "key_prefix is missing"},
+		{model.Workspace{Name: "e", KeyPrefix: "EE"}, "prefix_set is missing"},
+	} {
+		tc.w.ID = model.NewID()
+		b, err := tc.w.Encode()
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, dir, model.WorkspacePath(tc.w.ID), string(b))
+		if f := find(t, run(t, dir), "file", model.WorkspacePath(tc.w.ID)); !strings.Contains(f.Msg, tc.want) {
+			t.Errorf("finding = %+v, want %q", f, tc.want)
+		}
+	}
+}
+
 func TestRunNumbers(t *testing.T) {
 	s, dir := newStore(t)
 	for _, tt := range []string{"TST: [\n", "t: 3\n", "TST: 0\n"} {

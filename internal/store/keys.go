@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 
 	"github.com/kukv/hedgehug/internal/model"
@@ -84,6 +85,9 @@ func (tx *Tx) assignKeys() error {
 		}
 		if err != nil {
 			return err
+		}
+		if err := model.ValidKeyPrefix(ws.KeyPrefix); err != nil {
+			return fmt.Errorf("%s: %w; fix it with hedgehug workspace prefix", model.WorkspacePath(ws.ID), err)
 		}
 		if p, _, ok := model.ParseKey(t.Key); ok && p == ws.KeyPrefix {
 			continue
