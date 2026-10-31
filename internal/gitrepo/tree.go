@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/utils/merkletrie"
 )
@@ -101,6 +102,26 @@ func (r *Repo) ReadFile(tree plumbing.Hash, path string) ([]byte, error) {
 	return b, err
 }
 
+// subtree returns the directory name of t; false when t has no such entry
+// or it is not a directory. A directory whose tree cannot be read is an
+// error, so that a damaged repository does not look empty.
+func (r *Repo) subtree(t *object.Tree, name string) (*object.Tree, bool, error) {
+	for _, e := range t.Entries {
+		if e.Name != name {
+			continue
+		}
+		if e.Mode != filemode.Dir {
+			return nil, false, nil
+		}
+		sub, err := r.r.TreeObject(e.Hash)
+		if err != nil {
+			return nil, false, fmt.Errorf("%s: %w", name, err)
+		}
+		return sub, true, nil
+	}
+	return nil, false, nil
+}
+
 // Files returns the paths of the files under prefix in tree. It walks only
 // the directory prefix names up to its last slash, not the whole tree. The
 // order is not fixed.
@@ -113,16 +134,17 @@ func (r *Repo) Files(tree plumbing.Hash, prefix string) iter.Seq2[string, error]
 		}
 		dir := ""
 		if i := strings.LastIndex(prefix, "/"); i >= 0 {
-			dir = prefix[:i]
-			t, err = t.Tree(dir)
-			if errors.Is(err, object.ErrDirectoryNotFound) {
-				return
+			dir = prefix[:i+1]
+			for seg := range strings.SplitSeq(prefix[:i], "/") {
+				var ok bool
+				t, ok, err = r.subtree(t, seg)
+				if err != nil {
+					yield("", err)
+				}
+				if !ok {
+					return
+				}
 			}
-			if err != nil {
-				yield("", err)
-				return
-			}
-			dir += "/"
 		}
 		w := object.NewTreeWalker(t, true, nil)
 		defer w.Close()
