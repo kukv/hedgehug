@@ -79,6 +79,9 @@ func TestInitMakesSharedStore(t *testing.T) {
 				t.Errorf("%s config.yaml lacks %q:\n%s", u, want, cfg)
 			}
 		}
+		if n := strings.Count(string(cfg), "account: personal"); n != 2 {
+			t.Errorf("%s config.yaml names the account on %d stores, want 2:\n%s", u, n, cfg)
+		}
 		s, err := store.Open(filepath.Join(home, "stores", "org-a"))
 		if err != nil {
 			t.Fatalf("%s has no org-a: %v", u, err)

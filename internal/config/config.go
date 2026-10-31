@@ -303,6 +303,30 @@ func (c *Config) AddStore(name, path string, remotes []string) error {
 	return nil
 }
 
+// SetStoreAccount makes the account the one that authors the commits of the
+// store name. Save writes it.
+func (c *Config) SetStoreAccount(name, account string) error {
+	i := slices.IndexFunc(c.Stores, func(s StoreEntry) bool { return s.Name == name })
+	if i < 0 {
+		return fmt.Errorf("no store is named %q", name)
+	}
+	if !c.hasAccount(account) {
+		return fmt.Errorf("account %q is not in accounts", account)
+	}
+	for _, it := range valueOf(c.doc.Content[0], "stores").Content {
+		if n := valueOf(it, "name"); n == nil || n.Value != name {
+			continue
+		}
+		if a := valueOf(it, "account"); a != nil {
+			*a = *scalar(account)
+		} else {
+			it.Content = append(it.Content, scalar("account"), scalar(account))
+		}
+	}
+	c.Stores[i].Account = account
+	return nil
+}
+
 // RemoveStore removes a store from stores, with the comments on its item.
 // Save writes it.
 func (c *Config) RemoveStore(name string) error {

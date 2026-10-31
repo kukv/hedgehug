@@ -147,7 +147,8 @@ func TestE2EAliceAndBob(t *testing.T) {
 	bob.ok("add", "b", "--store", "org-a")
 	alice.ok("sync")
 	bob.ok("sync")
-	if !strings.Contains(bob.ok("inbox"), "renumbered") {
-		t.Error("bob was not told of the renumbering")
+	renumbered := regexp.MustCompile(`renumbered\s+ORG-\d+ \([0-9A-Z]{26}\) b\s+ORG-\d+ was renumbered to ORG-\d+;`)
+	if out := bob.ok("inbox"); !renumbered.MatchString(out) {
+		t.Errorf("bob was not told of the renumbering of b:\n%s", out)
 	}
 }

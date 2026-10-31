@@ -121,6 +121,49 @@ sync:
 	}
 }
 
+func TestSetStoreAccount(t *testing.T) {
+	p := testPaths(t)
+	writeConfig(t, p, `accounts:
+  - name: personal
+    host: github.com
+    login: alice
+  - name: work
+    host: github.com
+    login: alice-w
+stores:
+  - name: a
+    path: ~/a
+  - name: b
+    path: ~/b
+    account: personal
+`)
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"a", "b"} {
+		if err := c.SetStoreAccount(name, "work"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	c2, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c2.Stores) != 2 || c2.Stores[0].Account != "work" || c2.Stores[1].Account != "work" {
+		t.Errorf("Stores = %v", c2.Stores)
+	}
+	if err := c.SetStoreAccount("a", "nobody"); err == nil {
+		t.Error("an unknown account was accepted")
+	}
+	if err := c.SetStoreAccount("nope", "work"); err == nil {
+		t.Error("an unknown store was accepted")
+	}
+}
+
 func TestAddStoreToMissingFile(t *testing.T) {
 	p := testPaths(t)
 	c, err := Load(p)

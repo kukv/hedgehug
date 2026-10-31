@@ -298,6 +298,9 @@ func (e *userEnv) addStore(name, path string, remotes []string) error {
 	if err := c.AddStore(name, path, remotes); err != nil {
 		return err
 	}
+	if err := c.SetStoreAccount(name, e.acct.Name); err != nil {
+		return err
+	}
 	return c.Save()
 }
 
