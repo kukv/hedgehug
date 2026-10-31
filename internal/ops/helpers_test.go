@@ -92,7 +92,7 @@ func newTestSession(t *testing.T) *testSession {
 		t.Fatal(err)
 	}
 	ws := &model.Workspace{ULID: model.NewULID(), Name: "me", IDPrefix: "ME"}
-	if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "me"}, schema.Default(), ws, author, ""); err != nil {
+	if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "me"}, schema.Default(), ws, author, "", ts.Now); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.AddStore("me", dir, nil); err != nil {

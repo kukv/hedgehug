@@ -50,7 +50,7 @@ func (ss *Session) InboxStores() ([]InboxStore, []string, error) {
 	}
 	var out []InboxStore
 	for _, e := range targets {
-		s, err := store.Open(e.Path)
+		s, err := ss.openStoreAt(e.Path)
 		if err != nil {
 			return nil, warnings, fmt.Errorf("store %s: %w", e.Name, err)
 		}

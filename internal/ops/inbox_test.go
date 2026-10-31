@@ -582,7 +582,7 @@ func TestInboxRevertLeavesTheSessionAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws := &model.Workspace{ULID: model.NewULID(), Name: "other", IDPrefix: "OT"}
-	os2, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "other"}, schema.Default(), ws, author, "")
+	os2, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "other"}, schema.Default(), ws, author, "", ts.Now)
 	if err != nil {
 		t.Fatal(err)
 	}

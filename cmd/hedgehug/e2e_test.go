@@ -35,7 +35,7 @@ func buildDevenv(t *testing.T) string {
 			name += ".exe"
 		}
 		devenvBin = filepath.Join(dir, name)
-		if out, err := exec.Command("go", "build", "-o", devenvBin, "../../tools/devenv").CombinedOutput(); err != nil {
+		if out, err := exec.Command("go", goBuildArgs(devenvBin, "../../tools/devenv")...).CombinedOutput(); err != nil { //nolint:gosec // the arguments are ours
 			devenvErr = fmt.Errorf("go build devenv: %w\n%s", err, out)
 		}
 	})

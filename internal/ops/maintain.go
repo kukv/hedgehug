@@ -37,7 +37,7 @@ func (ss *Session) SchemaCheck() ([]doctor.Finding, error) {
 	if err != nil {
 		return nil, err
 	}
-	s, err := store.Open(e.Path)
+	s, err := ss.openStoreAt(e.Path)
 	if err != nil {
 		if data, rerr := os.ReadFile(filepath.Join(e.Path, schema.Path)); rerr == nil {
 			if sc, fs := doctor.SchemaFile(data); sc == nil {
@@ -199,7 +199,7 @@ func (ss *Session) Doctor(fix bool) (DoctorReport, error) {
 	if fix {
 		var s *store.Store
 		// A store that does not open is told of by the findings, which say why.
-		if s, openErr = store.Open(e.Path); openErr == nil {
+		if s, openErr = ss.openStoreAt(e.Path); openErr == nil {
 			if r.Repaired, err = ss.fixStore(c, e, s); err != nil {
 				return DoctorReport{}, err
 			}

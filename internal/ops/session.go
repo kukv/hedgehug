@@ -119,7 +119,18 @@ func (ss *Session) OpenStore() (*store.Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return store.Open(e.Path)
+	return ss.openStoreAt(e.Path)
+}
+
+// openStoreAt opens the store in dir with the clock of the session, so that
+// what it writes has the time ss.Now tells.
+func (ss *Session) openStoreAt(dir string) (*store.Store, error) {
+	s, err := store.Open(dir)
+	if err != nil {
+		return nil, err
+	}
+	s.SetNow(ss.Now)
+	return s, nil
 }
 
 // Open opens the store and its index.

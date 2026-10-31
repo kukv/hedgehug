@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
 
@@ -58,7 +59,7 @@ func TestCreateRefusesNonEmpty(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "x"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, ""); err == nil {
+	if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, "", time.Now); err == nil {
 		t.Error("Create into a non-empty directory succeeded")
 	}
 }
@@ -71,7 +72,7 @@ func TestOpenNotAStore(t *testing.T) {
 
 func TestCreateUsesTheGivenSchema(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "store")
-	s, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, schema.Dev(), &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, "")
+	s, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, schema.Dev(), &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, "", time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +90,7 @@ func TestCreateUsesTheGivenSchema(t *testing.T) {
 
 func TestCreateLeavesMetaAlone(t *testing.T) {
 	meta := &model.StoreMeta{ULID: model.NewULID(), Name: "x"}
-	if _, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, ""); err != nil {
+	if _, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, "", time.Now); err != nil {
 		t.Fatal(err)
 	}
 	if meta.Format != 0 {
@@ -106,7 +107,7 @@ func TestCreateCleansUpOnFailure(t *testing.T) {
 
 	t.Run("a directory Create made is removed", func(t *testing.T) {
 		dir := filepath.Join(t.TempDir(), "store")
-		if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, ""); !errors.Is(err, boom) {
+		if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, "", time.Now); !errors.Is(err, boom) {
 			t.Fatalf("err = %v, want %v", err, boom)
 		}
 		if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
@@ -115,7 +116,7 @@ func TestCreateCleansUpOnFailure(t *testing.T) {
 	})
 	t.Run("an empty directory is emptied again", func(t *testing.T) {
 		dir := t.TempDir()
-		if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, ""); !errors.Is(err, boom) {
+		if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, "", time.Now); !errors.Is(err, boom) {
 			t.Fatalf("err = %v, want %v", err, boom)
 		}
 		entries, err := os.ReadDir(dir)
@@ -133,22 +134,22 @@ func TestCreateCanRetryAfterFailure(t *testing.T) {
 	newStoreHook = func(s *Store) {
 		s.commit = func(gitrepo.Commit) (plumbing.Hash, error) { return plumbing.ZeroHash, errors.New("boom") }
 	}
-	if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, ""); err == nil {
+	if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, "", time.Now); err == nil {
 		t.Fatal("Create with a failing commit succeeded")
 	}
 	newStoreHook = func(*Store) {}
-	if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, ""); err != nil {
+	if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, "", time.Now); err != nil {
 		t.Errorf("retry: %v", err)
 	}
 }
 
 func TestCreateRefusesBadWorkspace(t *testing.T) {
 	meta := &model.StoreMeta{ULID: model.NewULID(), Name: "x"}
-	if _, err := Create(filepath.Join(t.TempDir(), "a"), meta, nil, nil, testAuthor, ""); err == nil {
+	if _, err := Create(filepath.Join(t.TempDir(), "a"), meta, nil, nil, testAuthor, "", time.Now); err == nil {
 		t.Error("nil workspace is accepted")
 	}
 	ws := &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "x"}
-	if _, err := Create(filepath.Join(t.TempDir(), "b"), meta, nil, ws, testAuthor, ""); err == nil {
+	if _, err := Create(filepath.Join(t.TempDir(), "b"), meta, nil, ws, testAuthor, "", time.Now); err == nil {
 		t.Error("bad prefix is accepted")
 	}
 }

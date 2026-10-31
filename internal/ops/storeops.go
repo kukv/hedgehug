@@ -71,7 +71,7 @@ func (ss *Session) StoreInit(in StoreInitInput) (StoreInitResult, error) {
 	}
 	dir := filepath.Join(p.StoresDir, name)
 	ws := &model.Workspace{ULID: model.NewULID(), Name: wsName, IDPrefix: prefix}
-	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, in.Schema, ws, author, account)
+	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, in.Schema, ws, author, account, ss.Now)
 	if err != nil {
 		return StoreInitResult{}, err
 	}
@@ -170,7 +170,7 @@ func (ss *Session) StoreAdd(name string, remotes []string, path string) (StoreAd
 		return StoreAddResult{}, newErr(KindInvalid, "store.clone_failed", err, "remote", remotes[0])
 	}
 	undo := func(err error) error { return errors.Join(err, clearDir(dir, existed)) }
-	s, err := store.Open(dir)
+	s, err := ss.openStoreAt(dir)
 	if err != nil {
 		return StoreAddResult{}, undo(newErr(KindInvalid, "store.not_hedgehug", fmt.Errorf("%s is not a hedgehug store: %w", remotes[0], err), "name", name))
 	}
@@ -290,7 +290,7 @@ func (ss *Session) StoreList() ([]StoreView, error) {
 			out[i].Account = acct.ID()
 		}
 		// A store that does not open or has no state is listed without its last sync.
-		if s, err := store.Open(e.Path); err == nil {
+		if s, err := ss.openStoreAt(e.Path); err == nil {
 			if st, err := sync.ReadState(s); err == nil {
 				out[i].LastSuccess = timePtr(st.LastSuccess)
 			}
@@ -323,7 +323,7 @@ func (ss *Session) StoreRemove(name string, purge bool) (StoreRemoveResult, erro
 		return StoreRemoveResult{}, newErr(KindNotFound, "store.not_found", err, "name", name)
 	}
 	if purge {
-		if err := checkPushed(e); err != nil {
+		if err := ss.checkPushed(e); err != nil {
 			return StoreRemoveResult{}, err
 		}
 	}
@@ -343,12 +343,12 @@ func (ss *Session) StoreRemove(name string, purge bool) (StoreRemoveResult, erro
 
 // checkPushed refuses to delete a store whose commits are not all on its
 // origin, or that has no origin to hold them.
-func checkPushed(e config.StoreEntry) error {
+func (ss *Session) checkPushed(e config.StoreEntry) error {
 	unpushed := func(err error) error { return newErr(KindConflict, "store.unpushed", err, "name", e.Name) }
 	if len(e.Remotes) == 0 {
 		return unpushed(fmt.Errorf("store %s has no remote, so its commits are only in %s; delete the directory by hand if you mean to lose them", e.Name, e.Path))
 	}
-	s, err := store.Open(e.Path)
+	s, err := ss.openStoreAt(e.Path)
 	if err != nil {
 		return unpushed(fmt.Errorf("store %s: %w; delete the directory by hand if you mean to", e.Name, err))
 	}

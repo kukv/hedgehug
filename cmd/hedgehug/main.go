@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
 	"github.com/kukv/hedgehug/internal/config"
@@ -30,6 +31,14 @@ type env struct {
 	isTerminal     func(any) bool // reports whether a stream is a terminal
 	now            func() time.Time
 	beforeUpdate   func() // for tests: runs before each write; nil in the binary
+}
+
+func init() {
+	// On Windows cobra lists every process on each run, about 40ms, to tell
+	// whether Explorer started the command and if so to ask for cmd.exe.
+	// hedgehug is run from a shell; started from Explorer it prints its
+	// usage as it does with no arguments.
+	cobra.MousetrapHelpText = ""
 }
 
 func main() {

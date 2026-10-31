@@ -280,10 +280,10 @@ func TestWarnPrefixDuplicatesNamesTheLaterWorkspace(t *testing.T) {
 	ts := newTestSession(t)
 	c, p, _ := ts.Config()
 	// Two stores that share the prefix ME, the second set later (the store stamps a zero time with now).
-	later := &model.Workspace{ULID: model.NewULID(), Name: "late", IDPrefix: "ME", PrefixSet: time.Now().Add(time.Hour)}
+	later := &model.Workspace{ULID: model.NewULID(), Name: "late", IDPrefix: "ME", PrefixSet: ts.Now().Add(time.Hour)}
 	author, _ := config.CommitAuthor(config.Account{}, false, ts.Getenv)
 	dir := filepath.Join(p.StoresDir, "late")
-	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "late"}, schema.Default(), later, author, "")
+	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "late"}, schema.Default(), later, author, "", ts.Now)
 	if err != nil {
 		t.Fatal(err)
 	}

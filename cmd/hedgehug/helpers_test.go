@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"testing"
@@ -191,6 +192,12 @@ func TestMain(m *testing.M) {
 	if script := os.Getenv("HH_TEST_EDITOR_SCRIPT"); script != "" {
 		os.Exit(testEditor(script, os.Args[len(os.Args)-1]))
 	}
+	// A program built with -race sleeps a second when it exits, by default,
+	// so that goroutines still running at the exit can be caught in a race.
+	// The children of the tests (this binary as the editor, the hedgehug
+	// buildHedgehug makes) leave no goroutine of their own work running when
+	// they exit, so for them the sleep only makes each run a second longer.
+	_ = os.Setenv("GORACE", strings.TrimSpace(os.Getenv("GORACE")+" atexit_sleep_ms=0"))
 	// hedgehug is on PATH, as doctor expects of a store with a merge driver.
 	pathDir, err := os.MkdirTemp("", "hedgehug-path-")
 	if err == nil {
@@ -273,7 +280,7 @@ func buildHedgehug(t *testing.T) string {
 			name += ".exe"
 		}
 		builtBin = filepath.Join(builtDir, name)
-		if out, err := exec.Command("go", "build", "-o", builtBin, ".").CombinedOutput(); err != nil {
+		if out, err := exec.Command("go", goBuildArgs(builtBin, ".")...).CombinedOutput(); err != nil { //nolint:gosec // the arguments are ours
 			buildErr = fmt.Errorf("go build: %w\n%s", err, out)
 		}
 	})
@@ -281,6 +288,21 @@ func buildHedgehug(t *testing.T) string {
 		t.Fatal(buildErr)
 	}
 	return builtBin
+}
+
+// goBuildArgs returns the arguments of go build for pkg into out, with -race
+// when this test binary has it: the packages are then in the build cache
+// from the build of the tests, and are not compiled again.
+func goBuildArgs(out, pkg string) []string {
+	args := []string{"build"}
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		for _, s := range bi.Settings {
+			if s.Key == "-race" && s.Value == "true" {
+				args = append(args, "-race")
+			}
+		}
+	}
+	return append(args, "-o", out, pkg)
 }
 
 // bare makes an empty bare repository next to the test's directories and

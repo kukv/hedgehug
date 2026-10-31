@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
@@ -61,7 +62,7 @@ func TestStoreAddSetsUp(t *testing.T) {
 	te := newTestEnv(t)
 	remote := te.bare("old")
 	s, err := store.Create(filepath.Join(t.TempDir(), "old"), &model.StoreMeta{ULID: model.NewULID(), Name: "old"}, nil,
-		&model.Workspace{ULID: model.NewULID(), Name: "old", IDPrefix: "OLD"}, gitrepo.Signature{Name: "A", Email: "a@example.com"}, "")
+		&model.Workspace{ULID: model.NewULID(), Name: "old", IDPrefix: "OLD"}, gitrepo.Signature{Name: "A", Email: "a@example.com"}, "", time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}

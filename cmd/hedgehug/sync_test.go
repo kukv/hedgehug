@@ -51,7 +51,7 @@ func TestSyncShowsRenumbered(t *testing.T) {
 func TestSyncShowsOverwritten(t *testing.T) {
 	alice, bob, _ := twoUsers(t)
 	bob.ok("set", "ORG-1", "title=bob's")
-	time.Sleep(1100 * time.Millisecond) // commit times are seconds: alice writes later, so alice's value wins
+	alice.now = alice.now.Add(time.Second) // alice writes later, so alice's value wins
 	alice.ok("set", "ORG-1", "title=alice's")
 	alice.ok("sync")
 	bob.goldenOK("sync", "sync")

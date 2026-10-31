@@ -13,8 +13,8 @@ import (
 // carol made after the shared store.
 func TestStoreAddWarningNamesLater(t *testing.T) {
 	alice, _, remote := twoUsers(t)
-	time.Sleep(1100 * time.Millisecond) // prefix_set is in seconds
 	carol := alice.other()
+	carol.now = carol.now.Add(time.Second) // prefix_set is in seconds
 	carol.ok("store", "init", "mine", "--prefix", "ORG")
 	carol.goldenRun("add", 0, "store", "add", "org", "--remote", remote)
 }

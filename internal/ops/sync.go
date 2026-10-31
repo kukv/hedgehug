@@ -84,7 +84,7 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry) (SyncReport,
 		r.NoRemote = true
 		return r, nil
 	}
-	s, err := store.Open(e.Path)
+	s, err := ss.openStoreAt(e.Path)
 	if err != nil {
 		return r, err
 	}
@@ -192,14 +192,14 @@ func (ss *Session) SyncStatus() ([]StoreStatus, error) {
 	}
 	out := make([]StoreStatus, len(targets))
 	for i, e := range targets {
-		out[i] = storeStatus(e)
+		out[i] = ss.storeStatus(e)
 	}
 	return out, nil
 }
 
-func storeStatus(e config.StoreEntry) StoreStatus {
+func (ss *Session) storeStatus(e config.StoreEntry) StoreStatus {
 	x := StoreStatus{Store: e.Name, Remotes: append([]string{}, e.Remotes...)}
-	s, err := store.Open(e.Path)
+	s, err := ss.openStoreAt(e.Path)
 	if err != nil {
 		x.Error = err.Error()
 		return x
@@ -246,7 +246,7 @@ func (ss *Session) SyncBackground(log io.Writer) error {
 	if err != nil {
 		return backgroundFailed(ss, log, "", err)
 	}
-	s, err := store.Open(e.Path)
+	s, err := ss.openStoreAt(e.Path)
 	if err != nil {
 		return backgroundFailed(ss, log, e.Name, err)
 	}
@@ -304,7 +304,7 @@ func (ss *Session) BeforeCommand(start func(s *store.Store, name string) error, 
 		if !SyncsInBackground(e) {
 			continue
 		}
-		s, err := store.Open(e.Path)
+		s, err := ss.openStoreAt(e.Path)
 		if err != nil {
 			continue
 		}

@@ -9,6 +9,7 @@ import (
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/storage/filesystem"
 )
 
 // Repo is a git repository with a work tree.
@@ -28,7 +29,7 @@ func Init(dir string) (*Repo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("init %s: %w", dir, err)
 	}
-	return &Repo{dir: dir, r: r}, nil
+	return newRepo(dir, r), nil
 }
 
 // Open opens the repository in dir.
@@ -37,5 +38,13 @@ func Open(dir string) (*Repo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", dir, err)
 	}
-	return &Repo{dir: dir, r: r}, nil
+	return newRepo(dir, r), nil
+}
+
+// newRepo wraps r, whose objects it reads through a cachedStorage.
+func newRepo(dir string, r *git.Repository) *Repo {
+	if s, ok := r.Storer.(*filesystem.Storage); ok {
+		r.Storer = newCachedStorage(s)
+	}
+	return &Repo{dir: dir, r: r}
 }
