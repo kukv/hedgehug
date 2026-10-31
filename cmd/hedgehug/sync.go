@@ -96,7 +96,7 @@ func (a *app) syncBackground() error {
 	if err != nil {
 		return a.backgroundFailed("", err)
 	}
-	s, err := store.Open(e.Path)
+	s, err := a.openStoreAt(e.Path)
 	if err != nil {
 		return a.backgroundFailed(e.Name, err)
 	}
@@ -233,7 +233,7 @@ func (a *app) syncStore(c *config.Config, e config.StoreEntry) (syncJSON, error)
 		r.NoRemote = true
 		return r, nil
 	}
-	s, err := store.Open(e.Path)
+	s, err := a.openStoreAt(e.Path)
 	if err != nil {
 		return r, err
 	}
@@ -436,7 +436,7 @@ func (a *app) syncStatus() error {
 // its error in the row, so the status of the others is still shown.
 func (a *app) storeStatus(e config.StoreEntry) statusJSON {
 	x := statusJSON{Store: e.Name, Remotes: append([]string{}, e.Remotes...)}
-	s, err := store.Open(e.Path)
+	s, err := a.openStoreAt(e.Path)
 	if err != nil {
 		x.Error = err.Error()
 		return x

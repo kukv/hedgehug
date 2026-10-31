@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/gitrepo"
@@ -231,7 +232,7 @@ func initUser(home, u string, remotes []string) error {
 		return err
 	}
 	storeDir := filepath.Join(e.paths.StoresDir, storeName)
-	s, err := store.Create(storeDir, &model.StoreMeta{ULID: model.NewULID(), Name: storeName}, nil, &model.Workspace{ULID: model.NewULID(), Name: storeName, IDPrefix: "DEV"}, e.author, e.acct.ID())
+	s, err := store.Create(storeDir, &model.StoreMeta{ULID: model.NewULID(), Name: storeName}, nil, &model.Workspace{ULID: model.NewULID(), Name: storeName, IDPrefix: "DEV"}, e.author, e.acct.ID(), time.Now)
 	if err != nil {
 		return err
 	}
@@ -255,7 +256,7 @@ func initShared(dir string) error {
 		return err
 	}
 	aliceDir := filepath.Join(alice.paths.StoresDir, sharedName)
-	s, err := store.Create(aliceDir, &model.StoreMeta{ULID: model.NewULID(), Name: sharedName}, nil, &model.Workspace{ULID: model.NewULID(), Name: sharedName, IDPrefix: sharedPrefix}, alice.author, alice.acct.ID())
+	s, err := store.Create(aliceDir, &model.StoreMeta{ULID: model.NewULID(), Name: sharedName}, nil, &model.Workspace{ULID: model.NewULID(), Name: sharedName, IDPrefix: sharedPrefix}, alice.author, alice.acct.ID(), time.Now)
 	if err != nil {
 		return err
 	}

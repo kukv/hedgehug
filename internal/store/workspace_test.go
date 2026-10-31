@@ -101,7 +101,7 @@ func TestWorkspaceCommitSubject(t *testing.T) {
 
 func TestCreateRefusesZeroWorkspaceULID(t *testing.T) {
 	meta := &model.StoreMeta{ULID: model.NewULID(), Name: "test"}
-	_, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, &model.Workspace{Name: "test", IDPrefix: "TST"}, testAuthor, "")
+	_, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, &model.Workspace{Name: "test", IDPrefix: "TST"}, testAuthor, "", time.Now)
 	if err == nil || !strings.Contains(err.Error(), "no ulid") {
 		t.Errorf("err = %v", err)
 	}

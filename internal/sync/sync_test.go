@@ -365,7 +365,7 @@ func TestNoRemoteDoesNothing(t *testing.T) {
 func TestUnrelatedHistories(t *testing.T) {
 	c := newCluster(t, 1)
 	other, err := store.Create(filepath.Join(t.TempDir(), "o"), &model.StoreMeta{ULID: model.NewULID(), Name: "o"}, nil,
-		&model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}, gitrepo.Signature{Name: "o", Email: "o@x"}, "")
+		&model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}, gitrepo.Signature{Name: "o", Email: "o@x"}, "", time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -431,7 +431,7 @@ func TestPrefixDuplicateAcrossStores(t *testing.T) {
 			cl := newCluster(t, 1)
 			dir := filepath.Join(t.TempDir(), "other")
 			ws := &model.Workspace{ULID: model.NewULID(), Name: "o", IDPrefix: "WEB", PrefixSet: c.otherSet}
-			if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "other"}, nil, ws, gitrepo.Signature{Name: "o", Email: "o@x"}, ""); err != nil {
+			if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "other"}, nil, ws, gitrepo.Signature{Name: "o", Email: "o@x"}, "", time.Now); err != nil {
 				t.Fatal(err)
 			}
 			cl.opts[0].Others = []OtherStore{{Name: "other", Path: dir}, {Name: "gone", Path: filepath.Join(t.TempDir(), "gone")}}

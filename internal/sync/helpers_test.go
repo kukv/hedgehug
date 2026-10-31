@@ -31,7 +31,7 @@ func newCluster(t *testing.T, n int) *cluster {
 		t.Fatal(err)
 	}
 	first, err := store.Create(filepath.Join(t.TempDir(), "s0"), &model.StoreMeta{ULID: model.NewULID(), Name: "s"}, nil,
-		&model.Workspace{ULID: model.NewULID(), Name: "web", IDPrefix: "WEB"}, gitrepo.Signature{Name: "u0", Email: "u0@x"}, "github.com/u0")
+		&model.Workspace{ULID: model.NewULID(), Name: "web", IDPrefix: "WEB"}, gitrepo.Signature{Name: "u0", Email: "u0@x"}, "github.com/u0", time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}
