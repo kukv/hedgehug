@@ -36,17 +36,22 @@ func (a *app) doctor(fix bool) error {
 		return err
 	}
 	var fixed []fixedJSON
-	var fixErr error
+	var openErr error
 	if fix {
-		fixed, fixErr = a.fixStore(c, e)
+		var s *store.Store
+		// A store that does not open is told of by the findings, which say why.
+		if s, openErr = store.Open(e.Path); openErr == nil {
+			if fixed, err = a.fixStore(c, e, s); err != nil {
+				return err
+			}
+		}
 	}
 	fs, err := doctor.Run(e.Path)
 	if err != nil {
 		return err
 	}
-	// A store that does not open is told of by the findings, which say why.
-	if fixErr != nil && len(fs) == 0 {
-		return fixErr
+	if openErr != nil && len(fs) == 0 {
+		return openErr
 	}
 	if !fix {
 		return a.printFindings(fs)
@@ -94,13 +99,9 @@ type fixedJSON struct {
 	line   string
 }
 
-// fixStore repairs the files of HEAD of the store e as a sync does, under
+// fixStore repairs the files of HEAD of the store e, opened as s, as a sync does, under
 // the lock of a sync, and describes what it fixed.
-func (a *app) fixStore(c *config.Config, e config.StoreEntry) ([]fixedJSON, error) {
-	s, err := store.Open(e.Path)
-	if err != nil {
-		return nil, err
-	}
+func (a *app) fixStore(c *config.Config, e config.StoreEntry, s *store.Store) ([]fixedJSON, error) {
 	opt, err := a.syncOptions(c, e)
 	if err != nil {
 		return nil, err

@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/kukv/hedgehug/internal/model"
 )
 
 func TestDoctorNoProblems(t *testing.T) {
@@ -120,13 +122,14 @@ func TestDoctorFixTakesNoArguments(t *testing.T) {
 
 func TestDoctorMergeDriverAndInbox(t *testing.T) {
 	te := newStoreEnv(t)
-	bin := buildHedgehug(t)
+	// Not parallel: PATH is the process's. TestMain put hedgehug on it.
+	path := os.Getenv("PATH")
 	t.Setenv("PATH", "")
 	code, out, _ := te.run("doctor")
 	if code != 1 || !strings.Contains(out, "hedgehug is not on PATH") {
 		t.Errorf("exit %d\n%s", code, out)
 	}
-	t.Setenv("PATH", filepath.Dir(bin))
+	t.Setenv("PATH", path)
 	rec := filepath.Join(te.storeDir("me"), ".hedgehug", "local", "overwritten", "01JC1111111111111111111111.json")
 	if err := os.MkdirAll(filepath.Dir(rec), 0o750); err != nil {
 		t.Fatal(err)
@@ -137,5 +140,80 @@ func TestDoctorMergeDriverAndInbox(t *testing.T) {
 	code, out, _ = te.run("doctor")
 	if code != 1 || !strings.Contains(out, "1 merge driver records are not in the inbox yet") || !strings.Contains(out, "hint: run hedgehug inbox") {
 		t.Errorf("exit %d\n%s", code, out)
+	}
+}
+
+// insertField adds a line of front matter to the task id, as a hand edit
+// would, before its kind.
+func (te *testEnv) insertField(id, line string) {
+	te.t.Helper()
+	te.handEdit("me", id, "\nkind: ", "\n"+line+"\nkind: ")
+}
+
+func TestDoctorFixKinds(t *testing.T) {
+	const hint = "hint: hedgehug doctor --fix fixes it"
+	tests := []struct {
+		name  string
+		setup func(te *testEnv)
+		line  string // of the repair
+	}{
+		{"parent_cycle", func(te *testEnv) {
+			te.ok("add", "a")
+			b := te.addJSON("b", "--parent", "ME-1")
+			te.insertField("ME-1", "parent: "+b.ULID)
+		}, "parent_cycle: moved back to"},
+		{"parent_deleted", func(te *testEnv) {
+			te.ok("add", "a")
+			te.ok("add", "b", "--parent", "ME-1")
+			te.insertField("ME-1", "deleted_at: 2026-10-30T12:00:00Z")
+		}, "parent_deleted: moved to the root"},
+		{"workspace_mismatch", func(te *testEnv) {
+			te.ok("workspace", "add", "other", "--prefix", "OT")
+			c := te.addJSON("c", "--workspace", "other")
+			te.ok("add", "d", "--workspace", "me")
+			te.insertField("ME-1", "parent: "+c.ULID)
+		}, "workspace_mismatch"},
+		{"id_prefix", func(te *testEnv) {
+			te.ok("add", "a")
+			te.handEdit("me", "ME-1", "id: ME-1", "id: XX-1")
+		}, "id_renumbered"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			te := newTestEnv(t)
+			te.ok("store", "init", "me", "--prefix", "ME")
+			tt.setup(te)
+			code, out, _ := te.run("doctor")
+			if code != 1 || !strings.Contains(out, hint) {
+				t.Fatalf("doctor: %d\n%s", code, out)
+			}
+			out = te.ok("doctor", "--fix")
+			if !strings.Contains(out, "repaired: ") || !strings.Contains(out, tt.line) {
+				t.Errorf("fix:\n%s", out)
+			}
+			if code, out, _ := te.run("doctor"); code != 0 {
+				t.Errorf("after fix: %d\n%s", code, out)
+			}
+		})
+	}
+}
+
+func TestDoctorFixError(t *testing.T) {
+	te := newTestEnv(t)
+	te.ok("store", "init", "me", "--prefix", "ME")
+	te.ok("add", "a")
+	b := te.addJSON("b")
+	te.handEdit("me", "ME-2", "id: ME-2", "id: ME-1")
+	// An uncommitted change to the file the repair writes.
+	u, err := model.ParseULID(b.ULID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := appendFile(filepath.Join(te.storeDir("me"), filepath.FromSlash(model.TaskPath(u))), "unsaved\n"); err != nil {
+		t.Fatal(err)
+	}
+	code, out, stderr := te.run("doctor", "--fix")
+	if code == 0 || !strings.Contains(stderr, "uncommitted changes") || strings.Contains(out, "Nothing to repair") {
+		t.Errorf("exit %d\nstdout %s\nstderr %s", code, out, stderr)
 	}
 }

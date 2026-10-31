@@ -528,3 +528,78 @@ func TestFix(t *testing.T) {
 		t.Errorf("second fix = %+v, %v", again, err)
 	}
 }
+
+func TestFixHintsByProblem(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(t *testing.T, s *store.Store, dir string)
+		msg   string
+	}{
+		{"id_prefix", func(t *testing.T, s *store.Store, dir string) {
+			a := newTask("a")
+			a.ID = "XX-1"
+			putRaw(t, s, dir, a)
+		}, "id prefix"},
+		{"cycle", func(t *testing.T, s *store.Store, dir string) {
+			a, b := newTask("a"), newTask("b")
+			a.Parent, b.Parent = &b.ULID, &a.ULID
+			putRaw(t, s, dir, a)
+			putRaw(t, s, dir, b)
+		}, "cycle"},
+		{"missing parent", func(t *testing.T, s *store.Store, dir string) {
+			a := newTask("a")
+			gone := model.NewULID()
+			a.Parent = &gone
+			putRaw(t, s, dir, a)
+		}, "not in this store"},
+		{"deleted parent", func(t *testing.T, s *store.Store, dir string) {
+			p, c := newTask("p"), newTask("c")
+			now := time.Now()
+			p.DeletedAt = &now
+			c.Parent = &p.ULID
+			putRaw(t, s, dir, p)
+			putRaw(t, s, dir, c)
+		}, "is deleted"},
+		{"workspace_mismatch", func(t *testing.T, s *store.Store, dir string) {
+			w := &model.Workspace{ULID: model.NewULID(), Name: "two", IDPrefix: "TWO", PrefixSet: time.Now()}
+			commitWorkspace(t, s, dir, w)
+			p, c := newTask("p"), newTask("c")
+			p.Workspace, p.ID = w.ULID, "TWO-1"
+			c.Parent = &p.ULID
+			putRaw(t, s, dir, p)
+			putRaw(t, s, dir, c)
+		}, "workspace of the parent"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, dir := newStore(t)
+			tt.setup(t, s, dir)
+			for _, f := range run(t, dir) {
+				if f.Check == "task" && strings.Contains(f.Msg, tt.msg) {
+					if !strings.Contains(f.Hint, "hedgehug doctor --fix") {
+						t.Errorf("hint = %q", f.Hint)
+					}
+					return
+				}
+			}
+			t.Errorf("no finding with %q", tt.msg)
+		})
+	}
+}
+
+func TestLiveChildOfDeletedParentIsFixed(t *testing.T) {
+	s, dir := newStore(t)
+	p, c := newTask("p"), newTask("c")
+	now := time.Now()
+	p.DeletedAt = &now
+	c.Parent = &p.ULID
+	putRaw(t, s, dir, p)
+	putRaw(t, s, dir, c)
+	repaired, err := Fix(s, sync.Options{Author: testAuthor, Now: time.Now})
+	if err != nil || len(repaired) != 1 || repaired[0].Kind != "parent_deleted" {
+		t.Fatalf("repaired = %+v, %v", repaired, err)
+	}
+	if fs := run(t, dir); len(fs) != 0 {
+		t.Errorf("after fix: %+v", fs)
+	}
+}

@@ -31,7 +31,7 @@ var fileRoots = []string{"tasks", "comments", "worklogs", "sprints", "releases",
 // indexCodes are the problems of a task that come from the shape of the
 // store, not from the schema.
 var indexCodes = []string{
-	schema.CodeMissingRef, schema.CodeCycle, index.CodeBroken,
+	schema.CodeMissingRef, schema.CodeCycle, index.CodeBroken, index.CodeParentDeleted,
 	index.CodeNoID, index.CodeDuplicateID, index.CodeIDPrefix, store.CodeNoWorkspace, store.CodeWorkspaceMismatch,
 }
 
@@ -142,7 +142,7 @@ func checkMergeDriver(dir string, repo *gitrepo.Repo) []Finding {
 	if !registered {
 		return []Finding{{
 			Check: "merge_driver", Where: where,
-			Msg:  "marks files merge=hedgehug, but the merge driver is not registered in .git/config as `driver = " + gitrepo.MergeDriver + "`",
+			Msg:  "marks files merge=hedgehug, but the merge driver is not registered in .git/config (expected name = Hedgehug field merge and driver = " + gitrepo.MergeDriver + ")",
 			Hint: "run hedgehug sync once",
 		}}
 	}
@@ -287,7 +287,7 @@ func fixHint(p index.Problem) string {
 		return fix + "; hedgehug sync also renumbers it, keeping the task that is pushed"
 	case p.Code == index.CodeIDPrefix, p.Code == store.CodeWorkspaceMismatch:
 		return fix
-	case p.Field == "parent" && (p.Code == schema.CodeCycle || p.Code == schema.CodeMissingRef):
+	case p.Field == "parent" && (p.Code == schema.CodeCycle || p.Code == schema.CodeMissingRef || p.Code == index.CodeParentDeleted):
 		return fix
 	}
 	return ""

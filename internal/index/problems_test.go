@@ -132,3 +132,20 @@ func TestIDAndWorkspaceProblems(t *testing.T) {
 		t.Errorf("problems of a good task = %v", ix.Problems(a.ULID))
 	}
 }
+
+func TestParentDeletedProblem(t *testing.T) {
+	s, dir := newStore(t)
+	ws := firstWorkspace(t, s)
+	p, live, gone := model.NewULID(), model.NewULID(), model.NewULID()
+	common := "workspace: " + ws.String() + "\nkind: task\nstatus: todo\n"
+	commitRaw(t, s, dir, model.TaskPath(p), rawTask(p, "id: TST-1\n"+common+"title: p\ndeleted_at: 2026-10-30T12:00:00Z\n"))
+	commitRaw(t, s, dir, model.TaskPath(live), rawTask(live, "id: TST-2\nparent: "+p.String()+"\n"+common+"title: live\n"))
+	commitRaw(t, s, dir, model.TaskPath(gone), rawTask(gone, "id: TST-3\nparent: "+p.String()+"\n"+common+"title: gone\ndeleted_at: 2026-10-30T12:00:00Z\n"))
+	ix := mustOpen(t, s)
+	has := func(u model.ULID) bool {
+		return slices.ContainsFunc(ix.Problems(u), func(x Problem) bool { return x.Code == CodeParentDeleted && x.Field == "parent" })
+	}
+	if !has(live) || has(gone) || has(p) {
+		t.Errorf("problems: live %v, deleted child %v, parent %v", ix.Problems(live), ix.Problems(gone), ix.Problems(p))
+	}
+}

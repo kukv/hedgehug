@@ -204,7 +204,7 @@ func TestMain(m *testing.M) {
 // handEdit changes the file of the task id in the work tree of the store
 // name, as an editor would (old becomes new), and commits it as a hand edit
 // would, past every check of the commands.
-func (te *testEnv) handEdit(name, id, old, replacement string) {
+func (te *testEnv) handEdit(name, id, old, replacement string) { //nolint:unparam // every test uses the one store "me"; the name keeps call sites readable
 	te.t.Helper()
 	dir := te.storeDir(name)
 	var rel string

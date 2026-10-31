@@ -682,21 +682,15 @@ func repairHead(s *store.Store, ix *index.Index, opt Options, res *Result) error
 var repairCodes = []string{index.CodeDuplicateID, index.CodeNoID, index.CodeIDPrefix, store.CodeWorkspaceMismatch}
 
 // needsRepair reports whether the tasks of HEAD may need the repair: the
-// index has a problem it fixes, or a task that is not deleted has a
-// deleted parent.
+// index has a problem it fixes.
 func needsRepair(ix *index.Index) (bool, error) {
 	if err := ix.Refresh(); err != nil {
 		return false, err
 	}
 	for _, e := range ix.Tasks() {
 		for _, p := range ix.Problems(e.ULID) {
-			parent := p.Field == "parent" && (p.Code == schema.CodeCycle || p.Code == schema.CodeMissingRef)
+			parent := p.Field == "parent" && (p.Code == schema.CodeCycle || p.Code == schema.CodeMissingRef || p.Code == index.CodeParentDeleted)
 			if parent || slices.Contains(repairCodes, p.Code) {
-				return true, nil
-			}
-		}
-		if e.DeletedAt == nil && e.Parent != nil {
-			if p, ok := ix.Task(*e.Parent); ok && p.DeletedAt != nil {
 				return true, nil
 			}
 		}
