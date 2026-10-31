@@ -151,7 +151,7 @@ func TestStoreListJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(alice.ok("store", "list", "--json")), &list); err != nil {
 		t.Fatal(err)
 	}
-	if len(list) != 1 || list[0].Name != "org" || len(list[0].Remotes) != 1 || list[0].Remotes[0] != remote || list[0].Account != "alice" || list[0].LastSuccess == "" {
+	if len(list) != 1 || list[0].Name != "org" || len(list[0].Remotes) != 1 || list[0].Remotes[0] != remote || list[0].Account != "github.com/alice" || list[0].LastSuccess == "" {
 		t.Errorf("list = %+v", list)
 	}
 }

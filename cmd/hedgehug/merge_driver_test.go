@@ -42,7 +42,7 @@ func TestMergeDriverWithGitPull(t *testing.T) {
 }
 
 // Both sides changed the same field: the driver writes the winner to <ours>
-// and the loser to a record for the inbox. With no MERGE_HEAD (a rebase, say)
+// and the loser to a record for the inbox. With no commit being merged in (a rebase, say)
 // the sides carry no history, and the later `updated` wins.
 func TestMergeDriverRecordsOverwritten(t *testing.T) {
 	alice, _, _ := twoUsers(t)
@@ -113,25 +113,22 @@ func TestMergeDriverRecordsOverwritten(t *testing.T) {
 
 func TestMergeDriverFails(t *testing.T) {
 	alice, _, _ := twoUsers(t)
-	dir := alice.storeDir("org")
-	t.Chdir(dir)
+	t.Chdir(alice.storeDir("org"))
 	tmp := t.TempDir()
 	missing := filepath.Join(tmp, "missing")
 	// A file the driver was not given is left to the conflict of git: exit 1.
 	if code, _, _ := alice.run("merge-driver", missing, missing, missing, "tasks/00/X.md"); code != 1 {
 		t.Errorf("missing files: code %d, want 1", code)
 	}
-	// So is a merge that names no commit.
+	// So is a merge of a commit the store does not have.
 	for _, n := range []string{"base", "ours", "theirs"} {
 		if err := os.WriteFile(filepath.Join(tmp, n), []byte(n+"\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(dir, ".git", "MERGE_HEAD"), []byte("nonsense\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	t.Setenv("GITHEAD_0123456789abcdef0123456789abcdef01234567", "unknown")
 	if code, _, _ := alice.run("merge-driver", filepath.Join(tmp, "base"), filepath.Join(tmp, "ours"), filepath.Join(tmp, "theirs"), "tasks/00/X.md"); code != 1 {
-		t.Errorf("bad MERGE_HEAD: code %d, want 1", code)
+		t.Errorf("unknown commit: code %d, want 1", code)
 	}
 	if code, _, _ := alice.run("merge-driver", "a", "b"); code != 2 {
 		t.Errorf("two arguments: code %d, want 2", code)

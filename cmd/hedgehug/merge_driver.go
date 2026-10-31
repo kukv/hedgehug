@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/go-git/go-git/v5/plumbing"
@@ -38,8 +37,9 @@ func (a *app) mergeDriverCmd() *cobra.Command {
 
 // mergeDriver merges one file of a merge git runs: base, ours and theirs are
 // the files git made of its versions, and the result goes to ours. The times
-// and authors of the two sides come from the history of HEAD and MERGE_HEAD;
-// without a MERGE_HEAD (a rebase, a cherry-pick) the sides carry none, and
+// and authors of the two sides come from the history of HEAD and of the
+// commit being merged in (GITHEAD_*; see mergedIn); without one (a rebase, a
+// cherry-pick) the sides carry none, and
 // the merge goes by the files alone. The values that lose go to
 // .hedgehug/local/overwritten/, for the next sync or hedgehug inbox. A merge
 // of one file does not repair what holds across files; the next sync does.
@@ -62,18 +62,21 @@ func (a *app) mergeDriver(basePath, oursPath, theirsPath, rel string) error {
 	if err != nil {
 		return err
 	}
-	theirs, hasMerge, err := mergeHead(dir)
-	if err != nil {
-		return err
-	}
+	theirs, hasMerge := mergedIn(os.Environ())
 	sc, err := driverSchema(r, head)
 	if err != nil {
 		return err
 	}
 	var ours, other merge.Side
-	commit := head
+	// An empty base file is how git says the file has no common version
+	// (both sides added it); the merge reads that as no base.
+	baseData := data[0]
+	if len(baseData) == 0 {
+		baseData = nil
+	}
+	commit := ""
 	if hasMerge {
-		commit = theirs
+		commit = theirs.String()
 		base, err := r.MergeBase(head, theirs)
 		if err != nil {
 			return err
@@ -81,12 +84,12 @@ func (a *app) mergeDriver(basePath, oursPath, theirsPath, rel string) error {
 		if sc, err = mergedSchema(r, base, head, theirs, sc, rel); err != nil {
 			return err
 		}
-		if _, ours, other, err = sync.Sides(r, base, head, theirs, rel); err != nil {
+		if baseData, ours, other, err = sync.Sides(r, base, head, theirs, rel); err != nil {
 			return err
 		}
 	}
 	ours.Data, other.Data = data[1], data[2]
-	m, err := merge.Merge(rel, sc, data[0], ours, other, merge.LWW)
+	m, err := merge.Merge(rel, sc, baseData, ours, other, merge.LWW)
 	if err != nil {
 		return fmt.Errorf("merge %s: %w", rel, err)
 	}
@@ -97,24 +100,6 @@ func (a *app) mergeDriver(basePath, oursPath, theirsPath, rel string) error {
 		return err
 	}
 	return a.recordLosses(dir, commit, m)
-}
-
-// mergeHead reads MERGE_HEAD; ok is false when no merge is under way.
-func mergeHead(dir string) (h plumbing.Hash, ok bool, err error) {
-	b, err := os.ReadFile(filepath.Join(dir, ".git", "MERGE_HEAD")) //nolint:gosec // the work tree git runs the driver in
-	if errors.Is(err, fs.ErrNotExist) {
-		return plumbing.ZeroHash, false, nil
-	}
-	if err != nil {
-		return plumbing.ZeroHash, false, err
-	}
-	// A merge of several heads lists one per line; the first is the one
-	// being merged into HEAD.
-	first, _, _ := strings.Cut(strings.TrimSpace(string(b)), "\n")
-	if !plumbing.IsHash(first) {
-		return plumbing.ZeroHash, false, fmt.Errorf(".git/MERGE_HEAD: %q is no commit", first)
-	}
-	return plumbing.NewHash(first), true, nil
 }
 
 // driverSchema is the schema HEAD has, or the default one when it has none or
@@ -158,15 +143,16 @@ func mergedSchema(r *gitrepo.Repo, base, head, theirs plumbing.Hash, headSchema 
 
 // recordLosses writes what lost in m to .hedgehug/local/overwritten/, one
 // file for each. commit is the one merged in, which the merge commit git
-// makes will have as a parent.
-func (a *app) recordLosses(dir string, commit plumbing.Hash, m merge.Result) error {
+// makes will have as a parent: once the merge is aborted it is not in HEAD's
+// history, and the inbox drops the record. It is empty when no commit is being merged in.
+func (a *app) recordLosses(dir string, commit string, m merge.Result) error {
 	now := a.now().UTC()
 	var recs []inbox.Record
 	for _, o := range m.Overwritten {
-		recs = append(recs, inbox.Record{Path: o.Path, Field: o.Field, Value: o.Value, Author: o.Author, Commit: commit.String(), Time: now})
+		recs = append(recs, inbox.Record{Path: o.Path, Field: o.Field, Value: o.Value, Author: o.Author, Commit: commit, Time: now})
 	}
 	for _, n := range m.Notices {
-		recs = append(recs, inbox.Record{Kind: inbox.Kind(n.Kind), Path: n.Path, Author: n.Author, Commit: commit.String(), Time: now})
+		recs = append(recs, inbox.Record{Kind: inbox.Kind(n.Kind), Path: n.Path, Author: n.Author, Commit: commit, Time: now})
 	}
 	for _, rec := range recs {
 		b, err := json.Marshal(rec)
@@ -178,4 +164,22 @@ func (a *app) recordLosses(dir string, commit plumbing.Hash, m merge.Result) err
 		}
 	}
 	return nil
+}
+
+// mergedIn finds the commit git merges into HEAD. git has not written
+// MERGE_HEAD yet when it runs the driver; it names the commits being merged
+// in the variables GITHEAD_<commit>. A merge of several commits, and any other
+// command that runs the driver, has no one commit.
+func mergedIn(environ []string) (plumbing.Hash, bool) {
+	var found []plumbing.Hash
+	for _, kv := range environ {
+		k, _, _ := strings.Cut(kv, "=")
+		if h, ok := strings.CutPrefix(k, "GITHEAD_"); ok && plumbing.IsHash(h) {
+			found = append(found, plumbing.NewHash(h))
+		}
+	}
+	if len(found) != 1 {
+		return plumbing.ZeroHash, false
+	}
+	return found[0], true
 }

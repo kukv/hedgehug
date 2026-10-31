@@ -179,9 +179,19 @@ func (a *app) syncStore(c *config.Config, e config.StoreEntry) (syncJSON, error)
 	if err != nil {
 		return r, err
 	}
+	// The push is done: what fails from here is a warning, as in sync.Run.
 	ix, err := index.Open(s)
 	if err != nil {
-		return r, err
+		r.Warnings = append(r.Warnings, "read the index, so ids are not shown: "+err.Error())
+	}
+	taskID := func(u model.ULID) string {
+		if ix == nil {
+			return ""
+		}
+		if t, ok := ix.Task(u); ok {
+			return t.ID
+		}
+		return ""
 	}
 	r.Merges = res.Merges
 	r.Pushed = append(r.Pushed, res.Pushed...)
@@ -191,9 +201,7 @@ func (a *app) syncStore(c *config.Config, e config.StoreEntry) (syncJSON, error)
 		x := overwrittenJSON{Path: o.Path, Field: o.Field, Value: jsonValue(o.Value), Author: o.Author}
 		if u, ok := taskOfPath(o.Path); ok {
 			x.Task = u.String()
-			if t, ok := ix.Task(u); ok {
-				x.ID = t.ID
-			}
+			x.ID = taskID(u)
 		}
 		for _, n := range res.Notices {
 			if n.Kind == inbox.Overwritten && n.Path == o.Path && noticeField(n) == o.Field {
@@ -203,11 +211,7 @@ func (a *app) syncStore(c *config.Config, e config.StoreEntry) (syncJSON, error)
 		r.Overwritten = append(r.Overwritten, x)
 	}
 	for _, x := range res.Repaired {
-		y := repairedJSON{ULID: x.ULID.String(), Kind: x.Kind, Value: jsonValue(x.Value), Author: x.Author}
-		if t, ok := ix.Task(x.ULID); ok {
-			y.ID = t.ID
-		}
-		r.Repaired = append(r.Repaired, y)
+		r.Repaired = append(r.Repaired, repairedJSON{ULID: x.ULID.String(), ID: taskID(x.ULID), Kind: x.Kind, Value: jsonValue(x.Value), Author: x.Author})
 	}
 	for _, u := range res.Invalid {
 		r.Invalid = append(r.Invalid, u.String())
@@ -314,6 +318,7 @@ type statusJSON struct {
 	LastAttempt  *time.Time `json:"last_attempt,omitempty"`
 	LastSuccess  *time.Time `json:"last_success,omitempty"`
 	LastError    string     `json:"last_error,omitempty"`
+	Error        string     `json:"error,omitempty"`    // the store could not be read
 	Unpushed     *int       `json:"unpushed,omitempty"` // absent when the store has no remote
 }
 
@@ -324,37 +329,19 @@ func (a *app) syncStatus() error {
 	}
 	var targets []config.StoreEntry
 	if a.storeName != "" {
-		e, err := c.Select(a.storeName)
-		if err != nil {
-			return err
-		}
-		targets = []config.StoreEntry{e}
+		targets, err = a.syncTargets(c)
 	} else {
-		if len(c.Stores) == 0 {
-			return config.ErrNoStores
-		}
 		targets = c.Stores
+		if len(targets) == 0 {
+			err = config.ErrNoStores
+		}
 	}
-	out := make([]statusJSON, 0, len(targets))
-	for _, e := range targets {
-		s, err := store.Open(e.Path)
-		if err != nil {
-			return fmt.Errorf("store %s: %w", e.Name, err)
-		}
-		st, err := sync.ReadState(s)
-		if err != nil {
-			return fmt.Errorf("store %s: %w", e.Name, err)
-		}
-		x := statusJSON{Store: e.Name, Remotes: append([]string{}, e.Remotes...), LastError: st.LastError}
-		x.PendingSince, x.LastAttempt, x.LastSuccess = timePtr(st.PendingSince), timePtr(st.LastAttempt), timePtr(st.LastSuccess)
-		if len(e.Remotes) > 0 {
-			n, err := unpushed(s)
-			if err != nil {
-				return fmt.Errorf("store %s: %w", e.Name, err)
-			}
-			x.Unpushed = &n
-		}
-		out = append(out, x)
+	if err != nil {
+		return err
+	}
+	out := make([]statusJSON, len(targets))
+	for i, e := range targets {
+		out[i] = a.storeStatus(e)
 	}
 	if a.jsonOut {
 		return a.printJSON(out)
@@ -362,6 +349,10 @@ func (a *app) syncStatus() error {
 	var b strings.Builder
 	for _, x := range out {
 		fmt.Fprintf(&b, "%s\n", x.Store)
+		if x.Error != "" {
+			fmt.Fprintf(&b, "  error:         %s\n", x.Error)
+			continue
+		}
 		fmt.Fprintf(&b, "  last attempt:  %s\n", timeText(x.LastAttempt))
 		fmt.Fprintf(&b, "  last success:  %s\n", timeText(x.LastSuccess))
 		if x.PendingSince != nil {
@@ -381,6 +372,33 @@ func (a *app) syncStatus() error {
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())
 	return err
+}
+
+// storeStatus reads how the syncs of e went. A store that cannot be read has
+// its error in the row, so the status of the others is still shown.
+func (a *app) storeStatus(e config.StoreEntry) statusJSON {
+	x := statusJSON{Store: e.Name, Remotes: append([]string{}, e.Remotes...)}
+	s, err := store.Open(e.Path)
+	if err != nil {
+		x.Error = err.Error()
+		return x
+	}
+	st, err := sync.ReadState(s)
+	if err != nil {
+		x.Error = err.Error()
+		return x
+	}
+	x.LastError = st.LastError
+	x.PendingSince, x.LastAttempt, x.LastSuccess = timePtr(st.PendingSince), timePtr(st.LastAttempt), timePtr(st.LastSuccess)
+	if len(e.Remotes) > 0 {
+		n, err := unpushed(s)
+		if err != nil {
+			x.Error = err.Error()
+			return x
+		}
+		x.Unpushed = &n
+	}
+	return x
 }
 
 func timePtr(t time.Time) *time.Time {

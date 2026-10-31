@@ -330,6 +330,13 @@ func (b *Box) importRecords(me []string) ([]Item, error) {
 			b.warn(fmt.Sprintf(".hedgehug/local/%s: skipped: %v", name, err))
 			continue
 		}
+		switch b.fate(it.Commit) {
+		case recordPending:
+			continue
+		case recordAborted:
+			done = append(done, name)
+			continue
+		}
 		if _, ok := isMe(me, it.To); ok {
 			items = append(items, it)
 		}
@@ -345,6 +352,36 @@ func (b *Box) importRecords(me []string) ([]Item, error) {
 		}
 	}
 	return added, nil
+}
+
+type recordFate int
+
+const (
+	recordSettled recordFate = iota // the merge it was written for is done, or it names none
+	recordPending                   // that merge is under way
+	recordAborted                   // that merge was given up: its commit never reached HEAD
+)
+
+// fate tells what became of the merge the driver wrote a record for. The
+// record names the commit being merged in; it is not in HEAD's history once
+// the merge has been aborted. A record without a commit (a rebase, a
+// cherry-pick) has no merge to wait for.
+func (b *Box) fate(commit string) recordFate {
+	if !plumbing.IsHash(commit) {
+		return recordSettled
+	}
+	r := b.s.Repo()
+	if _, merging, err := r.MergeHead(); err != nil || merging {
+		return recordPending
+	}
+	head, err := r.Head()
+	if err != nil {
+		return recordPending
+	}
+	if in, err := r.IsAncestor(plumbing.NewHash(commit), head); err != nil || !in {
+		return recordAborted
+	}
+	return recordSettled
 }
 
 // fromRecord makes the item of a merge driver's record. The id is the

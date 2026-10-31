@@ -152,13 +152,20 @@ func (a *app) warnPrefixDuplicates(c *config.Config, name string, s *store.Store
 				continue
 			}
 			later := fmt.Sprintf("workspace %s in store %s", m.Name, name)
-			if cmp := m.PrefixSet.Compare(w.PrefixSet); cmp < 0 || cmp == 0 && m.ULID.String() < w.ULID.String() {
+			if !setLater(m, w) {
 				later = fmt.Sprintf("workspace %s in store %s", w.Name, u.Store)
 			}
 			_, _ = fmt.Fprintf(a.stderr, "warning: %s is also the id prefix of workspace %s in store %s; the one set later (%s) should change it with hedgehug workspace prefix\n",
 				m.IDPrefix, w.Name, u.Store, later)
 		}
 	}
+}
+
+// setLater reports whether the id prefix of m was set after that of w; set
+// at the same time, the larger ULID is the later.
+func setLater(m, w *model.Workspace) bool {
+	cmp := m.PrefixSet.Compare(w.PrefixSet)
+	return cmp > 0 || cmp == 0 && m.ULID.String() > w.ULID.String()
 }
 
 func (a *app) storeListCmd() *cobra.Command {
@@ -188,7 +195,7 @@ func (a *app) storeList() error {
 	for i, e := range c.Stores {
 		out[i] = storeJSON{Name: e.Name, Path: e.Path, Remotes: append([]string{}, e.Remotes...)}
 		if acct, ok := c.Writer(e); ok {
-			out[i].Account = acct.Name
+			out[i].Account = acct.ID()
 		}
 		// A store that does not open or has no state is listed without its last sync.
 		if s, err := store.Open(e.Path); err == nil {
@@ -284,6 +291,17 @@ func checkPushed(e config.StoreEntry) error {
 	n, err := unpushed(s)
 	if err != nil {
 		return err
+	}
+	st, err := s.Repo().Status()
+	if err != nil {
+		return err
+	}
+	if len(st) > 0 {
+		paths := make([]string, len(st))
+		for i, f := range st {
+			paths[i] = f.Path
+		}
+		return fmt.Errorf("store %s has changes that are not committed (%s); commit or restore them, or delete the directory by hand if you mean to lose them", e.Name, strings.Join(paths, ", "))
 	}
 	if n > 0 {
 		return fmt.Errorf("store %s has %d commits not pushed; run hedgehug sync --store %s first", e.Name, n, e.Name)
