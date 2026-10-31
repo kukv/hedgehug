@@ -31,6 +31,10 @@ func TestPropertyConverges(t *testing.T) {
 	}
 	for seed := int64(1); seed <= int64(rounds); seed++ {
 		t.Run(fmt.Sprint("seed", seed), func(t *testing.T) {
+			// Each seed has a cluster of its own in its own directories, and
+			// the hooks of the package are not changed here, so the seeds run
+			// side by side.
+			t.Parallel()
 			rnd := rand.New(rand.NewPCG(uint64(seed), 0))
 			c := newCluster(t, 3)
 			var log []string

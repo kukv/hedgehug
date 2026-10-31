@@ -2,6 +2,7 @@ package gitrepo
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -429,6 +430,35 @@ func TestBetweenPutsParentsFirstWhateverTheTime(t *testing.T) {
 	// LastChange is the latest by time, even before a later commit in order.
 	if e, ok, _ := r.LastChange(c2, base, "a.md"); !ok || e.Hash != c1 {
 		t.Errorf("LastChange = %+v, %v; want c1", e, ok)
+	}
+}
+
+func TestBetweenOrdersCommitsOfTheSameTimeByHash(t *testing.T) {
+	dir := t.TempDir()
+	r, _ := Init(dir)
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	base := commitWith(t, r, dir, "a.md", "base", t0)
+	// Two sides from base in the same second: the smaller hash goes first,
+	// whatever the order of the merge's parents.
+	s1 := commitWith(t, r, dir, "a.md", "s1", t0.Add(time.Hour), base)
+	s2 := commitWith(t, r, dir, "b.md", "s2", t0.Add(time.Hour), base)
+	first, second := s1, s2
+	if s2.String() < s1.String() {
+		first, second = s2, s1
+	}
+	for i, parents := range [][]plumbing.Hash{{s1, s2}, {s2, s1}} {
+		m := commitWith(t, r, dir, "a.md", fmt.Sprint("m", i), t0.Add(2*time.Hour), parents...)
+		es, err := r.Between(m, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []plumbing.Hash
+		for _, e := range es {
+			got = append(got, e.Hash)
+		}
+		if want := []plumbing.Hash{first, second, m}; !slices.Equal(got, want) {
+			t.Errorf("parents %v: Between = %v, want %v", parents, got, want)
+		}
 	}
 }
 

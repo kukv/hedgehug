@@ -68,6 +68,40 @@ func TestSidesYAMLWhen(t *testing.T) {
 	}
 }
 
+func TestMergeAuthorOfTheSameTimeIsTheLargerWriter(t *testing.T) {
+	dir := t.TempDir()
+	r, err := gitrepo.Init(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t0 := time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
+	commit := func(data, email string, when time.Time, parents ...plumbing.Hash) plumbing.Hash {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, "a.md"), []byte(data), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		h, err := r.Commit(gitrepo.Commit{
+			Paths: []string{"a.md"}, Parents: parents, Subject: data,
+			Author: gitrepo.Signature{Name: "a", Email: email}, When: when,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return h
+	}
+	base := commit("base", "a@x", t0)
+	small := commit("small", "b@x", t0.Add(time.Minute), base)
+	large := commit("large", "c@x", t0.Add(time.Minute), base)
+	// Both sides changed the file in the same second: the larger writer is
+	// the author, on either side.
+	for _, sides := range [][2]plumbing.Hash{{small, large}, {large, small}} {
+		got, err := mergeAuthor(r, base, sides[0], sides[1])("a.md")
+		if err != nil || got != "c@x" {
+			t.Errorf("mergeAuthor(head %s, remote %s) = %q, %v; want c@x", sides[0], sides[1], got, err)
+		}
+	}
+}
+
 func TestSidesOtherFile(t *testing.T) {
 	c := newCluster(t, 1)
 	r := c.stores[0].Repo()
