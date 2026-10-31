@@ -6,7 +6,38 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/store"
 )
+
+// waitChildDone waits until the detached child of te has cleared
+// pending_since and let go of its locks, so that nothing of it runs while the
+// test directories are removed.
+func waitChildDone(t *testing.T, te *testEnv) {
+	t.Helper()
+	state := filepath.Join(te.storeDir("org"), ".hedgehug", "local", "sync.json")
+	s, err := store.Open(te.storeDir("org"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		b, err := os.ReadFile(state) //nolint:gosec // the state of the test
+		if err == nil && !strings.Contains(string(b), "pending_since") {
+			free := true
+			for _, l := range []string{"bg.lock", "sync.lock"} {
+				if s.WithLocalLock(l, 0, func() error { return nil }) != nil {
+					free = false
+				}
+			}
+			if free {
+				return
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("the background child did not finish")
+}
 
 // settled is twoUsers with alice's sync done after her last write: the clock
 // of the tests stands still, so a write at the instant a sync begins is
@@ -44,6 +75,36 @@ func TestWriteWithoutRemoteStartsNothing(t *testing.T) {
 	te.ok("add", "x")
 	if started != 0 {
 		t.Error("started a sync for a store with no remote")
+	}
+}
+
+func TestStoreFlagOnAStoreWithoutRemoteStartsNothing(t *testing.T) {
+	te := newTestEnv(t)
+	te.ok("store", "init", "solo", "--prefix", "SOL")
+	started := 0
+	defer stubSpawn(func([]string) { started++ })()
+	te.env["HEDGEHUG_AUTO_SYNC"] = "1"
+	te.ok("--store", "solo", "ls")
+	if started != 0 {
+		t.Errorf("started %d for a store with no remote", started)
+	}
+}
+
+func TestSyncBackgroundRecordsAFailureBeforeTheRun(t *testing.T) {
+	te := newTestEnv(t)
+	remote := te.bare("shared")
+	te.ok("store", "init", "org", "--prefix", "ORG", "--remote", remote)
+	// No account and no author in the user's gitconfig: the options of the
+	// sync cannot be made.
+	if err := os.Remove(filepath.Join(te.home, ".gitconfig")); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errs := te.run("sync", "--background", "--store", "org"); code != 0 || !strings.Contains(errs, "sync org:") {
+		t.Fatalf("code = %d, stderr = %s", code, errs)
+	}
+	_, _, errs := te.run("ls")
+	if !strings.Contains(errs, "hedgehug: background sync of org failed:") {
+		t.Errorf("stderr = %s", errs)
 	}
 }
 
@@ -137,6 +198,7 @@ func TestBackgroundSyncReachesRemote(t *testing.T) {
 	for time.Now().Before(deadline) {
 		bob.ok("sync")
 		if strings.Contains(bob.ok("ls"), "bg") {
+			waitChildDone(t, alice)
 			return
 		}
 		time.Sleep(100 * time.Millisecond)

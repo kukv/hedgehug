@@ -174,6 +174,19 @@ func TestTakeErrorOnce(t *testing.T) {
 	}
 }
 
+func TestTakeErrorWritesNothingWhenThereIsNone(t *testing.T) {
+	c := newCluster(t, 1)
+	if err := c.stores[0].RemoveLocal("sync.json"); err != nil {
+		t.Fatal(err)
+	}
+	if e, err := TakeError(c.stores[0]); e != "" || err != nil {
+		t.Fatalf("TakeError = %q, %v", e, err)
+	}
+	if _, err := c.stores[0].ReadLocal("sync.json"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("sync.json was written: %v", err)
+	}
+}
+
 func TestOpenLogKeepsTheLastHalfOfABigLog(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "local", "sync.log")
 	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {

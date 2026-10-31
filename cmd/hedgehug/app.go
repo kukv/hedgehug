@@ -188,13 +188,17 @@ func (a *app) afterWrite(s *store.Store) {
 		return
 	}
 	e, err := c.Select(a.storeName)
-	if err != nil || len(e.Remotes) == 0 {
+	if err != nil || !syncsInBackground(e) {
 		return
 	}
 	if err := sync.Start(s, e.Name, a.getenv); err != nil {
 		_, _ = fmt.Fprintln(a.stderr, "warning: the background sync did not start:", err)
 	}
 }
+
+// syncsInBackground is whether the store e is synced in the background: only
+// a store with a remote is.
+func syncsInBackground(e config.StoreEntry) bool { return len(e.Remotes) > 0 }
 
 // beforeCommand reports the failure of a background sync that the user has
 // not been told of, and starts one for each store with a remote that is due.
@@ -215,6 +219,9 @@ func (a *app) beforeCommand(cmd *cobra.Command, _ []string) {
 		return
 	}
 	for _, e := range targets {
+		if !syncsInBackground(e) {
+			continue
+		}
 		s, err := store.Open(e.Path)
 		if err != nil {
 			continue

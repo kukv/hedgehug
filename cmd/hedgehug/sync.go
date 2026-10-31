@@ -83,29 +83,43 @@ func (a *app) syncCmd() *cobra.Command {
 func (a *app) syncBackground() error {
 	c, _, err := a.config()
 	if err != nil {
-		return err
+		return a.backgroundFailed("", err)
 	}
 	if a.storeName == "" {
 		return usageErrorf("--background needs --store")
 	}
 	e, err := c.Select(a.storeName)
 	if err != nil {
-		return err
+		return a.backgroundFailed("", err)
 	}
 	s, err := store.Open(e.Path)
 	if err != nil {
-		return err
+		return a.backgroundFailed(e.Name, err)
 	}
 	opt, err := a.syncOptions(c, e)
-	if err != nil {
-		return err
+	if err == nil {
+		err = sync.Background(s, opt, c.Sync.PushInterval, func() error {
+			_, err := a.runSyncReported(s, opt, false)
+			return err
+		})
 	}
-	err = sync.Background(s, opt, c.Sync.PushInterval, func() error {
-		_, err := a.runSyncReported(s, opt, false)
-		return err
-	})
 	if err != nil {
-		_, _ = fmt.Fprintf(a.stderr, "%s sync %s: %v\n", a.now().Format(time.RFC3339), e.Name, err)
+		// The same text a failed run left in sync.json already; the others
+		// (syncOptions, the lock) are told of by the next command.
+		_, stateErr := sync.UpdateState(s, func(st *sync.State) {
+			st.LastError, st.ErrorReported = err.Error(), false
+		})
+		err = errors.Join(err, stateErr)
+	}
+	return a.backgroundFailed(e.Name, err)
+}
+
+// backgroundFailed logs err for sync.log and ends the child with exit code 0:
+// no one waits for it. A store that could not be opened has no sync.json to
+// tell of the failure; the log is all there is.
+func (a *app) backgroundFailed(name string, err error) error {
+	if err != nil {
+		_, _ = fmt.Fprintf(a.stderr, "%s sync %s: %v\n", a.now().Format(time.RFC3339), name, err)
 	}
 	return nil
 }

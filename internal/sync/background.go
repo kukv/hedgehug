@@ -117,10 +117,15 @@ func Background(s *store.Store, opt Options, pushInterval time.Duration, run fun
 }
 
 // TakeError returns the last background error once (it sets error_reported).
+// It reads first, so a store with nothing to report is not written to.
 func TakeError(s *store.Store) (string, error) {
+	st, err := ReadState(s)
+	if err != nil || st.LastError == "" || st.ErrorReported {
+		return "", err
+	}
 	var msg string
-	_, err := UpdateState(s, func(st *State) {
-		if st.LastError != "" && !st.ErrorReported {
+	_, err = UpdateState(s, func(st *State) {
+		if st.LastError != "" && !st.ErrorReported { // another command may have taken it
 			msg = st.LastError
 			st.ErrorReported = true
 		}
