@@ -14,9 +14,9 @@ import (
 	"github.com/kukv/hedgehug/internal/gitrepo"
 )
 
-// localDir holds what belongs to this machine only, like the lock and the
+// LocalDir holds what belongs to this machine only, like the lock and the
 // index. git ignores it.
-const localDir = ".hedgehug/local"
+const LocalDir = ".hedgehug/local"
 
 // ReadLocal reads the file name of .hedgehug/local; a name may go into a
 // directory, as in overwritten/<ULID>.json. A missing file is ErrNotFound
@@ -25,7 +25,7 @@ func (s *Store) ReadLocal(name string) ([]byte, error) {
 	if err := validLocalName(name); err != nil {
 		return nil, err
 	}
-	rel := localDir + "/" + name
+	rel := LocalDir + "/" + name
 	b, err := atomicfile.ReadFile(s.path(rel))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("%s: %w: %w", rel, ErrNotFound, fs.ErrNotExist)
@@ -40,7 +40,7 @@ func (s *Store) WriteLocal(name string, data []byte) error {
 	if err := validLocalName(name); err != nil {
 		return err
 	}
-	return atomicfile.WriteFile(s.path(localDir+"/"+name), data)
+	return atomicfile.WriteFile(s.path(LocalDir+"/"+name), data)
 }
 
 // WriteLocalIn is WriteLocal for the store in dir, which it does not open: the
@@ -50,7 +50,7 @@ func WriteLocalIn(dir, name string, data []byte) error {
 	if err := validLocalName(name); err != nil {
 		return err
 	}
-	return atomicfile.WriteFile(filepath.Join(dir, filepath.FromSlash(localDir+"/"+name)), data)
+	return atomicfile.WriteFile(filepath.Join(dir, filepath.FromSlash(LocalDir+"/"+name)), data)
 }
 
 // WithLocalLock runs fn holding the file lock .hedgehug/local/<name>,
@@ -60,7 +60,7 @@ func (s *Store) WithLocalLock(name string, wait time.Duration, fn func() error) 
 	if err := validLocalName(name); err != nil {
 		return err
 	}
-	l, err := acquire(s.path(localDir+"/"+name), wait)
+	l, err := acquire(s.path(LocalDir+"/"+name), wait)
 	if err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func (s *Store) LocalFiles(dir string) ([]string, error) {
 	if err := validLocalName(dir); err != nil {
 		return nil, err
 	}
-	entries, err := os.ReadDir(s.path(localDir + "/" + dir))
+	entries, err := os.ReadDir(s.path(LocalDir + "/" + dir))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
@@ -103,7 +103,7 @@ func (s *Store) RemoveLocal(name string) error {
 	if err := validLocalName(name); err != nil {
 		return err
 	}
-	err := os.Remove(s.path(localDir + "/" + name))
+	err := os.Remove(s.path(LocalDir + "/" + name))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}

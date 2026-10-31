@@ -1,7 +1,9 @@
 package doctor
 
 import (
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -10,8 +12,10 @@ import (
 
 	"github.com/go-git/go-git/v5"
 
+	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/sync"
 )
 
 func writeFile(t *testing.T, dir, rel, content string) {
@@ -389,5 +393,138 @@ func TestRunIDProblems(t *testing.T) {
 	fs := run(t, dir)
 	if f := find(t, fs, "task", "XX-1 ("+a.ULID.String()+") A"); !strings.Contains(f.Msg, "id prefix") {
 		t.Errorf("finding = %+v", f)
+	}
+}
+
+// hasFinding reports whether fs has a finding of check whose message or
+// hint contains text.
+func hasFinding(fs []Finding, check, text string) bool {
+	return slices.ContainsFunc(fs, func(f Finding) bool {
+		return f.Check == check && (strings.Contains(f.Msg, text) || strings.Contains(f.Hint, text))
+	})
+}
+
+// registerDriver writes the merge driver of .git/config by hand, with
+// driver as its command.
+func registerDriver(t *testing.T, dir, driver string) {
+	t.Helper()
+	f, err := os.OpenFile(filepath.Join(dir, ".git", "config"), os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.WriteString("[merge \"hedgehug\"]\n\tname = Hedgehug field merge\n\tdriver = " + driver + "\n")
+	if err = errors.Join(err, f.Close()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMergeDriverChecks(t *testing.T) {
+	dir := newBareStore(t) // .gitattributes with merge=hedgehug, no driver in .git/config
+	if fs := run(t, dir); !hasFinding(fs, "merge_driver", "not registered") || !hasFinding(fs, "merge_driver", "run hedgehug sync once") {
+		t.Errorf("findings = %+v", fs)
+	}
+	registerDriver(t, dir, "hedgehug merge-driver %O %A %B")
+	if fs := run(t, dir); !hasFinding(fs, "merge_driver", "not registered") {
+		t.Errorf("a different command: %+v", fs)
+	}
+
+	dir = newBareStore(t)
+	registerDriver(t, dir, gitrepo.MergeDriver)
+	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+	if fs := run(t, dir); !hasFinding(fs, "merge_driver", "hedgehug is not on PATH") {
+		t.Errorf("findings = %+v", fs)
+	}
+	lookPath = func(string) (string, error) { return "/bin/hedgehug", nil }
+	for _, f := range run(t, dir) {
+		if f.Check == "merge_driver" {
+			t.Errorf("registered and on PATH: %+v", f)
+		}
+	}
+}
+
+func TestMergeDriverIgnoredWithoutAttributes(t *testing.T) {
+	dir := newBareStore(t)
+	if err := os.Remove(filepath.Join(dir, store.AttributesPath)); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range run(t, dir) {
+		if f.Check == "merge_driver" {
+			t.Errorf("no merge=hedgehug line: %+v", f)
+		}
+	}
+}
+
+func TestUnimportedRecords(t *testing.T) {
+	_, dir := newStore(t)
+	rec := `{"path":"tasks/x.md","field":"title","value":"\"a\"","author":"a","commit":"","time":"2026-10-31T00:00:00Z"}`
+	writeFile(t, dir, ".hedgehug/local/overwritten/01JC1111111111111111111111.json", rec)
+	writeFile(t, dir, ".hedgehug/local/overwritten/01JC2222222222222222222222.json", rec)
+	fs := run(t, dir)
+	if !hasFinding(fs, "inbox", "2 merge driver records are not in the inbox yet") || !hasFinding(fs, "inbox", "hedgehug inbox") {
+		t.Errorf("findings = %+v", fs)
+	}
+}
+
+func TestUndecodableRecords(t *testing.T) {
+	_, dir := newStore(t)
+	writeFile(t, dir, ".hedgehug/local/overwritten/01JC1111111111111111111111.json", "{}")
+	writeFile(t, dir, ".hedgehug/local/overwritten/01JC2222222222222222222222.json", "[")
+	writeFile(t, dir, ".hedgehug/local/overwritten/note.txt", "not a record")
+	fs := run(t, dir)
+	for _, name := range []string{"01JC1111111111111111111111", "01JC2222222222222222222222"} {
+		f := find(t, fs, "inbox", ".hedgehug/local/overwritten/"+name+".json")
+		if !strings.Contains(f.Msg, "does not decode") || !strings.Contains(f.Hint, "remove the file") {
+			t.Errorf("%s: %+v", name, f)
+		}
+	}
+	if hasFinding(fs, "inbox", "hedgehug inbox") || len(fs) != 2 {
+		t.Errorf("an undecodable record is not waiting for the inbox: %+v", fs)
+	}
+}
+
+func TestNoRecords(t *testing.T) {
+	_, dir := newStore(t)
+	if fs := run(t, dir); len(fs) != 0 {
+		t.Errorf("findings = %+v", fs)
+	}
+}
+
+func TestFixHints(t *testing.T) {
+	s, dir := newStore(t)
+	a, b := newTask("a"), newTask("b")
+	a.ID, b.ID = "TST-7", "TST-7"
+	putRaw(t, s, dir, a)
+	putRaw(t, s, dir, b)
+	fs := run(t, dir)
+	for _, f := range fs {
+		if f.Check == "task" && strings.Contains(f.Msg, "TST-7") {
+			if !strings.Contains(f.Hint, "hedgehug doctor --fix") || !strings.Contains(f.Hint, "hedgehug sync") {
+				t.Errorf("hint = %q", f.Hint)
+			}
+			return
+		}
+	}
+	t.Errorf("no duplicate_id finding in %+v", fs)
+}
+
+func TestFix(t *testing.T) {
+	s, dir := newStore(t)
+	a, b := newTask("a"), newTask("b")
+	a.ID, b.ID = "TST-7", "TST-7"
+	putRaw(t, s, dir, a)
+	putRaw(t, s, dir, b)
+	opt := sync.Options{Author: testAuthor, Now: time.Now}
+	repaired, err := Fix(s, opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(repaired) != 1 || repaired[0].Kind != "id_collision" {
+		t.Fatalf("repaired = %+v", repaired)
+	}
+	if fs := run(t, dir); len(fs) != 0 {
+		t.Errorf("after fix: %+v", fs)
+	}
+	if again, err := Fix(s, opt); err != nil || len(again) != 0 {
+		t.Errorf("second fix = %+v, %v", again, err)
 	}
 }

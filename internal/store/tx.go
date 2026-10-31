@@ -256,7 +256,7 @@ func trackedPath(rel string) error {
 	first, _, _ := strings.Cut(clean, "/")
 	lower := strings.ToLower(clean) // case-insensitive file systems
 	if !filepath.IsLocal(filepath.FromSlash(rel)) || strings.EqualFold(first, ".git") ||
-		lower == localDir || strings.HasPrefix(lower, localDir+"/") {
+		lower == LocalDir || strings.HasPrefix(lower, LocalDir+"/") {
 		return fmt.Errorf("%q is not a tracked file of the store", rel)
 	}
 	return nil

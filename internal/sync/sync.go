@@ -590,6 +590,23 @@ func dirty(r *gitrepo.Repo, paths []string) error {
 	return nil
 }
 
+// RepairHead repairs the files of HEAD as a sync does, without fetching or
+// pushing: what a merge made by hand or a file edited by hand left. It
+// returns what it fixed and what it only tells of. A store with no remote
+// has no task on origin, so a duplicate id is renumbered by the order of
+// the ULIDs.
+func RepairHead(s *store.Store, opt Options) ([]merge.Repaired, error) {
+	ix, err := index.Open(s)
+	if err != nil {
+		return nil, err
+	}
+	var res Result
+	if err := repairHead(s, ix, opt, &res); err != nil {
+		return nil, err
+	}
+	return res.Repaired, nil
+}
+
 // repairHead repairs the files of HEAD, for what a merge made by hand or a
 // file edited by hand brought in, and commits what it fixed. It reads every
 // file only when the index has a problem the repair fixes; otherwise it

@@ -12,6 +12,7 @@ import (
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
+	format "github.com/go-git/go-git/v5/plumbing/format/config"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 )
 
@@ -258,9 +259,23 @@ func (r *Repo) RegisterMergeDriver() error {
 		return err
 	}
 	sub := cfg.Raw.Section("merge").Subsection("hedgehug")
-	if sub.Option("name") == "Hedgehug field merge" && sub.Option("driver") == MergeDriver {
+	if mergeDriverSet(sub) {
 		return nil
 	}
 	sub.SetOption("name", "Hedgehug field merge").SetOption("driver", MergeDriver)
 	return r.r.SetConfig(cfg)
+}
+
+// MergeDriverRegistered reports whether .git/config has the hedgehug merge
+// driver, as RegisterMergeDriver writes it.
+func (r *Repo) MergeDriverRegistered() (bool, error) {
+	cfg, err := r.r.Config()
+	if err != nil {
+		return false, err
+	}
+	return mergeDriverSet(cfg.Raw.Section("merge").Subsection("hedgehug")), nil
+}
+
+func mergeDriverSet(sub *format.Subsection) bool {
+	return sub.Option("name") == "Hedgehug field merge" && sub.Option("driver") == MergeDriver
 }

@@ -391,27 +391,51 @@ func (b *Box) fate(commit string) recordFate {
 	return recordSettled
 }
 
+// RecordsPath is the directory of the merge driver's records, relative to
+// the store.
+const RecordsPath = store.LocalDir + "/" + recordsDir
+
+// CheckRecord returns why a merge driver record cannot be imported, or nil.
+func CheckRecord(data []byte) error {
+	_, err := decodeRecord(data)
+	return err
+}
+
+// decodeRecord reads a merge driver's record and checks that the inbox can
+// make an item of it.
+func decodeRecord(data []byte) (Record, error) {
+	var r Record
+	if err := json.Unmarshal(data, &r); err != nil {
+		return r, err
+	}
+	if r.Path == "" {
+		return r, errors.New("the record has no path")
+	}
+	switch r.Kind {
+	case "":
+		if r.Field == "" {
+			return r, errors.New("the record has no field")
+		}
+	case Revived:
+	default:
+		return r, fmt.Errorf("unknown kind %q", r.Kind)
+	}
+	return r, nil
+}
+
 // fromRecord makes the item of a merge driver's record. The id is the
 // task's in the work tree, when it reads.
 func (b *Box) fromRecord(data []byte) (Item, error) {
-	var r Record
-	if err := json.Unmarshal(data, &r); err != nil {
+	r, err := decodeRecord(data)
+	if err != nil {
 		return Item{}, err
-	}
-	if r.Path == "" {
-		return Item{}, errors.New("the record has no path")
 	}
 	it := Item{Kind: r.Kind, Task: taskOf(r.Path), Path: r.Path, Commit: r.Commit, To: r.Author, Time: r.Time}
 	switch r.Kind {
 	case "":
-		if r.Field == "" {
-			return Item{}, errors.New("the record has no field")
-		}
 		it.Kind, it.Detail = Overwritten, overwrittenDetail(r.Field, r.Value)
 	case Revived:
 		it.Detail = mustJSON(repairDetail{Kind: string(Revived), Value: jsonOrNull(r.Value)})
-	default:
-		return Item{}, fmt.Errorf("unknown kind %q", r.Kind)
 	}
 	if !it.Task.IsZero() {
 		if t, err := b.s.Task(it.Task); err == nil {

@@ -184,11 +184,61 @@ func TestMain(m *testing.M) {
 	if script := os.Getenv("HH_TEST_EDITOR_SCRIPT"); script != "" {
 		os.Exit(testEditor(script, os.Args[len(os.Args)-1]))
 	}
+	// hedgehug is on PATH, as doctor expects of a store with a merge driver.
+	pathDir, err := os.MkdirTemp("", "hedgehug-path-")
+	if err == nil {
+		if err := os.WriteFile(filepath.Join(pathDir, "hedgehug"), nil, 0o700); err == nil { //nolint:gosec // an empty file that only has to be found
+			_ = os.Setenv("PATH", pathDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+		}
+	}
 	code := m.Run()
+	if pathDir != "" {
+		_ = os.RemoveAll(pathDir)
+	}
 	if builtDir != "" {
 		_ = os.RemoveAll(builtDir)
 	}
 	os.Exit(code)
+}
+
+// handEdit changes the file of the task id in the work tree of the store
+// name, as an editor would (old becomes new), and commits it as a hand edit
+// would, past every check of the commands.
+func (te *testEnv) handEdit(name, id, old, replacement string) {
+	te.t.Helper()
+	dir := te.storeDir(name)
+	var rel string
+	err := filepath.WalkDir(filepath.Join(dir, "tasks"), func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := os.ReadFile(p) //nolint:gosec // a file of the test's own store
+		if err == nil && strings.Contains(string(b), "\nid: "+id+"\n") {
+			rel, err = filepath.Rel(dir, p)
+		}
+		return err
+	})
+	if err != nil || rel == "" {
+		te.t.Fatalf("no file of %s: %v", id, err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, rel)) //nolint:gosec // a file of the test's own store
+	if err != nil {
+		te.t.Fatal(err)
+	}
+	if !strings.Contains(string(b), old) {
+		te.t.Fatalf("%s has no %q", rel, old)
+	}
+	if err := os.WriteFile(filepath.Join(dir, rel), []byte(strings.Replace(string(b), old, replacement, 1)), 0o600); err != nil {
+		te.t.Fatal(err)
+	}
+	r, err := gitrepo.Open(dir)
+	if err != nil {
+		te.t.Fatal(err)
+	}
+	c := gitrepo.Commit{Paths: []string{filepath.ToSlash(rel)}, Subject: "hand edit", Author: gitrepo.Signature{Name: "Alice", Email: "alice@example.com"}, When: te.now}
+	if _, err := r.Commit(c); err != nil {
+		te.t.Fatal(err)
+	}
 }
 
 var (

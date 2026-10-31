@@ -24,7 +24,25 @@ func newStore(t *testing.T) (*store.Store, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := s.Repo().RegisterMergeDriver(); err != nil {
+		t.Fatal(err)
+	}
 	return s, dir
+}
+
+// newBareStore creates a store whose .git/config has no merge driver.
+func newBareStore(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "store")
+	if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "test"}, schema.Default(), &model.Workspace{ULID: model.NewULID(), Name: "test", IDPrefix: "TST"}, testAuthor, ""); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func init() {
+	// hedgehug is on PATH for every test but the ones that say otherwise.
+	lookPath = func(string) (string, error) { return "/bin/hedgehug", nil }
 }
 
 // rewriteSchema writes schema.yaml as the default schema after edit changed
