@@ -11,9 +11,9 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// rename retries when another program, such as a virus scanner, has the
-// file open for a moment.
-func rename(oldpath, newpath string) error {
+// Rename renames oldpath to newpath, replacing it. It retries when another
+// program, such as a virus scanner, has the file open for a moment.
+func Rename(oldpath, newpath string) error {
 	return retryRename(os.Rename, transientRenameError, oldpath, newpath)
 }
 

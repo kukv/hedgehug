@@ -300,9 +300,9 @@ func blobAt(c *object.Commit, path string) (plumbing.Hash, error) {
 //
 // Under the index lock it first makes sure the repository is still as the
 // caller saw it: HEAD is on main, h descends from it, and every path on disk
-// is as in HEAD. Otherwise it returns ErrWorkTreeChanged. Every path is also
-// read from h before anything is written, so a commit or object that is
-// missing changes nothing either.
+// is as in HEAD or already as in h. Otherwise it returns ErrWorkTreeChanged.
+// Every path is read from h before anything is written, so a commit or object
+// that is missing changes nothing either.
 func (r *Repo) FastForward(h plumbing.Hash, paths []string) (err error) {
 	for _, p := range paths {
 		if err := checkWorkPath(p); err != nil {
@@ -314,9 +314,6 @@ func (r *Repo) FastForward(h plumbing.Hash, paths []string) (err error) {
 		return err
 	}
 	defer unlock()
-	if err := r.checkFastForward(h, paths); err != nil {
-		return err
-	}
 	tree, err := r.TreeOf(h)
 	if err != nil {
 		return err
@@ -334,6 +331,9 @@ func (r *Repo) FastForward(h plumbing.Hash, paths []string) (err error) {
 		case !errors.Is(err, fs.ErrNotExist):
 			return err
 		}
+	}
+	if err := r.checkFastForward(h, paths, data, inTree); err != nil {
+		return err
 	}
 	before, err := r.r.Storer.Index()
 	if err != nil {
@@ -371,8 +371,10 @@ var mainRef = plumbing.NewBranchReferenceName("main")
 
 // checkFastForward returns ErrWorkTreeChanged unless HEAD is a symbolic
 // reference to main, h descends from HEAD, and each path on disk is the same
-// as in HEAD (a path missing from both is the same).
-func (r *Repo) checkFastForward(h plumbing.Hash, paths []string) error {
+// as in HEAD or as in h, given by data and inTree (a path missing from both
+// is the same). A path already as in h is what a fast-forward that stopped
+// before moving the reference leaves; this one finishes it.
+func (r *Repo) checkFastForward(h plumbing.Hash, paths []string, data [][]byte, inTree []bool) error {
 	ref, err := r.r.Storer.Reference(plumbing.HEAD)
 	if err != nil {
 		return err
@@ -390,18 +392,23 @@ func (r *Repo) checkFastForward(h plumbing.Hash, paths []string) error {
 		}
 		return fmt.Errorf("%w: %s does not descend from HEAD", ErrWorkTreeChanged, h)
 	}
-	for _, p := range paths {
-		want, err := r.ReadAt(head, p)
-		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return err
-		}
-		inHead := err == nil
+	same := func(a []byte, inA bool, b []byte, inB bool) bool {
+		return inA == inB && bytes.Equal(a, b)
+	}
+	for i, p := range paths {
 		got, err := atomicfile.ReadFile(filepath.Join(r.dir, filepath.FromSlash(p)))
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}
 		onDisk := err == nil
-		if inHead != onDisk || !bytes.Equal(want, got) {
+		if same(got, onDisk, data[i], inTree[i]) {
+			continue
+		}
+		old, err := r.ReadAt(head, p)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		if !same(got, onDisk, old, err == nil) {
 			return fmt.Errorf("%w: %s differs from HEAD", ErrWorkTreeChanged, p)
 		}
 	}

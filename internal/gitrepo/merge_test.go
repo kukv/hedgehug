@@ -510,6 +510,34 @@ func TestFastForwardRefusesWhenHeadMovedAway(t *testing.T) {
 	assertRefused(t, b, b.r.FastForward(theirs, []string{"x.md"}), hb, "")
 }
 
+func TestFastForwardFinishesAStoppedOne(t *testing.T) {
+	remote := newBare(t)
+	a, b := cloneTwo(t, remote)
+	h := commitHead(t, a.r, a.dir, map[string]string{"x.md": "x\n", "y.md": "y\n", "seed.md": ""})
+	if err := a.r.Push("origin"); err != nil {
+		t.Fatal(err)
+	}
+	theirs, err := b.r.Fetch("origin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A run that stopped after writing x.md and removing seed.md, but
+	// before y.md and the reference.
+	writeFile(t, b.dir, "x.md", "x\n")
+	if err := removeFile(b.dir, "seed.md"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.r.FastForward(theirs, []string{"x.md", "y.md", "seed.md"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := b.r.Head(); got != h {
+		t.Errorf("HEAD = %s, want %s", got, h)
+	}
+	if st, _ := b.r.Status(); len(st) != 0 {
+		t.Errorf("status = %+v", st)
+	}
+}
+
 func TestFastForwardRefusesADetachedHead(t *testing.T) {
 	b, theirs := ffSetup(t)
 	before, _ := b.r.Head()

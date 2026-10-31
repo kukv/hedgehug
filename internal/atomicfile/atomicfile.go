@@ -35,7 +35,7 @@ func WriteFile(path string, data []byte) error {
 		err = cerr
 	}
 	if err == nil {
-		err = rename(tmp, path)
+		err = Rename(tmp, path)
 	}
 	if err != nil {
 		_ = os.Remove(tmp)

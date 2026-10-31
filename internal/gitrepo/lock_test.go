@@ -179,6 +179,41 @@ func TestRepackKeepsPacksAndObjectsNoReferenceReaches(t *testing.T) {
 	}
 }
 
+func TestRepackFailureLeavesNoFiles(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(t *testing.T, dir string)
+	}{
+		{"unreadable loose object", func(t *testing.T, dir string) {
+			writeFile(t, dir, ".git/objects/ff/00000000000000000000000000000000000000", "not zlib")
+		}},
+		{"failure after the pack is written", func(t *testing.T, _ string) {
+			afterPackWrite = func() error { return errors.New("injected") }
+			t.Cleanup(func() { afterPackWrite = func() error { return nil } })
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			r, _ := Init(dir)
+			commitFiles(t, r, dir, map[string]string{"a.md": "1"})
+			tc.setup(t, dir)
+			before, _ := r.LooseObjects()
+			if err := r.Repack(); err == nil {
+				t.Fatal("Repack succeeded")
+			}
+			if got := packFiles(t, dir); len(got) != 0 {
+				t.Errorf("files in objects/pack after a failed repack: %v", got)
+			}
+			if n, _ := r.LooseObjects(); n != before {
+				t.Errorf("loose objects = %d, want %d", n, before)
+			}
+			if err := r.Verify(); err != nil {
+				t.Errorf("Verify after a failed repack: %v", err)
+			}
+		})
+	}
+}
+
 func TestRepackNothingLoose(t *testing.T) {
 	dir := t.TempDir()
 	r, _ := Init(dir)
