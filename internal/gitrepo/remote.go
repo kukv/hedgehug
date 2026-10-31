@@ -188,7 +188,7 @@ func Clone(url, dir string) (*Repo, error) {
 		SingleBranch:  true,
 	})
 	if err == nil {
-		repo := &Repo{dir: dir, r: r}
+		repo := newRepo(dir, r)
 		if err = afterClone(repo, url); err == nil {
 			return repo, nil
 		}

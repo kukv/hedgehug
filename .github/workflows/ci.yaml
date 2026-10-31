@@ -63,8 +63,14 @@ jobs:
       - uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # v5.2.3
       # Windows の既定の pwsh は -coverprofile=coverage.out をドットで分けてしまうため、
       # 3つの OS とも bash で同じコマンドを使う。
+      # Windows のランナーの TEMP は OS のディスク（C:）にあり、ファイルの作成や fsync が遅い。
+      # テストの t.TempDir() をワークスペースと同じ D: の runner.temp に作る。
+      # Go は Windows で TMP、Unix で TMPDIR を読むので、ubuntu と macos は変わらない。
       - name: Test
         shell: bash
+        env:
+          TMP: ${{ runner.temp }}
+          TEMP: ${{ runner.temp }}
         run: gotestsum --format testdox --junitfile test-report.xml -- -race -coverprofile=coverage.out -covermode=atomic ./...
       # 書き込めない GITHUB_TOKEN の PR（fork と Dependabot）では投稿が失敗して CI が赤くなるため、
       # 同じリポジトリの PR だけで投稿する。チェックとカバレッジのコメントは PR に1つなので、
