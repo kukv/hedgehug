@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/config"
+	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
@@ -101,4 +102,32 @@ func newTestSession(t *testing.T) *testSession {
 		t.Fatal(err)
 	}
 	return ts
+}
+
+// addBareRemote creates a bare repository and makes it the remote of the
+// test store, in config.yaml. It returns the path of the remote.
+func addBareRemote(t *testing.T, ts *testSession) string {
+	t.Helper()
+	remote := filepath.Join(t.TempDir(), "r.git")
+	if err := gitrepo.InitBare(remote); err != nil {
+		t.Fatal(err)
+	}
+	c, _, err := ts.Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := c.Select("me")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RemoveStore("me"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AddStore("me", e.Path, []string{remote}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	return remote
 }

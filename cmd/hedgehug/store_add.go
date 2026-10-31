@@ -201,7 +201,7 @@ func (a *app) storeList() error {
 		// A store that does not open or has no state is listed without its last sync.
 		if s, err := store.Open(e.Path); err == nil {
 			if st, err := sync.ReadState(s); err == nil {
-				out[i].LastSuccess = timePtr(st.LastSuccess)
+				out[i].LastSuccess = ops.TimePtr(st.LastSuccess)
 			}
 		}
 	}

@@ -7,7 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 	"github.com/kukv/hedgehug/internal/sync"
@@ -85,43 +84,20 @@ func (a *app) afterWrite(s *store.Store) {
 	a.ss.AfterWrite(s, e)
 }
 
-// syncsInBackground is whether the store e is synced in the background: only
-// a store with a remote is.
-func syncsInBackground(e config.StoreEntry) bool { return len(e.Remotes) > 0 }
-
 // beforeCommand reports the failure of a background sync that the user has
-// not been told of, and starts one for each store with a remote that is due.
-// What goes wrong here is left to the command itself to tell: it fails on
-// the same store or config.
+// not been told of, and starts one for each store with a remote that is due
+// (ops.BeforeCommand), except in the sync itself and in a merge driver.
 func (a *app) beforeCommand(cmd *cobra.Command, _ []string) {
 	for c := cmd; c != nil; c = c.Parent() {
 		if c.Parent() != nil && c.Parent().Parent() == nil && (c.Name() == "sync" || c.Name() == "merge-driver") {
 			return // the sync itself, and a merge in the middle of one
 		}
 	}
-	cfg, _, err := a.ss.Config()
-	if err != nil {
-		return
-	}
-	targets, err := a.ss.SyncTargets(cfg, false)
-	if err != nil {
-		return
-	}
-	for _, e := range targets {
-		if !syncsInBackground(e) {
-			continue
-		}
-		s, err := store.Open(e.Path)
-		if err != nil {
-			continue
-		}
-		if msg, err := sync.TakeError(s); err == nil && msg != "" {
-			_, _ = fmt.Fprintf(a.stderr, "hedgehug: background sync of %s failed: %s (run hedgehug sync)\n", e.Name, msg)
-		}
-		if st, err := sync.ReadState(s); err == nil && sync.Due(st, a.now(), cfg.Sync.Interval) {
-			_ = sync.Start(s, e.Name, a.getenv)
-		}
-	}
+	a.ss.BeforeCommand(
+		func(s *store.Store, name string) error { return sync.Start(s, name, a.getenv) },
+		func(name, msg string) {
+			_, _ = fmt.Fprintf(a.stderr, "hedgehug: background sync of %s failed: %s (run hedgehug sync)\n", name, msg)
+		})
 }
 
 // verb is the heading of a command that printed what it wrote: heading, or

@@ -56,7 +56,7 @@ func run(args []string, e *env) int {
 		Now:    e.now,
 		Warn:   func(m string) { _, _ = fmt.Fprintln(e.stderr, "warning: "+m) },
 		AfterWrite: func(s *store.Store, en config.StoreEntry) {
-			if !syncsInBackground(en) {
+			if !ops.SyncsInBackground(en) {
 				return
 			}
 			if err := sync.Start(s, en.Name, e.getenv); err != nil {

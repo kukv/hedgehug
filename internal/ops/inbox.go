@@ -93,6 +93,9 @@ func (ss *Session) WarnInbox(stores []InboxStore) {
 func (ss *Session) SyncTargets(c *config.Config, all bool) ([]config.StoreEntry, error) {
 	if ss.StoreName != "" {
 		e, err := c.Select(ss.StoreName)
+		if err != nil && !errors.Is(err, config.ErrNoStores) {
+			return nil, newErr(KindNotFound, "store.not_found", err, "name", ss.StoreName)
+		}
 		return []config.StoreEntry{e}, err
 	}
 	if len(c.Stores) == 0 {

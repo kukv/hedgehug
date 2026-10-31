@@ -123,7 +123,7 @@ func (a *app) fixStore(c *config.Config, e config.StoreEntry, s *store.Store) ([
 	}
 	out := make([]fixedJSON, 0, len(repaired))
 	for _, x := range repaired {
-		f := fixedJSON{ULID: x.ULID.String(), Kind: x.Kind, Value: jsonValue(x.Value), Author: x.Author}
+		f := fixedJSON{ULID: x.ULID.String(), Kind: x.Kind, Value: ops.JSONValue(x.Value), Author: x.Author}
 		name := x.ULID.String()
 		if ix != nil {
 			if t, ok := ix.Task(x.ULID); ok {
@@ -150,6 +150,6 @@ func fixedContent(ix *index.Index, x merge.Repaired) string {
 	detail, _ := json.Marshal(struct {
 		Kind  string          `json:"kind"`
 		Value json.RawMessage `json:"value"`
-	}{x.Kind, jsonValue(x.Value)}) // a string and JSON always encode
+	}{x.Kind, ops.JSONValue(x.Value)}) // a string and JSON always encode
 	return ops.RepairedContent(ix, inbox.Item{Detail: detail})
 }
