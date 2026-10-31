@@ -89,8 +89,12 @@ func TestNumbersUnreadableSide(t *testing.T) {
 }
 
 func TestWhenOf(t *testing.T) {
-	t1, t2 := time.Unix(1, 0), time.Unix(2, 0)
-	when := WhenOf(map[string]time.Time{PathKey([]string{"statuses", "a", "x"}): t2, PathKey([]string{"props"}): t1})
+	t1, t2, t3 := time.Unix(1, 0), time.Unix(2, 0), time.Unix(3, 0)
+	when := WhenOf(map[string]time.Time{
+		PathKey([]string{"statuses", "a", "x"}): t2,
+		PathKey([]string{"props"}):              t1,
+		PathKey([]string{""}):                   t3, // a key that is empty, not the root
+	})
 	for _, c := range []struct {
 		path []string
 		want time.Time
@@ -100,11 +104,17 @@ func TestWhenOf(t *testing.T) {
 		{[]string{"props", "p", "type"}, t1}, // a value above it
 		{[]string{"statusesx"}, time.Time{}}, // not a path under statuses
 		{[]string{"x"}, time.Time{}},
-		{nil, t2}, // the root is above all
+		{[]string{"x", ""}, time.Time{}},
+		{[]string{""}, t3},
+		{[]string{"", "j"}, t3},
+		{nil, t3}, // the root is above all
 	} {
 		if got := when(c.path); !got.Equal(c.want) {
 			t.Errorf("%q: %s, want %s", c.path, got, c.want)
 		}
+	}
+	if PathKey(nil) == PathKey([]string{""}) || PathKey([]string{"a", "b"}) == PathKey([]string{"a\x00b"}) {
+		t.Error("PathKey is ambiguous")
 	}
 }
 

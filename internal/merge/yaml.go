@@ -203,8 +203,17 @@ func YAMLValues(data []byte) ([]YAMLValue, error) {
 	return out, nil
 }
 
-// PathKey is the key of a yaml path in the map that WhenOf reads.
-func PathKey(path []string) string { return strings.Join(path, "\x00") }
+// PathKey is the key of a yaml path in the map that WhenOf reads: each key
+// of the path quoted, after a NUL. The root is "", and no two paths share
+// a key, even with keys that are empty or hold a NUL.
+func PathKey(path []string) string {
+	var b strings.Builder
+	for _, k := range path {
+		b.WriteByte(0)
+		b.WriteString(strconv.Quote(k))
+	}
+	return b.String()
+}
 
 // WhenOf builds a Side.When from when a side last changed each value,
 // keyed by PathKey of the paths YAMLValues lists in its versions. A path is
@@ -223,12 +232,12 @@ func WhenOf(changed map[string]time.Time) func(path []string) time.Time {
 }
 
 // related reports whether one of the path keys a and b is the other or a
-// path under it. The root path is above every path.
+// path under it.
 func related(a, b string) bool {
 	if len(a) > len(b) {
 		a, b = b, a
 	}
-	return a == "" || a == b || strings.HasPrefix(b, a+"\x00")
+	return a == b || strings.HasPrefix(b, a) && b[len(a)] == 0
 }
 
 // yamlNode merges the value at path; nil is a value that is not there.
