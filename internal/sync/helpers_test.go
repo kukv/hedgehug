@@ -21,7 +21,8 @@ type cluster struct {
 	remote string
 	stores []*store.Store
 	opts   []Options
-	last   model.Rank // the last rank given by addTask
+	last   model.Rank      // the last rank given by addTask
+	seen   map[string]bool // the values the property test wrote or started with, by task, field and value
 }
 
 func newCluster(t *testing.T, n int) *cluster {
