@@ -207,13 +207,21 @@ func find[T any](s []T, k string, key func(T) string) int {
 // mergeSet applies the additions and removals of both sides to base: the
 // items of base that both sides kept, in base's order, then the items either
 // side added, ordered by key so that the result does not depend on which
-// side is ours.
+// side is ours. An item one side removed and the other changed keeps the
+// change.
 func mergeSet[T any](base, ours, theirs []T, key func(T) string) []T {
 	var out, added []T
 	for _, x := range base {
 		k := key(x)
-		if find(ours, k, key) >= 0 && find(theirs, k, key) >= 0 && find(out, k, key) < 0 {
+		oi, ti := find(ours, k, key), find(theirs, k, key)
+		switch {
+		case find(out, k, key) >= 0:
+		case oi >= 0 && ti >= 0:
 			out = append(out, x)
+		case oi >= 0 && !jsonEqual(x, ours[oi]):
+			out = append(out, ours[oi])
+		case ti >= 0 && !jsonEqual(x, theirs[ti]):
+			out = append(out, theirs[ti])
 		}
 	}
 	for _, x := range slices.Concat(ours, theirs) {
@@ -239,11 +247,17 @@ func pick[T any](m *taskMerge, name string, b, o, t T, eq func(a, b any) bool) T
 		return o
 	}
 	oj, tj := jsonOf(o), jsonOf(t)
+	// Values that encode alike lose nothing, though one side must still win.
+	record := !bytes.Equal(oj, tj)
 	if m.oursLater(oj, tj) {
-		m.lost(name, tj, m.theirs.Author)
+		if record {
+			m.lost(name, tj, m.theirs.Author)
+		}
 		return o
 	}
-	m.lost(name, oj, m.ours.Author)
+	if record {
+		m.lost(name, oj, m.ours.Author)
+	}
 	return t
 }
 
@@ -327,7 +341,11 @@ func (m *taskMerge) node(name string, b, o, t, d *yaml.Node, multi bool) *yaml.N
 		v = o
 	default:
 		if bs, os, ts, ok := scalarLists(b, o, t); multi && ok {
-			v = listNode(d, mergeSet(bs, os, ts, ident), b, o, t)
+			top, other := t, o
+			if m.oursTop {
+				top, other = o, t
+			}
+			v = listNode(d, mergeSet(bs, os, ts, ident), b, top, other)
 		} else {
 			v = pick(m, name, b, o, t, nodeEqual)
 		}
@@ -360,7 +378,8 @@ func scalarLists(nodes ...*yaml.Node) (b, o, t []string, ok bool) {
 }
 
 // listNode builds a list of values in the style of like, reusing the item
-// nodes of from that hold the same value.
+// nodes of from that hold the same value, the first found. from must not
+// depend on which side is ours.
 func listNode(like *yaml.Node, values []string, from ...*yaml.Node) *yaml.Node {
 	n := *like
 	n.Content = nil
@@ -446,17 +465,17 @@ func (m *taskMerge) updated() {
 	}
 }
 
-// deletedAt merges deleted_at. A side that deleted the task while the other
-// edited it loses the deletion, and is told; when both changed deleted_at
-// it is a scalar.
+// deletedAt merges deleted_at. A side that deleted a live task while the
+// other edited it loses the deletion, and is told; otherwise deleted_at is
+// a scalar.
 func (m *taskMerge) deletedAt(oEdited, tEdited bool) {
 	b, o, t := m.b.DeletedAt, m.o.DeletedAt, m.t.DeletedAt
 	oc, tc := !jsonEqual(b, o), !jsonEqual(b, t)
 	var v *time.Time
 	switch {
-	case oc && !tc && o != nil && tEdited:
+	case b == nil && oc && !tc && o != nil && tEdited:
 		m.res.Notices = append(m.res.Notices, Notice{Kind: Revived, Path: m.path, Author: m.ours.Author})
-	case tc && !oc && t != nil && oEdited:
+	case b == nil && tc && !oc && t != nil && oEdited:
 		m.res.Notices = append(m.res.Notices, Notice{Kind: Revived, Path: m.path, Author: m.theirs.Author})
 	default:
 		v = pick(m, "deleted_at", b, o, t, jsonEqual)

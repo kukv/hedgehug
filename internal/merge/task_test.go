@@ -120,6 +120,12 @@ func TestTaskDeleteVsEdit(t *testing.T) {
 	if len(r.Notices) != 1 || r.Notices[0] != (Notice{Kind: Revived, Path: taskPath, Author: "a"}) {
 		t.Errorf("notices = %v", r.Notices)
 	}
+	// Built on the deleting side, the key stays as null, as hh restore
+	// writes it.
+	r = mergeTask(t, side(base, ""), side(ours, "c"), side(theirs, "b"))
+	if x := decoded(t, r.Data); x.DeletedAt != nil || !bytes.Contains(r.Data, []byte("deleted_at: null")) {
+		t.Errorf("built on the deleting side:\n%s", r.Data)
+	}
 }
 
 func TestTaskPurgeVsEdit(t *testing.T) {
@@ -292,5 +298,50 @@ func TestTaskOursWins(t *testing.T) {
 	}
 	if len(r.Overwritten) != 0 {
 		t.Errorf("overwritten = %v", r.Overwritten)
+	}
+}
+
+// Items both sides added take the top side's node, in either order.
+func TestTaskMultiPropItemNodes(t *testing.T) {
+	base := task("2026-10-31T10:00:00Z", "props:", "  relates: [01JBZ8K3QW7M2X9V4T6R5N8P0X]")
+	low := task("2026-10-31T11:00:00Z", "props:", `  relates: ["01JBZ8K3QW7M2X9V4T6R5N8P0C", 01JBZ8K3QW7M2X9V4T6R5N8P0D]`)
+	top := task("2026-10-31T12:00:00Z", "props:", "  relates: [01JBZ8K3QW7M2X9V4T6R5N8P0X, 01JBZ8K3QW7M2X9V4T6R5N8P0C, 01JBZ8K3QW7M2X9V4T6R5N8P0E]")
+	r := mergeTask(t, side(base, ""), side(low, "a"), side(top, "b"))
+	want := "relates: [01JBZ8K3QW7M2X9V4T6R5N8P0C, 01JBZ8K3QW7M2X9V4T6R5N8P0D, 01JBZ8K3QW7M2X9V4T6R5N8P0E]"
+	if !bytes.Contains(r.Data, []byte(want)) {
+		t.Errorf("relates:\n%s", r.Data)
+	}
+}
+
+func TestTaskLinkRemovedAndChanged(t *testing.T) {
+	base := task("2026-10-31T10:00:00Z", "links: [{type: pr, ref: o/r#1}, {type: pr, ref: o/r#2}]")
+	ours := task("2026-10-31T11:00:00Z", "links: [{type: pr, ref: o/r#1, sync: status}]")
+	theirs := task("2026-10-31T12:00:00Z", "links: [{type: pr, ref: o/r#1}, {type: issue, ref: o/r#2}]")
+	r := mergeTask(t, side(base, ""), side(ours, "a"), side(theirs, "b"))
+	want := []model.Link{{Type: "pr", Ref: "o/r#1", Sync: "status"}, {Type: "issue", Ref: "o/r#2"}}
+	if x := decoded(t, r.Data); !slices.Equal(x.Links, want) || len(r.Overwritten) != 0 {
+		t.Errorf("links %v overwritten %v", x.Links, r.Overwritten) // ours removed #2, theirs changed it: the change stays
+	}
+}
+
+func TestTaskDeletedBaseNotRevived(t *testing.T) {
+	base := task("2026-10-31T10:00:00Z", "title: a", "deleted_at: 2026-10-31T10:00:00Z")
+	ours := task("2026-10-31T11:00:00Z", "title: a", "deleted_at: 2026-10-31T11:00:00Z")
+	theirs := task("2026-10-31T12:00:00Z", "title: edited", "deleted_at: 2026-10-31T10:00:00Z")
+	r := mergeTask(t, side(base, ""), side(ours, "a"), side(theirs, "b"))
+	x := decoded(t, r.Data)
+	if x.DeletedAt == nil || !x.DeletedAt.Equal(time.Date(2026, 10, 31, 11, 0, 0, 0, time.UTC)) || x.Title != "edited" || len(r.Notices) != 0 {
+		t.Errorf("deleted_at %v title %s notices %v", x.DeletedAt, x.Title, r.Notices)
+	}
+}
+
+// Values written differently that encode alike lose nothing.
+func TestTaskEqualValuesNotOverwritten(t *testing.T) {
+	base := task("2026-10-31T10:00:00Z", "props:", "  points: 1")
+	ours := task("2026-10-31T11:00:00Z", "props:", "  points: 0x10")
+	theirs := task("2026-10-31T12:00:00Z", "props:", "  points: 16")
+	r := mergeTask(t, side(base, ""), side(ours, "a"), side(theirs, "b"))
+	if v := decoded(t, r.Data).Props.Get("points"); v == nil || v.Value != "16" || len(r.Overwritten) != 0 {
+		t.Errorf("points %v overwritten %v", v, r.Overwritten)
 	}
 }

@@ -50,8 +50,8 @@ func mergeWith(t *testing.T, p Policy, base, ours, theirs Side) Result {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(r.Data, r2.Data) || !sameOverwritten(r.Overwritten, r2.Overwritten) {
-		t.Fatalf("not symmetric:\n%s\n---\n%s\n%v\n%v", r.Data, r2.Data, r.Overwritten, r2.Overwritten)
+	if !bytes.Equal(r.Data, r2.Data) || !sameOverwritten(r.Overwritten, r2.Overwritten) || !slices.Equal(r.Notices, r2.Notices) {
+		t.Fatalf("not symmetric:\n%s\n---\n%s\n%v\n%v\n%v\n%v", r.Data, r2.Data, r.Overwritten, r2.Overwritten, r.Notices, r2.Notices)
 	}
 	return r
 }
