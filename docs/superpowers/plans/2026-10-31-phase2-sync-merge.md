@@ -319,6 +319,7 @@ git commit -m "feat(gitrepo): インプロセスの file transport と fetch・p
   - `func (r *Repo) FastForward(h plumbing.Hash, paths []string) error` — `refs/heads/main` を h にし、paths の作業ツリーのファイルと index を h のツリーに合わせる
   - `var ErrGitBusy = errors.New("git is running in the store (.git/index.lock exists); try again when it ends, or remove the file if it is left over")`
   - `func (r *Repo) LooseObjects() (int, error)`、`func (r *Repo) Repack() error`
+  - `func (e LogEntry) TrailerValues(key string) []string` — 同じ key の trailer をすべて、書かれた順に（`Hedgehug-Overwritten` は1つの負けた値につき1行なので複数ある）。`parseMessage` は最初の `: ` で分けるので、値の JSON が `: ` を含んでも壊れない（テストで確かめる）
 
 - [ ] **Step 1: テストを書く**（`merge_test.go`）
 
@@ -464,6 +465,7 @@ Expected: FAIL（未定義）
 - `FastForward`: `lockIndex` を取り、`refs/heads/main` を `storer.SetReference` で h にし、paths の各ファイルを h のツリーから作業ツリーに書く（なければ消す）。書き込みは `os.WriteFile` ではなく、一時ファイルと rename（store の `writeFile` と同じ手順。gitrepo に小さな `atomicWrite` を置く）。最後に `w.AddWithOptions(SkipStatus)` / `unstage` で index を合わせる（`Commit` と同じ）
 - `LogFrom`: `Log` の中身を、HEAD でなく from から始める形に切り出す。`Log` は `LogFrom(head, ...)` を呼ぶ
 - `Between`: `object.NewCommitPreorderIter(from)` で全親をたどり、base の祖先を除いて集め、`When` と Hash の順で古い順に並べる
+- `log.go`: `TrailerValues` を足し、`TestLog` に、値が `"a: b"` を含む trailer と同じ key の trailer 2行のケースを足す
 - `maintain.go`: `LooseObjects` は `.git/objects/??/*` を数える。`Repack` は `r.r.RepackObjects(&git.RepackConfig{})`
 
 - [ ] **Step 4: テストを通す**
@@ -1797,8 +1799,7 @@ type Result struct {
 	Overwritten []merge.Overwritten
 	Repaired    []merge.Repaired
 	Invalid     []model.ULID // tasks left with problems (is:invalid)
-	Pushed      []string     // remote names
-	Notices     []inbox.Item // made in step 7 (Task 11 fills this in)
+	Pushed      []string     // remote names, of the last round
 }
 
 // Run syncs the store once. A store with no remote does nothing.
@@ -1837,6 +1838,7 @@ type cluster struct {
 	remote string
 	stores []*store.Store
 	opts   []Options
+	rank   int
 }
 
 func newCluster(t *testing.T, n int) *cluster {
@@ -1901,7 +1903,9 @@ func (c *cluster) addTask(i int, title string) *model.Task {
 			break
 		}
 	}
-	x := &model.Task{ULID: model.NewULID(), Workspace: ws, Kind: "task", Title: title, Status: "todo", Rank: "a0"}
+	c.rank++
+	r, _ := model.Between(model.Rank(fmt.Sprintf("a%d", c.rank)), "") // distinct ranks: rerank is not what these tests look at
+	x := &model.Task{ULID: model.NewULID(), Workspace: ws, Kind: "task", Title: title, Status: "todo", Rank: r}
 	if _, err := s.Update(c.op(i, "add", x.ULID), func(tx *store.Tx) error { return tx.PutTask(x) }); err != nil {
 		c.t.Fatal(err)
 	}
@@ -2192,6 +2196,7 @@ func Run(s *store.Store, opt Options) (Result, error) {
 	}
 	wait := 500 * time.Millisecond
 	for round := 0; ; round++ {
+		res.Pushed = nil // a rejected mirror makes another round; report the last one
 		for _, name := range r.Remotes() {
 			if _, err := r.Fetch(name); err != nil {
 				return res, fmt.Errorf("fetch %s: %w", name, err)
@@ -2243,7 +2248,7 @@ func Run(s *store.Store, opt Options) (Result, error) {
 （Task 11 で、`setup` の前に `before, _ := r.Head()` を取り、repack の前に inbox の手順を足す。）
 
 - `mergeRemote`: `head := r.Head()`、`remote := r.RemoteHead(name)`。ゼロ、または `IsAncestor(remote, head)` なら何もしない。`IsAncestor(head, remote)` なら、`DiffTrees(head の木, remote の木)` のパスで `checkDirty` してから `s.FastForward(head, remote, paths)`。それ以外は `base := MergeBase(head, remote)`、`DiffTrees` の両方に出たパスを `checkDirty`、schema.yaml を先にマージして `sc`（`schema.Decode`、失敗したら HEAD のスキーマ）、ほかのパスを `merge.Merge`。HEAD の木にマージの結果を重ねた `merge.Files` を作り（`Read` は結果にあればそれ、なければ HEAD の木から）、`merge.Repair` を `Base`（base の木）・`OnOrigin`（origin の main の木でタスクのファイルを読み ID を比べる）・`Changed`（マージで書いたパス）付きで呼ぶ。trailer を作って `s.CommitMerge(head, []plumbing.Hash{head, remote}, files, store.Op{Name: "merge", Detail: name, Author: opt.Author, Account: opt.Account}, trailers)`。`ErrHeadMoved` なら同じ remote でやり直す
-- trailer: `Hedgehug-Overwritten: <path> <field> <value> <author>`、`Hedgehug-Repaired: <ulid> <kind> <value> <author>`（author が空なら `-`）
+- trailer: `Hedgehug-Overwritten: <path> <field> <value> <author>`、`Hedgehug-Repaired: <ulid> <kind> <value> <author>`（author が空なら `-`）。マージの `Notice{Revived}` は `Hedgehug-Repaired: <ファイルの ULID> revived - <消した側の author>` として載せる（spec の trailer の表に書いてある）。値の JSON は空白を含みうるので、読む側（Task 11 の `Collect`）は「先頭の2語、最後の1語、その間がすべて JSON」と分ける。パスと field と ULID と kind と author は空白を含まない
 - `checkDirty(paths)`: `r.Status()` のパスと交われば `ErrDirty`
 - `repairHead`: HEAD の木全体で `merge.Repair`（`Base` nil、`Changed` は常に true）。何か書くなら `CommitMerge(head, []plumbing.Hash{head}, …, Op{Name: "repair", Detail: fmt.Sprintf("%d issues", n)})`。何も書かないが通知だけある（`prefix_duplicate` など）場合はコミットせず、`res.Repaired` に入れる（Task 11 が inbox に出す）
 - Store 間の接頭辞の重複: `repairHead` の後、`opt.Others` の各 Store を `store.Open` し（失敗は飛ばす）、そのワークスペースとこの Store のワークスペースの `IDPrefix` を比べ、この Store の側の `PrefixSet` が後なら `Repaired{Kind: "prefix_duplicate", Value: json({"store": 相手の名前, "workspace": 相手の名前})}`
@@ -2378,7 +2383,7 @@ func TestCollectOverwrittenAndRenumberedFromOwnMerge(t *testing.T) {
 	before := head(t, b)
 	p := model.TaskPath(x.ULID)
 	trailers := []gitrepo.Trailer{
-		{Key: "Hedgehug-Overwritten", Value: p + ` title "mine" github.com/b`},
+		{Key: "Hedgehug-Overwritten", Value: p + ` title "mine: with spaces" github.com/b`}, // the JSON has a space and ": "
 		{Key: "Hedgehug-Repaired", Value: x.ULID.String() + ` id_collision {"old":"WEB-1","new":"WEB-2"} github.com/b`},
 		{Key: "Hedgehug-Overwritten", Value: p + ` status "todo" github.com/a`}, // someone else's: no item
 	}
@@ -2391,7 +2396,7 @@ func TestCollectOverwrittenAndRenumberedFromOwnMerge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 2 || items[0].Kind != Overwritten || items[1].Kind != Renumbered || string(items[1].Detail) != `{"old":"WEB-1","new":"WEB-2"}` {
+	if len(items) != 2 || items[0].Kind != Overwritten || !strings.Contains(string(items[0].Detail), `mine: with spaces`) || items[1].Kind != Renumbered || string(items[1].Detail) != `{"old":"WEB-1","new":"WEB-2"}` {
 		t.Errorf("items = %+v", items)
 	}
 }
@@ -2435,6 +2440,7 @@ Expected: FAIL
   - 当たり判定: `@login` は me のうち `/login` で終わるもの、`@host/login` は完全一致
 - `.hedgehug/local/overwritten/*.json`: `func (b *Box) Import(me []string) error` が、author が me に入る記録を Item にして `Add` し、`Add` が済んでからファイルを消す（me に入らない記録も消す。merge driver は誰の値かを問わず書くため）。`Collect` はこのファイルを読まない。sync の手順 7 と `hh inbox` が `Import` を呼ぶ
 - Notice{Revived}: マージコミットに trailer として残すため、Task 10 の trailer に `Hedgehug-Repaired: <ulid> revived - <author>` として入れる（spec の Notice はマージの結果。Repaired と同じ trailer に `revived` の種類で載せる）。`Collect` は kind `revived` を `Revived` にする
+- `sync.Result` に `Notices []inbox.Item`（手順 7 で作った Item）を足す
 - sync の手順 7: `Run` の最後で `items := Collect(s, before, head, opt.Me)`、`inbox.Open(s).Add(items)`、`res.Notices` に足す。同期で作った「データを変えない通知」（`repairHead` のコミットしない `prefix_duplicate`、Store 間の重複）は、コミットがないので直接 Item にして足す（Commit は HEAD、重複の鍵が同じなら二度出ない）
 
 - [ ] **Step 4: テストを通す**
@@ -3049,15 +3055,33 @@ func TestUndoKeepsLaterChangesOfOthers(t *testing.T) {
 	bob.ok("sync")
 	alice.ok("sync")
 	out := alice.ok("undo")
-	if !strings.Contains(out, "Undid") || !strings.Contains(out, "kept status (changed later by github.com/bob)") {
+	if !strings.Contains(out, "Undid") || !strings.Contains(out, "kept status (changed later by github.com/bob)") || strings.Contains(out, "kept updated") {
 		t.Errorf("undo = %s", out)
 	}
 	got := alice.ok("show", "ORG-1", "--json")
 	if !strings.Contains(got, `"title": "x"`) || !strings.Contains(got, `"status": "doing"`) {
 		t.Errorf("after undo: %s", got) // twoUsers made ORG-1 with the title x
 	}
-	if out := alice.ok("undo"); !strings.Contains(out, "Undid") {
-		t.Errorf("second undo = %s", out) // the add of ORG-1 by alice
+	out = alice.ok("undo") // the add of ORG-1 by alice: bob changed it later, so the file stays
+	if !strings.Contains(out, "Undid") || !strings.Contains(out, "nothing to change") {
+		t.Errorf("second undo = %s", out)
+	}
+	if out := alice.ok("undo"); strings.TrimSpace(out) != "Nothing to undo" {
+		t.Errorf("third undo = %s", out) // the second one is marked undone though it changed no file
+	}
+	for _, f := range []string{"kept updated", "kept id", "kept former_ids"} {
+		if strings.Contains(out, f) {
+			t.Errorf("undo lists %q", f)
+		}
+	}
+}
+
+func TestUndoWithoutAccounts(t *testing.T) {
+	te := newTestEnv(t)
+	te.ok("store", "init", "me", "--prefix", "ME")
+	te.ok("add", "x")
+	if code, _, errs := te.run("undo"); code != 1 || !strings.Contains(errs, "accounts are not set up") {
+		t.Errorf("code %d stderr %s", code, errs)
 	}
 }
 
@@ -3147,6 +3171,9 @@ Expected: FAIL
 
 - `undo`: `LogFrom(HEAD, 0)`（first-parent）を新しい順に見て、`Hedgehug-Undo` の値の集合を作りながら、`Hedgehug-Author` が書き手で、`Hedgehug-Op` が merge・repair・setup・undo でなく、集合に入っていない最初のコミット c を選ぶ。c が変えたパス（`DiffTrees(c の親の木, c の木)`）ごとに `merge.Merge(path, sc, base=ReadAt(c), ours=Side{Data: ReadAt(HEAD)}, theirs=Side{Data: ReadAt(c^)}, merge.OursWins)`。タスクのファイルは結果を `model.DecodeTask` し、`ID` と `FormerIDs` は HEAD の値に戻す。ours（HEAD）と base（c の版）で違っていたフィールドの名前を「kept」として集め、そのフィールドを最後に変えたコミットの書き手を `LastChange` で添える
 - `workspace` が変わるタスクは、`Update` の中で `ix.Refresh()` してから今の配下を集め、同じワークスペースに移す（`mv --workspace` と同じ関数を使う）。すべてを1つの `s.Update(Op{Name: "undo"}, …)` で書き、`Hedgehug-Undo: <c のハッシュ>` を付ける（`Op` に `Trailers []gitrepo.Trailer` を足す）。件名の Detail は c の件名から `hedgehug: ` を除いたもの
+- 「kept」に出すのは利用者が変えたフィールドだけで、`updated`・`id`・`former_ids` は出さない（必ず base と違うため）
+- 書き手がいない（accounts がない）Store では、自分のコミットを見分けられないので `accounts are not set up in config.yaml; hedgehug undo needs them to find your operations` で 1
+- 取り消すコミットは見つかったが、書き戻すファイルがない（全部のフィールドを後から他人が変えた、または追加を取り消すファイルを他人が変えていた）ときも、`Hedgehug-Undo` を持つコミットを作る（でないと次の undo が同じコミットを選び続ける）。`Op` に `AllowEmpty bool` を足し、`Update` は変更がなくても `AllowEmpty` ならコミットする（`gitrepo.Commit` に `AllowEmpty`、空の `Paths` を許す）。出力に `  nothing to change: every field was changed later by others` を足す
 - 出力: `Undid <c の短いハッシュ> <c の件名の残り>` と、`  kept <field> (changed later by <author>)` を1行ずつ
 - `restore --at`: 時点の解釈は RFC 3339 → 日付（その日の 23:59:59 のローカル時刻）→ コミットハッシュ（`r.r.ResolveRevision`、短縮可）の順。`LogFrom(HEAD)` で時点以前の最新のコミットを探し、`ReadAt(そのコミット, TaskPath)`。なければ `<ID> did not exist at <時点>` で 1。読んだ内容の `ID`・`FormerIDs`・`Workspace` を今の値にし、`DeletedAt` はその時点の値、`Updated` は書き込みで今になる。ワークスペースが違っていたら `the workspace stays <今>; move it with hedgehug mv <ID> --workspace <その時点の名前>` を出す
 - 既存の `restore <id>`（`--at` なし）はそのまま
@@ -3498,14 +3525,14 @@ func TestE2EAliceAndBob(t *testing.T) {
           ln -s "$(command -v go)" "$RUNNER_TEMP/nogit/go"
           ln -s "$(go env GOPATH)/bin/gotestsum" "$RUNNER_TEMP/nogit/gotestsum"
           ! PATH="$RUNNER_TEMP/nogit" command -v git
-          PATH="$RUNNER_TEMP/nogit" gotestsum --format testdox -- ./...
+          CGO_ENABLED=0 PATH="$RUNNER_TEMP/nogit" gotestsum --format testdox -- ./...
 ```
 
 `go` の実体が使うツールチェーンが PATH の別のコマンドを要るなら（`go env GOROOT` の bin を指すだけで足りる）、`GOROOT/bin` の `go` と `gofmt` へのリンクにする。ローカルで同じ手順（`PATH=<そのディレクトリ> go test ./...`）を走らせて確かめる。
 
 - [ ] **Step 5: テストを通す**
 
-Run: `go test -race ./... && mkdir -p /tmp/nogit-check && ln -sf "$(command -v go)" /tmp/nogit-check/go && PATH=/tmp/nogit-check go test ./...`
+Run: `go test -race ./... && mkdir -p /tmp/nogit-check && ln -sf "$(command -v go)" /tmp/nogit-check/go && CGO_ENABLED=0 PATH=/tmp/nogit-check go test ./...`
 Expected: どちらも PASS（git を使うテストは skip と表示される）。一時ディレクトリはスクラッチパッドに作る
 
 - [ ] **Step 6: コミット**

@@ -95,7 +95,7 @@ tools/devenv/
 | `Hedgehug-Repaired` | マージコミット、修復のコミット | `<タスクかワークスペースの ULID> <修復の種類> <元の値の JSON> <その変更の author>` |
 | `Hedgehug-Undo` | undo のコミット | 取り消したコミットのハッシュ |
 
-`<フィールド>` はタスクなら `title`、`props.priority` のようにドットでつなぐ。値の JSON は1行にする。負けた側の author は、その側で merge-base 以降にそのファイルを最後に変えたコミットの `Hedgehug-Author`（なければコミットの author のメール）。修復の種類は「マージ後の修復」の表の名前（`parent_cycle`、`id_collision` など）。
+`<フィールド>` はタスクなら `title`、`props.priority` のようにドットでつなぐ。値の JSON は1行にする。負けた側の author は、その側で merge-base 以降にそのファイルを最後に変えたコミットの `Hedgehug-Author`（なければコミットの author のメール）。修復の種類は「マージ後の修復」の表の名前（`parent_cycle`、`id_collision` など）と、マージの `Notice{revived}`（削除の取り消し）を載せる `revived`（ULID はそのファイルのもの、値は `-`、author は消した側）。値の JSON は空白を含みうるので、読む側は「先頭の2語、最後の1語、その間がすべて JSON」と分ける（パス・フィールド・ULID・種類・author は空白を含まない）。同じ trailer は複数行ありうる。
 
 `Hedgehug-Op` に `merge`、`repair`、`setup`、`undo`、`revert-overwritten` を足す。
 
@@ -393,6 +393,9 @@ push の拒否と再試行の間に別の衝突が入っても、次の周のマ
 - `workspace` が戻るタスクの、今の配下（ロックの中でインデックスを `Refresh` して集める。取り消すコミットの後に足された子を含む）も、同じワークスペースへ移す。`mv --workspace` と同じく、親と子でワークスペースが違う状態を作らないため。
 - 書き込みは `Store.Update` で行い、書き込み時の検査を通す。検査で拒否された場合（取り消すと親の循環になるなど）は何も変えずにエラーを返す（終了コード 1）。変わったタスクの `updated` は今にする。
 - コミットは `Hedgehug-Op: undo`、`Hedgehug-Undo: <hash>`。取り消すものがなければ `Nothing to undo` で 0。
+- 取り消すコミットは見つかったが書き戻すファイルがない（そのコミットの変更をすべて他人が後から変えた）場合も、`Hedgehug-Undo` を持つ空のコミットを作り、「nothing to change」と表示する。作らないと、次の undo が同じコミットを選び続けるため。
+- 書き手がいない（accounts がない）Store では、自分のコミットを見分けられないので、accounts の設定を案内してエラーにする（終了コード 1）。
+- 「残したフィールド」には、`updated`・`id`・`former_ids` を出さない（必ず変わっているため）。
 
 ### `hh restore <id> --at <時点>`
 
