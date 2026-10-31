@@ -443,7 +443,7 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 	}
 	var trailers []gitrepo.Trailer
 	for _, o := range lost {
-		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Overwritten", Value: strings.Join([]string{url.PathEscape(o.Path), o.Field, o.Value, orDash(o.Author)}, " ")})
+		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Overwritten", Value: strings.Join([]string{url.PathEscape(o.Path), fieldEscaper.Replace(o.Field), o.Value, orDash(o.Author)}, " ")})
 	}
 	for _, n := range notices {
 		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Repaired", Value: strings.Join([]string{url.PathEscape(fileULID(n.Path)), string(n.Kind), "-", orDash(n.Author)}, " ")})
@@ -451,7 +451,11 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 	trailers = append(trailers, repairedTrailers(repaired)...)
 	op := store.Op{Name: "merge", Detail: name, Author: opt.Author, Account: opt.Account}
 	beforeCommit()
-	if _, err := s.CommitMerge(head, []plumbing.Hash{head, remote}, files, op, trailers); err != nil {
+	_, err = s.CommitMerge(head, []plumbing.Hash{head, remote}, files, op, trailers)
+	if errors.Is(err, gitrepo.ErrWorkTreeChanged) {
+		return ErrDirty
+	}
+	if err != nil {
 		return err
 	}
 	res.Merges++
@@ -484,6 +488,10 @@ func repairedTrailers(rs []merge.Repaired) []gitrepo.Trailer {
 	}
 	return out
 }
+
+// fieldEscaper keeps a field one word of a trailer: a yaml key or a prop name
+// can hold spaces (statuses.In Progress.color). Readers url.PathUnescape it.
+var fieldEscaper = strings.NewReplacer("%", "%25", " ", "%20")
 
 // orDash keeps an empty author a word of its own in a trailer.
 func orDash(author string) string {
@@ -678,6 +686,9 @@ func repairHead(s *store.Store, ix *index.Index, opt Options, res *Result) error
 		_, err = s.CommitMerge(head, []plumbing.Hash{head}, fixed, op, repairedTrailers(repaired))
 		if errors.Is(err, store.ErrHeadMoved) && try < tries {
 			continue
+		}
+		if errors.Is(err, gitrepo.ErrWorkTreeChanged) {
+			return ErrDirty
 		}
 		if err != nil {
 			return err

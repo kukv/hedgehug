@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"encoding/json"
 	"errors"
 	"net/url"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
+	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/merge"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
@@ -284,5 +286,37 @@ func TestTrailerPathWithSpace(t *testing.T) {
 	}
 	if got, err := url.PathUnescape(f[0]); err != nil || got != p {
 		t.Errorf("unescaped = %q, %v", got, err)
+	}
+}
+
+// A yaml key can hold a space; the field stays one word of the trailer and
+// the inbox reads it back whole.
+func TestTrailerFieldWithSpace(t *testing.T) {
+	c := newCluster(t, 2)
+	const p = "automations.yaml"
+	c.putFile(0, p, "vars:\n  my key: base\n")
+	c.sync(0)
+	c.sync(1)
+	c.putFile(0, p, "vars:\n  my key: one\n")
+	c.putFile(1, p, "vars:\n  my key: two\n")
+	c.sync(0)
+	r := c.sync(1)
+	if len(r.Overwritten) != 1 || r.Overwritten[0].Field != "vars.my key" {
+		t.Fatalf("overwritten = %+v", r.Overwritten)
+	}
+	var got []string
+	for _, res := range []Result{r, c.sync(0)} {
+		for _, it := range res.Notices {
+			if it.Kind == inbox.Overwritten {
+				var d struct{ Field string }
+				if err := json.Unmarshal(it.Detail, &d); err != nil {
+					t.Fatal(err)
+				}
+				got = append(got, d.Field)
+			}
+		}
+	}
+	if !slices.Equal(got, []string{"vars.my key"}) {
+		t.Errorf("the inbox told of %q, want vars.my key", got)
 	}
 }

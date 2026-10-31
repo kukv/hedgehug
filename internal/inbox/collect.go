@@ -136,8 +136,8 @@ func (c *commit) ids() error {
 	return nil
 }
 
-// splitTrailer splits a trailer value into its first word (unescaped), its
-// second word, the JSON value and the last word. The value can hold spaces;
+// splitTrailer splits a trailer value into its first and second words
+// (unescaped), the JSON value and the last word. The value can hold spaces;
 // the words cannot.
 func splitTrailer(v string) (first, second, value, last string, ok bool) {
 	first, rest, ok1 := strings.Cut(v, " ")
@@ -148,6 +148,9 @@ func splitTrailer(v string) (first, second, value, last string, ok bool) {
 	}
 	first, err := url.PathUnescape(first)
 	if err != nil {
+		return "", "", "", "", false
+	}
+	if second, err = url.PathUnescape(second); err != nil {
 		return "", "", "", "", false
 	}
 	return first, second, rest[:i], rest[i+1:], true

@@ -173,7 +173,11 @@ func newHistory(c *cluster) *history {
 			}
 			// path, field, JSON (which may hold spaces), author
 			value := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(v, w[0]+" "+w[1]+" "), " "+w[len(w)-1]))
-			h.lost = append(h.lost, lost{p, w[1], value})
+			field, err := url.PathUnescape(w[1])
+			if err != nil {
+				t.Fatal(err)
+			}
+			h.lost = append(h.lost, lost{p, field, value})
 		}
 		for _, v := range e.TrailerValues("Hedgehug-Repaired") {
 			w := strings.Fields(v)
