@@ -304,7 +304,7 @@ func (ss *Session) InboxRevertOf(stores []InboxStore, u model.ULID) (TaskResult,
 	}
 	// The write goes through a session of its own on the store of the item:
 	// ss is shared and keeps its store and its writer.
-	sub := &Session{Getenv: ss.Getenv, Now: ss.Now, Warn: ss.Warn, AfterWrite: ss.AfterWrite, StoreName: st.Name}
+	sub := ss.ForStore(st.Name)
 	s, ix, err := sub.Open()
 	if err != nil {
 		return TaskResult{}, err
@@ -316,7 +316,7 @@ func (ss *Session) InboxRevertOf(stores []InboxStore, u model.ULID) (TaskResult,
 	if err := NotDeleted(ix, e); err != nil {
 		return TaskResult{}, err
 	}
-	committed, err := sub.Update(s, store.Op{Name: "revert-overwritten", Task: e.ULID}, func(tx *store.Tx) error {
+	hash, err := sub.UpdateCommit(s, store.Op{Name: "revert-overwritten", Task: e.ULID}, func(tx *store.Tx) error {
 		if d.Field == "parent" || d.Field == "workspace" {
 			return sub.revertMove(tx, ix, e, d.Field, d.Value)
 		}
@@ -335,7 +335,7 @@ func (ss *Session) InboxRevertOf(stores []InboxStore, u model.ULID) (TaskResult,
 	if err := st.Box.MarkRead([]model.ULID{u}); err != nil {
 		return TaskResult{}, err
 	}
-	return TaskResult{Index: ix, ULID: e.ULID, Committed: committed}, nil
+	return TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }
 
 // inboxTaskRef names the task of the item as it is now, or as the item has
@@ -644,14 +644,14 @@ func (ss *Session) revertMove(tx *store.Tx, ix *index.Index, e *index.Entry, fie
 	case field == "parent":
 		var ok bool
 		if p, ok = ix.Task(*u); !ok {
-			return fmt.Errorf("parent: %s is not in this store: %w", u, store.ErrNotFound)
+			return newErr(KindNotFound, "task.not_found", fmt.Errorf("parent: %s is not in this store: %w", u, store.ErrNotFound), "input", u.String())
 		}
 	case u == nil:
 		return notRevertible(errors.New("workspace: the value is empty"))
 	default:
 		var ok bool
 		if w, ok = ix.Workspace(*u); !ok {
-			return fmt.Errorf("workspace: %s is not in this store: %w", u, store.ErrNotFound)
+			return newErr(KindNotFound, "workspace.not_found", fmt.Errorf("workspace: %s is not in this store: %w", u, store.ErrNotFound), "input", u.String())
 		}
 	}
 	_, err := ss.MoveInTx(tx, ix, e, p, w, root, "", "")

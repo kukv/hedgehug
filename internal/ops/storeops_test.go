@@ -165,9 +165,7 @@ func TestStoreAddErrors(t *testing.T) {
 	other := otherSession(t, ts, ts.Now())
 	_, p, _ := other.Config()
 	_, err = other.StoreAdd("gone", []string{filepath.Join(t.TempDir(), "missing.git")}, "")
-	if err == nil || KindOf(err) != KindUnknown {
-		t.Errorf("a failed clone: kind %v (%v); want KindUnknown, unwrapped", KindOf(err), err)
-	}
+	wantErr(t, err, KindInvalid, "store.clone_failed")
 	if exists(filepath.Join(p.StoresDir, "gone")) {
 		t.Error("the failed clone left its directory")
 	}
@@ -179,9 +177,7 @@ func TestStoreAddErrors(t *testing.T) {
 	if err == nil {
 		t.Fatal("the clone of a remote without a store was added")
 	}
-	if KindOf(err) != KindUnknown {
-		t.Errorf("clone of an empty remote: kind %v (%v); want KindUnknown, unwrapped", KindOf(err), err)
-	}
+	wantErr(t, err, KindInvalid, "store.clone_failed")
 	// A remote with commits but no store.
 	plain := filepath.Join(t.TempDir(), "plain.git")
 	if err := gitrepo.InitBare(plain); err != nil {

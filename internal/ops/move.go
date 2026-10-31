@@ -62,7 +62,7 @@ func (ss *Session) Move(in MoveInput) (MoveResult, error) {
 		return MoveResult{}, err
 	}
 	var res MoveResult
-	committed, err := ss.Update(s, store.Op{Name: "mv", Task: e.ULID}, func(tx *store.Tx) error {
+	hash, err := ss.UpdateCommit(s, store.Op{Name: "mv", Task: e.ULID}, func(tx *store.Tx) error {
 		var err error
 		res, err = ss.MoveInTx(tx, ix, e, p, w, in.Root, in.Before, in.After)
 		return err
@@ -70,7 +70,7 @@ func (ss *Session) Move(in MoveInput) (MoveResult, error) {
 	if err != nil {
 		return MoveResult{}, err
 	}
-	res.TaskResult = TaskResult{Index: ix, ULID: e.ULID, Committed: committed}
+	res.TaskResult = TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: commitHex(hash)}
 	return res, nil
 }
 

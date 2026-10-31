@@ -36,16 +36,18 @@ func (ss *Session) Undo() (UndoResult, error) {
 		return UndoResult{}, err
 	}
 	var res UndoResult
-	if _, err := ss.Update(s, store.Op{Name: "undo"}, func(tx *store.Tx) error {
+	hash, err := ss.UpdateCommit(s, store.Op{Name: "undo"}, func(tx *store.Tx) error {
 		var err error
 		res, err = undoInTx(tx, s, ix, acct.ID())
 		if err == nil && !res.Found {
 			return newErr(KindConflict, "undo.nothing", errors.New("nothing to undo"))
 		}
 		return err
-	}); err != nil {
+	})
+	if err != nil {
 		return UndoResult{}, err
 	}
+	res.NewCommit = commitHex(hash)
 	return res, nil
 }
 
@@ -87,6 +89,9 @@ type UndoResult struct {
 	Found   bool
 	Changed bool // a file differs from what HEAD had
 	Kept    []UndoKept
+	// NewCommit is the hex hash of the commit Undo made; "" when nothing was
+	// committed.
+	NewCommit string
 }
 
 // UndoSubject is the subject of c without the "hedgehug: " every commit of

@@ -1,13 +1,63 @@
 package ops
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/config"
+	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 )
+
+// ulidsOf is what a caller keeps of the targets it showed: their ULIDs.
+func ulidsOf(es []*index.Entry) []model.ULID {
+	out := make([]model.ULID, len(es))
+	for i, e := range es {
+		out[i] = e.ULID
+	}
+	return out
+}
+
+func TestPurgeNeedsAConfirmation(t *testing.T) {
+	ts := newTestSession(t)
+	if _, err := ts.Add(AddInput{Title: "p"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.Remove("ME-1"); err != nil {
+		t.Fatal(err)
+	}
+	for _, confirmed := range [][]model.ULID{nil, {}} {
+		_, err := ts.Purge("ME-1", confirmed)
+		wantErr(t, err, KindUsage, "purge.unconfirmed")
+	}
+	// Nothing was purged by the refusals.
+	_, _, targets, err := ts.PurgeTargets("ME-1")
+	if err != nil || len(targets) != 1 {
+		t.Fatalf("PurgeTargets after the refusals = %d targets, %v; want the task still there", len(targets), err)
+	}
+	// Other tasks than the ones that are purged do not confirm it.
+	other := model.NewULID()
+	_, err = ts.Purge("ME-1", []model.ULID{other})
+	wantErr(t, err, KindConflict, "purge.changed")
+	// PurgeUnchecked goes through without the list.
+	r, err := ts.PurgeUnchecked("ME-1")
+	if err != nil || !r.Committed || len(r.Targets) != 1 {
+		t.Fatalf("PurgeUnchecked = %+v, %v", r, err)
+	}
+	if r.Commit == "" {
+		t.Error("PurgeUnchecked left no commit hash")
+	}
+	// The purged task is gone, but Views still describes it as it was.
+	vs, err := r.Views()
+	if err != nil || len(vs) != 1 || vs[0].ID != "ME-1" || vs[0].DeletedAt == nil {
+		t.Errorf("Views of a purged task = %+v, %v; want ME-1 as it was, deleted", vs, err)
+	}
+}
 
 func TestRemoveRestorePurge(t *testing.T) {
 	ts := newTestSession(t)
@@ -50,7 +100,7 @@ func TestRemoveRestorePurge(t *testing.T) {
 	if ix == nil || e.ID != "ME-1" || len(targets) != 2 {
 		t.Fatalf("PurgeTargets = %v %v %d targets; want ME-1 and 2 targets", ix != nil, e.ID, len(targets))
 	}
-	pr, err := ts.Purge("ME-1", targets)
+	pr, err := ts.Purge("ME-1", ulidsOf(targets))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +198,7 @@ func TestPurgeChildNotDeleted(t *testing.T) {
 	if err != nil && (!strings.Contains(err.Error(), "ME-2") || !strings.HasSuffix(err.Error(), " under it is not deleted")) {
 		t.Errorf("message = %q", err)
 	}
-	_, err = ts.Purge("ME-1", nil)
+	_, err = ts.PurgeUnchecked("ME-1")
 	wantErr(t, err, KindConflict, "purge.child_not_deleted")
 	_, _, _, err = ts.PurgeTargets("ME-9")
 	wantErr(t, err, KindNotFound, "task.not_found")
@@ -179,7 +229,7 @@ func TestPurgeWithStaleTargetsIsConflict(t *testing.T) {
 	if _, err := ts.Remove("ME-1"); err != nil {
 		t.Fatal(err)
 	}
-	_, err = ts.Purge("ME-1", targets)
+	_, err = ts.Purge("ME-1", ulidsOf(targets))
 	wantErr(t, err, KindConflict, "purge.changed")
 	if err != nil && err.Error() != "the tasks under it changed after the confirmation; run purge again" {
 		t.Errorf("message = %q", err)
@@ -194,7 +244,7 @@ func TestPurgeWithStaleTargetsIsConflict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.Purge("ME-1", targets); err != nil {
+	if _, err := ts.Purge("ME-1", ulidsOf(targets)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -212,7 +262,7 @@ func TestCurrentOfPurgedTaskIsGone(t *testing.T) {
 	if _, err := ts.Remove("ME-1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.Purge("ME-1", nil); err != nil {
+	if _, err := ts.PurgeUnchecked("ME-1"); err != nil {
 		t.Fatal(err)
 	}
 	_, err = current(ix, e)
@@ -261,20 +311,39 @@ func TestDescendants(t *testing.T) {
 
 func TestRestoreAtByTimeAndCommit(t *testing.T) {
 	ts := newTestSession(t)
-	// Commit times have a second's precision and come from the real clock.
-	time.Sleep(1100 * time.Millisecond)
-	if _, err := ts.Add(AddInput{Title: "v1"}); err != nil {
+	if _, err := ts.Add(AddInput{Title: "orig"}); err != nil {
 		t.Fatal(err)
 	}
-	s, _, _ := ts.Open()
-	head, err := s.Repo().Head()
+	// v1 is committed with a time in 2020 by hand, so that no point of time
+	// between it and the later commits needs the clock to move.
+	_, e, err := ts.Entry()
 	if err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(1100 * time.Millisecond)
-	at := time.Now().UTC().Format(time.RFC3339)
-	time.Sleep(1100 * time.Millisecond)
-	for _, point := range []string{at, head.String()[:7]} {
+	s, err := ts.OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, ix, _ := ts.Open()
+	task, _ := ts.Resolve(ix, "ME-1")
+	b, err := s.TaskBytes(task.ULID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rel := model.TaskPath(task.ULID)
+	if err := os.WriteFile(filepath.Join(e.Path, filepath.FromSlash(rel)), bytes.Replace(b, []byte("title: orig"), []byte("title: v1"), 1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	author, err := config.CommitAuthor(config.Account{}, false, ts.Getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v1, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: author, When: time.Date(2020, 1, 1, 20, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts.Loc = time.UTC
+	for _, point := range []string{"2020-01-02T00:00:00Z", "2020-01-01", v1.String()[:7]} {
 		if _, err := ts.Set("ME-1", []Assign{{Key: "title", Op: "=", Value: "later"}}); err != nil {
 			t.Fatal(err)
 		}
@@ -285,8 +354,8 @@ func TestRestoreAtByTimeAndCommit(t *testing.T) {
 		if err != nil {
 			t.Fatalf("RestoreAt(%q): %v", point, err)
 		}
-		if !res.Committed || res.Note != "" || res.Index == nil {
-			t.Errorf("RestoreAt(%q) = committed %v note %q", point, res.Committed, res.Note)
+		if !res.Committed || res.Note != "" || res.Index == nil || res.Commit == "" {
+			t.Errorf("RestoreAt(%q) = committed %v commit %q note %q", point, res.Committed, res.Commit, res.Note)
 		}
 		_, ix, _ := ts.Open()
 		e, _ := ts.Resolve(ix, "ME-1")
@@ -297,6 +366,11 @@ func TestRestoreAtByTimeAndCommit(t *testing.T) {
 			t.Errorf("result ULID = %v; want %v", res.ULID, e.ULID)
 		}
 	}
+	// A date is read in the session's zone: 2020-01-01 ends before v1 is
+	// committed in a zone far enough east.
+	ts.Loc = time.FixedZone("east", 14*3600)
+	_, err = ts.RestoreAt("ME-1", "2020-01-01")
+	wantErr(t, err, KindNotFound, "restore_at.not_found")
 }
 
 func TestRestoreAtErrors(t *testing.T) {
@@ -406,7 +480,7 @@ func TestSameTasks(t *testing.T) {
 		{[]*index.Entry{a}, []*index.Entry{b}, false},
 		{nil, nil, true},
 	} {
-		if got := sameTasks(c.x, c.y); got != c.want {
+		if got := sameTasks(c.x, ulidsOf(c.y)); got != c.want {
 			t.Errorf("sameTasks = %v; want %v", got, c.want)
 		}
 	}

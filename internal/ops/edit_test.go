@@ -23,9 +23,12 @@ func TestEditChangesTitleAndRefusesULIDChange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := ts.ApplyEdit(es, nt)
+	if err := ts.PrepareEdit(es, nt); err != nil {
+		t.Fatal(err)
+	}
+	r, err := ts.WriteEdit(es, nt)
 	if err != nil || !r.Committed || r.ULID != es.Entry.ULID {
-		t.Fatalf("ApplyEdit = %+v, %v", r, err)
+		t.Fatalf("WriteEdit = %+v, %v", r, err)
 	}
 	_, ix, err := ts.Open()
 	if err != nil {
@@ -186,7 +189,7 @@ func TestCheckEditOfBrokenTaskChecksOnlyULID(t *testing.T) {
 	}
 }
 
-func TestApplyEditRefusesWhenFileChanged(t *testing.T) {
+func TestWriteEditRefusesWhenFileChanged(t *testing.T) {
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -202,9 +205,10 @@ func TestApplyEditRefusesWhenFileChanged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = ts.ApplyEdit(es, nt)
-	if err == nil || err.Error() != "the task changed while editing" {
-		t.Errorf("ApplyEdit = %v; want the task changed while editing", err)
+	_, err = ts.WriteEdit(es, nt)
+	wantErr(t, err, KindConflict, "edit.changed")
+	if err != nil && err.Error() != "the task changed while editing" {
+		t.Errorf("WriteEdit = %v; want the task changed while editing", err)
 	}
 }
 

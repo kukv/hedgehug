@@ -57,14 +57,14 @@ func (ts *testSession) useAccount() {
 // wantErr checks that err has the kind and the code.
 func wantErr(t *testing.T, err error, kind Kind, code string) {
 	t.Helper()
-	var e *Error
+	e := AsError(err)
 	if err == nil {
 		t.Fatalf("no error; want %v %q", kind, code)
 	}
 	if KindOf(err) != kind {
 		t.Errorf("KindOf(%v) = %v; want %v", err, KindOf(err), kind)
 	}
-	if code != "" && (!asError(err, &e) || e.Code != code) {
+	if code != "" && e.Code != code {
 		t.Errorf("Code of %v = %+v; want %q", err, e, code)
 	}
 }
@@ -242,7 +242,7 @@ func TestWatchAddsAndRemovesMe(t *testing.T) {
 	}
 
 	ts.useAccount()
-	ts.writerDone = false // the writer is read once per session; read it again
+	ts.resetWriter() // the writer is read once per session; read it again
 	watchers := func() []string {
 		t.Helper()
 		_, ix, err := ts.Open()
@@ -426,7 +426,7 @@ func TestWriterHost(t *testing.T) {
 		t.Errorf("WriterHost without an account = %q, %v", h, err)
 	}
 	ts.useAccount()
-	ts.writerDone = false
+	ts.resetWriter()
 	if h, err := ts.WriterHost(); err != nil || h != "github.com" {
 		t.Errorf("WriterHost = %q, %v; want github.com", h, err)
 	}

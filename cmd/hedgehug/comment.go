@@ -85,10 +85,11 @@ func (a *app) commentAdd(arg string, text []string) error {
 }
 
 func (a *app) commentEdit(arg string) error {
-	s, ref, c, err := a.ss.OpenComment(arg)
+	ces, err := a.ss.OpenComment(arg)
 	if err != nil {
 		return err
 	}
+	s, ref, c := ces.Store, ces.Ref, ces.Comment
 	if err := ops.CheckCommentEditable(ref, c); err != nil {
 		return err
 	}
@@ -98,7 +99,7 @@ func (a *app) commentEdit(arg string) error {
 		return err
 	}
 	body := ops.CommentBody(string(edited))
-	p, err := a.ss.PrepareCommentEdit(s, ref, c, body)
+	p, err := a.ss.PrepareCommentEdit(ces, body)
 	if body == "" || body == c.Body {
 		if rerr := os.Remove(path); rerr != nil {
 			return rerr

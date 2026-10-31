@@ -109,6 +109,10 @@ func TestSyncAllReportsFailedStore(t *testing.T) {
 	if len(reps) != 1 || reps[0].Err == nil || reps[0].Store != "me" {
 		t.Errorf("reports = %+v; want the failed store with Err set", reps)
 	}
+	// Error is filled with Err's message, for a caller that has no words of its own.
+	if len(reps) == 1 && (reps[0].Error == "" || reps[0].Error != reps[0].Err.Error()) {
+		t.Errorf("report Error = %q; want %q", reps[0].Error, reps[0].Err)
+	}
 }
 
 func TestBeforeCommandStartsNothingWithoutRemote(t *testing.T) {

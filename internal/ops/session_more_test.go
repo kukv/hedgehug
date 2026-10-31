@@ -197,11 +197,30 @@ func TestSyncOptions(t *testing.T) {
 func TestEntryErrors(t *testing.T) {
 	ts := newTestSession(t)
 	ts.StoreName = "nope"
-	if _, _, err := ts.Entry(); err == nil {
-		t.Error("Entry with an unknown store did not fail")
+	_, _, err := ts.Entry()
+	wantErr(t, err, KindNotFound, "store.not_found")
+	if err != nil && !strings.HasPrefix(err.Error(), `no store is named "nope"`) {
+		t.Errorf("message = %q", err)
 	}
-	if _, err := ts.OpenStore(); err == nil {
-		t.Error("OpenStore with an unknown store did not fail")
+	_, err = ts.OpenStore()
+	wantErr(t, err, KindNotFound, "store.not_found")
+
+	// Several stores and none named: KindInvalid, not KindUsage (exit 1).
+	ts.StoreName = ""
+	c, p, err := ts.Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AddStore("two", filepath.Join(p.StoresDir, "two"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = ts.Entry()
+	wantErr(t, err, KindInvalid, "store.choose")
+	if err != nil && !strings.HasPrefix(err.Error(), "several stores are set up; pick one with --store") {
+		t.Errorf("message = %q", err)
 	}
 }
 
@@ -232,6 +251,7 @@ func TestRunSyncWithoutRemotes(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, runErr := ts.RunSync(s, opt, true)
+
 	st, err := sync.ReadState(s)
 	if err != nil {
 		t.Fatal(err)
@@ -239,10 +259,14 @@ func TestRunSyncWithoutRemotes(t *testing.T) {
 	if st.LastAttempt.IsZero() {
 		t.Error("RunSync did not record the attempt")
 	}
-	if (runErr != nil) != (st.LastError != "") {
-		t.Errorf("run error %v, LastError %q: they must agree", runErr, st.LastError)
+	// With no remote there is nothing to sync: it succeeds and says so.
+	if runErr != nil {
+		t.Errorf("RunSync without remotes = %v; want nil", runErr)
 	}
-	if runErr != nil && !st.ErrorReported {
-		t.Error("ErrorReported is false for reported = true")
+	if st.LastError != "" || st.ErrorReported {
+		t.Errorf("state after RunSync without remotes: LastError %q, ErrorReported %v; want none", st.LastError, st.ErrorReported)
+	}
+	if !st.LastSuccess.Equal(ts.Now()) {
+		t.Errorf("LastSuccess = %v; want %v", st.LastSuccess, ts.Now())
 	}
 }

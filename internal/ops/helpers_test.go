@@ -104,6 +104,14 @@ func newTestSession(t *testing.T) *testSession {
 	return ts
 }
 
+// resetWriter forgets the writer the session cached, so that it is read from
+// config.yaml again after a test changed the accounts.
+func (ss *Session) resetWriter() {
+	ss.writerMu.Lock()
+	defer ss.writerMu.Unlock()
+	ss.writerDone = false
+}
+
 // addBareRemote creates a bare repository and makes it the remote of the
 // test store, in config.yaml. It returns the path of the remote.
 func addBareRemote(t *testing.T, ts *testSession) string {

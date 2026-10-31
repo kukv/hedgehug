@@ -8,6 +8,7 @@ import (
 	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/sync"
 )
 
 // Kind is what an error means to the caller: the CLI turns it into an exit
@@ -48,15 +49,25 @@ func newErr(k Kind, code string, err error, args ...any) *Error {
 	return e
 }
 
-// KindOf is the Kind of err: that of the outermost *Error, or the one the
-// error of a lower layer stands for.
-func KindOf(err error) Kind {
+// AsError is the *Error that err stands for: the outermost one in its chain,
+// or else what classify makes of the error of a lower layer. It is nil for a
+// nil err, and has KindUnknown for an error nothing classifies. The server
+// reads Kind, Code and Args from it.
+func AsError(err error) *Error {
+	if err == nil {
+		return nil
+	}
 	var e *Error
 	if errors.As(err, &e) {
-		return e.Kind
+		return e
 	}
-	if c := classify(err); c != nil {
-		return c.Kind
+	return classify(err)
+}
+
+// KindOf is the Kind of err: that of its AsError.
+func KindOf(err error) Kind {
+	if e := AsError(err); e != nil {
+		return e.Kind
 	}
 	return KindUnknown
 }
@@ -72,13 +83,17 @@ func classify(err error) *Error {
 	case errors.As(err, &ae):
 		return newErr(KindAmbiguous, "task.ambiguous", err, "input", ae.Input)
 	case errors.Is(err, store.ErrNotFound):
-		return newErr(KindNotFound, "task.not_found", err)
+		return newErr(KindNotFound, "not_found", err)
 	case errors.As(err, &ve):
 		return newErr(KindInvalid, "schema.violation", err)
 	case errors.As(err, &wt):
 		return newErr(KindConflict, "workspace.taken", err)
 	case errors.Is(err, store.ErrLocked):
 		return newErr(KindConflict, "store.locked", err)
+	case errors.Is(err, sync.ErrDirty):
+		return newErr(KindConflict, "sync.dirty", err)
+	case errors.Is(err, sync.ErrUnrelated):
+		return newErr(KindConflict, "sync.unrelated", err)
 	case errors.Is(err, config.ErrNoStores):
 		return newErr(KindConflict, "store.none", err)
 	}

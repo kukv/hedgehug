@@ -35,6 +35,7 @@ type WorkspaceResult struct {
 	Index     *index.Index
 	Workspace *model.Workspace
 	Committed bool
+	Commit    string     // hex hash of the commit made; "" when nothing was committed
 	OldName   string     // WorkspaceRename: the name before
 	IDs       []IDChange // WorkspacePrefix: the ids of the renumbered tasks
 	// Renumbered is len(IDs).
@@ -112,14 +113,14 @@ func (ss *Session) WorkspaceAdd(name, prefix string) (WorkspaceResult, error) {
 		return WorkspaceResult{}, err
 	}
 	w := &model.Workspace{ULID: model.NewULID(), Name: name, IDPrefix: prefix, PrefixSet: ss.Now()}
-	committed, err := ss.Update(s, workspaceOp(w.ULID), func(tx *store.Tx) error {
+	hash, err := ss.UpdateCommit(s, workspaceOp(w.ULID), func(tx *store.Tx) error {
 		tx.SetDetail(fmt.Sprintf("add %s (%s)", w.Name, w.IDPrefix))
 		return tx.PutWorkspace(w)
 	})
 	if err != nil {
 		return WorkspaceResult{}, err
 	}
-	return WorkspaceResult{Index: ix, Workspace: w, Committed: committed}, nil
+	return WorkspaceResult{Index: ix, Workspace: w, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }
 
 // WorkspaceRename renames the workspace arg names.
@@ -137,7 +138,7 @@ func (ss *Session) WorkspaceRename(arg, name string) (WorkspaceResult, error) {
 	}
 	var old string
 	var w *model.Workspace
-	committed, err := ss.Update(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
+	hash, err := ss.UpdateCommit(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
 		var err error
 		if w, err = tx.Workspace(ws.ULID); err != nil {
 			return err
@@ -150,7 +151,7 @@ func (ss *Session) WorkspaceRename(arg, name string) (WorkspaceResult, error) {
 	if err != nil {
 		return WorkspaceResult{}, err
 	}
-	return WorkspaceResult{Index: ix, Workspace: w, Committed: committed, OldName: old}, nil
+	return WorkspaceResult{Index: ix, Workspace: w, Committed: !hash.IsZero(), Commit: commitHex(hash), OldName: old}, nil
 }
 
 // WorkspacePrefix changes the id prefix of the workspace arg names and
@@ -181,7 +182,7 @@ func (ss *Session) WorkspacePrefix(arg, prefix string) (WorkspaceResult, error) 
 	var w *model.Workspace
 	var tasks []*model.Task
 	var oldIDs []string
-	committed, err := ss.Update(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
+	hash, err := ss.UpdateCommit(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
 		var err error
 		if w, err = tx.Workspace(ws.ULID); err != nil {
 			return err
@@ -232,7 +233,7 @@ func (ss *Session) WorkspacePrefix(arg, prefix string) (WorkspaceResult, error) 
 	if err != nil {
 		return WorkspaceResult{}, err
 	}
-	r := WorkspaceResult{Index: ix, Workspace: w, Committed: committed, Renumbered: len(tasks)}
+	r := WorkspaceResult{Index: ix, Workspace: w, Committed: !hash.IsZero(), Commit: commitHex(hash), Renumbered: len(tasks)}
 	for i, t := range tasks {
 		r.IDs = append(r.IDs, IDChange{Old: oldIDs[i], New: t.ID})
 	}
@@ -254,7 +255,7 @@ func (ss *Session) WorkspaceRemove(arg string) (WorkspaceResult, error) {
 			fmt.Errorf("workspace %s still has %d tasks; move them with hedgehug mv --workspace or purge them", ws.Name, n))
 	}
 	w := ws
-	committed, err := ss.Update(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
+	hash, err := ss.UpdateCommit(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
 		var err error
 		if w, err = tx.Workspace(ws.ULID); err != nil {
 			return err
@@ -265,7 +266,7 @@ func (ss *Session) WorkspaceRemove(arg string) (WorkspaceResult, error) {
 	if err != nil {
 		return WorkspaceResult{}, err
 	}
-	return WorkspaceResult{Index: ix, Workspace: w, Committed: committed}, nil
+	return WorkspaceResult{Index: ix, Workspace: w, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }
 
 // WorkspaceList lists the workspaces of the store, by name, with the number

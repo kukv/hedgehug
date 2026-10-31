@@ -59,6 +59,9 @@ type MigrationPlan struct {
 	Schema  *schema.Schema
 	Changed []*model.Task
 	Skipped []model.ULID
+	// Commit is the hex hash of the commit a migration made; "" for a dry
+	// run and when nothing changed.
+	Commit string
 }
 
 // Migrate applies m to the schema of the store and to its tasks. With dryRun
@@ -79,7 +82,7 @@ func (ss *Session) Migrate(m schema.Migration, dryRun bool) (*index.Index, *Migr
 	// The plan is made under the store lock, from the schema Update has
 	// just read, so that no write in between is lost.
 	var p *MigrationPlan
-	if _, err := ss.Update(s, store.Op{Name: "migrate", SkipTransitions: true}, func(tx *store.Tx) error {
+	hash, err := ss.UpdateCommit(s, store.Op{Name: "migrate", SkipTransitions: true}, func(tx *store.Tx) error {
 		var err error
 		if p, err = planMigration(s, ix, m); err != nil {
 			return err
@@ -90,7 +93,8 @@ func (ss *Session) Migrate(m schema.Migration, dryRun bool) (*index.Index, *Migr
 			}
 		}
 		return tx.PutSchema(p.Schema)
-	}); err != nil {
+	})
+	if err != nil {
 		// Name the task: the migration writes many.
 		var ve *store.ValidationError
 		if errors.As(err, &ve) {
@@ -98,6 +102,7 @@ func (ss *Session) Migrate(m schema.Migration, dryRun bool) (*index.Index, *Migr
 		}
 		return nil, nil, err
 	}
+	p.Commit = commitHex(hash)
 	if err := ix.Refresh(); err != nil {
 		return nil, nil, err
 	}

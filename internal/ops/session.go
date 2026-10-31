@@ -4,7 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	gosync "sync"
 	"time"
+
+	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/inbox"
@@ -19,20 +22,53 @@ import (
 // as the one in the background, to end.
 const syncLockWait = 5 * time.Minute
 
-// Session is what one caller (a CLI run, the GUI server) works through: the
-// outside world it sees and the store it works on.
+// Session is what one caller works through: the outside world it sees and
+// the store it works on. The CLI makes one per run and the GUI server one per
+// request, so that the warnings and the writer it reads are those of the one
+// caller. Operations never assign to its fields; what it caches is guarded
+// by a mutex, so concurrent operations on one Session are safe.
+//
+// Every exported field is copied by ForStore.
 type Session struct {
 	Getenv     func(string) string
 	Now        func() time.Time
+	Loc        *time.Location                            // where a date without a zone is read; nil is time.Local
 	StoreName  string                                    // --store; "" selects as config.Select does
 	Warn       func(msg string)                          // warnings; the CLI prints "warning: "+msg to stderr
 	AfterWrite func(s *store.Store, e config.StoreEntry) // after a commit; nil does nothing more
+	// BeforeUpdate lets a test write to the store after an operation read its
+	// index and before it writes, as another process could.
+	BeforeUpdate func()
 
-	// the writer of the store, read from config.yaml once per session
+	// the writer of the store, read from config.yaml once per session; an
+	// error is not kept, so the next call reads again
+	writerMu   gosync.Mutex
 	writerDone bool
 	writerAcct config.Account
 	writerOK   bool
-	writerErr  error
+}
+
+// ForStore is a session of its own on the store name, with the same outside
+// world and hooks as ss. Not a copy of ss: that would carry the writer ss
+// cached for another store.
+func (ss *Session) ForStore(name string) *Session {
+	return &Session{
+		Getenv:       ss.Getenv,
+		Now:          ss.Now,
+		Loc:          ss.Loc,
+		StoreName:    name,
+		Warn:         ss.Warn,
+		AfterWrite:   ss.AfterWrite,
+		BeforeUpdate: ss.BeforeUpdate,
+	}
+}
+
+// location is where a date without a zone is read.
+func (ss *Session) location() *time.Location {
+	if ss.Loc != nil {
+		return ss.Loc
+	}
+	return time.Local
 }
 
 func (ss *Session) warn(msg string) {
@@ -59,9 +95,22 @@ func (ss *Session) Entry() (*config.Config, config.StoreEntry, error) {
 	}
 	e, err := c.Select(ss.StoreName)
 	if err != nil {
-		return nil, config.StoreEntry{}, err
+		return nil, config.StoreEntry{}, selectError(ss.StoreName, err)
 	}
 	return c, e, nil
+}
+
+// selectError classifies what config.Select refuses: a name that is no
+// store, or no name when there are several. KindInvalid, not KindUsage: the
+// CLI exits 1 for both.
+func selectError(name string, err error) error {
+	switch {
+	case errors.Is(err, config.ErrNoStores):
+		return err
+	case name != "":
+		return newErr(KindNotFound, "store.not_found", err, "name", name)
+	}
+	return newErr(KindInvalid, "store.choose", err)
 }
 
 // OpenStore opens the store the session works on.
@@ -87,13 +136,19 @@ func (ss *Session) Open() (*store.Store, *index.Index, error) {
 }
 
 // Writer returns the account that writes to the store the session works
-// on; ok is false when the store has none. It reads the config once.
+// on; ok is false when the store has none. It reads the config once; a
+// failed read is not kept.
 func (ss *Session) Writer() (acct config.Account, ok bool, err error) {
+	ss.writerMu.Lock()
+	defer ss.writerMu.Unlock()
 	if !ss.writerDone {
-		ss.writerDone = true
-		ss.writerAcct, ss.writerOK, ss.writerErr = ss.loadWriter()
+		acct, ok, err = ss.loadWriter()
+		if err != nil {
+			return config.Account{}, false, err
+		}
+		ss.writerDone, ss.writerAcct, ss.writerOK = true, acct, ok
 	}
-	return ss.writerAcct, ss.writerOK, ss.writerErr
+	return ss.writerAcct, ss.writerOK, nil
 }
 
 func (ss *Session) loadWriter() (config.Account, bool, error) {
@@ -114,28 +169,45 @@ func (ss *Session) AccountID() (string, error) {
 	return acct.ID(), nil
 }
 
-// Update runs one operation as one commit. The author is the store's
-// account, or the git config when the store has none. committed is false
-// when the operation changed nothing.
+// Update is UpdateCommit for the callers that need only to know whether a
+// commit was made.
 func (ss *Session) Update(s *store.Store, op store.Op, fn func(*store.Tx) error) (committed bool, err error) {
+	h, err := ss.UpdateCommit(s, op, fn)
+	return !h.IsZero(), err
+}
+
+// UpdateCommit runs one operation as one commit and returns its hash, the
+// zero hash when the operation changed nothing. The author is the store's
+// account, or the git config when the store has none.
+func (ss *Session) UpdateCommit(s *store.Store, op store.Op, fn func(*store.Tx) error) (plumbing.Hash, error) {
 	acct, ok, err := ss.Writer()
 	if err != nil {
-		return false, err
+		return plumbing.ZeroHash, err
 	}
 	author, err := config.CommitAuthor(acct, ok, ss.Getenv)
 	if err != nil {
-		return false, err
+		return plumbing.ZeroHash, err
 	}
 	op.Author = author
 	if ok {
 		op.Account = acct.ID()
 	}
-	beforeUpdate()
-	committed, err = s.Update(op, fn)
-	if err == nil && committed {
+	if ss.BeforeUpdate != nil {
+		ss.BeforeUpdate()
+	}
+	h, err := s.UpdateCommit(op, fn)
+	if err == nil && !h.IsZero() {
 		ss.markWritten(s)
 	}
-	return committed, err
+	return h, err
+}
+
+// commitHex is the hex form of a commit hash, "" for the zero hash.
+func commitHex(h plumbing.Hash) string {
+	if h.IsZero() {
+		return ""
+	}
+	return h.String()
 }
 
 // markWritten notes that s has a commit to push and hands the write to
@@ -224,6 +296,9 @@ func (ss *Session) Resolve(ix *index.Index, arg string) (*index.Entry, error) {
 		return nil, newErr(KindAmbiguous, "task.ambiguous", &ambiguousError{input: arg, lines: lines}, "input", arg)
 	}
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, newErr(KindNotFound, "task.not_found", err, "input", arg)
+		}
 		return nil, classify(err)
 	}
 	e, _ := ix.Task(ulid)

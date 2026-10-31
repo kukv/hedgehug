@@ -20,7 +20,7 @@ import (
 type SyncReport struct {
 	Store       string        `json:"store"`
 	NoRemote    bool          `json:"no_remote,omitempty"`
-	Error       string        `json:"error,omitempty"` // set by the caller from Err, in its own words
+	Error       string        `json:"error,omitempty"` // Sync sets it to Err's message; the CLI puts its own words
 	Merges      int           `json:"merges"`
 	Pushed      []string      `json:"pushed"`
 	Overwritten []Overwritten `json:"overwritten"`
@@ -69,7 +69,7 @@ func (ss *Session) Sync(all bool) ([]SyncReport, error) {
 		r, err := ss.SyncStore(c, e)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("sync %s: %w", e.Name, err))
-			r.Err = err
+			r.Err, r.Error = err, err.Error()
 		}
 		out = append(out, r)
 	}

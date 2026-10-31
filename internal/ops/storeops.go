@@ -166,7 +166,8 @@ func (ss *Session) StoreAdd(name string, remotes []string, path string) (StoreAd
 	existed := statErr == nil
 	// A failed clone removes what it made itself.
 	if _, err := gitrepo.Clone(remotes[0], dir); err != nil {
-		return StoreAddResult{}, err
+		// KindInvalid, not KindUsage: the CLI exits 1.
+		return StoreAddResult{}, newErr(KindInvalid, "store.clone_failed", err, "remote", remotes[0])
 	}
 	undo := func(err error) error { return errors.Join(err, clearDir(dir, existed)) }
 	s, err := store.Open(dir)

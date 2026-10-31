@@ -12,7 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/store"
 )
 
-var errChangedWhileEditing = errors.New("the task changed while editing")
+var errChangedWhileEditing = newErr(KindConflict, "edit.changed", errors.New("the task changed while editing"))
 
 // EditSession is what edit needs between reading the file and writing the
 // edited bytes back: the CLI opens $EDITOR in between, the server takes
@@ -121,7 +121,7 @@ func (ss *Session) PrepareEdit(es *EditSession, t *model.Task) error {
 // the file changed since BeginEdit.
 func (ss *Session) WriteEdit(es *EditSession, t *model.Task) (TaskResult, error) {
 	s, e := es.Store, es.Entry
-	committed, err := ss.Update(s, store.Op{Name: "edit", Task: e.ULID}, func(tx *store.Tx) error {
+	hash, err := ss.UpdateCommit(s, store.Op{Name: "edit", Task: e.ULID}, func(tx *store.Tx) error {
 		cur, err := s.TaskBytes(e.ULID)
 		if err != nil {
 			return err
@@ -134,11 +134,21 @@ func (ss *Session) WriteEdit(es *EditSession, t *model.Task) (TaskResult, error)
 	if err != nil {
 		return TaskResult{}, err
 	}
-	return TaskResult{Index: es.Index, ULID: e.ULID, Committed: committed}, nil
+	return TaskResult{Index: es.Index, ULID: e.ULID, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }
 
-// ApplyEdit is PrepareEdit and WriteEdit.
-func (ss *Session) ApplyEdit(es *EditSession, t *model.Task) (TaskResult, error) {
+// Edit replaces the file of the task arg names with edited, checked as
+// CheckEdit does. It is the one call for the server; the CLI opens $EDITOR
+// between BeginEdit and CheckEdit.
+func (ss *Session) Edit(arg string, edited []byte) (TaskResult, error) {
+	es, err := ss.BeginEdit(arg)
+	if err != nil {
+		return TaskResult{}, err
+	}
+	t, err := CheckEdit(es.Index, es.Entry.ULID, es.Old, edited)
+	if err != nil {
+		return TaskResult{}, err
+	}
 	if err := ss.PrepareEdit(es, t); err != nil {
 		return TaskResult{}, err
 	}

@@ -29,6 +29,7 @@ type env struct {
 	getenv         func(string) string
 	isTerminal     func(any) bool // reports whether a stream is a terminal
 	now            func() time.Time
+	beforeUpdate   func() // for tests: runs before each write; nil in the binary
 }
 
 func main() {
@@ -52,9 +53,10 @@ func isTerminal(f any) bool {
 func run(args []string, e *env) int {
 	a := &app{env: e}
 	a.ss = &ops.Session{
-		Getenv: e.getenv,
-		Now:    e.now,
-		Warn:   func(m string) { _, _ = fmt.Fprintln(e.stderr, "warning: "+m) },
+		Getenv:       e.getenv,
+		Now:          e.now,
+		BeforeUpdate: e.beforeUpdate,
+		Warn:         func(m string) { _, _ = fmt.Fprintln(e.stderr, "warning: "+m) },
 		AfterWrite: func(s *store.Store, en config.StoreEntry) {
 			if !ops.SyncsInBackground(en) {
 				return

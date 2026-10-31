@@ -22,11 +22,11 @@ func TestCommentAddEditRemove(t *testing.T) {
 	if err != nil || !r.Committed || r.Comment.Body != "second\n" {
 		t.Fatalf("CommentEdit = %+v, %v", r, err)
 	}
-	_, _, got, err := ts.OpenComment(id)
+	ces, err := ts.OpenComment(id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if CommentBody(got.Body) != "second\n" {
+	if got := ces.Comment; CommentBody(got.Body) != "second\n" {
 		t.Errorf("body = %q; want second", got.Body)
 	}
 	rm, err := ts.CommentRemove(id)
@@ -36,7 +36,7 @@ func TestCommentAddEditRemove(t *testing.T) {
 	if _, err := ts.CommentAdd("ME-1", ""); KindOf(err) != KindInvalid {
 		t.Errorf("empty comment kind = %v; want KindInvalid", KindOf(err))
 	}
-	if _, _, _, err := ts.OpenComment("01JZZZZZZZZZZZZZZZZZZZZZZZ"); KindOf(err) != KindNotFound {
+	if _, err := ts.OpenComment("01JZZZZZZZZZZZZZZZZZZZZZZZ"); KindOf(err) != KindNotFound {
 		t.Errorf("unknown comment kind = %v; want KindNotFound", KindOf(err))
 	}
 }
@@ -82,18 +82,18 @@ func TestOpenCommentErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, arg := range []string{"abc", "01JZZZZZZZZZZZZZZZZZZZZZZZ"} {
-		_, _, _, err := ts.OpenComment(arg)
+		_, err := ts.OpenComment(arg)
 		wantErr(t, err, KindNotFound, "comment.not_found")
 		var e *Error
 		if !asError(err, &e) || e.Args["input"] != arg {
 			t.Errorf("Args = %+v; want input %q", e, arg)
 		}
 	}
-	_, _, _, err := ts.OpenComment("abc")
+	_, err := ts.OpenComment("abc")
 	if want := `comment "abc": give the full ULID of the comment: not found`; err == nil || err.Error() != want {
 		t.Errorf("message = %v; want %q", err, want)
 	}
-	_, _, _, err = ts.OpenComment("01JZZZZZZZZZZZZZZZZZZZZZZZ")
+	_, err = ts.OpenComment("01JZZZZZZZZZZZZZZZZZZZZZZZ")
 	if want := `comment "01JZZZZZZZZZZZZZZZZZZZZZZZ": not found`; err == nil || err.Error() != want {
 		t.Errorf("message = %v; want %q", err, want)
 	}
@@ -108,9 +108,9 @@ func TestOpenCommentIsCaseInsensitive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, ref, got, err := ts.OpenComment(strings.ToLower(c.Ref.Comment.String()))
-	if err != nil || ref != c.Ref || got.Body != "x\n" {
-		t.Errorf("OpenComment = %+v %+v, %v", ref, got, err)
+	ces, err := ts.OpenComment(strings.ToLower(c.Ref.Comment.String()))
+	if err != nil || ces.Ref != c.Ref || ces.Comment.Body != "x\n" || ces.Store == nil {
+		t.Errorf("OpenComment = %+v, %v", ces, err)
 	}
 }
 
@@ -149,17 +149,25 @@ func TestCommentEditCases(t *testing.T) {
 		t.Errorf("message = %q; want %q", err, want)
 	}
 	// The comment changed since the caller read it.
-	s, ref, old, err := ts.OpenComment(id)
+	ces, err := ts.OpenComment(id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := ts.CommentEdit(id, "two\n"); err != nil {
 		t.Fatal(err)
 	}
-	_, err = ts.CommentEditFrom(s, ref, old, "three\n")
-	if err == nil || err.Error() != "the comment changed while editing" {
-		t.Errorf("stale CommentEditFrom = %v; want the comment changed while editing", err)
+	pce, err := ts.PrepareCommentEdit(ces, "three\n")
+	if err != nil {
+		t.Fatal(err)
 	}
+	_, err = ts.WriteCommentEdit(pce)
+	wantErr(t, err, KindConflict, "comment.changed")
+	if err != nil && err.Error() != "the comment changed while editing" {
+		t.Errorf("stale WriteCommentEdit = %v; want the comment changed while editing", err)
+	}
+	// A body of white space only is refused whoever cleaned it.
+	_, err = ts.CommentEdit(id, " \n\t")
+	wantErr(t, err, KindInvalid, "comment.empty")
 	if _, err := ts.CommentRemove(id); err != nil {
 		t.Fatal(err)
 	}

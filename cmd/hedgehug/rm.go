@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/index"
+	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/ops"
 )
 
@@ -68,20 +69,28 @@ func (a *app) restore(arg string) error {
 
 func (a *app) purge(arg string, yes bool) error {
 	// Without --yes the targets are listed and confirmed first; Purge then
-	// refuses when they changed. With it, Purge works from the tasks as they
-	// are under the lock.
-	var confirmed []*index.Entry
-	if !yes {
-		ix, _, targets, err := a.ss.PurgeTargets(arg)
+	// refuses when they changed. With it, PurgeUnchecked works from the tasks
+	// as they are under the lock.
+	var res ops.AffectedResult
+	var err error
+	if yes {
+		res, err = a.ss.PurgeUnchecked(arg)
+	} else {
+		var ix *index.Index
+		var targets []*index.Entry
+		ix, _, targets, err = a.ss.PurgeTargets(arg)
 		if err != nil {
 			return err
 		}
-		if err := a.confirm(ix, targets); err != nil {
+		if err = a.confirm(ix, targets); err != nil {
 			return err
 		}
-		confirmed = targets
+		confirmed := make([]model.ULID, len(targets))
+		for i, x := range targets {
+			confirmed[i] = x.ULID
+		}
+		res, err = a.ss.Purge(arg, confirmed)
 	}
-	res, err := a.ss.Purge(arg, confirmed)
 	if err != nil {
 		return err
 	}

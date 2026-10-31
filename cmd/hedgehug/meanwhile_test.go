@@ -15,9 +15,13 @@ import (
 // index and before it writes, as another process could.
 func (te *testEnv) meanwhile(fn func(tx *store.Tx) error) {
 	te.t.Helper()
-	var restore func()
-	restore = ops.SetBeforeUpdate(func() {
-		restore()
+	done := false
+	te.beforeUpdate = func() {
+		if done {
+			return
+		}
+		done = true
+		te.beforeUpdate = nil
 		s, err := store.Open(te.storeDir("me"))
 		if err != nil {
 			te.t.Fatal(err)
@@ -25,8 +29,7 @@ func (te *testEnv) meanwhile(fn func(tx *store.Tx) error) {
 		if _, err := s.Update(store.Op{Name: "update", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, fn); err != nil {
 			te.t.Fatal(err)
 		}
-	})
-	te.t.Cleanup(restore)
+	}
 }
 
 // putChild returns a write of a new task under parent, in its workspace and

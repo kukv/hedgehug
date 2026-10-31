@@ -24,6 +24,24 @@ type AffectedResult struct {
 	Entry     *index.Entry
 	Targets   []*index.Entry
 	Committed bool
+	Commit    string // hex hash of the commit made; "" when nothing was committed
+}
+
+// Views are the tasks of Targets as the write left them, refreshed from the
+// store; a purged task, which is gone, is as it was.
+func (r AffectedResult) Views() ([]*TaskView, error) {
+	if err := r.Index.Refresh(); err != nil {
+		return nil, err
+	}
+	out := make([]*TaskView, 0, len(r.Targets))
+	for _, x := range r.Targets {
+		cur, ok := r.Index.Task(x.ULID)
+		if !ok {
+			cur = x
+		}
+		out = append(out, TaskViewOf(r.Index, cur))
+	}
+	return out, nil
 }
 
 // Descendants returns the tasks under ulid for which follow is true, going
@@ -65,7 +83,7 @@ func (ss *Session) Remove(arg string) (AffectedResult, error) {
 	}
 	var targets []*index.Entry
 	now := ss.Now().Truncate(time.Second)
-	committed, err := ss.Update(s, store.Op{Name: "rm", Task: e.ULID}, func(tx *store.Tx) error {
+	hash, err := ss.UpdateCommit(s, store.Op{Name: "rm", Task: e.ULID}, func(tx *store.Tx) error {
 		// Read under the lock, so a child added since is deleted too, and
 		// a task deleted since is not deleted again.
 		var err error
@@ -96,7 +114,7 @@ func (ss *Session) Remove(arg string) (AffectedResult, error) {
 	if err != nil {
 		return AffectedResult{}, err
 	}
-	return AffectedResult{Index: ix, Entry: e, Targets: targets, Committed: committed}, nil
+	return AffectedResult{Index: ix, Entry: e, Targets: targets, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }
 
 // Restore restores the deleted task arg names and what the same Remove
@@ -114,7 +132,7 @@ func (ss *Session) Restore(arg string) (AffectedResult, error) {
 		return AffectedResult{}, err
 	}
 	var targets []*index.Entry
-	committed, err := ss.Update(s, store.Op{Name: "restore", Task: e.ULID}, func(tx *store.Tx) error {
+	hash, err := ss.UpdateCommit(s, store.Op{Name: "restore", Task: e.ULID}, func(tx *store.Tx) error {
 		// Read under the lock, so a child the same rm deleted is restored
 		// even when it came in after the index was read, and a task
 		// restored since is refused.
@@ -144,7 +162,7 @@ func (ss *Session) Restore(arg string) (AffectedResult, error) {
 	if err != nil {
 		return AffectedResult{}, err
 	}
-	return AffectedResult{Index: ix, Entry: e, Targets: targets, Committed: committed}, nil
+	return AffectedResult{Index: ix, Entry: e, Targets: targets, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }
 
 // PurgeTargets lists what Purge would remove, for the caller to confirm: the
@@ -167,10 +185,24 @@ func (ss *Session) PurgeTargets(arg string) (*index.Index, *index.Entry, []*inde
 }
 
 // Purge removes the files of the task arg names and of the tasks under it for
-// good. targets is what PurgeTargets listed and the caller confirmed: Purge
-// fails with purge.changed when the tasks under it are no longer those. A nil
-// targets, for a purge that was not confirmed, skips that check.
-func (ss *Session) Purge(arg string, targets []*index.Entry) (AffectedResult, error) {
+// good. confirmed is the ULIDs of the tasks the caller showed to the user
+// (PurgeTargets lists them) and the user agreed to: it is required, and Purge
+// fails with purge.changed when the tasks under it are no longer those.
+func (ss *Session) Purge(arg string, confirmed []model.ULID) (AffectedResult, error) {
+	if len(confirmed) == 0 {
+		return AffectedResult{}, newErr(KindUsage, "purge.unconfirmed", errors.New("purge needs the tasks the user confirmed"))
+	}
+	return ss.purge(arg, confirmed)
+}
+
+// PurgeUnchecked is Purge for a purge that was not confirmed (hedgehug purge
+// --yes): it works from the tasks as they are under the lock.
+func (ss *Session) PurgeUnchecked(arg string) (AffectedResult, error) {
+	return ss.purge(arg, nil)
+}
+
+// purge is Purge; a nil confirmed skips the comparison.
+func (ss *Session) purge(arg string, confirmed []model.ULID) (AffectedResult, error) {
 	s, ix, err := ss.Open()
 	if err != nil {
 		return AffectedResult{}, err
@@ -183,7 +215,7 @@ func (ss *Session) Purge(arg string, targets []*index.Entry) (AffectedResult, er
 	if err != nil {
 		return AffectedResult{}, err
 	}
-	committed, err := ss.Update(s, store.Op{Name: "purge", Task: e.ULID}, func(tx *store.Tx) error {
+	hash, err := ss.UpdateCommit(s, store.Op{Name: "purge", Task: e.ULID}, func(tx *store.Tx) error {
 		// Read again under the lock: a task restored or added under it
 		// since must not be purged unchecked, nor left behind.
 		var err error
@@ -193,7 +225,7 @@ func (ss *Session) Purge(arg string, targets []*index.Entry) (AffectedResult, er
 		if now, err = purgeTargets(ix, e); err != nil {
 			return err
 		}
-		if targets != nil && !sameTasks(now, targets) {
+		if confirmed != nil && !sameTasks(now, confirmed) {
 			return newErr(KindConflict, "purge.changed", errors.New("the tasks under it changed after the confirmation; run purge again"))
 		}
 		for _, x := range now {
@@ -206,7 +238,7 @@ func (ss *Session) Purge(arg string, targets []*index.Entry) (AffectedResult, er
 	if err != nil {
 		return AffectedResult{}, err
 	}
-	return AffectedResult{Index: ix, Entry: e, Targets: now, Committed: committed}, nil
+	return AffectedResult{Index: ix, Entry: e, Targets: now, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }
 
 // current refreshes ix, as an operation does under the lock, and returns e as
@@ -268,16 +300,18 @@ func purgeTargets(ix *index.Index, e *index.Entry) ([]*index.Entry, error) {
 }
 
 // sameTasks reports whether a and b hold the same tasks.
-func sameTasks(a, b []*index.Entry) bool {
-	ulids := func(es []*index.Entry) []string {
-		out := make([]string, len(es))
-		for i, e := range es {
-			out[i] = e.ULID.String()
+func sameTasks(a []*index.Entry, b []model.ULID) bool {
+	ulids := func(n int, at func(int) model.ULID) []string {
+		out := make([]string, n)
+		for i := range out {
+			out[i] = at(i).String()
 		}
 		slices.Sort(out)
 		return out
 	}
-	return slices.Equal(ulids(a), ulids(b))
+	return slices.Equal(
+		ulids(len(a), func(i int) model.ULID { return a[i].ULID }),
+		ulids(len(b), func(i int) model.ULID { return b[i] }))
 }
 
 // ParseAtTime reads at as a time: RFC 3339, or a date, which stands for the
@@ -296,8 +330,8 @@ func ParseAtTime(at string, loc *time.Location) (time.Time, bool) {
 // newest commit on the first-parent line from HEAD made at or before it (the
 // zero hash when there is none); for anything else, the commit it names, an
 // abbreviated hash included.
-func commitAt(r *gitrepo.Repo, at string) (plumbing.Hash, error) {
-	t, ok := ParseAtTime(at, time.Local)
+func commitAt(r *gitrepo.Repo, at string, loc *time.Location) (plumbing.Hash, error) {
+	t, ok := ParseAtTime(at, loc)
 	if !ok {
 		h, err := r.ResolveCommit(at)
 		if err != nil {
@@ -350,12 +384,12 @@ func (ss *Session) RestoreAt(arg, at string) (RestoreAtResult, error) {
 	if err != nil {
 		return RestoreAtResult{}, err
 	}
-	commit, err := commitAt(s.Repo(), at)
+	commit, err := commitAt(s.Repo(), at, ss.location())
 	if err != nil {
 		return RestoreAtResult{}, err
 	}
 	var note string
-	committed, err := ss.Update(s, store.Op{Name: "restore", Task: e.ULID}, func(tx *store.Tx) error {
+	hash, err := ss.UpdateCommit(s, store.Op{Name: "restore", Task: e.ULID}, func(tx *store.Tx) error {
 		// Read under the lock, as the other writes do.
 		var err error
 		if e, err = current(ix, e); err != nil {
@@ -394,5 +428,5 @@ func (ss *Session) RestoreAt(arg, at string) (RestoreAtResult, error) {
 	if err != nil {
 		return RestoreAtResult{}, err
 	}
-	return RestoreAtResult{TaskResult: TaskResult{Index: ix, ULID: e.ULID, Committed: committed}, Note: note}, nil
+	return RestoreAtResult{TaskResult: TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: commitHex(hash)}, Note: note}, nil
 }

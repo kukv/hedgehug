@@ -32,6 +32,8 @@ type testEnv struct {
 	now      time.Time
 	env      map[string]string // more variables, looked up after the fixed ones
 	tmp      string            // the directory of temporary files, set by editWith
+
+	beforeUpdate func() // Session.BeforeUpdate of the next runs; meanwhile sets it
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -79,6 +81,8 @@ func (te *testEnv) run(args ...string) (code int, stdout, stderr string) {
 		getenv:     te.getenv,
 		isTerminal: func(any) bool { return te.terminal },
 		now:        func() time.Time { return te.now },
+
+		beforeUpdate: te.beforeUpdate,
 	}
 	if args == nil {
 		args = []string{} // cobra reads os.Args, the flags of go test, for nil

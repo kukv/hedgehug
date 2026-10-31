@@ -19,6 +19,20 @@ type TaskResult struct {
 	Index     *index.Index
 	ULID      model.ULID
 	Committed bool
+	Commit    string // hex hash of the commit made; "" when nothing was committed
+}
+
+// View is the task as the write left it. It refreshes the index, so a caller
+// that answers a request from it never returns what the task was before.
+func (r TaskResult) View() (*TaskView, error) {
+	if err := r.Index.Refresh(); err != nil {
+		return nil, err
+	}
+	e, ok := r.Index.Task(r.ULID)
+	if !ok {
+		return nil, newErr(KindNotFound, "task.gone", fmt.Errorf("%s is no longer in the store", r.ULID), "id", r.ULID.String())
+	}
+	return TaskViewOf(r.Index, e), nil
 }
 
 // AddInput is what Add makes a task from. Empty Kind and Status take the
@@ -104,11 +118,11 @@ func (ss *Session) Add(in AddInput) (TaskResult, error) {
 		AddWatchers(t, t.CreatedBy)
 	}
 	watchNewAssignees(t, nil)
-	committed, err := ss.Update(s, store.Op{Name: "add", Task: t.ULID}, func(tx *store.Tx) error { return tx.PutTask(t) })
+	hash, err := ss.UpdateCommit(s, store.Op{Name: "add", Task: t.ULID}, func(tx *store.Tx) error { return tx.PutTask(t) })
 	if err != nil {
 		return TaskResult{}, err
 	}
-	return TaskResult{Index: ix, ULID: t.ULID, Committed: committed}, nil
+	return TaskResult{Index: ix, ULID: t.ULID, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }
 
 // Set applies assigns to the task arg names.
@@ -124,7 +138,7 @@ func (ss *Session) Set(arg string, assigns []Assign) (TaskResult, error) {
 	if err := NotDeleted(ix, e); err != nil {
 		return TaskResult{}, err
 	}
-	committed, err := ss.Update(s, store.Op{Name: "set", Task: e.ULID}, func(tx *store.Tx) error {
+	hash, err := ss.UpdateCommit(s, store.Op{Name: "set", Task: e.ULID}, func(tx *store.Tx) error {
 		t, err := tx.Task(e.ULID)
 		if err != nil {
 			return err
@@ -141,7 +155,7 @@ func (ss *Session) Set(arg string, assigns []Assign) (TaskResult, error) {
 	if err != nil {
 		return TaskResult{}, err
 	}
-	return TaskResult{Index: ix, ULID: e.ULID, Committed: committed}, nil
+	return TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }
 
 // SetStatus sets the status of the task arg names; an empty status means the
@@ -172,7 +186,7 @@ func (ss *Session) SetStatus(arg, name string) (TaskResult, error) {
 	if err := NotDeleted(ix, e); err != nil {
 		return TaskResult{}, err
 	}
-	committed, err := ss.Update(s, store.Op{Name: "status", Task: e.ULID}, func(tx *store.Tx) error {
+	hash, err := ss.UpdateCommit(s, store.Op{Name: "status", Task: e.ULID}, func(tx *store.Tx) error {
 		t, err := tx.Task(e.ULID)
 		if err != nil {
 			return err
@@ -183,7 +197,7 @@ func (ss *Session) SetStatus(arg, name string) (TaskResult, error) {
 	if err != nil {
 		return TaskResult{}, err
 	}
-	return TaskResult{Index: ix, ULID: e.ULID, Committed: committed}, nil
+	return TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }
 
 // Dep makes the task arg names blocked by the task blockerArg names, or, with
@@ -204,7 +218,7 @@ func (ss *Session) Dep(arg, blockerArg string, add bool) (TaskResult, error) {
 	if err != nil {
 		return TaskResult{}, err
 	}
-	committed, err := ss.Update(s, store.Op{Name: "dep", Task: e.ULID}, func(tx *store.Tx) error {
+	hash, err := ss.UpdateCommit(s, store.Op{Name: "dep", Task: e.ULID}, func(tx *store.Tx) error {
 		t, err := tx.Task(e.ULID)
 		if err != nil {
 			return err
@@ -225,7 +239,7 @@ func (ss *Session) Dep(arg, blockerArg string, add bool) (TaskResult, error) {
 	if err != nil {
 		return TaskResult{}, err
 	}
-	return TaskResult{Index: ix, ULID: e.ULID, Committed: committed}, nil
+	return TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }
 
 var errNoAccounts = newErr(KindConflict, "account.none", errors.New("accounts are not set up in config.yaml; add one to accounts"))
@@ -255,7 +269,7 @@ func (ss *Session) Watch(arg string, on bool) (TaskResult, error) {
 	if on {
 		name = "watch"
 	}
-	committed, err := ss.Update(s, store.Op{Name: name, Task: e.ULID}, func(tx *store.Tx) error {
+	hash, err := ss.UpdateCommit(s, store.Op{Name: name, Task: e.ULID}, func(tx *store.Tx) error {
 		t, err := tx.Task(e.ULID)
 		if err != nil {
 			return err
@@ -270,7 +284,7 @@ func (ss *Session) Watch(arg string, on bool) (TaskResult, error) {
 	if err != nil {
 		return TaskResult{}, err
 	}
-	return TaskResult{Index: ix, ULID: e.ULID, Committed: committed}, nil
+	return TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }
 
 // AddWatchers adds the accounts that t does not have yet to its watchers,
