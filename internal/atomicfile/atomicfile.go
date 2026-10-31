@@ -1,6 +1,6 @@
-// Package store reads and writes the files of one store, and commits every
-// write to git as one commit per operation.
-package store
+// Package atomicfile replaces files whole, so that a reader never sees a
+// part of a write, and reads them without stopping such a replacement.
+package atomicfile
 
 import (
 	"os"
@@ -14,10 +14,10 @@ const renameRetries = 10
 
 var renameInterval = 50 * time.Millisecond
 
-// writeFile replaces the file at path with data. It writes a temporary file
+// WriteFile replaces the file at path with data. It writes a temporary file
 // in the same directory, syncs it and renames it over path, so a reader sees
 // either the old or the new content, never a part.
-func writeFile(path string, data []byte) error {
+func WriteFile(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err

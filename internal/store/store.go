@@ -1,3 +1,5 @@
+// Package store reads and writes the files of one store, and commits every
+// write to git as one commit per operation.
 package store
 
 import (
@@ -10,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/atomicfile"
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
@@ -127,7 +130,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 	}
 	paths := make([]string, 0, len(files))
 	for _, f := range files {
-		if err := writeFile(s.path(f.rel), f.data); err != nil {
+		if err := atomicfile.WriteFile(s.path(f.rel), f.data); err != nil {
 			return nil, err
 		}
 		paths = append(paths, f.rel)

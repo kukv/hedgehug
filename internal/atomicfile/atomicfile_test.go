@@ -1,4 +1,4 @@
-package store
+package atomicfile
 
 import (
 	"errors"
@@ -12,13 +12,13 @@ import (
 func TestWriteFile(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "tasks", "A", "B", "x.md")
-	if err := writeFile(p, []byte("one")); err != nil {
+	if err := WriteFile(p, []byte("one")); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeFile(p, []byte("two")); err != nil {
+	if err := WriteFile(p, []byte("two")); err != nil {
 		t.Fatal(err)
 	}
-	got, err := readFile(p)
+	got, err := ReadFile(p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestWriteFile(t *testing.T) {
 }
 
 func TestReadFileNotExist(t *testing.T) {
-	_, err := readFile(filepath.Join(t.TempDir(), "nope.md"))
+	_, err := ReadFile(filepath.Join(t.TempDir(), "nope.md"))
 	if !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("err = %v, want fs.ErrNotExist", err)
 	}

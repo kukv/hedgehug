@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kukv/hedgehug/internal/atomicfile"
 	"github.com/kukv/hedgehug/internal/model"
 )
 
@@ -31,7 +32,7 @@ func (e *FileError) Unwrap() error { return e.Err }
 // ErrNotFound; a decode error is a *FileError.
 func readDecode[T any](dir, rel string, decode func([]byte) (T, error)) (T, error) {
 	var zero T
-	b, err := readFile(filepath.Join(dir, filepath.FromSlash(rel)))
+	b, err := atomicfile.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
 	if errors.Is(err, fs.ErrNotExist) {
 		return zero, fmt.Errorf("%s: %w", rel, ErrNotFound)
 	}
@@ -150,7 +151,7 @@ func (s *Store) Workspaces() iter.Seq2[*model.Workspace, error] {
 
 // Numbers returns the record of purged numbers; empty when there is none.
 func (s *Store) Numbers() (model.Numbers, error) {
-	b, err := readFile(s.path(model.NumbersPath))
+	b, err := atomicfile.ReadFile(s.path(model.NumbersPath))
 	if errors.Is(err, fs.ErrNotExist) {
 		return model.Numbers{}, nil
 	}
@@ -196,7 +197,7 @@ func (s *Store) Templates() iter.Seq2[*model.Template, error] {
 // TaskBytes returns the file of task ulid as it is, without decoding it.
 func (s *Store) TaskBytes(ulid model.ULID) ([]byte, error) {
 	rel := model.TaskPath(ulid)
-	b, err := readFile(s.path(rel))
+	b, err := atomicfile.ReadFile(s.path(rel))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("%s: %w", rel, ErrNotFound)
 	}

@@ -1,6 +1,6 @@
 //go:build windows
 
-package store
+package atomicfile
 
 import (
 	"errors"
@@ -21,9 +21,9 @@ func transientRenameError(err error) bool {
 	return errors.Is(err, windows.ERROR_ACCESS_DENIED) || errors.Is(err, windows.ERROR_SHARING_VIOLATION)
 }
 
-// readFile opens path with FILE_SHARE_DELETE, so reading a file does not
+// ReadFile opens path with FILE_SHARE_DELETE, so reading a file does not
 // stop another writer from renaming over it.
-func readFile(path string) ([]byte, error) {
+func ReadFile(path string) ([]byte, error) {
 	p, err := windows.UTF16PtrFromString(path)
 	if err != nil {
 		return nil, &fs.PathError{Op: "open", Path: path, Err: err}

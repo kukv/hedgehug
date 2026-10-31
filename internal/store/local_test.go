@@ -3,6 +3,8 @@ package store
 import (
 	"errors"
 	"testing"
+
+	"github.com/kukv/hedgehug/internal/atomicfile"
 )
 
 func TestLocalFiles(t *testing.T) {
@@ -18,7 +20,7 @@ func TestLocalFiles(t *testing.T) {
 		t.Errorf("ReadLocal = %q, %v", b, err)
 	}
 	// The file is under .hedgehug/local, which git ignores.
-	if _, err := readFile(s.path(".hedgehug/local/index")); err != nil {
+	if _, err := atomicfile.ReadFile(s.path(".hedgehug/local/index")); err != nil {
 		t.Errorf("file not in .hedgehug/local: %v", err)
 	}
 	for _, bad := range []string{"", ".", "..", "a/b", `a\b`} {

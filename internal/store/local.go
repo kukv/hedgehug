@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"strings"
 
+	"github.com/kukv/hedgehug/internal/atomicfile"
 	"github.com/kukv/hedgehug/internal/gitrepo"
 )
 
@@ -20,7 +21,7 @@ func (s *Store) ReadLocal(name string) ([]byte, error) {
 		return nil, err
 	}
 	rel := localDir + "/" + name
-	b, err := readFile(s.path(rel))
+	b, err := atomicfile.ReadFile(s.path(rel))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("%s: %w", rel, ErrNotFound)
 	}
@@ -34,7 +35,7 @@ func (s *Store) WriteLocal(name string, data []byte) error {
 	if err := validLocalName(name); err != nil {
 		return err
 	}
-	return writeFile(s.path(localDir+"/"+name), data)
+	return atomicfile.WriteFile(s.path(localDir+"/"+name), data)
 }
 
 func validLocalName(name string) error {

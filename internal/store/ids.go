@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/kukv/hedgehug/internal/atomicfile"
 	"github.com/kukv/hedgehug/internal/model"
 )
 
@@ -34,7 +35,7 @@ func (tx *Tx) usedNumbers() (map[string]int, error) {
 			if errors.As(err, &fe) {
 				// Its ids cannot be read, but a number it holds must not
 				// be given again.
-				b, err := readFile(tx.s.path(fe.Path))
+				b, err := atomicfile.ReadFile(tx.s.path(fe.Path))
 				if err != nil {
 					return nil, err
 				}

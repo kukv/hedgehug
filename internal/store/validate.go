@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kukv/hedgehug/internal/atomicfile"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
 )
@@ -190,7 +191,7 @@ func (tx *Tx) validateWorkspaces() error {
 			// would leave it pointing nowhere once it is fixed, so a file
 			// that holds the ULID anywhere, in any case, is taken to be in
 			// that workspace: refusing too often is the safe side.
-			b, err := readFile(tx.s.path(fe.Path))
+			b, err := atomicfile.ReadFile(tx.s.path(fe.Path))
 			if err != nil {
 				return err
 			}
