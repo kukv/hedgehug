@@ -17,6 +17,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
+	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/merge"
 	"github.com/kukv/hedgehug/internal/model"
@@ -53,8 +54,10 @@ type Result struct {
 	Repaired    []merge.Repaired
 	Invalid     []model.ULID // tasks left with problems (is:invalid)
 	Pushed      []string     // remote names, of the last round
+	Notices     []inbox.Item // what the sync added to the inbox
 	// Warnings are what failed after the push, which the sync did not undo:
-	// finding the invalid tasks, other stores' prefixes, repacking.
+	// other stores' prefixes, the inbox, finding the invalid tasks,
+	// repacking.
 	Warnings []string
 }
 
@@ -158,6 +161,7 @@ func Run(s *store.Store, opt Options) (Result, error) {
 		}
 	}
 	warn("check the other stores' id prefixes", prefixDuplicates(s, opt, &res))
+	warn("fill the inbox", notify(s, before, opt, &res))
 	warn("find the invalid tasks", findInvalid(s, ix, was, before, &res))
 	n, err := r.LooseObjects()
 	warn("count the loose objects", err)
@@ -728,6 +732,36 @@ func prefixDuplicates(s *store.Store, opt Options, res *Result) error {
 		}
 	}
 	return nil
+}
+
+// notify adds to the inbox what the sync brought for opt.Me: the items of
+// the commits since before, the duplicate prefixes and names it told of
+// without a commit (the inbox drops those it has), and the merge driver's
+// records.
+func notify(s *store.Store, before plumbing.Hash, opt Options, res *Result) error {
+	head, err := s.Repo().Head()
+	if err != nil {
+		return err
+	}
+	items, err := inbox.Collect(s, before, head, opt.Me)
+	if err != nil {
+		return err
+	}
+	now := opt.Now()
+	for _, x := range res.Repaired {
+		if (x.Kind == "prefix_duplicate" || x.Kind == "name_duplicate") && slices.Contains(opt.Me, x.Author) {
+			if it, ok := inbox.Notice(x.ULID, x.Kind, x.Value, x.Author, head.String(), now); ok {
+				items = append(items, it)
+			}
+		}
+	}
+	box := inbox.Open(s)
+	added, err := box.Add(items)
+	if err != nil {
+		return err
+	}
+	res.Notices = append(res.Notices, added...)
+	return box.Import(opt.Me)
 }
 
 // invalid returns the tasks that have problems, as is:invalid finds them.

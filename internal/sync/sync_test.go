@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
+	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/merge"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
@@ -64,6 +65,34 @@ func TestOverwrittenTrailer(t *testing.T) {
 	e, _ := c.stores[1].Repo().LogFrom(mustHead(t, c.stores[1]), 1)
 	if v, ok := e[0].Trailer("Hedgehug-Overwritten"); !ok || !strings.HasPrefix(v, url.PathEscape(model.TaskPath(x.ULID))+" title \"a\" github.com/u0") {
 		t.Errorf("trailer = %q", v)
+	}
+	// The merge commit is u1's, the lost value u0's: only u0 is told, at
+	// u0's next sync.
+	if items, _ := inbox.Open(c.stores[1]).List(true); len(items) != 0 {
+		t.Errorf("u1's inbox = %+v", items)
+	}
+	r = c.sync(0)
+	items, err := inbox.Open(c.stores[0]).List(false)
+	if err != nil || len(items) != 1 || items[0].Kind != inbox.Overwritten || items[0].Task != x.ULID || items[0].Author != "github.com/u0" {
+		t.Fatalf("u0's inbox = %+v, %v", items, err)
+	}
+	if len(r.Notices) != 1 || r.Notices[0].ULID != items[0].ULID {
+		t.Errorf("notices = %+v", r.Notices)
+	}
+	if r = c.sync(0); len(r.Notices) != 0 {
+		t.Errorf("the next sync told again: %+v", r.Notices)
+	}
+}
+
+func TestSyncImportsMergeDriverRecords(t *testing.T) {
+	c := newCluster(t, 1)
+	rec := `{"path":"tasks/0A/P0/01JBZ8K3QW7M2X9V4T6R5N8P0A.md","field":"title","value":"\"mine\"","author":"github.com/u0","commit":"","time":"2026-10-31T10:00:00Z"}`
+	if err := c.stores[0].WriteLocal("overwritten/"+model.NewULID().String()+".json", []byte(rec)); err != nil {
+		t.Fatal(err)
+	}
+	c.sync(0)
+	if items, _ := inbox.Open(c.stores[0]).List(false); len(items) != 1 || items[0].Kind != inbox.Overwritten {
+		t.Errorf("inbox = %+v", items)
 	}
 }
 
@@ -328,6 +357,13 @@ func TestPrefixDuplicateAcrossStores(t *testing.T) {
 			})
 			if got != c.wantNotice {
 				t.Errorf("notice = %v, want %v (%+v)", got, c.wantNotice, r.Repaired)
+			}
+			if items, _ := inbox.Open(cl.stores[0]).List(false); len(items) != len(r.Notices) || got != (len(items) == 1) ||
+				got && (items[0].Kind != inbox.PrefixDuplicate || !strings.Contains(string(items[0].Detail), `"store":"other"`)) {
+				t.Errorf("inbox = %+v, notices = %+v", items, r.Notices)
+			}
+			if r := cl.sync(0); len(r.Notices) != 0 { // told once, though each sync finds it
+				t.Errorf("the next sync told again: %+v", r.Notices)
 			}
 		})
 	}

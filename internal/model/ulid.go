@@ -36,6 +36,19 @@ func (x ULID) MarshalBinary() ([]byte, error) { return x.u.MarshalBinary() }
 // UnmarshalBinary reads what MarshalBinary wrote.
 func (x *ULID) UnmarshalBinary(b []byte) error { return x.u.UnmarshalBinary(b) }
 
+// MarshalText writes x as its string, so that JSON holds it that way.
+func (x ULID) MarshalText() ([]byte, error) { return []byte(x.String()), nil }
+
+// UnmarshalText reads a ULID in either case.
+func (x *ULID) UnmarshalText(b []byte) error {
+	p, err := ParseULID(string(b))
+	if err != nil {
+		return err
+	}
+	*x = p
+	return nil
+}
+
 func (x ULID) MarshalYAML() (any, error) { return x.String(), nil }
 
 // UnmarshalYAML reads the scalar as written, so a ULID of digits only is not
