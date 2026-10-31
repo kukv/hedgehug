@@ -26,9 +26,10 @@ type InboxStore struct {
 }
 
 // NoAccountsWarning is the warning of InboxStores for a config without
-// accounts, where mentions and assignments cannot be told. The CLI prints it
-// as "hedgehug: warning: " + it; InboxList, InboxRead and InboxRevert send it
-// through Warn without the "hedgehug: " prefix.
+// accounts, where mentions and assignments cannot be told. The CLI prints
+// each warning InboxStores returns as "hedgehug: warning: " + it, which is
+// the line it printed before; InboxList, InboxRead and InboxRevert send it
+// through Warn, so without the "hedgehug: " prefix.
 const NoAccountsWarning = "accounts are not set up in config.yaml; mentions and assignments cannot be told"
 
 // InboxStores opens the stores the operation works on, after the inbox of

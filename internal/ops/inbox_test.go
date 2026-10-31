@@ -16,6 +16,7 @@ import (
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 // addItem puts it into the inbox of the test store, as a sync would, and
@@ -569,14 +570,51 @@ func TestInboxRevertLeavesTheSessionAlone(t *testing.T) {
 	task := &model.Task{ULID: e.ULID, ID: "ME-1"}
 	u := ts.addItem(overwritten(task, "c1", "title", `"before"`))
 	ts.addItem(overwritten(task, "c2", "status", `"done"`))
-	if _, err := ts.InboxRevert(u.String()); err != nil {
+
+	// A second store, with an item of its own.
+	c, p, err := ts.Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(p.StoresDir, "other")
+	author, err := config.CommitAuthor(config.Account{}, false, ts.Getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws := &model.Workspace{ULID: model.NewULID(), Name: "other", IDPrefix: "OT"}
+	os2, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "other"}, schema.Default(), ws, author, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AddStore("other", dir, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	foreign := &model.Task{ULID: model.NewULID(), ID: "OT-1"}
+	if _, err := inbox.Open(os2).Add([]inbox.Item{overwritten(foreign, "c3", "title", `"x"`)}); err != nil {
+		t.Fatal(err)
+	}
+
+	stores, _, err := ts.InboxStores()
+	if err != nil || len(stores) != 2 {
+		t.Fatalf("InboxStores = %d stores, %v; want 2", len(stores), err)
+	}
+	if _, err := ts.InboxRevertOf(stores, u); err != nil {
 		t.Fatal(err)
 	}
 	if ts.StoreName != "" {
 		t.Errorf("StoreName = %q after the revert; want it untouched", ts.StoreName)
 	}
-	if _, items, err := ts.InboxList(false); err != nil || len(items) != 1 || items[0].Content != `status: "done" was replaced` {
-		t.Errorf("InboxList after the revert = %d items, %v; want the one left", len(items), err)
+	_, items, err := ts.InboxList(false)
+	if err != nil || len(items) != 2 {
+		t.Fatalf("InboxList after the revert = %d items, %v; want the one of each store", len(items), err)
+	}
+	got := []string{items[0].Store, items[1].Store}
+	slices.Sort(got)
+	if !slices.Equal(got, []string{"me", "other"}) {
+		t.Errorf("stores of the items = %v; want me and other", got)
 	}
 }
 
