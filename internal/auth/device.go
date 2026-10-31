@@ -105,9 +105,7 @@ func deviceToken(a config.Account, opt Options) (string, error) {
 	if opt.Host.Web == "" {
 		return "", errors.New("auth: Host is not set")
 	}
-	locked := false
 	err = store.WithFileLock(opt.LockFile, lockWait, func() error {
-		locked = true
 		if t, err = LoadDeviceToken(a, k); err != nil {
 			return err
 		}
@@ -132,7 +130,7 @@ func deviceToken(a config.Account, opt Options) (string, error) {
 		return nil
 	})
 	if err != nil {
-		if !locked {
+		if errors.Is(err, store.ErrLocked) {
 			return "", fmt.Errorf("another hedgehug is refreshing the token; wait a little and try again: %w", err)
 		}
 		return "", err

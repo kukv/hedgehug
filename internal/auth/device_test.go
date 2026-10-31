@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -307,5 +308,22 @@ func TestDeviceRefreshLockBusy(t *testing.T) {
 	}
 	if err == nil || !strings.Contains(err.Error(), "another hedgehug is refreshing") {
 		t.Errorf("busy lock = %v", err)
+	}
+}
+
+func TestDeviceRefreshLockFails(t *testing.T) {
+	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	a := config.Account{Name: "a", Host: "github.com", Login: "alice", Token: config.TokenSource{Kind: "device"}}
+	k := newMem()
+	_ = SaveDeviceToken(a, DeviceToken{AccessToken: "x", RefreshToken: "r", ExpiresAt: now}, k)
+	// The parent of the lock file is a file, so the lock cannot be made.
+	parent := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(parent, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	opt := Options{Keyring: k, Host: config.Host{Web: "http://127.0.0.1:1"}, Now: func() time.Time { return now }, LockFile: filepath.Join(parent, "auth.lock")}
+	_, err := Token(a, opt)
+	if err == nil || strings.Contains(err.Error(), "another hedgehug") {
+		t.Errorf("lock failure = %v, want the plain error", err)
 	}
 }
