@@ -22,6 +22,15 @@ func TestErrorKeepsMessage(t *testing.T) {
 	}
 }
 
+func TestKindOfNil(t *testing.T) {
+	if got := KindOf(nil); got != KindUnknown {
+		t.Errorf("KindOf(nil) = %v; want KindUnknown", got)
+	}
+	if classify(nil) != nil {
+		t.Error("classify(nil) is not nil")
+	}
+}
+
 func TestKindOfClassifiesLowerLayers(t *testing.T) {
 	cases := []struct {
 		err  error

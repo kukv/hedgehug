@@ -55,7 +55,10 @@ func KindOf(err error) Kind {
 	if errors.As(err, &e) {
 		return e.Kind
 	}
-	return classify(err).Kind
+	if c := classify(err); c != nil {
+		return c.Kind
+	}
+	return KindUnknown
 }
 
 // classify gives the errors of the lower layers a Kind and a Code.
@@ -64,7 +67,7 @@ func classify(err error) *Error {
 	var ve *store.ValidationError
 	switch {
 	case err == nil:
-		return &Error{}
+		return nil
 	case errors.As(err, &ae):
 		return newErr(KindAmbiguous, "task.ambiguous", err, "input", ae.Input)
 	case errors.Is(err, store.ErrNotFound):
