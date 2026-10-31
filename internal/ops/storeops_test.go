@@ -61,24 +61,21 @@ func TestStoreInitErrors(t *testing.T) {
 		in   StoreInitInput
 		kind Kind
 		code string
+		key  string
 		arg  any
 	}{
-		{"bad store name", StoreInitInput{Name: "bad/name", Prefix: "BN"}, KindUsage, "store.bad_name", "bad/name"},
-		{"bad prefix", StoreInitInput{Name: "x", Prefix: "b d"}, KindUsage, "workspace.bad_prefix", "b d"},
-		{"bad workspace name", StoreInitInput{Name: "x", Prefix: "XX", Workspace: " "}, KindUsage, "workspace.bad_name", " "},
-		{"already set up", StoreInitInput{Name: "me", Prefix: "XX"}, KindConflict, "store.exists", "me"},
-		{"prefix of another store", StoreInitInput{Name: "x", Prefix: "ME"}, KindConflict, "workspace.prefix_taken", "ME"},
+		{"bad store name", StoreInitInput{Name: "bad/name", Prefix: "BN"}, KindUsage, "store.bad_name", "value", "bad/name"},
+		{"bad prefix", StoreInitInput{Name: "x", Prefix: "b d"}, KindUsage, "workspace.bad_prefix", "value", "b d"},
+		{"bad workspace name", StoreInitInput{Name: "x", Prefix: "XX", Workspace: " "}, KindUsage, "workspace.bad_name", "value", " "},
+		{"already set up", StoreInitInput{Name: "me", Prefix: "XX"}, KindConflict, "store.exists", "name", "me"},
+		{"prefix of another store", StoreInitInput{Name: "x", Prefix: "ME"}, KindConflict, "workspace.prefix_taken", "prefix", "ME"},
 	}
 	for _, tc := range tests {
 		_, err := ts.StoreInit(tc.in)
 		wantErr(t, err, tc.kind, tc.code)
 		var e *Error
-		if asError(err, &e) {
-			for _, v := range e.Args {
-				if v != tc.arg {
-					t.Errorf("%s: args = %v; want %v", tc.name, e.Args, tc.arg)
-				}
-			}
+		if !asError(err, &e) || e.Args[tc.key] != tc.arg {
+			t.Errorf("%s: args = %v; want %s = %q", tc.name, e, tc.key, tc.arg)
 		}
 	}
 	_, err := ts.StoreInit(StoreInitInput{Name: "me", Prefix: "XX"})
@@ -159,11 +156,18 @@ func TestStoreAddErrors(t *testing.T) {
 	if want := `a store named "me" is already set up`; err.Error() != want {
 		t.Errorf("message = %q; want %q", err, want)
 	}
+	_, err = ts.StoreAdd("x", nil, "")
+	wantErr(t, err, KindUsage, "store.remote_required")
+	if err.Error() != "a remote is needed" {
+		t.Errorf("message = %q", err)
+	}
 	// A remote that is not there cannot be cloned; a remote without a store is no store.
 	other := otherSession(t, ts, ts.Now())
 	_, p, _ := other.Config()
 	_, err = other.StoreAdd("gone", []string{filepath.Join(t.TempDir(), "missing.git")}, "")
-	wantErr(t, err, KindNotFound, "store.not_found")
+	if err == nil || KindOf(err) != KindUnknown {
+		t.Errorf("a failed clone: kind %v (%v); want KindUnknown, unwrapped", KindOf(err), err)
+	}
 	if exists(filepath.Join(p.StoresDir, "gone")) {
 		t.Error("the failed clone left its directory")
 	}
@@ -172,7 +176,43 @@ func TestStoreAddErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = other.StoreAdd("empty", []string{empty}, "")
-	wantErr(t, err, KindNotFound, "store.not_found")
+	if err == nil {
+		t.Fatal("the clone of a remote without a store was added")
+	}
+	if KindOf(err) != KindUnknown {
+		t.Errorf("clone of an empty remote: kind %v (%v); want KindUnknown, unwrapped", KindOf(err), err)
+	}
+	// A remote with commits but no store.
+	plain := filepath.Join(t.TempDir(), "plain.git")
+	if err := gitrepo.InitBare(plain); err != nil {
+		t.Fatal(err)
+	}
+	work := t.TempDir()
+	r, err := gitrepo.Init(work)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(work, "x.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	author, _ := config.CommitAuthor(config.Account{}, false, ts.Getenv)
+	if _, err := r.Commit(gitrepo.Commit{Paths: []string{"x.txt"}, Subject: "x", Author: author, When: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.SetRemotes([]string{plain}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Push("origin"); err != nil {
+		t.Fatal(err)
+	}
+	_, err = other.StoreAdd("plain", []string{plain}, "")
+	wantErr(t, err, KindInvalid, "store.not_hedgehug")
+	if !strings.HasPrefix(err.Error(), plain+" is not a hedgehug store: ") {
+		t.Errorf("message = %q", err)
+	}
+	if exists(filepath.Join(p.StoresDir, "plain")) {
+		t.Error("the add of a remote without a store left its directory")
+	}
 	if exists(filepath.Join(p.StoresDir, "empty")) {
 		t.Error("the clone of a remote without a store left its directory")
 	}

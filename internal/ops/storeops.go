@@ -143,6 +143,9 @@ type StoreAddResult struct {
 // halfway removes what it made. A prefix that a workspace of another store
 // has too is warned of.
 func (ss *Session) StoreAdd(name string, remotes []string, path string) (StoreAddResult, error) {
+	if len(remotes) == 0 {
+		return StoreAddResult{}, newErr(KindUsage, "store.remote_required", errors.New("a remote is needed"))
+	}
 	if err := config.ValidStoreName(name); err != nil {
 		return StoreAddResult{}, newErr(KindUsage, "store.bad_name", err, "value", name)
 	}
@@ -163,12 +166,12 @@ func (ss *Session) StoreAdd(name string, remotes []string, path string) (StoreAd
 	existed := statErr == nil
 	// A failed clone removes what it made itself.
 	if _, err := gitrepo.Clone(remotes[0], dir); err != nil {
-		return StoreAddResult{}, newErr(KindNotFound, "store.not_found", err, "name", name)
+		return StoreAddResult{}, err
 	}
 	undo := func(err error) error { return errors.Join(err, clearDir(dir, existed)) }
 	s, err := store.Open(dir)
 	if err != nil {
-		return StoreAddResult{}, undo(newErr(KindNotFound, "store.not_found", fmt.Errorf("%s is not a hedgehug store: %w", remotes[0], err), "name", name))
+		return StoreAddResult{}, undo(newErr(KindInvalid, "store.not_hedgehug", fmt.Errorf("%s is not a hedgehug store: %w", remotes[0], err), "name", name))
 	}
 	if err := s.Repo().RegisterMergeDriver(); err != nil {
 		return StoreAddResult{}, undo(err)
