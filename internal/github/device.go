@@ -40,7 +40,10 @@ func postForm(hc *http.Client, u string, form url.Values, out any) error {
 		return err
 	}
 	defer func() { _ = res.Body.Close() }()
-	data, _ := io.ReadAll(res.Body)
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return fmt.Errorf("POST %s: reading the answer: %w", u, err)
+	}
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("POST %s: %d %s", u, res.StatusCode, strings.TrimSpace(string(data)))
 	}

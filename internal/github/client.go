@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -94,9 +95,12 @@ func (c *Client) do(method, url string, in, out any) (http.Header, error) {
 		return nil, err
 	}
 	defer func() { _ = res.Body.Close() }()
-	data, _ := io.ReadAll(res.Body)
+	data, readErr := io.ReadAll(res.Body)
 	if err := statusError(res, data); err != nil {
 		return res.Header, fmt.Errorf("%s %s: %w", method, url, err)
+	}
+	if readErr != nil {
+		return res.Header, fmt.Errorf("%s %s: reading the answer: %w", method, url, readErr)
 	}
 	if out != nil {
 		if err := json.Unmarshal(data, out); err != nil {
@@ -110,7 +114,7 @@ func statusError(res *http.Response, data []byte) error {
 	if res.StatusCode >= 200 && res.StatusCode < 300 {
 		return nil
 	}
-	if res.StatusCode == http.StatusTooManyRequests || res.StatusCode == http.StatusForbidden && (res.Header.Get("X-RateLimit-Remaining") == "0" || res.Header.Get("Retry-After") != "") {
+	if res.StatusCode == http.StatusTooManyRequests || (res.StatusCode == http.StatusForbidden && (res.Header.Get("X-RateLimit-Remaining") == "0" || res.Header.Get("Retry-After") != "")) {
 		reset := time.Now().Add(time.Minute)
 		if s, err := strconv.ParseInt(res.Header.Get("X-RateLimit-Reset"), 10, 64); err == nil {
 			reset = time.Unix(s, 0)
@@ -146,6 +150,13 @@ func statusError(res *http.Response, data []byte) error {
 	return fmt.Errorf("GitHub answered %d: %s", res.StatusCode, msg.Message)
 }
 
+// sameOrigin reports whether u has the scheme and host of the API base.
+func (c *Client) sameOrigin(u string) bool {
+	a, err1 := neturl.Parse(c.api)
+	b, err2 := neturl.Parse(u)
+	return err1 == nil && err2 == nil && a.Scheme == b.Scheme && a.Host == b.Host
+}
+
 var nextLink = regexp.MustCompile(`<([^>]+)>;\s*rel="next"`)
 
 // getAll gets every page of a list from url and appends its items to out.
@@ -160,6 +171,9 @@ func getAll[T any](c *Client, url string) ([]T, error) {
 		all = append(all, page...)
 		url = ""
 		if m := nextLink.FindStringSubmatch(h.Get("Link")); m != nil {
+			if !c.sameOrigin(m[1]) {
+				return nil, fmt.Errorf("GET %s: the next page %s is not on the API host; not sending the token there", url, m[1])
+			}
 			url = m[1]
 		}
 	}

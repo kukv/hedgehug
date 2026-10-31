@@ -51,5 +51,5 @@ func RepoID(u string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	return strings.ToLower(host + "/" + owner + "/" + repo), true
+	return host + "/" + strings.ToLower(owner+"/"+repo), true
 }
