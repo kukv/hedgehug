@@ -503,3 +503,28 @@ func TestInvalidAfterMerge(t *testing.T) {
 		t.Errorf("invalid = %v, want %v", r.Invalid, want)
 	}
 }
+
+// Both sides remove the same file: the merge has nothing to write for it.
+func TestMergeBothRemoveSameFile(t *testing.T) {
+	c := newCluster(t, 2)
+	w := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
+	if _, err := c.stores[0].Update(c.op(0, "workspace", model.ULID{}), func(tx *store.Tx) error { return tx.PutWorkspace(w) }); err != nil {
+		t.Fatal(err)
+	}
+	c.sync(0)
+	c.sync(1)
+	for i := range 2 {
+		if _, err := c.stores[i].Update(c.op(i, "workspace", model.ULID{}), func(tx *store.Tx) error { return tx.RemoveWorkspace(w.ULID) }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c.sync(0)
+	c.sync(1)
+	c.sync(0)
+	if c.headTree(0) != c.headTree(1) {
+		t.Error("clones differ")
+	}
+	if _, err := c.stores[1].Workspace(w.ULID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("workspace after both removed it: %v", err)
+	}
+}

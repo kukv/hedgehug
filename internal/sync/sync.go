@@ -401,6 +401,18 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 			}
 		}
 	}
+	// Both sides removed a file: HEAD already lacks it, so there is nothing
+	// to remove.
+	for p, data := range files {
+		if data != nil {
+			continue
+		}
+		if _, err := r.ReadFile(ht, p); errors.Is(err, fs.ErrNotExist) {
+			delete(files, p)
+		} else if err != nil {
+			return err
+		}
+	}
 	snap, err := newSnapshot(r, ht, "", files)
 	if err != nil {
 		return err
