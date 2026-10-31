@@ -39,13 +39,13 @@ func (tx *Tx) usedNumbers() (map[string]int, error) {
 				if err != nil {
 					return nil, err
 				}
-				raise(out, model.IDNumbersIn(b))
+				model.RaiseNumbers(out, model.IDNumbersIn(b))
 				continue
 			}
 			if err != nil {
 				return nil, err
 			}
-			countIDs(out, t)
+			model.CountIDs(out, t)
 		}
 	}
 	if tx.numbers == nil {
@@ -55,31 +55,13 @@ func (tx *Tx) usedNumbers() (map[string]int, error) {
 		}
 		tx.numbers = n
 	}
-	raise(out, tx.numbers)
+	model.RaiseNumbers(out, tx.numbers)
 	for _, t := range tx.tasks {
 		if t != nil {
-			countIDs(out, t)
+			model.CountIDs(out, t)
 		}
 	}
 	return out, nil
-}
-
-// raise raises used to the numbers of more.
-func raise(used, more map[string]int) {
-	for p, n := range more {
-		if n > used[p] {
-			used[p] = n
-		}
-	}
-}
-
-// countIDs raises used to the numbers of t's id and former ids.
-func countIDs(used map[string]int, t *model.Task) {
-	for _, k := range append([]string{t.ID}, t.FormerIDs...) {
-		if p, n, ok := model.ParseTaskID(k); ok && n > used[p] {
-			used[p] = n
-		}
-	}
 }
 
 // assignIDs gives an id to each task put in the operation that has none,

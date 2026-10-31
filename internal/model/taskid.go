@@ -54,6 +54,24 @@ func IDNumbersIn(data []byte) map[string]int {
 	return out
 }
 
+// CountIDs raises used to the numbers of t's id and former ids.
+func CountIDs(used map[string]int, t *Task) {
+	for _, k := range append([]string{t.ID}, t.FormerIDs...) {
+		if p, n, ok := ParseTaskID(k); ok && n > used[p] {
+			used[p] = n
+		}
+	}
+}
+
+// RaiseNumbers raises used to the numbers of more.
+func RaiseNumbers(used, more map[string]int) {
+	for p, n := range more {
+		if n > used[p] {
+			used[p] = n
+		}
+	}
+}
+
 // CompareIDs orders ids by prefix, then by number. What is not the form of
 // an id comes after the ids, in string order.
 func CompareIDs(a, b string) int {
