@@ -185,7 +185,7 @@ func Merge(path string, sc *schema.Schema, base []byte, ours, theirs Side, p Pol
 ### schema.yaml / automations.yaml / store.yaml
 
 - mapping はキーごとに再帰的にマージする。
-- 要素を見分けられる列は、要素ごとにマージする。見分けるキーは、automations の `rules` が `id`、`scoped` が `where`、schema の `statuses`・`kinds`・`categories` が `name`。props と `workflow` は mapping なのでキーで見分ける。片側だけで足された要素は残し、片側だけで消された要素は消す。並びは集合マージと同じ規則で決める。
+- 要素を見分けられる列は、要素ごとにマージする。見分けるキーは、automations の `rules` が `id`、automations と schema の `scoped` が `where`、schema の `statuses`・`kinds`・`categories` が `name`。props と `workflow` は mapping なのでキーで見分ける。片側だけで足された要素は残し、片側だけで消された要素は消す。並びは集合マージと同じ規則で決める。
 - それ以外の値（スカラーと、見分けられない列）は LWW。時刻は `When(path)` で、その側で merge-base 以降にそのキーの値を最後に変えたコミットの時刻（親設計で未決だった点の決定。ファイルの形式は変えない）。
 - 片側が要素を消し、もう片側がその要素の中を変えたら、変えた側を残して `Notice{revived}` を出す。
 
@@ -232,7 +232,7 @@ func Repair(in RepairInput) ([]Change, []Repaired, error)
 | `id_renumbered` | ID の接頭辞が所属するワークスペースの接頭辞と一致する | フェーズ1.5の「書き込みのときに振る」決まりを、マージコミットを書き込みとみなして当てる。ID がない、または接頭辞が違うタスクに番号を振り、古い ID を `former_ids` の末尾に足す。所属するワークスペースの `id_prefix` の形式が違うタスクは振らない。通知はしない（`id_collision` と `workspace_mismatch` から来たものは、その行で通知する） |
 | `prefix_duplicate` | 同じ Store のワークスペース同士で `id_prefix` が重複しない | データは変えない（接頭辞は必須なので外せない。番号は接頭辞ごとに数えるので ID は重複しない）。`prefix_set` が後の側（同じなら ULID の大きい側）のワークスペースについて、それを最後に変えた author に「`hh workspace prefix <ws> <新しい接頭辞>` で変える」と案内する |
 | `name_duplicate` | 同じ Store のワークスペース同士で `name` が重複しない（大文字小文字を区別しない） | データは変えない。`created` が後の側（同じなら ULID の大きい側）について、`hh workspace rename` で変えるよう案内する |
-| `rank` の重複 | — | データは変えない。表示は既存どおり rank、ULID の順。`mv` で前後の rank が同じなら、その兄弟の rank を `NBetween` で振り直してから置く |
+| `rank` の重複 | — | 修復ではデータを変えない（親設計「rank の重複：ID の順で並べ、次の書き込み時に rank を振り直す」）。並びは rank、次に ID（接頭辞、番号の順）、次に ULID にする（今の rank、ULID の順を変える。`ls`・`ls --tree`・`sort:` の決着すべて）。「次の書き込み」は `store.Update` で行う: `PutTask` したタスクの rank が、兄弟（削除済みを除く）の rank と同じなら、そのタスクだけを振り直す（兄弟は書き換えない）。同じ rank の兄弟の中で先頭なら、それより小さい rank の兄弟との間（`model.Between`）に、先頭でなければ、それより大きい rank の兄弟との間に置く（同じ rank の組の末尾へ動くが、組の外との順は変わらない）。`mv` で置く先の前後の rank が同じときも、先に同じ規則でそのタスクの位置を決める |
 | 依存の循環、配置違反、ワークフロー違反 | — | 直さない。既存の検査（`is:invalid`、`doctor`、`schema check`）で警告する |
 
 - 番号を振るとき（`id_collision`、`id_renumbered`）の最大は、修復の対象のファイルの集合で数える。フェーズ1.5と同じく、全タスク（削除済みを含む）の `id` と `former_ids`、読めないタスクファイルの中の ID の形の語、`numbers.yaml`（マージした後のもの）、同じ修復の中で振った番号から取る。HEAD のインデックス（`IDNumbers`）はマージの結果を映していないので使わない。数える処理は `store/ids.go` から `model.CountIDNumbers` に移し、store の採番と修復で共有する。1つの組の中、組どうしは ULID の順に振る。
@@ -254,6 +254,7 @@ func Repair(in RepairInput) ([]Change, []Repaired, error)
 - `Commit` に `Parents []plumbing.Hash` を足す（空なら今と同じ HEAD）。
 - `FastForward(h)`: HEAD を h に進め、作業ツリーと index を合わせる。
 - `LooseObjects() (int, error)`、`Repack() error`。
+- `.git/index.lock`: go-git は git の index のロックの手順を使わないので、手で git を操作しているときに Hedgehug が書くと index を壊しうる（1b・1d-2 で「フェーズ2で要るかを決める」としたもの）。手での `git pull` と merge driver を前提にするので要る。index と ref を書くすべての操作（`Commit`、`FastForward`、merge driver を除く）で、`.git/index.lock` を `O_CREATE|O_EXCL` で作ってから書き、終わったら消す。すでにあれば 0.1 秒おきに 2 秒まで待ち、それでもあれば `ErrGitBusy`（「git が動いている。終わってからやり直す。残っているだけなら `.git/index.lock` を消す」）を返す。merge driver は git がロックを持っている中で呼ばれるので取らない（作業ツリーのファイルを1つ書くだけ）。
 - `transport.go`: パッケージの初期化で `client.InstallProtocol("file", server.NewClient(loader))` を呼ぶ。loader は endpoint のパスを、そのまま bare リポジトリ（`filesystem.NewStorage`）として開く。Windows のドライブ文字（`C:\...`、`/C:/...`）も受け付ける。存在しないパスは `transport.ErrRepositoryNotFound`。
 
 ## store の追加
@@ -297,18 +298,19 @@ push の拒否と再試行の間に別の衝突が入っても、次の周のマ
 
 ### merge driver
 
-- 登録: `.git/config` に次を書く。パスは `os.Executable()` の絶対パス。
+- 登録: `.git/config` に次を書く。親設計の「Hedgehug が自分で登録するコマンドは、`hh` が使えない環境でも動くよう `hedgehug` で書く」に従い、コマンド名 `hedgehug` で書く（`hh` で実行していても `hedgehug`。絶対パスにしないのは、`go run` の一時バイナリや更新で消えるパスを残さないため）。
 
   ```
   [merge "hedgehug"]
       name = Hedgehug field merge
-      driver = "<hedgehug の絶対パス>" merge-driver %O %A %B %P
+      driver = hedgehug merge-driver %O %A %B %P
   ```
 
 - 登録する時: `hh store init`、`hh store add`、同期の 3。
+- `.gitattributes`: `hh store init` は最初のコミットに含める。`hh store add` は clone した Store に足りない行があれば、同期の 3 と同じ setup のコミットを作り、push する。
 - `hedgehug merge-driver <base> <ours> <theirs> <path>`: リポジトリの作業ツリーから HEAD（ours）と `MERGE_HEAD`（theirs）を読み、`LastChange` で各側の時刻と author を引いて `merge.Merge` を呼ぶ。両側の schema.yaml もこの場でマージして `sc` にする。結果を `<ours>` に書いて 0 で終わる。`MERGE_HEAD` がない場合（rebase、cherry-pick など）は各側の履歴を引けないので、時刻はファイルの `updated`、yaml のファイルは時刻なしとして、author は空で比べる（LWW の 3 段目の値のバイト列で決まる）。git が作るマージコミットには trailer を書けないので、上書きと通知は `.hedgehug/local/overwritten/<ULID>.json` に書き、次の同期か `hh inbox` で inbox に取り込む。
 - merge driver は1ファイルずつ呼ばれるので、ファイルをまたぐ修復（ID の衝突など）はしない。次の `hh sync` の 5 で直す。
-- `hh doctor` は、`.gitattributes` に `merge=hedgehug` があるのに driver が登録されていない、または登録されたパスに実行ファイルがない場合に警告する（直し方: `hh sync` を一度実行する）。
+- `hh doctor` は、`.gitattributes` に `merge=hedgehug` があるのに driver が登録されていない、登録が `hedgehug merge-driver %O %A %B %P` と違う、または PATH に `hedgehug` がない場合に警告する（直し方: `hh sync` を一度実行する）。
 
 ### 状態（sync.json）
 
@@ -368,7 +370,17 @@ push の拒否と再試行の間に別の衝突が入っても、次の周のマ
 
 - 書き込み時に watchers へ自動で足す: add の書き手、set や assign で足された assignees、comment の書き手、本文とコメントで新しくメンションされたアカウント（`@login` は書き手の Store のアカウントの host を補う）。
 - `hh watch <id>` / `hh unwatch <id>`: 自分（Store の書き手）を足す・外す。
+- index: フェーズ1c で回したコメント・作業時間のインデックスを作る（タスクごとのコメントと作業時間の ULID、author、created、updated、deleted_at。`hh show` と inbox の watch・mention の判定が使う）。
 - index: タスクの本文とコメントから `@...` と `#<ID>` を拾い、`Entry` にメンションと参照を持つ。`#<ID>` は今の ID と古い ID の両方で引く（`index.Resolve` と同じ順）。`Backlinks(ulid)` で参照元を返す。`hh show` に `Referenced by` を「ID (ULID) タイトル」の形で出す（`--json` は `referenced_by`、要素は `{"ulid", "id", "title"}`）。
+
+## クエリ
+
+親設計のクエリ言語のうち、フェーズ1c で「フェーズ2」とした条件を足す。
+
+- `@me` は config.yaml の `accounts[]` のすべてのアカウント（`query.Options.Me` に入れる）。`assignee:@me` も同じ。accounts がなければ今と同じく「アカウントが要る」エラー
+- `mentions:<account|@me>`: 本文か、削除されていないコメントでメンションされているタスク。`@login` のメンションは login で、`@host/login` は完全一致で比べる（inbox と同じ）
+- `watching:<account|@me>`: `watchers` にそのアカウントがいるタスク
+- `is:overwritten`: 自分の inbox に、そのタスクの未読の overwritten の件があるタスク（inbox はマシンごとなので、このマシンで受け取ったもの）
 
 ## undo と restore --at
 
@@ -398,11 +410,15 @@ push の拒否と再試行の間に別の衝突が入っても、次の周のマ
 | `hh sync --status` | 各 Store の `sync.json` と、origin より先にある未 push のコミット数を出す |
 | `hh store init <name> --prefix <接頭辞> --remote <url>...` | フェーズ1.5の初期化（`--prefix` 必須）に加え、remotes を config.yaml に記録し、merge driver を登録し、初回の push をする。remote は空の bare リポジトリを前提にする。空でなく push が拒否されたら、`hh store add` を案内してエラーにする |
 | `hh store add <name> --remote <url>... [--path <dir>]` | origin を clone し、config.yaml に登録し、merge driver を登録する。path の既定は `store init` と同じ。clone した Store のワークスペースを登録済みの他の Store と照合し、重複があれば警告する（どちらの `prefix_set` が後か、後の側で `hh workspace prefix` を使うよう案内する）。登録はする（重複は ID の重複を生まず、Store 名付きの表示はフェーズ3で作る） |
+| `hh store list` | config.yaml の Store の名前、パス、remotes、アカウント、最後の同期を出す（親設計の `hh store add/remove/list`。`store add` と一緒に作る） |
+| `hh store remove <name>` | config.yaml から外す。ディレクトリは消さない（`--purge` で消す。未 push のコミットがあれば拒否し、`hh sync` を案内する） |
 | `hh inbox` / `inbox read` / `inbox revert` | 前記 |
 | `hh watch` / `hh unwatch` | 前記 |
 | `hh undo` | 前記 |
 | `hh restore <id> --at <時点>` | 前記 |
 | `hedgehug merge-driver` / `hedgehug sync --background` | 隠しコマンド |
+
+隠しコマンドを除き、足すコマンドはすべて `--json` に対応する（親設計「すべてのコマンドは `--json` に対応」）。
 
 config.yaml で新しく読むもの（Save は今と同じく、知らないキーとコメントを残す）:
 
@@ -456,6 +472,9 @@ sync:
 - **diff3**: 重ならない変更、同じ変更、重なる変更、末尾の改行、空のファイル。
 - **repair**: 表の各行。親の2つ組・3つ組の循環（base あり・なし）、削除済みの親、消されたワークスペースの復活、不正な接頭辞の base への戻し、ワークスペースの違う子、ID の衝突（origin にある側を残す、どちらもない・両方あるときは ULID の小さい側、3つ以上の組、振った番号がマージした集合の最大 + 1 になる、読めないファイルと numbers.yaml の番号を数える）、接頭辞の不一致の振り直し、接頭辞と名前の重複の案内。決定性（同じ入力から同じ結果）。
 - **gitrepo**: インプロセスの file transport で fetch / push / clone（git の実行ファイルを呼ばないことを、PATH を空にして確かめる）、拒否の検出、`LastChange`、`DiffTrees`、`FastForward`、`Repack`。
+- **index.lock**: ロックがあれば待って `ErrGitBusy`、終わったら消える、merge driver は取らない。
+- **rank**: 同じ rank の兄弟が ID の順に並ぶ、書き込んだタスクだけが振り直され組の外との順が変わらない。
+- **クエリ**: `mentions:@me`（本文・コメント・削除済みコメントを除く・`@login` と `@host/login`）、`watching:@me`、`is:overwritten`、accounts からの `@me`。
 - **store**: `CommitMerge`（親の指定、検査をしない、`ErrHeadMoved`）、重複のあるワークスペースの変更で、変えていないフィールドの重複では拒否しないこと。
 - **sync**: fast-forward、マージ、拒否からの再試行（テスト用のフックで別のクローンが間に push する）、ID の衝突の振り直し（2つのクローンで同じ ID を振り、後から同期した側が振り直す。両方が収束する）、push の間のローカルの書き込みが失われない、手でマージした後の修復のコミット、ミラーへの push、`ErrDirty`、`.gitattributes` の追加、Store 間の接頭辞の重複の案内。
 - **プロパティテスト**（完了条件）: 1つの bare remote と3つのクローンを作り、ランダムな操作（add / set / status / mv / `mv --workspace` / rm / restore / purge / comment / 本文の編集 / schema.yaml の変更 / `workspace add` / `workspace prefix` / `workspace rename` / `workspace rm`）とランダムな順序の同期を繰り返す。同期をはさまずに複数のクローンで add することで、ID の衝突を必ず起こす。最後に全クローンが変わらなくなるまで同期し、次を確かめる。
@@ -480,6 +499,9 @@ sync:
 | merge driver の登録の確認 | 1d-2 | doctor の警告 |
 | `update` が途中で失敗すると `ix.tasks` が半端に残る | 1c | 同期の後の index の更新で通る経路なので、失敗を注入するテストで、次の `Open` で正しい状態になることを確かめる |
 | コメントの author、`created_by` | 1d-1 | 「自分」の節で埋める |
+| コメント・作業時間のインデックス、`mentions:@me`、`watching:@me`、`is:overwritten` | 1c | 「watchers とバックリンク」「クエリ」で作る |
+| 同じ rank の扱い（ID の順で並べて次の書き込みで振り直す） | 1a | 「マージ後の修復」の `rank` の重複の行で作る |
+| go-git が `index.lock` の手順を使わない | 1b・1d-2 | 「gitrepo の追加」で `.git/index.lock` を取る |
 | ID の衝突の振り直しと通知、`workspaces/` と `numbers.yaml` のマージ、接頭辞の重複の案内 | 1.5 | 「マージ後の修復」「numbers.yaml」「スプリント・リリース・テンプレート・ワークスペース」「Store 間の接頭辞の重複」で作る |
 
 フェーズ1・1.5の spec で意図して決めたもの（restore の秒精度など）は変えない。
@@ -492,5 +514,8 @@ spec の承認後に、次を親設計に書き足す。
 - 「上書きされた変更の扱い」: `Hedgehug-Overwritten` の最初の欄を、タスクだけでなくコメントや yaml も指せるように、タスクからファイルのパスに変えること。
 - 「マージ後の不変条件」: ワークスペースの復活、親とワークスペースの不一致、接頭辞の不一致の振り直し、名前の重複の案内を足し、ID の衝突で origin にどちらもない・両方あるときは ULID の小さい側を残すこと。手でマージした後は次の同期の修復のコミットで直すこと。
 - 「書き込みの流れ」: trailer の一覧（`Hedgehug-Author`、`Hedgehug-Repaired`、`Hedgehug-Undo`）と、マージ・修復・setup の件名。
-- 「消失への耐性」: undo と `restore --at` は `id`・`former_ids` を戻さないこと（`restore --at` は `workspace` も）。
-- 「アーキテクチャと技術選定」のパッケージ構成に `internal/merge`・`internal/sync`・`internal/inbox` を足す。
+- 「名前と識別子」の表の trailer に `Hedgehug-Workspace`（フェーズ1.5で足したが表に出ていない）、`Hedgehug-Author`、`Hedgehug-Repaired`、`Hedgehug-Undo` を足す。
+- 「手で git を操作する場合」: `.gitattributes` の行に `comments/`・`worklogs/`・`workspaces/` を足すこと。手でマージした後のファイルをまたぐ修復は次の `hh sync` で行うこと。Hedgehug が `.git/index.lock` を取って git と共存すること。
+- 「消失への耐性」: undo は git の revert ではなく、取り消すコミットの後の他人の変更を残すフィールド単位の取り消しのコミットであること。undo と `restore --at` は `id`・`former_ids` を戻さないこと（`restore --at` は `workspace` も）。
+- 「inbox に届くもの」: 復活、修復、ID の振り直し、接頭辞と名前の重複の案内を足す。
+- 「アーキテクチャと技術選定」のパッケージ構成に `internal/inbox` を足し、`internal/sync` の説明を「同期の手順、バックグラウンド同期」に、fetch / push を `internal/gitrepo` に置くことを書く。
