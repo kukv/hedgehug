@@ -75,7 +75,7 @@ func (r *Repo) writePack(objs []plumbing.Hash) (err error) {
 	defer func() {
 		if err != nil {
 			for _, t := range tmps {
-				_ = os.Remove(t)
+				removeReadOnly(t)
 			}
 		}
 	}()
@@ -126,15 +126,31 @@ func (r *Repo) writePack(objs []plumbing.Hash) (err error) {
 	} else if !errors.Is(serr, fs.ErrNotExist) {
 		return serr
 	}
+	// Read-only for everyone, as git writes them, so that the other users of
+	// a shared repository can read them.
+	for _, t := range tmps {
+		if err := os.Chmod(t, packMode); err != nil {
+			return err
+		}
+	}
 	if err := atomicfile.Rename(pack.Name(), base+".pack"); err != nil {
 		return err
 	}
 	if err := atomicfile.Rename(ix.Name(), base+".idx"); err != nil {
 		// A .pack without its .idx is never read; it is ours, so remove it.
-		_ = os.Remove(base + ".pack")
+		removeReadOnly(base + ".pack")
 		return err
 	}
 	return nil
+}
+
+const packMode = 0o444
+
+// removeReadOnly removes a file writePack made, which may be read-only by
+// then; Windows does not remove a read-only file.
+func removeReadOnly(p string) {
+	_ = os.Chmod(p, 0o600)
+	_ = os.Remove(p)
 }
 
 // indexPack reads the pack at path and returns its index.

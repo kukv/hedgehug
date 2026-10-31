@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -211,6 +212,31 @@ func TestRepackFailureLeavesNoFiles(t *testing.T) {
 				t.Errorf("Verify after a failed repack: %v", err)
 			}
 		})
+	}
+}
+
+func TestRepackWritesReadOnlyPacks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no permission bits for others")
+	}
+	dir := t.TempDir()
+	r, _ := Init(dir)
+	commitFiles(t, r, dir, map[string]string{"a.md": "1"})
+	if err := r.Repack(); err != nil {
+		t.Fatal(err)
+	}
+	files := packFiles(t, dir)
+	if len(files) != 2 {
+		t.Fatalf("pack files = %v", files)
+	}
+	for _, p := range files {
+		fi, err := os.Stat(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fi.Mode().Perm() != 0o444 {
+			t.Errorf("%s mode = %v, want 0444", filepath.Base(p), fi.Mode().Perm())
+		}
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -429,6 +430,44 @@ func TestBetweenPutsParentsFirstWhateverTheTime(t *testing.T) {
 	if e, ok, _ := r.LastChange(c2, base, "a.md"); !ok || e.Hash != c1 {
 		t.Errorf("LastChange = %+v, %v; want c1", e, ok)
 	}
+}
+
+func TestSideIsWalkedOnceAndSharedSafely(t *testing.T) {
+	dir := t.TempDir()
+	r, _ := Init(dir)
+	base := commitHead(t, r, dir, map[string]string{"a.md": "1\n"})
+	commitHead(t, r, dir, map[string]string{"a.md": "2\n"})
+	h := commitHead(t, r, dir, map[string]string{"b.md": "3\n"})
+	first, err := r.side(h, base)
+	if err != nil || len(first) != 2 {
+		t.Fatalf("side = %v, %v", first, err)
+	}
+	// The second call returns the slice the first one kept.
+	if again, _ := r.side(h, base); &again[0] != &first[0] {
+		t.Error("side walked the history again")
+	}
+	// Under -race, many readers of one fresh (from, base) do not race.
+	r2, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for i := range 16 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if i%2 == 0 {
+				if es, err := r2.Between(h, base); err != nil || len(es) != 2 || es[1].Hash != h {
+					t.Errorf("Between = %v, %v", es, err)
+				}
+				return
+			}
+			if e, ok, err := r2.LastChange(h, base, "a.md"); err != nil || !ok || e.Hash == h {
+				t.Errorf("LastChange = %+v, %v, %v", e, ok, err)
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func TestMergeBaseCrissCrossIsSymmetric(t *testing.T) {
