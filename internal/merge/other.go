@@ -11,13 +11,22 @@ func (m *merger) other(ours, theirs Side) (Result, error) {
 		win, lose = ours, theirs
 	}
 	r := Result{Data: win.Data}
-	if m.p == LWW && lose.Data != nil {
-		r.Overwritten = []Overwritten{{
-			Path:   m.path,
-			Field:  "*",
-			Value:  plumbing.ComputeHash(plumbing.BlobObject, lose.Data).String(),
-			Author: lose.Author,
-		}}
+	if lose.Data != nil {
+		r.Overwritten = m.blobLost(lose)
 	}
 	return r, nil
+}
+
+// blobLost records the whole file of s as lost, by its git blob hash.
+// Nothing is recorded under OursWins.
+func (m *merger) blobLost(s Side) []Overwritten {
+	if m.p != LWW {
+		return nil
+	}
+	return []Overwritten{{
+		Path:   m.path,
+		Field:  "*",
+		Value:  plumbing.ComputeHash(plumbing.BlobObject, s.Data).String(),
+		Author: s.Author,
+	}}
 }

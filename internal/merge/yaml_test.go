@@ -64,12 +64,74 @@ func TestYAMLKeepsListIndent(t *testing.T) {
 	}
 }
 
+// yaml.v4 indents all the lists of a file alike, so a file that mixes the
+// styles comes out in the style of its first block list.
+func TestYAMLMixedListIndent(t *testing.T) {
+	base := []byte("a:\n- x\nb:\n- y\nc: 0\n")
+	ours := []byte("a:\n  - x\nb:\n- y\nc: 1\n")
+	theirs := []byte("a:\n- x\nb:\n- y\nc: 2\n")
+	r := mergeSym(t, model.StoreMetaPath, Side{Data: base}, Side{Data: ours, Author: "b"}, Side{Data: theirs, Author: "a"})
+	if want := "a:\n  - x\nb:\n  - y\nc: 1\n"; string(r.Data) != want {
+		t.Errorf("r =\n%s", r.Data)
+	}
+}
+
+func TestNumbersUnreadableSide(t *testing.T) {
+	broken := []byte("WEB: [\n")
+	r := mergeSym(t, model.NumbersPath, Side{Data: []byte("WEB: 3\nAPI: 2\n")}, Side{Data: broken, Author: "a"}, Side{Data: []byte("WEB: 1\n"), Author: "b"})
+	n, err := model.DecodeNumbers(r.Data)
+	if err != nil || n["WEB"] != 3 || n["API"] != 2 || len(n) != 2 {
+		t.Errorf("numbers = %v, %v", n, err)
+	}
+	if len(r.Overwritten) != 1 || r.Overwritten[0].Field != "*" || r.Overwritten[0].Author != "a" || len(r.Overwritten[0].Value) != 40 {
+		t.Errorf("overwritten = %v", r.Overwritten)
+	}
+}
+
+func TestWhenOf(t *testing.T) {
+	t1, t2 := time.Unix(1, 0), time.Unix(2, 0)
+	when := WhenOf(map[string]time.Time{PathKey([]string{"statuses", "a", "x"}): t2, PathKey([]string{"props"}): t1})
+	for _, c := range []struct {
+		path []string
+		want time.Time
+	}{
+		{[]string{"statuses"}, t2},           // a value under it
+		{[]string{"statuses", "a", "x"}, t2}, // the value
+		{[]string{"props", "p", "type"}, t1}, // a value above it
+		{[]string{"statusesx"}, time.Time{}}, // not a path under statuses
+		{[]string{"x"}, time.Time{}},
+		{nil, t2}, // the root is above all
+	} {
+		if got := when(c.path); !got.Equal(c.want) {
+			t.Errorf("%q: %s, want %s", c.path, got, c.want)
+		}
+	}
+}
+
+// A list whose items share an identity key is one value: When is asked
+// about the list, and answers with the changes under it.
+func TestYAMLDuplicateItemKeysThroughWhen(t *testing.T) {
+	at := func(u int64) func([]string) time.Time {
+		return WhenOf(map[string]time.Time{PathKey([]string{"statuses", "a", "x"}): time.Unix(u, 0)})
+	}
+	base := []byte("statuses:\n- {name: a, x: 1}\n")
+	ours := []byte("statuses:\n- {name: a, x: 1}\n- {name: a, x: 2}\n")
+	theirs := []byte("statuses:\n- {name: a, x: 3}\n")
+	// ours changed it later; the authors alone would pick theirs.
+	r := mergeSym(t, schema.Path, Side{Data: base}, Side{Data: ours, Author: "a", When: at(2)}, Side{Data: theirs, Author: "b", When: at(1)})
+	if string(r.Data) != string(ours) || len(r.Overwritten) != 1 || r.Overwritten[0].Author != "b" {
+		t.Errorf("r = %s %v", r.Data, r.Overwritten)
+	}
+}
+
 func TestYAMLBlankSide(t *testing.T) {
 	base := []byte("a: 1\n")
 	theirs := []byte("a: 2\nb: 1\n")
 	for _, c := range []struct{ ours, want string }{
 		{"", "a: 2\nb: 1\n"},
-		{"# only a comment\n", "# only a comment\n\na: 2\nb: 1\n"},
+		{"# only a comment\n", "# only a comment\na: 2\nb: 1\n"},
+		// Each line is kept as it is, with LF line ends.
+		{"#a\r\n   #b\r\n\r\n# c", "#a\n   #b\n\n# c\na: 2\nb: 1\n"},
 	} {
 		r := mergeSym(t, schema.Path, Side{Data: base}, Side{Data: []byte(c.ours), Author: "z"}, Side{Data: theirs, Author: "a"})
 		// ours removed a, which theirs changed: a stays, and ours is told.

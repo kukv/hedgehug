@@ -41,20 +41,28 @@ func (m *merger) yaml(base []byte, ours, theirs Side) (Result, error) {
 		s.res.Data = []byte{}
 		return s.res, nil
 	}
-	doc.Content = []*yaml.Node{v}
-	data, err := dump(doc, flush)
+	data, err := dump(doc, v, flush)
 	if err != nil {
 		return Result{}, err
+	}
+	top := theirs.Data
+	if s.oursTop {
+		top = ours.Data
+	}
+	if blank(top) {
+		// The side the result is built on holds only comments: they come
+		// first, line for line.
+		data = append(comments(top), data...)
 	}
 	s.res.Data = data
 	return s.res, nil
 }
 
 // loadYAML reads a document. Data with only blank lines and comments is a
-// document with no value, which keeps the comments.
+// document with no value; see comments for keeping them.
 func loadYAML(data []byte) (*yaml.Node, error) {
 	if blank(data) {
-		return &yaml.Node{Kind: yaml.DocumentNode, HeadComment: string(bytes.TrimSpace(data))}, nil
+		return &yaml.Node{Kind: yaml.DocumentNode}, nil
 	}
 	var n yaml.Node
 	if err := yaml.Load(data, &n); err != nil {
@@ -80,6 +88,17 @@ func blank(data []byte) bool {
 	return true
 }
 
+// comments returns the lines of data, which holds only blank lines and
+// comments, as they are with LF line ends. The parser would give them as
+// one head comment, which the encoder writes back changed.
+func comments(data []byte) []byte {
+	out := bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
+	if len(out) > 0 && out[len(out)-1] != '\n' {
+		out = append(out, '\n')
+	}
+	return out
+}
+
 // root is the value of a document, or nil.
 func root(doc *yaml.Node) *yaml.Node {
 	if doc == nil || len(doc.Content) == 0 {
@@ -90,6 +109,9 @@ func root(doc *yaml.Node) *yaml.Node {
 
 // flushLists tells how the result writes its block lists: as the first
 // document with one writes them, else flush, as the encoders of model do.
+// yaml.v4 indents the lists of one Dump all alike (the setting is the
+// encoder's, not a node's), so a file that mixes the two styles comes out
+// in the style of its first block list, as config.yaml does.
 func flushLists(docs ...*yaml.Node) bool {
 	for _, d := range docs {
 		if r := root(d); r != nil {
@@ -101,7 +123,9 @@ func flushLists(docs ...*yaml.Node) bool {
 	return true
 }
 
-func dump(doc *yaml.Node, flush bool) ([]byte, error) {
+// dump writes doc with v as its value.
+func dump(doc, v *yaml.Node, flush bool) ([]byte, error) {
+	doc.Content = []*yaml.Node{v}
 	return yaml.Dump(doc, yaml.WithLineWidth(-1), yaml.WithIndent(2), yaml.WithCompactSeqIndent(flush))
 }
 
@@ -136,10 +160,16 @@ type YAMLValue struct {
 
 // YAMLValues lists the values of schema.yaml, automations.yaml or
 // store.yaml as the merge sees them: the keys of mappings and the items of
-// the lists it tells apart are followed, by the key or the item's
-// identity (which is not itself listed), and anything else is one value. When a value is a mapping on
-// one side and not on the other, When is asked about the mapping's path:
-// it then means the last change of any value under it.
+// the lists it tells apart are followed, by the key or the item's identity
+// (which is not itself listed), and anything else is one value.
+//
+// The versions of a file need not agree on where a value starts. When one
+// version holds one value where another has values under it (a mapping on
+// one side and not on the other, a list whose items lose their identity
+// key or share one, an empty mapping or list that gains items), When is
+// asked about the higher path, and means the last change of any value at
+// or under it. Likewise a value recorded at a higher path counts for the
+// paths under it. WhenOf answers so.
 func YAMLValues(data []byte) ([]YAMLValue, error) {
 	doc, err := loadYAML(data)
 	if err != nil {
@@ -171,6 +201,34 @@ func YAMLValues(data []byte) ([]YAMLValue, error) {
 		walk(nil, r)
 	}
 	return out, nil
+}
+
+// PathKey is the key of a yaml path in the map that WhenOf reads.
+func PathKey(path []string) string { return strings.Join(path, "\x00") }
+
+// WhenOf builds a Side.When from when a side last changed each value,
+// keyed by PathKey of the paths YAMLValues lists in its versions. A path is
+// answered with the latest change at it, under it or above it.
+func WhenOf(changed map[string]time.Time) func(path []string) time.Time {
+	return func(path []string) time.Time {
+		k := PathKey(path)
+		var latest time.Time
+		for p, at := range changed {
+			if related(p, k) && at.After(latest) {
+				latest = at
+			}
+		}
+		return latest
+	}
+}
+
+// related reports whether one of the path keys a and b is the other or a
+// path under it. The root path is above every path.
+func related(a, b string) bool {
+	if len(a) > len(b) {
+		a, b = b, a
+	}
+	return a == "" || a == b || strings.HasPrefix(b, a+"\x00")
 }
 
 // yamlNode merges the value at path; nil is a value that is not there.
@@ -341,16 +399,35 @@ func (m *sides) yamlList(path []string, key string, b, o, t, d *yaml.Node) *yaml
 // undo what both did, as it keeps a file that both removed removed. Nothing
 // is overwritten. The result is the file of a side that holds it already,
 // or else the document of the side it is built on, with its comments.
+//
+// A side that cannot be read counts as one that kept base, so that no
+// number goes down, and its file is recorded as overwritten.
 func (m *merger) numbers(base []byte, ours, theirs Side) (Result, error) {
-	o, err1 := model.DecodeNumbers(ours.Data)
-	t, err2 := model.DecodeNumbers(theirs.Data)
-	if err1 != nil || err2 != nil {
-		return m.other(ours, theirs)
-	}
 	b, err := model.DecodeNumbers(base)
 	if err != nil {
 		b = model.Numbers{}
 	}
+	o, err1 := model.DecodeNumbers(ours.Data)
+	t, err2 := model.DecodeNumbers(theirs.Data)
+	var lost []Overwritten
+	switch {
+	case err1 != nil && err2 != nil:
+		return m.other(ours, theirs)
+	case err1 != nil:
+		o, lost = maps.Clone(b), m.blobLost(ours)
+		ours.Data = nil
+	case err2 != nil:
+		t, lost = maps.Clone(b), m.blobLost(theirs)
+		theirs.Data = nil
+	}
+	r, err := maxNumbers(b, o, t, ours, theirs)
+	r.Overwritten = lost
+	return r, err
+}
+
+// maxNumbers writes the largest numbers of b, o and t for the prefixes of
+// o and t.
+func maxNumbers(b, o, t model.Numbers, ours, theirs Side) (Result, error) {
 	n := model.Numbers{}
 	for _, x := range []model.Numbers{o, t} {
 		for k := range x {
@@ -391,7 +468,7 @@ func (m *merger) numbers(base []byte, ours, theirs Side) (Result, error) {
 				&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!int", Value: strconv.Itoa(n[k])})
 		}
 	}
-	data, err := dump(doc, flushLists(doc))
+	data, err := dump(doc, mp, flushLists(doc))
 	if err != nil {
 		return Result{}, err
 	}
