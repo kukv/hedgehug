@@ -113,3 +113,17 @@ func TestRunSortErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestRunRankTiesAreOrderedByID(t *testing.T) {
+	s := newStore(t)
+	// The ULID order (ten first) differs from the id order.
+	ten, nine := newTask("ten"), newTask("nine")
+	ten.ID, nine.ID = "TST-10", "TST-9"
+	ten.Rank, nine.Rank = "a5", "a5"
+	put(t, s, ten, nine)
+
+	ix := mustOpen(t, s)
+	if got := run(t, ix, "", Options{}); len(got) != 1 || !reflect.DeepEqual(got[0], []string{"nine", "ten"}) {
+		t.Errorf("= %v, want [nine ten]", got)
+	}
+}

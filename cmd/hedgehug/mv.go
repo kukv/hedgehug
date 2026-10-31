@@ -194,10 +194,15 @@ func (a *app) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, befor
 	if i < 0 {
 		return "", fmt.Errorf("%s is not under the same parent", refName(ix, x.ULID))
 	}
+	// Siblings that share a rank are ordered by id, so no rank lies between
+	// them: the task takes the place the write would give it in the group.
 	if before != "" {
 		var prev model.Rank
 		if i > 0 {
 			prev = sib[i-1].Rank
+		}
+		if prev == x.Rank {
+			return a.rankInGroup(ix, ulid, x.Rank, sib)
 		}
 		return model.Between(prev, x.Rank)
 	}
@@ -205,5 +210,22 @@ func (a *app) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, befor
 	if i+1 < len(sib) {
 		next = sib[i+1].Rank
 	}
+	if next == x.Rank {
+		return a.rankInGroup(ix, ulid, x.Rank, sib)
+	}
 	return model.Between(x.Rank, next)
+}
+
+// rankInGroup returns the rank for ulid when it joins the siblings that
+// have rank r.
+func (a *app) rankInGroup(ix *index.Index, ulid model.ULID, r model.Rank, sibs []*index.Entry) (model.Rank, error) {
+	self := model.RankKey{ULID: ulid, Rank: r}
+	if e, ok := ix.Task(ulid); ok {
+		self.ID = e.ID
+	}
+	keys := make([]model.RankKey, len(sibs))
+	for i, e := range sibs {
+		keys[i] = model.RankKey{ID: e.ID, ULID: e.ULID, Rank: e.Rank}
+	}
+	return model.RankAmong(self, keys)
 }

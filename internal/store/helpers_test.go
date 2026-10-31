@@ -83,3 +83,11 @@ func mustWrite(t *testing.T, s *Store, rel, content string) {
 		t.Fatal(err)
 	}
 }
+
+// mustPut writes tasks in one operation and fails the test if it fails.
+func mustPut(t *testing.T, s *Store, tasks ...*model.Task) {
+	t.Helper()
+	if err := put(s, tasks...); err != nil {
+		t.Fatal(err)
+	}
+}

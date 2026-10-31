@@ -57,6 +57,7 @@ type Tx struct {
 	workspaces map[model.ULID]*model.Workspace // put workspaces; nil for a removed one
 	numbers    model.Numbers                   // the purged numbers; nil until read
 	oldIDs     []oldID                         // what assignIDs changed
+	oldRanks   []oldRank                       // what rerank changed
 }
 
 // pending is one queued write. created and updated point into the value
@@ -323,8 +324,8 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
 	s.schema.Store(cached)
 
 	tx := &Tx{s: s, op: op, pending: map[string]*pending{}, tasks: map[model.ULID]*model.Task{}, workspaces: map[model.ULID]*model.Workspace{}}
-	// assignIDs changes the caller's tasks; a failed operation leaves them
-	// as they were given.
+	// assignIDs and rerank change the caller's tasks; a failed operation
+	// leaves them as they were given.
 	defer func() {
 		if err != nil {
 			tx.restoreIDs()
@@ -333,6 +334,9 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
 	err = fn(tx)
 	if err == nil {
 		err = tx.assignIDs()
+		if err == nil {
+			err = tx.rerank()
+		}
 	}
 	tx.done = true
 	if err != nil {

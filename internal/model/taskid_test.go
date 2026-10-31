@@ -1,6 +1,9 @@
 package model
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestValidIDPrefix(t *testing.T) {
 	for _, p := range []string{"WEB", "A1", "ABCDEFGHIJ"} {
@@ -33,5 +36,13 @@ func TestIDNumbersIn(t *testing.T) {
 	got := IDNumbersIn([]byte("id: WEB-7\nformer_ids: [WEB-12, API-3]\nsee WEB-2, xWEB-99, WEB-0, WEB-5x and api-4\n"))
 	if len(got) != 2 || got["WEB"] != 12 || got["API"] != 3 {
 		t.Errorf("IDNumbersIn = %v", got)
+	}
+}
+
+func TestCompareIDs(t *testing.T) {
+	ids := []string{"WEB-10", "API-3", "WEB-9", "", "WEB-1"}
+	slices.SortFunc(ids, CompareIDs)
+	if want := []string{"API-3", "WEB-1", "WEB-9", "WEB-10", ""}; !slices.Equal(ids, want) {
+		t.Errorf("sorted = %v", ids)
 	}
 }

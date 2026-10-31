@@ -51,6 +51,35 @@ func TestMv(t *testing.T) {
 	}
 }
 
+func TestMvBetweenSiblingsWithTheSameRank(t *testing.T) {
+	te := newStoreEnv(t)
+	p := te.addJSON("P", "--kind", "project")
+	a := te.addJSON("A", "--parent", p.ID)
+	b := te.addJSON("B", "--parent", p.ID)
+	d := te.addJSON("D", "--parent", p.ID)
+	loose := te.addJSON("Loose")
+	// A merge can leave siblings with one rank; they are ordered by id.
+	te.commitFile(b.ULID, strings.Replace(te.raw(b.ULID), "rank: "+string(te.task(b.ULID).Rank), "rank: "+string(te.task(a.ULID).Rank), 1))
+	if te.task(a.ULID).Rank != te.task(b.ULID).Rank {
+		t.Fatal("A and B do not share a rank")
+	}
+
+	te.ok("mv", loose.ID, "--parent", p.ID, "--after", a.ID)
+	var titles []string
+	for _, l := range strings.Split(te.ok("ls", "--tree", "--no-color"), "\n") {
+		if i := strings.LastIndex(l, "  "); i >= 0 {
+			titles = append(titles, l[i+2:])
+		}
+	}
+	if got := strings.Join(titles, ","); got != "P,A,B,Loose,D" {
+		t.Errorf("order = %s", got)
+	}
+	l, dd := te.task(loose.ULID), te.task(d.ULID)
+	if l.Rank == te.task(a.ULID).Rank || l.Rank <= te.task(b.ULID).Rank || l.Rank >= dd.Rank {
+		t.Errorf("rank = %s, want between B's and D's", l.Rank)
+	}
+}
+
 func TestMvErrors(t *testing.T) {
 	te := newStoreEnv(t)
 	p := te.addJSON("P", "--kind", "project")

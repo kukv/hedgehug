@@ -37,6 +37,7 @@ type Store struct {
 	schema atomic.Pointer[schema.Schema] // replaced by Update; read without mu
 
 	idNumbers IDNumbers // counts id numbers for Update; nil reads every task
+	siblings  Siblings  // finds siblings for Update; nil reads every task
 
 	// Replaced by tests.
 	now      func() time.Time

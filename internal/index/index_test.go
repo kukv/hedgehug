@@ -101,3 +101,33 @@ func TestOpenViolations(t *testing.T) {
 	check(orphan)
 	check(parent.ULID)
 }
+
+func TestSiblingsWithTheSameRankAreOrderedByID(t *testing.T) {
+	s, _ := newStore(t)
+	// The ULID order (ten first) differs from the id order.
+	ten, nine, other := newTask("ten"), newTask("nine"), newTask("other")
+	ten.ID, nine.ID, other.ID = "TST-10", "TST-9", "TST-2"
+	ten.Rank, nine.Rank, other.Rank = "a5", "a5", "a9"
+	put(t, s, ten, nine, other)
+
+	ix := mustOpen(t, s)
+	if got := titles(ix.Roots()); !slices.Equal(got, []string{"nine", "ten", "other"}) {
+		t.Errorf("roots = %v", got)
+	}
+}
+
+// A write through a store the index is open on finds the siblings in the
+// index.
+func TestWriteReranksThroughTheIndex(t *testing.T) {
+	s, _ := newStore(t)
+	a, b := newTask("a"), newTask("b")
+	a.Rank, b.Rank = "a5", "a9"
+	put(t, s, a, b)
+	mustOpen(t, s)
+
+	b.Rank = "a5"
+	put(t, s, b)
+	if b.Rank <= "a5" {
+		t.Errorf("b.Rank = %s, want it after a5", b.Rank)
+	}
+}

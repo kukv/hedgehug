@@ -1,7 +1,6 @@
 package query
 
 import (
-	"cmp"
 	"fmt"
 	"math"
 	"slices"
@@ -531,8 +530,5 @@ func matchAll(ps []pred, e *index.Entry) bool {
 }
 
 func byRank(a, b *index.Entry) int {
-	if c := cmp.Compare(a.Rank, b.Rank); c != 0 {
-		return c
-	}
-	return cmp.Compare(a.ULID.String(), b.ULID.String())
+	return model.CompareRankKeys(model.RankKey{ID: a.ID, ULID: a.ULID, Rank: a.Rank}, model.RankKey{ID: b.ID, ULID: b.ULID, Rank: b.Rank})
 }

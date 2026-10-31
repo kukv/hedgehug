@@ -127,8 +127,11 @@ type oldID struct {
 	former []string
 }
 
-// restoreIDs puts back the ids assignIDs changed.
+// restoreIDs puts back the ids assignIDs and the ranks rerank changed.
 func (tx *Tx) restoreIDs() {
+	for _, o := range tx.oldRanks {
+		o.t.Rank = o.rank
+	}
 	for _, o := range tx.oldIDs {
 		o.t.ID, o.t.FormerIDs = o.id, o.former
 	}

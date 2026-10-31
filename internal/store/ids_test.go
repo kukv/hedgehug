@@ -16,13 +16,6 @@ func newTaskIn(ws *model.Workspace, title string) *model.Task {
 	return &model.Task{ULID: model.NewULID(), Workspace: ws.ULID, Kind: "task", Title: title, Status: "todo"}
 }
 
-func mustPut(t *testing.T, s *Store, tasks ...*model.Task) {
-	t.Helper()
-	if err := put(s, tasks...); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestAssignIDs(t *testing.T) {
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)

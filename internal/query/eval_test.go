@@ -176,7 +176,7 @@ func TestRunWorkspace(t *testing.T) {
 		{"workspace:api", []string{"b"}},
 		{"workspace:API", []string{"b"}},
 		{"workspace:test", []string{"a"}},
-		{"workspace:api,test", []string{"a", "b"}},
+		{"workspace:api,test", []string{"b", "a"}}, // same rank: API-1 before TST-1
 		{"-workspace:api", []string{"a"}},
 	}
 	for _, tt := range tests {

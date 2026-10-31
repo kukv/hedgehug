@@ -78,3 +78,19 @@ func (ix *Index) IDNumbers() (map[string]int, error) {
 	}
 	return out, nil
 }
+
+// siblingULIDs returns the tasks at HEAD under parent (nil for the top
+// level) in workspace ws, deleted ones included. It is the store's
+// Siblings.
+func (ix *Index) siblingULIDs(parent *model.ULID, ws model.ULID) ([]model.ULID, error) {
+	if err := ix.Refresh(); err != nil {
+		return nil, err
+	}
+	var out []model.ULID
+	for _, e := range ix.tasks {
+		if e.Workspace == ws && (e.Parent == nil) == (parent == nil) && (parent == nil || *e.Parent == *parent) {
+			out = append(out, e.ULID)
+		}
+	}
+	return out, nil
+}
