@@ -16,7 +16,7 @@ import (
 // Author returns the author of commits: user.name and user.email of the
 // user's global git config. GIT_CONFIG_GLOBAL names the only file to read
 // when set; otherwise the XDG file and ~/.gitconfig are read in that order,
-// the later winning, as git does. Accounts replace this in phase 3.
+// the later winning, as git does. Stores with an account use CommitAuthor instead.
 func Author(getenv func(string) string) (gitrepo.Signature, error) {
 	var files []string
 	if g := getenv("GIT_CONFIG_GLOBAL"); g != "" {
@@ -101,4 +101,13 @@ func includePath(from, home, p string) string {
 		return p
 	}
 	return filepath.Join(filepath.Dir(from), p)
+}
+
+// CommitAuthor returns the author of commits in a store: the login of acct
+// when ok, otherwise the one Author reads from the user's config.
+func CommitAuthor(acct Account, ok bool, getenv func(string) string) (gitrepo.Signature, error) {
+	if ok {
+		return gitrepo.Signature{Name: acct.Login, Email: acct.Login + "@users.noreply." + acct.Host}, nil
+	}
+	return Author(getenv)
 }

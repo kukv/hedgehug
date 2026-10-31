@@ -90,7 +90,7 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema) error {
 	if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, sc, ws, author); err != nil {
 		return err
 	}
-	if err := c.AddStore(name, dir); err != nil {
+	if err := c.AddStore(name, dir, nil); err != nil {
 		return errors.Join(err, os.RemoveAll(dir))
 	}
 	if err := c.Save(); err != nil {

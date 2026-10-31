@@ -180,7 +180,7 @@ func initUser(home, u string) error {
 	if err != nil {
 		return err
 	}
-	if err := c.AddStore(storeName, storeDir); err != nil {
+	if err := c.AddStore(storeName, storeDir, nil); err != nil {
 		return err
 	}
 	return c.Save()

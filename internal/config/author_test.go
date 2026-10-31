@@ -183,3 +183,25 @@ func TestAuthorInclude(t *testing.T) {
 		}
 	})
 }
+
+func TestCommitAuthorFromAccount(t *testing.T) {
+	sig, err := CommitAuthor(Account{Host: "github.com", Login: "alice"}, true, func(string) string { return "" })
+	if err != nil || sig != (gitrepo.Signature{Name: "alice", Email: "alice@users.noreply.github.com"}) {
+		t.Errorf("CommitAuthor = %+v, %v", sig, err)
+	}
+}
+
+func TestCommitAuthorWithoutAccountReadsGitConfig(t *testing.T) {
+	f := filepath.Join(t.TempDir(), "gitconfig")
+	writeFile(t, f, "[user]\n\tname = Bob\n\temail = bob@example.com\n")
+	env := func(k string) string {
+		if k == "GIT_CONFIG_GLOBAL" {
+			return f
+		}
+		return ""
+	}
+	sig, err := CommitAuthor(Account{}, false, env)
+	if err != nil || sig != (gitrepo.Signature{Name: "Bob", Email: "bob@example.com"}) {
+		t.Errorf("CommitAuthor = %+v, %v", sig, err)
+	}
+}
