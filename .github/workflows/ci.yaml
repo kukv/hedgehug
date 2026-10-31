@@ -103,5 +103,5 @@ jobs:
           mkdir -p "$RUNNER_TEMP/nogit"
           ln -s "$(command -v go)" "$RUNNER_TEMP/nogit/go"
           ln -s "$(go env GOPATH)/bin/gotestsum" "$RUNNER_TEMP/nogit/gotestsum"
-          ! PATH="$RUNNER_TEMP/nogit" command -v git
+          if PATH="$RUNNER_TEMP/nogit" command -v git; then exit 1; fi
           CGO_ENABLED=0 PATH="$RUNNER_TEMP/nogit" gotestsum --format testdox -- ./...
