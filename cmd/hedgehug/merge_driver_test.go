@@ -42,8 +42,8 @@ func TestMergeDriverWithGitPull(t *testing.T) {
 }
 
 // Both sides changed the same field: the driver writes the winner to <ours>
-// and the loser to a record for the inbox. With no commit being merged in (a rebase, say)
-// the sides carry no history, and the later `updated` wins.
+// and the loser to a record for the inbox. With no commit being merged in (a
+// rebase, say) the sides carry no history, and the later `updated` wins.
 func TestMergeDriverRecordsOverwritten(t *testing.T) {
 	alice, _, _ := twoUsers(t)
 	var shown struct {

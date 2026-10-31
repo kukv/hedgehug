@@ -39,10 +39,10 @@ func (a *app) mergeDriverCmd() *cobra.Command {
 // the files git made of its versions, and the result goes to ours. The times
 // and authors of the two sides come from the history of HEAD and of the
 // commit being merged in (GITHEAD_*; see mergedIn); without one (a rebase, a
-// cherry-pick) the sides carry none, and
-// the merge goes by the files alone. The values that lose go to
-// .hedgehug/local/overwritten/, for the next sync or hedgehug inbox. A merge
-// of one file does not repair what holds across files; the next sync does.
+// cherry-pick) the sides carry none, and the merge goes by the files alone.
+// The values that lose go to .hedgehug/local/overwritten/, for the next sync
+// or hedgehug inbox. A merge of one file does not repair what holds across
+// files; the next sync does.
 func (a *app) mergeDriver(basePath, oursPath, theirsPath, rel string) error {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -68,8 +68,10 @@ func (a *app) mergeDriver(basePath, oursPath, theirsPath, rel string) error {
 		return err
 	}
 	var ours, other merge.Side
-	// An empty base file is how git says the file has no common version
-	// (both sides added it); the merge reads that as no base.
+	// The base is git's own, which may be a virtual one after criss-cross
+	// merges; the history only gives the times and authors. An empty base
+	// file is how git says the file has no common version (both sides added
+	// it); the merge reads that as no base.
 	baseData := data[0]
 	if len(baseData) == 0 {
 		baseData = nil
@@ -84,7 +86,7 @@ func (a *app) mergeDriver(basePath, oursPath, theirsPath, rel string) error {
 		if sc, err = mergedSchema(r, base, head, theirs, sc, rel); err != nil {
 			return err
 		}
-		if baseData, ours, other, err = sync.Sides(r, base, head, theirs, rel); err != nil {
+		if _, ours, other, err = sync.Sides(r, base, head, theirs, rel); err != nil {
 			return err
 		}
 	}

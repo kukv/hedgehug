@@ -67,9 +67,10 @@ func (a *app) syncCmd() *cobra.Command {
 	return cmd
 }
 
-// syncTargets are the stores a sync works on: the one --store names, or all
-// that have a remote.
-func (a *app) syncTargets(c *config.Config) ([]config.StoreEntry, error) {
+// syncTargets are the stores a command works on: the one --store names, or
+// all that have a remote, or with all every store (the status lists those
+// with no remote too).
+func (a *app) syncTargets(c *config.Config, all bool) ([]config.StoreEntry, error) {
 	if a.storeName != "" {
 		e, err := c.Select(a.storeName)
 		return []config.StoreEntry{e}, err
@@ -79,7 +80,7 @@ func (a *app) syncTargets(c *config.Config) ([]config.StoreEntry, error) {
 	}
 	var out []config.StoreEntry
 	for _, e := range c.Stores {
-		if len(e.Remotes) > 0 {
+		if all || len(e.Remotes) > 0 {
 			out = append(out, e)
 		}
 	}
@@ -125,7 +126,7 @@ func (a *app) sync() error {
 	if err != nil {
 		return err
 	}
-	targets, err := a.syncTargets(c)
+	targets, err := a.syncTargets(c, false)
 	if err != nil {
 		return err
 	}
@@ -327,15 +328,7 @@ func (a *app) syncStatus() error {
 	if err != nil {
 		return err
 	}
-	var targets []config.StoreEntry
-	if a.storeName != "" {
-		targets, err = a.syncTargets(c)
-	} else {
-		targets = c.Stores
-		if len(targets) == 0 {
-			err = config.ErrNoStores
-		}
-	}
+	targets, err := a.syncTargets(c, true)
 	if err != nil {
 		return err
 	}

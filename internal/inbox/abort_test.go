@@ -14,10 +14,21 @@ import (
 // that commit never reaches HEAD, and the record is dropped; while the merge
 // is under way the record waits.
 func TestImportDropsAbortedMerge(t *testing.T) {
-	_, b := twoClones(t)
+	a, b := twoClones(t)
 	box := Open(b.s)
 	inHead := head(t, b).String()
-	elsewhere := "0123456789abcdef0123456789abcdef01234567"
+	// A commit b has the objects of but not in its history, as after an
+	// aborted merge.
+	addTask(t, a, "x", nil)
+	if err := a.s.Repo().Push("origin"); err != nil {
+		t.Fatal(err)
+	}
+	fetched, err := b.s.Repo().Fetch("origin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	elsewhere := fetched.String()
+	unknown := "0123456789abcdef0123456789abcdef01234567"
 	write := func(commit string) string {
 		rec := `{"path":"tasks/0A/P0/01JBZ8K3QW7M2X9V4T6R5N8P0A.md","field":"title","value":"\"mine\"","author":"github.com/b","commit":"` + commit + `","time":"2026-10-31T10:00:00Z"}`
 		name := "overwritten/" + model.NewULID().String() + ".json"
@@ -37,6 +48,18 @@ func TestImportDropsAbortedMerge(t *testing.T) {
 	items, _ := box.List(true)
 	if len(items) != 1 || items[0].Commit != inHead || !gone(aborted) || !gone(merged) {
 		t.Errorf("items = %+v, aborted gone %v, merged gone %v", items, gone(aborted), gone(merged))
+	}
+
+	// A commit that cannot be judged keeps its record.
+	unjudged := write(unknown)
+	if err := box.Import([]string{"github.com/b"}); err != nil {
+		t.Fatal(err)
+	}
+	if gone(unjudged) {
+		t.Error("a record of a commit that could not be judged was dropped")
+	}
+	if err := b.s.RemoveLocal(unjudged); err != nil {
+		t.Fatal(err)
 	}
 
 	// With a merge under way the record stays.

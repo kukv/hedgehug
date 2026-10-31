@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
 )
 
@@ -119,4 +120,49 @@ func TestMergeDriverRecordCarriesMergeHead(t *testing.T) {
 		t.Errorf("record = %s, want %s", b, want)
 	}
 	run("merge", "--abort")
+}
+
+// With a commit being merged in the times and authors come from the history,
+// and the base is still git's: empty for a file both sides added.
+func TestMergeDriverAddAddWithMergedInCommit(t *testing.T) {
+	alice, _, _ := twoUsers(t)
+	task := *task1(t, alice)
+	task.ULID = model.NewULID()
+	task.ID = "ORG-9"
+	tmp := t.TempDir()
+	base, ours, theirs := filepath.Join(tmp, "base"), filepath.Join(tmp, "ours"), filepath.Join(tmp, "theirs")
+	if err := os.WriteFile(base, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writeTaskFile(t, ours, task, "ours", task.Updated.Add(time.Hour))
+	writeTaskFile(t, theirs, task, "theirs", task.Updated.Add(2*time.Hour))
+	dir := alice.storeDir("org")
+	t.Chdir(dir)
+	r, err := gitrepo.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err := r.Head()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GITHEAD_"+head.String(), "theirs")
+	if code, _, errs := alice.run("merge-driver", base, ours, theirs, model.TaskPath(task.ULID)); code != 0 {
+		t.Fatalf("merge-driver: %d %s", code, errs)
+	}
+	merged, err := os.ReadFile(ours) //nolint:gosec // the file of the test
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := model.DecodeTask(merged); err != nil || got.ID != "ORG-9" {
+		t.Errorf("merged = %+v, %v", got, err)
+	}
+	recs, err := os.ReadDir(filepath.Join(dir, ".hedgehug", "local", "overwritten"))
+	if err != nil || len(recs) != 1 {
+		t.Fatalf("records = %v, %v", recs, err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, ".hedgehug", "local", "overwritten", recs[0].Name())) //nolint:gosec // the record of the test
+	if err != nil || !strings.Contains(string(b), `"commit":"`+head.String()+`"`) {
+		t.Errorf("record = %s, %v", b, err)
+	}
 }

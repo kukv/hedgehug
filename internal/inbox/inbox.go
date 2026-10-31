@@ -365,7 +365,10 @@ const (
 // fate tells what became of the merge the driver wrote a record for. The
 // record names the commit being merged in; it is not in HEAD's history once
 // the merge has been aborted. A record without a commit (a rebase, a
-// cherry-pick) has no merge to wait for.
+// cherry-pick) has no merge to wait for. A commit that cannot be judged (an
+// error reading the history) keeps its record: dropping is irreversible. After
+// a squash merge the commit never becomes an ancestor of HEAD, so its records
+// are dropped as if the merge were aborted.
 func (b *Box) fate(commit string) recordFate {
 	if !plumbing.IsHash(commit) {
 		return recordSettled
@@ -378,7 +381,11 @@ func (b *Box) fate(commit string) recordFate {
 	if err != nil {
 		return recordPending
 	}
-	if in, err := r.IsAncestor(plumbing.NewHash(commit), head); err != nil || !in {
+	in, err := r.IsAncestor(plumbing.NewHash(commit), head)
+	switch {
+	case err != nil:
+		return recordPending
+	case !in:
 		return recordAborted
 	}
 	return recordSettled
