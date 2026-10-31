@@ -96,7 +96,7 @@ func TestMergeDriverRecordCarriesMergeHead(t *testing.T) {
 	run := func(args ...string) {
 		cmd := exec.Command(gitBin, append([]string{"-c", "user.name=bob", "-c", "user.email=bob@x", "-c", "commit.gpgsign=false"}, args...)...)
 		cmd.Dir = dir
-		cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(bin)+string(os.PathListSeparator)+filepath.Dir(gitBin), "HEDGEHUG_AUTO_SYNC=0",
+		cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(bin)+string(os.PathListSeparator)+os.Getenv("PATH"), "HEDGEHUG_AUTO_SYNC=0",
 			"GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1")
 		out, err := cmd.CombinedOutput()
 		if err != nil {

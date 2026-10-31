@@ -67,7 +67,7 @@ func TestStoreAddMirror(t *testing.T) {
 	carol := alice.other()
 	carol.ok("store", "add", "org", "--remote", remote, "--remote", mirror)
 	cfg, err := os.ReadFile(filepath.Join(carol.storeDir("org"), ".git", "config"))
-	if err != nil || !strings.Contains(string(cfg), `[remote "mirror1"]`) || !strings.Contains(string(cfg), mirror) {
+	if err != nil || !strings.Contains(string(cfg), `[remote "mirror1"]`) || !strings.Contains(string(cfg), strings.ReplaceAll(mirror, `\`, `\\`)) { // .git/config escapes a backslash
 		t.Errorf(".git/config = %q, %v", cfg, err)
 	}
 	if out := carol.ok("store", "list"); !strings.Contains(out, remote+","+mirror) {

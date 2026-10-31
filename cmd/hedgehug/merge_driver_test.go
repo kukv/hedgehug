@@ -18,7 +18,7 @@ func gitPull(t *testing.T, gitBin, bin string, te *testEnv) {
 	t.Helper()
 	cmd := exec.Command(gitBin, "-c", "user.name=bob", "-c", "user.email=bob@x", "-c", "commit.gpgsign=false", "pull", "--no-rebase", "origin", "main")
 	cmd.Dir = te.storeDir("org")
-	cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(bin)+string(os.PathListSeparator)+filepath.Dir(gitBin), "HEDGEHUG_AUTO_SYNC=0",
+	cmd.Env = append(os.Environ(), "PATH="+filepath.Dir(bin)+string(os.PathListSeparator)+os.Getenv("PATH"), "HEDGEHUG_AUTO_SYNC=0",
 		"GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1") // not the signing of whoever runs the test
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git pull: %v\n%s", err, out)

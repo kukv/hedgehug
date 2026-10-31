@@ -187,7 +187,11 @@ func TestMain(m *testing.M) {
 	// hedgehug is on PATH, as doctor expects of a store with a merge driver.
 	pathDir, err := os.MkdirTemp("", "hedgehug-path-")
 	if err == nil {
-		if err := os.WriteFile(filepath.Join(pathDir, "hedgehug"), nil, 0o700); err == nil { //nolint:gosec // an empty file that only has to be found
+		name := "hedgehug"
+		if runtime.GOOS == "windows" {
+			name += ".exe" // exec.LookPath tries the PATHEXT names only
+		}
+		if err := os.WriteFile(filepath.Join(pathDir, name), nil, 0o700); err == nil { //nolint:gosec // an empty file that only has to be found
 			_ = os.Setenv("PATH", pathDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 		}
 	}
