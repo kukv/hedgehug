@@ -48,6 +48,23 @@ func acquire(path string, wait time.Duration) (*fileLock, error) {
 	}
 }
 
+// WithFileLock runs fn holding the OS lock on the file path, made with its
+// directory when missing, waiting up to wait for another holder. It is for
+// locks outside a store, such as the one that keeps two processes from
+// refreshing a token at once.
+func WithFileLock(path string, wait time.Duration, fn func() error) (err error) {
+	l, err := acquire(path, wait)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if rerr := l.release(); err == nil {
+			err = rerr
+		}
+	}()
+	return fn()
+}
+
 func (l *fileLock) release() error {
 	err := unlock(l.f)
 	if cerr := l.f.Close(); err == nil {
