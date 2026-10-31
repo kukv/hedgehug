@@ -165,8 +165,7 @@ func TestMergeDriverRecordsOverwritten(t *testing.T) {
 }
 
 // git runs the driver while it holds .git/index.lock, so the driver neither
-// waits for the lock (Commit waits 2 seconds, then gives ErrGitBusy) nor
-// removes it.
+// takes the lock nor removes it.
 func TestMergeDriverIgnoresIndexLock(t *testing.T) {
 	alice, _, _ := twoUsers(t)
 	dir, rel, o, a, b := driverFiles(t, alice)
@@ -175,13 +174,10 @@ func TestMergeDriverIgnoresIndexLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Chdir(dir)
-	start := time.Now()
+	// A driver that took the lock would fail with ErrGitBusy, as the lock stays.
 	code, _, errs := alice.run("merge-driver", o, a, b, rel)
 	if code != 0 || strings.Contains(errs, "index.lock") {
 		t.Fatalf("merge-driver with index.lock: %d %s", code, errs)
-	}
-	if d := time.Since(start); d >= time.Second {
-		t.Errorf("the driver waited %v for index.lock", d)
 	}
 	merged, err := os.ReadFile(a) //nolint:gosec // the file of the test
 	if err != nil {
