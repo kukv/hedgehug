@@ -47,6 +47,8 @@ func (a *app) rootCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args:          cobra.NoArgs,
+		// Every subcommand uses this one: none has a hook of its own.
+		PersistentPreRun: a.beforeCommand,
 		// completion comes in phase 7.
 		CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -166,7 +168,64 @@ func (a *app) update(s *store.Store, op store.Op, fn func(*store.Tx) error) (boo
 		op.Account = acct.ID()
 	}
 	beforeUpdate()
-	return s.Update(op, fn)
+	committed, err := s.Update(op, fn)
+	if err == nil && committed {
+		a.afterWrite(s)
+	}
+	return committed, err
+}
+
+// afterWrite notes that the store has a commit to push and, when it has a
+// remote, starts the background sync. The commit is made, so a failure here
+// is only a warning.
+func (a *app) afterWrite(s *store.Store) {
+	if err := sync.MarkPending(s, a.now()); err != nil {
+		_, _ = fmt.Fprintln(a.stderr, "warning: the write is not marked for sync:", err)
+		return
+	}
+	c, _, err := a.config()
+	if err != nil {
+		return
+	}
+	e, err := c.Select(a.storeName)
+	if err != nil || len(e.Remotes) == 0 {
+		return
+	}
+	if err := sync.Start(s, e.Name, a.getenv); err != nil {
+		_, _ = fmt.Fprintln(a.stderr, "warning: the background sync did not start:", err)
+	}
+}
+
+// beforeCommand reports the failure of a background sync that the user has
+// not been told of, and starts one for each store with a remote that is due.
+// What goes wrong here is left to the command itself to tell: it fails on
+// the same store or config.
+func (a *app) beforeCommand(cmd *cobra.Command, _ []string) {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c.Parent() != nil && c.Parent().Parent() == nil && (c.Name() == "sync" || c.Name() == "merge-driver") {
+			return // the sync itself, and a merge in the middle of one
+		}
+	}
+	cfg, _, err := a.config()
+	if err != nil {
+		return
+	}
+	targets, err := a.syncTargets(cfg, false)
+	if err != nil {
+		return
+	}
+	for _, e := range targets {
+		s, err := store.Open(e.Path)
+		if err != nil {
+			continue
+		}
+		if msg, err := sync.TakeError(s); err == nil && msg != "" {
+			_, _ = fmt.Fprintf(a.stderr, "hedgehug: background sync of %s failed: %s (run hedgehug sync)\n", e.Name, msg)
+		}
+		if st, err := sync.ReadState(s); err == nil && sync.Due(st, a.now(), cfg.Sync.Interval) {
+			_ = sync.Start(s, e.Name, a.getenv)
+		}
+	}
 }
 
 // syncOptions is what sync.Run needs for the store e, which need not be in c

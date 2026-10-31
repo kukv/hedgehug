@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
+	hhsync "github.com/kukv/hedgehug/internal/sync"
 )
 
 // testEnv runs the command with HEDGEHUG_HOME and HOME in temporary
@@ -221,6 +223,58 @@ func twoUsers(t *testing.T) (alice, bob *testEnv, remote string) {
 	bob.writeAccounts("github.com", "bob")
 	bob.ok("store", "add", "org", "--remote", remote)
 	return alice, bob, remote
+}
+
+// writeSync adds the sync section to config.yaml.
+func (te *testEnv) writeSync(interval, pushInterval string) {
+	te.t.Helper()
+	p := filepath.Join(te.hhHome, "config.yaml")
+	old, err := os.ReadFile(p) //nolint:gosec // the config of the test
+	if err != nil {
+		te.t.Fatal(err)
+	}
+	sec := fmt.Sprintf("sync:\n  interval: %s\n  push_interval: %s\n", interval, pushInterval)
+	if err := os.WriteFile(p, append(old, sec...), 0o600); err != nil {
+		te.t.Fatal(err)
+	}
+}
+
+// setSyncError makes the last background sync of the store look failed and
+// not yet reported.
+func (te *testEnv) setSyncError(name, msg string) {
+	te.t.Helper()
+	b, err := json.Marshal(map[string]any{"last_error": msg, "last_attempt": te.now, "last_success": te.now})
+	if err != nil {
+		te.t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(te.storeDir(name), ".hedgehug", "local", "sync.json"), b, 0o600); err != nil {
+		te.t.Fatal(err)
+	}
+}
+
+// stubSpawn replaces the start of the background sync with f, which gets the
+// arguments of the child.
+func stubSpawn(f func(args []string)) (restore func()) {
+	return hhsync.SetSpawn(func(_ string, args []string, _ string) error { f(args); return nil })
+}
+
+// runBinary runs the built command with the variables of the test, and
+// HEDGEHUG_AUTO_SYNC as te.env sets it.
+func (te *testEnv) runBinary(bin string, args ...string) {
+	te.t.Helper()
+	cmd := exec.Command(bin, args...) //nolint:gosec // the binary the test built
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "HOME=") && !strings.HasPrefix(kv, "USERPROFILE=") && !strings.HasPrefix(kv, "HEDGEHUG_") {
+			cmd.Env = append(cmd.Env, kv)
+		}
+	}
+	cmd.Env = append(cmd.Env, "HOME="+te.home, "USERPROFILE="+te.home, "HEDGEHUG_HOME="+te.hhHome)
+	for k, v := range te.env {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		te.t.Fatalf("hedgehug %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
 }
 
 // editorStepSep separates the steps of a test editor script, and the

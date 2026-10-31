@@ -24,7 +24,13 @@ const syncLockWait = 5 * time.Minute
 // runSync syncs s under .hedgehug/local/sync.lock, and keeps in sync.json
 // how it went. A write that was pending when the sync began has been pushed
 // by it; one made later has not.
-func (a *app) runSync(s *store.Store, opt sync.Options) (res sync.Result, err error) {
+func (a *app) runSync(s *store.Store, opt sync.Options) (sync.Result, error) {
+	return a.runSyncReported(s, opt, true)
+}
+
+// runSyncReported is runSync; reported says that the one who ran it is told
+// of a failure, so the next command does not tell of it again.
+func (a *app) runSyncReported(s *store.Store, opt sync.Options, reported bool) (res sync.Result, err error) {
 	err = s.WithLocalLock("sync.lock", syncLockWait, func() error {
 		started := a.now()
 		if _, err := sync.UpdateState(s, func(st *sync.State) { st.LastAttempt = started }); err != nil {
@@ -33,12 +39,12 @@ func (a *app) runSync(s *store.Store, opt sync.Options) (res sync.Result, err er
 		var runErr error
 		res, runErr = sync.Run(s, opt)
 		_, stateErr := sync.UpdateState(s, func(st *sync.State) {
-			st.ErrorReported = false
 			if runErr != nil {
 				st.LastError = runErr.Error()
+				st.ErrorReported = reported
 				return
 			}
-			st.LastError = ""
+			st.LastError, st.ErrorReported = "", false
 			st.LastSuccess = a.now()
 			if st.PendingSince.Before(started) {
 				st.PendingSince = time.Time{}
@@ -50,7 +56,7 @@ func (a *app) runSync(s *store.Store, opt sync.Options) (res sync.Result, err er
 }
 
 func (a *app) syncCmd() *cobra.Command {
-	var status bool
+	var status, background bool
 	cmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Sync the stores with their remotes",
@@ -60,11 +66,48 @@ func (a *app) syncCmd() *cobra.Command {
 			if status {
 				return a.syncStatus()
 			}
+			if background {
+				return a.syncBackground()
+			}
 			return a.sync()
 		},
 	}
 	cmd.Flags().BoolVar(&status, "status", false, "show how the syncs went and the commits not pushed, and sync nothing")
+	cmd.Flags().BoolVar(&background, "background", false, "wait for push_interval after a write, then sync the store given with --store")
+	_ = cmd.Flags().MarkHidden("background")
 	return cmd
+}
+
+// syncBackground is what the detached child of a write runs. Its failures
+// are in sync.json and the log, not in the exit code: no one waits for it.
+func (a *app) syncBackground() error {
+	c, _, err := a.config()
+	if err != nil {
+		return err
+	}
+	if a.storeName == "" {
+		return usageErrorf("--background needs --store")
+	}
+	e, err := c.Select(a.storeName)
+	if err != nil {
+		return err
+	}
+	s, err := store.Open(e.Path)
+	if err != nil {
+		return err
+	}
+	opt, err := a.syncOptions(c, e)
+	if err != nil {
+		return err
+	}
+	err = sync.Background(s, opt, c.Sync.PushInterval, func() error {
+		_, err := a.runSyncReported(s, opt, false)
+		return err
+	})
+	if err != nil {
+		_, _ = fmt.Fprintf(a.stderr, "%s sync %s: %v\n", a.now().Format(time.RFC3339), e.Name, err)
+	}
+	return nil
 }
 
 // syncTargets are the stores a command works on: the one --store names, or
