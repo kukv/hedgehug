@@ -30,7 +30,8 @@ type testEnv struct {
 	home     string
 	hhHome   string
 	stdin    string
-	terminal bool // what isTerminal reports for every stream
+	terminal bool               // what isTerminal reports for every stream
+	openURL  func(string) error // what the browser is opened with; nil for none
 	now      time.Time
 	env      map[string]string // more variables, looked up after the fixed ones
 	tmp      string            // the directory of temporary files, set by editWith
@@ -83,6 +84,7 @@ func (te *testEnv) run(args ...string) (code int, stdout, stderr string) {
 		getenv:     te.getenv,
 		isTerminal: func(any) bool { return te.terminal },
 		now:        func() time.Time { return te.now },
+		openURL:    te.openURL,
 
 		beforeUpdate: te.beforeUpdate,
 	}
