@@ -2,6 +2,7 @@ package sync
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"slices"
@@ -20,7 +21,7 @@ type write struct {
 	clone  int
 	commit plumbing.Hash
 	task   model.ULID // the workspace for the ws.* fields; zero for the schema
-	field  string     // title, status, parent, workspace, deleted_at, body, labels, id, comment, purge, ws.name, ws.id_prefix, schema.status, schema.prop
+	field  string     // title, status, parent, workspace, deleted_at, body, labels, id, comment, purge, ws.rm, ws.name, ws.id_prefix, schema.status, schema.prop
 	value  string     // JSON; for body, the line written; for labels, the label added
 }
 
@@ -169,11 +170,17 @@ func (c *cluster) nextRank() model.Rank {
 	return r
 }
 
-// update runs fn as one operation of clone i. A rejected operation is a
-// correct outcome, and gives no commit.
+// update runs fn as one operation of clone i. A write the store refuses for
+// the rules of the schema is a correct outcome, and gives no commit; any
+// other error fails the test.
 func (c *cluster) update(i int, o store.Op, fn func(tx *store.Tx) error) (plumbing.Hash, bool) {
 	c.t.Helper()
 	ok, err := c.stores[i].Update(o, fn)
+	var ve *store.ValidationError
+	var se *store.SchemaError
+	if err != nil && !errors.As(err, &ve) && !errors.As(err, &se) {
+		c.t.Fatalf("clone %d: %s: %v", i, o.Name, err)
+	}
 	if err != nil || !ok {
 		return plumbing.ZeroHash, false
 	}
@@ -527,8 +534,23 @@ func opSchema(c *cluster, i int, rnd *rand.Rand) []write {
 	return []write{{i, h, model.ULID{}, field, js(name)}}
 }
 
+// clashes reports whether the store would refuse a workspace with this name
+// and prefix because another workspace has the same: the name in any case,
+// the prefix exactly.
+func (v *view) clashes(self model.ULID, name, prefix string) bool {
+	for u, o := range v.ws {
+		if u != self && (o.IDPrefix == prefix || strings.EqualFold(o.Name, name)) {
+			return true
+		}
+	}
+	return false
+}
+
 func opWSAdd(c *cluster, i int, rnd *rand.Rand) []write {
 	w := &model.Workspace{ULID: model.NewULID(), Name: namePool[rnd.IntN(len(namePool))], IDPrefix: prefixPool[rnd.IntN(len(prefixPool))], PrefixSet: time.Now()}
+	if c.view(i).clashes(w.ULID, w.Name, w.IDPrefix) {
+		return nil
+	}
 	h, ok := c.update(i, c.wsOp(i, w.ULID), func(tx *store.Tx) error { return tx.PutWorkspace(w) })
 	if !ok {
 		return nil
@@ -545,7 +567,7 @@ func opWSPrefix(c *cluster, i int, rnd *rand.Rand) []write {
 		return nil
 	}
 	prefix := prefixPool[rnd.IntN(len(prefixPool))]
-	if prefix == ws.IDPrefix {
+	if prefix == ws.IDPrefix || v.clashes(ws.ULID, ws.Name+"\x00", prefix) {
 		return nil
 	}
 	var tasks []*model.Task
@@ -595,12 +617,13 @@ func opWSPrefix(c *cluster, i int, rnd *rand.Rand) []write {
 }
 
 func opWSRename(c *cluster, i int, rnd *rand.Rand) []write {
-	ws := c.view(i).pickWS(rnd, func(*model.Workspace) bool { return true })
+	v := c.view(i)
+	ws := v.pickWS(rnd, func(*model.Workspace) bool { return true })
 	if ws == nil {
 		return nil
 	}
 	name := strings.ToLower(namePool[rnd.IntN(len(namePool))])
-	if name == ws.Name {
+	if name == ws.Name || v.clashes(ws.ULID, name, ws.IDPrefix+"\x00") {
 		return nil
 	}
 	h, ok := c.update(i, c.wsOp(i, ws.ULID), func(tx *store.Tx) error {
@@ -635,6 +658,9 @@ func opWSRm(c *cluster, i int, rnd *rand.Rand) []write {
 	if ws == nil {
 		return nil
 	}
-	c.update(i, c.wsOp(i, ws.ULID), func(tx *store.Tx) error { return tx.RemoveWorkspace(ws.ULID) })
-	return nil
+	h, ok := c.update(i, c.wsOp(i, ws.ULID), func(tx *store.Tx) error { return tx.RemoveWorkspace(ws.ULID) })
+	if !ok {
+		return nil
+	}
+	return []write{{i, h, ws.ULID, "ws.rm", "null"}}
 }

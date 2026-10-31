@@ -240,8 +240,25 @@ func (h *history) purged(w write, writes []write) bool {
 	})
 }
 
-func (h *history) wasRepaired(u model.ULID) bool {
-	return slices.ContainsFunc(h.repaired, func(r repaired) bool { return r.ulid == u.String() })
+// repairFields are the fields a kind of repair or notice changes, as the
+// writes name them.
+var repairFields = map[string][]string{
+	"parent_cycle":       {"parent"},
+	"parent_deleted":     {"parent"},
+	"workspace_mismatch": {"workspace", "id"},
+	"id_collision":       {"id"},
+	"id_renumbered":      {"id"},
+	"revived":            {"deleted_at"},
+	"workspace_revived":  {"ws.name", "ws.id_prefix"},
+	"id_prefix":          {"ws.id_prefix"},
+}
+
+// wasRepaired reports whether a repair or notice of the task or workspace u
+// touched the field.
+func (h *history) wasRepaired(u model.ULID, field string) bool {
+	return slices.ContainsFunc(h.repaired, func(r repaired) bool {
+		return r.ulid == u.String() && slices.Contains(repairFields[r.kind], field)
+	})
 }
 
 // sameJSON compares two JSON values, times by the instant.
@@ -271,7 +288,7 @@ func (h *history) wasLost(path, field, value string) bool {
 func (h *history) checkWrites(ps *problems, writes []write) {
 	sc := h.c.stores[0].Schema()
 	for _, w := range writes {
-		if w.field == "purge" || h.purged(w, writes) {
+		if w.field == "purge" || w.field == "ws.rm" || h.purged(w, writes) {
 			continue
 		}
 		if _, ok := h.entries[w.commit]; !ok {
@@ -294,7 +311,10 @@ func (h *history) checkWrites(ps *problems, writes []write) {
 		default:
 			t := h.v.tasks[w.task]
 			if t == nil {
-				continue // purged
+				if !slices.ContainsFunc(writes, func(o write) bool { return o.task == w.task && o.field == "purge" }) {
+					ps.add("task %s is gone, and no clone purged it (%s %s)", w.task, w.field, w.value)
+				}
+				continue
 			}
 			h.checkTaskWrite(ps, w, t, writes)
 		}
@@ -304,14 +324,17 @@ func (h *history) checkWrites(ps *problems, writes []write) {
 func (h *history) checkWorkspace(ps *problems, w write, writes []write) {
 	ws := h.v.ws[w.task]
 	if ws == nil {
-		return // removed
+		if !slices.ContainsFunc(writes, func(o write) bool { return o.task == w.task && o.field == "ws.rm" }) {
+			ps.add("workspace %s is gone, and no clone removed it (%s %s)", w.task, w.field, w.value)
+		}
+		return
 	}
 	field := strings.TrimPrefix(w.field, "ws.")
 	final := js(ws.Name)
 	if field == "id_prefix" {
 		final = js(ws.IDPrefix)
 	}
-	if sameJSON(final, w.value) || h.replaced(w, writes) || h.reverts(w, writes) || h.wasRepaired(w.task) ||
+	if sameJSON(final, w.value) || h.replaced(w, writes) || h.reverts(w, writes) || h.wasRepaired(w.task, w.field) ||
 		h.wasLost(model.WorkspacePath(w.task), field, w.value) {
 		return
 	}
@@ -367,7 +390,7 @@ func (h *history) checkTaskWrite(ps *problems, w write, t *model.Task, writes []
 			ps.add("unknown field %s", w.field)
 			return
 		}
-		if !sameJSON(final, w.value) && !h.replaced(w, writes) && !h.wasRepaired(t.ULID) && !h.wasLost(path, w.field, w.value) && !h.reverts(w, writes) {
+		if !sameJSON(final, w.value) && !h.replaced(w, writes) && !h.wasRepaired(t.ULID, w.field) && !h.wasLost(path, w.field, w.value) && !h.reverts(w, writes) {
 			ps.add("task %s (%s): %s %s written by clone %d is lost (final %s)", t.ULID, t.ID, w.field, w.value, w.clone, final)
 		}
 	}
