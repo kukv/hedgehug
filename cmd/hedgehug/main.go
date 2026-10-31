@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
@@ -24,6 +25,14 @@ type env struct {
 	getenv         func(string) string
 	isTerminal     func(any) bool // reports whether a stream is a terminal
 	now            func() time.Time
+}
+
+func init() {
+	// On Windows cobra lists every process on each run, about 40ms, to tell
+	// whether Explorer started the command and if so to ask for cmd.exe.
+	// hedgehug is run from a shell; started from Explorer it prints its
+	// usage as it does with no arguments.
+	cobra.MousetrapHelpText = ""
 }
 
 func main() {
