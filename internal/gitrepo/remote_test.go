@@ -108,6 +108,24 @@ func TestPushRejected(t *testing.T) {
 	}
 }
 
+func TestFetchWithLocalCommitsTheRemoteLacks(t *testing.T) {
+	noGit(t)
+	remote := newBare(t)
+	a, b := cloneTwo(t, remote)
+	commitFiles(t, a.r, a.dir, map[string]string{"x.md": "a\n"})
+	ha, _ := a.r.Head()
+	commitFiles(t, b.r, b.dir, map[string]string{"y.md": "b\n"})
+	if err := a.r.Push("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := b.r.Fetch("origin"); err != nil || got != ha {
+		t.Errorf("Fetch = %s, %v; want %s", got, err, ha)
+	}
+	if _, err := b.r.r.CommitObject(ha); err != nil {
+		t.Errorf("fetched commit is not stored: %v", err)
+	}
+}
+
 func TestPushNothing(t *testing.T) {
 	remote := newBare(t)
 	a, _ := cloneTwo(t, remote)
