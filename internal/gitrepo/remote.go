@@ -233,3 +233,23 @@ func removeCreated(dir, created string) {
 		_ = os.RemoveAll(filepath.Join(dir, e.Name()))
 	}
 }
+
+// MergeDriver is the command .git/config runs for the files .gitattributes
+// marks merge=hedgehug. It names hedgehug, not a path to the binary, so a
+// moved or temporary binary leaves nothing stale behind.
+const MergeDriver = "hedgehug merge-driver %O %A %B %P"
+
+// RegisterMergeDriver writes the hedgehug merge driver to .git/config. It
+// leaves the file alone when the driver is already there.
+func (r *Repo) RegisterMergeDriver() error {
+	cfg, err := r.r.Config()
+	if err != nil {
+		return err
+	}
+	sub := cfg.Raw.Section("merge").Subsection("hedgehug")
+	if sub.Option("name") == "Hedgehug field merge" && sub.Option("driver") == MergeDriver {
+		return nil
+	}
+	sub.SetOption("name", "Hedgehug field merge").SetOption("driver", MergeDriver)
+	return r.r.SetConfig(cfg)
+}

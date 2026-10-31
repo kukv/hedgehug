@@ -180,6 +180,20 @@ func TestSetRemotes(t *testing.T) {
 	}
 }
 
+func TestRegisterMergeDriver(t *testing.T) {
+	dir := t.TempDir()
+	r, _ := Init(dir)
+	for range 2 {
+		if err := r.RegisterMergeDriver(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, ".git", "config"))
+	if strings.Count(string(b), `[merge "hedgehug"]`) != 1 || !strings.Contains(string(b), "\tname = Hedgehug field merge\n\tdriver = hedgehug merge-driver %O %A %B %P\n") {
+		t.Errorf(".git/config:\n%s", b)
+	}
+}
+
 func TestLocalPath(t *testing.T) {
 	for in, want := range map[string]string{
 		"/C:/x/y.git":    "C:/x/y.git",

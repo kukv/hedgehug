@@ -26,6 +26,28 @@ func addTask(t *testing.T, s *Store, task *model.Task) {
 	}
 }
 
+func TestPutFile(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.Update(Op{Name: "setup", Author: testAuthor}, func(tx *Tx) error {
+		return tx.PutFile(".gitattributes", []byte("*.yaml merge=hedgehug\n"))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(s.path(".gitattributes")); err != nil || string(b) != "*.yaml merge=hedgehug\n" {
+		t.Errorf(".gitattributes = %q, %v", b, err)
+	}
+	if files, _ := headLog(t, s.dir)[0].Stats(); len(files) != 1 || files[0].Name != ".gitattributes" {
+		t.Errorf("committed %v", files)
+	}
+	for _, bad := range []string{".hedgehug/local/x", ".hedgehug/local", ".git/config", ".GIT/config", "../x", "/x", "a/../../x"} {
+		if _, err := s.Update(Op{Name: "x", Author: testAuthor}, func(tx *Tx) error {
+			return tx.PutFile(bad, []byte("x"))
+		}); err == nil {
+			t.Errorf("PutFile(%q) succeeded", bad)
+		}
+	}
+}
+
 func TestUpdateCommitsOnce(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("リリース準備")

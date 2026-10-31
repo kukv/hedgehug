@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"strings"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/atomicfile"
 	"github.com/kukv/hedgehug/internal/gitrepo"
@@ -38,6 +39,26 @@ func (s *Store) WriteLocal(name string, data []byte) error {
 	return atomicfile.WriteFile(s.path(localDir+"/"+name), data)
 }
 
+// WithLocalLock runs fn holding the file lock .hedgehug/local/<name>,
+// waiting up to wait for it; ErrLocked when it stays taken. It is apart
+// from the store lock, for what only this machine serializes, like syncs.
+func (s *Store) WithLocalLock(name string, wait time.Duration, fn func() error) (err error) {
+	if err := validLocalName(name); err != nil {
+		return err
+	}
+	l, err := acquire(s.path(localDir+"/"+name), wait)
+	if err != nil {
+		return err
+	}
+	// As in Update, a release error only matters when fn failed.
+	defer func() {
+		if rerr := l.release(); rerr != nil && err != nil {
+			err = errors.Join(err, rerr)
+		}
+	}()
+	return fn()
+}
+
 func validLocalName(name string) error {
 	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
 		return fmt.Errorf("invalid local file name %q", name)
@@ -47,3 +68,6 @@ func validLocalName(name string) error {
 
 // Repo returns the git repository of the store, for reading its history.
 func (s *Store) Repo() *gitrepo.Repo { return s.repo }
+
+// Dir returns the directory of the store's work tree.
+func (s *Store) Dir() string { return s.dir }

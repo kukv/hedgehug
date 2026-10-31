@@ -15,6 +15,7 @@ import (
 // LogEntry is one commit as read back from the history.
 type LogEntry struct {
 	Hash     plumbing.Hash
+	Parents  []plumbing.Hash
 	Author   Signature
 	When     time.Time
 	Subject  string
@@ -108,6 +109,7 @@ func entry(c *object.Commit) LogEntry {
 	subject, trailers := parseMessage(c.Message)
 	return LogEntry{
 		Hash:     c.Hash,
+		Parents:  c.ParentHashes,
 		Author:   Signature{Name: c.Author.Name, Email: c.Author.Email},
 		When:     c.Author.When,
 		Subject:  subject,

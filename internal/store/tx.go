@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -213,6 +214,19 @@ func (tx *Tx) PutSchema(sc *schema.Schema) error {
 	}
 	tx.schema = sc
 	return nil
+}
+
+// PutFile queues a write of data to rel, any file of the store that git
+// tracks, such as .gitattributes. Files of .hedgehug/local and .git are
+// refused.
+func (tx *Tx) PutFile(rel string, data []byte) error {
+	clean := path.Clean(rel)
+	first, _, _ := strings.Cut(clean, "/")
+	if !filepath.IsLocal(filepath.FromSlash(rel)) || strings.EqualFold(first, ".git") ||
+		clean == localDir || strings.HasPrefix(clean, localDir+"/") {
+		return fmt.Errorf("%q is not a tracked file of the store", rel)
+	}
+	return tx.put(clean, &pending{encode: func() ([]byte, error) { return data, nil }})
 }
 
 // RemoveTask queues the removal of a task file with its comments and

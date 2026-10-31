@@ -35,3 +35,25 @@ func TestLocalFiles(t *testing.T) {
 		t.Error("Repo() = nil")
 	}
 }
+
+func TestWithLocalLock(t *testing.T) {
+	s := newTestStore(t)
+	ran := false
+	err := s.WithLocalLock("sync.lock", 0, func() error {
+		ran = true
+		// The lock is taken: another holder does not get it.
+		return s.WithLocalLock("sync.lock", 0, func() error { return nil })
+	})
+	if !ran || !errors.Is(err, ErrLocked) {
+		t.Errorf("nested WithLocalLock: ran %v, err = %v", ran, err)
+	}
+	if err := s.WithLocalLock("sync.lock", 0, func() error { return nil }); err != nil {
+		t.Errorf("the lock was not released: %v", err)
+	}
+	if err := s.WithLocalLock("a/b", 0, func() error { return nil }); err == nil {
+		t.Error("WithLocalLock(a/b) succeeded")
+	}
+	if s.Dir() == "" {
+		t.Error("Dir() is empty")
+	}
+}
