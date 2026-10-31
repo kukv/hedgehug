@@ -286,20 +286,23 @@ func repairedContent(ix *index.Index, it inbox.Item) string {
 	_ = json.Unmarshal(it.Detail, &d) // an item that does not decode tells no kind
 	switch d.Kind {
 	case "parent_cycle", "parent_deleted":
-		// The value is the parent the repair took the task from; the task
-		// went back to the parent it had before, or to the root.
-		to := "root"
-		if ix != nil {
-			if e, ok := ix.Task(it.Task); ok && e.Parent != nil {
-				to = refName(ix, *e.Parent)
+		// The value tells where the repair took the task from and put it
+		// (null is the root); the index only gives names to the ULIDs.
+		var m struct{ From, To *model.ULID }
+		if json.Unmarshal(d.Value, &m) == nil {
+			from := "the root"
+			if m.From != nil {
+				from = taskName(ix, *m.From)
 			}
+			if d.Kind == "parent_deleted" {
+				return fmt.Sprintf("parent_deleted: moved to the root (its parent %s was deleted)", from)
+			}
+			to := "root"
+			if m.To != nil {
+				to = taskName(ix, *m.To)
+			}
+			return fmt.Sprintf("parent_cycle: moved back to %s (was under %s)", to, from)
 		}
-		from := ""
-		var u model.ULID
-		if json.Unmarshal(d.Value, &u) == nil && !u.IsZero() {
-			from = " (was under " + taskName(ix, u) + ")"
-		}
-		return fmt.Sprintf("%s: moved back to %s%s", d.Kind, to, from)
 	}
 	if v := compactJSON(d.Value); v != "" && v != "null" {
 		return fmt.Sprintf("%s (was %s)", d.Kind, v)
@@ -322,37 +325,44 @@ func taskName(ix *index.Index, u model.ULID) string {
 func duplicateContent(ix *index.Index, it inbox.Item, storeName string, manyStores bool) string {
 	var d repairDetail
 	_ = json.Unmarshal(it.Detail, &d)
-	ws, name := d.Workspace.String(), d.Workspace.String()
-	prefix := ""
+	ws, prefix := d.Workspace.String(), ""
 	if w, ok := detailWorkspace(ix, it); ok {
-		ws, name, prefix = w.Name, w.Name, w.IDPrefix
+		ws, prefix = w.Name, w.IDPrefix
 	}
-	if d.Kind == "name_duplicate" {
-		var n string
-		if json.Unmarshal(d.Value, &n) != nil {
-			n = name
-		}
-		return fmt.Sprintf("%s is also the name of another workspace; change it with hedgehug workspace rename %s <new name>", n, ws)
-	}
-	var other struct{ Store, Workspace string }
-	var text string
-	switch {
-	case json.Unmarshal(d.Value, &other) == nil && other.Workspace != "":
-		text = fmt.Sprintf("workspace %s in store %s", other.Workspace, other.Store)
-	default:
-		var p string
-		if json.Unmarshal(d.Value, &p) == nil && p != "" {
-			prefix = p
-		}
-		text = "another workspace"
-		if ix != nil {
+	var value string
+	_ = json.Unmarshal(d.Value, &value) // a string for the duplicates of one store
+	// others names the other workspaces of the store that share the name or
+	// the prefix, as the item's kind says.
+	others := func(same func(*model.Workspace) bool) string {
+		var names []string
+		if ix != nil && value != "" {
 			for _, w := range ix.Workspaces() {
-				if w.ULID != d.Workspace && strings.EqualFold(w.IDPrefix, prefix) {
-					text = "workspace " + w.Name
-					break
+				if w.ULID != d.Workspace && same(w) {
+					names = append(names, "workspace "+w.Name)
 				}
 			}
 		}
+		if len(names) == 0 {
+			return "another workspace"
+		}
+		return strings.Join(names, ", ")
+	}
+	if d.Kind == "name_duplicate" {
+		if value == "" {
+			value = ws
+		}
+		text := others(func(w *model.Workspace) bool { return strings.EqualFold(w.Name, value) })
+		return fmt.Sprintf("%s is also the name of %s; change it with hedgehug workspace rename %s <new name>", value, text, ws)
+	}
+	var other struct{ Store, Workspace string }
+	var text string
+	if json.Unmarshal(d.Value, &other) == nil && other.Workspace != "" {
+		text = fmt.Sprintf("workspace %s in store %s", other.Workspace, other.Store)
+	} else {
+		if value != "" {
+			prefix = value
+		}
+		text = others(func(w *model.Workspace) bool { return strings.EqualFold(w.IDPrefix, value) })
 	}
 	where := ""
 	if manyStores {
@@ -496,16 +506,14 @@ func (a *app) inboxRevert(arg string) error {
 		return err
 	}
 	committed, err := a.update(s, store.Op{Name: "revert-overwritten", Task: e.ULID}, func(tx *store.Tx) error {
+		if d.Field == "parent" || d.Field == "workspace" {
+			return a.revertMove(tx, ix, e, d.Field, d.Value)
+		}
 		t, err := tx.Task(e.ULID)
 		if err != nil {
 			return err
 		}
-		if d.Field == "parent" {
-			err = a.revertParent(ix, e, t, d.Value)
-		} else {
-			err = revertField(t, d.Field, d.Value, ix.Schema(), a.resolveULID(ix))
-		}
-		if err != nil {
+		if err := revertField(t, d.Field, d.Value, ix.Schema(), a.resolveULID(ix)); err != nil {
 			return err
 		}
 		return tx.PutTask(t)
@@ -527,7 +535,6 @@ var refused = map[string]string{
 	"*":          "is the whole file, which is not one value",
 	"id":         "is given by the store with the workspace prefix; renumbering belongs to hedgehug mv --workspace",
 	"former_ids": "keeps the ids the task has had and is never rolled back",
-	"workspace":  "moves a task with its subtree and renumbers it; use hedgehug mv --workspace",
 	"created":    "is set by the store when the task is made",
 	"created_by": "tells who made the task, and no command changes it",
 	"body":       "is merged line by line and has no single value; edit it with hedgehug edit",
@@ -600,30 +607,36 @@ func revertSet[T comparable](dst *[]T, field string, raw json.RawMessage) error 
 	return nil
 }
 
-// revertParent puts the parent that lost, or the root for null, back as
-// hedgehug mv does, at the end of its siblings. A parent in another
-// workspace would move the subtree, which is for hedgehug mv.
-func (a *app) revertParent(ix *index.Index, e *index.Entry, t *model.Task, raw json.RawMessage) error {
+// revertMove puts the parent or the workspace that lost back as hedgehug mv
+// --parent or mv --workspace writes it: the task goes to the end of its
+// siblings, and to another workspace with its subtree and new ids. A parent
+// that is null is the root.
+func (a *app) revertMove(tx *store.Tx, ix *index.Index, e *index.Entry, field string, raw json.RawMessage) error {
 	var u *model.ULID
 	if err := json.Unmarshal(raw, &u); err != nil {
-		return fmt.Errorf("parent: %w", err)
+		return fmt.Errorf("%s: %w", field, err)
 	}
 	var p *index.Entry
-	if u != nil {
+	var w *model.Workspace
+	root := false
+	switch {
+	case field == "parent" && u == nil:
+		root = true
+	case field == "parent":
 		var ok bool
 		if p, ok = ix.Task(*u); !ok {
 			return fmt.Errorf("parent: %s is not in this store: %w", u, store.ErrNotFound)
 		}
+	case u == nil:
+		return errors.New("workspace: the value is empty")
+	default:
+		var ok bool
+		if w, ok = ix.Workspace(*u); !ok {
+			return fmt.Errorf("workspace: %s is not in this store: %w", u, store.ErrNotFound)
+		}
 	}
-	to, err := a.mvTargetOf(ix, e, p, nil, u == nil, "", "")
-	if err != nil {
-		return err
-	}
-	if to.workspace != e.Workspace {
-		return fmt.Errorf("parent: %s is in another workspace; move the task with hedgehug mv", refName(ix, *u))
-	}
-	t.Parent, t.Rank = to.parent, to.rank
-	return nil
+	_, err := a.mvInTx(tx, ix, e, p, w, root, "", "")
+	return err
 }
 
 // revertLink puts the link raw back in place of the one with its ref.

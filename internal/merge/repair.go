@@ -121,6 +121,12 @@ func (r *repairer) tell(u model.ULID, kind string, value []byte, path string) {
 	r.done = append(r.done, Repaired{ULID: u, Kind: kind, Value: string(value), Author: r.in.Author(path)})
 }
 
+// parentMove is the value of a parent repair: where the task was and where
+// the repair put it, each a ULID or null for the root. It is one line.
+func parentMove(from, to []byte) []byte {
+	return []byte(`{"from":` + string(from) + `,"to":` + string(to) + `}`)
+}
+
 // readBase returns the base's file at path, or nil.
 func (r *repairer) readBase(path string) []byte {
 	if r.in.Base == nil {
@@ -213,7 +219,7 @@ func (r *repairer) breakCycles() error {
 			}
 		}
 		r.dirty[u] = true
-		r.tell(u, "parent_cycle", old, model.TaskPath(u))
+		r.tell(u, "parent_cycle", parentMove(old, jsonOf(t.Parent)), model.TaskPath(u))
 	}
 }
 
@@ -313,7 +319,7 @@ func (r *repairer) detachFromDeleted() error {
 			return err
 		}
 		r.dirty[u] = true
-		r.tell(u, "parent_deleted", old, model.TaskPath(u))
+		r.tell(u, "parent_deleted", parentMove(old, jsonOf(t.Parent)), model.TaskPath(u))
 	}
 	return nil
 }

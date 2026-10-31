@@ -143,7 +143,7 @@ func TestRepairParentCycle(t *testing.T) {
 	if p := decoded(t, after[pathOf(a)]).Parent; p == nil || p.String() != b {
 		t.Errorf("a.parent changed: %v", p)
 	}
-	if len(rs) != 1 || rs[0].Kind != "parent_cycle" {
+	if len(rs) != 1 || rs[0].Kind != "parent_cycle" || rs[0].Value != `{"from":"`+a+`","to":null}` {
 		t.Errorf("repaired = %+v", rs)
 	}
 	after, _ = repair(t, RepairInput{Files: f}) // no base: to the root
@@ -160,7 +160,7 @@ func TestRepairDeletedParent(t *testing.T) {
 		pathOf(c):                          taskFile(c, "WEB-2", wsA, p, "2026-10-31T10:00:00Z"),
 	}
 	after, rs := repair(t, RepairInput{Files: f})
-	if decoded(t, after[pathOf(c)]).Parent != nil || len(rs) != 1 || rs[0].Kind != "parent_deleted" {
+	if decoded(t, after[pathOf(c)]).Parent != nil || len(rs) != 1 || rs[0].Kind != "parent_deleted" || rs[0].Value != `{"from":"`+p+`","to":null}` {
 		t.Errorf("child not moved to the root: %+v", rs)
 	}
 }
@@ -279,7 +279,7 @@ func TestRepairThreeCycleWithBaseRevertsAChangedParent(t *testing.T) {
 	if got := parents(t, after); !slices.Equal(got, []string{"", cyC, cyA}) {
 		t.Errorf("parents = %v", got) // a, changed and later than c, back to its base root; b, updated last, keeps c
 	}
-	if len(rs) != 1 || rs[0].Kind != "parent_cycle" || rs[0].ULID.String() != cyA || rs[0].Value != `"`+cyB+`"` {
+	if len(rs) != 1 || rs[0].Kind != "parent_cycle" || rs[0].ULID.String() != cyA || rs[0].Value != `{"from":"`+cyB+`","to":null}` {
 		t.Errorf("repaired = %+v", rs)
 	}
 }

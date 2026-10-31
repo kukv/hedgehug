@@ -72,64 +72,79 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 	if _, err := a.mvTargetOf(ix, e, p, w, root, before, after); err != nil {
 		return err
 	}
-	// The tasks put; assignIDs gives them their new ids in place.
-	var tasks []*model.Task
-	var oldIDs []string
-	moved := false // to another workspace
+	var res mvResult
 	committed, err := a.update(s, store.Op{Name: "mv", Task: e.ULID}, func(tx *store.Tx) error {
-		// Work out the move again under the lock, from the tasks as they
-		// are now: another process may have moved or deleted them since
-		// the index was read.
 		var err error
-		if e, err = current(ix, e); err != nil {
-			return err
-		}
-		if p != nil {
-			if p, err = current(ix, p); err != nil {
-				return err
-			}
-		}
-		to, err := a.mvTargetOf(ix, e, p, w, root, before, after)
-		if err != nil {
-			return err
-		}
-		// A task and its subtree are in one workspace, so they move
-		// together, a child added since the index was read too.
-		ulids := []model.ULID{e.ULID}
-		if moved = to.workspace != e.Workspace; moved {
-			for _, d := range descendants(ix, e.ULID, func(*index.Entry) bool { return true }) {
-				ulids = append(ulids, d.ULID)
-			}
-		}
-		for _, ulid := range ulids {
-			t, err := tx.Task(ulid)
-			if err != nil {
-				return err
-			}
-			oldIDs = append(oldIDs, t.ID)
-			t.Workspace = to.workspace
-			if ulid == e.ULID {
-				t.Parent, t.Rank = to.parent, to.rank
-			}
-			if err := tx.PutTask(t); err != nil {
-				return err
-			}
-			tasks = append(tasks, t)
-		}
-		return nil
+		res, err = a.mvInTx(tx, ix, e, p, w, root, before, after)
+		return err
 	})
 	if err != nil {
 		return err
 	}
-	if err := a.printTask(ix, e.ULID, verb(committed, "Moved")); err != nil || a.jsonOut || !moved {
+	if err := a.printTask(ix, e.ULID, verb(committed, "Moved")); err != nil || a.jsonOut || !res.moved {
 		return err
 	}
 	var b strings.Builder
-	for i, t := range tasks {
-		fmt.Fprintf(&b, "  %s → %s\n", oldIDs[i], t.ID)
+	for i, t := range res.tasks {
+		fmt.Fprintf(&b, "  %s → %s\n", res.oldIDs[i], t.ID)
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())
 	return err
+}
+
+// mvResult is what mvInTx put: the tasks, in order, with the ids they had;
+// assignIDs gives them their new ids in place.
+type mvResult struct {
+	tasks  []*model.Task
+	oldIDs []string
+	moved  bool // to another workspace
+}
+
+// mvInTx moves e as mv does, in the operation tx: under the new parent p (or
+// to the top level for root), into the workspace w, before or after a
+// sibling.
+func (a *app) mvInTx(tx *store.Tx, ix *index.Index, e, p *index.Entry, w *model.Workspace, root bool, before, after string) (mvResult, error) {
+	// Work out the move again under the lock, from the tasks as they
+	// are now: another process may have moved or deleted them since
+	// the index was read.
+	var res mvResult
+	var err error
+	if e, err = current(ix, e); err != nil {
+		return res, err
+	}
+	if p != nil {
+		if p, err = current(ix, p); err != nil {
+			return res, err
+		}
+	}
+	to, err := a.mvTargetOf(ix, e, p, w, root, before, after)
+	if err != nil {
+		return res, err
+	}
+	// A task and its subtree are in one workspace, so they move
+	// together, a child added since the index was read too.
+	ulids := []model.ULID{e.ULID}
+	if res.moved = to.workspace != e.Workspace; res.moved {
+		for _, d := range descendants(ix, e.ULID, func(*index.Entry) bool { return true }) {
+			ulids = append(ulids, d.ULID)
+		}
+	}
+	for _, ulid := range ulids {
+		t, err := tx.Task(ulid)
+		if err != nil {
+			return res, err
+		}
+		res.oldIDs = append(res.oldIDs, t.ID)
+		t.Workspace = to.workspace
+		if ulid == e.ULID {
+			t.Parent, t.Rank = to.parent, to.rank
+		}
+		if err := tx.PutTask(t); err != nil {
+			return res, err
+		}
+		res.tasks = append(res.tasks, t)
+	}
+	return res, nil
 }
 
 // mvTarget is where mv puts a task.

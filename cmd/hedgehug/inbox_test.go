@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/inbox"
+	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 // inboxItems returns the items of the inbox of te as --json prints them.
@@ -319,8 +321,155 @@ func TestInboxReadDuplicates(t *testing.T) {
 }
 
 func TestInboxRepairedContent(t *testing.T) {
-	it := inbox.Item{Kind: inbox.Repaired, Detail: json.RawMessage(`{"kind":"parent_cycle","value":null}`)}
-	if got := inboxContent(nil, it, "org", false); got != "parent_cycle: moved back to root" {
-		t.Errorf("content = %q", got)
+	alice, _, _ := twoUsers(t)
+	var j struct{ ULID string }
+	if err := json.Unmarshal([]byte(alice.ok("show", "ORG-1", "--json")), &j); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(alice.storeDir("org"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ix, err := index.Open(st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := func(kind, value string) inbox.Item {
+		return inbox.Item{Kind: inbox.Repaired, Detail: json.RawMessage(`{"kind":"` + kind + `","value":` + value + `}`)}
+	}
+	name := "ORG-1 (" + j.ULID + ") x"
+	for _, c := range []struct{ kind, value, want string }{
+		{"parent_cycle", `{"from":"` + j.ULID + `","to":null}`, "parent_cycle: moved back to root (was under " + name + ")"},
+		{"parent_cycle", `{"from":null,"to":"` + j.ULID + `"}`, "parent_cycle: moved back to " + name + " (was under the root)"},
+		{"parent_deleted", `{"from":"` + j.ULID + `","to":null}`, "parent_deleted: moved to the root (its parent " + name + " was deleted)"},
+	} {
+		// The destination is the one the value names, whatever the index has now.
+		if got := inboxContent(ix, item(c.kind, c.value), "org", false); got != c.want {
+			t.Errorf("%s: content = %q, want %q", c.kind, got, c.want)
+		}
+	}
+	gone := model.NewULID().String()
+	if got := inboxContent(nil, item("parent_deleted", `{"from":"`+gone+`","to":null}`), "org", false); got != "parent_deleted: moved to the root (its parent "+gone+" was deleted)" {
+		t.Errorf("without an index: %q", got)
+	}
+	if got := inboxContent(ix, item("id_prefix", `"web"`), "org", false); got != `id_prefix (was "web")` {
+		t.Errorf("other kinds: %q", got)
+	}
+}
+
+func TestInboxRevertWorkspace(t *testing.T) {
+	alice, bob, _ := twoUsers(t)
+	alice.ok("workspace", "add", "w2", "--prefix", "AA")
+	alice.ok("workspace", "add", "w3", "--prefix", "BB")
+	alice.ok("sync")
+	bob.ok("sync")
+	bob.ok("mv", "ORG-1", "--workspace", "w2")
+	time.Sleep(1100 * time.Millisecond) // alice writes later, so alice's workspace wins
+	alice.ok("mv", "ORG-1", "--workspace", "w3")
+	alice.ok("sync")
+	bob.ok("sync")
+	out := bob.ok("inbox")
+	m := regexp.MustCompile(`([0-9A-Z]{26})\s+overwritten\s+\S+ \(([0-9A-Z]{26})\) x\s+workspace: "[0-9A-Z]{26}" was replaced`).FindStringSubmatch(out)
+	if m == nil {
+		t.Fatalf("inbox = %s", out)
+	}
+	bob.ok("inbox", "revert", m[1])
+	if out := bob.ok("show", m[2]); !regexp.MustCompile(`workspace\s+w2 \(AA, `).MatchString(out) || !regexp.MustCompile(`id\s+AA-\d+\n`).MatchString(out) {
+		t.Errorf("after revert: %s", out)
+	}
+}
+
+func TestInboxRevertParentInAnotherWorkspace(t *testing.T) {
+	alice, bob, _ := twoUsers(t)
+	alice.ok("workspace", "add", "w2", "--prefix", "AA")
+	alice.ok("workspace", "add", "w3", "--prefix", "BB")
+	alice.ok("add", "t2", "--workspace", "w2")
+	alice.ok("add", "t3", "--workspace", "w3")
+	alice.ok("add", "c", "--workspace", "org")
+	alice.ok("sync")
+	bob.ok("sync")
+	var c struct{ ULID string }
+	if err := json.Unmarshal([]byte(bob.ok("show", "ORG-2", "--json")), &c); err != nil {
+		t.Fatal(err)
+	}
+	bob.ok("mv", "ORG-2", "--parent", "AA-1")
+	time.Sleep(1100 * time.Millisecond) // alice writes later, so alice's parent wins
+	alice.ok("mv", "ORG-2", "--parent", "BB-1")
+	alice.ok("sync")
+	bob.ok("sync")
+	m := regexp.MustCompile(`([0-9A-Z]{26})\s+overwritten\s+\S+ \(` + c.ULID + `\) c\s+parent: `).FindStringSubmatch(bob.ok("inbox"))
+	if m == nil {
+		t.Fatalf("inbox lacks the parent item")
+	}
+	bob.ok("inbox", "revert", m[1])
+	out := bob.ok("show", c.ULID)
+	if !regexp.MustCompile(`parent\s+AA-1 `).MatchString(out) || !regexp.MustCompile(`workspace\s+w2 `).MatchString(out) {
+		t.Errorf("after revert: %s", out)
+	}
+}
+
+func TestInboxRevertDeletedTask(t *testing.T) {
+	alice, bob, _ := twoUsers(t)
+	conflict(t, alice, bob, "title", "bob", "alice")
+	u := itemOfKind(t, bob, "overwritten")
+	bob.ok("rm", "ORG-1")
+	code, _, errs := bob.run("inbox", "revert", u)
+	if code != 1 || !strings.Contains(errs, "is deleted") {
+		t.Errorf("exit %d, stderr = %s", code, errs)
+	}
+	if got := itemOfKind(t, bob, "overwritten"); got != u {
+		t.Errorf("a refused revert marked the item read")
+	}
+}
+
+func TestInboxDuplicateNamesEveryMatch(t *testing.T) {
+	alice, bob, remote := twoUsers(t)
+	carol := alice.other()
+	carol.writeAccounts("github.com", "carol")
+	carol.ok("store", "add", "org", "--remote", remote)
+	alice.ok("workspace", "add", "web", "--prefix", "DUP")
+	time.Sleep(1100 * time.Millisecond) // the prefix set later is the one told
+	bob.ok("workspace", "add", "api", "--prefix", "DUP")
+	time.Sleep(1100 * time.Millisecond)
+	carol.ok("workspace", "add", "zed", "--prefix", "DUP")
+	for _, te := range []*testEnv{alice, bob, carol, bob, alice} {
+		te.ok("sync")
+	}
+	out := carol.ok("inbox")
+	if !regexp.MustCompile(`prefix_duplicate\s+workspace zed\s+DUP is also used by workspace api, workspace web; change it with hedgehug workspace prefix zed <new prefix>\n`).MatchString(out) {
+		t.Errorf("inbox = %s", out)
+	}
+}
+
+func TestInboxDuplicateNameMatchesTheName(t *testing.T) {
+	alice, _, _ := twoUsers(t)
+	alice.ok("workspace", "add", "web", "--prefix", "WEB")
+	st, err := store.Open(alice.storeDir("org"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ix, err := index.Open(st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var web *model.Workspace
+	for _, w := range ix.Workspaces() {
+		if w.Name == "web" {
+			web = w
+		}
+	}
+	item := func(kind, value string) inbox.Item {
+		return inbox.Item{Kind: inbox.PrefixDuplicate, Detail: json.RawMessage(`{"kind":"` + kind + `","workspace":"` + web.ULID.String() + `","value":` + value + `}`)}
+	}
+	// The workspace of the first store has a prefix and a name of its own: a name
+	// nobody else has, and an empty value, name no other workspace.
+	if got := inboxContent(ix, item("name_duplicate", `"Web"`), "org", false); got != "Web is also the name of another workspace; change it with hedgehug workspace rename web <new name>" {
+		t.Errorf("name: %q", got)
+	}
+	if got := inboxContent(ix, item("prefix_duplicate", `"WEB"`), "org", false); got != "WEB is also used by another workspace; change it with hedgehug workspace prefix web <new prefix>" {
+		t.Errorf("prefix: %q", got)
+	}
+	if got := inboxContent(ix, item("name_duplicate", `""`), "org", false); !strings.Contains(got, "another workspace") {
+		t.Errorf("empty name: %q", got)
 	}
 }
