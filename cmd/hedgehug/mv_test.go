@@ -51,32 +51,57 @@ func TestMv(t *testing.T) {
 	}
 }
 
-func TestMvBetweenSiblingsWithTheSameRank(t *testing.T) {
-	te := newStoreEnv(t)
-	p := te.addJSON("P", "--kind", "project")
-	a := te.addJSON("A", "--parent", p.ID)
-	b := te.addJSON("B", "--parent", p.ID)
-	d := te.addJSON("D", "--parent", p.ID)
-	loose := te.addJSON("Loose")
-	// A merge can leave siblings with one rank; they are ordered by id.
-	te.commitFile(b.ULID, strings.Replace(te.raw(b.ULID), "rank: "+string(te.task(b.ULID).Rank), "rank: "+string(te.task(a.ULID).Rank), 1))
-	if te.task(a.ULID).Rank != te.task(b.ULID).Rank {
-		t.Fatal("A and B do not share a rank")
-	}
+// A merge can leave siblings with one rank; they are ordered by id and no
+// rank lies between them, so mv puts the task past the group on the side it
+// was asked for, whatever its own id.
+func TestMvNextToSiblingsWithTheSameRank(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		moverFirst bool // the mover has the lowest id
+		flag, to   string
+		want       string
+	}{
+		{"after A, highest id", false, "--after", "A", "P,A,B,M,D"},
+		{"after A, lowest id", true, "--after", "A", "P,A,B,M,D"},
+		{"before B, highest id", false, "--before", "B", "P,M,A,B,D"},
+		{"before B, lowest id", true, "--before", "B", "P,M,A,B,D"},
+		{"after B, lowest id", true, "--after", "B", "P,A,B,M,D"},
+		{"before A, highest id", false, "--before", "A", "P,M,A,B,D"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			te := newStoreEnv(t)
+			var m taskJSON
+			if tc.moverFirst {
+				m = te.addJSON("M")
+			}
+			p := te.addJSON("P", "--kind", "project")
+			a := te.addJSON("A", "--parent", p.ID)
+			b := te.addJSON("B", "--parent", p.ID)
+			d := te.addJSON("D", "--parent", p.ID)
+			if !tc.moverFirst {
+				m = te.addJSON("M")
+			}
+			te.commitFile(b.ULID, strings.Replace(te.raw(b.ULID), "rank: "+string(te.task(b.ULID).Rank), "rank: "+string(te.task(a.ULID).Rank), 1))
+			if te.task(a.ULID).Rank != te.task(b.ULID).Rank {
+				t.Fatal("A and B do not share a rank")
+			}
 
-	te.ok("mv", loose.ID, "--parent", p.ID, "--after", a.ID)
-	var titles []string
-	for _, l := range strings.Split(te.ok("ls", "--tree", "--no-color"), "\n") {
-		if i := strings.LastIndex(l, "  "); i >= 0 {
-			titles = append(titles, l[i+2:])
-		}
-	}
-	if got := strings.Join(titles, ","); got != "P,A,B,Loose,D" {
-		t.Errorf("order = %s", got)
-	}
-	l, dd := te.task(loose.ULID), te.task(d.ULID)
-	if l.Rank == te.task(a.ULID).Rank || l.Rank <= te.task(b.ULID).Rank || l.Rank >= dd.Rank {
-		t.Errorf("rank = %s, want between B's and D's", l.Rank)
+			ref := map[string]string{"A": a.ID, "B": b.ID}[tc.to]
+			te.ok("mv", m.ID, "--parent", p.ID, tc.flag, ref)
+			var titles []string
+			for _, l := range strings.Split(te.ok("ls", "--tree", "--no-color"), "\n") {
+				if i := strings.LastIndex(l, "  "); i >= 0 {
+					titles = append(titles, l[i+2:])
+				}
+			}
+			if got := strings.Join(titles, ","); got != tc.want {
+				t.Errorf("order = %s, want %s", got, tc.want)
+			}
+			mr, ar, dr := te.task(m.ULID).Rank, te.task(a.ULID).Rank, te.task(d.ULID).Rank
+			if mr == ar || mr == dr {
+				t.Errorf("M shares a rank: %s", mr)
+			}
+		})
 	}
 }
 

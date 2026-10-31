@@ -128,13 +128,13 @@ func (ix *Index) derive() {
 	sortByRank(ix.roots)
 }
 
-// rankKey is what orders e among its siblings.
-func rankKey(e *Entry) model.RankKey {
+// RankKey returns what orders e among its siblings.
+func (e *Entry) RankKey() model.RankKey {
 	return model.RankKey{ID: e.ID, ULID: e.ULID, Rank: e.Rank}
 }
 
 func sortByRank(es []*Entry) {
 	slices.SortFunc(es, func(a, b *Entry) int {
-		return model.CompareRankKeys(rankKey(a), rankKey(b))
+		return model.CompareRankKeys(a.RankKey(), b.RankKey())
 	})
 }

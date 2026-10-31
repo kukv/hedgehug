@@ -306,6 +306,9 @@ type RankKey struct {
 	Rank Rank
 }
 
+// RankKey returns what orders t among its siblings.
+func (t *Task) RankKey() RankKey { return RankKey{ID: t.ID, ULID: t.ULID, Rank: t.Rank} }
+
 // CompareRankKeys orders siblings: by rank, then id, then ULID.
 func CompareRankKeys(a, b RankKey) int {
 	if c := cmp.Compare(a.Rank, b.Rank); c != 0 {

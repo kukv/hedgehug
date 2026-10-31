@@ -123,11 +123,47 @@ func TestWriteReranksThroughTheIndex(t *testing.T) {
 	a, b := newTask("a"), newTask("b")
 	a.Rank, b.Rank = "a5", "a9"
 	put(t, s, a, b)
-	mustOpen(t, s)
+	ix := mustOpen(t, s)
+	calls := 0
+	s.SetSiblings(func(parent *model.ULID, ws model.ULID) ([]model.ULID, error) {
+		calls++
+		return ix.siblingULIDs(parent, ws)
+	})
 
 	b.Rank = "a5"
 	put(t, s, b)
+	if calls == 0 {
+		t.Error("the write did not ask the index for the siblings")
+	}
 	if b.Rank <= "a5" {
 		t.Errorf("b.Rank = %s, want it after a5", b.Rank)
+	}
+}
+
+// The index shows a task whose parent is missing among the roots, and a
+// write treats it as one.
+func TestSiblingULIDsTreatsAMissingParentAsTheTopLevel(t *testing.T) {
+	s, dir := newStore(t)
+	root, child := newTask("root"), newTask("child")
+	root.Rank, child.Rank = "a7", "a5"
+	put(t, s, root)
+	child.Parent = &root.ULID
+	put(t, s, child)
+	orphan := model.NewULID()
+	commitRaw(t, s, dir, model.TaskPath(orphan), rawTask(orphan, "kind: task\ntitle: x\nstatus: todo\nrank: a5\nworkspace: "+root.Workspace.String()+"\nparent: "+model.NewULID().String()+"\n"))
+	ix := mustOpen(t, s)
+
+	ulids, err := ix.siblingULIDs(nil, root.Workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(ulids, orphan) || !slices.Contains(ulids, root.ULID) || slices.Contains(ulids, child.ULID) {
+		t.Errorf("siblings of the top level = %v", ulids)
+	}
+
+	root.Rank = "a5"
+	put(t, s, root)
+	if root.Rank == "a5" {
+		t.Error("root shares a rank with the orphan, shown at the top level, but was not reranked")
 	}
 }

@@ -124,3 +124,68 @@ func TestRerankIsRestoredWhenTheOperationFails(t *testing.T) {
 		t.Errorf("b.Rank = %s after a failed write, want a5", b.Rank)
 	}
 }
+
+// The first of a group with no smaller sibling goes before everything.
+func TestRerankFirstOfTheLowestGroup(t *testing.T) {
+	s := newTestStore(t)
+	ws := testWorkspace(t, s)
+	a, b, after := rankTask(ws, "a", "a5"), rankTask(ws, "b", "a5"), rankTask(ws, "after", "a9")
+	a.ID, b.ID, after.ID = "TST-1", "TST-2", "TST-3"
+	writeShared(t, s, a, b, after)
+	mustPut(t, s, a)
+	if a.Rank >= "a5" {
+		t.Errorf("a.Rank = %s, want it before a5", a.Rank)
+	}
+}
+
+// Every task the operation reranked gets its rank back when it fails.
+func TestRerankIsRestoredForEveryTask(t *testing.T) {
+	s := newTestStore(t)
+	ws := testWorkspace(t, s)
+	a, b, c := rankTask(ws, "a", "a5"), rankTask(ws, "b", "a5"), rankTask(ws, "c", "a5")
+	d, e, f := rankTask(ws, "d", "a7"), rankTask(ws, "e", "a7"), rankTask(ws, "f", "a7")
+	a.ID, b.ID, c.ID, d.ID, e.ID, f.ID = "TST-1", "TST-2", "TST-3", "TST-4", "TST-5", "TST-6"
+	writeShared(t, s, a, b, c, d, e, f)
+	s.commit = func(gitrepo.Commit) error { return errors.New("commit fails") }
+	// a is first of the a5 group, f is last of the a7 group: both change.
+	if err := put(s, a, f); err == nil {
+		t.Fatal("the commit did not fail")
+	}
+	if a.Rank != "a5" || f.Rank != "a7" {
+		t.Errorf("ranks = %s, %s after a failed write, want a5, a7", a.Rank, f.Rank)
+	}
+}
+
+// A failure in rerank itself leaves the tasks it had already changed as
+// they were.
+func TestRerankIsRestoredWhenRerankFails(t *testing.T) {
+	s := newTestStore(t)
+	ws := testWorkspace(t, s)
+	a, b := rankTask(ws, "a", "a5"), rankTask(ws, "b", "a5")
+	a.ID, b.ID = "TST-1", "TST-2"
+	bad1, bad2 := rankTask(ws, "bad1", "~"), rankTask(ws, "bad2", "~")
+	bad1.ID, bad2.ID = "TST-3", "TST-4"
+	writeShared(t, s, a, b, bad1)
+	if err := put(s, a, bad2); err == nil {
+		t.Fatal("a malformed rank did not fail the write")
+	}
+	if a.Rank != "a5" {
+		t.Errorf("a.Rank = %s after a failed write, want a5", a.Rank)
+	}
+}
+
+// A task whose parent does not exist is shown at the top level, so it shares
+// a rank with the roots.
+func TestRerankTreatsAMissingParentAsTheTopLevel(t *testing.T) {
+	s := newTestStore(t)
+	ws := testWorkspace(t, s)
+	gone := model.NewULID()
+	orphan, root := rankTask(ws, "orphan", "a5"), rankTask(ws, "root", "a5")
+	orphan.Parent = &gone
+	orphan.ID, root.ID = "TST-1", "TST-2"
+	writeShared(t, s, orphan)
+	mustPut(t, s, root) // not first: goes after the orphan's a5
+	if root.Rank <= "a5" {
+		t.Errorf("root.Rank = %s, want it after a5", root.Rank)
+	}
+}

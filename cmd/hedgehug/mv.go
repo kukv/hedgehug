@@ -171,15 +171,17 @@ func (a *app) mvTargetOf(ix *index.Index, e, p *index.Entry, w *model.Workspace,
 		to.workspace = w.ULID
 	}
 	var err error
-	to.rank, err = a.rankAt(ix, e.ULID, to.parent, before, after)
+	to.rank, err = a.rankAt(ix, e.ULID, to.parent, to.workspace, before, after)
 	return to, err
 }
 
-// rankAt returns the rank for ulid under parent: just before or after a
-// sibling, or after every sibling.
-func (a *app) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, before, after string) (model.Rank, error) {
+// rankAt returns the rank for ulid under parent in workspace ws: just before
+// or after a sibling, or after every sibling. Siblings that share a rank are
+// ordered by id, so no rank lies between them: next to one of a group, the
+// task goes past the group on the side asked for.
+func (a *app) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, ws model.ULID, before, after string) (model.Rank, error) {
 	if before == "" && after == "" {
-		return endRank(ix, parent, ulid)
+		return endRank(ix, parent, ws, ulid)
 	}
 	ref := before
 	if ref == "" {
@@ -189,43 +191,21 @@ func (a *app) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, befor
 	if err != nil {
 		return "", err
 	}
-	sib := siblings(ix, parent, ulid)
-	i := slices.IndexFunc(sib, func(e *index.Entry) bool { return e.ULID == x.ULID })
-	if i < 0 {
+	sib := siblings(ix, parent, ws, ulid)
+	if !slices.ContainsFunc(sib, func(e *index.Entry) bool { return e.ULID == x.ULID }) {
 		return "", fmt.Errorf("%s is not under the same parent", refName(ix, x.ULID))
 	}
-	// Siblings that share a rank are ordered by id, so no rank lies between
-	// them: the task takes the place the write would give it in the group.
+	var lower, higher model.Rank
+	for _, e := range sib {
+		switch {
+		case e.Rank < x.Rank && e.Rank > lower:
+			lower = e.Rank
+		case e.Rank > x.Rank && (higher == "" || e.Rank < higher):
+			higher = e.Rank
+		}
+	}
 	if before != "" {
-		var prev model.Rank
-		if i > 0 {
-			prev = sib[i-1].Rank
-		}
-		if prev == x.Rank {
-			return a.rankInGroup(ix, ulid, x.Rank, sib)
-		}
-		return model.Between(prev, x.Rank)
+		return model.Between(lower, x.Rank)
 	}
-	var next model.Rank
-	if i+1 < len(sib) {
-		next = sib[i+1].Rank
-	}
-	if next == x.Rank {
-		return a.rankInGroup(ix, ulid, x.Rank, sib)
-	}
-	return model.Between(x.Rank, next)
-}
-
-// rankInGroup returns the rank for ulid when it joins the siblings that
-// have rank r.
-func (a *app) rankInGroup(ix *index.Index, ulid model.ULID, r model.Rank, sibs []*index.Entry) (model.Rank, error) {
-	self := model.RankKey{ULID: ulid, Rank: r}
-	if e, ok := ix.Task(ulid); ok {
-		self.ID = e.ID
-	}
-	keys := make([]model.RankKey, len(sibs))
-	for i, e := range sibs {
-		keys[i] = model.RankKey{ID: e.ID, ULID: e.ULID, Rank: e.Rank}
-	}
-	return model.RankAmong(self, keys)
+	return model.Between(x.Rank, higher)
 }

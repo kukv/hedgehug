@@ -2,7 +2,6 @@ package store
 
 import (
 	"errors"
-	"slices"
 
 	"github.com/kukv/hedgehug/internal/model"
 )
@@ -17,12 +16,16 @@ func (s *Store) SetSiblings(f Siblings) { s.siblings = f }
 
 // siblings returns the live tasks that share t's parent and workspace as
 // the operation leaves them, t excluded. A task put in the operation wins
-// over the one at HEAD.
+// over the one at HEAD. A task whose parent does not exist is at the top
+// level, as the index shows it.
 func (tx *Tx) siblings(t *model.Task) ([]*model.Task, error) {
+	parent, err := tx.effectiveParent(t)
+	if err != nil {
+		return nil, err
+	}
 	var ulids []model.ULID
 	if f := tx.s.siblings; f != nil {
-		var err error
-		if ulids, err = f(t.Parent, t.Workspace); err != nil {
+		if ulids, err = f(parent, t.Workspace); err != nil {
 			return nil, err
 		}
 	} else {
@@ -37,8 +40,12 @@ func (tx *Tx) siblings(t *model.Task) ([]*model.Task, error) {
 			ulids = append(ulids, o.ULID)
 		}
 	}
+	seen := make(map[model.ULID]bool, len(ulids))
+	for _, ulid := range ulids {
+		seen[ulid] = true
+	}
 	for _, ulid := range tx.taskOrder {
-		if !slices.Contains(ulids, ulid) {
+		if !seen[ulid] {
 			ulids = append(ulids, ulid)
 		}
 	}
@@ -55,11 +62,35 @@ func (tx *Tx) siblings(t *model.Task) ([]*model.Task, error) {
 		if err != nil {
 			return nil, err
 		}
-		if o.DeletedAt == nil && o.Workspace == t.Workspace && sameParent(o.Parent, t.Parent) {
+		if o.DeletedAt != nil || o.Workspace != t.Workspace {
+			continue
+		}
+		op, err := tx.effectiveParent(o)
+		if err != nil {
+			return nil, err
+		}
+		if sameParent(op, parent) {
 			out = append(out, o)
 		}
 	}
 	return out, nil
+}
+
+// effectiveParent returns the parent of t, or nil when t has none or the
+// parent does not exist.
+func (tx *Tx) effectiveParent(t *model.Task) (*model.ULID, error) {
+	if t.Parent == nil {
+		return nil, nil
+	}
+	_, err := tx.task(*t.Parent)
+	if errors.Is(err, ErrNotFound) {
+		return nil, nil
+	}
+	var de *model.DecodeError
+	if err != nil && !errors.As(err, &de) {
+		return nil, err
+	}
+	return t.Parent, nil
 }
 
 func sameParent(a, b *model.ULID) bool {
@@ -87,9 +118,9 @@ func (tx *Tx) rerank() error {
 		}
 		keys := make([]model.RankKey, len(sibs))
 		for i, o := range sibs {
-			keys[i] = model.RankKey{ID: o.ID, ULID: o.ULID, Rank: o.Rank}
+			keys[i] = o.RankKey()
 		}
-		r, err := model.RankAmong(model.RankKey{ID: t.ID, ULID: t.ULID, Rank: t.Rank}, keys)
+		r, err := model.RankAmong(t.RankKey(), keys)
 		if err != nil {
 			return err
 		}

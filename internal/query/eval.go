@@ -530,5 +530,5 @@ func matchAll(ps []pred, e *index.Entry) bool {
 }
 
 func byRank(a, b *index.Entry) int {
-	return model.CompareRankKeys(model.RankKey{ID: a.ID, ULID: a.ULID, Rank: a.Rank}, model.RankKey{ID: b.ID, ULID: b.ULID, Rank: b.Rank})
+	return model.CompareRankKeys(a.RankKey(), b.RankKey())
 }
