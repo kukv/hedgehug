@@ -61,6 +61,13 @@ func (a *app) edit(arg string) error {
 		}
 		t, err := checkEdit(ix, e.ULID, old, edited)
 		if err == nil {
+			if old != nil {
+				host, herr := a.writerHost()
+				if herr != nil {
+					return herr
+				}
+				addWatchers(t, newMentions(old.Body, t.Body, host)...)
+			}
 			var committed bool
 			committed, err = a.update(s, store.Op{Name: "edit", Task: e.ULID}, func(tx *store.Tx) error {
 				cur, err := s.TaskBytes(e.ULID)

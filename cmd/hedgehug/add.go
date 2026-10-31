@@ -107,6 +107,10 @@ func (a *app) add(title, parentArg, workspaceArg, kind, status string, assigns [
 	if t.CreatedBy, err = a.accountID(); err != nil {
 		return err
 	}
+	if t.CreatedBy != "" {
+		addWatchers(t, t.CreatedBy)
+	}
+	watchNewAssignees(t, nil)
 	committed, err := a.update(s, store.Op{Name: "add", Task: t.ULID}, func(tx *store.Tx) error { return tx.PutTask(t) })
 	if err != nil {
 		return err
