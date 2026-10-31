@@ -29,8 +29,46 @@ func TestCommitMerge(t *testing.T) {
 	if !strings.Contains(c.Message, "Hedgehug-Op: repair\nHedgehug-Author: github.com/a\nHedgehug-Repaired: x") {
 		t.Errorf("trailer order: %q", c.Message)
 	}
-	if _, err := s.CommitMerge(head, []plumbing.Hash{head}, files, Op{Name: "repair", Author: testAuthor}, nil); !errors.Is(err, ErrHeadMoved) {
+	stale := map[string][]byte{"notes/stale.md": []byte("s\n")}
+	if _, err := s.CommitMerge(head, []plumbing.Hash{head}, stale, Op{Name: "repair", Author: testAuthor}, nil); !errors.Is(err, ErrHeadMoved) {
 		t.Errorf("stale head = %v", err)
+	}
+	if _, err := os.Stat(s.path("notes/stale.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("a file was written on ErrHeadMoved: %v", err)
+	}
+}
+
+func TestCommitMergeRefusesOtherFirstParent(t *testing.T) {
+	s := newTestStore(t)
+	head := mustHead(t, s)
+	other := plumbing.NewHash("0123456789012345678901234567890123456789")
+	files := map[string][]byte{"notes/a.md": []byte("a\n")}
+	for _, parents := range [][]plumbing.Hash{nil, {other, head}} {
+		if _, err := s.CommitMerge(head, parents, files, Op{Name: "merge", Author: testAuthor}, nil); err == nil || errors.Is(err, ErrHeadMoved) {
+			t.Errorf("parents %v = %v", parents, err)
+		}
+	}
+	if _, err := os.Stat(s.path("notes/a.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("a file was written: %v", err)
+	}
+	if got := mustHead(t, s); got != head {
+		t.Errorf("HEAD moved to %s", got)
+	}
+}
+
+func TestCommitMergeWithUndecodableSchema(t *testing.T) {
+	s := newTestStore(t)
+	head := mustHead(t, s)
+	old := s.Schema()
+	h, err := s.CommitMerge(head, []plumbing.Hash{head}, map[string][]byte{schemaPath: []byte("{{ not yaml")}, Op{Name: "merge", Author: testAuthor}, nil)
+	if err != nil || h.IsZero() {
+		t.Fatalf("CommitMerge = %s, %v", h, err)
+	}
+	if got := mustHead(t, s); got != h {
+		t.Errorf("HEAD = %s, want %s", got, h)
+	}
+	if s.Schema() != old {
+		t.Error("the cached schema changed")
 	}
 }
 

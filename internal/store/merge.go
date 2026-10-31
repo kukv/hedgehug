@@ -50,6 +50,9 @@ func (s *Store) CommitMerge(head plumbing.Hash, parents []plumbing.Hash, files m
 	if op.Name == "" {
 		return plumbing.ZeroHash, errors.New("the operation has no name")
 	}
+	if len(parents) == 0 || parents[0] != head {
+		return plumbing.ZeroHash, errors.New("the first parent of a merge must be HEAD")
+	}
 	err = s.lockedAtHead(head, func() error {
 		rels := make([]string, 0, len(files))
 		for rel := range files {
@@ -89,7 +92,8 @@ func (s *Store) CommitMerge(head plumbing.Hash, parents []plumbing.Hash, files m
 		if h, err = s.repo.Head(); err != nil {
 			return err
 		}
-		return s.refreshSchema(rels)
+		s.refreshSchema(rels)
+		return nil
 	})
 	return h, err
 }
@@ -102,20 +106,20 @@ func (s *Store) FastForward(head, to plumbing.Hash, paths []string) error {
 		if err := s.repo.FastForward(to, paths); err != nil {
 			return err
 		}
-		return s.refreshSchema(paths)
+		s.refreshSchema(paths)
+		return nil
 	})
 }
 
 // refreshSchema reads schema.yaml again when rels names it, so the cached
-// schema is the one on disk.
-func (s *Store) refreshSchema(rels []string) error {
+// schema is the one on disk. The commit or fast-forward has already happened,
+// so a schema that does not decode is not an error here: the cache is left as
+// it was and the next Update reads the file again and reports the problem.
+func (s *Store) refreshSchema(rels []string) {
 	if !slices.Contains(rels, schemaPath) {
-		return nil
+		return
 	}
-	sc, err := readDecode(s.dir, schemaPath, schema.Decode)
-	if err != nil {
-		return err
+	if sc, err := readDecode(s.dir, schemaPath, schema.Decode); err == nil {
+		s.schema.Store(sc)
 	}
-	s.schema.Store(sc)
-	return nil
 }
