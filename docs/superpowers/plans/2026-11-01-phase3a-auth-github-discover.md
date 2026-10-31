@@ -35,20 +35,28 @@ spec が書いていない細部を、次のように埋めた（挙動は spec 
 5. 読み取り専用の状態（`access.json`）とメンバー一覧（`members.json`）の読み書きは `internal/sync` に置く（spec のパッケージ構成では `internal/mount` だが、3a に mount はなく、同期が書くので sync に置く。3b の mount は sync の関数を呼ぶ）。
 6. `members.json` に、author を集めた最後の HEAD（`head`）を足す。次の同期でそこからの差分だけを読むため。
 7. ローカルのパスの origin の「書けるか」の判定は、GitHub の情報と同じ5分おきの時機で行う（ほかの時機は spec どおり add・discover の直後）。
-8. 書き込みの拒否は、コミットを作る入口（`app.update` と `doctor --fix`）の最初で行う。`purge` の確認より前に検査するため、`rm.go` の `confirm` の前でも同じ関数を呼ぶ。
+8. 書き込みの拒否は、コミットを作る入口（`app.update` と `doctor --fix`）の最初で行う。`purge` は `purgeTargets` が「削除済みでなければ `not deleted`」を先に返すので、`rm.go` の `purge` では `a.open()` の直後（`purgeTargets` より前）で同じ関数を呼ぶ。
 9. 読み取り専用の Store の同期では、マージと修復は行い、push だけをしない。push できないコミット数を `sync.Result.Unpushable` に入れ、`hh sync` と `sync --status` に出す。
 10. origin への push が `ErrPushDenied` のときは、`access.json` に `push_denied` を書いてから、`org-a is read-only (the remote denied the push)` のエラーにする。ミラーへの push の拒否はミラーの警告（今の扱い）にする。
 11. `hh sync`（明示の実行）は、理由が `push_denied` の判定を、同期の前に外す。
 12. `hh auth status` は、トークンが取れない・`/user` が失敗した・login が合わない、のどれかがあれば終了コード1（spec は login の不一致だけを書くが、取れないのも確かめられない状態なので同じ扱いにした）。token のないアカウントは `-` と出して検査しない。
 13. Device Flow でブラウザを開くかは、端末のときだけ `Open the browser? [Y/n]` で聞く。開く処理は `env.openURL`（macOS は `open`、Windows は `rundll32 url.dll,FileProtocolHandler`、それ以外は `xdg-open`）。失敗しても URL とコードは出ているので警告だけにする。
-14. discover の提案名が Store の名前の規則（`model.ValidName`）に合わないときは、英小文字にし、使えない文字を `-` にする。それでも合わなければ `store-<番号>`。
+14. discover の提案名は、repo 名、使われていれば `<owner>-<repo>`、それも使われていれば `<owner>-<repo>-2`、`-3`…（spec のとおり）。どれも Store の名前の規則（`model.ValidName`）に合わないときは、英小文字にし、使えない文字を `-` にして作る。owner と repo から有効な名前が作れないとき（日本語だけなど）は `store-<番号>` で、番号は 1 から数えて、使われていない最初のもの（`store-1`、`store-2`…）。
 15. `store discover --from` の bare リポジトリの判定は `HEAD` ファイル・`objects/`・`refs/` の3つがあること。見つけたら、その下へは入らない。
 16. devenv の alice の2つ目のアカウント（alice-corp）は、`token: env:HH_DEV_TOKEN_WORK` にする（spec は `env:HH_DEV_TOKEN` だが、1つの変数では2つのアカウントのトークンを分けられないため）。`devenv env alice` が両方を export する。
 17. devenv の fakegh の URL は `devenv init --fakegh <url>`（既定 `http://127.0.0.1:7777`）で変えられるようにする（E2E が httptest の URL を渡すため）。
 18. HTTPS の git 通信に Basic 認証が付くことのテストは、spec の「httptest の smart HTTP サーバー」ではなく、テスト用に `https` の transport を差し替え、渡された `AuthMethod` を記録して確かめる（go-git に smart HTTP のサーバーがなく、git 本体なしでは立てられないため）。差し替えは `internal/gitrepo/gitrepotest` に置き、テストだけが使う。
 19. fakegh の Device Flow の `interval` は seed の `device_interval`（秒、既定5）。テストは0にし、`auto_approve` で発行と同時に承認させる。
-20. repo ID の正規化（discover でマウント済みを外すのに使う）は、3b で使う `internal/context/repoid.go` を 3a で先に作る。
-21. 読み取り専用の判定とメンバーの取得で「origin が GitHub のホストか」は、`url_rewrites` で書き換える前の URL で見る（spec の devenv の「bob の読み取り専用は fakegh の権限で再現する」は、書き換えた後がローカルのパスでも GitHub の権限を見ることを求めるため）。`store init` の分岐は spec どおり書き換えた後の URL で見る。
+20. repo ID の正規化（discover でマウント済みを外すのに使う）は、3b で使う `internal/context/repoid.go` を 3a で先に作る（Task 4）。remote URL を読む処理はそこの `Split` の1つだけで、`store init`・読み取り専用の判定・メンバー一覧・discover が使う。`Split` は owner と repo の大文字小文字を保ち（GitHub に作るリポジトリの名前を変えないため）、`RepoID` は `Split` を小文字でつないだもの。
+21. 読み取り専用の判定とメンバーの取得で「origin が GitHub のホストか」は、`url_rewrites` で書き換える前の URL で見る（spec の devenv の「bob の読み取り専用は fakegh の権限で再現する」は、書き換えた後がローカルのパスでも GitHub の権限を見ることを求めるため）。`store init` の分岐は spec どおり書き換えた後の URL で見る。どちらも、GitHub のホストかは URL の形（https・ssh://・`user@host:path`）ではなく `Split` が返す host で決め、`github.com` か `hosts[]` の host なら GitHub のホストとする。
+22. `Split` の host はポートを含まない（spec が repo ID でポートを捨てると決めているため）。そのため `hosts[].host` もポートなしのホスト名で書く。ポート付きの host を `hosts[]` に書いても、remote の URL とは一致しない。（spec は `hosts[].host` にポートを書けるかを書いていない。）
+23. 認証と GitHub API の失敗は `github.Describe(err, <host>/<login>, <アカウント名>, <していたこと>)` を通して、`<host>/<login> cannot <していたこと>: <原因>` の形にし、401 のときは末尾に `(run hedgehug auth login <アカウント名>)` を足す（spec の「エラー」）。`sync` は `config` を import しないので、`sync.GitHubRepo` にアカウントの ID と名前を文字列で持たせる。
+24. `store init` でリポジトリの作成が 422 のときの「remote に ref が1つもないか」は、`gitrepo.RemoteEmpty` が git の通信（go-git の `Remote.List`。`url_rewrites` と認証は `Conn` を通す）で確かめる。fakegh は API だけに答えて git の通信をしないので、テストでは「GitHub 側にある」を fakegh の `State.Repos`（作成が 422 になる）に、「空」「中身あり」を `gitrepotest.InstallHTTPS` で同じ owner/name の bare に向けて置く。既存の空のリポジトリを使うときは、自分が作ったものではないので、失敗しても「GitHub に作った」とは言わない。
+25. `store init` は、アカウントが決まれば（`--account`、またはアカウントが1つ）その名前を `stores[].account` に書く（spec の「選んだアカウントを `stores[].account` に書く」）。決まらなければ書かない。
+26. config にあり `token` が空のアカウントに `hh auth login <name>` を実行したときは、Device Flow（`--with-token` なら標準入力のトークンを keychain へ）でトークンを取り、`GET /user` の login が config と合えば `token: device`（または `keychain`）を書く。合わなければ何も書かずにエラー（spec の「`hh auth`」の表）。
+27. コラボレーターが取れないとき（403 に限らず、失敗はすべて）は `members.json` の `collaborators` を `null` にする（以前の一覧は残さない）。403 は読み取りだけの人に起きるのがふつうなので警告にしない。ほかの失敗は警告にする。
+28. `Options.keyring()` は `Options.Keychain()` として公開し、`hh auth` もそこから keychain を得る（「nil なら OS の keychain」の分岐は1つ）。HEAD にあって origin にないコミットの数え方は `sync.Unpushed` の1つ。読み取り専用の bare を作るテスト用の chmod は `gitrepotest.LockObjects` の1つ。
+29. 3a の E2E の `auth login` は、バイナリではなくこのプロセスの中で `run` を呼んで動かす（バイナリは本物の OS の keychain に書くので、keychain のない CI では通らず、spec は keychain の代わりのファイル保存を作らないため）。`store init` の GitHub 分岐の E2E は、`hosts` に `127.0.0.1` を GitHub のホストとして登録し、remote を何も待ち受けていない `http://127.0.0.1:1/...` にして、fakegh への作成と topic、残したリポジトリの案内までを確かめる（push は本物の `github.com` へ行かせない）。
 
 ---
 
@@ -61,12 +69,12 @@ internal/config/
 internal/store/
   lock.go            WithFileLock を足す
 internal/auth/       新規
-  source.go          Token、ClientID、Key
+  source.go          Token、ClientID、Key、Options（Keychain を含む）
   keychain.go        Keyring と OS の実装
   device.go          Login（Device Flow）、リフレッシュ
 internal/github/     新規
-  client.go          Client、エラー、ページ
-  repos.go           User、CreateRepo、SetTopics、UserRepos、Repo、Collaborators、ParseRepoURL
+  client.go          Client、エラー、Describe、ページ
+  repos.go           User、CreateRepo、SetTopics、UserRepos、Repo、Collaborators
   device.go          RequestDeviceCode、PollToken、RefreshToken
 internal/fakegh/     新規
   state.go           State、Repo、Load
@@ -75,30 +83,31 @@ internal/fakegh/     新規
 cmd/fakegh/          新規
   main.go            serve、perm、repo、device、token
 internal/gitrepo/
-  conn.go            新規。Conn、SetConn、CloneWith、ErrPushDenied、LocalPath、IsHTTP、Writable、HeadHasFile
+  conn.go            新規。Conn、SetConn、CloneWith、ErrPushDenied、LocalPath、IsHTTP、Writable、HeadHasFile、RemoteEmpty
   remote.go          Fetch・Push・Clone が Conn を使う
-  gitrepotest/       新規。テスト用の https transport
-internal/context/    新規（3a は repoid.go だけ）
-  repoid.go          RepoID
+  gitrepotest/       新規。テスト用の https transport（https.go）と、読み取り専用の bare（lock.go の LockObjects）
+internal/context/    新規（3a は repoid.go だけ。Task 4 で作る）
+  repoid.go          Split（remote URL を読む唯一の関数）、RepoID
 internal/sync/
   access.go          新規。Access、ReadAccess、WriteAccess
   members.go         新規。Members、ReadMembers、WriteMembers、UpdateAuthors
   github.go          新規。GitHubRepo、CheckAccess、refreshInfo
-  sync.go            Conn・GitHub・Explicit、読み取り専用での同期、ErrPushDenied
+  sync.go            Conn・GitHub・Explicit、読み取り専用での同期、ErrPushDenied、Unpushed
 cmd/hedgehug/
   auth.go            新規。auth login/status/logout
-  conn.go            新規。connFor、githubFor、tokenFor
+  conn.go            新規。connFor、authOptions、tokenFor
+  github.go          新規。githubFor、pickAccount、accountNames
   store_default.go   新規
   store_discover.go  新規
   store_init.go      remote の用意、--account、--path
   store_add.go       --account、読み取り専用の判定、storeAdd の引数
   readonly.go        新規。checkWritable、readOnlyError
   app.go             update が checkWritable を呼ぶ、syncOptions が Conn・GitHub を入れる
-  sync.go            Explicit、Unpushable の表示、status の read-only
+  sync.go            Explicit、Unpushable の表示、status の read-only、unpushed が sync.Unpushed を呼ぶ
   doctor.go          --fix の前に checkWritable
-  rm.go              purge の確認の前に checkWritable
+  rm.go              purge の a.open() の直後に checkWritable
   main.go            env.openURL
-tools/devenv/main.go hosts、fakegh.json、url_rewrites、org-b、alice-corp、--fakegh
+tools/devenv/main.go hosts、fakegh.json（org-a/web を含む4件）、url_rewrites、org-b、alice-corp、--fakegh、トークンの export
 ```
 
 ---
@@ -217,24 +226,7 @@ func TestLoadPhase3KeyErrors(t *testing.T) {
 }
 ```
 
-`testPaths` と `writeConfig` が `config_test.go` にまだなければ、同じファイルに足す:
-
-```go
-func testPaths(t *testing.T) Paths {
-	t.Helper()
-	d := t.TempDir()
-	return Paths{Home: d, ConfigFile: filepath.Join(d, "config.yaml"), StoresDir: filepath.Join(d, "stores")}
-}
-
-func writeConfig(t *testing.T, p Paths, s string) {
-	t.Helper()
-	if err := os.WriteFile(p.ConfigFile, []byte(s), 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-```
-
-（同名のヘルパーがすでにあれば、それを使い、ここは足さない。）
+`testPaths`・`writeConfig`・`cfgPaths` は `config_test.go` にすでにあるヘルパーなので、足さない（同名を足すと重複定義でコンパイルできない）。
 
 - [ ] **Step 2: 書き込みと hosts の失敗するテストを書く**
 
@@ -769,12 +761,35 @@ func (c *Config) SetDefaultStore(name string) error {
 
 `Config` の先頭のコメントを「Only stores, accounts, hosts, default_store, url_rewrites, repo_accounts and sync are read; …」に直す。`loadAccounts` のコメントの「(a token, say)」を消す（token は読むようになった）。
 
-- [ ] **Step 6: config のテストが通ることを確かめる**
+- [ ] **Step 6: 既存の config テストを新しい動きに合わせて直す**
+
+`AddStore` は `default_store` がなければその Store を書く（`AddStore` の結果は末尾に `default_store: <name>` の1行が付く）ので、`AddStore` の結果の config.yaml を完全一致で比べる既存のテストが変わる。また、`token:` に `gh`・`env:<VAR>`・`keychain`・`device` 以外を書いた既存のテストは、新しい検査で読み込みのエラーになる。`internal/config/config_test.go` を次のとおり直す（`strings.Contains` や読み直しで比べるほかのテストは、そのままで通る）。
+
+1. `TestSaveKeepsSequenceIndent` の表（`addAndRead` が `AddStore("b", …)` を呼ぶ6ケース）を、どの `want` も末尾に `default_store: b\n` を足した形にする。
+
+```go
+		{"indented", "stores:\n  - name: a\n    path: /x\n", "stores:\n  - name: a\n    path: /x\n  - name: b\n    path: /elsewhere/b\ndefault_store: b\n"},
+		{"flush", "stores:\n- name: a\n  path: /x\n", "stores:\n- name: a\n  path: /x\n- name: b\n  path: /elsewhere/b\ndefault_store: b\n"},
+		{"no file", "", "stores:\n  - name: b\n    path: /elsewhere/b\ndefault_store: b\n"},
+		{"other list flush, no stores", "other:\n- x\n", "other:\n- x\nstores:\n- name: b\n  path: /elsewhere/b\ndefault_store: b\n"},
+		{"other list indented, no stores", "other:\n  - x\n", "other:\n  - x\nstores:\n  - name: b\n    path: /elsewhere/b\ndefault_store: b\n"},
+		{"empty stores", "stores:\n", "stores:\n  - name: b\n    path: /elsewhere/b\ndefault_store: b\n"},
+```
+
+2. `TestAddAndRemoveStoreKeepsComments` の `want` を次にする（`b` を足したとき既定の Store がなかったので `b` が既定になる。`a` を外しても既定は変わらない）:
+
+```go
+	want := "# mine\nstores:\n  - name: c\n    path: /c # third\n  - name: b\n    path: /b\n    remotes: [/r/b.git]\nlog_level: debug # keep\ndefault_store: b\n"
+```
+
+3. `TestLoadAccountsRemotesSync` の設定の `    token: secret` を `    token: gh` にする（`secret` は新しい検査で読み込みのエラーになる）。
+
+- [ ] **Step 7: config のテストが通ることを確かめる**
 
 Run: `go test ./internal/config/`
 Expected: PASS
 
-- [ ] **Step 7: `hh store default` の失敗するテストを書く**
+- [ ] **Step 8: `hh store default` の失敗するテストを書く**
 
 `cmd/hedgehug/store_default_test.go`:
 
@@ -810,12 +825,12 @@ func TestStoreDefault(t *testing.T) {
 }
 ```
 
-- [ ] **Step 8: 失敗を確かめる**
+- [ ] **Step 9: 失敗を確かめる**
 
 Run: `go test ./cmd/hedgehug/ -run TestStoreDefault`
 Expected: FAIL（`unknown command "default"`）
 
-- [ ] **Step 9: store_default.go を書く**
+- [ ] **Step 10: store_default.go を書く**
 
 ```go
 package main
@@ -871,12 +886,12 @@ func (a *app) storeDefaultCmd() *cobra.Command {
 
 `storeCmd` の `cmd.AddCommand(…)` に `a.storeDefaultCmd()` を足す。
 
-- [ ] **Step 10: テストを通す**
+- [ ] **Step 11: テストを通す**
 
 Run: `go test ./internal/config/ ./cmd/hedgehug/`
 Expected: PASS（既存のゴールデンテストに `default_store` の行が出るものがあれば、出力が spec どおりかを確かめて更新する）
 
-- [ ] **Step 11: コミット**
+- [ ] **Step 12: コミット**
 
 ```bash
 git add internal/config cmd/hedgehug/store_default.go cmd/hedgehug/store_default_test.go cmd/hedgehug/store_init.go
@@ -900,7 +915,7 @@ git commit -m "feat(config): token・hosts・default_store・url_rewrites・repo
   - `func store.WithFileLock(path string, wait time.Duration, fn func() error) error`
   - `package auth`: `const Service = "hedgehug"`、`func Key(a config.Account) string`
   - `type Keyring interface { Get(service, user string) (string, error); Set(service, user, secret string) error; Delete(service, user string) error }`、`var ErrNotFound`、`func OSKeyring() Keyring`
-  - `type Options struct { Getenv func(string) string; Run func(name string, args ...string) (stdout, stderr []byte, err error); Keyring Keyring; Now func() time.Time; Host config.Host; HTTP *http.Client; LockFile string; Sleep func(time.Duration) }`
+  - `type Options struct { Getenv func(string) string; Run func(name string, args ...string) (stdout, stderr []byte, err error); Keyring Keyring; Now func() time.Time; Host config.Host; HTTP *http.Client; LockFile string; Sleep func(time.Duration) }`、`func (o Options) Keychain() Keyring`（`Keyring` が nil なら OS の keychain。コマンドも keychain をここから得る）
   - `func Token(a config.Account, opt Options) (string, error)`（`device` の分は Task 5 で足す。この Task では `device` は保存済みのアクセストークンをそのまま返す）
   - `func SaveToken(a config.Account, token string, k Keyring) error`、`func Delete(a config.Account, k Keyring) error`
   - `type DeviceToken struct{ AccessToken, RefreshToken string; ExpiresAt, RefreshExpiresAt time.Time }`（JSON は `access_token` など）、`func SaveDeviceToken(a config.Account, t DeviceToken, k Keyring) error`、`func LoadDeviceToken(a config.Account, k Keyring) (DeviceToken, error)`
@@ -1181,6 +1196,7 @@ func wrapKeyring(err error) error {
 package auth
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1188,7 +1204,6 @@ import (
 	"os/exec"
 	"strings"
 	"time"
-	"bytes"
 
 	"github.com/kukv/hedgehug/internal/config"
 )
@@ -1228,7 +1243,9 @@ type Options struct {
 	Sleep    func(time.Duration)
 }
 
-func (o Options) keyring() Keyring {
+// Keychain is the keyring to use: Keyring, or the OS keychain when it is nil.
+// The commands get the keyring from here too, so the choice is made once.
+func (o Options) Keychain() Keyring {
 	if o.Keyring == nil {
 		return OSKeyring()
 	}
@@ -1247,7 +1264,7 @@ func (o Options) run(name string, args ...string) ([]byte, []byte, error) {
 		return o.Run(name, args...)
 	}
 	var out, errb bytes.Buffer
-	cmd := exec.Command(name, args...)
+	cmd := exec.Command(name, args...) //nolint:gosec // G204: name is gh, and args are the host and login of an account in config.yaml
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	err := cmd.Run()
 	return out.Bytes(), errb.Bytes(), err
@@ -1278,7 +1295,7 @@ func Token(a config.Account, opt Options) (string, error) {
 		}
 		return v, nil
 	case "keychain":
-		v, err := opt.keyring().Get(Service, Key(a))
+		v, err := opt.Keychain().Get(Service, Key(a))
 		if errors.Is(err, ErrNotFound) {
 			return "", fmt.Errorf("the keychain has no token of %s; run hedgehug auth login %s --with-token", Key(a), a.Name)
 		}
@@ -1335,7 +1352,7 @@ func LoadDeviceToken(a config.Account, k Keyring) (DeviceToken, error) {
 // deviceToken returns the access token of a device login. Task 5 adds the
 // refresh; until then the token is used as it is.
 func deviceToken(a config.Account, opt Options) (string, error) {
-	t, err := LoadDeviceToken(a, opt.keyring())
+	t, err := LoadDeviceToken(a, opt.Keychain())
 	if errors.Is(err, ErrNotFound) {
 		return "", fmt.Errorf("%s is not logged in; run hedgehug auth login %s", Key(a), a.Name)
 	}
@@ -1346,7 +1363,7 @@ func deviceToken(a config.Account, opt Options) (string, error) {
 }
 ```
 
-（`goimports` で import を整える。`net/http` は Options の型で使う。）
+（`net/http` は Options の型で使う。）
 
 - [ ] **Step 8: テストを通す**
 
@@ -1589,6 +1606,63 @@ func TestAdmin(t *testing.T) {
 	}
 	if err := a.SetPerm("nope/x", "bob", "read"); err == nil {
 		t.Error("perm on a missing repo = nil")
+	}
+}
+
+// TestAdminDeviceApproveAndExpire goes through the two endpoints the other
+// tests reach by calling the server's methods: /_fakegh/device/approve and
+// /_fakegh/token/expire.
+func TestAdminDeviceApproveAndExpire(t *testing.T) {
+	s := New(seed())
+	srv := httptest.NewServer(s)
+	defer srv.Close()
+	a := Admin{URL: srv.URL}
+	_, body := do(t, srv, "POST", "/login/device/code", "", "client_id=Iv23x")
+	var dc struct {
+		DeviceCode string `json:"device_code"`
+		UserCode   string `json:"user_code"`
+	}
+	if err := json.Unmarshal([]byte(body), &dc); err != nil || dc.UserCode == "" {
+		t.Fatalf("device code = %s", body)
+	}
+	poll := url.Values{"client_id": {"Iv23x"}, "device_code": {dc.DeviceCode}, "grant_type": {"urn:ietf:params:oauth:grant-type:device_code"}}.Encode()
+	if _, body := do(t, srv, "POST", "/login/oauth/access_token", "", poll); !strings.Contains(body, "authorization_pending") {
+		t.Errorf("before approval = %s", body)
+	}
+	if err := a.ApproveDevice("NOPE-0000", "alice"); err == nil {
+		t.Error("approving a code nobody has = nil")
+	}
+	if err := a.ApproveDevice(dc.UserCode, "alice"); err != nil {
+		t.Fatal(err)
+	}
+	_, body = do(t, srv, "POST", "/login/oauth/access_token", "", poll)
+	var tok struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.Unmarshal([]byte(body), &tok); err != nil || !strings.HasPrefix(tok.AccessToken, "ghu_") {
+		t.Fatalf("token after approval = %s", body)
+	}
+	if res, _ := do(t, srv, "GET", "/user", tok.AccessToken, ""); res.StatusCode != 200 {
+		t.Errorf("issued token = %d", res.StatusCode)
+	}
+	// Expiring bob's tokens leaves alice's alone; expiring alice's makes the
+	// access token 401 while the refresh token still works.
+	if err := a.ExpireTokens("bob"); err != nil {
+		t.Fatal(err)
+	}
+	if res, _ := do(t, srv, "GET", "/user", tok.AccessToken, ""); res.StatusCode != 200 {
+		t.Errorf("after expiring bob's tokens = %d", res.StatusCode)
+	}
+	if err := a.ExpireTokens("alice"); err != nil {
+		t.Fatal(err)
+	}
+	if res, _ := do(t, srv, "GET", "/user", tok.AccessToken, ""); res.StatusCode != 401 {
+		t.Errorf("after expiring alice's tokens = %d, want 401", res.StatusCode)
+	}
+	refresh := url.Values{"client_id": {"Iv23x"}, "refresh_token": {tok.RefreshToken}, "grant_type": {"refresh_token"}}.Encode()
+	if _, body := do(t, srv, "POST", "/login/oauth/access_token", "", refresh); !strings.Contains(body, "ghu_") {
+		t.Errorf("refresh after expiring = %s", body)
 	}
 }
 ```
@@ -2157,7 +2231,7 @@ func (a Admin) post(path string, b adminBody) error {
 	if hc == nil {
 		hc = http.DefaultClient
 	}
-	res, err := hc.Post(a.URL+path, "application/json", bytes.NewReader(data))
+	res, err := hc.Post(a.URL+path, "application/json", bytes.NewReader(data)) //nolint:gosec // G107, G704: the URL is the running fake the developer named with --server
 	if err != nil {
 		return err
 	}
@@ -2211,12 +2285,15 @@ git commit -m "feat(fakegh): フェーズ3が使う GitHub API のフェイク�
 **Files:**
 - Create: `internal/github/client.go`、`internal/github/repos.go`、`internal/github/device.go`
 - Test: `internal/github/client_test.go`
+- Create: `internal/context/repoid.go`（remote URL を読む処理はここの1か所。`store init`・読み取り専用の判定・discover が使うので、このTaskで作る）
+- Test: `internal/context/repoid_test.go`
 
 **Interfaces:**
 - Consumes: `config.Host`（Task 1）、`fakegh.New`（Task 3、テストだけ）
 - Produces:
   - `type Client struct{ … }`、`func New(h config.Host, token string, hc *http.Client) *Client`（`hc` が nil なら30秒のタイムアウトの client）
   - `var ErrUnauthorized, ErrForbidden, ErrNotFound, ErrExists error`、`type RateLimitError struct{ Reset time.Time }`（`Error()` は `GitHub API rate limit; try again after <時刻>`）
+  - `func Describe(err error, accountID, accountName, doing string) error`（エラーに「どのアカウントで何をしようとしたか」を添える。`<accountID> cannot <doing>: <err>`。`errors.Is(err, ErrUnauthorized)` のときは末尾に `(run hedgehug auth login <accountName>)` を足す。spec の「エラー」の節。認証と GitHub API を呼ぶ側はすべてこれを通す）
   - `type Repo struct { Name, FullName, CloneURL string; Owner struct{ Login string }; Private bool; Topics []string; Permissions struct{ Admin, Push, Pull bool } }`（JSON タグは GitHub の名前）
   - `type Collaborator struct{ Login, RoleName string }`
   - `func (c *Client) User() (string, error)`
@@ -2225,9 +2302,9 @@ git commit -m "feat(fakegh): フェーズ3が使う GitHub API のフェイク�
   - `func (c *Client) UserRepos() ([]Repo, error)`
   - `func (c *Client) Repo(owner, name string) (*Repo, error)`
   - `func (c *Client) Collaborators(owner, name string) ([]Collaborator, error)`
-  - `func ParseRepoURL(u string) (host, owner, name string, ok bool)`（`https://host/owner/name(.git)` と `http://…`）
   - `type DeviceCode struct{ DeviceCode, UserCode, VerificationURI string; ExpiresIn, Interval int }`
   - `type TokenResponse struct{ AccessToken, RefreshToken, Error string; ExpiresIn, RefreshTokenExpiresIn int }`
+  - `package context`（`internal/context`）: `func Split(u string) (host, owner, repo string, ok bool)`（remote URL を読む唯一の関数。`https`・`http`・`ssh`・`git` の URL と `user@host:owner/repo`。host は小文字でポートなし、owner と repo は書かれたまま、repo の `.git` は除く。ローカルのパスや owner/repo を取れない URL は ok が false）、`func RepoID(u string) (string, bool)`（`Split` を小文字でつないだ `<host>/<owner>/<repo>`。spec の「repo ID の正規化」）
   - `func RequestDeviceCode(hc *http.Client, web, clientID string) (*DeviceCode, error)`
   - `func PollToken(hc *http.Client, web, clientID, deviceCode string) (*TokenResponse, error)`（`Error` が `authorization_pending` などのときも err は nil）
   - `func RefreshToken(hc *http.Client, web, clientID, refresh string) (*TokenResponse, error)`
@@ -2244,6 +2321,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -2350,21 +2428,22 @@ func TestRateLimit(t *testing.T) {
 	}
 }
 
-func TestParseRepoURL(t *testing.T) {
-	for in, want := range map[string][3]string{
-		"https://github.com/org-a/hh-shared.git": {"github.com", "org-a", "hh-shared"},
-		"https://ghe.example.com/x/y":            {"ghe.example.com", "x", "y"},
-		"http://127.0.0.1:7777/x/y.git":          {"127.0.0.1:7777", "x", "y"},
-	} {
-		h, o, n, ok := ParseRepoURL(in)
-		if !ok || [3]string{h, o, n} != want {
-			t.Errorf("ParseRepoURL(%q) = %q %q %q %v", in, h, o, n, ok)
+func TestDescribe(t *testing.T) {
+	err := Describe(ErrUnauthorized, "github.com/alice-corp", "work", "read the permission of org-a/hh-shared")
+	if !errors.Is(err, ErrUnauthorized) {
+		t.Errorf("Describe lost the cause: %v", err)
+	}
+	for _, want := range []string{"github.com/alice-corp cannot read the permission of org-a/hh-shared", "401", "run hedgehug auth login work"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("err = %q, want it to contain %q", err, want)
 		}
 	}
-	for _, in := range []string{"/tmp/x.git", "git@github.com:o/r.git", "https://github.com/only"} {
-		if _, _, _, ok := ParseRepoURL(in); ok {
-			t.Errorf("ParseRepoURL(%q) is ok", in)
-		}
+	// Only a 401 is cured by logging in again.
+	if err := Describe(ErrForbidden, "github.com/bob", "me", "list the collaborators of org-a/x"); !errors.Is(err, ErrForbidden) || strings.Contains(err.Error(), "auth login") {
+		t.Errorf("403 = %v", err)
+	}
+	if Describe(nil, "github.com/bob", "me", "do it") != nil {
+		t.Error("Describe(nil) is not nil")
 	}
 }
 
@@ -2392,9 +2471,61 @@ func TestDevice(t *testing.T) {
 }
 ```
 
+`internal/context/repoid_test.go`（remote URL の解析のテストはここだけ。`store init`・読み取り専用の判定・discover は `Split` を使い、別の解析を持たない）:
+
+```go
+package context
+
+import "testing"
+
+func TestSplit(t *testing.T) {
+	for in, want := range map[string][3]string{
+		"https://github.com/Org-A/HH-Shared.git":     {"github.com", "Org-A", "HH-Shared"},
+		"https://GitHub.com/org-a/api/":              {"github.com", "org-a", "api"},
+		"http://127.0.0.1:7777/x/y.git":              {"127.0.0.1", "x", "y"},
+		"https://ghe.example.com:8443/x/y":           {"ghe.example.com", "x", "y"},
+		"git@github.com:org-a/api.git":               {"github.com", "org-a", "api"},
+		"git@github.com:Org-A/API":                   {"github.com", "Org-A", "API"},
+		"ssh://git@github.com:22/org-a/api.git":      {"github.com", "org-a", "api"},
+		"ssh://ghe.example.com/org-a/api":            {"ghe.example.com", "org-a", "api"},
+		"git://github.com/org-a/api":                 {"github.com", "org-a", "api"},
+	} {
+		h, o, n, ok := Split(in)
+		if !ok || [3]string{h, o, n} != want {
+			t.Errorf("Split(%q) = %q %q %q %v, want %v", in, h, o, n, ok, want)
+		}
+	}
+	for _, in := range []string{"/tmp/x.git", "file:///tmp/x", "https://github.com/only", "https://github.com/a/b/c", `C:\x\y`, ""} {
+		if h, o, n, ok := Split(in); ok {
+			t.Errorf("Split(%q) = %q %q %q, want none", in, h, o, n)
+		}
+	}
+}
+
+func TestRepoID(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://github.com/Org-A/API.git":      "github.com/org-a/api",
+		"http://github.com/org-a/api/":          "github.com/org-a/api",
+		"ssh://git@github.com:22/org-a/api.git": "github.com/org-a/api",
+		"git@github.com:org-a/api.git":          "github.com/org-a/api",
+		"git://github.com/org-a/api":            "github.com/org-a/api",
+		"https://ghe.example.com:8443/x/y":      "ghe.example.com/x/y",
+	} {
+		if got, ok := RepoID(in); !ok || got != want {
+			t.Errorf("RepoID(%q) = %q %v, want %q", in, got, ok, want)
+		}
+	}
+	for _, in := range []string{"/tmp/x.git", "file:///tmp/x", "https://github.com/only", `C:\x\y`} {
+		if got, ok := RepoID(in); ok {
+			t.Errorf("RepoID(%q) = %q, want none", in, got)
+		}
+	}
+}
+```
+
 - [ ] **Step 2: 失敗を確かめる**
 
-Run: `go test ./internal/github/`
+Run: `go test ./internal/github/ ./internal/context/`
 Expected: FAIL（パッケージがない）
 
 - [ ] **Step 3: client.go を書く**
@@ -2431,6 +2562,22 @@ type RateLimitError struct{ Reset time.Time }
 
 func (e *RateLimitError) Error() string {
 	return "GitHub API rate limit; try again after " + e.Reset.Format(time.RFC3339)
+}
+
+// Describe says in err which account did what, and for a 401 what to run: a
+// failure of the API is shown to the person as
+// "github.com/alice-corp cannot read the permission of org-a/hh-shared: …
+// (run hedgehug auth login work)". accountID is <host>/<login>, accountName
+// the name in config.yaml, doing what was being done.
+func Describe(err error, accountID, accountName, doing string) error {
+	if err == nil {
+		return nil
+	}
+	err = fmt.Errorf("%s cannot %s: %w", accountID, doing, err)
+	if errors.Is(err, ErrUnauthorized) {
+		err = fmt.Errorf("%w (run hedgehug auth login %s)", err, accountName)
+	}
+	return err
 }
 
 // Client calls the REST API of one host with one token.
@@ -2474,7 +2621,7 @@ func (c *Client) do(method, url string, in, out any) (*http.Response, error) {
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	res, err := c.hc.Do(req)
+	res, err := c.hc.Do(req) //nolint:gosec // G704: the URL is the API base of a host in config.yaml
 	if err != nil {
 		return nil, err
 	}
@@ -2554,10 +2701,7 @@ func getAll[T any](c *Client, url string) ([]T, error) {
 ```go
 package github
 
-import (
-	"net/url"
-	"strings"
-)
+import "net/url"
 
 // Repo is a repository as the API gives it.
 type Repo struct {
@@ -2636,20 +2780,6 @@ func (c *Client) Collaborators(owner, name string) ([]Collaborator, error) {
 func (c *Client) repoURL(owner, name string) string {
 	return c.api + "/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(name)
 }
-
-// ParseRepoURL reads the host, owner and name of an http or https URL of a
-// repository: https://host/owner/name, with or without .git.
-func ParseRepoURL(u string) (host, owner, name string, ok bool) {
-	p, err := url.Parse(u)
-	if err != nil || (p.Scheme != "http" && p.Scheme != "https") || p.Host == "" {
-		return "", "", "", false
-	}
-	parts := strings.Split(strings.Trim(p.Path, "/"), "/")
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", "", false
-	}
-	return p.Host, parts[0], strings.TrimSuffix(parts[1], ".git"), true
-}
 ```
 
 - [ ] **Step 5: device.go を書く**
@@ -2692,7 +2822,7 @@ func postForm(hc *http.Client, u string, form url.Values, out any) error {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
-	res, err := defaultHTTP(hc).Do(req)
+	res, err := defaultHTTP(hc).Do(req) //nolint:gosec // G704: web is the web base of a host in config.yaml
 	if err != nil {
 		return err
 	}
@@ -2739,16 +2869,78 @@ func RefreshToken(hc *http.Client, web, clientID, refresh string) (*TokenRespons
 }
 ```
 
-- [ ] **Step 6: テストを通す**
+- [ ] **Step 6: repoid.go を書く**
 
-Run: `go test -race ./internal/github/`
+`internal/context/repoid.go`:
+
+```go
+// Package context decides where a new task goes when the command does not
+// say, and reads remote URLs. Phase 3a has only the remote URLs.
+package context
+
+import (
+	"net/url"
+	"regexp"
+	"strings"
+)
+
+// scpLike is user@host:owner/repo, the short form of ssh.
+var scpLike = regexp.MustCompile(`^[^@/]+@([^:/]+):(.+)$`)
+
+// Split reads a remote URL: https, http, ssh, git and user@host:path. The
+// host is in lower case and has no port; the owner and the repo are as
+// written, and the repo has no .git or trailing slash. A local path, or a URL
+// that does not end in an owner and a repo, is not ok.
+//
+// This is the one place that reads a remote URL: store init (is this a
+// GitHub host, and which repository to make), the read-only check and the
+// member list use the owner and the repo from here, and RepoID lower-cases
+// it.
+func Split(u string) (host, owner, repo string, ok bool) {
+	var p string
+	if m := scpLike.FindStringSubmatch(u); m != nil && !strings.Contains(u, "://") {
+		host, p = m[1], m[2]
+	} else {
+		x, err := url.Parse(u)
+		if err != nil {
+			return "", "", "", false
+		}
+		switch x.Scheme {
+		case "https", "http", "ssh", "git":
+		default:
+			return "", "", "", false
+		}
+		host, p = x.Hostname(), x.Path
+	}
+	parts := strings.Split(strings.Trim(strings.TrimSuffix(strings.Trim(p, "/"), ".git"), "/"), "/")
+	if host == "" || len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", "", false
+	}
+	return strings.ToLower(host), parts[0], parts[1], true
+}
+
+// RepoID turns a remote URL into <host>/<owner>/<repo> in lower case, without
+// .git, a trailing slash or a port. A local path, or a URL without an owner
+// and a repo, has none.
+func RepoID(u string) (string, bool) {
+	host, owner, repo, ok := Split(u)
+	if !ok {
+		return "", false
+	}
+	return strings.ToLower(host + "/" + owner + "/" + repo), true
+}
+```
+
+- [ ] **Step 7: テストを通す**
+
+Run: `go test -race ./internal/github/ ./internal/context/`
 Expected: PASS
 
-- [ ] **Step 7: コミット**
+- [ ] **Step 8: コミット**
 
 ```bash
-git add internal/github
-git commit -m "feat(github): フェーズ3で使う REST API と Device Flow のクライアントを作る"
+git add internal/github internal/context
+git commit -m "feat(github): フェーズ3で使う REST API と Device Flow のクライアントを作り、remote URL の解析を internal/context に置く"
 ```
 
 ---
@@ -2981,7 +3173,7 @@ func deviceTokenOf(tr *github.TokenResponse, now time.Time) DeviceToken {
 // when it ends within refreshBefore. The refresh holds auth.lock and reads
 // the keychain again under it, so of two processes only one refreshes.
 func deviceToken(a config.Account, opt Options) (string, error) {
-	k := opt.keyring()
+	k := opt.Keychain()
 	t, err := LoadDeviceToken(a, k)
 	if errors.Is(err, ErrNotFound) {
 		return "", fmt.Errorf("%s is not logged in; run hedgehug auth login %s", Key(a), a.Name)
@@ -3057,7 +3249,11 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"io"
+	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -3085,7 +3281,52 @@ func TestCommands(t *testing.T) {
 	if r, ok := s.Repo("org-a/y"); !ok || r.Topics[0] != "hedgehug-store" {
 		t.Errorf("repo = %+v", r)
 	}
-	var errb bytes.Buffer
+
+	// device approve: the user_code of a device code, approved from the
+	// command, makes the next poll give a token.
+	res, err := http.PostForm(srv.URL+"/login/device/code", url.Values{"client_id": {"Iv23x"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dc struct {
+		DeviceCode string `json:"device_code"`
+		UserCode   string `json:"user_code"`
+	}
+	err = json.NewDecoder(res.Body).Decode(&dc)
+	_ = res.Body.Close()
+	if err != nil || dc.UserCode == "" {
+		t.Fatalf("device code = %+v, %v", dc, err)
+	}
+	poll := func() string {
+		res, err := http.PostForm(srv.URL+"/login/oauth/access_token", url.Values{
+			"client_id": {"Iv23x"}, "device_code": {dc.DeviceCode},
+			"grant_type": {"urn:ietf:params:oauth:grant-type:device_code"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+		b, _ := io.ReadAll(res.Body)
+		return string(b)
+	}
+	if got := poll(); !strings.Contains(got, "authorization_pending") {
+		t.Errorf("before approval = %s", got)
+	}
+	var out, errb bytes.Buffer
+	if code := run([]string{"device", "approve", dc.UserCode, "--user", "bob", "--server", srv.URL}, &out, &errb); code != 0 {
+		t.Errorf("device approve: exit %d: %s", code, errb.String())
+	}
+	if got := poll(); !strings.Contains(got, "ghu_") {
+		t.Errorf("after approval = %s", got)
+	}
+	errb.Reset()
+	if code := run([]string{"device", "approve", "NOPE-0000", "--user", "bob", "--server", srv.URL}, &out, &errb); code != 1 || !strings.Contains(errb.String(), "NOPE-0000") {
+		t.Errorf("device approve of a code nobody has: exit %d: %s", code, errb.String())
+	}
+	if code := run([]string{"device", "approve", dc.UserCode, "--server", srv.URL}, &out, &errb); code != 2 {
+		t.Errorf("device approve without --user: exit %d", code)
+	}
+	errb.Reset()
 	if code := run([]string{"perm", "set", "org-a/x"}, &bytes.Buffer{}, &errb); code != 2 {
 		t.Errorf("too few args: exit %d", code)
 	}
@@ -3267,7 +3508,7 @@ git commit -m "feat(fakegh): fakegh の serve と状態を変えるコマンド�
 **Files:**
 - Create: `internal/gitrepo/conn.go`
 - Modify: `internal/gitrepo/remote.go`（`Fetch`・`Push`・`Clone` が `Conn` を使う）
-- Create: `internal/gitrepo/gitrepotest/https.go`
+- Create: `internal/gitrepo/gitrepotest/https.go`、`internal/gitrepo/gitrepotest/lock.go`（読み取り専用の bare を作るテスト用ヘルパー。Task 10・11 のテストもこれを使う）
 - Test: `internal/gitrepo/conn_test.go`
 - Modify: `internal/sync/sync.go`（`Options.Conn`、`Run` の最初で `r.SetConn(opt.Conn)`）
 - Create: `cmd/hedgehug/conn.go`
@@ -3281,7 +3522,9 @@ git commit -m "feat(fakegh): fakegh の serve と状態を変えるコマンド�
   - `var ErrPushDenied = errors.New("the remote denied the push")`
   - `func (r *Repo) SetConn(c Conn)`、`func CloneWith(url, dir string, c Conn) (*Repo, error)`（`Clone(url, dir)` は `CloneWith(url, dir, Conn{})`）
   - `func LocalPath(url string) (string, bool)`（ローカルのパスか `file://` の URL なら、そのパス）、`func IsHTTP(url string) bool`、`func Writable(dir string) bool`（`dir/objects` にファイルを作って消せるか）
-  - `func HeadHasFile(dir, path string) (bool, error)`（bare を含むリポジトリの HEAD のツリーに path があるか。Task 11 が使う）
+  - `func HeadHasFile(dir, path string) (bool, error)`（bare を含むリポジトリの HEAD のツリーに path があるか。Task 9 のテストと Task 12 が使う）
+  - `func RemoteEmpty(u string, c Conn) (bool, error)`（`u` は `.git/config` にある書き換え前の URL。`c` で書き換えと認証を通して、go-git の `Remote.List` で remote の ref を取り、1つもなければ true。`transport.ErrEmptyRemoteRepository` も空として true。リポジトリがない・通信できないなどはエラー。Task 9 の `store init` が、リポジトリの作成が 422 のときに「既存の空のリポジトリか」を確かめるのに使う。git の通信で確かめるので、本物の GitHub でも SSH でも、テストの `gitrepotest.InstallHTTPS` でも同じ関数で動く）
+  - `gitrepotest.LockObjects(t testing.TB, dir string) (unlock func())`: bare リポジトリ `dir` の `objects` とその下のディレクトリをすべて読み取り専用（0o500）にして、push と `Writable` を失敗させる。`unlock` で戻す（`t.Cleanup` でも戻すので TempDir を消せる）。Windows と root では `t.Skip`。読み取り専用の chmod の処理はここの1つだけで、各パッケージのテストは複製しない
   - `gitrepotest.InstallHTTPS(t testing.TB, route func(url string) (dir string, ok bool), auths *[]transport.AuthMethod, deny func(url string) bool)`: `https` と `http` の transport を、URL を dir の bare リポジトリに向けるインプロセスの server に差し替え、渡された AuthMethod を記録する。`deny` が true の URL は receive-pack で `transport.ErrAuthorizationFailed` を返す。`t.Cleanup` で元に戻す
   - `sync.Options.Conn gitrepo.Conn`
   - cmd: `func (a *app) connFor(c *config.Config, e config.StoreEntry) gitrepo.Conn`、`func (a *app) authOptions(c *config.Config, acct config.Account) auth.Options`、`func (a *app) tokenFor(c *config.Config, acct config.Account) (string, error)`（1回の実行の中でアカウントごとに覚える）
@@ -3380,6 +3623,51 @@ func Under(base, dir string) func(string) (string, bool) {
 }
 ```
 
+`internal/gitrepo/gitrepotest/lock.go`:
+
+```go
+package gitrepotest
+
+import (
+	"os"
+	"path/filepath"
+	"runtime"
+	"testing"
+)
+
+// LockObjects makes the objects directory of the bare repository dir, and
+// every directory in it, read-only, so that a push to it is denied and
+// gitrepo.Writable is false. unlock gives the write permission back; the
+// cleanup of the test calls it too, so that TempDir can remove the
+// directory. The test is skipped where a directory cannot be made read-only
+// to the user who runs it: on Windows, and as root.
+func LockObjects(t testing.TB, dir string) (unlock func()) {
+	t.Helper()
+	if runtime.GOOS == "windows" || os.Getuid() == 0 {
+		t.Skip("no read-only directories here")
+	}
+	var dirs []string
+	_ = filepath.WalkDir(filepath.Join(dir, "objects"), func(p string, d os.DirEntry, err error) error {
+		if err == nil && d.IsDir() {
+			dirs = append(dirs, p)
+		}
+		return nil
+	})
+	for _, p := range dirs {
+		if err := os.Chmod(p, 0o500); err != nil { //nolint:gosec // G302: a read-only directory is the point of this helper
+			t.Fatal(err)
+		}
+	}
+	unlock = func() {
+		for _, p := range dirs {
+			_ = os.Chmod(p, 0o700) //nolint:gosec // G302: give the write permission back so that TempDir can remove the directory
+		}
+	}
+	t.Cleanup(unlock)
+	return unlock
+}
+```
+
 - [ ] **Step 2: conn の失敗するテストを書く**
 
 `internal/gitrepo/conn_test.go`:
@@ -3389,9 +3677,7 @@ package gitrepo
 
 import (
 	"errors"
-	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/go-git/go-git/v5/plumbing/transport"
@@ -3484,15 +3770,52 @@ func TestLocalPathAndWritable(t *testing.T) {
 	if !Writable(d) {
 		t.Error("a fresh bare is not writable")
 	}
-	if runtime.GOOS == "windows" || os.Getuid() == 0 {
-		t.Skip("no read-only directories here")
-	}
-	if err := os.Chmod(filepath.Join(d, "objects"), 0o500); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.Chmod(filepath.Join(d, "objects"), 0o700) }()
+	gitrepotest.LockObjects(t, d) // skips the rest where there are no read-only directories
 	if Writable(d) {
 		t.Error("a read-only bare is writable")
+	}
+}
+
+func TestRemoteEmpty(t *testing.T) {
+	d := t.TempDir()
+	bare := filepath.Join(d, "org", "x.git")
+	if err := InitBare(bare); err != nil {
+		t.Fatal(err)
+	}
+	var auths []transport.AuthMethod
+	gitrepotest.InstallHTTPS(t, gitrepotest.Under("https://github.com/", d), &auths, nil)
+	conn := Conn{Auth: func(string) (transport.AuthMethod, error) {
+		return &githttp.BasicAuth{Username: "x-access-token", Password: "tok"}, nil
+	}}
+	const u = "https://github.com/org/x.git"
+	if empty, err := RemoteEmpty(u, conn); err != nil || !empty {
+		t.Errorf("a bare with no ref = %v, %v", empty, err)
+	}
+	if len(auths) == 0 {
+		t.Fatal("the listing sent no auth")
+	}
+	if b, ok := auths[0].(*githttp.BasicAuth); !ok || b.Password != "tok" {
+		t.Errorf("auth = %#v", auths[0])
+	}
+	r := initWithCommit(t, filepath.Join(d, "work"))
+	if err := r.SetRemotes([]string{bare}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Push("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if empty, err := RemoteEmpty(u, conn); err != nil || empty {
+		t.Errorf("a bare with a commit = %v, %v", empty, err)
+	}
+	// The rewrite applies: the URL as written is not served at all.
+	rw := Conn{Rewrite: func(string) string { return bare }}
+	if empty, err := RemoteEmpty("https://example.invalid/org/x.git", rw); err != nil || empty {
+		t.Errorf("through a rewrite = %v, %v", empty, err)
+	}
+	// A repository that is not there (here: a host nothing serves) is an
+	// error, not an empty one.
+	if empty, err := RemoteEmpty("https://elsewhere.test/org/x.git", conn); err == nil || empty {
+		t.Errorf("a missing repository = %v, %v", empty, err)
 	}
 }
 
@@ -3564,8 +3887,10 @@ import (
 	"strings"
 
 	git "github.com/go-git/go-git/v5"
+	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/go-git/go-git/v5/storage/memory"
 )
 
 // ErrPushDenied means the remote refused the push for want of the right to
@@ -3635,13 +3960,33 @@ func IsHTTP(u string) bool {
 // Writable reports whether a file can be made and removed in dir/objects,
 // which a push to the bare repository dir needs.
 func Writable(dir string) bool {
-	f, err := os.CreateTemp(filepath.Join(dir, "objects"), ".hedgehug-write-test-*")
+	f, err := os.CreateTemp(filepath.Join(dir, "objects"), ".hedgehug-write-test-*") //nolint:gosec // G703: dir is the bare repository of a remote in config.yaml
 	if err != nil {
 		return false
 	}
 	name := f.Name()
 	_ = f.Close()
-	return os.Remove(name) == nil
+	return os.Remove(name) == nil //nolint:gosec // G703: the file made just above
+}
+
+// RemoteEmpty reports whether the remote at url has no ref at all, listing
+// its refs through c (url_rewrites and auth, as for a fetch). A remote the
+// server calls empty, and one that lists nothing, are both empty; a
+// repository that is not there, or a failed connection, is an error.
+func RemoteEmpty(u string, c Conn) (bool, error) {
+	to, auth, err := c.endpoint(u)
+	if err != nil {
+		return false, fmt.Errorf("list the refs of %s: %w", u, err)
+	}
+	rm := git.NewRemote(memory.NewStorage(), &gitconfig.RemoteConfig{Name: "origin", URLs: []string{to}})
+	refs, err := rm.List(&git.ListOptions{Auth: auth})
+	if errors.Is(err, transport.ErrEmptyRemoteRepository) {
+		return true, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("list the refs of %s: %w", u, err)
+	}
+	return len(refs) == 0, nil
 }
 
 // HeadHasFile reports whether the tree of HEAD of the repository at dir,
@@ -3832,9 +4177,9 @@ SSH の remote（`ssh://` と `user@host:path`）には `Auth` で nil を返す
 
 `app.syncOptions` の `opt := sync.Options{…}` に `Conn: a.connFor(c, e)` を足す。
 
-`store_add.go` の `gitrepo.Clone(remotes[0], dir)` を、`e := config.StoreEntry{Name: name, Path: dir, Remotes: remotes, Account: account}` を先に作ってから `gitrepo.CloneWith(remotes[0], dir, a.connFor(c, e))` にする（`account` は Task 10 で足す引数。この Task では `""`）。
+`store_add.go` の `gitrepo.Clone(remotes[0], dir)` を、`e := config.StoreEntry{Name: name, Path: dir, Remotes: remotes, Account: account}` を先に作ってから `gitrepo.CloneWith(remotes[0], dir, a.connFor(c, e))` にする（`account` は Task 11 で足す引数。この Task では `""`）。
 
-`tools/devenv/main.go` の `sync.Run` と `gitrepo.Clone` は、この Task では変えない（Task 12 で書き換えに移す）。
+`tools/devenv/main.go` の `sync.Run` と `gitrepo.Clone` は、この Task では変えない（Task 13 で書き換えに移す）。
 
 - [ ] **Step 7: cmd の失敗するテストを書く**
 
@@ -3942,8 +4287,8 @@ git commit -m "feat(gitrepo): url_rewrites と HTTPS のトークンで通信し
 - Test: `cmd/hedgehug/auth_test.go`
 
 **Interfaces:**
-- Consumes: `auth.DeviceLogin`、`auth.SaveToken`、`auth.SaveDeviceToken`、`auth.Delete`、`auth.LoadDeviceToken`、`auth.Token`（Task 2・5）、`github.New`、`(*github.Client).User`（Task 4）、`config.AddAccount`、`SetAccountToken`、`Account`（Task 1）、`a.authOptions`、`a.tokenFor`（Task 7）
-- Produces: `hh auth login [<name>] [--host h] [--with-token]`、`hh auth status`、`hh auth logout <name>`（spec の「`hh auth`」の表と「spec にない細部の判断」12・13）
+- Consumes: `auth.DeviceLogin`、`auth.SaveToken`、`auth.SaveDeviceToken`、`auth.Delete`、`auth.LoadDeviceToken`、`auth.Token`、`auth.Options.Keychain`（Task 2・5）、`github.New`、`(*github.Client).User`、`github.Describe`（Task 4）、`config.AddAccount`、`SetAccountToken`、`Account`（Task 1）、`a.authOptions`、`a.tokenFor`（Task 7）
+- Produces: `hh auth login [<name>] [--host h] [--with-token]`、`hh auth status`、`hh auth logout <name>`（spec の「`hh auth`」の表と「spec にない細部の判断」12・13。config にあり `token` が空のアカウントに `hh auth login <name>` を実行したときは、Device Flow（`--with-token` なら標準入力のトークンを keychain へ）でトークンを取り、`GET /user` の login が config と合えば `token: device`（または `keychain`）を書く。合わなければ何も書かずにエラー。spec の表のとおり）
 - `--json`: login は `{"account": name, "id": "<host>/<login>", "added": bool}`、status は配列 `[{"name","id","token","ok","login","expires","error"}]`、logout は `{"account": name, "removed": bool}`
 
 - [ ] **Step 1: 失敗するテストを書く**
@@ -3954,6 +4299,7 @@ git commit -m "feat(gitrepo): url_rewrites と HTTPS のトークンで通信し
 package main
 
 import (
+	"errors"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -4046,6 +4392,70 @@ func TestAuthStatusMismatch(t *testing.T) {
 		t.Errorf("env account login = %q", out)
 	}
 }
+
+// An account in config.yaml with no token: (every account of phase 2 is one)
+// gets its token from auth login, once GitHub says the token is of its login.
+func TestAuthLoginFillsEmptyToken(t *testing.T) {
+	keyring.MockInit()
+	te := newTestEnv(t)
+	te.withFake(fakegh.State{AutoApprove: "alice"})
+	te.writeConfigYAML("accounts:\n  - {name: work, host: github.com, login: alice}\n")
+	out := te.ok("auth", "login", "work")
+	if !strings.Contains(out, "Logged in as github.com/alice (account work)") {
+		t.Errorf("stdout = %q", out)
+	}
+	b, _ := os.ReadFile(filepath.Join(te.hhHome, "config.yaml"))
+	if strings.Count(string(b), "login: alice") != 1 || !strings.Contains(string(b), "token: device") {
+		t.Errorf("config.yaml = %s", b)
+	}
+	if v, err := keyring.Get("hedgehug", "github.com/alice"); err != nil || !strings.Contains(v, "access_token") {
+		t.Errorf("keychain = %q, %v", v, err)
+	}
+	if out := te.ok("auth", "status"); !strings.Contains(out, "device") || !strings.Contains(out, "ok") {
+		t.Errorf("status = %q", out)
+	}
+}
+
+// A token of another login is refused, and nothing is written.
+func TestAuthLoginEmptyTokenOfAnotherLogin(t *testing.T) {
+	keyring.MockInit()
+	te := newTestEnv(t)
+	te.withFake(fakegh.State{AutoApprove: "bob", Tokens: map[string]string{"t-alice": "alice", "t-bob": "bob"}})
+	te.writeConfigYAML("accounts:\n  - {name: work, host: github.com, login: alice}\n")
+	noToken := func(what string) {
+		t.Helper()
+		b, _ := os.ReadFile(filepath.Join(te.hhHome, "config.yaml"))
+		if strings.Contains(string(b), "token:") {
+			t.Errorf("%s: config.yaml has a token:\n%s", what, b)
+		}
+		for _, k := range []string{"github.com/alice", "github.com/bob"} {
+			if _, err := keyring.Get("hedgehug", k); !errors.Is(err, keyring.ErrNotFound) {
+				t.Errorf("%s: the keychain has %s: %v", what, k, err)
+			}
+		}
+	}
+	code, _, errs := te.run("auth", "login", "work") // the device flow approves bob
+	if code != 1 || !strings.Contains(errs, "github.com/bob") || !strings.Contains(errs, "account work") {
+		t.Errorf("device flow: exit %d, %q", code, errs)
+	}
+	noToken("device flow")
+	te.stdin = "t-bob\n"
+	code, _, errs = te.run("auth", "login", "work", "--with-token")
+	if code != 1 || !strings.Contains(errs, "github.com/bob") {
+		t.Errorf("--with-token: exit %d, %q", code, errs)
+	}
+	noToken("--with-token")
+	// The right token is kept in the keychain.
+	te.stdin = "t-alice\n"
+	te.ok("auth", "login", "work", "--with-token")
+	b, _ := os.ReadFile(filepath.Join(te.hhHome, "config.yaml"))
+	if !strings.Contains(string(b), "token: keychain") {
+		t.Errorf("config.yaml = %s", b)
+	}
+	if v, _ := keyring.Get("hedgehug", "github.com/alice"); v != "t-alice" {
+		t.Errorf("keychain = %q", v)
+	}
+}
 ```
 
 - [ ] **Step 2: 失敗を確かめる**
@@ -4115,13 +4525,6 @@ func (a *app) authCmd() *cobra.Command {
 	return cmd
 }
 
-func (a *app) keyringOrOS() auth.Keyring {
-	if a.keyring != nil {
-		return a.keyring
-	}
-	return auth.OSKeyring()
-}
-
 func (a *app) authLogin(name, host string, withToken bool) error {
 	c, _, err := a.config()
 	if err != nil {
@@ -4129,13 +4532,11 @@ func (a *app) authLogin(name, host string, withToken bool) error {
 	}
 	acct, known := c.Account(name)
 	if known {
+		// An account with no token: falls through to the device flow, or
+		// to --with-token, which gives it one.
 		switch acct.Token.Kind {
-		case "", "gh", "env":
-			what := acct.Token.String()
-			if what == "" {
-				what = "no token"
-			}
-			_, err := fmt.Fprintf(a.stdout, "Nothing to log in for %s: it uses %s\n", name, what)
+		case "gh", "env":
+			_, err := fmt.Fprintf(a.stdout, "Nothing to log in for %s: it uses %s\n", name, acct.Token.String())
 			return err
 		case "keychain":
 			if !withToken {
@@ -4197,7 +4598,7 @@ func (a *app) authLogin(name, host string, withToken bool) error {
 		}
 		added = true
 	}
-	k := a.keyringOrOS()
+	k := a.authOptions(c, acct).Keychain()
 	if kind == "device" {
 		err = auth.SaveDeviceToken(acct, dt, k)
 	} else {
@@ -4262,6 +4663,7 @@ func (a *app) authStatus() error {
 		tok, err := a.tokenFor(c, acct)
 		if err == nil {
 			x.Login, err = github.New(c.Host(acct.Host), tok, a.httpClient).User()
+			err = github.Describe(err, acct.ID(), acct.Name, "check the token")
 		}
 		switch {
 		case err != nil:
@@ -4270,7 +4672,7 @@ func (a *app) authStatus() error {
 			x.OK, x.Error = false, fmt.Sprintf("the token is of %s/%s", acct.Host, x.Login)
 		}
 		if acct.Token.Kind == "device" {
-			if dt, err := auth.LoadDeviceToken(acct, a.keyringOrOS()); err == nil {
+			if dt, err := auth.LoadDeviceToken(acct, a.authOptions(c, acct).Keychain()); err == nil {
 				x.Expires = timePtr(dt.ExpiresAt)
 			}
 		}
@@ -4290,7 +4692,7 @@ func (a *app) authStatus() error {
 			} else if !x.OK {
 				state = x.Error
 			}
-			rows[i] = []string{x.Name, x.ID, token, timeText(x.Expires), state}
+			rows[i] = []string{x.Name, x.ID, token, expiryText(x.Expires), state}
 		}
 		if len(rows) == 0 {
 			_, err := fmt.Fprintln(a.stdout, "No account is set up; run hedgehug auth login")
@@ -4317,7 +4719,7 @@ func (a *app) authLogout(name string) error {
 	}
 	removed := false
 	if acct.Token.Kind == "keychain" || acct.Token.Kind == "device" {
-		if err := auth.Delete(acct, a.keyringOrOS()); err != nil {
+		if err := auth.Delete(acct, a.authOptions(c, acct).Keychain()); err != nil {
 			return err
 		}
 		removed = true
@@ -4337,7 +4739,19 @@ func (a *app) authLogout(name string) error {
 }
 ```
 
-（`timeText` の「never」は、期限のないものに `-` を出したいので、表では `timeText(x.Expires)` を `x.Expires == nil` のとき `-` にする小さな分岐に置き換える。`errFindings` は doctor と同じく「出力は済んだので終了コード1」の印。）
+同じファイルに、期限のないものに `-` を出す関数を足す（`timeText(nil)` は `never` を返すので、表では使わない）:
+
+```go
+// expiryText is the expiry for the table: - for a token that has none.
+func expiryText(t *time.Time) string {
+	if t == nil {
+		return "-"
+	}
+	return timeText(t)
+}
+```
+
+（`errFindings` は doctor と同じく「出力は済んだので終了コード1」の印。）
 
 `rootCmd` の `root.AddCommand(…)` に `a.authCmd()` を足す。`main.go` の `main` で `openURL: openURL` を渡し、同じファイルに:
 
@@ -4347,11 +4761,11 @@ func openURL(u string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", u)
+		cmd = exec.Command("open", u) //nolint:gosec // G204: the command is fixed; u is the verification URL the host gave
 	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", u)
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", u) //nolint:gosec // G204: the command is fixed; u is the verification URL the host gave
 	default:
-		cmd = exec.Command("xdg-open", u)
+		cmd = exec.Command("xdg-open", u) //nolint:gosec // G204: the command is fixed; u is the verification URL the host gave
 	}
 	return cmd.Start()
 }
@@ -4375,19 +4789,23 @@ git commit -m "feat(cli): hh auth login/status/logout を作る"
 
 **Files:**
 - Modify: `cmd/hedgehug/store_init.go`
-- Create: `cmd/hedgehug/github.go`（`githubFor`）
+- Create: `cmd/hedgehug/github.go`（`githubFor`・`pickAccount`・`accountNames`）
 - Test: `cmd/hedgehug/store_init_test.go`
 
 **Interfaces:**
-- Consumes: `config.Config.Rewrite`、`IsGitHubHost`、`Host`（Task 1）、`github.ParseRepoURL`、`(*github.Client).CreateRepo`、`SetTopics`、`ErrExists`、`ErrForbidden`（Task 4）、`gitrepo.LocalPath`、`InitBare`、`gitrepotest.InstallHTTPS`（Task 7）、`a.tokenFor`（Task 7）
+- Consumes: `config.Config.Rewrite`、`IsGitHubHost`、`Host`、`StoreEntry`、`SetStoreAccount`（Task 1 と既存）、`context.Split`（Task 4。remote URL を読む唯一の関数）、`(*github.Client).CreateRepo`、`SetTopics`、`ErrExists`、`ErrForbidden`、`github.Describe`（Task 4）、`gitrepo.LocalPath`、`InitBare`、`RemoteEmpty`、`gitrepotest.InstallHTTPS`（Task 7）、`a.tokenFor`、`a.connFor`（Task 7）
 - Produces:
   - `func (a *app) githubFor(c *config.Config, acct config.Account, host string) (*github.Client, error)`
   - `func (a *app) pickAccount(c *config.Config, flag string) (config.Account, bool, error)`（`--account` か、アカウントが1つならそれ）
   - `store init` のフラグ `--account`、`--path`
+  - `store init` は、アカウントが決まったら（`--account`、またはアカウントが1つ）、そのアカウントの名前を `stores[].account` に書く（spec の「選んだアカウントを `stores[].account` に書く」）。決まらなければ書かない
+  - GitHub のホストの remote の用意（spec の「Store の作成と発見」の「GitHub のホスト」）: `https`・`ssh://`・`user@host:owner/repo` のどの形でも、書き換え後の URL の host が `github.com` か `hosts[]` の host なら GitHub の remote。private のリポジトリを作って topic `hedgehug-store` を付ける。作成が 422（`ErrExists`）のときは、`gitrepo.RemoteEmpty` で remote に ref が1つもないかを git の通信で確かめる。空なら作成を飛ばして topic を付け、初回の push へ進む。中身があればエラーで `hedgehug store add` を案内する
+
+**テストでの「既存の空のリポジトリ」と「中身のあるリポジトリ」の置き方:** fakegh は API だけに答え、git の通信はしない。そこで、GitHub 側の「リポジトリがある」は fakegh の `State.Repos` に置いて（作成が 422 になる）、git 側の「空」「中身あり」は `gitrepotest.InstallHTTPS(t, gitrepotest.Under("https://github.com/", d), nil, nil)` で同じ owner/name の bare リポジトリ（`d/org-a/hh-empty.git`、`d/org-a/hh-full.git`）に向けて置く。空は `gitrepo.InitBare` しただけの bare、中身ありは別の `testEnv` で `store init --remote <その bare のパス>` して push したもの。`RemoteEmpty` はこの transport を通して ref を取る。
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-`cmd/hedgehug/store_init_test.go` に足す:
+`cmd/hedgehug/store_init_test.go` に足す（import に `net/http/httptest`、`os`、`path/filepath`、`strings`、`internal/fakegh`、`internal/gitrepo`、`internal/gitrepo/gitrepotest` のうち、まだないものを足す）:
 
 ```go
 func TestStoreInitMakesLocalBare(t *testing.T) {
@@ -4397,6 +4815,23 @@ func TestStoreInitMakesLocalBare(t *testing.T) {
 	te.ok("store", "init", "me", "--prefix", "ME", "--remote", "https://github.com/kukv/hh-tasks.git")
 	if ok, err := gitrepo.HeadHasFile(filepath.Join(remotes, "kukv", "hh-tasks.git"), ".hedgehug/store.yaml"); err != nil || !ok {
 		t.Errorf("the bare was not made and pushed: %v %v", ok, err)
+	}
+}
+
+// The only account is the one that writes the store, so it is the one written
+// to stores[].account, with or without --account.
+func TestStoreInitWritesTheAccount(t *testing.T) {
+	te := newTestEnv(t)
+	te.writeAccounts("github.com", "alice")
+	te.ok("store", "init", "me", "--prefix", "ME")
+	b, _ := os.ReadFile(filepath.Join(te.hhHome, "config.yaml"))
+	if !strings.Contains(string(b), "account: alice") {
+		t.Errorf("the only account is not written:\n%s", b)
+	}
+	te.ok("store", "init", "other", "--prefix", "OT", "--account", "alice")
+	b, _ = os.ReadFile(filepath.Join(te.hhHome, "config.yaml"))
+	if strings.Count(string(b), "account: alice") != 2 {
+		t.Errorf("--account is not written:\n%s", b)
 	}
 }
 
@@ -4420,10 +4855,83 @@ func TestStoreInitOnGitHub(t *testing.T) {
 	if !strings.Contains(string(b), "account: work") || !strings.Contains(string(b), filepath.ToSlash(filepath.Join(d, "clone"))) {
 		t.Errorf("config.yaml = %s", b)
 	}
-	// Again: the repository exists.
+	// Again: the repository exists, and now it has the store in it.
 	code, _, errs := te.run("store", "init", "org2", "--prefix", "ORGB", "--remote", "https://github.com/org-a/hh-new.git")
-	if code != 1 || !strings.Contains(errs, "hedgehug store add") {
-		t.Errorf("exists: exit %d, %q", code, errs)
+	if code != 1 || !strings.Contains(errs, "not empty") || !strings.Contains(errs, "hedgehug store add org2") {
+		t.Errorf("exists with content: exit %d, %q", code, errs)
+	}
+	if _, err := os.Stat(te.storeDir("org2")); !os.IsNotExist(err) {
+		t.Errorf("the store directory of the failed init is left: %v", err)
+	}
+}
+
+// A repository on GitHub with no ref (an empty one that a person made by
+// hand, say) is used as it is: the creation is skipped, the topic is set, and
+// the store is pushed. One with a commit is not touched.
+func TestStoreInitOnAnExistingRepo(t *testing.T) {
+	te := newTestEnv(t)
+	d := t.TempDir()
+	// The API side of the two repositories is in the state of the fake, so that
+	// creating them is a 422; the git side is a bare each, which the test serves.
+	fake := te.withFake(fakegh.State{
+		Orgs:   map[string][]string{"org-a": {"alice"}},
+		Tokens: map[string]string{"t-alice": "alice"},
+		Repos: []*fakegh.Repo{
+			{Owner: "org-a", Name: "hh-empty", Private: true, Perms: map[string]string{"alice": "admin"}},
+			{Owner: "org-a", Name: "hh-full", Private: true, Perms: map[string]string{"alice": "admin"}},
+		},
+	})
+	te.env["HH_TOKEN"] = "t-alice"
+	te.writeConfigYAML("accounts:\n  - {name: work, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
+	empty := filepath.Join(d, "org-a", "hh-empty.git")
+	if err := gitrepo.InitBare(empty); err != nil {
+		t.Fatal(err)
+	}
+	maker := newTestEnv(t)
+	maker.ok("store", "init", "full", "--prefix", "FULL", "--remote", filepath.Join(d, "org-a", "hh-full.git"))
+	gitrepotest.InstallHTTPS(t, gitrepotest.Under("https://github.com/", d), nil, nil)
+
+	te.ok("store", "init", "org", "--prefix", "ORG", "--remote", "https://github.com/org-a/hh-empty.git")
+	if r, _ := fake.Repo("org-a/hh-empty"); len(r.Topics) != 1 || r.Topics[0] != "hedgehug-store" {
+		t.Errorf("the topic of the empty repository = %v", r.Topics)
+	}
+	if ok, err := gitrepo.HeadHasFile(empty, ".hedgehug/store.yaml"); err != nil || !ok {
+		t.Errorf("the store was not pushed to the empty repository: %v %v", ok, err)
+	}
+	b, _ := os.ReadFile(filepath.Join(te.hhHome, "config.yaml"))
+	if !strings.Contains(string(b), "account: work") {
+		t.Errorf("config.yaml = %s", b)
+	}
+
+	code, _, errs := te.run("store", "init", "org2", "--prefix", "ORGB", "--remote", "https://github.com/org-a/hh-full.git")
+	if code != 1 || !strings.Contains(errs, "not empty") || !strings.Contains(errs, "hedgehug store add org2 --remote https://github.com/org-a/hh-full.git") {
+		t.Errorf("a repository with a commit: exit %d, %q", code, errs)
+	}
+	if r, _ := fake.Repo("org-a/hh-full"); len(r.Topics) != 0 {
+		t.Errorf("the topic was set on a repository that was not used: %v", r.Topics)
+	}
+	if _, err := os.Stat(te.storeDir("org2")); !os.IsNotExist(err) {
+		t.Errorf("the store directory of the failed init is left: %v", err)
+	}
+}
+
+// An ssh remote is on a GitHub host by its host, like an https one: the
+// repository is made from the owner and the name in the ssh URL.
+func TestStoreInitSSHRemoteIsOnGitHub(t *testing.T) {
+	te := newTestEnv(t)
+	fake := fakegh.New(fakegh.State{Users: []string{"alice"}, Orgs: map[string][]string{"org-a": {"alice"}}, Tokens: map[string]string{"t-alice": "alice"}})
+	srv := httptest.NewServer(fake)
+	t.Cleanup(srv.Close)
+	te.env["HH_TOKEN"] = "t-alice"
+	te.writeConfigYAML("accounts:\n  - {name: work, host: 127.0.0.1, login: alice, token: \"env:HH_TOKEN\"}\nhosts:\n  - {host: 127.0.0.1, api: \"" + srv.URL + "\", web: \"" + srv.URL + "\"}\n")
+	// Nothing listens on port 1, so the push fails; the repository is made
+	// first, and is left there with the way to use it.
+	code, _, errs := te.run("store", "init", "org", "--prefix", "ORG", "--remote", "ssh://git@127.0.0.1:1/org-a/hh-ssh.git")
+	if code != 1 || !strings.Contains(errs, "hedgehug store add org") {
+		t.Errorf("exit %d, %q", code, errs)
+	}
+	if r, ok := fake.Repo("org-a/hh-ssh"); !ok || len(r.Topics) != 1 || r.Topics[0] != "hedgehug-store" {
+		t.Errorf("repo = %+v %v", r, ok)
 	}
 }
 
@@ -4446,6 +4954,27 @@ func TestStoreInitGitHubFailureKeepsRepo(t *testing.T) {
 	}
 }
 
+// A 403 on creating (alice is not a member of org-a) tells how to go on
+// with a repository made by hand; a 401 names the account and the command.
+func TestStoreInitGitHubErrors(t *testing.T) {
+	te := newTestEnv(t)
+	fake := te.withFake(fakegh.State{Orgs: map[string][]string{"org-a": {"bob"}}, Tokens: map[string]string{"t-alice": "alice"}})
+	te.env["HH_TOKEN"] = "t-alice"
+	te.writeConfigYAML("accounts:\n  - {name: work, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
+	code, _, errs := te.run("store", "init", "org", "--prefix", "ORG", "--remote", "https://github.com/org-a/x.git")
+	if code != 1 || !strings.Contains(errs, "github.com/alice cannot create org-a/x") || !strings.Contains(errs, "make an empty repository on GitHub") {
+		t.Errorf("403: exit %d, %q", code, errs)
+	}
+	if _, ok := fake.Repo("org-a/x"); ok {
+		t.Error("a repository was made for a token that may not")
+	}
+	te.env["HH_TOKEN"] = "stale"
+	code, _, errs = te.run("store", "init", "org", "--prefix", "ORG", "--remote", "https://github.com/org-a/x.git")
+	if code != 1 || !strings.Contains(errs, "github.com/alice cannot create org-a/x") || !strings.Contains(errs, "run hedgehug auth login work") {
+		t.Errorf("401: exit %d, %q", code, errs)
+	}
+}
+
 func TestStoreInitAccountChoice(t *testing.T) {
 	te := newTestEnv(t)
 	te.withFake(fakegh.State{})
@@ -4459,8 +4988,6 @@ func TestStoreInitAccountChoice(t *testing.T) {
 	}
 }
 ```
-
-（import に `internal/fakegh`、`internal/gitrepo`、`internal/gitrepo/gitrepotest` を足す。）
 
 - [ ] **Step 2: 失敗を確かめる**
 
@@ -4521,7 +5048,9 @@ func accountNames(c *config.Config) string {
 
 `store_init.go` の変更:
 
-- フラグを足す: `cmd.Flags().StringVar(&account, "account", "", "the account that writes the store and makes its GitHub repository (default: the only account)")`、`cmd.Flags().StringVar(&path, "path", "", "where to make the store (default: under the data directory)")`。`storeInit(args[0], prefix, wsName, sc, remotes, account, path)` にする。
+- import に `io/fs`、`hhctx "github.com/kukv/hedgehug/internal/context"`、`internal/github` を足す。
+- `storeCmd` の `AddCommand` は Task 1 と Task 12 が足す。ここでは変えない。
+- `storeInitCmd` に変数 `account, path string` と、フラグ `cmd.Flags().StringVar(&account, "account", "", "the account that writes the store and makes its GitHub repository (default: the only account)")`、`cmd.Flags().StringVar(&path, "path", "", "where to make the store (default: under the data directory)")` を足し、`RunE` の最後を `return a.storeInit(args[0], prefix, wsName, sc, remotes, account, path)` にする。
 - `storeInit` を次に置き換える（`addCommand` はそのまま）:
 
 ```go
@@ -4550,6 +5079,8 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema, remotes 
 	if err := a.checkPrefixElsewhere(prefix, name); err != nil {
 		return err
 	}
+	// --account, or the only account. Without either, the store has no account
+	// (a remote on a GitHub host then fails in prepareRemotes).
 	acct, haveAcct, err := a.pickAccount(c, account)
 	if err != nil {
 		return err
@@ -4568,7 +5099,11 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema, remotes 
 			return err
 		}
 	}
-	made, err := a.prepareRemotes(c, name, remotes, acct, haveAcct)
+	e := config.StoreEntry{Name: name, Path: dir, Remotes: remotes}
+	if haveAcct {
+		e.Account = acct.Name
+	}
+	made, err := a.prepareRemotes(c, e, acct, haveAcct)
 	if err != nil {
 		return err
 	}
@@ -4577,13 +5112,11 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema, remotes 
 	if err != nil {
 		return made.note(errors.Join(err, made.undo()))
 	}
-	undo := func(err error) error { return made.note(errors.Join(err, os.RemoveAll(dir), made.undo())) }
+	undo := func(err error) error {
+		return made.note(errors.Join(err, os.RemoveAll(dir), made.undo())) //nolint:gosec // G703: dir is the store this command just made
+	}
 	if err := s.Repo().RegisterMergeDriver(); err != nil {
 		return undo(err)
-	}
-	e := config.StoreEntry{Name: name, Path: dir, Remotes: remotes}
-	if account != "" {
-		e.Account = acct.Name
 	}
 	var pushed []string
 	if len(remotes) > 0 {
@@ -4606,7 +5139,8 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema, remotes 
 	if err := c.AddStore(name, dir, remotes); err != nil {
 		return undo(err)
 	}
-	// --account is written; the only account needs no entry (Writer falls back to it).
+	// The account that was picked is written, whether --account named it or it
+	// was the only one.
 	if e.Account != "" {
 		if err := c.SetStoreAccount(name, e.Account); err != nil {
 			return undo(err)
@@ -4615,11 +5149,27 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema, remotes 
 	if err := c.Save(); err != nil {
 		return undo(err)
 	}
-	// … the output as before (--json and the two lines)
+	if a.jsonOut {
+		type wsJSON struct {
+			ULID     string `json:"ulid"`
+			Name     string `json:"name"`
+			IDPrefix string `json:"id_prefix"`
+		}
+		return a.printJSON(struct {
+			Name      string   `json:"name"`
+			Path      string   `json:"path"`
+			Workspace wsJSON   `json:"workspace"`
+			Remotes   []string `json:"remotes,omitempty"`
+			Pushed    []string `json:"pushed,omitempty"`
+		}{name, dir, wsJSON{ws.ULID.String(), ws.Name, ws.IDPrefix}, remotes, pushed})
+	}
+	_, err = fmt.Fprintf(a.stdout, "Created store %s at %s with workspace %s (%s)\n", name, dir, ws.Name, ws.IDPrefix)
+	if err == nil && len(pushed) > 0 {
+		_, err = fmt.Fprintf(a.stdout, "Pushed to %s\n", strings.Join(pushed, ", "))
+	}
+	return err
 }
 ```
-
-（`pickAccount` が `--account` なしで見つけられなかったときは `haveAcct` が false で、アカウントのない Store として作る。GitHub の remote があればその時点で `prepareRemotes` がエラーにする。出力の部分は今のコードのまま。）
 
 ```go
 // madeRemotes is what prepareRemotes made: local bare repositories, which a
@@ -4633,7 +5183,7 @@ type madeRemotes struct {
 func (m madeRemotes) undo() error {
 	var errs []error
 	for _, b := range m.bares {
-		errs = append(errs, os.RemoveAll(b))
+		errs = append(errs, os.RemoveAll(b)) //nolint:gosec // G703: a bare repository this command just made
 	}
 	return errors.Join(errs...)
 }
@@ -4647,15 +5197,18 @@ func (m madeRemotes) note(err error) error {
 		err, strings.Join(m.github, ", "), addCommand(m.name, m.github))
 }
 
-// prepareRemotes makes what the remotes need before the first push: a bare
-// repository for a local path that is missing, a private repository with the
-// hedgehug-store topic on a GitHub host. Other remotes must exist already.
-func (a *app) prepareRemotes(c *config.Config, name string, remotes []string, acct config.Account, haveAcct bool) (madeRemotes, error) {
-	m := madeRemotes{name: name}
-	for _, u := range remotes {
+// prepareRemotes makes what the remotes of e need before the first push: a
+// bare repository for a local path that is missing, a private repository with
+// the hedgehug-store topic on a GitHub host. Other remotes must exist
+// already. Which kind a remote is, is told by the URL after url_rewrites, and
+// a GitHub host is told by its host in any form of a URL (https, ssh://,
+// user@host:path).
+func (a *app) prepareRemotes(c *config.Config, e config.StoreEntry, acct config.Account, haveAcct bool) (madeRemotes, error) {
+	m := madeRemotes{name: e.Name}
+	for _, u := range e.Remotes {
 		to := c.Rewrite(u)
 		if p, ok := gitrepo.LocalPath(to); ok {
-			if _, err := os.Stat(p); errors.Is(err, fs.ErrNotExist) {
+			if _, err := os.Stat(p); errors.Is(err, fs.ErrNotExist) { //nolint:gosec // G703: p is a remote written by the person who runs this
 				if err := gitrepo.InitBare(p); err != nil {
 					return m, errors.Join(err, m.undo())
 				}
@@ -4663,7 +5216,7 @@ func (a *app) prepareRemotes(c *config.Config, name string, remotes []string, ac
 			}
 			continue
 		}
-		host, owner, repo, ok := github.ParseRepoURL(to)
+		host, owner, repo, ok := hhctx.Split(to)
 		if !ok || !c.IsGitHubHost(host) {
 			continue
 		}
@@ -4674,32 +5227,43 @@ func (a *app) prepareRemotes(c *config.Config, name string, remotes []string, ac
 		if err != nil {
 			return m, errors.Join(err, m.undo())
 		}
+		doing := "create " + owner + "/" + repo
 		_, err = gh.CreateRepo(owner, repo, strings.EqualFold(owner, acct.Login))
 		switch {
 		case errors.Is(err, github.ErrExists):
-			return m, errors.Join(fmt.Errorf("%s exists on GitHub; to use the store there, run %s", u, addCommand(name, remotes)), m.undo())
+			// 422: the repository is there. One with no ref is used as it is;
+			// one with content is a store, or something else, for store add.
+			empty, lerr := gitrepo.RemoteEmpty(u, a.connFor(c, e))
+			if lerr != nil {
+				return m, errors.Join(fmt.Errorf("%s exists on GitHub, and whether it is empty could not be checked: %w", u, lerr), m.undo())
+			}
+			if !empty {
+				return m, errors.Join(fmt.Errorf("%s exists on GitHub and is not empty; to use the store there, run %s", u, addCommand(e.Name, e.Remotes)), m.undo())
+			}
 		case errors.Is(err, github.ErrForbidden):
-			return m, errors.Join(fmt.Errorf("%w\nmake an empty repository on GitHub and give its URL to hedgehug store init --remote; it is used as it is", err), m.undo())
+			err = github.Describe(err, acct.ID(), acct.Name, doing)
+			return m, errors.Join(fmt.Errorf("%w\nmake an empty repository on GitHub and give its URL to hedgehug store init --remote; the creation is skipped", err), m.undo())
 		case err != nil:
-			return m, errors.Join(err, m.undo())
+			return m, errors.Join(github.Describe(err, acct.ID(), acct.Name, doing), m.undo())
+		default:
+			m.github = append(m.github, u)
 		}
-		m.github = append(m.github, u)
 		if err := gh.SetTopics(owner, repo, []string{"hedgehug-store"}); err != nil {
-			return m, errors.Join(m.note(err), m.undo())
+			return m, errors.Join(m.note(github.Describe(err, acct.ID(), acct.Name, "set the topic of "+owner+"/"+repo)), m.undo())
 		}
 	}
 	return m, nil
 }
 ```
 
-（`ErrForbidden` の案内は spec 付録の文面「GitHub で空のリポジトリを作り、hh store init --remote でその URL を指定してください（作成は飛ばします）」に当たる。既存の空のリポジトリは、作成が `ErrExists` になるので、上の分岐で `store add` を案内する。spec の付録どおり。）
-
-import に `io/fs`、`internal/github` を足す。
+（403 の案内は spec 付録の「GitHub で空のリポジトリを作り、hh store init --remote でその URL を指定してください（作成は飛ばします）」に当たる。その空のリポジトリで `store init` をすると作成が 422 になり、`RemoteEmpty` が空と答えるので、作成を飛ばして使う。中身のあるリポジトリは `store add` を案内する。どちらも spec の「Store の作成と発見」のとおり。）
 
 - [ ] **Step 4: テストを通す**
 
 Run: `go test -race ./cmd/hedgehug/ -run 'TestStoreInit|TestStoreSelection'`
 Expected: PASS
+
+そのうえで `go test -race ./cmd/hedgehug/` を通す。`store init` がアカウントを1つのときも `stores[].account` に書くようになったので、`account:` の行が増えたことで落ちる既存のテストがあれば、期待値に `account: <name>` の行を足して直す（`writeAccounts` でアカウントを1つ書いた上で `store init` し、config.yaml を完全一致で比べているもの）。`strings.Contains` や読み直しで比べているテストは変わらない。
 
 - [ ] **Step 5: コミット**
 
@@ -4718,16 +5282,17 @@ git commit -m "feat(cli): store init がローカルの bare と GitHub のリ�
 - Test: `internal/sync/access_test.go`、`internal/sync/github_test.go`、`internal/sync/readonly_test.go`
 
 **Interfaces:**
-- Consumes: `gitrepo.ErrPushDenied`、`LocalPath`、`Writable`、`Conn`（Task 7）、`github.Client`、`Repo`、`Collaborators`、`ErrForbidden`（Task 4）
+- Consumes: `gitrepo.ErrPushDenied`、`LocalPath`、`Writable`、`Conn`、`gitrepotest.LockObjects`（Task 7。テストだけ）、`github.Client`、`Repo`、`Collaborators`、`ErrForbidden`、`Describe`（Task 4）
 - Produces:
   - `type Access struct { ReadOnly bool; Reason string; Checked time.Time }`（JSON `read_only`、`reason`、`checked`）、`const ReasonGitHub = "github_permission"`、`ReasonNotWritable = "not_writable"`、`ReasonPushDenied = "push_denied"`
   - `func ReadAccess(s *store.Store) (Access, error)`、`func WriteAccess(s *store.Store, a Access) error`、`func (a Access) Why() string`（`the GitHub permission is read`、`the remote cannot be written`、`the remote denied the push`）
   - `type Members struct { Collaborators []Collaborator; Authors []string; Head string; Checked time.Time }`（JSON `collaborators`（nil は `null`）、`authors`、`head`、`checked`）、`type Collaborator struct{ ID, Permission string }`（JSON `id`、`permission`）
   - `func ReadMembers(s *store.Store) (Members, error)`、`func WriteMembers(s *store.Store, m Members) error`、`func UpdateAuthors(s *store.Store) error`
-  - `type GitHubRepo struct { Host, Owner, Name string; Client func() (*github.Client, error) }`
+  - `type GitHubRepo struct { Host, Owner, Name string; AccountID, AccountName string; Client func() (*github.Client, error) }`（`AccountID` は `<host>/<login>`、`AccountName` は config のアカウント名。GitHub から取れなかったときの警告に「どのアカウントで何をしようとしたか」と、401 なら `hedgehug auth login <AccountName>` を添えるのに使う。`sync` は `config` を import しないので、文字列で持つ）
   - `Options.GitHub *GitHubRepo`（origin が GitHub のホストでなければ nil）、`Options.Explicit bool`（`hh sync` の明示の実行）
   - `func CheckAccess(s *store.Store, opt Options, now time.Time) (Access, []string, error)`: origin の種類ごとに判定して `access.json`（と GitHub なら `members.json` の collaborators）を書き、警告を返す
   - `Result.Unpushable int`
+  - `func Unpushed(r *gitrepo.Repo) (int, error)`（HEAD にあって、最後の fetch か push の時点で origin にないコミットの数。Store が一度も push していなければ全部。cmd の `unpushed` もこれを呼ぶ。数える処理はここの1つだけ）
   - `infoInterval = 5 * time.Minute`
 
 - [ ] **Step 1: 失敗するテストを書く**
@@ -4738,9 +5303,7 @@ git commit -m "feat(cli): store init がローカルの bare と GitHub のリ�
 package sync
 
 import (
-	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -4759,34 +5322,6 @@ func newLoneStore(t *testing.T) *store.Store {
 		t.Fatal(err)
 	}
 	return s
-}
-
-// lockObjects makes the objects of the bare repository dir read-only until
-// unlock is called or the test ends.
-func lockObjects(t *testing.T, dir string) (unlock func()) {
-	t.Helper()
-	if runtime.GOOS == "windows" || os.Getuid() == 0 {
-		t.Skip("no read-only directories here")
-	}
-	var dirs []string
-	_ = filepath.WalkDir(filepath.Join(dir, "objects"), func(p string, d os.DirEntry, err error) error {
-		if err == nil && d.IsDir() {
-			dirs = append(dirs, p)
-		}
-		return nil
-	})
-	for _, p := range dirs {
-		if err := os.Chmod(p, 0o500); err != nil {
-			t.Fatal(err)
-		}
-	}
-	unlock = func() {
-		for _, p := range dirs {
-			_ = os.Chmod(p, 0o700)
-		}
-	}
-	t.Cleanup(unlock)
-	return unlock
 }
 
 func TestAccessAndMembersRoundTrip(t *testing.T) {
@@ -4821,13 +5356,17 @@ func TestAccessAndMembersRoundTrip(t *testing.T) {
 package sync
 
 import (
+	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/fakegh"
 	"github.com/kukv/hedgehug/internal/github"
+	"github.com/kukv/hedgehug/internal/gitrepo/gitrepotest"
 )
 
 func TestCheckAccessGitHub(t *testing.T) {
@@ -4840,6 +5379,7 @@ func TestCheckAccessGitHub(t *testing.T) {
 	defer srv.Close()
 	s := newLoneStore(t)
 	opt := Options{Remotes: []string{"https://github.com/org-a/x.git"}, GitHub: &GitHubRepo{Host: "github.com", Owner: "org-a", Name: "x",
+		AccountID: "github.com/bob", AccountName: "me",
 		Client: func() (*github.Client, error) {
 			return github.New(config.Host{API: srv.URL}, "t-bob", nil), nil
 		}}}
@@ -4867,7 +5407,58 @@ func TestCheckAccessGitHub(t *testing.T) {
 	opt.GitHub.Client = func() (*github.Client, error) { return github.New(config.Host{API: srv.URL}, "bad", nil), nil }
 	a, warns, err = CheckAccess(s, opt, now.Add(2*time.Minute))
 	if err != nil || a.ReadOnly || len(warns) != 1 {
-		t.Errorf("failing API = %+v %v %v", a, warns, err)
+		t.Fatalf("failing API = %+v %v %v", a, warns, err)
+	}
+	// The warning says which account failed to do what, and for a 401 what to run.
+	for _, want := range []string{"github.com/bob cannot read the permission of org-a/x", "401", "run hedgehug auth login me"} {
+		if !strings.Contains(warns[0], want) {
+			t.Errorf("warning = %q, want it to contain %q", warns[0], want)
+		}
+	}
+}
+
+// Collaborators that cannot be read, for whatever reason, are unknown (null),
+// not the list of an earlier check. A 403 is no warning (it is how a token
+// without push access is told); any other failure is.
+func TestCheckAccessCollaboratorsUnknownOnAnyFailure(t *testing.T) {
+	fake := fakegh.New(fakegh.State{
+		Users:  []string{"alice"},
+		Tokens: map[string]string{"t-alice": "alice"},
+		Repos:  []*fakegh.Repo{{Owner: "org-a", Name: "x", Perms: map[string]string{"alice": "admin"}}},
+	})
+	var broken atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if broken.Load() && strings.HasSuffix(r.URL.Path, "/collaborators") {
+			http.Error(w, `{"message":"boom"}`, http.StatusInternalServerError)
+			return
+		}
+		fake.ServeHTTP(w, r)
+	}))
+	defer srv.Close()
+	s := newLoneStore(t)
+	opt := Options{Remotes: []string{"https://github.com/org-a/x.git"}, GitHub: &GitHubRepo{Host: "github.com", Owner: "org-a", Name: "x",
+		AccountID: "github.com/alice", AccountName: "me",
+		Client: func() (*github.Client, error) {
+			return github.New(config.Host{API: srv.URL}, "t-alice", nil), nil
+		}}}
+	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	if _, warns, err := CheckAccess(s, opt, now); err != nil || len(warns) != 0 {
+		t.Fatalf("first check = %v %v", warns, err)
+	}
+	if m, _ := ReadMembers(s); len(m.Collaborators) != 1 || m.Collaborators[0].ID != "github.com/alice" {
+		t.Fatalf("collaborators = %+v", m.Collaborators)
+	}
+	broken.Store(true)
+	a, warns, err := CheckAccess(s, opt, now.Add(time.Minute))
+	if err != nil || a.ReadOnly {
+		t.Errorf("access after a failure = %+v %v", a, err)
+	}
+	m, _ := ReadMembers(s)
+	if m.Collaborators != nil || !m.Checked.Equal(now.Add(time.Minute)) {
+		t.Errorf("members after a failure = %+v, want collaborators null and a new time", m)
+	}
+	if len(warns) != 1 || !strings.Contains(warns[0], "github.com/alice cannot read the collaborators of org-a/x") {
+		t.Errorf("warnings = %v", warns)
 	}
 }
 
@@ -4877,7 +5468,7 @@ func TestCheckAccessLocal(t *testing.T) {
 	if err != nil || a.ReadOnly {
 		t.Errorf("writable bare = %+v %v", a, err)
 	}
-	lockObjects(t, c.remote)
+	gitrepotest.LockObjects(t, c.remote)
 	a, _, err = CheckAccess(c.stores[0], c.opts[0], time.Now())
 	if err != nil || !a.ReadOnly || a.Reason != ReasonNotWritable {
 		t.Errorf("read-only bare = %+v %v", a, err)
@@ -4894,6 +5485,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/gitrepo/gitrepotest"
 )
 
 func TestReadOnlySyncDoesNotPush(t *testing.T) {
@@ -4911,7 +5504,7 @@ func TestReadOnlySyncDoesNotPush(t *testing.T) {
 func TestPushDeniedMakesReadOnly(t *testing.T) {
 	c := newCluster(t, 1)
 	c.addTask(0, "local")
-	unlock := lockObjects(t, c.remote)
+	unlock := gitrepotest.LockObjects(t, c.remote)
 	_, err := Run(c.stores[0], c.opts[0])
 	if err == nil || !strings.Contains(err.Error(), "read-only") {
 		t.Fatalf("err = %v", err)
@@ -5121,7 +5714,10 @@ const infoInterval = 5 * time.Minute
 // token only when called.
 type GitHubRepo struct {
 	Host, Owner, Name string
-	Client            func() (*github.Client, error)
+	// AccountID (<host>/<login>) and AccountName (as in config.yaml) say who
+	// asks, for the warnings; sync does not import config.
+	AccountID, AccountName string
+	Client                 func() (*github.Client, error)
 }
 
 // CheckAccess finds out whether the store may be pushed to, by what origin
@@ -5143,7 +5739,8 @@ func CheckAccess(s *store.Store, opt Options, now time.Time) (Access, []string, 
 			r, err = gh.Repo(opt.GitHub.Owner, opt.GitHub.Name)
 		}
 		if err != nil {
-			return a, []string{"read the permission on GitHub: " + err.Error()}, nil
+			doing := "read the permission of " + opt.GitHub.Owner + "/" + opt.GitHub.Name
+			return a, []string{github.Describe(err, opt.GitHub.AccountID, opt.GitHub.AccountName, doing).Error()}, nil
 		}
 		a = Access{ReadOnly: !r.Permissions.Push, Checked: now}
 		if a.ReadOnly {
@@ -5171,30 +5768,34 @@ func CheckAccess(s *store.Store, opt Options, now time.Time) (Access, []string, 
 	return a, warns, WriteAccess(s, a)
 }
 
-// updateCollaborators writes the collaborators to members.json; a 403 (the
-// token cannot push) makes them unknown. It returns a warning, or "".
+// updateCollaborators writes the collaborators to members.json. When they
+// cannot be read, for whatever reason, they are unknown (null), not the list
+// of an earlier check (spec: 取れなかったとき（403 など）は null). A 403 is how
+// GitHub says the token cannot push, which a reader is not told to fix, so it
+// is no warning; any other failure is. It returns a warning, or "".
 func updateCollaborators(s *store.Store, gh *github.Client, r *GitHubRepo, now time.Time) string {
 	m, err := ReadMembers(s)
 	if err != nil {
 		return "read members.json: " + err.Error()
 	}
+	warn := ""
 	cs, err := gh.Collaborators(r.Owner, r.Name)
-	switch {
-	case errors.Is(err, github.ErrForbidden):
-		m.Collaborators = nil
-	case err != nil:
-		return "read the collaborators on GitHub: " + err.Error()
-	default:
+	if err == nil {
 		m.Collaborators = make([]Collaborator, len(cs))
 		for i, c := range cs {
 			m.Collaborators[i] = Collaborator{ID: r.Host + "/" + c.Login, Permission: c.RoleName}
+		}
+	} else {
+		m.Collaborators = nil
+		if !errors.Is(err, github.ErrForbidden) {
+			warn = github.Describe(err, r.AccountID, r.AccountName, "read the collaborators of "+r.Owner+"/"+r.Name).Error()
 		}
 	}
 	m.Checked = now
 	if err := WriteMembers(s, m); err != nil {
 		return "write members.json: " + err.Error()
 	}
-	return ""
+	return warn
 }
 
 // refreshInfo checks the access and the collaborators when infoInterval has
@@ -5253,7 +5854,7 @@ func refreshInfo(s *store.Store, opt Options, res *Result) {
 
 ```go
 		if acc.ReadOnly {
-			n, err := unpushedCount(r)
+			n, err := Unpushed(r)
 			if err != nil {
 				return res, err
 			}
@@ -5278,9 +5879,10 @@ func refreshInfo(s *store.Store, opt Options, res *Result) {
 5. ファイルの末尾に:
 
 ```go
-// unpushedCount counts the commits of HEAD that origin does not have as of
-// the last fetch.
-func unpushedCount(r *gitrepo.Repo) (int, error) {
+// Unpushed counts the commits of HEAD that origin did not have as of the last
+// fetch or push. A store that never pushed has all of them. The commands that
+// show it call this too.
+func Unpushed(r *gitrepo.Repo) (int, error) {
 	head, err := r.Head()
 	if err != nil {
 		return 0, err
@@ -5312,11 +5914,11 @@ git commit -m "feat(sync): 読み取り専用とメンバーの状態を持ち�
 
 **Files:**
 - Create: `cmd/hedgehug/readonly.go`
-- Modify: `cmd/hedgehug/app.go`（`update` の最初で `checkWritable`、`syncOptions` に `GitHub`）、`cmd/hedgehug/doctor.go`（`--fix` の前）、`cmd/hedgehug/rm.go`（purge の `confirm` の前）、`cmd/hedgehug/store_add.go`（`--account`、clone の直後の `CheckAccess`）、`cmd/hedgehug/sync.go`（`Explicit`、`Unpushable`、status の read-only）
+- Modify: `cmd/hedgehug/app.go`（`update` の最初で `checkWritable`、`syncOptions` に `GitHub`）、`cmd/hedgehug/doctor.go`（`--fix` の前）、`cmd/hedgehug/rm.go`（`purge` の `a.open()` の直後）、`cmd/hedgehug/store_add.go`（`--account`、clone の直後の `CheckAccess`）、`cmd/hedgehug/sync.go`（`Explicit`、`Unpushable`、status の read-only）
 - Test: `cmd/hedgehug/readonly_test.go`
 
 **Interfaces:**
-- Consumes: `sync.ReadAccess`、`CheckAccess`、`Access.Why`、`Result.Unpushable`、`Options.GitHub`、`Options.Explicit`、`GitHubRepo`（Task 10）、`a.githubFor`、`a.pickAccount`（Task 9）、`a.connFor`（Task 7）
+- Consumes: `sync.ReadAccess`、`CheckAccess`、`Access.Why`、`Result.Unpushable`、`Unpushed`、`Options.GitHub`、`Options.Explicit`、`GitHubRepo`（Task 10）、`gitrepotest.LockObjects`（Task 7。テストだけ）、`context.Split`（Task 4）、`a.githubFor`、`a.pickAccount`（Task 9）、`a.connFor`（Task 7）
 - Produces:
   - `type readOnlyError struct{ store string; access sync.Access }`（`Error()` は `<store> is read-only (<why>)`）
   - `func (a *app) checkWritable(s *store.Store) error`
@@ -5332,9 +5934,7 @@ git commit -m "feat(sync): 読み取り専用とメンバーの状態を持ち�
 package main
 
 import (
-	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -5397,9 +5997,6 @@ func TestStoreAddChecksAccess(t *testing.T) {
 }
 
 func TestSyncShowsUnpushable(t *testing.T) {
-	if runtime.GOOS == "windows" || os.Getuid() == 0 {
-		t.Skip("no read-only directories here")
-	}
 	te := newTestEnv(t)
 	bare := filepath.Join(t.TempDir(), "x.git")
 	if err := gitrepo.InitBare(bare); err != nil {
@@ -5407,7 +6004,7 @@ func TestSyncShowsUnpushable(t *testing.T) {
 	}
 	te.ok("store", "init", "me", "--prefix", "ME", "--remote", bare)
 	te.ok("add", "one")
-	lockDir(t, bare) // chmod objects and its subdirectories 0o500; restored by t.Cleanup
+	gitrepotest.LockObjects(t, bare) // skips the test where there are no read-only directories
 	code, _, errs := te.run("sync")
 	if code != 1 || !strings.Contains(errs, "read-only (the remote denied the push)") {
 		t.Errorf("sync: exit %d, %q", code, errs)
@@ -5417,30 +6014,6 @@ func TestSyncShowsUnpushable(t *testing.T) {
 	if !strings.Contains(out, "read-only") || !strings.Contains(out, "1 commit not pushed") {
 		t.Errorf("status = %q", out)
 	}
-}
-
-// lockDir makes the objects of the bare repository dir read-only until the
-// test ends.
-func lockDir(t *testing.T, dir string) {
-	t.Helper()
-	objects := filepath.Join(dir, "objects")
-	var dirs []string
-	_ = filepath.WalkDir(objects, func(p string, d os.DirEntry, err error) error {
-		if err == nil && d.IsDir() {
-			dirs = append(dirs, p)
-		}
-		return nil
-	})
-	for _, p := range dirs {
-		if err := os.Chmod(p, 0o500); err != nil {
-			t.Fatal(err)
-		}
-	}
-	t.Cleanup(func() {
-		for _, p := range dirs {
-			_ = os.Chmod(p, 0o700)
-		}
-	})
 }
 ```
 
@@ -5458,6 +6031,7 @@ import (
 	"fmt"
 
 	"github.com/kukv/hedgehug/internal/config"
+	hhctx "github.com/kukv/hedgehug/internal/context"
 	"github.com/kukv/hedgehug/internal/github"
 	"github.com/kukv/hedgehug/internal/store"
 	"github.com/kukv/hedgehug/internal/sync"
@@ -5497,7 +6071,8 @@ func (a *app) githubRepoOf(c *config.Config, e config.StoreEntry) *sync.GitHubRe
 	if len(e.Remotes) == 0 {
 		return nil
 	}
-	host, owner, name, ok := github.ParseRepoURL(e.Remotes[0])
+	// The host decides, in any form of a URL (https, ssh://, user@host:path).
+	host, owner, name, ok := hhctx.Split(e.Remotes[0])
 	if !ok || !c.IsGitHubHost(host) {
 		return nil
 	}
@@ -5505,17 +6080,19 @@ func (a *app) githubRepoOf(c *config.Config, e config.StoreEntry) *sync.GitHubRe
 	if !ok {
 		return nil
 	}
-	return &sync.GitHubRepo{Host: host, Owner: owner, Name: name, Client: func() (*github.Client, error) {
-		return a.githubFor(c, acct, host)
-	}}
+	return &sync.GitHubRepo{Host: host, Owner: owner, Name: name, AccountID: acct.ID(), AccountName: acct.Name,
+		Client: func() (*github.Client, error) {
+			return a.githubFor(c, acct, host)
+		}}
 }
 ```
 
 - `app.update` の最初（`a.writer()` の前）に `if err := a.checkWritable(s); err != nil { return false, err }`。
-- `rm.go` の purge で `confirm` を呼ぶ前（`--yes` の分岐の前）に `if err := a.checkWritable(s); err != nil { return err }`。
+- `rm.go` の `purge` で、`s, ix, err := a.open()` の直後（`a.resolve` と `purgeTargets` より前）に `if err := a.checkWritable(s); err != nil { return err }`。`purge` は `purgeTargets` が「削除済みでなければ `not deleted`」で拒否するので、`confirm` の前に置くと、読み取り専用の Store の未削除のタスクは read-only ではなく `ME-1 is not deleted` のエラーになる（`TestReadOnlyRefusesWrites` の `purge ME-1 --yes` が落ちる）。`a.open()` の直後なら、削除済みかどうかにかかわらず読み取り専用が先に拒否する。
 - `doctor.go` の `fixStore` の最初に `if err := a.checkWritable(s); err != nil { return nil, err }`。
 - `app.syncOptions` の `opt` に `GitHub: a.githubRepoOf(c, e)`。
 - `sync.go`（cmd）の `syncStore` で `opt.Explicit = true` を `a.runSync` の前に入れる（`syncBackground` では入れない）。`res.Unpushable` を `r.Unpushable` に写し、`printSync` で `Unpushable > 0` なら `  read-only: %d commits not pushed\n` を出す。`storeStatus` で `sync.ReadAccess(s)` が読み取り専用なら `x.ReadOnly = acc.Why()`、表示では `  read-only:     <why>\n` を `last error` の後に出す。`syncStore` のエラーで `res.Unpushable` が 0 でも、`runSync` が `read-only` のエラーを返したら今のとおりエラーとして出す（`describe` の結果）。
+- `sync.go`（cmd）の `unpushed(s *store.Store)` の本体を `return sync.Unpushed(s.Repo())` に置き換える（関数 `unpushed` は残し、呼び出し側の `store_add.go`・`sync.go` とそのテストは変えない。`Head`・`RemoteHead`・`Between` で数える処理は `sync.Unpushed` の1つだけにする）。
 - `store_add.go`: `--account` フラグを足し、`storeAdd(name, remotes, path, account)` に。`account` が空でなければ `c.Account(account)` を確かめ（なければ `pickAccount` と同じエラー）、`e.Account = account` で `connFor` を作って clone し、`c.AddStore` の後に `c.SetStoreAccount(name, account)`。登録の後（`c.Save()` の後）に:
 
 ```go
@@ -5551,97 +6128,17 @@ git commit -m "feat(cli): 読み取り専用の Store への書き込みを拒�
 ### Task 12: `hh store discover`
 
 **Files:**
-- Create: `internal/context/repoid.go`
-- Test: `internal/context/repoid_test.go`
 - Create: `cmd/hedgehug/store_discover.go`
 - Modify: `cmd/hedgehug/store_init.go`（`storeCmd` に `storeDiscoverCmd`）
 - Test: `cmd/hedgehug/store_discover_test.go`
 
 **Interfaces:**
-- Consumes: `(*github.Client).UserRepos`（Task 4）、`gitrepo.HeadHasFile`、`Writable`、`LocalPath`（Task 7）、`config.Unrewrite`（Task 1）、`a.storeAdd`（Task 11）、`a.githubFor`（Task 9）
+- Consumes: `(*github.Client).UserRepos`、`github.Describe`、`context.RepoID`（Task 4。repo ID の正規化は Task 4 で作り済み）、`gitrepo.HeadHasFile`、`Writable`、`LocalPath`（Task 7）、`config.Unrewrite`（Task 1）、`a.storeAdd`（Task 11）、`a.githubFor`（Task 9）
 - Produces:
-  - `package context`: `func RepoID(u string) (string, bool)`（spec の「repo ID の正規化」）
   - `hh store discover [--account a] [--from <dir>] [--all]`（spec の「`hh store discover`」）
   - `--json`: `{"candidates": [{"name","url","account","permission"}], "mounted": [names]}`
 
-- [ ] **Step 1: RepoID の失敗するテストを書く**
-
-`internal/context/repoid_test.go`:
-
-```go
-package context
-
-import "testing"
-
-func TestRepoID(t *testing.T) {
-	for in, want := range map[string]string{
-		"https://github.com/Org-A/API.git":      "github.com/org-a/api",
-		"http://github.com/org-a/api/":          "github.com/org-a/api",
-		"ssh://git@github.com:22/org-a/api.git": "github.com/org-a/api",
-		"git@github.com:org-a/api.git":          "github.com/org-a/api",
-		"git://github.com/org-a/api":            "github.com/org-a/api",
-		"https://ghe.example.com:8443/x/y":      "ghe.example.com/x/y",
-	} {
-		if got, ok := RepoID(in); !ok || got != want {
-			t.Errorf("RepoID(%q) = %q %v, want %q", in, got, ok, want)
-		}
-	}
-	for _, in := range []string{"/tmp/x.git", "file:///tmp/x", "https://github.com/only", "C:\\x\\y"} {
-		if got, ok := RepoID(in); ok {
-			t.Errorf("RepoID(%q) = %q, want none", in, got)
-		}
-	}
-}
-```
-
-- [ ] **Step 2: 失敗を確かめ、repoid.go を書く**
-
-Run: `go test ./internal/context/` → FAIL
-
-```go
-// Package context decides where a new task goes when the command does not
-// say, and turns remote URLs into repo IDs. Phase 3a has only the repo IDs.
-package context
-
-import (
-	"net/url"
-	"regexp"
-	"strings"
-)
-
-// scpLike is user@host:owner/repo, the short form of ssh.
-var scpLike = regexp.MustCompile(`^[^@/]+@([^:/]+):(.+)$`)
-
-// RepoID turns a remote URL into <host>/<owner>/<repo>: https, http, ssh,
-// git and user@host:path, in lower case, without .git, a trailing slash or a
-// port. A local path, or a URL without an owner and a repo, has none.
-func RepoID(u string) (string, bool) {
-	var host, p string
-	if m := scpLike.FindStringSubmatch(u); m != nil && !strings.Contains(u, "://") {
-		host, p = m[1], m[2]
-	} else {
-		x, err := url.Parse(u)
-		if err != nil {
-			return "", false
-		}
-		switch x.Scheme {
-		case "https", "http", "ssh", "git":
-		default:
-			return "", false
-		}
-		host, p = x.Hostname(), x.Path
-	}
-	parts := strings.Split(strings.Trim(strings.TrimSuffix(strings.Trim(p, "/"), ".git"), "/"), "/")
-	if host == "" || len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", false
-	}
-	return strings.ToLower(host + "/" + parts[0] + "/" + parts[1]), true
-}
-```
-
-Run: `go test ./internal/context/` → PASS
-
-- [ ] **Step 3: discover の失敗するテストを書く**
+- [ ] **Step 1: discover の失敗するテストを書く**
 
 `cmd/hedgehug/store_discover_test.go`:
 
@@ -5655,6 +6152,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/fakegh"
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/gitrepo/gitrepotest"
@@ -5758,14 +6256,37 @@ func TestDiscoverTerminal(t *testing.T) {
 		t.Errorf("picked 2, got:\n%s", out)
 	}
 }
+
+// The names offered: the repo name; <owner>-<repo> when that is used; then
+// <owner>-<repo>-2, -3...; and store-1, store-2... where no valid name can be
+// made of the owner and the repo.
+func TestNameCandidates(t *testing.T) {
+	c := &config.Config{Stores: []config.StoreEntry{{Name: "hh-shared"}, {Name: "org-a-hh-shared"}}}
+	// In order: both names used; lower case; the repo name used; no valid
+	// name (twice).
+	cands := []candidate{
+		{URL: "https://github.com/org-a/hh-shared.git"},
+		{URL: "https://github.com/org-b/Hh_Shared.git"},
+		{URL: "https://github.com/org-b/hh-shared.git"},
+		{URL: "/srv/日本/日本.git"},
+		{URL: "/srv/語/語.git"},
+	}
+	nameCandidates(c, cands)
+	want := []string{"org-a-hh-shared-2", "hh_shared", "org-b-hh-shared", "store-1", "store-2"}
+	for i, x := range cands {
+		if x.Name != want[i] {
+			t.Errorf("name of %s = %q, want %q", x.URL, x.Name, want[i])
+		}
+	}
+}
 ```
 
-- [ ] **Step 4: 失敗を確かめる**
+- [ ] **Step 2: 失敗を確かめる**
 
 Run: `go test ./cmd/hedgehug/ -run TestDiscover`
 Expected: FAIL（`unknown command "discover"`）
 
-- [ ] **Step 5: store_discover.go を書く**
+- [ ] **Step 3: store_discover.go を書く**
 
 ```go
 package main
@@ -5787,6 +6308,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/config"
 	hhctx "github.com/kukv/hedgehug/internal/context"
+	"github.com/kukv/hedgehug/internal/github"
 	"github.com/kukv/hedgehug/internal/gitrepo"
 )
 
@@ -5946,7 +6468,7 @@ func (a *app) discoverGitHub(c *config.Config, only string) ([]candidate, error)
 		}
 		repos, err := gh.UserRepos()
 		if err != nil {
-			return nil, fmt.Errorf("list the repositories of %s: %w", acct.ID(), err)
+			return nil, github.Describe(err, acct.ID(), acct.Name, "list the repositories")
 		}
 		for _, r := range repos {
 			if !slices.Contains(r.Topics, "hedgehug-store") {
@@ -6003,11 +6525,11 @@ func (a *app) discoverFrom(c *config.Config, dir, account string) ([]candidate, 
 }
 
 func isBare(p string) bool {
-	if fi, err := os.Stat(filepath.Join(p, "HEAD")); err != nil || fi.IsDir() {
+	if fi, err := os.Stat(filepath.Join(p, "HEAD")); err != nil || fi.IsDir() { //nolint:gosec // G703: p is a directory under the --from the person gave
 		return false
 	}
 	for _, d := range []string{"objects", "refs"} {
-		if fi, err := os.Stat(filepath.Join(p, d)); err != nil || !fi.IsDir() {
+		if fi, err := os.Stat(filepath.Join(p, d)); err != nil || !fi.IsDir() { //nolint:gosec // G703: p is a directory under the --from the person gave
 			return false
 		}
 	}
@@ -6041,9 +6563,12 @@ func dropMounted(c *config.Config, cands []candidate) []candidate {
 
 var badNameChars = regexp.MustCompile(`[^a-z0-9_-]+`)
 
-// nameCandidates gives each candidate a store name: the repo name, then
-// <owner>-<repo>, then with -2, -3...; a name the rule of store names does
-// not take is made lower case with - for the other characters, or store-<n>.
+// nameCandidates gives each candidate a store name (spec: the repo name; when
+// that is used, <owner>-<repo>; when that is used too, -2, -3 after it). A
+// name the rule of store names (model.ValidName) does not take is made lower
+// case with - for the other characters. Where nothing valid can be made of
+// the owner and the repo, the name is store-1, store-2... (the first number
+// that is not used, from 1).
 func nameCandidates(c *config.Config, cands []candidate) {
 	used := map[string]bool{}
 	for _, e := range c.Stores {
@@ -6061,19 +6586,28 @@ func nameCandidates(c *config.Config, cands []candidate) {
 		repo := strings.TrimSuffix(path.Base(u), ".git")
 		owner := path.Base(path.Dir(u))
 		var name string
-		for _, n := range []string{fix(repo), fix(owner + "-" + repo)} {
+		base := fix(owner + "-" + repo)
+		for _, n := range []string{fix(repo), base} {
 			if n != "" && !used[n] {
 				name = n
 				break
 			}
 		}
-		base := fix(owner + "-" + repo)
-		if base == "" {
-			base = "store"
-		}
-		for n := 2; name == ""; n++ {
-			if x := base + "-" + strconv.Itoa(n); !used[x] {
-				name = x
+		switch {
+		case name != "":
+		case base != "":
+			// <owner>-<repo> is used too: -2, -3...
+			for n := 2; name == ""; n++ {
+				if x := base + "-" + strconv.Itoa(n); !used[x] {
+					name = x
+				}
+			}
+		default:
+			// Nothing valid can be made of the owner and the repo: store-1, store-2...
+			for n := 1; name == ""; n++ {
+				if x := "store-" + strconv.Itoa(n); !used[x] {
+					name = x
+				}
 			}
 		}
 		used[name] = true
@@ -6084,15 +6618,15 @@ func nameCandidates(c *config.Config, cands []candidate) {
 
 `storeCmd` の `AddCommand` に `a.storeDiscoverCmd()` を足す。
 
-- [ ] **Step 6: テストを通す**
+- [ ] **Step 4: テストを通す**
 
-Run: `go test -race ./internal/context/ ./cmd/hedgehug/ -run 'TestDiscover|TestRepoID'`
+Run: `go test -race ./cmd/hedgehug/ -run 'TestDiscover|TestNameCandidates'`
 Expected: PASS
 
-- [ ] **Step 7: コミット**
+- [ ] **Step 5: コミット**
 
 ```bash
-git add internal/context cmd/hedgehug
+git add cmd/hedgehug
 git commit -m "feat(cli): store discover で GitHub とディレクトリから Store を見つけてマウントする"
 ```
 
@@ -6101,125 +6635,587 @@ git commit -m "feat(cli): store discover で GitHub とディレクトリから 
 ### Task 13: devenv の 3a 分と 3a の E2E
 
 **Files:**
-- Modify: `tools/devenv/main.go`
+- Modify: `tools/devenv/main.go`（全体を下の内容にする）
 - Test: `tools/devenv/main_test.go`
 - Create: `cmd/hedgehug/e2e_3a_test.go`
+- Modify: `cmd/hedgehug/e2e_test.go`（`TestE2EAliceAndBob` の devenv の用意を `initDevenv` に置き換える）
 
 **Interfaces:**
 - Consumes: すべての前の Task
 - Produces:
-  - `devenv init [--dir d] [--fakegh <url>]`（既定 `http://127.0.0.1:7777`）
+  - `devenv init [--dir d] [--fakegh <url>]`、`devenv reset [--dir d] [--fakegh <url>]`（`--fakegh` の既定は `http://127.0.0.1:7777`。各ユーザーの config.yaml の `hosts` の `api` と `web` になる）
   - `<dir>/fakegh.json`（spec の「devenv」の初期データ）
-  - 各ユーザーの config.yaml: `accounts`（token は env）、`hosts`（github.com を fakegh へ）、`url_rewrites`、`stores`（remote は `https://github.com/...`）、`default_store`
+  - 各ユーザーの config.yaml: `accounts`（token は env）、`hosts`（github.com を fakegh へ）、`url_rewrites`（`https://github.com/` → `<dir>/remotes/`）、`stores`（remote は `https://github.com/...`）、`default_store`
+  - 各ユーザーの `.gitconfig`: `[user]` と、同じ書き換えの `[url "<dir>/remotes/"] insteadOf = https://github.com/`
   - `devenv env <user>` が `HH_DEV_TOKEN`（alice は `HH_DEV_TOKEN_WORK` も）を export する
   - alice: アカウント personal（alice、`env:HH_DEV_TOKEN`）と work（alice-corp、`env:HH_DEV_TOKEN_WORK`）。Store は me（`https://github.com/kukv/hh-tasks.git`、personal）、org-a（`https://github.com/org-a/hh-shared.git`、work、接頭辞 ORG）、org-b（`https://github.com/org-b/hh-ops.git`、work、接頭辞 OPS）
-  - bob: アカウント personal（bob、`env:HH_DEV_TOKEN`）。Store は me（ローカル、remote なし）、org-a と org-b（clone）
-  - fakegh.json: users alice・alice-corp・bob、orgs org-a・org-b（alice-corp・bob）、repos（`kukv/hh-tasks` alice admin、`org-a/hh-shared` alice-corp admin・bob write、`org-b/hh-ops` alice-corp admin・bob read、すべて topic `hedgehug-store`）、tokens（`dev-alice`→alice、`dev-alice-corp`→alice-corp、`dev-bob`→bob）
+  - bob: アカウント personal（bob、`env:HH_DEV_TOKEN`）。Store は me（ローカル、remote なし）、org-a と org-b（alice が push したものの clone、personal）
+  - fakegh.json: users alice・alice-corp・bob、orgs org-a・org-b（alice-corp・bob）、repos 4件（`kukv/hh-tasks` alice admin、`org-a/hh-shared` alice-corp admin・bob write、`org-b/hh-ops` alice-corp admin・bob read、この3件は topic `hedgehug-store`。`org-a/web` は topic なしで alice-corp・bob が write）、tokens（`dev-alice`→alice、`dev-alice-corp`→alice-corp、`dev-bob`→bob）
+  - テスト用 `initDevenv(t, devenv) (dev string, fake *fakegh.Server, apiURL string)`（`cmd/hedgehug/e2e_3a_test.go`）: httptest で fakegh を起動し、その URL を `--fakegh` に渡して `devenv init` し、できた `fakegh.json` で fakegh を `Reset` する。`apiURL` は httptest の URL。`TestE2EAliceAndBob` と `TestE2EPhase3a` が使う
 
-- [ ] **Step 1: devenv の失敗するテストを書く**
+- [ ] **Step 1: devenv のテストを直し、新しいテストを書く**
 
-`tools/devenv/main_test.go` に足す（既存の init のテストの形に合わせる）:
+`tools/devenv/main_test.go` の既存のテストのうち、3つが新しい構成に合わなくなる。次のとおり直す（`TestInitCreatesUsers`・`TestInitPushesAlicesStoreOnly` とそれ以外は、そのままで通る。`TestInitCreatesUsers` の「`me` の最初のコミットの作者が u」は、me のアカウントが personal（login は u）のままなので変わらない）。
+
+1. `TestInitMakesSharedStore` を次に置き換える。alice の org-a は work（alice-corp）のアカウントで作るので、最初のコミットの作者とメールが alice-corp になり、`account:` の数がユーザーごとに変わる:
+
+```go
+func TestInitMakesSharedStore(t *testing.T) {
+	dir := initDir(t)
+	for _, p := range []string{"remotes/kukv/hh-tasks.git/HEAD", "remotes/org-a/hh-shared.git/HEAD", "remotes/org-b/hh-ops.git/HEAD"} {
+		if _, err := os.Stat(filepath.Join(dir, p)); err != nil {
+			t.Errorf("%s: %v", p, err)
+		}
+	}
+	for _, tc := range []struct {
+		user           string
+		personal, work int // the stores that name each account
+	}{{"alice", 1, 2}, {"bob", 3, 0}} {
+		u := tc.user
+		home := filepath.Join(dir, "users", u)
+		cfg, err := os.ReadFile(filepath.Join(home, "config.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{"login: " + u, "host: github.com", "name: org-a", "hh-shared.git"} {
+			if !strings.Contains(string(cfg), want) {
+				t.Errorf("%s config.yaml lacks %q:\n%s", u, want, cfg)
+			}
+		}
+		if n := strings.Count(string(cfg), "account: personal"); n != tc.personal {
+			t.Errorf("%s config.yaml names personal on %d stores, want %d:\n%s", u, n, tc.personal, cfg)
+		}
+		if n := strings.Count(string(cfg), "account: work"); n != tc.work {
+			t.Errorf("%s config.yaml names work on %d stores, want %d:\n%s", u, n, tc.work, cfg)
+		}
+		s, err := store.Open(filepath.Join(home, "stores", "org-a"))
+		if err != nil {
+			t.Fatalf("%s has no org-a: %v", u, err)
+		}
+		if ok, err := s.Repo().MergeDriverRegistered(); err != nil || !ok {
+			t.Errorf("%s: merge driver registered = %v, %v", u, ok, err)
+		}
+		if got := s.Repo().Remotes(); len(got) != 1 || got[0] != "origin" {
+			t.Errorf("%s: org-a remotes = %v, want [origin]", u, got)
+		}
+		log, err := s.Repo().Log(nil, 0)
+		if err != nil || len(log) == 0 {
+			t.Fatalf("%s: log = %v, %v", u, log, err)
+		}
+		if got := log[len(log)-1].Author.Name; got != "alice-corp" {
+			t.Errorf("%s: first commit of org-a by %q, want alice-corp (alice's work account)", u, got)
+		}
+		if got, want := log[0].Author.Email, "alice-corp@users.noreply.github.com"; got != want {
+			t.Errorf("%s: org-a head author email = %q, want %q", u, got, want)
+		}
+	}
+}
+```
+
+2. `TestEnv` の `want` を、トークンの export を足した形にする:
+
+```go
+	want := "export HEDGEHUG_HOME='" + home + "'\nexport GIT_CONFIG_GLOBAL='" + filepath.Join(home, ".gitconfig") + "'\n" +
+		"export HH_DEV_TOKEN='dev-alice'\nexport HH_DEV_TOKEN_WORK='dev-alice-corp'\n"
+```
+
+3. `TestUsageErrors` の表に、使えない `--fakegh` を足す: `{"init", "--fakegh", "not a url"}`（終了コード2）。
+
+4. 新しいテストを足す（import に `bytes` は既にあるので、`internal/fakegh` を足す）:
 
 ```go
 func TestInitPhase3a(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "dev")
 	var out, errb bytes.Buffer
-	if code := run([]string{"init", "--dir", dir, "--fakegh", "http://127.0.0.1:9999"}, &out, &errb, dir); code != 0 {
+	if code := run([]string{"init", "--dir", dir, "--fakegh", "http://127.0.0.1:9999"}, &out, &errb, t.TempDir()); code != 0 {
 		t.Fatalf("init: %d %s", code, errb.String())
+	}
+	if !strings.Contains(out.String(), "go run ./cmd/fakegh serve --addr 127.0.0.1:9999 --seed ") {
+		t.Errorf("init does not say how to start the fake:\n%s", out.String())
 	}
 	st, err := fakegh.Load(filepath.Join(dir, "fakegh.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Tokens["dev-alice-corp"] != "alice-corp" || len(st.Repos) != 3 {
-		t.Errorf("seed = %+v", st)
+	if st.Tokens["dev-alice-corp"] != "alice-corp" || st.Tokens["dev-alice"] != "alice" || st.Tokens["dev-bob"] != "bob" {
+		t.Errorf("tokens = %v", st.Tokens)
+	}
+	if len(st.Repos) != 4 {
+		t.Fatalf("repos = %d, want 4", len(st.Repos))
+	}
+	for _, r := range st.Repos {
+		hasTopic := len(r.Topics) == 1 && r.Topics[0] == "hedgehug-store"
+		if isWeb := r.Owner == "org-a" && r.Name == "web"; isWeb == hasTopic {
+			t.Errorf("%s/%s topics = %v: only org-a/web has none", r.Owner, r.Name, r.Topics)
+		}
+	}
+	if st.Repos[2].Perms["bob"] != "read" {
+		t.Errorf("org-b/hh-ops perms = %v, bob reads it only", st.Repos[2].Perms)
 	}
 	b, _ := os.ReadFile(filepath.Join(dir, "users", "alice", "config.yaml"))
-	for _, want := range []string{"http://127.0.0.1:9999", "url_rewrites", "https://github.com/org-b/hh-ops.git", "login: alice-corp", "env:HH_DEV_TOKEN_WORK", "default_store: me"} {
+	for _, want := range []string{"http://127.0.0.1:9999", "url_rewrites", "https://github.com/org-b/hh-ops.git", "login: alice-corp", "token: env:HH_DEV_TOKEN_WORK", "default_store: me"} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("alice's config lacks %q:\n%s", want, b)
 		}
+	}
+	gc, _ := os.ReadFile(filepath.Join(dir, "users", "alice", ".gitconfig"))
+	if !strings.Contains(string(gc), "insteadOf = https://github.com/") {
+		t.Errorf("alice's .gitconfig = %q", gc)
 	}
 	for _, r := range []string{"kukv/hh-tasks.git", "org-a/hh-shared.git", "org-b/hh-ops.git"} {
 		if ok, err := gitrepo.HeadHasFile(filepath.Join(dir, "remotes", r), ".hedgehug/store.yaml"); err != nil || !ok {
 			t.Errorf("%s has no store: %v %v", r, ok, err)
 		}
 	}
-	out.Reset()
-	if code := run([]string{"env", "alice", "--dir", dir}, &out, &errb, dir); code != 0 || !strings.Contains(out.String(), "HH_DEV_TOKEN_WORK='dev-alice-corp'") {
-		t.Errorf("env alice = %q", out.String())
+	if code := run([]string{"init", "--dir", filepath.Join(t.TempDir(), "x"), "--fakegh", "not a url"}, &out, &errb, t.TempDir()); code != 2 {
+		t.Errorf("a --fakegh that is not a URL: exit %d, want 2", code)
 	}
 }
 ```
+
+（import に `github.com/kukv/hedgehug/internal/fakegh` と `github.com/kukv/hedgehug/internal/gitrepo` を足す。）
 
 - [ ] **Step 2: 失敗を確かめる**
 
 Run: `go test ./tools/devenv/`
-Expected: FAIL
+Expected: FAIL（`--fakegh` が未知のフラグ、`fakegh.json` がない）
 
 - [ ] **Step 3: devenv を書き換える**
 
-`tools/devenv/main.go` の変更点:
-
-- 定数と表:
+`tools/devenv/main.go` を次の内容にする（`resolveDir`・`findRoot`・`shellQuote` は今のコードのまま。`userEnv`・`newUserEnv`・`initShared` はなくなり、`initUser` と `addDevStore` に置き換わる）:
 
 ```go
-const defaultFakegh = "http://127.0.0.1:7777"
+// Command devenv sets up a throwaway development environment with two users,
+// alice and bob, each with their own HEDGEHUG_HOME, git identity, accounts and
+// stores, and the seed of the fake GitHub (fakegh) they talk to. It is for
+// developers of Hedgehug and is not shipped.
+package main
 
-// devStore is a store of the environment: its remote on "GitHub", which
-// url_rewrites points at remotes/, and its first workspace's prefix.
-type devStore struct {
-	name, url, prefix, account string
+import (
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"maps"
+	"net/url"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+
+	"github.com/kukv/hedgehug/internal/config"
+	"github.com/kukv/hedgehug/internal/fakegh"
+	"github.com/kukv/hedgehug/internal/gitrepo"
+	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/sync"
+)
+
+const (
+	markerFile    = ".hedgehug-devenv"
+	defaultFakegh = "http://127.0.0.1:7777"
+)
+
+// bareRemotes are the bare repositories under the environment's directory:
+// the "GitHub" that url_rewrites points https://github.com/ at.
+var bareRemotes = []string{
+	filepath.Join("remotes", "kukv", "hh-tasks.git"),
+	filepath.Join("remotes", "org-a", "hh-shared.git"),
+	filepath.Join("remotes", "org-b", "hh-ops.git"),
 }
 
-var aliceStores = []devStore{
-	{"me", "https://github.com/kukv/hh-tasks.git", "DEV", "personal"},
-	{"org-a", "https://github.com/org-a/hh-shared.git", "ORG", "work"},
-	{"org-b", "https://github.com/org-b/hh-ops.git", "OPS", "work"},
+var users = []string{"alice", "bob"}
+
+// account is an account of a user's config.yaml; its token is in the
+// environment variable tokenVar.
+type account struct{ name, login, tokenVar string }
+
+// accounts are the accounts of each user: alice has her own and the one of
+// her organizations.
+var accounts = map[string][]account{
+	"alice": {{"personal", "alice", "HH_DEV_TOKEN"}, {"work", "alice-corp", "HH_DEV_TOKEN_WORK"}},
+	"bob":   {{"personal", "bob", "HH_DEV_TOKEN"}},
 }
 
-// tokens are what each user's HH_DEV_TOKEN* hold; fakegh knows them.
+// tokens are what each user's HH_DEV_TOKEN* hold; devSeed has the same.
 var tokens = map[string]map[string]string{
 	"alice": {"HH_DEV_TOKEN": "dev-alice", "HH_DEV_TOKEN_WORK": "dev-alice-corp"},
 	"bob":   {"HH_DEV_TOKEN": "dev-bob"},
 }
-```
 
-- `dispatch` に `--fakegh` のフラグ（`init` と `reset`）を足し、`initEnv(d, *fakeghURL, stdout)` に渡す。
-- `initEnv` は、bare を3つ作り（`remotes/kukv/hh-tasks.git`、`remotes/org-a/hh-shared.git`、`remotes/org-b/hh-ops.git`）、`fakegh.json` を書き、alice の3つの Store を作って push し、bob の me（ローカル）と org-a・org-b の clone を作る。終わりの案内に `Start the fake GitHub with: go run ./cmd/fakegh serve --seed <dir>/fakegh.json` を足す。
-- 各ユーザーの config.yaml の頭（`AddStore` の前に書く）:
+// devStore is a store of a user: its remote as config.yaml has it (on
+// "GitHub"; empty for a store with no remote), the id prefix of its first
+// workspace, the account that writes it, and whether the user clones it (the
+// one before made it) or makes it.
+type devStore struct {
+	name, remote, prefix, account string
+	clone                         bool
+}
 
-```go
+// stores are the stores of each user, in the order they are made: alice's
+// first, so that bob can clone what she pushed.
+var stores = map[string][]devStore{
+	"alice": {
+		{name: "me", remote: "https://github.com/kukv/hh-tasks.git", prefix: "DEV", account: "personal"},
+		{name: "org-a", remote: "https://github.com/org-a/hh-shared.git", prefix: "ORG", account: "work"},
+		{name: "org-b", remote: "https://github.com/org-b/hh-ops.git", prefix: "OPS", account: "work"},
+	},
+	"bob": {
+		{name: "me", prefix: "DEV", account: "personal"},
+		{name: "org-a", remote: "https://github.com/org-a/hh-shared.git", prefix: "ORG", account: "personal", clone: true},
+		{name: "org-b", remote: "https://github.com/org-b/hh-ops.git", prefix: "OPS", account: "personal", clone: true},
+	},
+}
+
+func main() {
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "devenv:", err)
+		os.Exit(1)
+	}
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, cwd))
+}
+
+// usageError marks a mistake in the arguments (exit code 2).
+type usageError struct{ error }
+
+func run(args []string, stdout, stderr io.Writer, cwd string) int {
+	err := dispatch(args, stdout, stderr, cwd)
+	var ue usageError
+	switch {
+	case err == nil, errors.Is(err, flag.ErrHelp):
+		return 0
+	case errors.As(err, &ue):
+		_, _ = fmt.Fprintln(stderr, "devenv:", err) // nothing useful to do if stderr is unwritable
+		return 2
+	default:
+		_, _ = fmt.Fprintln(stderr, "devenv:", err) // nothing useful to do if stderr is unwritable
+		return 1
+	}
+}
+
+func dispatch(args []string, stdout, stderr io.Writer, cwd string) error {
+	if len(args) == 0 {
+		return usageError{errors.New("usage: devenv init|reset|env <user> [--dir <path>] [--fakegh <url>]")}
+	}
+	cmd, rest := args[0], args[1:]
+	fs := flag.NewFlagSet("devenv "+cmd, flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	dir := fs.String("dir", "", "directory of the environment (default: .devenv at the repository root, found by walking up to go.mod)")
+	fakeghURL := fs.String("fakegh", defaultFakegh, "the URL of the fake GitHub that the users' config.yaml point github.com at (init and reset)")
+
+	var want int // number of positional arguments
+	switch cmd {
+	case "init", "reset":
+	case "env":
+		want = 1
+	default:
+		return usageError{fmt.Errorf("unknown command %q (init, reset or env)", cmd)}
+	}
+	// Allow the flag before or after the positional argument.
+	var pos []string
+	for len(rest) > 0 {
+		if err := fs.Parse(rest); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				return err
+			}
+			return usageError{err}
+		}
+		rest = fs.Args()
+		if len(rest) > 0 {
+			pos = append(pos, rest[0])
+			rest = rest[1:]
+		}
+	}
+	if len(pos) != want {
+		return usageError{fmt.Errorf("%s takes %d argument(s), got %d", cmd, want, len(pos))}
+	}
+	if u, err := url.Parse(*fakeghURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return usageError{fmt.Errorf("--fakegh %q: want an http or https URL", *fakeghURL)}
+	}
+
+	d, err := resolveDir(*dir, cwd)
+	if err != nil {
+		return err
+	}
+	switch cmd {
+	case "init":
+		return initEnv(d, *fakeghURL, stdout)
+	case "reset":
+		return reset(d, *fakeghURL, stdout)
+	default:
+		return printEnv(d, pos[0], stdout)
+	}
+}
+
+// resolveDir is the absolute directory of the environment. A relative --dir
+// is relative to cwd; without --dir it is .devenv in the repository root.
+func resolveDir(dir, cwd string) (string, error) {
+	if dir == "" {
+		root, err := findRoot(cwd)
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(root, ".devenv"), nil
+	}
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(cwd, dir)
+	}
+	return filepath.Clean(dir), nil
+}
+
+// findRoot walks up from dir to the directory that holds go.mod.
+func findRoot(dir string) (string, error) {
+	for d := dir; ; {
+		if _, err := os.Stat(filepath.Join(d, "go.mod")); err == nil {
+			return d, nil
+		}
+		parent := filepath.Dir(d)
+		if parent == d {
+			return "", fmt.Errorf("no go.mod found above %s; run in the repository or pass --dir", dir)
+		}
+		d = parent
+	}
+}
+
+func initEnv(dir, fakeghURL string, stdout io.Writer) error {
+	if _, err := os.Lstat(dir); err == nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+		return fmt.Errorf("%s already exists; run `devenv reset` to recreate it", dir)
+	}
+	if err := os.MkdirAll(dir, 0o750); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, markerFile), nil, 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+		return err
+	}
+	for _, r := range bareRemotes {
+		if err := gitrepo.InitBare(filepath.Join(dir, r)); err != nil {
+			return err
+		}
+	}
+	seed := filepath.Join(dir, "fakegh.json")
+	if err := writeSeed(seed); err != nil {
+		return err
+	}
+	for _, u := range users {
+		if err := initUser(dir, u, fakeghURL); err != nil {
+			return fmt.Errorf("%s: %w", u, err)
+		}
+	}
+	fu, err := url.Parse(fakeghURL)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(stdout, "Created %s with users %s.\nStart the fake GitHub with: go run ./cmd/fakegh serve --addr %s --seed %s\nUse one with: eval \"$(go run ./tools/devenv env %s --dir %s)\"\n",
+		dir, strings.Join(users, " and "), fu.Host, shellQuote(seed), users[0], shellQuote(dir))
+	return err
+}
+
+// devSeed is the state the fake GitHub starts with: the users and the two
+// organizations, the repositories (the three stores have the hedgehug-store
+// topic; org-a/web is code and has none), who may do what with them, and the
+// tokens the HH_DEV_TOKEN variables hold. bob reads org-b/hh-ops only.
+func devSeed() fakegh.State {
+	interval := 5
+	return fakegh.State{
+		Users: []string{"alice", "alice-corp", "bob"},
+		Orgs: map[string][]string{
+			"org-a": {"alice-corp", "bob"},
+			"org-b": {"alice-corp", "bob"},
+		},
+		Tokens: map[string]string{"dev-alice": "alice", "dev-alice-corp": "alice-corp", "dev-bob": "bob"},
+		Repos: []*fakegh.Repo{
+			{Owner: "kukv", Name: "hh-tasks", Private: true, Topics: []string{"hedgehug-store"}, Perms: map[string]string{"alice": "admin"}},
+			{Owner: "org-a", Name: "hh-shared", Private: true, Topics: []string{"hedgehug-store"}, Perms: map[string]string{"alice-corp": "admin", "bob": "write"}},
+			{Owner: "org-b", Name: "hh-ops", Private: true, Topics: []string{"hedgehug-store"}, Perms: map[string]string{"alice-corp": "admin", "bob": "read"}},
+			{Owner: "org-a", Name: "web", Private: true, Perms: map[string]string{"alice-corp": "write", "bob": "write"}},
+		},
+		DeviceInterval: &interval,
+	}
+}
+
+// writeSeed writes devSeed to path, for `fakegh serve --seed`.
+func writeSeed(path string) error {
+	b, err := json.MarshalIndent(devSeed(), "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(b, '\n'), 0o600) //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+}
+
+// configHead is the start of the config.yaml of user u, written before the
+// stores are added: the accounts with their token variables, github.com on
+// the fake, and url_rewrites to the bare repositories.
 func configHead(dir, u, fakeghURL string) string {
-	remotes := filepath.ToSlash(filepath.Join(dir, "remotes")) + "/"
 	var b strings.Builder
 	b.WriteString("accounts:\n")
-	fmt.Fprintf(&b, "  - name: personal\n    host: github.com\n    login: %s\n    token: env:HH_DEV_TOKEN\n", u)
-	if u == "alice" {
-		b.WriteString("  - name: work\n    host: github.com\n    login: alice-corp\n    token: env:HH_DEV_TOKEN_WORK\n")
+	for _, a := range accounts[u] {
+		fmt.Fprintf(&b, "  - name: %s\n    host: github.com\n    login: %s\n    token: env:%s\n", a.name, a.login, a.tokenVar)
 	}
 	fmt.Fprintf(&b, "hosts:\n  - host: github.com\n    api: %s\n    web: %s\n", fakeghURL, fakeghURL)
-	fmt.Fprintf(&b, "url_rewrites:\n  - from: \"https://github.com/\"\n    to: %q\n", remotes)
+	fmt.Fprintf(&b, "url_rewrites:\n  - from: \"https://github.com/\"\n    to: %q\n", filepath.ToSlash(filepath.Join(dir, "remotes"))+"/")
 	return b.String()
+}
+
+// initUser makes the home of the user u: .gitconfig (the author, and the
+// rewrite of url_rewrites as insteadOf), config.yaml and the stores.
+func initUser(dir, u, fakeghURL string) error {
+	home := filepath.Join(dir, "users", u)
+	if err := os.MkdirAll(home, 0o750); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+		return err
+	}
+	gitconfig := "[user]\n\tname = " + u + "\n\temail = " + u + "@example.com\n" +
+		"[url \"" + filepath.ToSlash(filepath.Join(dir, "remotes")) + "/\"]\n\tinsteadOf = https://github.com/\n"
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte(gitconfig), 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+		return err
+	}
+	getenv := func(k string) string {
+		switch k {
+		case "HEDGEHUG_HOME", "HOME", "USERPROFILE":
+			return home
+		}
+		return ""
+	}
+	p, err := config.Resolve(getenv)
+	if err != nil {
+		return err
+	}
+	// The accounts, hosts and url_rewrites are written before the config is
+	// loaded, so that AddStore keeps them.
+	if err := os.WriteFile(p.ConfigFile, []byte(configHead(dir, u, fakeghURL)), 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+		return err
+	}
+	for _, ds := range stores[u] {
+		if err := addDevStore(p, getenv, ds); err != nil {
+			return fmt.Errorf("store %s: %w", ds.name, err)
+		}
+	}
+	return nil
+}
+
+// addDevStore makes (and pushes) or clones the store ds as the user of p, and
+// adds it to their config.yaml with its account. It works in this process, so
+// no background sync starts, and reaches the remote through url_rewrites.
+func addDevStore(p config.Paths, getenv func(string) string, ds devStore) error {
+	c, err := config.Load(p)
+	if err != nil {
+		return err
+	}
+	acct, ok := c.Account(ds.account)
+	if !ok {
+		return fmt.Errorf("no account named %s", ds.account)
+	}
+	author, err := config.CommitAuthor(acct, true, getenv)
+	if err != nil {
+		return err
+	}
+	var remotes []string
+	if ds.remote != "" {
+		remotes = []string{ds.remote}
+	}
+	conn := gitrepo.Conn{Rewrite: c.Rewrite}
+	dir := filepath.Join(p.StoresDir, ds.name)
+	var s *store.Store
+	if ds.clone {
+		if _, err = gitrepo.CloneWith(ds.remote, dir, conn); err != nil {
+			return err
+		}
+		s, err = store.Open(dir)
+	} else {
+		ws := &model.Workspace{ULID: model.NewULID(), Name: ds.name, IDPrefix: ds.prefix}
+		s, err = store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: ds.name}, nil, ws, author, acct.ID())
+	}
+	if err != nil {
+		return err
+	}
+	if err := s.Repo().RegisterMergeDriver(); err != nil {
+		return err
+	}
+	if !ds.clone && len(remotes) > 0 {
+		if _, err := sync.Run(s, sync.Options{Remotes: remotes, Author: author, Account: acct.ID(), Me: c.Me(), Conn: conn}); err != nil {
+			return err
+		}
+	}
+	if err := c.AddStore(ds.name, dir, remotes); err != nil {
+		return err
+	}
+	if err := c.SetStoreAccount(ds.name, ds.account); err != nil {
+		return err
+	}
+	return c.Save()
+}
+
+// reset removes dir when it is a devenv (it holds the marker file) and
+// creates it again. A missing dir is only created.
+func reset(dir, fakeghURL string, stdout io.Writer) error {
+	if _, err := os.Lstat(dir); err == nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+		if _, err := os.Stat(filepath.Join(dir, markerFile)); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+			return fmt.Errorf("%s was not made by devenv (no %s in it); not removing it", dir, markerFile)
+		}
+		if err := os.RemoveAll(dir); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+			return err
+		}
+	}
+	return initEnv(dir, fakeghURL, stdout)
+}
+
+func printEnv(dir, user string, stdout io.Writer) error {
+	home := filepath.Join(dir, "users", user)
+	if !slices.Contains(users, user) {
+		return fmt.Errorf("no user named %q (users: %s)", user, strings.Join(users, ", "))
+	}
+	if _, err := os.Stat(home); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+		return fmt.Errorf("%s: %w; run `devenv init` first", home, err)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "export HEDGEHUG_HOME=%s\nexport GIT_CONFIG_GLOBAL=%s\n", shellQuote(home), shellQuote(filepath.Join(home, ".gitconfig")))
+	for _, k := range slices.Sorted(maps.Keys(tokens[user])) {
+		fmt.Fprintf(&b, "export %s=%s\n", k, shellQuote(tokens[user][k]))
+	}
+	_, err := io.WriteString(stdout, b.String())
+	return err
+}
+
+// shellQuote quotes s for sh with single quotes.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 ```
 
-- `.gitconfig` に `[url "<remotes>/"]\n\tinsteadOf = https://github.com/\n` を足す。
-- 同期は `sync.Run(s, sync.Options{Remotes: []string{url}, Author: …, Account: …, Me: …, Conn: gitrepo.Conn{Rewrite: c.Rewrite}})`（`c` はそのユーザーの config を `config.Load` したもの）。clone は `gitrepo.CloneWith(url, dir, gitrepo.Conn{Rewrite: c.Rewrite})`。
-- `addStore` は `c.AddStore(name, path, remotes)` と `c.SetStoreAccount(name, account)`（`default_store` は最初の `AddStore` で me になる）。
-- `printEnv` は `tokens[user]` を名前順に `export K='v'` で足す。
-- fakegh.json は `fakegh.State` を `json.MarshalIndent` して書く（`device_interval` は 5、`auto_approve` は空）。
+既存の `TestE2EAliceAndBob`（phase 2）は、devenv の構成が変わっても、alice の org-a と bob の org-a の同期が書き換えを通って動くことで通る。ただし、同期は GitHub のホストの Store で権限とコラボレーターを取りに行くので、fakegh がいないと毎回「接続できない」警告が出る（失敗にはならない）。`127.0.0.1:7777` に別の fakegh が立っていると結果が変わってしまうので、`e2e_test.go` の `TestE2EAliceAndBob` で、devenv の用意の 4 行
 
-既存の `TestE2EAliceAndBob`（phase 2）は、alice の org-a と bob の org-a の同期が書き換えを通って動くことで通る。bob の me がローカルのままなのも変えない。
+```go
+	dev := filepath.Join(t.TempDir(), "hh-dev")
+	if out, err := exec.Command(devenv, "init", "--dir", dev).CombinedOutput(); err != nil { //nolint:gosec // the binary the test built
+		t.Fatalf("devenv init: %v\n%s", err, out)
+	}
+```
+
+を、次の1行に置き換える（`initDevenv` は Step 5 で `e2e_3a_test.go` に書く）:
+
+```go
+	dev, _, _ := initDevenv(t, devenv)
+```
 
 - [ ] **Step 4: devenv のテストを通す**
 
-Run: `go test ./tools/devenv/ && go test ./cmd/hedgehug/ -run TestE2E`
+Run: `go test ./tools/devenv/`
 Expected: PASS
 
 - [ ] **Step 5: 3a の E2E を書く**
 
-`cmd/hedgehug/e2e_3a_test.go`:
+`cmd/hedgehug/e2e_3a_test.go`。spec の 3a の E2E の項目と、このファイルのテストの対応:
+
+| spec の項目 | テスト |
+| --- | --- |
+| `auth login`（Device Flow を fakegh で承認）→ `auth status` | `TestE2EAuthLoginAndStatus`（このプロセスの中で実行。下の理由）と、`TestE2EPhase3a` の最初の `auth status`（バイナリ、env のトークン） |
+| `store init` のローカル分岐 | `TestE2EPhase3a`: alice が `https://github.com/kukv/hh-extra.git` を `url_rewrites` 付きで init し、bare ができて push され、fakegh にリポジトリができない |
+| `store init` の GitHub 分岐（書き換えなしの構成で fakegh にリポジトリができる） | `TestE2EPhase3a`: `url_rewrites` のない構成で init し、fakegh に private のリポジトリと topic ができる |
+| `discover` と `discover --from` | `TestE2EPhase3a` |
+| bob の読み取り専用（書き込みの拒否、同期は fetch だけ、権限を戻すと外れる） | `TestE2EPhase3a` |
+
+`auth login` を `TestE2EAuthLoginAndStatus` でバイナリではなくこのプロセスの中で動かす理由: バイナリは本物の OS の keychain にトークンを書く。CI のマシン（ubuntu）には Secret Service がなく、spec は keychain の代わりのファイル保存を作らないと決めているので、バイナリでは `auth login` が通らない。cmd のテストは `keyring.MockInit()`（go-keyring のメモリ上のモック）で keychain を差し替えているので、同じ方法で `run` を直接呼ぶ。`store init` の GitHub 分岐も、バイナリは書き換えなしの構成では本物の `github.com` へ push しに行ってしまうので、`hosts` に `127.0.0.1` を GitHub のホストとして登録し、remote を `http://127.0.0.1:1/...`（何も待ち受けていないポート）にする。リポジトリの作成と topic は fakegh に届き、push だけが失敗するので、「GitHub に作ったリポジトリを残し、`hedgehug store add` を案内する」ことまで確かめられる。
 
 ```go
 package main
@@ -6234,10 +7230,32 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zalando/go-keyring"
+
 	"github.com/kukv/hedgehug/internal/fakegh"
+	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/store"
-	"github.com/kukv/hedgehug/internal/sync"
+	hhsync "github.com/kukv/hedgehug/internal/sync"
 )
+
+// initDevenv runs devenv init with the fake GitHub of this test as the one the
+// users' config.yaml point at, and loads the seed devenv wrote into the fake.
+func initDevenv(t *testing.T, devenv string) (dev string, fake *fakegh.Server, apiURL string) {
+	t.Helper()
+	fake = fakegh.New(fakegh.State{})
+	srv := httptest.NewServer(fake)
+	t.Cleanup(srv.Close)
+	dev = filepath.Join(t.TempDir(), "hh-dev")
+	if out, err := exec.Command(devenv, "init", "--dir", dev, "--fakegh", srv.URL).CombinedOutput(); err != nil { //nolint:gosec // the binary the test built
+		t.Fatalf("devenv init: %v\n%s", err, out)
+	}
+	seed, err := fakegh.Load(filepath.Join(dev, "fakegh.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake.Reset(seed)
+	return dev, fake, srv.URL
+}
 
 // fail runs hedgehug and returns its exit code and stderr; it fails the test
 // when the command succeeds.
@@ -6254,58 +7272,116 @@ func (u *devUser) fail(args ...string) (int, string) {
 	return cmd.ProcessState.ExitCode(), stderr.String()
 }
 
+// TestE2EAuthLoginAndStatus logs in with the device flow, which the fake
+// approves, and checks the login with auth status. It runs the commands in
+// this process, with go-keyring's mock as the keychain (see above).
+func TestE2EAuthLoginAndStatus(t *testing.T) {
+	keyring.MockInit()
+	zero := 0
+	srv := httptest.NewServer(fakegh.New(fakegh.State{Users: []string{"carol"}, AutoApprove: "carol", DeviceInterval: &zero}))
+	defer srv.Close()
+	te := newTestEnv(t)
+	te.writeConfigYAML("hosts:\n  - {host: github.com, api: \"" + srv.URL + "\", web: \"" + srv.URL + "\", client_id: Iv23e2e}\n")
+	code, out, errs := te.run("auth", "login")
+	if code != 0 || !strings.Contains(errs, "enter the code") || !strings.Contains(out, "Logged in as github.com/carol") {
+		t.Fatalf("auth login: exit %d\nstdout: %s\nstderr: %s", code, out, errs)
+	}
+	if out := te.ok("auth", "status"); !strings.Contains(out, "github.com/carol") || !strings.Contains(out, "device") || !strings.Contains(out, " ok") {
+		t.Errorf("auth status:\n%s", out)
+	}
+}
+
 func TestE2EPhase3a(t *testing.T) {
 	bin, devenv := buildHedgehug(t), buildDevenv(t)
-	fake := fakegh.New(fakegh.State{})
-	srv := httptest.NewServer(fake)
-	defer srv.Close()
-	dev := filepath.Join(t.TempDir(), "hh-dev")
-	if out, err := exec.Command(devenv, "init", "--dir", dev, "--fakegh", srv.URL).CombinedOutput(); err != nil { //nolint:gosec // the binary the test built
-		t.Fatalf("devenv init: %v\n%s", err, out)
-	}
-	seed, err := fakegh.Load(filepath.Join(dev, "fakegh.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	fake.Reset(seed)
+	dev, fake, apiURL := initDevenv(t, devenv)
 	alice, bob := devUserOf(t, bin, devenv, dev, "alice"), devUserOf(t, bin, devenv, dev, "bob")
 
-	// alice's two accounts each have their token.
+	// alice's two accounts each have their token, and GitHub says they are
+	// of the logins in config.yaml.
 	if out := alice.ok("auth", "status"); strings.Count(out, " ok") != 2 {
 		t.Errorf("alice's auth status:\n%s", out)
 	}
 
+	// store init, local branch: url_rewrites points github.com at a local
+	// path, so the command makes the bare there and pushes, and does not call
+	// GitHub.
+	alice.ok("store", "init", "extra", "--prefix", "EXT", "--account", "personal", "--remote", "https://github.com/kukv/hh-extra.git")
+	if ok, err := gitrepo.HeadHasFile(filepath.Join(dev, "remotes", "kukv", "hh-extra.git"), ".hedgehug/store.yaml"); err != nil || !ok {
+		t.Errorf("the bare of the local branch was not made and pushed: %v %v", ok, err)
+	}
+	if _, ok := fake.Repo("kukv/hh-extra"); ok {
+		t.Error("the local branch made a repository on the fake GitHub")
+	}
+
+	// store init, GitHub branch: with no url_rewrites, the remote is on a
+	// GitHub host (127.0.0.1 is one, by hosts), so the command makes the
+	// repository there, through the fake, with the topic. The push then fails,
+	// as nothing listens on port 1; the repository is left, and the way to use
+	// it is told.
+	dave := filepath.Join(t.TempDir(), "dave")
+	if err := os.MkdirAll(dave, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	cfg := "accounts:\n  - {name: personal, host: 127.0.0.1, login: alice, token: \"env:HH_DEV_TOKEN\"}\nhosts:\n  - {host: 127.0.0.1, api: \"" + apiURL + "\", web: \"" + apiURL + "\"}\n"
+	if err := os.WriteFile(filepath.Join(dave, "config.yaml"), []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := &devUser{t: t, bin: bin, home: dave, env: append(slicesWithout(alice.env, "HEDGEHUG_HOME=", "HOME=", "USERPROFILE="), "HEDGEHUG_HOME="+dave, "HOME="+dave, "USERPROFILE="+dave)}
+	code, errs := d.fail("store", "init", "gh", "--prefix", "GH", "--remote", "http://127.0.0.1:1/alice/hh-gh.git")
+	if code != 1 || !strings.Contains(errs, "hedgehug store add gh") {
+		t.Errorf("store init on the GitHub branch: exit %d, %q", code, errs)
+	}
+	if r, ok := fake.Repo("alice/hh-gh"); !ok || !r.Private || len(r.Topics) != 1 || r.Topics[0] != "hedgehug-store" {
+		t.Errorf("the repository on the fake GitHub = %+v %v", r, ok)
+	}
+
 	// bob may only read org-b: the sync finds out, and writes are refused.
 	bob.ok("sync")
-	if _, errs := bob.fail("add", "x", "--store", "org-b"); !strings.Contains(errs, "org-b is read-only (the GitHub permission is read)") {
-		t.Errorf("bob's add: %s", errs)
+	if code, errs := bob.fail("add", "x", "--store", "org-b"); code != 1 || !strings.Contains(errs, "org-b is read-only (the GitHub permission is read)") {
+		t.Errorf("bob's add: exit %d, %q", code, errs)
 	}
 	bob.ok("add", "y", "--store", "org-a") // org-a he may write
 
-	// Given write, he may write after the next check.
-	if err := fake.SetPerm("org-b/hh-ops", "bob", "write"); err != nil {
-		t.Fatal(err)
+	// The sync of a read-only store only fetches: what alice pushes comes in,
+	// and nothing of bob's goes out.
+	alice.ok("add", "from alice", "--store", "org-b")
+	alice.ok("sync")
+	bob.ok("sync")
+	if out := bob.ok("ls", "--store", "org-b"); !strings.Contains(out, "from alice") {
+		t.Errorf("bob's sync did not fetch alice's task:\n%s", out)
 	}
 	s, err := store.Open(filepath.Join(bob.home, "stores", "org-b"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	acc, _ := sync.ReadAccess(s)
+	if n, err := hhsync.Unpushed(s.Repo()); err != nil || n != 0 {
+		t.Errorf("bob has %d commits of org-b that origin lacks (%v), want none", n, err)
+	}
+
+	// Given write, he may write after the next check.
+	if err := fake.SetPerm("org-b/hh-ops", "bob", "write"); err != nil {
+		t.Fatal(err)
+	}
+	acc, _ := hhsync.ReadAccess(s)
 	acc.Checked = time.Now().Add(-10 * time.Minute) // the 5 minutes have passed
-	if err := sync.WriteAccess(s, acc); err != nil {
+	if err := hhsync.WriteAccess(s, acc); err != nil {
 		t.Fatal(err)
 	}
 	bob.ok("sync")
+	if acc, _ := hhsync.ReadAccess(s); acc.ReadOnly {
+		t.Errorf("org-b is still read-only: %+v", acc)
+	}
 	bob.ok("add", "x", "--store", "org-b")
 
-	// discover: a new store repository on GitHub, and the bares under remotes.
+	// discover: a new store repository on GitHub (the code repository
+	// org-a/web has no topic and is not offered), and the bares under remotes.
 	if err := fake.AddRepo("org-a/hh-more", []string{"hedgehug-store"}, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := fake.SetPerm("org-a/hh-more", "alice-corp", "write"); err != nil {
 		t.Fatal(err)
 	}
-	if out := alice.ok("store", "discover"); !strings.Contains(out, "https://github.com/org-a/hh-more.git") || strings.Contains(out, "hh-shared") {
+	if out := alice.ok("store", "discover"); !strings.Contains(out, "https://github.com/org-a/hh-more.git") || strings.Contains(out, "hh-shared") || strings.Contains(out, "web") {
 		t.Errorf("alice's discover:\n%s", out)
 	}
 	carol := filepath.Join(t.TempDir(), "carol")
@@ -6341,13 +7417,13 @@ func slicesWithout(env []string, prefixes ...string) []string {
 
 - [ ] **Step 6: E2E を通す**
 
-Run: `go test -race ./cmd/hedgehug/ -run 'TestE2E' ./tools/devenv/`
+Run: `go test -race ./cmd/hedgehug/ -run 'TestE2E' && go test -race ./tools/devenv/`
 Expected: PASS
 
 - [ ] **Step 7: コミット**
 
 ```bash
-git add tools/devenv cmd/hedgehug/e2e_3a_test.go
+git add tools/devenv cmd/hedgehug/e2e_3a_test.go cmd/hedgehug/e2e_test.go
 git commit -m "feat(devenv): fakegh・url_rewrites・org-b・alice-corp を用意し、3a の E2E を足す"
 ```
 
@@ -6364,15 +7440,24 @@ git commit -m "feat(devenv): fakegh・url_rewrites・org-b・alice-corp を用�
 Run: `make check`
 Expected: `tidy-check`・`lint`・`fmt-check`・`test` がすべて通る
 
+lint（gosec を含む）が新しいコードで指摘したものは、この plan の `//nolint:gosec` のほかに足りないものがあれば、既存のコードと同じ書き方（`//nolint:gosec // G703: <理由>`。理由は、そのパスや引数がどこから来るか）で、指摘された行に足す。理由なしの `//nolint` は足さない。
+
 - [ ] **Step 2: git を外したテスト**
+
+CI の `test-without-git`（`.github/workflows/ci.yaml`）と同じ条件で流す: `CGO_ENABLED=0`、PATH には `go` と `gotestsum` だけ、`gotestsum --format testdox -- ./...`。`go-keyring`（cgo なし）を足したので、`CGO_ENABLED=0` で通ることもここで確かめる。
 
 Run:
 
 ```bash
-mkdir -p /tmp/nogit && ln -sf "$(command -v go)" /tmp/nogit/go && PATH=/tmp/nogit go test ./...
+go install gotest.tools/gotestsum@v1.13.0
+nogit="$(mktemp -d)"
+ln -s "$(command -v go)" "$nogit/go"
+ln -s "$(go env GOPATH)/bin/gotestsum" "$nogit/gotestsum"
+if PATH="$nogit" command -v git; then echo "git is still on PATH" >&2; exit 1; fi
+CGO_ENABLED=0 PATH="$nogit" gotestsum --format testdox -- ./...
 ```
 
-Expected: PASS（git の実行ファイルがなくても通る。gh を呼ぶテストはない）
+Expected: PASS（git の実行ファイルがなくても通る。gh を呼ぶテストはない。fakegh は Go の HTTP サーバーなので git を要らない）
 
 - [ ] **Step 3: spec との突き合わせ**
 
