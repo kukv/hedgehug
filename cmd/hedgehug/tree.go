@@ -22,7 +22,7 @@ type treeNode struct {
 	children []*treeNode
 }
 
-func (a *app) lsTree(q *query.Query, idsOnly bool, tmpl *template.Template) error {
+func (a *app) lsTree(q *query.Query, ulidsOnly bool, tmpl *template.Template) error {
 	if hasTerm(q, "group") || hasTerm(q, "sort") {
 		return usageErrorf("--tree orders tasks by rank; it takes neither group: nor sort:")
 	}
@@ -46,7 +46,7 @@ func (a *app) lsTree(q *query.Query, idsOnly bool, tmpl *template.Template) erro
 	tops := append(slices.Clone(roots), cycle...)
 	drawn := flatten(tops)
 	switch {
-	case idsOnly:
+	case ulidsOnly:
 		// Only the tasks found: the ancestors drawn for them must not
 		// reach a command such as done.
 		var hit []*index.Entry
@@ -55,15 +55,15 @@ func (a *app) lsTree(q *query.Query, idsOnly bool, tmpl *template.Template) erro
 				hit = append(hit, n.e)
 			}
 		}
-		return a.printIDs(hit)
+		return a.printULIDs(hit)
 	case tmpl != nil:
-		node := map[model.ID]*treeNode{}
+		node := map[model.ULID]*treeNode{}
 		es := make([]*index.Entry, len(drawn))
 		for i, n := range drawn {
-			node[n.e.ID], es[i] = n, n.e
+			node[n.e.ULID], es[i] = n, n.e
 		}
 		return a.printFormat(ix, es, tmpl, func(m map[string]any, e *index.Entry) {
-			m["context"], m["in_cycle"] = node[e.ID].context, node[e.ID].inCycle
+			m["context"], m["in_cycle"] = node[e.ULID].context, node[e.ULID].inCycle
 		})
 	case a.jsonOut:
 		out := make([]*taskJSON, len(tops))
@@ -89,50 +89,50 @@ func (a *app) lsTree(q *query.Query, idsOnly bool, tmpl *template.Template) erro
 
 // treeOf builds the tree of the tasks found and of the ancestors that
 // connect them to a root. Tasks in a parent cycle never reach a root; they
-// are returned apart, by ID, each as the root of the tasks under it that
+// are returned apart, by ULID, each as the root of the tasks under it that
 // are not in the cycle.
 func treeOf(ix *index.Index, found []*index.Entry) (roots, cycle []*treeNode) {
-	match := map[model.ID]bool{}
-	show := map[model.ID]bool{}
+	match := map[model.ULID]bool{}
+	show := map[model.ULID]bool{}
 	for _, e := range found {
-		match[e.ID] = true
-		for cur := e; cur != nil && !show[cur.ID]; {
-			show[cur.ID] = true
+		match[e.ULID] = true
+		for cur := e; cur != nil && !show[cur.ULID]; {
+			show[cur.ULID] = true
 			if cur.Parent == nil {
 				break
 			}
 			cur, _ = ix.Task(*cur.Parent)
 		}
 	}
-	seen := map[model.ID]bool{}
+	seen := map[model.ULID]bool{}
 	var build func(e *index.Entry) *treeNode
 	build = func(e *index.Entry) *treeNode {
-		seen[e.ID] = true
-		n := &treeNode{e: e, context: !match[e.ID]}
-		for _, c := range ix.Children(e.ID) {
-			if show[c.ID] && !seen[c.ID] {
+		seen[e.ULID] = true
+		n := &treeNode{e: e, context: !match[e.ULID]}
+		for _, c := range ix.Children(e.ULID) {
+			if show[c.ULID] && !seen[c.ULID] {
 				n.children = append(n.children, build(c))
 			}
 		}
 		return n
 	}
 	for _, r := range ix.Roots() {
-		if show[r.ID] {
+		if show[r.ULID] {
 			roots = append(roots, build(r))
 		}
 	}
 	// What the roots do not reach lies in a cycle or under one. Mark the
 	// tasks in the cycle seen first, so that none is drawn under another.
 	var members []*index.Entry
-	for id := range show {
-		if !seen[id] && inParentCycle(ix, id) {
-			e, _ := ix.Task(id)
+	for ulid := range show {
+		if !seen[ulid] && inParentCycle(ix, ulid) {
+			e, _ := ix.Task(ulid)
 			members = append(members, e)
 		}
 	}
-	slices.SortFunc(members, func(x, y *index.Entry) int { return cmp.Compare(x.ID.String(), y.ID.String()) })
+	slices.SortFunc(members, func(x, y *index.Entry) int { return cmp.Compare(x.ULID.String(), y.ULID.String()) })
 	for _, e := range members {
-		seen[e.ID] = true
+		seen[e.ULID] = true
 	}
 	for _, e := range members {
 		n := build(e)
@@ -142,9 +142,9 @@ func treeOf(ix *index.Index, found []*index.Entry) (roots, cycle []*treeNode) {
 	return roots, cycle
 }
 
-// inParentCycle reports whether the parents of id lead back to it.
-func inParentCycle(ix *index.Index, id model.ID) bool {
-	for _, p := range ix.Problems(id) {
+// inParentCycle reports whether the parents of ulid lead back to it.
+func inParentCycle(ix *index.Index, ulid model.ULID) bool {
+	for _, p := range ix.Problems(ulid) {
 		if p.Code == schema.CodeCycle && p.Field == "parent" {
 			return true
 		}
@@ -163,7 +163,7 @@ func writeNode(b *strings.Builder, st style, n *treeNode, lead, childLead string
 	}
 }
 
-// treeLine is one task of the tree: key and ULID, status, kind and title.
+// treeLine is one task of the tree: id and ULID, status, kind and title.
 func treeLine(st style, e *index.Entry, context bool) string {
 	r := taskRow(e)
 	name := r[0] + " " + r[1]

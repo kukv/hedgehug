@@ -58,9 +58,9 @@ func denull(n *yaml.Node) *yaml.Node {
 }
 
 func FuzzDecodeTask(f *testing.F) {
-	f.Add("---\nid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\ntitle: x\n---\nbody\n")
-	f.Add("---\nid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nlabels: [a, b]\nprops: {p: 1}\n---\n")
-	f.Add("---\nid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nlinks:\n- {type: a, ref: b, x: 1} # c\n---\n")
+	f.Add("---\nulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\ntitle: x\n---\nbody\n")
+	f.Add("---\nulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nlabels: [a, b]\nprops: {p: 1}\n---\n")
+	f.Add("---\nulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nlinks:\n- {type: a, ref: b, x: 1} # c\n---\n")
 	f.Fuzz(func(t *testing.T, s string) {
 		task, err := DecodeTask([]byte(s))
 		if err != nil {

@@ -38,14 +38,14 @@ func (a *app) edit(arg string) error {
 	if err := notDeleted(ix, e); err != nil {
 		return err
 	}
-	orig, err := s.TaskBytes(e.ID)
+	orig, err := s.TaskBytes(e.ULID)
 	if err != nil {
 		return err
 	}
 	// old is nil for a broken task: its file does not decode, or holds
-	// another id.
+	// another ULID.
 	old, err := model.DecodeTask(orig)
-	if err != nil || old.ID != e.ID {
+	if err != nil || old.ULID != e.ULID {
 		old = nil
 	}
 	path, edited, err := a.editFile(taskFileName(e), orig)
@@ -57,13 +57,13 @@ func (a *app) edit(arg string) error {
 			if err := os.Remove(path); err != nil {
 				return err
 			}
-			return a.printTask(ix, e.ID, verb(false, ""))
+			return a.printTask(ix, e.ULID, verb(false, ""))
 		}
-		t, err := checkEdit(ix, e.ID, old, edited)
+		t, err := checkEdit(ix, e.ULID, old, edited)
 		if err == nil {
 			var committed bool
-			committed, err = a.update(s, store.Op{Name: "edit", Task: e.ID}, func(tx *store.Tx) error {
-				cur, err := s.TaskBytes(e.ID)
+			committed, err = a.update(s, store.Op{Name: "edit", Task: e.ULID}, func(tx *store.Tx) error {
+				cur, err := s.TaskBytes(e.ULID)
 				if err != nil {
 					return err
 				}
@@ -76,7 +76,7 @@ func (a *app) edit(arg string) error {
 				if err := os.Remove(path); err != nil {
 					return err
 				}
-				return a.printTask(ix, e.ID, verb(committed, "Updated"))
+				return a.printTask(ix, e.ULID, verb(committed, "Updated"))
 			}
 			var ve *store.ValidationError
 			if !errors.As(err, &ve) {
@@ -93,49 +93,49 @@ func (a *app) edit(arg string) error {
 	}
 }
 
-// checkEdit decodes the edited file of task id and refuses the changes
+// checkEdit decodes the edited file of task ulid and refuses the changes
 // edit does not make. old is the task before the edit, nil when it was
-// broken; then only the id is checked. The workspace can be changed only
+// broken; then only the ulid is checked. The workspace can be changed only
 // when the old one is missing or not a workspace of ix, to repair it.
-func checkEdit(ix *index.Index, id model.ID, old *model.Task, edited []byte) (*model.Task, error) {
+func checkEdit(ix *index.Index, ulid model.ULID, old *model.Task, edited []byte) (*model.Task, error) {
 	t, err := model.DecodeTask(edited)
 	if err != nil {
 		return nil, fmt.Errorf("the file does not decode: %w", err)
 	}
 	if old == nil {
-		if t.ID != id {
-			return nil, fmt.Errorf("the id must stay %s", id)
+		if t.ULID != ulid {
+			return nil, fmt.Errorf("the ulid must stay %s", ulid)
 		}
 		return t, nil
 	}
 	fixed := func(key string) error { return fmt.Errorf("%s cannot be changed", key) }
 	moved := func(key string) error { return fmt.Errorf("%s cannot be changed here; use hedgehug mv", key) }
 	switch {
+	case t.ULID != old.ULID:
+		return nil, fixed("ulid")
 	case t.ID != old.ID:
 		return nil, fixed("id")
-	case t.Key != old.Key:
-		return nil, fixed("key")
 	case !t.Created.Equal(old.Created):
 		return nil, fixed("created")
 	case !t.Updated.Equal(old.Updated):
 		return nil, fixed("updated")
 	case !sameTime(t.DeletedAt, old.DeletedAt):
 		return nil, fixed("deleted_at")
-	case !sameID(t.Parent, old.Parent):
+	case !sameULID(t.Parent, old.Parent):
 		return nil, moved("parent")
 	case t.Rank != old.Rank:
 		return nil, moved("rank")
-	case !slices.Equal(t.FormerKeys, old.FormerKeys):
-		return nil, fixed("former_keys")
+	case !slices.Equal(t.FormerIDs, old.FormerIDs):
+		return nil, fixed("former_ids")
 	case t.Workspace != old.Workspace && hasWorkspace(ix, old.Workspace):
 		return nil, fmt.Errorf("workspace cannot be changed here; use hedgehug mv --workspace")
 	}
 	return t, nil
 }
 
-// hasWorkspace reports whether id is a workspace of ix.
-func hasWorkspace(ix *index.Index, id model.ID) bool {
-	_, ok := ix.Workspace(id)
+// hasWorkspace reports whether ulid is a workspace of ix.
+func hasWorkspace(ix *index.Index, ulid model.ULID) bool {
+	_, ok := ix.Workspace(ulid)
 	return ok
 }
 
@@ -143,6 +143,6 @@ func sameTime(a, b *time.Time) bool {
 	return a == nil && b == nil || a != nil && b != nil && a.Equal(*b)
 }
 
-func sameID(a, b *model.ID) bool {
+func sameULID(a, b *model.ULID) bool {
 	return a == nil && b == nil || a != nil && b != nil && *a == *b
 }

@@ -2,18 +2,18 @@ package model
 
 import "testing"
 
-func mustID(t *testing.T, s string) ID {
+func mustULID(t *testing.T, s string) ULID {
 	t.Helper()
-	id, err := ParseID(s)
+	ulid, err := ParseULID(s)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return id
+	return ulid
 }
 
 func TestPaths(t *testing.T) {
-	task := mustID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0A")
-	c := mustID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B")
+	task := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0A")
+	c := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B")
 	for _, tc := range []struct{ got, want string }{
 		{TaskPath(task), "tasks/A/0/01JBZ8K3QW7M2X9V4T6R5N8P0A.md"},
 		{CommentPath(task, c), "comments/A/0/01JBZ8K3QW7M2X9V4T6R5N8P0A/01JBZ8K3QW7M2X9V4T6R5N8P0B.md"},
@@ -43,7 +43,7 @@ func TestValidTemplateName(t *testing.T) {
 }
 
 func TestParseTaskPath(t *testing.T) {
-	want := mustID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0A")
+	want := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0A")
 	got, err := ParseTaskPath(TaskPath(want))
 	if err != nil || got != want {
 		t.Errorf("ParseTaskPath = %v, %v; want %v", got, err, want)
@@ -62,8 +62,8 @@ func TestParseTaskPath(t *testing.T) {
 }
 
 func TestParseCommentAndWorklogPath(t *testing.T) {
-	task := mustID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0A")
-	c := mustID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B")
+	task := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0A")
+	c := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B")
 	gt, gc, err := ParseCommentPath(CommentPath(task, c))
 	if err != nil || gt != task || gc != c {
 		t.Errorf("ParseCommentPath = %v, %v, %v", gt, gc, err)

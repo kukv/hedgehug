@@ -54,12 +54,12 @@ func testSchema() *schema.Schema {
 }
 
 func TestApplyAssign(t *testing.T) {
-	other := model.NewID()
-	resolve := func(s string) (model.ID, error) {
+	other := model.NewULID()
+	resolve := func(s string) (model.ULID, error) {
 		if s == "other" {
 			return other, nil
 		}
-		return model.ID{}, errors.New("no such task")
+		return model.ULID{}, errors.New("no such task")
 	}
 	apply := func(t *testing.T, task *model.Task, ss ...string) error {
 		t.Helper()
@@ -75,7 +75,7 @@ func TestApplyAssign(t *testing.T) {
 		return nil
 	}
 	newTask := func() *model.Task {
-		return &model.Task{ID: model.NewID(), Kind: "task", Title: "t", Status: "todo", Labels: []string{"x"}}
+		return &model.Task{ULID: model.NewULID(), Kind: "task", Title: "t", Status: "todo", Labels: []string{"x"}}
 	}
 
 	t.Run("built-in scalars", func(t *testing.T) {
@@ -105,12 +105,12 @@ func TestApplyAssign(t *testing.T) {
 			t.Errorf("labels= : err %v, labels %v", err, task.Labels)
 		}
 	})
-	t.Run("blocked_by resolves IDs", func(t *testing.T) {
+	t.Run("blocked_by resolves ULIDs", func(t *testing.T) {
 		task := newTask()
 		if err := apply(t, task, "blocked_by+=other"); err != nil {
 			t.Fatal(err)
 		}
-		if !slices.Equal(task.BlockedBy, []model.ID{other}) {
+		if !slices.Equal(task.BlockedBy, []model.ULID{other}) {
 			t.Errorf("blocked_by = %v", task.BlockedBy)
 		}
 		if err := apply(t, task, "blocked_by-=other"); err != nil || len(task.BlockedBy) != 0 {
@@ -152,7 +152,7 @@ func TestApplyAssign(t *testing.T) {
 	})
 	t.Run("errors", func(t *testing.T) {
 		for _, s := range []string{
-			"parent=x", "rank=x", "id=x", "created=x", "deleted_at=x", "key=x", "sprint=x", "props=x",
+			"parent=x", "rank=x", "ulid=x", "created=x", "deleted_at=x", "id=x", "sprint=x", "props=x",
 			"nope=1", "due=tomorrow", "points=many", "flag=maybe", "at=today", "estimate=long",
 			"due+=2026-11-01", "duplicates+=nope", "duplicates+=", "duplicates-=", "tags+=", "tags-=",
 		} {

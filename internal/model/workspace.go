@@ -7,23 +7,27 @@ import (
 	"time"
 )
 
-var workspaceNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
+var nameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 
-// ValidWorkspaceName reports whether name can name a workspace: lower-case
-// letters, digits, - and _, starting with a letter or a digit.
-func ValidWorkspaceName(name string) error {
-	if !workspaceNameRE.MatchString(name) {
-		return fmt.Errorf("%q cannot name a workspace: use lower-case letters, digits, - and _, starting with a letter or a digit", name)
+// ValidName reports whether name can name a thing of the kind what, such as
+// a workspace or a store: lower-case letters, digits, - and _, starting with
+// a letter or a digit.
+func ValidName(what, name string) error {
+	if !nameRE.MatchString(name) {
+		return fmt.Errorf("%q cannot name a %s: use lower-case letters, digits, - and _, starting with a letter or a digit", name, what)
 	}
 	return nil
 }
 
-// Workspace is one workspace file. It owns a key prefix, and the tasks in
+// ValidWorkspaceName is ValidName for a workspace.
+func ValidWorkspaceName(name string) error { return ValidName("workspace", name) }
+
+// Workspace is one workspace file. It owns an id prefix, and the tasks in
 // it are numbered under that prefix. The body holds notes.
 type Workspace struct {
-	ID        ID
+	ULID      ULID
 	Name      string
-	KeyPrefix string
+	IDPrefix  string
 	PrefixSet time.Time // when the prefix was last set
 	Created   time.Time
 	Updated   time.Time
@@ -33,8 +37,12 @@ type Workspace struct {
 	doc *Doc
 }
 
-var workspaceKeys = []string{"id", "name", "key_prefix", "prefix_set", "created", "updated"}
+var workspaceKeys = []string{"ulid", "name", "id_prefix", "prefix_set", "created", "updated"}
 
+// DecodeWorkspace decodes a workspace file. Only the ulid is required; the
+// other fields are checked by those who write the file (Store.Update) and
+// by doctor, so a file with a bad prefix or name can still be read and
+// fixed.
 func DecodeWorkspace(data []byte) (*Workspace, error) {
 	front, body, err := splitFrontmatter(data)
 	if err != nil {
@@ -46,13 +54,13 @@ func DecodeWorkspace(data []byte) (*Workspace, error) {
 	}
 	w := &Workspace{Body: body, doc: d}
 	if err := decodeAll(d, map[string]any{
-		"id": &w.ID, "name": &w.Name, "key_prefix": &w.KeyPrefix, "prefix_set": &w.PrefixSet,
+		"ulid": &w.ULID, "name": &w.Name, "id_prefix": &w.IDPrefix, "prefix_set": &w.PrefixSet,
 		"created": &w.Created, "updated": &w.Updated,
 	}); err != nil {
 		return nil, err
 	}
-	if w.ID.IsZero() {
-		return nil, &DecodeError{Field: "id", Err: errors.New("missing")}
+	if w.ULID.IsZero() {
+		return nil, &DecodeError{Field: "ulid", Err: errors.New("missing")}
 	}
 	w.Extra = d.Extra(workspaceKeys)
 	return w, nil
@@ -63,9 +71,9 @@ func (w *Workspace) Encode() ([]byte, error) {
 		w.doc = NewDoc()
 	}
 	e := w.doc.Encoder()
-	e.Put("id", w.ID, false)
+	e.Put("ulid", w.ULID, false)
 	e.Put("name", w.Name, w.Name == "")
-	e.Put("key_prefix", w.KeyPrefix, w.KeyPrefix == "")
+	e.Put("id_prefix", w.IDPrefix, w.IDPrefix == "")
 	e.Put("prefix_set", w.PrefixSet, w.PrefixSet.IsZero())
 	e.Put("created", w.Created, w.Created.IsZero())
 	e.Put("updated", w.Updated, w.Updated.IsZero())

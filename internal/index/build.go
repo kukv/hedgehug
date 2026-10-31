@@ -33,13 +33,13 @@ func (ix *Index) rebuild(tree plumbing.Hash) error {
 	if err != nil {
 		return err
 	}
-	tasks := map[model.ID]*Entry{}
-	decoded := map[model.ID]*model.Task{}
+	tasks := map[model.ULID]*Entry{}
+	decoded := map[model.ULID]*model.Task{}
 	for p, err := range ix.repo.Files(tree, "tasks/") {
 		if err != nil {
 			return err
 		}
-		id, err := model.ParseTaskPath(p)
+		ulid, err := model.ParseTaskPath(p)
 		if err != nil {
 			continue // not a task file
 		}
@@ -47,7 +47,7 @@ func (ix *Index) rebuild(tree plumbing.Hash) error {
 		if err != nil {
 			return err
 		}
-		tasks[id], decoded[id] = newEntry(id, b)
+		tasks[ulid], decoded[ulid] = newEntry(ulid, b)
 	}
 	ix.sc, ix.tasks = sc, tasks
 	ix.derive()
@@ -58,23 +58,23 @@ func (ix *Index) rebuild(tree plumbing.Hash) error {
 	return nil
 }
 
-// revalidate checks the tasks ids against the schema and keeps the
+// revalidate checks the tasks ulids against the schema and keeps the
 // violations in their entries. decoded holds tasks already decoded; the
 // others are read from tree again. Broken and missing entries are skipped.
-func (ix *Index) revalidate(tree plumbing.Hash, ids []model.ID, decoded map[model.ID]*model.Task) error {
-	for _, id := range ids {
-		e := ix.tasks[id]
+func (ix *Index) revalidate(tree plumbing.Hash, ulids []model.ULID, decoded map[model.ULID]*model.Task) error {
+	for _, ulid := range ulids {
+		e := ix.tasks[ulid]
 		if e == nil || e.Broken != "" {
 			continue
 		}
-		t := decoded[id]
+		t := decoded[ulid]
 		if t == nil {
-			b, err := ix.repo.ReadFile(tree, model.TaskPath(id))
+			b, err := ix.repo.ReadFile(tree, model.TaskPath(ulid))
 			if err != nil {
 				return err
 			}
 			if t, err = model.DecodeTask(b); err != nil {
-				return fmt.Errorf("%s: %w", model.TaskPath(id), err)
+				return fmt.Errorf("%s: %w", model.TaskPath(ulid), err)
 			}
 		}
 		e.Violations = ix.violations(t)
@@ -113,19 +113,19 @@ func (ix *Index) parentKind(t *model.Task) (string, bool) {
 // ancestors returns what Schema.For needs for t: its ancestors nearest
 // first, led by t itself when it is a container. The walk stops at a
 // missing or broken task, and when it comes back to a task it has seen.
-func (ix *Index) ancestors(t *model.Task) []model.ID {
-	var out []model.ID
+func (ix *Index) ancestors(t *model.Task) []model.ULID {
+	var out []model.ULID
 	if k, ok := ix.sc.Kind(t.Kind); ok && k.Role == schema.RoleContainer {
-		out = append(out, t.ID)
+		out = append(out, t.ULID)
 	}
-	seen := map[model.ID]bool{t.ID: true}
+	seen := map[model.ULID]bool{t.ULID: true}
 	for p := t.Parent; p != nil && !seen[*p]; {
 		seen[*p] = true
 		e := ix.tasks[*p]
 		if e == nil || e.Broken != "" {
 			break
 		}
-		out = append(out, e.ID)
+		out = append(out, e.ULID)
 		p = e.Parent
 	}
 	return out
@@ -133,7 +133,7 @@ func (ix *Index) ancestors(t *model.Task) []model.ID {
 
 const (
 	cacheName   = "index" // in .hedgehug/local
-	cacheFormat = 2       // bump when Entry or cache changes
+	cacheFormat = 4       // bump when Entry or cache changes
 )
 
 // cache is the index as it is kept on disk, for one tree of HEAD.
@@ -154,9 +154,9 @@ func (ix *Index) load() (plumbing.Hash, bool) {
 	if err := gob.NewDecoder(bytes.NewReader(b)).Decode(&c); err != nil || c.Format != cacheFormat {
 		return plumbing.ZeroHash, false
 	}
-	ix.tasks = make(map[model.ID]*Entry, len(c.Tasks))
+	ix.tasks = make(map[model.ULID]*Entry, len(c.Tasks))
 	for _, e := range c.Tasks {
-		ix.tasks[e.ID] = e
+		ix.tasks[e.ULID] = e
 	}
 	return c.Tree, true
 }
@@ -187,69 +187,69 @@ func (ix *Index) update(from, to plumbing.Hash) error {
 		}
 	}
 	ix.sc = sc
-	decoded := map[model.ID]*model.Task{}
-	var touched []model.ID
+	decoded := map[model.ULID]*model.Task{}
+	var touched []model.ULID
 	all := false
 	for _, c := range changes {
 		if c.Path == schema.Path {
 			all = true
 			continue
 		}
-		id, err := model.ParseTaskPath(c.Path)
+		ulid, err := model.ParseTaskPath(c.Path)
 		if err != nil {
 			continue
 		}
-		touched = append(touched, id)
+		touched = append(touched, ulid)
 		if c.Deleted {
-			delete(ix.tasks, id)
+			delete(ix.tasks, ulid)
 			continue
 		}
 		b, err := ix.repo.ReadFile(to, c.Path)
 		if err != nil {
 			return err
 		}
-		ix.tasks[id], decoded[id] = newEntry(id, b)
+		ix.tasks[ulid], decoded[ulid] = newEntry(ulid, b)
 	}
 	ix.derive()
-	ids := ix.descendants(touched)
+	ulids := ix.descendants(touched)
 	if all {
-		ids = slices.Collect(maps.Keys(ix.tasks))
+		ulids = slices.Collect(maps.Keys(ix.tasks))
 	}
 	// A task's placement depends on its parent's kind, and its schema on its
 	// ancestors, so the descendants of a changed task are checked again.
-	if err := ix.revalidateAndFindProblems(to, ids, decoded); err != nil {
+	if err := ix.revalidateAndFindProblems(to, ulids, decoded); err != nil {
 		return err
 	}
 	ix.tree = to // only now: after an error, from stays the tree the tasks match
 	return nil
 }
 
-// revalidateAndFindProblems revalidates ids against tree, then finds the
+// revalidateAndFindProblems revalidates ulids against tree, then finds the
 // problems, which depend on the violations.
-func (ix *Index) revalidateAndFindProblems(tree plumbing.Hash, ids []model.ID, decoded map[model.ID]*model.Task) error {
-	if err := ix.revalidate(tree, ids, decoded); err != nil {
+func (ix *Index) revalidateAndFindProblems(tree plumbing.Hash, ulids []model.ULID, decoded map[model.ULID]*model.Task) error {
+	if err := ix.revalidate(tree, ulids, decoded); err != nil {
 		return err
 	}
 	ix.problems = ix.findProblems()
 	return nil
 }
 
-// descendants returns ids and all their descendants, each once. A cycle of
+// descendants returns ulids and all their descendants, each once. A cycle of
 // parents is walked once.
-func (ix *Index) descendants(ids []model.ID) []model.ID {
-	seen := map[model.ID]bool{}
-	var out []model.ID
-	stack := slices.Clone(ids)
+func (ix *Index) descendants(ulids []model.ULID) []model.ULID {
+	seen := map[model.ULID]bool{}
+	var out []model.ULID
+	stack := slices.Clone(ulids)
 	for len(stack) > 0 {
-		id := stack[len(stack)-1]
+		ulid := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
-		if seen[id] {
+		if seen[ulid] {
 			continue
 		}
-		seen[id] = true
-		out = append(out, id)
-		for _, c := range ix.children[id] {
-			stack = append(stack, c.ID)
+		seen[ulid] = true
+		out = append(out, ulid)
+		for _, c := range ix.children[ulid] {
+			stack = append(stack, c.ULID)
 		}
 	}
 	return out

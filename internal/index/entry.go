@@ -13,18 +13,18 @@ import (
 
 // Entry is what the index keeps of one task.
 type Entry struct {
-	ID         model.ID
-	Key        string
-	FormerKeys []string
-	Workspace  model.ID
+	ULID       model.ULID
+	ID         string
+	FormerIDs  []string
+	Workspace  model.ULID
 	Kind       string
 	Title      string
-	Parent     *model.ID
+	Parent     *model.ULID
 	Rank       model.Rank
 	Status     string
 	Assignees  []string
 	Labels     []string
-	BlockedBy  []model.ID
+	BlockedBy  []model.ULID
 	Props      []Prop // in file order; queries read them by the schema's types
 	Created    time.Time
 	Updated    time.Time
@@ -32,6 +32,10 @@ type Entry struct {
 	Text       string             // title and body in lower case, for free-text search
 	Violations []schema.Violation // against the schema where the task sits
 	Broken     string             // why the file did not decode; empty when it did
+	// BrokenNumbers is, for a file that did not decode, the largest number
+	// of each prefix among its words of the form of an id; numbering counts
+	// them, since the file's ids cannot be read.
+	BrokenNumbers map[string]int
 }
 
 // Prop is one property of a task.
@@ -50,16 +54,16 @@ func (e *Entry) Prop(key string) []string {
 	return nil
 }
 
-// newEntry decodes the task file data, found at the path of id. A file that
-// does not decode, or whose id is not the one of its path, gives a broken
+// newEntry decodes the task file data, found at the path of ulid. A file that
+// does not decode, or whose ULID is not the one of its path, gives a broken
 // entry and no task.
-func newEntry(id model.ID, data []byte) (*Entry, *model.Task) {
+func newEntry(ulid model.ULID, data []byte) (*Entry, *model.Task) {
 	t, err := model.DecodeTask(data)
-	if err == nil && t.ID != id {
-		err = fmt.Errorf("id %s does not match the file name", t.ID)
+	if err == nil && t.ULID != ulid {
+		err = fmt.Errorf("ulid %s does not match the file name", t.ULID)
 	}
 	if err != nil {
-		return &Entry{ID: id, Broken: err.Error()}, nil
+		return &Entry{ULID: ulid, Broken: err.Error(), BrokenNumbers: model.IDNumbersIn(data)}, nil
 	}
 	return EntryOf(t), t
 }
@@ -68,22 +72,22 @@ func newEntry(id model.ID, data []byte) (*Entry, *model.Task) {
 // command uses it for a task that is not yet written.
 func EntryOf(t *model.Task) *Entry {
 	e := &Entry{
-		ID:         t.ID,
-		Key:        t.Key,
-		FormerKeys: t.FormerKeys,
-		Workspace:  t.Workspace,
-		Kind:       t.Kind,
-		Title:      t.Title,
-		Parent:     t.Parent,
-		Rank:       t.Rank,
-		Status:     t.Status,
-		Assignees:  t.Assignees,
-		Labels:     t.Labels,
-		BlockedBy:  t.BlockedBy,
-		Created:    t.Created,
-		Updated:    t.Updated,
-		DeletedAt:  t.DeletedAt,
-		Text:       strings.ToLower(t.Title + "\n" + t.Body),
+		ULID:      t.ULID,
+		ID:        t.ID,
+		FormerIDs: t.FormerIDs,
+		Workspace: t.Workspace,
+		Kind:      t.Kind,
+		Title:     t.Title,
+		Parent:    t.Parent,
+		Rank:      t.Rank,
+		Status:    t.Status,
+		Assignees: t.Assignees,
+		Labels:    t.Labels,
+		BlockedBy: t.BlockedBy,
+		Created:   t.Created,
+		Updated:   t.Updated,
+		DeletedAt: t.DeletedAt,
+		Text:      strings.ToLower(t.Title + "\n" + t.Body),
 	}
 	for _, f := range t.Props {
 		e.Props = append(e.Props, Prop{Key: f.Key, Values: scalars(f.Value)})
@@ -113,15 +117,15 @@ func scalars(n *yaml.Node) []string {
 }
 
 // Targets returns the tasks e points at through rel: blocked_by, or a
-// task_ref property. Property values that are not IDs are left out.
-func (e *Entry) Targets(rel string) []model.ID {
+// task_ref property. Property values that are not ULIDs are left out.
+func (e *Entry) Targets(rel string) []model.ULID {
 	if rel == "blocked_by" {
 		return e.BlockedBy
 	}
-	var out []model.ID
+	var out []model.ULID
 	for _, v := range e.Prop(rel) {
-		if id, err := model.ParseID(v); err == nil {
-			out = append(out, id)
+		if ulid, err := model.ParseULID(v); err == nil {
+			out = append(out, ulid)
 		}
 	}
 	return out

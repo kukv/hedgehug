@@ -23,7 +23,7 @@ var storeDirs = map[*store.Store]string{}
 func newStore(t *testing.T) *store.Store {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "store")
-	s, err := store.Create(dir, &model.StoreMeta{ID: model.NewID(), Name: "test"}, nil, &model.Workspace{ID: model.NewID(), Name: "test", KeyPrefix: "TST"}, testAuthor)
+	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "test"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "test", IDPrefix: "TST"}, testAuthor)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,17 +48,17 @@ func writeRaw(t *testing.T, s *store.Store, rel, content string) {
 }
 
 func newTask(title string) *model.Task {
-	return &model.Task{ID: model.NewID(), Kind: "task", Title: title, Status: "todo"}
+	return &model.Task{ULID: model.NewULID(), Kind: "task", Title: title, Status: "todo"}
 }
 
 func setProp(task *model.Task, key, value string) {
 	task.Props.Set(key, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value})
 }
 
-func setRefs(task *model.Task, key string, ids ...model.ID) {
+func setRefs(task *model.Task, key string, ulids ...model.ULID) {
 	n := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
-	for _, id := range ids {
-		n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: id.String()})
+	for _, ulid := range ulids {
+		n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: ulid.String()})
 	}
 	task.Props.Set(key, n)
 }
@@ -81,17 +81,17 @@ func put(t *testing.T, s *store.Store, tasks ...*model.Task) {
 	}
 }
 
-// firstWorkspace returns the ID of the first workspace of s.
-func firstWorkspace(t *testing.T, s *store.Store) model.ID {
+// firstWorkspace returns the ULID of the first workspace of s.
+func firstWorkspace(t *testing.T, s *store.Store) model.ULID {
 	t.Helper()
 	for w, err := range s.Workspaces() {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return w.ID
+		return w.ULID
 	}
 	t.Fatal("the store has no workspace")
-	return model.ID{}
+	return model.ULID{}
 }
 
 func mustOpen(t *testing.T, s *store.Store) *index.Index {

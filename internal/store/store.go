@@ -33,7 +33,7 @@ type Store struct {
 	meta   *model.StoreMeta
 	schema atomic.Pointer[schema.Schema] // replaced by Update; read without mu
 
-	keyNumbers KeyNumbers // counts key numbers for Update; nil reads every task
+	idNumbers IDNumbers // counts id numbers for Update; nil reads every task
 
 	// Replaced by tests.
 	now      func() time.Time
@@ -69,7 +69,10 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 	if ws == nil {
 		return nil, errors.New("the store needs a workspace")
 	}
-	if err := model.ValidKeyPrefix(ws.KeyPrefix); err != nil {
+	if ws.ULID.IsZero() {
+		return nil, errors.New("the workspace has no ulid")
+	}
+	if err := model.ValidIDPrefix(ws.IDPrefix); err != nil {
 		return nil, err
 	}
 	made, err := ensureEmpty(dir)
@@ -119,7 +122,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 	}{
 		{model.StoreMetaPath, mb},
 		{schemaPath, sb},
-		{model.WorkspacePath(w.ID), wb},
+		{model.WorkspacePath(w.ULID), wb},
 		{gitignorePath, []byte(".hedgehug/local/\n")},
 	}
 	paths := make([]string, 0, len(files))

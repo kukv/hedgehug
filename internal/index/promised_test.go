@@ -13,17 +13,17 @@ import (
 	"github.com/kukv/hedgehug/internal/schema"
 )
 
-func byID(es []*Entry) []*Entry {
+func byULID(es []*Entry) []*Entry {
 	out := slices.Clone(es)
-	slices.SortFunc(out, func(a, b *Entry) int { return cmp.Compare(a.ID.String(), b.ID.String()) })
+	slices.SortFunc(out, func(a, b *Entry) int { return cmp.Compare(a.ULID.String(), b.ULID.String()) })
 	return out
 }
 
 func TestOpenParentCycleOfThree(t *testing.T) {
 	s, dir := newStore(t)
-	a, b, c := model.NewID(), model.NewID(), model.NewID()
-	for id, parent := range map[model.ID]model.ID{a: b, b: c, c: a} {
-		commitRaw(t, s, dir, model.TaskPath(id), rawTask(id, "kind: task\ntitle: x\nstatus: todo\nparent: "+parent.String()+"\n"))
+	a, b, c := model.NewULID(), model.NewULID(), model.NewULID()
+	for ulid, parent := range map[model.ULID]model.ULID{a: b, b: c, c: a} {
+		commitRaw(t, s, dir, model.TaskPath(ulid), rawTask(ulid, "kind: task\ntitle: x\nstatus: todo\nparent: "+parent.String()+"\n"))
 	}
 	loose := newTask("loose")
 	put(t, s, loose)
@@ -32,16 +32,16 @@ func TestOpenParentCycleOfThree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []model.ID{a, b, c} {
-		if !hasProblem(ix, id, "cycle") {
-			t.Errorf("task %s has no cycle problem: %v", id, ix.Problems(id))
+	for _, ulid := range []model.ULID{a, b, c} {
+		if !hasProblem(ix, ulid, "cycle") {
+			t.Errorf("task %s has no cycle problem: %v", ulid, ix.Problems(ulid))
 		}
 	}
-	if hasProblem(ix, loose.ID, "cycle") {
+	if hasProblem(ix, loose.ULID, "cycle") {
 		t.Error("a task outside the cycle has a cycle problem")
 	}
 	roots := ix.Roots()
-	if len(roots) != 1 || roots[0].ID != loose.ID {
+	if len(roots) != 1 || roots[0].ULID != loose.ULID {
 		t.Errorf("roots = %v, want only the task outside the cycle", titles(roots))
 	}
 	// Again from the cache, and after a Refresh.
@@ -60,17 +60,17 @@ func TestOpenParentCycleOfThree(t *testing.T) {
 
 func TestOpenCacheEqualsRebuild(t *testing.T) {
 	s, dir := newStore(t)
-	p := &model.Task{ID: model.NewID(), Kind: "project", Title: "P", Status: "todo"}
+	p := &model.Task{ULID: model.NewULID(), Kind: "project", Title: "P", Status: "todo"}
 	child := newTask("child")
-	child.Parent = &p.ID
+	child.Parent = &p.ULID
 	child.Labels = []string{"x", "y"}
 	other := newTask("other")
-	other.BlockedBy = []model.ID{child.ID}
+	other.BlockedBy = []model.ULID{child.ULID}
 	gone := newTask("gone")
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	gone.DeletedAt = &now
 	put(t, s, p, child, other, gone)
-	commitRaw(t, s, dir, model.TaskPath(model.NewID()), "not a task file\n")
+	commitRaw(t, s, dir, model.TaskPath(model.NewULID()), "not a task file\n")
 
 	mustOpen(t, s) // writes the cache
 	cached := mustOpen(t, s)
@@ -82,7 +82,7 @@ func TestOpenCacheEqualsRebuild(t *testing.T) {
 	if len(fresh.Tasks()) != 5 {
 		t.Errorf("tasks = %d, want 5", len(fresh.Tasks()))
 	}
-	if a, b := byID(cached.Tasks()), byID(fresh.Tasks()); !reflect.DeepEqual(a, b) {
+	if a, b := byULID(cached.Tasks()), byULID(fresh.Tasks()); !reflect.DeepEqual(a, b) {
 		t.Errorf("entries differ between the cache and a rebuild:\ncache:   %+v\nrebuild: %+v", a, b)
 	}
 }

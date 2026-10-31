@@ -15,20 +15,20 @@ import (
 )
 
 func (a *app) lsCmd() *cobra.Command {
-	var tree, idsOnly bool
+	var tree, ulidsOnly bool
 	var format string
 	cmd := &cobra.Command{
 		Use:   "ls [query]",
 		Short: "List tasks",
 		RunE: func(_ *cobra.Command, args []string) error {
 			n := 0
-			for _, on := range []bool{a.jsonOut, idsOnly, format != ""} {
+			for _, on := range []bool{a.jsonOut, ulidsOnly, format != ""} {
 				if on {
 					n++
 				}
 			}
 			if n > 1 {
-				return usageErrorf("give only one of --json, --ids-only and --format")
+				return usageErrorf("give only one of --json, --ulids-only and --format")
 			}
 			var tmpl *template.Template
 			if format != "" {
@@ -42,19 +42,19 @@ func (a *app) lsCmd() *cobra.Command {
 				return usageError{err}
 			}
 			if tree {
-				return a.lsTree(q, idsOnly, tmpl)
+				return a.lsTree(q, ulidsOnly, tmpl)
 			}
-			return a.ls(q, idsOnly, tmpl)
+			return a.ls(q, ulidsOnly, tmpl)
 		},
 	}
 	f := cmd.Flags()
 	f.BoolVar(&tree, "tree", false, "show the tasks found under their ancestors")
-	f.BoolVar(&idsOnly, "ids-only", false, "print only the full IDs")
+	f.BoolVar(&ulidsOnly, "ulids-only", false, "print only the full ULIDs")
 	f.StringVar(&format, "format", "", "print each task with a Go template over its JSON fields")
 	return cmd
 }
 
-func (a *app) ls(q *query.Query, idsOnly bool, tmpl *template.Template) error {
+func (a *app) ls(q *query.Query, ulidsOnly bool, tmpl *template.Template) error {
 	_, ix, err := a.open()
 	if err != nil {
 		return err
@@ -72,8 +72,8 @@ func (a *app) ls(q *query.Query, idsOnly bool, tmpl *template.Template) error {
 		all = append(all, g.Tasks...)
 	}
 	switch {
-	case idsOnly:
-		return a.printIDs(all)
+	case ulidsOnly:
+		return a.printULIDs(all)
 	case tmpl != nil:
 		return a.printFormat(ix, all, tmpl, nil)
 	case a.jsonOut || !hasTerm(q, "group"):
@@ -108,10 +108,10 @@ func hasTerm(q *query.Query, key string) bool {
 	return false
 }
 
-func (a *app) printIDs(es []*index.Entry) error {
+func (a *app) printULIDs(es []*index.Entry) error {
 	var b strings.Builder
 	for _, e := range es {
-		b.WriteString(e.ID.String() + "\n")
+		b.WriteString(e.ULID.String() + "\n")
 	}
 	_, err := fmt.Fprint(a.stdout, b.String())
 	return err

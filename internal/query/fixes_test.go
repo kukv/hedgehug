@@ -12,12 +12,12 @@ import (
 
 func TestRunErrorUnwraps(t *testing.T) {
 	s := newStore(t)
-	for _, id := range []string{"01JBZ8K3QW7M2X9V4T6RAAA001", "01JBZ8K3QW7M2X9V4T6RBBB001"} {
-		pid, err := model.ParseID(id)
+	for _, ulid := range []string{"01JBZ8K3QW7M2X9V4T6RAAA001", "01JBZ8K3QW7M2X9V4T6RBBB001"} {
+		taskULID, err := model.ParseULID(ulid)
 		if err != nil {
 			t.Fatal(err)
 		}
-		writeRaw(t, s, model.TaskPath(pid), "---\nid: "+id+"\nkind: task\nkey: WEB-1\ntitle: t\nstatus: todo\n---\n")
+		writeRaw(t, s, model.TaskPath(taskULID), "---\nulid: "+ulid+"\nkind: task\nid: WEB-1\ntitle: t\nstatus: todo\n---\n")
 	}
 	ix := mustOpen(t, s)
 	runQ := func(q string) error {
@@ -43,14 +43,14 @@ func TestRunBlockedByClosedOrGone(t *testing.T) {
 	done.Status, canceled.Status = "done", "canceled"
 	at := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 	deleted.DeletedAt = &at
-	broken, missing := model.NewID(), model.NewID()
+	broken, missing := model.NewULID(), model.NewULID()
 	writeRaw(t, s, model.TaskPath(broken), "not a task file\n")
 	put(t, s, done, canceled, deleted)
-	for title, id := range map[string]model.ID{"byDone": done.ID, "byCanceled": canceled.ID, "byDeleted": deleted.ID, "byBroken": broken, "byMissing": missing} {
+	for title, ulid := range map[string]model.ULID{"byDone": done.ULID, "byCanceled": canceled.ULID, "byDeleted": deleted.ULID, "byBroken": broken, "byMissing": missing} {
 		task := newTask(title)
-		task.BlockedBy = []model.ID{id}
+		task.BlockedBy = []model.ULID{ulid}
 		// Past the store, which refuses a blocker that is not there.
-		writeRaw(t, s, model.TaskPath(task.ID), "---\nid: "+task.ID.String()+"\nkind: task\ntitle: "+title+"\nstatus: todo\nblocked_by: ["+id.String()+"]\n---\n")
+		writeRaw(t, s, model.TaskPath(task.ULID), "---\nulid: "+task.ULID.String()+"\nkind: task\ntitle: "+title+"\nstatus: todo\nblocked_by: ["+ulid.String()+"]\n---\n")
 	}
 	got := run(t, mustOpen(t, s), "is:blocked", Options{})
 	if len(got) != 1 || len(got[0]) != 0 {

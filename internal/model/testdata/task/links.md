@@ -1,5 +1,5 @@
 ---
-id: 01JBZ8K3QW7M2X9V4T6R5N8P0A
+ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A
 title: リンクの未知のキー
 links:
 # 最初のリンク

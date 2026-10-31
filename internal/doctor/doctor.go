@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -24,7 +25,7 @@ var fileRoots = []string{"tasks", "comments", "worklogs", "sprints", "releases",
 // store, not from the schema.
 var indexCodes = []string{
 	schema.CodeMissingRef, schema.CodeCycle, index.CodeBroken,
-	index.CodeNoKey, index.CodeDuplicateKey, index.CodeKeyPrefix, store.CodeNoWorkspace, store.CodeWorkspaceMismatch,
+	index.CodeNoID, index.CodeDuplicateID, index.CodeIDPrefix, store.CodeNoWorkspace, store.CodeWorkspaceMismatch,
 }
 
 // Run checks the store in dir without opening it with store.Open, which
@@ -43,9 +44,13 @@ func Run(dir string) ([]Finding, error) {
 			Hint: "restore it with `git restore " + model.StoreMetaPath + "`, or fix it by hand and commit",
 		})
 	}
-	if err := readCheck(dir, model.NumbersPath, checkNumbers); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	msg, err := checkNumbers(dir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		msg = err.Error()
+	}
+	if msg != "" {
 		out = append(out, Finding{
-			Check: "file", Where: model.NumbersPath, Msg: err.Error(),
+			Check: "file", Where: model.NumbersPath, Msg: msg,
 			Hint: "fix the file by hand and commit, or restore it with `git restore " + model.NumbersPath + "`",
 		})
 	}
@@ -122,22 +127,27 @@ func readCheck[T any](dir, rel string, decode func([]byte) (T, error)) error {
 	return nil
 }
 
-// checkNumbers decodes numbers.yaml and checks each entry is a key prefix
-// with a number of 1 or more.
-func checkNumbers(data []byte) (model.Numbers, error) {
+// checkNumbers returns what is wrong with numbers.yaml, or "" if nothing
+// is: that it does not decode, or an entry that is not an id prefix with a
+// number of 1 or more. The error is for a file that cannot be read.
+func checkNumbers(dir string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(model.NumbersPath))) //nolint:gosec // G304: the path is built from the store root and a fixed name
+	if err != nil {
+		return "", err
+	}
 	n, err := model.DecodeNumbers(data)
 	if err != nil {
-		return nil, err
+		return "does not decode: " + err.Error(), nil
 	}
-	for p, v := range n {
-		if err := model.ValidKeyPrefix(p); err != nil {
-			return nil, fmt.Errorf("%s: %w", p, err)
+	for _, p := range slices.Sorted(maps.Keys(n)) {
+		if err := model.ValidIDPrefix(p); err != nil {
+			return fmt.Sprintf("has an invalid entry: %s: %v", p, err), nil
 		}
-		if v < 1 {
-			return nil, fmt.Errorf("%s: the number %d is less than 1", p, v)
+		if n[p] < 1 {
+			return fmt.Sprintf("has an invalid entry: %s: the number %d is less than 1", p, n[p]), nil
 		}
 	}
-	return n, nil
+	return "", nil
 }
 
 // checkStore opens the store and the index and finds what step 5 of Run
@@ -159,7 +169,7 @@ func checkStore(dir string) []Finding {
 	fs = slices.DeleteFunc(fs, func(f Finding) bool { return f.Check == "schema" })
 	fs = append(fs, checkWorkspaces(ix)...)
 	for _, e := range ix.Tasks() {
-		for _, p := range ix.Problems(e.ID) {
+		for _, p := range ix.Problems(e.ULID) {
 			if !slices.Contains(indexCodes, p.Code) {
 				continue
 			}
@@ -173,7 +183,8 @@ func checkStore(dir string) []Finding {
 	return fs
 }
 
-// checkWorkspaces finds workspaces that share a key prefix or a name.
+// checkWorkspaces finds workspaces that share an id prefix or a name. Each
+// of them gets a finding that names the other.
 func checkWorkspaces(ix *index.Index) []Finding {
 	var out []Finding
 	ws := ix.Workspaces()
@@ -181,30 +192,32 @@ func checkWorkspaces(ix *index.Index) []Finding {
 		for _, b := range ws[:i] {
 			var what string
 			switch {
-			case a.KeyPrefix == b.KeyPrefix:
-				what = "key prefix " + a.KeyPrefix
+			case a.IDPrefix == b.IDPrefix:
+				what = "id prefix " + a.IDPrefix
 			case strings.EqualFold(a.Name, b.Name):
 				what = "name " + a.Name
 			default:
 				continue
 			}
-			out = append(out, Finding{
-				Check: "workspace", Where: model.WorkspacePath(a.ID),
-				Msg:  fmt.Sprintf("has the same %s as workspace %s (%s)", what, b.Name, b.ID),
-				Hint: "change one with hedgehug workspace prefix (or rename)",
-			})
+			for _, pair := range [][2]*model.Workspace{{a, b}, {b, a}} {
+				out = append(out, Finding{
+					Check: "workspace", Where: model.WorkspacePath(pair[0].ULID),
+					Msg:  fmt.Sprintf("has the same %s as workspace %s (%s)", what, pair[1].Name, pair[1].ULID),
+					Hint: "change one with hedgehug workspace prefix (or rename)",
+				})
+			}
 		}
 	}
 	return out
 }
 
-// taskWhere names the task e in a finding: its key, ULID and title, or the
-// ULID and title when it has no key (a file that does not decode).
+// taskWhere names the task e in a finding: its id, ULID and title, or the
+// ULID and title when it has no id (a file that does not decode).
 func taskWhere(e *index.Entry) string {
-	if e.Key == "" {
-		return strings.TrimSpace(e.ID.String() + " " + e.Title)
+	if e.ID == "" {
+		return strings.TrimSpace(e.ULID.String() + " " + e.Title)
 	}
-	return strings.TrimSpace(e.Key + " (" + e.ID.String() + ") " + e.Title)
+	return strings.TrimSpace(e.ID + " (" + e.ULID.String() + ") " + e.Title)
 }
 
 // checkFiles reads every file under the directories of fileRoots.
@@ -251,7 +264,7 @@ func checkFile(dir, root, rel string) (string, error) {
 	}
 	switch root {
 	case "tasks":
-		id, err := model.ParseTaskPath(rel)
+		ulid, err := model.ParseTaskPath(rel)
 		if err != nil {
 			return bad("the name does not follow the rule of task files")
 		}
@@ -259,11 +272,11 @@ func checkFile(dir, root, rel string) (string, error) {
 		if err != nil {
 			return bad("does not decode: %v", err)
 		}
-		if t.ID != id {
-			return bad("the id in the file is %s, which differs from the id in the path", t.ID)
+		if t.ULID != ulid {
+			return bad("the ulid in the file is %s, which differs from the ulid in the path", t.ULID)
 		}
 	case "comments", "worklogs":
-		var task, child, got model.ID
+		var task, child, got model.ULID
 		if root == "comments" {
 			task, child, err = model.ParseCommentPath(rel)
 		} else {
@@ -277,16 +290,16 @@ func checkFile(dir, root, rel string) (string, error) {
 			if derr != nil {
 				return bad("does not decode: %v", derr)
 			}
-			got = c.ID
+			got = c.ULID
 		} else {
 			w, derr := model.DecodeWorklog(data)
 			if derr != nil {
 				return bad("does not decode: %v", derr)
 			}
-			got = w.ID
+			got = w.ULID
 		}
 		if got != child {
-			return bad("the id in the file is %s, which differs from the id in the path", got)
+			return bad("the ulid in the file is %s, which differs from the ulid in the path", got)
 		}
 		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(model.TaskPath(task)))); errors.Is(err, fs.ErrNotExist) {
 			return bad("there is no task file for task %s", task)
@@ -295,33 +308,33 @@ func checkFile(dir, root, rel string) (string, error) {
 		}
 	case "sprints", "releases":
 		name := path.Base(rel)
-		id, perr := model.ParseID(strings.TrimSuffix(name, ".md"))
+		ulid, perr := model.ParseULID(strings.TrimSuffix(name, ".md"))
 		build := model.SprintPath
 		if root == "releases" {
 			build = model.ReleasePath
 		}
-		if perr != nil || build(id) != rel {
+		if perr != nil || build(ulid) != rel {
 			return bad("the name does not follow the rule of %s files", root)
 		}
-		var got model.ID
+		var got model.ULID
 		if root == "sprints" {
 			sp, derr := model.DecodeSprint(data)
 			if derr != nil {
 				return bad("does not decode: %v", derr)
 			}
-			got = sp.ID
+			got = sp.ULID
 		} else {
 			r, derr := model.DecodeRelease(data)
 			if derr != nil {
 				return bad("does not decode: %v", derr)
 			}
-			got = r.ID
+			got = r.ULID
 		}
-		if got != id {
-			return bad("the id in the file is %s, which differs from the id in the path", got)
+		if got != ulid {
+			return bad("the ulid in the file is %s, which differs from the ulid in the path", got)
 		}
 	case "workspaces":
-		id, err := model.ParseWorkspacePath(rel)
+		ulid, err := model.ParseWorkspacePath(rel)
 		if err != nil {
 			return bad("the name does not follow the rule of workspace files")
 		}
@@ -329,21 +342,21 @@ func checkFile(dir, root, rel string) (string, error) {
 		if err != nil {
 			return bad("does not decode: %v", err)
 		}
-		if w.ID != id {
-			return bad("the id in the file is %s, which differs from the id in the path", w.ID)
+		if w.ULID != ulid {
+			return bad("the ulid in the file is %s, which differs from the ulid in the path", w.ULID)
 		}
 		switch {
 		case w.Name == "":
 			return bad("name is missing")
-		case w.KeyPrefix == "":
-			return bad("key_prefix is missing")
+		case w.IDPrefix == "":
+			return bad("id_prefix is missing")
 		case w.PrefixSet.IsZero():
 			return bad("prefix_set is missing")
 		}
 		if err := model.ValidWorkspaceName(w.Name); err != nil {
 			return bad("%v", err)
 		}
-		if err := model.ValidKeyPrefix(w.KeyPrefix); err != nil {
+		if err := model.ValidIDPrefix(w.IDPrefix); err != nil {
 			return bad("%v", err)
 		}
 	case "templates":

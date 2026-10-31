@@ -20,9 +20,15 @@ var errTxDone = errors.New("the transaction is used after Update returned")
 
 // Op describes one operation, which becomes one commit.
 type Op struct {
-	Name   string   // add, update, rm, mv...; the Hedgehug-Op trailer
-	Task   model.ID // the main task of the operation; zero if none
+	Name   string     // add, update, rm, mv...; the Hedgehug-Op trailer
+	Task   model.ULID // the main task of the operation; zero if none
 	Author gitrepo.Signature
+	// Detail ends the subject when there is no Task, saying what changed,
+	// such as "add web (WEB)".
+	Detail string
+	// Workspace is the workspace the operation changes, for the
+	// Hedgehug-Workspace trailer; zero if none.
+	Workspace model.ULID
 	// SkipTransitions skips the check of workflow.transitions; a required
 	// field of the new status is still checked, but only when the task had
 	// it before the write.
@@ -39,13 +45,14 @@ type Tx struct {
 	order   []string // paths in the order first put
 	pending map[string]*pending
 
-	tasks     map[model.ID]*model.Task // put tasks; nil for a removed one
-	removed   map[model.ID]bool        // tasks given to RemoveTask
-	taskOrder []model.ID
+	tasks     map[model.ULID]*model.Task // put tasks; nil for a removed one
+	removed   map[model.ULID]bool        // tasks given to RemoveTask
+	taskOrder []model.ULID
 	schema    *schema.Schema // set by PutSchema
 
-	workspaces map[model.ID]*model.Workspace // put workspaces; nil for a removed one
-	numbers    model.Numbers                 // the purged numbers; nil until read
+	workspaces map[model.ULID]*model.Workspace // put workspaces; nil for a removed one
+	numbers    model.Numbers                   // the purged numbers; nil until read
+	oldIDs     []oldID                         // what assignIDs changed
 }
 
 // pending is one queued write. created and updated point into the value
@@ -77,108 +84,112 @@ func (tx *Tx) put(rel string, p *pending) error {
 }
 
 // Task reads a task as it will be after the writes queued so far.
-func (tx *Tx) Task(id model.ID) (*model.Task, error) {
+func (tx *Tx) Task(ulid model.ULID) (*model.Task, error) {
 	if tx.done {
 		return nil, errTxDone
 	}
-	return tx.task(id)
+	return tx.task(ulid)
 }
 
-func (tx *Tx) task(id model.ID) (*model.Task, error) {
-	if t, ok := tx.tasks[id]; ok {
+func (tx *Tx) task(ulid model.ULID) (*model.Task, error) {
+	if t, ok := tx.tasks[ulid]; ok {
 		if t == nil {
-			return nil, fmt.Errorf("%s: %w", model.TaskPath(id), ErrNotFound)
+			return nil, fmt.Errorf("%s: %w", model.TaskPath(ulid), ErrNotFound)
 		}
 		return t, nil
 	}
-	return tx.s.Task(id)
+	return tx.s.Task(ulid)
 }
 
 // PutTask queues a write of t. Update fills in created and updated.
 func (tx *Tx) PutTask(t *model.Task) error {
-	if t.ID.IsZero() {
-		return errors.New("the task has no id")
+	if t.ULID.IsZero() {
+		return errors.New("the task has no ulid")
 	}
-	if err := tx.put(model.TaskPath(t.ID), &pending{encode: t.Encode, created: &t.Created, updated: &t.Updated}); err != nil {
+	if err := tx.put(model.TaskPath(t.ULID), &pending{encode: t.Encode, created: &t.Created, updated: &t.Updated}); err != nil {
 		return err
 	}
 	// Not the tasks map: a task removed earlier in the operation is in it.
-	if !slices.Contains(tx.taskOrder, t.ID) {
-		tx.taskOrder = append(tx.taskOrder, t.ID)
+	if !slices.Contains(tx.taskOrder, t.ULID) {
+		tx.taskOrder = append(tx.taskOrder, t.ULID)
 	}
-	tx.tasks[t.ID] = t
+	tx.tasks[t.ULID] = t
 	return nil
 }
 
-func (tx *Tx) PutComment(task model.ID, c *model.Comment) error {
-	if task.IsZero() || c.ID.IsZero() {
-		return errors.New("the comment has no id or no task")
+func (tx *Tx) PutComment(task model.ULID, c *model.Comment) error {
+	if task.IsZero() || c.ULID.IsZero() {
+		return errors.New("the comment has no ulid or no task")
 	}
 	if tx.removed[task] {
 		return fmt.Errorf("task %s is removed in this operation", task)
 	}
-	return tx.put(model.CommentPath(task, c.ID), &pending{encode: c.Encode, created: &c.Created, updated: &c.Updated})
+	return tx.put(model.CommentPath(task, c.ULID), &pending{encode: c.Encode, created: &c.Created, updated: &c.Updated})
 }
 
-func (tx *Tx) PutWorklog(task model.ID, w *model.Worklog) error {
-	if task.IsZero() || w.ID.IsZero() {
-		return errors.New("the worklog entry has no id or no task")
+func (tx *Tx) PutWorklog(task model.ULID, w *model.Worklog) error {
+	if task.IsZero() || w.ULID.IsZero() {
+		return errors.New("the worklog entry has no ulid or no task")
 	}
 	if tx.removed[task] {
 		return fmt.Errorf("task %s is removed in this operation", task)
 	}
-	return tx.put(model.WorklogPath(task, w.ID), &pending{encode: w.Encode, created: &w.Created, updated: &w.Updated})
+	return tx.put(model.WorklogPath(task, w.ULID), &pending{encode: w.Encode, created: &w.Created, updated: &w.Updated})
 }
 
 func (tx *Tx) PutSprint(sp *model.Sprint) error {
-	if sp.ID.IsZero() {
-		return errors.New("the sprint has no id")
+	if sp.ULID.IsZero() {
+		return errors.New("the sprint has no ulid")
 	}
-	return tx.put(model.SprintPath(sp.ID), &pending{encode: sp.Encode, created: &sp.Created, updated: &sp.Updated})
+	return tx.put(model.SprintPath(sp.ULID), &pending{encode: sp.Encode, created: &sp.Created, updated: &sp.Updated})
 }
 
 func (tx *Tx) PutWorkspace(w *model.Workspace) error {
-	if w.ID.IsZero() {
-		return errors.New("the workspace has no id")
+	if w.ULID.IsZero() {
+		return errors.New("the workspace has no ulid")
 	}
-	if err := tx.put(model.WorkspacePath(w.ID), &pending{encode: w.Encode, created: &w.Created, updated: &w.Updated}); err != nil {
+	if err := tx.put(model.WorkspacePath(w.ULID), &pending{encode: w.Encode, created: &w.Created, updated: &w.Updated}); err != nil {
 		return err
 	}
-	tx.workspaces[w.ID] = w
+	tx.workspaces[w.ULID] = w
 	return nil
 }
 
-func (tx *Tx) RemoveWorkspace(id model.ID) error {
-	if err := tx.put(model.WorkspacePath(id), &pending{remove: true}); err != nil {
+func (tx *Tx) RemoveWorkspace(ulid model.ULID) error {
+	if err := tx.put(model.WorkspacePath(ulid), &pending{remove: true}); err != nil {
 		return err
 	}
-	tx.workspaces[id] = nil
+	tx.workspaces[ulid] = nil
 	return nil
 }
+
+// SetDetail replaces the Detail of the operation, so fn can say what changed
+// from what it read under the lock.
+func (tx *Tx) SetDetail(s string) { tx.op.Detail = s }
 
 // Workspace reads a workspace as it will be after the writes queued so far.
-func (tx *Tx) Workspace(id model.ID) (*model.Workspace, error) {
+func (tx *Tx) Workspace(ulid model.ULID) (*model.Workspace, error) {
 	if tx.done {
 		return nil, errTxDone
 	}
-	return tx.workspace(id)
+	return tx.workspace(ulid)
 }
 
-func (tx *Tx) workspace(id model.ID) (*model.Workspace, error) {
-	if w, ok := tx.workspaces[id]; ok {
+func (tx *Tx) workspace(ulid model.ULID) (*model.Workspace, error) {
+	if w, ok := tx.workspaces[ulid]; ok {
 		if w == nil {
-			return nil, fmt.Errorf("%s: %w", model.WorkspacePath(id), ErrNotFound)
+			return nil, fmt.Errorf("%s: %w", model.WorkspacePath(ulid), ErrNotFound)
 		}
 		return w, nil
 	}
-	return tx.s.Workspace(id)
+	return tx.s.Workspace(ulid)
 }
 
 func (tx *Tx) PutRelease(r *model.Release) error {
-	if r.ID.IsZero() {
-		return errors.New("the release has no id")
+	if r.ULID.IsZero() {
+		return errors.New("the release has no ulid")
 	}
-	return tx.put(model.ReleasePath(r.ID), &pending{encode: r.Encode, created: &r.Created, updated: &r.Updated})
+	return tx.put(model.ReleasePath(r.ULID), &pending{encode: r.Encode, created: &r.Created, updated: &r.Updated})
 }
 
 func (tx *Tx) PutTemplate(t *model.Template) error {
@@ -201,31 +212,31 @@ func (tx *Tx) PutSchema(sc *schema.Schema) error {
 
 // RemoveTask queues the removal of a task file with its comments and
 // worklog entries, for purging. Soft deletion is a PutTask with DeletedAt.
-func (tx *Tx) RemoveTask(id model.ID) error {
+func (tx *Tx) RemoveTask(ulid model.ULID) error {
 	if tx.done {
 		return errTxDone
 	}
-	if id.IsZero() {
-		return errors.New("the task has no id")
+	if ulid.IsZero() {
+		return errors.New("the task has no ulid")
 	}
 	var de *model.DecodeError
-	if t, err := tx.task(id); err == nil {
+	if t, err := tx.task(ulid); err == nil {
 		if err := tx.recordNumbers(t); err != nil {
 			return err
 		}
 	} else if !errors.Is(err, ErrNotFound) && !errors.As(err, &de) {
 		return err
 	}
-	rels := []string{model.TaskPath(id)}
+	rels := []string{model.TaskPath(ulid)}
 	// Files put earlier in this operation are removed too.
 	for _, rel := range tx.order {
-		for _, root := range []string{model.CommentPath(id, model.ID{}), model.WorklogPath(id, model.ID{})} {
+		for _, root := range []string{model.CommentPath(ulid, model.ULID{}), model.WorklogPath(ulid, model.ULID{})} {
 			if strings.HasPrefix(rel, path.Dir(root)+"/") && !slices.Contains(rels, rel) {
 				rels = append(rels, rel)
 			}
 		}
 	}
-	for _, dir := range []string{path.Dir(model.CommentPath(id, model.ID{})), path.Dir(model.WorklogPath(id, model.ID{}))} {
+	for _, dir := range []string{path.Dir(model.CommentPath(ulid, model.ULID{})), path.Dir(model.WorklogPath(ulid, model.ULID{}))} {
 		entries, err := os.ReadDir(tx.s.path(dir))
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
@@ -244,16 +255,16 @@ func (tx *Tx) RemoveTask(id model.ID) error {
 			return err
 		}
 	}
-	tx.tasks[id] = nil
+	tx.tasks[ulid] = nil
 	if tx.removed == nil {
-		tx.removed = map[model.ID]bool{}
+		tx.removed = map[model.ULID]bool{}
 	}
-	tx.removed[id] = true
+	tx.removed[ulid] = true
 	return nil
 }
 
 // recordNumbers raises the record of purged numbers to the numbers of t's
-// keys, so numbering never gives them again.
+// ids, so numbering never gives them again.
 func (tx *Tx) recordNumbers(t *model.Task) error {
 	if tx.numbers == nil {
 		n, err := tx.s.Numbers()
@@ -263,8 +274,8 @@ func (tx *Tx) recordNumbers(t *model.Task) error {
 		tx.numbers = n
 	}
 	changed := false
-	for _, k := range append([]string{t.Key}, t.FormerKeys...) {
-		if p, n, ok := model.ParseKey(k); ok && n > tx.numbers[p] {
+	for _, k := range append([]string{t.ID}, t.FormerIDs...) {
+		if p, n, ok := model.ParseTaskID(k); ok && n > tx.numbers[p] {
 			tx.numbers[p] = n
 			changed = true
 		}
@@ -307,10 +318,17 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
 	}
 	s.schema.Store(cached)
 
-	tx := &Tx{s: s, op: op, pending: map[string]*pending{}, tasks: map[model.ID]*model.Task{}, workspaces: map[model.ID]*model.Workspace{}}
+	tx := &Tx{s: s, op: op, pending: map[string]*pending{}, tasks: map[model.ULID]*model.Task{}, workspaces: map[model.ULID]*model.Workspace{}}
+	// assignIDs changes the caller's tasks; a failed operation leaves them
+	// as they were given.
+	defer func() {
+		if err != nil {
+			tx.restoreIDs()
+		}
+	}()
 	err = fn(tx)
 	if err == nil {
-		err = tx.assignKeys()
+		err = tx.assignIDs()
 	}
 	tx.done = true
 	if err != nil {
@@ -337,7 +355,7 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
 	if len(changes) == 0 {
 		return false, nil
 	}
-	commit := tx.commitFor(op, changes, now)
+	commit := tx.commitFor(tx.op, changes, now)
 	if err := s.apply(changes); err != nil {
 		return false, err
 	}
@@ -395,11 +413,18 @@ func (tx *Tx) changes(now time.Time) ([]change, error) {
 	return out, nil
 }
 
-// commitFor builds the commit of op. The subject names the task by its key,
-// or by its ID when it has none, and gives its title as op leaves it.
+// commitFor builds the commit of op. The subject names the task by its id,
+// or by its ULID when it has none, and gives its title as op leaves it; with
+// no task it ends with op.Detail.
 func (tx *Tx) commitFor(op Op, cs []change, now time.Time) gitrepo.Commit {
 	subject := "hedgehug: " + op.Name
 	trailers := []gitrepo.Trailer{{Key: "Hedgehug-Op", Value: op.Name}}
+	if op.Task.IsZero() && op.Detail != "" {
+		subject += " " + op.Detail
+	}
+	if !op.Workspace.IsZero() {
+		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Workspace", Value: op.Workspace.String()})
+	}
 	if !op.Task.IsZero() {
 		label, title := op.Task.String(), ""
 		t, err := tx.task(op.Task)
@@ -408,8 +433,8 @@ func (tx *Tx) commitFor(op Op, cs []change, now time.Time) gitrepo.Commit {
 			t, err = tx.s.Task(op.Task)
 		}
 		if err == nil {
-			if t.Key != "" {
-				label = t.Key
+			if t.ID != "" {
+				label = t.ID
 			}
 			title = t.Title
 		}

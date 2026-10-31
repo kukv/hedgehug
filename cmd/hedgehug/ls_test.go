@@ -13,10 +13,10 @@ func TestLs(t *testing.T) {
 
 	out := te.ok("ls")
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	if len(lines) != 3 || !strings.HasPrefix(lines[0], "KEY") {
+	if len(lines) != 3 || !strings.HasPrefix(lines[0], "ID ") || !strings.Contains(lines[0], " ULID ") {
 		t.Fatalf("ls =\n%s", out)
 	}
-	for _, s := range []string{a.Key, a.ID, "Alpha", "ui", b.Key, b.ID, "Beta", "done"} {
+	for _, s := range []string{a.ID, a.ULID, "Alpha", "ui", b.ID, b.ULID, "Beta", "done"} {
 		if !strings.Contains(out, s) {
 			t.Errorf("ls does not show %q:\n%s", s, out)
 		}
@@ -31,8 +31,8 @@ func TestLs(t *testing.T) {
 	if out := te.ok("ls", "status:todo", "label:ui"); !strings.Contains(out, "Alpha") || strings.Contains(out, "Beta") {
 		t.Errorf("ls with two args =\n%s", out)
 	}
-	if out := te.ok("ls", "--ids-only"); out != a.ID+"\n"+b.ID+"\n" && out != b.ID+"\n"+a.ID+"\n" {
-		t.Errorf("--ids-only = %q", out)
+	if out := te.ok("ls", "--ulids-only"); out != a.ULID+"\n"+b.ULID+"\n" && out != b.ULID+"\n"+a.ULID+"\n" {
+		t.Errorf("--ulids-only = %q", out)
 	}
 	if out := te.ok("ls", "--format", "{{.title}}|{{.status}}", "sort:title"); out != "Alpha|todo\nBeta|done\n" {
 		t.Errorf("--format = %q", out)
@@ -48,9 +48,9 @@ func TestLs(t *testing.T) {
 		t.Error("empty lists in JSON must be [] or {}, not null")
 	}
 
-	// blocked_by names each task by its ID, key and title.
-	te.ok("dep", "add", a.Key, "--blocked-by", b.Key)
-	if out := te.ok("ls", "--format", "{{range .blocked_by}}{{.id}} {{.key}} {{.title}}{{end}}", "sort:title"); out != b.ID+" "+b.Key+" Beta\n\n" {
+	// blocked_by names each task by its ULID, id and title.
+	te.ok("dep", "add", a.ID, "--blocked-by", b.ID)
+	if out := te.ok("ls", "--format", "{{range .blocked_by}}{{.ulid}} {{.id}} {{.title}}{{end}}", "sort:title"); out != b.ULID+" "+b.ID+" Beta\n\n" {
 		t.Errorf("--format over blocked_by = %q", out)
 	}
 }
@@ -67,22 +67,22 @@ func TestLsFormatBroken(t *testing.T) {
 		t.Errorf("ls --tree --format = %q", out)
 	}
 	b := te.addJSON("Beta")
-	te.commitFile(b.ID, "not a task\n")
+	te.commitFile(b.ULID, "not a task\n")
 	if out := te.ok("ls", "--format", "{{if .broken}}BROKEN{{else}}{{.title}}{{end}}", "sort:title"); !strings.Contains(out, "BROKEN\n") || !strings.Contains(out, "Alpha\n") {
 		t.Errorf("ls --format with a broken task = %q", out)
 	}
 }
 
-// A broken task has no readable key, so ls shows ? in the KEY column and
+// A broken task has no readable id, so ls shows ? in the ID column and
 // "? <ULID>" in the tree.
-func TestLsBrokenKey(t *testing.T) {
+func TestLsBrokenID(t *testing.T) {
 	te := newStoreEnv(t)
 	te.addJSON("Alpha")
 	b := te.addJSON("Beta")
-	te.commitFile(b.ID, "not a task\n")
+	te.commitFile(b.ULID, "not a task\n")
 	var found bool
 	for _, line := range strings.Split(te.ok("ls"), "\n") {
-		if strings.Contains(line, b.ID) {
+		if strings.Contains(line, b.ULID) {
 			found = true
 			if f := strings.Fields(line); f[0] != "?" {
 				t.Errorf("ls line of a broken task = %q", line)
@@ -92,8 +92,8 @@ func TestLsBrokenKey(t *testing.T) {
 	if !found {
 		t.Error("ls does not list the broken task")
 	}
-	if out := te.ok("ls", "--tree"); !strings.Contains(out, "? "+b.ID) {
-		t.Errorf("ls --tree has no %q:\n%s", "? "+b.ID, out)
+	if out := te.ok("ls", "--tree"); !strings.Contains(out, "? "+b.ULID) {
+		t.Errorf("ls --tree has no %q:\n%s", "? "+b.ULID, out)
 	}
 }
 
@@ -128,7 +128,8 @@ func TestLsErrors(t *testing.T) {
 		want string
 	}{
 		{[]string{"ls", "nope:x"}, "nope"},
-		{[]string{"ls", "--json", "--ids-only"}, "only one of"},
+		{[]string{"ls", "--json", "--ulids-only"}, "only one of"},
+		{[]string{"ls", "--ids-only"}, "unknown flag: --ids-only"},
 		{[]string{"ls", "--format", "{{"}, "--format"},
 		{[]string{"ls", "--format", "{{.nosuch}}"}, "nosuch"},
 		{[]string{"ls", "--tree", "--format", "{{"}, "--format"},
@@ -146,7 +147,7 @@ func TestLsErrors(t *testing.T) {
 
 func TestUnknownID(t *testing.T) {
 	te := newStoreEnv(t)
-	// An ambiguous input needs two tasks with one key, which only a raw
+	// An ambiguous input needs two tasks with one id, which only a raw
 	// edit makes, so only the not-found case is run here.
 	code, _, stderr := te.run("add", "x", "--parent", "zzzzzzzz")
 	if code != 1 || !strings.Contains(stderr, "not found") {

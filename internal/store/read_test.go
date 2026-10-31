@@ -15,22 +15,22 @@ const (
 	cmt2  = "01JBZ8K3QW7M2X9V4T6R5N8P1B"
 )
 
-func id(t *testing.T, s string) model.ID {
+func mustULID(t *testing.T, s string) model.ULID {
 	t.Helper()
-	v, err := model.ParseID(s)
+	v, err := model.ParseULID(s)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return v
 }
 
-func taskFile(id, title string) string {
-	return "---\nid: " + id + "\nkind: task\ntitle: " + title + "\nstatus: todo\n---\n"
+func taskFile(ulid, title string) string {
+	return "---\nulid: " + ulid + "\nkind: task\ntitle: " + title + "\nstatus: todo\n---\n"
 }
 
 func TestReadTask(t *testing.T) {
 	s := newTestStore(t)
-	a := id(t, taskA)
+	a := mustULID(t, taskA)
 	mustWrite(t, s, model.TaskPath(a), taskFile(taskA, "A"))
 
 	got, err := s.Task(a)
@@ -40,15 +40,15 @@ func TestReadTask(t *testing.T) {
 	if got.Title != "A" {
 		t.Errorf("title = %q", got.Title)
 	}
-	if _, err := s.Task(id(t, taskB)); !errors.Is(err, ErrNotFound) {
+	if _, err := s.Task(mustULID(t, taskB)); !errors.Is(err, ErrNotFound) {
 		t.Errorf("missing task: err = %v, want ErrNotFound", err)
 	}
 }
 
 func TestReadDecodeError(t *testing.T) {
 	s := newTestStore(t)
-	a := id(t, taskA)
-	mustWrite(t, s, model.TaskPath(a), "---\ntitle: no id\n---\n")
+	a := mustULID(t, taskA)
+	mustWrite(t, s, model.TaskPath(a), "---\ntitle: no ulid\n---\n")
 	_, err := s.Task(a)
 	var de *model.DecodeError
 	if !errors.As(err, &de) {
@@ -58,7 +58,7 @@ func TestReadDecodeError(t *testing.T) {
 
 func TestTasksSkipsOtherFiles(t *testing.T) {
 	s := newTestStore(t)
-	a, b := id(t, taskA), id(t, taskB)
+	a, b := mustULID(t, taskA), mustULID(t, taskB)
 	mustWrite(t, s, model.TaskPath(a), taskFile(taskA, "A"))
 	mustWrite(t, s, model.TaskPath(b), taskFile(taskB, "B"))
 	mustWrite(t, s, "tasks/README.md", "not a task")
@@ -78,13 +78,13 @@ func TestTasksSkipsOtherFiles(t *testing.T) {
 }
 
 // Tasks yields a FileError naming the path for a file that does not decode
-// or that holds a task of another id, and no task for it.
+// or that holds a task of another ULID, and no task for it.
 func TestTasksBrokenFiles(t *testing.T) {
 	s := newTestStore(t)
-	a, b := id(t, taskA), id(t, taskB)
+	a, b := mustULID(t, taskA), mustULID(t, taskB)
 	mustWrite(t, s, model.TaskPath(a), taskFile(taskA, "A"))
 	mustWrite(t, s, model.TaskPath(b), taskFile(taskA, "stale copy of A"))
-	c := id(t, cmt1)
+	c := mustULID(t, cmt1)
 	mustWrite(t, s, model.TaskPath(c), "not a task\n")
 
 	var titles []string
@@ -106,7 +106,7 @@ func TestTasksBrokenFiles(t *testing.T) {
 	if !slices.Equal(titles, []string{"A"}) {
 		t.Errorf("titles = %v, want [A]", titles)
 	}
-	if err := bad[model.TaskPath(b)]; !errors.Is(err, ErrIDMismatch) {
+	if err := bad[model.TaskPath(b)]; !errors.Is(err, ErrULIDMismatch) {
 		t.Errorf("stale copy: err = %v, want ErrIDMismatch", err)
 	}
 	if err := bad[model.TaskPath(c)]; !errors.As(err, new(*model.DecodeError)) {
@@ -126,9 +126,9 @@ func TestTasksEmptyStore(t *testing.T) {
 
 func TestComments(t *testing.T) {
 	s := newTestStore(t)
-	a, b := id(t, taskA), id(t, taskB)
-	c1, c2 := id(t, cmt1), id(t, cmt2)
-	comment := func(id string) string { return "---\nid: " + id + "\nauthor: github.com/me\n---\nbody\n" }
+	a, b := mustULID(t, taskA), mustULID(t, taskB)
+	c1, c2 := mustULID(t, cmt1), mustULID(t, cmt2)
+	comment := func(ulid string) string { return "---\nulid: " + ulid + "\nauthor: github.com/me\n---\nbody\n" }
 	mustWrite(t, s, model.CommentPath(a, c1), comment(cmt1))
 	mustWrite(t, s, model.CommentPath(a, c2), comment(cmt2))
 	mustWrite(t, s, model.CommentPath(b, c1), comment(cmt1))
@@ -138,8 +138,8 @@ func TestComments(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if c.ID != c1 && c.ID != c2 {
-			t.Errorf("unexpected comment %s", c.ID)
+		if c.ULID != c1 && c.ULID != c2 {
+			t.Errorf("unexpected comment %s", c.ULID)
 		}
 		n++
 	}
@@ -150,9 +150,9 @@ func TestComments(t *testing.T) {
 
 func TestSprintsReleasesTemplates(t *testing.T) {
 	s := newTestStore(t)
-	a := id(t, taskA)
-	mustWrite(t, s, model.SprintPath(a), "---\nid: "+taskA+"\nname: S1\nstate: planned\n---\n")
-	mustWrite(t, s, model.ReleasePath(a), "---\nid: "+taskA+"\nname: v1\nstate: unreleased\n---\n")
+	a := mustULID(t, taskA)
+	mustWrite(t, s, model.SprintPath(a), "---\nulid: "+taskA+"\nname: S1\nstate: planned\n---\n")
+	mustWrite(t, s, model.ReleasePath(a), "---\nulid: "+taskA+"\nname: v1\nstate: unreleased\n---\n")
 	mustWrite(t, s, model.TemplatePath("bug"), "---\nkind: bug\n---\n## 再現手順\n")
 	mustWrite(t, s, "sprints/notes.txt", "skipped")
 	mustWrite(t, s, "templates/.hidden.md", "skipped")

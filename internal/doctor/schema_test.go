@@ -58,7 +58,7 @@ func TestSchemaEachCheck(t *testing.T) {
 	s = rewriteSchema(t, dir, func(sc *schema.Schema) {
 		sc.Kinds[0].Template = "nope"
 		sc.Props = append(sc.Props, schema.Prop{Name: "label", Type: schema.TypeText})
-		sc.Scoped = []schema.Scoped{{Where: "project:" + model.NewID().String()}}
+		sc.Scoped = []schema.Scoped{{Where: "project:" + model.NewULID().String()}}
 	})
 	fs, err := Schema(s, mustOpen(t, s))
 	if err != nil {
@@ -89,7 +89,7 @@ func TestSchemaScopedTemplates(t *testing.T) {
 	put(t, s, p)
 	s = rewriteSchema(t, dir, func(sc *schema.Schema) {
 		sc.Scoped = []schema.Scoped{{
-			Where:     "project:" + p.ID.String(),
+			Where:     "project:" + p.ULID.String(),
 			Templates: &schema.Templates{Only: []string{"a"}, Default: map[string]string{"task": "b"}},
 		}}
 	})
@@ -117,7 +117,7 @@ func TestSchemaOverrideOfDeletedProject(t *testing.T) {
 	live.Kind = "project"
 	put(t, s, gone, live)
 	s = rewriteSchema(t, dir, func(sc *schema.Schema) {
-		sc.Scoped = []schema.Scoped{{Where: "project:" + gone.ID.String()}, {Where: "project:" + live.ID.String()}}
+		sc.Scoped = []schema.Scoped{{Where: "project:" + gone.ULID.String()}, {Where: "project:" + live.ULID.String()}}
 	})
 	fs, err := Schema(s, mustOpen(t, s))
 	if err != nil {

@@ -41,7 +41,7 @@ type logJSON struct {
 	} `json:"author"`
 	Op      *string `json:"op"`
 	Task    *string `json:"task"`
-	Key     *string `json:"key"` // the current key of the task
+	ID      *string `json:"id"` // the current id of the task
 	Subject string  `json:"subject"`
 }
 
@@ -53,9 +53,9 @@ func toLogJSON(ix *index.Index, e gitrepo.LogEntry) logJSON {
 	}
 	if v, ok := e.Trailer("Hedgehug-Task"); ok {
 		j.Task = &v
-		if id, err := model.ParseID(v); err == nil {
-			if t, ok := ix.Task(id); ok && t.Key != "" {
-				j.Key = &t.Key
+		if ulid, err := model.ParseULID(v); err == nil {
+			if t, ok := ix.Task(ulid); ok && t.ID != "" {
+				j.ID = &t.ID
 			}
 		}
 	}
@@ -71,22 +71,22 @@ func logJSONs(ix *index.Index, entries []gitrepo.LogEntry) []logJSON {
 }
 
 // subjectNow gives the subject of a Hedgehug commit with the task's current
-// key and ULID in place of the label it was written with: the subject is
+// id and ULID in place of the label it was written with: the subject is
 // "hedgehug: <op> <label> <title>". Other subjects, and tasks the index does
 // not have, keep the subject as it is.
 func subjectNow(ix *index.Index, le gitrepo.LogEntry) string {
 	op, ok1 := le.Trailer("Hedgehug-Op")
-	tid, ok2 := le.Trailer("Hedgehug-Task")
+	taskULID, ok2 := le.Trailer("Hedgehug-Task")
 	head := "hedgehug: " + op + " "
 	rest, ok3 := strings.CutPrefix(le.Subject, head)
 	if !ok1 || !ok2 || !ok3 {
 		return le.Subject
 	}
-	id, err := model.ParseID(tid)
+	ulid, err := model.ParseULID(taskULID)
 	if err != nil {
 		return le.Subject
 	}
-	e, ok := ix.Task(id)
+	e, ok := ix.Task(ulid)
 	if !ok {
 		return le.Subject
 	}
@@ -115,7 +115,7 @@ func (a *app) log(args []string, limit int) error {
 		if rerr != nil {
 			return rerr
 		}
-		entries, err = a.taskLog(s, e.ID, limit)
+		entries, err = a.taskLog(s, e.ULID, limit)
 	}
 	if err != nil {
 		return err
@@ -129,10 +129,10 @@ func (a *app) log(args []string, limit int) error {
 
 // taskLog returns the commits that touched the task, its comments or its
 // work logs.
-func (a *app) taskLog(s *store.Store, id model.ID, limit int) ([]gitrepo.LogEntry, error) {
+func (a *app) taskLog(s *store.Store, ulid model.ULID, limit int) ([]gitrepo.LogEntry, error) {
 	return s.Repo().Log([]string{
-		model.TaskPath(id),
-		path.Dir(model.CommentPath(id, model.ID{})) + "/",
-		path.Dir(model.WorklogPath(id, model.ID{})) + "/",
+		model.TaskPath(ulid),
+		path.Dir(model.CommentPath(ulid, model.ULID{})) + "/",
+		path.Dir(model.WorklogPath(ulid, model.ULID{})) + "/",
 	}, limit)
 }

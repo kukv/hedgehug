@@ -45,10 +45,10 @@ func TestNoShortIdentifiers(t *testing.T) {
 	s := "Short"
 	pattern := s + "ID|" + s + "Lengths|min" + s + `|"` + strings.ToLower(s) + `"|\.` + s + `\b`
 	// repo_test.go calls the method of go-git that shortens a reference
-	// name, which is not a short ID.
+	// name, which is not a short ULID.
 	out, err := exec.Command("grep", "-rnE", pattern, "--include=*.go", "--exclude=repo_test.go", "../../cmd", "../../internal", "../../tools").CombinedOutput()
 	// grep exits 1 when nothing matches, and 2 on an error.
 	if ee := (*exec.ExitError)(nil); !errors.As(err, &ee) || ee.ExitCode() != 1 {
-		t.Errorf("short IDs are still in the code, or grep failed: %v\n%s", err, out)
+		t.Errorf("short ULIDs are still in the code, or grep failed: %v\n%s", err, out)
 	}
 }

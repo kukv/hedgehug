@@ -241,7 +241,7 @@ func TestPutMergesRenamedMapKeyByPosition(t *testing.T) {
 }
 
 func TestTaskLinkChangeKeepsOtherLinks(t *testing.T) {
-	src := "---\nid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nlinks:\n- type: github_pr # PR\n  ref: r1\n  sync: \"\"\n  x: keep\n- {type: github_issue, ref: r2, x: keep} # issue\n---\n"
+	src := "---\nulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nlinks:\n- type: github_pr # PR\n  ref: r1\n  sync: \"\"\n  x: keep\n- {type: github_issue, ref: r2, x: keep} # issue\n---\n"
 	task, err := DecodeTask([]byte(src))
 	if err != nil {
 		t.Fatal(err)

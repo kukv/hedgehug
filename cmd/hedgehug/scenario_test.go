@@ -28,8 +28,8 @@ func TestScenario(t *testing.T) {
 	}
 
 	p := te.addJSON("Website", "--kind", "project")
-	c := te.addJSON("Login page", "--parent", p.Key)
-	g := te.addJSON("Form", "--parent", c.Key)
+	c := te.addJSON("Login page", "--parent", p.ID)
+	g := te.addJSON("Form", "--parent", c.ID)
 	o := te.addJSON("Other")
 
 	tree := te.ok("ls", "--tree", "--no-color")
@@ -38,22 +38,22 @@ func TestScenario(t *testing.T) {
 			t.Fatalf("tree lacks %q:\n%s", s, tree)
 		}
 	}
-	step("set", "set", g.Key, "labels+=ui", "due=2026-11-01")
+	step("set", "set", g.ID, "labels+=ui", "due=2026-11-01")
 	// The editor writes its contents in turn: the task for edit, then the
 	// body for comment edit.
-	te.editWith(setLine(te.raw(g.ID), "title", "Form fields"), "second\n")
-	step("edit", "edit", g.Key)
-	step("comment", "comment", g.Key, "first")
-	cm := te.comments(g.ID)
+	te.editWith(setLine(te.raw(g.ULID), "title", "Form fields"), "second\n")
+	step("edit", "edit", g.ID)
+	step("comment", "comment", g.ID, "first")
+	cm := te.comments(g.ULID)
 	if len(cm) != 1 {
 		t.Fatalf("comments = %d, want 1", len(cm))
 	}
-	step("comment", "comment", "edit", cm[0].ID.String())
-	if cs := te.comments(g.ID); len(cs) != 1 || cs[0].Body != "second\n" {
+	step("comment", "comment", "edit", cm[0].ULID.String())
+	if cs := te.comments(g.ULID); len(cs) != 1 || cs[0].Body != "second\n" {
 		t.Fatalf("comments after edit = %+v", cs)
 	}
-	out := te.ok("show", g.Key)
-	for _, w := range []string{"Form fields", cm[0].ID.String(), "second", "\nHistory:\n", "hedgehug: edit "} {
+	out := te.ok("show", g.ID)
+	for _, w := range []string{"Form fields", cm[0].ULID.String(), "second", "\nHistory:\n", "hedgehug: edit "} {
 		if !strings.Contains(out, w) {
 			t.Errorf("show lacks %q:\n%s", w, out)
 		}
@@ -61,30 +61,30 @@ func TestScenario(t *testing.T) {
 	var sj struct {
 		History []logJSON `json:"history"`
 	}
-	if err := json.Unmarshal([]byte(te.ok("show", g.Key, "--json")), &sj); err != nil {
+	if err := json.Unmarshal([]byte(te.ok("show", g.ID, "--json")), &sj); err != nil {
 		t.Fatal(err)
 	}
 	if len(sj.History) == 0 || !slices.ContainsFunc(sj.History, func(l logJSON) bool { return strings.HasPrefix(l.Subject, "hedgehug: edit ") }) {
 		t.Errorf("show --json history = %+v, want the edit commit", sj.History)
 	}
-	step("comment", "comment", "rm", cm[0].ID.String())
-	if out := te.ok("log", g.Key); !strings.Contains(out, "hedgehug: edit ") || !strings.Contains(out, "hedgehug: comment ") || len(strings.Split(strings.TrimRight(out, "\n"), "\n")) < 4 {
+	step("comment", "comment", "rm", cm[0].ULID.String())
+	if out := te.ok("log", g.ID); !strings.Contains(out, "hedgehug: edit ") || !strings.Contains(out, "hedgehug: comment ") || len(strings.Split(strings.TrimRight(out, "\n"), "\n")) < 4 {
 		t.Errorf("log for the task:\n%s", out)
 	}
-	step("status", "status", g.Key, "in_progress")
-	step("status", "done", g.Key)
-	step("mv", "mv", o.Key, "--parent", p.Key, "--before", c.Key)
-	step("dep", "dep", "add", c.Key, "--blocked-by", o.Key)
-	step("dep", "dep", "rm", c.Key, "--blocked-by", o.Key)
+	step("status", "status", g.ID, "in_progress")
+	step("status", "done", g.ID)
+	step("mv", "mv", o.ID, "--parent", p.ID, "--before", c.ID)
+	step("dep", "dep", "add", c.ID, "--blocked-by", o.ID)
+	step("dep", "dep", "rm", c.ID, "--blocked-by", o.ID)
 	step("migrate", "schema", "migrate", "status", "done", "closed")
-	if out := te.ok("ls", "status:closed", "--ids-only"); !strings.Contains(out, g.ID) {
-		t.Errorf("ls status:closed = %q, want %s", out, g.ID)
+	if out := te.ok("ls", "status:closed", "--ulids-only"); !strings.Contains(out, g.ULID) {
+		t.Errorf("ls status:closed = %q, want %s", out, g.ULID)
 	}
-	step("rm", "rm", p.Key)
-	step("restore", "restore", p.Key)
-	step("rm", "rm", p.Key)
-	step("purge", "purge", p.Key, "--yes")
-	if out := te.ok("ls", "is:deleted", "--ids-only"); out != "" {
+	step("rm", "rm", p.ID)
+	step("restore", "restore", p.ID)
+	step("rm", "rm", p.ID)
+	step("purge", "purge", p.ID, "--yes")
+	if out := te.ok("ls", "is:deleted", "--ulids-only"); out != "" {
 		t.Errorf("deleted tasks remain after purge: %q", out)
 	}
 	// The store stays consistent after all of it.

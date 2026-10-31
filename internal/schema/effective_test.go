@@ -7,9 +7,9 @@ import (
 	"github.com/kukv/hedgehug/internal/model"
 )
 
-func id(t *testing.T, s string) model.ID {
+func mustULID(t *testing.T, s string) model.ULID {
 	t.Helper()
-	v, err := model.ParseID(s)
+	v, err := model.ParseULID(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,15 +27,15 @@ func fullSchema(t *testing.T) *Schema {
 
 func TestForPicksNearestScopedAncestor(t *testing.T) {
 	s := fullSchema(t)
-	release := id(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B") // has an override
-	epic := id(t, "01JBZ8K3QW7M2X9V4T6R5N8P0F")    // has none
-	ops := id(t, "01JBZ8K3QW7M2X9V4T6R5N8P0C")     // has an override
+	release := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B") // has an override
+	epic := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0F")    // has none
+	ops := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0C")     // has an override
 
-	e := s.For([]model.ID{epic, release})
+	e := s.For([]model.ULID{epic, release})
 	if e.Required("done") == nil || !slices.Contains(e.Required("done"), "estimate") {
 		t.Errorf("an override two levels up did not apply: %v", e.Required("done"))
 	}
-	if e := s.For([]model.ID{ops, release}); len(e.Statuses()) != 5 {
+	if e := s.For([]model.ULID{ops, release}); len(e.Statuses()) != 5 {
 		t.Errorf("the nearest override must win, statuses = %v", e.Statuses())
 	}
 	if e := s.For(nil); len(e.Statuses()) != 7 {
@@ -46,7 +46,7 @@ func TestForPicksNearestScopedAncestor(t *testing.T) {
 func TestCanTransition(t *testing.T) {
 	s := fullSchema(t)
 	store := s.For(nil)
-	release := s.For([]model.ID{id(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B")})
+	release := s.For([]model.ULID{mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B")})
 	for _, tc := range []struct {
 		e        *Effective
 		from, to string
@@ -68,7 +68,7 @@ func TestCanTransition(t *testing.T) {
 
 func TestRequiredIsUnion(t *testing.T) {
 	s := fullSchema(t)
-	e := s.For([]model.ID{id(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B")})
+	e := s.For([]model.ULID{mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B")})
 	got := e.Required("done")
 	slices.Sort(got)
 	if !slices.Equal(got, []string{"estimate", "points"}) {
@@ -81,7 +81,7 @@ func TestRequiredIsUnion(t *testing.T) {
 
 func TestStatusesKeepStoreOrder(t *testing.T) {
 	s := fullSchema(t)
-	e := s.For([]model.ID{id(t, "01JBZ8K3QW7M2X9V4T6R5N8P0C")})
+	e := s.For([]model.ULID{mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0C")})
 	var names []string
 	for _, st := range e.Statuses() {
 		names = append(names, st.Name)
@@ -93,7 +93,7 @@ func TestStatusesKeepStoreOrder(t *testing.T) {
 
 func TestTemplates(t *testing.T) {
 	s := fullSchema(t)
-	only, def := s.For([]model.ID{id(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B")}).Templates()
+	only, def := s.For([]model.ULID{mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B")}).Templates()
 	if !slices.Equal(only, []string{"release-checklist", "api-change"}) || def["task"] != "release-checklist" {
 		t.Errorf("Templates = %v, %v", only, def)
 	}

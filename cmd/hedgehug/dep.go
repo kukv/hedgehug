@@ -60,26 +60,26 @@ func (a *app) dep(arg, blockerArg string, add bool) error {
 	if err != nil {
 		return err
 	}
-	committed, err := a.update(s, store.Op{Name: "dep", Task: e.ID}, func(tx *store.Tx) error {
-		t, err := tx.Task(e.ID)
+	committed, err := a.update(s, store.Op{Name: "dep", Task: e.ULID}, func(tx *store.Tx) error {
+		t, err := tx.Task(e.ULID)
 		if err != nil {
 			return err
 		}
-		has := slices.Contains(t.BlockedBy, b.ID)
+		has := slices.Contains(t.BlockedBy, b.ULID)
 		switch {
 		case add && has:
-			return fmt.Errorf("%s is already blocked by %s", refName(ix, e.ID), refName(ix, b.ID))
+			return fmt.Errorf("%s is already blocked by %s", refName(ix, e.ULID), refName(ix, b.ULID))
 		case add:
-			t.BlockedBy = append(t.BlockedBy, b.ID)
+			t.BlockedBy = append(t.BlockedBy, b.ULID)
 		case !has:
-			return fmt.Errorf("%s is not blocked by %s", refName(ix, e.ID), refName(ix, b.ID))
+			return fmt.Errorf("%s is not blocked by %s", refName(ix, e.ULID), refName(ix, b.ULID))
 		default:
-			t.BlockedBy = slices.DeleteFunc(t.BlockedBy, func(x model.ID) bool { return x == b.ID })
+			t.BlockedBy = slices.DeleteFunc(t.BlockedBy, func(x model.ULID) bool { return x == b.ULID })
 		}
 		return tx.PutTask(t)
 	})
 	if err != nil {
 		return err
 	}
-	return a.printTask(ix, e.ID, verb(committed, "Updated"))
+	return a.printTask(ix, e.ULID, verb(committed, "Updated"))
 }

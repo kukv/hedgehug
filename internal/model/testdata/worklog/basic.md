@@ -1,5 +1,5 @@
 ---
-id: 01JBZ8K3QW7M2X9V4T6R5N8P0C
+ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0C
 author: github.com/yourname
 date: 2026-10-29
 duration: 1h30m

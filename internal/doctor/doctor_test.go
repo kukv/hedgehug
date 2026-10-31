@@ -11,6 +11,7 @@ import (
 	"github.com/go-git/go-git/v5"
 
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 func writeFile(t *testing.T, dir, rel, content string) {
@@ -48,7 +49,7 @@ func find(t *testing.T, fs []Finding, check, where string) Finding {
 func newComment(t *testing.T) (*model.Comment, string) {
 	t.Helper()
 	now := time.Now().UTC()
-	c := &model.Comment{ID: model.NewID(), Author: "x", Created: now, Updated: now, Body: "hi"}
+	c := &model.Comment{ULID: model.NewULID(), Author: "x", Created: now, Updated: now, Body: "hi"}
 	b, err := c.Encode()
 	if err != nil {
 		t.Fatal(err)
@@ -61,7 +62,7 @@ func TestRunClean(t *testing.T) {
 	task := newTask("A")
 	put(t, s, task)
 	c, body := newComment(t)
-	rel := model.CommentPath(task.ID, c.ID)
+	rel := model.CommentPath(task.ULID, c.ULID)
 	writeFile(t, dir, rel, body)
 	if _, err := s.Repo().Commit(commitOf(rel)); err != nil {
 		t.Fatal(err)
@@ -98,7 +99,7 @@ func TestRunBrokenSchema(t *testing.T) {
 
 func TestRunBrokenStoreMeta(t *testing.T) {
 	_, dir := newStore(t)
-	writeFile(t, dir, model.StoreMetaPath, "id: [\n")
+	writeFile(t, dir, model.StoreMetaPath, "ulid: [\n")
 	fs := run(t, dir)
 	find(t, fs, "file", model.StoreMetaPath)
 	for _, f := range fs {
@@ -112,23 +113,23 @@ func TestRunFiles(t *testing.T) {
 	s, dir := newStore(t)
 	a, b := newTask("A"), newTask("B")
 	put(t, s, a)
-	// b's content at a's path: the ID and the path disagree.
+	// b's content at a's path: the ULID and the path disagree.
 	bb, err := b.Encode()
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, dir, model.TaskPath(a.ID), string(bb))
+	writeFile(t, dir, model.TaskPath(a.ULID), string(bb))
 	writeFile(t, dir, "tasks/zz/zz/nope.md", "x")
-	undecodable := model.TaskPath(model.NewID())
+	undecodable := model.TaskPath(model.NewULID())
 	writeFile(t, dir, undecodable, "not a task")
-	orphan := model.NewID()
+	orphan := model.NewULID()
 	c, cb := newComment(t)
-	writeFile(t, dir, model.CommentPath(orphan, c.ID), cb)
+	writeFile(t, dir, model.CommentPath(orphan, c.ULID), cb)
 	writeFile(t, dir, "templates/.bad.md", "x")
 	writeFile(t, dir, "sprints/nope.md", "x")
 	fs := run(t, dir)
 
-	if f := find(t, fs, "file", model.TaskPath(a.ID)); !strings.Contains(f.Msg, b.ID.String()) {
+	if f := find(t, fs, "file", model.TaskPath(a.ULID)); !strings.Contains(f.Msg, b.ULID.String()) {
 		t.Errorf("mismatch = %+v", f)
 	}
 	if f := find(t, fs, "file", "tasks/zz/zz/nope.md"); !strings.Contains(f.Msg, "name") {
@@ -137,7 +138,7 @@ func TestRunFiles(t *testing.T) {
 	if f := find(t, fs, "file", undecodable); !strings.Contains(f.Msg, "decode") {
 		t.Errorf("decode = %+v", f)
 	}
-	if f := find(t, fs, "file", model.CommentPath(orphan, c.ID)); !strings.Contains(f.Msg, "no task file") {
+	if f := find(t, fs, "file", model.CommentPath(orphan, c.ULID)); !strings.Contains(f.Msg, "no task file") {
 		t.Errorf("orphan = %+v", f)
 	}
 	find(t, fs, "file", "templates/.bad.md")
@@ -198,12 +199,12 @@ func TestRunVerifyFails(t *testing.T) {
 func TestRunIndexProblems(t *testing.T) {
 	s, dir := newStore(t)
 	a := newTask("A")
-	missing := model.NewID()
+	missing := model.NewULID()
 	a.Parent = &missing
-	a.Key = "TST-1"
+	a.ID = "TST-1"
 	putRaw(t, s, dir, a)
 	fs := run(t, dir)
-	if len(fs) != 1 || fs[0].Check != "task" || fs[0].Where != "TST-1 ("+a.ID.String()+") A" || !strings.Contains(fs[0].Msg, "parent") {
+	if len(fs) != 1 || fs[0].Check != "task" || fs[0].Where != "TST-1 ("+a.ULID.String()+") A" || !strings.Contains(fs[0].Msg, "parent") {
 		t.Errorf("findings = %+v", fs)
 	}
 }
@@ -242,10 +243,10 @@ func TestRunBrokenHead(t *testing.T) {
 func TestRunCycleAndBroken(t *testing.T) {
 	s, dir := newStore(t)
 	a, b := newTask("A"), newTask("B")
-	a.Parent, b.Parent = &b.ID, &a.ID
+	a.Parent, b.Parent = &b.ULID, &a.ULID
 	putRaw(t, s, dir, a)
 	putRaw(t, s, dir, b)
-	rel := model.TaskPath(model.NewID())
+	rel := model.TaskPath(model.NewULID())
 	writeFile(t, dir, rel, "not a task")
 	if _, err := s.Repo().Commit(commitOf(rel)); err != nil {
 		t.Fatal(err)
@@ -278,28 +279,55 @@ func TestRunIgnoresLockAndGitignore(t *testing.T) {
 	}
 }
 
-func TestRunWorkspaces(t *testing.T) {
-	s, dir := newStore(t)
-	w := &model.Workspace{ID: model.NewID(), Name: "other", KeyPrefix: "TST"}
+// commitWorkspace writes w into the store and commits it.
+func commitWorkspace(t *testing.T, s *store.Store, dir string, w *model.Workspace) {
+	t.Helper()
 	b, err := w.Encode()
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, dir, model.WorkspacePath(w.ID), string(b))
-	if _, err := s.Repo().Commit(commitOf(model.WorkspacePath(w.ID))); err != nil {
+	writeFile(t, dir, model.WorkspacePath(w.ULID), string(b))
+	if _, err := s.Repo().Commit(commitOf(model.WorkspacePath(w.ULID))); err != nil {
 		t.Fatal(err)
 	}
-	n := 0
+}
+
+// duplicateFindings returns, by where they are, the workspace findings that
+// say what.
+func duplicateFindings(t *testing.T, dir, what string) map[string]Finding {
+	t.Helper()
+	out := map[string]Finding{}
 	for _, f := range run(t, dir) {
-		if f.Check == "workspace" && strings.Contains(f.Msg, "key prefix TST") {
-			n++
+		if f.Check == "workspace" && strings.Contains(f.Msg, what) {
+			out[f.Where] = f
 		}
 	}
-	if n != 1 {
-		t.Errorf("%d workspace findings, want 1", n)
+	return out
+}
+
+func TestRunWorkspaces(t *testing.T) {
+	s, dir := newStore(t)
+	first := firstWorkspace(t, s)
+	w := &model.Workspace{ULID: model.NewULID(), Name: "other", IDPrefix: "TST"}
+	commitWorkspace(t, s, dir, w)
+	got := duplicateFindings(t, dir, "id prefix TST")
+	// Both are reported, each naming the other.
+	if len(got) != 2 || !strings.Contains(got[model.WorkspacePath(first)].Msg, w.ULID.String()) || !strings.Contains(got[model.WorkspacePath(w.ULID)].Msg, first.String()) {
+		t.Errorf("findings = %+v", got)
 	}
 	writeFile(t, dir, "workspaces/nope.md", "x")
 	find(t, run(t, dir), "file", "workspaces/nope.md")
+}
+
+func TestRunWorkspaceNames(t *testing.T) {
+	s, dir := newStore(t)
+	first := firstWorkspace(t, s)
+	w := &model.Workspace{ULID: model.NewULID(), Name: "test", IDPrefix: "OTHER"} // as the first one
+	commitWorkspace(t, s, dir, w)
+	got := duplicateFindings(t, dir, "name test")
+	if len(got) != 2 || !strings.Contains(got[model.WorkspacePath(first)].Msg, w.ULID.String()) || !strings.Contains(got[model.WorkspacePath(w.ULID)].Msg, first.String()) {
+		t.Errorf("findings = %+v", got)
+	}
 }
 
 func TestRunWorkspaceFields(t *testing.T) {
@@ -309,19 +337,19 @@ func TestRunWorkspaceFields(t *testing.T) {
 		w    model.Workspace
 		want string
 	}{
-		{model.Workspace{Name: "a", KeyPrefix: "me", PrefixSet: set}, "key prefix"},
-		{model.Workspace{Name: "B", KeyPrefix: "BB", PrefixSet: set}, "cannot name a workspace"},
-		{model.Workspace{KeyPrefix: "CC", PrefixSet: set}, "name is missing"},
-		{model.Workspace{Name: "d", PrefixSet: set}, "key_prefix is missing"},
-		{model.Workspace{Name: "e", KeyPrefix: "EE"}, "prefix_set is missing"},
+		{model.Workspace{Name: "a", IDPrefix: "me", PrefixSet: set}, "id prefix"},
+		{model.Workspace{Name: "B", IDPrefix: "BB", PrefixSet: set}, "cannot name a workspace"},
+		{model.Workspace{IDPrefix: "CC", PrefixSet: set}, "name is missing"},
+		{model.Workspace{Name: "d", PrefixSet: set}, "id_prefix is missing"},
+		{model.Workspace{Name: "e", IDPrefix: "EE"}, "prefix_set is missing"},
 	} {
-		tc.w.ID = model.NewID()
+		tc.w.ULID = model.NewULID()
 		b, err := tc.w.Encode()
 		if err != nil {
 			t.Fatal(err)
 		}
-		writeFile(t, dir, model.WorkspacePath(tc.w.ID), string(b))
-		if f := find(t, run(t, dir), "file", model.WorkspacePath(tc.w.ID)); !strings.Contains(f.Msg, tc.want) {
+		writeFile(t, dir, model.WorkspacePath(tc.w.ULID), string(b))
+		if f := find(t, run(t, dir), "file", model.WorkspacePath(tc.w.ULID)); !strings.Contains(f.Msg, tc.want) {
 			t.Errorf("finding = %+v, want %q", f, tc.want)
 		}
 	}
@@ -329,12 +357,18 @@ func TestRunWorkspaceFields(t *testing.T) {
 
 func TestRunNumbers(t *testing.T) {
 	s, dir := newStore(t)
-	for _, tt := range []string{"TST: [\n", "t: 3\n", "TST: 0\n"} {
-		writeFile(t, dir, model.NumbersPath, tt)
+	for _, tt := range []struct{ data, want string }{
+		{"TST: [\n", "does not decode: "},
+		{"t: 3\n", "has an invalid entry: t: "},
+		{"TST: 0\n", "has an invalid entry: TST: the number 0 is less than 1"},
+	} {
+		writeFile(t, dir, model.NumbersPath, tt.data)
 		if _, err := s.Repo().Commit(commitOf(model.NumbersPath)); err != nil {
 			t.Fatal(err)
 		}
-		find(t, run(t, dir), "file", model.NumbersPath)
+		if f := find(t, run(t, dir), "file", model.NumbersPath); !strings.HasPrefix(f.Msg, tt.want) {
+			t.Errorf("%q: msg = %q, want it to start with %q", tt.data, f.Msg, tt.want)
+		}
 	}
 	writeFile(t, dir, model.NumbersPath, "TST: 3\n")
 	if _, err := s.Repo().Commit(commitOf(model.NumbersPath)); err != nil {
@@ -347,13 +381,13 @@ func TestRunNumbers(t *testing.T) {
 	}
 }
 
-func TestRunKeyProblems(t *testing.T) {
+func TestRunIDProblems(t *testing.T) {
 	s, dir := newStore(t)
 	a := newTask("A")
-	a.Key = "XX-1"
+	a.ID = "XX-1"
 	putRaw(t, s, dir, a)
 	fs := run(t, dir)
-	if f := find(t, fs, "task", "XX-1 ("+a.ID.String()+") A"); !strings.Contains(f.Msg, "key prefix") {
+	if f := find(t, fs, "task", "XX-1 ("+a.ULID.String()+") A"); !strings.Contains(f.Msg, "id prefix") {
 		t.Errorf("finding = %+v", f)
 	}
 }

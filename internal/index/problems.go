@@ -14,13 +14,13 @@ import (
 const (
 	// CodeBroken is the problem of a task file that does not decode.
 	CodeBroken = "broken"
-	// CodeNoKey is the problem of a task whose key is missing or not a key.
-	CodeNoKey = "no_key"
-	// CodeDuplicateKey is the problem of tasks that share a key.
-	CodeDuplicateKey = "duplicate_key"
-	// CodeKeyPrefix is the problem of a key whose prefix is not the one of
+	// CodeNoID is the problem of a task whose id is missing or not an id.
+	CodeNoID = "no_id"
+	// CodeDuplicateID is the problem of tasks that share an id.
+	CodeDuplicateID = "duplicate_id"
+	// CodeIDPrefix is the problem of an id whose prefix is not the one of
 	// the task's workspace.
-	CodeKeyPrefix = "key_prefix"
+	CodeIDPrefix = "id_prefix"
 )
 
 // Problem is something wrong with a task: what is:invalid finds, and what is
@@ -31,78 +31,77 @@ type Problem struct {
 	Msg   string
 }
 
-// Problems returns what is wrong with the task id.
-func (ix *Index) Problems(id model.ID) []Problem { return slices.Clone(ix.problems[id]) }
+// Problems returns what is wrong with the task ulid.
+func (ix *Index) Problems(ulid model.ULID) []Problem { return slices.Clone(ix.problems[ulid]) }
 
 // findProblems finds what is wrong with each task: a file that does not
 // decode, schema violations, references to tasks not in the store, and
-// cycles of parents or blockers, and keys and workspaces that do not fit.
-func (ix *Index) findProblems() map[model.ID][]Problem {
-	out := map[model.ID][]Problem{}
-	add := func(id model.ID, p Problem) { out[id] = append(out[id], p) }
-	byKey := map[string][]model.ID{}
+// cycles of parents or blockers, and ids and workspaces that do not fit.
+func (ix *Index) findProblems() map[model.ULID][]Problem {
+	out := map[model.ULID][]Problem{}
+	add := func(ulid model.ULID, p Problem) { out[ulid] = append(out[ulid], p) }
+	byID := map[string][]model.ULID{}
 	for _, e := range ix.tasks {
 		if e.Broken != "" {
-			add(e.ID, Problem{CodeBroken, "", e.Broken})
+			add(e.ULID, Problem{CodeBroken, "", e.Broken})
 			continue
 		}
 		for _, v := range e.Violations {
-			add(e.ID, Problem{v.Code, v.Field, v.Msg})
+			add(e.ULID, Problem{v.Code, v.Field, v.Msg})
 		}
 		for _, r := range ix.refs(e) {
-			if ix.tasks[r.id] == nil {
-				add(e.ID, Problem{schema.CodeMissingRef, r.field, fmt.Sprintf("task %s is not in this store", r.id)})
+			if ix.tasks[r.ulid] == nil {
+				add(e.ULID, Problem{schema.CodeMissingRef, r.field, fmt.Sprintf("task %s is not in this store", r.ulid)})
 			}
 		}
-		if _, _, ok := model.ParseKey(e.Key); !ok {
-			add(e.ID, Problem{CodeNoKey, "key", "missing or not a key such as WEB-42; the next write gives one"})
+		prefix, _, idOK := model.ParseTaskID(e.ID)
+		if !idOK {
+			add(e.ULID, Problem{CodeNoID, "id", "missing or not an id such as WEB-42; the next write gives one"})
 		} else {
-			byKey[e.Key] = append(byKey[e.Key], e.ID)
+			byID[e.ID] = append(byID[e.ID], e.ULID)
 		}
 		ws, wsOK := ix.workspaces[e.Workspace]
 		switch {
 		case e.Workspace.IsZero() || !wsOK:
-			add(e.ID, Problem{store.CodeNoWorkspace, "workspace", "missing or not a workspace of this store; set it with hedgehug edit"})
-		case e.Key != "":
-			if p, _, ok := model.ParseKey(e.Key); ok && p != ws.KeyPrefix {
-				add(e.ID, Problem{CodeKeyPrefix, "key", fmt.Sprintf("the key prefix is not the one of workspace %s (%s); the next write renumbers it", ws.Name, ws.KeyPrefix)})
-			}
+			add(e.ULID, Problem{store.CodeNoWorkspace, "workspace", "missing or not a workspace of this store; set it with hedgehug edit"})
+		case idOK && prefix != ws.IDPrefix:
+			add(e.ULID, Problem{CodeIDPrefix, "id", fmt.Sprintf("the id prefix is not the one of workspace %s (%s); the next write renumbers it", ws.Name, ws.IDPrefix)})
 		}
 		if e.Parent != nil {
 			if p := ix.tasks[*e.Parent]; p != nil && p.Broken == "" && p.Workspace != e.Workspace {
-				add(e.ID, Problem{store.CodeWorkspaceMismatch, "workspace", "differs from the workspace of the parent"})
+				add(e.ULID, Problem{store.CodeWorkspaceMismatch, "workspace", "differs from the workspace of the parent"})
 			}
 		}
 	}
-	for key, ids := range byKey {
-		if len(ids) < 2 {
+	for taskID, ulids := range byID {
+		if len(ulids) < 2 {
 			continue
 		}
-		for _, id := range ids {
-			others := slices.DeleteFunc(slices.Clone(ids), func(o model.ID) bool { return o == id })
-			add(id, Problem{CodeDuplicateKey, "key", fmt.Sprintf("key %s is also the key of %s", key, joinIDs(others))})
+		for _, ulid := range ulids {
+			others := slices.DeleteFunc(slices.Clone(ulids), func(o model.ULID) bool { return o == ulid })
+			add(ulid, Problem{CodeDuplicateID, "id", fmt.Sprintf("id %s is also the id of %s", taskID, joinULIDs(others))})
 		}
 	}
-	parents := func(e *Entry) []model.ID {
+	parents := func(e *Entry) []model.ULID {
 		if e.Parent == nil {
 			return nil
 		}
-		return []model.ID{*e.Parent}
+		return []model.ULID{*e.Parent}
 	}
-	for _, id := range ix.cycles(parents) {
-		add(id, Problem{schema.CodeCycle, "parent", "the parents form a cycle"})
+	for _, ulid := range ix.cycles(parents) {
+		add(ulid, Problem{schema.CodeCycle, "parent", "the parents form a cycle"})
 	}
-	for _, id := range ix.cycles(func(e *Entry) []model.ID { return e.BlockedBy }) {
-		add(id, Problem{schema.CodeCycle, "blocked_by", "the blockers form a cycle"})
+	for _, ulid := range ix.cycles(func(e *Entry) []model.ULID { return e.BlockedBy }) {
+		add(ulid, Problem{schema.CodeCycle, "blocked_by", "the blockers form a cycle"})
 	}
 	return out
 }
 
-// joinIDs lists ids in order, separated by commas.
-func joinIDs(ids []model.ID) string {
-	strs := make([]string, len(ids))
-	for i, id := range ids {
-		strs[i] = id.String()
+// joinULIDs lists ulids in order, separated by commas.
+func joinULIDs(ulids []model.ULID) string {
+	strs := make([]string, len(ulids))
+	for i, ulid := range ulids {
+		strs[i] = ulid.String()
 	}
 	slices.Sort(strs)
 	return strings.Join(strs, ", ")
@@ -111,7 +110,7 @@ func joinIDs(ids []model.ID) string {
 // ref is one reference from a task to another.
 type ref struct {
 	field string
-	id    model.ID
+	ulid  model.ULID
 }
 
 // refs returns the references of e: its parent, its blockers and its
@@ -121,13 +120,13 @@ func (ix *Index) refs(e *Entry) []ref {
 	if e.Parent != nil {
 		out = append(out, ref{"parent", *e.Parent})
 	}
-	for _, id := range e.BlockedBy {
-		out = append(out, ref{"blocked_by", id})
+	for _, ulid := range e.BlockedBy {
+		out = append(out, ref{"blocked_by", ulid})
 	}
 	for _, p := range e.Props {
 		if def, ok := ix.sc.Prop(p.Key); ok && def.Type == schema.TypeTaskRef {
-			for _, id := range e.Targets(p.Key) {
-				out = append(out, ref{p.Key, id})
+			for _, ulid := range e.Targets(p.Key) {
+				out = append(out, ref{p.Key, ulid})
 			}
 		}
 	}
@@ -138,40 +137,40 @@ func (ix *Index) refs(e *Entry) []ref {
 // algorithm for strongly connected components: a component of more than
 // one task, or a task that points at itself. Edges to tasks not in the
 // index are ignored.
-func (ix *Index) cycles(next func(*Entry) []model.ID) []model.ID {
-	order := map[model.ID]int{}
-	low := map[model.ID]int{}
-	onStack := map[model.ID]bool{}
-	var stack, out []model.ID
-	var visit func(id model.ID)
-	visit = func(id model.ID) {
+func (ix *Index) cycles(next func(*Entry) []model.ULID) []model.ULID {
+	order := map[model.ULID]int{}
+	low := map[model.ULID]int{}
+	onStack := map[model.ULID]bool{}
+	var stack, out []model.ULID
+	var visit func(ulid model.ULID)
+	visit = func(ulid model.ULID) {
 		n := len(order)
-		order[id], low[id] = n, n
-		stack = append(stack, id)
-		onStack[id] = true
+		order[ulid], low[ulid] = n, n
+		stack = append(stack, ulid)
+		onStack[ulid] = true
 		self := false
-		for _, to := range next(ix.tasks[id]) {
+		for _, to := range next(ix.tasks[ulid]) {
 			switch {
 			case ix.tasks[to] == nil:
-			case to == id:
+			case to == ulid:
 				self = true
 			case !hasKey(order, to):
 				visit(to)
-				low[id] = min(low[id], low[to])
+				low[ulid] = min(low[ulid], low[to])
 			case onStack[to]:
-				low[id] = min(low[id], order[to])
+				low[ulid] = min(low[ulid], order[to])
 			}
 		}
-		if low[id] != order[id] {
+		if low[ulid] != order[ulid] {
 			return
 		}
-		var comp []model.ID
+		var comp []model.ULID
 		for {
 			top := stack[len(stack)-1]
 			stack = stack[:len(stack)-1]
 			onStack[top] = false
 			comp = append(comp, top)
-			if top == id {
+			if top == ulid {
 				break
 			}
 		}
@@ -179,9 +178,9 @@ func (ix *Index) cycles(next func(*Entry) []model.ID) []model.ID {
 			out = append(out, comp...)
 		}
 	}
-	for id := range ix.tasks {
-		if !hasKey(order, id) {
-			visit(id)
+	for ulid := range ix.tasks {
+		if !hasKey(order, ulid) {
+			visit(ulid)
 		}
 	}
 	return out
@@ -192,30 +191,30 @@ func hasKey[K comparable, V any](m map[K]V, k K) bool {
 	return ok
 }
 
-// Reverse returns the tasks that point at id through rel: blocked_by or a
-// task_ref property. For a symmetric property it also returns the tasks id
-// points at. Each task appears once, in ID order.
-func (ix *Index) Reverse(id model.ID, rel string) []*Entry {
-	seen := map[model.ID]bool{}
+// Reverse returns the tasks that point at ulid through rel: blocked_by or a
+// task_ref property. For a symmetric property it also returns the tasks ulid
+// points at. Each task appears once, in ULID order.
+func (ix *Index) Reverse(ulid model.ULID, rel string) []*Entry {
+	seen := map[model.ULID]bool{}
 	var out []*Entry
 	add := func(e *Entry) {
-		if e != nil && !seen[e.ID] {
-			seen[e.ID] = true
+		if e != nil && !seen[e.ULID] {
+			seen[e.ULID] = true
 			out = append(out, e)
 		}
 	}
 	for _, e := range ix.tasks {
-		if slices.Contains(e.Targets(rel), id) {
+		if slices.Contains(e.Targets(rel), ulid) {
 			add(e)
 		}
 	}
 	if p, ok := ix.sc.Prop(rel); ok && p.Symmetric {
-		if self := ix.tasks[id]; self != nil {
+		if self := ix.tasks[ulid]; self != nil {
 			for _, to := range self.Targets(rel) {
 				add(ix.tasks[to])
 			}
 		}
 	}
-	slices.SortFunc(out, func(a, b *Entry) int { return cmp.Compare(a.ID.String(), b.ID.String()) })
+	slices.SortFunc(out, func(a, b *Entry) int { return cmp.Compare(a.ULID.String(), b.ULID.String()) })
 	return out
 }

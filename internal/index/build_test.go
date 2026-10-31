@@ -45,14 +45,14 @@ func TestOpenWritesAndUsesCache(t *testing.T) {
 	ix := mustOpen(t, s)
 
 	c := readCache(t, s)
-	if c.Format != cacheFormat || c.Tree != ix.tree || len(c.Tasks) != 1 || c.Tasks[0].ID != task.ID {
+	if c.Format != cacheFormat || c.Tree != ix.tree || len(c.Tasks) != 1 || c.Tasks[0].ULID != task.ULID {
 		t.Fatalf("cache = %+v", c)
 	}
 	// Open trusts a cache for the same tree: an edited title shows that it
 	// was read instead of the files.
 	c.Tasks[0].Title = "from cache"
 	writeCache(t, s, c)
-	if e, _ := mustOpen(t, s).Task(task.ID); e.Title != "from cache" {
+	if e, _ := mustOpen(t, s).Task(task.ULID); e.Title != "from cache" {
 		t.Errorf("title = %q, want the cached one", e.Title)
 	}
 }
@@ -88,7 +88,7 @@ func TestOpenRebuildsBadCache(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.write()
-			e, ok := mustOpen(t, s).Task(task.ID)
+			e, ok := mustOpen(t, s).Task(task.ULID)
 			if !ok || e.Title != "original" {
 				t.Errorf("entry = %+v, want the title from the files", e)
 			}
@@ -104,28 +104,28 @@ func TestRefreshReadsOnlyChanges(t *testing.T) {
 	kept, edited, purged := newTask("kept"), newTask("edited"), newTask("purged")
 	put(t, s, kept, edited, purged)
 	ix := mustOpen(t, s)
-	keptBefore, _ := ix.Task(kept.ID)
+	keptBefore, _ := ix.Task(kept.ULID)
 
 	added := newTask("added")
 	edited.Title = "edited again"
 	put(t, s, added, edited)
-	if _, err := s.Update(store.Op{Name: "purge", Author: testAuthor}, func(tx *store.Tx) error { return tx.RemoveTask(purged.ID) }); err != nil {
+	if _, err := s.Update(store.Op{Name: "purge", Author: testAuthor}, func(tx *store.Tx) error { return tx.RemoveTask(purged.ULID) }); err != nil {
 		t.Fatal(err)
 	}
 	if err := ix.Refresh(); err != nil {
 		t.Fatal(err)
 	}
 
-	if e, ok := ix.Task(added.ID); !ok || e.Title != "added" {
+	if e, ok := ix.Task(added.ULID); !ok || e.Title != "added" {
 		t.Errorf("added = %+v", e)
 	}
-	if e, _ := ix.Task(edited.ID); e.Title != "edited again" {
+	if e, _ := ix.Task(edited.ULID); e.Title != "edited again" {
 		t.Errorf("edited = %q", e.Title)
 	}
-	if _, ok := ix.Task(purged.ID); ok {
+	if _, ok := ix.Task(purged.ULID); ok {
 		t.Error("purged task still indexed")
 	}
-	if keptAfter, _ := ix.Task(kept.ID); keptAfter != keptBefore {
+	if keptAfter, _ := ix.Task(kept.ULID); keptAfter != keptBefore {
 		t.Error("an unchanged entry was read again")
 	}
 	if c := readCache(t, s); c.Tree != ix.tree || len(c.Tasks) != 3 {
@@ -143,9 +143,9 @@ func TestRefreshRevalidatesOnSchemaChange(t *testing.T) {
 	s, dir := newStore(t)
 	task := newTask("x")
 	put(t, s, task)
-	commitRaw(t, s, dir, model.TaskPath(task.ID), rawTask(task.ID, "key: TST-1\nworkspace: "+firstWorkspace(t, s).String()+"\nkind: task\ntitle: x\nstatus: todo\nprops:\n  priority: high\n"))
+	commitRaw(t, s, dir, model.TaskPath(task.ULID), rawTask(task.ULID, "id: TST-1\nworkspace: "+firstWorkspace(t, s).String()+"\nkind: task\ntitle: x\nstatus: todo\nprops:\n  priority: high\n"))
 	ix := mustOpen(t, s)
-	if e, _ := ix.Task(task.ID); len(e.Violations) != 0 {
+	if e, _ := ix.Task(task.ULID); len(e.Violations) != 0 {
 		t.Fatalf("violations = %v", e.Violations)
 	}
 
@@ -157,7 +157,7 @@ func TestRefreshRevalidatesOnSchemaChange(t *testing.T) {
 	if err := ix.Refresh(); err != nil {
 		t.Fatal(err)
 	}
-	if e, _ := ix.Task(task.ID); len(e.Violations) != 1 || e.Violations[0].Code != schema.CodeBadValue {
+	if e, _ := ix.Task(task.ULID); len(e.Violations) != 1 || e.Violations[0].Code != schema.CodeBadValue {
 		t.Errorf("violations = %v, want a bad_value on priority", e.Violations)
 	}
 }
@@ -166,7 +166,7 @@ func TestRefreshRevalidatesChildren(t *testing.T) {
 	s, _ := newStore(t)
 	parent, child := newTask("parent"), newTask("child")
 	parent.Kind, child.Kind = "epic", "story"
-	child.Parent = &parent.ID
+	child.Parent = &parent.ULID
 	put(t, s, parent, child)
 	ix := mustOpen(t, s)
 
@@ -175,7 +175,7 @@ func TestRefreshRevalidatesChildren(t *testing.T) {
 	if err := ix.Refresh(); err != nil {
 		t.Fatal(err)
 	}
-	if e, _ := ix.Task(child.ID); len(e.Violations) != 1 || e.Violations[0].Code != schema.CodePlacement {
+	if e, _ := ix.Task(child.ULID); len(e.Violations) != 1 || e.Violations[0].Code != schema.CodePlacement {
 		t.Errorf("child violations = %v, want a placement violation", e.Violations)
 	}
 }
@@ -189,19 +189,19 @@ func TestRefreshWithoutChange(t *testing.T) {
 	}
 }
 
-func hasProblem(ix *Index, id model.ID, code string) bool {
-	return slices.ContainsFunc(ix.Problems(id), func(p Problem) bool { return p.Code == code })
+func hasProblem(ix *Index, ulid model.ULID, code string) bool {
+	return slices.ContainsFunc(ix.Problems(ulid), func(p Problem) bool { return p.Code == code })
 }
 
 func TestProblemsIncludeViolationsOnOpen(t *testing.T) {
 	s, dir := newStore(t)
-	id := model.NewID()
-	commitRaw(t, s, dir, model.TaskPath(id), rawTask(id, "kind: nope\ntitle: x\nstatus: todo\n"))
-	if ix := mustOpen(t, s); !hasProblem(ix, id, schema.CodeUnknownKind) {
-		t.Errorf("Problems after a rebuild = %v, want unknown_kind", ix.Problems(id))
+	ulid := model.NewULID()
+	commitRaw(t, s, dir, model.TaskPath(ulid), rawTask(ulid, "kind: nope\ntitle: x\nstatus: todo\n"))
+	if ix := mustOpen(t, s); !hasProblem(ix, ulid, schema.CodeUnknownKind) {
+		t.Errorf("Problems after a rebuild = %v, want unknown_kind", ix.Problems(ulid))
 	}
-	if ix := mustOpen(t, s); !hasProblem(ix, id, schema.CodeUnknownKind) { // from the cache
-		t.Errorf("Problems after a cached Open = %v, want unknown_kind", ix.Problems(id))
+	if ix := mustOpen(t, s); !hasProblem(ix, ulid, schema.CodeUnknownKind) { // from the cache
+		t.Errorf("Problems after a cached Open = %v, want unknown_kind", ix.Problems(ulid))
 	}
 }
 
@@ -209,10 +209,10 @@ func TestProblemsFollowRefresh(t *testing.T) {
 	s, dir := newStore(t)
 	task := newTask("x")
 	put(t, s, task)
-	commitRaw(t, s, dir, model.TaskPath(task.ID), rawTask(task.ID, "key: TST-1\nworkspace: "+firstWorkspace(t, s).String()+"\nkind: task\ntitle: x\nstatus: todo\nprops:\n  priority: high\n"))
+	commitRaw(t, s, dir, model.TaskPath(task.ULID), rawTask(task.ULID, "id: TST-1\nworkspace: "+firstWorkspace(t, s).String()+"\nkind: task\ntitle: x\nstatus: todo\nprops:\n  priority: high\n"))
 	ix := mustOpen(t, s)
-	if len(ix.Problems(task.ID)) != 0 {
-		t.Fatalf("Problems = %v", ix.Problems(task.ID))
+	if len(ix.Problems(task.ULID)) != 0 {
+		t.Fatalf("Problems = %v", ix.Problems(task.ULID))
 	}
 	sc := schema.Default()
 	sc.Props[0].Values = []string{"low", "mid"}
@@ -222,8 +222,8 @@ func TestProblemsFollowRefresh(t *testing.T) {
 	if err := ix.Refresh(); err != nil {
 		t.Fatal(err)
 	}
-	if !hasProblem(ix, task.ID, schema.CodeBadValue) {
-		t.Errorf("Problems after a schema change = %v, want bad_value", ix.Problems(task.ID))
+	if !hasProblem(ix, task.ULID, schema.CodeBadValue) {
+		t.Errorf("Problems after a schema change = %v, want bad_value", ix.Problems(task.ULID))
 	}
 }
 
@@ -231,7 +231,7 @@ func TestProblemsFollowParentKind(t *testing.T) {
 	s, _ := newStore(t)
 	parent, child := newTask("parent"), newTask("child")
 	parent.Kind, child.Kind = "epic", "story"
-	child.Parent = &parent.ID
+	child.Parent = &parent.ULID
 	put(t, s, parent, child)
 	ix := mustOpen(t, s)
 	parent.Kind = "task"
@@ -239,7 +239,7 @@ func TestProblemsFollowParentKind(t *testing.T) {
 	if err := ix.Refresh(); err != nil {
 		t.Fatal(err)
 	}
-	if !hasProblem(ix, child.ID, schema.CodePlacement) {
-		t.Errorf("child Problems = %v, want placement", ix.Problems(child.ID))
+	if !hasProblem(ix, child.ULID, schema.CodePlacement) {
+		t.Errorf("child Problems = %v, want placement", ix.Problems(child.ULID))
 	}
 }

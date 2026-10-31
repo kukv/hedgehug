@@ -104,6 +104,10 @@ func (a *app) open() (*store.Store, *index.Index, error) {
 	return s, ix, nil
 }
 
+// beforeUpdate lets tests write to the store after a command read its index
+// and before it writes, as another process could.
+var beforeUpdate = func() {}
+
 // update runs one operation as one commit, with the author from the
 // environment. committed is false when the operation changed nothing.
 func (a *app) update(s *store.Store, op store.Op, fn func(*store.Tx) error) (bool, error) {
@@ -112,6 +116,7 @@ func (a *app) update(s *store.Store, op store.Op, fn func(*store.Tx) error) (boo
 		return false, err
 	}
 	op.Author = author
+	beforeUpdate()
 	return s.Update(op, fn)
 }
 
@@ -128,7 +133,7 @@ func verb(committed bool, heading string) string {
 type ambiguousError struct {
 	input string
 	noun  string   // what the candidates are, "tasks" when empty
-	lines []string // "<key> (<ULID>) <title>" per candidate
+	lines []string // "<id> (<ULID>) <title>" per candidate
 }
 
 func (e *ambiguousError) Error() string {
@@ -141,7 +146,7 @@ func (e *ambiguousError) Error() string {
 
 // resolve finds the task arg names.
 func (a *app) resolve(ix *index.Index, arg string) (*index.Entry, error) {
-	id, err := ix.Resolve(arg)
+	ulid, err := ix.Resolve(arg)
 	var ae *index.AmbiguousError
 	if errors.As(err, &ae) {
 		lines := make([]string, len(ae.Candidates))
@@ -153,18 +158,18 @@ func (a *app) resolve(ix *index.Index, arg string) (*index.Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	e, _ := ix.Task(id)
+	e, _ := ix.Task(ulid)
 	return e, nil
 }
 
-// resolveID is resolve for applyAssign.
-func (a *app) resolveID(ix *index.Index) func(string) (model.ID, error) {
-	return func(s string) (model.ID, error) {
+// resolveULID is resolve for applyAssign.
+func (a *app) resolveULID(ix *index.Index) func(string) (model.ULID, error) {
+	return func(s string) (model.ULID, error) {
 		e, err := a.resolve(ix, s)
 		if err != nil {
-			return model.ID{}, err
+			return model.ULID{}, err
 		}
-		return e.ID, nil
+		return e.ULID, nil
 	}
 }
 

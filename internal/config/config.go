@@ -6,10 +6,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"go.yaml.in/yaml/v4"
+
+	"github.com/kukv/hedgehug/internal/model"
 )
 
 // ErrNoStores means config.yaml lists no store.
@@ -181,17 +182,9 @@ func (c *Config) Save() error {
 	return err
 }
 
-var storeNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
-
-// ValidStoreName reports whether name can name a store: lower-case letters,
-// digits, - and _, starting with a letter or a digit. The name is also the
-// directory of the store.
-func ValidStoreName(name string) error {
-	if !storeNameRE.MatchString(name) {
-		return fmt.Errorf("%q cannot name a store: use lower-case letters, digits, - and _, starting with a letter or a digit", name)
-	}
-	return nil
-}
+// ValidStoreName reports whether name can name a store, by the rule of
+// model.ValidName. The name is also the directory of the store.
+func ValidStoreName(name string) error { return model.ValidName("store", name) }
 
 func (c *Config) errAt(n *yaml.Node, msg string) error {
 	return fmt.Errorf("%s:%d: %s", c.file, n.Line, msg)

@@ -178,7 +178,7 @@ func checkScalar(p Prop, n *yaml.Node) error {
 			err = fmt.Errorf("%q is not <host>/<login>", v)
 		}
 	case TypeTaskRef:
-		_, err = model.ParseID(v)
+		_, err = model.ParseULID(v)
 	case TypeURL:
 		u, perr := url.Parse(v)
 		if perr != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {

@@ -37,7 +37,7 @@ func (a *app) storeInitCmd() *cobra.Command {
 		Args:  exactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			if prefix == "" {
-				return usageErrorf("--prefix is required: the key prefix of the first workspace, such as WEB")
+				return usageErrorf("--prefix is required: the id prefix of the first workspace, such as WEB")
 			}
 			var sc *schema.Schema
 			switch template {
@@ -50,7 +50,7 @@ func (a *app) storeInitCmd() *cobra.Command {
 			return a.storeInit(args[0], prefix, wsName, sc)
 		},
 	}
-	cmd.Flags().StringVar(&prefix, "prefix", "", "the key prefix of the first workspace, such as WEB")
+	cmd.Flags().StringVar(&prefix, "prefix", "", "the id prefix of the first workspace, such as WEB")
 	cmd.Flags().StringVar(&wsName, "workspace", "", "the name of the first workspace (default: the store's name)")
 	cmd.Flags().StringVar(&template, "template", "", "start from a template: dev adds a review status")
 	return cmd
@@ -60,7 +60,7 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema) error {
 	if err := config.ValidStoreName(name); err != nil {
 		return usageError{err}
 	}
-	if err := model.ValidKeyPrefix(prefix); err != nil {
+	if err := model.ValidIDPrefix(prefix); err != nil {
 		return usageError{err}
 	}
 	if wsName == "" {
@@ -86,8 +86,8 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema) error {
 		return err
 	}
 	dir := filepath.Join(p.StoresDir, name)
-	ws := &model.Workspace{ID: model.NewID(), Name: wsName, KeyPrefix: prefix}
-	if _, err := store.Create(dir, &model.StoreMeta{ID: model.NewID(), Name: name}, sc, ws, author); err != nil {
+	ws := &model.Workspace{ULID: model.NewULID(), Name: wsName, IDPrefix: prefix}
+	if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, sc, ws, author); err != nil {
 		return err
 	}
 	if err := c.AddStore(name, dir); err != nil {
@@ -98,16 +98,16 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema) error {
 	}
 	if a.jsonOut {
 		type wsJSON struct {
-			ID        string `json:"id"`
-			Name      string `json:"name"`
-			KeyPrefix string `json:"key_prefix"`
+			ULID     string `json:"ulid"`
+			Name     string `json:"name"`
+			IDPrefix string `json:"id_prefix"`
 		}
 		return a.printJSON(struct {
 			Name      string `json:"name"`
 			Path      string `json:"path"`
 			Workspace wsJSON `json:"workspace"`
-		}{name, dir, wsJSON{ws.ID.String(), ws.Name, ws.KeyPrefix}})
+		}{name, dir, wsJSON{ws.ULID.String(), ws.Name, ws.IDPrefix}})
 	}
-	_, err = fmt.Fprintf(a.stdout, "Created store %s at %s with workspace %s (%s)\n", name, dir, ws.Name, ws.KeyPrefix)
+	_, err = fmt.Fprintf(a.stdout, "Created store %s at %s with workspace %s (%s)\n", name, dir, ws.Name, ws.IDPrefix)
 	return err
 }
