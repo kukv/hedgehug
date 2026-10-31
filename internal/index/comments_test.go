@@ -2,12 +2,15 @@ package index
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -125,6 +128,69 @@ func TestMentionsFollowTheirFiles(t *testing.T) {
 	putComment(t, s, a.ULID, c)
 	if got := mentions(); !slices.Equal(got, []string{"dave"}) {
 		t.Errorf("after the comment was deleted: Mentions = %v, want [dave]", got)
+	}
+	if got := rebuilt(t, s); !reflect.DeepEqual(sortedTasks(got), sortedTasks(ix)) {
+		t.Errorf("a rebuild = %s, want %s", dump(sortedTasks(got)), dump(sortedTasks(ix)))
+	}
+}
+
+// An update lists and reads the comments and worklog entries of the tasks
+// it touches only, under their own directories.
+func TestUpdateReadsOnlyTheNotesOfTheTouchedTask(t *testing.T) {
+	s, _ := newStore(t)
+	a, b := newTask("a"), newTask("b")
+	put(t, s, a, b)
+	putComment(t, s, b.ULID, newComment("github.com/x", "@bob\n"))
+	ix := mustOpen(t, s)
+	putComment(t, s, a.ULID, newComment("github.com/x", "@alice\n"))
+
+	var listed, read []string
+	listHook = func(prefix string) { listed = append(listed, prefix) }
+	readHook = func(p string) error { read = append(read, p); return nil }
+	t.Cleanup(func() { listHook, readHook = nil, nil })
+	if err := ix.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	listHook, readHook = nil, nil
+	if want := noteDirs(a.ULID); !slices.Equal(listed, want) {
+		t.Errorf("listed %v, want %v", listed, want)
+	}
+	for _, p := range read {
+		if task, _, err := model.ParseCommentPath(p); err == nil && task != a.ULID || p == model.TaskPath(b.ULID) {
+			t.Errorf("read %s, of a task the update did not touch", p)
+		}
+	}
+	if e, _ := ix.Task(a.ULID); !slices.Equal(e.Mentions, []string{"alice"}) || len(e.Comments) != 1 {
+		t.Errorf("a = %s", dump([]*Entry{e}))
+	}
+	if e, _ := ix.Task(b.ULID); !slices.Equal(e.Mentions, []string{"bob"}) || len(e.Comments) != 1 {
+		t.Errorf("b = %s", dump([]*Entry{e}))
+	}
+}
+
+// A comment file removed from the tree, as by hand, leaves the entry in an
+// update as in a rebuild.
+func TestRemovedCommentFile(t *testing.T) {
+	s, dir := newStore(t)
+	a := newTask("a")
+	put(t, s, a)
+	kept, removed := newComment("github.com/x", "@alice\n"), newComment("github.com/x", "@bob #TST-9\n")
+	putComment(t, s, a.ULID, kept, removed)
+	ix := mustOpen(t, s)
+
+	rel := model.CommentPath(a.ULID, removed.ULID)
+	if err := os.Remove(filepath.Join(dir, filepath.FromSlash(rel))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: testAuthor, When: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ix.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	e, _ := ix.Task(a.ULID)
+	if !slices.Equal(commentULIDs(e.Comments), []model.ULID{kept.ULID}) || !slices.Equal(e.Mentions, []string{"alice"}) || len(e.Refs) != 0 {
+		t.Errorf("after the removal: a = %s", dump([]*Entry{e}))
 	}
 	if got := rebuilt(t, s); !reflect.DeepEqual(sortedTasks(got), sortedTasks(ix)) {
 		t.Errorf("a rebuild = %s, want %s", dump(sortedTasks(got)), dump(sortedTasks(ix)))

@@ -29,11 +29,13 @@ func TestMentionNames(t *testing.T) {
 		{"alice", "github.com/alice", true},
 		{"Alice", "github.com/ALICE", true},
 		{"alice", "gitlab.com/alice", true},
-		{"alice", "alice", true},
+		{"alice", "ALICE", true},
 		{"alice", "github.com/malice", false},
 		{"github.com/alice", "github.com/Alice", true},
 		{"github.com/alice", "gitlab.com/alice", false},
-		{"github.com/alice", "alice", false},
+		{"github.com/alice", "alice", true},
+		{"github.com/ALICE", "Alice", true},
+		{"github.com/malice", "alice", false},
 	} {
 		if got := MentionNames(c.mention, c.account); got != c.want {
 			t.Errorf("MentionNames(%q, %q) = %v, want %v", c.mention, c.account, got, c.want)

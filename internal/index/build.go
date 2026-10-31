@@ -20,6 +20,10 @@ import (
 // returns fails the read. Tests set it.
 var readHook func(p string) error
 
+// listHook, when set, is called with each prefix whose comment and worklog
+// files are listed. Tests set it.
+var listHook func(prefix string)
+
 // read reads the file p of tree.
 func (ix *Index) read(tree plumbing.Hash, p string) ([]byte, error) {
 	if readHook != nil {
@@ -66,7 +70,7 @@ func (ix *Index) rebuild(tree plumbing.Hash) error {
 		}
 		tasks[ulid], decoded[ulid] = newEntry(ulid, b)
 	}
-	n, err := ix.readNotes(tree, func(ulid model.ULID) bool { return tasks[ulid] != nil })
+	n, err := ix.readNotes(tree, []string{"comments/", "worklogs/"}, func(ulid model.ULID) bool { return tasks[ulid] != nil })
 	if err != nil {
 		return err
 	}
@@ -264,15 +268,19 @@ func (ix *Index) update(from, to plumbing.Hash) error {
 		ix.tasks[ulid], decoded[ulid] = newEntry(ulid, b)
 		reread = append(reread, ulid)
 	}
-	if len(noted) > 0 {
-		n, err := ix.readNotes(to, func(ulid model.ULID) bool { _, ok := noted[ulid]; return ok })
-		if err != nil {
-			return err
+	var dirs []string
+	for ulid := range noted {
+		if ix.tasks[ulid] != nil {
+			dirs = append(dirs, noteDirs(ulid)...)
 		}
-		for ulid := range noted {
-			if e := ix.tasks[ulid]; e != nil {
-				n.attach(e)
-			}
+	}
+	n, err := ix.readNotes(to, dirs, func(ulid model.ULID) bool { return ix.tasks[ulid] != nil })
+	if err != nil {
+		return err
+	}
+	for ulid := range noted {
+		if e := ix.tasks[ulid]; e != nil {
+			n.attach(e)
 		}
 	}
 	ix.derive()

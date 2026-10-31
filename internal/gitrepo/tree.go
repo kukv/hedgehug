@@ -101,14 +101,28 @@ func (r *Repo) ReadFile(tree plumbing.Hash, path string) ([]byte, error) {
 	return b, err
 }
 
-// Files returns the paths of the files under prefix in tree. The order is
-// not fixed.
+// Files returns the paths of the files under prefix in tree. It walks only
+// the directory prefix names up to its last slash, not the whole tree. The
+// order is not fixed.
 func (r *Repo) Files(tree plumbing.Hash, prefix string) iter.Seq2[string, error] {
 	return func(yield func(string, error) bool) {
 		t, err := r.tree(tree)
 		if err != nil {
 			yield("", err)
 			return
+		}
+		dir := ""
+		if i := strings.LastIndex(prefix, "/"); i >= 0 {
+			dir = prefix[:i]
+			t, err = t.Tree(dir)
+			if errors.Is(err, object.ErrDirectoryNotFound) {
+				return
+			}
+			if err != nil {
+				yield("", err)
+				return
+			}
+			dir += "/"
 		}
 		w := object.NewTreeWalker(t, true, nil)
 		defer w.Close()
@@ -121,7 +135,7 @@ func (r *Repo) Files(tree plumbing.Hash, prefix string) iter.Seq2[string, error]
 				yield("", err)
 				return
 			}
-			if !e.Mode.IsFile() || !strings.HasPrefix(name, prefix) {
+			if name = dir + name; !e.Mode.IsFile() || !strings.HasPrefix(name, prefix) {
 				continue
 			}
 			if !yield(name, nil) {

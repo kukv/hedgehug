@@ -142,6 +142,8 @@ func TestRunMentionsWatchingOverwritten(t *testing.T) {
 		{"mentions:@me", alice, []string{"body", "comment"}},
 		{"mentions:GitHub.com/alice", Options{}, []string{"body", "comment"}},
 		{"mentions:gitlab.com/alice", Options{}, []string{"body", "other"}},
+		// A login with no host names that login on any host.
+		{"mentions:ALICE", Options{}, []string{"body", "comment", "other"}},
 		{"mentions:none", Options{}, []string{"gone", "watched", "over"}},
 		{"-mentions:@me", alice, []string{"gone", "other", "watched", "over"}},
 		{"watching:github.com/b", Options{}, []string{"watched"}},

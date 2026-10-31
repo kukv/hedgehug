@@ -91,9 +91,13 @@ func isAlnum(c byte) bool {
 }
 
 // MentionNames reports whether the mention m, as written, names the account
-// a: @login any account with that login, @host/login that account. Case
-// does not count.
+// a: @login any account with that login, @host/login that account. A bare
+// login a, as a query may give, is named by a mention of that login on any
+// host. Case does not count.
 func MentionNames(m, a string) bool {
+	if !strings.Contains(a, "/") {
+		return strings.EqualFold(m[strings.LastIndex(m, "/")+1:], a)
+	}
 	if strings.Contains(m, "/") {
 		return strings.EqualFold(m, a)
 	}

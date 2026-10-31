@@ -232,6 +232,7 @@ func (c *compiler) watching(t Term) (pred, error) {
 
 // mentions matches the mentions of the body and of the comments that are
 // not deleted, as the inbox does: @login names any account with that login.
+// A value with no host matches that login on any host.
 func (c *compiler) mentions(t Term) (pred, error) {
 	t, err := c.me(t)
 	if err != nil {

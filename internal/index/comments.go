@@ -1,6 +1,7 @@
 package index
 
 import (
+	"path"
 	"slices"
 	"strings"
 	"time"
@@ -47,19 +48,41 @@ type notes struct {
 	worklogs map[model.ULID][]*model.Worklog
 }
 
-// readNotes reads the comment and worklog files in tree of the tasks want
-// takes. A file that does not decode, or whose ULID is not the one of its
-// path, is left out.
-func (ix *Index) readNotes(tree plumbing.Hash, want func(model.ULID) bool) (notes, error) {
+// noteDirs returns the directories of the comment and the worklog files of
+// task, as prefixes.
+func noteDirs(task model.ULID) []string {
+	return []string{
+		path.Dir(model.CommentPath(task, model.ULID{})) + "/",
+		path.Dir(model.WorklogPath(task, model.ULID{})) + "/",
+	}
+}
+
+// readNotes reads the comment and worklog files under prefixes in tree of
+// the tasks want takes. A file that does not decode, or whose ULID is not
+// the one of its path, is left out.
+func (ix *Index) readNotes(tree plumbing.Hash, prefixes []string, want func(model.ULID) bool) (notes, error) {
 	n := notes{comments: map[model.ULID][]*model.Comment{}, worklogs: map[model.ULID][]*model.Worklog{}}
-	for p, err := range ix.repo.Files(tree, "") {
-		if err != nil {
+	for _, prefix := range prefixes {
+		if err := ix.readNotesUnder(tree, prefix, want, n); err != nil {
 			return n, err
+		}
+	}
+	return n, nil
+}
+
+// readNotesUnder reads into n the files under one prefix, as readNotes does.
+func (ix *Index) readNotesUnder(tree plumbing.Hash, prefix string, want func(model.ULID) bool, n notes) error {
+	if listHook != nil {
+		listHook(prefix)
+	}
+	for p, err := range ix.repo.Files(tree, prefix) {
+		if err != nil {
+			return err
 		}
 		if task, ulid, err := model.ParseCommentPath(p); err == nil && want(task) {
 			b, err := ix.read(tree, p)
 			if err != nil {
-				return n, err
+				return err
 			}
 			if c, err := model.DecodeComment(b); err == nil && c.ULID == ulid {
 				n.comments[task] = append(n.comments[task], c)
@@ -67,14 +90,14 @@ func (ix *Index) readNotes(tree plumbing.Hash, want func(model.ULID) bool) (note
 		} else if task, ulid, err := model.ParseWorklogPath(p); err == nil && want(task) {
 			b, err := ix.read(tree, p)
 			if err != nil {
-				return n, err
+				return err
 			}
 			if w, err := model.DecodeWorklog(b); err == nil && w.ULID == ulid {
 				n.worklogs[task] = append(n.worklogs[task], w)
 			}
 		}
 	}
-	return n, nil
+	return nil
 }
 
 // noteTask returns the task of the comment or worklog file at p.

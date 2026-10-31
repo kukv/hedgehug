@@ -137,4 +137,26 @@ func TestReadFileAndFiles(t *testing.T) {
 	if want := []string{"tasks/b.md", "tasks/x/y/a.md"}; !slices.Equal(got, want) {
 		t.Errorf("Files = %v, want %v", got, want)
 	}
+	for _, c := range []struct {
+		prefix string
+		want   []string
+	}{
+		{"tasks/x/", []string{"tasks/x/y/a.md"}},
+		{"tasks/x/y/a", []string{"tasks/x/y/a.md"}},
+		{"tasks/b", []string{"tasks/b.md"}},
+		{"o", []string{"other.md"}},
+		{"tasks/nope/", nil},
+		{"other.md/", nil}, // a file is no directory
+	} {
+		var got []string
+		for p, err := range r.Files(head, c.prefix) {
+			if err != nil {
+				t.Fatal(err)
+			}
+			got = append(got, p)
+		}
+		if !slices.Equal(got, c.want) {
+			t.Errorf("Files(%q) = %v, want %v", c.prefix, got, c.want)
+		}
+	}
 }

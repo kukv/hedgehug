@@ -201,6 +201,7 @@ func TestFailedUpdateThenOpenEqualsARebuild(t *testing.T) {
 		}
 		return nil
 	}
+	t.Cleanup(func() { readHook = nil })
 	err := ix.Refresh()
 	readHook = nil
 	if err == nil {
