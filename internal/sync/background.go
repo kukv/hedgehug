@@ -2,11 +2,11 @@ package sync
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/atomicfile"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -17,8 +17,8 @@ const (
 	// logName is where the stderr of the background sync goes, in
 	// .hedgehug/local.
 	logName = "sync.log"
-	// logMax is the size of sync.log above which a new child keeps only its
-	// last half.
+	// logMax is the size of sync.log above which it keeps only its last
+	// half, when a child starts and after each write the child makes.
 	logMax = 1 << 20
 )
 
@@ -63,7 +63,11 @@ func Start(s *store.Store, name string, getenv func(string) string) error {
 	if err != nil {
 		return err
 	}
-	return spawn(exe, []string{"sync", "--background", "--store", name}, filepath.Join(s.Dir(), ".hedgehug", "local", logName))
+	return spawn(exe, []string{"sync", "--background", "--store", name}, logPath(s))
+}
+
+func logPath(s *store.Store) string {
+	return filepath.Join(s.Dir(), ".hedgehug", "local", logName)
 }
 
 // spawn starts the process detached from this one; tests replace it.
@@ -145,6 +149,29 @@ func openLog(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // G304: the path is built from the store root
 }
 
+// BoundLog returns w, which is the stderr of the child that Start started,
+// as a writer that keeps sync.log within logMax while the child runs.
+func BoundLog(s *store.Store, w io.Writer) io.Writer {
+	return &boundedLog{w: w, path: logPath(s)}
+}
+
+// boundedLog trims the log after each write that makes it larger than
+// logMax. w appends to the file at path.
+type boundedLog struct {
+	w    io.Writer
+	path string
+}
+
+func (b *boundedLog) Write(p []byte) (int, error) {
+	n, err := b.w.Write(p)
+	if terr := trimLog(b.path); err == nil {
+		err = terr
+	}
+	return n, err
+}
+
+// trimLog keeps the last half of a log over logMax. It rewrites the file in
+// place, so that a child that has it open for appending goes on writing to it.
 func trimLog(path string) error {
 	fi, err := os.Stat(path)
 	if errors.Is(err, os.ErrNotExist) || (err == nil && fi.Size() <= logMax) {
@@ -157,5 +184,5 @@ func trimLog(path string) error {
 	if err != nil {
 		return err
 	}
-	return atomicfile.WriteFile(path, b[len(b)/2:])
+	return os.WriteFile(path, b[len(b)/2:], 0o600) //nolint:gosec // G703: the path is built from the store root
 }

@@ -96,6 +96,7 @@ func (a *app) syncBackground() error {
 	if err != nil {
 		return a.backgroundFailed(e.Name, err)
 	}
+	a.stderr = sync.BoundLog(s, a.stderr)
 	opt, err := a.syncOptions(c, e)
 	if err == nil {
 		err = sync.Background(s, opt, c.Sync.PushInterval, func() error {

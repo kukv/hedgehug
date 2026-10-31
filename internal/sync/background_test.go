@@ -218,3 +218,32 @@ func TestOpenLogKeepsTheLastHalfOfABigLog(t *testing.T) {
 		t.Errorf("small log = %q", b)
 	}
 }
+
+func TestBoundLogKeepsTheLogWithinLogMax(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "local", "sync.log")
+	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) // as the child has it from openLog
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	w := &boundedLog{w: f, path: p}
+	line := strings.Repeat("x", 99) + "\n"
+	for range 3 * logMax / len(line) {
+		if _, err := w.Write([]byte(line)); err != nil {
+			t.Fatal(err)
+		}
+		if fi, err := os.Stat(p); err != nil || fi.Size() > logMax {
+			t.Fatalf("log is over logMax: %v, %v", fi, err)
+		}
+	}
+	if _, err := w.Write([]byte("last\n")); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p)
+	if len(b) > logMax || !strings.HasSuffix(string(b), line+"last\n") {
+		t.Errorf("log is %d bytes, ends %q", len(b), b[len(b)-20:])
+	}
+}
