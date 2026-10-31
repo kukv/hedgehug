@@ -209,6 +209,11 @@ func checkCloneTarget(dir string) (created string, err error) {
 		created = dir
 		for p := filepath.Dir(created); p != created; p = filepath.Dir(created) {
 			if _, err := os.Lstat(p); !errors.Is(err, fs.ErrNotExist) {
+				// Windows says "not found" for a path below a file, where Unix says
+				// "not a directory"; either way the clone could not make dir.
+				if pi, err := os.Stat(p); err == nil && !pi.IsDir() {
+					return "", fmt.Errorf("%s: %s is not a directory", dir, p)
+				}
 				break
 			}
 			created = p
