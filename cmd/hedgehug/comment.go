@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -9,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -39,34 +37,6 @@ func (a *app) commentCmd() *cobra.Command {
 	return cmd
 }
 
-// commentIndex lists the comments of a store, deleted ones included, to
-// resolve their ULIDs.
-type commentIndex struct {
-	refs []store.CommentRef
-}
-
-func loadComments(s *store.Store) (*commentIndex, error) {
-	refs, err := s.CommentULIDs()
-	if err != nil {
-		return nil, err
-	}
-	return &commentIndex{refs: refs}, nil
-}
-
-// Resolve finds the comment arg names: a full ULID, in any case.
-func (ci *commentIndex) Resolve(arg string) (store.CommentRef, error) {
-	if len(arg) != 26 {
-		return store.CommentRef{}, fmt.Errorf("comment %q: give the full ULID of the comment: %w", arg, store.ErrNotFound)
-	}
-	u := strings.ToUpper(arg)
-	for _, r := range ci.refs {
-		if r.Comment.String() == u {
-			return r, nil
-		}
-	}
-	return store.CommentRef{}, fmt.Errorf("comment %q: %w", arg, store.ErrNotFound)
-}
-
 // commentOut is a comment as --json prints it.
 type commentOut struct {
 	ULID      string     `json:"ulid"`
@@ -78,100 +48,34 @@ type commentOut struct {
 	Body      string     `json:"body"`
 }
 
-var errCommentChanged = errors.New("the comment changed while editing")
-
-// openComment opens the store and resolves arg to a comment that is read
-// from its file.
-func (a *app) openComment(arg string) (*store.Store, store.CommentRef, *model.Comment, error) {
-	s, _, err := a.ss.Open()
-	if err != nil {
-		return nil, store.CommentRef{}, nil, err
-	}
-	ci, err := loadComments(s)
-	if err != nil {
-		return nil, store.CommentRef{}, nil, err
-	}
-	ref, err := ci.Resolve(arg)
-	if err != nil {
-		return nil, ref, nil, err
-	}
-	c, err := findComment(s, ref)
-	return s, ref, c, err
-}
-
-func findComment(s *store.Store, ref store.CommentRef) (*model.Comment, error) {
-	for c, err := range s.Comments(ref.Task) {
-		if err != nil {
-			return nil, err
-		}
-		if c.ULID == ref.Comment {
-			return c, nil
-		}
-	}
-	return nil, fmt.Errorf("comment %s: %w", ref.Comment, store.ErrNotFound)
-}
-
-// commentBody trims the end of a comment body and ends it with a newline.
-// It is "" for a body of white space only.
-func commentBody(b string) string {
-	b = strings.TrimRight(b, " \t\r\n")
-	if strings.TrimSpace(b) == "" {
-		return ""
-	}
-	return b + "\n"
-}
-
-var errEmptyComment = errors.New("the comment is empty")
-
 func (a *app) commentAdd(arg string, text []string) error {
-	s, ix, err := a.ss.Open()
-	if err != nil {
-		return err
-	}
-	e, err := a.ss.Resolve(ix, arg)
-	if err != nil {
-		return err
-	}
-	if err := ops.NotDeleted(ix, e); err != nil {
-		return err
-	}
 	var body, path string // path is the file of the editor, if any
 	if len(text) > 0 {
-		body = commentBody(strings.Join(text, " "))
+		body = strings.Join(text, " ")
 	} else {
+		// The task is checked before the editor opens.
+		_, ix, err := a.ss.Open()
+		if err != nil {
+			return err
+		}
+		e, err := a.ss.Resolve(ix, arg)
+		if err != nil {
+			return err
+		}
+		if err := ops.NotDeleted(ix, e); err != nil {
+			return err
+		}
 		var edited []byte
 		if path, edited, err = a.editFile(ops.TaskFileName(e), nil); err != nil {
 			return err
 		}
-		if body = commentBody(string(edited)); body == "" {
+		if body = ops.CommentBody(string(edited)); body == "" {
 			_ = os.Remove(path)
 		}
 	}
-	if body == "" {
-		return errEmptyComment
-	}
-	c := &model.Comment{ULID: model.NewULID(), Body: body}
-	if c.Author, err = a.ss.AccountID(); err != nil {
-		return err
-	}
-	host, err := a.ss.WriterHost()
+	r, err := a.ss.CommentAdd(arg, body)
 	if err != nil {
-		return err
-	}
-	accts := ops.NewMentions("", c.Body, host)
-	if c.Author != "" {
-		accts = append([]string{c.Author}, accts...)
-	}
-	if _, err := a.ss.Update(s, store.Op{Name: "comment", Task: e.ULID}, func(tx *store.Tx) error {
-		if err := tx.PutComment(e.ULID, c); err != nil {
-			return err
-		}
-		if e.Broken != "" {
-			return nil
-		}
-		return ops.WatchInTx(tx, e.ULID, accts...)
-	}); err != nil {
-		if path != "" {
+		if path != "" && ops.CommentBody(body) != "" {
 			return fmt.Errorf("%s; the comment is kept at %s", describe(err), path)
 		}
 		return err
@@ -181,97 +85,48 @@ func (a *app) commentAdd(arg string, text []string) error {
 			return err
 		}
 	}
-	return a.printComment(s, store.CommentRef{Task: e.ULID, Comment: c.ULID}, "Added")
+	return a.printComment(r.Store, r.Ref, "Added")
 }
 
 func (a *app) commentEdit(arg string) error {
-	s, ref, c, err := a.openComment(arg)
+	s, ref, c, err := a.ss.OpenComment(arg)
 	if err != nil {
 		return err
 	}
-	commentULID := ref.Comment.String()
-	if c.DeletedAt != nil {
-		return fmt.Errorf("comment %s is deleted and cannot be edited", commentULID)
+	if err := ops.CheckCommentEditable(ref, c); err != nil {
+		return err
 	}
+	commentULID := ref.Comment.String()
 	path, edited, err := a.editFile("comment-"+commentULID, []byte(c.Body))
 	if err != nil {
 		return err
 	}
-	body := commentBody(string(edited))
+	body := ops.CommentBody(string(edited))
+	r, err := a.ss.CommentEditFrom(s, ref, c, body)
 	if body == "" || body == c.Body {
-		if err := os.Remove(path); err != nil {
-			return err
+		if rerr := os.Remove(path); rerr != nil {
+			return rerr
 		}
-		if body == "" {
-			return fmt.Errorf("the comment is empty; delete it with hedgehug comment rm %s", commentULID)
-		}
-		return a.printComment(s, ref, verb(false, ""))
-	}
-	host, err := a.ss.WriterHost()
-	if err != nil {
-		return err
-	}
-	mentioned := ops.NewMentions(c.Body, body, host)
-	if len(mentioned) > 0 {
-		// A broken task has no watchers to add to.
-		_, ix, err := a.ss.Open()
 		if err != nil {
 			return err
 		}
-		if e, ok := ix.Task(ref.Task); ok && e.Broken != "" {
-			mentioned = nil
-		}
+		return a.printComment(r.Store, r.Ref, verb(false, ""))
 	}
-	committed, err := a.ss.Update(s, store.Op{Name: "comment", Task: ref.Task}, func(tx *store.Tx) error {
-		cur, err := findComment(s, ref)
-		if err != nil {
-			return err
-		}
-		if cur.Body != c.Body || cur.DeletedAt != nil {
-			return errCommentChanged
-		}
-		cur.Body = body
-		if err := tx.PutComment(ref.Task, cur); err != nil {
-			return err
-		}
-		return ops.WatchInTx(tx, ref.Task, mentioned...)
-	})
 	if err != nil {
 		return fmt.Errorf("%s; the edited comment is kept at %s", describe(err), path)
 	}
 	if err := os.Remove(path); err != nil {
 		return err
 	}
-	return a.printComment(s, ref, verb(committed, "Updated"))
+	return a.printComment(r.Store, r.Ref, verb(r.Committed, "Updated"))
 }
 
 func (a *app) commentRm(arg string) error {
-	s, ref, c, err := a.openComment(arg)
+	r, err := a.ss.CommentRemove(arg)
 	if err != nil {
 		return err
 	}
-	errDeleted := fmt.Errorf("comment %s is already deleted", ref.Comment.String())
-	if c.DeletedAt != nil {
-		return errDeleted
-	}
-	now := a.now()
-	// The comment is read again under the lock, so that an edit made since
-	// is not lost.
-	committed, err := a.ss.Update(s, store.Op{Name: "comment", Task: ref.Task}, func(tx *store.Tx) error {
-		cur, err := findComment(s, ref)
-		if err != nil {
-			return err
-		}
-		if cur.DeletedAt != nil {
-			return errDeleted
-		}
-		cur.DeletedAt = &now
-		return tx.PutComment(ref.Task, cur)
-	})
-	if err != nil {
-		return err
-	}
-	return a.printComment(s, ref, verb(committed, "Deleted"))
+	return a.printComment(r.Store, r.Ref, verb(r.Committed, "Deleted"))
 }
 
 // printComment prints the comment ref after a write: as JSON, or as one
@@ -279,7 +134,7 @@ func (a *app) commentRm(arg string) error {
 func (a *app) printComment(s *store.Store, ref store.CommentRef, verb string) error {
 	var err error
 	if a.jsonOut {
-		c, err := findComment(s, ref)
+		c, err := ops.FindComment(s, ref)
 		if err != nil {
 			return err
 		}
