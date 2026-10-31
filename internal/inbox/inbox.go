@@ -483,7 +483,7 @@ func mustJSON(v any) json.RawMessage {
 }
 
 // key is what two items that tell the same thing share. Only mention,
-// assigned and watch are told per commit: an overwritten value, a repair
+// assigned and watch are told per commit and account: an overwritten value, a repair
 // or a duplicate prefix that two merge commits carry is one item.
 func key(it Item) string {
 	var k []any
@@ -506,7 +506,7 @@ func key(it Item) string {
 		_ = json.Unmarshal(it.Detail, &d)
 		k = []any{it.Kind, it.Task.String(), it.Path, d.Kind, d.Workspace.String(), compact(d.Value)}
 	default:
-		k = []any{it.Kind, it.Commit, it.Task.String()}
+		k = []any{it.Kind, it.Commit, it.Task.String(), strings.ToLower(it.To)}
 	}
 	return string(mustJSON(k))
 }

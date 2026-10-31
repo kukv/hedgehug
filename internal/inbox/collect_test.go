@@ -230,6 +230,53 @@ func TestCollectAccountsWithoutCase(t *testing.T) {
 	}
 }
 
+func TestCollectEveryAccountOfMe(t *testing.T) {
+	a, b := twoClones(t)
+	me := []string{"github.com/b", "gitlab.com/b"}
+	x := addTask(t, a, "x", func(t *model.Task) { t.Watchers = []string{"github.com/b", "gitlab.com/b"} })
+	y := addTask(t, a, "y", func(t *model.Task) { t.Watchers = []string{"github.com/b", "gitlab.com/b"} })
+	syncBoth(t, a, b)
+	before := head(t, b)
+	update(t, a, x.ULID, func(t *model.Task) {
+		t.Body = "ping @b\n" // names both accounts of me
+		t.Assignees = []string{"github.com/b", "gitlab.com/b"}
+	})
+	update(t, a, y.ULID, func(t *model.Task) { t.Status = "done" })
+	syncBoth(t, a, b)
+	items, err := Collect(b.s, before, head(t, b), me)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Each account is told once of x, and its watch is covered; y is a watch for each.
+	count := map[string]int{}
+	for _, it := range items {
+		count[fmt.Sprintf("%s %s %s", it.Kind, it.Task, it.To)]++
+	}
+	for _, to := range me {
+		for k, task := range map[Kind]model.ULID{Assigned: x.ULID, Mention: x.ULID, Watch: y.ULID} {
+			if n := count[fmt.Sprintf("%s %s %s", k, task, to)]; n != 1 {
+				t.Errorf("%s of %s for %s: %d items", k, task, to, n)
+			}
+		}
+	}
+	if len(items) != 6 {
+		t.Errorf("items = %+v", items)
+	}
+	// A comment mentions both too.
+	before = head(t, b)
+	addComment(t, a, y.ULID, "cc @b\n")
+	syncBoth(t, a, b)
+	items, err = Collect(b.s, before, head(t, b), me)
+	if k := kinds(items); err != nil || k[Mention] != 2 || len(items) != 2 {
+		t.Errorf("comment items = %+v, %v", items, err)
+	}
+	// Both items are kept when they are added to the inbox.
+	added, err := Open(b.s).Catch(me, plumbing.ZeroHash)
+	if err != nil || len(added) != 8 {
+		t.Errorf("Catch added %d, %v", len(added), err)
+	}
+}
+
 func TestCollectOnlyNewMentions(t *testing.T) {
 	a, b := twoClones(t)
 	x := addTask(t, a, "x", func(t *model.Task) { t.Body = "for @b\n" })

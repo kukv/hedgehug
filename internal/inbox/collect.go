@@ -290,14 +290,14 @@ func (c *commit) task(u model.ULID, from plumbing.Hash) error {
 	if was != nil {
 		old = was
 	}
-	if to, ok := c.added(old.Assignees, now.Assignees); ok {
+	for _, to := range c.added(old.Assignees, now.Assignees) {
 		c.addChange(Item{Kind: Assigned, Task: u, To: to})
 	}
-	if to, ok := c.mentioned(old.Body, now.Body); ok {
+	for _, to := range c.mentioned(old.Body, now.Body) {
 		c.addChange(Item{Kind: Mention, Task: u, To: to})
 	}
-	to, watching := c.watcher(now)
-	if was == nil || !watching {
+	watchers := c.watchers(now)
+	if was == nil || len(watchers) == 0 {
 		return nil
 	}
 	var changed []string
@@ -307,8 +307,10 @@ func (c *commit) task(u model.ULID, from plumbing.Hash) error {
 	if !slices.Equal(now.Assignees, old.Assignees) {
 		changed = append(changed, "assignees")
 	}
-	if len(changed) > 0 {
-		c.addChange(Item{Kind: Watch, Task: u, To: to, Detail: mustJSON(map[string][]string{"changed": changed})})
+	for _, to := range watchers {
+		if len(changed) > 0 {
+			c.addChange(Item{Kind: Watch, Task: u, To: to, Detail: mustJSON(map[string][]string{"changed": changed})})
+		}
 	}
 	return nil
 }
@@ -329,7 +331,7 @@ func (c *commit) comment(task, cm model.ULID, from plumbing.Hash) error {
 		old = was
 	}
 	d := mustJSON(map[string]model.ULID{"comment": cm})
-	if to, ok := c.mentioned(old.Body, now.Body); ok {
+	for _, to := range c.mentioned(old.Body, now.Body) {
 		c.addChange(Item{Kind: Mention, Task: task, To: to, Detail: d})
 	}
 	if was != nil {
@@ -339,48 +341,51 @@ func (c *commit) comment(task, cm model.ULID, from plumbing.Hash) error {
 	if err != nil || t == nil {
 		return err
 	}
-	if to, ok := c.watcher(t); ok {
+	for _, to := range c.watchers(t) {
 		c.addChange(Item{Kind: Watch, Task: task, To: to, Detail: d})
 	}
 	return nil
 }
 
-// added returns the first account of me in now and not in old.
-func (c *commit) added(old, now []string) (string, bool) {
+// added returns the accounts of me in now and not in old.
+func (c *commit) added(old, now []string) []string {
+	var out []string
 	for _, a := range now {
 		_, had := isMe(old, a)
-		if to, ok := isMe(c.me, a); ok && !had {
-			return to, true
+		if to, ok := isMe(c.me, a); ok && !had && !slices.ContainsFunc(out, func(o string) bool { return strings.EqualFold(o, to) }) {
+			out = append(out, to)
 		}
 	}
-	return "", false
+	return out
 }
 
-// mentioned returns the account of me that the first mention in now and
-// not in old names.
-func (c *commit) mentioned(old, now string) (string, bool) {
+// mentioned returns the accounts of me that the mentions in now and not in
+// old name.
+func (c *commit) mentioned(old, now string) []string {
 	was := index.Mentions(old)
+	var out []string
 	for _, m := range index.Mentions(now) {
 		if slices.ContainsFunc(was, func(w string) bool { return strings.EqualFold(w, m) }) {
 			continue
 		}
 		for _, a := range c.me {
-			if index.MentionNames(m, a) {
-				return a, true
+			if index.MentionNames(m, a) && !slices.Contains(out, a) {
+				out = append(out, a)
 			}
 		}
 	}
-	return "", false
+	return out
 }
 
-// watcher returns the account of me that watches t.
-func (c *commit) watcher(t *model.Task) (string, bool) {
+// watchers returns the accounts of me that watch t.
+func (c *commit) watchers(t *model.Task) []string {
+	var out []string
 	for _, w := range t.Watchers {
-		if to, ok := isMe(c.me, w); ok {
-			return to, true
+		if to, ok := isMe(c.me, w); ok && !slices.ContainsFunc(out, func(o string) bool { return strings.EqualFold(o, to) }) {
+			out = append(out, to)
 		}
 	}
-	return "", false
+	return out
 }
 
 // readTask reads the task u in tree; nil when it is missing or does not
