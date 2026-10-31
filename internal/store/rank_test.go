@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing"
+
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
 )
@@ -117,7 +119,10 @@ func TestRerankIsRestoredWhenTheOperationFails(t *testing.T) {
 	a.ID, b.ID = "TST-1", "TST-2"
 	writeShared(t, s, a, b)
 	var rankAtCommit model.Rank
-	s.commit = func(gitrepo.Commit) error { rankAtCommit = b.Rank; return errors.New("commit fails") }
+	s.commit = func(gitrepo.Commit) (plumbing.Hash, error) {
+		rankAtCommit = b.Rank
+		return plumbing.ZeroHash, errors.New("commit fails")
+	}
 	if err := put(s, b); err == nil {
 		t.Fatal("the commit did not fail")
 	}
@@ -151,7 +156,10 @@ func TestRerankIsRestoredForEveryTask(t *testing.T) {
 	a.ID, b.ID, c.ID, d.ID, e.ID, f.ID = "TST-1", "TST-2", "TST-3", "TST-4", "TST-5", "TST-6"
 	writeShared(t, s, a, b, c, d, e, f)
 	var aAtCommit, fAtCommit model.Rank
-	s.commit = func(gitrepo.Commit) error { aAtCommit, fAtCommit = a.Rank, f.Rank; return errors.New("commit fails") }
+	s.commit = func(gitrepo.Commit) (plumbing.Hash, error) {
+		aAtCommit, fAtCommit = a.Rank, f.Rank
+		return plumbing.ZeroHash, errors.New("commit fails")
+	}
 	// a is first of the a5 group, f is last of the a7 group: both change.
 	if err := put(s, a, f); err == nil {
 		t.Fatal("the commit did not fail")

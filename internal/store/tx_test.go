@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing"
+
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
@@ -167,7 +169,7 @@ func TestUpdateCommitFailureRollsBack(t *testing.T) {
 	}
 
 	boom := errors.New("commit failed")
-	s.commit = func(gitrepo.Commit) error { return boom }
+	s.commit = func(gitrepo.Commit) (plumbing.Hash, error) { return plumbing.ZeroHash, boom }
 	edited, err := s.Task(kept.ULID)
 	if err != nil {
 		t.Fatal(err)

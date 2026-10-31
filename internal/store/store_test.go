@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/go-git/go-git/v5/plumbing"
+
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
@@ -97,7 +99,9 @@ func TestCreateLeavesMetaAlone(t *testing.T) {
 
 func TestCreateCleansUpOnFailure(t *testing.T) {
 	boom := errors.New("commit failed")
-	newStoreHook = func(s *Store) { s.commit = func(gitrepo.Commit) error { return boom } }
+	newStoreHook = func(s *Store) {
+		s.commit = func(gitrepo.Commit) (plumbing.Hash, error) { return plumbing.ZeroHash, boom }
+	}
 	t.Cleanup(func() { newStoreHook = func(*Store) {} })
 
 	t.Run("a directory Create made is removed", func(t *testing.T) {
@@ -126,7 +130,9 @@ func TestCreateCleansUpOnFailure(t *testing.T) {
 
 func TestCreateCanRetryAfterFailure(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "store")
-	newStoreHook = func(s *Store) { s.commit = func(gitrepo.Commit) error { return errors.New("boom") } }
+	newStoreHook = func(s *Store) {
+		s.commit = func(gitrepo.Commit) (plumbing.Hash, error) { return plumbing.ZeroHash, errors.New("boom") }
+	}
 	if _, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, ""); err == nil {
 		t.Fatal("Create with a failing commit succeeded")
 	}
