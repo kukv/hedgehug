@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/schema"
 )
 
 const commentPath = "comments/0A/P0/01JBZ8K3QW7M2X9V4T6R5N8P0A/01JC1111111111111111111111.md"
@@ -269,6 +270,27 @@ func TestStoreYAMLByKey(t *testing.T) {
 	want := "ulid: 01JC0A1B2C3D4E5F6G7H8J9K0M\nname: b\nformat: 1\n# who reads it\naudience: public\n"
 	if string(r.Data) != want {
 		t.Errorf("r =\n%s", r.Data)
+	}
+}
+
+func TestYAMLKeyRemovedAndChanged(t *testing.T) {
+	base := []byte("name: a\naudience: team\nx: 1\n")
+	ours := []byte("name: b\n")
+	theirs := []byte("name: a\naudience: public\nx: 2\n")
+	r := mergeSym(t, model.StoreMetaPath, Side{Data: base}, Side{Data: ours, Author: "a"}, Side{Data: theirs, Author: "b"})
+	if string(r.Data) != "name: b\naudience: public\nx: 2\n" || len(r.Overwritten) != 0 {
+		t.Errorf("r = %q %v", r.Data, r.Overwritten)
+	}
+	// Two keys revived tell the remover once.
+	if want := []Notice{{Kind: Revived, Path: model.StoreMetaPath, Author: "a"}}; !slices.Equal(r.Notices, want) {
+		t.Errorf("notices = %v", r.Notices)
+	}
+}
+
+func TestYAMLOursWins(t *testing.T) {
+	r := mergeAt(t, schema.Path, nil, OursWins, Side{Data: []byte("a: 1\nb: 1\n")}, Side{Data: []byte("a: 2\nb: 1\n"), Author: "a"}, Side{Data: []byte("a: 3\nb: 2\n"), Author: "b", When: whenAt(time.Unix(9, 0))})
+	if string(r.Data) != "a: 2\nb: 2\n" || len(r.Overwritten) != 0 {
+		t.Errorf("r = %q %v", r.Data, r.Overwritten)
 	}
 }
 
