@@ -159,24 +159,6 @@ func word(rnd *rand.Rand, prefix string) string {
 	return fmt.Sprintf("%s%06d", prefix, rnd.IntN(1000000))
 }
 
-// fresh reports whether no write gave the field of the task this value
-// before. An op writes only fresh values: a write that returns a field to
-// a value it had is no change to a merge that sees only the base and the
-// sides, so it cannot be told from no write.
-func (c *cluster) fresh(task model.ULID, field, value string) bool {
-	return !c.seen[task.String()+" "+field+" "+value]
-}
-
-// mark records the values of writes as given.
-func (c *cluster) mark(ws ...write) {
-	if c.seen == nil {
-		c.seen = map[string]bool{}
-	}
-	for _, w := range ws {
-		c.seen[w.task.String()+" "+w.field+" "+w.value] = true
-	}
-}
-
 func (c *cluster) nextRank() model.Rank {
 	c.t.Helper()
 	r, err := model.Between(c.last, "")
@@ -254,16 +236,8 @@ func opStatus(c *cluster, i int, rnd *rand.Rand) []write {
 	if t == nil {
 		return nil
 	}
-	var cands []string
-	for _, st := range c.stores[i].Schema().Statuses {
-		if c.fresh(t.ULID, "status", js(st.Name)) {
-			cands = append(cands, st.Name)
-		}
-	}
-	if len(cands) == 0 {
-		return nil
-	}
-	status := cands[rnd.IntN(len(cands))]
+	sts := c.stores[i].Schema().Statuses
+	status := sts[rnd.IntN(len(sts))].Name
 	h, ok := c.update(i, c.taskOp(i, "status", t.ULID), func(tx *store.Tx) error {
 		x, err := tx.Task(t.ULID)
 		if err != nil {
@@ -290,9 +264,6 @@ func opMove(c *cluster, i int, rnd *rand.Rand) []write {
 		return live(x) && x.Workspace == t.Workspace && !slices.Contains(under, x.ULID) && rnd.IntN(3) > 0
 	}); q != nil {
 		p = &q.ULID
-	}
-	if !c.fresh(t.ULID, "parent", parentJSON(p)) {
-		return nil
 	}
 	rank := c.nextRank()
 	h, ok := c.update(i, c.taskOp(i, "mv", t.ULID), func(tx *store.Tx) error {
@@ -324,14 +295,6 @@ func opMoveWS(c *cluster, i int, rnd *rand.Rand) []write {
 	var p *model.ULID
 	if q := v.pickTask(rnd, func(x *model.Task) bool { return live(x) && x.Workspace == to.ULID && rnd.IntN(2) == 0 }); q != nil {
 		p = &q.ULID
-	}
-	for _, u := range v.subtree(t.ULID) {
-		if !c.fresh(u, "workspace", js(to.ULID.String())) {
-			return nil
-		}
-	}
-	if !c.fresh(t.ULID, "parent", parentJSON(p)) {
-		return nil
 	}
 	rank := c.nextRank()
 	var moved []*model.Task
@@ -582,7 +545,7 @@ func opWSPrefix(c *cluster, i int, rnd *rand.Rand) []write {
 		return nil
 	}
 	prefix := prefixPool[rnd.IntN(len(prefixPool))]
-	if prefix == ws.IDPrefix || !c.fresh(ws.ULID, "ws.id_prefix", js(prefix)) {
+	if prefix == ws.IDPrefix {
 		return nil
 	}
 	var tasks []*model.Task
@@ -637,7 +600,7 @@ func opWSRename(c *cluster, i int, rnd *rand.Rand) []write {
 		return nil
 	}
 	name := strings.ToLower(namePool[rnd.IntN(len(namePool))])
-	if name == ws.Name || !c.fresh(ws.ULID, "ws.name", js(name)) {
+	if name == ws.Name {
 		return nil
 	}
 	h, ok := c.update(i, c.wsOp(i, ws.ULID), func(tx *store.Tx) error {

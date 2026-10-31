@@ -528,3 +528,29 @@ func TestMergeBothRemoveSameFile(t *testing.T) {
 		t.Errorf("workspace after both removed it: %v", err)
 	}
 }
+
+// A side that deleted a task and restored it did not change deleted_at as a
+// three-way merge sees it, so a delete on the other side stays, and nothing
+// is recorded as overwritten.
+func TestRestoreAfterDeleteIsNoChange(t *testing.T) {
+	c := newCluster(t, 2)
+	x := c.addTask(0, "x")
+	c.sync(0)
+	c.sync(1)
+	now := time.Now().Truncate(time.Second)
+	c.set(0, x.ULID, func(t *model.Task) { t.DeletedAt = &now })
+	c.set(0, x.ULID, func(t *model.Task) { t.DeletedAt = nil })
+	c.set(1, x.ULID, func(t *model.Task) { t.DeletedAt = &now })
+	c.sync(0)
+	r := c.sync(1)
+	c.sync(0)
+	if got := c.task(0, x.ULID); got.DeletedAt == nil {
+		t.Error("the task is not deleted")
+	}
+	if len(r.Overwritten) != 0 {
+		t.Errorf("overwritten = %v", r.Overwritten)
+	}
+	if c.headTree(0) != c.headTree(1) {
+		t.Error("clones differ")
+	}
+}

@@ -35,8 +35,10 @@ func TestPropertyConverges(t *testing.T) {
 			c := newCluster(t, 3)
 			var log []string
 			var writes []write
-			for u, w := range c.view(0).ws { // the workspace the store began with
-				c.mark(write{task: u, field: "ws.name", value: js(w.Name)}, write{task: u, field: "ws.id_prefix", value: js(w.IDPrefix)})
+			// The workspace the store began with is written by the first commit.
+			first := mustHead(t, c.stores[0])
+			for u, w := range c.view(0).ws {
+				writes = append(writes, write{0, first, u, "ws.name", js(w.Name)}, write{0, first, u, "ws.id_prefix", js(w.IDPrefix)})
 			}
 			for range steps {
 				i := rnd.IntN(3)
@@ -48,16 +50,13 @@ func TestPropertyConverges(t *testing.T) {
 				o := ops[rnd.IntN(len(ops))]
 				log = append(log, fmt.Sprintf("%s on %d", o.name, i))
 				ws := o.do(c, i, rnd)
-				c.mark(ws...)
 				log[len(log)-1] += fmt.Sprintf(" (%d writes)", len(ws))
 				writes = append(writes, ws...)
 			}
 			// Several clones add without syncing: ids must collide.
 			for i := range 3 {
 				log = append(log, fmt.Sprintf("add on %d", i))
-				ws := opAdd(c, i, rnd)
-				c.mark(ws...)
-				writes = append(writes, ws...)
+				writes = append(writes, opAdd(c, i, rnd)...)
 			}
 			settle(t, c)
 			if err := checkAll(c, writes); err != nil {
@@ -218,11 +217,12 @@ func (h *history) replaced(w write, writes []write) bool {
 	})
 }
 
-// reverts reports whether w gives the field a value it had before w, in the
-// state the writer started from, as a restore does after a delete. A merge
-// sees only the base and the two sides, so a side that went from a value and
-// back is the side that did not change it, and the other side's value
-// stays.
+// reverts reports whether w returns the field to a value it had before, in
+// the history the writer started from (A to B and back to A, a restore after
+// a delete). A three-way merge sees the base and the two sides only, so a
+// side that went away from a value and came back is the side that did not
+// change it, and the other side's value stays: such a write is a net-zero
+// change, and it is not counted as lost.
 func (h *history) reverts(w write, writes []write) bool {
 	return slices.ContainsFunc(writes, func(o write) bool {
 		return o.commit != w.commit && o.task == w.task && o.field == w.field && sameJSON(o.value, w.value) && h.isAncestor(o.commit, w.commit)
@@ -309,7 +309,7 @@ func (h *history) checkWorkspace(ps *problems, w write, writes []write) {
 	if field == "id_prefix" {
 		final = js(ws.IDPrefix)
 	}
-	if sameJSON(final, w.value) || h.replaced(w, writes) || h.wasRepaired(w.task) ||
+	if sameJSON(final, w.value) || h.replaced(w, writes) || h.reverts(w, writes) || h.wasRepaired(w.task) ||
 		h.wasLost(model.WorkspacePath(w.task), field, w.value) {
 		return
 	}
@@ -365,8 +365,7 @@ func (h *history) checkTaskWrite(ps *problems, w write, t *model.Task, writes []
 			ps.add("unknown field %s", w.field)
 			return
 		}
-		if !sameJSON(final, w.value) && !h.replaced(w, writes) && !h.wasRepaired(t.ULID) && !h.wasLost(path, w.field, w.value) &&
-			(w.field != "deleted_at" || !h.reverts(w, writes)) {
+		if !sameJSON(final, w.value) && !h.replaced(w, writes) && !h.wasRepaired(t.ULID) && !h.wasLost(path, w.field, w.value) && !h.reverts(w, writes) {
 			ps.add("task %s (%s): %s %s written by clone %d is lost (final %s)", t.ULID, t.ID, w.field, w.value, w.clone, final)
 		}
 	}
