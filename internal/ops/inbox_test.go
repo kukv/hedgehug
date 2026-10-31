@@ -558,6 +558,28 @@ func TestPropText(t *testing.T) {
 	}
 }
 
+func TestInboxRevertLeavesTheSessionAlone(t *testing.T) {
+	ts := newTestSession(t)
+	ts.appendConfig(aliceAccount)
+	if _, err := ts.Add(AddInput{Title: "mine"}); err != nil {
+		t.Fatal(err)
+	}
+	_, ix, _ := ts.Open()
+	e, _ := ts.Resolve(ix, "ME-1")
+	task := &model.Task{ULID: e.ULID, ID: "ME-1"}
+	u := ts.addItem(overwritten(task, "c1", "title", `"before"`))
+	ts.addItem(overwritten(task, "c2", "status", `"done"`))
+	if _, err := ts.InboxRevert(u.String()); err != nil {
+		t.Fatal(err)
+	}
+	if ts.StoreName != "" {
+		t.Errorf("StoreName = %q after the revert; want it untouched", ts.StoreName)
+	}
+	if _, items, err := ts.InboxList(false); err != nil || len(items) != 1 || items[0].Content != `status: "done" was replaced` {
+		t.Errorf("InboxList after the revert = %d items, %v; want the one left", len(items), err)
+	}
+}
+
 func TestCompactJSON(t *testing.T) {
 	if got := compactJSON(json.RawMessage("{ \"a\": [1, 2] }")); got != `{"a":[1,2]}` {
 		t.Errorf("compactJSON = %q", got)

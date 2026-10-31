@@ -26,7 +26,9 @@ type InboxStore struct {
 }
 
 // NoAccountsWarning is the warning of InboxStores for a config without
-// accounts, where mentions and assignments cannot be told.
+// accounts, where mentions and assignments cannot be told. The CLI prints it
+// as "hedgehug: warning: " + it; InboxList, InboxRead and InboxRevert send it
+// through Warn without the "hedgehug: " prefix.
 const NoAccountsWarning = "accounts are not set up in config.yaml; mentions and assignments cannot be told"
 
 // InboxStores opens the stores the operation works on, after the inbox of
@@ -296,8 +298,10 @@ func (ss *Session) InboxRevertOf(stores []InboxStore, u model.ULID) (TaskResult,
 	if err := json.Unmarshal(it.Detail, &d); err != nil {
 		return TaskResult{}, fmt.Errorf("inbox item %s does not decode: %w", u, err)
 	}
-	ss.StoreName = st.Name
-	s, ix, err := ss.Open()
+	// The write goes through a session of its own on the store of the item:
+	// ss is shared and keeps its store and its writer.
+	sub := &Session{Getenv: ss.Getenv, Now: ss.Now, Warn: ss.Warn, AfterWrite: ss.AfterWrite, StoreName: st.Name}
+	s, ix, err := sub.Open()
 	if err != nil {
 		return TaskResult{}, err
 	}
@@ -308,15 +312,15 @@ func (ss *Session) InboxRevertOf(stores []InboxStore, u model.ULID) (TaskResult,
 	if err := NotDeleted(ix, e); err != nil {
 		return TaskResult{}, err
 	}
-	committed, err := ss.Update(s, store.Op{Name: "revert-overwritten", Task: e.ULID}, func(tx *store.Tx) error {
+	committed, err := sub.Update(s, store.Op{Name: "revert-overwritten", Task: e.ULID}, func(tx *store.Tx) error {
 		if d.Field == "parent" || d.Field == "workspace" {
-			return ss.revertMove(tx, ix, e, d.Field, d.Value)
+			return sub.revertMove(tx, ix, e, d.Field, d.Value)
 		}
 		t, err := tx.Task(e.ULID)
 		if err != nil {
 			return err
 		}
-		if err := revertField(t, d.Field, d.Value, ix.Schema(), ss.ResolveULID(ix)); err != nil {
+		if err := revertField(t, d.Field, d.Value, ix.Schema(), sub.ResolveULID(ix)); err != nil {
 			return err
 		}
 		return tx.PutTask(t)
