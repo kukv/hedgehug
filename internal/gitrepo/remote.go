@@ -159,11 +159,16 @@ func (r *Repo) Head() (plumbing.Hash, error) {
 // afterClone finishes a fresh clone; tests replace it to make the step fail.
 var afterClone = func(r *Repo, url string) error { return r.SetRemotes([]string{url}) }
 
-// Clone clones the main branch of url into dir. A failed clone removes what it
+// Clone clones the main branch of url into dir, which must be missing or empty. A failed clone removes what it
 // created: the directory, or only its contents when dir already existed.
 func Clone(url, dir string) (*Repo, error) {
-	_, statErr := os.Stat(dir)
-	existed := statErr == nil
+	existed := false
+	if entries, err := os.ReadDir(dir); err == nil {
+		if len(entries) > 0 {
+			return nil, fmt.Errorf("clone %s: %s is not empty", url, dir)
+		}
+		existed = true
+	}
 	r, err := git.PlainClone(dir, false, &git.CloneOptions{
 		URL:           url,
 		RemoteName:    "origin",

@@ -234,3 +234,15 @@ func TestCloneCleansUpWhenTheLastStepFails(t *testing.T) {
 		t.Errorf("existing directory = %v, %v; want kept and empty", entries, err)
 	}
 }
+
+func TestCloneRefusesNonEmptyDirectory(t *testing.T) {
+	remote := newBare(t)
+	dir := t.TempDir()
+	writeFile(t, dir, "mine.txt", "keep\n")
+	if _, err := Clone(remote, dir); err == nil {
+		t.Fatal("Clone into a non-empty directory succeeded")
+	}
+	if b, err := os.ReadFile(filepath.Join(dir, "mine.txt")); err != nil || string(b) != "keep\n" {
+		t.Errorf("user file = %q, %v", b, err)
+	}
+}
