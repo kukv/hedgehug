@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"slices"
 	"strconv"
@@ -51,17 +52,28 @@ func New(st State) *Server {
 func (s *Server) Reset(st State) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if st.Orgs == nil {
-		st.Orgs = map[string][]string{}
-	}
+	// Keep our own copy, so the caller changing what it passed in (or a
+	// second Reset with the same State) does not reach into the server.
+	st.Users = slices.Clone(st.Users)
+	st.Orgs = cloneLists(st.Orgs)
+	st.Tokens = maps.Clone(st.Tokens)
 	if st.Tokens == nil {
 		st.Tokens = map[string]string{}
 	}
+	repos := make([]*Repo, 0, len(st.Repos))
+	s.nextID = 0
 	for _, r := range st.Repos {
-		if r.Perms == nil {
-			r.Perms = map[string]string{}
+		c := *r
+		c.Topics = slices.Clone(r.Topics)
+		c.Perms = maps.Clone(r.Perms)
+		if c.Perms == nil {
+			c.Perms = map[string]string{}
 		}
+		s.nextID++
+		c.id = s.nextID
+		repos = append(repos, &c)
 	}
+	st.Repos = repos
 	s.st = st
 	s.devices, s.access, s.refresh = map[string]*device{}, map[string]issued{}, map[string]string{}
 }
@@ -97,6 +109,21 @@ func (s *Server) find(full string) *Repo {
 		}
 	}
 	return nil
+}
+
+func cloneLists(m map[string][]string) map[string][]string {
+	out := make(map[string][]string, len(m))
+	for k, v := range m {
+		out[k] = slices.Clone(v)
+	}
+	return out
+}
+
+// addRepo takes x in and numbers it.
+func (s *Server) addRepo(x *Repo) {
+	s.nextID++
+	x.id = s.nextID
+	s.st.Repos = append(s.st.Repos, x)
 }
 
 func (s *Server) isUser(login string) bool { return slices.Contains(s.st.Users, login) }
@@ -136,6 +163,9 @@ func (s *Server) caller(r *http.Request) string {
 	tok, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if !ok {
 		tok, _ = strings.CutPrefix(r.Header.Get("Authorization"), "token ")
+	}
+	if tok == "" {
+		return ""
 	}
 	if l, ok := s.st.Tokens[tok]; ok {
 		return l
@@ -252,6 +282,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request, n int, item func(i
 	if per <= 0 {
 		per = 30
 	}
+	per = min(per, 100)
 	pg, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if pg <= 0 {
 		pg = 1
@@ -270,14 +301,13 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request, n int, item func(i
 }
 
 func (s *Server) repoJSON(x *Repo, login string) map[string]any {
-	s.nextID++
 	p := perm(x, login)
 	topics := x.Topics
 	if topics == nil {
 		topics = []string{}
 	}
 	return map[string]any{
-		"id": s.nextID, "node_id": fmt.Sprintf("R_%d", s.nextID),
+		"id": x.id, "node_id": fmt.Sprintf("R_%d", x.id),
 		"name": x.Name, "full_name": x.Owner + "/" + x.Name,
 		"owner":       map[string]string{"login": x.Owner},
 		"private":     x.Private,
@@ -308,7 +338,7 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request, owner, login str
 	if owner != login {
 		x.Perms[login] = "admin"
 	}
-	s.st.Repos = append(s.st.Repos, x)
+	s.addRepo(x)
 	writeJSON(w, http.StatusCreated, s.repoJSON(x, login))
 }
 
@@ -402,7 +432,7 @@ func (s *Server) AddRepo(repo string, topics []string, public bool) error {
 	if s.find(repo) != nil {
 		return fmt.Errorf("%s exists", repo)
 	}
-	s.st.Repos = append(s.st.Repos, &Repo{Owner: owner, Name: name, Private: !public, Topics: topics, Perms: map[string]string{}})
+	s.addRepo(&Repo{Owner: owner, Name: name, Private: !public, Topics: slices.Clone(topics), Perms: map[string]string{}})
 	return nil
 }
 

@@ -34,6 +34,10 @@ func (s *Server) admin(w http.ResponseWriter, r *http.Request) {
 	case "/_fakegh/device/approve":
 		err = s.ApproveDevice(b.UserCode, b.Login)
 	case "/_fakegh/token":
+		if b.Token == "" || b.Login == "" {
+			fail(w, http.StatusBadRequest, "token and login are required")
+			return
+		}
 		s.AddToken(b.Token, b.Login)
 	case "/_fakegh/token/expire":
 		s.ExpireTokens(b.Login)
@@ -75,22 +79,27 @@ func (a Admin) post(path string, b adminBody) error {
 	return nil
 }
 
+// SetPerm sets what login may do with repo (owner/name).
 func (a Admin) SetPerm(repo, login, perm string) error {
 	return a.post("/_fakegh/perm", adminBody{Repo: repo, Login: login, Perm: perm})
 }
 
+// AddRepo adds the repository owner/name.
 func (a Admin) AddRepo(repo string, topics []string, public bool) error {
 	return a.post("/_fakegh/repo", adminBody{Repo: repo, Topics: topics, Public: public})
 }
 
+// ApproveDevice approves the device code shown as userCode for login.
 func (a Admin) ApproveDevice(userCode, login string) error {
 	return a.post("/_fakegh/device/approve", adminBody{UserCode: userCode, Login: login})
 }
 
+// AddToken makes token a token of login.
 func (a Admin) AddToken(token, login string) error {
 	return a.post("/_fakegh/token", adminBody{Token: token, Login: login})
 }
 
+// ExpireTokens makes the access tokens issued to login expired.
 func (a Admin) ExpireTokens(login string) error {
 	return a.post("/_fakegh/token/expire", adminBody{Login: login})
 }

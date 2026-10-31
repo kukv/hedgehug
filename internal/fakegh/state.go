@@ -27,6 +27,8 @@ type Repo struct {
 	Private bool              `json:"private"`
 	Topics  []string          `json:"topics"`
 	Perms   map[string]string `json:"perms"` // login → read, write, admin or none
+
+	id int // numbered once, when the server takes the repository in
 }
 
 // Load reads a seed file.
