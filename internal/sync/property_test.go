@@ -100,7 +100,8 @@ type lost struct{ path, field, value string }
 
 // repaired is a Hedgehug-Repaired trailer.
 type repaired struct {
-	ulid, kind string
+	ulid, kind, value string
+	commit            plumbing.Hash
 }
 
 // problems collects what checkAll finds wrong.
@@ -183,7 +184,8 @@ func newHistory(c *cluster) *history {
 			if err != nil {
 				t.Fatal(err)
 			}
-			h.repaired = append(h.repaired, repaired{u, w[1]})
+			value := strings.Join(w[2:len(w)-1], " ")
+			h.repaired = append(h.repaired, repaired{u, w[1], value, e.Hash})
 		}
 	}
 	return h
@@ -203,9 +205,9 @@ func (h *history) isAncestor(a, b plumbing.Hash) bool {
 }
 
 // replaced reports whether another write to the same field of the same
-// task came after w, knowing it. Two writes of the same value count as one,
-// since a merge of equal values loses nothing: a write that came after
-// either of them replaces both.
+// task came after w, knowing it. Two writes of the same value count as one
+// (spec: an equal value on both sides is not an overwrite, R58), so a write
+// that came after either of them replaces both.
 func (h *history) replaced(w write, writes []write) bool {
 	return slices.ContainsFunc(writes, func(same write) bool {
 		if same.task != w.task || same.field != w.field || !sameJSON(same.value, w.value) {
@@ -443,6 +445,11 @@ func (h *history) checkInvariants(ps *problems) {
 			ps.add("tasks %s and %s have the id %s", o, u, t.ID)
 		}
 		seen[t.ID] = u
+		for _, o := range sortedULIDs(v.tasks) {
+			if x := v.tasks[o]; o != u && x.ID != "" && slices.Contains(t.FormerIDs, x.ID) && !h.collided(u, x.ID) && !h.givenTogether(u, o, x.ID) {
+				ps.add("task %s (%s) has %s, which is the id of task %s, in its former ids, and no id_collision explains it", u, t.ID, x.ID, o)
+			}
+		}
 		ws := v.ws[t.Workspace]
 		if ws == nil {
 			ps.add("task %s (%s) is in workspace %s, which is not there", u, t.ID, t.Workspace)
@@ -475,4 +482,66 @@ func (h *history) checkInvariants(ps *problems) {
 			x = q.Parent
 		}
 	}
+}
+
+// givenTogether reports whether the tasks a and b were each given id by
+// clones that did not know of the other's. One of them was renumbered (a
+// move to another workspace, a new prefix) before the merge met the other
+// holder, so no duplicate id was left for a repair to see, and the id stays
+// in the former ids of the one and the id of the other.
+func (h *history) givenTogether(a, b model.ULID, id string) bool {
+	for _, ca := range h.introduced(a, id) {
+		for _, cb := range h.introduced(b, id) {
+			if !h.isAncestor(ca, cb) && !h.isAncestor(cb, ca) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// introduced returns the commits that give the task the id: it is the task's
+// id there and was not in any parent.
+func (h *history) introduced(task model.ULID, id string) []plumbing.Hash {
+	idAt := func(c plumbing.Hash) string {
+		b, err := h.repo.ReadAt(c, model.TaskPath(task))
+		if errors.Is(err, fs.ErrNotExist) {
+			return ""
+		}
+		if err != nil {
+			h.c.t.Fatal(err)
+		}
+		x, err := model.DecodeTask(b)
+		if err != nil {
+			h.c.t.Fatal(err)
+		}
+		return x.ID
+	}
+	var out []plumbing.Hash
+	for _, e := range h.entries {
+		if idAt(e.Hash) == id && !slices.ContainsFunc(e.Parents, func(p plumbing.Hash) bool { return idAt(p) == id }) {
+			out = append(out, e.Hash)
+		}
+	}
+	return out
+}
+
+// collided reports whether a repair renumbered the task from id because
+// another task had it too: an id_collision, or an id_renumbered when the
+// task also had a prefix other than its workspace's.
+func (h *history) collided(task model.ULID, id string) bool {
+	return slices.ContainsFunc(h.repaired, func(r repaired) bool {
+		if r.ulid != task.String() {
+			return false
+		}
+		switch r.kind {
+		case "id_collision":
+			var v struct{ Old string }
+			return json.Unmarshal([]byte(r.value), &v) == nil && v.Old == id
+		case "id_renumbered":
+			var old string
+			return json.Unmarshal([]byte(r.value), &old) == nil && old == id
+		}
+		return false
+	})
 }
