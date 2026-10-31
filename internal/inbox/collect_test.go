@@ -40,7 +40,7 @@ func twoClones(t *testing.T) (*clone, *clone) {
 		t.Fatal(err)
 	}
 	s, err := store.Create(filepath.Join(t.TempDir(), "a"), &model.StoreMeta{ULID: model.NewULID(), Name: "s"}, nil,
-		&model.Workspace{ULID: model.NewULID(), Name: "web", IDPrefix: "WEB"}, gitrepo.Signature{Name: "a", Email: "a@x"}, "github.com/a")
+		&model.Workspace{ULID: model.NewULID(), Name: "web", IDPrefix: "WEB"}, gitrepo.Signature{Name: "a", Email: "a@x"}, "github.com/a", time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}

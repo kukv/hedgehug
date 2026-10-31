@@ -6,18 +6,14 @@ import (
 	"time"
 )
 
-// The store clock is the real one, which commands in tests cannot replace,
-// so the commits of these tests are told apart by waiting.
-const storeTick = 1100 * time.Millisecond
-
 func TestRestoreAt(t *testing.T) {
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
-	time.Sleep(storeTick)
+	te.now = te.now.Add(time.Second)
 	te.ok("add", "v1")
-	time.Sleep(storeTick)
-	at := time.Now().UTC().Format(time.RFC3339)
-	time.Sleep(storeTick)
+	te.now = te.now.Add(time.Second)
+	at := te.now.UTC().Format(time.RFC3339)
+	te.now = te.now.Add(time.Second)
 	te.ok("set", "ME-1", "title=v2")
 	te.ok("rm", "ME-1")
 	te.goldenOK("restore", "restore", "ME-1", "--at", at)

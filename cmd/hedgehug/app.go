@@ -99,7 +99,18 @@ func (a *app) openStore() (*store.Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return store.Open(e.Path)
+	return a.openStoreAt(e.Path)
+}
+
+// openStoreAt opens the store in dir with the clock of the app, so that what
+// it writes has the time a.now tells.
+func (a *app) openStoreAt(dir string) (*store.Store, error) {
+	s, err := store.Open(dir)
+	if err != nil {
+		return nil, err
+	}
+	s.SetNow(a.now)
+	return s, nil
 }
 
 // open opens the store and its index.
@@ -222,7 +233,7 @@ func (a *app) beforeCommand(cmd *cobra.Command, _ []string) {
 		if !syncsInBackground(e) {
 			continue
 		}
-		s, err := store.Open(e.Path)
+		s, err := a.openStoreAt(e.Path)
 		if err != nil {
 			continue
 		}

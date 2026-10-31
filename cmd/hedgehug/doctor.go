@@ -40,7 +40,7 @@ func (a *app) doctor(fix bool) error {
 	if fix {
 		var s *store.Store
 		// A store that does not open is told of by the findings, which say why.
-		if s, openErr = store.Open(e.Path); openErr == nil {
+		if s, openErr = a.openStoreAt(e.Path); openErr == nil {
 			if fixed, err = a.fixStore(c, e, s); err != nil {
 				return err
 			}

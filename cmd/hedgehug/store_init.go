@@ -98,7 +98,7 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema, remotes 
 	}
 	dir := filepath.Join(p.StoresDir, name)
 	ws := &model.Workspace{ULID: model.NewULID(), Name: wsName, IDPrefix: prefix}
-	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, sc, ws, author, account)
+	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, sc, ws, author, account, a.now)
 	if err != nil {
 		return err
 	}

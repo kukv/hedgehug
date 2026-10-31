@@ -62,7 +62,7 @@ func (a *app) storeAdd(name string, remotes []string, path string) error {
 		return err
 	}
 	undo := func(err error) error { return errors.Join(err, clearDir(dir, existed)) }
-	s, err := store.Open(dir)
+	s, err := a.openStoreAt(dir)
 	if err != nil {
 		return undo(fmt.Errorf("%s is not a hedgehug store: %w", remotes[0], err))
 	}
@@ -198,7 +198,7 @@ func (a *app) storeList() error {
 			out[i].Account = acct.ID()
 		}
 		// A store that does not open or has no state is listed without its last sync.
-		if s, err := store.Open(e.Path); err == nil {
+		if s, err := a.openStoreAt(e.Path); err == nil {
 			if st, err := sync.ReadState(s); err == nil {
 				out[i].LastSuccess = timePtr(st.LastSuccess)
 			}

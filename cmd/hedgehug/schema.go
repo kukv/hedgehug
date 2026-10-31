@@ -11,7 +11,6 @@ import (
 	"github.com/kukv/hedgehug/internal/doctor"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/schema"
-	"github.com/kukv/hedgehug/internal/store"
 )
 
 // errFindings is what a command that found problems returns: the problems
@@ -59,7 +58,7 @@ func (a *app) checkSchema() ([]doctor.Finding, error) {
 	if err != nil {
 		return nil, err
 	}
-	s, err := store.Open(e.Path)
+	s, err := a.openStoreAt(e.Path)
 	if err != nil {
 		if data, rerr := os.ReadFile(filepath.Join(e.Path, schema.Path)); rerr == nil {
 			if sc, fs := doctor.SchemaFile(data); sc == nil {

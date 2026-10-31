@@ -80,7 +80,7 @@ func (a *app) inboxStores() ([]inboxStore, error) {
 	}
 	var out []inboxStore
 	for _, e := range targets {
-		s, err := store.Open(e.Path)
+		s, err := a.openStoreAt(e.Path)
 		if err != nil {
 			return nil, fmt.Errorf("store %s: %w", e.Name, err)
 		}

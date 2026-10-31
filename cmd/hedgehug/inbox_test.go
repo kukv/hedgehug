@@ -31,7 +31,7 @@ func inboxItems(t *testing.T, te *testEnv, args ...string) []map[string]any {
 func conflict(t *testing.T, alice, bob *testEnv, key, bobs, alices string) {
 	t.Helper()
 	bob.ok("set", "ORG-1", key+"="+bobs)
-	time.Sleep(1100 * time.Millisecond) // commit times are seconds: alice writes later, so alice's value wins
+	alice.now = alice.now.Add(time.Second) // alice writes later, so alice's value wins
 	alice.ok("set", "ORG-1", key+"="+alices)
 	alice.ok("sync")
 	bob.ok("sync")
@@ -207,7 +207,7 @@ func TestInboxWithoutAccounts(t *testing.T) {
 func TestInboxPrefixDuplicate(t *testing.T) {
 	alice, bob, _ := twoUsers(t)
 	alice.ok("workspace", "add", "web", "--prefix", "DUP")
-	time.Sleep(1100 * time.Millisecond) // the prefix set later is the one told
+	bob.now = bob.now.Add(time.Second) // the prefix set later is the one told
 	bob.ok("workspace", "add", "api", "--prefix", "DUP")
 	alice.ok("sync")
 	bob.ok("sync")
@@ -276,7 +276,7 @@ func TestInboxRevertParent(t *testing.T) {
 	alice.ok("sync")
 	bob.ok("sync")
 	bob.ok("mv", "ORG-4", "--parent", "ORG-2")
-	time.Sleep(1100 * time.Millisecond) // alice writes later, so alice's parent wins
+	alice.now = alice.now.Add(time.Second) // alice writes later, so alice's parent wins
 	alice.ok("mv", "ORG-4", "--parent", "ORG-3")
 	alice.ok("sync")
 	bob.ok("sync")
@@ -342,7 +342,7 @@ func TestInboxRevertWorkspace(t *testing.T) {
 	alice.ok("sync")
 	bob.ok("sync")
 	bob.ok("mv", "ORG-1", "--workspace", "w2")
-	time.Sleep(1100 * time.Millisecond) // alice writes later, so alice's workspace wins
+	alice.now = alice.now.Add(time.Second) // alice writes later, so alice's workspace wins
 	alice.ok("mv", "ORG-1", "--workspace", "w3")
 	alice.ok("sync")
 	bob.ok("sync")
@@ -371,7 +371,7 @@ func TestInboxRevertParentInAnotherWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	bob.ok("mv", "ORG-2", "--parent", "AA-1")
-	time.Sleep(1100 * time.Millisecond) // alice writes later, so alice's parent wins
+	alice.now = alice.now.Add(time.Second) // alice writes later, so alice's parent wins
 	alice.ok("mv", "ORG-2", "--parent", "BB-1")
 	alice.ok("sync")
 	bob.ok("sync")
@@ -400,9 +400,9 @@ func TestInboxDuplicateNamesEveryMatch(t *testing.T) {
 	carol.writeAccounts("github.com", "carol")
 	carol.ok("store", "add", "org", "--remote", remote)
 	alice.ok("workspace", "add", "web", "--prefix", "DUP")
-	time.Sleep(1100 * time.Millisecond) // the prefix set later is the one told
+	bob.now = bob.now.Add(time.Second) // the prefix set later is the one told
 	bob.ok("workspace", "add", "api", "--prefix", "DUP")
-	time.Sleep(1100 * time.Millisecond)
+	carol.now = carol.now.Add(2 * time.Second)
 	carol.ok("workspace", "add", "zed", "--prefix", "DUP")
 	for _, te := range []*testEnv{alice, bob, carol, bob, alice} {
 		te.ok("sync")
