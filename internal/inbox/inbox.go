@@ -39,9 +39,10 @@ type Item struct {
 	ID     string     `json:"id,omitempty"`   // the task's id when the item was made
 	Path   string     `json:"path,omitempty"` // the file, for overwritten and revived
 	Commit string     `json:"commit"`
-	// Author is who caused it: the writer of the commit (for a trailer, of
-	// the merge or repair commit); empty when nothing tells, as for the
-	// merge driver's records and the notices of a sync.
+	// Author is who caused it: the writer of the commit for mention,
+	// assigned and watch. It is empty for the items of trailers, records
+	// and the notices of a sync, which do not tell who won or caused it
+	// (the merge or repair commit's writer only merged).
 	Author string    `json:"author"`
 	To     string    `json:"to"` // the account told, one of me as the commit or record names it
 	Time   time.Time `json:"time"`
@@ -93,29 +94,36 @@ func (b *Box) warn(w string) {
 }
 
 // Catch adds the items of the commits from the last Catch to HEAD, and
-// then the merge driver's records, and returns the items added. The first
-// Catch of a store starts at since: the HEAD before a sync, or HEAD itself.
-// The commit it reached is kept only once its items are in, so a failed
-// Catch is made up by the next.
+// then the merge driver's records, and returns the items added. A store
+// that has not been caught yet starts at since: the HEAD before a sync, or
+// HEAD itself. The commits are read without the lock; the commit reached
+// is kept only once its items are in, and only when no other Catch moved
+// it meanwhile (the items of both are in either way, once each), so a
+// failed Catch is made up by the next.
 func (b *Box) Catch(me []string, since plumbing.Hash) ([]Item, error) {
+	head, err := b.s.Repo().Head()
+	if err != nil {
+		return nil, err
+	}
+	was := b.markText()
+	from := since
+	if m, ok := b.mark(was); ok {
+		from = m
+	}
+	items, err := Collect(b.s, from, head, me)
+	if err != nil {
+		return nil, err
+	}
 	var added []Item
-	err := b.locked(func() error {
-		head, err := b.s.Repo().Head()
-		if err != nil {
-			return err
-		}
-		if m, ok := b.mark(); ok {
-			since = m
-		}
-		items, err := Collect(b.s, since, head, me)
-		if err != nil {
-			return err
-		}
+	err = b.locked(func() error {
+		var err error
 		if added, err = b.add(items); err != nil {
 			return err
 		}
-		if err := b.s.WriteLocal(markFile, []byte(head.String()+"\n")); err != nil {
-			return err
+		if b.markText() == was {
+			if err := b.s.WriteLocal(markFile, []byte(head.String()+"\n")); err != nil {
+				return err
+			}
 		}
 		more, err := b.importRecords(me)
 		added = append(added, more...)
@@ -124,18 +132,43 @@ func (b *Box) Catch(me []string, since plumbing.Hash) ([]Item, error) {
 	return added, err
 }
 
-// mark is the commit the last Catch reached; ok is false when there is
-// none or it does not read.
-func (b *Box) mark() (plumbing.Hash, bool) {
+// Start makes at the commit a store's first Catch starts from, unless one
+// is set already; a sync sets it at the HEAD it starts from, so a Catch
+// that runs meanwhile does not start after the commits the sync brings.
+func (b *Box) Start(at plumbing.Hash) error {
+	return b.locked(func() error {
+		if b.markText() != "" {
+			return nil
+		}
+		return b.s.WriteLocal(markFile, []byte(at.String()+"\n"))
+	})
+}
+
+// markText is what inbox-head holds; "" when it is missing.
+func (b *Box) markText() string {
 	data, err := b.s.ReadLocal(markFile)
 	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// mark is the commit that inbox-head, as read, names; ok is false when it
+// is missing, or with a warning when it names no commit of the repository.
+func (b *Box) mark(data string) (plumbing.Hash, bool) {
+	if data == "" {
 		return plumbing.ZeroHash, false
 	}
-	s := strings.TrimSpace(string(data))
-	if !plumbing.IsHash(s) {
+	if !plumbing.IsHash(data) {
+		b.warn(fmt.Sprintf(".hedgehug/local/%s: %q is no commit; reading from the given start", markFile, data))
 		return plumbing.ZeroHash, false
 	}
-	return plumbing.NewHash(s), true
+	h := plumbing.NewHash(data)
+	if _, err := b.s.Repo().TreeOf(h); err != nil {
+		b.warn(fmt.Sprintf(".hedgehug/local/%s: commit %s does not read (%v); reading from the given start", markFile, data, err))
+		return plumbing.ZeroHash, false
+	}
+	return h, true
 }
 
 // Add adds the items that the inbox does not have yet, by key: the same

@@ -73,7 +73,7 @@ func TestOverwrittenTrailer(t *testing.T) {
 	}
 	r = c.sync(0)
 	items, err := inbox.Open(c.stores[0]).List(false)
-	if err != nil || len(items) != 1 || items[0].Kind != inbox.Overwritten || items[0].Task != x.ULID || items[0].To != "github.com/u0" || items[0].Author != "github.com/u1" {
+	if err != nil || len(items) != 1 || items[0].Kind != inbox.Overwritten || items[0].Task != x.ULID || items[0].To != "github.com/u0" || items[0].Author != "" {
 		t.Fatalf("u0's inbox = %+v, %v", items, err)
 	}
 	if len(r.Notices) != 1 || r.Notices[0].ULID != items[0].ULID {
@@ -113,6 +113,31 @@ func TestInboxAfterFailedPush(t *testing.T) {
 	c.opts[0].BeforePush = nil
 	if r := c.sync(0); len(r.Notices) != 0 {
 		t.Errorf("told again: %+v", r.Notices)
+	}
+}
+
+// A Catch between the merge and the end of the sync, on a store the inbox
+// has not caught yet, starts from where the sync did.
+func TestCatchDuringSync(t *testing.T) {
+	c := newCluster(t, 2)
+	x := c.addTask(0, "x")
+	c.sync(0)
+	c.sync(1)
+	c.set(0, x.ULID, func(t *model.Task) { t.Title = "a" })
+	c.set(1, x.ULID, func(t *model.Task) { t.Title = "b" }) // later: wins
+	c.sync(1)
+	if err := c.stores[0].RemoveLocal("inbox-head"); err != nil {
+		t.Fatal(err)
+	}
+	c.opts[0].BeforePush = func() { // after u0's merge
+		h := mustHead(t, c.stores[0])
+		if _, err := inbox.Open(c.stores[0]).Catch(c.opts[0].Me, h); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c.sync(0)
+	if items, _ := inbox.Open(c.stores[0]).List(false); len(items) != 1 || items[0].Kind != inbox.Overwritten {
+		t.Errorf("inbox = %+v", items)
 	}
 }
 

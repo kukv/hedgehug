@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -299,7 +300,7 @@ func TestCollectOverwrittenAndRenumberedFromOwnMerge(t *testing.T) {
 		t.Fatalf("items = %+v", items)
 	}
 	for _, it := range items {
-		if it.Task != x.ULID || it.ID != x.ID || it.To != "github.com/b" || it.Author != "github.com/b" {
+		if it.Task != x.ULID || it.ID != x.ID || it.To != "github.com/b" || it.Author != "" {
 			t.Errorf("item = %+v", it)
 		}
 	}
@@ -492,5 +493,77 @@ func TestImportLeavesBadRecords(t *testing.T) {
 	}
 	if w := box.Warnings(); len(w) != 3 || !strings.Contains(w[0], "overwritten/1.json") || !strings.Contains(w[1], `unknown kind "mention"`) || !strings.Contains(w[2], "no path") {
 		t.Errorf("warnings = %q", w)
+	}
+}
+
+// handMerge commits a merge of nothing with an overwritten trailer for b.
+func handMerge(t *testing.T, b *clone, x model.ULID) {
+	t.Helper()
+	h := head(t, b)
+	trailers := []gitrepo.Trailer{{Key: "Hedgehug-Overwritten", Value: url.PathEscape(model.TaskPath(x)) + ` title "mine" github.com/b`}}
+	if _, err := b.s.CommitMerge(h, []plumbing.Hash{h}, map[string][]byte{"notes.md": []byte(h.String())}, b.op("merge", model.ULID{}), trailers); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCatchUnreadableMark(t *testing.T) {
+	_, b := twoClones(t)
+	x := addTask(t, b, "x", nil)
+	before := head(t, b)
+	handMerge(t, b, x.ULID)
+	gone := strings.Repeat("ab", 20) // no such commit
+	if err := b.s.WriteLocal("inbox-head", []byte(gone+"\n")); err != nil {
+		t.Fatal(err)
+	}
+	box := Open(b.s)
+	added, err := box.Catch([]string{"github.com/b"}, before)
+	if err != nil || len(added) != 1 || added[0].Kind != Overwritten {
+		t.Errorf("Catch = %+v, %v", added, err)
+	}
+	if w := box.Warnings(); len(w) != 1 || !strings.Contains(w[0], gone) {
+		t.Errorf("warnings = %q", w)
+	}
+	if m, _ := b.s.ReadLocal("inbox-head"); strings.TrimSpace(string(m)) != head(t, b).String() {
+		t.Errorf("mark = %s", m)
+	}
+}
+
+func TestTwoCatchesAtOnce(t *testing.T) {
+	_, b := twoClones(t)
+	x := addTask(t, b, "x", nil)
+	before := head(t, b)
+	if err := Open(b.s).Start(before); err != nil {
+		t.Fatal(err)
+	}
+	handMerge(t, b, x.ULID)
+	var wg sync.WaitGroup
+	got := make(chan int, 2)
+	for range 2 {
+		wg.Go(func() {
+			added, err := Open(b.s).Catch([]string{"github.com/b"}, before)
+			if err != nil {
+				t.Error(err)
+			}
+			got <- len(added)
+		})
+	}
+	wg.Wait()
+	close(got)
+	n := 0
+	for k := range got {
+		n += k
+	}
+	if n != 1 {
+		t.Errorf("%d items added", n)
+	}
+	if m, _ := b.s.ReadLocal("inbox-head"); strings.TrimSpace(string(m)) != head(t, b).String() {
+		t.Errorf("mark = %s", m)
+	}
+	// A mark another Catch moved is kept: Start does not move it either.
+	if err := Open(b.s).Start(before); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := b.s.ReadLocal("inbox-head"); strings.TrimSpace(string(m)) != head(t, b).String() {
+		t.Errorf("Start moved the mark to %s", m)
 	}
 }

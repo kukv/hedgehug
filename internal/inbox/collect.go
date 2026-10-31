@@ -85,10 +85,18 @@ type commit struct {
 	changed map[string]string
 }
 
-// add puts in the item, made by the commit's writer.
+// add puts in an item of a trailer: who caused it the trailer does not
+// tell.
 func (c *commit) add(it Item) {
-	it.Commit, it.Time, it.Author = c.e.Hash.String(), c.e.When, c.e.Writer()
+	it.Commit, it.Time = c.e.Hash.String(), c.e.When
 	c.items = append(c.items, it)
+}
+
+// addChange puts in an item of what the commit changed, which its writer
+// caused.
+func (c *commit) addChange(it Item) {
+	it.Author = c.e.Writer()
+	c.add(it)
 }
 
 // ids gives the items of tasks the task's id at the commit.
@@ -269,10 +277,10 @@ func (c *commit) task(u model.ULID, from plumbing.Hash) error {
 		old = was
 	}
 	if to, ok := c.added(old.Assignees, now.Assignees); ok {
-		c.add(Item{Kind: Assigned, Task: u, To: to})
+		c.addChange(Item{Kind: Assigned, Task: u, To: to})
 	}
 	if to, ok := c.mentioned(old.Body, now.Body); ok {
-		c.add(Item{Kind: Mention, Task: u, To: to})
+		c.addChange(Item{Kind: Mention, Task: u, To: to})
 	}
 	to, watching := c.watcher(now)
 	if was == nil || !watching {
@@ -286,7 +294,7 @@ func (c *commit) task(u model.ULID, from plumbing.Hash) error {
 		changed = append(changed, "assignees")
 	}
 	if len(changed) > 0 {
-		c.add(Item{Kind: Watch, Task: u, To: to, Detail: mustJSON(map[string][]string{"changed": changed})})
+		c.addChange(Item{Kind: Watch, Task: u, To: to, Detail: mustJSON(map[string][]string{"changed": changed})})
 	}
 	return nil
 }
@@ -308,7 +316,7 @@ func (c *commit) comment(task, cm model.ULID, from plumbing.Hash) error {
 	}
 	d := mustJSON(map[string]model.ULID{"comment": cm})
 	if to, ok := c.mentioned(old.Body, now.Body); ok {
-		c.add(Item{Kind: Mention, Task: task, To: to, Detail: d})
+		c.addChange(Item{Kind: Mention, Task: task, To: to, Detail: d})
 	}
 	if was != nil {
 		return nil
@@ -318,7 +326,7 @@ func (c *commit) comment(task, cm model.ULID, from plumbing.Hash) error {
 		return err
 	}
 	if to, ok := c.watcher(t); ok {
-		c.add(Item{Kind: Watch, Task: task, To: to, Detail: d})
+		c.addChange(Item{Kind: Watch, Task: task, To: to, Detail: d})
 	}
 	return nil
 }

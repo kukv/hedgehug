@@ -14,39 +14,96 @@ var mentionRe = regexp.MustCompile(`(?:^|[^A-Za-z0-9_.@/-])@((?:[A-Za-z0-9][A-Za
 // Mentions returns the accounts body mentions, as written (login or
 // host/login), once each, in the order they first appear. Code is left
 // out, as CommonMark reads it: fenced code blocks, indented code blocks and
-// inline code.
+// inline code. The lines of a list item are read from the item's content
+// column, so its continuation is text and only what is indented four more
+// is code.
 func Mentions(body string) []string {
 	var out []string
 	fence := ""       // the opening fence of the fenced block the line is in
 	indented := false // in an indented code block
 	canIndent := true // an indented line here starts a code block: no paragraph goes on
+	list := 0         // the content column of the list item the lines go on; 0 outside a list
 	for line := range strings.SplitSeq(body, "\n") {
 		if fence != "" {
-			if closesFence(line, fence) {
+			if closesFence(dedent(line, list), fence) {
 				fence, canIndent = "", true
 			}
-			continue
-		}
-		if f := openingFence(line); f != "" {
-			fence, indented = f, false
 			continue
 		}
 		if strings.TrimSpace(line) == "" {
 			canIndent = true
 			continue
 		}
-		if indent(line) >= 4 && (canIndent || indented) {
+		base := list
+		if indent(line) < list {
+			base = 0
+			if canIndent { // after a blank line, a line left of the item ends the list
+				list = 0
+			}
+		}
+		l := dedent(line, base)
+		if f := openingFence(l); f != "" {
+			fence, indented = f, false
+			continue
+		}
+		if indent(l) >= 4 && (canIndent || indented) {
 			indented, canIndent = true, false
 			continue
 		}
 		indented, canIndent = false, false
-		for _, m := range mentionRe.FindAllStringSubmatch(stripInlineCode(line), -1) {
+		if w := listItem(l); w > 0 {
+			list = base + w
+		} else if atxHeading.MatchString(l) {
+			canIndent = true // a heading is no paragraph to go on
+		}
+		for _, m := range mentionRe.FindAllStringSubmatch(stripInlineCode(l), -1) {
 			if !slices.Contains(out, m[1]) {
 				out = append(out, m[1])
 			}
 		}
 	}
 	return out
+}
+
+var (
+	atxHeading = regexp.MustCompile(`^ {0,3}#{1,6}(?:[ \t]|$)`)
+	listMarker = regexp.MustCompile(`^( {0,3})([-*+]|[0-9]{1,9}[.)])( *)`)
+)
+
+// listItem returns the content column of the list item line starts, or 0
+// when it starts none: the marker and one to four spaces after it (one when
+// more follow, as the content is then code).
+func listItem(line string) int {
+	m := listMarker.FindStringSubmatch(line)
+	if m == nil {
+		return 0
+	}
+	n := len(m[1]) + len(m[2])
+	switch rest := line[len(m[0]):]; {
+	case rest == "":
+		return n + 1
+	case m[3] == "":
+		return 0 // -x is no list item
+	case len(m[3]) > 4:
+		return n + 1
+	}
+	return n + len(m[3])
+}
+
+// dedent removes up to n columns of the line's leading spaces and tabs.
+func dedent(line string, n int) string {
+	w := 0
+	for i, r := range line {
+		if w >= n || r != ' ' && r != '\t' {
+			return line[i:]
+		}
+		if r == '\t' {
+			w += 4
+		} else {
+			w++
+		}
+	}
+	return ""
 }
 
 // indent is the width of the line's leading spaces and tabs, a tab

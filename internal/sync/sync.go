@@ -92,6 +92,10 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 	if err != nil {
 		return res, err
 	}
+	// The inbox catches up from here, even when a Catch runs meanwhile.
+	if err := inbox.Open(s).Start(before); err != nil {
+		return res, err
+	}
 	// A failed sync may have moved HEAD too: a fast-forward, a merge.
 	defer func() {
 		if err := notify(s, before, opt, &res); err != nil {

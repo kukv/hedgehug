@@ -38,6 +38,14 @@ func TestMentionsCode(t *testing.T) {
 		{"an indented line goes on a paragraph", "x\n    @c\n", []string{"c"}},
 		{"double backticks", "``@a ` b`` and `@b` @c\n", []string{"c"}},
 		{"runs of another length", "``x` @c\n", []string{"c"}},
+		{"a list item goes on after a blank line", "- item\n\n    @c goes on\n", []string{"c"}},
+		{"an ordered list item goes on", "1. item\n\n   @c\n", []string{"c"}},
+		{"code in a list item", "- item\n\n      @a\n@c\n", []string{"c"}},
+		{"a nested list item", "- a\n  - @b\n\n      @c\n\n          @a\n", []string{"b", "c"}},
+		{"a line left of the item ends the list", "- item\n\n@c\n\n    @a\n", []string{"c"}},
+		{"items of one list", "- @b\n- @c\n", []string{"b", "c"}},
+		{"after an ATX heading", "# Title\n    @a\n## @c\n", []string{"c"}},
+		{"no heading without a space", "#Title\n    @c\n", []string{"c"}},
 	} {
 		if got := Mentions(c.body); !slices.Equal(got, c.want) {
 			t.Errorf("%s: Mentions = %v, want %v", c.name, got, c.want)
