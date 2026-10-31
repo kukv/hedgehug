@@ -2,6 +2,7 @@ package gitrepo
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -28,6 +29,18 @@ func (e LogEntry) Trailer(key string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// TrailerValues returns the values of every trailer named key, in the order
+// they are written.
+func (e LogEntry) TrailerValues(key string) []string {
+	var out []string
+	for _, t := range e.Trailers {
+		if t.Key == key {
+			out = append(out, t.Value)
+		}
+	}
+	return out
 }
 
 // Log returns the commits reachable from HEAD, newest first. With prefixes,
@@ -64,6 +77,29 @@ func (r *Repo) Log(prefixes []string, limit int) ([]LogEntry, error) {
 	})
 	if err != nil {
 		return nil, err
+	}
+	return out, nil
+}
+
+// LogFrom returns the commits from from along the first parents, newest
+// first: the history of the line from was made on, without the commits a
+// merge brought in. A limit above zero caps the number of entries. The zero
+// hash has an empty log.
+func (r *Repo) LogFrom(from plumbing.Hash, limit int) ([]LogEntry, error) {
+	var out []LogEntry
+	for h := from; !h.IsZero(); {
+		c, err := r.r.CommitObject(h)
+		if err != nil {
+			return nil, fmt.Errorf("commit %s: %w", h, err)
+		}
+		out = append(out, entry(c))
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+		h = plumbing.ZeroHash
+		if len(c.ParentHashes) > 0 {
+			h = c.ParentHashes[0]
+		}
 	}
 	return out, nil
 }

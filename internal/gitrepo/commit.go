@@ -27,7 +27,8 @@ type Trailer struct{ Key, Value string }
 
 // Commit describes one commit.
 type Commit struct {
-	Paths    []string // relative to the repository root, slash-separated
+	Paths    []string        // relative to the repository root, slash-separated
+	Parents  []plumbing.Hash // HEAD when empty
 	Subject  string
 	Trailers []Trailer
 	Author   Signature
@@ -43,10 +44,18 @@ type Commit struct {
 //
 // If the commit fails, the index is put back as it was before the call, so
 // that staged paths do not leak into the next commit.
+//
+// A commit with two or more parents is made even when its tree is the same
+// as the first parent's: the parents alone make it a change.
 func (r *Repo) Commit(c Commit) (h plumbing.Hash, err error) {
 	if len(c.Paths) == 0 {
 		return plumbing.ZeroHash, ErrNothingToCommit
 	}
+	unlock, err := r.lockIndex()
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+	defer unlock()
 	before, err := r.r.Storer.Index()
 	if err != nil {
 		return plumbing.ZeroHash, err
@@ -62,29 +71,40 @@ func (r *Repo) Commit(c Commit) (h plumbing.Hash, err error) {
 	if err != nil {
 		return plumbing.ZeroHash, err
 	}
-	for _, p := range c.Paths {
+	if err := r.stage(w, c.Paths); err != nil {
+		return plumbing.ZeroHash, err
+	}
+	sig := &object.Signature{Name: c.Author.Name, Email: c.Author.Email, When: c.When}
+	h, err = w.Commit(message(c), &git.CommitOptions{
+		Author: sig, Committer: sig, Parents: c.Parents, AllowEmptyCommits: len(c.Parents) >= 2,
+	})
+	if errors.Is(err, git.ErrEmptyCommit) {
+		return plumbing.ZeroHash, ErrNothingToCommit
+	}
+	return h, err
+}
+
+// stage makes the index entries of paths match the work tree: a path that is
+// on disk is added; one that is not is dropped from the index.
+func (r *Repo) stage(w *git.Worktree, paths []string) error {
+	for _, p := range paths {
 		_, err := os.Lstat(filepath.Join(r.dir, filepath.FromSlash(p)))
 		switch {
 		case err == nil:
 			// SkipStatus is ignored for a missing path, which is why removals
 			// go through unstage instead.
 			if err := w.AddWithOptions(&git.AddOptions{Path: p, SkipStatus: true}); err != nil {
-				return plumbing.ZeroHash, fmt.Errorf("add %s: %w", p, err)
+				return fmt.Errorf("add %s: %w", p, err)
 			}
 		case errors.Is(err, fs.ErrNotExist):
 			if err := r.unstage(p); err != nil {
-				return plumbing.ZeroHash, fmt.Errorf("remove %s: %w", p, err)
+				return fmt.Errorf("remove %s: %w", p, err)
 			}
 		default:
-			return plumbing.ZeroHash, err
+			return err
 		}
 	}
-	sig := &object.Signature{Name: c.Author.Name, Email: c.Author.Email, When: c.When}
-	h, err = w.Commit(message(c), &git.CommitOptions{Author: sig, Committer: sig})
-	if errors.Is(err, git.ErrEmptyCommit) {
-		return plumbing.ZeroHash, ErrNothingToCommit
-	}
-	return h, err
+	return nil
 }
 
 // unstage drops p from the index without taking the status of the work tree.
