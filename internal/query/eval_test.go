@@ -115,6 +115,49 @@ func TestRunFilters(t *testing.T) {
 	}
 }
 
+func TestRunMentionsWatchingOverwritten(t *testing.T) {
+	s := newStore(t)
+	body, comment, gone, other, watched, over := newTask("body"), newTask("comment"), newTask("gone"), newTask("other"), newTask("watched"), newTask("over")
+	body.Body = "for @Alice\n"
+	other.Body = "for @gitlab.com/alice\n"
+	watched.Watchers = []string{"github.com/b"}
+	put(t, s, body, comment, gone, other, watched, over)
+	now := time.Now().Truncate(time.Second)
+	if _, err := s.Update(store.Op{Name: "comment", Author: testAuthor}, func(tx *store.Tx) error {
+		return errors.Join(
+			tx.PutComment(comment.ULID, &model.Comment{ULID: model.NewULID(), Author: "github.com/x", Created: now, Body: "ask @github.com/alice\n"}),
+			tx.PutComment(gone.ULID, &model.Comment{ULID: model.NewULID(), Author: "github.com/x", Created: now, DeletedAt: &now, Body: "ask @alice\n"}),
+		)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ix := mustOpen(t, s)
+	alice := Options{Me: []string{"github.com/alice"}}
+	tests := []struct {
+		q    string
+		opt  Options
+		want []string
+	}{
+		// @login names an account of any host with that login.
+		{"mentions:@me", alice, []string{"body", "comment"}},
+		{"mentions:GitHub.com/alice", Options{}, []string{"body", "comment"}},
+		{"mentions:gitlab.com/alice", Options{}, []string{"body", "other"}},
+		{"mentions:none", Options{}, []string{"gone", "watched", "over"}},
+		{"-mentions:@me", alice, []string{"gone", "other", "watched", "over"}},
+		{"watching:github.com/b", Options{}, []string{"watched"}},
+		{"watching:GITHUB.COM/B", Options{}, []string{"watched"}},
+		{"watching:@me", Options{Me: []string{"github.com/a", "github.com/b"}}, []string{"watched"}},
+		{"watching:@me", alice, []string{}},
+		{"is:overwritten", Options{Overwritten: map[model.ULID]bool{over.ULID: true}}, []string{"over"}},
+		{"is:overwritten", Options{}, []string{}},
+	}
+	for _, tt := range tests {
+		if got := run(t, ix, tt.q, tt.opt); len(got) != 1 || !slices.Equal(got[0], tt.want) {
+			t.Errorf("%q = %v, want [%v]", tt.q, got, tt.want)
+		}
+	}
+}
+
 func TestRunIsInvalid(t *testing.T) {
 	s := newStore(t)
 	ok := newTask("ok")
@@ -143,6 +186,8 @@ func TestRunErrors(t *testing.T) {
 		{"due<none", Options{}, 1},
 		{"parent:ZZZZ", Options{}, 1},
 		{"assignee:@me", Options{}, 1},
+		{"mentions:@me", Options{}, 1},
+		{"watching:@me", Options{}, 1},
 		{"is:nope", Options{}, 1},
 		{"project:none", Options{}, 1},
 	}

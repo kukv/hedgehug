@@ -3,7 +3,96 @@ package index
 import (
 	"slices"
 	"testing"
+	"time"
+
+	"github.com/kukv/hedgehug/internal/model"
 )
+
+func TestTaskRefs(t *testing.T) {
+	if got := TaskRefs("see #WEB-42, #api-3 and #12\n"); !slices.Equal(got, []string{"WEB-42"}) {
+		t.Errorf("TaskRefs = %v", got)
+	}
+}
+
+func TestTaskRefsOnceInOrderOutsideCode(t *testing.T) {
+	body := "(#B-1) #AB-2 #AB-1 #AB-2\nx#AB-3 #AB-4x #AB-05 `#AB-6`\n```\n#AB-7\n```\n#AB-8.\n"
+	if got := TaskRefs(body); !slices.Equal(got, []string{"AB-2", "AB-1", "AB-8"}) {
+		t.Errorf("TaskRefs = %v", got)
+	}
+}
+
+func TestMentionNames(t *testing.T) {
+	for _, c := range []struct {
+		mention, account string
+		want             bool
+	}{
+		{"alice", "github.com/alice", true},
+		{"Alice", "github.com/ALICE", true},
+		{"alice", "gitlab.com/alice", true},
+		{"alice", "alice", true},
+		{"alice", "github.com/malice", false},
+		{"github.com/alice", "github.com/Alice", true},
+		{"github.com/alice", "gitlab.com/alice", false},
+		{"github.com/alice", "alice", false},
+	} {
+		if got := MentionNames(c.mention, c.account); got != c.want {
+			t.Errorf("MentionNames(%q, %q) = %v, want %v", c.mention, c.account, got, c.want)
+		}
+	}
+}
+
+// A reference by a former id points at the task that has it, since no task
+// has it as its id; the task itself and deleted tasks are no backlinks.
+func TestBacklinksByFormerID(t *testing.T) {
+	s, _ := newStore(t)
+	a := newTask("a")
+	put(t, s, a) // TST-1
+	ix := mustOpen(t, s)
+	b, gone := newTask("b"), newTask("gone")
+	b.Body = "after #" + a.ID + "\n"
+	gone.Body = "#" + a.ID + "\n"
+	put(t, s, b, gone)
+	at := time.Now()
+	gone.DeletedAt = &at
+	put(t, s, gone)
+	a.Body = "#" + a.ID + "\n"
+	renumber(t, s, a, "NEW")
+	if err := ix.Refresh(); err != nil {
+		t.Fatal(err)
+	}
+	if e, _ := ix.Task(a.ULID); e.ID != "NEW-1" || !slices.Equal(e.FormerIDs, []string{"TST-1"}) {
+		t.Fatalf("a = %s %v, want NEW-1 with the former id TST-1", e.ID, e.FormerIDs)
+	}
+	if got := titles(ix.Backlinks(a.ULID)); !slices.Equal(got, []string{"b"}) {
+		t.Errorf("Backlinks = %v, want [b]", got)
+	}
+}
+
+// A reference goes to the task with that id before one with it as a former
+// id, and to none when two tasks have it; the backlinks are in ULID order.
+func TestBacklinksResolveOrder(t *testing.T) {
+	s, dir := newStore(t)
+	former, current := model.NewULID(), model.NewULID()
+	commitRaw(t, s, dir, model.TaskPath(former), rawTask(former, "kind: task\nid: TST-9\nformer_ids: [TST-1]\ntitle: former\nstatus: todo\n"))
+	commitRaw(t, s, dir, model.TaskPath(current), rawTask(current, "kind: task\nid: TST-1\ntitle: current\nstatus: todo\n"))
+	twin1, twin2 := model.NewULID(), model.NewULID()
+	commitRaw(t, s, dir, model.TaskPath(twin1), rawTask(twin1, "kind: task\nid: TST-5\ntitle: twin\nstatus: todo\n"))
+	commitRaw(t, s, dir, model.TaskPath(twin2), rawTask(twin2, "kind: task\nid: TST-5\ntitle: twin\nstatus: todo\n"))
+	x, y := model.NewULID(), model.NewULID()
+	// y is written first, so that the ULID order is not the order of writing.
+	commitRaw(t, s, dir, model.TaskPath(y), rawTask(y, "kind: task\ntitle: y\nstatus: todo\n")+"#TST-1 #TST-5\n")
+	commitRaw(t, s, dir, model.TaskPath(x), rawTask(x, "kind: task\ntitle: x\nstatus: todo\n")+"#TST-1\n")
+	ix := mustOpen(t, s)
+	if got := titles(ix.Backlinks(current)); !slices.Equal(got, []string{"x", "y"}) {
+		t.Errorf("Backlinks(current) = %v, want [x y]", got)
+	}
+	if got := ix.Backlinks(former); len(got) != 0 {
+		t.Errorf("Backlinks(former) = %v, want none", titles(got))
+	}
+	if got := ix.Backlinks(twin1); len(got) != 0 {
+		t.Errorf("Backlinks(twin1) = %v, want none: TST-5 is ambiguous", titles(got))
+	}
+}
 
 func TestMentionsSkipCode(t *testing.T) {
 	body := "hi @alice and @github.com/bob\n`@carol`\n```\n@dave\n```\nmail a@b.c\n"

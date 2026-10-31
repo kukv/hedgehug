@@ -1,8 +1,10 @@
 package index
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -177,5 +179,36 @@ func TestSiblingULIDsTreatsAMissingParentAsTheTopLevel(t *testing.T) {
 	put(t, s, root)
 	if root.Rank == "a5" {
 		t.Error("root shares a rank with the orphan, shown at the top level, but was not reranked")
+	}
+}
+
+// A read that fails in the middle of an update leaves the cache as it was:
+// Refresh reports the error, and the index opened again is the one a full
+// rebuild makes.
+func TestFailedUpdateThenOpenEqualsARebuild(t *testing.T) {
+	s, _ := newStore(t)
+	a, b := newTask("a"), newTask("b")
+	put(t, s, a, b)
+	ix := mustOpen(t, s)
+	a.Title, b.Title = "a2", "b2"
+	b.Body = "@bob #TST-1\n"
+	put(t, s, a, b)
+	putComment(t, s, a.ULID, newComment("github.com/x", "@carol\n"))
+
+	reads := 0
+	readHook = func(string) error {
+		if reads++; reads == 2 {
+			return errors.New("read failed")
+		}
+		return nil
+	}
+	err := ix.Refresh()
+	readHook = nil
+	if err == nil {
+		t.Fatal("Refresh succeeded with a failed read")
+	}
+	got := sortedTasks(mustOpen(t, s))
+	if want := sortedTasks(rebuilt(t, s)); !reflect.DeepEqual(got, want) {
+		t.Errorf("Open after the failed update = %s, want %s", dump(got), dump(want))
 	}
 }

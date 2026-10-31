@@ -1,6 +1,7 @@
 package index
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -39,6 +40,37 @@ func put(t *testing.T, s *store.Store, tasks ...*model.Task) {
 				task.Workspace = ws
 			}
 			if err := tx.PutTask(task); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// renumber gives task's workspace the id prefix p and writes task again,
+// which gives it an id of p and keeps the old one among its former ids.
+func renumber(t *testing.T, s *store.Store, task *model.Task, p string) {
+	t.Helper()
+	if _, err := s.Update(store.Op{Name: "workspace", Author: testAuthor}, func(tx *store.Tx) error {
+		w, err := tx.Workspace(task.Workspace)
+		if err != nil {
+			return err
+		}
+		w.IDPrefix = p
+		return errors.Join(tx.PutWorkspace(w), tx.PutTask(task))
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// putComment writes the comments cs on task in one operation.
+func putComment(t *testing.T, s *store.Store, task model.ULID, cs ...*model.Comment) {
+	t.Helper()
+	if _, err := s.Update(store.Op{Name: "comment", Task: task, Author: testAuthor}, func(tx *store.Tx) error {
+		for _, c := range cs {
+			if err := tx.PutComment(task, c); err != nil {
 				return err
 			}
 		}

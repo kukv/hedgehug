@@ -1,9 +1,12 @@
 package index
 
 import (
+	"iter"
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/kukv/hedgehug/internal/model"
 )
 
 // mentionRe finds @login and @host/login where the @ does not follow a
@@ -11,14 +14,102 @@ import (
 // login does not end with a hyphen.
 var mentionRe = regexp.MustCompile(`(?:^|[^A-Za-z0-9_.@/-])@((?:[A-Za-z0-9][A-Za-z0-9.-]*/)?[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)`)
 
+// taskRefRe finds #<ID> where the # does not follow a letter, digit or
+// underscore. TaskRefs checks what follows the id.
+var taskRefRe = regexp.MustCompile(`(?:^|[^A-Za-z0-9_])#([A-Z][A-Z0-9]{1,9}-[1-9][0-9]*)`)
+
 // Mentions returns the accounts body mentions, as written (login or
 // host/login), once each, in the order they first appear. Code is left
-// out, as CommonMark reads it: fenced code blocks, indented code blocks and
-// inline code. The lines of a list item are read from the item's content
-// column, so its continuation is text and only what is indented four more
-// is code.
+// out, as prose reads it.
 func Mentions(body string) []string {
 	var out []string
+	for l := range prose(body) {
+		for _, m := range mentionRe.FindAllStringSubmatch(l, -1) {
+			if !slices.Contains(out, m[1]) {
+				out = append(out, m[1])
+			}
+		}
+	}
+	return out
+}
+
+// TaskRefs returns the ids body refers to as #<ID>, such as #WEB-42, once
+// each, in the order they first appear. An id followed by a letter, digit,
+// underscore or hyphen is not one. Code is left out, as prose reads it.
+func TaskRefs(body string) []string {
+	var out []string
+	for l := range prose(body) {
+		for _, m := range taskRefRe.FindAllStringSubmatchIndex(l, -1) {
+			if end := m[3]; end < len(l) && (isAlnum(l[end]) || l[end] == '_' || l[end] == '-') {
+				continue
+			}
+			if id := l[m[2]:m[3]]; !slices.Contains(out, id) {
+				out = append(out, id)
+			}
+		}
+	}
+	return out
+}
+
+// Backlinks returns the tasks that refer to ulid by a ref, in ULID order: a
+// ref points at the task Resolve finds for it, so by its id first, then by
+// a former id. The task itself and deleted tasks are left out.
+func (ix *Index) Backlinks(ulid model.ULID) []*Entry {
+	target, ok := ix.tasks[ulid]
+	if !ok {
+		return nil
+	}
+	ids := append([]string{target.ID}, target.FormerIDs...)
+	points := map[string]bool{} // by ref, whether it points at ulid
+	var out []*Entry
+	for _, e := range ix.tasks {
+		if e.ULID == ulid || e.DeletedAt != nil {
+			continue
+		}
+		for _, r := range e.Refs {
+			if !slices.ContainsFunc(ids, func(id string) bool { return strings.EqualFold(id, r) }) {
+				continue
+			}
+			p, seen := points[r]
+			if !seen {
+				got, err := ix.Resolve(r)
+				p = err == nil && got == ulid
+				points[r] = p
+			}
+			if p {
+				out = append(out, e)
+				break
+			}
+		}
+	}
+	slices.SortFunc(out, func(a, b *Entry) int { return strings.Compare(a.ULID.String(), b.ULID.String()) })
+	return out
+}
+
+func isAlnum(c byte) bool {
+	return c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9'
+}
+
+// MentionNames reports whether the mention m, as written, names the account
+// a: @login any account with that login, @host/login that account. Case
+// does not count.
+func MentionNames(m, a string) bool {
+	if strings.Contains(m, "/") {
+		return strings.EqualFold(m, a)
+	}
+	return strings.EqualFold(m, a[strings.LastIndex(a, "/")+1:])
+}
+
+// prose returns the lines of body that are not code, with their inline
+// code blanked. Code is as CommonMark reads it: fenced code blocks,
+// indented code blocks and inline code. The lines of a list item are read
+// from the item's content column, so its continuation is text and only
+// what is indented four more is code.
+func prose(body string) iter.Seq[string] {
+	return func(yield func(string) bool) { walkProse(body, yield) }
+}
+
+func walkProse(body string, yield func(string) bool) {
 	fence := ""       // the opening fence of the fenced block the line is in
 	indented := false // in an indented code block
 	canIndent := true // an indented line here starts a code block: no paragraph goes on
@@ -58,13 +149,10 @@ func Mentions(body string) []string {
 		} else if atxHeading.MatchString(l) {
 			canIndent = true // a heading is no paragraph to go on
 		}
-		for _, m := range mentionRe.FindAllStringSubmatch(stripInlineCode(l), -1) {
-			if !slices.Contains(out, m[1]) {
-				out = append(out, m[1])
-			}
+		if !yield(stripInlineCode(l)) {
+			return
 		}
 	}
-	return out
 }
 
 var (

@@ -23,6 +23,7 @@ type Entry struct {
 	Rank       model.Rank
 	Status     string
 	Assignees  []string
+	Watchers   []string
 	Labels     []string
 	BlockedBy  []model.ULID
 	Props      []Prop // in file order; queries read them by the schema's types
@@ -30,6 +31,10 @@ type Entry struct {
 	Updated    time.Time
 	DeletedAt  *time.Time
 	Text       string             // title and body in lower case, for free-text search
+	Mentions   []string           // accounts mentioned in the body and the comments not deleted (login or host/login, as written), each once, in order
+	Refs       []string           // ids referred to as #<ID> there, each once, in order
+	Comments   []CommentEntry     // in ULID order, deleted ones included
+	Worklogs   []WorklogEntry     // in ULID order, deleted ones included
 	Violations []schema.Violation // against the schema where the task sits
 	Broken     string             // why the file did not decode; empty when it did
 	// BrokenNumbers is, for a file that did not decode, the largest number
@@ -68,7 +73,8 @@ func newEntry(ulid model.ULID, data []byte) (*Entry, *model.Task) {
 	return EntryOf(t), t
 }
 
-// EntryOf returns what the index keeps of t, as read from its file. A
+// EntryOf returns what the index keeps of t, as read from its file: its
+// mentions and refs are those of the body, as it knows of no comments. A
 // command uses it for a task that is not yet written.
 func EntryOf(t *model.Task) *Entry {
 	e := &Entry{
@@ -82,12 +88,15 @@ func EntryOf(t *model.Task) *Entry {
 		Rank:      t.Rank,
 		Status:    t.Status,
 		Assignees: t.Assignees,
+		Watchers:  t.Watchers,
 		Labels:    t.Labels,
 		BlockedBy: t.BlockedBy,
 		Created:   t.Created,
 		Updated:   t.Updated,
 		DeletedAt: t.DeletedAt,
 		Text:      strings.ToLower(t.Title + "\n" + t.Body),
+		Mentions:  Mentions(t.Body),
+		Refs:      TaskRefs(t.Body),
 	}
 	for _, f := range t.Props {
 		e.Props = append(e.Props, Prop{Key: f.Key, Values: scalars(f.Value)})

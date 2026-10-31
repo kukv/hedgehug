@@ -351,7 +351,7 @@ func (c *commit) mentioned(old, now string) (string, bool) {
 			continue
 		}
 		for _, a := range c.me {
-			if mentions(m, a) {
+			if index.MentionNames(m, a) {
 				return a, true
 			}
 		}
@@ -414,16 +414,6 @@ func isMe(me []string, a string) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-// mentions reports whether the mention m, as written, names the account a:
-// @login any account with that login, @host/login that account. Case does
-// not count.
-func mentions(m, a string) bool {
-	if strings.Contains(m, "/") {
-		return strings.EqualFold(m, a)
-	}
-	return strings.HasSuffix(strings.ToLower(a), "/"+strings.ToLower(m))
 }
 
 // taskOf is the task a file of the store belongs to: the task of a task,
