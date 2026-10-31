@@ -116,9 +116,13 @@ func TestRerankIsRestoredWhenTheOperationFails(t *testing.T) {
 	a, b := rankTask(ws, "a", "a5"), rankTask(ws, "b", "a5")
 	a.ID, b.ID = "TST-1", "TST-2"
 	writeShared(t, s, a, b)
-	s.commit = func(gitrepo.Commit) error { return errors.New("commit fails") }
+	var rankAtCommit model.Rank
+	s.commit = func(gitrepo.Commit) error { rankAtCommit = b.Rank; return errors.New("commit fails") }
 	if err := put(s, b); err == nil {
 		t.Fatal("the commit did not fail")
+	}
+	if rankAtCommit == "a5" {
+		t.Error("b was not reranked in the operation")
 	}
 	if b.Rank != "a5" {
 		t.Errorf("b.Rank = %s after a failed write, want a5", b.Rank)
@@ -146,10 +150,14 @@ func TestRerankIsRestoredForEveryTask(t *testing.T) {
 	d, e, f := rankTask(ws, "d", "a7"), rankTask(ws, "e", "a7"), rankTask(ws, "f", "a7")
 	a.ID, b.ID, c.ID, d.ID, e.ID, f.ID = "TST-1", "TST-2", "TST-3", "TST-4", "TST-5", "TST-6"
 	writeShared(t, s, a, b, c, d, e, f)
-	s.commit = func(gitrepo.Commit) error { return errors.New("commit fails") }
+	var aAtCommit, fAtCommit model.Rank
+	s.commit = func(gitrepo.Commit) error { aAtCommit, fAtCommit = a.Rank, f.Rank; return errors.New("commit fails") }
 	// a is first of the a5 group, f is last of the a7 group: both change.
 	if err := put(s, a, f); err == nil {
 		t.Fatal("the commit did not fail")
+	}
+	if aAtCommit == "a5" || fAtCommit == "a7" {
+		t.Errorf("ranks in the operation = %s, %s; want both reranked", aAtCommit, fAtCommit)
 	}
 	if a.Rank != "a5" || f.Rank != "a7" {
 		t.Errorf("ranks = %s, %s after a failed write, want a5, a7", a.Rank, f.Rank)

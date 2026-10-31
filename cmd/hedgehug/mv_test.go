@@ -86,6 +86,7 @@ func TestMvNextToSiblingsWithTheSameRank(t *testing.T) {
 				t.Fatal("A and B do not share a rank")
 			}
 
+			aRank, bRank := te.task(a.ULID).Rank, te.task(b.ULID).Rank
 			ref := map[string]string{"A": a.ID, "B": b.ID}[tc.to]
 			te.ok("mv", m.ID, "--parent", p.ID, tc.flag, ref)
 			var titles []string
@@ -96,6 +97,9 @@ func TestMvNextToSiblingsWithTheSameRank(t *testing.T) {
 			}
 			if got := strings.Join(titles, ","); got != tc.want {
 				t.Errorf("order = %s, want %s", got, tc.want)
+			}
+			if te.task(a.ULID).Rank != aRank || te.task(b.ULID).Rank != bRank {
+				t.Error("mv changed the rank of A or B")
 			}
 			mr, ar, dr := te.task(m.ULID).Rank, te.task(a.ULID).Rank, te.task(d.ULID).Rank
 			if mr == ar || mr == dr {

@@ -1,6 +1,8 @@
 package index
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -116,25 +118,35 @@ func TestSiblingsWithTheSameRankAreOrderedByID(t *testing.T) {
 	}
 }
 
-// A write through a store the index is open on finds the siblings in the
-// index.
+// Open registers the index as the store's source of siblings: a write finds
+// them there and does not read the task files. A file that is not in HEAD
+// shows which one it used.
 func TestWriteReranksThroughTheIndex(t *testing.T) {
-	s, _ := newStore(t)
+	s, dir := newStore(t)
 	a, b := newTask("a"), newTask("b")
 	a.Rank, b.Rank = "a5", "a9"
 	put(t, s, a, b)
-	ix := mustOpen(t, s)
-	calls := 0
-	s.SetSiblings(func(parent *model.ULID, ws model.ULID) ([]model.ULID, error) {
-		calls++
-		return ix.siblingULIDs(parent, ws)
-	})
+	mustOpen(t, s)
 
+	// The index does not know this file, a read of the task files does.
+	stray := model.NewULID()
+	raw := rawTask(stray, "kind: task\ntitle: x\nstatus: todo\nrank: a7\nworkspace: "+a.Workspace.String()+"\n")
+	strayPath := filepath.Join(dir, filepath.FromSlash(model.TaskPath(stray)))
+	if err := os.MkdirAll(filepath.Dir(strayPath), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(strayPath, []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	b.Rank = "a7"
+	put(t, s, b)
+	if b.Rank != "a7" {
+		t.Errorf("b.Rank = %s: the write read the task files, not the index", b.Rank)
+	}
+
+	// The index knows a: the write finds it.
 	b.Rank = "a5"
 	put(t, s, b)
-	if calls == 0 {
-		t.Error("the write did not ask the index for the siblings")
-	}
 	if b.Rank <= "a5" {
 		t.Errorf("b.Rank = %s, want it after a5", b.Rank)
 	}
