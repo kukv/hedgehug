@@ -340,12 +340,25 @@ func (u *undoer) fieldAuthors(p string) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Each version is decoded once: a commit is read as itself and as the
+	// parent of the next.
+	type version struct {
+		t   *model.Task
+		err error
+	}
+	seen := map[plumbing.Hash]version{}
 	task := func(commit plumbing.Hash) (*model.Task, error) {
-		b, err := u.read(commit, p)
-		if err != nil || b == nil {
-			return nil, err
+		if v, ok := seen[commit]; ok {
+			return v.t, v.err
 		}
-		return model.DecodeTask(b)
+		var v version
+		if b, err := u.read(commit, p); err != nil || b == nil {
+			v.err = err
+		} else {
+			v.t, v.err = model.DecodeTask(b)
+		}
+		seen[commit] = v
+		return v.t, v.err
 	}
 	out := map[string]string{}
 	when := map[string]time.Time{}
