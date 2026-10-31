@@ -12,7 +12,6 @@ import (
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/schema"
-	"github.com/kukv/hedgehug/internal/store"
 )
 
 func (a *app) showCmd() *cobra.Command {
@@ -24,130 +23,19 @@ func (a *app) showCmd() *cobra.Command {
 	}
 }
 
-type commentJSON struct {
-	ULID    string    `json:"ulid"`
-	Author  string    `json:"author"`
-	Created time.Time `json:"created"`
-	Body    string    `json:"body"`
-}
-
-type showJSON struct {
-	*ops.TaskView
-	Body     string               `json:"body"`
-	Watchers []string             `json:"watchers"`
-	Repos    []string             `json:"repos"`
-	Comments []commentJSON        `json:"comments"`
-	Reverse  map[string][]ops.Ref `json:"reverse"`
-	// ReferencedBy are the tasks whose body or comments write this one as #<ID>.
-	ReferencedBy []ops.Ref `json:"referenced_by"`
-	History      []logJSON `json:"history"`
-}
-
-// showHistory is how many commits show lists under History.
-const showHistory = 5
-
-// relation is one kind of task pointing at the task shown.
-type relation struct {
-	key   string // the name in JSON: blocks, or the property
-	label string // the name in the text
-	tasks []*index.Entry
-}
-
 func (a *app) show(arg string) error {
-	s, ix, err := a.ss.Open()
-	if err != nil {
-		return err
-	}
-	e, err := a.ss.Resolve(ix, arg)
-	if err != nil {
-		return err
-	}
-	var t *model.Task
-	if e.Broken == "" {
-		if t, err = s.Task(e.ULID); err != nil {
-			return err
-		}
-	}
-	var comments []*model.Comment
-	if e.Broken == "" {
-		if comments, err = liveComments(s, e.ULID); err != nil {
-			return err
-		}
-	}
-	rels := reverse(ix, e.ULID)
-	back := ix.Backlinks(e.ULID)
-	history, err := a.taskLog(s, e.ULID, showHistory)
+	r, err := a.ss.Show(arg)
 	if err != nil {
 		return err
 	}
 	if a.jsonOut {
-		return a.printJSON(showOf(ix, e, t, comments, rels, back, history))
+		return a.printJSON(ops.ShowViewOf(r))
 	}
-	_, err = fmt.Fprint(a.stdout, a.showText(ix, e, t, comments, rels, back, history))
+	_, err = fmt.Fprint(a.stdout, a.showText(r.Index, r.Entry, r.Task, r.Comments, r.Relations, r.Back, r.History))
 	return err
 }
 
-func liveComments(s *store.Store, ulid model.ULID) ([]*model.Comment, error) {
-	var out []*model.Comment
-	for c, err := range s.Comments(ulid) {
-		if err != nil {
-			return nil, err
-		}
-		if c.DeletedAt == nil {
-			out = append(out, c)
-		}
-	}
-	return out, nil
-}
-
-// reverse finds the tasks that point at ulid, by relation.
-func reverse(ix *index.Index, ulid model.ULID) []relation {
-	var out []relation
-	if es := ix.Reverse(ulid, "blocked_by"); len(es) > 0 {
-		out = append(out, relation{"blocks", "blocks", es})
-	}
-	for _, p := range ix.Schema().Props {
-		if p.Type != schema.TypeTaskRef {
-			continue
-		}
-		es := ix.Reverse(ulid, p.Name)
-		if len(es) == 0 {
-			continue
-		}
-		label := p.Name + " (from)"
-		switch {
-		case p.Inverse != "":
-			label = p.Inverse
-		case p.Symmetric && p.Label != "":
-			label = p.Label
-		case p.Symmetric:
-			label = p.Name
-		}
-		out = append(out, relation{p.Name, label, es})
-	}
-	return out
-}
-
-func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []relation, back []*index.Entry, history []gitrepo.LogEntry) *showJSON {
-	j := &showJSON{TaskView: ops.TaskViewOf(ix, e), Watchers: []string{}, Repos: []string{}, Comments: []commentJSON{}, Reverse: map[string][]ops.Ref{}, ReferencedBy: []ops.Ref{}, History: logJSONs(ix, history)}
-	for _, x := range back {
-		j.ReferencedBy = append(j.ReferencedBy, ops.Ref{ULID: x.ULID.String(), ID: x.ID, Title: x.Title})
-	}
-	if t != nil {
-		j.Body, j.Watchers, j.Repos = t.Body, ops.OrEmpty(t.Watchers), ops.OrEmpty(t.Repos)
-	}
-	for _, c := range comments {
-		j.Comments = append(j.Comments, commentJSON{c.ULID.String(), c.Author, c.Created, c.Body})
-	}
-	for _, r := range rels {
-		for _, x := range r.tasks {
-			j.Reverse[r.key] = append(j.Reverse[r.key], ops.Ref{ULID: x.ULID.String(), ID: x.ID, Title: x.Title})
-		}
-	}
-	return j
-}
-
-func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []relation, back []*index.Entry, history []gitrepo.LogEntry) string {
+func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []ops.Relation, back []*index.Entry, history []gitrepo.LogEntry) string {
 	st := a.style()
 	var b strings.Builder
 	title := e.Title
@@ -223,11 +111,11 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 	if len(rels) > 0 {
 		b.WriteString("\nRelated:\n")
 		for _, r := range rels {
-			names := make([]string, len(r.tasks))
-			for i, x := range r.tasks {
+			names := make([]string, len(r.Tasks))
+			for i, x := range r.Tasks {
 				names[i] = ops.RefName(ix, x.ULID)
 			}
-			field(r.label, names...)
+			field(r.Label, names...)
 		}
 	}
 	if len(back) > 0 {

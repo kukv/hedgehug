@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"text/template"
@@ -56,32 +55,17 @@ func (a *app) lsCmd() *cobra.Command {
 }
 
 func (a *app) ls(q *query.Query, ulidsOnly bool, tmpl *template.Template) error {
-	s, ix, err := a.ss.Open()
+	res, err := a.ss.List(q)
 	if err != nil {
 		return err
 	}
-	opt, err := a.ss.QueryOptions(s)
-	if err != nil {
-		return err
-	}
-	res, err := query.Run(ix, q, opt)
-	if err != nil {
-		var qe *query.Error
-		if errors.As(err, &qe) {
-			return usageError{err}
-		}
-		return err
-	}
-	var all []*index.Entry
-	for _, g := range res.Groups {
-		all = append(all, g.Tasks...)
-	}
+	ix, all := res.Index, res.Entries
 	switch {
 	case ulidsOnly:
 		return a.printULIDs(all)
 	case tmpl != nil:
 		return a.printFormat(ix, all, tmpl, nil)
-	case a.jsonOut || !hasTerm(q, "group"):
+	case a.jsonOut || !ops.HasTerm(q, "group"):
 		return a.printTasks(ix, all)
 	}
 	for i, g := range res.Groups {
@@ -102,15 +86,6 @@ func (a *app) ls(q *query.Query, ulidsOnly bool, tmpl *template.Template) error 
 		}
 	}
 	return nil
-}
-
-func hasTerm(q *query.Query, key string) bool {
-	for _, t := range q.Terms {
-		if t.Key == key {
-			return true
-		}
-	}
-	return false
 }
 
 func (a *app) printULIDs(es []*index.Entry) error {

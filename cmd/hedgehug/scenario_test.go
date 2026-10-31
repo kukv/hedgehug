@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/ops"
 )
 
 // TestScenario runs the phase 1 done criterion for the CLI: in one store,
@@ -59,12 +61,12 @@ func TestScenario(t *testing.T) {
 		}
 	}
 	var sj struct {
-		History []logJSON `json:"history"`
+		History []ops.LogView `json:"history"`
 	}
 	if err := json.Unmarshal([]byte(te.ok("show", g.ID, "--json")), &sj); err != nil {
 		t.Fatal(err)
 	}
-	if len(sj.History) == 0 || !slices.ContainsFunc(sj.History, func(l logJSON) bool { return strings.HasPrefix(l.Subject, "hedgehug: edit ") }) {
+	if len(sj.History) == 0 || !slices.ContainsFunc(sj.History, func(l ops.LogView) bool { return strings.HasPrefix(l.Subject, "hedgehug: edit ") }) {
 		t.Errorf("show --json history = %+v, want the edit commit", sj.History)
 	}
 	step("comment", "comment", "rm", cm[0].ULID.String())
