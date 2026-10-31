@@ -1838,7 +1838,7 @@ type cluster struct {
 	remote string
 	stores []*store.Store
 	opts   []Options
-	rank   int
+	last   model.Rank // the last rank given by addTask
 }
 
 func newCluster(t *testing.T, n int) *cluster {
@@ -1903,8 +1903,11 @@ func (c *cluster) addTask(i int, title string) *model.Task {
 			break
 		}
 	}
-	c.rank++
-	r, _ := model.Between(model.Rank(fmt.Sprintf("a%d", c.rank)), "") // distinct ranks: rerank is not what these tests look at
+	r, err := model.Between(c.last, "") // distinct ranks: rerank is not what these tests look at
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	c.last = r
 	x := &model.Task{ULID: model.NewULID(), Workspace: ws, Kind: "task", Title: title, Status: "todo", Rank: r}
 	if _, err := s.Update(c.op(i, "add", x.ULID), func(tx *store.Tx) error { return tx.PutTask(x) }); err != nil {
 		c.t.Fatal(err)
