@@ -122,7 +122,9 @@ func TestSetDeletedIsConflict(t *testing.T) {
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
-	ts.deleteTask("ME-1")
+	if _, err := ts.Remove("ME-1"); err != nil {
+		t.Fatal(err)
+	}
 	_, err := ts.Set("ME-1", []Assign{{Key: "title", Op: "=", Value: "x"}})
 	wantErr(t, err, KindConflict, "task.deleted")
 }

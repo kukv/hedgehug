@@ -17,6 +17,7 @@ import (
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/merge"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -420,7 +421,7 @@ func (u *undoer) workspace(ulid model.ULID, ours, merged []byte) error {
 // subtree are in one workspace, as hedgehug mv --workspace keeps them.
 func (u *undoer) followMoves() error {
 	for _, m := range u.moved {
-		for _, d := range descendants(u.ix, m.ulid, func(*index.Entry) bool { return true }) {
+		for _, d := range ops.Descendants(u.ix, m.ulid, func(*index.Entry) bool { return true }) {
 			t, err := u.tx.Task(d.ULID)
 			if errors.Is(err, store.ErrNotFound) {
 				continue // removed in this undo

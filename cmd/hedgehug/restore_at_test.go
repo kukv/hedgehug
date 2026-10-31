@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/ops"
 )
 
 // The store clock is the real one, which commands in tests cannot replace,
@@ -74,9 +76,9 @@ func TestParseAt(t *testing.T) {
 		{"abc1234", time.Time{}, false},
 		{"2026-13-45", time.Time{}, false},
 	} {
-		got, ok := parseAtTime(c.in, loc)
+		got, ok := ops.ParseAtTime(c.in, loc)
 		if ok != c.ok || !got.Equal(c.want) {
-			t.Errorf("parseAtTime(%q) = %v %v, want %v %v", c.in, got, ok, c.want, c.ok)
+			t.Errorf("ops.ParseAtTime(%q) = %v %v, want %v %v", c.in, got, ok, c.want, c.ok)
 		}
 	}
 }

@@ -4,16 +4,12 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/index"
-	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/store"
 )
 
 func (a *app) rmCmd() *cobra.Command {
@@ -54,232 +50,42 @@ func (a *app) purgeCmd() *cobra.Command {
 	return cmd
 }
 
-// descendants returns the tasks under ulid for which follow is true, going
-// down only through those, depth first in rank order. A parent cycle stops
-// the walk.
-func descendants(ix *index.Index, ulid model.ULID, follow func(*index.Entry) bool) []*index.Entry {
-	seen := map[model.ULID]bool{ulid: true}
-	var out []*index.Entry
-	var walk func(model.ULID)
-	walk = func(p model.ULID) {
-		for _, c := range ix.Children(p) {
-			if seen[c.ULID] || !follow(c) {
-				continue
-			}
-			seen[c.ULID] = true
-			out = append(out, c)
-			walk(c.ULID)
-		}
-	}
-	walk(ulid)
-	return out
-}
-
 func (a *app) rm(arg string) error {
-	s, ix, err := a.ss.Open()
+	res, err := a.ss.Remove(arg)
 	if err != nil {
 		return err
 	}
-	e, err := a.ss.Resolve(ix, arg)
-	if err != nil {
-		return err
-	}
-	if err := notDeletedYet(ix, e); err != nil {
-		return err
-	}
-	var targets []*index.Entry
-	now := a.now().Truncate(time.Second)
-	if _, err := a.ss.Update(s, store.Op{Name: "rm", Task: e.ULID}, func(tx *store.Tx) error {
-		// Read under the lock, so a child added since is deleted too, and
-		// a task deleted since is not deleted again.
-		var err error
-		if e, err = current(ix, e); err != nil {
-			return err
-		}
-		if err := notDeletedYet(ix, e); err != nil {
-			return err
-		}
-		targets = []*index.Entry{e}
-		for _, d := range descendants(ix, e.ULID, func(*index.Entry) bool { return true }) {
-			if d.DeletedAt == nil {
-				targets = append(targets, d)
-			}
-		}
-		for _, x := range targets {
-			t, err := tx.Task(x.ULID)
-			if err != nil {
-				return err
-			}
-			t.DeletedAt = &now
-			if err := tx.PutTask(t); err != nil {
-				return err
-			}
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-	return a.printAffected(ix, e, targets, "Deleted", true)
-}
-
-// current refreshes ix, as a command does under the lock, and returns e as
-// it is now.
-func current(ix *index.Index, e *index.Entry) (*index.Entry, error) {
-	if err := ix.Refresh(); err != nil {
-		return nil, err
-	}
-	cur, ok := ix.Task(e.ULID)
-	if !ok {
-		return nil, fmt.Errorf("%s is no longer in the store", ops.TaskLabel(e))
-	}
-	return cur, nil
-}
-
-// notDeletedYet refuses to delete the task e again.
-func notDeletedYet(ix *index.Index, e *index.Entry) error {
-	if e.DeletedAt != nil {
-		return fmt.Errorf("%s is already deleted", ops.RefName(ix, e.ULID))
-	}
-	return nil
-}
-
-// isDeleted refuses to restore or purge the task e when it is not deleted;
-// hint ends the message.
-func isDeleted(ix *index.Index, e *index.Entry, hint string) error {
-	if e.DeletedAt == nil {
-		return fmt.Errorf("%s is not deleted%s", ops.RefName(ix, e.ULID), hint)
-	}
-	return nil
-}
-
-// restorable refuses to restore e when it is not deleted or its parent is.
-func restorable(ix *index.Index, e *index.Entry) error {
-	if err := isDeleted(ix, e, ""); err != nil {
-		return err
-	}
-	if e.Parent != nil {
-		if p, ok := ix.Task(*e.Parent); ok {
-			return ops.LiveParent(ix, p)
-		}
-	}
-	return nil
+	return a.printAffected(res.Index, res.Entry, res.Targets, "Deleted", true)
 }
 
 func (a *app) restore(arg string) error {
-	s, ix, err := a.ss.Open()
+	res, err := a.ss.Restore(arg)
 	if err != nil {
 		return err
 	}
-	e, err := a.ss.Resolve(ix, arg)
-	if err != nil {
-		return err
-	}
-	if err := restorable(ix, e); err != nil {
-		return err
-	}
-	var targets []*index.Entry
-	if _, err := a.ss.Update(s, store.Op{Name: "restore", Task: e.ULID}, func(tx *store.Tx) error {
-		// Read under the lock, so a child the same rm deleted is restored
-		// even when it came in after the index was read, and a task
-		// restored since is refused.
-		var err error
-		if e, err = current(ix, e); err != nil {
-			return err
-		}
-		if err := restorable(ix, e); err != nil {
-			return err
-		}
-		at := *e.DeletedAt
-		targets = append([]*index.Entry{e}, descendants(ix, e.ULID, func(d *index.Entry) bool {
-			return d.DeletedAt != nil && d.DeletedAt.Equal(at)
-		})...)
-		for _, x := range targets {
-			t, err := tx.Task(x.ULID)
-			if err != nil {
-				return err
-			}
-			t.DeletedAt = nil
-			if err := tx.PutTask(t); err != nil {
-				return err
-			}
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-	return a.printAffected(ix, e, targets, "Restored", true)
+	return a.printAffected(res.Index, res.Entry, res.Targets, "Restored", true)
 }
 
 func (a *app) purge(arg string, yes bool) error {
-	s, ix, err := a.ss.Open()
-	if err != nil {
-		return err
-	}
-	e, err := a.ss.Resolve(ix, arg)
-	if err != nil {
-		return err
-	}
-	targets, err := purgeTargets(ix, e)
-	if err != nil {
-		return err
-	}
+	// Without --yes the targets are listed and confirmed first; Purge then
+	// refuses when they changed. With it, Purge works from the tasks as they
+	// are under the lock.
+	var confirmed []*index.Entry
 	if !yes {
+		ix, _, targets, err := a.ss.PurgeTargets(arg)
+		if err != nil {
+			return err
+		}
 		if err := a.confirm(ix, targets); err != nil {
 			return err
 		}
+		confirmed = targets
 	}
-	confirmed := targets
-	if _, err := a.ss.Update(s, store.Op{Name: "purge", Task: e.ULID}, func(tx *store.Tx) error {
-		// Read again under the lock: a task restored or added under it
-		// since must not be purged unchecked, nor left behind.
-		var err error
-		if e, err = current(ix, e); err != nil {
-			return err
-		}
-		if targets, err = purgeTargets(ix, e); err != nil {
-			return err
-		}
-		if !yes && !sameTasks(targets, confirmed) {
-			return errors.New("the tasks under it changed after the confirmation; run purge again")
-		}
-		for _, x := range targets {
-			if err := tx.RemoveTask(x.ULID); err != nil {
-				return err
-			}
-		}
-		return nil
-	}); err != nil {
+	res, err := a.ss.Purge(arg, confirmed)
+	if err != nil {
 		return err
 	}
-	return a.printAffected(ix, e, targets, "Purged", false)
-}
-
-// purgeTargets returns e and every task under it, refusing when one of them
-// is not deleted.
-func purgeTargets(ix *index.Index, e *index.Entry) ([]*index.Entry, error) {
-	if err := isDeleted(ix, e, "; delete it with hedgehug rm first"); err != nil {
-		return nil, err
-	}
-	targets := append([]*index.Entry{e}, descendants(ix, e.ULID, func(*index.Entry) bool { return true })...)
-	for _, d := range targets[1:] {
-		if d.DeletedAt == nil {
-			return nil, fmt.Errorf("%s under it is not deleted", ops.RefName(ix, d.ULID))
-		}
-	}
-	return targets, nil
-}
-
-// sameTasks reports whether a and b hold the same tasks.
-func sameTasks(a, b []*index.Entry) bool {
-	ulids := func(es []*index.Entry) []string {
-		out := make([]string, len(es))
-		for i, e := range es {
-			out[i] = e.ULID.String()
-		}
-		slices.Sort(out)
-		return out
-	}
-	return slices.Equal(ulids(a), ulids(b))
+	return a.printAffected(res.Index, res.Entry, res.Targets, "Purged", false)
 }
 
 // confirm asks on the terminal before a purge.

@@ -636,7 +636,7 @@ func (a *app) revertMove(tx *store.Tx, ix *index.Index, e *index.Entry, field st
 			return fmt.Errorf("workspace: %s is not in this store: %w", u, store.ErrNotFound)
 		}
 	}
-	_, err := a.mvInTx(tx, ix, e, p, w, root, "", "")
+	_, err := a.ss.MoveInTx(tx, ix, e, p, w, root, "", "")
 	return err
 }
 
