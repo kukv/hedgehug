@@ -169,13 +169,14 @@ func getAll[T any](c *Client, url string) ([]T, error) {
 			return nil, err
 		}
 		all = append(all, page...)
-		url = ""
+		next := ""
 		if m := nextLink.FindStringSubmatch(h.Get("Link")); m != nil {
-			if !c.sameOrigin(m[1]) {
-				return nil, fmt.Errorf("GET %s: the next page %s is not on the API host; not sending the token there", url, m[1])
+			next = m[1]
+			if !c.sameOrigin(next) {
+				return nil, fmt.Errorf("GET %s: the next page %s is not on the API host; not sending the token there", url, next)
 			}
-			url = m[1]
 		}
+		url = next
 	}
 	return all, nil
 }

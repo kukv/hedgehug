@@ -47,8 +47,9 @@ func TestNextPageOtherHost(t *testing.T) {
 	}))
 	defer srv.Close()
 	_, err := New(config.Host{API: srv.URL}, "secret", nil).UserRepos()
-	if err == nil || !strings.Contains(err.Error(), "not on the API host") {
-		t.Errorf("err = %v", err)
+	if err == nil || !strings.Contains(err.Error(), "not on the API host") ||
+		!strings.Contains(err.Error(), "GET "+srv.URL) || !strings.Contains(err.Error(), other.URL+"/user/repos?page=2") {
+		t.Errorf("err = %v, want it to name the page asked and the next page", err)
 	}
 	if gotAuth != "" {
 		t.Errorf("the token was sent to the other host: %q", gotAuth)
