@@ -80,6 +80,9 @@ func (te *testEnv) run(args ...string) (code int, stdout, stderr string) {
 		isTerminal: func(any) bool { return te.terminal },
 		now:        func() time.Time { return te.now },
 	}
+	if args == nil {
+		args = []string{} // cobra reads os.Args, the flags of go test, for nil
+	}
 	code = run(args, e)
 	return code, out.String(), errb.String()
 }
