@@ -42,6 +42,7 @@
 6. `hh show` の見出しの下は1行で `  ☑ 2/5  3/14`（チェックリスト、進捗の順。片方だけならその片方）。`hh ls --tree` は行末に2つの空白に続けて同じ形
 7. doctor: 形式の誤りは既存の `file` の検査、スキーマにない列は新しい `view` の検査（`checkOrder` の `file` の次）。大文字小文字だけが違う2つのビューのファイルは `file` の検査で両方を報告する
 8. エラーの Code: `view.bad_name`（Usage）、`view.not_found`（NotFound）、`view.name_taken`（Conflict）、`view.bad_value`（Usage）、`view.bad_column`（Invalid）、`view.tree_order`（Usage）、`view.broken`（Invalid）
+10. 進捗は container の種類なら子孫に work のタスクがなくても `0/0` を出す（spec の「項目が1つもなければ出さない」はチェックリストだけ）。既存のゴールデンで project・epic の行に `0/0` が付く。削除済みの子の下にある削除されていない孫は数える（削除済みのタスク自身だけを数えない）
 9. inbox: `views/*.yaml` の上書きは schema.yaml と同じく inbox に出るが revert できない（タスクの値だけが revert の対象。既存の挙動のまま）
 
 ## ファイル構成
@@ -842,7 +843,7 @@ func TestByKey(t *testing.T) {
 }
 ```
 
-（`bytes`・`model` の import が kinds_test.go になければ足す。）
+（`bytes`・`model` の import が kinds_test.go になければ足す。最初のケースの結果は author の大きい側（theirs）の文書を土台に作られる。バイト列が期待値と違ったら、両方を YAML として読んで値が同じことを確かめたうえで期待値をその出力に合わせてよい。`Overwritten` と `Notices` の確認は変えない。）
 
 - [ ] **Step 2: 失敗を確かめる**
 
@@ -1094,7 +1095,7 @@ func TestViewSaveRefuses(t *testing.T) {
 		{"x", ViewChange{Columns: ptr([]string{"id", "nope"})}, KindInvalid, "view.bad_column"},
 		{"x", ViewChange{Query: ptr("status:todo sort:due")}, KindUsage, "view.tree_order"},
 		{"x", ViewChange{Layout: ptr("tree"), Query: ptr("group:status")}, KindUsage, "view.tree_order"},
-		{"x", ViewChange{Query: ptr("(")}, KindUsage, "query.invalid"},
+		{"x", ViewChange{Query: ptr(`"abc`)}, KindUsage, "query.invalid"},
 	} {
 		_, err := ts.ViewSave(c.name, c.ch)
 		wantErr(t, err, c.kind, c.code)
@@ -1177,12 +1178,14 @@ func TestViewBrokenFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	ts.writeAndCommit("views/bad.yaml", "- not a mapping\n")
-	ts.writeAndCommit("views/con.yaml", "layout: tree\n")
+	ts.writeAndCommit("views/.bad.yaml", "layout: tree\n") // a name ValidName refuses, on every system
 	vs, err := ts.ViewList()
 	if err != nil || len(vs) != 1 || vs[0].Name != "ok" {
 		t.Errorf("list = %+v, %v", vs, err)
 	}
-	if len(ts.warns) != 2 || !strings.Contains(ts.warns[0], "views/bad.yaml") || !strings.HasSuffix(ts.warns[0], "; run hedgehug doctor") {
+	// .bad sorts before bad.
+	if len(ts.warns) != 2 || !strings.HasPrefix(ts.warns[0], "views/.bad.yaml: ") || !strings.HasPrefix(ts.warns[1], "views/bad.yaml: does not decode: ") ||
+		!strings.HasSuffix(ts.warns[1], "; run hedgehug doctor") {
 		t.Errorf("warns = %q", ts.warns)
 	}
 	_, err = ts.ViewSave("bad", ViewChange{Query: ptr("")})
