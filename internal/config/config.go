@@ -98,6 +98,9 @@ type Config struct {
 	flush bool
 }
 
+// File is the path of config.yaml.
+func (c *Config) File() string { return c.file }
+
 // Load reads config.yaml. A missing file is a config with no stores.
 func Load(p Paths) (*Config, error) {
 	c := &Config{file: p.ConfigFile, home: p.Home, Sync: SyncConfig{Interval: defaultSyncInterval, PushInterval: defaultPushInterval}}

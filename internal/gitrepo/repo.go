@@ -17,6 +17,8 @@ type Repo struct {
 	dir string
 	r   *git.Repository
 
+	conn Conn // how Fetch and Push reach a remote; set by SetConn
+
 	mu    sync.Mutex
 	sides map[[2]plumbing.Hash][]*object.Commit // side's results by from and base
 }

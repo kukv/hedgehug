@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/kukv/hedgehug/internal/auth"
 	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
@@ -30,7 +32,11 @@ type env struct {
 	getenv         func(string) string
 	isTerminal     func(any) bool // reports whether a stream is a terminal
 	now            func() time.Time
-	beforeUpdate   func() // for tests: runs before each write; nil in the binary
+	beforeUpdate   func()       // for tests: runs before each write; nil in the binary
+	keyring        auth.Keyring // nil is the OS keychain
+	httpClient     *http.Client // nil is a client with a 30-second timeout
+	// run runs a command (gh) and gives its output; nil runs the command.
+	run func(name string, args ...string) (stdout, stderr []byte, err error)
 }
 
 func init() {
@@ -65,6 +71,7 @@ func run(args []string, e *env) int {
 		Getenv:       e.getenv,
 		Now:          e.now,
 		BeforeUpdate: e.beforeUpdate,
+		Conn:         a.connFor,
 		Warn:         func(m string) { _, _ = fmt.Fprintln(e.stderr, "warning: "+m) },
 		AfterWrite: func(s *store.Store, en config.StoreEntry) {
 			if !ops.SyncsInBackground(en) {

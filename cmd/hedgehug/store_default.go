@@ -13,7 +13,7 @@ func (a *app) storeDefaultCmd() *cobra.Command {
 		Short: "Show or set the default store, where hedgehug add puts a task when nothing else decides",
 		Args:  asUsage(cobra.MaximumNArgs(1)),
 		RunE: func(_ *cobra.Command, args []string) error {
-			c, _, err := a.config()
+			c, _, err := a.ss.Config()
 			if err != nil {
 				return err
 			}

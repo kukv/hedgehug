@@ -10,6 +10,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/config"
+	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
@@ -39,6 +40,9 @@ type Session struct {
 	// BeforeUpdate lets a test write to the store after an operation read its
 	// index and before it writes, as another process could.
 	BeforeUpdate func()
+	// Conn is how the remotes of a store are reached (url_rewrites and the
+	// token of its account); nil reaches them as they are.
+	Conn func(c *config.Config, e config.StoreEntry) gitrepo.Conn
 
 	// the writer of the store, read from config.yaml once per session; an
 	// error is not kept, so the next call reads again
@@ -60,7 +64,16 @@ func (ss *Session) ForStore(name string) *Session {
 		Warn:         ss.Warn,
 		AfterWrite:   ss.AfterWrite,
 		BeforeUpdate: ss.BeforeUpdate,
+		Conn:         ss.Conn,
 	}
+}
+
+// conn is how the remotes of the store e are reached.
+func (ss *Session) conn(c *config.Config, e config.StoreEntry) gitrepo.Conn {
+	if ss.Conn == nil {
+		return gitrepo.Conn{}
+	}
+	return ss.Conn(c, e)
 }
 
 // location is where a date without a zone is read.
@@ -247,7 +260,7 @@ func (ss *Session) SyncOptions(c *config.Config, e config.StoreEntry) (sync.Opti
 	if err != nil {
 		return sync.Options{}, err
 	}
-	opt := sync.Options{Remotes: e.Remotes, Author: author, Me: c.Me(), Now: ss.Now}
+	opt := sync.Options{Remotes: e.Remotes, Author: author, Me: c.Me(), Now: ss.Now, Conn: ss.conn(c, e)}
 	if ok {
 		opt.Account = acct.ID()
 	}

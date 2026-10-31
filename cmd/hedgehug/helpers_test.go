@@ -17,6 +17,7 @@ import (
 
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/zalando/go-keyring"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	hhsync "github.com/kukv/hedgehug/internal/sync"
@@ -152,6 +153,22 @@ func (te *testEnv) writeAccounts(host, login string) { //nolint:unparam // every
 	}
 }
 
+// writeConfigYAML puts s at the start of config.yaml.
+func (te *testEnv) writeConfigYAML(s string) {
+	te.t.Helper()
+	if err := os.MkdirAll(te.hhHome, 0o750); err != nil {
+		te.t.Fatal(err)
+	}
+	p := filepath.Join(te.hhHome, "config.yaml")
+	old, err := os.ReadFile(p) //nolint:gosec // the config of the test
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		te.t.Fatal(err)
+	}
+	if err := os.WriteFile(p, append([]byte(s), old...), 0o600); err != nil {
+		te.t.Fatal(err)
+	}
+}
+
 // withOtherWriter runs fn with account (host/login) as the only account in
 // config.yaml, so the commands in fn are written by someone else, and puts
 // the config back after.
@@ -192,6 +209,8 @@ func TestMain(m *testing.M) {
 	if script := os.Getenv("HH_TEST_EDITOR_SCRIPT"); script != "" {
 		os.Exit(testEditor(script, os.Args[len(os.Args)-1]))
 	}
+	// No test reaches the keychain of the machine.
+	keyring.MockInit()
 	// A program built with -race sleeps a second when it exits, by default,
 	// so that goroutines still running at the exit can be caught in a race.
 	// The children of the tests (this binary as the editor, the hedgehug

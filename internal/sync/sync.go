@@ -41,6 +41,7 @@ type Options struct {
 	Me         []string          // all accounts, for the inbox
 	Now        func() time.Time
 	Others     []OtherStore // the other stores in config, for prefix duplicates across stores
+	Conn       gitrepo.Conn // how the remotes are reached: url_rewrites and the token
 	BeforePush func()       // a test hook: another clone pushes here
 }
 
@@ -88,6 +89,7 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 		opt.Now = time.Now
 	}
 	r := s.Repo()
+	r.SetConn(opt.Conn)
 	before, err := r.Head()
 	if err != nil {
 		return res, err

@@ -105,7 +105,15 @@ func trackingRef(remote string) plumbing.ReferenceName {
 // Fetch updates refs/remotes/<remote>/main and returns its hash, or the zero
 // hash when the remote is empty.
 func (r *Repo) Fetch(remote string) (plumbing.Hash, error) {
-	err := r.r.Fetch(&git.FetchOptions{RemoteName: remote})
+	u, err := r.remoteURL(remote)
+	if err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("fetch %s: %w", remote, err)
+	}
+	to, auth, err := r.conn.endpoint(u)
+	if err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("fetch %s: %w", remote, err)
+	}
+	err = r.r.Fetch(&git.FetchOptions{RemoteName: remote, RemoteURL: to, Auth: auth})
 	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) && !errors.Is(err, transport.ErrEmptyRemoteRepository) {
 		return plumbing.ZeroHash, fmt.Errorf("fetch %s: %w", remote, err)
 	}
@@ -142,13 +150,26 @@ func (r *Repo) Push(remote string) error {
 	if h.IsZero() {
 		return errors.New("push: the repository has no commit")
 	}
+	u, err := r.remoteURL(remote)
+	if err != nil {
+		return fmt.Errorf("push %s: %w", remote, err)
+	}
+	to, auth, err := r.conn.endpoint(u)
+	if err != nil {
+		return fmt.Errorf("push %s: %w", remote, err)
+	}
 	beforePush()
 	err = r.r.Push(&git.PushOptions{
 		RemoteName: remote,
+		RemoteURL:  to,
+		Auth:       auth,
 		RefSpecs:   []config.RefSpec{config.RefSpec(h.String() + ":refs/heads/main")},
 	})
 	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) && (errors.Is(err, git.ErrNonFastForwardUpdate) || strings.Contains(err.Error(), "non-fast-forward")) {
 		return ErrRejected
+	}
+	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) && pushDenied(err) {
+		return fmt.Errorf("push %s: %w: %w", remote, ErrPushDenied, err)
 	}
 	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return fmt.Errorf("push %s: %w", remote, err)
@@ -172,23 +193,32 @@ func (r *Repo) Head() (plumbing.Hash, error) {
 // afterClone finishes a fresh clone; tests replace it to make the step fail.
 var afterClone = func(r *Repo, url string) error { return r.SetRemotes([]string{url}) }
 
-// Clone clones the main branch of url into dir, which must be missing or an
-// empty directory; anything else is refused untouched. A failed clone removes
-// what it created: the directory and its missing parents, or only its contents
-// when dir existed.
-func Clone(url, dir string) (*Repo, error) {
+// Clone is CloneWith with no rewrite and no auth.
+func Clone(url, dir string) (*Repo, error) { return CloneWith(url, dir, Conn{}) }
+
+// CloneWith clones the main branch of url into dir through c; .git/config
+// keeps url as given. dir must be missing or an empty directory; anything
+// else is refused untouched. A failed clone removes what it created: the
+// directory and its missing parents, or only its contents when dir existed.
+func CloneWith(url, dir string, c Conn) (*Repo, error) {
 	created, err := checkCloneTarget(dir)
 	if err != nil {
 		return nil, fmt.Errorf("clone %s: %w", url, err)
 	}
+	to, auth, err := c.endpoint(url)
+	if err != nil {
+		return nil, fmt.Errorf("clone %s: %w", url, err)
+	}
 	r, err := git.PlainClone(dir, false, &git.CloneOptions{
-		URL:           url,
+		URL:           to,
+		Auth:          auth,
 		RemoteName:    "origin",
 		ReferenceName: plumbing.NewBranchReferenceName("main"),
 		SingleBranch:  true,
 	})
 	if err == nil {
 		repo := newRepo(dir, r)
+		repo.conn = c
 		if err = afterClone(repo, url); err == nil {
 			return repo, nil
 		}
