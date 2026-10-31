@@ -253,7 +253,7 @@ REST だけを作る。フェーズ3で使うのは次の表のもの。
   - `store add`・`store discover` で clone した直後
   - 同期で GitHub の情報を取るとき（前回から5分以上たっていたら。親設計の「GitHub の取得は 5 分」）
   - push が `ErrPushDenied` で拒否されたとき
-- 判定のしかた:
+- 判定のしかた（origin が GitHub のホストかどうかは、`url_rewrites` で書き換える前の URL で見る。メンバー一覧も同じ。利用者の決定。`store init` の分岐だけは書き換えた後の URL で見る）:
   - origin が GitHub のホスト: `permissions.push`。API のエラーなら判定を変えない。
   - origin がローカルのパス: bare リポジトリの `objects/` に一時ファイルを作って消せるか。
   - それ以外: push の拒否だけ。次に明示的に `hh sync` を実行したときに、この理由の判定をいったん外す。
