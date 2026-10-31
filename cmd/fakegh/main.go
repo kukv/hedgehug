@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -16,7 +17,8 @@ import (
 	"github.com/kukv/hedgehug/internal/fakegh"
 )
 
-const usage = `usage:
+const (
+	usage = `usage:
   fakegh serve [--addr 127.0.0.1:7777] [--seed <json>]
   fakegh perm set <owner/repo> <login> <read|write|admin|none>
   fakegh repo add <owner/repo> [--topic t]... [--public]
@@ -24,6 +26,8 @@ const usage = `usage:
   fakegh token add <token> --user <login>
   fakegh token expire <login>
 The commands but serve take --server (default http://127.0.0.1:7777).`
+	defaultServer = "http://127.0.0.1:7777"
+)
 
 type usageError struct{ error }
 
@@ -36,7 +40,7 @@ func (t *topics) Set(v string) error { *t = append(*t, v); return nil }
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
 func run(args []string, stdout, stderr io.Writer) int {
-	err := dispatch(args, stdout, stderr)
+	err := dispatch(args, stdout)
 	var ue usageError
 	switch {
 	case err == nil:
@@ -48,6 +52,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "fakegh:", err)
 		return 1
 	}
+}
+
+// flagSet makes the flag set of one command. Its own errors are not shown:
+// run prints the one error it gets, with the usage.
+func flagSet(name string) *flag.FlagSet {
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	return fs
 }
 
 // parse parses the flags of fs wherever they are among args and returns the
@@ -69,75 +81,102 @@ func parse(fs *flag.FlagSet, args []string, n int) ([]string, error) {
 	return pos, nil
 }
 
-func dispatch(args []string, stdout, stderr io.Writer) error {
+// admin is the fake at url, which the commands change.
+func admin(url string) fakegh.Admin {
+	return fakegh.Admin{URL: strings.TrimSuffix(url, "/")}
+}
+
+func dispatch(args []string, stdout io.Writer) error {
 	if len(args) == 0 {
 		return usageError{errors.New("a command is needed")}
 	}
-	fs := flag.NewFlagSet("fakegh", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	server := fs.String("server", "http://127.0.0.1:7777", "the URL of the running fake")
-	user := fs.String("user", "", "the login")
-	var ts topics
-	cmd := args[0]
-	if len(args) > 1 && cmd != "serve" {
-		cmd += " " + args[1]
+	if args[0] == "serve" {
+		return serveCmd(args[1:], stdout)
 	}
-	admin := func() fakegh.Admin { return fakegh.Admin{URL: strings.TrimSuffix(*server, "/")} }
+	if len(args) < 2 {
+		return usageError{fmt.Errorf("unknown command %q", args[0])}
+	}
+	cmd, rest := args[0]+" "+args[1], args[2:]
 	switch cmd {
-	case "serve":
-		addr := fs.String("addr", "127.0.0.1:7777", "where to listen")
-		seed := fs.String("seed", "", "a JSON file of the state to start with")
-		if _, err := parse(fs, args[1:], 0); err != nil {
-			return err
-		}
-		var st fakegh.State
-		if *seed != "" {
-			var err error
-			if st, err = fakegh.Load(*seed); err != nil {
-				return err
-			}
-		}
-		_, _ = fmt.Fprintf(stdout, "fakegh listening on http://%s\n", *addr)
-		srv := &http.Server{Addr: *addr, Handler: fakegh.New(st), ReadHeaderTimeout: 10 * time.Second}
-		return srv.ListenAndServe()
 	case "perm set":
-		pos, err := parse(fs, args[2:], 3)
+		fs := flagSet("fakegh perm set")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		pos, err := parse(fs, rest, 3)
 		if err != nil {
 			return err
 		}
-		return admin().SetPerm(pos[0], pos[1], pos[2])
+		return admin(*server).SetPerm(pos[0], pos[1], pos[2])
 	case "repo add":
+		fs := flagSet("fakegh repo add")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		var ts topics
 		fs.Var(&ts, "topic", "a topic; give it again for more")
 		public := fs.Bool("public", false, "make it public")
-		pos, err := parse(fs, args[2:], 1)
+		pos, err := parse(fs, rest, 1)
 		if err != nil {
 			return err
 		}
-		return admin().AddRepo(pos[0], ts, *public)
+		return admin(*server).AddRepo(pos[0], ts, *public)
 	case "device approve":
-		pos, err := parse(fs, args[2:], 1)
+		fs := flagSet("fakegh device approve")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		user := fs.String("user", "", "the login")
+		pos, err := parse(fs, rest, 1)
 		if err != nil {
 			return err
 		}
 		if *user == "" {
 			return usageError{errors.New("--user is required")}
 		}
-		return admin().ApproveDevice(pos[0], *user)
+		return admin(*server).ApproveDevice(pos[0], *user)
 	case "token add":
-		pos, err := parse(fs, args[2:], 1)
+		fs := flagSet("fakegh token add")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		user := fs.String("user", "", "the login")
+		pos, err := parse(fs, rest, 1)
 		if err != nil {
 			return err
 		}
 		if *user == "" {
 			return usageError{errors.New("--user is required")}
 		}
-		return admin().AddToken(pos[0], *user)
+		return admin(*server).AddToken(pos[0], *user)
 	case "token expire":
-		pos, err := parse(fs, args[2:], 1)
+		fs := flagSet("fakegh token expire")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		pos, err := parse(fs, rest, 1)
 		if err != nil {
 			return err
 		}
-		return admin().ExpireTokens(pos[0])
+		return admin(*server).ExpireTokens(pos[0])
 	}
 	return usageError{fmt.Errorf("unknown command %q", cmd)}
+}
+
+func serveCmd(args []string, stdout io.Writer) error {
+	fs := flagSet("fakegh serve")
+	addr := fs.String("addr", "127.0.0.1:7777", "where to listen")
+	seed := fs.String("seed", "", "a JSON file of the state to start with")
+	if _, err := parse(fs, args, 0); err != nil {
+		return err
+	}
+	var st fakegh.State
+	if *seed != "" {
+		var err error
+		if st, err = fakegh.Load(*seed); err != nil {
+			return err
+		}
+	}
+	ln, err := net.Listen("tcp", *addr)
+	if err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(stdout, "fakegh listening on http://%s\n", ln.Addr())
+	return serveOn(ln, fakegh.New(st))
+}
+
+// serveOn serves h on ln until ln is closed or fails.
+func serveOn(ln net.Listener, h http.Handler) error {
+	srv := &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second}
+	return srv.Serve(ln)
 }
