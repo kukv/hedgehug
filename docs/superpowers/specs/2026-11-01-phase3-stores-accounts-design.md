@@ -113,7 +113,7 @@ cmd/hedgehug/
 tools/devenv/    hosts、fakegh.json、url_rewrites、org-b、web、alice-corp
 ```
 
-依存の向きは `cmd/hedgehug → context → mount → index, store`、`mount → sync`（状態の読み出し）、`sync → github → auth → config`、`gitrepo → auth`（トークンは呼び出し側が渡す。`gitrepo` は `auth` を import しない）。`internal/fakegh` はテストと `cmd/fakegh` だけが使う。
+依存の向きは `cmd/hedgehug → context → mount → index, store`、`mount → sync`（状態の読み出し）、`sync → auth → github, config, store`（auth は Device Flow の HTTP に github を、ロックに store を使う）、`gitrepo → auth`（トークンは呼び出し側が渡す。`gitrepo` は `auth` を import しない）。`internal/fakegh` はテストと `cmd/fakegh` だけが使う。
 
 ## 設定（internal/config）
 
@@ -174,7 +174,7 @@ repo_accounts:
 
 | コマンド | 内容 |
 | --- | --- |
-| `hh auth login [<name>] [--host <host>] [--with-token]` | `<name>` が config にあれば、その token で動く。`device` なら Device Flow、`keychain` なら `--with-token` で標準入力から1行読んで保存する（`--with-token` がなければ、keychain には Device Flow で入れられないので、その旨のエラー）。`gh` と `env` は「Hedgehug でログインするものはありません」と出して終了コード0。`<name>` がないか config にないときは、Device Flow（`--with-token` なら標準入力のトークン）でトークンを取り、`GET /user` で login を得て、`accounts[]` に `{name, host, login, token: device|keychain}` を足す。名前の既定は login。`--host` の既定は `github.com`。同じ host と login のアカウントがすでにあれば足さずに、そのアカウントのトークンを置き換える |
+| `hh auth login [<name>] [--host <host>] [--with-token]` | `<name>` が config にあれば、その token で動く。`device` なら Device Flow、`keychain` なら `--with-token` で標準入力から1行読んで保存する（`--with-token` がなければ、keychain には Device Flow で入れられないので、その旨のエラー）。`gh` と `env` は「Hedgehug でログインするものはありません」と出して終了コード0。token が空なら、Device Flow（`--with-token` なら標準入力のトークンを keychain へ）でトークンを取り、`GET /user` の login が config と合うのを確かめてから、そのアカウントに `token: device`（または `keychain`）を書く。合わなければ何も書かずにエラー（利用者の決定）。`<name>` がないか config にないときは、Device Flow（`--with-token` なら標準入力のトークン）でトークンを取り、`GET /user` で login を得て、`accounts[]` に `{name, host, login, token: device|keychain}` を足す。名前の既定は login。`--host` の既定は `github.com`。同じ host と login のアカウントがすでにあれば足さずに、そのアカウントのトークンを置き換える |
 | `hh auth status` | アカウントごとに、名前、`<host>/<login>`、token の種類、トークンが取れたか、`GET /user` の login が config と合うか、`device` の期限を出す。合わないときは終了コード1。`--json` 対応 |
 | `hh auth logout <name>` | keychain の値を消す（`keychain` と `device`）。config のアカウントは残す。`gh` と `env` は「Hedgehug が持っているものはありません」と出して終了コード0 |
 
@@ -225,7 +225,7 @@ REST だけを作る。フェーズ3で使うのは次の表のもの。
 フェーズ2の動き（Store とワークスペースを作り、remotes を記録し、merge driver を登録し、初回の push）に、remote の用意を足す。remote ごとに、書き換え後の URL で分岐する。
 
 - **ローカルのパス**: なければ bare リポジトリを作る（親ディレクトリも）。あれば、空の bare であることを求める（フェーズ2と同じ）。
-- **GitHub のホスト**（`github.com` か `hosts[]` の host）: URL から owner と repo を取り（末尾の `.git` を除く）、「GitHub API」の表のとおり private のリポジトリを作って topic を付ける。`ErrExists` はエラーにして `hh store add` を案内する。
+- **GitHub のホスト**（`github.com` か `hosts[]` の host）: URL から owner と repo を取り（末尾の `.git` を除く）、「GitHub API」の表のとおり private のリポジトリを作って topic を付ける。SSH の形（`git@github.com:o/r.git`、`ssh://`）も host で判定する。`ErrExists`（422）のときは、remote に ref が1つもない（空）かを確かめ、空なら作成を飛ばして topic を付け、初回の push へ進む。中身があればエラーにして `hh store add` を案内する（利用者の決定）。
 - **それ以外**: 作らない。既存の空のリポジトリを前提にする（フェーズ2と同じ）。
 
 アカウントは `--account`、なければアカウントが1つならそれ。GitHub のホストの remote があるのにアカウントが決まらなければ、名前を並べたエラー。選んだアカウントを `stores[].account` に書く。
@@ -604,4 +604,4 @@ Hedgehug 専用の GitHub App を、kukv のアカウント（または配布用
 6. Client ID を `internal/auth` の組み込みの値に入れる（client ID は公開してよい値）。
 7. Org で使うときは、その Org に App をインストールし、Store のリポジトリへのアクセスを許す。インストールできない場合は `token: gh` を使う。
 
-Administration の権限は、`store init` で GitHub にリポジトリを作るときに必要になる。App のユーザートークンは「App とユーザーの両方が持つ権限」の範囲でしか使えないため、ユーザーが Org でリポジトリを作れない場合は作成が 403 になる。そのときはエラーに「GitHub で空のリポジトリを作り、hh store init --remote でその URL を指定してください（作成は飛ばします）」を添える。既存の空のリポジトリが GitHub にあるとき（作成が 422）は、`store init` はエラーで `store add` を案内する（上記）。
+Administration の権限は、`store init` で GitHub にリポジトリを作るときに必要になる。App のユーザートークンは「App とユーザーの両方が持つ権限」の範囲でしか使えないため、ユーザーが Org でリポジトリを作れない場合は作成が 403 になる。そのときはエラーに「GitHub で空のリポジトリを作り、hh store init --remote でその URL を指定してください（作成は飛ばします）」を添える。既存の空のリポジトリが GitHub にあるとき（作成が 422）は、`store init` は作成を飛ばしてそのリポジトリを使う（上記）。
