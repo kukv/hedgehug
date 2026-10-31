@@ -38,7 +38,19 @@ func mergeTask(t *testing.T, base, ours, theirs Side) Result {
 // ours and theirs gives the same result.
 func mergeWith(t *testing.T, p Policy, base, ours, theirs Side) Result {
 	t.Helper()
-	r, err := Merge(taskPath, schema.Default(), base.Data, ours, theirs, p)
+	return mergeAt(t, taskPath, schema.Default(), p, base, ours, theirs)
+}
+
+// mergeSym merges path under LWW and checks that swapping ours and theirs
+// gives the same result.
+func mergeSym(t *testing.T, path string, base, ours, theirs Side) Result {
+	t.Helper()
+	return mergeAt(t, path, nil, LWW, base, ours, theirs)
+}
+
+func mergeAt(t *testing.T, path string, sc *schema.Schema, p Policy, base, ours, theirs Side) Result {
+	t.Helper()
+	r, err := Merge(path, sc, base.Data, ours, theirs, p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +58,7 @@ func mergeWith(t *testing.T, p Policy, base, ours, theirs Side) Result {
 		return r
 	}
 	// Every merge must be symmetric.
-	r2, err := Merge(taskPath, schema.Default(), base.Data, theirs, ours, LWW)
+	r2, err := Merge(path, sc, base.Data, theirs, ours, LWW)
 	if err != nil {
 		t.Fatal(err)
 	}

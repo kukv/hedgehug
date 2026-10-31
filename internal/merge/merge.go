@@ -11,6 +11,7 @@ import (
 
 	"go.yaml.in/yaml/v4"
 
+	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
 )
 
@@ -67,8 +68,19 @@ func Merge(path string, sc *schema.Schema, base []byte, ours, theirs Side, p Pol
 		return Result{Data: ours.Data}, nil
 	}
 	m := &merger{path: path, sc: sc, p: p}
-	if kindOf(path) == kindTask {
+	switch kindOf(path) {
+	case kindTask:
 		return m.task(base, ours, theirs)
+	case kindComment:
+		return m.record(ours, theirs, commentUpdated)
+	case kindWorklog:
+		return m.record(ours, theirs, worklogUpdated)
+	case kindSprint, kindRelease, kindTemplate, kindWorkspace:
+		return m.plan(base, ours, theirs)
+	case kindYAML:
+		return m.yaml(base, ours, theirs)
+	case kindNumbers:
+		return m.numbers(base, ours, theirs)
 	}
 	return m.other(ours, theirs)
 }
@@ -78,14 +90,44 @@ type kind int
 const (
 	kindOther kind = iota
 	kindTask
+	kindComment
+	kindWorklog
+	kindSprint
+	kindRelease
+	kindTemplate
+	kindWorkspace
+	kindYAML    // schema.yaml, automations.yaml and store.yaml, merged key by key
+	kindNumbers // numbers.yaml, merged by the largest number
 )
 
 func kindOf(path string) kind {
-	if strings.HasPrefix(path, "tasks/") {
-		return kindTask
+	switch path {
+	case schema.Path, automationsPath, model.StoreMetaPath:
+		return kindYAML
+	case model.NumbersPath:
+		return kindNumbers
+	}
+	for _, d := range []struct {
+		dir string
+		k   kind
+	}{
+		{"tasks/", kindTask},
+		{"comments/", kindComment},
+		{"worklogs/", kindWorklog},
+		{"sprints/", kindSprint},
+		{"releases/", kindRelease},
+		{"templates/", kindTemplate},
+		{"workspaces/", kindWorkspace},
+	} {
+		if strings.HasPrefix(path, d.dir) {
+			return d.k
+		}
 	}
 	return kindOther
 }
+
+// automationsPath is where a store keeps its automations.
+const automationsPath = "automations.yaml"
 
 // merger holds what the merge of one file needs besides the sides.
 type merger struct {
