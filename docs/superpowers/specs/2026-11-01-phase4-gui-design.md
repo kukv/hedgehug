@@ -43,6 +43,7 @@
 - GUI の一覧の行とカードは ID だけを出し、ULID はタスク詳細とホバーで出す
 - 4a でも ops の層の単体テストを足す
 - undo は確認ダイアログを出さない（取り消しにくい操作ではないため）
+- 4b の細部（2026-11-01）: 進捗は親設計どおり work 役割の子孫で数える。`--json` の進捗は `ls --tree` と `show` だけ。tree のビューで `sort:`・`group:` は保存時に拒否。名前の大文字小文字だけの変更は拒否し、Windows の予約名も拒否。組み込みの列は9個
 
 ## 範囲
 
@@ -151,9 +152,9 @@ kanban:
   swimlane: none         # none | assignee | project
 ```
 
-- 名前は 1〜64 文字。`/ \ : * ? " < > |`、制御文字、先頭と末尾の空白とドットは拒否する。大文字小文字だけが違う名前は同じ名前として拒否する（大文字小文字を区別しないファイルシステムのため）
+- 名前は 1〜64 文字。`/ \ : * ? " < > |`、制御文字、先頭と末尾の空白とドット、Windows の予約名（`CON`・`PRN`・`AUX`・`NUL`・`COM1`〜`COM9`・`LPT1`〜`LPT9`。大文字小文字と拡張子を問わない）は、どの OS でも拒否する。大文字小文字だけが違う名前は同じ名前として拒否する（大文字小文字を区別しないファイルシステムのため）。名前の変更で大文字小文字だけを変える（`Foo` → `foo`）のも拒否する（大文字小文字を区別しないファイルシステムで、同じファイルの別名になるため）
 - `table` と `kanban` は省略でき、省略時は既定値（table: `id, title, status, assignee, due` と `group_by: none`、kanban: `columns: status` と `swimlane: none`）。`layout` に関係しない節も保存してよい（レイアウトを切り替えても設定が残る）
-- `columns` に書けるのは、組み込みのフィールドとスキーマのプロパティのキー。スキーマから消えた列は表示で飛ばし、doctor が警告する
+- `columns` に書けるのは、組み込みのフィールド（`id`・`title`・`kind`・`status`・`assignee`・`label`・`parent`・`created`・`updated`。クエリのキーに合わせて単数形）とスキーマのプロパティのキー。スキーマから消えた列は表示で飛ばし、doctor が警告する
 - 未知のキーは読み飛ばし、書き戻すときに残す（ほかのファイルと同じく `yaml.Node` で扱う）
 - `layout: gantt` はフェーズ6で足す
 
@@ -173,7 +174,7 @@ kanban:
 
 | コマンド | 内容 |
 |---|---|
-| `hh view save <name> [--layout] [--query] [--columns] [--group-by] [--kanban-columns] [--swimlane]` | 作成・上書き。上書きでは、指定したフラグの項目だけを変える |
+| `hh view save <name> [--layout] [--query] [--columns] [--group-by] [--kanban-columns] [--swimlane]` | 作成・上書き。上書きでは、指定したフラグの項目だけを変える。`layout: tree` で、クエリに `sort:`・`group:` があるものは使い方の誤りとして拒否する（`hh ls --tree` と同じ） |
 | `hh view list` | 名前・レイアウト・クエリ |
 | `hh view show <name>` | そのクエリで `hh ls` と同じ一覧を出す。layout が tree なら `hh ls --tree` と同じ表示 |
 | `hh view rm <name>` | 削除 |
@@ -186,8 +187,8 @@ kanban:
 親設計のフェーズ4の項目どおり、GUI と CLI の両方に入れる。計算は ops の結果の型に置き、CLI と API で共有する。
 
 - チェックリストの進捗: 本文の `- [ ]` と `- [x]`（`X` も可）の数。リストの項目の行だけを数え、コードブロックの中は数えない。項目が1つもなければ出さない
-- プロジェクトの進捗: 子孫のうち、カテゴリが done の数 / カテゴリが canceled のものを除いた数。削除済みは数えない。プロジェクト（`kind` の role が container）だけに出す
-- CLI: `hh ls --tree` の行末と `hh show` の見出しの下に `☑ 2/5`・`3/14` の形で出す。`--json` には `checklist: {done, total}` と `progress: {done, total}` を足す（該当しなければ省く）
+- プロジェクトの進捗: 子孫のうち work 役割（`kind` の role が work）のタスクで、カテゴリが done の数 / カテゴリが canceled のものを除いた数（親設計の「種類」のとおり）。削除済みは数えない。プロジェクト（`kind` の role が container）だけに出す
+- CLI: `hh ls --tree` の行末と `hh show` の見出しの下に `☑ 2/5`・`3/14` の形で出す。`hh ls --tree --json` と `hh show --json` には `checklist: {done, total}` と `progress: {done, total}` を足す（該当しなければ省く）。ほかのコマンドの `--json` には足さない。API の一覧のタスクには 4c で同じ計算を使って足す
 - ゴールデンテストの期待値は、この変更の分だけ更新する
 
 ## 4c サーバー（internal/server）
