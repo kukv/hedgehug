@@ -268,7 +268,9 @@ func TestDirtyTheirsOnlyPath(t *testing.T) {
 	}
 }
 
-func TestSetupAddsGitattributes(t *testing.T) {
+// A store has the merge driver's .gitattributes from its first commit, so a
+// sync has nothing to set up in it.
+func TestInitHasGitattributes(t *testing.T) {
 	c := newCluster(t, 1)
 	b, err := os.ReadFile(filepath.Join(c.stores[0].Dir(), ".gitattributes"))
 	if err != nil {
@@ -284,8 +286,8 @@ func TestSetupAddsGitattributes(t *testing.T) {
 		t.Errorf("driver not registered:\n%s", cfg)
 	}
 	e, _ := c.stores[0].Repo().LogFrom(mustHead(t, c.stores[0]), 1)
-	if op, _ := e[0].Trailer("Hedgehug-Op"); op != "setup" || e[0].Subject != "hedgehug: setup merge driver" {
-		t.Errorf("HEAD is not the setup commit: %+v", e[0])
+	if op, _ := e[0].Trailer("Hedgehug-Op"); op != "init" {
+		t.Errorf("HEAD is %+v, want the init commit: the sync set up what init wrote", e[0])
 	}
 }
 
@@ -305,6 +307,10 @@ func TestSetupKeepsLinesAndCommitsOnce(t *testing.T) {
 		t.Errorf(".gitattributes = %q, want %q", b, want)
 	}
 	head := mustHead(t, s)
+	e, _ := s.Repo().LogFrom(head, 1)
+	if op, _ := e[0].Trailer("Hedgehug-Op"); op != "setup" || e[0].Subject != "hedgehug: setup merge driver" {
+		t.Errorf("HEAD is not the setup commit: %+v", e[0])
+	}
 	c.sync(0)
 	if mustHead(t, s) != head {
 		t.Error("a second sync made a commit")

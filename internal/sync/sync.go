@@ -180,18 +180,6 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 	return res, nil
 }
 
-// attributes are the lines of .gitattributes that send the files of the
-// store to the hedgehug merge driver.
-var attributes = []string{
-	"tasks/**/*.md merge=hedgehug",
-	"comments/**/*.md merge=hedgehug",
-	"worklogs/**/*.md merge=hedgehug",
-	"workspaces/*.md merge=hedgehug",
-	"*.yaml merge=hedgehug",
-}
-
-const attributesPath = ".gitattributes"
-
 // setup adds to .gitattributes the lines it lacks, in a commit of its own.
 // With nothing to add it commits nothing.
 func setup(s *store.Store, opt Options) error {
@@ -212,9 +200,20 @@ func setup(s *store.Store, opt Options) error {
 		if err != nil || data == nil {
 			return err
 		}
-		return tx.PutFile(attributesPath, data)
+		return tx.PutFile(store.AttributesPath, data)
 	})
 	return err
+}
+
+// NeedsSetup reports whether HEAD's .gitattributes lacks a line of the merge
+// driver, which a sync adds.
+func NeedsSetup(s *store.Store) (bool, error) {
+	head, err := s.Repo().Head()
+	if err != nil {
+		return false, err
+	}
+	data, err := attributesToAdd(s, head, false)
+	return data != nil, err
 }
 
 // attributesToAdd returns .gitattributes as commit has it with the missing
@@ -222,7 +221,7 @@ func setup(s *store.Store, opt Options) error {
 // a line of the file gives its pattern merge=hedgehug. With checkDirty, a
 // file that would change but has changes git has not committed is ErrDirty.
 func attributesToAdd(s *store.Store, commit plumbing.Hash, checkDirty bool) ([]byte, error) {
-	data, err := s.Repo().ReadAt(commit, attributesPath)
+	data, err := s.Repo().ReadAt(commit, store.AttributesPath)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, err
 	}
@@ -234,7 +233,7 @@ func attributesToAdd(s *store.Store, commit plumbing.Hash, checkDirty bool) ([]b
 		}
 	}
 	missing := false
-	for _, l := range attributes {
+	for _, l := range store.Attributes {
 		if pattern, _, _ := strings.Cut(l, " "); have[pattern] {
 			continue
 		}
@@ -248,7 +247,7 @@ func attributesToAdd(s *store.Store, commit plumbing.Hash, checkDirty bool) ([]b
 		return nil, nil
 	}
 	if checkDirty {
-		if err := dirty(s.Repo(), []string{attributesPath}); err != nil {
+		if err := dirty(s.Repo(), []string{store.AttributesPath}); err != nil {
 			return nil, err
 		}
 	}

@@ -8,9 +8,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/config"
+	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/query"
 	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/sync"
 )
 
 // app holds the global flags and what the commands share.
@@ -58,7 +61,7 @@ func (a *app) rootCmd() *cobra.Command {
 	pf.StringVar(&a.storeName, "store", "", "the store to work on, by name")
 	pf.BoolVar(&a.jsonOut, "json", false, "print JSON")
 	pf.BoolVar(&a.noColor, "no-color", false, "do not color the output")
-	root.AddCommand(a.storeCmd(), a.addCmd(), a.lsCmd(), a.showCmd(), a.setCmd(), a.statusCmd(), a.doneCmd(), a.depCmd(), a.rmCmd(), a.restoreCmd(), a.purgeCmd(), a.mvCmd(), a.editCmd(), a.commentCmd(), a.logCmd(), a.schemaCmd(), a.doctorCmd(), a.workspaceCmd())
+	root.AddCommand(a.storeCmd(), a.addCmd(), a.lsCmd(), a.showCmd(), a.setCmd(), a.statusCmd(), a.doneCmd(), a.depCmd(), a.rmCmd(), a.restoreCmd(), a.purgeCmd(), a.mvCmd(), a.editCmd(), a.commentCmd(), a.logCmd(), a.schemaCmd(), a.doctorCmd(), a.workspaceCmd(), a.syncCmd(), a.mergeDriverCmd())
 	return root
 }
 
@@ -164,6 +167,48 @@ func (a *app) update(s *store.Store, op store.Op, fn func(*store.Tx) error) (boo
 	}
 	beforeUpdate()
 	return s.Update(op, fn)
+}
+
+// syncOptions is what sync.Run needs for the store e, which need not be in c
+// yet: the account that writes, the accounts that are me, and the other
+// stores whose id prefixes it checks.
+func (a *app) syncOptions(c *config.Config, e config.StoreEntry) (sync.Options, error) {
+	acct, ok := c.Writer(e)
+	author, err := config.CommitAuthor(acct, ok, a.getenv)
+	if err != nil {
+		return sync.Options{}, err
+	}
+	opt := sync.Options{Remotes: e.Remotes, Author: author, Me: c.Me(), Now: a.now}
+	if ok {
+		opt.Account = acct.ID()
+	}
+	for _, o := range c.Stores {
+		if o.Name != e.Name {
+			opt.Others = append(opt.Others, sync.OtherStore{Name: o.Name, Path: o.Path})
+		}
+	}
+	return opt, nil
+}
+
+// queryOptions is what the queries on the store s need besides its index: the
+// accounts @me stands for, and the tasks with an unread overwritten item in
+// the inbox.
+func (a *app) queryOptions(s *store.Store) (query.Options, error) {
+	c, _, err := a.config()
+	if err != nil {
+		return query.Options{}, err
+	}
+	items, err := inbox.Open(s).List(false)
+	if err != nil {
+		return query.Options{}, err
+	}
+	opt := query.Options{Me: c.Me(), Overwritten: map[model.ULID]bool{}}
+	for _, it := range items {
+		if it.Kind == inbox.Overwritten && !it.Task.IsZero() {
+			opt.Overwritten[it.Task] = true
+		}
+	}
+	return opt, nil
 }
 
 // verb is the heading of a command that printed what it wrote: heading, or

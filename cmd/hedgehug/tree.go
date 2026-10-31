@@ -26,11 +26,15 @@ func (a *app) lsTree(q *query.Query, ulidsOnly bool, tmpl *template.Template) er
 	if hasTerm(q, "group") || hasTerm(q, "sort") {
 		return usageErrorf("--tree orders tasks by rank; it takes neither group: nor sort:")
 	}
-	_, ix, err := a.open()
+	s, ix, err := a.open()
 	if err != nil {
 		return err
 	}
-	res, err := query.Run(ix, q, query.Options{})
+	opt, err := a.queryOptions(s)
+	if err != nil {
+		return err
+	}
+	res, err := query.Run(ix, q, opt)
 	if err != nil {
 		var qe *query.Error
 		if errors.As(err, &qe) {

@@ -5,13 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+
+	"github.com/kukv/hedgehug/internal/gitrepo"
 )
 
 // testEnv runs the command with HEDGEHUG_HOME and HOME in temporary
@@ -121,7 +126,7 @@ func (te *testEnv) headCommit(name string) *object.Commit {
 }
 
 // writeAccounts puts one account at the start of config.yaml.
-func (te *testEnv) writeAccounts(host, login string) {
+func (te *testEnv) writeAccounts(host, login string) { //nolint:unparam // every test uses github.com; the host keeps call sites readable
 	te.t.Helper()
 	if err := os.MkdirAll(te.hhHome, 0o750); err != nil {
 		te.t.Fatal(err)
@@ -143,7 +148,79 @@ func TestMain(m *testing.M) {
 	if script := os.Getenv("HH_TEST_EDITOR_SCRIPT"); script != "" {
 		os.Exit(testEditor(script, os.Args[len(os.Args)-1]))
 	}
-	os.Exit(m.Run())
+	code := m.Run()
+	if builtDir != "" {
+		_ = os.RemoveAll(builtDir)
+	}
+	os.Exit(code)
+}
+
+var (
+	buildOnce sync.Once
+	builtDir  string // the directory of the binary buildHedgehug made
+	builtBin  string
+	buildErr  error
+)
+
+// buildHedgehug builds the command once for all tests and returns the path of
+// the binary, which is named hedgehug so that a merge driver finds it on PATH.
+func buildHedgehug(t *testing.T) string {
+	t.Helper()
+	buildOnce.Do(func() {
+		builtDir, buildErr = os.MkdirTemp("", "hedgehug-bin-")
+		if buildErr != nil {
+			return
+		}
+		name := "hedgehug"
+		if runtime.GOOS == "windows" {
+			name += ".exe"
+		}
+		builtBin = filepath.Join(builtDir, name)
+		if out, err := exec.Command("go", "build", "-o", builtBin, ".").CombinedOutput(); err != nil {
+			buildErr = fmt.Errorf("go build: %w\n%s", err, out)
+		}
+	})
+	if buildErr != nil {
+		t.Fatal(buildErr)
+	}
+	return builtBin
+}
+
+// bare makes an empty bare repository next to the test's directories and
+// returns its path.
+func (te *testEnv) bare(name string) string {
+	te.t.Helper()
+	dir := filepath.Join(filepath.Dir(te.hhHome), name+".git")
+	if err := gitrepo.InitBare(dir); err != nil {
+		te.t.Fatal(err)
+	}
+	return dir
+}
+
+// other is a second user: a HEDGEHUG_HOME and a HOME of their own, the same
+// clock.
+func (te *testEnv) other() *testEnv {
+	te.t.Helper()
+	o := newTestEnv(te.t)
+	o.now = te.now
+	return o
+}
+
+// twoUsers sets up alice and bob on one remote: alice makes the store org
+// (prefix ORG) with a task, syncs, and bob adds the store. The remote is
+// returned too.
+func twoUsers(t *testing.T) (alice, bob *testEnv, remote string) {
+	t.Helper()
+	alice = newTestEnv(t)
+	remote = alice.bare("shared")
+	alice.writeAccounts("github.com", "alice")
+	alice.ok("store", "init", "org", "--prefix", "ORG", "--remote", remote)
+	alice.ok("add", "x")
+	alice.ok("sync")
+	bob = alice.other()
+	bob.writeAccounts("github.com", "bob")
+	bob.ok("store", "add", "org", "--remote", remote)
+	return alice, bob, remote
 }
 
 // editorStepSep separates the steps of a test editor script, and the

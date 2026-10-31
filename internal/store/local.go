@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -40,6 +41,16 @@ func (s *Store) WriteLocal(name string, data []byte) error {
 		return err
 	}
 	return atomicfile.WriteFile(s.path(localDir+"/"+name), data)
+}
+
+// WriteLocalIn is WriteLocal for the store in dir, which it does not open: the
+// merge driver runs in the middle of a merge, when the files of the store may
+// not read.
+func WriteLocalIn(dir, name string, data []byte) error {
+	if err := validLocalName(name); err != nil {
+		return err
+	}
+	return atomicfile.WriteFile(filepath.Join(dir, filepath.FromSlash(localDir+"/"+name)), data)
 }
 
 // WithLocalLock runs fn holding the file lock .hedgehug/local/<name>,

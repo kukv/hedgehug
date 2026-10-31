@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -23,6 +24,20 @@ const (
 	gitignorePath = ".gitignore"
 	lockPath      = ".hedgehug/local/lock"
 )
+
+// AttributesPath is the file that sends the files of the store to the
+// hedgehug merge driver.
+const AttributesPath = ".gitattributes"
+
+// Attributes are the lines of AttributesPath that do so. Create writes them;
+// a sync adds the ones a store lacks.
+var Attributes = []string{
+	"tasks/**/*.md merge=hedgehug",
+	"comments/**/*.md merge=hedgehug",
+	"worklogs/**/*.md merge=hedgehug",
+	"workspaces/*.md merge=hedgehug",
+	"*.yaml merge=hedgehug",
+}
 
 // ErrNotFound means a file the caller asked for is not in the store.
 var ErrNotFound = errors.New("not found")
@@ -66,7 +81,8 @@ var newStoreHook = func(*Store) {}
 
 // Create makes a new store in dir, which must be missing or empty: a git
 // repository holding store.yaml, sc as schema.yaml (the default schema when
-// sc is nil), the workspace ws and a .gitignore, in one commit. meta and ws
+// sc is nil), the workspace ws, a .gitignore and the .gitattributes of the
+// merge driver, in one commit. meta and ws
 // are copied, not changed. A non-empty account (host/login) is named in the
 // Hedgehug-Author trailer of the commit.
 // When Create fails it removes what it made, so it can be run again.
@@ -129,6 +145,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 		{schemaPath, sb},
 		{model.WorkspacePath(w.ULID), wb},
 		{gitignorePath, []byte(".hedgehug/local/\n")},
+		{AttributesPath, []byte(strings.Join(Attributes, "\n") + "\n")},
 	}
 	paths := make([]string, 0, len(files))
 	for _, f := range files {
