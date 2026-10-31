@@ -191,17 +191,21 @@ func TestBackgroundSyncReachesRemote(t *testing.T) {
 	// The real binary: a write starts a detached child that pushes after push_interval.
 	bin := buildHedgehug(t)
 	alice, bob, _ := twoUsers(t)
-	alice.writeSync("50ms", "50ms")
+	// twoUsers synced on the test clock, which leaves pending_since in the
+	// past. A sync on the real clock clears it, and an interval that never
+	// falls due keeps the command from starting a child before it writes: that
+	// child would sync while the write is half done, or clear the write's
+	// pending_since without having pushed it.
+	alice.writeSync("1h", "50ms")
+	alice.now = time.Now()
+	alice.ok("sync")
 	delete(alice.env, "HEDGEHUG_AUTO_SYNC") // unset, as a user has it
 	alice.runBinary(bin, "add", "bg")
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		bob.ok("sync")
-		if strings.Contains(bob.ok("ls"), "bg") {
-			waitChildDone(t, alice)
-			return
-		}
-		time.Sleep(100 * time.Millisecond)
+	// Bob syncs once the child is done: a fetch that reads the ref while the
+	// push writes it sees an empty file.
+	waitChildDone(t, alice)
+	bob.ok("sync")
+	if !strings.Contains(bob.ok("ls"), "bg") {
+		t.Error("the background sync did not push")
 	}
-	t.Error("the background sync did not push")
 }
