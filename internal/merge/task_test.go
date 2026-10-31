@@ -273,6 +273,11 @@ func TestTaskBothCreated(t *testing.T) {
 	if x.Title != "b" || !slices.Equal(x.Labels, []string{"x", "y"}) {
 		t.Errorf("title %s labels %v", x.Title, x.Labels)
 	}
+	// A base that cannot be read is taken as no base.
+	r2 := mergeTask(t, side([]byte("---\nulid: [\n---\n"), ""), side(ours, "a"), side(theirs, "b"))
+	if !bytes.Equal(r2.Data, r.Data) {
+		t.Errorf("broken base:\n%s", r2.Data)
+	}
 }
 
 func TestTaskOursWins(t *testing.T) {
