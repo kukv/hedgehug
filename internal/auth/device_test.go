@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/fakegh"
 	"github.com/kukv/hedgehug/internal/github"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 func fakeHost(t *testing.T, st fakegh.State) (*fakegh.Server, config.Host, *atomic.Int32) {
@@ -130,11 +132,46 @@ func TestDeviceLoginErrors(t *testing.T) {
 	}
 }
 
+// barrierKeyring holds the first n Gets until all n have come, so n callers
+// all see the token as due before any of them takes the lock.
+type barrierKeyring struct {
+	*memKeyring
+	n    int32
+	seen atomic.Int32
+	on   atomic.Bool // the barrier holds only while on
+	all  chan struct{}
+	fail error // Set returns this when not nil
+}
+
+func newBarrier(n int) *barrierKeyring {
+	return &barrierKeyring{memKeyring: newMem(), n: int32(n), all: make(chan struct{})}
+}
+
+func (b *barrierKeyring) Get(service, user string) (string, error) {
+	v, err := b.memKeyring.Get(service, user)
+	if !b.on.Load() {
+		return v, err
+	}
+	if c := b.seen.Add(1); c < b.n {
+		<-b.all
+	} else if c == b.n {
+		close(b.all)
+	}
+	return v, err
+}
+
+func (b *barrierKeyring) Set(service, user, secret string) error {
+	if b.fail != nil {
+		return b.fail
+	}
+	return b.memKeyring.Set(service, user, secret)
+}
+
 func TestDeviceRefresh(t *testing.T) {
 	zero := 0
 	_, h, refreshes := fakeHost(t, fakegh.State{Users: []string{"alice"}, DeviceInterval: &zero, AutoApprove: "alice"})
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
-	k := newMem()
+	k := newBarrier(4)
 	a := config.Account{Name: "a", Host: "github.com", Login: "alice", Token: config.TokenSource{Kind: "device"}}
 	opt := Options{Keyring: k, Host: h, Now: func() time.Time { return now }, Sleep: func(time.Duration) {}, LockFile: filepath.Join(t.TempDir(), "auth.lock")}
 	dt, err := DeviceLogin(h, opt, func(*github.DeviceCode) {})
@@ -147,6 +184,7 @@ func TestDeviceRefresh(t *testing.T) {
 	if tok, err := Token(a, opt); err != nil || tok != dt.AccessToken || refreshes.Load() != 0 {
 		t.Errorf("fresh token = %q, %v, %d refreshes", tok, err, refreshes.Load())
 	}
+	k.on.Store(true)                           // the barrier is for the four callers below
 	now = now.Add(8*time.Hour - 4*time.Minute) // within 5 minutes of the end
 	var wg sync.WaitGroup
 	toks := make([]string, 4)
@@ -194,7 +232,80 @@ func TestDeviceTokenEdges(t *testing.T) {
 	}
 	// Past the end of the refresh token: no request, a new login.
 	opt.LockFile = filepath.Join(t.TempDir(), "auth.lock")
+	opt.Host = config.Host{Web: "http://127.0.0.1:1"}
 	if _, err := Token(a, opt); err == nil || !strings.Contains(err.Error(), "expired") || !strings.Contains(err.Error(), "hedgehug auth login a") {
 		t.Errorf("refresh expired = %v", err)
+	}
+}
+
+func TestDeviceRefreshKeepFails(t *testing.T) {
+	zero := 0
+	_, h, _ := fakeHost(t, fakegh.State{Users: []string{"alice"}, DeviceInterval: &zero, AutoApprove: "alice"})
+	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	k := newBarrier(0)
+	a := config.Account{Name: "a", Host: "github.com", Login: "alice", Token: config.TokenSource{Kind: "device"}}
+	opt := Options{Keyring: k, Host: h, Now: func() time.Time { return now }, Sleep: func(time.Duration) {}, LockFile: filepath.Join(t.TempDir(), "auth.lock")}
+	dt, err := DeviceLogin(h, opt, func(*github.DeviceCode) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dt.ExpiresAt = now
+	if err := SaveDeviceToken(a, dt, k); err != nil {
+		t.Fatal(err)
+	}
+	k.fail = errors.New("keychain locked")
+	_, err = Token(a, opt)
+	if err == nil || !strings.Contains(err.Error(), "could not keep it") || !strings.Contains(err.Error(), "keychain locked") || !strings.Contains(err.Error(), "hedgehug auth login a") {
+		t.Errorf("save failed = %v", err)
+	}
+}
+
+func TestDeviceNoExpiry(t *testing.T) {
+	h := tokenServer(t, map[string]any{"access_token": "ghu_1", "refresh_token": "ghr_1"})
+	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	dt, err := DeviceLogin(h, Options{Now: func() time.Time { return now }, Sleep: func(time.Duration) {}}, func(*github.DeviceCode) {})
+	if err != nil || !dt.ExpiresAt.IsZero() || !dt.RefreshExpiresAt.IsZero() {
+		t.Fatalf("DeviceLogin = %+v, %v", dt, err)
+	}
+	// A token with no end is used years later with no refresh (no lock file, no host).
+	a := config.Account{Name: "a", Host: "github.com", Login: "alice", Token: config.TokenSource{Kind: "device"}}
+	k := newMem()
+	_ = SaveDeviceToken(a, dt, k)
+	later := now.AddDate(10, 0, 0)
+	if tok, err := Token(a, Options{Keyring: k, Now: func() time.Time { return later }}); err != nil || tok != "ghu_1" {
+		t.Errorf("Token = %q, %v", tok, err)
+	}
+}
+
+func TestDeviceRefreshNeedsHost(t *testing.T) {
+	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	a := config.Account{Name: "a", Host: "github.com", Login: "alice", Token: config.TokenSource{Kind: "device"}}
+	k := newMem()
+	_ = SaveDeviceToken(a, DeviceToken{AccessToken: "x", RefreshToken: "r", ExpiresAt: now}, k)
+	opt := Options{Keyring: k, Now: func() time.Time { return now }, LockFile: filepath.Join(t.TempDir(), "auth.lock")}
+	if _, err := Token(a, opt); err == nil || !strings.Contains(err.Error(), "Host") {
+		t.Errorf("no host = %v", err)
+	}
+}
+
+func TestDeviceRefreshLockBusy(t *testing.T) {
+	old := lockWait
+	lockWait = 50 * time.Millisecond
+	t.Cleanup(func() { lockWait = old })
+	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	a := config.Account{Name: "a", Host: "github.com", Login: "alice", Token: config.TokenSource{Kind: "device"}}
+	k := newMem()
+	_ = SaveDeviceToken(a, DeviceToken{AccessToken: "x", RefreshToken: "r", ExpiresAt: now}, k)
+	lock := filepath.Join(t.TempDir(), "auth.lock")
+	opt := Options{Keyring: k, Host: config.Host{Web: "http://127.0.0.1:1"}, Now: func() time.Time { return now }, LockFile: lock}
+	var err error
+	if lerr := store.WithFileLock(lock, time.Second, func() error {
+		_, err = Token(a, opt)
+		return nil
+	}); lerr != nil {
+		t.Fatal(lerr)
+	}
+	if err == nil || !strings.Contains(err.Error(), "another hedgehug is refreshing") {
+		t.Errorf("busy lock = %v", err)
 	}
 }

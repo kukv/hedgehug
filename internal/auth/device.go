@@ -14,7 +14,7 @@ import (
 const refreshBefore = 5 * time.Minute
 
 // lockWait is how long a refresh waits for another one to end.
-const lockWait = 30 * time.Second
+var lockWait = 30 * time.Second
 
 // Prompt shows the user the code and where to enter it.
 type Prompt func(dc *github.DeviceCode)
@@ -64,12 +64,24 @@ func DeviceLogin(h config.Host, opt Options, show Prompt) (DeviceToken, error) {
 	}
 }
 
+// deviceTokenOf makes the tokens of a response. An expires_in of 0 is a
+// token with no end (the App has expiring tokens turned off): its time is
+// left zero.
 func deviceTokenOf(tr *github.TokenResponse, now time.Time) DeviceToken {
-	return DeviceToken{
-		AccessToken: tr.AccessToken, RefreshToken: tr.RefreshToken,
-		ExpiresAt:        now.Add(time.Duration(tr.ExpiresIn) * time.Second),
-		RefreshExpiresAt: now.Add(time.Duration(tr.RefreshTokenExpiresIn) * time.Second),
+	t := DeviceToken{AccessToken: tr.AccessToken, RefreshToken: tr.RefreshToken}
+	if tr.ExpiresIn > 0 {
+		t.ExpiresAt = now.Add(time.Duration(tr.ExpiresIn) * time.Second)
 	}
+	if tr.RefreshTokenExpiresIn > 0 {
+		t.RefreshExpiresAt = now.Add(time.Duration(tr.RefreshTokenExpiresIn) * time.Second)
+	}
+	return t
+}
+
+// fresh reports whether t needs no refresh yet: it has no end, or the end is
+// more than refreshBefore away.
+func fresh(t DeviceToken, now time.Time) bool {
+	return t.ExpiresAt.IsZero() || now.Add(refreshBefore).Before(t.ExpiresAt)
 }
 
 // deviceToken returns the access token of a device login, refreshed first
@@ -84,17 +96,22 @@ func deviceToken(a config.Account, opt Options) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if opt.now().Add(refreshBefore).Before(t.ExpiresAt) {
+	if fresh(t, opt.now()) {
 		return t.AccessToken, nil
 	}
 	if opt.LockFile == "" {
 		return "", errors.New("auth: LockFile is not set")
 	}
+	if opt.Host.Web == "" {
+		return "", errors.New("auth: Host is not set")
+	}
+	locked := false
 	err = store.WithFileLock(opt.LockFile, lockWait, func() error {
+		locked = true
 		if t, err = LoadDeviceToken(a, k); err != nil {
 			return err
 		}
-		if opt.now().Add(refreshBefore).Before(t.ExpiresAt) {
+		if fresh(t, opt.now()) {
 			return nil // another process refreshed it
 		}
 		if !t.RefreshExpiresAt.IsZero() && opt.now().After(t.RefreshExpiresAt) {
@@ -108,9 +125,16 @@ func deviceToken(a config.Account, opt Options) (string, error) {
 			return fmt.Errorf("refreshing the token of %s failed (%s); run hedgehug auth login %s", Key(a), tr.Error, a.Name)
 		}
 		t = deviceTokenOf(tr, opt.now())
-		return SaveDeviceToken(a, t, k)
+		if err := SaveDeviceToken(a, t, k); err != nil {
+			// The old refresh token is spent, so the new pair is lost.
+			return fmt.Errorf("got a new token for %s but could not keep it in the keychain: %w; run hedgehug auth login %s", Key(a), err, a.Name)
+		}
+		return nil
 	})
 	if err != nil {
+		if !locked {
+			return "", fmt.Errorf("another hedgehug is refreshing the token; wait a little and try again: %w", err)
+		}
 		return "", err
 	}
 	return t.AccessToken, nil
