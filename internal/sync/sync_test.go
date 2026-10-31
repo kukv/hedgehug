@@ -12,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/merge"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -327,6 +328,35 @@ func TestPrefixDuplicateAcrossStores(t *testing.T) {
 				t.Errorf("notice = %v, want %v (%+v)", got, c.wantNotice, r.Repaired)
 			}
 		})
+	}
+}
+
+func TestMergeSchemaBothSides(t *testing.T) {
+	c := newCluster(t, 2)
+	c.sync(1)
+	addProp := func(i int, name string) {
+		t.Helper()
+		sc := *c.stores[i].Schema()
+		sc.Props = append(slices.Clone(sc.Props), schema.Prop{Name: name, Type: schema.TypeText})
+		if _, err := c.stores[i].Update(c.op(i, "schema", model.ULID{}), func(tx *store.Tx) error { return tx.PutSchema(&sc) }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	addProp(0, "alpha")
+	addProp(1, "beta")
+	c.sync(0)
+	r := c.sync(1)
+	if r.Merges != 1 || len(r.Overwritten) != 0 {
+		t.Errorf("result = %+v", r)
+	}
+	for _, name := range []string{"alpha", "beta"} {
+		if _, ok := c.stores[1].Schema().Prop(name); !ok {
+			t.Errorf("the merged schema lacks %s", name)
+		}
+	}
+	c.sync(0)
+	if c.headTree(0) != c.headTree(1) {
+		t.Error("clones differ")
 	}
 }
 
