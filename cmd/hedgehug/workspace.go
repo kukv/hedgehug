@@ -2,7 +2,6 @@ package main
 
 import (
 	"cmp"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -75,20 +75,6 @@ func (a *app) workspaceCmd() *cobra.Command {
 		},
 	)
 	return cmd
-}
-
-// resolveWorkspace finds the workspace arg names.
-func resolveWorkspace(ix *index.Index, arg string) (*model.Workspace, error) {
-	w, err := ix.ResolveWorkspace(arg)
-	var ae *index.AmbiguousWorkspaceError
-	if errors.As(err, &ae) {
-		lines := make([]string, len(ae.Candidates))
-		for i, c := range ae.Candidates {
-			lines[i] = fmt.Sprintf("%s (%s, %s)", c.Name, c.IDPrefix, c.ULID)
-		}
-		return nil, &ambiguousError{input: arg, noun: "workspaces", lines: lines}
-	}
-	return w, err
 }
 
 // checkPrefixElsewhere refuses an id prefix that a workspace of another store
@@ -159,7 +145,7 @@ func (a *app) workspaceRename(arg, name string) error {
 	if err != nil {
 		return err
 	}
-	ws, err := resolveWorkspace(ix, arg)
+	ws, err := ops.ResolveWorkspace(ix, arg)
 	if err != nil {
 		return err
 	}
@@ -188,7 +174,7 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 	if err != nil {
 		return err
 	}
-	ws, err := resolveWorkspace(ix, arg)
+	ws, err := ops.ResolveWorkspace(ix, arg)
 	if err != nil {
 		return err
 	}
@@ -276,7 +262,7 @@ func (a *app) workspaceRm(arg string) error {
 	if err != nil {
 		return err
 	}
-	ws, err := resolveWorkspace(ix, arg)
+	ws, err := ops.ResolveWorkspace(ix, arg)
 	if err != nil {
 		return err
 	}

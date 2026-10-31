@@ -152,24 +152,6 @@ func isDeleted(ix *index.Index, e *index.Entry, hint string) error {
 	return nil
 }
 
-// notDeleted refuses to change the task e when it is deleted, and points
-// to restore.
-func notDeleted(ix *index.Index, e *index.Entry) error {
-	if e.DeletedAt != nil {
-		return fmt.Errorf("%s is deleted; restore %s first", ops.RefName(ix, e.ULID), ops.TaskFileName(e))
-	}
-	return nil
-}
-
-// liveParent refuses a deleted task as a parent: live tasks under it would
-// block its purge and the restore of its other children.
-func liveParent(ix *index.Index, p *index.Entry) error {
-	if err := notDeleted(ix, p); err != nil {
-		return fmt.Errorf("the parent %w", err)
-	}
-	return nil
-}
-
 // restorable refuses to restore e when it is not deleted or its parent is.
 func restorable(ix *index.Index, e *index.Entry) error {
 	if err := isDeleted(ix, e, ""); err != nil {
@@ -177,7 +159,7 @@ func restorable(ix *index.Index, e *index.Entry) error {
 	}
 	if e.Parent != nil {
 		if p, ok := ix.Task(*e.Parent); ok {
-			return liveParent(ix, p)
+			return ops.LiveParent(ix, p)
 		}
 	}
 	return nil

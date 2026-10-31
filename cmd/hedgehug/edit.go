@@ -36,7 +36,7 @@ func (a *app) edit(arg string) error {
 	if err != nil {
 		return err
 	}
-	if err := notDeleted(ix, e); err != nil {
+	if err := ops.NotDeleted(ix, e); err != nil {
 		return err
 	}
 	orig, err := s.TaskBytes(e.ULID)
@@ -63,11 +63,11 @@ func (a *app) edit(arg string) error {
 		t, err := checkEdit(ix, e.ULID, old, edited)
 		if err == nil {
 			if old != nil {
-				host, herr := a.writerHost()
+				host, herr := a.ss.WriterHost()
 				if herr != nil {
 					return herr
 				}
-				addWatchers(t, newMentions(old.Body, t.Body, host)...)
+				ops.AddWatchers(t, ops.NewMentions(old.Body, t.Body, host)...)
 			}
 			var committed bool
 			committed, err = a.ss.Update(s, store.Op{Name: "edit", Task: e.ULID}, func(tx *store.Tx) error {

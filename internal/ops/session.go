@@ -200,11 +200,16 @@ func (ss *Session) QueryOptions(s *store.Store) (query.Options, error) {
 // ambiguousError is index.AmbiguousError with the candidates spelled out.
 type ambiguousError struct {
 	input string
+	noun  string   // what the candidates are, "tasks" when empty
 	lines []string // "<id> (<ULID>) <title>" per candidate
 }
 
 func (e *ambiguousError) Error() string {
-	return fmt.Sprintf("%q matches %d tasks:\n  %s", e.input, len(e.lines), strings.Join(e.lines, "\n  "))
+	noun := e.noun
+	if noun == "" {
+		noun = "tasks"
+	}
+	return fmt.Sprintf("%q matches %d %s:\n  %s", e.input, len(e.lines), noun, strings.Join(e.lines, "\n  "))
 }
 
 // Resolve finds the task arg names.

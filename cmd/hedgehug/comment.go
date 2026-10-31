@@ -132,7 +132,7 @@ func (a *app) commentAdd(arg string, text []string) error {
 	if err != nil {
 		return err
 	}
-	if err := notDeleted(ix, e); err != nil {
+	if err := ops.NotDeleted(ix, e); err != nil {
 		return err
 	}
 	var body, path string // path is the file of the editor, if any
@@ -154,11 +154,11 @@ func (a *app) commentAdd(arg string, text []string) error {
 	if c.Author, err = a.ss.AccountID(); err != nil {
 		return err
 	}
-	host, err := a.writerHost()
+	host, err := a.ss.WriterHost()
 	if err != nil {
 		return err
 	}
-	accts := newMentions("", c.Body, host)
+	accts := ops.NewMentions("", c.Body, host)
 	if c.Author != "" {
 		accts = append([]string{c.Author}, accts...)
 	}
@@ -169,7 +169,7 @@ func (a *app) commentAdd(arg string, text []string) error {
 		if e.Broken != "" {
 			return nil
 		}
-		return watchInTx(tx, e.ULID, accts...)
+		return ops.WatchInTx(tx, e.ULID, accts...)
 	}); err != nil {
 		if path != "" {
 			return fmt.Errorf("%s; the comment is kept at %s", describe(err), path)
@@ -207,11 +207,11 @@ func (a *app) commentEdit(arg string) error {
 		}
 		return a.printComment(s, ref, verb(false, ""))
 	}
-	host, err := a.writerHost()
+	host, err := a.ss.WriterHost()
 	if err != nil {
 		return err
 	}
-	mentioned := newMentions(c.Body, body, host)
+	mentioned := ops.NewMentions(c.Body, body, host)
 	if len(mentioned) > 0 {
 		// A broken task has no watchers to add to.
 		_, ix, err := a.ss.Open()
@@ -234,7 +234,7 @@ func (a *app) commentEdit(arg string) error {
 		if err := tx.PutComment(ref.Task, cur); err != nil {
 			return err
 		}
-		return watchInTx(tx, ref.Task, mentioned...)
+		return ops.WatchInTx(tx, ref.Task, mentioned...)
 	})
 	if err != nil {
 		return fmt.Errorf("%s; the edited comment is kept at %s", describe(err), path)

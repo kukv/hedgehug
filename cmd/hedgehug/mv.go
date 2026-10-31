@@ -52,7 +52,7 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 	}
 	// The checks come in the order of the arguments; mvTargetOf repeats
 	// them.
-	if err := notDeleted(ix, e); err != nil {
+	if err := ops.NotDeleted(ix, e); err != nil {
 		return err
 	}
 	var p *index.Entry
@@ -60,13 +60,13 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 		if p, err = a.ss.Resolve(ix, parentArg); err != nil {
 			return err
 		}
-		if err := liveParent(ix, p); err != nil {
+		if err := ops.LiveParent(ix, p); err != nil {
 			return err
 		}
 	}
 	var w *model.Workspace
 	if workspaceArg != "" {
-		if w, err = resolveWorkspace(ix, workspaceArg); err != nil {
+		if w, err = ops.ResolveWorkspace(ix, workspaceArg); err != nil {
 			return err
 		}
 	}
@@ -159,7 +159,7 @@ type mvTarget struct {
 // level when root, or under the new parent p (nil to keep the parent), in
 // the workspace w (nil to follow the parent), before or after a sibling.
 func (a *app) mvTargetOf(ix *index.Index, e, p *index.Entry, w *model.Workspace, root bool, before, after string) (mvTarget, error) {
-	if err := notDeleted(ix, e); err != nil {
+	if err := ops.NotDeleted(ix, e); err != nil {
 		return mvTarget{}, err
 	}
 	to := mvTarget{parent: e.Parent, workspace: e.Workspace}
@@ -167,7 +167,7 @@ func (a *app) mvTargetOf(ix *index.Index, e, p *index.Entry, w *model.Workspace,
 	case root:
 		to.parent = nil
 	case p != nil:
-		if err := liveParent(ix, p); err != nil {
+		if err := ops.LiveParent(ix, p); err != nil {
 			return mvTarget{}, err
 		}
 		to.parent, to.workspace = &p.ULID, p.Workspace
@@ -197,7 +197,7 @@ func (a *app) mvTargetOf(ix *index.Index, e, p *index.Entry, w *model.Workspace,
 // task goes past the group on the side asked for.
 func (a *app) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, ws model.ULID, before, after string) (model.Rank, error) {
 	if before == "" && after == "" {
-		return endRank(ix, parent, ws, ulid)
+		return ops.EndRank(ix, parent, ws, ulid)
 	}
 	ref := before
 	if ref == "" {
@@ -207,7 +207,7 @@ func (a *app) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, ws mo
 	if err != nil {
 		return "", err
 	}
-	sib := siblings(ix, parent, ws, ulid)
+	sib := ops.Siblings(ix, parent, ws, ulid)
 	if !slices.ContainsFunc(sib, func(e *index.Entry) bool { return e.ULID == x.ULID }) {
 		return "", fmt.Errorf("%s is not under the same parent", ops.RefName(ix, x.ULID))
 	}

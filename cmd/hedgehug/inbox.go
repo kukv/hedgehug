@@ -503,7 +503,7 @@ func (a *app) inboxRevert(arg string) error {
 	if !ok {
 		return fmt.Errorf("the task of inbox item %s (%s) is gone: %w", u, it.Task, store.ErrNotFound)
 	}
-	if err := notDeleted(ix, e); err != nil {
+	if err := ops.NotDeleted(ix, e); err != nil {
 		return err
 	}
 	committed, err := a.ss.Update(s, store.Op{Name: "revert-overwritten", Task: e.ULID}, func(tx *store.Tx) error {
@@ -550,7 +550,7 @@ func revertField(t *model.Task, field string, raw json.RawMessage, sc *schema.Sc
 		if err := json.Unmarshal(raw, &v); err != nil {
 			return fmt.Errorf("%s: %w", field, err)
 		}
-		return applyAssign(t, assign{key: field, op: "=", value: v}, sc, resolve)
+		return ops.ApplyAssign(t, ops.Assign{Key: field, Op: "=", Value: v}, sc, resolve)
 	case "rank":
 		var v model.Rank
 		if err := json.Unmarshal(raw, &v); err != nil {
@@ -675,11 +675,11 @@ func revertProp(t *model.Task, key string, raw json.RawMessage, sc *schema.Schem
 		if err != nil {
 			return err
 		}
-		as := assign{key: key, op: "=", value: text}
+		as := ops.Assign{Key: key, Op: "=", Value: text}
 		if i > 0 {
-			as.op = "+="
+			as.Op = "+="
 		}
-		if err := applyAssign(t, as, sc, resolve); err != nil {
+		if err := ops.ApplyAssign(t, as, sc, resolve); err != nil {
 			return err
 		}
 	}

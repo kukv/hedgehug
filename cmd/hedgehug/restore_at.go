@@ -12,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -102,7 +103,7 @@ func (a *app) restoreAt(arg, at string) error {
 		}
 		if old.DeletedAt == nil && old.Parent != nil {
 			if p, ok := ix.Task(*old.Parent); ok {
-				if err := liveParent(ix, p); err != nil {
+				if err := ops.LiveParent(ix, p); err != nil {
 					return err
 				}
 			}
