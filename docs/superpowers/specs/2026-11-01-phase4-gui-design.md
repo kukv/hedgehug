@@ -149,14 +149,11 @@ table:
 kanban:
   columns: status        # status | category
   swimlane: none         # none | assignee | project
-updated: 2026-11-01T10:00:00Z
-updated_by: koki
 ```
 
 - 名前は 1〜64 文字。`/ \ : * ? " < > |`、制御文字、先頭と末尾の空白とドットは拒否する。大文字小文字だけが違う名前は同じ名前として拒否する（大文字小文字を区別しないファイルシステムのため）
 - `table` と `kanban` は省略でき、省略時は既定値（table: `id, title, status, assignee, due` と `group_by: none`、kanban: `columns: status` と `swimlane: none`）。`layout` に関係しない節も保存してよい（レイアウトを切り替えても設定が残る）
 - `columns` に書けるのは、組み込みのフィールドとスキーマのプロパティのキー。スキーマから消えた列は表示で飛ばし、doctor が警告する
-- `updated` と `updated_by` は書き込むたびに更新する（マージの勝ち負けに使う）
 - 未知のキーは読み飛ばし、書き戻すときに残す（ほかのファイルと同じく `yaml.Node` で扱う）
 - `layout: gantt` はフェーズ6で足す
 
@@ -166,7 +163,7 @@ updated_by: koki
 
 ### マージ
 
-`views/` を、schema.yaml と同じキー単位のマージ（`kindYAML`）に入れる。両方の側で同じキーを違う値に変えたときは既存の LWW（`updated` → 書き手 → 値）で決め、負けた値は `Hedgehug-Overwritten` に記録する。片側が削除し、もう片側が変更したときは、変更を残す（タスクと同じ）。
+`views/` を、schema.yaml と同じキー単位のマージ（`kindYAML`）に入れる。両方の側で同じキーを違う値に変えたときは、schema.yaml と同じく、その側でそのキーを最後に変えたコミットの時刻（同じなら書き手 → 値）で決め、負けた値は `Hedgehug-Overwritten` に記録する。片側が削除し、もう片側が変更したときは、変更を残す（タスクと同じ）。
 
 ### doctor
 
