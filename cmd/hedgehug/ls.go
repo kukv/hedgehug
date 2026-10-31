@@ -37,9 +37,9 @@ func (a *app) lsCmd() *cobra.Command {
 					return usageErrorf("--format: %w", err)
 				}
 			}
-			q, err := query.Parse(strings.Join(args, " "))
+			q, err := ops.ParseQuery(strings.Join(args, " "))
 			if err != nil {
-				return usageError{err}
+				return err
 			}
 			if tree {
 				return a.lsTree(q, ulidsOnly, tmpl)
