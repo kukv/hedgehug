@@ -78,9 +78,9 @@ var (
 	onFullRepair = func() {}              // runs when the repair reads every file of HEAD
 )
 
-// Run syncs the store once. A store with no remote does nothing.
-func Run(s *store.Store, opt Options) (Result, error) {
-	var res Result
+// Run syncs the store once. A store with no remote does nothing. Whether
+// it succeeds or not, it then fills the inbox from what HEAD gained.
+func Run(s *store.Store, opt Options) (res Result, err error) {
 	if len(opt.Remotes) == 0 {
 		return res, nil
 	}
@@ -92,6 +92,12 @@ func Run(s *store.Store, opt Options) (Result, error) {
 	if err != nil {
 		return res, err
 	}
+	// A failed sync may have moved HEAD too: a fast-forward, a merge.
+	defer func() {
+		if err := notify(s, before, opt, &res); err != nil {
+			res.Warnings = append(res.Warnings, "fill the inbox: "+err.Error())
+		}
+	}()
 	// setup commits after the merges; refuse now what it would refuse then.
 	if _, err := attributesToAdd(s, before, true); err != nil {
 		return res, err
@@ -161,7 +167,6 @@ func Run(s *store.Store, opt Options) (Result, error) {
 		}
 	}
 	warn("check the other stores' id prefixes", prefixDuplicates(s, opt, &res))
-	warn("fill the inbox", notify(s, before, opt, &res))
 	warn("find the invalid tasks", findInvalid(s, ix, was, before, &res))
 	n, err := r.LooseObjects()
 	warn("count the loose objects", err)
@@ -512,14 +517,14 @@ func mergeAuthor(r *gitrepo.Repo, base, head, remote plumbing.Hash) func(string)
 		}
 		switch {
 		case okO && okT:
-			if t.When.After(o.When) || t.When.Equal(o.When) && author(t) > author(o) {
-				return author(t), nil
+			if t.When.After(o.When) || t.When.Equal(o.When) && t.Writer() > o.Writer() {
+				return t.Writer(), nil
 			}
-			return author(o), nil
+			return o.Writer(), nil
 		case okO:
-			return author(o), nil
+			return o.Writer(), nil
 		case okT:
-			return author(t), nil
+			return t.Writer(), nil
 		}
 		return headAuthor(r, head)(p)
 	}
@@ -532,7 +537,7 @@ func headAuthor(r *gitrepo.Repo, head plumbing.Hash) func(string) (string, error
 		if err != nil || !ok {
 			return "", err
 		}
-		return author(e), nil
+		return e.Writer(), nil
 	}
 }
 
@@ -734,34 +739,35 @@ func prefixDuplicates(s *store.Store, opt Options, res *Result) error {
 	return nil
 }
 
-// notify adds to the inbox what the sync brought for opt.Me: the items of
-// the commits since before, the duplicate prefixes and names it told of
-// without a commit (the inbox drops those it has), and the merge driver's
-// records.
+// notify adds to the inbox what reached HEAD for opt.Me since the inbox
+// last caught up (since before, the first time), the merge driver's
+// records, and the duplicate prefixes and names the sync told of without a
+// commit (the inbox drops those it has). What the inbox skipped goes to the
+// warnings.
 func notify(s *store.Store, before plumbing.Hash, opt Options, res *Result) error {
+	box := inbox.Open(s)
+	defer func() { res.Warnings = append(res.Warnings, box.Warnings()...) }()
+	added, err := box.Catch(opt.Me, before)
+	res.Notices = append(res.Notices, added...)
+	if err != nil {
+		return err
+	}
 	head, err := s.Repo().Head()
 	if err != nil {
 		return err
 	}
-	items, err := inbox.Collect(s, before, head, opt.Me)
-	if err != nil {
-		return err
-	}
+	var items []inbox.Item
 	now := opt.Now()
 	for _, x := range res.Repaired {
-		if (x.Kind == "prefix_duplicate" || x.Kind == "name_duplicate") && slices.Contains(opt.Me, x.Author) {
-			if it, ok := inbox.Notice(x.ULID, x.Kind, x.Value, x.Author, head.String(), now); ok {
+		if x.Kind == "prefix_duplicate" || x.Kind == "name_duplicate" {
+			if it, ok := inbox.Notice(x.ULID, x.Kind, x.Value, x.Author, head.String(), now); ok && slices.ContainsFunc(opt.Me, func(m string) bool { return strings.EqualFold(m, x.Author) }) {
 				items = append(items, it)
 			}
 		}
 	}
-	box := inbox.Open(s)
-	added, err := box.Add(items)
-	if err != nil {
-		return err
-	}
+	added, err = box.Add(items)
 	res.Notices = append(res.Notices, added...)
-	return box.Import(opt.Me)
+	return err
 }
 
 // invalid returns the tasks that have problems, as is:invalid finds them.

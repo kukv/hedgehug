@@ -120,3 +120,14 @@ func TestLogNoTrailers(t *testing.T) {
 		t.Errorf("entry = %+v", got[0])
 	}
 }
+
+func TestLogEntryWriter(t *testing.T) {
+	e := LogEntry{Author: Signature{Name: "a", Email: "a@x"}}
+	if got := e.Writer(); got != "a@x" {
+		t.Errorf("Writer = %q", got)
+	}
+	e.Trailers = []Trailer{{Key: "Hedgehug-Op", Value: "add"}, {Key: "Hedgehug-Author", Value: "github.com/a"}}
+	if got := e.Writer(); got != "github.com/a" {
+		t.Errorf("Writer = %q", got)
+	}
+}

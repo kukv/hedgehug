@@ -73,7 +73,7 @@ func TestOverwrittenTrailer(t *testing.T) {
 	}
 	r = c.sync(0)
 	items, err := inbox.Open(c.stores[0]).List(false)
-	if err != nil || len(items) != 1 || items[0].Kind != inbox.Overwritten || items[0].Task != x.ULID || items[0].Author != "github.com/u0" {
+	if err != nil || len(items) != 1 || items[0].Kind != inbox.Overwritten || items[0].Task != x.ULID || items[0].To != "github.com/u0" || items[0].Author != "github.com/u1" {
 		t.Fatalf("u0's inbox = %+v, %v", items, err)
 	}
 	if len(r.Notices) != 1 || r.Notices[0].ULID != items[0].ULID {
@@ -81,6 +81,38 @@ func TestOverwrittenTrailer(t *testing.T) {
 	}
 	if r = c.sync(0); len(r.Notices) != 0 {
 		t.Errorf("the next sync told again: %+v", r.Notices)
+	}
+}
+
+// A sync that fails after HEAD moved still fills the inbox.
+func TestInboxAfterFailedPush(t *testing.T) {
+	c := newCluster(t, 2)
+	x := c.addTask(0, "x")
+	c.sync(0)
+	c.sync(1)
+	c.set(0, x.ULID, func(t *model.Task) { t.Title = "a" })
+	c.set(1, x.ULID, func(t *model.Task) { t.Title = "b" }) // later: wins
+	c.sync(1)
+	// u0's merge, where u0's value loses, is made; then its push fails.
+	c.opts[0].BeforePush = func() {
+		if err := os.Rename(c.remote, c.remote+".away"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r, err := Run(c.stores[0], c.opts[0])
+	if err := os.Rename(c.remote+".away", c.remote); err != nil {
+		t.Fatal(err)
+	}
+	if err == nil {
+		t.Fatal("the push did not fail")
+	}
+	items, _ := inbox.Open(c.stores[0]).List(false)
+	if len(items) != 1 || items[0].Kind != inbox.Overwritten || len(r.Notices) != 1 {
+		t.Errorf("inbox = %+v, notices = %+v", items, r.Notices)
+	}
+	c.opts[0].BeforePush = nil
+	if r := c.sync(0); len(r.Notices) != 0 {
+		t.Errorf("told again: %+v", r.Notices)
 	}
 }
 

@@ -23,7 +23,8 @@ import (
 // Hedgehug-Repaired trailers make an item when the account they name is one
 // of me, whoever made the commit. The changes of a commit make mention,
 // assigned and watch items unless one of me wrote it; a merge commit's are
-// skipped, as the commits it brings are among the others.
+// skipped, as the commits it brings are among the others. Accounts compare
+// without case.
 func Collect(s *store.Store, before, after plumbing.Hash, me []string) ([]Item, error) {
 	r := s.Repo()
 	es, err := r.Between(after, before)
@@ -32,7 +33,11 @@ func Collect(s *store.Store, before, after plumbing.Hash, me []string) ([]Item, 
 	}
 	var out []Item
 	for _, e := range es {
-		c := &commit{r: r, e: e, me: me}
+		tree, err := r.TreeOf(e.Hash)
+		if err != nil {
+			return nil, err
+		}
+		c := &commit{r: r, e: e, tree: tree, me: me}
 		for _, t := range e.Trailers {
 			var err error
 			switch t.Key {
@@ -45,10 +50,13 @@ func Collect(s *store.Store, before, after plumbing.Hash, me []string) ([]Item, 
 				return nil, err
 			}
 		}
-		if len(e.Parents) == 1 && !slices.Contains(me, author(e)) {
+		if _, mine := isMe(me, e.Writer()); len(e.Parents) == 1 && !mine {
 			if err := c.changes(); err != nil {
 				return nil, err
 			}
+		}
+		if err := c.ids(); err != nil {
+			return nil, err
 		}
 		out = append(out, c.items...)
 	}
@@ -57,9 +65,10 @@ func Collect(s *store.Store, before, after plumbing.Hash, me []string) ([]Item, 
 
 // Notice makes the item for a repair the sync tells of without a commit,
 // such as a prefix two workspaces share: target is the workspace or task,
-// commit the HEAD it was seen at. ok is false when the repair makes no item.
-func Notice(target model.ULID, kind, value, author, commit string, when time.Time) (Item, bool) {
-	it, ok := repairItem(target, kind, value, author)
+// to whom it tells, commit the HEAD it was seen at. ok is false when the
+// repair makes no item.
+func Notice(target model.ULID, kind, value, to, commit string, when time.Time) (Item, bool) {
+	it, ok := repairItem(target, kind, value, to)
 	it.Commit, it.Time = commit, when
 	return it, ok
 }
@@ -68,16 +77,41 @@ func Notice(target model.ULID, kind, value, author, commit string, when time.Tim
 type commit struct {
 	r     *gitrepo.Repo
 	e     gitrepo.LogEntry
+	tree  plumbing.Hash
 	me    []string
 	items []Item
+	// changed maps the names of the files the commit changed from any of
+	// its parents to their paths; made when a trailer needs it.
+	changed map[string]string
 }
 
+// add puts in the item, made by the commit's writer.
 func (c *commit) add(it Item) {
-	it.Commit, it.Time = c.e.Hash.String(), c.e.When
-	if it.Author == "" {
-		it.Author = author(c.e)
-	}
+	it.Commit, it.Time, it.Author = c.e.Hash.String(), c.e.When, c.e.Writer()
 	c.items = append(c.items, it)
+}
+
+// ids gives the items of tasks the task's id at the commit.
+func (c *commit) ids() error {
+	got := map[model.ULID]string{}
+	for i, it := range c.items {
+		if it.Task.IsZero() {
+			continue
+		}
+		id, ok := got[it.Task]
+		if !ok {
+			t, err := readTask(c.r, c.tree, it.Task)
+			if err != nil {
+				return err
+			}
+			if t != nil {
+				id = t.ID
+			}
+			got[it.Task] = id
+		}
+		c.items[i].ID = id
+	}
+	return nil
 }
 
 // splitTrailer splits a trailer value into its first word (unescaped), its
@@ -101,22 +135,22 @@ func splitTrailer(v string) (first, second, value, last string, ok bool) {
 // does not read so is not one Hedgehug wrote and is skipped.
 func (c *commit) overwritten(v string) {
 	p, field, value, who, ok := splitTrailer(v)
-	if !ok || !json.Valid([]byte(value)) || !slices.Contains(c.me, who) {
+	if _, mine := isMe(c.me, who); !ok || !mine || !json.Valid([]byte(value)) {
 		return
 	}
-	c.add(Item{Kind: Overwritten, Task: taskOf(p), Path: p, Author: who, Detail: overwrittenDetail(field, value)})
+	c.add(Item{Kind: Overwritten, Task: taskOf(p), Path: p, To: who, Detail: overwrittenDetail(field, value)})
 }
 
 // repaired reads `<ULID or path> <kind> <JSON value or -> <author>`.
 func (c *commit) repaired(v string) error {
 	target, kind, value, who, ok := splitTrailer(v)
-	if !ok || !slices.Contains(c.me, who) {
+	if _, mine := isMe(c.me, who); !ok || !mine {
 		return nil
 	}
 	u, err := model.ParseULID(target)
 	isULID := err == nil
 	if kind == "revived" {
-		return c.revived(u, isULID, target, who)
+		return c.revived(u, isULID, target, value, who)
 	}
 	if !isULID {
 		return nil
@@ -130,13 +164,13 @@ func (c *commit) repaired(v string) error {
 // workspaceKinds are the repairs and notices whose ULID is a workspace's.
 var workspaceKinds = []string{"workspace_revived", "id_prefix", "prefix_duplicate", "name_duplicate"}
 
-// repairItem makes the item of the repair kind of u, told to who.
-func repairItem(u model.ULID, kind, value, who string) (Item, bool) {
+// repairItem makes the item of the repair kind of u, told to to.
+func repairItem(u model.ULID, kind, value, to string) (Item, bool) {
 	raw := json.RawMessage(value)
 	if kind == "id_renumbered" || !json.Valid(raw) { // id_renumbered: the other side of an id_collision, told there
 		return Item{}, false
 	}
-	it := Item{Kind: Repaired, Task: u, Author: who}
+	it := Item{Kind: Repaired, Task: u, To: to}
 	d := repairDetail{Kind: kind, Value: raw}
 	if slices.Contains(workspaceKinds, kind) {
 		it.Task, d.Workspace = model.ULID{}, u
@@ -148,14 +182,14 @@ func repairItem(u model.ULID, kind, value, who string) (Item, bool) {
 		it.Kind = PrefixDuplicate
 	}
 	if it.Detail == nil {
-		it.Detail, _ = json.Marshal(d) // valid JSON always encodes
+		it.Detail = mustJSON(d)
 	}
 	return it, true
 }
 
 // revived tells of a file a merge brought back. The trailer names it by
 // the ULID of its name, or by its path when its name is no ULID.
-func (c *commit) revived(u model.ULID, isULID bool, target, who string) error {
+func (c *commit) revived(u model.ULID, isULID bool, target, value, who string) error {
 	p := target
 	if isULID {
 		var err error
@@ -163,46 +197,44 @@ func (c *commit) revived(u model.ULID, isULID bool, target, who string) error {
 			return err
 		}
 	}
-	c.add(Item{Kind: Revived, Task: taskOf(p), Path: p, Author: who})
+	c.add(Item{Kind: Revived, Task: taskOf(p), Path: p, To: who, Detail: mustJSON(repairDetail{Kind: "revived", Value: jsonOrNull(value)})})
 	return nil
 }
 
-// find returns the path of the file named by u in the commit, or "" when
+// find returns the path of the file named by u that the commit changed
+// from one of its parents, as a merge that brings a file back does; "" when
 // there is none.
 func (c *commit) find(u model.ULID) (string, error) {
-	if _, err := c.r.ReadAt(c.e.Hash, model.TaskPath(u)); err == nil {
-		return model.TaskPath(u), nil
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		return "", err
-	}
-	tree, err := c.r.TreeOf(c.e.Hash)
-	if err != nil {
-		return "", err
-	}
-	for p, err := range c.r.Files(tree, "") {
-		if err != nil {
-			return "", err
+	if c.changed == nil {
+		c.changed = map[string]string{}
+		for _, parent := range c.e.Parents {
+			from, err := c.r.TreeOf(parent)
+			if err != nil {
+				return "", err
+			}
+			cs, err := c.r.DiffTrees(from, c.tree, "")
+			if err != nil {
+				return "", err
+			}
+			for _, ch := range cs {
+				if !ch.Deleted {
+					c.changed[path.Base(ch.Path)] = ch.Path
+				}
+			}
 		}
-		if path.Base(p) == u.String()+".md" {
-			return p, nil
-		}
 	}
-	return "", nil
+	return c.changed[u.String()+".md"], nil
 }
 
 // changes makes the items of what the commit changed from its parent: the
-// tasks it changed and the comments it added. A file that does not decode
-// makes none; doctor tells of it.
+// tasks it changed and the comments it added or changed. A file that does
+// not decode makes none; doctor tells of it.
 func (c *commit) changes() error {
 	from, err := c.r.TreeOf(c.e.Parents[0])
 	if err != nil {
 		return err
 	}
-	to, err := c.r.TreeOf(c.e.Hash)
-	if err != nil {
-		return err
-	}
-	cs, err := c.r.DiffTrees(from, to, "")
+	cs, err := c.r.DiffTrees(from, c.tree, "")
 	if err != nil {
 		return err
 	}
@@ -212,9 +244,9 @@ func (c *commit) changes() error {
 		}
 		var err error
 		if u, perr := model.ParseTaskPath(ch.Path); perr == nil {
-			err = c.task(u, from, to)
+			err = c.task(u, from)
 		} else if task, cm, perr := model.ParseCommentPath(ch.Path); perr == nil {
-			err = c.comment(task, cm, from, to)
+			err = c.comment(task, cm, from)
 		}
 		if err != nil {
 			return err
@@ -223,8 +255,8 @@ func (c *commit) changes() error {
 	return nil
 }
 
-func (c *commit) task(u model.ULID, from, to plumbing.Hash) error {
-	now, err := readTask(c.r, to, u)
+func (c *commit) task(u model.ULID, from plumbing.Hash) error {
+	now, err := readTask(c.r, c.tree, u)
 	if err != nil || now == nil {
 		return err
 	}
@@ -236,14 +268,14 @@ func (c *commit) task(u model.ULID, from, to plumbing.Hash) error {
 	if was != nil {
 		old = was
 	}
-	if slices.ContainsFunc(now.Assignees, func(a string) bool { return slices.Contains(c.me, a) && !slices.Contains(old.Assignees, a) }) {
-		c.add(Item{Kind: Assigned, Task: u})
+	if to, ok := c.added(old.Assignees, now.Assignees); ok {
+		c.add(Item{Kind: Assigned, Task: u, To: to})
 	}
-	oldMentions := index.Mentions(old.Body)
-	if slices.ContainsFunc(index.Mentions(now.Body), func(m string) bool { return !slices.Contains(oldMentions, m) && mentions(m, c.me) }) {
-		c.add(Item{Kind: Mention, Task: u})
+	if to, ok := c.mentioned(old.Body, now.Body); ok {
+		c.add(Item{Kind: Mention, Task: u, To: to})
 	}
-	if was == nil || !slices.ContainsFunc(now.Watchers, func(w string) bool { return slices.Contains(c.me, w) }) {
+	to, watching := c.watcher(now)
+	if was == nil || !watching {
 		return nil
 	}
 	var changed []string
@@ -254,50 +286,86 @@ func (c *commit) task(u model.ULID, from, to plumbing.Hash) error {
 		changed = append(changed, "assignees")
 	}
 	if len(changed) > 0 {
-		d, _ := json.Marshal(map[string][]string{"changed": changed}) // strings always encode
-		c.add(Item{Kind: Watch, Task: u, Detail: d})
+		c.add(Item{Kind: Watch, Task: u, To: to, Detail: mustJSON(map[string][]string{"changed": changed})})
 	}
 	return nil
 }
 
-// comment makes the items of a comment the commit added.
-func (c *commit) comment(task, cm model.ULID, from, to plumbing.Hash) error {
-	p := model.CommentPath(task, cm)
-	if _, err := c.r.ReadFile(from, p); err == nil {
-		return nil // changed, not added
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		return err
-	}
-	b, err := c.r.ReadFile(to, p)
+// comment makes the items of a comment the commit added or changed: a new
+// mention of me, and for a new comment a watch.
+func (c *commit) comment(task, cm model.ULID, from plumbing.Hash) error {
+	was, err := readComment(c.r, from, task, cm)
 	if err != nil {
 		return err
 	}
-	x, err := model.DecodeComment(b)
-	if err != nil {
-		return nil //nolint:nilerr // a comment that does not decode makes no item
-	}
-	d, _ := json.Marshal(map[string]model.ULID{"comment": cm}) // a ULID always encodes
-	if slices.ContainsFunc(index.Mentions(x.Body), func(m string) bool { return mentions(m, c.me) }) {
-		c.add(Item{Kind: Mention, Task: task, Detail: d})
-	}
-	t, err := readTask(c.r, to, task)
-	if err != nil {
+	now, err := readComment(c.r, c.tree, task, cm)
+	if err != nil || now == nil {
 		return err
 	}
-	if t != nil && slices.ContainsFunc(t.Watchers, func(w string) bool { return slices.Contains(c.me, w) }) {
-		c.add(Item{Kind: Watch, Task: task, Detail: d})
+	old := &model.Comment{}
+	if was != nil {
+		old = was
+	}
+	d := mustJSON(map[string]model.ULID{"comment": cm})
+	if to, ok := c.mentioned(old.Body, now.Body); ok {
+		c.add(Item{Kind: Mention, Task: task, To: to, Detail: d})
+	}
+	if was != nil {
+		return nil
+	}
+	t, err := readTask(c.r, c.tree, task)
+	if err != nil || t == nil {
+		return err
+	}
+	if to, ok := c.watcher(t); ok {
+		c.add(Item{Kind: Watch, Task: task, To: to, Detail: d})
 	}
 	return nil
+}
+
+// added returns the first account of me in now and not in old.
+func (c *commit) added(old, now []string) (string, bool) {
+	for _, a := range now {
+		_, had := isMe(old, a)
+		if to, ok := isMe(c.me, a); ok && !had {
+			return to, true
+		}
+	}
+	return "", false
+}
+
+// mentioned returns the account of me that the first mention in now and
+// not in old names.
+func (c *commit) mentioned(old, now string) (string, bool) {
+	was := index.Mentions(old)
+	for _, m := range index.Mentions(now) {
+		if slices.ContainsFunc(was, func(w string) bool { return strings.EqualFold(w, m) }) {
+			continue
+		}
+		for _, a := range c.me {
+			if mentions(m, a) {
+				return a, true
+			}
+		}
+	}
+	return "", false
+}
+
+// watcher returns the account of me that watches t.
+func (c *commit) watcher(t *model.Task) (string, bool) {
+	for _, w := range t.Watchers {
+		if to, ok := isMe(c.me, w); ok {
+			return to, true
+		}
+	}
+	return "", false
 }
 
 // readTask reads the task u in tree; nil when it is missing or does not
 // decode.
 func readTask(r *gitrepo.Repo, tree plumbing.Hash, u model.ULID) (*model.Task, error) {
-	b, err := r.ReadFile(tree, model.TaskPath(u))
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
+	b, err := readAt(r, tree, model.TaskPath(u))
+	if err != nil || b == nil {
 		return nil, err
 	}
 	t, err := model.DecodeTask(b)
@@ -307,13 +375,47 @@ func readTask(r *gitrepo.Repo, tree plumbing.Hash, u model.ULID) (*model.Task, e
 	return t, nil
 }
 
-// mentions reports whether the mention m, as written, is one of me: @login
-// is any account with that login, @host/login that account.
-func mentions(m string, me []string) bool {
-	if strings.Contains(m, "/") {
-		return slices.Contains(me, m)
+// readComment reads the comment cm of task in tree; nil when it is missing
+// or does not decode.
+func readComment(r *gitrepo.Repo, tree plumbing.Hash, task, cm model.ULID) (*model.Comment, error) {
+	b, err := readAt(r, tree, model.CommentPath(task, cm))
+	if err != nil || b == nil {
+		return nil, err
 	}
-	return slices.ContainsFunc(me, func(a string) bool { return strings.HasSuffix(a, "/"+m) })
+	x, err := model.DecodeComment(b)
+	if err != nil {
+		return nil, nil //nolint:nilerr // a comment that does not decode makes no item
+	}
+	return x, nil
+}
+
+// readAt reads p in tree; nil when it is missing.
+func readAt(r *gitrepo.Repo, tree plumbing.Hash, p string) ([]byte, error) {
+	b, err := r.ReadFile(tree, p)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	return b, err
+}
+
+// isMe returns the account of me that a is, comparing without case.
+func isMe(me []string, a string) (string, bool) {
+	for _, m := range me {
+		if strings.EqualFold(m, a) {
+			return a, true
+		}
+	}
+	return "", false
+}
+
+// mentions reports whether the mention m, as written, names the account a:
+// @login any account with that login, @host/login that account. Case does
+// not count.
+func mentions(m, a string) bool {
+	if strings.Contains(m, "/") {
+		return strings.EqualFold(m, a)
+	}
+	return strings.HasSuffix(strings.ToLower(a), "/"+strings.ToLower(m))
 }
 
 // taskOf is the task a file of the store belongs to: the task of a task,
@@ -329,13 +431,4 @@ func taskOf(p string) model.ULID {
 		return u
 	}
 	return model.ULID{}
-}
-
-// author is who wrote a commit: its Hedgehug-Author, or the mail of its
-// author when it has none.
-func author(e gitrepo.LogEntry) string {
-	if a, ok := e.Trailer("Hedgehug-Author"); ok {
-		return a
-	}
-	return e.Author.Email
 }

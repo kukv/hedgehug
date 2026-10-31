@@ -44,6 +44,15 @@ func (e LogEntry) TrailerValues(key string) []string {
 	return out
 }
 
+// Writer is who made the commit: its Hedgehug-Author, else the email of
+// its author.
+func (e LogEntry) Writer() string {
+	if a, ok := e.Trailer("Hedgehug-Author"); ok {
+		return a
+	}
+	return e.Author.Email
+}
+
 // Log returns the commits reachable from HEAD, newest first. With prefixes,
 // only commits that touch a path starting with one of them are returned. A
 // limit above zero caps the number of entries. A repository without commits

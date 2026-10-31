@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing"
+
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -34,17 +36,20 @@ type Item struct {
 	ULID   model.ULID `json:"ulid"`
 	Kind   Kind       `json:"kind"`
 	Task   model.ULID `json:"task,omitzero"`  // zero for a workspace item
+	ID     string     `json:"id,omitempty"`   // the task's id when the item was made
 	Path   string     `json:"path,omitempty"` // the file, for overwritten and revived
 	Commit string     `json:"commit"`
-	// Author is who caused it: the writer of the commit for mention,
-	// assigned and watch; the account it tells, as the trailer or the
-	// record names it, for the others (for overwritten: whose value lost).
+	// Author is who caused it: the writer of the commit (for a trailer, of
+	// the merge or repair commit); empty when nothing tells, as for the
+	// merge driver's records and the notices of a sync.
 	Author string    `json:"author"`
+	To     string    `json:"to"` // the account told, one of me as the commit or record names it
 	Time   time.Time `json:"time"`
 	// Detail is by kind: overwritten {"field","value"}; renumbered
-	// {"old","new"}; repaired and prefix_duplicate {"kind","workspace","value"}
-	// (workspace for a workspace's repair); watch {"changed":[...]} or
-	// {"comment"}; mention {"comment"} when a comment mentions.
+	// {"old","new"}; repaired, revived and prefix_duplicate
+	// {"kind","workspace","value"} (workspace for a workspace's repair);
+	// watch {"changed":[...]} or {"comment"}; mention {"comment"} when a
+	// comment mentions.
 	Detail json.RawMessage `json:"detail,omitempty"`
 }
 
@@ -62,56 +67,128 @@ type Record struct {
 const (
 	itemsFile  = "inbox.jsonl"
 	readFile   = "inbox-read.json"
+	markFile   = "inbox-head"
 	lockFile   = "inbox.lock"
 	recordsDir = "overwritten"
 	lockWait   = 10 * time.Second
 )
 
 // Box is the inbox of one store on this machine.
-type Box struct{ s *store.Store }
+type Box struct {
+	s        *store.Store
+	warnings []string
+}
 
-func Open(s *store.Store) *Box { return &Box{s} }
+func Open(s *store.Store) *Box { return &Box{s: s} }
 
-// Add adds the items that the inbox does not have yet: by key, the same
-// overwritten value, the same duplicate prefix or name, or the same kind of
-// notice of the same commit and task. An item without a ULID is given one.
-// It returns the ones added.
-func (b *Box) Add(items []Item) ([]Item, error) {
+// Warnings returns what the box skipped while reading: lines of
+// inbox.jsonl and merge driver records that do not decode. They stay in
+// place.
+func (b *Box) Warnings() []string { return b.warnings }
+
+func (b *Box) warn(w string) {
+	if !slices.Contains(b.warnings, w) {
+		b.warnings = append(b.warnings, w)
+	}
+}
+
+// Catch adds the items of the commits from the last Catch to HEAD, and
+// then the merge driver's records, and returns the items added. The first
+// Catch of a store starts at since: the HEAD before a sync, or HEAD itself.
+// The commit it reached is kept only once its items are in, so a failed
+// Catch is made up by the next.
+func (b *Box) Catch(me []string, since plumbing.Hash) ([]Item, error) {
 	var added []Item
 	err := b.locked(func() error {
-		have, err := b.items()
+		head, err := b.s.Repo().Head()
 		if err != nil {
 			return err
 		}
-		keys := map[string]bool{}
-		for _, it := range have {
-			keys[key(it)] = true
+		if m, ok := b.mark(); ok {
+			since = m
 		}
-		for _, it := range items {
-			k := key(it)
-			if keys[k] {
-				continue
-			}
-			keys[k] = true
-			if it.ULID.IsZero() {
-				it.ULID = model.NewULID()
-			}
-			added = append(added, it)
+		items, err := Collect(b.s, since, head, me)
+		if err != nil {
+			return err
 		}
-		if len(added) == 0 {
-			return nil
+		if added, err = b.add(items); err != nil {
+			return err
 		}
-		var buf bytes.Buffer
-		for _, it := range append(have, added...) {
-			line, err := json.Marshal(it)
-			if err != nil {
-				return err
-			}
-			buf.Write(append(line, '\n'))
+		if err := b.s.WriteLocal(markFile, []byte(head.String()+"\n")); err != nil {
+			return err
 		}
-		return b.s.WriteLocal(itemsFile, buf.Bytes())
+		more, err := b.importRecords(me)
+		added = append(added, more...)
+		return err
 	})
+	return added, err
+}
+
+// mark is the commit the last Catch reached; ok is false when there is
+// none or it does not read.
+func (b *Box) mark() (plumbing.Hash, bool) {
+	data, err := b.s.ReadLocal(markFile)
 	if err != nil {
+		return plumbing.ZeroHash, false
+	}
+	s := strings.TrimSpace(string(data))
+	if !plumbing.IsHash(s) {
+		return plumbing.ZeroHash, false
+	}
+	return plumbing.NewHash(s), true
+}
+
+// Add adds the items that the inbox does not have yet, by key: the same
+// overwritten value, the same duplicate prefix or name, the same repair,
+// or the same kind of notice of the same commit and task. An item without
+// a ULID is given one. It returns the ones added.
+func (b *Box) Add(items []Item) ([]Item, error) {
+	var added []Item
+	err := b.locked(func() error {
+		var err error
+		added, err = b.add(items)
+		return err
+	})
+	return added, err
+}
+
+// add is Add for a caller that holds the lock. It appends to inbox.jsonl,
+// keeping the lines that do not decode.
+func (b *Box) add(items []Item) ([]Item, error) {
+	have, data, err := b.items()
+	if err != nil {
+		return nil, err
+	}
+	keys := map[string]bool{}
+	for _, it := range have {
+		keys[key(it)] = true
+	}
+	var added []Item
+	for _, it := range items {
+		k := key(it)
+		if keys[k] {
+			continue
+		}
+		keys[k] = true
+		if it.ULID.IsZero() {
+			it.ULID = model.NewULID()
+		}
+		added = append(added, it)
+	}
+	if len(added) == 0 {
+		return nil, nil
+	}
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		data = append(data, '\n')
+	}
+	for _, it := range added {
+		line, err := json.Marshal(it)
+		if err != nil {
+			return nil, err
+		}
+		data = append(append(data, line...), '\n')
+	}
+	if err := b.s.WriteLocal(itemsFile, data); err != nil {
 		return nil, err
 	}
 	return added, nil
@@ -119,7 +196,7 @@ func (b *Box) Add(items []Item) ([]Item, error) {
 
 // List returns the items, newest first; only the unread ones unless all.
 func (b *Box) List(all bool) ([]Item, error) {
-	items, err := b.items()
+	items, _, err := b.items()
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +223,7 @@ func (b *Box) List(all bool) ([]Item, error) {
 // and nothing is marked.
 func (b *Box) MarkRead(ulids []model.ULID) error {
 	return b.locked(func() error {
-		items, err := b.items()
+		items, _, err := b.items()
 		if err != nil {
 			return err
 		}
@@ -155,14 +232,14 @@ func (b *Box) MarkRead(ulids []model.ULID) error {
 				return fmt.Errorf("inbox item %s: %w", u, store.ErrNotFound)
 			}
 		}
-		return b.markRead(ulids)
+		return b.markRead(items, ulids)
 	})
 }
 
 // MarkAllRead marks every item read.
 func (b *Box) MarkAllRead() error {
 	return b.locked(func() error {
-		items, err := b.items()
+		items, _, err := b.items()
 		if err != nil {
 			return err
 		}
@@ -170,13 +247,13 @@ func (b *Box) MarkAllRead() error {
 		for i, it := range items {
 			ulids[i] = it.ULID
 		}
-		return b.markRead(ulids)
+		return b.markRead(items, ulids)
 	})
 }
 
 // Item returns the item ulid; ok is false when there is none.
 func (b *Box) Item(ulid model.ULID) (Item, bool, error) {
-	items, err := b.items()
+	items, _, err := b.items()
 	if err != nil {
 		return Item{}, false, err
 	}
@@ -191,10 +268,18 @@ func (b *Box) Item(ulid model.ULID) (Item, bool, error) {
 // Import adds the merge driver's records in .hedgehug/local/overwritten/
 // and removes the files. The records whose author is not one of me are
 // removed too: the driver writes every value that lost, whoever wrote it.
+// A record that does not decode is left in place, with a warning.
 func (b *Box) Import(me []string) error {
+	return b.locked(func() error {
+		_, err := b.importRecords(me)
+		return err
+	})
+}
+
+func (b *Box) importRecords(me []string) ([]Item, error) {
 	names, err := b.s.LocalFiles(recordsDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var items []Item
 	var done []string
@@ -205,35 +290,58 @@ func (b *Box) Import(me []string) error {
 		name := recordsDir + "/" + n
 		data, err := b.s.ReadLocal(name)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		var r Record
-		if err := json.Unmarshal(data, &r); err != nil {
-			return fmt.Errorf(".hedgehug/local/%s: %w", name, err)
+		it, err := b.fromRecord(data)
+		if err != nil {
+			b.warn(fmt.Sprintf(".hedgehug/local/%s: skipped: %v", name, err))
+			continue
 		}
-		if slices.Contains(me, r.Author) {
-			items = append(items, fromRecord(r))
+		if _, ok := isMe(me, it.To); ok {
+			items = append(items, it)
 		}
 		done = append(done, name)
 	}
-	if _, err := b.Add(items); err != nil {
-		return err
+	added, err := b.add(items)
+	if err != nil {
+		return nil, err
 	}
 	for _, name := range done {
 		if err := b.s.RemoveLocal(name); err != nil {
-			return err
+			return added, err
 		}
 	}
-	return nil
+	return added, nil
 }
 
-func fromRecord(r Record) Item {
-	it := Item{Kind: r.Kind, Task: taskOf(r.Path), Path: r.Path, Commit: r.Commit, Author: r.Author, Time: r.Time}
-	if r.Kind == "" {
-		it.Kind = Overwritten
-		it.Detail = overwrittenDetail(r.Field, r.Value)
+// fromRecord makes the item of a merge driver's record. The id is the
+// task's in the work tree, when it reads.
+func (b *Box) fromRecord(data []byte) (Item, error) {
+	var r Record
+	if err := json.Unmarshal(data, &r); err != nil {
+		return Item{}, err
 	}
-	return it
+	if r.Path == "" {
+		return Item{}, errors.New("the record has no path")
+	}
+	it := Item{Kind: r.Kind, Task: taskOf(r.Path), Path: r.Path, Commit: r.Commit, To: r.Author, Time: r.Time}
+	switch r.Kind {
+	case "":
+		if r.Field == "" {
+			return Item{}, errors.New("the record has no field")
+		}
+		it.Kind, it.Detail = Overwritten, overwrittenDetail(r.Field, r.Value)
+	case Revived:
+		it.Detail = mustJSON(repairDetail{Kind: string(Revived), Value: jsonOrNull(r.Value)})
+	default:
+		return Item{}, fmt.Errorf("unknown kind %q", r.Kind)
+	}
+	if !it.Task.IsZero() {
+		if t, err := b.s.Task(it.Task); err == nil {
+			it.ID = t.ID
+		}
+	}
+	return it, nil
 }
 
 // overwrittenDetail holds the field and the value, which is JSON; a value
@@ -241,23 +349,41 @@ func fromRecord(r Record) Item {
 func overwrittenDetail(field, value string) json.RawMessage {
 	v := json.RawMessage(value)
 	if !json.Valid(v) {
-		v, _ = json.Marshal(value) // a string always encodes
+		v = mustJSON(value)
 	}
-	d, _ := json.Marshal(struct {
+	return mustJSON(struct {
 		Field string          `json:"field"`
 		Value json.RawMessage `json:"value"`
-	}{field, v}) // valid JSON always encodes
-	return d
+	}{field, v})
 }
 
-// repairDetail is the Detail of repaired and prefix_duplicate.
+// repairDetail is the Detail of repaired, revived and prefix_duplicate.
 type repairDetail struct {
 	Kind      string          `json:"kind"`
 	Workspace model.ULID      `json:"workspace,omitzero"`
 	Value     json.RawMessage `json:"value"`
 }
 
-// key is what two items that tell the same thing share.
+// jsonOrNull is v when it is JSON, else null (as for the - of a trailer).
+func jsonOrNull(v string) json.RawMessage {
+	if json.Valid([]byte(v)) {
+		return json.RawMessage(v)
+	}
+	return json.RawMessage("null")
+}
+
+// mustJSON encodes what always encodes: strings, ULIDs and valid JSON.
+func mustJSON(v any) json.RawMessage {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+// key is what two items that tell the same thing share. Only mention,
+// assigned and watch are told per commit: an overwritten value, a repair
+// or a duplicate prefix that two merge commits carry is one item.
 func key(it Item) string {
 	var k []any
 	switch it.Kind {
@@ -267,22 +393,21 @@ func key(it Item) string {
 			Value json.RawMessage
 		}
 		_ = json.Unmarshal(it.Detail, &d) // a detail that does not decode keys as empty
-		k = []any{it.Kind, it.Path, d.Field, compact(d.Value), it.Author}
+		k = []any{it.Kind, it.Path, d.Field, compact(d.Value), strings.ToLower(it.To)}
 	case PrefixDuplicate:
 		var d repairDetail
 		_ = json.Unmarshal(it.Detail, &d)
 		k = []any{it.Kind, d.Workspace.String(), compact(d.Value), d.Kind}
-	default:
-		// The path tells apart revived files that are not tasks, and the
-		// repair's kind two repairs of one task in one commit.
+	case Renumbered:
+		k = []any{it.Kind, it.Task.String(), it.Path, "id_collision", compact(it.Detail)}
+	case Repaired, Revived:
 		var d repairDetail
-		if it.Kind == Repaired {
-			_ = json.Unmarshal(it.Detail, &d)
-		}
-		k = []any{it.Kind, it.Commit, it.Task.String(), it.Path, d.Kind}
+		_ = json.Unmarshal(it.Detail, &d)
+		k = []any{it.Kind, it.Task.String(), it.Path, d.Kind, d.Workspace.String(), compact(d.Value)}
+	default:
+		k = []any{it.Kind, it.Commit, it.Task.String()}
 	}
-	b, _ := json.Marshal(k) // strings always encode
-	return string(b)
+	return string(mustJSON(k))
 }
 
 func compact(v json.RawMessage) string {
@@ -297,14 +422,15 @@ func (b *Box) locked(fn func() error) error {
 	return b.s.WithLocalLock(lockFile, lockWait, fn)
 }
 
-// items reads inbox.jsonl, one item a line.
-func (b *Box) items() ([]Item, error) {
+// items reads inbox.jsonl, one item a line, and returns its bytes too. A
+// line that does not decode is skipped, with a warning.
+func (b *Box) items() ([]Item, []byte, error) {
 	data, err := b.s.ReadLocal(itemsFile)
 	if errors.Is(err, store.ErrNotFound) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var out []Item
 	for i, line := range bytes.Split(data, []byte("\n")) {
@@ -313,11 +439,12 @@ func (b *Box) items() ([]Item, error) {
 		}
 		var it Item
 		if err := json.Unmarshal(line, &it); err != nil {
-			return nil, fmt.Errorf(".hedgehug/local/%s:%d: %w", itemsFile, i+1, err)
+			b.warn(fmt.Sprintf(".hedgehug/local/%s:%d: skipped: %v", itemsFile, i+1, err))
+			continue
 		}
 		out = append(out, it)
 	}
-	return out, nil
+	return out, data, nil
 }
 
 // read reads inbox-read.json, the set of the items read.
@@ -340,8 +467,9 @@ func (b *Box) read() (map[model.ULID]bool, error) {
 	return out, nil
 }
 
-// markRead adds ulids to the set of the items read; the caller holds the lock.
-func (b *Box) markRead(ulids []model.ULID) error {
+// markRead adds ulids to the set of the items read, which keeps only the
+// ULIDs of items; the caller holds the lock.
+func (b *Box) markRead(items []Item, ulids []model.ULID) error {
 	read, err := b.read()
 	if err != nil {
 		return err
@@ -349,12 +477,15 @@ func (b *Box) markRead(ulids []model.ULID) error {
 	for _, u := range ulids {
 		read[u] = true
 	}
-	all := make([]model.ULID, 0, len(read))
-	for u := range read {
-		all = append(all, u)
+	var keep []model.ULID
+	for _, it := range items {
+		if read[it.ULID] {
+			keep = append(keep, it.ULID)
+			delete(read, it.ULID)
+		}
 	}
-	slices.SortFunc(all, func(x, y model.ULID) int { return strings.Compare(x.String(), y.String()) })
-	data, err := json.Marshal(all)
+	slices.SortFunc(keep, func(x, y model.ULID) int { return strings.Compare(x.String(), y.String()) })
+	data, err := json.Marshal(keep)
 	if err != nil {
 		return err
 	}

@@ -41,7 +41,7 @@ func side(r *gitrepo.Repo, base, from plumbing.Hash, path string) (merge.Side, e
 		return merge.Side{}, err
 	}
 	if ok {
-		s.Author, s.Time = author(e), e.When
+		s.Author, s.Time = e.Writer(), e.When
 	}
 	if isYAML(path) {
 		if s.When, err = yamlWhen(r, base, from, path); err != nil {
@@ -62,15 +62,6 @@ func readAt(r *gitrepo.Repo, commit plumbing.Hash, path string) ([]byte, error) 
 
 func isYAML(path string) bool {
 	return path == schema.Path || path == model.AutomationsPath || path == model.StoreMetaPath
-}
-
-// author is who made the commit: its Hedgehug-Author, else the email of
-// its author.
-func author(e gitrepo.LogEntry) string {
-	if a, ok := e.Trailer("Hedgehug-Author"); ok {
-		return a
-	}
-	return e.Author.Email
 }
 
 // yamlWhen tells when the side from last changed each value of the yaml

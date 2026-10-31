@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -143,13 +144,14 @@ func update(t *testing.T, c *clone, ulid model.ULID, fn func(*model.Task)) {
 	}
 }
 
-func addComment(t *testing.T, c *clone, task model.ULID, body string) {
+func addComment(t *testing.T, c *clone, task model.ULID, body string) *model.Comment {
 	t.Helper()
 	now := time.Now().Truncate(time.Second)
 	cm := &model.Comment{ULID: model.NewULID(), Author: c.acct, Created: now, Updated: now, Body: body}
 	if _, err := c.s.Update(c.op("comment", task), func(tx *store.Tx) error { return tx.PutComment(task, cm) }); err != nil {
 		t.Fatal(err)
 	}
+	return cm
 }
 
 func kinds(items []Item) map[Kind]int {
@@ -158,6 +160,14 @@ func kinds(items []Item) map[Kind]int {
 		out[it.Kind]++
 	}
 	return out
+}
+
+func editComment(t *testing.T, c *clone, task model.ULID, cm *model.Comment, body string) {
+	t.Helper()
+	cm.Body, cm.Updated = body, cm.Updated.Add(time.Second)
+	if _, err := c.s.Update(c.op("comment", task), func(tx *store.Tx) error { return tx.PutComment(task, cm) }); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestCollectMentionAssignWatch(t *testing.T) {
@@ -179,12 +189,26 @@ func TestCollectMentionAssignWatch(t *testing.T) {
 		t.Errorf("kinds = %v", k) // the mention in inline code does not count
 	}
 	for _, it := range items {
-		if it.Task != x.ULID || it.Author != "github.com/a" || it.Commit != head(t, b).String() {
+		if it.Task != x.ULID || it.ID != x.ID || it.ID == "" || it.Author != "github.com/a" || it.To != "github.com/b" || it.Commit != head(t, b).String() {
 			t.Errorf("item = %+v", it)
 		}
 		if it.Kind == Watch && string(it.Detail) != `{"changed":["status","assignees"]}` {
 			t.Errorf("watch detail = %s", it.Detail)
 		}
+	}
+}
+
+func TestCollectAccountsWithoutCase(t *testing.T) {
+	a, b := twoClones(t)
+	before := head(t, b)
+	addTask(t, a, "x", func(t *model.Task) {
+		t.Body = "for @B\n"
+		t.Assignees = []string{"GitHub.com/B"}
+	})
+	syncBoth(t, a, b)
+	items, err := Collect(b.s, before, head(t, b), []string{"github.com/b"})
+	if k := kinds(items); err != nil || k[Mention] != 1 || k[Assigned] != 1 || len(items) != 2 {
+		t.Errorf("kinds = %v, %v", k, err)
 	}
 }
 
@@ -223,6 +247,26 @@ func TestCollectComment(t *testing.T) {
 	}
 }
 
+func TestCollectEditedComment(t *testing.T) {
+	a, b := twoClones(t)
+	x := addTask(t, a, "x", func(t *model.Task) { t.Watchers = []string{"github.com/b"} })
+	cm := addComment(t, a, x.ULID, "first\n")
+	syncBoth(t, a, b)
+	before := head(t, b)
+	editComment(t, a, x.ULID, cm, "first, and @b\n")
+	syncBoth(t, a, b)
+	items, err := Collect(b.s, before, head(t, b), []string{"github.com/b"})
+	if err != nil || len(items) != 1 || items[0].Kind != Mention || items[0].Detail == nil {
+		t.Errorf("items = %+v, %v", items, err) // a mention, and no watch: the comment is not new
+	}
+	before = head(t, b)
+	editComment(t, a, x.ULID, cm, "first, and @b, again\n")
+	syncBoth(t, a, b)
+	if items, err := Collect(b.s, before, head(t, b), []string{"github.com/b"}); err != nil || len(items) != 0 {
+		t.Errorf("a mention already there made %+v, %v", items, err)
+	}
+}
+
 func TestCollectSkipsOwnCommits(t *testing.T) {
 	a, _ := twoClones(t)
 	before := head(t, a)
@@ -252,26 +296,41 @@ func TestCollectOverwrittenAndRenumberedFromOwnMerge(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(items) != 2 || items[0].Kind != Overwritten || !strings.Contains(string(items[0].Detail), `mine: with spaces`) || items[1].Kind != Renumbered || string(items[1].Detail) != `{"old":"WEB-1","new":"WEB-2"}` {
-		t.Errorf("items = %+v", items)
+		t.Fatalf("items = %+v", items)
 	}
-	if items[0].Task != x.ULID || items[0].Path != p || items[1].Task != x.ULID {
-		t.Errorf("items = %+v", items)
+	for _, it := range items {
+		if it.Task != x.ULID || it.ID != x.ID || it.To != "github.com/b" || it.Author != "github.com/b" {
+			t.Errorf("item = %+v", it)
+		}
+	}
+	if items[0].Path != p {
+		t.Errorf("path = %q", items[0].Path)
 	}
 }
 
 func TestCollectRepairedTrailers(t *testing.T) {
 	_, b := twoClones(t)
 	x := addTask(t, b, "x", nil)
-	cm := &model.Comment{ULID: model.NewULID(), Author: b.acct, Created: time.Now().Truncate(time.Second), Updated: time.Now().Truncate(time.Second), Body: "c\n"}
-	if _, err := b.s.Update(b.op("comment", x.ULID), func(tx *store.Tx) error { return tx.PutComment(x.ULID, cm) }); err != nil {
-		t.Fatal(err)
-	}
+	cm := addComment(t, b, x.ULID, "c\n")
 	var ws model.ULID
 	for w, err := range b.s.Workspaces() {
 		if err != nil {
 			t.Fatal(err)
 		}
 		ws = w.ULID
+	}
+	// x and its comment are removed, then a merge brings them back.
+	h := head(t, b)
+	files := map[string][]byte{}
+	for _, p := range []string{model.TaskPath(x.ULID), model.CommentPath(x.ULID, cm.ULID)} {
+		data, err := b.s.Repo().ReadAt(h, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files[p] = data
+	}
+	if _, err := b.s.CommitMerge(h, []plumbing.Hash{h}, map[string][]byte{model.TaskPath(x.ULID): nil, model.CommentPath(x.ULID, cm.ULID): nil}, b.op("rm", x.ULID), nil); err != nil {
+		t.Fatal(err)
 	}
 	before := head(t, b)
 	other := model.NewULID()
@@ -286,8 +345,8 @@ func TestCollectRepairedTrailers(t *testing.T) {
 		{Key: "Hedgehug-Repaired", Value: url.PathEscape("templates/bug report.md") + ` revived - github.com/b`},
 		{Key: "Hedgehug-Repaired", Value: x.ULID.String() + ` revived - github.com/a`},
 	}
-	h := head(t, b)
-	if _, err := b.s.CommitMerge(h, []plumbing.Hash{h}, map[string][]byte{"notes.md": []byte("n\n")}, b.op("repair", model.ULID{}), trailers); err != nil {
+	h = head(t, b)
+	if _, err := b.s.CommitMerge(h, []plumbing.Hash{h}, files, b.op("repair", model.ULID{}), trailers); err != nil {
 		t.Fatal(err)
 	}
 	items, err := Collect(b.s, before, head(t, b), []string{"github.com/b"})
@@ -296,20 +355,76 @@ func TestCollectRepairedTrailers(t *testing.T) {
 	}
 	var got []string
 	for _, it := range items {
-		got = append(got, fmt.Sprintf("%s %s %s %s", it.Kind, it.Task, it.Path, string(it.Detail)))
+		got = append(got, fmt.Sprintf("%s %s %s %s %s", it.Kind, it.Task, it.ID, it.Path, string(it.Detail)))
 	}
 	zero := model.ULID{}.String()
 	want := []string{
-		fmt.Sprintf(`repaired %s  {"kind":"parent_cycle","value":"%s"}`, x.ULID, other),
-		fmt.Sprintf(`repaired %s  {"kind":"workspace_mismatch","value":"%s"}`, x.ULID, other),
-		fmt.Sprintf(`prefix_duplicate %s  {"kind":"prefix_duplicate","workspace":"%s","value":"WEB"}`, zero, ws),
-		fmt.Sprintf(`repaired %s  {"kind":"id_prefix","workspace":"%s","value":"web"}`, zero, ws),
-		fmt.Sprintf(`revived %s %s `, x.ULID, model.TaskPath(x.ULID)),
-		fmt.Sprintf(`revived %s %s `, x.ULID, model.CommentPath(x.ULID, cm.ULID)),
-		fmt.Sprintf(`revived %s templates/bug report.md `, zero),
+		fmt.Sprintf(`repaired %s %s  {"kind":"parent_cycle","value":"%s"}`, x.ULID, x.ID, other),
+		fmt.Sprintf(`repaired %s %s  {"kind":"workspace_mismatch","value":"%s"}`, x.ULID, x.ID, other),
+		fmt.Sprintf(`prefix_duplicate %s   {"kind":"prefix_duplicate","workspace":"%s","value":"WEB"}`, zero, ws),
+		fmt.Sprintf(`repaired %s   {"kind":"id_prefix","workspace":"%s","value":"web"}`, zero, ws),
+		fmt.Sprintf(`revived %s %s %s {"kind":"revived","value":null}`, x.ULID, x.ID, model.TaskPath(x.ULID)),
+		fmt.Sprintf(`revived %s %s %s {"kind":"revived","value":null}`, x.ULID, x.ID, model.CommentPath(x.ULID, cm.ULID)),
+		fmt.Sprintf(`revived %s  templates/bug report.md {"kind":"revived","value":null}`, zero),
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("items:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// Two clones that merge the same pair make two merge commits with the same
+// trailers; a clone that gets both is told once.
+func TestSameTrailersInTwoMergeCommits(t *testing.T) {
+	_, b := twoClones(t)
+	x := addTask(t, b, "x", nil)
+	before := head(t, b)
+	p := url.PathEscape(model.TaskPath(x.ULID))
+	trailers := []gitrepo.Trailer{
+		{Key: "Hedgehug-Overwritten", Value: p + ` title "mine" github.com/b`},
+		{Key: "Hedgehug-Repaired", Value: x.ULID.String() + ` id_collision {"old":"WEB-1","new":"WEB-2"} github.com/b`},
+		{Key: "Hedgehug-Repaired", Value: x.ULID.String() + ` parent_cycle null github.com/b`},
+		{Key: "Hedgehug-Repaired", Value: url.PathEscape("templates/bug.md") + ` revived - github.com/b`},
+	}
+	for i := range 2 {
+		h := head(t, b)
+		if _, err := b.s.CommitMerge(h, []plumbing.Hash{h}, map[string][]byte{"notes.md": []byte(fmt.Sprint(i))}, b.op("merge", model.ULID{}), trailers); err != nil {
+			t.Fatal(err)
+		}
+	}
+	items, err := Collect(b.s, before, head(t, b), []string{"github.com/b"})
+	if err != nil || len(items) != 8 {
+		t.Fatalf("items = %+v, %v", items, err)
+	}
+	added, err := Open(b.s).Add(items)
+	if k := kinds(added); err != nil || len(added) != 4 || k[Overwritten] != 1 || k[Renumbered] != 1 || k[Repaired] != 1 || k[Revived] != 1 {
+		t.Errorf("added = %v, %v", k, err)
+	}
+}
+
+func TestCatch(t *testing.T) {
+	_, b := twoClones(t)
+	x := addTask(t, b, "x", nil)
+	box := Open(b.s)
+	if added, err := box.Catch([]string{"github.com/b"}, head(t, b)); err != nil || len(added) != 0 {
+		t.Fatalf("first Catch = %+v, %v", added, err)
+	}
+	// A merge made outside a sync, as by hand.
+	h := head(t, b)
+	trailers := []gitrepo.Trailer{{Key: "Hedgehug-Overwritten", Value: url.PathEscape(model.TaskPath(x.ULID)) + ` title "mine" github.com/b`}}
+	if _, err := b.s.CommitMerge(h, []plumbing.Hash{h}, map[string][]byte{"notes.md": []byte("n\n")}, b.op("merge", model.ULID{}), trailers); err != nil {
+		t.Fatal(err)
+	}
+	rec := `{"kind":"revived","path":"templates/bug.md","author":"github.com/b","commit":"","time":"2026-10-31T10:00:00Z"}`
+	if err := b.s.WriteLocal("overwritten/"+model.NewULID().String()+".json", []byte(rec)); err != nil {
+		t.Fatal(err)
+	}
+	// since counts only when the inbox has caught nothing yet.
+	added, err := box.Catch([]string{"github.com/b"}, plumbing.ZeroHash)
+	if k := kinds(added); err != nil || len(added) != 2 || k[Overwritten] != 1 || k[Revived] != 1 {
+		t.Errorf("Catch = %+v, %v", added, err)
+	}
+	if added, err := box.Catch([]string{"github.com/b"}, plumbing.ZeroHash); err != nil || len(added) != 0 {
+		t.Errorf("Catch again = %+v, %v", added, err)
 	}
 }
 
@@ -332,7 +447,7 @@ func TestImportMergeDriverRecords(t *testing.T) {
 	if len(items) != 1 || items[0].Kind != Overwritten {
 		t.Fatalf("items = %+v", items)
 	}
-	if it := items[0]; it.Path != "tasks/0A/P0/01JBZ8K3QW7M2X9V4T6R5N8P0A.md" || it.Author != "github.com/b" || string(it.Detail) != `{"field":"title","value":"mine"}` ||
+	if it := items[0]; it.Path != "tasks/0A/P0/01JBZ8K3QW7M2X9V4T6R5N8P0A.md" || it.To != "github.com/b" || it.Author != "" || string(it.Detail) != `{"field":"title","value":"mine"}` ||
 		!it.Time.Equal(time.Date(2026, 10, 31, 10, 0, 0, 0, time.UTC)) {
 		t.Errorf("item = %+v", it)
 	}
@@ -342,18 +457,40 @@ func TestImportMergeDriverRecords(t *testing.T) {
 		}
 	}
 	// The same value lost again, as a trailer tells it, is not a new item.
-	if added, err := box.Add([]Item{{Kind: Overwritten, Path: "tasks/0A/P0/01JBZ8K3QW7M2X9V4T6R5N8P0A.md", Author: "github.com/b", Commit: "c", Detail: json.RawMessage(`{"field":"title","value":"mine"}`)}}); err != nil || len(added) != 0 {
+	if added, err := box.Add([]Item{{Kind: Overwritten, Path: "tasks/0A/P0/01JBZ8K3QW7M2X9V4T6R5N8P0A.md", To: "github.com/b", Commit: "c", Detail: json.RawMessage(`{"field":"title","value":"mine"}`)}}); err != nil || len(added) != 0 {
 		t.Errorf("added = %v, %v", added, err)
 	}
 }
 
-func TestImportBrokenRecord(t *testing.T) {
+func TestImportLeavesBadRecords(t *testing.T) {
 	_, b := twoClones(t)
-	name := "overwritten/" + model.NewULID().String() + ".json"
-	if err := b.s.WriteLocal(name, []byte("{")); err != nil {
+	x := addTask(t, b, "x", nil)
+	bad := map[string]string{
+		"overwritten/1.json": "{",
+		"overwritten/2.json": `{"kind":"mention","path":"tasks/a.md","author":"github.com/b"}`,
+		"overwritten/3.json": `{"field":"title","author":"github.com/b"}`,
+	}
+	for n, data := range bad {
+		if err := b.s.WriteLocal(n, []byte(data)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	good := `{"kind":"revived","path":"` + model.TaskPath(x.ULID) + `","author":"github.com/b","commit":"","time":"2026-10-31T10:00:00Z"}`
+	if err := b.s.WriteLocal("overwritten/4.json", []byte(good)); err != nil {
 		t.Fatal(err)
 	}
-	if err := Open(b.s).Import([]string{"github.com/b"}); err == nil || !strings.Contains(err.Error(), name) {
-		t.Errorf("err = %v", err)
+	box := Open(b.s)
+	if err := box.Import([]string{"github.com/b"}); err != nil {
+		t.Fatal(err)
+	}
+	items, _ := box.List(false)
+	if len(items) != 1 || items[0].Kind != Revived || items[0].Task != x.ULID || items[0].ID != x.ID || string(items[0].Detail) != `{"kind":"revived","value":null}` {
+		t.Errorf("items = %+v", items)
+	}
+	if left, _ := b.s.LocalFiles("overwritten"); !slices.Equal(left, []string{"1.json", "2.json", "3.json"}) {
+		t.Errorf("left = %v", left)
+	}
+	if w := box.Warnings(); len(w) != 3 || !strings.Contains(w[0], "overwritten/1.json") || !strings.Contains(w[1], `unknown kind "mention"`) || !strings.Contains(w[2], "no path") {
+		t.Errorf("warnings = %q", w)
 	}
 }
