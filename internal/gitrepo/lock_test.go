@@ -6,8 +6,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
+
+	"github.com/go-git/go-git/v5/plumbing"
 )
 
 func TestCommitWaitsForIndexLock(t *testing.T) {
@@ -104,5 +107,90 @@ func TestRepack(t *testing.T) {
 	}
 	if err := r.Verify(); err != nil {
 		t.Errorf("Verify after repack: %v", err)
+	}
+}
+
+func packFiles(t *testing.T, dir string) []string {
+	t.Helper()
+	m, err := filepath.Glob(filepath.Join(dir, ".git", "objects", "pack", "*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+func TestRepackKeepsPacksAndObjectsNoReferenceReaches(t *testing.T) {
+	dir := t.TempDir()
+	r, _ := Init(dir)
+	commitFiles(t, r, dir, map[string]string{"a.md": "1"})
+	// A blob no reference reaches, as a stash or an aborted merge leaves.
+	obj := r.r.Storer.NewEncodedObject()
+	obj.SetType(plumbing.BlobObject)
+	w, _ := obj.Writer()
+	_, _ = w.Write([]byte("unreachable"))
+	_ = w.Close()
+	orphan, err := r.r.Storer.SetEncodedObject(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Repack(); err != nil {
+		t.Fatal(err)
+	}
+	first := packFiles(t, dir)
+	if len(first) == 0 {
+		t.Fatal("no pack after the first repack")
+	}
+
+	commitFiles(t, r, dir, map[string]string{"a.md": "2"})
+	// A blob only the index holds.
+	writeFile(t, dir, "staged.md", "staged")
+	wt, _ := r.r.Worktree()
+	staged, err := wt.Add("staged.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Repack(); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := r.LooseObjects(); n != 0 {
+		t.Errorf("loose objects after repack = %d", n)
+	}
+	after := packFiles(t, dir)
+	for _, p := range first {
+		if !slices.Contains(after, p) {
+			t.Errorf("%s was removed", p)
+		}
+	}
+	// A fresh open reads only what is on disk.
+	o, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range []plumbing.Hash{orphan, staged} {
+		if _, err := o.r.Storer.EncodedObject(plumbing.BlobObject, h); err != nil {
+			t.Errorf("object %s after repack: %v", h, err)
+		}
+	}
+	if err := o.Verify(); err != nil {
+		t.Errorf("Verify after repack: %v", err)
+	}
+	if st, err := o.Status(); err != nil || len(st) != 1 || st[0].Path != "staged.md" || !st[0].Staged {
+		t.Errorf("status after repack = %+v, %v", st, err)
+	}
+}
+
+func TestRepackNothingLoose(t *testing.T) {
+	dir := t.TempDir()
+	r, _ := Init(dir)
+	commitFiles(t, r, dir, map[string]string{"a.md": "1"})
+	if err := r.Repack(); err != nil {
+		t.Fatal(err)
+	}
+	before := packFiles(t, dir)
+	if err := r.Repack(); err != nil {
+		t.Fatal(err)
+	}
+	if after := packFiles(t, dir); !slices.Equal(before, after) {
+		t.Errorf("packs = %v, want %v", after, before)
 	}
 }

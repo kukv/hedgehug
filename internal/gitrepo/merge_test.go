@@ -378,3 +378,143 @@ func TestBetweenAcrossAMerge(t *testing.T) {
 		t.Errorf("Between(m, ha) = %v, %v", es, err)
 	}
 }
+
+// commitWith commits path with content on top of parents.
+func commitWith(t *testing.T, r *Repo, dir, path, content string, when time.Time, parents ...plumbing.Hash) plumbing.Hash {
+	t.Helper()
+	writeFile(t, dir, path, content)
+	h, err := r.Commit(Commit{Paths: []string{path}, Subject: content, Parents: parents, Author: author, When: when})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h
+}
+
+func TestBetweenPutsParentsFirstWhateverTheTime(t *testing.T) {
+	dir := t.TempDir()
+	r, _ := Init(dir)
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	base := commitWith(t, r, dir, "a.md", "base", t0)
+	// The child's clock is behind its parent's.
+	c1 := commitWith(t, r, dir, "a.md", "c1", t0.Add(2*time.Hour), base)
+	c2 := commitWith(t, r, dir, "a.md", "c2", t0.Add(time.Hour), c1)
+	// A side branch from base, older than c1.
+	s1 := commitWith(t, r, dir, "b.md", "s1", t0.Add(30*time.Minute), base)
+	m := commitWith(t, r, dir, "a.md", "m", t0.Add(30*time.Minute), c2, s1)
+	es, err := r.Between(m, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []plumbing.Hash
+	for _, e := range es {
+		got = append(got, e.Hash)
+	}
+	if want := []plumbing.Hash{s1, c1, c2, m}; !slices.Equal(got, want) {
+		t.Errorf("Between = %v, want %v", got, want)
+	}
+	// The parents' order does not change it.
+	m2 := commitWith(t, r, dir, "a.md", "m2", t0.Add(30*time.Minute), s1, c2)
+	es, err = r.Between(m2, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = got[:0]
+	for _, e := range es {
+		got = append(got, e.Hash)
+	}
+	if want := []plumbing.Hash{s1, c1, c2, m2}; !slices.Equal(got, want) {
+		t.Errorf("Between with swapped parents = %v, want %v", got, want)
+	}
+	// LastChange is the latest by time, even before a later commit in order.
+	if e, ok, _ := r.LastChange(c2, base, "a.md"); !ok || e.Hash != c1 {
+		t.Errorf("LastChange = %+v, %v; want c1", e, ok)
+	}
+}
+
+func TestMergeBaseCrissCrossIsSymmetric(t *testing.T) {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	// Either of the two bases is the newer one in one of the cases, so that
+	// go-git's own order of the bases cannot pass for the smallest hash.
+	for _, swap := range []bool{false, true} {
+		dir := t.TempDir()
+		r, _ := Init(dir)
+		base := commitWith(t, r, dir, "a.md", "base", t0)
+		tx, ty := t0.Add(time.Minute), t0.Add(2*time.Minute)
+		if swap {
+			tx, ty = ty, tx
+		}
+		x := commitWith(t, r, dir, "x.md", "x", tx, base)
+		y := commitWith(t, r, dir, "y.md", "y", ty, base)
+		mx := commitWith(t, r, dir, "a.md", "mx", t0.Add(3*time.Minute), x, y)
+		my := commitWith(t, r, dir, "a.md", "my", t0.Add(4*time.Minute), y, x)
+		ab, err := r.MergeBase(mx, my)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ba, err := r.MergeBase(my, mx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := min(x.String(), y.String())
+		if ab != ba || ab.String() != want {
+			t.Errorf("swap %v: MergeBase(mx, my) = %s, MergeBase(my, mx) = %s; want %s", swap, ab, ba, want)
+		}
+	}
+}
+
+// ffSetup gives b a fetched commit of a's that changes x.md.
+func ffSetup(t *testing.T) (b clone, theirs plumbing.Hash) {
+	t.Helper()
+	remote := newBare(t)
+	a, b := cloneTwo(t, remote)
+	commitHead(t, a.r, a.dir, map[string]string{"x.md": "a\n"})
+	if err := a.r.Push("origin"); err != nil {
+		t.Fatal(err)
+	}
+	theirs, err := b.r.Fetch("origin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b, theirs
+}
+
+// assertRefused checks that a fast-forward was refused and left HEAD at
+// before and x.md as want ("" for missing).
+func assertRefused(t *testing.T, b clone, err error, before plumbing.Hash, want string) {
+	t.Helper()
+	if !errors.Is(err, ErrWorkTreeChanged) {
+		t.Errorf("FastForward = %v, want ErrWorkTreeChanged", err)
+	}
+	if got, _ := b.r.r.Storer.Reference(plumbing.NewBranchReferenceName("main")); got.Hash() != before {
+		t.Errorf("main = %s, want %s", got.Hash(), before)
+	}
+	got, rerr := os.ReadFile(filepath.Join(b.dir, "x.md"))
+	if want == "" && !errors.Is(rerr, fs.ErrNotExist) || want != "" && string(got) != want {
+		t.Errorf("x.md = %q, %v; want %q", got, rerr, want)
+	}
+	if _, err := os.Stat(filepath.Join(b.dir, ".git", "index.lock")); !errors.Is(err, fs.ErrNotExist) {
+		t.Error("index.lock is left")
+	}
+}
+
+func TestFastForwardRefusesAChangedPath(t *testing.T) {
+	b, theirs := ffSetup(t)
+	before, _ := b.r.Head()
+	writeFile(t, b.dir, "x.md", "mine\n")
+	assertRefused(t, b, b.r.FastForward(theirs, []string{"x.md"}), before, "mine\n")
+}
+
+func TestFastForwardRefusesWhenHeadMovedAway(t *testing.T) {
+	b, theirs := ffSetup(t)
+	hb := commitHead(t, b.r, b.dir, map[string]string{"y.md": "b\n"})
+	assertRefused(t, b, b.r.FastForward(theirs, []string{"x.md"}), hb, "")
+}
+
+func TestFastForwardRefusesADetachedHead(t *testing.T) {
+	b, theirs := ffSetup(t)
+	before, _ := b.r.Head()
+	if err := b.r.r.Storer.SetReference(plumbing.NewHashReference(plumbing.HEAD, before)); err != nil {
+		t.Fatal(err)
+	}
+	assertRefused(t, b, b.r.FastForward(theirs, []string{"x.md"}), before, "")
+}

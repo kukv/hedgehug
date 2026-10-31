@@ -1,19 +1,26 @@
 package gitrepo
 
 import (
-	"cmp"
+	"bytes"
+	"container/heap"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+
+	"github.com/kukv/hedgehug/internal/atomicfile"
 )
+
+// ErrWorkTreeChanged means the repository is no longer what the caller saw
+// when it chose the commit to fast-forward to: HEAD moved or left main, or a
+// path to update was changed. The caller looks again and retries.
+var ErrWorkTreeChanged = errors.New("the store changed during the fast-forward")
 
 func (r *Repo) commit(h plumbing.Hash) (*object.Commit, error) {
 	c, err := r.r.CommitObject(h)
@@ -24,7 +31,9 @@ func (r *Repo) commit(h plumbing.Hash) (*object.Commit, error) {
 }
 
 // MergeBase returns a newest common ancestor of a and b, or the zero hash
-// when they have none or either is zero.
+// when they have none or either is zero. When there are several, as after
+// criss-cross merges, the one with the smallest hash is returned, so that
+// MergeBase(a, b) is MergeBase(b, a).
 func (r *Repo) MergeBase(a, b plumbing.Hash) (plumbing.Hash, error) {
 	if a.IsZero() || b.IsZero() {
 		return plumbing.ZeroHash, nil
@@ -41,7 +50,13 @@ func (r *Repo) MergeBase(a, b plumbing.Hash) (plumbing.Hash, error) {
 	if err != nil || len(bases) == 0 {
 		return plumbing.ZeroHash, err
 	}
-	return bases[0].Hash, nil
+	best := bases[0].Hash
+	for _, c := range bases[1:] {
+		if bytes.Compare(c.Hash[:], best[:]) < 0 {
+			best = c.Hash
+		}
+	}
+	return best, nil
 }
 
 // IsAncestor reports whether a is b or one of its ancestors. The zero hash,
@@ -90,7 +105,10 @@ func (r *Repo) ReadAt(commit plumbing.Hash, path string) ([]byte, error) {
 }
 
 // Between returns the commits reachable from from but not from base, through
-// every parent, oldest first. A zero base excludes nothing.
+// every parent, in the order of the history: a commit never comes before its
+// parents. Among commits that can go next, the oldest by author time goes
+// first, then the smallest hash, so the order does not depend on the order of
+// a merge's parents. A zero base excludes nothing.
 func (r *Repo) Between(from, base plumbing.Hash) ([]LogEntry, error) {
 	cs, err := r.side(from, base)
 	if err != nil {
@@ -103,36 +121,61 @@ func (r *Repo) Between(from, base plumbing.Hash) ([]LogEntry, error) {
 	return out, nil
 }
 
-// LastChange returns the latest commit between base and from, as Between
-// counts them, that changed path: one whose content of path differs from its
-// parent's, or, for a merge, from every parent's, so that a merge that takes
-// one side's content is not a change of its own. ok is false when no commit
-// changed it.
+// LastChange returns the latest commit by author time between base and from,
+// as Between counts them, that changed path: one whose content of path
+// differs from its parent's, or, for a merge, from every parent's, so that a
+// merge that takes one side's content is not a change of its own. Of commits
+// of the same time, the one later in Between's order wins. ok is false when
+// no commit changed it.
 func (r *Repo) LastChange(from, base plumbing.Hash, path string) (e LogEntry, ok bool, err error) {
 	cs, err := r.side(from, base)
 	if err != nil {
 		return LogEntry{}, false, err
 	}
-	for _, c := range slices.Backward(cs) {
+	var best *object.Commit
+	for _, c := range cs {
 		changed, err := r.changes(c, path)
 		if err != nil {
 			return LogEntry{}, false, err
 		}
-		if changed {
-			return entry(c), true, nil
+		if changed && (best == nil || !c.Author.When.Before(best.Author.When)) {
+			best = c
 		}
 	}
-	return LogEntry{}, false, nil
+	if best == nil {
+		return LogEntry{}, false, nil
+	}
+	return entry(best), true, nil
 }
 
-// side returns the commits reachable from from but not from base, oldest
-// first. The order is by author time; commits of the same second, the
-// precision git keeps, come ancestors first and then by hash, so that the
-// order is fixed whatever order the parents are in.
+// side returns the commits of Between, in its order. Commits never change, so
+// the result is kept for the next call with the same from and base; callers
+// must not modify it.
 func (r *Repo) side(from, base plumbing.Hash) ([]*object.Commit, error) {
 	if from.IsZero() {
 		return nil, nil
 	}
+	key := [2]plumbing.Hash{from, base}
+	r.mu.Lock()
+	cs, ok := r.sides[key]
+	r.mu.Unlock()
+	if ok {
+		return cs, nil
+	}
+	cs, err := r.walkSide(from, base)
+	if err != nil {
+		return nil, err
+	}
+	r.mu.Lock()
+	if r.sides == nil {
+		r.sides = map[[2]plumbing.Hash][]*object.Commit{}
+	}
+	r.sides[key] = cs
+	r.mu.Unlock()
+	return cs, nil
+}
+
+func (r *Repo) walkSide(from, base plumbing.Hash) ([]*object.Commit, error) {
 	seen := map[plumbing.Hash]bool{}
 	if !base.IsZero() {
 		cb, err := r.commit(base)
@@ -159,35 +202,55 @@ func (r *Repo) side(from, base plumbing.Hash) ([]*object.Commit, error) {
 	if err != nil {
 		return nil, err
 	}
-	// depth is the longest path to a commit of the side without parents in it.
-	depth := map[plumbing.Hash]int{}
-	var depthOf func(c *object.Commit) int
-	depthOf = func(c *object.Commit) int {
-		if d, ok := depth[c.Hash]; ok {
-			return d
-		}
-		d := 0
+	// A commit is ready once all its parents in the side are out.
+	waiting := map[plumbing.Hash]int{}
+	children := map[plumbing.Hash][]*object.Commit{}
+	ready := &commitHeap{}
+	for _, c := range in {
 		for _, p := range c.ParentHashes {
-			if pc, ok := in[p]; ok {
-				d = max(d, depthOf(pc)+1)
+			if _, ok := in[p]; ok {
+				waiting[c.Hash]++
+				children[p] = append(children[p], c)
 			}
 		}
-		depth[c.Hash] = d
-		return d
+		if waiting[c.Hash] == 0 {
+			heap.Push(ready, c)
+		}
 	}
 	out := make([]*object.Commit, 0, len(in))
-	for _, c := range in {
-		depthOf(c)
+	for ready.Len() > 0 {
+		c := heap.Pop(ready).(*object.Commit)
 		out = append(out, c)
+		for _, ch := range children[c.Hash] {
+			if waiting[ch.Hash]--; waiting[ch.Hash] == 0 {
+				heap.Push(ready, ch)
+			}
+		}
 	}
-	slices.SortFunc(out, func(a, b *object.Commit) int {
-		return cmp.Or(
-			a.Author.When.Compare(b.Author.When),
-			cmp.Compare(depth[a.Hash], depth[b.Hash]),
-			strings.Compare(a.Hash.String(), b.Hash.String()),
-		)
-	})
 	return out, nil
+}
+
+// commitHeap orders commits by author time, then hash.
+type commitHeap []*object.Commit
+
+func (h commitHeap) Len() int { return len(h) }
+
+func (h commitHeap) Less(i, j int) bool {
+	if c := h[i].Author.When.Compare(h[j].Author.When); c != 0 {
+		return c < 0
+	}
+	return bytes.Compare(h[i].Hash[:], h[j].Hash[:]) < 0
+}
+
+func (h commitHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+
+func (h *commitHeap) Push(x any) { *h = append(*h, x.(*object.Commit)) }
+
+func (h *commitHeap) Pop() any {
+	old := *h
+	c := old[len(old)-1]
+	*h = old[:len(old)-1]
+	return c
 }
 
 // changes reports whether c changed path against all of its parents.
@@ -233,9 +296,13 @@ func blobAt(c *object.Commit, path string) (plumbing.Hash, error) {
 
 // FastForward moves refs/heads/main to h and makes paths, in the work tree
 // and in the index, what they are in h: a path in h is written, one that is
-// not is removed. Nothing else in the work tree is touched. Every path is
+// not is removed. Nothing else in the work tree is touched.
+//
+// Under the index lock it first makes sure the repository is still as the
+// caller saw it: HEAD is on main, h descends from it, and every path on disk
+// is as in HEAD. Otherwise it returns ErrWorkTreeChanged. Every path is also
 // read from h before anything is written, so a commit or object that is
-// missing changes nothing.
+// missing changes nothing either.
 func (r *Repo) FastForward(h plumbing.Hash, paths []string) (err error) {
 	for _, p := range paths {
 		if err := checkWorkPath(p); err != nil {
@@ -247,6 +314,9 @@ func (r *Repo) FastForward(h plumbing.Hash, paths []string) (err error) {
 		return err
 	}
 	defer unlock()
+	if err := r.checkFastForward(h, paths); err != nil {
+		return err
+	}
 	tree, err := r.TreeOf(h)
 	if err != nil {
 		return err
@@ -279,7 +349,7 @@ func (r *Repo) FastForward(h plumbing.Hash, paths []string) (err error) {
 	for i, p := range paths {
 		abs := filepath.Join(r.dir, filepath.FromSlash(p))
 		if inTree[i] {
-			err = atomicWrite(abs, data[i])
+			err = atomicfile.WriteFile(abs, data[i])
 		} else if err = os.Remove(abs); errors.Is(err, fs.ErrNotExist) {
 			err = nil
 		}
@@ -294,7 +364,48 @@ func (r *Repo) FastForward(h plumbing.Hash, paths []string) (err error) {
 	if err := r.stage(w, paths); err != nil {
 		return err
 	}
-	return r.r.Storer.SetReference(plumbing.NewHashReference(plumbing.NewBranchReferenceName("main"), h))
+	return r.r.Storer.SetReference(plumbing.NewHashReference(mainRef, h))
+}
+
+var mainRef = plumbing.NewBranchReferenceName("main")
+
+// checkFastForward returns ErrWorkTreeChanged unless HEAD is a symbolic
+// reference to main, h descends from HEAD, and each path on disk is the same
+// as in HEAD (a path missing from both is the same).
+func (r *Repo) checkFastForward(h plumbing.Hash, paths []string) error {
+	ref, err := r.r.Storer.Reference(plumbing.HEAD)
+	if err != nil {
+		return err
+	}
+	if ref.Type() != plumbing.SymbolicReference || ref.Target() != mainRef {
+		return fmt.Errorf("%w: HEAD is not on main", ErrWorkTreeChanged)
+	}
+	head, err := r.Head()
+	if err != nil {
+		return err
+	}
+	if ok, err := r.IsAncestor(head, h); err != nil || !ok {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("%w: %s does not descend from HEAD", ErrWorkTreeChanged, h)
+	}
+	for _, p := range paths {
+		want, err := r.ReadAt(head, p)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		inHead := err == nil
+		got, err := atomicfile.ReadFile(filepath.Join(r.dir, filepath.FromSlash(p)))
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		onDisk := err == nil
+		if inHead != onDisk || !bytes.Equal(want, got) {
+			return fmt.Errorf("%w: %s differs from HEAD", ErrWorkTreeChanged, p)
+		}
+	}
+	return nil
 }
 
 // checkWorkPath refuses a path that is not a file of the work tree.
@@ -302,35 +413,6 @@ func checkWorkPath(p string) error {
 	first, _, _ := strings.Cut(path.Clean(p), "/")
 	if !filepath.IsLocal(filepath.FromSlash(p)) || strings.EqualFold(first, ".git") {
 		return fmt.Errorf("%q is not a path in the work tree", p)
-	}
-	return nil
-}
-
-// atomicWrite replaces the file at path with data through a temporary file in
-// the same directory, so that a reader sees either the old or the new content.
-func atomicWrite(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return err
-	}
-	f, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmp := f.Name()
-	_, err = f.Write(data)
-	if err == nil {
-		err = f.Sync()
-	}
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err == nil {
-		err = os.Rename(tmp, path)
-	}
-	if err != nil {
-		_ = os.Remove(tmp)
-		return err
 	}
 	return nil
 }
