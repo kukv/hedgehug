@@ -215,7 +215,7 @@ REST だけを作る。フェーズ3で使うのは次の表のもの。
 ## git の通信（internal/gitrepo）
 
 - `url_rewrites` は fetch・push・clone の直前にだけ適用する。`from` が URL の先頭に一致する規則のうち、`from` が最も長いものを使い、その部分を `to` に置き換える。Store の `.git/config`、config.yaml、表示、repo ID はすべて書き換え前の値を使う。書き換えは呼び出し側（`sync`・`store`）が `gitrepo` に関数として渡す。
-- 認証: 書き換え後の URL が `http://` か `https://` なら、その Store の `account` のトークンを `BasicAuth{Username: "x-access-token", Password: token}` で付ける。`account` がない、またはアカウントに `token` がないときは認証なしで試す。SSH（`ssh://` と `user@host:path`）は go-git の SSH で ssh-agent を使い、`known_hosts` を確かめる。ローカルのパスは今と同じ（インプロセスの file transport）。
+- 認証: 書き換え後の URL が `http://` か `https://` なら、その Store の `account` のトークンを `BasicAuth{Username: "x-access-token", Password: token}` で付ける。ただし付けるのは、書き換え後の URL の host（大文字小文字を区別せず、ポートを除く）がアカウントの host と同じときだけ。別の host のミラーや、書き換えで別のサーバーへ向けた通信には付けない（利用者の決定。トークンを意図しないサーバーに渡さないため）。`account` がない、またはアカウントに `token` がないときは認証なしで試す。SSH（`ssh://` と `user@host:path`）は go-git の SSH で ssh-agent を使い、`known_hosts` を確かめる。ローカルのパスは今と同じ（インプロセスの file transport）。
 - push の拒否の判別: HTTP の 403、receive-pack の権限エラー、ローカルのパスで書けない（`EACCES`・`EPERM`）を `ErrPushDenied` にまとめる。読み取り専用の判定に使う。
 
 ## Store の作成と発見
