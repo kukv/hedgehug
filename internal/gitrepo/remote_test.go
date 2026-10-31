@@ -110,6 +110,9 @@ func TestPushRejected(t *testing.T) {
 func TestPushNothing(t *testing.T) {
 	remote := newBare(t)
 	a, _ := cloneTwo(t, remote)
+	if err := a.r.r.Storer.RemoveReference(trackingRef("origin")); err != nil {
+		t.Fatal(err)
+	}
 	if err := a.r.Push("origin"); err != nil {
 		t.Errorf("push with nothing new = %v", err)
 	}
@@ -189,5 +192,45 @@ func TestMissingRemote(t *testing.T) {
 	}
 	if _, err := r.Fetch("origin"); err == nil {
 		t.Error("Fetch of a missing remote succeeded")
+	}
+}
+
+func TestCloneFailureInExistingDirectoryKeepsIt(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := Clone(filepath.Join(t.TempDir(), "nope.git"), dir); err == nil {
+		t.Fatal("Clone of a missing remote succeeded")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 0 {
+		t.Errorf("directory = %v, %v; want it kept and empty", entries, err)
+	}
+}
+
+func TestCloneCleansUpWhenTheLastStepFails(t *testing.T) {
+	remote := newBare(t)
+	seed := t.TempDir()
+	s, _ := Init(seed)
+	commitFiles(t, s, seed, map[string]string{"a.md": "a\n"})
+	_ = s.SetRemotes([]string{remote})
+	if err := s.Push("origin"); err != nil {
+		t.Fatal(err)
+	}
+	orig := afterClone
+	afterClone = func(*Repo, string) error { return errors.New("boom") }
+	t.Cleanup(func() { afterClone = orig })
+
+	fresh := filepath.Join(t.TempDir(), "clone")
+	if _, err := Clone(remote, fresh); err == nil {
+		t.Fatal("Clone succeeded")
+	}
+	if _, err := os.Stat(fresh); !os.IsNotExist(err) {
+		t.Errorf("created directory left behind: %v", err)
+	}
+	existing := t.TempDir()
+	if _, err := Clone(remote, existing); err == nil {
+		t.Fatal("Clone succeeded")
+	}
+	if entries, err := os.ReadDir(existing); err != nil || len(entries) != 0 {
+		t.Errorf("existing directory = %v, %v; want kept and empty", entries, err)
 	}
 }

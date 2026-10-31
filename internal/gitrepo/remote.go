@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -155,8 +156,11 @@ func (r *Repo) Head() (plumbing.Hash, error) {
 	return ref.Hash(), nil
 }
 
-// Clone clones the main branch of url into dir.
-// A failed clone removes the directory it created.
+// afterClone finishes a fresh clone; tests replace it to make the step fail.
+var afterClone = func(r *Repo, url string) error { return r.SetRemotes([]string{url}) }
+
+// Clone clones the main branch of url into dir. A failed clone removes what it
+// created: the directory, or only its contents when dir already existed.
 func Clone(url, dir string) (*Repo, error) {
 	_, statErr := os.Stat(dir)
 	existed := statErr == nil
@@ -166,18 +170,28 @@ func Clone(url, dir string) (*Repo, error) {
 		ReferenceName: plumbing.NewBranchReferenceName("main"),
 		SingleBranch:  true,
 	})
+	if err == nil {
+		repo := &Repo{dir: dir, r: r}
+		if err = afterClone(repo, url); err == nil {
+			return repo, nil
+		}
+	} else {
+		err = fmt.Errorf("clone %s: %w", url, err)
+	}
+	removeCreated(dir, existed)
+	return nil, err
+}
+
+func removeCreated(dir string, existed bool) {
+	if !existed {
+		_ = os.RemoveAll(dir)
+		return
+	}
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		if !existed {
-			_ = os.RemoveAll(dir)
-		}
-		return nil, fmt.Errorf("clone %s: %w", url, err)
+		return
 	}
-	repo := &Repo{dir: dir, r: r}
-	if err := repo.SetRemotes([]string{url}); err != nil {
-		if !existed {
-			_ = os.RemoveAll(dir)
-		}
-		return nil, err
+	for _, e := range entries {
+		_ = os.RemoveAll(filepath.Join(dir, e.Name()))
 	}
-	return repo, nil
 }
