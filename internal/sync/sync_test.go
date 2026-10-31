@@ -329,6 +329,27 @@ func TestMirrorPush(t *testing.T) {
 	}
 }
 
+// A mirror that cannot be reached does not stop the sync with origin; it is
+// told of as a warning. An origin that cannot be reached fails the sync.
+func TestMirrorDownIsAWarning(t *testing.T) {
+	c := newCluster(t, 2)
+	missing := filepath.Join(t.TempDir(), "gone.git")
+	c.opts[0].Remotes = append(c.opts[0].Remotes, missing)
+	x := c.addTask(0, "x")
+	r := c.sync(0)
+	if !slices.Equal(r.Pushed, []string{"origin"}) || len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "mirror1") {
+		t.Errorf("pushed = %v, warnings = %q", r.Pushed, r.Warnings)
+	}
+	c.sync(1)
+	if c.task(1, x.ULID) == nil {
+		t.Error("the task did not reach origin")
+	}
+	c.opts[0].Remotes = []string{missing}
+	if _, err := Run(c.stores[0], c.opts[0]); err == nil {
+		t.Error("a sync with origin down succeeded")
+	}
+}
+
 func TestNoRemoteDoesNothing(t *testing.T) {
 	c := newCluster(t, 1)
 	head := mustHead(t, c.stores[0])

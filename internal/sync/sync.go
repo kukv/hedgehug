@@ -118,14 +118,23 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 		return res, err
 	}
 	wait := retryWait
+	// A mirror that cannot be reached is left out, and told of as a
+	// warning; origin is the remote the sync is for.
+	down := map[string]error{}
 	for round := 0; ; round++ {
 		res.Pushed = nil // a rejected mirror makes another round; report the last one
-		for _, name := range r.Remotes() {
-			if _, err := r.Fetch(name); err != nil {
+		var up []string
+		for i, name := range r.Remotes() {
+			if _, err := r.Fetch(name); err != nil && i == 0 {
 				return res, err
+			} else if err != nil {
+				down[name] = err
+				continue
 			}
+			delete(down, name) // a warning tells of how the last round went
+			up = append(up, name)
 		}
-		for _, name := range r.Remotes() {
+		for _, name := range up {
 			if err := mergeRemote(s, name, opt, &res); err != nil {
 				return res, err
 			}
@@ -152,15 +161,19 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 			return res, err
 		}
 		res.Pushed = append(res.Pushed, "origin")
-		for _, name := range r.Remotes()[1:] {
-			if err := r.Push(name); err == nil {
+		rejected := false
+		for _, name := range up[1:] {
+			err := r.Push(name)
+			switch {
+			case err == nil:
 				res.Pushed = append(res.Pushed, name)
-			} else if !errors.Is(err, gitrepo.ErrRejected) {
-				return res, err
+			case errors.Is(err, gitrepo.ErrRejected):
+				rejected = true // merged in the next round; the rounds are capped
+			default:
+				down[name] = err
 			}
-			// A rejected mirror is merged in the next round; the rounds are capped.
 		}
-		if len(res.Pushed) == len(r.Remotes()) || round >= rounds-1 {
+		if !rejected || round >= rounds-1 {
 			break
 		}
 	}
@@ -169,6 +182,9 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 		if err != nil {
 			res.Warnings = append(res.Warnings, what+": "+err.Error())
 		}
+	}
+	for _, name := range r.Remotes()[1:] {
+		warn("sync mirror "+name, down[name])
 	}
 	warn("check the other stores' id prefixes", prefixDuplicates(s, opt, &res))
 	warn("find the invalid tasks", findInvalid(s, ix, was, before, &res))

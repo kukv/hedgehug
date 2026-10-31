@@ -104,7 +104,10 @@ func (a *app) syncBackground() error {
 	opt, err := a.syncOptions(c, e)
 	if err == nil {
 		err = sync.Background(s, opt, c.Sync.PushInterval, func() error {
-			_, err := a.runSyncReported(s, opt, false)
+			res, err := a.runSyncReported(s, opt, false)
+			for _, w := range res.Warnings { // such as a mirror that is down; for sync.log
+				_, _ = fmt.Fprintln(a.stderr, "warning: "+w)
+			}
 			return err
 		})
 	}
