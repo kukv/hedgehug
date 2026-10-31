@@ -2,10 +2,12 @@ package gitrepo
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
+	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 
@@ -31,8 +33,22 @@ func TestRewriteFetchPush(t *testing.T) {
 	if err := r.Push("origin"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.Fetch("origin"); err != nil {
+	h, err := r.Fetch("origin")
+	if err != nil {
 		t.Fatal(err)
+	}
+	local, _ := r.Head()
+	rh, _ := r.RemoteHead("origin")
+	br, err := git.PlainOpen(bare)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bh, err := br.Head()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.IsZero() || h != local || h != rh || h != bh.Hash() {
+		t.Errorf("fetch = %s, local HEAD = %s, RemoteHead = %s, bare HEAD = %s; want all the same", h, local, rh, bh.Hash())
 	}
 	// .git/config keeps the URL as written.
 	cfg, _ := r.r.Config()
@@ -149,6 +165,30 @@ func TestPushDeniedByReadOnlyRemote(t *testing.T) {
 	}
 	if h, _ := r.RemoteHead("origin"); !h.IsZero() {
 		t.Error("a denied push moved refs/remotes/origin/main")
+	}
+}
+
+func TestPushDenied(t *testing.T) {
+	ssh := errors.New("ssh: handshake failed: ssh: unable to authenticate: Permission denied (publickey)")
+	perm := &os.PathError{Op: "open", Path: "x", Err: os.ErrPermission}
+	for _, c := range []struct {
+		name  string
+		err   error
+		local bool
+		want  bool
+	}{
+		{"403 over http", transport.ErrAuthorizationFailed, false, true},
+		{"403 wrapped", fmt.Errorf("x: %w", transport.ErrAuthorizationFailed), false, true},
+		{"ssh login failure", ssh, false, false},
+		{"permission text, remote", errors.New("permission denied"), false, false},
+		{"permission error, remote", perm, false, false},
+		{"permission text, local", errors.New("open objects/x: Permission denied"), true, true},
+		{"permission error, local", perm, true, true},
+		{"another error, local", errors.New("boom"), true, false},
+	} {
+		if got := pushDenied(c.err, c.local); got != c.want {
+			t.Errorf("%s: pushDenied = %v, want %v", c.name, got, c.want)
+		}
 	}
 }
 

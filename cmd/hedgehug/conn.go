@@ -1,7 +1,9 @@
 package main
 
 import (
+	"net/url"
 	"path/filepath"
+	"strings"
 
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
@@ -36,16 +38,24 @@ func (a *app) tokenFor(c *config.Config, acct config.Account) (string, error) {
 	return tok, nil
 }
 
+// sameHost reports whether the URL u is served by host, ignoring case and
+// port: the token of an account goes only to its own host.
+func sameHost(u, host string) bool {
+	p, err := url.Parse(u)
+	return err == nil && strings.EqualFold(p.Hostname(), host)
+}
+
 // connFor is how the remotes of the store e are reached: through
-// url_rewrites, and with the token of its account over http and https. A
-// store with no account, an account with no token, and an ssh or local
-// remote get no auth from here (ssh falls to go-git's ssh-agent).
+// url_rewrites, and with the token of its account over http and https, when
+// the host reached (after the rewrite) is the host of the account. A store
+// with no account, an account with no token, another host, and an ssh or
+// local remote get no auth from here (ssh falls to go-git's ssh-agent).
 func (a *app) connFor(c *config.Config, e config.StoreEntry) gitrepo.Conn {
 	acct, ok := c.Writer(e)
 	return gitrepo.Conn{
 		Rewrite: c.Rewrite,
 		Auth: func(u string) (transport.AuthMethod, error) {
-			if !ok || acct.Token.Kind == "" || !gitrepo.IsHTTP(u) {
+			if !ok || acct.Token.Kind == "" || !gitrepo.IsHTTP(u) || !sameHost(u, acct.Host) {
 				return nil, nil
 			}
 			tok, err := a.tokenFor(c, acct)

@@ -168,13 +168,18 @@ func (r *Repo) Push(remote string) error {
 	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) && (errors.Is(err, git.ErrNonFastForwardUpdate) || strings.Contains(err.Error(), "non-fast-forward")) {
 		return ErrRejected
 	}
-	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) && pushDenied(err) {
+	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) && pushDenied(err, isLocal(to)) {
 		return fmt.Errorf("push %s: %w: %w", remote, ErrPushDenied, err)
 	}
 	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return fmt.Errorf("push %s: %w", remote, err)
 	}
 	return r.r.Storer.SetReference(plumbing.NewHashReference(trackingRef(remote), h))
+}
+
+func isLocal(u string) bool {
+	_, ok := LocalPath(u)
+	return ok
 }
 
 // Head returns the commit HEAD points at, or the zero hash when there is no

@@ -58,11 +58,14 @@ func (r *Repo) remoteURL(name string) (string, error) {
 }
 
 // pushDenied reports whether err is a refusal to write: a 403 from an
-// http remote, or a permission error of a local one (go-git's in-process
-// server gives the latter as text only).
-func pushDenied(err error) bool {
-	return errors.Is(err, transport.ErrAuthorizationFailed) || errors.Is(err, fs.ErrPermission) ||
-		strings.Contains(strings.ToLower(err.Error()), "permission denied")
+// http remote, or, for a local remote only, a permission error (go-git's
+// in-process server gives it as text only). An ssh "Permission denied
+// (publickey)" is a failed login, not a refusal to write.
+func pushDenied(err error, local bool) bool {
+	if errors.Is(err, transport.ErrAuthorizationFailed) {
+		return true
+	}
+	return local && (errors.Is(err, fs.ErrPermission) || strings.Contains(strings.ToLower(err.Error()), "permission denied"))
 }
 
 // LocalPath returns the local path of a remote that is one: a path, or a

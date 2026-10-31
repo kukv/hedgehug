@@ -50,10 +50,68 @@ func TestSyncSendsToken(t *testing.T) {
 	if len(auths) == 0 {
 		t.Fatal("no git session")
 	}
-	for _, a := range auths {
-		if b, ok := a.(*githttp.BasicAuth); !ok || b.Password != "tok-1" || b.Username != "x-access-token" {
-			t.Errorf("auth = %#v", a)
+	checkAuths := func(from int) {
+		t.Helper()
+		for _, a := range auths[from:] {
+			if b, ok := a.(*githttp.BasicAuth); !ok || b.Password != "tok-1" || b.Username != "x-access-token" {
+				t.Errorf("auth = %#v", a)
+			}
 		}
+	}
+	checkAuths(0)
+	// A later sync fetches and pushes, and each session carries the token.
+	te.ok("add", "one")
+	n := len(auths)
+	te.ok("sync")
+	if len(auths) < n+2 {
+		t.Fatalf("sync made %d sessions, want a fetch and a push", len(auths)-n)
+	}
+	checkAuths(n)
+}
+
+// The host that decides is the one reached after the rewrite.
+func TestTokenGoesToTheRewrittenHost(t *testing.T) {
+	for _, c := range []struct {
+		name, remote, to string
+		token            bool
+	}{
+		{"rewritten to the account's host", "https://github.com/org-a/x.git", "https://git.example.com/", true},
+		{"rewritten to another host", "https://git.example.com/org-a/x.git", "https://other.example.com/", false},
+		{"not rewritten, another host", "https://other.example.com/org-a/x.git", "", false},
+		{"not rewritten, the account's host", "https://GIT.example.com/org-a/x.git", "", true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			te := newTestEnv(t)
+			d := t.TempDir()
+			if err := gitrepo.InitBare(filepath.Join(d, "org-a", "x.git")); err != nil {
+				t.Fatal(err)
+			}
+			var auths []transport.AuthMethod
+			route := func(u string) (string, bool) {
+				for _, h := range []string{"git.example.com", "other.example.com"} {
+					if dir, ok := gitrepotest.Under("https://"+h+"/", d)(strings.ToLower(u)); ok {
+						return dir, true
+					}
+				}
+				return "", false
+			}
+			gitrepotest.InstallHTTPS(t, route, &auths, nil)
+			te.env["HH_TOKEN"] = "tok-1"
+			cfg := "accounts:\n  - {name: me, host: git.example.com, login: alice, token: \"env:HH_TOKEN\"}\n"
+			if c.to != "" {
+				cfg += "url_rewrites:\n  - {from: \"" + strings.TrimSuffix(c.remote, "org-a/x.git") + "\", to: \"" + c.to + "\"}\n"
+			}
+			te.writeConfigYAML(cfg)
+			te.ok("store", "init", "me", "--prefix", "ME", "--remote", c.remote)
+			if len(auths) == 0 {
+				t.Fatal("no git session")
+			}
+			for _, a := range auths {
+				if b, ok := a.(*githttp.BasicAuth); ok != c.token || ok && b.Password != "tok-1" {
+					t.Errorf("auth = %#v, want token %v", a, c.token)
+				}
+			}
+		})
 	}
 }
 
@@ -107,6 +165,20 @@ func TestConnFor(t *testing.T) {
 	au, err = conn.Auth("http://github.com/org/x.git")
 	if b, ok := au.(*githttp.BasicAuth); err != nil || !ok || b.Password != "tok-1" {
 		t.Errorf("second Auth = %#v, %v", au, err)
+	}
+	// Only the account's own host gets the token, whatever the case or port.
+	for u, want := range map[string]bool{
+		"https://github.com/org/x.git":      true,
+		"https://GitHub.com:8443/org/x.git": true,
+		"http://github.com/org/x.git":       true,
+		"https://mirror.example.com/x.git":  false,
+		"https://github.com.evil.test/x":    false,
+		"https://api.github.com/x":          false,
+	} {
+		au, err := conn.Auth(u)
+		if err != nil || (au != nil) != want {
+			t.Errorf("Auth(%q) = %v, %v; want token %v", u, au, err, want)
+		}
 	}
 	// An account with no token, and a name that is no account.
 	for _, name := range []string{"b", "nobody"} {
