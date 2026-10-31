@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
@@ -288,5 +289,30 @@ func TestPurgeSubjectWithoutIDUsesULID(t *testing.T) {
 	}
 	if subj, _ := subjectAndBody(t, s); subj != "hedgehug: purge "+x.ULID.String()+" idless" {
 		t.Errorf("subject = %q", subj)
+	}
+}
+
+func mustEncode(t *testing.T, w *model.Workspace) []byte {
+	t.Helper()
+	b, err := w.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func TestRenameWorkspaceWithDuplicatePrefixFromSync(t *testing.T) {
+	s := newTestStore(t)
+	a := testWorkspace(t, s) // prefix TST
+	b := &model.Workspace{ULID: model.NewULID(), Name: "b", IDPrefix: "TST", PrefixSet: time.Now()}
+	mustWrite(t, s, model.WorkspacePath(b.ULID), string(mustEncode(t, b))) // as a merge would leave it
+	b.Name = "bee"
+	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(b) }); err != nil {
+		t.Errorf("rename of a workspace with a duplicate prefix was refused: %v", err)
+	}
+	b.IDPrefix = a.IDPrefix
+	b.Name = a.Name
+	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(b) }); err == nil {
+		t.Error("taking the name of another workspace was allowed")
 	}
 }
