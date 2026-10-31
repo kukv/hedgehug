@@ -136,7 +136,10 @@ func Load(p Paths) (*Config, error) {
 				e.Remotes = append(e.Remotes, r.Value)
 			}
 		}
-		if a := valueOf(it, "account"); a != nil && a.Value != "" {
+		if a := valueOf(it, "account"); a != nil && a.Tag != "!!null" {
+			if a.Kind != yaml.ScalarNode || a.Value == "" {
+				return nil, c.errAt(a, "stores: account: want the name of an account")
+			}
 			if !c.hasAccount(a.Value) {
 				return nil, c.errAt(a, fmt.Sprintf("stores: account %q is not in accounts", a.Value))
 			}
@@ -260,6 +263,9 @@ func (c *Config) Select(name string) (StoreEntry, error) {
 
 // AddStore adds a store to the end of stores. Save writes it.
 func (c *Config) AddStore(name, path string, remotes []string) error {
+	if slices.Contains(remotes, "") {
+		return errors.New("a remote must not be empty")
+	}
 	for _, s := range c.Stores {
 		if s.Name == name {
 			return fmt.Errorf("a store named %q is already set up", name)

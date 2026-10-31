@@ -421,10 +421,12 @@ stores:
 
 func TestBadAccountAndSync(t *testing.T) {
 	for _, src := range []string{
-		"accounts:\n  - {name: a, host: github.com}\n",                                    // no login
-		"accounts:\n  - {name: a, host: h, login: x}\n  - {name: a, host: h, login: y}\n", // twice
-		"stores:\n  - {name: s, path: /s, account: nobody}\naccounts: []\n",               // unknown account
-		"stores:\n  - {name: s, path: /s, remotes: x}\n",                                  // remotes not a list
+		"accounts:\n  - {name: a, host: github.com}\n",                                                     // no login
+		"accounts:\n  - {name: a, host: h, login: x}\n  - {name: a, host: h, login: y}\n",                  // twice
+		"stores:\n  - {name: s, path: /s, account: nobody}\naccounts: []\n",                                // unknown account
+		"stores:\n  - {name: s, path: /s, remotes: x}\n",                                                   // remotes not a list
+		"accounts:\n  - {name: a, host: h, login: x}\nstores:\n  - {name: s, path: /s, account: \"\"}\n",   // empty account
+		"accounts:\n  - {name: a, host: h, login: x}\nstores:\n  - {name: s, path: /s, account: {x: y}}\n", // account is a mapping
 		"sync:\n  interval: soon\n",
 		"sync:\n  push_interval: 0s\n",
 		"sync:\n  interval: -1m\n",
@@ -461,5 +463,65 @@ func TestAddAndRemoveStoreKeepsComments(t *testing.T) {
 	c, err = Load(p)
 	if err != nil || len(c.Stores) != 2 || c.Stores[1].Remotes[0] != "/r/b.git" {
 		t.Errorf("reload: %+v, %v", c.Stores, err)
+	}
+}
+
+func TestNullAccountIsNoAccount(t *testing.T) {
+	c, err := Load(cfgPaths(t, "accounts:\n  - {name: a, host: h, login: x}\n  - {name: b, host: h, login: y}\nstores:\n  - {name: s, path: /s, account: null}\n"))
+	if err != nil || c.Stores[0].Account != "" {
+		t.Errorf("null account: %+v, %v", c.Stores, err)
+	}
+}
+
+func TestWriterNamedButMissingAccount(t *testing.T) {
+	c := &Config{Accounts: []Account{{Name: "a", Host: "h", Login: "x"}}}
+	if a, ok := c.Writer(StoreEntry{Name: "s", Account: "gone"}); ok {
+		t.Errorf("Writer = %+v, true; want no writer", a)
+	}
+}
+
+func TestAddStoreRefusesEmptyRemote(t *testing.T) {
+	c, _ := Load(testPaths(t))
+	if err := c.AddStore("a", "/a", []string{"/r", ""}); err == nil {
+		t.Error("AddStore with an empty remote succeeded")
+	}
+	if len(c.Stores) != 0 {
+		t.Errorf("Stores = %v", c.Stores)
+	}
+}
+
+func TestRemoveOnlyStoreKeepsKey(t *testing.T) {
+	p := cfgPaths(t, "# top\nstores:\n  - name: a\n    path: /a\nlog: 1\n")
+	c, _ := Load(p)
+	if err := c.RemoveStore("a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p.ConfigFile)
+	if want := "# top\nstores: []\nlog: 1\n"; string(b) != want {
+		t.Errorf("config.yaml =\n%s\nwant\n%s", b, want)
+	}
+	c, err := Load(p)
+	if err != nil || len(c.Stores) != 0 {
+		t.Errorf("reload: %+v, %v", c.Stores, err)
+	}
+}
+
+func TestRemoveStoreKeepsNeighborComments(t *testing.T) {
+	p := cfgPaths(t, "stores:\n  # about a\n  - name: a\n    path: /a\n  # about b\n  - name: b\n    path: /b\n  # about c\n  - name: c\n    path: /c\n")
+	c, _ := Load(p)
+	if err := c.RemoveStore("b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p.ConfigFile)
+	t.Logf("config.yaml =\n%s", b)
+	got := string(b)
+	if !strings.Contains(got, "# about a") || !strings.Contains(got, "# about c") || strings.Contains(got, "name: b") {
+		t.Errorf("config.yaml =\n%s", b)
 	}
 }
