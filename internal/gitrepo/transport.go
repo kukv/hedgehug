@@ -75,7 +75,7 @@ func (fileLoader) Load(ep *transport.Endpoint) (storer.Storer, error) {
 	if !isDir(filepath.Join(p, "objects")) {
 		return nil, transport.ErrRepositoryNotFound
 	}
-	return filesystem.NewStorage(osfs.New(p), cache.NewObjectLRUDefault()), nil
+	return newCachedStorage(filesystem.NewStorage(osfs.New(p), cache.NewObjectLRUDefault())), nil
 }
 
 func isDir(p string) bool {
