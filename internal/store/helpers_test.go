@@ -26,7 +26,7 @@ var (
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
 	meta := &model.StoreMeta{ULID: model.NewULID(), Name: "test"}
-	s, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, &model.Workspace{ULID: testWorkspaceULID, Name: "test", IDPrefix: "TST"}, testAuthor, "")
+	s, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, &model.Workspace{ULID: testWorkspaceULID, Name: "test", IDPrefix: "TST"}, testAuthor, "", time.Now)
 	if err != nil {
 		t.Fatal(err)
 	}

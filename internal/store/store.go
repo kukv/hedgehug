@@ -84,9 +84,10 @@ var newStoreHook = func(*Store) {}
 // sc is nil), the workspace ws, a .gitignore and the .gitattributes of the
 // merge driver, in one commit. meta and ws
 // are copied, not changed. A non-empty account (host/login) is named in the
-// Hedgehug-Author trailer of the commit.
+// Hedgehug-Author trailer of the commit. now tells the time of what it
+// writes, there and later.
 // When Create fails it removes what it made, so it can be run again.
-func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Workspace, author gitrepo.Signature, account string) (_ *Store, err error) {
+func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Workspace, author gitrepo.Signature, account string, now func() time.Time) (_ *Store, err error) {
 	if ws == nil {
 		return nil, errors.New("the store needs a workspace")
 	}
@@ -115,13 +116,14 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 		sc = schema.Default()
 	}
 	s := newStore(dir, repo, &m, sc)
+	s.now = now
 	newStoreHook(s)
 
-	now := s.now().Truncate(time.Second)
+	at := s.now().Truncate(time.Second)
 	w := *ws
 	for _, t := range []*time.Time{&w.Created, &w.Updated, &w.PrefixSet} {
 		if t.IsZero() {
-			*t = now
+			*t = at
 		}
 	}
 
@@ -163,7 +165,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 		Subject:  "hedgehug: init",
 		Trailers: trailers,
 		Author:   author,
-		When:     now,
+		When:     at,
 	}); err != nil {
 		return nil, err
 	}
@@ -221,6 +223,10 @@ func Open(dir string) (*Store, error) {
 	}
 	return newStore(dir, repo, meta, sc), nil
 }
+
+// SetNow makes the store read the time from now, in place of time.Now, for
+// what it writes: created, updated and the time of its commits.
+func (s *Store) SetNow(now func() time.Time) { s.now = now }
 
 func (s *Store) Meta() *model.StoreMeta { return s.meta }
 func (s *Store) Schema() *schema.Schema { return s.schema.Load() }
