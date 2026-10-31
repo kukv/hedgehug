@@ -25,7 +25,7 @@ func TestRemoveRestorePurge(t *testing.T) {
 	}
 	_, err = ts.Remove("ME-1")
 	wantErr(t, err, KindConflict, "task.already_deleted")
-	if err != nil && !strings.HasPrefix(err.Error(), "ME-1 ") || !strings.HasSuffix(err.Error(), " is already deleted") {
+	if err != nil && (!strings.HasPrefix(err.Error(), "ME-1 ") || !strings.HasSuffix(err.Error(), " is already deleted")) {
 		t.Errorf("message = %q", err)
 	}
 	r, err = ts.Restore("ME-1")
@@ -145,7 +145,7 @@ func TestPurgeChildNotDeleted(t *testing.T) {
 	ts.deleteTask("ME-1") // the parent only
 	_, _, _, err := ts.PurgeTargets("ME-1")
 	wantErr(t, err, KindConflict, "purge.child_not_deleted")
-	if err != nil && !strings.Contains(err.Error(), "ME-2") || !strings.HasSuffix(err.Error(), " under it is not deleted") {
+	if err != nil && (!strings.Contains(err.Error(), "ME-2") || !strings.HasSuffix(err.Error(), " under it is not deleted")) {
 		t.Errorf("message = %q", err)
 	}
 	_, err = ts.Purge("ME-1", nil)
@@ -217,7 +217,7 @@ func TestCurrentOfPurgedTaskIsGone(t *testing.T) {
 	}
 	_, err = current(ix, e)
 	wantErr(t, err, KindNotFound, "task.gone")
-	if err != nil && !strings.HasPrefix(err.Error(), "ME-1 (") || !strings.HasSuffix(err.Error(), ") is no longer in the store") {
+	if err != nil && (!strings.HasPrefix(err.Error(), "ME-1 (") || !strings.HasSuffix(err.Error(), ") is no longer in the store")) {
 		t.Errorf("message = %q", err)
 	}
 	var oe *Error

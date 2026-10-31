@@ -1,10 +1,15 @@
 package ops
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/kukv/hedgehug/internal/config"
+	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
 )
 
@@ -59,16 +64,61 @@ func TestMoveParentAndOrder(t *testing.T) {
 	// ME-1 is under ME-2 now, so ME-2 under ME-1 would be a cycle; the store
 	// refuses it.
 	_, err = ts.Move(MoveInput{Arg: "ME-2", Parent: "ME-1"})
-	wantErr(t, err, KindInvalid, "")
+	// The store's error is not wrapped in an *Error; classify gives it its Code.
+	if c := classify(err); c == nil || c.Kind != KindInvalid || c.Code != "schema.violation" {
+		t.Errorf("classify(%v) = %+v; want KindInvalid schema.violation", err, c)
+	}
+	if KindOf(err) != KindInvalid {
+		t.Errorf("KindOf = %v; want KindInvalid", KindOf(err))
+	}
 	if err != nil && !strings.Contains(err.Error(), "leads back to this task") {
 		t.Errorf("message = %q", err)
 	}
-	res, err = ts.Move(MoveInput{Arg: "ME-1", Root: true})
+	_, err = ts.Move(MoveInput{Arg: "ME-1", Root: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got, want := strings.Join(ts.order(nil), " "), "ME-3 ME-2 ME-1"; got != want {
 		t.Errorf("order after --root = %s; want %s", got, want)
+	}
+}
+
+func TestMoveUnderParentOfMissingWorkspace(t *testing.T) {
+	ts := newTestSession(t)
+	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	// A task whose workspace is not in the store, committed past the store's
+	// checks as a sync or a hand edit could.
+	_, e, err := ts.Entry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := ts.OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ghost, gone := model.NewULID(), model.NewULID()
+	rel := model.TaskPath(ghost)
+	p := filepath.Join(e.Path, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	body := "---\nulid: " + ghost.String() + "\nid: ME-9\nworkspace: " + gone.String() + "\nkind: task\ntitle: ghost\nstatus: todo\n---\n"
+	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	author, err := config.CommitAuthor(config.Account{}, false, ts.Getenv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: author, When: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = ts.Move(MoveInput{Arg: "ME-1", Parent: "ME-9", Workspace: "me"})
+	wantErr(t, err, KindInvalid, "move.invalid")
+	if want := "the parent's workspace " + gone.String() + " is not in this store"; err != nil && err.Error() != want {
+		t.Errorf("message = %q; want %q", err, want)
 	}
 }
 
@@ -132,7 +182,7 @@ func TestMoveErrors(t *testing.T) {
 	// a sibling that is not under the same parent
 	_, err = ts.Move(MoveInput{Arg: "ME-1", Before: "ME-3"})
 	wantErr(t, err, KindInvalid, "move.invalid")
-	if err != nil && !strings.Contains(err.Error(), "ME-3") || !strings.Contains(err.Error(), "is not under the same parent") {
+	if err != nil && (!strings.Contains(err.Error(), "ME-3") || !strings.Contains(err.Error(), "is not under the same parent")) {
 		t.Errorf("message = %q", err)
 	}
 
