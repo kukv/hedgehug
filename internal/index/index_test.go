@@ -195,9 +195,8 @@ func TestFailedUpdateThenOpenEqualsARebuild(t *testing.T) {
 	put(t, s, a, b)
 	putComment(t, s, a.ULID, newComment("github.com/x", "@carol\n"))
 
-	reads := 0
-	readHook = func(string) error {
-		if reads++; reads == 2 {
+	readHook = func(p string) error {
+		if strings.HasPrefix(p, "comments/") {
 			return errors.New("read failed")
 		}
 		return nil

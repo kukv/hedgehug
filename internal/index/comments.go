@@ -90,7 +90,7 @@ func noteTask(p string) (model.ULID, bool) {
 
 // attach puts the comments and worklog entries of n into e, and adds the
 // mentions and refs of the comments that are not deleted to those of the
-// body.
+// body. e must be newly made, its Mentions and Refs those of the body.
 func (n notes) attach(e *Entry) {
 	cs := slices.Clone(n.comments[e.ULID])
 	slices.SortFunc(cs, func(a, b *model.Comment) int { return strings.Compare(a.ULID.String(), b.ULID.String()) })
