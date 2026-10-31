@@ -679,3 +679,80 @@ func TestRevertField(t *testing.T) {
 		t.Errorf("a link that is no link was accepted")
 	}
 }
+
+// overwriteME1 makes the store of ts overwrite a change of ME-1's title: ts
+// and a clone of it set the title to different values, the clone syncs first,
+// then ts, whose own value loses the merge. It returns the inbox item that
+// tells of it, and the title ME-1 has after.
+func overwriteME1(t *testing.T, ts *testSession) (item InboxItemView, kept string) {
+	t.Helper()
+	ts.useAccount()
+	remote := addBareRemote(t, ts)
+	if _, err := ts.Add(AddInput{Title: "first"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.Sync(false); err != nil {
+		t.Fatal(err)
+	}
+	// The clone writes later than ts, so its title wins the merge.
+	other := cloneSession(t, ts, remote, ts.Now().Add(time.Hour))
+	other.appendConfig(bobAccount)
+	if _, err := ts.Set("ME-1", []Assign{{Key: "title", Op: "=", Value: "mine"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.Set("ME-1", []Assign{{Key: "title", Op: "=", Value: "theirs"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.Sync(false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.Sync(false); err != nil {
+		t.Fatal(err)
+	}
+	_, items, err := ts.InboxList(false)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("InboxList = %v, %v; want 1 overwritten item", items, err)
+	}
+	_, ix, _ := ts.Open()
+	e, err := ts.Resolve(ix, "ME-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return items[0], e.Title
+}
+
+func TestInboxRevertAfterARealSync(t *testing.T) {
+	ts := newTestSession(t)
+	item, kept := overwriteME1(t, ts)
+	if kept != "theirs" || item.Kind != inbox.Overwritten {
+		t.Fatalf("after the sync: title %q, item kind %v; want theirs and an overwritten item", kept, item.Kind)
+	}
+	if _, err := ts.InboxRevert(item.ULID.String()); err != nil {
+		t.Fatal(err)
+	}
+	_, ix, _ := ts.Open()
+	if e, _ := ts.Resolve(ix, "ME-1"); e.Title != "mine" {
+		t.Errorf("title after revert = %q; want mine", e.Title)
+	}
+	n, err := ts.InboxRead([]string{item.ULID.String()}, false)
+	if err != nil || n != 1 {
+		t.Fatalf("InboxRead = %d, %v; want 1", n, err)
+	}
+}
+
+func TestQueryOptionsMarksOverwrittenTasks(t *testing.T) {
+	ts := newTestSession(t)
+	item, _ := overwriteME1(t, ts)
+	s, ix, err := ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	opt, err := ts.QueryOptions(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, _ := ts.Resolve(ix, "ME-1")
+	if len(opt.Overwritten) != 1 || !opt.Overwritten[e.ULID] || e.ULID != item.Item.Task {
+		t.Errorf("Overwritten = %v; want only ME-1 (%s)", opt.Overwritten, e.ULID)
+	}
+}

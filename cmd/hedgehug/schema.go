@@ -3,15 +3,10 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/doctor"
-	"github.com/kukv/hedgehug/internal/index"
-	"github.com/kukv/hedgehug/internal/schema"
-	"github.com/kukv/hedgehug/internal/store"
 )
 
 // errFindings is what a command that found problems returns: the problems
@@ -39,40 +34,13 @@ func (a *app) checkCmd() *cobra.Command {
 		Short: "Find where the schema does not fit the store and its tasks",
 		Args:  exactArgs(0),
 		RunE: func(*cobra.Command, []string) error {
-			fs, err := a.checkSchema()
+			fs, err := a.ss.SchemaCheck()
 			if err != nil {
 				return err
 			}
 			return a.printFindings(fs)
 		},
 	}
-}
-
-// checkSchema opens the store and checks its schema. A schema.yaml that does
-// not decode keeps the store from opening; that is then the one finding.
-func (a *app) checkSchema() ([]doctor.Finding, error) {
-	c, _, err := a.ss.Config()
-	if err != nil {
-		return nil, err
-	}
-	e, err := c.Select(a.ss.StoreName)
-	if err != nil {
-		return nil, err
-	}
-	s, err := store.Open(e.Path)
-	if err != nil {
-		if data, rerr := os.ReadFile(filepath.Join(e.Path, schema.Path)); rerr == nil {
-			if sc, fs := doctor.SchemaFile(data); sc == nil {
-				return fs, nil
-			}
-		}
-		return nil, err
-	}
-	ix, err := index.Open(s)
-	if err != nil {
-		return nil, err
-	}
-	return doctor.Schema(s, ix)
 }
 
 // printFindings prints what a check found. It returns errFindings when there

@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -70,20 +69,6 @@ func asUsage(f cobra.PositionalArgs) cobra.PositionalArgs {
 	}
 }
 
-// afterWrite is Session.Update's step after a commit, for the one write that
-// does not go through Update: the repair of doctor --fix.
-func (a *app) afterWrite(s *store.Store) {
-	if err := sync.MarkPending(s, a.now()); err != nil {
-		a.ss.Warn("the write is not marked for sync: " + err.Error())
-		return
-	}
-	_, e, err := a.ss.Entry()
-	if err != nil {
-		return
-	}
-	a.ss.AfterWrite(s, e)
-}
-
 // beforeCommand reports the failure of a background sync that the user has
 // not been told of, and starts one for each store with a remote that is due
 // (ops.BeforeCommand), except in the sync itself and in a merge driver.
@@ -109,32 +94,12 @@ func verb(committed bool, heading string) string {
 	return heading
 }
 
-// ambiguousError is index.AmbiguousError with the candidates spelled out.
-type ambiguousError struct {
-	input string
-	noun  string   // what the candidates are, "tasks" when empty
-	lines []string // "<id> (<ULID>) <title>" per candidate
-}
-
-func (e *ambiguousError) Error() string {
-	noun := e.noun
-	if noun == "" {
-		noun = "tasks"
-	}
-	return fmt.Sprintf("%q matches %d %s:\n  %s", e.input, len(e.lines), noun, strings.Join(e.lines, "\n  "))
-}
-
 // describe turns err into the text after "hedgehug: ", with the violations
 // of a refused write on the lines after it.
 func describe(err error) string {
 	var ve *store.ValidationError
 	if errors.As(err, &ve) {
-		var b strings.Builder
-		b.WriteString("the change breaks the schema:")
-		for _, v := range ve.Violations {
-			b.WriteString("\n  " + v.String())
-		}
-		return b.String()
+		return ops.ViolationsText(ve)
 	}
 	if errors.Is(err, store.ErrLocked) {
 		return "another hedgehug is writing to the store; try again"

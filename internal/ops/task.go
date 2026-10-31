@@ -378,6 +378,9 @@ func ResolveWorkspace(ix *index.Index, arg string) (*model.Workspace, error) {
 		}
 		return nil, newErr(KindAmbiguous, "workspace.ambiguous", &ambiguousError{input: arg, noun: "workspaces", lines: lines}, "input", arg)
 	}
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, newErr(KindNotFound, "workspace.not_found", err, "input", arg)
+	}
 	return w, err
 }
 

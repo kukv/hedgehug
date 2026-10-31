@@ -115,7 +115,7 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry) (SyncReport,
 	r.Warnings = append(r.Warnings, res.Warnings...)
 	r.Notices = append(r.Notices, res.Notices...)
 	for _, o := range res.Overwritten {
-		x := Overwritten{Path: o.Path, Field: o.Field, Value: JSONValue(o.Value), Author: o.Author}
+		x := Overwritten{Path: o.Path, Field: o.Field, Value: jsonValue(o.Value), Author: o.Author}
 		if u, ok := TaskOfPath(o.Path); ok {
 			x.Task = u.String()
 			x.ID = taskID(u)
@@ -128,7 +128,7 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry) (SyncReport,
 		r.Overwritten = append(r.Overwritten, x)
 	}
 	for _, x := range res.Repaired {
-		r.Repaired = append(r.Repaired, Repaired{ULID: x.ULID.String(), ID: taskID(x.ULID), Kind: x.Kind, Value: JSONValue(x.Value), Author: x.Author})
+		r.Repaired = append(r.Repaired, Repaired{ULID: x.ULID.String(), ID: taskID(x.ULID), Kind: x.Kind, Value: jsonValue(x.Value), Author: x.Author})
 	}
 	for _, u := range res.Invalid {
 		r.Invalid = append(r.Invalid, u.String())
@@ -136,9 +136,9 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry) (SyncReport,
 	return r, nil
 }
 
-// JSONValue is v as JSON when it is, else as a string: the values of the
+// jsonValue is v as JSON when it is, else as a string: the values of the
 // sync are one line of JSON, or "-" for none.
-func JSONValue(v string) json.RawMessage {
+func jsonValue(v string) json.RawMessage {
 	if json.Valid([]byte(v)) {
 		return json.RawMessage(v)
 	}
@@ -210,7 +210,7 @@ func storeStatus(e config.StoreEntry) StoreStatus {
 		return x
 	}
 	x.LastError = st.LastError
-	x.PendingSince, x.LastAttempt, x.LastSuccess = TimePtr(st.PendingSince), TimePtr(st.LastAttempt), TimePtr(st.LastSuccess)
+	x.PendingSince, x.LastAttempt, x.LastSuccess = timePtr(st.PendingSince), timePtr(st.LastAttempt), timePtr(st.LastSuccess)
 	if len(e.Remotes) > 0 {
 		n, err := Unpushed(s)
 		if err != nil {
@@ -222,8 +222,8 @@ func storeStatus(e config.StoreEntry) StoreStatus {
 	return x
 }
 
-// TimePtr is &t, or nil for the zero time.
-func TimePtr(t time.Time) *time.Time {
+// timePtr is &t, or nil for the zero time.
+func timePtr(t time.Time) *time.Time {
 	if t.IsZero() {
 		return nil
 	}

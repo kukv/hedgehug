@@ -1,20 +1,13 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/config"
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/schema"
-	"github.com/kukv/hedgehug/internal/store"
-	"github.com/kukv/hedgehug/internal/sync"
 )
 
 func (a *app) storeCmd() *cobra.Command {
@@ -62,75 +55,11 @@ func (a *app) storeInitCmd() *cobra.Command {
 }
 
 func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema, remotes []string) error {
-	if err := config.ValidStoreName(name); err != nil {
-		return usageError{err}
-	}
-	if err := model.ValidIDPrefix(prefix); err != nil {
-		return usageError{err}
-	}
-	if wsName == "" {
-		wsName = name
-	}
-	if err := model.ValidWorkspaceName(wsName); err != nil {
-		return usageError{err}
-	}
-	c, p, err := a.ss.Config()
+	r, err := a.ss.StoreInit(ops.StoreInitInput{Name: name, Prefix: prefix, Workspace: wsName, Schema: sc, Remotes: remotes})
 	if err != nil {
 		return err
 	}
-	for _, e := range c.Stores {
-		if e.Name == name {
-			return fmt.Errorf("a store named %q is already set up", name)
-		}
-	}
-	if err := a.checkPrefixElsewhere(prefix, name); err != nil {
-		return err
-	}
-	// The new store has no entry yet, so only the single-account fallback applies.
-	acct, ok := c.Writer(config.StoreEntry{Name: name})
-	author, err := config.CommitAuthor(acct, ok, a.getenv)
-	if err != nil {
-		return err
-	}
-	account := ""
-	if ok {
-		account = acct.ID()
-	}
-	dir := filepath.Join(p.StoresDir, name)
-	ws := &model.Workspace{ULID: model.NewULID(), Name: wsName, IDPrefix: prefix}
-	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, sc, ws, author, account)
-	if err != nil {
-		return err
-	}
-	undo := func(err error) error { return errors.Join(err, os.RemoveAll(dir)) }
-	if err := s.Repo().RegisterMergeDriver(); err != nil {
-		return undo(err)
-	}
-	var pushed []string
-	if len(remotes) > 0 {
-		e := config.StoreEntry{Name: name, Path: dir, Remotes: remotes}
-		opt, err := a.ss.SyncOptions(c, e)
-		if err != nil {
-			return undo(err)
-		}
-		res, err := a.ss.RunSync(s, opt, true)
-		if errors.Is(err, gitrepo.ErrRejected) || errors.Is(err, sync.ErrUnrelated) {
-			err = fmt.Errorf("the remote is not empty; to use the store there, run %s", addCommand(name, remotes))
-		}
-		if err != nil {
-			return undo(err)
-		}
-		pushed = res.Pushed
-		for _, w := range res.Warnings {
-			_, _ = fmt.Fprintf(a.stderr, "warning: %s: %s\n", name, w)
-		}
-	}
-	if err := c.AddStore(name, dir, remotes); err != nil {
-		return undo(err)
-	}
-	if err := c.Save(); err != nil {
-		return undo(err)
-	}
+	ws := r.Workspace
 	if a.jsonOut {
 		type wsJSON struct {
 			ULID     string `json:"ulid"`
@@ -143,21 +72,11 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema, remotes 
 			Workspace wsJSON   `json:"workspace"`
 			Remotes   []string `json:"remotes,omitempty"`
 			Pushed    []string `json:"pushed,omitempty"`
-		}{name, dir, wsJSON{ws.ULID.String(), ws.Name, ws.IDPrefix}, remotes, pushed})
+		}{r.Name, r.Path, wsJSON{ws.ULID.String(), ws.Name, ws.IDPrefix}, r.Remotes, r.Pushed})
 	}
-	_, err = fmt.Fprintf(a.stdout, "Created store %s at %s with workspace %s (%s)\n", name, dir, ws.Name, ws.IDPrefix)
-	if err == nil && len(pushed) > 0 {
-		_, err = fmt.Fprintf(a.stdout, "Pushed to %s\n", strings.Join(pushed, ", "))
+	_, err = fmt.Fprintf(a.stdout, "Created store %s at %s with workspace %s (%s)\n", r.Name, r.Path, ws.Name, ws.IDPrefix)
+	if err == nil && len(r.Pushed) > 0 {
+		_, err = fmt.Fprintf(a.stdout, "Pushed to %s\n", strings.Join(r.Pushed, ", "))
 	}
 	return err
-}
-
-// addCommand is the hedgehug store add that takes the store of the remotes.
-func addCommand(name string, remotes []string) string {
-	var b strings.Builder
-	b.WriteString("hedgehug store add " + name)
-	for _, r := range remotes {
-		b.WriteString(" --remote " + r)
-	}
-	return b.String()
 }

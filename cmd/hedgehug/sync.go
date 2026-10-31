@@ -11,10 +11,6 @@ import (
 	"github.com/kukv/hedgehug/internal/ops"
 )
 
-// syncLockWait is how long a sync waits for another one of the store, such
-// as the one in the background, to end.
-const syncLockWait = 5 * time.Minute
-
 func (a *app) syncCmd() *cobra.Command {
 	var status, background bool
 	cmd := &cobra.Command{

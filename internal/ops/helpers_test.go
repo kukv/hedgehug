@@ -131,3 +131,32 @@ func addBareRemote(t *testing.T, ts *testSession) string {
 	}
 	return remote
 }
+
+// otherSession is a second testSession of the same user (the same HOME) with
+// a data directory of its own and no store. Its clock is at now.
+func otherSession(t *testing.T, ts *testSession, now time.Time) *testSession {
+	t.Helper()
+	env := map[string]string{}
+	for k, v := range ts.env {
+		env[k] = v
+	}
+	env["HEDGEHUG_HOME"] = filepath.Join(t.TempDir(), "hh2")
+	c := &testSession{t: t, env: env}
+	c.Session = &Session{
+		Getenv: func(k string) string { return c.env[k] },
+		Now:    func() time.Time { return now },
+		Warn:   func(m string) { c.warns = append(c.warns, m) },
+	}
+	return c
+}
+
+// cloneSession is otherSession whose store "me" is cloned from remote with
+// StoreAdd.
+func cloneSession(t *testing.T, ts *testSession, remote string, now time.Time) *testSession {
+	t.Helper()
+	c := otherSession(t, ts, now)
+	if _, err := c.StoreAdd("me", []string{remote}, ""); err != nil {
+		t.Fatal(err)
+	}
+	return c
+}

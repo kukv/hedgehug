@@ -1,18 +1,14 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/index"
-	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/schema"
-	"github.com/kukv/hedgehug/internal/store"
 )
 
 func (a *app) migrateCmd() *cobra.Command {
@@ -60,116 +56,19 @@ func (a *app) migrateCmd() *cobra.Command {
 }
 
 func (a *app) migrate(m schema.Migration, dryRun bool) error {
-	s, ix, err := a.ss.Open()
+	ix, p, err := a.ss.Migrate(m, dryRun)
 	if err != nil {
 		return err
 	}
-	if dryRun {
-		p, err := planMigration(s, ix, m)
-		if err != nil {
-			return err
-		}
-		return a.printMigrated(ix, p, true)
-	}
-	// The plan is made under the store lock, from the schema Update has
-	// just read, so that no write in between is lost.
-	var p *migrationPlan
-	if _, err := a.ss.Update(s, store.Op{Name: "migrate", SkipTransitions: true}, func(tx *store.Tx) error {
-		var err error
-		if p, err = planMigration(s, ix, m); err != nil {
-			return err
-		}
-		for _, t := range p.changed {
-			if err := tx.PutTask(t); err != nil {
-				return err
-			}
-		}
-		return tx.PutSchema(p.schema)
-	}); err != nil {
-		// Name the task: the migration writes many.
-		var ve *store.ValidationError
-		if errors.As(err, &ve) {
-			return fmt.Errorf("%s: %v", ops.RefName(ix, ve.Task), describe(err))
-		}
-		return err
-	}
-	if err := ix.Refresh(); err != nil {
-		return err
-	}
-	return a.printMigrated(ix, p, false)
-}
-
-// migrationPlan is what a migration writes: the new schema and the tasks
-// it changes, and the task files it leaves since they do not decode.
-type migrationPlan struct {
-	schema  *schema.Schema
-	changed []*model.Task
-	skipped []model.ULID
-}
-
-// planMigration applies m to the schema of s and to its tasks, without
-// writing anything. ix only names the tasks it refuses.
-func planMigration(s *store.Store, ix *index.Index, m schema.Migration) (*migrationPlan, error) {
-	sc := s.Schema()
-	next, err := sc.Migrate(m)
-	if err != nil {
-		return nil, err
-	}
-	if ps := next.Check(); len(ps) > 0 {
-		return nil, &store.SchemaError{Problems: ps}
-	}
-	p := &migrationPlan{schema: next}
-	var refused []string
-	for t, err := range s.Tasks() {
-		if err != nil {
-			ulid, ok := brokenTask(err)
-			if !ok {
-				return nil, err
-			}
-			p.skipped = append(p.skipped, ulid)
-			continue
-		}
-		ok, err := m.ApplyTask(t, sc)
-		switch {
-		case err != nil:
-			refused = append(refused, ops.RefName(ix, t.ULID)+": "+err.Error())
-		case ok:
-			p.changed = append(p.changed, t)
-		}
-	}
-	if len(refused) > 0 {
-		slices.Sort(refused)
-		return nil, fmt.Errorf("cannot migrate %s:\n  %s", count(len(refused)), strings.Join(refused, "\n  "))
-	}
-	slices.SortFunc(p.changed, func(x, y *model.Task) int { return strings.Compare(x.ULID.String(), y.ULID.String()) })
-	slices.SortFunc(p.skipped, func(x, y model.ULID) int { return strings.Compare(x.String(), y.String()) })
-	return p, nil
-}
-
-// brokenTask returns the ULID of the task file that err, from Store.Tasks,
-// says does not decode or holds another task.
-func brokenTask(err error) (model.ULID, bool) {
-	var fe *store.FileError
-	if !errors.As(err, &fe) || !errors.As(err, new(*model.DecodeError)) && !errors.Is(err, store.ErrULIDMismatch) {
-		return model.ULID{}, false
-	}
-	ulid, perr := model.ParseTaskPath(fe.Path)
-	return ulid, perr == nil
-}
-
-func count(n int) string {
-	if n == 1 {
-		return "1 task"
-	}
-	return fmt.Sprintf("%d tasks", n)
+	return a.printMigrated(ix, p, dryRun)
 }
 
 // printMigrated prints the tasks p changes. Their JSON is read from the
 // index after a write, and from the migrated tasks in a dry run.
-func (a *app) printMigrated(ix *index.Index, p *migrationPlan, dryRun bool) error {
-	changed := p.changed
-	skipped := make([]string, len(p.skipped))
-	for i, ulid := range p.skipped {
+func (a *app) printMigrated(ix *index.Index, p *ops.MigrationPlan, dryRun bool) error {
+	changed := p.Changed
+	skipped := make([]string, len(p.Skipped))
+	for i, ulid := range p.Skipped {
 		skipped[i] = ulid.String()
 	}
 	if len(skipped) > 0 {
@@ -196,7 +95,7 @@ func (a *app) printMigrated(ix *index.Index, p *migrationPlan, dryRun bool) erro
 		heading = "Would migrate"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s %s\n", heading, count(len(changed)))
+	fmt.Fprintf(&b, "%s %s\n", heading, ops.TaskCount(len(changed)))
 	st := a.style()
 	for _, t := range changed {
 		fmt.Fprintf(&b, "  %s  %s\n", st.id(ops.TaskLabel(index.EntryOf(t))), t.Title)

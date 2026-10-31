@@ -200,7 +200,7 @@ func TestPurgeRefusesATaskRestoredMeanwhile(t *testing.T) {
 
 func TestMvSeesAWorkspaceMoveMeanwhile(t *testing.T) {
 	te := newStoreEnv(t)
-	var api workspaceJSON
+	var api ops.WorkspaceView
 	te.wsJSON(&api, "add", "api", "--prefix", "API")
 	apiULID := mustULID(t, api.ULID)
 	p := te.addJSON("p", "--workspace", "me")
@@ -236,7 +236,7 @@ func TestMvParentInAnotherWorkspaceMovesAChildAddedMeanwhile(t *testing.T) {
 func TestWorkspaceSubjectsSeeARenameMeanwhile(t *testing.T) {
 	te := newStoreEnv(t)
 	me := mustULID(t, te.addJSON("a").Workspace.ULID)
-	var tmp workspaceJSON
+	var tmp ops.WorkspaceView
 	te.wsJSON(&tmp, "add", "tmp", "--prefix", "TMP")
 	rename := func(ulid model.ULID, name string) func(*store.Tx) error {
 		return func(tx *store.Tx) error {

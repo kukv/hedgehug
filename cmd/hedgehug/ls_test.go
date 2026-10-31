@@ -5,7 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 func TestLs(t *testing.T) {
@@ -158,8 +160,29 @@ func TestUnknownID(t *testing.T) {
 }
 
 func TestDescribe(t *testing.T) {
-	err := &ambiguousError{input: "ab", lines: []string{"1234  Alpha", "5678  Beta"}}
-	if got := describe(err); got != "\"ab\" matches 2 tasks:\n  1234  Alpha\n  5678  Beta" {
+	te := newStoreEnv(t)
+	a := te.addJSON("Alpha")
+	b := te.addJSON("Beta")
+	te.handEdit("me", b.ID, "id: "+b.ID, "id: "+a.ID) // two tasks with one id
+	s, err := store.Open(te.storeDir("me"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ix, err := index.Open(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = (&ops.Session{}).Resolve(ix, a.ID)
+	if ops.KindOf(err) != ops.KindAmbiguous {
+		t.Fatalf("Resolve(%s) = %v; want an ambiguous error", a.ID, err)
+	}
+	got := describe(err)
+	if got != err.Error() || !strings.HasPrefix(got, "\""+a.ID+"\" matches 2 tasks:\n  ") {
 		t.Errorf("describe = %q", got)
+	}
+	for _, j := range []ops.TaskView{a, b} {
+		if !strings.Contains(got, "\n  "+a.ID+" ("+j.ULID+") ") {
+			t.Errorf("describe lacks the candidate %s:\n%s", j.ULID, got)
+		}
 	}
 }

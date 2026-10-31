@@ -65,6 +65,7 @@ func KindOf(err error) Kind {
 func classify(err error) *Error {
 	var ae *index.AmbiguousError
 	var ve *store.ValidationError
+	var wt *store.WorkspaceTakenError
 	switch {
 	case err == nil:
 		return nil
@@ -74,6 +75,8 @@ func classify(err error) *Error {
 		return newErr(KindNotFound, "task.not_found", err)
 	case errors.As(err, &ve):
 		return newErr(KindInvalid, "schema.violation", err)
+	case errors.As(err, &wt):
+		return newErr(KindConflict, "workspace.taken", err)
 	case errors.Is(err, store.ErrLocked):
 		return newErr(KindConflict, "store.locked", err)
 	case errors.Is(err, config.ErrNoStores):
