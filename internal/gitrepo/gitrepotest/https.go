@@ -29,28 +29,32 @@ func (l loader) Load(ep *transport.Endpoint) (storer.Storer, error) {
 	return filesystem.NewStorage(osfs.New(dir), cache.NewObjectLRUDefault()), nil
 }
 
-type recorder struct {
-	transport.Transport
-	mu    *sync.Mutex
-	auths *[]transport.AuthMethod
-	deny  func(string) bool
+// Session is one session a client opened: the kind of it (UploadPack for a
+// fetch, a clone or a listing; ReceivePack for a push) and the auth it gave.
+type Session struct {
+	Kind string
+	Auth transport.AuthMethod
 }
 
-func (r recorder) record(a transport.AuthMethod) {
-	if r.auths != nil {
-		r.mu.Lock()
-		*r.auths = append(*r.auths, a)
-		r.mu.Unlock()
-	}
+// The kinds of Session.
+const (
+	UploadPack  = "upload-pack"
+	ReceivePack = "receive-pack"
+)
+
+type recorder struct {
+	transport.Transport
+	record func(kind string, a transport.AuthMethod)
+	deny   func(string) bool
 }
 
 func (r recorder) NewUploadPackSession(ep *transport.Endpoint, a transport.AuthMethod) (transport.UploadPackSession, error) {
-	r.record(a)
+	r.record(UploadPack, a)
 	return r.Transport.NewUploadPackSession(ep, a)
 }
 
 func (r recorder) NewReceivePackSession(ep *transport.Endpoint, a transport.AuthMethod) (transport.ReceivePackSession, error) {
-	r.record(a)
+	r.record(ReceivePack, a)
 	if r.deny != nil && r.deny(ep.String()) {
 		return nil, transport.ErrAuthorizationFailed
 	}
@@ -63,7 +67,31 @@ func (r recorder) NewReceivePackSession(ep *transport.Endpoint, a transport.Auth
 // the test. The tests that call it must not run in parallel.
 func InstallHTTPS(t testing.TB, route func(u string) (dir string, ok bool), auths *[]transport.AuthMethod, deny func(u string) bool) {
 	t.Helper()
-	tr := recorder{Transport: server.NewClient(loader{route: route}), mu: &sync.Mutex{}, auths: auths, deny: deny}
+	var mu sync.Mutex
+	install(t, route, func(_ string, a transport.AuthMethod) {
+		if auths != nil {
+			mu.Lock()
+			*auths = append(*auths, a)
+			mu.Unlock()
+		}
+	}, deny)
+}
+
+// InstallHTTPSSessions is InstallHTTPS, recording the kind of each session
+// (UploadPack or ReceivePack) with its auth.
+func InstallHTTPSSessions(t testing.TB, route func(u string) (dir string, ok bool), sessions *[]Session, deny func(u string) bool) {
+	t.Helper()
+	var mu sync.Mutex
+	install(t, route, func(kind string, a transport.AuthMethod) {
+		mu.Lock()
+		*sessions = append(*sessions, Session{Kind: kind, Auth: a})
+		mu.Unlock()
+	}, deny)
+}
+
+func install(t testing.TB, route func(string) (string, bool), record func(string, transport.AuthMethod), deny func(string) bool) {
+	t.Helper()
+	tr := recorder{Transport: server.NewClient(loader{route: route}), record: record, deny: deny}
 	client.InstallProtocol("https", tr)
 	client.InstallProtocol("http", tr)
 	t.Cleanup(func() {

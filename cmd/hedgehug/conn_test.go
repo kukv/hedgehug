@@ -41,32 +41,38 @@ func TestSyncSendsToken(t *testing.T) {
 	if err := gitrepo.InitBare(filepath.Join(d, "org-a", "x.git")); err != nil {
 		t.Fatal(err)
 	}
-	var auths []transport.AuthMethod
+	var sessions []gitrepotest.Session
 	// Not a GitHub host: store init (Task 9) makes no repository there.
-	gitrepotest.InstallHTTPS(t, gitrepotest.Under("https://git.example.com/", d), &auths, nil)
+	gitrepotest.InstallHTTPSSessions(t, gitrepotest.Under("https://git.example.com/", d), &sessions, nil)
 	te.env["HH_TOKEN"] = "tok-1"
 	te.writeConfigYAML("accounts:\n  - {name: me, host: git.example.com, login: alice, token: \"env:HH_TOKEN\"}\n")
 	te.ok("store", "init", "me", "--prefix", "ME", "--remote", "https://git.example.com/org-a/x.git")
-	if len(auths) == 0 {
+	if len(sessions) == 0 {
 		t.Fatal("no git session")
 	}
-	checkAuths := func(from int) {
+	// kinds checks that the sessions from the index on all carry the token,
+	// and returns whether a fetch and a push were seen.
+	kinds := func(from int) (fetch, push bool) {
 		t.Helper()
-		for _, a := range auths[from:] {
-			if b, ok := a.(*githttp.BasicAuth); !ok || b.Password != "tok-1" || b.Username != "x-access-token" {
-				t.Errorf("auth = %#v", a)
+		for _, s := range sessions[from:] {
+			if b, ok := s.Auth.(*githttp.BasicAuth); !ok || b.Password != "tok-1" || b.Username != "x-access-token" {
+				t.Errorf("%s auth = %#v", s.Kind, s.Auth)
 			}
+			fetch = fetch || s.Kind == gitrepotest.UploadPack
+			push = push || s.Kind == gitrepotest.ReceivePack
 		}
+		return fetch, push
 	}
-	checkAuths(0)
-	// A later sync fetches and pushes, and each session carries the token.
+	if _, push := kinds(0); !push {
+		t.Error("store init did not push")
+	}
+	// A later sync fetches and pushes; both carry the token.
 	te.ok("add", "one")
-	n := len(auths)
+	n := len(sessions)
 	te.ok("sync")
-	if len(auths) < n+2 {
-		t.Fatalf("sync made %d sessions, want a fetch and a push", len(auths)-n)
+	if fetch, push := kinds(n); !fetch || !push {
+		t.Errorf("sync: fetch with the token = %v, push with the token = %v", fetch, push)
 	}
-	checkAuths(n)
 }
 
 // The host that decides is the one reached after the rewrite.
