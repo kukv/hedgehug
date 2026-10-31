@@ -138,3 +138,46 @@ func TestAddRefusesADeletedParent(t *testing.T) {
 		t.Errorf("commits = %d, want 3 (init, add, rm)", n)
 	}
 }
+
+func TestAddWithAccount(t *testing.T) {
+	te := newStoreEnv(t)
+	te.writeAccounts("github.com", "alice")
+	x := te.addJSON("x")
+	if got := te.task(x.ULID).CreatedBy; got != "github.com/alice" {
+		t.Errorf("created_by = %q", got)
+	}
+	c := te.headCommit("me")
+	if trailer := "Hedgehug-Author: " + te.task(x.ULID).CreatedBy; !strings.Contains(c.Message, trailer) {
+		t.Errorf("created_by differs from the trailer: %q", c.Message)
+	}
+	if c.Author.Name != "alice" || c.Author.Email != "alice@users.noreply.github.com" || !strings.Contains(c.Message, "Hedgehug-Author: github.com/alice") {
+		t.Errorf("commit = %+v", c)
+	}
+	te.ok("comment", x.ID, "hi")
+	cs := te.comments(x.ULID)
+	if len(cs) != 1 || cs[0].Author != "github.com/alice" {
+		t.Errorf("comments = %+v", cs)
+	}
+}
+
+func TestAddWithoutAccountUsesGitConfig(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("x")
+	if c := te.headCommit("me"); c.Author.Email != "alice@example.com" || strings.Contains(c.Message, "Hedgehug-Author") {
+		t.Errorf("commit = %+v", c)
+	}
+	if got := te.task(x.ULID).CreatedBy; got != "" {
+		t.Errorf("created_by = %q", got)
+	}
+}
+
+func TestStoreInitWithAccount(t *testing.T) {
+	te := newTestEnv(t)
+	te.writeAccounts("github.com", "alice")
+	te.ok("store", "init", "me", "--prefix", "ME")
+	log := te.log("me")
+	c := log[len(log)-1]
+	if c.Author.Name != "alice" || c.Author.Email != "alice@users.noreply.github.com" || !strings.Contains(c.Message, "Hedgehug-Author: github.com/alice") {
+		t.Errorf("first commit = %+v", c)
+	}
+}

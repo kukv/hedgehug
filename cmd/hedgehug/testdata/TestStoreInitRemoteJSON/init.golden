@@ -1,0 +1,17 @@
+{
+  "name": "org",
+  "path": "<TMP>/001/hh/stores/org",
+  "workspace": {
+    "ulid": "<ULID-1>",
+    "name": "org",
+    "id_prefix": "ORG"
+  },
+  "remotes": [
+    "<TMP>/001/one.git",
+    "<TMP>/001/two.git"
+  ],
+  "pushed": [
+    "origin",
+    "mirror1"
+  ]
+}

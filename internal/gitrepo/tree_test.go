@@ -137,4 +137,66 @@ func TestReadFileAndFiles(t *testing.T) {
 	if want := []string{"tasks/b.md", "tasks/x/y/a.md"}; !slices.Equal(got, want) {
 		t.Errorf("Files = %v, want %v", got, want)
 	}
+	for _, c := range []struct {
+		prefix string
+		want   []string
+	}{
+		{"tasks/x/", []string{"tasks/x/y/a.md"}},
+		{"tasks/x/y/a", []string{"tasks/x/y/a.md"}},
+		{"tasks/b", []string{"tasks/b.md"}},
+		{"o", []string{"other.md"}},
+		{"tasks/nope/", nil},
+		{"other.md/", nil}, // a file is no directory
+	} {
+		var got []string
+		for p, err := range r.Files(head, c.prefix) {
+			if err != nil {
+				t.Fatal(err)
+			}
+			got = append(got, p)
+		}
+		if !slices.Equal(got, c.want) {
+			t.Errorf("Files(%q) = %v, want %v", c.prefix, got, c.want)
+		}
+	}
+}
+
+// A directory whose tree object is gone is an error, not an empty listing.
+func TestFilesMissingSubtreeObject(t *testing.T) {
+	dir := t.TempDir()
+	r, err := Init(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head := commitFiles(t, r, dir, map[string]string{"tasks/x/a.md": "a", "tasks/b.md": "b"})
+	tr, err := r.tree(head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := tr.FindEntry("tasks/x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := e.Hash.String()
+	if err := os.Remove(filepath.Join(dir, ".git", "objects", h[:2], h[2:])); err != nil {
+		t.Fatal(err)
+	}
+	r, err = Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, prefix := range []string{"tasks/x/", "tasks/x/y/"} {
+		var failed bool
+		for _, err := range r.Files(head, prefix) {
+			failed = failed || err != nil
+		}
+		if !failed {
+			t.Errorf("Files(%q) gave no error with the tree object of tasks/x gone", prefix)
+		}
+	}
+	for p, err := range r.Files(head, "tasks/b") {
+		if err != nil || p != "tasks/b.md" {
+			t.Errorf("Files(tasks/b) = %q, %v", p, err)
+		}
+	}
 }

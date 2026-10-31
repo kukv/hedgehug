@@ -26,7 +26,7 @@ var (
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
 	meta := &model.StoreMeta{ULID: model.NewULID(), Name: "test"}
-	s, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, &model.Workspace{ULID: testWorkspaceULID, Name: "test", IDPrefix: "TST"}, testAuthor)
+	s, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, &model.Workspace{ULID: testWorkspaceULID, Name: "test", IDPrefix: "TST"}, testAuthor, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,6 +80,14 @@ func mustWrite(t *testing.T, s *Store, rel, content string) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// mustPut writes tasks in one operation and fails the test if it fails.
+func mustPut(t *testing.T, s *Store, tasks ...*model.Task) {
+	t.Helper()
+	if err := put(s, tasks...); err != nil {
 		t.Fatal(err)
 	}
 }

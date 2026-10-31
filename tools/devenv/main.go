@@ -16,11 +16,24 @@ import (
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/sync"
 )
 
 const (
 	markerFile = ".hedgehug-devenv"
 	storeName  = "me"
+
+	sharedName   = "org-a"
+	sharedPrefix = "ORG"
+	host         = "github.com"
+	accountName  = "personal"
+)
+
+// Bare remotes under the environment's directory: alice's own store, and the
+// store alice and bob share.
+var (
+	personalRemote = filepath.Join("remotes", "kukv", "hh-tasks.git")
+	sharedRemote   = filepath.Join("remotes", "org-a", "hh-shared.git")
 )
 
 var users = []string{"alice", "bob"}
@@ -142,24 +155,38 @@ func initEnv(dir string, stdout io.Writer) error {
 	if err := os.WriteFile(filepath.Join(dir, markerFile), nil, 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return err
 	}
+	for _, r := range []string{personalRemote, sharedRemote} {
+		if err := gitrepo.InitBare(filepath.Join(dir, r)); err != nil {
+			return err
+		}
+	}
 	for _, u := range users {
-		if err := initUser(filepath.Join(dir, "users", u), u); err != nil {
+		// Only alice's own store has a remote; bob's stays local.
+		var remotes []string
+		if u == users[0] {
+			remotes = []string{filepath.Join(dir, personalRemote)}
+		}
+		if err := initUser(filepath.Join(dir, "users", u), u, remotes); err != nil {
 			return fmt.Errorf("%s: %w", u, err)
 		}
+	}
+	if err := initShared(dir); err != nil {
+		return fmt.Errorf("%s: %w", sharedName, err)
 	}
 	_, err := fmt.Fprintf(stdout, "Created %s with users %s.\nUse one with: eval \"$(go run ./tools/devenv env %s --dir %s)\"\n",
 		dir, strings.Join(users, " and "), users[0], shellQuote(dir))
 	return err
 }
 
-func initUser(home, u string) error {
-	if err := os.MkdirAll(home, 0o750); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
-		return err
-	}
-	gitconfig := "[user]\n\tname = " + u + "\n\temail = " + u + "@example.com\n"
-	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte(gitconfig), 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
-		return err
-	}
+// userEnv is what a user's hedgehug sees: the paths of their home and
+// config, and the account that writes their commits.
+type userEnv struct {
+	paths  config.Paths
+	author gitrepo.Signature
+	acct   config.Account
+}
+
+func newUserEnv(home, u string) (*userEnv, error) {
 	getenv := func(k string) string {
 		switch k {
 		case "HEDGEHUG_HOME", "HOME", "USERPROFILE":
@@ -169,18 +196,109 @@ func initUser(home, u string) error {
 	}
 	p, err := config.Resolve(getenv)
 	if err != nil {
+		return nil, err
+	}
+	acct := config.Account{Name: accountName, Host: host, Login: u}
+	author, err := config.CommitAuthor(acct, true, getenv)
+	if err != nil {
+		return nil, err
+	}
+	return &userEnv{paths: p, author: author, acct: acct}, nil
+}
+
+// sync syncs s once with remotes, as the user's account. It runs in this
+// process, so no background sync starts.
+func (e *userEnv) sync(s *store.Store, remotes []string) error {
+	_, err := sync.Run(s, sync.Options{Remotes: remotes, Author: e.author, Account: e.acct.ID(), Me: []string{e.acct.ID()}})
+	return err
+}
+
+func initUser(home, u string, remotes []string) error {
+	if err := os.MkdirAll(home, 0o750); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return err
 	}
-	storeDir := filepath.Join(p.StoresDir, storeName)
-	author := gitrepo.Signature{Name: u, Email: u + "@example.com"}
-	if _, err := store.Create(storeDir, &model.StoreMeta{ULID: model.NewULID(), Name: storeName}, nil, &model.Workspace{ULID: model.NewULID(), Name: storeName, IDPrefix: "DEV"}, author); err != nil {
+	gitconfig := "[user]\n\tname = " + u + "\n\temail = " + u + "@example.com\n"
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte(gitconfig), 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return err
 	}
-	c, err := config.Load(p)
+	e, err := newUserEnv(home, u)
 	if err != nil {
 		return err
 	}
-	if err := c.AddStore(storeName, storeDir); err != nil {
+	// The account is written before the config is loaded, so that AddStore keeps it.
+	accounts := fmt.Sprintf("accounts:\n  - name: %s\n    host: %s\n    login: %s\n", e.acct.Name, e.acct.Host, e.acct.Login)
+	if err := os.WriteFile(e.paths.ConfigFile, []byte(accounts), 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+		return err
+	}
+	storeDir := filepath.Join(e.paths.StoresDir, storeName)
+	s, err := store.Create(storeDir, &model.StoreMeta{ULID: model.NewULID(), Name: storeName}, nil, &model.Workspace{ULID: model.NewULID(), Name: storeName, IDPrefix: "DEV"}, e.author, e.acct.ID())
+	if err != nil {
+		return err
+	}
+	if err := s.Repo().RegisterMergeDriver(); err != nil {
+		return err
+	}
+	if len(remotes) > 0 {
+		if err := e.sync(s, remotes); err != nil {
+			return err
+		}
+	}
+	return e.addStore(storeName, storeDir, remotes)
+}
+
+// initShared makes the store org-a: alice creates it and pushes it, bob
+// clones it.
+func initShared(dir string) error {
+	remote := []string{filepath.Join(dir, sharedRemote)}
+	alice, err := newUserEnv(filepath.Join(dir, "users", users[0]), users[0])
+	if err != nil {
+		return err
+	}
+	aliceDir := filepath.Join(alice.paths.StoresDir, sharedName)
+	s, err := store.Create(aliceDir, &model.StoreMeta{ULID: model.NewULID(), Name: sharedName}, nil, &model.Workspace{ULID: model.NewULID(), Name: sharedName, IDPrefix: sharedPrefix}, alice.author, alice.acct.ID())
+	if err != nil {
+		return err
+	}
+	if err := s.Repo().RegisterMergeDriver(); err != nil {
+		return err
+	}
+	if err := alice.sync(s, remote); err != nil {
+		return err
+	}
+	if err := alice.addStore(sharedName, aliceDir, remote); err != nil {
+		return err
+	}
+
+	bob, err := newUserEnv(filepath.Join(dir, "users", users[1]), users[1])
+	if err != nil {
+		return err
+	}
+	bobDir := filepath.Join(bob.paths.StoresDir, sharedName)
+	if _, err := gitrepo.Clone(remote[0], bobDir); err != nil {
+		return err
+	}
+	bs, err := store.Open(bobDir)
+	if err != nil {
+		return err
+	}
+	if err := bs.Repo().RegisterMergeDriver(); err != nil {
+		return err
+	}
+	if err := bs.Repo().SetRemotes(remote); err != nil {
+		return err
+	}
+	return bob.addStore(sharedName, bobDir, remote)
+}
+
+func (e *userEnv) addStore(name, path string, remotes []string) error {
+	c, err := config.Load(e.paths)
+	if err != nil {
+		return err
+	}
+	if err := c.AddStore(name, path, remotes); err != nil {
+		return err
+	}
+	if err := c.SetStoreAccount(name, e.acct.Name); err != nil {
 		return err
 	}
 	return c.Save()

@@ -101,9 +101,16 @@ func (a *app) add(title, parentArg, workspaceArg, kind, status string, assigns [
 			return err
 		}
 	}
-	if t.Rank, err = endRank(ix, t.Parent, t.ULID); err != nil {
+	if t.Rank, err = endRank(ix, t.Parent, t.Workspace, t.ULID); err != nil {
 		return err
 	}
+	if t.CreatedBy, err = a.accountID(); err != nil {
+		return err
+	}
+	if t.CreatedBy != "" {
+		addWatchers(t, t.CreatedBy)
+	}
+	watchNewAssignees(t, nil)
 	committed, err := a.update(s, store.Op{Name: "add", Task: t.ULID}, func(tx *store.Tx) error { return tx.PutTask(t) })
 	if err != nil {
 		return err
@@ -111,22 +118,19 @@ func (a *app) add(title, parentArg, workspaceArg, kind, status string, assigns [
 	return a.printTask(ix, t.ULID, verb(committed, "Added"))
 }
 
-// siblings returns the tasks under parent (the root when nil) that are not
-// deleted, leaving out skip, by rank.
-func siblings(ix *index.Index, parent *model.ULID, skip model.ULID) []*index.Entry {
+// siblings returns the tasks under parent (the root when nil, which also
+// holds the tasks whose parent is missing, as Roots does) in workspace ws
+// that are not deleted, leaving out skip, by rank.
+func siblings(ix *index.Index, parent *model.ULID, ws, skip model.ULID) []*index.Entry {
 	var all []*index.Entry
 	if parent == nil {
-		for _, e := range ix.Roots() {
-			if e.Parent == nil {
-				all = append(all, e)
-			}
-		}
+		all = ix.Roots()
 	} else {
 		all = ix.Children(*parent)
 	}
 	out := all[:0:0]
 	for _, e := range all {
-		if e.DeletedAt == nil && e.ULID != skip {
+		if e.DeletedAt == nil && e.ULID != skip && e.Workspace == ws {
 			out = append(out, e)
 		}
 	}
@@ -134,8 +138,8 @@ func siblings(ix *index.Index, parent *model.ULID, skip model.ULID) []*index.Ent
 }
 
 // endRank returns a rank after every sibling under parent.
-func endRank(ix *index.Index, parent *model.ULID, skip model.ULID) (model.Rank, error) {
-	sib := siblings(ix, parent, skip)
+func endRank(ix *index.Index, parent *model.ULID, ws, skip model.ULID) (model.Rank, error) {
+	sib := siblings(ix, parent, ws, skip)
 	var last model.Rank
 	if len(sib) > 0 {
 		last = sib[len(sib)-1].Rank

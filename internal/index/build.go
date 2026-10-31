@@ -3,7 +3,9 @@ package index
 import (
 	"bytes"
 	"encoding/gob"
+	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"slices"
 
@@ -14,9 +16,27 @@ import (
 	"github.com/kukv/hedgehug/internal/schema"
 )
 
+// readHook, when set, is called before each read of a file; an error it
+// returns fails the read. Tests set it.
+var readHook func(p string) error
+
+// listHook, when set, is called with each prefix whose comment and worklog
+// files are listed. Tests set it.
+var listHook func(prefix string)
+
+// read reads the file p of tree.
+func (ix *Index) read(tree plumbing.Hash, p string) ([]byte, error) {
+	if readHook != nil {
+		if err := readHook(p); err != nil {
+			return nil, err
+		}
+	}
+	return ix.repo.ReadFile(tree, p)
+}
+
 // readSchema decodes schema.yaml as tree has it.
 func (ix *Index) readSchema(tree plumbing.Hash) (*schema.Schema, error) {
-	b, err := ix.repo.ReadFile(tree, schema.Path)
+	b, err := ix.read(tree, schema.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -27,7 +47,8 @@ func (ix *Index) readSchema(tree plumbing.Hash) (*schema.Schema, error) {
 	return sc, nil
 }
 
-// rebuild indexes every task file of tree.
+// rebuild indexes every task file of tree, with its comments and worklog
+// entries.
 func (ix *Index) rebuild(tree plumbing.Hash) error {
 	sc, err := ix.readSchema(tree)
 	if err != nil {
@@ -43,11 +64,18 @@ func (ix *Index) rebuild(tree plumbing.Hash) error {
 		if err != nil {
 			continue // not a task file
 		}
-		b, err := ix.repo.ReadFile(tree, p)
+		b, err := ix.read(tree, p)
 		if err != nil {
 			return err
 		}
 		tasks[ulid], decoded[ulid] = newEntry(ulid, b)
+	}
+	n, err := ix.readNotes(tree, []string{"comments/", "worklogs/"}, func(ulid model.ULID) bool { return tasks[ulid] != nil })
+	if err != nil {
+		return err
+	}
+	for _, e := range tasks {
+		n.attach(e)
 	}
 	ix.sc, ix.tasks = sc, tasks
 	ix.derive()
@@ -69,7 +97,7 @@ func (ix *Index) revalidate(tree plumbing.Hash, ulids []model.ULID, decoded map[
 		}
 		t := decoded[ulid]
 		if t == nil {
-			b, err := ix.repo.ReadFile(tree, model.TaskPath(ulid))
+			b, err := ix.read(tree, model.TaskPath(ulid))
 			if err != nil {
 				return err
 			}
@@ -133,7 +161,7 @@ func (ix *Index) ancestors(t *model.Task) []model.ULID {
 
 const (
 	cacheName   = "index" // in .hedgehug/local
-	cacheFormat = 4       // bump when Entry or cache changes
+	cacheFormat = 5       // bump when Entry or cache changes
 )
 
 // cache is the index as it is kept on disk, for one tree of HEAD.
@@ -175,6 +203,8 @@ func (ix *Index) save() {
 // update brings the index from tree from, which tasks match, to tree to: it
 // reads the task files that changed, and checks again the tasks whose
 // violations may have changed. A change to schema.yaml checks every task.
+// A task whose file, comments or worklog entries changed has all its
+// comments and entries read again.
 func (ix *Index) update(from, to plumbing.Hash) error {
 	sc, err := ix.readSchema(to)
 	if err != nil {
@@ -189,10 +219,19 @@ func (ix *Index) update(from, to plumbing.Hash) error {
 	ix.sc = sc
 	decoded := map[model.ULID]*model.Task{}
 	var touched []model.ULID
+	// noted holds the tasks whose file, comments or worklog entries changed,
+	// and whether their file is read.
+	noted := map[model.ULID]bool{}
 	all := false
 	for _, c := range changes {
 		if c.Path == schema.Path {
 			all = true
+			continue
+		}
+		if task, ok := noteTask(c.Path); ok {
+			if _, ok := noted[task]; !ok {
+				noted[task] = false
+			}
 			continue
 		}
 		ulid, err := model.ParseTaskPath(c.Path)
@@ -200,18 +239,57 @@ func (ix *Index) update(from, to plumbing.Hash) error {
 			continue
 		}
 		touched = append(touched, ulid)
+		noted[ulid] = true
 		if c.Deleted {
 			delete(ix.tasks, ulid)
 			continue
 		}
-		b, err := ix.repo.ReadFile(to, c.Path)
+		b, err := ix.read(to, c.Path)
 		if err != nil {
 			return err
 		}
 		ix.tasks[ulid], decoded[ulid] = newEntry(ulid, b)
 	}
+	// An entry holds what the comments add to the body, so a task whose
+	// comments changed is read again too, and checked again as its entry is
+	// new.
+	var reread []model.ULID
+	for ulid, done := range noted {
+		if done {
+			continue
+		}
+		b, err := ix.read(to, model.TaskPath(ulid))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue // comments of a task that is not there
+		}
+		if err != nil {
+			return err
+		}
+		ix.tasks[ulid], decoded[ulid] = newEntry(ulid, b)
+		reread = append(reread, ulid)
+	}
+	var dirs []string
+	for ulid := range noted {
+		if ix.tasks[ulid] != nil {
+			dirs = append(dirs, noteDirs(ulid)...)
+		}
+	}
+	n, err := ix.readNotes(to, dirs, func(ulid model.ULID) bool { return ix.tasks[ulid] != nil })
+	if err != nil {
+		return err
+	}
+	for ulid := range noted {
+		if e := ix.tasks[ulid]; e != nil {
+			n.attach(e)
+		}
+	}
 	ix.derive()
 	ulids := ix.descendants(touched)
+	for _, ulid := range reread {
+		if !slices.Contains(ulids, ulid) {
+			ulids = append(ulids, ulid)
+		}
+	}
 	if all {
 		ulids = slices.Collect(maps.Keys(ix.tasks))
 	}

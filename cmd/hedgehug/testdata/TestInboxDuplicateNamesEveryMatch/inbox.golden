@@ -1,0 +1,1 @@
+<ULID-1>  prefix_duplicate  workspace zed  DUP is also used by workspace api, workspace web; change it with hedgehug workspace prefix zed <new prefix>

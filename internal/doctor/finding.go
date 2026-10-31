@@ -16,7 +16,7 @@ type Finding struct {
 }
 
 // checkOrder is the order the findings come in.
-var checkOrder = []string{"schema", "template", "prop_name", "override", "task", "file", "worktree", "git"}
+var checkOrder = []string{"schema", "template", "prop_name", "override", "task", "file", "worktree", "merge_driver", "inbox", "git"}
 
 // Sort orders fs by the kind of check, then by where.
 func Sort(fs []Finding) {

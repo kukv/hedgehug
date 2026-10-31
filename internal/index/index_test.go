@@ -1,6 +1,10 @@
 package index
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -100,4 +104,111 @@ func TestOpenViolations(t *testing.T) {
 	check(misplaced, schema.CodePlacement+":parent")
 	check(orphan)
 	check(parent.ULID)
+}
+
+func TestSiblingsWithTheSameRankAreOrderedByID(t *testing.T) {
+	s, _ := newStore(t)
+	// The ULID order (ten first) differs from the id order.
+	ten, nine, other := newTask("ten"), newTask("nine"), newTask("other")
+	ten.ID, nine.ID, other.ID = "TST-10", "TST-9", "TST-2"
+	ten.Rank, nine.Rank, other.Rank = "a5", "a5", "a9"
+	put(t, s, ten, nine, other)
+
+	ix := mustOpen(t, s)
+	if got := titles(ix.Roots()); !slices.Equal(got, []string{"nine", "ten", "other"}) {
+		t.Errorf("roots = %v", got)
+	}
+}
+
+// Open registers the index as the store's source of siblings: a write finds
+// them there and does not read the task files. A file that is not in HEAD
+// shows which one it used.
+func TestWriteReranksThroughTheIndex(t *testing.T) {
+	s, dir := newStore(t)
+	a, b := newTask("a"), newTask("b")
+	a.Rank, b.Rank = "a5", "a9"
+	put(t, s, a, b)
+	mustOpen(t, s)
+
+	// The index does not know this file, a read of the task files does.
+	stray := model.NewULID()
+	raw := rawTask(stray, "kind: task\ntitle: x\nstatus: todo\nrank: a7\nworkspace: "+a.Workspace.String()+"\n")
+	strayPath := filepath.Join(dir, filepath.FromSlash(model.TaskPath(stray)))
+	if err := os.MkdirAll(filepath.Dir(strayPath), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(strayPath, []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	b.Rank = "a7"
+	put(t, s, b)
+	if b.Rank != "a7" {
+		t.Errorf("b.Rank = %s: the write read the task files, not the index", b.Rank)
+	}
+
+	// The index knows a: the write finds it.
+	b.Rank = "a5"
+	put(t, s, b)
+	if b.Rank <= "a5" {
+		t.Errorf("b.Rank = %s, want it after a5", b.Rank)
+	}
+}
+
+// The index shows a task whose parent is missing among the roots, and a
+// write treats it as one.
+func TestSiblingULIDsTreatsAMissingParentAsTheTopLevel(t *testing.T) {
+	s, dir := newStore(t)
+	root, child := newTask("root"), newTask("child")
+	root.Rank, child.Rank = "a7", "a5"
+	put(t, s, root)
+	child.Parent = &root.ULID
+	put(t, s, child)
+	orphan := model.NewULID()
+	commitRaw(t, s, dir, model.TaskPath(orphan), rawTask(orphan, "kind: task\ntitle: x\nstatus: todo\nrank: a5\nworkspace: "+root.Workspace.String()+"\nparent: "+model.NewULID().String()+"\n"))
+	ix := mustOpen(t, s)
+
+	ulids, err := ix.siblingULIDs(nil, root.Workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(ulids, orphan) || !slices.Contains(ulids, root.ULID) || slices.Contains(ulids, child.ULID) {
+		t.Errorf("siblings of the top level = %v", ulids)
+	}
+
+	root.Rank = "a5"
+	put(t, s, root)
+	if root.Rank == "a5" {
+		t.Error("root shares a rank with the orphan, shown at the top level, but was not reranked")
+	}
+}
+
+// A read that fails in the middle of an update leaves the cache as it was:
+// Refresh reports the error, and the index opened again is the one a full
+// rebuild makes.
+func TestFailedUpdateThenOpenEqualsARebuild(t *testing.T) {
+	s, _ := newStore(t)
+	a, b := newTask("a"), newTask("b")
+	put(t, s, a, b)
+	ix := mustOpen(t, s)
+	a.Title, b.Title = "a2", "b2"
+	b.Body = "@bob #TST-1\n"
+	put(t, s, a, b)
+	putComment(t, s, a.ULID, newComment("github.com/x", "@carol\n"))
+
+	readHook = func(p string) error {
+		if strings.HasPrefix(p, "comments/") {
+			return errors.New("read failed")
+		}
+		return nil
+	}
+	t.Cleanup(func() { readHook = nil })
+	err := ix.Refresh()
+	readHook = nil
+	if err == nil {
+		t.Fatal("Refresh succeeded with a failed read")
+	}
+	got := sortedTasks(mustOpen(t, s))
+	if want := sortedTasks(rebuilt(t, s)); !reflect.DeepEqual(got, want) {
+		t.Errorf("Open after the failed update = %s, want %s", dump(got), dump(want))
+	}
 }

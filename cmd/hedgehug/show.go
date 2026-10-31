@@ -37,7 +37,9 @@ type showJSON struct {
 	Repos    []string             `json:"repos"`
 	Comments []commentJSON        `json:"comments"`
 	Reverse  map[string][]refJSON `json:"reverse"`
-	History  []logJSON            `json:"history"`
+	// ReferencedBy are the tasks whose body or comments write this one as #<ID>.
+	ReferencedBy []refJSON `json:"referenced_by"`
+	History      []logJSON `json:"history"`
 }
 
 // showHistory is how many commits show lists under History.
@@ -72,14 +74,15 @@ func (a *app) show(arg string) error {
 		}
 	}
 	rels := reverse(ix, e.ULID)
+	back := ix.Backlinks(e.ULID)
 	history, err := a.taskLog(s, e.ULID, showHistory)
 	if err != nil {
 		return err
 	}
 	if a.jsonOut {
-		return a.printJSON(showOf(ix, e, t, comments, rels, history))
+		return a.printJSON(showOf(ix, e, t, comments, rels, back, history))
 	}
-	_, err = fmt.Fprint(a.stdout, a.showText(ix, e, t, comments, rels, history))
+	_, err = fmt.Fprint(a.stdout, a.showText(ix, e, t, comments, rels, back, history))
 	return err
 }
 
@@ -124,8 +127,11 @@ func reverse(ix *index.Index, ulid model.ULID) []relation {
 	return out
 }
 
-func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []relation, history []gitrepo.LogEntry) *showJSON {
-	j := &showJSON{taskJSON: entryJSON(ix, e), Watchers: []string{}, Repos: []string{}, Comments: []commentJSON{}, Reverse: map[string][]refJSON{}, History: logJSONs(ix, history)}
+func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []relation, back []*index.Entry, history []gitrepo.LogEntry) *showJSON {
+	j := &showJSON{taskJSON: entryJSON(ix, e), Watchers: []string{}, Repos: []string{}, Comments: []commentJSON{}, Reverse: map[string][]refJSON{}, ReferencedBy: []refJSON{}, History: logJSONs(ix, history)}
+	for _, x := range back {
+		j.ReferencedBy = append(j.ReferencedBy, refJSON{x.ULID.String(), x.ID, x.Title})
+	}
 	if t != nil {
 		j.Body, j.Watchers, j.Repos = t.Body, orEmpty(t.Watchers), orEmpty(t.Repos)
 	}
@@ -140,7 +146,7 @@ func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Co
 	return j
 }
 
-func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []relation, history []gitrepo.LogEntry) string {
+func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []relation, back []*index.Entry, history []gitrepo.LogEntry) string {
 	st := a.style()
 	var b strings.Builder
 	title := e.Title
@@ -221,6 +227,12 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 				names[i] = refName(ix, x.ULID)
 			}
 			field(r.label, names...)
+		}
+	}
+	if len(back) > 0 {
+		b.WriteString("\nReferenced by:\n")
+		for _, x := range back {
+			b.WriteString("  " + refName(ix, x.ULID) + "\n")
 		}
 	}
 	if e.Broken != "" {

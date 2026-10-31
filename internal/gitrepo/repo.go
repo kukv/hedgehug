@@ -4,15 +4,20 @@ package gitrepo
 
 import (
 	"fmt"
+	"sync"
 
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
 // Repo is a git repository with a work tree.
 type Repo struct {
 	dir string
 	r   *git.Repository
+
+	mu    sync.Mutex
+	sides map[[2]plumbing.Hash][]*object.Commit // side's results by from and base
 }
 
 // Init creates a repository in dir, with main as its default branch.

@@ -2,16 +2,23 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+
+	"github.com/kukv/hedgehug/internal/gitrepo"
+	hhsync "github.com/kukv/hedgehug/internal/sync"
 )
 
 // testEnv runs the command with HEDGEHUG_HOME and HOME in temporary
@@ -35,6 +42,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		home:   filepath.Join(d, "home"),
 		hhHome: filepath.Join(d, "hh"),
 		now:    time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC),
+		env:    map[string]string{},
 	}
 	if err := os.MkdirAll(te.home, 0o750); err != nil {
 		t.Fatal(err)
@@ -52,7 +60,13 @@ func (te *testEnv) getenv(k string) string {
 	case "HEDGEHUG_HOME":
 		return te.hhHome
 	}
-	return te.env[k]
+	if v, ok := te.env[k]; ok {
+		return v
+	}
+	if k == "HEDGEHUG_AUTO_SYNC" {
+		return "0"
+	}
+	return ""
 }
 
 func (te *testEnv) run(args ...string) (code int, stdout, stderr string) {
@@ -65,6 +79,9 @@ func (te *testEnv) run(args ...string) (code int, stdout, stderr string) {
 		getenv:     te.getenv,
 		isTerminal: func(any) bool { return te.terminal },
 		now:        func() time.Time { return te.now },
+	}
+	if args == nil {
+		args = []string{} // cobra reads os.Args, the flags of go test, for nil
 	}
 	code = run(args, e)
 	return code, out.String(), errb.String()
@@ -107,13 +124,248 @@ func (te *testEnv) log(name string) []*object.Commit { //nolint:unparam // every
 	return out
 }
 
+// headCommit returns the newest commit of the store.
+func (te *testEnv) headCommit(name string) *object.Commit {
+	te.t.Helper()
+	return te.log(name)[0]
+}
+
+// writeAccounts puts one account at the start of config.yaml.
+func (te *testEnv) writeAccounts(host, login string) { //nolint:unparam // every test uses github.com; the host keeps call sites readable
+	te.t.Helper()
+	if err := os.MkdirAll(te.hhHome, 0o750); err != nil {
+		te.t.Fatal(err)
+	}
+	p := filepath.Join(te.hhHome, "config.yaml")
+	old, err := os.ReadFile(p) //nolint:gosec // the config of the test
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		te.t.Fatal(err)
+	}
+	head := fmt.Sprintf("accounts:\n  - name: %s\n    host: %s\n    login: %s\n", login, host, login)
+	if err := os.WriteFile(p, append([]byte(head), old...), 0o600); err != nil {
+		te.t.Fatal(err)
+	}
+}
+
+// withOtherWriter runs fn with account (host/login) as the only account in
+// config.yaml, so the commands in fn are written by someone else, and puts
+// the config back after.
+func (te *testEnv) withOtherWriter(account string, fn func()) {
+	te.t.Helper()
+	host, login, _ := strings.Cut(account, "/")
+	p := filepath.Join(te.hhHome, "config.yaml")
+	old, err := os.ReadFile(p) //nolint:gosec // the config of the test
+	if err != nil {
+		te.t.Fatal(err)
+	}
+	rest, skipping := []string{}, false
+	for _, l := range strings.SplitAfter(string(old), "\n") {
+		switch {
+		case strings.HasPrefix(l, "accounts:"):
+			skipping = true
+		case skipping && (strings.HasPrefix(l, " ") || strings.HasPrefix(l, "-")):
+		default:
+			skipping = false
+			rest = append(rest, l)
+		}
+	}
+	head := fmt.Sprintf("accounts:\n  - name: %s\n    host: %s\n    login: %s\n", login, host, login)
+	if err := os.WriteFile(p, []byte(head+strings.Join(rest, "")), 0o600); err != nil {
+		te.t.Fatal(err)
+	}
+	defer func() {
+		if err := os.WriteFile(p, old, 0o600); err != nil {
+			te.t.Fatal(err)
+		}
+	}()
+	fn()
+}
+
 // TestMain runs the tests, or acts as the editor when HH_TEST_EDITOR_SCRIPT
 // is set: editWith points $EDITOR at this test binary.
 func TestMain(m *testing.M) {
 	if script := os.Getenv("HH_TEST_EDITOR_SCRIPT"); script != "" {
 		os.Exit(testEditor(script, os.Args[len(os.Args)-1]))
 	}
-	os.Exit(m.Run())
+	// hedgehug is on PATH, as doctor expects of a store with a merge driver.
+	pathDir, err := os.MkdirTemp("", "hedgehug-path-")
+	if err == nil {
+		name := "hedgehug"
+		if runtime.GOOS == "windows" {
+			name += ".exe" // exec.LookPath tries the PATHEXT names only
+		}
+		if err := os.WriteFile(filepath.Join(pathDir, name), nil, 0o700); err == nil { //nolint:gosec // an empty file that only has to be found
+			_ = os.Setenv("PATH", pathDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+		}
+	}
+	code := m.Run()
+	if pathDir != "" {
+		_ = os.RemoveAll(pathDir)
+	}
+	if builtDir != "" {
+		_ = os.RemoveAll(builtDir)
+	}
+	os.Exit(code)
+}
+
+// handEdit changes the file of the task id in the work tree of the store
+// name, as an editor would (old becomes new), and commits it as a hand edit
+// would, past every check of the commands.
+func (te *testEnv) handEdit(name, id, old, replacement string) { //nolint:unparam // every test uses the one store "me"; the name keeps call sites readable
+	te.t.Helper()
+	dir := te.storeDir(name)
+	var rel string
+	err := filepath.WalkDir(filepath.Join(dir, "tasks"), func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := os.ReadFile(p) //nolint:gosec // a file of the test's own store
+		if err == nil && strings.Contains(string(b), "\nid: "+id+"\n") {
+			rel, err = filepath.Rel(dir, p)
+		}
+		return err
+	})
+	if err != nil || rel == "" {
+		te.t.Fatalf("no file of %s: %v", id, err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, rel)) //nolint:gosec // a file of the test's own store
+	if err != nil {
+		te.t.Fatal(err)
+	}
+	if !strings.Contains(string(b), old) {
+		te.t.Fatalf("%s has no %q", rel, old)
+	}
+	if err := os.WriteFile(filepath.Join(dir, rel), []byte(strings.Replace(string(b), old, replacement, 1)), 0o600); err != nil {
+		te.t.Fatal(err)
+	}
+	r, err := gitrepo.Open(dir)
+	if err != nil {
+		te.t.Fatal(err)
+	}
+	c := gitrepo.Commit{Paths: []string{filepath.ToSlash(rel)}, Subject: "hand edit", Author: gitrepo.Signature{Name: "Alice", Email: "alice@example.com"}, When: te.now}
+	if _, err := r.Commit(c); err != nil {
+		te.t.Fatal(err)
+	}
+}
+
+var (
+	buildOnce sync.Once
+	builtDir  string // the directory of the binary buildHedgehug made
+	builtBin  string
+	buildErr  error
+)
+
+// buildHedgehug builds the command once for all tests and returns the path of
+// the binary, which is named hedgehug so that a merge driver finds it on PATH.
+func buildHedgehug(t *testing.T) string {
+	t.Helper()
+	buildOnce.Do(func() {
+		builtDir, buildErr = os.MkdirTemp("", "hedgehug-bin-")
+		if buildErr != nil {
+			return
+		}
+		name := "hedgehug"
+		if runtime.GOOS == "windows" {
+			name += ".exe"
+		}
+		builtBin = filepath.Join(builtDir, name)
+		if out, err := exec.Command("go", "build", "-o", builtBin, ".").CombinedOutput(); err != nil {
+			buildErr = fmt.Errorf("go build: %w\n%s", err, out)
+		}
+	})
+	if buildErr != nil {
+		t.Fatal(buildErr)
+	}
+	return builtBin
+}
+
+// bare makes an empty bare repository next to the test's directories and
+// returns its path.
+func (te *testEnv) bare(name string) string {
+	te.t.Helper()
+	dir := filepath.Join(filepath.Dir(te.hhHome), name+".git")
+	if err := gitrepo.InitBare(dir); err != nil {
+		te.t.Fatal(err)
+	}
+	return dir
+}
+
+// other is a second user: a HEDGEHUG_HOME and a HOME of their own, the same
+// clock.
+func (te *testEnv) other() *testEnv {
+	te.t.Helper()
+	o := newTestEnv(te.t)
+	o.now = te.now
+	return o
+}
+
+// twoUsers sets up alice and bob on one remote: alice makes the store org
+// (prefix ORG) with a task, syncs, and bob adds the store. The remote is
+// returned too.
+func twoUsers(t *testing.T) (alice, bob *testEnv, remote string) {
+	t.Helper()
+	alice = newTestEnv(t)
+	remote = alice.bare("shared")
+	alice.writeAccounts("github.com", "alice")
+	alice.ok("store", "init", "org", "--prefix", "ORG", "--remote", remote)
+	alice.ok("add", "x")
+	alice.ok("sync")
+	bob = alice.other()
+	bob.writeAccounts("github.com", "bob")
+	bob.ok("store", "add", "org", "--remote", remote)
+	return alice, bob, remote
+}
+
+// writeSync adds the sync section to config.yaml.
+func (te *testEnv) writeSync(interval, pushInterval string) {
+	te.t.Helper()
+	p := filepath.Join(te.hhHome, "config.yaml")
+	old, err := os.ReadFile(p) //nolint:gosec // the config of the test
+	if err != nil {
+		te.t.Fatal(err)
+	}
+	sec := fmt.Sprintf("sync:\n  interval: %s\n  push_interval: %s\n", interval, pushInterval)
+	if err := os.WriteFile(p, append(old, sec...), 0o600); err != nil {
+		te.t.Fatal(err)
+	}
+}
+
+// setSyncError makes the last background sync of the store look failed and
+// not yet reported.
+func (te *testEnv) setSyncError(name, msg string) {
+	te.t.Helper()
+	b, err := json.Marshal(map[string]any{"last_error": msg, "last_attempt": te.now, "last_success": te.now})
+	if err != nil {
+		te.t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(te.storeDir(name), ".hedgehug", "local", "sync.json"), b, 0o600); err != nil {
+		te.t.Fatal(err)
+	}
+}
+
+// stubSpawn replaces the start of the background sync with f, which gets the
+// arguments of the child.
+func stubSpawn(f func(args []string)) (restore func()) {
+	return hhsync.SetSpawn(func(_ string, args []string, _ string) error { f(args); return nil })
+}
+
+// runBinary runs the built command with the variables of the test, and
+// HEDGEHUG_AUTO_SYNC as te.env sets it.
+func (te *testEnv) runBinary(bin string, args ...string) {
+	te.t.Helper()
+	cmd := exec.Command(bin, args...) //nolint:gosec // the binary the test built
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "HOME=") && !strings.HasPrefix(kv, "USERPROFILE=") && !strings.HasPrefix(kv, "HEDGEHUG_") {
+			cmd.Env = append(cmd.Env, kv)
+		}
+	}
+	cmd.Env = append(cmd.Env, "HOME="+te.home, "USERPROFILE="+te.home, "HEDGEHUG_HOME="+te.hhHome)
+	for k, v := range te.env {
+		cmd.Env = append(cmd.Env, k+"="+v)
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		te.t.Fatalf("hedgehug %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
 }
 
 // editorStepSep separates the steps of a test editor script, and the
@@ -211,9 +463,6 @@ func (te *testEnv) editWith(contents ...string) (seen func() []string) {
 	}
 	for _, k := range []string{"TMPDIR", "TMP", "TEMP"} {
 		te.t.Setenv(k, te.tmp)
-	}
-	if te.env == nil {
-		te.env = map[string]string{}
 	}
 	te.env["EDITOR"] = os.Args[0]
 	return func() []string {

@@ -55,11 +55,15 @@ func (a *app) lsCmd() *cobra.Command {
 }
 
 func (a *app) ls(q *query.Query, ulidsOnly bool, tmpl *template.Template) error {
-	_, ix, err := a.open()
+	s, ix, err := a.open()
 	if err != nil {
 		return err
 	}
-	res, err := query.Run(ix, q, query.Options{})
+	opt, err := a.queryOptions(s)
+	if err != nil {
+		return err
+	}
+	res, err := query.Run(ix, q, opt)
 	if err != nil {
 		var qe *query.Error
 		if errors.As(err, &qe) {

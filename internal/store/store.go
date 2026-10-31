@@ -1,3 +1,5 @@
+// Package store reads and writes the files of one store, and commits every
+// write to git as one commit per operation.
 package store
 
 import (
@@ -6,10 +8,12 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/atomicfile"
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
@@ -20,6 +24,20 @@ const (
 	gitignorePath = ".gitignore"
 	lockPath      = ".hedgehug/local/lock"
 )
+
+// AttributesPath is the file that sends the files of the store to the
+// hedgehug merge driver.
+const AttributesPath = ".gitattributes"
+
+// Attributes are the lines of AttributesPath that do so. Create writes them;
+// a sync adds the ones a store lacks.
+var Attributes = []string{
+	"tasks/**/*.md merge=hedgehug",
+	"comments/**/*.md merge=hedgehug",
+	"worklogs/**/*.md merge=hedgehug",
+	"workspaces/*.md merge=hedgehug",
+	"*.yaml merge=hedgehug",
+}
 
 // ErrNotFound means a file the caller asked for is not in the store.
 var ErrNotFound = errors.New("not found")
@@ -34,6 +52,7 @@ type Store struct {
 	schema atomic.Pointer[schema.Schema] // replaced by Update; read without mu
 
 	idNumbers IDNumbers // counts id numbers for Update; nil reads every task
+	siblings  Siblings  // finds siblings for Update; nil reads every task
 
 	// Replaced by tests.
 	now      func() time.Time
@@ -62,10 +81,12 @@ var newStoreHook = func(*Store) {}
 
 // Create makes a new store in dir, which must be missing or empty: a git
 // repository holding store.yaml, sc as schema.yaml (the default schema when
-// sc is nil), the workspace ws and a .gitignore, in one commit. meta and ws
-// are copied, not changed.
+// sc is nil), the workspace ws, a .gitignore and the .gitattributes of the
+// merge driver, in one commit. meta and ws
+// are copied, not changed. A non-empty account (host/login) is named in the
+// Hedgehug-Author trailer of the commit.
 // When Create fails it removes what it made, so it can be run again.
-func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Workspace, author gitrepo.Signature) (_ *Store, err error) {
+func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Workspace, author gitrepo.Signature, account string) (_ *Store, err error) {
 	if ws == nil {
 		return nil, errors.New("the store needs a workspace")
 	}
@@ -124,18 +145,23 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 		{schemaPath, sb},
 		{model.WorkspacePath(w.ULID), wb},
 		{gitignorePath, []byte(".hedgehug/local/\n")},
+		{AttributesPath, []byte(strings.Join(Attributes, "\n") + "\n")},
 	}
 	paths := make([]string, 0, len(files))
 	for _, f := range files {
-		if err := writeFile(s.path(f.rel), f.data); err != nil {
+		if err := atomicfile.WriteFile(s.path(f.rel), f.data); err != nil {
 			return nil, err
 		}
 		paths = append(paths, f.rel)
 	}
+	trailers := []gitrepo.Trailer{{Key: "Hedgehug-Op", Value: "init"}}
+	if account != "" {
+		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Author", Value: account})
+	}
 	if err := s.commit(gitrepo.Commit{
 		Paths:    paths,
 		Subject:  "hedgehug: init",
-		Trailers: []gitrepo.Trailer{{Key: "Hedgehug-Op", Value: "init"}},
+		Trailers: trailers,
 		Author:   author,
 		When:     now,
 	}); err != nil {

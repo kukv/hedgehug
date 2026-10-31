@@ -1,6 +1,8 @@
 package main
 
 import (
+	"slices"
+
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/store"
@@ -48,11 +50,13 @@ func (a *app) set(arg string, assigns []assign) error {
 		if err != nil {
 			return err
 		}
+		assignees := slices.Clone(t.Assignees)
 		for _, as := range assigns {
 			if err := applyAssign(t, as, ix.Schema(), a.resolveULID(ix)); err != nil {
 				return err
 			}
 		}
+		watchNewAssignees(t, assignees)
 		return tx.PutTask(t)
 	})
 	if err != nil {

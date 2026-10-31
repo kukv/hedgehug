@@ -8,9 +8,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/config"
+	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/query"
 	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/sync"
 )
 
 // app holds the global flags and what the commands share.
@@ -19,6 +22,12 @@ type app struct {
 	storeName string
 	jsonOut   bool
 	noColor   bool
+
+	// the writer of the store, read from config.yaml once per run
+	writerDone bool
+	writerAcct config.Account
+	writerOK   bool
+	writerErr  error
 }
 
 // usageError is a mistake in the flags or arguments; it exits 2.
@@ -38,6 +47,8 @@ func (a *app) rootCmd() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args:          cobra.NoArgs,
+		// Every subcommand uses this one: none has a hook of its own.
+		PersistentPreRun: a.beforeCommand,
 		// completion comes in phase 7.
 		CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -52,7 +63,7 @@ func (a *app) rootCmd() *cobra.Command {
 	pf.StringVar(&a.storeName, "store", "", "the store to work on, by name")
 	pf.BoolVar(&a.jsonOut, "json", false, "print JSON")
 	pf.BoolVar(&a.noColor, "no-color", false, "do not color the output")
-	root.AddCommand(a.storeCmd(), a.addCmd(), a.lsCmd(), a.showCmd(), a.setCmd(), a.statusCmd(), a.doneCmd(), a.depCmd(), a.rmCmd(), a.restoreCmd(), a.purgeCmd(), a.mvCmd(), a.editCmd(), a.commentCmd(), a.logCmd(), a.schemaCmd(), a.doctorCmd(), a.workspaceCmd())
+	root.AddCommand(a.storeCmd(), a.addCmd(), a.lsCmd(), a.showCmd(), a.setCmd(), a.statusCmd(), a.doneCmd(), a.depCmd(), a.rmCmd(), a.restoreCmd(), a.undoCmd(), a.purgeCmd(), a.mvCmd(), a.editCmd(), a.commentCmd(), a.logCmd(), a.schemaCmd(), a.doctorCmd(), a.workspaceCmd(), a.syncCmd(), a.inboxCmd(), a.watchCmd(), a.unwatchCmd(), a.mergeDriverCmd())
 	return root
 }
 
@@ -108,16 +119,162 @@ func (a *app) open() (*store.Store, *index.Index, error) {
 // and before it writes, as another process could.
 var beforeUpdate = func() {}
 
-// update runs one operation as one commit, with the author from the
-// environment. committed is false when the operation changed nothing.
+// writer returns the account that writes to the store the command works
+// on; ok is false when the store has none. It reads the config once.
+func (a *app) writer() (acct config.Account, ok bool, err error) {
+	if !a.writerDone {
+		a.writerDone = true
+		a.writerAcct, a.writerOK, a.writerErr = a.loadWriter()
+	}
+	return a.writerAcct, a.writerOK, a.writerErr
+}
+
+func (a *app) loadWriter() (config.Account, bool, error) {
+	c, _, err := a.config()
+	if err != nil {
+		return config.Account{}, false, err
+	}
+	e, err := c.Select(a.storeName)
+	if err != nil {
+		return config.Account{}, false, err
+	}
+	acct, ok := c.Writer(e)
+	return acct, ok, nil
+}
+
+// accountID is the ID of the writer's account, or "" when the store has none.
+func (a *app) accountID() (string, error) {
+	acct, ok, err := a.writer()
+	if err != nil || !ok {
+		return "", err
+	}
+	return acct.ID(), nil
+}
+
+// update runs one operation as one commit. The author is the store's
+// account, or the git config when the store has none. committed is false
+// when the operation changed nothing.
 func (a *app) update(s *store.Store, op store.Op, fn func(*store.Tx) error) (bool, error) {
-	author, err := config.Author(a.getenv)
+	acct, ok, err := a.writer()
+	if err != nil {
+		return false, err
+	}
+	author, err := config.CommitAuthor(acct, ok, a.getenv)
 	if err != nil {
 		return false, err
 	}
 	op.Author = author
+	if ok {
+		op.Account = acct.ID()
+	}
 	beforeUpdate()
-	return s.Update(op, fn)
+	committed, err := s.Update(op, fn)
+	if err == nil && committed {
+		a.afterWrite(s)
+	}
+	return committed, err
+}
+
+// afterWrite notes that the store has a commit to push and, when it has a
+// remote, starts the background sync. The commit is made, so a failure here
+// is only a warning.
+func (a *app) afterWrite(s *store.Store) {
+	if err := sync.MarkPending(s, a.now()); err != nil {
+		_, _ = fmt.Fprintln(a.stderr, "warning: the write is not marked for sync:", err)
+		return
+	}
+	c, _, err := a.config()
+	if err != nil {
+		return
+	}
+	e, err := c.Select(a.storeName)
+	if err != nil || !syncsInBackground(e) {
+		return
+	}
+	if err := sync.Start(s, e.Name, a.getenv); err != nil {
+		_, _ = fmt.Fprintln(a.stderr, "warning: the background sync did not start:", err)
+	}
+}
+
+// syncsInBackground is whether the store e is synced in the background: only
+// a store with a remote is.
+func syncsInBackground(e config.StoreEntry) bool { return len(e.Remotes) > 0 }
+
+// beforeCommand reports the failure of a background sync that the user has
+// not been told of, and starts one for each store with a remote that is due.
+// What goes wrong here is left to the command itself to tell: it fails on
+// the same store or config.
+func (a *app) beforeCommand(cmd *cobra.Command, _ []string) {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c.Parent() != nil && c.Parent().Parent() == nil && (c.Name() == "sync" || c.Name() == "merge-driver") {
+			return // the sync itself, and a merge in the middle of one
+		}
+	}
+	cfg, _, err := a.config()
+	if err != nil {
+		return
+	}
+	targets, err := a.syncTargets(cfg, false)
+	if err != nil {
+		return
+	}
+	for _, e := range targets {
+		if !syncsInBackground(e) {
+			continue
+		}
+		s, err := store.Open(e.Path)
+		if err != nil {
+			continue
+		}
+		if msg, err := sync.TakeError(s); err == nil && msg != "" {
+			_, _ = fmt.Fprintf(a.stderr, "hedgehug: background sync of %s failed: %s (run hedgehug sync)\n", e.Name, msg)
+		}
+		if st, err := sync.ReadState(s); err == nil && sync.Due(st, a.now(), cfg.Sync.Interval) {
+			_ = sync.Start(s, e.Name, a.getenv)
+		}
+	}
+}
+
+// syncOptions is what sync.Run needs for the store e, which need not be in c
+// yet: the account that writes, the accounts that are me, and the other
+// stores whose id prefixes it checks.
+func (a *app) syncOptions(c *config.Config, e config.StoreEntry) (sync.Options, error) {
+	acct, ok := c.Writer(e)
+	author, err := config.CommitAuthor(acct, ok, a.getenv)
+	if err != nil {
+		return sync.Options{}, err
+	}
+	opt := sync.Options{Remotes: e.Remotes, Author: author, Me: c.Me(), Now: a.now}
+	if ok {
+		opt.Account = acct.ID()
+	}
+	for _, o := range c.Stores {
+		if o.Name != e.Name {
+			opt.Others = append(opt.Others, sync.OtherStore{Name: o.Name, Path: o.Path})
+		}
+	}
+	return opt, nil
+}
+
+// queryOptions is what the queries on the store s need besides its index: the
+// accounts @me stands for, and the tasks with an unread overwritten item in
+// the inbox.
+func (a *app) queryOptions(s *store.Store) (query.Options, error) {
+	c, _, err := a.config()
+	if err != nil {
+		return query.Options{}, err
+	}
+	items, err := inbox.Open(s).List(false)
+	if err != nil {
+		return query.Options{}, err
+	}
+	opt := query.Options{Me: c.Me(), Overwritten: map[model.ULID]bool{}}
+	for _, it := range items {
+		if it.Kind == inbox.Overwritten && !it.Task.IsZero() {
+			opt.Overwritten[it.Task] = true
+		}
+	}
+	return opt, nil
 }
 
 // verb is the heading of a command that printed what it wrote: heading, or

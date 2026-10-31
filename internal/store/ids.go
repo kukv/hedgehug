@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/kukv/hedgehug/internal/atomicfile"
 	"github.com/kukv/hedgehug/internal/model"
 )
 
@@ -34,17 +35,17 @@ func (tx *Tx) usedNumbers() (map[string]int, error) {
 			if errors.As(err, &fe) {
 				// Its ids cannot be read, but a number it holds must not
 				// be given again.
-				b, err := readFile(tx.s.path(fe.Path))
+				b, err := atomicfile.ReadFile(tx.s.path(fe.Path))
 				if err != nil {
 					return nil, err
 				}
-				raise(out, model.IDNumbersIn(b))
+				model.RaiseNumbers(out, model.IDNumbersIn(b))
 				continue
 			}
 			if err != nil {
 				return nil, err
 			}
-			countIDs(out, t)
+			model.CountIDs(out, t)
 		}
 	}
 	if tx.numbers == nil {
@@ -54,31 +55,13 @@ func (tx *Tx) usedNumbers() (map[string]int, error) {
 		}
 		tx.numbers = n
 	}
-	raise(out, tx.numbers)
+	model.RaiseNumbers(out, tx.numbers)
 	for _, t := range tx.tasks {
 		if t != nil {
-			countIDs(out, t)
+			model.CountIDs(out, t)
 		}
 	}
 	return out, nil
-}
-
-// raise raises used to the numbers of more.
-func raise(used, more map[string]int) {
-	for p, n := range more {
-		if n > used[p] {
-			used[p] = n
-		}
-	}
-}
-
-// countIDs raises used to the numbers of t's id and former ids.
-func countIDs(used map[string]int, t *model.Task) {
-	for _, k := range append([]string{t.ID}, t.FormerIDs...) {
-		if p, n, ok := model.ParseTaskID(k); ok && n > used[p] {
-			used[p] = n
-		}
-	}
 }
 
 // assignIDs gives an id to each task put in the operation that has none,
@@ -126,8 +109,11 @@ type oldID struct {
 	former []string
 }
 
-// restoreIDs puts back the ids assignIDs changed.
+// restoreIDs puts back the ids assignIDs and the ranks rerank changed.
 func (tx *Tx) restoreIDs() {
+	for _, o := range tx.oldRanks {
+		o.t.Rank = o.rank
+	}
 	for _, o := range tx.oldIDs {
 		o.t.ID, o.t.FormerIDs = o.id, o.former
 	}

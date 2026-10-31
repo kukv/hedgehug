@@ -7,10 +7,12 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/atomicfile"
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
@@ -23,6 +25,9 @@ type Op struct {
 	Name   string     // add, update, rm, mv...; the Hedgehug-Op trailer
 	Task   model.ULID // the main task of the operation; zero if none
 	Author gitrepo.Signature
+	// Account is the ID of the writer's account (host/login), for the
+	// Hedgehug-Author trailer; empty if the store has none.
+	Account string
 	// Detail ends the subject when there is no Task, saying what changed,
 	// such as "add web (WEB)".
 	Detail string
@@ -33,6 +38,10 @@ type Op struct {
 	// field of the new status is still checked, but only when the task had
 	// it before the write.
 	SkipTransitions bool
+	// Trailers and AllowEmpty are set from inside fn, by AddTrailer and
+	// AllowEmpty, because what they hold is read under the store lock.
+	Trailers   []gitrepo.Trailer
+	AllowEmpty bool
 }
 
 // Tx collects the writes of one operation. Its Put methods only queue a
@@ -53,6 +62,7 @@ type Tx struct {
 	workspaces map[model.ULID]*model.Workspace // put workspaces; nil for a removed one
 	numbers    model.Numbers                   // the purged numbers; nil until read
 	oldIDs     []oldID                         // what assignIDs changed
+	oldRanks   []oldRank                       // what rerank changed
 }
 
 // pending is one queued write. created and updated point into the value
@@ -167,6 +177,26 @@ func (tx *Tx) RemoveWorkspace(ulid model.ULID) error {
 // from what it read under the lock.
 func (tx *Tx) SetDetail(s string) { tx.op.Detail = s }
 
+// AddTrailer adds a trailer to the commit of the operation, after the ones
+// the store writes.
+func (tx *Tx) AddTrailer(key, value string) {
+	tx.op.Trailers = append(tx.op.Trailers, gitrepo.Trailer{Key: key, Value: value})
+}
+
+// AllowEmpty makes the operation commit even when it changes no file, so
+// that the commit's trailers record that it ran.
+func (tx *Tx) AllowEmpty() { tx.op.AllowEmpty = true }
+
+// RemoveFile queues the removal of rel, any file of the store that git
+// tracks, under the same limits as PutFile. A file that is not there is left
+// alone.
+func (tx *Tx) RemoveFile(rel string) error {
+	if err := trackedPath(rel); err != nil {
+		return err
+	}
+	return tx.put(path.Clean(rel), &pending{remove: true})
+}
+
 // Workspace reads a workspace as it will be after the writes queued so far.
 func (tx *Tx) Workspace(ulid model.ULID) (*model.Workspace, error) {
 	if tx.done {
@@ -207,6 +237,28 @@ func (tx *Tx) PutSchema(sc *schema.Schema) error {
 		return err
 	}
 	tx.schema = sc
+	return nil
+}
+
+// PutFile queues a write of data to rel, any file of the store that git
+// tracks, such as .gitattributes. Files of .hedgehug/local and .git are
+// refused.
+func (tx *Tx) PutFile(rel string, data []byte) error {
+	if err := trackedPath(rel); err != nil {
+		return err
+	}
+	return tx.put(path.Clean(rel), &pending{encode: func() ([]byte, error) { return data, nil }})
+}
+
+// trackedPath refuses rel unless it is a file of the store that git tracks.
+func trackedPath(rel string) error {
+	clean := path.Clean(rel)
+	first, _, _ := strings.Cut(clean, "/")
+	lower := strings.ToLower(clean) // case-insensitive file systems
+	if !filepath.IsLocal(filepath.FromSlash(rel)) || strings.EqualFold(first, ".git") ||
+		lower == LocalDir || strings.HasPrefix(lower, LocalDir+"/") {
+		return fmt.Errorf("%q is not a tracked file of the store", rel)
+	}
 	return nil
 }
 
@@ -319,8 +371,8 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
 	s.schema.Store(cached)
 
 	tx := &Tx{s: s, op: op, pending: map[string]*pending{}, tasks: map[model.ULID]*model.Task{}, workspaces: map[model.ULID]*model.Workspace{}}
-	// assignIDs changes the caller's tasks; a failed operation leaves them
-	// as they were given.
+	// assignIDs and rerank change the caller's tasks; a failed operation
+	// leaves them as they were given.
 	defer func() {
 		if err != nil {
 			tx.restoreIDs()
@@ -329,6 +381,9 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
 	err = fn(tx)
 	if err == nil {
 		err = tx.assignIDs()
+		if err == nil {
+			err = tx.rerank()
+		}
 	}
 	tx.done = true
 	if err != nil {
@@ -352,7 +407,7 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	if len(changes) == 0 {
+	if len(changes) == 0 && !tx.op.AllowEmpty {
 		return false, nil
 	}
 	commit := tx.commitFor(tx.op, changes, now)
@@ -381,7 +436,7 @@ func (tx *Tx) changes(now time.Time) ([]change, error) {
 	var out []change
 	for _, rel := range tx.order {
 		p := tx.pending[rel]
-		old, err := readFile(tx.s.path(rel))
+		old, err := atomicfile.ReadFile(tx.s.path(rel))
 		existed := err == nil
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return nil, err
@@ -422,6 +477,9 @@ func (tx *Tx) commitFor(op Op, cs []change, now time.Time) gitrepo.Commit {
 	if op.Task.IsZero() && op.Detail != "" {
 		subject += " " + op.Detail
 	}
+	if op.Account != "" {
+		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Author", Value: op.Account})
+	}
 	if !op.Workspace.IsZero() {
 		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Workspace", Value: op.Workspace.String()})
 	}
@@ -448,7 +506,10 @@ func (tx *Tx) commitFor(op Op, cs []change, now time.Time) gitrepo.Commit {
 	for i, c := range cs {
 		paths[i] = c.rel
 	}
-	return gitrepo.Commit{Paths: paths, Subject: subject, Trailers: trailers, Author: op.Author, When: now}
+	return gitrepo.Commit{
+		Paths: paths, Subject: subject, Trailers: append(trailers, op.Trailers...),
+		Author: op.Author, When: now, AllowEmpty: op.AllowEmpty,
+	}
 }
 
 // apply writes cs in order. When one fails, the ones before it are rolled
@@ -459,7 +520,7 @@ func (s *Store) apply(cs []change) error {
 		if c.data == nil {
 			err = os.Remove(s.path(c.rel))
 		} else {
-			err = writeFile(s.path(c.rel), c.data)
+			err = atomicfile.WriteFile(s.path(c.rel), c.data)
 		}
 		if err != nil {
 			return errors.Join(err, s.rollback(cs[:i]))
@@ -473,7 +534,7 @@ func (s *Store) rollback(cs []change) error {
 	var errs []error
 	for _, c := range slices.Backward(cs) {
 		if c.existed {
-			errs = append(errs, writeFile(s.path(c.rel), c.old))
+			errs = append(errs, atomicfile.WriteFile(s.path(c.rel), c.old))
 		} else if err := os.Remove(s.path(c.rel)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			errs = append(errs, err)
 		}

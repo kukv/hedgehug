@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/kukv/hedgehug/internal/model"
 )
 
 func TestDoctorNoProblems(t *testing.T) {
@@ -45,5 +48,172 @@ func TestDoctorTakesNoArguments(t *testing.T) {
 	te := newStoreEnv(t)
 	if code, _, _ := te.run("doctor", "x"); code != 2 {
 		t.Errorf("exit %d, want 2", code)
+	}
+}
+
+func TestDoctorFixWithoutRemote(t *testing.T) {
+	te := newTestEnv(t)
+	te.ok("store", "init", "me", "--prefix", "ME")
+	te.ok("add", "a")
+	te.ok("add", "b")
+	te.handEdit("me", "ME-2", "id: ME-2", "id: ME-1") // writes the file and commits it as a hand edit would
+	code, out, _ := te.run("doctor")
+	if code != 1 || !strings.Contains(out, "hint: hedgehug doctor --fix fixes it") {
+		t.Errorf("doctor found nothing: %d %s", code, out)
+	}
+	before := len(te.log("me"))
+	out = te.ok("doctor", "--fix")
+	if !regexp.MustCompile(`repaired: ME-2 \([0-9A-Z]{26}\) b: id_collision ME-1 → ME-2`).MatchString(out) {
+		t.Errorf("fix = %s", out)
+	}
+	if n := len(te.log("me")); n != before+1 || !strings.Contains(te.headCommit("me").Message, "Hedgehug-Op: repair") {
+		t.Errorf("commits %d -> %d, head %q", before, n, te.headCommit("me").Message)
+	}
+	if code, out, _ := te.run("doctor"); code != 0 {
+		t.Errorf("after fix: %d %s", code, out)
+	}
+	if out := te.ok("doctor", "--fix"); !strings.Contains(out, "Nothing to repair") || !strings.Contains(out, "No problems") {
+		t.Errorf("second fix = %s", out)
+	}
+	if n := len(te.log("me")); n != before+1 {
+		t.Errorf("the second fix committed: %d", n)
+	}
+}
+
+func TestDoctorFixJSON(t *testing.T) {
+	te := newTestEnv(t)
+	te.ok("store", "init", "me", "--prefix", "ME")
+	te.ok("add", "a")
+	te.ok("add", "b")
+	te.handEdit("me", "ME-2", "id: ME-2", "id: ME-1")
+	code, out, _ := te.run("doctor", "--fix", "--json")
+	var got struct {
+		Repaired []struct {
+			ULID, ID, Title, Kind string
+			Value                 json.RawMessage
+		}
+		Findings []map[string]string
+	}
+	if code != 0 || json.Unmarshal([]byte(out), &got) != nil || len(got.Repaired) != 1 || got.Findings == nil || len(got.Findings) != 0 {
+		t.Fatalf("exit %d\n%s", code, out)
+	}
+	if r := got.Repaired[0]; r.Kind != "id_collision" || r.ID != "ME-2" || r.Title != "b" || len(r.ULID) != 26 || !strings.Contains(string(r.Value), `"old": "ME-1"`) {
+		t.Errorf("repaired = %+v", r)
+	}
+}
+
+func TestDoctorFixLeavesBrokenFiles(t *testing.T) {
+	te := newTestEnv(t)
+	te.ok("store", "init", "me", "--prefix", "ME")
+	te.ok("add", "a")
+	te.handEdit("me", "ME-1", "title: a", "title: [")
+	code, out, _ := te.run("doctor", "--fix")
+	if code != 1 || !strings.Contains(out, "does not decode") || !strings.Contains(out, "Nothing to repair") {
+		t.Errorf("code %d out %s", code, out)
+	}
+}
+
+func TestDoctorFixTakesNoArguments(t *testing.T) {
+	te := newStoreEnv(t)
+	if code, _, _ := te.run("doctor", "--fix", "x"); code != 2 {
+		t.Errorf("exit %d, want 2", code)
+	}
+}
+
+func TestDoctorMergeDriverAndInbox(t *testing.T) {
+	te := newStoreEnv(t)
+	// Not parallel: PATH is the process's. TestMain put hedgehug on it.
+	path := os.Getenv("PATH")
+	t.Setenv("PATH", "")
+	code, out, _ := te.run("doctor")
+	if code != 1 || !strings.Contains(out, "hedgehug is not on PATH") {
+		t.Errorf("exit %d\n%s", code, out)
+	}
+	t.Setenv("PATH", path)
+	rec := filepath.Join(te.storeDir("me"), ".hedgehug", "local", "overwritten", "01JC1111111111111111111111.json")
+	if err := os.MkdirAll(filepath.Dir(rec), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(rec, []byte(`{"path":"tasks/x.md","field":"title","value":"\"a\"","author":"a","commit":"","time":"2026-10-31T00:00:00Z"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, out, _ = te.run("doctor")
+	if code != 1 || !strings.Contains(out, "1 merge driver records are not in the inbox yet") || !strings.Contains(out, "hint: run hedgehug inbox") {
+		t.Errorf("exit %d\n%s", code, out)
+	}
+}
+
+// insertField adds a line of front matter to the task id, as a hand edit
+// would, before its kind.
+func (te *testEnv) insertField(id, line string) {
+	te.t.Helper()
+	te.handEdit("me", id, "\nkind: ", "\n"+line+"\nkind: ")
+}
+
+func TestDoctorFixKinds(t *testing.T) {
+	const hint = "hint: hedgehug doctor --fix fixes it"
+	tests := []struct {
+		name  string
+		setup func(te *testEnv)
+		line  string // of the repair
+	}{
+		{"parent_cycle", func(te *testEnv) {
+			te.ok("add", "a")
+			b := te.addJSON("b", "--parent", "ME-1")
+			te.insertField("ME-1", "parent: "+b.ULID)
+		}, "parent_cycle: moved back to"},
+		{"parent_deleted", func(te *testEnv) {
+			te.ok("add", "a")
+			te.ok("add", "b", "--parent", "ME-1")
+			te.insertField("ME-1", "deleted_at: 2026-10-30T12:00:00Z")
+		}, "parent_deleted: moved to the root"},
+		{"workspace_mismatch", func(te *testEnv) {
+			te.ok("workspace", "add", "other", "--prefix", "OT")
+			c := te.addJSON("c", "--workspace", "other")
+			te.ok("add", "d", "--workspace", "me")
+			te.insertField("ME-1", "parent: "+c.ULID)
+		}, "workspace_mismatch"},
+		{"id_prefix", func(te *testEnv) {
+			te.ok("add", "a")
+			te.handEdit("me", "ME-1", "id: ME-1", "id: XX-1")
+		}, "id_renumbered"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			te := newTestEnv(t)
+			te.ok("store", "init", "me", "--prefix", "ME")
+			tt.setup(te)
+			code, out, _ := te.run("doctor")
+			if code != 1 || !strings.Contains(out, hint) {
+				t.Fatalf("doctor: %d\n%s", code, out)
+			}
+			out = te.ok("doctor", "--fix")
+			if !strings.Contains(out, "repaired: ") || !strings.Contains(out, tt.line) {
+				t.Errorf("fix:\n%s", out)
+			}
+			if code, out, _ := te.run("doctor"); code != 0 {
+				t.Errorf("after fix: %d\n%s", code, out)
+			}
+		})
+	}
+}
+
+func TestDoctorFixError(t *testing.T) {
+	te := newTestEnv(t)
+	te.ok("store", "init", "me", "--prefix", "ME")
+	te.ok("add", "a")
+	b := te.addJSON("b")
+	te.handEdit("me", "ME-2", "id: ME-2", "id: ME-1")
+	// An uncommitted change to the file the repair writes.
+	u, err := model.ParseULID(b.ULID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := appendFile(filepath.Join(te.storeDir("me"), filepath.FromSlash(model.TaskPath(u))), "unsaved\n"); err != nil {
+		t.Fatal(err)
+	}
+	code, out, stderr := te.run("doctor", "--fix")
+	if code == 0 || !strings.Contains(stderr, "uncommitted changes") || strings.Contains(out, "Nothing to repair") {
+		t.Errorf("exit %d\nstdout %s\nstderr %s", code, out, stderr)
 	}
 }

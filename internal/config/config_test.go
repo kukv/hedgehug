@@ -4,8 +4,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // testPaths returns paths under a temporary directory.
@@ -46,8 +49,8 @@ func TestLoadExpandsHome(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []StoreEntry{{"me", filepath.Join(p.Home, "data", "me")}, {"abs", filepath.Join(p.Home, "x")}}
-	if len(c.Stores) != 2 || c.Stores[0] != want[0] || c.Stores[1] != want[1] {
+	want := []StoreEntry{{Name: "me", Path: filepath.Join(p.Home, "data", "me")}, {Name: "abs", Path: filepath.Join(p.Home, "x")}}
+	if !slices.EqualFunc(c.Stores, want, func(a, b StoreEntry) bool { return a.Name == b.Name && a.Path == b.Path }) {
 		t.Errorf("Stores = %v, want %v", c.Stores, want)
 	}
 }
@@ -79,6 +82,8 @@ func TestAddStoreKeepsTheRest(t *testing.T) {
 	writeConfig(t, p, `# my settings
 accounts:
   - name: personal # the main one
+    host: github.com
+    login: alice
     token: gh
 stores:
   - name: me
@@ -91,7 +96,7 @@ sync:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := c.AddStore("work", filepath.Join(p.Home, "stores", "work")); err != nil {
+	if err := c.AddStore("work", filepath.Join(p.Home, "stores", "work"), nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.Save(); err != nil {
@@ -111,8 +116,51 @@ sync:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(c2.Stores) != 2 || c2.Stores[1] != (StoreEntry{"work", filepath.Join(p.Home, "stores", "work")}) {
+	if len(c2.Stores) != 2 || !reflect.DeepEqual(c2.Stores[1], StoreEntry{Name: "work", Path: filepath.Join(p.Home, "stores", "work")}) {
 		t.Errorf("Stores after reload = %v", c2.Stores)
+	}
+}
+
+func TestSetStoreAccount(t *testing.T) {
+	p := testPaths(t)
+	writeConfig(t, p, `accounts:
+  - name: personal
+    host: github.com
+    login: alice
+  - name: work
+    host: github.com
+    login: alice-w
+stores:
+  - name: a
+    path: ~/a
+  - name: b
+    path: ~/b
+    account: personal
+`)
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"a", "b"} {
+		if err := c.SetStoreAccount(name, "work"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	c2, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c2.Stores) != 2 || c2.Stores[0].Account != "work" || c2.Stores[1].Account != "work" {
+		t.Errorf("Stores = %v", c2.Stores)
+	}
+	if err := c.SetStoreAccount("a", "nobody"); err == nil {
+		t.Error("an unknown account was accepted")
+	}
+	if err := c.SetStoreAccount("nope", "work"); err == nil {
+		t.Error("an unknown store was accepted")
 	}
 }
 
@@ -123,7 +171,7 @@ func TestAddStoreToMissingFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	outside := filepath.Join(filepath.Dir(p.Home), "elsewhere", "a")
-	if err := c.AddStore("a", outside); err != nil {
+	if err := c.AddStore("a", outside, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.Save(); err != nil {
@@ -133,7 +181,7 @@ func TestAddStoreToMissingFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(c2.Stores) != 1 || c2.Stores[0] != (StoreEntry{"a", outside}) {
+	if len(c2.Stores) != 1 || !reflect.DeepEqual(c2.Stores[0], StoreEntry{Name: "a", Path: outside}) {
 		t.Errorf("Stores = %v", c2.Stores)
 	}
 }
@@ -149,7 +197,7 @@ func TestNullStoresIsEmpty(t *testing.T) {
 		t.Errorf("Stores = %v, want none", c.Stores)
 	}
 	outside := filepath.Join(filepath.Dir(p.Home), "elsewhere", "a")
-	if err := c.AddStore("a", outside); err != nil {
+	if err := c.AddStore("a", outside, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.Save(); err != nil {
@@ -159,7 +207,7 @@ func TestNullStoresIsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(c2.Stores) != 1 || c2.Stores[0] != (StoreEntry{"a", outside}) {
+	if len(c2.Stores) != 1 || !reflect.DeepEqual(c2.Stores[0], StoreEntry{Name: "a", Path: outside}) {
 		t.Errorf("Stores = %v", c2.Stores)
 	}
 }
@@ -167,17 +215,17 @@ func TestNullStoresIsEmpty(t *testing.T) {
 func TestAddStoreRefusesDuplicates(t *testing.T) {
 	p := testPaths(t)
 	c, _ := Load(p)
-	if err := c.AddStore("a", "/a"); err != nil {
+	if err := c.AddStore("a", "/a", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.AddStore("a", "/b"); err == nil {
+	if err := c.AddStore("a", "/b", nil); err == nil {
 		t.Error("a second store named a was added")
 	}
 }
 
 func TestSelect(t *testing.T) {
-	one := &Config{Stores: []StoreEntry{{"me", "/me"}}}
-	two := &Config{Stores: []StoreEntry{{"me", "/me"}, {"work", "/work"}}}
+	one := &Config{Stores: []StoreEntry{{Name: "me", Path: "/me"}}}
+	two := &Config{Stores: []StoreEntry{{Name: "me", Path: "/me"}, {Name: "work", Path: "/work"}}}
 	none := &Config{}
 	for _, tc := range []struct {
 		name    string
@@ -234,7 +282,7 @@ func addAndRead(t *testing.T, p Paths) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := c.AddStore("b", "/elsewhere/b"); err != nil {
+	if err := c.AddStore("b", "/elsewhere/b", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.Save(); err != nil {
@@ -319,5 +367,206 @@ func TestRelativePathIsUnderConfigDir(t *testing.T) {
 	}
 	if want := filepath.Join(filepath.Dir(p.ConfigFile), "stores", "me"); s.Path != want {
 		t.Errorf("Path = %q, want %q", s.Path, want)
+	}
+}
+
+// cfgPaths writes src as config.yaml under a temporary directory.
+func cfgPaths(t *testing.T, src string) Paths {
+	t.Helper()
+	p := testPaths(t)
+	writeConfig(t, p, src)
+	return p
+}
+
+func TestLoadAccountsRemotesSync(t *testing.T) {
+	p := cfgPaths(t, `accounts:
+  - name: personal
+    host: github.com
+    login: alice
+    token: secret
+stores:
+  - name: org-a
+    path: /s/org-a
+    remotes: [/r/a.git, /r/b.git]
+    account: personal
+sync:
+  interval: 5m
+  push_interval: 10s
+`)
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Accounts) != 1 || c.Accounts[0].ID() != "github.com/alice" {
+		t.Errorf("accounts = %+v", c.Accounts)
+	}
+	if !slices.Equal(c.Me(), []string{"github.com/alice"}) {
+		t.Errorf("Me = %v", c.Me())
+	}
+	e := c.Stores[0]
+	if !slices.Equal(e.Remotes, []string{"/r/a.git", "/r/b.git"}) || e.Account != "personal" {
+		t.Errorf("store = %+v", e)
+	}
+	if c.Sync.Interval != 5*time.Minute || c.Sync.PushInterval != 10*time.Second {
+		t.Errorf("sync = %+v", c.Sync)
+	}
+	if a, ok := c.Writer(e); !ok || a.Login != "alice" {
+		t.Errorf("Writer = %+v, %v", a, ok)
+	}
+}
+
+func TestSyncDefaults(t *testing.T) {
+	c, err := Load(cfgPaths(t, "stores: []\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Sync.Interval != 2*time.Minute || c.Sync.PushInterval != 30*time.Second {
+		t.Errorf("defaults = %+v", c.Sync)
+	}
+	c, err = Load(testPaths(t))
+	if err != nil || c.Sync.Interval != 2*time.Minute {
+		t.Errorf("missing file: %+v, %v", c.Sync, err)
+	}
+}
+
+func TestWriterRules(t *testing.T) {
+	two := `accounts:
+  - {name: a, host: github.com, login: a}
+  - {name: b, host: github.com, login: b}
+stores:
+  - {name: s, path: /s}
+  - {name: t, path: /t, account: b}
+`
+	c, err := Load(cfgPaths(t, two))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := c.Writer(c.Stores[0]); ok {
+		t.Error("two accounts and no stores[].account: want no writer")
+	}
+	if a, ok := c.Writer(c.Stores[1]); !ok || a.Name != "b" {
+		t.Errorf("named account: Writer = %+v, %v", a, ok)
+	}
+	one := strings.Replace(two, "  - {name: b, host: github.com, login: b}\n", "", 1)
+	one = strings.Replace(one, ", account: b", "", 1)
+	c, err = Load(cfgPaths(t, one))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a, ok := c.Writer(c.Stores[0]); !ok || a.Name != "a" {
+		t.Errorf("one account: Writer = %+v, %v", a, ok)
+	}
+	c, _ = Load(cfgPaths(t, "stores:\n  - {name: s, path: /s}\n"))
+	if _, ok := c.Writer(c.Stores[0]); ok {
+		t.Error("no accounts: want no writer")
+	}
+}
+
+func TestBadAccountAndSync(t *testing.T) {
+	for _, src := range []string{
+		"accounts:\n  - {name: a, host: github.com}\n",                                                     // no login
+		"accounts:\n  - {name: a, host: h, login: x}\n  - {name: a, host: h, login: y}\n",                  // twice
+		"stores:\n  - {name: s, path: /s, account: nobody}\naccounts: []\n",                                // unknown account
+		"stores:\n  - {name: s, path: /s, remotes: x}\n",                                                   // remotes not a list
+		"accounts:\n  - {name: a, host: h, login: x}\nstores:\n  - {name: s, path: /s, account: \"\"}\n",   // empty account
+		"accounts:\n  - {name: a, host: h, login: x}\nstores:\n  - {name: s, path: /s, account: {x: y}}\n", // account is a mapping
+		"sync:\n  interval: soon\n",
+		"sync:\n  push_interval: 0s\n",
+		"sync:\n  interval: -1m\n",
+	} {
+		if _, err := Load(cfgPaths(t, src)); err == nil {
+			t.Errorf("Load(%q) succeeded", src)
+		}
+	}
+}
+
+func TestAddAndRemoveStoreKeepsComments(t *testing.T) {
+	p := cfgPaths(t, "# mine\nstores:\n  - name: a # first\n    path: /a\n  - name: c\n    path: /c # third\nlog_level: debug # keep\n")
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AddStore("b", "/b", []string{"/r/b.git"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RemoveStore("a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.RemoveStore("nope"); err == nil {
+		t.Error("RemoveStore of an unknown store succeeded")
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p.ConfigFile)
+	want := "# mine\nstores:\n  - name: c\n    path: /c # third\n  - name: b\n    path: /b\n    remotes: [/r/b.git]\nlog_level: debug # keep\n"
+	if string(b) != want {
+		t.Errorf("config.yaml =\n%s\nwant\n%s", b, want)
+	}
+	c, err = Load(p)
+	if err != nil || len(c.Stores) != 2 || c.Stores[1].Remotes[0] != "/r/b.git" {
+		t.Errorf("reload: %+v, %v", c.Stores, err)
+	}
+}
+
+func TestNullAccountIsNoAccount(t *testing.T) {
+	c, err := Load(cfgPaths(t, "accounts:\n  - {name: a, host: h, login: x}\n  - {name: b, host: h, login: y}\nstores:\n  - {name: s, path: /s, account: null}\n"))
+	if err != nil || c.Stores[0].Account != "" {
+		t.Errorf("null account: %+v, %v", c.Stores, err)
+	}
+}
+
+func TestWriterNamedButMissingAccount(t *testing.T) {
+	c := &Config{Accounts: []Account{{Name: "a", Host: "h", Login: "x"}}}
+	if a, ok := c.Writer(StoreEntry{Name: "s", Account: "gone"}); ok {
+		t.Errorf("Writer = %+v, true; want no writer", a)
+	}
+}
+
+func TestAddStoreRefusesEmptyRemote(t *testing.T) {
+	c, _ := Load(testPaths(t))
+	if err := c.AddStore("a", "/a", []string{"/r", ""}); err == nil {
+		t.Error("AddStore with an empty remote succeeded")
+	}
+	if len(c.Stores) != 0 {
+		t.Errorf("Stores = %v", c.Stores)
+	}
+}
+
+func TestRemoveOnlyStoreKeepsKey(t *testing.T) {
+	p := cfgPaths(t, "# top\nstores:\n  - name: a\n    path: /a\nlog: 1\n")
+	c, _ := Load(p)
+	if err := c.RemoveStore("a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p.ConfigFile)
+	if want := "# top\nstores: []\nlog: 1\n"; string(b) != want {
+		t.Errorf("config.yaml =\n%s\nwant\n%s", b, want)
+	}
+	c, err := Load(p)
+	if err != nil || len(c.Stores) != 0 {
+		t.Errorf("reload: %+v, %v", c.Stores, err)
+	}
+}
+
+func TestRemoveStoreKeepsNeighborComments(t *testing.T) {
+	p := cfgPaths(t, "stores:\n  # about a\n  - name: a\n    path: /a\n  # about b\n  - name: b\n    path: /b\n  # about c\n  - name: c\n    path: /c\n")
+	c, _ := Load(p)
+	if err := c.RemoveStore("b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p.ConfigFile)
+	want := "stores:\n  # about a\n  - name: a\n    path: /a\n  # about c\n  - name: c\n    path: /c\n"
+	if string(b) != want {
+		t.Errorf("config.yaml =\n%s\nwant\n%s", b, want)
+	}
+	if strings.Contains(string(b), "# about b") {
+		t.Error("the comment of the removed item is still there")
 	}
 }

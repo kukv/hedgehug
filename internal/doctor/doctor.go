@@ -6,17 +6,24 @@ import (
 	"io/fs"
 	"maps"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
+	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
+	"github.com/kukv/hedgehug/internal/merge"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/sync"
 )
+
+// lookPath finds hedgehug on PATH; tests replace it.
+var lookPath = exec.LookPath
 
 // fileRoots are the directories of a store whose files doctor reads.
 var fileRoots = []string{"tasks", "comments", "worklogs", "sprints", "releases", "templates", "workspaces"}
@@ -24,7 +31,7 @@ var fileRoots = []string{"tasks", "comments", "worklogs", "sprints", "releases",
 // indexCodes are the problems of a task that come from the shape of the
 // store, not from the schema.
 var indexCodes = []string{
-	schema.CodeMissingRef, schema.CodeCycle, index.CodeBroken,
+	schema.CodeMissingRef, schema.CodeCycle, index.CodeBroken, index.CodeParentDeleted,
 	index.CodeNoID, index.CodeDuplicateID, index.CodeIDPrefix, store.CodeNoWorkspace, store.CodeWorkspaceMismatch,
 }
 
@@ -103,6 +110,8 @@ func Run(dir string) ([]Finding, error) {
 			})
 		}
 	}
+	out = append(out, checkMergeDriver(dir, repo)...)
+	out = append(out, checkInbox(dir)...)
 	if err := repo.Verify(); err != nil {
 		out = append(out, Finding{Check: "git", Where: ".git", Msg: "a git object cannot be read: " + err.Error()})
 	}
@@ -113,6 +122,93 @@ func Run(dir string) ([]Finding, error) {
 	}
 	Sort(out)
 	return out, nil
+}
+
+// checkMergeDriver finds a store whose .gitattributes send files to the
+// hedgehug merge driver while .git/config does not register it, or while
+// hedgehug cannot be found on PATH for git to run it.
+func checkMergeDriver(dir string, repo *gitrepo.Repo) []Finding {
+	data, err := os.ReadFile(filepath.Join(dir, store.AttributesPath)) //nolint:gosec // G304: the path is built from the store root and a fixed name
+	if err != nil || !slices.ContainsFunc(strings.Split(string(data), "\n"), func(l string) bool {
+		return !strings.HasPrefix(strings.TrimSpace(l), "#") && slices.Contains(strings.Fields(l), "merge=hedgehug")
+	}) {
+		return nil
+	}
+	where := store.AttributesPath
+	registered, err := repo.MergeDriverRegistered()
+	if err != nil {
+		return []Finding{{Check: "merge_driver", Where: where, Msg: "cannot read .git/config: " + err.Error()}}
+	}
+	if !registered {
+		return []Finding{{
+			Check: "merge_driver", Where: where,
+			Msg:  "marks files merge=hedgehug, but the merge driver is not registered in .git/config (expected name = Hedgehug field merge and driver = " + gitrepo.MergeDriver + ")",
+			Hint: "run hedgehug sync once",
+		}}
+	}
+	if _, err := lookPath("hedgehug"); err != nil {
+		return []Finding{{
+			Check: "merge_driver", Where: where,
+			Msg:  "hedgehug is not on PATH, so git cannot run the merge driver",
+			Hint: "put hedgehug on PATH",
+		}}
+	}
+	return nil
+}
+
+// checkInbox finds the records of the merge driver that the inbox has not
+// taken in. A record that does not decode is never taken in, so it is told
+// apart: the advice for it is to remove the file.
+func checkInbox(dir string) []Finding {
+	root := filepath.Join(dir, filepath.FromSlash(inbox.RecordsPath))
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return []Finding{{Check: "inbox", Where: inbox.RecordsPath, Msg: err.Error()}}
+	}
+	var out []Finding
+	waiting := 0
+	for _, e := range entries { // the inbox leaves other names alone
+		if !e.Type().IsRegular() || !strings.HasSuffix(e.Name(), ".json") || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		rel := inbox.RecordsPath + "/" + e.Name()
+		data, err := os.ReadFile(filepath.Join(root, e.Name())) //nolint:gosec // G304: the path is built from the store root and a walked name
+		if err == nil {
+			err = inbox.CheckRecord(data)
+		}
+		if err != nil {
+			out = append(out, Finding{
+				Check: "inbox", Where: rel, Msg: "does not decode: " + err.Error() + "; the inbox leaves it where it is",
+				Hint: "remove the file",
+			})
+			continue
+		}
+		waiting++
+	}
+	if waiting > 0 {
+		out = append(out, Finding{
+			Check: "inbox", Where: inbox.RecordsPath,
+			Msg:  fmt.Sprintf("%d merge driver records are not in the inbox yet", waiting),
+			Hint: "run hedgehug inbox",
+		})
+	}
+	return out
+}
+
+// Fix repairs the files of HEAD as a sync does, without fetching or
+// pushing, and returns what it fixed. Duplicate prefixes and names the
+// repair only tells of are not in the result: they stay findings.
+func Fix(s *store.Store, opt sync.Options) ([]merge.Repaired, error) {
+	all, err := sync.RepairHead(s, opt)
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(all, func(x merge.Repaired) bool {
+		return x.Kind == "prefix_duplicate" || x.Kind == "name_duplicate"
+	}), nil
 }
 
 // readCheck reads the file at rel and decodes it.
@@ -177,10 +273,24 @@ func checkStore(dir string) []Finding {
 			if p.Field != "" {
 				msg = p.Field + ": " + msg
 			}
-			fs = append(fs, Finding{Check: "task", Where: taskWhere(e), Msg: msg})
+			fs = append(fs, Finding{Check: "task", Where: taskWhere(e), Msg: msg, Hint: fixHint(p)})
 		}
 	}
 	return fs
+}
+
+// fixHint is the advice for a problem that doctor --fix repairs, or "".
+func fixHint(p index.Problem) string {
+	const fix = "hedgehug doctor --fix fixes it"
+	switch {
+	case p.Code == index.CodeDuplicateID:
+		return fix + "; hedgehug sync also renumbers it, keeping the task that is pushed"
+	case p.Code == index.CodeIDPrefix, p.Code == store.CodeWorkspaceMismatch:
+		return fix
+	case p.Field == "parent" && (p.Code == schema.CodeCycle || p.Code == schema.CodeMissingRef || p.Code == index.CodeParentDeleted):
+		return fix
+	}
+	return ""
 }
 
 // checkWorkspaces finds workspaces that share an id prefix or a name. Each

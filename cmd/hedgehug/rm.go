@@ -25,12 +25,20 @@ func (a *app) rmCmd() *cobra.Command {
 }
 
 func (a *app) restoreCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "restore <id>",
-		Short: "Restore a deleted task and what the same rm deleted under it",
+	var at string
+	cmd := &cobra.Command{
+		Use:   "restore <id> [--at <time>]",
+		Short: "Restore a deleted task and what the same rm deleted under it, or a task as it was at a time",
 		Args:  exactArgs(1),
-		RunE:  func(_ *cobra.Command, args []string) error { return a.restore(args[0]) },
+		RunE: func(_ *cobra.Command, args []string) error {
+			if at != "" {
+				return a.restoreAt(args[0], at)
+			}
+			return a.restore(args[0])
+		},
 	}
+	cmd.Flags().StringVar(&at, "at", "", "put the task back as it was at this time (RFC 3339 or a date, the end of that day) or commit; its id and workspace stay")
+	return cmd
 }
 
 func (a *app) purgeCmd() *cobra.Command {

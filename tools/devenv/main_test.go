@@ -61,6 +61,75 @@ func TestInitCreatesUsers(t *testing.T) {
 	}
 }
 
+func TestInitMakesSharedStore(t *testing.T) {
+	dir := initDir(t)
+	for _, p := range []string{"remotes/kukv/hh-tasks.git/HEAD", "remotes/org-a/hh-shared.git/HEAD"} {
+		if _, err := os.Stat(filepath.Join(dir, p)); err != nil {
+			t.Errorf("%s: %v", p, err)
+		}
+	}
+	for _, u := range []string{"alice", "bob"} {
+		home := filepath.Join(dir, "users", u)
+		cfg, err := os.ReadFile(filepath.Join(home, "config.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{"login: " + u, "host: github.com", "name: org-a", "hh-shared.git"} {
+			if !strings.Contains(string(cfg), want) {
+				t.Errorf("%s config.yaml lacks %q:\n%s", u, want, cfg)
+			}
+		}
+		if n := strings.Count(string(cfg), "account: personal"); n != 2 {
+			t.Errorf("%s config.yaml names the account on %d stores, want 2:\n%s", u, n, cfg)
+		}
+		s, err := store.Open(filepath.Join(home, "stores", "org-a"))
+		if err != nil {
+			t.Fatalf("%s has no org-a: %v", u, err)
+		}
+		if ok, err := s.Repo().MergeDriverRegistered(); err != nil || !ok {
+			t.Errorf("%s: merge driver registered = %v, %v", u, ok, err)
+		}
+		if got := s.Repo().Remotes(); len(got) != 1 || got[0] != "origin" {
+			t.Errorf("%s: org-a remotes = %v, want [origin]", u, got)
+		}
+		log, err := s.Repo().Log(nil, 0)
+		if err != nil || len(log) == 0 {
+			t.Fatalf("%s: log = %v, %v", u, log, err)
+		}
+		if got := log[len(log)-1].Author.Name; got != "alice" {
+			t.Errorf("%s: first commit of org-a by %q, want alice", u, got)
+		}
+		if got, want := log[0].Author.Email, "alice@users.noreply.github.com"; got != want {
+			t.Errorf("%s: org-a head author email = %q, want %q", u, got, want)
+		}
+	}
+}
+
+func TestInitPushesAlicesStoreOnly(t *testing.T) {
+	dir := initDir(t)
+	alice, err := store.Open(filepath.Join(dir, "users", "alice", "stores", "me"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := alice.Repo().Remotes(); len(got) != 1 || got[0] != "origin" {
+		t.Errorf("alice remotes = %v, want [origin]", got)
+	}
+	head, err := alice.Repo().Head()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if remote, err := alice.Repo().RemoteHead("origin"); err != nil || remote != head {
+		t.Errorf("remote head = %v, %v; want %v", remote, err, head)
+	}
+	bob, err := store.Open(filepath.Join(dir, "users", "bob", "stores", "me"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := bob.Repo().Remotes(); len(got) != 0 {
+		t.Errorf("bob's own store has remotes %v", got)
+	}
+}
+
 func TestInitExistingDirFails(t *testing.T) {
 	dir := initDir(t)
 	code, _, stderr := runDevenv(t, "init", "--dir", dir)

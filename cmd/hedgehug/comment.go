@@ -150,8 +150,25 @@ func (a *app) commentAdd(arg string, text []string) error {
 		return errEmptyComment
 	}
 	c := &model.Comment{ULID: model.NewULID(), Body: body}
+	if c.Author, err = a.accountID(); err != nil {
+		return err
+	}
+	host, err := a.writerHost()
+	if err != nil {
+		return err
+	}
+	accts := newMentions("", c.Body, host)
+	if c.Author != "" {
+		accts = append([]string{c.Author}, accts...)
+	}
 	if _, err := a.update(s, store.Op{Name: "comment", Task: e.ULID}, func(tx *store.Tx) error {
-		return tx.PutComment(e.ULID, c)
+		if err := tx.PutComment(e.ULID, c); err != nil {
+			return err
+		}
+		if e.Broken != "" {
+			return nil
+		}
+		return watchInTx(tx, e.ULID, accts...)
 	}); err != nil {
 		if path != "" {
 			return fmt.Errorf("%s; the comment is kept at %s", describe(err), path)
@@ -189,6 +206,21 @@ func (a *app) commentEdit(arg string) error {
 		}
 		return a.printComment(s, ref, verb(false, ""))
 	}
+	host, err := a.writerHost()
+	if err != nil {
+		return err
+	}
+	mentioned := newMentions(c.Body, body, host)
+	if len(mentioned) > 0 {
+		// A broken task has no watchers to add to.
+		_, ix, err := a.open()
+		if err != nil {
+			return err
+		}
+		if e, ok := ix.Task(ref.Task); ok && e.Broken != "" {
+			mentioned = nil
+		}
+	}
 	committed, err := a.update(s, store.Op{Name: "comment", Task: ref.Task}, func(tx *store.Tx) error {
 		cur, err := findComment(s, ref)
 		if err != nil {
@@ -198,7 +230,10 @@ func (a *app) commentEdit(arg string) error {
 			return errCommentChanged
 		}
 		cur.Body = body
-		return tx.PutComment(ref.Task, cur)
+		if err := tx.PutComment(ref.Task, cur); err != nil {
+			return err
+		}
+		return watchInTx(tx, ref.Task, mentioned...)
 	})
 	if err != nil {
 		return fmt.Errorf("%s; the edited comment is kept at %s", describe(err), path)

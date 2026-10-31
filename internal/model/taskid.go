@@ -1,9 +1,11 @@
 package model
 
 import (
+	"cmp"
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -50,4 +52,41 @@ func IDNumbersIn(data []byte) map[string]int {
 		}
 	}
 	return out
+}
+
+// CountIDs raises used to the numbers of t's id and former ids.
+func CountIDs(used map[string]int, t *Task) {
+	for _, k := range append([]string{t.ID}, t.FormerIDs...) {
+		if p, n, ok := ParseTaskID(k); ok && n > used[p] {
+			used[p] = n
+		}
+	}
+}
+
+// RaiseNumbers raises used to the numbers of more.
+func RaiseNumbers(used, more map[string]int) {
+	for p, n := range more {
+		if n > used[p] {
+			used[p] = n
+		}
+	}
+}
+
+// CompareIDs orders ids by prefix, then by number. What is not the form of
+// an id comes after the ids, in string order.
+func CompareIDs(a, b string) int {
+	pa, na, oka := ParseTaskID(a)
+	pb, nb, okb := ParseTaskID(b)
+	switch {
+	case oka && okb:
+		if c := strings.Compare(pa, pb); c != 0 {
+			return c
+		}
+		return cmp.Compare(na, nb)
+	case oka:
+		return -1
+	case okb:
+		return 1
+	}
+	return strings.Compare(a, b)
 }

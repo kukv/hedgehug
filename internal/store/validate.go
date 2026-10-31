@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kukv/hedgehug/internal/atomicfile"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
 )
@@ -154,14 +155,23 @@ func (tx *Tx) validateWorkspaces() error {
 		if err := model.ValidWorkspaceName(w.Name); err != nil {
 			return err
 		}
+		// A duplicate that a sync brought in must not stop a change of the
+		// other field, so only a field the operation changes is compared.
+		prefixChanged, nameChanged := true, true
+		if cur, err := tx.s.Workspace(ulid); err == nil {
+			prefixChanged = cur.IDPrefix != w.IDPrefix
+			nameChanged = cur.Name != w.Name
+		} else if !errors.Is(err, ErrNotFound) && !errors.As(err, new(*model.DecodeError)) {
+			return err
+		}
 		for otherULID, o := range all {
 			if otherULID == ulid {
 				continue
 			}
-			if o.IDPrefix == w.IDPrefix {
+			if prefixChanged && o.IDPrefix == w.IDPrefix {
 				return fmt.Errorf("the id prefix %s is already used by workspace %s", w.IDPrefix, o.Name)
 			}
-			if strings.EqualFold(o.Name, w.Name) {
+			if nameChanged && strings.EqualFold(o.Name, w.Name) {
 				return fmt.Errorf("a workspace named %s already exists", o.Name)
 			}
 		}
@@ -190,7 +200,7 @@ func (tx *Tx) validateWorkspaces() error {
 			// would leave it pointing nowhere once it is fixed, so a file
 			// that holds the ULID anywhere, in any case, is taken to be in
 			// that workspace: refusing too often is the safe side.
-			b, err := readFile(tx.s.path(fe.Path))
+			b, err := atomicfile.ReadFile(tx.s.path(fe.Path))
 			if err != nil {
 				return err
 			}

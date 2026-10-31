@@ -1,0 +1,22 @@
+[
+  {
+    "ulid": "<ULID-1>",
+    "kind": "overwritten",
+    "id": "ORG-1",
+    "path": "tasks/<SHARD>/<ULID-2>.md",
+    "commit": "<HASH>",
+    "author": "",
+    "to": "github.com/bob",
+    "time": "<TIME>",
+    "detail": {
+      "field": "title",
+      "value": "bob"
+    },
+    "store": "org",
+    "task": {
+      "ulid": "<ULID-2>",
+      "id": "ORG-1",
+      "title": "bob"
+    }
+  }
+]

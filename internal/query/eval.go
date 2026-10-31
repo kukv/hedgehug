@@ -1,7 +1,6 @@
 package query
 
 import (
-	"cmp"
 	"fmt"
 	"math"
 	"slices"
@@ -16,7 +15,10 @@ import (
 
 // Options holds what a query needs from outside the store.
 type Options struct {
-	Me []string // the accounts assignee:@me stands for
+	Me []string // the accounts @me stands for
+	// Overwritten holds the tasks is:overwritten matches: those with an
+	// unread overwritten item in the inbox.
+	Overwritten map[model.ULID]bool
 }
 
 // Result is what a query found.
@@ -112,6 +114,10 @@ func (c *compiler) term(t Term) (pred, error) {
 		return c.matchText(t, func(e *index.Entry) []string { return e.Labels }, nil)
 	case "assignee":
 		return c.assignee(t)
+	case "watching":
+		return c.watching(t)
+	case "mentions":
+		return c.mentions(t)
 	case "parent":
 		return c.ref(t, func(e *index.Entry) []model.ULID {
 			if e.Parent == nil {
@@ -145,6 +151,12 @@ func (c *compiler) term(t Term) (pred, error) {
 // ignoring case; none matches a task with no value. check, when set, refuses
 // values the term cannot take.
 func (c *compiler) matchText(t Term, get func(*index.Entry) []string, check func(string) error) (pred, error) {
+	return c.matchBy(t, get, check, strings.EqualFold)
+}
+
+// matchBy is matchText with match telling whether a value of the task
+// matches a value of the term.
+func (c *compiler) matchBy(t Term, get func(*index.Entry) []string, check func(string) error, match func(got, want string) bool) (pred, error) {
 	none := false
 	var want []string
 	for _, v := range t.Values {
@@ -166,7 +178,7 @@ func (c *compiler) matchText(t Term, get func(*index.Entry) []string, check func
 		}
 		for _, g := range got {
 			for _, w := range want {
-				if strings.EqualFold(g, w) {
+				if match(g, w) {
 					return true
 				}
 			}
@@ -200,8 +212,37 @@ func (c *compiler) status(t Term) (pred, error) {
 	return c.matchText(t, func(e *index.Entry) []string { return single(e.Status) }, nil)
 }
 
-// assignee matches assignees; @me stands for the accounts in Options.Me.
+// assignee matches assignees.
 func (c *compiler) assignee(t Term) (pred, error) {
+	t, err := c.me(t)
+	if err != nil {
+		return nil, err
+	}
+	return c.matchText(t, func(e *index.Entry) []string { return e.Assignees }, nil)
+}
+
+// watching matches watchers.
+func (c *compiler) watching(t Term) (pred, error) {
+	t, err := c.me(t)
+	if err != nil {
+		return nil, err
+	}
+	return c.matchText(t, func(e *index.Entry) []string { return e.Watchers }, nil)
+}
+
+// mentions matches the mentions of the body and of the comments that are
+// not deleted, as the inbox does: @login names any account with that login.
+// A value with no host matches that login on any host.
+func (c *compiler) mentions(t Term) (pred, error) {
+	t, err := c.me(t)
+	if err != nil {
+		return nil, err
+	}
+	return c.matchBy(t, func(e *index.Entry) []string { return e.Mentions }, nil, index.MentionNames)
+}
+
+// me replaces @me among the values of t with the accounts in Options.Me.
+func (c *compiler) me(t Term) (Term, error) {
 	var vs []string
 	for _, v := range t.Values {
 		if v != "@me" {
@@ -209,12 +250,12 @@ func (c *compiler) assignee(t Term) (pred, error) {
 			continue
 		}
 		if len(c.opt.Me) == 0 {
-			return nil, c.fail(t, "@me needs an account to be set up")
+			return t, c.fail(t, "@me needs an account to be set up")
 		}
 		vs = append(vs, c.opt.Me...)
 	}
 	t.Values = vs
-	return c.matchText(t, func(e *index.Entry) []string { return e.Assignees }, nil)
+	return t, nil
 }
 
 // resolve turns the values of t into tasks; none is reported apart.
@@ -478,6 +519,8 @@ func (c *compiler) is(t Term) (pred, error) {
 		case "deleted":
 			c.deleted = true
 			ps = append(ps, func(e *index.Entry) bool { return e.DeletedAt != nil })
+		case "overwritten":
+			ps = append(ps, func(e *index.Entry) bool { return c.opt.Overwritten[e.ULID] })
 		default:
 			return nil, c.fail(t, "unknown condition is:%s", v)
 		}
@@ -531,8 +574,5 @@ func matchAll(ps []pred, e *index.Entry) bool {
 }
 
 func byRank(a, b *index.Entry) int {
-	if c := cmp.Compare(a.Rank, b.Rank); c != 0 {
-		return c
-	}
-	return cmp.Compare(a.ULID.String(), b.ULID.String())
+	return model.CompareRankKeys(a.RankKey(), b.RankKey())
 }

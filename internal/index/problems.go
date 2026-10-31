@@ -21,6 +21,9 @@ const (
 	// CodeIDPrefix is the problem of an id whose prefix is not the one of
 	// the task's workspace.
 	CodeIDPrefix = "id_prefix"
+	// CodeParentDeleted is the problem of a task that is not deleted but
+	// whose parent is.
+	CodeParentDeleted = "parent_deleted"
 )
 
 // Problem is something wrong with a task: what is:invalid finds, and what is
@@ -68,8 +71,13 @@ func (ix *Index) findProblems() map[model.ULID][]Problem {
 			add(e.ULID, Problem{CodeIDPrefix, "id", fmt.Sprintf("the id prefix is not the one of workspace %s (%s); the next write renumbers it", ws.Name, ws.IDPrefix)})
 		}
 		if e.Parent != nil {
-			if p := ix.tasks[*e.Parent]; p != nil && p.Broken == "" && p.Workspace != e.Workspace {
-				add(e.ULID, Problem{store.CodeWorkspaceMismatch, "workspace", "differs from the workspace of the parent"})
+			if p := ix.tasks[*e.Parent]; p != nil && p.Broken == "" {
+				if p.Workspace != e.Workspace {
+					add(e.ULID, Problem{store.CodeWorkspaceMismatch, "workspace", "differs from the workspace of the parent"})
+				}
+				if e.DeletedAt == nil && p.DeletedAt != nil {
+					add(e.ULID, Problem{CodeParentDeleted, "parent", fmt.Sprintf("the parent %s is deleted", p.ID)})
+				}
 			}
 		}
 	}

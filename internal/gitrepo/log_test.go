@@ -1,6 +1,7 @@
 package gitrepo
 
 import (
+	"slices"
 	"testing"
 	"time"
 )
@@ -64,6 +65,30 @@ func TestLog(t *testing.T) {
 			t.Errorf("%s: len = %d, want %d", tc.name, len(got), tc.want)
 		}
 	}
+
+	// A value may hold ": ", and a key may come more than once.
+	writeFile(t, dir, "a.md", "fourth")
+	_, err = r.Commit(Commit{
+		Paths: []string{"a.md"}, Subject: "fourth", Author: author, When: base.Add(3 * time.Minute),
+		Trailers: []Trailer{
+			{"Hedgehug-Overwritten", `{"field":"a: b"}`},
+			{"Hedgehug-Op", "merge"},
+			{"Hedgehug-Overwritten", `{"field":"c"}`},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	last, err := r.Log(nil, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := last[0].TrailerValues("Hedgehug-Overwritten"); !slices.Equal(got, []string{`{"field":"a: b"}`, `{"field":"c"}`}) {
+		t.Errorf("TrailerValues = %q", got)
+	}
+	if got := last[0].TrailerValues("Nope"); len(got) != 0 {
+		t.Errorf("TrailerValues(Nope) = %q", got)
+	}
 }
 
 func TestLogEmptyRepo(t *testing.T) {
@@ -93,5 +118,16 @@ func TestLogNoTrailers(t *testing.T) {
 	}
 	if got[0].Subject != "only: subject" || len(got[0].Trailers) != 0 {
 		t.Errorf("entry = %+v", got[0])
+	}
+}
+
+func TestLogEntryWriter(t *testing.T) {
+	e := LogEntry{Author: Signature{Name: "a", Email: "a@x"}}
+	if got := e.Writer(); got != "a@x" {
+		t.Errorf("Writer = %q", got)
+	}
+	e.Trailers = []Trailer{{Key: "Hedgehug-Op", Value: "add"}, {Key: "Hedgehug-Author", Value: "github.com/a"}}
+	if got := e.Writer(); got != "github.com/a" {
+		t.Errorf("Writer = %q", got)
 	}
 }

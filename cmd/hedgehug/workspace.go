@@ -98,23 +98,17 @@ func (a *app) checkPrefixElsewhere(prefix, self string) error {
 	if err != nil {
 		return err
 	}
+	var others []store.NamedStore
 	for _, e := range c.Stores {
-		if e.Name == self {
-			continue
+		if e.Name != self {
+			others = append(others, store.NamedStore{Name: e.Name, Path: e.Path})
 		}
-		s, err := store.Open(e.Path)
-		if err != nil {
-			_, _ = fmt.Fprintf(a.stderr, "warning: store %s is not checked for id prefixes: %v\n", e.Name, err)
-			continue
-		}
-		for w, err := range s.Workspaces() {
-			if err != nil {
-				continue
-			}
-			if strings.EqualFold(w.IDPrefix, prefix) {
-				return fmt.Errorf("id prefix %s is used by workspace %s of store %s", prefix, w.Name, e.Name)
-			}
-		}
+	}
+	uses := store.PrefixUses(others, []string{prefix}, func(name string, err error) {
+		_, _ = fmt.Fprintf(a.stderr, "warning: store %s is not checked for id prefixes: %v\n", name, err)
+	})
+	if len(uses) > 0 {
+		return fmt.Errorf("id prefix %s is used by workspace %s of store %s", prefix, uses[0].Workspace.Name, uses[0].Store)
 	}
 	return nil
 }

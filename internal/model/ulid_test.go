@@ -3,6 +3,7 @@ package model
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -102,5 +103,20 @@ func TestDecodeError(t *testing.T) {
 	}
 	if got, want := (&DecodeError{Field: "ulid", Err: inner}).Error(), "ulid: boom"; got != want {
 		t.Errorf("Error() = %q, want %q", got, want)
+	}
+}
+
+func TestULIDJSON(t *testing.T) {
+	a := NewULID()
+	b, err := json.Marshal(map[string]ULID{"u": a})
+	if err != nil || string(b) != `{"u":"`+a.String()+`"}` {
+		t.Fatalf("Marshal = %s, %v", b, err)
+	}
+	var out map[string]ULID
+	if err := json.Unmarshal([]byte(`{"u":"`+strings.ToLower(a.String())+`"}`), &out); err != nil || out["u"] != a {
+		t.Errorf("Unmarshal = %v, %v", out, err)
+	}
+	if err := json.Unmarshal([]byte(`{"u":"nope"}`), &out); err == nil {
+		t.Error("an invalid ULID was read")
 	}
 }

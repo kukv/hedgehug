@@ -52,6 +52,7 @@ func (a *app) printJSON(v any) error {
 type taskJSON struct {
 	ULID      string            `json:"ulid"`
 	ID        string            `json:"id"`
+	FormerIDs []string          `json:"former_ids,omitempty"`
 	Workspace *workspaceRefJSON `json:"workspace"`
 	Kind      string            `json:"kind"`
 	Title     string            `json:"title"`
@@ -98,6 +99,7 @@ func entryJSON(ix *index.Index, e *index.Entry) *taskJSON {
 	j := &taskJSON{
 		ULID:      e.ULID.String(),
 		ID:        e.ID,
+		FormerIDs: e.FormerIDs,
 		Kind:      e.Kind,
 		Title:     e.Title,
 		Rank:      string(e.Rank),

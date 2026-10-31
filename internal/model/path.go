@@ -10,6 +10,9 @@ import (
 // StoreMetaPath is where a store keeps its metadata.
 const StoreMetaPath = ".hedgehug/store.yaml"
 
+// AutomationsPath is where a store keeps its automations.
+const AutomationsPath = "automations.yaml"
+
 // shard splits files into 32×32 directories by the last and the second to
 // last character of the ULID. The first characters are a timestamp and
 // cluster, so the random tail is used instead.

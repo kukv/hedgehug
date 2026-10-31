@@ -4,7 +4,6 @@
 package index
 
 import (
-	"cmp"
 	"errors"
 	"maps"
 	"slices"
@@ -63,6 +62,7 @@ func Open(s *store.Store) (*Index, error) {
 		ix.save()
 	}
 	s.SetIDNumbers(ix.IDNumbers)
+	s.SetSiblings(ix.siblingULIDs)
 	return ix, nil
 }
 
@@ -102,11 +102,11 @@ func (ix *Index) Task(ulid model.ULID) (*Entry, bool) {
 // Tasks returns every entry, deleted ones included. The order is not fixed.
 func (ix *Index) Tasks() []*Entry { return slices.Collect(maps.Values(ix.tasks)) }
 
-// Children returns the tasks whose parent is ulid, by rank then ULID.
+// Children returns the tasks whose parent is ulid, by rank, ID, then ULID.
 func (ix *Index) Children(ulid model.ULID) []*Entry { return slices.Clone(ix.children[ulid]) }
 
 // Roots returns the tasks with no parent, and those whose parent is not in
-// the index, by rank then ULID.
+// the index, by rank, ID, then ULID.
 func (ix *Index) Roots() []*Entry { return slices.Clone(ix.roots) }
 
 // derive fills what is computed from the entries. Call it after any change
@@ -128,11 +128,13 @@ func (ix *Index) derive() {
 	sortByRank(ix.roots)
 }
 
+// RankKey returns what orders e among its siblings.
+func (e *Entry) RankKey() model.RankKey {
+	return model.RankKey{ID: e.ID, ULID: e.ULID, Rank: e.Rank}
+}
+
 func sortByRank(es []*Entry) {
 	slices.SortFunc(es, func(a, b *Entry) int {
-		if c := cmp.Compare(a.Rank, b.Rank); c != 0 {
-			return c
-		}
-		return cmp.Compare(a.ULID.String(), b.ULID.String())
+		return model.CompareRankKeys(a.RankKey(), b.RankKey())
 	})
 }

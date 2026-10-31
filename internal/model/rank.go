@@ -1,8 +1,10 @@
 package model
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v4"
@@ -294,4 +296,55 @@ func decrementInteger(x string) (string, bool) {
 		digs = digs[:len(digs)-1]
 	}
 	return string(h) + string(digs), true
+}
+
+// RankKey is what orders a task among its siblings: its rank, then its id,
+// then its ULID.
+type RankKey struct {
+	ID   string
+	ULID ULID
+	Rank Rank
+}
+
+// RankKey returns what orders t among its siblings.
+func (t *Task) RankKey() RankKey { return RankKey{ID: t.ID, ULID: t.ULID, Rank: t.Rank} }
+
+// CompareRankKeys orders siblings: by rank, then id, then ULID.
+func CompareRankKeys(a, b RankKey) int {
+	if c := cmp.Compare(a.Rank, b.Rank); c != 0 {
+		return c
+	}
+	if c := CompareIDs(a.ID, b.ID); c != 0 {
+		return c
+	}
+	return cmp.Compare(a.ULID.String(), b.ULID.String())
+}
+
+// RankAmong returns the rank for self among sibs, which are its live
+// siblings. Siblings with the same rank are ordered by id, so when one has
+// the rank of self, self gets a rank of its own: the first of the group
+// goes between the next smaller rank of the siblings and the group's, any
+// other between the group's and the next larger. The order against the
+// siblings outside the group stays. Without a sibling of the same rank it
+// returns self.Rank.
+func RankAmong(self RankKey, sibs []RankKey) (Rank, error) {
+	var lower, higher Rank
+	group := []RankKey{self}
+	for _, o := range sibs {
+		switch {
+		case o.Rank == self.Rank:
+			group = append(group, o)
+		case o.Rank < self.Rank && o.Rank > lower:
+			lower = o.Rank
+		case o.Rank > self.Rank && (higher == "" || o.Rank < higher):
+			higher = o.Rank
+		}
+	}
+	if len(group) == 1 {
+		return self.Rank, nil
+	}
+	if slices.MinFunc(group, CompareRankKeys) == self {
+		return Between(lower, self.Rank)
+	}
+	return Between(self.Rank, higher)
 }

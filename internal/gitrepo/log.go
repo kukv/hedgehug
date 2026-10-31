@@ -2,6 +2,7 @@ package gitrepo
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 // LogEntry is one commit as read back from the history.
 type LogEntry struct {
 	Hash     plumbing.Hash
+	Parents  []plumbing.Hash
 	Author   Signature
 	When     time.Time
 	Subject  string
@@ -28,6 +30,27 @@ func (e LogEntry) Trailer(key string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// TrailerValues returns the values of every trailer named key, in the order
+// they are written.
+func (e LogEntry) TrailerValues(key string) []string {
+	var out []string
+	for _, t := range e.Trailers {
+		if t.Key == key {
+			out = append(out, t.Value)
+		}
+	}
+	return out
+}
+
+// Writer is who made the commit: its Hedgehug-Author, else the email of
+// its author.
+func (e LogEntry) Writer() string {
+	if a, ok := e.Trailer("Hedgehug-Author"); ok {
+		return a
+	}
+	return e.Author.Email
 }
 
 // Log returns the commits reachable from HEAD, newest first. With prefixes,
@@ -68,10 +91,48 @@ func (r *Repo) Log(prefixes []string, limit int) ([]LogEntry, error) {
 	return out, nil
 }
 
+// LogFrom returns the commits from from along the first parents, newest
+// first: the history of the line from was made on, without the commits a
+// merge brought in. A limit above zero caps the number of entries. The zero
+// hash has an empty log.
+func (r *Repo) LogFrom(from plumbing.Hash, limit int) ([]LogEntry, error) {
+	var out []LogEntry
+	for h := from; !h.IsZero(); {
+		c, err := r.r.CommitObject(h)
+		if err != nil {
+			return nil, fmt.Errorf("commit %s: %w", h, err)
+		}
+		out = append(out, entry(c))
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+		h = plumbing.ZeroHash
+		if len(c.ParentHashes) > 0 {
+			h = c.ParentHashes[0]
+		}
+	}
+	return out, nil
+}
+
+// ResolveCommit returns the commit that rev names: a full or abbreviated
+// hash, or any other revision git understands. An abbreviation that matches
+// more than one commit is an error.
+func (r *Repo) ResolveCommit(rev string) (plumbing.Hash, error) {
+	h, err := r.r.ResolveRevision(plumbing.Revision(rev))
+	if err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("revision %q: %w", rev, err)
+	}
+	if _, err := r.r.CommitObject(*h); err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("revision %q is not a commit: %w", rev, err)
+	}
+	return *h, nil
+}
+
 func entry(c *object.Commit) LogEntry {
 	subject, trailers := parseMessage(c.Message)
 	return LogEntry{
 		Hash:     c.Hash,
+		Parents:  c.ParentHashes,
 		Author:   Signature{Name: c.Author.Name, Email: c.Author.Email},
 		When:     c.Author.When,
 		Subject:  subject,

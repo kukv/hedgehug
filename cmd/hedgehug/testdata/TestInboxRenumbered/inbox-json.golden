@@ -1,0 +1,21 @@
+[
+  {
+    "ulid": "<ULID-1>",
+    "kind": "renumbered",
+    "id": "ORG-3",
+    "commit": "<HASH>",
+    "author": "",
+    "to": "github.com/bob",
+    "time": "<TIME>",
+    "detail": {
+      "old": "ORG-2",
+      "new": "ORG-3"
+    },
+    "store": "org",
+    "task": {
+      "ulid": "<ULID-2>",
+      "id": "ORG-3",
+      "title": "b"
+    }
+  }
+]
