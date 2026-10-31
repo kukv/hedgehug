@@ -150,10 +150,8 @@ func (a *app) commentAdd(arg string, text []string) error {
 		return errEmptyComment
 	}
 	c := &model.Comment{ULID: model.NewULID(), Body: body}
-	if _, acct, ok, err := a.writer(); err != nil {
+	if c.Author, err = a.accountID(); err != nil {
 		return err
-	} else if ok {
-		c.Author = acct.ID()
 	}
 	if _, err := a.update(s, store.Op{Name: "comment", Task: e.ULID}, func(tx *store.Tx) error {
 		return tx.PutComment(e.ULID, c)

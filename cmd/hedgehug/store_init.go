@@ -81,6 +81,7 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema) error {
 	if err := a.checkPrefixElsewhere(prefix, name); err != nil {
 		return err
 	}
+	// The new store has no entry yet, so only the single-account fallback applies.
 	acct, ok := c.Writer(config.StoreEntry{Name: name})
 	author, err := config.CommitAuthor(acct, ok, a.getenv)
 	if err != nil {

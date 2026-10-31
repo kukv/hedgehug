@@ -104,12 +104,8 @@ func (a *app) add(title, parentArg, workspaceArg, kind, status string, assigns [
 	if t.Rank, err = endRank(ix, t.Parent, t.ULID); err != nil {
 		return err
 	}
-	_, acct, ok, err := a.writer()
-	if err != nil {
+	if t.CreatedBy, err = a.accountID(); err != nil {
 		return err
-	}
-	if ok {
-		t.CreatedBy = acct.ID()
 	}
 	committed, err := a.update(s, store.Op{Name: "add", Task: t.ULID}, func(tx *store.Tx) error { return tx.PutTask(t) })
 	if err != nil {

@@ -19,6 +19,12 @@ type app struct {
 	storeName string
 	jsonOut   bool
 	noColor   bool
+
+	// the writer of the store, read from config.yaml once per run
+	writerDone bool
+	writerAcct config.Account
+	writerOK   bool
+	writerErr  error
 }
 
 // usageError is a mistake in the flags or arguments; it exits 2.
@@ -108,26 +114,43 @@ func (a *app) open() (*store.Store, *index.Index, error) {
 // and before it writes, as another process could.
 var beforeUpdate = func() {}
 
-// writer returns the store the command works on and the account that writes
-// to it; ok is false when the store has none.
-func (a *app) writer() (config.StoreEntry, config.Account, bool, error) { //nolint:unparam // the entry is for the commands that sync
+// writer returns the account that writes to the store the command works
+// on; ok is false when the store has none. It reads the config once.
+func (a *app) writer() (acct config.Account, ok bool, err error) {
+	if !a.writerDone {
+		a.writerDone = true
+		a.writerAcct, a.writerOK, a.writerErr = a.loadWriter()
+	}
+	return a.writerAcct, a.writerOK, a.writerErr
+}
+
+func (a *app) loadWriter() (config.Account, bool, error) {
 	c, _, err := a.config()
 	if err != nil {
-		return config.StoreEntry{}, config.Account{}, false, err
+		return config.Account{}, false, err
 	}
 	e, err := c.Select(a.storeName)
 	if err != nil {
-		return e, config.Account{}, false, err
+		return config.Account{}, false, err
 	}
 	acct, ok := c.Writer(e)
-	return e, acct, ok, nil
+	return acct, ok, nil
+}
+
+// accountID is the ID of the writer's account, or "" when the store has none.
+func (a *app) accountID() (string, error) {
+	acct, ok, err := a.writer()
+	if err != nil || !ok {
+		return "", err
+	}
+	return acct.ID(), nil
 }
 
 // update runs one operation as one commit. The author is the store's
 // account, or the git config when the store has none. committed is false
 // when the operation changed nothing.
 func (a *app) update(s *store.Store, op store.Op, fn func(*store.Tx) error) (bool, error) {
-	_, acct, ok, err := a.writer()
+	acct, ok, err := a.writer()
 	if err != nil {
 		return false, err
 	}

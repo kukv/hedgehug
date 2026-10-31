@@ -147,6 +147,9 @@ func TestAddWithAccount(t *testing.T) {
 		t.Errorf("created_by = %q", got)
 	}
 	c := te.headCommit("me")
+	if trailer := "Hedgehug-Author: " + te.task(x.ULID).CreatedBy; !strings.Contains(c.Message, trailer) {
+		t.Errorf("created_by differs from the trailer: %q", c.Message)
+	}
 	if c.Author.Name != "alice" || c.Author.Email != "alice@users.noreply.github.com" || !strings.Contains(c.Message, "Hedgehug-Author: github.com/alice") {
 		t.Errorf("commit = %+v", c)
 	}
