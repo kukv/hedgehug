@@ -232,8 +232,13 @@ func TestWatchAddsAndRemovesMe(t *testing.T) {
 		t.Fatal(err)
 	}
 	// With no account in config.yaml there is no "me" to watch with.
-	if _, err := ts.Watch("ME-1", true); err == nil || !strings.Contains(err.Error(), "accounts are not set up") {
+	_, err := ts.Watch("ME-1", true)
+	if err == nil || !strings.Contains(err.Error(), "accounts are not set up") {
 		t.Fatalf("Watch without an account: %v", err)
+	}
+	var ne *Error
+	if KindOf(err) != KindConflict || !errors.As(err, &ne) || ne.Code != "account.none" {
+		t.Fatalf("Watch without an account: kind %v, err %v; want KindConflict account.none", KindOf(err), err)
 	}
 
 	ts.useAccount()

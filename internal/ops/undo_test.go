@@ -75,8 +75,9 @@ func TestUndoNeedsAccounts(t *testing.T) {
 	if err == nil || err.Error() != "accounts are not set up in config.yaml; hedgehug undo needs them to find your operations" {
 		t.Fatalf("Undo = %v; want the accounts message", err)
 	}
-	if KindOf(err) != KindUnknown {
-		t.Errorf("kind = %v; want KindUnknown, as the CLI exits 1 for it", KindOf(err))
+	var oe *Error
+	if KindOf(err) != KindConflict || !errors.As(err, &oe) || oe.Code != "account.none" {
+		t.Errorf("Undo = %v (kind %v); want KindConflict account.none", err, KindOf(err))
 	}
 }
 

@@ -29,7 +29,7 @@ func (ss *Session) Undo() (UndoResult, error) {
 		return UndoResult{}, err
 	}
 	if !ok {
-		return UndoResult{}, errors.New("accounts are not set up in config.yaml; hedgehug undo needs them to find your operations")
+		return UndoResult{}, newErr(KindConflict, "account.none", errors.New("accounts are not set up in config.yaml; hedgehug undo needs them to find your operations"))
 	}
 	s, ix, err := ss.Open()
 	if err != nil {

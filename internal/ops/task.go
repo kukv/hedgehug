@@ -228,7 +228,7 @@ func (ss *Session) Dep(arg, blockerArg string, add bool) (TaskResult, error) {
 	return TaskResult{Index: ix, ULID: e.ULID, Committed: committed}, nil
 }
 
-var errNoAccounts = errors.New("accounts are not set up in config.yaml; add one to accounts")
+var errNoAccounts = newErr(KindConflict, "account.none", errors.New("accounts are not set up in config.yaml; add one to accounts"))
 
 // Watch adds the writer of the store to the watchers of the task arg
 // names, or, with on false, takes it out.
