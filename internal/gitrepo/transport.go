@@ -23,15 +23,19 @@ func init() {
 // driveRE matches the /C:/... that a file URL of a Windows path turns into.
 var driveRE = regexp.MustCompile(`^/[A-Za-z]:[/\\]`)
 
+// localPath turns the path of a file URL into a local path in slash form.
+func localPath(p string) string {
+	if driveRE.MatchString(p) {
+		return p[1:]
+	}
+	return p
+}
+
 type fileLoader struct{}
 
 // Load opens the bare repository at the endpoint's path.
 func (fileLoader) Load(ep *transport.Endpoint) (storer.Storer, error) {
-	p := ep.Path
-	if driveRE.MatchString(p) {
-		p = p[1:]
-	}
-	p = filepath.FromSlash(p)
+	p := filepath.FromSlash(localPath(ep.Path))
 	if !isDir(filepath.Join(p, "objects")) {
 		return nil, transport.ErrRepositoryNotFound
 	}

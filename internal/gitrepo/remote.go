@@ -3,6 +3,7 @@ package gitrepo
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -128,13 +129,10 @@ func (r *Repo) Push(remote string) error {
 		RemoteName: remote,
 		RefSpecs:   []config.RefSpec{"refs/heads/main:refs/heads/main"},
 	})
-	if errors.Is(err, git.NoErrAlreadyUpToDate) {
-		return nil
-	}
-	if err != nil && (errors.Is(err, git.ErrNonFastForwardUpdate) || strings.Contains(err.Error(), "non-fast-forward")) {
+	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) && (errors.Is(err, git.ErrNonFastForwardUpdate) || strings.Contains(err.Error(), "non-fast-forward")) {
 		return ErrRejected
 	}
-	if err != nil {
+	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return fmt.Errorf("push %s: %w", remote, err)
 	}
 	h, err := r.Head()
@@ -158,7 +156,10 @@ func (r *Repo) Head() (plumbing.Hash, error) {
 }
 
 // Clone clones the main branch of url into dir.
+// A failed clone removes the directory it created.
 func Clone(url, dir string) (*Repo, error) {
+	_, statErr := os.Stat(dir)
+	existed := statErr == nil
 	r, err := git.PlainClone(dir, false, &git.CloneOptions{
 		URL:           url,
 		RemoteName:    "origin",
@@ -166,10 +167,16 @@ func Clone(url, dir string) (*Repo, error) {
 		SingleBranch:  true,
 	})
 	if err != nil {
+		if !existed {
+			_ = os.RemoveAll(dir)
+		}
 		return nil, fmt.Errorf("clone %s: %w", url, err)
 	}
 	repo := &Repo{dir: dir, r: r}
 	if err := repo.SetRemotes([]string{url}); err != nil {
+		if !existed {
+			_ = os.RemoveAll(dir)
+		}
 		return nil, err
 	}
 	return repo, nil

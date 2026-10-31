@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"github.com/go-git/go-git/v5/config"
 )
 
 // noGit empties PATH so that a call to the git binary fails the test.
@@ -111,6 +113,10 @@ func TestPushNothing(t *testing.T) {
 	if err := a.r.Push("origin"); err != nil {
 		t.Errorf("push with nothing new = %v", err)
 	}
+	h, _ := a.r.Head()
+	if got, _ := a.r.RemoteHead("origin"); got != h {
+		t.Errorf("RemoteHead = %s, want %s", got, h)
+	}
 }
 
 func TestFetchEmptyRemote(t *testing.T) {
@@ -131,6 +137,9 @@ func TestSetRemotes(t *testing.T) {
 	if err := r.SetRemotes([]string{"/a.git", "/b.git", "/c.git"}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := r.r.CreateRemote(&config.RemoteConfig{Name: "upstream", URLs: []string{"/u.git"}}); err != nil {
+		t.Fatal(err)
+	}
 	if err := r.SetRemotes([]string{"/a.git", "/c.git"}); err != nil {
 		t.Fatal(err)
 	}
@@ -144,12 +153,40 @@ func TestSetRemotes(t *testing.T) {
 	if _, ok := cfg.Remotes["mirror2"]; ok {
 		t.Error("mirror2 was not removed")
 	}
+	if _, ok := cfg.Remotes["upstream"]; !ok {
+		t.Error("upstream was removed")
+	}
+}
+
+func TestLocalPath(t *testing.T) {
+	for in, want := range map[string]string{
+		"/C:/x/y.git":    "C:/x/y.git",
+		`/d:\x\y.git`:    `d:\x\y.git`,
+		"/home/u/y.git":  "/home/u/y.git",
+		"relative/y.git": "relative/y.git",
+	} {
+		if got := localPath(in); got != want {
+			t.Errorf("localPath(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestCloneFailureLeavesNoDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "clone")
+	if _, err := Clone(filepath.Join(t.TempDir(), "nope.git"), dir); err == nil {
+		t.Fatal("Clone of a missing remote succeeded")
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("directory left behind: %v", err)
+	}
 }
 
 func TestMissingRemote(t *testing.T) {
 	dir := t.TempDir()
 	r, _ := Init(dir)
-	_ = r.SetRemotes([]string{filepath.Join(t.TempDir(), "nope.git")})
+	if err := r.SetRemotes([]string{filepath.Join(t.TempDir(), "nope.git")}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := r.Fetch("origin"); err == nil {
 		t.Error("Fetch of a missing remote succeeded")
 	}
