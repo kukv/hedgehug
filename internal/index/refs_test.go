@@ -44,6 +44,10 @@ func TestMentionsCode(t *testing.T) {
 		{"a nested list item", "- a\n  - @b\n\n      @c\n\n          @a\n", []string{"b", "c"}},
 		{"a line left of the item ends the list", "- item\n\n@c\n\n    @a\n", []string{"c"}},
 		{"items of one list", "- @b\n- @c\n", []string{"b", "c"}},
+		{"a heading ends the list", "- a\n# H\n\n    @a\n", nil},
+		{"a thematic break ends the list", "- a\n***\n\n    @a\n", nil},
+		{"a fence ends the list", "- a\n```\n@a\n```\n\n    @b\n", nil},
+		{"a lazy line goes on the item", "- a\nlazy @c\n\n    @b\n", []string{"c", "b"}},
 		{"after an ATX heading", "# Title\n    @a\n## @c\n", []string{"c"}},
 		{"no heading without a space", "#Title\n    @c\n", []string{"c"}},
 	} {

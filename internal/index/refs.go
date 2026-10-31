@@ -37,7 +37,9 @@ func Mentions(body string) []string {
 		base := list
 		if indent(line) < list {
 			base = 0
-			if canIndent { // after a blank line, a line left of the item ends the list
+			// A line left of the item ends the list after a blank line, or
+			// when it starts a block; only a paragraph's text goes on lazily.
+			if canIndent || startsBlock(line) {
 				list = 0
 			}
 		}
@@ -69,6 +71,23 @@ var (
 	atxHeading = regexp.MustCompile(`^ {0,3}#{1,6}(?:[ \t]|$)`)
 	listMarker = regexp.MustCompile(`^( {0,3})([-*+]|[0-9]{1,9}[.)])( *)`)
 )
+
+// startsBlock reports whether line starts a block that ends a paragraph:
+// an ATX heading, a thematic break, a fence or a list item.
+func startsBlock(line string) bool {
+	return atxHeading.MatchString(line) || thematicBreak(line) || openingFence(line) != "" || listItem(line) > 0
+}
+
+// thematicBreak reports whether line is three or more of one of - * _,
+// after at most three spaces, with only spaces between them.
+func thematicBreak(line string) bool {
+	l := strings.TrimLeft(line, " ")
+	if len(line)-len(l) > 3 || l == "" || !strings.ContainsRune("-*_", rune(l[0])) {
+		return false
+	}
+	rest := strings.ReplaceAll(strings.TrimRight(l, " \t"), " ", "")
+	return len(rest) >= 3 && strings.Trim(rest, l[:1]) == ""
+}
 
 // listItem returns the content column of the list item line starts, or 0
 // when it starts none: the marker and one to four spaces after it (one when
