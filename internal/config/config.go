@@ -390,44 +390,12 @@ func (c *Config) shorten(p string) string {
 // order; a file without one is not flush.
 func detectFlush(root *yaml.Node) bool {
 	if k := keyNode(root, "stores"); k != nil {
-		if flush, ok := listStyle(k, valueOf(root, "stores")); ok {
+		if flush, ok := model.ListStyle(k, valueOf(root, "stores")); ok {
 			return flush
 		}
 	}
-	flush, _ := firstListStyle(root)
+	flush, _ := model.FirstListStyle(root)
 	return flush
-}
-
-// listStyle tells the style of the block list v under the key k. An item
-// starts after "- ", so it is 2 columns right of a flush list and more than
-// 2 right of an indented one.
-func listStyle(k, v *yaml.Node) (flush, ok bool) {
-	if v.Kind != yaml.SequenceNode || v.Style&yaml.FlowStyle != 0 || len(v.Content) == 0 {
-		return false, false
-	}
-	return v.Content[0].Column-k.Column <= 2, true
-}
-
-// firstListStyle finds the first block list under a key, in document order.
-func firstListStyle(n *yaml.Node) (flush, ok bool) {
-	switch n.Kind {
-	case yaml.MappingNode:
-		for i := 0; i+1 < len(n.Content); i += 2 {
-			if flush, ok := listStyle(n.Content[i], n.Content[i+1]); ok {
-				return flush, true
-			}
-			if flush, ok := firstListStyle(n.Content[i+1]); ok {
-				return flush, true
-			}
-		}
-	case yaml.SequenceNode:
-		for _, it := range n.Content {
-			if flush, ok := firstListStyle(it); ok {
-				return flush, true
-			}
-		}
-	}
-	return false, false
 }
 
 // keyNode returns the key node of key in the mapping m, or nil.

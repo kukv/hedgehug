@@ -36,16 +36,25 @@ type field[X any] struct {
 	merge func(m *fileMerge[X])
 }
 
+// fileKind is how a kind of file read field by field is merged.
+type fileKind[X any] struct {
+	decode  func([]byte) (*X, error)
+	updated func(*X) *time.Time
+	fields  []field[X]
+	encode  func(*X) ([]byte, error)
+	after   func(m *fileMerge[X]) // when set, runs after the fields and updated
+}
+
 // load decodes the versions of a file. It reports false when a side cannot
 // be read. A base that is not there or cannot be read is empty: both sides
 // made the file.
-func load[X any](m *merger, base []byte, ours, theirs Side, decode func([]byte) (*X, error), updated func(*X) *time.Time) (*fileMerge[X], bool) {
-	o, err1 := decode(ours.Data)
-	t, err2 := decode(theirs.Data)
+func load[X any](m *merger, base []byte, ours, theirs Side, k fileKind[X]) (*fileMerge[X], bool) {
+	o, err1 := k.decode(ours.Data)
+	t, err2 := k.decode(theirs.Data)
 	if err1 != nil || err2 != nil {
 		return nil, false
 	}
-	b, err := decode(base)
+	b, err := k.decode(base)
 	if err != nil {
 		b = new(X)
 	}
@@ -54,38 +63,38 @@ func load[X any](m *merger, base []byte, ours, theirs Side, decode func([]byte) 
 	if oursTop {
 		from = ours.Data
 	}
-	dst, err := decode(from)
+	dst, err := k.decode(from)
 	if err != nil {
 		return nil, false
 	}
-	s := &sides{merger: m, ours: ours, theirs: theirs, oTime: *updated(o), tTime: *updated(t), oursTop: oursTop}
+	s := &sides{merger: m, ours: ours, theirs: theirs, oTime: *k.updated(o), tTime: *k.updated(t), oursTop: oursTop}
 	return &fileMerge[X]{sides: s, b: b, o: o, t: t, dst: dst}, true
 }
 
-// mergeFile merges a file of type X field by field, then its updated. The
-// rules for a file that a side removed or cannot read are those of tasks.
-func mergeFile[X any](m *merger, base []byte, ours, theirs Side, decode func([]byte) (*X, error), updated func(*X) *time.Time, fields []field[X], encode func(*X) ([]byte, error)) (Result, error) {
+// mergeFile merges a file field by field, then its updated. A side that
+// removed the file while the other changed it loses the removal, and a
+// side that cannot be read makes it an other file.
+func mergeFile[X any](m *merger, base []byte, ours, theirs Side, k fileKind[X]) (Result, error) {
 	if ours.Data == nil || theirs.Data == nil {
 		return m.revive(ours, theirs), nil
 	}
-	fm, ok := load(m, base, ours, theirs, decode, updated)
+	fm, ok := load(m, base, ours, theirs, k)
 	if !ok {
 		return m.other(ours, theirs)
 	}
-	for _, f := range fields {
+	for _, f := range k.fields {
 		f.merge(fm)
 	}
-	fm.updated(updated)
-	return fm.encode(encode)
-}
-
-func (m *fileMerge[X]) encode(encode func(*X) ([]byte, error)) (Result, error) {
-	data, err := encode(m.dst)
+	fm.updated(k.updated)
+	if k.after != nil {
+		k.after(fm)
+	}
+	data, err := k.encode(fm.dst)
 	if err != nil {
 		return Result{}, err
 	}
-	m.res.Data = data
-	return m.res, nil
+	fm.res.Data = data
+	return fm.res, nil
 }
 
 // updated is the later of the two when both sides changed it.

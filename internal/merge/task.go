@@ -10,23 +10,14 @@ import (
 // taskMerge is the merge of one task file.
 type taskMerge = fileMerge[model.Task]
 
-func taskUpdated(x *model.Task) *time.Time { return &x.Updated }
-
-func (m *merger) task(base []byte, ours, theirs Side) (Result, error) {
-	if ours.Data == nil || theirs.Data == nil {
-		return m.revive(ours, theirs), nil
-	}
-	tm, ok := load(m, base, ours, theirs, model.DecodeTask, taskUpdated)
-	if !ok {
-		return m.other(ours, theirs)
-	}
-	oEdited, tEdited := edited(tm.b, tm.o), edited(tm.b, tm.t)
-	for _, f := range taskFields {
-		f.merge(tm)
-	}
-	tm.updated(taskUpdated)
-	deletedAt(tm, oEdited, tEdited)
-	return tm.encode((*model.Task).Encode)
+// taskKind merges deleted_at last: whether a side edited the task decides
+// it.
+var taskKind = fileKind[model.Task]{
+	decode:  model.DecodeTask,
+	updated: func(x *model.Task) *time.Time { return &x.Updated },
+	fields:  taskFields,
+	encode:  (*model.Task).Encode,
+	after:   func(m *taskMerge) { deletedAt(m, edited(m.b, m.o), edited(m.b, m.t)) },
 }
 
 // taskFields are the fields of a task file other than ulid, updated and

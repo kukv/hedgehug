@@ -13,15 +13,23 @@ import (
 func (m *merger) plan(base []byte, ours, theirs Side) (Result, error) {
 	switch kindOf(m.path) {
 	case kindSprint:
-		return mergeFile(m, base, ours, theirs, model.DecodeSprint, func(x *model.Sprint) *time.Time { return &x.Updated }, sprintFields, (*model.Sprint).Encode)
+		return mergeFile(m, base, ours, theirs, fileKind[model.Sprint]{
+			model.DecodeSprint, func(x *model.Sprint) *time.Time { return &x.Updated }, sprintFields, (*model.Sprint).Encode, nil,
+		})
 	case kindRelease:
-		return mergeFile(m, base, ours, theirs, model.DecodeRelease, func(x *model.Release) *time.Time { return &x.Updated }, releaseFields, (*model.Release).Encode)
+		return mergeFile(m, base, ours, theirs, fileKind[model.Release]{
+			model.DecodeRelease, func(x *model.Release) *time.Time { return &x.Updated }, releaseFields, (*model.Release).Encode, nil,
+		})
 	case kindWorkspace:
-		return mergeFile(m, base, ours, theirs, model.DecodeWorkspace, func(x *model.Workspace) *time.Time { return &x.Updated }, workspaceFields, (*model.Workspace).Encode)
+		return mergeFile(m, base, ours, theirs, fileKind[model.Workspace]{
+			model.DecodeWorkspace, func(x *model.Workspace) *time.Time { return &x.Updated }, workspaceFields, (*model.Workspace).Encode, nil,
+		})
 	}
 	name := strings.TrimSuffix(strings.TrimPrefix(m.path, "templates/"), ".md")
-	decode := func(data []byte) (*model.Template, error) { return model.DecodeTemplate(name, data) }
-	return mergeFile(m, base, ours, theirs, decode, func(x *model.Template) *time.Time { return &x.Updated }, templateFields, (*model.Template).Encode)
+	return mergeFile(m, base, ours, theirs, fileKind[model.Template]{
+		func(data []byte) (*model.Template, error) { return model.DecodeTemplate(name, data) },
+		func(x *model.Template) *time.Time { return &x.Updated }, templateFields, (*model.Template).Encode, nil,
+	})
 }
 
 var sprintFields = []field[model.Sprint]{

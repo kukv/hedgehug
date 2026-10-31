@@ -1,0 +1,6 @@
+go test fuzz v1
+string(".")
+string("# 0\nc0:\n- 0yy%")
+string("#000000000000000000000000000\x80")
+int64(1)
+int64(2)

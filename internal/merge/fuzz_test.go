@@ -27,8 +27,8 @@ func FuzzSymmetric(f *testing.F) {
 	})
 }
 
-// FuzzSymmetricYAML checks the same for the files merged key by key.
-func FuzzSymmetricYAML(f *testing.F) {
+// FuzzYAMLSymmetric checks the same for the files merged key by key.
+func FuzzYAMLSymmetric(f *testing.F) {
 	f.Add("statuses:\n- {name: todo, category: todo}\nprops:\n  p: {values: [a]}\n",
 		"# c\nstatuses:\n- {name: todo, category: doing}\n- {name: qa}\nprops:\n  p: {values: [a, b]}\n",
 		"statuses:\n- {name: review}\nprops:\n  p: {values: [c]} # p\n  q: 1\n", int64(1), int64(2))

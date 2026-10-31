@@ -18,7 +18,7 @@ import (
 // Side is one side of a three-way merge of one file.
 type Side struct {
 	Data   []byte                        // nil when the file is not there
-	When   func(path []string) time.Time // when the side last changed the yaml value at path; nil outside yaml files
+	When   func(path []string) time.Time // when the side last changed the yaml value at path (see YAMLValues); nil outside yaml files
 	Author string                        // the account (or email) that last changed the file on this side
 	Time   time.Time                     // when the side last changed the file (for "other files")
 }
@@ -61,16 +61,21 @@ func Merge(path string, sc *schema.Schema, base []byte, ours, theirs Side, p Pol
 	if bytes.Equal(ours.Data, theirs.Data) {
 		return Result{Data: ours.Data}, nil
 	}
+	m := &merger{path: path, sc: sc, p: p}
+	if kindOf(path) == kindNumbers {
+		// Numbers never go down: a side that lowered them or removed the
+		// file does not win because the other side left the file alone.
+		return m.numbers(base, ours, theirs)
+	}
 	if bytes.Equal(base, ours.Data) {
 		return Result{Data: theirs.Data}, nil
 	}
 	if bytes.Equal(base, theirs.Data) {
 		return Result{Data: ours.Data}, nil
 	}
-	m := &merger{path: path, sc: sc, p: p}
 	switch kindOf(path) {
 	case kindTask:
-		return m.task(base, ours, theirs)
+		return mergeFile(m, base, ours, theirs, taskKind)
 	case kindComment:
 		return m.record(ours, theirs, commentUpdated)
 	case kindWorklog:
@@ -79,8 +84,6 @@ func Merge(path string, sc *schema.Schema, base []byte, ours, theirs Side, p Pol
 		return m.plan(base, ours, theirs)
 	case kindYAML:
 		return m.yaml(base, ours, theirs)
-	case kindNumbers:
-		return m.numbers(base, ours, theirs)
 	}
 	return m.other(ours, theirs)
 }
@@ -102,7 +105,7 @@ const (
 
 func kindOf(path string) kind {
 	switch path {
-	case schema.Path, automationsPath, model.StoreMetaPath:
+	case schema.Path, model.AutomationsPath, model.StoreMetaPath:
 		return kindYAML
 	case model.NumbersPath:
 		return kindNumbers
@@ -125,9 +128,6 @@ func kindOf(path string) kind {
 	}
 	return kindOther
 }
-
-// automationsPath is where a store keeps its automations.
-const automationsPath = "automations.yaml"
 
 // merger holds what the merge of one file needs besides the sides.
 type merger struct {

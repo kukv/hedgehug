@@ -66,13 +66,12 @@ func TestNewFilesFromOneSide(t *testing.T) {
 }
 
 // A side that removes a file the other side changed loses the removal, for
-// every kind read by fields.
+// every kind read by fields. numbers.yaml has rules of its own.
 func TestRemovedAndChanged(t *testing.T) {
 	for _, c := range []struct{ path, base, changed string }{
 		{commentPath, string(comment("2026-10-31T10:00:00Z", "x\n")), string(comment("2026-10-31T11:00:00Z", "y\n"))},
 		{"sprints/01JC0A1B2C3D4E5F6G7H8J9K0M.md", string(sprint("2026-10-31T10:00:00Z", "name: s1")), string(sprint("2026-10-31T11:00:00Z", "name: s2"))},
 		{"schema.yaml", "statuses:\n  - {name: todo, category: todo}\n", "statuses:\n  - {name: todo, category: doing}\n"},
-		{model.NumbersPath, "WEB: 1\n", "WEB: 2\n"},
 	} {
 		r := mergeSym(t, c.path, Side{Data: []byte(c.base)}, Side{Author: "a"}, Side{Data: []byte(c.changed), Author: "b"})
 		if string(r.Data) != c.changed || !slices.Equal(r.Notices, []Notice{{Kind: Revived, Path: c.path, Author: "a"}}) {
