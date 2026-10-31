@@ -81,7 +81,8 @@ tools/devenv/
 - config.yaml の `accounts[]` から `host` と `login` を読む。アカウントの ID は `<host>/<login>`（例 `github.com/alice`）。
 - Store の書き手は `stores[].account` が指すアカウント。指定がなく、アカウントが1つだけならそれを使う。どちらもなければ書き手は空で、`created_by` と `author` は空のまま、`Hedgehug-Author` を付けない。`hh inbox` は「accounts が設定されていない」と警告する。
 - 「自分」は `accounts[]` のすべてのアカウント（親設計の「自分」の定義どおり）。
-- コミットの author（名前とメール）は今と同じく git の設定から取る。
+- コミットの author は、親設計の「author はその Store に紐付くアカウント」に従い、書き手のアカウントから作る（利用者の決定）。名前は `login`、メールは `<login>@users.noreply.<host>`（例 `alice <alice@users.noreply.github.com>`）。push すると Store を読める全員に見えるので、本当のメールアドレスは使わない。login はタスクのデータ（`assignees`、`created_by` など）にすでにあるので、新しく見える情報はない。git の設定（`.gitconfig`）がなくても動く。
+- 書き手がいない Store（accounts が設定されていない）では、今と同じく git の設定から取る。`config.Author` のコメント「Accounts replace this in phase 3」はこの決定に合わせて直す。
 
 ### trailer
 
@@ -439,6 +440,18 @@ sync:
 
 ## doctor の追加
 
+### `hh doctor --fix`（利用者の決定）
+
+親設計の「整合性の検査と修復」に合わせ、1d-2 で後に回した doctor の修復を作る。
+
+- 同期の 5 と同じ `merge.Repair`（`Base` なし）を HEAD のファイルの集合にかけ、直すものがあれば1つの修復のコミット（`Hedgehug-Op: repair`、`Hedgehug-Repaired`）を作る。remote のない Store でも動く。
+- 直すのは同期の修復と同じもの（`parent_cycle`、`parent_deleted`、`workspace_mismatch`、`id_collision`、`id_renumbered`）。`id_collision` の `OnOrigin` は fetch 済みの `origin` の main を読む（remote がなければ常に false なので、ULID の小さい側が残る）。`workspace_revived` と `id_prefix` は戻す先（base）がないので直さず、案内を残す。
+- 直した内容を1件1行で出し（`--json` 対応）、続けて残った問題（壊れたファイルなど自動では直せないもの）を今の doctor と同じ形で出す。残った問題があれば終了コード 1。
+- `--fix` なしの `hh doctor` は今と同じく検査だけ。直せる問題には「`hh doctor --fix` で直る」を添える。
+- 通知: 修復のコミットは自分が作るので、対象の author が他人のときだけ、その人の次の同期で inbox に届く（inbox の規則どおり）。
+
+### 検査
+
 - merge driver の登録（前記）。
 - `.hedgehug/local/overwritten/` に取り込まれていない記録が残っている（`hh inbox` で取り込める）。
 - フェーズ1.5の `duplicate_id` の直し方に「`hh sync` で、push 済みの側を残して振り直す」を足す。ワークスペースの接頭辞と名前の重複の直し方は今のまま（`hh workspace prefix` / `rename`）。
@@ -472,6 +485,8 @@ sync:
 - **diff3**: 重ならない変更、同じ変更、重なる変更、末尾の改行、空のファイル。
 - **repair**: 表の各行。親の2つ組・3つ組の循環（base あり・なし）、削除済みの親、消されたワークスペースの復活、不正な接頭辞の base への戻し、ワークスペースの違う子、ID の衝突（origin にある側を残す、どちらもない・両方あるときは ULID の小さい側、3つ以上の組、振った番号がマージした集合の最大 + 1 になる、読めないファイルと numbers.yaml の番号を数える）、接頭辞の不一致の振り直し、接頭辞と名前の重複の案内。決定性（同じ入力から同じ結果）。
 - **gitrepo**: インプロセスの file transport で fetch / push / clone（git の実行ファイルを呼ばないことを、PATH を空にして確かめる）、拒否の検出、`LastChange`、`DiffTrees`、`FastForward`、`Repack`。
+- **doctor --fix**: remote のない Store で親の循環・ID の重複・ワークスペースの不一致を1コミットで直す、直せない問題が残れば終了コード 1、直すものがなければコミットしない。
+- **author**: accounts がある Store のコミットが `login <login@users.noreply.host>`、ない Store は git の設定、`.gitconfig` がなくてもアカウントがあればコミットできる。
 - **index.lock**: ロックがあれば待って `ErrGitBusy`、終わったら消える、merge driver は取らない。
 - **rank**: 同じ rank の兄弟が ID の順に並ぶ、書き込んだタスクだけが振り直され組の外との順が変わらない。
 - **クエリ**: `mentions:@me`（本文・コメント・削除済みコメントを除く・`@login` と `@host/login`）、`watching:@me`、`is:overwritten`、accounts からの `@me`。
@@ -501,6 +516,8 @@ sync:
 | コメントの author、`created_by` | 1d-1 | 「自分」の節で埋める |
 | コメント・作業時間のインデックス、`mentions:@me`、`watching:@me`、`is:overwritten` | 1c | 「watchers とバックリンク」「クエリ」で作る |
 | 同じ rank の扱い（ID の順で並べて次の書き込みで振り直す） | 1a | 「マージ後の修復」の `rank` の重複の行で作る |
+| doctor の修復 | 1d-2 | `hh doctor --fix`（利用者の決定） |
+| コミットの author をアカウントにする（`config.Author` の「phase 3」） | 1b | 「自分」の節（利用者の決定） |
 | go-git が `index.lock` の手順を使わない | 1b・1d-2 | 「gitrepo の追加」で `.git/index.lock` を取る |
 | ID の衝突の振り直しと通知、`workspaces/` と `numbers.yaml` のマージ、接頭辞の重複の案内 | 1.5 | 「マージ後の修復」「numbers.yaml」「スプリント・リリース・テンプレート・ワークスペース」「Store 間の接頭辞の重複」で作る |
 
