@@ -79,3 +79,29 @@ jobs:
       - name: Report coverage
         uses: k1LoW/octocov-action@a167dc0dee441b7ffc45e1b862ab55ec0d87f278 # v1.5.2
         if: ${{ !cancelled() && matrix.os == 'ubuntu-latest' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
+
+  # Hedgehug は git なしで動く（親設計の「外部依存ゼロ」）。git を PATH から外して全テストを流し、
+  # どこかが git の実行ファイルを呼ぶようになったらここで気付く。
+  test-without-git:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@v1.13.0
+      - name: Test with no git on PATH
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/nogit"
+          ln -s "$(command -v go)" "$RUNNER_TEMP/nogit/go"
+          ln -s "$(go env GOPATH)/bin/gotestsum" "$RUNNER_TEMP/nogit/gotestsum"
+          ! PATH="$RUNNER_TEMP/nogit" command -v git
+          CGO_ENABLED=0 PATH="$RUNNER_TEMP/nogit" gotestsum --format testdox -- ./...

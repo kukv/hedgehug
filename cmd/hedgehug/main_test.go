@@ -1,8 +1,11 @@
 package main
 
 import (
-	"errors"
-	"os/exec"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -39,16 +42,36 @@ func TestRun(t *testing.T) {
 	}
 }
 
-// The name is not TestNoShort + "IDs", which the pattern would match.
+// The name is not TestNoShort + "IDs", which the pattern would match. It reads
+// the files itself, not with grep, so that it runs where only go is on PATH.
 func TestNoShortIdentifiers(t *testing.T) {
 	// Built so that this file does not match itself.
 	s := "Short"
-	pattern := s + "ID|" + s + "Lengths|min" + s + `|"` + strings.ToLower(s) + `"|\.` + s + `\b`
-	// repo_test.go calls the method of go-git that shortens a reference
-	// name, which is not a short ULID.
-	out, err := exec.Command("grep", "-rnE", pattern, "--include=*.go", "--exclude=repo_test.go", "../../cmd", "../../internal", "../../tools").CombinedOutput()
-	// grep exits 1 when nothing matches, and 2 on an error.
-	if ee := (*exec.ExitError)(nil); !errors.As(err, &ee) || ee.ExitCode() != 1 {
-		t.Errorf("short ULIDs are still in the code, or grep failed: %v\n%s", err, out)
+	re := regexp.MustCompile(s + "ID|" + s + "Lengths|min" + s + `|"` + strings.ToLower(s) + `"|\.` + s + `\b`)
+	var found []string
+	for _, root := range []string{"../../cmd", "../../internal", "../../tools"} {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			// repo_test.go calls the method of go-git that shortens a
+			// reference name, which is not a short ULID.
+			if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || d.Name() == "repo_test.go" {
+				return err
+			}
+			b, err := os.ReadFile(path) //nolint:gosec // a source file of this repository
+			if err != nil {
+				return err
+			}
+			for i, line := range strings.Split(string(b), "\n") {
+				if re.MatchString(line) {
+					found = append(found, fmt.Sprintf("%s:%d:%s", path, i+1, line))
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(found) > 0 {
+		t.Errorf("short ULIDs are still in the code:\n%s", strings.Join(found, "\n"))
 	}
 }
