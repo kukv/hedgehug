@@ -186,16 +186,33 @@ func TestCollectMentionAssignWatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if k := kinds(items); k[Mention] != 1 || k[Assigned] != 1 || k[Watch] != 1 || len(items) != 3 {
-		t.Errorf("kinds = %v", k) // the mention in inline code does not count
+	if k := kinds(items); k[Mention] != 1 || k[Assigned] != 1 || len(items) != 2 {
+		t.Errorf("kinds = %v", k) // the mention in inline code does not count; the watch is covered by the other two
 	}
 	for _, it := range items {
 		if it.Task != x.ULID || it.ID != x.ID || it.ID == "" || it.Author != "github.com/a" || it.To != "github.com/b" || it.Commit != head(t, b).String() {
 			t.Errorf("item = %+v", it)
 		}
-		if it.Kind == Watch && string(it.Detail) != `{"changed":["status","assignees"]}` {
-			t.Errorf("watch detail = %s", it.Detail)
-		}
+	}
+	// A change that neither assigns nor mentions b is a watch.
+	before = head(t, b)
+	update(t, a, x.ULID, func(t *model.Task) { t.Status = "done" })
+	syncBoth(t, a, b)
+	items, err = Collect(b.s, before, head(t, b), []string{"github.com/b"})
+	if err != nil || len(items) != 1 || items[0].Kind != Watch || string(items[0].Detail) != `{"changed":["status"]}` {
+		t.Errorf("items = %+v, %v", items, err)
+	}
+}
+
+func TestCollectWatchCoveredByMention(t *testing.T) {
+	a, b := twoClones(t)
+	x := addTask(t, a, "x", func(t *model.Task) { t.Watchers = []string{"github.com/b"} })
+	before := head(t, b)
+	addComment(t, a, x.ULID, "ping @github.com/b\n") // b watches x, and a comment on x is a watch too
+	syncBoth(t, a, b)
+	items, err := Collect(b.s, before, head(t, b), []string{"github.com/b"})
+	if err != nil || len(items) != 1 || items[0].Kind != Mention {
+		t.Errorf("items = %+v, %v", items, err)
 	}
 }
 

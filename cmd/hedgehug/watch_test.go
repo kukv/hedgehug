@@ -141,3 +141,21 @@ func TestShowReferencedBy(t *testing.T) {
 		t.Errorf("an unreferenced task: %+v, %v", j.ReferencedBy, err)
 	}
 }
+
+func TestCommentEditOnBrokenTask(t *testing.T) {
+	te := newStoreEnv(t)
+	te.writeAccounts("github.com", "alice")
+	x := te.addJSON("Alpha")
+	te.ok("comment", x.ULID, "hello")
+	var j struct{ Comments []struct{ ULID string } }
+	if err := json.Unmarshal([]byte(te.ok("show", x.ULID, "--json")), &j); err != nil || len(j.Comments) != 1 {
+		t.Fatalf("comments = %+v, %v", j.Comments, err)
+	}
+	te.commitFile(x.ULID, "not a task file\n")
+	te.editWith("hello @carol\n")
+	before := len(te.log("me"))
+	te.ok("comment", "edit", j.Comments[0].ULID)
+	if log := te.log("me"); len(log) != before+1 || !strings.Contains(log[0].Message, "Hedgehug-Op: comment") {
+		t.Errorf("the edit was not committed: %d commits, want %d", len(log), before+1)
+	}
+}

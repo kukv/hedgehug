@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
 )
@@ -121,6 +123,10 @@ func TestInboxAssignedAndMention(t *testing.T) {
 	alice.ok("sync")
 	bob.ok("sync")
 	out := bob.ok("inbox")
+	items := inboxItems(t, bob)
+	if len(items) != 2 { // bob watches the task by being assigned, which is no third notice
+		t.Errorf("items = %v", items)
+	}
 	for _, re := range []string{
 		`assigned\s+ORG-1 \([0-9A-Z]{26}\) x\s+assigned by github.com/alice\n`,
 		`mention\s+ORG-1 \([0-9A-Z]{26}\) x\s+mentioned in a comment by github.com/alice\n`,
@@ -220,7 +226,7 @@ func TestInboxPrefixDuplicate(t *testing.T) {
 	alice.ok("sync")
 	bob.ok("sync")
 	out := bob.ok("inbox")
-	if !regexp.MustCompile(`prefix_duplicate\s+workspace api\s+DUP is also used by another workspace; change it with hedgehug workspace prefix api <new prefix>\n`).MatchString(out) {
+	if !regexp.MustCompile(`prefix_duplicate\s+workspace api\s+DUP is also used by workspace web; change it with hedgehug workspace prefix api <new prefix>\n`).MatchString(out) {
 		t.Errorf("inbox = %s", out)
 	}
 }
@@ -244,12 +250,77 @@ func TestRevertField(t *testing.T) {
 	if err := revertField(task, "props.priority", json.RawMessage(`null`), sc, resolve); err != nil || task.Props.Get("priority") != nil {
 		t.Errorf("props = %+v, %v", task.Props, err)
 	}
-	for _, f := range []string{"*", "rank", "parent", "id", "body"} {
-		if err := revertField(task, f, json.RawMessage(`"x"`), sc, resolve); !errors.Is(err, errNotRevertible) {
+	for _, f := range []string{"*", "id", "former_ids", "workspace", "created", "created_by", "body", "unknown_key"} {
+		if err := revertField(task, f, json.RawMessage(`"x"`), sc, resolve); !errors.Is(err, errNotRevertible) || !strings.HasPrefix(err.Error(), f+" ") {
 			t.Errorf("%s: err = %v", f, err)
 		}
 	}
+	// A set takes the lost item back, or the whole list.
+	task.Labels = []string{"a"}
+	if err := revertField(task, "labels", json.RawMessage(`"b"`), sc, resolve); err != nil || !slices.Equal(task.Labels, []string{"a", "b"}) {
+		t.Errorf("labels = %v, %v", task.Labels, err)
+	}
+	if err := revertField(task, "labels", json.RawMessage(`"b"`), sc, resolve); err != nil || !slices.Equal(task.Labels, []string{"a", "b"}) {
+		t.Errorf("labels = %v, %v", task.Labels, err)
+	}
+	if err := revertField(task, "assignees", json.RawMessage(`["github.com/bob"]`), sc, resolve); err != nil || !slices.Equal(task.Assignees, []string{"github.com/bob"}) {
+		t.Errorf("assignees = %v, %v", task.Assignees, err)
+	}
+	u := model.NewULID()
+	if err := revertField(task, "blocked_by", json.RawMessage(`"`+u.String()+`"`), sc, resolve); err != nil || !slices.Equal(task.BlockedBy, []model.ULID{u}) {
+		t.Errorf("blocked_by = %v, %v", task.BlockedBy, err)
+	}
+	if err := revertField(task, "sprint", json.RawMessage(`"`+u.String()+`"`), sc, resolve); err != nil || task.Sprint == nil || *task.Sprint != u {
+		t.Errorf("sprint = %v, %v", task.Sprint, err)
+	}
+	if err := revertField(task, "sprint", json.RawMessage(`null`), sc, resolve); err != nil || task.Sprint != nil {
+		t.Errorf("sprint = %v, %v", task.Sprint, err)
+	}
+	if err := revertField(task, "rank", json.RawMessage(`"V"`), sc, resolve); err != nil || task.Rank != "V" {
+		t.Errorf("rank = %q, %v", task.Rank, err)
+	}
 	if err := revertField(task, "links", json.RawMessage(`"x"`), sc, resolve); err == nil {
 		t.Errorf("a link that is no link was accepted")
+	}
+}
+
+func TestInboxRevertParent(t *testing.T) {
+	alice, bob, _ := twoUsers(t)
+	alice.ok("add", "p")
+	alice.ok("add", "q")
+	alice.ok("add", "c")
+	alice.ok("sync")
+	bob.ok("sync")
+	bob.ok("mv", "ORG-4", "--parent", "ORG-2")
+	time.Sleep(1100 * time.Millisecond) // alice writes later, so alice's parent wins
+	alice.ok("mv", "ORG-4", "--parent", "ORG-3")
+	alice.ok("sync")
+	bob.ok("sync")
+	out := bob.ok("inbox")
+	m := regexp.MustCompile(`([0-9A-Z]{26})\s+overwritten\s+ORG-4 .*parent: "[0-9A-Z]{26}" was replaced`).FindStringSubmatch(out)
+	if m == nil {
+		t.Fatalf("inbox = %s", out)
+	}
+	bob.ok("inbox", "revert", m[1])
+	if out := bob.ok("show", "ORG-4"); !regexp.MustCompile(`parent\s+ORG-2 `).MatchString(out) {
+		t.Errorf("after revert: %s", out)
+	}
+}
+
+func TestInboxReadDuplicates(t *testing.T) {
+	alice, bob, _ := twoUsers(t)
+	alice.ok("set", "ORG-1", "assignees+=github.com/bob")
+	alice.ok("sync")
+	bob.ok("sync")
+	u := itemOfKind(t, bob, "assigned")
+	if out := bob.ok("inbox", "read", u, strings.ToLower(u)); !strings.Contains(out, "Marked 1 item read") {
+		t.Errorf("read = %s", out)
+	}
+}
+
+func TestInboxRepairedContent(t *testing.T) {
+	it := inbox.Item{Kind: inbox.Repaired, Detail: json.RawMessage(`{"kind":"parent_cycle","value":null}`)}
+	if got := inboxContent(nil, it, "org", false); got != "parent_cycle: moved back to root" {
+		t.Errorf("content = %q", got)
 	}
 }

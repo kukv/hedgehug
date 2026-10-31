@@ -99,7 +99,7 @@ func (a *app) inboxStores() ([]inboxStore, error) {
 	return out, nil
 }
 
-// warn prints what the boxes skipped, once all their reading is done.
+// warnInbox prints what the boxes skipped, once all their reading is done.
 func (a *app) warnInbox(stores []inboxStore) {
 	for _, st := range stores {
 		for _, w := range st.box.Warnings() {
@@ -286,18 +286,35 @@ func repairedContent(ix *index.Index, it inbox.Item) string {
 	_ = json.Unmarshal(it.Detail, &d) // an item that does not decode tells no kind
 	switch d.Kind {
 	case "parent_cycle", "parent_deleted":
-		to := "the root"
+		// The value is the parent the repair took the task from; the task
+		// went back to the parent it had before, or to the root.
+		to := "root"
 		if ix != nil {
 			if e, ok := ix.Task(it.Task); ok && e.Parent != nil {
 				to = refName(ix, *e.Parent)
 			}
 		}
-		return fmt.Sprintf("%s: moved to %s", d.Kind, to)
+		from := ""
+		var u model.ULID
+		if json.Unmarshal(d.Value, &u) == nil && !u.IsZero() {
+			from = " (was under " + taskName(ix, u) + ")"
+		}
+		return fmt.Sprintf("%s: moved back to %s%s", d.Kind, to, from)
 	}
 	if v := compactJSON(d.Value); v != "" && v != "null" {
 		return fmt.Sprintf("%s (was %s)", d.Kind, v)
 	}
 	return d.Kind
+}
+
+// taskName is the task u as "ID (ULID) title", or its ULID when ix lacks it.
+func taskName(ix *index.Index, u model.ULID) string {
+	if ix != nil {
+		if _, ok := ix.Task(u); ok {
+			return refName(ix, u)
+		}
+	}
+	return u.String()
 }
 
 // duplicateContent tells of a prefix or a name two workspaces share, and how
@@ -328,6 +345,14 @@ func duplicateContent(ix *index.Index, it inbox.Item, storeName string, manyStor
 			prefix = p
 		}
 		text = "another workspace"
+		if ix != nil {
+			for _, w := range ix.Workspaces() {
+				if w.ULID != d.Workspace && strings.EqualFold(w.IDPrefix, prefix) {
+					text = "workspace " + w.Name
+					break
+				}
+			}
+		}
 	}
 	where := ""
 	if manyStores {
@@ -375,7 +400,9 @@ func (a *app) inboxRead(args []string, all bool) error {
 		if err != nil {
 			return err
 		}
-		ulids = append(ulids, u)
+		if !slices.Contains(ulids, u) {
+			ulids = append(ulids, u)
+		}
 	}
 	stores, err := a.inboxStores()
 	if err != nil {
@@ -473,7 +500,12 @@ func (a *app) inboxRevert(arg string) error {
 		if err != nil {
 			return err
 		}
-		if err := revertField(t, d.Field, d.Value, ix.Schema(), a.resolveULID(ix)); err != nil {
+		if d.Field == "parent" {
+			err = a.revertParent(ix, e, t, d.Value)
+		} else {
+			err = revertField(t, d.Field, d.Value, ix.Schema(), a.resolveULID(ix))
+		}
+		if err != nil {
 			return err
 		}
 		return tx.PutTask(t)
@@ -487,24 +519,111 @@ func (a *app) inboxRevert(arg string) error {
 	return a.printTask(ix, e.ULID, verb(committed, "Reverted"))
 }
 
-var errNotRevertible = errors.New("cannot be reverted; change it with hedgehug set or mv")
+var errNotRevertible = errors.New("cannot be reverted")
 
-// revertField puts the value raw, as JSON, back into the field of t: a
-// field set takes, a property of the schema, or the link of the same ref.
+// refused says why the fields that no write of a value can restore are
+// refused, and what to use.
+var refused = map[string]string{
+	"*":          "is the whole file, which is not one value",
+	"id":         "is given by the store with the workspace prefix; renumbering belongs to hedgehug mv --workspace",
+	"former_ids": "keeps the ids the task has had and is never rolled back",
+	"workspace":  "moves a task with its subtree and renumbers it; use hedgehug mv --workspace",
+	"created":    "is set by the store when the task is made",
+	"created_by": "tells who made the task, and no command changes it",
+	"body":       "is merged line by line and has no single value; edit it with hedgehug edit",
+}
+
+// revertField puts the value raw, as JSON, back into the field of t, as
+// hedgehug set would write it. The parent is the job of revertParent.
 func revertField(t *model.Task, field string, raw json.RawMessage, sc *schema.Schema, resolve func(string) (model.ULID, error)) error {
-	switch {
-	case field == "title" || field == "kind" || field == "status":
+	switch field {
+	case "title", "kind", "status":
 		var v string
 		if err := json.Unmarshal(raw, &v); err != nil {
 			return fmt.Errorf("%s: %w", field, err)
 		}
 		return applyAssign(t, assign{key: field, op: "=", value: v}, sc, resolve)
-	case field == "links":
+	case "rank":
+		var v model.Rank
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return fmt.Errorf("rank: %w", err)
+		}
+		t.Rank = v
+		return nil
+	case "sprint":
+		var v *model.ULID
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return fmt.Errorf("sprint: %w", err)
+		}
+		t.Sprint = v
+		return nil
+	case "assignees":
+		return revertSet(&t.Assignees, field, raw)
+	case "watchers":
+		return revertSet(&t.Watchers, field, raw)
+	case "labels":
+		return revertSet(&t.Labels, field, raw)
+	case "repos":
+		return revertSet(&t.Repos, field, raw)
+	case "blocked_by":
+		return revertSet(&t.BlockedBy, field, raw)
+	case "releases":
+		return revertSet(&t.Releases, field, raw)
+	case "links":
 		return revertLink(t, raw)
-	case strings.HasPrefix(field, "props."):
-		return revertProp(t, strings.TrimPrefix(field, "props."), raw, sc, resolve)
 	}
-	return fmt.Errorf("%s %w", field, errNotRevertible)
+	if p, ok := strings.CutPrefix(field, "props."); ok {
+		return revertProp(t, p, raw, sc, resolve)
+	}
+	if why, ok := refused[field]; ok {
+		return fmt.Errorf("%s %s: %w", field, why, errNotRevertible)
+	}
+	return fmt.Errorf("%s is a key this version does not know and no command writes it: %w", field, errNotRevertible)
+}
+
+// revertSet puts back the value of a list that is merged as a set: the
+// value is one item, which is added unless the list has it, or the whole
+// list, which replaces it.
+func revertSet[T comparable](dst *[]T, field string, raw json.RawMessage) error {
+	var list []T
+	if err := json.Unmarshal(raw, &list); err == nil {
+		*dst = list
+		return nil
+	}
+	var item T
+	if err := json.Unmarshal(raw, &item); err != nil {
+		return fmt.Errorf("%s: %w", field, err)
+	}
+	if !slices.Contains(*dst, item) {
+		*dst = append(*dst, item)
+	}
+	return nil
+}
+
+// revertParent puts the parent that lost, or the root for null, back as
+// hedgehug mv does, at the end of its siblings. A parent in another
+// workspace would move the subtree, which is for hedgehug mv.
+func (a *app) revertParent(ix *index.Index, e *index.Entry, t *model.Task, raw json.RawMessage) error {
+	var u *model.ULID
+	if err := json.Unmarshal(raw, &u); err != nil {
+		return fmt.Errorf("parent: %w", err)
+	}
+	var p *index.Entry
+	if u != nil {
+		var ok bool
+		if p, ok = ix.Task(*u); !ok {
+			return fmt.Errorf("parent: %s is not in this store: %w", u, store.ErrNotFound)
+		}
+	}
+	to, err := a.mvTargetOf(ix, e, p, nil, u == nil, "", "")
+	if err != nil {
+		return err
+	}
+	if to.workspace != e.Workspace {
+		return fmt.Errorf("parent: %s is in another workspace; move the task with hedgehug mv", refName(ix, *u))
+	}
+	t.Parent, t.Rank = to.parent, to.rank
+	return nil
 }
 
 // revertLink puts the link raw back in place of the one with its ref.

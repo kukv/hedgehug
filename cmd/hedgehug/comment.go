@@ -211,6 +211,16 @@ func (a *app) commentEdit(arg string) error {
 		return err
 	}
 	mentioned := newMentions(c.Body, body, host)
+	if len(mentioned) > 0 {
+		// A broken task has no watchers to add to.
+		_, ix, err := a.open()
+		if err != nil {
+			return err
+		}
+		if e, ok := ix.Task(ref.Task); ok && e.Broken != "" {
+			mentioned = nil
+		}
+	}
 	committed, err := a.update(s, store.Op{Name: "comment", Task: ref.Task}, func(tx *store.Tx) error {
 		cur, err := findComment(s, ref)
 		if err != nil {

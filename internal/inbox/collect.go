@@ -55,6 +55,7 @@ func Collect(s *store.Store, before, after plumbing.Hash, me []string) ([]Item, 
 				return nil, err
 			}
 		}
+		c.dropCoveredWatches()
 		if err := c.ids(); err != nil {
 			return nil, err
 		}
@@ -97,6 +98,19 @@ func (c *commit) add(it Item) {
 func (c *commit) addChange(it Item) {
 	it.Author = c.e.Writer()
 	c.add(it)
+}
+
+// dropCoveredWatches removes the watch items that an assigned or mention
+// item of the same task and account covers: one change tells an account
+// once, and an account that was just made a watcher by the change it is told
+// of needs no second notice.
+func (c *commit) dropCoveredWatches() {
+	covered := func(w Item) bool {
+		return slices.ContainsFunc(c.items, func(x Item) bool {
+			return (x.Kind == Assigned || x.Kind == Mention) && x.Task == w.Task && strings.EqualFold(x.To, w.To)
+		})
+	}
+	c.items = slices.DeleteFunc(c.items, func(it Item) bool { return it.Kind == Watch && covered(it) })
 }
 
 // ids gives the items of tasks the task's id at the commit.
