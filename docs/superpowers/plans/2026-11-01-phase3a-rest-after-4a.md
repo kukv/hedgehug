@@ -25,18 +25,18 @@
 | --- | --- |
 | `func (a *app) xxx(...)` で処理と表示が一緒 | 処理は `func (ss *Session) Xxx(in XxxInput) (XxxResult, error)`（`internal/ops`）、表示は `cmd/hedgehug` の `a.xxx` が結果を出す |
 | `a.config()` | `ss.Config()` |
-| `a.tokenFor`・`a.authOptions`・`a.connFor`・`a.githubFor`・`a.pickAccount` | `ss.Token`・`ss.AuthOptions`・`ss.Conn`・`ss.GitHub`・`ss.PickAccount`（Task R2 で作る） |
+| `a.tokenFor`・`a.authOptions`・`a.connFor`・`a.githubFor`・`a.pickAccount` | `ss.Token`・`ss.AuthOptions`・`ss.Conn`・`ss.GitHub`・`ss.PickAccount`（Task 2 で作る） |
 | `a.syncOptions`・`a.runSync` | `ss.SyncOptions`・`ss.RunSync` |
-| `a.open()`（書き込み） | `ss.OpenForWrite()`（Task R5 で作る） |
+| `a.open()`（書き込み） | `ss.OpenForWrite()`（Task 5 で作る） |
 | `usageError{err}`・`fmt.Errorf(...)` | `newErr(Kind..., "<code>", err, args...)`（spec の「エラーと警告」の表。表にないものは既存の Code の付け方に合わせる） |
 | `fmt.Fprintf(a.stderr, "warning: ...")` | `ss.warn(...)` |
-| `c.Save()` | `c.Update(func(c *config.Config) error { ... })`（Task R1） |
+| `c.Save()` | `c.Update(func(c *config.Config) error { ... })`（Task 1） |
 | `x.Host == host`、`a == b`（アカウント ID） | `config.SameHost`、`config.SameAccount` |
 | テストの `te.run`・`te.ok` | ops の単体テスト（`internal/ops/helpers_test.go` のヘルパー）を主にし、CLI のテストは表示と終了コードだけを確かめる |
 
 ---
 
-### Task R1: 共通の決まりの土台（config・ops のエラー・自分の判定）
+### Task 1: 共通の決まりの土台（config・ops のエラー・自分の判定）
 
 **Files:**
 - Modify: `internal/config/hosts.go`、`internal/config/config.go`、`internal/ops/errors.go`、`internal/query/eval.go`（`@me` の比較）、`internal/inbox`（`Catch` の比較）、`internal/ops/storeops.go`（`c.Save()` → `Update`）
@@ -71,7 +71,7 @@
 
 ---
 
-### Task R2: 認証と通信を ops に移す
+### Task 2: 認証と通信を ops に移す
 
 rebase で一時的に入れた `ops.Session.Conn`（フック）を消し、`cmd/hedgehug/conn.go` の処理を `internal/ops` に移す。
 
@@ -101,7 +101,7 @@ rebase で一時的に入れた `ops.Session.Conn`（フック）を消し、`cm
 
 ---
 
-### Task R3: `hh auth` と `hh store default` を ops に移し、Task 8 のレビューを直す
+### Task 3: `hh auth` と `hh store default` を ops に移し、旧 Task 8 のレビューを直す
 
 **Files:**
 - Create: `internal/ops/auth.go`、`internal/ops/auth_test.go`
@@ -113,8 +113,8 @@ rebase で一時的に入れた `ops.Session.Conn`（フック）を消し、`cm
   - `type AuthStatus struct { Name, ID, Token string; Expires *time.Time; State string /* ok|error|none */; Login, Error string }`、`func (ss *Session) AuthStatus() ([]AuthStatus, error)`（エラーが1つでもあれば、結果と一緒に `errFindings` に当たるエラーを返す。CLI は終了コード1）
   - `func (ss *Session) AuthLogout(name string) (removed bool, err error)`
   - `func (ss *Session) StoreDefault(name string) (string, error)`（name が空なら今の値。今と同じ名前なら書かない。ない名前は `store.not_found` と候補）
-- 直すこと（Task 8 のレビューと見直し）:
-  1. login の比較は大文字小文字を区別しない。同じ host・login の重複判定も `config.SameHost` と `EqualFold`。config.yaml の重複の読み込みエラー（Task R1）と合わせたテストを足す
+- 直すこと（旧 Task 8 のレビューと見直し）:
+  1. login の比較は大文字小文字を区別しない。同じ host・login の重複判定も `config.SameHost` と `EqualFold`。config.yaml の重複の読み込みエラー（Task 1）と合わせたテストを足す
   2. `--host` が config のアカウントの host と違えば `KindUsage`（終了コード2）。比較は `SameHost`
   3. 書く順は keychain → config.yaml（`Config.Update`）。config.yaml が書けなければ keychain を前の値に戻す（前の値がなければ消す）
   4. `device` のトークンの keychain への保存と `auth logout` の削除を `auth.lock` の中で行う。Device Flow のポーリングの間は取らない
@@ -130,7 +130,7 @@ rebase で一時的に入れた `ops.Session.Conn`（フック）を消し、`cm
 
 ---
 
-### Task R4: `store init` の remote の用意（旧 Task 9）
+### Task 4: `store init` の remote の用意（旧 Task 9）
 
 **Files:**
 - Modify: `internal/ops/storeops.go`（`StoreInitInput` に `Account`・`Path`、`prepareRemotes`・`madeRemotes`）、`cmd/hedgehug/store_init.go`（`--account`・`--path`）
@@ -153,21 +153,21 @@ rebase で一時的に入れた `ops.Session.Conn`（フック）を消し、`cm
 
 ---
 
-### Task R5: 読み取り専用とメンバーの状態、同期での GitHub の情報（旧 Task 10）
+### Task 5: 読み取り専用とメンバーの状態、同期での GitHub の情報（旧 Task 10）
 
 **Files:** 旧 Task 10 と同じ（`internal/sync/access.go`・`members.go`・`github.go`・`sync.go` とテスト）。加えて `internal/ops/session.go`（`Unpushed` が `sync.Unpushed` を呼ぶ）。
 
 **Interfaces:** 旧 Task 10 のとおり。`internal/sync` は 4a で変わっていないので、旧 Task 10 のテストとコードをそのまま使う。次だけ変える。
 - GitHub の情報を取るのに失敗しても `checked` を進める（次は5分後）。判定は変えない。テストを足す（失敗の直後の同期で API を呼ばない）
-- `access.json`・`members.json` は同期の中（`ss.RunSync` が取る `sync.lock`）で書く。`CheckAccess` を同期の外から呼ぶ側（Task R6 の `store add`）は `s.WithLocalLock("sync.lock", ...)` の中で呼ぶ。`CheckAccess` の doc にそう書く
+- `access.json`・`members.json` は同期の中（`ss.RunSync` が取る `sync.lock`）で書く。`CheckAccess` を同期の外から呼ぶ側（Task 6 の `store add`）は `s.WithLocalLock("sync.lock", ...)` の中で呼ぶ。`CheckAccess` の doc にそう書く
 - `ops.Unpushed` の本体を `return sync.Unpushed(s.Repo())` にする（数える処理は `sync.Unpushed` の1つ）
-- 「GitHub のホスト」の判定は Task R1 の `IsGitHubHost`（呼び出し側の ops が `GitHubRepo` を作るときに使う。Task R6）
+- 「GitHub のホスト」の判定は Task 1 の `IsGitHubHost`（呼び出し側の ops が `GitHubRepo` を作るときに使う。Task 6）
 
 - [ ] Step 1〜7 は旧 Task 10 のとおり（コミットは `feat(sync): 読み取り専用とメンバーの状態を持ち、同期で GitHub の権限とコラボレーターを取る`）
 
 ---
 
-### Task R6: 読み取り専用の拒否、`store add --account`、同期の表示（旧 Task 11）
+### Task 6: 読み取り専用の拒否、`store add --account`、同期の表示（旧 Task 11）
 
 **Files:**
 - Create: `internal/ops/readonly.go`、`internal/ops/readonly_test.go`
@@ -195,7 +195,7 @@ rebase で一時的に入れた `ops.Session.Conn`（フック）を消し、`cm
 
 ---
 
-### Task R7: `hh store discover`（旧 Task 12）
+### Task 7: `hh store discover`（旧 Task 12）
 
 **Files:**
 - Create: `internal/ops/discover.go`、`internal/ops/discover_test.go`、`cmd/hedgehug/store_discover.go`、`cmd/hedgehug/store_discover_test.go`
@@ -216,17 +216,17 @@ rebase で一時的に入れた `ops.Session.Conn`（フック）を消し、`cm
 
 ---
 
-### Task R8: devenv の 3a 分と 3a の E2E（旧 Task 13）
+### Task 8: devenv の 3a 分と 3a の E2E（旧 Task 13）
 
 **Files・Interfaces:** 旧 Task 13 のとおり（`tools/devenv` は 4a で変わっていない）。変わるところ:
 - `TestE2EAuthLoginAndStatus` は、このプロセスの中で `run` を呼ぶ（旧 Task 13 のとおり）。`run` が作る `ops.Session` に `Keyring` が入るので、`keyring.MockInit()` のモックがそのまま効く
-- `auth status --json` の期待値は `state`（Task R3）
+- `auth status --json` の期待値は `state`（Task 3）
 
 - [ ] Step 1〜7 は旧 Task 13 のとおり（コミットは `feat(devenv): 3a の構成（fakegh・url_rewrites・org-b・alice-corp）と E2E を足す`）
 
 ---
 
-### Task R9: 全体の確認と spec との突き合わせ（旧 Task 14）
+### Task 9: 全体の確認と spec との突き合わせ（旧 Task 14）
 
 - [ ] **Step 1: 全体のチェック**: `go test -race ./...`、`golangci-lint run ./...`（gosec の指摘は旧 Task 14 の書き方で）
 - [ ] **Step 2: git を外したテスト**: 旧 Task 14 の Step 2 のとおり（`CGO_ENABLED=0`、PATH は `go` と `gotestsum` だけ）
