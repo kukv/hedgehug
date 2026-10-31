@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/schema"
 )
 
 // Files is the set of files the repair looks at: HEAD with the merge laid
@@ -26,7 +25,6 @@ type RepairInput struct {
 	OnOrigin func(ulid model.ULID, id string) bool // origin's main has this task with this id
 	Changed  func(path string) bool                // the merge changed the file (parent_cycle picks among these)
 	Author   func(path string) string              // who last changed the file
-	Sc       *schema.Schema
 	Now      time.Time
 }
 
@@ -180,16 +178,20 @@ func (r *repairer) restorePrefixes() {
 }
 
 // breakCycles breaks one parent cycle at a time until none is left. Of the
-// tasks on the cycle whose file the merge changed (all of them when none
-// is), the one updated last goes back to its parent in the base, or to the
-// root when that does not break the cycle.
+// tasks on the cycle whose parent differs from the base's, else whose file
+// the merge changed, else all of them, the one updated last goes back to
+// its parent in the base, or to the root when that does not break the
+// cycle.
 func (r *repairer) breakCycles() error {
 	for {
 		cycle := r.findCycle()
 		if cycle == nil {
 			return nil
 		}
-		cands := slices.DeleteFunc(slices.Clone(cycle), func(u model.ULID) bool { return !r.in.Changed(model.TaskPath(u)) })
+		cands := slices.DeleteFunc(slices.Clone(cycle), func(u model.ULID) bool { return !r.parentChanged(u) })
+		if len(cands) == 0 {
+			cands = slices.DeleteFunc(slices.Clone(cycle), func(u model.ULID) bool { return !r.in.Changed(model.TaskPath(u)) })
+		}
 		if len(cands) == 0 {
 			cands = cycle
 		}
@@ -250,6 +252,16 @@ func (r *repairer) onCycle(u model.ULID) bool {
 		seen[*p] = true
 	}
 	return false
+}
+
+// parentChanged reports whether task u has another parent than in the
+// base. Without a base, no parent is known to have changed.
+func (r *repairer) parentChanged(u model.ULID) bool {
+	if r.in.Base == nil {
+		return false
+	}
+	p, b := r.tasks[u].Parent, r.baseParent(u)
+	return (p == nil) != (b == nil) || p != nil && *p != *b
 }
 
 // baseParent returns the parent of task u in the base, or nil.
@@ -351,8 +363,10 @@ func (r *repairer) prefix(t *model.Task) (string, bool) {
 // workspace's prefix, and to all but one of the tasks that share an id.
 // The task kept is the one origin has with that id when there is exactly
 // one, else the one with the smallest ULID. Tasks renumbered for the
-// prefix are not counted among those that share an id. Numbers are given
-// in ULID order, after the largest number in use.
+// prefix, and tasks that cannot be numbered (no workspace, or a prefix not
+// well formed), are not counted among those that share an id. Numbers are
+// given in one ULID order over all the tasks, whatever id they shared,
+// after the largest number in use.
 func (r *repairer) renumber() error {
 	const collision, mismatch = 1, 2
 	need := map[model.ULID]int{}
@@ -368,8 +382,8 @@ func (r *repairer) renumber() error {
 	}
 	byID := map[string][]model.ULID{}
 	for _, u := range r.order {
-		if t := r.tasks[u]; t.ID != "" && need[u] == 0 {
-			byID[t.ID] = append(byID[t.ID], u)
+		if _, ok := r.prefix(r.tasks[u]); ok && r.tasks[u].ID != "" && need[u] == 0 {
+			byID[r.tasks[u].ID] = append(byID[r.tasks[u].ID], u)
 		}
 	}
 	for _, id := range slices.Sorted(maps.Keys(byID)) {
@@ -382,7 +396,7 @@ func (r *repairer) renumber() error {
 			keep = on[0]
 		}
 		for _, u := range g {
-			if _, ok := r.prefix(r.tasks[u]); ok && u != keep {
+			if u != keep {
 				need[u] = collision
 			}
 		}

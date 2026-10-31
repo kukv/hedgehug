@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/schema"
 )
 
 // memFiles is a set of files in memory.
@@ -50,9 +49,6 @@ func wsFile(ulid, name, prefix string) []byte {
 
 func repair(t *testing.T, in RepairInput) (memFiles, []Repaired) {
 	t.Helper()
-	if in.Sc == nil {
-		in.Sc = schema.Default()
-	}
 	if in.Author == nil {
 		in.Author = func(string) string { return "github.com/x" }
 	}
@@ -216,7 +212,7 @@ func TestRepairPrefixAndNameDuplicatesOnlyTell(t *testing.T) {
 		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
 		model.WorkspacePath(mustULID(wsB)): []byte(strings.Replace(later, "created: 2026-10-30", "created: 2026-10-31", 1)),
 	}
-	out, rs, err := Repair(RepairInput{Files: f, Sc: schema.Default(), Author: func(string) string { return "x" }, OnOrigin: func(model.ULID, string) bool { return false }, Changed: func(string) bool { return true }})
+	out, rs, err := Repair(RepairInput{Files: f, Author: func(string) string { return "x" }, OnOrigin: func(model.ULID, string) bool { return false }, Changed: func(string) bool { return true }})
 	if err != nil || len(out) != 0 {
 		t.Fatalf("out = %v, err = %v; duplicates must not change data", out, err)
 	}
@@ -244,6 +240,142 @@ func TestRepairIDPrefixMismatchRenumbersSilently(t *testing.T) {
 	}
 	if len(rs) != 1 || rs[0].Kind != "id_renumbered" || rs[0].Author != "" {
 		t.Errorf("repaired = %+v", rs)
+	}
+}
+
+// threeCycle is a -> b -> c -> a, where only a and c have another parent
+// than in base3 and b was updated last.
+var (
+	cyA, cyB, cyC = "01JD0000000000000000000001", "01JD0000000000000000000002", "01JD0000000000000000000003"
+	threeCycle    = memFiles{
+		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
+		pathOf(cyA):                        taskFile(cyA, "WEB-1", wsA, cyB, "2026-10-31T11:00:00Z"),
+		pathOf(cyB):                        taskFile(cyB, "WEB-2", wsA, cyC, "2026-10-31T12:00:00Z"),
+		pathOf(cyC):                        taskFile(cyC, "WEB-3", wsA, cyA, "2026-10-31T10:00:00Z"),
+	}
+	base3 = memFiles{
+		pathOf(cyA): taskFile(cyA, "WEB-1", wsA, "", "2026-10-31T09:00:00Z"),
+		pathOf(cyB): taskFile(cyB, "WEB-2", wsA, cyC, "2026-10-31T09:00:00Z"),
+		pathOf(cyC): taskFile(cyC, "WEB-3", wsA, "", "2026-10-31T09:00:00Z"),
+	}
+)
+
+// parents returns the parents of a, b and c of threeCycle in after.
+func parents(t *testing.T, after memFiles) []string {
+	t.Helper()
+	var out []string
+	for _, u := range []string{cyA, cyB, cyC} {
+		p := ""
+		if x := decoded(t, after[pathOf(u)]).Parent; x != nil {
+			p = x.String()
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+func TestRepairThreeCycleWithBaseRevertsAChangedParent(t *testing.T) {
+	after, rs := repair(t, RepairInput{Files: threeCycle, Base: base3})
+	if got := parents(t, after); !slices.Equal(got, []string{"", cyC, cyA}) {
+		t.Errorf("parents = %v", got) // a, changed and later than c, back to its base root; b, updated last, keeps c
+	}
+	if len(rs) != 1 || rs[0].Kind != "parent_cycle" || rs[0].ULID.String() != cyA || rs[0].Value != `"`+cyB+`"` {
+		t.Errorf("repaired = %+v", rs)
+	}
+}
+
+func TestRepairThreeCycleWithoutBaseMovesTheLatestToTheRoot(t *testing.T) {
+	after, rs := repair(t, RepairInput{Files: threeCycle})
+	if got := parents(t, after); !slices.Equal(got, []string{cyB, "", cyA}) {
+		t.Errorf("parents = %v", got)
+	}
+	if len(rs) != 1 || rs[0].ULID.String() != cyB {
+		t.Errorf("repaired = %+v", rs)
+	}
+}
+
+func TestRepairCycleWithoutChangedMemberPicksAmongAll(t *testing.T) {
+	after, rs := repair(t, RepairInput{Files: threeCycle, Changed: func(string) bool { return false }})
+	if got := parents(t, after); !slices.Equal(got, []string{cyB, "", cyA}) || len(rs) != 1 {
+		t.Errorf("parents = %v, repaired = %+v", got, rs)
+	}
+}
+
+func TestRepairCycleBaseParentStillCyclesGoesToTheRoot(t *testing.T) {
+	// Only c has another parent than in the base, and its base parent b
+	// still leads back to c.
+	base := memFiles{
+		pathOf(cyA): taskFile(cyA, "WEB-1", wsA, cyB, "2026-10-31T09:00:00Z"),
+		pathOf(cyB): taskFile(cyB, "WEB-2", wsA, cyC, "2026-10-31T09:00:00Z"),
+		pathOf(cyC): taskFile(cyC, "WEB-3", wsA, cyB, "2026-10-31T09:00:00Z"),
+	}
+	after, rs := repair(t, RepairInput{Files: threeCycle, Base: base})
+	if got := parents(t, after); !slices.Equal(got, []string{cyB, cyC, ""}) || len(rs) != 1 {
+		t.Errorf("parents = %v, repaired = %+v", got, rs)
+	}
+}
+
+func TestRepairRevivesUndecodableWorkspaceAsItWas(t *testing.T) {
+	x := "01JD0000000000000000000001"
+	raw := []byte("---\n: [\n")
+	base := memFiles{model.WorkspacePath(mustULID(wsB)): raw}
+	f := memFiles{
+		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
+		pathOf(x):                          taskFile(x, "API-1", wsB, "", "2026-10-31T10:00:00Z"),
+	}
+	after, rs := repair(t, RepairInput{Files: f, Base: base})
+	if !bytes.Equal(after[model.WorkspacePath(mustULID(wsB))], raw) || len(rs) != 1 || rs[0].Kind != "workspace_revived" {
+		t.Errorf("not revived as it was: %+v", rs)
+	}
+}
+
+func TestRepairIDCollisionBothOnOriginKeepsSmallerULID(t *testing.T) {
+	x, y := "01JD0000000000000000000001", "01JD0000000000000000000002"
+	f := memFiles{
+		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
+		pathOf(x):                          taskFile(x, "WEB-1", wsA, "", "2026-10-31T10:00:00Z"),
+		pathOf(y):                          taskFile(y, "WEB-1", wsA, "", "2026-10-31T10:00:00Z"),
+	}
+	after, rs := repair(t, RepairInput{Files: f, OnOrigin: func(model.ULID, string) bool { return true }})
+	if gx, gy := decoded(t, after[pathOf(x)]).ID, decoded(t, after[pathOf(y)]).ID; gx != "WEB-1" || gy != "WEB-2" {
+		t.Errorf("ids = %s %s", gx, gy)
+	}
+	if len(rs) != 1 || rs[0].ULID.String() != y {
+		t.Errorf("repaired = %+v", rs)
+	}
+}
+
+func TestRepairUnnumberableTaskDoesNotTakePartInACollision(t *testing.T) {
+	x, y := "01JD0000000000000000000001", "01JD0000000000000000000002"
+	f := memFiles{
+		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
+		model.WorkspacePath(mustULID(wsB)): wsFile(wsB, "api", "api!"),
+		pathOf(x):                          taskFile(x, "WEB-1", wsB, "", "2026-10-31T10:00:00Z"), // malformed prefix
+		pathOf(y):                          taskFile(y, "WEB-1", wsA, "", "2026-10-31T10:00:00Z"),
+	}
+	after, rs := repair(t, RepairInput{Files: f})
+	if got := decoded(t, after[pathOf(y)]).ID; got != "WEB-1" || len(rs) != 0 {
+		t.Errorf("y = %s, repaired = %+v", got, rs)
+	}
+	delete(f, model.WorkspacePath(mustULID(wsB))) // no workspace
+	after, rs = repair(t, RepairInput{Files: f})
+	if got := decoded(t, after[pathOf(y)]).ID; got != "WEB-1" || len(rs) != 0 {
+		t.Errorf("y = %s, repaired = %+v", got, rs)
+	}
+}
+
+func TestRepairNumbersCollisionGroupsInOneULIDOrder(t *testing.T) {
+	u1, u2, u3, u4 := "01JD0000000000000000000001", "01JD0000000000000000000002", "01JD0000000000000000000003", "01JD0000000000000000000004"
+	f := memFiles{
+		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
+		pathOf(u1):                         taskFile(u1, "WEB-2", wsA, "", "2026-10-31T10:00:00Z"),
+		pathOf(u2):                         taskFile(u2, "WEB-1", wsA, "", "2026-10-31T10:00:00Z"),
+		pathOf(u3):                         taskFile(u3, "WEB-2", wsA, "", "2026-10-31T10:00:00Z"),
+		pathOf(u4):                         taskFile(u4, "WEB-1", wsA, "", "2026-10-31T10:00:00Z"),
+	}
+	after, _ := repair(t, RepairInput{Files: f})
+	if g3, g4 := decoded(t, after[pathOf(u3)]).ID, decoded(t, after[pathOf(u4)]).ID; g3 != "WEB-3" || g4 != "WEB-4" {
+		t.Errorf("ids = %s %s, want WEB-3 WEB-4", g3, g4)
 	}
 }
 
