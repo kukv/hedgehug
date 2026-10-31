@@ -117,7 +117,7 @@ func Run(s *store.Store, opt Options) (Result, error) {
 				return res, err
 			}
 		}
-		if err := repairHead(s, ix, before, opt, &res); err != nil {
+		if err := repairHead(s, ix, opt, &res); err != nil {
 			return res, err
 		}
 		if err := setup(s, opt); err != nil {
@@ -389,11 +389,11 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 			}
 		}
 	}
-	snap, err := newSnapshot(r, ht, files)
+	snap, err := newSnapshot(r, ht, "", files)
 	if err != nil {
 		return err
 	}
-	baseSnap, err := newSnapshot(r, bt, nil)
+	baseSnap, err := newSnapshot(r, bt, "", nil)
 	if err != nil {
 		return err
 	}
@@ -579,27 +579,32 @@ func dirty(r *gitrepo.Repo, paths []string) error {
 }
 
 // repairHead repairs the files of HEAD, for what a merge made by hand or a
-// file edited by hand brought in, and commits what it fixed. It reads the
-// files only when the index has a problem the repair fixes, or a workspace
-// changed since before; otherwise there is nothing to repair. What it only
-// tells of, like a prefix two workspaces share, goes to res without a
-// commit, once per run.
-func repairHead(s *store.Store, ix *index.Index, before plumbing.Hash, opt Options, res *Result) error {
+// file edited by hand brought in, and commits what it fixed. It reads every
+// file only when the index has a problem the repair fixes; otherwise it
+// reads the workspaces alone, for the prefixes and names two of them share.
+// What it only tells of goes to res without a commit, once per run; the
+// inbox drops what it told before.
+func repairHead(s *store.Store, ix *index.Index, opt Options, res *Result) error {
 	r := s.Repo()
 	for try := 1; ; try++ {
 		head, err := r.Head()
 		if err != nil {
 			return err
 		}
-		if need, err := needsRepair(r, ix, before, head); err != nil || !need {
+		full, err := needsRepair(ix)
+		if err != nil {
 			return err
 		}
-		onFullRepair()
+		prefix := "workspaces/"
+		if full {
+			onFullRepair()
+			prefix = ""
+		}
 		tree, err := r.TreeOf(head)
 		if err != nil {
 			return err
 		}
-		snap, err := newSnapshot(r, tree, nil)
+		snap, err := newSnapshot(r, tree, prefix, nil)
 		if err != nil {
 			return err
 		}
@@ -647,11 +652,10 @@ func repairHead(s *store.Store, ix *index.Index, before plumbing.Hash, opt Optio
 // tasks count only as parents.
 var repairCodes = []string{index.CodeDuplicateID, index.CodeNoID, index.CodeIDPrefix, store.CodeWorkspaceMismatch}
 
-// needsRepair reports whether the files of head may need the repair: the
-// index has a problem it fixes, a task that is not deleted has a deleted
-// parent, or a workspace changed since the commit before, which may make
-// prefixes or names that two workspaces share.
-func needsRepair(r *gitrepo.Repo, ix *index.Index, before, head plumbing.Hash) (bool, error) {
+// needsRepair reports whether the tasks of HEAD may need the repair: the
+// index has a problem it fixes, or a task that is not deleted has a
+// deleted parent.
+func needsRepair(ix *index.Index) (bool, error) {
 	if err := ix.Refresh(); err != nil {
 		return false, err
 	}
@@ -668,19 +672,7 @@ func needsRepair(r *gitrepo.Repo, ix *index.Index, before, head plumbing.Hash) (
 			}
 		}
 	}
-	if before == head {
-		return false, nil
-	}
-	from, err := r.TreeOf(before)
-	if err != nil {
-		return false, err
-	}
-	to, err := r.TreeOf(head)
-	if err != nil {
-		return false, err
-	}
-	cs, err := r.DiffTrees(from, to, "workspaces/")
-	return len(cs) > 0, err
+	return false, nil
 }
 
 // addNotice adds x to res unless res already tells the same of the same
@@ -703,12 +695,24 @@ func prefixDuplicates(s *store.Store, opt Options, res *Result) error {
 		return err
 	}
 	who := headAuthor(s.Repo(), head)
+	var mine []*model.Workspace
+	var prefixes []string
 	for m, err := range s.Workspaces() {
-		if err != nil || m.IDPrefix == "" {
-			continue
+		if err == nil && m.IDPrefix != "" {
+			mine = append(mine, m)
+			prefixes = append(prefixes, m.IDPrefix)
 		}
-		for _, u := range store.PrefixUses(opt.Others, m.IDPrefix, nil) {
+	}
+	if len(mine) == 0 {
+		return nil
+	}
+	uses := store.PrefixUses(opt.Others, prefixes, nil) // each other store opens once
+	for _, m := range mine {
+		for _, u := range uses {
 			w := u.Workspace
+			if !strings.EqualFold(m.IDPrefix, w.IDPrefix) {
+				continue
+			}
 			if c := m.PrefixSet.Compare(w.PrefixSet); c < 0 || c == 0 && m.ULID.String() < w.ULID.String() {
 				continue
 			}
@@ -758,7 +762,8 @@ func findInvalid(s *store.Store, ix *index.Index, was map[model.ULID]bool, befor
 
 func compareULIDs(a, b model.ULID) int { return strings.Compare(a.String(), b.String()) }
 
-// snapshot is the files of a tree with some laid over it (nil removes).
+// snapshot is the files under a prefix of a tree, with some laid over it
+// (nil removes).
 type snapshot struct {
 	r     *gitrepo.Repo
 	tree  plumbing.Hash
@@ -766,9 +771,9 @@ type snapshot struct {
 	paths []string // sorted
 }
 
-func newSnapshot(r *gitrepo.Repo, tree plumbing.Hash, over map[string][]byte) (*snapshot, error) {
+func newSnapshot(r *gitrepo.Repo, tree plumbing.Hash, prefix string, over map[string][]byte) (*snapshot, error) {
 	s := &snapshot{r: r, tree: tree, over: over}
-	for p, err := range r.Files(tree, "") {
+	for p, err := range r.Files(tree, prefix) {
 		if err != nil {
 			return nil, err
 		}

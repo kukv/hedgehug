@@ -124,6 +124,47 @@ func TestHeadMovedCapped(t *testing.T) {
 	}
 }
 
+// A prefix two workspaces share that is in HEAD before the sync starts, as
+// a hand merge leaves it, is told of on every sync, without reading every
+// file.
+func TestPrefixDuplicateInHeadBeforeSync(t *testing.T) {
+	c := newCluster(t, 1)
+	n := 0
+	replace(t, &onFullRepair, func() { n++ })
+	w := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "WEB", Created: time.Now(), PrefixSet: time.Now()}
+	b, err := w.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.putFile(0, model.WorkspacePath(w.ULID), string(b))
+	for i := range 2 {
+		r := c.sync(0)
+		if !slices.ContainsFunc(r.Repaired, func(x merge.Repaired) bool {
+			return x.ULID == w.ULID && x.Kind == "prefix_duplicate" && x.Author == "github.com/u0"
+		}) {
+			t.Errorf("sync %d: repaired = %+v", i, r.Repaired)
+		}
+	}
+	if n != 0 {
+		t.Errorf("read every file %d times", n)
+	}
+}
+
+func TestRepairHeadMovedCapped(t *testing.T) {
+	c := newCluster(t, 1)
+	a := c.addTask(0, "a")
+	b := c.addTask(0, "b")
+	c.set(0, b.ULID, func(t *model.Task) { t.ID = a.ID }) // the repair has a commit to make
+	n := 0
+	replace(t, &beforeCommit, func() { n++; c.addTask(0, "moves HEAD") })
+	if _, err := Run(c.stores[0], c.opts[0]); !errors.Is(err, store.ErrHeadMoved) {
+		t.Errorf("Run = %v", err)
+	}
+	if n != tries {
+		t.Errorf("computed %d times, want %d", n, tries)
+	}
+}
+
 func TestMirrorRejectedMergedNextRound(t *testing.T) {
 	c := newCluster(t, 2)
 	mirror := filepath.Join(t.TempDir(), "m.git")

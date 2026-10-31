@@ -104,7 +104,7 @@ func (a *app) checkPrefixElsewhere(prefix, self string) error {
 			others = append(others, store.NamedStore{Name: e.Name, Path: e.Path})
 		}
 	}
-	uses := store.PrefixUses(others, prefix, func(name string, err error) {
+	uses := store.PrefixUses(others, []string{prefix}, func(name string, err error) {
 		_, _ = fmt.Fprintf(a.stderr, "warning: store %s is not checked for id prefixes: %v\n", name, err)
 	})
 	if len(uses) > 0 {
