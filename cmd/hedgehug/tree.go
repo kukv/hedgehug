@@ -10,6 +10,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/query"
 	"github.com/kukv/hedgehug/internal/schema"
 )
@@ -26,11 +27,11 @@ func (a *app) lsTree(q *query.Query, ulidsOnly bool, tmpl *template.Template) er
 	if hasTerm(q, "group") || hasTerm(q, "sort") {
 		return usageErrorf("--tree orders tasks by rank; it takes neither group: nor sort:")
 	}
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
-	opt, err := a.queryOptions(s)
+	opt, err := a.ss.QueryOptions(s)
 	if err != nil {
 		return err
 	}
@@ -70,7 +71,7 @@ func (a *app) lsTree(q *query.Query, ulidsOnly bool, tmpl *template.Template) er
 			m["context"], m["in_cycle"] = node[e.ULID].context, node[e.ULID].inCycle
 		})
 	case a.jsonOut:
-		out := make([]*taskJSON, len(tops))
+		out := make([]*ops.TaskView, len(tops))
 		for i, n := range tops {
 			out[i] = nodeJSON(ix, n)
 		}
@@ -178,8 +179,8 @@ func treeLine(st style, e *index.Entry, context bool) string {
 	return st.id(name) + line[len(name):]
 }
 
-func nodeJSON(ix *index.Index, n *treeNode) *taskJSON {
-	j := entryJSON(ix, n.e)
+func nodeJSON(ix *index.Index, n *treeNode) *ops.TaskView {
+	j := ops.TaskViewOf(ix, n.e)
 	j.Context, j.InCycle = n.context, n.inCycle
 	for _, c := range n.children {
 		j.Children = append(j.Children, nodeJSON(ix, c))

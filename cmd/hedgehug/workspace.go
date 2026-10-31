@@ -94,7 +94,7 @@ func resolveWorkspace(ix *index.Index, arg string) (*model.Workspace, error) {
 // checkPrefixElsewhere refuses an id prefix that a workspace of another store
 // of the config has. A store that cannot be opened is skipped with a warning.
 func (a *app) checkPrefixElsewhere(prefix, self string) error {
-	c, _, err := a.config()
+	c, _, err := a.ss.Config()
 	if err != nil {
 		return err
 	}
@@ -115,11 +115,11 @@ func (a *app) checkPrefixElsewhere(prefix, self string) error {
 
 // selectedStoreName returns the name of the store the command works on.
 func (a *app) selectedStoreName() (string, error) {
-	c, _, err := a.config()
+	c, _, err := a.ss.Config()
 	if err != nil {
 		return "", err
 	}
-	e, err := c.Select(a.storeName)
+	e, err := c.Select(a.ss.StoreName)
 	return e.Name, err
 }
 
@@ -137,12 +137,12 @@ func (a *app) workspaceAdd(name, prefix string) error {
 	if err := a.checkPrefixElsewhere(prefix, self); err != nil {
 		return err
 	}
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
 	w := &model.Workspace{ULID: model.NewULID(), Name: name, IDPrefix: prefix, PrefixSet: a.now()}
-	if _, err := a.update(s, workspaceOp(w.ULID), func(tx *store.Tx) error {
+	if _, err := a.ss.Update(s, workspaceOp(w.ULID), func(tx *store.Tx) error {
 		tx.SetDetail(fmt.Sprintf("add %s (%s)", w.Name, w.IDPrefix))
 		return tx.PutWorkspace(w)
 	}); err != nil {
@@ -155,7 +155,7 @@ func (a *app) workspaceRename(arg, name string) error {
 	if err := model.ValidWorkspaceName(name); err != nil {
 		return usageError{err}
 	}
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
@@ -165,7 +165,7 @@ func (a *app) workspaceRename(arg, name string) error {
 	}
 	var old string
 	var w *model.Workspace
-	if _, err := a.update(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
+	if _, err := a.ss.Update(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
 		var err error
 		if w, err = tx.Workspace(ws.ULID); err != nil {
 			return err
@@ -184,7 +184,7 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 	if err := model.ValidIDPrefix(prefix); err != nil {
 		return usageError{err}
 	}
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
@@ -205,7 +205,7 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 	var w *model.Workspace
 	var tasks []*model.Task
 	var oldIDs []string
-	committed, err := a.update(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
+	committed, err := a.ss.Update(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
 		var err error
 		if w, err = tx.Workspace(ws.ULID); err != nil {
 			return err
@@ -272,7 +272,7 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 }
 
 func (a *app) workspaceRm(arg string) error {
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
@@ -284,7 +284,7 @@ func (a *app) workspaceRm(arg string) error {
 		return fmt.Errorf("workspace %s still has %d tasks; move them with hedgehug mv --workspace or purge them", ws.Name, n)
 	}
 	w := ws
-	if _, err := a.update(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
+	if _, err := a.ss.Update(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
 		var err error
 		if w, err = tx.Workspace(ws.ULID); err != nil {
 			return err
@@ -305,7 +305,7 @@ func workspaceOp(ulid model.ULID) store.Op {
 }
 
 func (a *app) workspaceLs() error {
-	_, ix, err := a.open()
+	_, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -41,11 +42,11 @@ func (a *app) mvCmd() *cobra.Command {
 }
 
 func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after string) error {
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
-	e, err := a.resolve(ix, arg)
+	e, err := a.ss.Resolve(ix, arg)
 	if err != nil {
 		return err
 	}
@@ -56,7 +57,7 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 	}
 	var p *index.Entry
 	if parentArg != "" {
-		if p, err = a.resolve(ix, parentArg); err != nil {
+		if p, err = a.ss.Resolve(ix, parentArg); err != nil {
 			return err
 		}
 		if err := liveParent(ix, p); err != nil {
@@ -73,7 +74,7 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 		return err
 	}
 	var res mvResult
-	committed, err := a.update(s, store.Op{Name: "mv", Task: e.ULID}, func(tx *store.Tx) error {
+	committed, err := a.ss.Update(s, store.Op{Name: "mv", Task: e.ULID}, func(tx *store.Tx) error {
 		var err error
 		res, err = a.mvInTx(tx, ix, e, p, w, root, before, after)
 		return err
@@ -202,13 +203,13 @@ func (a *app) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, ws mo
 	if ref == "" {
 		ref = after
 	}
-	x, err := a.resolve(ix, ref)
+	x, err := a.ss.Resolve(ix, ref)
 	if err != nil {
 		return "", err
 	}
 	sib := siblings(ix, parent, ws, ulid)
 	if !slices.ContainsFunc(sib, func(e *index.Entry) bool { return e.ULID == x.ULID }) {
-		return "", fmt.Errorf("%s is not under the same parent", refName(ix, x.ULID))
+		return "", fmt.Errorf("%s is not under the same parent", ops.RefName(ix, x.ULID))
 	}
 	var lower, higher model.Rank
 	for _, e := range sib {

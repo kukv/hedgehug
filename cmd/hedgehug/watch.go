@@ -35,18 +35,18 @@ var errNoAccounts = errors.New("accounts are not set up in config.yaml; add one 
 // watch adds the writer of the store to the watchers of the task arg
 // names, or takes it out.
 func (a *app) watch(arg string, on bool) error {
-	acct, ok, err := a.writer()
+	acct, ok, err := a.ss.Writer()
 	if err != nil {
 		return err
 	}
 	if !ok {
 		return errNoAccounts
 	}
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
-	e, err := a.resolve(ix, arg)
+	e, err := a.ss.Resolve(ix, arg)
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func (a *app) watch(arg string, on bool) error {
 	if on {
 		name = "watch"
 	}
-	committed, err := a.update(s, store.Op{Name: name, Task: e.ULID}, func(tx *store.Tx) error {
+	committed, err := a.ss.Update(s, store.Op{Name: name, Task: e.ULID}, func(tx *store.Tx) error {
 		t, err := tx.Task(e.ULID)
 		if err != nil {
 			return err
@@ -116,7 +116,7 @@ func newMentions(old, now, writerHost string) []string {
 // writerHost is the host of the account that writes to the store, "" when
 // the store has none.
 func (a *app) writerHost() (string, error) {
-	acct, ok, err := a.writer()
+	acct, ok, err := a.ss.Writer()
 	if err != nil || !ok {
 		return "", err
 	}

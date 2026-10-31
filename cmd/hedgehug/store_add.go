@@ -13,6 +13,7 @@ import (
 	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 	"github.com/kukv/hedgehug/internal/sync"
 )
@@ -40,7 +41,7 @@ func (a *app) storeAdd(name string, remotes []string, path string) error {
 	if err := config.ValidStoreName(name); err != nil {
 		return usageError{err}
 	}
-	c, p, err := a.config()
+	c, p, err := a.ss.Config()
 	if err != nil {
 		return err
 	}
@@ -80,11 +81,11 @@ func (a *app) storeAdd(name string, remotes []string, path string) error {
 		return undo(err)
 	}
 	if need {
-		opt, err := a.syncOptions(c, e)
+		opt, err := a.ss.SyncOptions(c, e)
 		if err != nil {
 			return undo(err)
 		}
-		if _, err := a.runSync(s, opt); err != nil {
+		if _, err := a.ss.RunSync(s, opt, true); err != nil {
 			return undo(fmt.Errorf("set up %s: %w", name, err))
 		}
 	}
@@ -187,7 +188,7 @@ type storeJSON struct {
 }
 
 func (a *app) storeList() error {
-	c, _, err := a.config()
+	c, _, err := a.ss.Config()
 	if err != nil {
 		return err
 	}
@@ -239,7 +240,7 @@ func (a *app) storeRemoveCmd() *cobra.Command {
 }
 
 func (a *app) storeRemove(name string, purge bool) error {
-	c, _, err := a.config()
+	c, _, err := a.ss.Config()
 	if err != nil {
 		return err
 	}
@@ -288,7 +289,7 @@ func checkPushed(e config.StoreEntry) error {
 	if err != nil {
 		return fmt.Errorf("store %s: %w; delete the directory by hand if you mean to", e.Name, err)
 	}
-	n, err := unpushed(s)
+	n, err := ops.Unpushed(s)
 	if err != nil {
 		return err
 	}

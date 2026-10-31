@@ -70,11 +70,11 @@ func workspaceName(ix *index.Index, ulid model.ULID) string {
 // moving to another workspace is the job of mv --workspace, which moves the
 // tasks under it too.
 func (a *app) restoreAt(arg, at string) error {
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
-	e, err := a.resolve(ix, arg)
+	e, err := a.ss.Resolve(ix, arg)
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func (a *app) restoreAt(arg, at string) error {
 		return err
 	}
 	var note string
-	committed, err := a.update(s, store.Op{Name: "restore", Task: e.ULID}, func(tx *store.Tx) error {
+	committed, err := a.ss.Update(s, store.Op{Name: "restore", Task: e.ULID}, func(tx *store.Tx) error {
 		// Read under the lock, as the other writes do.
 		var err error
 		if e, err = current(ix, e); err != nil {

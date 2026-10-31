@@ -51,11 +51,11 @@ func (a *app) checkCmd() *cobra.Command {
 // checkSchema opens the store and checks its schema. A schema.yaml that does
 // not decode keeps the store from opening; that is then the one finding.
 func (a *app) checkSchema() ([]doctor.Finding, error) {
-	c, _, err := a.config()
+	c, _, err := a.ss.Config()
 	if err != nil {
 		return nil, err
 	}
-	e, err := c.Select(a.storeName)
+	e, err := c.Select(a.ss.StoreName)
 	if err != nil {
 		return nil, err
 	}

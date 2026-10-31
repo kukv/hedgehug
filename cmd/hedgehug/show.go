@@ -10,6 +10,7 @@ import (
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -31,14 +32,14 @@ type commentJSON struct {
 }
 
 type showJSON struct {
-	*taskJSON
+	*ops.TaskView
 	Body     string               `json:"body"`
 	Watchers []string             `json:"watchers"`
 	Repos    []string             `json:"repos"`
 	Comments []commentJSON        `json:"comments"`
-	Reverse  map[string][]refJSON `json:"reverse"`
+	Reverse  map[string][]ops.Ref `json:"reverse"`
 	// ReferencedBy are the tasks whose body or comments write this one as #<ID>.
-	ReferencedBy []refJSON `json:"referenced_by"`
+	ReferencedBy []ops.Ref `json:"referenced_by"`
 	History      []logJSON `json:"history"`
 }
 
@@ -53,11 +54,11 @@ type relation struct {
 }
 
 func (a *app) show(arg string) error {
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
-	e, err := a.resolve(ix, arg)
+	e, err := a.ss.Resolve(ix, arg)
 	if err != nil {
 		return err
 	}
@@ -128,19 +129,19 @@ func reverse(ix *index.Index, ulid model.ULID) []relation {
 }
 
 func showOf(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []relation, back []*index.Entry, history []gitrepo.LogEntry) *showJSON {
-	j := &showJSON{taskJSON: entryJSON(ix, e), Watchers: []string{}, Repos: []string{}, Comments: []commentJSON{}, Reverse: map[string][]refJSON{}, ReferencedBy: []refJSON{}, History: logJSONs(ix, history)}
+	j := &showJSON{TaskView: ops.TaskViewOf(ix, e), Watchers: []string{}, Repos: []string{}, Comments: []commentJSON{}, Reverse: map[string][]ops.Ref{}, ReferencedBy: []ops.Ref{}, History: logJSONs(ix, history)}
 	for _, x := range back {
-		j.ReferencedBy = append(j.ReferencedBy, refJSON{x.ULID.String(), x.ID, x.Title})
+		j.ReferencedBy = append(j.ReferencedBy, ops.Ref{ULID: x.ULID.String(), ID: x.ID, Title: x.Title})
 	}
 	if t != nil {
-		j.Body, j.Watchers, j.Repos = t.Body, orEmpty(t.Watchers), orEmpty(t.Repos)
+		j.Body, j.Watchers, j.Repos = t.Body, ops.OrEmpty(t.Watchers), ops.OrEmpty(t.Repos)
 	}
 	for _, c := range comments {
 		j.Comments = append(j.Comments, commentJSON{c.ULID.String(), c.Author, c.Created, c.Body})
 	}
 	for _, r := range rels {
 		for _, x := range r.tasks {
-			j.Reverse[r.key] = append(j.Reverse[r.key], refJSON{x.ULID.String(), x.ID, x.Title})
+			j.Reverse[r.key] = append(j.Reverse[r.key], ops.Ref{ULID: x.ULID.String(), ID: x.ID, Title: x.Title})
 		}
 	}
 	return j
@@ -164,7 +165,7 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 	refs := func(ulids []model.ULID) []string {
 		out := make([]string, len(ulids))
 		for i, ulid := range ulids {
-			out[i] = refName(ix, ulid)
+			out[i] = ops.RefName(ix, ulid)
 		}
 		return out
 	}
@@ -183,7 +184,7 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 	field("kind", e.Kind)
 	field("status", e.Status)
 	if e.Parent != nil {
-		field("parent", refName(ix, *e.Parent))
+		field("parent", ops.RefName(ix, *e.Parent))
 	} else {
 		field("parent")
 	}
@@ -224,7 +225,7 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 		for _, r := range rels {
 			names := make([]string, len(r.tasks))
 			for i, x := range r.tasks {
-				names[i] = refName(ix, x.ULID)
+				names[i] = ops.RefName(ix, x.ULID)
 			}
 			field(r.label, names...)
 		}
@@ -232,7 +233,7 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 	if len(back) > 0 {
 		b.WriteString("\nReferenced by:\n")
 		for _, x := range back {
-			b.WriteString("  " + refName(ix, x.ULID) + "\n")
+			b.WriteString("  " + ops.RefName(ix, x.ULID) + "\n")
 		}
 	}
 	if e.Broken != "" {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -75,11 +76,11 @@ func descendants(ix *index.Index, ulid model.ULID, follow func(*index.Entry) boo
 }
 
 func (a *app) rm(arg string) error {
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
-	e, err := a.resolve(ix, arg)
+	e, err := a.ss.Resolve(ix, arg)
 	if err != nil {
 		return err
 	}
@@ -88,7 +89,7 @@ func (a *app) rm(arg string) error {
 	}
 	var targets []*index.Entry
 	now := a.now().Truncate(time.Second)
-	if _, err := a.update(s, store.Op{Name: "rm", Task: e.ULID}, func(tx *store.Tx) error {
+	if _, err := a.ss.Update(s, store.Op{Name: "rm", Task: e.ULID}, func(tx *store.Tx) error {
 		// Read under the lock, so a child added since is deleted too, and
 		// a task deleted since is not deleted again.
 		var err error
@@ -129,7 +130,7 @@ func current(ix *index.Index, e *index.Entry) (*index.Entry, error) {
 	}
 	cur, ok := ix.Task(e.ULID)
 	if !ok {
-		return nil, fmt.Errorf("%s is no longer in the store", taskLabel(e))
+		return nil, fmt.Errorf("%s is no longer in the store", ops.TaskLabel(e))
 	}
 	return cur, nil
 }
@@ -137,7 +138,7 @@ func current(ix *index.Index, e *index.Entry) (*index.Entry, error) {
 // notDeletedYet refuses to delete the task e again.
 func notDeletedYet(ix *index.Index, e *index.Entry) error {
 	if e.DeletedAt != nil {
-		return fmt.Errorf("%s is already deleted", refName(ix, e.ULID))
+		return fmt.Errorf("%s is already deleted", ops.RefName(ix, e.ULID))
 	}
 	return nil
 }
@@ -146,7 +147,7 @@ func notDeletedYet(ix *index.Index, e *index.Entry) error {
 // hint ends the message.
 func isDeleted(ix *index.Index, e *index.Entry, hint string) error {
 	if e.DeletedAt == nil {
-		return fmt.Errorf("%s is not deleted%s", refName(ix, e.ULID), hint)
+		return fmt.Errorf("%s is not deleted%s", ops.RefName(ix, e.ULID), hint)
 	}
 	return nil
 }
@@ -155,7 +156,7 @@ func isDeleted(ix *index.Index, e *index.Entry, hint string) error {
 // to restore.
 func notDeleted(ix *index.Index, e *index.Entry) error {
 	if e.DeletedAt != nil {
-		return fmt.Errorf("%s is deleted; restore %s first", refName(ix, e.ULID), taskFileName(e))
+		return fmt.Errorf("%s is deleted; restore %s first", ops.RefName(ix, e.ULID), ops.TaskFileName(e))
 	}
 	return nil
 }
@@ -183,11 +184,11 @@ func restorable(ix *index.Index, e *index.Entry) error {
 }
 
 func (a *app) restore(arg string) error {
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
-	e, err := a.resolve(ix, arg)
+	e, err := a.ss.Resolve(ix, arg)
 	if err != nil {
 		return err
 	}
@@ -195,7 +196,7 @@ func (a *app) restore(arg string) error {
 		return err
 	}
 	var targets []*index.Entry
-	if _, err := a.update(s, store.Op{Name: "restore", Task: e.ULID}, func(tx *store.Tx) error {
+	if _, err := a.ss.Update(s, store.Op{Name: "restore", Task: e.ULID}, func(tx *store.Tx) error {
 		// Read under the lock, so a child the same rm deleted is restored
 		// even when it came in after the index was read, and a task
 		// restored since is refused.
@@ -228,11 +229,11 @@ func (a *app) restore(arg string) error {
 }
 
 func (a *app) purge(arg string, yes bool) error {
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
-	e, err := a.resolve(ix, arg)
+	e, err := a.ss.Resolve(ix, arg)
 	if err != nil {
 		return err
 	}
@@ -246,7 +247,7 @@ func (a *app) purge(arg string, yes bool) error {
 		}
 	}
 	confirmed := targets
-	if _, err := a.update(s, store.Op{Name: "purge", Task: e.ULID}, func(tx *store.Tx) error {
+	if _, err := a.ss.Update(s, store.Op{Name: "purge", Task: e.ULID}, func(tx *store.Tx) error {
 		// Read again under the lock: a task restored or added under it
 		// since must not be purged unchecked, nor left behind.
 		var err error
@@ -280,7 +281,7 @@ func purgeTargets(ix *index.Index, e *index.Entry) ([]*index.Entry, error) {
 	targets := append([]*index.Entry{e}, descendants(ix, e.ULID, func(*index.Entry) bool { return true })...)
 	for _, d := range targets[1:] {
 		if d.DeletedAt == nil {
-			return nil, fmt.Errorf("%s under it is not deleted", refName(ix, d.ULID))
+			return nil, fmt.Errorf("%s under it is not deleted", ops.RefName(ix, d.ULID))
 		}
 	}
 	return targets, nil
@@ -307,7 +308,7 @@ func (a *app) confirm(ix *index.Index, targets []*index.Entry) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Purge %d tasks for good?\n", len(targets))
 	for _, x := range targets {
-		b.WriteString("  " + refName(ix, x.ULID) + "\n")
+		b.WriteString("  " + ops.RefName(ix, x.ULID) + "\n")
 	}
 	b.WriteString("[y/N] ")
 	if _, err := fmt.Fprint(a.stderr, b.String()); err != nil {
@@ -333,17 +334,17 @@ func (a *app) printAffected(ix *index.Index, e *index.Entry, targets []*index.En
 				return err
 			}
 		}
-		out := make([]*taskJSON, 0, len(targets))
+		out := make([]*ops.TaskView, 0, len(targets))
 		for _, x := range targets {
 			cur := x
 			if refresh {
 				cur, _ = ix.Task(x.ULID)
 			}
-			out = append(out, entryJSON(ix, cur))
+			out = append(out, ops.TaskViewOf(ix, cur))
 		}
 		return a.printJSON(out)
 	}
-	line := fmt.Sprintf("%s %s %s", verb, a.style().id(taskLabel(e)), e.Title)
+	line := fmt.Sprintf("%s %s %s", verb, a.style().id(ops.TaskLabel(e)), e.Title)
 	switch n := len(targets) - 1; n {
 	case 0:
 	case 1:

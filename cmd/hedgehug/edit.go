@@ -12,6 +12,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -27,11 +28,11 @@ func (a *app) editCmd() *cobra.Command {
 var errChangedWhileEditing = errors.New("the task changed while editing")
 
 func (a *app) edit(arg string) error {
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
-	e, err := a.resolve(ix, arg)
+	e, err := a.ss.Resolve(ix, arg)
 	if err != nil {
 		return err
 	}
@@ -48,7 +49,7 @@ func (a *app) edit(arg string) error {
 	if err != nil || old.ULID != e.ULID {
 		old = nil
 	}
-	path, edited, err := a.editFile(taskFileName(e), orig)
+	path, edited, err := a.editFile(ops.TaskFileName(e), orig)
 	if err != nil {
 		return err
 	}
@@ -69,7 +70,7 @@ func (a *app) edit(arg string) error {
 				addWatchers(t, newMentions(old.Body, t.Body, host)...)
 			}
 			var committed bool
-			committed, err = a.update(s, store.Op{Name: "edit", Task: e.ULID}, func(tx *store.Tx) error {
+			committed, err = a.ss.Update(s, store.Op{Name: "edit", Task: e.ULID}, func(tx *store.Tx) error {
 				cur, err := s.TaskBytes(e.ULID)
 				if err != nil {
 					return err

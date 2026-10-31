@@ -38,7 +38,7 @@ func (a *app) addCmd() *cobra.Command {
 }
 
 func (a *app) add(title, parentArg, workspaceArg, kind, status string, assigns []assign) error {
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
@@ -59,7 +59,7 @@ func (a *app) add(title, parentArg, workspaceArg, kind, status string, assigns [
 		t.Status = st.Name
 	}
 	if parentArg != "" {
-		p, err := a.resolve(ix, parentArg)
+		p, err := a.ss.Resolve(ix, parentArg)
 		if err != nil {
 			return err
 		}
@@ -97,21 +97,21 @@ func (a *app) add(title, parentArg, workspaceArg, kind, status string, assigns [
 		t.Workspace = wss[0].ULID
 	}
 	for _, as := range assigns {
-		if err := applyAssign(t, as, sc, a.resolveULID(ix)); err != nil {
+		if err := applyAssign(t, as, sc, a.ss.ResolveULID(ix)); err != nil {
 			return err
 		}
 	}
 	if t.Rank, err = endRank(ix, t.Parent, t.Workspace, t.ULID); err != nil {
 		return err
 	}
-	if t.CreatedBy, err = a.accountID(); err != nil {
+	if t.CreatedBy, err = a.ss.AccountID(); err != nil {
 		return err
 	}
 	if t.CreatedBy != "" {
 		addWatchers(t, t.CreatedBy)
 	}
 	watchNewAssignees(t, nil)
-	committed, err := a.update(s, store.Op{Name: "add", Task: t.ULID}, func(tx *store.Tx) error { return tx.PutTask(t) })
+	committed, err := a.ss.Update(s, store.Op{Name: "add", Task: t.ULID}, func(tx *store.Tx) error { return tx.PutTask(t) })
 	if err != nil {
 		return err
 	}

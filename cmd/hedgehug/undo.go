@@ -84,19 +84,19 @@ type keptJSON struct {
 }
 
 func (a *app) undo() error {
-	acct, ok, err := a.writer()
+	acct, ok, err := a.ss.Writer()
 	if err != nil {
 		return err
 	}
 	if !ok {
 		return errors.New("accounts are not set up in config.yaml; hedgehug undo needs them to find your operations")
 	}
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
 	var res undoResult
-	if _, err := a.update(s, store.Op{Name: "undo"}, func(tx *store.Tx) error {
+	if _, err := a.ss.Update(s, store.Op{Name: "undo"}, func(tx *store.Tx) error {
 		var err error
 		res, err = undoInTx(tx, s, ix, acct.ID())
 		return err

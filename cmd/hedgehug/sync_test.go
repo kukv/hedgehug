@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -145,7 +146,7 @@ func TestSyncKeepsPendingForAWriteAfterThePush(t *testing.T) {
 	// The clock is read after the push too; the first such read writes,
 	// as another command would.
 	now := func() time.Time {
-		if n, err := unpushed(s); !wrote && err == nil && n == 0 {
+		if n, err := ops.Unpushed(s); !wrote && err == nil && n == 0 {
 			wrote = true
 			if _, err := s.Update(store.Op{Name: "update", Author: gitrepo.Signature{Name: "alice", Email: "alice@x"}}, func(tx *store.Tx) error {
 				return tx.PutFile("late.txt", []byte("late\n"))

@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -91,7 +92,7 @@ func subjectNow(ix *index.Index, le gitrepo.LogEntry) string {
 		return le.Subject
 	}
 	_, title, _ := strings.Cut(rest, " ")
-	return strings.TrimRight(head+taskLabel(e)+" "+title, " ")
+	return strings.TrimRight(head+ops.TaskLabel(e)+" "+title, " ")
 }
 
 func logText(ix *index.Index, entries []gitrepo.LogEntry) string {
@@ -103,7 +104,7 @@ func logText(ix *index.Index, entries []gitrepo.LogEntry) string {
 }
 
 func (a *app) log(args []string, limit int) error {
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
@@ -111,7 +112,7 @@ func (a *app) log(args []string, limit int) error {
 	if len(args) == 0 {
 		entries, err = s.Repo().Log(nil, limit)
 	} else {
-		e, rerr := a.resolve(ix, args[0])
+		e, rerr := a.ss.Resolve(ix, args[0])
 		if rerr != nil {
 			return rerr
 		}

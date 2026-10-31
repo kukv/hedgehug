@@ -74,7 +74,7 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema, remotes 
 	if err := model.ValidWorkspaceName(wsName); err != nil {
 		return usageError{err}
 	}
-	c, p, err := a.config()
+	c, p, err := a.ss.Config()
 	if err != nil {
 		return err
 	}
@@ -109,11 +109,11 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema, remotes 
 	var pushed []string
 	if len(remotes) > 0 {
 		e := config.StoreEntry{Name: name, Path: dir, Remotes: remotes}
-		opt, err := a.syncOptions(c, e)
+		opt, err := a.ss.SyncOptions(c, e)
 		if err != nil {
 			return undo(err)
 		}
-		res, err := a.runSync(s, opt)
+		res, err := a.ss.RunSync(s, opt, true)
 		if errors.Is(err, gitrepo.ErrRejected) || errors.Is(err, sync.ErrUnrelated) {
 			err = fmt.Errorf("the remote is not empty; to use the store there, run %s", addCommand(name, remotes))
 		}

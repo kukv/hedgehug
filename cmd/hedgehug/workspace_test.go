@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 )
 
 func TestWorkspaceCommands(t *testing.T) {
@@ -232,11 +233,11 @@ func TestTaskInAMissingWorkspace(t *testing.T) {
 	x := te.addJSON("x")
 	gone := model.NewULID().String()
 	te.commitFile(x.ULID, setLine(te.raw(x.ULID), "workspace", gone))
-	var got taskJSON
+	var got ops.TaskView
 	if err := json.Unmarshal([]byte(te.ok("show", x.ID, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Workspace == nil || *got.Workspace != (workspaceRefJSON{ULID: gone}) {
+	if got.Workspace == nil || *got.Workspace != (ops.WorkspaceRef{ULID: gone}) {
 		t.Errorf("workspace = %+v", got.Workspace)
 	}
 	if out := te.ok("show", x.ID); !strings.Contains(out, "  workspace   "+gone+"\n") {

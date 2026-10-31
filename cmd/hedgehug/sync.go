@@ -13,6 +13,7 @@ import (
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 	"github.com/kukv/hedgehug/internal/sync"
 )
@@ -20,44 +21,6 @@ import (
 // syncLockWait is how long a sync waits for another one of the store, such
 // as the one in the background, to end.
 const syncLockWait = 5 * time.Minute
-
-// runSync syncs s under .hedgehug/local/sync.lock, and keeps in sync.json
-// how it went. A write that was pending when the sync began has been pushed
-// by it; one made later has not.
-func (a *app) runSync(s *store.Store, opt sync.Options) (sync.Result, error) {
-	return a.runSyncReported(s, opt, true)
-}
-
-// runSyncReported is runSync; reported says that the one who ran it is told
-// of a failure, so the next command does not tell of it again.
-func (a *app) runSyncReported(s *store.Store, opt sync.Options, reported bool) (res sync.Result, err error) {
-	err = s.WithLocalLock("sync.lock", syncLockWait, func() error {
-		started := a.now()
-		if _, err := sync.UpdateState(s, func(st *sync.State) { st.LastAttempt = started }); err != nil {
-			return err
-		}
-		var runErr error
-		res, runErr = sync.Run(s, opt)
-		_, stateErr := sync.UpdateState(s, func(st *sync.State) {
-			if runErr != nil {
-				st.LastError = runErr.Error()
-				st.ErrorReported = reported
-				return
-			}
-			st.LastError, st.ErrorReported = "", false
-			st.LastSuccess = a.now()
-			// A write made while the sync ran finds pending_since set and
-			// leaves it; it stays pending while HEAD has commits origin lacks.
-			// Counted under the state lock, a commit after the count marks
-			// pending again.
-			if n, err := unpushed(s); st.PendingSince.Before(started) && err == nil && n == 0 {
-				st.PendingSince = time.Time{}
-			}
-		})
-		return errors.Join(runErr, stateErr)
-	})
-	return res, err
-}
 
 func (a *app) syncCmd() *cobra.Command {
 	var status, background bool
@@ -85,14 +48,14 @@ func (a *app) syncCmd() *cobra.Command {
 // syncBackground is what the detached child of a write runs. Its failures
 // are in sync.json and the log, not in the exit code: no one waits for it.
 func (a *app) syncBackground() error {
-	c, _, err := a.config()
+	c, _, err := a.ss.Config()
 	if err != nil {
 		return a.backgroundFailed("", err)
 	}
-	if a.storeName == "" {
+	if a.ss.StoreName == "" {
 		return usageErrorf("--background needs --store")
 	}
-	e, err := c.Select(a.storeName)
+	e, err := c.Select(a.ss.StoreName)
 	if err != nil {
 		return a.backgroundFailed("", err)
 	}
@@ -101,10 +64,10 @@ func (a *app) syncBackground() error {
 		return a.backgroundFailed(e.Name, err)
 	}
 	a.stderr = sync.BoundLog(s, a.stderr)
-	opt, err := a.syncOptions(c, e)
+	opt, err := a.ss.SyncOptions(c, e)
 	if err == nil {
 		err = sync.Background(s, opt, c.Sync.PushInterval, func() error {
-			res, err := a.runSyncReported(s, opt, false)
+			res, err := a.ss.RunSync(s, opt, false)
 			for _, w := range res.Warnings { // such as a mirror that is down; for sync.log
 				_, _ = fmt.Fprintln(a.stderr, "warning: "+w)
 			}
@@ -136,8 +99,8 @@ func (a *app) backgroundFailed(name string, err error) error {
 // all that have a remote, or with all every store (the status lists those
 // with no remote too).
 func (a *app) syncTargets(c *config.Config, all bool) ([]config.StoreEntry, error) {
-	if a.storeName != "" {
-		e, err := c.Select(a.storeName)
+	if a.ss.StoreName != "" {
+		e, err := c.Select(a.ss.StoreName)
 		return []config.StoreEntry{e}, err
 	}
 	if len(c.Stores) == 0 {
@@ -187,7 +150,7 @@ type repairedJSON struct {
 }
 
 func (a *app) sync() error {
-	c, _, err := a.config()
+	c, _, err := a.ss.Config()
 	if err != nil {
 		return err
 	}
@@ -237,11 +200,11 @@ func (a *app) syncStore(c *config.Config, e config.StoreEntry) (syncJSON, error)
 	if err != nil {
 		return r, err
 	}
-	opt, err := a.syncOptions(c, e)
+	opt, err := a.ss.SyncOptions(c, e)
 	if err != nil {
 		return r, err
 	}
-	res, err := a.runSync(s, opt)
+	res, err := a.ss.RunSync(s, opt, true)
 	if err != nil {
 		return r, err
 	}
@@ -389,7 +352,7 @@ type statusJSON struct {
 }
 
 func (a *app) syncStatus() error {
-	c, _, err := a.config()
+	c, _, err := a.ss.Config()
 	if err != nil {
 		return err
 	}
@@ -449,7 +412,7 @@ func (a *app) storeStatus(e config.StoreEntry) statusJSON {
 	x.LastError = st.LastError
 	x.PendingSince, x.LastAttempt, x.LastSuccess = timePtr(st.PendingSince), timePtr(st.LastAttempt), timePtr(st.LastSuccess)
 	if len(e.Remotes) > 0 {
-		n, err := unpushed(s)
+		n, err := ops.Unpushed(s)
 		if err != nil {
 			x.Error = err.Error()
 			return x
@@ -471,20 +434,4 @@ func timeText(t *time.Time) string {
 		return "never"
 	}
 	return t.Format(time.RFC3339)
-}
-
-// unpushed counts the commits of s that origin did not have as of the last
-// fetch or push. A store that never pushed has all of them.
-func unpushed(s *store.Store) (int, error) {
-	r := s.Repo()
-	head, err := r.Head()
-	if err != nil {
-		return 0, err
-	}
-	remote, err := r.RemoteHead("origin")
-	if err != nil {
-		return 0, err
-	}
-	es, err := r.Between(head, remote)
-	return len(es), err
 }

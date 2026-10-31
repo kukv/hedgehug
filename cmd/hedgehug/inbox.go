@@ -15,6 +15,7 @@ import (
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -67,7 +68,7 @@ type inboxStore struct {
 // has taken in what reached the store since it last looked and the merge
 // driver's records. What the boxes skipped goes to stderr.
 func (a *app) inboxStores() ([]inboxStore, error) {
-	c, _, err := a.config()
+	c, _, err := a.ss.Config()
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +114,7 @@ func (a *app) warnInbox(stores []inboxStore) {
 type inboxItemJSON struct {
 	inbox.Item
 	Store string   `json:"store"`
-	Task  *refJSON `json:"task"`
+	Task  *ops.Ref `json:"task"`
 }
 
 func (a *app) inboxList(all bool) error {
@@ -177,11 +178,11 @@ func (a *app) inboxList(all bool) error {
 
 // inboxTaskRef names the task of the item as it is now, or as the item has
 // it when the task is gone; nil for an item of no task.
-func inboxTaskRef(ix *index.Index, it inbox.Item) *refJSON {
+func inboxTaskRef(ix *index.Index, it inbox.Item) *ops.Ref {
 	if it.Task.IsZero() {
 		return nil
 	}
-	r := &refJSON{ULID: it.Task.String(), ID: it.ID}
+	r := &ops.Ref{ULID: it.Task.String(), ID: it.ID}
 	if ix != nil {
 		if e, ok := ix.Task(it.Task); ok {
 			r.ID, r.Title = e.ID, e.Title
@@ -201,7 +202,7 @@ func inboxTarget(ix *index.Index, it inbox.Item) string {
 	}
 	if ix != nil {
 		if e, ok := ix.Task(it.Task); ok {
-			return refName(ix, e.ULID)
+			return ops.RefName(ix, e.ULID)
 		}
 	}
 	if it.ID != "" {
@@ -314,7 +315,7 @@ func repairedContent(ix *index.Index, it inbox.Item) string {
 func taskName(ix *index.Index, u model.ULID) string {
 	if ix != nil {
 		if _, ok := ix.Task(u); ok {
-			return refName(ix, u)
+			return ops.RefName(ix, u)
 		}
 	}
 	return u.String()
@@ -493,8 +494,8 @@ func (a *app) inboxRevert(arg string) error {
 	if err := json.Unmarshal(it.Detail, &d); err != nil {
 		return fmt.Errorf("inbox item %s does not decode: %w", u, err)
 	}
-	a.storeName = st.name
-	s, ix, err := a.open()
+	a.ss.StoreName = st.name
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
@@ -505,7 +506,7 @@ func (a *app) inboxRevert(arg string) error {
 	if err := notDeleted(ix, e); err != nil {
 		return err
 	}
-	committed, err := a.update(s, store.Op{Name: "revert-overwritten", Task: e.ULID}, func(tx *store.Tx) error {
+	committed, err := a.ss.Update(s, store.Op{Name: "revert-overwritten", Task: e.ULID}, func(tx *store.Tx) error {
 		if d.Field == "parent" || d.Field == "workspace" {
 			return a.revertMove(tx, ix, e, d.Field, d.Value)
 		}
@@ -513,7 +514,7 @@ func (a *app) inboxRevert(arg string) error {
 		if err != nil {
 			return err
 		}
-		if err := revertField(t, d.Field, d.Value, ix.Schema(), a.resolveULID(ix)); err != nil {
+		if err := revertField(t, d.Field, d.Value, ix.Schema(), a.ss.ResolveULID(ix)); err != nil {
 			return err
 		}
 		return tx.PutTask(t)

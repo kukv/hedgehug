@@ -10,6 +10,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -59,7 +60,7 @@ func (a *app) migrateCmd() *cobra.Command {
 }
 
 func (a *app) migrate(m schema.Migration, dryRun bool) error {
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
@@ -73,7 +74,7 @@ func (a *app) migrate(m schema.Migration, dryRun bool) error {
 	// The plan is made under the store lock, from the schema Update has
 	// just read, so that no write in between is lost.
 	var p *migrationPlan
-	if _, err := a.update(s, store.Op{Name: "migrate", SkipTransitions: true}, func(tx *store.Tx) error {
+	if _, err := a.ss.Update(s, store.Op{Name: "migrate", SkipTransitions: true}, func(tx *store.Tx) error {
 		var err error
 		if p, err = planMigration(s, ix, m); err != nil {
 			return err
@@ -88,7 +89,7 @@ func (a *app) migrate(m schema.Migration, dryRun bool) error {
 		// Name the task: the migration writes many.
 		var ve *store.ValidationError
 		if errors.As(err, &ve) {
-			return fmt.Errorf("%s: %v", refName(ix, ve.Task), describe(err))
+			return fmt.Errorf("%s: %v", ops.RefName(ix, ve.Task), describe(err))
 		}
 		return err
 	}
@@ -131,7 +132,7 @@ func planMigration(s *store.Store, ix *index.Index, m schema.Migration) (*migrat
 		ok, err := m.ApplyTask(t, sc)
 		switch {
 		case err != nil:
-			refused = append(refused, refName(ix, t.ULID)+": "+err.Error())
+			refused = append(refused, ops.RefName(ix, t.ULID)+": "+err.Error())
 		case ok:
 			p.changed = append(p.changed, t)
 		}
@@ -178,15 +179,15 @@ func (a *app) printMigrated(ix *index.Index, p *migrationPlan, dryRun bool) erro
 	}
 	if a.jsonOut {
 		out := struct {
-			Changed []*taskJSON `json:"changed"`
-			Skipped []string    `json:"skipped"`
-		}{Changed: []*taskJSON{}, Skipped: skipped}
+			Changed []*ops.TaskView `json:"changed"`
+			Skipped []string        `json:"skipped"`
+		}{Changed: []*ops.TaskView{}, Skipped: skipped}
 		for _, t := range changed {
 			e, ok := ix.Task(t.ULID)
 			if dryRun || !ok {
 				e = index.EntryOf(t)
 			}
-			out.Changed = append(out.Changed, entryJSON(ix, e))
+			out.Changed = append(out.Changed, ops.TaskViewOf(ix, e))
 		}
 		return a.printJSON(out)
 	}
@@ -198,7 +199,7 @@ func (a *app) printMigrated(ix *index.Index, p *migrationPlan, dryRun bool) erro
 	fmt.Fprintf(&b, "%s %s\n", heading, count(len(changed)))
 	st := a.style()
 	for _, t := range changed {
-		fmt.Fprintf(&b, "  %s  %s\n", st.id(taskLabel(index.EntryOf(t))), t.Title)
+		fmt.Fprintf(&b, "  %s  %s\n", st.id(ops.TaskLabel(index.EntryOf(t))), t.Title)
 	}
 	_, err := fmt.Fprint(a.stdout, b.String())
 	return err

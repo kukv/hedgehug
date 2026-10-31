@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -82,7 +83,7 @@ var errCommentChanged = errors.New("the comment changed while editing")
 // openComment opens the store and resolves arg to a comment that is read
 // from its file.
 func (a *app) openComment(arg string) (*store.Store, store.CommentRef, *model.Comment, error) {
-	s, _, err := a.open()
+	s, _, err := a.ss.Open()
 	if err != nil {
 		return nil, store.CommentRef{}, nil, err
 	}
@@ -123,11 +124,11 @@ func commentBody(b string) string {
 var errEmptyComment = errors.New("the comment is empty")
 
 func (a *app) commentAdd(arg string, text []string) error {
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
-	e, err := a.resolve(ix, arg)
+	e, err := a.ss.Resolve(ix, arg)
 	if err != nil {
 		return err
 	}
@@ -139,7 +140,7 @@ func (a *app) commentAdd(arg string, text []string) error {
 		body = commentBody(strings.Join(text, " "))
 	} else {
 		var edited []byte
-		if path, edited, err = a.editFile(taskFileName(e), nil); err != nil {
+		if path, edited, err = a.editFile(ops.TaskFileName(e), nil); err != nil {
 			return err
 		}
 		if body = commentBody(string(edited)); body == "" {
@@ -150,7 +151,7 @@ func (a *app) commentAdd(arg string, text []string) error {
 		return errEmptyComment
 	}
 	c := &model.Comment{ULID: model.NewULID(), Body: body}
-	if c.Author, err = a.accountID(); err != nil {
+	if c.Author, err = a.ss.AccountID(); err != nil {
 		return err
 	}
 	host, err := a.writerHost()
@@ -161,7 +162,7 @@ func (a *app) commentAdd(arg string, text []string) error {
 	if c.Author != "" {
 		accts = append([]string{c.Author}, accts...)
 	}
-	if _, err := a.update(s, store.Op{Name: "comment", Task: e.ULID}, func(tx *store.Tx) error {
+	if _, err := a.ss.Update(s, store.Op{Name: "comment", Task: e.ULID}, func(tx *store.Tx) error {
 		if err := tx.PutComment(e.ULID, c); err != nil {
 			return err
 		}
@@ -213,7 +214,7 @@ func (a *app) commentEdit(arg string) error {
 	mentioned := newMentions(c.Body, body, host)
 	if len(mentioned) > 0 {
 		// A broken task has no watchers to add to.
-		_, ix, err := a.open()
+		_, ix, err := a.ss.Open()
 		if err != nil {
 			return err
 		}
@@ -221,7 +222,7 @@ func (a *app) commentEdit(arg string) error {
 			mentioned = nil
 		}
 	}
-	committed, err := a.update(s, store.Op{Name: "comment", Task: ref.Task}, func(tx *store.Tx) error {
+	committed, err := a.ss.Update(s, store.Op{Name: "comment", Task: ref.Task}, func(tx *store.Tx) error {
 		cur, err := findComment(s, ref)
 		if err != nil {
 			return err
@@ -256,7 +257,7 @@ func (a *app) commentRm(arg string) error {
 	now := a.now()
 	// The comment is read again under the lock, so that an edit made since
 	// is not lost.
-	committed, err := a.update(s, store.Op{Name: "comment", Task: ref.Task}, func(tx *store.Tx) error {
+	committed, err := a.ss.Update(s, store.Op{Name: "comment", Task: ref.Task}, func(tx *store.Tx) error {
 		cur, err := findComment(s, ref)
 		if err != nil {
 			return err

@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/index"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/query"
 )
 
@@ -55,11 +56,11 @@ func (a *app) lsCmd() *cobra.Command {
 }
 
 func (a *app) ls(q *query.Query, ulidsOnly bool, tmpl *template.Template) error {
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
-	opt, err := a.queryOptions(s)
+	opt, err := a.ss.QueryOptions(s)
 	if err != nil {
 		return err
 	}
@@ -128,7 +129,7 @@ func (a *app) printULIDs(es []*index.Entry) error {
 func (a *app) printFormat(ix *index.Index, es []*index.Entry, tmpl *template.Template, extra func(m map[string]any, e *index.Entry)) error {
 	var out bytes.Buffer
 	for _, e := range es {
-		b, err := json.Marshal(entryJSON(ix, e))
+		b, err := json.Marshal(ops.TaskViewOf(ix, e))
 		if err != nil {
 			return err
 		}

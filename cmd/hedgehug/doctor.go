@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/merge"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -27,11 +28,11 @@ func (a *app) doctorCmd() *cobra.Command {
 }
 
 func (a *app) doctor(fix bool) error {
-	c, _, err := a.config()
+	c, _, err := a.ss.Config()
 	if err != nil {
 		return err
 	}
-	e, err := c.Select(a.storeName)
+	e, err := c.Select(a.ss.StoreName)
 	if err != nil {
 		return err
 	}
@@ -102,7 +103,7 @@ type fixedJSON struct {
 // fixStore repairs the files of HEAD of the store e, opened as s, as a sync does, under
 // the lock of a sync, and describes what it fixed.
 func (a *app) fixStore(c *config.Config, e config.StoreEntry, s *store.Store) ([]fixedJSON, error) {
-	opt, err := a.syncOptions(c, e)
+	opt, err := a.ss.SyncOptions(c, e)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +127,7 @@ func (a *app) fixStore(c *config.Config, e config.StoreEntry, s *store.Store) ([
 		name := x.ULID.String()
 		if ix != nil {
 			if t, ok := ix.Task(x.ULID); ok {
-				f.ID, f.Title, name = t.ID, t.Title, refName(ix, x.ULID)
+				f.ID, f.Title, name = t.ID, t.Title, ops.RefName(ix, x.ULID)
 			} else if w, ok := ix.Workspace(x.ULID); ok {
 				f.Title, name = w.Name, w.Name+" ("+x.ULID.String()+")"
 			}

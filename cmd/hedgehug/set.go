@@ -34,25 +34,25 @@ and the order.`,
 }
 
 func (a *app) set(arg string, assigns []assign) error {
-	s, ix, err := a.open()
+	s, ix, err := a.ss.Open()
 	if err != nil {
 		return err
 	}
-	e, err := a.resolve(ix, arg)
+	e, err := a.ss.Resolve(ix, arg)
 	if err != nil {
 		return err
 	}
 	if err := notDeleted(ix, e); err != nil {
 		return err
 	}
-	committed, err := a.update(s, store.Op{Name: "set", Task: e.ULID}, func(tx *store.Tx) error {
+	committed, err := a.ss.Update(s, store.Op{Name: "set", Task: e.ULID}, func(tx *store.Tx) error {
 		t, err := tx.Task(e.ULID)
 		if err != nil {
 			return err
 		}
 		assignees := slices.Clone(t.Assignees)
 		for _, as := range assigns {
-			if err := applyAssign(t, as, ix.Schema(), a.resolveULID(ix)); err != nil {
+			if err := applyAssign(t, as, ix.Schema(), a.ss.ResolveULID(ix)); err != nil {
 				return err
 			}
 		}

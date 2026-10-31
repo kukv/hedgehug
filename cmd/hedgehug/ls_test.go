@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/kukv/hedgehug/internal/ops"
 )
 
 func TestLs(t *testing.T) {
@@ -37,7 +39,7 @@ func TestLs(t *testing.T) {
 	if out := te.ok("ls", "--format", "{{.title}}|{{.status}}", "sort:title"); out != "Alpha|todo\nBeta|done\n" {
 		t.Errorf("--format = %q", out)
 	}
-	var got []taskJSON
+	var got []ops.TaskView
 	if err := json.Unmarshal([]byte(te.ok("ls", "--json", "sort:title")), &got); err != nil {
 		t.Fatal(err)
 	}
