@@ -46,9 +46,10 @@ type Commit struct {
 // that staged paths do not leak into the next commit.
 //
 // A commit with two or more parents is made even when its tree is the same
-// as the first parent's: the parents alone make it a change.
+// as the first parent's, and without any path: the parents alone make it a
+// change.
 func (r *Repo) Commit(c Commit) (h plumbing.Hash, err error) {
-	if len(c.Paths) == 0 {
+	if len(c.Paths) == 0 && len(c.Parents) < 2 {
 		return plumbing.ZeroHash, ErrNothingToCommit
 	}
 	unlock, err := r.lockIndex()
