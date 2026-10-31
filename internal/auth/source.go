@@ -59,6 +59,13 @@ func (o Options) Keychain() Keyring {
 	return o.Keyring
 }
 
+func (o Options) now() time.Time {
+	if o.Now != nil {
+		return o.Now()
+	}
+	return time.Now()
+}
+
 func (o Options) run(name string, args ...string) ([]byte, []byte, error) {
 	if o.Run != nil {
 		return o.Run(name, args...)
@@ -147,17 +154,4 @@ func LoadDeviceToken(a config.Account, k Keyring) (DeviceToken, error) {
 		return t, fmt.Errorf("the keychain entry of %s: %w", Key(a), err)
 	}
 	return t, nil
-}
-
-// deviceToken returns the access token of a device login. Task 5 adds the
-// refresh; until then the token is used as it is.
-func deviceToken(a config.Account, opt Options) (string, error) {
-	t, err := LoadDeviceToken(a, opt.Keychain())
-	if errors.Is(err, ErrNotFound) {
-		return "", fmt.Errorf("%s is not logged in; run hedgehug auth login %s", Key(a), a.Name)
-	}
-	if err != nil {
-		return "", err
-	}
-	return t.AccessToken, nil
 }
