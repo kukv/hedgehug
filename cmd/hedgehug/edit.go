@@ -39,8 +39,11 @@ func (a *app) edit(arg string) error {
 		}
 		t, err := ops.CheckEdit(es.Index, es.Entry.ULID, es.Old, edited)
 		if err == nil {
+			if err := a.ss.PrepareEdit(es, t); err != nil {
+				return err
+			}
 			var r ops.TaskResult
-			r, err = a.ss.ApplyEdit(es, t)
+			r, err = a.ss.WriteEdit(es, t)
 			if err == nil {
 				if err := os.Remove(path); err != nil {
 					return err

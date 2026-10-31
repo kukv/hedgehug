@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -99,35 +100,64 @@ func CheckCommentEditable(ref store.CommentRef, c *model.Comment) error {
 	return nil
 }
 
-// CommentAdd adds a comment to the live task arg. The body is cleaned by
-// CommentBody; one of white space only is refused.
-func (ss *Session) CommentAdd(arg, body string) (CommentResult, error) {
+// CommentSession is a live task checked to take a comment.
+type CommentSession struct {
+	Store *store.Store
+	Index *index.Index
+	Entry *index.Entry
+}
+
+// BeginComment resolves arg to a live task; it is done before the body is
+// taken from the user.
+func (ss *Session) BeginComment(arg string) (*CommentSession, error) {
 	s, ix, err := ss.Open()
 	if err != nil {
-		return CommentResult{}, err
+		return nil, err
 	}
 	e, err := ss.Resolve(ix, arg)
 	if err != nil {
-		return CommentResult{}, err
+		return nil, err
 	}
 	if err := NotDeleted(ix, e); err != nil {
-		return CommentResult{}, err
+		return nil, err
 	}
+	return &CommentSession{Store: s, Index: ix, Entry: e}, nil
+}
+
+// PendingComment is a comment ready to be written.
+type PendingComment struct {
+	cs      *CommentSession
+	Comment *model.Comment
+	accts   []string
+}
+
+// PrepareComment builds the comment with the body, which CommentBody cleans;
+// one of white space only is refused. Its errors come before anything is
+// written.
+func (ss *Session) PrepareComment(cs *CommentSession, body string) (*PendingComment, error) {
 	if body = CommentBody(body); body == "" {
-		return CommentResult{}, newErr(KindInvalid, "comment.empty", errEmptyComment)
+		return nil, newErr(KindInvalid, "comment.empty", errEmptyComment)
 	}
 	c := &model.Comment{ULID: model.NewULID(), Body: body}
+	var err error
 	if c.Author, err = ss.AccountID(); err != nil {
-		return CommentResult{}, err
+		return nil, err
 	}
 	host, err := ss.WriterHost()
 	if err != nil {
-		return CommentResult{}, err
+		return nil, err
 	}
 	accts := NewMentions("", c.Body, host)
 	if c.Author != "" {
 		accts = append([]string{c.Author}, accts...)
 	}
+	return &PendingComment{cs: cs, Comment: c, accts: accts}, nil
+}
+
+// WriteComment writes the comment to the task of its session. The task is
+// not checked again.
+func (ss *Session) WriteComment(p *PendingComment) (CommentResult, error) {
+	s, e, c := p.cs.Store, p.cs.Entry, p.Comment
 	committed, err := ss.Update(s, store.Op{Name: "comment", Task: e.ULID}, func(tx *store.Tx) error {
 		if err := tx.PutComment(e.ULID, c); err != nil {
 			return err
@@ -135,12 +165,30 @@ func (ss *Session) CommentAdd(arg, body string) (CommentResult, error) {
 		if e.Broken != "" {
 			return nil
 		}
-		return WatchInTx(tx, e.ULID, accts...)
+		return WatchInTx(tx, e.ULID, p.accts...)
 	})
 	if err != nil {
 		return CommentResult{}, err
 	}
 	return CommentResult{Store: s, Ref: store.CommentRef{Task: e.ULID, Comment: c.ULID}, Comment: c, Committed: committed}, nil
+}
+
+// CommentAddTo is PrepareComment and WriteComment.
+func (ss *Session) CommentAddTo(cs *CommentSession, body string) (CommentResult, error) {
+	p, err := ss.PrepareComment(cs, body)
+	if err != nil {
+		return CommentResult{}, err
+	}
+	return ss.WriteComment(p)
+}
+
+// CommentAdd adds a comment to the live task arg.
+func (ss *Session) CommentAdd(arg, body string) (CommentResult, error) {
+	cs, err := ss.BeginComment(arg)
+	if err != nil {
+		return CommentResult{}, err
+	}
+	return ss.CommentAddTo(cs, body)
 }
 
 // CommentEdit sets the body of the comment arg; body is already cleaned by
@@ -157,52 +205,82 @@ func (ss *Session) CommentEdit(arg, body string) (CommentResult, error) {
 	return ss.CommentEditFrom(s, ref, c, body)
 }
 
-// CommentEditFrom is CommentEdit for a caller that read the comment c
-// earlier, as OpenComment returns it, and took the body from the user since:
-// it refuses when the comment is not as c any more.
-func (ss *Session) CommentEditFrom(s *store.Store, ref store.CommentRef, c *model.Comment, body string) (CommentResult, error) {
+// PendingCommentEdit is an edit of a comment ready to be written.
+type PendingCommentEdit struct {
+	s         *store.Store
+	ref       store.CommentRef
+	c         *model.Comment
+	body      string
+	mentioned []string
+}
+
+// PrepareCommentEdit checks the body, already cleaned by CommentBody, for the
+// comment c, as OpenComment returned it before the body was taken from the
+// user. An empty body is refused; one that is the same as before makes
+// WriteCommentEdit change nothing. Its errors come before anything is
+// written.
+func (ss *Session) PrepareCommentEdit(s *store.Store, ref store.CommentRef, c *model.Comment, body string) (*PendingCommentEdit, error) {
 	if body == "" {
-		return CommentResult{}, newErr(KindInvalid, "comment.empty",
+		return nil, newErr(KindInvalid, "comment.empty",
 			fmt.Errorf("the comment is empty; delete it with hedgehug comment rm %s", ref.Comment.String()))
 	}
+	p := &PendingCommentEdit{s: s, ref: ref, c: c, body: body}
 	if body == c.Body {
-		return CommentResult{Store: s, Ref: ref, Comment: c}, nil
+		return p, nil
 	}
 	host, err := ss.WriterHost()
 	if err != nil {
-		return CommentResult{}, err
+		return nil, err
 	}
-	mentioned := NewMentions(c.Body, body, host)
-	if len(mentioned) > 0 {
+	p.mentioned = NewMentions(c.Body, body, host)
+	if len(p.mentioned) > 0 {
 		// A broken task has no watchers to add to.
 		_, ix, err := ss.Open()
 		if err != nil {
-			return CommentResult{}, err
+			return nil, err
 		}
 		if e, ok := ix.Task(ref.Task); ok && e.Broken != "" {
-			mentioned = nil
+			p.mentioned = nil
 		}
 	}
+	return p, nil
+}
+
+// WriteCommentEdit writes the edit; it refuses when the comment is not as c
+// any more.
+func (ss *Session) WriteCommentEdit(p *PendingCommentEdit) (CommentResult, error) {
+	if p.body == p.c.Body {
+		return CommentResult{Store: p.s, Ref: p.ref, Comment: p.c}, nil
+	}
 	var written *model.Comment
-	committed, err := ss.Update(s, store.Op{Name: "comment", Task: ref.Task}, func(tx *store.Tx) error {
-		cur, err := FindComment(s, ref)
+	committed, err := ss.Update(p.s, store.Op{Name: "comment", Task: p.ref.Task}, func(tx *store.Tx) error {
+		cur, err := FindComment(p.s, p.ref)
 		if err != nil {
 			return err
 		}
-		if cur.Body != c.Body || cur.DeletedAt != nil {
+		if cur.Body != p.c.Body || cur.DeletedAt != nil {
 			return errCommentChanged
 		}
-		cur.Body = body
+		cur.Body = p.body
 		written = cur
-		if err := tx.PutComment(ref.Task, cur); err != nil {
+		if err := tx.PutComment(p.ref.Task, cur); err != nil {
 			return err
 		}
-		return WatchInTx(tx, ref.Task, mentioned...)
+		return WatchInTx(tx, p.ref.Task, p.mentioned...)
 	})
 	if err != nil {
 		return CommentResult{}, err
 	}
-	return CommentResult{Store: s, Ref: ref, Comment: written, Committed: committed}, nil
+	return CommentResult{Store: p.s, Ref: p.ref, Comment: written, Committed: committed}, nil
+}
+
+// CommentEditFrom is PrepareCommentEdit and WriteCommentEdit.
+func (ss *Session) CommentEditFrom(s *store.Store, ref store.CommentRef, c *model.Comment, body string) (CommentResult, error) {
+	p, err := ss.PrepareCommentEdit(s, ref, c, body)
+	if err != nil {
+		return CommentResult{}, err
+	}
+	return ss.WriteCommentEdit(p)
 }
 
 // CommentRemove deletes the comment arg.

@@ -103,16 +103,23 @@ func CheckEdit(ix *index.Index, ulid model.ULID, old *model.Task, edited []byte)
 	return t, nil
 }
 
-// ApplyEdit writes t, the checked edit of es, to the store. It refuses when
-// the file changed since BeginEdit.
-func (ss *Session) ApplyEdit(es *EditSession, t *model.Task) (TaskResult, error) {
-	if es.Old != nil {
-		host, err := ss.WriterHost()
-		if err != nil {
-			return TaskResult{}, err
-		}
-		AddWatchers(t, NewMentions(es.Old.Body, t.Body, host)...)
+// PrepareEdit adds the watchers the edit calls for to t, the checked edit of
+// es. Its error comes before anything is written.
+func (ss *Session) PrepareEdit(es *EditSession, t *model.Task) error {
+	if es.Old == nil {
+		return nil
 	}
+	host, err := ss.WriterHost()
+	if err != nil {
+		return err
+	}
+	AddWatchers(t, NewMentions(es.Old.Body, t.Body, host)...)
+	return nil
+}
+
+// WriteEdit writes t, prepared by PrepareEdit, to the store. It refuses when
+// the file changed since BeginEdit.
+func (ss *Session) WriteEdit(es *EditSession, t *model.Task) (TaskResult, error) {
 	s, e := es.Store, es.Entry
 	committed, err := ss.Update(s, store.Op{Name: "edit", Task: e.ULID}, func(tx *store.Tx) error {
 		cur, err := s.TaskBytes(e.ULID)
@@ -128,6 +135,14 @@ func (ss *Session) ApplyEdit(es *EditSession, t *model.Task) (TaskResult, error)
 		return TaskResult{}, err
 	}
 	return TaskResult{Index: es.Index, ULID: e.ULID, Committed: committed}, nil
+}
+
+// ApplyEdit is PrepareEdit and WriteEdit.
+func (ss *Session) ApplyEdit(es *EditSession, t *model.Task) (TaskResult, error) {
+	if err := ss.PrepareEdit(es, t); err != nil {
+		return TaskResult{}, err
+	}
+	return ss.WriteEdit(es, t)
 }
 
 // hasWorkspace reports whether ulid is a workspace of ix.

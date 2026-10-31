@@ -49,33 +49,29 @@ type commentOut struct {
 }
 
 func (a *app) commentAdd(arg string, text []string) error {
+	cs, err := a.ss.BeginComment(arg)
+	if err != nil {
+		return err
+	}
 	var body, path string // path is the file of the editor, if any
 	if len(text) > 0 {
 		body = strings.Join(text, " ")
 	} else {
-		// The task is checked before the editor opens.
-		_, ix, err := a.ss.Open()
-		if err != nil {
-			return err
-		}
-		e, err := a.ss.Resolve(ix, arg)
-		if err != nil {
-			return err
-		}
-		if err := ops.NotDeleted(ix, e); err != nil {
-			return err
-		}
 		var edited []byte
-		if path, edited, err = a.editFile(ops.TaskFileName(e), nil); err != nil {
+		if path, edited, err = a.editFile(ops.TaskFileName(cs.Entry), nil); err != nil {
 			return err
 		}
 		if body = ops.CommentBody(string(edited)); body == "" {
 			_ = os.Remove(path)
 		}
 	}
-	r, err := a.ss.CommentAdd(arg, body)
+	p, err := a.ss.PrepareComment(cs, body)
 	if err != nil {
-		if path != "" && ops.CommentBody(body) != "" {
+		return err
+	}
+	r, err := a.ss.WriteComment(p)
+	if err != nil {
+		if path != "" {
 			return fmt.Errorf("%s; the comment is kept at %s", describe(err), path)
 		}
 		return err
@@ -102,7 +98,7 @@ func (a *app) commentEdit(arg string) error {
 		return err
 	}
 	body := ops.CommentBody(string(edited))
-	r, err := a.ss.CommentEditFrom(s, ref, c, body)
+	p, err := a.ss.PrepareCommentEdit(s, ref, c, body)
 	if body == "" || body == c.Body {
 		if rerr := os.Remove(path); rerr != nil {
 			return rerr
@@ -110,8 +106,12 @@ func (a *app) commentEdit(arg string) error {
 		if err != nil {
 			return err
 		}
-		return a.printComment(r.Store, r.Ref, verb(false, ""))
+		return a.printComment(s, ref, verb(false, ""))
 	}
+	if err != nil {
+		return err
+	}
+	r, err := a.ss.WriteCommentEdit(p)
 	if err != nil {
 		return fmt.Errorf("%s; the edited comment is kept at %s", describe(err), path)
 	}
