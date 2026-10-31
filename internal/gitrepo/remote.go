@@ -3,6 +3,7 @@ package gitrepo
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -159,15 +160,14 @@ func (r *Repo) Head() (plumbing.Hash, error) {
 // afterClone finishes a fresh clone; tests replace it to make the step fail.
 var afterClone = func(r *Repo, url string) error { return r.SetRemotes([]string{url}) }
 
-// Clone clones the main branch of url into dir, which must be missing or empty. A failed clone removes what it
-// created: the directory, or only its contents when dir already existed.
+// Clone clones the main branch of url into dir, which must be missing or an
+// empty directory; anything else is refused untouched. A failed clone removes
+// what it created: the directory and its missing parents, or only its contents
+// when dir existed.
 func Clone(url, dir string) (*Repo, error) {
-	existed := false
-	if entries, err := os.ReadDir(dir); err == nil {
-		if len(entries) > 0 {
-			return nil, fmt.Errorf("clone %s: %s is not empty", url, dir)
-		}
-		existed = true
+	created, err := checkCloneTarget(dir)
+	if err != nil {
+		return nil, fmt.Errorf("clone %s: %w", url, err)
 	}
 	r, err := git.PlainClone(dir, false, &git.CloneOptions{
 		URL:           url,
@@ -183,13 +183,46 @@ func Clone(url, dir string) (*Repo, error) {
 	} else {
 		err = fmt.Errorf("clone %s: %w", url, err)
 	}
-	removeCreated(dir, existed)
+	removeCreated(dir, created)
 	return nil, err
 }
 
-func removeCreated(dir string, existed bool) {
-	if !existed {
-		_ = os.RemoveAll(dir)
+// checkCloneTarget fails unless dir is missing or an empty directory; a
+// symlink is refused, so cleanup never follows it. When dir is missing it
+// returns the topmost of dir and its parents that does not exist, the path the
+// clone will create; it returns "" for an existing empty directory.
+func checkCloneTarget(dir string) (created string, err error) {
+	fi, err := os.Lstat(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		created = dir
+		for p := filepath.Dir(created); p != created; p = filepath.Dir(created) {
+			if _, err := os.Lstat(p); !errors.Is(err, fs.ErrNotExist) {
+				break
+			}
+			created = p
+		}
+		return created, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", dir, err)
+	}
+	if !fi.IsDir() {
+		return "", fmt.Errorf("%s exists and is not a directory", dir)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", dir, err)
+	}
+	if len(entries) > 0 {
+		return "", fmt.Errorf("%s is not empty", dir)
+	}
+	return "", nil
+}
+
+// removeCreated removes created, or the contents of dir when created is "".
+func removeCreated(dir, created string) {
+	if created != "" {
+		_ = os.RemoveAll(created)
 		return
 	}
 	entries, err := os.ReadDir(dir)

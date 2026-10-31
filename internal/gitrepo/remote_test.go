@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/go-git/go-git/v5/config"
@@ -184,6 +185,19 @@ func TestCloneFailureLeavesNoDirectory(t *testing.T) {
 	}
 }
 
+func TestCloneFailureRemovesTheParentsItCreated(t *testing.T) {
+	base := t.TempDir()
+	if _, err := Clone(filepath.Join(base, "nope.git"), filepath.Join(base, "a", "b", "clone")); err == nil {
+		t.Fatal("Clone of a missing remote succeeded")
+	}
+	if _, err := os.Stat(filepath.Join(base, "a")); !os.IsNotExist(err) {
+		t.Errorf("created parent left behind: %v", err)
+	}
+	if _, err := os.Stat(base); err != nil {
+		t.Errorf("existing parent removed: %v", err)
+	}
+}
+
 func TestMissingRemote(t *testing.T) {
 	dir := t.TempDir()
 	r, _ := Init(dir)
@@ -244,5 +258,34 @@ func TestCloneRefusesNonEmptyDirectory(t *testing.T) {
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, "mine.txt")); err != nil || string(b) != "keep\n" {
 		t.Errorf("user file = %q, %v", b, err)
+	}
+}
+
+func TestCloneRefusesWhatIsNotAnEmptyDirectory(t *testing.T) {
+	remote := newBare(t)
+	base := t.TempDir()
+	writeFile(t, base, "file.txt", "keep\n")
+	file := filepath.Join(base, "file.txt")
+	empty := filepath.Join(base, "empty")
+	if err := os.Mkdir(empty, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(empty, link); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{file, link, filepath.Join(file, "sub")} {
+		if _, err := Clone(remote, dir); err == nil || !strings.Contains(err.Error(), dir) {
+			t.Errorf("Clone into %s: error = %v; want a refusal naming it", dir, err)
+		}
+	}
+	if b, err := os.ReadFile(file); err != nil || string(b) != "keep\n" {
+		t.Errorf("user file = %q, %v", b, err)
+	}
+	if target, err := os.Readlink(link); err != nil || target != empty {
+		t.Errorf("symlink = %q, %v", target, err)
+	}
+	if entries, err := os.ReadDir(empty); err != nil || len(entries) != 0 {
+		t.Errorf("symlink target = %v, %v; want kept and empty", entries, err)
 	}
 }
