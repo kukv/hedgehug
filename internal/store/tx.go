@@ -24,6 +24,9 @@ type Op struct {
 	Name   string     // add, update, rm, mv...; the Hedgehug-Op trailer
 	Task   model.ULID // the main task of the operation; zero if none
 	Author gitrepo.Signature
+	// Account is the ID of the writer's account (host/login), for the
+	// Hedgehug-Author trailer; empty if the store has none.
+	Account string
 	// Detail ends the subject when there is no Task, saying what changed,
 	// such as "add web (WEB)".
 	Detail string
@@ -422,6 +425,9 @@ func (tx *Tx) commitFor(op Op, cs []change, now time.Time) gitrepo.Commit {
 	trailers := []gitrepo.Trailer{{Key: "Hedgehug-Op", Value: op.Name}}
 	if op.Task.IsZero() && op.Detail != "" {
 		subject += " " + op.Detail
+	}
+	if op.Account != "" {
+		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Author", Value: op.Account})
 	}
 	if !op.Workspace.IsZero() {
 		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Workspace", Value: op.Workspace.String()})

@@ -81,13 +81,18 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema) error {
 	if err := a.checkPrefixElsewhere(prefix, name); err != nil {
 		return err
 	}
-	author, err := config.Author(a.getenv)
+	acct, ok := c.Writer(config.StoreEntry{Name: name})
+	author, err := config.CommitAuthor(acct, ok, a.getenv)
 	if err != nil {
 		return err
 	}
+	account := ""
+	if ok {
+		account = acct.ID()
+	}
 	dir := filepath.Join(p.StoresDir, name)
 	ws := &model.Workspace{ULID: model.NewULID(), Name: wsName, IDPrefix: prefix}
-	if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, sc, ws, author); err != nil {
+	if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, sc, ws, author, account); err != nil {
 		return err
 	}
 	if err := c.AddStore(name, dir, nil); err != nil {

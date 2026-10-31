@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/model"
@@ -204,5 +205,23 @@ func TestCommentULIDs(t *testing.T) {
 		if !have[r] {
 			t.Errorf("missing %v", r)
 		}
+	}
+}
+
+func TestAuthorTrailer(t *testing.T) {
+	s := newTestStore(t)
+	x := newTask("x")
+	if _, err := s.Update(Op{Name: "add", Task: x.ULID, Author: testAuthor, Account: "github.com/alice"}, func(tx *Tx) error { return tx.PutTask(x) }); err != nil {
+		t.Fatal(err)
+	}
+	if msg := headLog(t, s.dir)[0].Message; !strings.Contains(msg, "\nHedgehug-Author: github.com/alice") {
+		t.Errorf("message = %q", msg)
+	}
+	y := newTask("y")
+	if _, err := s.Update(Op{Name: "add", Task: y.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(y) }); err != nil {
+		t.Fatal(err)
+	}
+	if msg := headLog(t, s.dir)[0].Message; strings.Contains(msg, "Hedgehug-Author") {
+		t.Errorf("message = %q", msg)
 	}
 }

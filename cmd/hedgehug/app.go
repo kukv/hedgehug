@@ -108,14 +108,37 @@ func (a *app) open() (*store.Store, *index.Index, error) {
 // and before it writes, as another process could.
 var beforeUpdate = func() {}
 
-// update runs one operation as one commit, with the author from the
-// environment. committed is false when the operation changed nothing.
+// writer returns the store the command works on and the account that writes
+// to it; ok is false when the store has none.
+func (a *app) writer() (config.StoreEntry, config.Account, bool, error) { //nolint:unparam // the entry is for the commands that sync
+	c, _, err := a.config()
+	if err != nil {
+		return config.StoreEntry{}, config.Account{}, false, err
+	}
+	e, err := c.Select(a.storeName)
+	if err != nil {
+		return e, config.Account{}, false, err
+	}
+	acct, ok := c.Writer(e)
+	return e, acct, ok, nil
+}
+
+// update runs one operation as one commit. The author is the store's
+// account, or the git config when the store has none. committed is false
+// when the operation changed nothing.
 func (a *app) update(s *store.Store, op store.Op, fn func(*store.Tx) error) (bool, error) {
-	author, err := config.Author(a.getenv)
+	_, acct, ok, err := a.writer()
+	if err != nil {
+		return false, err
+	}
+	author, err := config.CommitAuthor(acct, ok, a.getenv)
 	if err != nil {
 		return false, err
 	}
 	op.Author = author
+	if ok {
+		op.Account = acct.ID()
+	}
 	beforeUpdate()
 	return s.Update(op, fn)
 }

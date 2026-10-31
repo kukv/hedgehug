@@ -66,9 +66,10 @@ var newStoreHook = func(*Store) {}
 // Create makes a new store in dir, which must be missing or empty: a git
 // repository holding store.yaml, sc as schema.yaml (the default schema when
 // sc is nil), the workspace ws and a .gitignore, in one commit. meta and ws
-// are copied, not changed.
+// are copied, not changed. A non-empty account (host/login) is named in the
+// Hedgehug-Author trailer of the commit.
 // When Create fails it removes what it made, so it can be run again.
-func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Workspace, author gitrepo.Signature) (_ *Store, err error) {
+func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Workspace, author gitrepo.Signature, account string) (_ *Store, err error) {
 	if ws == nil {
 		return nil, errors.New("the store needs a workspace")
 	}
@@ -135,10 +136,14 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 		}
 		paths = append(paths, f.rel)
 	}
+	trailers := []gitrepo.Trailer{{Key: "Hedgehug-Op", Value: "init"}}
+	if account != "" {
+		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Author", Value: account})
+	}
 	if err := s.commit(gitrepo.Commit{
 		Paths:    paths,
 		Subject:  "hedgehug: init",
-		Trailers: []gitrepo.Trailer{{Key: "Hedgehug-Op", Value: "init"}},
+		Trailers: trailers,
 		Author:   author,
 		When:     now,
 	}); err != nil {

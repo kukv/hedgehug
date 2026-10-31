@@ -23,7 +23,7 @@ var storeDirs = map[*store.Store]string{}
 func newStore(t *testing.T) *store.Store {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "store")
-	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "test"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "test", IDPrefix: "TST"}, testAuthor)
+	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "test"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "test", IDPrefix: "TST"}, testAuthor, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -35,6 +35,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		home:   filepath.Join(d, "home"),
 		hhHome: filepath.Join(d, "hh"),
 		now:    time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC),
+		env:    map[string]string{},
 	}
 	if err := os.MkdirAll(te.home, 0o750); err != nil {
 		t.Fatal(err)
@@ -52,7 +53,13 @@ func (te *testEnv) getenv(k string) string {
 	case "HEDGEHUG_HOME":
 		return te.hhHome
 	}
-	return te.env[k]
+	if v, ok := te.env[k]; ok {
+		return v
+	}
+	if k == "HEDGEHUG_AUTO_SYNC" {
+		return "0"
+	}
+	return ""
 }
 
 func (te *testEnv) run(args ...string) (code int, stdout, stderr string) {
@@ -105,6 +112,29 @@ func (te *testEnv) log(name string) []*object.Commit { //nolint:unparam // every
 		te.t.Fatal(err)
 	}
 	return out
+}
+
+// headCommit returns the newest commit of the store.
+func (te *testEnv) headCommit(name string) *object.Commit {
+	te.t.Helper()
+	return te.log(name)[0]
+}
+
+// writeAccounts puts one account at the start of config.yaml.
+func (te *testEnv) writeAccounts(host, login string) {
+	te.t.Helper()
+	if err := os.MkdirAll(te.hhHome, 0o750); err != nil {
+		te.t.Fatal(err)
+	}
+	p := filepath.Join(te.hhHome, "config.yaml")
+	old, err := os.ReadFile(p) //nolint:gosec // the config of the test
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		te.t.Fatal(err)
+	}
+	head := fmt.Sprintf("accounts:\n  - name: %s\n    host: %s\n    login: %s\n", login, host, login)
+	if err := os.WriteFile(p, append([]byte(head), old...), 0o600); err != nil {
+		te.t.Fatal(err)
+	}
 }
 
 // TestMain runs the tests, or acts as the editor when HH_TEST_EDITOR_SCRIPT
@@ -211,9 +241,6 @@ func (te *testEnv) editWith(contents ...string) (seen func() []string) {
 	}
 	for _, k := range []string{"TMPDIR", "TMP", "TEMP"} {
 		te.t.Setenv(k, te.tmp)
-	}
-	if te.env == nil {
-		te.env = map[string]string{}
 	}
 	te.env["EDITOR"] = os.Args[0]
 	return func() []string {
