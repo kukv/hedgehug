@@ -38,6 +38,10 @@ type Op struct {
 	// field of the new status is still checked, but only when the task had
 	// it before the write.
 	SkipTransitions bool
+	// Trailers and AllowEmpty are set from inside fn, by AddTrailer and
+	// AllowEmpty, because what they hold is read under the store lock.
+	Trailers   []gitrepo.Trailer
+	AllowEmpty bool
 }
 
 // Tx collects the writes of one operation. Its Put methods only queue a
@@ -173,6 +177,26 @@ func (tx *Tx) RemoveWorkspace(ulid model.ULID) error {
 // from what it read under the lock.
 func (tx *Tx) SetDetail(s string) { tx.op.Detail = s }
 
+// AddTrailer adds a trailer to the commit of the operation, after the ones
+// the store writes.
+func (tx *Tx) AddTrailer(key, value string) {
+	tx.op.Trailers = append(tx.op.Trailers, gitrepo.Trailer{Key: key, Value: value})
+}
+
+// AllowEmpty makes the operation commit even when it changes no file, so
+// that the commit's trailers record that it ran.
+func (tx *Tx) AllowEmpty() { tx.op.AllowEmpty = true }
+
+// RemoveFile queues the removal of rel, any file of the store that git
+// tracks, under the same limits as PutFile. A file that is not there is left
+// alone.
+func (tx *Tx) RemoveFile(rel string) error {
+	if err := trackedPath(rel); err != nil {
+		return err
+	}
+	return tx.put(path.Clean(rel), &pending{remove: true})
+}
+
 // Workspace reads a workspace as it will be after the writes queued so far.
 func (tx *Tx) Workspace(ulid model.ULID) (*model.Workspace, error) {
 	if tx.done {
@@ -220,6 +244,14 @@ func (tx *Tx) PutSchema(sc *schema.Schema) error {
 // tracks, such as .gitattributes. Files of .hedgehug/local and .git are
 // refused.
 func (tx *Tx) PutFile(rel string, data []byte) error {
+	if err := trackedPath(rel); err != nil {
+		return err
+	}
+	return tx.put(path.Clean(rel), &pending{encode: func() ([]byte, error) { return data, nil }})
+}
+
+// trackedPath refuses rel unless it is a file of the store that git tracks.
+func trackedPath(rel string) error {
 	clean := path.Clean(rel)
 	first, _, _ := strings.Cut(clean, "/")
 	lower := strings.ToLower(clean) // case-insensitive file systems
@@ -227,7 +259,7 @@ func (tx *Tx) PutFile(rel string, data []byte) error {
 		lower == localDir || strings.HasPrefix(lower, localDir+"/") {
 		return fmt.Errorf("%q is not a tracked file of the store", rel)
 	}
-	return tx.put(clean, &pending{encode: func() ([]byte, error) { return data, nil }})
+	return nil
 }
 
 // RemoveTask queues the removal of a task file with its comments and
@@ -375,7 +407,7 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	if len(changes) == 0 {
+	if len(changes) == 0 && !tx.op.AllowEmpty {
 		return false, nil
 	}
 	commit := tx.commitFor(tx.op, changes, now)
@@ -474,7 +506,10 @@ func (tx *Tx) commitFor(op Op, cs []change, now time.Time) gitrepo.Commit {
 	for i, c := range cs {
 		paths[i] = c.rel
 	}
-	return gitrepo.Commit{Paths: paths, Subject: subject, Trailers: trailers, Author: op.Author, When: now}
+	return gitrepo.Commit{
+		Paths: paths, Subject: subject, Trailers: append(trailers, op.Trailers...),
+		Author: op.Author, When: now, AllowEmpty: op.AllowEmpty,
+	}
 }
 
 // apply writes cs in order. When one fails, the ones before it are rolled

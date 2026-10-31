@@ -34,6 +34,14 @@ type fileMerge[X any] struct {
 type field[X any] struct {
 	same  func(a, b *X) bool
 	merge func(m *fileMerge[X])
+	// names lists, as TaskChanges names them, what differs between a and b
+	// when same says they differ; nil for a kind that does not report it.
+	names func(a, b *X) []string
+}
+
+// one names a field that is a single value.
+func one[X any](name string) func(a, b *X) []string {
+	return func(_, _ *X) []string { return []string{name} }
 }
 
 // fileKind is how a kind of file read field by field is merged.
@@ -117,7 +125,8 @@ func jsonEqual(a, b any) bool { return bytes.Equal(jsonOf(a), jsonOf(b)) }
 // scalarField is a field that takes one side's value whole.
 func scalarField[X, T any](name string, get func(*X) *T) field[X] {
 	return field[X]{
-		same: func(a, b *X) bool { return jsonEqual(*get(a), *get(b)) },
+		same:  func(a, b *X) bool { return jsonEqual(*get(a), *get(b)) },
+		names: one[X](name),
 		merge: func(m *fileMerge[X]) {
 			v := pick(m.sides, name, *get(m.b), *get(m.o), *get(m.t), jsonEqual)
 			// An equal value keeps the form it has in the file.
@@ -135,7 +144,8 @@ func setField[X, T any](name string, get func(*X) *[]T, key func(T) string) fiel
 		return slices.EqualFunc(a, b, func(x, y T) bool { return key(x) == key(y) && jsonEqual(x, y) })
 	}
 	return field[X]{
-		same: func(a, b *X) bool { return same(*get(a), *get(b)) },
+		same:  func(a, b *X) bool { return same(*get(a), *get(b)) },
+		names: one[X](name),
 		merge: func(m *fileMerge[X]) {
 			b, o, t := *get(m.b), *get(m.o), *get(m.t)
 			var v []T
@@ -168,6 +178,15 @@ func setField[X, T any](name string, get func(*X) *[]T, key func(T) string) fiel
 func mapField[X any](prefix string, get func(*X) *model.Fields, multi bool) field[X] {
 	return field[X]{
 		same: func(a, b *X) bool { return sameFields(*get(a), *get(b)) },
+		names: func(a, b *X) []string {
+			var out []string
+			for _, f := range slices.Concat(*get(a), *get(b)) {
+				if !model.NodeEqual(get(a).Get(f.Key), get(b).Get(f.Key)) && !slices.Contains(out, prefix+f.Key) {
+					out = append(out, prefix+f.Key)
+				}
+			}
+			return out
+		},
 		merge: func(m *fileMerge[X]) {
 			*get(m.dst) = m.fields(prefix, *get(m.b), *get(m.o), *get(m.t), *get(m.dst), multi)
 		},
@@ -178,6 +197,7 @@ func mapField[X any](prefix string, get func(*X) *model.Fields, multi bool) fiel
 func bodyField[X any](get func(*X) *string) field[X] {
 	return field[X]{
 		same:  func(a, b *X) bool { return *get(a) == *get(b) },
+		names: one[X]("body"),
 		merge: func(m *fileMerge[X]) { *get(m.dst) = m.text(*get(m.b), *get(m.o), *get(m.t)) },
 	}
 }

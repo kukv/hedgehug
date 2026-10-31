@@ -33,6 +33,9 @@ type Commit struct {
 	Trailers []Trailer
 	Author   Signature
 	When     time.Time
+	// AllowEmpty makes the commit even when its tree is the same as the
+	// first parent's, and without any path.
+	AllowEmpty bool
 }
 
 // Commit stages exactly c.Paths and commits the index. A path that is on
@@ -45,11 +48,11 @@ type Commit struct {
 // If the commit fails, the index is put back as it was before the call, so
 // that staged paths do not leak into the next commit.
 //
-// A commit with two or more parents is made even when its tree is the same
-// as the first parent's, and without any path: the parents alone make it a
-// change.
+// A commit with two or more parents, or with AllowEmpty, is made even when
+// its tree is the same as the first parent's, and without any path: the
+// parents or the caller alone make it a change.
 func (r *Repo) Commit(c Commit) (h plumbing.Hash, err error) {
-	if len(c.Paths) == 0 && len(c.Parents) < 2 {
+	if len(c.Paths) == 0 && len(c.Parents) < 2 && !c.AllowEmpty {
 		return plumbing.ZeroHash, ErrNothingToCommit
 	}
 	unlock, err := r.lockIndex()
@@ -77,7 +80,7 @@ func (r *Repo) Commit(c Commit) (h plumbing.Hash, err error) {
 	}
 	sig := &object.Signature{Name: c.Author.Name, Email: c.Author.Email, When: c.When}
 	h, err = w.Commit(message(c), &git.CommitOptions{
-		Author: sig, Committer: sig, Parents: c.Parents, AllowEmptyCommits: len(c.Parents) >= 2,
+		Author: sig, Committer: sig, Parents: c.Parents, AllowEmptyCommits: len(c.Parents) >= 2 || c.AllowEmpty,
 	})
 	if errors.Is(err, git.ErrEmptyCommit) {
 		return plumbing.ZeroHash, ErrNothingToCommit

@@ -42,6 +42,7 @@ var taskFields = []field[model.Task]{
 	mapField("props.", func(x *model.Task) *model.Fields { return &x.Props }, true),
 	{
 		same:  func(a, b *model.Task) bool { return model.NodeEqual(a.GH, b.GH) },
+		names: one[model.Task]("gh"),
 		merge: gh,
 	},
 	scalarField("created", func(x *model.Task) *time.Time { return &x.Created }),
@@ -54,6 +55,28 @@ var taskFields = []field[model.Task]{
 // deleted_at.
 func edited(b, x *model.Task) bool {
 	return slices.ContainsFunc(taskFields, func(f field[model.Task]) bool { return !f.same(b, x) })
+}
+
+// TaskChanges names the fields a person changes that differ between a and b,
+// in the order of the file: title, status, props.priority... It leaves out
+// updated, which every change moves, and id and former_ids, which undo does
+// not put back.
+func TaskChanges(a, b *model.Task) []string {
+	var out []string
+	for _, f := range taskFields {
+		if f.same(a, b) {
+			continue
+		}
+		for _, n := range f.names(a, b) {
+			if n != "id" && n != "former_ids" {
+				out = append(out, n)
+			}
+		}
+	}
+	if !jsonEqual(a.DeletedAt, b.DeletedAt) {
+		out = append(out, "deleted_at")
+	}
+	return out
 }
 
 // formerIDsField is a set that also takes the id that lost to the other

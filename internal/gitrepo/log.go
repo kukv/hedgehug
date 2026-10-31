@@ -114,6 +114,20 @@ func (r *Repo) LogFrom(from plumbing.Hash, limit int) ([]LogEntry, error) {
 	return out, nil
 }
 
+// ResolveCommit returns the commit that rev names: a full or abbreviated
+// hash, or any other revision git understands. An abbreviation that matches
+// more than one commit is an error.
+func (r *Repo) ResolveCommit(rev string) (plumbing.Hash, error) {
+	h, err := r.r.ResolveRevision(plumbing.Revision(rev))
+	if err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("revision %q: %w", rev, err)
+	}
+	if _, err := r.r.CommitObject(*h); err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("revision %q is not a commit: %w", rev, err)
+	}
+	return *h, nil
+}
+
 func entry(c *object.Commit) LogEntry {
 	subject, trailers := parseMessage(c.Message)
 	return LogEntry{

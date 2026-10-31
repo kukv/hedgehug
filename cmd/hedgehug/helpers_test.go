@@ -144,6 +144,40 @@ func (te *testEnv) writeAccounts(host, login string) { //nolint:unparam // every
 	}
 }
 
+// withOtherWriter runs fn with account (host/login) as the only account in
+// config.yaml, so the commands in fn are written by someone else, and puts
+// the config back after.
+func (te *testEnv) withOtherWriter(account string, fn func()) {
+	te.t.Helper()
+	host, login, _ := strings.Cut(account, "/")
+	p := filepath.Join(te.hhHome, "config.yaml")
+	old, err := os.ReadFile(p) //nolint:gosec // the config of the test
+	if err != nil {
+		te.t.Fatal(err)
+	}
+	rest, skipping := []string{}, false
+	for _, l := range strings.SplitAfter(string(old), "\n") {
+		switch {
+		case strings.HasPrefix(l, "accounts:"):
+			skipping = true
+		case skipping && (strings.HasPrefix(l, " ") || strings.HasPrefix(l, "-")):
+		default:
+			skipping = false
+			rest = append(rest, l)
+		}
+	}
+	head := fmt.Sprintf("accounts:\n  - name: %s\n    host: %s\n    login: %s\n", login, host, login)
+	if err := os.WriteFile(p, []byte(head+strings.Join(rest, "")), 0o600); err != nil {
+		te.t.Fatal(err)
+	}
+	defer func() {
+		if err := os.WriteFile(p, old, 0o600); err != nil {
+			te.t.Fatal(err)
+		}
+	}()
+	fn()
+}
+
 // TestMain runs the tests, or acts as the editor when HH_TEST_EDITOR_SCRIPT
 // is set: editWith points $EDITOR at this test binary.
 func TestMain(m *testing.M) {
