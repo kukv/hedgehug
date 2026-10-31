@@ -42,8 +42,8 @@
 6. `hh show` の見出しの下は1行で `  ☑ 2/5  3/14`（チェックリスト、進捗の順。片方だけならその片方）。`hh ls --tree` は行末に2つの空白に続けて同じ形
 7. doctor: 形式の誤りは既存の `file` の検査、スキーマにない列は新しい `view` の検査（`checkOrder` の `file` の次）。大文字小文字だけが違う2つのビューのファイルは `file` の検査で両方を報告する
 8. エラーの Code: `view.bad_name`（Usage）、`view.not_found`（NotFound）、`view.name_taken`（Conflict）、`view.bad_value`（Usage）、`view.bad_column`（Invalid）、`view.tree_order`（Usage）、`view.broken`（Invalid）
-10. 進捗は container の種類なら子孫に work のタスクがなくても `0/0` を出す（spec の「項目が1つもなければ出さない」はチェックリストだけ）。既存のゴールデンで project・epic の行に `0/0` が付く。削除済みの子の下にある削除されていない孫は数える（削除済みのタスク自身だけを数えない）
 9. inbox: `views/*.yaml` の上書きは schema.yaml と同じく inbox に出るが revert できない（タスクの値だけが revert の対象。既存の挙動のまま）
+10. 進捗は container の種類なら子孫に work のタスクがなくても `0/0` を出す（spec の「項目が1つもなければ出さない」はチェックリストだけ）。既存のゴールデンで project・epic の行に `0/0` が付く。削除済みの子の下にある削除されていない孫は数える（削除済みのタスク自身だけを数えない）
 
 ## ファイル構成
 
