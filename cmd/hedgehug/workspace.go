@@ -266,7 +266,7 @@ func (a *app) workspaceRm(arg string) error {
 	if err != nil {
 		return err
 	}
-	if n := countTasks(ix, ws.ULID, true); n > 0 {
+	if n := ops.CountTasks(ix, ws.ULID, true); n > 0 {
 		return fmt.Errorf("workspace %s still has %d tasks; move them with hedgehug mv --workspace or purge them", ws.Name, n)
 	}
 	w := ws
@@ -305,25 +305,13 @@ func (a *app) workspaceLs() error {
 	}
 	rows := make([][]string, len(wss))
 	for i, w := range wss {
-		rows[i] = []string{w.Name, w.IDPrefix, w.ULID.String(), fmt.Sprint(countTasks(ix, w.ULID, false))}
+		rows[i] = []string{w.Name, w.IDPrefix, w.ULID.String(), fmt.Sprint(ops.CountTasks(ix, w.ULID, false))}
 	}
 	return writeTable(a.stdout, []string{"NAME", "PREFIX", "ULID", "TASKS"}, rows, nil)
 }
 
-// countTasks counts the tasks of a workspace: the ones not deleted, or all
-// of them when withDeleted.
-func countTasks(ix *index.Index, ws model.ULID, withDeleted bool) int {
-	n := 0
-	for _, e := range ix.Tasks() {
-		if e.Workspace == ws && (withDeleted || e.DeletedAt == nil) {
-			n++
-		}
-	}
-	return n
-}
-
 func workspaceToJSON(ix *index.Index, w *model.Workspace) workspaceJSON {
-	return workspaceJSON{ULID: w.ULID.String(), Name: w.Name, IDPrefix: w.IDPrefix, PrefixSet: w.PrefixSet, Tasks: countTasks(ix, w.ULID, false)}
+	return workspaceJSON{ULID: w.ULID.String(), Name: w.Name, IDPrefix: w.IDPrefix, PrefixSet: w.PrefixSet, Tasks: ops.CountTasks(ix, w.ULID, false)}
 }
 
 // printWorkspace prints w as JSON, or line as text. ix is the index from

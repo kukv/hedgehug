@@ -2,9 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"regexp"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,7 +10,7 @@ import (
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/schema"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -215,59 +213,6 @@ func TestInboxPrefixDuplicate(t *testing.T) {
 	bob.goldenOK("inbox-json", "inbox", "--json")
 }
 
-func TestRevertField(t *testing.T) {
-	sc := schema.Default()
-	resolve := func(string) (model.ULID, error) { return model.ULID{}, errors.New("no tasks here") }
-	task := &model.Task{Title: "alice", Links: []model.Link{{Type: "pr", Ref: "o/r#1", Sync: "auto"}}}
-	if err := revertField(task, "title", json.RawMessage(`"bob"`), sc, resolve); err != nil || task.Title != "bob" {
-		t.Errorf("title = %q, %v", task.Title, err)
-	}
-	if err := revertField(task, "links", json.RawMessage(`{"type":"pr","ref":"o/r#1","sync":"manual"}`), sc, resolve); err != nil || len(task.Links) != 1 || task.Links[0].Sync != "manual" {
-		t.Errorf("links = %+v, %v", task.Links, err)
-	}
-	if err := revertField(task, "links", json.RawMessage(`{"type":"issue","ref":"o/r#2"}`), sc, resolve); err != nil || len(task.Links) != 2 {
-		t.Errorf("links = %+v, %v", task.Links, err)
-	}
-	if err := revertField(task, "props.priority", json.RawMessage(`"high"`), sc, resolve); err != nil || task.Props.Get("priority") == nil || task.Props.Get("priority").Value != "high" {
-		t.Errorf("props = %+v, %v", task.Props, err)
-	}
-	if err := revertField(task, "props.priority", json.RawMessage(`null`), sc, resolve); err != nil || task.Props.Get("priority") != nil {
-		t.Errorf("props = %+v, %v", task.Props, err)
-	}
-	for _, f := range []string{"*", "id", "former_ids", "workspace", "created", "created_by", "body", "unknown_key"} {
-		if err := revertField(task, f, json.RawMessage(`"x"`), sc, resolve); !errors.Is(err, errNotRevertible) || !strings.HasPrefix(err.Error(), f+" ") {
-			t.Errorf("%s: err = %v", f, err)
-		}
-	}
-	// A set takes the lost item back, or the whole list.
-	task.Labels = []string{"a"}
-	if err := revertField(task, "labels", json.RawMessage(`"b"`), sc, resolve); err != nil || !slices.Equal(task.Labels, []string{"a", "b"}) {
-		t.Errorf("labels = %v, %v", task.Labels, err)
-	}
-	if err := revertField(task, "labels", json.RawMessage(`"b"`), sc, resolve); err != nil || !slices.Equal(task.Labels, []string{"a", "b"}) {
-		t.Errorf("labels = %v, %v", task.Labels, err)
-	}
-	if err := revertField(task, "assignees", json.RawMessage(`["github.com/bob"]`), sc, resolve); err != nil || !slices.Equal(task.Assignees, []string{"github.com/bob"}) {
-		t.Errorf("assignees = %v, %v", task.Assignees, err)
-	}
-	u := model.NewULID()
-	if err := revertField(task, "blocked_by", json.RawMessage(`"`+u.String()+`"`), sc, resolve); err != nil || !slices.Equal(task.BlockedBy, []model.ULID{u}) {
-		t.Errorf("blocked_by = %v, %v", task.BlockedBy, err)
-	}
-	if err := revertField(task, "sprint", json.RawMessage(`"`+u.String()+`"`), sc, resolve); err != nil || task.Sprint == nil || *task.Sprint != u {
-		t.Errorf("sprint = %v, %v", task.Sprint, err)
-	}
-	if err := revertField(task, "sprint", json.RawMessage(`null`), sc, resolve); err != nil || task.Sprint != nil {
-		t.Errorf("sprint = %v, %v", task.Sprint, err)
-	}
-	if err := revertField(task, "rank", json.RawMessage(`"V"`), sc, resolve); err != nil || task.Rank != "V" {
-		t.Errorf("rank = %q, %v", task.Rank, err)
-	}
-	if err := revertField(task, "links", json.RawMessage(`"x"`), sc, resolve); err == nil {
-		t.Errorf("a link that is no link was accepted")
-	}
-}
-
 func TestInboxRevertParent(t *testing.T) {
 	alice, bob, _ := twoUsers(t)
 	alice.ok("add", "p")
@@ -322,15 +267,15 @@ func TestInboxRepairedContent(t *testing.T) {
 		{"parent_deleted", `{"from":"` + j.ULID + `","to":null}`, "parent_deleted: moved to the root (its parent " + name + " was deleted)"},
 	} {
 		// The destination is the one the value names, whatever the index has now.
-		if got := inboxContent(ix, item(c.kind, c.value), "org", false); got != c.want {
+		if got := ops.InboxContent(ix, item(c.kind, c.value), "org", false); got != c.want {
 			t.Errorf("%s: content = %q, want %q", c.kind, got, c.want)
 		}
 	}
 	gone := model.NewULID().String()
-	if got := inboxContent(nil, item("parent_deleted", `{"from":"`+gone+`","to":null}`), "org", false); got != "parent_deleted: moved to the root (its parent "+gone+" was deleted)" {
+	if got := ops.InboxContent(nil, item("parent_deleted", `{"from":"`+gone+`","to":null}`), "org", false); got != "parent_deleted: moved to the root (its parent "+gone+" was deleted)" {
 		t.Errorf("without an index: %q", got)
 	}
-	if got := inboxContent(ix, item("id_prefix", `"web"`), "org", false); got != `id_prefix (was "web")` {
+	if got := ops.InboxContent(ix, item("id_prefix", `"web"`), "org", false); got != `id_prefix (was "web")` {
 		t.Errorf("other kinds: %q", got)
 	}
 }
@@ -432,13 +377,13 @@ func TestInboxDuplicateNameMatchesTheName(t *testing.T) {
 	}
 	// The workspace of the first store has a prefix and a name of its own: a name
 	// nobody else has, and an empty value, name no other workspace.
-	if got := inboxContent(ix, item("name_duplicate", `"Web"`), "org", false); got != "Web is also the name of another workspace; change it with hedgehug workspace rename web <new name>" {
+	if got := ops.InboxContent(ix, item("name_duplicate", `"Web"`), "org", false); got != "Web is also the name of another workspace; change it with hedgehug workspace rename web <new name>" {
 		t.Errorf("name: %q", got)
 	}
-	if got := inboxContent(ix, item("prefix_duplicate", `"WEB"`), "org", false); got != "WEB is also used by another workspace; change it with hedgehug workspace prefix web <new prefix>" {
+	if got := ops.InboxContent(ix, item("prefix_duplicate", `"WEB"`), "org", false); got != "WEB is also used by another workspace; change it with hedgehug workspace prefix web <new prefix>" {
 		t.Errorf("prefix: %q", got)
 	}
-	if got := inboxContent(ix, item("name_duplicate", `""`), "org", false); !strings.Contains(got, "another workspace") {
+	if got := ops.InboxContent(ix, item("name_duplicate", `""`), "org", false); !strings.Contains(got, "another workspace") {
 		t.Errorf("empty name: %q", got)
 	}
 }

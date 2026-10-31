@@ -95,26 +95,6 @@ func (a *app) backgroundFailed(name string, err error) error {
 	return nil
 }
 
-// syncTargets are the stores a command works on: the one --store names, or
-// all that have a remote, or with all every store (the status lists those
-// with no remote too).
-func (a *app) syncTargets(c *config.Config, all bool) ([]config.StoreEntry, error) {
-	if a.ss.StoreName != "" {
-		e, err := c.Select(a.ss.StoreName)
-		return []config.StoreEntry{e}, err
-	}
-	if len(c.Stores) == 0 {
-		return nil, config.ErrNoStores
-	}
-	var out []config.StoreEntry
-	for _, e := range c.Stores {
-		if all || len(e.Remotes) > 0 {
-			out = append(out, e)
-		}
-	}
-	return out, nil
-}
-
 // syncJSON is what a sync of one store did, as --json prints it.
 type syncJSON struct {
 	Store       string            `json:"store"`
@@ -154,7 +134,7 @@ func (a *app) sync() error {
 	if err != nil {
 		return err
 	}
-	targets, err := a.syncTargets(c, false)
+	targets, err := a.ss.SyncTargets(c, false)
 	if err != nil {
 		return err
 	}
@@ -356,7 +336,7 @@ func (a *app) syncStatus() error {
 	if err != nil {
 		return err
 	}
-	targets, err := a.syncTargets(c, true)
+	targets, err := a.ss.SyncTargets(c, true)
 	if err != nil {
 		return err
 	}

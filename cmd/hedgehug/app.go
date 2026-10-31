@@ -103,7 +103,7 @@ func (a *app) beforeCommand(cmd *cobra.Command, _ []string) {
 	if err != nil {
 		return
 	}
-	targets, err := a.syncTargets(cfg, false)
+	targets, err := a.ss.SyncTargets(cfg, false)
 	if err != nil {
 		return
 	}

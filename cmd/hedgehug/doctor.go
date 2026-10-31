@@ -151,5 +151,5 @@ func fixedContent(ix *index.Index, x merge.Repaired) string {
 		Kind  string          `json:"kind"`
 		Value json.RawMessage `json:"value"`
 	}{x.Kind, jsonValue(x.Value)}) // a string and JSON always encode
-	return repairedContent(ix, inbox.Item{Detail: detail})
+	return ops.RepairedContent(ix, inbox.Item{Detail: detail})
 }
