@@ -1,0 +1,17 @@
+[
+  {
+    "ulid": "<ULID-1>",
+    "kind": "assigned",
+    "id": "ORG-1",
+    "commit": "<HASH>",
+    "author": "github.com/alice",
+    "to": "github.com/bob",
+    "time": "<TIME>",
+    "store": "org",
+    "task": {
+      "ulid": "<ULID-2>",
+      "id": "ORG-1",
+      "title": "x"
+    }
+  }
+]

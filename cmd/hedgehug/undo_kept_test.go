@@ -13,16 +13,8 @@ func TestUndoNamesTheAuthorOfEachKeptField(t *testing.T) {
 	te.ok("set", "ME-1", "title=alice")
 	te.withOtherWriter("github.com/bob", func() { te.ok("status", "ME-1", "in_progress") })
 	te.withOtherWriter("github.com/carol", func() { te.ok("set", "ME-1", "title=carol") })
-	out := te.ok("undo")
-	for _, want := range []string{"kept title (changed later by github.com/carol)", "kept status (changed later by github.com/bob)"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("undo lacks %q:\n%s", want, out)
-		}
-	}
 	// carol's later change to the title does not make her the author of the status.
-	if strings.Contains(out, "kept status (changed later by github.com/carol)") {
-		t.Errorf("undo = %s", out)
-	}
+	te.goldenOK("undo", "undo")
 }
 
 func TestUndoKeepsAFieldOthersSetBack(t *testing.T) {
@@ -32,10 +24,7 @@ func TestUndoKeepsAFieldOthersSetBack(t *testing.T) {
 	te.ok("add", "x")
 	te.ok("set", "ME-1", "title=alice")
 	te.withOtherWriter("github.com/bob", func() { te.ok("set", "ME-1", "title=x") }) // what it was before alice
-	out := te.ok("undo")
-	if !strings.Contains(out, "kept title (changed later by github.com/bob)") {
-		t.Errorf("undo = %s", out)
-	}
+	te.goldenOK("undo", "undo")
 	if got := te.ok("show", "ME-1", "--json"); !strings.Contains(got, `"title": "x"`) {
 		t.Errorf("show = %s", got)
 	}

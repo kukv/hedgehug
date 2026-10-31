@@ -1,0 +1,40 @@
+[
+  {
+    "store": "org",
+    "merges": 1,
+    "pushed": [
+      "origin"
+    ],
+    "overwritten": [],
+    "repaired": [
+      {
+        "ulid": "<ULID-1>",
+        "id": "ORG-3",
+        "kind": "id_collision",
+        "value": {
+          "old": "ORG-2",
+          "new": "ORG-3"
+        },
+        "author": "github.com/bob"
+      }
+    ],
+    "invalid": [],
+    "notices": [
+      {
+        "ulid": "<ULID-2>",
+        "kind": "renumbered",
+        "task": "<ULID-1>",
+        "id": "ORG-3",
+        "commit": "<HASH>",
+        "author": "",
+        "to": "github.com/bob",
+        "time": "<TIME>",
+        "detail": {
+          "old": "ORG-2",
+          "new": "ORG-3"
+        }
+      }
+    ],
+    "warnings": []
+  }
+]

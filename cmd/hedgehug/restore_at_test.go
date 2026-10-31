@@ -20,10 +20,7 @@ func TestRestoreAt(t *testing.T) {
 	time.Sleep(storeTick)
 	te.ok("set", "ME-1", "title=v2")
 	te.ok("rm", "ME-1")
-	out := te.ok("restore", "ME-1", "--at", at)
-	if !strings.HasPrefix(out, "Restored ME-1") {
-		t.Errorf("restore = %s", out)
-	}
+	te.goldenOK("restore", "restore", "ME-1", "--at", at)
 	got := te.ok("show", "ME-1", "--json")
 	if !strings.Contains(got, `"title": "v1"`) || strings.Contains(got, `"deleted_at": "2`) {
 		t.Errorf("show = %s", got)
@@ -32,13 +29,8 @@ func TestRestoreAt(t *testing.T) {
 	if !strings.Contains(c.Message, "Hedgehug-Op: restore") {
 		t.Errorf("message = %s", c.Message)
 	}
-	_, _, errs := te.run("restore", "ME-1", "--at", "2000-01-01T00:00:00Z")
-	if !strings.Contains(errs, "ME-1 did not exist at 2000-01-01T00:00:00Z") {
-		t.Errorf("before creation: %s", errs)
-	}
-	if code, _, errs := te.run("restore", "ME-1", "--at", "yesterday-ish"); code == 0 || !strings.Contains(errs, "neither a time nor a commit") {
-		t.Errorf("bad point: code %d %s", code, errs)
-	}
+	te.goldenRun("before-creation", 1, "restore", "ME-1", "--at", "2000-01-01T00:00:00Z")
+	te.goldenRun("bad-point", 1, "restore", "ME-1", "--at", "yesterday-ish")
 }
 
 func TestRestoreAtCommitAndWorkspaceNote(t *testing.T) {
@@ -49,10 +41,7 @@ func TestRestoreAtCommitAndWorkspaceNote(t *testing.T) {
 	h := te.headCommit("me").Hash.String()[:7]
 	te.ok("mv", "WEB-1", "--workspace", "api")
 	te.ok("set", "API-1", "title=later")
-	out := te.ok("restore", "API-1", "--at", h)
-	if !strings.Contains(out, "the workspace stays api; move it with hedgehug mv API-1 --workspace web") {
-		t.Errorf("restore = %s", out)
-	}
+	te.goldenOK("restore", "restore", "API-1", "--at", h)
 	if got := te.ok("show", "API-1", "--json"); !strings.Contains(got, `"title": "x"`) || !strings.Contains(got, `"id": "API-1"`) {
 		t.Errorf("show = %s", got)
 	}
@@ -67,9 +56,7 @@ func TestRestoreAtRefusedParent(t *testing.T) {
 	te.ok("mv", "ME-2", "--root")
 	te.ok("rm", "ME-1")
 	before := te.headCommit("me").Hash
-	if code, _, errs := te.run("restore", "ME-2", "--at", h); code != 1 || !strings.Contains(errs, "the parent ME-1") || !strings.Contains(errs, "is deleted") {
-		t.Errorf("the parent is deleted: code %d stderr %s", code, errs)
-	}
+	te.goldenRun("restore", 1, "restore", "ME-2", "--at", h)
 	if te.headCommit("me").Hash != before {
 		t.Error("a refused restore --at committed")
 	}

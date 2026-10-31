@@ -1,0 +1,12 @@
+[
+  {
+    "store": "org",
+    "remotes": [
+      "<TMP>/001/shared.git"
+    ],
+    "pending_since": "<TIME>",
+    "last_attempt": "<TIME>",
+    "last_success": "<TIME>",
+    "unpushed": 0
+  }
+]

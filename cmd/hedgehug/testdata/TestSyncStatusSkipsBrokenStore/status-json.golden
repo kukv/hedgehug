@@ -1,0 +1,19 @@
+[
+  {
+    "store": "org",
+    "remotes": [
+      "<TMP>/001/shared.git"
+    ],
+    "pending_since": "<TIME>",
+    "last_attempt": "<TIME>",
+    "last_success": "<TIME>",
+    "unpushed": 0
+  },
+  {
+    "store": "two",
+    "remotes": [
+      "<TMP>/001/second.git"
+    ],
+    "error": "sync.json: unexpected end of JSON input"
+  }
+]

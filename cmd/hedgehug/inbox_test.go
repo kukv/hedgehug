@@ -53,24 +53,35 @@ func itemOfKind(t *testing.T, te *testEnv, kind string) string {
 	return found[0]
 }
 
+// itemOverwriting returns the ULID of the one unread overwritten item of the field.
+func itemOverwriting(t *testing.T, te *testEnv, field string) string {
+	t.Helper()
+	var found []string
+	for _, it := range inboxItems(t, te) {
+		if d, _ := it["detail"].(map[string]any); it["kind"] == "overwritten" && d["field"] == field {
+			found = append(found, it["ulid"].(string)) //nolint:forcetypeassert // --json prints the ULID as a string
+		}
+	}
+	if len(found) != 1 {
+		t.Fatalf("overwritten items of %s = %v", field, found)
+	}
+	return found[0]
+}
+
 func TestInboxOverwrittenAndRevert(t *testing.T) {
 	alice, bob, _ := twoUsers(t)
 	conflict(t, alice, bob, "title", "bob", "alice")
-	out := bob.ok("inbox")
-	m := regexp.MustCompile(`([0-9A-Z]{26})\s+overwritten\s+ORG-1 \([0-9A-Z]{26}\) alice\s+title: "bob" was replaced\n`).FindStringSubmatch(out)
-	if m == nil {
-		t.Fatalf("inbox = %s", out)
-	}
-	bob.ok("inbox", "revert", m[1])
+	bob.goldenOK("inbox", "inbox")
+	u := itemOfKind(t, bob, "overwritten")
+	bob.goldenOK("revert", "inbox", "revert", u)
 	if out := bob.ok("show", "ORG-1", "--json"); !strings.Contains(out, `"title": "bob"`) {
 		t.Errorf("after revert: %s", out)
 	}
-	if out := bob.ok("inbox"); strings.Contains(out, m[1]) {
-		t.Errorf("reverted item is still unread: %s", out)
-	}
-	if out := bob.ok("inbox", "--all", "--json"); !strings.Contains(out, m[1]) {
+	bob.goldenOK("inbox-after", "inbox")
+	if out := bob.ok("inbox", "--all", "--json"); !strings.Contains(out, u) {
 		t.Errorf("--all lacks it: %s", out)
 	}
+	bob.goldenOK("inbox-all-json", "inbox", "--all", "--json")
 	if subject := bob.headCommit("org").Message; !strings.HasPrefix(subject, "hedgehug: revert-overwritten ORG-1 bob\n") || !strings.Contains(subject, "Hedgehug-Op: revert-overwritten") {
 		t.Errorf("commit = %q", subject)
 	}
@@ -79,12 +90,8 @@ func TestInboxOverwrittenAndRevert(t *testing.T) {
 func TestInboxRevertProp(t *testing.T) {
 	alice, bob, _ := twoUsers(t)
 	conflict(t, alice, bob, "priority", "low", "high")
-	out := bob.ok("inbox")
-	m := regexp.MustCompile(`([0-9A-Z]{26})\s+overwritten\s.*priority: "low" was replaced`).FindStringSubmatch(out)
-	if m == nil {
-		t.Fatalf("inbox = %s", out)
-	}
-	bob.ok("inbox", "revert", m[1])
+	bob.goldenOK("inbox", "inbox")
+	bob.goldenOK("revert", "inbox", "revert", itemOfKind(t, bob, "overwritten"))
 	if out := bob.ok("show", "ORG-1"); !regexp.MustCompile(`priority\s+low\n`).MatchString(out) {
 		t.Errorf("after revert: %s", out)
 	}
@@ -96,15 +103,9 @@ func TestInboxRevertErrors(t *testing.T) {
 	alice.ok("sync")
 	bob.ok("sync")
 	u := itemOfKind(t, bob, "assigned")
-	if code, _, errs := bob.run("inbox", "revert", u); code != 1 || !strings.Contains(errs, "only an overwritten item can be reverted") {
-		t.Errorf("exit %d, stderr = %s", code, errs)
-	}
-	if code, _, errs := bob.run("inbox", "revert", "01ARZ3NDEKTSV4RRFFQ69G5FAV"); code != 1 || !strings.Contains(errs, "not found") {
-		t.Errorf("exit %d, stderr = %s", code, errs)
-	}
-	if code, _, _ := bob.run("inbox", "revert", "ABCD"); code != 2 {
-		t.Errorf("a short ULID was accepted: exit %d", code)
-	}
+	bob.goldenRun("not-overwritten", 1, "inbox", "revert", u)
+	bob.goldenRun("not-found", 1, "inbox", "revert", "01ARZ3NDEKTSV4RRFFQ69G5FAV")
+	bob.goldenRun("bad-ulid", 2, "inbox", "revert", "ABCD")
 }
 
 func TestInboxRenumbered(t *testing.T) {
@@ -113,9 +114,8 @@ func TestInboxRenumbered(t *testing.T) {
 	bob.ok("add", "b")
 	alice.ok("sync")
 	bob.ok("sync")
-	if out := bob.ok("inbox"); !regexp.MustCompile(`renumbered\s+ORG-3 \([0-9A-Z]{26}\) b\s+ORG-2 was renumbered to ORG-3; #ORG-2 in text still points to the task that kept it\n`).MatchString(out) {
-		t.Errorf("inbox = %s", out)
-	}
+	bob.goldenOK("inbox", "inbox")
+	bob.goldenOK("inbox-json", "inbox", "--json")
 }
 
 func TestInboxAssignedAndMention(t *testing.T) {
@@ -124,18 +124,10 @@ func TestInboxAssignedAndMention(t *testing.T) {
 	alice.ok("comment", "ORG-1", "look @bob")
 	alice.ok("sync")
 	bob.ok("sync")
-	out := bob.ok("inbox")
+	bob.goldenOK("inbox", "inbox")
 	items := inboxItems(t, bob)
 	if len(items) != 2 { // bob watches the task by being assigned, which is no third notice
 		t.Errorf("items = %v", items)
-	}
-	for _, re := range []string{
-		`assigned\s+ORG-1 \([0-9A-Z]{26}\) x\s+assigned by github.com/alice\n`,
-		`mention\s+ORG-1 \([0-9A-Z]{26}\) x\s+mentioned in a comment by github.com/alice\n`,
-	} {
-		if !regexp.MustCompile(re).MatchString(out) {
-			t.Errorf("inbox lacks %s:\n%s", re, out)
-		}
 	}
 }
 
@@ -144,10 +136,8 @@ func TestInboxReadAll(t *testing.T) {
 	alice.ok("set", "ORG-1", "assignees+=github.com/bob")
 	alice.ok("sync")
 	bob.ok("sync")
-	bob.ok("inbox", "read", "--all")
-	if out := bob.ok("inbox"); strings.TrimSpace(out) != "No unread items" {
-		t.Errorf("inbox = %q", out)
-	}
+	bob.goldenOK("read", "inbox", "read", "--all")
+	bob.goldenOK("inbox", "inbox")
 	if items := inboxItems(t, bob, "--all"); len(items) == 0 {
 		t.Errorf("--all lists nothing after the items were read")
 	}
@@ -161,7 +151,7 @@ func TestInboxRead(t *testing.T) {
 	bob.ok("sync")
 	before := inboxItems(t, bob)
 	assigned := itemOfKind(t, bob, "assigned")
-	bob.ok("inbox", "read", assigned)
+	bob.goldenOK("read", "inbox", "read", assigned)
 	after := inboxItems(t, bob)
 	if len(after) != len(before)-1 {
 		t.Errorf("after read: %d items, before %d", len(after), len(before))
@@ -171,9 +161,7 @@ func TestInboxRead(t *testing.T) {
 			t.Errorf("the item is still unread: %v", it)
 		}
 	}
-	if code, _, errs := bob.run("inbox", "read", "01ARZ3NDEKTSV4RRFFQ69G5FAV"); code != 1 || !strings.Contains(errs, "not found") {
-		t.Errorf("exit %d, stderr = %s", code, errs)
-	}
+	bob.goldenRun("not-found", 1, "inbox", "read", "01ARZ3NDEKTSV4RRFFQ69G5FAV")
 }
 
 func TestInboxJSON(t *testing.T) {
@@ -181,6 +169,7 @@ func TestInboxJSON(t *testing.T) {
 	alice.ok("set", "ORG-1", "assignees+=github.com/bob")
 	alice.ok("sync")
 	bob.ok("sync")
+	bob.goldenOK("inbox", "inbox", "--json")
 	var it map[string]any
 	for _, x := range inboxItems(t, bob) {
 		if x["kind"] == "assigned" {
@@ -191,9 +180,7 @@ func TestInboxJSON(t *testing.T) {
 	if it["store"] != "org" || it["author"] != "github.com/alice" || it["to"] != "github.com/bob" || task["id"] != "ORG-1" || task["title"] != "x" || len(task["ulid"].(string)) != 26 { //nolint:forcetypeassert // the ULID of --json is a string
 		t.Errorf("item = %v", it)
 	}
-	if out := alice.ok("inbox", "--json"); strings.TrimSpace(out) != "[]" {
-		t.Errorf("an empty inbox as JSON = %q", out)
-	}
+	alice.goldenOK("empty", "inbox", "--json")
 }
 
 func TestInboxRejectsBadArguments(t *testing.T) {
@@ -214,10 +201,7 @@ func TestInboxRejectsBadArguments(t *testing.T) {
 func TestInboxWithoutAccounts(t *testing.T) {
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
-	code, out, errs := te.run("inbox")
-	if code != 0 || strings.TrimSpace(out) != "No unread items" || !strings.Contains(errs, "accounts are not set up") {
-		t.Errorf("exit %d, stdout = %q, stderr = %s", code, out, errs)
-	}
+	te.goldenRun("inbox", 0, "inbox")
 }
 
 func TestInboxPrefixDuplicate(t *testing.T) {
@@ -227,10 +211,8 @@ func TestInboxPrefixDuplicate(t *testing.T) {
 	bob.ok("workspace", "add", "api", "--prefix", "DUP")
 	alice.ok("sync")
 	bob.ok("sync")
-	out := bob.ok("inbox")
-	if !regexp.MustCompile(`prefix_duplicate\s+workspace api\s+DUP is also used by workspace web; change it with hedgehug workspace prefix api <new prefix>\n`).MatchString(out) {
-		t.Errorf("inbox = %s", out)
-	}
+	bob.goldenOK("inbox", "inbox")
+	bob.goldenOK("inbox-json", "inbox", "--json")
 }
 
 func TestRevertField(t *testing.T) {
@@ -298,12 +280,8 @@ func TestInboxRevertParent(t *testing.T) {
 	alice.ok("mv", "ORG-4", "--parent", "ORG-3")
 	alice.ok("sync")
 	bob.ok("sync")
-	out := bob.ok("inbox")
-	m := regexp.MustCompile(`([0-9A-Z]{26})\s+overwritten\s+ORG-4 .*parent: "[0-9A-Z]{26}" was replaced`).FindStringSubmatch(out)
-	if m == nil {
-		t.Fatalf("inbox = %s", out)
-	}
-	bob.ok("inbox", "revert", m[1])
+	bob.goldenOK("inbox", "inbox")
+	bob.goldenOK("revert", "inbox", "revert", itemOfKind(t, bob, "overwritten"))
 	if out := bob.ok("show", "ORG-4"); !regexp.MustCompile(`parent\s+ORG-2 `).MatchString(out) {
 		t.Errorf("after revert: %s", out)
 	}
@@ -368,13 +346,13 @@ func TestInboxRevertWorkspace(t *testing.T) {
 	alice.ok("mv", "ORG-1", "--workspace", "w3")
 	alice.ok("sync")
 	bob.ok("sync")
-	out := bob.ok("inbox")
-	m := regexp.MustCompile(`([0-9A-Z]{26})\s+overwritten\s+\S+ \(([0-9A-Z]{26})\) x\s+workspace: "[0-9A-Z]{26}" was replaced`).FindStringSubmatch(out)
-	if m == nil {
-		t.Fatalf("inbox = %s", out)
+	bob.goldenOK("inbox", "inbox")
+	bob.goldenOK("revert", "inbox", "revert", itemOverwriting(t, bob, "workspace"))
+	var x struct{ ULID string }
+	if err := json.Unmarshal([]byte(bob.ok("show", "ORG-1", "--json")), &x); err != nil {
+		t.Fatal(err)
 	}
-	bob.ok("inbox", "revert", m[1])
-	if out := bob.ok("show", m[2]); !regexp.MustCompile(`workspace\s+w2 \(AA, `).MatchString(out) || !regexp.MustCompile(`id\s+AA-\d+\n`).MatchString(out) {
+	if out := bob.ok("show", x.ULID); !regexp.MustCompile(`workspace\s+w2 \(AA, `).MatchString(out) || !regexp.MustCompile(`id\s+AA-\d+\n`).MatchString(out) {
 		t.Errorf("after revert: %s", out)
 	}
 }
@@ -397,11 +375,8 @@ func TestInboxRevertParentInAnotherWorkspace(t *testing.T) {
 	alice.ok("mv", "ORG-2", "--parent", "BB-1")
 	alice.ok("sync")
 	bob.ok("sync")
-	m := regexp.MustCompile(`([0-9A-Z]{26})\s+overwritten\s+\S+ \(` + c.ULID + `\) c\s+parent: `).FindStringSubmatch(bob.ok("inbox"))
-	if m == nil {
-		t.Fatalf("inbox lacks the parent item")
-	}
-	bob.ok("inbox", "revert", m[1])
+	bob.goldenOK("inbox", "inbox")
+	bob.goldenOK("revert", "inbox", "revert", itemOverwriting(t, bob, "parent"))
 	out := bob.ok("show", c.ULID)
 	if !regexp.MustCompile(`parent\s+AA-1 `).MatchString(out) || !regexp.MustCompile(`workspace\s+w2 `).MatchString(out) {
 		t.Errorf("after revert: %s", out)
@@ -413,10 +388,7 @@ func TestInboxRevertDeletedTask(t *testing.T) {
 	conflict(t, alice, bob, "title", "bob", "alice")
 	u := itemOfKind(t, bob, "overwritten")
 	bob.ok("rm", "ORG-1")
-	code, _, errs := bob.run("inbox", "revert", u)
-	if code != 1 || !strings.Contains(errs, "is deleted") {
-		t.Errorf("exit %d, stderr = %s", code, errs)
-	}
+	bob.goldenRun("revert", 1, "inbox", "revert", u)
 	if got := itemOfKind(t, bob, "overwritten"); got != u {
 		t.Errorf("a refused revert marked the item read")
 	}
@@ -435,10 +407,7 @@ func TestInboxDuplicateNamesEveryMatch(t *testing.T) {
 	for _, te := range []*testEnv{alice, bob, carol, bob, alice} {
 		te.ok("sync")
 	}
-	out := carol.ok("inbox")
-	if !regexp.MustCompile(`prefix_duplicate\s+workspace zed\s+DUP is also used by workspace api, workspace web; change it with hedgehug workspace prefix zed <new prefix>\n`).MatchString(out) {
-		t.Errorf("inbox = %s", out)
-	}
+	carol.goldenOK("inbox", "inbox")
 }
 
 func TestInboxDuplicateNameMatchesTheName(t *testing.T) {

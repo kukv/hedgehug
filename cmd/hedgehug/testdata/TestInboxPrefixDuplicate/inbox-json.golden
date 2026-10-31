@@ -1,0 +1,17 @@
+[
+  {
+    "ulid": "<ULID-1>",
+    "kind": "prefix_duplicate",
+    "commit": "<HASH>",
+    "author": "",
+    "to": "github.com/bob",
+    "time": "<TIME>",
+    "detail": {
+      "kind": "prefix_duplicate",
+      "workspace": "<ULID-2>",
+      "value": "DUP"
+    },
+    "store": "org",
+    "task": null
+  }
+]

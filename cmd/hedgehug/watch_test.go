@@ -91,29 +91,22 @@ func TestNoWatcherWithoutAccounts(t *testing.T) {
 		t.Errorf("watchers = %v, want none", got)
 	}
 	for _, c := range []string{"watch", "unwatch"} {
-		code, _, errs := te.run(c, "ME-1")
-		if code != 1 || !strings.Contains(errs, "accounts are not set up") {
-			t.Errorf("%s: exit %d, stderr = %s", c, code, errs)
-		}
+		te.goldenRun(c, 1, c, "ME-1")
 	}
 }
 
 func TestWatchUnwatch(t *testing.T) {
 	_, bob, _ := twoUsers(t)
-	bob.ok("watch", "ORG-1")
+	bob.goldenOK("watch", "watch", "ORG-1")
 	if out := bob.ok("ls", "watching:@me"); !strings.Contains(out, "ORG-1") {
 		t.Errorf("watching = %s", out)
 	}
-	if out := bob.ok("watch", "ORG-1"); !strings.Contains(out, "No changes") {
-		t.Errorf("watching twice = %s", out)
-	}
-	bob.ok("unwatch", "ORG-1")
+	bob.goldenOK("watch-twice", "watch", "ORG-1")
+	bob.goldenOK("unwatch", "unwatch", "ORG-1")
 	if out := bob.ok("ls", "watching:@me"); strings.Contains(out, "ORG-1") {
 		t.Errorf("still watching: %s", out)
 	}
-	if out := bob.ok("unwatch", "ORG-1"); !strings.Contains(out, "No changes") {
-		t.Errorf("unwatching twice = %s", out)
-	}
+	bob.goldenOK("unwatch-twice", "unwatch", "ORG-1")
 }
 
 func TestShowReferencedBy(t *testing.T) {

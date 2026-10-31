@@ -38,10 +38,7 @@ func TestStoreAddWarningNamesLater(t *testing.T) {
 	time.Sleep(1100 * time.Millisecond) // prefix_set is in seconds
 	carol := alice.other()
 	carol.ok("store", "init", "mine", "--prefix", "ORG")
-	_, _, errs := carol.run("store", "add", "org", "--remote", remote)
-	if !strings.Contains(errs, "(workspace mine in store mine)") {
-		t.Errorf("stderr = %s", errs)
-	}
+	carol.goldenRun("add", 0, "store", "add", "org", "--remote", remote)
 }
 
 func TestStoreInitRemoteJSON(t *testing.T) {
@@ -52,7 +49,7 @@ func TestStoreInitRemoteJSON(t *testing.T) {
 		Remotes []string `json:"remotes"`
 		Pushed  []string `json:"pushed"`
 	}
-	out := te.ok("store", "init", "org", "--prefix", "ORG", "--remote", remote, "--remote", mirror, "--json")
+	out := te.goldenOK("init", "store", "init", "org", "--prefix", "ORG", "--remote", remote, "--remote", mirror, "--json")
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
@@ -65,19 +62,15 @@ func TestStoreAddMirror(t *testing.T) {
 	alice, _, remote := twoUsers(t)
 	mirror := alice.bare("mirror")
 	carol := alice.other()
-	carol.ok("store", "add", "org", "--remote", remote, "--remote", mirror)
+	carol.goldenOK("add", "store", "add", "org", "--remote", remote, "--remote", mirror)
 	cfg, err := os.ReadFile(filepath.Join(carol.storeDir("org"), ".git", "config"))
 	if err != nil || !strings.Contains(string(cfg), `[remote "mirror1"]`) || !strings.Contains(string(cfg), strings.ReplaceAll(mirror, `\`, `\\`)) { // .git/config escapes a backslash
 		t.Errorf(".git/config = %q, %v", cfg, err)
 	}
-	if out := carol.ok("store", "list"); !strings.Contains(out, remote+","+mirror) {
-		t.Errorf("list = %s", out)
-	}
+	carol.goldenOK("list", "store", "list")
 	// A sync fills the mirror.
-	carol.ok("sync")
-	if out := carol.ok("sync"); !strings.Contains(out, "pushed to origin, mirror1") {
-		t.Errorf("sync = %s", out)
-	}
+	carol.goldenOK("sync-first", "sync")
+	carol.goldenOK("sync-second", "sync")
 }
 
 func TestStoreListAccountIsID(t *testing.T) {
@@ -96,7 +89,7 @@ func TestStoreRemoveJSON(t *testing.T) {
 		Name   string `json:"name"`
 		Purged bool   `json:"purged"`
 	}
-	out := alice.ok("store", "remove", "org", "--purge", "--json")
+	out := alice.goldenOK("remove", "store", "remove", "org", "--purge", "--json")
 	if err := json.Unmarshal([]byte(out), &got); err != nil || got.Name != "org" || !got.Purged {
 		t.Errorf("remove --json = %s, %v", out, err)
 	}
@@ -128,15 +121,12 @@ func TestSyncStatusSkipsBrokenStore(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(alice.storeDir("two"), ".hedgehug", "local", "sync.json"), []byte("{"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	out := alice.ok("sync", "--status")
-	if !strings.Contains(out, "0 commits not pushed") || !strings.Contains(out, "error:") {
-		t.Errorf("status = %s", out)
-	}
+	alice.goldenOK("status", "sync", "--status")
 	var rows []struct {
 		Store string `json:"store"`
 		Error string `json:"error"`
 	}
-	if err := json.Unmarshal([]byte(alice.ok("sync", "--status", "--json")), &rows); err != nil || len(rows) != 2 || rows[0].Error != "" || rows[1].Error == "" {
+	if err := json.Unmarshal([]byte(alice.goldenOK("status-json", "sync", "--status", "--json")), &rows); err != nil || len(rows) != 2 || rows[0].Error != "" || rows[1].Error == "" {
 		t.Errorf("rows = %+v, %v", rows, err)
 	}
 }

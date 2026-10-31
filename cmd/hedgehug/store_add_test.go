@@ -16,14 +16,9 @@ func TestStoreAddWarnsPrefixDuplicate(t *testing.T) {
 	alice, _, remote := twoUsers(t) // the shared store uses ORG
 	carol := alice.other()
 	carol.ok("store", "init", "mine", "--prefix", "ORG") // later than the shared ORG
-	code, out, errs := carol.run("store", "add", "org", "--remote", remote)
-	if code != 0 || !strings.Contains(errs, "ORG is also the id prefix of workspace") || !strings.Contains(errs, "hedgehug workspace prefix") {
-		t.Errorf("code %d out %s errs %s", code, out, errs)
-	}
+	carol.goldenRun("add", 0, "store", "add", "org", "--remote", remote)
 	// The store is added all the same.
-	if out := carol.ok("store", "list"); !strings.Contains(out, "org") {
-		t.Errorf("list = %s", out)
-	}
+	carol.goldenOK("list", "store", "list")
 }
 
 func TestStoreAddPath(t *testing.T) {
@@ -34,6 +29,7 @@ func TestStoreAddPath(t *testing.T) {
 	if !strings.Contains(out, dir) {
 		t.Errorf("add = %s", out)
 	}
+	carol.golden("add", out)
 	if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(model.StoreMetaPath))); err != nil {
 		t.Error(err)
 	}
@@ -48,23 +44,15 @@ func TestStoreAddPath(t *testing.T) {
 
 func TestStoreAddErrors(t *testing.T) {
 	alice, bob, remote := twoUsers(t)
-	if code, _, errs := bob.run("store", "add", "org", "--remote", remote); code != 1 || !strings.Contains(errs, "already set up") {
-		t.Errorf("a name in use: code %d, stderr %s", code, errs)
-	}
-	if code, _, errs := alice.run("store", "add", "two"); code != 2 || !strings.Contains(errs, "--remote") {
-		t.Errorf("no remote: code %d, stderr %s", code, errs)
-	}
+	bob.goldenRun("name-in-use", 1, "store", "add", "org", "--remote", remote)
+	alice.goldenRun("no-remote", 2, "store", "add", "two")
 	empty := alice.bare("empty")
 	dir := alice.storeDir("two")
-	if code, _, _ := alice.run("store", "add", "two", "--remote", empty); code != 1 {
-		t.Errorf("an empty remote: code %d", code)
-	}
+	alice.goldenRun("empty-remote", 1, "store", "add", "two", "--remote", empty)
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Errorf("the directory of the failed add is left: %v", err)
 	}
-	if out := alice.ok("store", "list"); strings.Contains(out, "two") {
-		t.Errorf("list = %s", out)
-	}
+	alice.goldenOK("list", "store", "list")
 }
 
 // A store whose .gitattributes lacks a line of the driver is set up when it

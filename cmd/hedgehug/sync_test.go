@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -29,9 +28,9 @@ func TestSyncTwoUsers(t *testing.T) {
 	}
 	alice.ok("set", "ORG-1", "title=from alice")
 	bob.ok("status", "ORG-1", "in_progress")
-	alice.ok("sync")
-	bob.ok("sync")
-	alice.ok("sync")
+	alice.goldenOK("alice-first", "sync")
+	bob.goldenOK("bob", "sync")
+	alice.goldenOK("alice-second", "sync")
 	for _, te := range []*testEnv{alice, bob} {
 		out := te.ok("show", "ORG-1", "--json")
 		if !strings.Contains(out, `"title": "from alice"`) || !strings.Contains(out, `"status": "in_progress"`) {
@@ -45,13 +44,7 @@ func TestSyncShowsRenumbered(t *testing.T) {
 	alice.ok("add", "a")
 	bob.ok("add", "b")
 	alice.ok("sync")
-	out := bob.ok("sync")
-	if !regexp.MustCompile(`ORG-2 \([0-9A-Z]{26}\) → ORG-3`).MatchString(out) {
-		t.Errorf("sync output = %s", out)
-	}
-	if !strings.Contains(out, "Synced org: 1 merges, pushed to origin") {
-		t.Errorf("sync output = %s", out)
-	}
+	bob.goldenOK("sync", "sync")
 }
 
 func TestSyncShowsOverwritten(t *testing.T) {
@@ -60,10 +53,7 @@ func TestSyncShowsOverwritten(t *testing.T) {
 	time.Sleep(1100 * time.Millisecond) // commit times are seconds: alice writes later, so alice's value wins
 	alice.ok("set", "ORG-1", "title=alice's")
 	alice.ok("sync")
-	out := bob.ok("sync")
-	if !regexp.MustCompile(`overwritten: ORG-1 title \(github\.com/bob's value was replaced; hedgehug inbox revert [0-9A-Z]{26}\)`).MatchString(out) {
-		t.Errorf("sync output = %s", out)
-	}
+	bob.goldenOK("sync", "sync")
 	if !strings.Contains(bob.ok("ls", "is:overwritten"), "ORG-1") {
 		t.Error("is:overwritten does not find the task")
 	}
@@ -85,7 +75,7 @@ func TestSyncJSON(t *testing.T) {
 			Kind string `json:"kind"`
 		} `json:"repaired"`
 	}
-	out := bob.ok("sync", "--json")
+	out := bob.goldenOK("sync", "sync", "--json")
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
@@ -178,28 +168,18 @@ func TestSyncKeepsPendingForAWriteAfterThePush(t *testing.T) {
 func TestSyncStatus(t *testing.T) {
 	alice, _, _ := twoUsers(t)
 	alice.ok("add", "a")
-	out := alice.ok("sync", "--status")
-	if !strings.Contains(out, "1 commit not pushed") {
-		t.Errorf("status = %s", out)
-	}
+	alice.goldenOK("status", "sync", "--status")
 	alice.ok("sync")
-	if out := alice.ok("sync", "--status", "--json"); !strings.Contains(out, `"unpushed": 0`) {
-		t.Errorf("status json = %s", out)
-	}
+	alice.goldenOK("status-pushed", "sync", "--status")
+	alice.goldenOK("status-json", "sync", "--status", "--json")
 }
 
 func TestSyncStatusNoRemote(t *testing.T) {
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
-	if out := te.ok("sync", "--status"); !strings.Contains(out, "no remote") {
-		t.Errorf("status = %s", out)
-	}
-	if out := te.ok("sync"); !strings.Contains(out, "no store has a remote") {
-		t.Errorf("sync = %s", out)
-	}
-	if out := te.ok("sync", "--store", "me"); !strings.Contains(out, "me has no remote") {
-		t.Errorf("sync --store me = %s", out)
-	}
+	te.goldenOK("status", "sync", "--status")
+	te.goldenOK("sync", "sync")
+	te.goldenOK("sync-store", "sync", "--store", "me")
 }
 
 func TestSyncAllStores(t *testing.T) {
@@ -207,34 +187,24 @@ func TestSyncAllStores(t *testing.T) {
 	remote2 := alice.bare("second")
 	alice.ok("store", "init", "two", "--prefix", "TWO", "--remote", remote2)
 	alice.ok("--store", "two", "add", "y")
-	out := alice.ok("sync")
-	if !strings.Contains(out, "Synced org:") || !strings.Contains(out, "Synced two:") {
-		t.Errorf("sync = %s", out)
-	}
-	if out := alice.ok("sync", "--store", "two"); strings.Contains(out, "Synced org:") {
-		t.Errorf("sync --store two = %s", out)
-	}
+	alice.goldenOK("all", "sync")
+	alice.goldenOK("store-two", "sync", "--store", "two")
 }
 
 func TestStoreInitRemoteNotEmpty(t *testing.T) {
 	alice, _, remote := twoUsers(t)
-	code, _, errs := alice.run("store", "init", "again", "--prefix", "AG", "--remote", remote)
-	if code != 1 || !strings.Contains(errs, "hedgehug store add again --remote "+remote) {
-		t.Errorf("code %d, stderr %s", code, errs)
-	}
+	alice.goldenRun("init", 1, "store", "init", "again", "--prefix", "AG", "--remote", remote)
 	// Nothing is left: the next try starts clean.
 	if _, err := os.Stat(alice.storeDir("again")); !os.IsNotExist(err) {
 		t.Errorf("the directory of the failed store is left: %v", err)
 	}
-	if out := alice.ok("store", "list"); strings.Contains(out, "again") {
-		t.Errorf("list = %s", out)
-	}
+	alice.goldenOK("list", "store", "list")
 }
 
 func TestStoreInitRemoteFirstCommit(t *testing.T) {
 	te := newTestEnv(t)
 	remote := te.bare("shared")
-	te.ok("store", "init", "org", "--prefix", "ORG", "--remote", remote)
+	te.goldenOK("init", "store", "init", "org", "--prefix", "ORG", "--remote", remote)
 	log := te.log("org")
 	if len(log) != 1 || !strings.Contains(log[0].Message, "Hedgehug-Op: init") {
 		t.Fatalf("log = %d commits", len(log))
@@ -247,7 +217,5 @@ func TestStoreInitRemoteFirstCommit(t *testing.T) {
 	if err != nil || !strings.Contains(string(cfg), "driver = hedgehug merge-driver %O %A %B %P") {
 		t.Errorf("driver not registered: %q, %v", cfg, err)
 	}
-	if out := te.ok("sync", "--status", "--json"); !strings.Contains(out, `"unpushed": 0`) {
-		t.Errorf("the first push did not happen: %s", out)
-	}
+	te.goldenOK("status", "sync", "--status", "--json")
 }
