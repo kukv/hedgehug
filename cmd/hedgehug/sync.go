@@ -46,7 +46,11 @@ func (a *app) runSyncReported(s *store.Store, opt sync.Options, reported bool) (
 			}
 			st.LastError, st.ErrorReported = "", false
 			st.LastSuccess = a.now()
-			if st.PendingSince.Before(started) {
+			// A write made while the sync ran finds pending_since set and
+			// leaves it; it stays pending while HEAD has commits origin lacks.
+			// Counted under the state lock, a commit after the count marks
+			// pending again.
+			if n, err := unpushed(s); st.PendingSince.Before(started) && err == nil && n == 0 {
 				st.PendingSince = time.Time{}
 			}
 		})

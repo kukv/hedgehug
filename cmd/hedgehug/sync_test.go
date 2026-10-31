@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -8,6 +9,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/gitrepo"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 func TestSyncTwoUsers(t *testing.T) {
@@ -130,6 +134,44 @@ func TestSyncClearsPendingSince(t *testing.T) {
 		if name == "before" && has || name == "after" && !has {
 			t.Errorf("%s: sync.json = %s", name, b)
 		}
+	}
+}
+
+// A write made after the push, while pending_since was already set by an
+// earlier one, finds it set and leaves it: the sync must not clear it.
+func TestSyncKeepsPendingForAWriteAfterThePush(t *testing.T) {
+	alice, _, _ := twoUsers(t)
+	dir := alice.storeDir("org")
+	state := filepath.Join(dir, ".hedgehug", "local", "sync.json")
+	if err := os.WriteFile(state, []byte(`{"pending_since":"2026-10-30T11:00:00Z"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	alice.ok("add", "pushed")
+	s, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrote := false
+	// The clock is read after the push too; the first such read writes,
+	// as another command would.
+	now := func() time.Time {
+		if n, err := unpushed(s); !wrote && err == nil && n == 0 {
+			wrote = true
+			if _, err := s.Update(store.Op{Name: "update", Author: gitrepo.Signature{Name: "alice", Email: "alice@x"}}, func(tx *store.Tx) error {
+				return tx.PutFile("late.txt", []byte("late\n"))
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return alice.now
+	}
+	var out, errb bytes.Buffer
+	code := run([]string{"sync"}, &env{stdin: strings.NewReader(""), stdout: &out, stderr: &errb, getenv: alice.getenv, isTerminal: func(any) bool { return false }, now: now})
+	if code != 0 || !wrote {
+		t.Fatalf("sync: exit %d, wrote %v\n%s", code, wrote, errb.String())
+	}
+	if b, _ := os.ReadFile(state); !strings.Contains(string(b), "pending_since") {
+		t.Errorf("a write the sync did not push is not pending: %s", b)
 	}
 }
 
