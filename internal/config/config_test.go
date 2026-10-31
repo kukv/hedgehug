@@ -519,9 +519,11 @@ func TestRemoveStoreKeepsNeighborComments(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(p.ConfigFile)
-	t.Logf("config.yaml =\n%s", b)
-	got := string(b)
-	if !strings.Contains(got, "# about a") || !strings.Contains(got, "# about c") || strings.Contains(got, "name: b") {
-		t.Errorf("config.yaml =\n%s", b)
+	want := "stores:\n  # about a\n  - name: a\n    path: /a\n  # about c\n  - name: c\n    path: /c\n"
+	if string(b) != want {
+		t.Errorf("config.yaml =\n%s\nwant\n%s", b, want)
+	}
+	if strings.Contains(string(b), "# about b") {
+		t.Error("the comment of the removed item is still there")
 	}
 }
