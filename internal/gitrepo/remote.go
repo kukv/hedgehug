@@ -124,22 +124,33 @@ func (r *Repo) RemoteHead(remote string) (plumbing.Hash, error) {
 	return ref.Hash(), nil
 }
 
+// beforePush runs once Push has read the commit it sends; tests replace it to
+// commit meanwhile.
+var beforePush = func() {}
+
 // Push sends main to the remote as a fast-forward. It returns ErrRejected when
 // the remote is not an ancestor of main, and nil when there is nothing to send.
+// The commit main is at when Push starts is sent, and becomes
+// refs/remotes/<remote>/main; a commit made during the push is not taken as
+// being on the remote.
 func (r *Repo) Push(remote string) error {
-	err := r.r.Push(&git.PushOptions{
+	h, err := r.Head()
+	if err != nil {
+		return err
+	}
+	if h.IsZero() {
+		return errors.New("push: the repository has no commit")
+	}
+	beforePush()
+	err = r.r.Push(&git.PushOptions{
 		RemoteName: remote,
-		RefSpecs:   []config.RefSpec{"refs/heads/main:refs/heads/main"},
+		RefSpecs:   []config.RefSpec{config.RefSpec(h.String() + ":refs/heads/main")},
 	})
 	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) && (errors.Is(err, git.ErrNonFastForwardUpdate) || strings.Contains(err.Error(), "non-fast-forward")) {
 		return ErrRejected
 	}
 	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return fmt.Errorf("push %s: %w", remote, err)
-	}
-	h, err := r.Head()
-	if err != nil {
-		return err
 	}
 	return r.r.Storer.SetReference(plumbing.NewHashReference(trackingRef(remote), h))
 }

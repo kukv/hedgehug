@@ -8,9 +8,8 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
-	"os"
+	"net/url"
 	"path"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -25,12 +24,15 @@ import (
 	"github.com/kukv/hedgehug/internal/store"
 )
 
+// ErrDirty means a file the sync would write has changes git has not
+// committed. The sync changes nothing then.
 var ErrDirty = errors.New("the store has uncommitted changes where the sync would write; check them with hedgehug doctor, then commit or restore them and run hedgehug sync")
 
 // ErrUnrelated means a remote's main shares no commit with the store: it
 // holds another store, or was made apart from this one.
 var ErrUnrelated = errors.New("the remote holds a history of its own, not the store's")
 
+// Options is what one sync needs besides the store.
 type Options struct {
 	Remotes    []string          // config.yaml stores[].remotes
 	Author     gitrepo.Signature // for merge and repair commits
@@ -41,19 +43,37 @@ type Options struct {
 	BeforePush func()       // a test hook: another clone pushes here
 }
 
-type OtherStore struct{ Name, Path string }
+// OtherStore is another store of the config, by its name.
+type OtherStore = store.NamedStore
 
+// Result is what one sync did.
 type Result struct {
 	Merges      int
 	Overwritten []merge.Overwritten
 	Repaired    []merge.Repaired
 	Invalid     []model.ULID // tasks left with problems (is:invalid)
 	Pushed      []string     // remote names, of the last round
+	// Warnings are what failed after the push, which the sync did not undo:
+	// finding the invalid tasks, other stores' prefixes, repacking.
+	Warnings []string
 }
 
-// rounds caps the fetch, merge and push rounds a push rejected by a remote
-// starts again.
-const rounds = 6
+const (
+	// rounds caps the fetch, merge and push rounds that a push rejected by
+	// a remote starts again.
+	rounds = 6
+	// tries caps how often one merge or repair is computed again because
+	// HEAD moved under it.
+	tries = 6
+)
+
+// Replaced by tests.
+var (
+	retryWait    = 500 * time.Millisecond // the first wait after a rejected push; it doubles
+	repackAt     = 6700                   // repack when there are more loose objects
+	beforeCommit = func() {}              // runs before each fast-forward, merge or repair commit
+	onFullRepair = func() {}              // runs when the repair reads every file of HEAD
+)
 
 // Run syncs the store once. A store with no remote does nothing.
 func Run(s *store.Store, opt Options) (Result, error) {
@@ -69,6 +89,10 @@ func Run(s *store.Store, opt Options) (Result, error) {
 	if err != nil {
 		return res, err
 	}
+	// setup commits after the merges; refuse now what it would refuse then.
+	if _, err := attributesToAdd(s, before, true); err != nil {
+		return res, err
+	}
 	ix, err := index.Open(s)
 	if err != nil {
 		return res, err
@@ -77,10 +101,10 @@ func Run(s *store.Store, opt Options) (Result, error) {
 	if err := r.SetRemotes(opt.Remotes); err != nil {
 		return res, err
 	}
-	if err := setup(s, opt); err != nil { // .gitattributes and the driver
+	if err := r.RegisterMergeDriver(); err != nil {
 		return res, err
 	}
-	wait := 500 * time.Millisecond
+	wait := retryWait
 	for round := 0; ; round++ {
 		res.Pushed = nil // a rejected mirror makes another round; report the last one
 		for _, name := range r.Remotes() {
@@ -93,11 +117,11 @@ func Run(s *store.Store, opt Options) (Result, error) {
 				return res, err
 			}
 		}
-		if err := repairHead(s, opt, &res); err != nil {
+		if err := repairHead(s, ix, before, opt, &res); err != nil {
 			return res, err
 		}
-		if round == 0 {
-			prefixDuplicates(s, opt, &res)
+		if err := setup(s, opt); err != nil {
+			return res, err
 		}
 		if opt.BeforePush != nil {
 			opt.BeforePush()
@@ -127,13 +151,18 @@ func Run(s *store.Store, opt Options) (Result, error) {
 			break
 		}
 	}
-	if err := findInvalid(s, ix, was, before, &res); err != nil {
-		return res, err
-	}
-	if n, err := r.LooseObjects(); err == nil && n > 6700 {
-		if err := r.Repack(); err != nil {
-			return res, err
+	// The push is done: what fails from here is a warning.
+	warn := func(what string, err error) {
+		if err != nil {
+			res.Warnings = append(res.Warnings, what+": "+err.Error())
 		}
+	}
+	warn("check the other stores' id prefixes", prefixDuplicates(s, opt, &res))
+	warn("find the invalid tasks", findInvalid(s, ix, was, before, &res))
+	n, err := r.LooseObjects()
+	warn("count the loose objects", err)
+	if err == nil && n > repackAt {
+		warn("repack", r.Repack())
 	}
 	return res, nil
 }
@@ -150,41 +179,50 @@ var attributes = []string{
 
 const attributesPath = ".gitattributes"
 
-// setup adds to .gitattributes the lines it lacks, in a commit of its own,
-// and registers the merge driver. With nothing to add it commits nothing.
+// setup adds to .gitattributes the lines it lacks, in a commit of its own.
+// With nothing to add it commits nothing.
 func setup(s *store.Store, opt Options) error {
-	if _, missing, err := withAttributes(s); err != nil || missing {
+	head, err := s.Repo().Head()
+	if err != nil {
+		return err
+	}
+	if data, err := attributesToAdd(s, head, false); err != nil || data == nil {
+		return err
+	}
+	op := store.Op{Name: "setup", Detail: "merge driver", Author: opt.Author, Account: opt.Account}
+	_, err = s.Update(op, func(tx *store.Tx) error {
+		head, err := s.Repo().Head() // again, under the lock
 		if err != nil {
 			return err
 		}
-		op := store.Op{Name: "setup", Detail: "merge driver", Author: opt.Author, Account: opt.Account}
-		if _, err := s.Update(op, func(tx *store.Tx) error {
-			data, missing, err := withAttributes(s) // again, under the lock
-			if err != nil || !missing {
-				return err
-			}
-			return tx.PutFile(attributesPath, data)
-		}); err != nil {
+		data, err := attributesToAdd(s, head, true)
+		if err != nil || data == nil {
 			return err
 		}
-	}
-	return s.Repo().RegisterMergeDriver()
+		return tx.PutFile(attributesPath, data)
+	})
+	return err
 }
 
-// withAttributes returns .gitattributes with the missing lines added at
-// the end, and whether any were.
-func withAttributes(s *store.Store) ([]byte, bool, error) {
-	data, err := os.ReadFile(filepath.Join(s.Dir(), attributesPath))
+// attributesToAdd returns .gitattributes as commit has it with the missing
+// lines added at the end, or nil when none is missing. A line is there when
+// a line of the file gives its pattern merge=hedgehug. With checkDirty, a
+// file that would change but has changes git has not committed is ErrDirty.
+func attributesToAdd(s *store.Store, commit plumbing.Hash, checkDirty bool) ([]byte, error) {
+	data, err := s.Repo().ReadAt(commit, attributesPath)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, false, err
+		return nil, err
 	}
 	have := map[string]bool{}
 	for l := range strings.SplitSeq(string(data), "\n") {
-		have[strings.TrimSpace(l)] = true
+		f := strings.Fields(l)
+		if len(f) > 1 && !strings.HasPrefix(f[0], "#") && slices.Contains(f[1:], "merge=hedgehug") {
+			have[f[0]] = true
+		}
 	}
 	missing := false
 	for _, l := range attributes {
-		if have[l] {
+		if pattern, _, _ := strings.Cut(l, " "); have[pattern] {
 			continue
 		}
 		if len(data) > 0 && data[len(data)-1] != '\n' {
@@ -193,15 +231,23 @@ func withAttributes(s *store.Store) ([]byte, bool, error) {
 		data = append(data, l+"\n"...)
 		missing = true
 	}
-	return data, missing, nil
+	if !missing {
+		return nil, nil
+	}
+	if checkDirty {
+		if err := dirty(s.Repo(), []string{attributesPath}); err != nil {
+			return nil, err
+		}
+	}
+	return data, nil
 }
 
 // mergeRemote brings the main of the remote name into HEAD: nothing when
 // HEAD has it, a fast-forward when HEAD is behind it, a merge commit
-// otherwise. When HEAD moves meanwhile it looks again.
+// otherwise. When HEAD moves meanwhile it looks again, up to tries times.
 func mergeRemote(s *store.Store, name string, opt Options, res *Result) error {
 	r := s.Repo()
-	for {
+	for try := 1; ; try++ {
 		head, err := r.Head()
 		if err != nil {
 			return err
@@ -222,7 +268,7 @@ func mergeRemote(s *store.Store, name string, opt Options, res *Result) error {
 		} else {
 			err = mergeCommit(s, name, head, remote, opt, res)
 		}
-		if !errors.Is(err, store.ErrHeadMoved) {
+		if !errors.Is(err, store.ErrHeadMoved) || try == tries {
 			return err
 		}
 	}
@@ -246,9 +292,10 @@ func fastForward(s *store.Store, head, to plumbing.Hash) error {
 	for i, c := range cs {
 		paths[i] = c.Path
 	}
-	if err := checkDirty(r, paths); err != nil {
+	if err := dirty(r, paths); err != nil {
 		return err
 	}
+	beforeCommit()
 	err = s.FastForward(head, to, paths)
 	if errors.Is(err, gitrepo.ErrWorkTreeChanged) {
 		return ErrDirty
@@ -284,15 +331,15 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 	if err != nil {
 		return err
 	}
-	inOurs := map[string]bool{}
+	changed := map[string]bool{} // by either side
 	for _, c := range ours {
-		inOurs[c.Path] = true
+		changed[c.Path] = true
 	}
 	files := map[string][]byte{} // nil removes
 	var both []string
 	for _, c := range theirs {
 		switch {
-		case inOurs[c.Path]:
+		case changed[c.Path]:
 			both = append(both, c.Path)
 		case c.Deleted:
 			files[c.Path] = nil
@@ -301,12 +348,16 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 				return err
 			}
 		}
+		changed[c.Path] = true
 	}
 	var lost []merge.Overwritten
 	var notices []merge.Notice
-	sc := s.Schema()
+	sc, err := schemaAt(r, ht)
+	if err != nil {
+		return err
+	}
 	mergeFile := func(p string) error {
-		b, o, t, err := sides(r, base, head, remote, p)
+		b, o, t, err := Sides(r, base, head, remote, p)
 		if err != nil {
 			return err
 		}
@@ -338,7 +389,6 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 			}
 		}
 	}
-	merged := maps.Clone(files)
 	snap, err := newSnapshot(r, ht, files)
 	if err != nil {
 		return err
@@ -351,30 +401,32 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 	if err != nil {
 		return err
 	}
+	var authorErr error
 	fixed, repaired, err := merge.Repair(merge.RepairInput{
 		Files:    snap,
 		Base:     baseSnap,
 		OnOrigin: onOrigin,
-		Changed:  func(p string) bool { _, ok := merged[p]; return ok },
-		Author:   mergeAuthor(r, base, head, remote),
+		Changed:  func(p string) bool { return changed[p] },
+		Author:   keepError(&authorErr, mergeAuthor(r, base, head, remote)),
 		Now:      opt.Now().Truncate(time.Second),
 	})
-	if err != nil {
+	if err = errors.Join(err, authorErr); err != nil {
 		return err
 	}
 	maps.Copy(files, fixed)
-	if err := checkDirty(r, slices.Collect(maps.Keys(files))); err != nil {
+	if err := dirty(r, slices.Collect(maps.Keys(files))); err != nil {
 		return err
 	}
 	var trailers []gitrepo.Trailer
 	for _, o := range lost {
-		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Overwritten", Value: strings.Join([]string{o.Path, o.Field, o.Value, orDash(o.Author)}, " ")})
+		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Overwritten", Value: strings.Join([]string{url.PathEscape(o.Path), o.Field, o.Value, orDash(o.Author)}, " ")})
 	}
 	for _, n := range notices {
-		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Repaired", Value: strings.Join([]string{fileULID(n.Path), string(n.Kind), "-", orDash(n.Author)}, " ")})
+		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Repaired", Value: strings.Join([]string{url.PathEscape(fileULID(n.Path)), string(n.Kind), "-", orDash(n.Author)}, " ")})
 	}
 	trailers = append(trailers, repairedTrailers(repaired)...)
 	op := store.Op{Name: "merge", Detail: name, Author: opt.Author, Account: opt.Account}
+	beforeCommit()
 	if _, err := s.CommitMerge(head, []plumbing.Hash{head, remote}, files, op, trailers); err != nil {
 		return err
 	}
@@ -382,6 +434,23 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 	res.Overwritten = append(res.Overwritten, lost...)
 	res.Repaired = append(res.Repaired, repaired...)
 	return nil
+}
+
+// schemaAt is the schema of tree, or the default one when the tree has
+// none or it does not decode (the store reports that on its next write).
+func schemaAt(r *gitrepo.Repo, tree plumbing.Hash) (*schema.Schema, error) {
+	b, err := r.ReadFile(tree, schema.Path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return schema.Default(), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	sc, err := schema.Decode(b)
+	if err != nil {
+		return schema.Default(), nil //nolint:nilerr // a broken schema.yaml is merged as a file; the merge goes on
+	}
+	return sc, nil
 }
 
 func repairedTrailers(rs []merge.Repaired) []gitrepo.Trailer {
@@ -401,8 +470,7 @@ func orDash(author string) string {
 }
 
 // fileULID is the ULID a file of the store is named by. A file not named by
-// one, such as schema.yaml or a template, is given by its path, which has no
-// space either.
+// one, such as schema.yaml or a template, is given by its path.
 func fileULID(p string) string {
 	if s, ok := strings.CutSuffix(path.Base(p), ".md"); ok {
 		if u, err := model.ParseULID(s); err == nil {
@@ -412,40 +480,55 @@ func fileULID(p string) string {
 	return p
 }
 
+// keepError adapts a lookup that can fail to the Author of merge.Repair,
+// keeping the first error in *errp.
+func keepError(errp *error, f func(string) (string, error)) func(string) string {
+	return func(p string) string {
+		a, err := f(p)
+		if err != nil && *errp == nil {
+			*errp = err
+		}
+		return a
+	}
+}
+
 // mergeAuthor tells who last changed a file for a merge of head and remote
 // over base: the side that changed it, the later one when both did (then
 // the larger author, as the merge decides), or, when neither did, whoever
 // changed it last before.
-func mergeAuthor(r *gitrepo.Repo, base, head, remote plumbing.Hash) func(string) string {
-	return func(p string) string {
-		o, okO, err1 := r.LastChange(head, base, p)
-		t, okT, err2 := r.LastChange(remote, base, p)
-		if err1 != nil || err2 != nil {
-			return ""
+func mergeAuthor(r *gitrepo.Repo, base, head, remote plumbing.Hash) func(string) (string, error) {
+	return func(p string) (string, error) {
+		o, okO, err := r.LastChange(head, base, p)
+		if err != nil {
+			return "", err
+		}
+		t, okT, err := r.LastChange(remote, base, p)
+		if err != nil {
+			return "", err
 		}
 		switch {
 		case okO && okT:
 			if t.When.After(o.When) || t.When.Equal(o.When) && author(t) > author(o) {
-				return author(t)
+				return author(t), nil
 			}
-			return author(o)
+			return author(o), nil
 		case okO:
-			return author(o)
+			return author(o), nil
 		case okT:
-			return author(t)
+			return author(t), nil
 		}
 		return headAuthor(r, head)(p)
 	}
 }
 
 // headAuthor tells who last changed a file in the history of head.
-func headAuthor(r *gitrepo.Repo, head plumbing.Hash) func(string) string {
-	return func(p string) string {
+func headAuthor(r *gitrepo.Repo, head plumbing.Hash) func(string) (string, error) {
+	return func(p string) (string, error) {
 		e, ok, err := r.LastChange(head, plumbing.ZeroHash, p)
 		if err != nil || !ok {
-			return ""
+			return "", err
 		}
-		return author(e)
+		return author(e), nil
 	}
 }
 
@@ -473,9 +556,9 @@ func originIDs(r *gitrepo.Repo) (func(model.ULID, string) bool, error) {
 	}, nil
 }
 
-// checkDirty returns ErrDirty when one of paths has changes git has not
+// dirty returns ErrDirty when one of paths has changes git has not
 // committed.
-func checkDirty(r *gitrepo.Repo, paths []string) error {
+func dirty(r *gitrepo.Repo, paths []string) error {
 	if len(paths) == 0 {
 		return nil
 	}
@@ -483,12 +566,12 @@ func checkDirty(r *gitrepo.Repo, paths []string) error {
 	if err != nil {
 		return err
 	}
-	dirty := map[string]bool{}
+	changed := map[string]bool{}
 	for _, f := range st {
-		dirty[f.Path] = true
+		changed[f.Path] = true
 	}
 	for _, p := range paths {
-		if dirty[p] {
+		if changed[p] {
 			return ErrDirty
 		}
 	}
@@ -496,16 +579,22 @@ func checkDirty(r *gitrepo.Repo, paths []string) error {
 }
 
 // repairHead repairs the files of HEAD, for what a merge made by hand or a
-// file edited by hand brought in, and commits what it fixed. What it only
+// file edited by hand brought in, and commits what it fixed. It reads the
+// files only when the index has a problem the repair fixes, or a workspace
+// changed since before; otherwise there is nothing to repair. What it only
 // tells of, like a prefix two workspaces share, goes to res without a
 // commit, once per run.
-func repairHead(s *store.Store, opt Options, res *Result) error {
+func repairHead(s *store.Store, ix *index.Index, before plumbing.Hash, opt Options, res *Result) error {
 	r := s.Repo()
-	for {
+	for try := 1; ; try++ {
 		head, err := r.Head()
 		if err != nil {
 			return err
 		}
+		if need, err := needsRepair(r, ix, before, head); err != nil || !need {
+			return err
+		}
+		onFullRepair()
 		tree, err := r.TreeOf(head)
 		if err != nil {
 			return err
@@ -518,14 +607,15 @@ func repairHead(s *store.Store, opt Options, res *Result) error {
 		if err != nil {
 			return err
 		}
+		var authorErr error
 		fixed, repaired, err := merge.Repair(merge.RepairInput{
 			Files:    snap,
 			OnOrigin: onOrigin,
 			Changed:  func(string) bool { return true },
-			Author:   headAuthor(r, head),
+			Author:   keepError(&authorErr, headAuthor(r, head)),
 			Now:      opt.Now().Truncate(time.Second),
 		})
-		if err != nil {
+		if err = errors.Join(err, authorErr); err != nil {
 			return err
 		}
 		if len(fixed) == 0 {
@@ -534,12 +624,13 @@ func repairHead(s *store.Store, opt Options, res *Result) error {
 			}
 			return nil
 		}
-		if err := checkDirty(r, slices.Collect(maps.Keys(fixed))); err != nil {
+		if err := dirty(r, slices.Collect(maps.Keys(fixed))); err != nil {
 			return err
 		}
 		op := store.Op{Name: "repair", Detail: fmt.Sprintf("%d issues", len(repaired)), Author: opt.Author, Account: opt.Account}
+		beforeCommit()
 		_, err = s.CommitMerge(head, []plumbing.Hash{head}, fixed, op, repairedTrailers(repaired))
-		if errors.Is(err, store.ErrHeadMoved) {
+		if errors.Is(err, store.ErrHeadMoved) && try < tries {
 			continue
 		}
 		if err != nil {
@@ -548,6 +639,48 @@ func repairHead(s *store.Store, opt Options, res *Result) error {
 		res.Repaired = append(res.Repaired, repaired...)
 		return nil
 	}
+}
+
+// repairCodes are the problems of the index that the repair of HEAD fixes:
+// ids two tasks share, ids missing or not of the workspace's prefix, and
+// children in another workspace than their parent. Cycles and missing
+// tasks count only as parents.
+var repairCodes = []string{index.CodeDuplicateID, index.CodeNoID, index.CodeIDPrefix, store.CodeWorkspaceMismatch}
+
+// needsRepair reports whether the files of head may need the repair: the
+// index has a problem it fixes, a task that is not deleted has a deleted
+// parent, or a workspace changed since the commit before, which may make
+// prefixes or names that two workspaces share.
+func needsRepair(r *gitrepo.Repo, ix *index.Index, before, head plumbing.Hash) (bool, error) {
+	if err := ix.Refresh(); err != nil {
+		return false, err
+	}
+	for _, e := range ix.Tasks() {
+		for _, p := range ix.Problems(e.ULID) {
+			parent := p.Field == "parent" && (p.Code == schema.CodeCycle || p.Code == schema.CodeMissingRef)
+			if parent || slices.Contains(repairCodes, p.Code) {
+				return true, nil
+			}
+		}
+		if e.DeletedAt == nil && e.Parent != nil {
+			if p, ok := ix.Task(*e.Parent); ok && p.DeletedAt != nil {
+				return true, nil
+			}
+		}
+	}
+	if before == head {
+		return false, nil
+	}
+	from, err := r.TreeOf(before)
+	if err != nil {
+		return false, err
+	}
+	to, err := r.TreeOf(head)
+	if err != nil {
+		return false, err
+	}
+	cs, err := r.DiffTrees(from, to, "workspaces/")
+	return len(cs) > 0, err
 }
 
 // addNotice adds x to res unless res already tells the same of the same
@@ -564,42 +697,33 @@ func addNotice(res *Result, x merge.Repaired) {
 // workspace of another store has too, when this store's one set it later
 // (the same time: the larger ULID). The other store tells of its own when
 // it syncs. A store that does not open is skipped.
-func prefixDuplicates(s *store.Store, opt Options, res *Result) {
-	var mine []*model.Workspace
-	for w, err := range s.Workspaces() {
-		if err == nil && w.IDPrefix != "" {
-			mine = append(mine, w)
-		}
-	}
+func prefixDuplicates(s *store.Store, opt Options, res *Result) error {
 	head, err := s.Repo().Head()
-	if len(mine) == 0 || err != nil {
-		return
+	if err != nil {
+		return err
 	}
 	who := headAuthor(s.Repo(), head)
-	for _, o := range opt.Others {
-		other, err := store.Open(o.Path)
-		if err != nil {
+	for m, err := range s.Workspaces() {
+		if err != nil || m.IDPrefix == "" {
 			continue
 		}
-		for w, err := range other.Workspaces() {
-			if err != nil {
+		for _, u := range store.PrefixUses(opt.Others, m.IDPrefix, nil) {
+			w := u.Workspace
+			if c := m.PrefixSet.Compare(w.PrefixSet); c < 0 || c == 0 && m.ULID.String() < w.ULID.String() {
 				continue
 			}
-			for _, m := range mine {
-				if !strings.EqualFold(m.IDPrefix, w.IDPrefix) {
-					continue
-				}
-				if c := m.PrefixSet.Compare(w.PrefixSet); c < 0 || c == 0 && m.ULID.String() < w.ULID.String() {
-					continue
-				}
-				v, _ := json.Marshal(struct {
-					Store     string `json:"store"`
-					Workspace string `json:"workspace"`
-				}{o.Name, w.Name}) // strings always encode
-				addNotice(res, merge.Repaired{ULID: m.ULID, Kind: "prefix_duplicate", Value: string(v), Author: who(model.WorkspacePath(m.ULID))})
+			a, err := who(model.WorkspacePath(m.ULID))
+			if err != nil {
+				return err
 			}
+			v, _ := json.Marshal(struct {
+				Store     string `json:"store"`
+				Workspace string `json:"workspace"`
+			}{u.Store, w.Name}) // strings always encode
+			addNotice(res, merge.Repaired{ULID: m.ULID, Kind: "prefix_duplicate", Value: string(v), Author: a})
 		}
 	}
+	return nil
 }
 
 // invalid returns the tasks that have problems, as is:invalid finds them.

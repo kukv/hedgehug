@@ -15,8 +15,9 @@ import (
 	"github.com/kukv/hedgehug/internal/schema"
 )
 
-// sides builds the two Sides of path for a merge of ours and theirs over base.
-func sides(r *gitrepo.Repo, base, ours, theirs plumbing.Hash, path string) (b []byte, o, t merge.Side, err error) {
+// Sides builds the two Sides of path for a merge of ours and theirs over base,
+// from their histories since base. The sync and the merge driver share it.
+func Sides(r *gitrepo.Repo, base, ours, theirs plumbing.Hash, path string) (b []byte, o, t merge.Side, err error) {
 	if b, err = readAt(r, base, path); err != nil {
 		return nil, o, t, err
 	}
@@ -94,7 +95,11 @@ func yamlWhen(r *gitrepo.Repo, base, from plumbing.Hash, path string) (func([]st
 		if err != nil {
 			return version{}, err
 		}
-		v := version{data: data, values: flatten(data)}
+		values, err := flatten(data)
+		if err != nil {
+			return version{}, err
+		}
+		v := version{data: data, values: values}
 		seen[h] = v
 		return v, nil
 	}
@@ -145,31 +150,35 @@ func yamlWhen(r *gitrepo.Repo, base, from plumbing.Hash, path string) (func([]st
 
 // flatten maps each value of a yaml file, by merge.PathKey of its path, to
 // its encoding. A file that does not read as yaml is one value at the root.
-func flatten(data []byte) map[string]string {
+func flatten(data []byte) (map[string]string, error) {
 	out := map[string]string{}
 	if data == nil {
-		return out
+		return out, nil
 	}
 	vs, err := merge.YAMLValues(data)
 	if err != nil {
 		out[merge.PathKey(nil)] = string(data)
-		return out
+		return out, nil
 	}
 	for _, v := range vs {
-		out[merge.PathKey(v.Path)] = encodeValue(v.Node)
+		s, err := encodeValue(v.Node)
+		if err != nil {
+			return nil, err
+		}
+		out[merge.PathKey(v.Path)] = s
 	}
-	return out
+	return out, nil
 }
 
 // encodeValue encodes n without its comments, so that a changed comment is
-// not a changed value.
-func encodeValue(n *yaml.Node) string {
+// not a changed value. A value with no Go form, such as a mapping with keys
+// that are not strings, is encoded as its node, comments and all.
+func encodeValue(n *yaml.Node) (string, error) {
 	var x any
 	if n.Decode(&x) == nil {
-		if b, err := yaml.Dump(x); err == nil {
-			return string(b)
-		}
+		b, err := yaml.Dump(x)
+		return string(b), err
 	}
-	b, _ := yaml.Dump(n)
-	return string(b)
+	b, err := yaml.Dump(n)
+	return string(b), err
 }

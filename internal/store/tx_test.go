@@ -39,7 +39,7 @@ func TestPutFile(t *testing.T) {
 	if files, _ := headLog(t, s.dir)[0].Stats(); len(files) != 1 || files[0].Name != ".gitattributes" {
 		t.Errorf("committed %v", files)
 	}
-	for _, bad := range []string{".hedgehug/local/x", ".hedgehug/local", ".git/config", ".GIT/config", "../x", "/x", "a/../../x"} {
+	for _, bad := range []string{".hedgehug/local/x", ".hedgehug/local", ".Hedgehug/Local/x", ".git/config", ".GIT/config", "../x", "/x", "a/../../x"} {
 		if _, err := s.Update(Op{Name: "x", Author: testAuthor}, func(tx *Tx) error {
 			return tx.PutFile(bad, []byte("x"))
 		}); err == nil {

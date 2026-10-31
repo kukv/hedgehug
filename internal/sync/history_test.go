@@ -40,7 +40,7 @@ func TestSidesYAMLWhen(t *testing.T) {
 	// The merge takes b from theirs: b changed when theirs changed it.
 	ours := commit("# a note\na: 2\nb: 2\n", at(4), o2, theirs)
 
-	b, o, th, err := sides(r, base, ours, theirs, model.AutomationsPath)
+	b, o, th, err := Sides(r, base, ours, theirs, model.AutomationsPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestSidesOtherFile(t *testing.T) {
 	base := mustHead(t, c.stores[0])
 	x := c.addTask(0, "x")
 	head := mustHead(t, c.stores[0])
-	b, o, th, err := sides(r, base, head, base, model.TaskPath(x.ULID))
+	b, o, th, err := Sides(r, base, head, base, model.TaskPath(x.ULID))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -108,6 +108,24 @@ func TestPushRejected(t *testing.T) {
 	}
 }
 
+func TestPushSendsTheCommitItRead(t *testing.T) {
+	remote := newBare(t)
+	a, _ := cloneTwo(t, remote)
+	commitFiles(t, a.r, a.dir, map[string]string{"x.md": "a\n"})
+	sent, _ := a.r.Head()
+	beforePush = func() { commitFiles(t, a.r, a.dir, map[string]string{"y.md": "during\n"}) }
+	defer func() { beforePush = func() {} }()
+	if err := a.r.Push("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := a.r.RemoteHead("origin"); got != sent {
+		t.Errorf("RemoteHead = %s, want the pushed %s", got, sent)
+	}
+	if got, _ := a.r.Fetch("origin"); got != sent {
+		t.Errorf("the remote has %s, want %s", got, sent)
+	}
+}
+
 func TestFetchWithLocalCommitsTheRemoteLacks(t *testing.T) {
 	noGit(t)
 	remote := newBare(t)

@@ -222,8 +222,9 @@ func (tx *Tx) PutSchema(sc *schema.Schema) error {
 func (tx *Tx) PutFile(rel string, data []byte) error {
 	clean := path.Clean(rel)
 	first, _, _ := strings.Cut(clean, "/")
+	lower := strings.ToLower(clean) // case-insensitive file systems
 	if !filepath.IsLocal(filepath.FromSlash(rel)) || strings.EqualFold(first, ".git") ||
-		clean == localDir || strings.HasPrefix(clean, localDir+"/") {
+		lower == localDir || strings.HasPrefix(lower, localDir+"/") {
 		return fmt.Errorf("%q is not a tracked file of the store", rel)
 	}
 	return tx.put(clean, &pending{encode: func() ([]byte, error) { return data, nil }})

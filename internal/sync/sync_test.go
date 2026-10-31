@@ -2,6 +2,7 @@ package sync
 
 import (
 	"errors"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -61,7 +62,7 @@ func TestOverwrittenTrailer(t *testing.T) {
 		t.Errorf("overwritten = %+v", r.Overwritten)
 	}
 	e, _ := c.stores[1].Repo().LogFrom(mustHead(t, c.stores[1]), 1)
-	if v, ok := e[0].Trailer("Hedgehug-Overwritten"); !ok || !strings.HasPrefix(v, model.TaskPath(x.ULID)+" title \"a\" github.com/u0") {
+	if v, ok := e[0].Trailer("Hedgehug-Overwritten"); !ok || !strings.HasPrefix(v, url.PathEscape(model.TaskPath(x.ULID))+" title \"a\" github.com/u0") {
 		t.Errorf("trailer = %q", v)
 	}
 }
@@ -109,6 +110,10 @@ func TestPushRejectedRetries(t *testing.T) {
 	r := c.sync(0)
 	if !slices.Contains(r.Pushed, "origin") {
 		t.Errorf("pushed = %v", r.Pushed)
+	}
+	// Clone 0 was ahead of origin: only the rejected push makes it merge.
+	if !pushed || r.Merges != 1 {
+		t.Errorf("rejected %v, merges = %d", pushed, r.Merges)
 	}
 	c.sync(1)
 	c.sync(2)
@@ -256,12 +261,9 @@ func TestUnrelatedHistories(t *testing.T) {
 	if _, err := Run(other, opt); !errors.Is(err, ErrUnrelated) {
 		t.Errorf("Run = %v", err)
 	}
-	if h := mustHead(t, other); h != head {
-		// setup may have committed .gitattributes; nothing else.
-		e, _ := other.Repo().LogFrom(h, 1)
-		if op, _ := e[0].Trailer("Hedgehug-Op"); op != "setup" {
-			t.Errorf("HEAD moved to %+v", e[0])
-		}
+	// Nothing is committed, not even the missing .gitattributes.
+	if mustHead(t, other) != head {
+		t.Error("HEAD moved")
 	}
 }
 
