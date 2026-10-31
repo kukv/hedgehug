@@ -12,6 +12,11 @@ import (
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
+
+	"github.com/kukv/hedgehug/internal/config"
+	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/sync"
 )
 
 // version is what --version prints. GoReleaser sets it with -ldflags at
@@ -25,6 +30,7 @@ type env struct {
 	getenv         func(string) string
 	isTerminal     func(any) bool // reports whether a stream is a terminal
 	now            func() time.Time
+	beforeUpdate   func() // for tests: runs before each write; nil in the binary
 }
 
 func init() {
@@ -55,6 +61,20 @@ func isTerminal(f any) bool {
 // mistake in flags or arguments, 1 for any other error.
 func run(args []string, e *env) int {
 	a := &app{env: e}
+	a.ss = &ops.Session{
+		Getenv:       e.getenv,
+		Now:          e.now,
+		BeforeUpdate: e.beforeUpdate,
+		Warn:         func(m string) { _, _ = fmt.Fprintln(e.stderr, "warning: "+m) },
+		AfterWrite: func(s *store.Store, en config.StoreEntry) {
+			if !ops.SyncsInBackground(en) {
+				return
+			}
+			if err := sync.Start(s, en.Name, e.getenv); err != nil {
+				_, _ = fmt.Fprintln(e.stderr, "warning: the background sync did not start:", err)
+			}
+		},
+	}
 	root := a.rootCmd()
 	root.SetArgs(args)
 	root.SetIn(e.stdin)
@@ -69,7 +89,7 @@ func run(args []string, e *env) int {
 	}
 	writeErr(e.stderr, err)
 	var ue usageError
-	if errors.As(err, &ue) || strings.HasPrefix(err.Error(), "unknown command") {
+	if errors.As(err, &ue) || ops.KindOf(err) == ops.KindUsage || strings.HasPrefix(err.Error(), "unknown command") {
 		return 2
 	}
 	return 1

@@ -13,6 +13,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing"
+
 	"github.com/kukv/hedgehug/internal/atomicfile"
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
@@ -57,7 +59,7 @@ type Store struct {
 	// Replaced by tests.
 	now      func() time.Time
 	lockWait time.Duration
-	commit   func(gitrepo.Commit) error
+	commit   func(gitrepo.Commit) (plumbing.Hash, error)
 }
 
 func newStore(dir string, repo *gitrepo.Repo, meta *model.StoreMeta, sc *schema.Schema) *Store {
@@ -67,10 +69,7 @@ func newStore(dir string, repo *gitrepo.Repo, meta *model.StoreMeta, sc *schema.
 		meta:     meta,
 		now:      time.Now,
 		lockWait: lockWait,
-		commit: func(c gitrepo.Commit) error {
-			_, err := repo.Commit(c)
-			return err
-		},
+		commit:   repo.Commit,
 	}
 	s.schema.Store(sc)
 	return s
@@ -160,7 +159,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 	if account != "" {
 		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Author", Value: account})
 	}
-	if err := s.commit(gitrepo.Commit{
+	if _, err := s.commit(gitrepo.Commit{
 		Paths:    paths,
 		Subject:  "hedgehug: init",
 		Trailers: trailers,

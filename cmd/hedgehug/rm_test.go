@@ -5,10 +5,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/ops"
 )
 
 // tree3 adds a project with a child and a grandchild.
-func tree3(te *testEnv) (p, c, g taskJSON) {
+func tree3(te *testEnv) (p, c, g ops.TaskView) {
 	p = te.addJSON("P", "--kind", "project")
 	c = te.addJSON("C", "--parent", p.ID)
 	g = te.addJSON("G", "--parent", c.ID)
@@ -97,7 +99,7 @@ func TestRmRestoreErrors(t *testing.T) {
 func TestRmJSON(t *testing.T) {
 	te := newStoreEnv(t)
 	p, _, _ := tree3(te)
-	var got []taskJSON
+	var got []ops.TaskView
 	if err := json.Unmarshal([]byte(te.ok("rm", p.ID, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}

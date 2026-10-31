@@ -1,13 +1,7 @@
 package main
 
 import (
-	"fmt"
-	"slices"
-
 	"github.com/spf13/cobra"
-
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/store"
 )
 
 func (a *app) depCmd() *cobra.Command {
@@ -45,41 +39,9 @@ func (a *app) depCmd() *cobra.Command {
 }
 
 func (a *app) dep(arg, blockerArg string, add bool) error {
-	s, ix, err := a.open()
+	r, err := a.ss.Dep(arg, blockerArg, add)
 	if err != nil {
 		return err
 	}
-	e, err := a.resolve(ix, arg)
-	if err != nil {
-		return err
-	}
-	if err := notDeleted(ix, e); err != nil {
-		return err
-	}
-	b, err := a.resolve(ix, blockerArg)
-	if err != nil {
-		return err
-	}
-	committed, err := a.update(s, store.Op{Name: "dep", Task: e.ULID}, func(tx *store.Tx) error {
-		t, err := tx.Task(e.ULID)
-		if err != nil {
-			return err
-		}
-		has := slices.Contains(t.BlockedBy, b.ULID)
-		switch {
-		case add && has:
-			return fmt.Errorf("%s is already blocked by %s", refName(ix, e.ULID), refName(ix, b.ULID))
-		case add:
-			t.BlockedBy = append(t.BlockedBy, b.ULID)
-		case !has:
-			return fmt.Errorf("%s is not blocked by %s", refName(ix, e.ULID), refName(ix, b.ULID))
-		default:
-			t.BlockedBy = slices.DeleteFunc(t.BlockedBy, func(x model.ULID) bool { return x == b.ULID })
-		}
-		return tx.PutTask(t)
-	})
-	if err != nil {
-		return err
-	}
-	return a.printTask(ix, e.ULID, verb(committed, "Updated"))
+	return a.printTask(r.Index, r.ULID, verb(r.Committed, "Updated"))
 }

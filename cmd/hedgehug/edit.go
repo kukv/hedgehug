@@ -5,13 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"slices"
-	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/index"
-	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -24,66 +21,34 @@ func (a *app) editCmd() *cobra.Command {
 	}
 }
 
-var errChangedWhileEditing = errors.New("the task changed while editing")
-
 func (a *app) edit(arg string) error {
-	s, ix, err := a.open()
+	es, err := a.ss.BeginEdit(arg)
 	if err != nil {
 		return err
 	}
-	e, err := a.resolve(ix, arg)
-	if err != nil {
-		return err
-	}
-	if err := notDeleted(ix, e); err != nil {
-		return err
-	}
-	orig, err := s.TaskBytes(e.ULID)
-	if err != nil {
-		return err
-	}
-	// old is nil for a broken task: its file does not decode, or holds
-	// another ULID.
-	old, err := model.DecodeTask(orig)
-	if err != nil || old.ULID != e.ULID {
-		old = nil
-	}
-	path, edited, err := a.editFile(taskFileName(e), orig)
+	path, edited, err := a.editFile(ops.TaskFileName(es.Entry), es.Bytes)
 	if err != nil {
 		return err
 	}
 	for {
-		if bytes.Equal(edited, orig) {
+		if bytes.Equal(edited, es.Bytes) {
 			if err := os.Remove(path); err != nil {
 				return err
 			}
-			return a.printTask(ix, e.ULID, verb(false, ""))
+			return a.printTask(es.Index, es.Entry.ULID, verb(false, ""))
 		}
-		t, err := checkEdit(ix, e.ULID, old, edited)
+		t, err := ops.CheckEdit(es.Index, es.Entry.ULID, es.Old, edited)
 		if err == nil {
-			if old != nil {
-				host, herr := a.writerHost()
-				if herr != nil {
-					return herr
-				}
-				addWatchers(t, newMentions(old.Body, t.Body, host)...)
+			if err := a.ss.PrepareEdit(es, t); err != nil {
+				return err
 			}
-			var committed bool
-			committed, err = a.update(s, store.Op{Name: "edit", Task: e.ULID}, func(tx *store.Tx) error {
-				cur, err := s.TaskBytes(e.ULID)
-				if err != nil {
-					return err
-				}
-				if !bytes.Equal(cur, orig) {
-					return errChangedWhileEditing
-				}
-				return tx.PutTask(t)
-			})
+			var r ops.TaskResult
+			r, err = a.ss.WriteEdit(es, t)
 			if err == nil {
 				if err := os.Remove(path); err != nil {
 					return err
 				}
-				return a.printTask(ix, e.ULID, verb(committed, "Updated"))
+				return a.printTask(r.Index, r.ULID, verb(r.Committed, "Updated"))
 			}
 			var ve *store.ValidationError
 			if !errors.As(err, &ve) {
@@ -98,58 +63,4 @@ func (a *app) edit(arg string) error {
 			return err
 		}
 	}
-}
-
-// checkEdit decodes the edited file of task ulid and refuses the changes
-// edit does not make. old is the task before the edit, nil when it was
-// broken; then only the ulid is checked. The workspace can be changed only
-// when the old one is missing or not a workspace of ix, to repair it.
-func checkEdit(ix *index.Index, ulid model.ULID, old *model.Task, edited []byte) (*model.Task, error) {
-	t, err := model.DecodeTask(edited)
-	if err != nil {
-		return nil, fmt.Errorf("the file does not decode: %w", err)
-	}
-	if old == nil {
-		if t.ULID != ulid {
-			return nil, fmt.Errorf("the ulid must stay %s", ulid)
-		}
-		return t, nil
-	}
-	fixed := func(key string) error { return fmt.Errorf("%s cannot be changed", key) }
-	moved := func(key string) error { return fmt.Errorf("%s cannot be changed here; use hedgehug mv", key) }
-	switch {
-	case t.ULID != old.ULID:
-		return nil, fixed("ulid")
-	case t.ID != old.ID:
-		return nil, fixed("id")
-	case !t.Created.Equal(old.Created):
-		return nil, fixed("created")
-	case !t.Updated.Equal(old.Updated):
-		return nil, fixed("updated")
-	case !sameTime(t.DeletedAt, old.DeletedAt):
-		return nil, fixed("deleted_at")
-	case !sameULID(t.Parent, old.Parent):
-		return nil, moved("parent")
-	case t.Rank != old.Rank:
-		return nil, moved("rank")
-	case !slices.Equal(t.FormerIDs, old.FormerIDs):
-		return nil, fixed("former_ids")
-	case t.Workspace != old.Workspace && hasWorkspace(ix, old.Workspace):
-		return nil, fmt.Errorf("workspace cannot be changed here; use hedgehug mv --workspace")
-	}
-	return t, nil
-}
-
-// hasWorkspace reports whether ulid is a workspace of ix.
-func hasWorkspace(ix *index.Index, ulid model.ULID) bool {
-	_, ok := ix.Workspace(ulid)
-	return ok
-}
-
-func sameTime(a, b *time.Time) bool {
-	return a == nil && b == nil || a != nil && b != nil && a.Equal(*b)
-}
-
-func sameULID(a, b *model.ULID) bool {
-	return a == nil && b == nil || a != nil && b != nil && *a == *b
 }

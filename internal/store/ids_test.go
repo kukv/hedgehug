@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/go-git/go-git/v5/plumbing"
+
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
 )
@@ -187,7 +189,7 @@ func TestUpdateRestoresIDsOnFailure(t *testing.T) {
 	}
 
 	y := newTaskIn(ws, "y")
-	s.commit = func(gitrepo.Commit) error { return errors.New("commit fails") }
+	s.commit = func(gitrepo.Commit) (plumbing.Hash, error) { return plumbing.ZeroHash, errors.New("commit fails") }
 	if err := put(s, y); err == nil {
 		t.Fatal("the commit did not fail")
 	}

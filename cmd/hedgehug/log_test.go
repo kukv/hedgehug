@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/ops"
 )
 
 func TestLog(t *testing.T) {
@@ -105,7 +107,7 @@ func TestLogShowsCurrentID(t *testing.T) {
 	if !strings.Contains(show, "  former_ids  ME-1\n") || !strings.Contains(show, "  workspace   api (API, ") {
 		t.Errorf("show has no former_ids or workspace line:\n%s", show)
 	}
-	var js []logJSON
+	var js []ops.LogView
 	if err := json.Unmarshal([]byte(te.ok("log", "API-1", "--json")), &js); err != nil {
 		t.Fatal(err)
 	}

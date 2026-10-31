@@ -1,4 +1,4 @@
-package main
+package ops
 
 import (
 	"fmt"
@@ -14,35 +14,37 @@ import (
 	"github.com/kukv/hedgehug/internal/schema"
 )
 
-// assign is one key=value of set and of add -p: = sets (an empty value
+// Assign is one key=value of set and of add -p: = sets (an empty value
 // clears), += adds to a list and -= removes from it.
-type assign struct {
-	key   string
-	op    string // "=", "+=" or "-="
-	value string
+type Assign struct {
+	Key   string
+	Op    string // "=", "+=" or "-="
+	Value string
 }
 
-func parseAssign(s string) (assign, error) {
+// ParseAssign reads s as key=value, key+=value or key-=value.
+func ParseAssign(s string) (Assign, error) {
 	i := strings.IndexByte(s, '=')
 	if i < 0 {
-		return assign{}, usageErrorf("%q: want key=value, key+=value or key-=value", s)
+		return Assign{}, newErr(KindUsage, "assign.form", fmt.Errorf("%q: want key=value, key+=value or key-=value", s), "input", s)
 	}
-	a := assign{key: s[:i], op: "=", value: s[i+1:]}
-	if k, ok := strings.CutSuffix(a.key, "+"); ok {
-		a.key, a.op = k, "+="
-	} else if k, ok := strings.CutSuffix(a.key, "-"); ok {
-		a.key, a.op = k, "-="
+	a := Assign{Key: s[:i], Op: "=", Value: s[i+1:]}
+	if k, ok := strings.CutSuffix(a.Key, "+"); ok {
+		a.Key, a.Op = k, "+="
+	} else if k, ok := strings.CutSuffix(a.Key, "-"); ok {
+		a.Key, a.Op = k, "-="
 	}
-	if a.key == "" {
-		return assign{}, usageErrorf("%q: the key is missing", s)
+	if a.Key == "" {
+		return Assign{}, newErr(KindUsage, "assign.form", fmt.Errorf("%q: the key is missing", s), "input", s)
 	}
 	return a, nil
 }
 
-func parseAssigns(ss []string) ([]assign, error) {
-	out := make([]assign, 0, len(ss))
+// ParseAssigns reads each of ss with ParseAssign.
+func ParseAssigns(ss []string) ([]Assign, error) {
+	out := make([]Assign, 0, len(ss))
 	for _, s := range ss {
-		a, err := parseAssign(s)
+		a, err := ParseAssign(s)
 		if err != nil {
 			return nil, err
 		}
@@ -51,12 +53,12 @@ func parseAssigns(ss []string) ([]assign, error) {
 	return out, nil
 }
 
-// applyAssign changes t as a says. Built-in fields come first; any other key
+// ApplyAssign changes t as a says. Built-in fields come first; any other key
 // must be a property of sc, and its value is read by the property's type.
 // resolve turns task names into ULIDs, for blocked_by and task_ref properties.
 // Whether the result fits the schema is the store's to check.
-func applyAssign(t *model.Task, a assign, sc *schema.Schema, resolve func(string) (model.ULID, error)) error {
-	switch a.key {
+func ApplyAssign(t *model.Task, a Assign, sc *schema.Schema, resolve func(string) (model.ULID, error)) error {
+	switch a.Key {
 	case "title":
 		return setScalar(&t.Title, a)
 	case "kind":
@@ -74,54 +76,54 @@ func applyAssign(t *model.Task, a assign, sc *schema.Schema, resolve func(string
 	case "blocked_by":
 		return setULIDs(&t.BlockedBy, a, resolve)
 	case "parent", "rank":
-		return fmt.Errorf("%s cannot be set; use hedgehug mv", a.key)
+		return newErr(KindInvalid, "assign.readonly", fmt.Errorf("%s cannot be set; use hedgehug mv", a.Key), "key", a.Key)
 	}
-	if slices.Contains(model.TaskKeys(), a.key) {
-		return fmt.Errorf("%s cannot be set", a.key)
+	if slices.Contains(model.TaskKeys(), a.Key) {
+		return newErr(KindInvalid, "assign.readonly", fmt.Errorf("%s cannot be set", a.Key), "key", a.Key)
 	}
-	p, ok := sc.Prop(a.key)
+	p, ok := sc.Prop(a.Key)
 	if !ok {
-		return fmt.Errorf("%s is not a field or a property of the schema", a.key)
+		return newErr(KindInvalid, "assign.unknown_key", fmt.Errorf("%s is not a field or a property of the schema", a.Key), "key", a.Key)
 	}
 	return setProp(t, p, a, resolve)
 }
 
-func setScalar(dst *string, a assign) error {
-	if a.op != "=" {
-		return fmt.Errorf("%s holds one value; use %s=<value>", a.key, a.key)
+func setScalar(dst *string, a Assign) error {
+	if a.Op != "=" {
+		return newErr(KindInvalid, "assign.single", fmt.Errorf("%s holds one value; use %s=<value>", a.Key, a.Key), "key", a.Key)
 	}
-	*dst = a.value
+	*dst = a.Value
 	return nil
 }
 
-func setList(dst *[]string, a assign) error {
+func setList(dst *[]string, a Assign) error {
 	switch {
-	case a.op == "=" && a.value == "":
+	case a.Op == "=" && a.Value == "":
 		*dst = nil
-	case a.value == "":
-		return fmt.Errorf("%s%s: the value is missing", a.key, a.op)
-	case a.op == "=":
-		*dst = []string{a.value}
-	case a.op == "+=":
-		if !slices.Contains(*dst, a.value) {
-			*dst = append(*dst, a.value)
+	case a.Value == "":
+		return newErr(KindInvalid, "assign.missing_value", fmt.Errorf("%s%s: the value is missing", a.Key, a.Op), "key", a.Key)
+	case a.Op == "=":
+		*dst = []string{a.Value}
+	case a.Op == "+=":
+		if !slices.Contains(*dst, a.Value) {
+			*dst = append(*dst, a.Value)
 		}
 	default:
-		*dst = slices.DeleteFunc(*dst, func(v string) bool { return v == a.value })
+		*dst = slices.DeleteFunc(*dst, func(v string) bool { return v == a.Value })
 	}
 	return nil
 }
 
-func setULIDs(dst *[]model.ULID, a assign, resolve func(string) (model.ULID, error)) error {
-	if a.op == "=" && a.value == "" {
+func setULIDs(dst *[]model.ULID, a Assign, resolve func(string) (model.ULID, error)) error {
+	if a.Op == "=" && a.Value == "" {
 		*dst = nil
 		return nil
 	}
-	ulid, err := resolve(a.value)
+	ulid, err := resolve(a.Value)
 	if err != nil {
-		return fmt.Errorf("%s: %w", a.key, err)
+		return fmt.Errorf("%s: %w", a.Key, err)
 	}
-	switch a.op {
+	switch a.Op {
 	case "=":
 		*dst = []model.ULID{ulid}
 	case "+=":
@@ -134,19 +136,19 @@ func setULIDs(dst *[]model.ULID, a assign, resolve func(string) (model.ULID, err
 	return nil
 }
 
-func setProp(t *model.Task, p schema.Prop, a assign, resolve func(string) (model.ULID, error)) error {
+func setProp(t *model.Task, p schema.Prop, a Assign, resolve func(string) (model.ULID, error)) error {
 	multi := p.Multi || p.Type == schema.TypeMultiEnum
-	if a.op == "=" && a.value == "" {
+	if a.Op == "=" && a.Value == "" {
 		t.Props.Delete(p.Name)
 		return nil
 	}
-	if !multi && a.op != "=" {
-		return fmt.Errorf("%s holds one value; use %s=<value>", a.key, a.key)
+	if !multi && a.Op != "=" {
+		return newErr(KindInvalid, "assign.single", fmt.Errorf("%s holds one value; use %s=<value>", a.Key, a.Key), "key", a.Key)
 	}
-	if multi && a.op != "=" && a.value == "" {
-		return fmt.Errorf("%s%s: the value is missing", a.key, a.op)
+	if multi && a.Op != "=" && a.Value == "" {
+		return newErr(KindInvalid, "assign.missing_value", fmt.Errorf("%s%s: the value is missing", a.Key, a.Op), "key", a.Key)
 	}
-	n, err := propValue(p, a.value, resolve)
+	n, err := propValue(p, a.Value, resolve)
 	if err != nil {
 		return err
 	}
@@ -159,7 +161,7 @@ func setProp(t *model.Task, p schema.Prop, a assign, resolve func(string) (model
 		items = slices.Clone(cur.Content)
 	}
 	same := func(x *yaml.Node) bool { return x.Value == n.Value }
-	switch a.op {
+	switch a.Op {
 	case "=":
 		items = []*yaml.Node{n}
 	case "+=":
@@ -181,7 +183,9 @@ func setProp(t *model.Task, p schema.Prop, a assign, resolve func(string) (model
 // as its type: a text that looks like a number is quoted, a date is not.
 func propValue(p schema.Prop, v string, resolve func(string) (model.ULID, error)) (*yaml.Node, error) {
 	tag := "!!str"
-	bad := func(what string) error { return fmt.Errorf("%s: %q is not %s", p.Name, v, what) }
+	bad := func(what string) error {
+		return newErr(KindInvalid, "assign.bad_value", fmt.Errorf("%s: %q is not %s", p.Name, v, what), "key", p.Name, "value", v)
+	}
 	switch p.Type {
 	case schema.TypeNumber:
 		_, ierr := strconv.ParseInt(v, 10, 64)

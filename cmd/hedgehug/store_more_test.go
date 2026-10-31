@@ -7,29 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/kukv/hedgehug/internal/model"
 )
-
-func TestSetLater(t *testing.T) {
-	t0 := time.Date(2026, 10, 31, 10, 0, 0, 0, time.UTC)
-	older, newer := &model.Workspace{PrefixSet: t0}, &model.Workspace{PrefixSet: t0.Add(time.Second)}
-	if !setLater(newer, older) || setLater(older, newer) {
-		t.Error("the prefix set at the later time is not the later one")
-	}
-	// Set at the same time, the larger ULID is the later one.
-	small := &model.Workspace{ULID: model.NewULID(), PrefixSet: t0}
-	large := &model.Workspace{ULID: model.NewULID(), PrefixSet: t0}
-	if small.ULID.String() > large.ULID.String() {
-		small, large = large, small
-	}
-	if !setLater(large, small) || setLater(small, large) {
-		t.Error("the larger ULID is not the later one on a tie")
-	}
-	if setLater(small, small) {
-		t.Error("a workspace is later than itself")
-	}
-}
 
 // The warning names the workspace whose prefix was set later: here the one
 // carol made after the shared store.

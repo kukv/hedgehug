@@ -2,14 +2,11 @@ package main
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/index"
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/ops"
 )
 
 func (a *app) mvCmd() *cobra.Command {
@@ -41,186 +38,17 @@ func (a *app) mvCmd() *cobra.Command {
 }
 
 func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after string) error {
-	s, ix, err := a.open()
+	res, err := a.ss.Move(ops.MoveInput{Arg: arg, Workspace: workspaceArg, Parent: parentArg, Root: root, Before: before, After: after})
 	if err != nil {
 		return err
 	}
-	e, err := a.resolve(ix, arg)
-	if err != nil {
-		return err
-	}
-	// The checks come in the order of the arguments; mvTargetOf repeats
-	// them.
-	if err := notDeleted(ix, e); err != nil {
-		return err
-	}
-	var p *index.Entry
-	if parentArg != "" {
-		if p, err = a.resolve(ix, parentArg); err != nil {
-			return err
-		}
-		if err := liveParent(ix, p); err != nil {
-			return err
-		}
-	}
-	var w *model.Workspace
-	if workspaceArg != "" {
-		if w, err = resolveWorkspace(ix, workspaceArg); err != nil {
-			return err
-		}
-	}
-	if _, err := a.mvTargetOf(ix, e, p, w, root, before, after); err != nil {
-		return err
-	}
-	var res mvResult
-	committed, err := a.update(s, store.Op{Name: "mv", Task: e.ULID}, func(tx *store.Tx) error {
-		var err error
-		res, err = a.mvInTx(tx, ix, e, p, w, root, before, after)
-		return err
-	})
-	if err != nil {
-		return err
-	}
-	if err := a.printTask(ix, e.ULID, verb(committed, "Moved")); err != nil || a.jsonOut || !res.moved {
+	if err := a.printTask(res.Index, res.ULID, verb(res.Committed, "Moved")); err != nil || a.jsonOut || !res.Moved {
 		return err
 	}
 	var b strings.Builder
-	for i, t := range res.tasks {
-		fmt.Fprintf(&b, "  %s → %s\n", res.oldIDs[i], t.ID)
+	for i, t := range res.Tasks {
+		fmt.Fprintf(&b, "  %s → %s\n", res.OldIDs[i], t.ID)
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())
 	return err
-}
-
-// mvResult is what mvInTx put: the tasks, in order, with the ids they had;
-// assignIDs gives them their new ids in place.
-type mvResult struct {
-	tasks  []*model.Task
-	oldIDs []string
-	moved  bool // to another workspace
-}
-
-// mvInTx moves e as mv does, in the operation tx: under the new parent p (or
-// to the top level for root), into the workspace w, before or after a
-// sibling.
-func (a *app) mvInTx(tx *store.Tx, ix *index.Index, e, p *index.Entry, w *model.Workspace, root bool, before, after string) (mvResult, error) {
-	// Work out the move again under the lock, from the tasks as they
-	// are now: another process may have moved or deleted them since
-	// the index was read.
-	var res mvResult
-	var err error
-	if e, err = current(ix, e); err != nil {
-		return res, err
-	}
-	if p != nil {
-		if p, err = current(ix, p); err != nil {
-			return res, err
-		}
-	}
-	to, err := a.mvTargetOf(ix, e, p, w, root, before, after)
-	if err != nil {
-		return res, err
-	}
-	// A task and its subtree are in one workspace, so they move
-	// together, a child added since the index was read too.
-	ulids := []model.ULID{e.ULID}
-	if res.moved = to.workspace != e.Workspace; res.moved {
-		for _, d := range descendants(ix, e.ULID, func(*index.Entry) bool { return true }) {
-			ulids = append(ulids, d.ULID)
-		}
-	}
-	for _, ulid := range ulids {
-		t, err := tx.Task(ulid)
-		if err != nil {
-			return res, err
-		}
-		res.oldIDs = append(res.oldIDs, t.ID)
-		t.Workspace = to.workspace
-		if ulid == e.ULID {
-			t.Parent, t.Rank = to.parent, to.rank
-		}
-		if err := tx.PutTask(t); err != nil {
-			return res, err
-		}
-		res.tasks = append(res.tasks, t)
-	}
-	return res, nil
-}
-
-// mvTarget is where mv puts a task.
-type mvTarget struct {
-	parent    *model.ULID
-	workspace model.ULID
-	rank      model.Rank
-}
-
-// mvTargetOf works out where mv puts e, as ix has the tasks: at the top
-// level when root, or under the new parent p (nil to keep the parent), in
-// the workspace w (nil to follow the parent), before or after a sibling.
-func (a *app) mvTargetOf(ix *index.Index, e, p *index.Entry, w *model.Workspace, root bool, before, after string) (mvTarget, error) {
-	if err := notDeleted(ix, e); err != nil {
-		return mvTarget{}, err
-	}
-	to := mvTarget{parent: e.Parent, workspace: e.Workspace}
-	switch {
-	case root:
-		to.parent = nil
-	case p != nil:
-		if err := liveParent(ix, p); err != nil {
-			return mvTarget{}, err
-		}
-		to.parent, to.workspace = &p.ULID, p.Workspace
-	}
-	if w != nil {
-		switch {
-		case p != nil && w.ULID != to.workspace:
-			pw, ok := ix.Workspace(to.workspace)
-			if !ok {
-				return mvTarget{}, fmt.Errorf("the parent's workspace %s is not in this store", to.workspace)
-			}
-			return mvTarget{}, fmt.Errorf("the parent is in workspace %s", pw.Name)
-		case p == nil && w.ULID != e.Workspace:
-			// The old parent stays behind, so the task goes to the top level.
-			to.parent = nil
-		}
-		to.workspace = w.ULID
-	}
-	var err error
-	to.rank, err = a.rankAt(ix, e.ULID, to.parent, to.workspace, before, after)
-	return to, err
-}
-
-// rankAt returns the rank for ulid under parent in workspace ws: just before
-// or after a sibling, or after every sibling. Siblings that share a rank are
-// ordered by id, so no rank lies between them: next to one of a group, the
-// task goes past the group on the side asked for.
-func (a *app) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, ws model.ULID, before, after string) (model.Rank, error) {
-	if before == "" && after == "" {
-		return endRank(ix, parent, ws, ulid)
-	}
-	ref := before
-	if ref == "" {
-		ref = after
-	}
-	x, err := a.resolve(ix, ref)
-	if err != nil {
-		return "", err
-	}
-	sib := siblings(ix, parent, ws, ulid)
-	if !slices.ContainsFunc(sib, func(e *index.Entry) bool { return e.ULID == x.ULID }) {
-		return "", fmt.Errorf("%s is not under the same parent", refName(ix, x.ULID))
-	}
-	var lower, higher model.Rank
-	for _, e := range sib {
-		switch {
-		case e.Rank < x.Rank && e.Rank > lower:
-			lower = e.Rank
-		case e.Rank > x.Rank && (higher == "" || e.Rank < higher):
-			higher = e.Rank
-		}
-	}
-	if before != "" {
-		return model.Between(lower, x.Rank)
-	}
-	return model.Between(x.Rank, higher)
 }

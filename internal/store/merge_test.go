@@ -89,7 +89,7 @@ func TestCommitMergeRollsBack(t *testing.T) {
 	}
 	head, _ := s.repo.Head()
 	files := map[string][]byte{"notes/old.md": nil, "notes/new.md": []byte("n\n")}
-	s.commit = func(gitrepo.Commit) error { return errors.New("boom") }
+	s.commit = func(gitrepo.Commit) (plumbing.Hash, error) { return plumbing.ZeroHash, errors.New("boom") }
 	if _, err := s.CommitMerge(head, []plumbing.Hash{head}, files, Op{Name: "merge", Author: testAuthor}, nil); err == nil || errors.Is(err, gitrepo.ErrWorkTreeChanged) {
 		t.Fatalf("a failed commit was not reported: %v", err)
 	}

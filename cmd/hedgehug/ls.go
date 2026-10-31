@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"text/template"
@@ -11,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/index"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/query"
 )
 
@@ -37,9 +37,9 @@ func (a *app) lsCmd() *cobra.Command {
 					return usageErrorf("--format: %w", err)
 				}
 			}
-			q, err := query.Parse(strings.Join(args, " "))
+			q, err := ops.ParseQuery(strings.Join(args, " "))
 			if err != nil {
-				return usageError{err}
+				return err
 			}
 			if tree {
 				return a.lsTree(q, ulidsOnly, tmpl)
@@ -55,32 +55,17 @@ func (a *app) lsCmd() *cobra.Command {
 }
 
 func (a *app) ls(q *query.Query, ulidsOnly bool, tmpl *template.Template) error {
-	s, ix, err := a.open()
+	res, err := a.ss.List(q)
 	if err != nil {
 		return err
 	}
-	opt, err := a.queryOptions(s)
-	if err != nil {
-		return err
-	}
-	res, err := query.Run(ix, q, opt)
-	if err != nil {
-		var qe *query.Error
-		if errors.As(err, &qe) {
-			return usageError{err}
-		}
-		return err
-	}
-	var all []*index.Entry
-	for _, g := range res.Groups {
-		all = append(all, g.Tasks...)
-	}
+	ix, all := res.Index, res.Entries
 	switch {
 	case ulidsOnly:
 		return a.printULIDs(all)
 	case tmpl != nil:
 		return a.printFormat(ix, all, tmpl, nil)
-	case a.jsonOut || !hasTerm(q, "group"):
+	case a.jsonOut || !ops.HasTerm(q, "group"):
 		return a.printTasks(ix, all)
 	}
 	for i, g := range res.Groups {
@@ -103,15 +88,6 @@ func (a *app) ls(q *query.Query, ulidsOnly bool, tmpl *template.Template) error 
 	return nil
 }
 
-func hasTerm(q *query.Query, key string) bool {
-	for _, t := range q.Terms {
-		if t.Key == key {
-			return true
-		}
-	}
-	return false
-}
-
 func (a *app) printULIDs(es []*index.Entry) error {
 	var b strings.Builder
 	for _, e := range es {
@@ -128,7 +104,7 @@ func (a *app) printULIDs(es []*index.Entry) error {
 func (a *app) printFormat(ix *index.Index, es []*index.Entry, tmpl *template.Template, extra func(m map[string]any, e *index.Entry)) error {
 	var out bytes.Buffer
 	for _, e := range es {
-		b, err := json.Marshal(entryJSON(ix, e))
+		b, err := json.Marshal(ops.TaskViewOf(ix, e))
 		if err != nil {
 			return err
 		}

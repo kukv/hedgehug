@@ -1,4 +1,4 @@
-package main
+package ops
 
 import (
 	"errors"
@@ -15,28 +15,27 @@ import (
 func TestParseAssign(t *testing.T) {
 	for _, tc := range []struct {
 		in   string
-		want assign
+		want Assign
 	}{
-		{"title=Hello", assign{"title", "=", "Hello"}},
-		{"title=", assign{"title", "=", ""}},
-		{"labels+=ui", assign{"labels", "+=", "ui"}},
-		{"labels-=ui", assign{"labels", "-=", "ui"}},
-		{"title=a=b", assign{"title", "=", "a=b"}},
+		{"title=Hello", Assign{"title", "=", "Hello"}},
+		{"title=", Assign{"title", "=", ""}},
+		{"labels+=ui", Assign{"labels", "+=", "ui"}},
+		{"labels-=ui", Assign{"labels", "-=", "ui"}},
+		{"title=a=b", Assign{"title", "=", "a=b"}},
 	} {
-		got, err := parseAssign(tc.in)
+		got, err := ParseAssign(tc.in)
 		if err != nil {
-			t.Errorf("parseAssign(%q): %v", tc.in, err)
+			t.Errorf("ParseAssign(%q): %v", tc.in, err)
 			continue
 		}
 		if got != tc.want {
-			t.Errorf("parseAssign(%q) = %+v, want %+v", tc.in, got, tc.want)
+			t.Errorf("ParseAssign(%q) = %+v, want %+v", tc.in, got, tc.want)
 		}
 	}
 	for _, bad := range []string{"title", "=x", "+=x", "-=x"} {
-		_, err := parseAssign(bad)
-		var ue usageError
-		if !errors.As(err, &ue) {
-			t.Errorf("parseAssign(%q) err = %v, want a usageError", bad, err)
+		_, err := ParseAssign(bad)
+		if KindOf(err) != KindUsage {
+			t.Errorf("ParseAssign(%q) err = %v, want KindUsage", bad, err)
 		}
 	}
 }
@@ -64,11 +63,11 @@ func TestApplyAssign(t *testing.T) {
 	apply := func(t *testing.T, task *model.Task, ss ...string) error {
 		t.Helper()
 		for _, s := range ss {
-			a, err := parseAssign(s)
+			a, err := ParseAssign(s)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := applyAssign(task, a, testSchema(), resolve); err != nil {
+			if err := ApplyAssign(task, a, testSchema(), resolve); err != nil {
 				return err
 			}
 		}

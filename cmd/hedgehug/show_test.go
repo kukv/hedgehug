@@ -13,6 +13,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -70,17 +71,17 @@ func TestShow(t *testing.T) {
 	}
 
 	var got struct {
-		taskJSON
+		ops.TaskView
 		Body     string `json:"body"`
 		Comments []struct {
 			Author, Body string
 		} `json:"comments"`
-		Reverse map[string][]refJSON `json:"reverse"`
+		Reverse map[string][]ops.Ref `json:"reverse"`
 	}
 	if err := json.Unmarshal([]byte(te.ok("show", a.ID, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Title != "Write the spec" || got.Body != "The body.\n" || len(got.Comments) != 1 || len(got.Reverse["blocks"]) != 1 || got.Reverse["blocks"][0] != (refJSON{waiting.ULID, waiting.ID, "Waiting"}) {
+	if got.Title != "Write the spec" || got.Body != "The body.\n" || len(got.Comments) != 1 || len(got.Reverse["blocks"]) != 1 || got.Reverse["blocks"][0] != (ops.Ref{ULID: waiting.ULID, ID: waiting.ID, Title: "Waiting"}) {
 		t.Errorf("show --json = %+v", got)
 	}
 }

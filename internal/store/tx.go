@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/kukv/hedgehug/internal/atomicfile"
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
@@ -344,14 +345,21 @@ func (tx *Tx) recordNumbers(t *model.Task) error {
 // back as they were. An operation that changes nothing makes no commit, and
 // committed is false.
 func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
+	h, err := s.UpdateCommit(op, fn)
+	return !h.IsZero(), err
+}
+
+// UpdateCommit is Update that returns the hash of the commit it made; the
+// zero hash says nothing was committed.
+func (s *Store) UpdateCommit(op Op, fn func(*Tx) error) (hash plumbing.Hash, err error) {
 	if op.Name == "" {
-		return false, errors.New("the operation has no name")
+		return plumbing.ZeroHash, errors.New("the operation has no name")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	l, err := acquire(s.path(lockPath), s.lockWait)
 	if err != nil {
-		return false, err
+		return plumbing.ZeroHash, err
 	}
 	// A release error is dropped when the operation succeeded: release
 	// closes the file, which drops the OS lock on Unix and Windows anyway,
@@ -366,7 +374,7 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
 	// Another Store or a sync may have changed schema.yaml since it was read.
 	cached, err := readDecode(s.dir, schemaPath, schema.Decode)
 	if err != nil {
-		return false, err
+		return plumbing.ZeroHash, err
 	}
 	s.schema.Store(cached)
 
@@ -387,11 +395,11 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
 	}
 	tx.done = true
 	if err != nil {
-		return false, err
+		return plumbing.ZeroHash, err
 	}
 	if tx.schema != nil {
 		if ps := tx.schema.Check(); len(ps) > 0 {
-			return false, &SchemaError{Problems: ps}
+			return plumbing.ZeroHash, &SchemaError{Problems: ps}
 		}
 	}
 	sc := cached
@@ -399,34 +407,33 @@ func (s *Store) Update(op Op, fn func(*Tx) error) (committed bool, err error) {
 		sc = tx.schema
 	}
 	if err := tx.validate(sc); err != nil {
-		return false, err
+		return plumbing.ZeroHash, err
 	}
 
 	now := s.now().Truncate(time.Second)
 	changes, err := tx.changes(now)
 	if err != nil {
-		return false, err
+		return plumbing.ZeroHash, err
 	}
 	if len(changes) == 0 && !tx.op.AllowEmpty {
-		return false, nil
+		return plumbing.ZeroHash, nil
 	}
 	commit := tx.commitFor(tx.op, changes, now)
 	if err := s.apply(changes); err != nil {
-		return false, err
+		return plumbing.ZeroHash, err
 	}
-	if err := s.commit(commit); err != nil {
+	if h, err := s.commit(commit); err != nil {
 		// The files written equal HEAD's, so there is nothing to undo.
 		if !errors.Is(err, gitrepo.ErrNothingToCommit) {
-			return false, errors.Join(err, s.rollback(changes))
+			return plumbing.ZeroHash, errors.Join(err, s.rollback(changes))
 		}
-		committed = false
 	} else {
-		committed = true
+		hash = h
 	}
 	if tx.schema != nil {
 		s.schema.Store(tx.schema)
 	}
-	return committed, nil
+	return hash, nil
 }
 
 // changes stamps the queued writes and returns those that alter a file.

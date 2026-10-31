@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/kukv/hedgehug/internal/ops"
 )
 
 func TestMv(t *testing.T) {
@@ -70,7 +72,7 @@ func TestMvNextToSiblingsWithTheSameRank(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			te := newStoreEnv(t)
-			var m taskJSON
+			var m ops.TaskView
 			if tc.moverFirst {
 				m = te.addJSON("M")
 			}

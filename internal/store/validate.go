@@ -169,10 +169,10 @@ func (tx *Tx) validateWorkspaces() error {
 				continue
 			}
 			if prefixChanged && o.IDPrefix == w.IDPrefix {
-				return fmt.Errorf("the id prefix %s is already used by workspace %s", w.IDPrefix, o.Name)
+				return &WorkspaceTakenError{Msg: fmt.Sprintf("the id prefix %s is already used by workspace %s", w.IDPrefix, o.Name)}
 			}
 			if nameChanged && strings.EqualFold(o.Name, w.Name) {
-				return fmt.Errorf("a workspace named %s already exists", o.Name)
+				return &WorkspaceTakenError{Msg: fmt.Sprintf("a workspace named %s already exists", o.Name)}
 			}
 		}
 	}
@@ -269,3 +269,9 @@ func lineage(t *model.Task, sc *schema.Schema, read func(model.ULID) (*model.Tas
 	}
 	return parentKind, ancestors, nil
 }
+
+// WorkspaceTakenError means a workspace write would give a workspace the id
+// prefix or the name that another workspace has.
+type WorkspaceTakenError struct{ Msg string }
+
+func (e *WorkspaceTakenError) Error() string { return e.Msg }

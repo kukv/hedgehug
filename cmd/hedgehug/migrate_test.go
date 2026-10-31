@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -38,8 +39,8 @@ func (te *testEnv) schemaFile() string {
 }
 
 type migrateOut struct {
-	Changed []taskJSON `json:"changed"`
-	Skipped []string   `json:"skipped"`
+	Changed []ops.TaskView `json:"changed"`
+	Skipped []string       `json:"skipped"`
 }
 
 func TestSchemaMigrateStatus(t *testing.T) {

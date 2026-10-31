@@ -281,7 +281,7 @@ func TestPurgeSubjectWithoutIDUsesULID(t *testing.T) {
 	}
 	rel := model.TaskPath(x.ULID)
 	mustWrite(t, s, rel, string(b))
-	if err := s.commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: testAuthor, When: testNow}); err != nil {
+	if _, err := s.commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: testAuthor, When: testNow}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Update(Op{Name: "purge", Task: x.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.RemoveTask(x.ULID) }); err != nil {

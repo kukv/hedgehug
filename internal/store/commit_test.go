@@ -28,6 +28,37 @@ func TestUpdateReportsCommitted(t *testing.T) {
 	}
 }
 
+func TestUpdateCommitReturnsTheNewHead(t *testing.T) {
+	s := newTestStore(t)
+	task := newTask("x")
+	h, err := s.UpdateCommit(Op{Name: "add", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(task) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err := s.Repo().Head()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.IsZero() || h != head {
+		t.Errorf("UpdateCommit = %s; want HEAD %s", h, head)
+	}
+	same, err := s.Task(task.ULID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err = s.UpdateCommit(Op{Name: "update", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(same) })
+	if err != nil || !h.IsZero() {
+		t.Errorf("same content: hash, err = %s, %v; want the zero hash, nil", h, err)
+	}
+	if after, _ := s.Repo().Head(); after != head {
+		t.Errorf("HEAD moved to %s without a commit", after)
+	}
+	boom := errors.New("boom")
+	if h, err = s.UpdateCommit(Op{Name: "update", Author: testAuthor}, func(*Tx) error { return boom }); !errors.Is(err, boom) || !h.IsZero() {
+		t.Errorf("failed operation: hash, err = %s, %v; want the zero hash, boom", h, err)
+	}
+}
+
 func TestUpdateSameAsHeadWithDirtyWorkTree(t *testing.T) {
 	s := newTestStore(t)
 	task := newTask("x")

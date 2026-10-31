@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -19,9 +20,9 @@ func newStoreEnv(t *testing.T) *testEnv {
 }
 
 // addJSON runs add with --json and returns the task it printed.
-func (te *testEnv) addJSON(args ...string) taskJSON {
+func (te *testEnv) addJSON(args ...string) ops.TaskView {
 	te.t.Helper()
-	var got taskJSON
+	var got ops.TaskView
 	out := te.ok(append(append([]string{"add"}, args...), "--json")...)
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		te.t.Fatalf("%v: %s", err, out)
@@ -30,7 +31,7 @@ func (te *testEnv) addJSON(args ...string) taskJSON {
 }
 
 // label is how the CLI names task j: its id and full ULID.
-func label(j taskJSON) string { return j.ID + " (" + j.ULID + ")" }
+func label(j ops.TaskView) string { return j.ID + " (" + j.ULID + ")" }
 
 // task reads the task file of ulid from the store.
 func (te *testEnv) task(ulid string) *model.Task {

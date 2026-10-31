@@ -7,6 +7,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -14,8 +15,13 @@ import (
 // index and before it writes, as another process could.
 func (te *testEnv) meanwhile(fn func(tx *store.Tx) error) {
 	te.t.Helper()
-	beforeUpdate = func() {
-		beforeUpdate = func() {}
+	done := false
+	te.beforeUpdate = func() {
+		if done {
+			return
+		}
+		done = true
+		te.beforeUpdate = nil
 		s, err := store.Open(te.storeDir("me"))
 		if err != nil {
 			te.t.Fatal(err)
@@ -24,7 +30,6 @@ func (te *testEnv) meanwhile(fn func(tx *store.Tx) error) {
 			te.t.Fatal(err)
 		}
 	}
-	te.t.Cleanup(func() { beforeUpdate = func() {} })
 }
 
 // putChild returns a write of a new task under parent, in its workspace and
@@ -198,7 +203,7 @@ func TestPurgeRefusesATaskRestoredMeanwhile(t *testing.T) {
 
 func TestMvSeesAWorkspaceMoveMeanwhile(t *testing.T) {
 	te := newStoreEnv(t)
-	var api workspaceJSON
+	var api ops.WorkspaceView
 	te.wsJSON(&api, "add", "api", "--prefix", "API")
 	apiULID := mustULID(t, api.ULID)
 	p := te.addJSON("p", "--workspace", "me")
@@ -234,7 +239,7 @@ func TestMvParentInAnotherWorkspaceMovesAChildAddedMeanwhile(t *testing.T) {
 func TestWorkspaceSubjectsSeeARenameMeanwhile(t *testing.T) {
 	te := newStoreEnv(t)
 	me := mustULID(t, te.addJSON("a").Workspace.ULID)
-	var tmp workspaceJSON
+	var tmp ops.WorkspaceView
 	te.wsJSON(&tmp, "add", "tmp", "--prefix", "TMP")
 	rename := func(ulid model.ULID, name string) func(*store.Tx) error {
 		return func(tx *store.Tx) error {

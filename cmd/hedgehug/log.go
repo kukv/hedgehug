@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"path"
 	"strings"
 	"time"
 
@@ -10,8 +9,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/index"
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/ops"
 )
 
 func (a *app) logCmd() *cobra.Command {
@@ -31,108 +29,22 @@ func (a *app) logCmd() *cobra.Command {
 	return cmd
 }
 
-// logJSON is a commit as --json prints it.
-type logJSON struct {
-	Hash   string    `json:"hash"`
-	Date   time.Time `json:"date"`
-	Author struct {
-		Name  string `json:"name"`
-		Email string `json:"email"`
-	} `json:"author"`
-	Op      *string `json:"op"`
-	Task    *string `json:"task"`
-	ID      *string `json:"id"` // the current id of the task
-	Subject string  `json:"subject"`
-}
-
-func toLogJSON(ix *index.Index, e gitrepo.LogEntry) logJSON {
-	j := logJSON{Hash: e.Hash.String(), Date: e.When, Subject: e.Subject}
-	j.Author.Name, j.Author.Email = e.Author.Name, e.Author.Email
-	if v, ok := e.Trailer("Hedgehug-Op"); ok {
-		j.Op = &v
-	}
-	if v, ok := e.Trailer("Hedgehug-Task"); ok {
-		j.Task = &v
-		if ulid, err := model.ParseULID(v); err == nil {
-			if t, ok := ix.Task(ulid); ok && t.ID != "" {
-				j.ID = &t.ID
-			}
-		}
-	}
-	return j
-}
-
-func logJSONs(ix *index.Index, entries []gitrepo.LogEntry) []logJSON {
-	out := make([]logJSON, len(entries))
-	for i, e := range entries {
-		out[i] = toLogJSON(ix, e)
-	}
-	return out
-}
-
-// subjectNow gives the subject of a Hedgehug commit with the task's current
-// id and ULID in place of the label it was written with: the subject is
-// "hedgehug: <op> <label> <title>". Other subjects, and tasks the index does
-// not have, keep the subject as it is.
-func subjectNow(ix *index.Index, le gitrepo.LogEntry) string {
-	op, ok1 := le.Trailer("Hedgehug-Op")
-	taskULID, ok2 := le.Trailer("Hedgehug-Task")
-	head := "hedgehug: " + op + " "
-	rest, ok3 := strings.CutPrefix(le.Subject, head)
-	if !ok1 || !ok2 || !ok3 {
-		return le.Subject
-	}
-	ulid, err := model.ParseULID(taskULID)
-	if err != nil {
-		return le.Subject
-	}
-	e, ok := ix.Task(ulid)
-	if !ok {
-		return le.Subject
-	}
-	_, title, _ := strings.Cut(rest, " ")
-	return strings.TrimRight(head+taskLabel(e)+" "+title, " ")
-}
-
 func logText(ix *index.Index, entries []gitrepo.LogEntry) string {
 	var b strings.Builder
 	for _, e := range entries {
-		fmt.Fprintf(&b, "%s  %s  %s  %s\n", e.Hash.String()[:7], e.When.In(time.Local).Format("2006-01-02 15:04"), e.Author.Name, subjectNow(ix, e))
+		fmt.Fprintf(&b, "%s  %s  %s  %s\n", e.Hash.String()[:7], e.When.In(time.Local).Format("2006-01-02 15:04"), e.Author.Name, ops.SubjectNow(ix, e))
 	}
 	return b.String()
 }
 
 func (a *app) log(args []string, limit int) error {
-	s, ix, err := a.open()
-	if err != nil {
-		return err
-	}
-	var entries []gitrepo.LogEntry
-	if len(args) == 0 {
-		entries, err = s.Repo().Log(nil, limit)
-	} else {
-		e, rerr := a.resolve(ix, args[0])
-		if rerr != nil {
-			return rerr
-		}
-		entries, err = a.taskLog(s, e.ULID, limit)
-	}
+	ix, entries, err := a.ss.Log(args, limit)
 	if err != nil {
 		return err
 	}
 	if a.jsonOut {
-		return a.printJSON(logJSONs(ix, entries))
+		return a.printJSON(ops.LogViewsOf(ix, entries))
 	}
 	_, err = fmt.Fprint(a.stdout, logText(ix, entries))
 	return err
-}
-
-// taskLog returns the commits that touched the task, its comments or its
-// work logs.
-func (a *app) taskLog(s *store.Store, ulid model.ULID, limit int) ([]gitrepo.LogEntry, error) {
-	return s.Repo().Log([]string{
-		model.TaskPath(ulid),
-		path.Dir(model.CommentPath(ulid, model.ULID{})) + "/",
-		path.Dir(model.WorklogPath(ulid, model.ULID{})) + "/",
-	}, limit)
 }
