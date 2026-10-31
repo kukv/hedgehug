@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/spf13/cobra"
@@ -305,46 +306,75 @@ func (u *undoer) task(ulid model.ULID, p string, files [3][]byte, merged []byte)
 	return u.tx.PutTask(t)
 }
 
-// keep notes the fields of the task that HEAD has otherwise than c had them
-// and than the version before c had them: others changed them after c, so
-// the merge left them. files are c's version, HEAD's and the one before c.
+// keep notes the fields of the task that HEAD has otherwise than c had them:
+// others changed them after c, so the merge left them. files are c's
+// version, HEAD's and the one before c.
 func (u *undoer) keep(p string, files [3][]byte, oursT *model.Task) error {
 	if files[0] == nil {
-		return nil // c made the file: nothing to compare with
+		return nil // c removed the file: nothing to compare with
 	}
 	baseT, err := model.DecodeTask(files[0])
 	if err != nil {
-		return nil //nolint:nilerr // a version that does not read has no fields to name
+		return fmt.Errorf("the version c wrote does not read: %w", err)
 	}
 	changed := merge.TaskChanges(baseT, oursT)
 	if len(changed) == 0 {
 		return nil
 	}
-	if files[2] != nil {
-		if theirsT, err := model.DecodeTask(files[2]); err == nil {
-			// Back to what it was before c, by others: nothing is kept.
-			changed = slices.DeleteFunc(changed, func(f string) bool {
-				return !slices.Contains(merge.TaskChanges(theirsT, oursT), f)
-			})
-		}
-	}
-	author, err := u.author(p)
+	authors, err := u.fieldAuthors(p)
 	if err != nil {
 		return err
 	}
 	for _, f := range changed {
-		u.res.kept = append(u.res.kept, undoKept{path: p, task: cmp.Or(oursT.ID, oursT.ULID.String()), field: f, author: author})
+		u.res.kept = append(u.res.kept, undoKept{path: p, task: cmp.Or(oursT.ID, oursT.ULID.String()), field: f, author: cmp.Or(authors[f], "someone")})
 	}
 	return nil
 }
 
-// author is who changed p last after c.
-func (u *undoer) author(p string) (string, error) {
-	e, ok, err := u.r.LastChange(u.head, u.c.Hash, p)
-	if err != nil || !ok {
-		return "someone", err
+// fieldAuthors tells, for each field of the task file p, who changed it
+// last after c: of the commits between c and HEAD, the newest by author time
+// (the later in history among equals) whose version of the file differs in
+// that field from each of its parents'.
+func (u *undoer) fieldAuthors(p string) (map[string]string, error) {
+	log, err := u.r.Between(u.head, u.c.Hash)
+	if err != nil {
+		return nil, err
 	}
-	return e.Writer(), nil
+	task := func(commit plumbing.Hash) (*model.Task, error) {
+		b, err := u.read(commit, p)
+		if err != nil || b == nil {
+			return nil, err
+		}
+		return model.DecodeTask(b)
+	}
+	out := map[string]string{}
+	when := map[string]time.Time{}
+	for _, e := range log {
+		t, err := task(e.Hash)
+		if err != nil || t == nil {
+			continue // a version that does not read changed no field
+		}
+		var fields []string
+		for i, ph := range e.Parents {
+			pt, err := task(ph)
+			if err != nil || pt == nil {
+				fields = nil
+				break
+			}
+			diff := merge.TaskChanges(pt, t)
+			if i == 0 {
+				fields = diff
+			} else {
+				fields = slices.DeleteFunc(fields, func(f string) bool { return !slices.Contains(diff, f) })
+			}
+		}
+		for _, f := range fields {
+			if w, ok := when[f]; !ok || !e.When.Before(w) {
+				out[f], when[f] = e.Writer(), e.When
+			}
+		}
+	}
+	return out, nil
 }
 
 // workspace writes the workspace file ulid, which merged is the merge of. A

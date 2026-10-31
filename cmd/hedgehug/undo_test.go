@@ -16,26 +16,26 @@ func TestUndoKeepsLaterChangesOfOthers(t *testing.T) {
 	bob.ok("status", "ORG-1", "in_progress")
 	bob.ok("sync")
 	alice.ok("sync")
-	out := alice.ok("undo")
-	if !strings.Contains(out, "Undid") || !strings.Contains(out, "kept status (changed later by github.com/bob)") || strings.Contains(out, "kept updated") {
-		t.Errorf("undo = %s", out)
+	first := alice.ok("undo")
+	if !strings.Contains(first, "Undid") || !strings.Contains(first, "kept status (changed later by github.com/bob)") {
+		t.Errorf("undo = %s", first)
+	}
+	for _, f := range []string{"kept updated", "kept id", "kept former_ids"} {
+		if strings.Contains(first, f) {
+			t.Errorf("undo lists %q", f)
+		}
 	}
 	got := alice.ok("show", "ORG-1", "--json")
 	if !strings.Contains(got, `"title": "x"`) || !strings.Contains(got, `"status": "in_progress"`) { // twoUsers made ORG-1 with the title x
 		t.Errorf("after undo: %s", got)
 	}
-	out = alice.ok("undo") // the add of ORG-1 by alice: bob changed it later, so the file stays
+	out := alice.ok("undo") // the add of ORG-1 by alice: bob changed it later, so the file stays
 	if !strings.Contains(out, "Undid") || !strings.Contains(out, "nothing to change") {
 		t.Errorf("second undo = %s", out)
 	}
 	out = alice.ok("undo") // the second one is marked undone though it changed no file
 	if strings.TrimSpace(out) != "Nothing to undo" {
 		t.Errorf("third undo = %s", out)
-	}
-	for _, f := range []string{"kept updated", "kept id", "kept former_ids"} {
-		if strings.Contains(out, f) {
-			t.Errorf("undo lists %q", f)
-		}
 	}
 }
 
@@ -135,8 +135,8 @@ func TestUndoMoveAcrossWorkspaces(t *testing.T) {
 	if !regexp.MustCompile(`"id": "WEB-2"`).MatchString(p) {
 		t.Errorf("p = %s", p)
 	}
-	if former := regexp.MustCompile(`(?m)^\s*former_ids\s.*$`).FindString(te.ok("show", "WEB-2")); !strings.Contains(former, "WEB-1") || !strings.Contains(former, "API-1") {
-		t.Errorf("former_ids line = %q", former)
+	if !regexp.MustCompile(`"former_ids": \[\s*"WEB-1",\s*"API-1"\s*\]`).MatchString(p) {
+		t.Errorf("former_ids missing from %s", p)
 	}
 	c := te.ok("show", "API-2", "--json")
 	if !strings.Contains(c, `"id": "WEB-3"`) {
