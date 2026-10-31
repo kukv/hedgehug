@@ -95,7 +95,7 @@ tools/devenv/
 | `Hedgehug-Repaired` | マージコミット、修復のコミット | `<タスクかワークスペースの ULID> <修復の種類> <値の JSON> <その変更の author>`。値は種類ごとに下記 |
 | `Hedgehug-Undo` | undo のコミット | 取り消したコミットのハッシュ |
 
-`<フィールド>` はタスクなら `title`、`props.priority` のようにドットでつなぐ。値の JSON は1行にする。負けた側の author は、その側で merge-base 以降にそのファイルを最後に変えたコミットの `Hedgehug-Author`（なければコミットの author のメール）。修復の種類は「マージ後の修復」の表の名前（`parent_cycle`、`id_collision` など）と、マージの `Notice{revived}`（削除の取り消し）を載せる `revived`（ULID はそのファイルのもの、値は `-`、author は消した側）。値の JSON は空白を含みうるので、読む側は「先頭の2語、最後の1語、その間がすべて JSON」と分ける（フィールド・ULID・種類・author は空白を含まない。パスは `url.PathEscape` して書き、読む側で戻す）。ULID の名前を持たないファイル（yaml など）の `revived` は、ULID の欄にパスを書く。同じ trailer は複数行ありうる。
+`<フィールド>` はタスクなら `title`、`props.priority` のようにドットでつなぐ。値の JSON は1行にする。負けた側の author は、その側で merge-base 以降にそのファイルを最後に変えたコミットの `Hedgehug-Author`（なければコミットの author のメール）。修復の種類は「マージ後の修復」の表の名前（`parent_cycle`、`id_collision` など）と、マージの `Notice{revived}`（削除の取り消し）を載せる `revived`（ULID はそのファイルのもの、値は `-`、author は消した側）。値の JSON は空白を含みうるので、読む側は「先頭の2語、最後の1語、その間がすべて JSON」と分ける（ULID・種類・author は空白を含まない。パスは `url.PathEscape` して書き、フィールドは yaml のキーや prop の名前が空白を含みうるので `%` と空白だけを `%25`・`%20` にして書き、読む側でどちらも `url.PathUnescape` で戻す）。ULID の名前を持たないファイル（yaml など）の `revived` は、ULID の欄にパスを書く。同じ trailer は複数行ありうる。
 
 `Hedgehug-Repaired` の値（inbox の文面に要るものを持つ）:
 
@@ -279,7 +279,7 @@ func Repair(in RepairInput) (map[string][]byte, []Repaired, error) // 書くフ�
 
 ## store の追加
 
-- `Store.CommitMerge(head plumbing.Hash, parents []plumbing.Hash, files map[string][]byte, op Op, trailers []gitrepo.Trailer) (plumbing.Hash, error)`: `head` はマージの計算に使った HEAD（`parents` の先頭と同じ）、`trailers` は `Hedgehug-Op`・`Hedgehug-Author` の後に付ける `Hedgehug-Overwritten`・`Hedgehug-Repaired`。作ったコミットのハッシュを返す。Store のロックの中で、マージと修復の結果のファイル（nil は削除）を既存の原子的な書き込み（一時ファイルと rename）で書き、`gitrepo.Commit` の手順で index に載せ、親を指定してコミットする。書き込み時の検査（`tx.validate`）はしない（依存の循環などはマージ後も警告に留めるため）。採番（`assignIDs`）もしない（振り直しは修復が済ませている）。ロックを取った時点の HEAD が、マージの計算に使った HEAD と違えば `ErrHeadMoved` を返し、同期はロックを外して計算し直す。
+- `Store.CommitMerge(head plumbing.Hash, parents []plumbing.Hash, files map[string][]byte, op Op, trailers []gitrepo.Trailer) (plumbing.Hash, error)`: `head` はマージの計算に使った HEAD（`parents` の先頭と同じ）、`trailers` は `Hedgehug-Op`・`Hedgehug-Author` の後に付ける `Hedgehug-Overwritten`・`Hedgehug-Repaired`。作ったコミットのハッシュを返す。Store のロックの中で、マージと修復の結果のファイル（nil は削除）を既存の原子的な書き込み（一時ファイルと rename）で書き、`gitrepo.Commit` の手順で index に載せ、親を指定してコミットする。書き込み時の検査（`tx.validate`）はしない（依存の循環などはマージ後も警告に留めるため）。採番（`assignIDs`）もしない（振り直しは修復が済ませている）。ロックを取った時点の HEAD が、マージの計算に使った HEAD と違えば `ErrHeadMoved` を返し、同期はロックを外して計算し直す。書くファイルが作業ツリーで HEAD と違えば（同期の未コミットの変更の検査の後に手で保存された場合）、何も書かずに `gitrepo.ErrWorkTreeChanged` を返し、同期は `ErrDirty` にする（`FastForward` と同じ）。
 - `Tx.validateWorkspaces` の重複の検査を、操作で変えたフィールドに限る。同期で生じた重複（`prefix_duplicate`、`name_duplicate`）があるワークスペースでも、重複していないほうのフィールドの変更（重複した接頭辞のワークスペースの `rename` など）は通す。案内どおりに `workspace prefix` や `workspace rename` で直せるようにするため。
 - undo と `restore --at` が使う `Tx.PutTask` は既存のまま。ID の扱いは「undo と restore --at」に書く。
 - `Tx.PutFile(rel, data)`: タスクなどの型を持たない、git が追跡するファイル（`.gitattributes` など）を書き込みに載せる。`.hedgehug/local` と `.git` の下は拒否する。setup のコミットが使う。
@@ -505,7 +505,7 @@ sync:
 
 - `ErrDirty`: 作業ツリーの未コミット変更がマージと重なる。「`hh doctor` で確認し、変更をコミットするか戻してから `hh sync`」を案内する。終了コード 1。
 - push の再試行を使い切った: 最後の拒否を返す。ローカルのコミット（マージコミットを含む）は残り、次の同期でその上からマージする。
-- remote が見つからない・読めない: そのまま返す（`sync.json` に記録）。
+- remote が見つからない・読めない: `origin` ならそのまま返す（`sync.json` に記録）。ミラーなら、そのミラーを飛ばして `origin` との同期を続け、警告として結果に出す（`hh sync` の出力。バックグラウンド同期では `sync.log`）。ミラーが落ちている間も `origin` との同期を止めないため（利用者の決定）。
 - merge driver の失敗: 0 以外で終わり、git の既定の衝突に任せる。
 
 ## テスト
