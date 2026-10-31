@@ -4281,6 +4281,8 @@ git commit -m "feat(gitrepo): url_rewrites と HTTPS のトークンで通信し
 
 ### Task 8: `hh auth login/status/logout`
 
+> **置き換え済み（2026-11-01）**: Task 8 の修正と Task 9〜14 は、フェーズ4a の後のコードと設計の見直しに合わせて `docs/superpowers/plans/2026-11-01-phase3a-rest-after-4a.md` で置き換えた。以下の Task 8〜14 のテストとコードは、新しい plan が「旧 Task N のコードを使う」と書いたところで参照する。冒頭の「spec にない細部の判断」1〜29 は spec に移した。
+
 **Files:**
 - Create: `cmd/hedgehug/auth.go`
 - Modify: `cmd/hedgehug/app.go`（`rootCmd` に `a.authCmd()`）、`cmd/hedgehug/main.go`（`openURL`）

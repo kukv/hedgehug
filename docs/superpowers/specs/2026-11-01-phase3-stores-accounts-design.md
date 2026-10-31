@@ -143,7 +143,7 @@ host とアカウント ID の比較は `internal/config` の1つずつの関数
 
 ### ロック
 
-- Store のロック: コミットと、`.hedgehug/local/` の JSON（`access.json`、`members.json`、`rewrites-applied.json`）の書き込みは、Store のロックの中で行う。
+- Store のロック: コミットは今の Store のロック（`store.lock`）の中で行う。同期が書く `.hedgehug/local/` の JSON（`access.json`、`members.json`、`rewrites-applied.json`）は、同期と同じ `sync.lock`（`WithLocalLock`）の中で書く。同期の外から書くとき（`store add`・`discover` の clone 直後の判定）も `sync.lock` を取る。
 - 2つ以上の Store のロックは、Store の ULID の小さい順に取る。
 - `auth.lock`（設定ディレクトリ）: Device Flow のトークンを keychain に読み書きするとき（リフレッシュ、`auth login` の保存、`auth logout` の削除）に取る。Device Flow のポーリングの間は取らず、保存の直前に取る。
 - `config.lock`（設定ディレクトリ）: config.yaml を書くときに取り、取った後に読み直して変更を当ててから保存する（`Config.Update(func(*Config) error)`）。CLI と GUI サーバーが同時に書いても変更を失わない。
@@ -363,7 +363,7 @@ REST だけを作る。フェーズ3で使うのは次の表のもの。
 
 ### 同期での GitHub の情報の更新
 
-`internal/sync/github.go`。`sync.Run` の最後に、前回の取得（`access.json` の `checked`）から5分以上たっていて、origin が GitHub のホストなら、権限とコラボレーターを取り、`access.json` と `members.json` を書く。失敗は同期の失敗にせず、警告として結果に入れる（`Result.Warnings`。フェーズ2のミラーの警告と同じ）。失敗しても `checked` を進め、次は5分後に試す（判定は変えない）。`access.json`・`members.json` の書き込みは Store のロックの中で行う（`store add`・`discover` の clone 直後の判定も）。`sync` は `config` を import しないので、`sync.GitHubRepo` にアカウントの ID と名前を文字列で持たせる。
+`internal/sync/github.go`。`sync.Run` の最後に、前回の取得（`access.json` の `checked`）から5分以上たっていて、origin が GitHub のホストなら、権限とコラボレーターを取り、`access.json` と `members.json` を書く。失敗は同期の失敗にせず、警告として結果に入れる（`Result.Warnings`。フェーズ2のミラーの警告と同じ）。失敗しても `checked` を進め、次は5分後に試す（判定は変えない）。`access.json`・`members.json` の書き込みは `sync.lock` の中で行う（`store add`・`discover` の clone 直後の判定も）。`sync` は `config` を import しないので、`sync.GitHubRepo` にアカウントの ID と名前を文字列で持たせる。
 
 ## マウントと統合ビュー（internal/mount）
 
