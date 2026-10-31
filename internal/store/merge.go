@@ -1,7 +1,9 @@
 package store
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"io/fs"
 	"slices"
 	"time"
@@ -44,7 +46,8 @@ func (s *Store) lockedAtHead(head plumbing.Hash, fn func() error) (err error) {
 // CommitMerge writes files (nil removes a file) and commits them with the
 // given parents, under the store lock. It checks nothing and numbers nothing:
 // a merge keeps what the sides made, and repair has already settled ids. It
-// returns ErrHeadMoved when HEAD is not head. trailers follow Hedgehug-Op and
+// returns ErrHeadMoved when HEAD is not head, and gitrepo.ErrWorkTreeChanged
+// when a file to write is no longer as in HEAD. trailers follow Hedgehug-Op and
 // Hedgehug-Author. When the commit fails the files are put back.
 func (s *Store) CommitMerge(head plumbing.Hash, parents []plumbing.Hash, files map[string][]byte, op Op, trailers []gitrepo.Trailer) (h plumbing.Hash, err error) {
 	if op.Name == "" {
@@ -64,6 +67,14 @@ func (s *Store) CommitMerge(head plumbing.Hash, parents []plumbing.Hash, files m
 			old, err := atomicfile.ReadFile(s.path(rel))
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return err
+			}
+			// A file saved by hand since the caller looked would be lost.
+			was, herr := s.repo.ReadAt(head, rel)
+			if herr != nil && !errors.Is(herr, fs.ErrNotExist) {
+				return herr
+			}
+			if (err == nil) != (herr == nil) || !bytes.Equal(old, was) {
+				return fmt.Errorf("%w: %s differs from HEAD", gitrepo.ErrWorkTreeChanged, rel)
 			}
 			changes = append(changes, change{rel: rel, data: files[rel], old: old, existed: err == nil})
 		}

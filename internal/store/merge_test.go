@@ -84,18 +84,40 @@ func TestCommitMergeSkipsValidation(t *testing.T) {
 
 func TestCommitMergeRollsBack(t *testing.T) {
 	s := newTestStore(t)
-	mustWrite(t, s, "notes/old.md", "old\n")
+	if _, err := s.Update(Op{Name: "edit", Author: testAuthor}, func(tx *Tx) error { return tx.PutFile("notes/old.md", []byte("old\n")) }); err != nil {
+		t.Fatal(err)
+	}
 	head, _ := s.repo.Head()
 	files := map[string][]byte{"notes/old.md": nil, "notes/new.md": []byte("n\n")}
 	s.commit = func(gitrepo.Commit) error { return errors.New("boom") }
-	if _, err := s.CommitMerge(head, []plumbing.Hash{head}, files, Op{Name: "merge", Author: testAuthor}, nil); err == nil {
-		t.Fatal("a failed commit was not reported")
+	if _, err := s.CommitMerge(head, []plumbing.Hash{head}, files, Op{Name: "merge", Author: testAuthor}, nil); err == nil || errors.Is(err, gitrepo.ErrWorkTreeChanged) {
+		t.Fatalf("a failed commit was not reported: %v", err)
 	}
 	if b, err := os.ReadFile(s.path("notes/old.md")); err != nil || string(b) != "old\n" {
 		t.Errorf("old.md = %q, %v", b, err)
 	}
 	if _, err := os.Stat(s.path("notes/new.md")); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("new.md stayed: %v", err)
+	}
+}
+
+// A file saved by hand after the caller checked the work tree, and before
+// the store lock, is not overwritten.
+func TestCommitMergeWorkTreeChanged(t *testing.T) {
+	s := newTestStore(t)
+	head := mustHead(t, s)
+	for name, rel := range map[string]string{"changed": schemaPath, "added": "notes/n.md"} {
+		mustWrite(t, s, rel, "mine\n")
+		_, err := s.CommitMerge(head, []plumbing.Hash{head}, map[string][]byte{rel: []byte("merged\n")}, Op{Name: "merge", Author: testAuthor}, nil)
+		if !errors.Is(err, gitrepo.ErrWorkTreeChanged) {
+			t.Errorf("%s: CommitMerge = %v, want ErrWorkTreeChanged", name, err)
+		}
+		if b, _ := os.ReadFile(s.path(rel)); string(b) != "mine\n" {
+			t.Errorf("%s: %s = %q", name, rel, b)
+		}
+	}
+	if got := mustHead(t, s); got != head {
+		t.Errorf("HEAD moved to %s", got)
 	}
 }
 
