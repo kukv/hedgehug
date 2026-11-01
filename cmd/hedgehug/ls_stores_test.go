@@ -157,6 +157,10 @@ func TestLsIDInAnotherStore(t *testing.T) {
 	if !strings.Contains(out, "Alpha child") || strings.Contains(out, "Bravo") {
 		t.Errorf("project:AA-1 =\n%s", out)
 	}
+	// the negation matches everything in the store without it
+	if out := te.ok("ls", "--", "-project:AA-1"); !strings.Contains(out, "Bravo task") || !strings.Contains(out, "Bravo other") || strings.Contains(out, "Alpha child") {
+		t.Errorf("-project:AA-1 =\n%s", out)
+	}
 	if out := te.ok("ls", "project:alpha:AA-1"); !strings.Contains(out, "Alpha child") {
 		t.Errorf("project:alpha:AA-1 =\n%s", out)
 	}

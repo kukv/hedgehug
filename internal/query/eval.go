@@ -21,6 +21,11 @@ type Options struct {
 	// Overwritten holds the tasks is:overwritten matches: those with an
 	// unread overwritten item in the inbox.
 	Overwritten map[model.ULID]bool
+	// MissingIDs makes a value naming a task the store does not have (in
+	// project:, parent:, ...) match no task, listed in Result.IDs, where it
+	// is otherwise the error of the query. mount.Query sets it: another store
+	// may have the task.
+	MissingIDs bool
 }
 
 // Result is what a query found.
@@ -30,6 +35,20 @@ type Result struct {
 	SortKey func(*index.Entry) SortKey
 	// Desc is whether the sort: is descending.
 	Desc bool
+	// IDs are the values of the terms that name a task (project:, parent:,
+	// blocked_by:, a task_ref property, ...), with whether this store has the
+	// task. A value it does not have matches no task here; mount.Query makes
+	// it an error when no store has it.
+	IDs []IDLookup
+}
+
+// IDLookup is one value that names a task. Err is nil when the store has the
+// task, and says it does not otherwise (store.ErrNotFound).
+type IDLookup struct {
+	Pos   int // the term
+	Term  string
+	Value string
+	Err   error
 }
 
 // Group is the tasks with one value of the group: field, or all the tasks
@@ -47,9 +66,10 @@ type compiler struct {
 	ix      *index.Index
 	sc      *schema.Schema
 	opt     Options
-	deleted bool      // the query names is:deleted
-	order   *sortSpec // sort:, if any
-	group   *field    // group:, if any
+	ids     []IDLookup // the values naming a task
+	deleted bool       // the query names is:deleted
+	order   *sortSpec  // sort:, if any
+	group   *field     // group:, if any
 }
 
 // Run finds the tasks of ix that match every term of q, sorted and grouped
@@ -88,6 +108,7 @@ func Run(ix *index.Index, q *Query, opt Options) (*Result, error) {
 	if c.order != nil {
 		res.SortKey, res.Desc = c.order.f.sortKey, c.order.desc
 	}
+	res.IDs = c.ids
 	return res, nil
 }
 
@@ -103,11 +124,6 @@ func (c *compiler) failUnknown(t Term, format string, args ...any) error {
 // failWith is fail for an underlying error, which callers can unwrap.
 func (c *compiler) failWith(t Term, err error) error {
 	return &Error{Pos: t.Pos, Term: t.Raw, Msg: err.Error(), Err: err}
-}
-
-// notInStore is failWith for a task this store does not have.
-func (c *compiler) notInStore(t Term, err error) error {
-	return &Error{Pos: t.Pos, Term: t.Raw, Msg: err.Error(), Err: err, NotInStore: true}
 }
 
 func (c *compiler) term(t Term) (pred, error) {
@@ -294,19 +310,27 @@ func (c *compiler) resolve(t Term) (none bool, ulids map[model.ULID]bool, err er
 			continue
 		}
 		// "<store>:<id>" is looked up in that store only; ids have no ":".
+		id := v
+		var lerr error
 		if name, rest, ok := strings.Cut(v, ":"); ok {
 			if name != c.ix.StoreName() {
-				return false, nil, c.notInStore(t, fmt.Errorf("%q: %w", v, store.ErrNotFound))
+				lerr = fmt.Errorf("%q: %w", v, store.ErrNotFound)
 			}
-			v = rest
+			id = rest
 		}
-		ulid, err := c.ix.Resolve(v)
-		if err != nil {
-			if errors.Is(err, store.ErrNotFound) {
-				return false, nil, c.notInStore(t, err)
-			}
-			return false, nil, c.failWith(t, err)
+		var ulid model.ULID
+		if lerr == nil {
+			ulid, lerr = c.ix.Resolve(id)
 		}
+		if errors.Is(lerr, store.ErrNotFound) && c.opt.MissingIDs {
+			// no task here: the value matches none
+			c.ids = append(c.ids, IDLookup{Pos: t.Pos, Term: t.Raw, Value: v, Err: lerr})
+			continue
+		}
+		if lerr != nil {
+			return false, nil, c.failWith(t, lerr)
+		}
+		c.ids = append(c.ids, IDLookup{Pos: t.Pos, Term: t.Raw, Value: v})
 		ulids[ulid] = true
 	}
 	return none, ulids, nil

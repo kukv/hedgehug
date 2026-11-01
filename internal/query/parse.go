@@ -33,11 +33,6 @@ type Error struct {
 	// comparison on a property that is not there. mount.Query treats a store
 	// with this error as having no match.
 	Unknown bool
-	// NotInStore says the term names a task (project:, parent:, blocked_by:,
-	// a task_ref property, ...) that this store does not have, or that is
-	// written "<store>:<id>" for another store. mount.Query treats a store
-	// with this error like one with Unknown.
-	NotInStore bool
 }
 
 func (e *Error) Error() string { return fmt.Sprintf("term %d (%s): %s", e.Pos, e.Term, e.Msg) }

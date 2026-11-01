@@ -2,7 +2,10 @@ package query
 
 import (
 	"errors"
+	"reflect"
 	"testing"
+
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 func TestCompareSortKeys(t *testing.T) {
@@ -139,31 +142,55 @@ func TestErrorUnknown(t *testing.T) {
 	}
 }
 
-func TestErrorNotInStore(t *testing.T) {
+// A value naming a task the store does not have matches no task, and Run
+// tells which values it did not find.
+func TestRunValueOfATaskTheStoreLacks(t *testing.T) {
 	ix := sortFixture(t)
 	ix.SetStoreName("here")
+	all := run(t, ix, "", Options{})[0]
 	tests := []struct {
 		q    string
-		want bool
+		want []string
+		miss []string // the values not found
 	}{
-		{"parent:ZZ-9", true},
-		{"project:nope", true},
-		{"blocked_by:ZZ-9", true},
-		{"parent:there:TST-1", true},
-		{"parent:here:ZZ-9", true},
-		{"parent:none", false},
-		{"kind:nope", false},
+		{"parent:ZZ-9", []string{}, []string{"ZZ-9"}},
+		{"-parent:ZZ-9", all, []string{"ZZ-9"}},
+		{"project:nope", []string{}, []string{"nope"}},
+		{"parent:there:TST-1", []string{}, []string{"there:TST-1"}},
+		{"parent:none,ZZ-9", all, []string{"ZZ-9"}},
+		{"parent:none", all, nil},
 	}
 	for _, tt := range tests {
 		q, err := Parse(tt.q)
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = Run(ix, q, Options{})
-		var qe *Error
-		got := errors.As(err, &qe) && qe.NotInStore
-		if got != tt.want || (qe != nil && qe.Unknown) {
-			t.Errorf("%q: NotInStore = %v (err %v); want %v", tt.q, got, err, tt.want)
+		res, err := Run(ix, q, Options{MissingIDs: true})
+		if err != nil {
+			t.Fatalf("%q: %v", tt.q, err)
 		}
+		var got, miss []string
+		for _, e := range res.Groups[0].Tasks {
+			got = append(got, e.Title)
+		}
+		if got == nil {
+			got = []string{}
+		}
+		for _, l := range res.IDs {
+			if l.Err != nil {
+				miss = append(miss, l.Value)
+			}
+		}
+		if !reflect.DeepEqual(got, tt.want) || !reflect.DeepEqual(miss, tt.miss) {
+			t.Errorf("%q = %v, missing %v; want %v, %v", tt.q, got, miss, tt.want, tt.miss)
+		}
+	}
+}
+
+func TestRunMissingTaskIsAnErrorUnlessAllowed(t *testing.T) {
+	ix := sortFixture(t)
+	q, _ := Parse("parent:ZZ-9")
+	if _, err := Run(ix, q, Options{}); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("err = %v; want not found", err)
 	}
 }

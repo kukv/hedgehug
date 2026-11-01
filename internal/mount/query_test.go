@@ -61,7 +61,7 @@ func twoSchemas(t *testing.T) (a, b config.StoreEntry) {
 			schema.Status{Name: "canceled", Category: schema.CategoryCanceled, Default: true},
 		),
 		Kinds: []schema.Kind{
-			{Name: "task", Role: schema.RoleWork, Parents: root, Default: true},
+			{Name: "task", Role: schema.RoleWork, Parents: []string{schema.Root, "epic"}, Default: true},
 			{Name: "epic", Role: schema.RoleContainer, Parents: root},
 		},
 		Props: schema.Props{{Name: "tier", Type: schema.TypeEnum, Values: []string{"silver", "gold"}}},
@@ -343,7 +343,7 @@ func TestQueryTaskNotInAStoreFindsNothingThere(t *testing.T) {
 	parsed, _ := query.Parse("parent:org-b:API-1")
 	_, err := Query(set, parsed, "", noOptions)
 	var qe *query.Error
-	if !errors.As(err, &qe) || !qe.NotInStore || qe.Unknown {
+	if !errors.As(err, &qe) || qe.Unknown || !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("parent:org-b:API-1: err = %v; want the not-found error", err)
 	}
 	// an id no store has
@@ -426,5 +426,45 @@ func TestQueryGroupWithoutValueComesLast(t *testing.T) {
 	last := res.Entries[len(res.Entries)-2:]
 	if last[0].Entry.Title != "a2" || last[1].Entry.Title != "b2" {
 		t.Errorf("Entries end with %s %s", last[0].Entry.Title, last[1].Entry.Title)
+	}
+}
+
+func TestQueryMissingIDMatchesNothingInTheStore(t *testing.T) {
+	a, b := twoSchemas(t)
+	parents := putTasks(t, a, 2, func(i int, task *model.Task) { task.Title, task.Kind = []string{"a-p1", "a-p2"}[i], "project" })
+	putTasks(t, a, 2, func(i int, task *model.Task) { task.Title, task.Parent = []string{"a-c1", "a-c2"}[i], &parents[i].ULID })
+	bp := putTasks(t, b, 1, func(_ int, task *model.Task) { task.Title, task.Kind = "b-p", "epic" })
+	putTasks(t, b, 1, func(_ int, task *model.Task) { task.Title, task.Parent = "b-c", &bp[0].ULID })
+	set := openSet(t, a, b)
+	// the negation in org-b, which lacks API-1, matches all its tasks
+	got := queryTitles(t, set, "-parent:API-1", "")
+	if !sameSet(got, []string{"a-p1", "a-p2", "a-c2", "b-p", "b-c"}) {
+		t.Errorf("-parent:API-1 = %v", got)
+	}
+	// one value is missing in each store
+	got = queryTitles(t, set, "parent:API-1,WEB-1", "")
+	if !sameSet(got, []string{"a-c1", "b-c"}) {
+		t.Errorf("parent:API-1,WEB-1 = %v; want a-c1 and b-c", got)
+	}
+	// a value no store has is the error, even beside one that exists
+	parsed, _ := query.Parse("parent:API-1,ZZ-9")
+	_, err := Query(set, parsed, "", noOptions)
+	if err == nil || !strings.Contains(err.Error(), "ZZ-9") {
+		t.Errorf("parent:API-1,ZZ-9: err = %v", err)
+	}
+	// not even for a negation
+	parsed, _ = query.Parse("-parent:ZZ-9")
+	if _, err = Query(set, parsed, "", noOptions); err == nil {
+		t.Error("-parent:ZZ-9: no error")
+	}
+	// the stores asked are the ones that must have it
+	parsed, _ = query.Parse("parent:API-1 store:org-b")
+	if _, err = Query(set, parsed, "", noOptions); err == nil {
+		t.Error("parent:API-1 store:org-b: no error")
+	}
+	// org-a:API-1 is org-a's only, so its negation matches all of org-b
+	got = queryTitles(t, set, "-parent:org-a:API-1", "")
+	if !sameSet(got, []string{"a-p1", "a-p2", "a-c2", "b-p", "b-c"}) {
+		t.Errorf("-parent:org-a:API-1 = %v", got)
 	}
 }
