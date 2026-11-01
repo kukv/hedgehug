@@ -227,6 +227,8 @@ func checkOrigin(s *store.Store, tracked plumbing.Hash, opt Options, res *Result
 	}
 	switch state {
 	case NoRewrite:
+		// A missing file is not an error for RemoveLocal, so this writes
+		// nothing in the usual sync.
 		return s.RemoveLocal(forcePushFile)
 	case Recorded:
 		res.Rewrite = rec

@@ -3,6 +3,7 @@ package sync
 import (
 	"errors"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -195,11 +196,57 @@ func TestRunMirrorWithOldHistory(t *testing.T) {
 	if len(res.Warnings) != 0 {
 		t.Errorf("warnings = %v", res.Warnings)
 	}
+	if res.Merges != 0 || !slices.Equal(res.Pushed, []string{"origin", "mirror1"}) {
+		t.Errorf("merges %d, pushed %v; want 0 and origin, mirror1", res.Merges, res.Pushed)
+	}
 	if c.task(0, gone.ULID) != nil {
 		t.Error("the removed task came back")
 	}
 	if got := headOf(t, c, 0); got != newHead {
 		t.Errorf("HEAD = %s, want %s (nothing merged)", got, newHead)
+	}
+	if got, err := c.stores[0].Repo().RemoteHead("mirror1"); err != nil || got != newHead {
+		t.Errorf("mirror = %s, %v, want %s", got, err, newHead)
+	}
+}
+
+// A mirror fetched for the first time that holds a before is force pushed
+// to, not merged.
+func TestRunMirrorFirstFetchHoldsBefore(t *testing.T) {
+	c := newCluster(t, 1)
+	mirror := filepath.Join(t.TempDir(), "m.git")
+	if err := gitrepo.InitBare(mirror); err != nil {
+		t.Fatal(err)
+	}
+	c.addTask(0, "keep")
+	gone := c.addTask(0, "gone")
+	c.sync(0)
+	// Someone else fills the mirror with the history as it is now.
+	other, err := gitrepo.Clone(c.remote, filepath.Join(t.TempDir(), "o"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := other.SetRemotes([]string{c.remote, mirror}); err != nil {
+		t.Fatal(err)
+	}
+	if err := other.Push("mirror1"); err != nil {
+		t.Fatal(err)
+	}
+
+	c.rewriteLocally(gone.ULID, plumbing.ZeroHash, true)
+	c.forcePush()
+	newHead := headOf(t, c, 0)
+	c.opts[0].Remotes = append(c.opts[0].Remotes, mirror)
+	if got, _ := c.stores[0].Repo().RemoteHead("mirror1"); !got.IsZero() {
+		t.Fatalf("the mirror was fetched already: %s", got)
+	}
+
+	res := c.sync(0)
+	if res.Merges != 0 || !slices.Equal(res.Pushed, []string{"origin", "mirror1"}) {
+		t.Errorf("merges %d, pushed %v; want 0 and origin, mirror1", res.Merges, res.Pushed)
+	}
+	if c.task(0, gone.ULID) != nil || headOf(t, c, 0) != newHead {
+		t.Error("the removed task came back")
 	}
 	if got, err := c.stores[0].Repo().RemoteHead("mirror1"); err != nil || got != newHead {
 		t.Errorf("mirror = %s, %v, want %s", got, err, newHead)
