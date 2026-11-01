@@ -42,19 +42,19 @@
 | D3 | 古い ID の読み方（利用者の決定の細部） | `LastChange(HEAD, 0, パス)` でそのパスを最後に変えたコミットを探し、その最初の親での中身を読む。転送ファイルならさらに前へたどる（最大 20 回）。タスクが見つからなければ ID なし。index のキャッシュの形式を上げる（`cacheFormat` 7） |
 | D4 | 転送ファイルに当たったときの案内 | `KindNotFound`、`task.moved`、Args `input`・`store`（移動先の Store 名。マウントしていなければ空）・`store_ulid`・`id`（移動先での今の ID。分からなければ空）。文面: マウント中 `API-12 moved to org-b (org-b:WEB-45)`、マウントしていない `API-12 moved to another store (ULID 01JC0…); mount that store to follow it`。終了コード1 |
 | D5 | 転送ファイルに当たる入力 | 転送ファイルの ULID、または D3 で覚えた ID・古い ID。全 Store から引くとき、タスクに当たれば（移動先で古い ID が `former_ids` にあるなど）それを使い、どの Store のタスクにも当たらないときだけ案内にする。`--store` で絞ったときはその Store の中で同じ |
-| D6 | `mv` の `--store` | `mv` に限り `--store` は移動先（spec）。移動元は ID を全 Store から引いて決める（`org-a:API-12` も可）。`--store` と一緒に `--root`・`--before`・`--after` は使い方の誤り（終了コード2）。`--parent` と `--workspace` は移動先の中で引く |
+| D6 | `mv` の `--store` | `mv` に限り `--store` は移動先（spec の `hh mv <id> --store <dest>`。spec の「コマンドごとの対象」と 3b の D1 では `--store` は ID の絞り込みなので、`mv` だけ意味が変わる）。`mv` は自分の `--store` を持ち、全体フラグ（`ss.StoreName`）は空のまま。移動元は ID を全 Store から引いて決める（`org-a:API-12` も可）。移動元と同じ Store を渡したら `move.same_store`。`--store` と一緒に `--root`・`--before`・`--after` は使い方の誤り（終了コード2）。`--parent` と `--workspace` は移動先の中で引く |
 | D7 | `--scoped` が要らないときに渡した | 無視する（エラーにしない） |
 | D8 | 移動の確認の文面 | 外す参照を `unlink: API-12 blocked_by API-3` の形で1行ずつ、続けて履歴の警告 `The content before the move stays in the git history of org-a, and anyone who can read org-a can see it; use hedgehug purge --rewrite-history to remove it`、見えなくなる人がいれば `No longer visible to: github.com/bob, github.com/carol`、最後に `Move N tasks to org-b? [y/N] `。拒否は `Canceled`（終了コード1） |
 | D9 | `--scoped` の端末の質問 | `The scoped schema of <project の ID> <タイトル> — [c]arry / [d]rop: `。端末でなければ `choice.required`（what `--scoped`、候補 `carry`・`drop`） |
 | D10 | 外した `scoped` の部分の一覧 | `scoped: dropped status "review" (not in org-b)` の形で1行ずつ。`--json` の `scoped.dropped` は `["status review", "template bug", ...]` |
-| D11 | 移動のコミットの件名と trailer | move-in: `Op{Name: "move-in", Task: <根の ULID>}`（件名は今の形で、移動先での新しい ID とタイトル）。move-out: `Op{Name: "move-out", Detail: "<移動元での ID> <タイトル>"}`（タスクファイルが転送ファイルになるため Task は使わない）。どちらも M の各タスクに `Hedgehug-Task` を1行ずつ（根が先、ほかは ULID 順）、外した参照ごとに `Hedgehug-Unlinked: <ULID> <フィールド> <ULID>`（フィールドは `blocked_by` か `props.<key>`） |
+| D11 | 移動のコミットの件名と trailer | move-in: `Op{Name: "move-in", Task: <根の ULID>}`（件名は今の形で、移動先での新しい ID とタイトル）。move-out: `Op{Name: "move-out", Detail: "<移動元での ID> <タイトル>"}`（タスクファイルが転送ファイルになるため Task は使わない）。どちらも M の各タスクに `Hedgehug-Task` を1行ずつ（根が先、ほかは ULID 順。move-in の根は `Op.Task` が書くので足さない）、外した参照ごとに `Hedgehug-Unlinked: <ULID> <フィールド> <ULID>`（フィールドは `blocked_by` か `props.<key>`） |
 | D12 | 再実行の判定 | M の ULID がすべて移動先に生きたタスクとしてあり、移動先の HEAD の履歴に、`Hedgehug-Op: move-in` かつ `Hedgehug-Moved-From` が移動元の ULID で、`Hedgehug-Task` が M と同じ集合のコミットがあれば、7 を飛ばして 8 だけを行う。M の一部だけが移動先にある、または move-in の記録がないのに移動先にあるときは、何も変えずにエラー（`KindConflict`、`move.exists`、`01JBZ… is already in org-b`） |
 | D13 | 移動元の `numbers.yaml` | M の各タスクの `id` と `former_ids` のうち、移動元のいずれかのワークスペースの接頭辞を持つものの番号の最大を、接頭辞ごとに記録する（今の purge の `recordNumbers` と同じ「大きい方を残す」） |
 | D14 | 転送ファイルの下のコメント・作業時間の同期 | `merge.Repair` に「転送ファイルの下にあるコメント・作業時間のファイルを消す」を足す。消したファイルは `Repaired` ではなく、新しい戻り値 `Dropped []merge.Overwritten`（`Field: "*"`、値はファイル全体の JSON、author はそのファイルを書いた人）で返し、同期は `Hedgehug-Overwritten` に書く。merge driver（git の CLI のマージ）は1ファイルしか見ないので、タスクファイルの規則だけが効き、コメントは次の同期の `repairHead` で消える |
 | D15 | 転送ファイルとタスクファイルのマージ | 片側が転送ファイルなら転送ファイルを採る。負けた側がタスクファイルなら `Overwritten{Path, Field: "*", Value: <ファイル全文の JSON 文字列>, Author}`、削除なら `Value: "null"`。両側が転送ファイルなら `moved_to` をスカラーの LWW（今の `pick`）で決める |
 | D16 | `parent_moved`・`ref_moved` の値 | `parent_moved`: `{"from": "<元の親の ULID>", "to": null}`。`ref_moved`: `{"field": "blocked_by" か "props.<key>", "target": "<転送ファイルの ULID>"}`。どちらも author はその参照を書いた人（今の `parent_deleted` と同じ決め方） |
 | D17 | inbox の表示 | 移動済みのタスクへの上書きの通知に、`→ apply it to org-b's WEB-45`（マウントしていなければ `→ apply it in the store 01JC0…`）を足す。`parent_moved` は `moved to the root because its parent moved to another store`、`ref_moved` は `<field> to <ID> was removed because it moved to another store` |
-| D18 | 移動済みのタスクの `inbox revert` | `KindConflict`、`task.moved`、`<ID> moved to org-b; fix it there (org-b:WEB-45)`。何も書かない |
+| D18 | 移動済みのタスクの `inbox revert` | `KindNotFound`、`task.moved`（D4 と同じ Kind）、`<ID> moved to org-b; fix it there (org-b:WEB-45)`。何も書かない |
 | D19 | `duplicate_across_stores`・`forward_target` の文面 | `duplicate_across_stores`: Where は ULID、Msg `in org-b (WEB-45) and org-c (OPS-3); remove the one not needed with hedgehug rm and hedgehug purge`。同じ文を同期の `Warnings` に `01JBZ… is in org-b (WEB-45) and org-c (OPS-3); …` で入れる。`forward_target`: Where は転送ファイルの ULID（覚えた ID があれば `API-12 (01JBZ…)`）、Msg `moved to a store that is not mounted (ULID 01JC0…)`、重さ info |
 | D20 | `purge --moved` の出力 | 一覧は `01JBZ…  API-12 → org-b WEB-45`（移動先がマウントされていなければ `→ 01JC0…`、今の ID が分からなければ ID の欄を省く）。確認は `Remove N forward files? [y/N] `。結果 `Removed N forward files`。0件は `No forward files`。`--json` は `{removed: [{ulid, id, to_store, to_id}], commit}` |
 | D21 | `purge --rewrite-history` の確認 | 一覧のあと `This rewrites the history of every remote of org-a and force pushes it. The clones of other members are rebuilt at their next sync.` と `Type the store name to go ahead: `。違う名前は `Canceled`（終了コード1）。端末でなければ `KindUsage`、`confirm.required`（`--yes` でも通さない） |
@@ -65,6 +65,8 @@
 | D26 | GUI サーバーでの入れ替え | `ops.Session.BeforeSwap func(path string)` を足し、サーバーはそこでその Store の index と状態を捨てる（spec の「入れ替えの前にその Store の index を閉じる」） |
 | D27 | E2E の `purge --rewrite-history` | バイナリでは端末の入力を渡せないので、その1手だけこのプロセスの中で `run` を呼び、`te.terminal` と標準入力に Store 名を与える（3a の `auth login` と同じ形）。ほかの手はバイナリで行う |
 | D28 | devenv | 変えない（spec「3c で変更なし」。3b の E2E が Store の数を数えている） |
+| D29 | `purge --rewrite-history` の再開 | 6 の直前に `.hedgehug/local/rewrite-in-progress.json`（`{before, ulids, at}`）を書き、8 の origin への push が通ったら消す。このファイルがあるときに実行したら 1〜6 を飛ばし（書き換えた HEAD は origin の子孫でないので、3 の同期と未 push の検査はできない）、HEAD に `rewrites.yaml` の記録（`at` が同じ）があれば 7 も飛ばして 8 へ進む。5〜8 は Store のロックと `sync.lock` を持ったまま行い、このファイルがある間は同期（`RunSync`）を拒む（`KindConflict`、`rewrite.in_progress`、`a history rewrite of org-a is unfinished; run hedgehug purge --rewrite-history again`） |
+| D30 | 新しい操作の名前の表示 | `log` とアクティビティは `Hedgehug-Op` の `move-in`・`move-out`・`purge-moved`・`rewrite-history`・`replay` をそのまま出す（今の操作と同じ扱い）。`ops/read.go` と `server/activity.go` が知らない操作名で落ちないことをテストで確かめる |
 
 ---
 
@@ -333,7 +335,7 @@ func (ss *Session) PrepareMoveStore(in MoveStoreInput) (MovePlan, error)
 func (ss *Session) MoveStore(in MoveStoreInput) (MoveStoreResult, error)
 ```
 
-- 流れは spec の 1〜9 のとおり。7 の前に `LockInOrder(移動元, 移動先)` を取り、ロックの中で index を読み直して 1〜4 をやり直す（確認の後に変わっていたら `move.changed`、`KindConflict`）。7 は `ss.ForStore(to)` の `UpdateCommit`、8 は `ss.ForStore(from)` の `UpdateCommit`。8 が失敗したら spec の文（`moved into <to>; run the same command again to finish the source`）を添える。
+- 流れは spec の 1〜9 のとおり。7 の前に `LockInOrder(移動元, 移動先)` を取り、ロックの中で index を読み直して 1〜4 をやり直す（2つの Store の index は順に読む。`Mounted.With` を入れ子にしない。`mount/refs.go` の注意と同じ）（確認の後に変わっていたら `move.changed`、`KindConflict`）。7 は `ss.ForStore(to)` の `UpdateCommit`、8 は `ss.ForStore(from)` の `UpdateCommit`。8 が失敗したら spec の文（`moved into <to>; run the same command again to finish the source`）を添える。
 - 移動元と移動先のどちらかが読み取り専用なら、ロックを取る前に `store.read_only`。移動元と移動先が同じなら `KindUsage`、`move.same_store`（`use hedgehug mv --workspace`）。
 - 移動先のワークスペースが2つ以上で `--workspace` がなければ `choice.required`（what `--workspace`）。
 - scoped の持っていき方: 移動元の `schema.yaml` の `scoped` のうち `where: project:<M の中の project の ULID>` のもの。carry は移動先のスキーマにないステータス・テンプレートの名前と、そのステータスを指す `workflow` の遷移を外し（D10）、移動先の `Schema.Check()` を通るものを `MoveIn.Scoped` にする。
@@ -480,7 +482,7 @@ func (r *Repo) SetTracking(remote string, h plumbing.Hash) error
 func (r *Repo) Close() error
 ```
 
-- オブジェクトは `r.r.Storer.SetEncodedObject` で書く（`object.Tree`・`object.Commit` の `Encode`）。ツリーはサブツリーごとに作り直し、空になったサブツリーは親から外す。go-git の file transport で force push が通ることは plan の作成時に確かめた（`Force: true` と `+` の refspec）。
+- オブジェクトは `r.r.Storer.SetEncodedObject` で書く（`object.Tree`・`object.Commit` の `Encode`。ツリーのエントリは git の順に並べてから Encode する）。親が先の順は `Between(head, plumbing.ZeroHash)` で得る。ツリーはサブツリーごとに作り直し、空になったサブツリーは親から外す。go-git の file transport で force push が通ることは plan の作成時に確かめた（`Force: true` と `+` の refspec）。
 
 - [ ] **Step 1: 失敗するテストを書く**
   - 3コミット（1つ目でファイル a・b、2つ目で b を変える、3つ目で c）を `Drop: b` で書き換え → 3コミットのまま、どのツリーにも b がない、2つ目のツリーは親と同じ、author・committer・時刻が元と同じ、Message が呼ばれて置き換わる。マージコミットを含む履歴でも親が書き換え後のもの
@@ -558,14 +560,14 @@ func (ss *Session) RewriteHistory(in RewriteInput) (RewriteResult, error)
 - 1〜3: spec のとおり。移動済みなら移動先で子孫を引き（Task 2 の `MovedError` と `mount`）、対象の Store に転送ファイルかタスクファイルがあるものに絞る。同期は `ss.SyncStore(…, true)`、その後 `ops.Unpushed`・`Status` が0であること。
 - 5: 生きているタスクは今の purge の `RemoveTask` で1コミット（`Hedgehug-Op: purge`）。
 - 6: `RewriteHistory` の `Drop` は対象の ULID の3つのパス、`Message` は spec の 6（件名のタイトルを `(purged)`、対象の `Hedgehug-Overwritten`・`Hedgehug-Repaired` の行を消す）。
-- 7〜8: `ResetMain` → `rewrites.yaml` を足すコミット（`Hedgehug-Op: rewrite-history`）→ 全 remote に `ForcePush`。8 の再開の判定は spec のとおり。Store のロックの中で行い、index は `Refresh`（古いツリーのオブジェクトは残るので差分で更新できる）。
+- 7〜8: `ResetMain` → `rewrites.yaml` を足すコミット（`Hedgehug-Op: rewrite-history`）→ 全 remote に `ForcePush`。再開は D29。Store のロックの中で行い、index は `Refresh`（古いツリーのオブジェクトは残るので差分で更新できる）。
 - CLI: `purge --rewrite-history <id>`。端末でなければ D21 のエラー（`--yes` でも）。端末なら一覧と D21 の文面で Store 名を読み、`RewriteHistory` に渡す。出力は消したタスクと書き換えたコミット数（`Removed N tasks from the history (M commits rewritten)`）。`--json` は `{store, tasks: [{ulid, id}], rewritten, pushed}`。
 
 - [ ] **Step 1: 失敗するテストを書く**
   - 転送ファイルになったタスク（移動済み）と、まだ生きているタスクのそれぞれで `RewriteHistory` → origin の bare のどのコミットのツリーにも対象のパスがない、件名が `(purged)`、対象の trailer の行がない、`rewrites.yaml` の記録、ほかのタスクの履歴は残る
   - 未 push のコミットがある・未コミットの変更がある・読み取り専用 → 拒否
   - 入力された Store 名が違う → `Canceled`、空 → `confirm.required`
-  - origin への force push を失敗させる → エラー、もう一度で 7 を飛ばして push だけ
+  - origin への force push を失敗させる → エラー、`rewrite-in-progress.json` が残り、`hh sync` は `rewrite.in_progress` で拒まれる。もう一度実行すると 1〜7 を飛ばして push だけ行い、ファイルが消える（D29）
   - ミラーへの失敗 → 警告
   - CLI: 端末でない → 終了コード2（`--yes` でも）、端末で Store 名 → 成功のゴールデン
 - [ ] **Step 2: 失敗を確かめる**
