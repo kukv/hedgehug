@@ -1,2 +1,8 @@
 [tools]
 "github:gotestyourself/gotestsum" = "1.13.0"
+
+[env]
+# Without -trimpath the build cache keys the packages of this module by their
+# absolute directory, so every worktree compiles and caches them again.
+# -trimpath makes the worktrees share one cache.
+GOFLAGS = "-trimpath"

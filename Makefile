@@ -1,4 +1,4 @@
-.PHONY: generate build fmt fmt-check lint tidy-check test check release-check
+.PHONY: generate build fmt fmt-check lint tidy-check test cover clean-cache check release-check
 
 # Write the generated files (api/openapi.yaml).
 generate:
@@ -25,9 +25,19 @@ tidy-check:
 	go mod tidy
 	git diff --exit-code -- go.mod go.sum
 
-# Run tests with the race detector and coverage (mirrors the CI test step).
+# Run tests with the race detector. Coverage is make cover: a build with it is
+# another variant in the build cache.
 test:
+	gotestsum --format testdox -- -race ./...
+
+# Run tests with the race detector and coverage (mirrors the CI test step).
+cover:
 	gotestsum --format testdox -- -race -coverprofile=coverage.out -covermode=atomic ./...
+
+# Empty the Go build and test caches. Go keeps entries for 5 days and has no
+# size limit, so run this when the cache takes too much space.
+clean-cache:
+	go clean -cache -testcache
 
 # Run everything the CI checks, locally.
 check: tidy-check lint fmt-check test

@@ -14,10 +14,12 @@ hedgehug is a single Go binary for Linux, macOS and Windows. You need:
 
 ```bash
 make check          # everything CI checks: tidy, lint, fmt, test
-make test           # tests with the race detector and coverage
+make test           # tests with the race detector
+make cover          # tests with the race detector and coverage
 make fmt            # format with gofumpt + goimports
-make release-check  # goreleaser config and cross-compiling for 3 OSes
+make release-check  # goreleaser config and cross-compiling
 make build          # bin/hedgehug
+make clean-cache    # empty the Go build cache when it grows too large
 
 go run ./cmd/hedgehug --version
 ```
