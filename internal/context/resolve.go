@@ -536,6 +536,8 @@ func (r *resolver) repo(_ *git.Repository, ids []string) (result, error) {
 	def := ""
 	for i, c := range cands {
 		options[i], labels[i] = c.ref, c.title
+		// recent is keyed by the repo ID of the repository: with no origin and
+		// several remotes, that of the first remote by name (the spec's repo-link rule)
 		if rc, ok := r.st.Recent[ids[0]]; ok && rc.Store == c.m.ULID && rc.Project == c.e.ULID {
 			def = c.ref
 		}

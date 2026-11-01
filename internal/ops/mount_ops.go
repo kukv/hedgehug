@@ -79,10 +79,14 @@ func (ss *Session) mountResolveError(set *mount.Set, arg string, err error) erro
 	case errors.As(err, &ie):
 		// within one store: let that store spell the candidates out
 		var found error
-		for _, m := range set.Stores {
+		stores, in := set.Stores, arg
+		if m, rest, ok := set.SplitStore(arg); ok {
+			stores, in = []*mount.Mounted{m}, rest // "<store>:" names the one store
+		}
+		for _, m := range stores {
 			_ = m.With(func(ix *index.Index) {
-				if _, rerr := ix.Resolve(arg); errors.As(rerr, &ie) {
-					_, found = ss.Resolve(ix, arg)
+				if _, rerr := ix.Resolve(in); errors.As(rerr, &ie) {
+					_, found = ss.Resolve(ix, in)
 				}
 			})
 			if found != nil {

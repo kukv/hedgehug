@@ -1,6 +1,17 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestAddJSONAtTheRootHasNullParent(t *testing.T) {
+	te := newStoreEnv(t)
+	out := te.ok("add", "root", "--json")
+	if !strings.Contains(out, `"parent": null`) || !strings.Contains(out, `"store": "me"`) || !strings.Contains(out, `"workspace": {`) {
+		t.Errorf("stdout = %s", out)
+	}
+}
 
 func TestAddContextGolden(t *testing.T) {
 	te := newStoreEnv(t)

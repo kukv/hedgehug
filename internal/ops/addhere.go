@@ -52,8 +52,14 @@ func (ss *Session) AddHere(in AddHereInput) (AddHereResult, *hhctx.Confirm, *hhc
 	if err != nil {
 		return AddHereResult{}, nil, nil, err
 	}
-	st := hhctx.Load(p.DataDir, ss.warn)
-	dest, confirm, choice, err := hhctx.Resolve(set, st, ctx, ss.warn)
+	// A call that carries the answer to a question is a repeat of an earlier
+	// one, which gave the warnings (context.json, hedgehug use): say them once.
+	warn := ss.warn
+	if ctx.BranchParent != hhctx.Unasked || ctx.PickProject != "" || ctx.PickStore != "" || ctx.PickWorkspace != "" {
+		warn = nil
+	}
+	st := hhctx.Load(p.DataDir, warn)
+	dest, confirm, choice, err := hhctx.Resolve(set, st, ctx, warn)
 	if err != nil {
 		return AddHereResult{}, nil, nil, ss.contextError(set, err)
 	}
@@ -80,6 +86,8 @@ func (ss *Session) AddHere(in AddHereInput) (AddHereResult, *hhctx.Confirm, *hhc
 		if st.Recent == nil {
 			st.Recent = map[string]hhctx.Ref{}
 		}
+		// keyed by the repo ID of the repository: with no origin and several
+		// remotes, the first remote's by name, as the repo link is
 		st.Recent[dest.RepoID] = hhctx.Ref{Store: dest.Store.ULID, Project: dest.Parent.ULID}
 		if err := hhctx.Save(p.DataDir, st); err != nil {
 			// the task is added; only the memory of the project is lost

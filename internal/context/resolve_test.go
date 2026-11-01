@@ -173,7 +173,10 @@ func TestExplicitParentIsLookedUpInEveryStoreOrInTheStore(t *testing.T) {
 
 func TestExplicitProject(t *testing.T) {
 	w, set := newWorld(t)
-	d := mustDest(t, set, State{}, Input{Project: "API-1"})
+	d := mustDest(t, set, State{}, Input{Project: "API-1", Dir: gitDir(t, "", "origin", "https://github.com/o/r")})
+	if d.Recent || d.Stage != 1 {
+		t.Errorf("stage 1 decided: Recent = %v, stage %d; want Recent false", d.Recent, d.Stage)
+	}
 	if d.Parent == nil || d.Parent.ULID != w.api1.ULID || d.Store.Name != "org-a" || d.Workspace.Name != "api" {
 		t.Errorf("--project API-1 = %v", d.Parent)
 	}
