@@ -46,3 +46,12 @@ func TestViews(t *testing.T) {
 		t.Errorf("after delete = %+v", list)
 	}
 }
+
+func TestViewNameTaken(t *testing.T) {
+	ts := newTestServer(t)
+	ts.call("PUT", "/api/views/a", map[string]any{"layout": "table"}, 200, nil)
+	ts.call("PUT", "/api/views/b", map[string]any{"layout": "table"}, 200, nil)
+	if p := ts.problem("PATCH", "/api/views/a", map[string]any{"name": "b"}, 409); p.Type != "view.name_taken" {
+		t.Errorf("taken: %+v", p)
+	}
+}

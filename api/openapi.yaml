@@ -850,10 +850,8 @@ components:
         account:
           type: string
         name:
-          minLength: 1
           type: string
         prefix:
-          minLength: 1
           type: string
         remotes:
           items:
@@ -1097,7 +1095,6 @@ components:
       properties:
         name:
           description: The new name
-          minLength: 1
           type: string
       required:
         - name
@@ -1165,10 +1162,8 @@ components:
       additionalProperties: false
       properties:
         name:
-          minLength: 1
           type: string
         prefix:
-          minLength: 1
           type: string
       required:
         - name

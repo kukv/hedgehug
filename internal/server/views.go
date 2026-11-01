@@ -36,7 +36,7 @@ type viewSaveInput struct {
 type viewRenameInput struct {
 	ViewParam
 	Body struct {
-		Name string `json:"name" minLength:"1" doc:"The new name"`
+		Name string `json:"name" doc:"The new name"`
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/kukv/hedgehug/internal/doctor"
+	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/schema"
 )
@@ -33,8 +34,8 @@ type workspaceOutput struct{ Body workspaceWrite }
 type workspaceAddInput struct {
 	StoreParam
 	Body struct {
-		Name   string `json:"name" minLength:"1"`
-		Prefix string `json:"prefix" minLength:"1"`
+		Name   string `json:"name"`
+		Prefix string `json:"prefix"`
 	}
 }
 
@@ -80,8 +81,8 @@ type storesOutput struct{ Body []storeItem }
 
 type storeInitInput struct {
 	Body struct {
-		Name      string   `json:"name" minLength:"1"`
-		Prefix    string   `json:"prefix" minLength:"1"`
+		Name      string   `json:"name"`
+		Prefix    string   `json:"prefix"`
 		Workspace string   `json:"workspace,omitempty" doc:"The name of the first workspace; the name of the store without it"`
 		Remotes   []string `json:"remotes,omitempty"`
 		Account   string   `json:"account,omitempty"`
@@ -100,17 +101,15 @@ type storeInitOutput struct {
 
 type doctorOutput struct{ Body ops.DoctorReport }
 
-// workspaceOut is the output of a write to a workspace.
-func (s *Server) workspaceOut(ss *ops.Session, r ops.WorkspaceResult) (*workspaceOutput, error) {
-	_, ix, err := ss.Open()
-	if err != nil {
-		return nil, problemOf(err)
-	}
-	out := &workspaceOutput{Body: workspaceWrite{Workspace: ops.WorkspaceViewOf(ix, r.Workspace), Commit: commitPtr(r.Commit)}}
+// workspaceOut is the output of a write to a workspace. The view counts the
+// tasks from the index the operation read (refreshed after a renumbering), so
+// that a write that is committed is never answered with an error.
+func workspaceOut(r ops.WorkspaceResult) *workspaceOutput {
+	out := &workspaceOutput{Body: workspaceWrite{Workspace: ops.WorkspaceViewOf(r.Index, r.Workspace), Commit: commitPtr(r.Commit)}}
 	for _, c := range r.IDs {
 		out.Body.IDs = append(out.Body.IDs, idChange{c.Old, c.New})
 	}
-	return out, nil
+	return out
 }
 
 func (s *Server) registerAdmin() {
@@ -137,7 +136,7 @@ func (s *Server) registerAdmin() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return s.workspaceOut(ss, r)
+		return workspaceOut(r), nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -161,7 +160,7 @@ func (s *Server) registerAdmin() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return s.workspaceOut(ss, r)
+		return workspaceOut(r), nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -173,9 +172,7 @@ func (s *Server) registerAdmin() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		out := &workspaceOutput{Body: workspaceWrite{Commit: commitPtr(r.Commit)}}
-		out.Body.Workspace = ops.WorkspaceView{ULID: r.Workspace.ULID.String(), Name: r.Workspace.Name, IDPrefix: r.Workspace.IDPrefix}
-		return out, nil
+		return workspaceOut(r), nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -221,14 +218,10 @@ func (s *Server) registerAdmin() {
 		out.Body.Commit = commitPtr(plan.Commit)
 		for _, t := range plan.Changed {
 			e, ok := ix.Task(t.ULID)
-			if !ok {
-				continue
+			if b.DryRun || !ok {
+				e = index.EntryOf(t) // the task as migrated, as the CLI prints it
 			}
-			v := listView(ix, e)
-			if b.DryRun {
-				v.Status, v.Kind = t.Status, t.Kind // as the migration would make it
-			}
-			out.Body.Changed = append(out.Body.Changed, v)
+			out.Body.Changed = append(out.Body.Changed, listView(ix, e))
 		}
 		for _, u := range plan.Skipped {
 			out.Body.Skipped = append(out.Body.Skipped, u.String())
@@ -246,10 +239,8 @@ func (s *Server) registerAdmin() {
 			return nil, problemOf(err)
 		}
 		def := ""
-		if c, _, err := ss.Config(); err == nil {
-			if e, err := c.Select(""); err == nil {
-				def = e.Name
-			}
+		if _, e, err := ss.Entry(); err == nil { // the store the CLI picks without --store
+			def = e.Name
 		}
 		out := &storesOutput{Body: []storeItem{}}
 		for _, v := range list {
@@ -271,7 +262,11 @@ func (s *Server) registerAdmin() {
 		out := &storeInitOutput{}
 		out.Body.Name, out.Body.Path = r.Name, r.Path
 		out.Body.Remotes, out.Body.Pushed = append([]string{}, r.Remotes...), append([]string{}, r.Pushed...)
-		out.Body.Workspace = ops.WorkspaceView{ULID: r.Workspace.ULID.String(), Name: r.Workspace.Name, IDPrefix: r.Workspace.IDPrefix}
+		out.Body.Workspace = ops.WorkspaceView{ULID: r.Workspace.ULID.String(), Name: r.Workspace.Name, IDPrefix: r.Workspace.IDPrefix, PrefixSet: r.Workspace.PrefixSet}
+		// StoreInit leaves the time of the prefix out of its workspace; the store has it.
+		if _, ws, err := s.session(r.Name).WorkspaceList(); err == nil && len(ws) == 1 {
+			out.Body.Workspace = ws[0]
+		}
 		return out, nil
 	})
 

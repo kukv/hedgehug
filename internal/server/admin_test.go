@@ -71,12 +71,15 @@ func TestSchema(t *testing.T) {
 		Commit  *string         `json:"commit"`
 	}
 	ts.call("POST", "/api/schema/migrate", map[string]any{"target": "status", "old": old, "new": "renamed", "dry_run": true}, 200, &mig)
-	if mig.Commit != nil || len(mig.Changed) != 1 {
+	if mig.Commit != nil || len(mig.Changed) != 1 || mig.Changed[0].Status != "renamed" {
 		t.Errorf("dry run = %+v", mig)
 	}
 	ts.call("POST", "/api/schema/migrate", map[string]any{"target": "status", "old": old, "new": "renamed"}, 200, &mig)
 	if mig.Commit == nil || mig.Changed[0].Status != "renamed" {
 		t.Errorf("migrate = %+v", mig)
+	}
+	if mig.Changed[0].Status != "renamed" {
+		t.Errorf("status after migrate = %q", mig.Changed[0].Status)
 	}
 	ts.problem("POST", "/api/schema/migrate", map[string]any{"target": "value", "old": "a", "new": "b"}, 400) // value needs prop
 	ts.problem("POST", "/api/schema/migrate", map[string]any{"target": "nope", "old": "a", "new": "b"}, 400)
