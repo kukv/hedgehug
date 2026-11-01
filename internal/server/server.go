@@ -99,6 +99,7 @@ func schemaName(t reflect.Type, hint string) string {
 func (s *Server) register() {
 	s.registerHealth()
 	s.registerTaskReads()
+	s.registerTaskWrites()
 }
 
 // SetPort sets the port the Host check allows.

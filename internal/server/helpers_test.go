@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"sync"
 	"testing"
@@ -17,6 +18,7 @@ import (
 	"github.com/pb33f/libopenapi"
 	validator "github.com/pb33f/libopenapi-validator"
 
+	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/ops"
 )
 
@@ -168,7 +170,7 @@ func (ts *testServer) call(method, path string, body any, want int, out any) *ht
 }
 
 // problem calls method path, wants status, and returns the problem.
-func (ts *testServer) problem(method, path string, body any, want int) Problem { //nolint:unparam // the tests of later tasks send other methods
+func (ts *testServer) problem(method, path string, body any, want int) Problem {
 	ts.t.Helper()
 	var p Problem
 	resp := ts.call(method, path, body, want, &p) //nolint:bodyclose // raw reads the body into memory
@@ -186,3 +188,14 @@ func readAll(t *testing.T, resp *http.Response) []byte {
 	}
 	return b
 }
+
+func mustULID(t *testing.T, s string) model.ULID {
+	t.Helper()
+	u, err := model.ParseULID(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u
+}
+
+func slicesEqual[T comparable](a, b []T) bool { return slices.Equal(a, b) }

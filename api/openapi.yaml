@@ -1,5 +1,29 @@
 components:
   schemas:
+    AffectedWrite:
+      additionalProperties: false
+      properties:
+        commit:
+          type:
+            - string
+            - "null"
+        tasks:
+          description: The task and the tasks under it, as they are now
+          items:
+            $ref: "#/components/schemas/TaskView"
+          type:
+            - array
+            - "null"
+        ulids:
+          description: The tasks purged
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - commit
+      type: object
     CommentView:
       additionalProperties: false
       properties:
@@ -30,6 +54,42 @@ components:
       required:
         - done
         - total
+      type: object
+    CreateInputBody:
+      additionalProperties: false
+      properties:
+        assignees:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        kind:
+          description: project for hh add --kind project
+          type: string
+        labels:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        parent:
+          description: "The parent: an ID or a ULID"
+          type: string
+        props:
+          additionalProperties: {}
+          description: Property name to value
+          type: object
+        status:
+          type: string
+        title:
+          minLength: 1
+          type: string
+        workspace:
+          description: The workspace, by name or prefix
+          type: string
+      required:
+        - title
       type: object
     ErrorDetail:
       additionalProperties: false
@@ -158,6 +218,67 @@ components:
       required:
         - name
         - email
+      type: object
+    MoveInputBody:
+      additionalProperties: false
+      properties:
+        after:
+          description: Put it after this sibling
+          type: string
+        before:
+          description: Put it before this sibling
+          type: string
+        parent:
+          description: "The new parent: an ID or a ULID"
+          type: string
+        root:
+          description: Move to the top, with no parent
+          type: boolean
+        workspace:
+          description: Move to another workspace
+          type: string
+      type: object
+    PatchInputBody:
+      additionalProperties: false
+      properties:
+        assignees:
+          description: Replaces the assignees
+          items:
+            type: string
+          type: array
+        blocked_by:
+          description: "Replaces the blockers: IDs or ULIDs"
+          items:
+            type: string
+          type: array
+        body:
+          description: The body in Markdown
+          type: string
+        kind:
+          type: string
+        labels:
+          description: Replaces the labels
+          items:
+            type: string
+          type: array
+        props:
+          additionalProperties: {}
+          description: Property name to value; null clears it, a list replaces a multiple value
+          type: object
+        repos:
+          description: Replaces the repos
+          items:
+            type: string
+          type: array
+        status:
+          type: string
+        title:
+          type: string
+        watchers:
+          description: Replaces the watchers
+          items:
+            type: string
+          type: array
       type: object
     Problem:
       additionalProperties: false
@@ -449,6 +570,23 @@ components:
         - deleted_at
         - problems
       type: object
+    TaskWrite:
+      additionalProperties: false
+      properties:
+        commit:
+          description: The commit made; null when nothing changed
+          type:
+            - string
+            - "null"
+        note:
+          description: What restore at a commit has to say, as hh restore --at prints it
+          type: string
+        task:
+          $ref: "#/components/schemas/TaskView"
+      required:
+        - task
+        - commit
+      type: object
     WorkspaceRef:
       additionalProperties: false
       properties:
@@ -532,7 +670,86 @@ paths:
       summary: List the tasks a query finds
       tags:
         - tasks
+    post:
+      operationId: create-task
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskWrite"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Add a task, as hh add
+      tags:
+        - tasks
   /api/tasks/{id}:
+    delete:
+      operationId: delete-task
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+        - description: Remove the files for good; the task must be deleted already
+          explode: false
+          in: query
+          name: purge
+          schema:
+            description: Remove the files for good; the task must be deleted already
+            type: boolean
+        - description: "With purge: the ULIDs the user agreed to purge, comma-separated, as purge.unconfirmed listed them"
+          explode: false
+          in: query
+          name: confirm
+          schema:
+            description: "With purge: the ULIDs the user agreed to purge, comma-separated, as purge.unconfirmed listed them"
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AffectedWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Delete a task and the tasks under it (hh rm), or purge them (hh purge)
+      tags:
+        - tasks
     get:
       operationId: get-task
       parameters:
@@ -564,6 +781,45 @@ paths:
                 $ref: "#/components/schemas/Problem"
           description: Error
       summary: Show a task, as hh show
+      tags:
+        - tasks
+    patch:
+      operationId: update-task
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Change the fields sent, in one commit, as hh set and hh edit
       tags:
         - tasks
   /api/tasks/{id}/history:
@@ -611,6 +867,121 @@ paths:
                 $ref: "#/components/schemas/Problem"
           description: Error
       summary: List the commits of a task, newest first
+      tags:
+        - tasks
+  /api/tasks/{id}/history/{commit}/restore:
+    post:
+      operationId: restore-task-at
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+        - description: The commit to bring the task back to
+          in: path
+          name: commit
+          required: true
+          schema:
+            description: The commit to bring the task back to
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Bring a task back to how it was at a commit, as hh restore --at
+      tags:
+        - tasks
+  /api/tasks/{id}/move:
+    post:
+      operationId: move-task
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Move a task, as hh mv
+      tags:
+        - tasks
+  /api/tasks/{id}/restore:
+    post:
+      operationId: restore-task
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AffectedWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Restore a deleted task and the tasks under it, as hh restore
       tags:
         - tasks
 security:
