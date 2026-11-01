@@ -44,7 +44,9 @@ func (ss *Session) Undo() (UndoResult, error) {
 			if moved := ss.movedFor(ix, fe.ulid.String()); moved != nil {
 				return moved
 			}
-			return err
+			// the forward is there but the index cannot name it (a broken one)
+			return newErr(KindNotFound, "task.moved", fmt.Errorf("%s moved to another store", fe.ulid),
+				"input", fe.ulid.String(), "store", "", "store_ulid", "", "id", "")
 		}
 		if err == nil && !res.Found {
 			return newErr(KindConflict, "undo.nothing", errors.New("nothing to undo"))

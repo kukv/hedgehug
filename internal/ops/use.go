@@ -117,7 +117,8 @@ func (ss *Session) useResolve(set *mount.Set, arg string) (mount.Hit, error) {
 		}
 	}
 	hit, err := set.Resolve(scoped)
-	if errors.Is(err, store.ErrNotFound) {
+	var moved *mount.MovedError
+	if errors.Is(err, store.ErrNotFound) && !errors.As(err, &moved) {
 		// say what the user typed, not the store-qualified form made here
 		return mount.Hit{}, newErr(KindNotFound, "task.not_found", fmt.Errorf("%q: %w", arg, store.ErrNotFound), "input", arg)
 	}
@@ -126,6 +127,9 @@ func (ss *Session) useResolve(set *mount.Set, arg string) (mount.Hit, error) {
 		var me *mount.AmbiguousError
 		if errors.As(err, &me) {
 			me.Input = arg
+		}
+		if moved != nil {
+			moved.Input = arg
 		}
 		return mount.Hit{}, ss.mountResolveError(set, arg, err)
 	}

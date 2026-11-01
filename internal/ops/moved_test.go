@@ -2,6 +2,7 @@ package ops
 
 import (
 	"errors"
+	"maps"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
@@ -52,8 +53,17 @@ func mustIndex(t *testing.T, ts *testSession, name string) *index.Index {
 	return ix
 }
 
-func wantMoved(t *testing.T, err error, args map[string]any) {
+func wantMoved(t *testing.T, ts *testSession, err error, args map[string]any) {
 	t.Helper()
+	bs, serr := ts.ForStore("org-b").OpenStore()
+	if serr != nil {
+		t.Fatal(serr)
+	}
+	args = maps.Clone(args)
+	if args == nil {
+		args = map[string]any{}
+	}
+	args["store"], args["id"], args["store_ulid"] = "org-b", "WEB-2", bs.Meta().ULID.String()
 	var oe *Error
 	if !errors.As(err, &oe) || oe.Kind != KindNotFound || oe.Code != "task.moved" {
 		t.Fatalf("err = %v; want KindNotFound task.moved", err)
@@ -72,17 +82,17 @@ func TestShowAMovedTaskSaysWhereItWent(t *testing.T) {
 	ts := newTwoStoreSession(t)
 	ulid := movedFixture(t, ts)
 	_, err := ts.Show("org-a:API-1")
-	wantMoved(t, err, map[string]any{"input": "API-1", "store": "org-b", "id": "WEB-2"})
+	wantMoved(t, ts, err, map[string]any{"input": "API-1", "store": "org-b", "id": "WEB-2"})
 	// the ULID too; Args carry the ULID of the store it went to
 	_, err = ts.Show("org-a:" + ulid.String())
-	wantMoved(t, err, nil)
+	wantMoved(t, ts, err, nil)
 	// without --store the task is found where it is now
 	if res, err := ts.Show("API-1"); err != nil || res.Entry.ID != "WEB-2" {
 		t.Errorf("Show(API-1) = %+v, %v; want org-b WEB-2", res.Entry, err)
 	}
 	// a session of one store sees the forward too
 	_, err = ts.ForStore("org-a").Show("API-1")
-	wantMoved(t, err, nil)
+	wantMoved(t, ts, err, nil)
 }
 
 func TestShowAMovedTaskOfAStoreNotMounted(t *testing.T) {
@@ -117,7 +127,7 @@ func TestDepOnAMovedTask(t *testing.T) {
 	}
 	movedFixture(t, ts)
 	_, err := ts.ForStore("org-a").Dep("API-2", "API-1", true)
-	wantMoved(t, err, map[string]any{"store": "org-b"})
+	wantMoved(t, ts, err, map[string]any{"store": "org-b"})
 }
 
 func TestUndoRefusesMovesAndRewrites(t *testing.T) {
@@ -165,7 +175,7 @@ func TestUndoOfATaskThatMovedSince(t *testing.T) {
 	movedFixture(t, ts)
 	before := headOf(t, s)
 	_, err = alice.Undo()
-	wantMoved(t, err, map[string]any{"store": "org-b", "id": "WEB-2"})
+	wantMoved(t, ts, err, map[string]any{"store": "org-b", "id": "WEB-2"})
 	if after := headOf(t, s); after != before {
 		t.Errorf("HEAD moved from %s to %s", before, after)
 	}
@@ -178,4 +188,12 @@ func headOf(t *testing.T, s *store.Store) string {
 		t.Fatal(err)
 	}
 	return h.String()
+}
+
+// hh use names where a project went, as the other commands do.
+func TestUseAMovedProject(t *testing.T) {
+	ts := newTwoStoreSession(t)
+	movedFixture(t, ts)
+	_, err := ts.ForStore("org-a").Use("API-1")
+	wantMoved(t, ts, err, map[string]any{"input": "API-1"})
 }
