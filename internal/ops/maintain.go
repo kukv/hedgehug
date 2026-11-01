@@ -211,9 +211,15 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 		}
 		entries = []config.StoreEntry{e}
 	}
+	// The reports tell of a store that does not open; the mount need not.
+	for _, e := range entries {
+		if _, err := ss.openStoreAt(e.Path); err != nil {
+			ss.markOpenWarned(e.Name)
+		}
+	}
 	out := make([]DoctorReport, 0, len(entries))
 	for _, e := range entries {
-		r, err := ss.doctorStore(c, e, fix)
+		r, err := ss.doctorStore(c, e, fix, len(entries) == 1)
 		if err != nil {
 			return nil, err
 		}
@@ -222,8 +228,10 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 	return out, nil
 }
 
-// doctorStore is Doctor for the store e.
-func (ss *Session) doctorStore(c *config.Config, e config.StoreEntry, fix bool) (DoctorReport, error) {
+// doctorStore is Doctor for the store e. A store that does not open and has
+// no finding is the error when it is the only one asked for, else a finding
+// of its own, so that the reports of the others stand.
+func (ss *Session) doctorStore(c *config.Config, e config.StoreEntry, fix, only bool) (DoctorReport, error) {
 	r := DoctorReport{Store: e.Name}
 	// A store that does not open is told of by the findings, which say why;
 	// it is not repaired, and its references are not looked at.
@@ -246,7 +254,10 @@ func (ss *Session) doctorStore(c *config.Config, e config.StoreEntry, fix bool) 
 		return DoctorReport{}, err
 	}
 	if openErr != nil && len(fs) == 0 {
-		return DoctorReport{}, openErr
+		if only {
+			return DoctorReport{}, openErr
+		}
+		fs = []doctor.Finding{{Check: "git", Where: e.Path, Msg: "cannot open the store: " + openErr.Error()}}
 	}
 	if openErr == nil {
 		fs = append(fs, ss.crossStoreFindings(e.Name)...)

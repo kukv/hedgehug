@@ -164,6 +164,58 @@ func TestDoctorFixOfAReadOnlyStoreWarnsInsteadOfFailing(t *testing.T) {
 	}
 }
 
+func TestDoctorKeepsTheOtherStoresWhenOneDoesNotOpen(t *testing.T) {
+	ts := newTwoStoreSession(t)
+	refTo(t, ts, "parent: <target>")
+	c, _, err := ts.Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AddStore("gone", filepath.Join(t.TempDir(), "gone"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	ts.warns = nil
+	rs, err := ts.Doctor(false)
+	if err != nil || len(rs) != 3 || rs[2].Store != "gone" || len(rs[2].Findings) == 0 {
+		t.Fatalf("Doctor = %+v, %v; want three reports, the third with findings about gone", rs, err)
+	}
+	if !slices.ContainsFunc(rs[0].Findings, func(f doctor.Finding) bool { return f.Check == "cross_store_ref" }) {
+		t.Errorf("org-a = %+v; want its cross-store reference still found", rs[0])
+	}
+	for _, w := range ts.warns {
+		if strings.Contains(w, "cannot open gone") {
+			t.Errorf("warning %q repeats what the report of gone says", w)
+		}
+	}
+	// named alone, it is still the error of today or its findings
+	if one, err := ts.ForStore("gone").Doctor(false); err == nil && (len(one) != 1 || len(one[0].Findings) == 0) {
+		t.Errorf("Doctor of gone = %+v; want the findings or the error", one)
+	}
+}
+
+func TestCrossStoreCheckFailureIsAWarning(t *testing.T) {
+	ts := newTwoStoreSession(t)
+	// a session that has not mounted yet, and a config.yaml it cannot read
+	ts.env["HEDGEHUG_HOME"] = t.TempDir()
+	if err := os.WriteFile(filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml"), []byte("stores: [\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ts.warns = nil
+	if fs := ts.crossStoreFindings("org-a"); len(fs) != 0 {
+		t.Errorf("findings = %+v; want none", fs)
+	}
+	ws := ts.crossStoreWarnings("org-a")
+	if len(ts.warns) != 1 || !strings.HasPrefix(ts.warns[0], "could not check cross-store references: ") {
+		t.Errorf("doctor warned %q; want the could-not-check warning", ts.warns)
+	}
+	if len(ws) != 1 || !strings.HasPrefix(ws[0], "could not check cross-store references: ") {
+		t.Errorf("sync warnings = %q; want the could-not-check warning", ws)
+	}
+}
+
 func TestSyncWarnsOfCrossStoreRefs(t *testing.T) {
 	ts := newTwoStoreSession(t)
 	refTo(t, ts, "blocked_by: [<target>]")

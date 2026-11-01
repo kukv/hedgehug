@@ -149,6 +149,18 @@ func (ss *Session) warnSkipped(sk mount.Skipped) {
 	ss.warn(openError(sk.Name, sk.Err).Error())
 }
 
+// markOpenWarned makes the mount keep quiet about the store name that does
+// not open, for a caller that tells of it in its own way.
+func (ss *Session) markOpenWarned(name string) {
+	mc := ss.mountCache()
+	mc.warnedMu.Lock()
+	defer mc.warnedMu.Unlock()
+	if mc.warned == nil {
+		mc.warned = map[string]bool{}
+	}
+	mc.warned[name] = true
+}
+
 // dropMount forgets the stores mounted, for the next call to open them
 // again. A write through a handle of its own (a sync) adds objects that a
 // store opened before it does not see.
