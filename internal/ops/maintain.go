@@ -264,6 +264,8 @@ func (ss *Session) doctorStore(c *config.Config, e config.StoreEntry, fix, only 
 	}
 	if openErr == nil {
 		fs = append(fs, ss.crossStoreFindings(e.Name)...)
+		fs = append(fs, ss.duplicateFindings(e.Name)...)
+		fs = append(fs, ss.forwardTargetFindings(e.Name)...)
 	}
 	r.Findings = fs
 	return r, nil
