@@ -352,7 +352,7 @@ REST だけを作る。フェーズ3で使うのは次の表のもの。
   - origin への push が `ErrPushDenied` のときは、`access.json` に `push_denied` を書いてから `org-a is read-only (the remote denied the push)` のエラーにする。ミラーへの push の拒否は今のミラーの警告にする。
   - 外す規則は「判定の元が書けると示したら外す」: GitHub は `push` が true、ローカルは一時ファイルを作れた、push の拒否は明示的な同期で push が通った。
 - 状態は `.hedgehug/local/access.json` に `{"read_only": bool, "reason": "github_permission" | "not_writable" | "push_denied", "checked": 時刻}` で持つ。ないときは書ける扱い。
-- 読み取り専用の Store に書き込むコマンドは、Store を開いた時点で拒否する（終了コード1。`store.read_only`）。書き込みの操作は Store を `Session.OpenForWrite` で開き、そこで拒否する。ID の解決や書き込み前の検査より先に拒否が出る。入口を通らない書き込みを取りこぼさないよう、`Session.UpdateCommit` と doctor の修正（`fixStore`）の最初にも同じ検査を置く。文面は `org-a は読み取り専用です（GitHub の権限が read です）` のように理由ごとに変える。対象は、タスク・コメント・ワークスペース・スキーマ・undo・restore・purge・mv など、コミットを作るすべてのコマンド。
+- 読み取り専用の Store に書き込むコマンドは、Store を開いた時点で拒否する（終了コード1。`store.read_only`）。書き込みの操作は Store を `Session.OpenForWrite` で開き、そこで拒否する。`--store` か Store 名付きの ID（`org-a:API-12`）で Store を指したときは、ID の解決や書き込み前の検査より先に拒否が出る。Store を指さないときは、全 Store から ID を引いて Store が決まった直後（ほかの検査より前）に拒否する（ID を引くまでどの Store か分からないため。利用者の決定。2026-11-01）。入口を通らない書き込みを取りこぼさないよう、`Session.UpdateCommit` と doctor の修正（`fixStore`）の最初にも同じ検査を置く。文面は `org-a は読み取り専用です（GitHub の権限が read です）` のように理由ごとに変える。対象は、タスク・コメント・ワークスペース・スキーマ・undo・restore・purge・mv など、コミットを作るすべてのコマンド。
 - バックグラウンドの同期と `hh sync` は、読み取り専用の Store では fetch とマージだけをする。ローカルにコミットがないのでマージは早送りになる。早送りにならないとき（読み取り専用になる前の未 push のコミットがある）は、マージと修復をしてコミットを残し、push はせず、`hh sync` の出力と `sync --status` に「未 push のコミットが N 件ありますが、読み取り専用のため push できません」と出す（`sync.Result.Unpushable`）。HEAD にあって origin にないコミットの数え方は `sync.Unpushed` の1つにし、`ops.Unpushed` はそれを呼ぶ。
 - 権限が戻ったと分かったら（API の `push`、または書けるようになった）、自動で外す。
 
@@ -393,7 +393,7 @@ REST だけを作る。フェーズ3で使うのは次の表のもの。
 - Store 名がなければ、全 Store の index で `Resolve` する。
   - 1つの Store で当たればそれ。
   - 0なら今と同じ「見つかりません」のエラー。転送ファイルにだけ当たったときは「移動の案内」（Store 間の移動の節）。
-  - 2つ以上の Store で当たったら、`AmbiguousError` と同じ形で `org-a:API-12`、`org-b:API-12` を並べたエラー（終了コード2）。
+  - 2つ以上の Store で当たったら、`AmbiguousError` と同じ形で `org-a:API-12`、`org-b:API-12` を並べたエラー（終了コード2）。`KindAmbiguous` は終了コード2（使い方の誤り）にし、1つの Store の中で2つ以上に当たったとき（`task.ambiguous`、`workspace.ambiguous`）も2にそろえる（利用者の決定。2026-11-01）。
 - 2つ目の ID（`dep --blocked-by`、`mv --parent`/`--before`/`--after`、`set parent=`、`task_ref` のプロパティ、`add --parent`）は、1つ目のタスクの Store（`add` では入れ先の Store）の中だけで引く。その Store で当たらず、別の Store で当たったら、「org-b の WEB-4 は参照できません（参照は Store の中に閉じます）」で拒否する（終了コード1）。`set blocked_by=`、`edit` で書いた参照も、書き込み時の検査で同じ文面にする。
 
 ### 表示
@@ -401,9 +401,10 @@ REST だけを作る。フェーズ3で使うのは次の表のもの。
 - `ls`: マウント中の Store が2つ以上なら、先頭に `STORE` の列を置く。1つなら今のまま。
 - 並び:
   - `sort:` がなければ、config の Store の順、その中は今の順。
-  - `sort:` があれば、Store をまたいで並べる。値の比べ方は今と同じ。ただし `sort:status` は、カテゴリの順（todo、doing、done、canceled）で比べ、同じカテゴリの中はそれぞれのスキーマでのステータスの位置、それも同じなら Store の順で比べる。同じ値どうしは Store の順、その中は今の順。
+  - `sort:` があれば、Store をまたいで並べる。値の比べ方は今と同じ。ただし `sort:status` は、カテゴリの順（todo、doing、done、canceled）で比べ、同じカテゴリの中はそれぞれのスキーマでのステータスの位置、それも同じなら Store の順で比べる。`sort:kind` は、親設計の「Store をまたぐ統合ビューは役割で揃える」に従い、役割の順（container、work）で比べ、同じ役割の中はそれぞれのスキーマでの種類の位置、それも同じなら Store の順で比べる。enum・multi_enum のプロパティは、それぞれのスキーマでの値の位置で比べる。同じ値どうしは Store の順、その中は今の順。
   - `group:` は、グループの値（表示名）が同じものを Store をまたいで1つのグループにする。グループの順は、最初に現れた Store での順。
 - `ls --tree`: Store が2つ以上なら、Store ごとに見出し（Store 名）を置き、その下に今のツリーを出す。
+- `log`（ID なし）: 全 Store のコミットを時刻の新しい順に混ぜる。Store が2つ以上なら、各行の先頭に Store 名を出す。`--limit` は全体の件数（利用者の決定。2026-11-01）。`--json` の各コミットに `store` を足す。
 - `show`: `id` と `ulid` の行の後に `store` の行を足す（Store が1つでも出す）。
 - `--json`: タスクの出力に `store`（Store 名）を常に足す。`--ulids-only` は変えない。
 - Store 名付きの表示: マウント中の2つ以上の Store のワークスペースが同じ接頭辞（大文字小文字を区別しない）を持つ間は、その接頭辞の ID を、人が見る出力（一覧、`show`、確認メッセージ、エラー、inbox、`log` の件名の置き換え）で `org-a:API-12` と出す。`--json` の `id` は変えない（`store` があるので）。
@@ -585,7 +586,7 @@ moved_to: 01JC0STORE...      # 移動先の Store の ULID（store.yaml の ulid
 | `unexpected_force_push`: origin が手元で追っている origin の子孫でなく、記録もない | エラー | 3c |
 | `rewrite_leftover`: `.rewrite-new`・`.before-rewrite-*` が残っている | 警告（`--fix` で入れ替えをやり直す） | 3c |
 
-`doctor` は全 Store を見る（「コマンドごとの対象」）。Store をまたぐ検査は、マウント中の Store の index を使う。
+`doctor` は全 Store を見る（「コマンドごとの対象」）。Store をまたぐ検査は、マウント中の Store の index を使う。Store が2つ以上なら、Store ごとに見出し（Store 名）を置き、その下にその Store の修正と検査結果を出す。`--json` は Store ごとの配列 `[{store, repaired, findings}]`（Store が1つでも配列）。`--fix` も全 Store を直し、読み取り専用の Store は直さずに警告を出す（利用者の決定。2026-11-01）。
 
 ## エラー
 
