@@ -47,3 +47,35 @@ func TestBoundedLogReopenClosesTheNullDevice(t *testing.T) {
 		_ = b.own.Close()
 	}
 }
+
+// A run that ends while the log is released closes the null device in Close.
+func TestBoundedLogCloseClosesTheNullDevice(t *testing.T) {
+	saved, err := unix.Dup(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = unix.Dup2(saved, 2)
+		_ = unix.Close(saved)
+	})
+	b := &BoundedLog{w: os.Stderr, path: filepath.Join(t.TempDir(), "sync.log"), own: os.Stderr}
+	if err := b.Release(); err != nil {
+		t.Fatal(err)
+	}
+	nul := b.nul
+	if nul == nil {
+		t.Fatal("Release opened no null device")
+	}
+	if err := b.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if b.nul != nil {
+		t.Error("the null device is still held")
+	}
+	if _, err := nul.Stat(); err == nil {
+		t.Error("the handle of the null device is still open")
+	}
+	if err := b.Close(); err != nil {
+		t.Errorf("a second Close = %v", err)
+	}
+}

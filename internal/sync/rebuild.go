@@ -21,6 +21,7 @@ import (
 
 const (
 	newSuffix    = ".rewrite-new"
+	staleMarker  = ".rebuild-stale" // in the rebuild: the old store is the one to keep
 	beforePrefix = ".before-rewrite-"
 )
 
@@ -489,6 +490,11 @@ func Swap(dir string, b *Rebuild) error {
 	// commit would go with the old directory. If so, put it back; the next
 	// sync makes the rebuild again.
 	if err := checkUnchanged(before, b); err != nil {
+		if errors.Is(err, ErrRebuildStale) {
+			// If the old store cannot be put back, FinishLeftover must not
+			// put the rebuild in its place: it would drop that commit.
+			_ = os.WriteFile(filepath.Join(b.Dir, staleMarker), []byte("the old store has a commit this rebuild lacks\n"), 0o600)
+		}
 		if rerr := os.Rename(before, dir); rerr != nil {
 			return errors.Join(err, rerr)
 		}
@@ -601,7 +607,20 @@ func (e *LeftoverError) Error() string { return LeftoverMessage(e.Name) }
 // old one left, it is put back. Then what remains beside the store goes.
 func FinishLeftover(dir string, l Leftover) error {
 	if _, err := os.Lstat(dir); errors.Is(err, fs.ErrNotExist) {
+		stale := false
+		if l.New != "" {
+			_, merr := os.Lstat(filepath.Join(l.New, staleMarker))
+			stale = merr == nil
+		}
 		switch {
+		case stale && len(l.Before) > 0:
+			// The rebuild was found stale and the old store could not be put
+			// back: it is put back now, and the rebuild goes with the rest.
+			last := l.Before[len(l.Before)-1]
+			if err := os.Rename(last, dir); err != nil {
+				return fmt.Errorf("finish the rebuild: %w", err)
+			}
+			l.Before = l.Before[:len(l.Before)-1]
 		case l.New != "":
 			if err := os.Rename(l.New, dir); err != nil {
 				return fmt.Errorf("finish the rebuild: %w", err)

@@ -236,6 +236,19 @@ func (b *BoundedLog) Release() error {
 	return nil
 }
 
+// Close lets go of the null device a Release left the standard error on,
+// at the end of the run when no Reopen came. The log is not used after.
+func (b *BoundedLog) Close() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.nul == nil {
+		return nil
+	}
+	err := b.nul.Close()
+	b.nul = nil
+	return err
+}
+
 // Reopen opens sync.log again, at the same path, which may be in another
 // directory now, and writes what was kept. The standard error, if it was
 // the file, points at it again.

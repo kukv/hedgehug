@@ -100,7 +100,7 @@ func (ss *Session) Sync(all, explicit bool) ([]SyncReport, error) {
 		}
 		out = append(out, r)
 	}
-	ss.addDuplicateWarnings(out)
+	ss.AddDuplicateWarnings(out)
 	return out, errors.Join(errs...)
 }
 
@@ -322,6 +322,7 @@ func (ss *Session) SyncBackground(log io.Writer) error {
 		return backgroundFailed(ss, log, e.Name, err)
 	}
 	bounded := sync.BoundLog(s, log)
+	defer func() { _ = bounded.Close() }() // after the last line of the log
 	log = bounded
 	opt, err := ss.SyncOptions(c, e)
 	if err == nil {

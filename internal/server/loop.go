@@ -32,16 +32,17 @@ type Loop struct {
 	last    map[string]time.Time // store → when its last sync started
 	next    map[string]time.Time // store → when the next fetch is due
 	running map[string]bool
-	active  int           // syncs that run
-	idle    chan struct{} // closed when active falls to 0
-	cfgErr  string        // the config.yaml failure last logged; "" while it reads
+	active  int             // syncs that run
+	idle    chan struct{}   // closed when active falls to 0
+	cfgErr  string          // the config.yaml failure last logged; "" while it reads
+	told    map[string]bool // warnings of syncs already logged
 }
 
 func newLoop(s *Server, clock Clock, visible func() bool) *Loop {
 	l := &Loop{
 		s: s, clock: clock, visible: visible, onState: func(string) {},
 		wake: make(chan struct{}, 1),
-		last: map[string]time.Time{}, next: map[string]time.Time{}, running: map[string]bool{},
+		last: map[string]time.Time{}, next: map[string]time.Time{}, running: map[string]bool{}, told: map[string]bool{},
 	}
 	l.syncFn = l.syncStore
 	return l
@@ -244,6 +245,26 @@ func (l *Loop) syncStore(name string) {
 	}
 	if err != nil {
 		l.s.logf("sync %s: %s", name, detailOf(err))
+	}
+	// The duplicates across stores are told as a sync of hh tells them:
+	// each once, not at every sync.
+	reps := []ops.SyncReport{rep}
+	ss.AddDuplicateWarnings(reps)
+	l.logWarnings(name, reps[0].Warnings)
+}
+
+// logWarnings logs the warnings of a sync of the store name that were not
+// logged before.
+func (l *Loop) logWarnings(name string, warnings []string) {
+	for _, w := range warnings {
+		key := name + "\x00" + w
+		l.mu.Lock()
+		seen := l.told[key]
+		l.told[key] = true
+		l.mu.Unlock()
+		if !seen {
+			l.s.logf("sync %s: warning: %s", name, w)
+		}
 	}
 }
 

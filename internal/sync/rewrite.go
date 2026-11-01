@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
@@ -174,7 +176,75 @@ func staleMirror(r *gitrepo.Repo, head, mirror plumbing.Hash) (mirrorState, erro
 			state = mirrorDiverged
 		}
 	}
+	if state == mirrorCurrent {
+		// A mirror that branched off before a before and has commits of its
+		// own can still hold what a rewrite purged; merging it brings that
+		// back. One that does not touch a purged file is merged as usual.
+		purged, err := mirrorHoldsPurged(r, head, mirror, recs)
+		if err != nil {
+			return mirrorCurrent, err
+		}
+		if purged {
+			return mirrorDiverged, nil
+		}
+	}
 	return state, nil
+}
+
+// mirrorHoldsPurged tells whether a commit that only the mirror has (not in
+// HEAD's history) writes a file of a task a rewrite of recs purged: the task
+// file, or a comment or worklog of it.
+func mirrorHoldsPurged(r *gitrepo.Repo, head, mirror plumbing.Hash, recs []model.Rewrite) (bool, error) {
+	var ulids []string
+	for _, rec := range recs {
+		for _, u := range rec.ULIDs {
+			ulids = append(ulids, u.String())
+		}
+	}
+	if len(ulids) == 0 {
+		return false, nil
+	}
+	purged := func(p string) bool {
+		return slices.ContainsFunc(ulids, func(u string) bool { return strings.Contains(p, u) })
+	}
+	own, err := r.Between(mirror, head)
+	if err != nil {
+		if errors.Is(err, plumbing.ErrObjectNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	for _, c := range own {
+		to, err := r.TreeOf(c.Hash)
+		if err != nil {
+			return false, err
+		}
+		if len(c.Parents) == 0 {
+			for p, err := range r.Files(to, "") {
+				if err != nil {
+					return false, err
+				}
+				if purged(p) {
+					return true, nil
+				}
+			}
+			continue
+		}
+		from, err := r.TreeOf(c.Parents[0])
+		if err != nil {
+			return false, err
+		}
+		changes, err := r.DiffTrees(from, to, "")
+		if err != nil {
+			return false, err
+		}
+		for _, ch := range changes {
+			if !ch.Deleted && purged(ch.Path) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 // ReadApplied reads rewrites-applied.json: the at of the rewrites taken in.

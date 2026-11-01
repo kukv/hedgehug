@@ -82,12 +82,12 @@ func duplicateFindings(name string, ds []duplicate) []doctor.Finding {
 	return out
 }
 
-// addDuplicateWarnings puts the warning of each duplicate, "01JBZ… is in org-b
+// AddDuplicateWarnings puts the warning of each duplicate, "01JBZ… is in org-b
 // (WEB-45) and org-c (OPS-3); …", in the report of the first store synced
 // that has the task: once for the duplicate, not once for each store it is
 // in. The duplicates are found once for all the reports. A store that has no
 // remote, or whose sync failed, is not told of here.
-func (ss *Session) addDuplicateWarnings(reports []SyncReport) {
+func (ss *Session) AddDuplicateWarnings(reports []SyncReport) {
 	var told []int
 	for i, r := range reports {
 		if !r.NoRemote && r.Err == nil {
