@@ -237,8 +237,9 @@ func initEnv(dir, fakeghURL string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(stdout, "Created %s with users %s.\nStart the fake GitHub with: go run ./cmd/fakegh serve --addr %s --seed %s\nUse one with: eval \"$(go run ./tools/devenv env %s --dir %s)\"\nThen add a task from the code repository with: cd ~/hh-dev/users/alice/src/web && hedgehug add \"...\"\n",
-		dir, strings.Join(users, " and "), fu.Host, shellQuote(seed), users[0], shellQuote(dir))
+	_, err = fmt.Fprintf(stdout, "Created %s with users %s.\nStart the fake GitHub with: go run ./cmd/fakegh serve --addr %s --seed %s\nUse one with: eval \"$(go run ./tools/devenv env %s --dir %s)\"\nThen add a task from the code repository with: cd %s && hedgehug add \"...\"\n",
+		dir, strings.Join(users, " and "), fu.Host, shellQuote(seed), users[0], shellQuote(dir),
+		shellQuote(filepath.Join(dir, "users", "alice", "src", "web")))
 	return err
 }
 
@@ -327,30 +328,20 @@ func initUser(dir, u, fakeghURL string) error {
 	return nil
 }
 
-// rewriteTo turns https://github.com/ into the remotes directory of dir, as
-// url_rewrites does.
-func rewriteTo(dir string) func(string) string {
-	remotes := filepath.ToSlash(filepath.Join(dir, "remotes")) + "/"
-	return func(u string) string {
-		if rest, ok := strings.CutPrefix(u, "https://github.com/"); ok {
-			return remotes + rest
-		}
-		return u
-	}
-}
-
-// seedWeb puts one commit, a README, in the bare repository of web.
+// seedWeb puts one commit, a README, in the bare repository of web. It works
+// in a directory under dir that it removes, and pushes to the bare repository
+// by its path, so that no rewrite is needed before config.yaml exists.
 func seedWeb(dir string) error {
-	work, err := os.MkdirTemp("", "devenv-web-")
+	work, err := os.MkdirTemp(dir, ".web-seed-")
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.RemoveAll(work) }()
+	defer func() { _ = os.RemoveAll(work) }() //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 	r, err := gitrepo.Init(work)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(work, "README.md"), []byte("# web\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(work, "README.md"), []byte("# web\n"), 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return err
 	}
 	if _, err := r.Commit(gitrepo.Commit{
@@ -361,10 +352,9 @@ func seedWeb(dir string) error {
 	}); err != nil {
 		return err
 	}
-	if err := r.SetRemotes([]string{webURL}); err != nil {
+	if err := r.SetRemotes([]string{filepath.Join(dir, webRemote)}); err != nil {
 		return err
 	}
-	r.SetConn(gitrepo.Conn{Rewrite: rewriteTo(dir)})
 	return r.Push("origin")
 }
 
@@ -372,9 +362,13 @@ func seedWeb(dir string) error {
 // web in its repos, pushes it so that bob's clone of org-a has it, and clones
 // web into src/web. The clone keeps origin at the URL on GitHub.
 func addWebProject(home string, p config.Paths, getenv func(string) string) error {
-	ss := &ops.Session{Getenv: getenv, Now: time.Now, StoreName: "org-a", Warn: func(string) {}}
+	var warnings []string
+	ss := &ops.Session{Getenv: getenv, Now: time.Now, StoreName: "org-a", Warn: func(m string) { warnings = append(warnings, m) }}
 	if _, err := ss.Add(ops.AddInput{Title: "Web release", Kind: "project", Repos: []string{webRepoID}}); err != nil {
 		return fmt.Errorf("add project: %w", err)
+	}
+	if len(warnings) > 0 {
+		return fmt.Errorf("add project: warning: %s", strings.Join(warnings, "; "))
 	}
 	c, err := config.Load(p)
 	if err != nil {

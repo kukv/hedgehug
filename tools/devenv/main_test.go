@@ -313,7 +313,7 @@ func TestInitSaysHowToAddFromWeb(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("init = %d, stderr %q", code, stderr)
 	}
-	if want := "cd ~/hh-dev/users/alice/src/web && hedgehug add"; !strings.Contains(stdout, want) {
+	if want := "cd " + shellQuote(filepath.Join(dir, "users", "alice", "src", "web")) + " && hedgehug add"; !strings.Contains(stdout, want) {
 		t.Errorf("init output lacks %q:\n%s", want, stdout)
 	}
 }
@@ -322,6 +322,9 @@ func TestInitMakesWebRepoAndProject(t *testing.T) {
 	dir := initDir(t)
 	if _, err := os.Stat(filepath.Join(dir, "remotes", "org-a", "web.git", "HEAD")); err != nil {
 		t.Fatal(err)
+	}
+	if left, _ := filepath.Glob(filepath.Join(dir, ".web-seed-*")); len(left) > 0 {
+		t.Errorf("seed directory left behind: %v", left)
 	}
 	web := filepath.Join(dir, "users", "alice", "src", "web")
 	r, err := gitrepo.Open(web)
