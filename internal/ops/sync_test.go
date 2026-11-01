@@ -21,7 +21,7 @@ func TestSyncWithoutRemoteAndStatus(t *testing.T) {
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
-	reps, err := ts.Sync(false)
+	reps, err := ts.Sync(false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestSyncWithoutRemoteAndStatus(t *testing.T) {
 	if st[0].Store != "me" || st[0].Unpushed != nil || len(st[0].Remotes) != 0 {
 		t.Errorf("SyncStatus row = %+v; want store me without remote and without unpushed", st[0])
 	}
-	reps, err = ts.Sync(true)
+	reps, err = ts.Sync(true, true)
 	if err != nil || len(reps) != 1 || !reps[0].NoRemote || reps[0].Store != "me" {
 		t.Errorf("Sync(all) = %+v, %v; want one NoRemote report of me", reps, err)
 	}
@@ -76,7 +76,7 @@ func TestSyncStorePushesAndStatusReportsIt(t *testing.T) {
 	if err != nil || len(targets) != 1 {
 		t.Fatalf("SyncTargets = %v, %v", targets, err)
 	}
-	r, err := ts.SyncStore(c, targets[0])
+	r, err := ts.SyncStore(c, targets[0], true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestSyncAllReportsFailedStore(t *testing.T) {
 	if err := os.RemoveAll(remote); err != nil {
 		t.Fatal(err)
 	}
-	reps, err := ts.Sync(false)
+	reps, err := ts.Sync(false, true)
 	if err == nil || !strings.HasPrefix(err.Error(), "sync me: ") {
 		t.Fatalf("Sync error = %v; want one starting with \"sync me: \"", err)
 	}

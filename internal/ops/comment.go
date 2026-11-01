@@ -58,7 +58,7 @@ type CommentEditSession struct {
 // OpenComment opens the store and resolves arg to a comment that is read
 // from its file.
 func (ss *Session) OpenComment(arg string) (*CommentEditSession, error) {
-	s, _, err := ss.Open()
+	s, _, err := ss.OpenForWrite()
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ type CommentSession struct {
 // BeginComment resolves arg to a live task; it is done before the body is
 // taken from the user.
 func (ss *Session) BeginComment(arg string) (*CommentSession, error) {
-	s, ix, err := ss.Open()
+	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return nil, err
 	}

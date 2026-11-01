@@ -130,7 +130,7 @@ func TestStoreInitPushesToRemotes(t *testing.T) {
 func TestStoreInitIntoANonEmptyRemoteLeavesNothing(t *testing.T) {
 	ts := newTestSession(t)
 	remote := addBareRemote(t, ts)
-	if _, err := ts.Sync(false); err != nil { // the remote now holds the store me
+	if _, err := ts.Sync(false, true); err != nil { // the remote now holds the store me
 		t.Fatal(err)
 	}
 	_, err := ts.StoreInit(StoreInitInput{Name: "org", Prefix: "ORG", Remotes: []string{remote}})
@@ -149,14 +149,14 @@ func TestStoreInitIntoANonEmptyRemoteLeavesNothing(t *testing.T) {
 
 func TestStoreAddErrors(t *testing.T) {
 	ts := newTestSession(t)
-	_, err := ts.StoreAdd("bad/name", []string{"x"}, "")
+	_, err := ts.StoreAdd("bad/name", []string{"x"}, "", "")
 	wantErr(t, err, KindUsage, "store.bad_name")
-	_, err = ts.StoreAdd("me", []string{"x"}, "")
+	_, err = ts.StoreAdd("me", []string{"x"}, "", "")
 	wantErr(t, err, KindConflict, "store.exists")
 	if want := `a store named "me" is already set up`; err.Error() != want {
 		t.Errorf("message = %q; want %q", err, want)
 	}
-	_, err = ts.StoreAdd("x", nil, "")
+	_, err = ts.StoreAdd("x", nil, "", "")
 	wantErr(t, err, KindUsage, "store.remote_required")
 	if err.Error() != "a remote is needed" {
 		t.Errorf("message = %q", err)
@@ -164,7 +164,7 @@ func TestStoreAddErrors(t *testing.T) {
 	// A remote that is not there cannot be cloned; a remote without a store is no store.
 	other := otherSession(t, ts, ts.Now())
 	_, p, _ := other.Config()
-	_, err = other.StoreAdd("gone", []string{filepath.Join(t.TempDir(), "missing.git")}, "")
+	_, err = other.StoreAdd("gone", []string{filepath.Join(t.TempDir(), "missing.git")}, "", "")
 	wantErr(t, err, KindInvalid, "store.clone_failed")
 	if exists(filepath.Join(p.StoresDir, "gone")) {
 		t.Error("the failed clone left its directory")
@@ -173,7 +173,7 @@ func TestStoreAddErrors(t *testing.T) {
 	if err := gitrepo.InitBare(empty); err != nil {
 		t.Fatal(err)
 	}
-	_, err = other.StoreAdd("empty", []string{empty}, "")
+	_, err = other.StoreAdd("empty", []string{empty}, "", "")
 	if err == nil {
 		t.Fatal("the clone of a remote without a store was added")
 	}
@@ -201,7 +201,7 @@ func TestStoreAddErrors(t *testing.T) {
 	if err := r.Push("origin"); err != nil {
 		t.Fatal(err)
 	}
-	_, err = other.StoreAdd("plain", []string{plain}, "")
+	_, err = other.StoreAdd("plain", []string{plain}, "", "")
 	wantErr(t, err, KindInvalid, "store.not_hedgehug")
 	if !strings.HasPrefix(err.Error(), plain+" is not a hedgehug store: ") {
 		t.Errorf("message = %q", err)
@@ -223,12 +223,12 @@ func TestStoreAddClonesToAPath(t *testing.T) {
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.Sync(false); err != nil {
+	if _, err := ts.Sync(false, true); err != nil {
 		t.Fatal(err)
 	}
 	other := otherSession(t, ts, ts.Now())
 	dir := filepath.Join(t.TempDir(), "here")
-	res, err := other.StoreAdd("copy", []string{remote}, dir)
+	res, err := other.StoreAdd("copy", []string{remote}, dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +244,7 @@ func TestStoreAddClonesToAPath(t *testing.T) {
 	if len(list) != 1 || list[0].Path != dir || !slices.Equal(list[0].Remotes, []string{remote}) {
 		t.Errorf("StoreList = %+v", list)
 	}
-	if _, err := other.StoreAdd("again", []string{remote}, dir); err == nil {
+	if _, err := other.StoreAdd("again", []string{remote}, dir, ""); err == nil {
 		t.Error("a clone into a directory that holds a store succeeded")
 	}
 	if !exists(filepath.Join(dir, "schema.yaml")) {
@@ -255,14 +255,14 @@ func TestStoreAddClonesToAPath(t *testing.T) {
 func TestStoreAddWarnsOfPrefixDuplicates(t *testing.T) {
 	ts := newTestSession(t)
 	remote := addBareRemote(t, ts)
-	if _, err := ts.Sync(false); err != nil {
+	if _, err := ts.Sync(false, true); err != nil {
 		t.Fatal(err)
 	}
 	other := otherSession(t, ts, ts.Now())
 	if _, err := other.StoreInit(StoreInitInput{Name: "mine", Prefix: "ME"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := other.StoreAdd("me", []string{remote}, ""); err != nil {
+	if _, err := other.StoreAdd("me", []string{remote}, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	// The workspace of mine was made at the zero time of its prefix, the shared one too:
@@ -341,7 +341,7 @@ func TestStoreListShowsAccountAndLastSync(t *testing.T) {
 	ts := newTestSession(t)
 	ts.useAccount()
 	addBareRemote(t, ts)
-	if _, err := ts.Sync(false); err != nil {
+	if _, err := ts.Sync(false, true); err != nil {
 		t.Fatal(err)
 	}
 	list, err := ts.StoreList()
@@ -382,7 +382,7 @@ func TestStoreRemovePurgeRefusals(t *testing.T) {
 		t.Errorf("message = %q", err)
 	}
 
-	if _, err := ts.Sync(false); err != nil {
+	if _, err := ts.Sync(false, true); err != nil {
 		t.Fatal(err)
 	}
 	// Changes that are not committed.
@@ -432,7 +432,7 @@ func TestStoreRemovePurgeDeletesAPushedStore(t *testing.T) {
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.Sync(false); err != nil {
+	if _, err := ts.Sync(false, true); err != nil {
 		t.Fatal(err)
 	}
 	_, e, _ := ts.Entry()

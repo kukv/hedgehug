@@ -70,7 +70,7 @@ func every(*index.Entry) bool { return true }
 // Remove deletes the task arg names and the tasks under it; they can be
 // restored.
 func (ss *Session) Remove(arg string) (AffectedResult, error) {
-	s, ix, err := ss.Open()
+	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return AffectedResult{}, err
 	}
@@ -120,7 +120,7 @@ func (ss *Session) Remove(arg string) (AffectedResult, error) {
 // Restore restores the deleted task arg names and what the same Remove
 // deleted under it.
 func (ss *Session) Restore(arg string) (AffectedResult, error) {
-	s, ix, err := ss.Open()
+	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return AffectedResult{}, err
 	}
@@ -169,7 +169,7 @@ func (ss *Session) Restore(arg string) (AffectedResult, error) {
 // index, the task arg names and the tasks under it. It refuses when one of
 // them is not deleted.
 func (ss *Session) PurgeTargets(arg string) (*index.Index, *index.Entry, []*index.Entry, error) {
-	_, ix, err := ss.Open()
+	_, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -203,7 +203,7 @@ func (ss *Session) PurgeUnchecked(arg string) (AffectedResult, error) {
 
 // purge is Purge; a nil confirmed skips the comparison.
 func (ss *Session) purge(arg string, confirmed []model.ULID) (AffectedResult, error) {
-	s, ix, err := ss.Open()
+	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return AffectedResult{}, err
 	}
@@ -376,7 +376,7 @@ type RestoreAtResult struct {
 // be given twice, and moving to another workspace is the job of Move with a
 // workspace, which moves the tasks under it too.
 func (ss *Session) RestoreAt(arg, at string) (RestoreAtResult, error) {
-	s, ix, err := ss.Open()
+	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return RestoreAtResult{}, err
 	}

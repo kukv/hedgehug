@@ -24,16 +24,16 @@ import (
 // changed after it. It returns an error of Code "undo.nothing" (KindConflict)
 // when there is no operation to take back, and writes no commit then.
 func (ss *Session) Undo() (UndoResult, error) {
+	s, ix, err := ss.OpenForWrite()
+	if err != nil {
+		return UndoResult{}, err
+	}
 	acct, ok, err := ss.Writer()
 	if err != nil {
 		return UndoResult{}, err
 	}
 	if !ok {
 		return UndoResult{}, newErr(KindConflict, "account.none", errors.New("accounts are not set up in config.yaml; hedgehug undo needs them to find your operations"))
-	}
-	s, ix, err := ss.Open()
-	if err != nil {
-		return UndoResult{}, err
 	}
 	var res UndoResult
 	hash, err := ss.UpdateCommit(s, store.Op{Name: "undo"}, func(tx *store.Tx) error {

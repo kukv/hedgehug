@@ -68,7 +68,12 @@ type MigrationPlan struct {
 // it writes nothing. The index is the one from before the write in a dry
 // run, and refreshed after a write.
 func (ss *Session) Migrate(m schema.Migration, dryRun bool) (*index.Index, *MigrationPlan, error) {
-	s, ix, err := ss.Open()
+	// A dry run writes nothing, so a read-only store may be planned.
+	open := ss.OpenForWrite
+	if dryRun {
+		open = ss.Open
+	}
+	s, ix, err := open()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -219,6 +224,9 @@ func (ss *Session) Doctor(fix bool) (DoctorReport, error) {
 // fixStore repairs the files of HEAD of the store e, opened as s, as a sync
 // does, under the lock of a sync, and describes what it fixed.
 func (ss *Session) fixStore(c *config.Config, e config.StoreEntry, s *store.Store) ([]Fixed, error) {
+	if err := ss.checkWritable(s); err != nil {
+		return nil, err
+	}
 	opt, err := ss.SyncOptions(c, e)
 	if err != nil {
 		return nil, err

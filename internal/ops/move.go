@@ -30,7 +30,7 @@ type MoveResult struct {
 // Move moves a task under another parent, to another workspace, or among its
 // siblings.
 func (ss *Session) Move(in MoveInput) (MoveResult, error) {
-	s, ix, err := ss.Open()
+	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return MoveResult{}, err
 	}

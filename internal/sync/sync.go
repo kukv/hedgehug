@@ -95,9 +95,12 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 	}
 	r := s.Repo()
 	r.SetConn(opt.Conn)
-	acc, err := ReadAccess(s)
+	acc, brokenWarning, err := readAccessOrReset(s)
 	if err != nil {
 		return res, err
+	}
+	if brokenWarning != "" {
+		res.Warnings = append(res.Warnings, brokenWarning)
 	}
 	if opt.Explicit && acc.Reason == ReasonPushDenied {
 		acc = Access{}

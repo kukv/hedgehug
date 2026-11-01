@@ -28,7 +28,10 @@ type SyncReport struct {
 	Invalid     []string      `json:"invalid"` // ULIDs of the tasks with problems now
 	Notices     []inbox.Item  `json:"notices"` // what the sync added to the inbox
 	Warnings    []string      `json:"warnings"`
-	Err         error         `json:"-"` // why the sync failed; the report holds what is known
+	// Unpushable is the number of commits not pushed because the store is
+	// read-only.
+	Unpushable int   `json:"unpushable,omitempty"`
+	Err        error `json:"-"` // why the sync failed; the report holds what is known
 }
 
 // Overwritten is a value that lost in a merge of the sync.
@@ -54,7 +57,9 @@ type Repaired struct {
 // Sync syncs the stores SyncTargets names and describes what each did. A
 // store that failed is in the list with Err set, and the error joins the
 // failures as "sync <store>: <err>". With no target the list is empty.
-func (ss *Session) Sync(all bool) ([]SyncReport, error) {
+// explicit is a sync the user asked for (hh sync, "sync now" of the GUI): it
+// tries a push again that was denied before. The background sync passes false.
+func (ss *Session) Sync(all, explicit bool) ([]SyncReport, error) {
 	c, _, err := ss.Config()
 	if err != nil {
 		return nil, err
@@ -66,7 +71,7 @@ func (ss *Session) Sync(all bool) ([]SyncReport, error) {
 	out := make([]SyncReport, 0, len(targets))
 	var errs []error
 	for _, e := range targets {
-		r, err := ss.SyncStore(c, e)
+		r, err := ss.SyncStore(c, e, explicit)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("sync %s: %w", e.Name, err))
 			r.Err, r.Error = err, err.Error()
@@ -76,9 +81,9 @@ func (ss *Session) Sync(all bool) ([]SyncReport, error) {
 	return out, errors.Join(errs...)
 }
 
-// SyncStore syncs the store e and describes what it did. On an error the
-// description holds what is known.
-func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry) (SyncReport, error) {
+// SyncStore syncs the store e and describes what it did (explicit as in
+// Sync). On an error the description holds what is known.
+func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit bool) (SyncReport, error) {
 	r := SyncReport{Store: e.Name, Pushed: []string{}, Overwritten: []Overwritten{}, Repaired: []Repaired{}, Invalid: []string{}, Notices: []inbox.Item{}, Warnings: []string{}}
 	if len(e.Remotes) == 0 {
 		r.NoRemote = true
@@ -92,6 +97,7 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry) (SyncReport,
 	if err != nil {
 		return r, err
 	}
+	opt.Explicit = explicit
 	res, err := ss.RunSync(s, opt, true)
 	if err != nil {
 		return r, err
@@ -111,6 +117,7 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry) (SyncReport,
 		return ""
 	}
 	r.Merges = res.Merges
+	r.Unpushable = res.Unpushable
 	r.Pushed = append(r.Pushed, res.Pushed...)
 	r.Warnings = append(r.Warnings, res.Warnings...)
 	r.Notices = append(r.Notices, res.Notices...)
@@ -175,8 +182,9 @@ type StoreStatus struct {
 	LastAttempt  *time.Time `json:"last_attempt,omitempty"`
 	LastSuccess  *time.Time `json:"last_success,omitempty"`
 	LastError    string     `json:"last_error,omitempty"`
-	Error        string     `json:"error,omitempty"`    // the store could not be read
-	Unpushed     *int       `json:"unpushed,omitempty"` // absent when the store has no remote
+	Error        string     `json:"error,omitempty"`     // the store could not be read
+	Unpushed     *int       `json:"unpushed,omitempty"`  // absent when the store has no remote
+	ReadOnly     string     `json:"read_only,omitempty"` // why the store is read-only, in words; absent when it is not
 }
 
 // SyncStatus reads how the syncs of every store went. A store that cannot be
@@ -210,6 +218,14 @@ func (ss *Session) storeStatus(e config.StoreEntry) StoreStatus {
 		return x
 	}
 	x.LastError = st.LastError
+	acc, err := sync.ReadAccess(s)
+	if err != nil {
+		x.Error = err.Error()
+		return x
+	}
+	if acc.ReadOnly {
+		x.ReadOnly = acc.Why()
+	}
 	x.PendingSince, x.LastAttempt, x.LastSuccess = timePtr(st.PendingSince), timePtr(st.LastAttempt), timePtr(st.LastSuccess)
 	if len(e.Remotes) > 0 {
 		n, err := Unpushed(s)

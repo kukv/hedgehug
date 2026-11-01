@@ -4,12 +4,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/store"
 )
 
 const accessFile = "access.json"
+
+// ErrBrokenAccess is what ReadAccess wraps when access.json cannot be
+// decoded. The writes refuse such a store; a sync takes the file as absent.
+var ErrBrokenAccess = errors.New("access.json is broken")
 
 // The reasons a store is read-only.
 const (
@@ -49,9 +54,24 @@ func ReadAccess(s *store.Store) (Access, error) {
 		return a, err
 	}
 	if err := json.Unmarshal(b, &a); err != nil {
-		return Access{}, fmt.Errorf("%s: %w", accessFile, err)
+		return Access{}, fmt.Errorf("%s: %w: %w", accessFile, ErrBrokenAccess, err)
 	}
 	return a, nil
+}
+
+// readAccessOrReset is ReadAccess for a sync, which holds sync.lock: a broken
+// access.json is taken as absent and replaced by an empty one, so that the
+// check that follows judges again, and the warning says so.
+func readAccessOrReset(s *store.Store) (a Access, warning string, err error) {
+	a, err = ReadAccess(s)
+	if !errors.Is(err, ErrBrokenAccess) {
+		return a, "", err
+	}
+	path := filepath.Join(s.Dir(), store.LocalDir, accessFile)
+	if err := WriteAccess(s, Access{}); err != nil {
+		return Access{}, "", err
+	}
+	return Access{}, path + " is broken; judging access again", nil
 }
 
 // WriteAccess replaces access.json. A sync writes it under sync.lock, so a

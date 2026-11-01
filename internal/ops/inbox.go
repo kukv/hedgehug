@@ -305,7 +305,7 @@ func (ss *Session) InboxRevertOf(stores []InboxStore, u model.ULID) (TaskResult,
 	// The write goes through a session of its own on the store of the item:
 	// ss is shared and keeps its store and its writer.
 	sub := ss.ForStore(st.Name)
-	s, ix, err := sub.Open()
+	s, ix, err := sub.OpenForWrite()
 	if err != nil {
 		return TaskResult{}, err
 	}

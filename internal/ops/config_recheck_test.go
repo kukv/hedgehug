@@ -57,13 +57,13 @@ func TestStoreAddRechecksExistenceInUpdate(t *testing.T) {
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.Sync(false); err != nil {
+	if _, err := ts.Sync(false, true); err != nil {
 		t.Fatal(err)
 	}
 	other := otherSession(t, ts, ts.Now())
 	theirs := filepath.Join(t.TempDir(), "theirs")
 	hookConfigWrite(t, other, func(c *config.Config) error { return c.AddStore("copy", theirs, nil) })
-	_, err := other.StoreAdd("copy", []string{remote}, "")
+	_, err := other.StoreAdd("copy", []string{remote}, "", "")
 	wantErr(t, err, KindConflict, "store.exists")
 	got := namedStores(t, other, "copy")
 	if len(got) != 1 || got[0].Path != theirs {

@@ -691,7 +691,7 @@ func overwriteME1(t *testing.T, ts *testSession) (item InboxItemView, kept strin
 	if _, err := ts.Add(AddInput{Title: "first"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.Sync(false); err != nil {
+	if _, err := ts.Sync(false, true); err != nil {
 		t.Fatal(err)
 	}
 	// The clone writes later than ts, so its title wins the merge.
@@ -703,10 +703,10 @@ func overwriteME1(t *testing.T, ts *testSession) (item InboxItemView, kept strin
 	if _, err := other.Set("ME-1", []Assign{{Key: "title", Op: "=", Value: "theirs"}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := other.Sync(false); err != nil {
+	if _, err := other.Sync(false, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.Sync(false); err != nil {
+	if _, err := ts.Sync(false, true); err != nil {
 		t.Fatal(err)
 	}
 	_, items, err := ts.InboxList(false)

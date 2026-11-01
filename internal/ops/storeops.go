@@ -309,10 +309,12 @@ type StoreAddResult struct {
 }
 
 // StoreAdd adds the store that others made by cloning it from the first of
-// remotes, to path (under the data directory when empty). A clone that fails
-// halfway removes what it made. A prefix that a workspace of another store
-// has too is warned of.
-func (ss *Session) StoreAdd(name string, remotes []string, path string) (StoreAddResult, error) {
+// remotes, to path (under the data directory when empty), with the account
+// named account (none is set when empty, and the only account writes). A
+// clone that fails halfway removes what it made. A prefix that a workspace of
+// another store has too is warned of. Whether this machine may write to the
+// store is checked once it is added; a check that fails is a warning.
+func (ss *Session) StoreAdd(name string, remotes []string, path, account string) (StoreAddResult, error) {
 	if len(remotes) == 0 {
 		return StoreAddResult{}, newErr(KindUsage, "store.remote_required", errors.New("a remote is needed"))
 	}
@@ -326,16 +328,26 @@ func (ss *Session) StoreAdd(name string, remotes []string, path string) (StoreAd
 	if storeExists(c, name) {
 		return StoreAddResult{}, storeExistsErr(name)
 	}
+	// An account that is named must be there, before anything is cloned.
+	e := config.StoreEntry{Name: name, Remotes: remotes}
+	if account != "" {
+		acct, _, err := ss.PickAccount(c, account)
+		if err != nil {
+			return StoreAddResult{}, err
+		}
+		e.Account = acct.Name
+	}
 	dir := filepath.Join(p.StoresDir, name)
 	if path != "" {
 		if dir, err = filepath.Abs(path); err != nil {
 			return StoreAddResult{}, err
 		}
 	}
+	e.Path = dir
 	_, statErr := os.Lstat(dir)
 	existed := statErr == nil
 	// A failed clone removes what it made itself.
-	if _, err := gitrepo.CloneWith(remotes[0], dir, ss.Conn(c, config.StoreEntry{Name: name, Path: dir, Remotes: remotes})); err != nil {
+	if _, err := gitrepo.CloneWith(remotes[0], dir, ss.Conn(c, e)); err != nil {
 		// KindInvalid, not KindUsage: the CLI exits 1.
 		return StoreAddResult{}, newErr(KindInvalid, "store.clone_failed", err, "remote", remotes[0])
 	}
@@ -350,9 +362,12 @@ func (ss *Session) StoreAdd(name string, remotes []string, path string) (StoreAd
 	if err := s.Repo().SetRemotes(remotes); err != nil {
 		return StoreAddResult{}, undo(err)
 	}
-	e := config.StoreEntry{Name: name, Path: dir, Remotes: remotes}
+	// Judge the access before the setup sync, so that a store this machine
+	// may not write to is added too: its sync does not push.
+	ss.checkAccessOfNew(c, e, s)
 	// A store made before the merge driver lacks its .gitattributes; the
-	// sync adds it, and pushes it.
+	// sync adds it, and pushes it unless the store is read-only (the commit
+	// stays here, and is counted as unpushable).
 	need, err := sync.NeedsSetup(s)
 	if err != nil {
 		return StoreAddResult{}, undo(err)
@@ -363,19 +378,51 @@ func (ss *Session) StoreAdd(name string, remotes []string, path string) (StoreAd
 			return StoreAddResult{}, undo(err)
 		}
 		if _, err := ss.RunSync(s, opt, true); err != nil {
-			return StoreAddResult{}, undo(fmt.Errorf("set up %s: %w", name, err))
+			// A push the remote denied makes the store read-only (the sync
+			// wrote access.json); it is added as such, not undone.
+			if acc, aerr := sync.ReadAccess(s); aerr != nil || !acc.ReadOnly || acc.Reason != sync.ReasonPushDenied {
+				return StoreAddResult{}, undo(fmt.Errorf("set up %s: %w", name, err))
+			}
+			ss.warn(fmt.Sprintf("%s: %v; the setup commit stays here", name, err))
 		}
 	}
 	if err := ss.updateConfig(c, func(c *config.Config) error {
 		if storeExists(c, name) {
 			return storeExistsErr(name)
 		}
-		return c.AddStore(name, dir, remotes)
+		if err := c.AddStore(name, dir, remotes); err != nil {
+			return err
+		}
+		if e.Account != "" {
+			return c.SetStoreAccount(name, e.Account)
+		}
+		return nil
 	}); err != nil {
 		return StoreAddResult{}, undo(err)
 	}
 	ss.warnPrefixDuplicates(c, name, s)
 	return StoreAddResult{Name: name, Path: dir, Remotes: remotes}, nil
+}
+
+// checkAccessOfNew checks whether this machine may write to the store s,
+// being added as e, and writes access.json under sync.lock. The store is
+// added whatever comes of it: what cannot be checked is a warning.
+func (ss *Session) checkAccessOfNew(c *config.Config, e config.StoreEntry, s *store.Store) {
+	opt, err := ss.SyncOptions(c, e)
+	if err == nil {
+		var warns []string
+		err = s.WithLocalLock("sync.lock", syncLockWait, func() error {
+			var err error
+			_, warns, err = sync.CheckAccess(s, opt, ss.Now())
+			return err
+		})
+		for _, w := range warns {
+			ss.warn(fmt.Sprintf("%s: %s", e.Name, w))
+		}
+	}
+	if err != nil {
+		ss.warn(fmt.Sprintf("%s: the access is not checked: %v", e.Name, err))
+	}
 }
 
 // clearDir takes back what a failed command made in dir: dir itself, or only

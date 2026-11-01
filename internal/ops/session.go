@@ -206,6 +206,11 @@ func (ss *Session) Update(s *store.Store, op store.Op, fn func(*store.Tx) error)
 // zero hash when the operation changed nothing. The author is the store's
 // account, or the git config when the store has none.
 func (ss *Session) UpdateCommit(s *store.Store, op store.Op, fn func(*store.Tx) error) (plumbing.Hash, error) {
+	// Operations refuse a read-only store when they open it (OpenForWrite);
+	// this catches a write that did not come through there.
+	if err := ss.checkWritable(s); err != nil {
+		return plumbing.ZeroHash, err
+	}
 	acct, ok, err := ss.Writer()
 	if err != nil {
 		return plumbing.ZeroHash, err
@@ -262,7 +267,7 @@ func (ss *Session) SyncOptions(c *config.Config, e config.StoreEntry) (sync.Opti
 	if err != nil {
 		return sync.Options{}, err
 	}
-	opt := sync.Options{Name: e.Name, Remotes: e.Remotes, Author: author, Me: c.Me(), Now: ss.Now, Conn: ss.Conn(c, e)}
+	opt := sync.Options{Name: e.Name, Remotes: e.Remotes, Author: author, Me: c.Me(), Now: ss.Now, Conn: ss.Conn(c, e), GitHub: ss.githubRepoOf(c, e)}
 	if ok {
 		opt.Account = acct.ID()
 	}

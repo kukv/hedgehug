@@ -33,11 +33,14 @@ type GitHubRepo struct {
 // It writes files of .hedgehug/local that a sync writes under sync.lock: a
 // caller outside the sync must hold that lock (Store.WithLocalLock) around it.
 func CheckAccess(s *store.Store, opt Options, now time.Time) (Access, []string, error) {
-	a, err := ReadAccess(s)
+	a, broken, err := readAccessOrReset(s)
 	if err != nil {
 		return a, nil, err
 	}
 	var warns []string
+	if broken != "" {
+		warns = append(warns, broken)
+	}
 	switch {
 	case opt.GitHub != nil:
 		gh, err := opt.GitHub.Client()
@@ -70,14 +73,14 @@ func CheckAccess(s *store.Store, opt Options, now time.Time) (Access, []string, 
 		}
 		p, ok := gitrepo.LocalPath(to)
 		if !ok {
-			return a, nil, nil
+			return a, warns, nil
 		}
 		a = Access{ReadOnly: !gitrepo.Writable(p), Checked: now}
 		if a.ReadOnly {
 			a.Reason = ReasonNotWritable
 		}
 	default:
-		return a, nil, nil
+		return a, warns, nil
 	}
 	return a, warns, WriteAccess(s, a)
 }

@@ -101,15 +101,15 @@ func (ss *Session) WorkspaceAdd(name, prefix string) (WorkspaceResult, error) {
 	if err := badIDPrefix(prefix); err != nil {
 		return WorkspaceResult{}, err
 	}
+	s, ix, err := ss.OpenForWrite()
+	if err != nil {
+		return WorkspaceResult{}, err
+	}
 	self, err := ss.selectedStoreName()
 	if err != nil {
 		return WorkspaceResult{}, err
 	}
 	if err := ss.CheckPrefixElsewhere(prefix, self); err != nil {
-		return WorkspaceResult{}, err
-	}
-	s, ix, err := ss.Open()
-	if err != nil {
 		return WorkspaceResult{}, err
 	}
 	w := &model.Workspace{ULID: model.NewULID(), Name: name, IDPrefix: prefix, PrefixSet: ss.Now()}
@@ -128,7 +128,7 @@ func (ss *Session) WorkspaceRename(arg, name string) (WorkspaceResult, error) {
 	if err := badWorkspaceName(name); err != nil {
 		return WorkspaceResult{}, err
 	}
-	s, ix, err := ss.Open()
+	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return WorkspaceResult{}, err
 	}
@@ -161,7 +161,7 @@ func (ss *Session) WorkspacePrefix(arg, prefix string) (WorkspaceResult, error) 
 	if err := badIDPrefix(prefix); err != nil {
 		return WorkspaceResult{}, err
 	}
-	s, ix, err := ss.Open()
+	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return WorkspaceResult{}, err
 	}
@@ -242,7 +242,7 @@ func (ss *Session) WorkspacePrefix(arg, prefix string) (WorkspaceResult, error) 
 
 // WorkspaceRemove removes the workspace arg names, which has no tasks.
 func (ss *Session) WorkspaceRemove(arg string) (WorkspaceResult, error) {
-	s, ix, err := ss.Open()
+	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return WorkspaceResult{}, err
 	}
