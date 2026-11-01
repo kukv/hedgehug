@@ -19,7 +19,7 @@ func TestLockExcludes(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A second handle in the same process must not get the lock either.
-	if _, err := acquire(path, 100*time.Millisecond); !errors.Is(err, ErrLocked) {
+	if _, err := acquire(path, 20*time.Millisecond); !errors.Is(err, ErrLocked) {
 		t.Fatalf("second acquire: err = %v, want ErrLocked", err)
 	}
 	if err := l.release(); err != nil {
@@ -68,7 +68,7 @@ func TestLockReleasedOnKill(t *testing.T) {
 		t.Fatalf("helper said %q, %v", line, err)
 	}
 
-	if _, err := acquire(path, 100*time.Millisecond); !errors.Is(err, ErrLocked) {
+	if _, err := acquire(path, 20*time.Millisecond); !errors.Is(err, ErrLocked) {
 		t.Fatalf("acquire while the helper holds the lock: err = %v, want ErrLocked", err)
 	}
 	if err := cmd.Process.Kill(); err != nil {
@@ -97,7 +97,7 @@ func TestWithFileLock(t *testing.T) {
 		})
 	}()
 	<-inside
-	if err := WithFileLock(p, 100*time.Millisecond, func() error { return nil }); !errors.Is(err, ErrLocked) {
+	if err := WithFileLock(p, 20*time.Millisecond, func() error { return nil }); !errors.Is(err, ErrLocked) {
 		t.Errorf("second lock = %v, want ErrLocked", err)
 	}
 	close(release)

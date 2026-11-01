@@ -44,7 +44,7 @@ func acquire(path string, wait time.Duration) (*fileLock, error) {
 			_ = f.Close()
 			return nil, ErrLocked
 		}
-		time.Sleep(lockPoll)
+		time.Sleep(min(lockPoll, time.Until(deadline)))
 	}
 }
 

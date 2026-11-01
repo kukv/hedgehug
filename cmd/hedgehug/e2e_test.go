@@ -19,6 +19,14 @@ var (
 	devenvErr  error
 )
 
+// sleepToNextSecond waits past the start of the next second. Commit times are
+// in whole seconds, so what is written after it is in a later second than
+// anything written before.
+func sleepToNextSecond() {
+	now := time.Now()
+	time.Sleep(now.Truncate(time.Second).Add(time.Second).Sub(now) + 5*time.Millisecond)
+}
+
 // buildDevenv builds tools/devenv once for all tests and returns the path of
 // the binary.
 func buildDevenv(t *testing.T) string {
@@ -108,7 +116,7 @@ func TestE2EAliceAndBob(t *testing.T) {
 	alice.ok("sync")
 	bob.ok("sync")
 	bob.ok("set", "ORG-1", "title=bob", "--store", "org-a")
-	time.Sleep(1100 * time.Millisecond)
+	sleepToNextSecond()
 	alice.ok("set", "ORG-1", "title=alice", "--store", "org-a")
 	bob.ok("sync")
 	alice.ok("sync")

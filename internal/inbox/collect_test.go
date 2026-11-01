@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/url"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -692,8 +693,12 @@ func TestCatchAtHeadWritesNothing(t *testing.T) {
 	if _, err := box.Catch(me, head(t, b)); err != nil {
 		t.Fatal(err)
 	}
+	// Put the times of the files in the past, so that a rewrite would move them.
+	past := time.Now().Add(-time.Hour)
+	for _, name := range []string{itemsFile, readFile, markFile} {
+		_ = os.Chtimes(b.s.LocalPath(name), past, past) // a file that is not there is left so
+	}
 	before := box.Stamp()
-	time.Sleep(20 * time.Millisecond) // a rewrite would move the time
 	if added, err := box.Catch(me, head(t, b)); err != nil || len(added) != 0 {
 		t.Fatalf("second Catch = %+v, %v", added, err)
 	}

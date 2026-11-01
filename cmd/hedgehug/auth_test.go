@@ -15,6 +15,7 @@ import (
 	"github.com/zalando/go-keyring"
 
 	"github.com/kukv/hedgehug/internal/fakegh"
+	"github.com/kukv/hedgehug/internal/testenv"
 )
 
 // withFake starts a fakegh with alice and bob, and points github.com of the
@@ -253,14 +254,12 @@ func TestAuthLoginOpensBrowser(t *testing.T) {
 			te.openURL = func(u string) error { mu.Lock(); opened = append(opened, u); mu.Unlock(); return nil }
 			te.terminal, te.stdin = c.terminal, c.stdin
 			te.ok("auth", "login")
-			for i := 0; c.opened && i < 500; i++ { // the browser is opened beside the login
-				mu.Lock()
-				n := len(opened)
-				mu.Unlock()
-				if n > 0 {
-					break
-				}
-				time.Sleep(10 * time.Millisecond)
+			if c.opened { // the browser is opened beside the login
+				testenv.WaitFor(t, "the browser to be opened", func() bool {
+					mu.Lock()
+					defer mu.Unlock()
+					return len(opened) > 0
+				})
 			}
 			mu.Lock()
 			defer mu.Unlock()
@@ -284,9 +283,8 @@ func TestAuthLoginOpensBrowser(t *testing.T) {
 		if code := run([]string{"auth", "login"}, e); code != 0 {
 			t.Fatalf("exit %d: %s", code, errb.String())
 		}
-		for i := 0; !strings.Contains(errb.String(), "no browser") && i < 500; i++ { // the warning comes from beside the login
-			time.Sleep(10 * time.Millisecond)
-		}
+		// the warning comes from beside the login
+		testenv.WaitFor(t, "the warning of the browser", func() bool { return strings.Contains(errb.String(), "no browser") })
 		if !strings.Contains(errb.String(), "warning: the browser did not open: no browser") {
 			t.Errorf("stderr = %q", errb.String())
 		}

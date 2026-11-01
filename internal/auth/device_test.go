@@ -302,7 +302,7 @@ func TestDeviceRefreshNeedsHost(t *testing.T) {
 // 直列: パッケージ変数 lockWait の差し替え
 func TestDeviceRefreshLockBusy(t *testing.T) {
 	old := lockWait
-	lockWait = 50 * time.Millisecond
+	lockWait = 5 * time.Millisecond
 	t.Cleanup(func() { lockWait = old })
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	a := config.Account{Name: "a", Host: "github.com", Login: "alice", Token: config.TokenSource{Kind: "device"}}

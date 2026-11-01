@@ -159,7 +159,7 @@ func TestE2EPhase3c(t *testing.T) {
 	childPaths := pathsWith(t, bob, "org-a", child.ULID)
 	// Commit times are seconds: the move must be a second later than bob's
 	// edit, or the two would tie.
-	time.Sleep(1100 * time.Millisecond)
+	sleepToNextSecond()
 
 	// 2. alice moves the project, with the child, to org-b.
 	var mv struct {

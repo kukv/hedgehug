@@ -15,7 +15,7 @@ var ErrGitBusy = errors.New("git is running in the store (.git/index.lock exists
 // .git/index.lock to go away, trying every indexLockPoll.
 var indexLockWait = 2 * time.Second
 
-const indexLockPoll = 100 * time.Millisecond
+var indexLockPoll = 100 * time.Millisecond
 
 // lockIndex creates .git/index.lock, the lock git takes before it writes the
 // index or HEAD, so that Hedgehug and a git run by hand do not write at the

@@ -66,6 +66,8 @@ type Poller struct {
 	hub  *Hub
 	kick chan struct{}
 
+	interval time.Duration // how long Run waits between looks; pollInterval
+
 	pollMu sync.Mutex // one poll at a time; held while reading, not p.mu
 
 	mu       sync.Mutex // the state below
@@ -77,7 +79,7 @@ type Poller struct {
 }
 
 func newPoller(s *Server, hub *Hub) *Poller {
-	return &Poller{s: s, hub: hub, kick: make(chan struct{}, 1), stores: map[string]*polled{}}
+	return &Poller{s: s, hub: hub, kick: make(chan struct{}, 1), interval: pollInterval, stores: map[string]*polled{}}
 }
 
 // Release lets go of the store at path, whose directory is about to be
@@ -116,7 +118,7 @@ func (p *Poller) Kick() {
 func (p *Poller) Run(ctx context.Context) {
 	for ctx.Err() == nil {
 		p.poll(true)
-		t := time.NewTimer(pollInterval)
+		t := time.NewTimer(p.interval)
 		select {
 		case <-ctx.Done():
 			t.Stop()

@@ -101,7 +101,7 @@ func TestWithLock(t *testing.T) {
 		t.Errorf("WithLock = %v, want fn's error", err)
 	}
 	old := lockWait
-	lockWait = 50 * time.Millisecond
+	lockWait = 5 * time.Millisecond
 	t.Cleanup(func() { lockWait = old })
 	var busy error
 	if err := store.WithFileLock(lock, time.Second, func() error {

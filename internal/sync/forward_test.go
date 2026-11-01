@@ -165,10 +165,12 @@ func TestSyncTwoForwardsKeepOneMovedTo(t *testing.T) {
 	c.sync(0)
 	c.sync(1)
 	dest := [2]model.ULID{model.NewULID(), model.NewULID()}
+	// Commit times are seconds, so the second move is made two seconds after
+	// the first on the store's clock, not by waiting.
+	base := time.Now().Add(-time.Hour)
 	for i := range dest {
-		if i > 0 {
-			time.Sleep(1100 * time.Millisecond) // commit times are seconds
-		}
+		at := base.Add(time.Duration(2*i) * time.Second)
+		c.stores[i].SetNow(func() time.Time { return at })
 		if _, err := c.stores[i].Update(c.op(i, "move-out", x.ULID), func(tx *store.Tx) error {
 			return tx.MoveOut(store.MoveOut{To: dest[i], Tasks: []model.ULID{x.ULID}})
 		}); err != nil {

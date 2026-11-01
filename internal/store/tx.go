@@ -506,6 +506,10 @@ func (s *Store) UpdateCommit(op Op, fn func(*Tx) error) (hash plumbing.Hash, err
 	return hash, nil
 }
 
+// onLockWait is called when lockStore waits for a lock held elsewhere; tests
+// replace it to know that the wait began.
+var onLockWait = func() {}
+
 // lockStore takes s.mu and the file lock, and returns with both held. While
 // the file is held by someone else it waits without s.mu, so that a holder
 // of a Locked in this process, which needs s.mu, is not kept out by it.
@@ -521,7 +525,8 @@ func (s *Store) lockStore() (*fileLock, error) {
 		if !errors.Is(err, ErrLocked) || time.Now().After(deadline) {
 			return nil, err
 		}
-		time.Sleep(lockPoll)
+		onLockWait()
+		time.Sleep(min(lockPoll, time.Until(deadline)))
 	}
 }
 
