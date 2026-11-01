@@ -3,6 +3,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"io/fs"
@@ -38,6 +39,7 @@ type Options struct {
 	Version string    // of hedgehug, for GET /api/health
 	Static  fs.FS     // the built GUI (web.Dist()); nil serves the page that says to build it
 	Log     io.Writer // warnings and the errors of the loop, a line each; nil discards them
+	Clock   Clock     // what the sync loop waits on; nil is the real clock
 }
 
 // Server is the server of hh ui. Make it with New.
@@ -48,6 +50,11 @@ type Server struct {
 	api  huma.API
 
 	logMu sync.Mutex
+
+	presence *Presence
+	loop     *Loop
+	stopOnce sync.Once
+	cancel   context.CancelFunc
 }
 
 // New makes the server. Call SetPort with the port it listens on before
@@ -59,7 +66,12 @@ func New(opt Options) *Server {
 	if opt.Now == nil {
 		opt.Now = time.Now
 	}
+	if opt.Clock == nil {
+		opt.Clock = realClock{}
+	}
 	s := &Server{opt: opt, mux: http.NewServeMux()}
+	s.presence = newPresence(func() { s.loop.Wake() })
+	s.loop = newLoop(s, opt.Clock, s.presence.Visible)
 	s.api = humago.New(s.mux, apiConfig())
 	s.api.UseMiddleware(s.requireToken)
 	s.register()
@@ -104,6 +116,7 @@ func (s *Server) register() {
 	s.registerActivity()
 	s.registerAdmin()
 	s.registerViews()
+	s.registerSync()
 }
 
 // SetPort sets the port the Host check allows.
@@ -118,7 +131,7 @@ func (s *Server) API() huma.API { return s.api }
 
 // session is the ops.Session of one request, on the store named store ("" as
 // config.Select picks). Its warnings go to the log; its writes tell the sync
-// loop (Task 7).
+// loop.
 func (s *Server) session(storeName string) *ops.Session {
 	return &ops.Session{
 		Getenv:     s.opt.Getenv,
@@ -128,7 +141,7 @@ func (s *Server) session(storeName string) *ops.Session {
 		Run:        s.opt.Run,
 		StoreName:  storeName,
 		Warn:       func(m string) { s.logf("warning: %s", m) },
-		AfterWrite: func(*store.Store, config.StoreEntry) {},
+		AfterWrite: func(*store.Store, config.StoreEntry) { s.loop.Wake() },
 	}
 }
 
@@ -149,4 +162,23 @@ type StoreParam struct {
 // OpenAPIYAML is api/openapi.yaml: the OpenAPI document of the API.
 func OpenAPIYAML() ([]byte, error) {
 	return New(Options{}).API().OpenAPI().YAML()
+}
+
+// Start runs the sync loop (and, from Task 8, the events) until ctx is
+// done or Shutdown is called.
+func (s *Server) Start(ctx context.Context) {
+	ctx, s.cancel = context.WithCancel(ctx)
+	go s.loop.Run(ctx)
+}
+
+// Shutdown stops the loop and waits for the pushes of the writes not
+// pushed, 10 seconds at most. A second call does nothing.
+func (s *Server) Shutdown(context.Context) error {
+	s.stopOnce.Do(func() {
+		if s.cancel != nil {
+			s.cancel()
+		}
+		s.loop.Drain(10 * time.Second)
+	})
+	return nil
 }

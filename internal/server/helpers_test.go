@@ -15,12 +15,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/pb33f/libopenapi"
 	validator "github.com/pb33f/libopenapi-validator"
 
+	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/ops"
+	hhsync "github.com/kukv/hedgehug/internal/sync"
 )
 
 const testToken = "test-token"
@@ -69,7 +73,13 @@ type testServer struct {
 	log  *bytes.Buffer
 }
 
-func newTestServer(t *testing.T) *testServer {
+// newTestServer is newTestServerWith with the options as they are.
+func newTestServer(t *testing.T) *testServer { return newTestServerWith(t, nil) }
+
+// newTestServerWith is the test server with opt changed by edit (when not
+// nil) before New. It is the body newTestServer had in Task 2, with the
+// Options made first.
+func newTestServerWith(t *testing.T, edit func(*Options)) *testServer {
 	t.Helper()
 	d := t.TempDir()
 	home := filepath.Join(d, "home")
@@ -87,13 +97,11 @@ func newTestServer(t *testing.T) *testServer {
 	if _, err := ts.session().StoreInit(ops.StoreInitInput{Name: "me", Prefix: "ME", Workspace: "me"}); err != nil {
 		t.Fatal(err)
 	}
-	ts.srv = New(Options{
-		Getenv:  ts.getenv,
-		Now:     time.Now,
-		Token:   testToken,
-		Version: "test",
-		Log:     ts.log,
-	})
+	opt := Options{Getenv: ts.getenv, Now: time.Now, Token: testToken, Version: "test", Log: ts.log}
+	if edit != nil {
+		edit(&opt)
+	}
+	ts.srv = New(opt)
 	ts.hs = httptest.NewServer(ts.srv.Handler())
 	t.Cleanup(ts.hs.Close)
 	_, p, err := net.SplitHostPort(ts.hs.Listener.Addr().String())
@@ -103,6 +111,69 @@ func newTestServer(t *testing.T) *testServer {
 	ts.port, _ = strconv.Atoi(p)
 	ts.srv.SetPort(ts.port)
 	return ts
+}
+
+// addRemote makes a bare repository the remote of the store "me" and
+// returns its path.
+func (ts *testServer) addRemote() string {
+	ts.t.Helper()
+	remote := filepath.Join(ts.t.TempDir(), "r.git")
+	if err := gitrepo.InitBare(remote); err != nil {
+		ts.t.Fatal(err)
+	}
+	c, _, err := ts.session().Config()
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	e, err := c.Select("me")
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	if err := c.RemoveStore("me"); err != nil {
+		ts.t.Fatal(err)
+	}
+	if err := c.AddStore("me", e.Path, []string{remote}); err != nil {
+		ts.t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		ts.t.Fatal(err)
+	}
+	return remote
+}
+
+// state is sync.json of the store "me".
+func (ts *testServer) state() hhsync.State {
+	ts.t.Helper()
+	s, err := ts.session().OpenStore()
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	st, err := hhsync.ReadState(s)
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	return st
+}
+
+// remoteHead is the commit main points at in the bare repository remote;
+// "" before the first push.
+func remoteHead(t *testing.T, remote string) string {
+	t.Helper()
+	r, err := git.PlainOpen(remote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, err := r.Reference(plumbing.NewBranchReferenceName("main"), true)
+	if err != nil {
+		return ""
+	}
+	return ref.Hash().String()
+}
+
+// waitFirstSync waits for the sync the loop makes at its start to end.
+func waitFirstSync(t *testing.T, ts *testServer) {
+	t.Helper()
+	eventually(t, "the sync at start", func() bool { return !ts.state().LastSuccess.IsZero() })
 }
 
 func (ts *testServer) getenv(k string) string { return ts.env[k] }
