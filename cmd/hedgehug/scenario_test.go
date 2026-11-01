@@ -12,8 +12,9 @@ import (
 
 // TestScenario runs the phase 1 done criterion for the CLI: in one store,
 // every CRUD operation and the tree work, and each is one commit.
+//
+// 直列: editWith が t.Setenv（EDITOR と HH_TEST_EDITOR_SCRIPT）を使う
 func TestScenario(t *testing.T) {
-	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.writeAccounts("github.com", "alice")
