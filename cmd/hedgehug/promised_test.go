@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -14,9 +13,6 @@ import (
 
 func TestStoreInitConfigWriteFailureLeavesNoStore(t *testing.T) {
 	t.Parallel()
-	if runtime.GOOS == "windows" {
-		t.Skip("directory permissions do not restrict writes on Windows")
-	}
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores directory permissions")
 	}

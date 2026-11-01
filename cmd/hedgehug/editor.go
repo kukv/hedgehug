@@ -5,17 +5,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 )
 
 // defaultEditor is the editor when neither $VISUAL nor $EDITOR is set.
-var defaultEditor = func() string {
-	if runtime.GOOS == "windows" {
-		return "notepad"
-	}
-	return "vi"
-}()
+const defaultEditor = "vi"
 
 // editor returns the editor command and its arguments: $VISUAL, then
 // $EDITOR, then defaultEditor.

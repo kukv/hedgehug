@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"testing"
 )
@@ -28,11 +27,7 @@ func TestListAndFind(t *testing.T) {
 	writeView(t, dir, "b.yaml", "layout: tree\n")
 	writeView(t, dir, "a.yaml", "layout: table\n")
 	writeView(t, dir, "broken.yaml", "- x\n")
-	// Windows cannot create CON.yaml.
-	con := runtime.GOOS != "windows"
-	if con {
-		writeView(t, dir, "CON.yaml", "layout: tree\n")
-	}
+	writeView(t, dir, "CON.yaml", "layout: tree\n")
 	writeView(t, dir, "notes.txt", "x")
 	writeView(t, dir, "sub/c.yaml", "layout: tree\n")
 	es, err := List(dir)
@@ -43,21 +38,14 @@ func TestListAndFind(t *testing.T) {
 	for _, e := range es {
 		names = append(names, e.Name)
 	}
-	want := []string{"a", "b", "broken"}
-	if con {
-		want = []string{"CON", "a", "b", "broken"}
-	}
+	want := []string{"CON", "a", "b", "broken"}
 	if !slices.Equal(names, want) {
 		t.Fatalf("names = %q; want %q", names, want)
 	}
-	i := 0
-	if con {
-		i = 1
-		if es[0].Err == nil {
-			t.Errorf("CON entry = %+v; want an error", es[0])
-		}
+	if es[0].Err == nil {
+		t.Errorf("CON entry = %+v; want an error", es[0])
 	}
-	if es[i].Err != nil || es[i].View.Layout != "table" || es[i].Rel != "views/a.yaml" || es[i+2].Err == nil {
+	if es[1].Err != nil || es[1].View.Layout != "table" || es[1].Rel != "views/a.yaml" || es[3].Err == nil {
 		t.Errorf("entries = %+v", es)
 	}
 	if e, ok, err := Find(dir, "b"); err != nil || !ok || e.View.Layout != "tree" {

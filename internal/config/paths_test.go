@@ -52,11 +52,6 @@ func TestResolve(t *testing.T) {
 			map[string]string{"HOME": h},
 			filepath.Join(h, "Library", "Application Support", "hedgehug", "config.yaml"), filepath.Join(h, ".local", "share", "hedgehug", "stores"),
 		},
-		{
-			"Windows defaults", "windows",
-			map[string]string{"USERPROFILE": h, "APPDATA": xc, "LOCALAPPDATA": xd},
-			filepath.Join(xc, "hedgehug", "config.yaml"), filepath.Join(xd, "hedgehug", "stores"),
-		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			old := goos
@@ -91,7 +86,7 @@ func TestResolveNeedsHome(t *testing.T) {
 func TestResolveDataDir(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "h")
-	env := map[string]string{"HOME": home, "USERPROFILE": home}
+	env := map[string]string{"HOME": home}
 	get := func(k string) string { return env[k] }
 
 	env["HEDGEHUG_HOME"] = filepath.Join(root, "hh")

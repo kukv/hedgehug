@@ -72,7 +72,7 @@ func newTestSession(t *testing.T) *testSession {
 		t.Fatal(err)
 	}
 	ts := &testSession{t: t, env: map[string]string{
-		"HOME": home, "USERPROFILE": home,
+		"HOME":               home,
 		"HEDGEHUG_HOME":      filepath.Join(d, "hh"),
 		"HEDGEHUG_AUTO_SYNC": "0",
 	}}
@@ -203,7 +203,7 @@ func newTwoStoreSessionWith(t *testing.T, prefixA, prefixB string) *testSession 
 		t.Fatal(err)
 	}
 	ts := &testSession{t: t, env: map[string]string{
-		"HOME": home, "USERPROFILE": home,
+		"HOME":               home,
 		"HEDGEHUG_HOME":      filepath.Join(d, "hh"),
 		"HEDGEHUG_AUTO_SYNC": "0",
 	}}

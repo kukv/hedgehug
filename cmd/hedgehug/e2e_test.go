@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -33,9 +32,6 @@ func buildDevenv(t *testing.T) string {
 			return
 		}
 		name := "devenv"
-		if runtime.GOOS == "windows" {
-			name += ".exe"
-		}
 		devenvBin = filepath.Join(devenvDir, name)
 		if out, err := exec.Command("go", goBuildArgs(devenvBin, "../../tools/devenv")...).CombinedOutput(); err != nil { //nolint:gosec // the arguments are ours
 			devenvErr = fmt.Errorf("go build devenv: %w\n%s", err, out)
@@ -67,7 +63,7 @@ func devUserOf(t *testing.T, bin, devenv, dir, user string) *devUser {
 	}
 	u := &devUser{t: t, bin: bin}
 	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "HOME=") && !strings.HasPrefix(kv, "USERPROFILE=") && !strings.HasPrefix(kv, "HEDGEHUG_") && !strings.HasPrefix(kv, "GIT_CONFIG_") {
+		if !strings.HasPrefix(kv, "HOME=") && !strings.HasPrefix(kv, "HEDGEHUG_") && !strings.HasPrefix(kv, "GIT_CONFIG_") {
 			u.env = append(u.env, kv)
 		}
 	}
@@ -84,7 +80,7 @@ func devUserOf(t *testing.T, bin, devenv, dir, user string) *devUser {
 	}
 	// The home of the user is HEDGEHUG_HOME too, so that nothing of the
 	// real home is read.
-	u.env = append(u.env, "HOME="+u.home, "USERPROFILE="+u.home, "HEDGEHUG_AUTO_SYNC=0")
+	u.env = append(u.env, "HOME="+u.home, "HEDGEHUG_AUTO_SYNC=0")
 	return u
 }
 

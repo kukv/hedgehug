@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -287,7 +286,7 @@ func TestNameCandidates(t *testing.T) {
 // stores elsewhere are still found.
 func TestDiscoverFromSkipsAnUnreadableDirectory(t *testing.T) {
 	t.Parallel()
-	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+	if os.Geteuid() == 0 {
 		t.Skip("a directory cannot be made unreadable here")
 	}
 	remotes := filepath.Join(t.TempDir(), "remotes")

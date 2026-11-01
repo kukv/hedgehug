@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -137,7 +136,7 @@ func TestUIStartsAndStops(t *testing.T) {
 	if info == nil || int(info["port"].(float64)) != u.port || info["token"] != u.token || int(info["pid"].(float64)) != os.Getpid() {
 		t.Fatalf("ui.json = %v", info)
 	}
-	if runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
+	if st.Mode().Perm() != 0o600 {
 		t.Errorf("ui.json mode %v, want 0600", st.Mode().Perm())
 	}
 	u.stop()

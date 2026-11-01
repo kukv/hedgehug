@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -676,10 +675,6 @@ func TestDoctorViews(t *testing.T) {
 			delete(want, "file views/"+k+".yaml")
 		}
 	}
-	if runtime.GOOS == "windows" {
-		delete(files, "views/trail .yaml")
-		delete(want, "file views/trail .yaml")
-	}
 	if _, err := s.Update(store.Op{Name: "test", Author: testAuthor}, func(tx *store.Tx) error {
 		for rel, data := range files {
 			if err := tx.PutFile(rel, []byte(data)); err != nil {
@@ -731,7 +726,7 @@ func TestDoctorViews(t *testing.T) {
 }
 
 // caseSensitive reports whether the file system of dir tells names apart by
-// case. Windows and macOS do not, and cannot hold Same.yaml and same.yaml.
+// case. macOS does not, and cannot hold Same.yaml and same.yaml.
 func caseSensitive(t *testing.T, dir string) bool {
 	t.Helper()
 	p := filepath.Join(dir, ".hedgehug", "local", "caseprobe")

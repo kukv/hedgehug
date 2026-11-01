@@ -9,7 +9,7 @@ import (
 )
 
 // redirectStderr makes file descriptor 2 refer to to; what it referred to
-// before is let go. closeOld is for Windows.
-func redirectStderr(to *os.File, _ bool) error {
+// before is let go.
+func redirectStderr(to *os.File) error {
 	return unix.Dup2(int(to.Fd()), 2) //nolint:gosec // G115: a descriptor fits in an int
 }

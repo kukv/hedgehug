@@ -110,7 +110,7 @@ func TestE2EPhase3a(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dave, "config.yaml"), []byte(cfg), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	d := &devUser{t: t, bin: bin, home: dave, env: append(slicesWithout(alice.env, "HEDGEHUG_HOME=", "HOME=", "USERPROFILE="), "HEDGEHUG_HOME="+dave, "HOME="+dave, "USERPROFILE="+dave)}
+	d := &devUser{t: t, bin: bin, home: dave, env: append(slicesWithout(alice.env, "HEDGEHUG_HOME=", "HOME="), "HEDGEHUG_HOME="+dave, "HOME="+dave)}
 	code, errs := d.fail("store", "init", "gh", "--prefix", "GH", "--remote", "http://127.0.0.1:1/alice/hh-gh.git")
 	if code != 1 || !strings.Contains(errs, "hedgehug store add gh") {
 		t.Errorf("store init on the GitHub branch: exit %d, %q", code, errs)
@@ -179,7 +179,7 @@ func TestE2EPhase3a(t *testing.T) {
 	if err := os.MkdirAll(carol, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	c := &devUser{t: t, bin: bin, home: carol, env: append(slicesWithout(bob.env, "HEDGEHUG_HOME=", "HOME=", "USERPROFILE="), "HEDGEHUG_HOME="+carol, "HOME="+carol, "USERPROFILE="+carol)}
+	c := &devUser{t: t, bin: bin, home: carol, env: append(slicesWithout(bob.env, "HEDGEHUG_HOME=", "HOME="), "HEDGEHUG_HOME="+carol, "HOME="+carol)}
 	c.ok("store", "discover", "--from", filepath.Join(dev, "remotes"), "--all")
 	if out := c.ok("store", "list"); !strings.Contains(out, "hh-ops") || !strings.Contains(out, "hh-shared") || !strings.Contains(out, "hh-tasks") {
 		t.Errorf("carol's stores:\n%s", out)

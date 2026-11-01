@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -150,9 +149,6 @@ func hhBinary(t *testing.T) string {
 			return
 		}
 		hhBin = filepath.Join(dir, "hedgehug")
-		if runtime.GOOS == "windows" {
-			hhBin += ".exe"
-		}
 		if out, err := exec.Command("go", "build", "-o", hhBin, "github.com/kukv/hedgehug/cmd/hedgehug").CombinedOutput(); err != nil { //nolint:gosec // our own package
 			hhErr = fmt.Errorf("%v: %s", err, out)
 		}

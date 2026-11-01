@@ -18,7 +18,6 @@ var (
 	// The directories under tasks/ are the first characters of the ULID.
 	shardRE     = regexp.MustCompile(`tasks/[0-9A-Z]/[0-9A-Z]/`)
 	columnGapRE = regexp.MustCompile(`(\S) {2,}`)
-	tmpPathRE   = regexp.MustCompile(`<TMP>[^\s",:]*`)
 	// The commit that undo names by its first seven characters.
 	shortHashRE = regexp.MustCompile(`(Undid )[0-9a-f]{7}\b`)
 	// The commit and the local time that a line of show's History or of log
@@ -31,14 +30,8 @@ var (
 // stays visible), times and commit hashes. IDs, titles and messages are kept.
 func (te *testEnv) normalize(s string) string {
 	tmp := filepath.Dir(filepath.Dir(te.home))
-	// JSON writes the \ of a Windows path as \\.
-	escaped := strings.ReplaceAll(tmp, `\`, `\\`)
-	if strings.Contains(s, tmp) || strings.Contains(s, escaped) {
-		s = strings.ReplaceAll(strings.ReplaceAll(s, escaped, "<TMP>"), tmp, "<TMP>")
-		// A path under it is written with / on every system.
-		s = tmpPathRE.ReplaceAllStringFunc(s, func(p string) string {
-			return strings.ReplaceAll(strings.ReplaceAll(p, `\\`, "/"), `\`, "/")
-		})
+	if strings.Contains(s, tmp) {
+		s = strings.ReplaceAll(s, tmp, "<TMP>")
 		// The length of the directory changes the padding of a table.
 		s = columnGapRE.ReplaceAllString(s, "$1  ")
 	}

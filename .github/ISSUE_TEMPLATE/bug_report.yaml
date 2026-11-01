@@ -27,7 +27,7 @@ body:
       options:
         - Linux
         - macOS
-        - Windows
+        - Windows (WSL)
     validations:
       required: true
   - type: dropdown

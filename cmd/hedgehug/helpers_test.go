@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -61,7 +60,7 @@ func newTestEnv(t *testing.T) *testEnv {
 
 func (te *testEnv) getenv(k string) string {
 	switch k {
-	case "HOME", "USERPROFILE":
+	case "HOME":
 		return te.home
 	case "HEDGEHUG_HOME":
 		return te.hhHome
@@ -228,9 +227,6 @@ func TestMain(m *testing.M) {
 	pathDir, err := os.MkdirTemp("", "hedgehug-path-")
 	if err == nil {
 		name := "hedgehug"
-		if runtime.GOOS == "windows" {
-			name += ".exe" // exec.LookPath tries the PATHEXT names only
-		}
 		if err := os.WriteFile(filepath.Join(pathDir, name), nil, 0o700); err == nil { //nolint:gosec // an empty file that only has to be found
 			_ = os.Setenv("PATH", pathDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 		}
@@ -305,9 +301,6 @@ func buildHedgehug(t *testing.T) string {
 			return
 		}
 		name := "hedgehug"
-		if runtime.GOOS == "windows" {
-			name += ".exe"
-		}
 		builtBin = filepath.Join(builtDir, name)
 		if out, err := exec.Command("go", goBuildArgs(builtBin, ".")...).CombinedOutput(); err != nil { //nolint:gosec // the arguments are ours
 			buildErr = fmt.Errorf("go build: %w\n%s", err, out)
@@ -410,11 +403,11 @@ func (te *testEnv) runBinary(bin string, args ...string) {
 	te.t.Helper()
 	cmd := exec.Command(bin, args...) //nolint:gosec // the binary the test built
 	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "HOME=") && !strings.HasPrefix(kv, "USERPROFILE=") && !strings.HasPrefix(kv, "HEDGEHUG_") {
+		if !strings.HasPrefix(kv, "HOME=") && !strings.HasPrefix(kv, "HEDGEHUG_") {
 			cmd.Env = append(cmd.Env, kv)
 		}
 	}
-	cmd.Env = append(cmd.Env, "HOME="+te.home, "USERPROFILE="+te.home, "HEDGEHUG_HOME="+te.hhHome)
+	cmd.Env = append(cmd.Env, "HOME="+te.home, "HEDGEHUG_HOME="+te.hhHome)
 	for k, v := range te.env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -391,7 +390,7 @@ func TestFinishLeftoverCarriesLocalFiles(t *testing.T) {
 		t.Error("the old store is left")
 	}
 
-	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+	if os.Geteuid() == 0 {
 		t.Skip("a file that cannot be read needs a permission that is enforced")
 	}
 	if err := os.MkdirAll(local(before), 0o750); err != nil {

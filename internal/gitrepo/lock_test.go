@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -220,9 +219,6 @@ func TestRepackFailureLeavesNoFiles(t *testing.T) {
 
 func TestRepackWritesReadOnlyPacks(t *testing.T) {
 	t.Parallel()
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows has no permission bits for others")
-	}
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	commitFiles(t, r, dir, map[string]string{"a.md": "1"})

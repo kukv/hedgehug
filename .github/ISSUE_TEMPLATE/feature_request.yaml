@@ -6,8 +6,8 @@ body:
     attributes:
       value: |
         hedgehug is a local-first task manager that uses git as its storage and sync layer,
-        with a CLI and a GUI in a single binary. It ships for Linux, macOS and Windows, so a
-        proposal has to work on all three.
+        with a CLI and a GUI in a single binary. It ships for Linux and macOS (on Windows, it runs in WSL), so a
+        proposal has to work on both.
   - type: textarea
     id: problem
     attributes:

@@ -228,7 +228,7 @@ func (b *BoundedLog) Release() error {
 	if err != nil {
 		return err
 	}
-	if err := redirectStderr(nul, true); err != nil {
+	if err := redirectStderr(nul); err != nil {
 		_ = nul.Close()
 		return err
 	}
@@ -270,7 +270,7 @@ func (b *BoundedLog) ReopenAt(dir string) error {
 		return err
 	}
 	if b.own == os.Stderr {
-		if err := redirectStderr(f, false); err != nil {
+		if err := redirectStderr(f); err != nil {
 			_ = f.Close()
 			return err
 		}

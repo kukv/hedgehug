@@ -45,6 +45,5 @@ check: tidy-check lint fmt-check test
 # Validate the release configuration and cross-compilation (mirrors release CI).
 release-check:
 	goreleaser check
-	GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/hedgehug
 	GOOS=darwin GOARCH=arm64 go build -o /dev/null ./cmd/hedgehug
 	GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/hedgehug
