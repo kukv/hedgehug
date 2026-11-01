@@ -140,12 +140,12 @@ func (l *Loop) targets() (*config.Config, []config.StoreEntry) {
 		l.configFailed(err)
 		return nil, nil
 	}
-	l.configFailed(nil)
 	all, err := ss.SyncTargets(c, true)
 	if err != nil {
-		l.s.logf("sync: %v", err)
+		l.configFailed(err)
 		return nil, nil
 	}
+	l.configFailed(nil)
 	var out []config.StoreEntry
 	for _, e := range all {
 		if ops.SyncsInBackground(e) {

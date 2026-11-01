@@ -61,7 +61,7 @@ func main() {
 		getenv:     os.Getenv,
 		isTerminal: isTerminal,
 		now:        time.Now,
-		openURL:    func(u string) error { return openURL(u, os.Stderr) },
+		openURL:    openURL,
 	}))
 }
 
@@ -117,15 +117,9 @@ func writeErr(w io.Writer, err error) {
 	_, _ = fmt.Fprintln(w, "hedgehug: "+describe(err))
 }
 
-// openURL opens u in the browser of the OS without waiting for the command
-// that opens it, and tells w if that fails. A failure after the process has
-// ended is not shown.
-func openURL(u string, w io.Writer) error {
+// openURL opens u in the browser of the OS and returns when the command that
+// opens it has ended. Its own output is not shown.
+func openURL(u string) error {
 	browser.Stdout, browser.Stderr = io.Discard, io.Discard // not into the output of the CLI
-	go func() {
-		if err := browser.OpenURL(u); err != nil {
-			_, _ = fmt.Fprintln(w, "warning: the browser did not open:", err)
-		}
-	}()
-	return nil
+	return browser.OpenURL(u)
 }

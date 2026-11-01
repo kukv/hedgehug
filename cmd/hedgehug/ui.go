@@ -61,7 +61,9 @@ func (a *app) ui(port int, noOpen bool) error {
 	file := filepath.Join(paths.DataDir, "ui.json")
 	if info, ok := readRunningUI(file); ok {
 		_, _ = fmt.Fprintln(a.stdout, "Hedgehug UI is running: "+info.url())
-		a.open(info.url(), noOpen)
+		if !noOpen && a.openURL != nil {
+			a.warnBrowser(a.openURL(info.url())) // the command ends with this process otherwise
+		}
 		return nil
 	}
 	ln, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(port))
@@ -97,7 +99,9 @@ func (a *app) ui(port int, noOpen bool) error {
 	go func() { served <- hs.Serve(ln) }()
 
 	_, _ = fmt.Fprintln(a.stdout, "Hedgehug UI: "+info.url())
-	a.open(info.url(), noOpen)
+	if !noOpen && a.openURL != nil {
+		go func() { a.warnBrowser(a.openURL(info.url())) }() // do not wait for the opener
+	}
 
 	select {
 	case <-ctx.Done():
@@ -115,12 +119,9 @@ func (a *app) ui(port int, noOpen bool) error {
 	return srv.Shutdown(context.Background())
 }
 
-// open opens url in the browser, unless noOpen.
-func (a *app) open(url string, noOpen bool) {
-	if noOpen || a.openURL == nil {
-		return
-	}
-	if err := a.openURL(url); err != nil {
+// warnBrowser tells that the browser did not open, if err says so.
+func (a *app) warnBrowser(err error) {
+	if err != nil {
 		_, _ = fmt.Fprintln(a.stderr, "warning: the browser did not open:", err)
 	}
 }

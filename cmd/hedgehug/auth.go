@@ -100,9 +100,7 @@ func (a *app) showDeviceCode(dc *github.DeviceCode) {
 	_, _ = fmt.Fprint(a.stderr, "Open the browser? [Y/n] ")
 	line, _ := a.readLine()
 	if ans := strings.ToLower(strings.TrimSpace(line)); ans == "" || ans == "y" || ans == "yes" {
-		if err := a.openURL(dc.VerificationURI); err != nil {
-			_, _ = fmt.Fprintln(a.stderr, "warning: the browser did not open:", err)
-		}
+		go func() { a.warnBrowser(a.openURL(dc.VerificationURI)) }() // do not wait for the opener
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"os"
@@ -166,13 +167,24 @@ func TestUIReusesTheRunningServer(t *testing.T) {
 	te.ok("store", "init", "me", "--prefix", "ME")
 	u := te.startUI("--no-open")
 	var opened []string
-	te.openURL = func(s string) error { opened = append(opened, s); return nil }
+	te.openURL = func(s string) error { time.Sleep(50 * time.Millisecond); opened = append(opened, s); return nil } // slow: hh ui must wait for it
 	code, out, errs := te.run("ui")
 	if code != 0 || !strings.Contains(out, "Hedgehug UI is running: ") || !strings.Contains(out, "#token="+u.token) {
 		t.Fatalf("second hh ui: %d %q %q", code, out, errs)
 	}
 	if len(opened) != 1 {
 		t.Errorf("opened %v", opened)
+	}
+}
+
+func TestUIReuseWarnsWhenTheBrowserDoesNotOpen(t *testing.T) {
+	te := newTestEnv(t)
+	te.ok("store", "init", "me", "--prefix", "ME")
+	te.startUI("--no-open")
+	te.openURL = func(string) error { return errors.New("no browser") }
+	code, _, errs := te.run("ui")
+	if code != 0 || !strings.Contains(errs, "warning: the browser did not open: no browser") {
+		t.Fatalf("second hh ui: %d %q", code, errs)
 	}
 }
 

@@ -257,3 +257,38 @@ func TestLoopLogsBrokenConfigOnce(t *testing.T) {
 		t.Fatalf("after recovery and a new failure: %d lines\n%s", n, ts.log.String())
 	}
 }
+
+func TestLoopLogsNoTargetsOnce(t *testing.T) {
+	ts := newTestServer(t)
+	cfg := filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml")
+	good, err := os.ReadFile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfg, []byte("stores: []\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l := ts.srv.loop
+	lines := func() int { return strings.Count(ts.log.String(), "sync: ") }
+
+	// config.yaml reads but names no store: the same failure every minute is one line.
+	l.step()
+	l.step()
+	l.step()
+	if n := lines(); n != 1 {
+		t.Fatalf("after three steps: %d lines\n%s", n, ts.log.String())
+	}
+
+	// Once it works again the failure is forgotten, so a new one is logged.
+	if err := os.WriteFile(cfg, good, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l.step()
+	if err := os.WriteFile(cfg, []byte("stores: []\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l.step()
+	if n := lines(); n != 2 {
+		t.Fatalf("after recovery and a new failure: %d lines\n%s", n, ts.log.String())
+	}
+}
