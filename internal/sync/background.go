@@ -88,10 +88,19 @@ func SetSpawn(f func(name string, args []string, logPath string) error) (restore
 // ends it, since run keeps the error in sync.json for the next command to
 // show and to start another.
 func Background(s *store.Store, opt Options, pushInterval time.Duration, run func() error) error {
+	return BackgroundThen(s, opt, pushInterval, func() (func() error, error) { return nil, run() })
+}
+
+// BackgroundThen is Background whose run may return a function to call once
+// bg.lock is let go, the last thing the background sync does (run says it
+// is done with the loop by returning one). It is for the swap of a rebuilt
+// store, which cannot happen while a file of the store is held.
+func BackgroundThen(s *store.Store, opt Options, pushInterval time.Duration, run func() (func() error, error)) error {
 	now := opt.Now
 	if now == nil {
 		now = time.Now
 	}
+	var then func() error
 	err := s.WithLocalLock(bgLock, 0, func() error {
 		for {
 			st, err := ReadState(s)
@@ -103,7 +112,7 @@ func Background(s *store.Store, opt Options, pushInterval time.Duration, run fun
 					time.Sleep(d)
 				}
 			}
-			if err := run(); err != nil {
+			if then, err = run(); err != nil || then != nil {
 				return err
 			}
 			if st, err = ReadState(s); err != nil {
@@ -117,7 +126,10 @@ func Background(s *store.Store, opt Options, pushInterval time.Duration, run fun
 	if errors.Is(err, store.ErrLocked) {
 		return nil // another one waits already
 	}
-	return err
+	if err != nil || then == nil {
+		return err
+	}
+	return then()
 }
 
 // TakeError returns the last background error once (it sets error_reported).

@@ -55,6 +55,8 @@ type Rebuild struct {
 	// Notices are the items put in the inbox of the rebuild (spec step 7);
 	// whoever swaps it in tells of them.
 	Notices []inbox.Item
+
+	seen map[string]stamp // the local files copyLocal copied
 }
 
 // rebuild makes the clone again (spec steps 2 to 4) and puts it in
@@ -143,7 +145,7 @@ func rebuild(s *store.Store, tracked plumbing.Hash, opt Options, res *Result) (e
 	if err != nil {
 		return err
 	}
-	if err = copyLocal(s, ns); err != nil {
+	if err = copyLocal(s, ns, b); err != nil {
 		return err
 	}
 	// The inbox goes on from where the new history has the commit it had
@@ -292,19 +294,44 @@ func findPurgedChanges(r *gitrepo.Repo, base, oldHead plumbing.Hash, skip func(s
 	return nil
 }
 
-// skipLocal says what copyLocal leaves behind: the locks, the index cache
-// and what is about the old history.
+// skipLocal says what a rebuild leaves behind of .hedgehug/local: the
+// locks, the index cache and what is about the old history. A name that
+// starts with a dot is the temporary file of a write in progress (the
+// atomic write names it so; LocalFiles skips it too), not a file of its
+// own.
 func skipLocal(name string) bool {
-	return name == "lock" || strings.HasSuffix(name, ".lock") || name == "index" || name == forcePushFile || name == "rewrite-in-progress.json"
+	return name == "lock" || strings.HasSuffix(name, ".lock") || name == "index" || name == forcePushFile ||
+		name == "rewrite-in-progress.json" || strings.HasPrefix(name, ".")
 }
 
-// copyLocal copies .hedgehug/local of from to to (spec step 4).
-func copyLocal(from, to *store.Store) error {
-	src := filepath.Join(from.Dir(), filepath.FromSlash(store.LocalDir))
-	dst := filepath.Join(to.Dir(), filepath.FromSlash(store.LocalDir))
-	return filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
+// ownedLocal are the files the rebuild writes in its own way, so that the
+// copy made right before the swap leaves them alone.
+var ownedLocal = []string{"rewrites-applied.json", "inbox-head"}
+
+// stamp tells whether a file changed: its size and time.
+type stamp struct {
+	size int64
+	mod  time.Time
+}
+
+// localFiles lists the files of .hedgehug/local of the store at dir that a
+// rebuild carries over, by their names relative to it, with their stamps.
+func localFiles(dir string) (map[string]stamp, error) {
+	src := filepath.Join(dir, filepath.FromSlash(store.LocalDir))
+	out := map[string]stamp{}
+	err := filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
 		if errors.Is(err, fs.ErrNotExist) && p == src {
 			return nil // a store with nothing local
+		}
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !d.Type().IsRegular() || skipLocal(d.Name()) {
+			return nil
+		}
+		info, err := d.Info()
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil // gone since the walk saw it
 		}
 		if err != nil {
 			return err
@@ -313,21 +340,88 @@ func copyLocal(from, to *store.Store) error {
 		if err != nil {
 			return err
 		}
-		if rel == "." {
-			return os.MkdirAll(dst, 0o750)
+		out[filepath.ToSlash(rel)] = stamp{info.Size(), info.ModTime()}
+		return nil
+	})
+	return out, err
+}
+
+// copyFile copies the local file name of the store at from to the one at to.
+func copyFile(from, to, name string) error {
+	data, err := os.ReadFile(filepath.Join(from, filepath.FromSlash(store.LocalDir), filepath.FromSlash(name))) //nolint:gosec // a file of the store
+	if err != nil {
+		return err
+	}
+	return store.WriteLocalIn(to, name, data)
+}
+
+// copyLocal copies .hedgehug/local of from to to (spec step 4), and keeps in
+// b the stamps of what it copied, for syncLocal.
+func copyLocal(from, to *store.Store, b *Rebuild) error {
+	files, err := localFiles(from.Dir())
+	if err != nil {
+		return err
+	}
+	for name := range files {
+		if err := copyFile(from.Dir(), to.Dir(), name); err != nil {
+			return err
 		}
-		if d.IsDir() {
-			return os.MkdirAll(filepath.Join(dst, rel), 0o750)
+	}
+	b.seen = files
+	return nil
+}
+
+// syncLocal brings to the rebuild at b.Dir what changed in .hedgehug/local of
+// the store at dir since copyLocal: the sync writes sync.json and the inbox
+// after the rebuild was made, and a command may write there until the swap.
+// The inbox's items are joined line by line, so the notices of the rebuild
+// stay; the files the rebuild writes itself are left as they are.
+func syncLocal(dir string, b *Rebuild) error {
+	files, err := localFiles(dir)
+	if err != nil {
+		return err
+	}
+	for name, st := range files {
+		if b.seen[name] == st || slices.Contains(ownedLocal, name) {
+			continue
 		}
-		if !d.Type().IsRegular() || skipLocal(d.Name()) || strings.HasPrefix(d.Name(), ".") {
-			return nil
+		if name != "inbox.jsonl" {
+			if err := copyFile(dir, b.Dir, name); err != nil {
+				return err
+			}
+			continue
 		}
-		data, err := os.ReadFile(p) //nolint:gosec // a file of the store
+		old, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(store.LocalDir), name)) //nolint:gosec // a file of the store
 		if err != nil {
 			return err
 		}
-		return store.WriteLocalIn(to.Dir(), filepath.ToSlash(rel), data)
-	})
+		cur, err := os.ReadFile(filepath.Join(b.Dir, filepath.FromSlash(store.LocalDir), name)) //nolint:gosec // a file of the store
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		if err := store.WriteLocalIn(b.Dir, name, joinLines(cur, old)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// joinLines is cur with the lines of more it lacks added.
+func joinLines(cur, more []byte) []byte {
+	have := map[string]bool{}
+	for l := range strings.SplitSeq(string(cur), "\n") {
+		have[l] = true
+	}
+	out := cur
+	if len(out) > 0 && out[len(out)-1] != '\n' {
+		out = append(out, '\n')
+	}
+	for l := range strings.SplitSeq(string(more), "\n") {
+		if l != "" && !have[l] {
+			out = append(append(out, l...), '\n')
+		}
+	}
+	return out
 }
 
 // tellRewrite puts the notices of spec step 7 in the inbox of ns: they are
@@ -358,7 +452,8 @@ func tellRewrite(ns *store.Store, head plumbing.Hash, opt Options, b *Rebuild) (
 // is removed. The caller holds none of the store's locks and has closed
 // its git files. It checks first that the old one is as it was when b was
 // made (its HEAD is b.OldHead, nothing uncommitted); if not, it removes
-// b.Dir and returns ErrRebuildStale (any other failure to look at the old
+// b.Dir and returns ErrRebuildStale; then it brings over what changed in
+// .hedgehug/local since the copy (any other failure to look at the old
 // store leaves b.Dir, for FinishLeftover). A rename that fails changes nothing
 // or puts the old store back; only when that fails too is a leftover
 // (FindLeftover) all there is. The removal of the old store may fail
@@ -368,6 +463,9 @@ func Swap(dir string, b *Rebuild) error {
 		if errors.Is(err, ErrRebuildStale) {
 			_ = os.RemoveAll(b.Dir)
 		}
+		return err
+	}
+	if err := syncLocal(dir, b); err != nil {
 		return err
 	}
 	before := dir + beforePrefix + time.Now().UTC().Format("20060102T150405.000000000")
@@ -420,17 +518,31 @@ func (l Leftover) None() bool { return l.New == "" && len(l.Before) == 0 }
 
 // FindLeftover looks beside dir for what a rebuild left.
 func FindLeftover(dir string) (Leftover, error) {
+	entries, err := ReadParent(dir)
+	if err != nil {
+		return Leftover{}, err
+	}
+	return LeftoverIn(dir, entries), nil
+}
+
+// ReadParent reads the directory dir is in, for LeftoverIn; a caller that
+// looks at several stores reads each directory once. A missing directory
+// has no entries.
+func ReadParent(dir string) ([]fs.DirEntry, error) {
+	entries, err := os.ReadDir(filepath.Dir(filepath.Clean(dir)))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	return entries, err
+}
+
+// LeftoverIn is FindLeftover over the entries of the directory dir is in
+// (ReadParent).
+func LeftoverIn(dir string, entries []fs.DirEntry) Leftover {
 	var l Leftover
 	parent, base := filepath.Split(filepath.Clean(dir))
 	if parent == "" {
 		parent = "."
-	}
-	entries, err := os.ReadDir(parent)
-	if errors.Is(err, fs.ErrNotExist) {
-		return l, nil
-	}
-	if err != nil {
-		return l, err
 	}
 	for _, e := range entries { // sorted by name, so the oldest before-rewrite first
 		switch name := e.Name(); {
@@ -440,7 +552,7 @@ func FindLeftover(dir string) (Leftover, error) {
 			l.Before = append(l.Before, filepath.Join(parent, name))
 		}
 	}
-	return l, nil
+	return l
 }
 
 // LeftoverMessage is what Hedgehug tells of an unfinished rebuild of the

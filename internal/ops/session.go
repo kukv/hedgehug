@@ -619,7 +619,22 @@ func (ss *Session) ResolveULID(ix *index.Index) func(string) (model.ULID, error)
 // how it went. A write that was pending when the sync began has been pushed
 // by it; one made later has not. reported says that the one who ran it is
 // told of a failure, so the next command does not tell of it again.
+//
+// When the sync finds a history rewrite it makes the store again beside the
+// old one and, once it has let go of its locks, swaps it in (swapRebuilt);
+// Result.Reopen then says that s is closed.
 func (ss *Session) RunSync(s *store.Store, opt sync.Options, reported bool) (res sync.Result, err error) {
+	res, err = ss.runSyncLocked(s, opt, reported)
+	if res.Rebuild == nil || err != nil {
+		return res, err
+	}
+	return ss.swapRebuilt(s, opt, reported, res)
+}
+
+// runSyncLocked is RunSync up to the swap: the sync under sync.lock. A
+// rebuild it made is in Result.Rebuild, not swapped in; on an error it is
+// removed.
+func (ss *Session) runSyncLocked(s *store.Store, opt sync.Options, reported bool) (res sync.Result, err error) {
 	// The sync writes objects through the handle s; the stores mounted are
 	// opened again after it, so that they see them.
 	defer ss.dropMount()
@@ -655,15 +670,11 @@ func (ss *Session) RunSync(s *store.Store, opt sync.Options, reported bool) (res
 		})
 		return errors.Join(runErr, stateErr)
 	})
-	if res.Rebuild == nil {
-		return res, err
-	}
-	if err != nil {
+	if err != nil && res.Rebuild != nil {
 		sync.Discard(res.Rebuild)
 		res.Rebuild = nil
-		return res, err
 	}
-	return ss.swapRebuilt(s, opt, reported, res)
+	return res, err
 }
 
 // swapRebuilt puts the clone the sync made again after a history rewrite in
@@ -678,6 +689,7 @@ func (ss *Session) swapRebuilt(s *store.Store, opt sync.Options, reported bool, 
 	}
 	ss.closeMounted(dir)
 	ss.dropMount()
+	res.Reopen = true // s is closed from here
 	if err := s.Repo().Close(); err != nil {
 		sync.Discard(res.Rebuild)
 		return res, err
@@ -702,8 +714,9 @@ func (ss *Session) swapRebuilt(s *store.Store, opt sync.Options, reported bool, 
 	if err != nil {
 		return res, err
 	}
+	defer func() { _ = ns.Repo().Close() }() // the caller opens the store again
 	next, err := ss.RunSync(ns, opt, reported)
-	next.Swapped = true
+	next.Swapped, next.Reopen = true, true
 	next.Warnings = append(res.Warnings, next.Warnings...)
 	next.Notices = append(res.Notices, next.Notices...)
 	next.Overwritten = append(res.Overwritten, next.Overwritten...)

@@ -3,6 +3,8 @@
 package mount
 
 import (
+	"io/fs"
+	"path/filepath"
 	"strings"
 	gosync "sync"
 	"time"
@@ -139,10 +141,15 @@ type Options struct {
 // goes to Skipped with why.
 func Open(c *config.Config, opt Options) *Set {
 	set := &Set{unopened: opt.Unopened}
+	parents := map[string][]fs.DirEntry{} // read once for the stores in one directory
+	perr := map[string]error{}
 	for _, e := range c.Stores {
 		s, err := store.Open(e.Path)
-		left, lerr := sync.FindLeftover(e.Path)
-		unfinished := lerr == nil && !left.None()
+		parent := filepath.Dir(filepath.Clean(e.Path))
+		if _, ok := parents[parent]; !ok {
+			parents[parent], perr[parent] = sync.ReadParent(e.Path)
+		}
+		unfinished := perr[parent] == nil && !sync.LeftoverIn(e.Path, parents[parent]).None()
 		if err != nil {
 			if unfinished {
 				err = &sync.LeftoverError{Name: e.Name}

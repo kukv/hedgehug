@@ -78,8 +78,9 @@ type Result struct {
 	// is as it was.
 	Rebuild *Rebuild
 	// Swapped is set by the caller that put Rebuild in the place of the
-	// store: the Store handle the sync was given is then of the old one.
-	Swapped bool
+	// store. Reopen is set by a caller that closed the Store handle the sync
+	// was given (it swapped, or tried to): the caller of that opens it again.
+	Swapped, Reopen bool
 	// Unpushable counts the commits not pushed because the store is read-only.
 	Unpushable int
 }

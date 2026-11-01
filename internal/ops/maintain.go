@@ -215,10 +215,12 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 	}
 	// A swap after a history rewrite that stopped is finished first, so the
 	// store opens (rewrite_leftover).
+	// One that fails is that store's finding; the others go on.
+	finishErr := map[string]error{}
 	if fix {
 		for _, e := range entries {
 			if err := ss.finishRebuild(e); err != nil {
-				return nil, err
+				finishErr[e.Name] = err
 			}
 		}
 	}
@@ -257,6 +259,13 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 	out := make([]DoctorReport, 0, len(entries))
 	for i, e := range entries {
 		r, err := ss.doctorStore(e, len(entries) == 1, repaired[i], duplicatesOnce)
+		if ferr := finishErr[e.Name]; ferr != nil {
+			if err != nil {
+				// the store did not open for want of the finish: say that
+				r, err = DoctorReport{Store: e.Name, Repaired: repaired[i]}, nil
+			}
+			r.Findings = append(r.Findings, doctor.Finding{Check: "rewrite_leftover", Where: e.Path, Msg: "cannot finish the rebuild after a history rewrite: " + ferr.Error(), Hint: "fix the cause and run hedgehug doctor --fix again"})
+		}
 		if err != nil {
 			return nil, err
 		}

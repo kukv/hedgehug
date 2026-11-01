@@ -125,8 +125,8 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 	}
 	opt.Explicit = explicit
 	res, err := ss.RunSync(s, opt, true)
-	if res.Swapped {
-		// s is the store that was swapped out.
+	if res.Reopen {
+		// s was closed for the swap.
 		var oerr error
 		if s, oerr = ss.openStoreAt(e.Path); oerr != nil {
 			err = errors.Join(err, oerr)
@@ -323,20 +323,24 @@ func (ss *Session) SyncBackground(log io.Writer) error {
 	log = sync.BoundLog(s, log)
 	opt, err := ss.SyncOptions(c, e)
 	if err == nil {
-		err = sync.Background(s, opt, c.Sync.PushInterval, func() error {
-			res, err := ss.RunSync(s, opt, false)
-			if res.Swapped {
-				// s is the store that was swapped out; the next run, if any,
-				// is on the new one.
-				var oerr error
-				if s, oerr = ss.openStoreAt(e.Path); oerr != nil {
-					err = errors.Join(err, oerr)
-				}
-			}
+		logWarnings := func(res sync.Result) {
 			for _, w := range res.Warnings { // such as a mirror that is down; for sync.log
 				_, _ = fmt.Fprintln(log, "warning: "+w)
 			}
-			return err
+		}
+		err = sync.BackgroundThen(s, opt, c.Sync.PushInterval, func() (func() error, error) {
+			res, err := ss.runSyncLocked(s, opt, false)
+			logWarnings(res)
+			if err != nil || res.Rebuild == nil {
+				return nil, err
+			}
+			// A history rewrite was found. The swap waits until Background
+			// has let go of bg.lock, which is in the store it replaces.
+			return func() error {
+				next, err := ss.swapRebuilt(s, opt, false, res)
+				logWarnings(next)
+				return err
+			}, nil
 		})
 	}
 	if err != nil {
