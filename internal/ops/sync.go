@@ -108,7 +108,7 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 		return r, err
 	}
 	// The push is done: what fails from here is a warning, as in sync.Run.
-	ix, err := ss.indexOf(c, e.Name, s)
+	ix, err := ss.indexOf(e.Name, s)
 	if err != nil {
 		r.Warnings = append(r.Warnings, "read the index, so ids are not shown: "+err.Error())
 	}

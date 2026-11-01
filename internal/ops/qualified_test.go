@@ -39,6 +39,35 @@ func TestUndoKeptLabelIsQualifiedAndTaskIsNot(t *testing.T) {
 	}
 }
 
+func TestAStoreAddedInTheSessionIsMountedAndQualifies(t *testing.T) {
+	ts := newTestSession(t)
+	ts.addTask("one", nil)
+	remote := addBareRemote(t, ts)
+	if _, err := ts.Sync(false, true); err != nil {
+		t.Fatal(err)
+	}
+	set, err := ts.Mount() // one store: nothing shared yet
+	if err != nil || len(set.Stores) != 1 {
+		t.Fatalf("Mount = %d stores, %v", len(set.Stores), err)
+	}
+	if _, err := ts.StoreAdd("copy", []string{remote}, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	// the copy has the prefix ME too, so the id alone says nothing
+	_, err = ts.Show("ME-1")
+	wantCode(t, "Show(ME-1)", err, KindAmbiguous, "task.ambiguous")
+	r, err := ts.Show("copy:ME-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := r.Index.DisplayID(r.Entry); got != "copy:ME-1" {
+		t.Errorf("DisplayID = %q; want copy:ME-1", got)
+	}
+	if set, err = ts.Mount(); err != nil || len(set.Stores) != 2 {
+		t.Errorf("Mount after StoreAdd = %d stores, %v", len(set.Stores), err)
+	}
+}
+
 func TestMountedPathFollowsAPrefixThatBecomesShared(t *testing.T) {
 	ts := newTwoStoreSession(t) // API and WEB
 	set, err := ts.Mount()

@@ -122,7 +122,7 @@ func (ss *Session) Mount() (*mount.Set, error) {
 	if err != nil {
 		return nil, err
 	}
-	set, err := mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Warn: ss.warn, Qualified: ss.qualifiedNow(c)})
+	set, err := mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Warn: ss.warn, Qualified: ss.qualifiedNow()})
 	if err != nil {
 		return nil, err
 	}
@@ -257,34 +257,39 @@ func (ss *Session) Open() (*store.Store, *index.Index, error) {
 // index sets the id numbers of its store, so the two go together, and
 // operations run concurrently on one session.
 func (ss *Session) openIndex(s *store.Store) (*index.Index, error) {
-	c, e, err := ss.Entry()
+	_, e, err := ss.Entry()
 	if err != nil {
 		return index.Open(s)
 	}
-	return ss.indexOf(c, e.Name, s)
+	return ss.indexOf(e.Name, s)
 }
 
-// indexOf opens the index of s, the store name of c's stores, that knows its
+// indexOf opens the index of s, the store called name, that knows its
 // name and shows ids as the other indexes do.
-func (ss *Session) indexOf(c *config.Config, name string, s *store.Store) (*index.Index, error) {
+func (ss *Session) indexOf(name string, s *store.Store) (*index.Index, error) {
 	ix, err := index.Open(s)
 	if err != nil {
 		return nil, err
 	}
 	ix.SetStoreName(name)
-	ix.SetQualified(ss.qualified(c))
+	ix.SetQualified(ss.qualified())
 	return ix, nil
 }
 
 // qualified tells which id prefixes show with the store's name, because two
-// or more stores of c use them (mount.SharedPrefixes). It is worked out once
+// or more stores of config.yaml use them (mount.SharedPrefixes). It is worked out once
 // per caller, and again after a write, which may add a workspace or change a
 // prefix. Stores that cannot be read have no prefix to count.
-func (ss *Session) qualified(c *config.Config) func(prefix string) bool {
+func (ss *Session) qualified() func(prefix string) bool {
 	mc := ss.mountCache()
 	mc.sharedMu.Lock()
 	defer mc.sharedMu.Unlock()
 	if !mc.sharedDone {
+		// the config as it is now: a store may have been added or removed
+		c, _, err := ss.Config()
+		if err != nil {
+			return nil // not kept, so the next call reads again
+		}
 		mc.shared, mc.sharedDone = mount.SharedPrefixes(c), true
 	}
 	return mc.shared
@@ -292,9 +297,9 @@ func (ss *Session) qualified(c *config.Config) func(prefix string) bool {
 
 // qualifiedNow is qualified asked again at each use, for what is kept long:
 // a mounted set must follow a write that changes which prefixes are shared.
-func (ss *Session) qualifiedNow(c *config.Config) func(prefix string) bool {
+func (ss *Session) qualifiedNow() func(prefix string) bool {
 	return func(prefix string) bool {
-		fn := ss.qualified(c)
+		fn := ss.qualified()
 		return fn != nil && fn(prefix)
 	}
 }

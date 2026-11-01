@@ -175,11 +175,7 @@ func (ss *Session) InboxListOf(stores []InboxStore, all bool) ([]InboxItemView, 
 
 // inboxIndex opens the index of st, as the other operations do.
 func (ss *Session) inboxIndex(st InboxStore) (*index.Index, error) {
-	c, _, err := ss.Config()
-	if err != nil {
-		return index.Open(st.Store)
-	}
-	return ss.indexOf(c, st.Name, st.Store)
+	return ss.indexOf(st.Name, st.Store)
 }
 
 // ParseInboxItem reads the full ULID of an item; a short one is a mistake of

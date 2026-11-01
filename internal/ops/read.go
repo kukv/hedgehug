@@ -44,7 +44,7 @@ func (ss *Session) listSet() (*mount.Set, error) {
 			return nil, err
 		}
 	}
-	set, err := mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Warn: ss.warn, Qualified: ss.qualifiedNow(c)})
+	set, err := mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Warn: ss.warn, Qualified: ss.qualifiedNow()})
 	if err != nil {
 		return nil, err
 	}

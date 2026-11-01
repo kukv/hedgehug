@@ -241,7 +241,7 @@ func (ss *Session) fixStore(c *config.Config, e config.StoreEntry, s *store.Stor
 		return nil, err
 	}
 	ss.markWritten(s)
-	ix, err := ss.indexOf(c, e.Name, s)
+	ix, err := ss.indexOf(e.Name, s)
 	if err != nil {
 		ix = nil // the ULIDs name what was repaired
 	}
