@@ -114,7 +114,7 @@ func (ss *Session) Mount() (*mount.Set, error) {
 	if err != nil {
 		return nil, err
 	}
-	set, err := mount.Open(c, mount.Options{Now: ss.Now, Warn: ss.warn})
+	set, err := mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Warn: ss.warn})
 	if err != nil {
 		return nil, err
 	}
@@ -123,6 +123,16 @@ func (ss *Session) Mount() (*mount.Set, error) {
 	}
 	mc.set = set
 	return set, nil
+}
+
+// dropMount forgets the stores mounted, for the next call to open them
+// again. A write through a handle of its own (a sync) adds objects that a
+// store opened before it does not see.
+func (ss *Session) dropMount() {
+	mc := ss.mountCache()
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.set = nil
 }
 
 // openError is the error of a store that does not open.
@@ -210,11 +220,26 @@ func (ss *Session) Open() (*store.Store, *index.Index, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	ix, err := index.Open(s)
+	ix, err := ss.openIndex(s)
 	if err != nil {
 		return nil, nil, err
 	}
 	return s, ix, nil
+}
+
+// openIndex opens the index of s, which knows the name of its store. The
+// store and the index are of the operation, not the ones mount keeps: an
+// index sets the id numbers of its store, so the two go together, and
+// operations run concurrently on one session.
+func (ss *Session) openIndex(s *store.Store) (*index.Index, error) {
+	ix, err := index.Open(s)
+	if err != nil {
+		return nil, err
+	}
+	if _, e, err := ss.Entry(); err == nil {
+		ix.SetStoreName(e.Name)
+	}
+	return ix, nil
 }
 
 // Writer returns the account that writes to the store the session works
@@ -371,7 +396,7 @@ func (e *ambiguousError) Error() string {
 	return fmt.Sprintf("%q matches %d %s:\n  %s", e.input, len(e.lines), noun, strings.Join(e.lines, "\n  "))
 }
 
-// Resolve finds the task arg names.
+// Resolve finds the task arg names in the store of ix.
 func (ss *Session) Resolve(ix *index.Index, arg string) (*index.Entry, error) {
 	ulid, err := ix.Resolve(arg)
 	var ae *index.AmbiguousError
@@ -392,10 +417,10 @@ func (ss *Session) Resolve(ix *index.Index, arg string) (*index.Entry, error) {
 	return e, nil
 }
 
-// ResolveULID is Resolve for the callers that need only the ULID.
+// ResolveULID is ResolveRef for the callers that need only the ULID.
 func (ss *Session) ResolveULID(ix *index.Index) func(string) (model.ULID, error) {
 	return func(s string) (model.ULID, error) {
-		e, err := ss.Resolve(ix, s)
+		e, err := ss.ResolveRef(ix, s)
 		if err != nil {
 			return model.ULID{}, err
 		}

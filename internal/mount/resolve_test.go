@@ -36,6 +36,18 @@ func TestResolveOneStore(t *testing.T) {
 	}
 }
 
+func TestResolveSeesATaskWrittenAfterTheIndexWasOpened(t *testing.T) {
+	a := newStoreAt(t, "org-a", "API")
+	set := openSet(t, a)
+	if _, err := set.Resolve("API-1"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("Resolve before the write = %v; want not found", err)
+	}
+	putTasks(t, a, 1, nil)
+	if hit, err := set.Resolve("API-1"); err != nil || hit.Entry.ID != "API-1" {
+		t.Errorf("Resolve after the write = %v, %v", hit, err)
+	}
+}
+
 func TestResolveNotFound(t *testing.T) {
 	a := newStoreAt(t, "org-a", "API")
 	twelve(t, a)

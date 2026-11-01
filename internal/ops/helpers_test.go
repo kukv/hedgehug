@@ -181,3 +181,72 @@ func (ts *testSession) writeAndCommit(rel, data string) {
 		ts.t.Fatal(err)
 	}
 }
+
+// newTwoStoreSession is a session over the stores org-a (prefix API, the
+// account alice) and org-b (prefix WEB, the account bob), with no StoreName.
+// Each holds one task: API-1 and WEB-1.
+func newTwoStoreSession(t *testing.T) *testSession {
+	t.Helper()
+	return newTwoStoreSessionWith(t, "API", "WEB")
+}
+
+// newTwoStoreSessionWith is newTwoStoreSession with the id prefixes of the
+// two stores given.
+func newTwoStoreSessionWith(t *testing.T, prefixA, prefixB string) *testSession {
+	t.Helper()
+	d := t.TempDir()
+	home := filepath.Join(d, "home")
+	if err := os.MkdirAll(home, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte("[user]\n\tname = Carol\n\temail = carol@example.com\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ts := &testSession{t: t, env: map[string]string{
+		"HOME": home, "USERPROFILE": home,
+		"HEDGEHUG_HOME":      filepath.Join(d, "hh"),
+		"HEDGEHUG_AUTO_SYNC": "0",
+	}}
+	now := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+	ts.Session = &Session{
+		Getenv: func(k string) string { return ts.env[k] },
+		Now:    func() time.Time { return now },
+		Warn:   func(m string) { ts.warns = append(ts.warns, m) },
+	}
+	c, p, err := ts.Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range []config.Account{{Name: "alice", Host: "github.com", Login: "alice"}, {Name: "bob", Host: "github.com", Login: "bob"}} {
+		if err := c.AddAccount(a); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, sp := range []struct{ name, prefix, acct string }{{"org-a", prefixA, "alice"}, {"org-b", prefixB, "bob"}} {
+		dir := filepath.Join(p.StoresDir, sp.name)
+		acct, _ := c.Account(sp.acct)
+		author, err := config.CommitAuthor(acct, true, ts.Getenv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ws := &model.Workspace{ULID: model.NewULID(), Name: sp.name, IDPrefix: sp.prefix}
+		if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: sp.name}, schema.Default(), ws, author, "", ts.Now); err != nil {
+			t.Fatal(err)
+		}
+		if err := c.AddStore(sp.name, dir, nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := c.SetStoreAccount(sp.name, sp.acct); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"org-a", "org-b"} {
+		if _, err := ts.ForStore(name).Add(AddInput{Title: name + " task"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return ts
+}

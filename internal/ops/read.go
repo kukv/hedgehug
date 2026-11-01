@@ -224,6 +224,13 @@ type ShowResult struct {
 
 // Show reads the task arg names.
 func (ss *Session) Show(arg string) (ShowResult, error) {
+	ts, arg, err := ss.forTask(arg)
+	if err != nil {
+		return ShowResult{}, err
+	}
+	if ts != ss {
+		return ts.Show(arg)
+	}
 	s, ix, err := ss.Open()
 	if err != nil {
 		return ShowResult{}, err
@@ -399,6 +406,15 @@ func SubjectNow(ix *index.Index, le gitrepo.LogEntry) string {
 // Log lists the commits of the store, or of the task args[0] names, newest
 // first; limit 0 lists all.
 func (ss *Session) Log(args []string, limit int) (*index.Index, []gitrepo.LogEntry, error) {
+	if len(args) > 0 {
+		ts, arg, err := ss.forTask(args[0])
+		if err != nil {
+			return nil, nil, err
+		}
+		if ts != ss {
+			return ts.Log(append([]string{arg}, args[1:]...), limit)
+		}
+	}
 	s, ix, err := ss.Open()
 	if err != nil {
 		return nil, nil, err

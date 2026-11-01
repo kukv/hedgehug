@@ -63,7 +63,7 @@ func (ss *Session) OpenForWrite() (*store.Store, *index.Index, error) {
 	if err := ss.checkWritable(s); err != nil {
 		return nil, nil, err
 	}
-	ix, err := index.Open(s)
+	ix, err := ss.openIndex(s)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -66,7 +66,7 @@ func (ss *Session) Add(in AddInput) (TaskResult, error) {
 		t.Status = st.Name
 	}
 	if in.Parent != "" {
-		p, err := ss.Resolve(ix, in.Parent)
+		p, err := ss.ResolveRef(ix, in.Parent)
 		if err != nil {
 			return TaskResult{}, err
 		}
@@ -128,6 +128,13 @@ func (ss *Session) Add(in AddInput) (TaskResult, error) {
 
 // Set applies assigns to the task arg names.
 func (ss *Session) Set(arg string, assigns []Assign) (TaskResult, error) {
+	ts, arg, err := ss.forTask(arg)
+	if err != nil {
+		return TaskResult{}, err
+	}
+	if ts != ss {
+		return ts.Set(arg, assigns)
+	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return TaskResult{}, err
@@ -162,6 +169,13 @@ func (ss *Session) Set(arg string, assigns []Assign) (TaskResult, error) {
 // SetStatus sets the status of the task arg names; an empty status means the
 // default status of the done category.
 func (ss *Session) SetStatus(arg, name string) (TaskResult, error) {
+	ts, arg, err := ss.forTask(arg)
+	if err != nil {
+		return TaskResult{}, err
+	}
+	if ts != ss {
+		return ts.SetStatus(arg, name)
+	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return TaskResult{}, err
@@ -204,6 +218,13 @@ func (ss *Session) SetStatus(arg, name string) (TaskResult, error) {
 // Dep makes the task arg names blocked by the task blockerArg names, or, with
 // add false, no longer blocked by it.
 func (ss *Session) Dep(arg, blockerArg string, add bool) (TaskResult, error) {
+	ts, arg, err := ss.forTask(arg)
+	if err != nil {
+		return TaskResult{}, err
+	}
+	if ts != ss {
+		return ts.Dep(arg, blockerArg, add)
+	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return TaskResult{}, err
@@ -215,7 +236,7 @@ func (ss *Session) Dep(arg, blockerArg string, add bool) (TaskResult, error) {
 	if err := NotDeleted(ix, e); err != nil {
 		return TaskResult{}, err
 	}
-	b, err := ss.Resolve(ix, blockerArg)
+	b, err := ss.ResolveRef(ix, blockerArg)
 	if err != nil {
 		return TaskResult{}, err
 	}
@@ -248,6 +269,13 @@ var errNoAccounts = newErr(KindConflict, "account.none", errors.New("accounts ar
 // Watch adds the writer of the store to the watchers of the task arg
 // names, or, with on false, takes it out.
 func (ss *Session) Watch(arg string, on bool) (TaskResult, error) {
+	ts, arg, err := ss.forTask(arg)
+	if err != nil {
+		return TaskResult{}, err
+	}
+	if ts != ss {
+		return ts.Watch(arg, on)
+	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return TaskResult{}, err

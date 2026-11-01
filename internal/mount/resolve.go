@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/index"
+	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -52,7 +53,18 @@ func (s *Set) Resolve(arg string) (Hit, error) {
 	}
 	var hits []Hit
 	for _, m := range stores {
-		ix, err := m.Index()
+		var ulid model.ULID
+		var e *index.Entry
+		var rerr error
+		err := m.With(func(ix *index.Index) {
+			if ulid, rerr = ix.Resolve(in); rerr != nil {
+				return
+			}
+			var ok bool
+			if e, ok = ix.Task(ulid); !ok {
+				rerr = fmt.Errorf("%s: the index resolved %s but has no such task", m.Name, ulid)
+			}
+		})
 		if err != nil {
 			if named {
 				return Hit{}, fmt.Errorf("cannot open %s: %w", m.Name, err)
@@ -61,16 +73,11 @@ func (s *Set) Resolve(arg string) (Hit, error) {
 			s.warnOnce(m.Name, fmt.Sprintf("cannot open %s: %v", m.Name, err))
 			continue
 		}
-		ulid, err := ix.Resolve(in)
-		if errors.Is(err, store.ErrNotFound) {
+		if errors.Is(rerr, store.ErrNotFound) {
 			continue
 		}
-		if err != nil {
-			return Hit{}, err
-		}
-		e, ok := ix.Task(ulid)
-		if !ok {
-			return Hit{}, fmt.Errorf("%s: the index resolved %s but has no such task", m.Name, ulid)
+		if rerr != nil {
+			return Hit{}, rerr
 		}
 		hits = append(hits, Hit{Store: m, Entry: e})
 	}

@@ -70,6 +70,13 @@ func every(*index.Entry) bool { return true }
 // Remove deletes the task arg names and the tasks under it; they can be
 // restored.
 func (ss *Session) Remove(arg string) (AffectedResult, error) {
+	ts, arg, err := ss.forTask(arg)
+	if err != nil {
+		return AffectedResult{}, err
+	}
+	if ts != ss {
+		return ts.Remove(arg)
+	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return AffectedResult{}, err
@@ -120,6 +127,13 @@ func (ss *Session) Remove(arg string) (AffectedResult, error) {
 // Restore restores the deleted task arg names and what the same Remove
 // deleted under it.
 func (ss *Session) Restore(arg string) (AffectedResult, error) {
+	ts, arg, err := ss.forTask(arg)
+	if err != nil {
+		return AffectedResult{}, err
+	}
+	if ts != ss {
+		return ts.Restore(arg)
+	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return AffectedResult{}, err
@@ -376,6 +390,13 @@ type RestoreAtResult struct {
 // be given twice, and moving to another workspace is the job of Move with a
 // workspace, which moves the tasks under it too.
 func (ss *Session) RestoreAt(arg, at string) (RestoreAtResult, error) {
+	ts, arg, err := ss.forTask(arg)
+	if err != nil {
+		return RestoreAtResult{}, err
+	}
+	if ts != ss {
+		return ts.RestoreAt(arg, at)
+	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return RestoreAtResult{}, err

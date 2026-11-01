@@ -25,6 +25,8 @@ type Mounted struct {
 	// the index, opened by Index on first use and kept
 	mu gosync.Mutex
 	ix *index.Index
+	// use serializes With: an index is not safe for concurrent use
+	use gosync.Mutex
 }
 
 // Index opens the index of the store on first use and keeps it. The index
@@ -43,6 +45,23 @@ func (m *Mounted) Index() (*index.Index, error) {
 	ix.SetStoreName(m.Name)
 	m.ix = ix
 	return ix, nil
+}
+
+// With runs fn on the index of the store, brought up to HEAD, while no other
+// With uses it. The index is not to be kept past fn. An error opening or
+// refreshing the index is returned and fn is not run.
+func (m *Mounted) With(fn func(ix *index.Index)) error {
+	ix, err := m.Index()
+	if err != nil {
+		return err
+	}
+	m.use.Lock()
+	defer m.use.Unlock()
+	if err := ix.Refresh(); err != nil {
+		return err
+	}
+	fn(ix)
+	return nil
 }
 
 // Skipped is a store of stores[] that did not open.
