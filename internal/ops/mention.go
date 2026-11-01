@@ -30,9 +30,13 @@ func (ss *Session) warnMentions(s *store.Store, before, after string) {
 	if err != nil || m.Collaborators == nil {
 		return
 	}
-	_, e, err := ss.Entry()
-	if err != nil {
-		return
+	name := s.Meta().Name
+	if c, _, err := ss.Config(); err == nil {
+		for _, e := range c.Stores {
+			if e.Path == s.Dir() {
+				name = e.Name
+			}
+		}
 	}
 	var warned []string
 	for _, men := range fresh {
@@ -44,7 +48,7 @@ func (ss *Session) warnMentions(s *store.Store, before, after string) {
 			continue
 		}
 		warned = append(warned, login)
-		ss.warn(fmt.Sprintf("%s cannot read %s", login, e.Name))
+		ss.warn(fmt.Sprintf("%s cannot read %s", login, name))
 	}
 }
 

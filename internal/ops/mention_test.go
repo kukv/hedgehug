@@ -193,3 +193,59 @@ func TestMentionNoMembersFile(t *testing.T) {
 		t.Errorf("warnings = %q; want none", ts.warns)
 	}
 }
+
+func TestMentionWarningsUseTheStoreWritten(t *testing.T) {
+	ts := newTwoStoreSession(t)
+	members := func(name string, ids ...string) {
+		t.Helper()
+		s, err := ts.ForStore(name).OpenStore()
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := sync.Members{Collaborators: []sync.Collaborator{}}
+		for _, id := range ids {
+			m.Collaborators = append(m.Collaborators, sync.Collaborator{ID: id, Permission: "write"})
+		}
+		if err := sync.WriteMembers(s, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	members("org-a", "github.com/carol")
+	members("org-b", "github.com/bob")
+	check := func(label string, want ...string) {
+		t.Helper()
+		if !slices.Equal(ts.warns, want) {
+			t.Errorf("%s: warnings = %q; want %q", label, ts.warns, want)
+		}
+		ts.warns = nil
+	}
+
+	// No store is named: the task decides which store is written.
+	ts.warns = nil
+	c, err := ts.CommentAdd("WEB-1", "@bob @carol")
+	if err != nil {
+		t.Fatal(err)
+	}
+	check("comment on WEB-1", "carol cannot read org-b")
+	if _, err := ts.CommentEdit(c.Ref.Comment.String(), "@bob @carol @dave"); err != nil {
+		t.Fatal(err)
+	}
+	check("comment edit", "dave cannot read org-b")
+	if _, err := ts.CommentAdd("API-1", "@bob @carol"); err != nil {
+		t.Fatal(err)
+	}
+	check("comment on API-1", "bob cannot read org-a")
+	es, err := ts.BeginEdit("WEB-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	es.Old.Body = "@carol\n"
+	b, err := es.Old.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.Edit("WEB-1", b); err != nil {
+		t.Fatal(err)
+	}
+	check("edit of WEB-1", "carol cannot read org-b")
+}
