@@ -126,6 +126,25 @@ components:
       required:
         - title
       type: object
+    DoctorReport:
+      additionalProperties: false
+      properties:
+        findings:
+          items:
+            $ref: "#/components/schemas/Finding"
+          type:
+            - array
+            - "null"
+        repaired:
+          items:
+            $ref: "#/components/schemas/Fixed"
+          type:
+            - array
+            - "null"
+      required:
+        - repaired
+        - findings
+      type: object
     ErrorDetail:
       additionalProperties: false
       properties:
@@ -137,6 +156,54 @@ components:
           type: string
         value:
           description: The value at the given location
+      type: object
+    Finding:
+      additionalProperties: false
+      properties:
+        check:
+          type: string
+        hint:
+          type: string
+        msg:
+          type: string
+        where:
+          type: string
+      required:
+        - check
+        - where
+        - msg
+      type: object
+    FindingsOutputBody:
+      additionalProperties: false
+      properties:
+        findings:
+          items:
+            $ref: "#/components/schemas/Finding"
+          type:
+            - array
+            - "null"
+      required:
+        - findings
+      type: object
+    Fixed:
+      additionalProperties: false
+      properties:
+        author:
+          type: string
+        id:
+          type: string
+        kind:
+          type: string
+        title:
+          type: string
+        ulid:
+          type: string
+        value: {}
+      required:
+        - ulid
+        - title
+        - kind
+        - value
       type: object
     GroupView:
       additionalProperties: false
@@ -168,6 +235,17 @@ components:
         - version
         - pid
       type: object
+    IdChange:
+      additionalProperties: false
+      properties:
+        new:
+          type: string
+        old:
+          type: string
+      required:
+        - old
+        - new
+      type: object
     IndexProblem:
       additionalProperties: false
       properties:
@@ -181,6 +259,32 @@ components:
         - code
         - field
         - message
+      type: object
+    KindDef:
+      additionalProperties: false
+      properties:
+        default:
+          type: boolean
+        icon:
+          type: string
+        label:
+          type: string
+        name:
+          type: string
+        parents:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        role:
+          type: string
+        template:
+          type: string
+      required:
+        - name
+        - role
+        - parents
       type: object
     ListOutputBody:
       additionalProperties: false
@@ -253,6 +357,56 @@ components:
       required:
         - name
         - email
+      type: object
+    MigrateInputBody:
+      additionalProperties: false
+      properties:
+        dry_run:
+          type: boolean
+        new:
+          minLength: 1
+          type: string
+        old:
+          minLength: 1
+          type: string
+        prop:
+          description: "With value: the property whose value it is"
+          type: string
+        target:
+          enum:
+            - status
+            - kind
+            - prop
+            - value
+          type: string
+      required:
+        - target
+        - old
+        - new
+      type: object
+    MigrateOutputBody:
+      additionalProperties: false
+      properties:
+        changed:
+          items:
+            $ref: "#/components/schemas/TaskView"
+          type:
+            - array
+            - "null"
+        commit:
+          type:
+            - string
+            - "null"
+        skipped:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - changed
+        - skipped
+        - commit
       type: object
     MoveInputBody:
       additionalProperties: false
@@ -393,6 +547,28 @@ components:
         - title
         - status
       type: object
+    PropDef:
+      additionalProperties: false
+      properties:
+        inverse:
+          type: string
+        label:
+          type: string
+        multi:
+          type: boolean
+        symmetric:
+          type: boolean
+        type:
+          type: string
+        values:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - type
+      type: object
     Ref:
       additionalProperties: false
       properties:
@@ -406,6 +582,104 @@ components:
         - ulid
         - id
         - title
+      type: object
+    SavedKanban:
+      additionalProperties: false
+      properties:
+        columns:
+          type: string
+        swimlane:
+          type: string
+      required:
+        - columns
+        - swimlane
+      type: object
+    SavedTable:
+      additionalProperties: false
+      properties:
+        columns:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        group_by:
+          type: string
+      required:
+        - columns
+        - group_by
+      type: object
+    SavedView:
+      additionalProperties: false
+      properties:
+        kanban:
+          $ref: "#/components/schemas/SavedKanban"
+        layout:
+          type: string
+        name:
+          type: string
+        query:
+          type: string
+        table:
+          $ref: "#/components/schemas/SavedTable"
+      required:
+        - name
+        - layout
+        - query
+        - table
+        - kanban
+      type: object
+    SchemaView:
+      additionalProperties: false
+      properties:
+        kinds:
+          items:
+            $ref: "#/components/schemas/KindDef"
+          type:
+            - array
+            - "null"
+        props:
+          additionalProperties:
+            $ref: "#/components/schemas/PropDef"
+          type: object
+        scoped:
+          items:
+            $ref: "#/components/schemas/ScopedDef"
+          type:
+            - array
+            - "null"
+        statuses:
+          items:
+            $ref: "#/components/schemas/StatusDef"
+          type:
+            - array
+            - "null"
+        workflow:
+          $ref: "#/components/schemas/WorkflowDef"
+      required:
+        - statuses
+        - kinds
+        - props
+        - workflow
+        - scoped
+      type: object
+    ScopedDef:
+      additionalProperties: false
+      properties:
+        statuses:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        templates:
+          $ref: "#/components/schemas/TemplatesDef"
+        where:
+          type: string
+        workflow:
+          $ref: "#/components/schemas/WorkflowDef"
+      required:
+        - where
       type: object
     ShowView:
       additionalProperties: false
@@ -553,6 +827,102 @@ components:
         - deleted_at
         - problems
       type: object
+    StatusDef:
+      additionalProperties: false
+      properties:
+        category:
+          type: string
+        color:
+          type: string
+        default:
+          type: boolean
+        label:
+          type: string
+        name:
+          type: string
+      required:
+        - name
+        - category
+      type: object
+    StoreInitInputBody:
+      additionalProperties: false
+      properties:
+        account:
+          type: string
+        name:
+          minLength: 1
+          type: string
+        prefix:
+          minLength: 1
+          type: string
+        remotes:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        workspace:
+          description: The name of the first workspace; the name of the store without it
+          type: string
+      required:
+        - name
+        - prefix
+      type: object
+    StoreInitOutputBody:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        pushed:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        remotes:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        workspace:
+          $ref: "#/components/schemas/WorkspaceView"
+      required:
+        - name
+        - path
+        - workspace
+        - remotes
+        - pushed
+      type: object
+    StoreItem:
+      additionalProperties: false
+      properties:
+        account:
+          type: string
+        default:
+          description: The store hedgehug picks without --store
+          type: boolean
+        last_success:
+          format: date-time
+          type: string
+        name:
+          type: string
+        path:
+          type: string
+        remotes:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - default
+        - name
+        - path
+        - remotes
+      type: object
     TaskView:
       additionalProperties: false
       properties:
@@ -669,6 +1039,20 @@ components:
         - task
         - commit
       type: object
+    TemplatesDef:
+      additionalProperties: false
+      properties:
+        default:
+          additionalProperties:
+            type: string
+          type: object
+        only:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      type: object
     UndoKept:
       additionalProperties: false
       properties:
@@ -708,6 +1092,98 @@ components:
         - commit
         - kept
       type: object
+    ViewRenameInputBody:
+      additionalProperties: false
+      properties:
+        name:
+          description: The new name
+          minLength: 1
+          type: string
+      required:
+        - name
+      type: object
+    ViewSaveInputBody:
+      additionalProperties: false
+      properties:
+        columns:
+          description: The columns of the table
+          items:
+            type: string
+          type: array
+        group_by:
+          type: string
+        kanban_columns:
+          type: string
+        layout:
+          enum:
+            - tree
+            - table
+            - kanban
+          type: string
+        query:
+          type: string
+        swimlane:
+          type: string
+      type: object
+    ViewWrite:
+      additionalProperties: false
+      properties:
+        commit:
+          type:
+            - string
+            - "null"
+        view:
+          $ref: "#/components/schemas/SavedView"
+      required:
+        - view
+        - commit
+      type: object
+    WorkflowDef:
+      additionalProperties: false
+      properties:
+        required:
+          additionalProperties:
+            items:
+              type: string
+            type:
+              - array
+              - "null"
+          type: object
+        transitions:
+          additionalProperties:
+            items:
+              type: string
+            type:
+              - array
+              - "null"
+          type: object
+      required:
+        - transitions
+        - required
+      type: object
+    WorkspaceAddInputBody:
+      additionalProperties: false
+      properties:
+        name:
+          minLength: 1
+          type: string
+        prefix:
+          minLength: 1
+          type: string
+      required:
+        - name
+        - prefix
+      type: object
+    WorkspacePatchInputBody:
+      additionalProperties: false
+      properties:
+        name:
+          description: A new name; give it or prefix, not both
+          type: string
+        prefix:
+          description: A new prefix, which renumbers the tasks
+          type: string
+      type: object
     WorkspaceRef:
       additionalProperties: false
       properties:
@@ -721,6 +1197,48 @@ components:
         - ulid
         - name
         - id_prefix
+      type: object
+    WorkspaceView:
+      additionalProperties: false
+      properties:
+        id_prefix:
+          type: string
+        name:
+          type: string
+        prefix_set:
+          format: date-time
+          type: string
+        tasks:
+          format: int64
+          type: integer
+        ulid:
+          type: string
+      required:
+        - ulid
+        - name
+        - id_prefix
+        - prefix_set
+        - tasks
+      type: object
+    WorkspaceWrite:
+      additionalProperties: false
+      properties:
+        commit:
+          type:
+            - string
+            - "null"
+        ids:
+          description: "With a new prefix: the IDs the tasks had and have now"
+          items:
+            $ref: "#/components/schemas/IdChange"
+          type:
+            - array
+            - "null"
+        workspace:
+          $ref: "#/components/schemas/WorkspaceView"
+      required:
+        - workspace
+        - commit
       type: object
   securitySchemes:
     bearer:
@@ -788,6 +1306,60 @@ paths:
       summary: List the commits of the store, newest first, as hh log
       tags:
         - activity
+  /api/doctor:
+    get:
+      operationId: doctor
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DoctorReport"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Check the store, as hh doctor
+      tags:
+        - maintenance
+  /api/doctor/fix:
+    post:
+      operationId: doctor-fix
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DoctorReport"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Check the store and repair what can be, as hh doctor --fix
+      tags:
+        - maintenance
   /api/health:
     get:
       operationId: get-health
@@ -894,6 +1466,140 @@ paths:
       summary: Write my overwritten value back, as hh inbox revert
       tags:
         - notifications
+  /api/schema:
+    get:
+      operationId: get-schema
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchemaView"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Show schema.yaml
+      tags:
+        - schema
+  /api/schema/check:
+    get:
+      operationId: check-schema
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FindingsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Check the schema and the tasks, as hh schema check
+      tags:
+        - schema
+  /api/schema/migrate:
+    post:
+      operationId: migrate-schema
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MigrateInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MigrateOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Rename or merge a status, kind, property or value, as hh migrate
+      tags:
+        - schema
+  /api/stores:
+    get:
+      operationId: list-stores
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/StoreItem"
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: List the stores, as hh store list
+      tags:
+        - stores
+    post:
+      operationId: init-store
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreInitInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreInitOutputBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Make a store, as hh store init
+      tags:
+        - stores
   /api/tasks:
     get:
       operationId: list-tasks
@@ -1470,5 +2176,317 @@ paths:
       summary: Take back my last operation, as hh undo
       tags:
         - tasks
+  /api/views:
+    get:
+      operationId: list-views
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/SavedView"
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: List the saved views, as hh view list
+      tags:
+        - views
+  /api/views/{name}:
+    delete:
+      operationId: remove-view
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The name of the view
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the view
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Remove a saved view, as hh view rm
+      tags:
+        - views
+    get:
+      operationId: get-view
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The name of the view
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the view
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedView"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Show a saved view, as hh view show
+      tags:
+        - views
+    patch:
+      operationId: rename-view
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The name of the view
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the view
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewRenameInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Rename a saved view, as hh view rename
+      tags:
+        - views
+    put:
+      operationId: save-view
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The name of the view
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the view
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewSaveInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Save a view; what is not sent stays as saved, as hh view save
+      tags:
+        - views
+  /api/workspaces:
+    get:
+      operationId: list-workspaces
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/WorkspaceView"
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: List the workspaces, as hh workspace ls
+      tags:
+        - workspaces
+    post:
+      operationId: add-workspace
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspaceAddInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceWrite"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Add a workspace, as hh workspace add
+      tags:
+        - workspaces
+  /api/workspaces/{id}:
+    delete:
+      operationId: remove-workspace
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: "The workspace: its name, prefix or ULID"
+          in: path
+          name: id
+          required: true
+          schema:
+            description: "The workspace: its name, prefix or ULID"
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Remove an empty workspace, as hh workspace rm
+      tags:
+        - workspaces
+    patch:
+      operationId: update-workspace
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: "The workspace: its name, prefix or ULID"
+          in: path
+          name: id
+          required: true
+          schema:
+            description: "The workspace: its name, prefix or ULID"
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorkspacePatchInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Rename a workspace or change its prefix
+      tags:
+        - workspaces
 security:
   - bearer: []

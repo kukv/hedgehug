@@ -102,6 +102,8 @@ func (s *Server) register() {
 	s.registerTaskWrites()
 	s.registerComments()
 	s.registerActivity()
+	s.registerAdmin()
+	s.registerViews()
 }
 
 // SetPort sets the port the Host check allows.
