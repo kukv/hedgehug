@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -81,6 +82,21 @@ type Box struct {
 }
 
 func Open(s *store.Store) *Box { return &Box{s: s} }
+
+// Stamp tells whether the files of the box changed: the size and the time
+// of each, joined. A missing file stamps as "-".
+func (b *Box) Stamp() string {
+	var sb strings.Builder
+	for _, name := range []string{itemsFile, readFile, markFile} {
+		st, err := os.Stat(b.s.LocalPath(name))
+		if err != nil {
+			sb.WriteString("-;")
+			continue
+		}
+		fmt.Fprintf(&sb, "%d:%d;", st.Size(), st.ModTime().UnixNano())
+	}
+	return sb.String()
+}
 
 // Warnings returns what the box skipped while reading: lines of
 // inbox.jsonl and merge driver records that do not decode. They stay in

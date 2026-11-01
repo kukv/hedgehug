@@ -170,6 +170,7 @@ func (s *Server) registerActivity() {
 		if _, err := s.session("").InboxRead([]string{in.ID}, false); err != nil {
 			return nil, problemOf(err)
 		}
+		s.poller.Kick()
 		return nil, nil
 	})
 

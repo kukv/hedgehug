@@ -235,6 +235,27 @@ components:
         - version
         - pid
       type: object
+    HelloEvent:
+      additionalProperties: false
+      properties:
+        client:
+          description: This connection, for PUT /api/presence
+          type: string
+        stores:
+          description: The HEAD and the sync state of each store now
+          items:
+            $ref: "#/components/schemas/StoreState"
+          type:
+            - array
+            - "null"
+        unread:
+          format: int64
+          type: integer
+      required:
+        - client
+        - stores
+        - unread
+      type: object
     IdChange:
       additionalProperties: false
       properties:
@@ -711,6 +732,14 @@ components:
         - table
         - kanban
       type: object
+    SchemaChanged:
+      additionalProperties: false
+      properties:
+        store:
+          type: string
+      required:
+        - store
+      type: object
     SchemaView:
       additionalProperties: false
       properties:
@@ -1003,6 +1032,20 @@ components:
         - path
         - remotes
       type: object
+    StoreState:
+      additionalProperties: false
+      properties:
+        head:
+          type: string
+        store:
+          type: string
+        sync:
+          $ref: "#/components/schemas/SyncStatus"
+      required:
+        - store
+        - head
+        - sync
+      type: object
     SyncReport:
       additionalProperties: false
       properties:
@@ -1217,6 +1260,42 @@ components:
         - task
         - commit
       type: object
+    TasksChanged:
+      additionalProperties: false
+      properties:
+        author:
+          description: The Hedgehug-Author of HEAD; empty when unknown
+          type: string
+        commit:
+          description: HEAD now
+          type: string
+        op:
+          description: The Hedgehug-Op of HEAD; empty for a commit made by hand
+          type: string
+        removed:
+          description: The tasks whose file is gone (purged)
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        store:
+          type: string
+        ulids:
+          description: The tasks whose file, comments or worklogs changed
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - store
+        - ulids
+        - removed
+        - commit
+        - op
+        - author
+      type: object
     TemplatesDef:
       additionalProperties: false
       properties:
@@ -1270,6 +1349,16 @@ components:
         - commit
         - kept
       type: object
+    UnreadEvent:
+      additionalProperties: false
+      properties:
+        count:
+          description: The items not read, in every store
+          format: int64
+          type: integer
+      required:
+        - count
+      type: object
     ViewRenameInputBody:
       additionalProperties: false
       properties:
@@ -1314,6 +1403,14 @@ components:
       required:
         - view
         - commit
+      type: object
+    ViewsChanged:
+      additionalProperties: false
+      properties:
+        store:
+          type: string
+      required:
+        - store
       type: object
     WorkflowDef:
       additionalProperties: false
@@ -1535,6 +1632,149 @@ paths:
       summary: Check the store and repair what can be, as hh doctor --fix
       tags:
         - maintenance
+  /api/events:
+    get:
+      operationId: events
+      responses:
+        "200":
+          content:
+            text/event-stream:
+              schema:
+                description: Each oneOf object in the array represents one possible Server Sent Events (SSE) message, serialized as UTF-8 text according to the SSE specification.
+                items:
+                  oneOf:
+                    - properties:
+                        data:
+                          $ref: "#/components/schemas/HelloEvent"
+                        event:
+                          const: hello
+                          description: The event name.
+                          type: string
+                        id:
+                          description: The event ID.
+                          oneOf:
+                            - type: integer
+                            - type: string
+                        retry:
+                          description: The retry time in milliseconds.
+                          type: integer
+                      required:
+                        - data
+                        - event
+                      title: Event hello
+                      type: object
+                    - properties:
+                        data:
+                          $ref: "#/components/schemas/UnreadEvent"
+                        event:
+                          const: notifications.unread
+                          description: The event name.
+                          type: string
+                        id:
+                          description: The event ID.
+                          oneOf:
+                            - type: integer
+                            - type: string
+                        retry:
+                          description: The retry time in milliseconds.
+                          type: integer
+                      required:
+                        - data
+                        - event
+                      title: Event notifications.unread
+                      type: object
+                    - properties:
+                        data:
+                          $ref: "#/components/schemas/SchemaChanged"
+                        event:
+                          const: schema.changed
+                          description: The event name.
+                          type: string
+                        id:
+                          description: The event ID.
+                          oneOf:
+                            - type: integer
+                            - type: string
+                        retry:
+                          description: The retry time in milliseconds.
+                          type: integer
+                      required:
+                        - data
+                        - event
+                      title: Event schema.changed
+                      type: object
+                    - properties:
+                        data:
+                          $ref: "#/components/schemas/SyncStatus"
+                        event:
+                          const: sync.state
+                          description: The event name.
+                          type: string
+                        id:
+                          description: The event ID.
+                          oneOf:
+                            - type: integer
+                            - type: string
+                        retry:
+                          description: The retry time in milliseconds.
+                          type: integer
+                      required:
+                        - data
+                        - event
+                      title: Event sync.state
+                      type: object
+                    - properties:
+                        data:
+                          $ref: "#/components/schemas/TasksChanged"
+                        event:
+                          const: tasks.changed
+                          description: The event name.
+                          type: string
+                        id:
+                          description: The event ID.
+                          oneOf:
+                            - type: integer
+                            - type: string
+                        retry:
+                          description: The retry time in milliseconds.
+                          type: integer
+                      required:
+                        - data
+                        - event
+                      title: Event tasks.changed
+                      type: object
+                    - properties:
+                        data:
+                          $ref: "#/components/schemas/ViewsChanged"
+                        event:
+                          const: views.changed
+                          description: The event name.
+                          type: string
+                        id:
+                          description: The event ID.
+                          oneOf:
+                            - type: integer
+                            - type: string
+                        retry:
+                          description: The retry time in milliseconds.
+                          type: integer
+                      required:
+                        - data
+                        - event
+                      title: Event views.changed
+                      type: object
+                title: Server Sent Events
+                type: array
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: The changes, as server-sent events; hello comes first
+      tags:
+        - events
   /api/health:
     get:
       operationId: get-health

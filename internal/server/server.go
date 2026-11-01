@@ -53,9 +53,11 @@ type Server struct {
 
 	presence *Presence
 	loop     *Loop
+	hub      *Hub
+	poller   *Poller
 	stopOnce sync.Once
 	cancel   context.CancelFunc
-	runDone  chan struct{} // closed when the loop has returned; nil before Start
+	runDone  chan struct{} // closed when the loop and the poller have returned; nil before Start
 }
 
 // New makes the server. Call SetPort with the port it listens on before
@@ -73,6 +75,9 @@ func New(opt Options) *Server {
 	s := &Server{opt: opt, mux: http.NewServeMux()}
 	s.presence = newPresence(func() { s.loop.Wake() })
 	s.loop = newLoop(s, opt.Clock, s.presence.Visible)
+	s.hub = newHub()
+	s.poller = newPoller(s, s.hub)
+	s.loop.onState = func(string) { s.poller.Kick() } // a sync ended: read its state now
 	s.api = humago.New(s.mux, apiConfig())
 	s.api.UseMiddleware(s.requireToken)
 	s.register()
@@ -118,6 +123,7 @@ func (s *Server) register() {
 	s.registerAdmin()
 	s.registerViews()
 	s.registerSync()
+	s.registerEvents()
 }
 
 // SetPort sets the port the Host check allows.
@@ -165,24 +171,29 @@ func OpenAPIYAML() ([]byte, error) {
 	return New(Options{}).API().OpenAPI().YAML()
 }
 
-// Start runs the sync loop (and, from Task 8, the events) until ctx is
-// done or Shutdown is called.
+// Start runs the sync loop and the poller of the events until ctx is done
+// or Shutdown is called.
 func (s *Server) Start(ctx context.Context) {
 	ctx, s.cancel = context.WithCancel(ctx)
 	s.runDone = make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Go(func() { s.loop.Run(ctx) })
+	wg.Go(func() { s.poller.Run(ctx) })
 	go func() {
-		defer close(s.runDone)
-		s.loop.Run(ctx)
+		wg.Wait()
+		close(s.runDone)
 	}()
 }
 
-// Shutdown stops the loop and waits for the pushes of the writes not
-// pushed, 10 seconds at most. A second call does nothing.
+// Shutdown ends the event streams, stops the loop and the poller, and waits
+// for the pushes of the writes not pushed, 10 seconds at most. A second call
+// does nothing.
 func (s *Server) Shutdown(context.Context) error {
 	s.stopOnce.Do(func() {
 		if s.cancel != nil {
 			s.cancel()
 		}
+		s.hub.Close() // http.Server.Shutdown does not end a stream by itself
 		if s.runDone != nil {
 			<-s.runDone // a step in progress may still start a sync
 		}
