@@ -1,3 +1,7 @@
 # Round-trip tests compare test data byte for byte, so it must keep LF on
 # every platform (Git for Windows checks text out as CRLF by default).
 **/testdata/** text eol=lf
+
+# The OpenAPI document is compared byte for byte with what the server
+# generates (TestOpenAPIUpToDate), so it keeps LF too.
+api/openapi.yaml text eol=lf
