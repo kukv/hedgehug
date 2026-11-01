@@ -172,3 +172,61 @@ func TestSyncBringsADuplicateAcrossStores(t *testing.T) {
 		t.Errorf("sync: exit %d\nstderr %s", code, stderr)
 	}
 }
+
+// A --fix of a later store can renumber a task that lives in two stores; the
+// warning names the id it has after the repairs.
+func TestDoctorFixShowsTheRenumberedIDOfADuplicate(t *testing.T) {
+	te := newTwoStoreEnv(t)
+	te.addJSON("--store", "alpha", "Crossed")
+	path, old := te.storeTaskFile("alpha", "AA-3")
+	te.ok("mv", "AA-3", "--store", "bravo-long", "--yes")
+	if err := os.WriteFile(path, old, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rel, err := filepath.Rel(te.storeDir("alpha"), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := store.Open(te.storeDir("alpha"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{filepath.ToSlash(rel)}, Subject: "raw", Author: gitrepo.Signature{Name: "Alice", Email: "alice@example.com"}, When: te.now}); err != nil {
+		t.Fatal(err)
+	}
+	// the moved task takes the id of an older one in bravo-long
+	te.handEdit("bravo-long", "BB-3", "id: BB-3", "id: BB-1")
+	_, out, _ := te.run("doctor", "--fix", "--json")
+	var got []struct {
+		Store    string `json:"store"`
+		Repaired []struct {
+			ID    string `json:"id"`
+			Title string `json:"title"`
+		} `json:"repaired"`
+		Findings []struct {
+			Check string `json:"check"`
+			Msg   string `json:"msg"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if len(got) != 2 || len(got[1].Repaired) != 1 || got[1].Repaired[0].Title != "Crossed" || got[1].Repaired[0].ID == "BB-1" {
+		t.Fatalf("doctor --fix = %s; want the task renumbered in bravo-long", out)
+	}
+	want := "bravo-long (" + got[1].Repaired[0].ID + ")"
+	for _, r := range got {
+		var n int
+		for _, f := range r.Findings {
+			if f.Check == "duplicate_across_stores" {
+				n++
+				if !strings.Contains(f.Msg, want) {
+					t.Errorf("%s: %q lacks %q", r.Store, f.Msg, want)
+				}
+			}
+		}
+		if n != 1 {
+			t.Errorf("%s: %d duplicate findings in %s", r.Store, n, out)
+		}
+	}
+}

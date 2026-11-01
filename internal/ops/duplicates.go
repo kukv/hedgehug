@@ -38,7 +38,7 @@ func (ss *Session) duplicates() ([]duplicate, error) {
 			}
 		})
 		if err != nil {
-			ss.warnOnce(m.Name, fmt.Sprintf("could not read the index of %s, so its duplicates are not checked: %v", m.Name, err))
+			ss.warnOnce("duplicates:"+m.Name, fmt.Sprintf("could not read the index of %s, so its duplicates are not checked: %v", m.Name, err))
 		}
 	}
 	var out []duplicate
@@ -124,7 +124,7 @@ func (ss *Session) forwardTargetFindings(name string) []doctor.Finding {
 		}
 	})
 	if err != nil {
-		ss.warnOnce(name, fmt.Sprintf("could not read the index of %s, so its forwards are not checked: %v", name, err))
+		ss.warnOnce("forward_target:"+name, fmt.Sprintf("could not read the index of %s, so its forwards are not checked: %v", name, err))
 	}
 	doctor.Sort(out)
 	return out

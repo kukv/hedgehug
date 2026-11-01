@@ -233,9 +233,20 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 		}
 		return dups
 	}
+	// Every store is repaired before any is looked at: a repair can renumber
+	// a task, and the duplicates name the ids.
+	repaired := make([][]Fixed, len(entries))
+	if fix {
+		for i, e := range entries {
+			var err error
+			if repaired[i], err = ss.doctorFix(c, e); err != nil {
+				return nil, err
+			}
+		}
+	}
 	out := make([]DoctorReport, 0, len(entries))
-	for _, e := range entries {
-		r, err := ss.doctorStore(c, e, fix, len(entries) == 1, duplicatesOnce)
+	for i, e := range entries {
+		r, err := ss.doctorStore(e, len(entries) == 1, repaired[i], duplicatesOnce)
 		if err != nil {
 			return nil, err
 		}
@@ -244,27 +255,36 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 	return out, nil
 }
 
-// doctorStore is Doctor for the store e. A store that does not open and has
-// no finding is the error when it is the only one asked for, else a finding
-// of its own, so that the reports of the others stand.
-func (ss *Session) doctorStore(c *config.Config, e config.StoreEntry, fix, only bool, duplicates func() []duplicate) (DoctorReport, error) {
-	r := DoctorReport{Store: e.Name}
-	// A store that does not open is told of by the findings, which say why;
-	// it is not repaired, and its references are not looked at.
-	s, openErr := ss.openStoreAt(e.Path)
-	if fix && openErr == nil {
-		repaired, err := ss.fixStore(c, e, s)
-		var ro *ReadOnlyError
-		switch {
-		case errors.As(err, &ro):
-			ss.warn(fmt.Sprintf("%s is read-only, so it is not fixed (%s)", e.Name, ro.Access.Why()))
-		case err != nil:
-			return DoctorReport{}, err
-		case len(repaired) > 0:
-			r.Repaired = repaired
-			ss.dropMount() // the repair went in through a handle of its own
-		}
+// doctorFix repairs the store e for Doctor and returns what it fixed. A store
+// that does not open is not repaired (the findings tell of it), nor is a
+// read-only one (a warning says so).
+func (ss *Session) doctorFix(c *config.Config, e config.StoreEntry) ([]Fixed, error) {
+	s, err := ss.openStoreAt(e.Path)
+	if err != nil {
+		return nil, nil
 	}
+	repaired, err := ss.fixStore(c, e, s)
+	var ro *ReadOnlyError
+	switch {
+	case errors.As(err, &ro):
+		ss.warn(fmt.Sprintf("%s is read-only, so it is not fixed (%s)", e.Name, ro.Access.Why()))
+		return nil, nil
+	case err != nil:
+		return nil, err
+	case len(repaired) > 0:
+		ss.dropMount() // the repair went in through a handle of its own
+	}
+	return repaired, nil
+}
+
+// doctorStore is Doctor for the store e, after the repairs. A store that does
+// not open and has no finding is the error when it is the only one asked for,
+// else a finding of its own, so that the reports of the others stand.
+func (ss *Session) doctorStore(e config.StoreEntry, only bool, repaired []Fixed, duplicates func() []duplicate) (DoctorReport, error) {
+	r := DoctorReport{Store: e.Name, Repaired: repaired}
+	// A store that does not open is told of by the findings, which say why;
+	// its references are not looked at.
+	_, openErr := ss.openStoreAt(e.Path)
 	fs, err := doctor.Run(e.Path)
 	if err != nil {
 		return DoctorReport{}, err
