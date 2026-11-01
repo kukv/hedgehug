@@ -242,6 +242,8 @@ func (c *compiler) mentions(t Term) (pred, error) {
 }
 
 // me replaces @me among the values of t with the accounts in Options.Me.
+// The accounts are then compared with strings.EqualFold, like
+// config.SameAccount (spec: 共通の決まり, 大文字小文字).
 func (c *compiler) me(t Term) (Term, error) {
 	var vs []string
 	for _, v := range t.Values {

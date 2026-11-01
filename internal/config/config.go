@@ -13,6 +13,7 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 // ErrNoStores means config.yaml lists no store.
@@ -149,11 +150,17 @@ func Load(p Paths) (*Config, error) {
 	if err := c.loadRepoAccounts(valueOf(root, "repo_accounts")); err != nil {
 		return nil, err
 	}
-	if d := valueOf(root, "default_store"); d != nil && d.Tag != "!!null" {
-		if !slices.ContainsFunc(c.Stores, func(s StoreEntry) bool { return s.Name == d.Value }) {
-			return nil, c.errAt(d, fmt.Sprintf("default_store: no store is named %q", d.Value))
+	if d := valueOf(root, "default_store"); d != nil {
+		v, ok := text(d)
+		if !ok {
+			return nil, c.errAt(d, "default_store must be a store name")
 		}
-		c.DefaultStore = d.Value
+		if v != "" {
+			if !slices.ContainsFunc(c.Stores, func(s StoreEntry) bool { return s.Name == v }) {
+				return nil, c.errAt(d, fmt.Sprintf("default_store: no store is named %q", v))
+			}
+			c.DefaultStore = v
+		}
 	}
 	return c, nil
 }
@@ -226,21 +233,30 @@ func (c *Config) loadAccounts(seq *yaml.Node) error {
 			key string
 			dst *string
 		}{{"name", &a.Name}, {"host", &a.Host}, {"login", &a.Login}} {
-			v := valueOf(it, f.key)
-			if v == nil || v.Value == "" {
+			v, _ := text(valueOf(it, f.key))
+			if v == "" {
 				return c.errAt(it, fmt.Sprintf("accounts: %s is missing", f.key))
 			}
-			*f.dst = v.Value
+			*f.dst = v
 		}
-		if v := valueOf(it, "token"); v != nil && v.Tag != "!!null" {
-			ts, ok := parseTokenSource(v.Value)
+		if n := valueOf(it, "token"); n != nil {
+			v, ok := text(n)
 			if !ok {
-				return c.errAt(v, fmt.Sprintf("accounts: token %q: want gh, env:<VAR>, keychain or device", v.Value))
+				return c.errAt(n, "accounts: token must be gh, env:<VAR>, keychain or device")
 			}
-			a.Token = ts
+			if v != "" {
+				ts, ok := parseTokenSource(v)
+				if !ok {
+					return c.errAt(n, fmt.Sprintf("accounts: token %q: want gh, env:<VAR>, keychain or device", v))
+				}
+				a.Token = ts
+			}
 		}
 		if c.hasAccount(a.Name) {
 			return c.errAt(it, fmt.Sprintf("accounts: %q is listed twice", a.Name))
+		}
+		if slices.ContainsFunc(c.Accounts, func(x Account) bool { return SameAccount(x.ID(), a.ID()) }) {
+			return c.errAt(it, fmt.Sprintf("accounts: %q is listed twice", a.ID()))
 		}
 		c.Accounts = append(c.Accounts, a)
 	}
@@ -514,6 +530,31 @@ func (c *Config) RemoveStore(name string) error {
 		return c.SetDefaultStore("")
 	}
 	return nil
+}
+
+// updateWait is how long Update waits for config.lock.
+const updateWait = 30 * time.Second
+
+// Update changes config.yaml under config.lock: it reads the file again,
+// applies fn to what it read, and saves that. Nothing is written when fn
+// fails. On success c holds what was written, so a CLI and a server that
+// write at once keep each other's changes.
+func (c *Config) Update(fn func(*Config) error) error {
+	lock := filepath.Join(filepath.Dir(c.file), "config.lock")
+	return store.WithFileLock(lock, updateWait, func() error {
+		fresh, err := Load(Paths{Home: c.home, ConfigFile: c.file})
+		if err != nil {
+			return err
+		}
+		if err := fn(fresh); err != nil {
+			return err
+		}
+		if err := fresh.Save(); err != nil {
+			return err
+		}
+		*c = *fresh
+		return nil
+	})
 }
 
 // Save writes config.yaml through a temporary file and a rename.

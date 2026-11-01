@@ -99,13 +99,24 @@ func (ss *Session) StoreInit(in StoreInitInput) (StoreInitResult, error) {
 			ss.warn(fmt.Sprintf("%s: %s", name, w))
 		}
 	}
-	if err := c.AddStore(name, dir, in.Remotes); err != nil {
-		return StoreInitResult{}, undo(err)
-	}
-	if err := c.Save(); err != nil {
+	if err := ss.updateConfig(c, func(c *config.Config) error {
+		if storeExists(c, name) {
+			return storeExistsErr(name)
+		}
+		return c.AddStore(name, dir, in.Remotes)
+	}); err != nil {
 		return StoreInitResult{}, undo(err)
 	}
 	return StoreInitResult{Name: name, Path: dir, Workspace: ws, Remotes: in.Remotes, Pushed: pushed}, nil
+}
+
+// updateConfig is c.Update, after the BeforeUpdate hook of the session (a
+// test writes config.yaml there, as another process could).
+func (ss *Session) updateConfig(c *config.Config, fn func(*config.Config) error) error {
+	if ss.BeforeUpdate != nil {
+		ss.BeforeUpdate()
+	}
+	return c.Update(fn)
 }
 
 func storeExists(c *config.Config, name string) bool {
@@ -196,10 +207,12 @@ func (ss *Session) StoreAdd(name string, remotes []string, path string) (StoreAd
 			return StoreAddResult{}, undo(fmt.Errorf("set up %s: %w", name, err))
 		}
 	}
-	if err := c.AddStore(name, dir, remotes); err != nil {
-		return StoreAddResult{}, undo(err)
-	}
-	if err := c.Save(); err != nil {
+	if err := ss.updateConfig(c, func(c *config.Config) error {
+		if storeExists(c, name) {
+			return storeExistsErr(name)
+		}
+		return c.AddStore(name, dir, remotes)
+	}); err != nil {
 		return StoreAddResult{}, undo(err)
 	}
 	ss.warnPrefixDuplicates(c, name, s)
@@ -327,10 +340,12 @@ func (ss *Session) StoreRemove(name string, purge bool) (StoreRemoveResult, erro
 			return StoreRemoveResult{}, err
 		}
 	}
-	if err := c.RemoveStore(name); err != nil {
-		return StoreRemoveResult{}, err
-	}
-	if err := c.Save(); err != nil {
+	if err := ss.updateConfig(c, func(c *config.Config) error {
+		if !storeExists(c, name) { // another writer may have removed it since the lookup
+			return newErr(KindNotFound, "store.not_found", fmt.Errorf("no store is named %q", name), "name", name)
+		}
+		return c.RemoveStore(name)
+	}); err != nil {
 		return StoreRemoveResult{}, err
 	}
 	if purge {

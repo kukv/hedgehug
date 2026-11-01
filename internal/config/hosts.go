@@ -27,19 +27,39 @@ type URLRewrite struct{ From, To string }
 // Match (a path.Match pattern; "*" matches every ID). Phase 5 uses it.
 type RepoAccount struct{ Match, Account string }
 
+// SameHost reports whether a and b name the same host. Hosts are compared
+// without case and kept as they are written.
+func SameHost(a, b string) bool { return strings.EqualFold(a, b) }
+
+// SameAccount reports whether a and b are the same account ID
+// (<host>/<login>), compared without case.
+func SameAccount(a, b string) bool { return strings.EqualFold(a, b) }
+
+// text is the trimmed value of a scalar node. ok is false for a node that
+// is not a scalar; a missing node and a null are the empty string.
+func text(n *yaml.Node) (s string, ok bool) {
+	if n == nil || n.Tag == "!!null" {
+		return "", true
+	}
+	if n.Kind != yaml.ScalarNode {
+		return "", false
+	}
+	return strings.TrimSpace(n.Value), true
+}
+
 // Host returns the host name with its defaults filled in: the API at
 // https://api.github.com for github.com and https://<host>/api/v3 elsewhere,
 // the web at https://<host>.
 func (c *Config) Host(name string) Host {
 	h := Host{Host: name}
 	for _, x := range c.Hosts {
-		if x.Host == name {
+		if SameHost(x.Host, name) {
 			h = x
 		}
 	}
 	if h.API == "" {
 		h.API = "https://" + name + "/api/v3"
-		if name == "github.com" {
+		if SameHost(name, "github.com") {
 			h.API = "https://api.github.com"
 		}
 	}
@@ -53,11 +73,11 @@ func (c *Config) Host(name string) Host {
 
 // IsGitHubHost reports whether name is github.com or a host of hosts.
 func (c *Config) IsGitHubHost(name string) bool {
-	if name == "github.com" {
+	if SameHost(name, "github.com") {
 		return true
 	}
 	for _, x := range c.Hosts {
-		if x.Host == name {
+		if SameHost(x.Host, name) {
 			return true
 		}
 	}
@@ -106,7 +126,7 @@ func (c *Config) loadHosts(seq *yaml.Node) error {
 		return nil
 	}
 	if seq.Kind != yaml.SequenceNode {
-		return c.errAt(seq, "hosts: want a list")
+		return c.errAt(seq, "hosts must be a list")
 	}
 	for _, it := range seq.Content {
 		if it.Kind != yaml.MappingNode {
@@ -117,9 +137,11 @@ func (c *Config) loadHosts(seq *yaml.Node) error {
 			key string
 			dst *string
 		}{{"host", &h.Host}, {"api", &h.API}, {"web", &h.Web}, {"client_id", &h.ClientID}} {
-			if v := valueOf(it, f.key); v != nil && v.Tag != "!!null" {
-				*f.dst = v.Value
+			v, ok := text(valueOf(it, f.key))
+			if !ok {
+				return c.errAt(it, "hosts: "+f.key+" must be a string")
 			}
+			*f.dst = v
 		}
 		if h.Host == "" {
 			return c.errAt(it, "hosts: host is missing")
@@ -129,7 +151,7 @@ func (c *Config) loadHosts(seq *yaml.Node) error {
 				return c.errAt(it, fmt.Sprintf("hosts: %s %q: want an http or https URL", f.key, f.v))
 			}
 		}
-		if slices.ContainsFunc(c.Hosts, func(x Host) bool { return x.Host == h.Host }) {
+		if slices.ContainsFunc(c.Hosts, func(x Host) bool { return SameHost(x.Host, h.Host) }) {
 			return c.errAt(it, fmt.Sprintf("hosts: %q is listed twice", h.Host))
 		}
 		c.Hosts = append(c.Hosts, h)
@@ -143,17 +165,21 @@ func (c *Config) loadRewrites(seq *yaml.Node) error {
 		return nil
 	}
 	if seq.Kind != yaml.SequenceNode {
-		return c.errAt(seq, "url_rewrites: want a list")
+		return c.errAt(seq, "url_rewrites must be a list")
 	}
 	for _, it := range seq.Content {
 		if it.Kind != yaml.MappingNode {
 			return c.errAt(it, "url_rewrites: want a mapping with from and to")
 		}
-		from, to := valueOf(it, "from"), valueOf(it, "to")
-		if from == nil || from.Value == "" || to == nil || to.Value == "" {
+		from, ok1 := text(valueOf(it, "from"))
+		to, ok2 := text(valueOf(it, "to"))
+		if !ok1 || !ok2 {
+			return c.errAt(it, "url_rewrites: from and to must be strings")
+		}
+		if from == "" || to == "" {
 			return c.errAt(it, "url_rewrites: want a mapping with from and to")
 		}
-		c.URLRewrites = append(c.URLRewrites, URLRewrite{From: from.Value, To: to.Value})
+		c.URLRewrites = append(c.URLRewrites, URLRewrite{From: from, To: to})
 	}
 	return nil
 }
@@ -164,23 +190,28 @@ func (c *Config) loadRepoAccounts(seq *yaml.Node) error {
 		return nil
 	}
 	if seq.Kind != yaml.SequenceNode {
-		return c.errAt(seq, "repo_accounts: want a list")
+		return c.errAt(seq, "repo_accounts must be a list")
 	}
 	for _, it := range seq.Content {
 		if it.Kind != yaml.MappingNode {
 			return c.errAt(it, "repo_accounts: want a mapping with match and account")
 		}
-		m, a := valueOf(it, "match"), valueOf(it, "account")
-		if m == nil || m.Value == "" || a == nil || a.Value == "" {
+		mn, an := valueOf(it, "match"), valueOf(it, "account")
+		m, ok1 := text(mn)
+		a, ok2 := text(an)
+		if !ok1 || !ok2 {
+			return c.errAt(it, "repo_accounts: match and account must be strings")
+		}
+		if m == "" || a == "" {
 			return c.errAt(it, "repo_accounts: want a mapping with match and account")
 		}
-		if _, err := path.Match(m.Value, ""); err != nil {
-			return c.errAt(m, fmt.Sprintf("repo_accounts: match %q: %v", m.Value, err))
+		if _, err := path.Match(m, ""); err != nil {
+			return c.errAt(mn, fmt.Sprintf("repo_accounts: match %q: %v", m, err))
 		}
-		if !c.hasAccount(a.Value) {
-			return c.errAt(a, fmt.Sprintf("repo_accounts: account %q is not in accounts", a.Value))
+		if !c.hasAccount(a) {
+			return c.errAt(an, fmt.Sprintf("repo_accounts: account %q is not in accounts", a))
 		}
-		c.RepoAccounts = append(c.RepoAccounts, RepoAccount{Match: m.Value, Account: a.Value})
+		c.RepoAccounts = append(c.RepoAccounts, RepoAccount{Match: m, Account: a})
 	}
 	return nil
 }

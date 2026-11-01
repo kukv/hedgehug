@@ -38,7 +38,8 @@ type Session struct {
 	Warn       func(msg string)                          // warnings; the CLI prints "warning: "+msg to stderr
 	AfterWrite func(s *store.Store, e config.StoreEntry) // after a commit; nil does nothing more
 	// BeforeUpdate lets a test write to the store after an operation read its
-	// index and before it writes, as another process could.
+	// index and before it writes, or write config.yaml after an operation
+	// read it and before it updates it, as another process could.
 	BeforeUpdate func()
 	// Conn is how the remotes of a store are reached (url_rewrites and the
 	// token of its account); nil reaches them as they are.

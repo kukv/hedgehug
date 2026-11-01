@@ -428,7 +428,8 @@ func readAt(r *gitrepo.Repo, tree plumbing.Hash, p string) ([]byte, error) {
 	return b, err
 }
 
-// isMe returns the account of me that a is, comparing without case.
+// isMe returns the account of me that a is, comparing without case as
+// config.SameAccount does (spec: 共通の決まり, 大文字小文字).
 func isMe(me []string, a string) (string, bool) {
 	for _, m := range me {
 		if strings.EqualFold(m, a) {
