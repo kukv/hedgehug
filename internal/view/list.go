@@ -29,8 +29,13 @@ type Entry struct {
 // without views/ has none. Files in subdirectories, and files without the
 // .yaml extension, are not views and are left out; doctor reports them.
 func List(storeDir string) ([]Entry, error) {
-	des, err := os.ReadDir(filepath.Join(storeDir, model.ViewsDir))
+	dir := filepath.Join(storeDir, model.ViewsDir)
+	des, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
+		// Windows says so of a file at views too.
+		if fi, serr := os.Stat(dir); serr == nil && !fi.IsDir() {
+			return nil, fmt.Errorf("%s is not a directory", model.ViewsDir)
+		}
 		return nil, nil
 	}
 	if err != nil {
