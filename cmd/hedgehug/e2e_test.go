@@ -16,6 +16,7 @@ import (
 
 var (
 	devenvOnce sync.Once
+	devenvDir  string // the directory of the binary buildDevenv made; TestMain removes it
 	devenvBin  string
 	devenvErr  error
 )
@@ -25,7 +26,8 @@ var (
 func buildDevenv(t *testing.T) string {
 	t.Helper()
 	devenvOnce.Do(func() {
-		dir, err := os.MkdirTemp("", "devenv-bin-")
+		var err error
+		devenvDir, err = os.MkdirTemp("", "devenv-bin-")
 		if err != nil {
 			devenvErr = err
 			return
@@ -34,7 +36,7 @@ func buildDevenv(t *testing.T) string {
 		if runtime.GOOS == "windows" {
 			name += ".exe"
 		}
-		devenvBin = filepath.Join(dir, name)
+		devenvBin = filepath.Join(devenvDir, name)
 		if out, err := exec.Command("go", goBuildArgs(devenvBin, "../../tools/devenv")...).CombinedOutput(); err != nil { //nolint:gosec // the arguments are ours
 			devenvErr = fmt.Errorf("go build devenv: %w\n%s", err, out)
 		}
