@@ -44,7 +44,8 @@ func (ix *Index) Forward(ulid model.ULID) (*ForwardEntry, bool) {
 
 // ResolveForward finds the forward s names, ignoring case: by its id, a
 // former id, or its full ULID, trying them in that order as Resolve does.
-// Only forwards are looked at. An input that matches more than one is an
+// Only forwards are looked at, and not the broken ones: a file that does not
+// decode names no store (doctor tells of it). An input that matches more than one is an
 // *AmbiguousError; none is store.ErrNotFound.
 func (ix *Index) ResolveForward(s string) (*ForwardEntry, error) {
 	if s == "" {
@@ -58,7 +59,7 @@ func (ix *Index) ResolveForward(s string) (*ForwardEntry, error) {
 		},
 		func(f *ForwardEntry) bool { return len(u) == 26 && f.ULID.String() == u },
 	}
-	all := ix.Forwards()
+	all := slices.DeleteFunc(ix.Forwards(), func(f *ForwardEntry) bool { return f.Broken != "" })
 	for _, match := range stages {
 		var hits []*ForwardEntry
 		for _, f := range all {

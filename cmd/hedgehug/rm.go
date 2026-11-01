@@ -231,7 +231,18 @@ func (a *app) purgeMoved(yes bool) error {
 			return errors.New("Canceled")
 		}
 	}
-	removed, commit, err := a.ss.PurgeMoved(true)
+	var removed []ops.ForwardView
+	var commit string
+	if yes {
+		removed, commit, err = a.ss.PurgeMoved(true)
+	} else {
+		// what the user said yes to, and nothing that came in since
+		confirmed := make([]model.ULID, len(list))
+		for i, v := range list {
+			confirmed[i] = v.ULID
+		}
+		removed, commit, err = a.ss.PurgeMovedConfirmed(confirmed)
+	}
 	if err != nil {
 		return err
 	}
