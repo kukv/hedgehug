@@ -1,4 +1,8 @@
-.PHONY: build fmt fmt-check lint tidy-check test check release-check
+.PHONY: generate build fmt fmt-check lint tidy-check test check release-check
+
+# Write the generated files (api/openapi.yaml).
+generate:
+	go generate ./...
 
 # Build the binary into bin/.
 build:

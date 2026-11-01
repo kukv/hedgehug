@@ -39,6 +39,9 @@ test-report.xml
 
 ### GoReleaser ###
 dist/
+!/web/dist/
+/web/dist/*
+!/web/dist/.gitkeep
 
 ### devenv ###
 /.devenv/

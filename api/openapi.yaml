@@ -1,0 +1,89 @@
+components:
+  schemas:
+    ErrorDetail:
+      additionalProperties: false
+      properties:
+        location:
+          description: Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id'
+          type: string
+        message:
+          description: Error message text
+          type: string
+        value:
+          description: The value at the given location
+      type: object
+    HealthOutputBody:
+      additionalProperties: false
+      properties:
+        pid:
+          description: The process of the server
+          format: int64
+          type: integer
+        version:
+          description: The version of hedgehug
+          type: string
+      required:
+        - version
+        - pid
+      type: object
+    Problem:
+      additionalProperties: false
+      properties:
+        args:
+          additionalProperties: {}
+          description: The arguments of the error, by name
+          type: object
+        detail:
+          description: The message in English, as the CLI prints it
+          type: string
+        errors:
+          description: What was wrong in the request, for request.invalid
+          items:
+            $ref: "#/components/schemas/ErrorDetail"
+          type:
+            - array
+            - "null"
+        status:
+          format: int64
+          type: integer
+        title:
+          description: The text of the HTTP status
+          type: string
+        type:
+          description: What went wrong, such as task.not_found
+          type: string
+      required:
+        - type
+        - title
+        - status
+      type: object
+  securitySchemes:
+    bearer:
+      scheme: bearer
+      type: http
+info:
+  title: Hedgehug
+  version: "1"
+openapi: 3.1.0
+paths:
+  /api/health:
+    get:
+      operationId: get-health
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Check that the server is up
+      tags:
+        - server
+security:
+  - bearer: []
