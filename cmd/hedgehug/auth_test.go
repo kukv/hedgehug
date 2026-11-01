@@ -1,13 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/zalando/go-keyring"
 
@@ -244,10 +247,22 @@ func TestAuthLoginOpensBrowser(t *testing.T) {
 			keyring.MockInit()
 			te := newTestEnv(t)
 			te.withFake(fakegh.State{AutoApprove: "alice"})
+			var mu sync.Mutex
 			var opened []string
-			te.openURL = func(u string) error { opened = append(opened, u); return nil }
+			te.openURL = func(u string) error { mu.Lock(); opened = append(opened, u); mu.Unlock(); return nil }
 			te.terminal, te.stdin = c.terminal, c.stdin
 			te.ok("auth", "login")
+			for i := 0; c.opened && i < 500; i++ { // the browser is opened beside the login
+				mu.Lock()
+				n := len(opened)
+				mu.Unlock()
+				if n > 0 {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			mu.Lock()
+			defer mu.Unlock()
 			if (len(opened) == 1) != c.opened || (c.opened && !strings.HasSuffix(opened[0], "/login/device")) {
 				t.Errorf("opened = %v", opened)
 			}
@@ -259,9 +274,20 @@ func TestAuthLoginOpensBrowser(t *testing.T) {
 		te.withFake(fakegh.State{AutoApprove: "alice"})
 		te.openURL = func(string) error { return errors.New("no browser") }
 		te.terminal, te.stdin = true, "\n"
-		_, _, errs := te.run("auth", "login")
-		if !strings.Contains(errs, "no browser") {
-			t.Errorf("stderr = %q", errs)
+		errb := &syncBuffer{}
+		e := &env{
+			stdin: strings.NewReader(te.stdin), stdout: &bytes.Buffer{}, stderr: errb,
+			getenv: te.getenv, isTerminal: func(any) bool { return true },
+			now: func() time.Time { return te.now }, openURL: te.openURL,
+		}
+		if code := run([]string{"auth", "login"}, e); code != 0 {
+			t.Fatalf("exit %d: %s", code, errb.String())
+		}
+		for i := 0; !strings.Contains(errb.String(), "no browser") && i < 500; i++ { // the warning comes from beside the login
+			time.Sleep(10 * time.Millisecond)
+		}
+		if !strings.Contains(errb.String(), "warning: the browser did not open: no browser") {
+			t.Errorf("stderr = %q", errb.String())
 		}
 		if !strings.Contains(te.configText(), "login: alice") {
 			t.Error("the login did not go on")

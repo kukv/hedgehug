@@ -63,7 +63,7 @@ func (a *app) rootCmd() *cobra.Command {
 	pf.StringVar(&a.ss.StoreName, "store", "", "the store to work on, by name")
 	pf.BoolVar(&a.jsonOut, "json", false, "print JSON")
 	pf.BoolVar(&a.noColor, "no-color", false, "do not color the output")
-	root.AddCommand(a.storeCmd(), a.addCmd(), a.lsCmd(), a.showCmd(), a.setCmd(), a.statusCmd(), a.doneCmd(), a.depCmd(), a.rmCmd(), a.restoreCmd(), a.undoCmd(), a.purgeCmd(), a.mvCmd(), a.editCmd(), a.commentCmd(), a.logCmd(), a.schemaCmd(), a.doctorCmd(), a.workspaceCmd(), a.viewCmd(), a.syncCmd(), a.inboxCmd(), a.watchCmd(), a.unwatchCmd(), a.mergeDriverCmd(), a.authCmd(), a.useCmd())
+	root.AddCommand(a.storeCmd(), a.addCmd(), a.lsCmd(), a.showCmd(), a.setCmd(), a.statusCmd(), a.doneCmd(), a.depCmd(), a.rmCmd(), a.restoreCmd(), a.undoCmd(), a.purgeCmd(), a.mvCmd(), a.editCmd(), a.commentCmd(), a.logCmd(), a.schemaCmd(), a.doctorCmd(), a.workspaceCmd(), a.viewCmd(), a.syncCmd(), a.inboxCmd(), a.watchCmd(), a.unwatchCmd(), a.mergeDriverCmd(), a.authCmd(), a.useCmd(), a.uiCmd())
 	return root
 }
 
@@ -85,8 +85,8 @@ func asUsage(f cobra.PositionalArgs) cobra.PositionalArgs {
 // (ops.BeforeCommand), except in the sync itself and in a merge driver.
 func (a *app) beforeCommand(cmd *cobra.Command, _ []string) {
 	for c := cmd; c != nil; c = c.Parent() {
-		if c.Parent() != nil && c.Parent().Parent() == nil && (c.Name() == "sync" || c.Name() == "merge-driver") {
-			return // the sync itself, and a merge in the middle of one
+		if c.Parent() != nil && c.Parent().Parent() == nil && (c.Name() == "sync" || c.Name() == "merge-driver" || c.Name() == "ui") {
+			return // the sync itself, a merge in the middle of one, and hh ui, whose server syncs
 		}
 	}
 	a.ss.BeforeCommand(

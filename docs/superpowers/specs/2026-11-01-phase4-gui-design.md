@@ -44,6 +44,7 @@
 - 4a でも ops の層の単体テストを足す
 - undo は確認ダイアログを出さない（取り消しにくい操作ではないため）
 - 4b の細部（2026-11-01）: 進捗は親設計どおり work 役割の子孫で数える。`--json` の進捗は `ls --tree` と `show` だけ。tree のビューで `sort:`・`group:` は保存時に拒否。名前の大文字小文字だけの変更は拒否し、Windows の予約名も拒否。組み込みの列は9個。名前のバイト数・NFC・書式文字・Windows の追加の予約名も拒否し、CLI の表の列幅は全角を2桁で数える（既存の表も含む）
+- 4c の細部（2026-11-01）: `PATCH /tasks/{id}` は CLI のコマンドに合わせ、`hh set` の範囲と本文を1コミットにする（本文だけなら op は edit、ほかは set）。移動は `POST /tasks/{id}/move`、復元は `POST /tasks/{id}/restore`。完全削除は `confirm` なしで 409 `purge.unconfirmed` と対象を返し、`confirm=<ULID>,…` で送り直す。Store は `?store=` で指定し、省略は CLI と同じ（3b のあと: 一覧・ツリー・履歴・アクティビティ・doctor・通知は全 Store にまたがり、各タスクに `store` が付く。doctor は Store ごとの配列。ID で指す書き込みは ID が Store を決める。Store が複数あるときの `?store=` なしの作成は ops のまま 422 `store.choose`。2026-11-01 に利用者が決定）。表示の状態は SSE の接続ごとの `client`（最初のイベント `hello` で渡す）に結びつけ、切断したタブは数えない。応答はテストで libopenapi-validator を使って `api/openapi.yaml` と照合する。ほかの細部（エラーの形と状態、各エンドポイントの入出力、同期ループの再試行と停止、`hh ui` の出力と `ui.json` の場所など）は `docs/superpowers/plans/2026-11-01-phase4c-server.md` の「この plan で埋める spec にない細部」のとおり
 
 ## 範囲
 
@@ -199,8 +200,8 @@ huma v2 を標準の ServeMux の上（humago）で使う。パスはすべて `
 
 | 資源 | エンドポイント | 呼ぶ ops |
 |---|---|---|
-| タスク | `GET /tasks?q=&tree=`、`GET /tasks/{id}`、`POST /tasks`、`PATCH /tasks/{id}`、`DELETE /tasks/{id}` | ls / ls --tree、show、add、set・status・dep・mv・restore・本文の更新、rm |
-| 完全削除 | `DELETE /tasks/{id}?purge=true` | purge |
+| タスク | `GET /tasks?q=&tree=`、`GET /tasks/{id}`、`POST /tasks`、`PATCH /tasks/{id}`、`POST /tasks/{id}/move`、`POST /tasks/{id}/restore`、`DELETE /tasks/{id}` | ls / ls --tree、show、add、set・edit（本文）、mv、restore、rm |
+| 完全削除 | `DELETE /tasks/{id}?purge=true&confirm=<ULID>,…` | purge（`confirm` がない・対象と違うときは 409 `purge.unconfirmed` と対象を返す） |
 | 履歴 | `GET /tasks/{id}/history`、`POST /tasks/{id}/history/{commit}/restore` | log、restore --at |
 | コメント | `POST /tasks/{id}/comments`、`PATCH /tasks/{id}/comments/{cid}`、`DELETE /tasks/{id}/comments/{cid}` | comment add / edit / rm |
 | ウォッチ | `PUT /tasks/{id}/watchers/me`、`DELETE /tasks/{id}/watchers/me` | watch / unwatch |
@@ -217,7 +218,8 @@ huma v2 を標準の ServeMux の上（humago）で使う。パスはすべて `
 | 状態の確認 | `GET /health` | なし |
 
 - `{id}` は ID・以前の ID・ULID のどれでもよい（CLI と同じ解決）
-- 1回の `PATCH` は1コミット。送ったフィールドだけを変える。同じフィールドを CLI と同時に変えたときは後勝ち
+- Store ごとの資源は `?store=<名前>` で指定する。省略は CLI と同じで、読み取りは全 Store にまたがる（3b の統合ビュー）
+- 1回の `PATCH` は1コミット。送ったフィールドだけを変える（`hh set` の範囲と本文）。同じフィールドを CLI と同時に変えたときは後勝ち
 - 書き込みの応答は、変わったタスクと、作ったコミットのハッシュを返す
 - タスクの応答には、4b の `checklist` と `progress` を含める
 - エラーは problem+json。`type` に ops のエラーの `Code`、拡張メンバーに引数を入れる。表示の文言はフロントエンドが持つ
@@ -232,18 +234,19 @@ huma v2 を標準の ServeMux の上（humago）で使う。パスはすべて `
 
 | イベント | 中身 |
 |---|---|
+| `hello` | `client`（この接続。`PUT /api/presence` に使う）、各 Store の `store`・`head`・同期の状態、未読数 |
 | `tasks.changed` | `store`、`ulids`、`removed`、`commit`、`op`、`author` |
 | `sync.state` | `store`、最終同期時刻、未 push のコミット数、エラー、次の fetch の時刻 |
 | `notifications.unread` | 未読数 |
 | `schema.changed` | `store` |
 | `views.changed` | `store` |
 
-- 接続のたびに、最初に今の状態（各 Store の HEAD と同期の状態）を送る。クライアントは、切断中に HEAD が動いていたら表示中のデータを取り直す
+- 接続のたびに、最初に `hello` で今の状態（各 Store の HEAD と同期の状態）を送る。クライアントは、切断中に HEAD が動いていたら表示中のデータを取り直す
 
 ### 同期ループ
 
 - 親設計の既定のとおり、fetch はブラウザで表示中なら `sync.interval`（既定 2 分）、非表示なら 10 分（`sync.interval` が 10 分より長ければその値）ごとに行う。`hh ui` の起動時にも1回同期する
-- 表示中かどうかは、SPA が Page Visibility API の変化を `PUT /api/presence` で知らせる。どのタブも表示中でなければ非表示とみなす
+- 表示中かどうかは、SPA が Page Visibility API の変化を `PUT /api/presence`（`hello` の `client` を付ける）で知らせる。どのタブも表示中でなければ非表示とみなす。SSE の接続が切れたタブは数えない
 - サーバーの書き込みの後は、CLI のバックグラウンド同期と同じ規則（最初の書き込みから `sync.push_interval` 後に push）で同期する
 - CLI の書き込みは、今どおり CLI の子プロセスが同期する。同時に動いても既存のロックで直列になる
 

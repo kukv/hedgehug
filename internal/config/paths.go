@@ -15,7 +15,7 @@ var goos = runtime.GOOS
 type Paths struct {
 	Home       string // the user's home directory
 	ConfigFile string // config.yaml
-	DataDir    string // where Hedgehug keeps its data: context.json, and stores/
+	DataDir    string // where Hedgehug keeps its data: context.json, ui.json and stores/
 	StoresDir  string // the directory new stores go in, one per name; DataDir/stores
 }
 

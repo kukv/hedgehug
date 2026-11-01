@@ -3,16 +3,16 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
-	"runtime"
 	"strings"
 	"time"
 
+	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
@@ -42,6 +42,8 @@ type env struct {
 	run func(name string, args ...string) (stdout, stderr []byte, err error)
 	// openURL opens a URL in the browser; nil means no browser can be opened.
 	openURL func(url string) error
+	// uiContext is for tests: what hh ui runs until; nil is Ctrl-C and SIGTERM.
+	uiContext func() (context.Context, context.CancelFunc)
 }
 
 func init() {
@@ -117,16 +119,9 @@ func writeErr(w io.Writer, err error) {
 	_, _ = fmt.Fprintln(w, "hedgehug: "+describe(err))
 }
 
-// openURL opens u in the browser of the OS.
+// openURL opens u in the browser of the OS and returns when the command that
+// opens it has ended. Its own output is not shown.
 func openURL(u string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", u) //nolint:gosec // G204: the command is fixed; u is the verification URL the host gave
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", u) //nolint:gosec // G204: the command is fixed; u is the verification URL the host gave
-	default:
-		cmd = exec.Command("xdg-open", u) //nolint:gosec // G204: the command is fixed; u is the verification URL the host gave
-	}
-	return cmd.Start()
+	browser.Stdout, browser.Stderr = io.Discard, io.Discard // not into the output of the CLI
+	return browser.OpenURL(u)
 }

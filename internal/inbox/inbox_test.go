@@ -180,3 +180,19 @@ func TestReadSetKeepsOnlyItems(t *testing.T) {
 		t.Errorf("inbox-read.json = %s, %v", data, err)
 	}
 }
+
+func TestStampChangesWithTheFiles(t *testing.T) {
+	_, b := twoClones(t)
+	box := Open(b.s)
+	before := box.Stamp()
+	if _, err := box.Add([]Item{{Kind: Mention, Task: model.NewULID(), Commit: "c", Time: time.Now()}}); err != nil {
+		t.Fatal(err)
+	}
+	after := box.Stamp()
+	if before == after {
+		t.Fatalf("stamp did not change: %q", after)
+	}
+	if box.Stamp() != after {
+		t.Error("stamp changed with nothing written")
+	}
+}

@@ -631,3 +631,20 @@ func TestTwoCatchesAtOnce(t *testing.T) {
 		t.Errorf("Start moved the mark to %s", m)
 	}
 }
+
+func TestCatchAtHeadWritesNothing(t *testing.T) {
+	_, b := twoClones(t)
+	box := Open(b.s)
+	me := []string{"github.com/b"}
+	if _, err := box.Catch(me, head(t, b)); err != nil {
+		t.Fatal(err)
+	}
+	before := box.Stamp()
+	time.Sleep(20 * time.Millisecond) // a rewrite would move the time
+	if added, err := box.Catch(me, head(t, b)); err != nil || len(added) != 0 {
+		t.Fatalf("second Catch = %+v, %v", added, err)
+	}
+	if after := box.Stamp(); after != before {
+		t.Errorf("stamp %q, was %q: Catch at HEAD rewrote a file", after, before)
+	}
+}

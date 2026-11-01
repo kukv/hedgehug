@@ -18,6 +18,10 @@ import (
 // index. git ignores it.
 const LocalDir = ".hedgehug/local"
 
+// LocalPath is the path of the file name of .hedgehug/local, which may not
+// exist.
+func (s *Store) LocalPath(name string) string { return s.path(LocalDir + "/" + name) }
+
 // ReadLocal reads the file name of .hedgehug/local; a name may go into a
 // directory, as in overwritten/<ULID>.json. A missing file is ErrNotFound
 // and fs.ErrNotExist.

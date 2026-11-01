@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -82,6 +83,21 @@ type Box struct {
 
 func Open(s *store.Store) *Box { return &Box{s: s} }
 
+// Stamp tells whether the files of the box changed: the size and the time
+// of each, joined. A missing file stamps as "-".
+func (b *Box) Stamp() string {
+	var sb strings.Builder
+	for _, name := range []string{itemsFile, readFile, markFile} {
+		st, err := os.Stat(b.s.LocalPath(name))
+		if err != nil {
+			sb.WriteString("-;")
+			continue
+		}
+		fmt.Fprintf(&sb, "%d:%d;", st.Size(), st.ModTime().UnixNano())
+	}
+	return sb.String()
+}
+
 // Warnings returns what the box skipped while reading: lines of
 // inbox.jsonl and merge driver records that do not decode. They stay in
 // place.
@@ -99,7 +115,9 @@ func (b *Box) warn(w string) {
 // HEAD itself. The commits are read without the lock; the commit reached
 // is kept only once its items are in, and only when no other Catch moved
 // it meanwhile (the items of both are in either way, once each), so a
-// failed Catch is made up by the next.
+// failed Catch is made up by the next. A mark that is HEAD already is not
+// written again, so that a Catch with nothing to do leaves the files as
+// they are (see Stamp).
 func (b *Box) Catch(me []string, since plumbing.Hash) ([]Item, error) {
 	head, err := b.s.Repo().Head()
 	if err != nil {
@@ -120,7 +138,7 @@ func (b *Box) Catch(me []string, since plumbing.Hash) ([]Item, error) {
 		if added, err = b.add(items); err != nil {
 			return err
 		}
-		if b.markText() == was {
+		if now := b.markText(); now == was && now != head.String() {
 			if err := b.s.WriteLocal(markFile, []byte(head.String()+"\n")); err != nil {
 				return err
 			}
