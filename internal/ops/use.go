@@ -6,11 +6,10 @@ import (
 	"github.com/kukv/hedgehug/internal/config"
 	hhctx "github.com/kukv/hedgehug/internal/context"
 	"github.com/kukv/hedgehug/internal/index"
-	"github.com/kukv/hedgehug/internal/mount"
 )
 
 // useKind is the kind of a task that hh use takes.
-const useKind = "project"
+const useKind = hhctx.ProjectKind
 
 // UseResult is the project hh use set or shows; Project is nil when there is none.
 type UseResult struct {
@@ -94,29 +93,14 @@ func (ss *Session) UseShow() (UseResult, error) {
 	if err != nil {
 		return UseResult{}, err
 	}
-	var m *mount.Mounted
-	for _, c := range set.Stores {
-		if c.ULID == st.Use.Store {
-			m = c
-			break
-		}
+	m, e, id, ok, err := st.Use.Find(set)
+	if err != nil {
+		return UseResult{}, err
 	}
-	if m != nil {
-		var res UseResult
-		err := m.With(func(ix *index.Index) {
-			if e, ok := ix.Task(st.Use.Project); ok && e.DeletedAt == nil && e.Kind == useKind {
-				cp := *e
-				res = UseResult{Store: m.Name, Project: &cp, ID: ix.DisplayID(e)}
-			}
-		})
-		if err != nil {
-			return UseResult{}, err
-		}
-		if res.Project != nil {
-			return res, nil
-		}
+	if ok {
+		return UseResult{Store: m.Name, Project: &e, ID: id}, nil
 	}
-	ss.warn("the project of hedgehug use is not found (hedgehug use --clear removes it)")
+	ss.warn(hhctx.UseGoneWarning)
 	return UseResult{}, nil
 }
 

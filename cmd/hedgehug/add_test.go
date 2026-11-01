@@ -54,7 +54,7 @@ func (te *testEnv) task(ulid string) *model.Task {
 func TestAdd(t *testing.T) {
 	te := newStoreEnv(t)
 	out := te.ok("add", "Write", "the", "spec")
-	if !regexp.MustCompile(`^Added ME-1 \([0-9A-Z]{26}\) Write the spec\n$`).MatchString(out) {
+	if !regexp.MustCompile(`^Added ME-1 \([0-9A-Z]{26}\) Write the spec\n→ added to me / me\n$`).MatchString(out) {
 		t.Errorf("stdout = %q", out)
 	}
 	log := te.log("me")
