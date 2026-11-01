@@ -347,6 +347,17 @@ func (h *history) reverts(w write, writes []write) bool {
 	})
 }
 
+// wsRemoved reports whether the workspace of w was removed by a write that came
+// after w, knowing it, as purged does for a task. The removal takes the writes
+// before it with the workspace; when a side that edited the workspace meanwhile
+// brings it back (the removal loses to the edit), the workspace is that side's
+// version, and the removing side's earlier edits were part of what it removed.
+func (h *history) wsRemoved(w write, writes []write) bool {
+	return slices.ContainsFunc(writes, func(o write) bool {
+		return o.field == "ws.rm" && o.task == w.task && h.isAncestor(w.commit, o.commit)
+	})
+}
+
 // purged reports whether the task of w was purged by a write that came
 // after w, knowing it. A purge takes the writes before it with the task, and
 // a side that changed the task meanwhile gets its own version back.
@@ -484,7 +495,7 @@ func (h *history) checkWorkspace(ps *problems, w write, writes []write) {
 	if field == "id_prefix" {
 		final = js(ws.IDPrefix)
 	}
-	if sameJSON(final, w.value) || h.replaced(w, writes) || h.reverts(w, writes) || h.wasRepaired(w.task, w.field) ||
+	if sameJSON(final, w.value) || h.replaced(w, writes) || h.reverts(w, writes) || h.wsRemoved(w, writes) || h.wasRepaired(w.task, w.field) ||
 		h.wasLost(model.WorkspacePath(w.task), field, w.value) {
 		return
 	}
