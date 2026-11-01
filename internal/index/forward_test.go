@@ -145,8 +145,4 @@ func TestBrokenForward(t *testing.T) {
 	if !ok || f.Broken == "" || !strings.Contains(f.Broken, "title") {
 		t.Fatalf("forward = %+v, %v", f, ok)
 	}
-	ps := ix.Problems(ulid)
-	if len(ps) != 1 || ps[0].Code != CodeBroken {
-		t.Errorf("problems = %+v, want one broken", ps)
-	}
 }

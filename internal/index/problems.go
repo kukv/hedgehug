@@ -43,11 +43,6 @@ func (ix *Index) Problems(ulid model.ULID) []Problem { return slices.Clone(ix.pr
 func (ix *Index) findProblems() map[model.ULID][]Problem {
 	out := map[model.ULID][]Problem{}
 	add := func(ulid model.ULID, p Problem) { out[ulid] = append(out[ulid], p) }
-	for _, f := range ix.forwards {
-		if f.Broken != "" {
-			add(f.ULID, Problem{CodeBroken, "", f.Broken})
-		}
-	}
 	byID := map[string][]model.ULID{}
 	for _, e := range ix.tasks {
 		if e.Broken != "" {

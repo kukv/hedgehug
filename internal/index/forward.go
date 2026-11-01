@@ -58,9 +58,10 @@ func (ix *Index) ResolveForward(s string) (*ForwardEntry, error) {
 		},
 		func(f *ForwardEntry) bool { return len(u) == 26 && f.ULID.String() == u },
 	}
+	all := ix.Forwards()
 	for _, match := range stages {
 		var hits []*ForwardEntry
-		for _, f := range ix.Forwards() {
+		for _, f := range all {
 			if match(f) {
 				hits = append(hits, f)
 			}

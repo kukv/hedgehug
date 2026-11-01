@@ -69,13 +69,14 @@ func (ix *Index) rebuild(tree plumbing.Hash) error {
 		if err != nil {
 			return err
 		}
-		if model.IsForward(b) {
+		e, t, forward := newEntry(ulid, b)
+		if forward {
 			if forwards[ulid], err = ix.newForwardEntry(ulid, b); err != nil {
 				return err
 			}
 			continue
 		}
-		tasks[ulid], decoded[ulid] = newEntry(ulid, b)
+		tasks[ulid], decoded[ulid] = e, t
 	}
 	n, err := ix.readNotes(tree, []string{"comments/", "worklogs/"}, func(ulid model.ULID) bool { return tasks[ulid] != nil })
 	if err != nil {
@@ -324,7 +325,8 @@ func (ix *Index) update(from, to plumbing.Hash) error {
 // and drops the other kind of entry it had. It returns the task when the
 // file is one that decodes.
 func (ix *Index) setFile(ulid model.ULID, data []byte) (*model.Task, error) {
-	if model.IsForward(data) {
+	e, t, forward := newEntry(ulid, data)
+	if forward {
 		f, err := ix.newForwardEntry(ulid, data)
 		if err != nil {
 			return nil, err
@@ -334,7 +336,6 @@ func (ix *Index) setFile(ulid model.ULID, data []byte) (*model.Task, error) {
 		return nil, nil
 	}
 	delete(ix.forwards, ulid)
-	e, t := newEntry(ulid, data)
 	ix.tasks[ulid] = e
 	return t, nil
 }

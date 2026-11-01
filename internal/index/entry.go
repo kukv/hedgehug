@@ -1,6 +1,7 @@
 package index
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -64,16 +65,20 @@ func (e *Entry) Prop(key string) []string {
 
 // newEntry decodes the task file data, found at the path of ulid. A file that
 // does not decode, or whose ULID is not the one of its path, gives a broken
-// entry and no task.
-func newEntry(ulid model.ULID, data []byte) (*Entry, *model.Task) {
+// entry and no task. A forward is neither: forward is true and the entry is
+// nil, for the caller to read it as one.
+func newEntry(ulid model.ULID, data []byte) (e *Entry, t *model.Task, forward bool) {
 	t, err := model.DecodeTask(data)
+	if errors.Is(err, model.ErrForward) {
+		return nil, nil, true
+	}
 	if err == nil && t.ULID != ulid {
 		err = fmt.Errorf("ulid %s does not match the file name", t.ULID)
 	}
 	if err != nil {
-		return &Entry{ULID: ulid, Broken: err.Error(), BrokenNumbers: model.IDNumbersIn(data)}, nil
+		return &Entry{ULID: ulid, Broken: err.Error(), BrokenNumbers: model.IDNumbersIn(data)}, nil, false
 	}
-	return EntryOf(t), t
+	return EntryOf(t), t, false
 }
 
 // EntryOf returns what the index keeps of t, as read from its file: its
