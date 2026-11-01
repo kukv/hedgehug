@@ -449,12 +449,3 @@ func errString(err error) string {
 	}
 	return err.Error()
 }
-
-func TestSecondIDWithItsOwnStorePrefixInASingleStoreSession(t *testing.T) {
-	ts := newTestSession(t)
-	ts.addTask("a", nil)
-	ts.addTask("b", nil)
-	if _, err := ts.Dep("ME-1", "me:ME-2", true); err != nil {
-		t.Errorf("Dep(ME-1, me:ME-2): %v", err)
-	}
-}

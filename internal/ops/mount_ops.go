@@ -165,9 +165,6 @@ func (ss *Session) ResolveRef(ix *index.Index, arg string) (*index.Entry, error)
 	}
 	in := arg
 	if c, _, err := ss.Config(); err == nil {
-		if self == "" && len(c.Stores) == 1 {
-			self = c.Stores[0].Name
-		}
 		if name, rest, ok := strings.Cut(arg, ":"); ok && storeNamed(c, name) {
 			if name == self {
 				in = rest
