@@ -51,7 +51,7 @@ jobs:
 
   # hedgehug は Linux と macOS 向けに配る（Windows では WSL で Linux 版を使う）。
   # データの置き場所やファイルシステムが OS ごとに違うので、テストは2つの OS で回す。
-  # 1つのジョブでは4コアで CPU 律速になるので、パッケージを3つの shard に分けて同時に回す。
+  # 1つのジョブでは4コアで CPU 律速になるので、テストを6つの shard に分けて同時に回す。
   test-shard:
     name: test (${{ matrix.os }}, ${{ matrix.shard }})
     strategy:
@@ -59,7 +59,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5, 6]
         # -race はテストを数倍遅くする。検出するデータ競合は OS によらないので、
         # ubuntu だけで付ける。カバレッジとテストの結果も ubuntu の分をまとめる。
         include:
@@ -104,22 +104,9 @@ jobs:
       - name: Verify the module cache
         run: go mod verify
 
-      # shard 1 と 2 は重いパッケージを1つずつ、shard 3 は残りすべて。
-      # 新しいパッケージは何もしなくても shard 3 に入る。
-      - name: Choose the packages
-        id: pkgs
-        shell: bash
-        env:
-          SHARD: ${{ matrix.shard }}
-        run: |
-          mod=$(go list -m)
-          case "$SHARD" in
-            1) pkgs="$mod/internal/ops" ;;
-            2) pkgs="$mod/cmd/hedgehug" ;;
-            3) pkgs=$(go list ./... | grep -vxF -e "$mod/internal/ops" -e "$mod/cmd/hedgehug" | tr '\n' ' ') ;;
-          esac
-          echo "list=$pkgs" >> "$GITHUB_OUTPUT"
-
+      # 何を回すかは、パッケージごとの時間（下の Package times）で均した分け方:
+      # 1 = ops、2 = cmd/hedgehug、3・4 = sync の2つの property テスト（seed が多く重い）、
+      # 5 = sync の残りと server、6 = 残りのパッケージすべて（新しいパッケージは何もしなくても 6 に入る）。
       # 復元したキャッシュには main のテスト結果も入っているので、-count=1 で毎回テストを実行する。
       - name: Test
         shell: bash
@@ -127,13 +114,23 @@ jobs:
           RACE: ${{ matrix.race }}
           REPORT: ${{ matrix.report }}
           SHARD: ${{ matrix.shard }}
-          PKGS: ${{ steps.pkgs.outputs.list }}
         run: |
+          mod=$(go list -m)
+          prop='^TestPropertyConverges(Stores)?$'
+          # shellcheck disable=SC2207 # package paths have no spaces
+          case "$SHARD" in
+            1) args=("$mod/internal/ops") ;;
+            2) args=("$mod/cmd/hedgehug") ;;
+            3) args=(-run '^TestPropertyConverges$' "$mod/internal/sync") ;;
+            4) args=(-run '^TestPropertyConvergesStores$' "$mod/internal/sync") ;;
+            5) args=(-skip "$prop" "$mod/internal/sync" "$mod/internal/server") ;;
+            6) args=($(go list ./... | grep -vxF -e "$mod/internal/ops" -e "$mod/cmd/hedgehug" -e "$mod/internal/sync" -e "$mod/internal/server")) ;;
+            *) echo "unknown shard $SHARD"; exit 1 ;;
+          esac
           cover=()
           if [ -n "$REPORT" ]; then cover=(-coverprofile="coverage-$SHARD.out" -covermode=atomic); fi
-          # shellcheck disable=SC2086 # PKGS is a list of packages
           gotestsum --format testdox --junitfile "test-report-$SHARD.xml" --jsonfile "test-$SHARD.json" -- \
-            ${RACE:+"$RACE"} -count=1 "${cover[@]}" $PKGS
+            ${RACE:+"$RACE"} -count=1 "${cover[@]}" "${args[@]}"
 
       # パッケージごとの時間を手順の要約とログに出す。shard の分け方を均すときに使う。
       # Test がファイルを書く前に落ちたときは何も出さない（shard はすでに赤い）。
