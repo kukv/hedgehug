@@ -43,6 +43,9 @@ type Options struct {
 	Others     []OtherStore // the other stores in config, for prefix duplicates across stores
 	Conn       gitrepo.Conn // how the remotes are reached: url_rewrites and the token
 	BeforePush func()       // a test hook: another clone pushes here
+	Name       string       // the store's name in config, for the read-only error
+	GitHub     *GitHubRepo  // origin on GitHub; nil when it is not
+	Explicit   bool         // hh sync, not the background one: a push_denied is tried again
 }
 
 // OtherStore is another store of the config, by its name.
@@ -60,6 +63,8 @@ type Result struct {
 	// other stores' prefixes, the inbox, finding the invalid tasks,
 	// repacking.
 	Warnings []string
+	// Unpushable counts the commits not pushed because the store is read-only.
+	Unpushable int
 }
 
 const (
@@ -90,6 +95,16 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 	}
 	r := s.Repo()
 	r.SetConn(opt.Conn)
+	acc, err := ReadAccess(s)
+	if err != nil {
+		return res, err
+	}
+	if opt.Explicit && acc.Reason == ReasonPushDenied {
+		acc = Access{}
+		if err := WriteAccess(s, acc); err != nil {
+			return res, err
+		}
+	}
 	before, err := r.Head()
 	if err != nil {
 		return res, err
@@ -150,7 +165,19 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 		if opt.BeforePush != nil {
 			opt.BeforePush()
 		}
+		if acc.ReadOnly {
+			n, err := Unpushed(r)
+			if err != nil {
+				return res, err
+			}
+			res.Unpushable = n
+			break // no push, not to the mirrors either
+		}
 		err := r.Push("origin")
+		if errors.Is(err, gitrepo.ErrPushDenied) {
+			denied := Access{ReadOnly: true, Reason: ReasonPushDenied, Checked: opt.Now()}
+			return res, &readOnlyError{msg: opt.storeName() + " is read-only (" + denied.Why() + ")", errs: []error{err, WriteAccess(s, denied)}}
+		}
 		if errors.Is(err, gitrepo.ErrRejected) && round < rounds-1 {
 			time.Sleep(wait)
 			wait *= 2
@@ -188,6 +215,7 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 	for _, name := range r.Remotes()[1:] {
 		warn("sync mirror "+name, down[name])
 	}
+	refreshInfo(s, opt, &res)
 	warn("check the other stores' id prefixes", prefixDuplicates(s, opt, &res))
 	warn("find the invalid tasks", findInvalid(s, ix, was, before, &res))
 	n, err := r.LooseObjects()
@@ -904,4 +932,40 @@ func (s *snapshot) Read(p string) []byte {
 		return nil
 	}
 	return b
+}
+
+// Unpushed counts the commits of HEAD that origin did not have as of the last
+// fetch or push. A store that never pushed has all of them. The commands that
+// show it call this too.
+func Unpushed(r *gitrepo.Repo) (int, error) {
+	head, err := r.Head()
+	if err != nil {
+		return 0, err
+	}
+	remote, err := r.RemoteHead("origin")
+	if err != nil {
+		return 0, err
+	}
+	es, err := r.Between(head, remote)
+	return len(es), err
+}
+
+// readOnlyError says a store is read-only. It holds the push error and the
+// failure to write access.json, if any, for errors.Is, without repeating
+// them in its text.
+type readOnlyError struct {
+	msg  string
+	errs []error
+}
+
+func (e *readOnlyError) Error() string   { return e.msg }
+func (e *readOnlyError) Unwrap() []error { return e.errs }
+
+// storeName is the name for messages: the store's, or "the store" when none
+// is given.
+func (o Options) storeName() string {
+	if o.Name == "" {
+		return "the store"
+	}
+	return o.Name
 }

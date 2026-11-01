@@ -262,7 +262,7 @@ func (ss *Session) SyncOptions(c *config.Config, e config.StoreEntry) (sync.Opti
 	if err != nil {
 		return sync.Options{}, err
 	}
-	opt := sync.Options{Remotes: e.Remotes, Author: author, Me: c.Me(), Now: ss.Now, Conn: ss.Conn(c, e)}
+	opt := sync.Options{Name: e.Name, Remotes: e.Remotes, Author: author, Me: c.Me(), Now: ss.Now, Conn: ss.Conn(c, e)}
 	if ok {
 		opt.Account = acct.ID()
 	}
@@ -378,15 +378,5 @@ func (ss *Session) RunSync(s *store.Store, opt sync.Options, reported bool) (res
 // Unpushed counts the commits of s that origin did not have as of the last
 // fetch or push. A store that never pushed has all of them.
 func Unpushed(s *store.Store) (int, error) {
-	r := s.Repo()
-	head, err := r.Head()
-	if err != nil {
-		return 0, err
-	}
-	remote, err := r.RemoteHead("origin")
-	if err != nil {
-		return 0, err
-	}
-	es, err := r.Between(head, remote)
-	return len(es), err
+	return sync.Unpushed(s.Repo())
 }
