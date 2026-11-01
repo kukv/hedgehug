@@ -479,6 +479,7 @@ moved_to: 01JC0STORE...      # 移動先の Store の ULID（store.yaml の ulid
 
 - タスクと同じパス（`tasks/<a>/<b>/<ULID>.md`）に置く。`model.DecodeTask` は `moved_to` を持つファイルを `*model.Forward` として返す（`ulid` と `moved_to` だけを読み、ほかのキーがあれば壊れたファイル扱い）。
 - index は転送ファイルをタスクとして扱わず、`ix.Forwards()` として別に持つ。`Resolve` は転送ファイルの ULID には当たらない。
+- 古い ID からの案内のため、index は転送ファイルごとに、そのパスがタスクだった最後の版を git の履歴から1回読み、その `id` と `former_ids` を覚える（キャッシュに残す。転送ファイルの形は変えない。利用者の決定。2026-11-01）。
 
 ### `hh mv <id> --store <dest> [--workspace ws] [--parent p] [--scoped carry|drop] [--yes]`
 
@@ -532,6 +533,7 @@ moved_to: 01JC0STORE...      # 移動先の Store の ULID（store.yaml の ulid
    - ツリーが親と同じになったコミットも残す（履歴の形を変えない）。
 7. **記録**: 書き換えた HEAD の上に、`.hedgehug/rewrites.yaml` に `{at: 時刻, before: <書き換え前の origin の先頭のハッシュ>, ulids: [...]}` を足すコミットを置く（`Hedgehug-Op: rewrite-history`）。ファイルは配列で、前の記録を残す。
 8. **push**: すべての remote に force push する。origin が失敗したらエラー（手元は書き換えたまま。もう一度実行すると 7 から再開する。`rewrites.yaml` の最後の `before` が今の origin の先頭なら 7 を飛ばす）。ミラーの失敗は警告。
+   - 書き換え前の履歴を持つミラーはマージしない: 同期で、ミラーの先頭が `rewrites.yaml` のいずれかの `before` を含み、手元の HEAD がそれを含まないなら、そのミラーはマージせず、手元の HEAD を force push する。作り直した他のクローンでも同じ（利用者の決定。2026-11-01。消したタスクが古いミラーから戻らないため）。
 9. 出力: 消したタスクと、書き換えたコミット数。
 
 ### 他のクローンでの検出
@@ -553,6 +555,7 @@ moved_to: 01JC0STORE...      # 移動先の Store の ULID（store.yaml の ulid
 6. push する（ふだんの同期の push）。
 7. inbox に `org-a の履歴の書き換えを取り込みました（未 push の変更 N 件を戻しました）` を出す。
 
+- 5 の入れ替えは、1〜4 で持ったロック（Store のロックと `sync.lock`。どちらも `<path>` の中にある）を外し、その Store の git のファイルを閉じてから行う（Windows では開いているファイルを含むディレクトリを rename できないため。利用者の決定。2026-11-01）。入れ替えの直前に、古い方の HEAD が 4 の時点から変わっていないかを確かめ、変わっていたら `.rewrite-new` を消して入れ替えをやめ、次の同期でやり直す（警告）。6 の push は、入れ替えた後の `<path>` でふだんの同期として行う。
 - 5 より前に失敗したら `.rewrite-new` を消してエラー。手元は変わらない。
 - 5 の途中で失敗した状態（`<path>` がなく、`.before-rewrite-*` と `.rewrite-new` がある、など）は、`doctor --fix`（`rewrite_leftover`）と、次の取り込みを始めるとき（同期の最初）に見つけて入れ替えをやり直す。`<path>` があり `.before-rewrite-*` も残っていれば、古い方を消すところから続ける。Store を開く処理（`store.Open`・`mount.Open`）は書き換えの状態を知らない。開いたときに残りがあれば `warning: org-a の履歴の書き換えの取り込みが途中です（hh doctor --fix で仕上げます）` を出し、`<path>` がなければその Store を「開けない Store」として扱う。
 - Windows では、別のプロセス（GUI サーバー）が Store のファイルを開いていると 5 の rename が失敗する。そのときも上の「途中で失敗した状態」として扱う。GUI サーバーの中で取り込むときは、入れ替えの前にその Store の index を閉じる。
