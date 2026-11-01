@@ -177,6 +177,7 @@ func inParentCycle(ix *index.Index, ulid model.ULID) bool {
 func TreeViewOf(ix *index.Index, n *TreeNode) *TaskView {
 	j := TaskViewOf(ix, n.Entry)
 	j.Context, j.InCycle = n.Context, n.InCycle
+	j.Checklist, j.Progress = ChecklistOf(n.Entry), ProgressOf(ix, n.Entry)
 	for _, c := range n.Children {
 		j.Children = append(j.Children, TreeViewOf(ix, c))
 	}
@@ -313,6 +314,7 @@ type ShowView struct {
 // ShowViewOf is r as show --json prints it.
 func ShowViewOf(r ShowResult) *ShowView {
 	j := &ShowView{TaskView: TaskViewOf(r.Index, r.Entry), Watchers: []string{}, Repos: []string{}, Comments: []CommentView{}, Reverse: map[string][]Ref{}, ReferencedBy: []Ref{}, History: LogViewsOf(r.Index, r.History)}
+	j.Checklist, j.Progress = ChecklistOf(r.Entry), ProgressOf(r.Index, r.Entry)
 	for _, x := range r.Back {
 		j.ReferencedBy = append(j.ReferencedBy, Ref{ULID: x.ULID.String(), ID: x.ID, Title: x.Title})
 	}

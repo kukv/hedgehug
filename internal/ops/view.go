@@ -29,6 +29,10 @@ type TaskView struct {
 	Problems  []Problem      `json:"problems"`
 	Broken    string         `json:"broken,omitempty"`
 
+	// Only in ls --tree --json and show --json.
+	Checklist *Count `json:"checklist,omitempty"`
+	Progress  *Count `json:"progress,omitempty"`
+
 	// Only in ls --tree --json.
 	Context  bool        `json:"context,omitempty"`  // shown only to connect the tasks found
 	InCycle  bool        `json:"in_cycle,omitempty"` // in a parent cycle, out of reach of the roots

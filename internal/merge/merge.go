@@ -99,9 +99,14 @@ const (
 	kindRelease
 	kindTemplate
 	kindWorkspace
-	kindYAML    // schema.yaml, automations.yaml and store.yaml, merged key by key
+	kindYAML    // schema.yaml, automations.yaml, store.yaml and views/*.yaml, merged key by key
 	kindNumbers // numbers.yaml, merged by the largest number
 )
+
+// ByKey reports whether the file at path is merged key by key, as
+// schema.yaml is: the merge then asks Side.When when each side changed a
+// value.
+func ByKey(path string) bool { return kindOf(path) == kindYAML }
 
 func kindOf(path string) kind {
 	switch path {
@@ -109,6 +114,9 @@ func kindOf(path string) kind {
 		return kindYAML
 	case model.NumbersPath:
 		return kindNumbers
+	}
+	if _, ok := model.IsViewPath(path); ok {
+		return kindYAML
 	}
 	for _, d := range []struct {
 		dir string

@@ -79,3 +79,26 @@ func TestParseCommentAndWorklogPath(t *testing.T) {
 		t.Error("ParseCommentPath accepted a wrong shard")
 	}
 }
+
+func TestViewPath(t *testing.T) {
+	if got := ViewPath("今週"); got != "views/今週.yaml" {
+		t.Errorf("ViewPath = %q", got)
+	}
+	for _, c := range []struct {
+		p    string
+		name string
+		ok   bool
+	}{
+		{"views/a.yaml", "a", true},
+		{"views/今週 の作業.yaml", "今週 の作業", true},
+		{"views/a.yml", "", false},
+		{"views/sub/a.yaml", "", false},
+		{"schema.yaml", "", false},
+		{"views/.yaml", "", true},
+	} {
+		name, ok := IsViewPath(c.p)
+		if name != c.name || ok != c.ok {
+			t.Errorf("IsViewPath(%q) = %q, %v; want %q, %v", c.p, name, ok, c.name, c.ok)
+		}
+	}
+}

@@ -50,34 +50,38 @@ func (a *app) lsTree(q *query.Query, ulidsOnly bool, tmpl *template.Template) er
 	var b strings.Builder
 	st := a.style()
 	for _, n := range roots {
-		writeNode(&b, st, n, "", "")
+		writeNode(&b, st, ix, n, "", "")
 	}
 	if len(cycle) > 0 {
 		b.WriteString("\n== in a parent cycle\n")
 		for _, n := range cycle {
-			writeNode(&b, st, n, "", "")
+			writeNode(&b, st, ix, n, "", "")
 		}
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())
 	return err
 }
 
-func writeNode(b *strings.Builder, st style, n *ops.TreeNode, lead, childLead string) {
-	b.WriteString(lead + treeLine(st, n.Entry, n.Context) + "\n")
+func writeNode(b *strings.Builder, st style, ix *index.Index, n *ops.TreeNode, lead, childLead string) {
+	b.WriteString(lead + treeLine(st, ix, n.Entry, n.Context) + "\n")
 	for i, c := range n.Children {
 		if i == len(n.Children)-1 {
-			writeNode(b, st, c, childLead+"└─ ", childLead+"   ")
+			writeNode(b, st, ix, c, childLead+"└─ ", childLead+"   ")
 		} else {
-			writeNode(b, st, c, childLead+"├─ ", childLead+"│  ")
+			writeNode(b, st, ix, c, childLead+"├─ ", childLead+"│  ")
 		}
 	}
 }
 
-// treeLine is one task of the tree: id and ULID, status, kind and title.
-func treeLine(st style, e *index.Entry, context bool) string {
+// treeLine is one task of the tree: id and ULID, status, kind and title,
+// then the checklist and the progress of a project.
+func treeLine(st style, ix *index.Index, e *index.Entry, context bool) string {
 	r := taskRow(e)
 	name := r[0] + " " + r[1]
 	line := name + "  " + r[2] + "  " + r[3] + "  " + r[6]
+	if p := ops.ProgressText(ops.ChecklistOf(e), ops.ProgressOf(ix, e)); p != "" {
+		line += "  " + p
+	}
 	if context {
 		return st.dim(line)
 	}

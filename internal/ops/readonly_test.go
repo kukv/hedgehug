@@ -101,6 +101,10 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 			return err
 		}},
 		{"Doctor --fix", func() error { _, err := ts.Doctor(true); return err }},
+		{"ViewSave", func() error { _, err := ts.ViewSave("mine", ViewChange{}); return err }},
+		// Views that do not exist: the refusal comes before "not found".
+		{"ViewRemove", func() error { _, err := ts.ViewRemove("nope"); return err }},
+		{"ViewRename", func() error { _, err := ts.ViewRename("nope", "other"); return err }},
 		{"UpdateCommit", func() error {
 			s, err := ts.OpenStore()
 			if err != nil {
@@ -142,6 +146,9 @@ func TestReadOnlyAllowsReading(t *testing.T) {
 	}
 	if _, err := ts.Doctor(false); err != nil {
 		t.Errorf("Doctor: %v", err)
+	}
+	if _, err := ts.ViewList(); err != nil {
+		t.Errorf("ViewList: %v", err)
 	}
 }
 

@@ -43,6 +43,9 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 		title = "-" // a file that does not decode
 	}
 	b.WriteString(title + "\n")
+	if p := ops.ProgressText(ops.ChecklistOf(e), ops.ProgressOf(ix, e)); p != "" {
+		b.WriteString("  " + p + "\n")
+	}
 	field := func(k string, vs ...string) {
 		v := strings.Join(vs, ", ")
 		if v == "" {

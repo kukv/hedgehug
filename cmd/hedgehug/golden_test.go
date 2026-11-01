@@ -21,6 +21,9 @@ var (
 	tmpPathRE   = regexp.MustCompile(`<TMP>[^\s",:]*`)
 	// The commit that undo names by its first seven characters.
 	shortHashRE = regexp.MustCompile(`(Undid )[0-9a-f]{7}\b`)
+	// The commit and the local time that a line of show's History or of log
+	// starts with; the time is in the zone of the machine.
+	logHashRE = regexp.MustCompile(`(?m)^[0-9a-f]{7}  \d{4}-\d{2}-\d{2} \d{2}:\d{2}`)
 )
 
 // normalize replaces what changes from run to run: the temporary directories
@@ -49,6 +52,7 @@ func (te *testEnv) normalize(s string) string {
 	})
 	s = hashRE.ReplaceAllString(s, "<HASH>")
 	s = shortHashRE.ReplaceAllString(s, "${1}<HASH>")
+	s = logHashRE.ReplaceAllString(s, "<HASH>  <TIME>")
 	return timeRE.ReplaceAllString(s, "<TIME>")
 }
 

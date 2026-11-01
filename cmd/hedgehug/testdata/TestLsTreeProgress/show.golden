@@ -1,0 +1,18 @@
+Project
+  1/2
+  id          ME-1
+  ulid        <ULID-1>
+  workspace   me (ME, <ULID-2>)
+  kind        project
+  status      todo
+  parent      -
+  assignees   -
+  watchers    -
+  labels      -
+  repos       -
+  blocked_by  -
+  created     <TIME> by -
+  updated     <TIME>
+
+History:
+<HASH>  <TIME>  Alice  hedgehug: add ME-1 (<ULID-1>) Project

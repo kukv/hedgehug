@@ -59,6 +59,21 @@ func TestLsTree(t *testing.T) {
 	}
 }
 
+func TestLsTreeProgress(t *testing.T) {
+	te := newStoreEnv(t)
+	p := te.addJSON("Project", "--kind", "project")
+	a := te.addJSON("Alpha", "--parent", p.ID, "--status", "done")
+	te.addJSON("Beta", "--parent", p.ID)
+	te.addJSON("Gamma", "--parent", p.ID, "--status", "canceled")
+	te.editWith(te.raw(a.ULID) + "- [x] one\n- [ ] two\n")
+	te.ok("edit", a.ID)
+	te.goldenOK("tree", "ls", "--tree")
+	te.goldenOK("tree-json", "ls", "--tree", "--json")
+	te.goldenOK("show", "show", p.ID)
+	te.goldenOK("show-a", "show", a.ID)
+	te.goldenOK("show-json", "show", a.ID, "--json")
+}
+
 func TestLsTreeULIDsAndFormat(t *testing.T) {
 	te := newStoreEnv(t)
 	p := te.addJSON("Project", "--kind", "project")

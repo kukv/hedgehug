@@ -11,8 +11,6 @@ import (
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/merge"
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/schema"
 )
 
 // Sides builds the two Sides of path for a merge of ours and theirs over base,
@@ -43,7 +41,7 @@ func side(r *gitrepo.Repo, base, from plumbing.Hash, path string) (merge.Side, e
 	if ok {
 		s.Author, s.Time = e.Writer(), e.When
 	}
-	if isYAML(path) {
+	if merge.ByKey(path) {
 		if s.When, err = yamlWhen(r, base, from, path); err != nil {
 			return merge.Side{}, err
 		}
@@ -58,10 +56,6 @@ func readAt(r *gitrepo.Repo, commit plumbing.Hash, path string) ([]byte, error) 
 		return nil, nil
 	}
 	return b, err
-}
-
-func isYAML(path string) bool {
-	return path == schema.Path || path == model.AutomationsPath || path == model.StoreMetaPath
 }
 
 // yamlWhen tells when the side from last changed each value of the yaml

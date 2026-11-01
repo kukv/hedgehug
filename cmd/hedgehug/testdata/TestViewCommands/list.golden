@@ -1,0 +1,3 @@
+NAME  LAYOUT  QUERY
+tree  tree    kind:task
+今週  table   status:todo
