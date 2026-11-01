@@ -30,13 +30,16 @@ func (ss *Session) duplicates() ([]duplicate, error) {
 	}
 	seen := map[model.ULID][]dupPlace{}
 	for _, m := range set.Stores {
-		_ = m.With(func(ix *index.Index) {
+		err := m.With(func(ix *index.Index) {
 			for _, e := range ix.Tasks() {
 				if e.DeletedAt == nil {
 					seen[e.ULID] = append(seen[e.ULID], dupPlace{m.Name, e.ID})
 				}
 			}
 		})
+		if err != nil {
+			ss.warnOnce(m.Name, fmt.Sprintf("could not read the index of %s, so its duplicates are not checked: %v", m.Name, err))
+		}
 	}
 	var out []duplicate
 	for u, ps := range seen {
@@ -68,13 +71,8 @@ func (d duplicate) in(name string) bool {
 }
 
 // duplicateFindings are the tasks of the store name that live in another
-// mounted store too, as warnings of doctor.
-func (ss *Session) duplicateFindings(name string) []doctor.Finding {
-	ds, err := ss.duplicates()
-	if err != nil {
-		ss.warn("could not check duplicates across stores: " + err.Error())
-		return nil
-	}
+// mounted store too, as warnings of doctor. ds is what duplicates found.
+func duplicateFindings(name string, ds []duplicate) []doctor.Finding {
 	var out []doctor.Finding
 	for _, d := range ds {
 		if d.in(name) {
@@ -113,7 +111,7 @@ func (ss *Session) forwardTargetFindings(name string) []doctor.Finding {
 		return nil
 	}
 	var out []doctor.Finding
-	_ = m.With(func(ix *index.Index) {
+	err = m.With(func(ix *index.Index) {
 		for _, f := range ix.Forwards() {
 			if f.Broken != "" || slices.ContainsFunc(set.Stores, func(o *mount.Mounted) bool { return o.ULID == f.MovedTo }) {
 				continue
@@ -125,6 +123,9 @@ func (ss *Session) forwardTargetFindings(name string) []doctor.Finding {
 			out = append(out, doctor.Finding{Check: "forward_target", Where: where, Msg: fmt.Sprintf("moved to a store that is not mounted (ULID %s)", f.MovedTo), Severity: doctor.Info})
 		}
 	})
+	if err != nil {
+		ss.warnOnce(name, fmt.Sprintf("could not read the index of %s, so its forwards are not checked: %v", name, err))
+	}
 	doctor.Sort(out)
 	return out
 }

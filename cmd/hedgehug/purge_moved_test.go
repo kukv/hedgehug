@@ -87,10 +87,20 @@ func TestPurgeMovedYesText(t *testing.T) {
 
 func TestPurgeMovedNeedsAStoreWhenThereAreSeveral(t *testing.T) {
 	te := newForwardEnv(t)
-	code, _, stderr := te.run("purge", "--moved", "--yes")
-	if code == 0 || !strings.Contains(stderr, "store") {
-		t.Errorf("exit %d, stderr %s; want a refusal to guess the store", code, stderr)
-	}
+	te.goldenRun("no-store", 1, "purge", "--moved", "--yes")
+}
+
+// A forward to a store that is not mounted is listed with the ULID of that
+// store.
+func TestPurgeMovedListsAStoreNotMounted(t *testing.T) {
+	te := newForwardEnv(t)
+	te.ok("store", "remove", "bravo-long")
+	te.terminal = true
+	te.stdin = "n\n"
+	te.goldenRun("list", 1, "purge", "--moved")
+	te.stdin = ""
+	te.terminal = false
+	te.golden("json", te.ok("purge", "--moved", "--yes", "--json"))
 }
 
 func TestPurgeMovedAndAnIDDoNotMix(t *testing.T) {
@@ -136,6 +146,29 @@ func TestDuplicateAcrossStoresIsAWarning(t *testing.T) {
 	te.goldenRun("doctor-json", 1, "doctor", "--json")
 	code, _, stderr := te.run("sync", "--store", "alpha")
 	if code != 0 || !strings.Contains(stderr, "warning: alpha: ") || !strings.Contains(stderr, " is in alpha (AA-1) and bravo-long (BB-1); remove the one not needed with hedgehug rm and hedgehug purge") {
+		t.Errorf("sync: exit %d\nstderr %s", code, stderr)
+	}
+}
+
+// Two users move the same task to different stores at the same time. The
+// duplicate arrives with the sync of the store the other one moved it to.
+func TestSyncBringsADuplicateAcrossStores(t *testing.T) {
+	alice := newTestEnv(t)
+	remoteA, remoteB := alice.bare("alpha"), alice.bare("bravo")
+	alice.ok("store", "init", "alpha", "--prefix", "AA", "--remote", remoteA)
+	alice.ok("store", "init", "bravo-long", "--prefix", "BB", "--remote", remoteB)
+	alice.ok("store", "init", "charlie", "--prefix", "CC")
+	alice.ok("add", "--store", "alpha", "Shared")
+	alice.ok("sync")
+	bob := alice.other()
+	bob.ok("store", "add", "alpha", "--remote", remoteA)
+	bob.ok("store", "add", "bravo-long", "--remote", remoteB)
+	bob.ok("mv", "AA-1", "--store", "bravo-long", "--yes")
+	bob.ok("sync")
+	alice.ok("mv", "AA-1", "--store", "charlie", "--yes")
+	code, _, stderr := alice.run("sync", "--store", "bravo-long")
+	want := " is in bravo-long (BB-1) and charlie (CC-1); remove the one not needed with hedgehug rm and hedgehug purge"
+	if code != 0 || !strings.Contains(stderr, "warning: bravo-long: ") || !strings.Contains(stderr, want) {
 		t.Errorf("sync: exit %d\nstderr %s", code, stderr)
 	}
 }

@@ -220,9 +220,22 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 		}
 	}
 	defer ss.muteOpenWarnings(broken)()
+	// the duplicates are the same for every store: found once, when first needed
+	var dups []duplicate
+	var dupsDone bool
+	duplicatesOnce := func() []duplicate {
+		if !dupsDone {
+			dupsDone = true
+			var err error
+			if dups, err = ss.duplicates(); err != nil {
+				ss.warn("could not check duplicates across stores: " + err.Error())
+			}
+		}
+		return dups
+	}
 	out := make([]DoctorReport, 0, len(entries))
 	for _, e := range entries {
-		r, err := ss.doctorStore(c, e, fix, len(entries) == 1)
+		r, err := ss.doctorStore(c, e, fix, len(entries) == 1, duplicatesOnce)
 		if err != nil {
 			return nil, err
 		}
@@ -234,7 +247,7 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 // doctorStore is Doctor for the store e. A store that does not open and has
 // no finding is the error when it is the only one asked for, else a finding
 // of its own, so that the reports of the others stand.
-func (ss *Session) doctorStore(c *config.Config, e config.StoreEntry, fix, only bool) (DoctorReport, error) {
+func (ss *Session) doctorStore(c *config.Config, e config.StoreEntry, fix, only bool, duplicates func() []duplicate) (DoctorReport, error) {
 	r := DoctorReport{Store: e.Name}
 	// A store that does not open is told of by the findings, which say why;
 	// it is not repaired, and its references are not looked at.
@@ -264,7 +277,7 @@ func (ss *Session) doctorStore(c *config.Config, e config.StoreEntry, fix, only 
 	}
 	if openErr == nil {
 		fs = append(fs, ss.crossStoreFindings(e.Name)...)
-		fs = append(fs, ss.duplicateFindings(e.Name)...)
+		fs = append(fs, duplicateFindings(e.Name, duplicates())...)
 		fs = append(fs, ss.forwardTargetFindings(e.Name)...)
 	}
 	r.Findings = fs

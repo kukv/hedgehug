@@ -93,3 +93,32 @@ func TestPurgeMovedForwardToAStoreNotMounted(t *testing.T) {
 		t.Errorf("list = %+v lacks the root", list)
 	}
 }
+
+// The forwards are read again under the lock: when a sync or another
+// command took them away in between, there is nothing to commit.
+func TestPurgeMovedGoneUnderTheLockIsNoCommit(t *testing.T) {
+	f := newMoveFx(t)
+	if _, err := f.ts.MoveStore(f.in()); err != nil {
+		t.Fatal(err)
+	}
+	a := f.ts.ForStore("org-a")
+	racing := false
+	a.BeforeUpdate = func() {
+		if racing {
+			return
+		}
+		racing = true
+		if _, _, err := a.PurgeMoved(true); err != nil {
+			t.Error(err)
+		}
+	}
+	// the list was read before the other purge, so it is not empty
+	before := len(f.log(t, "org-a"))
+	removed, commit, err := a.PurgeMoved(true)
+	if err != nil || len(removed) != 0 || commit != "" {
+		t.Errorf("removed %v, commit %q, err %v; want nothing", removed, commit, err)
+	}
+	if got := len(f.log(t, "org-a")); got != before+1 {
+		t.Errorf("commits = %d; want only the racing purge (%d)", got, before+1)
+	}
+}

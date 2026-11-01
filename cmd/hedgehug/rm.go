@@ -184,6 +184,14 @@ func forwardLine(v ops.ForwardView) string {
 	return line
 }
 
+// forwardFiles is "1 forward file", "2 forward files".
+func forwardFiles(n int) string {
+	if n == 1 {
+		return "1 forward file"
+	}
+	return fmt.Sprintf("%d forward files", n)
+}
+
 // purgeMoved removes the forward files of the store: on a terminal after the
 // list and a question, else only with --yes.
 func (a *app) purgeMoved(yes bool) error {
@@ -204,7 +212,7 @@ func (a *app) purgeMoved(yes bool) error {
 		for _, v := range list {
 			b.WriteString(forwardLine(v) + "\n")
 		}
-		fmt.Fprintf(&b, "Remove %d forward files? [y/N] ", len(list))
+		fmt.Fprintf(&b, "Remove %s? [y/N] ", forwardFiles(len(list)))
 		if _, err := fmt.Fprint(a.stderr, b.String()); err != nil {
 			return err
 		}
@@ -238,6 +246,6 @@ func (a *app) printPurgedMoved(removed []ops.ForwardView, commit string) error {
 		_, err := fmt.Fprintln(a.stdout, "No forward files")
 		return err
 	}
-	_, err := fmt.Fprintf(a.stdout, "Removed %d forward files\n", len(removed))
+	_, err := fmt.Fprintf(a.stdout, "Removed %s\n", forwardFiles(len(removed)))
 	return err
 }
