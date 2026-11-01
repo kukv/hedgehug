@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"path"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
+	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
@@ -674,7 +676,34 @@ func opWSRm(c *cluster, i int, rnd *rand.Rand) []write {
 
 // moveOps are the operations of the tests with two stores: the ones above
 // and blocked_by, which the moves between stores cut.
-var moveOps = append(slices.Clone(ops), op{"block", opBlock}, op{"block", opBlock})
+var moveOps = append(slices.Clone(ops), op{"block", opBlock}, op{"block", opBlock}, op{"ref", opRef}, op{"ref", opRef})
+
+// refProp is the task_ref property of the schema of the clusters.
+const refProp = "ref"
+
+// opRef makes the task_ref property of a task point at another task of the
+// same store. Like opBlock it keeps no write: the invariant is that nothing
+// points at a forward.
+func opRef(c *cluster, i int, rnd *rand.Rand) []write {
+	v := c.view(i)
+	t := v.pickTask(rnd, live)
+	if t == nil {
+		return nil
+	}
+	b := v.pickTask(rnd, func(x *model.Task) bool { return live(x) && x.ULID != t.ULID })
+	if b == nil {
+		return nil
+	}
+	c.update(i, c.taskOp(i, "update", t.ULID), func(tx *store.Tx) error {
+		x, err := tx.Task(t.ULID)
+		if err != nil {
+			return err
+		}
+		x.Props.Set(refProp, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: b.ULID.String()})
+		return tx.PutTask(x)
+	})
+	return nil
+}
 
 // opBlock makes a task wait for another of the same store. It keeps no write:
 // the invariant it feeds is that nothing blocks on a forward.
@@ -770,7 +799,38 @@ func opMoveStore(src, dst *cluster, i int, rnd *rand.Rand) []write {
 		if err != nil {
 			dst.t.Fatal(err)
 		}
-		dst.foreign[x.ULID] = append(dst.foreign[x.ULID], append([]string{x.ID}, x.FormerIDs...)...)
+		// The ids of the source are foreign here, except those this store gave the
+		// task before: it may come back, and reusing its own old id is a reuse.
+		for _, id := range append([]string{x.ID}, x.FormerIDs...) {
+			if !slices.Contains(src.foreign[x.ULID], id) && !slices.Contains(src.held[x.ULID], id) {
+				src.held[x.ULID] = append(src.held[x.ULID], id)
+			}
+			if !slices.Contains(dst.held[x.ULID], id) && !slices.Contains(dst.foreign[x.ULID], id) {
+				dst.foreign[x.ULID] = append(dst.foreign[x.ULID], id)
+			}
+		}
+		dst.moves[x.ULID] = src.moves[x.ULID] + 1
+		if dst.moves[x.ULID] > 1 {
+			dst.multi++
+		}
+		if dv.fwd[x.ULID] != nil {
+			dst.backs++
+		}
+		// What the task carried is checked in dst from here on: its body, its
+		// labels and its comments went with it.
+		for _, line := range strings.Split(strings.TrimSuffix(nt.Body, "\n"), "\n") {
+			if line != "" {
+				ws = append(ws, write{i, h, x.ULID, "body", line})
+			}
+		}
+		for _, l := range nt.Labels {
+			ws = append(ws, write{i, h, x.ULID, "labels", l})
+		}
+		for rel := range notes {
+			if dir := path.Dir(model.CommentPath(x.ULID, model.ULID{})) + "/"; strings.HasPrefix(rel, dir) {
+				ws = append(ws, write{i, h, x.ULID, "comment", js(strings.TrimSuffix(path.Base(rel), ".md"))})
+			}
+		}
 		ws = append(ws,
 			write{i, h, x.ULID, "title", js(nt.Title)},
 			write{i, h, x.ULID, "status", js(nt.Status)},

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
+	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
@@ -83,11 +84,23 @@ func TestPropertyConvergesStores(t *testing.T) {
 	if shortMode() {
 		rounds, steps = 5, 30
 	}
-	var moves, overwritten, parentMoved, refMoved atomic.Int64
+	var moves, multi, backs, overwritten, parentMoved, refMoved, taskRefMoved atomic.Int64
 	t.Cleanup(func() {
-		t.Logf("moves %d, task files overwritten by a forward %d, parent_moved %d, ref_moved %d", moves.Load(), overwritten.Load(), parentMoved.Load(), refMoved.Load())
-		if moves.Load() == 0 {
-			t.Error("no task moved between stores in any seed")
+		t.Logf("moves %d, moves of a task that had moved %d, moves back to a store with the forward %d, task files overwritten by a forward %d, parent_moved %d, ref_moved %d (task_ref %d)",
+			moves.Load(), multi.Load(), backs.Load(), overwritten.Load(), parentMoved.Load(), refMoved.Load(), taskRefMoved.Load())
+		// Each path is reached at least once over the seeds of a full run.
+		if shortMode() {
+			return
+		}
+		for name, n := range map[string]int64{
+			"a move between stores": moves.Load(), "a move of a task that had moved": multi.Load(),
+			"a move back to the store with the forward": backs.Load(), "a parent_moved repair": parentMoved.Load(),
+			"a ref_moved repair of blocked_by or task_ref": refMoved.Load(), "a ref_moved repair of a task_ref": taskRefMoved.Load(),
+			"a task file overwritten by a forward": overwritten.Load(),
+		} {
+			if n == 0 {
+				t.Errorf("no seed had %s", name)
+			}
 		}
 	})
 	for seed := int64(1); seed <= int64(rounds); seed++ {
@@ -132,6 +145,9 @@ func TestPropertyConvergesStores(t *testing.T) {
 			for _, c := range stores {
 				for i := range 3 {
 					writes[c] = append(writes[c], opAdd(c, i, rnd)...)
+					// Unsynced clones point at tasks that others have moved away.
+					opRef(c, i, rnd)
+					opBlock(c, i, rnd)
 				}
 				settle(t, c)
 			}
@@ -159,6 +175,8 @@ func TestPropertyConvergesStores(t *testing.T) {
 				}
 			}
 			for _, c := range stores {
+				multi.Add(int64(c.multi))
+				backs.Add(int64(c.backs))
 				h := newHistory(c)
 				for _, l := range h.lost {
 					if l.field == "*" {
@@ -171,6 +189,9 @@ func TestPropertyConvergesStores(t *testing.T) {
 						parentMoved.Add(1)
 					case "ref_moved":
 						refMoved.Add(1)
+						if strings.Contains(r.value, `"props.`+refProp+`"`) {
+							taskRefMoved.Add(1)
+						}
 					}
 				}
 			}
@@ -208,7 +229,10 @@ func settle(t *testing.T, c *cluster) {
 }
 
 // lost is a Hedgehug-Overwritten trailer.
-type lost struct{ path, field, value string }
+type lost struct {
+	path, field, value string
+	commit             plumbing.Hash // the commit that records it
+}
 
 // repaired is a Hedgehug-Repaired trailer.
 type repaired struct {
@@ -289,7 +313,7 @@ func newHistory(c *cluster) *history {
 			if err != nil {
 				t.Fatal(err)
 			}
-			h.lost = append(h.lost, lost{p, field, value})
+			h.lost = append(h.lost, lost{p, field, value, e.Hash})
 		}
 		for _, v := range e.TrailerValues("Hedgehug-Repaired") {
 			w := strings.Fields(v)
@@ -353,7 +377,9 @@ func (h *history) reverts(w write, writes []write) bool {
 // brings it back (the removal loses to the edit), the workspace is that side's
 // version, and the removing side's earlier edits were part of what it removed.
 func (h *history) wsRemoved(w write, writes []write) bool {
-	return slices.ContainsFunc(writes, func(o write) bool {
+	// The merge that brought it back says so: a revived record of the workspace.
+	revived := slices.ContainsFunc(h.repaired, func(r repaired) bool { return r.ulid == w.task.String() && r.kind == "revived" })
+	return revived && slices.ContainsFunc(writes, func(o write) bool {
 		return o.field == "ws.rm" && o.task == w.task && h.isAncestor(w.commit, o.commit)
 	})
 }
@@ -407,38 +433,50 @@ func sameJSON(a, b string) bool {
 	return reflect.DeepEqual(x, y)
 }
 
-// wasLostWhole reports whether the file at path was recorded overwritten
-// whole (Field "*": a forward won over the task) with the value in it. The
-// task may have come back to the store since, in a version that does not have
-// the value any more. A null is told by nothing but the record.
-func (h *history) wasLostWhole(path, value string) bool {
-	needle := value
-	var s string
-	if json.Unmarshal([]byte(value), &s) == nil {
-		needle = s
-	}
+// lostWhole reports whether the merge recorded the task file overwritten whole
+// (Field "*": a forward won over the task) in a version that held the write w:
+// the record is in a commit that knows w, and the file it holds has the value
+// of w in the field of w. A deletion recorded whole (null) excuses nothing here:
+// the writes before a purge are excused by purged.
+func (h *history) lostWhole(w write) bool {
+	path := model.TaskPath(w.task)
 	return slices.ContainsFunc(h.lost, func(l lost) bool {
-		if l.path != path || l.field != "*" {
+		if l.path != path || l.field != "*" || l.commit != w.commit && !h.isAncestor(w.commit, l.commit) {
 			return false
 		}
 		var text string
 		if json.Unmarshal([]byte(l.value), &text) != nil {
 			return false
 		}
-		if value == "null" || strings.Contains(text, needle) {
-			return true
-		}
-		// A time is written in the zone of the clone that made it.
-		at, err := time.Parse(time.RFC3339Nano, needle)
-		if err != nil {
-			return false
-		}
-		return slices.ContainsFunc(strings.Split(text, "\n"), func(line string) bool {
-			_, v, ok := strings.Cut(line, ": ")
-			x, err := time.Parse(time.RFC3339Nano, v)
-			return ok && err == nil && x.Equal(at)
-		})
+		x, err := model.DecodeTask([]byte(text))
+		return err == nil && taskHas(x, w.field, w.value)
 	})
+}
+
+// taskHas reports whether the task has the value (as a write names it) in the
+// field.
+func taskHas(x *model.Task, field, value string) bool {
+	switch field {
+	case "title":
+		return sameJSON(js(x.Title), value)
+	case "status":
+		return sameJSON(js(x.Status), value)
+	case "workspace":
+		return sameJSON(js(x.Workspace.String()), value)
+	case "parent":
+		return sameJSON(parentJSON(x.Parent), value)
+	case "deleted_at":
+		return sameJSON(deletedJSON(x.DeletedAt), value)
+	case "id":
+		var id string
+		_ = json.Unmarshal([]byte(value), &id)
+		return x.ID == id || slices.Contains(x.FormerIDs, id)
+	case "body":
+		return slices.Contains(strings.Split(x.Body, "\n"), value)
+	case "labels":
+		return slices.Contains(x.Labels, value)
+	}
+	return false
 }
 
 func (h *history) wasLost(path, field, value string) bool {
@@ -499,18 +537,7 @@ func (h *history) checkForwarded(ps *problems, w write, writes []write) {
 	}) {
 		return
 	}
-	// A comment is a file of its own under the forward, dropped by itself.
-	file := model.TaskPath(w.task)
-	if w.field == "comment" {
-		var c string
-		_ = json.Unmarshal([]byte(w.value), &c)
-		u, err := model.ParseULID(c)
-		if err != nil {
-			h.c.t.Fatal(err)
-		}
-		file = model.CommentPath(w.task, u)
-	}
-	if slices.ContainsFunc(h.lost, func(l lost) bool { return l.path == file && l.field == "*" }) {
+	if w.field == "comment" && h.commentDropped(w) || w.field != "comment" && (h.lostWhole(w) || h.wasLost(model.TaskPath(w.task), w.field, w.value)) {
 		return
 	}
 	ps.add("task %s moved to another store, and %s %s written by clone %d beside the move is not in the move-out or in Hedgehug-Overwritten", w.task, w.field, w.value, w.clone)
@@ -526,7 +553,11 @@ func (h *history) commentDropped(w write) bool {
 		h.c.t.Fatal(err)
 	}
 	file := model.CommentPath(w.task, u)
-	return slices.ContainsFunc(h.lost, func(l lost) bool { return l.path == file && l.field == "*" })
+	return slices.ContainsFunc(h.lost, func(l lost) bool {
+		var text string
+		return l.path == file && l.field == "*" && (l.commit == w.commit || h.isAncestor(w.commit, l.commit)) &&
+			json.Unmarshal([]byte(l.value), &text) == nil && strings.Contains(text, "ulid: "+u.String())
+	})
 }
 
 // movedOut reports whether the move-out of w's task knew of w.
@@ -577,16 +608,16 @@ func (h *history) checkTaskWrite(ps *problems, w write, t *model.Task, writes []
 	case "id":
 		var id string
 		_ = json.Unmarshal([]byte(w.value), &id)
-		if t.ID != id && !slices.Contains(t.FormerIDs, id) && !h.wasLostWhole(path, w.value) {
+		if t.ID != id && !slices.Contains(t.FormerIDs, id) && !h.lostWhole(w) {
 			lose()
 		}
 		h.checkNotReused(ps, w, id)
 	case "body":
-		if !slices.Contains(strings.Split(t.Body, "\n"), w.value) && !h.replaced(w, writes) && !h.wasLostWhole(path, w.value) {
+		if !slices.Contains(strings.Split(t.Body, "\n"), w.value) && !h.replaced(w, writes) && !h.lostWhole(w) {
 			lose()
 		}
 	case "labels":
-		if !slices.Contains(t.Labels, w.value) && !h.replaced(w, writes) && !h.wasLostWhole(path, w.value) {
+		if !slices.Contains(t.Labels, w.value) && !h.replaced(w, writes) && !h.lostWhole(w) {
 			lose()
 		}
 	case "comment":
@@ -617,7 +648,7 @@ func (h *history) checkTaskWrite(ps *problems, w write, t *model.Task, writes []
 			ps.add("unknown field %s", w.field)
 			return
 		}
-		if !moved && !sameJSON(final, w.value) && !h.replaced(w, writes) && !h.wasRepaired(t.ULID, w.field) && !h.wasLost(path, w.field, w.value) && !h.wasLostWhole(path, w.value) && !h.reverts(w, writes) {
+		if !moved && !sameJSON(final, w.value) && !h.replaced(w, writes) && !h.wasRepaired(t.ULID, w.field) && !h.wasLost(path, w.field, w.value) && !h.lostWhole(w) && !h.reverts(w, writes) {
 			ps.add("task %s (%s): %s %s written by clone %d is lost (final %s)", t.ULID, t.ID, w.field, w.value, w.clone, final)
 		}
 	}
@@ -726,6 +757,11 @@ func (h *history) checkInvariants(ps *problems) {
 		for _, b := range t.BlockedBy {
 			if v.fwd[b] != nil {
 				ps.add("task %s (%s) is blocked by %s, which moved to another store", u, t.ID, b)
+			}
+		}
+		if n := t.Props.Get(refProp); n != nil && n.Kind == yaml.ScalarNode {
+			if r, err := model.ParseULID(n.Value); err == nil && v.fwd[r] != nil {
+				ps.add("task %s (%s) has a task_ref to %s, which moved to another store", u, t.ID, r)
 			}
 		}
 		if t.Parent == nil {
