@@ -1,6 +1,7 @@
 package query
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"math"
@@ -78,21 +79,34 @@ type compiler struct {
 func Run(ix *index.Index, q *Query, opt Options) (*Result, error) {
 	c := &compiler{ix: ix, sc: ix.Schema(), opt: opt}
 	var preds []pred
+	// A term of a property the schema lacks fails the query, but the other
+	// terms are still read, so that Result.IDs tells what the store has.
+	var unknown error
 	for _, t := range q.Terms {
 		if t.Key == "sort" || t.Key == "group" {
 			if err := c.orderBy(t); err != nil {
-				return nil, err
+				if !isUnknown(err) {
+					return nil, err
+				}
+				unknown = cmp.Or(unknown, err)
 			}
 			continue
 		}
 		p, err := c.term(t)
 		if err != nil {
-			return nil, err
+			if !isUnknown(err) {
+				return nil, err
+			}
+			unknown = cmp.Or(unknown, err)
+			continue
 		}
 		if t.Neg {
 			p = not(p)
 		}
 		preds = append(preds, p)
+	}
+	if unknown != nil {
+		return &Result{IDs: c.ids}, unknown
 	}
 	hits := []*index.Entry{}
 	for _, e := range ix.Tasks() {
@@ -110,6 +124,11 @@ func Run(ix *index.Index, q *Query, opt Options) (*Result, error) {
 	}
 	res.IDs = c.ids
 	return res, nil
+}
+
+func isUnknown(err error) bool {
+	var qe *Error
+	return errors.As(err, &qe) && qe.Unknown
 }
 
 func (c *compiler) fail(t Term, format string, args ...any) error {

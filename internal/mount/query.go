@@ -102,6 +102,20 @@ func Query(set *Set, q *query.Query, only string, opt QueryOptions) (*Result, er
 		if werr != nil {
 			return nil, werr
 		}
+		// what the store has of the tasks the query names counts even when
+		// it is dropped for a property it lacks
+		if rr != nil {
+			for _, l := range rr.IDs {
+				k := idKey{l.Pos, l.Value}
+				if _, seen := lookups[k]; !seen {
+					idOrder = append(idOrder, k)
+					lookups[k] = l
+				}
+				if l.Err == nil {
+					lookups[k] = l
+				}
+			}
+		}
 		var qe *query.Error
 		if errors.As(qerr, &qe) && qe.Unknown {
 			if unknown == nil {
@@ -113,16 +127,6 @@ func Query(set *Set, q *query.Query, only string, opt QueryOptions) (*Result, er
 			return nil, qerr
 		}
 		ran++
-		for _, l := range rr.IDs {
-			k := idKey{l.Pos, l.Value}
-			if _, seen := lookups[k]; !seen {
-				idOrder = append(idOrder, k)
-				lookups[k] = l
-			}
-			if l.Err == nil {
-				lookups[k] = l
-			}
-		}
 		desc = rr.Desc
 		for _, g := range found {
 			into, ok := byKey[g.key]

@@ -468,3 +468,23 @@ func TestQueryMissingIDMatchesNothingInTheStore(t *testing.T) {
 		t.Errorf("-parent:org-a:API-1 = %v", got)
 	}
 }
+
+// A store dropped for a property it lacks still has the tasks the query
+// names: the id is found in org-b, which has no size, and org-a has size
+// but not the id.
+func TestQueryStoreDroppedForUnknownStillResolvesIDs(t *testing.T) {
+	a, b := twoSchemas(t)
+	putSpecs(t, a, spec{title: "a-todo", kind: "task", status: "todo", size: "5"})
+	putSpecs(t, b, spec{title: "b-todo", kind: "task", status: "todo"})
+	set := openSet(t, a, b)
+	for _, q := range []string{"size>=1 parent:WEB-1", "parent:WEB-1 size>=1", "sort:size parent:WEB-1"} {
+		if got := queryTitles(t, set, q, ""); len(got) != 0 {
+			t.Errorf("%q = %v; want nothing", q, got)
+		}
+	}
+	// an id nobody has is still the error
+	parsed, _ := query.Parse("size>=1 parent:ZZ-9")
+	if _, err := Query(set, parsed, "", noOptions); err == nil {
+		t.Error("parent:ZZ-9: no error")
+	}
+}
