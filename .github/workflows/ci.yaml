@@ -135,19 +135,21 @@ jobs:
           gotestsum --format testdox --junitfile "test-report-$SHARD.xml" --jsonfile "test-$SHARD.json" -- \
             ${RACE:+"$RACE"} -count=1 "${cover[@]}" $PKGS
 
-      # パッケージごとの時間を手順の要約に出す。shard の分け方を均すときに使う。
+      # パッケージごとの時間を手順の要約とログに出す。shard の分け方を均すときに使う。
+      # Test がファイルを書く前に落ちたときは何も出さない（shard はすでに赤い）。
       - name: Package times
         if: ${{ !cancelled() }}
         shell: bash
         env:
           SHARD: ${{ matrix.shard }}
         run: |
+          [ -f "test-$SHARD.json" ] || exit 0
           {
             echo "| seconds | package |"
             echo "| ---: | --- |"
             jq -r 'select(.Test == null and (.Action == "pass" or .Action == "fail")) | "\(.Elapsed)\t\(.Package)"' "test-$SHARD.json" |
               sort -rn | awk -F'\t' '{ printf "| %s | %s |\n", $1, $2 }'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
