@@ -81,6 +81,7 @@ devenv とテストは、各段で動く範囲を足す（「開発環境」「�
 
 - git の通信: 書き換え後の URL の host（ポートを除く）が、その Store のアカウントの host と同じときだけトークンを付ける（「git の通信」）。
 - GitHub API・Device Flow: アカウントの host の `api`・`web`（既定値を含む）と、オリジン（スキーム・host・ポート）が同じ URL にだけトークンを送る。`Link` の `next` などが別のオリジンを指したら、トークンを付けずにエラーにする。リダイレクトも同じで、別のオリジンへのリダイレクトは追わずにエラーにする。remote の host がアカウントの host と違うときは、そのアカウントで GitHub API を呼ばない（`store init` はエラー `account.host_mismatch`、同期の権限の取得は警告）。
+- 平文の通信にはトークンを送らない（利用者の決定。2026-11-01）。送ってよいのは `https://` と、ループバック（`127.0.0.0/8`、`::1`、`localhost`）への `http://` だけ（devenv・fakegh・テストのため）。それ以外の `http://` の remote は、トークンを付けずにエラー（`auth.insecure`。「<URL> uses plain http, so the token is not sent; use https」の意味）にする。アカウントにトークンがなければ、今までどおり認証なしで試す。`hosts[].api`・`web` にループバック以外の `http://` を書いたら読み込みのエラー。
 - トークンを、エラー文・警告・ログ・`--json`・コマンドラインの引数に出さない。受け取るのは標準入力（`--with-token`）、環境変数、keychain、gh の標準出力だけ。gh の標準エラーをエラーに添えるときは、トークンの形（`gho_`・`ghp_`・`ghs_`・`ghu_`・`github_pat_` で始まる語）を `***` に伏せる。
 
 ### 大文字小文字
@@ -119,6 +120,7 @@ host とアカウント ID の比較は `internal/config` の1つずつの関数
 | 移動済みのタスク | KindNotFound | `task.moved`（Args: 移動先の Store と ID） |
 | トークンが取れない・401 | KindInvalid | `auth.token`・`auth.unauthorized`（Args: アカウント名） |
 | GitHub API の 403・404・レート制限 | KindInvalid | `github.forbidden`・`github.not_found`・`github.rate_limit` |
+| 平文の http の remote にトークンを送ろうとした | KindInvalid | `auth.insecure`（Args: `url`） |
 | 端末がなく選択・確認ができない | KindUsage | `choice.required`（Args: 候補）・`confirm.required` |
 
 ### 端末と非端末
@@ -300,7 +302,7 @@ REST だけを作る。フェーズ3で使うのは次の表のもの。
 ## git の通信（internal/gitrepo）
 
 - `url_rewrites` は fetch・push・clone の直前にだけ適用する。`from` が URL の先頭に一致する規則のうち、`from` が最も長いものを使い、その部分を `to` に置き換える。Store の `.git/config`、config.yaml、表示、repo ID はすべて書き換え前の値を使う。書き換えは呼び出し側（`sync`・`store`）が `gitrepo` に関数として渡す。
-- 認証: 書き換え後の URL が `http://` か `https://` なら、その Store の `account` のトークンを `BasicAuth{Username: "x-access-token", Password: token}` で付ける。ただし付けるのは、書き換え後の URL の host（大文字小文字を区別せず、ポートを除く）がアカウントの host と同じときだけ。別の host のミラーや、書き換えで別のサーバーへ向けた通信には付けない（利用者の決定。トークンを意図しないサーバーに渡さないため）。`account` がない、またはアカウントに `token` がないときは認証なしで試す。SSH（`ssh://` と `user@host:path`）は go-git の SSH で ssh-agent を使い、`known_hosts` を確かめる。ローカルのパスは今と同じ（インプロセスの file transport）。
+- 認証（平文の http の扱いは「共通の決まり」の「秘密の送り先」）: 書き換え後の URL が `http://` か `https://` なら、その Store の `account` のトークンを `BasicAuth{Username: "x-access-token", Password: token}` で付ける。ただし付けるのは、書き換え後の URL の host（大文字小文字を区別せず、ポートを除く）がアカウントの host と同じときだけ。別の host のミラーや、書き換えで別のサーバーへ向けた通信には付けない（利用者の決定。トークンを意図しないサーバーに渡さないため）。`account` がない、またはアカウントに `token` がないときは認証なしで試す。SSH（`ssh://` と `user@host:path`）は go-git の SSH で ssh-agent を使い、`known_hosts` を確かめる。ローカルのパスは今と同じ（インプロセスの file transport）。
 - push の拒否の判別: HTTP の 403、receive-pack の権限エラー、ローカルのパスで書けない（`EACCES`・`EPERM`）を `ErrPushDenied` にまとめる。読み取り専用の判定に使う。
 
 ## Store の作成と発見
