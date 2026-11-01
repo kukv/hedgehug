@@ -38,7 +38,7 @@ func TestConn(t *testing.T) {
 	}
 	// The token is got once a run: it stays when the variable goes.
 	ts.env["HH_TOKEN"] = ""
-	au, err = conn.Auth("http://github.com/org/x.git")
+	au, err = conn.Auth("https://github.com/org/y.git")
 	if b, ok := au.(*githttp.BasicAuth); err != nil || !ok || b.Password != "tok-1" {
 		t.Errorf("second Auth = %#v, %v", au, err)
 	}
@@ -46,7 +46,6 @@ func TestConn(t *testing.T) {
 	for u, want := range map[string]bool{
 		"https://github.com/org/x.git":      true,
 		"https://GitHub.com:8443/org/x.git": true,
-		"http://github.com/org/x.git":       true,
 		"https://mirror.example.com/x.git":  false,
 		"https://github.com.evil.test/x":    false,
 		"https://api.github.com/x":          false,

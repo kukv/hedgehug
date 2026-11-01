@@ -105,6 +105,9 @@ func (c *Client) do(method, url string, in, out any) (http.Header, error) {
 		}
 		body = bytes.NewReader(b)
 	}
+	if config.PlainHTTP(url) {
+		return nil, fmt.Errorf("%s %s: plain http, so the token is not sent; use https", method, url)
+	}
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err

@@ -116,6 +116,15 @@ func (ss *Session) Conn(c *config.Config, e config.StoreEntry) gitrepo.Conn {
 			if h, ok := hostOf(u); !ok || !config.SameHost(h, acct.Host) {
 				return nil, nil
 			}
+			if config.PlainHTTP(u) {
+				shown := "(unparsable URL)"
+				if p, err := url.Parse(u); err == nil {
+					p.User = nil
+					shown = p.String()
+				}
+				return nil, newErr(KindInvalid, "auth.insecure",
+					fmt.Errorf("%s uses plain http, so the token is not sent; use https", shown), "url", shown)
+			}
 			tok, err := ss.Token(c, acct)
 			if err != nil {
 				return nil, err

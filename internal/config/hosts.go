@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"path"
 	"slices"
@@ -120,6 +121,25 @@ func webURL(s string) bool {
 	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
+// IsLoopback reports whether host (a name or an IP, with or without the
+// brackets of an IPv6 literal) is the local machine: 127.0.0.0/8, ::1 or
+// localhost. A token is sent over plain http only there.
+func IsLoopback(host string) bool {
+	host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// PlainHTTP reports whether s is an http URL (not https) whose host is not
+// loopback.
+func PlainHTTP(s string) bool {
+	u, err := url.Parse(s)
+	return err == nil && strings.EqualFold(u.Scheme, "http") && !IsLoopback(u.Hostname())
+}
+
 // loadHosts reads hosts: a host each, with an optional api, web and client_id.
 func (c *Config) loadHosts(seq *yaml.Node) error {
 	if seq == nil || seq.Tag == "!!null" {
@@ -149,6 +169,9 @@ func (c *Config) loadHosts(seq *yaml.Node) error {
 		for _, f := range []struct{ key, v string }{{"api", h.API}, {"web", h.Web}} {
 			if f.v != "" && !webURL(f.v) {
 				return c.errAt(it, fmt.Sprintf("hosts: %s %q: want an http or https URL", f.key, f.v))
+			}
+			if PlainHTTP(f.v) {
+				return c.errAt(it, fmt.Sprintf("hosts: %s %q uses plain http, so the token would be sent in the clear; use https", f.key, f.v))
 			}
 		}
 		if slices.ContainsFunc(c.Hosts, func(x Host) bool { return SameHost(x.Host, h.Host) }) {

@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/kukv/hedgehug/internal/config"
 )
 
 // DeviceCode is the start of the device flow.
@@ -29,6 +31,9 @@ type TokenResponse struct {
 }
 
 func postForm(hc *http.Client, u string, form url.Values, out any) error {
+	if config.PlainHTTP(u) {
+		return fmt.Errorf("POST %s: plain http, so nothing secret is sent; use https", redact(u))
+	}
 	req, err := http.NewRequest("POST", u, strings.NewReader(form.Encode()))
 	if err != nil {
 		return err
@@ -82,4 +87,14 @@ func RefreshToken(hc *http.Client, web, clientID, refresh string) (*TokenRespons
 		"client_id": {clientID}, "refresh_token": {refresh}, "grant_type": {"refresh_token"},
 	}, &tr)
 	return &tr, err
+}
+
+// redact is u without its userinfo.
+func redact(u string) string {
+	p, err := url.Parse(u)
+	if err != nil {
+		return "(unparsable URL)"
+	}
+	p.User = nil
+	return p.String()
 }
