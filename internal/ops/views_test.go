@@ -52,6 +52,7 @@ func (ts *testSession) headTrailer(key string) (string, bool) {
 }
 
 func TestViewSaveCreateAndOverwrite(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	r, err := ts.ViewSave("今週", ViewChange{})
 	if err != nil {
@@ -88,6 +89,7 @@ func TestViewSaveCreateAndOverwrite(t *testing.T) {
 }
 
 func TestViewSaveKeepsUnknownKeys(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.ViewSave("a", ViewChange{Layout: ptr("table")}); err != nil {
 		t.Fatal(err)
@@ -105,6 +107,7 @@ func TestViewSaveKeepsUnknownKeys(t *testing.T) {
 }
 
 func TestViewSaveRefuses(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.ViewSave("Release", ViewChange{}); err != nil {
 		t.Fatal(err)
@@ -143,6 +146,7 @@ func TestViewSaveRefuses(t *testing.T) {
 }
 
 func TestViewListGetRemoveRename(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if vs, err := ts.ViewList(); err != nil || len(vs) != 0 {
 		t.Fatalf("empty list = %v, %v", vs, err)
@@ -204,6 +208,7 @@ func TestViewListGetRemoveRename(t *testing.T) {
 }
 
 func TestViewBrokenFile(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.ViewSave("ok", ViewChange{}); err != nil {
 		t.Fatal(err)
@@ -233,6 +238,7 @@ func TestViewBrokenFile(t *testing.T) {
 }
 
 func TestViewUndo(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.appendConfig(aliceAccount) // as undo_test.go does
 	if _, err := ts.ViewSave("a", ViewChange{Layout: ptr("table")}); err != nil {
@@ -250,6 +256,7 @@ func TestViewUndo(t *testing.T) {
 }
 
 func TestViewNameTakenDetails(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.ViewSave("Release", ViewChange{}); err != nil {
 		t.Fatal(err)
@@ -265,6 +272,7 @@ func TestViewNameTakenDetails(t *testing.T) {
 }
 
 func TestViewUndoCreateRemoveRename(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.appendConfig(aliceAccount)
 	exists := func(name string) bool {

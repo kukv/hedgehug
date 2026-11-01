@@ -28,6 +28,7 @@ func (ts *testSession) order(parent *model.ULID) []string {
 }
 
 func TestMoveParentAndOrder(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	for _, title := range []string{"a", "b", "c"} {
 		if _, err := ts.Add(AddInput{Title: title}); err != nil {
@@ -84,6 +85,7 @@ func TestMoveParentAndOrder(t *testing.T) {
 }
 
 func TestMoveUnderParentOfMissingWorkspace(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -123,6 +125,7 @@ func TestMoveUnderParentOfMissingWorkspace(t *testing.T) {
 }
 
 func TestMoveNoChangeIsNotCommitted(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -137,6 +140,7 @@ func TestMoveNoChangeIsNotCommitted(t *testing.T) {
 }
 
 func TestMoveToWorkspaceRenumbersSubtree(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.addWorkspace("api", "API")
 	for _, in := range []AddInput{{Title: "p", Workspace: "me"}, {Title: "c", Parent: "ME-1"}} {
@@ -164,6 +168,7 @@ func TestMoveToWorkspaceRenumbersSubtree(t *testing.T) {
 }
 
 func TestMoveErrors(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.addWorkspace("api", "API")
 	for _, in := range []AddInput{{Title: "a", Workspace: "me"}, {Title: "b", Workspace: "me"}, {Title: "kid", Parent: "ME-2"}, {Title: "x", Workspace: "api"}} {

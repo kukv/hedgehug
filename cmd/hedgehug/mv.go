@@ -57,12 +57,36 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 	if err != nil {
 		return err
 	}
+	if a.jsonOut && len(res.Detached) > 0 {
+		// The task as the other commands print it, and what the move took off
+		// it, as the server tells it.
+		if err := res.Index.Refresh(); err != nil {
+			return err
+		}
+		e, ok := res.Index.Task(res.ULID)
+		if !ok {
+			return fmt.Errorf("task %s is not in the index after the write", res.ULID)
+		}
+		return a.printJSON(struct {
+			*ops.TaskView
+			Detached []ops.Detached `json:"detached"`
+		}{ops.TaskViewOf(res.Index, e), res.Detached})
+	}
 	if err := a.printTask(res.Index, res.ULID, verb(res.Committed, "Moved")); err != nil || a.jsonOut || !res.Moved {
 		return err
 	}
 	var b strings.Builder
 	for i, t := range res.Tasks {
 		fmt.Fprintf(&b, "  %s → %s\n", res.Index.QualifyID(res.OldIDs[i]), res.Index.QualifyID(t.ID))
+	}
+	for _, d := range res.Detached {
+		id := res.Index.QualifyID(d.ID)
+		if d.Sprint != "" {
+			fmt.Fprintf(&b, "  %s: removed from sprint %s\n", id, d.Sprint)
+		}
+		for _, r := range d.Releases {
+			fmt.Fprintf(&b, "  %s: removed from release %s\n", id, r)
+		}
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())
 	return err

@@ -15,6 +15,7 @@ import (
 )
 
 func TestSyncTwoUsers(t *testing.T) {
+	t.Parallel()
 	alice := newTestEnv(t)
 	remote := alice.bare("shared")
 	alice.writeAccounts("github.com", "alice")
@@ -41,6 +42,7 @@ func TestSyncTwoUsers(t *testing.T) {
 }
 
 func TestSyncShowsRenumbered(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	alice.ok("add", "a")
 	bob.ok("add", "b")
@@ -49,6 +51,7 @@ func TestSyncShowsRenumbered(t *testing.T) {
 }
 
 func TestSyncShowsOverwritten(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	bob.ok("set", "ORG-1", "title=bob's")
 	alice.now = alice.now.Add(time.Second) // alice writes later, so alice's value wins
@@ -64,6 +67,7 @@ func TestSyncShowsOverwritten(t *testing.T) {
 }
 
 func TestSyncJSON(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	alice.ok("add", "a")
 	bob.ok("add", "b")
@@ -86,6 +90,7 @@ func TestSyncJSON(t *testing.T) {
 }
 
 func TestSyncWritesState(t *testing.T) {
+	t.Parallel()
 	alice, _, remote := twoUsers(t)
 	state := filepath.Join(alice.storeDir("org"), ".hedgehug", "local", "sync.json")
 	b, err := os.ReadFile(state)
@@ -111,6 +116,7 @@ func TestSyncWritesState(t *testing.T) {
 }
 
 func TestSyncClearsPendingSince(t *testing.T) {
+	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	dir := alice.storeDir("org")
 	state := filepath.Join(dir, ".hedgehug", "local", "sync.json")
@@ -131,6 +137,7 @@ func TestSyncClearsPendingSince(t *testing.T) {
 // A write made after the push, while pending_since was already set by an
 // earlier one, finds it set and leaves it: the sync must not clear it.
 func TestSyncKeepsPendingForAWriteAfterThePush(t *testing.T) {
+	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	dir := alice.storeDir("org")
 	state := filepath.Join(dir, ".hedgehug", "local", "sync.json")
@@ -167,6 +174,7 @@ func TestSyncKeepsPendingForAWriteAfterThePush(t *testing.T) {
 }
 
 func TestSyncStatus(t *testing.T) {
+	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	alice.ok("add", "a")
 	alice.goldenOK("status", "sync", "--status")
@@ -176,6 +184,7 @@ func TestSyncStatus(t *testing.T) {
 }
 
 func TestSyncStatusNoRemote(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.goldenOK("status", "sync", "--status")
@@ -184,6 +193,7 @@ func TestSyncStatusNoRemote(t *testing.T) {
 }
 
 func TestSyncAllStores(t *testing.T) {
+	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	remote2 := alice.bare("second")
 	alice.ok("store", "init", "two", "--prefix", "TWO", "--remote", remote2)
@@ -193,6 +203,7 @@ func TestSyncAllStores(t *testing.T) {
 }
 
 func TestStoreInitRemoteNotEmpty(t *testing.T) {
+	t.Parallel()
 	alice, _, remote := twoUsers(t)
 	alice.goldenRun("init", 1, "store", "init", "again", "--prefix", "AG", "--remote", remote)
 	// Nothing is left: the next try starts clean.
@@ -203,6 +214,7 @@ func TestStoreInitRemoteNotEmpty(t *testing.T) {
 }
 
 func TestStoreInitRemoteFirstCommit(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	remote := te.bare("shared")
 	te.goldenOK("init", "store", "init", "org", "--prefix", "ORG", "--remote", remote)

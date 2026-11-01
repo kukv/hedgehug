@@ -16,6 +16,7 @@ import (
 )
 
 func TestCreateAndOpen(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	if s.Meta().Format != model.StoreFormat {
 		t.Errorf("format = %d, want %d", s.Meta().Format, model.StoreFormat)
@@ -55,6 +56,7 @@ func TestCreateAndOpen(t *testing.T) {
 }
 
 func TestCreateRefusesNonEmpty(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "x"), nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -65,12 +67,14 @@ func TestCreateRefusesNonEmpty(t *testing.T) {
 }
 
 func TestOpenNotAStore(t *testing.T) {
+	t.Parallel()
 	if _, err := Open(t.TempDir()); !errors.Is(err, ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
 }
 
 func TestCreateUsesTheGivenSchema(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "store")
 	s, err := Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "x"}, schema.Dev(), &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, "", time.Now)
 	if err != nil {
@@ -89,6 +93,7 @@ func TestCreateUsesTheGivenSchema(t *testing.T) {
 }
 
 func TestCreateLeavesMetaAlone(t *testing.T) {
+	t.Parallel()
 	meta := &model.StoreMeta{ULID: model.NewULID(), Name: "x"}
 	if _, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, &model.Workspace{ULID: model.NewULID(), Name: "x", IDPrefix: "TST"}, testAuthor, "", time.Now); err != nil {
 		t.Fatal(err)
@@ -144,6 +149,7 @@ func TestCreateCanRetryAfterFailure(t *testing.T) {
 }
 
 func TestCreateRefusesBadWorkspace(t *testing.T) {
+	t.Parallel()
 	meta := &model.StoreMeta{ULID: model.NewULID(), Name: "x"}
 	if _, err := Create(filepath.Join(t.TempDir(), "a"), meta, nil, nil, testAuthor, "", time.Now); err == nil {
 		t.Error("nil workspace is accepted")

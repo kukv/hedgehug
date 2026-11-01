@@ -96,6 +96,7 @@ func TestPushFetchCloneWithoutGit(t *testing.T) {
 }
 
 func TestPushRejected(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	a, b := cloneTwo(t, remote) // both clones of one pushed commit
 	commitFiles(t, a.r, a.dir, map[string]string{"x.md": "a\n"})
@@ -145,6 +146,7 @@ func TestFetchWithLocalCommitsTheRemoteLacks(t *testing.T) {
 }
 
 func TestPushNothing(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	a, _ := cloneTwo(t, remote)
 	if err := a.r.r.Storer.RemoveReference(trackingRef("origin")); err != nil {
@@ -160,6 +162,7 @@ func TestPushNothing(t *testing.T) {
 }
 
 func TestFetchEmptyRemote(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	dir := t.TempDir()
 	r, _ := Init(dir)
@@ -172,6 +175,7 @@ func TestFetchEmptyRemote(t *testing.T) {
 }
 
 func TestSetRemotes(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	if err := r.SetRemotes([]string{"/a.git", "/b.git", "/c.git"}); err != nil {
@@ -199,6 +203,7 @@ func TestSetRemotes(t *testing.T) {
 }
 
 func TestRegisterMergeDriver(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	for range 2 {
@@ -213,6 +218,7 @@ func TestRegisterMergeDriver(t *testing.T) {
 }
 
 func TestLocalPath(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[string]string{
 		"/C:/x/y.git":    "C:/x/y.git",
 		`/d:\x\y.git`:    `d:\x\y.git`,
@@ -226,6 +232,7 @@ func TestLocalPath(t *testing.T) {
 }
 
 func TestCloneFailureLeavesNoDirectory(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "clone")
 	if _, err := Clone(filepath.Join(t.TempDir(), "nope.git"), dir); err == nil {
 		t.Fatal("Clone of a missing remote succeeded")
@@ -236,6 +243,7 @@ func TestCloneFailureLeavesNoDirectory(t *testing.T) {
 }
 
 func TestCloneFailureRemovesTheParentsItCreated(t *testing.T) {
+	t.Parallel()
 	base := t.TempDir()
 	if _, err := Clone(filepath.Join(base, "nope.git"), filepath.Join(base, "a", "b", "clone")); err == nil {
 		t.Fatal("Clone of a missing remote succeeded")
@@ -249,6 +257,7 @@ func TestCloneFailureRemovesTheParentsItCreated(t *testing.T) {
 }
 
 func TestMissingRemote(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	if err := r.SetRemotes([]string{filepath.Join(t.TempDir(), "nope.git")}); err != nil {
@@ -260,6 +269,7 @@ func TestMissingRemote(t *testing.T) {
 }
 
 func TestCloneFailureInExistingDirectoryKeepsIt(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if _, err := Clone(filepath.Join(t.TempDir(), "nope.git"), dir); err == nil {
 		t.Fatal("Clone of a missing remote succeeded")
@@ -300,6 +310,7 @@ func TestCloneCleansUpWhenTheLastStepFails(t *testing.T) {
 }
 
 func TestCloneRefusesNonEmptyDirectory(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	dir := t.TempDir()
 	writeFile(t, dir, "mine.txt", "keep\n")
@@ -312,6 +323,7 @@ func TestCloneRefusesNonEmptyDirectory(t *testing.T) {
 }
 
 func TestCloneRefusesWhatIsNotAnEmptyDirectory(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	base := t.TempDir()
 	writeFile(t, base, "file.txt", "keep\n")

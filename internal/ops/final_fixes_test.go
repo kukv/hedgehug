@@ -14,6 +14,7 @@ import (
 )
 
 func TestSessionConcurrentOperations(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.useAccount()
 	if _, err := ts.Add(AddInput{Title: "seed"}); err != nil {
@@ -67,6 +68,7 @@ func TestSessionConcurrentOperations(t *testing.T) {
 // TestForStoreCopiesEveryExportedField fails when a field is added to
 // Session and ForStore does not carry it to the session of another store.
 func TestForStoreCopiesEveryExportedField(t *testing.T) {
+	t.Parallel()
 	src := &Session{}
 	v := reflect.ValueOf(src).Elem()
 	for i := range v.NumField() {
@@ -128,6 +130,7 @@ func TestForStoreCopiesEveryExportedField(t *testing.T) {
 }
 
 func TestAsError(t *testing.T) {
+	t.Parallel()
 	if AsError(nil) != nil {
 		t.Error("AsError(nil) is not nil")
 	}
@@ -165,6 +168,7 @@ func TestAsError(t *testing.T) {
 // A task that is not found says task.not_found; a store error for something
 // else does not.
 func TestNotFoundCodes(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	_, ix, err := ts.Open()
 	if err != nil {
@@ -190,6 +194,7 @@ func TestNotFoundCodes(t *testing.T) {
 }
 
 func TestEditIsOneCall(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -225,6 +230,7 @@ func TestEditIsOneCall(t *testing.T) {
 }
 
 func TestCommentAddCleansTheBody(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.asAccount("alice")
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
@@ -248,6 +254,7 @@ func TestCommentAddCleansTheBody(t *testing.T) {
 }
 
 func TestResultsCarryTheCommitAndAFreshView(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.asAccount("alice")
 	head := func() string {
@@ -342,6 +349,7 @@ func TestResultsCarryTheCommitAndAFreshView(t *testing.T) {
 }
 
 func TestSessionUpdateCommitAndBeforeUpdate(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	s, _, err := ts.Open()
 	if err != nil {

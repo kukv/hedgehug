@@ -638,14 +638,15 @@ func TestMoveStoreHidden(t *testing.T) {
 
 func TestMoveStoreUnlinksSprintAndReleases(t *testing.T) {
 	f := newMoveFx(t)
-	sp := &model.Sprint{ULID: model.NewULID(), Name: "Sprint 1"}
 	as, _ := f.ts.ForStore("org-a").OpenStore()
 	_, err := f.ts.ForStore("org-a").Update(as, store.Op{Name: "sprint"}, func(tx *store.Tx) error {
-		if err := tx.PutSprint(sp); err != nil {
-			return err
-		}
 		c, err := tx.Task(f.c)
 		if err != nil {
+			return err
+		}
+		// a sprint belongs to a workspace; the task's own one here
+		sp := &model.Sprint{ULID: model.NewULID(), Workspace: c.Workspace, Name: "Sprint 1"}
+		if err := tx.PutSprint(sp); err != nil {
 			return err
 		}
 		c.Sprint = &sp.ULID

@@ -3,6 +3,7 @@ package store
 import (
 	"cmp"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -621,6 +622,15 @@ func TestMoveInKeepsTheOtherTargetsOfAProperty(t *testing.T) {
 func TestMoveInTakesOffSprintAndReleases(t *testing.T) {
 	f := newMoveFixture(t, "SRC", "DST", nil)
 	sprint, r1, r2 := model.NewULID(), model.NewULID(), model.NewULID()
+	// a sprint and releases of the source's workspace, as a task may name only those
+	if err := putSprint(f.src, &model.Sprint{ULID: sprint, Workspace: f.srcWS.ULID, Name: "S1"}); err != nil {
+		t.Fatal(err)
+	}
+	for i, r := range []model.ULID{r1, r2} {
+		if err := putRelease(f.src, &model.Release{ULID: r, Workspace: f.srcWS.ULID, Name: fmt.Sprintf("R%d", i+1)}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	f.c.Sprint = &sprint
 	f.c.Releases = []model.ULID{r1, r2}
 	f.c.Links = []model.Link{{Type: "pr", Ref: "o/r#1"}}

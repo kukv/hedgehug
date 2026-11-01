@@ -23,6 +23,7 @@ func newLoneStore(t *testing.T) *store.Store {
 }
 
 func TestAccessAndMembersRoundTrip(t *testing.T) {
+	t.Parallel()
 	s := newLoneStore(t)
 	if a, err := ReadAccess(s); err != nil || a.ReadOnly {
 		t.Errorf("no access.json = %+v, %v", a, err)
@@ -48,6 +49,7 @@ func TestAccessAndMembersRoundTrip(t *testing.T) {
 }
 
 func TestAccessWhy(t *testing.T) {
+	t.Parallel()
 	for reason, want := range map[string]string{
 		ReasonNotWritable: "the remote cannot be written",
 		ReasonPushDenied:  "the remote denied the push",
@@ -62,6 +64,7 @@ func TestAccessWhy(t *testing.T) {
 // Account IDs are the same without case: an author known as github.com/U0 is
 // not added again as github.com/u0.
 func TestUpdateAuthorsIgnoresCase(t *testing.T) {
+	t.Parallel()
 	s := newLoneStore(t)
 	if err := WriteMembers(s, Members{Authors: []string{"github.com/U0"}}); err != nil {
 		t.Fatal(err)

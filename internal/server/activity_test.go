@@ -11,6 +11,7 @@ import (
 )
 
 func TestUndo(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	ts.withAccount()
 	id := ts.add("one", "")
@@ -33,6 +34,7 @@ func TestUndo(t *testing.T) {
 }
 
 func TestUndoWithoutAccountIsConflict(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	if p := ts.problem("POST", "/api/undo", nil, 409); p.Type != "account.none" {
 		t.Errorf("problem = %+v", p)
@@ -40,6 +42,7 @@ func TestUndoWithoutAccountIsConflict(t *testing.T) {
 }
 
 func TestActivity(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	ts.withAccount()
 	ts.add("one", "")
@@ -62,9 +65,22 @@ func TestActivity(t *testing.T) {
 		t.Errorf("author: %d entries, want the two adds", len(out))
 	}
 	ts.problem("GET", "/api/activity?sync=maybe", nil, 400)
+	// a workspace by its prefix or ULID; the adds tell their workspace
+	ts.call("GET", "/api/activity?workspace=ME&limit=1", nil, 200, &out)
+	if len(out) != 1 || out[0].Workspace == nil || out[0].Workspace.Name != "me" {
+		t.Fatalf("workspace=ME: %+v", out)
+	}
+	if p := ts.problem("GET", "/api/activity?workspace="+out[0].Workspace.ULID+",nope", nil, 404); p.Type != "workspace.not_found" {
+		t.Errorf("problem = %+v", p)
+	}
+	ts.call("GET", "/api/activity?workspace="+out[0].Workspace.ULID, nil, 200, &out)
+	if len(out) < 2 {
+		t.Errorf("workspace=<ULID>: %d entries, want the two adds at least", len(out))
+	}
 }
 
 func TestNotifications(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	id := ts.add("mine", "")
 	var show ops.ShowView
@@ -112,6 +128,7 @@ func TestNotifications(t *testing.T) {
 }
 
 func TestUndoNothingIsConflict(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	ts.withAccount()
 	if p := ts.problem("POST", "/api/undo", nil, 409); p.Type != "undo.nothing" {
@@ -120,6 +137,7 @@ func TestUndoNothingIsConflict(t *testing.T) {
 }
 
 func TestNotificationsWarnOnce(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t) // no account: NoAccountsWarning
 	ts.call("GET", "/api/notifications?all=true", nil, 200, nil)
 	if n := strings.Count(ts.log.String(), ops.NoAccountsWarning); n != 1 {

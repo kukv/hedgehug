@@ -47,6 +47,7 @@ func countContaining(warns []string, sub string) int {
 
 // hh use --store looks in that store only.
 func TestUseWithStoreLooksInThatStoreOnly(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSessionWith(t, "API", "API")
 	idA := addProjectIn(t, ts, "org-a", "Release A")
 	idB := addProjectIn(t, ts, "org-b", "Release B")
@@ -81,6 +82,7 @@ func TestUseWithStoreLooksInThatStoreOnly(t *testing.T) {
 
 // A command about one store does not warn of a store it is not about.
 func TestStoreNameKeepsTheWarningsOfOtherStoresQuiet(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	addGoneStore(t, ts, false)
 	ts.StoreName = "org-a"
@@ -106,6 +108,7 @@ func TestStoreNameKeepsTheWarningsOfOtherStoresQuiet(t *testing.T) {
 // A sync that fails for a store that does not open says so in its report;
 // the cross-store check of the other stores does not say it again.
 func TestSyncDoesNotWarnTwiceOfAStoreItReports(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	addGoneStore(t, ts, true)
 	rs, err := ts.Sync(true, true)
@@ -137,6 +140,7 @@ func TestSyncDoesNotWarnTwiceOfAStoreItReports(t *testing.T) {
 // inbox leaves out a store that does not open, with a warning, but not the
 // one --store names.
 func TestInboxSkipsAStoreThatDoesNotOpen(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"list", "read", "revert"} {
 		ts := newTwoStoreSession(t)
 		addGoneStore(t, ts, false)
@@ -168,6 +172,7 @@ func TestInboxSkipsAStoreThatDoesNotOpen(t *testing.T) {
 
 // Warn may call back into the session: nothing is held while it runs.
 func TestWarnMayCallBackIntoTheSession(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	addGoneStore(t, ts, false)
 	ts.Warn = func(m string) {
@@ -195,6 +200,7 @@ func TestWarnMayCallBackIntoTheSession(t *testing.T) {
 
 // An unknown store given to add is said as the other commands say it.
 func TestAddHereUnknownStoreIsStoreNotFound(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	_, _, _, err := ts.AddHere(AddHereInput{Context: hhctx.Input{Store: "nope"}, Task: AddInput{Title: "x"}})
 	wantCode(t, "AddHere in nope", err, KindNotFound, "store.not_found")
@@ -202,6 +208,7 @@ func TestAddHereUnknownStoreIsStoreNotFound(t *testing.T) {
 
 // An ambiguity found by hh use --store names the input as the user typed it.
 func TestUseWithStoreAmbiguityKeepsTheInput(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	s, err := ts.ForStore("org-a").OpenStore()
 	if err != nil {
@@ -229,6 +236,7 @@ func TestUseWithStoreAmbiguityKeepsTheInput(t *testing.T) {
 // A store whose inbox cannot be taken in is warned of as that, not as one
 // that does not open.
 func TestInboxStoreWhoseInboxCannotBeReadIsWarnedOf(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	s, err := ts.ForStore("org-b").OpenStore()
 	if err != nil {

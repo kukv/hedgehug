@@ -39,6 +39,7 @@ func loadContext(t *testing.T, ts *testSession) hhctx.State {
 }
 
 func TestUseSetsTheProjectOfAnyStore(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	id := addProjectIn(t, ts, "org-a", "Release")
 	r, err := ts.Use("org-a:" + id)
@@ -70,6 +71,7 @@ func TestUseSetsTheProjectOfAnyStore(t *testing.T) {
 }
 
 func TestUseKeepsRecent(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	_, p, _ := ts.Config()
 	rec := hhctx.Ref{Store: model.NewULID(), Project: model.NewULID()}
@@ -86,6 +88,7 @@ func TestUseKeepsRecent(t *testing.T) {
 }
 
 func TestUseRefusesWhatIsNotAProject(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	_, err := ts.Use("org-a:API-1")
 	wantCode(t, "Use(task)", err, KindInvalid, "use.not_project")
@@ -97,6 +100,7 @@ func TestUseRefusesWhatIsNotAProject(t *testing.T) {
 }
 
 func TestUseRefusesADeletedProject(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	id := addProjectIn(t, ts, "org-a", "Release")
 	if _, err := ts.Remove(id); err != nil {
@@ -110,6 +114,7 @@ func TestUseRefusesADeletedProject(t *testing.T) {
 }
 
 func TestUseAmbiguousAcrossStores(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSessionWith(t, "SAME", "SAME")
 	addProjectIn(t, ts, "org-a", "A")
 	addProjectIn(t, ts, "org-b", "B")
@@ -118,6 +123,7 @@ func TestUseAmbiguousAcrossStores(t *testing.T) {
 }
 
 func TestUseShow(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	r, err := ts.UseShow()
 	if err != nil || r.Project != nil || r.Store != "" {
@@ -138,6 +144,7 @@ func TestUseShow(t *testing.T) {
 }
 
 func TestUseShowWarnsOfAProjectThatIsGone(t *testing.T) {
+	t.Parallel()
 	deleted := func(t *testing.T, ts *testSession, id string) { // deleted
 		if _, err := ts.Remove(id); err != nil {
 			t.Fatal(err)
@@ -197,6 +204,7 @@ func TestUseShowWarnsOfAProjectThatIsGone(t *testing.T) {
 }
 
 func TestUseClear(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	r, err := ts.UseClear()
 	if err != nil || r.Changed {

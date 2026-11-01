@@ -6,6 +6,7 @@ import (
 )
 
 func TestWriteWithoutChangeSaysSo(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 

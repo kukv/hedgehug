@@ -12,6 +12,7 @@ import (
 // A token goes over https, and over http only to the loopback. Over plain
 // http to another host it is not even looked for.
 func TestConnPlainHTTP(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	var calls atomic.Int32
 	ts.env["HH_TOKEN"] = "tok-1"

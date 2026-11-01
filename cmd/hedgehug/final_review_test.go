@@ -23,6 +23,7 @@ func (te *testEnv) breakStore(name string) {
 // A sync tells of a reference to another store once, with the store's name
 // in front, as the other warnings of a sync have it.
 func TestSyncWarnsOfACrossStoreRefOnce(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	remote := te.bare("shared")
 	te.ok("store", "init", "alpha", "--prefix", "AA", "--remote", remote)
@@ -43,6 +44,7 @@ func TestSyncWarnsOfACrossStoreRefOnce(t *testing.T) {
 // hh use --json gives the id as the file has it, even where the text shows
 // it with the store's name.
 func TestUseJSONIDIsPlainWhenThePrefixIsShared(t *testing.T) {
+	t.Parallel()
 	te := newSharedPrefixEnv(t)
 	te.addJSON("--store", "org-a", "Alpha project", "--kind", "project")
 	te.addJSON("--store", "org-b", "Bravo project", "--kind", "project")
@@ -66,6 +68,7 @@ func TestUseJSONIDIsPlainWhenThePrefixIsShared(t *testing.T) {
 
 // hh use --store looks in that store only.
 func TestUseWithStoreLooksInThatStoreOnly(t *testing.T) {
+	t.Parallel()
 	te := newSharedPrefixEnv(t)
 	te.addJSON("--store", "org-a", "Alpha project", "--kind", "project")
 	te.addJSON("--store", "org-b", "Bravo project", "--kind", "project")
@@ -80,6 +83,7 @@ func TestUseWithStoreLooksInThatStoreOnly(t *testing.T) {
 // inbox leaves out a store that does not open, with a warning, and the
 // store --store names is the error.
 func TestInboxLeavesOutAStoreThatDoesNotOpen(t *testing.T) {
+	t.Parallel()
 	te := newTwoStoreEnv(t)
 	te.breakStore("bravo-long")
 	code, out, stderr := te.run("inbox")
@@ -94,6 +98,7 @@ func TestInboxLeavesOutAStoreThatDoesNotOpen(t *testing.T) {
 
 // A command about one store does not warn of the others.
 func TestStoreFlagKeepsOtherBrokenStoresQuiet(t *testing.T) {
+	t.Parallel()
 	te := newTwoStoreEnv(t)
 	te.breakStore("bravo-long")
 	code, _, stderr := te.run("ls", "--store", "alpha")
@@ -108,6 +113,7 @@ func TestStoreFlagKeepsOtherBrokenStoresQuiet(t *testing.T) {
 
 // A status that only one store's schema has is looked for in that store.
 func TestLsStatusOfAnotherSchema(t *testing.T) {
+	t.Parallel()
 	te := newTwoStoreEnv(t)
 	s, err := store.Open(te.storeDir("alpha"))
 	if err != nil {

@@ -98,11 +98,11 @@ frontmatter は `id, author, date, duration, created, updated, deleted_at`。本
 
 ### スプリント `sprints/<ULID>.md`
 
-`id, name, start, end, state, goal, created, updated`。`state` は `planned / active / closed`。本文はメモ。
+`id, workspace, name, start, end, state, goal, created, updated`。`workspace` は所属するワークスペースの ULID で必須（2026-11-01 に追加。スプリントとリリースはワークスペースに属する）。`state` は `planned / active / closed`。本文はメモ。
 
 ### リリース `releases/<ULID>.md`
 
-`id, name, date, state, created, updated`。`state` は `unreleased / released / archived`。本文はメモ。
+`id, workspace, name, date, state, created, updated`。`workspace` はスプリントと同じく必須（2026-11-01 に追加）。`state` は `unreleased / released / archived`。本文はメモ。
 
 ### テンプレート `templates/<name>.md`
 

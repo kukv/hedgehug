@@ -120,6 +120,7 @@ func queryTitles(t *testing.T, set *Set, q, only string) []string {
 }
 
 func TestQueryStoreFilter(t *testing.T) {
+	t.Parallel()
 	set := twoStoreSet(t)
 	tests := []struct {
 		q    string
@@ -170,6 +171,7 @@ func sameSet(a, b []string) bool {
 }
 
 func TestQueryUnknownStore(t *testing.T) {
+	t.Parallel()
 	set := twoStoreSet(t)
 	for _, q := range []string{"store:nope", "-store:nope", "store:org-a,nope"} {
 		parsed, _ := query.Parse(q)
@@ -186,6 +188,7 @@ func TestQueryUnknownStore(t *testing.T) {
 }
 
 func TestQueryUnknownProperty(t *testing.T) {
+	t.Parallel()
 	set := twoStoreSet(t)
 	// only org-a has size
 	if got := queryTitles(t, set, "size>=5", ""); !sameSet(got, []string{"a-todo", "a-review"}) {
@@ -211,6 +214,7 @@ func TestQueryUnknownProperty(t *testing.T) {
 // that store, as an id the store lacks does; a value no schema has is the
 // error of the query.
 func TestQueryValueOfAnotherSchemaMatchesNothingHere(t *testing.T) {
+	t.Parallel()
 	set := twoStoreSet(t)
 	for q, want := range map[string][]string{
 		"status:review":     {"a-review"},
@@ -241,6 +245,7 @@ func TestQueryValueOfAnotherSchemaMatchesNothingHere(t *testing.T) {
 }
 
 func TestQuerySortStatusByCategoryThenPlaceThenStore(t *testing.T) {
+	t.Parallel()
 	set := twoStoreSet(t)
 	// the todo category first (place 0 in both: store order), then the
 	// doing one: b-wip (place 1) before a-review (place 2)
@@ -255,6 +260,7 @@ func TestQuerySortStatusByCategoryThenPlaceThenStore(t *testing.T) {
 }
 
 func TestQuerySortKindByRoleThenPlaceThenStore(t *testing.T) {
+	t.Parallel()
 	set := twoStoreSet(t)
 	got := queryTitles(t, set, "status:todo sort:kind", "")
 	// containers first: a-project (place 0), b-epic (place 1); then the work: b-todo (task, place 0), a-todo (task, place 1)
@@ -265,6 +271,7 @@ func TestQuerySortKindByRoleThenPlaceThenStore(t *testing.T) {
 }
 
 func TestQuerySortEnumByPlaceOfEachSchema(t *testing.T) {
+	t.Parallel()
 	set := twoStoreSet(t)
 	// tier: gold is place 0 in org-a and 1 in org-b
 	got := queryTitles(t, set, "tier:gold,silver sort:tier", "")
@@ -277,6 +284,7 @@ func TestQuerySortEnumByPlaceOfEachSchema(t *testing.T) {
 }
 
 func TestQuerySortTiesAreInStoreOrder(t *testing.T) {
+	t.Parallel()
 	a, b := twoSchemas(t)
 	putSpecs(t, b, spec{title: "same", kind: "task", status: "todo"}, spec{title: "same", kind: "task", status: "todo"})
 	putSpecs(t, a, spec{title: "same", kind: "task", status: "todo"})
@@ -296,6 +304,7 @@ func TestQuerySortTiesAreInStoreOrder(t *testing.T) {
 }
 
 func TestQuerySortDescendingAcrossStores(t *testing.T) {
+	t.Parallel()
 	set := twoStoreSet(t)
 	want := []string{"b-wip", "b-todo", "b-epic", "a-todo", "a-review", "a-project"}
 	if got := queryTitles(t, set, "sort:-title", ""); !reflect.DeepEqual(got, want) {
@@ -314,6 +323,7 @@ func TestQuerySortDescendingAcrossStores(t *testing.T) {
 }
 
 func TestQuerySortWithinGroupsAcrossStores(t *testing.T) {
+	t.Parallel()
 	set := twoStoreSet(t)
 	for q, want := range map[string]map[string][]string{
 		"group:status sort:title": {
@@ -344,6 +354,7 @@ func TestQuerySortWithinGroupsAcrossStores(t *testing.T) {
 }
 
 func TestQueryGroupJoinsAcrossStores(t *testing.T) {
+	t.Parallel()
 	set := twoStoreSet(t)
 	parsed, _ := query.Parse("group:status")
 	res, err := Query(set, parsed, "", noOptions)
@@ -372,6 +383,7 @@ func TestQueryGroupJoinsAcrossStores(t *testing.T) {
 }
 
 func TestQueryOpensOnlyTheStoresItNeeds(t *testing.T) {
+	t.Parallel()
 	set := twoStoreSet(t)
 	parsed, _ := query.Parse("kind:task")
 	if _, err := Query(set, parsed, "org-b", noOptions); err != nil {
@@ -391,6 +403,7 @@ func TestQueryOpensOnlyTheStoresItNeeds(t *testing.T) {
 }
 
 func TestQueryOptionsErrorAndUnknownStoreOnly(t *testing.T) {
+	t.Parallel()
 	set := twoStoreSet(t)
 	parsed, _ := query.Parse("")
 	boom := errors.New("boom")
@@ -403,6 +416,7 @@ func TestQueryOptionsErrorAndUnknownStoreOnly(t *testing.T) {
 }
 
 func TestQueryTaskNotInAStoreFindsNothingThere(t *testing.T) {
+	t.Parallel()
 	a, b := twoSchemas(t)
 	parents := putTasks(t, a, 1, func(_ int, task *model.Task) { task.Title, task.Kind = "a-parent", "project" })
 	putTasks(t, a, 1, func(_ int, task *model.Task) { task.Title, task.Parent = "a-child", &parents[0].ULID })
@@ -436,6 +450,7 @@ func TestQueryTaskNotInAStoreFindsNothingThere(t *testing.T) {
 // A store whose statuses are not in the order of the categories is sorted as
 // query.Run does when it is the only one that runs.
 func TestQuerySortOfOneStoreIsRuns(t *testing.T) {
+	t.Parallel()
 	root := []string{schema.Root}
 	odd := &schema.Schema{
 		Statuses: statuses(
@@ -480,6 +495,7 @@ func TestQuerySortOfOneStoreIsRuns(t *testing.T) {
 }
 
 func TestQueryGroupWithoutValueComesLast(t *testing.T) {
+	t.Parallel()
 	a, b := twoSchemas(t)
 	putSpecs(t, a, spec{title: "a1", kind: "task", status: "todo", tier: "silver"}, spec{title: "a2", kind: "task", status: "todo"})
 	putSpecs(t, b, spec{title: "b1", kind: "task", status: "todo", tier: "gold"}, spec{title: "b2", kind: "task", status: "todo"})
@@ -506,6 +522,7 @@ func TestQueryGroupWithoutValueComesLast(t *testing.T) {
 }
 
 func TestQueryMissingIDMatchesNothingInTheStore(t *testing.T) {
+	t.Parallel()
 	a, b := twoSchemas(t)
 	parents := putTasks(t, a, 2, func(i int, task *model.Task) { task.Title, task.Kind = []string{"a-p1", "a-p2"}[i], "project" })
 	putTasks(t, a, 2, func(i int, task *model.Task) { task.Title, task.Parent = []string{"a-c1", "a-c2"}[i], &parents[i].ULID })
@@ -549,6 +566,7 @@ func TestQueryMissingIDMatchesNothingInTheStore(t *testing.T) {
 // names: the id is found in org-b, which has no size, and org-a has size
 // but not the id.
 func TestQueryStoreDroppedForUnknownStillResolvesIDs(t *testing.T) {
+	t.Parallel()
 	a, b := twoSchemas(t)
 	putSpecs(t, a, spec{title: "a-todo", kind: "task", status: "todo", size: "5"})
 	putSpecs(t, b, spec{title: "b-todo", kind: "task", status: "todo"})

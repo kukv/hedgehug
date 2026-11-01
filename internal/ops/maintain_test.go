@@ -131,6 +131,7 @@ func TestDoctorAndSchemaCheckOnACleanStore(t *testing.T) {
 }
 
 func TestSchemaCheckAndDoctorOnABrokenSchemaFile(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	_, e, _ := ts.Entry()
 	if err := os.WriteFile(filepath.Join(e.Path, "schema.yaml"), []byte("statuses: [\n"), 0o600); err != nil {
@@ -151,6 +152,7 @@ func TestSchemaCheckAndDoctorOnABrokenSchemaFile(t *testing.T) {
 }
 
 func TestDoctorFindsABrokenTaskFile(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	a, err := ts.Add(AddInput{Title: "a"})
 	if err != nil {
@@ -223,6 +225,7 @@ func TestDoctorFixRepairsAnIDClash(t *testing.T) {
 }
 
 func TestDoctorNoStores(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.StoreRemove("me", false); err != nil {
 		t.Fatal(err)
@@ -236,6 +239,7 @@ func TestDoctorNoStores(t *testing.T) {
 }
 
 func TestMigrateDryRunWritesNothing(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "Alpha"}); err != nil {
 		t.Fatal(err)
@@ -260,6 +264,7 @@ func TestMigrateDryRunWritesNothing(t *testing.T) {
 }
 
 func TestMigrateWritesTasksAndSchemaInOneCommit(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	a, _ := ts.Add(AddInput{Title: "Alpha"})
 	b, _ := ts.Add(AddInput{Title: "Beta"})
@@ -302,6 +307,7 @@ func TestMigrateWritesTasksAndSchemaInOneCommit(t *testing.T) {
 }
 
 func TestMigrateRefusals(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	a, _ := ts.Add(AddInput{Title: "Alpha"})
 	b, _ := ts.Add(AddInput{Title: "Beta"})
@@ -327,6 +333,7 @@ func TestMigrateRefusals(t *testing.T) {
 }
 
 func TestMigrateNamesTheTaskOfAViolation(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	p, _ := ts.Add(AddInput{Title: "Parent"})
 	c, _ := ts.Add(AddInput{Title: "Child", Parent: "ME-1"})
@@ -345,6 +352,7 @@ func TestMigrateNamesTheTaskOfAViolation(t *testing.T) {
 }
 
 func TestMigrateUnknownDefinition(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, _, err := ts.Migrate(schema.Migration{Target: schema.TargetStatus, Old: "nope", New: "x"}, true); err == nil {
 		t.Error("a status the schema lacks was migrated")
@@ -352,6 +360,7 @@ func TestMigrateUnknownDefinition(t *testing.T) {
 }
 
 func TestTaskCount(t *testing.T) {
+	t.Parallel()
 	for n, want := range map[int]string{0: "0 tasks", 1: "1 task", 2: "2 tasks"} {
 		if got := TaskCount(n); got != want {
 			t.Errorf("TaskCount(%d) = %q; want %q", n, got, want)
@@ -360,6 +369,7 @@ func TestTaskCount(t *testing.T) {
 }
 
 func TestViolationsText(t *testing.T) {
+	t.Parallel()
 	ve := &store.ValidationError{Violations: []schema.Violation{{Field: "kind", Msg: "bug is not a kind"}, {Field: "title", Msg: "is empty"}}}
 	want := "the change breaks the schema:\n  kind: bug is not a kind\n  title: is empty"
 	if got := ViolationsText(ve); got != want {

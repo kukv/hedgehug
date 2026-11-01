@@ -40,6 +40,7 @@ func namedStores(t *testing.T, ts *testSession, name string) []config.StoreEntry
 }
 
 func TestStoreInitRechecksExistenceInUpdate(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	theirs := filepath.Join(t.TempDir(), "theirs")
 	hookConfigWrite(t, ts, func(c *config.Config) error { return c.AddStore("team", theirs, nil) })
@@ -52,6 +53,7 @@ func TestStoreInitRechecksExistenceInUpdate(t *testing.T) {
 }
 
 func TestStoreAddRechecksExistenceInUpdate(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	remote := addBareRemote(t, ts)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
@@ -72,6 +74,7 @@ func TestStoreAddRechecksExistenceInUpdate(t *testing.T) {
 }
 
 func TestStoreRemoveRechecksExistenceInUpdate(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.StoreInit(StoreInitInput{Name: "team", Prefix: "TM"}); err != nil {
 		t.Fatal(err)

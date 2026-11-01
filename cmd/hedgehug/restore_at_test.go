@@ -9,6 +9,7 @@ import (
 )
 
 func TestRestoreAt(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.now = te.now.Add(time.Second)
@@ -32,6 +33,7 @@ func TestRestoreAt(t *testing.T) {
 }
 
 func TestRestoreAtCommitAndWorkspaceNote(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "WEB", "--workspace", "web")
 	te.ok("workspace", "add", "api", "--prefix", "API")
@@ -46,6 +48,7 @@ func TestRestoreAtCommitAndWorkspaceNote(t *testing.T) {
 }
 
 func TestRestoreAtRefusedParent(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.ok("add", "p")
@@ -61,6 +64,7 @@ func TestRestoreAtRefusedParent(t *testing.T) {
 }
 
 func TestParseAt(t *testing.T) {
+	t.Parallel()
 	loc := time.FixedZone("x", 9*3600)
 	for _, c := range []struct {
 		in   string

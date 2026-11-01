@@ -10,6 +10,7 @@ import (
 )
 
 func TestOpenKeepsCacheOfHead(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	put(t, s, newTask("original"))
 	mustOpen(t, s)
@@ -33,6 +34,7 @@ func TestOpenKeepsCacheOfHead(t *testing.T) {
 }
 
 func TestResolveEmpty(t *testing.T) {
+	t.Parallel()
 	ix := indexOf(&Entry{ULID: mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0C"), FormerIDs: []string{""}})
 	if _, err := ix.Resolve(""); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("Resolve(\"\") err = %v, want ErrNotFound", err)

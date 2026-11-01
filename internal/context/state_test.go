@@ -10,6 +10,7 @@ import (
 )
 
 func TestLoadMissingIsEmpty(t *testing.T) {
+	t.Parallel()
 	var warns []string
 	st := Load(t.TempDir(), func(m string) { warns = append(warns, m) })
 	if st.Use != nil || len(st.Recent) != 0 || len(warns) != 0 {
@@ -18,6 +19,7 @@ func TestLoadMissingIsEmpty(t *testing.T) {
 }
 
 func TestLoadBrokenIsEmptyAndWarns(t *testing.T) {
+	t.Parallel()
 	d := t.TempDir()
 	if err := os.WriteFile(filepath.Join(d, "context.json"), []byte("{not json"), 0o600); err != nil {
 		t.Fatal(err)
@@ -33,6 +35,7 @@ func TestLoadBrokenIsEmptyAndWarns(t *testing.T) {
 }
 
 func TestSaveThenLoad(t *testing.T) {
+	t.Parallel()
 	d := filepath.Join(t.TempDir(), "data")
 	want := State{
 		Use:    &Ref{Store: model.NewULID(), Project: model.NewULID()},
@@ -55,6 +58,7 @@ func TestSaveThenLoad(t *testing.T) {
 }
 
 func TestSaveEmptyWritesNullUse(t *testing.T) {
+	t.Parallel()
 	d := t.TempDir()
 	if err := Save(d, State{}); err != nil {
 		t.Fatal(err)
@@ -69,6 +73,7 @@ func TestSaveEmptyWritesNullUse(t *testing.T) {
 }
 
 func TestLoadInvalidULIDIsBroken(t *testing.T) {
+	t.Parallel()
 	d := t.TempDir()
 	if err := os.WriteFile(filepath.Join(d, "context.json"), []byte(`{"use": {"store": "nope", "project": "nope"}, "recent": {}}`), 0o600); err != nil {
 		t.Fatal(err)
@@ -84,6 +89,7 @@ func TestLoadInvalidULIDIsBroken(t *testing.T) {
 }
 
 func TestLoadUnreadableIsNotBroken(t *testing.T) {
+	t.Parallel()
 	d := t.TempDir()
 	// a directory where the file should be cannot be read, on every system
 	if err := os.Mkdir(filepath.Join(d, "context.json"), 0o750); err != nil {

@@ -91,6 +91,7 @@ func TestStoreFlagOnAStoreWithoutRemoteStartsNothing(t *testing.T) {
 }
 
 func TestSyncBackgroundRecordsAFailureBeforeTheRun(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	remote := te.bare("shared")
 	te.ok("store", "init", "org", "--prefix", "ORG", "--remote", remote)
@@ -138,6 +139,7 @@ func TestSyncStartsNothing(t *testing.T) {
 }
 
 func TestStartReportsBackgroundError(t *testing.T) {
+	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	alice.setSyncError("org", "remote unreachable")
 	_, _, errs := alice.run("ls")
@@ -150,6 +152,7 @@ func TestStartReportsBackgroundError(t *testing.T) {
 }
 
 func TestForegroundSyncFailureIsNotReportedAgain(t *testing.T) {
+	t.Parallel()
 	alice, _, remote := twoUsers(t)
 	if err := os.RemoveAll(remote); err != nil {
 		t.Fatal(err)
@@ -163,6 +166,7 @@ func TestForegroundSyncFailureIsNotReportedAgain(t *testing.T) {
 }
 
 func TestSyncBackgroundNeedsAStore(t *testing.T) {
+	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	if code, _, _ := alice.run("sync", "--background"); code != 2 {
 		t.Errorf("code = %d", code)
@@ -170,6 +174,7 @@ func TestSyncBackgroundNeedsAStore(t *testing.T) {
 }
 
 func TestSyncBackgroundPushesAfterPushInterval(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	alice.writeSync("50ms", "50ms")
 	alice.ok("add", "bg")
@@ -188,6 +193,7 @@ func TestSyncBackgroundPushesAfterPushInterval(t *testing.T) {
 }
 
 func TestBackgroundSyncReachesRemote(t *testing.T) {
+	t.Parallel()
 	// The real binary: a write starts a detached child that pushes after push_interval.
 	bin := buildHedgehug(t)
 	alice, bob, _ := twoUsers(t)

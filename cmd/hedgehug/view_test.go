@@ -15,6 +15,7 @@ import (
 )
 
 func TestViewCommands(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("Project", "--kind", "project")
 	te.addJSON("Alpha", "--parent", p.ID, "--status", "done")
@@ -95,6 +96,7 @@ func (te *testEnv) commitViewFile(name, data string) {
 }
 
 func TestViewStoreFlag(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("store", "init", "other", "--prefix", "OT")
 	te.ok("--store", "other", "view", "save", "only-other", "--query", "status:todo")

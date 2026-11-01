@@ -9,6 +9,7 @@ import (
 )
 
 func TestVerify(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := Init(dir)
 	if err != nil {

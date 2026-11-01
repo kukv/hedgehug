@@ -15,6 +15,7 @@ import (
 )
 
 func TestAddDropsDuplicates(t *testing.T) {
+	t.Parallel()
 	_, b := twoClones(t)
 	box := Open(b.s)
 	task := model.NewULID()
@@ -47,6 +48,7 @@ func TestAddDropsDuplicates(t *testing.T) {
 }
 
 func TestListAndMarkRead(t *testing.T) {
+	t.Parallel()
 	_, b := twoClones(t)
 	box := Open(b.s)
 	if items, err := box.List(true); err != nil || len(items) != 0 {
@@ -103,6 +105,7 @@ func TestListAndMarkRead(t *testing.T) {
 }
 
 func TestCorruptLineIsSkipped(t *testing.T) {
+	t.Parallel()
 	_, b := twoClones(t)
 	box := Open(b.s)
 	added, err := box.Add([]Item{{Kind: Assigned, Task: model.NewULID(), Commit: "c1"}})
@@ -133,6 +136,7 @@ func TestCorruptLineIsSkipped(t *testing.T) {
 }
 
 func TestTwoWritersAtOnce(t *testing.T) {
+	t.Parallel()
 	_, b := twoClones(t)
 	var wg sync.WaitGroup
 	errs := make(chan error, 20)
@@ -161,6 +165,7 @@ func TestTwoWritersAtOnce(t *testing.T) {
 }
 
 func TestReadSetKeepsOnlyItems(t *testing.T) {
+	t.Parallel()
 	_, b := twoClones(t)
 	box := Open(b.s)
 	added, err := box.Add([]Item{{Kind: Assigned, Task: model.NewULID(), Commit: "c1"}})
@@ -182,6 +187,7 @@ func TestReadSetKeepsOnlyItems(t *testing.T) {
 }
 
 func TestStampChangesWithTheFiles(t *testing.T) {
+	t.Parallel()
 	_, b := twoClones(t)
 	box := Open(b.s)
 	before := box.Stamp()

@@ -38,6 +38,7 @@ type listBody struct {
 }
 
 func TestListTasks(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	ts.add("one", "")
 	ts.add("two", "")
@@ -53,6 +54,7 @@ func TestListTasks(t *testing.T) {
 }
 
 func TestListTasksEmptyIsArray(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	resp := ts.call("GET", "/api/tasks", nil, 200, nil)
 	b := resp.Body
@@ -62,6 +64,7 @@ func TestListTasksEmptyIsArray(t *testing.T) {
 }
 
 func TestListTasksGroups(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	ts.add("one", "")
 	var out listBody
@@ -72,6 +75,7 @@ func TestListTasksGroups(t *testing.T) {
 }
 
 func TestTreeHasProgress(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	res, err := ts.session().Add(ops.AddInput{Title: "p", Kind: "project"})
 	if err != nil {
@@ -90,6 +94,7 @@ func TestTreeHasProgress(t *testing.T) {
 }
 
 func TestListHasChecklistAndProgress(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	res, err := ts.session().Add(ops.AddInput{Title: "p", Kind: "project"})
 	if err != nil {
@@ -118,6 +123,7 @@ func TestListHasChecklistAndProgress(t *testing.T) {
 }
 
 func TestShowTask(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	id := ts.add("one", "")
 	var out ops.ShowView
@@ -133,6 +139,7 @@ func TestShowTask(t *testing.T) {
 }
 
 func TestShowTaskNotFound(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	p := ts.problem("GET", "/api/tasks/ME-99", nil, 404)
 	if p.Status != 404 || p.Type == "" || p.Detail == "" {
@@ -141,6 +148,7 @@ func TestShowTaskNotFound(t *testing.T) {
 }
 
 func TestUnknownStoreIsProblem(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	p := ts.problem("GET", "/api/tasks?store=nope", nil, 404)
 	if p.Type != "store.not_found" || p.Args["name"] != "nope" {
@@ -149,6 +157,7 @@ func TestUnknownStoreIsProblem(t *testing.T) {
 }
 
 func TestBadQueryIsProblem(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	p := ts.problem("GET", "/api/tasks?q="+url.QueryEscape("sort:"), nil, 400)
 	if p.Type == "" {
@@ -157,6 +166,7 @@ func TestBadQueryIsProblem(t *testing.T) {
 }
 
 func TestTaskHistory(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	id := ts.add("one", "")
 	title := "two"
@@ -213,6 +223,7 @@ func (ts *testServer) rawTask(id string, ulid model.ULID, front string) {
 }
 
 func TestEmptyTreeIsArray(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	resp := ts.call("GET", "/api/tasks?tree=true", nil, 200, nil)
 	if b := string(resp.Body); b != `{"roots":[]}`+"\n" && b != `{"roots":[]}` {
@@ -221,6 +232,7 @@ func TestEmptyTreeIsArray(t *testing.T) {
 }
 
 func TestTreeParentCycle(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	x, y := model.NewULID(), model.NewULID()
 	ts.rawTask("ME-1", x, "title: X\nparent: "+y.String()+"\n")
@@ -233,6 +245,7 @@ func TestTreeParentCycle(t *testing.T) {
 }
 
 func TestStoreParamNamesTheStore(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	id := ts.add("one", "")
 	var out listBody
@@ -249,6 +262,7 @@ func TestStoreParamNamesTheStore(t *testing.T) {
 }
 
 func TestShowByFormerID(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	old := ts.add("one", "")
 	if _, err := ts.session().WorkspacePrefix("me", "XX"); err != nil {

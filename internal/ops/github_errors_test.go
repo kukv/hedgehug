@@ -11,6 +11,7 @@ import (
 
 // The Kind and Code of each way GitHub can refuse (spec: the table of errors).
 func TestGitHubErrKindsAndCodes(t *testing.T) {
+	t.Parallel()
 	acct := config.Account{Name: "work", Host: "github.com", Login: "alice"}
 	for _, c := range []struct {
 		err  error

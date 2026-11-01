@@ -8,6 +8,7 @@ import (
 )
 
 func TestViews(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	var list []ops.SavedView
 	ts.call("GET", "/api/views", nil, 200, &list)
@@ -48,6 +49,7 @@ func TestViews(t *testing.T) {
 }
 
 func TestViewNameTaken(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	ts.call("PUT", "/api/views/a", map[string]any{"layout": "table"}, 200, nil)
 	ts.call("PUT", "/api/views/b", map[string]any{"layout": "table"}, 200, nil)

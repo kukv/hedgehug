@@ -34,7 +34,7 @@ type RepairInput struct {
 // Repaired is one thing the repair fixed, or a duplicate it only tells of.
 type Repaired struct {
 	ULID   model.ULID // task or workspace
-	Kind   string     // workspace_revived, id_prefix, parent_cycle, parent_deleted, parent_moved, ref_moved, workspace_mismatch, id_collision, id_renumbered, prefix_duplicate, name_duplicate
+	Kind   string     // workspace_revived, id_prefix, parent_cycle, parent_deleted, parent_moved, ref_moved, workspace_mismatch, sprint_detached, release_detached, id_collision, id_renumbered, prefix_duplicate, name_duplicate
 	Value  string     // the old value as one line of JSON (for id_collision: {"old":"WEB-43","new":"WEB-45"})
 	Author string     // whom to tell; empty for id_renumbered
 }
@@ -42,7 +42,8 @@ type Repaired struct {
 // Repair fixes what holds across files and a merge of single files can
 // break: tasks in a removed workspace, bad id prefixes, parent cycles,
 // children of deleted tasks, children in another workspace than their
-// parent, and ids two tasks share or that do not fit the workspace. It
+// parent (which lose the sprint and releases that are not of the new
+// workspace), and ids two tasks share or that do not fit the workspace. It
 // tells of duplicate prefixes and names without changing them. It returns
 // the files to write (nil data removes) and what it did, in the order of
 // the kinds above. The same input gives the same output.
@@ -467,6 +468,7 @@ func (r *repairer) followParents() {
 				r.dirty[c] = true
 				r.moved[c] = true
 				r.tell(c, "workspace_mismatch", old, model.TaskPath(c))
+				r.detachRefs(c, t)
 			}
 			visit(c)
 		}
@@ -474,6 +476,47 @@ func (r *repairer) followParents() {
 	for _, u := range roots {
 		visit(u)
 	}
+}
+
+// detachRefs takes off t, which has moved to the workspace of its parent, the
+// sprint and the releases that are not of that workspace, and tells of each.
+// One that is gone, or whose file does not decode, is not known to be of the
+// workspace, so it goes too.
+func (r *repairer) detachRefs(u model.ULID, t *model.Task) {
+	if t.Sprint != nil && !r.sprintIn(*t.Sprint, t.Workspace) {
+		r.tell(u, "sprint_detached", jsonOf(*t.Sprint), model.TaskPath(u))
+		t.Sprint = nil
+	}
+	var kept []model.ULID
+	for _, ru := range t.Releases {
+		if r.releaseIn(ru, t.Workspace) {
+			kept = append(kept, ru)
+		} else {
+			r.tell(u, "release_detached", jsonOf(ru), model.TaskPath(u))
+		}
+	}
+	t.Releases = kept
+}
+
+// sprintIn reports whether the sprint u is in the files, decodes, and is in
+// the workspace ws.
+func (r *repairer) sprintIn(u, ws model.ULID) bool {
+	b := r.in.Files.Read(model.SprintPath(u))
+	if b == nil {
+		return false
+	}
+	x, err := model.DecodeSprint(b)
+	return err == nil && x.ULID == u && x.Workspace == ws
+}
+
+// releaseIn is sprintIn for a release.
+func (r *repairer) releaseIn(u, ws model.ULID) bool {
+	b := r.in.Files.Read(model.ReleasePath(u))
+	if b == nil {
+		return false
+	}
+	x, err := model.DecodeRelease(b)
+	return err == nil && x.ULID == u && x.Workspace == ws
 }
 
 // prefix returns the prefix of t's workspace, or false when t cannot be

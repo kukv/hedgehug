@@ -7,6 +7,7 @@ import (
 )
 
 func TestNeedsSetup(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	s := c.stores[0]
 	if need, err := NeedsSetup(s); err != nil || need {

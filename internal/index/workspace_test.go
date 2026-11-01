@@ -12,6 +12,7 @@ import (
 )
 
 func TestWorkspacesAndResolveWorkspace(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	api := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
 	if _, err := s.Update(store.Op{Name: "workspace", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutWorkspace(api) }); err != nil {
@@ -44,6 +45,7 @@ func TestWorkspacesAndResolveWorkspace(t *testing.T) {
 }
 
 func TestResolveWorkspaceAmbiguous(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	// The name of one workspace is the prefix of another.
 	other := &model.Workspace{ULID: model.NewULID(), Name: "tst", IDPrefix: "OTH"}
@@ -59,6 +61,7 @@ func TestResolveWorkspaceAmbiguous(t *testing.T) {
 }
 
 func TestWorkspacesAfterRefresh(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	ix := mustOpen(t, s)
 	api := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
@@ -77,6 +80,7 @@ func TestWorkspacesAfterRefresh(t *testing.T) {
 }
 
 func TestIDNumbersIsAFreshMap(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	put(t, s, newTask("a"))
 	ix := mustOpen(t, s)
@@ -90,6 +94,7 @@ func TestIDNumbersIsAFreshMap(t *testing.T) {
 // Two handles of one store, each with an index, add tasks at once: the ids
 // stay distinct because Update counts with the index under the store's lock.
 func TestConcurrentAddsThroughIndexes(t *testing.T) {
+	t.Parallel()
 	s1, dir := newStore(t)
 	s2, err := store.Open(dir)
 	if err != nil {
@@ -132,6 +137,7 @@ func TestConcurrentAddsThroughIndexes(t *testing.T) {
 
 // Numbering must not give again a number of a deleted task or a former id.
 func TestIDNumbersCountsDeletedAndFormerIDs(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	gone, moved := newTask("gone"), newTask("moved")
 	put(t, s, gone, moved) // TST-1, TST-2
@@ -149,6 +155,7 @@ func TestIDNumbersCountsDeletedAndFormerIDs(t *testing.T) {
 }
 
 func TestIDNumbersCountsBrokenFiles(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	put(t, s, newTask("a")) // TST-1
 	ulid := model.NewULID()
@@ -169,6 +176,7 @@ func TestIDNumbersCountsBrokenFiles(t *testing.T) {
 }
 
 func TestRefreshAfterAWorkspaceChange(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	a := newTask("a")
 	put(t, s, a) // TST-1

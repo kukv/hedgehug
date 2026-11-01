@@ -13,6 +13,7 @@ import (
 )
 
 func TestParseAssign(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		in   string
 		want Assign
@@ -53,6 +54,7 @@ func testSchema() *schema.Schema {
 }
 
 func TestApplyAssign(t *testing.T) {
+	t.Parallel()
 	other := model.NewULID()
 	resolve := func(s string) (model.ULID, error) {
 		if s == "other" {

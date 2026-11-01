@@ -11,6 +11,7 @@ import (
 )
 
 func TestLog(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("First")
 	b := te.addJSON("Second")
@@ -51,9 +52,24 @@ func TestLog(t *testing.T) {
 	if code, _, _ := te.run("log", "-n", "-1"); code != 2 {
 		t.Errorf("log -n -1 exit = %d, want 2", code)
 	}
+
+	// --workspace: the commits of its tasks, not the store's init
+	if got := lines("log", "--workspace", "ME"); len(got) != 4 || strings.Contains(strings.Join(got, "\n"), "init") {
+		t.Errorf("log --workspace ME has %d lines, want the 4 of the tasks:\n%s", len(got), strings.Join(got, "\n"))
+	}
+	if got := lines("log", "--workspace", "me", "-n", "2"); len(got) != 2 {
+		t.Errorf("log --workspace me -n 2 has %d lines, want 2", len(got))
+	}
+	if code, _, _ := te.run("log", "--workspace", "nope"); code == 0 {
+		t.Error("log --workspace nope succeeded")
+	}
+	if code, _, _ := te.run("log", a.ID, "--workspace", "me"); code != 2 {
+		t.Errorf("log <id> --workspace exit = %d, want 2", code)
+	}
 }
 
 func TestLogJSON(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("First")
 	var got []struct {
@@ -91,6 +107,7 @@ func TestLogJSON(t *testing.T) {
 }
 
 func TestLogShowsCurrentID(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("workspace", "add", "api", "--prefix", "API")
 	a := te.addJSON("Alpha", "--workspace", "me") // ME-1
@@ -117,6 +134,7 @@ func TestLogShowsCurrentID(t *testing.T) {
 }
 
 func TestShowHistory(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("First")
 	for range 6 {

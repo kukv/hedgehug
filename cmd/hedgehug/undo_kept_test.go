@@ -6,6 +6,7 @@ import (
 )
 
 func TestUndoNamesTheAuthorOfEachKeptField(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.writeAccounts("github.com", "alice")
 	te.ok("store", "init", "me", "--prefix", "ME")
@@ -18,6 +19,7 @@ func TestUndoNamesTheAuthorOfEachKeptField(t *testing.T) {
 }
 
 func TestUndoKeepsAFieldOthersSetBack(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.writeAccounts("github.com", "alice")
 	te.ok("store", "init", "me", "--prefix", "ME")
@@ -31,6 +33,7 @@ func TestUndoKeepsAFieldOthersSetBack(t *testing.T) {
 }
 
 func TestShowJSONFormerIDs(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "WEB", "--workspace", "web")
 	te.ok("workspace", "add", "api", "--prefix", "API")

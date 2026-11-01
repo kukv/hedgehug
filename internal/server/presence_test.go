@@ -3,6 +3,7 @@ package server
 import "testing"
 
 func TestPresence(t *testing.T) {
+	t.Parallel()
 	changes := 0
 	p := newPresence(func() { changes++ })
 	if p.Visible() {

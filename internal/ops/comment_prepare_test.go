@@ -6,6 +6,7 @@ import (
 )
 
 func TestCommentAddAfterTaskDeletedWhileEditing(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -32,6 +33,7 @@ func TestCommentAddAfterTaskDeletedWhileEditing(t *testing.T) {
 }
 
 func TestPrepareErrorsAreReturnedBare(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)

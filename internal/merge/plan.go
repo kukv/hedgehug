@@ -33,6 +33,7 @@ func (m *merger) plan(base []byte, ours, theirs Side) (Result, error) {
 }
 
 var sprintFields = []field[model.Sprint]{
+	scalarField("workspace", func(x *model.Sprint) *model.ULID { return &x.Workspace }),
 	scalarField("name", func(x *model.Sprint) *string { return &x.Name }),
 	scalarField("start", func(x *model.Sprint) *model.Date { return &x.Start }),
 	scalarField("end", func(x *model.Sprint) *model.Date { return &x.End }),
@@ -44,6 +45,7 @@ var sprintFields = []field[model.Sprint]{
 }
 
 var releaseFields = []field[model.Release]{
+	scalarField("workspace", func(x *model.Release) *model.ULID { return &x.Workspace }),
 	scalarField("name", func(x *model.Release) *string { return &x.Name }),
 	scalarField("date", func(x *model.Release) *model.Date { return &x.Date }),
 	scalarField("state", func(x *model.Release) *string { return &x.State }),

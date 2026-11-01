@@ -152,6 +152,8 @@ type taskWrite struct {
 	Task   *ops.TaskView `json:"task"`
 	Commit *string       `json:"commit" doc:"The commit made; null when nothing changed"`
 	Note   string        `json:"note,omitempty" doc:"What restore at a commit has to say, as hh restore --at prints it"`
+	// Detached is for a move to another workspace.
+	Detached []ops.Detached `json:"detached,omitempty" doc:"What a move to another workspace took off the tasks: the sprint and the releases that are not of the new workspace, as hh mv tells it"`
 }
 
 type taskWriteOutput struct{ Body taskWrite }
@@ -287,7 +289,12 @@ func (s *Server) registerTaskWrites() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return s.writeOut(ss, res.ULID, res.Commit)
+		out, err := s.writeOut(ss, res.ULID, res.Commit)
+		if err != nil {
+			return nil, err
+		}
+		out.Body.Detached = res.Detached
+		return out, nil
 	})
 
 	huma.Register(s.api, huma.Operation{

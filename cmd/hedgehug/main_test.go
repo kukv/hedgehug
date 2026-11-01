@@ -15,12 +15,14 @@ import (
 // cobra on Windows lists every process on each run to tell whether Explorer
 // started the command, about 40ms a run; hedgehug turns that off.
 func TestNoExplorerCheck(t *testing.T) {
+	t.Parallel()
 	if cobra.MousetrapHelpText != "" {
 		t.Errorf("cobra.MousetrapHelpText = %q, want empty", cobra.MousetrapHelpText)
 	}
 }
 
 func TestRun(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		args       []string
@@ -55,6 +57,7 @@ func TestRun(t *testing.T) {
 // The name is not TestNoShort + "IDs", which the pattern would match. It reads
 // the files itself, not with grep, so that it runs where only go is on PATH.
 func TestNoShortIdentifiers(t *testing.T) {
+	t.Parallel()
 	// Built so that this file does not match itself.
 	s := "Short"
 	re := regexp.MustCompile(s + "ID|" + s + "Lengths|min" + s + `|"` + strings.ToLower(s) + `"|\.` + s + `\b`)

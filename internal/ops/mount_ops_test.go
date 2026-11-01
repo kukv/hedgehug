@@ -62,6 +62,7 @@ func makeStoreReadOnly(t *testing.T, ts *testSession, name string) {
 }
 
 func TestSetFindsTheTaskInItsStoreAndWritesAsItsAccount(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	if _, err := ts.Set("WEB-1", []Assign{{Key: "title", Op: "=", Value: "changed"}}); err != nil {
 		t.Fatal(err)
@@ -79,6 +80,7 @@ func TestSetFindsTheTaskInItsStoreAndWritesAsItsAccount(t *testing.T) {
 }
 
 func TestShowByIDAndByStorePrefix(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	r, err := ts.Show("API-1")
 	if err != nil || r.Entry.Title != "org-a task" {
@@ -94,6 +96,7 @@ func TestShowByIDAndByStorePrefix(t *testing.T) {
 }
 
 func TestShowSameIDInTwoStoresIsAmbiguous(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSessionWith(t, "XX", "XX")
 	_, err := ts.Show("XX-1")
 	wantCode(t, "Show(XX-1)", err, KindAmbiguous, "task.ambiguous")
@@ -113,6 +116,7 @@ func TestShowSameIDInTwoStoresIsAmbiguous(t *testing.T) {
 }
 
 func TestStoreNameKeepsTheLookupInTheStore(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	ts.StoreName = "org-a"
 	_, err := ts.Show("WEB-1")
@@ -125,6 +129,7 @@ func TestStoreNameKeepsTheLookupInTheStore(t *testing.T) {
 }
 
 func TestReadOnlyRefusalOrder(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	makeStoreReadOnly(t, ts, "org-b")
 	assign := []Assign{{Key: "title", Op: "=", Value: "x"}}
@@ -141,6 +146,7 @@ func TestReadOnlyRefusalOrder(t *testing.T) {
 }
 
 func TestSecondIDsStayInsideTheStore(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	const msg = "org-b's WEB-1 cannot be referred to (references stay inside a store)"
 	for _, blocker := range []string{"WEB-1", "org-b:WEB-1"} {
@@ -187,6 +193,7 @@ func TestSecondIDsStayInsideTheStore(t *testing.T) {
 }
 
 func TestTwoStepOperationsWriteInTheStoreTheyBeganIn(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	es, err := ts.BeginEdit("WEB-1")
 	if err != nil {
@@ -242,6 +249,7 @@ func TestTwoStepOperationsWriteInTheStoreTheyBeganIn(t *testing.T) {
 }
 
 func TestCommentOperationsFindTheCommentInAnyStore(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	r, err := ts.CommentAdd("WEB-1", "first")
 	if err != nil {
@@ -262,6 +270,7 @@ func TestCommentOperationsFindTheCommentInAnyStore(t *testing.T) {
 }
 
 func TestCommentULIDInTwoStoresIsAmbiguous(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	c := &model.Comment{ULID: model.NewULID(), Body: "same\n"}
 	for name, id := range map[string]string{"org-a": "API-1", "org-b": "WEB-1"} {
@@ -341,6 +350,7 @@ func handedOverOps(t *testing.T) []handedOver {
 }
 
 func TestEveryOperationOnAnIDGoesToTheStoreOfTheTask(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	if _, err := ts.ForStore("org-b").Add(AddInput{Title: "second"}); err != nil {
 		t.Fatal(err)
@@ -374,6 +384,7 @@ func TestEveryOperationOnAnIDGoesToTheStoreOfTheTask(t *testing.T) {
 }
 
 func TestEveryOperationOnAnIDRefusesAReadOnlyStoreAfterTheLookup(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	makeStoreReadOnly(t, ts, "org-b")
 	for _, op := range handedOverOps(t) {
@@ -390,6 +401,7 @@ func TestEveryOperationOnAnIDRefusesAReadOnlyStoreAfterTheLookup(t *testing.T) {
 }
 
 func TestSecondIDThatNoStoreHasIsNotFound(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	_, err := ts.Dep("API-1", "org-b:WEB-999", true)
 	wantCode(t, "Dep(API-1, org-b:WEB-999)", err, KindNotFound, "task.not_found")
@@ -400,6 +412,7 @@ func TestSecondIDThatNoStoreHasIsNotFound(t *testing.T) {
 }
 
 func TestNoStoresIsTheErrorOfSelect(t *testing.T) {
+	t.Parallel()
 	d := t.TempDir()
 	env := map[string]string{"HOME": d, "USERPROFILE": d, "HEDGEHUG_HOME": filepath.Join(d, "hh"), "HEDGEHUG_AUTO_SYNC": "0"}
 	ss := &Session{Getenv: func(k string) string { return env[k] }, Now: time.Now}
@@ -415,6 +428,7 @@ func TestNoStoresIsTheErrorOfSelect(t *testing.T) {
 }
 
 func TestOperationsOnTwoStoresRunConcurrently(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	var wg gosync.WaitGroup
 	errs := make([]error, 12)

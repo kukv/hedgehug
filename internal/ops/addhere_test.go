@@ -48,6 +48,7 @@ func reposOf(t *testing.T, ts *testSession, name string, ulid model.ULID) []stri
 }
 
 func TestAddWithStoreAndRepos(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	r, err := ts.Add(AddInput{Store: "org-b", Title: "Elsewhere", Repos: []string{"github.com/o/r"}})
 	if err != nil {
@@ -65,6 +66,7 @@ func TestAddWithStoreAndRepos(t *testing.T) {
 }
 
 func TestAddHereExplicitParentInAnotherStore(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	r, cf, ch, err := ts.AddHere(AddHereInput{Context: hhctx.Input{Parent: "WEB-1"}, Task: AddInput{Title: "child"}})
 	if err != nil || cf != nil || ch != nil {
@@ -81,6 +83,7 @@ func TestAddHereExplicitParentInAnotherStore(t *testing.T) {
 }
 
 func TestAddHereRefusesAReadOnlyStore(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	makeStoreReadOnly(t, ts, "org-a")
 	makeStoreReadOnly(t, ts, "org-b")
@@ -91,6 +94,7 @@ func TestAddHereRefusesAReadOnlyStore(t *testing.T) {
 }
 
 func TestAddHerePutsTheRepoOnTheTask(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	dir := repoDir(t, "", "https://github.com/Org-A/Web.git")
 	r, _, _, err := ts.AddHere(AddHereInput{Context: hhctx.Input{Dir: dir, Store: "org-a"}, Task: AddInput{Title: "linked"}})
@@ -118,6 +122,7 @@ func TestAddHerePutsTheRepoOnTheTask(t *testing.T) {
 }
 
 func TestAddHereStage4SetsRecent(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	p, err := ts.ForStore("org-a").Add(AddInput{Title: "Web release", Kind: "project", Repos: []string{"github.com/org-a/web"}})
 	if err != nil {
@@ -148,6 +153,7 @@ func TestAddHereStage4SetsRecent(t *testing.T) {
 }
 
 func TestAddHereReturnsWhatToAsk(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	setDefaultStore(t, ts, "")
 	dir := repoDir(t, "hh/WEB-1-login", "")
@@ -170,6 +176,7 @@ func TestAddHereReturnsWhatToAsk(t *testing.T) {
 }
 
 func TestAddHereUsesDefaultStoreAndTheGlobalStore(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	setDefaultStore(t, ts, "org-b")
 	r, _, _, err := ts.AddHere(AddHereInput{Task: AddInput{Title: "x"}})
@@ -187,6 +194,7 @@ func TestAddHereUsesDefaultStoreAndTheGlobalStore(t *testing.T) {
 }
 
 func TestAddHereErrors(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	setDefaultStore(t, ts, "")
 	pid := addProjectIn(t, ts, "org-a", "Release")

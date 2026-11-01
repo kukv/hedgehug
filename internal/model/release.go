@@ -14,19 +14,20 @@ const (
 
 // Release is one release file. Date is the planned date.
 type Release struct {
-	ULID    ULID
-	Name    string
-	Date    Date
-	State   string
-	Created time.Time
-	Updated time.Time
-	Extra   Fields
-	Body    string
+	ULID      ULID
+	Workspace ULID // zero when not set
+	Name      string
+	Date      Date
+	State     string
+	Created   time.Time
+	Updated   time.Time
+	Extra     Fields
+	Body      string
 
 	doc *Doc
 }
 
-var releaseKeys = []string{"ulid", "name", "date", "state", "created", "updated"}
+var releaseKeys = []string{"ulid", "workspace", "name", "date", "state", "created", "updated"}
 
 func DecodeRelease(data []byte) (*Release, error) {
 	front, body, err := splitFrontmatter(data)
@@ -39,7 +40,7 @@ func DecodeRelease(data []byte) (*Release, error) {
 	}
 	r := &Release{Body: body, doc: d}
 	if err := decodeAll(d, map[string]any{
-		"ulid": &r.ULID, "name": &r.Name, "date": &r.Date, "state": &r.State,
+		"ulid": &r.ULID, "workspace": &r.Workspace, "name": &r.Name, "date": &r.Date, "state": &r.State,
 		"created": &r.Created, "updated": &r.Updated,
 	}); err != nil {
 		return nil, err
@@ -57,6 +58,7 @@ func (r *Release) Encode() ([]byte, error) {
 	}
 	e := r.doc.Encoder()
 	e.Put("ulid", r.ULID, false)
+	e.Put("workspace", r.Workspace, r.Workspace.IsZero())
 	e.Put("name", r.Name, r.Name == "")
 	e.Put("date", r.Date, r.Date.IsZero())
 	e.Put("state", r.State, r.State == "")

@@ -9,6 +9,7 @@ import (
 )
 
 func TestMergeCommitWithoutPaths(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	a, b := cloneTwo(t, remote)
 	commitHead(t, a.r, a.dir, map[string]string{"x.md": "a\n"})

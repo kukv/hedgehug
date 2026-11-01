@@ -72,6 +72,7 @@ func wantErr(t *testing.T, err error, kind Kind, code string) {
 func asError(err error, target **Error) bool { return errors.As(err, target) }
 
 func TestAddSetStatusDep(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	a, err := ts.Add(AddInput{Title: "parent"})
 	if err != nil || !a.Committed {
@@ -118,6 +119,7 @@ func TestAddSetStatusDep(t *testing.T) {
 }
 
 func TestSetDeletedIsConflict(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -130,6 +132,7 @@ func TestSetDeletedIsConflict(t *testing.T) {
 }
 
 func TestParseAssignBadFormIsUsage(t *testing.T) {
+	t.Parallel()
 	_, err := ParseAssign("novalue")
 	wantErr(t, err, KindUsage, "assign.form")
 	_, err = ParseAssign("=x")
@@ -137,6 +140,7 @@ func TestParseAssignBadFormIsUsage(t *testing.T) {
 }
 
 func TestApplyAssignErrorKinds(t *testing.T) {
+	t.Parallel()
 	resolve := func(string) (model.ULID, error) { return model.ULID{}, nil }
 	for _, tc := range []struct {
 		in   string
@@ -164,6 +168,7 @@ func TestApplyAssignErrorKinds(t *testing.T) {
 }
 
 func TestAddErrors(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -196,6 +201,7 @@ func TestAddErrors(t *testing.T) {
 }
 
 func TestSetStatusUnknown(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -208,6 +214,7 @@ func TestSetStatusUnknown(t *testing.T) {
 }
 
 func TestDepErrors(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	for _, title := range []string{"a", "b"} {
 		if _, err := ts.Add(AddInput{Title: title}); err != nil {
@@ -227,6 +234,7 @@ func TestDepErrors(t *testing.T) {
 }
 
 func TestWatchAddsAndRemovesMe(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -274,6 +282,7 @@ func TestWatchAddsAndRemovesMe(t *testing.T) {
 }
 
 func TestSiblingsAndEndRank(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	for _, title := range []string{"a", "b", "c"} {
 		if _, err := ts.Add(AddInput{Title: title}); err != nil {
@@ -323,6 +332,7 @@ func TestSiblingsAndEndRank(t *testing.T) {
 }
 
 func TestNotDeletedAndLiveParent(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -351,6 +361,7 @@ func TestNotDeletedAndLiveParent(t *testing.T) {
 }
 
 func TestResolveWorkspace(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.addWorkspace("zz", "OT")
 	ts.addWorkspace("ot", "XX") // its name is the prefix of the one before
@@ -371,6 +382,7 @@ func TestResolveWorkspace(t *testing.T) {
 }
 
 func TestWatchInTx(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	task := ts.addTask("a", nil)
 	s, _, _ := ts.Open()
@@ -403,6 +415,7 @@ func TestWatchInTx(t *testing.T) {
 }
 
 func TestNewMentions(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		old, now, host string
 		want           []string
@@ -421,6 +434,7 @@ func TestNewMentions(t *testing.T) {
 }
 
 func TestWriterHost(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if h, err := ts.WriterHost(); err != nil || h != "" {
 		t.Errorf("WriterHost without an account = %q, %v", h, err)

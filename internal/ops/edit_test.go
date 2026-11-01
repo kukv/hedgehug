@@ -10,6 +10,7 @@ import (
 )
 
 func TestEditChangesTitleAndRefusesULIDChange(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -44,6 +45,7 @@ func TestEditChangesTitleAndRefusesULIDChange(t *testing.T) {
 }
 
 func TestBeginEditErrors(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -58,6 +60,7 @@ func TestBeginEditErrors(t *testing.T) {
 }
 
 func TestBeginEditReadsFile(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -75,6 +78,7 @@ func TestBeginEditReadsFile(t *testing.T) {
 }
 
 func TestCheckEditRefusals(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -148,6 +152,7 @@ func TestCheckEditRefusals(t *testing.T) {
 }
 
 func TestCheckEditBrokenFrontMatter(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -168,6 +173,7 @@ func TestCheckEditBrokenFrontMatter(t *testing.T) {
 }
 
 func TestCheckEditOfBrokenTaskChecksOnlyULID(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -191,6 +197,7 @@ func TestCheckEditOfBrokenTaskChecksOnlyULID(t *testing.T) {
 }
 
 func TestWriteEditRefusesWhenFileChanged(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -214,6 +221,7 @@ func TestWriteEditRefusesWhenFileChanged(t *testing.T) {
 }
 
 func TestHelpersSameTimeSameULID(t *testing.T) {
+	t.Parallel()
 	a, b := model.NewULID(), model.NewULID()
 	if !sameULID(nil, nil) || !sameULID(&a, &a) || sameULID(&a, &b) || sameULID(&a, nil) || sameULID(nil, &a) {
 		t.Error("sameULID is wrong")

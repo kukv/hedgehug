@@ -3,6 +3,7 @@ package index
 import "testing"
 
 func TestChecklist(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name        string
 		body        string
@@ -26,6 +27,7 @@ func TestChecklist(t *testing.T) {
 }
 
 func TestEntryChecklist(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	a := newTask("a")
 	a.Body = "- [x] a\n- [ ] b\n"

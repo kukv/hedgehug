@@ -272,6 +272,7 @@ func checkStore(dir string) []Finding {
 	// schema.yaml was checked in step 1.
 	fs = slices.DeleteFunc(fs, func(f Finding) bool { return f.Check == "schema" })
 	fs = append(fs, checkWorkspaces(ix)...)
+	fs = append(fs, checkSprintsAndReleases(s, ix)...)
 	for _, e := range ix.Tasks() {
 		for _, p := range ix.Problems(e.ULID) {
 			if !slices.Contains(indexCodes, p.Code) {

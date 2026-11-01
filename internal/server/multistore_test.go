@@ -34,6 +34,7 @@ func storesOf(tasks []*ops.TaskView) map[string]string {
 }
 
 func TestListSpansStores(t *testing.T) {
+	t.Parallel()
 	ts := twoStores(t)
 	var out listBody
 	ts.call("GET", "/api/tasks", nil, 200, &out)
@@ -57,6 +58,7 @@ func TestListSpansStores(t *testing.T) {
 }
 
 func TestListGroupsSpanStores(t *testing.T) {
+	t.Parallel()
 	ts := twoStores(t)
 	var out listBody
 	ts.call("GET", "/api/tasks?q=group%3Astatus", nil, 200, &out)
@@ -70,6 +72,7 @@ func TestListGroupsSpanStores(t *testing.T) {
 }
 
 func TestTreeSpansStores(t *testing.T) {
+	t.Parallel()
 	ts := twoStores(t)
 	var out listBody
 	ts.call("GET", "/api/tasks?tree=true", nil, 200, &out)
@@ -83,6 +86,7 @@ func TestTreeSpansStores(t *testing.T) {
 }
 
 func TestActivitySpansStores(t *testing.T) {
+	t.Parallel()
 	ts := twoStores(t)
 	var all []ops.LogView
 	ts.call("GET", "/api/activity", nil, 200, &all)
@@ -101,6 +105,7 @@ func TestActivitySpansStores(t *testing.T) {
 }
 
 func TestHistoryNamesTheStore(t *testing.T) {
+	t.Parallel()
 	ts := twoStores(t)
 	var h []ops.LogView
 	ts.call("GET", "/api/tasks/TM-1/history", nil, 200, &h)
@@ -110,6 +115,7 @@ func TestHistoryNamesTheStore(t *testing.T) {
 }
 
 func TestDoctorSpansStores(t *testing.T) {
+	t.Parallel()
 	ts := twoStores(t)
 	var reps []doctorReport
 	ts.call("GET", "/api/doctor", nil, 200, &reps)
@@ -127,6 +133,7 @@ func TestDoctorSpansStores(t *testing.T) {
 }
 
 func TestNotificationsSpanStores(t *testing.T) {
+	t.Parallel()
 	ts := twoStores(t)
 	ts.withAccount()
 	now := time.Now()
@@ -169,6 +176,7 @@ func TestNotificationsSpanStores(t *testing.T) {
 // Each task's checklist and each project's progress come from its own store,
 // where two stores number their tasks alike.
 func TestChecklistAndProgressPerStore(t *testing.T) {
+	t.Parallel()
 	ts := twoStores(t)
 	bodies := map[string]string{"me": "- [x] a\n- [ ] b\n", "team": "- [x] a\n- [x] b\n- [ ] c\n"}
 	want := map[string]ops.Count{"me": {Done: 1, Total: 2}, "team": {Done: 2, Total: 3}}
@@ -223,6 +231,7 @@ func TestChecklistAndProgressPerStore(t *testing.T) {
 }
 
 func TestActivityFiltersMergedList(t *testing.T) {
+	t.Parallel()
 	ts := twoStores(t)
 	ts.withAccount()
 	for _, store := range []string{"me", "team", "me", "team"} {
@@ -270,6 +279,7 @@ func TestActivityFiltersMergedList(t *testing.T) {
 
 // With several stores a create names its store; ops does not pick one.
 func TestCreateNeedsAStoreWhenSeveral(t *testing.T) {
+	t.Parallel()
 	ts := twoStores(t)
 	if p := ts.problem("POST", "/api/tasks", map[string]any{"title": "x"}, 422); p.Type != "store.choose" {
 		t.Errorf("create without ?store: %+v", p)

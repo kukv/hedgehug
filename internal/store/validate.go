@@ -16,6 +16,9 @@ const (
 	CodeForward           = "forward"
 	CodeNoWorkspace       = "no_workspace"
 	CodeWorkspaceMismatch = "workspace_mismatch"
+	// CodeRefWorkspace is the violation of a sprint or a release that is
+	// not of the workspace of the task.
+	CodeRefWorkspace = "ref_workspace"
 )
 
 // SchemaError means a schema written with PutSchema has problems.
@@ -50,6 +53,9 @@ func (e *ValidationError) Error() string {
 // checked in its new place.
 func (tx *Tx) validate(sc *schema.Schema) error {
 	if err := tx.validateWorkspaces(); err != nil {
+		return err
+	}
+	if err := tx.validateSprintsAndReleases(); err != nil {
 		return err
 	}
 	for _, ulid := range tx.taskOrder {
@@ -94,7 +100,12 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 		if err != nil {
 			return err
 		}
+		svs, err := tx.sprintReleaseViolations(old, t)
+		if err != nil {
+			return err
+		}
 		vs = append(vs, wvs...)
+		vs = append(vs, svs...)
 		if vs = append(vs, rvs...); len(vs) > 0 {
 			return &ValidationError{Task: ulid, Violations: vs}
 		}
@@ -186,6 +197,9 @@ func (tx *Tx) validateWorkspaces() error {
 	}
 	if !removed {
 		return nil
+	}
+	if err := tx.checkWorkspacesEmptyOfSprints(); err != nil {
+		return err
 	}
 	// The tasks written in the operation count as they will be; the others
 	// as they are on disk.

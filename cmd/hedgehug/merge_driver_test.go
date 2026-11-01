@@ -26,6 +26,7 @@ func gitPull(t *testing.T, gitBin, bin string, te *testEnv) {
 }
 
 func TestMergeDriverWithGitPull(t *testing.T) {
+	t.Parallel()
 	gitBin, err := exec.LookPath("git")
 	if err != nil {
 		t.Skip("git is not installed")
@@ -95,6 +96,7 @@ func driverFiles(t *testing.T, alice *testEnv) (dir, rel, o, a, b string) {
 // files, so git has nothing to conflict on); the next sync repairs it with a
 // commit of its own, and the task that is on origin keeps the ID.
 func TestGitPullThenSyncRepairsIDCollision(t *testing.T) {
+	t.Parallel()
 	gitBin, err := exec.LookPath("git")
 	if err != nil {
 		t.Skip("git is not installed")

@@ -140,6 +140,7 @@ func wantKind(t *testing.T, err error, kind Kind, code string) {
 }
 
 func TestExplicitStoreAloneIsTheRootOfItsOnlyWorkspace(t *testing.T) {
+	t.Parallel()
 	_, set := newWorld(t)
 	d := mustDest(t, set, State{}, Input{Store: "org-b"})
 	if d.Store.Name != "org-b" || d.Parent != nil || d.Workspace.Name != "web" || d.Stage != 1 {
@@ -148,6 +149,7 @@ func TestExplicitStoreAloneIsTheRootOfItsOnlyWorkspace(t *testing.T) {
 }
 
 func TestExplicitParentIsLookedUpInEveryStoreOrInTheStore(t *testing.T) {
+	t.Parallel()
 	w, set := newWorld(t)
 	d := mustDest(t, set, State{}, Input{Parent: "WEB-1"})
 	if d.Store.Name != "org-b" || d.Parent == nil || d.Parent.ULID != w.web1.ULID || d.Workspace.Name != "web" {
@@ -169,6 +171,7 @@ func TestExplicitParentIsLookedUpInEveryStoreOrInTheStore(t *testing.T) {
 }
 
 func TestExplicitProject(t *testing.T) {
+	t.Parallel()
 	w, set := newWorld(t)
 	d := mustDest(t, set, State{}, Input{Project: "API-1", Dir: gitDir(t, "", "origin", "https://github.com/o/r")})
 	if d.Recent || d.Stage != 1 {
@@ -184,6 +187,7 @@ func TestExplicitProject(t *testing.T) {
 }
 
 func TestExplicitWorkspaceAlone(t *testing.T) {
+	t.Parallel()
 	a := newStoreAt(t, "org-a", "api", "API", "shared", "SH")
 	b := newStoreAt(t, "org-b", "web", "WEB", "shared", "SH2")
 	set := openSet(t, a, b)
@@ -204,6 +208,7 @@ func TestExplicitWorkspaceAlone(t *testing.T) {
 }
 
 func TestUseStage(t *testing.T) {
+	t.Parallel()
 	w, set := newWorld(t)
 	a, _ := set.Get("org-a")
 	st := State{Use: &Ref{Store: a.ULID, Project: w.api1.ULID}}
@@ -233,6 +238,7 @@ func TestUseStage(t *testing.T) {
 }
 
 func TestBranchStage(t *testing.T) {
+	t.Parallel()
 	w, set := newWorld(t)
 	dir := gitDir(t, "hh/WEB-1-login")
 	_, cf, _, _, err := resolve(t, set, State{}, Input{Dir: dir, Interactive: true})
@@ -269,6 +275,7 @@ func TestBranchStage(t *testing.T) {
 }
 
 func TestRepoStage(t *testing.T) {
+	t.Parallel()
 	a := newStoreAt(t, "org-a", "api", "API")
 	b := newStoreAt(t, "org-b", "web", "WEB")
 	p1 := put(t, a, "Web release", project("github.com/org-a/web"))
@@ -330,6 +337,7 @@ func TestRepoStage(t *testing.T) {
 }
 
 func TestRepoStageReadsRemotesAsWritten(t *testing.T) {
+	t.Parallel()
 	a := newStoreAt(t, "org-a", "api", "API")
 	p := put(t, a, "Web", project("github.com/org-a/web"))
 	set := openSet(t, a)
@@ -351,6 +359,7 @@ func TestRepoStageReadsRemotesAsWritten(t *testing.T) {
 }
 
 func TestRepoIDWithoutOriginTakesTheRemotesByName(t *testing.T) {
+	t.Parallel()
 	a := newStoreAt(t, "org-a", "api", "API")
 	put(t, a, "T", nil)
 	set := openSet(t, a)
@@ -369,6 +378,7 @@ func TestRepoIDWithoutOriginTakesTheRemotesByName(t *testing.T) {
 }
 
 func TestRepoIDIsSetWhateverStageDecided(t *testing.T) {
+	t.Parallel()
 	_, set := newWorld(t)
 	dir := gitDir(t, "", "origin", "https://github.com/o/r.git")
 	d := mustDest(t, set, State{}, Input{Dir: dir, Parent: "WEB-1"})
@@ -378,6 +388,7 @@ func TestRepoIDIsSetWhateverStageDecided(t *testing.T) {
 }
 
 func TestDefaultStage(t *testing.T) {
+	t.Parallel()
 	_, set := newWorld(t)
 	d := mustDest(t, set, State{}, Input{DefaultStore: "org-b"})
 	if d.Stage != 5 || d.Store.Name != "org-b" || d.Parent != nil || d.Workspace.Name != "web" {

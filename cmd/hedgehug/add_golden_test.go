@@ -6,6 +6,7 @@ import (
 )
 
 func TestAddJSONAtTheRootHasNullParent(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	out := te.ok("add", "root", "--json")
 	if !strings.Contains(out, `"parent": null`) || !strings.Contains(out, `"store": "me"`) || !strings.Contains(out, `"workspace": {`) {
@@ -14,6 +15,7 @@ func TestAddJSONAtTheRootHasNullParent(t *testing.T) {
 }
 
 func TestAddContextGolden(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.cloneDir("", "https://github.com/org-a/web")
 	te.goldenRun("project", 0, "add", "Web A", "--kind", "project")

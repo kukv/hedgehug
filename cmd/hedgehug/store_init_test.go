@@ -11,6 +11,7 @@ import (
 )
 
 func TestStoreInit(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	out := te.ok("store", "init", "me", "--prefix", "ME")
 	if !strings.Contains(out, "me") || !strings.Contains(out, te.storeDir("me")) {
@@ -42,6 +43,7 @@ func TestStoreInit(t *testing.T) {
 }
 
 func TestStoreInitDev(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "dev", "--prefix", "DV", "--template", "dev")
 	s, err := store.Open(te.storeDir("dev"))
@@ -54,6 +56,7 @@ func TestStoreInitDev(t *testing.T) {
 }
 
 func TestStoreInitJSON(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	var got struct{ Name, Path string }
 	if err := json.Unmarshal([]byte(te.ok("store", "init", "me", "--prefix", "ME", "--json")), &got); err != nil {
@@ -65,6 +68,7 @@ func TestStoreInitJSON(t *testing.T) {
 }
 
 func TestStoreInitErrors(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	for _, tc := range []struct {
@@ -95,6 +99,7 @@ func TestStoreInitErrors(t *testing.T) {
 }
 
 func TestStoreSelection(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	code, _, stderr := te.run("ls")
 	if code != 1 || !strings.Contains(stderr, "store init") {
@@ -117,6 +122,7 @@ func TestStoreSelection(t *testing.T) {
 }
 
 func TestStoreInitNoAuthor(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	if err := os.Remove(filepath.Join(te.home, ".gitconfig")); err != nil {
 		t.Fatal(err)
@@ -131,6 +137,7 @@ func TestStoreInitNoAuthor(t *testing.T) {
 }
 
 func TestStoreInitNeedsPrefix(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	if code, _, errs := te.run("store", "init", "me"); code == 0 || !strings.Contains(errs, "--prefix") {
 		t.Errorf("init without --prefix: %d %s", code, errs)

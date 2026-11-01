@@ -20,6 +20,7 @@ func byULID(es []*Entry) []*Entry {
 }
 
 func TestOpenParentCycleOfThree(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	a, b, c := model.NewULID(), model.NewULID(), model.NewULID()
 	for ulid, parent := range map[model.ULID]model.ULID{a: b, b: c, c: a} {
@@ -59,6 +60,7 @@ func TestOpenParentCycleOfThree(t *testing.T) {
 }
 
 func TestOpenCacheEqualsRebuild(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	p := &model.Task{ULID: model.NewULID(), Kind: "project", Title: "P", Status: "todo"}
 	child := newTask("child")
@@ -88,6 +90,7 @@ func TestOpenCacheEqualsRebuild(t *testing.T) {
 }
 
 func TestOpenAfterFailedUpdate(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	put(t, s, newTask("kept"))
 	ix := mustOpen(t, s)

@@ -95,6 +95,7 @@ func startedServer(t *testing.T) *testServer {
 }
 
 func TestEventsHelloFirst(t *testing.T) {
+	t.Parallel()
 	ts := startedServer(t)
 	es := ts.events()
 	var hello helloEvent
@@ -120,6 +121,7 @@ func TestEventsHelloFirst(t *testing.T) {
 }
 
 func TestEventsAPIWrite(t *testing.T) {
+	t.Parallel()
 	ts := startedServer(t)
 	es := ts.events()
 	es.next(t, "hello")
@@ -162,6 +164,7 @@ func hhBinary(t *testing.T) string {
 }
 
 func TestEventsCLIWrite(t *testing.T) {
+	t.Parallel()
 	ts := startedServer(t)
 	es := ts.events()
 	es.next(t, "hello")
@@ -181,6 +184,7 @@ func TestEventsCLIWrite(t *testing.T) {
 }
 
 func TestEventsReconnect(t *testing.T) {
+	t.Parallel()
 	ts := startedServer(t)
 	es := ts.events()
 	var h1 helloEvent
@@ -202,6 +206,7 @@ func TestEventsReconnect(t *testing.T) {
 }
 
 func TestEventsEndOnShutdown(t *testing.T) {
+	t.Parallel()
 	ts := startedServer(t)
 	es := ts.events()
 	es.next(t, "hello")
@@ -220,6 +225,7 @@ func TestEventsEndOnShutdown(t *testing.T) {
 }
 
 func TestEventsNeedToken(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	req, _ := http.NewRequest("GET", ts.hs.URL+"/api/events", nil)
 	if resp := ts.raw(req); resp.Status != 401 {
@@ -228,6 +234,7 @@ func TestEventsNeedToken(t *testing.T) {
 }
 
 func TestEventsAfterShutdownSendNoHello(t *testing.T) {
+	t.Parallel()
 	ts := startedServer(t)
 	_ = ts.srv.Shutdown(context.Background())
 	es := ts.events()

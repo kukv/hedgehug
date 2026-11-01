@@ -17,6 +17,7 @@ import (
 )
 
 func TestLsTree(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("Project", "--kind", "project")
 	a := te.addJSON("Alpha", "--parent", p.ID)
@@ -75,6 +76,7 @@ func TestLsTreeProgress(t *testing.T) {
 }
 
 func TestLsTreeULIDsAndFormat(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("Project", "--kind", "project")
 	a := te.addJSON("Alpha", "--parent", p.ID)
@@ -93,6 +95,7 @@ func TestLsTreeULIDsAndFormat(t *testing.T) {
 }
 
 func TestLsTreeULIDsInCycle(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	x := te.addJSON("X")
 	y := te.addJSON("Y", "--parent", x.ID, "--status", "done")
@@ -114,6 +117,7 @@ func TestLsTreeULIDsInCycle(t *testing.T) {
 }
 
 func TestLsTreeCycle(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	x := te.addJSON("X")
 	y := te.addJSON("Y", "--parent", x.ID)
@@ -135,6 +139,7 @@ func TestLsTreeCycle(t *testing.T) {
 }
 
 func TestLsTreeCycleNested(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	x := te.addJSON("X")
 	y := te.addJSON("Y", "--parent", x.ID)
@@ -217,6 +222,7 @@ func TestLsTreeCycleNested(t *testing.T) {
 }
 
 func TestLsTreeErrors(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	for _, q := range []string{"group:status", "sort:title"} {
 		code, _, stderr := te.run("ls", "--tree", q)

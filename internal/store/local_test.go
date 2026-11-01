@@ -10,6 +10,7 @@ import (
 )
 
 func TestLocalFiles(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	if _, err := s.ReadLocal("index"); !errors.Is(err, ErrNotFound) || !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("missing file: err = %v, want ErrNotFound and fs.ErrNotExist", err)
@@ -39,6 +40,7 @@ func TestLocalFiles(t *testing.T) {
 }
 
 func TestWithLocalLock(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ran := false
 	err := s.WithLocalLock("sync.lock", 0, func() error {
@@ -61,6 +63,7 @@ func TestWithLocalLock(t *testing.T) {
 }
 
 func TestLocalDirectory(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	if names, err := s.LocalFiles("records"); err != nil || len(names) != 0 {
 		t.Errorf("missing directory: %v, %v", names, err)

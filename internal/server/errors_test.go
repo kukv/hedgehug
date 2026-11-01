@@ -5,6 +5,7 @@ import "testing"
 // TestUnknownStoreOnEveryOperation covers the error case of the operations
 // that take ?store=: each answers store.not_found.
 func TestUnknownStoreOnEveryOperation(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	id := ts.add("one", "")
 	for _, c := range []struct{ method, path string }{
@@ -30,6 +31,7 @@ func TestUnknownStoreOnEveryOperation(t *testing.T) {
 }
 
 func TestRestoreErrors(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	id := ts.add("one", "")
 	ts.problem("POST", "/api/tasks/ME-99/restore", nil, 404)

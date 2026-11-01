@@ -6,6 +6,7 @@ import (
 )
 
 func TestStoreDefault(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	if out := te.ok("store", "default"); strings.TrimSpace(out) != "-" {
 		t.Errorf("no default: %q", out)

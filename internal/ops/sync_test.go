@@ -17,6 +17,7 @@ import (
 )
 
 func TestSyncWithoutRemoteAndStatus(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -42,6 +43,7 @@ func TestSyncWithoutRemoteAndStatus(t *testing.T) {
 }
 
 func TestSyncTargetsNamedStoreNotFound(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	c, _, err := ts.Config()
 	if err != nil {
@@ -59,6 +61,7 @@ func TestSyncTargetsNamedStoreNotFound(t *testing.T) {
 }
 
 func TestSyncStorePushesAndStatusReportsIt(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	remote := addBareRemote(t, ts)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
@@ -97,6 +100,7 @@ func TestSyncStorePushesAndStatusReportsIt(t *testing.T) {
 }
 
 func TestSyncAllReportsFailedStore(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	remote := addBareRemote(t, ts)
 	if err := os.RemoveAll(remote); err != nil {
@@ -116,6 +120,7 @@ func TestSyncAllReportsFailedStore(t *testing.T) {
 }
 
 func TestBeforeCommandStartsNothingWithoutRemote(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	var started int
 	ts.BeforeCommand(func(*store.Store, string) error { started++; return nil }, func(string, string) { t.Error("reported") })
@@ -125,6 +130,7 @@ func TestBeforeCommandStartsNothingWithoutRemote(t *testing.T) {
 }
 
 func TestBeforeCommandStartsDueStoreAndReportsFailureOnce(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	addBareRemote(t, ts)
 	s, err := ts.OpenStore()
@@ -161,6 +167,7 @@ func TestBeforeCommandStartsDueStoreAndReportsFailureOnce(t *testing.T) {
 }
 
 func TestSyncBackgroundWithoutStoreIsUsageError(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	var log bytes.Buffer
 	err := ts.SyncBackground(&log)
@@ -170,6 +177,7 @@ func TestSyncBackgroundWithoutStoreIsUsageError(t *testing.T) {
 }
 
 func TestSyncBackgroundLogsFailureAndKeepsItInState(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	remote := addBareRemote(t, ts)
 	if err := os.RemoveAll(remote); err != nil {
@@ -194,6 +202,7 @@ func TestSyncBackgroundLogsFailureAndKeepsItInState(t *testing.T) {
 }
 
 func TestSyncBackgroundUnknownStoreLogsWithEmptyName(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.StoreName = "nope"
 	var log bytes.Buffer
@@ -206,6 +215,7 @@ func TestSyncBackgroundUnknownStoreLogsWithEmptyName(t *testing.T) {
 }
 
 func TestNoticeFieldAndTaskOfPath(t *testing.T) {
+	t.Parallel()
 	if got := NoticeField(inbox.Item{Detail: json.RawMessage(`{"field":"title"}`)}); got != "title" {
 		t.Errorf("NoticeField = %q; want title", got)
 	}
@@ -224,6 +234,7 @@ func TestNoticeFieldAndTaskOfPath(t *testing.T) {
 }
 
 func TestJSONValueAndTimePtr(t *testing.T) {
+	t.Parallel()
 	if got := string(jsonValue(`{"a":1}`)); got != `{"a":1}` {
 		t.Errorf("jsonValue(json) = %s", got)
 	}
@@ -240,6 +251,7 @@ func TestJSONValueAndTimePtr(t *testing.T) {
 }
 
 func TestSyncsInBackground(t *testing.T) {
+	t.Parallel()
 	if SyncsInBackground(config.StoreEntry{}) || !SyncsInBackground(config.StoreEntry{Remotes: []string{"x"}}) {
 		t.Error("SyncsInBackground should be true only with a remote")
 	}

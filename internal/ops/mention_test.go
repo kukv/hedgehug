@@ -48,6 +48,7 @@ func (ts *testSession) setMembers(m sync.Members) {
 }
 
 func TestCheckCommentEditable(t *testing.T) {
+	t.Parallel()
 	ref := store.CommentRef{}
 	me := []string{"github.com/Alice"}
 	c := &model.Comment{ULID: model.NewULID(), Author: "github.com/alice"}
@@ -73,6 +74,7 @@ func TestCheckCommentEditable(t *testing.T) {
 }
 
 func TestCommentAuthorOps(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -104,6 +106,7 @@ func TestCommentAuthorOps(t *testing.T) {
 }
 
 func TestCommentWithoutAuthor(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -120,6 +123,7 @@ func TestCommentWithoutAuthor(t *testing.T) {
 }
 
 func TestMentionWarnings(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.asAccount("alice")
 	ts.setMembers(sync.Members{Collaborators: []sync.Collaborator{{ID: "github.com/bob", Permission: "write"}}})
@@ -181,6 +185,7 @@ func TestMentionWarnings(t *testing.T) {
 }
 
 func TestMentionNoMembersFile(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.asAccount("alice")
 	if _, err := ts.Add(AddInput{Title: "t"}); err != nil {
@@ -195,6 +200,7 @@ func TestMentionNoMembersFile(t *testing.T) {
 }
 
 func TestMentionWarningsUseTheStoreWritten(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	members := func(name string, ids ...string) {
 		t.Helper()

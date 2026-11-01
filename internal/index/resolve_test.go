@@ -41,6 +41,7 @@ func indexOf(es ...*Entry) *Index {
 }
 
 func TestResolve(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	a := newTask("a")
 	put(t, s, a) // gets TST-1
@@ -63,6 +64,7 @@ func TestResolve(t *testing.T) {
 }
 
 func TestResolveAmbiguous(t *testing.T) {
+	t.Parallel()
 	a := mustULID(t, "01JBZ8K3QW7M2X9V4T6RAAA001")
 	d := mustULID(t, "01JBZ8K3QW7M2X9V4T6RCAA001")
 	ix := indexOf(

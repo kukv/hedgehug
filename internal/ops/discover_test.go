@@ -47,6 +47,7 @@ func candidateNames(cands []Candidate) []string {
 }
 
 func TestDiscoverFrom(t *testing.T) {
+	t.Parallel()
 	remotes := filepath.Join(t.TempDir(), "remotes")
 	storesUnder(t, remotes, "https://github.com/org-a/hh-shared.git", "https://github.com/org-b/hh-ops.git")
 	// A bare that is not a store is not offered.
@@ -86,6 +87,7 @@ func TestDiscoverFrom(t *testing.T) {
 }
 
 func TestDiscoverFromAccounts(t *testing.T) {
+	t.Parallel()
 	remotes := filepath.Join(t.TempDir(), "remotes")
 	storesUnder(t, remotes, "https://github.com/org-a/hh-shared.git")
 
@@ -179,6 +181,7 @@ func TestDiscoverGitHub(t *testing.T) {
 }
 
 func TestDiscoverGitHubNoToken(t *testing.T) {
+	t.Parallel()
 	ts, _ := fakeSession(t, fakegh.State{}, "accounts:\n  - {name: bare, host: github.com, login: alice}\n")
 	_, err := ts.StoreDiscover(DiscoverInput{})
 	wantErr(t, err, KindConflict, "account.none")
@@ -193,6 +196,7 @@ func TestDiscoverGitHubNoToken(t *testing.T) {
 }
 
 func TestDiscoverGitHubUnauthorized(t *testing.T) {
+	t.Parallel()
 	ts, _ := fakeSession(t, fakegh.State{Tokens: map[string]string{"t-alice": "alice"}}, workAccount)
 	ts.env["HH_TOKEN"] = "revoked"
 	_, err := ts.StoreDiscover(DiscoverInput{})
@@ -202,6 +206,7 @@ func TestDiscoverGitHubUnauthorized(t *testing.T) {
 // The account of a host looks on that host's API and sends its token nowhere
 // else: github.com's API gets no request from an account of ghe.example.com.
 func TestDiscoverGitHubUsesTheHostOfTheAccount(t *testing.T) {
+	t.Parallel()
 	var asked int
 	other := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { asked++ }))
 	t.Cleanup(other.Close)
@@ -227,6 +232,7 @@ func TestDiscoverGitHubUsesTheHostOfTheAccount(t *testing.T) {
 // Of several candidates, the one that fails is undone alone, the rest are
 // added, and the result comes with an error.
 func TestStoreMountOneFails(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	bare := filepath.Join(t.TempDir(), "good.git")
 	if _, err := newTestSession(t).StoreInit(StoreInitInput{Name: "src", Prefix: "SRC", Remotes: []string{bare}}); err != nil {
@@ -257,6 +263,7 @@ func TestStoreMountOneFails(t *testing.T) {
 // <owner>-<repo>-2, -3...; and store-1, store-2... where no valid name can be
 // made of the owner and the repo.
 func TestNameCandidates(t *testing.T) {
+	t.Parallel()
 	c := &config.Config{Stores: []config.StoreEntry{{Name: "hh-shared"}, {Name: "org-a-hh-shared"}}}
 	// In order: both names used; lower case; the repo name used; no valid
 	// name (twice).
@@ -279,6 +286,7 @@ func TestNameCandidates(t *testing.T) {
 // A directory under --from that cannot be read is warned of and skipped; the
 // stores elsewhere are still found.
 func TestDiscoverFromSkipsAnUnreadableDirectory(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
 		t.Skip("a directory cannot be made unreadable here")
 	}
@@ -310,6 +318,7 @@ func TestDiscoverFromSkipsAnUnreadableDirectory(t *testing.T) {
 // The URL of a candidate goes back through the rule whose to is the longest
 // that matches.
 func TestDiscoverFromUsesTheLongestRewrite(t *testing.T) {
+	t.Parallel()
 	remotes := filepath.Join(t.TempDir(), "remotes")
 	storesUnder(t, remotes, "https://github.com/org-a/hh-shared.git")
 	ts := newTestSession(t)

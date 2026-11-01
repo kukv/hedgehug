@@ -6,6 +6,7 @@ import (
 )
 
 func TestCommentAddEditRemove(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.asAccount("alice")
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
@@ -43,6 +44,7 @@ func TestCommentAddEditRemove(t *testing.T) {
 }
 
 func TestCommentBody(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[string]string{
 		"":              "",
 		" \t\r\n":       "",
@@ -59,6 +61,7 @@ func TestCommentBody(t *testing.T) {
 }
 
 func TestCommentAddErrors(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -78,6 +81,7 @@ func TestCommentAddErrors(t *testing.T) {
 }
 
 func TestOpenCommentErrors(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -101,6 +105,7 @@ func TestOpenCommentErrors(t *testing.T) {
 }
 
 func TestOpenCommentIsCaseInsensitive(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -116,6 +121,7 @@ func TestOpenCommentIsCaseInsensitive(t *testing.T) {
 }
 
 func TestFindCommentNotFound(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -131,6 +137,7 @@ func TestFindCommentNotFound(t *testing.T) {
 }
 
 func TestCommentEditCases(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.asAccount("alice")
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {

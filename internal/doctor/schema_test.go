@@ -11,6 +11,7 @@ import (
 )
 
 func TestSchemaFileBroken(t *testing.T) {
+	t.Parallel()
 	sc, fs := SchemaFile([]byte("statuses: [\n"))
 	if sc != nil {
 		t.Errorf("schema = %v, want nil", sc)
@@ -21,6 +22,7 @@ func TestSchemaFileBroken(t *testing.T) {
 }
 
 func TestSchemaFileProblems(t *testing.T) {
+	t.Parallel()
 	sc := schema.Default()
 	sc.Statuses = append(sc.Statuses, sc.Statuses[0])
 	data, err := sc.Encode()
@@ -39,6 +41,7 @@ func TestSchemaFileProblems(t *testing.T) {
 }
 
 func TestSchemaClean(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	put(t, s, newTask("A"))
 	fs, err := Schema(s, mustOpen(t, s))
@@ -51,6 +54,7 @@ func TestSchemaClean(t *testing.T) {
 }
 
 func TestSchemaEachCheck(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	bad := newTask("Bad")
 	bad.Status = "weird"
@@ -83,6 +87,7 @@ func TestSchemaEachCheck(t *testing.T) {
 }
 
 func TestSchemaScopedTemplates(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	p := newTask("Proj")
 	p.Kind = "project"
@@ -108,6 +113,7 @@ func TestSchemaScopedTemplates(t *testing.T) {
 }
 
 func TestSchemaOverrideOfDeletedProject(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	gone := newTask("Gone")
 	gone.Kind = "project"
@@ -129,6 +135,7 @@ func TestSchemaOverrideOfDeletedProject(t *testing.T) {
 }
 
 func TestSort(t *testing.T) {
+	t.Parallel()
 	fs := []Finding{{Check: "task", Where: "b"}, {Check: "template", Where: "z"}, {Check: "schema", Where: "y"}, {Check: "task", Where: "a"}, {Check: "override", Where: "q"}}
 	Sort(fs)
 	want := []string{"schema", "template", "override", "task", "task"}

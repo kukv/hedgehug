@@ -64,6 +64,7 @@ func storeDirOf(t *testing.T, ts *testSession, name string) string {
 }
 
 func TestStoreInitMakesLocalBare(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	remotes := filepath.Join(t.TempDir(), "remotes")
 	ts.appendConfig("url_rewrites:\n  - {from: \"https://github.com/\", to: \"" + filepath.ToSlash(remotes) + "/\"}\n")
@@ -78,6 +79,7 @@ func TestStoreInitMakesLocalBare(t *testing.T) {
 // The only account is the one that writes the store, so it is the one written
 // to stores[].account, with or without Account.
 func TestStoreInitWritesTheAccount(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.appendConfig("accounts:\n  - {name: alice, host: github.com, login: alice}\n")
 	if _, err := ts.StoreInit(StoreInitInput{Name: "one", Prefix: "ON"}); err != nil {
@@ -94,6 +96,7 @@ func TestStoreInitWritesTheAccount(t *testing.T) {
 // With two accounts and none named, a store with no GitHub remote has no
 // account, and nothing is written for it.
 func TestStoreInitNoAccountPicked(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.appendConfig("accounts:\n  - {name: a, host: github.com, login: alice}\n  - {name: b, host: github.com, login: bob}\n")
 	if _, err := ts.StoreInit(StoreInitInput{Name: "x", Prefix: "XX"}); err != nil {
@@ -189,6 +192,7 @@ func TestStoreInitOnAnExistingRepo(t *testing.T) {
 // host written in capitals in hosts[] is the same host: the repository is
 // made from the owner and the name in the ssh URL.
 func TestStoreInitSSHRemoteIsOnGitHub(t *testing.T) {
+	t.Parallel()
 	fake := fakegh.New(fakegh.State{Users: []string{"alice"}, Orgs: map[string][]string{"org-a": {"alice"}}, Tokens: map[string]string{"t-alice": "alice"}})
 	srv := httptest.NewServer(fake)
 	t.Cleanup(srv.Close)
@@ -226,6 +230,7 @@ func TestStoreInitGitHubFailureKeepsRepo(t *testing.T) {
 // A 403 on creating (alice is not a member of org-a) tells how to go on with
 // a repository made by hand; a 401 names the account and the command.
 func TestStoreInitGitHubErrors(t *testing.T) {
+	t.Parallel()
 	ts, fake := fakeSession(t, fakegh.State{Orgs: map[string][]string{"org-a": {"bob"}}, Tokens: map[string]string{"t-alice": "alice"}}, workAccount)
 	in := StoreInitInput{Name: "org", Prefix: "ORG", Remotes: []string{"https://github.com/org-a/x.git"}}
 	_, err := ts.StoreInit(in)
@@ -247,6 +252,7 @@ func TestStoreInitGitHubErrors(t *testing.T) {
 }
 
 func TestStoreInitAccountChoice(t *testing.T) {
+	t.Parallel()
 	ts, _ := fakeSession(t, fakegh.State{}, "accounts:\n  - {name: a, host: github.com, login: alice, token: gh}\n  - {name: b, host: github.com, login: bob, token: gh}\n")
 	in := StoreInitInput{Name: "org", Prefix: "ORG", Remotes: []string{"https://github.com/org-a/x.git"}}
 	_, err := ts.StoreInit(in)
@@ -266,6 +272,7 @@ func TestStoreInitAccountChoice(t *testing.T) {
 
 // A GitHub remote with no account at all points at auth login.
 func TestStoreInitNoAccountAtAll(t *testing.T) {
+	t.Parallel()
 	ts, _ := fakeSession(t, fakegh.State{}, "")
 	_, err := ts.StoreInit(StoreInitInput{Name: "org", Prefix: "ORG", Remotes: []string{"https://github.com/org-a/x.git"}})
 	wantErr(t, err, KindConflict, "account.none")
@@ -277,6 +284,7 @@ func TestStoreInitNoAccountAtAll(t *testing.T) {
 // The token of an account is not sent to another host: an account of
 // github.com does not make a repository on a host of hosts[].
 func TestStoreInitAccountOfAnotherHost(t *testing.T) {
+	t.Parallel()
 	fake := fakegh.New(fakegh.State{Orgs: map[string][]string{"org-a": {"alice"}}, Tokens: map[string]string{"t-alice": "alice"}})
 	srv := httptest.NewServer(fake)
 	t.Cleanup(srv.Close)
@@ -319,6 +327,7 @@ func TestStoreInitConfigFailureUndoes(t *testing.T) {
 
 // A bare that the failed init made is removed with it.
 func TestStoreInitConfigFailureRemovesTheBare(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	bare := filepath.Join(t.TempDir(), "r.git")
 	theirs := filepath.Join(t.TempDir(), "theirs")
@@ -332,6 +341,7 @@ func TestStoreInitConfigFailureRemovesTheBare(t *testing.T) {
 // then refused by config.yaml: the store here is removed, the remote keeps the
 // commits, and the error says how to use them.
 func TestStoreInitConfigFailureAfterPushTellsOfTheRemote(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	bare := filepath.Join(t.TempDir(), "r.git")
 	if err := gitrepo.InitBare(bare); err != nil {
@@ -353,6 +363,7 @@ func TestStoreInitConfigFailureAfterPushTellsOfTheRemote(t *testing.T) {
 // Only the accounts of the host of the remote are offered; with none on that
 // host the way to set one up is given.
 func TestStoreInitChoiceIsOfTheRemotesHost(t *testing.T) {
+	t.Parallel()
 	ts, _ := fakeSession(t, fakegh.State{}, "accounts:\n  - {name: a, host: github.com, login: alice, token: gh}\n  - {name: b, host: github.com, login: bob, token: gh}\n  - {name: g, host: ghe.example.com, login: gina, token: gh}\n")
 	_, err := ts.StoreInit(StoreInitInput{Name: "org", Prefix: "ORG", Remotes: []string{"https://github.com/org-a/x.git"}})
 	wantErr(t, err, KindUsage, "choice.required")
@@ -364,6 +375,7 @@ func TestStoreInitChoiceIsOfTheRemotesHost(t *testing.T) {
 // With two GitHub remotes, the first made and the second failing, the error
 // tells that the first was left on GitHub.
 func TestStoreInitSecondRemoteFailsAfterTheFirstWasMade(t *testing.T) {
+	t.Parallel()
 	ts, fake := fakeSession(t, fakegh.State{Orgs: map[string][]string{"org-a": {"alice"}, "org-b": {"bob"}}, Tokens: map[string]string{"t-alice": "alice"}}, workAccount)
 	first := "https://github.com/org-a/hh-a.git"
 	_, err := ts.StoreInit(StoreInitInput{Name: "org", Prefix: "ORG", Remotes: []string{first, "https://github.com/org-b/hh-b.git"}})
@@ -379,6 +391,7 @@ func TestStoreInitSecondRemoteFailsAfterTheFirstWasMade(t *testing.T) {
 
 // A topic that cannot be set fails the init, and the repository made is told.
 func TestStoreInitTopicFailureTellsOfTheRepo(t *testing.T) {
+	t.Parallel()
 	fake := fakegh.New(fakegh.State{Users: []string{"alice"}, Orgs: map[string][]string{"org-a": {"alice"}}, Tokens: map[string]string{"t-alice": "alice"}})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/topics") {
@@ -421,6 +434,7 @@ func TestStoreInitOtherRemoteIsNotMade(t *testing.T) {
 // Accounts that are all of other hosts are no choice: account.none names the
 // host of the remote.
 func TestStoreInitNoAccountOfTheRemotesHost(t *testing.T) {
+	t.Parallel()
 	ts, _ := fakeSession(t, fakegh.State{}, "accounts:\n  - {name: g, host: ghe.example.com, login: gina, token: gh}\n  - {name: h, host: ghe.example.com, login: hal, token: gh}\n")
 	// (With one account only, it is picked as the only one and the host check
 	// answers account.host_mismatch instead.)

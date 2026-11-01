@@ -24,6 +24,7 @@ func displayIDs(t *testing.T, set *Set) map[string]string {
 }
 
 func TestSharedPrefixesShowWithTheStoreName(t *testing.T) {
+	t.Parallel()
 	a := newStoreAt(t, "org-a", "API")
 	b := newStoreAt(t, "org-b", "API")
 	c := newStoreAt(t, "org-c", "WEB")
@@ -40,6 +41,7 @@ func TestSharedPrefixesShowWithTheStoreName(t *testing.T) {
 }
 
 func TestSharedPrefixesDoNotCountAStoreThatDoesNotOpen(t *testing.T) {
+	t.Parallel()
 	a := newStoreAt(t, "org-a", "API")
 	gone := config.StoreEntry{Name: "gone", Path: filepath.Join(t.TempDir(), "nope")}
 	putTasks(t, a, 1, nil)
@@ -49,6 +51,7 @@ func TestSharedPrefixesDoNotCountAStoreThatDoesNotOpen(t *testing.T) {
 }
 
 func TestSharedPrefixesOfAConfigIsTheOneOpenGives(t *testing.T) {
+	t.Parallel()
 	a := newStoreAt(t, "org-a", "API")
 	b := newStoreAt(t, "org-b", "API")
 	c := &config.Config{Stores: []config.StoreEntry{a, b}}
@@ -64,6 +67,7 @@ func TestSharedPrefixesOfAConfigIsTheOneOpenGives(t *testing.T) {
 }
 
 func TestQualifiedIsKeptAcrossRefreshAndReopen(t *testing.T) {
+	t.Parallel()
 	a := newStoreAt(t, "org-a", "API")
 	b := newStoreAt(t, "org-b", "API")
 	set := openSet(t, a, b)

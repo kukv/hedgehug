@@ -43,6 +43,7 @@ func overwritten(task *model.Task, commit, field, value string) inbox.Item {
 }
 
 func TestInboxEmptyAndUnknownItem(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	_, items, err := ts.InboxList(false)
 	if err != nil || len(items) != 0 {
@@ -62,6 +63,7 @@ func TestInboxEmptyAndUnknownItem(t *testing.T) {
 }
 
 func TestInboxStoresWarnsOfMissingAccounts(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	stores, err := ts.InboxStores()
 	if err != nil || len(stores) != 1 || stores[0].Name != "me" {
@@ -83,6 +85,7 @@ func TestInboxStoresWarnsOfMissingAccounts(t *testing.T) {
 }
 
 func TestInboxStoresUnknownStore(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.StoreName = "nope"
 	if _, err := ts.InboxStores(); err == nil {
@@ -91,6 +94,7 @@ func TestInboxStoresUnknownStore(t *testing.T) {
 }
 
 func TestSyncTargets(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	c, _, err := ts.Config()
 	if err != nil {
@@ -112,6 +116,7 @@ func TestSyncTargets(t *testing.T) {
 }
 
 func TestInboxListNewestFirstWithWordsAndJSON(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	task := ts.addTask("title", func(x *model.Task) { x.ID = "ME-1" })
 	old := overwritten(task, "c1", "title", `"first"`)
@@ -156,6 +161,7 @@ func TestInboxListNewestFirstWithWordsAndJSON(t *testing.T) {
 }
 
 func TestInboxRead(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	task := ts.addTask("t", nil)
 	a := ts.addItem(overwritten(task, "c1", "title", `"x"`))
@@ -173,6 +179,7 @@ func TestInboxRead(t *testing.T) {
 }
 
 func TestInboxReadOfSaysWhichItems(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	task := ts.addTask("t", nil)
 	u := ts.addItem(overwritten(task, "c1", "title", `"x"`))
@@ -191,6 +198,7 @@ func TestInboxReadOfSaysWhichItems(t *testing.T) {
 }
 
 func TestParseInboxItem(t *testing.T) {
+	t.Parallel()
 	u := model.NewULID()
 	if got, err := ParseInboxItem(u.String()); err != nil || got != u {
 		t.Errorf("ParseInboxItem = %v, %v; want %v", got, err, u)
@@ -212,6 +220,7 @@ func TestParseInboxItem(t *testing.T) {
 }
 
 func TestInboxRevertRefusals(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	task := ts.addTask("t", nil)
 	notOverwritten := ts.addItem(inbox.Item{Kind: inbox.Assigned, Task: task.ULID, Commit: "c1", To: "x"})
@@ -250,6 +259,7 @@ func TestInboxRevertRefusals(t *testing.T) {
 }
 
 func TestInboxRevertOfAGoneOrDeletedTask(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "t"}); err != nil {
 		t.Fatal(err)
@@ -278,6 +288,7 @@ func TestInboxRevertOfAGoneOrDeletedTask(t *testing.T) {
 }
 
 func TestInboxRevertWritesTheValueBack(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "mine"}); err != nil {
 		t.Fatal(err)
@@ -317,6 +328,7 @@ func TestInboxRevertWritesTheValueBack(t *testing.T) {
 }
 
 func TestInboxRevertMoves(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	for _, title := range []string{"p", "c"} {
 		if _, err := ts.Add(AddInput{Title: title}); err != nil {
@@ -363,6 +375,7 @@ func TestInboxRevertMoves(t *testing.T) {
 }
 
 func TestInboxContent(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.addTask("t", func(x *model.Task) { x.ID = "ME-1" })
 	_, ix, _ := ts.Open()
@@ -393,6 +406,7 @@ func TestInboxContent(t *testing.T) {
 }
 
 func TestRepairedContent(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	task := ts.addTask("t", func(x *model.Task) { x.ID = "ME-1" })
 	_, ix, _ := ts.Open()
@@ -422,6 +436,7 @@ func TestRepairedContent(t *testing.T) {
 }
 
 func TestDuplicateContent(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	_, ix, _ := ts.Open()
 	w1 := ix.Workspaces()[0]
@@ -483,6 +498,7 @@ func TestDuplicateContent(t *testing.T) {
 }
 
 func TestInboxTargetAndTaskRef(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	task := ts.addTask("title", func(x *model.Task) { x.ID = "ME-1" })
 	_, ix, _ := ts.Open()
@@ -541,6 +557,7 @@ func TestInboxTargetAndTaskRef(t *testing.T) {
 }
 
 func TestPropText(t *testing.T) {
+	t.Parallel()
 	sc := schema.Default()
 	for _, c := range []struct {
 		in   any
@@ -563,6 +580,7 @@ func TestPropText(t *testing.T) {
 }
 
 func TestInboxRevertLeavesTheSessionAlone(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.appendConfig(aliceAccount)
 	if _, err := ts.Add(AddInput{Title: "mine"}); err != nil {
@@ -622,6 +640,7 @@ func TestInboxRevertLeavesTheSessionAlone(t *testing.T) {
 }
 
 func TestCompactJSON(t *testing.T) {
+	t.Parallel()
 	if got := compactJSON(json.RawMessage("{ \"a\": [1, 2] }")); got != `{"a":[1,2]}` {
 		t.Errorf("compactJSON = %q", got)
 	}
@@ -631,6 +650,7 @@ func TestCompactJSON(t *testing.T) {
 }
 
 func TestRevertField(t *testing.T) {
+	t.Parallel()
 	sc := schema.Default()
 	resolve := func(string) (model.ULID, error) { return model.ULID{}, errors.New("no tasks here") }
 	task := &model.Task{Title: "alice", Links: []model.Link{{Type: "pr", Ref: "o/r#1", Sync: "auto"}}}
@@ -725,6 +745,7 @@ func overwriteME1(t *testing.T, ts *testSession) (item InboxItemView, kept strin
 }
 
 func TestInboxRevertAfterARealSync(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	item, kept := overwriteME1(t, ts)
 	if kept != "theirs" || item.Kind != inbox.Overwritten {
@@ -744,6 +765,7 @@ func TestInboxRevertAfterARealSync(t *testing.T) {
 }
 
 func TestQueryOptionsMarksOverwrittenTasks(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	item, _ := overwriteME1(t, ts)
 	s, ix, err := ts.Open()

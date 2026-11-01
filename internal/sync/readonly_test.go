@@ -9,6 +9,7 @@ import (
 )
 
 func TestReadOnlySyncDoesNotPush(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	c.addTask(0, "local") // a commit that origin lacks
 	if err := WriteAccess(c.stores[0], Access{ReadOnly: true, Reason: ReasonGitHub, Checked: time.Now()}); err != nil {
@@ -24,6 +25,7 @@ func TestReadOnlySyncDoesNotPush(t *testing.T) {
 }
 
 func TestPushDeniedMakesReadOnly(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	c.addTask(0, "local")
 	unlock := gitrepotest.LockObjects(t, c.remote)
@@ -47,6 +49,7 @@ func TestPushDeniedMakesReadOnly(t *testing.T) {
 
 // Without Explicit (the background sync), a push_denied stays.
 func TestPushDeniedStaysForBackgroundSync(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	c.addTask(0, "local")
 	unlock := gitrepotest.LockObjects(t, c.remote)

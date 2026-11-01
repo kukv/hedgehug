@@ -9,6 +9,7 @@ import (
 // An account ID is compared without case (spec: 大文字小文字): Me written as
 // github.com/B still catches what is addressed to github.com/b.
 func TestCatchComparesMeWithoutCase(t *testing.T) {
+	t.Parallel()
 	a, b := twoClones(t)
 	x := addTask(t, a, "x", nil)
 	syncBoth(t, a, b)

@@ -162,6 +162,15 @@ func (r *Repo) push(remote string, force bool, lease plumbing.Hash) error {
 	if err != nil {
 		return fmt.Errorf("push %s: %w", remote, err)
 	}
+	// When the remote refuses the push before it reads the pack, go-git
+	// returns without waiting for the goroutine that writes the pack, which
+	// goes on reading the objects. The push goes through a Repository of its
+	// own, so that the goroutine shares no state with the readers of r.
+	p, err := Open(r.dir)
+	if err != nil {
+		return fmt.Errorf("push %s: %w", remote, err)
+	}
+	defer func() { _ = p.Close() }()
 	beforePush()
 	spec := h.String() + ":refs/heads/main"
 	if force {
@@ -180,7 +189,7 @@ func (r *Repo) push(remote string, force bool, lease plumbing.Hash) error {
 		opts.RefSpecs = []config.RefSpec{config.RefSpec("+" + mainRef.String() + ":refs/heads/main")}
 		opts.ForceWithLease = &git.ForceWithLease{RefName: mainRef, Hash: lease}
 	}
-	err = r.r.Push(opts)
+	err = p.r.Push(opts)
 	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) && (errors.Is(err, git.ErrNonFastForwardUpdate) || strings.Contains(err.Error(), "non-fast-forward")) {
 		return ErrRejected
 	}

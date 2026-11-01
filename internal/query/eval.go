@@ -24,9 +24,9 @@ type Options struct {
 	Overwritten map[model.ULID]bool
 	// MissingIDs makes a value the store does not know match no task, listed
 	// in Result.IDs, where it is otherwise the error of the query: a task it
-	// does not have (in project:, parent:, ...), and a status, kind or enum
-	// value its schema lacks. mount.Query sets it: another store may know the
-	// value.
+	// does not have (in project:, parent:, ...), a workspace it does not
+	// have, and a status, kind or enum value its schema lacks. mount.Query
+	// sets it: another store may know the value.
 	MissingIDs bool
 }
 
@@ -38,9 +38,9 @@ type Result struct {
 	// Desc is whether the sort: is descending.
 	Desc bool
 	// IDs are the values that Options.MissingIDs covers: those that name a
-	// task (project:, parent:, blocked_by:, a task_ref property, ...) and
-	// those of status:, kind: and enum properties, with whether this store
-	// knows the value. A value it does not know matches no task here;
+	// task (project:, parent:, blocked_by:, a task_ref property, ...) or a
+	// workspace, and those of status:, kind: and enum properties, with
+	// whether this store knows the value. A value it does not know matches no task here;
 	// mount.Query makes it an error when no store knows it.
 	IDs []IDLookup
 }
@@ -447,8 +447,16 @@ func (c *compiler) workspace(t Term) (pred, error) {
 	ulids := map[model.ULID]bool{}
 	for _, v := range t.Values {
 		w, err := c.ix.ResolveWorkspace(v)
+		if errors.Is(err, store.ErrNotFound) && c.opt.MissingIDs {
+			// another store may have it, as with a task's id
+			c.ids = append(c.ids, IDLookup{Pos: t.Pos, Term: t.Raw, Value: v, Err: err})
+			continue
+		}
 		if err != nil {
 			return nil, c.failWith(t, err)
+		}
+		if c.opt.MissingIDs {
+			c.ids = append(c.ids, IDLookup{Pos: t.Pos, Term: t.Raw, Value: v})
 		}
 		ulids[w.ULID] = true
 	}
