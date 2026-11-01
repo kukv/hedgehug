@@ -189,3 +189,52 @@ func TestResolveAfterAnotherHandleRepackedTheStore(t *testing.T) {
 		t.Errorf("Resolve(API-3) = %v, %v", hit, err)
 	}
 }
+
+// brokenMounted is a Mounted on the store a whose store and index are those
+// of another store b, which is then removed: its Refresh fails.
+func brokenMounted(t *testing.T, a config.StoreEntry) *Mounted {
+	t.Helper()
+	b := newStoreAt(t, "org-b", "WEB")
+	sb, err := store.Open(b.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Mounted{Name: a.Name, Entry: a, Store: sb}
+	if _, err := m.Index(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(b.Path); err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+func TestWithOpensTheStoreAgainWhenTheIndexCannotRefresh(t *testing.T) {
+	a := newStoreAt(t, "org-a", "API")
+	m := brokenMounted(t, a)
+	old := m.Store
+	ran := false
+	if err := m.With(func(ix *index.Index) {
+		ran = true
+		if len(ix.Workspaces()) != 1 || ix.Workspaces()[0].IDPrefix != "API" {
+			t.Errorf("the index is not that of org-a: %v", ix.Workspaces())
+		}
+	}); err != nil || !ran {
+		t.Fatalf("With = %v, ran %v", err, ran)
+	}
+	if m.Store == old {
+		t.Error("the store was not opened again")
+	}
+}
+
+func TestWithFailsWhenTheStoreCannotBeOpenedAgain(t *testing.T) {
+	a := newStoreAt(t, "org-a", "API")
+	m := brokenMounted(t, a)
+	if err := os.RemoveAll(a.Path); err != nil {
+		t.Fatal(err)
+	}
+	ran := false
+	if err := m.With(func(*index.Index) { ran = true }); err == nil || ran {
+		t.Errorf("With = %v, ran %v; want an error and no run", err, ran)
+	}
+}
