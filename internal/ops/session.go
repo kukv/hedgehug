@@ -77,6 +77,7 @@ type mountCache struct {
 	// the stores that did not open and were warned of, once per caller
 	warnedMu gosync.Mutex
 	warned   map[string]bool
+	muted    map[string]int // callers that tell of the store themselves, by store
 }
 
 // ForStore is a session of its own on the store name, with the same outside
@@ -139,7 +140,7 @@ func (ss *Session) warnSkipped(sk mount.Skipped) {
 	mc := ss.mountCache()
 	mc.warnedMu.Lock()
 	defer mc.warnedMu.Unlock()
-	if mc.warned[sk.Name] {
+	if mc.warned[sk.Name] || mc.muted[sk.Name] > 0 {
 		return
 	}
 	if mc.warned == nil {
@@ -151,29 +152,27 @@ func (ss *Session) warnSkipped(sk mount.Skipped) {
 
 // muteOpenWarnings makes the mount keep quiet about the stores names that do
 // not open, for a caller that tells of them in its own way. The returned
-// function ends it: the stores it silenced are warned of again by the next
-// mount, which is opened again for that.
+// function ends it: once the last caller that muted a store has ended, the
+// next mount, opened again for that, warns of it. Callers may overlap.
 func (ss *Session) muteOpenWarnings(names []string) (unmute func()) {
 	mc := ss.mountCache()
 	mc.warnedMu.Lock()
-	var muted []string
+	if mc.muted == nil {
+		mc.muted = map[string]int{}
+	}
 	for _, n := range names {
-		if !mc.warned[n] {
-			if mc.warned == nil {
-				mc.warned = map[string]bool{}
-			}
-			mc.warned[n] = true
-			muted = append(muted, n)
-		}
+		mc.muted[n]++
 	}
 	mc.warnedMu.Unlock()
 	return func() {
-		if len(muted) == 0 {
+		if len(names) == 0 {
 			return
 		}
 		mc.warnedMu.Lock()
-		for _, n := range muted {
-			delete(mc.warned, n)
+		for _, n := range names {
+			if mc.muted[n]--; mc.muted[n] <= 0 {
+				delete(mc.muted, n)
+			}
 		}
 		mc.warnedMu.Unlock()
 		ss.dropMount()

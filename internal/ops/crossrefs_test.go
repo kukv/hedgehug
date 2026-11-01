@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	gosync "sync"
 	"testing"
 	"time"
 
@@ -210,6 +211,80 @@ func TestDoctorKeepsTheOtherStoresWhenOneDoesNotOpen(t *testing.T) {
 	one, err := ts.ForStore("gone").Doctor(false)
 	if err != nil || len(one) != 1 || one[0].Store != "gone" || !slices.ContainsFunc(one[0].Findings, func(f doctor.Finding) bool { return f.Check == "git" }) {
 		t.Errorf("Doctor of gone = %+v, %v; want its findings and no error", one, err)
+	}
+}
+
+func countWarns(ts *testSession, mu *gosync.Mutex, sub string) int {
+	mu.Lock()
+	defer mu.Unlock()
+	var n int
+	for _, w := range ts.warns {
+		if strings.Contains(w, sub) {
+			n++
+		}
+	}
+	return n
+}
+
+// The silence of overlapping callers ends with the last of them.
+func TestMuteOpenWarningsIsCountedPerCaller(t *testing.T) {
+	ts := newTwoStoreSession(t)
+	c, _, err := ts.Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AddStore("gone", filepath.Join(t.TempDir(), "gone"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	var mu gosync.Mutex
+	ts.Warn = func(m string) { mu.Lock(); ts.warns = append(ts.warns, m); mu.Unlock() }
+	first, second := ts.muteOpenWarnings([]string{"gone"}), ts.muteOpenWarnings([]string{"gone"})
+	first()
+	if _, err := ts.Mount(); err != nil {
+		t.Fatal(err)
+	}
+	if n := countWarns(ts, &mu, "cannot open gone"); n != 0 {
+		t.Errorf("warned %d times while the second caller still mutes", n)
+	}
+	second()
+	if _, err := ts.Mount(); err != nil {
+		t.Fatal(err)
+	}
+	if n := countWarns(ts, &mu, "cannot open gone"); n != 1 {
+		t.Errorf("warned %d times after both ended; want once", n)
+	}
+}
+
+func TestConcurrentDoctorCallsDoNotWarnOfWhatTheyReport(t *testing.T) {
+	ts := newTwoStoreSession(t)
+	c, _, err := ts.Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AddStore("gone", filepath.Join(t.TempDir(), "gone"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	var mu gosync.Mutex
+	ts.Warn = func(m string) { mu.Lock(); ts.warns = append(ts.warns, m); mu.Unlock() }
+	var wg gosync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := ts.Doctor(false); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	if n := countWarns(ts, &mu, "cannot open gone"); n != 0 {
+		t.Errorf("warned %d times of gone, which the reports tell of", n)
 	}
 }
 
