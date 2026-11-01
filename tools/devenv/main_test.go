@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -302,6 +303,63 @@ func TestInitPhase3a(t *testing.T) {
 	for _, r := range []string{"kukv/hh-tasks.git", "org-a/hh-shared.git", "org-b/hh-ops.git"} {
 		if ok, err := gitrepo.HeadHasFile(filepath.Join(dir, "remotes", r), ".hedgehug/store.yaml"); err != nil || !ok {
 			t.Errorf("%s has no store: %v %v", r, ok, err)
+		}
+	}
+}
+
+func TestInitSaysHowToAddFromWeb(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "devenv")
+	code, stdout, stderr := runDevenv(t, "init", "--dir", dir)
+	if code != 0 {
+		t.Fatalf("init = %d, stderr %q", code, stderr)
+	}
+	if want := "cd " + shellQuote(filepath.Join(dir, "users", "alice", "src", "web")) + " && hedgehug add"; !strings.Contains(stdout, want) {
+		t.Errorf("init output lacks %q:\n%s", want, stdout)
+	}
+}
+
+func TestInitMakesWebRepoAndProject(t *testing.T) {
+	dir := initDir(t)
+	if _, err := os.Stat(filepath.Join(dir, "remotes", "org-a", "web.git", "HEAD")); err != nil {
+		t.Fatal(err)
+	}
+	if left, _ := filepath.Glob(filepath.Join(dir, ".web-seed-*")); len(left) > 0 {
+		t.Errorf("seed directory left behind: %v", left)
+	}
+	web := filepath.Join(dir, "users", "alice", "src", "web")
+	r, err := gitrepo.Open(web)
+	if err != nil {
+		t.Fatalf("alice's clone of web: %v", err)
+	}
+	if h, err := r.Head(); err != nil || h.IsZero() {
+		t.Errorf("web head = %v, %v", h, err)
+	}
+	if _, err := os.Stat(filepath.Join(web, "README.md")); err != nil {
+		t.Error(err)
+	}
+	if got := r.Remotes(); len(got) != 1 || got[0] != "origin" {
+		t.Errorf("web remotes = %v, want [origin]", got)
+	}
+	cfg, err := os.ReadFile(filepath.Join(web, ".git", "config"))
+	if err != nil || !strings.Contains(string(cfg), "url = https://github.com/org-a/web.git") {
+		t.Errorf("web .git/config = %q, %v; want origin at https://github.com/org-a/web.git", cfg, err)
+	}
+	for _, u := range []string{"alice", "bob"} {
+		s, err := store.Open(filepath.Join(dir, "users", u, "stores", "org-a"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var found int
+		for task, err := range s.Tasks() {
+			if err != nil {
+				t.Fatal(err)
+			}
+			if task.Kind == "project" && task.Title == "Web release" && slices.Equal(task.Repos, []string{"github.com/org-a/web"}) {
+				found++
+			}
+		}
+		if found != 1 {
+			t.Errorf("%s: org-a has %d Web release projects with repos, want 1", u, found)
 		}
 	}
 }

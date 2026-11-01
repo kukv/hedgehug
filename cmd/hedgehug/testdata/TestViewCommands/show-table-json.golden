@@ -2,6 +2,7 @@
   {
     "ulid": "<ULID-1>",
     "id": "ME-1",
+    "store": "me",
     "workspace": {
       "ulid": "<ULID-2>",
       "name": "me",
@@ -24,6 +25,7 @@
   {
     "ulid": "<ULID-3>",
     "id": "ME-3",
+    "store": "me",
     "workspace": {
       "ulid": "<ULID-2>",
       "name": "me",

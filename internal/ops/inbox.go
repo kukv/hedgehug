@@ -2,6 +2,7 @@ package ops
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/mount"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -26,56 +28,65 @@ type InboxStore struct {
 }
 
 // NoAccountsWarning is the warning of InboxStores for a config without
-// accounts, where mentions and assignments cannot be told. The CLI prints
-// each warning InboxStores returns as "hedgehug: warning: " + it, which is
-// the line it printed before; InboxList, InboxRead and InboxRevert send it
-// through Warn, so without the "hedgehug: " prefix.
+// accounts, where mentions and assignments cannot be told.
 const NoAccountsWarning = "accounts are not set up in config.yaml; mentions and assignments cannot be told"
 
 // InboxStores opens the stores the operation works on, after the inbox of
 // each has taken in what reached the store since it last looked and the
-// merge driver's records. The warnings are for the caller to show.
-func (ss *Session) InboxStores() ([]InboxStore, []string, error) {
+// merge driver's records. It gives Warn what is not an error: no accounts,
+// and a store that does not open (or whose inbox cannot be taken in), which
+// it leaves out once per session as the listings do. The store --store names
+// and the only store of config.yaml are an error instead.
+func (ss *Session) InboxStores() ([]InboxStore, error) {
 	c, _, err := ss.Config()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	targets, err := ss.SyncTargets(c, true)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	var warnings []string
 	if len(c.Accounts) == 0 {
-		warnings = append(warnings, NoAccountsWarning)
+		ss.warn(NoAccountsWarning)
 	}
+	strict := ss.StoreName != "" || len(c.Stores) == 1
 	var out []InboxStore
 	for _, e := range targets {
-		s, err := ss.openStoreAt(e.Path)
-		if err != nil {
-			return nil, warnings, fmt.Errorf("store %s: %w", e.Name, err)
+		st, openErr, readErr := ss.openInboxStore(c, e)
+		err := cmp.Or(openErr, readErr)
+		switch {
+		case err == nil:
+			out = append(out, st)
+		case strict:
+			return nil, fmt.Errorf("store %s: %w", e.Name, err)
+		case openErr != nil:
+			ss.warnSkipped(mount.Skipped{Name: e.Name, Err: openErr})
+		default:
+			ss.warnOnce(e.Name, fmt.Sprintf("cannot read the inbox of %s: %v", e.Name, readErr))
 		}
-		box := inbox.Open(s)
-		if len(c.Accounts) > 0 {
-			head, err := s.Repo().Head()
-			if err == nil {
-				_, err = box.Catch(c.Me(), head)
-			}
-			if err != nil {
-				return nil, warnings, fmt.Errorf("store %s: %w", e.Name, err)
-			}
-		}
-		out = append(out, InboxStore{e.Name, s, box})
 	}
-	return out, warnings, nil
+	return out, nil
 }
 
-// openInbox is InboxStores with its warnings given to Warn.
-func (ss *Session) openInbox() ([]InboxStore, error) {
-	stores, warnings, err := ss.InboxStores()
-	for _, w := range warnings {
-		ss.warn(w)
+// openInboxStore opens the store e and takes in what reached its inbox.
+// openErr is why the store does not open, readErr why its inbox cannot be
+// taken in.
+func (ss *Session) openInboxStore(c *config.Config, e config.StoreEntry) (st InboxStore, openErr, readErr error) {
+	s, err := ss.openStoreAt(e.Path)
+	if err != nil {
+		return InboxStore{}, err, nil
 	}
-	return stores, err
+	box := inbox.Open(s)
+	if len(c.Accounts) > 0 {
+		head, err := s.Repo().Head()
+		if err == nil {
+			_, err = box.Catch(c.Me(), head)
+		}
+		if err != nil {
+			return InboxStore{}, nil, err
+		}
+	}
+	return InboxStore{e.Name, s, box}, nil, nil
 }
 
 // WarnInbox gives Warn what the boxes skipped, once all their reading is
@@ -122,7 +133,7 @@ type InboxItemView struct {
 
 // InboxList lists the items of the stores, the newest first.
 func (ss *Session) InboxList(all bool) ([]InboxStore, []InboxItemView, error) {
-	stores, err := ss.openInbox()
+	stores, err := ss.InboxStores()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -148,7 +159,7 @@ func (ss *Session) InboxListOf(stores []InboxStore, all bool) ([]InboxItemView, 
 		if len(items) == 0 {
 			continue
 		}
-		ix, err := index.Open(st.Store)
+		ix, err := ss.inboxIndex(st)
 		if err != nil {
 			ss.warn(fmt.Sprintf("%s: read the index, so titles are not shown: %v", st.Name, err))
 			ix = nil
@@ -171,6 +182,11 @@ func (ss *Session) InboxListOf(stores []InboxStore, all bool) ([]InboxItemView, 
 		}
 	}
 	return out, nil
+}
+
+// inboxIndex opens the index of st, as the other operations do.
+func (ss *Session) inboxIndex(st InboxStore) (*index.Index, error) {
+	return ss.indexOf(st.Name, st.Store)
 }
 
 // ParseInboxItem reads the full ULID of an item; a short one is a mistake of
@@ -219,7 +235,7 @@ func (ss *Session) InboxRead(args []string, all bool) (marked int, err error) {
 	if err != nil {
 		return 0, err
 	}
-	stores, err := ss.openInbox()
+	stores, err := ss.InboxStores()
 	if err != nil {
 		return 0, err
 	}
@@ -274,7 +290,7 @@ func (ss *Session) InboxRevert(arg string) (TaskResult, error) {
 	if err != nil {
 		return TaskResult{}, err
 	}
-	stores, err := ss.openInbox()
+	stores, err := ss.InboxStores()
 	if err != nil {
 		return TaskResult{}, err
 	}
@@ -368,7 +384,11 @@ func inboxTarget(ix *index.Index, it inbox.Item) string {
 		}
 	}
 	if it.ID != "" {
-		return it.ID + " (" + it.Task.String() + ")"
+		id := it.ID
+		if ix != nil {
+			id = ix.QualifyID(id)
+		}
+		return id + " (" + it.Task.String() + ")"
 	}
 	return it.Task.String()
 }
@@ -407,7 +427,11 @@ func InboxContent(ix *index.Index, it inbox.Item, storeName string, manyStores b
 	case inbox.Renumbered:
 		var d struct{ Old, New string }
 		_ = json.Unmarshal(it.Detail, &d)
-		return fmt.Sprintf("%s was renumbered to %s; #%s in text still points to the task that kept it", d.Old, d.New, d.Old)
+		old, now := d.Old, d.New
+		if ix != nil {
+			old, now = ix.QualifyID(old), ix.QualifyID(now)
+		}
+		return fmt.Sprintf("%s was renumbered to %s; #%s in text still points to the task that kept it", old, now, d.Old)
 	case inbox.Mention:
 		where := "the body"
 		if hasComment(it) {

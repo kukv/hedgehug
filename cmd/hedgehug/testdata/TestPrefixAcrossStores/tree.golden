@@ -1,0 +1,8 @@
+== org-a
+org-a:API-1 <ULID-1>  todo  task  Alpha task
+
+== org-b
+org-b:API-1 <ULID-2>  todo  task  Bravo task
+
+== org-c
+WEB-1 <ULID-3>  todo  task  Charlie task

@@ -90,7 +90,7 @@ func (a *app) commentEdit(arg string) error {
 		return err
 	}
 	s, ref, c := ces.Store, ces.Ref, ces.Comment
-	if err := ops.CheckCommentEditable(ref, c); err != nil {
+	if err := a.ss.CheckMyComment(ces, "edited"); err != nil {
 		return err
 	}
 	commentULID := ref.Comment.String()

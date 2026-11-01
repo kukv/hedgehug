@@ -76,8 +76,11 @@ func UndoTarget(log []gitrepo.LogEntry, me string) (gitrepo.LogEntry, bool) {
 // UndoKept is a value undo left as it is, because another writer changed it
 // after the commit that is taken back.
 type UndoKept struct {
-	Path   string
-	Task   string // the id of the task; empty for other files
+	Path string
+	Task string // the id of the task; empty for other files
+	// Label is the id as a reader sees it (the ULID when the task has none),
+	// which --json leaves out
+	Label  string
 	Field  string
 	Author string
 }
@@ -280,7 +283,7 @@ func (u *undoer) keep(p string, files [3][]byte, oursT *model.Task) error {
 		return err
 	}
 	for _, f := range changed {
-		u.res.Kept = append(u.res.Kept, UndoKept{Path: p, Task: cmp.Or(oursT.ID, oursT.ULID.String()), Field: f, Author: cmp.Or(authors[f], "someone")})
+		u.res.Kept = append(u.res.Kept, UndoKept{Path: p, Task: cmp.Or(oursT.ID, oursT.ULID.String()), Label: cmp.Or(u.ix.QualifyID(oursT.ID), oursT.ULID.String()), Field: f, Author: cmp.Or(authors[f], "someone")})
 	}
 	return nil
 }

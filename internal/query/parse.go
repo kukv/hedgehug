@@ -28,6 +28,11 @@ type Error struct {
 	Term string
 	Msg  string
 	Err  error // the error Msg tells of, when there is one
+	// Unknown says the term names a property the schema does not have: an
+	// unknown key, a sort: or group: field that is not there, or a
+	// comparison on a property that is not there. mount.Query treats a store
+	// with this error as having no match.
+	Unknown bool
 }
 
 func (e *Error) Error() string { return fmt.Sprintf("term %d (%s): %s", e.Pos, e.Term, e.Msg) }

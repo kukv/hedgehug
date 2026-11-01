@@ -1,0 +1,9 @@
+== todo (3)
+STORE       ID    ULID                        STATUS  KIND     ASSIGNEES  LABELS  TITLE
+alpha       AA-1  <ULID-1>  todo    project                     Alpha project
+alpha       AA-2  <ULID-2>  todo    task                        Alpha child
+bravo-long  BB-2  <ULID-3>  todo    task                        Bravo other
+
+== done (1)
+STORE       ID    ULID                        STATUS  KIND  ASSIGNEES  LABELS  TITLE
+bravo-long  BB-1  <ULID-4>  done    task                     Bravo task

@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"runtime"
@@ -102,29 +101,10 @@ func (a *app) askRetry() bool {
 	if _, err := fmt.Fprint(a.stderr, "Open the editor again? [Y/n] "); err != nil {
 		return false
 	}
-	line, ok := readLine(a.stdin)
-	if !ok {
+	line, err := a.readLine()
+	if err != nil && line == "" {
 		return false // the end of the input, not an empty answer
 	}
 	ans := strings.TrimSpace(line)
 	return ans == "" || ans == "y" || ans == "Y"
-}
-
-// readLine reads up to a newline one byte at a time, so nothing after the
-// line is taken from r. ok is false when r ends before anything is read.
-func readLine(r io.Reader) (line string, ok bool) {
-	var b strings.Builder
-	buf := make([]byte, 1)
-	for {
-		n, err := r.Read(buf)
-		if n == 1 {
-			if buf[0] == '\n' {
-				return b.String(), true
-			}
-			b.WriteByte(buf[0])
-		}
-		if err != nil {
-			return b.String(), b.Len() > 0
-		}
-	}
 }

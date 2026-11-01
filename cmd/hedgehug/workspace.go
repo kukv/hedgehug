@@ -97,7 +97,7 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Changed the id prefix of %s to %s (%s); renumbered %d tasks\n", w.Name, w.IDPrefix, w.ULID, r.Renumbered)
 	for _, c := range r.IDs {
-		fmt.Fprintf(&b, "  %s → %s\n", c.Old, c.New)
+		fmt.Fprintf(&b, "  %s → %s\n", r.Index.QualifyID(c.Old), r.Index.QualifyID(c.New))
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())
 	return err

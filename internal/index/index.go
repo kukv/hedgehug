@@ -23,6 +23,10 @@ type Index struct {
 	tree  plumbing.Hash
 	sc    *schema.Schema // schema.yaml as tree has it
 	tasks map[model.ULID]*Entry
+	name  string // the store's name, set by SetStoreName; Refresh keeps it
+	// qualified says whether ids of a prefix show with the store's name,
+	// set by SetQualified; Refresh keeps it
+	qualified func(prefix string) bool
 
 	// Read from the tree each time it changes; the cache does not hold them.
 	workspaces map[model.ULID]*model.Workspace
@@ -65,6 +69,33 @@ func Open(s *store.Store) (*Index, error) {
 	s.SetSiblings(ix.siblingULIDs)
 	return ix, nil
 }
+
+// SetStoreName gives the index the name of its store in config.yaml.
+func (ix *Index) SetStoreName(name string) { ix.name = name }
+
+// SetQualified tells the index which id prefixes show with the name of the
+// store (DisplayID), as fn says; nil shows none. fn gets the prefix as the
+// id has it.
+func (ix *Index) SetQualified(fn func(prefix string) bool) { ix.qualified = fn }
+
+// QualifyID is id as a reader sees it: "<store>:<id>" when SetQualified
+// holds for the prefix of id, id itself otherwise (also for what is not the
+// form of an id, and when the index knows no store name).
+func (ix *Index) QualifyID(id string) string {
+	if id == "" || ix.qualified == nil || ix.name == "" {
+		return id
+	}
+	if p, _, ok := model.ParseTaskID(id); ok && ix.qualified(p) {
+		return ix.name + ":" + id
+	}
+	return id
+}
+
+// DisplayID is the id of e as a reader sees it (QualifyID); "" when e has none.
+func (ix *Index) DisplayID(e *Entry) string { return ix.QualifyID(e.ID) }
+
+// StoreName is the name SetStoreName gave, "" if none.
+func (ix *Index) StoreName() string { return ix.name }
 
 // Refresh brings the index to the tree of HEAD when HEAD has moved, as after
 // a write or a sync. After an error, Open the index again.

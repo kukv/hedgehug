@@ -1,0 +1,18 @@
+Charlie task
+  id          WEB-1
+  ulid        <ULID-1>
+  store       org-c
+  workspace   org-c (WEB, <ULID-2>)
+  kind        task
+  status      todo
+  parent      -
+  assignees   -
+  watchers    -
+  labels      -
+  repos       -
+  blocked_by  -
+  created     <TIME> by -
+  updated     <TIME>
+
+History:
+<HASH>  <TIME>  Alice  hedgehug: add WEB-1 (<ULID-1>) Charlie task

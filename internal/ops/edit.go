@@ -26,10 +26,19 @@ type EditSession struct {
 	Old *model.Task
 	// Bytes is the file as it was read.
 	Bytes []byte
+
+	ss *Session // the session that began it, which writes
 }
 
 // BeginEdit resolves arg to a live task and reads its file.
 func (ss *Session) BeginEdit(arg string) (*EditSession, error) {
+	ts, arg, err := ss.forTask(arg)
+	if err != nil {
+		return nil, err
+	}
+	if ts != ss {
+		return ts.BeginEdit(arg)
+	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return nil, err
@@ -49,7 +58,15 @@ func (ss *Session) BeginEdit(arg string) (*EditSession, error) {
 	if err != nil || old.ULID != e.ULID {
 		old = nil
 	}
-	return &EditSession{Store: s, Index: ix, Entry: e, Old: old, Bytes: orig}, nil
+	return &EditSession{Store: s, Index: ix, Entry: e, Old: old, Bytes: orig, ss: ss}, nil
+}
+
+// session is the session that began es, or ss for one made by hand.
+func (es *EditSession) session(ss *Session) *Session {
+	if es.ss != nil {
+		return es.ss
+	}
+	return ss
 }
 
 // editInvalid is the error for an edit CheckEdit refuses; field names the
@@ -106,6 +123,10 @@ func CheckEdit(ix *index.Index, ulid model.ULID, old *model.Task, edited []byte)
 // PrepareEdit adds the watchers the edit calls for to t, the checked edit of
 // es. Its error comes before anything is written.
 func (ss *Session) PrepareEdit(es *EditSession, t *model.Task) error {
+	ss = es.session(ss)
+	if err := ss.checkEditRefs(es.Index, es.Old, t); err != nil {
+		return err
+	}
 	if es.Old == nil {
 		return nil
 	}
@@ -120,6 +141,7 @@ func (ss *Session) PrepareEdit(es *EditSession, t *model.Task) error {
 // WriteEdit writes t, prepared by PrepareEdit, to the store. It refuses when
 // the file changed since BeginEdit.
 func (ss *Session) WriteEdit(es *EditSession, t *model.Task) (TaskResult, error) {
+	ss = es.session(ss)
 	s, e := es.Store, es.Entry
 	hash, err := ss.UpdateCommit(s, store.Op{Name: "edit", Task: e.ULID}, func(tx *store.Tx) error {
 		cur, err := s.TaskBytes(e.ULID)
@@ -133,6 +155,9 @@ func (ss *Session) WriteEdit(es *EditSession, t *model.Task) (TaskResult, error)
 	})
 	if err != nil {
 		return TaskResult{}, err
+	}
+	if !hash.IsZero() && es.Old != nil {
+		ss.warnMentions(s, es.Old.Body, t.Body)
 	}
 	return TaskResult{Index: es.Index, ULID: e.ULID, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }

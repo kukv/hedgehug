@@ -2,6 +2,7 @@ Alpha
   ☑ 1/2
   id          ME-2
   ulid        <ULID-1>
+  store       me
   workspace   me (ME, <ULID-2>)
   kind        task
   status      done

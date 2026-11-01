@@ -1,5 +1,6 @@
 // Package context decides where a new task goes when the command does not
-// say, and reads remote URLs. Phase 3a has only the remote URLs.
+// say: it reads remote URLs, and keeps context.json (the project hh use set,
+// and the project last used for each repository).
 package context
 
 import (

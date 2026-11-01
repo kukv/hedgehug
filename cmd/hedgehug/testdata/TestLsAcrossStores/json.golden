@@ -1,0 +1,94 @@
+[
+  {
+    "ulid": "<ULID-1>",
+    "id": "AA-1",
+    "store": "alpha",
+    "workspace": {
+      "ulid": "<ULID-2>",
+      "name": "alpha",
+      "id_prefix": "AA"
+    },
+    "kind": "project",
+    "title": "Alpha project",
+    "parent": null,
+    "rank": "a0",
+    "status": "todo",
+    "assignees": [],
+    "labels": [],
+    "blocked_by": [],
+    "props": {},
+    "created": "<TIME>",
+    "updated": "<TIME>",
+    "deleted_at": null,
+    "problems": []
+  },
+  {
+    "ulid": "<ULID-3>",
+    "id": "AA-2",
+    "store": "alpha",
+    "workspace": {
+      "ulid": "<ULID-2>",
+      "name": "alpha",
+      "id_prefix": "AA"
+    },
+    "kind": "task",
+    "title": "Alpha child",
+    "parent": "<ULID-1>",
+    "rank": "a0",
+    "status": "todo",
+    "assignees": [],
+    "labels": [],
+    "blocked_by": [],
+    "props": {},
+    "created": "<TIME>",
+    "updated": "<TIME>",
+    "deleted_at": null,
+    "problems": []
+  },
+  {
+    "ulid": "<ULID-4>",
+    "id": "BB-1",
+    "store": "bravo-long",
+    "workspace": {
+      "ulid": "<ULID-5>",
+      "name": "bravo-long",
+      "id_prefix": "BB"
+    },
+    "kind": "task",
+    "title": "Bravo task",
+    "parent": null,
+    "rank": "a0",
+    "status": "done",
+    "assignees": [],
+    "labels": [],
+    "blocked_by": [],
+    "props": {},
+    "created": "<TIME>",
+    "updated": "<TIME>",
+    "deleted_at": null,
+    "problems": []
+  },
+  {
+    "ulid": "<ULID-6>",
+    "id": "BB-2",
+    "store": "bravo-long",
+    "workspace": {
+      "ulid": "<ULID-5>",
+      "name": "bravo-long",
+      "id_prefix": "BB"
+    },
+    "kind": "task",
+    "title": "Bravo other",
+    "parent": null,
+    "rank": "a1",
+    "status": "todo",
+    "assignees": [],
+    "labels": [],
+    "blocked_by": [],
+    "props": {},
+    "created": "<TIME>",
+    "updated": "<TIME>",
+    "deleted_at": null,
+    "problems": []
+  }
+]

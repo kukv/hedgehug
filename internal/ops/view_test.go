@@ -104,7 +104,7 @@ func TestNames(t *testing.T) {
 	}
 	e, _ := ix.Task(task.ULID)
 	u := task.ULID.String()
-	if got, want := TaskLabel(e), task.ID+" ("+u+")"; got != want {
+	if got, want := TaskLabel(ix, e), task.ID+" ("+u+")"; got != want {
 		t.Errorf("TaskLabel = %q; want %q", got, want)
 	}
 	if got := TaskFileName(e); got != task.ID {
@@ -115,7 +115,7 @@ func TestNames(t *testing.T) {
 	}
 	noID := *e
 	noID.ID = ""
-	if got := TaskLabel(&noID); got != u {
+	if got := TaskLabel(ix, &noID); got != u {
 		t.Errorf("TaskLabel without id = %q; want the ULID", got)
 	}
 	if got := TaskFileName(&noID); got != u {

@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/sync"
 )
 
 func TestDoctorNoProblems(t *testing.T) {
@@ -19,8 +21,13 @@ func TestDoctorNoProblems(t *testing.T) {
 		t.Errorf("exit %d, stdout %q, stderr %q", code, out, stderr)
 	}
 	code, out, _ = te.run("doctor", "--json")
-	if code != 0 || strings.TrimSpace(out) != "[]" {
-		t.Errorf("--json: exit %d, stdout %q", code, out)
+	var rs []struct {
+		Store    string
+		Repaired []json.RawMessage
+		Findings []json.RawMessage
+	}
+	if code != 0 || json.Unmarshal([]byte(out), &rs) != nil || len(rs) != 1 || rs[0].Store != "me" || rs[0].Repaired == nil || rs[0].Findings == nil || len(rs[0].Findings) != 0 {
+		t.Errorf("--json: exit %d, stdout %q; want one report of me with empty lists", code, out)
 	}
 }
 
@@ -38,8 +45,12 @@ func TestDoctorBrokenSchemaFile(t *testing.T) {
 		t.Errorf("output:\n%s", out)
 	}
 	code, out, _ = te.run("doctor", "--json")
-	var fs []map[string]string
-	if code != 1 || json.Unmarshal([]byte(out), &fs) != nil || len(fs) == 0 || fs[0]["check"] != "schema" {
+	var rs []struct {
+		Store    string
+		Findings []map[string]string
+	}
+	if code != 1 || json.Unmarshal([]byte(out), &rs) != nil || len(rs) != 1 || len(rs[0].Findings) == 0 ||
+		rs[0].Findings[0]["check"] != "schema" || rs[0].Findings[0]["severity"] != "error" {
 		t.Errorf("--json: exit %d\n%s", code, out)
 	}
 }
@@ -87,14 +98,19 @@ func TestDoctorFixJSON(t *testing.T) {
 	te.ok("add", "b")
 	te.handEdit("me", "ME-2", "id: ME-2", "id: ME-1")
 	code, out, _ := te.run("doctor", "--fix", "--json")
-	var got struct {
+	var reports []struct {
+		Store    string
 		Repaired []struct {
 			ULID, ID, Title, Kind string
 			Value                 json.RawMessage
 		}
 		Findings []map[string]string
 	}
-	if code != 0 || json.Unmarshal([]byte(out), &got) != nil || len(got.Repaired) != 1 || got.Findings == nil || len(got.Findings) != 0 {
+	if code != 0 || json.Unmarshal([]byte(out), &reports) != nil || len(reports) != 1 {
+		t.Fatalf("exit %d\n%s", code, out)
+	}
+	got := reports[0]
+	if got.Store != "me" || len(got.Repaired) != 1 || got.Findings == nil || len(got.Findings) != 0 {
 		t.Fatalf("exit %d\n%s", code, out)
 	}
 	if r := got.Repaired[0]; r.Kind != "id_collision" || r.ID != "ME-2" || r.Title != "b" || len(r.ULID) != 26 || !strings.Contains(string(r.Value), `"old": "ME-1"`) {
@@ -214,6 +230,41 @@ func TestDoctorFixError(t *testing.T) {
 	}
 	code, out, stderr := te.run("doctor", "--fix")
 	if code == 0 || !strings.Contains(stderr, "uncommitted changes") || strings.Contains(out, "Nothing to repair") {
+		t.Errorf("exit %d\nstdout %s\nstderr %s", code, out, stderr)
+	}
+}
+
+func TestDoctorAcrossStores(t *testing.T) {
+	te := newTwoStoreEnv(t)
+	te.goldenOK("clean", "doctor")
+	te.goldenOK("clean-json", "doctor", "--json")
+	te.goldenOK("clean-fix", "doctor", "--fix")
+	te.goldenOK("one-store", "doctor", "--store", "alpha")
+}
+
+func TestDoctorCrossStoreRefIsAWarning(t *testing.T) {
+	te := newTwoStoreEnv(t)
+	target := te.addJSON("--store", "bravo-long", "Bravo target")
+	te.handEdit("alpha", "AA-2", "\nkind: ", "\nblocked_by: ["+target.ULID+"]\nkind: ")
+	te.goldenRun("text", 1, "doctor")
+	te.goldenRun("json", 1, "doctor", "--json")
+	te.goldenRun("one-store", 1, "doctor", "--store", "alpha")
+	te.goldenOK("other-store", "doctor", "--store", "bravo-long")
+	te.goldenRun("fix", 1, "doctor", "--fix")
+}
+
+func TestDoctorFixOfAReadOnlyStoreWarns(t *testing.T) {
+	te := newStoreEnv(t)
+	te.ok("add", "one")
+	s, err := store.Open(te.storeDir("me"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sync.WriteAccess(s, sync.Access{ReadOnly: true, Reason: sync.ReasonGitHub, Checked: te.now}); err != nil {
+		t.Fatal(err)
+	}
+	code, out, stderr := te.run("doctor", "--fix")
+	if code != 0 || !strings.Contains(stderr, "warning: me is read-only, so it is not fixed (the GitHub permission is read)") || !strings.Contains(out, "Nothing to repair") {
 		t.Errorf("exit %d\nstdout %s\nstderr %s", code, out, stderr)
 	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"strconv"
@@ -64,7 +65,7 @@ func (a *app) storeInit(in ops.StoreInitInput) error {
 	if e := ops.AsError(err); e != nil && e.Code == "choice.required" && e.Args["what"] == "--account" && a.isTerminal(a.stdin) {
 		candidates, _ := e.Args["candidates"].([]string)
 		var picked string
-		if picked, err = a.askChoice("Which account makes the repository?", candidates); err != nil {
+		if picked, err = a.askChoice(candidates, choice{question: "Which account makes the repository?"}); err != nil {
 			return err
 		}
 		in.Account = picked
@@ -95,15 +96,40 @@ func (a *app) storeInit(in ops.StoreInitInput) error {
 	return err
 }
 
+// choice is how askChoice asks: the question above the list ("" for none),
+// the label after each candidate (may be shorter than the candidates), the
+// word before the answer ("Number" when empty), and the candidate Enter takes
+// ("" for none, when Enter is not an answer).
+type choice struct {
+	question string
+	labels   []string
+	prompt   string
+	def      string
+}
+
 // askChoice lists candidates on stderr and reads the number of the one to
 // pick from stdin.
-func (a *app) askChoice(question string, candidates []string) (string, error) {
+func (a *app) askChoice(candidates []string, c choice) (string, error) {
 	var b strings.Builder
-	b.WriteString(question + "\n")
-	for i, c := range candidates {
-		fmt.Fprintf(&b, "  %d) %s\n", i+1, c)
+	if c.question != "" {
+		b.WriteString(c.question + "\n")
 	}
-	b.WriteString("Number: ")
+	def := 0
+	for i, cand := range candidates {
+		fmt.Fprintf(&b, "  %d) %s", i+1, cand)
+		if i < len(c.labels) && c.labels[i] != "" {
+			b.WriteString(" " + c.labels[i])
+		}
+		b.WriteString("\n")
+		if c.def != "" && cand == c.def {
+			def = i + 1
+		}
+	}
+	b.WriteString(cmp.Or(c.prompt, "Number"))
+	if def > 0 {
+		fmt.Fprintf(&b, " [%d]", def)
+	}
+	b.WriteString(": ")
 	if _, err := fmt.Fprint(a.stderr, b.String()); err != nil {
 		return "", err
 	}
@@ -111,9 +137,13 @@ func (a *app) askChoice(question string, candidates []string) (string, error) {
 	if err != nil && line == "" {
 		return "", errors.New("canceled")
 	}
-	n, err := strconv.Atoi(strings.TrimSpace(line))
+	text := strings.TrimSpace(line)
+	if text == "" && def > 0 {
+		return candidates[def-1], nil
+	}
+	n, err := strconv.Atoi(text)
 	if err != nil || n < 1 || n > len(candidates) {
-		return "", usageErrorf("%q is not one of 1-%d", strings.TrimSpace(line), len(candidates))
+		return "", usageErrorf("%q is not one of 1-%d", text, len(candidates))
 	}
 	return candidates[n-1], nil
 }

@@ -30,6 +30,14 @@ type MoveResult struct {
 // Move moves a task under another parent, to another workspace, or among its
 // siblings.
 func (ss *Session) Move(in MoveInput) (MoveResult, error) {
+	ts, arg, err := ss.forTask(in.Arg)
+	if err != nil {
+		return MoveResult{}, err
+	}
+	if ts != ss {
+		in.Arg = arg
+		return ts.Move(in)
+	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return MoveResult{}, err
@@ -45,7 +53,7 @@ func (ss *Session) Move(in MoveInput) (MoveResult, error) {
 	}
 	var p *index.Entry
 	if in.Parent != "" {
-		if p, err = ss.Resolve(ix, in.Parent); err != nil {
+		if p, err = ss.ResolveRef(ix, in.Parent); err != nil {
 			return MoveResult{}, err
 		}
 		if err := LiveParent(ix, p); err != nil {
@@ -176,7 +184,7 @@ func (ss *Session) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, 
 	if ref == "" {
 		ref = after
 	}
-	x, err := ss.Resolve(ix, ref)
+	x, err := ss.ResolveRef(ix, ref)
 	if err != nil {
 		return "", err
 	}

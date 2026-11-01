@@ -44,7 +44,7 @@ func (a *app) checkCmd() *cobra.Command {
 }
 
 // printFindings prints what a check found. It returns errFindings when there
-// is anything to report.
+// is an error or a warning to report.
 func (a *app) printFindings(fs []doctor.Finding) error {
 	if a.jsonOut {
 		if fs == nil {
@@ -53,21 +53,32 @@ func (a *app) printFindings(fs []doctor.Finding) error {
 		if err := a.printJSON(fs); err != nil {
 			return err
 		}
-	} else {
-		if len(fs) == 0 {
-			_, err := fmt.Fprintln(a.stdout, "No problems")
-			return err
-		}
-		for _, f := range fs {
-			_, _ = fmt.Fprintf(a.stdout, "%s: %s\n", f.Where, f.Msg)
-			if f.Hint != "" {
-				_, _ = fmt.Fprintf(a.stdout, "  hint: %s\n", f.Hint)
-			}
-		}
-		_, _ = fmt.Fprintf(a.stdout, "%d problems\n", len(fs))
+	} else if err := a.writeFindings(fs); err != nil {
+		return err
 	}
-	if len(fs) > 0 {
+	if doctor.Failing(fs) {
 		return errFindings
 	}
 	return nil
+}
+
+// writeFindings writes fs as text. A warning or an info line ends with its
+// severity in parentheses; an error line has nothing added.
+func (a *app) writeFindings(fs []doctor.Finding) error {
+	if len(fs) == 0 {
+		_, err := fmt.Fprintln(a.stdout, "No problems")
+		return err
+	}
+	for _, f := range fs {
+		tag := ""
+		if f.Severity != "" && f.Severity != doctor.Error {
+			tag = " (" + string(f.Severity) + ")"
+		}
+		_, _ = fmt.Fprintf(a.stdout, "%s: %s%s\n", f.Where, f.Msg, tag)
+		if f.Hint != "" {
+			_, _ = fmt.Fprintf(a.stdout, "  hint: %s\n", f.Hint)
+		}
+	}
+	_, err := fmt.Fprintf(a.stdout, "%d problems\n", len(fs))
+	return err
 }

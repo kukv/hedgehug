@@ -302,12 +302,18 @@ func noAccountFor(c *config.Config, host, u string) error {
 }
 
 // updateConfig is c.Update, after the BeforeUpdate hook of the session (a
-// test writes config.yaml there, as another process could).
+// test writes config.yaml there, as another process could). A change makes
+// the session forget the stores it mounted.
 func (ss *Session) updateConfig(c *config.Config, fn func(*config.Config) error) error {
 	if ss.BeforeUpdate != nil {
 		ss.BeforeUpdate()
 	}
-	return c.Update(fn)
+	if err := c.Update(fn); err != nil {
+		return err
+	}
+	// the stores and the prefixes they share may have changed
+	ss.dropMount()
+	return nil
 }
 
 func storeExists(c *config.Config, name string) bool {

@@ -10,7 +10,6 @@ import (
 
 	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/inbox"
-	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
 	"github.com/kukv/hedgehug/internal/sync"
@@ -36,9 +35,11 @@ type SyncReport struct {
 
 // Overwritten is a value that lost in a merge of the sync.
 type Overwritten struct {
-	Task   string          `json:"task,omitempty"` // the ULID, for a task's file
-	ID     string          `json:"id,omitempty"`
-	Path   string          `json:"path"`
+	Task string `json:"task,omitempty"` // the ULID, for a task's file
+	ID   string `json:"id,omitempty"`
+	Path string `json:"path"`
+	// Label is the id as a reader sees it, which --json leaves out
+	Label  string          `json:"-"`
 	Field  string          `json:"field"`
 	Value  json.RawMessage `json:"value"`
 	Author string          `json:"author,omitempty"`
@@ -52,6 +53,10 @@ type Repaired struct {
 	Kind   string          `json:"kind"`
 	Value  json.RawMessage `json:"value"`
 	Author string          `json:"author,omitempty"`
+	// Label is the id as a reader sees it, and Line the text of a new id
+	// ("ORG-2 → ORG-3"; "" for the other kinds); --json leaves them out
+	Label string `json:"-"`
+	Line  string `json:"-"`
 }
 
 // Sync syncs the stores SyncTargets names and describes what each did. A
@@ -68,6 +73,18 @@ func (ss *Session) Sync(all, explicit bool) ([]SyncReport, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A store that cannot be opened is reported by its sync; the mount that
+	// the cross-store check of the other stores opens need not say it again.
+	var broken []string
+	for _, e := range targets {
+		if len(e.Remotes) == 0 {
+			continue
+		}
+		if _, err := ss.openStoreAt(e.Path); err != nil {
+			broken = append(broken, e.Name)
+		}
+	}
+	defer ss.muteOpenWarnings(broken)()
 	out := make([]SyncReport, 0, len(targets))
 	var errs []error
 	for _, e := range targets {
@@ -103,7 +120,7 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 		return r, err
 	}
 	// The push is done: what fails from here is a warning, as in sync.Run.
-	ix, err := index.Open(s)
+	ix, err := ss.indexOf(e.Name, s)
 	if err != nil {
 		r.Warnings = append(r.Warnings, "read the index, so ids are not shown: "+err.Error())
 	}
@@ -116,6 +133,12 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 		}
 		return ""
 	}
+	qualify := func(id string) string {
+		if ix == nil {
+			return id
+		}
+		return ix.QualifyID(id)
+	}
 	r.Merges = res.Merges
 	r.Unpushable = res.Unpushable
 	r.Pushed = append(r.Pushed, res.Pushed...)
@@ -126,6 +149,7 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 		if u, ok := TaskOfPath(o.Path); ok {
 			x.Task = u.String()
 			x.ID = taskID(u)
+			x.Label = qualify(x.ID)
 		}
 		for _, n := range res.Notices {
 			if n.Kind == inbox.Overwritten && n.Path == o.Path && NoticeField(n) == o.Field {
@@ -135,11 +159,20 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 		r.Overwritten = append(r.Overwritten, x)
 	}
 	for _, x := range res.Repaired {
-		r.Repaired = append(r.Repaired, Repaired{ULID: x.ULID.String(), ID: taskID(x.ULID), Kind: x.Kind, Value: jsonValue(x.Value), Author: x.Author})
+		rep := Repaired{ULID: x.ULID.String(), ID: taskID(x.ULID), Kind: x.Kind, Value: jsonValue(x.Value), Author: x.Author}
+		rep.Label = qualify(rep.ID)
+		if x.Kind == "id_collision" {
+			var v struct{ Old, New string }
+			if json.Unmarshal([]byte(x.Value), &v) == nil && v.Old != "" && v.New != "" {
+				rep.Line = fmt.Sprintf("%s (%s) → %s", qualify(v.Old), x.ULID, qualify(v.New))
+			}
+		}
+		r.Repaired = append(r.Repaired, rep)
 	}
 	for _, u := range res.Invalid {
 		r.Invalid = append(r.Invalid, u.String())
 	}
+	r.Warnings = append(r.Warnings, ss.crossStoreWarnings(e.Name)...)
 	return r, nil
 }
 

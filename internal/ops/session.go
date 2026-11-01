@@ -15,6 +15,7 @@ import (
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/mount"
 	"github.com/kukv/hedgehug/internal/query"
 	"github.com/kukv/hedgehug/internal/store"
 	"github.com/kukv/hedgehug/internal/sync"
@@ -57,6 +58,26 @@ type Session struct {
 	// the tokens got, shared with the sessions ForStore makes
 	tokMu  gosync.Mutex
 	tokens *tokenCache
+
+	// the stores mounted, shared with the sessions ForStore makes
+	mountMu gosync.Mutex
+	mounts  *mountCache
+}
+
+// mountCache is the set of mounted stores, opened once for all the sessions
+// of one caller. A failure is not kept, so the next call opens again.
+type mountCache struct {
+	mu  gosync.Mutex
+	set *mount.Set
+	// the id prefixes that stores share, which qualified works out; sharedMu
+	// is apart from mu, as Mount holds mu while it asks for them
+	sharedMu   gosync.Mutex
+	shared     func(prefix string) bool
+	sharedDone bool
+	// the stores that did not open and were warned of, once per caller
+	warnedMu gosync.Mutex
+	warned   map[string]bool
+	muted    map[string]int // callers that tell of the store themselves, by store
 }
 
 // ForStore is a session of its own on the store name, with the same outside
@@ -75,7 +96,143 @@ func (ss *Session) ForStore(name string) *Session {
 		HTTPClient:   ss.HTTPClient,
 		Run:          ss.Run,
 		tokens:       ss.tokenCache(),
+		mounts:       ss.mountCache(),
 	}
+}
+
+// mountCache is the cache of ss, made on first use.
+func (ss *Session) mountCache() *mountCache {
+	ss.mountMu.Lock()
+	defer ss.mountMu.Unlock()
+	if ss.mounts == nil {
+		ss.mounts = &mountCache{}
+	}
+	return ss.mounts
+}
+
+// Mount is the stores config.yaml lists, opened once per caller. A store
+// that does not open is in Skipped, and the first call warns of each (not of
+// the others when --store names one store).
+func (ss *Session) Mount() (*mount.Set, error) {
+	set, toWarn, err := ss.mountOnce()
+	// not under mc.mu: Warn is the caller's and may call back
+	for _, sk := range toWarn {
+		ss.warnSkipped(sk)
+	}
+	return set, err
+}
+
+// mountOnce is the cached set, opened if need be; toWarn are the stores of
+// a set opened now that the caller tells of.
+func (ss *Session) mountOnce() (set *mount.Set, toWarn []mount.Skipped, err error) {
+	mc := ss.mountCache()
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	if mc.set != nil {
+		return mc.set, nil, nil
+	}
+	c, _, err := ss.Config()
+	if err != nil {
+		return nil, nil, err
+	}
+	set, toWarn, _ = ss.openSet(c, false)
+	mc.set = set
+	return set, toWarn, nil
+}
+
+// openSet opens the stores of c as this session wants them: its clock, the
+// id prefixes it counts itself, and what Resolve finds not to open given to
+// warnSkipped. A store that does not open is left out of the set. toWarn are
+// those the caller is to tell of with warnSkipped, once it holds no lock: all
+// of them, except that with --store naming a store the command is about
+// that store only. With strict the store --store names, and the only store
+// of c, are an error instead (what a listing does).
+func (ss *Session) openSet(c *config.Config, strict bool) (set *mount.Set, toWarn []mount.Skipped, err error) {
+	set = mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Unopened: ss.warnSkipped, Qualified: ss.qualifiedNow()})
+	for _, sk := range set.Skipped {
+		switch {
+		case strict && (ss.StoreName == sk.Name || len(c.Stores) == 1):
+			return nil, nil, openError(sk.Name, sk.Err)
+		case ss.StoreName != "" && ss.StoreName != sk.Name:
+			// not what the command is about
+		default:
+			toWarn = append(toWarn, sk)
+		}
+	}
+	return set, toWarn, nil
+}
+
+// warnSkipped warns that a store did not open: the stores found not to open
+// when they are mounted, and an index that does not open while an id is
+// looked up in every store. It is said once per caller however many times
+// the stores are opened, and not while muteOpenWarnings holds the store. (The
+// other warn-once of the package is the context.json one, which AddHere
+// leaves out for a call that carries an answer; that is about a file, not
+// a store.)
+func (ss *Session) warnSkipped(sk mount.Skipped) {
+	ss.warnOnce(sk.Name, openError(sk.Name, sk.Err).Error())
+}
+
+// warnOnce says msg about the store name, once per caller and not while
+// muteOpenWarnings holds the store.
+func (ss *Session) warnOnce(name, msg string) {
+	mc := ss.mountCache()
+	mc.warnedMu.Lock()
+	if mc.warned[name] || mc.muted[name] > 0 {
+		mc.warnedMu.Unlock()
+		return
+	}
+	if mc.warned == nil {
+		mc.warned = map[string]bool{}
+	}
+	mc.warned[name] = true
+	mc.warnedMu.Unlock()
+	ss.warn(msg)
+}
+
+// muteOpenWarnings makes the mount keep quiet about the stores names that do
+// not open, for a caller that tells of them in its own way. The returned
+// function ends it: once the last caller that muted a store has ended, the
+// next mount, opened again for that, warns of it. Callers may overlap.
+func (ss *Session) muteOpenWarnings(names []string) (unmute func()) {
+	mc := ss.mountCache()
+	mc.warnedMu.Lock()
+	if mc.muted == nil {
+		mc.muted = map[string]int{}
+	}
+	for _, n := range names {
+		mc.muted[n]++
+	}
+	mc.warnedMu.Unlock()
+	return func() {
+		if len(names) == 0 {
+			return
+		}
+		mc.warnedMu.Lock()
+		for _, n := range names {
+			if mc.muted[n]--; mc.muted[n] <= 0 {
+				delete(mc.muted, n)
+			}
+		}
+		mc.warnedMu.Unlock()
+		ss.dropMount()
+	}
+}
+
+// dropMount forgets the stores mounted, for the next call to open them
+// again. A write through a handle of its own (a sync) adds objects that a
+// store opened before it does not see.
+func (ss *Session) dropMount() {
+	mc := ss.mountCache()
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.set = nil
+	ss.forgetQualified()
+}
+
+// openError is the error of a store that does not open.
+func openError(name string, err error) *Error {
+	return newErr(KindInvalid, "store.open", fmt.Errorf("cannot open %s: %w", name, err), "name", name)
 }
 
 // location is where a date without a zone is read.
@@ -134,7 +291,11 @@ func (ss *Session) OpenStore() (*store.Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ss.openStoreAt(e.Path)
+	s, err := ss.openStoreAt(e.Path)
+	if err != nil {
+		return nil, openError(e.Name, err)
+	}
+	return s, nil
 }
 
 // openStoreAt opens the store in dir with the clock of the session, so that
@@ -154,11 +315,72 @@ func (ss *Session) Open() (*store.Store, *index.Index, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	ix, err := index.Open(s)
+	ix, err := ss.openIndex(s)
 	if err != nil {
 		return nil, nil, err
 	}
 	return s, ix, nil
+}
+
+// openIndex opens the index of s, which knows the name of its store. The
+// store and the index are of the operation, not the ones mount keeps: an
+// index sets the id numbers of its store, so the two go together, and
+// operations run concurrently on one session.
+func (ss *Session) openIndex(s *store.Store) (*index.Index, error) {
+	_, e, err := ss.Entry()
+	if err != nil {
+		return index.Open(s)
+	}
+	return ss.indexOf(e.Name, s)
+}
+
+// indexOf opens the index of s, the store called name, that knows its
+// name and shows ids as the other indexes do.
+func (ss *Session) indexOf(name string, s *store.Store) (*index.Index, error) {
+	ix, err := index.Open(s)
+	if err != nil {
+		return nil, err
+	}
+	ix.SetStoreName(name)
+	ix.SetQualified(ss.qualified())
+	return ix, nil
+}
+
+// qualified tells which id prefixes show with the store's name, because two
+// or more stores of config.yaml use them (mount.SharedPrefixes). It is worked out once
+// per caller, and again after a write, which may add a workspace or change a
+// prefix. Stores that cannot be read have no prefix to count.
+func (ss *Session) qualified() func(prefix string) bool {
+	mc := ss.mountCache()
+	mc.sharedMu.Lock()
+	defer mc.sharedMu.Unlock()
+	if !mc.sharedDone {
+		// the config as it is now: a store may have been added or removed
+		c, _, err := ss.Config()
+		if err != nil {
+			return nil // not kept, so the next call reads again
+		}
+		mc.shared, mc.sharedDone = mount.SharedPrefixes(c), true
+	}
+	return mc.shared
+}
+
+// qualifiedNow is qualified asked again at each use, for what is kept long:
+// a mounted set must follow a write that changes which prefixes are shared.
+func (ss *Session) qualifiedNow() func(prefix string) bool {
+	return func(prefix string) bool {
+		fn := ss.qualified()
+		return fn != nil && fn(prefix)
+	}
+}
+
+// forgetQualified drops what qualified worked out, for the next call to
+// work it out again.
+func (ss *Session) forgetQualified() {
+	mc := ss.mountCache()
+	mc.sharedMu.Lock()
+	defer mc.sharedMu.Unlock()
+	mc.shared, mc.sharedDone = nil, false
 }
 
 // Writer returns the account that writes to the store the session works
@@ -229,6 +451,7 @@ func (ss *Session) UpdateCommit(s *store.Store, op store.Op, fn func(*store.Tx) 
 	h, err := s.UpdateCommit(op, fn)
 	if err == nil && !h.IsZero() {
 		ss.markWritten(s)
+		ss.forgetQualified()
 	}
 	return h, err
 }
@@ -315,7 +538,7 @@ func (e *ambiguousError) Error() string {
 	return fmt.Sprintf("%q matches %d %s:\n  %s", e.input, len(e.lines), noun, strings.Join(e.lines, "\n  "))
 }
 
-// Resolve finds the task arg names.
+// Resolve finds the task arg names in the store of ix.
 func (ss *Session) Resolve(ix *index.Index, arg string) (*index.Entry, error) {
 	ulid, err := ix.Resolve(arg)
 	var ae *index.AmbiguousError
@@ -336,10 +559,10 @@ func (ss *Session) Resolve(ix *index.Index, arg string) (*index.Entry, error) {
 	return e, nil
 }
 
-// ResolveULID is Resolve for the callers that need only the ULID.
+// ResolveULID is ResolveRef for the callers that need only the ULID.
 func (ss *Session) ResolveULID(ix *index.Index) func(string) (model.ULID, error) {
 	return func(s string) (model.ULID, error) {
-		e, err := ss.Resolve(ix, s)
+		e, err := ss.ResolveRef(ix, s)
 		if err != nil {
 			return model.ULID{}, err
 		}
@@ -352,6 +575,9 @@ func (ss *Session) ResolveULID(ix *index.Index) func(string) (model.ULID, error)
 // by it; one made later has not. reported says that the one who ran it is
 // told of a failure, so the next command does not tell of it again.
 func (ss *Session) RunSync(s *store.Store, opt sync.Options, reported bool) (res sync.Result, err error) {
+	// The sync writes objects through the handle s; the stores mounted are
+	// opened again after it, so that they see them.
+	defer ss.dropMount()
 	err = s.WithLocalLock("sync.lock", syncLockWait, func() error {
 		started := ss.Now()
 		if _, err := sync.UpdateState(s, func(st *sync.State) { st.LastAttempt = started }); err != nil {

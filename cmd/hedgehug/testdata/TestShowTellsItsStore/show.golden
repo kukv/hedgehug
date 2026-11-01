@@ -1,0 +1,18 @@
+Bravo task
+  id          BB-1
+  ulid        <ULID-1>
+  store       bravo-long
+  workspace   bravo-long (BB, <ULID-2>)
+  kind        task
+  status      done
+  parent      -
+  assignees   -
+  watchers    -
+  labels      -
+  repos       -
+  blocked_by  -
+  created     <TIME> by -
+  updated     <TIME>
+
+History:
+<HASH>  <TIME>  Alice  hedgehug: add BB-1 (<ULID-1>) Bravo task

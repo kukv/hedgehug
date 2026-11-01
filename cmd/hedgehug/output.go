@@ -10,6 +10,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/mount"
 	"github.com/kukv/hedgehug/internal/ops"
 )
 
@@ -79,8 +80,8 @@ var taskHeader = []string{"ID", "ULID", "STATUS", "KIND", "ASSIGNEES", "LABELS",
 
 // taskRow is one task in the table. The title is last, so wide characters
 // in it do not shift other columns.
-func taskRow(e *index.Entry) []string {
-	id, kind, status := e.ID, e.Kind, e.Status
+func taskRow(ix *index.Index, e *index.Entry) []string {
+	id, kind, status := ix.DisplayID(e), e.Kind, e.Status
 	if id == "" {
 		id = "?"
 	}
@@ -90,25 +91,41 @@ func taskRow(e *index.Entry) []string {
 	return []string{id, e.ULID.String(), status, kind, strings.Join(e.Assignees, ","), strings.Join(e.Labels, ","), e.Title}
 }
 
-// printTasks prints es as JSON or as a table.
-func (a *app) printTasks(ix *index.Index, es []*index.Entry) error {
+// printTasks prints es as JSON or as a table; withStore puts the name of the
+// store of each task in a STORE column ahead of the others.
+func (a *app) printTasks(es []mount.Entry, withStore bool) error {
 	if a.jsonOut {
 		out := make([]*ops.TaskView, len(es))
 		for i, e := range es {
-			out[i] = ops.TaskViewOf(ix, e)
+			ix, err := e.Store.Index()
+			if err != nil {
+				return err
+			}
+			out[i] = ops.TaskViewOf(ix, e.Entry)
 		}
 		return a.printJSON(out)
 	}
 	if len(es) == 0 {
 		return nil
 	}
+	header, lead := taskHeader, 0
+	if withStore {
+		header, lead = append([]string{"STORE"}, taskHeader...), 1
+	}
 	rows := make([][]string, len(es))
 	for i, e := range es {
-		rows[i] = taskRow(e)
+		ix, err := e.Store.Index()
+		if err != nil {
+			return err
+		}
+		rows[i] = taskRow(ix, e.Entry)
+		if withStore {
+			rows[i] = append([]string{e.Store.Name}, rows[i]...)
+		}
 	}
 	st := a.style()
-	return writeTable(a.stdout, taskHeader, rows, func(r, c int, s string) string {
-		if r >= 0 && c <= 1 {
+	return writeTable(a.stdout, header, rows, func(r, c int, s string) string {
+		if r >= 0 && c >= lead && c <= lead+1 {
 			return st.id(s)
 		}
 		return s
@@ -128,7 +145,7 @@ func (a *app) printTask(ix *index.Index, ulid model.ULID, verb string) error {
 	if a.jsonOut {
 		return a.printJSON(ops.TaskViewOf(ix, e))
 	}
-	_, err := fmt.Fprintf(a.stdout, "%s %s %s\n", verb, a.style().id(ops.TaskLabel(e)), e.Title)
+	_, err := fmt.Fprintf(a.stdout, "%s %s %s\n", verb, a.style().id(ops.TaskLabel(ix, e)), e.Title)
 	return err
 }
 

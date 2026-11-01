@@ -7,6 +7,7 @@ import (
 
 func TestCommentAddEditRemove(t *testing.T) {
 	ts := newTestSession(t)
+	ts.asAccount("alice")
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
@@ -131,6 +132,7 @@ func TestFindCommentNotFound(t *testing.T) {
 
 func TestCommentEditCases(t *testing.T) {
 	ts := newTestSession(t)
+	ts.asAccount("alice")
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/sync"
 )
 
 func (te *testEnv) commentJSON(args ...string) commentOut {
@@ -142,6 +143,7 @@ func TestCommentDeletedTask(t *testing.T) {
 
 func TestCommentEdit(t *testing.T) {
 	te := newStoreEnv(t)
+	te.writeAccounts("github.com", "alice")
 	x := te.addJSON("Alpha")
 	c := te.commentJSON("comment", x.ID, "first")
 	before := len(te.log("me"))
@@ -169,6 +171,7 @@ func TestCommentEdit(t *testing.T) {
 
 func TestCommentEditChangedWhileEditing(t *testing.T) {
 	te := newStoreEnv(t)
+	te.writeAccounts("github.com", "alice")
 	x := te.addJSON("Alpha")
 	c := te.commentJSON("comment", x.ID, "first")
 	before := len(te.log("me"))
@@ -193,6 +196,7 @@ func TestCommentEditChangedWhileEditing(t *testing.T) {
 
 func TestCommentEditNoChangesAndEmpty(t *testing.T) {
 	te := newStoreEnv(t)
+	te.writeAccounts("github.com", "alice")
 	x := te.addJSON("Alpha")
 	c := te.commentJSON("comment", x.ID, "first")
 	before := len(te.log("me"))
@@ -213,6 +217,7 @@ func TestCommentEditNoChangesAndEmpty(t *testing.T) {
 
 func TestCommentRm(t *testing.T) {
 	te := newStoreEnv(t)
+	te.writeAccounts("github.com", "alice")
 	x := te.addJSON("Alpha")
 	c := te.commentJSON("comment", x.ID, "gone soon")
 	before := len(te.log("me"))
@@ -248,6 +253,7 @@ func TestCommentRm(t *testing.T) {
 // lands between its first read and the lock is kept.
 func TestCommentRmRereadsUnderLock(t *testing.T) {
 	te := newStoreEnv(t)
+	te.writeAccounts("github.com", "alice")
 	x := te.addJSON("Alpha")
 	c := te.commentJSON("comment", x.ID, "first")
 	s, err := store.Open(te.storeDir("me"))
@@ -315,7 +321,7 @@ func (te *testEnv) putComments(ulid string, commentULIDs ...string) {
 	}
 	if _, err := s.Update(store.Op{Name: "comment", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
 		for _, commentULID := range commentULIDs {
-			if err := tx.PutComment(mustULID(te.t, ulid), &model.Comment{ULID: mustULID(te.t, commentULID), Body: "body " + commentULID + "\n"}); err != nil {
+			if err := tx.PutComment(mustULID(te.t, ulid), &model.Comment{ULID: mustULID(te.t, commentULID), Author: "github.com/alice", Body: "body " + commentULID + "\n"}); err != nil {
 				return err
 			}
 		}
@@ -327,6 +333,7 @@ func (te *testEnv) putComments(ulid string, commentULIDs ...string) {
 
 func TestCommentULIDMustBeFull(t *testing.T) {
 	te := newStoreEnv(t)
+	te.writeAccounts("github.com", "alice")
 	x := te.addJSON("Alpha")
 	const a = "01HZZZZZZZZZZZZZZZZZZZ0001"
 	te.putComments(x.ULID, a)
@@ -358,5 +365,43 @@ func TestShowCommentULID(t *testing.T) {
 	// ulid, author, created and body.
 	if len(got.Comments) != 1 || got.Comments[0]["ulid"] != c.ULID || len(got.Comments[0]) != 4 {
 		t.Errorf("comments = %+v, want only ulid %q, author, created and body", got.Comments, c.ULID)
+	}
+}
+
+func TestCommentEditRmOnlyByTheAuthor(t *testing.T) {
+	te := newStoreEnv(t)
+	te.writeAccounts("github.com", "alice")
+	x := te.addJSON("Alpha")
+	c := te.commentJSON("comment", x.ID, "mine")
+	if c.Author != "github.com/alice" {
+		t.Fatalf("author = %q", c.Author)
+	}
+	te.withOtherWriter("github.com/bob", func() {
+		for _, verb := range []struct{ cmd, done string }{{"edit", "edited"}, {"rm", "removed"}} {
+			code, _, errs := te.run("comment", verb.cmd, c.ULID)
+			if want := "hedgehug: github.com/alice's comment cannot be " + verb.done + "\n"; code != 1 || errs != want {
+				t.Errorf("comment %s: exit %d, stderr %q; want 1, %q", verb.cmd, code, errs, want)
+			}
+		}
+	})
+	if cs := te.comments(x.ULID); len(cs) != 1 || cs[0].DeletedAt != nil || cs[0].Body != "mine\n" {
+		t.Errorf("comments = %+v; want the comment untouched", cs)
+	}
+}
+
+func TestCommentMentionWarning(t *testing.T) {
+	te := newStoreEnv(t)
+	te.writeAccounts("github.com", "alice")
+	x := te.addJSON("Alpha")
+	s, err := store.Open(te.storeDir("me"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sync.WriteMembers(s, sync.Members{Collaborators: []sync.Collaborator{{ID: "github.com/bob", Permission: "write"}}}); err != nil {
+		t.Fatal(err)
+	}
+	code, _, errs := te.run("comment", x.ID, "hi @bob and @carol")
+	if code != 0 || errs != "warning: carol cannot read me\n" {
+		t.Errorf("exit %d, stderr %q; want the warning for carol", code, errs)
 	}
 }

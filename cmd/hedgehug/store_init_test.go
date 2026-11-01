@@ -102,11 +102,18 @@ func TestStoreSelection(t *testing.T) {
 	}
 	te.ok("store", "init", "a", "--prefix", "AA")
 	te.ok("store", "init", "b", "--prefix", "BB")
-	code, _, stderr = te.run("ls")
-	if code != 1 || !strings.Contains(stderr, "--store") {
-		t.Errorf("ls with two stores: exit %d, stderr %q", code, stderr)
+	// a listing is over every store
+	te.ok("add", "--store", "a", "x")
+	te.ok("add", "--store", "b", "y")
+	if out := te.ok("ls"); !strings.HasPrefix(out, "STORE") {
+		t.Errorf("ls with two stores =\n%s", out)
 	}
 	te.ok("ls", "--store", "b")
+	// a store-wide command wants the store named
+	code, _, stderr = te.run("workspace", "ls")
+	if code != 1 || !strings.Contains(stderr, "--store") {
+		t.Errorf("workspace ls with two stores: exit %d, stderr %q", code, stderr)
+	}
 }
 
 func TestStoreInitNoAuthor(t *testing.T) {

@@ -186,7 +186,7 @@ func TestAmbiguousWorkspace(t *testing.T) {
 	te.wsJSON(&api, "add", "api", "--prefix", "BE")
 	te.wsJSON(&be, "add", "be", "--prefix", "API")
 	code, _, errs := te.run("workspace", "rename", "api", "x")
-	if code != 1 {
+	if code != 2 {
 		t.Errorf("exit %d", code)
 	}
 	for _, want := range []string{
@@ -251,7 +251,7 @@ func TestAmbiguousTask(t *testing.T) {
 	b := te.addJSON("second")
 	te.commitFile(b.ULID, setLine(te.raw(b.ULID), "id", a.ID))
 	code, _, errs := te.run("show", a.ID)
-	if code != 1 {
+	if code != 2 {
 		t.Errorf("exit %d", code)
 	}
 	for _, want := range []string{
