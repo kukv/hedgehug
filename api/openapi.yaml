@@ -1821,6 +1821,13 @@ paths:
     get:
       operationId: list-notifications
       parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
         - description: Include the items read
           explode: false
           in: query
@@ -1845,13 +1852,20 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
           description: Error
-      summary: List the inbox of every store, newest first, as hh inbox
+      summary: List the inbox of every store (of ?store= only), newest first, as hh inbox
       tags:
         - notifications
   /api/notifications/{id}:
     patch:
       operationId: update-notification
       parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
         - description: The ULID of the item
           in: path
           name: id
@@ -1881,6 +1895,13 @@ paths:
     post:
       operationId: revert-notification
       parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
         - description: The ULID of the item
           in: path
           name: id

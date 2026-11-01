@@ -36,6 +36,7 @@ type activityInput struct {
 type activityOutput struct{ Body []ops.LogView }
 
 type notificationsInput struct {
+	StoreParam
 	All bool `query:"all" doc:"Include the items read"`
 }
 
@@ -49,6 +50,7 @@ type notificationsOutput struct{ Body []notification }
 // NotificationParam is the item a request is on. It is exported because huma
 // skips an embedded struct whose type is not.
 type NotificationParam struct {
+	StoreParam
 	ID string `path:"id" doc:"The ULID of the item"`
 }
 
@@ -121,10 +123,11 @@ func (s *Server) registerActivity() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "list-notifications", Method: http.MethodGet, Path: "/api/notifications",
-		Summary: "List the inbox of every store, newest first, as hh inbox", Tags: []string{"notifications"},
+		Summary: "List the inbox of every store (of ?store= only), newest first, as hh inbox", Tags: []string{"notifications"},
 	}, func(_ context.Context, in *notificationsInput) (*notificationsOutput, error) {
-		ss := s.session("")
-		// Warnings reach the log once, however many times the boxes are read.
+		ss := s.session(in.Store)
+		// Ops warns once per read of the boxes, and the unread and the all
+		// lists below read them twice: the warnings reach the log once.
 		seen := map[string]bool{}
 		warn := ss.Warn
 		ss.Warn = func(m string) {
@@ -165,7 +168,7 @@ func (s *Server) registerActivity() {
 		if !in.Body.Read {
 			return nil, newProblem(http.StatusBadRequest, "notification.unread", "an item cannot be marked unread")
 		}
-		if _, err := s.session("").InboxRead([]string{in.ID}, false); err != nil {
+		if _, err := s.session(in.Store).InboxRead([]string{in.ID}, false); err != nil {
 			return nil, problemOf(err)
 		}
 		s.poller.Kick()
@@ -176,7 +179,7 @@ func (s *Server) registerActivity() {
 		OperationID: "revert-notification", Method: http.MethodPost, Path: "/api/notifications/{id}/revert",
 		Summary: "Write my overwritten value back, as hh inbox revert", Tags: []string{"notifications"},
 	}, func(_ context.Context, in *NotificationParam) (*taskWriteOutput, error) {
-		r, err := s.session("").InboxRevert(in.ID)
+		r, err := s.session(in.Store).InboxRevert(in.ID)
 		if err != nil {
 			return nil, problemOf(err)
 		}

@@ -301,7 +301,16 @@ func (ts *testServer) accountID() string {
 // returns its ULID.
 func (ts *testServer) notifyMe(it inbox.Item) string {
 	ts.t.Helper()
-	s, err := ts.session().OpenStore()
+	return ts.notifyIn("me", it)
+}
+
+// notifyIn puts it into the inbox of the named store, as a sync would, and
+// returns its ULID.
+func (ts *testServer) notifyIn(storeName string, it inbox.Item) string {
+	ts.t.Helper()
+	ss := ts.session()
+	ss.StoreName = storeName
+	s, err := ss.OpenStore()
 	if err != nil {
 		ts.t.Fatal(err)
 	}
