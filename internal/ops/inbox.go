@@ -62,7 +62,7 @@ func (ss *Session) InboxStores() ([]InboxStore, error) {
 		case openErr != nil:
 			ss.warnSkipped(mount.Skipped{Name: e.Name, Err: openErr})
 		default:
-			ss.warnOnce(e.Name, fmt.Sprintf("cannot read the inbox of %s: %v", e.Name, readErr))
+			ss.warnOnce("inbox:"+e.Name, fmt.Sprintf("cannot read the inbox of %s: %v", e.Name, readErr))
 		}
 	}
 	return out, nil
@@ -185,10 +185,45 @@ func (ss *Session) InboxListOf(stores []InboxStore, all bool) ([]InboxItemView, 
 		}
 		out[i] = InboxItemView{
 			Item: r.item, Store: r.store, Task: inboxTaskRef(r.ix, r.item),
-			Target: inboxTarget(r.ix, r.item), Content: InboxContent(r.ix, named, r.store, len(stores) > 1),
+			Target: inboxTarget(r.ix, r.item), Content: InboxContent(r.ix, named, r.store, len(stores) > 1) + ss.movedHint(r.ix, r.store, r.item),
 		}
 	}
 	return out, nil
+}
+
+// movedHint says where to apply an overwritten value of a task that moved to
+// another store: "→ apply it to org-b's WEB-45", or the store's ULID when it
+// is not mounted. It is empty for any other item.
+func (ss *Session) movedHint(ix *index.Index, storeName string, it inbox.Item) string {
+	if ix == nil || it.Kind != inbox.Overwritten || it.Task.IsZero() {
+		return ""
+	}
+	f, ok := ix.Forward(it.Task)
+	if !ok {
+		return ""
+	}
+	mv := ss.movedTo(storeName, it.Task.String(), f)
+	switch {
+	case mv.To == nil:
+		return " → apply it in the store " + f.MovedTo.String()
+	case mv.NowID() == "":
+		return " → apply it in the store " + mv.To.Name
+	}
+	return fmt.Sprintf(" → apply it to %s's %s", mv.To.Name, mv.NowID())
+}
+
+// movedTo looks for the task a forward of the store storeName points at.
+func (ss *Session) movedTo(storeName, input string, f *index.ForwardEntry) *mount.MovedError {
+	set, err := ss.Mount()
+	if err != nil {
+		// without the mounts, the store is only named by its ULID
+		ss.warnOnce("mount: moved", fmt.Sprintf("cannot look for the store the task moved to: %v", err))
+	}
+	var from *mount.Mounted
+	if set != nil {
+		from, _ = set.Get(storeName)
+	}
+	return set.Moved(from, input, f)
 }
 
 // inboxIndex opens the index of st, as the other operations do.
@@ -318,6 +353,11 @@ func (ss *Session) InboxRevertOf(stores []InboxStore, u model.ULID) (TaskResult,
 	if it.Task.IsZero() {
 		return TaskResult{}, notRevertible(fmt.Errorf("inbox item %s is about %s, which is not a task; only the values of tasks can be reverted", u, it.Path))
 	}
+	if ix, err := ss.inboxIndex(st); err == nil {
+		if f, ok := ix.Forward(it.Task); ok {
+			return TaskResult{}, movedRevertErr(ss.movedTo(st.Name, it.Task.String(), f))
+		}
+	}
 	var d struct {
 		Field string          `json:"field"`
 		Value json.RawMessage `json:"value"`
@@ -361,6 +401,29 @@ func (ss *Session) InboxRevertOf(stores []InboxStore, u model.ULID) (TaskResult,
 	return TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }
 
+// movedRevertErr is task.moved for an inbox revert of a task that moved:
+// nothing is written; the value is to be applied where the task is now.
+func movedRevertErr(mv *mount.MovedError) error {
+	label := mv.Label()
+	var text string
+	switch {
+	case mv.To == nil:
+		text = fmt.Sprintf("%s moved to the store %s; fix it there", label, mv.Forward.MovedTo)
+	case mv.Entry == nil:
+		text = fmt.Sprintf("%s moved to %s; fix it there", label, mv.To.Name)
+	default:
+		text = fmt.Sprintf("%s moved to %s; fix it there (%s)", label, mv.To.Name, mount.Hit{Store: mv.To, Entry: mv.Entry}.Ref())
+	}
+	args := []any{"input", mv.Input, "store_ulid", mv.Forward.MovedTo.String()}
+	if mv.To != nil {
+		args = append(args, "store", mv.To.Name)
+	}
+	if id := mv.NowID(); id != "" {
+		args = append(args, "id", id)
+	}
+	return newErr(KindNotFound, "task.moved", errors.New(text), args...)
+}
+
 // inboxTaskRef names the task of the item as it is now, or as the item has
 // it when the task is gone; nil for an item of no task.
 func inboxTaskRef(ix *index.Index, it inbox.Item) *Ref {
@@ -390,8 +453,11 @@ func inboxTarget(ix *index.Index, it inbox.Item) string {
 			return RefName(ix, e.ULID)
 		}
 	}
-	if it.ID != "" {
-		id := it.ID
+	id := it.ID
+	if f, ok := forwardOf(ix, it.Task); ok && id == "" {
+		id = f.ID // the task moved to another store
+	}
+	if id != "" {
 		if ix != nil {
 			id = ix.QualifyID(id)
 		}
@@ -462,6 +528,26 @@ func InboxContent(ix *index.Index, it inbox.Item, storeName string, manyStores b
 		return RepairedContent(ix, it)
 	case inbox.PrefixDuplicate:
 		return duplicateContent(ix, it, storeName, manyStores)
+	case inbox.RewriteApplied:
+		var d struct {
+			Store    string `json:"store"`
+			Replayed int    `json:"replayed"`
+		}
+		_ = json.Unmarshal(it.Detail, &d) // an item that does not decode tells no store
+		changes := fmt.Sprintf("%d unpushed changes", d.Replayed)
+		if d.Replayed == 1 {
+			changes = "1 unpushed change"
+		}
+		return fmt.Sprintf("the history rewrite of %s was taken in (%s put back)", d.Store, changes)
+	case inbox.PurgedChange:
+		id := it.ID
+		if ix != nil {
+			id = ix.QualifyID(id)
+		}
+		if id == "" {
+			id = it.Task.String()
+		}
+		return fmt.Sprintf("unpushed changes to the purged task %s were not taken in", id)
 	}
 	return string(it.Detail)
 }
@@ -479,6 +565,10 @@ func RepairedContent(ix *index.Index, it inbox.Item) string {
 	var d repairDetail
 	_ = json.Unmarshal(it.Detail, &d) // an item that does not decode tells no kind
 	switch d.Kind {
+	case "parent_moved":
+		return "moved to the root because its parent moved to another store"
+	case "ref_moved":
+		return movedRefContent(ix, d.Value)
 	case "sprint_detached", "release_detached":
 		// The value is the name of the sprint or release (its ULID when it
 		// cannot be read).
@@ -510,6 +600,31 @@ func RepairedContent(ix *index.Index, it inbox.Item) string {
 		return fmt.Sprintf("%s (was %s)", d.Kind, v)
 	}
 	return d.Kind
+}
+
+// forwardOf is the forward of u in ix, which may be nil.
+func forwardOf(ix *index.Index, u model.ULID) (*index.ForwardEntry, bool) {
+	if ix == nil {
+		return nil, false
+	}
+	return ix.Forward(u)
+}
+
+// movedRefContent says what a ref_moved repair removed: the field and the
+// task it named, by the id the task had when it moved.
+func movedRefContent(ix *index.Index, value json.RawMessage) string {
+	var v struct {
+		Field  string
+		Target model.ULID
+	}
+	if json.Unmarshal(value, &v) != nil || v.Field == "" {
+		return "ref_moved"
+	}
+	name := v.Target.String()
+	if f, ok := forwardOf(ix, v.Target); ok && f.ID != "" {
+		name = f.ID
+	}
+	return fmt.Sprintf("%s to %s was removed because it moved to another store", v.Field, name)
 }
 
 // taskName is the task u as "ID (ULID) title", or its ULID when ix lacks it.

@@ -21,12 +21,13 @@ var ErrHeadMoved = errors.New("HEAD moved while the merge was computed")
 
 // lockedAtHead takes the store lock, checks that HEAD is head and runs fn.
 func (s *Store) lockedAtHead(head plumbing.Hash, fn func() error) (err error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	l, err := acquire(s.path(lockPath), s.lockWait)
+	// lockStore waits for the file lock without s.mu, so that a holder of a
+	// Locked in this process, which needs s.mu, is not kept out by the wait.
+	l, err := s.lockStore()
 	if err != nil {
 		return err
 	}
+	defer s.mu.Unlock()
 	// As in Update, a release error only matters when the operation failed.
 	defer func() {
 		if rerr := l.release(); rerr != nil && err != nil {
@@ -93,6 +94,9 @@ func (s *Store) CommitMerge(head plumbing.Hash, parents []plumbing.Hash, files m
 			Trailers: append(ts, trailers...),
 			Author:   op.Author,
 			When:     s.now().Truncate(time.Second),
+			// The replay after a history rewrite records what lost, with no
+			// file changed.
+			AllowEmpty: op.AllowEmpty,
 		}
 		if err := s.apply(changes); err != nil {
 			return err

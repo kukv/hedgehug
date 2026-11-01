@@ -1,0 +1,14 @@
+{
+  "from": "alpha",
+  "to": "bravo-long",
+  "tasks": [
+    {
+      "ulid": "<ULID-1>",
+      "old_id": "AA-4",
+      "new_id": "BB-3"
+    }
+  ],
+  "scoped": {
+    "carried": false
+  }
+}

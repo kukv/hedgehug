@@ -1,0 +1,9 @@
+{
+  "removed": [
+    {
+      "ulid": "<ULID-1>",
+      "id": "AA-2"
+    }
+  ],
+  "commit": "<HASH>"
+}

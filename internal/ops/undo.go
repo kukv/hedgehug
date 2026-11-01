@@ -39,6 +39,14 @@ func (ss *Session) Undo() (UndoResult, error) {
 	hash, err := ss.UpdateCommit(s, store.Op{Name: "undo"}, func(tx *store.Tx) error {
 		var err error
 		res, err = undoInTx(tx, s, ix, acct.ID())
+		var fe *forwardHitError
+		if errors.As(err, &fe) {
+			if moved := ss.movedFor(ix, fe.ulid.String()); moved != nil {
+				return moved
+			}
+			// the forward is there but the index cannot name it (a broken one)
+			return movedUnknownErr(fe.ulid)
+		}
 		if err == nil && !res.Found {
 			return newErr(KindConflict, "undo.nothing", errors.New("nothing to undo"))
 		}
@@ -72,6 +80,19 @@ func UndoTarget(log []gitrepo.LogEntry, me string) (gitrepo.LogEntry, bool) {
 	}
 	return gitrepo.LogEntry{}, false
 }
+
+// undoBlocked are the operations undo does not take back, with why.
+var undoBlocked = map[string]string{
+	"move-in":         "a move between stores cannot be undone; move it back with hedgehug mv --store",
+	"move-out":        "a move between stores cannot be undone; move it back with hedgehug mv --store",
+	"rewrite-history": "a history rewrite cannot be undone",
+}
+
+// forwardHitError is a task file that undo would write over a forward: the
+// task moved after the operation. Undo turns it into task.moved.
+type forwardHitError struct{ ulid model.ULID }
+
+func (e *forwardHitError) Error() string { return e.ulid.String() + " moved to another store" }
 
 // UndoKept is a value undo left as it is, because another writer changed it
 // after the commit that is taken back.
@@ -125,6 +146,10 @@ func undoInTx(tx *store.Tx, s *store.Store, ix *index.Index, me string) (UndoRes
 	if !ok {
 		return res, nil
 	}
+	op, _ := c.Trailer("Hedgehug-Op")
+	if why, blocked := undoBlocked[op]; blocked {
+		return res, newErr(KindConflict, "undo.blocked", errors.New(why))
+	}
 	res.Commit, res.Found = c, true
 	tx.SetDetail(UndoSubject(c))
 	tx.AddTrailer("Hedgehug-Undo", c.Hash.String())
@@ -142,6 +167,16 @@ func undoInTx(tx *store.Tx, s *store.Store, ix *index.Index, me string) (UndoRes
 	changes, err := r.DiffTrees(pTree, cTree, "")
 	if err != nil {
 		return res, err
+	}
+	// Nothing is written over a task that has moved since: it is told first.
+	for _, ch := range changes {
+		ulid, err := model.ParseTaskPath(ch.Path)
+		if err != nil {
+			continue
+		}
+		if b, err := r.ReadAt(head, ch.Path); err == nil && model.IsForward(b) {
+			return res, &forwardHitError{ulid: ulid}
+		}
 	}
 	u := &undoer{tx: tx, r: r, ix: ix, sc: s.Schema(), head: head, c: c, paths: map[string]bool{}, res: &res}
 	for _, ch := range changes {

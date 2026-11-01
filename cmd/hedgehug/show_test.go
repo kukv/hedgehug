@@ -217,3 +217,46 @@ func mustULID(t *testing.T, s string) model.ULID {
 	}
 	return ulid
 }
+
+// A task that moved to another store is named by where it went, with exit 1.
+func TestShowAMovedTask(t *testing.T) {
+	t.Parallel()
+	te := newTestEnv(t)
+	te.ok("store", "init", "org-a", "--prefix", "API")
+	te.ok("store", "init", "org-b", "--prefix", "WEB")
+	moved := te.addJSON("--store", "org-a", "Moving")
+	ulid, _ := model.ParseULID(moved.ULID)
+	sa, err := store.Open(te.storeDir("org-a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sb, err := store.Open(te.storeDir("org-b"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	author := gitrepo.Signature{Name: "T", Email: "t@example.com"}
+	var ws model.ULID
+	for w, err := range sb.Workspaces() {
+		if err != nil {
+			t.Fatal(err)
+		}
+		ws = w.ULID
+		break
+	}
+	if _, err := sb.Update(store.Op{Name: "move-in", Task: ulid, Author: author}, func(tx *store.Tx) error {
+		return tx.PutTask(&model.Task{ULID: ulid, Title: "Moving", Kind: "task", Status: "todo", Workspace: ws, FormerIDs: []string{moved.ID}})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fwd := "---\nulid: " + moved.ULID + "\nmoved_to: " + sb.Meta().ULID.String() + "\n---\n"
+	if _, err := sa.Update(store.Op{Name: "move-out", Author: author}, func(tx *store.Tx) error {
+		return tx.PutFile(model.TaskPath(ulid), []byte(fwd))
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, stderr := te.run("show", "org-a:"+moved.ID)
+	if code != 1 || out != "" || !strings.Contains(stderr, moved.ID+" moved to org-b (org-b:WEB-1)") {
+		t.Errorf("show org-a:%s: exit %d, stdout %q, stderr %q; want exit 1 and the move named", moved.ID, code, out, stderr)
+	}
+}

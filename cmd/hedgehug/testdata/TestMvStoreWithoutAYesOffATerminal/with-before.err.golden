@@ -1,0 +1,1 @@
+hedgehug: --store cannot be used with --root, --before or --after

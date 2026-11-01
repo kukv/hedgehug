@@ -149,6 +149,9 @@ func (s *Server) session(storeName string) *ops.Session {
 		StoreName:  storeName,
 		Warn:       func(m string) { s.logf("warning: %s", m) },
 		AfterWrite: func(*store.Store, config.StoreEntry) { s.loop.Wake() },
+		// A sync that swaps a rebuilt store in (after a history rewrite)
+		// needs the files of the old one closed.
+		BeforeSwap: func(path string) { s.poller.Release(path) },
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"iter"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -91,17 +92,22 @@ func ignoreRel[T any](decode func([]byte) (T, error)) func(string, []byte) (T, e
 	return func(_ string, b []byte) (T, error) { return decode(b) }
 }
 
+// Task reads the task ulid. A forward is not a task: the error wraps both
+// model.ErrForward and ErrNotFound, so that the code that treats a task that
+// is not here as absent (a parent, a reference, a task to be written anew)
+// treats a forward the same.
 func (s *Store) Task(ulid model.ULID) (*model.Task, error) {
-	return readDecode(s.dir, model.TaskPath(ulid), model.DecodeTask)
+	t, err := readDecode(s.dir, model.TaskPath(ulid), model.DecodeTask)
+	if errors.Is(err, model.ErrForward) {
+		err = fmt.Errorf("%w: %w", ErrNotFound, err)
+	}
+	return t, err
 }
 
 // Tasks returns every task file. One that does not decode, or holds a task
-// of another ULID, yields a *FileError and no task.
+// of another ULID, yields a *FileError and no task. A forward is not a task:
+// it is skipped (Forwards yields it).
 func (s *Store) Tasks() iter.Seq2[*model.Task, error] {
-	match := func(rel string) bool {
-		_, err := model.ParseTaskPath(rel)
-		return err == nil
-	}
 	decode := func(rel string, b []byte) (*model.Task, error) {
 		t, err := model.DecodeTask(b)
 		if err != nil {
@@ -112,7 +118,21 @@ func (s *Store) Tasks() iter.Seq2[*model.Task, error] {
 		}
 		return t, nil
 	}
-	return walk(s, "tasks", match, decode)
+	return func(yield func(*model.Task, error) bool) {
+		for t, err := range walk(s, "tasks", isTaskPath, decode) {
+			if errors.Is(err, model.ErrForward) {
+				continue
+			}
+			if !yield(t, err) {
+				return
+			}
+		}
+	}
+}
+
+func isTaskPath(rel string) bool {
+	_, err := model.ParseTaskPath(rel)
+	return err == nil
 }
 
 // Comments returns the comments on task.
@@ -131,6 +151,33 @@ func (s *Store) Worklogs(task model.ULID) iter.Seq2[*model.Worklog, error] {
 		return err == nil && t == task
 	}
 	return walk(s, path.Dir(model.WorklogPath(task, model.ULID{})), match, ignoreRel(model.DecodeWorklog))
+}
+
+// NoteFiles returns the comment and worklog files of task as they are, by
+// path (relative to the store); none gives an empty map.
+func (s *Store) NoteFiles(task model.ULID) (map[string][]byte, error) {
+	out := map[string][]byte{}
+	for _, dir := range []string{path.Dir(model.CommentPath(task, model.ULID{})), path.Dir(model.WorklogPath(task, model.ULID{}))} {
+		entries, err := os.ReadDir(s.path(dir))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			rel := dir + "/" + e.Name()
+			b, err := atomicfile.ReadFile(s.path(rel))
+			if err != nil {
+				return nil, err
+			}
+			out[rel] = b
+		}
+	}
+	return out, nil
 }
 
 func (s *Store) Sprint(ulid model.ULID) (*model.Sprint, error) {

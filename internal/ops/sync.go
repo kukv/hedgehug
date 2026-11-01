@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -80,6 +81,10 @@ func (ss *Session) Sync(all, explicit bool) ([]SyncReport, error) {
 		if len(e.Remotes) == 0 {
 			continue
 		}
+		if err := ss.finishRebuild(e); err != nil {
+			broken = append(broken, e.Name)
+			continue
+		}
 		if _, err := ss.openStoreAt(e.Path); err != nil {
 			broken = append(broken, e.Name)
 		}
@@ -95,6 +100,7 @@ func (ss *Session) Sync(all, explicit bool) ([]SyncReport, error) {
 		}
 		out = append(out, r)
 	}
+	ss.AddDuplicateWarnings(out)
 	return out, errors.Join(errs...)
 }
 
@@ -106,6 +112,11 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 		r.NoRemote = true
 		return r, nil
 	}
+	// A swap after a history rewrite that stopped is finished first (spec:
+	// 作り直しと未 push の変更の取り込み).
+	if err := ss.finishRebuild(e); err != nil {
+		return r, err
+	}
 	s, err := ss.openStoreAt(e.Path)
 	if err != nil {
 		return r, err
@@ -116,6 +127,13 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 	}
 	opt.Explicit = explicit
 	res, err := ss.RunSync(s, opt, true)
+	if res.Reopen {
+		// s was closed for the swap.
+		var oerr error
+		if s, oerr = ss.openStoreAt(e.Path); oerr != nil {
+			err = errors.Join(err, oerr)
+		}
+	}
 	if err != nil {
 		return r, err
 	}
@@ -296,30 +314,88 @@ func (ss *Session) SyncBackground(log io.Writer) error {
 	if err != nil {
 		return backgroundFailed(ss, log, "", err)
 	}
+	if err := ss.finishRebuild(e); err != nil {
+		return backgroundFailed(ss, log, e.Name, err)
+	}
 	s, err := ss.openStoreAt(e.Path)
 	if err != nil {
 		return backgroundFailed(ss, log, e.Name, err)
 	}
-	log = sync.BoundLog(s, log)
+	bounded := sync.BoundLog(s, log)
+	defer func() { _ = bounded.Close() }() // after the last line of the log
+	log = bounded
 	opt, err := ss.SyncOptions(c, e)
 	if err == nil {
-		err = sync.Background(s, opt, c.Sync.PushInterval, func() error {
-			res, err := ss.RunSync(s, opt, false)
+		logWarnings := func(res sync.Result) {
 			for _, w := range res.Warnings { // such as a mirror that is down; for sync.log
 				_, _ = fmt.Fprintln(log, "warning: "+w)
 			}
-			return err
+		}
+		err = sync.BackgroundThen(s, opt, c.Sync.PushInterval, func() (func() error, error) {
+			res, err := ss.runSyncLocked(s, opt, false)
+			logWarnings(res)
+			if err != nil || res.Rebuild == nil {
+				return nil, err
+			}
+			// A history rewrite was found. The swap waits until Background
+			// has let go of bg.lock, which is in the store it replaces.
+			return func() error {
+				// sync.log is in the directory the swap replaces: let go of
+				// it, and open the new one after.
+				if err := bounded.Release(); err != nil {
+					sync.Discard(res.Rebuild)
+					return err
+				}
+				next, err := ss.swapRebuilt(s, opt, false, res)
+				if rerr := reopenLog(bounded, e.Path); rerr != nil {
+					err = errors.Join(err, rerr)
+				}
+				logWarnings(next)
+				if err == nil && next.Swapped {
+					_, _ = fmt.Fprintf(log, "%s sync %s: took in a history rewrite\n", ss.Now().Format(time.RFC3339), e.Name)
+				}
+				return err
+			}, nil
 		})
 	}
 	if err != nil {
 		// The same text a failed run left in sync.json already; the others
-		// (SyncOptions, the lock) are told of by the next command.
-		_, stateErr := sync.UpdateState(s, func(st *sync.State) {
-			st.LastError, st.ErrorReported = err.Error(), false
-		})
-		err = errors.Join(err, stateErr)
+		// (SyncOptions, the lock) are told of by the next command. s may be
+		// closed (a swap failed); UpdateState works by the path of the store,
+		// not by the repository, but when the swap left no store at the path
+		// it would make a directory there, which the repair of the swap takes
+		// for a store: only the log has the error then, in the directory the
+		// swap left (reopenLog).
+		if _, serr := os.Stat(e.Path); serr == nil {
+			_, stateErr := sync.UpdateState(s, func(st *sync.State) {
+				st.LastError, st.ErrorReported = err.Error(), false
+			})
+			err = errors.Join(err, stateErr)
+		}
 	}
 	return backgroundFailed(ss, log, e.Name, err)
+}
+
+// reopenLog opens the sync.log of the store at path again after the swap.
+// With no store at the path (a swap that stopped, left for the repair) it
+// opens the one in the old store that was moved away, or else in the
+// rebuild, so that what is logged after is not lost; opening it at the path
+// would make a directory there.
+func reopenLog(l *sync.BoundedLog, path string) error {
+	if _, err := os.Stat(path); err == nil {
+		return l.Reopen()
+	}
+	left, err := sync.FindLeftover(path)
+	if err != nil {
+		return err
+	}
+	switch {
+	case len(left.Before) > 0:
+		return l.ReopenAt(left.Before[len(left.Before)-1])
+	case left.New != "":
+		return l.ReopenAt(left.New)
+	}
+	return nil
 }
 
 // backgroundFailed logs err for sync.log and ends the child with exit code 0:

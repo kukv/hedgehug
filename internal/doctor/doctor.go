@@ -387,12 +387,22 @@ func checkFile(dir, root, rel string) (string, error) {
 		if err != nil {
 			return bad("the name does not follow the rule of task files")
 		}
-		t, err := model.DecodeTask(data)
-		if err != nil {
-			return bad("does not decode: %v", err)
+		var got model.ULID
+		if model.IsForward(data) {
+			f, err := model.DecodeForward(data)
+			if err != nil {
+				return bad("does not decode: %v", err)
+			}
+			got = f.ULID
+		} else {
+			t, err := model.DecodeTask(data)
+			if err != nil {
+				return bad("does not decode: %v", err)
+			}
+			got = t.ULID
 		}
-		if t.ULID != ulid {
-			return bad("the ulid in the file is %s, which differs from the ulid in the path", t.ULID)
+		if got != ulid {
+			return bad("the ulid in the file is %s, which differs from the ulid in the path", got)
 		}
 	case "comments", "worklogs":
 		var task, child, got model.ULID

@@ -19,6 +19,7 @@ type sides struct {
 	ours, theirs Side
 	oTime, tTime time.Time // when each side changed the file: its updated
 	oursTop      bool      // the result is built on ours
+	noBase       bool      // there is no base: both sides made the file
 	res          Result
 }
 
@@ -63,7 +64,8 @@ func load[X any](m *merger, base []byte, ours, theirs Side, k fileKind[X]) (*fil
 		return nil, false
 	}
 	b, err := k.decode(base)
-	if err != nil {
+	noBase := err != nil
+	if noBase {
 		b = new(X)
 	}
 	oursTop := top(ours, theirs)
@@ -75,7 +77,7 @@ func load[X any](m *merger, base []byte, ours, theirs Side, k fileKind[X]) (*fil
 	if err != nil {
 		return nil, false
 	}
-	s := &sides{merger: m, ours: ours, theirs: theirs, oTime: *k.updated(o), tTime: *k.updated(t), oursTop: oursTop}
+	s := &sides{merger: m, ours: ours, theirs: theirs, oTime: *k.updated(o), tTime: *k.updated(t), oursTop: oursTop, noBase: noBase}
 	return &fileMerge[X]{sides: s, b: b, o: o, t: t, dst: dst}, true
 }
 
@@ -245,10 +247,12 @@ func pick[T any](m *sides, name string, b, o, t T, eq func(a, b any) bool) T {
 // both sides changed it to different values, the later side wins and the
 // loser is recorded; under OursWins ours wins and nothing is recorded.
 func pickAt[T any](m *sides, name string, ot, tt time.Time, b, o, t T, eq func(a, b any) bool) T {
+	// Without a base both sides wrote the value, even when it is the empty
+	// one (a task with no parent): nothing is unchanged.
 	switch {
-	case eq(b, o):
+	case !m.noBase && eq(b, o):
 		return t
-	case eq(b, t) || eq(o, t):
+	case !m.noBase && eq(b, t) || eq(o, t):
 		return o
 	case m.p == OursWins:
 		return o

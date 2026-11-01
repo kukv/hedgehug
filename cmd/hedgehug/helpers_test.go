@@ -242,6 +242,9 @@ func TestMain(m *testing.M) {
 	if builtDir != "" {
 		_ = os.RemoveAll(builtDir)
 	}
+	if devenvDir != "" {
+		_ = os.RemoveAll(devenvDir)
+	}
 	os.Exit(code)
 }
 

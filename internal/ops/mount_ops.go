@@ -63,8 +63,11 @@ func storeConflict(arg, named, storeName string) error {
 // mountResolveError gives the error of mount.Set.Resolve its Kind and Code.
 func (ss *Session) mountResolveError(set *mount.Set, arg string, err error) error {
 	var me *mount.AmbiguousError
+	var mv *mount.MovedError
 	var ie *index.AmbiguousError
 	switch {
+	case errors.As(err, &mv):
+		return movedErr(mv)
 	case errors.As(err, &me):
 		lines := make([]string, len(me.Candidates))
 		for i, h := range me.Candidates {
@@ -93,6 +96,40 @@ func (ss *Session) mountResolveError(set *mount.Set, arg string, err error) erro
 		return newErr(KindNotFound, "task.not_found", err, "input", arg)
 	}
 	return classify(err)
+}
+
+// movedErr is the error of an input that names a task that moved to another
+// store.
+func movedErr(mv *mount.MovedError) error {
+	args := []any{"input", mv.Input, "store_ulid", mv.Forward.MovedTo.String()}
+	if mv.To != nil {
+		args = append(args, "store", mv.To.Name)
+	}
+	if id := mv.NowID(); id != "" {
+		args = append(args, "id", id)
+	}
+	return newErr(KindNotFound, "task.moved", mv, args...)
+}
+
+// movedUnknownErr is task.moved for a forward that the index cannot name:
+// only the task is known, so the keys of the destination are left out.
+func movedUnknownErr(ulid model.ULID) error {
+	return newErr(KindNotFound, "task.moved", fmt.Errorf("%s moved to another store", ulid), "input", ulid.String())
+}
+
+// movedFor is the task.moved error of arg when a forward in the store of ix
+// names it, nil when none does.
+func (ss *Session) movedFor(ix *index.Index, arg string) error {
+	f, err := ix.ResolveForward(arg)
+	if err != nil {
+		return nil
+	}
+	set, _ := ss.Mount()
+	var from *mount.Mounted
+	if set != nil {
+		from, _ = set.Get(ix.StoreName())
+	}
+	return movedErr(set.Moved(from, arg, f))
 }
 
 // forComment is the session that works on the comment arg names: ss itself
@@ -178,7 +215,7 @@ func (ss *Session) ResolveRef(ix *index.Index, arg string) (*index.Entry, error)
 		}
 	}
 	e, err := ss.Resolve(ix, in)
-	if err == nil || KindOf(err) != KindNotFound {
+	if err == nil || KindOf(err) != KindNotFound || AsError(err).Code == "task.moved" {
 		return e, err
 	}
 	set, merr := ss.Mount()

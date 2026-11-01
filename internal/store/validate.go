@@ -13,6 +13,7 @@ import (
 
 // Codes of the violations validate adds to the schema's.
 const (
+	CodeForward           = "forward"
 	CodeNoWorkspace       = "no_workspace"
 	CodeWorkspaceMismatch = "workspace_mismatch"
 	// CodeRefWorkspace is the violation of a sprint or a release that is
@@ -63,6 +64,13 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 			continue // removed in the same operation
 		}
 		old, err := tx.s.Task(ulid)
+		// The path holds a forward: a task is not put over it, unless this
+		// is the move back into the store it left (MoveIn).
+		if errors.Is(err, model.ErrForward) && !tx.movedIn[ulid] {
+			return &ValidationError{Task: ulid, Violations: []schema.Violation{{
+				Code: CodeForward, Field: "ulid", Msg: fmt.Sprintf("task %s moved to another store", ulid),
+			}}}
+		}
 		// A file that does not decode is checked like a new task, so a
 		// write can repair it.
 		if errors.Is(err, ErrNotFound) || errors.As(err, new(*model.DecodeError)) {
@@ -282,6 +290,13 @@ func lineage(t *model.Task, sc *schema.Schema, read func(model.ULID) (*model.Tas
 		cur = p
 	}
 	return parentKind, ancestors, nil
+}
+
+// Lineage is the kind of t's parent and the ancestors schema.For needs, as a
+// write works them out (see lineage), for a caller that checks a task before
+// it is written. read gives the tasks of the place t is to be written in.
+func Lineage(t *model.Task, sc *schema.Schema, read func(model.ULID) (*model.Task, error)) (parentKind string, ancestors []model.ULID, err error) {
+	return lineage(t, sc, read)
 }
 
 // WorkspaceTakenError means a workspace write would give a workspace the id

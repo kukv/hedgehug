@@ -84,6 +84,9 @@ func editInvalid(err error, field string) error {
 // when the old one is missing or not a workspace of ix, to repair it.
 func CheckEdit(ix *index.Index, ulid model.ULID, old *model.Task, edited []byte) (*model.Task, error) {
 	t, err := model.DecodeTask(edited)
+	if errors.Is(err, model.ErrForward) {
+		return nil, editInvalid(errors.New("moved_to cannot be set by hand; use hedgehug mv --store"), "moved_to")
+	}
 	if err != nil {
 		return nil, editInvalid(fmt.Errorf("the file does not decode: %w", err), "")
 	}

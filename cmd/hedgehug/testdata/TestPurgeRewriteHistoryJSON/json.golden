@@ -1,0 +1,13 @@
+{
+  "store": "alpha",
+  "tasks": [
+    {
+      "ulid": "<ULID-1>",
+      "id": "AA-2"
+    }
+  ],
+  "rewritten": 4,
+  "pushed": [
+    "origin"
+  ]
+}

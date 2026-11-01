@@ -142,7 +142,11 @@ var beforePush = func() {}
 // The commit main is at when Push starts is sent, and becomes
 // refs/remotes/<remote>/main; a commit made during the push is not taken as
 // being on the remote.
-func (r *Repo) Push(remote string) error {
+func (r *Repo) Push(remote string) error { return r.push(remote, false, plumbing.ZeroHash) }
+
+// push sends main to the remote; force sends it even when the remote is not
+// its ancestor.
+func (r *Repo) push(remote string, force bool, lease plumbing.Hash) error {
 	h, err := r.Head()
 	if err != nil {
 		return err
@@ -166,13 +170,26 @@ func (r *Repo) Push(remote string) error {
 	if err != nil {
 		return fmt.Errorf("push %s: %w", remote, err)
 	}
+	defer func() { _ = p.Close() }()
 	beforePush()
-	err = p.r.Push(&git.PushOptions{
+	spec := h.String() + ":refs/heads/main"
+	if force {
+		spec = "+" + spec
+	}
+	opts := &git.PushOptions{
 		RemoteName: remote,
 		RemoteURL:  to,
 		Auth:       auth,
-		RefSpecs:   []config.RefSpec{config.RefSpec(h.String() + ":refs/heads/main")},
-	})
+		RefSpecs:   []config.RefSpec{config.RefSpec(spec)},
+		Force:      force,
+	}
+	if force && !lease.IsZero() {
+		// go-git checks a lease for a ref source only, not for a hash
+		// source; the caller holds the store lock, so main is h.
+		opts.RefSpecs = []config.RefSpec{config.RefSpec("+" + mainRef.String() + ":refs/heads/main")}
+		opts.ForceWithLease = &git.ForceWithLease{RefName: mainRef, Hash: lease}
+	}
+	err = p.r.Push(opts)
 	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) && (errors.Is(err, git.ErrNonFastForwardUpdate) || strings.Contains(err.Error(), "non-fast-forward")) {
 		return ErrRejected
 	}
@@ -182,7 +199,7 @@ func (r *Repo) Push(remote string) error {
 	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
 		return fmt.Errorf("push %s: %w", remote, err)
 	}
-	return r.r.Storer.SetReference(plumbing.NewHashReference(trackingRef(remote), h))
+	return r.SetTracking(remote, h)
 }
 
 func isLocal(u string) bool {

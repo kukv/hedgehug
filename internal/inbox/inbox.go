@@ -30,6 +30,8 @@ const (
 	Repaired        Kind = "repaired"
 	Renumbered      Kind = "renumbered"
 	PrefixDuplicate Kind = "prefix_duplicate"
+	RewriteApplied  Kind = "rewrite_applied" // a history rewrite was taken in (D25)
+	PurgedChange    Kind = "purged_change"   // an unpushed change to a purged task was dropped (D25)
 )
 
 // Item is one notice.
@@ -158,6 +160,15 @@ func (b *Box) Start(at plumbing.Hash) error {
 		if b.markText() != "" {
 			return nil
 		}
+		return b.s.WriteLocal(markFile, []byte(at.String()+"\n"))
+	})
+}
+
+// SetMark makes the next Catch start at the commit at, whatever the box
+// caught up to before: a store made again after a history rewrite has none
+// of the old commits.
+func (b *Box) SetMark(at plumbing.Hash) error {
+	return b.locked(func() error {
 		return b.s.WriteLocal(markFile, []byte(at.String()+"\n"))
 	})
 }

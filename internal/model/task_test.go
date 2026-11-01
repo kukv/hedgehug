@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -139,11 +140,12 @@ func TestNewTaskEncode(t *testing.T) {
 	}
 }
 
-func TestTaskForwardingFile(t *testing.T) {
-	// Phase 3 leaves files with only a ulid and moved_to. They must decode.
-	task, err := DecodeTask([]byte("---\nulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nmoved_to: org-a\n---\n"))
-	if err != nil || task.Extra.Get("moved_to") == nil {
-		t.Errorf("DecodeTask = %+v, %v", task, err)
+func TestDecodeTaskRefusesForward(t *testing.T) {
+	t.Parallel()
+	// A file with moved_to is a forward, not a task: DecodeForward reads it.
+	_, err := DecodeTask([]byte("---\nulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nmoved_to: 01JC0M3R5W7M2X9V4T6R5N8P1B\n---\n"))
+	if !errors.Is(err, ErrForward) {
+		t.Errorf("DecodeTask err = %v, want ErrForward", err)
 	}
 }
 

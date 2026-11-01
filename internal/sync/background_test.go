@@ -240,7 +240,7 @@ func TestBoundLogKeepsTheLogWithinLogMax(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = f.Close() }()
-	w := &boundedLog{w: f, path: p}
+	w := &BoundedLog{w: f, path: p}
 	line := strings.Repeat("x", 99) + "\n"
 	for range 3 * logMax / len(line) {
 		if _, err := w.Write([]byte(line)); err != nil {

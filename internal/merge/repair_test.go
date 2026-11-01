@@ -58,7 +58,7 @@ func repair(t *testing.T, in RepairInput) (memFiles, []Repaired) {
 	if in.Changed == nil {
 		in.Changed = func(string) bool { return true }
 	}
-	out, rs, err := Repair(in)
+	out, rs, _, err := Repair(in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func repair(t *testing.T, in RepairInput) (memFiles, []Repaired) {
 		}
 	}
 	// Repair must be deterministic.
-	out2, rs2, _ := Repair(in)
+	out2, rs2, _, _ := Repair(in)
 	if !maps.EqualFunc(out, out2, bytes.Equal) || !slices.Equal(rs, rs2) {
 		t.Fatal("not deterministic")
 	}
@@ -212,7 +212,7 @@ func TestRepairPrefixAndNameDuplicatesOnlyTell(t *testing.T) {
 		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
 		model.WorkspacePath(mustULID(wsB)): []byte(strings.Replace(later, "created: 2026-10-30", "created: 2026-10-31", 1)),
 	}
-	out, rs, err := Repair(RepairInput{Files: f, Author: func(string) string { return "x" }, OnOrigin: func(model.ULID, string) bool { return false }, Changed: func(string) bool { return true }})
+	out, rs, _, err := Repair(RepairInput{Files: f, Author: func(string) string { return "x" }, OnOrigin: func(model.ULID, string) bool { return false }, Changed: func(string) bool { return true }})
 	if err != nil || len(out) != 0 {
 		t.Fatalf("out = %v, err = %v; duplicates must not change data", out, err)
 	}
@@ -423,6 +423,22 @@ func TestRepairBrokenParentIsNotDeleted(t *testing.T) {
 	}
 }
 
+// A forward is not a task, and not a broken file either: it is left as it is.
+func TestRepairSkipsForwards(t *testing.T) {
+	t.Parallel()
+	x, fwd := "01JD0000000000000000000001", "01JD0000000000000000000002"
+	forward := []byte("---\nulid: " + fwd + "\nmoved_to: 01JC0M3R5W7M2X9V4T6R5N8P1B\n---\n")
+	f := memFiles{
+		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
+		pathOf(x):                          taskFile(x, "WEB-1", wsA, "", "2026-10-31T10:00:00Z"),
+		pathOf(fwd):                        forward,
+	}
+	after, rs := repair(t, RepairInput{Files: f})
+	if len(rs) != 0 || !bytes.Equal(after[pathOf(fwd)], forward) || !bytes.Equal(after[pathOf(x)], f[pathOf(x)]) {
+		t.Errorf("repaired = %+v", rs)
+	}
+}
+
 func TestRepairMismatchedIDDoesNotKeepACollision(t *testing.T) {
 	x, y := "01JD0000000000000000000001", "01JD0000000000000000000002"
 	f := memFiles{
@@ -460,11 +476,11 @@ func TestRepairUnreadableNumbers(t *testing.T) {
 		model.NumbersPath:                  []byte("[\n"),
 	}
 	in := RepairInput{Files: f, Author: func(string) string { return "x" }, OnOrigin: func(model.ULID, string) bool { return false }, Changed: func(string) bool { return true }}
-	if _, _, err := Repair(in); err != nil {
+	if _, _, _, err := Repair(in); err != nil {
 		t.Errorf("nothing to number, but err = %v", err)
 	}
 	f[pathOf(y)] = taskFile(y, "WEB-1", wsA, "", "2026-10-31T10:00:00Z")
-	if _, _, err := Repair(in); err == nil {
+	if _, _, _, err := Repair(in); err == nil {
 		t.Error("numbered past a numbers.yaml it cannot read")
 	}
 }

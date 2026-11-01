@@ -11,6 +11,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -22,15 +23,30 @@ type cluster struct {
 	stores []*store.Store
 	opts   []Options
 	last   model.Rank // the last rank given by addTask
+	// foreign are the ids a task brought from the store it moved in from
+	// (its id and former ids there). They are in its former ids here, and may
+	// be the current id of another task of this store, which is no collision.
+	foreign map[model.ULID][]string
+	// held are the ids a task held in this store itself, kept when it moves
+	// out, so that they are not foreign when it comes back.
+	held map[model.ULID][]string
+	// moves counts how many times a task has moved (the count goes with it to
+	// the store it moves to); multi and backs count the moves into this store
+	// of a task that had moved before, and of one whose forward this store held.
+	moves        map[model.ULID]int
+	multi, backs int
 }
 
 func newCluster(t *testing.T, n int) *cluster {
 	t.Helper()
-	c := &cluster{t: t, remote: filepath.Join(t.TempDir(), "r.git")}
+	c := &cluster{t: t, remote: filepath.Join(t.TempDir(), "r.git"), foreign: map[model.ULID][]string{}, held: map[model.ULID][]string{}, moves: map[model.ULID]int{}}
 	if err := gitrepo.InitBare(c.remote); err != nil {
 		t.Fatal(err)
 	}
-	first, err := store.Create(filepath.Join(t.TempDir(), "s0"), &model.StoreMeta{ULID: model.NewULID(), Name: "s"}, nil,
+	// The schema has a task_ref property, which the moves between stores cut.
+	sc := schema.Default()
+	sc.Props = append(sc.Props, schema.Prop{Name: refProp, Type: schema.TypeTaskRef})
+	first, err := store.Create(filepath.Join(t.TempDir(), "s0"), &model.StoreMeta{ULID: model.NewULID(), Name: "s"}, sc,
 		&model.Workspace{ULID: model.NewULID(), Name: "web", IDPrefix: "WEB"}, gitrepo.Signature{Name: "u0", Email: "u0@x"}, "github.com/u0", time.Now)
 	if err != nil {
 		t.Fatal(err)
