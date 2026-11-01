@@ -66,6 +66,72 @@ type ScopedPlan struct {
 	Dropped  []string       // D10, filled when carried: "status review", "template bug"...
 }
 
+// Lines are the parts of the scoped schema the move leaves out when it goes
+// to the store to (D10), one line each.
+func (sp *ScopedPlan) Lines(to string) []string {
+	if sp == nil {
+		return nil
+	}
+	out := make([]string, 0, len(sp.Dropped))
+	for _, d := range sp.Dropped {
+		what, name, _ := strings.Cut(d, " ")
+		switch what {
+		case "transitions":
+			out = append(out, fmt.Sprintf("scoped: dropped transitions from %q (no target in %s)", name, to))
+		case "required":
+			out = append(out, fmt.Sprintf("scoped: dropped the required fields of %q (none of them in %s)", name, to))
+		default:
+			out = append(out, fmt.Sprintf("scoped: dropped %s %q (not in %s)", what, name, to))
+		}
+	}
+	return out
+}
+
+// MoveView is a MovePlan as a person reads it, and all that leaves ops with
+// the confirmation (Args "plan"): who moves where, the references cut, who
+// loses sight of the tasks and what the scoped schema loses. It holds no
+// content of the tasks (not their text, comments or worklogs).
+type MoveView struct {
+	From     string         `json:"from"`
+	To       string         `json:"to"`
+	Tasks    []MoveTaskView `json:"tasks"`
+	Unlinked []string       `json:"unlinked,omitempty"` // "unlink: API-12 blocked_by API-3"
+	Hidden   []string       `json:"hidden,omitempty"`   // accounts that can read From and not To
+	Scoped   []string       `json:"scoped,omitempty"`   // "scoped: dropped status \"review\" (not in org-b)"
+}
+
+// MoveTaskView names a task of a move.
+type MoveTaskView struct {
+	ULID  model.ULID `json:"ulid"`
+	ID    string     `json:"id"`
+	Title string     `json:"title"`
+}
+
+// View is the plan as the confirmation shows it.
+func (p MovePlan) View() MoveView {
+	v := MoveView{From: p.From, To: p.To, Tasks: make([]MoveTaskView, len(p.Tasks)), Hidden: p.Hidden, Scoped: p.Scoped.Lines(p.To)}
+	for i, e := range p.Tasks {
+		v.Tasks[i] = MoveTaskView{ULID: e.ULID, ID: p.Label(e.ULID), Title: e.Title}
+	}
+	if len(p.Unlinked) > 0 {
+		v.Unlinked = p.UnlinkLines()
+	}
+	return v
+}
+
+// MoveConfirmError is the confirm.required of a move. Its Args hold the
+// MoveView only; the plan itself is for the caller that asks the user in
+// person, and gives it back as MoveStoreInput.Confirmed.
+type MoveConfirmError struct {
+	Confirm *Error
+	Plan    MovePlan
+}
+
+func (e *MoveConfirmError) Error() string { return e.Confirm.Error() }
+
+// Unwrap gives the *Error, so that AsError finds its Kind, Code and Args.
+func (e *MoveConfirmError) Unwrap() error { return e.Confirm }
+
 // MovedTask is one task of a move with its id before and after.
 type MovedTask struct {
 	ULID  model.ULID
@@ -82,23 +148,24 @@ type MoveStoreResult struct {
 }
 
 // PrepareMoveStore does steps 1 to 4 and 6's checks, and returns the plan to
-// confirm. A task the destination schema refuses is KindInvalid, move.invalid,
+// confirm as the confirmation shows it (the entry for the GUI). A task the destination schema refuses is KindInvalid, move.invalid,
 // with one line per task and violation. A scoped entry that applies and no
 // in.Scoped is choice.required.
-func (ss *Session) PrepareMoveStore(in MoveStoreInput) (MovePlan, error) {
+func (ss *Session) PrepareMoveStore(in MoveStoreInput) (MoveView, error) {
 	j, err := ss.openMove(in)
 	if err != nil {
-		return MovePlan{}, err
+		return MoveView{}, err
 	}
 	w, err := j.load()
 	if err != nil {
-		return MovePlan{}, err
+		return MoveView{}, err
 	}
-	return w.plan, nil
+	return w.plan.View(), nil
 }
 
 // MoveStore does the move. Without in.Yes it is confirm.required with the
-// plan in the error (Args "plan"); a needed --scoped is choice.required.
+// MoveView in Args "plan" (the error is a *MoveConfirmError, which has the
+// plan itself); a needed --scoped is choice.required.
 func (ss *Session) MoveStore(in MoveStoreInput) (MoveStoreResult, error) {
 	j, err := ss.openMove(in)
 	if err != nil {
@@ -110,8 +177,8 @@ func (ss *Session) MoveStore(in MoveStoreInput) (MoveStoreResult, error) {
 	}
 	if !in.Yes {
 		ce := confirmRequired(fmt.Sprintf("move %d tasks to %s", len(w.tasks), j.toName))
-		ce.Args["plan"] = w.plan
-		return MoveStoreResult{}, ce
+		ce.Args["plan"] = w.plan.View()
+		return MoveStoreResult{}, &MoveConfirmError{Confirm: ce, Plan: w.plan}
 	}
 
 	// Both stores are locked, smallest ULID first, while the move is worked

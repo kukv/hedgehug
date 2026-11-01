@@ -94,11 +94,14 @@ func (a *app) mvStore(in ops.MoveStoreInput) error {
 				return err
 			}
 		case e.Code == "confirm.required":
-			plan, _ := e.Args["plan"].(ops.MovePlan)
-			if err = a.confirmMove(plan); err != nil {
+			var ce *ops.MoveConfirmError
+			if !errors.As(err, &ce) {
 				return err
 			}
-			in.Yes, in.Confirmed, shown = true, &plan, true
+			if err = a.confirmMove(ce.Plan); err != nil {
+				return err
+			}
+			in.Yes, in.Confirmed, shown = true, &ce.Plan, true
 		default:
 			return err
 		}
@@ -127,16 +130,19 @@ func (a *app) askScoped(projects []string) (string, error) {
 // confirmMove shows what a move cuts and says about the history (D8), and
 // asks.
 func (a *app) confirmMove(p ops.MovePlan) error {
+	v := p.View()
 	var b strings.Builder
-	for _, l := range p.UnlinkLines() {
+	for _, l := range v.Unlinked {
 		b.WriteString(l + "\n")
 	}
-	b.WriteString(scopedLines(p))
-	fmt.Fprintf(&b, "The content before the move stays in the git history of %[1]s, and anyone who can read %[1]s can see it; use hedgehug purge --rewrite-history to remove it\n", p.From)
-	if len(p.Hidden) > 0 {
-		fmt.Fprintf(&b, "No longer visible to: %s\n", strings.Join(p.Hidden, ", "))
+	for _, l := range v.Scoped {
+		b.WriteString(l + "\n")
 	}
-	fmt.Fprintf(&b, "Move %d tasks to %s? [y/N] ", len(p.Tasks), p.To)
+	fmt.Fprintf(&b, "The content before the move stays in the git history of %[1]s, and anyone who can read %[1]s can see it; use hedgehug purge --rewrite-history to remove it\n", v.From)
+	if len(v.Hidden) > 0 {
+		fmt.Fprintf(&b, "No longer visible to: %s\n", strings.Join(v.Hidden, ", "))
+	}
+	fmt.Fprintf(&b, "Move %d tasks to %s? [y/N] ", len(v.Tasks), v.To)
 	if _, err := fmt.Fprint(a.stderr, b.String()); err != nil {
 		return err
 	}
@@ -148,24 +154,6 @@ func (a *app) confirmMove(p ops.MovePlan) error {
 		return errors.New("Canceled")
 	}
 	return nil
-}
-
-// scopedLines are the parts of a scoped schema a move leaves out (D10), one
-// line each.
-func scopedLines(p ops.MovePlan) string {
-	if p.Scoped == nil {
-		return ""
-	}
-	var b strings.Builder
-	for _, d := range p.Scoped.Dropped {
-		what, name, _ := strings.Cut(d, " ")
-		if what == "transitions" {
-			fmt.Fprintf(&b, "scoped: dropped transitions from %q (no target in %s)\n", name, p.To)
-			continue
-		}
-		fmt.Fprintf(&b, "scoped: dropped %s %q (not in %s)\n", what, name, p.To)
-	}
-	return b.String()
 }
 
 // printMoveStore prints a move: a line for each task, or JSON. The scoped
@@ -193,7 +181,8 @@ func (a *app) printMoveStore(res ops.MoveStoreResult, shown bool) error {
 			Tasks    []taskJSON   `json:"tasks"`
 			Unlinked []unlinkJSON `json:"unlinked,omitempty"`
 			Scoped   *scopedJSON  `json:"scoped,omitempty"`
-		}{From: p.From, To: p.To}
+			Resumed  bool         `json:"resumed,omitempty"`
+		}{From: p.From, To: p.To, Resumed: res.Resumed}
 		for _, m := range res.Moved {
 			out.Tasks = append(out.Tasks, taskJSON{m.ULID.String(), m.OldID, m.NewID})
 		}
@@ -206,11 +195,18 @@ func (a *app) printMoveStore(res ops.MoveStoreResult, shown bool) error {
 		return a.printJSON(out)
 	}
 	var b strings.Builder
+	if res.Resumed {
+		// The destination was written by an earlier run that stopped; this
+		// one only finished the source.
+		fmt.Fprintf(&b, "Finished the move: %s was left unfinished last time\n", p.From)
+	}
 	for _, m := range res.Moved {
 		fmt.Fprintf(&b, "Moved %s (%s) → %s %s\n", m.OldID, m.ULID, p.To, m.NewID)
 	}
 	if !shown {
-		b.WriteString(scopedLines(p))
+		for _, l := range p.Scoped.Lines(p.To) {
+			b.WriteString(l + "\n")
+		}
 	}
 	_, err := fmt.Fprint(a.stdout, b.String())
 	return err

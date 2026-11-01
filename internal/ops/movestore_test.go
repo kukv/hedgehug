@@ -346,10 +346,15 @@ func TestMoveStoreNeedsConfirmationAndScopedChoice(t *testing.T) {
 	_, err = f.ts.MoveStore(in)
 	mustCode(t, err, KindUsage, "confirm.required")
 	e = argsOf(err)
-	plan, ok := e["plan"].(MovePlan)
-	if !ok || len(plan.Tasks) != 3 || plan.Scoped == nil || !slices.Contains(plan.Scoped.Dropped, "status review") {
+	view, ok := e["plan"].(MoveView)
+	if !ok || len(view.Tasks) != 3 || !slices.Contains(view.Scoped, `scoped: dropped status "review" (not in org-b)`) {
 		t.Fatalf("plan = %+v", e["plan"])
 	}
+	var ce *MoveConfirmError
+	if !errors.As(err, &ce) || ce.Plan.Scoped == nil || !slices.Contains(ce.Plan.Scoped.Dropped, "status review") {
+		t.Fatalf("the error has no plan: %v", err)
+	}
+	plan := ce.Plan
 	if f.head(t, "org-b") == "" || len(f.log(t, "org-b")) != 2 { // init and add
 		t.Error("the destination was written")
 	}
@@ -653,8 +658,8 @@ func TestMoveStoreUnlinksSprintAndReleases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(p.UnlinkLines(), "unlink: API-3 sprint Sprint 1") {
-		t.Errorf("lines = %q", p.UnlinkLines())
+	if !slices.Contains(p.Unlinked, "unlink: API-3 sprint Sprint 1") {
+		t.Errorf("lines = %q", p.Unlinked)
 	}
 	if _, err := f.ts.MoveStore(f.in()); err != nil {
 		t.Fatal(err)
