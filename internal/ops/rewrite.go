@@ -31,6 +31,9 @@ type rewriteProgress struct {
 	Before string       `json:"before"` // the head of origin before the rewrite
 	ULIDs  []model.ULID `json:"ulids"`
 	At     time.Time    `json:"at"`
+	// Live is the tasks the store still had as tasks: step 5 purges them,
+	// and a run that stopped before that does it first.
+	Live []model.ULID `json:"live,omitempty"`
 }
 
 // RewriteInput is what the history rewrite takes.
@@ -140,8 +143,7 @@ func (ss *Session) RewriteHistory(in RewriteInput) (RewriteResult, error) {
 	if in.Confirmed != nil && !sameULIDs(run.plan.ULIDs(), in.Confirmed) {
 		return RewriteResult{}, newErr(KindConflict, "rewrite.changed", errors.New("the tasks changed after the confirmation; run purge --rewrite-history again"))
 	}
-	res, err := run.execute()
-	return res, err
+	return run.execute()
 }
 
 func sameULIDs(a, b []model.ULID) bool {
@@ -172,7 +174,11 @@ func (ss *Session) locateRewrite(arg string) (*rewriteRun, error) {
 	}
 	name, targets, err := ss.rewriteTargets(arg, explicit)
 	if err == nil {
-		if prog := rewriteProgressOf(c, name); prog != nil {
+		prog, perr := rewriteProgressOf(c, name)
+		if perr != nil {
+			return nil, perr
+		}
+		if prog != nil {
 			return ss.resumedRewrite(name, prog), nil
 		}
 		return &rewriteRun{ts: ss.ForStore(name), plan: RewritePlan{Store: name, Tasks: targets}}, nil
@@ -180,13 +186,22 @@ func (ss *Session) locateRewrite(arg string) (*rewriteRun, error) {
 	// The history was made again already, so the task is not found any
 	// more: the run that was left unfinished is the one to go on with.
 	var left []string
+	var found *rewriteProgress
 	for _, e := range c.Stores {
-		if (explicit == "" || e.Name == explicit) && rewriteProgressOf(c, e.Name) != nil {
+		if explicit != "" && e.Name != explicit {
+			continue
+		}
+		prog, perr := rewriteProgressOf(c, e.Name)
+		if perr != nil {
+			return nil, perr
+		}
+		if prog != nil {
 			left = append(left, e.Name)
+			found = prog
 		}
 	}
 	if len(left) == 1 {
-		return ss.resumedRewrite(left[0], rewriteProgressOf(c, left[0])), nil
+		return ss.resumedRewrite(left[0], found), nil
 	}
 	return nil, err
 }
@@ -200,22 +215,32 @@ func (ss *Session) resumedRewrite(name string, prog *rewriteProgress) *rewriteRu
 }
 
 // rewriteProgressOf reads rewrite-in-progress.json of the store name; nil
-// when the store has none (or it cannot be read: the push is then not
-// resumed, and a sync is not refused for it).
-func rewriteProgressOf(c *config.Config, name string) *rewriteProgress {
+// when the store has none. A file that cannot be read or decoded is an
+// error naming it, here and in the refusal of a sync alike.
+func rewriteProgressOf(c *config.Config, name string) (*rewriteProgress, error) {
 	e, err := c.Select(name)
 	if err != nil {
-		return nil
+		return nil, nil //nolint:nilerr // a store that is not listed has no file
 	}
-	b, err := os.ReadFile(filepath.Join(e.Path, store.LocalDir, rewriteProgressFile)) //nolint:gosec // a file of the store
+	return readRewriteProgress(filepath.Join(e.Path, store.LocalDir, rewriteProgressFile))
+}
+
+func readRewriteProgress(file string) (*rewriteProgress, error) {
+	b, err := os.ReadFile(file) //nolint:gosec // a file of the store
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
 	if err != nil {
-		return nil
+		return nil, newErr(KindInvalid, "rewrite.progress_unreadable", fmt.Errorf("%s cannot be read (%w); fix or delete it", file, err), "file", file)
 	}
 	var p rewriteProgress
-	if json.Unmarshal(b, &p) != nil || p.Before == "" || len(p.ULIDs) == 0 {
-		return nil
+	if err := json.Unmarshal(b, &p); err != nil || p.Before == "" || len(p.ULIDs) == 0 || p.At.IsZero() {
+		if err == nil {
+			err = errors.New("before, ulids and at are needed")
+		}
+		return nil, newErr(KindInvalid, "rewrite.progress_unreadable", fmt.Errorf("%s is broken (%w); a history rewrite may be unfinished: fix or delete it", file, err), "file", file)
 	}
-	return &p
+	return &p, nil
 }
 
 // rewriteTargets finds the store whose history is rewritten and the tasks to
@@ -424,11 +449,36 @@ func (r *rewriteRun) run(s *store.Store, l *store.Locked, conn gitrepo.Conn, res
 		if fetched != tracked || head != fetched {
 			return newErr(KindConflict, "rewrite.origin_moved", fmt.Errorf("origin of %s changed since the sync; run purge --rewrite-history again", name), "store", name)
 		}
-		// Step 5: the tasks the store still has go first, with their numbers.
-		var live []model.ULID
+		// The file goes first, so that a run that stops after any step
+		// below can be run again (D29, from before step 5).
+		prog = &rewriteProgress{Before: tracked.String(), ULIDs: r.plan.ULIDs(), At: ts.Now().UTC().Truncate(time.Second)}
 		for _, t := range r.plan.Tasks {
 			if t.Live {
-				live = append(live, t.ULID)
+				prog.Live = append(prog.Live, t.ULID)
+			}
+		}
+		b, err := json.Marshal(prog)
+		if err != nil {
+			return err
+		}
+		if err := s.WriteLocal(rewriteProgressFile, b); err != nil {
+			return err
+		}
+	} else if err := r.originStill(repo, prog); err != nil {
+		return err
+	}
+
+	recorded, err := rewriteRecorded(repo, prog.At)
+	if err != nil {
+		return err
+	}
+	if !recorded {
+		// Step 5: the tasks the store still has go first, with their numbers.
+		// A run that stopped after it finds them gone.
+		var live []model.ULID
+		for _, u := range prog.Live {
+			if _, err := s.Task(u); err == nil {
+				live = append(live, u)
 			}
 		}
 		if len(live) > 0 {
@@ -443,19 +493,6 @@ func (r *rewriteRun) run(s *store.Store, l *store.Locked, conn gitrepo.Conn, res
 				return err
 			}
 		}
-		prog = &rewriteProgress{Before: tracked.String(), ULIDs: r.plan.ULIDs(), At: ts.Now().UTC().Truncate(time.Second)}
-		b, err := json.Marshal(prog)
-		if err != nil {
-			return err
-		}
-		if err := s.WriteLocal(rewriteProgressFile, b); err != nil {
-			return err
-		}
-	}
-
-	recorded, err := rewriteRecorded(repo, prog.At)
-	if err != nil {
-		return err
 	}
 	if !recorded {
 		// Steps 6 and 7. A run that stopped between them finds the history
@@ -500,6 +537,9 @@ func (r *rewriteRun) run(s *store.Store, l *store.Locked, conn gitrepo.Conn, res
 
 	// Step 8: origin first; its failure keeps rewrite-in-progress.json, so
 	// that the next run pushes again and a sync is refused until then.
+	if err := r.originStill(repo, prog); err != nil {
+		return err
+	}
 	remotes := repo.Remotes()
 	if len(remotes) == 0 {
 		return newErr(KindInvalid, "rewrite.no_remote", fmt.Errorf("%s has no remote", name), "store", name)
@@ -523,6 +563,27 @@ func (r *rewriteRun) run(s *store.Store, l *store.Locked, conn gitrepo.Conn, res
 		if _, err := sync.UpdateState(s, func(st *sync.State) { st.PendingSince = time.Time{} }); err != nil {
 			res.Warnings = append(res.Warnings, "clear the pending mark: "+err.Error())
 		}
+	}
+	return nil
+}
+
+// originStill fetches origin and refuses unless it is still where the
+// rewrite began (prog.Before: the push is due) or already at HEAD (the push
+// was made). A commit pushed by someone else meanwhile would be lost by the
+// force push.
+func (r *rewriteRun) originStill(repo *gitrepo.Repo, prog *rewriteProgress) error {
+	fetched, err := repo.Fetch("origin")
+	if err != nil {
+		return fmt.Errorf("%w; the history of %s is rewritten here, run purge --rewrite-history again to push it", err, r.plan.Store)
+	}
+	head, err := repo.Head()
+	if err != nil {
+		return err
+	}
+	if fetched.String() != prog.Before && fetched != head {
+		name := r.plan.Store
+		return newErr(KindConflict, "rewrite.origin_moved",
+			fmt.Errorf("origin of %s changed since the history rewrite began; nothing is pushed, and %s is kept: fix it by hand or delete it to give the rewrite up", name, rewriteProgressFile), "store", name)
 	}
 	return nil
 }
@@ -615,7 +676,7 @@ func errRewriteInProgress(name string) error {
 
 // rewriteUnfinished reports whether the store s has an unfinished history
 // rewrite.
-func rewriteUnfinished(s *store.Store) bool {
-	_, err := s.ReadLocal(rewriteProgressFile)
-	return err == nil
+func rewriteUnfinished(s *store.Store) (bool, error) {
+	p, err := readRewriteProgress(s.LocalPath(rewriteProgressFile))
+	return p != nil, err
 }

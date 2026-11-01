@@ -653,6 +653,14 @@ func TestRewriteMessage(t *testing.T) {
 	if m := rewriteMessage(set, drop)(unrelated); m != unrelated {
 		t.Errorf("changed: %q", m)
 	}
+	spaced := "hedgehug: add API-2 A title with  several words\n\nHedgehug-Task: " + a.String() + "\n"
+	if m := rewriteMessage(set, drop)(spaced); m != "hedgehug: add API-2 (purged)\n\nHedgehug-Task: "+a.String()+"\n" {
+		t.Errorf("spaced title: %q", m)
+	}
+	foreign := "Merge branch x\n\nHedgehug-Task: " + a.String() + "\n"
+	if m := rewriteMessage(set, drop)(foreign); m != foreign {
+		t.Errorf("a subject that is not ours changed: %q", m)
+	}
 	bare := "hedgehug: rm " + a.String() + "\n\nHedgehug-Task: " + a.String() + "\n"
 	if m := rewriteMessage(set, drop)(bare); m != bare {
 		t.Errorf("changed: %q", m)
@@ -680,4 +688,154 @@ func TestRewriteDrop(t *testing.T) {
 			t.Errorf("drop(%s) = %v", p, got)
 		}
 	}
+}
+
+// Someone pushes to origin between the failed push and the resume: the
+// resume refuses and changes nothing.
+func TestRewriteHistoryResumeRefusesWhenOriginMoved(t *testing.T) {
+	f := newRewriteFx(t, false)
+	f.moved(t)
+	gone := f.bare + ".gone"
+	f.ts.BeforeUpdate = func() {
+		if err := os.Rename(f.bare, gone); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a := f.org()
+	if _, err := a.RewriteHistory(RewriteInput{Arg: "API-2", Typed: "org-a"}); err == nil {
+		t.Fatal("the push did not fail")
+	}
+	f.ts.BeforeUpdate = nil
+	if err := os.Rename(gone, f.bare); err != nil {
+		t.Fatal(err)
+	}
+	other := cloneSessionOf(t, f)
+	if _, err := other.Add(AddInput{Title: "from elsewhere"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.Sync(false, true); err != nil {
+		t.Fatal(err)
+	}
+	pushed := originHead(t, f.bare)
+	head, _ := f.repo(t).Head()
+	_, err := a.RewriteHistory(RewriteInput{Arg: "API-2", Typed: "org-a"})
+	mustCode(t, err, KindConflict, "rewrite.origin_moved")
+	if got := originHead(t, f.bare); got != pushed {
+		t.Errorf("origin = %s; want %s", got, pushed)
+	}
+	if got, _ := f.repo(t).Head(); got != head {
+		t.Errorf("the head moved to %s", got)
+	}
+	if _, err := os.Stat(a.rewriteProgressPath(t)); err != nil {
+		t.Errorf("progress file: %v", err)
+	}
+}
+
+// A run stops before or right after the commit of step 5: the file is
+// there already, and the next run does what is left.
+func TestRewriteHistoryResumesAroundStepFive(t *testing.T) {
+	for _, stopAt := range []int{1, 2} { // the purge commit, the record commit
+		f := newRewriteFx(t, false)
+		secret, err := f.org().Add(AddInput{Title: "Secret"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.sync(t)
+		n := 0
+		f.ts.BeforeUpdate = func() {
+			if n++; n == stopAt {
+				panic("stop")
+			}
+		}
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Error("the hook did not run")
+				}
+			}()
+			_, _ = f.org().RewriteHistory(RewriteInput{Arg: "API-6", Typed: "org-a"})
+		}()
+		f.ts.BeforeUpdate = nil
+		a := f.org()
+		if _, err := os.Stat(a.rewriteProgressPath(t)); err != nil {
+			t.Fatalf("stop %d: progress file: %v", stopAt, err)
+		}
+		if _, err := a.Sync(false, true); AsError(err) == nil || AsError(err).Code != "rewrite.in_progress" {
+			t.Fatalf("stop %d: sync = %v", stopAt, err)
+		}
+		if _, err := a.RewriteHistory(RewriteInput{Arg: "API-6", Typed: "org-a"}); err != nil {
+			t.Fatalf("stop %d: %v", stopAt, err)
+		}
+		r := f.repo(t)
+		head, _ := r.Head()
+		noTrace(t, r, head, []model.ULID{secret.ULID})
+		if got := originHead(t, f.bare); got != head {
+			t.Errorf("stop %d: origin = %s", stopAt, got)
+		}
+		nums, err := r.ReadAt(head, model.NumbersPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if nm, err := model.DecodeNumbers(nums); err != nil || nm["API"] != 6 {
+			t.Errorf("stop %d: numbers = %v, %v", stopAt, nm, err)
+		}
+		if !strings.Contains(strings.Join(subjects(t, r), "\n"), "hedgehug: purge API-6 (purged)") {
+			t.Errorf("stop %d: no purge commit: %v", stopAt, subjects(t, r))
+		}
+	}
+}
+
+// A broken progress file is refused by the sync and by a new run alike,
+// naming the file.
+func TestRewriteProgressFileBroken(t *testing.T) {
+	f := newRewriteFx(t, false)
+	f.moved(t)
+	a := f.org()
+	file := a.rewriteProgressPath(t)
+	for _, content := range []string{"not json", `{"before":"","ulids":[]}`} {
+		if err := os.WriteFile(file, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := a.Sync(false, true)
+		mustCode(t, err, KindInvalid, "rewrite.progress_unreadable")
+		if !strings.Contains(err.Error(), file) {
+			t.Errorf("sync error does not name the file: %v", err)
+		}
+		_, err = a.RewriteHistory(RewriteInput{Arg: "API-2", Typed: "org-a"})
+		mustCode(t, err, KindInvalid, "rewrite.progress_unreadable")
+		if !strings.Contains(err.Error(), file) {
+			t.Errorf("run error does not name the file: %v", err)
+		}
+	}
+}
+
+// What a purged live task leaves in the tasks outside the set: a reference
+// to it stays, as plain purge leaves it.
+func TestRewriteHistoryDanglingReference(t *testing.T) {
+	f := newRewriteFx(t, false)
+	a := f.org()
+	secret, err := a.Add(AddInput{Title: "Secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := a.Add(AddInput{Title: "Other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Dep("API-7", "API-6", true); err != nil {
+		t.Fatal(err)
+	}
+	f.sync(t)
+	if _, err := a.RewriteHistory(RewriteInput{Arg: "API-6", Typed: "org-a"}); err != nil {
+		t.Fatal(err)
+	}
+	s, err := a.OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	o, err := s.Task(other.ULID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("blocked_by after the purge: %v (purged %s)", o.BlockedBy, secret.ULID)
 }
