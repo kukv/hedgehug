@@ -52,6 +52,27 @@ func TestTokenRequired(t *testing.T) {
 	}
 }
 
+func TestEmptyTokenRefusesEverything(t *testing.T) {
+	ts := newTestServer(t)
+	s := New(Options{Getenv: ts.getenv, Version: "test"}) // Token is empty
+	s.SetPort(ts.port)
+	hs := httptest.NewServer(s.Handler())
+	t.Cleanup(hs.Close)
+	for _, auth := range []string{"Bearer ", "Bearer x"} {
+		req, _ := http.NewRequest("GET", hs.URL+"/api/health", nil)
+		req.Host = "127.0.0.1:" + itoa(ts.port)
+		req.Header.Set("Authorization", auth)
+		resp, err := hs.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != 401 {
+			t.Errorf("Authorization %q: status %d, want 401", auth, resp.StatusCode)
+		}
+	}
+}
+
 func TestHostRefused(t *testing.T) {
 	ts := newTestServer(t)
 	for _, host := range []string{"evil.example:80", "127.0.0.1:1", "localhost", "example.com"} {

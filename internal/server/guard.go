@@ -27,7 +27,7 @@ func (s *Server) guardHost(h http.Handler) http.Handler {
 // requireToken refuses an API request without Authorization: Bearer <token>.
 func (s *Server) requireToken(ctx huma.Context, next func(huma.Context)) {
 	got, ok := strings.CutPrefix(ctx.Header("Authorization"), "Bearer ")
-	if !ok || subtle.ConstantTimeCompare([]byte(got), []byte(s.opt.Token)) != 1 {
+	if !ok || s.opt.Token == "" || subtle.ConstantTimeCompare([]byte(got), []byte(s.opt.Token)) != 1 {
 		p := newProblem(http.StatusUnauthorized, "auth.token", "the request needs Authorization: Bearer <token>")
 		ctx.SetHeader("Content-Type", "application/problem+json")
 		ctx.SetStatus(p.Status)
