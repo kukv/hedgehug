@@ -116,7 +116,8 @@ host とアカウント ID の比較は `internal/config` の1つずつの関数
 | --- | --- | --- |
 | 読み取り専用の Store への書き込み | KindConflict | `store.read_only`（Args: `store`、`reason`） |
 | Store をまたぐ参照 | KindInvalid | `ref.cross_store` |
-| 2つ以上の Store で当たった ID | KindAmbiguous | `task.ambiguous`（Args に候補の Store 名付き ID） |
+| 2つ以上の Store で当たった ID | KindAmbiguous | `task.ambiguous`（Args に候補の Store 名付き ID）。コメントの ULID なら `comment.ambiguous` |
+| `--store` と、別の Store 名を付けた ID を一緒に渡した | KindUsage | `store.conflict` |
 | 移動済みのタスク | KindNotFound | `task.moved`（Args: 移動先の Store と ID） |
 | トークンが取れない・401 | KindInvalid | `auth.token`・`auth.unauthorized`（Args: アカウント名） |
 | GitHub API の 403・404・レート制限 | KindInvalid | `github.forbidden`・`github.not_found`・`github.rate_limit` |
@@ -385,7 +386,7 @@ REST だけを作る。フェーズ3で使うのは次の表のもの。
 | Store 単位 | `workspace`、`schema`、`undo`、`purge`（`--moved` を含む） | `--store`。なければ Store が1つならそれ、2つ以上ならエラー（名前を並べる） |
 | 作成 | `add` | コンテキスト解決 |
 
-`--store` は今と同じく全体フラグとして残す。ID を受け取るコマンドで `--store` を付けたときは、その Store の中だけで引く。
+`--store` は今と同じく全体フラグとして残す。ID を受け取るコマンド（`hh use` を含む。利用者の決定。2026-11-01）で `--store` を付けたときは、その Store の中だけで引く。別の Store 名を付けた ID（`org-b:API-1`）と一緒なら使い方の誤り（`store.conflict`、終了コード2）。保存済みのビュー（`hh view`）は Store の中に保存されるので「Store 単位」に入る。`inbox` で開けない Store は、ほかの一覧と同じく警告して飛ばす（`--store` で名指ししたときはエラー。利用者の決定。2026-11-01）。
 
 ### ID の解決
 
@@ -394,7 +395,7 @@ REST だけを作る。フェーズ3で使うのは次の表のもの。
   - 1つの Store で当たればそれ。
   - 0なら今と同じ「見つかりません」のエラー。転送ファイルにだけ当たったときは「移動の案内」（Store 間の移動の節）。
   - 2つ以上の Store で当たったら、`AmbiguousError` と同じ形で `org-a:API-12`、`org-b:API-12` を並べたエラー（終了コード2）。`KindAmbiguous` は終了コード2（使い方の誤り）にし、1つの Store の中で2つ以上に当たったとき（`task.ambiguous`、`workspace.ambiguous`）も2にそろえる（利用者の決定。2026-11-01）。
-- 2つ目の ID（`dep --blocked-by`、`mv --parent`/`--before`/`--after`、`set parent=`、`task_ref` のプロパティ、`add --parent`）は、1つ目のタスクの Store（`add` では入れ先の Store）の中だけで引く。その Store で当たらず、別の Store で当たったら、「org-b の WEB-4 は参照できません（参照は Store の中に閉じます）」で拒否する（終了コード1）。`set blocked_by=`、`edit` で書いた参照も、書き込み時の検査で同じ文面にする。
+- 2つ目の ID（`dep --blocked-by`、`mv --parent`/`--before`/`--after`、`task_ref` のプロパティ、`add --parent`）は、1つ目のタスクの Store（`add` では入れ先の Store）の中だけで引く。その Store で当たらず、別の Store で当たったら、「org-b の WEB-4 は参照できません（参照は Store の中に閉じます）」で拒否する（終了コード1）。`set blocked_by=`、`edit` で書いた参照も、書き込み時の検査で同じ文面にする。
 
 ### 表示
 
@@ -415,7 +416,7 @@ REST だけを作る。フェーズ3で使うのは次の表のもの。
 
 ### Store をまたぐ評価
 
-`mount.Query(set, q, opt)`: 対象の Store ごとに `query.Run` を呼び、結果の Entry に Store を添えて結合し、上の規則で並べ替え・グループ化する。`query.Options.Me` は全 Store で同じ（全アカウント）。ある Store でクエリのエラー（そのスキーマにないプロパティなど）が出たら、全体をエラーにする。ただし「プロパティがスキーマにない」エラーは、その Store を0件として扱い、ほかの Store で1つでも知っていれば続ける（Store ごとにスキーマが違うため）。全 Store で知らなければ今のエラー。`project:`・`parent:`・`blocked_by:` など値に ID を書く項も同じで、その ID が見つからない Store は0件として扱い、どの Store でも見つからなければ今のエラーにする。値を `org-a:API-1` の形で書いたら、その Store の中だけで引く（利用者の決定。2026-11-01）。
+`mount.Query(set, q, opt)`: 対象の Store ごとに `query.Run` を呼び、結果の Entry に Store を添えて結合し、上の規則で並べ替え・グループ化する。`query.Options.Me` は全 Store で同じ（全アカウント）。ある Store でクエリのエラー（そのスキーマにないプロパティなど）が出たら、全体をエラーにする。ただし「プロパティがスキーマにない」エラーは、その Store を0件として扱い、ほかの Store で1つでも知っていれば続ける（Store ごとにスキーマが違うため）。全 Store で知らなければ今のエラー。`project:`・`parent:`・`blocked_by:` など値に ID を書く項も同じで、その ID が見つからない Store は0件として扱い、どの Store でも見つからなければ今のエラーにする。値を `org-a:API-1` の形で書いたら、その Store の中だけで引く（利用者の決定。2026-11-01）。`status:`・`kind:` と enum・multi_enum のプロパティの値も同じで、その Store のスキーマにない値はその Store では何にも当たらず、どの Store のスキーマにもなければ今のエラーにする（利用者の決定。2026-11-01）。これらは値ごとに当てるので、否定（`-status:review`）はその値を持たない Store の全件に当たる。
 
 ### 参照が Store の中に閉じているかの検査
 
@@ -428,7 +429,7 @@ REST だけを作る。フェーズ3で使うのは次の表のもの。
 
 ### メンションの権限の警告
 
-本文（`add`、`set body`、`edit`）とコメント（追加・編集）の書き込みで、書き込み前に無かった `@login` について、その Store の `members.json` の `collaborators` が `null` でなく、その中にいない人なら、書き込みの後に標準エラーへ `warning: bob は org-a を読む権限がありません` と出す。`@github.com/login` の形はそのアカウント ID で、`@login` はコラボレーターの login と比べる（どちらも大文字小文字を区別しない）。`collaborators` が `null` なら警告しない（判断できない）。書き込みは常に行う。
+本文（`edit`。`add`・`set` には本文の入口がない）とコメント（追加・編集）の書き込みで、書き込み前に無かった `@login` について、その Store の `members.json` の `collaborators` が `null` でなく、その中にいない人なら、書き込みの後に標準エラーへ `warning: bob は org-a を読む権限がありません` と出す。`@github.com/login` の形はそのアカウント ID で、`@login` はコラボレーターの login と比べる（どちらも大文字小文字を区別しない）。`collaborators` が `null` なら警告しない（判断できない）。書き込みは常に行う。
 
 ## コンテキスト解決（internal/context）
 
@@ -588,7 +589,7 @@ moved_to: 01JC0STORE...      # 移動先の Store の ULID（store.yaml の ulid
 
 検査の結果は重さ（`error`・`warning`・`info`）を持つ。フェーズ2までの検査はすべて `error`。表示は `warning` と `info` の行にだけ重さを添え（`error` は今の表示のまま）、`--json` の各 finding に `severity` を足す。終了コード1は `error` か `warning` があるとき。`info` だけなら0（利用者の決定。2026-11-01）。
 
-`doctor` は全 Store を見る（「コマンドごとの対象」）。Store をまたぐ検査は、マウント中の Store の index を使う。Store が2つ以上なら、Store ごとに見出し（Store 名）を置き、その下にその Store の修正と検査結果を出す。`--json` は Store ごとの配列 `[{store, repaired, findings}]`（Store が1つでも配列）。`--fix` も全 Store を直し、読み取り専用の Store は直さずに警告を出す（利用者の決定。2026-11-01）。
+`doctor` は全 Store を見る（「コマンドごとの対象」）。Store をまたぐ検査は、マウント中の Store の index を使う。マウント中の Store が2つ以上なら（`--store` で1つに絞っても。`ls` と同じ。利用者の決定。2026-11-01）、Store ごとに見出し（Store 名）を置き、その下にその Store の修正と検査結果を出す。`--json` は Store ごとの配列 `[{store, repaired, findings}]`（Store が1つでも配列）。`--fix` も全 Store を直し、読み取り専用の Store は直さずに警告を出す（利用者の決定。2026-11-01）。
 
 ## エラー
 
