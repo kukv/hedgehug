@@ -1,19 +1,25 @@
 // Command devenv sets up a throwaway development environment with two users,
-// alice and bob, each with their own HEDGEHUG_HOME, git identity and store.
-// It is for developers of Hedgehug and is not shipped.
+// alice and bob, each with their own HEDGEHUG_HOME, git identity, accounts and
+// stores, and the seed of the fake GitHub (fakegh) they talk to. It is for
+// developers of Hedgehug and is not shipped.
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"maps"
+	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/config"
+	"github.com/kukv/hedgehug/internal/fakegh"
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
@@ -21,23 +27,60 @@ import (
 )
 
 const (
-	markerFile = ".hedgehug-devenv"
-	storeName  = "me"
-
-	sharedName   = "org-a"
-	sharedPrefix = "ORG"
-	host         = "github.com"
-	accountName  = "personal"
+	markerFile    = ".hedgehug-devenv"
+	defaultFakegh = "http://127.0.0.1:7777"
 )
 
-// Bare remotes under the environment's directory: alice's own store, and the
-// store alice and bob share.
-var (
-	personalRemote = filepath.Join("remotes", "kukv", "hh-tasks.git")
-	sharedRemote   = filepath.Join("remotes", "org-a", "hh-shared.git")
-)
+// bareRemotes are the bare repositories under the environment's directory:
+// the "GitHub" that url_rewrites points https://github.com/ at.
+var bareRemotes = []string{
+	filepath.Join("remotes", "kukv", "hh-tasks.git"),
+	filepath.Join("remotes", "org-a", "hh-shared.git"),
+	filepath.Join("remotes", "org-b", "hh-ops.git"),
+}
 
 var users = []string{"alice", "bob"}
+
+// account is an account of a user's config.yaml; its token is in the
+// environment variable tokenVar.
+type account struct{ name, login, tokenVar string }
+
+// accounts are the accounts of each user: alice has her own and the one of
+// her organizations.
+var accounts = map[string][]account{
+	"alice": {{"personal", "alice", "HH_DEV_TOKEN"}, {"work", "alice-corp", "HH_DEV_TOKEN_WORK"}},
+	"bob":   {{"personal", "bob", "HH_DEV_TOKEN"}},
+}
+
+// tokens are what each user's HH_DEV_TOKEN* hold; devSeed has the same.
+var tokens = map[string]map[string]string{
+	"alice": {"HH_DEV_TOKEN": "dev-alice", "HH_DEV_TOKEN_WORK": "dev-alice-corp"}, //nolint:gosec // G101: fixed tokens of the fake GitHub, not credentials
+	"bob":   {"HH_DEV_TOKEN": "dev-bob"},
+}
+
+// devStore is a store of a user: its remote as config.yaml has it (on
+// "GitHub"; empty for a store with no remote), the id prefix of its first
+// workspace, the account that writes it, and whether the user clones it (the
+// one before made it) or makes it.
+type devStore struct {
+	name, remote, prefix, account string
+	clone                         bool
+}
+
+// stores are the stores of each user, in the order they are made: alice's
+// first, so that bob can clone what she pushed.
+var stores = map[string][]devStore{
+	"alice": {
+		{name: "me", remote: "https://github.com/kukv/hh-tasks.git", prefix: "DEV", account: "personal"},
+		{name: "org-a", remote: "https://github.com/org-a/hh-shared.git", prefix: "ORG", account: "work"},
+		{name: "org-b", remote: "https://github.com/org-b/hh-ops.git", prefix: "OPS", account: "work"},
+	},
+	"bob": {
+		{name: "me", prefix: "DEV", account: "personal"},
+		{name: "org-a", remote: "https://github.com/org-a/hh-shared.git", prefix: "ORG", account: "personal", clone: true},
+		{name: "org-b", remote: "https://github.com/org-b/hh-ops.git", prefix: "OPS", account: "personal", clone: true},
+	},
+}
 
 func main() {
 	cwd, err := os.Getwd()
@@ -68,12 +111,13 @@ func run(args []string, stdout, stderr io.Writer, cwd string) int {
 
 func dispatch(args []string, stdout, stderr io.Writer, cwd string) error {
 	if len(args) == 0 {
-		return usageError{errors.New("usage: devenv init|reset|env <user> [--dir <path>]")}
+		return usageError{errors.New("usage: devenv init|reset|env <user> [--dir <path>] [--fakegh <url>]")}
 	}
 	cmd, rest := args[0], args[1:]
 	fs := flag.NewFlagSet("devenv "+cmd, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	dir := fs.String("dir", "", "directory of the environment (default: .devenv at the repository root, found by walking up to go.mod)")
+	fakeghURL := fs.String("fakegh", defaultFakegh, "the URL of the fake GitHub that the users' config.yaml point github.com at (init and reset)")
 
 	var want int // number of positional arguments
 	switch cmd {
@@ -101,6 +145,11 @@ func dispatch(args []string, stdout, stderr io.Writer, cwd string) error {
 	if len(pos) != want {
 		return usageError{fmt.Errorf("%s takes %d argument(s), got %d", cmd, want, len(pos))}
 	}
+	if cmd != "env" {
+		if u, err := url.Parse(*fakeghURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return usageError{fmt.Errorf("--fakegh %q: want an http or https URL", *fakeghURL)}
+		}
+	}
 
 	d, err := resolveDir(*dir, cwd)
 	if err != nil {
@@ -108,9 +157,9 @@ func dispatch(args []string, stdout, stderr io.Writer, cwd string) error {
 	}
 	switch cmd {
 	case "init":
-		return initEnv(d, stdout)
+		return initEnv(d, *fakeghURL, stdout)
 	case "reset":
-		return reset(d, stdout)
+		return reset(d, *fakeghURL, stdout)
 	default:
 		return printEnv(d, pos[0], stdout)
 	}
@@ -146,7 +195,7 @@ func findRoot(dir string) (string, error) {
 	}
 }
 
-func initEnv(dir string, stdout io.Writer) error {
+func initEnv(dir, fakeghURL string, stdout io.Writer) error {
 	if _, err := os.Lstat(dir); err == nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return fmt.Errorf("%s already exists; run `devenv reset` to recreate it", dir)
 	}
@@ -156,38 +205,87 @@ func initEnv(dir string, stdout io.Writer) error {
 	if err := os.WriteFile(filepath.Join(dir, markerFile), nil, 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return err
 	}
-	for _, r := range []string{personalRemote, sharedRemote} {
+	for _, r := range bareRemotes {
 		if err := gitrepo.InitBare(filepath.Join(dir, r)); err != nil {
 			return err
 		}
 	}
+	seed := filepath.Join(dir, "fakegh.json")
+	if err := writeSeed(seed); err != nil {
+		return err
+	}
 	for _, u := range users {
-		// Only alice's own store has a remote; bob's stays local.
-		var remotes []string
-		if u == users[0] {
-			remotes = []string{filepath.Join(dir, personalRemote)}
-		}
-		if err := initUser(filepath.Join(dir, "users", u), u, remotes); err != nil {
+		if err := initUser(dir, u, fakeghURL); err != nil {
 			return fmt.Errorf("%s: %w", u, err)
 		}
 	}
-	if err := initShared(dir); err != nil {
-		return fmt.Errorf("%s: %w", sharedName, err)
+	fu, err := url.Parse(fakeghURL)
+	if err != nil {
+		return err
 	}
-	_, err := fmt.Fprintf(stdout, "Created %s with users %s.\nUse one with: eval \"$(go run ./tools/devenv env %s --dir %s)\"\n",
-		dir, strings.Join(users, " and "), users[0], shellQuote(dir))
+	_, err = fmt.Fprintf(stdout, "Created %s with users %s.\nStart the fake GitHub with: go run ./cmd/fakegh serve --addr %s --seed %s\nUse one with: eval \"$(go run ./tools/devenv env %s --dir %s)\"\n",
+		dir, strings.Join(users, " and "), fu.Host, shellQuote(seed), users[0], shellQuote(dir))
 	return err
 }
 
-// userEnv is what a user's hedgehug sees: the paths of their home and
-// config, and the account that writes their commits.
-type userEnv struct {
-	paths  config.Paths
-	author gitrepo.Signature
-	acct   config.Account
+// devSeed is the state the fake GitHub starts with: the users and the two
+// organizations, the repositories (the three stores have the hedgehug-store
+// topic; org-a/web is code and has none), who may do what with them, and the
+// tokens the HH_DEV_TOKEN variables hold. bob reads org-b/hh-ops only.
+func devSeed() fakegh.State {
+	interval := 5
+	return fakegh.State{
+		Users: []string{"alice", "alice-corp", "bob"},
+		Orgs: map[string][]string{
+			"org-a": {"alice-corp", "bob"},
+			"org-b": {"alice-corp", "bob"},
+		},
+		Tokens: map[string]string{"dev-alice": "alice", "dev-alice-corp": "alice-corp", "dev-bob": "bob"},
+		Repos: []*fakegh.Repo{
+			{Owner: "kukv", Name: "hh-tasks", Private: true, Topics: []string{"hedgehug-store"}, Perms: map[string]string{"alice": "admin"}},
+			{Owner: "org-a", Name: "hh-shared", Private: true, Topics: []string{"hedgehug-store"}, Perms: map[string]string{"alice-corp": "admin", "bob": "write"}},
+			{Owner: "org-b", Name: "hh-ops", Private: true, Topics: []string{"hedgehug-store"}, Perms: map[string]string{"alice-corp": "admin", "bob": "read"}},
+			{Owner: "org-a", Name: "web", Private: true, Perms: map[string]string{"alice-corp": "write", "bob": "write"}},
+		},
+		DeviceInterval: &interval,
+	}
 }
 
-func newUserEnv(home, u string) (*userEnv, error) {
+// writeSeed writes devSeed to path, for `fakegh serve --seed`.
+func writeSeed(path string) error {
+	b, err := json.MarshalIndent(devSeed(), "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(b, '\n'), 0o600) //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+}
+
+// configHead is the start of the config.yaml of user u, written before the
+// stores are added: the accounts with their token variables, github.com on
+// the fake, and url_rewrites to the bare repositories.
+func configHead(dir, u, fakeghURL string) string {
+	var b strings.Builder
+	b.WriteString("accounts:\n")
+	for _, a := range accounts[u] {
+		fmt.Fprintf(&b, "  - name: %s\n    host: github.com\n    login: %s\n    token: env:%s\n", a.name, a.login, a.tokenVar)
+	}
+	fmt.Fprintf(&b, "hosts:\n  - host: github.com\n    api: %s\n    web: %s\n", fakeghURL, fakeghURL)
+	fmt.Fprintf(&b, "url_rewrites:\n  - from: \"https://github.com/\"\n    to: %q\n", filepath.ToSlash(filepath.Join(dir, "remotes"))+"/")
+	return b.String()
+}
+
+// initUser makes the home of the user u: .gitconfig (the author, and the
+// rewrite of url_rewrites as insteadOf), config.yaml and the stores.
+func initUser(dir, u, fakeghURL string) error {
+	home := filepath.Join(dir, "users", u)
+	if err := os.MkdirAll(home, 0o750); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+		return err
+	}
+	gitconfig := "[user]\n\tname = " + u + "\n\temail = " + u + "@example.com\n" +
+		"[url \"" + filepath.ToSlash(filepath.Join(dir, "remotes")) + "/\"]\n\tinsteadOf = https://github.com/\n"
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte(gitconfig), 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+		return err
+	}
 	getenv := func(k string) string {
 		switch k {
 		case "HEDGEHUG_HOME", "HOME", "USERPROFILE":
@@ -197,109 +295,68 @@ func newUserEnv(home, u string) (*userEnv, error) {
 	}
 	p, err := config.Resolve(getenv)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	acct := config.Account{Name: accountName, Host: host, Login: u}
+	// The accounts, hosts and url_rewrites are written before the config is
+	// loaded, so that AddStore keeps them.
+	if err := os.WriteFile(p.ConfigFile, []byte(configHead(dir, u, fakeghURL)), 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+		return err
+	}
+	for _, ds := range stores[u] {
+		if err := addDevStore(p, getenv, ds); err != nil {
+			return fmt.Errorf("store %s: %w", ds.name, err)
+		}
+	}
+	return nil
+}
+
+// addDevStore makes (and pushes) or clones the store ds as the user of p, and
+// adds it to their config.yaml with its account. It works in this process, so
+// no background sync starts, and reaches the remote through url_rewrites.
+func addDevStore(p config.Paths, getenv func(string) string, ds devStore) error {
+	c, err := config.Load(p)
+	if err != nil {
+		return err
+	}
+	acct, ok := c.Account(ds.account)
+	if !ok {
+		return fmt.Errorf("no account named %s", ds.account)
+	}
 	author, err := config.CommitAuthor(acct, true, getenv)
 	if err != nil {
-		return nil, err
-	}
-	return &userEnv{paths: p, author: author, acct: acct}, nil
-}
-
-// sync syncs s once with remotes, as the user's account. It runs in this
-// process, so no background sync starts.
-func (e *userEnv) sync(s *store.Store, remotes []string) error {
-	_, err := sync.Run(s, sync.Options{Remotes: remotes, Author: e.author, Account: e.acct.ID(), Me: []string{e.acct.ID()}})
-	return err
-}
-
-func initUser(home, u string, remotes []string) error {
-	if err := os.MkdirAll(home, 0o750); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return err
 	}
-	gitconfig := "[user]\n\tname = " + u + "\n\temail = " + u + "@example.com\n"
-	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte(gitconfig), 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
-		return err
+	var remotes []string
+	if ds.remote != "" {
+		remotes = []string{ds.remote}
 	}
-	e, err := newUserEnv(home, u)
-	if err != nil {
-		return err
+	conn := gitrepo.Conn{Rewrite: c.Rewrite}
+	dir := filepath.Join(p.StoresDir, ds.name)
+	var s *store.Store
+	if ds.clone {
+		if _, err = gitrepo.CloneWith(ds.remote, dir, conn); err != nil {
+			return err
+		}
+		s, err = store.Open(dir)
+	} else {
+		ws := &model.Workspace{ULID: model.NewULID(), Name: ds.name, IDPrefix: ds.prefix}
+		s, err = store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: ds.name}, nil, ws, author, acct.ID(), time.Now)
 	}
-	// The account is written before the config is loaded, so that AddStore keeps it.
-	accounts := fmt.Sprintf("accounts:\n  - name: %s\n    host: %s\n    login: %s\n", e.acct.Name, e.acct.Host, e.acct.Login)
-	if err := os.WriteFile(e.paths.ConfigFile, []byte(accounts), 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
-		return err
-	}
-	storeDir := filepath.Join(e.paths.StoresDir, storeName)
-	s, err := store.Create(storeDir, &model.StoreMeta{ULID: model.NewULID(), Name: storeName}, nil, &model.Workspace{ULID: model.NewULID(), Name: storeName, IDPrefix: "DEV"}, e.author, e.acct.ID(), time.Now)
 	if err != nil {
 		return err
 	}
 	if err := s.Repo().RegisterMergeDriver(); err != nil {
 		return err
 	}
-	if len(remotes) > 0 {
-		if err := e.sync(s, remotes); err != nil {
+	if !ds.clone && len(remotes) > 0 {
+		if _, err := sync.Run(s, sync.Options{Remotes: remotes, Author: author, Account: acct.ID(), Me: c.Me(), Conn: conn}); err != nil {
 			return err
 		}
 	}
-	return e.addStore(storeName, storeDir, remotes)
-}
-
-// initShared makes the store org-a: alice creates it and pushes it, bob
-// clones it.
-func initShared(dir string) error {
-	remote := []string{filepath.Join(dir, sharedRemote)}
-	alice, err := newUserEnv(filepath.Join(dir, "users", users[0]), users[0])
-	if err != nil {
+	if err := c.AddStore(ds.name, dir, remotes); err != nil {
 		return err
 	}
-	aliceDir := filepath.Join(alice.paths.StoresDir, sharedName)
-	s, err := store.Create(aliceDir, &model.StoreMeta{ULID: model.NewULID(), Name: sharedName}, nil, &model.Workspace{ULID: model.NewULID(), Name: sharedName, IDPrefix: sharedPrefix}, alice.author, alice.acct.ID(), time.Now)
-	if err != nil {
-		return err
-	}
-	if err := s.Repo().RegisterMergeDriver(); err != nil {
-		return err
-	}
-	if err := alice.sync(s, remote); err != nil {
-		return err
-	}
-	if err := alice.addStore(sharedName, aliceDir, remote); err != nil {
-		return err
-	}
-
-	bob, err := newUserEnv(filepath.Join(dir, "users", users[1]), users[1])
-	if err != nil {
-		return err
-	}
-	bobDir := filepath.Join(bob.paths.StoresDir, sharedName)
-	if _, err := gitrepo.Clone(remote[0], bobDir); err != nil {
-		return err
-	}
-	bs, err := store.Open(bobDir)
-	if err != nil {
-		return err
-	}
-	if err := bs.Repo().RegisterMergeDriver(); err != nil {
-		return err
-	}
-	if err := bs.Repo().SetRemotes(remote); err != nil {
-		return err
-	}
-	return bob.addStore(sharedName, bobDir, remote)
-}
-
-func (e *userEnv) addStore(name, path string, remotes []string) error {
-	c, err := config.Load(e.paths)
-	if err != nil {
-		return err
-	}
-	if err := c.AddStore(name, path, remotes); err != nil {
-		return err
-	}
-	if err := c.SetStoreAccount(name, e.acct.Name); err != nil {
+	if err := c.SetStoreAccount(ds.name, ds.account); err != nil {
 		return err
 	}
 	return c.Save()
@@ -307,7 +364,7 @@ func (e *userEnv) addStore(name, path string, remotes []string) error {
 
 // reset removes dir when it is a devenv (it holds the marker file) and
 // creates it again. A missing dir is only created.
-func reset(dir string, stdout io.Writer) error {
+func reset(dir, fakeghURL string, stdout io.Writer) error {
 	if _, err := os.Lstat(dir); err == nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		if _, err := os.Stat(filepath.Join(dir, markerFile)); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 			return fmt.Errorf("%s was not made by devenv (no %s in it); not removing it", dir, markerFile)
@@ -316,23 +373,23 @@ func reset(dir string, stdout io.Writer) error {
 			return err
 		}
 	}
-	return initEnv(dir, stdout)
+	return initEnv(dir, fakeghURL, stdout)
 }
 
 func printEnv(dir, user string, stdout io.Writer) error {
 	home := filepath.Join(dir, "users", user)
-	known := false
-	for _, u := range users {
-		known = known || u == user
-	}
-	if !known {
+	if !slices.Contains(users, user) {
 		return fmt.Errorf("no user named %q (users: %s)", user, strings.Join(users, ", "))
 	}
 	if _, err := os.Stat(home); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return fmt.Errorf("%s: %w; run `devenv init` first", home, err)
 	}
-	_, err := fmt.Fprintf(stdout, "export HEDGEHUG_HOME=%s\nexport GIT_CONFIG_GLOBAL=%s\n",
-		shellQuote(home), shellQuote(filepath.Join(home, ".gitconfig")))
+	var b strings.Builder
+	fmt.Fprintf(&b, "export HEDGEHUG_HOME=%s\nexport GIT_CONFIG_GLOBAL=%s\n", shellQuote(home), shellQuote(filepath.Join(home, ".gitconfig")))
+	for _, k := range slices.Sorted(maps.Keys(tokens[user])) {
+		fmt.Fprintf(&b, "export %s=%s\n", k, shellQuote(tokens[user][k]))
+	}
+	_, err := io.WriteString(stdout, b.String())
 	return err
 }
 

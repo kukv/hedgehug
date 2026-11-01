@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/fakegh"
+	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -63,12 +65,16 @@ func TestInitCreatesUsers(t *testing.T) {
 
 func TestInitMakesSharedStore(t *testing.T) {
 	dir := initDir(t)
-	for _, p := range []string{"remotes/kukv/hh-tasks.git/HEAD", "remotes/org-a/hh-shared.git/HEAD"} {
+	for _, p := range []string{"remotes/kukv/hh-tasks.git/HEAD", "remotes/org-a/hh-shared.git/HEAD", "remotes/org-b/hh-ops.git/HEAD"} {
 		if _, err := os.Stat(filepath.Join(dir, p)); err != nil {
 			t.Errorf("%s: %v", p, err)
 		}
 	}
-	for _, u := range []string{"alice", "bob"} {
+	for _, tc := range []struct {
+		user           string
+		personal, work int // the stores that name each account
+	}{{"alice", 1, 2}, {"bob", 3, 0}} {
+		u := tc.user
 		home := filepath.Join(dir, "users", u)
 		cfg, err := os.ReadFile(filepath.Join(home, "config.yaml"))
 		if err != nil {
@@ -79,8 +85,11 @@ func TestInitMakesSharedStore(t *testing.T) {
 				t.Errorf("%s config.yaml lacks %q:\n%s", u, want, cfg)
 			}
 		}
-		if n := strings.Count(string(cfg), "account: personal"); n != 2 {
-			t.Errorf("%s config.yaml names the account on %d stores, want 2:\n%s", u, n, cfg)
+		if n := strings.Count(string(cfg), "account: personal"); n != tc.personal {
+			t.Errorf("%s config.yaml names personal on %d stores, want %d:\n%s", u, n, tc.personal, cfg)
+		}
+		if n := strings.Count(string(cfg), "account: work"); n != tc.work {
+			t.Errorf("%s config.yaml names work on %d stores, want %d:\n%s", u, n, tc.work, cfg)
 		}
 		s, err := store.Open(filepath.Join(home, "stores", "org-a"))
 		if err != nil {
@@ -96,10 +105,10 @@ func TestInitMakesSharedStore(t *testing.T) {
 		if err != nil || len(log) == 0 {
 			t.Fatalf("%s: log = %v, %v", u, log, err)
 		}
-		if got := log[len(log)-1].Author.Name; got != "alice" {
-			t.Errorf("%s: first commit of org-a by %q, want alice", u, got)
+		if got := log[len(log)-1].Author.Name; got != "alice-corp" {
+			t.Errorf("%s: first commit of org-a by %q, want alice-corp (alice's work account)", u, got)
 		}
-		if got, want := log[0].Author.Email, "alice@users.noreply.github.com"; got != want {
+		if got, want := log[0].Author.Email, "alice-corp@users.noreply.github.com"; got != want {
 			t.Errorf("%s: org-a head author email = %q, want %q", u, got, want)
 		}
 	}
@@ -187,7 +196,8 @@ func TestEnv(t *testing.T) {
 		t.Fatalf("env = %d, stderr %q", code, stderr)
 	}
 	home := filepath.Join(dir, "users", "alice")
-	want := "export HEDGEHUG_HOME='" + home + "'\nexport GIT_CONFIG_GLOBAL='" + filepath.Join(home, ".gitconfig") + "'\n"
+	want := "export HEDGEHUG_HOME='" + home + "'\nexport GIT_CONFIG_GLOBAL='" + filepath.Join(home, ".gitconfig") + "'\n" +
+		"export HH_DEV_TOKEN='dev-alice'\nexport HH_DEV_TOKEN_WORK='dev-alice-corp'\n"
 	if stdout != want {
 		t.Errorf("env = %q, want %q", stdout, want)
 	}
@@ -220,7 +230,7 @@ func TestEnvUnknownUser(t *testing.T) {
 }
 
 func TestUsageErrors(t *testing.T) {
-	for _, args := range [][]string{nil, {"nope"}, {"env"}, {"init", "extra"}} {
+	for _, args := range [][]string{nil, {"nope"}, {"env"}, {"init", "extra"}, {"init", "--fakegh", "not a url"}} {
 		if code, _, _ := runDevenv(t, args...); code != 2 {
 			t.Errorf("run(%v) = %d, want 2", args, code)
 		}
@@ -239,5 +249,59 @@ func TestFindRoot(t *testing.T) {
 	got, err := findRoot(sub)
 	if err != nil || got != root {
 		t.Errorf("findRoot = %q, %v; want %q", got, err, root)
+	}
+}
+
+func TestInitPhase3a(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "dev")
+	var out, errb bytes.Buffer
+	if code := run([]string{"init", "--dir", dir, "--fakegh", "http://127.0.0.1:9999"}, &out, &errb, t.TempDir()); code != 0 {
+		t.Fatalf("init: %d %s", code, errb.String())
+	}
+	if !strings.Contains(out.String(), "go run ./cmd/fakegh serve --addr 127.0.0.1:9999 --seed ") {
+		t.Errorf("init does not say how to start the fake:\n%s", out.String())
+	}
+	st, err := fakegh.Load(filepath.Join(dir, "fakegh.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Tokens["dev-alice-corp"] != "alice-corp" || st.Tokens["dev-alice"] != "alice" || st.Tokens["dev-bob"] != "bob" {
+		t.Errorf("tokens = %v", st.Tokens)
+	}
+	if len(st.Repos) != 4 {
+		t.Fatalf("repos = %d, want 4", len(st.Repos))
+	}
+	for _, r := range st.Repos {
+		hasTopic := len(r.Topics) == 1 && r.Topics[0] == "hedgehug-store"
+		if isWeb := r.Owner == "org-a" && r.Name == "web"; isWeb == hasTopic {
+			t.Errorf("%s/%s topics = %v: only org-a/web has none", r.Owner, r.Name, r.Topics)
+		}
+	}
+	foundOps := false
+	for _, r := range st.Repos {
+		if r.Owner == "org-b" && r.Name == "hh-ops" {
+			foundOps = true
+			if r.Perms["bob"] != "read" {
+				t.Errorf("org-b/hh-ops perms = %v, bob reads it only", r.Perms)
+			}
+		}
+	}
+	if !foundOps {
+		t.Error("the seed has no org-b/hh-ops")
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, "users", "alice", "config.yaml"))
+	for _, want := range []string{"http://127.0.0.1:9999", "url_rewrites", "https://github.com/org-b/hh-ops.git", "login: alice-corp", "token: env:HH_DEV_TOKEN_WORK", "default_store: me"} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("alice's config lacks %q:\n%s", want, b)
+		}
+	}
+	gc, _ := os.ReadFile(filepath.Join(dir, "users", "alice", ".gitconfig"))
+	if !strings.Contains(string(gc), "insteadOf = https://github.com/") {
+		t.Errorf("alice's .gitconfig = %q", gc)
+	}
+	for _, r := range []string{"kukv/hh-tasks.git", "org-a/hh-shared.git", "org-b/hh-ops.git"} {
+		if ok, err := gitrepo.HeadHasFile(filepath.Join(dir, "remotes", r), ".hedgehug/store.yaml"); err != nil || !ok {
+			t.Errorf("%s has no store: %v %v", r, ok, err)
+		}
 	}
 }

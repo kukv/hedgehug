@@ -102,10 +102,7 @@ func (u *devUser) ok(args ...string) string {
 
 func TestE2EAliceAndBob(t *testing.T) {
 	bin, devenv := buildHedgehug(t), buildDevenv(t)
-	dev := filepath.Join(t.TempDir(), "hh-dev")
-	if out, err := exec.Command(devenv, "init", "--dir", dev).CombinedOutput(); err != nil { //nolint:gosec // the binary the test built
-		t.Fatalf("devenv init: %v\n%s", err, out)
-	}
+	dev, _, _ := initDevenv(t, devenv)
 	alice, bob := devUserOf(t, bin, devenv, dev, "alice"), devUserOf(t, bin, devenv, dev, "bob")
 
 	// Both change the title of ORG-1 apart. Commit times have a precision of
