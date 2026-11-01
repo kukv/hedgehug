@@ -346,12 +346,8 @@ func (ss *Session) SyncBackground(log io.Writer) error {
 					return err
 				}
 				next, err := ss.swapRebuilt(s, opt, false, res)
-				// With no store at the path a swap that stopped is left for
-				// the repair; opening the log would make a directory there.
-				if _, serr := os.Stat(e.Path); serr == nil {
-					if rerr := bounded.Reopen(); rerr != nil {
-						err = errors.Join(err, rerr)
-					}
+				if rerr := reopenLog(bounded, e.Path); rerr != nil {
+					err = errors.Join(err, rerr)
 				}
 				logWarnings(next)
 				if err == nil && next.Swapped {
@@ -367,7 +363,8 @@ func (ss *Session) SyncBackground(log io.Writer) error {
 		// closed (a swap failed); UpdateState works by the path of the store,
 		// not by the repository, but when the swap left no store at the path
 		// it would make a directory there, which the repair of the swap takes
-		// for a store: the log has the error then.
+		// for a store: only the log has the error then, in the directory the
+		// swap left (reopenLog).
 		if _, serr := os.Stat(e.Path); serr == nil {
 			_, stateErr := sync.UpdateState(s, func(st *sync.State) {
 				st.LastError, st.ErrorReported = err.Error(), false
@@ -376,6 +373,28 @@ func (ss *Session) SyncBackground(log io.Writer) error {
 		}
 	}
 	return backgroundFailed(ss, log, e.Name, err)
+}
+
+// reopenLog opens the sync.log of the store at path again after the swap.
+// With no store at the path (a swap that stopped, left for the repair) it
+// opens the one in the old store that was moved away, or else in the
+// rebuild, so that what is logged after is not lost; opening it at the path
+// would make a directory there.
+func reopenLog(l *sync.BoundedLog, path string) error {
+	if _, err := os.Stat(path); err == nil {
+		return l.Reopen()
+	}
+	left, err := sync.FindLeftover(path)
+	if err != nil {
+		return err
+	}
+	switch {
+	case len(left.Before) > 0:
+		return l.ReopenAt(left.Before[len(left.Before)-1])
+	case left.New != "":
+		return l.ReopenAt(left.New)
+	}
+	return nil
 }
 
 // backgroundFailed logs err for sync.log and ends the child with exit code 0:

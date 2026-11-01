@@ -216,8 +216,13 @@ func (b *BoundedLog) Release() error {
 		return nil
 	}
 	if b.own != os.Stderr {
+		// Released only when the close worked: a log that is still open goes
+		// on taking lines.
+		if err := b.own.Close(); err != nil {
+			return err
+		}
 		b.released = true
-		return b.own.Close()
+		return nil
 	}
 	nul, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
 	if err != nil {
@@ -234,11 +239,18 @@ func (b *BoundedLog) Release() error {
 // Reopen opens sync.log again, at the same path, which may be in another
 // directory now, and writes what was kept. The standard error, if it was
 // the file, points at it again.
-func (b *BoundedLog) Reopen() error {
+func (b *BoundedLog) Reopen() error { return b.ReopenAt("") }
+
+// ReopenAt is Reopen for the sync.log of the store in the directory dir, when
+// the store is not at its path (a swap that stopped); "" is the path it has.
+func (b *BoundedLog) ReopenAt(dir string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if !b.released {
 		return nil
+	}
+	if dir != "" {
+		b.path = filepath.Join(dir, ".hedgehug", "local", logName)
 	}
 	f, err := openLog(b.path)
 	if err != nil {
