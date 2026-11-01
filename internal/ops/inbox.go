@@ -62,7 +62,7 @@ func (ss *Session) InboxStores() ([]InboxStore, error) {
 		case openErr != nil:
 			ss.warnSkipped(mount.Skipped{Name: e.Name, Err: openErr})
 		default:
-			ss.warnOnce(e.Name, fmt.Sprintf("cannot read the inbox of %s: %v", e.Name, readErr))
+			ss.warnOnce("inbox:"+e.Name, fmt.Sprintf("cannot read the inbox of %s: %v", e.Name, readErr))
 		}
 	}
 	return out, nil
