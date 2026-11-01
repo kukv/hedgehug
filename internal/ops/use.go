@@ -7,7 +7,6 @@ import (
 	hhctx "github.com/kukv/hedgehug/internal/context"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/mount"
-	"github.com/kukv/hedgehug/internal/store"
 )
 
 // useKind is the kind of a task that hh use takes.
@@ -15,9 +14,9 @@ const useKind = "project"
 
 // UseResult is the project hh use set or shows; Project is nil when there is none.
 type UseResult struct {
-	Store   string // the store's name
-	Project *index.Entry
-	Index   *index.Index
+	Store   string       // the store's name
+	Project *index.Entry // a copy of the entry as it was read
+	ID      string       // the project's id as its store shows it (store-qualified when prefixes are shared)
 	Changed bool
 }
 
@@ -32,7 +31,7 @@ func (ss *Session) loadContext() (hhctx.State, config.Paths, error) {
 
 // Use makes the project arg names (any store, "<store>:" allowed) the
 // default parent of new tasks. A task whose kind is not project is
-// KindInvalid, use.not_project. A deleted one is not found.
+// KindInvalid, use.not_project. A deleted one is KindConflict, task.deleted.
 func (ss *Session) Use(arg string) (UseResult, error) {
 	set, err := ss.Mount()
 	if err != nil {
@@ -42,13 +41,26 @@ func (ss *Session) Use(arg string) (UseResult, error) {
 	if err != nil {
 		return UseResult{}, ss.mountResolveError(set, arg, err)
 	}
-	e := hit.Entry
-	label := hit.Ref()
-	if e.DeletedAt != nil {
-		return UseResult{}, newErr(KindNotFound, "task.not_found",
-			fmt.Errorf("%s is deleted: %w", label, store.ErrNotFound), "input", arg)
+	var e index.Entry
+	var id string
+	var ferr error
+	if err := hit.Store.With(func(ix *index.Index) {
+		cur, ok := ix.Task(hit.Entry.ULID)
+		if !ok {
+			cur = hit.Entry
+		}
+		if ferr = NotDeleted(ix, cur); ferr != nil {
+			return
+		}
+		e, id = *cur, ix.DisplayID(cur)
+	}); err != nil {
+		return UseResult{}, err
+	}
+	if ferr != nil {
+		return UseResult{}, ferr
 	}
 	if e.Kind != useKind {
+		label := hit.Ref()
 		return UseResult{}, newErr(KindInvalid, "use.not_project",
 			fmt.Errorf("%s is a %s, not a project", label, e.Kind), "id", label, "kind", e.Kind)
 	}
@@ -64,11 +76,7 @@ func (ss *Session) Use(arg string) (UseResult, error) {
 			return UseResult{}, err
 		}
 	}
-	ix, err := hit.Store.Index()
-	if err != nil {
-		return UseResult{}, err
-	}
-	return UseResult{Store: hit.Store.Name, Project: e, Index: ix, Changed: changed}, nil
+	return UseResult{Store: hit.Store.Name, Project: &e, ID: id, Changed: changed}, nil
 }
 
 // UseShow is the project hh use set, or a zero result. A project that is
@@ -97,7 +105,8 @@ func (ss *Session) UseShow() (UseResult, error) {
 		var res UseResult
 		err := m.With(func(ix *index.Index) {
 			if e, ok := ix.Task(st.Use.Project); ok && e.DeletedAt == nil && e.Kind == useKind {
-				res = UseResult{Store: m.Name, Project: e, Index: ix}
+				cp := *e
+				res = UseResult{Store: m.Name, Project: &cp, ID: ix.DisplayID(e)}
 			}
 		})
 		if err != nil {

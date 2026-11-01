@@ -55,7 +55,7 @@ func (a *app) useShow() error {
 		_, err = fmt.Fprintln(a.stdout, "-")
 		return err
 	}
-	_, err = fmt.Fprintf(a.stdout, "%s / %s %s\n", res.Store, a.style().id(res.Index.DisplayID(res.Project)), res.Project.Title)
+	_, err = fmt.Fprintf(a.stdout, "%s / %s %s\n", res.Store, a.style().id(res.ID), res.Project.Title)
 	return err
 }
 
@@ -90,5 +90,5 @@ func useJSON(res ops.UseResult) any {
 	return struct {
 		Store   string     `json:"store"`
 		Project useProject `json:"project"`
-	}{res.Store, useProject{res.Index.DisplayID(res.Project), res.Project.ULID.String(), res.Project.Title}}
+	}{res.Store, useProject{res.ID, res.Project.ULID.String(), res.Project.Title}}
 }

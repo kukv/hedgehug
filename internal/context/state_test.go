@@ -67,3 +67,34 @@ func TestSaveEmptyWritesNullUse(t *testing.T) {
 		t.Errorf("context.json = %s", b)
 	}
 }
+
+func TestLoadInvalidULIDIsBroken(t *testing.T) {
+	d := t.TempDir()
+	if err := os.WriteFile(filepath.Join(d, "context.json"), []byte(`{"use": {"store": "nope", "project": "nope"}, "recent": {}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var warns []string
+	st := Load(d, func(m string) { warns = append(warns, m) })
+	if st.Use != nil || len(st.Recent) != 0 {
+		t.Errorf("Load = %+v; want empty", st)
+	}
+	if len(warns) != 1 || !strings.HasPrefix(warns[0], "context.json is broken, so it is read as empty: ") {
+		t.Errorf("warns = %q", warns)
+	}
+}
+
+func TestLoadUnreadableIsNotBroken(t *testing.T) {
+	d := t.TempDir()
+	// a directory where the file should be cannot be read, on every system
+	if err := os.Mkdir(filepath.Join(d, "context.json"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	var warns []string
+	st := Load(d, func(m string) { warns = append(warns, m) })
+	if st.Use != nil || len(st.Recent) != 0 {
+		t.Errorf("Load = %+v; want empty", st)
+	}
+	if len(warns) != 1 || !strings.HasPrefix(warns[0], "context.json cannot be read, so it is read as empty: ") {
+		t.Errorf("warns = %q", warns)
+	}
+}

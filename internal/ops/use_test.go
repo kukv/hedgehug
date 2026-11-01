@@ -103,7 +103,10 @@ func TestUseRefusesADeletedProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := ts.Use(id)
-	wantCode(t, "Use(deleted)", err, KindNotFound, "task.not_found")
+	wantCode(t, "Use(deleted)", err, KindConflict, "task.deleted")
+	if err == nil || !strings.Contains(err.Error(), "restore") {
+		t.Errorf("Use(deleted) = %v; want a hint to restore", err)
+	}
 }
 
 func TestUseAmbiguousAcrossStores(t *testing.T) {
@@ -126,7 +129,7 @@ func TestUseShow(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err = ts.UseShow()
-	if err != nil || r.Project == nil || r.Project.ULID != set.Project.ULID || r.Store != "org-a" || r.Index == nil {
+	if err != nil || r.Project == nil || r.Project.ULID != set.Project.ULID || r.Store != "org-a" || r.ID != id {
 		t.Errorf("UseShow = %+v, %v", r, err)
 	}
 	if len(ts.warns) != 0 {
