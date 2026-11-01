@@ -64,6 +64,7 @@ func newComment(t *testing.T) (*model.Comment, string) {
 }
 
 func TestRunClean(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	task := newTask("A")
 	put(t, s, task)
@@ -79,6 +80,7 @@ func TestRunClean(t *testing.T) {
 }
 
 func TestRunBrokenSchema(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	put(t, s, newTask("A"))
 	writeFile(t, dir, "schema.yaml", "statuses: [\n")
@@ -104,6 +106,7 @@ func TestRunBrokenSchema(t *testing.T) {
 }
 
 func TestRunBrokenStoreMeta(t *testing.T) {
+	t.Parallel()
 	_, dir := newStore(t)
 	writeFile(t, dir, model.StoreMetaPath, "ulid: [\n")
 	fs := run(t, dir)
@@ -116,6 +119,7 @@ func TestRunBrokenStoreMeta(t *testing.T) {
 }
 
 func TestRunFiles(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	a, b := newTask("A"), newTask("B")
 	put(t, s, a)
@@ -152,6 +156,7 @@ func TestRunFiles(t *testing.T) {
 }
 
 func TestRunWorktree(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	put(t, s, newTask("A"))
 	writeFile(t, dir, "untracked.md", "x")
@@ -179,6 +184,7 @@ func TestRunWorktree(t *testing.T) {
 }
 
 func TestRunVerifyFails(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	put(t, s, newTask("A"))
 	matches, err := filepath.Glob(filepath.Join(dir, ".git", "objects", "??", "*"))
@@ -203,6 +209,7 @@ func TestRunVerifyFails(t *testing.T) {
 }
 
 func TestRunIndexProblems(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	a := newTask("A")
 	missing := model.NewULID()
@@ -216,6 +223,7 @@ func TestRunIndexProblems(t *testing.T) {
 }
 
 func TestRunSchemaProblems(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	bad := newTask("Bad")
 	bad.Status = "weird"
@@ -227,6 +235,7 @@ func TestRunSchemaProblems(t *testing.T) {
 }
 
 func TestRunBrokenHead(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	put(t, s, newTask("A"))
 	// Commit a broken schema.yaml, then make the file readable again.
@@ -247,6 +256,7 @@ func TestRunBrokenHead(t *testing.T) {
 }
 
 func TestRunCycleAndBroken(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	a, b := newTask("A"), newTask("B")
 	a.Parent, b.Parent = &b.ULID, &a.ULID
@@ -275,6 +285,7 @@ func TestRunCycleAndBroken(t *testing.T) {
 }
 
 func TestRunIgnoresLockAndGitignore(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	put(t, s, newTask("A"))
 	if _, err := os.Stat(filepath.Join(dir, ".hedgehug", "local", "lock")); err != nil {
@@ -312,6 +323,7 @@ func duplicateFindings(t *testing.T, dir, what string) map[string]Finding {
 }
 
 func TestRunWorkspaces(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	first := firstWorkspace(t, s)
 	w := &model.Workspace{ULID: model.NewULID(), Name: "other", IDPrefix: "TST"}
@@ -326,6 +338,7 @@ func TestRunWorkspaces(t *testing.T) {
 }
 
 func TestRunWorkspaceNames(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	first := firstWorkspace(t, s)
 	w := &model.Workspace{ULID: model.NewULID(), Name: "test", IDPrefix: "OTHER"} // as the first one
@@ -337,6 +350,7 @@ func TestRunWorkspaceNames(t *testing.T) {
 }
 
 func TestRunWorkspaceFields(t *testing.T) {
+	t.Parallel()
 	_, dir := newStore(t)
 	set := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	for _, tc := range []struct {
@@ -362,6 +376,7 @@ func TestRunWorkspaceFields(t *testing.T) {
 }
 
 func TestRunNumbers(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	for _, tt := range []struct{ data, want string }{
 		{"TST: [\n", "does not decode: "},
@@ -388,6 +403,7 @@ func TestRunNumbers(t *testing.T) {
 }
 
 func TestRunIDProblems(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	a := newTask("A")
 	a.ID = "XX-1"
@@ -445,6 +461,7 @@ func TestMergeDriverChecks(t *testing.T) {
 }
 
 func TestMergeDriverIgnoredWithoutAttributes(t *testing.T) {
+	t.Parallel()
 	dir := newBareStore(t)
 	if err := os.Remove(filepath.Join(dir, store.AttributesPath)); err != nil {
 		t.Fatal(err)
@@ -457,6 +474,7 @@ func TestMergeDriverIgnoredWithoutAttributes(t *testing.T) {
 }
 
 func TestUnimportedRecords(t *testing.T) {
+	t.Parallel()
 	_, dir := newStore(t)
 	rec := `{"path":"tasks/x.md","field":"title","value":"\"a\"","author":"a","commit":"","time":"2026-10-31T00:00:00Z"}`
 	writeFile(t, dir, ".hedgehug/local/overwritten/01JC1111111111111111111111.json", rec)
@@ -468,6 +486,7 @@ func TestUnimportedRecords(t *testing.T) {
 }
 
 func TestUndecodableRecords(t *testing.T) {
+	t.Parallel()
 	_, dir := newStore(t)
 	writeFile(t, dir, ".hedgehug/local/overwritten/01JC1111111111111111111111.json", "{}")
 	writeFile(t, dir, ".hedgehug/local/overwritten/01JC2222222222222222222222.json", "[")
@@ -485,6 +504,7 @@ func TestUndecodableRecords(t *testing.T) {
 }
 
 func TestNoRecords(t *testing.T) {
+	t.Parallel()
 	_, dir := newStore(t)
 	if fs := run(t, dir); len(fs) != 0 {
 		t.Errorf("findings = %+v", fs)
@@ -492,6 +512,7 @@ func TestNoRecords(t *testing.T) {
 }
 
 func TestFixHints(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	a, b := newTask("a"), newTask("b")
 	a.ID, b.ID = "TST-7", "TST-7"
@@ -510,6 +531,7 @@ func TestFixHints(t *testing.T) {
 }
 
 func TestFix(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	a, b := newTask("a"), newTask("b")
 	a.ID, b.ID = "TST-7", "TST-7"
@@ -532,6 +554,7 @@ func TestFix(t *testing.T) {
 }
 
 func TestFixHintsByProblem(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		setup func(t *testing.T, s *store.Store, dir string)
@@ -590,6 +613,7 @@ func TestFixHintsByProblem(t *testing.T) {
 }
 
 func TestLiveChildOfDeletedParentIsFixed(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	p, c := newTask("p"), newTask("c")
 	now := time.Now()
@@ -607,6 +631,7 @@ func TestLiveChildOfDeletedParentIsFixed(t *testing.T) {
 }
 
 func TestDoctorViewColumnsWithBrokenStoreMeta(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	if _, err := s.Update(store.Op{Name: "test", Author: testAuthor}, func(tx *store.Tx) error {
 		return tx.PutFile("views/cols.yaml", []byte("layout: table\ntable:\n  columns: [id, gone]\n"))
@@ -620,6 +645,7 @@ func TestDoctorViewColumnsWithBrokenStoreMeta(t *testing.T) {
 }
 
 func TestDoctorViews(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	files := map[string]string{
 		"views/ok.yaml":     "layout: table\ntable:\n  columns: [id, due]\n",

@@ -6,6 +6,7 @@ import (
 )
 
 func TestChoiceAndConfirmRequired(t *testing.T) {
+	t.Parallel()
 	e := choiceRequired("a store", []string{"a", "b"})
 	if e.Kind != KindUsage || e.Code != "choice.required" || e.Error() != "a store is needed; pick one of: a, b" {
 		t.Errorf("choiceRequired = %+v %q", e, e.Error())

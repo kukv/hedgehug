@@ -7,6 +7,7 @@ import (
 )
 
 func TestLog(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := Init(dir)
 	if err != nil {
@@ -92,6 +93,7 @@ func TestLog(t *testing.T) {
 }
 
 func TestLogEmptyRepo(t *testing.T) {
+	t.Parallel()
 	r, err := Init(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -103,6 +105,7 @@ func TestLogEmptyRepo(t *testing.T) {
 }
 
 func TestLogNoTrailers(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := Init(dir)
 	if err != nil {
@@ -122,6 +125,7 @@ func TestLogNoTrailers(t *testing.T) {
 }
 
 func TestLogEntryWriter(t *testing.T) {
+	t.Parallel()
 	e := LogEntry{Author: Signature{Name: "a", Email: "a@x"}}
 	if got := e.Writer(); got != "a@x" {
 		t.Errorf("Writer = %q", got)

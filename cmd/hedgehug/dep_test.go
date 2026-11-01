@@ -6,6 +6,7 @@ import (
 )
 
 func TestDep(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	b := te.addJSON("Beta")

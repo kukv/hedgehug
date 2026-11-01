@@ -10,6 +10,7 @@ import (
 // A token that cannot be got (env unset) is auth.token, through Token, GitHub
 // and Conn.Auth.
 func TestTokenFailureIsAuthToken(t *testing.T) {
+	t.Parallel()
 	ts, _ := authSession(t, fakegh.State{},
 		"accounts:\n  - {name: e, host: github.com, login: alice, token: \"env:HH_UNSET_TOKEN\"}\n")
 	c, _, err := ts.Config()
@@ -38,6 +39,7 @@ func TestTokenFailureIsAuthToken(t *testing.T) {
 
 // A token GitHub refuses (401) when AuthLogin checks it is auth.unauthorized.
 func TestAuthLoginBadTokenIsUnauthorized(t *testing.T) {
+	t.Parallel()
 	ts, k := authSession(t, fakegh.State{}, "")
 	_, err := ts.AuthLogin(AuthLoginInput{Host: "github.com", WithToken: true, Token: "bad"})
 	wantErr(t, err, KindInvalid, "auth.unauthorized")
@@ -59,6 +61,7 @@ func TestAuthLoginBadTokenIsUnauthorized(t *testing.T) {
 // The login of the token is not the account's: the message says the token
 // can be revoked on GitHub.
 func TestAuthLoginOtherLoginSaysHowToRevoke(t *testing.T) {
+	t.Parallel()
 	ts, _ := authSession(t, fakegh.State{Tokens: map[string]string{"t-bob": "bob"}},
 		"accounts:\n  - {name: work, host: github.com, login: alice}\n")
 	_, err := ts.AuthLogin(AuthLoginInput{Name: "work", Host: "github.com", WithToken: true, Token: "t-bob"})
@@ -69,6 +72,7 @@ func TestAuthLoginOtherLoginSaysHowToRevoke(t *testing.T) {
 
 // For a known account too: the same text, with no hint to run the command.
 func TestAuthLoginBadTokenKnownAccount(t *testing.T) {
+	t.Parallel()
 	ts, _ := authSession(t, fakegh.State{}, "accounts:\n  - {name: work, host: github.com, login: alice, token: keychain}\n")
 	_, err := ts.AuthLogin(AuthLoginInput{Name: "work", Host: "github.com", WithToken: true, Token: "bad"})
 	wantErr(t, err, KindInvalid, "auth.unauthorized")

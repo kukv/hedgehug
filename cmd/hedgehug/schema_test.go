@@ -36,6 +36,7 @@ func (te *testEnv) writeSchemaFile(edit func(*schema.Schema)) {
 }
 
 func TestSchemaCheckNoProblems(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("add", "Alpha")
 	code, out, stderr := te.run("schema", "check")
@@ -49,6 +50,7 @@ func TestSchemaCheckNoProblems(t *testing.T) {
 }
 
 func TestSchemaCheckProblems(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	te.writeSchemaFile(func(sc *schema.Schema) {
@@ -93,6 +95,7 @@ func TestSchemaCheckProblems(t *testing.T) {
 }
 
 func TestSchemaCheckBrokenSchemaFile(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("add", "Alpha")
 	if err := os.WriteFile(filepath.Join(te.storeDir("me"), "schema.yaml"), []byte("statuses: [\n"), 0o600); err != nil {
@@ -110,6 +113,7 @@ func TestSchemaCheckBrokenSchemaFile(t *testing.T) {
 }
 
 func TestSchemaCheckBrokenStoreIsNotAFinding(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	if err := os.Remove(filepath.Join(te.storeDir("me"), ".hedgehug", "store.yaml")); err != nil {
 		t.Fatal(err)
@@ -121,6 +125,7 @@ func TestSchemaCheckBrokenStoreIsNotAFinding(t *testing.T) {
 }
 
 func TestSchemaCheckTakesNoArguments(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	if code, _, _ := te.run("schema", "check", "x"); code != 2 {
 		t.Errorf("exit %d, want 2", code)

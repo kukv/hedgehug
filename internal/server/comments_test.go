@@ -15,6 +15,7 @@ type commentBody struct {
 }
 
 func TestComments(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	ts.withAccount() // only the author edits a comment
 	id := ts.add("one", "")
@@ -52,6 +53,7 @@ func TestComments(t *testing.T) {
 }
 
 func TestWatchMe(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	ts.withAccount()
 	id := ts.add("one", "")
@@ -70,6 +72,7 @@ func TestWatchMe(t *testing.T) {
 }
 
 func TestWatchMeWithoutAccountIsConflict(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	id := ts.add("one", "")
 	if p := ts.problem("PUT", "/api/tasks/"+id+"/watchers/me", nil, 409); p.Type != "account.none" {

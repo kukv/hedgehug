@@ -12,6 +12,7 @@ import (
 // The warning names the workspace whose prefix was set later: here the one
 // carol made after the shared store.
 func TestStoreAddWarningNamesLater(t *testing.T) {
+	t.Parallel()
 	alice, _, remote := twoUsers(t)
 	carol := alice.other()
 	carol.now = carol.now.Add(time.Second) // prefix_set is in seconds
@@ -20,6 +21,7 @@ func TestStoreAddWarningNamesLater(t *testing.T) {
 }
 
 func TestStoreInitRemoteJSON(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	remote, mirror := te.bare("one"), te.bare("two")
 	var got struct {
@@ -37,6 +39,7 @@ func TestStoreInitRemoteJSON(t *testing.T) {
 }
 
 func TestStoreAddMirror(t *testing.T) {
+	t.Parallel()
 	alice, _, remote := twoUsers(t)
 	mirror := alice.bare("mirror")
 	carol := alice.other()
@@ -52,6 +55,7 @@ func TestStoreAddMirror(t *testing.T) {
 }
 
 func TestStoreListAccountIsID(t *testing.T) {
+	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	var list []struct {
 		Account string `json:"account"`
@@ -62,6 +66,7 @@ func TestStoreListAccountIsID(t *testing.T) {
 }
 
 func TestStoreRemoveJSON(t *testing.T) {
+	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	var got struct {
 		Name   string `json:"name"`
@@ -74,6 +79,7 @@ func TestStoreRemoveJSON(t *testing.T) {
 }
 
 func TestStoreRemovePurgeRefusesDirtyTree(t *testing.T) {
+	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	dir := alice.storeDir("org")
 	if err := os.WriteFile(filepath.Join(dir, "notes.md"), []byte("hand edit\n"), 0o600); err != nil {
@@ -93,6 +99,7 @@ func TestStoreRemovePurgeRefusesDirtyTree(t *testing.T) {
 
 // One store that cannot be read does not hide the status of the others.
 func TestSyncStatusSkipsBrokenStore(t *testing.T) {
+	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	remote2 := alice.bare("second")
 	alice.ok("store", "init", "two", "--prefix", "TWO", "--remote", remote2)

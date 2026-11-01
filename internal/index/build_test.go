@@ -39,6 +39,7 @@ func writeCache(t *testing.T, s *store.Store, c cache) {
 }
 
 func TestOpenWritesAndUsesCache(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	task := newTask("original")
 	put(t, s, task)
@@ -58,6 +59,7 @@ func TestOpenWritesAndUsesCache(t *testing.T) {
 }
 
 func TestOpenRebuildsBadCache(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	task := newTask("original")
 	put(t, s, task)
@@ -100,6 +102,7 @@ func TestOpenRebuildsBadCache(t *testing.T) {
 }
 
 func TestRefreshReadsOnlyChanges(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	kept, edited, purged := newTask("kept"), newTask("edited"), newTask("purged")
 	put(t, s, kept, edited, purged)
@@ -140,6 +143,7 @@ func TestRefreshReadsOnlyChanges(t *testing.T) {
 }
 
 func TestRefreshRevalidatesOnSchemaChange(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	task := newTask("x")
 	put(t, s, task)
@@ -163,6 +167,7 @@ func TestRefreshRevalidatesOnSchemaChange(t *testing.T) {
 }
 
 func TestRefreshRevalidatesChildren(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	parent, child := newTask("parent"), newTask("child")
 	parent.Kind, child.Kind = "epic", "story"
@@ -181,6 +186,7 @@ func TestRefreshRevalidatesChildren(t *testing.T) {
 }
 
 func TestRefreshWithoutChange(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	put(t, s, newTask("x"))
 	ix := mustOpen(t, s)
@@ -194,6 +200,7 @@ func hasProblem(ix *Index, ulid model.ULID, code string) bool {
 }
 
 func TestProblemsIncludeViolationsOnOpen(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	ulid := model.NewULID()
 	commitRaw(t, s, dir, model.TaskPath(ulid), rawTask(ulid, "kind: nope\ntitle: x\nstatus: todo\n"))
@@ -206,6 +213,7 @@ func TestProblemsIncludeViolationsOnOpen(t *testing.T) {
 }
 
 func TestProblemsFollowRefresh(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	task := newTask("x")
 	put(t, s, task)
@@ -228,6 +236,7 @@ func TestProblemsFollowRefresh(t *testing.T) {
 }
 
 func TestProblemsFollowParentKind(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	parent, child := newTask("parent"), newTask("child")
 	parent.Kind, child.Kind = "epic", "story"

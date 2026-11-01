@@ -13,6 +13,7 @@ import (
 )
 
 func TestStoreInitConfigWriteFailureLeavesNoStore(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("directory permissions do not restrict writes on Windows")
 	}
@@ -38,6 +39,7 @@ func TestStoreInitConfigWriteFailureLeavesNoStore(t *testing.T) {
 }
 
 func TestStatusRejectedByTransitionAddsNoCommit(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	s, err := store.Open(te.storeDir("me"))
@@ -64,6 +66,7 @@ func TestStatusRejectedByTransitionAddsNoCommit(t *testing.T) {
 }
 
 func TestDepAddCycleAddsNoCommit(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	b := te.addJSON("Beta")
@@ -79,6 +82,7 @@ func TestDepAddCycleAddsNoCommit(t *testing.T) {
 }
 
 func TestDepAddSelfIsAnError(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	before := len(te.log("me"))
@@ -92,6 +96,7 @@ func TestDepAddSelfIsAnError(t *testing.T) {
 }
 
 func TestMvAgainstItself(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	te.addJSON("Beta")
@@ -108,6 +113,7 @@ func TestMvAgainstItself(t *testing.T) {
 }
 
 func TestMvDeletedTask(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	te.addJSON("Beta")

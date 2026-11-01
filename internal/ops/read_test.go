@@ -33,6 +33,7 @@ func ids(es []*TreeNode) []string {
 }
 
 func TestListTreeShowLog(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	for _, in := range []AddInput{{Title: "p"}, {Title: "c", Parent: "ME-1"}, {Title: "other"}} {
 		if _, err := ts.Add(in); err != nil {
@@ -78,6 +79,7 @@ func TestListTreeShowLog(t *testing.T) {
 }
 
 func TestParseQuery(t *testing.T) {
+	t.Parallel()
 	q, err := ParseQuery("status:todo group:status")
 	if err != nil || len(q.Terms) != 2 {
 		t.Fatalf("ParseQuery = %+v, %v; want two terms", q, err)
@@ -87,6 +89,7 @@ func TestParseQuery(t *testing.T) {
 }
 
 func TestListGroupsAndErrors(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	for _, in := range []AddInput{{Title: "a"}, {Title: "b", Status: "done"}} {
 		if _, err := ts.Add(in); err != nil {
@@ -110,6 +113,7 @@ func TestListGroupsAndErrors(t *testing.T) {
 }
 
 func TestHasTerm(t *testing.T) {
+	t.Parallel()
 	q := mustParse(t, "status:todo sort:title")
 	if !HasTerm(q, "sort") || !HasTerm(q, "status") || HasTerm(q, "group") {
 		t.Errorf("HasTerm wrong for %+v", q.Terms)
@@ -120,6 +124,7 @@ func TestHasTerm(t *testing.T) {
 }
 
 func TestTreeRefusesGroupAndSort(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	for _, s := range []string{"group:status", "sort:title"} {
 		_, err := ts.Tree(mustParse(t, s))
@@ -131,6 +136,7 @@ func TestTreeRefusesGroupAndSort(t *testing.T) {
 }
 
 func TestTreeViewOfAndFlatten(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	for _, in := range []AddInput{{Title: "p"}, {Title: "c1", Parent: "ME-1"}, {Title: "g", Parent: "ME-2"}, {Title: "c2", Parent: "ME-1"}, {Title: "q"}} {
 		if _, err := ts.Add(in); err != nil {
@@ -207,6 +213,7 @@ func rawTask(t *testing.T, ts *testSession, id string, ulid model.ULID, front st
 }
 
 func TestTreeParentCycle(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	x, y, c := model.NewULID(), model.NewULID(), model.NewULID()
 	rawTask(t, ts, "ME-1", x, "title: X\nparent: "+y.String()+"\n")
@@ -244,6 +251,7 @@ func TestTreeParentCycle(t *testing.T) {
 }
 
 func TestShowFullTask(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.asAccount("alice")
 	a := ts.addTask("a", func(t *model.Task) { t.Body = "the body\n"; t.Watchers = []string{"bob"}; t.Repos = []string{"r1"} })
@@ -333,6 +341,7 @@ func TestShowFullTask(t *testing.T) {
 }
 
 func TestShowViewOfEmpty(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "bare"}); err != nil {
 		t.Fatal(err)
@@ -357,6 +366,7 @@ func TestShowViewOfEmpty(t *testing.T) {
 }
 
 func TestShowBrokenTask(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ulid := model.NewULID()
 	rawTask(t, ts, "ME-1", ulid, "title: [unclosed\n")
@@ -374,12 +384,14 @@ func TestShowBrokenTask(t *testing.T) {
 }
 
 func TestShowErrors(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	_, err := ts.Show("ME-9")
 	wantErr(t, err, KindNotFound, "task.not_found")
 }
 
 func TestLogAndTaskLog(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	for _, in := range []AddInput{{Title: "a"}, {Title: "b"}} {
 		if _, err := ts.Add(in); err != nil {
@@ -458,6 +470,7 @@ func mustULID(t *testing.T, s string) model.ULID {
 }
 
 func TestLogViewsOfAndSubjectNow(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "Alpha"}); err != nil {
 		t.Fatal(err)

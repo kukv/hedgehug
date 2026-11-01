@@ -61,6 +61,7 @@ func refTo(t *testing.T, ts *testSession, line string) (from model.ULID) {
 }
 
 func TestDoctorCoversEveryStoreAndFindsCrossStoreRefs(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	from := refTo(t, ts, "parent: <target>")
 	rs, err := ts.Doctor(false)
@@ -102,6 +103,7 @@ func TestDoctorCoversEveryStoreAndFindsCrossStoreRefs(t *testing.T) {
 // With a prefix both stores use, doctor's Where is still the plain id (the
 // store has its heading), and the Msg names the other store and its id.
 func TestDoctorCrossStoreRefWhereIsThePlainIDWhenThePrefixIsShared(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSessionWith(t, "API", "API")
 	from := refTo(t, ts, "parent: <target>")
 	rs, err := ts.Doctor(false)
@@ -124,6 +126,7 @@ func TestDoctorCrossStoreRefWhereIsThePlainIDWhenThePrefixIsShared(t *testing.T)
 }
 
 func TestDoctorFixSkipsAReadOnlyStoreAndWarns(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	// an id clash in each store, which --fix repairs
 	for _, name := range []string{"org-a", "org-b"} {
@@ -182,6 +185,7 @@ func editRaw(t *testing.T, ts *testSession, name string, ulid model.ULID, old, r
 }
 
 func TestDoctorFixOfAReadOnlyStoreWarnsInsteadOfFailing(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.addTask("one", nil)
 	makeReadOnly(t, ts, "test")
@@ -195,6 +199,7 @@ func TestDoctorFixOfAReadOnlyStoreWarnsInsteadOfFailing(t *testing.T) {
 }
 
 func TestDoctorKeepsTheOtherStoresWhenOneDoesNotOpen(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	refTo(t, ts, "parent: <target>")
 	c, _, err := ts.Config()
@@ -256,6 +261,7 @@ func countWarns(ts *testSession, mu *gosync.Mutex, sub string) int {
 
 // The silence of overlapping callers ends with the last of them.
 func TestMuteOpenWarningsIsCountedPerCaller(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	c, _, err := ts.Config()
 	if err != nil {
@@ -287,6 +293,7 @@ func TestMuteOpenWarningsIsCountedPerCaller(t *testing.T) {
 }
 
 func TestConcurrentDoctorCallsDoNotWarnOfWhatTheyReport(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	c, _, err := ts.Config()
 	if err != nil {
@@ -317,6 +324,7 @@ func TestConcurrentDoctorCallsDoNotWarnOfWhatTheyReport(t *testing.T) {
 }
 
 func TestCrossStoreCheckFailureIsAWarning(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	// a session that has not mounted yet, and a config.yaml it cannot read
 	ts.env["HEDGEHUG_HOME"] = t.TempDir()
@@ -337,6 +345,7 @@ func TestCrossStoreCheckFailureIsAWarning(t *testing.T) {
 }
 
 func TestSyncWarnsOfCrossStoreRefs(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	refTo(t, ts, "blocked_by: [<target>]")
 	remote := filepath.Join(t.TempDir(), "r.git")

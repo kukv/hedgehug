@@ -9,6 +9,7 @@ import (
 )
 
 func TestUndoKeptLabelIsQualifiedAndTaskIsNot(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSessionWith(t, "XX", "XX")
 	a := ts.ForStore("org-a")
 	if _, err := a.Set("XX-1", []Assign{{Key: "title", Op: "=", Value: "b"}}); err != nil {
@@ -40,6 +41,7 @@ func TestUndoKeptLabelIsQualifiedAndTaskIsNot(t *testing.T) {
 }
 
 func TestAStoreAddedInTheSessionIsMountedAndQualifies(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.addTask("one", nil)
 	remote := addBareRemote(t, ts)
@@ -69,6 +71,7 @@ func TestAStoreAddedInTheSessionIsMountedAndQualifies(t *testing.T) {
 }
 
 func TestMountedPathFollowsAPrefixThatBecomesShared(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t) // API and WEB
 	set, err := ts.Mount()
 	if err != nil {
@@ -100,6 +103,7 @@ func TestMountedPathFollowsAPrefixThatBecomesShared(t *testing.T) {
 }
 
 func TestTaskLabelFollowsWhetherThePrefixIsShared(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		a, b, want string
 	}{
@@ -125,6 +129,7 @@ func TestTaskLabelFollowsWhetherThePrefixIsShared(t *testing.T) {
 }
 
 func TestDeletedTaskPointsToRestoreWithTheStoreName(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSessionWith(t, "XX", "XX")
 	if _, err := ts.Remove("org-a:XX-1"); err != nil {
 		t.Fatal(err)
@@ -137,6 +142,7 @@ func TestDeletedTaskPointsToRestoreWithTheStoreName(t *testing.T) {
 }
 
 func TestOperationIndexesQualifyToo(t *testing.T) {
+	t.Parallel()
 	// an operation opens its own index (Session.openIndex), not the mount's
 	ts := newTwoStoreSessionWith(t, "XX", "XX")
 	s := ts.ForStore("org-b")

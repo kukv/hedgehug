@@ -26,6 +26,7 @@ func commitHead(t *testing.T, r *Repo, dir string, files map[string]string) plum
 }
 
 func TestMergeBaseAndAncestor(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	a, b := cloneTwo(t, remote)
 	base, _ := a.r.Head()
@@ -54,6 +55,7 @@ func TestMergeBaseAndAncestor(t *testing.T) {
 }
 
 func TestMergeBaseUnrelatedAndZero(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	h := commitHead(t, r, dir, map[string]string{"a.md": "1\n"})
@@ -83,6 +85,7 @@ func TestMergeBaseUnrelatedAndZero(t *testing.T) {
 }
 
 func TestTreeOfAndReadAt(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	h := commitHead(t, r, dir, map[string]string{"a.md": "1\n"})
@@ -108,6 +111,7 @@ func TestTreeOfAndReadAt(t *testing.T) {
 }
 
 func TestCommitWithParentsAndLastChange(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	a, b := cloneTwo(t, remote)
 	base, _ := a.r.Head()
@@ -144,6 +148,7 @@ func TestCommitWithParentsAndLastChange(t *testing.T) {
 }
 
 func TestMergeCommitWithTheSameTreeAsOurs(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	a, b := cloneTwo(t, remote)
 	commitHead(t, a.r, a.dir, map[string]string{"x.md": "a\n"})
@@ -165,6 +170,7 @@ func TestMergeCommitWithTheSameTreeAsOurs(t *testing.T) {
 }
 
 func TestLastChangeLatestOnEitherBranch(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	a, b := cloneTwo(t, remote)
 	base, _ := a.r.Head()
@@ -206,6 +212,7 @@ func TestLastChangeLatestOnEitherBranch(t *testing.T) {
 }
 
 func TestLogFromFollowsFirstParent(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	a, b := cloneTwo(t, remote)
 	seed, _ := a.r.Head()
@@ -238,6 +245,7 @@ func TestLogFromFollowsFirstParent(t *testing.T) {
 }
 
 func TestFastForward(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	a, b := cloneTwo(t, remote)
 	h := commitHead(t, a.r, a.dir, map[string]string{"x.md": "a\n"})
@@ -255,6 +263,7 @@ func TestFastForward(t *testing.T) {
 }
 
 func TestFastForwardRemovesAndKeepsOtherFiles(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	a, b := cloneTwo(t, remote)
 	commitHead(t, a.r, a.dir, map[string]string{"x.md": "x\n", "d/y.md": "y\n"})
@@ -299,6 +308,7 @@ func mustRemoteHead(t *testing.T, r *Repo) plumbing.Hash {
 }
 
 func TestFastForwardMissingCommitChangesNothing(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	h := commitHead(t, r, dir, map[string]string{"x.md": "x\n"})
@@ -321,6 +331,7 @@ func TestFastForwardMissingCommitChangesNothing(t *testing.T) {
 }
 
 func TestFastForwardRefusesPathsOutsideTheWorkTree(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	h := commitHead(t, r, dir, map[string]string{"x.md": "x\n"})
@@ -332,6 +343,7 @@ func TestFastForwardRefusesPathsOutsideTheWorkTree(t *testing.T) {
 }
 
 func TestBetween(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	base := commitHead(t, r, dir, map[string]string{"a.md": "1\n"})
@@ -350,6 +362,7 @@ func TestBetween(t *testing.T) {
 }
 
 func TestBetweenAcrossAMerge(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	a, b := cloneTwo(t, remote)
 	base, _ := a.r.Head()
@@ -393,6 +406,7 @@ func commitWith(t *testing.T, r *Repo, dir, path, content string, when time.Time
 }
 
 func TestBetweenPutsParentsFirstWhateverTheTime(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -434,6 +448,7 @@ func TestBetweenPutsParentsFirstWhateverTheTime(t *testing.T) {
 }
 
 func TestBetweenOrdersCommitsOfTheSameTimeByHash(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -463,6 +478,7 @@ func TestBetweenOrdersCommitsOfTheSameTimeByHash(t *testing.T) {
 }
 
 func TestSideIsWalkedOnceAndSharedSafely(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	base := commitHead(t, r, dir, map[string]string{"a.md": "1\n"})
@@ -501,6 +517,7 @@ func TestSideIsWalkedOnceAndSharedSafely(t *testing.T) {
 }
 
 func TestMergeBaseCrissCrossIsSymmetric(t *testing.T) {
+	t.Parallel()
 	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	// Either of the two bases is the newer one in one of the cases, so that
 	// go-git's own order of the bases cannot pass for the smallest hash.
@@ -567,6 +584,7 @@ func assertRefused(t *testing.T, b clone, err error, before plumbing.Hash, want 
 }
 
 func TestFastForwardRefusesAChangedPath(t *testing.T) {
+	t.Parallel()
 	b, theirs := ffSetup(t)
 	before, _ := b.r.Head()
 	writeFile(t, b.dir, "x.md", "mine\n")
@@ -574,12 +592,14 @@ func TestFastForwardRefusesAChangedPath(t *testing.T) {
 }
 
 func TestFastForwardRefusesWhenHeadMovedAway(t *testing.T) {
+	t.Parallel()
 	b, theirs := ffSetup(t)
 	hb := commitHead(t, b.r, b.dir, map[string]string{"y.md": "b\n"})
 	assertRefused(t, b, b.r.FastForward(theirs, []string{"x.md"}), hb, "")
 }
 
 func TestFastForwardFinishesAStoppedOne(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	a, b := cloneTwo(t, remote)
 	h := commitHead(t, a.r, a.dir, map[string]string{"x.md": "x\n", "y.md": "y\n", "seed.md": ""})
@@ -608,6 +628,7 @@ func TestFastForwardFinishesAStoppedOne(t *testing.T) {
 }
 
 func TestFastForwardRefusesADetachedHead(t *testing.T) {
+	t.Parallel()
 	b, theirs := ffSetup(t)
 	before, _ := b.r.Head()
 	if err := b.r.r.Storer.SetReference(plumbing.NewHashReference(plumbing.HEAD, before)); err != nil {

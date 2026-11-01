@@ -19,6 +19,7 @@ import (
 )
 
 func TestFastForward(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	x := c.addTask(0, "x")
 	c.sync(0)
@@ -29,6 +30,7 @@ func TestFastForward(t *testing.T) {
 }
 
 func TestMergeBothSidesAndConverge(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	x := c.addTask(0, "x")
 	c.sync(0)
@@ -51,6 +53,7 @@ func TestMergeBothSidesAndConverge(t *testing.T) {
 }
 
 func TestOverwrittenTrailer(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	x := c.addTask(0, "x")
 	c.sync(0)
@@ -86,6 +89,7 @@ func TestOverwrittenTrailer(t *testing.T) {
 
 // A sync that fails after HEAD moved still fills the inbox.
 func TestInboxAfterFailedPush(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	x := c.addTask(0, "x")
 	c.sync(0)
@@ -119,6 +123,7 @@ func TestInboxAfterFailedPush(t *testing.T) {
 // A Catch between the merge and the end of the sync, on a store the inbox
 // has not caught yet, starts from where the sync did.
 func TestCatchDuringSync(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	x := c.addTask(0, "x")
 	c.sync(0)
@@ -142,6 +147,7 @@ func TestCatchDuringSync(t *testing.T) {
 }
 
 func TestSyncImportsMergeDriverRecords(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	rec := `{"path":"tasks/0A/P0/01JBZ8K3QW7M2X9V4T6R5N8P0A.md","field":"title","value":"\"mine\"","author":"github.com/u0","commit":"","time":"2026-10-31T10:00:00Z"}`
 	if err := c.stores[0].WriteLocal("overwritten/"+model.NewULID().String()+".json", []byte(rec)); err != nil {
@@ -154,6 +160,7 @@ func TestSyncImportsMergeDriverRecords(t *testing.T) {
 }
 
 func TestIDCollisionRenumbersUnpushedSide(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	a := c.addTask(0, "a") // WEB-1 in both clones
 	b := c.addTask(1, "b")
@@ -183,6 +190,7 @@ func TestIDCollisionRenumbersUnpushedSide(t *testing.T) {
 }
 
 func TestPushRejectedRetries(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 3)
 	c.addTask(0, "a")
 	c.addTask(2, "c")
@@ -209,6 +217,7 @@ func TestPushRejectedRetries(t *testing.T) {
 }
 
 func TestLocalWriteDuringPushIsKept(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	c.addTask(0, "a")
 	var during *model.Task
@@ -222,6 +231,7 @@ func TestLocalWriteDuringPushIsKept(t *testing.T) {
 }
 
 func TestDirty(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	x := c.addTask(0, "x")
 	c.sync(0)
@@ -244,6 +254,7 @@ func TestDirty(t *testing.T) {
 // A file only the remote changed is written by the merge too, so a hand
 // edit of it stops the sync.
 func TestDirtyTheirsOnlyPath(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	x := c.addTask(0, "x")
 	y := c.addTask(0, "y")
@@ -271,6 +282,7 @@ func TestDirtyTheirsOnlyPath(t *testing.T) {
 // A store has the merge driver's .gitattributes from its first commit, so a
 // sync has nothing to set up in it.
 func TestInitHasGitattributes(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	b, err := os.ReadFile(filepath.Join(c.stores[0].Dir(), ".gitattributes"))
 	if err != nil {
@@ -292,6 +304,7 @@ func TestInitHasGitattributes(t *testing.T) {
 }
 
 func TestSetupKeepsLinesAndCommitsOnce(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	s := c.stores[0]
 	// Another line of the user's, and a line setup writes taken away.
@@ -318,6 +331,7 @@ func TestSetupKeepsLinesAndCommitsOnce(t *testing.T) {
 }
 
 func TestMirrorPush(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	mirror := filepath.Join(t.TempDir(), "m.git")
 	_ = gitrepo.InitBare(mirror)
@@ -332,6 +346,7 @@ func TestMirrorPush(t *testing.T) {
 // A mirror that cannot be reached does not stop the sync with origin; it is
 // told of as a warning. An origin that cannot be reached fails the sync.
 func TestMirrorDownIsAWarning(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	missing := filepath.Join(t.TempDir(), "gone.git")
 	c.opts[0].Remotes = append(c.opts[0].Remotes, missing)
@@ -351,6 +366,7 @@ func TestMirrorDownIsAWarning(t *testing.T) {
 }
 
 func TestNoRemoteDoesNothing(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	head := mustHead(t, c.stores[0])
 	c.opts[0].Remotes = nil
@@ -363,6 +379,7 @@ func TestNoRemoteDoesNothing(t *testing.T) {
 }
 
 func TestUnrelatedHistories(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	other, err := store.Create(filepath.Join(t.TempDir(), "o"), &model.StoreMeta{ULID: model.NewULID(), Name: "o"}, nil,
 		&model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}, gitrepo.Signature{Name: "o", Email: "o@x"}, "", time.Now)
@@ -381,6 +398,7 @@ func TestUnrelatedHistories(t *testing.T) {
 }
 
 func TestRepairCommitAfterHandMerge(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	a := c.addTask(0, "a")
 	b := c.addTask(0, "b")
@@ -400,6 +418,7 @@ func TestRepairCommitAfterHandMerge(t *testing.T) {
 }
 
 func TestRevivedTrailer(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	x := c.addTask(0, "x")
 	c.sync(0)
@@ -419,6 +438,7 @@ func TestRevivedTrailer(t *testing.T) {
 }
 
 func TestPrefixDuplicateAcrossStores(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name       string
 		otherSet   time.Time
@@ -454,6 +474,7 @@ func TestPrefixDuplicateAcrossStores(t *testing.T) {
 }
 
 func TestMergeSchemaBothSides(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	c.sync(1)
 	addProp := func(i int, name string) {
@@ -483,6 +504,7 @@ func TestMergeSchemaBothSides(t *testing.T) {
 }
 
 func TestMergeViewBothSides(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	const p = "views/w.yaml"
 	put := func(i int, data string) {
@@ -515,6 +537,7 @@ func TestMergeViewBothSides(t *testing.T) {
 }
 
 func TestMergeViewSameKey(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	const p = "views/w.yaml"
 	base := time.Now().Add(-time.Hour).Truncate(time.Second)
@@ -548,6 +571,7 @@ func TestMergeViewSameKey(t *testing.T) {
 }
 
 func TestState(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	s := c.stores[0]
 	if st, err := ReadState(s); err != nil || st != (State{}) {
@@ -571,6 +595,7 @@ func TestState(t *testing.T) {
 }
 
 func TestInvalidAfterMerge(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	x := c.addTask(0, "x")
 	y := c.addTask(0, "y")
@@ -592,6 +617,7 @@ func TestInvalidAfterMerge(t *testing.T) {
 
 // Both sides remove the same file: the merge has nothing to write for it.
 func TestMergeBothRemoveSameFile(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	w := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
 	if _, err := c.stores[0].Update(c.op(0, "workspace", model.ULID{}), func(tx *store.Tx) error { return tx.PutWorkspace(w) }); err != nil {
@@ -619,6 +645,7 @@ func TestMergeBothRemoveSameFile(t *testing.T) {
 // three-way merge sees it, so a delete on the other side stays, and nothing
 // is recorded as overwritten.
 func TestRestoreAfterDeleteIsNoChange(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	x := c.addTask(0, "x")
 	c.sync(0)
@@ -642,6 +669,7 @@ func TestRestoreAfterDeleteIsNoChange(t *testing.T) {
 }
 
 func TestMergeViewCreatedOnBothSides(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	const p = "views/w.yaml"
 	put := func(i int, data string) {
@@ -668,6 +696,7 @@ func TestMergeViewCreatedOnBothSides(t *testing.T) {
 }
 
 func TestMergeViewRemovedAndChanged(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	const p = "views/w.yaml"
 	if _, err := c.stores[0].Update(c.op(0, "view", model.ULID{}), func(tx *store.Tx) error {

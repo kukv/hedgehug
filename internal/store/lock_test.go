@@ -12,6 +12,7 @@ import (
 )
 
 func TestLockExcludes(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), ".hedgehug", "local", "lock")
 	l, err := acquire(path, time.Second)
 	if err != nil {
@@ -36,6 +37,7 @@ func TestLockExcludes(t *testing.T) {
 // TestLockHelperProcess is not a test: TestLockReleasedOnKill runs the test
 // binary again with this test selected, to hold the lock in another process.
 func TestLockHelperProcess(t *testing.T) {
+	t.Parallel()
 	path := os.Getenv("HEDGEHUG_LOCK_HELPER")
 	if path == "" {
 		t.Skip("run by TestLockReleasedOnKill")
@@ -49,6 +51,7 @@ func TestLockHelperProcess(t *testing.T) {
 }
 
 func TestLockReleasedOnKill(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "lock")
 	cmd := exec.Command(os.Args[0], "-test.run=^TestLockHelperProcess$")
 	cmd.Env = append(os.Environ(), "HEDGEHUG_LOCK_HELPER="+path)
@@ -82,6 +85,7 @@ func TestLockReleasedOnKill(t *testing.T) {
 }
 
 func TestWithFileLock(t *testing.T) {
+	t.Parallel()
 	p := filepath.Join(t.TempDir(), "sub", "auth.lock")
 	inside := make(chan struct{})
 	release := make(chan struct{})

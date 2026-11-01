@@ -42,6 +42,7 @@ func removeFile(dir, rel string) error {
 }
 
 func TestDiffTrees(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := Init(dir)
 	if err != nil {
@@ -92,6 +93,7 @@ func TestDiffTrees(t *testing.T) {
 }
 
 func TestDiffTreesMissingTree(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := Init(dir)
 	if err != nil {
@@ -108,6 +110,7 @@ func TestDiffTreesMissingTree(t *testing.T) {
 }
 
 func TestReadFileAndFiles(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := Init(dir)
 	if err != nil {
@@ -163,6 +166,7 @@ func TestReadFileAndFiles(t *testing.T) {
 
 // A directory whose tree object is gone is an error, not an empty listing.
 func TestFilesMissingSubtreeObject(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := Init(dir)
 	if err != nil {

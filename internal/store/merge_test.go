@@ -15,6 +15,7 @@ import (
 )
 
 func TestCommitMerge(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	head, _ := s.repo.Head()
 	files := map[string][]byte{"notes/a.md": []byte("a\n")}
@@ -39,6 +40,7 @@ func TestCommitMerge(t *testing.T) {
 }
 
 func TestCommitMergeRefusesOtherFirstParent(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	head := mustHead(t, s)
 	other := plumbing.NewHash("0123456789012345678901234567890123456789")
@@ -57,6 +59,7 @@ func TestCommitMergeRefusesOtherFirstParent(t *testing.T) {
 }
 
 func TestCommitMergeWithUndecodableSchema(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	head := mustHead(t, s)
 	old := s.Schema()
@@ -73,6 +76,7 @@ func TestCommitMergeWithUndecodableSchema(t *testing.T) {
 }
 
 func TestCommitMergeSkipsValidation(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	head, _ := s.repo.Head()
 	x := model.NewULID()
@@ -83,6 +87,7 @@ func TestCommitMergeSkipsValidation(t *testing.T) {
 }
 
 func TestCommitMergeRollsBack(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	if _, err := s.Update(Op{Name: "edit", Author: testAuthor}, func(tx *Tx) error { return tx.PutFile("notes/old.md", []byte("old\n")) }); err != nil {
 		t.Fatal(err)
@@ -104,6 +109,7 @@ func TestCommitMergeRollsBack(t *testing.T) {
 // A file saved by hand after the caller checked the work tree, and before
 // the store lock, is not overwritten.
 func TestCommitMergeWorkTreeChanged(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	head := mustHead(t, s)
 	for name, rel := range map[string]string{"changed": schemaPath, "added": "notes/n.md"} {
@@ -122,6 +128,7 @@ func TestCommitMergeWorkTreeChanged(t *testing.T) {
 }
 
 func TestCommitMergeWithoutFiles(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	head := mustHead(t, s)
 	// Both sides made the same change: the merge writes nothing, but its
@@ -190,6 +197,7 @@ func ahead(t *testing.T, s *Store) (before, to plumbing.Hash) {
 }
 
 func TestFastForward(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	before, to := ahead(t, s)
 	dev, err := schema.Dev().Encode()
@@ -217,6 +225,7 @@ func TestFastForward(t *testing.T) {
 }
 
 func TestFastForwardWorkTreeChanged(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	before, to := ahead(t, s)
 	mustWrite(t, s, "notes/n.md", "mine\n")
@@ -229,6 +238,7 @@ func TestFastForwardWorkTreeChanged(t *testing.T) {
 }
 
 func TestFastForwardChecksHead(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	head, _ := s.repo.Head()
 	other := plumbing.NewHash("0123456789012345678901234567890123456789")

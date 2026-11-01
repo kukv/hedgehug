@@ -16,6 +16,7 @@ import (
 )
 
 func TestOpenIndexesTasks(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	epic := newTask("Epic")
 	epic.Kind = "epic"
@@ -59,6 +60,7 @@ func TestOpenIndexesTasks(t *testing.T) {
 }
 
 func TestOpenBrokenFile(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	ulid := model.NewULID()
 	commitRaw(t, s, dir, model.TaskPath(ulid), "not a task file\n")
@@ -78,6 +80,7 @@ func TestOpenBrokenFile(t *testing.T) {
 }
 
 func TestOpenViolations(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	parent := newTask("parent")
 	put(t, s, parent)
@@ -107,6 +110,7 @@ func TestOpenViolations(t *testing.T) {
 }
 
 func TestSiblingsWithTheSameRankAreOrderedByID(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	// The ULID order (ten first) differs from the id order.
 	ten, nine, other := newTask("ten"), newTask("nine"), newTask("other")
@@ -124,6 +128,7 @@ func TestSiblingsWithTheSameRankAreOrderedByID(t *testing.T) {
 // them there and does not read the task files. A file that is not in HEAD
 // shows which one it used.
 func TestWriteReranksThroughTheIndex(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	a, b := newTask("a"), newTask("b")
 	a.Rank, b.Rank = "a5", "a9"
@@ -157,6 +162,7 @@ func TestWriteReranksThroughTheIndex(t *testing.T) {
 // The index shows a task whose parent is missing among the roots, and a
 // write treats it as one.
 func TestSiblingULIDsTreatsAMissingParentAsTheTopLevel(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	root, child := newTask("root"), newTask("child")
 	root.Rank, child.Rank = "a7", "a5"

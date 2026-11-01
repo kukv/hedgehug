@@ -21,6 +21,7 @@ func problemCodes(ps []Problem) []string {
 func ptr(ulid model.ULID) *model.ULID { return &ulid }
 
 func TestProblems(t *testing.T) {
+	t.Parallel()
 	a, b, c, d := model.NewULID(), model.NewULID(), model.NewULID(), model.NewULID()
 	x, y, z, self := model.NewULID(), model.NewULID(), model.NewULID(), model.NewULID()
 	missing := model.NewULID()
@@ -55,6 +56,7 @@ func TestProblems(t *testing.T) {
 }
 
 func TestReverse(t *testing.T) {
+	t.Parallel()
 	a, b, c := model.NewULID(), model.NewULID(), model.NewULID()
 	ix := indexOf(
 		&Entry{ULID: a, Title: "a", BlockedBy: []model.ULID{c}, Props: []Prop{
@@ -84,6 +86,7 @@ func TestReverse(t *testing.T) {
 }
 
 func TestTargets(t *testing.T) {
+	t.Parallel()
 	a, b := model.NewULID(), model.NewULID()
 	e := &Entry{BlockedBy: []model.ULID{a}, Props: []Prop{{Key: "duplicates", Values: []string{b.String(), "not a ulid"}}}}
 	if got := e.Targets("blocked_by"); !slices.Equal(got, []model.ULID{a}) {
@@ -95,6 +98,7 @@ func TestTargets(t *testing.T) {
 }
 
 func TestIDAndWorkspaceProblems(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	ws := firstWorkspace(t, s)
 	a := newTask("a")
@@ -134,6 +138,7 @@ func TestIDAndWorkspaceProblems(t *testing.T) {
 }
 
 func TestParentDeletedProblem(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	ws := firstWorkspace(t, s)
 	p, live, gone := model.NewULID(), model.NewULID(), model.NewULID()

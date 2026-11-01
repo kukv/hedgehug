@@ -8,6 +8,7 @@ import (
 )
 
 func TestSchemaViewOfDefault(t *testing.T) {
+	t.Parallel()
 	v := SchemaViewOf(schema.Default())
 	if len(v.Statuses) == 0 || len(v.Kinds) == 0 {
 		t.Fatalf("view = %+v, want the statuses and kinds of the default", v)
@@ -35,6 +36,7 @@ func TestSchemaViewOfDefault(t *testing.T) {
 }
 
 func TestSchemaViewOfScoped(t *testing.T) {
+	t.Parallel()
 	sc := schema.Default()
 	sc.Scoped = []schema.Scoped{{
 		Where:     "project:01J0000000000000000000000A",

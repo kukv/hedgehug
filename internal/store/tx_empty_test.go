@@ -7,6 +7,7 @@ import (
 )
 
 func TestRemoveFile(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	put := func(tx *Tx) error { return tx.PutFile("notes.txt", []byte("x\n")) }
 	if _, err := s.Update(Op{Name: "setup", Author: testAuthor}, put); err != nil {
@@ -31,6 +32,7 @@ func TestRemoveFile(t *testing.T) {
 }
 
 func TestAllowEmptyAndTrailers(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	if committed, err := s.Update(Op{Name: "undo", Author: testAuthor}, func(*Tx) error { return nil }); err != nil || committed {
 		t.Fatalf("no change: committed %v, %v", committed, err)

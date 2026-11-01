@@ -19,6 +19,7 @@ func newTaskIn(ws *model.Workspace, title string) *model.Task {
 }
 
 func TestAssignIDs(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	a, b := newTaskIn(ws, "a"), newTaskIn(ws, "b")
@@ -34,6 +35,7 @@ func TestAssignIDs(t *testing.T) {
 }
 
 func TestAssignIDsCountsIDsGivenInTheOperation(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	a, b := newTaskIn(ws, "a"), newTaskIn(ws, "b")
@@ -45,6 +47,7 @@ func TestAssignIDsCountsIDsGivenInTheOperation(t *testing.T) {
 }
 
 func TestCommitSubjectUsesNewID(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	x := newTaskIn(testWorkspace(t, s), "x")
 	if _, err := s.Update(Op{Name: "add", Task: x.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(x) }); err != nil {
@@ -56,6 +59,7 @@ func TestCommitSubjectUsesNewID(t *testing.T) {
 }
 
 func TestAssignIDsCountsFormerAndNumbers(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	old := newTaskIn(ws, "old")
@@ -75,6 +79,7 @@ func TestAssignIDsCountsFormerAndNumbers(t *testing.T) {
 }
 
 func TestRenumberOnPrefixMismatch(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	api := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
@@ -96,6 +101,7 @@ func TestRenumberOnPrefixMismatch(t *testing.T) {
 }
 
 func TestAssignIDsRefusesABadPrefix(t *testing.T) {
+	t.Parallel()
 	for _, prefix := range []string{"me", ""} {
 		s := newTestStore(t)
 		ws := testWorkspace(t, s)
@@ -113,6 +119,7 @@ func TestAssignIDsRefusesABadPrefix(t *testing.T) {
 }
 
 func TestIDNumbersHook(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	calls := 0
@@ -132,6 +139,7 @@ func TestIDNumbersHook(t *testing.T) {
 }
 
 func TestConcurrentAddsGetDistinctIDs(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	other, err := Open(s.dir) // a second handle: only the file lock serializes them
@@ -165,6 +173,7 @@ func TestConcurrentAddsGetDistinctIDs(t *testing.T) {
 }
 
 func TestAssignIDsCountsBrokenFiles(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	mustWrite(t, s, model.TaskPath(model.NewULID()), "---\nid: TST-7\ntitle: [unclosed\n---\nsee OLD-3\n")
@@ -176,6 +185,7 @@ func TestAssignIDsCountsBrokenFiles(t *testing.T) {
 }
 
 func TestUpdateRestoresIDsOnFailure(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	x := newTaskIn(ws, "x")

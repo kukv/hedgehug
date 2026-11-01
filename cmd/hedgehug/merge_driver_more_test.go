@@ -83,6 +83,7 @@ func TestMergeDriverAddAdd(t *testing.T) {
 // The records of a merge git is in the middle of carry the commit merged in,
 // so that the inbox can tell the merge was aborted.
 func TestMergeDriverRecordCarriesMergeHead(t *testing.T) {
+	t.Parallel()
 	gitBin, err := exec.LookPath("git")
 	if err != nil {
 		t.Skip("git is not installed")

@@ -51,6 +51,7 @@ func putChild(parent string, ulid *model.ULID) func(*store.Tx) error {
 }
 
 func TestMvWorkspaceMovesAChildAddedMeanwhile(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("workspace", "add", "api", "--prefix", "API")
 	p := te.addJSON("p", "--workspace", "me")
@@ -66,6 +67,7 @@ func TestMvWorkspaceMovesAChildAddedMeanwhile(t *testing.T) {
 }
 
 func TestWorkspacePrefixRenumbersATaskAddedMeanwhile(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("p")
 	var c model.ULID
@@ -80,6 +82,7 @@ func TestWorkspacePrefixRenumbersATaskAddedMeanwhile(t *testing.T) {
 }
 
 func TestRmDeletesAChildAddedMeanwhile(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("p")
 	var c model.ULID
@@ -93,6 +96,7 @@ func TestRmDeletesAChildAddedMeanwhile(t *testing.T) {
 }
 
 func TestRestoreRestoresAChildDeletedMeanwhile(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("p")
 	te.ok("rm", p.ID)
@@ -105,6 +109,7 @@ func TestRestoreRestoresAChildDeletedMeanwhile(t *testing.T) {
 }
 
 func TestPurgeSeesChildrenAddedMeanwhile(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("p")
 	te.ok("rm", p.ID)
@@ -166,6 +171,7 @@ func changeTask(ulid string, fn func(*model.Task)) func(*store.Tx) error {
 }
 
 func TestRmRefusesATaskDeletedMeanwhile(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("p")
 	at := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
@@ -179,6 +185,7 @@ func TestRmRefusesATaskDeletedMeanwhile(t *testing.T) {
 }
 
 func TestRestoreRefusesATaskRestoredMeanwhile(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("p")
 	te.ok("rm", p.ID)
@@ -189,6 +196,7 @@ func TestRestoreRefusesATaskRestoredMeanwhile(t *testing.T) {
 }
 
 func TestPurgeRefusesATaskRestoredMeanwhile(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("p")
 	te.ok("rm", p.ID)
@@ -202,6 +210,7 @@ func TestPurgeRefusesATaskRestoredMeanwhile(t *testing.T) {
 }
 
 func TestMvSeesAWorkspaceMoveMeanwhile(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	var api ops.WorkspaceView
 	te.wsJSON(&api, "add", "api", "--prefix", "API")
@@ -224,6 +233,7 @@ func TestMvSeesAWorkspaceMoveMeanwhile(t *testing.T) {
 }
 
 func TestMvParentInAnotherWorkspaceMovesAChildAddedMeanwhile(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("workspace", "add", "api", "--prefix", "API")
 	q := te.addJSON("q", "--workspace", "api")
@@ -237,6 +247,7 @@ func TestMvParentInAnotherWorkspaceMovesAChildAddedMeanwhile(t *testing.T) {
 }
 
 func TestWorkspaceSubjectsSeeARenameMeanwhile(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	me := mustULID(t, te.addJSON("a").Workspace.ULID)
 	var tmp ops.WorkspaceView
@@ -269,6 +280,7 @@ func TestWorkspaceSubjectsSeeARenameMeanwhile(t *testing.T) {
 }
 
 func TestWorkspacePrefixToAPrefixSetMeanwhileChangesNothing(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.addJSON("p")
 	var ls []map[string]any

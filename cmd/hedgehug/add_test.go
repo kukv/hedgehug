@@ -52,6 +52,7 @@ func (te *testEnv) task(ulid string) *model.Task {
 }
 
 func TestAdd(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	out := te.ok("add", "Write", "the", "spec")
 	if !regexp.MustCompile(`^Added ME-1 \([0-9A-Z]{26}\) Write the spec\n→ added to me / me\n$`).MatchString(out) {
@@ -74,6 +75,7 @@ func TestAdd(t *testing.T) {
 }
 
 func TestAddRanksAtTheEnd(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("Parent", "--kind", "project")
 	a := te.addJSON("A", "--parent", p.ID)
@@ -91,6 +93,7 @@ func TestAddRanksAtTheEnd(t *testing.T) {
 }
 
 func TestAddProps(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	got := te.addJSON("Bug", "--kind", "bug", "--status", "backlog", "-p", "due=2026-11-01", "-p", "labels+=ui")
 	if got.Kind != "bug" || got.Status != "backlog" || got.Props["due"] != "2026-11-01" || len(got.Labels) != 1 || got.Labels[0] != "ui" {
@@ -102,6 +105,7 @@ func TestAddProps(t *testing.T) {
 }
 
 func TestAddErrors(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	for _, tc := range []struct {
 		name     string
@@ -128,6 +132,7 @@ func TestAddErrors(t *testing.T) {
 }
 
 func TestAddRefusesADeletedParent(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("P", "--kind", "project")
 	te.ok("rm", p.ID)
@@ -141,6 +146,7 @@ func TestAddRefusesADeletedParent(t *testing.T) {
 }
 
 func TestAddWithAccount(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.writeAccounts("github.com", "alice")
 	x := te.addJSON("x")
@@ -162,6 +168,7 @@ func TestAddWithAccount(t *testing.T) {
 }
 
 func TestAddWithoutAccountUsesGitConfig(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	x := te.addJSON("x")
 	if c := te.headCommit("me"); c.Author.Email != "alice@example.com" || strings.Contains(c.Message, "Hedgehug-Author") {
@@ -173,6 +180,7 @@ func TestAddWithoutAccountUsesGitConfig(t *testing.T) {
 }
 
 func TestStoreInitWithAccount(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.writeAccounts("github.com", "alice")
 	te.ok("store", "init", "me", "--prefix", "ME")

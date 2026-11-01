@@ -61,6 +61,7 @@ func taskOf(t *testing.T, u *devUser, ref string) taskInfo {
 // TestE2EPhase3b is the 3b of the design: the stores of a user mounted as one,
 // ids across them, and where a new task goes.
 func TestE2EPhase3b(t *testing.T) {
+	t.Parallel()
 	bin, devenv := buildHedgehug(t), buildDevenv(t)
 	dev, fake, _ := initDevenv(t, devenv)
 	alice, bob := devUserOf(t, bin, devenv, dev, "alice"), devUserOf(t, bin, devenv, dev, "bob")

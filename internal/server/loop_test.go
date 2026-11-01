@@ -34,11 +34,13 @@ func loopServer(t *testing.T) (*testServer, *fakeClock, string) {
 }
 
 func TestLoopSyncsAtStart(t *testing.T) {
+	t.Parallel()
 	ts, _, _ := loopServer(t)
 	waitFirstSync(t, ts)
 }
 
 func TestLoopIntervalVisibleAndHidden(t *testing.T) {
+	t.Parallel()
 	ts, clk, _ := loopServer(t)
 	waitFirstSync(t, ts)
 	first := ts.state().LastAttempt
@@ -63,6 +65,7 @@ func TestLoopIntervalVisibleAndHidden(t *testing.T) {
 }
 
 func TestLoopPushesAfterWrite(t *testing.T) {
+	t.Parallel()
 	ts, clk, remote := loopServer(t)
 	waitFirstSync(t, ts)
 	var out taskWriteBody
@@ -83,6 +86,7 @@ func TestLoopPushesAfterWrite(t *testing.T) {
 }
 
 func TestShutdownWaitsForPush(t *testing.T) {
+	t.Parallel()
 	ts, clk, remote := loopServer(t)
 	waitFirstSync(t, ts)
 	_ = clk
@@ -97,6 +101,7 @@ func TestShutdownWaitsForPush(t *testing.T) {
 }
 
 func TestDrainGivesUp(t *testing.T) {
+	t.Parallel()
 	ts, _, _ := loopServer(t)
 	waitFirstSync(t, ts)
 	block := make(chan struct{})
@@ -120,6 +125,7 @@ func settle(t *testing.T, ts *testServer, clk *fakeClock, at time.Time) {
 }
 
 func TestDrainSyncsAgainAfterARunningSync(t *testing.T) {
+	t.Parallel()
 	ts, _, remote := loopServer(t)
 	waitFirstSync(t, ts)
 	var mu sync.Mutex
@@ -149,6 +155,7 @@ func TestDrainSyncsAgainAfterARunningSync(t *testing.T) {
 }
 
 func TestLoopDoesNotRetryWithinPushInterval(t *testing.T) {
+	t.Parallel()
 	ts, clk, _ := loopServer(t)
 	waitFirstSync(t, ts)
 	var calls atomic.Int32
@@ -169,6 +176,7 @@ func TestLoopDoesNotRetryWithinPushInterval(t *testing.T) {
 }
 
 func TestLoopDoesNotOverlapSyncsOfAStore(t *testing.T) {
+	t.Parallel()
 	ts, clk, _ := loopServer(t)
 	waitFirstSync(t, ts)
 	var calls atomic.Int32
@@ -189,6 +197,7 @@ func TestLoopDoesNotOverlapSyncsOfAStore(t *testing.T) {
 }
 
 func TestLoopFollowsAddedStores(t *testing.T) {
+	t.Parallel()
 	ts, _, _ := loopServer(t)
 	waitFirstSync(t, ts)
 	remote := filepath.Join(t.TempDir(), "two.git")
@@ -212,6 +221,7 @@ func TestLoopFollowsAddedStores(t *testing.T) {
 }
 
 func TestLoopLogsBrokenConfigOnce(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	cfg := filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml")
 	good, err := os.ReadFile(cfg)
@@ -259,6 +269,7 @@ func TestLoopLogsBrokenConfigOnce(t *testing.T) {
 }
 
 func TestLoopLogsNoTargetsOnce(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	cfg := filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml")
 	good, err := os.ReadFile(cfg)

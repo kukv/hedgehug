@@ -15,6 +15,7 @@ import (
 const aliceAccount = "\naccounts:\n  - name: alice\n    host: github.com\n    login: alice\n"
 
 func TestResolveAmbiguousIsKindAmbiguous(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	a := ts.addTask("first", nil)
 	b := ts.addTask("second", func(x *model.Task) { x.ID = "ME-1" })
@@ -38,6 +39,7 @@ func TestResolveAmbiguousIsKindAmbiguous(t *testing.T) {
 }
 
 func TestResolveULID(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	a := ts.addTask("first", nil)
 	_, ix, err := ts.Open()
@@ -54,6 +56,7 @@ func TestResolveULID(t *testing.T) {
 }
 
 func TestWriterIsReadOnce(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.appendConfig(aliceAccount)
 	acct, ok, err := ts.Writer()
@@ -84,6 +87,7 @@ func TestWriterIsReadOnce(t *testing.T) {
 }
 
 func TestAccountIDWithoutAccountIsEmpty(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if id, err := ts.AccountID(); err != nil || id != "" {
 		t.Errorf("AccountID = %q, %v; want empty, nil", id, err)
@@ -91,6 +95,7 @@ func TestAccountIDWithoutAccountIsEmpty(t *testing.T) {
 }
 
 func TestMarkWrittenWarnsWhenPendingFails(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	s, _, err := ts.Open()
 	if err != nil {
@@ -112,6 +117,7 @@ func TestMarkWrittenWarnsWhenPendingFails(t *testing.T) {
 }
 
 func TestMarkWrittenWithoutAfterWriteMarksOnly(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	s, _, err := ts.Open()
 	if err != nil {
@@ -128,10 +134,12 @@ func TestMarkWrittenWithoutAfterWriteMarksOnly(t *testing.T) {
 }
 
 func TestWarnNilIsNoop(t *testing.T) {
+	t.Parallel()
 	(&Session{}).warn("x")
 }
 
 func TestQueryOptions(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.appendConfig(aliceAccount)
 	s, _, err := ts.Open()
@@ -151,6 +159,7 @@ func TestQueryOptions(t *testing.T) {
 }
 
 func TestSyncOptions(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.appendConfig(aliceAccount)
 	c, p, err := ts.Config()
@@ -195,6 +204,7 @@ func TestSyncOptions(t *testing.T) {
 }
 
 func TestEntryErrors(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.StoreName = "nope"
 	_, _, err := ts.Entry()
@@ -225,6 +235,7 @@ func TestEntryErrors(t *testing.T) {
 }
 
 func TestUnpushedWithoutRemote(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	s, _, err := ts.Open()
 	if err != nil {
@@ -237,6 +248,7 @@ func TestUnpushedWithoutRemote(t *testing.T) {
 }
 
 func TestRunSyncWithoutRemotes(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	s, _, err := ts.Open()
 	if err != nil {

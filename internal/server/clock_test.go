@@ -83,6 +83,7 @@ func eventually(t *testing.T, what string, cond func() bool) {
 }
 
 func TestFakeClock(t *testing.T) {
+	t.Parallel()
 	c := newFakeClock(time.Unix(0, 0))
 	ch := c.After(time.Minute)
 	c.Advance(30 * time.Second)

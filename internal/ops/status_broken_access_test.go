@@ -7,6 +7,7 @@ import (
 // A broken access.json is a reason in ReadOnly, and the rest of the row (the
 // unpushed count, the times) is still filled.
 func TestSyncStatusBrokenAccessKeepsTheRow(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	addBareRemote(t, ts)
 	if _, err := ts.Add(AddInput{Title: "x"}); err != nil {

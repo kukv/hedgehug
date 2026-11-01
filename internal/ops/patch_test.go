@@ -18,6 +18,7 @@ func headOp(t *testing.T, ts *testSession) string {
 }
 
 func TestPatchSetsFieldsAndBodyInOneCommit(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -61,6 +62,7 @@ func TestPatchSetsFieldsAndBodyInOneCommit(t *testing.T) {
 }
 
 func TestPatchBodyOnlyIsEdit(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -75,6 +77,7 @@ func TestPatchBodyOnlyIsEdit(t *testing.T) {
 }
 
 func TestPatchNothingIsUsage(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -84,6 +87,7 @@ func TestPatchNothingIsUsage(t *testing.T) {
 }
 
 func TestPatchDeletedIsConflict(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -97,6 +101,7 @@ func TestPatchDeletedIsConflict(t *testing.T) {
 }
 
 func TestPatchUnknownKeyIsInvalid(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)

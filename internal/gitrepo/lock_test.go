@@ -40,6 +40,7 @@ func TestCommitWaitsForIndexLock(t *testing.T) {
 }
 
 func TestCommitTakesTheLockWhenItIsReleased(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	lock := filepath.Join(dir, ".git", "index.lock")
@@ -91,6 +92,7 @@ func TestFastForwardWaitsForIndexLock(t *testing.T) {
 }
 
 func TestRepack(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	for i := range 5 {
@@ -121,6 +123,7 @@ func packFiles(t *testing.T, dir string) []string {
 }
 
 func TestRepackKeepsPacksAndObjectsNoReferenceReaches(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	commitFiles(t, r, dir, map[string]string{"a.md": "1"})
@@ -216,6 +219,7 @@ func TestRepackFailureLeavesNoFiles(t *testing.T) {
 }
 
 func TestRepackWritesReadOnlyPacks(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows has no permission bits for others")
 	}
@@ -241,6 +245,7 @@ func TestRepackWritesReadOnlyPacks(t *testing.T) {
 }
 
 func TestRepackNothingLoose(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	commitFiles(t, r, dir, map[string]string{"a.md": "1"})

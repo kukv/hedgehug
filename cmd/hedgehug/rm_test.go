@@ -20,6 +20,7 @@ func tree3(te *testEnv) (p, c, g ops.TaskView) {
 // The commands that change a task refuse a deleted one and point to
 // restore.
 func TestChangeDeletedTask(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
 	b := te.addJSON("Blocker")
@@ -42,6 +43,7 @@ func TestChangeDeletedTask(t *testing.T) {
 }
 
 func TestRmAndRestore(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p, c, g := tree3(te)
 
@@ -82,6 +84,7 @@ func TestRmAndRestore(t *testing.T) {
 }
 
 func TestRmRestoreErrors(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p, c, _ := tree3(te)
 	if code, _, stderr := te.run("restore", p.ID); code != 1 || !strings.Contains(stderr, "not deleted") {
@@ -97,6 +100,7 @@ func TestRmRestoreErrors(t *testing.T) {
 }
 
 func TestRmJSON(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p, _, _ := tree3(te)
 	var got []ops.TaskView
@@ -109,6 +113,7 @@ func TestRmJSON(t *testing.T) {
 }
 
 func TestPurge(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p, c, g := tree3(te)
 	if code, _, stderr := te.run("purge", p.ID, "--yes"); code != 1 || !strings.Contains(stderr, "hedgehug rm") {

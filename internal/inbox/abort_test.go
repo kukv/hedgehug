@@ -14,6 +14,7 @@ import (
 // that commit never reaches HEAD, and the record is dropped; while the merge
 // is under way the record waits.
 func TestImportDropsAbortedMerge(t *testing.T) {
+	t.Parallel()
 	a, b := twoClones(t)
 	box := Open(b.s)
 	inHead := head(t, b).String()

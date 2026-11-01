@@ -29,6 +29,7 @@ func taskFile(ulid, title string) string {
 }
 
 func TestReadTask(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	a := mustULID(t, taskA)
 	mustWrite(t, s, model.TaskPath(a), taskFile(taskA, "A"))
@@ -46,6 +47,7 @@ func TestReadTask(t *testing.T) {
 }
 
 func TestReadDecodeError(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	a := mustULID(t, taskA)
 	mustWrite(t, s, model.TaskPath(a), "---\ntitle: no ulid\n---\n")
@@ -57,6 +59,7 @@ func TestReadDecodeError(t *testing.T) {
 }
 
 func TestTasksSkipsOtherFiles(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	a, b := mustULID(t, taskA), mustULID(t, taskB)
 	mustWrite(t, s, model.TaskPath(a), taskFile(taskA, "A"))
@@ -80,6 +83,7 @@ func TestTasksSkipsOtherFiles(t *testing.T) {
 // Tasks yields a FileError naming the path for a file that does not decode
 // or that holds a task of another ULID, and no task for it.
 func TestTasksBrokenFiles(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	a, b := mustULID(t, taskA), mustULID(t, taskB)
 	mustWrite(t, s, model.TaskPath(a), taskFile(taskA, "A"))
@@ -118,6 +122,7 @@ func TestTasksBrokenFiles(t *testing.T) {
 }
 
 func TestTasksEmptyStore(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	for _, err := range s.Tasks() {
 		t.Fatalf("unexpected item, err = %v", err)
@@ -125,6 +130,7 @@ func TestTasksEmptyStore(t *testing.T) {
 }
 
 func TestComments(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	a, b := mustULID(t, taskA), mustULID(t, taskB)
 	c1, c2 := mustULID(t, cmt1), mustULID(t, cmt2)
@@ -149,6 +155,7 @@ func TestComments(t *testing.T) {
 }
 
 func TestSprintsReleasesTemplates(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	a := mustULID(t, taskA)
 	mustWrite(t, s, model.SprintPath(a), "---\nulid: "+taskA+"\nname: S1\nstate: planned\n---\n")

@@ -23,6 +23,7 @@ func addMissingStore(t *testing.T, ts *testSession) {
 }
 
 func TestStoreThatDoesNotOpenIsAnErrorOnlyWhenNamed(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	task := ts.addTask("a", nil)
 	addMissingStore(t, ts)
@@ -44,6 +45,7 @@ func TestStoreThatDoesNotOpenIsAnErrorOnlyWhenNamed(t *testing.T) {
 }
 
 func TestMountWarnsOnceAndOpensOnce(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	addMissingStore(t, ts)
 	a, err := ts.Mount()
@@ -73,6 +75,7 @@ func TestMountWarnsOnceAndOpensOnce(t *testing.T) {
 }
 
 func TestNoStoreNameWarnsOnceAndUsesTheOthers(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	task := ts.addTask("a", nil)
 	addMissingStore(t, ts)

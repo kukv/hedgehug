@@ -21,6 +21,7 @@ func exists(p string) bool {
 }
 
 func TestStoreInitListRemove(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	res, err := ts.StoreInit(StoreInitInput{Name: "team", Prefix: "TM"})
 	if err != nil {
@@ -55,6 +56,7 @@ func TestStoreInitListRemove(t *testing.T) {
 }
 
 func TestStoreInitErrors(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	tests := []struct {
 		name string
@@ -88,6 +90,7 @@ func TestStoreInitErrors(t *testing.T) {
 }
 
 func TestStoreInitWorkspaceNameAndSchema(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	res, err := ts.StoreInit(StoreInitInput{Name: "team", Prefix: "TM", Workspace: "platform", Schema: schema.Dev()})
 	if err != nil {
@@ -107,6 +110,7 @@ func TestStoreInitWorkspaceNameAndSchema(t *testing.T) {
 }
 
 func TestStoreInitPushesToRemotes(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	remote, mirror := filepath.Join(t.TempDir(), "one.git"), filepath.Join(t.TempDir(), "two.git")
 	for _, r := range []string{remote, mirror} {
@@ -128,6 +132,7 @@ func TestStoreInitPushesToRemotes(t *testing.T) {
 }
 
 func TestStoreInitIntoANonEmptyRemoteLeavesNothing(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	remote := addBareRemote(t, ts)
 	if _, err := ts.Sync(false, true); err != nil { // the remote now holds the store me
@@ -148,6 +153,7 @@ func TestStoreInitIntoANonEmptyRemoteLeavesNothing(t *testing.T) {
 }
 
 func TestStoreAddErrors(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	_, err := ts.StoreAdd("bad/name", []string{"x"}, "", "")
 	wantErr(t, err, KindUsage, "store.bad_name")
@@ -218,6 +224,7 @@ func TestStoreAddErrors(t *testing.T) {
 }
 
 func TestStoreAddClonesToAPath(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	remote := addBareRemote(t, ts)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
@@ -253,6 +260,7 @@ func TestStoreAddClonesToAPath(t *testing.T) {
 }
 
 func TestStoreAddWarnsOfPrefixDuplicates(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	remote := addBareRemote(t, ts)
 	if _, err := ts.Sync(false, true); err != nil {
@@ -277,6 +285,7 @@ func TestStoreAddWarnsOfPrefixDuplicates(t *testing.T) {
 }
 
 func TestWarnPrefixDuplicatesNamesTheLaterWorkspace(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	c, p, _ := ts.Config()
 	// Two stores that share the prefix ME, the second set later (the store stamps a zero time with now).
@@ -298,6 +307,7 @@ func TestWarnPrefixDuplicatesNamesTheLaterWorkspace(t *testing.T) {
 }
 
 func TestSetLater(t *testing.T) {
+	t.Parallel()
 	t0 := time.Date(2026, 10, 31, 10, 0, 0, 0, time.UTC)
 	older, newer := &model.Workspace{PrefixSet: t0}, &model.Workspace{PrefixSet: t0.Add(time.Second)}
 	if !setLater(newer, older) || setLater(older, newer) {
@@ -318,6 +328,7 @@ func TestSetLater(t *testing.T) {
 }
 
 func TestClearDir(t *testing.T) {
+	t.Parallel()
 	d := t.TempDir()
 	keep := filepath.Join(d, "keep")
 	if err := os.MkdirAll(filepath.Join(keep, "sub"), 0o750); err != nil {
@@ -338,6 +349,7 @@ func TestClearDir(t *testing.T) {
 }
 
 func TestStoreListShowsAccountAndLastSync(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.useAccount()
 	addBareRemote(t, ts)
@@ -354,6 +366,7 @@ func TestStoreListShowsAccountAndLastSync(t *testing.T) {
 }
 
 func TestStoreRemoveNotFound(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	_, err := ts.StoreRemove("nope", false)
 	wantErr(t, err, KindNotFound, "store.not_found")
@@ -363,6 +376,7 @@ func TestStoreRemoveNotFound(t *testing.T) {
 }
 
 func TestStoreRemovePurgeRefusals(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	e := func() config.StoreEntry { _, e, _ := ts.Entry(); return e }()
 
@@ -413,6 +427,7 @@ func TestStoreRemovePurgeRefusals(t *testing.T) {
 }
 
 func TestStoreRemovePurgeOfAStoreThatDoesNotOpen(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	addBareRemote(t, ts)
 	_, e, _ := ts.Entry()
@@ -427,6 +442,7 @@ func TestStoreRemovePurgeOfAStoreThatDoesNotOpen(t *testing.T) {
 }
 
 func TestStoreRemovePurgeDeletesAPushedStore(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	addBareRemote(t, ts)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {

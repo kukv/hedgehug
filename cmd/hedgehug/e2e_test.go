@@ -101,6 +101,7 @@ func (u *devUser) ok(args ...string) string {
 }
 
 func TestE2EAliceAndBob(t *testing.T) {
+	t.Parallel()
 	bin, devenv := buildHedgehug(t), buildDevenv(t)
 	dev, _, _ := initDevenv(t, devenv)
 	alice, bob := devUserOf(t, bin, devenv, dev, "alice"), devUserOf(t, bin, devenv, dev, "bob")

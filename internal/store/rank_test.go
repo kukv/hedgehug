@@ -30,6 +30,7 @@ func writeShared(t *testing.T, s *Store, tasks ...*model.Task) {
 }
 
 func TestRerankOnWrite(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	before, a, b, c, after := rankTask(ws, "before", "a0"), rankTask(ws, "a", "a5"), rankTask(ws, "b", "a5"), rankTask(ws, "c", "a5"), rankTask(ws, "after", "a9")
@@ -49,6 +50,7 @@ func TestRerankOnWrite(t *testing.T) {
 }
 
 func TestRerankKeepsUniqueRank(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	x := rankTask(ws, "x", "a5")
@@ -62,6 +64,7 @@ func TestRerankKeepsUniqueRank(t *testing.T) {
 
 // Tasks put together that share a rank keep their order by id.
 func TestRerankTasksOfOneOperation(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	a, b, c := rankTask(ws, "a", "a5"), rankTask(ws, "b", "a5"), rankTask(ws, "c", "a5")
@@ -72,6 +75,7 @@ func TestRerankTasksOfOneOperation(t *testing.T) {
 }
 
 func TestBetweenBeforeEverything(t *testing.T) {
+	t.Parallel()
 	r, err := model.Between("", "a5")
 	if err != nil || r >= "a5" {
 		t.Errorf("Between(\"\", a5) = %q, %v", r, err)
@@ -81,6 +85,7 @@ func TestBetweenBeforeEverything(t *testing.T) {
 // Only live siblings of the same parent and workspace share a rank with a
 // task, and a task put in the operation counts as the operation leaves it.
 func TestRerankSiblings(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	other := &model.Workspace{ULID: model.NewULID(), Name: "other", IDPrefix: "OTH"}
@@ -113,6 +118,7 @@ func TestRerankSiblings(t *testing.T) {
 }
 
 func TestRerankIsRestoredWhenTheOperationFails(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	a, b := rankTask(ws, "a", "a5"), rankTask(ws, "b", "a5")
@@ -136,6 +142,7 @@ func TestRerankIsRestoredWhenTheOperationFails(t *testing.T) {
 
 // The first of a group with no smaller sibling goes before everything.
 func TestRerankFirstOfTheLowestGroup(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	a, b, after := rankTask(ws, "a", "a5"), rankTask(ws, "b", "a5"), rankTask(ws, "after", "a9")
@@ -149,6 +156,7 @@ func TestRerankFirstOfTheLowestGroup(t *testing.T) {
 
 // Every task the operation reranked gets its rank back when it fails.
 func TestRerankIsRestoredForEveryTask(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	a, b, c := rankTask(ws, "a", "a5"), rankTask(ws, "b", "a5"), rankTask(ws, "c", "a5")
@@ -175,6 +183,7 @@ func TestRerankIsRestoredForEveryTask(t *testing.T) {
 // A failure in rerank itself leaves the tasks it had already changed as
 // they were.
 func TestRerankIsRestoredWhenRerankFails(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	a, b := rankTask(ws, "a", "a5"), rankTask(ws, "b", "a5")
@@ -193,6 +202,7 @@ func TestRerankIsRestoredWhenRerankFails(t *testing.T) {
 // A task whose parent does not exist is shown at the top level, so it shares
 // a rank with the roots.
 func TestRerankTreatsAMissingParentAsTheTopLevel(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	gone := model.NewULID()

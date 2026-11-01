@@ -11,6 +11,7 @@ import (
 )
 
 func TestUndo(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	ts.withAccount()
 	id := ts.add("one", "")
@@ -33,6 +34,7 @@ func TestUndo(t *testing.T) {
 }
 
 func TestUndoWithoutAccountIsConflict(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	if p := ts.problem("POST", "/api/undo", nil, 409); p.Type != "account.none" {
 		t.Errorf("problem = %+v", p)
@@ -40,6 +42,7 @@ func TestUndoWithoutAccountIsConflict(t *testing.T) {
 }
 
 func TestActivity(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	ts.withAccount()
 	ts.add("one", "")
@@ -77,6 +80,7 @@ func TestActivity(t *testing.T) {
 }
 
 func TestNotifications(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	id := ts.add("mine", "")
 	var show ops.ShowView
@@ -124,6 +128,7 @@ func TestNotifications(t *testing.T) {
 }
 
 func TestUndoNothingIsConflict(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	ts.withAccount()
 	if p := ts.problem("POST", "/api/undo", nil, 409); p.Type != "undo.nothing" {
@@ -132,6 +137,7 @@ func TestUndoNothingIsConflict(t *testing.T) {
 }
 
 func TestNotificationsWarnOnce(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t) // no account: NoAccountsWarning
 	ts.call("GET", "/api/notifications?all=true", nil, 200, nil)
 	if n := strings.Count(ts.log.String(), ops.NoAccountsWarning); n != 1 {

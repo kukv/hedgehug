@@ -6,6 +6,7 @@ import (
 )
 
 func TestWriteTableFullWidth(t *testing.T) {
+	t.Parallel()
 	var b strings.Builder
 	rows := [][]string{{"今週", "table"}, {"tree", "tree"}}
 	if err := writeTable(&b, []string{"NAME", "LAYOUT"}, rows, nil); err != nil {

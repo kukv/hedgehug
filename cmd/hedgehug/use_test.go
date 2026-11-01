@@ -6,6 +6,7 @@ import (
 )
 
 func TestUse(t *testing.T) {
+	t.Parallel()
 	te := newTwoStoreEnv(t)
 	te.goldenOK("none", "use")
 	te.goldenOK("none-json", "use", "--json")
@@ -23,6 +24,7 @@ func TestUse(t *testing.T) {
 }
 
 func TestUseJSONShape(t *testing.T) {
+	t.Parallel()
 	te := newTwoStoreEnv(t)
 	te.ok("use", "AA-1")
 	var got struct {
@@ -40,6 +42,7 @@ func TestUseJSONShape(t *testing.T) {
 }
 
 func TestUseWarnsOfAProjectThatIsGone(t *testing.T) {
+	t.Parallel()
 	te := newTwoStoreEnv(t)
 	te.ok("use", "AA-1")
 	te.ok("rm", "AA-1")

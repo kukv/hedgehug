@@ -3,6 +3,7 @@ package server
 import "testing"
 
 func TestHub(t *testing.T) {
+	t.Parallel()
 	h := newHub()
 	a, cancelA := h.Subscribe()
 	b, cancelB := h.Subscribe()

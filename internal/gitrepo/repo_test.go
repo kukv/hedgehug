@@ -60,6 +60,7 @@ func files(t *testing.T, c *object.Commit) []string {
 }
 
 func TestCommitOnlyNamedPaths(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := Init(dir)
 	if err != nil {
@@ -102,6 +103,7 @@ func TestCommitOnlyNamedPaths(t *testing.T) {
 }
 
 func TestCommitRemovedPath(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := Init(dir)
 	if err != nil {
@@ -128,6 +130,7 @@ func TestCommitRemovedPath(t *testing.T) {
 }
 
 func TestCommitNothing(t *testing.T) {
+	t.Parallel()
 	r, err := Init(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -138,6 +141,7 @@ func TestCommitNothing(t *testing.T) {
 }
 
 func TestFailedCommitKeepsIndex(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := Init(dir)
 	if err != nil {
@@ -176,6 +180,7 @@ func TestFailedCommitKeepsIndex(t *testing.T) {
 }
 
 func TestOpen(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if _, err := Init(dir); err != nil {
 		t.Fatal(err)

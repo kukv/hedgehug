@@ -6,6 +6,7 @@ import (
 )
 
 func TestStatusAndDone(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	te.ok("status", a.ID, "in_progress")
@@ -23,6 +24,7 @@ func TestStatusAndDone(t *testing.T) {
 }
 
 func TestStatusErrors(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	if code, _, stderr := te.run("status", a.ID, "doing"); code != 1 || !strings.Contains(stderr, "in_progress") {

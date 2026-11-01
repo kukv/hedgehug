@@ -8,6 +8,7 @@ import (
 )
 
 func TestDoctorNamesDifferingInCaseAreDuplicates(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	ws := firstWorkspace(t, s)
 	a := commitSprint(t, s, dir, &model.Sprint{ULID: model.NewULID(), Workspace: ws, Name: "Sprint"})
@@ -21,6 +22,7 @@ func TestDoctorNamesDifferingInCaseAreDuplicates(t *testing.T) {
 }
 
 func TestDoctorTaskPointsAtMissingSprintOrRelease(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	ws := firstWorkspace(t, s)
 	sp := &model.Sprint{ULID: model.NewULID(), Workspace: ws, Name: "ok"}

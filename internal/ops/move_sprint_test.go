@@ -44,6 +44,7 @@ func (ts *testSession) workspaceULID(name string) model.ULID {
 }
 
 func TestMoveToWorkspaceDetachesSprintAndReleases(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.addWorkspace("api", "API")
 	me := ts.workspaceULID("me")
@@ -85,6 +86,7 @@ func TestMoveToWorkspaceDetachesSprintAndReleases(t *testing.T) {
 }
 
 func TestMoveToWorkspaceDetachesFromSubtree(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.addWorkspace("api", "API")
 	me := ts.workspaceULID("me")
@@ -101,6 +103,7 @@ func TestMoveToWorkspaceDetachesFromSubtree(t *testing.T) {
 }
 
 func TestMoveWithinWorkspaceKeepsSprint(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	me := ts.workspaceULID("me")
 	sp, rel := ts.putSprintRelease(me, "S3", "v1")

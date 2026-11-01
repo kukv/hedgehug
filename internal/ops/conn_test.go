@@ -13,6 +13,7 @@ import (
 )
 
 func TestConn(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.env["HH_TOKEN"] = "tok-1"
 	ts.appendConfig("accounts:\n" +
@@ -65,6 +66,7 @@ func TestConn(t *testing.T) {
 
 // A token that cannot be got is an error, and is asked for again.
 func TestConnMissingTokenIsAskedAgain(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.appendConfig("accounts:\n  - {name: a, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
 	c, _, err := ts.Config()
@@ -86,6 +88,7 @@ func (*fakeKeyring) Delete(string, string) error        { return nil }
 
 // The session hands what it was given to the token code.
 func TestAuthOptions(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.appendConfig("hosts:\n  - {host: ghe.example.com, api: \"https://ghe.example.com/api\"}\n")
 	c, _, err := ts.Config()
@@ -107,6 +110,7 @@ func TestAuthOptions(t *testing.T) {
 // The token of an account is got once for the session and the sessions
 // ForStore makes, even when they ask at once.
 func TestTokenIsGotOnceAcrossForStore(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	var calls atomic.Int32
 	ts.Getenv = func(k string) string {
@@ -149,6 +153,7 @@ func TestTokenIsGotOnceAcrossForStore(t *testing.T) {
 
 // A slow fetch of one account does not hold up the others.
 func TestTokenFetchOfOneAccountDoesNotBlockAnother(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	started, release := make(chan struct{}), make(chan struct{})
 	ts.Run = func(string, ...string) ([]byte, []byte, error) {
@@ -188,6 +193,7 @@ func TestTokenFetchOfOneAccountDoesNotBlockAnother(t *testing.T) {
 // The same name with another host or login is another account: a session
 // that outlives a config change does not hand out the old account's token.
 func TestTokenCacheKeyIncludesTheAccountID(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.env["A"], ts.env["B"] = "tok-a", "tok-b"
 	c, _, err := ts.Config()
@@ -212,6 +218,7 @@ func TestTokenCacheKeyIncludesTheAccountID(t *testing.T) {
 }
 
 func TestForStoreCopiesTheOutsideWorld(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	k := &fakeKeyring{}
 	ts.Keyring = k
@@ -223,6 +230,7 @@ func TestForStoreCopiesTheOutsideWorld(t *testing.T) {
 }
 
 func TestGitHub(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.env["HH_TOKEN"] = "tok-1"
 	ts.appendConfig("accounts:\n" +
@@ -252,6 +260,7 @@ func TestGitHub(t *testing.T) {
 }
 
 func TestPickAccount(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	c, _, err := ts.Config()
 	if err != nil {

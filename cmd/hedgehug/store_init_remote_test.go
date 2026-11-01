@@ -16,6 +16,7 @@ const twoAccounts = "accounts:\n" +
 	"  - {name: b, host: github.com, login: bob, token: \"env:HH_TOKEN_B\"}\n"
 
 func TestStoreInitPathAndAccountFlags(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.writeAccounts("github.com", "alice")
 	dir := filepath.Join(t.TempDir(), "mine")
@@ -32,6 +33,7 @@ func TestStoreInitPathAndAccountFlags(t *testing.T) {
 // Off a terminal the choice of the account is not asked: exit 2 with the
 // candidates.
 func TestStoreInitAccountChoiceOffTerminal(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.withFake(fakegh.State{})
 	te.writeConfigYAML(twoAccounts)
@@ -71,6 +73,7 @@ func TestStoreInitAccountChoiceOnTerminal(t *testing.T) {
 }
 
 func TestStoreInitGitHubForbiddenExit(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.withFake(fakegh.State{Orgs: map[string][]string{"org-a": {"bob"}}, Tokens: map[string]string{"t-alice": "alice"}})
 	te.env["HH_TOKEN"] = "t-alice"

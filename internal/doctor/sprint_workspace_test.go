@@ -47,6 +47,7 @@ func secondWorkspace(t *testing.T, s *store.Store, dir string) model.ULID {
 }
 
 func TestDoctorSprintAndReleaseNeedWorkspaceOfStore(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	ws := firstWorkspace(t, s)
 	ok := commitSprint(t, s, dir, &model.Sprint{ULID: model.NewULID(), Workspace: ws, Name: "ok"})
@@ -74,6 +75,7 @@ func TestDoctorSprintAndReleaseNeedWorkspaceOfStore(t *testing.T) {
 }
 
 func TestDoctorSprintAndReleaseNamesAreUniqueInWorkspace(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	one, two := firstWorkspace(t, s), secondWorkspace(t, s, dir)
 	a := commitSprint(t, s, dir, &model.Sprint{ULID: model.NewULID(), Workspace: one, Name: "S1"})
@@ -97,6 +99,7 @@ func TestDoctorSprintAndReleaseNamesAreUniqueInWorkspace(t *testing.T) {
 }
 
 func TestDoctorTaskSprintAndReleasesOfOtherWorkspace(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	one, two := firstWorkspace(t, s), secondWorkspace(t, s, dir)
 	mine := &model.Sprint{ULID: model.NewULID(), Workspace: one, Name: "mine"}

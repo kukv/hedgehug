@@ -30,6 +30,7 @@ func initDir(t *testing.T) string {
 }
 
 func TestInitCreatesUsers(t *testing.T) {
+	t.Parallel()
 	dir := initDir(t)
 	if _, err := os.Stat(filepath.Join(dir, markerFile)); err != nil {
 		t.Errorf("marker: %v", err)
@@ -65,6 +66,7 @@ func TestInitCreatesUsers(t *testing.T) {
 }
 
 func TestInitMakesSharedStore(t *testing.T) {
+	t.Parallel()
 	dir := initDir(t)
 	for _, p := range []string{"remotes/kukv/hh-tasks.git/HEAD", "remotes/org-a/hh-shared.git/HEAD", "remotes/org-b/hh-ops.git/HEAD"} {
 		if _, err := os.Stat(filepath.Join(dir, p)); err != nil {
@@ -116,6 +118,7 @@ func TestInitMakesSharedStore(t *testing.T) {
 }
 
 func TestInitPushesAlicesStoreOnly(t *testing.T) {
+	t.Parallel()
 	dir := initDir(t)
 	alice, err := store.Open(filepath.Join(dir, "users", "alice", "stores", "me"))
 	if err != nil {
@@ -141,6 +144,7 @@ func TestInitPushesAlicesStoreOnly(t *testing.T) {
 }
 
 func TestInitExistingDirFails(t *testing.T) {
+	t.Parallel()
 	dir := initDir(t)
 	code, _, stderr := runDevenv(t, "init", "--dir", dir)
 	if code != 1 || !strings.Contains(stderr, "reset") {
@@ -149,6 +153,7 @@ func TestInitExistingDirFails(t *testing.T) {
 }
 
 func TestResetRecreates(t *testing.T) {
+	t.Parallel()
 	dir := initDir(t)
 	extra := filepath.Join(dir, "users", "alice", "extra")
 	if err := os.WriteFile(extra, []byte("x"), 0o600); err != nil {
@@ -166,6 +171,7 @@ func TestResetRecreates(t *testing.T) {
 }
 
 func TestResetWithoutMarkerKeepsDir(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	keep := filepath.Join(dir, "keep")
 	if err := os.WriteFile(keep, []byte("x"), 0o600); err != nil {
@@ -181,6 +187,7 @@ func TestResetWithoutMarkerKeepsDir(t *testing.T) {
 }
 
 func TestResetMissingDirInits(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "new")
 	if code, _, stderr := runDevenv(t, "reset", "--dir", dir); code != 0 {
 		t.Fatalf("reset = %d, stderr %q", code, stderr)
@@ -191,6 +198,7 @@ func TestResetMissingDirInits(t *testing.T) {
 }
 
 func TestEnv(t *testing.T) {
+	t.Parallel()
 	dir := initDir(t)
 	code, stdout, stderr := runDevenv(t, "env", "alice", "--dir", dir)
 	if code != 0 {
@@ -205,6 +213,7 @@ func TestEnv(t *testing.T) {
 }
 
 func TestEnvQuotesAndMakesAbsolute(t *testing.T) {
+	t.Parallel()
 	cwd := t.TempDir()
 	var out, errb bytes.Buffer
 	if code := run([]string{"init", "--dir", "it's here"}, &out, &errb, cwd); code != 0 {
@@ -223,6 +232,7 @@ func TestEnvQuotesAndMakesAbsolute(t *testing.T) {
 }
 
 func TestEnvUnknownUser(t *testing.T) {
+	t.Parallel()
 	dir := initDir(t)
 	code, stdout, stderr := runDevenv(t, "env", "carol", "--dir", dir)
 	if code != 1 || stdout != "" || stderr == "" {
@@ -231,6 +241,7 @@ func TestEnvUnknownUser(t *testing.T) {
 }
 
 func TestUsageErrors(t *testing.T) {
+	t.Parallel()
 	for _, args := range [][]string{nil, {"nope"}, {"env"}, {"init", "extra"}, {"init", "--fakegh", "not a url"}} {
 		if code, _, _ := runDevenv(t, args...); code != 2 {
 			t.Errorf("run(%v) = %d, want 2", args, code)
@@ -239,6 +250,7 @@ func TestUsageErrors(t *testing.T) {
 }
 
 func TestFindRoot(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module x\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -308,6 +320,7 @@ func TestInitPhase3a(t *testing.T) {
 }
 
 func TestInitSaysHowToAddFromWeb(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "devenv")
 	code, stdout, stderr := runDevenv(t, "init", "--dir", dir)
 	if code != 0 {
@@ -319,6 +332,7 @@ func TestInitSaysHowToAddFromWeb(t *testing.T) {
 }
 
 func TestInitMakesWebRepoAndProject(t *testing.T) {
+	t.Parallel()
 	dir := initDir(t)
 	if _, err := os.Stat(filepath.Join(dir, "remotes", "org-a", "web.git", "HEAD")); err != nil {
 		t.Fatal(err)

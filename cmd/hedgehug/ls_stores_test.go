@@ -26,6 +26,7 @@ func newTwoStoreEnv(t *testing.T) *testEnv {
 }
 
 func TestLsAcrossStores(t *testing.T) {
+	t.Parallel()
 	te := newTwoStoreEnv(t)
 	te.goldenOK("ls", "ls")
 	te.goldenOK("group", "ls", "group:status")
@@ -61,6 +62,7 @@ func TestLsAcrossStores(t *testing.T) {
 }
 
 func TestLsOneStoreHasNoStoreColumn(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.addJSON("Only")
 	te.goldenOK("ls", "ls")
@@ -69,6 +71,7 @@ func TestLsOneStoreHasNoStoreColumn(t *testing.T) {
 }
 
 func TestShowTellsItsStore(t *testing.T) {
+	t.Parallel()
 	te := newTwoStoreEnv(t)
 	te.goldenOK("show", "show", "BB-1")
 	var got ops.ShowView
@@ -81,6 +84,7 @@ func TestShowTellsItsStore(t *testing.T) {
 }
 
 func TestLogAcrossStores(t *testing.T) {
+	t.Parallel()
 	te := newTwoStoreEnv(t)
 	// three commits in each store: its init and two adds
 	out := te.ok("log")
@@ -129,6 +133,7 @@ func TestLogAcrossStores(t *testing.T) {
 // With several stores the parent-cycle section is told from the heading of a
 // store by naming its store.
 func TestLsTreeCycleAcrossStores(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.ok("store", "init", "bravo", "--prefix", "BB")
@@ -151,6 +156,7 @@ func TestLsTreeCycleAcrossStores(t *testing.T) {
 }
 
 func TestLsIDInAnotherStore(t *testing.T) {
+	t.Parallel()
 	te := newTwoStoreEnv(t)
 	// AA-1 is only in alpha: bravo-long finds nothing, which is no error
 	out := te.ok("ls", "project:AA-1")

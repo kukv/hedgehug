@@ -67,6 +67,7 @@ func itemOverwriting(t *testing.T, te *testEnv, field string) string {
 }
 
 func TestInboxOverwrittenAndRevert(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	conflict(t, alice, bob, "title", "bob", "alice")
 	bob.goldenOK("inbox", "inbox")
@@ -86,6 +87,7 @@ func TestInboxOverwrittenAndRevert(t *testing.T) {
 }
 
 func TestInboxRevertProp(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	conflict(t, alice, bob, "priority", "low", "high")
 	bob.goldenOK("inbox", "inbox")
@@ -96,6 +98,7 @@ func TestInboxRevertProp(t *testing.T) {
 }
 
 func TestInboxRevertErrors(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	alice.ok("set", "ORG-1", "assignees+=github.com/bob")
 	alice.ok("sync")
@@ -107,6 +110,7 @@ func TestInboxRevertErrors(t *testing.T) {
 }
 
 func TestInboxRenumbered(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	alice.ok("add", "a")
 	bob.ok("add", "b")
@@ -117,6 +121,7 @@ func TestInboxRenumbered(t *testing.T) {
 }
 
 func TestInboxAssignedAndMention(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	alice.ok("set", "ORG-1", "assignees+=github.com/bob")
 	alice.ok("comment", "ORG-1", "look @bob")
@@ -130,6 +135,7 @@ func TestInboxAssignedAndMention(t *testing.T) {
 }
 
 func TestInboxReadAll(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	alice.ok("set", "ORG-1", "assignees+=github.com/bob")
 	alice.ok("sync")
@@ -142,6 +148,7 @@ func TestInboxReadAll(t *testing.T) {
 }
 
 func TestInboxRead(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	alice.ok("set", "ORG-1", "assignees+=github.com/bob")
 	alice.ok("comment", "ORG-1", "look @bob")
@@ -163,6 +170,7 @@ func TestInboxRead(t *testing.T) {
 }
 
 func TestInboxJSON(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	alice.ok("set", "ORG-1", "assignees+=github.com/bob")
 	alice.ok("sync")
@@ -182,6 +190,7 @@ func TestInboxJSON(t *testing.T) {
 }
 
 func TestInboxRejectsBadArguments(t *testing.T) {
+	t.Parallel()
 	_, bob, _ := twoUsers(t)
 	for _, args := range [][]string{
 		{"inbox", "read", "ABCD"},
@@ -197,12 +206,14 @@ func TestInboxRejectsBadArguments(t *testing.T) {
 }
 
 func TestInboxWithoutAccounts(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.goldenRun("inbox", 0, "inbox")
 }
 
 func TestInboxPrefixDuplicate(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	alice.ok("workspace", "add", "web", "--prefix", "DUP")
 	bob.now = bob.now.Add(time.Second) // the prefix set later is the one told
@@ -214,6 +225,7 @@ func TestInboxPrefixDuplicate(t *testing.T) {
 }
 
 func TestInboxRevertParent(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	alice.ok("add", "p")
 	alice.ok("add", "q")
@@ -233,6 +245,7 @@ func TestInboxRevertParent(t *testing.T) {
 }
 
 func TestInboxReadDuplicates(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	alice.ok("set", "ORG-1", "assignees+=github.com/bob")
 	alice.ok("sync")
@@ -244,6 +257,7 @@ func TestInboxReadDuplicates(t *testing.T) {
 }
 
 func TestInboxRepairedContent(t *testing.T) {
+	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	var j struct{ ULID string }
 	if err := json.Unmarshal([]byte(alice.ok("show", "ORG-1", "--json")), &j); err != nil {
@@ -281,6 +295,7 @@ func TestInboxRepairedContent(t *testing.T) {
 }
 
 func TestInboxRevertWorkspace(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	alice.ok("workspace", "add", "w2", "--prefix", "AA")
 	alice.ok("workspace", "add", "w3", "--prefix", "BB")
@@ -303,6 +318,7 @@ func TestInboxRevertWorkspace(t *testing.T) {
 }
 
 func TestInboxRevertParentInAnotherWorkspace(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	alice.ok("workspace", "add", "w2", "--prefix", "AA")
 	alice.ok("workspace", "add", "w3", "--prefix", "BB")
@@ -329,6 +345,7 @@ func TestInboxRevertParentInAnotherWorkspace(t *testing.T) {
 }
 
 func TestInboxRevertDeletedTask(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	conflict(t, alice, bob, "title", "bob", "alice")
 	u := itemOfKind(t, bob, "overwritten")
@@ -340,6 +357,7 @@ func TestInboxRevertDeletedTask(t *testing.T) {
 }
 
 func TestInboxDuplicateNamesEveryMatch(t *testing.T) {
+	t.Parallel()
 	alice, bob, remote := twoUsers(t)
 	carol := alice.other()
 	carol.writeAccounts("github.com", "carol")
@@ -356,6 +374,7 @@ func TestInboxDuplicateNamesEveryMatch(t *testing.T) {
 }
 
 func TestInboxDuplicateNameMatchesTheName(t *testing.T) {
+	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	alice.ok("workspace", "add", "web", "--prefix", "WEB")
 	st, err := store.Open(alice.storeDir("org"))

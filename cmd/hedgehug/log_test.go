@@ -11,6 +11,7 @@ import (
 )
 
 func TestLog(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("First")
 	b := te.addJSON("Second")
@@ -68,6 +69,7 @@ func TestLog(t *testing.T) {
 }
 
 func TestLogJSON(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("First")
 	var got []struct {
@@ -105,6 +107,7 @@ func TestLogJSON(t *testing.T) {
 }
 
 func TestLogShowsCurrentID(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("workspace", "add", "api", "--prefix", "API")
 	a := te.addJSON("Alpha", "--workspace", "me") // ME-1
@@ -131,6 +134,7 @@ func TestLogShowsCurrentID(t *testing.T) {
 }
 
 func TestShowHistory(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("First")
 	for range 6 {

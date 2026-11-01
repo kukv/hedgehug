@@ -23,6 +23,7 @@ func watchersOf(t *testing.T, te *testEnv, id string) []string {
 }
 
 func TestAutoWatchers(t *testing.T) {
+	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	alice.ok("add", "x")                                          // ORG-2: the writer watches
 	alice.ok("set", "ORG-2", "assignees+=github.com/bob")         // the assignee watches
@@ -35,6 +36,7 @@ func TestAutoWatchers(t *testing.T) {
 }
 
 func TestAutoWatchersOnAddWithAssignee(t *testing.T) {
+	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	alice.ok("add", "y", "-p", "assignees=github.com/bob")
 	want := []string{"github.com/alice", "github.com/bob"}
@@ -83,6 +85,7 @@ func TestAutoWatchersOnCommentEdit(t *testing.T) {
 }
 
 func TestNoWatcherWithoutAccounts(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.ok("add", "x")
@@ -96,6 +99,7 @@ func TestNoWatcherWithoutAccounts(t *testing.T) {
 }
 
 func TestWatchUnwatch(t *testing.T) {
+	t.Parallel()
 	_, bob, _ := twoUsers(t)
 	bob.goldenOK("watch", "watch", "ORG-1")
 	if out := bob.ok("ls", "watching:@me"); !strings.Contains(out, "ORG-1") {
@@ -110,6 +114,7 @@ func TestWatchUnwatch(t *testing.T) {
 }
 
 func TestShowReferencedBy(t *testing.T) {
+	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	alice.ok("add", "b")
 	if out := alice.ok("show", "ORG-1"); strings.Contains(out, "Referenced by") {

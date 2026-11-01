@@ -29,6 +29,7 @@ func commentULIDs(cs []CommentEntry) []model.ULID {
 }
 
 func TestCommentsAndMentions(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	a := newTask("a")
 	a.Body = "for @alice, see #TST-9\n"
@@ -97,6 +98,7 @@ func TestCommentsAndMentions(t *testing.T) {
 // A change to the task keeps the mentions of its comments, and a change to
 // a comment keeps those of the task.
 func TestMentionsFollowTheirFiles(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	a := newTask("a")
 	a.Body = "@alice\n"
@@ -171,6 +173,7 @@ func TestUpdateReadsOnlyTheNotesOfTheTouchedTask(t *testing.T) {
 // A comment file removed from the tree, as by hand, leaves the entry in an
 // update as in a rebuild.
 func TestRemovedCommentFile(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	a := newTask("a")
 	put(t, s, a)

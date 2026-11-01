@@ -12,6 +12,7 @@ import (
 )
 
 func TestUpdateReportsCommitted(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	committed, err := s.Update(Op{Name: "add", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(task) })
@@ -29,6 +30,7 @@ func TestUpdateReportsCommitted(t *testing.T) {
 }
 
 func TestUpdateCommitReturnsTheNewHead(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	h, err := s.UpdateCommit(Op{Name: "add", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(task) })
@@ -60,6 +62,7 @@ func TestUpdateCommitReturnsTheNewHead(t *testing.T) {
 }
 
 func TestUpdateSameAsHeadWithDirtyWorkTree(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	addTask(t, s, task)
@@ -93,6 +96,7 @@ func TestUpdateSameAsHeadWithDirtyWorkTree(t *testing.T) {
 }
 
 func TestRemoveTaskDropsQueuedChildren(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	addTask(t, s, task)
@@ -115,6 +119,7 @@ func TestRemoveTaskDropsQueuedChildren(t *testing.T) {
 }
 
 func TestPutChildOfRemovedTask(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	addTask(t, s, task)
@@ -143,6 +148,7 @@ func forbidTodoToDone() *schema.Schema {
 }
 
 func TestUpdateSkipTransitions(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	task.Assignees = []string{"github.com/me"} // so that a write can empty them
@@ -183,6 +189,7 @@ func TestUpdateSkipTransitions(t *testing.T) {
 }
 
 func TestTaskBytes(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	addTask(t, s, task)
@@ -198,6 +205,7 @@ func TestTaskBytes(t *testing.T) {
 }
 
 func TestCommentULIDs(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	a, b := newTask("a"), newTask("b")
 	refs := []CommentRef{
@@ -240,6 +248,7 @@ func TestCommentULIDs(t *testing.T) {
 }
 
 func TestAuthorTrailer(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	x := newTask("x")
 	if _, err := s.Update(Op{Name: "add", Task: x.ULID, Author: testAuthor, Account: "github.com/alice"}, func(tx *Tx) error { return tx.PutTask(x) }); err != nil {

@@ -10,6 +10,7 @@ import (
 
 // The userinfo of a URL is not echoed by the error.
 func TestConnPlainHTTPHidesUserinfo(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.env["HH_TOKEN"] = "tok-1"
 	ts.appendConfig("accounts:\n  - {name: a, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
@@ -32,6 +33,7 @@ func TestConnPlainHTTPHidesUserinfo(t *testing.T) {
 
 // Loopback over http gets the token for both IPv4 and IPv6 literals.
 func TestConnLoopbackLiterals(t *testing.T) {
+	t.Parallel()
 	for _, host := range []string{"127.0.0.1", "::1"} {
 		ts := newTestSession(t)
 		ts.env["HH_TOKEN"] = "tok-1"
@@ -53,6 +55,7 @@ func TestConnLoopbackLiterals(t *testing.T) {
 // A url_rewrites rule is judged after the rewrite: an https URL rewritten to
 // a plain http one on another host is refused.
 func TestConnRewriteToPlainHTTP(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.env["HH_TOKEN"] = "tok-1"
 	ts.appendConfig("accounts:\n  - {name: a, host: mirror.example.com, login: alice, token: \"env:HH_TOKEN\"}\n" +

@@ -23,6 +23,7 @@ import (
 )
 
 func TestHealth(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	var out struct {
 		Version string `json:"version"`
@@ -35,6 +36,7 @@ func TestHealth(t *testing.T) {
 }
 
 func TestTokenRequired(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	for _, auth := range []string{"", "Bearer wrong", "Basic " + testToken, testToken} {
 		req, _ := http.NewRequest("GET", ts.hs.URL+"/api/health", nil)
@@ -53,6 +55,7 @@ func TestTokenRequired(t *testing.T) {
 }
 
 func TestEmptyTokenRefusesEverything(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	s := New(Options{Getenv: ts.getenv, Version: "test"}) // Token is empty
 	s.SetPort(ts.port)
@@ -74,6 +77,7 @@ func TestEmptyTokenRefusesEverything(t *testing.T) {
 }
 
 func TestHostRefused(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	for _, host := range []string{"evil.example:80", "127.0.0.1:1", "localhost", "example.com"} {
 		for _, path := range []string{"/api/health", "/", "/index.html"} {
@@ -98,6 +102,7 @@ func TestHostRefused(t *testing.T) {
 }
 
 func TestNotBuiltPage(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t) // Options.Static is nil
 	for _, path := range []string{"/", "/tasks/ME-1", "/index.html"} {
 		req, _ := http.NewRequest("GET", ts.hs.URL+path, nil)
@@ -114,6 +119,7 @@ func TestNotBuiltPage(t *testing.T) {
 }
 
 func TestStaticAndSPAFallback(t *testing.T) {
+	t.Parallel()
 	dist := fstest.MapFS{
 		"index.html":    {Data: []byte("<html>app</html>")},
 		"assets/app.js": {Data: []byte("console.log(1)")},
@@ -135,6 +141,7 @@ func TestStaticAndSPAFallback(t *testing.T) {
 }
 
 func TestBadRequestBodyIsRequestInvalid(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	// Any operation with a body will do; PUT /presence comes in Task 7, so
 	// this test uses the body of a test-only operation registered below.
@@ -146,6 +153,7 @@ func TestBadRequestBodyIsRequestInvalid(t *testing.T) {
 }
 
 func TestOpenAPIUpToDate(t *testing.T) {
+	t.Parallel()
 	got, err := OpenAPIYAML()
 	if err != nil {
 		t.Fatal(err)
@@ -206,6 +214,7 @@ func (ts *testServer) problemNoSpec(method, path string, body any, want int) Pro
 }
 
 func TestProblemOf(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		err    error
 		status int

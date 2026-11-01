@@ -45,6 +45,7 @@ func mustHead(t *testing.T, r *Repo) plumbing.Hash {
 // object file costs tens of microseconds, so go-git's opening the file before
 // it looks in its cache made reads slow.
 func TestReadObjectsFromMemoryOnceRead(t *testing.T) {
+	t.Parallel()
 	check := func(t *testing.T, r *Repo, dir string) {
 		t.Helper()
 		h := commitHead(t, r, dir, map[string]string{"a.md": "1\n"})
@@ -83,6 +84,7 @@ func TestReadObjectsFromMemoryOnceRead(t *testing.T) {
 
 // The remote side of a push or fetch reads from memory too.
 func TestFileLoaderReadsObjectsFromMemoryOnceRead(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	a, _ := cloneTwo(t, remote)
 	commitHead(t, a.r, a.dir, map[string]string{"a.md": "1\n"})
