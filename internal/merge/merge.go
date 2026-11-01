@@ -75,6 +75,9 @@ func Merge(path string, sc *schema.Schema, base []byte, ours, theirs Side, p Pol
 	}
 	switch kindOf(path) {
 	case kindTask:
+		if model.IsForward(ours.Data) || model.IsForward(theirs.Data) {
+			return m.forward(ours, theirs)
+		}
 		return mergeFile(m, base, ours, theirs, taskKind)
 	case kindComment:
 		return m.record(ours, theirs, commentUpdated)

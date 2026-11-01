@@ -27,6 +27,38 @@ func FuzzSymmetric(f *testing.F) {
 	})
 }
 
+// FuzzForwardSymmetric checks the same for a task file of which a side is a
+// forward, or removed.
+func FuzzForwardSymmetric(f *testing.F) {
+	f.Add(uint8(0), uint8(1), "a", "b", int64(1), int64(2))
+	f.Add(uint8(1), uint8(1), "a", "a", int64(2), int64(2))
+	f.Add(uint8(2), uint8(0), "b", "a", int64(1), int64(1))
+	f.Add(uint8(3), uint8(2), "", "", int64(0), int64(0))
+	variant := func(v uint8) []byte {
+		switch v % 5 {
+		case 0:
+			return task("2026-10-31T10:00:00Z", "title: x")
+		case 1:
+			return forwardFile(taskU, storeB)
+		case 2:
+			return forwardFile(taskU, storeC)
+		case 3:
+			return task("2026-10-31T11:00:00Z", "title: y")
+		}
+		return nil
+	}
+	f.Fuzz(func(t *testing.T, ov, tv uint8, oa, ta string, ot, tt int64) {
+		base := task("2026-10-31T09:00:00Z", "title: base")
+		o := Side{Data: variant(ov), Author: oa, Time: time.Unix(ot%1e9, 0)}
+		th := Side{Data: variant(tv), Author: ta, Time: time.Unix(tt%1e9, 0)}
+		a, err1 := Merge(taskPath, schema.Default(), base, o, th, LWW)
+		b, err2 := Merge(taskPath, schema.Default(), base, th, o, LWW)
+		if (err1 == nil) != (err2 == nil) || !bytes.Equal(a.Data, b.Data) || !sameOverwritten(a.Overwritten, b.Overwritten) || !slices.Equal(a.Notices, b.Notices) {
+			t.Fatalf("not symmetric:\n%s\n---\n%s\n%v\n%v", a.Data, b.Data, a.Overwritten, b.Overwritten)
+		}
+	})
+}
+
 // FuzzYAMLSymmetric checks the same for the files merged key by key.
 func FuzzYAMLSymmetric(f *testing.F) {
 	f.Add("statuses:\n- {name: todo, category: todo}\nprops:\n  p: {values: [a]}\n",

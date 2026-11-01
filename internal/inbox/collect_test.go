@@ -437,6 +437,41 @@ func TestCollectRepairedTrailers(t *testing.T) {
 	}
 }
 
+// The trailers of a forward winning a merge: the whole file lost under a
+// forward, a child sent to the root and a reference removed.
+func TestCollectMovedTrailers(t *testing.T) {
+	_, b := twoClones(t)
+	x := addTask(t, b, "x", nil)
+	y := addTask(t, b, "y", nil)
+	before := head(t, b)
+	trailers := []gitrepo.Trailer{
+		{Key: "Hedgehug-Overwritten", Value: url.PathEscape(model.TaskPath(x.ULID)) + ` * "old file" github.com/b`},
+		{Key: "Hedgehug-Repaired", Value: y.ULID.String() + ` parent_moved {"from":"` + x.ULID.String() + `","to":null} github.com/b`},
+		{Key: "Hedgehug-Repaired", Value: y.ULID.String() + ` ref_moved {"field":"blocked_by","target":"` + x.ULID.String() + `"} github.com/b`},
+		{Key: "Hedgehug-Repaired", Value: y.ULID.String() + ` ref_moved {"field":"blocked_by","target":"` + x.ULID.String() + `"} github.com/a`},
+	}
+	h := head(t, b)
+	if _, err := b.s.CommitMerge(h, []plumbing.Hash{h}, map[string][]byte{"notes/n.txt": []byte("n\n")}, b.op("repair", model.ULID{}), trailers); err != nil {
+		t.Fatal(err)
+	}
+	items, err := Collect(b.s, before, head(t, b), []string{"github.com/b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, it := range items {
+		got = append(got, fmt.Sprintf("%s %s %s", it.Kind, it.Task, string(it.Detail)))
+	}
+	want := []string{
+		fmt.Sprintf(`overwritten %s {"field":"*","value":"old file"}`, x.ULID),
+		fmt.Sprintf(`repaired %s {"kind":"parent_moved","value":{"from":"%s","to":null}}`, y.ULID, x.ULID),
+		fmt.Sprintf(`repaired %s {"kind":"ref_moved","value":{"field":"blocked_by","target":"%s"}}`, y.ULID, x.ULID),
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("items:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
 // Two clones that merge the same pair make two merge commits with the same
 // trailers; a clone that gets both is told once.
 func TestSameTrailersInTwoMergeCommits(t *testing.T) {

@@ -9,7 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"go.yaml.in/yaml/v4"
+
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/schema"
 )
 
 // Files is the set of files the repair looks at: HEAD with the merge laid
@@ -31,7 +34,7 @@ type RepairInput struct {
 // Repaired is one thing the repair fixed, or a duplicate it only tells of.
 type Repaired struct {
 	ULID   model.ULID // task or workspace
-	Kind   string     // workspace_revived, id_prefix, parent_cycle, parent_deleted, workspace_mismatch, id_collision, id_renumbered, prefix_duplicate, name_duplicate
+	Kind   string     // workspace_revived, id_prefix, parent_cycle, parent_deleted, parent_moved, ref_moved, workspace_mismatch, id_collision, id_renumbered, prefix_duplicate, name_duplicate
 	Value  string     // the old value as one line of JSON (for id_collision: {"old":"WEB-43","new":"WEB-45"})
 	Author string     // whom to tell; empty for id_renumbered
 }
@@ -43,23 +46,32 @@ type Repaired struct {
 // tells of duplicate prefixes and names without changing them. It returns
 // the files to write (nil data removes) and what it did, in the order of
 // the kinds above. The same input gives the same output.
-func Repair(in RepairInput) (map[string][]byte, []Repaired, error) {
+//
+// A task that moved to another store leaves a forward (a task file with only
+// moved_to). The children of a forward go to the root (parent_moved), the
+// blockers and task_ref values that name a forward are removed (ref_moved),
+// and the comment and worklog files under a forward are removed. The files
+// removed are returned as dropped, each an Overwritten with Field "*" and
+// the whole file as a JSON string.
+func Repair(in RepairInput) (files map[string][]byte, repaired []Repaired, dropped []Overwritten, err error) {
 	r := loadRepair(in)
 	r.reviveWorkspaces()
 	r.restorePrefixes()
 	if err := r.breakCycles(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if err := r.detachFromDeleted(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
+	r.removeMovedRefs()
 	r.followParents()
 	if err := r.renumber(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	r.duplicates()
-	out, err := r.files()
-	return out, r.done, err
+	r.dropUnderForwards()
+	files, err = r.files()
+	return files, r.done, r.dropped, err
 }
 
 type repairer struct {
@@ -74,6 +86,9 @@ type repairer struct {
 	dirty     map[model.ULID]bool // tasks
 	raw       map[string][]byte   // revived workspace files that do not decode
 	moved     map[model.ULID]bool // tasks moved to their parent's workspace
+	forwards  map[model.ULID]bool // task files that are forwards
+	dropped   []Overwritten
+	drop      []string // files to remove
 	done      []Repaired
 }
 
@@ -87,6 +102,7 @@ func loadRepair(in RepairInput) *repairer {
 		in: in, ws: map[model.ULID]*model.Workspace{}, brokenWS: map[model.ULID]bool{},
 		tasks: map[model.ULID]*model.Task{}, broken: map[string][]byte{}, brokenIDs: map[model.ULID]bool{},
 		dirtyWS: map[model.ULID]bool{}, dirty: map[model.ULID]bool{}, raw: map[string][]byte{}, moved: map[model.ULID]bool{},
+		forwards: map[model.ULID]bool{},
 	}
 	for _, p := range in.Files.Paths("workspaces/") {
 		u, err := model.ParseWorkspacePath(p)
@@ -106,7 +122,11 @@ func loadRepair(in RepairInput) *repairer {
 		}
 		b := in.Files.Read(p)
 		if model.IsForward(b) {
-			continue // not a task; the rules for forwards are in the file merge
+			// Not a task. A forward that does not decode is left alone.
+			if f, err := model.DecodeForward(b); err == nil && f.ULID == u {
+				r.forwards[u] = true
+			}
+			continue
 		}
 		if t, err := model.DecodeTask(b); err == nil && t.ULID == u {
 			r.tasks[u] = t
@@ -305,8 +325,8 @@ func (r *repairer) toRootEnd(t *model.Task) error {
 }
 
 // detachFromDeleted moves to the root the live tasks whose parent is
-// deleted or gone. A parent whose file does not decode is not known to be
-// either.
+// deleted, gone or moved to another store (a forward). A parent whose file
+// does not decode is not known to be any of them.
 func (r *repairer) detachFromDeleted() error {
 	for _, u := range r.order {
 		t := r.tasks[u]
@@ -316,15 +336,106 @@ func (r *repairer) detachFromDeleted() error {
 		if p := r.tasks[*t.Parent]; p != nil && p.DeletedAt == nil {
 			continue
 		}
+		kind := "parent_deleted"
+		if r.forwards[*t.Parent] {
+			kind = "parent_moved"
+		}
 		old := jsonOf(t.Parent)
 		t.Parent = nil
 		if err := r.toRootEnd(t); err != nil {
 			return err
 		}
 		r.dirty[u] = true
-		r.tell(u, "parent_deleted", parentMove(old, jsonOf(t.Parent)), model.TaskPath(u))
+		r.tell(u, kind, parentMove(old, jsonOf(t.Parent)), model.TaskPath(u))
 	}
 	return nil
+}
+
+// removeMovedRefs removes from each task the blockers and task_ref values
+// that name a forward.
+func (r *repairer) removeMovedRefs() {
+	if len(r.forwards) == 0 {
+		return
+	}
+	sc := schema.Default()
+	if b := r.in.Files.Read(schema.Path); b != nil {
+		if x, err := schema.Decode(b); err == nil {
+			sc = x
+		}
+	}
+	for _, u := range r.order {
+		t := r.tasks[u]
+		for _, target := range slices.Clone(t.BlockedBy) {
+			if r.forwards[target] {
+				t.BlockedBy = slices.DeleteFunc(t.BlockedBy, func(x model.ULID) bool { return x == target })
+				r.movedRef(u, "blocked_by", target)
+			}
+		}
+		for _, f := range slices.Clone(t.Props) {
+			if p, ok := sc.Prop(f.Key); !ok || p.Type != schema.TypeTaskRef || f.Value == nil {
+				continue
+			}
+			for _, target := range r.dropFromProp(t, f) {
+				r.movedRef(u, "props."+f.Key, target)
+			}
+		}
+	}
+}
+
+// dropFromProp removes the forwards from the task_ref property f of t, and
+// the property itself when nothing is left. It returns the ULIDs removed.
+func (r *repairer) dropFromProp(t *model.Task, f model.Field) []model.ULID {
+	var gone []model.ULID
+	isGone := func(n *yaml.Node) bool {
+		if n.Kind != yaml.ScalarNode {
+			return false
+		}
+		u, err := model.ParseULID(n.Value)
+		if err != nil || !r.forwards[u] {
+			return false
+		}
+		gone = append(gone, u)
+		return true
+	}
+	if f.Value.Kind == yaml.SequenceNode {
+		f.Value.Content = slices.DeleteFunc(f.Value.Content, isGone)
+		if len(gone) > 0 && len(f.Value.Content) == 0 {
+			t.Props.Delete(f.Key)
+		}
+	} else if isGone(f.Value) {
+		t.Props.Delete(f.Key)
+	}
+	return gone
+}
+
+func (r *repairer) movedRef(u model.ULID, field string, target model.ULID) {
+	r.dirty[u] = true
+	v, _ := json.Marshal(struct {
+		Field  string `json:"field"`
+		Target string `json:"target"`
+	}{field, target.String()}) // strings always encode
+	r.tell(u, "ref_moved", v, model.TaskPath(u))
+}
+
+// dropUnderForwards removes the comment and worklog files under a forward,
+// whole, and records each as lost.
+func (r *repairer) dropUnderForwards() {
+	if len(r.forwards) == 0 {
+		return
+	}
+	for _, dir := range []struct {
+		prefix string
+		parse  func(string) (model.ULID, model.ULID, error)
+	}{{"comments/", model.ParseCommentPath}, {"worklogs/", model.ParseWorklogPath}} {
+		for _, p := range r.in.Files.Paths(dir.prefix) {
+			if task, _, err := dir.parse(p); err != nil || !r.forwards[task] {
+				continue
+			}
+			v, _ := json.Marshal(string(r.in.Files.Read(p))) // a string always encodes
+			r.dropped = append(r.dropped, Overwritten{Path: p, Field: "*", Value: string(v), Author: r.in.Author(p)})
+			r.drop = append(r.drop, p)
+		}
+	}
 }
 
 // followParents moves each task to the workspace of its parent, depth
@@ -506,10 +617,16 @@ func (r *repairer) duplicates() {
 
 // files encodes what the repair changed, updated now.
 func (r *repairer) files() (map[string][]byte, error) {
-	if len(r.dirty)+len(r.dirtyWS)+len(r.raw) == 0 {
+	if len(r.dirty)+len(r.dirtyWS)+len(r.raw)+len(r.drop) == 0 {
 		return nil, nil
 	}
 	out := maps.Clone(r.raw)
+	if out == nil {
+		out = map[string][]byte{}
+	}
+	for _, p := range r.drop {
+		out[p] = nil
+	}
 	for u := range r.dirtyWS {
 		w := r.ws[u]
 		w.Updated = r.in.Now

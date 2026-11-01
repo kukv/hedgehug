@@ -464,15 +464,8 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 	}
 	// Both sides removed a file: HEAD already lacks it, so there is nothing
 	// to remove.
-	for p, data := range files {
-		if data != nil {
-			continue
-		}
-		if _, err := r.ReadFile(ht, p); errors.Is(err, fs.ErrNotExist) {
-			delete(files, p)
-		} else if err != nil {
-			return err
-		}
+	if err := forgetAbsent(r, ht, files); err != nil {
+		return err
 	}
 	snap, err := newSnapshot(r, ht, "", files)
 	if err != nil {
@@ -487,7 +480,7 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 		return err
 	}
 	var authorErr error
-	fixed, repaired, err := merge.Repair(merge.RepairInput{
+	fixed, repaired, dropped, err := merge.Repair(merge.RepairInput{
 		Files:    snap,
 		Base:     baseSnap,
 		OnOrigin: onOrigin,
@@ -499,13 +492,20 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 		return err
 	}
 	maps.Copy(files, fixed)
+	lost = append(lost, dropped...)
+	// A file the repair removed was not revived for good.
+	notices = slices.DeleteFunc(notices, func(n merge.Notice) bool {
+		return slices.ContainsFunc(dropped, func(d merge.Overwritten) bool { return d.Path == n.Path })
+	})
+	// A file the repair removes may not be in HEAD: it came from the remote.
+	if err := forgetAbsent(r, ht, files); err != nil {
+		return err
+	}
 	if err := dirty(r, slices.Collect(maps.Keys(files))); err != nil {
 		return err
 	}
 	var trailers []gitrepo.Trailer
-	for _, o := range lost {
-		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Overwritten", Value: strings.Join([]string{url.PathEscape(o.Path), fieldEscaper.Replace(o.Field), o.Value, orDash(o.Author)}, " ")})
-	}
+	trailers = append(trailers, overwrittenTrailers(lost)...)
 	for _, n := range notices {
 		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Repaired", Value: strings.Join([]string{url.PathEscape(fileULID(n.Path)), string(n.Kind), "-", orDash(n.Author)}, " ")})
 	}
@@ -540,6 +540,30 @@ func schemaAt(r *gitrepo.Repo, tree plumbing.Hash) (*schema.Schema, error) {
 		return schema.Default(), nil //nolint:nilerr // a broken schema.yaml is merged as a file; the merge goes on
 	}
 	return sc, nil
+}
+
+// forgetAbsent drops from files the removals of files that tree does not
+// have: there is nothing to remove.
+func forgetAbsent(r *gitrepo.Repo, tree plumbing.Hash, files map[string][]byte) error {
+	for p, data := range files {
+		if data != nil {
+			continue
+		}
+		if _, err := r.ReadFile(tree, p); errors.Is(err, fs.ErrNotExist) {
+			delete(files, p)
+		} else if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func overwrittenTrailers(os []merge.Overwritten) []gitrepo.Trailer {
+	out := make([]gitrepo.Trailer, len(os))
+	for i, o := range os {
+		out[i] = gitrepo.Trailer{Key: "Hedgehug-Overwritten", Value: strings.Join([]string{url.PathEscape(o.Path), fieldEscaper.Replace(o.Field), o.Value, orDash(o.Author)}, " ")}
+	}
+	return out
 }
 
 func repairedTrailers(rs []merge.Repaired) []gitrepo.Trailer {
@@ -701,7 +725,11 @@ func repairHead(s *store.Store, ix *index.Index, opt Options, res *Result) error
 		if err != nil {
 			return err
 		}
-		full, err := needsRepair(ix)
+		tree, err := r.TreeOf(head)
+		if err != nil {
+			return err
+		}
+		full, err := needsRepair(ix, r, tree)
 		if err != nil {
 			return err
 		}
@@ -709,10 +737,6 @@ func repairHead(s *store.Store, ix *index.Index, opt Options, res *Result) error
 		if full {
 			onFullRepair()
 			prefix = ""
-		}
-		tree, err := r.TreeOf(head)
-		if err != nil {
-			return err
 		}
 		snap, err := newSnapshot(r, tree, prefix, nil)
 		if err != nil {
@@ -723,7 +747,7 @@ func repairHead(s *store.Store, ix *index.Index, opt Options, res *Result) error
 			return err
 		}
 		var authorErr error
-		fixed, repaired, err := merge.Repair(merge.RepairInput{
+		fixed, repaired, dropped, err := merge.Repair(merge.RepairInput{
 			Files:    snap,
 			OnOrigin: onOrigin,
 			Changed:  func(string) bool { return true },
@@ -744,7 +768,7 @@ func repairHead(s *store.Store, ix *index.Index, opt Options, res *Result) error
 		}
 		op := store.Op{Name: "repair", Detail: fmt.Sprintf("%d issues", len(repaired)), Author: opt.Author, Account: opt.Account}
 		beforeCommit()
-		_, err = s.CommitMerge(head, []plumbing.Hash{head}, fixed, op, repairedTrailers(repaired))
+		_, err = s.CommitMerge(head, []plumbing.Hash{head}, fixed, op, append(overwrittenTrailers(dropped), repairedTrailers(repaired)...))
 		if errors.Is(err, store.ErrHeadMoved) && try < tries {
 			continue
 		}
@@ -755,6 +779,7 @@ func repairHead(s *store.Store, ix *index.Index, opt Options, res *Result) error
 			return err
 		}
 		res.Repaired = append(res.Repaired, repaired...)
+		res.Overwritten = append(res.Overwritten, dropped...)
 		return nil
 	}
 }
@@ -766,15 +791,24 @@ func repairHead(s *store.Store, ix *index.Index, opt Options, res *Result) error
 var repairCodes = []string{index.CodeDuplicateID, index.CodeNoID, index.CodeIDPrefix, store.CodeWorkspaceMismatch}
 
 // needsRepair reports whether the tasks of HEAD may need the repair: the
-// index has a problem it fixes.
-func needsRepair(ix *index.Index) (bool, error) {
+// index has a problem it fixes, or a forward has comments or worklogs under
+// it. tree is HEAD's.
+func needsRepair(ix *index.Index, r *gitrepo.Repo, tree plumbing.Hash) (bool, error) {
 	if err := ix.Refresh(); err != nil {
 		return false, err
+	}
+	if len(ix.Forwards()) > 0 {
+		under, err := filesUnderForwards(ix, r, tree)
+		if err != nil || under {
+			return under, err
+		}
 	}
 	for _, e := range ix.Tasks() {
 		for _, p := range ix.Problems(e.ULID) {
 			parent := p.Field == "parent" && (p.Code == schema.CodeCycle || p.Code == schema.CodeMissingRef || p.Code == index.CodeParentDeleted)
-			if parent || slices.Contains(repairCodes, p.Code) {
+			// With forwards in the store, a missing reference may be to one.
+			moved := p.Code == schema.CodeMissingRef && len(ix.Forwards()) > 0
+			if parent || moved || slices.Contains(repairCodes, p.Code) {
 				return true, nil
 			}
 		}
@@ -984,4 +1018,25 @@ func (o Options) storeName() string {
 		return "the store"
 	}
 	return o.Name
+}
+
+// filesUnderForwards reports whether tree has a comment or worklog file of a
+// task that is a forward.
+func filesUnderForwards(ix *index.Index, r *gitrepo.Repo, tree plumbing.Hash) (bool, error) {
+	parse := map[string]func(string) (model.ULID, model.ULID, error){
+		"comments/": model.ParseCommentPath,
+		"worklogs/": model.ParseWorklogPath,
+	}
+	for prefix, parseFn := range parse {
+		for p, err := range r.Files(tree, prefix) {
+			if err != nil {
+				return false, err
+			}
+			task, _, perr := parseFn(p)
+			if _, ok := ix.Forward(task); perr == nil && ok {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
