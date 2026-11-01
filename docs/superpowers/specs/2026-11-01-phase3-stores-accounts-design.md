@@ -159,8 +159,7 @@ internal/config/
 internal/auth/   新規
   source.go      gh / env / keychain / device からトークンを取る
   keychain.go    go-keyring の薄い包み（テストでモックに差し替える）
-  device.go      Device Flow とリフレッシュ
-  lock.go        マシン全体のロック（auth.lock）
+  device.go      Device Flow とリフレッシュ、マシン全体のロック（auth.lock の WithLock）
 internal/github/ 新規
   client.go      REST のクライアント、エラーの分類、ページの取得
   repos.go       リポジトリの作成、topic、/user/repos、権限、コラボレーター
