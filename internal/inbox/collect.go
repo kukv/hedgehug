@@ -107,6 +107,7 @@ func (c *commit) addChange(it Item) {
 func (c *commit) dropCoveredWatches() {
 	covered := func(w Item) bool {
 		return slices.ContainsFunc(c.items, func(x Item) bool {
+			// Account IDs are compared without case (spec: 共通の決まり, 大文字小文字); inbox does not import config, so strings.EqualFold, like config.SameAccount.
 			return (x.Kind == Assigned || x.Kind == Mention) && x.Task == w.Task && strings.EqualFold(x.To, w.To)
 		})
 	}
@@ -355,6 +356,7 @@ func (c *commit) added(old, now []string) []string {
 	var out []string
 	for _, a := range now {
 		_, had := isMe(old, a)
+		// Account IDs are compared without case (spec: 共通の決まり, 大文字小文字); inbox does not import config, so strings.EqualFold, like config.SameAccount.
 		if to, ok := isMe(c.me, a); ok && !had && !slices.ContainsFunc(out, func(o string) bool { return strings.EqualFold(o, to) }) {
 			out = append(out, to)
 		}
@@ -368,6 +370,7 @@ func (c *commit) mentioned(old, now string) []string {
 	was := index.Mentions(old)
 	var out []string
 	for _, m := range index.Mentions(now) {
+		// Account IDs are compared without case (spec: 共通の決まり, 大文字小文字); inbox does not import config, so strings.EqualFold, like config.SameAccount.
 		if slices.ContainsFunc(was, func(w string) bool { return strings.EqualFold(w, m) }) {
 			continue
 		}
@@ -384,6 +387,7 @@ func (c *commit) mentioned(old, now string) []string {
 func (c *commit) watchers(t *model.Task) []string {
 	var out []string
 	for _, w := range t.Watchers {
+		// Account IDs are compared without case (spec: 共通の決まり, 大文字小文字); inbox does not import config, so strings.EqualFold, like config.SameAccount.
 		if to, ok := isMe(c.me, w); ok && !slices.ContainsFunc(out, func(o string) bool { return strings.EqualFold(o, to) }) {
 			out = append(out, to)
 		}

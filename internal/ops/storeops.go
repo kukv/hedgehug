@@ -176,6 +176,7 @@ func (m madeRemotes) note(err error) error {
 // githubErr describes err of doing, as acct, and gives it its Kind and Code.
 func githubErr(err error, acct config.Account, doing string) error {
 	d := github.Describe(err, acct.ID(), acct.Name, doing)
+	var rl *github.RateLimitError
 	switch {
 	case errors.Is(err, github.ErrUnauthorized):
 		return newErr(KindInvalid, "auth.unauthorized", d, "account", acct.Name)
@@ -183,6 +184,8 @@ func githubErr(err error, acct config.Account, doing string) error {
 		return newErr(KindInvalid, "github.forbidden", d, "account", acct.Name)
 	case errors.Is(err, github.ErrNotFound):
 		return newErr(KindInvalid, "github.not_found", d, "account", acct.Name)
+	case errors.As(err, &rl):
+		return newErr(KindInvalid, "github.rate_limit", d, "account", acct.Name)
 	}
 	return d
 }

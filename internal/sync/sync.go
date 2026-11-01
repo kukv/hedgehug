@@ -846,6 +846,7 @@ func notify(s *store.Store, before plumbing.Hash, opt Options, res *Result) erro
 	now := opt.Now()
 	for _, x := range res.Repaired {
 		if x.Kind == "prefix_duplicate" || x.Kind == "name_duplicate" {
+			// Account IDs are compared without case (spec: 共通の決まり, 大文字小文字); sync does not import config, so strings.EqualFold, like config.SameAccount.
 			if it, ok := inbox.Notice(x.ULID, x.Kind, x.Value, x.Author, head.String(), now); ok && slices.ContainsFunc(opt.Me, func(m string) bool { return strings.EqualFold(m, x.Author) }) {
 				items = append(items, it)
 			}

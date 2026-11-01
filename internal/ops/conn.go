@@ -97,7 +97,9 @@ func hostOf(u string) (string, bool) {
 // url_rewrites, and with the token of its account over http and https, when
 // the host reached (after the rewrite) is the host of the account. A store
 // with no account, an account with no token, another host, and an ssh or
-// local remote get no auth from here (ssh falls to go-git's ssh-agent).
+// local remote get no auth from here. An ssh remote relies on go-git's
+// default: ssh-agent for the auth and known_hosts for the host key (spec: git
+// の通信).
 func (ss *Session) Conn(c *config.Config, e config.StoreEntry) gitrepo.Conn {
 	acct, ok := c.Writer(e)
 	return gitrepo.Conn{

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
@@ -277,7 +278,7 @@ func (ss *Session) Watch(arg string, on bool) (TaskResult, error) {
 		if on {
 			AddWatchers(t, acct.ID())
 		} else {
-			t.Watchers = slices.DeleteFunc(t.Watchers, func(w string) bool { return strings.EqualFold(w, acct.ID()) })
+			t.Watchers = slices.DeleteFunc(t.Watchers, func(w string) bool { return config.SameAccount(w, acct.ID()) })
 		}
 		return tx.PutTask(t)
 	})
@@ -291,7 +292,7 @@ func (ss *Session) Watch(arg string, on bool) (TaskResult, error) {
 // at the end. Accounts compare without case.
 func AddWatchers(t *model.Task, accts ...string) {
 	for _, acct := range accts {
-		if !slices.ContainsFunc(t.Watchers, func(w string) bool { return strings.EqualFold(w, acct) }) {
+		if !slices.ContainsFunc(t.Watchers, func(w string) bool { return config.SameAccount(w, acct) }) {
 			t.Watchers = append(t.Watchers, acct)
 		}
 	}
@@ -318,7 +319,7 @@ func NewMentions(old, now, writerHost string) []string {
 	was := mentionedAccounts(old, writerHost)
 	var out []string
 	for _, m := range mentionedAccounts(now, writerHost) {
-		if !slices.ContainsFunc(was, func(w string) bool { return strings.EqualFold(w, m) }) {
+		if !slices.ContainsFunc(was, func(w string) bool { return config.SameAccount(w, m) }) {
 			out = append(out, m)
 		}
 	}
@@ -339,7 +340,7 @@ func (ss *Session) WriterHost() (string, error) {
 // did not in before.
 func watchNewAssignees(t *model.Task, before []string) {
 	for _, as := range t.Assignees {
-		if !slices.ContainsFunc(before, func(b string) bool { return strings.EqualFold(b, as) }) {
+		if !slices.ContainsFunc(before, func(b string) bool { return config.SameAccount(b, as) }) {
 			AddWatchers(t, as)
 		}
 	}

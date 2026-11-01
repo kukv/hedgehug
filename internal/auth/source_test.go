@@ -137,4 +137,7 @@ func TestClientID(t *testing.T) {
 	if got := ClientID(config.Host{Host: "github.com"}); got != "Iv23builtin" {
 		t.Errorf("github.com = %q", got)
 	}
+	if got := ClientID(config.Host{Host: "GitHub.com"}); got != "Iv23builtin" {
+		t.Errorf("GitHub.com (case) = %q", got)
+	}
 }

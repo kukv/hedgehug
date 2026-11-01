@@ -85,6 +85,7 @@ func UpdateAuthors(s *store.Store) error {
 	}
 	for _, e := range es {
 		id, ok := e.Trailer("Hedgehug-Author")
+		// Account IDs are compared without case (spec: 共通の決まり, 大文字小文字); sync does not import config, so strings.EqualFold, like config.SameAccount.
 		if ok && !slices.ContainsFunc(m.Authors, func(a string) bool { return strings.EqualFold(a, id) }) {
 			m.Authors = append(m.Authors, id)
 		}

@@ -33,7 +33,7 @@ func ClientID(h config.Host) string {
 	if h.ClientID != "" {
 		return h.ClientID
 	}
-	if h.Host == "github.com" {
+	if config.SameHost(h.Host, "github.com") {
 		return builtinClientID
 	}
 	return ""

@@ -55,7 +55,8 @@ type Client struct {
 	hc         *http.Client
 }
 
-// defaultHTTP is hc, or a client with a 30-second timeout when hc is nil, in
+// defaultHTTP is hc, or a client with a 30-second timeout when hc is nil (a
+// copy of hc with no timeout of its own gets the 30 seconds too), in
 // either case refusing a redirect to another origin than the request's:
 // the token must not follow it. hc is copied, not changed; a policy it has
 // of its own is applied after this one.
@@ -65,6 +66,9 @@ func defaultHTTP(hc *http.Client) *http.Client {
 		c.Timeout = 30 * time.Second
 	} else {
 		c = *hc
+		if c.Timeout == 0 {
+			c.Timeout = 30 * time.Second
+		}
 	}
 	own := c.CheckRedirect
 	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
