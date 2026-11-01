@@ -20,6 +20,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	hhsync "github.com/kukv/hedgehug/internal/sync"
+	"github.com/kukv/hedgehug/internal/testenv"
 )
 
 // testEnv runs the command with HEDGEHUG_HOME and HOME in temporary
@@ -215,6 +216,13 @@ func TestMain(m *testing.M) {
 	if script := os.Getenv("HH_TEST_EDITOR_SCRIPT"); script != "" {
 		os.Exit(testEditor(script, os.Args[len(os.Args)-1]))
 	}
+	// Everything the tests make, the binaries buildHedgehug and buildDevenv
+	// make included, goes in a directory of this process that cleanup removes.
+	cleanup, err := testenv.Setup()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "testenv:", err)
+		os.Exit(1)
+	}
 	// No test reaches the keychain of the machine.
 	keyring.MockInit()
 	// A program built with -race sleeps a second when it exits, by default,
@@ -232,15 +240,7 @@ func TestMain(m *testing.M) {
 		}
 	}
 	code := m.Run()
-	if pathDir != "" {
-		_ = os.RemoveAll(pathDir)
-	}
-	if builtDir != "" {
-		_ = os.RemoveAll(builtDir)
-	}
-	if devenvDir != "" {
-		_ = os.RemoveAll(devenvDir)
-	}
+	cleanup()
 	os.Exit(code)
 }
 

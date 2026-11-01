@@ -15,7 +15,7 @@ import (
 
 var (
 	devenvOnce sync.Once
-	devenvDir  string // the directory of the binary buildDevenv made; TestMain removes it
+	devenvDir  string // the directory of the binary buildDevenv made; the directory of testenv holds it
 	devenvBin  string
 	devenvErr  error
 )
