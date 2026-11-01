@@ -103,7 +103,7 @@ func run(args []string, e *env) int {
 	}
 	writeErr(e.stderr, err)
 	var ue usageError
-	if errors.As(err, &ue) || ops.KindOf(err) == ops.KindUsage || strings.HasPrefix(err.Error(), "unknown command") {
+	if errors.As(err, &ue) || ops.KindOf(err) == ops.KindUsage || ops.KindOf(err) == ops.KindAmbiguous || strings.HasPrefix(err.Error(), "unknown command") {
 		return 2
 	}
 	return 1

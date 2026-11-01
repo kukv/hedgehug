@@ -15,6 +15,7 @@ import (
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/mount"
 	"github.com/kukv/hedgehug/internal/query"
 	"github.com/kukv/hedgehug/internal/store"
 	"github.com/kukv/hedgehug/internal/sync"
@@ -57,6 +58,17 @@ type Session struct {
 	// the tokens got, shared with the sessions ForStore makes
 	tokMu  gosync.Mutex
 	tokens *tokenCache
+
+	// the stores mounted, shared with the sessions ForStore makes
+	mountMu gosync.Mutex
+	mounts  *mountCache
+}
+
+// mountCache is the set of mounted stores, opened once for all the sessions
+// of one caller. A failure is not kept, so the next call opens again.
+type mountCache struct {
+	mu  gosync.Mutex
+	set *mount.Set
 }
 
 // ForStore is a session of its own on the store name, with the same outside
@@ -75,7 +87,47 @@ func (ss *Session) ForStore(name string) *Session {
 		HTTPClient:   ss.HTTPClient,
 		Run:          ss.Run,
 		tokens:       ss.tokenCache(),
+		mounts:       ss.mountCache(),
 	}
+}
+
+// mountCache is the cache of ss, made on first use.
+func (ss *Session) mountCache() *mountCache {
+	ss.mountMu.Lock()
+	defer ss.mountMu.Unlock()
+	if ss.mounts == nil {
+		ss.mounts = &mountCache{}
+	}
+	return ss.mounts
+}
+
+// Mount is the stores config.yaml lists, opened once per caller. A store
+// that does not open is in Skipped, and the first call warns of each.
+func (ss *Session) Mount() (*mount.Set, error) {
+	mc := ss.mountCache()
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	if mc.set != nil {
+		return mc.set, nil
+	}
+	c, _, err := ss.Config()
+	if err != nil {
+		return nil, err
+	}
+	set, err := mount.Open(c, mount.Options{Now: ss.Now})
+	if err != nil {
+		return nil, err
+	}
+	for _, sk := range set.Skipped {
+		ss.warn(openError(sk.Name, sk.Err).Error())
+	}
+	mc.set = set
+	return set, nil
+}
+
+// openError is the error of a store that does not open.
+func openError(name string, err error) *Error {
+	return newErr(KindInvalid, "store.open", fmt.Errorf("cannot open %s: %w", name, err), "name", name)
 }
 
 // location is where a date without a zone is read.
@@ -134,7 +186,11 @@ func (ss *Session) OpenStore() (*store.Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ss.openStoreAt(e.Path)
+	s, err := ss.openStoreAt(e.Path)
+	if err != nil {
+		return nil, openError(e.Name, err)
+	}
+	return s, nil
 }
 
 // openStoreAt opens the store in dir with the clock of the session, so that

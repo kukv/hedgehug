@@ -23,6 +23,7 @@ type Index struct {
 	tree  plumbing.Hash
 	sc    *schema.Schema // schema.yaml as tree has it
 	tasks map[model.ULID]*Entry
+	name  string // the store's name, set by SetStoreName; Refresh keeps it
 
 	// Read from the tree each time it changes; the cache does not hold them.
 	workspaces map[model.ULID]*model.Workspace
@@ -65,6 +66,12 @@ func Open(s *store.Store) (*Index, error) {
 	s.SetSiblings(ix.siblingULIDs)
 	return ix, nil
 }
+
+// SetStoreName gives the index the name of its store in config.yaml.
+func (ix *Index) SetStoreName(name string) { ix.name = name }
+
+// StoreName is the name SetStoreName gave, "" if none.
+func (ix *Index) StoreName() string { return ix.name }
 
 // Refresh brings the index to the tree of HEAD when HEAD has moved, as after
 // a write or a sync. After an error, Open the index again.
