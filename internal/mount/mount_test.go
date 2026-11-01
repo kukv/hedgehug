@@ -9,6 +9,7 @@ import (
 	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/sync"
 )
 
 func TestOpenKeepsConfigOrderAndULIDs(t *testing.T) {
@@ -122,5 +123,23 @@ func TestSplitStore(t *testing.T) {
 		if _, _, ok := set.SplitStore(in); ok {
 			t.Errorf("SplitStore(%q) ok", in)
 		}
+	}
+}
+
+func TestBrokenAccessIsZeroAndNotSkipped(t *testing.T) {
+	e := newStoreAt(t, "me", "ME")
+	dir := filepath.Join(e.Path, filepath.FromSlash(store.LocalDir))
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "access.json"), []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	set := openSet(t, e)
+	if len(set.Skipped) != 0 || len(set.Stores) != 1 {
+		t.Fatalf("stores %d, skipped %v", len(set.Stores), set.Skipped)
+	}
+	if set.Stores[0].Access != (sync.Access{}) {
+		t.Errorf("access = %+v", set.Stores[0].Access)
 	}
 }

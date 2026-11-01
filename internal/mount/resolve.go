@@ -46,15 +46,22 @@ func (e *AmbiguousError) Error() string {
 // matches more than one task within one store is that index's
 // *index.AmbiguousError, as now.
 func (s *Set) Resolve(arg string) (Hit, error) {
-	stores, in := s.Stores, arg
+	stores, in, named := s.Stores, arg, false
 	if m, rest, ok := s.SplitStore(arg); ok {
-		stores, in = []*Mounted{m}, rest
+		stores, in, named = []*Mounted{m}, rest, true
 	}
 	var hits []Hit
 	for _, m := range stores {
 		ix, err := m.Index()
 		if err != nil {
-			return Hit{}, fmt.Errorf("%s: %w", m.Name, err)
+			if named {
+				return Hit{}, fmt.Errorf("cannot open %s: %w", m.Name, err)
+			}
+			// treated like a store that did not open: warn, look in the others
+			if s.warn != nil {
+				s.warn(fmt.Sprintf("cannot open %s: %v", m.Name, err))
+			}
+			continue
 		}
 		ulid, err := ix.Resolve(in)
 		if errors.Is(err, store.ErrNotFound) {
@@ -63,9 +70,11 @@ func (s *Set) Resolve(arg string) (Hit, error) {
 		if err != nil {
 			return Hit{}, err
 		}
-		if e, ok := ix.Task(ulid); ok {
-			hits = append(hits, Hit{Store: m, Entry: e})
+		e, ok := ix.Task(ulid)
+		if !ok {
+			return Hit{}, fmt.Errorf("%s: the index resolved %s but has no such task", m.Name, ulid)
 		}
+		hits = append(hits, Hit{Store: m, Entry: e})
 	}
 	switch len(hits) {
 	case 0:

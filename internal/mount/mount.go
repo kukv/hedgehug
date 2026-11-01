@@ -55,18 +55,23 @@ type Skipped struct {
 type Set struct {
 	Stores  []*Mounted
 	Skipped []Skipped
+
+	warn func(string) // Options.Warn
 }
 
 // Options is how Open opens a store.
 type Options struct {
 	Now func() time.Time // given to store.SetNow; nil keeps the store's clock
+	// Warn gets the warning of a store whose index does not open while Resolve
+	// looks in every store; nil drops it.
+	Warn func(msg string)
 }
 
 // Open opens every store of c.Stores in order. A store that does not open
 // goes to Skipped with why; Open itself fails only for what is not about
 // one store.
 func Open(c *config.Config, opt Options) (*Set, error) {
-	set := &Set{}
+	set := &Set{warn: opt.Warn}
 	for _, e := range c.Stores {
 		s, err := store.Open(e.Path)
 		if err != nil {

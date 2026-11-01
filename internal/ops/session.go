@@ -114,7 +114,7 @@ func (ss *Session) Mount() (*mount.Set, error) {
 	if err != nil {
 		return nil, err
 	}
-	set, err := mount.Open(c, mount.Options{Now: ss.Now})
+	set, err := mount.Open(c, mount.Options{Now: ss.Now, Warn: ss.warn})
 	if err != nil {
 		return nil, err
 	}

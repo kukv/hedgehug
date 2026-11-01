@@ -2,6 +2,8 @@ package mount
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -100,5 +102,53 @@ func TestResolveAmbiguousInsideOneStore(t *testing.T) {
 		if !errors.As(err, &ie) || len(ie.Candidates) != 2 {
 			t.Errorf("Resolve(%q) err = %v, want index.AmbiguousError", in, err)
 		}
+	}
+}
+
+// breakIndex makes the index of m fail to open: the repository goes away
+// after the store was opened.
+func breakIndex(t *testing.T, m *Mounted) {
+	t.Helper()
+	if err := os.RemoveAll(filepath.Join(m.Entry.Path, ".git")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Index(); err == nil {
+		t.Fatal("the index of the broken store opens")
+	}
+}
+
+func TestResolveSkipsAStoreWhoseIndexDoesNotOpen(t *testing.T) {
+	a, b := newStoreAt(t, "org-a", "API"), newStoreAt(t, "org-b", "WEB")
+	tb := putTasks(t, b, 1, nil)[0]
+	var warns []string
+	set, err := Open(&config.Config{Stores: []config.StoreEntry{a, b}}, Options{Warn: func(m string) { warns = append(warns, m) }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	breakIndex(t, set.Stores[0])
+	hit, err := set.Resolve(tb.ULID.String())
+	if err != nil || hit.Store.Name != "org-b" {
+		t.Fatalf("Resolve = %v %v", hit, err)
+	}
+	if len(warns) != 1 || !strings.HasPrefix(warns[0], "cannot open org-a: ") {
+		t.Errorf("warnings = %q", warns)
+	}
+}
+
+func TestResolveNamedStoreWhoseIndexDoesNotOpenIsAnError(t *testing.T) {
+	a, b := newStoreAt(t, "org-a", "API"), newStoreAt(t, "org-b", "WEB")
+	putTasks(t, a, 1, nil)
+	var warns []string
+	set, err := Open(&config.Config{Stores: []config.StoreEntry{a, b}}, Options{Warn: func(m string) { warns = append(warns, m) }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	breakIndex(t, set.Stores[0])
+	_, err = set.Resolve("org-a:API-1")
+	if err == nil || !strings.HasPrefix(err.Error(), "cannot open org-a: ") || errors.Is(err, store.ErrNotFound) {
+		t.Errorf("err = %v", err)
+	}
+	if len(warns) != 0 {
+		t.Errorf("warnings = %q", warns)
 	}
 }

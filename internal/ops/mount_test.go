@@ -71,3 +71,28 @@ func TestMountWarnsOnceAndOpensOnce(t *testing.T) {
 		t.Errorf("warnings = %q", ts.warns)
 	}
 }
+
+func TestNoStoreNameWarnsOnceAndUsesTheOthers(t *testing.T) {
+	ts := newTestSession(t)
+	task := ts.addTask("a", nil)
+	addMissingStore(t, ts)
+	ts.warns = nil
+	ts.StoreName = ""
+	set, err := ts.Mount()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.Mount(); err != nil {
+		t.Fatal(err)
+	}
+	if len(ts.warns) != 1 || !strings.HasPrefix(ts.warns[0], "cannot open org-b: ") {
+		t.Errorf("warnings = %q", ts.warns)
+	}
+	hit, err := set.Resolve(task.ID)
+	if err != nil || hit.Store.Name != "me" {
+		t.Errorf("Resolve(%s) = %v %v", task.ID, hit, err)
+	}
+	if _, ok := set.Get("org-b"); ok {
+		t.Error("org-b is mounted")
+	}
+}
