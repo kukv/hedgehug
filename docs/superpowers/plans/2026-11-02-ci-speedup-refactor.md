@@ -13,7 +13,8 @@
 ## Global Constraints
 
 - **ローカルでテストを回さない。** 確かめてよいのは `go build ./...`・`go vet ./...`・`golangci-lint run ./...`・`golangci-lint fmt --diff ./...` と、Task 4 の `go test -count=1 ./internal/testenv/` だけ。それ以外のテストは CI で確かめる（利用者の指示。Windows 側のストレージに響くため）
-- `go vet` などを回すときは `TMPDIR` を作業領域に向ける: `TMPDIR=/tmp/claude-1000/-home-tech-dev-ghq-github-com-kukv-hedgehug/bfc452a6-062f-4599-8c05-3781a522581f/scratchpad/tmp`（無ければ作る）
+- Task 4 の `go test` だけは `TMPDIR` を worktree の中の `.tmp/`（gitignore 済み）に向ける: `mkdir -p .tmp && TMPDIR="$PWD/.tmp" go test -count=1 ./internal/testenv/`
+- この worktree の Bash は、git を呼ぶかどうか判定できないコマンドを拒む。コマンドは1行ずつの単純な形にし、`gh`・`sed` などの引数を変数や `$(...)` で組み立てない。パスに `github` を含む値を変数に入れて使わない。ファイルの編集は Edit・Write で行う
 - Bash の timeout は 600000
 - コードのコメントは英語（既存の流儀）。直列のテストの理由のコメントだけは既存の流儀どおり日本語の `// 直列: …`（例: `internal/store/move_test.go:533`）
 - コミットのメッセージは `feat:`/`fix:`/`docs:`/`refactor:`/`test:`/`chore:`/`ci:` の接頭辞と日本語の要約。末尾に `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`
@@ -105,14 +106,13 @@ Expected: `-trimpath`。空なら、このシェルで mise の環境が読ま�
 キャッシュの共有は、リポジトリの複製で同じパッケージの export data のパスを比べる（テストは回さない）:
 
 ```bash
-S=/tmp/claude-1000/-home-tech-dev-ghq-github-com-kukv-hedgehug/bfc452a6-062f-4599-8c05-3781a522581f/scratchpad
-rm -rf "$S/copy" && mkdir -p "$S/copy" && cp -r go.mod go.sum internal "$S/copy/"
-a=$(go list -export -f '{{.Export}}' ./internal/model)
-b=$(cd "$S/copy" && go list -export -f '{{.Export}}' ./internal/model)
-test "$a" = "$b" && echo shared
-rm -rf "$S/copy"
+mkdir -p .tmp/copy
+cp -r go.mod go.sum internal .tmp/copy/
+go list -export -f '{{.Export}}' ./internal/model
+go -C .tmp/copy list -export -f '{{.Export}}' ./internal/model
+rm -rf .tmp/copy
 ```
-Expected: `shared`（-trimpath なしなら別のパスになる）
+Expected: 3行目と4行目が同じパス（-trimpath なしなら別のパスになる）。`.tmp/copy` は自分の go.mod を持つので、元のモジュールの `./...` には入らない
 
 - [ ] **Step 5: Commit**
 
@@ -415,7 +415,7 @@ gh pr create --draft --title "CI の短縮とローカルのゴミの削減" --b
 - Modify: `cmd/hedgehug/editor.go:12-18`、`cmd/hedgehug/main.go:49-55`、`cmd/hedgehug/main_test.go:15`（コメント）
 - Modify: `tools/devenv/main.go:306`
 - Modify: テストの `runtime.GOOS == "windows"` の分岐と `USERPROFILE`（下の一覧）
-- Modify: `.goreleaser.yaml`、`Makefile`（release-check）、`README.md`、`README.ja.md`、`CONTRIBUTING.md`
+- Modify: `.goreleaser.yaml`、`Makefile`（release-check）、`README.md`、`README.ja.md`、`CONTRIBUTING.md`、`.github/ISSUE_TEMPLATE/bug_report.yaml`、`.github/ISSUE_TEMPLATE/feature_request.yaml`
 
 **Interfaces:**
 - Produces: なし（Windows では `go build` が通らなくなる）
@@ -551,10 +551,13 @@ not shrink when files are deleted; run `wsl --manage <distro> --set-sparse true`
 Windows side so that the space of deleted files goes back to the drive.
 ```
 
+`.github/ISSUE_TEMPLATE/bug_report.yaml:30`: OS の選択肢から `- Windows` を消し、`- Windows (WSL)` を足す（WSL で使う人が OS を選べるように）。
+
+`.github/ISSUE_TEMPLATE/feature_request.yaml:9-10`: `It ships for Linux and macOS (on Windows, it runs in WSL), so a` / `proposal has to work on both.` にする。
+
 - [ ] **Step 6: ビルドと検査**
 
 ```bash
-mkdir -p "$TMPDIR"
 go build ./... && go vet ./... && GOOS=darwin GOARCH=arm64 go vet ./... && golangci-lint run ./... && golangci-lint fmt --diff ./...
 go mod tidy && git diff --exit-code -- go.mod go.sum
 goreleaser check
@@ -613,8 +616,12 @@ func TestMain(m *testing.M) {
 			os.Exit(2)
 		}
 		dir := os.Getenv("TMPDIR")
-		// A file that only the owner may write, as some tests leave.
-		_ = os.Mkdir(filepath.Join(dir, "ro"), 0o500)
+		// A read-only directory with a file in it, as some tests leave: the
+		// file cannot be removed until the directory is writable again.
+		ro := filepath.Join(dir, "ro")
+		if os.Mkdir(ro, 0o700) != nil || os.WriteFile(filepath.Join(ro, "f"), nil, 0o600) != nil || os.Chmod(ro, 0o500) != nil {
+			os.Exit(2)
+		}
 		os.Stdout.WriteString(dir + "\n")
 		time.Sleep(time.Hour)
 	}
@@ -686,7 +693,7 @@ func TestWaitFor(t *testing.T) {
 - [ ] **Step 2: 失敗を確かめる**
 
 ```bash
-mkdir -p "$TMPDIR" && go test -count=1 ./internal/testenv/
+mkdir -p .tmp && TMPDIR="$PWD/.tmp" go test -count=1 ./internal/testenv/
 ```
 Expected: コンパイルエラー（`Setup`・`Main`・`Sweep`・`WaitFor`・`prefix` が無い）
 
@@ -784,7 +791,9 @@ func removeAll(dir string) {
 		return
 	}
 	_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
-		if err == nil && d.IsDir() {
+		// A directory that could not be read comes with err set; it is the
+		// one to make writable.
+		if d != nil && d.IsDir() {
 			_ = os.Chmod(p, 0o700) //nolint:gosec // G302: a directory of the tests, about to be removed
 		}
 		return nil
@@ -809,10 +818,11 @@ func WaitFor(t testing.TB, what string, cond func() bool) {
 - [ ] **Step 4: テストが通ることを確かめる**
 
 ```bash
-go test -count=1 ./internal/testenv/
-ls "$TMPDIR" | grep -c hedgehug-test- || true
+TMPDIR="$PWD/.tmp" go test -count=1 ./internal/testenv/
+ls -A .tmp
+rm -rf .tmp
 ```
-Expected: PASS。2行目は `0`（テストのディレクトリが残っていない）
+Expected: PASS。`ls -A .tmp` は何も出さない（テストのディレクトリも、止めた子のディレクトリも残っていない）。テストはこの1回だけ回す。失敗したら、回し直す前にコードを読んで原因を確かめる
 
 - [ ] **Step 5: 各パッケージの TestMain から呼ぶ**
 
@@ -1012,11 +1022,11 @@ func (s *Store) lockStore() (*fileLock, error) {
 
 `internal/gitrepo/lock.go:17`: `const indexLockPoll = 100 * time.Millisecond` を `var indexLockPoll = 100 * time.Millisecond` にする。
 
-`internal/server/poll.go`: `Poller` に `interval time.Duration // how long Run waits between looks; pollInterval` を足し、Poller を作る所（`newPoller` など、`&Poller{` を grep）で `interval: pollInterval` を入れ、`Run` の `time.NewTimer(pollInterval)` を `time.NewTimer(p.interval)` にする。
+`internal/server/poll.go`: `Poller` に `interval time.Duration // how long Run waits between looks; pollInterval` を足し、`internal/server/poll.go:80` の `&Poller{…}` に `interval: pollInterval` を足し、`Run` の `time.NewTimer(pollInterval)` を `time.NewTimer(p.interval)` にする。
 
 - [ ] **Step 2: パッケージのテストで待ちの間隔を縮める**
 
-Task 4 で作った `testmain_test.go` の TestMain で、テストが始まる前に1回だけ設定する（並列のテストより前なので競合しない）:
+Task 4 で作った `testmain_test.go` の TestMain で、テストが始まる前に1回だけ設定する（並列のテストより前なので競合しない）。3つとも import に `"time"` を足す（`"testing"` と testenv はすでにある）:
 
 ```go
 // internal/store/testmain_test.go
@@ -1094,7 +1104,7 @@ func (c *fakeClock) afterCalls() int {
 - `:148` の `time.Sleep(100 * time.Millisecond)` は 30ms にする（Drain が待ち始めたことを知る合図がないため残す）
 - `TestDrainGivesUp` の `Drain(200 * time.Millisecond)` は `Drain(20 * time.Millisecond)` にする（上限の `2*time.Second` の確かめはそのまま）
 
-実装の前に、`loop` の `parked`・`active`・`mu` の名前と、`step` が `After` を呼ぶ位置を `internal/server/loop.go` で確かめる。違えば合わせる。
+（`Loop` の `parked()`・`active`・`mu` は `internal/server/loop.go:32-37,371` にある。`Run` は `step()` が返ってから `l.clock.After(wait)` を呼ぶ（`loop.go:65-66`）ので、`After` の呼び出しが増えたら、その周の判断は終わっている。）
 
 - [ ] **Step 5: store・gitrepo・auth・inbox・sync のテスト**
 
@@ -1138,7 +1148,7 @@ func (c *fakeClock) afterCalls() int {
 	before := box.Stamp()
 ```
 
-実装の前に、`itemsFile`・`readFile`・`markFile`・`LocalPath`・`Stamp` の名前を `internal/inbox` で確かめる。違えば合わせる。
+（`itemsFile`・`readFile`・`markFile` は `internal/inbox/inbox.go:72-74`、`Stamp` は `inbox.go:90` にあり、`Stamp` は `b.s.LocalPath(name)` の大きさと mtime を見る。）
 
 `forward_test.go:170` のループ（2つ目の move-out を1秒後の時刻にする）:
 
@@ -1239,10 +1249,10 @@ lint の `--verbose` の出力から、時間のかかっている段（パッ�
 PR の CI がすべて緑になったら、利用者に ruleset の変更の承認を求める。承認されたら:
 
 ```bash
-S=/tmp/claude-1000/-home-tech-dev-ghq-github-com-kukv-hedgehug/bfc452a6-062f-4599-8c05-3781a522581f/scratchpad
-gh api repos/kukv/hedgehug/rulesets/26175024 > "$S/ruleset.json"
-jq '{name, target, enforcement, conditions, bypass_actors, rules: [.rules[] | if .type == "required_status_checks" then .parameters.required_status_checks |= ([.[] | select(.context | startswith("test (") | not)] + [{context: "test"}]) else . end]}' "$S/ruleset.json" > "$S/ruleset-new.json"
-gh api -X PUT repos/kukv/hedgehug/rulesets/26175024 --input "$S/ruleset-new.json" --jq '.rules[] | select(.type=="required_status_checks") | .parameters.required_status_checks[].context'
+mkdir -p .tmp
+gh api repos/kukv/hedgehug/rulesets/26175024 > .tmp/ruleset.json
+jq '{name, target, enforcement, conditions, bypass_actors: (.bypass_actors // []), rules: [.rules[] | if .type == "required_status_checks" then .parameters.required_status_checks |= ([.[] | select(.context | startswith("test (") | not)] + [{context: "test"}]) else . end]}' .tmp/ruleset.json > .tmp/ruleset-new.json
+gh api -X PUT repos/kukv/hedgehug/rulesets/26175024 --input .tmp/ruleset-new.json --jq '.rules[] | select(.type=="required_status_checks") | .parameters.required_status_checks[].context'
 ```
 Expected: `test (…)` の3つが消え、`test` が入っている
 
@@ -1266,7 +1276,7 @@ Expected: `test (…)` の3つが消え、`test` が入っている
 説明に入れるもの: 目的、利用者の決定、変更の一覧（Task 1〜6）、CI の前後の時間（main の 41355134695 と、この PR の最後の CI のジョブごとの時間）、テストの件数（前: 2110。消したテスト: TestRetryRename、TestLocalPath、paths_test の Windows の行、conn_test の Windows のパス）、ローカルの容量の対策（`-trimpath`・`make clean-cache`・`testenv`・`wsl --set-sparse`）、残した待ちとその理由。
 
 ```bash
-gh pr edit --body-file "$S/pr-body.md"
+gh pr edit --body-file .tmp/pr-body.md
 gh pr ready
 ```
 
