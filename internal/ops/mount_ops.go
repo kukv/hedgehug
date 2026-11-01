@@ -101,12 +101,20 @@ func (ss *Session) mountResolveError(set *mount.Set, arg string, err error) erro
 // movedErr is the error of an input that names a task that moved to another
 // store.
 func movedErr(mv *mount.MovedError) error {
-	to := ""
+	args := []any{"input", mv.Input, "store_ulid", mv.Forward.MovedTo.String()}
 	if mv.To != nil {
-		to = mv.To.Name
+		args = append(args, "store", mv.To.Name)
 	}
-	return newErr(KindNotFound, "task.moved", mv, "input", mv.Input, "store", to,
-		"store_ulid", mv.Forward.MovedTo.String(), "id", mv.NowID())
+	if id := mv.NowID(); id != "" {
+		args = append(args, "id", id)
+	}
+	return newErr(KindNotFound, "task.moved", mv, args...)
+}
+
+// movedUnknownErr is task.moved for a forward that the index cannot name:
+// only the task is known, so the keys of the destination are left out.
+func movedUnknownErr(ulid model.ULID) error {
+	return newErr(KindNotFound, "task.moved", fmt.Errorf("%s moved to another store", ulid), "input", ulid.String())
 }
 
 // movedFor is the task.moved error of arg when a forward in the store of ix

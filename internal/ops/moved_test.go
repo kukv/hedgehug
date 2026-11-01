@@ -111,7 +111,7 @@ func TestShowAMovedTaskOfAStoreNotMounted(t *testing.T) {
 	ts.dropMount()
 	_, err = ts.ForStore("org-a").Show("API-1")
 	var oe *Error
-	if !errors.As(err, &oe) || oe.Code != "task.moved" || oe.Args["store"] != "" || oe.Args["id"] != "" || oe.Args["store_ulid"] == "" {
+	if !errors.As(err, &oe) || oe.Code != "task.moved" || hasKey(oe.Args, "store") || hasKey(oe.Args, "id") || oe.Args["store_ulid"] == nil {
 		t.Fatalf("Show = %v (%+v); want task.moved with no store", err, oe)
 	}
 	want := "API-1 moved to another store (ULID " + oe.Args["store_ulid"].(string) + "); mount that store to follow it"
@@ -196,4 +196,23 @@ func TestUseAMovedProject(t *testing.T) {
 	movedFixture(t, ts)
 	_, err := ts.ForStore("org-a").Use("API-1")
 	wantMoved(t, ts, err, map[string]any{"input": "API-1"})
+}
+
+func hasKey(m map[string]any, k string) bool { _, ok := m[k]; return ok }
+
+// A forward the index cannot name still gives task.moved, with the keys of
+// the destination left out.
+func TestMovedUnknownErr(t *testing.T) {
+	ulid := model.NewULID()
+	err := movedUnknownErr(ulid)
+	var oe *Error
+	if !errors.As(err, &oe) || oe.Kind != KindNotFound || oe.Code != "task.moved" {
+		t.Fatalf("err = %v; want KindNotFound task.moved", err)
+	}
+	if oe.Args["input"] != ulid.String() || len(oe.Args) != 1 {
+		t.Errorf("Args = %v; want only input", oe.Args)
+	}
+	if want := ulid.String() + " moved to another store"; err.Error() != want {
+		t.Errorf("message = %q; want %q", err, want)
+	}
 }
