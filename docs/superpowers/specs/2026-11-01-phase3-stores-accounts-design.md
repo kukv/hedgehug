@@ -542,6 +542,7 @@ moved_to: 01JC0STORE...      # 移動先の Store の ULID（store.yaml の ulid
 同期の fetch で、origin の新しい先頭が、手元で追っている origin（`refs/remotes/origin/main` の fetch 前の値）の子孫でないとき:
 
 - 新しい先頭の `rewrites.yaml` に、まだ取り込んでいない記録（`.hedgehug/local/rewrites-applied.json` にない `at`）があり、その `before` が、手元で追っている origin と同じか、その子孫なら、作り直しに進む。
+- `before` のコミットが手元にない（最後の同期の後に誰かが push してから書き換えた）ときは、新しい先頭の履歴に、手元で追っている origin を書き換えたコミット（author・committer とそれぞれの時刻が同じもの。書き換えはこれを保つ）があれば、作り直しに進む（利用者の決定。2026-11-01）。
 - そうでなければ、予期しない force push として同期を止める。手元は何も変えない。エラーは `origin の履歴が書き換えられましたが、Hedgehug の記録がありません。hh doctor で確かめてください`。doctor の検査 `unexpected_force_push`（エラー）が同じ状態を出す。
 
 ### 作り直しと未 push の変更の取り込み

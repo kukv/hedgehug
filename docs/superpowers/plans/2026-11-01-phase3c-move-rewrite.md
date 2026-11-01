@@ -68,6 +68,7 @@
 | D29 | `purge --rewrite-history` の再開 | 5 の直前に `.hedgehug/local/rewrite-in-progress.json`（`{before, ulids, at}` と済んだ段）を書き（5 のコミットの後に落ちても再開できるように）、8 の origin への push が通ったら消す。このファイルがあるときに実行したら 1〜6 を飛ばし（書き換えた HEAD は origin の子孫でないので、3 の同期と未 push の検査はできない）、HEAD に `rewrites.yaml` の記録（`at` が同じ）があれば 7 も飛ばして 8 へ進む。5〜8 は Store のロックと `sync.lock` を持ったまま行い、このファイルがある間は同期（`RunSync`）を拒む（`KindConflict`、`rewrite.in_progress`、`a history rewrite of org-a is unfinished; run hedgehug purge --rewrite-history again`） |
 | D31 | undo と Store 間の移動（利用者の決定。2026-11-01） | 自分の最後の操作が `move-in`・`move-out` なら undo せず、`KindConflict`、`undo.blocked`、`a move between stores cannot be undone; move it back with hedgehug mv --store`。`rewrite-history` なら `undo.blocked`、`a history rewrite cannot be undone`。undo の対象の操作が変えたタスクが、その後に転送ファイルになっていたら、何も変えずに `task.moved`（D4 の文面と Args） |
 | D32 | sprint・releases（利用者の決定。2026-11-01） | M のタスクの `sprint` と `releases` は移動先で外す。`store.Unlinks` が `Unlink{Task, Field: "sprint" か "releases", Target: <sprint・release の ULID>}` として返し、確認の一覧（`unlink: API-12 sprint <sprint の名前か ULID>`）と `Hedgehug-Unlinked` に出る。`links` はそのまま |
+| D33 | `before` が手元にないときの照合（利用者の決定。2026-11-01） | 新しい先頭から親をたどり、手元で追っている origin の先頭と author（名前・メール・時刻）と committer（名前・メール・時刻）がすべて同じコミットがあれば `Recorded`。なければ `Unexpected`。記録の形は変えない |
 | D30 | 新しい操作の名前の表示 | `log` とアクティビティは `Hedgehug-Op` の `move-in`・`move-out`・`purge-moved`・`rewrite-history`・`replay` をそのまま出す（今の操作と同じ扱い）。`ops/read.go` と `server/activity.go` が知らない操作名で落ちないことをテストで確かめる |
 
 ---
