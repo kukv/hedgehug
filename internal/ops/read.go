@@ -44,7 +44,7 @@ func (ss *Session) listSet() (*mount.Set, error) {
 			return nil, err
 		}
 	}
-	set, err := mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Warn: ss.warn})
+	set, err := mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Warn: ss.warn, Qualified: ss.qualified(c)})
 	if err != nil {
 		return nil, err
 	}
@@ -459,7 +459,7 @@ func SubjectNow(ix *index.Index, le gitrepo.LogEntry) string {
 		return le.Subject
 	}
 	_, title, _ := strings.Cut(rest, " ")
-	return strings.TrimRight(head+TaskLabel(e)+" "+title, " ")
+	return strings.TrimRight(head+TaskLabel(ix, e)+" "+title, " ")
 }
 
 // StoreLog is a commit with the store it is in. Index is that store's.

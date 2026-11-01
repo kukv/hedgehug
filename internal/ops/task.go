@@ -396,7 +396,7 @@ func WatchInTx(tx *store.Tx, task model.ULID, accts ...string) error {
 // to restore.
 func NotDeleted(ix *index.Index, e *index.Entry) error {
 	if e.DeletedAt != nil {
-		return newErr(KindConflict, "task.deleted", fmt.Errorf("%s is deleted; restore %s first", RefName(ix, e.ULID), TaskFileName(e)), "id", TaskFileName(e))
+		return newErr(KindConflict, "task.deleted", fmt.Errorf("%s is deleted; restore %s first", RefName(ix, e.ULID), idOrULIDShown(ix, e)), "id", TaskFileName(e))
 	}
 	return nil
 }

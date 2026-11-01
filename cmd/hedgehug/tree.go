@@ -114,7 +114,7 @@ func writeNode(b *strings.Builder, st style, ix *index.Index, n *ops.TreeNode, l
 // treeLine is one task of the tree: id and ULID, status, kind and title,
 // then the checklist and the progress of a project.
 func treeLine(st style, ix *index.Index, e *index.Entry, context bool) string {
-	r := taskRow(e)
+	r := taskRow(ix, e)
 	name := r[0] + " " + r[1]
 	line := name + "  " + r[2] + "  " + r[3] + "  " + r[6]
 	if p := ops.ProgressText(ops.ChecklistOf(e), ops.ProgressOf(ix, e)); p != "" {

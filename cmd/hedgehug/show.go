@@ -60,7 +60,7 @@ func (a *app) showText(storeName string, ix *index.Index, e *index.Entry, t *mod
 		}
 		return out
 	}
-	field("id", e.ID)
+	field("id", ix.DisplayID(e))
 	field("ulid", e.ULID.String())
 	field("store", storeName)
 	if !e.Workspace.IsZero() {
@@ -71,7 +71,11 @@ func (a *app) showText(storeName string, ix *index.Index, e *index.Entry, t *mod
 		field("workspace", ws)
 	}
 	if len(e.FormerIDs) > 0 {
-		field("former_ids", e.FormerIDs...)
+		former := make([]string, len(e.FormerIDs))
+		for i, id := range e.FormerIDs {
+			former[i] = ix.QualifyID(id)
+		}
+		field("former_ids", former...)
 	}
 	field("kind", e.Kind)
 	field("status", e.Status)

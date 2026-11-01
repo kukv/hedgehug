@@ -478,19 +478,19 @@ func TestLogViewsOfAndSubjectNow(t *testing.T) {
 	if v.Op == nil || *v.Op != "add" || v.Task == nil || *v.Task != e.ULID.String() || v.ID == nil || *v.ID != "ME-1" {
 		t.Errorf("view trailers = op %v task %v id %v", v.Op, v.Task, v.ID)
 	}
-	if got, want := SubjectNow(ix, entries[0]), "hedgehug: add "+TaskLabel(e)+" Alpha"; got != want {
+	if got, want := SubjectNow(ix, entries[0]), "hedgehug: add "+TaskLabel(ix, e)+" Alpha"; got != want {
 		t.Errorf("SubjectNow = %q; want %q", got, want)
 	}
 
 	// A subject written with an old label shows the label now.
 	old := entries[0]
 	old.Subject = "hedgehug: add OLD-7 Alpha"
-	if got, want := SubjectNow(ix, old), "hedgehug: add "+TaskLabel(e)+" Alpha"; got != want {
+	if got, want := SubjectNow(ix, old), "hedgehug: add "+TaskLabel(ix, e)+" Alpha"; got != want {
 		t.Errorf("SubjectNow(old label) = %q; want %q", got, want)
 	}
 	// No title: no trailing space.
 	old.Subject = "hedgehug: add OLD-7"
-	if got, want := SubjectNow(ix, old), "hedgehug: add "+TaskLabel(e); got != want {
+	if got, want := SubjectNow(ix, old), "hedgehug: add "+TaskLabel(ix, e); got != want {
 		t.Errorf("SubjectNow(no title) = %q; want %q", got, want)
 	}
 	// Left as they are: no trailers, another op, a task the index lacks, a bad ULID.

@@ -216,6 +216,14 @@ func findIn(m *mount.Mounted, arg string) (*index.Entry, bool) {
 	return e, err == nil && e != nil
 }
 
+// idOrULIDShown is the id of e as ix shows it, or its ULID when it has none.
+func idOrULIDShown(ix *index.Index, e *index.Entry) string {
+	if e.ID != "" {
+		return ix.DisplayID(e)
+	}
+	return e.ULID.String()
+}
+
 // idOrULID is the id of e, or its ULID when it has none.
 func idOrULID(e *index.Entry) string {
 	if e.ID != "" {

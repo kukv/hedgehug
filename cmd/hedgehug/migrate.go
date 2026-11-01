@@ -98,7 +98,7 @@ func (a *app) printMigrated(ix *index.Index, p *ops.MigrationPlan, dryRun bool) 
 	fmt.Fprintf(&b, "%s %s\n", heading, ops.TaskCount(len(changed)))
 	st := a.style()
 	for _, t := range changed {
-		fmt.Fprintf(&b, "  %s  %s\n", st.id(ops.TaskLabel(index.EntryOf(t))), t.Title)
+		fmt.Fprintf(&b, "  %s  %s\n", st.id(ops.TaskLabel(ix, index.EntryOf(t))), t.Title)
 	}
 	_, err := fmt.Fprint(a.stdout, b.String())
 	return err

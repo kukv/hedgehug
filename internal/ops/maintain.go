@@ -241,7 +241,7 @@ func (ss *Session) fixStore(c *config.Config, e config.StoreEntry, s *store.Stor
 		return nil, err
 	}
 	ss.markWritten(s)
-	ix, err := index.Open(s)
+	ix, err := ss.indexOf(c, e.Name, s)
 	if err != nil {
 		ix = nil // the ULIDs name what was repaired
 	}
@@ -268,6 +268,9 @@ func fixedContent(ix *index.Index, x merge.Repaired) string {
 	if x.Kind == "id_collision" {
 		var v struct{ Old, New string }
 		if json.Unmarshal([]byte(x.Value), &v) == nil && v.Old != "" && v.New != "" {
+			if ix != nil {
+				v.Old, v.New = ix.QualifyID(v.Old), ix.QualifyID(v.New)
+			}
 			return fmt.Sprintf("id_collision %s → %s", v.Old, v.New)
 		}
 	}

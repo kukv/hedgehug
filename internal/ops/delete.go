@@ -263,7 +263,7 @@ func current(ix *index.Index, e *index.Entry) (*index.Entry, error) {
 	}
 	cur, ok := ix.Task(e.ULID)
 	if !ok {
-		return nil, newErr(KindNotFound, "task.gone", fmt.Errorf("%s is no longer in the store", TaskLabel(e)), "id", TaskFileName(e))
+		return nil, newErr(KindNotFound, "task.gone", fmt.Errorf("%s is no longer in the store", TaskLabel(ix, e)), "id", TaskFileName(e))
 	}
 	return cur, nil
 }
@@ -418,7 +418,7 @@ func (ss *Session) RestoreAt(arg, at string) (RestoreAtResult, error) {
 		}
 		data, err := s.Repo().ReadAt(commit, model.TaskPath(e.ULID))
 		if errors.Is(err, fs.ErrNotExist) {
-			return newErr(KindNotFound, "restore_at.not_found", fmt.Errorf("%s did not exist at %s", cmp.Or(e.ID, e.ULID.String()), at), "at", at)
+			return newErr(KindNotFound, "restore_at.not_found", fmt.Errorf("%s did not exist at %s", cmp.Or(ix.DisplayID(e), e.ULID.String()), at), "at", at)
 		}
 		if err != nil {
 			return err
@@ -441,7 +441,7 @@ func (ss *Session) RestoreAt(arg, at string) (RestoreAtResult, error) {
 		old.ID, old.FormerIDs = cur.ID, cur.FormerIDs
 		if old.Workspace != cur.Workspace {
 			note = fmt.Sprintf("the workspace stays %s; move it with hedgehug mv %s --workspace %s",
-				workspaceName(ix, cur.Workspace), cur.ID, workspaceName(ix, old.Workspace))
+				workspaceName(ix, cur.Workspace), ix.QualifyID(cur.ID), workspaceName(ix, old.Workspace))
 			old.Workspace = cur.Workspace
 		}
 		return tx.PutTask(old)

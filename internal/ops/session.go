@@ -69,6 +69,11 @@ type Session struct {
 type mountCache struct {
 	mu  gosync.Mutex
 	set *mount.Set
+	// the id prefixes that stores share, which qualified works out; sharedMu
+	// is apart from mu, as Mount holds mu while it asks for them
+	sharedMu   gosync.Mutex
+	shared     func(prefix string) bool
+	sharedDone bool
 	// the stores that did not open and were warned of, once per caller
 	warnedMu gosync.Mutex
 	warned   map[string]bool
@@ -117,7 +122,7 @@ func (ss *Session) Mount() (*mount.Set, error) {
 	if err != nil {
 		return nil, err
 	}
-	set, err := mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Warn: ss.warn})
+	set, err := mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Warn: ss.warn, Qualified: ss.qualified(c)})
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +157,7 @@ func (ss *Session) dropMount() {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	mc.set = nil
+	ss.forgetQualified()
 }
 
 // openError is the error of a store that does not open.
@@ -251,14 +257,46 @@ func (ss *Session) Open() (*store.Store, *index.Index, error) {
 // index sets the id numbers of its store, so the two go together, and
 // operations run concurrently on one session.
 func (ss *Session) openIndex(s *store.Store) (*index.Index, error) {
+	c, e, err := ss.Entry()
+	if err != nil {
+		return index.Open(s)
+	}
+	return ss.indexOf(c, e.Name, s)
+}
+
+// indexOf opens the index of s, the store name of c's stores, that knows its
+// name and shows ids as the other indexes do.
+func (ss *Session) indexOf(c *config.Config, name string, s *store.Store) (*index.Index, error) {
 	ix, err := index.Open(s)
 	if err != nil {
 		return nil, err
 	}
-	if _, e, err := ss.Entry(); err == nil {
-		ix.SetStoreName(e.Name)
-	}
+	ix.SetStoreName(name)
+	ix.SetQualified(ss.qualified(c))
 	return ix, nil
+}
+
+// qualified tells which id prefixes show with the store's name, because two
+// or more stores of c use them (mount.SharedPrefixes). It is worked out once
+// per caller, and again after a write, which may add a workspace or change a
+// prefix. Stores that cannot be read have no prefix to count.
+func (ss *Session) qualified(c *config.Config) func(prefix string) bool {
+	mc := ss.mountCache()
+	mc.sharedMu.Lock()
+	defer mc.sharedMu.Unlock()
+	if !mc.sharedDone {
+		mc.shared, mc.sharedDone = mount.SharedPrefixes(c), true
+	}
+	return mc.shared
+}
+
+// forgetQualified drops what qualified worked out, for the next call to
+// work it out again.
+func (ss *Session) forgetQualified() {
+	mc := ss.mountCache()
+	mc.sharedMu.Lock()
+	defer mc.sharedMu.Unlock()
+	mc.shared, mc.sharedDone = nil, false
 }
 
 // Writer returns the account that writes to the store the session works
@@ -329,6 +367,7 @@ func (ss *Session) UpdateCommit(s *store.Store, op store.Op, fn func(*store.Tx) 
 	h, err := s.UpdateCommit(op, fn)
 	if err == nil && !h.IsZero() {
 		ss.markWritten(s)
+		ss.forgetQualified()
 	}
 	return h, err
 }

@@ -148,7 +148,7 @@ func (ss *Session) InboxListOf(stores []InboxStore, all bool) ([]InboxItemView, 
 		if len(items) == 0 {
 			continue
 		}
-		ix, err := index.Open(st.Store)
+		ix, err := ss.inboxIndex(st)
 		if err != nil {
 			ss.warn(fmt.Sprintf("%s: read the index, so titles are not shown: %v", st.Name, err))
 			ix = nil
@@ -171,6 +171,15 @@ func (ss *Session) InboxListOf(stores []InboxStore, all bool) ([]InboxItemView, 
 		}
 	}
 	return out, nil
+}
+
+// inboxIndex opens the index of st, as the other operations do.
+func (ss *Session) inboxIndex(st InboxStore) (*index.Index, error) {
+	c, _, err := ss.Config()
+	if err != nil {
+		return index.Open(st.Store)
+	}
+	return ss.indexOf(c, st.Name, st.Store)
 }
 
 // ParseInboxItem reads the full ULID of an item; a short one is a mistake of
@@ -368,7 +377,11 @@ func inboxTarget(ix *index.Index, it inbox.Item) string {
 		}
 	}
 	if it.ID != "" {
-		return it.ID + " (" + it.Task.String() + ")"
+		id := it.ID
+		if ix != nil {
+			id = ix.QualifyID(id)
+		}
+		return id + " (" + it.Task.String() + ")"
 	}
 	return it.Task.String()
 }
@@ -407,7 +420,11 @@ func InboxContent(ix *index.Index, it inbox.Item, storeName string, manyStores b
 	case inbox.Renumbered:
 		var d struct{ Old, New string }
 		_ = json.Unmarshal(it.Detail, &d)
-		return fmt.Sprintf("%s was renumbered to %s; #%s in text still points to the task that kept it", d.Old, d.New, d.Old)
+		old, now := d.Old, d.New
+		if ix != nil {
+			old, now = ix.QualifyID(old), ix.QualifyID(now)
+		}
+		return fmt.Sprintf("%s was renumbered to %s; #%s in text still points to the task that kept it", old, now, d.Old)
 	case inbox.Mention:
 		where := "the body"
 		if hasComment(it) {

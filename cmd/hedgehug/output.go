@@ -80,8 +80,8 @@ var taskHeader = []string{"ID", "ULID", "STATUS", "KIND", "ASSIGNEES", "LABELS",
 
 // taskRow is one task in the table. The title is last, so wide characters
 // in it do not shift other columns.
-func taskRow(e *index.Entry) []string {
-	id, kind, status := e.ID, e.Kind, e.Status
+func taskRow(ix *index.Index, e *index.Entry) []string {
+	id, kind, status := ix.DisplayID(e), e.Kind, e.Status
 	if id == "" {
 		id = "?"
 	}
@@ -114,7 +114,11 @@ func (a *app) printTasks(es []mount.Entry, withStore bool) error {
 	}
 	rows := make([][]string, len(es))
 	for i, e := range es {
-		rows[i] = taskRow(e.Entry)
+		ix, err := e.Store.Index()
+		if err != nil {
+			return err
+		}
+		rows[i] = taskRow(ix, e.Entry)
 		if withStore {
 			rows[i] = append([]string{e.Store.Name}, rows[i]...)
 		}
@@ -141,7 +145,7 @@ func (a *app) printTask(ix *index.Index, ulid model.ULID, verb string) error {
 	if a.jsonOut {
 		return a.printJSON(ops.TaskViewOf(ix, e))
 	}
-	_, err := fmt.Fprintf(a.stdout, "%s %s %s\n", verb, a.style().id(ops.TaskLabel(e)), e.Title)
+	_, err := fmt.Fprintf(a.stdout, "%s %s %s\n", verb, a.style().id(ops.TaskLabel(ix, e)), e.Title)
 	return err
 }
 

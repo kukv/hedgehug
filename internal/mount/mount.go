@@ -29,6 +29,8 @@ type Mounted struct {
 	// guards Store and ix when With opens them again.
 	use gosync.Mutex
 	now func() time.Time // Options.Now, for the store opened again
+	// qualify is the Set's shared prefixes, given to the index as it opens
+	qualify func(prefix string) bool
 }
 
 // Index opens the index of the store on first use and keeps it. The index
@@ -45,6 +47,7 @@ func (m *Mounted) Index() (*index.Index, error) {
 		return nil, err
 	}
 	ix.SetStoreName(m.Name)
+	ix.SetQualified(m.qualify)
 	m.ix = ix
 	return ix, nil
 }
@@ -85,6 +88,7 @@ func (m *Mounted) reopen() (*index.Index, error) {
 		return nil, err
 	}
 	ix.SetStoreName(m.Name)
+	ix.SetQualified(m.qualify)
 	m.mu.Lock()
 	m.Store, m.ix = s, ix
 	m.mu.Unlock()
@@ -113,6 +117,10 @@ type Options struct {
 	// Warn gets the warning of a store whose index does not open while Resolve
 	// looks in every store; nil drops it.
 	Warn func(msg string)
+	// Qualified tells which id prefixes show with the store's name. nil has
+	// Open work it out from the stores it opens; SharedPrefixes gives the
+	// same, for a caller that opens indexes of its own as well.
+	Qualified func(prefix string) bool
 }
 
 // Open opens every store of c.Stores in order. A store that does not open
@@ -120,6 +128,7 @@ type Options struct {
 // one store.
 func Open(c *config.Config, opt Options) (*Set, error) {
 	set := &Set{warn: opt.Warn}
+	var opened []*store.Store
 	for _, e := range c.Stores {
 		s, err := store.Open(e.Path)
 		if err != nil {
@@ -135,9 +144,57 @@ func Open(c *config.Config, opt Options) (*Set, error) {
 		if err != nil {
 			acc = sync.Access{}
 		}
+		opened = append(opened, s)
 		set.Stores = append(set.Stores, &Mounted{Name: e.Name, Entry: e, Store: s, ULID: s.Meta().ULID, Access: acc, now: opt.Now})
 	}
+	// A store that did not open has no prefix to count.
+	shared := opt.Qualified
+	if shared == nil {
+		shared = sharedPrefixes(opened)
+	}
+	for _, m := range set.Stores {
+		m.qualify = shared
+	}
 	return set, nil
+}
+
+// SharedPrefixes tells which id prefixes two or more of the stores of c use
+// (index.SetQualified takes it), as Open counts them, but opening the
+// stores by itself and keeping none. A store that does not open has no
+// prefix to count. The result can be given to Options.Qualified.
+func SharedPrefixes(c *config.Config) func(prefix string) bool {
+	var opened []*store.Store
+	for _, e := range c.Stores {
+		if s, err := store.Open(e.Path); err == nil {
+			opened = append(opened, s)
+		}
+	}
+	return sharedPrefixes(opened)
+}
+
+// sharedPrefixes is the workspace id prefixes found in two or more of
+// stores, case aside, read without opening any index.
+func sharedPrefixes(stores []*store.Store) func(prefix string) bool {
+	seen := map[string]int{} // upper-cased prefix: number of stores
+	for _, s := range stores {
+		mine := map[string]bool{}
+		for w, err := range s.Workspaces() {
+			if err != nil {
+				continue // the store's own checks tell of it
+			}
+			mine[strings.ToUpper(w.IDPrefix)] = true
+		}
+		for p := range mine {
+			seen[p]++
+		}
+	}
+	shared := map[string]bool{}
+	for p, n := range seen {
+		if n >= 2 {
+			shared[p] = true
+		}
+	}
+	return func(prefix string) bool { return shared[strings.ToUpper(prefix)] }
 }
 
 // Get is the mounted store named name (case counts).
