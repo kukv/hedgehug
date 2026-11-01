@@ -122,6 +122,9 @@ func TestWorkspaceErrors(t *testing.T) {
 	if p := ts.problem("DELETE", "/api/workspaces/me", nil, 409); p.Type != "workspace.not_empty" {
 		t.Errorf("not empty: %+v", p)
 	}
+	if p := ts.problem("GET", "/api/workspaces?store=nope", nil, 404); p.Type != "store.not_found" {
+		t.Errorf("list of unknown store: %+v", p)
+	}
 	ts.problem("DELETE", "/api/workspaces/nope", nil, 404)
 	ts.problem("PATCH", "/api/workspaces/nope", map[string]any{"name": "x"}, 404)
 	if p := ts.problem("POST", "/api/workspaces", map[string]any{"name": "", "prefix": "WEB"}, 400); p.Type != "workspace.bad_name" {

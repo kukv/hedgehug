@@ -34,6 +34,7 @@ type Loop struct {
 	running map[string]bool
 	active  int           // syncs that run
 	idle    chan struct{} // closed when active falls to 0
+	cfgErr  string        // the config.yaml failure last logged; "" while it reads
 }
 
 func newLoop(s *Server, clock Clock, visible func() bool) *Loop {
@@ -105,8 +106,10 @@ func (l *Loop) fetchInterval(c *config.Config) time.Duration {
 func (l *Loop) noteNext(name string) {
 	c, _, err := l.s.session("").Config()
 	if err != nil {
-		return // targets logs a config.yaml that does not read
+		l.configFailed(err)
+		return
 	}
+	l.configFailed(nil)
 	l.mu.Lock()
 	if last, ok := l.last[name]; ok {
 		l.next[name] = last.Add(l.fetchInterval(c))
@@ -114,14 +117,30 @@ func (l *Loop) noteNext(name string) {
 	l.mu.Unlock()
 }
 
+// configFailed logs a config.yaml that does not read once for as long as the
+// message stays the same, and forgets it when it reads again (err nil).
+func (l *Loop) configFailed(err error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if err == nil {
+		l.cfgErr = ""
+		return
+	}
+	if m := err.Error(); m != l.cfgErr {
+		l.cfgErr = m
+		l.s.logf("sync: %v", err)
+	}
+}
+
 // targets are the stores with a remote, as config.yaml has them now.
 func (l *Loop) targets() (*config.Config, []config.StoreEntry) {
 	ss := l.s.session("")
 	c, _, err := ss.Config()
 	if err != nil {
-		l.s.logf("sync: %v", err)
+		l.configFailed(err)
 		return nil, nil
 	}
+	l.configFailed(nil)
 	all, err := ss.SyncTargets(c, true)
 	if err != nil {
 		l.s.logf("sync: %v", err)

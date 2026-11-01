@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -207,4 +209,51 @@ func TestLoopFollowsAddedStores(t *testing.T) {
 		st, err := hhsync.ReadState(s)
 		return err == nil && !st.LastSuccess.IsZero()
 	})
+}
+
+func TestLoopLogsBrokenConfigOnce(t *testing.T) {
+	ts := newTestServer(t)
+	cfg := filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml")
+	good, err := os.ReadFile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	broken := []byte("stores: [\n")
+	if err := os.WriteFile(cfg, broken, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l := ts.srv.loop
+	lines := func(ts *testServer) int { return strings.Count(ts.log.String(), "sync: ") }
+
+	// From the loop (step) repeatedly, then from Synced: one line.
+	l.step()
+	l.step()
+	l.Synced("me")
+	if n := lines(ts); n != 1 {
+		t.Fatalf("after step and Synced: %d lines\n%s", n, ts.log.String())
+	}
+
+	// Synced alone, before anything was logged, logs once.
+	ts2 := newTestServer(t)
+	if err := os.WriteFile(filepath.Join(ts2.env["HEDGEHUG_HOME"], "config.yaml"), broken, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ts2.srv.loop.Synced("me")
+	ts2.srv.loop.Synced("me")
+	if n := lines(ts2); n != 1 {
+		t.Fatalf("Synced alone: %d lines\n%s", n, ts2.log.String())
+	}
+
+	// Once it reads again the failure is forgotten, so a new one is logged.
+	if err := os.WriteFile(cfg, good, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l.step()
+	if err := os.WriteFile(cfg, broken, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l.step()
+	if n := lines(ts); n != 2 {
+		t.Fatalf("after recovery and a new failure: %d lines\n%s", n, ts.log.String())
+	}
 }
