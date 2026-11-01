@@ -65,6 +65,20 @@ func DeviceLogin(h config.Host, opt Options, show Prompt) (DeviceToken, error) {
 	}
 }
 
+// WithLock runs fn holding auth.lock (opt.LockFile). A login that keeps a
+// token in the keychain and a logout that removes one take it, as a refresh
+// does, so that they do not cross a refresh of the same entry.
+func WithLock(opt Options, fn func() error) error {
+	if opt.LockFile == "" {
+		return errors.New("auth: LockFile is not set")
+	}
+	err := store.WithFileLock(opt.LockFile, lockWait, fn)
+	if errors.Is(err, store.ErrLocked) {
+		return fmt.Errorf("another hedgehug is refreshing or changing the token; wait a little and try again: %w", err)
+	}
+	return err
+}
+
 // deviceTokenOf makes the tokens of a response. An expires_in of 0 is a
 // token with no end (the App has expiring tokens turned off): its time is
 // left zero.
@@ -106,7 +120,7 @@ func deviceToken(a config.Account, opt Options) (string, error) {
 	if opt.Host.Web == "" {
 		return "", errors.New("auth: Host is not set")
 	}
-	err = store.WithFileLock(opt.LockFile, lockWait, func() error {
+	err = WithLock(opt, func() error {
 		if t, err = LoadDeviceToken(a, k); err != nil {
 			return err
 		}
@@ -131,9 +145,6 @@ func deviceToken(a config.Account, opt Options) (string, error) {
 		return nil
 	})
 	if err != nil {
-		if errors.Is(err, store.ErrLocked) {
-			return "", fmt.Errorf("another hedgehug is refreshing the token; wait a little and try again: %w", err)
-		}
 		return "", err
 	}
 	return accessToken(a, t)

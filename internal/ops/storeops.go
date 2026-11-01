@@ -356,6 +356,38 @@ func (ss *Session) StoreRemove(name string, purge bool) (StoreRemoveResult, erro
 	return StoreRemoveResult{Name: name, Path: e.Path, Purged: purge}, nil
 }
 
+// StoreDefault makes name the default store and returns the default; an empty
+// name changes nothing and returns the current one ("" when there is none).
+// config.yaml is not written when name is the default already. A name that
+// is no store is KindNotFound, "store.not_found", with the names as
+// candidates.
+func (ss *Session) StoreDefault(name string) (string, error) {
+	c, _, err := ss.Config()
+	if err != nil {
+		return "", err
+	}
+	if name == "" || name == c.DefaultStore {
+		return c.DefaultStore, nil
+	}
+	if err := ss.updateConfig(c, func(c *config.Config) error {
+		if !storeExists(c, name) { // also when another writer removed it since the read
+			names := make([]string, len(c.Stores))
+			for i, s := range c.Stores {
+				names[i] = s.Name
+			}
+			msg := fmt.Sprintf("no store is named %q", name)
+			if len(names) > 0 {
+				msg += " (stores: " + strings.Join(names, ", ") + ")"
+			}
+			return newErr(KindNotFound, "store.not_found", errors.New(msg), "name", name, "candidates", names)
+		}
+		return c.SetDefaultStore(name)
+	}); err != nil {
+		return "", err
+	}
+	return c.DefaultStore, nil
+}
+
 // checkPushed refuses to delete a store whose commits are not all on its
 // origin, or that has no origin to hold them.
 func (ss *Session) checkPushed(e config.StoreEntry) error {

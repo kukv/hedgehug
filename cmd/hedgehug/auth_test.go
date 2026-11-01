@@ -286,7 +286,7 @@ func TestAuthJSON(t *testing.T) {
 	}
 	type statusJSON struct {
 		Name, ID, Token string
-		OK              bool
+		State           string
 		Login, Error    string
 		Expires         *string
 	}
@@ -294,10 +294,10 @@ func TestAuthJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(te.ok("auth", "status", "--json")), &st); err != nil || len(st) != 2 {
 		t.Fatalf("status = %+v, %v", st, err)
 	}
-	if st[0].Name != "nt" || st[0].Token != "" || !st[0].OK || st[0].Expires != nil {
+	if st[0].Name != "nt" || st[0].Token != "" || st[0].State != "none" || st[0].Expires != nil {
 		t.Errorf("no token = %+v", st[0])
 	}
-	if st[1].Name != "alice" || st[1].Token != "device" || !st[1].OK || st[1].Login != "alice" || st[1].Expires == nil {
+	if st[1].Name != "alice" || st[1].Token != "device" || st[1].State != "ok" || st[1].Login != "alice" || st[1].Expires == nil {
 		t.Errorf("device = %+v", st[1])
 	}
 	var lo struct {
@@ -315,7 +315,7 @@ func TestAuthJSON(t *testing.T) {
 		t.Errorf("status after logout: exit %d", code)
 	}
 	st = nil
-	if err := json.Unmarshal([]byte(out), &st); err != nil || len(st) != 2 || st[1].OK || st[1].Error == "" {
+	if err := json.Unmarshal([]byte(out), &st); err != nil || len(st) != 2 || st[1].State != "error" || st[1].Error == "" {
 		t.Errorf("status after logout = %+v, %v", st, err)
 	}
 }
@@ -377,5 +377,25 @@ func TestAuthStatusRefused(t *testing.T) {
 	code, out, _ := te.run("auth", "status")
 	if code != 1 || !strings.Contains(out, "auth login me") || !strings.Contains(out, "auth login gone --with-token") {
 		t.Errorf("exit %d, %q", code, out)
+	}
+}
+
+// An account with no token is state none, with only its name and ID; the
+// table says - for what was not checked.
+func TestAuthStatusNoneIsLeftBare(t *testing.T) {
+	keyring.MockInit()
+	te := newTestEnv(t)
+	te.withFake(fakegh.State{})
+	te.writeConfigYAML("accounts:\n  - {name: nt, host: github.com, login: z}\n")
+	var st []map[string]any
+	if err := json.Unmarshal([]byte(te.ok("auth", "status", "--json")), &st); err != nil || len(st) != 1 {
+		t.Fatalf("status = %v, %v", st, err)
+	}
+	if len(st[0]) != 3 || st[0]["state"] != "none" {
+		t.Errorf("none = %v; want name, id and state only", st[0])
+	}
+	out := te.ok("auth", "status")
+	if !strings.Contains(out, "github.com/z  -  ") || strings.Contains(out, "ok") {
+		t.Errorf("table = %q", out)
 	}
 }

@@ -1,17 +1,17 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/doctor"
+	"github.com/kukv/hedgehug/internal/ops"
 )
 
 // errFindings is what a command that found problems returns: the problems
 // are printed, so run exits 1 without a message of its own.
-var errFindings = errors.New("problems found")
+var errFindings = ops.ErrFindings
 
 func (a *app) schemaCmd() *cobra.Command {
 	cmd := &cobra.Command{
