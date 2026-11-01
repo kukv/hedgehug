@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"strconv"
@@ -24,7 +23,7 @@ func (a *app) storeCmd() *cobra.Command {
 			return usageErrorf("a subcommand is needed")
 		},
 	}
-	cmd.AddCommand(a.storeInitCmd(), a.storeAddCmd(), a.storeListCmd(), a.storeRemoveCmd(), a.storeDefaultCmd())
+	cmd.AddCommand(a.storeInitCmd(), a.storeAddCmd(), a.storeListCmd(), a.storeRemoveCmd(), a.storeDefaultCmd(), a.storeDiscoverCmd())
 	return cmd
 }
 
@@ -108,7 +107,7 @@ func (a *app) askChoice(question string, candidates []string) (string, error) {
 	if _, err := fmt.Fprint(a.stderr, b.String()); err != nil {
 		return "", err
 	}
-	line, err := bufio.NewReader(a.stdin).ReadString('\n')
+	line, err := a.readLine()
 	if err != nil && line == "" {
 		return "", errors.New("canceled")
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 
@@ -17,6 +18,16 @@ type app struct {
 	ss      *ops.Session
 	jsonOut bool
 	noColor bool
+	in      *bufio.Reader // the one buffered reader over stdin; see readLine
+}
+
+// readLine reads a line of stdin. Every prompt reads through the one reader,
+// so that a buffered second answer is not lost to a reader of its own.
+func (a *app) readLine() (string, error) {
+	if a.in == nil {
+		a.in = bufio.NewReader(a.stdin)
+	}
+	return a.in.ReadString('\n')
 }
 
 // usageError is a mistake in the flags or arguments; it exits 2.

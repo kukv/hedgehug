@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -60,7 +59,7 @@ func (a *app) authCmd() *cobra.Command {
 // readToken reads the first line of stdin. An empty line is left for the
 // operation to refuse.
 func (a *app) readToken() (string, error) {
-	line, err := bufio.NewReader(a.stdin).ReadString('\n')
+	line, err := a.readLine()
 	if err != nil && !errors.Is(err, io.EOF) {
 		return "", fmt.Errorf("read the token from stdin: %w", err)
 	}
@@ -99,7 +98,7 @@ func (a *app) showDeviceCode(dc *github.DeviceCode) {
 		return
 	}
 	_, _ = fmt.Fprint(a.stderr, "Open the browser? [Y/n] ")
-	line, _ := bufio.NewReader(a.stdin).ReadString('\n')
+	line, _ := a.readLine()
 	if ans := strings.ToLower(strings.TrimSpace(line)); ans == "" || ans == "y" || ans == "yes" {
 		if err := a.openURL(dc.VerificationURI); err != nil {
 			_, _ = fmt.Fprintln(a.stderr, "warning: the browser did not open:", err)
