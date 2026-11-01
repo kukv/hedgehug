@@ -111,6 +111,11 @@ func (p *Poller) Run(ctx context.Context) {
 func (p *Poller) poll(publish bool) {
 	p.pollMu.Lock()
 	defer p.pollMu.Unlock()
+	p.pollLocked(publish)
+}
+
+// pollLocked is poll with pollMu held.
+func (p *Poller) pollLocked(publish bool) {
 	defer func() {
 		p.mu.Lock()
 		p.looked = true
@@ -135,8 +140,19 @@ func (p *Poller) poll(publish bool) {
 			statuses[st.Store] = v
 		}
 	}
+	// Only poll writes p.stores and the fields of a polled, and polls run
+	// one at a time (pollMu), so it reads them without p.mu; what Snapshot
+	// reads is written under p.mu, all together at the end of the loop, so
+	// that the loop (index, diffs) does not make hello wait.
+	type update struct {
+		name  string
+		st    *polled
+		head  plumbing.Hash
+		sync  syncStatus
+		fresh bool
+	}
+	var updates []update
 	stamps := map[string]string{} // taken before the inbox is read
-	p.mu.Lock()
 	seen := map[string]bool{}
 	for _, e := range targets {
 		seen[e.Name] = true
@@ -148,7 +164,6 @@ func (p *Poller) poll(publish bool) {
 				continue
 			}
 			st = &polled{path: e.Path, s: s}
-			p.stores[e.Name] = st
 			fresh = true
 		}
 		head, err := st.s.Repo().Head()
@@ -160,19 +175,25 @@ func (p *Poller) poll(publish bool) {
 			if !st.head.IsZero() && publish {
 				p.headMoved(e.Name, st, head)
 			}
-			st.head = head
 			p.refresh(st)
 			stamps[e.Name] = stamp
 		}
+		u := update{name: e.Name, st: st, head: head, sync: st.sync, fresh: fresh}
 		if v, ok := statuses[e.Name]; ok && !reflect.DeepEqual(v, st.sync) {
-			st.sync = v
+			u.sync = v
 			if publish && !fresh {
 				p.hub.Publish(v)
 			}
 		}
+		updates = append(updates, u)
 		if stamp != st.stamp {
 			stamps[e.Name] = stamp
 		}
+	}
+	p.mu.Lock()
+	for _, u := range updates {
+		u.st.head, u.st.sync = u.head, u.sync
+		p.stores[u.name] = u.st
 	}
 	for name := range p.stores {
 		if !seen[name] {
@@ -288,11 +309,15 @@ func addOnce(list *[]string, u model.ULID) {
 // Snapshot is the HEAD and the sync state of each store, and the items not
 // read, for hello.
 func (p *Poller) Snapshot() ([]storeState, int) {
-	p.mu.Lock()
-	looked := p.looked
-	p.mu.Unlock()
-	if !looked {
-		p.poll(false)
+	// Once a poll has run, hello does not wait for pollMu. Before that it
+	// looks again under pollMu: Run's first poll may have run meanwhile, and
+	// a second poll that records only would swallow a HEAD move.
+	if !p.hasLooked() {
+		p.pollMu.Lock()
+		if !p.hasLooked() {
+			p.pollLocked(false)
+		}
+		p.pollMu.Unlock()
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -302,4 +327,10 @@ func (p *Poller) Snapshot() ([]storeState, int) {
 	}
 	slices.SortFunc(out, func(a, b storeState) int { return strings.Compare(a.Store, b.Store) })
 	return out, p.unread
+}
+
+func (p *Poller) hasLooked() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.looked
 }
