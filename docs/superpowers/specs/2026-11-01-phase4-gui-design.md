@@ -44,7 +44,7 @@
 - 4a でも ops の層の単体テストを足す
 - undo は確認ダイアログを出さない（取り消しにくい操作ではないため）
 - 4b の細部（2026-11-01）: 進捗は親設計どおり work 役割の子孫で数える。`--json` の進捗は `ls --tree` と `show` だけ。tree のビューで `sort:`・`group:` は保存時に拒否。名前の大文字小文字だけの変更は拒否し、Windows の予約名も拒否。組み込みの列は9個。名前のバイト数・NFC・書式文字・Windows の追加の予約名も拒否し、CLI の表の列幅は全角を2桁で数える（既存の表も含む）
-- 4c の細部（2026-11-01）: `PATCH /tasks/{id}` は CLI のコマンドに合わせ、`hh set` の範囲と本文を1コミットにする（本文だけなら op は edit、ほかは set）。移動は `POST /tasks/{id}/move`、復元は `POST /tasks/{id}/restore`。完全削除は `confirm` なしで 409 `purge.unconfirmed` と対象を返し、`confirm=<ULID>,…` で送り直す。Store は `?store=` で指定し、省略は CLI と同じ（3b のあと: 一覧・ツリー・履歴・アクティビティ・doctor・通知は全 Store にまたがり、各タスクに `store` が付く。doctor は Store ごとの配列。ID で指す書き込みは ID が Store を決める。Store が複数あるときの `?store=` なしの作成は ops のまま 422 `store.choose`。2026-11-01 に利用者が決定）。表示の状態は SSE の接続ごとの `client`（最初のイベント `hello` で渡す）に結びつけ、切断したタブは数えない。応答はテストで libopenapi-validator を使って `api/openapi.yaml` と照合する。ほかの細部（エラーの形と状態、各エンドポイントの入出力、同期ループの再試行と停止、`hh ui` の出力と `ui.json` の場所など）は `docs/superpowers/plans/2026-11-01-phase4c-server.md` の「この plan で埋める spec にない細部」のとおり
+- 4c の細部（2026-11-01）: `PATCH /tasks/{id}` は CLI のコマンドに合わせ、`hh set` の範囲と本文を1コミットにする（本文だけなら op は edit、ほかは set）。移動は `POST /tasks/{id}/move`、復元は `POST /tasks/{id}/restore`。完全削除は `confirm` なしで 409 `purge.unconfirmed` と対象を返し、`confirm=<ULID>,…` で送り直す。Store は `?store=` で指定し、省略は CLI と同じ（3b のあと: 一覧・ツリー・履歴・アクティビティ・doctor・通知は全 Store にまたがり、各タスクに `store` が付く。doctor は Store ごとの配列。ID で指す書き込みは ID が Store を決める。Store が複数あるときの `?store=` なしの作成は ops のまま 422 `store.choose`。2026-11-01 に利用者が決定）。表示の状態は SSE の接続ごとの `client`（最初のイベント `hello` で渡す）に結びつけ、切断したタブは数えない。応答はテストで libopenapi-validator を使って `api/openapi.yaml` と照合する。アクティビティのワークスペース（2026-11-02 に利用者が決定）: コミットのワークスペースは trailer `Hedgehug-Workspace` があればそれ、なければ `Hedgehug-Task` のタスクが今いるワークスペースで、どちらもなければなし（応答の `workspace` を省く。OpenAPI の生成がオブジェクトを nullable にできないため）。`hh log --workspace <名前|接頭辞|ULID>,…` と `GET /activity?workspace=…` はそのコミットだけを出し、limit は残したものを数える。名前は Store ごとに引き、どの Store にもなければ `workspace.not_found`。タスクの log と一緒には使えない（`log.workspace_with_task`）。同じ理由で、クエリの `workspace:` も、そのワークスペースのない Store では何にも当たらないだけにする（どの Store にもなければ誤り。タスクの ID と同じ）。ほかの細部（エラーの形と状態、各エンドポイントの入出力、同期ループの再試行と停止、`hh ui` の出力と `ui.json` の場所など）は `docs/superpowers/plans/2026-11-01-phase4c-server.md` の「この plan で埋める spec にない細部」のとおり
 
 ## 範囲
 
@@ -54,27 +54,30 @@
 
 | アートボード | フェーズ4で作るもの | 後のフェーズ |
 |---|---|---|
-| Sidebar | Store の一覧（今は1つ）と表示の切り替え、保存済みビュー、プロジェクトと進捗、同期の状態と「今すぐ同期」、通知の未読数 | Store の下の計画ビュー（6）、複数 Store と閲覧のみ（3） |
+| Sidebar | 保存済みビュー（開くと保存した layout で表示し、画面でツリー・カンバン・テーブルを切り替えられる。切り替えは `hh view save <名前> --layout` と同じ1コミット）、ワークスペース（名前と接頭辞、Store のバッジ）› プロジェクトと進捗の入れ子（Store の段は持たず、表示中の全 Store のワークスペースを並べる。ワークスペースが1つでもワークスペースの行を出す）、ワークスペースの行で概要を開く、「…」から設定・削除（接頭辞の変更は WorkspaceSettings からだけ）、同期の状態と「今すぐ同期」、通知の未読数 | 複数 Store と閲覧のみ（3。閲覧のみの Store のワークスペースは行の Store のバッジに印を付ける。Store ごとの表示の切り替えは SettingsStores で行う） |
+| Workspace | ワークスペースの概要: 見出し（Store、名前、接頭辞、タスク数とカテゴリ別の件数、入れ先をこのワークスペースに固定したタスク・プロジェクトの作成）、プロジェクトの一覧（ID・進捗・担当・期限）、プロジェクトの外のルートのタスク（rank 順）。タブは概要・ツリー・カンバン・テーブル・ガント・バックログ・スプリント・リリース・レポート・設定で、ツリー・カンバン・テーブルはプロジェクトの画面を `workspace:<名前>` で使い回す。件数はタスク一覧からフロントで数える | ガント・バックログ・スプリント・リリース・レポートのタブ（6。スプリントとリリースはワークスペースに属する） |
+| WorkspaceSettings | ワークスペースの設定タブ: 名前（その場で編集）、接頭辞の変更（確認ダイアログ）、ULID、削除（タスクが残っていれば理由を添えて無効。フェーズ6からはスプリント・リリースが残っているときも無効） | — |
 | Main（ツリー） | アウトライナー、キーボードでの追加・字下げ・並べ替え・完了、ドラッグでの並べ替えと親の付け替え、フィルタ欄、ビューを保存 | — |
-| Project | 子タスクの進捗（done 数 / canceled を除いた全数）と一覧 | 紐付く repo とリンク中の PR（5） |
-| Kanban | ステータスまたはカテゴリを列にする、スイムレーン（担当者・プロジェクト）、ドラッグでのステータス変更 | WIP 上限と遷移の制約の表示（6） |
+| Project | 子タスクの進捗（done 数 / canceled を除いた全数）と一覧。プロジェクトの画面とタスク詳細の見出しに、ワークスペース › プロジェクトと Store のバッジを出し、ワークスペースから概要へ戻れる | 紐付く repo とリンク中の PR（5） |
+| Kanban | ステータスまたはカテゴリを列にする、スイムレーン（担当者・プロジェクト）、ドラッグでのステータス変更、ビューを保存（layout: kanban） | WIP 上限と遷移の制約の表示（6）、ガントからのビューの保存と保存済みビューのガント表示（6。`layout: gantt` と一緒に足す） |
 | Table | セルの直接編集、並び替え、グループ化、列の選択 | 複数選択での一括編集（6、`hh set --query` と一緒に作る） |
-| MyTasks | `assignee:@me` のタスクを期限・プロジェクトでまとめる | Store 別のまとめと、非表示の Store の案内（3） |
+| MyTasks | `assignee:@me` のタスクを期限・プロジェクトでまとめる | ワークスペース別のまとめ（Store はバッジで示す。2026-11-01 に利用者が決定）と、非表示の Store の案内（3） |
 | TaskDetail | プロパティ、本文（Markdown エディタ）、コメント、関連と逆方向・バックリンク、チェックリストの進捗、ウォッチ、履歴と restore --at、削除と完全削除 | PR・Issue（5）、作業時間の記録（6） |
 | Inbox | 一覧、既読、上書きされた値を自分の値に戻す | 自動化の結果（5） |
-| Activity | 変更のフィード、人と同期での絞り込み | 自動化での絞り込み（5） |
+| Activity | 変更のフィード、人と同期での絞り込み、ワークスペースでの絞り込み（検索つきのチェックボックスのリストで複数選択。Store ごとに見出しを付け、未選択はすべて。`?workspace=` を使う。2026-11-02 に利用者が決定） | 自動化での絞り込み（5） |
 | ProjectSettings | `scoped` の上書き（表示するステータス、種類、プロパティ）の閲覧と編集。Store の値と並べて表示 | テンプレートと自動化の欄（6・5） |
-| CreateTask / CreateProject | add、add --kind project | テンプレートの選択（6） |
+| CreateTask / CreateProject | add、add --kind project。入れ先のワークスペースと接頭辞を出す（番号は予告せず、作成後のトーストで知らせる）。親がなく、表示中の全 Store を合わせてワークスペースが2つ以上あるときだけワークスペースの選択欄を出し（Store のバッジ付き。ワークスペースで入れ先の Store も決まるので Store は選ばせない）、既定は今開いている画面のワークスペース。親があれば親のワークスペースに固定する | テンプレートの選択（6） |
 | CreateStore | store init（名前・接頭辞・最初のワークスペース・remote） | — |
-| Dialogs | 削除・完全削除の確認、ビューを保存、ワークスペースの追加・名前の変更・接頭辞の変更・削除 | — |
+| Dialogs | 削除・完全削除の確認、ビューを保存、ワークスペースの追加・接頭辞の変更の確認・削除の確認（名前の変更は WorkspaceSettings でその場で行う）、別のワークスペースへの移動（mv --workspace。外れるスプリント・リリースを名前で出す） | — |
 | CommandPalette | ID・タイトルでの検索、画面の移動、操作の実行 | — |
 | States | 空の状態、読み込み中、サーバーに接続できない、同期のエラー、壊れたファイル（doctor への案内） | — |
 | Onboarding | Store が1つもないときの初回起動（store init へ） | Store の発見とマウント（3） |
 | SettingsSchema | スキーマの閲覧、schema check、migrate | テンプレート（6） |
 | SettingsGeneral | 同期の状態と間隔、doctor と修復 | — |
+| SettingsWorkspaces | Store ごとの設定の「ワークスペース」: 名前・接頭辞・プロジェクト数・タスク数の一覧、追加、各ワークスペースの設定タブへの移動 | — |
 | SettingsNav | 上の設定画面への移動 | アカウント・Store（3）、自動化（5） |
 
-フェーズ4で作らないアートボード: Backlog、SprintBoard、Gantt、Release、Reports、SprintDialogs（6）、StoreMove、SettingsAccounts、SettingsStores（3。4f で作る）、SettingsAutomations（5）。
+フェーズ4で作らないアートボード: Backlog、SprintBoard、Gantt、Release、Reports、SprintDialogs（6。どれもワークスペースのタブ）、StoreMove、SettingsAccounts、SettingsStores（3。4f で作る）、SettingsAutomations（5）。
 
 ### 親設計にない追加
 
@@ -207,7 +210,7 @@ huma v2 を標準の ServeMux の上（humago）で使う。パスはすべて `
 | ウォッチ | `PUT /tasks/{id}/watchers/me`、`DELETE /tasks/{id}/watchers/me` | watch / unwatch |
 | 取り消し | `POST /undo` | undo（自分の直前の操作） |
 | 通知 | `GET /notifications`、`PATCH /notifications/{id}`、`POST /notifications/{id}/revert` | inbox、read、revert |
-| アクティビティ | `GET /activity` | log |
+| アクティビティ | `GET /activity`（`?workspace=` は `hh log --workspace` と同じ） | log |
 | ワークスペース | `GET /workspaces`、`POST /workspaces`、`PATCH /workspaces/{id}`、`DELETE /workspaces/{id}` | workspace ls / add / rename・prefix / rm |
 | スキーマ | `GET /schema`、`GET /schema/check`、`POST /schema/migrate` | schema check、migrate |
 | Store | `GET /stores`、`POST /stores` | store list、store init |
@@ -315,12 +318,18 @@ huma v2 を標準の ServeMux の上（humago）で使う。パスはすべて `
 
 ## キャンバスの修正
 
-4d の前に、Hedgehug GUI デザインのキャンバスを直す。
+4d の前に、Hedgehug GUI デザインのキャンバスを直す。2026-11-01 に下のすべてをキャンバスへ反映した（version 51、ワークスペースの画面は version 52）。
 
 - 「キー未確定」のチップ、短縮 ID（`01JR` など）と点線の下線、「キーは次の同期で確定します」「次の同期でキーが確定します」を消す（Sidebar、MyTasks、Main、Kanban、Table、Backlog、CommandPalette、States、StoreMove、Foundations）
 - Activity の「キーを確定 · Hedgehug-Op: number」を、ID の振り直しの実際の記録に直す
 - 呼び方の「キー」を「ID」にする（Sidebar の「キー・検索・コマンド」など）。スキーマのキーなど、ID でない「キー」はそのまま
 - `former_keys` を `former_ids` にする
+- 接頭辞をプロジェクトに持たせていた描写を、ワークスペースの前提に直す（2026-11-01 に利用者が決定。上の表の Sidebar・CreateTask / CreateProject の行）: CreateProject の接頭辞の欄、プロジェクトの見出しの「接頭辞 REL」、SettingsSchema の種類ごとの接頭辞の列、CreateStore の「既定のキーの接頭辞」と「採番は最初の remote で判定」、SettingsStores の「キーの採番に使う」。CreateStore は最初のワークスペースの名前と接頭辞を入れる形にし、Dialogs にワークスペースの追加・名前の変更・接頭辞の変更・削除と、削除・完全削除の確認を足し、StoreMove に移動先のワークスペースの選択を足す
+- 短縮 ULID（`where: project:01JBZ7XXH2`、履歴の trailer、タスク詳細の ULID）を完全な ULID にする
+- Activity の Store 間の移動の op を `move-in` にする（フェーズ3の spec のとおり）
+- サンプルデータをワークスペースの決まり（子は親と同じワークスペース、接頭辞は Store をまたいで重ねない）に揃える
+- ワークスペースの画面を足す（2026-11-01 に利用者が決定。上の表の Workspace・WorkspaceSettings・SettingsWorkspaces の行）。ワークスペースは「開く場所」とし、プロジェクトの画面と同じタブに設定を加える。Dialogs の名前の変更は WorkspaceSettings に移す
+- Store を意識させない形にする（2026-11-01 に利用者が決定。上の表の Sidebar・Workspace・Project・CreateTask / CreateProject の行）: サイドバーから Store の段と Store の一覧を外し、ワークスペース › プロジェクトの入れ子に Store のバッジを付ける。Store ごとの表示の切り替えは SettingsStores に移す。スプリントとリリースはワークスペースに属するものとし、Backlog・SprintBoard・Release・Reports・SprintDialogs をワークスペースのタブと、そのワークスペースのスプリント・リリースに直す
 
 ## 親設計の修正
 
@@ -332,3 +341,4 @@ huma v2 を標準の ServeMux の上（humago）で使う。パスはすべて `
 - 「コマンド一覧」の `hh view` に `rm` と `rename` を足す
 - 「実装フェーズ」: フェーズ4の「全ビュー」を本 spec の「画面と範囲」にし、4a〜4f を書く。フェーズ3・5・6の項目に、それぞれの画面（本 spec の「後のフェーズ」）を足す
 - 「GUI 仕様」: 起動情報の `ui.json`、`Host` の検査、HEAD のポーリングによる変更の検知、SSE のイベント、表示の状態による同期の間隔を書く
+- 「計画」と「GUI 仕様」: スプリントとリリースをワークスペースに属するものにし（`workspace` は必須、名前の重複はワークスペースの中で検査、ワークスペースが変わるときは移り先のものでない `sprint`・`releases` を外して名前で知らせる、残っているワークスペースは削除できない）、サイドバーを Store の段のないワークスペース › プロジェクトの入れ子にし、Store ごとの表示の切り替えを設定に移す（2026-11-01、rev 317 に反映済み）

@@ -153,6 +153,38 @@ func TestReleaseFields(t *testing.T) {
 	}
 }
 
+func TestSprintAndReleaseWorkspaceLWW(t *testing.T) {
+	const wsA, wsB, wsC = "01JC0A1B2C3D4E5F6G7H8J9K0A", "01JC0A1B2C3D4E5F6G7H8J9K0B", "01JC0A1B2C3D4E5F6G7H8J9K0C"
+	for _, kind := range []string{"sprints", "releases"} {
+		p := kind + "/01JC0A1B2C3D4E5F6G7H8J9K0M.md"
+		base := sprint("2026-10-31T10:00:00Z", "workspace: "+wsA, "name: x")
+		ours := sprint("2026-10-31T11:00:00Z", "workspace: "+wsB, "name: x")
+		theirs := sprint("2026-10-31T12:00:00Z", "workspace: "+wsC, "name: x")
+		r := mergeSym(t, p, Side{Data: base}, Side{Data: ours, Author: "a"}, Side{Data: theirs, Author: "b"})
+		var got model.ULID
+		if kind == "sprints" {
+			s, err := model.DecodeSprint(r.Data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got = s.Workspace
+		} else {
+			x, err := model.DecodeRelease(r.Data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got = x.Workspace
+		}
+		if got.String() != wsC {
+			t.Errorf("%s: workspace = %s, want the later write %s", kind, got, wsC)
+		}
+		want := []Overwritten{{Path: p, Field: "workspace", Value: `"` + wsB + `"`, Author: "a"}}
+		if !sameOverwritten(r.Overwritten, want) {
+			t.Errorf("%s: overwritten = %v", kind, r.Overwritten)
+		}
+	}
+}
+
 func TestTemplateFields(t *testing.T) {
 	p := "templates/bug.md"
 	tmpl := func(updated string, lines ...string) []byte {

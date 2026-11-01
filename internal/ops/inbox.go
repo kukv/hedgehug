@@ -147,6 +147,7 @@ func (ss *Session) InboxListOf(stores []InboxStore, all bool) ([]InboxItemView, 
 	defer ss.WarnInbox(stores)
 	type row struct {
 		store string
+		s     *store.Store
 		item  inbox.Item
 		ix    *index.Index
 	}
@@ -165,7 +166,7 @@ func (ss *Session) InboxListOf(stores []InboxStore, all bool) ([]InboxItemView, 
 			ix = nil
 		}
 		for _, it := range items {
-			rows = append(rows, row{st.Name, it, ix})
+			rows = append(rows, row{st.Name, st.Store, it, ix})
 		}
 	}
 	slices.SortStableFunc(rows, func(x, y row) int {
@@ -176,9 +177,15 @@ func (ss *Session) InboxListOf(stores []InboxStore, all bool) ([]InboxItemView, 
 	})
 	out := make([]InboxItemView, len(rows))
 	for i, r := range rows {
+		named := r.item
+		var d repairDetail
+		if named.Kind == inbox.Repaired && json.Unmarshal(named.Detail, &d) == nil {
+			d.Value = json.RawMessage(detachedName(r.s, d.Kind, string(d.Value)))
+			named.Detail, _ = json.Marshal(d) // always encodes
+		}
 		out[i] = InboxItemView{
 			Item: r.item, Store: r.store, Task: inboxTaskRef(r.ix, r.item),
-			Target: inboxTarget(r.ix, r.item), Content: InboxContent(r.ix, r.item, r.store, len(stores) > 1),
+			Target: inboxTarget(r.ix, r.item), Content: InboxContent(r.ix, named, r.store, len(stores) > 1),
 		}
 	}
 	return out, nil
@@ -472,6 +479,14 @@ func RepairedContent(ix *index.Index, it inbox.Item) string {
 	var d repairDetail
 	_ = json.Unmarshal(it.Detail, &d) // an item that does not decode tells no kind
 	switch d.Kind {
+	case "sprint_detached", "release_detached":
+		// The value is the name of the sprint or release (its ULID when it
+		// cannot be read).
+		var name string
+		if json.Unmarshal(d.Value, &name) == nil && name != "" {
+			what := strings.TrimSuffix(d.Kind, "_detached")
+			return fmt.Sprintf("%s: removed from %s %s (it is not in the workspace the task moved to)", d.Kind, what, name)
+		}
 	case "parent_cycle", "parent_deleted":
 		// The value tells where the repair took the task from and put it
 		// (null is the root); the index only gives names to the ULIDs.
@@ -748,4 +763,28 @@ func propText(sc *schema.Schema, key string, x any) (string, error) {
 		return strconv.FormatBool(v), nil
 	}
 	return "", notRevertible(fmt.Errorf("props.%s: %v is not a value hedgehug set reads; %w", key, x, errNotRevertible))
+}
+
+// detachedName replaces the ULID that value (JSON) holds, for the kinds
+// sprint_detached and release_detached, with the name of the sprint or
+// release in s; the ULID stays when the file cannot be read. Other kinds
+// keep their value.
+func detachedName(s *store.Store, kind, value string) string {
+	var u model.ULID
+	if (kind != "sprint_detached" && kind != "release_detached") || s == nil || json.Unmarshal([]byte(value), &u) != nil {
+		return value
+	}
+	var name string
+	if kind == "sprint_detached" {
+		if sp, err := s.Sprint(u); err == nil {
+			name = sp.Name
+		}
+	} else if r, err := s.Release(u); err == nil {
+		name = r.Name
+	}
+	if name == "" {
+		return value
+	}
+	b, _ := json.Marshal(name) // a string always encodes
+	return string(b)
 }

@@ -412,11 +412,14 @@ type LogView struct {
 		Name  string `json:"name"`
 		Email string `json:"email"`
 	} `json:"author"`
-	Store   string  `json:"store"`
-	Op      *string `json:"op"`
-	Task    *string `json:"task"`
-	ID      *string `json:"id"` // the current id of the task
-	Subject string  `json:"subject"`
+	Store string `json:"store"`
+	// Workspace is left out for a commit of no workspace (logWorkspace),
+	// rather than null: the OpenAPI generator cannot make an object nullable.
+	Workspace *WorkspaceRef `json:"workspace,omitempty"`
+	Op        *string       `json:"op"`
+	Task      *string       `json:"task"`
+	ID        *string       `json:"id"` // the current id of the task
+	Subject   string        `json:"subject"`
 }
 
 func logViewOf(ix *index.Index, e gitrepo.LogEntry) LogView {
@@ -433,7 +436,31 @@ func logViewOf(ix *index.Index, e gitrepo.LogEntry) LogView {
 			}
 		}
 	}
+	if ws, ok := logWorkspace(ix, e); ok {
+		j.Workspace = &WorkspaceRef{ULID: ws.String()}
+		if w, ok := ix.Workspace(ws); ok {
+			j.Workspace.Name, j.Workspace.IDPrefix = w.Name, w.IDPrefix
+		}
+	}
 	return j
+}
+
+// logWorkspace is the workspace of a commit: the one its Hedgehug-Workspace
+// trailer names, or else the one the task of its Hedgehug-Task is in now.
+// A commit with neither, or of a task the index does not have, has none.
+func logWorkspace(ix *index.Index, e gitrepo.LogEntry) (model.ULID, bool) {
+	if v, ok := e.Trailer("Hedgehug-Workspace"); ok {
+		ulid, err := model.ParseULID(v)
+		return ulid, err == nil
+	}
+	if v, ok := e.Trailer("Hedgehug-Task"); ok {
+		if ulid, err := model.ParseULID(v); err == nil {
+			if t, ok := ix.Task(ulid); ok && !t.Workspace.IsZero() {
+				return t.Workspace, true
+			}
+		}
+	}
+	return model.ULID{}, false
 }
 
 // LogViewsOf is the commits as --json prints them.
@@ -498,6 +525,18 @@ func StoreLogViews(logs []StoreLog) []LogView {
 // its store; limit 0 lists all, and limit counts the commits of all the
 // stores together.
 func (ss *Session) Log(args []string, limit int) (LogResult, error) {
+	return ss.LogIn(args, nil, limit)
+}
+
+// LogIn is Log with only the commits of the workspaces named (by name, id
+// prefix or ULID, as elsewhere); none named takes every commit. A name is
+// looked up in each store, as workspace: in a query is: it is an error only
+// when no store has it. limit counts the commits that are kept. Naming
+// workspaces with a task is a usage error.
+func (ss *Session) LogIn(args, workspaces []string, limit int) (LogResult, error) {
+	if len(args) > 0 && len(workspaces) > 0 {
+		return LogResult{}, newErr(KindUsage, "log.workspace_with_task", errors.New("a task's log takes no --workspace"))
+	}
 	if len(args) > 0 {
 		ts, arg, err := ss.forTask(args[0])
 		if err != nil {
@@ -529,11 +568,17 @@ func (ss *Session) Log(args []string, limit int) (LogResult, error) {
 		m, _ := set.Get(ss.StoreName)
 		stores = []*mount.Mounted{m}
 	}
+	readLimit := limit
+	if len(workspaces) > 0 {
+		readLimit = 0 // the limit counts the commits kept
+	}
+	found := make([]bool, len(workspaces))
+	notFound := make([]error, len(workspaces))
 	var all []StoreLog
 	for _, m := range stores {
 		var entries []gitrepo.LogEntry
 		var logErr error
-		if err := m.With(func(*index.Index) { entries, logErr = m.Store.Repo().Log(nil, limit) }); err != nil {
+		if err := m.With(func(*index.Index) { entries, logErr = m.Store.Repo().Log(nil, readLimit) }); err != nil {
 			return LogResult{}, classify(err)
 		}
 		if logErr != nil {
@@ -543,7 +588,31 @@ func (ss *Session) Log(args []string, limit int) (LogResult, error) {
 		if err != nil {
 			return LogResult{}, classify(err)
 		}
-		all = append(all, storeLogs(m.Name, ix, entries)...)
+		logs := storeLogs(m.Name, ix, entries)
+		if len(workspaces) > 0 {
+			keep := map[model.ULID]bool{}
+			for i, arg := range workspaces {
+				w, err := ResolveWorkspace(ix, arg)
+				if errors.Is(err, store.ErrNotFound) {
+					notFound[i] = err // another store may have it
+					continue
+				}
+				if err != nil {
+					return LogResult{}, err
+				}
+				keep[w.ULID], found[i] = true, true
+			}
+			logs = slices.DeleteFunc(logs, func(l StoreLog) bool {
+				ws, ok := logWorkspace(ix, l.Entry)
+				return !ok || !keep[ws]
+			})
+		}
+		all = append(all, logs...)
+	}
+	for i, ok := range found {
+		if !ok {
+			return LogResult{}, notFound[i]
+		}
 	}
 	slices.SortStableFunc(all, func(a, b StoreLog) int { return b.Entry.When.Compare(a.Entry.When) })
 	if limit > 0 && len(all) > limit {

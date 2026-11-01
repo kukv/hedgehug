@@ -296,8 +296,8 @@ func TestPutEveryFileType(t *testing.T) {
 	task := newTask("x")
 	c := &model.Comment{ULID: model.NewULID(), Author: "github.com/me", Body: "コメント\n"}
 	w := &model.Worklog{ULID: model.NewULID(), Author: "github.com/me", Body: "作業\n"}
-	sp := &model.Sprint{ULID: model.NewULID(), Name: "S1", State: "planned"}
-	r := &model.Release{ULID: model.NewULID(), Name: "v1", State: "unreleased"}
+	sp := &model.Sprint{ULID: model.NewULID(), Workspace: testWorkspaceULID, Name: "S1", State: "planned"}
+	r := &model.Release{ULID: model.NewULID(), Workspace: testWorkspaceULID, Name: "v1", State: "unreleased"}
 	tp := &model.Template{Name: "bug"}
 	tp.Item.Kind = "bug"
 

@@ -488,9 +488,9 @@ moved_to: 01JC0STORE...      # 移動先の Store の ULID（store.yaml の ulid
 4. **切る参照**: 動かすタスクの集合 M と、移動元に残るタスクのあいだの参照（`blocked_by` と `task_ref` 型のプロパティ。両方向）を集める。`parent` は M の中で閉じている（子孫をすべて動かすので）。
 5. **確認**: 外す参照の一覧と、履歴の警告（下記）を出す。端末なら `移動しますか? [y/N]`。端末でないときは `--yes` がなければエラー（終了コード2）。外す参照がなくても確認は取る。
 6. **scoped**: 動かすタスクに project があり、移動元の `schema.yaml` の `scoped` にその `where: project:<ULID>` があれば、持っていくかを `--scoped` で決める。なければ端末で聞き（`[c]arry / [d]rop`）、端末でなければエラー。持っていくときは、移動先の定義で検査し、移動先にないステータス・プロパティ・テンプレートを指す部分を外し、外したものを一覧で出す。移動先の `schema.yaml` に `scoped` の要素として足す。どちらの場合も、移動元の `schema.yaml` からは消す。
-7. **移動先に書く**（1コミット、`Hedgehug-Op: move-in`）: M の各タスクを移動先に書く。ID は移動先のワークスペースで振り直し（古い ID は `former_ids` の末尾へ。`former_ids` にすでにある移動元での古い ID も残す）、`workspace` を移動先のものに、M の外を指す参照を外し、`updated` を今にする。コメントと作業時間の記録はそのまま写す。持っていく `scoped` も同じコミット。trailer: `Hedgehug-Task`（移動したタスク）、`Hedgehug-Moved-From: <移動元の Store の ULID>`、外した参照ごとに `Hedgehug-Unlinked: <ULID> <フィールド> <ULID>`。
+7. **移動先に書く**（1コミット、`Hedgehug-Op: move-in`）: M の各タスクを移動先に書く。ID は移動先のワークスペースで振り直し（古い ID は `former_ids` の末尾へ。`former_ids` にすでにある移動元での古い ID も残す）、`workspace` を移動先のものに、M の外を指す参照を外し、`sprint` と `releases` を外し（スプリントとリリースはワークスペースに属するため。2026-11-01 に利用者が決定、親設計の「計画」）、`updated` を今にする。コメントと作業時間の記録はそのまま写す。持っていく `scoped` も同じコミット。trailer: `Hedgehug-Task`（移動したタスク）、`Hedgehug-Moved-From: <移動元の Store の ULID>`、外した参照ごとに `Hedgehug-Unlinked: <ULID> <フィールド> <ULID>`。
 8. **移動元に書く**（1コミット、`Hedgehug-Op: move-out`）: M の各タスクファイルを転送ファイルに置き換え、M のコメントと作業時間の記録を消し、残るタスクの M を指す参照を外し、`.hedgehug/numbers.yaml` に M の ID の番号（`id` と `former_ids` のうち移動元の接頭辞のもの）の最大を記録し、`scoped` を消す。trailer: `Hedgehug-Task`、`Hedgehug-Moved-To: <移動先の Store の ULID>`、`Hedgehug-Unlinked`。
-9. **出力**: `Moved API-12 (ULID) → org-b WEB-45` を M の各タスクについて1行。`--json` は `{from, to, tasks: [{ulid, old_id, new_id}], unlinked: [...], scoped: {carried, dropped}}`。
+9. **出力**: `Moved API-12 (ULID) → org-b WEB-45` を M の各タスクについて1行。スプリント・リリースを外したタスクには、`mv --workspace` と同じ形で外したものを名前で続ける。`--json` は `{from, to, tasks: [{ulid, old_id, new_id}], unlinked: [...], scoped: {carried, dropped}}`。
 
 - 7 の後に 8 が失敗したら、エラーに「移動先には書きました。同じコマンドをもう一度実行すると移動元を仕上げます」と出す。再実行で、移動先に M の ULID がすでに同じ内容で（`move-in` のコミットの後に）あれば 7 を飛ばして 8 だけを行う。
 - 7 と 8 は、それぞれの Store のロックの中で行う。2つのロックは Store の ULID の小さい順に取る（「ロック」。逆向きの移動が同時に走っても待ち合わない）。

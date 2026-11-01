@@ -225,3 +225,82 @@ func TestListByAnIDOfOneStore(t *testing.T) {
 		wantErr(t, err, KindUsage, "query.invalid")
 	}
 }
+
+func TestWorkspaceQueryAcrossStores(t *testing.T) {
+	ts := newTwoStoreSession(t)
+	// org-a has no workspace org-b: it matches nothing there, not an error
+	r, err := ts.List(mustParse(t, "workspace:org-b"))
+	if err != nil || len(r.Entries) != 1 || r.Entries[0].Store.Name != "org-b" {
+		t.Fatalf("List(workspace:org-b) = %+v, %v", r.Entries, err)
+	}
+	r, err = ts.List(mustParse(t, "workspace:org-a,org-b"))
+	if err != nil || len(r.Entries) != 2 {
+		t.Errorf("List(workspace:org-a,org-b) = %d entries, %v", len(r.Entries), err)
+	}
+	// a workspace no store has is still an error
+	_, err = ts.List(mustParse(t, "workspace:nope"))
+	wantErr(t, err, KindUsage, "query.invalid")
+}
+
+func TestLogInWorkspaces(t *testing.T) {
+	ts := newTwoStoreSession(t)
+	a := ts.ForStore("org-a")
+	advance(ts, time.Hour)
+	if _, err := a.WorkspaceAdd("docs", "DOC"); err != nil {
+		t.Fatal(err)
+	}
+	advance(ts, time.Hour)
+	if _, err := a.Add(AddInput{Title: "guide", Workspace: "docs"}); err != nil {
+		t.Fatal(err)
+	}
+	wsOf := func(l StoreLog) string {
+		v := StoreLogViews([]StoreLog{l})[0]
+		if v.Workspace == nil {
+			return ""
+		}
+		return v.Workspace.Name
+	}
+	// the workspace's commit by its trailer, the task's by where it is
+	lr, err := ts.LogIn(nil, []string{"DOC"}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, l := range lr.Logs {
+		if wsOf(l) != "docs" {
+			t.Errorf("a commit of %q in the log of docs", wsOf(l))
+		}
+		op, _ := l.Entry.Trailer("Hedgehug-Op")
+		names = append(names, op)
+	}
+	if strings.Join(names, ",") != "add,workspace" {
+		t.Errorf("ops = %v; want add, workspace", names)
+	}
+	// a name in one store and a name in the other
+	lr, err = ts.LogIn(nil, []string{"org-b", "docs"}, 0)
+	if err != nil || len(lr.Logs) != 3 {
+		t.Fatalf("LogIn(org-b, docs) = %d, %v; want docs' two and org-b task's add", len(lr.Logs), err)
+	}
+	if wsOf(lr.Logs[2]) != "org-b" {
+		t.Errorf("oldest = %q; want org-b", wsOf(lr.Logs[2]))
+	}
+	// the limit counts what is kept
+	one, err := ts.LogIn(nil, []string{"docs"}, 1)
+	if err != nil || len(one.Logs) != 1 || wsOf(one.Logs[0]) != "docs" {
+		t.Errorf("LogIn(docs, 1) = %+v, %v", one.Logs, err)
+	}
+	_, err = ts.LogIn(nil, []string{"nope"}, 0)
+	wantErr(t, err, KindNotFound, "workspace.not_found")
+	_, err = ts.LogIn([]string{"WEB-1"}, []string{"org-b"}, 0)
+	wantErr(t, err, KindUsage, "log.workspace_with_task")
+	// every commit of a task tells its workspace
+	all, err := ts.Log(nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range StoreLogViews(all.Logs) {
+		if v.Task != nil && (v.Workspace == nil || v.Workspace.ULID == "" || v.Workspace.IDPrefix == "") {
+			t.Errorf("commit %s of task %s has workspace %+v", v.Hash[:7], *v.Task, v.Workspace)
+		}
+	}
+}
