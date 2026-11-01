@@ -138,3 +138,32 @@ func TestErrorUnknown(t *testing.T) {
 		}
 	}
 }
+
+func TestErrorNotInStore(t *testing.T) {
+	ix := sortFixture(t)
+	ix.SetStoreName("here")
+	tests := []struct {
+		q    string
+		want bool
+	}{
+		{"parent:ZZ-9", true},
+		{"project:nope", true},
+		{"blocked_by:ZZ-9", true},
+		{"parent:there:TST-1", true},
+		{"parent:here:ZZ-9", true},
+		{"parent:none", false},
+		{"kind:nope", false},
+	}
+	for _, tt := range tests {
+		q, err := Parse(tt.q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = Run(ix, q, Options{})
+		var qe *Error
+		got := errors.As(err, &qe) && qe.NotInStore
+		if got != tt.want || (qe != nil && qe.Unknown) {
+			t.Errorf("%q: NotInStore = %v (err %v); want %v", tt.q, got, err, tt.want)
+		}
+	}
+}

@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 // newTwoStoreEnv is an environment with two stores, alpha (AA) and
@@ -104,8 +106,8 @@ func TestLogAcrossStores(t *testing.T) {
 	if got := strings.Split(strings.TrimRight(te.ok("log", "-n", "3"), "\n"), "\n"); len(got) != 3 {
 		t.Errorf("log -n 3 has %d lines", len(got))
 	}
-	// one store, or one task: no name
-	if out := te.ok("log", "--store", "alpha"); strings.Contains(out, "alpha") || len(strings.Split(strings.TrimRight(out, "\n"), "\n")) != 3 {
+	// --store leaves one store of two mounted, which is still named; one task is not
+	if out := te.ok("log", "--store", "alpha"); strings.Count(out, "alpha  ") != 3 || strings.Contains(out, "bravo") {
 		t.Errorf("log --store alpha =\n%s", out)
 	}
 	if out := te.ok("log", "BB-1"); strings.Contains(out, "bravo-long") || strings.Count(out, "\n") != 1 {
@@ -121,5 +123,50 @@ func TestLogAcrossStores(t *testing.T) {
 	}
 	if len(views) != 6 || stores["alpha"] != 3 || stores["bravo-long"] != 3 {
 		t.Errorf("log --json stores = %v of %d", stores, len(views))
+	}
+}
+
+// With several stores the parent-cycle section is told from the heading of a
+// store by naming its store.
+func TestLsTreeCycleAcrossStores(t *testing.T) {
+	te := newTestEnv(t)
+	te.ok("store", "init", "me", "--prefix", "ME")
+	te.ok("store", "init", "bravo", "--prefix", "BB")
+	x := te.addJSON("--store", "me", "X")
+	y := te.addJSON("--store", "me", "Y", "--parent", x.ID)
+	te.addJSON("--store", "bravo", "Plain")
+	s, err := store.Open(te.storeDir("me"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	xULID, _ := model.ParseULID(x.ULID)
+	yULID, _ := model.ParseULID(y.ULID)
+	writeCycle(t, te, s, xULID, yULID)
+	te.goldenOK("tree", "ls", "--tree")
+	te.goldenOK("tree-one", "ls", "--tree", "store:me")
+	out := te.ok("ls", "--tree")
+	if !strings.Contains(out, "== me (in a parent cycle)\n") || strings.Contains(out, "\n== in a parent cycle") || !strings.Contains(out, "== bravo\n") {
+		t.Errorf("tree =\n%s", out)
+	}
+}
+
+func TestLsIDInAnotherStore(t *testing.T) {
+	te := newTwoStoreEnv(t)
+	// AA-1 is only in alpha: bravo-long finds nothing, which is no error
+	out := te.ok("ls", "project:AA-1")
+	if !strings.Contains(out, "Alpha child") || strings.Contains(out, "Bravo") {
+		t.Errorf("project:AA-1 =\n%s", out)
+	}
+	if out := te.ok("ls", "project:alpha:AA-1"); !strings.Contains(out, "Alpha child") {
+		t.Errorf("project:alpha:AA-1 =\n%s", out)
+	}
+	// written for the other store, it finds nothing there, and nowhere
+	code, _, errs := te.run("ls", "project:bravo-long:AA-1")
+	if code != 2 || !strings.Contains(errs, "not found") {
+		t.Errorf("project:bravo-long:AA-1: exit %d, stderr %q", code, errs)
+	}
+	code, _, errs = te.run("ls", "project:ZZ-9")
+	if code != 2 || !strings.Contains(errs, "not found") {
+		t.Errorf("project:ZZ-9: exit %d, stderr %q", code, errs)
 	}
 }

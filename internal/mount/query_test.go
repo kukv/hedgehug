@@ -46,7 +46,7 @@ func twoSchemas(t *testing.T) (a, b config.StoreEntry) {
 		),
 		Kinds: []schema.Kind{
 			{Name: "project", Role: schema.RoleContainer, Parents: root},
-			{Name: "task", Role: schema.RoleWork, Parents: root, Default: true},
+			{Name: "task", Role: schema.RoleWork, Parents: []string{schema.Root, "project"}, Default: true},
 		},
 		Props: schema.Props{
 			{Name: "size", Type: schema.TypeNumber},
@@ -323,5 +323,108 @@ func TestQueryOptionsErrorAndUnknownStoreOnly(t *testing.T) {
 	}
 	if _, err := Query(set, parsed, "nope", noOptions); err == nil {
 		t.Error("--store nope: no error")
+	}
+}
+
+func TestQueryTaskNotInAStoreFindsNothingThere(t *testing.T) {
+	a, b := twoSchemas(t)
+	parents := putTasks(t, a, 1, func(_ int, task *model.Task) { task.Title, task.Kind = "a-parent", "project" })
+	putTasks(t, a, 1, func(_ int, task *model.Task) { task.Title, task.Parent = "a-child", &parents[0].ULID })
+	putTasks(t, b, 1, func(_ int, task *model.Task) { task.Title = "b-task" })
+	set := openSet(t, a, b)
+	// API-1 is in org-a only; org-b finds nothing and that is no error
+	if got := queryTitles(t, set, "parent:API-1", ""); !reflect.DeepEqual(got, []string{"a-child"}) {
+		t.Errorf("parent:API-1 = %v", got)
+	}
+	if got := queryTitles(t, set, "parent:org-a:API-1", ""); !reflect.DeepEqual(got, []string{"a-child"}) {
+		t.Errorf("parent:org-a:API-1 = %v", got)
+	}
+	// written for org-b, org-a does not look either: no store has it
+	parsed, _ := query.Parse("parent:org-b:API-1")
+	_, err := Query(set, parsed, "", noOptions)
+	var qe *query.Error
+	if !errors.As(err, &qe) || !qe.NotInStore || qe.Unknown {
+		t.Errorf("parent:org-b:API-1: err = %v; want the not-found error", err)
+	}
+	// an id no store has
+	parsed, _ = query.Parse("parent:ZZ-9")
+	if _, err = Query(set, parsed, "", noOptions); !errors.As(err, &qe) || !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("parent:ZZ-9: err = %v", err)
+	}
+	// ambiguity inside a store stays an error of the query
+	if got := queryTitles(t, set, "parent:none", "org-b"); !reflect.DeepEqual(got, []string{"b-task"}) {
+		t.Errorf("parent:none on org-b = %v", got)
+	}
+}
+
+// A store whose statuses are not in the order of the categories is sorted as
+// query.Run does when it is the only one that runs.
+func TestQuerySortOfOneStoreIsRuns(t *testing.T) {
+	root := []string{schema.Root}
+	odd := &schema.Schema{
+		Statuses: statuses(
+			schema.Status{Name: "done", Category: schema.CategoryDone, Default: true},
+			schema.Status{Name: "todo", Category: schema.CategoryTodo, Default: true},
+			schema.Status{Name: "in_progress", Category: schema.CategoryDoing, Default: true},
+			schema.Status{Name: "canceled", Category: schema.CategoryCanceled, Default: true},
+		),
+		Kinds: []schema.Kind{{Name: "task", Role: schema.RoleWork, Parents: root, Default: true}},
+		Props: schema.Props{{Name: "size", Type: schema.TypeNumber}},
+	}
+	a := newStoreWith(t, "org-a", "API", odd)
+	_, b := twoSchemas(t)
+	putSpecs(t, a, spec{title: "t", kind: "task", status: "todo", size: "1"}, spec{title: "d", kind: "task", status: "done", size: "1"}, spec{title: "p", kind: "task", status: "in_progress", size: "1"})
+	putSpecs(t, b, spec{title: "b", kind: "task", status: "todo"})
+	set := openSet(t, a, b)
+	for _, only := range []string{"", "org-a"} {
+		q := "sort:status"
+		if only == "" {
+			q = "size>=1 sort:status" // org-b has no size: it drops out
+		}
+		parsed, _ := query.Parse(q)
+		ix, err := set.Stores[0].Index()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := query.Run(ix, parsed, query.Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var wantTitles []string
+		for _, e := range want.Groups[0].Tasks {
+			wantTitles = append(wantTitles, e.Title)
+		}
+		if !reflect.DeepEqual(wantTitles, []string{"d", "t", "p"}) {
+			t.Fatalf("query.Run = %v; the schema is not out of the order of the categories", wantTitles)
+		}
+		if got := queryTitles(t, set, q, only); !reflect.DeepEqual(got, wantTitles) {
+			t.Errorf("%q on %q = %v; want query.Run's %v", q, only, got, wantTitles)
+		}
+	}
+}
+
+func TestQueryGroupWithoutValueComesLast(t *testing.T) {
+	a, b := twoSchemas(t)
+	putSpecs(t, a, spec{title: "a1", kind: "task", status: "todo", tier: "silver"}, spec{title: "a2", kind: "task", status: "todo"})
+	putSpecs(t, b, spec{title: "b1", kind: "task", status: "todo", tier: "gold"}, spec{title: "b2", kind: "task", status: "todo"})
+	set := openSet(t, a, b)
+	parsed, _ := query.Parse("group:tier")
+	res, err := Query(set, parsed, "", noOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keys []string
+	for _, g := range res.Groups {
+		keys = append(keys, g.Key)
+	}
+	if want := []string{"silver", "gold", ""}; !reflect.DeepEqual(keys, want) {
+		t.Fatalf("keys = %q; want %q", keys, want)
+	}
+	if n := len(res.Groups[2].Entries); n != 2 {
+		t.Errorf("the group of no value has %d tasks; want 2, one from each store", n)
+	}
+	last := res.Entries[len(res.Entries)-2:]
+	if last[0].Entry.Title != "a2" || last[1].Entry.Title != "b2" {
+		t.Errorf("Entries end with %s %s", last[0].Entry.Title, last[1].Entry.Title)
 	}
 }

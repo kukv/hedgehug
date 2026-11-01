@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -11,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 // Options holds what a query needs from outside the store.
@@ -101,6 +103,11 @@ func (c *compiler) failUnknown(t Term, format string, args ...any) error {
 // failWith is fail for an underlying error, which callers can unwrap.
 func (c *compiler) failWith(t Term, err error) error {
 	return &Error{Pos: t.Pos, Term: t.Raw, Msg: err.Error(), Err: err}
+}
+
+// notInStore is failWith for a task this store does not have.
+func (c *compiler) notInStore(t Term, err error) error {
+	return &Error{Pos: t.Pos, Term: t.Raw, Msg: err.Error(), Err: err, NotInStore: true}
 }
 
 func (c *compiler) term(t Term) (pred, error) {
@@ -286,8 +293,18 @@ func (c *compiler) resolve(t Term) (none bool, ulids map[model.ULID]bool, err er
 			none = true
 			continue
 		}
+		// "<store>:<id>" is looked up in that store only; ids have no ":".
+		if name, rest, ok := strings.Cut(v, ":"); ok {
+			if name != c.ix.StoreName() {
+				return false, nil, c.notInStore(t, fmt.Errorf("%q: %w", v, store.ErrNotFound))
+			}
+			v = rest
+		}
 		ulid, err := c.ix.Resolve(v)
 		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return false, nil, c.notInStore(t, err)
+			}
 			return false, nil, c.failWith(t, err)
 		}
 		ulids[ulid] = true

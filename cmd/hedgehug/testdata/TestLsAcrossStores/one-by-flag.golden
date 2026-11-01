@@ -1,3 +1,3 @@
-ID    ULID                        STATUS  KIND     ASSIGNEES  LABELS  TITLE
-AA-1  <ULID-1>  todo    project                     Alpha project
-AA-2  <ULID-2>  todo    task                        Alpha child
+STORE  ID    ULID                        STATUS  KIND     ASSIGNEES  LABELS  TITLE
+alpha  AA-1  <ULID-1>  todo    project                     Alpha project
+alpha  AA-2  <ULID-2>  todo    task                        Alpha child

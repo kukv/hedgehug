@@ -30,7 +30,7 @@ func TestListAcrossStores(t *testing.T) {
 		t.Errorf("entries = %v %v", l.Entries[0].Store.Name, l.Entries[1].Store.Name)
 	}
 	one, err := ts.List(mustParse(t, "store:org-b"))
-	if err != nil || one.Many || len(one.Entries) != 1 || one.Entries[0].Store.Name != "org-b" {
+	if err != nil || !one.Many || len(one.Entries) != 1 || one.Entries[0].Store.Name != "org-b" {
 		t.Errorf("store:org-b = %+v, %v", one, err)
 	}
 	_, err = ts.List(mustParse(t, "store:nope"))
@@ -41,7 +41,7 @@ func TestListAcrossStores(t *testing.T) {
 	// --store takes one store, and store: can only narrow it
 	b := ts.ForStore("org-b")
 	only, err := b.List(mustParse(t, ""))
-	if err != nil || only.Many || len(only.Entries) != 1 {
+	if err != nil || !only.Many || len(only.Entries) != 1 {
 		t.Errorf("--store org-b = %+v, %v", only, err)
 	}
 	none, err := b.List(mustParse(t, "store:org-a"))
@@ -67,6 +67,10 @@ func TestListWarnsOfAStoreThatDoesNotOpen(t *testing.T) {
 	}
 	if len(ts.warns) != 1 || !strings.Contains(ts.warns[0], "org-b") {
 		t.Errorf("warnings = %q; want one about org-b", ts.warns)
+	}
+	// asking again does not warn again
+	if _, err := ts.List(mustParse(t, "")); err != nil || len(ts.warns) != 1 {
+		t.Errorf("second List: %v, warnings %q; want still one", err, ts.warns)
 	}
 	// the one --store names is an error
 	_, err = ts.ForStore("org-b").List(mustParse(t, ""))
@@ -100,9 +104,9 @@ func TestTreePerStore(t *testing.T) {
 	if err != nil || len(tr.Stores) != 2 || len(tr.Stores[1].Roots) != 0 || len(tr.Stores[0].Roots) != 1 {
 		t.Errorf("Tree(child) = %+v, %v", tr, err)
 	}
-	// store: leaves one
+	// store: leaves one, though two are mounted
 	tr, err = ts.Tree(mustParse(t, "store:org-b"))
-	if err != nil || tr.Many || len(tr.Stores) != 1 {
+	if err != nil || !tr.Many || len(tr.Stores) != 1 {
 		t.Errorf("Tree(store:org-b) = %+v, %v", tr, err)
 	}
 	_, err = ts.Tree(mustParse(t, "sort:title"))
@@ -169,7 +173,7 @@ func TestLogMixesStoresByTime(t *testing.T) {
 	}
 	// --store takes the commits of that one
 	onlyA, err := ts.ForStore("org-a").Log(nil, 0)
-	if err != nil || onlyA.Many {
+	if err != nil || !onlyA.Many {
 		t.Fatalf("--store org-a = %+v, %v", onlyA, err)
 	}
 	for _, l := range onlyA.Logs {
@@ -197,5 +201,27 @@ func TestViewsTellTheirStore(t *testing.T) {
 	}
 	if r, err := one.Show("ME-1"); err != nil || r.Store != "me" {
 		t.Errorf("Show(ME-1).Store = %q, %v", r.Store, err)
+	}
+}
+
+func TestListByAnIDOfOneStore(t *testing.T) {
+	ts := newTwoStoreSession(t)
+	if _, err := ts.ForStore("org-a").Add(AddInput{Title: "child", Parent: "API-1"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{"parent:API-1", "parent:org-a:API-1"} {
+		l, err := ts.List(mustParse(t, q))
+		if err != nil || len(l.Entries) != 1 || l.Entries[0].Entry.Title != "child" {
+			t.Errorf("%s = %+v, %v", q, l.Entries, err)
+		}
+	}
+	// org-b's WEB-1 is not in org-a, and written for org-a it is nowhere
+	l, err := ts.List(mustParse(t, "parent:org-b:WEB-1"))
+	if err != nil || len(l.Entries) != 0 {
+		t.Errorf("parent:org-b:WEB-1 = %+v, %v; want nothing, from org-b", l.Entries, err)
+	}
+	for _, q := range []string{"parent:ZZ-9", "parent:org-a:WEB-1", "parent:org-c:API-1"} {
+		_, err := ts.List(mustParse(t, q))
+		wantErr(t, err, KindUsage, "query.invalid")
 	}
 }

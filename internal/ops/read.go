@@ -52,7 +52,7 @@ func (ss *Session) listSet() (*mount.Set, error) {
 		if ss.StoreName == sk.Name || len(c.Stores) == 1 {
 			return nil, openError(sk.Name, sk.Err)
 		}
-		ss.warn(openError(sk.Name, sk.Err).Error())
+		ss.warnSkipped(sk)
 	}
 	return set, nil
 }
@@ -74,8 +74,8 @@ func (ss *Session) queryMounted(set *mount.Set, q *query.Query) (*mount.Result, 
 }
 
 // ListResult is what a query found: Entries in the order of the groups, and
-// the Groups themselves. Stores are the stores it ran on; Many says there
-// are two or more of them, so that a reader tells which store a task is in.
+// the Groups themselves. Stores are the stores it ran on; Many says two or
+// more stores are mounted, so that a reader tells which store a task is in.
 // What Entries hold is read through their Store's Index.
 type ListResult struct {
 	Stores  []*mount.Mounted
@@ -94,7 +94,7 @@ func (ss *Session) List(q *query.Query) (ListResult, error) {
 	if err != nil {
 		return ListResult{}, err
 	}
-	return ListResult{Stores: res.Stores, Entries: res.Entries, Groups: res.Groups, Many: len(res.Stores) > 1}, nil
+	return ListResult{Stores: res.Stores, Entries: res.Entries, Groups: res.Groups, Many: len(set.Stores) > 1}, nil
 }
 
 // HasTerm reports whether q has a term with the key.
@@ -147,7 +147,7 @@ func (ss *Session) Tree(q *query.Query) (TreeResult, error) {
 	if err != nil {
 		return TreeResult{}, err
 	}
-	out := TreeResult{Many: len(res.Stores) > 1}
+	out := TreeResult{Many: len(set.Stores) > 1}
 	for _, m := range res.Stores {
 		ix, err := m.Index()
 		if err != nil {
@@ -542,7 +542,7 @@ func (ss *Session) Log(args []string, limit int) (LogResult, error) {
 	if limit > 0 && len(all) > limit {
 		all = all[:limit]
 	}
-	return LogResult{Logs: all, Many: len(stores) > 1}, nil
+	return LogResult{Logs: all, Many: len(set.Stores) > 1}, nil
 }
 
 func storeLogs(name string, ix *index.Index, entries []gitrepo.LogEntry) []StoreLog {

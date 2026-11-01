@@ -61,18 +61,11 @@ func (a *app) lsTree(q *query.Query, ulidsOnly bool, tmpl *template.Template) er
 	}
 	var b strings.Builder
 	st := a.style()
-	first := true
 	for _, ts := range res.Stores {
-		if len(ts.Roots) == 0 && len(ts.Cycle) == 0 {
+		if res.Many {
+			writeStoreTree(&b, st, ts)
 			continue
 		}
-		if res.Many {
-			if !first {
-				b.WriteString("\n")
-			}
-			b.WriteString("== " + ts.Store.Name + "\n")
-		}
-		first = false
 		for _, n := range ts.Roots {
 			writeNode(&b, st, ts.Index, n, "", "")
 		}
@@ -85,6 +78,26 @@ func (a *app) lsTree(q *query.Query, ulidsOnly bool, tmpl *template.Template) er
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())
 	return err
+}
+
+// writeStoreTree writes the trees of one store of several: a heading with
+// its name, and the tasks in a parent cycle under their own heading that
+// names the store. A store with nothing to show has no heading.
+func writeStoreTree(b *strings.Builder, st style, ts ops.TreeStore) {
+	section := func(heading string, nodes []*ops.TreeNode) {
+		if len(nodes) == 0 {
+			return
+		}
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("== " + heading + "\n")
+		for _, n := range nodes {
+			writeNode(b, st, ts.Index, n, "", "")
+		}
+	}
+	section(ts.Store.Name, ts.Roots)
+	section(ts.Store.Name+" (in a parent cycle)", ts.Cycle)
 }
 
 func writeNode(b *strings.Builder, st style, ix *index.Index, n *ops.TreeNode, lead, childLead string) {

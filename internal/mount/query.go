@@ -37,12 +37,14 @@ type Result struct {
 // "Store をまたぐ評価" says, and joins what they found.
 //   - store:a,b keeps those; -store:a drops it; a name that is not mounted
 //     is a *query.Error ("unknown store \"x\"").
-//   - a *query.Error with Unknown in one store makes it find nothing, unless
-//     every store has it, which is that error.
+//   - a *query.Error with Unknown (a property the store's schema lacks) or
+//     NotInStore (a task the store lacks, or one written "<store>:<id>" for
+//     another store) in one store makes it find nothing, unless every store
+//     has it, which is that error.
 //   - no sort:: the stores in order, each in its order. sort:: CompareSortKeys
 //     across all, ties by store order then the order within the store.
 //   - group:: one group per Key across stores; the groups in the order they
-//     first come, store by store.
+//     first come, store by store, the group of no value last.
 //
 // With only keep, only those stores are opened. Each store is read under
 // Mounted.With; what Query returns belongs to the index of the store, so a
@@ -90,7 +92,7 @@ func Query(set *Set, q *query.Query, only string, opt QueryOptions) (*Result, er
 			return nil, werr
 		}
 		var qe *query.Error
-		if errors.As(qerr, &qe) && qe.Unknown {
+		if errors.As(qerr, &qe) && (qe.Unknown || qe.NotInStore) {
 			if unknown == nil {
 				unknown = qerr
 			}
@@ -116,6 +118,10 @@ func Query(set *Set, q *query.Query, only string, opt QueryOptions) (*Result, er
 	}
 	if ran == 0 && unknown != nil {
 		return nil, unknown
+	}
+	// the tasks with no value come last, as they do within a store
+	if i := slices.IndexFunc(groups, func(g *keyedGroup) bool { return g.key == "" }); i >= 0 {
+		groups = append(groups[:i:i], append(groups[i+1:], groups[i])...)
 	}
 	for _, g := range groups {
 		// One store keeps the order query.Run gave; the stores together

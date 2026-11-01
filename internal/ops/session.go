@@ -69,6 +69,9 @@ type Session struct {
 type mountCache struct {
 	mu  gosync.Mutex
 	set *mount.Set
+	// the stores that did not open and were warned of, once per caller
+	warnedMu gosync.Mutex
+	warned   map[string]bool
 }
 
 // ForStore is a session of its own on the store name, with the same outside
@@ -119,10 +122,26 @@ func (ss *Session) Mount() (*mount.Set, error) {
 		return nil, err
 	}
 	for _, sk := range set.Skipped {
-		ss.warn(openError(sk.Name, sk.Err).Error())
+		ss.warnSkipped(sk)
 	}
 	mc.set = set
 	return set, nil
+}
+
+// warnSkipped warns that a store did not open, once per caller however many
+// times the stores are opened.
+func (ss *Session) warnSkipped(sk mount.Skipped) {
+	mc := ss.mountCache()
+	mc.warnedMu.Lock()
+	defer mc.warnedMu.Unlock()
+	if mc.warned[sk.Name] {
+		return
+	}
+	if mc.warned == nil {
+		mc.warned = map[string]bool{}
+	}
+	mc.warned[sk.Name] = true
+	ss.warn(openError(sk.Name, sk.Err).Error())
 }
 
 // dropMount forgets the stores mounted, for the next call to open them
