@@ -85,7 +85,7 @@ func (a *app) viewSave(name string, ch ops.ViewChange) error {
 	}
 	line := fmt.Sprintf("Saved view %s (%s)", name, r.View.Layout)
 	if !r.Committed {
-		line = fmt.Sprintf("%s: view %s is already saved so", verb(false, ""), name)
+		line = fmt.Sprintf("No changes: view %s is already saved with these settings", name)
 	}
 	return a.printView(r.View, line)
 }

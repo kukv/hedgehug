@@ -93,3 +93,25 @@ func (te *testEnv) commitViewFile(name, data string) {
 		te.t.Fatal(err)
 	}
 }
+
+func TestViewStoreFlag(t *testing.T) {
+	te := newStoreEnv(t)
+	te.ok("store", "init", "other", "--prefix", "OT")
+	te.ok("--store", "other", "view", "save", "only-other", "--query", "status:todo")
+	if _, err := os.Stat(filepath.Join(te.storeDir("other"), "views", "only-other.yaml")); err != nil {
+		t.Errorf("the view is not in the named store: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(te.storeDir("me"), "views", "only-other.yaml")); err == nil {
+		t.Error("the view landed in the other store too")
+	}
+	if out := te.ok("--store", "other", "view", "list"); !strings.Contains(out, "only-other") {
+		t.Errorf("list in other = %q", out)
+	}
+	if out := te.ok("--store", "me", "view", "list"); strings.Contains(out, "only-other") {
+		t.Errorf("list in me = %q", out)
+	}
+	te.ok("--store", "other", "view", "show", "only-other")
+	if code, _, _ := te.run("--store", "me", "view", "show", "only-other"); code == 0 {
+		t.Error("show in me found a view of the other store")
+	}
+}

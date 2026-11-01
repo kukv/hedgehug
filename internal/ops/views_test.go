@@ -263,3 +263,51 @@ func TestViewNameTakenDetails(t *testing.T) {
 		t.Errorf("message = %q", err)
 	}
 }
+
+func TestViewUndoCreateRemoveRename(t *testing.T) {
+	ts := newTestSession(t)
+	ts.appendConfig(aliceAccount)
+	exists := func(name string) bool {
+		t.Helper()
+		s, err := ts.OpenStore()
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = os.Stat(filepath.Join(s.Dir(), "views", name+".yaml"))
+		return err == nil
+	}
+
+	if _, err := ts.ViewSave("a", ViewChange{Query: ptr("status:todo")}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.Undo(); err != nil {
+		t.Fatal(err)
+	}
+	if exists("a") {
+		t.Error("undo of a create left the file")
+	}
+
+	if _, err := ts.ViewSave("a", ViewChange{Query: ptr("status:todo")}); err != nil {
+		t.Fatal(err)
+	}
+	before := ts.viewFile("a")
+	if _, err := ts.ViewRemove("a"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.Undo(); err != nil {
+		t.Fatal(err)
+	}
+	if !exists("a") || ts.viewFile("a") != before {
+		t.Errorf("undo of rm: exists = %v, want the file back with its content", exists("a"))
+	}
+
+	if _, err := ts.ViewRename("a", "b"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.Undo(); err != nil {
+		t.Fatal(err)
+	}
+	if !exists("a") || exists("b") || ts.viewFile("a") != before {
+		t.Errorf("undo of rename: a = %v, b = %v", exists("a"), exists("b"))
+	}
+}
