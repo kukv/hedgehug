@@ -78,9 +78,6 @@ func TestSchema(t *testing.T) {
 	if mig.Commit == nil || mig.Changed[0].Status != "renamed" {
 		t.Errorf("migrate = %+v", mig)
 	}
-	if mig.Changed[0].Status != "renamed" {
-		t.Errorf("status after migrate = %q", mig.Changed[0].Status)
-	}
 	ts.problem("POST", "/api/schema/migrate", map[string]any{"target": "value", "old": "a", "new": "b"}, 400) // value needs prop
 	ts.problem("POST", "/api/schema/migrate", map[string]any{"target": "nope", "old": "a", "new": "b"}, 400)
 }

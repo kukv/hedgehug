@@ -105,8 +105,7 @@ func (l *Loop) fetchInterval(c *config.Config) time.Duration {
 func (l *Loop) noteNext(name string) {
 	c, _, err := l.s.session("").Config()
 	if err != nil {
-		l.s.logf("sync %s: %v", name, err)
-		return
+		return // targets logs a config.yaml that does not read
 	}
 	l.mu.Lock()
 	if last, ok := l.last[name]; ok {
