@@ -11,16 +11,14 @@ import (
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
-	"github.com/kukv/hedgehug/internal/sync"
 )
 
 // Mounted is a store of stores[] that opened.
 type Mounted struct {
-	Name   string // as config.yaml names it
-	Entry  config.StoreEntry
-	Store  *store.Store
-	ULID   model.ULID  // store.yaml's ulid
-	Access sync.Access // read-only state; the zero value when access.json is missing or does not read
+	Name  string // as config.yaml names it
+	Entry config.StoreEntry
+	Store *store.Store
+	ULID  model.ULID // store.yaml's ulid
 
 	// the index, opened by Index on first use and kept
 	mu gosync.Mutex
@@ -106,29 +104,26 @@ type Set struct {
 	Stores  []*Mounted
 	Skipped []Skipped
 
-	warn     func(string) // Options.Warn
-	warnedMu gosync.Mutex
-	warned   map[string]bool // stores warned of by Resolve, once each
+	unopened func(Skipped) // Options.Unopened
 }
 
 // Options is how Open opens a store.
 type Options struct {
 	Now func() time.Time // given to store.SetNow; nil keeps the store's clock
-	// Warn gets the warning of a store whose index does not open while Resolve
-	// looks in every store; nil drops it.
-	Warn func(msg string)
+	// Unopened is told of a store whose index does not open while Resolve
+	// looks in every store, each time it happens; nil drops it. The caller
+	// decides how often to say it.
+	Unopened func(Skipped)
 	// Qualified tells which id prefixes show with the store's name. nil has
-	// Open work it out from the stores it opens; SharedPrefixes gives the
-	// same, for a caller that opens indexes of its own as well.
+	// Open take SharedPrefixes of the config; a caller that opens indexes of
+	// its own as well gives the same function to both.
 	Qualified func(prefix string) bool
 }
 
 // Open opens every store of c.Stores in order. A store that does not open
-// goes to Skipped with why; Open itself fails only for what is not about
-// one store.
-func Open(c *config.Config, opt Options) (*Set, error) {
-	set := &Set{warn: opt.Warn}
-	var opened []*store.Store
+// goes to Skipped with why.
+func Open(c *config.Config, opt Options) *Set {
+	set := &Set{unopened: opt.Unopened}
 	for _, e := range c.Stores {
 		s, err := store.Open(e.Path)
 		if err != nil {
@@ -138,45 +133,29 @@ func Open(c *config.Config, opt Options) (*Set, error) {
 		if opt.Now != nil {
 			s.SetNow(opt.Now)
 		}
-		// A missing access.json is the zero value; one that does not read
-		// is too, and checkWritable of ops reads it again for a write.
-		acc, err := sync.ReadAccess(s)
-		if err != nil {
-			acc = sync.Access{}
-		}
-		opened = append(opened, s)
-		set.Stores = append(set.Stores, &Mounted{Name: e.Name, Entry: e, Store: s, ULID: s.Meta().ULID, Access: acc, now: opt.Now})
+		set.Stores = append(set.Stores, &Mounted{Name: e.Name, Entry: e, Store: s, ULID: s.Meta().ULID, now: opt.Now})
 	}
-	// A store that did not open has no prefix to count.
 	shared := opt.Qualified
 	if shared == nil {
-		shared = sharedPrefixes(opened)
+		shared = SharedPrefixes(c)
 	}
 	for _, m := range set.Stores {
 		m.qualify = shared
 	}
-	return set, nil
+	return set
 }
 
 // SharedPrefixes tells which id prefixes two or more of the stores of c use
-// (index.SetQualified takes it), as Open counts them, but opening the
-// stores by itself and keeping none. A store that does not open has no
-// prefix to count. The result can be given to Options.Qualified.
+// (index.SetQualified takes it), case aside, reading the workspaces of each
+// store without opening any index and keeping none. A store that does not
+// open has no prefix to count.
 func SharedPrefixes(c *config.Config) func(prefix string) bool {
-	var opened []*store.Store
-	for _, e := range c.Stores {
-		if s, err := store.Open(e.Path); err == nil {
-			opened = append(opened, s)
-		}
-	}
-	return sharedPrefixes(opened)
-}
-
-// sharedPrefixes is the workspace id prefixes found in two or more of
-// stores, case aside, read without opening any index.
-func sharedPrefixes(stores []*store.Store) func(prefix string) bool {
 	seen := map[string]int{} // upper-cased prefix: number of stores
-	for _, s := range stores {
+	for _, e := range c.Stores {
+		s, err := store.Open(e.Path)
+		if err != nil {
+			continue
+		}
 		mine := map[string]bool{}
 		for w, err := range s.Workspaces() {
 			if err != nil {

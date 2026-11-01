@@ -30,14 +30,7 @@ func (ss *Session) warnMentions(s *store.Store, before, after string) {
 	if err != nil || m.Collaborators == nil {
 		return
 	}
-	name := s.Meta().Name
-	if c, _, err := ss.Config(); err == nil {
-		for _, e := range c.Stores {
-			if e.Path == s.Dir() {
-				name = e.Name
-			}
-		}
-	}
+	name := ss.storeNameOf(s)
 	var warned []string
 	for _, men := range fresh {
 		if slices.ContainsFunc(m.Collaborators, func(c sync.Collaborator) bool { return mentionIsCollaborator(men, c.ID) }) {

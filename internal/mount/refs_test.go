@@ -70,8 +70,8 @@ func TestCrossRefsFindsParentBlockedByAndTaskRef(t *testing.T) {
 		}
 		for i, field := range []string{"parent", "blocked_by", "rel"} {
 			g := got[i]
-			if g.Field != field || g.From.Entry.ULID != from[i].ULID || g.From.Entry.ID != from[i].ID || g.From.Store.Name != "org-a" ||
-				g.Target.Entry.ULID != target.ULID || g.Target.Entry.ID != "WEB-1" || g.Target.Store.Name != "org-b" {
+			if g.Field != field || g.From.ULID != from[i].ULID || g.From.ID != from[i].ID || g.From.Title != from[i].Title || g.From.Store.Name != "org-a" ||
+				g.Target.ULID != target.ULID || g.Target.ID != "WEB-1" || g.Target.RawID() != "WEB-1" || g.Target.Display != "WEB-1" || g.Target.Store.Name != "org-b" {
 				t.Errorf("CrossRefs(%q)[%d] = %+v; want %s of %s to org-b's WEB-1", name, i, g, field, from[i].ID)
 			}
 		}

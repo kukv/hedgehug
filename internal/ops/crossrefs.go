@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/kukv/hedgehug/internal/doctor"
-	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/mount"
 )
 
@@ -17,18 +16,10 @@ func (ss *Session) crossRefs(name string) ([]mount.CrossRef, error) {
 	return mount.CrossRefs(set, name)
 }
 
-// rawID is the id of a task as the file has it, or its ULID when it has none.
-func rawID(e mount.Entry) string {
-	if e.Entry.ID == "" {
-		return e.Entry.ULID.String()
-	}
-	return e.Entry.ID
-}
-
 // crossRefMsg says what r is: "parent points at org-b's WEB-4; references
 // stay inside a store".
 func crossRefMsg(r mount.CrossRef) string {
-	return fmt.Sprintf("%s points at %s's %s; references stay inside a store", r.Field, r.Target.Store.Name, rawID(r.Target))
+	return fmt.Sprintf("%s points at %s's %s; references stay inside a store", r.Field, r.Target.Store.Name, r.Target.RawID())
 }
 
 // crossStoreFindings are the references of the store name to another mounted
@@ -42,10 +33,8 @@ func (ss *Session) crossStoreFindings(name string) []doctor.Finding {
 	}
 	var out []doctor.Finding
 	for _, r := range refs {
-		var where string
-		if err := r.From.Store.With(func(ix *index.Index) { where = TaskLabel(ix, r.From.Entry) }); err != nil {
-			where = r.From.Entry.ULID.String()
-		}
+		// the same words as the Where of a check of the store's own tasks
+		where := taskLabel(r.From.ID, r.From.ID, r.From.ULID) + " " + r.From.Title
 		out = append(out, doctor.Finding{Check: "cross_store_ref", Where: where, Msg: crossRefMsg(r), Severity: doctor.Warning})
 	}
 	doctor.Sort(out)
@@ -53,8 +42,9 @@ func (ss *Session) crossStoreFindings(name string) []doctor.Finding {
 }
 
 // crossStoreWarnings are the references of the store name to another
-// mounted store, as the warnings of a sync: "org-a: WEB-1 parent points at
-// org-b's WEB-4; references stay inside a store".
+// mounted store, as the warnings of a sync: "WEB-1 parent points at
+// org-b's WEB-4; references stay inside a store". The store is not named:
+// the sync names it where it shows a warning (and --json has it as store).
 func (ss *Session) crossStoreWarnings(name string) []string {
 	refs, err := ss.crossRefs(name)
 	if err != nil {
@@ -62,7 +52,7 @@ func (ss *Session) crossStoreWarnings(name string) []string {
 	}
 	var out []string
 	for _, r := range refs {
-		out = append(out, fmt.Sprintf("%s: %s %s", r.From.Store.Name, rawID(r.From), crossRefMsg(r)))
+		out = append(out, fmt.Sprintf("%s %s", r.From.RawID(), crossRefMsg(r)))
 	}
 	return out
 }

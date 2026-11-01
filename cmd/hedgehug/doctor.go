@@ -26,6 +26,16 @@ func (a *app) doctor(fix bool) error {
 	if err != nil {
 		return err
 	}
+	// the heading names the store when two or more are mounted, even when
+	// --store narrows the report to one, as ls does
+	heading := len(rs) > 1
+	if !heading && !a.jsonOut {
+		n, err := a.ss.MountedCount()
+		if err != nil {
+			return err
+		}
+		heading = n > 1
+	}
 	failing := false
 	for i, r := range rs {
 		failing = failing || doctor.Failing(r.Findings)
@@ -38,7 +48,7 @@ func (a *app) doctor(fix bool) error {
 			}
 			continue
 		}
-		if err := a.writeDoctor(r, fix, len(rs) > 1, i == 0); err != nil {
+		if err := a.writeDoctor(r, fix, heading, i == 0); err != nil {
 			return err
 		}
 	}

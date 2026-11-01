@@ -87,8 +87,14 @@ func useJSON(res ops.UseResult) any {
 	if res.Project == nil {
 		return struct{}{}
 	}
+	// the id as the file has it, not as the text shows it with the store's
+	// name: the store is a field of its own
+	id := res.Project.ID
+	if id == "" {
+		id = res.Project.ULID.String()
+	}
 	return struct {
 		Store   string     `json:"store"`
 		Project useProject `json:"project"`
-	}{res.Store, useProject{res.ID, res.Project.ULID.String(), res.Project.Title}}
+	}{res.Store, useProject{id, res.Project.ULID.String(), res.Project.Title}}
 }

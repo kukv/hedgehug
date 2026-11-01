@@ -46,6 +46,7 @@ func (ss *Session) SchemaCheck() ([]doctor.Finding, error) {
 		}
 		return nil, err
 	}
+	// plain ids: the report is the store's own, under its heading
 	ix, err := index.Open(s)
 	if err != nil {
 		return nil, err

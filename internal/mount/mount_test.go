@@ -9,7 +9,6 @@ import (
 	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
-	"github.com/kukv/hedgehug/internal/sync"
 )
 
 func TestOpenKeepsConfigOrderAndULIDs(t *testing.T) {
@@ -66,10 +65,7 @@ func TestOpenSkipsWhatDoesNotOpen(t *testing.T) {
 func TestOpenGivesTheClockToTheStore(t *testing.T) {
 	e := newStoreAt(t, "me", "ME")
 	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	set, err := Open(&config.Config{Stores: []config.StoreEntry{e}}, Options{Now: func() time.Time { return at }})
-	if err != nil {
-		t.Fatal(err)
-	}
+	set := Open(&config.Config{Stores: []config.StoreEntry{e}}, Options{Now: func() time.Time { return at }})
 	m := set.Stores[0]
 	ix, err := m.Index()
 	if err != nil {
@@ -106,13 +102,6 @@ func TestIndexIsOpenedOnceAndKnowsTheStoreName(t *testing.T) {
 	}
 }
 
-func TestAccessIsZeroWhenMissing(t *testing.T) {
-	m := openSet(t, newStoreAt(t, "me", "ME")).Stores[0]
-	if m.Access.ReadOnly {
-		t.Errorf("access = %+v", m.Access)
-	}
-}
-
 func TestSplitStore(t *testing.T) {
 	set := openSet(t, newStoreAt(t, "org-a", "API"))
 	m, rest, ok := set.SplitStore("org-a:API-12")
@@ -126,7 +115,7 @@ func TestSplitStore(t *testing.T) {
 	}
 }
 
-func TestBrokenAccessIsZeroAndNotSkipped(t *testing.T) {
+func TestBrokenAccessIsNotSkipped(t *testing.T) {
 	e := newStoreAt(t, "me", "ME")
 	dir := filepath.Join(e.Path, filepath.FromSlash(store.LocalDir))
 	if err := os.MkdirAll(dir, 0o750); err != nil {
@@ -138,8 +127,5 @@ func TestBrokenAccessIsZeroAndNotSkipped(t *testing.T) {
 	set := openSet(t, e)
 	if len(set.Skipped) != 0 || len(set.Stores) != 1 {
 		t.Fatalf("stores %d, skipped %v", len(set.Stores), set.Skipped)
-	}
-	if set.Stores[0].Access != (sync.Access{}) {
-		t.Errorf("access = %+v", set.Stores[0].Access)
 	}
 }

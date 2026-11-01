@@ -28,7 +28,11 @@ func refTo(t *testing.T, ts *testSession, line string) (from model.ULID) {
 		}
 		return r.Entry.ULID
 	}
-	from, target := ulidIn("org-a", "API-1"), ulidIn("org-b", "WEB-1")
+	bID := "WEB-1"
+	if _, err := ts.ForStore("org-b").Show(bID); err != nil {
+		bID = "API-1" // org-b shares the prefix of org-a
+	}
+	from, target := ulidIn("org-a", "API-1"), ulidIn("org-b", bID)
 	s, err := ts.ForStore("org-a").OpenStore()
 	if err != nil {
 		t.Fatal(err)
@@ -70,7 +74,7 @@ func TestDoctorCoversEveryStoreAndFindsCrossStoreRefs(t *testing.T) {
 		}
 	}
 	want := doctor.Finding{
-		Check: "cross_store_ref", Where: "API-1 (" + from.String() + ")",
+		Check: "cross_store_ref", Where: "API-1 (" + from.String() + ") org-a task",
 		Msg: "parent points at org-b's WEB-1; references stay inside a store", Severity: doctor.Warning,
 	}
 	if len(cross) != 1 || cross[0] != want {
@@ -92,6 +96,30 @@ func TestDoctorCoversEveryStoreAndFindsCrossStoreRefs(t *testing.T) {
 	}
 	if _, err := ts.ForStore("nope").Doctor(false); KindOf(err) != KindNotFound {
 		t.Errorf("Doctor of nope: kind %v (%v); want KindNotFound", KindOf(err), err)
+	}
+}
+
+// With a prefix both stores use, doctor's Where is still the plain id (the
+// store has its heading), and the Msg names the other store and its id.
+func TestDoctorCrossStoreRefWhereIsThePlainIDWhenThePrefixIsShared(t *testing.T) {
+	ts := newTwoStoreSessionWith(t, "API", "API")
+	from := refTo(t, ts, "parent: <target>")
+	rs, err := ts.Doctor(false)
+	if err != nil || len(rs) != 2 {
+		t.Fatalf("Doctor = %+v, %v", rs, err)
+	}
+	var cross []doctor.Finding
+	for _, f := range rs[0].Findings {
+		if f.Check == "cross_store_ref" {
+			cross = append(cross, f)
+		}
+	}
+	want := doctor.Finding{
+		Check: "cross_store_ref", Where: "API-1 (" + from.String() + ") org-a task",
+		Msg: "parent points at org-b's API-1; references stay inside a store", Severity: doctor.Warning,
+	}
+	if len(cross) != 1 || cross[0] != want {
+		t.Errorf("findings = %+v; want [%+v]", cross, want)
 	}
 }
 
@@ -340,7 +368,7 @@ func TestSyncWarnsOfCrossStoreRefs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "org-a: API-1 blocked_by points at org-b's WEB-1; references stay inside a store"
+	want := "API-1 blocked_by points at org-b's WEB-1; references stay inside a store"
 	if !slices.Contains(r.Warnings, want) {
 		t.Errorf("Warnings = %q; want %q", r.Warnings, want)
 	}

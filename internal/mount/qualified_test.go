@@ -56,10 +56,7 @@ func TestSharedPrefixesOfAConfigIsTheOneOpenGives(t *testing.T) {
 	if !shared("API") || !shared("api") || shared("WEB") {
 		t.Errorf("SharedPrefixes: API %v, api %v, WEB %v", shared("API"), shared("api"), shared("WEB"))
 	}
-	set, err := Open(c, Options{Qualified: func(string) bool { return false }})
-	if err != nil {
-		t.Fatal(err)
-	}
+	set := Open(c, Options{Qualified: func(string) bool { return false }})
 	putTasks(t, a, 1, nil)
 	if got := displayIDs(t, set)["org-a"]; got != "API-1" {
 		t.Errorf("with Options.Qualified saying no, DisplayID = %q; want API-1", got)

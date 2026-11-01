@@ -44,17 +44,24 @@ func (ss *Session) listSet() (*mount.Set, error) {
 			return nil, err
 		}
 	}
-	set, err := mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Warn: ss.warn, Qualified: ss.qualifiedNow()})
+	set, toWarn, err := ss.openSet(c, true)
 	if err != nil {
 		return nil, err
 	}
-	for _, sk := range set.Skipped {
-		if ss.StoreName == sk.Name || len(c.Stores) == 1 {
-			return nil, openError(sk.Name, sk.Err)
-		}
+	for _, sk := range toWarn {
 		ss.warnSkipped(sk)
 	}
 	return set, nil
+}
+
+// MountedCount is how many of the stores of config.yaml open, which is what
+// "two or more stores are mounted" counts. Nothing is warned of.
+func (ss *Session) MountedCount() (int, error) {
+	c, _, err := ss.Config()
+	if err != nil {
+		return 0, err
+	}
+	return len(mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }}).Stores), nil
 }
 
 // queryMounted runs q on the stores of set that store: and --store leave. A

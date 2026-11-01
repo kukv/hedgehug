@@ -38,14 +38,25 @@ func (e *AmbiguousError) Error() string {
 	for i, c := range e.Candidates {
 		lines[i] = fmt.Sprintf("%s (%s) %s", c.Ref(), c.Entry.ULID, c.Entry.Title)
 	}
-	return fmt.Sprintf("%q matches %d tasks in %d stores:\n  %s", e.Input, len(e.Candidates), len(e.Candidates), strings.Join(lines, "\n  "))
+	stores := map[*Mounted]bool{}
+	for _, c := range e.Candidates {
+		stores[c.Store] = true
+	}
+	where := fmt.Sprintf("%d stores", len(stores))
+	if len(stores) == 1 {
+		where = "1 store"
+	}
+	return fmt.Sprintf("%q matches %d tasks in %s:\n  %s", e.Input, len(e.Candidates), where, strings.Join(lines, "\n  "))
 }
 
 // Resolve finds the task arg names in every store, or in the store its
 // "<store>:" names. A match in one store is that task; none is
 // store.ErrNotFound; in several stores is *AmbiguousError. An input that
 // matches more than one task within one store is that index's
-// *index.AmbiguousError, as now.
+// *index.AmbiguousError when the set has one store only. With two or more it
+// is an *AmbiguousError too, with the candidates of that store and the hits
+// of the other stores together, so that the answer does not depend on which
+// store comes first.
 func (s *Set) Resolve(arg string) (Hit, error) {
 	stores, in, named := s.Stores, arg, false
 	if m, rest, ok := s.SplitStore(arg); ok {
@@ -53,24 +64,35 @@ func (s *Set) Resolve(arg string) (Hit, error) {
 	}
 	var hits []Hit
 	for _, m := range stores {
-		var ulid model.ULID
-		var e *index.Entry
+		var found []*index.Entry
 		var rerr error
 		err := m.With(func(ix *index.Index) {
-			if ulid, rerr = ix.Resolve(in); rerr != nil {
+			ulid, err := ix.Resolve(in)
+			var ie *index.AmbiguousError
+			ulids := []model.ULID{ulid}
+			if errors.As(err, &ie) && len(s.Stores) > 1 {
+				ulids, err = ie.Candidates, nil
+			}
+			if rerr = err; rerr != nil {
 				return
 			}
-			var ok bool
-			if e, ok = ix.Task(ulid); !ok {
-				rerr = fmt.Errorf("%s: the index resolved %s but has no such task", m.Name, ulid)
+			for _, u := range ulids {
+				e, ok := ix.Task(u)
+				if !ok {
+					rerr = fmt.Errorf("%s: the index resolved %s but has no such task", m.Name, u)
+					return
+				}
+				found = append(found, e)
 			}
 		})
 		if err != nil {
 			if named {
 				return Hit{}, fmt.Errorf("cannot open %s: %w", m.Name, err)
 			}
-			// treated like a store that did not open: warn, look in the others
-			s.warnOnce(m.Name, fmt.Sprintf("cannot open %s: %v", m.Name, err))
+			// treated like a store that did not open: say so, look in the others
+			if s.unopened != nil {
+				s.unopened(Skipped{Name: m.Name, Err: err})
+			}
 			continue
 		}
 		if errors.Is(rerr, store.ErrNotFound) {
@@ -79,7 +101,9 @@ func (s *Set) Resolve(arg string) (Hit, error) {
 		if rerr != nil {
 			return Hit{}, rerr
 		}
-		hits = append(hits, Hit{Store: m, Entry: e})
+		for _, e := range found {
+			hits = append(hits, Hit{Store: m, Entry: e})
+		}
 	}
 	switch len(hits) {
 	case 0:
@@ -88,18 +112,4 @@ func (s *Set) Resolve(arg string) (Hit, error) {
 		return hits[0], nil
 	}
 	return Hit{}, &AmbiguousError{Input: arg, Candidates: hits}
-}
-
-// warnOnce gives msg to Options.Warn, the first time for the store name.
-func (s *Set) warnOnce(name, msg string) {
-	s.warnedMu.Lock()
-	defer s.warnedMu.Unlock()
-	if s.warn == nil || s.warned[name] {
-		return
-	}
-	if s.warned == nil {
-		s.warned = map[string]bool{}
-	}
-	s.warned[name] = true
-	s.warn(msg)
 }

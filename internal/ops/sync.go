@@ -73,6 +73,18 @@ func (ss *Session) Sync(all, explicit bool) ([]SyncReport, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A store that cannot be opened is reported by its sync; the mount that
+	// the cross-store check of the other stores opens need not say it again.
+	var broken []string
+	for _, e := range targets {
+		if len(e.Remotes) == 0 {
+			continue
+		}
+		if _, err := ss.openStoreAt(e.Path); err != nil {
+			broken = append(broken, e.Name)
+		}
+	}
+	defer ss.muteOpenWarnings(broken)()
 	out := make([]SyncReport, 0, len(targets))
 	var errs []error
 	for _, e := range targets {

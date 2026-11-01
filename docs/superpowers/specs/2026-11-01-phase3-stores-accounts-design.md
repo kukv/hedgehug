@@ -371,7 +371,7 @@ REST だけを作る。フェーズ3で使うのは次の表のもの。
 
 ### マウント
 
-- `mount.Open(cfg, paths, opt) (*Set, error)`: config の `stores[]` の順に Store を開く。index は必要になったときに開く（`(*Mounted).Index()`）。
+- `mount.Open(cfg, opt) *Set`: config の `stores[]` の順に Store を開く。index は必要になったときに開く（`(*Mounted).Index()`）。
 - 開けない Store（パスがない、`store.yaml` が壊れている）は `Set.Skipped` に理由と一緒に入れ、コマンドは標準エラーに `warning: org-b を開けません: <理由>` と出して続ける。`--store` で名指しした Store が開けないときはエラー。
 - 各 `Mounted` は、名前、config の要素、`*store.Store`、Store の ULID、読み取り専用の状態を持つ。
 - 開けない Store の警告は `Session.Warn` に出す（GUI にも届く）。

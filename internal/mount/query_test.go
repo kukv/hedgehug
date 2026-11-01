@@ -205,10 +205,38 @@ func TestQueryUnknownProperty(t *testing.T) {
 	if got := queryTitles(t, set, "size>=5", "org-a"); len(got) != 2 {
 		t.Errorf("size>=5 on org-a = %v", got)
 	}
-	// a store that has the property but not the value is an error, not a miss
-	parsed, _ = query.Parse("status:review")
-	if _, err = Query(set, parsed, "", noOptions); err == nil {
-		t.Error("status:review: no error, but org-b has no review status")
+}
+
+// A status, kind or enum value that a store's schema lacks matches nothing in
+// that store, as an id the store lacks does; a value no schema has is the
+// error of the query.
+func TestQueryValueOfAnotherSchemaMatchesNothingHere(t *testing.T) {
+	set := twoStoreSet(t)
+	for q, want := range map[string][]string{
+		"status:review":     {"a-review"},
+		"status:wip":        {"b-wip"},
+		"status:review,wip": {"a-review", "b-wip"},
+		"-status:review":    {"a-todo", "a-project", "b-wip", "b-todo", "b-epic"},
+		"kind:epic":         {"b-epic"},
+		"-kind:epic":        {"a-todo", "a-review", "a-project", "b-wip", "b-todo"},
+		"kind:project,epic": {"a-project", "b-epic"},
+		"tier:gold":         {"b-todo"},
+	} {
+		if got := queryTitles(t, set, q, ""); !sameSet(got, want) {
+			t.Errorf("%s = %v; want %v", q, got, want)
+		}
+	}
+	// a value nobody has is the error, even for a negation or beside a known one
+	for _, q := range []string{"status:zzz", "-status:zzz", "kind:zzz", "status:review,zzz", "tier:silver,bronze"} {
+		parsed, _ := query.Parse(q)
+		if _, err := Query(set, parsed, "", noOptions); err == nil {
+			t.Errorf("%s: no error", q)
+		}
+	}
+	// the stores asked are the ones that must know it
+	parsed, _ := query.Parse("status:review store:org-b")
+	if _, err := Query(set, parsed, "", noOptions); err == nil {
+		t.Error("status:review store:org-b: no error")
 	}
 }
 
@@ -264,6 +292,54 @@ func TestQuerySortTiesAreInStoreOrder(t *testing.T) {
 	}
 	if !reflect.DeepEqual(stores, []string{"org-a", "org-b", "org-b"}) {
 		t.Errorf("stores = %v; want ties in store order", stores)
+	}
+}
+
+func TestQuerySortDescendingAcrossStores(t *testing.T) {
+	set := twoStoreSet(t)
+	want := []string{"b-wip", "b-todo", "b-epic", "a-todo", "a-review", "a-project"}
+	if got := queryTitles(t, set, "sort:-title", ""); !reflect.DeepEqual(got, want) {
+		t.Errorf("sort:-title = %v; want %v", got, want)
+	}
+	// a number: only org-a has size, so org-b finds nothing; the task with no
+	// value comes last in either direction
+	for q, want := range map[string][]string{
+		"sort:size":  {"a-todo", "a-review", "a-project"},
+		"sort:-size": {"a-review", "a-todo", "a-project"},
+	} {
+		if got := queryTitles(t, set, q, ""); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s = %v; want %v", q, got, want)
+		}
+	}
+}
+
+func TestQuerySortWithinGroupsAcrossStores(t *testing.T) {
+	set := twoStoreSet(t)
+	for q, want := range map[string]map[string][]string{
+		"group:status sort:title": {
+			"todo": {"a-project", "a-todo", "b-epic", "b-todo"}, "review": {"a-review"}, "wip": {"b-wip"},
+		},
+		"group:status sort:-title": {
+			"todo": {"b-todo", "b-epic", "a-todo", "a-project"}, "review": {"a-review"}, "wip": {"b-wip"},
+		},
+	} {
+		parsed, _ := query.Parse(q)
+		res, err := Query(set, parsed, "", noOptions)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := map[string][]string{}
+		for _, g := range res.Groups {
+			for _, e := range g.Entries {
+				got[g.Key] = append(got[g.Key], e.Entry.Title)
+			}
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s = %v; want %v", q, got, want)
+		}
+		if keys := []string{res.Groups[0].Key, res.Groups[1].Key, res.Groups[2].Key}; !reflect.DeepEqual(keys, []string{"todo", "review", "wip"}) {
+			t.Errorf("%s: groups in the order %v", q, keys)
+		}
 	}
 }
 

@@ -40,6 +40,14 @@ func (ss *Session) checkWritable(s *store.Store) error {
 	if !acc.ReadOnly {
 		return nil
 	}
+	name := ss.storeNameOf(s)
+	return newErr(KindConflict, "store.read_only", &ReadOnlyError{Store: name, Access: acc},
+		"store", name, "reason", acc.Reason)
+}
+
+// storeNameOf is the name config.yaml gives the store s, or the name its
+// store.yaml has when config.yaml lists no store in that directory.
+func (ss *Session) storeNameOf(s *store.Store) string {
 	name := s.Meta().Name
 	if c, _, err := ss.Config(); err == nil {
 		for _, e := range c.Stores {
@@ -48,8 +56,7 @@ func (ss *Session) checkWritable(s *store.Store) error {
 			}
 		}
 	}
-	return newErr(KindConflict, "store.read_only", &ReadOnlyError{Store: name, Access: acc},
-		"store", name, "reason", acc.Reason)
+	return name
 }
 
 // OpenForWrite opens the store and its index for an operation that writes. A

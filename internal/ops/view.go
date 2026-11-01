@@ -136,10 +136,16 @@ func OrEmpty(s []string) []string {
 // and full ULID, or the ULID alone when the task has no id (a file that does
 // not decode).
 func TaskLabel(ix *index.Index, e *index.Entry) string {
-	if e.ID == "" {
-		return e.ULID.String()
+	return taskLabel(e.ID, ix.DisplayID(e), e.ULID)
+}
+
+// taskLabel is TaskLabel for a task read out of its index: its id as the
+// file has it, as the index shows it, and its ULID.
+func taskLabel(id, shown string, ulid model.ULID) string {
+	if id == "" {
+		return ulid.String()
 	}
-	return ix.DisplayID(e) + " (" + e.ULID.String() + ")"
+	return shown + " (" + ulid.String() + ")"
 }
 
 // TaskFileName names the temporary file that edits task e: its id, or its

@@ -1,11 +1,15 @@
 package ops
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/kukv/hedgehug/internal/config"
 	hhctx "github.com/kukv/hedgehug/internal/context"
 	"github.com/kukv/hedgehug/internal/index"
+	"github.com/kukv/hedgehug/internal/mount"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 // useKind is the kind of a task that hh use takes.
@@ -29,16 +33,18 @@ func (ss *Session) loadContext() (hhctx.State, config.Paths, error) {
 }
 
 // Use makes the project arg names (any store, "<store>:" allowed) the
-// default parent of new tasks. A task whose kind is not project is
+// default parent of new tasks. With --store the project is looked for in
+// that store only, and a "<store>:" naming another one is store.conflict, as
+// for the other commands that take an id. A task whose kind is not project is
 // KindInvalid, use.not_project. A deleted one is KindConflict, task.deleted.
 func (ss *Session) Use(arg string) (UseResult, error) {
 	set, err := ss.Mount()
 	if err != nil {
 		return UseResult{}, err
 	}
-	hit, err := set.Resolve(arg)
+	hit, err := ss.useResolve(set, arg)
 	if err != nil {
-		return UseResult{}, ss.mountResolveError(set, arg, err)
+		return UseResult{}, err
 	}
 	var e index.Entry
 	var id string
@@ -76,6 +82,54 @@ func (ss *Session) Use(arg string) (UseResult, error) {
 		}
 	}
 	return UseResult{Store: hit.Store.Name, Project: &e, ID: id, Changed: changed}, nil
+}
+
+// useResolve finds the project arg names, in the store --store names when
+// there is one.
+func (ss *Session) useResolve(set *mount.Set, arg string) (mount.Hit, error) {
+	if ss.StoreName == "" {
+		hit, err := set.Resolve(arg)
+		if err != nil {
+			return mount.Hit{}, ss.mountResolveError(set, arg, err)
+		}
+		return hit, nil
+	}
+	c, _, err := ss.Config()
+	if err != nil {
+		return mount.Hit{}, err
+	}
+	scoped := ss.StoreName + ":" + arg
+	if name, _, ok := strings.Cut(arg, ":"); ok && storeExists(c, name) {
+		if name != ss.StoreName {
+			return mount.Hit{}, storeConflict(arg, name, ss.StoreName)
+		}
+		scoped = arg
+	}
+	if _, ok := set.Get(ss.StoreName); !ok {
+		// not found, or one that does not open, as the other commands say it
+		if _, _, err := ss.Entry(); err != nil {
+			return mount.Hit{}, err
+		}
+		for _, sk := range set.Skipped {
+			if sk.Name == ss.StoreName {
+				return mount.Hit{}, openError(sk.Name, sk.Err)
+			}
+		}
+	}
+	hit, err := set.Resolve(scoped)
+	if errors.Is(err, store.ErrNotFound) {
+		// say what the user typed, not the store-qualified form made here
+		return mount.Hit{}, newErr(KindNotFound, "task.not_found", fmt.Errorf("%q: %w", arg, store.ErrNotFound), "input", arg)
+	}
+	if err != nil {
+		// the input as the user typed it, not the form made here
+		var me *mount.AmbiguousError
+		if errors.As(err, &me) {
+			me.Input = arg
+		}
+		return mount.Hit{}, ss.mountResolveError(set, arg, err)
+	}
+	return hit, nil
 }
 
 // UseShow is the project hh use set, or a zero result. A project that is

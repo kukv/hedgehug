@@ -7,23 +7,12 @@ import (
 
 	"go.yaml.in/yaml/v4"
 
-	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/mount"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 )
-
-// storeNamed reports whether c has a store called name.
-func storeNamed(c *config.Config, name string) bool {
-	for _, e := range c.Stores {
-		if e.Name == name {
-			return true
-		}
-	}
-	return false
-}
 
 // forTask is the session that works on the task arg names, and arg as that
 // session reads it. With StoreName set it is ss itself; a "<store>:" naming
@@ -39,15 +28,14 @@ func (ss *Session) forTask(arg string) (*Session, string, error) {
 		return nil, "", err
 	}
 	// A "<store>:" names the store, which is not looked up.
-	if name, rest, ok := strings.Cut(arg, ":"); ok && storeNamed(c, name) {
+	if name, rest, ok := strings.Cut(arg, ":"); ok && storeExists(c, name) {
 		switch {
 		case ss.StoreName == "":
 			return ss.ForStore(name), rest, nil
 		case name == ss.StoreName:
 			return ss, rest, nil
 		}
-		return nil, "", newErr(KindUsage, "store.conflict",
-			fmt.Errorf("%q is in %s, but --store is %s", arg, name, ss.StoreName), "store", ss.StoreName, "named", name)
+		return nil, "", storeConflict(arg, name, ss.StoreName)
 	}
 	// With one store (or none: Select says so) there is nothing to look in:
 	// it is the store, decided as Select does, before the task is looked up.
@@ -63,6 +51,13 @@ func (ss *Session) forTask(arg string) (*Session, string, error) {
 		return nil, "", ss.mountResolveError(set, arg, err)
 	}
 	return ss.ForStore(hit.Store.Name), arg, nil
+}
+
+// storeConflict is the usage error of an id written for the store named but
+// asked in the store --store names.
+func storeConflict(arg, named, storeName string) error {
+	return newErr(KindUsage, "store.conflict",
+		fmt.Errorf("%q is in %s, but --store is %s", arg, named, storeName), "store", storeName, "named", named)
 }
 
 // mountResolveError gives the error of mount.Set.Resolve its Kind and Code.
@@ -122,6 +117,11 @@ func (ss *Session) forComment(arg string) (*Session, error) {
 	for _, m := range set.Stores {
 		var refs []store.CommentRef
 		var refsErr error
+		// With, though the index it brings up to HEAD is not used: With is the
+		// one way to reach m.Store that holds the store's lock and opens the
+		// store again after another handle repacked it. Mounted has no way to
+		// that without building the index, and the index is built once per
+		// store for the lookups that follow anyway.
 		if err := m.With(func(*index.Index) { refs, refsErr = m.Store.CommentULIDs() }); err != nil {
 			return nil, err
 		}
@@ -169,7 +169,7 @@ func (ss *Session) ResolveRef(ix *index.Index, arg string) (*index.Entry, error)
 	}
 	in := arg
 	if c, _, err := ss.Config(); err == nil {
-		if name, rest, ok := strings.Cut(arg, ":"); ok && storeNamed(c, name) {
+		if name, rest, ok := strings.Cut(arg, ":"); ok && storeExists(c, name) {
 			if name == self {
 				in = rest
 			} else {

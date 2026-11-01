@@ -1,10 +1,13 @@
 package query
 
 import (
+	"cmp"
 	"errors"
 	"reflect"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/index"
+	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -192,5 +195,36 @@ func TestRunMissingTaskIsAnErrorUnlessAllowed(t *testing.T) {
 	q, _ := Parse("parent:ZZ-9")
 	if _, err := Run(ix, q, Options{}); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("err = %v; want not found", err)
+	}
+}
+
+// A sort inside one store (sortSpec.compare, by field.less) and across stores
+// (CompareSortKeys on the keys) give the same sign for every pair of values,
+// ascending and descending, so that neither drifts from the other.
+func TestSortAndSortKeyAgree(t *testing.T) {
+	title := func(e *index.Entry) []string { return single(e.Title) }
+	cases := []struct {
+		name   string
+		f      field
+		values []string
+	}{
+		{"place", placed(field{values: title}, []string{"todo", "doing", "done"}), []string{"done", "todo", "doing", "zzz", "aaa", "Todo"}},
+		{"number", numbered(field{values: title}, parsers[schema.TypeNumber]), []string{"1", "2", "10", "1.0", "x", "a", "-3", "2.50", "2.5"}},
+		{"text", texted(field{values: title}), []string{"apple", "Apple", "banana", "Banana", "a", "B"}},
+	}
+	for _, c := range cases {
+		for _, desc := range []bool{false, true} {
+			o := &sortSpec{f: c.f, desc: desc}
+			for _, x := range c.values {
+				for _, y := range c.values {
+					ex, ey := &index.Entry{Title: x}, &index.Entry{Title: y}
+					want := o.compare(ex, ey)
+					got := CompareSortKeys(c.f.sortKey(ex), c.f.sortKey(ey), desc)
+					if cmp.Compare(got, 0) != cmp.Compare(want, 0) {
+						t.Errorf("%s desc=%v (%q, %q): CompareSortKeys %d, sort %d", c.name, desc, x, y, got, want)
+					}
+				}
+			}
+		}
 	}
 }

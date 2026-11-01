@@ -111,43 +111,83 @@ func (ss *Session) mountCache() *mountCache {
 }
 
 // Mount is the stores config.yaml lists, opened once per caller. A store
-// that does not open is in Skipped, and the first call warns of each.
+// that does not open is in Skipped, and the first call warns of each (not of
+// the others when --store names one store).
 func (ss *Session) Mount() (*mount.Set, error) {
+	set, toWarn, err := ss.mountOnce()
+	// not under mc.mu: Warn is the caller's and may call back
+	for _, sk := range toWarn {
+		ss.warnSkipped(sk)
+	}
+	return set, err
+}
+
+// mountOnce is the cached set, opened if need be; toWarn are the stores of
+// a set opened now that the caller tells of.
+func (ss *Session) mountOnce() (set *mount.Set, toWarn []mount.Skipped, err error) {
 	mc := ss.mountCache()
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 	if mc.set != nil {
-		return mc.set, nil
+		return mc.set, nil, nil
 	}
 	c, _, err := ss.Config()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	set, err := mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Warn: ss.warn, Qualified: ss.qualifiedNow()})
-	if err != nil {
-		return nil, err
-	}
-	for _, sk := range set.Skipped {
-		ss.warnSkipped(sk)
-	}
+	set, toWarn, _ = ss.openSet(c, false)
 	mc.set = set
-	return set, nil
+	return set, toWarn, nil
 }
 
-// warnSkipped warns that a store did not open, once per caller however many
-// times the stores are opened.
+// openSet opens the stores of c as this session wants them: its clock, the
+// id prefixes it counts itself, and what Resolve finds not to open given to
+// warnSkipped. A store that does not open is left out of the set. toWarn are
+// those the caller is to tell of with warnSkipped, once it holds no lock: all
+// of them, except that with --store naming a store the command is about
+// that store only. With strict the store --store names, and the only store
+// of c, are an error instead (what a listing does).
+func (ss *Session) openSet(c *config.Config, strict bool) (set *mount.Set, toWarn []mount.Skipped, err error) {
+	set = mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Unopened: ss.warnSkipped, Qualified: ss.qualifiedNow()})
+	for _, sk := range set.Skipped {
+		switch {
+		case strict && (ss.StoreName == sk.Name || len(c.Stores) == 1):
+			return nil, nil, openError(sk.Name, sk.Err)
+		case ss.StoreName != "" && ss.StoreName != sk.Name:
+			// not what the command is about
+		default:
+			toWarn = append(toWarn, sk)
+		}
+	}
+	return set, toWarn, nil
+}
+
+// warnSkipped warns that a store did not open: the stores found not to open
+// when they are mounted, and an index that does not open while an id is
+// looked up in every store. It is said once per caller however many times
+// the stores are opened, and not while muteOpenWarnings holds the store. (The
+// other warn-once of the package is the context.json one, which AddHere
+// leaves out for a call that carries an answer; that is about a file, not
+// a store.)
 func (ss *Session) warnSkipped(sk mount.Skipped) {
+	ss.warnOnce(sk.Name, openError(sk.Name, sk.Err).Error())
+}
+
+// warnOnce says msg about the store name, once per caller and not while
+// muteOpenWarnings holds the store.
+func (ss *Session) warnOnce(name, msg string) {
 	mc := ss.mountCache()
 	mc.warnedMu.Lock()
-	defer mc.warnedMu.Unlock()
-	if mc.warned[sk.Name] || mc.muted[sk.Name] > 0 {
+	if mc.warned[name] || mc.muted[name] > 0 {
+		mc.warnedMu.Unlock()
 		return
 	}
 	if mc.warned == nil {
 		mc.warned = map[string]bool{}
 	}
-	mc.warned[sk.Name] = true
-	ss.warn(openError(sk.Name, sk.Err).Error())
+	mc.warned[name] = true
+	mc.warnedMu.Unlock()
+	ss.warn(msg)
 }
 
 // muteOpenWarnings makes the mount keep quiet about the stores names that do

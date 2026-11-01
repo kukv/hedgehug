@@ -107,12 +107,46 @@ func TestAmbiguousCandidateWithoutIDUsesULID(t *testing.T) {
 func TestResolveAmbiguousInsideOneStore(t *testing.T) {
 	a := newStoreAt(t, "org-a", "API")
 	putTasks(t, a, 2, func(_ int, task *model.Task) { task.FormerIDs = []string{"OLD-3"} })
+	// one store alone: the index says it
+	alone := openSet(t, a)
+	_, err := alone.Resolve("OLD-3")
+	var ie *index.AmbiguousError
+	if !errors.As(err, &ie) || len(ie.Candidates) != 2 {
+		t.Errorf("one store: err = %v, want index.AmbiguousError", err)
+	}
+	// with two stores the candidates carry the name of the store
 	set := openSet(t, a, newStoreAt(t, "org-b", "WEB"))
 	for _, in := range []string{"OLD-3", "org-a:OLD-3"} {
 		_, err := set.Resolve(in)
-		var ie *index.AmbiguousError
-		if !errors.As(err, &ie) || len(ie.Candidates) != 2 {
-			t.Errorf("Resolve(%q) err = %v, want index.AmbiguousError", in, err)
+		var ae *AmbiguousError
+		if !errors.As(err, &ae) || len(ae.Candidates) != 2 {
+			t.Fatalf("Resolve(%q) err = %v, want AmbiguousError", in, err)
+		}
+		if !strings.Contains(err.Error(), "org-a:API-1") || !strings.Contains(err.Error(), "org-a:API-2") || !strings.Contains(err.Error(), "in 1 store:") {
+			t.Errorf("message = %q", err)
+		}
+	}
+}
+
+// An input that is ambiguous in one store and found in another is one
+// AmbiguousError with all the candidates, whichever store comes first.
+func TestResolveAmbiguousInOneStoreAndFoundInAnother(t *testing.T) {
+	for _, order := range [][2]string{{"org-a", "org-b"}, {"org-b", "org-a"}} {
+		two := newStoreAt(t, "org-a", "API")
+		one := newStoreAt(t, "org-b", "WEB")
+		putTasks(t, two, 2, func(_ int, task *model.Task) { task.FormerIDs = []string{"OLD-3"} })
+		putTasks(t, one, 1, func(_ int, task *model.Task) { task.FormerIDs = []string{"OLD-3"} })
+		entries := map[string]config.StoreEntry{"org-a": two, "org-b": one}
+		set := openSet(t, entries[order[0]], entries[order[1]])
+		_, err := set.Resolve("OLD-3")
+		var ae *AmbiguousError
+		if !errors.As(err, &ae) || len(ae.Candidates) != 3 {
+			t.Fatalf("order %v: err = %v, want AmbiguousError of 3", order, err)
+		}
+		for _, want := range []string{"org-a:API-1", "org-a:API-2", "org-b:WEB-1", "in 2 stores"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("order %v: message %q lacks %s", order, err, want)
+			}
 		}
 	}
 }
@@ -132,11 +166,8 @@ func breakIndex(t *testing.T, m *Mounted) {
 func TestResolveSkipsAStoreWhoseIndexDoesNotOpen(t *testing.T) {
 	a, b := newStoreAt(t, "org-a", "API"), newStoreAt(t, "org-b", "WEB")
 	tb := putTasks(t, b, 1, nil)[0]
-	var warns []string
-	set, err := Open(&config.Config{Stores: []config.StoreEntry{a, b}}, Options{Warn: func(m string) { warns = append(warns, m) }})
-	if err != nil {
-		t.Fatal(err)
-	}
+	var told []Skipped
+	set := Open(&config.Config{Stores: []config.StoreEntry{a, b}}, Options{Unopened: func(sk Skipped) { told = append(told, sk) }})
 	breakIndex(t, set.Stores[0])
 	for range 2 {
 		hit, err := set.Resolve(tb.ULID.String())
@@ -144,26 +175,24 @@ func TestResolveSkipsAStoreWhoseIndexDoesNotOpen(t *testing.T) {
 			t.Fatalf("Resolve = %v %v", hit, err)
 		}
 	}
-	if len(warns) != 1 || !strings.HasPrefix(warns[0], "cannot open org-a: ") {
-		t.Errorf("warnings = %q", warns)
+	// every time: how often to say it is for the caller to decide
+	if len(told) != 2 || told[0].Name != "org-a" || told[0].Err == nil {
+		t.Errorf("told of %+v", told)
 	}
 }
 
 func TestResolveNamedStoreWhoseIndexDoesNotOpenIsAnError(t *testing.T) {
 	a, b := newStoreAt(t, "org-a", "API"), newStoreAt(t, "org-b", "WEB")
 	putTasks(t, a, 1, nil)
-	var warns []string
-	set, err := Open(&config.Config{Stores: []config.StoreEntry{a, b}}, Options{Warn: func(m string) { warns = append(warns, m) }})
-	if err != nil {
-		t.Fatal(err)
-	}
+	var told []Skipped
+	set := Open(&config.Config{Stores: []config.StoreEntry{a, b}}, Options{Unopened: func(sk Skipped) { told = append(told, sk) }})
 	breakIndex(t, set.Stores[0])
-	_, err = set.Resolve("org-a:API-1")
+	_, err := set.Resolve("org-a:API-1")
 	if err == nil || !strings.HasPrefix(err.Error(), "cannot open org-a: ") || errors.Is(err, store.ErrNotFound) {
 		t.Errorf("err = %v", err)
 	}
-	if len(warns) != 0 {
-		t.Errorf("warnings = %q", warns)
+	if len(told) != 0 {
+		t.Errorf("told of %+v", told)
 	}
 }
 

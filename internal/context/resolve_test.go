@@ -72,10 +72,7 @@ func project(repos ...string) func(*model.Task) {
 
 func openSet(t *testing.T, es ...config.StoreEntry) *mount.Set {
 	t.Helper()
-	set, err := mount.Open(&config.Config{Stores: es}, mount.Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	set := mount.Open(&config.Config{Stores: es}, mount.Options{})
 	return set
 }
 

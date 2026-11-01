@@ -1,6 +1,7 @@
 package context
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"regexp"
@@ -219,7 +220,7 @@ func (r *resolver) explicit(*git.Repository, []string) (result, error) {
 	if in.Parent != "" && in.Project != "" {
 		return result{}, newError(KindUsage, "add.parent_and_project", errors.New("--parent and --project cannot be given together"))
 	}
-	if arg := cmp2(in.Parent, in.Project); arg != "" {
+	if arg := cmp.Or(in.Parent, in.Project); arg != "" {
 		m, e, err := r.findTask(arg)
 		if err != nil {
 			return result{}, err
@@ -242,14 +243,6 @@ func (r *resolver) explicit(*git.Repository, []string) (result, error) {
 	}
 	d, ch, err := r.root(m, in.Workspace, 1)
 	return result{dest: d, choice: ch}, err
-}
-
-// cmp2 is the first of a and b that is not empty.
-func cmp2(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }
 
 func idOrULID(e *index.Entry) string {
@@ -378,7 +371,7 @@ func (r *resolver) root(m *mount.Mounted, wsArg string, stage int) (*Destination
 	var ch *Choice
 	var err error
 	if werr := m.With(func(ix *index.Index) {
-		want := cmp2(wsArg, r.in.PickWorkspace)
+		want := cmp.Or(wsArg, r.in.PickWorkspace)
 		if want != "" {
 			f, rerr := ix.ResolveWorkspace(want)
 			if rerr != nil {

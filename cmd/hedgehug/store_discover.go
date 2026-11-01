@@ -36,7 +36,7 @@ func (a *app) storeDiscover(in ops.DiscoverInput, all bool) error {
 	if e := ops.AsError(err); e != nil && e.Code == "choice.required" && e.Args["what"] == "--account" && a.isTerminal(a.stdin) {
 		names, _ := e.Args["candidates"].([]string)
 		var picked string
-		if picked, err = a.askChoice("Which account do the stores belong to?", names); err != nil {
+		if picked, err = a.askChoice(names, choice{question: "Which account do the stores belong to?"}); err != nil {
 			return err
 		}
 		in.Account = picked

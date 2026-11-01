@@ -63,9 +63,6 @@ func putTasks(t *testing.T, e config.StoreEntry, n int, edit func(i int, task *m
 // openSet opens the stores of es.
 func openSet(t *testing.T, es ...config.StoreEntry) *Set {
 	t.Helper()
-	set, err := Open(&config.Config{Stores: es}, Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	set := Open(&config.Config{Stores: es}, Options{})
 	return set
 }

@@ -22,10 +22,11 @@ type Options struct {
 	// Overwritten holds the tasks is:overwritten matches: those with an
 	// unread overwritten item in the inbox.
 	Overwritten map[model.ULID]bool
-	// MissingIDs makes a value naming a task the store does not have (in
-	// project:, parent:, ...) match no task, listed in Result.IDs, where it
-	// is otherwise the error of the query. mount.Query sets it: another store
-	// may have the task.
+	// MissingIDs makes a value the store does not know match no task, listed
+	// in Result.IDs, where it is otherwise the error of the query: a task it
+	// does not have (in project:, parent:, ...), and a status, kind or enum
+	// value its schema lacks. mount.Query sets it: another store may know the
+	// value.
 	MissingIDs bool
 }
 
@@ -36,15 +37,17 @@ type Result struct {
 	SortKey func(*index.Entry) SortKey
 	// Desc is whether the sort: is descending.
 	Desc bool
-	// IDs are the values of the terms that name a task (project:, parent:,
-	// blocked_by:, a task_ref property, ...), with whether this store has the
-	// task. A value it does not have matches no task here; mount.Query makes
-	// it an error when no store has it.
+	// IDs are the values that Options.MissingIDs covers: those that name a
+	// task (project:, parent:, blocked_by:, a task_ref property, ...) and
+	// those of status:, kind: and enum properties, with whether this store
+	// knows the value. A value it does not know matches no task here;
+	// mount.Query makes it an error when no store knows it.
 	IDs []IDLookup
 }
 
-// IDLookup is one value that names a task. Err is nil when the store has the
-// task, and says it does not otherwise (store.ErrNotFound).
+// IDLookup is one value that Options.MissingIDs covers. Err is nil when the
+// store knows the value, and says why not otherwise (store.ErrNotFound for a
+// task).
 type IDLookup struct {
 	Pos   int // the term
 	Term  string
@@ -67,7 +70,7 @@ type compiler struct {
 	ix      *index.Index
 	sc      *schema.Schema
 	opt     Options
-	ids     []IDLookup // the values naming a task
+	ids     []IDLookup // the values MissingIDs covers
 	deleted bool       // the query names is:deleted
 	order   *sortSpec  // sort:, if any
 	group   *field     // group:, if any
@@ -164,12 +167,16 @@ func (c *compiler) term(t Term) (pred, error) {
 	case "status":
 		return c.status(t)
 	case "kind":
-		return c.matchText(t, func(e *index.Entry) []string { return single(e.Kind) }, func(v string) error {
+		t, err := c.known(t, func(v string) error {
 			if _, ok := c.sc.Kind(v); !ok {
 				return fmt.Errorf("unknown kind %q", v)
 			}
 			return nil
 		})
+		if err != nil {
+			return nil, err
+		}
+		return c.matchText(t, func(e *index.Entry) []string { return single(e.Kind) }, nil)
 	case "label":
 		return c.matchText(t, func(e *index.Entry) []string { return e.Labels }, nil)
 	case "assignee":
@@ -205,6 +212,32 @@ func (c *compiler) term(t Term) (pred, error) {
 		}
 	}
 	return nil, c.failUnknown(t, "unknown key %q", t.Key)
+}
+
+// known keeps the values of t that check accepts. A value it refuses is the
+// error of the query, or with Options.MissingIDs a value this store does not
+// know, which is left out (so it matches no task) and listed in c.ids.
+func (c *compiler) known(t Term, check func(string) error) (Term, error) {
+	var vs []string
+	for _, v := range t.Values {
+		if v == "none" {
+			vs = append(vs, v)
+			continue
+		}
+		if err := check(v); err != nil {
+			if !c.opt.MissingIDs {
+				return t, c.failWith(t, err)
+			}
+			c.ids = append(c.ids, IDLookup{Pos: t.Pos, Term: t.Raw, Value: v, Err: err})
+			continue
+		}
+		if c.opt.MissingIDs {
+			c.ids = append(c.ids, IDLookup{Pos: t.Pos, Term: t.Raw, Value: v})
+		}
+		vs = append(vs, v)
+	}
+	t.Values = vs
+	return t, nil
 }
 
 // matchText matches when a value of the task equals a value of the term,
@@ -262,10 +295,16 @@ func (c *compiler) status(t Term) (pred, error) {
 				}
 			}
 		default:
-			if _, ok := c.sc.Status(v); !ok {
-				return nil, c.fail(t, "unknown status or category %q", v)
+			one, err := c.known(Term{Pos: t.Pos, Raw: t.Raw, Values: []string{v}}, func(v string) error {
+				if _, ok := c.sc.Status(v); !ok {
+					return fmt.Errorf("unknown status or category %q", v)
+				}
+				return nil
+			})
+			if err != nil {
+				return nil, err
 			}
-			names = append(names, v)
+			names = append(names, one.Values...)
 		}
 	}
 	t.Values = names
@@ -488,12 +527,16 @@ func (c *compiler) prop(t Term, p schema.Prop) (pred, error) {
 	case schema.TypeTaskRef:
 		return c.taskRef(t, p)
 	case schema.TypeEnum, schema.TypeMultiEnum:
-		return c.matchText(t, get, func(v string) error {
+		t, err := c.known(t, func(v string) error {
 			if !slices.ContainsFunc(p.Values, func(x string) bool { return strings.EqualFold(x, v) }) {
 				return fmt.Errorf("%q is not one of %v", v, p.Values)
 			}
 			return nil
 		})
+		if err != nil {
+			return nil, err
+		}
+		return c.matchText(t, get, nil)
 	case schema.TypeBool:
 		return c.matchText(t, get, func(v string) error {
 			if v != "true" && v != "false" {

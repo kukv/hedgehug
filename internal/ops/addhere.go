@@ -42,7 +42,7 @@ func (ss *Session) AddHere(in AddHereInput) (AddHereResult, *hhctx.Confirm, *hhc
 	if ctx.Store != "" {
 		// an unknown store is said as the other commands say it
 		if _, err := c.Select(ctx.Store); err != nil {
-			return AddHereResult{}, nil, nil, err
+			return AddHereResult{}, nil, nil, selectError(ctx.Store, err)
 		}
 	}
 	if ctx.DefaultStore == "" {
@@ -54,6 +54,8 @@ func (ss *Session) AddHere(in AddHereInput) (AddHereResult, *hhctx.Confirm, *hhc
 	}
 	// A call that carries the answer to a question is a repeat of an earlier
 	// one, which gave the warnings (context.json, hedgehug use): say them once.
+	// (This is for what is wrong with context.json. A store that does not open
+	// is told of once by warnSkipped.)
 	warn := ss.warn
 	if ctx.BranchParent != hhctx.Unasked || ctx.PickProject != "" || ctx.PickStore != "" || ctx.PickWorkspace != "" {
 		warn = nil

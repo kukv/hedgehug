@@ -11,7 +11,7 @@
       },
       {
         "check": "cross_store_ref",
-        "where": "AA-2 (<ULID-1>)",
+        "where": "AA-2 (<ULID-1>) Alpha child",
         "msg": "blocked_by points at bravo-long's BB-3; references stay inside a store",
         "severity": "warning"
       }

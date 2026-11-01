@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -146,37 +145,5 @@ func (a *app) askBranchParent(c *hhctx.Confirm) (bool, error) {
 // pick; Enter takes the default, if there is one.
 func (a *app) askPick(c *hhctx.Choice) (string, error) {
 	prompt := map[string]string{"project": "Project", "store": "Store", "workspace": "Workspace"}[c.What]
-	var b strings.Builder
-	def := 0
-	for i, o := range c.Options {
-		b.WriteString("  " + strconv.Itoa(i+1) + ") " + o)
-		if i < len(c.Labels) && c.Labels[i] != "" {
-			b.WriteString(" " + c.Labels[i])
-		}
-		b.WriteString("\n")
-		if o == c.Default {
-			def = i + 1
-		}
-	}
-	if def > 0 {
-		b.WriteString(prompt + " [" + strconv.Itoa(def) + "]: ")
-	} else {
-		b.WriteString(prompt + ": ")
-	}
-	if _, err := fmt.Fprint(a.stderr, b.String()); err != nil {
-		return "", err
-	}
-	line, err := a.readLine()
-	if err != nil && line == "" {
-		return "", errors.New("canceled")
-	}
-	text := strings.TrimSpace(line)
-	if text == "" && def > 0 {
-		return c.Options[def-1], nil
-	}
-	n, err := strconv.Atoi(text)
-	if err != nil || n < 1 || n > len(c.Options) {
-		return "", usageErrorf("%q is not one of 1-%d", text, len(c.Options))
-	}
-	return c.Options[n-1], nil
+	return a.askChoice(c.Options, choice{labels: c.Labels, prompt: prompt, def: c.Default})
 }
