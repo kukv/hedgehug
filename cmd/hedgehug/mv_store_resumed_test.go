@@ -10,8 +10,7 @@ import (
 
 // unfinishedMove stops the move of AA-1 (with AA-2 under it) to bravo-long
 // after the destination was written: the source file of AA-2 cannot be read.
-// It returns the file, to be made readable again.
-func unfinishedMove(t *testing.T, te *testEnv) string {
+func unfinishedMove(t *testing.T, te *testEnv) {
 	t.Helper()
 	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
 		t.Skip("a file that cannot be read needs a permission that is enforced")
@@ -31,7 +30,6 @@ func unfinishedMove(t *testing.T, te *testEnv) string {
 	if code == 0 || !strings.Contains(errs, "moved into bravo-long; run the same command again") {
 		t.Fatalf("the first run: exit %d, stderr %q", code, errs)
 	}
-	return path
 }
 
 // A rerun that only finishes the source says so before the Moved lines.
