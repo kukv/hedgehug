@@ -1,0 +1,46 @@
+[
+  {
+    "ulid": "<ULID-1>",
+    "id": "ME-1",
+    "workspace": {
+      "ulid": "<ULID-2>",
+      "name": "me",
+      "id_prefix": "ME"
+    },
+    "kind": "project",
+    "title": "Project",
+    "parent": null,
+    "rank": "a0",
+    "status": "todo",
+    "assignees": [],
+    "labels": [],
+    "blocked_by": [],
+    "props": {},
+    "created": "<TIME>",
+    "updated": "<TIME>",
+    "deleted_at": null,
+    "problems": []
+  },
+  {
+    "ulid": "<ULID-3>",
+    "id": "ME-3",
+    "workspace": {
+      "ulid": "<ULID-2>",
+      "name": "me",
+      "id_prefix": "ME"
+    },
+    "kind": "task",
+    "title": "Beta",
+    "parent": "<ULID-1>",
+    "rank": "a1",
+    "status": "todo",
+    "assignees": [],
+    "labels": [],
+    "blocked_by": [],
+    "props": {},
+    "created": "<TIME>",
+    "updated": "<TIME>",
+    "deleted_at": null,
+    "problems": []
+  }
+]

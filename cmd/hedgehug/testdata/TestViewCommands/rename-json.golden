@@ -1,0 +1,19 @@
+{
+  "name": "r2",
+  "layout": "tree",
+  "query": "status:done",
+  "table": {
+    "columns": [
+      "id",
+      "title",
+      "status",
+      "assignee",
+      "due"
+    ],
+    "group_by": "none"
+  },
+  "kanban": {
+    "columns": "status",
+    "swimlane": "none"
+  }
+}

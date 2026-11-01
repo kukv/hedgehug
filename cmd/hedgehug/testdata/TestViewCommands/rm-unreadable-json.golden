@@ -1,0 +1,19 @@
+{
+  "name": "broken",
+  "layout": "",
+  "query": "",
+  "table": {
+    "columns": [
+      "id",
+      "title",
+      "status",
+      "assignee",
+      "due"
+    ],
+    "group_by": "none"
+  },
+  "kanban": {
+    "columns": "status",
+    "swimlane": "none"
+  }
+}
