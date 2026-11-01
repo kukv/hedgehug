@@ -692,3 +692,28 @@ func TestMoveStoreParentsComeBeforeTheirChildren(t *testing.T) {
 		t.Errorf("moved = %+v; want R, C, G", res.Moved)
 	}
 }
+
+func TestMoveStoreWarnsOnceOfAFileThatDoesNotDecode(t *testing.T) {
+	f := newMoveFx(t)
+	as, _ := f.ts.ForStore("org-a").OpenStore()
+	bad := model.NewULID()
+	rel := model.TaskPath(bad)
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(as.Dir(), filepath.FromSlash(rel))), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(as.Dir(), filepath.FromSlash(rel)), []byte("not a task"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.ts.MoveStore(f.in()); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, w := range f.ts.warns {
+		if strings.Contains(w, rel) && strings.Contains(w, "does not decode") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("%d warnings about %s; want 1 (all: %q)", n, rel, f.ts.warns)
+	}
+}

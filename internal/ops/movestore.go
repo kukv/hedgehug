@@ -199,6 +199,7 @@ type moveJob struct {
 	fromName, toName string
 	src, dst         *store.Store
 	srcIx, dstIx     *index.Index
+	warned           map[string]bool // the files load has warned of
 }
 
 // moveWork is a move worked out from the two indexes: steps 1 to 4 and 6.
@@ -268,7 +269,7 @@ func (ss *Session) openMove(in MoveStoreInput) (*moveJob, error) {
 		return nil, newErr(KindUsage, "move.same_store",
 			fmt.Errorf("the task is in %s already; use hedgehug mv --workspace to move it to another workspace", fe.Name), "store", fe.Name)
 	}
-	j := &moveJob{in: in, from: from, to: to, arg: arg, fromName: fe.Name, toName: te.Name}
+	j := &moveJob{warned: map[string]bool{}, in: in, from: from, to: to, arg: arg, fromName: fe.Name, toName: te.Name}
 	if j.src, j.srcIx, err = from.OpenForWrite(); err != nil {
 		return nil, err
 	}
@@ -311,7 +312,11 @@ func (j *moveJob) load() (*moveWork, error) {
 		var fe *store.FileError
 		if errors.As(err, &fe) {
 			// A file that does not decode holds no reference we could cut.
-			j.from.warn(fmt.Sprintf("%s does not decode; references in it are not cut: %v", fe.Path, fe.Err))
+			// load runs twice; each file is told of once.
+			if !j.warned[fe.Path] {
+				j.warned[fe.Path] = true
+				j.from.warn(fmt.Sprintf("%s does not decode; references in it are not cut: %v", fe.Path, fe.Err))
+			}
 			continue
 		}
 		if err != nil {
