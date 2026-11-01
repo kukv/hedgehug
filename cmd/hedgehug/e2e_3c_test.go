@@ -94,7 +94,6 @@ func TestE2EPhase3c(t *testing.T) {
 	proj := addTask(t, alice, "project", "--store", "org-a", "--kind", "project")
 	child := addTask(t, alice, "child", "--parent", proj.ULID)
 	keep := addTask(t, alice, "keep", "--store", "org-a")
-	other := addTask(t, alice, "other", "--store", "org-a")
 	alice.ok("dep", "add", child.ULID, "--blocked-by", keep.ULID)
 	alice.ok("sync")
 	out := alice.ok("ls")
@@ -207,6 +206,8 @@ func TestE2EPhase3c(t *testing.T) {
 		t.Error("no commit of bob's org-a has Hedgehug-Overwritten")
 	}
 
+	bobPath := taskFilePath(t, bob, "org-a", proj.ULID) // the forward is at the path of the task
+
 	// 4. purge --moved takes the forward files away.
 	alice.ok("purge", "--moved", "--store", "org-a", "--yes")
 	if code, _, errs := alice.run("", "show", "org-a:"+proj.ID); code == 0 || strings.Contains(errs, "moved to") {
@@ -215,14 +216,11 @@ func TestE2EPhase3c(t *testing.T) {
 	alice.ok("sync")
 	bob.ok("sync")
 
-	// 5. alice moves another task out and rewrites the history of org-a to be
-	// rid of it (the forward of a purged move is gone, so the rewrite takes
-	// one that is still there); bob has an edit not pushed.
-	bobPath := taskFilePath(t, bob, "org-a", other.ULID)
+	// 5. bob has an edit not pushed; alice rewrites the history of org-a to be
+	// rid of the moved project (D34: its forward is gone, so the task is named
+	// by its place in org-b).
 	bob.ok("set", keep.ID, "title=keep by bob", "--store", "org-a")
-	alice.ok("mv", "org-a:"+other.ID, "--store", "org-b", "--yes")
-	alice.ok("sync")
-	code, rout, rerr := inProcess(t, alice, "org-a\n", "purge", "--rewrite-history", other.ID, "--store", "org-a")
+	code, rout, rerr := inProcess(t, alice, "org-a\n", "purge", "--rewrite-history", moved.ID)
 	if code != 0 {
 		t.Fatalf("purge --rewrite-history: exit %d\nstdout: %s\nstderr: %s", code, rout, rerr)
 	}

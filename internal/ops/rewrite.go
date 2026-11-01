@@ -297,8 +297,17 @@ func (ss *Session) rewriteTargets(arg, explicit string) (string, []RewriteTarget
 				continue
 			}
 			var has bool
-			if err := m.With(func(ix *index.Index) { _, has = ix.Forward(root) }); err != nil {
+			var herr error
+			if err := m.With(func(ix *index.Index) {
+				if _, has = ix.Forward(root); !has {
+					// D34: the file may be in the history only, as after purge --moved
+					has, herr = inHistory(m.Store.Repo(), root)
+				}
+			}); err != nil {
 				return "", nil, err
+			}
+			if herr != nil {
+				return "", nil, herr
 			}
 			if has {
 				holders = append(holders, m.Name)
@@ -317,21 +326,36 @@ func (ss *Session) rewriteTargets(arg, explicit string) (string, []RewriteTarget
 	}
 	m, _ := set.Get(pick)
 	var targets []RewriteTarget
+	var herr error
 	if err := m.With(func(ix *index.Index) {
 		for _, u := range ulids {
 			if e, ok := ix.Task(u); ok {
 				targets = append(targets, RewriteTarget{ULID: u, ID: ix.DisplayID(e), Title: e.Title, Live: true})
 			} else if f, ok := ix.Forward(u); ok {
 				targets = append(targets, RewriteTarget{ULID: u, ID: f.ID, Title: titles[u]})
+			} else if in, err := inHistory(m.Store.Repo(), u); err != nil {
+				herr = err
+			} else if in {
+				targets = append(targets, RewriteTarget{ULID: u, Title: titles[u]})
 			}
 		}
 	}); err != nil {
 		return "", nil, err
 	}
+	if herr != nil {
+		return "", nil, herr
+	}
 	if len(targets) == 0 {
 		return "", nil, newErr(KindNotFound, "rewrite.nothing", fmt.Errorf("%s has no file of %s, so there is nothing to remove from its history", pick, arg), "store", pick, "input", arg)
 	}
 	return pick, targets, nil
+}
+
+// inHistory reports whether the file of the task u is in some commit of the
+// repository (D34): a task whose forward was purged is still there.
+func inHistory(r *gitrepo.Repo, u model.ULID) (bool, error) {
+	log, err := r.Log([]string{model.TaskPath(u)}, 1)
+	return len(log) > 0, err
 }
 
 // prepare does step 3: it syncs the store, refuses a store that is
