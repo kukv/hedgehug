@@ -22,11 +22,15 @@ type cluster struct {
 	stores []*store.Store
 	opts   []Options
 	last   model.Rank // the last rank given by addTask
+	// foreign are the ids a task brought from the store it moved in from
+	// (its id and former ids there). They are in its former ids here, and may
+	// be the current id of another task of this store, which is no collision.
+	foreign map[model.ULID][]string
 }
 
 func newCluster(t *testing.T, n int) *cluster {
 	t.Helper()
-	c := &cluster{t: t, remote: filepath.Join(t.TempDir(), "r.git")}
+	c := &cluster{t: t, remote: filepath.Join(t.TempDir(), "r.git"), foreign: map[model.ULID][]string{}}
 	if err := gitrepo.InitBare(c.remote); err != nil {
 		t.Fatal(err)
 	}

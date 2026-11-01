@@ -62,17 +62,24 @@ var (
 // view is clone i's tasks and workspaces as it has them now.
 type view struct {
 	tasks map[model.ULID]*model.Task
+	fwd   map[model.ULID]*model.Forward // the forwards of tasks that moved to another store
 	ws    map[model.ULID]*model.Workspace
 }
 
 func (c *cluster) view(i int) *view {
 	c.t.Helper()
-	v := &view{tasks: map[model.ULID]*model.Task{}, ws: map[model.ULID]*model.Workspace{}}
+	v := &view{tasks: map[model.ULID]*model.Task{}, fwd: map[model.ULID]*model.Forward{}, ws: map[model.ULID]*model.Workspace{}}
 	for t, err := range c.stores[i].Tasks() {
 		if err != nil {
 			c.t.Fatalf("clone %d: %v", i, err)
 		}
 		v.tasks[t.ULID] = t
+	}
+	for f, err := range c.stores[i].Forwards() {
+		if err != nil {
+			c.t.Fatalf("clone %d: %v", i, err)
+		}
+		v.fwd[f.ULID] = f
 	}
 	for w, err := range c.stores[i].Workspaces() {
 		if err != nil {
@@ -663,4 +670,122 @@ func opWSRm(c *cluster, i int, rnd *rand.Rand) []write {
 		return nil
 	}
 	return []write{{i, h, ws.ULID, "ws.rm", "null"}}
+}
+
+// moveOps are the operations of the tests with two stores: the ones above
+// and blocked_by, which the moves between stores cut.
+var moveOps = append(slices.Clone(ops), op{"block", opBlock}, op{"block", opBlock})
+
+// opBlock makes a task wait for another of the same store. It keeps no write:
+// the invariant it feeds is that nothing blocks on a forward.
+func opBlock(c *cluster, i int, rnd *rand.Rand) []write {
+	v := c.view(i)
+	t := v.pickTask(rnd, live)
+	if t == nil {
+		return nil
+	}
+	b := v.pickTask(rnd, func(x *model.Task) bool { return live(x) && x.ULID != t.ULID })
+	if b == nil {
+		return nil
+	}
+	c.update(i, c.taskOp(i, "update", t.ULID), func(tx *store.Tx) error {
+		x, err := tx.Task(t.ULID)
+		if err != nil {
+			return err
+		}
+		if !slices.Contains(x.BlockedBy, b.ULID) {
+			x.BlockedBy = append(x.BlockedBy, b.ULID)
+		}
+		return tx.PutTask(x)
+	})
+	return nil
+}
+
+// has reports whether the store has a file for the task: a task or a forward.
+func (v *view) has(u model.ULID) bool {
+	_, task := v.tasks[u]
+	_, fwd := v.fwd[u]
+	return task || fwd
+}
+
+// opMoveStore moves a task and everything under it, deleted ones too, from
+// clone i of src to clone i of dst, as hedgehug mv --store does: the two
+// stores are locked in the order of their ULIDs, dst gets the move-in commit,
+// then src the move-out. It returns the writes that dst has made of the
+// tasks, for the checks; nil when nothing moved.
+func opMoveStore(src, dst *cluster, i int, rnd *rand.Rand) []write {
+	sv, dv := src.view(i), dst.view(i)
+	// A task moves once: dst would hold a forward and a task of one ULID if it
+	// went back, and the destination of a ULID is one store.
+	t := sv.pickTask(rnd, func(x *model.Task) bool {
+		return live(x) && !slices.ContainsFunc(sv.subtree(x.ULID), dv.has)
+	})
+	to := dv.pickWS(rnd, func(*model.Workspace) bool { return true })
+	if t == nil || to == nil {
+		return nil
+	}
+	under := sv.subtree(t.ULID)
+	var moved, rest []*model.Task
+	for _, u := range sortedULIDs(sv.tasks) {
+		if !slices.Contains(under, u) {
+			rest = append(rest, sv.tasks[u])
+		}
+	}
+	for _, u := range under {
+		moved = append(moved, sv.tasks[u])
+	}
+	notes := map[string][]byte{}
+	for _, u := range under {
+		n, err := src.stores[i].NoteFiles(u)
+		if err != nil {
+			src.t.Fatal(err)
+		}
+		for rel, b := range n {
+			notes[rel] = b
+		}
+	}
+	unlinked := store.Unlinks(src.stores[i].Schema(), moved, rest)
+
+	l, err := store.LockInOrder(src.stores[i], dst.stores[i])
+	if err != nil {
+		src.t.Fatal(err)
+	}
+	defer l.Release()
+	in := dst.op(i, "move-in", t.ULID)
+	in.Locked = l
+	h, ok := dst.update(i, in, func(tx *store.Tx) error {
+		return tx.MoveIn(store.MoveIn{
+			From: src.stores[i].Meta().ULID, Tasks: moved, Workspace: to.ULID,
+			Notes: notes, Unlinked: unlinked,
+		})
+	})
+	if !ok {
+		return nil // the schema of dst refuses the tasks; nothing was written
+	}
+	out := src.op(i, "move-out", model.ULID{})
+	out.Detail = t.ID + " " + t.Title
+	out.Locked = l
+	if _, ok := src.update(i, out, func(tx *store.Tx) error {
+		return tx.MoveOut(store.MoveOut{To: dst.stores[i].Meta().ULID, Tasks: under, Unlinked: unlinked})
+	}); !ok {
+		src.t.Fatalf("clone %d: the move-out of %s was refused after its move-in", i, t.ULID)
+	}
+
+	var ws []write
+	for _, x := range moved {
+		nt, err := dst.stores[i].Task(x.ULID)
+		if err != nil {
+			dst.t.Fatal(err)
+		}
+		dst.foreign[x.ULID] = append(dst.foreign[x.ULID], append([]string{x.ID}, x.FormerIDs...)...)
+		ws = append(ws,
+			write{i, h, x.ULID, "title", js(nt.Title)},
+			write{i, h, x.ULID, "status", js(nt.Status)},
+			write{i, h, x.ULID, "workspace", js(nt.Workspace.String())},
+			write{i, h, x.ULID, "id", js(nt.ID)},
+			write{i, h, x.ULID, "parent", parentJSON(nt.Parent)},
+			write{i, h, x.ULID, "deleted_at", deletedJSON(nt.DeletedAt)},
+		)
+	}
+	return ws
 }

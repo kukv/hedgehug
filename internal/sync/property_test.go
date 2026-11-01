@@ -8,9 +8,11 @@ import (
 	"io/fs"
 	"math/rand/v2"
 	"net/url"
+	"path"
 	"reflect"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -65,6 +67,112 @@ func TestPropertyConverges(t *testing.T) {
 			settle(t, c)
 			if err := checkAll(c, writes); err != nil {
 				t.Fatalf("seed %d: %v\nops:\n  %s", seed, err, strings.Join(log, "\n  "))
+			}
+		})
+	}
+}
+
+// TestPropertyConvergesStores is the same with two stores, a and b, of three
+// clones each (clone i of a and of b are one user). Besides the operations of
+// a store, a clone moves a task with everything under it from one store to
+// the other. Each store converges, no write is lost, and what the forwards
+// require holds: nothing live under a forward, nothing blocked by it, no
+// comment or worklog entry left beneath it.
+func TestPropertyConvergesStores(t *testing.T) {
+	rounds, steps := 30, 60
+	if shortMode() {
+		rounds, steps = 5, 30
+	}
+	var moves, overwritten, parentMoved, refMoved atomic.Int64
+	t.Cleanup(func() {
+		t.Logf("moves %d, task files overwritten by a forward %d, parent_moved %d, ref_moved %d", moves.Load(), overwritten.Load(), parentMoved.Load(), refMoved.Load())
+		if moves.Load() == 0 {
+			t.Error("no task moved between stores in any seed")
+		}
+	})
+	for seed := int64(1); seed <= int64(rounds); seed++ {
+		t.Run(fmt.Sprint("seed", seed), func(t *testing.T) {
+			t.Parallel()
+			rnd := rand.New(rand.NewPCG(uint64(seed), 1))
+			a, b := newCluster(t, 3), newCluster(t, 3)
+			stores := []*cluster{a, b}
+			writes := map[*cluster][]write{}
+			for _, c := range stores {
+				first := mustHead(t, c.stores[0])
+				for u, w := range c.view(0).ws {
+					writes[c] = append(writes[c], write{0, first, u, "ws.name", js(w.Name)}, write{0, first, u, "ws.id_prefix", js(w.IDPrefix)})
+				}
+			}
+			var log []string
+			for range steps {
+				from, to := a, b
+				if rnd.IntN(2) == 0 {
+					from, to = b, a
+				}
+				i := rnd.IntN(3)
+				name := map[*cluster]string{a: "a", b: "b"}
+				switch r := rnd.IntN(8); {
+				case r == 0:
+					ws := opMoveStore(from, to, i, rnd)
+					log = append(log, fmt.Sprintf("move %s to %s on %d (%d writes)", name[from], name[to], i, len(ws)))
+					if len(ws) > 0 {
+						moves.Add(1)
+					}
+					writes[to] = append(writes[to], ws...)
+				case r < 3:
+					log = append(log, fmt.Sprintf("sync %s %d", name[from], i))
+					from.sync(i)
+				default:
+					o := moveOps[rnd.IntN(len(moveOps))]
+					ws := o.do(from, i, rnd)
+					log = append(log, fmt.Sprintf("%s on %s %d (%d writes)", o.name, name[from], i, len(ws)))
+					writes[from] = append(writes[from], ws...)
+				}
+			}
+			for _, c := range stores {
+				for i := range 3 {
+					writes[c] = append(writes[c], opAdd(c, i, rnd)...)
+				}
+				settle(t, c)
+			}
+			for n, c := range stores {
+				if err := checkAll(c, writes[c]); err != nil {
+					t.Fatalf("seed %d, store %c: %v\nops:\n  %s", seed, 'a'+n, err, strings.Join(log, "\n  "))
+				}
+			}
+			// A task has one destination, so no ULID is live in both stores,
+			// and every forward names the other store.
+			va, vb := a.view(0), b.view(0)
+			for u := range va.tasks {
+				if vb.tasks[u] != nil {
+					t.Fatalf("seed %d: task %s is in both stores", seed, u)
+				}
+			}
+			for _, x := range []struct {
+				from, to *cluster
+				v        *view
+			}{{a, b, va}, {b, a, vb}} {
+				for u, f := range x.v.fwd {
+					if f.MovedTo != x.to.stores[0].Meta().ULID {
+						t.Fatalf("seed %d: the forward of %s names the store %s, not the other store of the test", seed, u, f.MovedTo)
+					}
+				}
+			}
+			for _, c := range stores {
+				h := newHistory(c)
+				for _, l := range h.lost {
+					if l.field == "*" {
+						overwritten.Add(1)
+					}
+				}
+				for _, r := range h.repaired {
+					switch r.kind {
+					case "parent_moved":
+						parentMoved.Add(1)
+					case "ref_moved":
+						refMoved.Add(1)
+					}
+				}
 			}
 		})
 	}
@@ -239,6 +347,26 @@ func (h *history) reverts(w write, writes []write) bool {
 	})
 }
 
+// addedBesideMove reports whether w is a parent null that a move-in wrote
+// while another clone, not knowing it, moved the same task in under a parent
+// (it moved the parent's subtree, and w moved the task alone). The file has no
+// base, which the merge reads as an empty task: the null is the value of the
+// base, so it is not a change, and the parent of the other side stays. The
+// result is the whole subtree together, as the other move made it.
+func (h *history) addedBesideMove(w write, writes []write) bool {
+	if w.field != "parent" || w.value != "null" || !h.isMoveIn(w.commit) {
+		return false
+	}
+	return slices.ContainsFunc(writes, func(o write) bool {
+		return o.task == w.task && o.field == "parent" && o.value != "null" && h.isMoveIn(o.commit) &&
+			!h.isAncestor(w.commit, o.commit) && !h.isAncestor(o.commit, w.commit)
+	})
+}
+
+func (h *history) isMoveIn(c plumbing.Hash) bool {
+	return slices.Contains(h.entries[c].TrailerValues("Hedgehug-Op"), "move-in")
+}
+
 // purged reports whether the task of w was purged by a write that came
 // after w, knowing it. A purge takes the writes before it with the task, and
 // a side that changed the task meanwhile gets its own version back.
@@ -253,6 +381,7 @@ func (h *history) purged(w write, writes []write) bool {
 var repairFields = map[string][]string{
 	"parent_cycle":       {"parent"},
 	"parent_deleted":     {"parent"},
+	"parent_moved":       {"parent"},
 	"workspace_mismatch": {"workspace", "id"},
 	"id_collision":       {"id"},
 	"id_renumbered":      {"id"},
@@ -317,6 +446,10 @@ func (h *history) checkWrites(ps *problems, writes []write) {
 		case strings.HasPrefix(w.field, "ws."):
 			h.checkWorkspace(ps, w, writes)
 		default:
+			if h.v.fwd[w.task] != nil {
+				h.checkForwarded(ps, w)
+				continue
+			}
 			t := h.v.tasks[w.task]
 			if t == nil {
 				if !slices.ContainsFunc(writes, func(o write) bool { return o.task == w.task && o.field == "purge" }) {
@@ -327,6 +460,35 @@ func (h *history) checkWrites(ps *problems, writes []write) {
 			h.checkTaskWrite(ps, w, t, writes)
 		}
 	}
+}
+
+// checkForwarded checks a write to a task that left the store for another.
+// The write went with the task when the move-out knew of it; otherwise it was
+// made beside the move and lost to the forward, which the merge records as
+// the task file overwritten whole (Field "*").
+func (h *history) checkForwarded(ps *problems, w write) {
+	for _, e := range h.entries {
+		if slices.Contains(e.TrailerValues("Hedgehug-Op"), "move-out") &&
+			slices.Contains(e.TrailerValues("Hedgehug-Task"), w.task.String()) &&
+			(e.Hash == w.commit || h.isAncestor(w.commit, e.Hash)) {
+			return
+		}
+	}
+	// A comment is a file of its own under the forward, dropped by itself.
+	file := model.TaskPath(w.task)
+	if w.field == "comment" {
+		var c string
+		_ = json.Unmarshal([]byte(w.value), &c)
+		u, err := model.ParseULID(c)
+		if err != nil {
+			h.c.t.Fatal(err)
+		}
+		file = model.CommentPath(w.task, u)
+	}
+	if slices.ContainsFunc(h.lost, func(l lost) bool { return l.path == file && l.field == "*" }) {
+		return
+	}
+	ps.add("task %s moved to another store, and %s %s written by clone %d beside the move is not in the move-out or in Hedgehug-Overwritten", w.task, w.field, w.value, w.clone)
 }
 
 func (h *history) checkWorkspace(ps *problems, w write, writes []write) {
@@ -398,7 +560,7 @@ func (h *history) checkTaskWrite(ps *problems, w write, t *model.Task, writes []
 			ps.add("unknown field %s", w.field)
 			return
 		}
-		if !sameJSON(final, w.value) && !h.replaced(w, writes) && !h.wasRepaired(t.ULID, w.field) && !h.wasLost(path, w.field, w.value) && !h.reverts(w, writes) {
+		if !sameJSON(final, w.value) && !h.replaced(w, writes) && !h.wasRepaired(t.ULID, w.field) && !h.wasLost(path, w.field, w.value) && !h.reverts(w, writes) && !h.addedBesideMove(w, writes) {
 			ps.add("task %s (%s): %s %s written by clone %d is lost (final %s)", t.ULID, t.ID, w.field, w.value, w.clone, final)
 		}
 	}
@@ -420,12 +582,15 @@ func (h *history) idsAt(tree plumbing.Hash) map[string][]model.ULID {
 		if err != nil {
 			t.Fatal(err)
 		}
+		if model.IsForward(b) {
+			continue
+		}
 		x, err := model.DecodeTask(b)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, id := range append([]string{x.ID}, x.FormerIDs...) {
-			if id != "" && !slices.Contains(m[id], x.ULID) {
+			if id != "" && !slices.Contains(m[id], x.ULID) && !slices.Contains(h.c.foreign[x.ULID], id) {
 				m[id] = append(m[id], x.ULID)
 			}
 		}
@@ -469,6 +634,20 @@ func (h *history) checkNotReused(ps *problems, w write, id string) {
 
 func (h *history) checkInvariants(ps *problems) {
 	v := h.v
+	tree, err := h.repo.HeadTree()
+	if err != nil {
+		h.c.t.Fatal(err)
+	}
+	for _, u := range sortedULIDs(v.fwd) {
+		for _, p := range []string{model.CommentPath(u, model.ULID{}), model.WorklogPath(u, model.ULID{})} {
+			for f, err := range h.repo.Files(tree, path.Dir(p)+"/") {
+				if err != nil {
+					h.c.t.Fatal(err)
+				}
+				ps.add("%s is left under %s, which moved to another store", f, u)
+			}
+		}
+	}
 	seen := map[string]model.ULID{}
 	for _, u := range sortedULIDs(v.tasks) {
 		t := v.tasks[u]
@@ -477,7 +656,7 @@ func (h *history) checkInvariants(ps *problems) {
 		}
 		seen[t.ID] = u
 		for _, o := range sortedULIDs(v.tasks) {
-			if x := v.tasks[o]; o != u && x.ID != "" && slices.Contains(t.FormerIDs, x.ID) && !h.collided(u, x.ID) && !h.givenTogether(u, o, x.ID) {
+			if x := v.tasks[o]; o != u && x.ID != "" && slices.Contains(t.FormerIDs, x.ID) && !h.collided(u, x.ID) && !h.givenTogether(u, o, x.ID) && !slices.Contains(h.c.foreign[u], x.ID) {
 				ps.add("task %s (%s) has %s, which is the id of task %s, in its former ids, and no id_collision explains it", u, t.ID, x.ID, o)
 			}
 		}
@@ -487,11 +666,20 @@ func (h *history) checkInvariants(ps *problems) {
 		} else if p, _, ok := model.ParseTaskID(t.ID); !ok || p != ws.IDPrefix {
 			ps.add("task %s has the id %q in workspace %s (%s)", u, t.ID, ws.Name, ws.IDPrefix)
 		}
+		for _, b := range t.BlockedBy {
+			if v.fwd[b] != nil {
+				ps.add("task %s (%s) is blocked by %s, which moved to another store", u, t.ID, b)
+			}
+		}
 		if t.Parent == nil {
 			continue
 		}
 		p := v.tasks[*t.Parent]
 		switch {
+		case v.fwd[*t.Parent] != nil:
+			if t.DeletedAt == nil {
+				ps.add("task %s (%s) is live under %s, which moved to another store", u, t.ID, *t.Parent)
+			}
 		case p == nil:
 			if t.DeletedAt == nil {
 				ps.add("task %s (%s) has the parent %s, which is purged", u, t.ID, *t.Parent)
@@ -541,6 +729,9 @@ func (h *history) introduced(task model.ULID, id string) []plumbing.Hash {
 		}
 		if err != nil {
 			h.c.t.Fatal(err)
+		}
+		if model.IsForward(b) {
+			return ""
 		}
 		x, err := model.DecodeTask(b)
 		if err != nil {
