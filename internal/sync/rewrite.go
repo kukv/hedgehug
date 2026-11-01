@@ -44,8 +44,9 @@ type ForcePush struct {
 // Detect compares the head of origin after a fetch with tracked, the value
 // refs/remotes/origin/main had before it, as spec says. The record returned
 // with Recorded is the newest one not in applied whose before is tracked or
-// a descendant of it. A before the clone never fetched cannot be shown to
-// be a descendant, so it does not count.
+// a descendant of it. A before the clone never fetched cannot be compared,
+// so the record counts when the new history holds a commit with the same
+// author and committer as tracked (D33).
 func Detect(r *gitrepo.Repo, tracked, head plumbing.Hash, applied []time.Time) (RewriteState, *model.Rewrite, error) {
 	if head.IsZero() {
 		return NoRewrite, nil, nil
@@ -74,7 +75,15 @@ func Detect(r *gitrepo.Repo, tracked, head plumbing.Hash, applied []time.Time) (
 		if before.IsZero() {
 			continue
 		}
-		ok, err := ancestorOrMissing(r, tracked, before)
+		ok, err := r.IsAncestor(tracked, before)
+		if errors.Is(err, plumbing.ErrObjectNotFound) {
+			// The clone never fetched before, which the new history does
+			// not reach. The rewrite keeps the author and committer of
+			// every commit, so the commit the clone followed is found in
+			// the new history, if the record is the rewrite of that
+			// history (D33).
+			ok, err = r.HasSameCommit(head, tracked)
+		}
 		if err != nil {
 			return Unexpected, nil, err
 		}

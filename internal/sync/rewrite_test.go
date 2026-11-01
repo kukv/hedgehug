@@ -205,3 +205,44 @@ func TestRunMirrorWithOldHistory(t *testing.T) {
 		t.Errorf("mirror = %s, %v, want %s", got, err, newHead)
 	}
 }
+
+// A clone that lags behind (the rewriter pushed a commit it never fetched,
+// then rewrote) finds the record by the commit it followed (D33).
+func TestRunFindsRewriteOfALaggingClone(t *testing.T) {
+	c := newCluster(t, 2)
+	c.addTask(0, "keep")
+	gone := c.addTask(0, "gone")
+	c.sync(0)
+	c.sync(1)
+	headB := headOf(t, c, 1)
+
+	c.addTask(0, "extra")
+	c.sync(0) // the commit clone 1 never fetches
+	_, rec := c.rewriteLocally(gone.ULID, plumbing.ZeroHash, true)
+	c.forcePush()
+
+	res := c.sync(1)
+	if res.Rewrite == nil || !res.Rewrite.At.Equal(rec.At) {
+		t.Fatalf("Result.Rewrite = %+v, want %+v", res.Rewrite, rec)
+	}
+	if got := headOf(t, c, 1); got != headB {
+		t.Errorf("HEAD moved to %s", got)
+	}
+}
+
+// A record whose before the clone does not have, on a history that holds
+// nothing the clone followed, is an unexpected force push.
+func TestRunUnrelatedForcePushWithARecord(t *testing.T) {
+	c := newCluster(t, 2)
+	gone := c.addTask(0, "gone")
+	c.sync(0)
+	c.sync(1)
+	c.addTask(1, "b's")
+	c.sync(1) // origin and clone 1 have a commit that clone 0 does not
+
+	c.rewriteLocally(gone.ULID, plumbing.NewHash("1234567890123456789012345678901234567890"), true)
+	c.forcePush()
+	if _, err := Run(c.stores[1], c.opts[1]); !errors.Is(err, ErrForcePush) {
+		t.Fatalf("Run = %v, want ErrForcePush", err)
+	}
+}

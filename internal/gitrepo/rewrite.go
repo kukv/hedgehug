@@ -12,6 +12,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/storer"
 
 	"github.com/kukv/hedgehug/internal/atomicfile"
 )
@@ -280,4 +281,31 @@ func (r *Repo) Close() error {
 		return c.Close()
 	}
 	return nil
+}
+
+// HasSameCommit tells whether the history of from holds a commit with the
+// same author and committer (name, email and time) as the commit like. A
+// history rewrite keeps these (D22), so it finds where like went (D33). Both
+// commits must be in the repository.
+func (r *Repo) HasSameCommit(from, like plumbing.Hash) (bool, error) {
+	want, err := r.commit(like)
+	if err != nil {
+		return false, err
+	}
+	start, err := r.commit(from)
+	if err != nil {
+		return false, err
+	}
+	same := func(a, b object.Signature) bool {
+		return a.Name == b.Name && a.Email == b.Email && a.When.Equal(b.When)
+	}
+	found := false
+	err = object.NewCommitPreorderIter(start, nil, nil).ForEach(func(c *object.Commit) error {
+		if same(c.Author, want.Author) && same(c.Committer, want.Committer) {
+			found = true
+			return storer.ErrStop
+		}
+		return nil
+	})
+	return found, err
 }
