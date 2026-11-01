@@ -49,7 +49,8 @@ type Store struct {
 	dir  string
 	repo *gitrepo.Repo
 
-	mu     sync.Mutex // serializes Update within this Store
+	mu     sync.Mutex               // serializes Update within this Store
+	held   atomic.Pointer[heldLock] // set while LockInOrder holds the store lock
 	meta   *model.StoreMeta
 	schema atomic.Pointer[schema.Schema] // replaced by Update; read without mu
 

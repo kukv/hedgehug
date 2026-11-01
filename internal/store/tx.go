@@ -280,29 +280,11 @@ func (tx *Tx) RemoveTask(ulid model.ULID) error {
 	} else if !errors.Is(err, ErrNotFound) && !errors.As(err, &de) {
 		return err
 	}
-	rels := []string{model.TaskPath(ulid)}
-	// Files put earlier in this operation are removed too.
-	for _, rel := range tx.order {
-		for _, root := range []string{model.CommentPath(ulid, model.ULID{}), model.WorklogPath(ulid, model.ULID{})} {
-			if strings.HasPrefix(rel, path.Dir(root)+"/") && !slices.Contains(rels, rel) {
-				rels = append(rels, rel)
-			}
-		}
+	notes, err := tx.noteFiles(ulid)
+	if err != nil {
+		return err
 	}
-	for _, dir := range []string{path.Dir(model.CommentPath(ulid, model.ULID{})), path.Dir(model.WorklogPath(ulid, model.ULID{}))} {
-		entries, err := os.ReadDir(tx.s.path(dir))
-		if errors.Is(err, fs.ErrNotExist) {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		for _, e := range entries {
-			if rel := dir + "/" + e.Name(); !e.IsDir() && !slices.Contains(rels, rel) {
-				rels = append(rels, rel)
-			}
-		}
-	}
+	rels := append([]string{model.TaskPath(ulid)}, notes...)
 	for _, rel := range rels {
 		if err := tx.put(rel, &pending{remove: true}); err != nil {
 			return err
@@ -316,9 +298,42 @@ func (tx *Tx) RemoveTask(ulid model.ULID) error {
 	return nil
 }
 
+// noteFiles returns the paths of the comments and worklog entries of a
+// task: the ones put earlier in this operation and the ones on disk.
+func (tx *Tx) noteFiles(ulid model.ULID) ([]string, error) {
+	var rels []string
+	// Files put earlier in this operation are included too.
+	for _, rel := range tx.order {
+		for _, root := range []string{model.CommentPath(ulid, model.ULID{}), model.WorklogPath(ulid, model.ULID{})} {
+			if strings.HasPrefix(rel, path.Dir(root)+"/") && !slices.Contains(rels, rel) {
+				rels = append(rels, rel)
+			}
+		}
+	}
+	for _, dir := range []string{path.Dir(model.CommentPath(ulid, model.ULID{})), path.Dir(model.WorklogPath(ulid, model.ULID{}))} {
+		entries, err := os.ReadDir(tx.s.path(dir))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range entries {
+			if rel := dir + "/" + e.Name(); !e.IsDir() && !slices.Contains(rels, rel) {
+				rels = append(rels, rel)
+			}
+		}
+	}
+	return rels, nil
+}
+
 // recordNumbers raises the record of purged numbers to the numbers of t's
 // ids, so numbering never gives them again.
-func (tx *Tx) recordNumbers(t *model.Task) error {
+func (tx *Tx) recordNumbers(t *model.Task) error { return tx.recordNumbersOf(t, nil) }
+
+// recordNumbersOf is recordNumbers limited to the id prefixes in only; nil
+// means every prefix.
+func (tx *Tx) recordNumbersOf(t *model.Task, only map[string]bool) error {
 	if tx.numbers == nil {
 		n, err := tx.s.Numbers()
 		if err != nil {
@@ -328,7 +343,7 @@ func (tx *Tx) recordNumbers(t *model.Task) error {
 	}
 	changed := false
 	for _, k := range append([]string{t.ID}, t.FormerIDs...) {
-		if p, n, ok := model.ParseTaskID(k); ok && n > tx.numbers[p] {
+		if p, n, ok := model.ParseTaskID(k); ok && (only == nil || only[p]) && n > tx.numbers[p] {
 			tx.numbers[p] = n
 			changed = true
 		}
@@ -355,21 +370,25 @@ func (s *Store) UpdateCommit(op Op, fn func(*Tx) error) (hash plumbing.Hash, err
 	if op.Name == "" {
 		return plumbing.ZeroHash, errors.New("the operation has no name")
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	l, err := acquire(s.path(lockPath), s.lockWait)
-	if err != nil {
-		return plumbing.ZeroHash, err
-	}
-	// A release error is dropped when the operation succeeded: release
-	// closes the file, which drops the OS lock on Unix and Windows anyway,
-	// and the caller must not think a committed operation failed. When the
-	// operation failed, the release error is joined to its error.
-	defer func() {
-		if rerr := l.release(); rerr != nil && err != nil {
-			err = errors.Join(err, rerr)
+	// The goroutine that holds the store through LockInOrder holds s.mu and
+	// the file lock already; the others wait for them like for any writer.
+	if !s.heldByThisGoroutine() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		l, aerr := acquire(s.path(lockPath), s.lockWait)
+		if aerr != nil {
+			return plumbing.ZeroHash, aerr
 		}
-	}()
+		// A release error is dropped when the operation succeeded: release
+		// closes the file, which drops the OS lock on Unix and Windows anyway,
+		// and the caller must not think a committed operation failed. When the
+		// operation failed, the release error is joined to its error.
+		defer func() {
+			if rerr := l.release(); rerr != nil && err != nil {
+				err = errors.Join(err, rerr)
+			}
+		}()
+	}
 
 	// Another Store or a sync may have changed schema.yaml since it was read.
 	cached, err := readDecode(s.dir, schemaPath, schema.Decode)
