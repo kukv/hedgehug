@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/inbox"
+	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/schema"
 	hhsync "github.com/kukv/hedgehug/internal/sync"
@@ -18,8 +20,14 @@ func pollServer(t *testing.T) (*testServer, <-chan sseEvent) {
 	ts := newTestServer(t)
 	ch, cancel := ts.srv.hub.Subscribe()
 	ctx, stop := context.WithCancel(context.Background())
-	go ts.srv.poller.Run(ctx)
-	t.Cleanup(func() { stop(); cancel() })
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ts.srv.poller.Run(ctx)
+	}()
+	// Wait for Run to return: a poll still writing would race the removal
+	// of the temporary directory.
+	t.Cleanup(func() { stop(); cancel(); <-done })
 	// The first look sets the HEADs; what a test writes must come after it.
 	eventually(t, "the first look of the poller", func() bool {
 		ts.srv.poller.mu.Lock()
@@ -151,4 +159,65 @@ func TestPollUnread(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitEvent[unreadEvent](t, ch, func(e unreadEvent) bool { return e.Count == 0 })
+}
+
+func TestPollFirstLookSendsNothing(t *testing.T) {
+	ts := newTestServer(t)
+	ts.addRemote()
+	ch, cancel := ts.srv.hub.Subscribe()
+	defer cancel()
+	ctx, stop := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ts.srv.poller.Run(ctx)
+	}()
+	defer func() { stop(); <-done }()
+	eventually(t, "the first look", func() bool {
+		ts.srv.poller.mu.Lock()
+		defer ts.srv.poller.mu.Unlock()
+		return ts.srv.poller.looked
+	})
+	time.Sleep(2 * pollInterval)
+	select {
+	case e := <-ch:
+		t.Errorf("event on the first looks: %+v", e)
+	default:
+	}
+}
+
+func TestPollInboxStampIsStable(t *testing.T) {
+	ts := newTestServer(t)
+	res, err := ts.session().Add(ops.AddInput{Title: "mine"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := res.View()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts.notifyMe(overwrittenItem(res.ULID, v.ID, "title", `"first"`))
+	ts.srv.poller.poll(false)
+	ts.srv.poller.poll(false) // the Catch of the first moved the mark; it settles here
+	s, err := ts.session().OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := inbox.Open(s).Stamp()
+	if _, _, err := ts.session().InboxList(false); err != nil {
+		t.Fatal(err)
+	}
+	if after := inbox.Open(s).Stamp(); after != before {
+		t.Errorf("InboxList changed the files: %q -> %q", before, after)
+	}
+}
+
+func TestChildTaskIsCommentsOnly(t *testing.T) {
+	task, other := model.NewULID(), model.NewULID()
+	if u, ok := childTask(model.CommentPath(task, other)); !ok || u != task {
+		t.Errorf("comment path: %v %v", u, ok)
+	}
+	if _, ok := childTask(model.WorklogPath(task, other)); ok {
+		t.Error("a worklog path changes no task")
+	}
 }

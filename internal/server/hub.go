@@ -66,3 +66,9 @@ func (h *Hub) Close() {
 		close(ch)
 	}
 }
+
+func (h *Hub) isClosed() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.closed
+}

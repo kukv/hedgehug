@@ -23,7 +23,7 @@ const pollInterval = 300 * time.Millisecond
 
 type tasksChanged struct {
 	Store   string   `json:"store"`
-	ULIDs   []string `json:"ulids" doc:"The tasks whose file, comments or worklogs changed"`
+	ULIDs   []string `json:"ulids" doc:"The tasks whose file or comments changed"`
 	Removed []string `json:"removed" doc:"The tasks whose file is gone (purged)"`
 	Commit  string   `json:"commit" doc:"HEAD now"`
 	Op      string   `json:"op" doc:"The Hedgehug-Op of HEAD; empty for a commit made by hand"`
@@ -66,9 +66,13 @@ type Poller struct {
 	hub  *Hub
 	kick chan struct{}
 
-	mu     sync.Mutex
-	stores map[string]*polled
-	unread int
+	pollMu sync.Mutex // one poll at a time; held while reading, not p.mu
+
+	mu       sync.Mutex // the state below
+	stores   map[string]*polled
+	unread   int
+	looked   bool   // a poll has run
+	lastFail string // the last error of InboxList that was logged
 }
 
 func newPoller(s *Server, hub *Hub) *Poller {
@@ -101,8 +105,17 @@ func (p *Poller) Run(ctx context.Context) {
 }
 
 // poll reads every store once. With publish false it only records (for
-// Snapshot before Run has looked).
+// Snapshot before Run has looked). The first sight of a store only records,
+// as the HEAD does. The reads that take long (the sync state, the inbox)
+// are made without p.mu, so Snapshot does not wait for them.
 func (p *Poller) poll(publish bool) {
+	p.pollMu.Lock()
+	defer p.pollMu.Unlock()
+	defer func() {
+		p.mu.Lock()
+		p.looked = true
+		p.mu.Unlock()
+	}()
 	ss := p.s.session("")
 	c, _, err := ss.Config()
 	if err != nil {
@@ -122,13 +135,13 @@ func (p *Poller) poll(publish bool) {
 			statuses[st.Store] = v
 		}
 	}
+	stamps := map[string]string{} // taken before the inbox is read
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	seen := map[string]bool{}
-	recount := false
 	for _, e := range targets {
 		seen[e.Name] = true
 		st := p.stores[e.Name]
+		fresh := false
 		if st == nil || st.path != e.Path {
 			s, err := p.s.session(e.Name).OpenStore()
 			if err != nil {
@@ -136,27 +149,29 @@ func (p *Poller) poll(publish bool) {
 			}
 			st = &polled{path: e.Path, s: s}
 			p.stores[e.Name] = st
+			fresh = true
 		}
 		head, err := st.s.Repo().Head()
 		if err != nil {
 			continue
 		}
+		stamp := inbox.Open(st.s).Stamp()
 		if head != st.head {
 			if !st.head.IsZero() && publish {
 				p.headMoved(e.Name, st, head)
 			}
 			st.head = head
 			p.refresh(st)
-			recount = true
+			stamps[e.Name] = stamp
 		}
 		if v, ok := statuses[e.Name]; ok && !reflect.DeepEqual(v, st.sync) {
 			st.sync = v
-			if publish {
+			if publish && !fresh {
 				p.hub.Publish(v)
 			}
 		}
-		if inbox.Open(st.s).Stamp() != st.stamp {
-			recount = true
+		if stamp != st.stamp {
+			stamps[e.Name] = stamp
 		}
 	}
 	for name := range p.stores {
@@ -164,17 +179,33 @@ func (p *Poller) poll(publish bool) {
 			delete(p.stores, name)
 		}
 	}
-	if recount {
-		if _, items, err := ss.InboxList(false); err == nil && len(items) != p.unread {
-			p.unread = len(items)
-			if publish {
-				p.hub.Publish(unreadEvent{Count: p.unread})
-			}
+	p.mu.Unlock()
+	if len(stamps) == 0 {
+		return
+	}
+	_, items, err := ss.InboxList(false)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	// The stamps are those from before InboxList, so a file another process
+	// wrote meanwhile is seen by the next poll. A failure is not tried again
+	// until a file or HEAD changes.
+	for name, stamp := range stamps {
+		if st := p.stores[name]; st != nil {
+			st.stamp = stamp
 		}
-		// InboxList writes the files of the boxes (Catch moves the mark), so
-		// the stamps are taken after it: else every poll would count again.
-		for _, st := range p.stores {
-			st.stamp = inbox.Open(st.s).Stamp()
+	}
+	if err != nil {
+		if msg := err.Error(); msg != p.lastFail {
+			p.lastFail = msg
+			p.s.logf("inbox: %s", msg)
+		}
+		return
+	}
+	p.lastFail = ""
+	if len(items) != p.unread {
+		p.unread = len(items)
+		if publish {
+			p.hub.Publish(unreadEvent{Count: p.unread})
 		}
 	}
 }
@@ -242,15 +273,10 @@ func (p *Poller) refresh(st *polled) {
 	st.ix = ix
 }
 
-// childTask is the task of the comment or worklog file at path.
+// childTask is the task of the comment file at path.
 func childTask(path string) (model.ULID, bool) {
-	if u, _, err := model.ParseCommentPath(path); err == nil {
-		return u, true
-	}
-	if u, _, err := model.ParseWorklogPath(path); err == nil {
-		return u, true
-	}
-	return model.ULID{}, false
+	u, _, err := model.ParseCommentPath(path)
+	return u, err == nil
 }
 
 func addOnce(list *[]string, u model.ULID) {
@@ -263,9 +289,9 @@ func addOnce(list *[]string, u model.ULID) {
 // read, for hello.
 func (p *Poller) Snapshot() ([]storeState, int) {
 	p.mu.Lock()
-	empty := len(p.stores) == 0
+	looked := p.looked
 	p.mu.Unlock()
-	if empty {
+	if !looked {
 		p.poll(false)
 	}
 	p.mu.Lock()

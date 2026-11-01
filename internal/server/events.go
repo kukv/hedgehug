@@ -32,6 +32,9 @@ func (s *Server) registerEvents() {
 	}, func(ctx context.Context, _ *struct{}, send sse.Sender) {
 		events, stop := s.hub.Subscribe() // before hello: nothing after it is missed
 		defer stop()
+		if s.hub.isClosed() {
+			return // after Shutdown
+		}
 		id := s.presence.Connect()
 		defer s.presence.Disconnect(id)
 		stores, unread := s.poller.Snapshot()

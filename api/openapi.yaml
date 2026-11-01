@@ -1282,7 +1282,7 @@ components:
         store:
           type: string
         ulids:
-          description: The tasks whose file, comments or worklogs changed
+          description: The tasks whose file or comments changed
           items:
             type: string
           type:

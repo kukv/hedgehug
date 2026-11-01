@@ -226,3 +226,17 @@ func TestEventsNeedToken(t *testing.T) {
 		t.Errorf("status %d", resp.Status)
 	}
 }
+
+func TestEventsAfterShutdownSendNoHello(t *testing.T) {
+	ts := startedServer(t)
+	_ = ts.srv.Shutdown(context.Background())
+	es := ts.events()
+	select {
+	case e, ok := <-es.events:
+		if ok {
+			t.Errorf("event after Shutdown: %v", e)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the stream did not end")
+	}
+}
