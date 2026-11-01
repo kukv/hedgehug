@@ -2,8 +2,15 @@ package server
 
 import (
 	"context"
+	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/gitrepo"
+	"github.com/kukv/hedgehug/internal/ops"
+	hhsync "github.com/kukv/hedgehug/internal/sync"
 )
 
 var t0 = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
@@ -35,6 +42,7 @@ func TestLoopIntervalVisibleAndHidden(t *testing.T) {
 	first := ts.state().LastAttempt
 
 	// Hidden (no client): 2 minutes is not enough, 10 is.
+	settle(t, ts, clk, t0.Add(10*time.Minute))
 	clk.Advance(2 * time.Minute)
 	time.Sleep(100 * time.Millisecond)
 	if got := ts.state().LastAttempt; !got.Equal(first) {
@@ -47,6 +55,7 @@ func TestLoopIntervalVisibleAndHidden(t *testing.T) {
 	// Visible: every 2 minutes.
 	id := ts.srv.presence.Connect()
 	defer ts.srv.presence.Disconnect(id)
+	settle(t, ts, clk, t0.Add(12*time.Minute))
 	clk.Advance(2 * time.Minute)
 	eventually(t, "the visible fetch", func() bool { return ts.state().LastAttempt.After(second) })
 }
@@ -59,6 +68,7 @@ func TestLoopPushesAfterWrite(t *testing.T) {
 	if ts.state().PendingSince.IsZero() {
 		t.Fatal("the write is not pending")
 	}
+	settle(t, ts, clk, t0.Add(30*time.Second))
 	clk.Advance(29 * time.Second)
 	time.Sleep(100 * time.Millisecond)
 	if remoteHead(t, remote) == *out.Commit {
@@ -97,4 +107,104 @@ func TestDrainGivesUp(t *testing.T) {
 	if d := time.Since(start); d > 2*time.Second {
 		t.Errorf("Drain took %v, want about 200ms", d)
 	}
+}
+
+// settle waits until the loop has decided on everything that happened so
+// far and waits on the clock for at, so that the test may advance the clock.
+func settle(t *testing.T, ts *testServer, clk *fakeClock, at time.Time) {
+	t.Helper()
+	eventually(t, "the loop to park", ts.srv.loop.parked)
+	clk.waitWaiter(t, at)
+}
+
+func TestDrainSyncsAgainAfterARunningSync(t *testing.T) {
+	ts, _, remote := loopServer(t)
+	waitFirstSync(t, ts)
+	var mu sync.Mutex
+	calls := 0
+	release := make(chan struct{})
+	ts.srv.loop.setSyncFn(func(name string) {
+		mu.Lock()
+		calls++
+		n := calls
+		mu.Unlock()
+		if n == 1 {
+			<-release // began before the write, so it pushes nothing
+			return
+		}
+		ts.srv.loop.syncStore(name)
+	})
+	ts.srv.loop.start("me")
+	var out taskWriteBody
+	ts.call("POST", "/api/tasks", map[string]any{"title": "one"}, 201, &out)
+	go func() { time.Sleep(100 * time.Millisecond); close(release) }()
+	ts.srv.loop.Drain(10 * time.Second)
+	mu.Lock()
+	defer mu.Unlock()
+	if calls != 2 || remoteHead(t, remote) != *out.Commit {
+		t.Errorf("calls = %d, remote at %s, want 2 and %s", calls, remoteHead(t, remote), *out.Commit)
+	}
+}
+
+func TestLoopDoesNotRetryWithinPushInterval(t *testing.T) {
+	ts, clk, _ := loopServer(t)
+	waitFirstSync(t, ts)
+	var calls atomic.Int32
+	ts.srv.loop.setSyncFn(func(string) { calls.Add(1) }) // fails: the write stays pending
+	var out taskWriteBody
+	ts.call("POST", "/api/tasks", map[string]any{"title": "one"}, 201, &out)
+	settle(t, ts, clk, t0.Add(30*time.Second))
+	clk.Advance(30 * time.Second)
+	eventually(t, "the first try", func() bool { return calls.Load() == 1 })
+	settle(t, ts, clk, t0.Add(60*time.Second))
+	clk.Advance(29 * time.Second)
+	time.Sleep(100 * time.Millisecond)
+	if n := calls.Load(); n != 1 {
+		t.Fatalf("%d syncs 29 seconds after a failed one", n)
+	}
+	clk.Advance(time.Second)
+	eventually(t, "the second try", func() bool { return calls.Load() == 2 })
+}
+
+func TestLoopDoesNotOverlapSyncsOfAStore(t *testing.T) {
+	ts, clk, _ := loopServer(t)
+	waitFirstSync(t, ts)
+	var calls atomic.Int32
+	block := make(chan struct{})
+	ts.srv.loop.setSyncFn(func(string) { calls.Add(1); <-block })
+	var out taskWriteBody
+	ts.call("POST", "/api/tasks", map[string]any{"title": "one"}, 201, &out)
+	settle(t, ts, clk, t0.Add(30*time.Second))
+	clk.Advance(30 * time.Second)
+	eventually(t, "the sync to start", func() bool { return calls.Load() == 1 })
+	clk.Advance(time.Hour)
+	ts.srv.loop.Wake()
+	time.Sleep(200 * time.Millisecond)
+	if n := calls.Load(); n != 1 {
+		t.Errorf("%d syncs of one store at once", n)
+	}
+	close(block)
+}
+
+func TestLoopFollowsAddedStores(t *testing.T) {
+	ts, _, _ := loopServer(t)
+	waitFirstSync(t, ts)
+	remote := filepath.Join(t.TempDir(), "two.git")
+	if err := gitrepo.InitBare(remote); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.session().StoreInit(ops.StoreInitInput{Name: "two", Prefix: "TW", Workspace: "two", Remotes: []string{remote}}); err != nil {
+		t.Fatal(err)
+	}
+	ts.srv.loop.Wake()
+	eventually(t, "the sync of the new store", func() bool {
+		ss := ts.session()
+		ss.StoreName = "two"
+		s, err := ss.OpenStore()
+		if err != nil {
+			return false
+		}
+		st, err := hhsync.ReadState(s)
+		return err == nil && !st.LastSuccess.IsZero()
+	})
 }

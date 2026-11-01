@@ -54,6 +54,22 @@ func (c *fakeClock) Advance(d time.Duration) {
 	c.waiters = kept
 }
 
+// waitWaiter waits until something waits for the time at, so that a test
+// advances the clock only once the loop is parked on it.
+func (c *fakeClock) waitWaiter(t *testing.T, at time.Time) {
+	t.Helper()
+	eventually(t, "a wait until "+at.Format(time.RFC3339), func() bool {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		for _, w := range c.waiters {
+			if w.at.Equal(at) {
+				return true
+			}
+		}
+		return false
+	})
+}
+
 // eventually waits up to 10 seconds of real time for cond.
 func eventually(t *testing.T, what string, cond func() bool) {
 	t.Helper()

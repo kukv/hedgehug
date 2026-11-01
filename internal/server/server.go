@@ -55,6 +55,7 @@ type Server struct {
 	loop     *Loop
 	stopOnce sync.Once
 	cancel   context.CancelFunc
+	runDone  chan struct{} // closed when the loop has returned; nil before Start
 }
 
 // New makes the server. Call SetPort with the port it listens on before
@@ -168,7 +169,11 @@ func OpenAPIYAML() ([]byte, error) {
 // done or Shutdown is called.
 func (s *Server) Start(ctx context.Context) {
 	ctx, s.cancel = context.WithCancel(ctx)
-	go s.loop.Run(ctx)
+	s.runDone = make(chan struct{})
+	go func() {
+		defer close(s.runDone)
+		s.loop.Run(ctx)
+	}()
 }
 
 // Shutdown stops the loop and waits for the pushes of the writes not
@@ -177,6 +182,9 @@ func (s *Server) Shutdown(context.Context) error {
 	s.stopOnce.Do(func() {
 		if s.cancel != nil {
 			s.cancel()
+		}
+		if s.runDone != nil {
+			<-s.runDone // a step in progress may still start a sync
 		}
 		s.loop.Drain(10 * time.Second)
 	})

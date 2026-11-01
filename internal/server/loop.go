@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/config"
@@ -24,7 +25,8 @@ type Loop struct {
 	onState func(store string)
 	syncFn  func(store string) // the sync of one store; tests replace it
 
-	wake chan struct{}
+	wake     chan struct{}
+	deciding atomic.Bool // the loop is between waking and waiting (for tests)
 
 	mu      sync.Mutex
 	last    map[string]time.Time // store → when its last sync started
@@ -56,14 +58,10 @@ func (l *Loop) Wake() {
 // Run runs the loop until ctx is done.
 func (l *Loop) Run(ctx context.Context) {
 	for ctx.Err() == nil {
-		began := l.clock.Now()
+		l.deciding.Store(true)
 		wait := l.step()
 		timer := l.clock.After(wait)
-		// A clock that moved while step decided would make timer late by as
-		// much; decide again.
-		if l.clock.Now().Sub(began) > time.Second {
-			continue
-		}
+		l.deciding.Store(false)
 		select {
 		case <-ctx.Done():
 			return
@@ -107,6 +105,7 @@ func (l *Loop) fetchInterval(c *config.Config) time.Duration {
 func (l *Loop) noteNext(name string) {
 	c, _, err := l.s.session("").Config()
 	if err != nil {
+		l.s.logf("sync %s: %v", name, err)
 		return
 	}
 	l.mu.Lock()
@@ -191,6 +190,7 @@ func (l *Loop) start(name string) {
 	}
 	l.active++
 	l.mu.Unlock()
+	l.noteNext(name) // while it runs, the next fetch is a whole interval after its start
 	go func() {
 		fn(name)
 		l.mu.Lock()
@@ -312,4 +312,12 @@ func maxTime(a, b time.Time) time.Time {
 		return a
 	}
 	return b
+}
+
+// parked reports whether the loop waits with nothing left to look at: no
+// sync runs, no wake is pending, and it is not deciding (tests).
+func (l *Loop) parked() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.active == 0 && len(l.wake) == 0 && !l.deciding.Load()
 }
