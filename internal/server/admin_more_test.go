@@ -19,6 +19,7 @@ type migrated struct {
 }
 
 func TestMigrateProps(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	if _, err := ts.session().Add(ops.AddInput{Title: "p", Assigns: []ops.Assign{{Key: "priority", Op: "=", Value: "high"}}}); err != nil {
 		t.Fatal(err)
@@ -76,6 +77,7 @@ func (ts *testServer) commitRaw(rel, body string) {
 }
 
 func TestDoctorFindsAndRepairs(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	ts.add("a", "")
 	idB := ts.add("b", "")
@@ -120,6 +122,7 @@ func TestDoctorFindsAndRepairs(t *testing.T) {
 }
 
 func TestWorkspaceErrors(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	ts.add("one", "")
 	if p := ts.problem("DELETE", "/api/workspaces/me", nil, 409); p.Type != "workspace.not_empty" {
@@ -158,6 +161,7 @@ func TestWorkspaceErrors(t *testing.T) {
 }
 
 func TestSecondStore(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	ts.add("one", "")
 	ts.call("POST", "/api/stores", map[string]any{"name": "team", "prefix": "TM"}, 201, nil)
@@ -186,6 +190,7 @@ func TestSecondStore(t *testing.T) {
 }
 
 func TestStoreDefault(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	type item struct {
 		Name    string `json:"name"`

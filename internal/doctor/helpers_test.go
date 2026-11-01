@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -105,7 +106,7 @@ func firstWorkspace(t *testing.T, s *store.Store) model.ULID {
 }
 
 // rawIDs numbers the ids putRaw gives to tasks without one.
-var rawIDs int
+var rawIDs atomic.Int64
 
 // putRaw commits a task file past the checks of the store, as a sync or a
 // hand edit could.
@@ -115,8 +116,7 @@ func putRaw(t *testing.T, s *store.Store, dir string, task *model.Task) {
 		task.Workspace = firstWorkspace(t, s)
 	}
 	if task.ID == "" {
-		rawIDs++
-		task.ID = fmt.Sprintf("TST-%d", 1000+rawIDs)
+		task.ID = fmt.Sprintf("TST-%d", 1000+rawIDs.Add(1))
 	}
 	b, err := task.Encode()
 	if err != nil {

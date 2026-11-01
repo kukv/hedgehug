@@ -16,6 +16,7 @@ type workspaceBody struct {
 }
 
 func TestWorkspaces(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	ts.add("one", "")
 	var list []ops.WorkspaceView
@@ -48,6 +49,7 @@ func TestWorkspaces(t *testing.T) {
 }
 
 func TestSchema(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	var sc ops.SchemaView
 	ts.call("GET", "/api/schema", nil, 200, &sc)
@@ -83,6 +85,7 @@ func TestSchema(t *testing.T) {
 }
 
 func TestStores(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	var list []struct {
 		ops.StoreView
@@ -117,6 +120,7 @@ type doctorReport struct {
 }
 
 func TestDoctor(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	var reps []doctorReport
 	ts.call("GET", "/api/doctor", nil, 200, &reps)

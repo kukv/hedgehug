@@ -18,6 +18,7 @@ func advance(ts *testSession, d time.Duration) {
 func storeNames(es []string) string { return strings.Join(es, ",") }
 
 func TestListAcrossStores(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	l, err := ts.List(mustParse(t, ""))
 	if err != nil {
@@ -53,6 +54,7 @@ func TestListAcrossStores(t *testing.T) {
 }
 
 func TestListWarnsOfAStoreThatDoesNotOpen(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	_, e, err := ts.ForStore("org-b").Entry()
 	if err != nil {
@@ -78,6 +80,7 @@ func TestListWarnsOfAStoreThatDoesNotOpen(t *testing.T) {
 }
 
 func TestTreePerStore(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	if _, err := ts.ForStore("org-a").Add(AddInput{Title: "child", Parent: "API-1"}); err != nil {
 		t.Fatal(err)
@@ -114,6 +117,7 @@ func TestTreePerStore(t *testing.T) {
 }
 
 func TestLogMixesStoresByTime(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	advance(ts, time.Hour)
 	if _, err := ts.ForStore("org-b").Add(AddInput{Title: "b+1"}); err != nil {
@@ -184,6 +188,7 @@ func TestLogMixesStoresByTime(t *testing.T) {
 }
 
 func TestViewsTellTheirStore(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	r, err := ts.Show("WEB-1")
 	if err != nil || r.Store != "org-b" {
@@ -205,6 +210,7 @@ func TestViewsTellTheirStore(t *testing.T) {
 }
 
 func TestListByAnIDOfOneStore(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	if _, err := ts.ForStore("org-a").Add(AddInput{Title: "child", Parent: "API-1"}); err != nil {
 		t.Fatal(err)
@@ -227,6 +233,7 @@ func TestListByAnIDOfOneStore(t *testing.T) {
 }
 
 func TestWorkspaceQueryAcrossStores(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	// org-a has no workspace org-b: it matches nothing there, not an error
 	r, err := ts.List(mustParse(t, "workspace:org-b"))
@@ -243,6 +250,7 @@ func TestWorkspaceQueryAcrossStores(t *testing.T) {
 }
 
 func TestLogInWorkspaces(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	a := ts.ForStore("org-a")
 	advance(ts, time.Hour)

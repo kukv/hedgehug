@@ -42,6 +42,7 @@ func (te *testEnv) comments(ulid string) []*model.Comment {
 }
 
 func TestCommentAddFromArgs(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
 	before := len(te.log("me"))
@@ -131,6 +132,7 @@ func TestCommentEmptyBody(t *testing.T) {
 }
 
 func TestCommentDeletedTask(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
 	te.ok("rm", x.ID)
@@ -252,6 +254,7 @@ func TestCommentRm(t *testing.T) {
 // comment rm writes the comment as it is under the lock: an edit that
 // lands between its first read and the lock is kept.
 func TestCommentRmRereadsUnderLock(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.writeAccounts("github.com", "alice")
 	x := te.addJSON("Alpha")
@@ -305,6 +308,7 @@ func TestCommentRmRereadsUnderLock(t *testing.T) {
 }
 
 func TestCommentUnknown(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.addJSON("Alpha")
 	if code, _, errs := te.run("comment", "rm", "ZZZZ"); code != 1 || errs == "" {
@@ -332,6 +336,7 @@ func (te *testEnv) putComments(ulid string, commentULIDs ...string) {
 }
 
 func TestCommentULIDMustBeFull(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.writeAccounts("github.com", "alice")
 	x := te.addJSON("Alpha")
@@ -348,6 +353,7 @@ func TestCommentULIDMustBeFull(t *testing.T) {
 }
 
 func TestShowCommentULID(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
 	c := te.commentJSON("comment", x.ID, "has an author-less comment")
@@ -369,6 +375,7 @@ func TestShowCommentULID(t *testing.T) {
 }
 
 func TestCommentEditRmOnlyByTheAuthor(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.writeAccounts("github.com", "alice")
 	x := te.addJSON("Alpha")
@@ -390,6 +397,7 @@ func TestCommentEditRmOnlyByTheAuthor(t *testing.T) {
 }
 
 func TestCommentMentionWarning(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.writeAccounts("github.com", "alice")
 	x := te.addJSON("Alpha")

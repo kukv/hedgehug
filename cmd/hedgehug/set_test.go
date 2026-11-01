@@ -7,6 +7,7 @@ import (
 )
 
 func TestSet(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	other := te.addJSON("Other")
@@ -36,6 +37,7 @@ func TestSet(t *testing.T) {
 }
 
 func TestSetErrors(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	before := len(te.log("me"))

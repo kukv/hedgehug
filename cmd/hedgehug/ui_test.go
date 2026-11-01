@@ -120,6 +120,7 @@ func (te *testEnv) uiJSON() (map[string]any, os.FileInfo) {
 }
 
 func TestUIStartsAndStops(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	u := te.startUI("--no-open")
@@ -150,6 +151,7 @@ func TestUIStartsAndStops(t *testing.T) {
 }
 
 func TestUIOpensTheBrowser(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	u := te.startUI()
@@ -163,6 +165,7 @@ func TestUIOpensTheBrowser(t *testing.T) {
 }
 
 func TestUIReusesTheRunningServer(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	u := te.startUI("--no-open")
@@ -178,6 +181,7 @@ func TestUIReusesTheRunningServer(t *testing.T) {
 }
 
 func TestUIReuseWarnsWhenTheBrowserDoesNotOpen(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.startUI("--no-open")
@@ -189,6 +193,7 @@ func TestUIReuseWarnsWhenTheBrowserDoesNotOpen(t *testing.T) {
 }
 
 func TestUIOverwritesAStaleUIJSON(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -209,6 +214,7 @@ func TestUIOverwritesAStaleUIJSON(t *testing.T) {
 }
 
 func TestUIPortInUse(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -224,6 +230,7 @@ func TestUIPortInUse(t *testing.T) {
 }
 
 func TestUIKeepsAUIJSONThatIsNotItsOwn(t *testing.T) {
+	t.Parallel()
 	for name, other := range map[string]func(token string) string{
 		"other token": func(string) string {
 			return `{"port":1,"token":"other","pid":` + strconv.Itoa(os.Getpid()) + `,"version":"x"}`

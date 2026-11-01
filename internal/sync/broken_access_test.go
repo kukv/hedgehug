@@ -14,6 +14,7 @@ import (
 // A sync takes a broken access.json as absent: it warns, rewrites the file,
 // and goes on (and pushes).
 func TestRunWithBrokenAccessFile(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	c.addTask(0, "local")
 	s := c.stores[0]
@@ -40,6 +41,7 @@ func TestRunWithBrokenAccessFile(t *testing.T) {
 }
 
 func TestCheckAccessWithBrokenAccessFile(t *testing.T) {
+	t.Parallel()
 	s := newLoneStore(t)
 	if err := s.WriteLocal(accessFile, []byte("[")); err != nil {
 		t.Fatal(err)

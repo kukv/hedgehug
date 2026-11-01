@@ -28,6 +28,7 @@ func storesUnder(t *testing.T, remotes string, prefixes map[string]string) {
 }
 
 func TestDiscoverFrom(t *testing.T) {
+	t.Parallel()
 	remotes := filepath.Join(t.TempDir(), "remotes")
 	storesUnder(t, remotes, map[string]string{
 		"https://github.com/org-a/hh-shared.git": "SH",
@@ -113,6 +114,7 @@ func TestDiscoverGitHub(t *testing.T) {
 }
 
 func TestDiscoverTerminal(t *testing.T) {
+	t.Parallel()
 	remotes := filepath.Join(t.TempDir(), "remotes")
 	storesUnder(t, remotes, map[string]string{"https://github.com/o/aa.git": "AA", "https://github.com/o/bb.git": "BB"})
 	te := newTestEnv(t)
@@ -138,6 +140,7 @@ func TestDiscoverTerminal(t *testing.T) {
 // With --json on a terminal the question is still asked, and the list goes to
 // stderr so that stdout is the JSON alone.
 func TestDiscoverTerminalJSON(t *testing.T) {
+	t.Parallel()
 	remotes := filepath.Join(t.TempDir(), "remotes")
 	storesUnder(t, remotes, map[string]string{"https://github.com/o/aa.git": "AA"})
 	te := newTestEnv(t)
@@ -158,6 +161,7 @@ func TestDiscoverTerminalJSON(t *testing.T) {
 // --from with two accounts and none named: off a terminal the choice is not
 // asked (exit 2, the accounts listed); on one it is asked by number.
 func TestDiscoverFromAccountChoice(t *testing.T) {
+	t.Parallel()
 	remotes := filepath.Join(t.TempDir(), "remotes")
 	storesUnder(t, remotes, map[string]string{"https://github.com/o/aa.git": "AA"})
 	te := newTestEnv(t)
@@ -184,6 +188,7 @@ func TestDiscoverFromAccountChoice(t *testing.T) {
 // Of two that are picked, the one whose clone fails is reported, the other is
 // still added, and the exit code is 1.
 func TestDiscoverOneFails(t *testing.T) {
+	t.Parallel()
 	remotes := filepath.Join(t.TempDir(), "remotes")
 	storesUnder(t, remotes, map[string]string{"https://github.com/o/aa.git": "AA", "https://github.com/o/bb.git": "BB"})
 	te := newTestEnv(t)
@@ -217,6 +222,7 @@ func TestDiscoverOneFails(t *testing.T) {
 // The account question and the number question are answered from one input
 // of two lines: the second answer is not lost to the first prompt's reader.
 func TestDiscoverTwoPromptsFromOneInput(t *testing.T) {
+	t.Parallel()
 	remotes := filepath.Join(t.TempDir(), "remotes")
 	storesUnder(t, remotes, map[string]string{"https://github.com/o/aa.git": "AA", "https://github.com/o/bb.git": "BB"})
 	te := newTestEnv(t)
@@ -231,6 +237,7 @@ func TestDiscoverTwoPromptsFromOneInput(t *testing.T) {
 
 // A number given twice is added once.
 func TestDiscoverDuplicateNumbers(t *testing.T) {
+	t.Parallel()
 	remotes := filepath.Join(t.TempDir(), "remotes")
 	storesUnder(t, remotes, map[string]string{"https://github.com/o/aa.git": "AA", "https://github.com/o/bb.git": "BB"})
 	te := newTestEnv(t)

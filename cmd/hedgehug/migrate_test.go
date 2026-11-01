@@ -44,6 +44,7 @@ type migrateOut struct {
 }
 
 func TestSchemaMigrateStatus(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	b := te.addJSON("Beta")
@@ -93,6 +94,7 @@ func TestSchemaMigrateStatus(t *testing.T) {
 // A file at the path of one task that holds another, as a stale copy, is
 // left alone: writing it would overwrite the real file of the other task.
 func TestSchemaMigrateSkipsMismatchedULID(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	d := te.addJSON("Delta")
@@ -119,6 +121,7 @@ func TestSchemaMigrateSkipsMismatchedULID(t *testing.T) {
 }
 
 func TestSchemaMigrateJSON(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	te.ok("set", a.ID, "priority=mid")
@@ -143,6 +146,7 @@ func TestSchemaMigrateJSON(t *testing.T) {
 }
 
 func TestSchemaMigrateKindAndProp(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha", "--kind", "bug")
 	te.ok("set", a.ID, "start=2026-11-01")
@@ -158,6 +162,7 @@ func TestSchemaMigrateKindAndProp(t *testing.T) {
 }
 
 func TestSchemaMigratePropOnBoth(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	te.ok("set", a.ID, "start=2026-11-01", "due=2026-11-30")
@@ -174,6 +179,7 @@ func TestSchemaMigratePropOnBoth(t *testing.T) {
 }
 
 func TestSchemaMigrateRejectsNewViolation(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("Parent")
 	c := te.addJSON("Child", "--parent", p.ID)
@@ -195,6 +201,7 @@ func TestSchemaMigrateRejectsNewViolation(t *testing.T) {
 // Merging into a status with required fields keeps the tasks that lack
 // them: a migration is not a transition, and they did not have them before.
 func TestSchemaMigrateMergeIntoRequired(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	te.ok("status", a.ID, "backlog")
@@ -209,6 +216,7 @@ func TestSchemaMigrateMergeIntoRequired(t *testing.T) {
 
 // A rename keeps a task that already lacked a required field of the status.
 func TestSchemaMigrateKeepsMissingRequired(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	te.ok("status", a.ID, "in_progress")
@@ -228,6 +236,7 @@ func TestSchemaMigrateKeepsMissingRequired(t *testing.T) {
 }
 
 func TestSchemaMigrateRejectsBadSchema(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.addJSON("Alpha")
 	before := len(te.log("me"))
@@ -241,6 +250,7 @@ func TestSchemaMigrateRejectsBadSchema(t *testing.T) {
 }
 
 func TestSchemaMigrateDryRun(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	before := len(te.log("me"))
@@ -270,6 +280,7 @@ func TestSchemaMigrateDryRun(t *testing.T) {
 }
 
 func TestSchemaMigrateArgs(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	for _, tc := range []struct {
 		args []string

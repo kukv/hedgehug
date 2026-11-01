@@ -3,6 +3,7 @@ package context
 import "testing"
 
 func TestSplit(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[string][3]string{
 		"https://github.com/Org-A/HH-Shared.git": {"github.com", "Org-A", "HH-Shared"},
 		"https://GitHub.com/org-a/api/":          {"github.com", "org-a", "api"},
@@ -30,6 +31,7 @@ func TestSplit(t *testing.T) {
 }
 
 func TestRepoID(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[string]string{
 		"https://github.com/Org-A/API.git":      "github.com/org-a/api",
 		"http://github.com/org-a/api/":          "github.com/org-a/api",

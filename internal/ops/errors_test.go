@@ -9,6 +9,7 @@ import (
 )
 
 func TestErrorKeepsMessage(t *testing.T) {
+	t.Parallel()
 	base := errors.New("ME-1 is already deleted")
 	e := newErr(KindConflict, "task.deleted", base, "id", "ME-1")
 	if e.Error() != base.Error() {
@@ -23,6 +24,7 @@ func TestErrorKeepsMessage(t *testing.T) {
 }
 
 func TestKindOfNil(t *testing.T) {
+	t.Parallel()
 	if got := KindOf(nil); got != KindUnknown {
 		t.Errorf("KindOf(nil) = %v; want KindUnknown", got)
 	}
@@ -32,6 +34,7 @@ func TestKindOfNil(t *testing.T) {
 }
 
 func TestKindOfClassifiesLowerLayers(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		err  error
 		want Kind

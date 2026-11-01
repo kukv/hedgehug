@@ -59,6 +59,7 @@ func waitEvent[T any](t *testing.T, ch <-chan sseEvent, match func(T) bool) T {
 }
 
 func TestPollTasksChanged(t *testing.T) {
+	t.Parallel()
 	ts, ch := pollServer(t)
 	time.Sleep(2 * pollInterval) // the first look sets the HEADs; it sends nothing
 	res, err := ts.session().Add(ops.AddInput{Title: "one"})
@@ -72,6 +73,7 @@ func TestPollTasksChanged(t *testing.T) {
 }
 
 func TestPollCommentChangesItsTask(t *testing.T) {
+	t.Parallel()
 	ts, ch := pollServer(t)
 	res, err := ts.session().Add(ops.AddInput{Title: "one"})
 	if err != nil {
@@ -88,6 +90,7 @@ func TestPollCommentChangesItsTask(t *testing.T) {
 }
 
 func TestPollRemoved(t *testing.T) {
+	t.Parallel()
 	ts, ch := pollServer(t)
 	res, err := ts.session().Add(ops.AddInput{Title: "one"})
 	if err != nil {
@@ -107,6 +110,7 @@ func TestPollRemoved(t *testing.T) {
 }
 
 func TestPollSchemaAndViews(t *testing.T) {
+	t.Parallel()
 	ts, ch := pollServer(t)
 	if _, err := ts.session().Add(ops.AddInput{Title: "one"}); err != nil {
 		t.Fatal(err)
@@ -125,6 +129,7 @@ func TestPollSchemaAndViews(t *testing.T) {
 }
 
 func TestPollSyncState(t *testing.T) {
+	t.Parallel()
 	ts, ch := pollServer(t)
 	time.Sleep(2 * pollInterval)
 	s, err := ts.session().OpenStore()
@@ -141,6 +146,7 @@ func TestPollSyncState(t *testing.T) {
 }
 
 func TestPollUnread(t *testing.T) {
+	t.Parallel()
 	ts, ch := pollServer(t)
 	res, err := ts.session().Add(ops.AddInput{Title: "mine"})
 	if err != nil {
@@ -162,6 +168,7 @@ func TestPollUnread(t *testing.T) {
 }
 
 func TestPollFirstLookSendsNothing(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	ts.addRemote()
 	ch, cancel := ts.srv.hub.Subscribe()
@@ -187,6 +194,7 @@ func TestPollFirstLookSendsNothing(t *testing.T) {
 }
 
 func TestPollInboxStampIsStable(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	res, err := ts.session().Add(ops.AddInput{Title: "mine"})
 	if err != nil {
@@ -213,6 +221,7 @@ func TestPollInboxStampIsStable(t *testing.T) {
 }
 
 func TestChildTaskIsCommentsOnly(t *testing.T) {
+	t.Parallel()
 	task, other := model.NewULID(), model.NewULID()
 	if u, ok := childTask(model.CommentPath(task, other)); !ok || u != task {
 		t.Errorf("comment path: %v %v", u, ok)

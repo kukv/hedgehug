@@ -53,6 +53,7 @@ func commitTask(t *testing.T, e config.StoreEntry, task *model.Task) {
 func scalar(v string) *yaml.Node { return &yaml.Node{Kind: yaml.ScalarNode, Value: v} }
 
 func TestCrossRefsFindsParentBlockedByAndTaskRef(t *testing.T) {
+	t.Parallel()
 	a, b := newRefStoreAt(t, "org-a", "API"), newRefStoreAt(t, "org-b", "WEB")
 	target := putTasks(t, b, 1, nil)[0]
 	from := putTasks(t, a, 3, nil)
@@ -82,6 +83,7 @@ func TestCrossRefsFindsParentBlockedByAndTaskRef(t *testing.T) {
 }
 
 func TestCrossRefsIgnoresWhatIsNotAReferenceAcrossStores(t *testing.T) {
+	t.Parallel()
 	a, b := newRefStoreAt(t, "org-a", "API"), newRefStoreAt(t, "org-b", "WEB")
 	gone := model.NewULID()
 	deleted := putTasks(t, b, 1, nil)[0]
@@ -106,6 +108,7 @@ func TestCrossRefsIgnoresWhatIsNotAReferenceAcrossStores(t *testing.T) {
 }
 
 func TestCrossRefsSeesAWriteAfterTheIndexWasOpened(t *testing.T) {
+	t.Parallel()
 	a, b := newRefStoreAt(t, "org-a", "API"), newRefStoreAt(t, "org-b", "WEB")
 	target := putTasks(t, b, 1, nil)[0]
 	from := putTasks(t, a, 1, nil)[0]
@@ -121,6 +124,7 @@ func TestCrossRefsSeesAWriteAfterTheIndexWasOpened(t *testing.T) {
 }
 
 func TestCrossRefsUnknownStore(t *testing.T) {
+	t.Parallel()
 	if got, err := CrossRefs(openSet(t, newStoreAt(t, "org-a", "API")), "nope"); err != nil || len(got) != 0 {
 		t.Errorf("CrossRefs(nope) = %+v, %v; want none", got, err)
 	}

@@ -18,6 +18,7 @@ import (
 )
 
 func TestShow(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("Project", "--kind", "project")
 	other := te.addJSON("Other")
@@ -87,6 +88,7 @@ func TestShow(t *testing.T) {
 }
 
 func TestShowErrors(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	if code, _, stderr := te.run("show", "zzzzzzzz"); code != 1 || !strings.Contains(stderr, "not found") {
 		t.Errorf("exit %d, stderr %q", code, stderr)
@@ -97,6 +99,7 @@ func TestShowErrors(t *testing.T) {
 }
 
 func TestShowBroken(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	x := te.addJSON("X")
 	dir := te.storeDir("me")
@@ -136,6 +139,7 @@ func TestShowBroken(t *testing.T) {
 }
 
 func TestShowDeleted(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	x := te.addJSON("X")
 	s, err := store.Open(te.storeDir("me"))
@@ -160,6 +164,7 @@ func TestShowDeleted(t *testing.T) {
 }
 
 func TestShowInverseLabel(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	other := te.addJSON("Other")
 	a := te.addJSON("A", "-p", "duplicates+="+other.ID)
@@ -171,6 +176,7 @@ func TestShowInverseLabel(t *testing.T) {
 }
 
 func TestShowWideLabel(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	other := te.addJSON("Other")
 	a := te.addJSON("A", "-p", "relates+="+other.ID)
@@ -185,6 +191,7 @@ func TestShowWideLabel(t *testing.T) {
 }
 
 func TestDisplayWidth(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		s    string
 		want int

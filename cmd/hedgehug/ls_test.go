@@ -11,6 +11,7 @@ import (
 )
 
 func TestLs(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha", "-p", "labels+=ui")
 	b := te.addJSON("Beta", "--status", "done")
@@ -62,6 +63,7 @@ func TestLs(t *testing.T) {
 // broken is in every task for --format, empty when the task is not broken,
 // so that {{if .broken}} works on a key that must be there.
 func TestLsFormatBroken(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.addJSON("Alpha")
 	if out := te.ok("ls", "--format", "{{if .broken}}BROKEN {{end}}{{.title}}"); out != "Alpha\n" {
@@ -80,6 +82,7 @@ func TestLsFormatBroken(t *testing.T) {
 // A broken task has no readable id, so ls shows ? in the ID column and
 // "? <ULID>" in the tree.
 func TestLsBrokenID(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.addJSON("Alpha")
 	b := te.addJSON("Beta")
@@ -102,6 +105,7 @@ func TestLsBrokenID(t *testing.T) {
 }
 
 func TestLsGroups(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.addJSON("Alpha")
 	te.addJSON("Beta", "--status", "done")
@@ -112,6 +116,7 @@ func TestLsGroups(t *testing.T) {
 }
 
 func TestLsColor(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.addJSON("Alpha")
 	te.terminal = true
@@ -124,6 +129,7 @@ func TestLsColor(t *testing.T) {
 }
 
 func TestLsErrors(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	// A task, so that the templates are run.
 	te.addJSON("Alpha")
@@ -150,6 +156,7 @@ func TestLsErrors(t *testing.T) {
 }
 
 func TestUnknownID(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	// An ambiguous input needs two tasks with one id, which only a raw
 	// edit makes, so only the not-found case is run here.
@@ -160,6 +167,7 @@ func TestUnknownID(t *testing.T) {
 }
 
 func TestDescribe(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
 	b := te.addJSON("Beta")

@@ -14,6 +14,7 @@ import (
 )
 
 func TestDoctorNoProblems(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("add", "Alpha")
 	code, out, stderr := te.run("doctor")
@@ -32,6 +33,7 @@ func TestDoctorNoProblems(t *testing.T) {
 }
 
 func TestDoctorBrokenSchemaFile(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("add", "Alpha")
 	if err := os.WriteFile(filepath.Join(te.storeDir("me"), "schema.yaml"), []byte("statuses: [\n"), 0o600); err != nil {
@@ -56,6 +58,7 @@ func TestDoctorBrokenSchemaFile(t *testing.T) {
 }
 
 func TestDoctorTakesNoArguments(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	if code, _, _ := te.run("doctor", "x"); code != 2 {
 		t.Errorf("exit %d, want 2", code)
@@ -63,6 +66,7 @@ func TestDoctorTakesNoArguments(t *testing.T) {
 }
 
 func TestDoctorFixWithoutRemote(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.ok("add", "a")
@@ -92,6 +96,7 @@ func TestDoctorFixWithoutRemote(t *testing.T) {
 }
 
 func TestDoctorFixJSON(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.ok("add", "a")
@@ -119,6 +124,7 @@ func TestDoctorFixJSON(t *testing.T) {
 }
 
 func TestDoctorFixLeavesBrokenFiles(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.ok("add", "a")
@@ -130,6 +136,7 @@ func TestDoctorFixLeavesBrokenFiles(t *testing.T) {
 }
 
 func TestDoctorFixTakesNoArguments(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	if code, _, _ := te.run("doctor", "--fix", "x"); code != 2 {
 		t.Errorf("exit %d, want 2", code)
@@ -167,6 +174,7 @@ func (te *testEnv) insertField(id, line string) {
 }
 
 func TestDoctorFixKinds(t *testing.T) {
+	t.Parallel()
 	const hint = "hint: hedgehug doctor --fix fixes it"
 	tests := []struct {
 		name  string
@@ -215,6 +223,7 @@ func TestDoctorFixKinds(t *testing.T) {
 }
 
 func TestDoctorFixError(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.ok("add", "a")
@@ -235,6 +244,7 @@ func TestDoctorFixError(t *testing.T) {
 }
 
 func TestDoctorAcrossStores(t *testing.T) {
+	t.Parallel()
 	te := newTwoStoreEnv(t)
 	te.goldenOK("clean", "doctor")
 	te.goldenOK("clean-json", "doctor", "--json")
@@ -243,6 +253,7 @@ func TestDoctorAcrossStores(t *testing.T) {
 }
 
 func TestDoctorCrossStoreRefIsAWarning(t *testing.T) {
+	t.Parallel()
 	te := newTwoStoreEnv(t)
 	target := te.addJSON("--store", "bravo-long", "Bravo target")
 	te.handEdit("alpha", "AA-2", "\nkind: ", "\nblocked_by: ["+target.ULID+"]\nkind: ")
@@ -254,6 +265,7 @@ func TestDoctorCrossStoreRefIsAWarning(t *testing.T) {
 }
 
 func TestDoctorFixOfAReadOnlyStoreWarns(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("add", "one")
 	s, err := store.Open(te.storeDir("me"))

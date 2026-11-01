@@ -34,6 +34,7 @@ func (ts *testSession) asWriter(from, to string) *Session {
 }
 
 func TestUndoTakesBackMyLastWrite(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.appendConfig(aliceAccount)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
@@ -60,6 +61,7 @@ func TestUndoTakesBackMyLastWrite(t *testing.T) {
 }
 
 func TestUndoOnEmptyHistoryIsConflict(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.appendConfig(aliceAccount)
 	_, err := ts.Undo()
@@ -70,6 +72,7 @@ func TestUndoOnEmptyHistoryIsConflict(t *testing.T) {
 }
 
 func TestUndoNeedsAccounts(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	_, err := ts.Undo()
 	if err == nil || err.Error() != "accounts are not set up in config.yaml; hedgehug undo needs them to find your operations" {
@@ -82,6 +85,7 @@ func TestUndoNeedsAccounts(t *testing.T) {
 }
 
 func TestUndoKeepsWhatOthersChangedAfterwards(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.appendConfig(aliceAccount)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
@@ -111,6 +115,7 @@ func TestUndoKeepsWhatOthersChangedAfterwards(t *testing.T) {
 }
 
 func TestUndoKeptNamesTheFieldAndItsAuthor(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.appendConfig(aliceAccount)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
@@ -138,6 +143,7 @@ func TestUndoKeptNamesTheFieldAndItsAuthor(t *testing.T) {
 }
 
 func TestUndoBlockedByTasksOfAWorkspace(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.appendConfig(aliceAccount)
 	s, _, err := ts.Open()
@@ -161,6 +167,7 @@ func TestUndoBlockedByTasksOfAWorkspace(t *testing.T) {
 }
 
 func TestUndoTarget(t *testing.T) {
+	t.Parallel()
 	hash := func(b byte) plumbing.Hash { return plumbing.Hash{b} }
 	entry := func(h byte, author, op string, parents int, undoes ...byte) gitrepo.LogEntry {
 		e := gitrepo.LogEntry{Hash: hash(h), Trailers: []gitrepo.Trailer{{Key: "Hedgehug-Author", Value: author}, {Key: "Hedgehug-Op", Value: op}}}
@@ -202,6 +209,7 @@ func TestUndoTarget(t *testing.T) {
 }
 
 func TestCountTasks(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	for _, title := range []string{"live", "gone"} {
 		if _, err := ts.Add(AddInput{Title: title}); err != nil {

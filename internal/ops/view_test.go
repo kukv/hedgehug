@@ -16,6 +16,7 @@ func scalar(v string) *yaml.Node {
 }
 
 func TestTaskViewOf(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	blocker := ts.addTask("blocker", nil)
 	task := ts.addTask("the task", func(x *model.Task) {
@@ -66,6 +67,7 @@ func TestTaskViewOf(t *testing.T) {
 }
 
 func TestTaskViewOfProblems(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	a := ts.addTask("first", nil)
 	ts.addTask("second", func(x *model.Task) { x.ID = a.ID })
@@ -81,6 +83,7 @@ func TestTaskViewOfProblems(t *testing.T) {
 }
 
 func TestRefOfUnknownTask(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	_, ix, err := ts.Open()
 	if err != nil {
@@ -96,6 +99,7 @@ func TestRefOfUnknownTask(t *testing.T) {
 }
 
 func TestNames(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	task := ts.addTask("Write", nil)
 	_, ix, err := ts.Open()
@@ -124,6 +128,7 @@ func TestNames(t *testing.T) {
 }
 
 func TestOrEmpty(t *testing.T) {
+	t.Parallel()
 	if got := OrEmpty(nil); got == nil || len(got) != 0 {
 		t.Errorf("OrEmpty(nil) = %#v", got)
 	}

@@ -23,6 +23,7 @@ type affectedBody struct {
 }
 
 func TestCreateTask(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	var out taskWriteBody
 	ts.call("POST", "/api/tasks", map[string]any{"title": "one", "labels": []string{"a", "b"}}, 201, &out)
@@ -41,6 +42,7 @@ func TestCreateTask(t *testing.T) {
 }
 
 func TestPatchTask(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	id := ts.add("one", "")
 	blocker := ts.add("blocker", "")
@@ -77,6 +79,7 @@ func TestPatchTask(t *testing.T) {
 }
 
 func TestMoveTask(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	a := ts.add("a", "")
 	b := ts.add("b", "")
@@ -93,6 +96,7 @@ func TestMoveTask(t *testing.T) {
 }
 
 func TestRemoveRestoreTask(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	p := ts.add("p", "")
 	ts.add("c", p)
@@ -111,6 +115,7 @@ func TestRemoveRestoreTask(t *testing.T) {
 }
 
 func TestPurgeNeedsConfirm(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	p := ts.add("p", "")
 	c := ts.add("c", p)
@@ -142,6 +147,7 @@ func TestPurgeNeedsConfirm(t *testing.T) {
 }
 
 func TestPurgeLiveTaskIsConflict(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	p := ts.add("p", "")
 	if pr := ts.problem("DELETE", "/api/tasks/"+p+"?purge=true", nil, 409); pr.Type == "purge.unconfirmed" {
@@ -150,6 +156,7 @@ func TestPurgeLiveTaskIsConflict(t *testing.T) {
 }
 
 func TestRestoreAtCommit(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	id := ts.add("one", "")
 	var hist []ops.LogView
@@ -164,6 +171,7 @@ func TestRestoreAtCommit(t *testing.T) {
 }
 
 func TestAssignsOf(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		v    any
 		want []ops.Assign
@@ -187,6 +195,7 @@ func TestAssignsOf(t *testing.T) {
 }
 
 func TestPurgeConfirmNotAULID(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	p := ts.add("p", "")
 	ts.call("DELETE", "/api/tasks/"+p, nil, 200, nil)
@@ -197,6 +206,7 @@ func TestPurgeConfirmNotAULID(t *testing.T) {
 }
 
 func TestPurgeFailed(t *testing.T) {
+	t.Parallel()
 	ix := &index.Index{}
 	var ts []*index.Entry
 	read := func() (*index.Index, []*index.Entry, error) { return ix, ts, nil }
@@ -218,6 +228,7 @@ func TestPurgeFailed(t *testing.T) {
 }
 
 func TestViewsOfGone(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	_, err := ts.srv.viewsOf(ts.srv.session(""), model.NewULID())
 	var p *Problem
@@ -227,6 +238,7 @@ func TestViewsOfGone(t *testing.T) {
 }
 
 func TestPropsRefuseTaskKeys(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	id := ts.add("one", "")
 	for _, k := range append(model.TaskKeys(), "blocked_by") {

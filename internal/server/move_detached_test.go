@@ -11,6 +11,7 @@ import (
 )
 
 func TestMoveTaskToWorkspaceTellsWhatItTookOff(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	id := ts.add("one", "")
 	ts.call("POST", "/api/workspaces", map[string]any{"name": "web", "prefix": "WEB"}, 201, nil)

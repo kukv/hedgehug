@@ -6,6 +6,7 @@ import (
 )
 
 func TestUndoMoveTakesTheSubtree(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.writeAccounts("github.com", "alice")
 	te.ok("store", "init", "me", "--prefix", "WEB", "--workspace", "web")
@@ -23,6 +24,7 @@ func TestUndoMoveTakesTheSubtree(t *testing.T) {
 }
 
 func TestUndoComment(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.writeAccounts("github.com", "alice")
 	te.ok("store", "init", "me", "--prefix", "ME")
@@ -38,6 +40,7 @@ func TestUndoComment(t *testing.T) {
 }
 
 func TestUndoAddKeepsTaskOthersChanged(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.writeAccounts("github.com", "alice")
 	te.ok("store", "init", "me", "--prefix", "ME")
@@ -50,6 +53,7 @@ func TestUndoAddKeepsTaskOthersChanged(t *testing.T) {
 }
 
 func TestUndoWorkspaceWithTasksIsRefused(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.writeAccounts("github.com", "alice")
 	te.ok("store", "init", "me", "--prefix", "WEB", "--workspace", "web")

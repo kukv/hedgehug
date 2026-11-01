@@ -15,6 +15,7 @@ import (
 )
 
 func TestReadOnlyRefusesWrites(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.ok("add", "one")
@@ -90,6 +91,7 @@ func TestStoreAddAccountChecksAccess(t *testing.T) {
 }
 
 func TestSyncShowsUnpushable(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	bare := filepath.Join(t.TempDir(), "x.git")
 	if err := gitrepo.InitBare(bare); err != nil {
@@ -113,6 +115,7 @@ func TestSyncShowsUnpushable(t *testing.T) {
 // permission is read, and sync --status, which syncs and judges nothing, shows
 // the reason and the commits not pushed.
 func TestSyncStatusShowsGitHubReadOnlyAndUnpushed(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	bare := filepath.Join(t.TempDir(), "x.git")
 	if err := gitrepo.InitBare(bare); err != nil {
@@ -134,6 +137,7 @@ func TestSyncStatusShowsGitHubReadOnlyAndUnpushed(t *testing.T) {
 }
 
 func TestSyncPrintsUnpushable(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	bare := filepath.Join(t.TempDir(), "x.git")
 	if err := gitrepo.InitBare(bare); err != nil {

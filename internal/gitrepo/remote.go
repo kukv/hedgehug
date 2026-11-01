@@ -158,8 +158,16 @@ func (r *Repo) Push(remote string) error {
 	if err != nil {
 		return fmt.Errorf("push %s: %w", remote, err)
 	}
+	// When the remote refuses the push before it reads the pack, go-git
+	// returns without waiting for the goroutine that writes the pack, which
+	// goes on reading the objects. The push goes through a Repository of its
+	// own, so that the goroutine shares no state with the readers of r.
+	p, err := Open(r.dir)
+	if err != nil {
+		return fmt.Errorf("push %s: %w", remote, err)
+	}
 	beforePush()
-	err = r.r.Push(&git.PushOptions{
+	err = p.r.Push(&git.PushOptions{
 		RemoteName: remote,
 		RemoteURL:  to,
 		Auth:       auth,

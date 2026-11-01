@@ -44,6 +44,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        # -race はテストを5倍ほど遅くする。検出するデータ競合は OS によらないので、
+        # macOS では外す（Windows は今のまま）。
+        include:
+          - os: ubuntu-latest
+            race: -race
+          - os: windows-latest
+            race: -race
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     permissions:
@@ -61,17 +68,48 @@ jobs:
           cache: false
       # mise.toml に固定したツール（gotestsum）を入れる。Renovate の mise manager がバージョンを追う。
       - uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # v5.2.3
+      # Go のビルドキャッシュとモジュールキャッシュを復元する。キャッシュポイズニングを避けるため、
+      # 保存は main への push だけで行い（PR は復元のみ）、復元したモジュールは go mod verify で確かめる。
+      # キーは go.mod と go.sum だけなので、依存が変わるまで同じキャッシュを使う。
+      # 自分のパッケージは、キャッシュを作ったときから変わっていればコンパイルし直す。
+      # Windows はキャッシュの展開が遅いので使わない。
+      - name: Locate Go caches
+        id: go-env
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          echo "gocache=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+          echo "gomodcache=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: go-cache
+        if: runner.os != 'Windows'
+        with:
+          path: |
+            ${{ steps.go-env.outputs.gocache }}
+            ${{ steps.go-env.outputs.gomodcache }}
+          key: go-${{ runner.os }}-${{ runner.arch }}-test${{ matrix.race }}-${{ hashFiles('go.mod', 'go.sum') }}
+      - name: Verify the module cache
+        run: go mod verify
       # Windows の既定の pwsh は -coverprofile=coverage.out をドットで分けてしまうため、
       # 3つの OS とも bash で同じコマンドを使う。
       # Windows のランナーの TEMP は OS のディスク（C:）にあり、ファイルの作成や fsync が遅い。
       # テストの t.TempDir() をワークスペースと同じ D: の runner.temp に作る。
       # Go は Windows で TMP、Unix で TMPDIR を読むので、ubuntu と macos は変わらない。
+      # 復元したキャッシュには main のテスト結果も入っているので、-count=1 で毎回テストを実行する。
       - name: Test
         shell: bash
         env:
           TMP: ${{ runner.temp }}
           TEMP: ${{ runner.temp }}
-        run: gotestsum --format testdox --junitfile test-report.xml -- -race -coverprofile=coverage.out -covermode=atomic ./...
+          RACE: ${{ matrix.race }}
+        run: gotestsum --format testdox --junitfile test-report.xml -- ${RACE:+"$RACE"} -count=1 -coverprofile=coverage.out -covermode=atomic ./...
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.event_name == 'push' && runner.os != 'Windows' && steps.go-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ${{ steps.go-env.outputs.gocache }}
+            ${{ steps.go-env.outputs.gomodcache }}
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
       # 書き込めない GITHUB_TOKEN の PR（fork と Dependabot）では投稿が失敗して CI が赤くなるため、
       # 同じリポジトリの PR だけで投稿する。チェックとカバレッジのコメントは PR に1つなので、
       # 3つの OS が上書きし合わないよう ubuntu だけが投稿する。
@@ -103,6 +141,21 @@ jobs:
           cache: false
       # mise.toml に固定したツール（gotestsum）を入れる。Renovate の mise manager がバージョンを追う。
       - uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # v5.2.3
+      # キャッシュの扱いは test ジョブと同じ。
+      - name: Locate Go caches
+        id: go-env
+        run: |
+          echo "gocache=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+          echo "gomodcache=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: go-cache
+        with:
+          path: |
+            ${{ steps.go-env.outputs.gocache }}
+            ${{ steps.go-env.outputs.gomodcache }}
+          key: go-${{ runner.os }}-${{ runner.arch }}-nogit-${{ hashFiles('go.mod', 'go.sum') }}
+      - name: Verify the module cache
+        run: go mod verify
       - name: Test with no git on PATH
         shell: bash
         run: |
@@ -110,4 +163,11 @@ jobs:
           ln -s "$(command -v go)" "$RUNNER_TEMP/nogit/go"
           ln -s "$(mise which gotestsum)" "$RUNNER_TEMP/nogit/gotestsum"
           if PATH="$RUNNER_TEMP/nogit" command -v git; then exit 1; fi
-          CGO_ENABLED=0 PATH="$RUNNER_TEMP/nogit" gotestsum --format testdox -- ./...
+          CGO_ENABLED=0 PATH="$RUNNER_TEMP/nogit" gotestsum --format testdox -- -count=1 ./...
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ${{ steps.go-env.outputs.gocache }}
+            ${{ steps.go-env.outputs.gomodcache }}
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}

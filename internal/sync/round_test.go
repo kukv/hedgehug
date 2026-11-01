@@ -36,6 +36,7 @@ func replace[T any](t *testing.T, p *T, v T) {
 }
 
 func TestDirtyGitattributes(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	s := c.stores[0]
 	c.putFile(0, ".gitattributes", "tasks/**/*.md merge=hedgehug\n") // setup has lines to add
@@ -58,6 +59,7 @@ func TestDirtyGitattributes(t *testing.T) {
 
 // A merge that stops at a dirty file commits nothing, the setup either.
 func TestDirtyMergeCommitsNoSetup(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	x := c.addTask(0, "x")
 	c.sync(0)
@@ -80,6 +82,7 @@ func TestDirtyMergeCommitsNoSetup(t *testing.T) {
 
 // A line with other attributes, or spaced otherwise, counts.
 func TestSetupReadsAttributes(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	c.putFile(0, ".gitattributes", "tasks/**/*.md   diff=md merge=hedgehug\n# *.yaml merge=hedgehug\n")
 	c.sync(0)
@@ -168,6 +171,7 @@ func TestRepairHeadMovedCapped(t *testing.T) {
 }
 
 func TestMirrorRejectedMergedNextRound(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	mirror := filepath.Join(t.TempDir(), "m.git")
 	if err := gitrepo.InitBare(mirror); err != nil {
@@ -225,6 +229,7 @@ func TestRepack(t *testing.T) {
 // Two clones merge the same pair of commits, each from its own side, and
 // get the same tree and the same overwritten values.
 func TestMergeIsSymmetric(t *testing.T) {
+	t.Parallel()
 	for _, sameField := range []bool{false, true} {
 		c := newCluster(t, 2)
 		x := c.addTask(0, "x")
@@ -269,6 +274,7 @@ func TestMergeIsSymmetric(t *testing.T) {
 }
 
 func TestTrailerPathWithSpace(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	const p = "notes/a b.txt"
 	c.putFile(0, p, "base\n")
@@ -292,6 +298,7 @@ func TestTrailerPathWithSpace(t *testing.T) {
 // A yaml key can hold a space; the field stays one word of the trailer and
 // the inbox reads it back whole.
 func TestTrailerFieldWithSpace(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	const p = "automations.yaml"
 	c.putFile(0, p, "vars:\n  my key: base\n")

@@ -15,6 +15,7 @@ import (
 )
 
 func TestRewriteFetchPush(t *testing.T) {
+	t.Parallel()
 	d := t.TempDir()
 	bare := filepath.Join(d, "remotes", "org", "x.git")
 	if err := InitBare(bare); err != nil {
@@ -99,6 +100,7 @@ func TestHTTPSAuthAndDenied(t *testing.T) {
 // Auth is given the URL after the rewrite, and its failure stops the
 // fetch, the push, the clone and the listing before any session starts.
 func TestAuthGetsRewrittenURLAndItsErrorStops(t *testing.T) {
+	t.Parallel()
 	d := t.TempDir()
 	bare := filepath.Join(d, "x.git")
 	if err := InitBare(bare); err != nil {
@@ -150,6 +152,7 @@ func TestAuthGetsRewrittenURLAndItsErrorStops(t *testing.T) {
 }
 
 func TestPushDeniedByReadOnlyRemote(t *testing.T) {
+	t.Parallel()
 	d := t.TempDir()
 	bare := filepath.Join(d, "x.git")
 	if err := InitBare(bare); err != nil {
@@ -169,6 +172,7 @@ func TestPushDeniedByReadOnlyRemote(t *testing.T) {
 }
 
 func TestPushDenied(t *testing.T) {
+	t.Parallel()
 	ssh := errors.New("ssh: handshake failed: ssh: unable to authenticate: Permission denied (publickey)")
 	perm := &os.PathError{Op: "open", Path: "x", Err: os.ErrPermission}
 	for _, c := range []struct {
@@ -193,6 +197,7 @@ func TestPushDenied(t *testing.T) {
 }
 
 func TestLocalPathAndWritable(t *testing.T) {
+	t.Parallel()
 	for in, want := range map[string]bool{
 		"/tmp/x.git": true, "file:///tmp/x.git": true, "https://h/x": false, "git@h:o/r.git": false,
 		`C:\x\y.git`: true, "file:///C:/x/y.git": true, "ssh://git@h/o/r.git": false, "": false, "rel/x.git": false,
@@ -267,6 +272,7 @@ func TestRemoteEmpty(t *testing.T) {
 }
 
 func TestHeadHasFile(t *testing.T) {
+	t.Parallel()
 	d := t.TempDir()
 	r := initWithCommit(t, filepath.Join(d, "work"))
 	bare := filepath.Join(d, "x.git")

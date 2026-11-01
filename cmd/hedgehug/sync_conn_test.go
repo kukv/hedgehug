@@ -14,6 +14,7 @@ import (
 )
 
 func TestSyncThroughRewrite(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	remotes := filepath.Join(t.TempDir(), "remotes")
 	if err := gitrepo.InitBare(filepath.Join(remotes, "org-a", "x.git")); err != nil {

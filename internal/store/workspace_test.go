@@ -14,6 +14,7 @@ import (
 )
 
 func TestCreateWritesWorkspace(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	var got []*model.Workspace
 	for w, err := range s.Workspaces() {
@@ -28,6 +29,7 @@ func TestCreateWritesWorkspace(t *testing.T) {
 }
 
 func TestPutAndRemoveWorkspace(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	w := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
 	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(w) }); err != nil {
@@ -45,6 +47,7 @@ func TestPutAndRemoveWorkspace(t *testing.T) {
 }
 
 func TestPurgeRecordsNumbers(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := &model.Task{ULID: model.NewULID(), Workspace: testWorkspace(t, s).ULID, Kind: "task", Title: "x", Status: "todo", ID: "TST-9", FormerIDs: []string{"OLD-12"}}
 	if err := put(s, task); err != nil {
@@ -67,6 +70,7 @@ func subjectAndBody(t *testing.T, s *Store) (string, string) {
 }
 
 func TestWorkspaceCommitSubject(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	w := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
 	if _, err := s.Update(Op{Name: "workspace", Detail: "add api (API)", Workspace: w.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(w) }); err != nil {
@@ -100,6 +104,7 @@ func TestWorkspaceCommitSubject(t *testing.T) {
 }
 
 func TestCreateRefusesZeroWorkspaceULID(t *testing.T) {
+	t.Parallel()
 	meta := &model.StoreMeta{ULID: model.NewULID(), Name: "test"}
 	_, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, &model.Workspace{Name: "test", IDPrefix: "TST"}, testAuthor, "", time.Now)
 	if err == nil || !strings.Contains(err.Error(), "no ulid") {
@@ -108,6 +113,7 @@ func TestCreateRefusesZeroWorkspaceULID(t *testing.T) {
 }
 
 func TestRemoveWorkspaceRefusesBrokenTaskNamingIt(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	w := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
 	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.PutWorkspace(w) }); err != nil {
@@ -139,6 +145,7 @@ func TestRemoveWorkspaceRefusesBrokenTaskNamingIt(t *testing.T) {
 // A broken file the operation repairs or removes does not block removing
 // the workspace it names.
 func TestRemoveWorkspaceWithTheBrokenTaskNamingIt(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name string
 		fix  func(tx *Tx, ulid model.ULID) error
@@ -171,6 +178,7 @@ func TestRemoveWorkspaceWithTheBrokenTaskNamingIt(t *testing.T) {
 }
 
 func TestTxWorkspaceSeesTheOperation(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	w := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
 	if _, err := s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error {
@@ -193,6 +201,7 @@ func TestTxWorkspaceSeesTheOperation(t *testing.T) {
 }
 
 func TestNumbersWithoutFile(t *testing.T) {
+	t.Parallel()
 	n, err := newTestStore(t).Numbers()
 	if err != nil || n == nil || len(n) != 0 {
 		t.Errorf("Numbers = %v %v", n, err)
@@ -229,6 +238,7 @@ func committedPaths(t *testing.T, s *Store) []string {
 }
 
 func TestPurgeKeepsLargerNumbers(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	big, small := newTaskIn(ws, "big"), newTaskIn(ws, "small")
@@ -253,6 +263,7 @@ func TestPurgeKeepsLargerNumbers(t *testing.T) {
 }
 
 func TestPurgeRecordsNumbersOfSeveralTasksInOneCommit(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	a, b := newTaskIn(ws, "a"), newTaskIn(ws, "b")
@@ -273,6 +284,7 @@ func TestPurgeRecordsNumbersOfSeveralTasksInOneCommit(t *testing.T) {
 }
 
 func TestPurgeSubjectWithoutIDUsesULID(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	x := newTaskIn(testWorkspace(t, s), "idless")
 	b, err := x.Encode()
@@ -302,6 +314,7 @@ func mustEncode(t *testing.T, w *model.Workspace) []byte {
 }
 
 func TestRenameWorkspaceWithDuplicatePrefixFromSync(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	a := testWorkspace(t, s) // prefix TST
 	b := &model.Workspace{ULID: model.NewULID(), Name: "b", IDPrefix: "TST", PrefixSet: time.Now()}

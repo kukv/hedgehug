@@ -122,6 +122,7 @@ func heldElsewhere(lock string) bool {
 }
 
 func TestAuthLoginNewAccountByDevice(t *testing.T) {
+	t.Parallel()
 	ts, k := authSession(t, fakegh.State{AutoApprove: "alice"}, "")
 	var shown *github.DeviceCode
 	res, err := ts.AuthLogin(AuthLoginInput{Host: "github.com", ShowCode: func(dc *github.DeviceCode) { shown = dc }})
@@ -145,6 +146,7 @@ func TestAuthLoginNewAccountByDevice(t *testing.T) {
 // The login is compared without case: an account written Alice takes the
 // token of alice, and keeps its own spelling, in config.yaml and as the key.
 func TestAuthLoginLoginCaseIsIgnored(t *testing.T) {
+	t.Parallel()
 	ts, k := authSession(t, fakegh.State{AutoApprove: "alice", Tokens: map[string]string{"t-alice": "alice"}},
 		"accounts:\n  - {name: work, host: github.com, login: Alice}\n")
 	if _, err := ts.AuthLogin(AuthLoginInput{Name: "work", Host: "github.com"}); err != nil {
@@ -173,6 +175,7 @@ func TestAuthLoginLoginCaseIsIgnored(t *testing.T) {
 // Two accounts of one host and login in config.yaml stop the load, so a
 // login cannot go on from them.
 func TestAuthLoginRefusesDuplicateAccounts(t *testing.T) {
+	t.Parallel()
 	ts, k := authSession(t, fakegh.State{Tokens: map[string]string{"t-alice": "alice"}},
 		"accounts:\n  - {name: a, host: github.com, login: alice}\n  - {name: b, host: GitHub.com, login: ALICE}\n")
 	_, err := ts.AuthLogin(AuthLoginInput{Host: "github.com", WithToken: true, Token: "t-alice"})
@@ -185,6 +188,7 @@ func TestAuthLoginRefusesDuplicateAccounts(t *testing.T) {
 }
 
 func TestAuthLoginHostMustBeTheAccounts(t *testing.T) {
+	t.Parallel()
 	ts, k := authSession(t, fakegh.State{Tokens: map[string]string{"t-alice": "alice"}},
 		"accounts:\n  - {name: work, host: github.com, login: alice, token: keychain}\n")
 	_, err := ts.AuthLogin(AuthLoginInput{Name: "work", Host: "ghe.example.com", HostGiven: true, WithToken: true, Token: "t-alice"})
@@ -199,6 +203,7 @@ func TestAuthLoginHostMustBeTheAccounts(t *testing.T) {
 }
 
 func TestAuthLoginKinds(t *testing.T) {
+	t.Parallel()
 	ts, _ := authSession(t, fakegh.State{AutoApprove: "alice"},
 		"accounts:\n  - {name: k, host: github.com, login: alice, token: keychain}\n  - {name: d, host: github.com, login: bob, token: device}\n  - {name: g, host: github.com, login: x, token: gh}\n  - {name: e, host: github.com, login: y, token: \"env:V\"}\n")
 	_, err := ts.AuthLogin(AuthLoginInput{Name: "k", Host: "github.com"})
@@ -220,6 +225,7 @@ func TestAuthLoginKinds(t *testing.T) {
 }
 
 func TestAuthLoginEmptyToken(t *testing.T) {
+	t.Parallel()
 	ts, k := authSession(t, fakegh.State{}, "")
 	for _, tok := range []string{"", "  \n"} {
 		_, err := ts.AuthLogin(AuthLoginInput{Host: "github.com", WithToken: true, Token: tok})
@@ -233,6 +239,7 @@ func TestAuthLoginEmptyToken(t *testing.T) {
 }
 
 func TestAuthLoginOtherLoginWritesNothing(t *testing.T) {
+	t.Parallel()
 	ts, k := authSession(t, fakegh.State{AutoApprove: "bob", Tokens: map[string]string{"t-bob": "bob"}},
 		"accounts:\n  - {name: work, host: github.com, login: alice}\n")
 	for _, in := range []AuthLoginInput{
@@ -268,6 +275,7 @@ func breakConfig(t *testing.T, ts *testSession) {
 // A login that cannot write config.yaml puts the keychain back: to the old
 // value, or to nothing when there was none.
 func TestAuthLoginRollsBackTheKeychain(t *testing.T) {
+	t.Parallel()
 	t.Run("old value", func(t *testing.T) {
 		ts, k := authSession(t, fakegh.State{Tokens: map[string]string{"t-alice": "alice"}},
 			"accounts:\n  - {name: work, host: github.com, login: alice, token: keychain}\n")
@@ -307,6 +315,7 @@ func TestAuthLoginRollsBackTheKeychain(t *testing.T) {
 }
 
 func TestAuthLoginRollbackFailureIsSaid(t *testing.T) {
+	t.Parallel()
 	ts, k := authSession(t, fakegh.State{AutoApprove: "alice"}, "")
 	breakConfig(t, ts)
 	k.failDelete = errors.New("keychain locked")
@@ -319,6 +328,7 @@ func TestAuthLoginRollbackFailureIsSaid(t *testing.T) {
 // The keychain write of a login holds auth.lock; the polling of the device
 // flow does not.
 func TestAuthLoginLocksTheSave(t *testing.T) {
+	t.Parallel()
 	ts, k := authSession(t, fakegh.State{AutoApprove: "alice", Tokens: map[string]string{"t-alice": "alice"}}, "")
 	lock := ts.lockFile()
 	var heldDuringShow, heldDuringSet []bool
@@ -338,6 +348,7 @@ func TestAuthLoginLocksTheSave(t *testing.T) {
 }
 
 func TestAuthLogout(t *testing.T) {
+	t.Parallel()
 	ts, k := authSession(t, fakegh.State{},
 		"accounts:\n  - {name: d, host: github.com, login: dev, token: device}\n  - {name: k, host: github.com, login: key, token: keychain}\n  - {name: g, host: github.com, login: gh1, token: gh}\n  - {name: n, host: github.com, login: none1}\n")
 	k.m["github.com/dev"], k.m["github.com/key"] = "{}", "tok"
@@ -379,6 +390,7 @@ func TestAuthLogout(t *testing.T) {
 // An empty name is refused before config.yaml is read: a broken file does not
 // change the answer.
 func TestAuthLogoutNameFirst(t *testing.T) {
+	t.Parallel()
 	ts, _ := authSession(t, fakegh.State{}, "")
 	_, p, _ := ts.Config()
 	if err := os.WriteFile(p.ConfigFile, []byte("accounts: [\n"), 0o600); err != nil {
@@ -389,6 +401,7 @@ func TestAuthLogoutNameFirst(t *testing.T) {
 }
 
 func TestAuthStatus(t *testing.T) {
+	t.Parallel()
 	ts, k := authSession(t, fakegh.State{Tokens: map[string]string{"t-alice": "alice", "t-bob": "bob"}},
 		"accounts:\n"+
 			"  - {name: forever, host: github.com, login: alice, token: device}\n"+
@@ -442,6 +455,7 @@ func TestAuthStatus(t *testing.T) {
 }
 
 func TestAuthStatusAllGood(t *testing.T) {
+	t.Parallel()
 	ts, k := authSession(t, fakegh.State{Tokens: map[string]string{"t-alice": "alice"}},
 		"accounts:\n  - {name: a, host: github.com, login: Alice, token: keychain}\n  - {name: p, host: github.com, login: zed}\n")
 	k.m["github.com/Alice"] = "t-alice" // a login in another case than GitHub's
@@ -456,6 +470,7 @@ func TestAuthStatusAllGood(t *testing.T) {
 }
 
 func TestStoreDefault(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if name, err := ts.StoreDefault(""); err != nil || name != "me" {
 		t.Errorf("current = %q, %v", name, err)
@@ -499,6 +514,7 @@ func TestStoreDefault(t *testing.T) {
 }
 
 func TestStoreDefaultNoStore(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.StoreRemove("me", false); err != nil {
 		t.Fatal(err)

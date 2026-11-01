@@ -11,6 +11,7 @@ import (
 )
 
 func TestWorkspaceAddRenamePrefixRemove(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	r, err := ts.WorkspaceAdd("web", "WEB")
 	if err != nil {
@@ -62,6 +63,7 @@ func TestWorkspaceAddRenamePrefixRemove(t *testing.T) {
 }
 
 func TestWorkspaceBadNameAndPrefixAreUsageErrors(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	_, err := ts.WorkspaceAdd("web", "w-b")
 	wantErr(t, err, KindUsage, "workspace.bad_prefix")
@@ -80,6 +82,7 @@ func TestWorkspaceBadNameAndPrefixAreUsageErrors(t *testing.T) {
 }
 
 func TestWorkspaceNameAndPrefixTakenInTheStore(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.WorkspaceAdd("web", "WEB"); err != nil {
 		t.Fatal(err)
@@ -100,6 +103,7 @@ func TestWorkspaceNameAndPrefixTakenInTheStore(t *testing.T) {
 }
 
 func TestWorkspaceNotFoundAndAmbiguous(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	_, err := ts.WorkspaceRename("nope", "x")
 	wantErr(t, err, KindNotFound, "workspace.not_found")
@@ -123,6 +127,7 @@ func TestWorkspaceNotFoundAndAmbiguous(t *testing.T) {
 }
 
 func TestWorkspacePrefixUnchangedWritesNothing(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	s, _, _ := ts.Open()
 	before, _ := s.Repo().Head()
@@ -136,6 +141,7 @@ func TestWorkspacePrefixUnchangedWritesNothing(t *testing.T) {
 }
 
 func TestWorkspacePrefixRenumbersDeletedTasksToo(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	for _, title := range []string{"a", "b", "c"} {
 		if _, err := ts.Add(AddInput{Title: title}); err != nil {
@@ -154,6 +160,7 @@ func TestWorkspacePrefixRenumbersDeletedTasksToo(t *testing.T) {
 }
 
 func TestWorkspaceListCountsTasksNotDeleted(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.addWorkspace("api", "API")
 	if _, err := ts.Add(AddInput{Title: "a", Workspace: "me"}); err != nil {
@@ -177,6 +184,7 @@ func TestWorkspaceListCountsTasksNotDeleted(t *testing.T) {
 }
 
 func TestCheckPrefixElsewhere(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.StoreInit(StoreInitInput{Name: "team", Prefix: "TM"}); err != nil {
 		t.Fatal(err)
@@ -204,6 +212,7 @@ func TestCheckPrefixElsewhere(t *testing.T) {
 }
 
 func TestCheckPrefixElsewhereSkipsABrokenStoreWithAWarning(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	res, err := ts.StoreInit(StoreInitInput{Name: "other", Prefix: "OT"})
 	if err != nil {
@@ -222,6 +231,7 @@ func TestCheckPrefixElsewhereSkipsABrokenStoreWithAWarning(t *testing.T) {
 }
 
 func TestWorkspaceOnANamedStoreDoesNotTouchTheSession(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.StoreInit(StoreInitInput{Name: "team", Prefix: "TM"}); err != nil {
 		t.Fatal(err)

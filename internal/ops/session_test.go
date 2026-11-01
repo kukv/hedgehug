@@ -9,6 +9,7 @@ import (
 )
 
 func TestUpdateCommitsAndCallsAfterWrite(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	var after int
 	ts.AfterWrite = func(*store.Store, config.StoreEntry) { after++ }
@@ -28,6 +29,7 @@ func TestUpdateCommitsAndCallsAfterWrite(t *testing.T) {
 }
 
 func TestResolveNotFoundIsKindNotFound(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	_, ix, err := ts.Open()
 	if err != nil {

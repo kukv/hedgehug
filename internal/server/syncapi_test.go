@@ -13,6 +13,7 @@ type syncStatusBody struct {
 }
 
 func TestSyncAPI(t *testing.T) {
+	t.Parallel()
 	ts, _, remote := loopServer(t)
 	waitFirstSync(t, ts)
 	var st []syncStatusBody
@@ -38,6 +39,7 @@ func TestSyncAPI(t *testing.T) {
 }
 
 func TestPresenceAPI(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	id := ts.srv.presence.Connect()
 	ts.call("PUT", "/api/presence", map[string]any{"client": id, "visible": false}, 204, nil)

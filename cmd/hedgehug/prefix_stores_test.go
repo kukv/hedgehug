@@ -46,6 +46,7 @@ func newSharedPrefixEnv(t *testing.T) *testEnv {
 }
 
 func TestPrefixAcrossStores(t *testing.T) {
+	t.Parallel()
 	te := newSharedPrefixEnv(t)
 	te.goldenOK("ls", "ls")
 	te.goldenOK("tree", "ls", "--tree")
@@ -100,6 +101,7 @@ func TestPrefixAcrossStores(t *testing.T) {
 }
 
 func TestPrefixNotSharedIsUnchanged(t *testing.T) {
+	t.Parallel()
 	te := newTwoStoreEnv(t)
 	for _, out := range []string{te.ok("ls"), te.ok("show", "AA-1"), te.ok("set", "AA-1", "title=Renamed"), te.ok("log")} {
 		if strings.Contains(out, "alpha:AA") || strings.Contains(out, "bravo-long:BB") {

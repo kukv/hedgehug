@@ -32,6 +32,7 @@ func (te *testEnv) cloneDir(branch, url string) {
 }
 
 func TestAddInACloneLinksTheRepoAndGoesUnderItsProject(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.cloneDir("", "https://github.com/Org-A/Web.git")
 	p := te.addJSON("Web release", "--kind", "project")
@@ -65,6 +66,7 @@ func TestAddInACloneLinksTheRepoAndGoesUnderItsProject(t *testing.T) {
 }
 
 func TestAddAsksThePlaceOnATerminal(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.cloneDir("", "https://github.com/org-a/web")
 	te.addJSON("Web A", "--kind", "project")
@@ -104,6 +106,7 @@ func TestAddAsksThePlaceOnATerminal(t *testing.T) {
 }
 
 func TestAddWithoutRecentAndNoTerminalNamesTheCandidates(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.cloneDir("", "https://github.com/org-a/web")
 	te.addJSON("Web A", "--kind", "project")
@@ -115,6 +118,7 @@ func TestAddWithoutRecentAndNoTerminalNamesTheCandidates(t *testing.T) {
 }
 
 func TestAddAsksAboutTheBranch(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("Login work")
 	te.cloneDir("hh/"+p.ID+"-login", "https://github.com/org-a/web")
@@ -137,6 +141,7 @@ func TestAddAsksAboutTheBranch(t *testing.T) {
 }
 
 func TestAddAsksTheStoreAndTheWorkspace(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("store", "init", "other", "--prefix", "OT")
 	te.dropDefaultStore()

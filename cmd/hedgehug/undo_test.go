@@ -8,6 +8,7 @@ import (
 )
 
 func TestUndoKeepsLaterChangesOfOthers(t *testing.T) {
+	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	bob.ok("sync")
 	alice.ok("set", "ORG-1", "title=alice")
@@ -26,6 +27,7 @@ func TestUndoKeepsLaterChangesOfOthers(t *testing.T) {
 }
 
 func TestUndoWritesTheCommit(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.writeAccounts("github.com", "alice")
 	te.ok("store", "init", "me", "--prefix", "ME")
@@ -47,6 +49,7 @@ func TestUndoWritesTheCommit(t *testing.T) {
 }
 
 func TestUndoRm(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.writeAccounts("github.com", "alice")
 	te.ok("store", "init", "me", "--prefix", "ME")
@@ -59,6 +62,7 @@ func TestUndoRm(t *testing.T) {
 }
 
 func TestUndoJSON(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.writeAccounts("github.com", "alice")
 	te.ok("store", "init", "me", "--prefix", "ME")
@@ -87,6 +91,7 @@ func TestUndoJSON(t *testing.T) {
 }
 
 func TestUndoWithoutAccounts(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.ok("add", "x")
@@ -94,6 +99,7 @@ func TestUndoWithoutAccounts(t *testing.T) {
 }
 
 func TestUndoNothing(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.writeAccounts("github.com", "alice")
 	te.ok("store", "init", "me", "--prefix", "ME")
@@ -101,6 +107,7 @@ func TestUndoNothing(t *testing.T) {
 }
 
 func TestUndoMoveAcrossWorkspaces(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.writeAccounts("github.com", "alice")
 	te.ok("store", "init", "me", "--prefix", "WEB", "--workspace", "web")

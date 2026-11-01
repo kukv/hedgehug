@@ -10,6 +10,7 @@ import (
 )
 
 func TestAddHereNoRepoStillSetsRecent(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	p, err := ts.ForStore("org-a").Add(AddInput{Title: "Web release", Kind: "project", Repos: []string{"github.com/org-a/web"}})
 	if err != nil {
@@ -40,6 +41,7 @@ func TestAddHereNoRepoStillSetsRecent(t *testing.T) {
 }
 
 func TestAddHereWarnsOnceAcrossQuestions(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	_, p, _ := ts.Config()
 	if err := hhctx.Save(p.DataDir, hhctx.State{Use: &hhctx.Ref{Store: model.NewULID(), Project: model.NewULID()}}); err != nil {
@@ -66,6 +68,7 @@ func TestAddHereWarnsOnceAcrossQuestions(t *testing.T) {
 }
 
 func TestAddHereExplainsAnAmbiguityWithinTheNamedStore(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	s, err := ts.ForStore("org-a").OpenStore()
 	if err != nil {

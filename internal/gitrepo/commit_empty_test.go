@@ -7,6 +7,7 @@ import (
 )
 
 func TestCommitAllowEmpty(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := Init(dir)
 	if err != nil {
@@ -34,6 +35,7 @@ func TestCommitAllowEmpty(t *testing.T) {
 }
 
 func TestResolveCommit(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := Init(dir)
 	if err != nil {

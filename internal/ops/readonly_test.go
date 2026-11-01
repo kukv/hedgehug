@@ -59,6 +59,7 @@ func wantReadOnly(t *testing.T, what string, err error) {
 // or anything else is checked: ME-99 does not exist, and the refusal is not
 // "not found".
 func TestReadOnlyRefusesEveryWrite(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	live, err := ts.Add(AddInput{Title: "one"})
 	if err != nil {
@@ -131,6 +132,7 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 }
 
 func TestReadOnlyAllowsReading(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.addTask("one", nil)
 	makeReadOnly(t, ts, sync.ReasonGitHub)
@@ -153,6 +155,7 @@ func TestReadOnlyAllowsReading(t *testing.T) {
 
 // The words follow the reason.
 func TestReadOnlyReasonsInTheMessage(t *testing.T) {
+	t.Parallel()
 	for reason, want := range map[string]string{
 		sync.ReasonNotWritable: "me is read-only (the remote cannot be written)",
 		sync.ReasonPushDenied:  "me is read-only (the remote denied the push)",
@@ -171,6 +174,7 @@ func TestReadOnlyReasonsInTheMessage(t *testing.T) {
 
 // The store is named as config.yaml names it, not as its store.yaml does.
 func TestReadOnlyNamesTheStoreOfTheConfig(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	c, _, err := ts.Config()
 	if err != nil {
@@ -199,6 +203,7 @@ func TestReadOnlyNamesTheStoreOfTheConfig(t *testing.T) {
 // What is written to access.json by a check that finds the store writable
 // lets writes through again.
 func TestWritableAgain(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	makeReadOnly(t, ts, sync.ReasonGitHub)
 	s, err := ts.OpenStore()
@@ -216,6 +221,7 @@ func TestWritableAgain(t *testing.T) {
 // A sync of the background does not take back a push_denied; the one the
 // user asks for does, and pushes.
 func TestSyncExplicitClearsPushDeniedBackgroundDoesNot(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	remote := addBareRemote(t, ts)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
@@ -259,6 +265,7 @@ func TestSyncExplicitClearsPushDeniedBackgroundDoesNot(t *testing.T) {
 // A store that is read-only for its permission reports the commits that
 // cannot be pushed.
 func TestSyncReportsUnpushable(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	bare := addBareRemote(t, ts)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
@@ -282,6 +289,7 @@ func TestSyncReportsUnpushable(t *testing.T) {
 // read-only by the GitHub permission, synced in the background (nothing judges
 // it again), reports the commits it cannot push and the GitHub reason.
 func TestBackgroundSyncReportsUnpushableByGitHubPermission(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	addBareRemote(t, ts)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
@@ -299,6 +307,7 @@ func TestBackgroundSyncReportsUnpushableByGitHubPermission(t *testing.T) {
 }
 
 func TestGitHubRepoOf(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.appendConfig("hosts:\n  - {host: ghe.example.com}\n" +
 		"url_rewrites:\n  - {from: \"https://github.com/\", to: \"/srv/remotes/\"}\n" +
@@ -342,6 +351,7 @@ func TestGitHubRepoOf(t *testing.T) {
 
 // The token of an account goes to its own host only.
 func TestGitHubRepoOfAnotherHostOfTheAccount(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.env["HH_TOKEN"] = "t"
 	ts.appendConfig("hosts:\n  - {host: ghe.example.com}\n" +
@@ -439,6 +449,7 @@ func TestStoreAddAccessCheckFailureIsAWarning(t *testing.T) {
 }
 
 func TestStoreAddUnknownAccount(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	remote := addBareRemote(t, ts)
 	if _, err := ts.Sync(false, true); err != nil {
@@ -456,6 +467,7 @@ func TestStoreAddUnknownAccount(t *testing.T) {
 // The check of a local remote is of whether it can be written, with or
 // without an account.
 func TestStoreAddChecksALocalRemote(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	remote := addBareRemote(t, ts)
 	if _, err := ts.Sync(false, true); err != nil {
@@ -534,6 +546,7 @@ func TestStoreAddOldStoreReadOnlyOnGitHub(t *testing.T) {
 }
 
 func TestStoreAddOldStoreReadOnlyLocalBare(t *testing.T) {
+	t.Parallel()
 	d := t.TempDir()
 	aliceStore(t, d, true)
 	unlock := gitrepotest.LockObjects(t, filepath.Join(d, "org-a", "x.git")) // skips where there are no read-only directories
@@ -586,6 +599,7 @@ func TestStoreAddOldStorePushDeniedInTheSetup(t *testing.T) {
 
 // access.json that cannot be read refuses writes, and says what to do.
 func TestBrokenAccessFileRefusesWrites(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	s, err := ts.OpenStore()
 	if err != nil {
@@ -610,6 +624,7 @@ func TestBrokenAccessFileRefusesWrites(t *testing.T) {
 // A sync judges a broken access.json again, so that deleting it by hand is
 // not the only way out; until then writes are refused with the path.
 func TestSyncRepairsBrokenAccessFile(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	addBareRemote(t, ts)
 	s, err := ts.OpenStore()
@@ -642,6 +657,7 @@ func TestSyncRepairsBrokenAccessFile(t *testing.T) {
 // A revert from the inbox writes too, through a session of its own on the
 // store of the item.
 func TestReadOnlyRefusesInboxRevert(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	item, _ := overwriteME1(t, ts)
 	makeReadOnly(t, ts, sync.ReasonGitHub)

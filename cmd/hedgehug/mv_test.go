@@ -13,6 +13,7 @@ import (
 var progressSuffixRE = regexp.MustCompile(`  \d+/\d+$`)
 
 func TestMv(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("P", "--kind", "project")
 	a := te.addJSON("A", "--parent", p.ID)
@@ -62,6 +63,7 @@ func TestMv(t *testing.T) {
 // rank lies between them, so mv puts the task past the group on the side it
 // was asked for, whatever its own id.
 func TestMvNextToSiblingsWithTheSameRank(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		moverFirst bool // the mover has the lowest id
@@ -118,6 +120,7 @@ func TestMvNextToSiblingsWithTheSameRank(t *testing.T) {
 }
 
 func TestMvErrors(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("P", "--kind", "project")
 	a := te.addJSON("A", "--parent", p.ID)
@@ -144,6 +147,7 @@ func TestMvErrors(t *testing.T) {
 }
 
 func TestMvRefusesADeletedParent(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("P", "--kind", "project")
 	d := te.addJSON("D")
@@ -158,6 +162,7 @@ func TestMvRefusesADeletedParent(t *testing.T) {
 }
 
 func TestMvWorkspace(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("workspace", "add", "api", "--prefix", "API")
 	p := te.addJSON("p", "--workspace", "me")
@@ -185,6 +190,7 @@ func TestMvWorkspace(t *testing.T) {
 }
 
 func TestMvWorkspaceLeafShowsIDChange(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("workspace", "add", "api", "--prefix", "API")
 	x := te.addJSON("x", "--workspace", "me")
@@ -195,6 +201,7 @@ func TestMvWorkspaceLeafShowsIDChange(t *testing.T) {
 }
 
 func TestMvWorkspaceMovesADeletedDescendant(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("workspace", "add", "api", "--prefix", "API")
 	p := te.addJSON("p", "--workspace", "me")

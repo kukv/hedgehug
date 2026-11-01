@@ -13,6 +13,7 @@ import (
 )
 
 func TestWorkspaceCommands(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t) // me, prefix ME
 	te.ok("workspace", "add", "api", "--prefix", "API")
 	if code, _, errs := te.run("add", "x"); code == 0 || !strings.Contains(errs, "--workspace") {
@@ -49,6 +50,7 @@ func TestWorkspaceCommands(t *testing.T) {
 }
 
 func TestAddWithoutWorkspaces(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("workspace", "rm", "me")
 	if code, _, errs := te.run("add", "x"); code == 0 || !strings.Contains(errs, "the store has no workspace; add one with hedgehug workspace add") {
@@ -57,6 +59,7 @@ func TestAddWithoutWorkspaces(t *testing.T) {
 }
 
 func TestWorkspacePrefixSame(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.addJSON("a")
 	before := len(te.log("me"))
@@ -87,6 +90,7 @@ func (te *testEnv) wsJSON(v any, args ...string) {
 }
 
 func TestWorkspaceCommitSubjects(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.addJSON("a")
 	te.ok("workspace", "add", "web", "--prefix", "WEB")
@@ -133,6 +137,7 @@ func fieldNames(m map[string]any) []string {
 }
 
 func TestWorkspaceJSON(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.addJSON("a")
 	want := []string{"id_prefix", "name", "prefix_set", "tasks", "ulid"}
@@ -164,6 +169,7 @@ func TestWorkspaceJSON(t *testing.T) {
 }
 
 func TestStoreInitJSONHasTheWorkspace(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	var got struct {
 		Workspace map[string]any `json:"workspace"`
@@ -181,6 +187,7 @@ func TestStoreInitJSONHasTheWorkspace(t *testing.T) {
 }
 
 func TestAmbiguousWorkspace(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	var api, be map[string]any
 	te.wsJSON(&api, "add", "api", "--prefix", "BE")
@@ -201,6 +208,7 @@ func TestAmbiguousWorkspace(t *testing.T) {
 }
 
 func TestCheckPrefixElsewhereSkipsABrokenStore(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("store", "init", "other", "--prefix", "OT")
 	if err := os.WriteFile(filepath.Join(te.storeDir("other"), model.StoreMetaPath), []byte("not: [yaml\n"), 0o600); err != nil {
@@ -216,6 +224,7 @@ func TestCheckPrefixElsewhereSkipsABrokenStore(t *testing.T) {
 }
 
 func TestAddUnderAParentInAMissingWorkspace(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("p")
 	gone := model.NewULID().String()
@@ -229,6 +238,7 @@ func TestAddUnderAParentInAMissingWorkspace(t *testing.T) {
 }
 
 func TestTaskInAMissingWorkspace(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	x := te.addJSON("x")
 	gone := model.NewULID().String()
@@ -246,6 +256,7 @@ func TestTaskInAMissingWorkspace(t *testing.T) {
 }
 
 func TestAmbiguousTask(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("first")
 	b := te.addJSON("second")

@@ -50,6 +50,7 @@ func put(s *Store, tasks ...*model.Task) error {
 }
 
 func TestUpdateMissingBlocker(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	task.BlockedBy = []model.ULID{model.NewULID()}
@@ -57,6 +58,7 @@ func TestUpdateMissingBlocker(t *testing.T) {
 }
 
 func TestUpdateMissingTaskRefProp(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	task.Props.Set("duplicates", ulidList(model.NewULID()))
@@ -64,6 +66,7 @@ func TestUpdateMissingTaskRefProp(t *testing.T) {
 }
 
 func TestUpdateKeepsOldMissingRef(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	blocker, task := newTask("blocker"), newTask("task")
 	task.BlockedBy = []model.ULID{blocker.ULID}
@@ -83,6 +86,7 @@ func TestUpdateKeepsOldMissingRef(t *testing.T) {
 }
 
 func TestUpdateRefToDeletedTask(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	gone := newTask("gone")
 	at := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
@@ -96,6 +100,7 @@ func TestUpdateRefToDeletedTask(t *testing.T) {
 }
 
 func TestUpdateRefToTaskRemovedInSameOp(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	blocker := newTask("blocker")
 	addTask(t, s, blocker)
@@ -108,6 +113,7 @@ func TestUpdateRefToTaskRemovedInSameOp(t *testing.T) {
 }
 
 func TestUpdateRefToTaskMadeInSameOp(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	blocker, task := newTask("blocker"), newTask("task")
 	task.BlockedBy = []model.ULID{blocker.ULID}
@@ -117,6 +123,7 @@ func TestUpdateRefToTaskMadeInSameOp(t *testing.T) {
 }
 
 func TestUpdateUnderBrokenParent(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	parent, child := newTask("parent"), newTask("child")
 	child.Parent = &parent.ULID
@@ -134,6 +141,7 @@ func TestUpdateUnderBrokenParent(t *testing.T) {
 }
 
 func TestUpdateRefusesNewCycles(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		field string
@@ -183,6 +191,7 @@ func TestUpdateRefusesNewCycles(t *testing.T) {
 }
 
 func TestUpdateAllowsEditInOldCycle(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	a, b := newTask("a"), newTask("b")
 	// A sync or a hand edit may leave cycles; write them past Update.
@@ -199,6 +208,7 @@ func TestUpdateAllowsEditInOldCycle(t *testing.T) {
 }
 
 func TestUpdateAllowsBlockerChain(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	a, b, c := newTask("a"), newTask("b"), newTask("c")
 	b.BlockedBy = []model.ULID{c.ULID}

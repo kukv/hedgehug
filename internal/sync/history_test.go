@@ -13,6 +13,7 @@ import (
 )
 
 func TestSidesYAMLWhen(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := gitrepo.Init(dir)
 	if err != nil {
@@ -69,6 +70,7 @@ func TestSidesYAMLWhen(t *testing.T) {
 }
 
 func TestMergeAuthorOfTheSameTimeIsTheLargerWriter(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := gitrepo.Init(dir)
 	if err != nil {
@@ -103,6 +105,7 @@ func TestMergeAuthorOfTheSameTimeIsTheLargerWriter(t *testing.T) {
 }
 
 func TestSidesOtherFile(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	r := c.stores[0].Repo()
 	base := mustHead(t, c.stores[0])

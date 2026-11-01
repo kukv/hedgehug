@@ -12,6 +12,7 @@ import (
 )
 
 func TestOpenKeepsConfigOrderAndULIDs(t *testing.T) {
+	t.Parallel()
 	es := []config.StoreEntry{newStoreAt(t, "me", "ME"), newStoreAt(t, "org-a", "API"), newStoreAt(t, "org-b", "WEB")}
 	set := openSet(t, es...)
 	if len(set.Stores) != 3 || len(set.Skipped) != 0 {
@@ -38,6 +39,7 @@ func TestOpenKeepsConfigOrderAndULIDs(t *testing.T) {
 }
 
 func TestOpenSkipsWhatDoesNotOpen(t *testing.T) {
+	t.Parallel()
 	good := newStoreAt(t, "me", "ME")
 	missing := config.StoreEntry{Name: "gone", Path: filepath.Join(t.TempDir(), "nope")}
 	broken := newStoreAt(t, "broken", "BRK")
@@ -63,6 +65,7 @@ func TestOpenSkipsWhatDoesNotOpen(t *testing.T) {
 }
 
 func TestOpenGivesTheClockToTheStore(t *testing.T) {
+	t.Parallel()
 	e := newStoreAt(t, "me", "ME")
 	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	set := Open(&config.Config{Stores: []config.StoreEntry{e}}, Options{Now: func() time.Time { return at }})
@@ -81,6 +84,7 @@ func TestOpenGivesTheClockToTheStore(t *testing.T) {
 }
 
 func TestIndexIsOpenedOnceAndKnowsTheStoreName(t *testing.T) {
+	t.Parallel()
 	m := openSet(t, newStoreAt(t, "org-a", "API")).Stores[0]
 	a, err := m.Index()
 	if err != nil {
@@ -103,6 +107,7 @@ func TestIndexIsOpenedOnceAndKnowsTheStoreName(t *testing.T) {
 }
 
 func TestSplitStore(t *testing.T) {
+	t.Parallel()
 	set := openSet(t, newStoreAt(t, "org-a", "API"))
 	m, rest, ok := set.SplitStore("org-a:API-12")
 	if !ok || m.Name != "org-a" || rest != "API-12" {
@@ -116,6 +121,7 @@ func TestSplitStore(t *testing.T) {
 }
 
 func TestBrokenAccessIsNotSkipped(t *testing.T) {
+	t.Parallel()
 	e := newStoreAt(t, "me", "ME")
 	dir := filepath.Join(e.Path, filepath.FromSlash(store.LocalDir))
 	if err := os.MkdirAll(dir, 0o750); err != nil {

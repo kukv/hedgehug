@@ -62,6 +62,7 @@ func TestStartGivesTheChildItsCommand(t *testing.T) {
 }
 
 func TestBackgroundWaitsAndRuns(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	now := time.Now()
 	_ = MarkPending(c.stores[0], now)
@@ -80,6 +81,7 @@ func TestBackgroundWaitsAndRuns(t *testing.T) {
 }
 
 func TestBackgroundRunsAtOnceWithNothingPending(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	start := time.Now()
 	runs := 0
@@ -92,6 +94,7 @@ func TestBackgroundRunsAtOnceWithNothingPending(t *testing.T) {
 }
 
 func TestBackgroundRepeatsWhileSomethingIsPending(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	_ = MarkPending(c.stores[0], time.Now())
 	runs := 0
@@ -109,6 +112,7 @@ func TestBackgroundRepeatsWhileSomethingIsPending(t *testing.T) {
 }
 
 func TestBackgroundEndsOnAFailedRun(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	_ = MarkPending(c.stores[0], time.Now())
 	boom := errors.New("boom")
@@ -119,6 +123,7 @@ func TestBackgroundEndsOnAFailedRun(t *testing.T) {
 }
 
 func TestBackgroundLeavesToTheOneThatWaits(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	release := holdLocal(t, c.stores[0], "bg.lock")
 	defer release()
@@ -129,6 +134,7 @@ func TestBackgroundLeavesToTheOneThatWaits(t *testing.T) {
 }
 
 func TestMarkPendingKeepsTheFirst(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	first := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
 	_ = MarkPending(c.stores[0], first)
@@ -140,6 +146,7 @@ func TestMarkPendingKeepsTheFirst(t *testing.T) {
 }
 
 func TestDue(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	if !Due(State{PendingSince: now}, now, time.Minute) {
 		t.Error("pending: not due")
@@ -164,6 +171,7 @@ func TestDue(t *testing.T) {
 }
 
 func TestTakeErrorOnce(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	_, _ = UpdateState(c.stores[0], func(st *State) { st.LastError = "boom" })
 	if e, _ := TakeError(c.stores[0]); e != "boom" {
@@ -175,6 +183,7 @@ func TestTakeErrorOnce(t *testing.T) {
 }
 
 func TestTakeErrorWritesNothingWhenThereIsNone(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	if err := c.stores[0].RemoveLocal("sync.json"); err != nil {
 		t.Fatal(err)
@@ -188,6 +197,7 @@ func TestTakeErrorWritesNothingWhenThereIsNone(t *testing.T) {
 }
 
 func TestOpenLogKeepsTheLastHalfOfABigLog(t *testing.T) {
+	t.Parallel()
 	p := filepath.Join(t.TempDir(), "local", "sync.log")
 	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
 		t.Fatal(err)
@@ -220,6 +230,7 @@ func TestOpenLogKeepsTheLastHalfOfABigLog(t *testing.T) {
 }
 
 func TestBoundLogKeepsTheLogWithinLogMax(t *testing.T) {
+	t.Parallel()
 	p := filepath.Join(t.TempDir(), "local", "sync.log")
 	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
 		t.Fatal(err)

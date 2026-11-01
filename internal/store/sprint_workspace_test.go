@@ -29,6 +29,7 @@ func putRelease(s *Store, r *model.Release) error {
 }
 
 func TestPutSprintNeedsWorkspaceOfStore(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s).ULID
 	if err := putSprint(s, &model.Sprint{ULID: model.NewULID(), Name: "S1"}); err == nil {
@@ -43,6 +44,7 @@ func TestPutSprintNeedsWorkspaceOfStore(t *testing.T) {
 }
 
 func TestPutReleaseNeedsWorkspaceOfStore(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s).ULID
 	if err := putRelease(s, &model.Release{ULID: model.NewULID(), Name: "v1"}); err == nil {
@@ -57,6 +59,7 @@ func TestPutReleaseNeedsWorkspaceOfStore(t *testing.T) {
 }
 
 func TestPutSprintWithWorkspaceOfSameOperation(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	w := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
 	sp := &model.Sprint{ULID: model.NewULID(), Workspace: w.ULID, Name: "S1"}
@@ -74,6 +77,7 @@ func TestPutSprintWithWorkspaceOfSameOperation(t *testing.T) {
 }
 
 func TestSprintInWorkspaceRemovedInSameOperation(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	other := addWorkspace(t, s)
 	sp := &model.Sprint{ULID: model.NewULID(), Workspace: other, Name: "S1"}
@@ -88,6 +92,7 @@ func TestSprintInWorkspaceRemovedInSameOperation(t *testing.T) {
 }
 
 func TestRemoveWorkspaceWithSprintOrRelease(t *testing.T) {
+	t.Parallel()
 	for _, what := range []string{"sprints", "releases"} {
 		s := newTestStore(t)
 		other := addWorkspace(t, s)
@@ -111,6 +116,7 @@ func TestRemoveWorkspaceWithSprintOrRelease(t *testing.T) {
 }
 
 func TestRemoveWorkspaceAfterSprintMovedOutInSameOperation(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	other := addWorkspace(t, s)
 	sp := &model.Sprint{ULID: model.NewULID(), Workspace: other, Name: "S1"}
@@ -130,6 +136,7 @@ func TestRemoveWorkspaceAfterSprintMovedOutInSameOperation(t *testing.T) {
 }
 
 func TestTaskSprintAndReleasesMustBeOfItsWorkspace(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	home := testWorkspace(t, s).ULID
 	other := addWorkspace(t, s)
@@ -168,6 +175,7 @@ func TestTaskSprintAndReleasesMustBeOfItsWorkspace(t *testing.T) {
 }
 
 func TestTaskKeepsOldSprintOfOtherWorkspace(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	other := addWorkspace(t, s)
 	theirs := &model.Sprint{ULID: model.NewULID(), Workspace: other, Name: "theirs"}
@@ -193,6 +201,7 @@ func TestTaskKeepsOldSprintOfOtherWorkspace(t *testing.T) {
 }
 
 func TestTaskRefsToSprintPutInSameOperation(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	home := testWorkspace(t, s).ULID
 	sp := &model.Sprint{ULID: model.NewULID(), Workspace: home, Name: "S1"}

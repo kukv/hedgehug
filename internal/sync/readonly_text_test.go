@@ -13,6 +13,7 @@ import (
 // The error names the store first and says the reason once; the push error
 // stays reachable for errors.Is.
 func TestPushDeniedErrorText(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	c.addTask(0, "local")
 	gitrepotest.LockObjects(t, c.remote)
@@ -35,6 +36,7 @@ func TestPushDeniedErrorText(t *testing.T) {
 // An explicit sync clears push_denied before it fetches; a fetch that fails
 // leaves it cleared and returns the fetch error.
 func TestExplicitSyncClearsPushDeniedBeforeFetch(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	if err := WriteAccess(c.stores[0], Access{ReadOnly: true, Reason: ReasonPushDenied, Checked: time.Now()}); err != nil {
 		t.Fatal(err)

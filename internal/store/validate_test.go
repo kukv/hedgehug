@@ -11,6 +11,7 @@ import (
 )
 
 func TestUpdateRefusesViolation(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("")
 	_, err := s.Update(Op{Name: "add", Task: task.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(task) })
@@ -27,6 +28,7 @@ func TestUpdateRefusesViolation(t *testing.T) {
 }
 
 func TestUpdateAllowsOldViolation(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	addTask(t, s, task)
@@ -44,6 +46,7 @@ func TestUpdateAllowsOldViolation(t *testing.T) {
 }
 
 func TestUpdateRemoveThenPutIsValidated(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	addTask(t, s, task)
@@ -63,6 +66,7 @@ func TestUpdateRemoveThenPutIsValidated(t *testing.T) {
 }
 
 func TestUpdateRepairsCorruptTask(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("repaired")
 	mustWrite(t, s, model.TaskPath(task.ULID), "not a task file\n")
@@ -75,6 +79,7 @@ func TestUpdateRepairsCorruptTask(t *testing.T) {
 }
 
 func TestUpdatePlacement(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	parent := newTask("parent")
 	child := newTask("child")
@@ -90,6 +95,7 @@ func TestUpdatePlacement(t *testing.T) {
 }
 
 func TestUpdateParentAndChildTogether(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	parent := newTask("parent")
 	parent.Kind = "epic"
@@ -104,6 +110,7 @@ func TestUpdateParentAndChildTogether(t *testing.T) {
 }
 
 func TestUpdateMissingParent(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	child := newTask("child")
 	missing := model.NewULID()
@@ -149,6 +156,7 @@ func purgeAndRename(t *testing.T, s *Store, gone, task *model.Task) error {
 }
 
 func TestUpdateUnderPurgedParent(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	parent, child := newTask("parent"), newTask("child")
 	child.Parent = &parent.ULID
@@ -160,6 +168,7 @@ func TestUpdateUnderPurgedParent(t *testing.T) {
 }
 
 func TestUpdateUnderPurgedGrandparent(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	grand, parent, child := newTask("grand"), newTask("parent"), newTask("child")
 	parent.Parent = &grand.ULID
@@ -173,6 +182,7 @@ func TestUpdateUnderPurgedGrandparent(t *testing.T) {
 }
 
 func TestUpdateParentCycle(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	a, b := newTask("a"), newTask("b")
 	a.Parent, b.Parent = &b.ULID, &a.ULID
@@ -183,6 +193,7 @@ func TestUpdateParentCycle(t *testing.T) {
 }
 
 func TestUpdateUsesProjectSchema(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	project := newTask("project")
 	project.Kind = "project"
@@ -241,6 +252,7 @@ func refusedMove(t *testing.T, s *Store, task *model.Task, code string, fn func(
 }
 
 func TestUpdateMoveChecksPlacement(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	parent := newTask("parent")
 	bug := newTask("bug")
@@ -251,6 +263,7 @@ func TestUpdateMoveChecksPlacement(t *testing.T) {
 }
 
 func TestUpdateMoveUsesProjectSchema(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	project := newTask("project")
 	project.Kind = "project"
@@ -272,6 +285,7 @@ func TestUpdateMoveUsesProjectSchema(t *testing.T) {
 }
 
 func TestValidateWorkspace(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ws := testWorkspace(t, s)
 	write := func(task *model.Task) error {

@@ -24,6 +24,7 @@ func ulidsOf(es []*index.Entry) []model.ULID {
 }
 
 func TestPurgeNeedsAConfirmation(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "p"}); err != nil {
 		t.Fatal(err)
@@ -60,6 +61,7 @@ func TestPurgeNeedsAConfirmation(t *testing.T) {
 }
 
 func TestRemoveRestorePurge(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	for _, in := range []AddInput{{Title: "p"}, {Title: "c", Parent: "ME-1"}} {
 		if _, err := ts.Add(in); err != nil {
@@ -115,6 +117,7 @@ func TestRemoveRestorePurge(t *testing.T) {
 }
 
 func TestRestoreLiveTaskIsConflict(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -129,6 +132,7 @@ func TestRestoreLiveTaskIsConflict(t *testing.T) {
 }
 
 func TestRestoreUnderDeletedParentIsConflict(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	for _, in := range []AddInput{{Title: "p"}, {Title: "c", Parent: "ME-1"}} {
 		if _, err := ts.Add(in); err != nil {
@@ -143,6 +147,7 @@ func TestRestoreUnderDeletedParentIsConflict(t *testing.T) {
 }
 
 func TestRestoreLeavesWhatAnotherRemoveDeleted(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	for _, in := range []AddInput{{Title: "p"}, {Title: "c", Parent: "ME-1"}, {Title: "g", Parent: "ME-2"}} {
 		if _, err := ts.Add(in); err != nil {
@@ -167,6 +172,7 @@ func TestRestoreLeavesWhatAnotherRemoveDeleted(t *testing.T) {
 }
 
 func TestRemoveTruncatesToSecond(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.Now = func() time.Time { return time.Date(2026, 10, 30, 12, 0, 0, 999, time.UTC) }
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
@@ -186,6 +192,7 @@ func TestRemoveTruncatesToSecond(t *testing.T) {
 }
 
 func TestPurgeChildNotDeleted(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	for _, in := range []AddInput{{Title: "p"}, {Title: "c", Parent: "ME-1"}} {
 		if _, err := ts.Add(in); err != nil {
@@ -205,6 +212,7 @@ func TestPurgeChildNotDeleted(t *testing.T) {
 }
 
 func TestPurgeWithStaleTargetsIsConflict(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "p"}); err != nil {
 		t.Fatal(err)
@@ -250,6 +258,7 @@ func TestPurgeWithStaleTargetsIsConflict(t *testing.T) {
 }
 
 func TestCurrentOfPurgedTaskIsGone(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -277,6 +286,7 @@ func TestCurrentOfPurgedTaskIsGone(t *testing.T) {
 }
 
 func TestDescendants(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	for _, in := range []AddInput{
 		{Title: "p"}, {Title: "a", Parent: "ME-1"}, {Title: "b", Parent: "ME-1"}, {Title: "a1", Parent: "ME-2"}, {Title: "other"},
@@ -310,6 +320,7 @@ func TestDescendants(t *testing.T) {
 }
 
 func TestRestoreAtByTimeAndCommit(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "orig"}); err != nil {
 		t.Fatal(err)
@@ -374,6 +385,7 @@ func TestRestoreAtByTimeAndCommit(t *testing.T) {
 }
 
 func TestRestoreAtErrors(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
@@ -397,6 +409,7 @@ func TestRestoreAtErrors(t *testing.T) {
 }
 
 func TestRestoreAtRefusesDeletedParent(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	for _, in := range []AddInput{{Title: "p"}, {Title: "c", Parent: "ME-1"}} {
 		if _, err := ts.Add(in); err != nil {
@@ -419,6 +432,7 @@ func TestRestoreAtRefusesDeletedParent(t *testing.T) {
 }
 
 func TestRestoreAtKeepsWorkspaceAndSaysSo(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.addWorkspace("api", "API")
 	if _, err := ts.Add(AddInput{Title: "x", Workspace: "me"}); err != nil {
@@ -450,6 +464,7 @@ func TestRestoreAtKeepsWorkspaceAndSaysSo(t *testing.T) {
 }
 
 func TestParseAtTime(t *testing.T) {
+	t.Parallel()
 	loc := time.FixedZone("x", 9*3600)
 	for _, c := range []struct {
 		in   string
@@ -469,6 +484,7 @@ func TestParseAtTime(t *testing.T) {
 }
 
 func TestSameTasks(t *testing.T) {
+	t.Parallel()
 	a := &index.Entry{ULID: model.NewULID()}
 	b := &index.Entry{ULID: model.NewULID()}
 	for _, c := range []struct {

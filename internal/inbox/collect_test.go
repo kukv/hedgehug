@@ -172,6 +172,7 @@ func editComment(t *testing.T, c *clone, task model.ULID, cm *model.Comment, bod
 }
 
 func TestCollectMentionAssignWatch(t *testing.T) {
+	t.Parallel()
 	a, b := twoClones(t) // accounts github.com/a and github.com/b
 	x := addTask(t, a, "x", func(t *model.Task) { t.Watchers = []string{"github.com/b"} })
 	syncBoth(t, a, b)
@@ -205,6 +206,7 @@ func TestCollectMentionAssignWatch(t *testing.T) {
 }
 
 func TestCollectWatchCoveredByMention(t *testing.T) {
+	t.Parallel()
 	a, b := twoClones(t)
 	x := addTask(t, a, "x", func(t *model.Task) { t.Watchers = []string{"github.com/b"} })
 	before := head(t, b)
@@ -217,6 +219,7 @@ func TestCollectWatchCoveredByMention(t *testing.T) {
 }
 
 func TestCollectAccountsWithoutCase(t *testing.T) {
+	t.Parallel()
 	a, b := twoClones(t)
 	before := head(t, b)
 	addTask(t, a, "x", func(t *model.Task) {
@@ -231,6 +234,7 @@ func TestCollectAccountsWithoutCase(t *testing.T) {
 }
 
 func TestCollectEveryAccountOfMe(t *testing.T) {
+	t.Parallel()
 	a, b := twoClones(t)
 	me := []string{"github.com/b", "gitlab.com/b"}
 	x := addTask(t, a, "x", func(t *model.Task) { t.Watchers = []string{"github.com/b", "gitlab.com/b"} })
@@ -278,6 +282,7 @@ func TestCollectEveryAccountOfMe(t *testing.T) {
 }
 
 func TestCollectOnlyNewMentions(t *testing.T) {
+	t.Parallel()
 	a, b := twoClones(t)
 	x := addTask(t, a, "x", func(t *model.Task) { t.Body = "for @b\n" })
 	syncBoth(t, a, b)
@@ -291,6 +296,7 @@ func TestCollectOnlyNewMentions(t *testing.T) {
 }
 
 func TestCollectComment(t *testing.T) {
+	t.Parallel()
 	a, b := twoClones(t)
 	x := addTask(t, a, "x", func(t *model.Task) { t.Watchers = []string{"github.com/b"} })
 	y := addTask(t, a, "y", nil)
@@ -313,6 +319,7 @@ func TestCollectComment(t *testing.T) {
 }
 
 func TestCollectEditedComment(t *testing.T) {
+	t.Parallel()
 	a, b := twoClones(t)
 	x := addTask(t, a, "x", func(t *model.Task) { t.Watchers = []string{"github.com/b"} })
 	cm := addComment(t, a, x.ULID, "first\n")
@@ -333,6 +340,7 @@ func TestCollectEditedComment(t *testing.T) {
 }
 
 func TestCollectSkipsOwnCommits(t *testing.T) {
+	t.Parallel()
 	a, _ := twoClones(t)
 	before := head(t, a)
 	addTask(t, a, "x", func(t *model.Task) { t.Assignees = []string{"github.com/a"} })
@@ -342,6 +350,7 @@ func TestCollectSkipsOwnCommits(t *testing.T) {
 }
 
 func TestCollectOverwrittenAndRenumberedFromOwnMerge(t *testing.T) {
+	t.Parallel()
 	_, b := twoClones(t)
 	x := addTask(t, b, "x", nil)
 	before := head(t, b)
@@ -374,6 +383,7 @@ func TestCollectOverwrittenAndRenumberedFromOwnMerge(t *testing.T) {
 }
 
 func TestCollectRepairedTrailers(t *testing.T) {
+	t.Parallel()
 	_, b := twoClones(t)
 	x := addTask(t, b, "x", nil)
 	cm := addComment(t, b, x.ULID, "c\n")
@@ -440,6 +450,7 @@ func TestCollectRepairedTrailers(t *testing.T) {
 // Two clones that merge the same pair make two merge commits with the same
 // trailers; a clone that gets both is told once.
 func TestSameTrailersInTwoMergeCommits(t *testing.T) {
+	t.Parallel()
 	_, b := twoClones(t)
 	x := addTask(t, b, "x", nil)
 	before := head(t, b)
@@ -467,6 +478,7 @@ func TestSameTrailersInTwoMergeCommits(t *testing.T) {
 }
 
 func TestCatch(t *testing.T) {
+	t.Parallel()
 	_, b := twoClones(t)
 	x := addTask(t, b, "x", nil)
 	box := Open(b.s)
@@ -494,6 +506,7 @@ func TestCatch(t *testing.T) {
 }
 
 func TestImportMergeDriverRecords(t *testing.T) {
+	t.Parallel()
 	_, b := twoClones(t)
 	rec := `{"path":"tasks/0A/P0/01JBZ8K3QW7M2X9V4T6R5N8P0A.md","field":"title","value":"\"mine\"","author":"github.com/b","commit":"","time":"2026-10-31T10:00:00Z"}`
 	name := "overwritten/" + model.NewULID().String() + ".json"
@@ -528,6 +541,7 @@ func TestImportMergeDriverRecords(t *testing.T) {
 }
 
 func TestImportLeavesBadRecords(t *testing.T) {
+	t.Parallel()
 	_, b := twoClones(t)
 	x := addTask(t, b, "x", nil)
 	bad := map[string]string{
@@ -571,6 +585,7 @@ func handMerge(t *testing.T, b *clone, x model.ULID) {
 }
 
 func TestCatchUnreadableMark(t *testing.T) {
+	t.Parallel()
 	_, b := twoClones(t)
 	x := addTask(t, b, "x", nil)
 	before := head(t, b)
@@ -593,6 +608,7 @@ func TestCatchUnreadableMark(t *testing.T) {
 }
 
 func TestTwoCatchesAtOnce(t *testing.T) {
+	t.Parallel()
 	_, b := twoClones(t)
 	x := addTask(t, b, "x", nil)
 	before := head(t, b)
@@ -633,6 +649,7 @@ func TestTwoCatchesAtOnce(t *testing.T) {
 }
 
 func TestCatchAtHeadWritesNothing(t *testing.T) {
+	t.Parallel()
 	_, b := twoClones(t)
 	box := Open(b.s)
 	me := []string{"github.com/b"}

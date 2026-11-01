@@ -9,6 +9,7 @@ import (
 )
 
 func TestDetachedKindsShowNames(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	ts.addWorkspace("api", "API")
 	sp, rel := ts.putSprintRelease(ts.workspaceULID("api"), "S4", "v7")

@@ -10,6 +10,7 @@ import (
 )
 
 func TestMvWorkspaceTellsWhatItTookOff(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("workspace", "add", "api", "--prefix", "API")
 	p := te.addJSON("p", "--workspace", "me")

@@ -15,6 +15,7 @@ import (
 )
 
 func TestCheckAccessGitHub(t *testing.T) {
+	t.Parallel()
 	fake := fakegh.New(fakegh.State{
 		Users:  []string{"alice", "bob"},
 		Tokens: map[string]string{"t-bob": "bob"},
@@ -72,6 +73,7 @@ func TestCheckAccessGitHub(t *testing.T) {
 // not the list of an earlier check. A 403 is no warning (it is how a token
 // without push access is told); any other failure is.
 func TestCheckAccessCollaboratorsUnknownOnAnyFailure(t *testing.T) {
+	t.Parallel()
 	fake := fakegh.New(fakegh.State{
 		Users:  []string{"alice"},
 		Tokens: map[string]string{"t-alice": "alice"},
@@ -118,6 +120,7 @@ func TestCheckAccessCollaboratorsUnknownOnAnyFailure(t *testing.T) {
 // A token without push access gets a 403 for the collaborators: no warning,
 // and the collaborators are unknown.
 func TestCheckAccessForbiddenCollaboratorsIsNoWarning(t *testing.T) {
+	t.Parallel()
 	fake := fakegh.New(fakegh.State{
 		Users:  []string{"alice", "bob"},
 		Tokens: map[string]string{"t-bob": "bob"},
@@ -153,6 +156,7 @@ func TestCheckAccessForbiddenCollaboratorsIsNoWarning(t *testing.T) {
 }
 
 func TestCheckAccessLocal(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	a, _, err := CheckAccess(c.stores[0], c.opts[0], time.Now())
 	if err != nil || a.ReadOnly {
@@ -168,6 +172,7 @@ func TestCheckAccessLocal(t *testing.T) {
 // A sync whose GitHub call failed does not call GitHub again before
 // infoInterval has passed, and does again after.
 func TestRefreshInfoFailureAdvancesChecked(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

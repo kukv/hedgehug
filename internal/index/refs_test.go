@@ -9,12 +9,14 @@ import (
 )
 
 func TestTaskRefs(t *testing.T) {
+	t.Parallel()
 	if got := TaskRefs("see #WEB-42, #api-3 and #12\n"); !slices.Equal(got, []string{"WEB-42"}) {
 		t.Errorf("TaskRefs = %v", got)
 	}
 }
 
 func TestTaskRefsOnceInOrderOutsideCode(t *testing.T) {
+	t.Parallel()
 	body := "(#B-1) #AB-2 #AB-1 #AB-2\nx#AB-3 #AB-4x #AB-05 `#AB-6`\n```\n#AB-7\n```\n#AB-8.\n"
 	if got := TaskRefs(body); !slices.Equal(got, []string{"AB-2", "AB-1", "AB-8"}) {
 		t.Errorf("TaskRefs = %v", got)
@@ -22,6 +24,7 @@ func TestTaskRefsOnceInOrderOutsideCode(t *testing.T) {
 }
 
 func TestMentionNames(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		mention, account string
 		want             bool
@@ -46,6 +49,7 @@ func TestMentionNames(t *testing.T) {
 // A reference by a former id points at the task that has it, since no task
 // has it as its id; the task itself and deleted tasks are no backlinks.
 func TestBacklinksByFormerID(t *testing.T) {
+	t.Parallel()
 	s, _ := newStore(t)
 	a := newTask("a")
 	put(t, s, a) // TST-1
@@ -73,6 +77,7 @@ func TestBacklinksByFormerID(t *testing.T) {
 // A reference goes to the task with that id before one with it as a former
 // id, and to none when two tasks have it; the backlinks are in ULID order.
 func TestBacklinksResolveOrder(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	former, current := model.NewULID(), model.NewULID()
 	commitRaw(t, s, dir, model.TaskPath(former), rawTask(former, "kind: task\nid: TST-9\nformer_ids: [TST-1]\ntitle: former\nstatus: todo\n"))
@@ -97,6 +102,7 @@ func TestBacklinksResolveOrder(t *testing.T) {
 }
 
 func TestMentionsSkipCode(t *testing.T) {
+	t.Parallel()
 	body := "hi @alice and @github.com/bob\n`@carol`\n```\n@dave\n```\nmail a@b.c\n"
 	if got := Mentions(body); !slices.Equal(got, []string{"alice", "github.com/bob"}) {
 		t.Errorf("Mentions = %v", got)
@@ -104,6 +110,7 @@ func TestMentionsSkipCode(t *testing.T) {
 }
 
 func TestMentionsOnceInOrder(t *testing.T) {
+	t.Parallel()
 	// A backtick that closes nothing is text; a login does not end with a hyphen.
 	body := "(@bob), @alice. @bob\n@ken-1 `x` @eve `@mallory\n@trent-\n"
 	if got := Mentions(body); !slices.Equal(got, []string{"bob", "alice", "ken-1", "eve", "mallory", "trent"}) {
@@ -112,6 +119,7 @@ func TestMentionsOnceInOrder(t *testing.T) {
 }
 
 func TestMentionsCode(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name, body string
 		want       []string

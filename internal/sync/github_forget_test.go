@@ -15,6 +15,7 @@ import (
 // When GitHub cannot be reached for the permission at all, the collaborators
 // of an earlier check are not kept: they become null and the time moves on.
 func TestCheckAccessFailureForgetsCollaborators(t *testing.T) {
+	t.Parallel()
 	fake := fakegh.New(fakegh.State{
 		Users:  []string{"alice"},
 		Tokens: map[string]string{"t-alice": "alice"},

@@ -7,6 +7,7 @@ import (
 )
 
 func TestProgressOf(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	p := ts.addTask("P", func(x *model.Task) { x.Kind = "project" })
 	e := ts.addTask("E", func(x *model.Task) { x.Kind = "epic"; x.Parent = &p.ULID; x.Status = "done" })
@@ -51,6 +52,7 @@ func TestProgressOf(t *testing.T) {
 }
 
 func TestChecklistOfAndText(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	x := ts.addTask("x", func(x *model.Task) { x.Body = "- [x] a\n- [ ] b\n" })
 	y := ts.addTask("y", nil)
@@ -79,6 +81,7 @@ func TestChecklistOfAndText(t *testing.T) {
 }
 
 func TestViewHasChecklistAndProgress(t *testing.T) {
+	t.Parallel()
 	ts := newTestSession(t)
 	p := ts.addTask("P", func(x *model.Task) { x.Kind = "project"; x.Body = "- [x] a\n- [ ] b\n- [ ] c\n" })
 	ts.addTask("w", func(x *model.Task) { x.Parent = &p.ULID; x.Status = "done" })

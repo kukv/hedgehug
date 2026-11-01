@@ -14,6 +14,7 @@ import (
 // explicit sync, whatever infoInterval says, so the permission that came back
 // lets the same hh sync push. A background sync keeps the interval.
 func TestExplicitSyncRechecksAReadOnlyStore(t *testing.T) {
+	t.Parallel()
 	fake := fakegh.New(fakegh.State{
 		Users:  []string{"alice"},
 		Tokens: map[string]string{"t": "alice"},

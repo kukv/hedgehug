@@ -14,6 +14,7 @@ import (
 )
 
 func TestStoreAddWarnsPrefixDuplicate(t *testing.T) {
+	t.Parallel()
 	alice, _, remote := twoUsers(t) // the shared store uses ORG
 	carol := alice.other()
 	carol.ok("store", "init", "mine", "--prefix", "ORG") // later than the shared ORG
@@ -23,6 +24,7 @@ func TestStoreAddWarnsPrefixDuplicate(t *testing.T) {
 }
 
 func TestStoreAddPath(t *testing.T) {
+	t.Parallel()
 	alice, _, remote := twoUsers(t)
 	carol := alice.other()
 	dir := filepath.Join(t.TempDir(), "elsewhere")
@@ -44,6 +46,7 @@ func TestStoreAddPath(t *testing.T) {
 }
 
 func TestStoreAddErrors(t *testing.T) {
+	t.Parallel()
 	alice, bob, remote := twoUsers(t)
 	bob.goldenRun("name-in-use", 1, "store", "add", "org", "--remote", remote)
 	alice.goldenRun("no-remote", 2, "store", "add", "two")
@@ -59,6 +62,7 @@ func TestStoreAddErrors(t *testing.T) {
 // A store whose .gitattributes lacks a line of the driver is set up when it
 // is added, and the setup commit reaches the remote.
 func TestStoreAddSetsUp(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	remote := te.bare("old")
 	s, err := store.Create(filepath.Join(t.TempDir(), "old"), &model.StoreMeta{ULID: model.NewULID(), Name: "old"}, nil,
@@ -89,6 +93,7 @@ func TestStoreAddSetsUp(t *testing.T) {
 }
 
 func TestStoreListAndRemove(t *testing.T) {
+	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	out := alice.ok("store", "list")
 	if !strings.Contains(out, "org") || !strings.Contains(out, "shared.git") {
@@ -111,6 +116,7 @@ func TestStoreListAndRemove(t *testing.T) {
 }
 
 func TestStoreRemovePurge(t *testing.T) {
+	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	alice.ok("store", "remove", "org", "--purge")
 	if _, err := os.Stat(alice.storeDir("org")); !os.IsNotExist(err) {
@@ -122,6 +128,7 @@ func TestStoreRemovePurge(t *testing.T) {
 }
 
 func TestStoreRemovePurgeWithoutRemote(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	if code, _, errs := te.run("store", "remove", "me", "--purge"); code != 1 || !strings.Contains(errs, "no remote") {
@@ -130,6 +137,7 @@ func TestStoreRemovePurgeWithoutRemote(t *testing.T) {
 }
 
 func TestStoreListJSON(t *testing.T) {
+	t.Parallel()
 	alice, _, remote := twoUsers(t)
 	var list []struct {
 		Name        string   `json:"name"`

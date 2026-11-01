@@ -29,6 +29,7 @@ func addTask(t *testing.T, s *Store, task *model.Task) {
 }
 
 func TestPutFile(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	if _, err := s.Update(Op{Name: "setup", Author: testAuthor}, func(tx *Tx) error {
 		return tx.PutFile(".gitattributes", []byte("*.yaml merge=hedgehug\n"))
@@ -51,6 +52,7 @@ func TestPutFile(t *testing.T) {
 }
 
 func TestUpdateCommitsOnce(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("リリース準備")
 	addTask(t, s, task)
@@ -76,6 +78,7 @@ func TestUpdateCommitsOnce(t *testing.T) {
 }
 
 func TestUpdateSubjectUsesID(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	task.ID = "TST-42"
@@ -86,6 +89,7 @@ func TestUpdateSubjectUsesID(t *testing.T) {
 }
 
 func TestUpdateWithoutTask(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	if _, err := s.Update(Op{Name: "bulk", Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(task) }); err != nil {
@@ -97,6 +101,7 @@ func TestUpdateWithoutTask(t *testing.T) {
 }
 
 func TestUpdateNoChange(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	addTask(t, s, task)
@@ -139,6 +144,7 @@ func TestUpdateNoChange(t *testing.T) {
 }
 
 func TestUpdateFnError(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	boom := errors.New("boom")
@@ -160,6 +166,7 @@ func TestUpdateFnError(t *testing.T) {
 }
 
 func TestUpdateCommitFailureRollsBack(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	kept := newTask("kept")
 	addTask(t, s, kept)
@@ -195,6 +202,7 @@ func TestUpdateCommitFailureRollsBack(t *testing.T) {
 }
 
 func TestTxReadsItsWrites(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	if _, err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error {
@@ -215,6 +223,7 @@ func TestTxReadsItsWrites(t *testing.T) {
 }
 
 func TestTxUnusableAfterUpdate(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	var saved *Tx
 	if _, err := s.Update(Op{Name: "noop", Author: testAuthor}, func(tx *Tx) error {
@@ -229,6 +238,7 @@ func TestTxUnusableAfterUpdate(t *testing.T) {
 }
 
 func TestUpdateLockedElsewhere(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	s.lockWait = 100 * time.Millisecond
 	l, err := acquire(s.path(lockPath), time.Second)
@@ -243,6 +253,7 @@ func TestUpdateLockedElsewhere(t *testing.T) {
 }
 
 func TestUpdateFromTwoStores(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	other, err := Open(s.dir)
 	if err != nil {
@@ -285,6 +296,7 @@ func TestUpdateFromTwoStores(t *testing.T) {
 }
 
 func TestUpdateNeedsOpName(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	if _, err := s.Update(Op{Author: testAuthor}, func(*Tx) error { return nil }); err == nil {
 		t.Error("Update without Op.Name succeeded")
@@ -292,6 +304,7 @@ func TestUpdateNeedsOpName(t *testing.T) {
 }
 
 func TestPutEveryFileType(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	c := &model.Comment{ULID: model.NewULID(), Author: "github.com/me", Body: "コメント\n"}
@@ -344,6 +357,7 @@ func TestPutEveryFileType(t *testing.T) {
 }
 
 func TestPutTemplateBadName(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	_, err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error {
 		return tx.PutTemplate(&model.Template{Name: "../x"})
@@ -354,6 +368,7 @@ func TestPutTemplateBadName(t *testing.T) {
 }
 
 func TestPurgeSubjectUsesID(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("title")
 	task.ID = "TST-3"
@@ -369,6 +384,7 @@ func TestPurgeSubjectUsesID(t *testing.T) {
 }
 
 func TestRemoveTask(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	task := newTask("x")
 	c := &model.Comment{ULID: model.NewULID(), Author: "github.com/me"}
@@ -409,6 +425,7 @@ func TestRemoveTask(t *testing.T) {
 }
 
 func TestPutSchema(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	sc := schema.Dev()
 	if _, err := s.Update(Op{Name: "schema", Author: testAuthor}, func(tx *Tx) error { return tx.PutSchema(sc) }); err != nil {
@@ -435,6 +452,7 @@ func TestPutSchema(t *testing.T) {
 }
 
 func TestUpdateRereadsSchema(t *testing.T) {
+	t.Parallel()
 	a := newTestStore(t)
 	b, err := Open(a.dir)
 	if err != nil {
@@ -454,6 +472,7 @@ func TestUpdateRereadsSchema(t *testing.T) {
 }
 
 func TestUpdateFailsOnBadSchemaFile(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	mustWrite(t, s, schemaPath, "statuses: [\n")
 	if _, err := s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(newTask("x")) }); err == nil {
@@ -462,6 +481,7 @@ func TestUpdateFailsOnBadSchemaFile(t *testing.T) {
 }
 
 func TestSchemaWhileUpdating(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	done := make(chan struct{})
 	var wg sync.WaitGroup
@@ -485,6 +505,7 @@ func TestSchemaWhileUpdating(t *testing.T) {
 }
 
 func TestPutRefusesZeroULID(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	ulid := model.NewULID()
 	for _, tc := range []struct {

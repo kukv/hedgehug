@@ -21,6 +21,7 @@ func twelve(t *testing.T, e config.StoreEntry) *model.Task {
 }
 
 func TestResolveOneStore(t *testing.T) {
+	t.Parallel()
 	a, b := newStoreAt(t, "org-a", "API"), newStoreAt(t, "org-b", "WEB")
 	task := twelve(t, a)
 	putTasks(t, b, 1, nil)
@@ -37,6 +38,7 @@ func TestResolveOneStore(t *testing.T) {
 }
 
 func TestResolveSeesATaskWrittenAfterTheIndexWasOpened(t *testing.T) {
+	t.Parallel()
 	a := newStoreAt(t, "org-a", "API")
 	set := openSet(t, a)
 	if _, err := set.Resolve("API-1"); !errors.Is(err, store.ErrNotFound) {
@@ -49,6 +51,7 @@ func TestResolveSeesATaskWrittenAfterTheIndexWasOpened(t *testing.T) {
 }
 
 func TestResolveNotFound(t *testing.T) {
+	t.Parallel()
 	a := newStoreAt(t, "org-a", "API")
 	twelve(t, a)
 	set := openSet(t, a, newStoreAt(t, "org-b", "WEB"))
@@ -60,6 +63,7 @@ func TestResolveNotFound(t *testing.T) {
 }
 
 func TestResolveAcrossStoresIsAmbiguous(t *testing.T) {
+	t.Parallel()
 	a, b := newStoreAt(t, "org-a", "API"), newStoreAt(t, "org-b", "API")
 	ta, tb := twelve(t, a), twelve(t, b)
 	set := openSet(t, a, b)
@@ -84,6 +88,7 @@ func TestResolveAcrossStoresIsAmbiguous(t *testing.T) {
 }
 
 func TestResolveULIDAcrossStores(t *testing.T) {
+	t.Parallel()
 	a, b := newStoreAt(t, "org-a", "API"), newStoreAt(t, "org-b", "WEB")
 	ta := putTasks(t, a, 1, nil)[0]
 	tb := putTasks(t, b, 1, nil)[0]
@@ -97,6 +102,7 @@ func TestResolveULIDAcrossStores(t *testing.T) {
 }
 
 func TestAmbiguousCandidateWithoutIDUsesULID(t *testing.T) {
+	t.Parallel()
 	task := model.NewULID()
 	ae := &AmbiguousError{Input: "x", Candidates: []Hit{{Store: &Mounted{Name: "s"}, Entry: &index.Entry{ULID: task}}}}
 	if !strings.Contains(ae.Error(), "s:"+task.String()) {
@@ -105,6 +111,7 @@ func TestAmbiguousCandidateWithoutIDUsesULID(t *testing.T) {
 }
 
 func TestResolveAmbiguousInsideOneStore(t *testing.T) {
+	t.Parallel()
 	a := newStoreAt(t, "org-a", "API")
 	putTasks(t, a, 2, func(_ int, task *model.Task) { task.FormerIDs = []string{"OLD-3"} })
 	// one store alone: the index says it
@@ -131,6 +138,7 @@ func TestResolveAmbiguousInsideOneStore(t *testing.T) {
 // An input that is ambiguous in one store and found in another is one
 // AmbiguousError with all the candidates, whichever store comes first.
 func TestResolveAmbiguousInOneStoreAndFoundInAnother(t *testing.T) {
+	t.Parallel()
 	for _, order := range [][2]string{{"org-a", "org-b"}, {"org-b", "org-a"}} {
 		two := newStoreAt(t, "org-a", "API")
 		one := newStoreAt(t, "org-b", "WEB")
@@ -164,6 +172,7 @@ func breakIndex(t *testing.T, m *Mounted) {
 }
 
 func TestResolveSkipsAStoreWhoseIndexDoesNotOpen(t *testing.T) {
+	t.Parallel()
 	a, b := newStoreAt(t, "org-a", "API"), newStoreAt(t, "org-b", "WEB")
 	tb := putTasks(t, b, 1, nil)[0]
 	var told []Skipped
@@ -182,6 +191,7 @@ func TestResolveSkipsAStoreWhoseIndexDoesNotOpen(t *testing.T) {
 }
 
 func TestResolveNamedStoreWhoseIndexDoesNotOpenIsAnError(t *testing.T) {
+	t.Parallel()
 	a, b := newStoreAt(t, "org-a", "API"), newStoreAt(t, "org-b", "WEB")
 	putTasks(t, a, 1, nil)
 	var told []Skipped
@@ -197,6 +207,7 @@ func TestResolveNamedStoreWhoseIndexDoesNotOpenIsAnError(t *testing.T) {
 }
 
 func TestResolveAfterAnotherHandleRepackedTheStore(t *testing.T) {
+	t.Parallel()
 	a := newStoreAt(t, "org-a", "API")
 	putTasks(t, a, 1, nil)
 	set := openSet(t, a)
@@ -239,6 +250,7 @@ func brokenMounted(t *testing.T, a config.StoreEntry) *Mounted {
 }
 
 func TestWithOpensTheStoreAgainWhenTheIndexCannotRefresh(t *testing.T) {
+	t.Parallel()
 	a := newStoreAt(t, "org-a", "API")
 	m := brokenMounted(t, a)
 	old := m.Store
@@ -257,6 +269,7 @@ func TestWithOpensTheStoreAgainWhenTheIndexCannotRefresh(t *testing.T) {
 }
 
 func TestWithFailsWhenTheStoreCannotBeOpenedAgain(t *testing.T) {
+	t.Parallel()
 	a := newStoreAt(t, "org-a", "API")
 	m := brokenMounted(t, a)
 	if err := os.RemoveAll(a.Path); err != nil {
