@@ -18,6 +18,7 @@ import (
 	"github.com/pb33f/libopenapi"
 	validator "github.com/pb33f/libopenapi-validator"
 
+	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/ops"
 )
@@ -199,3 +200,57 @@ func mustULID(t *testing.T, s string) model.ULID {
 }
 
 func slicesEqual[T comparable](a, b []T) bool { return slices.Equal(a, b) }
+
+// withAccount makes github.com/alice the account of config.yaml, as
+// ops's useAccount does.
+func (ts *testServer) withAccount() {
+	ts.t.Helper()
+	_, p, err := ts.session().Config()
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	f, err := os.OpenFile(p.ConfigFile, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	if _, err := f.WriteString("accounts:\n  - name: alice\n    host: github.com\n    login: alice\n"); err != nil {
+		ts.t.Fatal(err)
+	}
+}
+
+// accountID is the ID of the account withAccount made, as the commits
+// carry it in Hedgehug-Author.
+func (ts *testServer) accountID() string {
+	ts.t.Helper()
+	c, _, err := ts.session().Config()
+	if err != nil || len(c.Accounts) == 0 {
+		ts.t.Fatalf("no account: %v", err)
+	}
+	return c.Accounts[0].ID()
+}
+
+// notifyMe puts it into the inbox of the store "me", as a sync would, and
+// returns its ULID.
+func (ts *testServer) notifyMe(it inbox.Item) string {
+	ts.t.Helper()
+	s, err := ts.session().OpenStore()
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	added, err := inbox.Open(s).Add([]inbox.Item{it})
+	if err != nil || len(added) != 1 {
+		ts.t.Fatalf("Add item = %v, %v", added, err)
+	}
+	return added[0].ULID.String()
+}
+
+// overwrittenItem is the item a sync makes when it overwrote field of the
+// task (ulid, id) of mine; value is the JSON of my value.
+func overwrittenItem(ulid model.ULID, id, field, value string) inbox.Item {
+	return inbox.Item{
+		Kind: inbox.Overwritten, Task: ulid, ID: id, Path: model.TaskPath(ulid), Commit: "c1",
+		Time:   time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC),
+		Detail: json.RawMessage(`{"field":"` + field + `","value":` + value + `}`),
+	}
+}

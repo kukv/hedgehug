@@ -24,6 +24,26 @@ components:
       required:
         - commit
       type: object
+    CommentEditInputBody:
+      additionalProperties: false
+      properties:
+        body:
+          description: The comment in Markdown
+          minLength: 1
+          type: string
+      required:
+        - body
+      type: object
+    CommentInputBody:
+      additionalProperties: false
+      properties:
+        body:
+          description: The comment in Markdown
+          minLength: 1
+          type: string
+      required:
+        - body
+      type: object
     CommentView:
       additionalProperties: false
       properties:
@@ -41,6 +61,21 @@ components:
         - author
         - created
         - body
+      type: object
+    CommentWrite:
+      additionalProperties: false
+      properties:
+        comment:
+          $ref: "#/components/schemas/CommentView"
+          description: The comment as written; for a removal, as it was
+        commit:
+          description: The commit made; null when nothing changed
+          type:
+            - string
+            - "null"
+      required:
+        - comment
+        - commit
       type: object
     Count:
       additionalProperties: false
@@ -237,6 +272,53 @@ components:
         workspace:
           description: Move to another workspace
           type: string
+      type: object
+    Notification:
+      additionalProperties: false
+      properties:
+        author:
+          type: string
+        commit:
+          type: string
+        detail: {}
+        id:
+          type: string
+        kind:
+          type: string
+        path:
+          type: string
+        read:
+          type: boolean
+        store:
+          type: string
+        task:
+          $ref: "#/components/schemas/Ref"
+        time:
+          format: date-time
+          type: string
+        to:
+          type: string
+        ulid:
+          type: string
+      required:
+        - read
+        - store
+        - task
+        - ulid
+        - kind
+        - commit
+        - author
+        - to
+        - time
+      type: object
+    NotificationPatchInputBody:
+      additionalProperties: false
+      properties:
+        read:
+          description: true marks it read; items cannot be marked unread
+          type: boolean
+      required:
+        - read
       type: object
     PatchInputBody:
       additionalProperties: false
@@ -587,6 +669,45 @@ components:
         - task
         - commit
       type: object
+    UndoKept:
+      additionalProperties: false
+      properties:
+        author:
+          type: string
+        field:
+          type: string
+        path:
+          type: string
+        task:
+          description: The ID of the task; empty for other files
+          type: string
+      required:
+        - path
+        - field
+        - author
+      type: object
+    UndoWrite:
+      additionalProperties: false
+      properties:
+        commit:
+          type:
+            - string
+            - "null"
+        kept:
+          description: What others changed after it, which undo kept
+          items:
+            $ref: "#/components/schemas/UndoKept"
+          type:
+            - array
+            - "null"
+        undone:
+          $ref: "#/components/schemas/LogView"
+          description: The commit taken back
+      required:
+        - undone
+        - commit
+        - kept
+      type: object
     WorkspaceRef:
       additionalProperties: false
       properties:
@@ -610,6 +731,63 @@ info:
   version: "1"
 openapi: 3.1.0
 paths:
+  /api/activity:
+    get:
+      operationId: list-activity
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - explode: false
+          in: query
+          name: limit
+          schema:
+            default: 100
+            format: int64
+            maximum: 1000
+            minimum: 1
+            type: integer
+        - description: Only the commits of this account (its ID)
+          explode: false
+          in: query
+          name: author
+          schema:
+            description: Only the commits of this account (its ID)
+            type: string
+        - description: "only: the merges and repairs of syncs; exclude: all but them"
+          explode: false
+          in: query
+          name: sync
+          schema:
+            description: "only: the merges and repairs of syncs; exclude: all but them"
+            enum:
+              - only
+              - exclude
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/LogView"
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: List the commits of the store, newest first, as hh log
+      tags:
+        - activity
   /api/health:
     get:
       operationId: get-health
@@ -629,6 +807,93 @@ paths:
       summary: Check that the server is up
       tags:
         - server
+  /api/notifications:
+    get:
+      operationId: list-notifications
+      parameters:
+        - description: Include the items read
+          explode: false
+          in: query
+          name: all
+          schema:
+            description: Include the items read
+            type: boolean
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/Notification"
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: List the inbox of every store, newest first, as hh inbox
+      tags:
+        - notifications
+  /api/notifications/{id}:
+    patch:
+      operationId: update-notification
+      parameters:
+        - description: The ULID of the item
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ULID of the item
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationPatchInputBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Mark an item read, as hh inbox read
+      tags:
+        - notifications
+  /api/notifications/{id}/revert:
+    post:
+      operationId: revert-notification
+      parameters:
+        - description: The ULID of the item
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ULID of the item
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Write my overwritten value back, as hh inbox revert
+      tags:
+        - notifications
   /api/tasks:
     get:
       operationId: list-tasks
@@ -822,6 +1087,133 @@ paths:
       summary: Change the fields sent, in one commit, as hh set and hh edit
       tags:
         - tasks
+  /api/tasks/{id}/comments:
+    post:
+      operationId: add-comment
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommentWrite"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Add a comment, as hh comment add
+      tags:
+        - comments
+  /api/tasks/{id}/comments/{cid}:
+    delete:
+      operationId: remove-comment
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+        - description: The ULID of the comment
+          in: path
+          name: cid
+          required: true
+          schema:
+            description: The ULID of the comment
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommentWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Remove a comment, as hh comment rm
+      tags:
+        - comments
+    patch:
+      operationId: edit-comment
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+        - description: The ULID of the comment
+          in: path
+          name: cid
+          required: true
+          schema:
+            description: The ULID of the comment
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentEditInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommentWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Change a comment, as hh comment edit
+      tags:
+        - comments
   /api/tasks/{id}/history:
     get:
       operationId: get-task-history
@@ -982,6 +1374,100 @@ paths:
                 $ref: "#/components/schemas/Problem"
           description: Error
       summary: Restore a deleted task and the tasks under it, as hh restore
+      tags:
+        - tasks
+  /api/tasks/{id}/watchers/me:
+    delete:
+      operationId: unwatch-task
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Stop watching a task, as hh unwatch
+      tags:
+        - tasks
+    put:
+      operationId: watch-task
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Watch a task, as hh watch
+      tags:
+        - tasks
+  /api/undo:
+    post:
+      operationId: undo
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UndoWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Take back my last operation, as hh undo
       tags:
         - tasks
 security:
