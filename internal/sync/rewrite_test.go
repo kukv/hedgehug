@@ -210,6 +210,85 @@ func TestRunMirrorWithOldHistory(t *testing.T) {
 	}
 }
 
+// A mirror that lags behind the rewrite (its head is an ancestor of before,
+// and holds the purged task) is force pushed to, not merged: the merge
+// would bring the purged task back.
+func TestRunMirrorBehindBefore(t *testing.T) {
+	c := newCluster(t, 1)
+	mirror := filepath.Join(t.TempDir(), "m.git")
+	if err := gitrepo.InitBare(mirror); err != nil {
+		t.Fatal(err)
+	}
+	origin := c.opts[0].Remotes
+	c.opts[0].Remotes = append(slices.Clone(origin), mirror)
+	c.addTask(0, "keep")
+	gone := c.addTask(0, "gone")
+	c.sync(0) // the mirror stops at the commit that adds gone
+	mirrorHead := headOf(t, c, 0)
+
+	c.opts[0].Remotes = origin
+	c.addTask(0, "later")
+	c.sync(0)
+	c.rewriteLocally(gone.ULID, plumbing.ZeroHash, true)
+	c.forcePush()
+	newHead := headOf(t, c, 0)
+	c.opts[0].Remotes = append(slices.Clone(origin), mirror)
+
+	res := c.sync(0)
+	if len(res.Warnings) != 0 {
+		t.Errorf("warnings = %v", res.Warnings)
+	}
+	if res.Merges != 0 || !slices.Equal(res.Pushed, []string{"origin", "mirror1"}) {
+		t.Errorf("merges %d, pushed %v; want 0 and origin, mirror1", res.Merges, res.Pushed)
+	}
+	if c.task(0, gone.ULID) != nil {
+		t.Error("the purged task came back")
+	}
+	if got := headOf(t, c, 0); got != newHead {
+		t.Errorf("HEAD = %s, want %s (nothing merged)", got, newHead)
+	}
+	if got, err := c.stores[0].Repo().RemoteHead("mirror1"); err != nil || got != newHead || got == mirrorHead {
+		t.Errorf("mirror = %s, %v, want %s", got, err, newHead)
+	}
+}
+
+// A mirror with commits on top of before has commits no history of origin
+// has: it is neither merged nor force pushed to, and a warning tells so.
+func TestRunMirrorWithCommitsOfNeitherHistory(t *testing.T) {
+	c := newCluster(t, 1)
+	mirror := filepath.Join(t.TempDir(), "m.git")
+	if err := gitrepo.InitBare(mirror); err != nil {
+		t.Fatal(err)
+	}
+	c.opts[0].Remotes = append(c.opts[0].Remotes, mirror)
+	c.addTask(0, "keep")
+	gone := c.addTask(0, "gone")
+	c.sync(0)
+	before := headOf(t, c, 0)
+	c.addTask(0, "extra")
+	c.sync(0) // the mirror holds before and a commit on top of it
+	mirrorHead := headOf(t, c, 0)
+
+	c.rewriteLocally(gone.ULID, before, true)
+	c.forcePush()
+	newHead := headOf(t, c, 0)
+
+	res := c.sync(0)
+	want := "mirror1 has commits that are in neither history; it is not pushed"
+	if !slices.Contains(res.Warnings, want) {
+		t.Errorf("warnings = %v, want %q", res.Warnings, want)
+	}
+	if res.Merges != 0 || !slices.Equal(res.Pushed, []string{"origin"}) {
+		t.Errorf("merges %d, pushed %v; want 0 and origin", res.Merges, res.Pushed)
+	}
+	if got := headOf(t, c, 0); got != newHead {
+		t.Errorf("HEAD = %s, want %s (nothing merged)", got, newHead)
+	}
+	if got, err := c.stores[0].Repo().RemoteHead("mirror1"); err != nil || got != mirrorHead {
+		t.Errorf("mirror = %s, %v, want it untouched at %s", got, err, mirrorHead)
+	}
+}
+
 // A mirror fetched for the first time that holds a before is force pushed
 // to, not merged.
 func TestRunMirrorFirstFetchHoldsBefore(t *testing.T) {

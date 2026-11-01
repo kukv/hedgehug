@@ -112,45 +112,69 @@ func ancestorOrMissing(r *gitrepo.Repo, a, b plumbing.Hash) (bool, error) {
 	return ok, err
 }
 
-// staleMirror tells whether the mirror whose main is at mirror still holds
-// a history that HEAD's rewrites.yaml says was rewritten: it has a before
-// that HEAD does not. Such a mirror is not merged but force pushed to.
-func staleMirror(r *gitrepo.Repo, head, mirror plumbing.Hash) (bool, error) {
+// mirrorState is how a mirror stands to the rewrites HEAD records.
+type mirrorState int
+
+const (
+	mirrorCurrent  mirrorState = iota // merged and pushed as usual
+	mirrorStale                       // only the history before a rewrite: force pushed
+	mirrorDiverged                    // holds commits of neither history: left alone
+)
+
+// staleMirror tells how the mirror whose main is at mirror stands to the
+// rewrites in HEAD's rewrites.yaml. A mirror that is at or behind a before
+// HEAD lacks, or holds one, has the history that was rewritten: it is not
+// merged (that brings back what the rewrite removed) but force pushed to.
+// A mirror that holds a before and commits on top of it has commits that
+// neither history has; force pushing would drop them, so it is left alone.
+func staleMirror(r *gitrepo.Repo, head, mirror plumbing.Hash) (mirrorState, error) {
 	if head.IsZero() || mirror.IsZero() {
-		return false, nil
+		return mirrorCurrent, nil
+	}
+	mine, err := ancestorOrMissing(r, mirror, head)
+	if err != nil || mine {
+		return mirrorCurrent, err
 	}
 	data, err := r.ReadAt(head, model.RewritesPath)
 	if errors.Is(err, fs.ErrNotExist) {
-		return false, nil
+		return mirrorCurrent, nil
 	}
 	if err != nil {
-		return false, err
+		return mirrorCurrent, err
 	}
 	recs, err := model.DecodeRewrites(data)
 	if err != nil {
-		return false, nil //nolint:nilerr // a broken record says nothing
+		return mirrorCurrent, nil //nolint:nilerr // a broken record says nothing
 	}
+	state := mirrorCurrent
 	for _, rec := range recs {
 		before := plumbing.NewHash(rec.Before)
 		if before.IsZero() {
 			continue
 		}
-		in, err := ancestorOrMissing(r, before, mirror)
+		kept, err := ancestorOrMissing(r, before, head)
 		if err != nil {
-			return false, err
+			return mirrorCurrent, err
 		}
-		if !in {
+		if kept {
 			continue
 		}
-		mine, err := ancestorOrMissing(r, before, head)
+		behind, err := ancestorOrMissing(r, mirror, before)
 		if err != nil {
-			return false, err
+			return mirrorCurrent, err
 		}
-		if !mine {
-			return true, nil
+		if behind {
+			return mirrorStale, nil
+		}
+		holds, err := ancestorOrMissing(r, before, mirror)
+		if err != nil {
+			return mirrorCurrent, err
+		}
+		if holds {
+			state = mirrorDiverged
 		}
 	}
-	return false, nil
+	return state, nil
 }
 
 // ReadApplied reads rewrites-applied.json: the at of the rewrites taken in.
