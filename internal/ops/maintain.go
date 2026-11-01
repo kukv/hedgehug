@@ -213,6 +213,15 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 		}
 		entries = []config.StoreEntry{e}
 	}
+	// A swap after a history rewrite that stopped is finished first, so the
+	// store opens (rewrite_leftover).
+	if fix {
+		for _, e := range entries {
+			if err := ss.finishRebuild(e); err != nil {
+				return nil, err
+			}
+		}
+	}
 	// The reports tell of a store that does not open; the mount need not.
 	var broken []string
 	for _, e := range entries {
@@ -283,6 +292,16 @@ func (ss *Session) doctorFix(c *config.Config, e config.StoreEntry) ([]Fixed, er
 // else a finding of its own, so that the reports of the others stand.
 func (ss *Session) doctorStore(e config.StoreEntry, only bool, repaired []Fixed, duplicates func() []duplicate) (DoctorReport, error) {
 	r := DoctorReport{Store: e.Name, Repaired: repaired}
+	left, err := rewriteLeftoverFinding(e)
+	if err != nil {
+		return DoctorReport{}, err
+	}
+	if _, serr := os.Lstat(e.Path); os.IsNotExist(serr) && len(left) > 0 {
+		// The swap after a history rewrite stopped before the rebuilt store
+		// took the place: nothing else can be said until it is finished.
+		r.Findings = left
+		return r, nil
+	}
 	// A store that does not open is told of by the findings, which say why;
 	// its references are not looked at.
 	opened, openErr := ss.openStoreAt(e.Path)
@@ -290,6 +309,7 @@ func (ss *Session) doctorStore(e config.StoreEntry, only bool, repaired []Fixed,
 	if err != nil {
 		return DoctorReport{}, err
 	}
+	fs = append(fs, left...)
 	if openErr != nil && len(fs) == 0 {
 		if only {
 			return DoctorReport{}, openErr

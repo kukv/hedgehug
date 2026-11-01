@@ -80,6 +80,10 @@ func (ss *Session) Sync(all, explicit bool) ([]SyncReport, error) {
 		if len(e.Remotes) == 0 {
 			continue
 		}
+		if err := ss.finishRebuild(e); err != nil {
+			broken = append(broken, e.Name)
+			continue
+		}
 		if _, err := ss.openStoreAt(e.Path); err != nil {
 			broken = append(broken, e.Name)
 		}
@@ -106,6 +110,11 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 		r.NoRemote = true
 		return r, nil
 	}
+	// A swap after a history rewrite that stopped is finished first (spec:
+	// 作り直しと未 push の変更の取り込み).
+	if err := ss.finishRebuild(e); err != nil {
+		return r, err
+	}
 	s, err := ss.openStoreAt(e.Path)
 	if err != nil {
 		return r, err
@@ -116,6 +125,13 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 	}
 	opt.Explicit = explicit
 	res, err := ss.RunSync(s, opt, true)
+	if res.Swapped {
+		// s is the store that was swapped out.
+		var oerr error
+		if s, oerr = ss.openStoreAt(e.Path); oerr != nil {
+			err = errors.Join(err, oerr)
+		}
+	}
 	if err != nil {
 		return r, err
 	}
@@ -297,6 +313,9 @@ func (ss *Session) SyncBackground(log io.Writer) error {
 	if err != nil {
 		return backgroundFailed(ss, log, "", err)
 	}
+	if err := ss.finishRebuild(e); err != nil {
+		return backgroundFailed(ss, log, e.Name, err)
+	}
 	s, err := ss.openStoreAt(e.Path)
 	if err != nil {
 		return backgroundFailed(ss, log, e.Name, err)
@@ -306,6 +325,14 @@ func (ss *Session) SyncBackground(log io.Writer) error {
 	if err == nil {
 		err = sync.Background(s, opt, c.Sync.PushInterval, func() error {
 			res, err := ss.RunSync(s, opt, false)
+			if res.Swapped {
+				// s is the store that was swapped out; the next run, if any,
+				// is on the new one.
+				var oerr error
+				if s, oerr = ss.openStoreAt(e.Path); oerr != nil {
+					err = errors.Join(err, oerr)
+				}
+			}
 			for _, w := range res.Warnings { // such as a mirror that is down; for sync.log
 				_, _ = fmt.Fprintln(log, "warning: "+w)
 			}

@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/sync"
 )
 
 // Mounted is a store of stores[] that opened.
@@ -48,6 +49,15 @@ func (m *Mounted) Index() (*index.Index, error) {
 	ix.SetQualified(m.qualify)
 	m.ix = ix
 	return ix, nil
+}
+
+// CloseRepo lets go of the repository files the store holds open, so that
+// its directory can be renamed (Windows). The store is not to be used after;
+// the set is dropped and opened again.
+func (m *Mounted) CloseRepo() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.Store.Repo().Close()
 }
 
 // With runs fn on the index of the store, brought up to HEAD, while no other
@@ -103,6 +113,11 @@ type Skipped struct {
 type Set struct {
 	Stores  []*Mounted
 	Skipped []Skipped
+	// Unfinished are the stores that opened but have a rebuild after a
+	// history rewrite left beside them (sync.LeftoverError). A store that
+	// did not open for want of its directory is in Skipped with the same
+	// error.
+	Unfinished []Skipped
 
 	unopened func(Skipped) // Options.Unopened
 }
@@ -126,9 +141,17 @@ func Open(c *config.Config, opt Options) *Set {
 	set := &Set{unopened: opt.Unopened}
 	for _, e := range c.Stores {
 		s, err := store.Open(e.Path)
+		left, lerr := sync.FindLeftover(e.Path)
+		unfinished := lerr == nil && !left.None()
 		if err != nil {
+			if unfinished {
+				err = &sync.LeftoverError{Name: e.Name}
+			}
 			set.Skipped = append(set.Skipped, Skipped{Name: e.Name, Err: err})
 			continue
+		}
+		if unfinished {
+			set.Unfinished = append(set.Unfinished, Skipped{Name: e.Name, Err: &sync.LeftoverError{Name: e.Name}})
 		}
 		if opt.Now != nil {
 			s.SetNow(opt.Now)

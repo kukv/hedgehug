@@ -93,6 +93,9 @@ func (s *Store) CommitMerge(head plumbing.Hash, parents []plumbing.Hash, files m
 			Trailers: append(ts, trailers...),
 			Author:   op.Author,
 			When:     s.now().Truncate(time.Second),
+			// The replay after a history rewrite records what lost, with no
+			// file changed.
+			AllowEmpty: op.AllowEmpty,
 		}
 		if err := s.apply(changes); err != nil {
 			return err

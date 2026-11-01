@@ -46,6 +46,13 @@ type Options struct {
 	Name       string       // the store's name in config, for the read-only error
 	GitHub     *GitHubRepo  // origin on GitHub; nil when it is not
 	Explicit   bool         // hh sync, not the background one: a push_denied is tried again
+
+	// origin, when set, is the commit the repair takes as the main of origin
+	// (the replay after a history rewrite, where it is not the one tracked).
+	origin plumbing.Hash
+	// skip, when set, names the paths mergeTrees leaves out of both sides
+	// (the files of the purged tasks in the replay).
+	skip func(path string) bool
 }
 
 // OtherStore is another store of the config, by its name.
@@ -66,6 +73,13 @@ type Result struct {
 	// Rewrite is the history rewrite of origin that is recorded and not yet
 	// taken in; the sync stopped before changing the store.
 	Rewrite *model.Rewrite
+	// Rebuild is the clone made again for Rewrite, ready to be swapped in;
+	// Run does not swap it (the caller releases the locks first). The store
+	// is as it was.
+	Rebuild *Rebuild
+	// Swapped is set by the caller that put Rebuild in the place of the
+	// store: the Store handle the sync was given is then of the old one.
+	Swapped bool
 	// Unpushable counts the commits not pushed because the store is read-only.
 	Unpushable int
 }
@@ -173,8 +187,11 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 				continue
 			}
 			if i == 0 {
-				if err := checkOrigin(s, tracked, opt, &res); err != nil || res.Rewrite != nil {
+				if err := checkOrigin(s, tracked, opt, &res); err != nil {
 					return res, err
+				}
+				if res.Rewrite != nil {
+					return res, rebuild(s, tracked, opt, &res)
 				}
 			}
 			delete(down, name) // a warning tells of how the last round went
@@ -417,10 +434,8 @@ func fastForward(s *store.Store, head, to plumbing.Hash) error {
 	return err
 }
 
-// mergeCommit merges remote into head as one merge commit: the paths only
-// the remote changed are taken from it, those both sides changed go
-// through merge.Merge (schema.yaml first, for the others to use), and the
-// repair runs over the result.
+// mergeCommit merges remote into head as one merge commit (mergeTrees over
+// the merge base).
 func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Options, res *Result) error {
 	r := s.Repo()
 	base, err := r.MergeBase(head, remote)
@@ -430,28 +445,81 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 	if base.IsZero() {
 		return fmt.Errorf("merge %s: %w", name, ErrUnrelated)
 	}
+	m, err := mergeTrees(r, base, head, remote, opt)
+	if err != nil {
+		return err
+	}
+	if err := dirty(r, slices.Collect(maps.Keys(m.files))); err != nil {
+		return err
+	}
+	op := store.Op{Name: "merge", Detail: name, Author: opt.Author, Account: opt.Account}
+	beforeCommit()
+	_, err = s.CommitMerge(head, []plumbing.Hash{head, remote}, m.files, op, m.trailers())
+	if errors.Is(err, gitrepo.ErrWorkTreeChanged) {
+		return ErrDirty
+	}
+	if err != nil {
+		return err
+	}
+	res.Merges++
+	res.Overwritten = append(res.Overwritten, m.lost...)
+	res.Repaired = append(res.Repaired, m.repaired...)
+	return nil
+}
+
+// merged is what mergeTrees made: the files that differ from ours (nil
+// removes), what lost, and what the repair did.
+type merged struct {
+	files    map[string][]byte
+	lost     []merge.Overwritten
+	notices  []merge.Notice
+	repaired []merge.Repaired
+}
+
+// trailers are the trailers of the commit that holds the merge.
+func (m *merged) trailers() []gitrepo.Trailer {
+	var ts []gitrepo.Trailer
+	ts = append(ts, overwrittenTrailers(m.lost)...)
+	for _, n := range m.notices {
+		ts = append(ts, gitrepo.Trailer{Key: "Hedgehug-Repaired", Value: strings.Join([]string{url.PathEscape(fileULID(n.Path)), string(n.Kind), "-", orDash(n.Author)}, " ")})
+	}
+	return append(ts, repairedTrailers(m.repaired)...)
+}
+
+// mergeTrees merges the commit theirs into ours over base: the paths only
+// theirs changed are taken from it, those both sides changed go through
+// merge.Merge (schema.yaml first, for the others to use), and the repair
+// runs over the result. The files are the changes to make to ours. base need
+// not be an ancestor of either side (the replay after a history rewrite).
+func mergeTrees(r *gitrepo.Repo, base, ours, theirs plumbing.Hash, opt Options) (*merged, error) {
 	var trees [3]plumbing.Hash
-	for i, c := range []plumbing.Hash{base, head, remote} {
+	for i, c := range []plumbing.Hash{base, ours, theirs} {
+		var err error
 		if trees[i], err = r.TreeOf(c); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	bt, ht, rt := trees[0], trees[1], trees[2]
-	ours, err := r.DiffTrees(bt, ht, "")
+	oursDiff, err := r.DiffTrees(bt, ht, "")
 	if err != nil {
-		return err
+		return nil, err
 	}
-	theirs, err := r.DiffTrees(bt, rt, "")
+	theirsDiff, err := r.DiffTrees(bt, rt, "")
 	if err != nil {
-		return err
+		return nil, err
+	}
+	if opt.skip != nil {
+		leave := func(c gitrepo.Change) bool { return opt.skip(c.Path) }
+		oursDiff = slices.DeleteFunc(oursDiff, leave)
+		theirsDiff = slices.DeleteFunc(theirsDiff, leave)
 	}
 	changed := map[string]bool{} // by either side
-	for _, c := range ours {
+	for _, c := range oursDiff {
 		changed[c.Path] = true
 	}
 	files := map[string][]byte{} // nil removes
 	var both []string
-	for _, c := range theirs {
+	for _, c := range theirsDiff {
 		switch {
 		case changed[c.Path]:
 			both = append(both, c.Path)
@@ -459,7 +527,7 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 			files[c.Path] = nil
 		default:
 			if files[c.Path], err = r.ReadFile(rt, c.Path); err != nil {
-				return err
+				return nil, err
 			}
 		}
 		changed[c.Path] = true
@@ -468,10 +536,10 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 	var notices []merge.Notice
 	sc, err := schemaAt(r, ht)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	mergeFile := func(p string) error {
-		b, o, t, err := Sides(r, base, head, remote, p)
+		b, o, t, err := Sides(r, base, ours, theirs, p)
 		if err != nil {
 			return err
 		}
@@ -485,10 +553,10 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 		return nil
 	}
 	// schema.yaml first: the merge of the other files reads the merged
-	// schema, or HEAD's when it does not decode.
+	// schema, or ours when it does not decode.
 	if slices.Contains(both, schema.Path) {
 		if err := mergeFile(schema.Path); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if data := files[schema.Path]; data != nil {
@@ -499,26 +567,32 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 	for _, p := range both {
 		if p != schema.Path {
 			if err := mergeFile(p); err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
-	// Both sides removed a file: HEAD already lacks it, so there is nothing
+	// Both sides removed a file: ours already lacks it, so there is nothing
 	// to remove.
 	if err := forgetAbsent(r, ht, files); err != nil {
-		return err
+		return nil, err
 	}
 	snap, err := newSnapshot(r, ht, "", files)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	baseSnap, err := newSnapshot(r, bt, "", nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	onOrigin, err := originIDs(r)
+	originHead := opt.origin
+	if originHead.IsZero() {
+		if originHead, err = r.RemoteHead("origin"); err != nil {
+			return nil, err
+		}
+	}
+	onOrigin, err := originIDsAt(r, originHead)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var authorErr error
 	fixed, repaired, dropped, err := merge.Repair(merge.RepairInput{
@@ -526,11 +600,11 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 		Base:     baseSnap,
 		OnOrigin: onOrigin,
 		Changed:  func(p string) bool { return changed[p] },
-		Author:   keepError(&authorErr, mergeAuthor(r, base, head, remote)),
+		Author:   keepError(&authorErr, mergeAuthor(r, base, ours, theirs)),
 		Now:      opt.Now().Truncate(time.Second),
 	})
 	if err = errors.Join(err, authorErr); err != nil {
-		return err
+		return nil, err
 	}
 	maps.Copy(files, fixed)
 	lost = append(lost, dropped...)
@@ -538,32 +612,11 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 	notices = slices.DeleteFunc(notices, func(n merge.Notice) bool {
 		return slices.ContainsFunc(dropped, func(d merge.Overwritten) bool { return d.Path == n.Path })
 	})
-	// A file the repair removes may not be in HEAD: it came from the remote.
+	// A file the repair removes may not be in ours: it came from theirs.
 	if err := forgetAbsent(r, ht, files); err != nil {
-		return err
+		return nil, err
 	}
-	if err := dirty(r, slices.Collect(maps.Keys(files))); err != nil {
-		return err
-	}
-	var trailers []gitrepo.Trailer
-	trailers = append(trailers, overwrittenTrailers(lost)...)
-	for _, n := range notices {
-		trailers = append(trailers, gitrepo.Trailer{Key: "Hedgehug-Repaired", Value: strings.Join([]string{url.PathEscape(fileULID(n.Path)), string(n.Kind), "-", orDash(n.Author)}, " ")})
-	}
-	trailers = append(trailers, repairedTrailers(repaired)...)
-	op := store.Op{Name: "merge", Detail: name, Author: opt.Author, Account: opt.Account}
-	beforeCommit()
-	_, err = s.CommitMerge(head, []plumbing.Hash{head, remote}, files, op, trailers)
-	if errors.Is(err, gitrepo.ErrWorkTreeChanged) {
-		return ErrDirty
-	}
-	if err != nil {
-		return err
-	}
-	res.Merges++
-	res.Overwritten = append(res.Overwritten, lost...)
-	res.Repaired = append(res.Repaired, repaired...)
-	return nil
+	return &merged{files: files, lost: lost, notices: notices, repaired: repaired}, nil
 }
 
 // schemaAt is the schema of tree, or the default one when the tree has
@@ -697,6 +750,11 @@ func originIDs(r *gitrepo.Repo) (func(model.ULID, string) bool, error) {
 	if err != nil {
 		return nil, err
 	}
+	return originIDsAt(r, h)
+}
+
+// originIDsAt is originIDs for the commit h taken as the main of origin.
+func originIDsAt(r *gitrepo.Repo, h plumbing.Hash) (func(model.ULID, string) bool, error) {
 	tree, err := r.TreeOf(h)
 	if err != nil {
 		return nil, err

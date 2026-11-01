@@ -288,24 +288,40 @@ func (r *Repo) Close() error {
 // history rewrite keeps these (D22), so it finds where like went (D33). Both
 // commits must be in the repository.
 func (r *Repo) HasSameCommit(from, like plumbing.Hash) (bool, error) {
+	_, ok, err := r.sameCommit(from, like, true)
+	return ok, err
+}
+
+// FindSameCommit is HasSameCommit that returns the commit it found. Commits
+// of one author and committer in the same second cannot be told apart, so it
+// returns the oldest of them that the walk from from meets (a line of
+// history is walked from the newest): a caller that goes on from it sees
+// the commits again at worst, never misses one.
+func (r *Repo) FindSameCommit(from, like plumbing.Hash) (plumbing.Hash, bool, error) {
+	return r.sameCommit(from, like, false)
+}
+
+func (r *Repo) sameCommit(from, like plumbing.Hash, first bool) (plumbing.Hash, bool, error) {
 	want, err := r.commit(like)
 	if err != nil {
-		return false, err
+		return plumbing.ZeroHash, false, err
 	}
 	start, err := r.commit(from)
 	if err != nil {
-		return false, err
+		return plumbing.ZeroHash, false, err
 	}
 	same := func(a, b object.Signature) bool {
 		return a.Name == b.Name && a.Email == b.Email && a.When.Equal(b.When)
 	}
-	found := false
+	var found plumbing.Hash
 	err = object.NewCommitPreorderIter(start, nil, nil).ForEach(func(c *object.Commit) error {
 		if same(c.Author, want.Author) && same(c.Committer, want.Committer) {
-			found = true
-			return storer.ErrStop
+			found = c.Hash
+			if first {
+				return storer.ErrStop
+			}
 		}
 		return nil
 	})
-	return found, err
+	return found, !found.IsZero(), err
 }

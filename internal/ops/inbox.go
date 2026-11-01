@@ -521,6 +521,26 @@ func InboxContent(ix *index.Index, it inbox.Item, storeName string, manyStores b
 		return RepairedContent(ix, it)
 	case inbox.PrefixDuplicate:
 		return duplicateContent(ix, it, storeName, manyStores)
+	case inbox.RewriteApplied:
+		var d struct {
+			Store    string `json:"store"`
+			Replayed int    `json:"replayed"`
+		}
+		_ = json.Unmarshal(it.Detail, &d) // an item that does not decode tells no store
+		changes := fmt.Sprintf("%d unpushed changes", d.Replayed)
+		if d.Replayed == 1 {
+			changes = "1 unpushed change"
+		}
+		return fmt.Sprintf("the history rewrite of %s was taken in (%s put back)", d.Store, changes)
+	case inbox.PurgedChange:
+		id := it.ID
+		if ix != nil {
+			id = ix.QualifyID(id)
+		}
+		if id == "" {
+			id = it.Task.String()
+		}
+		return fmt.Sprintf("unpushed changes to the purged task %s were not taken in", id)
 	}
 	return string(it.Detail)
 }

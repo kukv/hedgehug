@@ -70,6 +70,7 @@ type Poller struct {
 
 	mu       sync.Mutex // the state below
 	stores   map[string]*polled
+	released map[string]bool // stores swapped for a rebuild, to tell the clients once
 	unread   int
 	looked   bool   // a poll has run
 	lastFail string // the last error of InboxList that was logged
@@ -77,6 +78,29 @@ type Poller struct {
 
 func newPoller(s *Server, hub *Hub) *Poller {
 	return &Poller{s: s, hub: hub, kick: make(chan struct{}, 1), stores: map[string]*polled{}}
+}
+
+// Release lets go of the store at path, whose directory is about to be
+// swapped for a rebuild after a history rewrite (D26): its index and its
+// repository files are closed, and the next poll opens the store again and
+// tells the clients that its tasks changed. It waits for a poll that is
+// reading.
+func (p *Poller) Release(path string) {
+	p.pollMu.Lock()
+	defer p.pollMu.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for name, st := range p.stores {
+		if st.path != path {
+			continue
+		}
+		_ = st.s.Repo().Close()
+		delete(p.stores, name)
+		if p.released == nil {
+			p.released = map[string]bool{}
+		}
+		p.released[name] = true
+	}
 }
 
 // Kick makes the poller look now (after the server marked items read, or a
@@ -165,6 +189,14 @@ func (p *Poller) pollLocked(publish bool) {
 			}
 			st = &polled{path: e.Path, s: s}
 			fresh = true
+			p.mu.Lock()
+			swapped := p.released[e.Name]
+			delete(p.released, e.Name)
+			p.mu.Unlock()
+			if swapped && publish {
+				// The store was made again: what changed is not known.
+				p.hub.Publish(tasksChanged{Store: e.Name, ULIDs: []string{}, Removed: []string{}})
+			}
 		}
 		head, err := st.s.Repo().Head()
 		if err != nil {
