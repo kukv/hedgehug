@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"path"
 	"strings"
 	"unicode"
 )
@@ -116,4 +117,20 @@ func parseFileULID(name string) (ULID, error) {
 		return ULID{}, fmt.Errorf("%q is not a .md file", name)
 	}
 	return ParseULID(s)
+}
+
+// ViewsDir holds the saved views of a store, one YAML file each.
+const ViewsDir = "views"
+
+// ViewPath is the file of the saved view called name.
+func ViewPath(name string) string { return ViewsDir + "/" + name + ".yaml" }
+
+// IsViewPath reports whether p is a file directly under views/ with the
+// .yaml extension, and gives the name it stands for. The name is not
+// checked; see view.ValidName.
+func IsViewPath(p string) (name string, ok bool) {
+	if path.Dir(p) != ViewsDir || path.Ext(p) != ".yaml" {
+		return "", false
+	}
+	return strings.TrimSuffix(path.Base(p), ".yaml"), true
 }
