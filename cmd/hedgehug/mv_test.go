@@ -1,12 +1,16 @@
 package main
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/ops"
 )
+
+// progressSuffixRE is the progress that ls --tree writes after the title of a project.
+var progressSuffixRE = regexp.MustCompile(`  \d+/\d+$`)
 
 func TestMv(t *testing.T) {
 	te := newStoreEnv(t)
@@ -19,6 +23,7 @@ func TestMv(t *testing.T) {
 	order := func() string {
 		var titles []string
 		for _, l := range strings.Split(te.ok("ls", "--tree", "--no-color"), "\n") {
+			l = progressSuffixRE.ReplaceAllString(l, "")
 			if i := strings.LastIndex(l, "  "); i >= 0 {
 				titles = append(titles, l[i+2:])
 			}
@@ -93,6 +98,7 @@ func TestMvNextToSiblingsWithTheSameRank(t *testing.T) {
 			te.ok("mv", m.ID, "--parent", p.ID, tc.flag, ref)
 			var titles []string
 			for _, l := range strings.Split(te.ok("ls", "--tree", "--no-color"), "\n") {
+				l = progressSuffixRE.ReplaceAllString(l, "")
 				if i := strings.LastIndex(l, "  "); i >= 0 {
 					titles = append(titles, l[i+2:])
 				}

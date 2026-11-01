@@ -20,6 +20,10 @@
     "updated": "<TIME>",
     "deleted_at": null,
     "problems": [],
+    "progress": {
+      "done": 1,
+      "total": 2
+    },
     "context": true,
     "children": [
       {
