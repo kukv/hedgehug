@@ -168,3 +168,16 @@ func cloneSession(t *testing.T, ts *testSession, remote string, now time.Time) *
 	}
 	return c
 }
+
+// writeAndCommit writes data to rel in the test store and commits it, as a
+// hand edit that was committed would be.
+func (ts *testSession) writeAndCommit(rel, data string) {
+	ts.t.Helper()
+	s, err := ts.OpenStore()
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	if _, err := ts.Update(s, store.Op{Name: "test"}, func(tx *store.Tx) error { return tx.PutFile(rel, []byte(data)) }); err != nil {
+		ts.t.Fatal(err)
+	}
+}
