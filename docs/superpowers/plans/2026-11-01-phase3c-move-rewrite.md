@@ -66,6 +66,7 @@
 | D27 | E2E の `purge --rewrite-history` | バイナリでは端末の入力を渡せないので、その1手だけこのプロセスの中で `run` を呼び、`te.terminal` と標準入力に Store 名を与える（3a の `auth login` と同じ形）。ほかの手はバイナリで行う |
 | D28 | devenv | 変えない（spec「3c で変更なし」。3b の E2E が Store の数を数えている） |
 | D29 | `purge --rewrite-history` の再開 | 6 の直前に `.hedgehug/local/rewrite-in-progress.json`（`{before, ulids, at}`）を書き、8 の origin への push が通ったら消す。このファイルがあるときに実行したら 1〜6 を飛ばし（書き換えた HEAD は origin の子孫でないので、3 の同期と未 push の検査はできない）、HEAD に `rewrites.yaml` の記録（`at` が同じ）があれば 7 も飛ばして 8 へ進む。5〜8 は Store のロックと `sync.lock` を持ったまま行い、このファイルがある間は同期（`RunSync`）を拒む（`KindConflict`、`rewrite.in_progress`、`a history rewrite of org-a is unfinished; run hedgehug purge --rewrite-history again`） |
+| D31 | undo と Store 間の移動（利用者の決定。2026-11-01） | 自分の最後の操作が `move-in`・`move-out` なら undo せず、`KindConflict`、`undo.blocked`、`a move between stores cannot be undone; move it back with hedgehug mv --store`。`rewrite-history` なら `undo.blocked`、`a history rewrite cannot be undone`。undo の対象の操作が変えたタスクが、その後に転送ファイルになっていたら、何も変えずに `task.moved`（D4 の文面と Args） |
 | D30 | 新しい操作の名前の表示 | `log` とアクティビティは `Hedgehug-Op` の `move-in`・`move-out`・`purge-moved`・`rewrite-history`・`replay` をそのまま出す（今の操作と同じ扱い）。`ops/read.go` と `server/activity.go` が知らない操作名で落ちないことをテストで確かめる |
 
 ---
@@ -176,8 +177,10 @@ func (s *Set) Moved(from *Mounted, input string, f *index.ForwardEntry) *MovedEr
 - `Set.Resolve`: タスクの当たりが0のとき、同じ Store の範囲（Store 名付きならその Store、なければ全 Store）で `ResolveForward` を引き、当たれば `*MovedError`（D5）。
 - `ops`: `mountResolveError` と `Session.Resolve` が `*mount.MovedError` を `newErr(KindNotFound, "task.moved", err, "input", …, "store", …, "store_ulid", …, "id", …)` にする（D4）。1つの Store の `Session.Resolve`（Store 単位の操作と、Store が1つの構成）も、`ix.Resolve` が `ErrNotFound` のとき `ResolveForward` を見て同じエラーにする。`ResolveRef`（2つ目の ID）も同じ。
 - サーバーは `problemOf` が Code と Args をそのまま写すので変えない（404 になる）。
+- undo（D31。`internal/ops/undo.go`）: `UndoTarget` が選んだコミットの `Hedgehug-Op` が `move-in`・`move-out`・`rewrite-history` なら拒む。対象のコミットが変えたタスクファイルが HEAD で転送ファイルなら `task.moved`（`mount.Set.Moved` で移動先を引く）。
 
 - [ ] **Step 1: 失敗するテストを書く**
+  - undo: 最後の操作が move-in・move-out・rewrite-history のコミット（`store.Update` で `Op.Name` を付けて作る）→ D31 の `undo.blocked`、HEAD が変わらない。`set` の後にそのタスクを転送ファイルにする（別の書き手のコミット）→ undo が `task.moved`
   - mount: org-a に `API-12` の転送ファイル（moved_to が org-b の ULID）、org-b に同じ ULID のタスク `WEB-45`（former_ids に `API-12`）→ `Resolve("API-12")` は org-b の `WEB-45`（D5。タスクに当たるため）。`Resolve("org-a:API-12")` → `*MovedError`、`To` が org-b、`Entry.ID` が `WEB-45`。org-b をマウントから外す → `Resolve("API-12")` → `*MovedError`、`To` が nil。`Resolve(<ULID>)` も同じ
   - ops: `Show("org-a:API-12")` → `KindNotFound`、Code `task.moved`、文面が D4。org-b なしの構成で文面が D4 の2つ目
   - ops: `Dep("API-1", "API-12", true)`（API-12 が転送ファイル）→ `task.moved`
