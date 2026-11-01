@@ -1,14 +1,33 @@
 package gitrepo
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 
-	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
+
+	"github.com/kukv/hedgehug/internal/atomicfile"
 )
+
+// keptHeaders drops the headers that vouch for the old commit: a signature
+// or a merge tag no longer matches the commit made again.
+func keptHeaders(hs []object.ExtraHeader) []object.ExtraHeader {
+	var out []object.ExtraHeader
+	for _, h := range hs {
+		if k := strings.ToLower(h.Key); k == "mergetag" || strings.Contains(k, "sig") {
+			continue
+		}
+		out = append(out, h)
+	}
+	return out
+}
 
 // Rewrite says how each commit is made again.
 type Rewrite struct {
@@ -44,7 +63,7 @@ func (r *Repo) RewriteHistory(head plumbing.Hash, w Rewrite) (plumbing.Hash, int
 			Committer:    c.Committer,
 			Message:      c.Message,
 			Encoding:     c.Encoding,
-			ExtraHeaders: c.ExtraHeaders,
+			ExtraHeaders: keptHeaders(c.ExtraHeaders),
 		}
 		if w.Message != nil {
 			nc.Message = w.Message(c.Message)
@@ -146,16 +165,15 @@ func (r *Repo) store(o encoder) (plumbing.Hash, error) {
 
 // ResetMain moves refs/heads/main to h, which need not descend from it, and
 // makes the work tree and the index those of h. The work tree must be
-// clean (ErrWorkTreeChanged otherwise).
-func (r *Repo) ResetMain(h plumbing.Hash) error {
+// clean (ErrWorkTreeChanged otherwise). Only the paths that differ between
+// HEAD and h are written or removed: ignored and untracked files are never
+// touched. The caller holds the lock of the store.
+func (r *Repo) ResetMain(h plumbing.Hash) (err error) {
 	unlock, err := r.lockIndex()
 	if err != nil {
 		return err
 	}
 	defer unlock()
-	if _, err := r.commit(h); err != nil {
-		return err
-	}
 	ref, err := r.r.Storer.Reference(plumbing.HEAD)
 	if err != nil {
 		return err
@@ -170,14 +188,76 @@ func (r *Repo) ResetMain(h plumbing.Hash) error {
 	if len(st) > 0 {
 		return fmt.Errorf("%w: %s differs from HEAD", ErrWorkTreeChanged, st[0].Path)
 	}
+	from, err := r.HeadTree()
+	if err != nil {
+		return err
+	}
+	to, err := r.TreeOf(h)
+	if err != nil {
+		return err
+	}
+	changes, err := r.DiffTrees(from, to, "")
+	if err != nil {
+		return err
+	}
+	paths := make([]string, len(changes))
+	data := make([][]byte, len(changes))
+	for i, c := range changes {
+		if err := checkWorkPath(c.Path); err != nil {
+			return err
+		}
+		paths[i] = c.Path
+		if !c.Deleted {
+			if data[i], err = r.ReadFile(to, c.Path); err != nil {
+				return err
+			}
+		}
+	}
+	before, err := r.r.Storer.Index()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			if rerr := r.r.Storer.SetIndex(before); rerr != nil {
+				err = errors.Join(err, rerr)
+			}
+		}
+	}()
+	for i, c := range changes {
+		abs := filepath.Join(r.dir, filepath.FromSlash(c.Path))
+		if c.Deleted {
+			err = os.Remove(abs)
+			if errors.Is(err, fs.ErrNotExist) {
+				err = nil
+			}
+			r.removeEmptyDirs(filepath.Dir(abs))
+		} else if err = os.MkdirAll(filepath.Dir(abs), 0o750); err == nil {
+			err = atomicfile.WriteFile(abs, data[i])
+		}
+		if err != nil {
+			return err
+		}
+	}
 	w, err := r.r.Worktree()
 	if err != nil {
 		return err
 	}
-	if err := w.Reset(&git.ResetOptions{Commit: h, Mode: git.HardReset}); err != nil {
-		return fmt.Errorf("reset main to %s: %w", h, err)
+	if err = r.stage(w, paths); err != nil {
+		return err
 	}
-	return nil
+	return r.r.Storer.SetReference(plumbing.NewHashReference(mainRef, h))
+}
+
+// removeEmptyDirs removes dir and its parents up to the repository root for
+// as long as they are empty.
+func (r *Repo) removeEmptyDirs(dir string) {
+	for dir != r.dir && strings.HasPrefix(dir, r.dir) {
+		if os.Remove(dir) != nil {
+			return
+		}
+		dir = filepath.Dir(dir)
+	}
 }
 
 // ForcePush sends main to the remote even when the remote is not its

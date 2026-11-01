@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
 var rewriteEpoch = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -144,8 +145,8 @@ func TestRewriteHistoryNilFuncs(t *testing.T) {
 func TestResetMain(t *testing.T) {
 	dir := t.TempDir()
 	r, _ := Init(dir)
-	commitHead(t, r, dir, map[string]string{"a.md": "a\n", "b.md": "b\n"})
-	old := commitHead(t, r, dir, map[string]string{"c.md": "c\n"})
+	first := commitHead(t, r, dir, map[string]string{"a.md": "a\n", "b.md": "b\n", ".gitignore": ".hedgehug/local/\n"})
+	old := commitHead(t, r, dir, map[string]string{"c.md": "c\n", "a.md": "a2\n", "d/z.md": "z\n"})
 	nh, _, err := r.RewriteHistory(old, Rewrite{Drop: func(p string) bool { return p == "b.md" }})
 	if err != nil {
 		t.Fatal(err)
@@ -158,7 +159,8 @@ func TestResetMain(t *testing.T) {
 	if got, _ := r.Head(); got != old {
 		t.Errorf("a refused ResetMain moved HEAD to %s", got)
 	}
-	writeFile(t, dir, "a.md", "a\n")
+	writeFile(t, dir, "a.md", "a2\n")
+	writeFile(t, dir, ".hedgehug/local/x.json", "{}\n")
 
 	if err := r.ResetMain(nh); err != nil {
 		t.Fatal(err)
@@ -174,6 +176,60 @@ func TestResetMain(t *testing.T) {
 	}
 	if st, err := r.Status(); err != nil || len(st) != 0 {
 		t.Errorf("Status = %v, %v; want clean", st, err)
+	}
+	if b, err := os.ReadFile(filepath.Join(dir, ".hedgehug", "local", "x.json")); err != nil || string(b) != "{}\n" {
+		t.Errorf("the ignored file = %q, %v; want it left alone", b, err)
+	}
+
+	// Back to the first commit: a.md is rewritten, c.md and d/ go, b.md returns.
+	if err := r.ResetMain(first); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(filepath.Join(dir, "a.md")); err != nil || string(b) != "a\n" {
+		t.Errorf("a.md = %q, %v", b, err)
+	}
+	if b, err := os.ReadFile(filepath.Join(dir, "b.md")); err != nil || string(b) != "b\n" {
+		t.Errorf("b.md = %q, %v", b, err)
+	}
+	for _, p := range []string{"c.md", "d"} {
+		if _, err := os.Stat(filepath.Join(dir, p)); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("%s is left in the work tree: %v", p, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".hedgehug", "local", "x.json")); err != nil {
+		t.Errorf("the ignored file is gone: %v", err)
+	}
+	if st, err := r.Status(); err != nil || len(st) != 0 {
+		t.Errorf("Status = %v, %v; want clean", st, err)
+	}
+}
+
+func TestRewriteTreeOrder(t *testing.T) {
+	dir := t.TempDir()
+	r, _ := Init(dir)
+	h := commitHead(t, r, dir, map[string]string{"a/x.md": "x\n", "a.md": "a\n", "a-b.md": "b\n", "drop.md": "d\n"})
+	nh, _, err := r.RewriteHistory(h, Rewrite{Drop: func(p string) bool { return p == "drop.md" }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, _ := r.commit(nh)
+	tr, err := c.Tree()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, e := range tr.Entries {
+		names = append(names, e.Name)
+	}
+	if want := "a-b.md,a.md,a"; strings.Join(names, ",") != want {
+		t.Errorf("entries = %v, want %s", names, want)
+	}
+}
+
+func TestRewriteDropsSignatureHeaders(t *testing.T) {
+	got := keptHeaders([]object.ExtraHeader{{Key: "mergetag", Value: "x"}, {Key: "gpgsig-sha256", Value: "y"}, {Key: "foo", Value: "z"}})
+	if len(got) != 1 || got[0].Key != "foo" {
+		t.Errorf("keptHeaders = %v", got)
 	}
 }
 

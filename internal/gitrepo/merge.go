@@ -17,10 +17,11 @@ import (
 	"github.com/kukv/hedgehug/internal/atomicfile"
 )
 
-// ErrWorkTreeChanged means the repository is no longer what the caller saw
-// when it chose the commit to fast-forward to: HEAD moved or left main, or a
-// path to update was changed. The caller looks again and retries.
-var ErrWorkTreeChanged = errors.New("the store changed during the fast-forward")
+// ErrWorkTreeChanged means the repository is not what the caller expected
+// when it chose the commit to move main to (a fast-forward or a reset): HEAD
+// moved or left main, or a path to update was changed. The caller looks again
+// and retries.
+var ErrWorkTreeChanged = errors.New("the store changed while main was being moved")
 
 func (r *Repo) commit(h plumbing.Hash) (*object.Commit, error) {
 	c, err := r.r.CommitObject(h)
