@@ -56,7 +56,9 @@ type Set struct {
 	Stores  []*Mounted
 	Skipped []Skipped
 
-	warn func(string) // Options.Warn
+	warn     func(string) // Options.Warn
+	warnedMu gosync.Mutex
+	warned   map[string]bool // stores warned of by Resolve, once each
 }
 
 // Options is how Open opens a store.

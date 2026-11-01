@@ -58,9 +58,7 @@ func (s *Set) Resolve(arg string) (Hit, error) {
 				return Hit{}, fmt.Errorf("cannot open %s: %w", m.Name, err)
 			}
 			// treated like a store that did not open: warn, look in the others
-			if s.warn != nil {
-				s.warn(fmt.Sprintf("cannot open %s: %v", m.Name, err))
-			}
+			s.warnOnce(m.Name, fmt.Sprintf("cannot open %s: %v", m.Name, err))
 			continue
 		}
 		ulid, err := ix.Resolve(in)
@@ -83,4 +81,18 @@ func (s *Set) Resolve(arg string) (Hit, error) {
 		return hits[0], nil
 	}
 	return Hit{}, &AmbiguousError{Input: arg, Candidates: hits}
+}
+
+// warnOnce gives msg to Options.Warn, the first time for the store name.
+func (s *Set) warnOnce(name, msg string) {
+	s.warnedMu.Lock()
+	defer s.warnedMu.Unlock()
+	if s.warn == nil || s.warned[name] {
+		return
+	}
+	if s.warned == nil {
+		s.warned = map[string]bool{}
+	}
+	s.warned[name] = true
+	s.warn(msg)
 }

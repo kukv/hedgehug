@@ -126,9 +126,11 @@ func TestResolveSkipsAStoreWhoseIndexDoesNotOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 	breakIndex(t, set.Stores[0])
-	hit, err := set.Resolve(tb.ULID.String())
-	if err != nil || hit.Store.Name != "org-b" {
-		t.Fatalf("Resolve = %v %v", hit, err)
+	for range 2 {
+		hit, err := set.Resolve(tb.ULID.String())
+		if err != nil || hit.Store.Name != "org-b" {
+			t.Fatalf("Resolve = %v %v", hit, err)
+		}
 	}
 	if len(warns) != 1 || !strings.HasPrefix(warns[0], "cannot open org-a: ") {
 		t.Errorf("warnings = %q", warns)
