@@ -9,6 +9,7 @@ import (
 )
 
 func TestWriteFile(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	p := filepath.Join(dir, "tasks", "A", "B", "x.md")
 	if err := WriteFile(p, []byte("one")); err != nil {
@@ -34,6 +35,7 @@ func TestWriteFile(t *testing.T) {
 }
 
 func TestReadFileNotExist(t *testing.T) {
+	t.Parallel()
 	_, err := ReadFile(filepath.Join(t.TempDir(), "nope.md"))
 	if !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("err = %v, want fs.ErrNotExist", err)

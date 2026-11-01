@@ -6,6 +6,7 @@ import (
 )
 
 func TestBetween(t *testing.T) {
+	t.Parallel()
 	z26, z27 := strings.Repeat("0", 26), strings.Repeat("0", 27)
 	zz := strings.Repeat("z", 26)
 	for _, tc := range []struct{ a, b, want string }{
@@ -40,6 +41,7 @@ func TestBetween(t *testing.T) {
 }
 
 func TestBetweenErrors(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ a, b string }{
 		{"a00", ""}, // trailing zero
 		{"a00", "a1"},
@@ -57,6 +59,7 @@ func TestBetweenErrors(t *testing.T) {
 }
 
 func TestNBetween(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		a, b string
 		n    int
@@ -94,6 +97,7 @@ func TestNBetween(t *testing.T) {
 }
 
 func TestRankValidate(t *testing.T) {
+	t.Parallel()
 	if err := Rank("a0V").Validate(); err != nil {
 		t.Error(err)
 	}

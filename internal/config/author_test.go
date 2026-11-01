@@ -19,6 +19,7 @@ func writeFile(t *testing.T, path, s string) {
 	}
 }
 
+// 直列: パッケージ変数 goos の差し替え
 func TestAuthor(t *testing.T) {
 	old := goos
 	goos = "linux"
@@ -87,6 +88,7 @@ func TestAuthor(t *testing.T) {
 	})
 }
 
+// 直列: パッケージ変数 goos の差し替えと t.Chdir
 func TestAuthorInclude(t *testing.T) {
 	old := goos
 	goos = "linux"
@@ -185,6 +187,7 @@ func TestAuthorInclude(t *testing.T) {
 }
 
 func TestCommitAuthorFromAccount(t *testing.T) {
+	t.Parallel()
 	sig, err := CommitAuthor(Account{Host: "github.com", Login: "alice"}, true, func(string) string { return "" })
 	if err != nil || sig != (gitrepo.Signature{Name: "alice", Email: "alice@users.noreply.github.com"}) {
 		t.Errorf("CommitAuthor = %+v, %v", sig, err)
@@ -192,6 +195,7 @@ func TestCommitAuthorFromAccount(t *testing.T) {
 }
 
 func TestCommitAuthorWithoutAccountReadsGitConfig(t *testing.T) {
+	t.Parallel()
 	f := filepath.Join(t.TempDir(), "gitconfig")
 	writeFile(t, f, "[user]\n\tname = Bob\n\temail = bob@example.com\n")
 	env := func(k string) string {

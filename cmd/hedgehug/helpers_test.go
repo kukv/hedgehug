@@ -286,7 +286,6 @@ func (te *testEnv) handEdit(name, id, old, replacement string) { //nolint:unpara
 
 var (
 	buildOnce sync.Once
-	builtDir  string // the directory of the binary buildHedgehug made
 	builtBin  string
 	buildErr  error
 )
@@ -296,8 +295,9 @@ var (
 func buildHedgehug(t *testing.T) string {
 	t.Helper()
 	buildOnce.Do(func() {
-		builtDir, buildErr = os.MkdirTemp("", "hedgehug-bin-")
-		if buildErr != nil {
+		builtDir, err := os.MkdirTemp("", "hedgehug-bin-")
+		if err != nil {
+			buildErr = err
 			return
 		}
 		name := "hedgehug"

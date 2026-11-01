@@ -7,6 +7,7 @@ import (
 )
 
 func TestParseDate(t *testing.T) {
+	t.Parallel()
 	d, err := ParseDate("2026-11-03")
 	if err != nil || d.String() != "2026-11-03" || d.IsZero() {
 		t.Errorf("ParseDate = %v, %v", d, err)
@@ -22,6 +23,7 @@ func TestParseDate(t *testing.T) {
 }
 
 func TestDateYAML(t *testing.T) {
+	t.Parallel()
 	var v struct {
 		D Date `yaml:"d"`
 	}

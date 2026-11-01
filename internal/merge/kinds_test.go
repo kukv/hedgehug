@@ -18,6 +18,7 @@ func comment(updated, body string) []byte {
 }
 
 func TestCommentWholeFileLWW(t *testing.T) {
+	t.Parallel()
 	ours := comment("2026-10-31T11:00:00Z", "a\n")
 	r := mergeSym(t, commentPath, Side{Data: comment("2026-10-31T10:00:00Z", "x\n")}, Side{Data: ours, Author: "a"}, Side{Data: comment("2026-10-31T12:00:00Z", "b\n"), Author: "b"})
 	if !bytes.HasSuffix(r.Data, []byte("b\n")) || len(r.Overwritten) != 1 || r.Overwritten[0].Field != "*" {
@@ -31,6 +32,7 @@ func TestCommentWholeFileLWW(t *testing.T) {
 func jsonString(b []byte) string { return string(jsonOf(string(b))) }
 
 func TestWorklogWholeFileLWW(t *testing.T) {
+	t.Parallel()
 	p := "worklogs/0A/P0/01JBZ8K3QW7M2X9V4T6R5N8P0A/01JC1111111111111111111111.md"
 	w := func(updated, duration string) []byte {
 		return []byte("---\nulid: 01JC1111111111111111111111\nauthor: github.com/a\ndate: 2026-10-31\nduration: " + duration + "\ncreated: 2026-10-31T10:00:00Z\nupdated: " + updated + "\n---\n")
@@ -43,6 +45,7 @@ func TestWorklogWholeFileLWW(t *testing.T) {
 }
 
 func TestRecordOursWins(t *testing.T) {
+	t.Parallel()
 	ours := comment("2026-10-31T11:00:00Z", "a\n")
 	r := mergeAt(t, commentPath, nil, OursWins, Side{Data: comment("2026-10-31T10:00:00Z", "x\n")}, Side{Data: ours, Author: "a"}, Side{Data: comment("2026-10-31T12:00:00Z", "b\n"), Author: "b"})
 	if !bytes.Equal(r.Data, ours) || len(r.Overwritten) != 0 {
@@ -51,6 +54,7 @@ func TestRecordOursWins(t *testing.T) {
 }
 
 func TestBrokenRecordFallsBackToOtherFile(t *testing.T) {
+	t.Parallel()
 	r := mergeSym(t, commentPath, Side{Data: comment("2026-10-31T10:00:00Z", "x\n")},
 		Side{Data: []byte("---\nulid: [\n---\n"), Author: "a", Time: time.Unix(2, 0)}, Side{Data: comment("2026-10-31T12:00:00Z", "b\n"), Author: "b", Time: time.Unix(1, 0)})
 	if !bytes.HasPrefix(r.Data, []byte("---\nulid: [")) || len(r.Overwritten) != 1 || len(r.Overwritten[0].Value) != 40 {
@@ -59,6 +63,7 @@ func TestBrokenRecordFallsBackToOtherFile(t *testing.T) {
 }
 
 func TestNewFilesFromOneSide(t *testing.T) {
+	t.Parallel()
 	r := mergeSym(t, commentPath, Side{}, Side{Data: []byte("x")}, Side{})
 	if string(r.Data) != "x" {
 		t.Errorf("new file lost: %q", r.Data)
@@ -68,6 +73,7 @@ func TestNewFilesFromOneSide(t *testing.T) {
 // A side that removes a file the other side changed loses the removal, for
 // every kind read by fields. numbers.yaml has rules of its own.
 func TestRemovedAndChanged(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ path, base, changed string }{
 		{commentPath, string(comment("2026-10-31T10:00:00Z", "x\n")), string(comment("2026-10-31T11:00:00Z", "y\n"))},
 		{"sprints/01JC0A1B2C3D4E5F6G7H8J9K0M.md", string(sprint("2026-10-31T10:00:00Z", "name: s1")), string(sprint("2026-10-31T11:00:00Z", "name: s2"))},
@@ -87,6 +93,7 @@ func workspace(prefix, prefixSet, updated, name string) []byte {
 const workspacePath = "workspaces/01JC0A1B2C3D4E5F6G7H8J9K0M.md"
 
 func TestWorkspacePrefixPairFollowsPrefixSet(t *testing.T) {
+	t.Parallel()
 	base := workspace("WEB", "2026-10-30T00:00:00Z", "2026-10-30T00:00:00Z", "web")
 	ours := workspace("FE", "2026-10-31T12:00:00Z", "2026-10-31T12:00:00Z", "web")     // prefix set later
 	theirs := workspace("UI", "2026-10-31T11:00:00Z", "2026-10-31T13:00:00Z", "front") // renamed later
@@ -105,6 +112,7 @@ func TestWorkspacePrefixPairFollowsPrefixSet(t *testing.T) {
 }
 
 func TestWorkspaceSamePrefixNotOverwritten(t *testing.T) {
+	t.Parallel()
 	base := workspace("WEB", "2026-10-30T00:00:00Z", "2026-10-30T00:00:00Z", "web")
 	ours := workspace("FE", "2026-10-31T12:00:00Z", "2026-10-31T12:00:00Z", "web")
 	theirs := workspace("FE", "2026-10-31T11:00:00Z", "2026-10-31T11:00:00Z", "web")
@@ -120,6 +128,7 @@ func sprint(updated string, lines ...string) []byte {
 }
 
 func TestSprintFieldsAndBody(t *testing.T) {
+	t.Parallel()
 	p := "sprints/01JC0A1B2C3D4E5F6G7H8J9K0M.md"
 	base := append(sprint("2026-10-31T10:00:00Z", "name: s", "state: planned", "goal: g", "# keep", "x-note: n"), "1\n2\n3\n"...)
 	ours := append(sprint("2026-10-31T11:00:00Z", "name: s2", "state: planned", "goal: ours", "# keep", "x-note: n"), "1x\n2\n3\n"...)
@@ -142,6 +151,7 @@ func TestSprintFieldsAndBody(t *testing.T) {
 }
 
 func TestReleaseFields(t *testing.T) {
+	t.Parallel()
 	p := "releases/01JC0A1B2C3D4E5F6G7H8J9K0M.md"
 	base := sprint("2026-10-31T10:00:00Z", "name: v1", "date: 2026-11-01")
 	ours := sprint("2026-10-31T12:00:00Z", "name: v1.0", "date: 2026-11-01")
@@ -154,6 +164,7 @@ func TestReleaseFields(t *testing.T) {
 }
 
 func TestSprintAndReleaseWorkspaceLWW(t *testing.T) {
+	t.Parallel()
 	const wsA, wsB, wsC = "01JC0A1B2C3D4E5F6G7H8J9K0A", "01JC0A1B2C3D4E5F6G7H8J9K0B", "01JC0A1B2C3D4E5F6G7H8J9K0C"
 	for _, kind := range []string{"sprints", "releases"} {
 		p := kind + "/01JC0A1B2C3D4E5F6G7H8J9K0M.md"
@@ -186,6 +197,7 @@ func TestSprintAndReleaseWorkspaceLWW(t *testing.T) {
 }
 
 func TestTemplateFields(t *testing.T) {
+	t.Parallel()
 	p := "templates/bug.md"
 	tmpl := func(updated string, lines ...string) []byte {
 		return []byte("---\n" + strings.Join(lines, "\n") + "\nupdated: " + updated + "\n---\n")
@@ -214,6 +226,7 @@ func TestTemplateFields(t *testing.T) {
 func whenAt(t time.Time) func([]string) time.Time { return func([]string) time.Time { return t } }
 
 func TestSchemaYAMLByKeyAndElement(t *testing.T) {
+	t.Parallel()
 	base := []byte("statuses:\n  - {name: todo, category: todo}\nprops:\n  priority: {type: enum, values: [low, high]}\n")
 	ours := []byte("statuses:\n  - {name: todo, category: todo}\n  - {name: review, category: doing}\nprops:\n  priority: {type: enum, values: [low, high]}\n")
 	theirs := []byte("statuses:\n  - {name: todo, category: todo}\n  - {name: qa, category: doing}\nprops:\n  priority: {type: enum, values: [low, mid, high]}\n")
@@ -229,6 +242,7 @@ func TestSchemaYAMLByKeyAndElement(t *testing.T) {
 }
 
 func TestYAMLValueByWhen(t *testing.T) {
+	t.Parallel()
 	base := []byte("# head\nprops:\n  priority: {type: enum, values: [low, high]} # p\n")
 	ours := []byte("# head\nprops:\n  priority: {type: enum, values: [low, mid]} # p\n")
 	theirs := []byte("# head\nprops:\n  priority: {type: enum, values: [low, top]} # p\n")
@@ -252,6 +266,7 @@ func TestYAMLValueByWhen(t *testing.T) {
 }
 
 func TestYAMLElements(t *testing.T) {
+	t.Parallel()
 	// Lists are written flush with their key, as the encoders of model write them.
 	rules := func(items ...string) string { return "rules:\n" + strings.Join(items, "") + "other: 1\n" }
 	scoped := func(items ...string) string { return "scoped:\n" + strings.Join(items, "") }
@@ -294,6 +309,7 @@ func TestYAMLElements(t *testing.T) {
 }
 
 func TestStoreYAMLByKey(t *testing.T) {
+	t.Parallel()
 	base := []byte("ulid: 01JC0A1B2C3D4E5F6G7H8J9K0M\nname: a\nformat: 1\n# who reads it\naudience: team\n")
 	ours := []byte("ulid: 01JC0A1B2C3D4E5F6G7H8J9K0M\nname: b\nformat: 1\n# who reads it\naudience: team\n")
 	theirs := []byte("ulid: 01JC0A1B2C3D4E5F6G7H8J9K0M\nname: a\nformat: 1\n# who reads it\naudience: public\n")
@@ -305,6 +321,7 @@ func TestStoreYAMLByKey(t *testing.T) {
 }
 
 func TestYAMLKeyRemovedAndChanged(t *testing.T) {
+	t.Parallel()
 	base := []byte("name: a\naudience: team\nx: 1\n")
 	ours := []byte("name: b\n")
 	theirs := []byte("name: a\naudience: public\nx: 2\n")
@@ -319,6 +336,7 @@ func TestYAMLKeyRemovedAndChanged(t *testing.T) {
 }
 
 func TestYAMLOursWins(t *testing.T) {
+	t.Parallel()
 	r := mergeAt(t, schema.Path, nil, OursWins, Side{Data: []byte("a: 1\nb: 1\n")}, Side{Data: []byte("a: 2\nb: 1\n"), Author: "a"}, Side{Data: []byte("a: 3\nb: 2\n"), Author: "b", When: whenAt(time.Unix(9, 0))})
 	if string(r.Data) != "a: 2\nb: 2\n" || len(r.Overwritten) != 0 {
 		t.Errorf("r = %q %v", r.Data, r.Overwritten)
@@ -326,6 +344,7 @@ func TestYAMLOursWins(t *testing.T) {
 }
 
 func TestBrokenYAMLFallsBackToOtherFile(t *testing.T) {
+	t.Parallel()
 	r := mergeSym(t, "schema.yaml", Side{Data: []byte("a: 1\n")}, Side{Data: []byte("a: [\n"), Author: "a", Time: time.Unix(1, 0)}, Side{Data: []byte("a: 2\n"), Author: "b", Time: time.Unix(2, 0)})
 	if string(r.Data) != "a: 2\n" || len(r.Overwritten) != 1 || r.Overwritten[0].Field != "*" {
 		t.Errorf("r = %q %v", r.Data, r.Overwritten)
@@ -333,6 +352,7 @@ func TestBrokenYAMLFallsBackToOtherFile(t *testing.T) {
 }
 
 func TestNumbersTakeMax(t *testing.T) {
+	t.Parallel()
 	r := mergeSym(t, model.NumbersPath, Side{Data: []byte("WEB: 3\n")}, Side{Data: []byte("WEB: 5\nAPI: 1\n")}, Side{Data: []byte("WEB: 4\nBE: 2\n")})
 	n, err := model.DecodeNumbers(r.Data)
 	if err != nil || n["WEB"] != 5 || n["API"] != 1 || n["BE"] != 2 || len(r.Overwritten) != 0 {
@@ -341,6 +361,7 @@ func TestNumbersTakeMax(t *testing.T) {
 }
 
 func TestNumbersKeepComments(t *testing.T) {
+	t.Parallel()
 	ours := []byte("# record\nWEB: 5 # web\nAPI: 1\n")
 	theirs := []byte("# record\nWEB: 4 # web\nBE: 2\nAA: 1\n")
 	r := mergeSym(t, model.NumbersPath, Side{Data: []byte("# record\nWEB: 3 # web\n")}, Side{Data: ours, Author: "b"}, Side{Data: theirs, Author: "a"})
@@ -350,6 +371,7 @@ func TestNumbersKeepComments(t *testing.T) {
 }
 
 func TestOtherFileByTime(t *testing.T) {
+	t.Parallel()
 	r := mergeSym(t, ".gitattributes", Side{Data: []byte("a\n")}, Side{Data: []byte("o\n"), Author: "a", Time: time.Unix(2, 0)}, Side{Data: []byte("t\n"), Author: "b", Time: time.Unix(1, 0)})
 	if string(r.Data) != "o\n" || len(r.Overwritten) != 1 || r.Overwritten[0].Author != "b" {
 		t.Errorf("r = %q %v", r.Data, r.Overwritten)
@@ -357,6 +379,7 @@ func TestOtherFileByTime(t *testing.T) {
 }
 
 func TestViewYAMLByKey(t *testing.T) {
+	t.Parallel()
 	const p = "views/今週.yaml"
 	base := []byte("layout: table\nquery: \"status:todo\"\ntable:\n  columns: [id, title]\n")
 	ours := []byte("layout: kanban\nquery: \"status:todo\"\ntable:\n  columns: [id, title]\n")
@@ -389,6 +412,7 @@ func TestViewYAMLByKey(t *testing.T) {
 }
 
 func TestByKey(t *testing.T) {
+	t.Parallel()
 	for p, want := range map[string]bool{
 		"schema.yaml": true, model.AutomationsPath: true, model.StoreMetaPath: true,
 		"views/a.yaml": true, "views/sub/a.yaml": false, "views/a.md": false, "tasks/0/1/x.md": false,

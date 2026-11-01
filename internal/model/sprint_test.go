@@ -3,6 +3,7 @@ package model
 import "testing"
 
 func TestSprintRoundTrip(t *testing.T) {
+	t.Parallel()
 	src := readFile(t, "testdata/sprint/basic.md")
 	s, err := DecodeSprint(src)
 	if err != nil {
@@ -19,6 +20,7 @@ func TestSprintRoundTrip(t *testing.T) {
 }
 
 func TestReleaseRoundTrip(t *testing.T) {
+	t.Parallel()
 	src := readFile(t, "testdata/release/basic.md")
 	r, err := DecodeRelease(src)
 	if err != nil {
@@ -39,6 +41,7 @@ func TestReleaseRoundTrip(t *testing.T) {
 }
 
 func TestSprintAndReleaseNeedULID(t *testing.T) {
+	t.Parallel()
 	if _, err := DecodeSprint([]byte("---\nname: x\n---\n")); err == nil {
 		t.Error("DecodeSprint without ulid succeeded")
 	}

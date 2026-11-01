@@ -26,6 +26,7 @@ func fullSchema(t *testing.T) *Schema {
 }
 
 func TestForPicksNearestScopedAncestor(t *testing.T) {
+	t.Parallel()
 	s := fullSchema(t)
 	release := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B") // has an override
 	epic := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0F")    // has none
@@ -44,6 +45,7 @@ func TestForPicksNearestScopedAncestor(t *testing.T) {
 }
 
 func TestCanTransition(t *testing.T) {
+	t.Parallel()
 	s := fullSchema(t)
 	store := s.For(nil)
 	release := s.For([]model.ULID{mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B")})
@@ -67,6 +69,7 @@ func TestCanTransition(t *testing.T) {
 }
 
 func TestRequiredIsUnion(t *testing.T) {
+	t.Parallel()
 	s := fullSchema(t)
 	e := s.For([]model.ULID{mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B")})
 	got := e.Required("done")
@@ -80,6 +83,7 @@ func TestRequiredIsUnion(t *testing.T) {
 }
 
 func TestStatusesKeepStoreOrder(t *testing.T) {
+	t.Parallel()
 	s := fullSchema(t)
 	e := s.For([]model.ULID{mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0C")})
 	var names []string
@@ -92,6 +96,7 @@ func TestStatusesKeepStoreOrder(t *testing.T) {
 }
 
 func TestTemplates(t *testing.T) {
+	t.Parallel()
 	s := fullSchema(t)
 	only, def := s.For([]model.ULID{mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B")}).Templates()
 	if !slices.Equal(only, []string{"release-checklist", "api-change"}) || def["task"] != "release-checklist" {

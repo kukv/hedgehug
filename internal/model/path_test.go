@@ -12,6 +12,7 @@ func mustULID(t *testing.T, s string) ULID {
 }
 
 func TestPaths(t *testing.T) {
+	t.Parallel()
 	task := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0A")
 	c := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B")
 	for _, tc := range []struct{ got, want string }{
@@ -30,6 +31,7 @@ func TestPaths(t *testing.T) {
 }
 
 func TestValidTemplateName(t *testing.T) {
+	t.Parallel()
 	for _, ok := range []string{"bug-report", "release-checklist", "リリース", "v2.4"} {
 		if err := ValidTemplateName(ok); err != nil {
 			t.Errorf("ValidTemplateName(%q) = %v", ok, err)
@@ -43,6 +45,7 @@ func TestValidTemplateName(t *testing.T) {
 }
 
 func TestParseTaskPath(t *testing.T) {
+	t.Parallel()
 	want := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0A")
 	got, err := ParseTaskPath(TaskPath(want))
 	if err != nil || got != want {
@@ -62,6 +65,7 @@ func TestParseTaskPath(t *testing.T) {
 }
 
 func TestParseCommentAndWorklogPath(t *testing.T) {
+	t.Parallel()
 	task := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0A")
 	c := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B")
 	gt, gc, err := ParseCommentPath(CommentPath(task, c))
@@ -81,6 +85,7 @@ func TestParseCommentAndWorklogPath(t *testing.T) {
 }
 
 func TestViewPath(t *testing.T) {
+	t.Parallel()
 	if got := ViewPath("今週"); got != "views/今週.yaml" {
 		t.Errorf("ViewPath = %q", got)
 	}

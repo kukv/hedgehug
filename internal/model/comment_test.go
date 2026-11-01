@@ -7,6 +7,7 @@ import (
 )
 
 func TestCommentRoundTrip(t *testing.T) {
+	t.Parallel()
 	src := readFile(t, "testdata/comment/basic.md")
 	c, err := DecodeComment(src)
 	if err != nil {
@@ -28,6 +29,7 @@ func TestCommentRoundTrip(t *testing.T) {
 }
 
 func TestWorklogRoundTrip(t *testing.T) {
+	t.Parallel()
 	src := readFile(t, "testdata/worklog/basic.md")
 	w, err := DecodeWorklog(src)
 	if err != nil {
@@ -48,6 +50,7 @@ func TestWorklogRoundTrip(t *testing.T) {
 }
 
 func TestWorklogWithoutDuration(t *testing.T) {
+	t.Parallel()
 	src := "---\nulid: 01JBZ8K3QW7M2X9V4T6R5N8P0C\nauthor: x\n---\n"
 	w, err := DecodeWorklog([]byte(src))
 	if err != nil {
@@ -60,6 +63,7 @@ func TestWorklogWithoutDuration(t *testing.T) {
 }
 
 func TestCommentAndWorklogNeedULID(t *testing.T) {
+	t.Parallel()
 	if _, err := DecodeComment([]byte("---\nauthor: x\n---\n")); err == nil {
 		t.Error("DecodeComment without ulid succeeded")
 	}

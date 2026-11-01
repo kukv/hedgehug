@@ -16,10 +16,6 @@ import (
 
 var testAuthor = gitrepo.Signature{Name: "Test", Email: "test@example.com"}
 
-// storeDirs maps each test store to its directory, for writing files past
-// the store. Tests do not run in parallel, so it needs no lock.
-var storeDirs = map[*store.Store]string{}
-
 func newStore(t *testing.T) *store.Store {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "store")
@@ -27,7 +23,6 @@ func newStore(t *testing.T) *store.Store {
 	if err != nil {
 		t.Fatal(err)
 	}
-	storeDirs[s] = dir
 	return s
 }
 
@@ -35,7 +30,7 @@ func newStore(t *testing.T) *store.Store {
 // as a sync or a hand edit could.
 func writeRaw(t *testing.T, s *store.Store, rel, content string) {
 	t.Helper()
-	p := filepath.Join(storeDirs[s], filepath.FromSlash(rel))
+	p := filepath.Join(s.Dir(), filepath.FromSlash(rel))
 	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
 		t.Fatal(err)
 	}

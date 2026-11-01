@@ -15,7 +15,6 @@ import (
 
 var (
 	devenvOnce sync.Once
-	devenvDir  string // the directory of the binary buildDevenv made; the directory of testenv holds it
 	devenvBin  string
 	devenvErr  error
 )
@@ -25,8 +24,7 @@ var (
 func buildDevenv(t *testing.T) string {
 	t.Helper()
 	devenvOnce.Do(func() {
-		var err error
-		devenvDir, err = os.MkdirTemp("", "devenv-bin-")
+		devenvDir, err := os.MkdirTemp("", "devenv-bin-")
 		if err != nil {
 			devenvErr = err
 			return

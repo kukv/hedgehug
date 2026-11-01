@@ -7,6 +7,7 @@ import (
 )
 
 func TestWorkspaceRoundTrip(t *testing.T) {
+	t.Parallel()
 	in := "---\nulid: 01JC0A1B2C3D4E5F6G7H8J9K0M\nname: web\nid_prefix: WEB\nprefix_set: 2026-10-31T10:00:00+09:00\ncreated: 2026-10-31T10:00:00+09:00\nupdated: 2026-10-31T10:00:00+09:00\n---\nWeb のタスク。\n"
 	w, err := DecodeWorkspace([]byte(in))
 	if err != nil {
@@ -34,6 +35,7 @@ func TestWorkspaceRoundTrip(t *testing.T) {
 }
 
 func TestValidName(t *testing.T) {
+	t.Parallel()
 	for _, ok := range []string{"a", "web", "web-2", "my_ws", "0x"} {
 		if err := ValidName("store", ok); err != nil {
 			t.Errorf("%q: %v", ok, err)

@@ -10,6 +10,7 @@ import (
 )
 
 func TestSameHostAndAccount(t *testing.T) {
+	t.Parallel()
 	if !SameHost("GitHub.com", "github.com") || SameHost("github.com", "gitlab.com") {
 		t.Error("SameHost is wrong")
 	}
@@ -19,6 +20,7 @@ func TestSameHostAndAccount(t *testing.T) {
 }
 
 func TestHostsIgnoreCase(t *testing.T) {
+	t.Parallel()
 	p := testPaths(t)
 	writeConfig(t, p, "hosts:\n  - {host: GHE.example.com, api: \"https://ghe.example.com/x\"}\n")
 	c, err := Load(p)
@@ -37,6 +39,7 @@ func TestHostsIgnoreCase(t *testing.T) {
 }
 
 func TestLoadCommonRuleErrors(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, yaml, want string }{
 		{"hosts differ by case", "hosts:\n  - {host: GHE.example.com}\n  - {host: ghe.example.com}\n", ":3: hosts: \"ghe.example.com\" is listed twice"},
 		{"accounts differ by case", "accounts:\n  - {name: a, host: github.com, login: Alice}\n  - {name: b, host: GitHub.com, login: alice}\n", ":3: accounts: \"GitHub.com/alice\" is listed twice"},
@@ -60,6 +63,7 @@ func TestLoadCommonRuleErrors(t *testing.T) {
 }
 
 func TestLoadBlankOptionalValuesAreAbsent(t *testing.T) {
+	t.Parallel()
 	p := testPaths(t)
 	writeConfig(t, p, "accounts:\n  - {name: a, host: h, login: l, token: \"  \"}\nhosts:\n  - {host: h, api: \" \", web: \"\", client_id: \" \"}\ndefault_store: \"\"\n")
 	c, err := Load(p)
@@ -75,6 +79,7 @@ func TestLoadBlankOptionalValuesAreAbsent(t *testing.T) {
 }
 
 func TestLoadNonScalarErrorsHaveOneShape(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, yaml, want string }{
 		{"default_store", "default_store: [a]\n", ":1: default_store must be a store name"},
 		{"url_rewrites", "url_rewrites: x\n", ":1: url_rewrites must be a list"},
@@ -95,6 +100,7 @@ func TestLoadNonScalarErrorsHaveOneShape(t *testing.T) {
 }
 
 func TestUpdateKeepsBothWriters(t *testing.T) {
+	t.Parallel()
 	p := testPaths(t)
 	writeConfig(t, p, "# keep\nunknown: 1\naccounts:\n  - {name: a, host: github.com, login: alice}\n")
 	c1, err := Load(p)
@@ -138,6 +144,7 @@ func TestUpdateKeepsBothWriters(t *testing.T) {
 }
 
 func TestUpdateErrorWritesNothing(t *testing.T) {
+	t.Parallel()
 	p := testPaths(t)
 	const src = "accounts:\n  - {name: a, host: github.com, login: alice}\n"
 	writeConfig(t, p, src)
@@ -164,6 +171,7 @@ func TestUpdateErrorWritesNothing(t *testing.T) {
 }
 
 func TestUpdateOnMissingFile(t *testing.T) {
+	t.Parallel()
 	p := testPaths(t)
 	c, err := Load(p)
 	if err != nil {

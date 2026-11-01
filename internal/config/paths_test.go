@@ -10,6 +10,7 @@ func envOf(m map[string]string) func(string) string {
 	return func(k string) string { return m[k] }
 }
 
+// 直列: パッケージ変数 goos の差し替え
 func TestResolve(t *testing.T) {
 	h := filepath.Join(t.TempDir(), "home")
 	hh := filepath.Join(t.TempDir(), "hh")
@@ -74,6 +75,7 @@ func TestResolve(t *testing.T) {
 	}
 }
 
+// 直列: パッケージ変数 goos の差し替え
 func TestResolveNeedsHome(t *testing.T) {
 	old := goos
 	goos = "linux"
@@ -84,6 +86,7 @@ func TestResolveNeedsHome(t *testing.T) {
 }
 
 func TestResolveDataDir(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	home := filepath.Join(root, "h")
 	env := map[string]string{"HOME": home}

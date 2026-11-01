@@ -41,6 +41,7 @@ func (te *testEnv) configText() string {
 	return string(b)
 }
 
+// 直列: このファイルのテストはすべて keyring.MockInit で go-keyring のモックを作り直す
 func TestAuthLoginDevice(t *testing.T) {
 	keyring.MockInit()
 	te := newTestEnv(t)

@@ -14,6 +14,7 @@ import (
 // A failure to reach the host names the request once ("GET url: cause"), and
 // the cause stays reachable.
 func TestNetworkErrorTextHasTheURLOnce(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.NotFoundHandler())
 	api := srv.URL
 	srv.Close()

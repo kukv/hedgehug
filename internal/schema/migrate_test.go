@@ -101,6 +101,7 @@ func propNames(s *Schema) string {
 }
 
 func TestMigrate(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		m    Migration
@@ -185,6 +186,7 @@ func TestMigrate(t *testing.T) {
 }
 
 func TestMigrateKeepsReceiver(t *testing.T) {
+	t.Parallel()
 	for _, m := range []Migration{
 		{Target: TargetStatus, Old: "todo", New: "ready"},
 		{Target: TargetKind, Old: "epic", New: "project"},
@@ -202,6 +204,7 @@ func TestMigrateKeepsReceiver(t *testing.T) {
 }
 
 func TestMigrateStatusMergeOtherCategory(t *testing.T) {
+	t.Parallel()
 	s := decodeMigrate(t)
 	got, err := s.Migrate(Migration{Target: TargetStatus, Old: "todo", New: "doing"})
 	if err != nil {
@@ -223,6 +226,7 @@ func TestMigrateStatusMergeOtherCategory(t *testing.T) {
 }
 
 func TestMigrateRenameKeepsNotes(t *testing.T) {
+	t.Parallel()
 	s := decodeMigrate(t)
 	got, err := s.Migrate(Migration{Target: TargetStatus, Old: "ready", New: "prepared"})
 	if err != nil {
@@ -284,6 +288,7 @@ func TestMigrateRenameKeepsNotes(t *testing.T) {
 }
 
 func TestMigrateKindMergeDefault(t *testing.T) {
+	t.Parallel()
 	got, err := decodeMigrate(t).Migrate(Migration{Target: TargetKind, Old: "task", New: "bug"})
 	if err != nil {
 		t.Fatal(err)
@@ -311,6 +316,7 @@ func TestMigrateKindMergeDefault(t *testing.T) {
 }
 
 func TestMigrateErrors(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		m    Migration
 		want string
@@ -368,6 +374,7 @@ func (x *taskT) keys() string {
 }
 
 func TestApplyTask(t *testing.T) {
+	t.Parallel()
 	const props = "  priority: mid\n  points: 3\n  area: [a, b]\n"
 	for _, tc := range []struct {
 		name    string
@@ -422,6 +429,7 @@ func TestApplyTask(t *testing.T) {
 }
 
 func TestApplyTaskPropOnBoth(t *testing.T) {
+	t.Parallel()
 	s, x := migrateTask(t, "  points: 3\n  size: 5\n")
 	if _, err := (Migration{Target: TargetProp, Old: "points", New: "size"}).ApplyTask(x.Task, s); err == nil ||
 		!strings.Contains(err.Error(), "has both points and size") {

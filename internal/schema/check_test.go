@@ -8,6 +8,7 @@ import (
 )
 
 func TestCheckDefaults(t *testing.T) {
+	t.Parallel()
 	for name, s := range map[string]*Schema{"Default": Default(), "Dev": Dev()} {
 		if ps := s.Check(); len(ps) != 0 {
 			t.Errorf("%s has problems: %v", name, ps)
@@ -24,6 +25,7 @@ func TestCheckDefaults(t *testing.T) {
 }
 
 func TestCheckProblems(t *testing.T) {
+	t.Parallel()
 	where := "project:01JBZ8K3QW7M2X9V4T6R5N8P0B"
 	for _, tc := range []struct {
 		name   string
@@ -85,6 +87,7 @@ func TestCheckProblems(t *testing.T) {
 }
 
 func TestRequiredAcceptsBuiltinsAndProps(t *testing.T) {
+	t.Parallel()
 	s := Default()
 	s.Workflow.Required = Lists{{"in_progress", []string{"assignees"}}, {"done", []string{"points", "sprint"}}}
 	if ps := s.Check(); len(ps) != 0 {
@@ -93,6 +96,7 @@ func TestRequiredAcceptsBuiltinsAndProps(t *testing.T) {
 }
 
 func TestBuiltinFilled(t *testing.T) {
+	t.Parallel()
 	empty := &model.Task{}
 	for _, name := range requirableFields {
 		filled, ok := builtinFilled(empty, name)

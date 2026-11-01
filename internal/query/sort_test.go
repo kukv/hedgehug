@@ -31,6 +31,7 @@ func sortFixture(t *testing.T) *index.Index {
 }
 
 func TestRunSort(t *testing.T) {
+	t.Parallel()
 	ix := sortFixture(t)
 	tests := []struct {
 		q    string
@@ -53,6 +54,7 @@ func TestRunSort(t *testing.T) {
 }
 
 func TestRunGroup(t *testing.T) {
+	t.Parallel()
 	ix := sortFixture(t)
 	tests := []struct {
 		q        string
@@ -88,6 +90,7 @@ func TestRunGroup(t *testing.T) {
 }
 
 func TestRunSortErrors(t *testing.T) {
+	t.Parallel()
 	ix := sortFixture(t)
 	tests := []struct {
 		q   string
@@ -115,6 +118,7 @@ func TestRunSortErrors(t *testing.T) {
 }
 
 func TestRunRankTiesAreOrderedByID(t *testing.T) {
+	t.Parallel()
 	s := newStore(t)
 	// The ULID order (ten first) differs from the id order.
 	ten, nine := newTask("ten"), newTask("nine")

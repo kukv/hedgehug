@@ -14,6 +14,7 @@ import (
 // A next page on the same host but another port is another origin: the token
 // is not sent there.
 func TestNextPageOtherPort(t *testing.T) {
+	t.Parallel()
 	var gotAuth string
 	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
@@ -40,6 +41,7 @@ func TestNextPageOtherPort(t *testing.T) {
 }
 
 func TestSameOrigin(t *testing.T) {
+	t.Parallel()
 	c := &Client{api: "https://api.github.com"}
 	for u, want := range map[string]bool{
 		"https://api.github.com/user/repos?page=2":     true,
@@ -72,6 +74,7 @@ func redirecting(to string) *httptest.Server {
 // default client and with an injected one) and for the device flow, and the
 // other server sees no request at all.
 func TestRedirectToAnotherOriginIsRefused(t *testing.T) {
+	t.Parallel()
 	var seen []string
 	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = append(seen, r.Header.Get("Authorization")+"|"+r.URL.Path)
@@ -100,6 +103,7 @@ func TestRedirectToAnotherOriginIsRefused(t *testing.T) {
 }
 
 func TestRedirectToTheSameOriginIsFollowed(t *testing.T) {
+	t.Parallel()
 	var auths []string
 	mux := http.NewServeMux()
 	mux.HandleFunc("/user", func(w http.ResponseWriter, r *http.Request) {
@@ -126,6 +130,7 @@ func TestRedirectToTheSameOriginIsFollowed(t *testing.T) {
 
 // A client of the caller that has a policy of its own keeps it.
 func TestRedirectKeepsTheCallersPolicy(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/user" {
 			http.Redirect(w, r, "/user2", http.StatusFound)

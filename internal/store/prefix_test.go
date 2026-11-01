@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// 直列: パッケージ変数 openStore の差し替え
 func TestPrefixUses(t *testing.T) {
 	s := newTestStore(t) // workspace "test" with the prefix TST
 	opened := 0

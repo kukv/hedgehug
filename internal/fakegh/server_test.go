@@ -60,6 +60,7 @@ func do(t *testing.T, srv *httptest.Server, method, path, token, body string) (r
 }
 
 func TestUserAndRepos(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(New(seed()))
 	defer srv.Close()
 	if res, body := do(t, srv, "GET", "/user", "t-bob", ""); res.StatusCode != 200 || !strings.Contains(body, `"login":"bob"`) {
@@ -89,6 +90,7 @@ func TestUserAndRepos(t *testing.T) {
 }
 
 func TestPages(t *testing.T) {
+	t.Parallel()
 	st := seed()
 	for i := range 3 {
 		st.Repos = append(st.Repos, &Repo{Owner: "alice", Name: "r" + string(rune('0'+i))})
@@ -107,6 +109,7 @@ func TestPages(t *testing.T) {
 }
 
 func TestCreateRepoAndTopics(t *testing.T) {
+	t.Parallel()
 	s := New(seed())
 	srv := httptest.NewServer(s)
 	defer srv.Close()
@@ -132,6 +135,7 @@ func TestCreateRepoAndTopics(t *testing.T) {
 }
 
 func TestDeviceFlow(t *testing.T) {
+	t.Parallel()
 	s := New(seed())
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	s.SetNow(func() time.Time { return now })
@@ -178,6 +182,7 @@ func TestDeviceFlow(t *testing.T) {
 }
 
 func TestAdmin(t *testing.T) {
+	t.Parallel()
 	s := New(seed())
 	srv := httptest.NewServer(s)
 	defer srv.Close()
@@ -206,6 +211,7 @@ func TestAdmin(t *testing.T) {
 // tests reach by calling the server's methods: /_fakegh/device/approve and
 // /_fakegh/token/expire.
 func TestAdminDeviceApproveAndExpire(t *testing.T) {
+	t.Parallel()
 	s := New(seed())
 	srv := httptest.NewServer(s)
 	defer srv.Close()
@@ -273,6 +279,7 @@ func deviceCode(t *testing.T, srv *httptest.Server) (poll string) {
 }
 
 func TestAutoApprove(t *testing.T) {
+	t.Parallel()
 	st := seed()
 	st.AutoApprove = "bob"
 	srv := httptest.NewServer(New(st))
@@ -291,6 +298,7 @@ func TestAutoApprove(t *testing.T) {
 }
 
 func TestDeviceErrors(t *testing.T) {
+	t.Parallel()
 	s := New(seed())
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	s.SetNow(func() time.Time { return now })
@@ -312,6 +320,7 @@ func TestDeviceErrors(t *testing.T) {
 }
 
 func TestLoad(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "seed.json")
 	seedJSON := `{"users":["alice"],"orgs":{"o":["alice"]},"tokens":{"t":"alice"},` +
 		`"repos":[{"owner":"o","name":"r","private":true,"topics":["x"],"perms":{"alice":"admin"}}],` +
@@ -335,6 +344,7 @@ func TestLoad(t *testing.T) {
 }
 
 func TestResetCopies(t *testing.T) {
+	t.Parallel()
 	st := seed()
 	s := New(st)
 	// Changing what was passed in does not reach the server.
@@ -366,6 +376,7 @@ func TestResetCopies(t *testing.T) {
 }
 
 func TestRepoDetails(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(New(seed()))
 	defer srv.Close()
 	if res, _ := do(t, srv, "PUT", "/repos/org-a/hh-shared/topics", "t-bob", `{"names":["x"]}`); res.StatusCode != 403 {
@@ -391,6 +402,7 @@ func TestRepoDetails(t *testing.T) {
 }
 
 func TestCollaboratorPages(t *testing.T) {
+	t.Parallel()
 	st := seed()
 	for _, l := range []string{"c1", "c2", "c3"} {
 		st.Repos[0].Perms[l] = "read"
@@ -414,6 +426,7 @@ func TestCollaboratorPages(t *testing.T) {
 }
 
 func TestPerPageIsCapped(t *testing.T) {
+	t.Parallel()
 	st := seed()
 	for i := range 120 {
 		st.Repos = append(st.Repos, &Repo{Owner: "alice", Name: "r" + strconv.Itoa(i)})
@@ -428,6 +441,7 @@ func TestPerPageIsCapped(t *testing.T) {
 }
 
 func TestRepoIDIsStable(t *testing.T) {
+	t.Parallel()
 	s := New(seed())
 	srv := httptest.NewServer(s)
 	defer srv.Close()
@@ -475,6 +489,7 @@ func TestRepoIDIsStable(t *testing.T) {
 }
 
 func TestEmptyToken(t *testing.T) {
+	t.Parallel()
 	s := New(seed())
 	srv := httptest.NewServer(s)
 	defer srv.Close()

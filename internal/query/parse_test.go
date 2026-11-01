@@ -7,6 +7,7 @@ import (
 )
 
 func TestParse(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		in   string
 		want []Term
@@ -43,6 +44,7 @@ func TestParse(t *testing.T) {
 }
 
 func TestParseErrors(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		in  string
 		pos int

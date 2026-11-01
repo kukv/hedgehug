@@ -50,6 +50,7 @@ func acct(kind, env string) config.Account {
 }
 
 func TestTokenGh(t *testing.T) {
+	t.Parallel()
 	var got []string
 	opt := Options{Run: func(name string, args ...string) ([]byte, []byte, error) {
 		got = append([]string{name}, args...)
@@ -71,6 +72,7 @@ func TestTokenGh(t *testing.T) {
 }
 
 func TestTokenEnv(t *testing.T) {
+	t.Parallel()
 	opt := Options{Getenv: func(k string) string {
 		if k == "HH_TOKEN" {
 			return "t1"
@@ -86,6 +88,7 @@ func TestTokenEnv(t *testing.T) {
 }
 
 func TestTokenKeychain(t *testing.T) {
+	t.Parallel()
 	k := newMem()
 	opt := Options{Keyring: k}
 	if _, err := Token(acct("keychain", ""), opt); err == nil || !strings.Contains(err.Error(), "hedgehug auth login a --with-token") {
@@ -106,12 +109,14 @@ func TestTokenKeychain(t *testing.T) {
 }
 
 func TestTokenNone(t *testing.T) {
+	t.Parallel()
 	if _, err := Token(acct("", ""), Options{}); !errors.Is(err, ErrNoToken) {
 		t.Errorf("err = %v, want ErrNoToken", err)
 	}
 }
 
 func TestDeviceTokenRoundTrip(t *testing.T) {
+	t.Parallel()
 	k := newMem()
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	dt := DeviceToken{AccessToken: "ghu_1", RefreshToken: "ghr_1", ExpiresAt: now.Add(8 * time.Hour), RefreshExpiresAt: now.Add(4000 * time.Hour)}
@@ -124,6 +129,7 @@ func TestDeviceTokenRoundTrip(t *testing.T) {
 	}
 }
 
+// 直列: パッケージ変数 builtinClientID の差し替え
 func TestClientID(t *testing.T) {
 	if got := ClientID(config.Host{Host: "ghe", ClientID: "Iv23x"}); got != "Iv23x" {
 		t.Errorf("override = %q", got)

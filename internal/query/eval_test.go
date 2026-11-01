@@ -61,6 +61,7 @@ func newFixture(t *testing.T) *fixture {
 }
 
 func TestRunFilters(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	me := Options{Me: []string{"github.com/alice"}}
 	tests := []struct {
@@ -117,6 +118,7 @@ func TestRunFilters(t *testing.T) {
 }
 
 func TestRunMentionsWatchingOverwritten(t *testing.T) {
+	t.Parallel()
 	s := newStore(t)
 	body, comment, gone, other, watched, over := newTask("body"), newTask("comment"), newTask("gone"), newTask("other"), newTask("watched"), newTask("over")
 	body.Body = "for @Alice\n"
@@ -162,6 +164,7 @@ func TestRunMentionsWatchingOverwritten(t *testing.T) {
 }
 
 func TestRunIsInvalid(t *testing.T) {
+	t.Parallel()
 	s := newStore(t)
 	ok := newTask("ok")
 	put(t, s, ok)
@@ -173,6 +176,7 @@ func TestRunIsInvalid(t *testing.T) {
 }
 
 func TestRunErrors(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	tests := []struct {
 		q   string
@@ -208,6 +212,7 @@ func TestRunErrors(t *testing.T) {
 }
 
 func TestRunWorkspace(t *testing.T) {
+	t.Parallel()
 	s := newStore(t)
 	api := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "API"}
 	if _, err := s.Update(store.Op{Name: "workspace", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutWorkspace(api) }); err != nil {

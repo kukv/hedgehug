@@ -20,6 +20,7 @@ func writeView(t *testing.T, dir, file, data string) {
 }
 
 func TestListAndFind(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if es, err := List(dir); err != nil || len(es) != 0 {
 		t.Fatalf("List without views/ = %v, %v", es, err)
@@ -61,6 +62,7 @@ func TestListAndFind(t *testing.T) {
 }
 
 func TestListUnreadableDir(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "views"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)

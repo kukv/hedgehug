@@ -31,6 +31,7 @@ func fake(t *testing.T) (*fakegh.Server, config.Host) {
 }
 
 func TestClient(t *testing.T) {
+	t.Parallel()
 	s, h := fake(t)
 	c := New(h, "t-alice", nil)
 	if l, err := c.User(); err != nil || l != "alice" {
@@ -73,6 +74,7 @@ func TestClient(t *testing.T) {
 }
 
 func TestUserReposPages(t *testing.T) {
+	t.Parallel()
 	s, h := fake(t)
 	for i := range 150 {
 		name := fmt.Sprintf("org-a/r%03d", i)
@@ -90,6 +92,7 @@ func TestUserReposPages(t *testing.T) {
 }
 
 func TestRateLimit(t *testing.T) {
+	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-RateLimit-Remaining", "0")
 		w.Header().Set("X-RateLimit-Reset", "1793500000")
@@ -113,6 +116,7 @@ func TestRateLimit(t *testing.T) {
 }
 
 func TestDescribe(t *testing.T) {
+	t.Parallel()
 	err := Describe(ErrUnauthorized, "github.com/alice-corp", "work", "read the permission of org-a/hh-shared")
 	if !errors.Is(err, ErrUnauthorized) {
 		t.Errorf("Describe lost the cause: %v", err)
@@ -132,6 +136,7 @@ func TestDescribe(t *testing.T) {
 }
 
 func TestDevice(t *testing.T) {
+	t.Parallel()
 	s, h := fake(t)
 	dc, err := RequestDeviceCode(nil, h.Web, "Iv23x")
 	if err != nil || dc.UserCode == "" {

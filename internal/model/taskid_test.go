@@ -6,6 +6,7 @@ import (
 )
 
 func TestValidIDPrefix(t *testing.T) {
+	t.Parallel()
 	for _, p := range []string{"WEB", "A1", "ABCDEFGHIJ"} {
 		if err := ValidIDPrefix(p); err != nil {
 			t.Errorf("%q: %v", p, err)
@@ -19,6 +20,7 @@ func TestValidIDPrefix(t *testing.T) {
 }
 
 func TestParseTaskID(t *testing.T) {
+	t.Parallel()
 	if p, n, ok := ParseTaskID("WEB-42"); !ok || p != "WEB" || n != 42 {
 		t.Errorf("WEB-42 = %q %d %v", p, n, ok)
 	}
@@ -33,6 +35,7 @@ func TestParseTaskID(t *testing.T) {
 }
 
 func TestIDNumbersIn(t *testing.T) {
+	t.Parallel()
 	got := IDNumbersIn([]byte("id: WEB-7\nformer_ids: [WEB-12, API-3]\nsee WEB-2, xWEB-99, WEB-0, WEB-5x and api-4\n"))
 	if len(got) != 2 || got["WEB"] != 12 || got["API"] != 3 {
 		t.Errorf("IDNumbersIn = %v", got)
@@ -40,6 +43,7 @@ func TestIDNumbersIn(t *testing.T) {
 }
 
 func TestCompareIDs(t *testing.T) {
+	t.Parallel()
 	ids := []string{"WEB-10", "API-3", "WEB-9", "", "WEB-1"}
 	slices.SortFunc(ids, CompareIDs)
 	if want := []string{"API-3", "WEB-1", "WEB-9", "WEB-10", ""}; !slices.Equal(ids, want) {

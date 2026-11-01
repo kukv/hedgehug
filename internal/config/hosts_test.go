@@ -3,6 +3,7 @@ package config
 import "testing"
 
 func TestRewrite(t *testing.T) {
+	t.Parallel()
 	c := &Config{URLRewrites: []URLRewrite{
 		{From: "https://github.com/", To: "/r/"},
 		{From: "https://github.com/org-a/", To: "/a/"},
@@ -28,6 +29,7 @@ func TestRewrite(t *testing.T) {
 }
 
 func TestIsGitHubHost(t *testing.T) {
+	t.Parallel()
 	c := &Config{Hosts: []Host{{Host: "ghe.example.com"}}}
 	if !c.IsGitHubHost("github.com") || !c.IsGitHubHost("ghe.example.com") || c.IsGitHubHost("gitlab.com") {
 		t.Error("IsGitHubHost is wrong")

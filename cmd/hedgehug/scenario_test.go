@@ -13,6 +13,7 @@ import (
 // TestScenario runs the phase 1 done criterion for the CLI: in one store,
 // every CRUD operation and the tree work, and each is one commit.
 func TestScenario(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.writeAccounts("github.com", "alice")

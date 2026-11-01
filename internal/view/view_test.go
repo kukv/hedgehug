@@ -22,6 +22,7 @@ color: blue
 `
 
 func TestDecodeEncodeKeepsEverything(t *testing.T) {
+	t.Parallel()
 	v, err := Decode("今週", []byte(full))
 	if err != nil {
 		t.Fatal(err)
@@ -63,6 +64,7 @@ func TestDecodeEncodeKeepsEverything(t *testing.T) {
 }
 
 func TestDefaults(t *testing.T) {
+	t.Parallel()
 	v, err := Decode("x", []byte("layout: kanban\nquery: \"\"\n"))
 	if err != nil {
 		t.Fatal(err)
@@ -84,6 +86,7 @@ func TestDefaults(t *testing.T) {
 }
 
 func TestNewEncode(t *testing.T) {
+	t.Parallel()
 	v := New("x")
 	v.Layout, v.Query = "table", "status:todo"
 	v.Table = &Table{Columns: []string{"id", "title"}}
@@ -97,6 +100,7 @@ func TestNewEncode(t *testing.T) {
 }
 
 func TestDecodeErrors(t *testing.T) {
+	t.Parallel()
 	for _, data := range []string{"- a\n", "layout: [a]\n", "table: 3\n", "table:\n  columns: x: y\n", "a: &x 1\n"} {
 		if _, err := Decode("x", []byte(data)); err == nil {
 			t.Errorf("Decode(%q) = nil error", data)
@@ -105,6 +109,7 @@ func TestDecodeErrors(t *testing.T) {
 }
 
 func TestProblems(t *testing.T) {
+	t.Parallel()
 	v, err := Decode("x", []byte("layout: gantt\ntable:\n  columns: [id, id, \"\"]\n  group_by: owner\nkanban:\n  columns: kind\n  swimlane: label\n"))
 	if err != nil {
 		t.Fatal(err)
@@ -131,6 +136,7 @@ func TestProblems(t *testing.T) {
 }
 
 func TestMissingColumns(t *testing.T) {
+	t.Parallel()
 	v, _ := Decode("x", []byte("layout: table\ntable:\n  columns: [id, due, gone, label, other]\n"))
 	if got := v.MissingColumns(schema.Default()); !slices.Equal(got, []string{"gone", "other"}) {
 		t.Errorf("MissingColumns = %q", got)

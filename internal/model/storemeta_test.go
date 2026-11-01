@@ -6,6 +6,7 @@ import (
 )
 
 func TestStoreMetaRoundTrip(t *testing.T) {
+	t.Parallel()
 	src := "ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nname: shared\nformat: 1\naudience: backend と frontend の両チーム\n"
 	m, err := DecodeStoreMeta([]byte(src))
 	if err != nil {
@@ -21,6 +22,7 @@ func TestStoreMetaRoundTrip(t *testing.T) {
 }
 
 func TestStoreMetaErrors(t *testing.T) {
+	t.Parallel()
 	_, err := DecodeStoreMeta([]byte("ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nformat: 2\n"))
 	if !errors.Is(err, ErrNewerFormat) {
 		t.Errorf("format 2: err = %v, want ErrNewerFormat", err)
