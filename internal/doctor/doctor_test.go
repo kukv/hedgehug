@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
 	"github.com/kukv/hedgehug/internal/sync"
+	"github.com/kukv/hedgehug/internal/view"
 )
 
 func writeFile(t *testing.T, dir, rel, content string) {
@@ -602,4 +604,117 @@ func TestLiveChildOfDeletedParentIsFixed(t *testing.T) {
 	if fs := run(t, dir); len(fs) != 0 {
 		t.Errorf("after fix: %+v", fs)
 	}
+}
+
+func TestDoctorViewColumnsWithBrokenStoreMeta(t *testing.T) {
+	s, dir := newStore(t)
+	if _, err := s.Update(store.Op{Name: "test", Author: testAuthor}, func(tx *store.Tx) error {
+		return tx.PutFile("views/cols.yaml", []byte("layout: table\ntable:\n  columns: [id, gone]\n"))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, dir, model.StoreMetaPath, "ulid: [\n")
+	fs := run(t, dir)
+	find(t, fs, "file", model.StoreMetaPath)
+	find(t, fs, "view", "views/cols.yaml")
+}
+
+func TestDoctorViews(t *testing.T) {
+	s, dir := newStore(t)
+	files := map[string]string{
+		"views/ok.yaml":     "layout: table\ntable:\n  columns: [id, due]\n",
+		"views/cols.yaml":   "layout: table\ntable:\n  columns: [id, gone]\n",
+		"views/bad.yaml":    "layout: gantt\n",
+		"views/broken.yaml": "- x\n",
+		"views/multi.yaml":  "layout: gantt\ntable:\n  group_by: owner\n",
+		"views/trail .yaml": "layout: tree\n",
+		"views/Same.yaml":   "layout: tree\n",
+		"views/same.yaml":   "layout: tree\n",
+		"views/sub/x.yaml":  "layout: tree\n",
+		"views/notes.txt":   "x",
+	}
+	want := map[string][]string{
+		"view views/cols.yaml":   {`column "gone" is not a field or a property of the schema; the GUI skips it`},
+		"file views/bad.yaml":    {`layout "gantt" is not one of tree, kanban, table`},
+		"file views/broken.yaml": nil, // checked by prefix below
+		"file views/multi.yaml":  nil, // checked in order below
+		"file views/trail .yaml": nil,
+		"file views/Same.yaml":   {"has the same name as views/same.yaml but for case; rename one of them with hedgehug view rename"},
+		"file views/same.yaml":   {"has the same name as views/Same.yaml but for case; rename one of them with hedgehug view rename"},
+		"file views/sub/x.yaml":  {"is not a view: views holds <name>.yaml files only"},
+		"file views/notes.txt":   {"is not a view: views holds <name>.yaml files only"},
+	}
+	if !caseSensitive(t, dir) {
+		for _, k := range []string{"Same", "same"} {
+			delete(files, "views/"+k+".yaml")
+			delete(want, "file views/"+k+".yaml")
+		}
+	}
+	if runtime.GOOS == "windows" {
+		delete(files, "views/trail .yaml")
+		delete(want, "file views/trail .yaml")
+	}
+	if _, err := s.Update(store.Op{Name: "test", Author: testAuthor}, func(tx *store.Tx) error {
+		for rel, data := range files {
+			if err := tx.PutFile(rel, []byte(data)); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fs, err := Run(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string][]string{}
+	for _, f := range fs {
+		if strings.HasPrefix(f.Where, "views/") {
+			got[f.Check+" "+f.Where] = append(got[f.Check+" "+f.Where], f.Msg)
+		}
+	}
+	if len(got) != len(want) {
+		t.Errorf("findings = %v", got)
+	}
+	for k, w := range want {
+		g, ok := got[k]
+		switch {
+		case !ok:
+			t.Errorf("no finding %s (all: %v)", k, got)
+		case k == "file views/broken.yaml":
+			if len(g) != 1 || !strings.HasPrefix(g[0], "does not decode: ") {
+				t.Errorf("%s = %q", k, g)
+			}
+		case k == "file views/multi.yaml":
+			v, derr := view.Decode("multi", []byte(files["views/multi.yaml"]))
+			if derr != nil {
+				t.Fatal(derr)
+			}
+			if ps := v.Problems(); len(ps) < 2 || !slices.Equal(g, ps) {
+				t.Errorf("%s = %q; want each of %q once, in order", k, g, ps)
+			}
+		case k == "file views/trail .yaml":
+			if len(g) != 1 || !strings.HasPrefix(g[0], "the name is not a valid view name: ") {
+				t.Errorf("%s = %q", k, g)
+			}
+		case !slices.Equal(g, w):
+			t.Errorf("%s = %q; want %q", k, g, w)
+		}
+	}
+}
+
+// caseSensitive reports whether the file system of dir tells names apart by
+// case. Windows and macOS do not, and cannot hold Same.yaml and same.yaml.
+func caseSensitive(t *testing.T, dir string) bool {
+	t.Helper()
+	p := filepath.Join(dir, ".hedgehug", "local", "caseprobe")
+	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := os.Stat(filepath.Join(filepath.Dir(p), "CASEPROBE"))
+	return err != nil
 }
