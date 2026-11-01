@@ -302,7 +302,11 @@ func (tx *Tx) MoveIn(in MoveIn) error {
 	if moved[0].Rank, err = model.Between(last, ""); err != nil {
 		return err
 	}
+	if tx.movedIn == nil {
+		tx.movedIn = map[model.ULID]bool{}
+	}
 	for _, t := range moved {
+		tx.movedIn[t.ULID] = true
 		if err := tx.PutTask(t); err != nil {
 			return err
 		}

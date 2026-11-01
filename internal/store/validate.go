@@ -13,6 +13,7 @@ import (
 
 // Codes of the violations validate adds to the schema's.
 const (
+	CodeForward           = "forward"
 	CodeNoWorkspace       = "no_workspace"
 	CodeWorkspaceMismatch = "workspace_mismatch"
 )
@@ -57,6 +58,13 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 			continue // removed in the same operation
 		}
 		old, err := tx.s.Task(ulid)
+		// The path holds a forward: a task is not put over it, unless this
+		// is the move back into the store it left (MoveIn).
+		if errors.Is(err, model.ErrForward) && !tx.movedIn[ulid] {
+			return &ValidationError{Task: ulid, Violations: []schema.Violation{{
+				Code: CodeForward, Field: "ulid", Msg: fmt.Sprintf("task %s moved to another store", ulid),
+			}}}
+		}
 		// A file that does not decode is checked like a new task, so a
 		// write can repair it.
 		if errors.Is(err, ErrNotFound) || errors.As(err, new(*model.DecodeError)) {

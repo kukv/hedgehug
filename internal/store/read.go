@@ -130,35 +130,6 @@ func (s *Store) Tasks() iter.Seq2[*model.Task, error] {
 	}
 }
 
-// Forwards returns every forward: a task file that moved to another store.
-// One that does not decode, or holds a ULID other than the one of its path,
-// yields a *FileError and no forward. A file that is a task is skipped.
-func (s *Store) Forwards() iter.Seq2[*model.Forward, error] {
-	decode := func(rel string, b []byte) (*model.Forward, error) {
-		if !model.IsForward(b) {
-			return nil, nil
-		}
-		f, err := model.DecodeForward(b)
-		if err != nil {
-			return nil, err
-		}
-		if model.TaskPath(f.ULID) != rel {
-			return nil, fmt.Errorf("%w (ulid %s)", ErrULIDMismatch, f.ULID)
-		}
-		return f, nil
-	}
-	return func(yield func(*model.Forward, error) bool) {
-		for f, err := range walk(s, "tasks", isTaskPath, decode) {
-			if f == nil && err == nil {
-				continue
-			}
-			if !yield(f, err) {
-				return
-			}
-		}
-	}
-}
-
 func isTaskPath(rel string) bool {
 	_, err := model.ParseTaskPath(rel)
 	return err == nil

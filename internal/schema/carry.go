@@ -9,7 +9,7 @@ import (
 // that comes from another store, and what it left out, one line each: "status
 // <name>", "template <name>", "kind <name>" and "prop <name>". It drops the
 // statuses s does not have, the workflow transitions and required lists that
-// name them, the required fields that are neither a property of s nor a field
+// name them (a list left with nothing is dropped as "required <status>"), the required fields that are neither a property of s nor a field
 // that can be required, the default templates of kinds s does not have, and
 // the templates that templateExists denies. The result may still fail Check
 // (a status list that hides a default status of s); the caller checks.
@@ -38,7 +38,8 @@ func (s *Schema) Carry(sc Scoped, templateExists func(name string) bool) (Scoped
 		w := Workflow{
 			Transitions: carryTransitions(sc.Workflow.Transitions, hasStatus, drop),
 			Required: carryLists(sc.Workflow.Required, hasStatus, hasField,
-				func(name string) { drop("status", name) }, func(name string) { drop("prop", name) }),
+				func(name string) { drop("status", name) }, func(name string) { drop("prop", name) },
+				func(name string) { drop("required", name) }),
 		}
 		out.Workflow = &w
 	}
@@ -87,7 +88,10 @@ func unique(xs []string) []string {
 // carryLists keeps the entries of l whose key keepKey allows, and in them the
 // values keepValue allows; dropKey and dropValue are told of what is left out.
 // A key that keepKey denies goes with its values, which are not told apart.
-func carryLists(l Lists, keepKey, keepValue func(string) bool, dropKey, dropValue func(string)) Lists {
+// A key whose values are all gone goes too (dropEmpty is told of it, as
+// "required <status>"), as in carryTransitions: it asked for something, and
+// nothing of it is left.
+func carryLists(l Lists, keepKey, keepValue func(string) bool, dropKey, dropValue, dropEmpty func(string)) Lists {
 	var out Lists
 	for _, x := range l {
 		if !keepKey(x.Key) {
@@ -101,6 +105,10 @@ func carryLists(l Lists, keepKey, keepValue func(string) bool, dropKey, dropValu
 			} else {
 				dropValue(v)
 			}
+		}
+		if len(kept) == 0 && len(x.Values) > 0 {
+			dropEmpty(x.Key)
+			continue
 		}
 		out = append(out, List{Key: x.Key, Values: kept})
 	}

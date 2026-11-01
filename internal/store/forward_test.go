@@ -2,6 +2,8 @@ package store
 
 import (
 	"errors"
+	"fmt"
+	"iter"
 	"slices"
 	"testing"
 
@@ -14,7 +16,7 @@ func forwardFile(ulid string) string {
 	return "---\nulid: " + ulid + "\nmoved_to: " + forwardStoreULID + "\n---\n"
 }
 
-// Tasks skips a forward; Forwards yields it; Task names it with ErrForward.
+// Tasks skips a forward; forwardsOf yields it; Task names it with ErrForward.
 func TestForwards(t *testing.T) {
 	s := newTestStore(t)
 	a, b := mustULID(t, taskA), mustULID(t, taskB)
@@ -30,7 +32,7 @@ func TestForwards(t *testing.T) {
 	}
 	var got []model.ULID
 	var broken *FileError
-	for f, err := range s.Forwards() {
+	for f, err := range forwardsOf(s) {
 		if err != nil {
 			if !errors.As(err, &broken) || broken.Path != model.TaskPath(bad) {
 				t.Errorf("Forwards err = %v, want a *FileError for the broken forward", err)
@@ -61,5 +63,34 @@ func TestForwardIsRemoved(t *testing.T) {
 	}
 	if _, err := s.Task(b); !errors.Is(err, ErrNotFound) || errors.Is(err, model.ErrForward) {
 		t.Errorf("after removal: err = %v, want a plain ErrNotFound", err)
+	}
+}
+
+// forwardsOf returns every forward: a task file that moved to another store.
+// One that does not decode, or holds a ULID other than the one of its path,
+// yields a *FileError and no forward. A file that is a task is skipped.
+func forwardsOf(s *Store) iter.Seq2[*model.Forward, error] {
+	decode := func(rel string, b []byte) (*model.Forward, error) {
+		if !model.IsForward(b) {
+			return nil, nil
+		}
+		f, err := model.DecodeForward(b)
+		if err != nil {
+			return nil, err
+		}
+		if model.TaskPath(f.ULID) != rel {
+			return nil, fmt.Errorf("%w (ulid %s)", ErrULIDMismatch, f.ULID)
+		}
+		return f, nil
+	}
+	return func(yield func(*model.Forward, error) bool) {
+		for f, err := range walk(s, "tasks", isTaskPath, decode) {
+			if f == nil && err == nil {
+				continue
+			}
+			if !yield(f, err) {
+				return
+			}
+		}
 	}
 }

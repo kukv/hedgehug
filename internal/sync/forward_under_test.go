@@ -1,6 +1,10 @@
 package sync
 
 import (
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/index"
@@ -42,4 +46,36 @@ func TestFilesUnderForwards(t *testing.T) {
 	if !under() {
 		t.Error("a comment under the forward is not found")
 	}
+}
+
+// forwards reads the forward files in the working tree of clone i.
+func (c *cluster) forwards(i int) []*model.Forward {
+	c.t.Helper()
+	var out []*model.Forward
+	root := filepath.Join(c.stores[i].Dir(), "tasks")
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if errors.Is(err, fs.ErrNotExist) && p == root {
+			return nil // no task yet
+		}
+		if err != nil || d.IsDir() || filepath.Ext(p) != ".md" {
+			return err
+		}
+		b, err := os.ReadFile(p) //nolint:gosec // a file of the test store
+		if err != nil {
+			return err
+		}
+		if !model.IsForward(b) {
+			return nil
+		}
+		f, err := model.DecodeForward(b)
+		if err != nil {
+			return err
+		}
+		out = append(out, f)
+		return nil
+	})
+	if err != nil {
+		c.t.Fatalf("clone %d: %v", i, err)
+	}
+	return out
 }

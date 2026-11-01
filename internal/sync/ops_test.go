@@ -77,10 +77,7 @@ func (c *cluster) view(i int) *view {
 		}
 		v.tasks[t.ULID] = t
 	}
-	for f, err := range c.stores[i].Forwards() {
-		if err != nil {
-			c.t.Fatalf("clone %d: %v", i, err)
-		}
+	for _, f := range c.forwards(i) {
 		v.fwd[f.ULID] = f
 	}
 	for w, err := range c.stores[i].Workspaces() {

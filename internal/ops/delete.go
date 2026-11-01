@@ -424,6 +424,9 @@ func (ss *Session) RestoreAt(arg, at string) (RestoreAtResult, error) {
 			return err
 		}
 		old, err := model.DecodeTask(data)
+		if errors.Is(err, model.ErrForward) {
+			return newErr(KindConflict, "restore.forward", fmt.Errorf("%s was moved to another store at that time", cmp.Or(ix.DisplayID(e), e.ULID.String())), "at", at)
+		}
 		if err != nil {
 			return err
 		}

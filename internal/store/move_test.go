@@ -504,7 +504,7 @@ func TestMoveBothSides(t *testing.T) {
 			live++
 		}
 	}
-	for _, err := range f.src.Forwards() {
+	for _, err := range forwardsOf(f.src) {
 		if err == nil {
 			forwards++
 		}

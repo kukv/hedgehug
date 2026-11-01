@@ -62,7 +62,8 @@ type Tx struct {
 	tasks     map[model.ULID]*model.Task // put tasks; nil for a removed one
 	removed   map[model.ULID]bool        // tasks given to RemoveTask
 	taskOrder []model.ULID
-	schema    *schema.Schema // set by PutSchema
+	schema    *schema.Schema      // set by PutSchema
+	movedIn   map[model.ULID]bool // the tasks MoveIn puts; they may replace a forward
 
 	workspaces map[model.ULID]*model.Workspace // put workspaces; nil for a removed one
 	numbers    model.Numbers                   // the purged numbers; nil until read
