@@ -36,7 +36,11 @@ func TestCommitMergeWaitsWithoutHoldingTheMutex(t *testing.T) {
 		_, err := s.CommitMerge(head, []plumbing.Hash{head}, map[string][]byte{"m.txt": []byte("m")}, Op{Name: "repair", Author: testAuthor}, nil)
 		merged <- err
 	}()
-	<-waiting // CommitMerge is waiting for the file lock, without s.mu
+	select {
+	case <-waiting: // CommitMerge is waiting for the file lock, without s.mu
+	case err := <-merged:
+		t.Fatalf("CommitMerge ended before it waited for the lock: %v", err)
+	}
 
 	done := make(chan error, 1)
 	go func() {

@@ -696,7 +696,10 @@ func TestCatchAtHeadWritesNothing(t *testing.T) {
 	// Put the times of the files in the past, so that a rewrite would move them.
 	past := time.Now().Add(-time.Hour)
 	for _, name := range []string{itemsFile, readFile, markFile} {
-		_ = os.Chtimes(b.s.LocalPath(name), past, past) // a file that is not there is left so
+		// a file that is not there is left so
+		if err := os.Chtimes(b.s.LocalPath(name), past, past); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			t.Fatal(err)
+		}
 	}
 	before := box.Stamp()
 	if added, err := box.Catch(me, head(t, b)); err != nil || len(added) != 0 {
