@@ -586,6 +586,8 @@ moved_to: 01JC0STORE...      # 移動先の Store の ULID（store.yaml の ulid
 | `unexpected_force_push`: origin が手元で追っている origin の子孫でなく、記録もない | エラー | 3c |
 | `rewrite_leftover`: `.rewrite-new`・`.before-rewrite-*` が残っている | 警告（`--fix` で入れ替えをやり直す） | 3c |
 
+検査の結果は重さ（`error`・`warning`・`info`）を持つ。フェーズ2までの検査はすべて `error`。表示は `warning` と `info` の行にだけ重さを添え（`error` は今の表示のまま）、`--json` の各 finding に `severity` を足す。終了コード1は `error` か `warning` があるとき。`info` だけなら0（利用者の決定。2026-11-01）。
+
 `doctor` は全 Store を見る（「コマンドごとの対象」）。Store をまたぐ検査は、マウント中の Store の index を使う。Store が2つ以上なら、Store ごとに見出し（Store 名）を置き、その下にその Store の修正と検査結果を出す。`--json` は Store ごとの配列 `[{store, repaired, findings}]`（Store が1つでも配列）。`--fix` も全 Store を直し、読み取り専用の Store は直さずに警告を出す（利用者の決定。2026-11-01）。
 
 ## エラー
