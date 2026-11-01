@@ -9,6 +9,7 @@ import (
 // A marker with no old store to keep is not left inside the store the
 // rebuild becomes.
 func TestFinishLeftoverRemovesAMarkerWithoutAnOldStore(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "s")
 	fresh := dir + ".rewrite-new"
 	if err := os.MkdirAll(fresh, 0o750); err != nil {
@@ -39,6 +40,7 @@ func TestFinishLeftoverRemovesAMarkerWithoutAnOldStore(t *testing.T) {
 // its place by FinishLeftover (that would drop the commit of the gap): the
 // old store is, and the rebuild goes.
 func TestFinishLeftoverKeepsTheOldStoreOfAStaleRebuild(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "s")
 	before := dir + ".before-rewrite-1"
 	fresh := dir + ".rewrite-new"

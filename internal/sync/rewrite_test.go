@@ -80,6 +80,7 @@ func trackOf(t *testing.T, c *cluster) plumbing.Hash {
 // A rewrite with a record is found by the other clone, which changes
 // nothing.
 func TestRunFindsRecordedRewrite(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	keep := c.addTask(0, "keep")
 	gone := c.addTask(0, "gone")
@@ -118,6 +119,7 @@ func TestRunFindsRecordedRewrite(t *testing.T) {
 // A force push without a record stops the sync, leaves the clone as it was
 // and writes force-push.json; the file goes when origin is as it was.
 func TestRunUnexpectedForcePush(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	c.addTask(0, "keep")
 	gone := c.addTask(0, "gone")
@@ -157,6 +159,7 @@ func TestRunUnexpectedForcePush(t *testing.T) {
 
 // A record whose before is not what the clone followed is no record.
 func TestRunRecordWithForeignBefore(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	gone := c.addTask(0, "gone")
 	c.sync(0)
@@ -178,6 +181,7 @@ func TestRunRecordWithForeignBefore(t *testing.T) {
 // A mirror that still has the history before a rewrite is not merged: it is
 // force pushed to, and what the rewrite removed does not come back.
 func TestRunMirrorWithOldHistory(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	mirror := filepath.Join(t.TempDir(), "m.git")
 	if err := gitrepo.InitBare(mirror); err != nil {
@@ -214,6 +218,7 @@ func TestRunMirrorWithOldHistory(t *testing.T) {
 // and holds the purged task) is force pushed to, not merged: the merge
 // would bring the purged task back.
 func TestRunMirrorBehindBefore(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	mirror := filepath.Join(t.TempDir(), "m.git")
 	if err := gitrepo.InitBare(mirror); err != nil {
@@ -255,6 +260,7 @@ func TestRunMirrorBehindBefore(t *testing.T) {
 // A mirror with commits on top of before has commits no history of origin
 // has: it is neither merged nor force pushed to, and a warning tells so.
 func TestRunMirrorWithCommitsOfNeitherHistory(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	mirror := filepath.Join(t.TempDir(), "m.git")
 	if err := gitrepo.InitBare(mirror); err != nil {
@@ -292,6 +298,7 @@ func TestRunMirrorWithCommitsOfNeitherHistory(t *testing.T) {
 // A mirror fetched for the first time that holds a before is force pushed
 // to, not merged.
 func TestRunMirrorFirstFetchHoldsBefore(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	mirror := filepath.Join(t.TempDir(), "m.git")
 	if err := gitrepo.InitBare(mirror); err != nil {
@@ -335,6 +342,7 @@ func TestRunMirrorFirstFetchHoldsBefore(t *testing.T) {
 // A clone that lags behind (the rewriter pushed a commit it never fetched,
 // then rewrote) finds the record by the commit it followed (D33).
 func TestRunFindsRewriteOfALaggingClone(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	c.addTask(0, "keep")
 	gone := c.addTask(0, "gone")
@@ -359,6 +367,7 @@ func TestRunFindsRewriteOfALaggingClone(t *testing.T) {
 // A record whose before the clone does not have, on a history that holds
 // nothing the clone followed, is an unexpected force push.
 func TestRunUnrelatedForcePushWithARecord(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	gone := c.addTask(0, "gone")
 	c.sync(0)

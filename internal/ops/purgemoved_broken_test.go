@@ -30,6 +30,7 @@ func (f *moveFx) brokenForward(t *testing.T) model.ULID {
 // --moved leaves it, tells of it, and the lookup of a moved task does not
 // answer with it.
 func TestPurgeMovedLeavesABrokenForward(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	if _, err := f.ts.MoveStore(f.in()); err != nil {
 		t.Fatal(err)
@@ -61,6 +62,7 @@ func TestPurgeMovedLeavesABrokenForward(t *testing.T) {
 
 // A confirmed removal refuses a forward that came in after the list was shown.
 func TestPurgeMovedConfirmedRefusesChanges(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	if _, err := f.ts.MoveStore(f.in()); err != nil {
 		t.Fatal(err)

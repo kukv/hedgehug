@@ -21,6 +21,7 @@ func forwardFile(ulid, to string) []byte {
 }
 
 func TestMergeForwardBeatsEditedTask(t *testing.T) {
+	t.Parallel()
 	base := task("2026-10-31T10:00:00Z", "title: old")
 	edited := task("2026-10-31T11:00:00Z", "title: new")
 	fwd := forwardFile(taskU, storeB)
@@ -38,6 +39,7 @@ func TestMergeForwardBeatsEditedTask(t *testing.T) {
 }
 
 func TestMergeForwardBeatsDeletion(t *testing.T) {
+	t.Parallel()
 	base := task("2026-10-31T10:00:00Z", "title: old")
 	fwd := forwardFile(taskU, storeB)
 	r := mergeTask(t, side(base, ""), side(fwd, "a"), side(nil, "b"))
@@ -53,6 +55,7 @@ func TestMergeForwardBeatsDeletion(t *testing.T) {
 }
 
 func TestMergeTwoForwardsPicksNewerMovedTo(t *testing.T) {
+	t.Parallel()
 	base := task("2026-10-31T10:00:00Z", "title: old")
 	toB, toC := forwardFile(taskU, storeB), forwardFile(taskU, storeC)
 	at := time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
@@ -68,6 +71,7 @@ func TestMergeTwoForwardsPicksNewerMovedTo(t *testing.T) {
 }
 
 func TestMergeForwardUnderOursWins(t *testing.T) {
+	t.Parallel()
 	base := task("2026-10-31T10:00:00Z", "title: old")
 	edited := task("2026-10-31T11:00:00Z", "title: new")
 	r := mergeWith(t, OursWins, side(base, ""), side(edited, "a"), side(forwardFile(taskU, storeB), "b"))
@@ -119,6 +123,7 @@ const (
 )
 
 func TestRepairChildOfForwardGoesToRoot(t *testing.T) {
+	t.Parallel()
 	f := memFiles{
 		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
 		pathOf(fwdTask):                    forwardFile(fwdTask, storeB),
@@ -139,6 +144,7 @@ func TestRepairChildOfForwardGoesToRoot(t *testing.T) {
 }
 
 func TestRepairBlockedByAndTaskRefToForward(t *testing.T) {
+	t.Parallel()
 	f := memFiles{
 		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
 		pathOf(fwdTask):                    forwardFile(fwdTask, storeB),
@@ -170,6 +176,7 @@ func TestRepairBlockedByAndTaskRefToForward(t *testing.T) {
 }
 
 func TestRepairDropsFilesUnderForward(t *testing.T) {
+	t.Parallel()
 	c1, w1 := "01JE0000000000000000000001", "01JE0000000000000000000002"
 	keep := "01JE0000000000000000000003"
 	fwdUnder := func(base func(task, child model.ULID) string, child string) string {
@@ -208,6 +215,7 @@ func TestRepairDropsFilesUnderForward(t *testing.T) {
 }
 
 func TestRepairForwardListedTwiceIsToldOnce(t *testing.T) {
+	t.Parallel()
 	f := memFiles{
 		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
 		pathOf(fwdTask):                    forwardFile(fwdTask, storeB),

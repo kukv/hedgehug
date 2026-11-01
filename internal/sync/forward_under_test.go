@@ -15,6 +15,7 @@ import (
 // filesUnderForwards looks below the directories of the forwards only: the
 // comments of other tasks do not count.
 func TestFilesUnderForwards(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	x := c.addTask(0, "x")
 	y := c.addTask(0, "y")

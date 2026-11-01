@@ -15,6 +15,7 @@ import (
 // rename is carried over after the rename; the inbox's lines are joined with
 // no line twice.
 func TestSwapCarriesLocalWritesOfTheGap(t *testing.T) {
+	// 直列: パッケージ変数 beforeRename の差し替え
 	c := newCluster(t, 2)
 	sc := newRewriteScene(t, c, func(*rewriteScene) {})
 	old := c.stores[1]
@@ -47,6 +48,7 @@ func TestSwapCarriesLocalWritesOfTheGap(t *testing.T) {
 // vanish with the old directory: the swap finds it after the first rename,
 // puts the old store back and tells the rebuild is stale.
 func TestSwapFindsACommitOfTheGap(t *testing.T) {
+	// 直列: パッケージ変数 beforeRename の差し替え
 	c := newCluster(t, 2)
 	sc := newRewriteScene(t, c, func(*rewriteScene) {})
 	dir := c.stores[1].Dir()
@@ -93,6 +95,7 @@ func TestSwapFindsACommitOfTheGap(t *testing.T) {
 // opens the log at the path, in the directory that is there now, and writes
 // it.
 func TestBoundedLogReleaseAndReopen(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	dir := filepath.Join(root, "s")
 	p := filepath.Join(dir, ".hedgehug", "local", "sync.log")

@@ -12,6 +12,7 @@ const (
 )
 
 func TestDecodeForward(t *testing.T) {
+	t.Parallel()
 	f, err := DecodeForward([]byte("---\nulid: " + fwdULID + "\nmoved_to: " + fwdStore + "\n---\n"))
 	if err != nil {
 		t.Fatal(err)
@@ -22,6 +23,7 @@ func TestDecodeForward(t *testing.T) {
 }
 
 func TestDecodeForwardErrors(t *testing.T) {
+	t.Parallel()
 	for name, src := range map[string]string{
 		"no moved_to":   "---\nulid: " + fwdULID + "\n---\n",
 		"null moved_to": "---\nulid: " + fwdULID + "\nmoved_to:\n---\n",
@@ -43,6 +45,7 @@ func TestDecodeForwardErrors(t *testing.T) {
 }
 
 func TestForwardEncodeRoundTrip(t *testing.T) {
+	t.Parallel()
 	src := "---\nulid: " + fwdULID + "\nmoved_to: " + fwdStore + "\n---\n"
 	f, err := DecodeForward([]byte(src))
 	if err != nil {
@@ -64,6 +67,7 @@ func TestForwardEncodeRoundTrip(t *testing.T) {
 }
 
 func TestIsForward(t *testing.T) {
+	t.Parallel()
 	for src, want := range map[string]bool{
 		"---\nulid: " + fwdULID + "\nmoved_to: " + fwdStore + "\n---\n": true,
 		"---\nmoved_to:\n---\n":                       true,

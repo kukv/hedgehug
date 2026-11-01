@@ -80,6 +80,7 @@ func TestPropertyConverges(t *testing.T) {
 // require holds: nothing live under a forward, nothing blocked by it, no
 // comment or worklog entry left beneath it.
 func TestPropertyConvergesStores(t *testing.T) {
+	t.Parallel()
 	rounds, steps := 30, 60
 	if shortMode() {
 		rounds, steps = 5, 30

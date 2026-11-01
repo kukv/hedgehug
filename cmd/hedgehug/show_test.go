@@ -220,6 +220,7 @@ func mustULID(t *testing.T, s string) model.ULID {
 
 // A task that moved to another store is named by where it went, with exit 1.
 func TestShowAMovedTask(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "org-a", "--prefix", "API")
 	te.ok("store", "init", "org-b", "--prefix", "WEB")

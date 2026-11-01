@@ -10,6 +10,7 @@ import (
 // When the swap fails and leaves no store at the path, the child's log is
 // opened in the directory that was left, and the error is written there.
 func TestBackgroundSyncLogsTheFailedSwapWhereTheStoreIs(t *testing.T) {
+	t.Parallel()
 	f := newTakeFx(t)
 	path := f.path(t)
 	f.clone.appendConfig("sync:\n  push_interval: 1ms\n")

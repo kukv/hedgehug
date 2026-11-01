@@ -8,6 +8,7 @@ import (
 // restore --at a time when the task was a forward says so, with a code of
 // its own, not the bare "the task moved to another store".
 func TestRestoreAtWhenTheTaskWasAForward(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	if _, err := f.ts.MoveStore(f.in()); err != nil {
 		t.Fatal(err)

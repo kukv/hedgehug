@@ -141,6 +141,7 @@ func subjects(t *testing.T, r *gitrepo.Repo) []string {
 }
 
 func TestRewriteHistoryOfMovedTasks(t *testing.T) {
+	t.Parallel()
 	f := newRewriteFx(t, true)
 	f.moved(t)
 	r := f.repo(t)
@@ -266,6 +267,7 @@ func TestRewriteHistoryOfMovedTasks(t *testing.T) {
 }
 
 func TestRewriteHistoryOfALiveTask(t *testing.T) {
+	t.Parallel()
 	f := newRewriteFx(t, false)
 	a := f.org()
 	secret, err := a.Add(AddInput{Title: "Secret"})
@@ -338,6 +340,7 @@ func mustTaskID(t *testing.T, ts *testSession, name string, u model.ULID) string
 }
 
 func TestRewriteHistoryAsksForTheStoreName(t *testing.T) {
+	t.Parallel()
 	f := newRewriteFx(t, false)
 	f.moved(t)
 	r := f.repo(t)
@@ -377,6 +380,7 @@ func (ss *Session) rewriteProgressPath(t *testing.T) string {
 }
 
 func TestRewriteHistoryRefusals(t *testing.T) {
+	t.Parallel()
 	f := newRewriteFx(t, false)
 	f.moved(t)
 	a := f.org()
@@ -413,6 +417,7 @@ func TestRewriteHistoryRefusals(t *testing.T) {
 }
 
 func TestRewriteHistoryNeedsARemote(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	if _, err := f.ts.MoveStore(f.in()); err != nil {
 		t.Fatal(err)
@@ -424,6 +429,7 @@ func TestRewriteHistoryNeedsARemote(t *testing.T) {
 // A change made after the sync is not pushed: the rewrite under the locks
 // refuses, and so does one that finds origin moved on.
 func TestRewriteHistoryRechecksUnderTheLocks(t *testing.T) {
+	t.Parallel()
 	f := newRewriteFx(t, false)
 	f.moved(t)
 	a := f.org()
@@ -480,6 +486,7 @@ func cloneSessionOf(t *testing.T, f *rewriteFx) *testSession {
 // The push to origin fails: the history is made again here, the file is
 // kept, a sync is refused, and running it again pushes only.
 func TestRewriteHistoryResumesAfterAFailedPush(t *testing.T) {
+	t.Parallel()
 	f := newRewriteFx(t, false)
 	f.moved(t)
 	gone := f.bare + ".gone"
@@ -545,6 +552,7 @@ func TestRewriteHistoryResumesAfterAFailedPush(t *testing.T) {
 // The run stopped between making the history again and the record: it goes
 // on from the record, without making a second history.
 func TestRewriteHistoryResumesBeforeTheRecord(t *testing.T) {
+	t.Parallel()
 	f := newRewriteFx(t, false)
 	f.moved(t)
 	// a run that failed right after the record file was written
@@ -591,6 +599,7 @@ func TestRewriteHistoryResumesBeforeTheRecord(t *testing.T) {
 
 // A mirror that fails is a warning; origin has the history.
 func TestRewriteHistoryMirrorFailureIsAWarning(t *testing.T) {
+	t.Parallel()
 	f := newRewriteFx(t, true)
 	f.moved(t)
 	gone := f.mirror + ".gone"
@@ -620,6 +629,7 @@ func TestRewriteHistoryMirrorFailureIsAWarning(t *testing.T) {
 }
 
 func TestRewriteMessage(t *testing.T) {
+	t.Parallel()
 	a, b, other := model.NewULID(), model.NewULID(), model.NewULID()
 	set := map[model.ULID]bool{a: true, b: true}
 	drop := rewriteDrop(set)
@@ -672,6 +682,7 @@ func TestRewriteMessage(t *testing.T) {
 }
 
 func TestRewriteDrop(t *testing.T) {
+	t.Parallel()
 	a, other := model.NewULID(), model.NewULID()
 	drop := rewriteDrop(map[model.ULID]bool{a: true})
 	for p, want := range map[string]bool{
@@ -693,6 +704,7 @@ func TestRewriteDrop(t *testing.T) {
 // Someone pushes to origin between the failed push and the resume: the
 // resume refuses and changes nothing.
 func TestRewriteHistoryResumeRefusesWhenOriginMoved(t *testing.T) {
+	t.Parallel()
 	f := newRewriteFx(t, false)
 	f.moved(t)
 	gone := f.bare + ".gone"
@@ -734,6 +746,7 @@ func TestRewriteHistoryResumeRefusesWhenOriginMoved(t *testing.T) {
 // A run stops before or right after the commit of step 5: the file is
 // there already, and the next run does what is left.
 func TestRewriteHistoryResumesAroundStepFive(t *testing.T) {
+	t.Parallel()
 	for _, stopAt := range []int{1, 2} { // the purge commit, the record commit
 		f := newRewriteFx(t, false)
 		secret, err := f.org().Add(AddInput{Title: "Secret"})
@@ -788,6 +801,7 @@ func TestRewriteHistoryResumesAroundStepFive(t *testing.T) {
 // A broken progress file is refused by the sync and by a new run alike,
 // naming the file.
 func TestRewriteProgressFileBroken(t *testing.T) {
+	t.Parallel()
 	f := newRewriteFx(t, false)
 	f.moved(t)
 	a := f.org()
@@ -812,6 +826,7 @@ func TestRewriteProgressFileBroken(t *testing.T) {
 // What a purged live task leaves in the tasks outside the set: a reference
 // to it stays, as plain purge leaves it.
 func TestRewriteHistoryDanglingReference(t *testing.T) {
+	t.Parallel()
 	f := newRewriteFx(t, false)
 	a := f.org()
 	secret, err := a.Add(AddInput{Title: "Secret"})

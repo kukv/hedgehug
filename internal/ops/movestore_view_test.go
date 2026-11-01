@@ -11,6 +11,7 @@ import (
 // task, the references cut and who loses sight; the comments, worklogs and
 // bodies of the tasks are not in it.
 func TestMoveConfirmationHoldsOnlyTheView(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t) // API-3 has a comment "first" and a worklog "work"
 	_, err := f.ts.MoveStore(MoveStoreInput{Arg: "API-2", To: "org-b"})
 	mustCode(t, err, KindUsage, "confirm.required")
@@ -45,6 +46,7 @@ func TestMoveConfirmationHoldsOnlyTheView(t *testing.T) {
 // PrepareMoveStore is the entry for a caller that asks in its own way: it
 // returns the same view.
 func TestPrepareMoveStoreReturnsTheView(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	v, err := f.ts.PrepareMoveStore(f.in())
 	if err != nil {
@@ -57,6 +59,7 @@ func TestPrepareMoveStoreReturnsTheView(t *testing.T) {
 
 // The words for what a scoped schema loses are ops's, for every client.
 func TestScopedPlanLines(t *testing.T) {
+	t.Parallel()
 	var none *ScopedPlan
 	if len(none.Lines("org-b")) != 0 {
 		t.Error("a nil plan has lines")

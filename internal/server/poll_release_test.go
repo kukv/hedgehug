@@ -8,6 +8,7 @@ import (
 // swaps a rebuilt one in (D26); the poller then opens the store again and
 // tells the clients that its tasks changed.
 func TestSessionBeforeSwapReleasesTheStore(t *testing.T) {
+	t.Parallel()
 	ts, ch := pollServer(t)
 	_, e, err := ts.session().Entry()
 	if err != nil {

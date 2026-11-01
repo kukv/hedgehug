@@ -18,6 +18,7 @@ func forwardFile(ulid string) string {
 
 // Tasks skips a forward; forwardsOf yields it; Task names it with ErrForward.
 func TestForwards(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	a, b := mustULID(t, taskA), mustULID(t, taskB)
 	mustWrite(t, s, model.TaskPath(a), taskFile(taskA, "A"))
@@ -55,6 +56,7 @@ func TestForwards(t *testing.T) {
 
 // A forward can be removed (purge --moved).
 func TestForwardIsRemoved(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	b := mustULID(t, taskB)
 	mustWrite(t, s, model.TaskPath(b), forwardFile(taskB))

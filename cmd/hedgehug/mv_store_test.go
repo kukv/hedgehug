@@ -43,6 +43,7 @@ func (te *testEnv) putStoreSchema(name string, fn func(*schema.Schema)) {
 }
 
 func TestMvStoreYes(t *testing.T) {
+	t.Parallel()
 	te := newMoveStoreEnv(t)
 	got := te.ok("mv", "AA-1", "--store", "bravo-long", "--yes")
 	te.golden("out", got)
@@ -50,6 +51,7 @@ func TestMvStoreYes(t *testing.T) {
 }
 
 func TestMvStoreJSON(t *testing.T) {
+	t.Parallel()
 	te := newMoveStoreEnv(t)
 	out := te.ok("mv", "AA-2", "--store", "bravo-long", "--yes", "--json")
 	te.golden("json", out)
@@ -73,6 +75,7 @@ func TestMvStoreJSON(t *testing.T) {
 }
 
 func TestMvStoreConfirmOnATerminal(t *testing.T) {
+	t.Parallel()
 	te := newMoveStoreEnv(t)
 	te.terminal = true
 	te.stdin = "n\n"
@@ -87,6 +90,7 @@ func TestMvStoreConfirmOnATerminal(t *testing.T) {
 }
 
 func TestMvStoreWithoutAYesOffATerminal(t *testing.T) {
+	t.Parallel()
 	te := newMoveStoreEnv(t)
 	te.goldenRun("no-yes", 2, "mv", "AA-1", "--store", "bravo-long")
 	te.goldenRun("same-store", 2, "mv", "AA-1", "--store", "alpha", "--yes")
@@ -97,6 +101,7 @@ func TestMvStoreWithoutAYesOffATerminal(t *testing.T) {
 }
 
 func TestMvStoreScopedQuestion(t *testing.T) {
+	t.Parallel()
 	te := newMoveStoreEnv(t)
 	p := te.addJSON("--store", "alpha", "Scoped project", "--kind", "project")
 	te.putStoreSchema("alpha", func(sc *schema.Schema) {
@@ -119,6 +124,7 @@ func TestMvStoreScopedQuestion(t *testing.T) {
 }
 
 func TestMvStoreScopedDrop(t *testing.T) {
+	t.Parallel()
 	te := newMoveStoreEnv(t)
 	p := te.addJSON("--store", "alpha", "Scoped project", "--kind", "project")
 	te.putStoreSchema("alpha", func(sc *schema.Schema) {
@@ -129,6 +135,7 @@ func TestMvStoreScopedDrop(t *testing.T) {
 }
 
 func TestMvStoreAsksTheWorkspace(t *testing.T) {
+	t.Parallel()
 	te := newMoveStoreEnv(t)
 	te.ok("--store", "bravo-long", "workspace", "add", "second", "--prefix", "SEC")
 	te.goldenRun("off-terminal", 2, "mv", "AA-1", "--store", "bravo-long", "--yes")
@@ -138,6 +145,7 @@ func TestMvStoreAsksTheWorkspace(t *testing.T) {
 }
 
 func TestMvStoreTellsWhoCannotSeeItAnymore(t *testing.T) {
+	t.Parallel()
 	te := newMoveStoreEnv(t)
 	for name, ids := range map[string][]string{
 		"alpha":      {"github.com/alice", "github.com/bob", "github.com/carol"},

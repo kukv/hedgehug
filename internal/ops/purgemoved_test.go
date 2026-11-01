@@ -6,6 +6,7 @@ import (
 )
 
 func TestPurgeMovedListsAndRemoves(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	if _, err := f.ts.MoveStore(f.in()); err != nil {
 		t.Fatal(err)
@@ -59,6 +60,7 @@ func TestPurgeMovedListsAndRemoves(t *testing.T) {
 }
 
 func TestPurgeMovedNoneIsNoCommit(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	a := f.ts.ForStore("org-a")
 	head := f.head(t, "org-a")
@@ -74,6 +76,7 @@ func TestPurgeMovedNoneIsNoCommit(t *testing.T) {
 }
 
 func TestPurgeMovedForwardToAStoreNotMounted(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	if _, err := f.ts.MoveStore(f.in()); err != nil {
 		t.Fatal(err)
@@ -97,6 +100,7 @@ func TestPurgeMovedForwardToAStoreNotMounted(t *testing.T) {
 // The forwards are read again under the lock: when a sync or another
 // command took them away in between, there is nothing to commit.
 func TestPurgeMovedGoneUnderTheLockIsNoCommit(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	if _, err := f.ts.MoveStore(f.in()); err != nil {
 		t.Fatal(err)

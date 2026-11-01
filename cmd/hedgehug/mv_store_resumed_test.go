@@ -34,6 +34,7 @@ func unfinishedMove(t *testing.T, te *testEnv) {
 
 // A rerun that only finishes the source says so before the Moved lines.
 func TestMvStoreRerunSaysItFinishedTheMove(t *testing.T) {
+	t.Parallel()
 	te := newMoveStoreEnv(t)
 	unfinishedMove(t, te)
 	out := te.ok("mv", "AA-1", "--store", "bravo-long", "--yes")
@@ -50,6 +51,7 @@ func TestMvStoreRerunSaysItFinishedTheMove(t *testing.T) {
 
 // --json has resumed: true after a finished move, and no key otherwise.
 func TestMvStoreRerunJSONResumed(t *testing.T) {
+	t.Parallel()
 	te := newMoveStoreEnv(t)
 	unfinishedMove(t, te)
 	out := te.ok("mv", "AA-1", "--store", "bravo-long", "--yes", "--json")

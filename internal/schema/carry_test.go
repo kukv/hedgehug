@@ -6,6 +6,7 @@ import (
 )
 
 func TestCarry(t *testing.T) {
+	t.Parallel()
 	dest := Default() // no review status
 	sc := Scoped{
 		Where:    "project:01JBZ8K3QW7M2X9V4T6R5N8P0A",

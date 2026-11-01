@@ -11,6 +11,7 @@ import (
 // A task is not put over a forward by accident: a stale write for a task that
 // moved to another store would make the task live in two stores.
 func TestPutTaskOverAForwardIsRefused(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	x := newTask("x")
 	if _, err := s.Update(Op{Name: "add", Task: x.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(x) }); err != nil {

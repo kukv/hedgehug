@@ -31,6 +31,7 @@ func putCommit(t *testing.T, r *Repo, parent plumbing.Hash, author, committer ob
 }
 
 func TestHasSameCommit(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := Init(dir)
 	if err != nil {

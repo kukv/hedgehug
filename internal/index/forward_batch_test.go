@@ -11,6 +11,7 @@ import (
 // is the one the search of each alone gives: a plain forward, one that was
 // forwarded twice, one with former ids, and one with no history of a task.
 func TestColdBuildResolvesSeveralForwardsInOnePass(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	a := putWithID(t, s, newTask("a"), "OLD-1")
 	b := putWithID(t, s, newTask("b"))

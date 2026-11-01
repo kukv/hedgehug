@@ -379,6 +379,7 @@ func TestViolationsText(t *testing.T) {
 
 // force-push.json is told of as unexpected_force_push (D23).
 func TestDoctorFindsAnUnexpectedForcePush(t *testing.T) {
+	// 直列: t.Setenv
 	ts := newCheckedSession(t)
 	_, e, _ := ts.Entry()
 	file := filepath.Join(e.Path, ".hedgehug", "local", "force-push.json")

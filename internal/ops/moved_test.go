@@ -79,6 +79,7 @@ func wantMoved(t *testing.T, ts *testSession, err error, args map[string]any) {
 }
 
 func TestShowAMovedTaskSaysWhereItWent(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	ulid := movedFixture(t, ts)
 	_, err := ts.Show("org-a:API-1")
@@ -96,6 +97,7 @@ func TestShowAMovedTaskSaysWhereItWent(t *testing.T) {
 }
 
 func TestShowAMovedTaskOfAStoreNotMounted(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	movedFixture(t, ts)
 	c, _, err := ts.Config()
@@ -121,6 +123,7 @@ func TestShowAMovedTaskOfAStoreNotMounted(t *testing.T) {
 }
 
 func TestDepOnAMovedTask(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	if _, err := ts.ForStore("org-a").Add(AddInput{Title: "second"}); err != nil {
 		t.Fatal(err)
@@ -131,6 +134,7 @@ func TestDepOnAMovedTask(t *testing.T) {
 }
 
 func TestUndoRefusesMovesAndRewrites(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ op, why string }{
 		{"move-in", "a move between stores cannot be undone; move it back with hedgehug mv --store"},
 		{"move-out", "a move between stores cannot be undone; move it back with hedgehug mv --store"},
@@ -163,6 +167,7 @@ func TestUndoRefusesMovesAndRewrites(t *testing.T) {
 }
 
 func TestUndoOfATaskThatMovedSince(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	alice := ts.ForStore("org-a")
 	s, err := alice.OpenStore()
@@ -192,6 +197,7 @@ func headOf(t *testing.T, s *store.Store) string {
 
 // hh use names where a project went, as the other commands do.
 func TestUseAMovedProject(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	movedFixture(t, ts)
 	_, err := ts.ForStore("org-a").Use("API-1")
@@ -203,6 +209,7 @@ func hasKey(m map[string]any, k string) bool { _, ok := m[k]; return ok }
 // A forward the index cannot name still gives task.moved, with the keys of
 // the destination left out.
 func TestMovedUnknownErr(t *testing.T) {
+	t.Parallel()
 	ulid := model.NewULID()
 	err := movedUnknownErr(ulid)
 	var oe *Error

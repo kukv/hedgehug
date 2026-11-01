@@ -74,6 +74,7 @@ func (f *takeFx) path(t *testing.T) string {
 // first, the unpushed work is put back and pushed, nothing is left beside
 // the store, and the inbox tells of it.
 func TestSyncTakesInAHistoryRewrite(t *testing.T) {
+	t.Parallel()
 	f := newTakeFx(t)
 	path := f.path(t)
 	var told []string
@@ -175,6 +176,7 @@ func mustHead(t *testing.T, s *store.Store) plumbing.Hash {
 // A write that lands between the rebuild and the swap stops the swap with a
 // warning; the next sync makes the rebuild again.
 func TestSyncRebuildStaleIsAWarning(t *testing.T) {
+	t.Parallel()
 	f := newTakeFx(t)
 	var late *model.Task
 	f.clone.BeforeSwap = func(string) {
@@ -235,6 +237,7 @@ func (f *takeFx) breakSwap(t *testing.T) (path string) {
 // A store whose swap stopped does not open, says why, and is finished by the
 // next sync, which then takes the rewrite in as usual.
 func TestSyncFinishesAStoppedSwap(t *testing.T) {
+	t.Parallel()
 	f := newTakeFx(t)
 	path := f.breakSwap(t)
 	if _, err := os.Stat(path); !errors.Is(err, fs.ErrNotExist) {
@@ -263,6 +266,7 @@ func TestSyncFinishesAStoppedSwap(t *testing.T) {
 
 // A store with a leftover beside it opens with a warning, once.
 func TestOpenStoreWarnsOfALeftover(t *testing.T) {
+	t.Parallel()
 	f := newTakeFx(t)
 	path := f.path(t)
 	if err := os.MkdirAll(path+".before-rewrite-1", 0o750); err != nil {
@@ -294,6 +298,7 @@ func TestOpenStoreWarnsOfALeftover(t *testing.T) {
 // doctor finds a leftover as a warning and --fix finishes it, also when the
 // store itself is missing.
 func TestDoctorRewriteLeftover(t *testing.T) {
+	t.Parallel()
 	f := newTakeFx(t)
 	path := f.breakSwap(t)
 	rs, err := f.clone.Doctor(false)
@@ -338,6 +343,7 @@ func TestDoctorRewriteLeftover(t *testing.T) {
 // With the store there, a leftover is removed: the old store of a finished
 // swap, and a rebuild never swapped in.
 func TestDoctorFixRemovesTheOldStore(t *testing.T) {
+	t.Parallel()
 	f := newTakeFx(t)
 	path := f.path(t)
 	for _, suffix := range []string{".before-rewrite-1", ".rewrite-new"} {

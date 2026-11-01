@@ -6,6 +6,7 @@ import (
 )
 
 func TestRewritesRoundTrip(t *testing.T) {
+	t.Parallel()
 	rs := []Rewrite{
 		{At: time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC), Before: "abc123", ULIDs: []ULID{NewULID(), NewULID()}},
 		{At: time.Date(2026, 11, 3, 9, 0, 0, 0, time.UTC), Before: "def456", ULIDs: []ULID{NewULID()}},
@@ -24,6 +25,7 @@ func TestRewritesRoundTrip(t *testing.T) {
 }
 
 func TestDecodeRewritesEmptyAndBroken(t *testing.T) {
+	t.Parallel()
 	for _, in := range []string{"", "# only a comment\n", "[]\n"} {
 		rs, err := DecodeRewrites([]byte(in))
 		if err != nil || len(rs) != 0 {

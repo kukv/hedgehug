@@ -12,6 +12,7 @@ import (
 // Unfinished, the one whose directory is missing is skipped with the same
 // reason.
 func TestOpenTellsOfALeftoverRebuild(t *testing.T) {
+	t.Parallel()
 	here := newStoreAt(t, "here", "HRE")
 	away := newStoreAt(t, "away", "AWY")
 	if err := os.MkdirAll(here.Path+".rewrite-new", 0o750); err != nil {

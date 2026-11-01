@@ -19,6 +19,7 @@ import (
 // D34: a task whose forward was purged is still a target of the rewrite, as
 // long as its file is in the history of the store.
 func TestRewriteHistoryAfterPurgeMoved(t *testing.T) {
+	t.Parallel()
 	f := newRewriteFx(t, false)
 	f.moved(t)
 	if _, _, err := f.org().PurgeMoved(true); err != nil {
@@ -58,6 +59,7 @@ func TestRewriteHistoryAfterPurgeMoved(t *testing.T) {
 }
 
 func TestRewriteHistoryAfterPurgeMovedWithStore(t *testing.T) {
+	t.Parallel()
 	f := newRewriteFx(t, false)
 	f.moved(t)
 	if _, _, err := f.org().PurgeMoved(true); err != nil {
@@ -74,6 +76,7 @@ func TestRewriteHistoryAfterPurgeMovedWithStore(t *testing.T) {
 // tasksInHistory answers for several tasks in one pass: the live, the moved
 // whose forward is purged, and one that never was there.
 func TestTasksInHistorySeveralULIDs(t *testing.T) {
+	t.Parallel()
 	f := newRewriteFx(t, false)
 	f.moved(t)
 	if _, _, err := f.org().PurgeMoved(true); err != nil {
@@ -101,6 +104,7 @@ func TestTasksInHistorySeveralULIDs(t *testing.T) {
 // parent) is found, whether the side deleted it before the merge or the
 // merge deleted it.
 func TestTasksInHistoryOnTheMergedInSide(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := gitrepo.Init(dir)
 	if err != nil {
@@ -160,6 +164,7 @@ func TestTasksInHistoryOnTheMergedInSide(t *testing.T) {
 
 // With two stores that have the task in their history, the user picks.
 func TestRewriteHistoryTwoStoresHaveItInTheHistory(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	c, p, err := f.ts.Config()
 	if err != nil {

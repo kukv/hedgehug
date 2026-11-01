@@ -86,6 +86,7 @@ func inProcess(t *testing.T, u *devUser, input string, args ...string) (int, str
 // TestE2EPhase3c is the 3c of the design: a move between stores, what the
 // other members see of it, and the rewrite of the history.
 func TestE2EPhase3c(t *testing.T) {
+	t.Parallel()
 	bin, devenv := buildHedgehug(t), buildDevenv(t)
 	dev, fake, _ := initDevenv(t, devenv)
 	alice, bob := devUserOf(t, bin, devenv, dev, "alice"), devUserOf(t, bin, devenv, dev, "bob")

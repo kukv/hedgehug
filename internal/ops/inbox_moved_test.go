@@ -31,6 +31,7 @@ func addMovedItem(t *testing.T, ts *testSession, ulid model.ULID, path, field st
 }
 
 func TestInboxListSaysWhereAMovedTaskIs(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	ulid := movedFixture(t, ts)
 	addMovedItem(t, ts, ulid, model.TaskPath(ulid), "*")
@@ -47,6 +48,7 @@ func TestInboxListSaysWhereAMovedTaskIs(t *testing.T) {
 }
 
 func TestInboxListSaysTheStoreOfAMovedTaskNotMounted(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	ulid := movedFixture(t, ts)
 	addMovedItem(t, ts, ulid, model.CommentPath(ulid, model.NewULID()), "*")
@@ -75,6 +77,7 @@ func TestInboxListSaysTheStoreOfAMovedTaskNotMounted(t *testing.T) {
 }
 
 func TestInboxRevertOfAMovedTask(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	ulid := movedFixture(t, ts)
 	item := addMovedItem(t, ts, ulid, model.TaskPath(ulid), "title")
@@ -93,6 +96,7 @@ func TestInboxRevertOfAMovedTask(t *testing.T) {
 }
 
 func TestRepairedContentOfMoves(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	ulid := movedFixture(t, ts)
 	ix := mustIndex(t, ts, "org-a")

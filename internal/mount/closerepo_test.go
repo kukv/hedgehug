@@ -32,6 +32,7 @@ func newStoresIn(t *testing.T, root string, names ...string) []config.StoreEntry
 // Stores that share a directory read it once; each still gets its own
 // leftovers, and none gets those of a neighbour.
 func TestOpenStoresInOneDirectoryEachGetsItsOwnLeftover(t *testing.T) {
+	t.Parallel()
 	es := newStoresIn(t, t.TempDir(), "one", "two", "three", "onetwo")
 	// a rebuild beside "one", and an old store beside "two"; "three" and
 	// "onetwo" (whose name starts like "one") have none
@@ -61,6 +62,7 @@ func TestOpenStoresInOneDirectoryEachGetsItsOwnLeftover(t *testing.T) {
 // After CloseRepo the store is not used any more, and a set opened again
 // works; the closed one reopens its store when it is used (With).
 func TestCloseRepoThenTheSetIsOpenedAgain(t *testing.T) {
+	t.Parallel()
 	e := newStoreAt(t, "here", "HRE")
 	tasks := putTasks(t, e, 2, nil)
 	c := &config.Config{Stores: []config.StoreEntry{e}}

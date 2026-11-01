@@ -141,6 +141,7 @@ func TestNewTaskEncode(t *testing.T) {
 }
 
 func TestDecodeTaskRefusesForward(t *testing.T) {
+	t.Parallel()
 	// A file with moved_to is a forward, not a task: DecodeForward reads it.
 	_, err := DecodeTask([]byte("---\nulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nmoved_to: 01JC0M3R5W7M2X9V4T6R5N8P1B\n---\n"))
 	if !errors.Is(err, ErrForward) {

@@ -76,6 +76,7 @@ func newRewriteScene(t *testing.T, c *cluster, work func(sc *rewriteScene)) *rew
 // The unpushed work of the clone is put back on the new history; what it
 // did to the purged task is not, and is told of.
 func TestRebuildReplaysUnpushedChanges(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	sc := newRewriteScene(t, c, func(sc *rewriteScene) {
 		c.set(1, sc.other.ULID, func(x *model.Task) { x.Title = "other by b" })
@@ -156,6 +157,7 @@ func TestRebuildReplaysUnpushedChanges(t *testing.T) {
 
 // A clone with nothing unpushed is rebuilt as the new origin.
 func TestRebuildWithoutUnpushedChanges(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	sc := newRewriteScene(t, c, func(*rewriteScene) {})
 	if sc.res.Rebuild.Replayed != 0 || len(sc.res.Rebuild.Purged) != 0 {
@@ -170,6 +172,7 @@ func TestRebuildWithoutUnpushedChanges(t *testing.T) {
 // A change both the rewriting clone and this one made to a field is decided
 // as a merge decides it, and the loser is recorded.
 func TestRebuildMergesConflicts(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	c.addTask(0, "keep")
 	gone := c.addTask(0, "gone")
@@ -210,6 +213,7 @@ func TestRebuildMergesConflicts(t *testing.T) {
 
 // A write that lands between the rebuild and the swap stops the swap.
 func TestSwapStale(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	sc := newRewriteScene(t, c, func(*rewriteScene) {})
 	late := c.addTask(1, "late")
@@ -241,6 +245,7 @@ func TestSwapStale(t *testing.T) {
 
 // A change git has not committed stops the swap too, and the rebuild.
 func TestRebuildRefusesUncommittedChanges(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	keep := c.addTask(0, "keep")
 	gone := c.addTask(0, "gone")
@@ -275,6 +280,7 @@ func exists(t *testing.T, p string) bool {
 
 // A swap that stopped after the old store was moved away is finished.
 func TestFinishLeftoverNoStore(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	sc := newRewriteScene(t, c, func(*rewriteScene) {})
 	dir := c.stores[1].Dir()
@@ -306,6 +312,7 @@ func TestFinishLeftoverNoStore(t *testing.T) {
 // With the new store in place, the old one is removed; a rebuild never
 // swapped is removed; with only the old one left, it is put back.
 func TestFinishLeftoverOtherStates(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	dir := filepath.Join(root, "s")
 	mk := func(p string) {
@@ -349,6 +356,7 @@ func TestFinishLeftoverOtherStates(t *testing.T) {
 // The local files of an old store the swap did not carry over are brought
 // over before it goes; one that cannot be read keeps the old store.
 func TestFinishLeftoverCarriesLocalFiles(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	dir := filepath.Join(root, "s")
 	before := dir + ".before-rewrite-1"
@@ -404,6 +412,7 @@ func TestFinishLeftoverCarriesLocalFiles(t *testing.T) {
 
 // The neighbours of other names are not a leftover.
 func TestFindLeftoverIgnoresOtherNames(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	dir := filepath.Join(root, "s")
 	for _, n := range []string{"s", "s2.rewrite-new", "s2.before-rewrite-1", "t.rewrite-new"} {
@@ -422,6 +431,7 @@ func TestFindLeftoverIgnoresOtherNames(t *testing.T) {
 // What the other clone did after the rewrite is new to this clone's inbox,
 // though the history it comes in is not the one the inbox followed.
 func TestRebuildInboxSeesWhatCameAfterTheRewrite(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	c.addTask(0, "keep")
 	gone := c.addTask(0, "gone")

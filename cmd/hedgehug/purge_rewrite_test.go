@@ -43,6 +43,7 @@ func remoteMain(t *testing.T, bare string) string {
 }
 
 func TestPurgeRewriteHistoryNeedsATerminal(t *testing.T) {
+	t.Parallel()
 	te, remote, _ := newRewriteEnv(t)
 	before := remoteMain(t, remote)
 	te.goldenRun("without-yes", 2, "purge", "--rewrite-history", "AA-2", "--store", "alpha")
@@ -54,6 +55,7 @@ func TestPurgeRewriteHistoryNeedsATerminal(t *testing.T) {
 }
 
 func TestPurgeRewriteHistoryCanceled(t *testing.T) {
+	t.Parallel()
 	te, remote, _ := newRewriteEnv(t)
 	before := remoteMain(t, remote)
 	te.terminal = true
@@ -68,6 +70,7 @@ func TestPurgeRewriteHistoryCanceled(t *testing.T) {
 }
 
 func TestPurgeRewriteHistory(t *testing.T) {
+	t.Parallel()
 	te, remote, ulid := newRewriteEnv(t)
 	te.terminal = true
 	te.stdin = "alpha\n"
@@ -106,6 +109,7 @@ func TestPurgeRewriteHistory(t *testing.T) {
 }
 
 func TestPurgeRewriteHistoryJSON(t *testing.T) {
+	t.Parallel()
 	te, remote, _ := newRewriteEnv(t)
 	te.terminal = true
 	te.stdin = "alpha\n"
@@ -135,6 +139,7 @@ func TestPurgeRewriteHistoryJSON(t *testing.T) {
 }
 
 func TestPurgeRewriteHistoryUsage(t *testing.T) {
+	t.Parallel()
 	te, _, _ := newRewriteEnv(t)
 	te.goldenRun("no-id", 2, "purge", "--rewrite-history", "--store", "alpha")
 	te.goldenRun("with-moved", 2, "purge", "--rewrite-history", "--moved", "AA-2", "--store", "alpha")

@@ -31,6 +31,7 @@ func commitAt(t *testing.T, r *Repo, dir string, n int, subject string, files ma
 }
 
 func TestRewriteHistory(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := Init(dir)
 	if err != nil {
@@ -133,6 +134,7 @@ func TestRewriteHistory(t *testing.T) {
 }
 
 func TestRewriteHistoryNilFuncs(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	h := commitHead(t, r, dir, map[string]string{"a.md": "a\n"})
@@ -143,6 +145,7 @@ func TestRewriteHistoryNilFuncs(t *testing.T) {
 }
 
 func TestResetMain(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	first := commitHead(t, r, dir, map[string]string{"a.md": "a\n", "b.md": "b\n", ".gitignore": ".hedgehug/local/\n"})
@@ -205,6 +208,7 @@ func TestResetMain(t *testing.T) {
 }
 
 func TestRewriteTreeOrder(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	h := commitHead(t, r, dir, map[string]string{"a/x.md": "x\n", "a.md": "a\n", "a-b.md": "b\n", "drop.md": "d\n"})
@@ -227,6 +231,7 @@ func TestRewriteTreeOrder(t *testing.T) {
 }
 
 func TestRewriteDropsSignatureHeaders(t *testing.T) {
+	t.Parallel()
 	got := keptHeaders([]object.ExtraHeader{{Key: "mergetag", Value: "x"}, {Key: "gpgsig-sha256", Value: "y"}, {Key: "foo", Value: "z"}})
 	if len(got) != 1 || got[0].Key != "foo" {
 		t.Errorf("keptHeaders = %v", got)
@@ -234,6 +239,7 @@ func TestRewriteDropsSignatureHeaders(t *testing.T) {
 }
 
 func TestForcePush(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	a, _ := cloneTwo(t, remote)
 	old := commitHead(t, a.r, a.dir, map[string]string{"x.md": "x\n", "y.md": "y\n"})
@@ -276,6 +282,7 @@ func TestForcePush(t *testing.T) {
 }
 
 func TestClose(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	h := commitHead(t, r, dir, map[string]string{"a.md": "a\n"})
@@ -294,6 +301,7 @@ func TestClose(t *testing.T) {
 // A lease that is not the remote's main is ErrRejected and changes nothing;
 // the right one goes through.
 func TestForcePushLease(t *testing.T) {
+	t.Parallel()
 	remote := newBare(t)
 	a, b := cloneTwo(t, remote)
 	old := commitHead(t, a.r, a.dir, map[string]string{"x.md": "x\n", "y.md": "y\n"})

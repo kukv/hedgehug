@@ -41,6 +41,7 @@ func newForwardEnv(t *testing.T) *testEnv {
 }
 
 func TestPurgeMovedListAndConfirmOnATerminal(t *testing.T) {
+	t.Parallel()
 	te := newForwardEnv(t)
 	te.terminal = true
 	te.stdin = "n\n"
@@ -58,6 +59,7 @@ func TestPurgeMovedListAndConfirmOnATerminal(t *testing.T) {
 }
 
 func TestPurgeMovedYesAndJSON(t *testing.T) {
+	t.Parallel()
 	te := newForwardEnv(t)
 	te.goldenRun("without-yes", 2, "purge", "--moved", "--store", "alpha")
 	out := te.ok("purge", "--moved", "--store", "alpha", "--yes", "--json")
@@ -80,12 +82,14 @@ func TestPurgeMovedYesAndJSON(t *testing.T) {
 }
 
 func TestPurgeMovedYesText(t *testing.T) {
+	t.Parallel()
 	te := newForwardEnv(t)
 	te.goldenOK("yes", "purge", "--moved", "--store", "alpha", "--yes")
 	te.goldenOK("none", "purge", "--moved", "--store", "alpha", "--yes")
 }
 
 func TestPurgeMovedNeedsAStoreWhenThereAreSeveral(t *testing.T) {
+	t.Parallel()
 	te := newForwardEnv(t)
 	te.goldenRun("no-store", 1, "purge", "--moved", "--yes")
 }
@@ -93,6 +97,7 @@ func TestPurgeMovedNeedsAStoreWhenThereAreSeveral(t *testing.T) {
 // A forward to a store that is not mounted is listed with the ULID of that
 // store.
 func TestPurgeMovedListsAStoreNotMounted(t *testing.T) {
+	t.Parallel()
 	te := newForwardEnv(t)
 	te.ok("store", "remove", "bravo-long")
 	te.terminal = true
@@ -104,6 +109,7 @@ func TestPurgeMovedListsAStoreNotMounted(t *testing.T) {
 }
 
 func TestPurgeMovedAndAnIDDoNotMix(t *testing.T) {
+	t.Parallel()
 	te := newForwardEnv(t)
 	te.goldenRun("with-id", 2, "purge", "--moved", "AA-1", "--store", "alpha", "--yes")
 	te.goldenRun("neither", 2, "purge", "--store", "alpha")
@@ -112,6 +118,7 @@ func TestPurgeMovedAndAnIDDoNotMix(t *testing.T) {
 // The forward file a mounted-nowhere store leaves is told of by doctor as an
 // info, which does not fail it.
 func TestDoctorForwardTargetIsAnInfo(t *testing.T) {
+	t.Parallel()
 	te := newForwardEnv(t)
 	te.ok("store", "remove", "bravo-long")
 	te.goldenRun("text", 0, "doctor")
@@ -120,6 +127,7 @@ func TestDoctorForwardTargetIsAnInfo(t *testing.T) {
 
 // The same ULID live in two stores is a warning of doctor and of a sync.
 func TestDuplicateAcrossStoresIsAWarning(t *testing.T) {
+	t.Parallel()
 	te := newTestEnv(t)
 	remote := te.bare("shared")
 	te.ok("store", "init", "alpha", "--prefix", "AA", "--remote", remote)
@@ -153,6 +161,7 @@ func TestDuplicateAcrossStoresIsAWarning(t *testing.T) {
 // Two users move the same task to different stores at the same time. The
 // duplicate arrives with the sync of the store the other one moved it to.
 func TestSyncBringsADuplicateAcrossStores(t *testing.T) {
+	t.Parallel()
 	alice := newTestEnv(t)
 	remoteA, remoteB := alice.bare("alpha"), alice.bare("bravo")
 	alice.ok("store", "init", "alpha", "--prefix", "AA", "--remote", remoteA)
@@ -176,6 +185,7 @@ func TestSyncBringsADuplicateAcrossStores(t *testing.T) {
 // A --fix of a later store can renumber a task that lives in two stores; the
 // warning names the id it has after the repairs.
 func TestDoctorFixShowsTheRenumberedIDOfADuplicate(t *testing.T) {
+	t.Parallel()
 	te := newTwoStoreEnv(t)
 	te.addJSON("--store", "alpha", "Crossed")
 	path, old := te.storeTaskFile("alpha", "AA-3")

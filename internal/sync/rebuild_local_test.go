@@ -12,6 +12,7 @@ import (
 // What changed in .hedgehug/local after the copy and before the swap is
 // carried over, and the notices of the rebuild stay in the inbox.
 func TestSwapCarriesLocalChangesMadeAfterTheCopy(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	sc := newRewriteScene(t, c, func(sc *rewriteScene) {
 		c.set(1, sc.gone.ULID, func(x *model.Task) { x.Title = "gone by b" })

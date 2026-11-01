@@ -8,6 +8,7 @@ import (
 // Two forwards that name the same store lose nothing, whatever else differs
 // in the bytes of the files.
 func TestMergeTwoForwardsOfTheSameStoreRecordNothing(t *testing.T) {
+	t.Parallel()
 	base := task("2026-10-31T10:00:00Z", "title: old")
 	plain := forwardFile(taskU, storeB)
 	spaced := []byte("---\nmoved_to:   " + storeB + "\nulid: " + taskU + "\n---\n\n")

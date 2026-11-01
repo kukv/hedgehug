@@ -15,6 +15,7 @@ import (
 // before the swap: no lock file of the store is held when the directory is
 // renamed (Windows cannot rename a directory with an open file).
 func TestBackgroundSyncSwapsWithNoLockHeld(t *testing.T) {
+	t.Parallel()
 	f := newTakeFx(t)
 	path := f.path(t)
 	f.clone.appendConfig("sync:\n  push_interval: 1ms\n")

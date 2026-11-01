@@ -289,6 +289,7 @@ func TestTaskBothCreated(t *testing.T) {
 // A value that is the empty one of its field (no parent) is a value too when
 // both sides made the file: the other side's value does not win silently.
 func TestTaskBothCreatedEmptyValueIsRecorded(t *testing.T) {
+	t.Parallel()
 	const parent = "01JBZ8K3QW7M2X9V4T6R5N8P0B"
 	root := task("2026-10-31T11:00:00Z", "title: a")
 	child := task("2026-10-31T12:00:00Z", "title: a", "parent: "+parent)

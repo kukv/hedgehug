@@ -38,6 +38,7 @@ func movedPair(t *testing.T) (a, b config.StoreEntry, task *model.Task) {
 // A task found in another store wins over a forward; only an input that is
 // no task anywhere names the move.
 func TestResolveForward(t *testing.T) {
+	t.Parallel()
 	a, b, task := movedPair(t)
 	set := openSet(t, a, b)
 	for _, in := range []string{"API-12", "api-12", task.ULID.String()} {
@@ -65,6 +66,7 @@ func TestResolveForward(t *testing.T) {
 }
 
 func TestResolveForwardOfAStoreNotMounted(t *testing.T) {
+	t.Parallel()
 	a, _, task := movedPair(t)
 	set := openSet(t, a)
 	for _, in := range []string{"API-12", task.ULID.String()} {

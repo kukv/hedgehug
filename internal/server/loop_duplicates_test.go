@@ -12,6 +12,7 @@ import (
 // A warning that stays is logged once; one that goes away and comes back is
 // logged again; the warnings of another store are not touched.
 func TestLogWarningsTellsAnEpisodeOnce(t *testing.T) {
+	t.Parallel()
 	ts := newTestServer(t)
 	l := ts.srv.loop
 	count := func() int { return strings.Count(ts.log.String(), "sync me: warning: mirror down") }
@@ -34,6 +35,7 @@ func TestLogWarningsTellsAnEpisodeOnce(t *testing.T) {
 // The background sync of a store tells of a task that lives in two stores,
 // once, not at every sync.
 func TestBackgroundSyncTellsOfADuplicateOnce(t *testing.T) {
+	t.Parallel()
 	ts := twoStores(t)
 	ts.addRemote()
 	ss := ts.session()

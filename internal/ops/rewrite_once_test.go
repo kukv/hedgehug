@@ -10,6 +10,7 @@ import (
 // A rewrite that was prepared and confirmed syncs the store once: the sync
 // of PrepareRewrite, not a second one after the name was typed.
 func TestRewriteHistorySyncsOnceAfterAConfirmation(t *testing.T) {
+	t.Parallel()
 	f := newRewriteFx(t, false)
 	f.moved(t)
 	a := f.org()

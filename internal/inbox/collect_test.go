@@ -450,6 +450,7 @@ func TestCollectRepairedTrailers(t *testing.T) {
 // The trailers of a forward winning a merge: the whole file lost under a
 // forward, a child sent to the root and a reference removed.
 func TestCollectMovedTrailers(t *testing.T) {
+	t.Parallel()
 	_, b := twoClones(t)
 	x := addTask(t, b, "x", nil)
 	y := addTask(t, b, "y", nil)

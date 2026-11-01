@@ -12,6 +12,7 @@ import (
 // process does not keep the holder out of the store: the holder's own
 // Update, which needs s.mu, goes through at once.
 func TestCommitMergeWaitsWithoutHoldingTheMutex(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t)
 	s.lockWait = 3 * time.Second
 	head, err := s.repo.Head()

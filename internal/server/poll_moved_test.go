@@ -12,6 +12,7 @@ import (
 // A task that became a forward is no longer in the store's list: the poller
 // tells so as removed, not as changed (a refetch would get task.moved).
 func TestPollMovedTaskIsRemoved(t *testing.T) {
+	t.Parallel()
 	ts := twoStores(t)
 	ss := ts.session()
 	ss.StoreName = "me"
@@ -37,11 +38,22 @@ func TestPollMovedTaskIsRemoved(t *testing.T) {
 	if _, err := ts.session().MoveStore(ops.MoveStoreInput{Arg: moved.ULID.String(), To: "team", Yes: true}); err != nil {
 		t.Fatal(err)
 	}
-	e := waitEvent[tasksChanged](t, ch, func(e tasksChanged) bool { return e.Store == "me" && e.Op == "move-out" })
+	// The poller reads the two stores in no fixed order, so the two events
+	// come in either order.
+	var e, in tasksChanged
+	var gotOut, gotIn bool
+	waitEvent(t, ch, func(ev tasksChanged) bool {
+		switch {
+		case ev.Store == "me" && ev.Op == "move-out":
+			e, gotOut = ev, true
+		case ev.Store == "team" && ev.Op == "move-in":
+			in, gotIn = ev, true
+		}
+		return gotOut && gotIn
+	})
 	if !slices.Contains(e.Removed, moved.ULID.String()) || slices.Contains(e.ULIDs, moved.ULID.String()) {
 		t.Errorf("move-out event = %+v; want the task removed, not changed", e)
 	}
-	in := waitEvent[tasksChanged](t, ch, func(e tasksChanged) bool { return e.Store == "team" && e.Op == "move-in" })
 	if !slices.Contains(in.ULIDs, moved.ULID.String()) {
 		t.Errorf("move-in event = %+v; want the task changed", in)
 	}

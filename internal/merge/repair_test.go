@@ -425,6 +425,7 @@ func TestRepairBrokenParentIsNotDeleted(t *testing.T) {
 
 // A forward is not a task, and not a broken file either: it is left as it is.
 func TestRepairSkipsForwards(t *testing.T) {
+	t.Parallel()
 	x, fwd := "01JD0000000000000000000001", "01JD0000000000000000000002"
 	forward := []byte("---\nulid: " + fwd + "\nmoved_to: 01JC0M3R5W7M2X9V4T6R5N8P1B\n---\n")
 	f := memFiles{

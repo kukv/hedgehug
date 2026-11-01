@@ -52,6 +52,7 @@ func compareUnlink(a, b Unlink) int {
 }
 
 func TestUnlinks(t *testing.T) {
+	t.Parallel()
 	sc := schema.Default()
 	a, b, c, x, y := newTask("a"), newTask("b"), newTask("c"), newTask("x"), newTask("y")
 	a.BlockedBy = []model.ULID{b.ULID, x.ULID} // one inside M, one out
@@ -189,6 +190,7 @@ func (f *moveFixture) restSorted() []string {
 }
 
 func TestMoveIn(t *testing.T) {
+	t.Parallel()
 	f := newMoveFixture(t, "SRC", "DST", nil)
 	sib := newTaskIn(f.dstWS, "sibling") // DST-1; the root goes after it
 	sib.Rank = "a5"
@@ -263,6 +265,7 @@ func TestMoveIn(t *testing.T) {
 
 // Without Op.Task the root's Hedgehug-Task is added by MoveIn.
 func TestMoveInNamesTheRootWhenTheOpDoesNot(t *testing.T) {
+	t.Parallel()
 	f := newMoveFixture(t, "SRC", "DST", nil)
 	if _, err := f.dst.Update(Op{Name: "move-in", Detail: "x", Author: testAuthor}, func(tx *Tx) error { return tx.MoveIn(f.in()) }); err != nil {
 		t.Fatal(err)
@@ -273,6 +276,7 @@ func TestMoveInNamesTheRootWhenTheOpDoesNot(t *testing.T) {
 }
 
 func TestMoveInUnderAParent(t *testing.T) {
+	t.Parallel()
 	f := newMoveFixture(t, "SRC", "DST", nil)
 	parent := newTaskIn(f.dstWS, "parent")
 	mustPut(t, f.dst, parent)
@@ -288,6 +292,7 @@ func TestMoveInUnderAParent(t *testing.T) {
 }
 
 func TestMoveInSamePrefixGetsNewNumbers(t *testing.T) {
+	t.Parallel()
 	f := newMoveFixture(t, "ABC", "ABC", nil)
 	mustPut(t, f.dst, newTaskIn(f.dstWS, "early"), newTaskIn(f.dstWS, "early2"), newTaskIn(f.dstWS, "early3"))
 	if f.p.ID != "ABC-2" || f.c.ID != "ABC-3" {
@@ -309,6 +314,7 @@ func TestMoveInSamePrefixGetsNewNumbers(t *testing.T) {
 }
 
 func TestMoveInKeepsFormerIDs(t *testing.T) {
+	t.Parallel()
 	f := newMoveFixture(t, "SRC", "DST", nil)
 	f.p.FormerIDs = []string{"OLD-9"}
 	if err := f.moveIn(f.in()); err != nil {
@@ -321,6 +327,7 @@ func TestMoveInKeepsFormerIDs(t *testing.T) {
 }
 
 func TestMoveInRefusesWhatTheSchemaDoes(t *testing.T) {
+	t.Parallel()
 	sc := schema.Default()
 	sc.Kinds = slices.DeleteFunc(sc.Kinds, func(k schema.Kind) bool { return k.Name == "bug" })
 	f := newMoveFixture(t, "SRC", "DST", sc)
@@ -336,6 +343,7 @@ func TestMoveInRefusesWhatTheSchemaDoes(t *testing.T) {
 }
 
 func TestMoveInScoped(t *testing.T) {
+	t.Parallel()
 	f := newMoveFixture(t, "SRC", "DST", nil)
 	in := f.in()
 	in.Scoped = []schema.Scoped{{Where: "project:" + f.p.ULID.String(), Statuses: scopedStatuses}}
@@ -354,6 +362,7 @@ func TestMoveInScoped(t *testing.T) {
 }
 
 func TestMoveInScopedSeveral(t *testing.T) {
+	t.Parallel()
 	f := newMoveFixture(t, "SRC", "DST", nil)
 	in := f.in()
 	in.Scoped = []schema.Scoped{
@@ -369,6 +378,7 @@ func TestMoveInScopedSeveral(t *testing.T) {
 }
 
 func TestNoteFiles(t *testing.T) {
+	t.Parallel()
 	f := newMoveFixture(t, "SRC", "DST", nil)
 	got, err := f.src.NoteFiles(f.c.ULID)
 	if err != nil {
@@ -384,6 +394,7 @@ func TestNoteFiles(t *testing.T) {
 }
 
 func TestMoveInRefusesBadInput(t *testing.T) {
+	t.Parallel()
 	f := newMoveFixture(t, "SRC", "DST", nil)
 	in := f.in()
 	in.Tasks = []*model.Task{f.p, f.g} // G's parent C is not moved
@@ -398,6 +409,7 @@ func TestMoveInRefusesBadInput(t *testing.T) {
 }
 
 func TestMoveOut(t *testing.T) {
+	t.Parallel()
 	f := newMoveFixture(t, "SRC", "DST", nil)
 	scoped := "project:" + f.p.ULID.String()
 	sc, err := cloneSchema(f.src.Schema())
@@ -471,6 +483,7 @@ func TestMoveOut(t *testing.T) {
 }
 
 func TestMoveOutNumbersOnlyOfThisStoresPrefixes(t *testing.T) {
+	t.Parallel()
 	f := newMoveFixture(t, "SRC", "DST", nil)
 	f.c.FormerIDs = []string{"ELSE-77", "SRC-9"}
 	mustPut(t, f.src, f.c)
@@ -487,6 +500,7 @@ func TestMoveOutNumbersOnlyOfThisStoresPrefixes(t *testing.T) {
 // pass the destination's validation in one Tx, and the source ends with
 // forwards.
 func TestMoveBothSides(t *testing.T) {
+	t.Parallel()
 	f := newMoveFixture(t, "SRC", "DST", nil)
 	l, err := LockInOrder(f.dst, f.src)
 	if err != nil {
@@ -516,6 +530,7 @@ func TestMoveBothSides(t *testing.T) {
 }
 
 func TestLockInOrder(t *testing.T) {
+	// 直列: パッケージ変数 afterLock の差し替え
 	a, _ := newMoveStore(t, "a", "AAA", nil)
 	b, _ := newMoveStore(t, "b", "BBB", nil)
 	var order []string
@@ -576,6 +591,7 @@ func TestLockInOrder(t *testing.T) {
 }
 
 func TestLockInOrderFailureReleasesWhatItTook(t *testing.T) {
+	t.Parallel()
 	a, _ := newMoveStore(t, "a", "AAA", nil)
 	b, _ := newMoveStore(t, "b", "BBB", nil)
 	b.lockWait = 50 * time.Millisecond
@@ -598,6 +614,7 @@ func TestLockInOrderFailureReleasesWhatItTook(t *testing.T) {
 
 // A property that lists several tasks loses only the one cut.
 func TestMoveInKeepsTheOtherTargetsOfAProperty(t *testing.T) {
+	t.Parallel()
 	f := newMoveFixture(t, "SRC", "DST", nil)
 	f.c.Props.Set("relates", ulidList(f.out.ULID, f.g.ULID))
 	mustPut(t, f.src, f.c)
@@ -620,6 +637,7 @@ func TestMoveInKeepsTheOtherTargetsOfAProperty(t *testing.T) {
 // The sprint and the releases of the tasks moved are cut, and stay in the
 // source's tasks only as the forward leaves nothing; links stay.
 func TestMoveInTakesOffSprintAndReleases(t *testing.T) {
+	t.Parallel()
 	f := newMoveFixture(t, "SRC", "DST", nil)
 	sprint, r1, r2 := model.NewULID(), model.NewULID(), model.NewULID()
 	// a sprint and releases of the source's workspace, as a task may name only those
@@ -674,6 +692,7 @@ func TestMoveInTakesOffSprintAndReleases(t *testing.T) {
 // The scoped entry a move brings is in force for the validation of the
 // tasks of the same Tx: a field the entry requires for a status is checked.
 func TestMoveInValidatesAgainstTheScopedItBrings(t *testing.T) {
+	t.Parallel()
 	f := newMoveFixture(t, "SRC", "DST", nil)
 	f.g.Status = "backlog"
 	if err := f.moveIn(f.in()); err != nil {

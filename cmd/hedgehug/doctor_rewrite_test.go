@@ -13,6 +13,7 @@ import (
 // rebuilt one not yet in its place) is a warning of doctor, and --fix swaps
 // it in.
 func TestDoctorFixFinishesAStoppedRewriteSwap(t *testing.T) {
+	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("add", "Alpha")
 	dir := te.storeDir("me")

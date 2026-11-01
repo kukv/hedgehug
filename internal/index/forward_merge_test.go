@@ -15,6 +15,7 @@ import (
 // A forward that reaches HEAD by a merge commit (the move-out commit is on the
 // second parent) still gets the id the task had.
 func TestForwardThroughAMergeKeepsTheID(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	r := s.Repo()
 	moved := putWithID(t, s, newTask("moved"))

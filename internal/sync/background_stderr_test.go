@@ -13,6 +13,7 @@ import (
 // When the log is the standard error, Release points it at the null device
 // and Reopen puts the log back and closes the handle of the null device.
 func TestBoundedLogReopenClosesTheNullDevice(t *testing.T) {
+	// 直列: 標準エラー(fd 2)
 	saved, err := unix.Dup(2)
 	if err != nil {
 		t.Fatal(err)
@@ -50,6 +51,7 @@ func TestBoundedLogReopenClosesTheNullDevice(t *testing.T) {
 
 // A run that ends while the log is released closes the null device in Close.
 func TestBoundedLogCloseClosesTheNullDevice(t *testing.T) {
+	// 直列: 標準エラー(fd 2)
 	saved, err := unix.Dup(2)
 	if err != nil {
 		t.Fatal(err)

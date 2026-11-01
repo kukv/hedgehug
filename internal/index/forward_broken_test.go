@@ -11,6 +11,7 @@ import (
 // A forward that does not decode names no store, so a lookup by its ULID
 // finds nothing; doctor tells of the file.
 func TestResolveForwardSkipsABrokenForward(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	ulid := model.NewULID()
 	commitRaw(t, s, dir, model.TaskPath(ulid), "---\nulid: "+ulid.String()+"\nmoved_to: "+destStore+"\ntitle: x\n---\n")

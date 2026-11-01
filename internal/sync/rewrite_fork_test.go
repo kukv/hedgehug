@@ -45,6 +45,7 @@ func forkedMirror(t *testing.T, purges func(own *model.Task) model.ULID) (*clust
 // commit of its own is neither merged (the task would come back) nor force
 // pushed to (its commits would be lost): it is warned about.
 func TestRunMirrorForkedBeforeBeforeHoldsPurgedTask(t *testing.T) {
+	t.Parallel()
 	c, own, mirrorHead := forkedMirror(t, func(own *model.Task) model.ULID { return own.ULID })
 	newHead := headOf(t, c, 0)
 	res := c.sync(0)
@@ -66,6 +67,7 @@ func TestRunMirrorForkedBeforeBeforeHoldsPurgedTask(t *testing.T) {
 // The same mirror, when its own commits touch nothing a rewrite purged, is
 // merged as usual.
 func TestRunMirrorForkedBeforeBeforeWithOtherWorkIsMerged(t *testing.T) {
+	t.Parallel()
 	c, own, _ := forkedMirror(t, func(*model.Task) model.ULID { return model.NewULID() })
 	res := c.sync(0)
 	if len(res.Warnings) != 0 || res.Merges != 1 || !slices.Equal(res.Pushed, []string{"origin", "mirror1"}) {

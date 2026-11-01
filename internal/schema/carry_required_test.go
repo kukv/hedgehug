@@ -8,6 +8,7 @@ import (
 // A required list whose fields are all gone is dropped with its key, as an
 // empty transitions list is, and told of as "required <status>".
 func TestCarryDropsAnEmptiedRequiredList(t *testing.T) {
+	t.Parallel()
 	dest := Default()
 	sc := Scoped{
 		Where: "project:01JBZ8K3QW7M2X9V4T6R5N8P0A",

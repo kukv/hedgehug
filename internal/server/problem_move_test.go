@@ -12,6 +12,7 @@ import (
 // The confirmation of a move reaches a client as a problem that names the
 // tasks and the cuts, and nothing of their content.
 func TestProblemOfAMoveConfirmationIsSmall(t *testing.T) {
+	t.Parallel()
 	ts := twoStores(t)
 	ss := ts.session()
 	ss.StoreName = "me"

@@ -26,6 +26,7 @@ func (c *cluster) comment(i int, task model.ULID, body string, id model.ULID) {
 // commented on, gave a child and a blocker: the forward wins, what clone 1
 // did to the task is recorded, and the child and the blocker are repaired.
 func TestSyncForwardWinsAndRepairs(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	x := c.addTask(0, "x")
 	z := c.addTask(0, "z")
@@ -126,6 +127,7 @@ func TestSyncForwardWinsAndRepairs(t *testing.T) {
 // A forward with a comment under it left in HEAD is removed by the repair of
 // HEAD, as a sync does it after a merge made by hand.
 func TestRepairHeadDropsFilesUnderForward(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 1)
 	x := c.addTask(0, "x")
 	if _, err := c.stores[0].Update(c.op(0, "move-out", x.ULID), func(tx *store.Tx) error {
@@ -157,6 +159,7 @@ func TestRepairHeadDropsFilesUnderForward(t *testing.T) {
 // with last-writer-wins (when the file changed, then the author, then the
 // bytes), so the later move stays and the other store is recorded.
 func TestSyncTwoForwardsKeepOneMovedTo(t *testing.T) {
+	t.Parallel()
 	c := newCluster(t, 2)
 	x := c.addTask(0, "x")
 	c.sync(0)

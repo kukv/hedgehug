@@ -8,6 +8,7 @@ import (
 )
 
 func TestRunForwardFiles(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	put(t, s, newTask("A"))
 	good, bad, mismatch := model.NewULID(), model.NewULID(), model.NewULID()

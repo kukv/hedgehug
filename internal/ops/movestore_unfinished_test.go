@@ -13,6 +13,7 @@ import (
 // error is move.unfinished with the kind of a conflict, so that the
 // server answers 409 with the code and the store, not a 500.
 func TestMoveStoreUnfinishedByAnIOErrorIsAConflict(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
 		t.Skip("a file that cannot be read needs a permission that is enforced")
 	}

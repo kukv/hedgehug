@@ -8,6 +8,7 @@ import (
 
 // A log that could not be closed is not released: it takes lines as before.
 func TestBoundedLogReleaseThatFailsKeepsWriting(t *testing.T) {
+	t.Parallel()
 	p := filepath.Join(t.TempDir(), "sync.log")
 	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {

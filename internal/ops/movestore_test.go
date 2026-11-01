@@ -131,6 +131,7 @@ func mustCode(t *testing.T, err error, kind Kind, code string) {
 func argsOf(err error) map[string]any { return AsError(err).Args }
 
 func TestMoveStore(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	ts := f.ts
 	headsBefore := len(f.log(t, "org-a")) + len(f.log(t, "org-b"))
@@ -233,6 +234,7 @@ func TestMoveStore(t *testing.T) {
 }
 
 func TestMoveStoreFollowsTheGivenParentAndWorkspace(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	if _, err := f.ts.ForStore("org-b").WorkspaceAdd("second", "SEC"); err != nil {
 		t.Fatal(err)
@@ -264,6 +266,7 @@ func TestMoveStoreFollowsTheGivenParentAndWorkspace(t *testing.T) {
 }
 
 func TestMoveStoreUnderAParent(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	pb, err := f.ts.ForStore("org-b").Add(AddInput{Title: "B project", Kind: "project"})
 	if err != nil {
@@ -290,6 +293,7 @@ func TestMoveStoreUnderAParent(t *testing.T) {
 }
 
 func TestMoveStoreRefusedBySchemaCommitsNothing(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	f.setSchema(t, func(sc *schema.Schema) {
 		sc.Statuses = append(sc.Statuses, schema.Status{Name: "review", Category: schema.CategoryDoing})
@@ -320,6 +324,7 @@ func TestMoveStoreRefusedBySchemaCommitsNothing(t *testing.T) {
 }
 
 func TestMoveStoreNeedsConfirmationAndScopedChoice(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	f.setSchema(t, func(sc *schema.Schema) {
 		sc.Statuses = append(sc.Statuses, schema.Status{Name: "review", Category: schema.CategoryDoing})
@@ -389,6 +394,7 @@ func TestMoveStoreNeedsConfirmationAndScopedChoice(t *testing.T) {
 }
 
 func TestMoveStoreDropsScoped(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	f.setSchema(t, func(sc *schema.Schema) {
 		sc.Scoped = []schema.Scoped{{Where: "project:" + f.p.String(), Statuses: []string{"backlog", "todo", "in_progress", "done", "canceled"}}}
@@ -410,6 +416,7 @@ func TestMoveStoreDropsScoped(t *testing.T) {
 }
 
 func TestMoveStoreScopedIgnoredWhenNotNeeded(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	in := f.in()
 	in.Scoped = "carry" // D7: nothing to carry
@@ -423,6 +430,7 @@ func TestMoveStoreScopedIgnoredWhenNotNeeded(t *testing.T) {
 }
 
 func TestMoveStoreScopedThatCannotBeCarried(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	f.setSchema(t, func(sc *schema.Schema) {
 		// review is the default of doing here, so a project can hide in_progress;
@@ -446,6 +454,7 @@ func TestMoveStoreScopedThatCannotBeCarried(t *testing.T) {
 }
 
 func TestMoveStoreRerunFinishesTheSource(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	f.setSchema(t, func(sc *schema.Schema) {
 		sc.Scoped = []schema.Scoped{{Where: "project:" + f.p.String(), Statuses: []string{"backlog", "todo", "in_progress", "done", "canceled"}}}
@@ -498,6 +507,7 @@ func TestMoveStoreRerunFinishesTheSource(t *testing.T) {
 }
 
 func TestMoveStoreRefusesWhatIsInTheDestination(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	bss := f.ts.ForStore("org-b")
 	bs, ix, err := bss.Open()
@@ -522,6 +532,7 @@ func TestMoveStoreRefusesWhatIsInTheDestination(t *testing.T) {
 }
 
 func TestMoveStoreSameStoreAndReadOnly(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	in := f.in()
 	in.To = "org-a"
@@ -557,6 +568,7 @@ func TestMoveStoreSameStoreAndReadOnly(t *testing.T) {
 }
 
 func TestMoveStoreQualifiedSource(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	in := f.in()
 	in.Arg = "org-a:API-2"
@@ -566,6 +578,7 @@ func TestMoveStoreQualifiedSource(t *testing.T) {
 }
 
 func TestMoveStoreBothWaysAtOnce(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	b, err := f.ts.ForStore("org-b").Add(AddInput{Title: "from b"})
 	if err != nil {
@@ -600,6 +613,7 @@ func TestMoveStoreBothWaysAtOnce(t *testing.T) {
 }
 
 func TestMoveStoreHidden(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	p, err := f.ts.PrepareMoveStore(f.in())
 	if err != nil {
@@ -637,6 +651,7 @@ func TestMoveStoreHidden(t *testing.T) {
 }
 
 func TestMoveStoreUnlinksSprintAndReleases(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	as, _ := f.ts.ForStore("org-a").OpenStore()
 	_, err := f.ts.ForStore("org-a").Update(as, store.Op{Name: "sprint"}, func(tx *store.Tx) error {
@@ -672,6 +687,7 @@ func TestMoveStoreUnlinksSprintAndReleases(t *testing.T) {
 }
 
 func TestMoveStoreParentsComeBeforeTheirChildren(t *testing.T) {
+	t.Parallel()
 	ts := newTwoStoreSession(t)
 	a := ts.ForStore("org-a")
 	add := func(title, parent string) model.ULID {
@@ -700,6 +716,7 @@ func TestMoveStoreParentsComeBeforeTheirChildren(t *testing.T) {
 }
 
 func TestMoveStoreWarnsOnceOfAFileThatDoesNotDecode(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	as, _ := f.ts.ForStore("org-a").OpenStore()
 	bad := model.NewULID()
@@ -728,6 +745,7 @@ func TestMoveStoreWarnsOnceOfAFileThatDoesNotDecode(t *testing.T) {
 // with the task, which gets a new id of the source, keeps its former ids, and
 // the store it left now holds the forward.
 func TestMoveStoreBackToTheStoreItLeft(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	ts := f.ts
 	if _, err := ts.MoveStore(f.in()); err != nil {

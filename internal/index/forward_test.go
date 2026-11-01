@@ -34,6 +34,7 @@ func putWithID(t *testing.T, s *store.Store, task *model.Task, formerIDs ...stri
 }
 
 func TestForwardsAreNotTasks(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	kept := newTask("kept")
 	moved := putWithID(t, s, newTask("moved"), "OLD-3")
@@ -90,6 +91,7 @@ func TestForwardsAreNotTasks(t *testing.T) {
 }
 
 func TestRefreshTakesInAForward(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	moved := putWithID(t, s, newTask("moved"))
 	ix := mustOpen(t, s)
@@ -116,6 +118,7 @@ func TestRefreshTakesInAForward(t *testing.T) {
 }
 
 func TestForwardAfterForwardKeepsTheID(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	moved := putWithID(t, s, newTask("moved"))
 	commitRaw(t, s, dir, model.TaskPath(moved.ULID), forwardOf(moved.ULID, destStore))
@@ -127,6 +130,7 @@ func TestForwardAfterForwardKeepsTheID(t *testing.T) {
 }
 
 func TestForwardWithoutHistoryHasNoID(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	ulid := model.NewULID()
 	commitRaw(t, s, dir, model.TaskPath(ulid), forwardOf(ulid, destStore))
@@ -137,6 +141,7 @@ func TestForwardWithoutHistoryHasNoID(t *testing.T) {
 }
 
 func TestBrokenForward(t *testing.T) {
+	t.Parallel()
 	s, dir := newStore(t)
 	ulid := model.NewULID()
 	commitRaw(t, s, dir, model.TaskPath(ulid), "---\nulid: "+ulid.String()+"\nmoved_to: "+destStore+"\ntitle: x\n---\n")

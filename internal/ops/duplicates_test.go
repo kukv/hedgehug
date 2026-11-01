@@ -71,6 +71,7 @@ func findingsOf(t *testing.T, ts *testSession, store, check string) []doctor.Fin
 }
 
 func TestDoctorDuplicateAcrossStores(t *testing.T) {
+	t.Parallel()
 	f := duplicateFx(t)
 	bID := idIn(t, f, "org-b")
 	want := "in org-a (API-2) and org-b (" + bID + "); remove the one not needed with hedgehug rm and hedgehug purge"
@@ -98,6 +99,7 @@ func TestDoctorDuplicateAcrossStores(t *testing.T) {
 }
 
 func TestDuplicateIgnoresADeletedTask(t *testing.T) {
+	t.Parallel()
 	f := duplicateFx(t)
 	// the copy in org-b is deleted: nothing lives in both
 	if _, err := f.ts.ForStore("org-b").Remove(idIn(t, f, "org-b")); err != nil {
@@ -110,6 +112,7 @@ func TestDuplicateIgnoresADeletedTask(t *testing.T) {
 }
 
 func TestDuplicateTextOfThree(t *testing.T) {
+	t.Parallel()
 	d := duplicate{Places: []dupPlace{{"org-a", "API-1"}, {"org-b", "WEB-2"}, {"org-c", "OPS-3"}}}
 	if got, want := d.text(), "in org-a (API-1), org-b (WEB-2) and org-c (OPS-3); remove"; !strings.HasPrefix(got, want) {
 		t.Errorf("text = %q; want it to start %q", got, want)
@@ -117,6 +120,7 @@ func TestDuplicateTextOfThree(t *testing.T) {
 }
 
 func TestDoctorForwardTarget(t *testing.T) {
+	t.Parallel()
 	f := newMoveFx(t)
 	if _, err := f.ts.MoveStore(f.in()); err != nil {
 		t.Fatal(err)
