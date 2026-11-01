@@ -431,7 +431,7 @@ func TestRewriteHistoryRechecksUnderTheLocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := run.prepare("API-2"); err != nil {
+	if err := run.prepare("API-2", true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := a.Add(AddInput{Title: "later"}); err != nil {
@@ -446,7 +446,7 @@ func TestRewriteHistoryRechecksUnderTheLocks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := run.prepare("API-2"); err != nil {
+	if err := run.prepare("API-2", true); err != nil {
 		t.Fatal(err)
 	}
 	other := cloneSessionOf(t, f)

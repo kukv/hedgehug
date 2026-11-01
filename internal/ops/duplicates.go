@@ -82,20 +82,35 @@ func duplicateFindings(name string, ds []duplicate) []doctor.Finding {
 	return out
 }
 
-// duplicateWarnings are the same as the warnings of a sync of the store name:
-// "01JBZ… is in org-b (WEB-45) and org-c (OPS-3); …".
-func (ss *Session) duplicateWarnings(name string) []string {
-	ds, err := ss.duplicates()
-	if err != nil {
-		return []string{"could not check duplicates across stores: " + err.Error()}
-	}
-	var out []string
-	for _, d := range ds {
-		if d.in(name) {
-			out = append(out, fmt.Sprintf("%s is %s", d.ULID, d.text()))
+// addDuplicateWarnings puts the warning of each duplicate, "01JBZ… is in org-b
+// (WEB-45) and org-c (OPS-3); …", in the report of the first store synced
+// that has the task: once for the duplicate, not once for each store it is
+// in. The duplicates are found once for all the reports. A store that has no
+// remote, or whose sync failed, is not told of here.
+func (ss *Session) addDuplicateWarnings(reports []SyncReport) {
+	var told []int
+	for i, r := range reports {
+		if !r.NoRemote && r.Err == nil {
+			told = append(told, i)
 		}
 	}
-	return out
+	if len(told) == 0 {
+		return
+	}
+	ds, err := ss.duplicates()
+	if err != nil {
+		r := &reports[told[0]]
+		r.Warnings = append(r.Warnings, "could not check duplicates across stores: "+err.Error())
+		return
+	}
+	for _, d := range ds {
+		for _, i := range told {
+			if d.in(reports[i].Store) {
+				reports[i].Warnings = append(reports[i].Warnings, fmt.Sprintf("%s is %s", d.ULID, d.text()))
+				break
+			}
+		}
+	}
 }
 
 // forwardTargetFindings are the forwards of the store name whose moved_to is

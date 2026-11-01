@@ -80,9 +80,20 @@ func TestDoctorDuplicateAcrossStores(t *testing.T) {
 			t.Errorf("%s: findings = %+v; want one warning for %s: %s", store, got, f.p, want)
 		}
 	}
-	w := f.ts.ForStore("org-a").duplicateWarnings("org-a")
-	if len(w) != 1 || w[0] != f.p.String()+" is "+want {
-		t.Errorf("warnings = %q", w)
+	// a sync of both stores tells of the duplicate once, in the first report
+	reports := []SyncReport{{Store: "org-a"}, {Store: "org-b"}}
+	f.ts.addDuplicateWarnings(reports)
+	if w := reports[0].Warnings; len(w) != 1 || w[0] != f.p.String()+" is "+want {
+		t.Errorf("warnings of org-a = %q", w)
+	}
+	if w := reports[1].Warnings; len(w) != 0 {
+		t.Errorf("warnings of org-b = %q; the duplicate is told once", w)
+	}
+	// a store that has no remote or failed is not told of
+	reports = []SyncReport{{Store: "org-a", NoRemote: true}, {Store: "org-b"}}
+	f.ts.addDuplicateWarnings(reports)
+	if len(reports[0].Warnings) != 0 || len(reports[1].Warnings) != 1 {
+		t.Errorf("warnings = %q, %q", reports[0].Warnings, reports[1].Warnings)
 	}
 }
 

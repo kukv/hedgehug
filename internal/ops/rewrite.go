@@ -45,8 +45,9 @@ type RewriteInput struct {
 	// asks for it.
 	Typed string
 	// Confirmed is the ULIDs of the tasks the user was shown (PrepareRewrite
-	// lists them). When it is not nil, RewriteHistory fails with
-	// rewrite.changed if the tasks are no longer those.
+	// lists them, after it synced the store). When it is not nil,
+	// RewriteHistory does not sync again, and fails with rewrite.changed if
+	// the tasks are no longer those.
 	Confirmed []model.ULID
 }
 
@@ -108,7 +109,7 @@ func (ss *Session) PrepareRewrite(in RewriteInput) (RewritePlan, error) {
 	if run.resume != nil {
 		return run.plan, nil
 	}
-	if err := run.prepare(in.Arg); err != nil {
+	if err := run.prepare(in.Arg, true); err != nil {
 		return RewritePlan{}, err
 	}
 	return run.plan, nil
@@ -138,7 +139,11 @@ func (ss *Session) RewriteHistory(in RewriteInput) (RewriteResult, error) {
 		return RewriteResult{}, newErr(KindInvalid, "rewrite.canceled", errors.New("Canceled"), "store", name)
 	}
 	if run.resume == nil {
-		if err := run.prepare(in.Arg); err != nil {
+		// A caller that was shown the plan (PrepareRewrite) has synced the
+		// store already: syncing again would only be a second round trip
+		// to the remote. The checks that matter are made again under the
+		// locks (run), where a write or a push since is found.
+		if err := run.prepare(in.Arg, in.Confirmed == nil); err != nil {
 			return RewriteResult{}, err
 		}
 	}
@@ -424,10 +429,11 @@ func tasksInHistory(r *gitrepo.Repo, want []model.ULID) (map[model.ULID]bool, er
 	return found, nil
 }
 
-// prepare does step 3: it syncs the store, refuses a store that is
-// read-only, has no remote, or has changes that are not pushed or not
-// committed, and finds the tasks again (the sync may have brought some).
-func (r *rewriteRun) prepare(arg string) error {
+// prepare does step 3: it syncs the store (unless doSync is false), refuses a
+// store that is read-only, has no remote, or has changes that are not pushed
+// or not committed, and finds the tasks again (the sync may have brought
+// some).
+func (r *rewriteRun) prepare(arg string, doSync bool) error {
 	ts, name := r.ts, r.plan.Store
 	if _, _, err := ts.OpenForWrite(); err != nil { // read-only is refused here
 		return err
@@ -439,8 +445,10 @@ func (r *rewriteRun) prepare(arg string) error {
 	if len(e.Remotes) == 0 {
 		return newErr(KindInvalid, "rewrite.no_remote", fmt.Errorf("%s has no remote, so there is no history to rewrite for others", name), "store", name)
 	}
-	if _, err := ts.SyncStore(c, e, true); err != nil {
-		return fmt.Errorf("sync %s: %w", name, err)
+	if doSync {
+		if _, err := ts.SyncStore(c, e, true); err != nil {
+			return fmt.Errorf("sync %s: %w", name, err)
+		}
 	}
 	ts.dropMount()
 	s, err := ts.OpenStore()

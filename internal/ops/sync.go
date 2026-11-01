@@ -100,6 +100,7 @@ func (ss *Session) Sync(all, explicit bool) ([]SyncReport, error) {
 		}
 		out = append(out, r)
 	}
+	ss.addDuplicateWarnings(out)
 	return out, errors.Join(errs...)
 }
 
@@ -190,7 +191,6 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 		r.Invalid = append(r.Invalid, u.String())
 	}
 	r.Warnings = append(r.Warnings, ss.crossStoreWarnings(e.Name)...)
-	r.Warnings = append(r.Warnings, ss.duplicateWarnings(e.Name)...)
 	return r, nil
 }
 
