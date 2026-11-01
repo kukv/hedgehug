@@ -347,26 +347,6 @@ func (h *history) reverts(w write, writes []write) bool {
 	})
 }
 
-// addedBesideMove reports whether w is a parent null that a move-in wrote
-// while another clone, not knowing it, moved the same task in under a parent
-// (it moved the parent's subtree, and w moved the task alone). The file has no
-// base, which the merge reads as an empty task: the null is the value of the
-// base, so it is not a change, and the parent of the other side stays. The
-// result is the whole subtree together, as the other move made it.
-func (h *history) addedBesideMove(w write, writes []write) bool {
-	if w.field != "parent" || w.value != "null" || !h.isMoveIn(w.commit) {
-		return false
-	}
-	return slices.ContainsFunc(writes, func(o write) bool {
-		return o.task == w.task && o.field == "parent" && o.value != "null" && h.isMoveIn(o.commit) &&
-			!h.isAncestor(w.commit, o.commit) && !h.isAncestor(o.commit, w.commit)
-	})
-}
-
-func (h *history) isMoveIn(c plumbing.Hash) bool {
-	return slices.Contains(h.entries[c].TrailerValues("Hedgehug-Op"), "move-in")
-}
-
 // purged reports whether the task of w was purged by a write that came
 // after w, knowing it. A purge takes the writes before it with the task, and
 // a side that changed the task meanwhile gets its own version back.
@@ -560,7 +540,7 @@ func (h *history) checkTaskWrite(ps *problems, w write, t *model.Task, writes []
 			ps.add("unknown field %s", w.field)
 			return
 		}
-		if !sameJSON(final, w.value) && !h.replaced(w, writes) && !h.wasRepaired(t.ULID, w.field) && !h.wasLost(path, w.field, w.value) && !h.reverts(w, writes) && !h.addedBesideMove(w, writes) {
+		if !sameJSON(final, w.value) && !h.replaced(w, writes) && !h.wasRepaired(t.ULID, w.field) && !h.wasLost(path, w.field, w.value) && !h.reverts(w, writes) {
 			ps.add("task %s (%s): %s %s written by clone %d is lost (final %s)", t.ULID, t.ID, w.field, w.value, w.clone, final)
 		}
 	}

@@ -286,6 +286,22 @@ func TestTaskBothCreated(t *testing.T) {
 	}
 }
 
+// A value that is the empty one of its field (no parent) is a value too when
+// both sides made the file: the other side's value does not win silently.
+func TestTaskBothCreatedEmptyValueIsRecorded(t *testing.T) {
+	const parent = "01JBZ8K3QW7M2X9V4T6R5N8P0B"
+	root := task("2026-10-31T11:00:00Z", "title: a")
+	child := task("2026-10-31T12:00:00Z", "title: a", "parent: "+parent)
+	r := mergeTask(t, side(nil, ""), side(root, "github.com/a"), side(child, "github.com/b"))
+	if x := decoded(t, r.Data); x.Parent == nil || x.Parent.String() != parent {
+		t.Errorf("parent = %v, want the later side's", x.Parent)
+	}
+	want := []Overwritten{{Path: taskPath, Field: "parent", Value: "null", Author: "github.com/a"}}
+	if !sameOverwritten(r.Overwritten, want) {
+		t.Errorf("overwritten = %v", r.Overwritten)
+	}
+}
+
 func TestTaskOursWins(t *testing.T) {
 	base := append(task("2026-10-31T10:00:00Z", "title: a", "status: todo", "labels: [x]"), "1\n2\n3\n"...)
 	ours := append(task("2026-10-31T11:00:00Z", "title: ours", "status: todo", "labels: [x, y]"), "1\n2\nA\n"...)
