@@ -3,8 +3,10 @@ package ops
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
+	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
@@ -113,12 +115,31 @@ func commentDeleted(msg string) error {
 	return newErr(KindConflict, "comment.deleted", errors.New(msg))
 }
 
-// CheckCommentEditable refuses to edit a deleted comment.
-func CheckCommentEditable(ref store.CommentRef, c *model.Comment) error {
+// CheckCommentEditable refuses to edit a deleted comment, and one that none
+// of the accounts me wrote. verb is "edited" or "removed".
+func CheckCommentEditable(ref store.CommentRef, c *model.Comment, me []string, verb string) error {
 	if c.DeletedAt != nil {
 		return commentDeleted(fmt.Sprintf("comment %s is deleted and cannot be edited", ref.Comment.String()))
 	}
+	if c.Author == "" {
+		return newErr(KindConflict, "comment.no_author",
+			fmt.Errorf("a comment whose author is unknown cannot be %s", verb))
+	}
+	if !slices.ContainsFunc(me, func(a string) bool { return config.SameAccount(a, c.Author) }) {
+		return newErr(KindConflict, "comment.not_author",
+			fmt.Errorf("%s's comment cannot be %s", c.Author, verb), "author", c.Author)
+	}
 	return nil
+}
+
+// CheckMyComment is CheckCommentEditable with the accounts of config.yaml as
+// me.
+func (ss *Session) CheckMyComment(ces *CommentEditSession, verb string) error {
+	c, _, err := ss.Config()
+	if err != nil {
+		return err
+	}
+	return CheckCommentEditable(ces.Ref, ces.Comment, c.Me(), verb)
 }
 
 // CommentSession is a live task checked to take a comment.
@@ -207,6 +228,9 @@ func (ss *Session) WriteComment(p *PendingComment) (CommentResult, error) {
 	if err != nil {
 		return CommentResult{}, err
 	}
+	if !hash.IsZero() {
+		ss.warnMentions(s, "", c.Body)
+	}
 	return CommentResult{Store: s, Ref: store.CommentRef{Task: e.ULID, Comment: c.ULID}, Comment: c, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }
 
@@ -233,7 +257,7 @@ func (ss *Session) CommentEdit(arg, body string) (CommentResult, error) {
 	if err != nil {
 		return CommentResult{}, err
 	}
-	if err := CheckCommentEditable(ces.Ref, ces.Comment); err != nil {
+	if err := ss.CheckMyComment(ces, "edited"); err != nil {
 		return CommentResult{}, err
 	}
 	p, err := ss.PrepareCommentEdit(ces, body)
@@ -317,6 +341,9 @@ func (ss *Session) WriteCommentEdit(p *PendingCommentEdit) (CommentResult, error
 	if err != nil {
 		return CommentResult{}, err
 	}
+	if !hash.IsZero() {
+		ss.warnMentions(p.s, p.c.Body, p.body)
+	}
 	return CommentResult{Store: p.s, Ref: p.ref, Comment: written, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }
 
@@ -333,6 +360,9 @@ func (ss *Session) CommentRemove(arg string) (CommentResult, error) {
 	errDeleted := commentDeleted(fmt.Sprintf("comment %s is already deleted", ref.Comment.String()))
 	if c.DeletedAt != nil {
 		return CommentResult{}, errDeleted
+	}
+	if err := ss.CheckMyComment(ces, "removed"); err != nil {
+		return CommentResult{}, err
 	}
 	now := ss.Now()
 	var written *model.Comment

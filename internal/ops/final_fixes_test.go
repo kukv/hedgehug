@@ -225,6 +225,7 @@ func TestEditIsOneCall(t *testing.T) {
 
 func TestCommentAddCleansTheBody(t *testing.T) {
 	ts := newTestSession(t)
+	ts.asAccount("alice")
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
@@ -247,6 +248,7 @@ func TestCommentAddCleansTheBody(t *testing.T) {
 
 func TestResultsCarryTheCommitAndAFreshView(t *testing.T) {
 	ts := newTestSession(t)
+	ts.asAccount("alice")
 	head := func() string {
 		t.Helper()
 		s, err := ts.OpenStore()

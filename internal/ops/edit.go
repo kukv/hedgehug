@@ -156,6 +156,9 @@ func (ss *Session) WriteEdit(es *EditSession, t *model.Task) (TaskResult, error)
 	if err != nil {
 		return TaskResult{}, err
 	}
+	if !hash.IsZero() && es.Old != nil {
+		ss.warnMentions(s, es.Old.Body, t.Body)
+	}
 	return TaskResult{Index: es.Index, ULID: e.ULID, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }
 

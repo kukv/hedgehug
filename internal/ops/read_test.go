@@ -245,6 +245,7 @@ func TestTreeParentCycle(t *testing.T) {
 
 func TestShowFullTask(t *testing.T) {
 	ts := newTestSession(t)
+	ts.asAccount("alice")
 	a := ts.addTask("a", func(t *model.Task) { t.Body = "the body\n"; t.Watchers = []string{"bob"}; t.Repos = []string{"r1"} })
 	b := ts.addTask("b", nil)
 	c := ts.addTask("c", nil)
@@ -302,7 +303,7 @@ func TestShowFullTask(t *testing.T) {
 	}
 
 	v := ShowViewOf(r)
-	if v.ID != "ME-1" || v.Body != "the body\n" || !slices.Equal(v.Watchers, []string{"bob"}) || !slices.Equal(v.Repos, []string{"r1"}) {
+	if v.ID != "ME-1" || v.Body != "the body\n" || !slices.Equal(v.Watchers, []string{"bob", "github.com/alice"}) || !slices.Equal(v.Repos, []string{"r1"}) {
 		t.Errorf("ShowViewOf = %+v", v)
 	}
 	if len(v.Comments) != 2 || v.Comments[0].Body != "first\n" || v.Comments[0].ULID != r.Comments[0].ULID.String() {
