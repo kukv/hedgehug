@@ -69,7 +69,7 @@ Windows をやめたあとは、`GOOS=windows` のビルドは通らなくてよ
 - test のマトリクスを `os: [ubuntu-latest, macos-latest]` × `shard: 3 つ` にする。ubuntu は -race 付き、macOS は race なし（いまと同じ）
 - 分け方は、パッケージの一覧を3つに分けて ci.yaml に書く。最初の PR の CI でパッケージごとの時間を出し（gotestsum の JSON から集計する）、3つの合計が均等になるように決める。候補は `internal/ops`／`cmd/hedgehug`／その他
 - 新しいパッケージが漏れないよう、3つ目は「1つ目と2つ目に含まれないすべて」として `go list ./...` から引く
-- キャッシュのキーは OS と race の有無で決め、shard では分けない。保存は main への push のときに shard 1 だけが行う（同じキーに3つが同時に書くのを避ける）
+- キャッシュのキーは OS・race の有無・shard の番号で決める。shard ごとにビルドするパッケージが違うため。保存は今と同じく main への push のときだけ、各 shard が自分の分を保存する（1つ約 385MB × 6 と nogit の約 315MB で約 2.6GB。リポジトリの上限 10GB に収まる）
 
 ### 結果をまとめるジョブ
 
