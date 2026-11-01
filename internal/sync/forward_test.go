@@ -153,8 +153,9 @@ func TestRepairHeadDropsFilesUnderForward(t *testing.T) {
 	}
 }
 
-// Two clones move the same task to different stores: the merge keeps one
-// moved_to, by the order of the merge, and records the other.
+// Two clones move the same task to different stores: moved_to is a scalar
+// with last-writer-wins (when the file changed, then the author, then the
+// bytes), so the later move stays and the other store is recorded.
 func TestSyncTwoForwardsKeepOneMovedTo(t *testing.T) {
 	c := newCluster(t, 2)
 	x := c.addTask(0, "x")
@@ -162,6 +163,9 @@ func TestSyncTwoForwardsKeepOneMovedTo(t *testing.T) {
 	c.sync(1)
 	dest := [2]model.ULID{model.NewULID(), model.NewULID()}
 	for i := range dest {
+		if i > 0 {
+			time.Sleep(1100 * time.Millisecond) // commit times are seconds
+		}
 		if _, err := c.stores[i].Update(c.op(i, "move-out", x.ULID), func(tx *store.Tx) error {
 			return tx.MoveOut(store.MoveOut{To: dest[i], Tasks: []model.ULID{x.ULID}})
 		}); err != nil {
@@ -182,11 +186,9 @@ func TestSyncTwoForwardsKeepOneMovedTo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lose := dest[0]
-	if f.MovedTo == dest[0] {
-		lose = dest[1]
-	} else if f.MovedTo != dest[1] {
-		t.Fatalf("moved_to = %s; want one of %v", f.MovedTo, dest)
+	win, lose := dest[1], dest[0] // the later move wins
+	if f.MovedTo != win {
+		t.Fatalf("moved_to = %s; want %s, the later move", f.MovedTo, win)
 	}
 	var lost []merge.Overwritten
 	for _, o := range r.Overwritten {

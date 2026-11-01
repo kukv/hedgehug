@@ -210,7 +210,7 @@ func (ss *Session) movedTo(storeName, input string, f *index.ForwardEntry) *moun
 	set, err := ss.Mount()
 	if err != nil {
 		// without the mounts, the store is only named by its ULID
-		ss.warn(fmt.Sprintf("cannot look for the store the task moved to: %v", err))
+		ss.warnOnce("mount: moved", fmt.Sprintf("cannot look for the store the task moved to: %v", err))
 	}
 	var from *mount.Mounted
 	if set != nil {
