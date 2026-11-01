@@ -523,6 +523,17 @@ func TestLockInOrder(t *testing.T) {
 	if _, err := a.Update(Op{Name: "z", Author: testAuthor}, func(tx *Tx) error { return tx.PutFile("z.txt", []byte("z")) }); err != nil {
 		t.Error(err)
 	}
+	// An Op that still names the released Locked takes the file lock too:
+	// with another holder on it, it waits and fails.
+	a.lockWait = 100 * time.Millisecond
+	other, err := acquire(a.path(lockPath), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = other.release() }()
+	if _, err := a.Update(Op{Name: "stale", Author: testAuthor, Locked: l}, func(tx *Tx) error { return tx.PutFile("s.txt", []byte("s")) }); !errors.Is(err, ErrLocked) {
+		t.Errorf("an Update with a released Locked: err = %v, want ErrLocked", err)
+	}
 }
 
 func TestLockInOrderFailureReleasesWhatItTook(t *testing.T) {

@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"go.yaml.in/yaml/v4"
 
@@ -150,14 +151,16 @@ func cloneSchema(sc *schema.Schema) (*schema.Schema, error) {
 // again for a store it holds, and must not call CommitMerge, which takes the
 // lock itself and fails with ErrLocked after lockWait.
 type Locked struct {
-	stores []*Store
-	locks  []*fileLock
-	once   sync.Once
+	stores   []*Store
+	locks    []*fileLock
+	once     sync.Once
+	released atomic.Bool // set by Release; a Locked that was let go holds nothing
 }
 
-// holds reports whether l holds the lock of s. It is false for a nil l.
+// holds reports whether l holds the lock of s. It is false for a nil l and
+// for one that was released.
 func (l *Locked) holds(s *Store) bool {
-	return l != nil && slices.Contains(l.stores, s)
+	return l != nil && !l.released.Load() && slices.Contains(l.stores, s)
 }
 
 // afterLock is called with each store after LockInOrder took its lock;
@@ -195,6 +198,7 @@ func LockInOrder(ss ...*Store) (*Locked, error) {
 // than once.
 func (l *Locked) Release() {
 	l.once.Do(func() {
+		l.released.Store(true)
 		for i := len(l.stores) - 1; i >= 0; i-- {
 			// The OS drops the lock with the file whatever release says.
 			_ = l.locks[i].release()
