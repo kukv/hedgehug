@@ -490,13 +490,15 @@ func Swap(dir string, b *Rebuild) error {
 	// commit would go with the old directory. If so, put it back; the next
 	// sync makes the rebuild again.
 	if err := checkUnchanged(before, b); err != nil {
+		var merr error
 		if errors.Is(err, ErrRebuildStale) {
 			// If the old store cannot be put back, FinishLeftover must not
 			// put the rebuild in its place: it would drop that commit.
-			_ = os.WriteFile(filepath.Join(b.Dir, staleMarker), []byte("the old store has a commit this rebuild lacks\n"), 0o600)
+			merr = os.WriteFile(filepath.Join(b.Dir, staleMarker), []byte("the old store has a commit this rebuild lacks\n"), 0o600)
 		}
 		if rerr := os.Rename(before, dir); rerr != nil {
-			return errors.Join(err, rerr)
+			// merr says that FinishLeftover may not know the rebuild is stale.
+			return errors.Join(err, rerr, merr)
 		}
 		if errors.Is(err, ErrRebuildStale) {
 			_ = os.RemoveAll(b.Dir)
@@ -626,6 +628,10 @@ func FinishLeftover(dir string, l Leftover) error {
 				return fmt.Errorf("finish the rebuild: %w", err)
 			}
 			l.New = ""
+			// A marker with no old store to keep has nothing to say.
+			if err := os.Remove(filepath.Join(dir, staleMarker)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return fmt.Errorf("finish the rebuild: %w", err)
+			}
 		case len(l.Before) > 0:
 			last := l.Before[len(l.Before)-1]
 			if err := os.Rename(last, dir); err != nil {

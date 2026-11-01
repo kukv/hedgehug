@@ -9,6 +9,28 @@ import (
 	"github.com/kukv/hedgehug/internal/store"
 )
 
+// A warning that stays is logged once; one that goes away and comes back is
+// logged again; the warnings of another store are not touched.
+func TestLogWarningsTellsAnEpisodeOnce(t *testing.T) {
+	ts := newTestServer(t)
+	l := ts.srv.loop
+	count := func() int { return strings.Count(ts.log.String(), "sync me: warning: mirror down") }
+	l.logWarnings("me", []string{"mirror down"})
+	l.logWarnings("other", []string{"mirror down"})
+	l.logWarnings("me", []string{"mirror down"})
+	if n := count(); n != 1 {
+		t.Fatalf("a standing warning was logged %d times", n)
+	}
+	l.logWarnings("me", nil) // it went away
+	l.logWarnings("me", []string{"mirror down"})
+	if n := count(); n != 2 {
+		t.Errorf("a warning that came back was logged %d times in all, want 2", n)
+	}
+	if n := strings.Count(ts.log.String(), "sync other: warning: mirror down"); n != 1 {
+		t.Errorf("the other store's warning was logged %d times", n)
+	}
+}
+
 // The background sync of a store tells of a task that lives in two stores,
 // once, not at every sync.
 func TestBackgroundSyncTellsOfADuplicateOnce(t *testing.T) {

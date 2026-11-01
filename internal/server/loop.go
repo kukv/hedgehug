@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -253,18 +254,30 @@ func (l *Loop) syncStore(name string) {
 	l.logWarnings(name, reps[0].Warnings)
 }
 
-// logWarnings logs the warnings of a sync of the store name that were not
-// logged before.
+// logWarnings logs the warnings of a sync of the store name that the sync
+// before did not have: one that stays is told once, one that goes away and
+// comes back is told again.
 func (l *Loop) logWarnings(name string, warnings []string) {
+	prefix := name + "\x00"
+	l.mu.Lock()
+	now := map[string]bool{}
+	var fresh []string
 	for _, w := range warnings {
-		key := name + "\x00" + w
-		l.mu.Lock()
-		seen := l.told[key]
-		l.told[key] = true
-		l.mu.Unlock()
-		if !seen {
-			l.s.logf("sync %s: warning: %s", name, w)
+		key := prefix + w
+		now[key] = true
+		if !l.told[key] {
+			l.told[key] = true
+			fresh = append(fresh, w)
 		}
+	}
+	for key := range l.told {
+		if strings.HasPrefix(key, prefix) && !now[key] {
+			delete(l.told, key)
+		}
+	}
+	l.mu.Unlock()
+	for _, w := range fresh {
+		l.s.logf("sync %s: warning: %s", name, w)
 	}
 }
 
