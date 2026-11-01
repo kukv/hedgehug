@@ -84,3 +84,31 @@ func TestResolveNeedsHome(t *testing.T) {
 		t.Error("Resolve with no HOME succeeded")
 	}
 }
+
+func TestResolveDataDir(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "h")
+	env := map[string]string{"HOME": home, "USERPROFILE": home}
+	get := func(k string) string { return env[k] }
+
+	env["HEDGEHUG_HOME"] = filepath.Join(root, "hh")
+	p, err := Resolve(get)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.DataDir != env["HEDGEHUG_HOME"] {
+		t.Errorf("with HEDGEHUG_HOME: DataDir = %q", p.DataDir)
+	}
+
+	delete(env, "HEDGEHUG_HOME")
+	env["XDG_DATA_HOME"] = filepath.Join(root, "data")
+	if p, err = Resolve(get); err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(root, "data", "hedgehug"); p.DataDir != want {
+		t.Errorf("with XDG_DATA_HOME: DataDir = %q, want %q", p.DataDir, want)
+	}
+	if filepath.Dir(p.StoresDir) != p.DataDir {
+		t.Errorf("StoresDir %q is not under DataDir %q", p.StoresDir, p.DataDir)
+	}
+}

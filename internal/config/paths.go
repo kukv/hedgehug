@@ -15,6 +15,7 @@ var goos = runtime.GOOS
 type Paths struct {
 	Home       string // the user's home directory
 	ConfigFile string // config.yaml
+	DataDir    string // the data of hedgehug: stores/ and ui.json
 	StoresDir  string // the directory new stores go in, one per name
 }
 
@@ -30,6 +31,7 @@ func Resolve(getenv func(string) string) (Paths, error) {
 	p := Paths{Home: h}
 	if hh := abs(getenv("HEDGEHUG_HOME")); hh != "" {
 		p.ConfigFile = filepath.Join(hh, "config.yaml")
+		p.DataDir = hh
 		p.StoresDir = filepath.Join(hh, "stores")
 		return p, nil
 	}
@@ -42,7 +44,8 @@ func Resolve(getenv func(string) string) (Paths, error) {
 		data = defaultDataDir(getenv, h)
 	}
 	p.ConfigFile = filepath.Join(cfg, "hedgehug", "config.yaml")
-	p.StoresDir = filepath.Join(data, "hedgehug", "stores")
+	p.DataDir = filepath.Join(data, "hedgehug")
+	p.StoresDir = filepath.Join(p.DataDir, "stores")
 	return p, nil
 }
 
