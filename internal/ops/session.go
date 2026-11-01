@@ -149,16 +149,35 @@ func (ss *Session) warnSkipped(sk mount.Skipped) {
 	ss.warn(openError(sk.Name, sk.Err).Error())
 }
 
-// markOpenWarned makes the mount keep quiet about the store name that does
-// not open, for a caller that tells of it in its own way.
-func (ss *Session) markOpenWarned(name string) {
+// muteOpenWarnings makes the mount keep quiet about the stores names that do
+// not open, for a caller that tells of them in its own way. The returned
+// function ends it: the stores it silenced are warned of again by the next
+// mount, which is opened again for that.
+func (ss *Session) muteOpenWarnings(names []string) (unmute func()) {
 	mc := ss.mountCache()
 	mc.warnedMu.Lock()
-	defer mc.warnedMu.Unlock()
-	if mc.warned == nil {
-		mc.warned = map[string]bool{}
+	var muted []string
+	for _, n := range names {
+		if !mc.warned[n] {
+			if mc.warned == nil {
+				mc.warned = map[string]bool{}
+			}
+			mc.warned[n] = true
+			muted = append(muted, n)
+		}
 	}
-	mc.warned[name] = true
+	mc.warnedMu.Unlock()
+	return func() {
+		if len(muted) == 0 {
+			return
+		}
+		mc.warnedMu.Lock()
+		for _, n := range muted {
+			delete(mc.warned, n)
+		}
+		mc.warnedMu.Unlock()
+		ss.dropMount()
+	}
 }
 
 // dropMount forgets the stores mounted, for the next call to open them

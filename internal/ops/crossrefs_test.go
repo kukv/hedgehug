@@ -12,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/doctor"
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/query"
 )
 
 // refTo makes the task API-1 of org-a point at the task WEB-1 of org-b
@@ -190,9 +191,25 @@ func TestDoctorKeepsTheOtherStoresWhenOneDoesNotOpen(t *testing.T) {
 			t.Errorf("warning %q repeats what the report of gone says", w)
 		}
 	}
-	// named alone, it is still the error of today or its findings
-	if one, err := ts.ForStore("gone").Doctor(false); err == nil && (len(one) != 1 || len(one[0].Findings) == 0) {
-		t.Errorf("Doctor of gone = %+v; want the findings or the error", one)
+	// the silence was for Doctor only: a later operation warns, once
+	ts.warns = nil
+	if _, err := ts.List(&query.Query{}); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	for _, w := range ts.warns {
+		if strings.Contains(w, "cannot open gone") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("List after Doctor warned %d times of gone (%q); want once", n, ts.warns)
+	}
+	// named alone, it stays what it was: no error, the findings doctor.Run
+	// gives for a directory that is no store
+	one, err := ts.ForStore("gone").Doctor(false)
+	if err != nil || len(one) != 1 || one[0].Store != "gone" || !slices.ContainsFunc(one[0].Findings, func(f doctor.Finding) bool { return f.Check == "git" }) {
+		t.Errorf("Doctor of gone = %+v, %v; want its findings and no error", one, err)
 	}
 }
 

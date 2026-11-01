@@ -212,11 +212,13 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 		entries = []config.StoreEntry{e}
 	}
 	// The reports tell of a store that does not open; the mount need not.
+	var broken []string
 	for _, e := range entries {
 		if _, err := ss.openStoreAt(e.Path); err != nil {
-			ss.markOpenWarned(e.Name)
+			broken = append(broken, e.Name)
 		}
 	}
+	defer ss.muteOpenWarnings(broken)()
 	out := make([]DoctorReport, 0, len(entries))
 	for _, e := range entries {
 		r, err := ss.doctorStore(c, e, fix, len(entries) == 1)
