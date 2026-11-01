@@ -44,7 +44,7 @@
 - 4a でも ops の層の単体テストを足す
 - undo は確認ダイアログを出さない（取り消しにくい操作ではないため）
 - 4b の細部（2026-11-01）: 進捗は親設計どおり work 役割の子孫で数える。`--json` の進捗は `ls --tree` と `show` だけ。tree のビューで `sort:`・`group:` は保存時に拒否。名前の大文字小文字だけの変更は拒否し、Windows の予約名も拒否。組み込みの列は9個。名前のバイト数・NFC・書式文字・Windows の追加の予約名も拒否し、CLI の表の列幅は全角を2桁で数える（既存の表も含む）
-- 4c の細部（2026-11-01）: `PATCH /tasks/{id}` は CLI のコマンドに合わせ、`hh set` の範囲と本文を1コミットにする（本文だけなら op は edit、ほかは set）。移動は `POST /tasks/{id}/move`、復元は `POST /tasks/{id}/restore`。完全削除は `confirm` なしで 409 `purge.unconfirmed` と対象を返し、`confirm=<ULID>,…` で送り直す。Store は `?store=` で指定し、省略は CLI と同じ選び方。表示の状態は SSE の接続ごとの `client`（最初のイベント `hello` で渡す）に結びつけ、切断したタブは数えない。応答はテストで libopenapi-validator を使って `api/openapi.yaml` と照合する。ほかの細部（エラーの形と状態、各エンドポイントの入出力、同期ループの再試行と停止、`hh ui` の出力と `ui.json` の場所など）は `docs/superpowers/plans/2026-11-01-phase4c-server.md` の「この plan で埋める spec にない細部」のとおり
+- 4c の細部（2026-11-01）: `PATCH /tasks/{id}` は CLI のコマンドに合わせ、`hh set` の範囲と本文を1コミットにする（本文だけなら op は edit、ほかは set）。移動は `POST /tasks/{id}/move`、復元は `POST /tasks/{id}/restore`。完全削除は `confirm` なしで 409 `purge.unconfirmed` と対象を返し、`confirm=<ULID>,…` で送り直す。Store は `?store=` で指定し、省略は CLI と同じ（3b のあと: 一覧・ツリー・履歴・アクティビティ・doctor・通知は全 Store にまたがり、各タスクに `store` が付く。doctor は Store ごとの配列。ID で指す書き込みは ID が Store を決める。Store が複数あるときの `?store=` なしの作成は ops のまま 422 `store.choose`。2026-11-01 に利用者が決定）。表示の状態は SSE の接続ごとの `client`（最初のイベント `hello` で渡す）に結びつけ、切断したタブは数えない。応答はテストで libopenapi-validator を使って `api/openapi.yaml` と照合する。ほかの細部（エラーの形と状態、各エンドポイントの入出力、同期ループの再試行と停止、`hh ui` の出力と `ui.json` の場所など）は `docs/superpowers/plans/2026-11-01-phase4c-server.md` の「この plan で埋める spec にない細部」のとおり
 
 ## 範囲
 
@@ -218,7 +218,7 @@ huma v2 を標準の ServeMux の上（humago）で使う。パスはすべて `
 | 状態の確認 | `GET /health` | なし |
 
 - `{id}` は ID・以前の ID・ULID のどれでもよい（CLI と同じ解決）
-- Store ごとの資源は `?store=<名前>` で指定する。省略は CLI と同じ選び方
+- Store ごとの資源は `?store=<名前>` で指定する。省略は CLI と同じで、読み取りは全 Store にまたがる（3b の統合ビュー）
 - 1回の `PATCH` は1コミット。送ったフィールドだけを変える（`hh set` の範囲と本文）。同じフィールドを CLI と同時に変えたときは後勝ち
 - 書き込みの応答は、変わったタスクと、作ったコミットのハッシュを返す
 - タスクの応答には、4b の `checklist` と `progress` を含める

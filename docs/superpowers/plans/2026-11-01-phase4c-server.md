@@ -31,7 +31,7 @@
 |---|---|
 | タスクの更新 | CLI のコマンドに合わせる。`PATCH /tasks/{id}` は `hh set` の範囲（title・kind・status・assignees・watchers・labels・repos・blocked_by・プロパティ）と本文。本文だけなら `Hedgehug-Op: edit`、ほかは `set`（本文を含めても1コミット）。移動は `POST /tasks/{id}/move`（`mv`）、復元は `POST /tasks/{id}/restore`（`restore`）を足し、spec の API の表を直す |
 | 完全削除の確認 | `DELETE /tasks/{id}?purge=true` を `confirm` なしで呼ぶと 409 `purge.unconfirmed` と対象（ULID・ID・タイトル）を返す。SPA は確認のあと `&confirm=<ULID>,<ULID>…` を付けて送り直す。対象が変わっていれば再び 409（`purge.unconfirmed`、新しい対象） |
-| Store の指定 | Store ごとの資源はクエリ `?store=<名前>`。省略したら CLI と同じ選び方（`config.Select("")`）。フェーズ3b の統合ビューが入ったら、4f で一覧を全 Store に広げる |
+| Store の指定 | Store ごとの資源はクエリ `?store=<名前>`。省略したら CLI と同じ選び方。3b が先に main に入ったので、マージ（6d204ee）で一覧・ツリー・履歴・アクティビティ・doctor・通知を全 Store にまたがる形にした（利用者の決定、2026-11-01）。画面は 4f |
 | 表示の状態 | SSE の接続に結びつける。接続ごとに最初のイベント `hello` で `client`（接続の ID）と各 Store の HEAD・同期の状態・未読数を送る。`PUT /api/presence {client, visible}`。接続が切れたらそのタブは数えない |
 | 応答の検証 | テストで `pb33f/libopenapi-validator` を使い、コミットした `api/openapi.yaml` で全応答を検証する |
 
@@ -57,7 +57,7 @@
 18. ワークスペース: `PATCH /workspaces/{id}` は `{name}` か `{prefix}` のどちらか1つ（両方は 400 `workspace.one_change`。CLI も別のコマンドで、1回1コミットのため）。応答は `{workspace, commit, ids?}`
 19. スキーマ: `GET /schema` は schema.yaml の形をそのまま JSON にしたもの（`statuses`・`kinds`・`props`（名前 → 定義）・`workflow`・`scoped`）。`GET /schema/check` は `{findings}`。`POST /schema/migrate` は `{target: status|kind|prop|value, prop?, old, new, dry_run?}` → `{changed: [TaskView], skipped: [ulid], commit}`
 20. Store: `GET /stores` は `[StoreView]` に `default: bool` を足す。`POST /stores` は `{name, prefix, workspace?, remotes?, account?}` → 201 `{name, path, workspace, remotes, pushed}`
-21. 保守: `GET /doctor` は `{findings}`（修復しない）。`POST /doctor/fix` は `{repaired, findings}`
+21. 保守: `GET /doctor` は `{findings}`（修復しない）。`POST /doctor/fix` は `{repaired, findings}`。3b のマージ後は、どちらも Store ごとの `[{store, repaired, findings}]`
 22. 同期: `GET /sync` は `[StoreStatus に next_fetch を足したもの]`。`POST /sync` は `?store=` があればその Store だけ、なければ remote のある全 Store を同期し `[SyncReport]`
 23. 保存済みビュー: `PUT /views/{name}` の本文は `{layout?, query?, group_by?, kanban_columns?, swimlane?, columns?}`（`hh view save` のフラグ。省いたものは保存済みのまま）。`PATCH /views/{name}` は `{name}`（新しい名前）
 24. SSE: 15 秒ごとに `: ping` のコメントを送る（中継やブラウザに切られないため）。`tasks.changed` の `ulids` は前回の HEAD の木から今の木への差分（`tasks/` と `comments/` の下）で変わったタスク、`removed` はファイルが消えたタスク、`commit` は今の HEAD、`op`・`author` は今の HEAD のコミットの `Hedgehug-Op`・`Hedgehug-Author`（複数のコミットが進んでも最新の1つ）。`schema.changed` は `schema.yaml`、`views.changed` は `views/` の下が差分にあれば送る。`sync.state` は sync.json・未 push の数・次の fetch の時刻のどれかが変わったら、`notifications.unread` は全 Store の未読の合計が変わったら送る
