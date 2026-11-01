@@ -107,9 +107,86 @@ func (s *Set) Resolve(arg string) (Hit, error) {
 	}
 	switch len(hits) {
 	case 0:
+		if me := s.findForward(stores, arg, in); me != nil {
+			return Hit{}, me
+		}
 		return Hit{}, fmt.Errorf("%q: %w", arg, store.ErrNotFound)
 	case 1:
 		return hits[0], nil
 	}
 	return Hit{}, &AmbiguousError{Input: arg, Candidates: hits}
+}
+
+// MovedError is an input that names only a forward: the task moved to
+// another store. To is the store it moved to when it is mounted (nil when
+// not), and Entry the task there when found.
+type MovedError struct {
+	Input   string
+	From    *Mounted
+	Forward *index.ForwardEntry
+	To      *Mounted
+	Entry   *index.Entry
+}
+
+// Label is the task as the store it left names it: its id, or the input
+// when the forward does not remember one.
+func (e *MovedError) Label() string {
+	if e.Forward.ID != "" {
+		return e.Forward.ID
+	}
+	return e.Input
+}
+
+// NowID is the id the task has in the store it moved to; "" when not known.
+func (e *MovedError) NowID() string {
+	if e.Entry == nil {
+		return ""
+	}
+	return e.Entry.ID
+}
+
+func (e *MovedError) Error() string {
+	if e.To == nil {
+		return fmt.Sprintf("%s moved to another store (ULID %s); mount that store to follow it", e.Label(), e.Forward.MovedTo)
+	}
+	if e.Entry == nil {
+		return fmt.Sprintf("%s moved to %s", e.Label(), e.To.Name)
+	}
+	return fmt.Sprintf("%s moved to %s (%s)", e.Label(), e.To.Name, Hit{Store: e.To, Entry: e.Entry}.Ref())
+}
+
+// Unwrap lets a caller that treats a task that is not here as absent do so
+// for a forward.
+func (e *MovedError) Unwrap() error { return store.ErrNotFound }
+
+// Moved looks for the task a forward of from points at, in the mounted
+// store whose ulid is f.MovedTo. A nil set has no such store.
+func (s *Set) Moved(from *Mounted, input string, f *index.ForwardEntry) *MovedError {
+	e := &MovedError{Input: input, From: from, Forward: f}
+	if s == nil {
+		return e
+	}
+	for _, m := range s.Stores {
+		if m.ULID != f.MovedTo {
+			continue
+		}
+		e.To = m
+		_ = m.With(func(ix *index.Index) { e.Entry, _ = ix.Task(f.ULID) })
+		break
+	}
+	return e
+}
+
+// findForward looks for a forward that in names in stores; the first store
+// that has one gives it. A store that does not open, and an input that
+// matches several forwards of a store, are left out.
+func (s *Set) findForward(stores []*Mounted, input, in string) *MovedError {
+	for _, m := range stores {
+		var f *index.ForwardEntry
+		if m.With(func(ix *index.Index) { f, _ = ix.ResolveForward(in) }) != nil || f == nil {
+			continue
+		}
+		return s.Moved(m, input, f)
+	}
+	return nil
 }

@@ -551,6 +551,9 @@ func (ss *Session) Resolve(ix *index.Index, arg string) (*index.Entry, error) {
 	}
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
+			if moved := ss.movedFor(ix, arg); moved != nil {
+				return nil, moved
+			}
 			return nil, newErr(KindNotFound, "task.not_found", err, "input", arg)
 		}
 		return nil, classify(err)
