@@ -582,6 +582,11 @@ func (ss *Session) RunSync(s *store.Store, opt sync.Options, reported bool) (res
 	// opened again after it, so that they see them.
 	defer ss.dropMount()
 	err = s.WithLocalLock("sync.lock", syncLockWait, func() error {
+		// The history was made again here and origin has not got it yet
+		// (D29): a sync would merge the old history back.
+		if rewriteUnfinished(s) {
+			return errRewriteInProgress(ss.storeNameOf(s))
+		}
 		started := ss.Now()
 		if _, err := sync.UpdateState(s, func(st *sync.State) { st.LastAttempt = started }); err != nil {
 			return err

@@ -1,0 +1,3 @@
+  AA-2 Alpha child
+This rewrites the history of every remote of alpha and force pushes it. The clones of other members are rebuilt at their next sync.
+Type the store name to go ahead: hedgehug: Canceled

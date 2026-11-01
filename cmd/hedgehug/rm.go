@@ -39,11 +39,14 @@ func (a *app) restoreCmd() *cobra.Command {
 }
 
 func (a *app) purgeCmd() *cobra.Command {
-	var yes, moved bool
+	var yes, moved, rewrite bool
 	cmd := &cobra.Command{
-		Use:   "purge <id> [--yes]\n  hedgehug purge --moved [--store <store>] [--yes]",
-		Short: "Remove the files of a deleted task and the tasks under it, for good; or the forward files of moved tasks",
+		Use:   "purge <id> [--yes]\n  hedgehug purge --moved [--store <store>] [--yes]\n  hedgehug purge --rewrite-history <id> [--store <store>]",
+		Short: "Remove the files of a deleted task and the tasks under it, for good; or the forward files of moved tasks; or the tasks from the git history",
 		Args: func(cmd *cobra.Command, args []string) error {
+			if moved && rewrite {
+				return usageErrorf("--moved and --rewrite-history do not go together")
+			}
 			if moved {
 				if len(args) > 0 {
 					return usageErrorf("--moved takes no task id")
@@ -56,10 +59,14 @@ func (a *app) purgeCmd() *cobra.Command {
 			if moved {
 				return a.purgeMoved(yes)
 			}
+			if rewrite {
+				return a.purgeRewriteHistory(args[0])
+			}
 			return a.purge(args[0], yes)
 		},
 	}
-	cmd.Flags().BoolVar(&yes, "yes", false, "do not ask")
+	cmd.Flags().BoolVar(&yes, "yes", false, "do not ask (not for --rewrite-history, which asks for the store name on a terminal only)")
+	cmd.Flags().BoolVar(&rewrite, "rewrite-history", false, "remove the task and the tasks under it from the git history of its store, and force push it to every remote")
 	cmd.Flags().BoolVar(&moved, "moved", false, "remove the forward files that moves to other stores left in the store")
 	return cmd
 }
