@@ -14,10 +14,11 @@ import (
 type cachedStorage struct {
 	*filesystem.Storage
 	objects cache.Object
+	gitDir  string // the git directory; references are written there (refs.go)
 }
 
 func newCachedStorage(s *filesystem.Storage) *cachedStorage {
-	return &cachedStorage{Storage: s, objects: cache.NewObjectLRUDefault()}
+	return &cachedStorage{Storage: s, objects: cache.NewObjectLRUDefault(), gitDir: s.Filesystem().Root()}
 }
 
 func (s *cachedStorage) EncodedObject(t plumbing.ObjectType, h plumbing.Hash) (plumbing.EncodedObject, error) {
