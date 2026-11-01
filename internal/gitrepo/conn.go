@@ -77,7 +77,9 @@ func LocalPath(u string) (string, bool) {
 		}
 		return filepath.FromSlash(localPath(p)), true
 	}
-	if filepath.IsAbs(u) || driveRE.MatchString("/"+u) {
+	// A rooted path (/srv/x.git) is local on Windows too, as go-git takes it:
+	// filepath.IsAbs wants a drive there.
+	if filepath.IsAbs(u) || strings.HasPrefix(u, "/") || driveRE.MatchString("/"+u) {
 		return u, true
 	}
 	return "", false
