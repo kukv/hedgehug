@@ -12,6 +12,7 @@ import (
 type TaskView struct {
 	ULID      string         `json:"ulid"`
 	ID        string         `json:"id"`
+	Store     string         `json:"store"`
 	FormerIDs []string       `json:"former_ids,omitempty"`
 	Workspace *WorkspaceRef  `json:"workspace"`
 	Kind      string         `json:"kind"`
@@ -65,6 +66,7 @@ func TaskViewOf(ix *index.Index, e *index.Entry) *TaskView {
 	j := &TaskView{
 		ULID:      e.ULID.String(),
 		ID:        e.ID,
+		Store:     ix.StoreName(),
 		FormerIDs: e.FormerIDs,
 		Kind:      e.Kind,
 		Title:     e.Title,

@@ -22,7 +22,13 @@ type Options struct {
 }
 
 // Result is what a query found.
-type Result struct{ Groups []Group }
+type Result struct {
+	Groups []Group
+	// SortKey gives a task's key when the query has sort:; nil without it.
+	SortKey func(*index.Entry) SortKey
+	// Desc is whether the sort: is descending.
+	Desc bool
+}
 
 // Group is the tasks with one value of the group: field, or all the tasks
 // found when the query has no group:.
@@ -73,14 +79,23 @@ func Run(ix *index.Index, q *Query, opt Options) (*Result, error) {
 		}
 	}
 	sortEntries(hits, c.order)
-	if c.group == nil {
-		return &Result{Groups: []Group{{Tasks: hits}}}, nil
+	res := &Result{Groups: []Group{{Tasks: hits}}}
+	if c.group != nil {
+		res.Groups = groupEntries(hits, *c.group)
 	}
-	return &Result{Groups: groupEntries(hits, *c.group)}, nil
+	if c.order != nil {
+		res.SortKey, res.Desc = c.order.f.sortKey, c.order.desc
+	}
+	return res, nil
 }
 
 func (c *compiler) fail(t Term, format string, args ...any) error {
 	return &Error{Pos: t.Pos, Term: t.Raw, Msg: fmt.Sprintf(format, args...)}
+}
+
+// failUnknown is fail for a property the schema does not have.
+func (c *compiler) failUnknown(t Term, format string, args ...any) error {
+	return &Error{Pos: t.Pos, Term: t.Raw, Msg: fmt.Sprintf(format, args...), Unknown: true}
 }
 
 // failWith is fail for an underlying error, which callers can unwrap.
@@ -95,7 +110,10 @@ func (c *compiler) term(t Term) (pred, error) {
 	}
 	if t.Op != ":" {
 		p, ok := c.sc.Prop(t.Key)
-		if !ok || parsers[p.Type] == nil {
+		if !ok {
+			return nil, c.failUnknown(t, "%s cannot be compared with %s", t.Key, t.Op)
+		}
+		if parsers[p.Type] == nil {
 			return nil, c.fail(t, "%s cannot be compared with %s", t.Key, t.Op)
 		}
 		return c.compare(t, p)
@@ -144,7 +162,7 @@ func (c *compiler) term(t Term) (pred, error) {
 			return c.inverse(t, p.Name)
 		}
 	}
-	return nil, c.fail(t, "unknown key %q", t.Key)
+	return nil, c.failUnknown(t, "unknown key %q", t.Key)
 }
 
 // matchText matches when a value of the task equals a value of the term,

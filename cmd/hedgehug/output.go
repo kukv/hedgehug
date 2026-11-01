@@ -10,6 +10,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/mount"
 	"github.com/kukv/hedgehug/internal/ops"
 )
 
@@ -90,25 +91,37 @@ func taskRow(e *index.Entry) []string {
 	return []string{id, e.ULID.String(), status, kind, strings.Join(e.Assignees, ","), strings.Join(e.Labels, ","), e.Title}
 }
 
-// printTasks prints es as JSON or as a table.
-func (a *app) printTasks(ix *index.Index, es []*index.Entry) error {
+// printTasks prints es as JSON or as a table; withStore puts the name of the
+// store of each task in a STORE column ahead of the others.
+func (a *app) printTasks(es []mount.Entry, withStore bool) error {
 	if a.jsonOut {
 		out := make([]*ops.TaskView, len(es))
 		for i, e := range es {
-			out[i] = ops.TaskViewOf(ix, e)
+			ix, err := e.Store.Index()
+			if err != nil {
+				return err
+			}
+			out[i] = ops.TaskViewOf(ix, e.Entry)
 		}
 		return a.printJSON(out)
 	}
 	if len(es) == 0 {
 		return nil
 	}
+	header, lead := taskHeader, 0
+	if withStore {
+		header, lead = append([]string{"STORE"}, taskHeader...), 1
+	}
 	rows := make([][]string, len(es))
 	for i, e := range es {
-		rows[i] = taskRow(e)
+		rows[i] = taskRow(e.Entry)
+		if withStore {
+			rows[i] = append([]string{e.Store.Name}, rows[i]...)
+		}
 	}
 	st := a.style()
-	return writeTable(a.stdout, taskHeader, rows, func(r, c int, s string) string {
-		if r >= 0 && c <= 1 {
+	return writeTable(a.stdout, header, rows, func(r, c int, s string) string {
+		if r >= 0 && c >= lead && c <= lead+1 {
 			return st.id(s)
 		}
 		return s

@@ -31,11 +31,11 @@ func (a *app) show(arg string) error {
 	if a.jsonOut {
 		return a.printJSON(ops.ShowViewOf(r))
 	}
-	_, err = fmt.Fprint(a.stdout, a.showText(r.Index, r.Entry, r.Task, r.Comments, r.Relations, r.Back, r.History))
+	_, err = fmt.Fprint(a.stdout, a.showText(r.Store, r.Index, r.Entry, r.Task, r.Comments, r.Relations, r.Back, r.History))
 	return err
 }
 
-func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []ops.Relation, back []*index.Entry, history []gitrepo.LogEntry) string {
+func (a *app) showText(storeName string, ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []ops.Relation, back []*index.Entry, history []gitrepo.LogEntry) string {
 	st := a.style()
 	var b strings.Builder
 	title := e.Title
@@ -62,6 +62,7 @@ func (a *app) showText(ix *index.Index, e *index.Entry, t *model.Task, comments 
 	}
 	field("id", e.ID)
 	field("ulid", e.ULID.String())
+	field("store", storeName)
 	if !e.Workspace.IsZero() {
 		ws := e.Workspace.String()
 		if w, ok := ix.Workspace(e.Workspace); ok {

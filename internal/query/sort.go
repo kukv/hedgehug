@@ -15,6 +15,12 @@ type field struct {
 	values func(*index.Entry) []string // empty: no value
 	multi  bool                        // group: puts a task in one group per value
 	less   func(a, b string) bool      // the order of two values
+
+	// how mount.Query compares tasks of different stores (SortKey)
+	by    string                        // "place", "number" or "text"
+	order []string                      // by place: the values in the schema's order
+	parse func(string) (float64, error) // by number: how a value is read
+	class func(*index.Entry) int        // status: the category's place; kind: the role's place; nil: 0
 }
 
 // sortSpec is the sort: of a query.
@@ -71,26 +77,39 @@ func (c *compiler) fieldOf(t Term, name string, group bool) (field, error) {
 			return nil
 		}
 	}
-	byTime := byNumber(parsers[schema.TypeDatetime])
+	datetime := parsers[schema.TypeDatetime]
 	switch name {
 	case "status":
 		var names []string
 		for _, st := range c.sc.Statuses {
 			names = append(names, st.Name)
 		}
-		return field{values: text(func(e *index.Entry) string { return e.Status }), less: byPlace(names)}, nil
+		f := placed(field{values: text(func(e *index.Entry) string { return e.Status })}, names)
+		f.class = func(e *index.Entry) int {
+			st, _ := c.sc.Status(e.Status)
+			if i := slices.Index(schema.Categories, st.Category); i >= 0 {
+				return i
+			}
+			return len(schema.Categories)
+		}
+		return f, nil
 	case "kind":
 		var names []string
 		for _, k := range c.sc.Kinds {
 			names = append(names, k.Name)
 		}
-		return field{values: text(func(e *index.Entry) string { return e.Kind }), less: byPlace(names)}, nil
+		f := placed(field{values: text(func(e *index.Entry) string { return e.Kind })}, names)
+		f.class = func(e *index.Entry) int {
+			k, _ := c.sc.Kind(e.Kind)
+			return roleClass(k.Role)
+		}
+		return f, nil
 	case "title":
-		return field{values: text(func(e *index.Entry) string { return e.Title }), less: byText}, nil
+		return texted(field{values: text(func(e *index.Entry) string { return e.Title })}), nil
 	case "created":
-		return field{values: when(func(e *index.Entry) time.Time { return e.Created }), less: byTime}, nil
+		return numbered(field{values: when(func(e *index.Entry) time.Time { return e.Created })}, datetime), nil
 	case "updated":
-		return field{values: when(func(e *index.Entry) time.Time { return e.Updated }), less: byTime}, nil
+		return numbered(field{values: when(func(e *index.Entry) time.Time { return e.Updated })}, datetime), nil
 	case "label", "assignee":
 		if !group {
 			return field{}, c.fail(t, "%s can be grouped by, not sorted by", name)
@@ -99,24 +118,34 @@ func (c *compiler) fieldOf(t Term, name string, group bool) (field, error) {
 		if name == "assignee" {
 			get = func(e *index.Entry) []string { return e.Assignees }
 		}
-		return field{values: get, multi: true, less: byText}, nil
+		return texted(field{values: get, multi: true}), nil
 	}
 	p, ok := c.sc.Prop(name)
 	if !ok {
-		return field{}, c.fail(t, "cannot sort or group by %q", name)
+		return field{}, c.failUnknown(t, "cannot sort or group by %q", name)
 	}
 	f := field{
 		values: func(e *index.Entry) []string { return e.Prop(p.Name) },
 		multi:  p.Multi || p.Type == schema.TypeMultiEnum,
-		less:   byText,
 	}
 	switch {
 	case p.Type == schema.TypeEnum || p.Type == schema.TypeMultiEnum:
-		f.less = byPlace(p.Values)
+		return placed(f, p.Values), nil
 	case parsers[p.Type] != nil:
-		f.less = byNumber(parsers[p.Type])
+		return numbered(f, parsers[p.Type]), nil
 	}
-	return f, nil
+	return texted(f), nil
+}
+
+// roleClass is the place of a role: container, then work, then anything else.
+func roleClass(r schema.Role) int {
+	switch r {
+	case schema.RoleContainer:
+		return 0
+	case schema.RoleWork:
+		return 1
+	}
+	return 2
 }
 
 // byPlace orders values by their place in order; values not in it come

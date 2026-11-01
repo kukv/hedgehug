@@ -7,7 +7,7 @@ import (
 	"text/template"
 
 	"github.com/kukv/hedgehug/internal/index"
-	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/mount"
 	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/query"
 )
@@ -17,45 +17,70 @@ func (a *app) lsTree(q *query.Query, ulidsOnly bool, tmpl *template.Template) er
 	if err != nil {
 		return err
 	}
-	ix, roots, cycle := res.Index, res.Roots, res.Cycle
-	tops := append(slices.Clone(roots), cycle...)
-	drawn := ops.Flatten(tops)
+	// every store's trees, roots then the cycle, in the order they are drawn
+	type drawnNode struct {
+		store ops.TreeStore
+		node  *ops.TreeNode
+	}
+	var tops, drawn []drawnNode
+	for _, ts := range res.Stores {
+		own := append(slices.Clone(ts.Roots), ts.Cycle...)
+		for _, n := range own {
+			tops = append(tops, drawnNode{ts, n})
+		}
+		for _, n := range ops.Flatten(own) {
+			drawn = append(drawn, drawnNode{ts, n})
+		}
+	}
 	switch {
 	case ulidsOnly:
 		// Only the tasks found: the ancestors drawn for them must not
 		// reach a command such as done.
-		var hit []*index.Entry
-		for _, n := range drawn {
-			if !n.Context {
-				hit = append(hit, n.Entry)
+		var hit []mount.Entry
+		for _, d := range drawn {
+			if !d.node.Context {
+				hit = append(hit, mount.Entry{Store: d.store.Store, Entry: d.node.Entry})
 			}
 		}
 		return a.printULIDs(hit)
 	case tmpl != nil:
-		node := map[model.ULID]*ops.TreeNode{}
-		es := make([]*index.Entry, len(drawn))
-		for i, n := range drawn {
-			node[n.Entry.ULID], es[i] = n, n.Entry
+		node := map[*index.Entry]*ops.TreeNode{}
+		es := make([]mount.Entry, len(drawn))
+		for i, d := range drawn {
+			node[d.node.Entry], es[i] = d.node, mount.Entry{Store: d.store.Store, Entry: d.node.Entry}
 		}
-		return a.printFormat(ix, es, tmpl, func(m map[string]any, e *index.Entry) {
-			m["context"], m["in_cycle"] = node[e.ULID].Context, node[e.ULID].InCycle
+		return a.printFormat(es, tmpl, func(m map[string]any, e mount.Entry) {
+			m["context"], m["in_cycle"] = node[e.Entry].Context, node[e.Entry].InCycle
 		})
 	case a.jsonOut:
 		out := make([]*ops.TaskView, len(tops))
-		for i, n := range tops {
-			out[i] = ops.TreeViewOf(ix, n)
+		for i, d := range tops {
+			out[i] = ops.TreeViewOf(d.store.Index, d.node)
 		}
 		return a.printJSON(out)
 	}
 	var b strings.Builder
 	st := a.style()
-	for _, n := range roots {
-		writeNode(&b, st, ix, n, "", "")
-	}
-	if len(cycle) > 0 {
-		b.WriteString("\n== in a parent cycle\n")
-		for _, n := range cycle {
-			writeNode(&b, st, ix, n, "", "")
+	first := true
+	for _, ts := range res.Stores {
+		if len(ts.Roots) == 0 && len(ts.Cycle) == 0 {
+			continue
+		}
+		if res.Many {
+			if !first {
+				b.WriteString("\n")
+			}
+			b.WriteString("== " + ts.Store.Name + "\n")
+		}
+		first = false
+		for _, n := range ts.Roots {
+			writeNode(&b, st, ts.Index, n, "", "")
+		}
+		if len(ts.Cycle) > 0 {
+			b.WriteString("\n== in a parent cycle\n")
+			for _, n := range ts.Cycle {
+				writeNode(&b, st, ts.Index, n, "", "")
+			}
 		}
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())

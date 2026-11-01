@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/mount"
 	"github.com/kukv/hedgehug/internal/query"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
@@ -26,46 +27,74 @@ func ParseQuery(s string) (*query.Query, error) {
 	return q, nil
 }
 
-// runQuery runs q on the store. A query that does not run is a usage error.
-func (ss *Session) runQuery(q *query.Query) (*index.Index, *query.Result, []*index.Entry, error) {
-	s, ix, err := ss.Open()
+// listSet opens the stores a listing runs on: every store of config.yaml, or
+// the one --store names. The set is the caller's own, not the one Mount
+// caches: what a listing returns belongs to the indexes of its stores, which
+// another operation of the session must not refresh under it. A store that
+// does not open is warned of; the one --store names, and the only one
+// config.yaml lists, are an error.
+func (ss *Session) listSet() (*mount.Set, error) {
+	c, _, err := ss.Config()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
-	opt, err := ss.QueryOptions(s)
+	if ss.StoreName != "" || len(c.Stores) == 0 {
+		// not found, or none at all, as the other operations say
+		if _, _, err := ss.Entry(); err != nil {
+			return nil, err
+		}
+	}
+	set, err := mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Warn: ss.warn})
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
-	res, err := query.Run(ix, q, opt)
+	for _, sk := range set.Skipped {
+		if ss.StoreName == sk.Name || len(c.Stores) == 1 {
+			return nil, openError(sk.Name, sk.Err)
+		}
+		ss.warn(openError(sk.Name, sk.Err).Error())
+	}
+	return set, nil
+}
+
+// queryMounted runs q on the stores of set that store: and --store leave. A
+// query that does not run is a usage error.
+func (ss *Session) queryMounted(set *mount.Set, q *query.Query) (*mount.Result, error) {
+	res, err := mount.Query(set, q, ss.StoreName, func(m *mount.Mounted) (query.Options, error) {
+		return ss.QueryOptions(m.Store)
+	})
 	if err != nil {
 		var qe *query.Error
 		if errors.As(err, &qe) {
-			return nil, nil, nil, newErr(KindUsage, "query.invalid", err)
+			return nil, newErr(KindUsage, "query.invalid", err)
 		}
-		return nil, nil, nil, err
+		return nil, classify(err)
 	}
-	var all []*index.Entry
-	for _, g := range res.Groups {
-		all = append(all, g.Tasks...)
-	}
-	return ix, res, all, nil
+	return res, nil
 }
 
 // ListResult is what a query found: Entries in the order of the groups, and
-// the Groups themselves.
+// the Groups themselves. Stores are the stores it ran on; Many says there
+// are two or more of them, so that a reader tells which store a task is in.
+// What Entries hold is read through their Store's Index.
 type ListResult struct {
-	Index   *index.Index
-	Entries []*index.Entry
-	Groups  []query.Group
+	Stores  []*mount.Mounted
+	Entries []mount.Entry
+	Groups  []mount.Group
+	Many    bool
 }
 
-// List runs q.
+// List runs q on every store (or --store, or the store: of q).
 func (ss *Session) List(q *query.Query) (ListResult, error) {
-	ix, res, all, err := ss.runQuery(q)
+	set, err := ss.listSet()
 	if err != nil {
 		return ListResult{}, err
 	}
-	return ListResult{Index: ix, Entries: all, Groups: res.Groups}, nil
+	res, err := ss.queryMounted(set, q)
+	if err != nil {
+		return ListResult{}, err
+	}
+	return ListResult{Stores: res.Stores, Entries: res.Entries, Groups: res.Groups, Many: len(res.Stores) > 1}, nil
 }
 
 // HasTerm reports whether q has a term with the key.
@@ -86,26 +115,54 @@ type TreeNode struct {
 	Children []*TreeNode
 }
 
-// TreeResult is the tree of the tasks a query found. Cycle holds the tasks
-// in a parent cycle, which no root reaches.
-type TreeResult struct {
+// TreeStore is the tree of the tasks a query found in one store. Cycle holds
+// the tasks in a parent cycle, which no root reaches.
+type TreeStore struct {
+	Store        *mount.Mounted
 	Index        *index.Index
 	Roots, Cycle []*TreeNode
 }
 
-// Tree runs q and arranges what it found under its ancestors. A query that
-// groups or sorts is a usage error: the tree is in the order of the ranks.
+// TreeResult is the trees of the tasks a query found, one per store it ran
+// on, in config order (a store with no match has empty ones). Many says there
+// are two or more stores.
+type TreeResult struct {
+	Stores []TreeStore
+	Many   bool
+}
+
+// Tree runs q and arranges what it found under its ancestors, in each store.
+// A query that groups or sorts is a usage error: the tree is in the order of
+// the ranks.
 func (ss *Session) Tree(q *query.Query) (TreeResult, error) {
 	if HasTerm(q, "group") || HasTerm(q, "sort") {
 		//nolint:revive,staticcheck // the message is printed as it always was
 		return TreeResult{}, newErr(KindUsage, "query.tree_order", errors.New("--tree orders tasks by rank; it takes neither group: nor sort:"))
 	}
-	ix, _, found, err := ss.runQuery(q)
+	set, err := ss.listSet()
 	if err != nil {
 		return TreeResult{}, err
 	}
-	roots, cycle := treeOf(ix, found)
-	return TreeResult{Index: ix, Roots: roots, Cycle: cycle}, nil
+	res, err := ss.queryMounted(set, q)
+	if err != nil {
+		return TreeResult{}, err
+	}
+	out := TreeResult{Many: len(res.Stores) > 1}
+	for _, m := range res.Stores {
+		ix, err := m.Index()
+		if err != nil {
+			return TreeResult{}, classify(err)
+		}
+		var found []*index.Entry
+		for _, e := range res.Entries {
+			if e.Store == m {
+				found = append(found, e.Entry)
+			}
+		}
+		roots, cycle := treeOf(ix, found)
+		out.Stores = append(out.Stores, TreeStore{Store: m, Index: ix, Roots: roots, Cycle: cycle})
+	}
+	return out, nil
 }
 
 // treeOf builds the tree of the tasks found and of the ancestors that
@@ -213,6 +270,7 @@ type Relation struct {
 // ShowResult is a task with what points at it. Task and Comments are empty
 // when the file of the task does not decode.
 type ShowResult struct {
+	Store     string // the name of the store the task is in
 	Index     *index.Index
 	Entry     *index.Entry
 	Task      *model.Task
@@ -239,7 +297,7 @@ func (ss *Session) Show(arg string) (ShowResult, error) {
 	if err != nil {
 		return ShowResult{}, err
 	}
-	r := ShowResult{Index: ix, Entry: e}
+	r := ShowResult{Store: ix.StoreName(), Index: ix, Entry: e}
 	if e.Broken == "" {
 		if r.Task, err = s.Task(e.ULID); err != nil {
 			return ShowResult{}, err
@@ -347,6 +405,7 @@ type LogView struct {
 		Name  string `json:"name"`
 		Email string `json:"email"`
 	} `json:"author"`
+	Store   string  `json:"store"`
 	Op      *string `json:"op"`
 	Task    *string `json:"task"`
 	ID      *string `json:"id"` // the current id of the task
@@ -354,7 +413,7 @@ type LogView struct {
 }
 
 func logViewOf(ix *index.Index, e gitrepo.LogEntry) LogView {
-	j := LogView{Hash: e.Hash.String(), Date: e.When, Subject: e.Subject}
+	j := LogView{Hash: e.Hash.String(), Date: e.When, Subject: e.Subject, Store: ix.StoreName()}
 	j.Author.Name, j.Author.Email = e.Author.Name, e.Author.Email
 	if v, ok := e.Trailer("Hedgehug-Op"); ok {
 		j.Op = &v
@@ -403,36 +462,95 @@ func SubjectNow(ix *index.Index, le gitrepo.LogEntry) string {
 	return strings.TrimRight(head+TaskLabel(e)+" "+title, " ")
 }
 
-// Log lists the commits of the store, or of the task args[0] names, newest
-// first; limit 0 lists all.
-func (ss *Session) Log(args []string, limit int) (*index.Index, []gitrepo.LogEntry, error) {
+// StoreLog is a commit with the store it is in. Index is that store's.
+type StoreLog struct {
+	Store string
+	Index *index.Index
+	Entry gitrepo.LogEntry
+}
+
+// LogResult is the commits Log found. Many says they were taken from two or
+// more stores, so that a reader tells which store a commit is in.
+type LogResult struct {
+	Logs []StoreLog
+	Many bool
+}
+
+// StoreLogViews is the commits as --json prints them, each with its store.
+func StoreLogViews(logs []StoreLog) []LogView {
+	out := make([]LogView, len(logs))
+	for i, l := range logs {
+		out[i] = logViewOf(l.Index, l.Entry)
+		out[i].Store = l.Store
+	}
+	return out
+}
+
+// Log lists the commits of every store, newest first (a commit of the same
+// time comes in the order of the stores), or of the task args[0] names, in
+// its store; limit 0 lists all, and limit counts the commits of all the
+// stores together.
+func (ss *Session) Log(args []string, limit int) (LogResult, error) {
 	if len(args) > 0 {
 		ts, arg, err := ss.forTask(args[0])
 		if err != nil {
-			return nil, nil, err
+			return LogResult{}, err
 		}
 		if ts != ss {
 			return ts.Log(append([]string{arg}, args[1:]...), limit)
 		}
-	}
-	s, ix, err := ss.Open()
-	if err != nil {
-		return nil, nil, err
-	}
-	var entries []gitrepo.LogEntry
-	if len(args) == 0 {
-		entries, err = s.Repo().Log(nil, limit)
-	} else {
-		e, rerr := ss.Resolve(ix, args[0])
-		if rerr != nil {
-			return nil, nil, rerr
+		s, ix, err := ss.Open()
+		if err != nil {
+			return LogResult{}, err
 		}
-		entries, err = ss.TaskLog(s, e.ULID, limit)
+		e, err := ss.Resolve(ix, arg)
+		if err != nil {
+			return LogResult{}, err
+		}
+		entries, err := ss.TaskLog(s, e.ULID, limit)
+		if err != nil {
+			return LogResult{}, err
+		}
+		return LogResult{Logs: storeLogs(ix.StoreName(), ix, entries)}, nil
 	}
+	set, err := ss.listSet()
 	if err != nil {
-		return nil, nil, err
+		return LogResult{}, err
 	}
-	return ix, entries, nil
+	stores := set.Stores
+	if ss.StoreName != "" {
+		m, _ := set.Get(ss.StoreName)
+		stores = []*mount.Mounted{m}
+	}
+	var all []StoreLog
+	for _, m := range stores {
+		var entries []gitrepo.LogEntry
+		var logErr error
+		if err := m.With(func(*index.Index) { entries, logErr = m.Store.Repo().Log(nil, limit) }); err != nil {
+			return LogResult{}, classify(err)
+		}
+		if logErr != nil {
+			return LogResult{}, logErr
+		}
+		ix, err := m.Index()
+		if err != nil {
+			return LogResult{}, classify(err)
+		}
+		all = append(all, storeLogs(m.Name, ix, entries)...)
+	}
+	slices.SortStableFunc(all, func(a, b StoreLog) int { return b.Entry.When.Compare(a.Entry.When) })
+	if limit > 0 && len(all) > limit {
+		all = all[:limit]
+	}
+	return LogResult{Logs: all, Many: len(stores) > 1}, nil
+}
+
+func storeLogs(name string, ix *index.Index, entries []gitrepo.LogEntry) []StoreLog {
+	out := make([]StoreLog, len(entries))
+	for i, e := range entries {
+		out[i] = StoreLog{Store: name, Index: ix, Entry: e}
+	}
+	return out
 }
 
 // TaskLog returns the commits that touched the task, its comments or its

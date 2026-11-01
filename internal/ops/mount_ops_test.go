@@ -88,7 +88,7 @@ func TestShowByIDAndByStorePrefix(t *testing.T) {
 	if err != nil || r.Entry.Title != "org-b task" {
 		t.Errorf("Show(org-b:WEB-1) = %v, %v", r.Entry, err)
 	}
-	if _, _, err := ts.Log([]string{"WEB-1"}, 0); err != nil {
+	if _, err := ts.Log([]string{"WEB-1"}, 0); err != nil {
 		t.Errorf("Log(WEB-1): %v", err)
 	}
 }
@@ -309,7 +309,7 @@ func handedOverOps(t *testing.T) []handedOver {
 	t.Helper()
 	return []handedOver{
 		{name: "Show", task: true, read: true, run: func(ts *testSession, id string) error { _, err := ts.Show(id); return err }},
-		{name: "Log", task: true, read: true, run: func(ts *testSession, id string) error { _, _, err := ts.Log([]string{id}, 0); return err }},
+		{name: "Log", task: true, read: true, run: func(ts *testSession, id string) error { _, err := ts.Log([]string{id}, 0); return err }},
 		{name: "Set", task: true, run: func(ts *testSession, id string) error {
 			_, err := ts.Set(id, []Assign{{Key: "title", Op: "=", Value: "set " + id}})
 			return err
