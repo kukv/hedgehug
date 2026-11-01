@@ -17,6 +17,7 @@ import (
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/sync"
 )
 
 // ViolationsText is the text of a refused write: what it breaks, and the
@@ -284,7 +285,7 @@ func (ss *Session) doctorStore(e config.StoreEntry, only bool, repaired []Fixed,
 	r := DoctorReport{Store: e.Name, Repaired: repaired}
 	// A store that does not open is told of by the findings, which say why;
 	// its references are not looked at.
-	_, openErr := ss.openStoreAt(e.Path)
+	opened, openErr := ss.openStoreAt(e.Path)
 	fs, err := doctor.Run(e.Path)
 	if err != nil {
 		return DoctorReport{}, err
@@ -299,9 +300,25 @@ func (ss *Session) doctorStore(e config.StoreEntry, only bool, repaired []Fixed,
 		fs = append(fs, ss.crossStoreFindings(e.Name)...)
 		fs = append(fs, duplicateFindings(e.Name, duplicates())...)
 		fs = append(fs, ss.forwardTargetFindings(e.Name)...)
+		f, err := forcePushFinding(e.Name, opened)
+		if err != nil {
+			return DoctorReport{}, err
+		}
+		fs = append(fs, f...)
 	}
 	r.Findings = fs
 	return r, nil
+}
+
+// forcePushFinding is unexpected_force_push (D23): the last sync found the
+// history of origin rewritten without a record, and the file it left is
+// still there.
+func forcePushFinding(name string, s *store.Store) ([]doctor.Finding, error) {
+	_, ok, err := sync.ReadForcePush(s)
+	if err != nil || !ok {
+		return nil, err
+	}
+	return []doctor.Finding{{Check: "unexpected_force_push", Where: name, Msg: sync.ErrForcePush.Error(), Hint: "check the history of origin; if it is right, clone the store again"}}, nil
 }
 
 // fixStore repairs the files of HEAD of the store e, opened as s, as a sync

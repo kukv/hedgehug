@@ -63,6 +63,9 @@ type Result struct {
 	// other stores' prefixes, the inbox, finding the invalid tasks,
 	// repacking.
 	Warnings []string
+	// Rewrite is the history rewrite of origin that is recorded and not yet
+	// taken in; the sync stopped before changing the store.
+	Rewrite *model.Rewrite
 	// Unpushable counts the commits not pushed because the store is read-only.
 	Unpushable int
 }
@@ -156,17 +159,50 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 	for round := 0; ; round++ {
 		res.Pushed = nil // a rejected mirror makes another round; report the last one
 		var up []string
+		var tracked plumbing.Hash // origin before the fetch
 		for i, name := range r.Remotes() {
+			if i == 0 {
+				if tracked, err = r.RemoteHead(name); err != nil {
+					return res, err
+				}
+			}
 			if _, err := r.Fetch(name); err != nil && i == 0 {
 				return res, err
 			} else if err != nil {
 				down[name] = err
 				continue
 			}
+			if i == 0 {
+				if err := checkOrigin(s, tracked, opt, &res); err != nil || res.Rewrite != nil {
+					return res, err
+				}
+			}
 			delete(down, name) // a warning tells of how the last round went
 			up = append(up, name)
 		}
-		for _, name := range up {
+		// A mirror that still has the history before a rewrite is not merged
+		// (it would bring back what the rewrite removed); it is force pushed
+		// to below. Origin comes first, so HEAD has its rewrites.yaml.
+		stale := map[string]plumbing.Hash{}
+		for i, name := range up {
+			if i > 0 {
+				mirror, err := r.RemoteHead(name)
+				if err != nil {
+					return res, err
+				}
+				head, err := r.Head()
+				if err != nil {
+					return res, err
+				}
+				old, err := staleMirror(r, head, mirror)
+				if err != nil {
+					return res, err
+				}
+				if old {
+					stale[name] = mirror
+					continue
+				}
+			}
 			if err := mergeRemote(s, name, opt, &res); err != nil {
 				return res, err
 			}
@@ -207,7 +243,12 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 		res.Pushed = append(res.Pushed, "origin")
 		rejected := false
 		for _, name := range up[1:] {
-			err := r.Push(name)
+			var err error
+			if mirror, old := stale[name]; old {
+				err = r.ForcePush(name, mirror)
+			} else {
+				err = r.Push(name)
+			}
 			switch {
 			case err == nil:
 				res.Pushed = append(res.Pushed, name)

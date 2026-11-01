@@ -366,3 +366,24 @@ func TestViolationsText(t *testing.T) {
 		t.Errorf("ViolationsText = %q; want %q", got, want)
 	}
 }
+
+// force-push.json is told of as unexpected_force_push (D23).
+func TestDoctorFindsAnUnexpectedForcePush(t *testing.T) {
+	ts := newCheckedSession(t)
+	_, e, _ := ts.Entry()
+	file := filepath.Join(e.Path, ".hedgehug", "local", "force-push.json")
+	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte(`{"origin":"a","tracked":"b","checked":"2026-11-02T00:00:00Z"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := ts.doctorOne(false)
+	if err != nil || len(rep.Findings) != 1 {
+		t.Fatalf("Doctor = %+v, %v; want one finding", rep, err)
+	}
+	f := rep.Findings[0]
+	if f.Check != "unexpected_force_push" || f.Where != e.Name || !strings.Contains(f.Msg, "without a record of Hedgehug") || f.Hint == "" {
+		t.Errorf("finding = %+v", f)
+	}
+}

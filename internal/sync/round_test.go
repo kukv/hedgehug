@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing"
+
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/merge"
@@ -222,6 +224,24 @@ func TestRepack(t *testing.T) {
 	}
 }
 
+// followRoot makes clone i follow origin at the first commit of the store,
+// for a test that points origin at another remote.
+func (c *cluster) followRoot(i int) {
+	c.t.Helper()
+	r := c.stores[i].Repo()
+	head, err := r.Head()
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	cs, err := r.Between(head, plumbing.ZeroHash)
+	if err != nil || len(cs) == 0 {
+		c.t.Fatalf("history: %d commits, %v", len(cs), err)
+	}
+	if err := r.SetTracking("origin", cs[0].Hash); err != nil {
+		c.t.Fatal(err)
+	}
+}
+
 // Two clones merge the same pair of commits, each from its own side, and
 // get the same tree and the same overwritten values.
 func TestMergeIsSymmetric(t *testing.T) {
@@ -245,10 +265,15 @@ func TestMergeIsSymmetric(t *testing.T) {
 			t.Fatal(err)
 		}
 		c.sync(0) // origin has clone 0's side
+		// origin is another remote from here on: what the clone followed is
+		// the first commit they share, not a history that was rewritten.
+		c.followRoot(1)
 		c.opts[1].Remotes = []string{r2}
 		c.sync(1) // r2 has clone 1's side
+		c.followRoot(0)
 		c.opts[0].Remotes = []string{r2}
 		r0 := c.sync(0) // ours is clone 0's side
+		c.followRoot(1)
 		c.opts[1].Remotes = []string{origin}
 		r1 := c.sync(1) // ours is clone 1's side
 		if r0.Merges != 1 || r1.Merges != 1 {
