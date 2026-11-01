@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -98,6 +99,15 @@ func (ts *testSession) head() string {
 	return h.String()
 }
 
+// doctorOne is Doctor of a session with one store: its only report.
+func (ts *testSession) doctorOne(fix bool) (DoctorReport, error) {
+	rs, err := ts.Doctor(fix)
+	if err != nil || len(rs) != 1 {
+		return DoctorReport{}, fmt.Errorf("%d reports, %w", len(rs), err)
+	}
+	return rs[0], nil
+}
+
 func TestDoctorAndSchemaCheckOnACleanStore(t *testing.T) {
 	ts := newCheckedSession(t)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
@@ -107,14 +117,14 @@ func TestDoctorAndSchemaCheckOnACleanStore(t *testing.T) {
 	if err != nil || len(fs) != 0 {
 		t.Fatalf("SchemaCheck = %v, %v; want no findings", fs, err)
 	}
-	rep, err := ts.Doctor(false)
+	rep, err := ts.doctorOne(false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(rep.Findings) != 0 || len(rep.Repaired) != 0 {
 		t.Errorf("Doctor = %+v; want nothing found and nothing repaired", rep)
 	}
-	rep, err = ts.Doctor(true)
+	rep, err = ts.doctorOne(true)
 	if err != nil || len(rep.Findings) != 0 || len(rep.Repaired) != 0 {
 		t.Errorf("Doctor(fix) = %+v, %v; want nothing to repair", rep, err)
 	}
@@ -130,11 +140,11 @@ func TestSchemaCheckAndDoctorOnABrokenSchemaFile(t *testing.T) {
 	if err != nil || len(fs) == 0 || fs[0].Check != "schema" || !strings.HasPrefix(fs[0].Where, "schema.yaml") {
 		t.Fatalf("SchemaCheck = %+v, %v; want the schema.yaml finding", fs, err)
 	}
-	rep, err := ts.Doctor(false)
+	rep, err := ts.doctorOne(false)
 	if err != nil || len(rep.Findings) == 0 || rep.Findings[0].Check != "schema" {
 		t.Fatalf("Doctor = %+v, %v; want the schema finding", rep, err)
 	}
-	rep, err = ts.Doctor(true)
+	rep, err = ts.doctorOne(true)
 	if err != nil || len(rep.Findings) == 0 || len(rep.Repaired) != 0 {
 		t.Errorf("Doctor(fix) = %+v, %v; want the finding and no repair of a store that does not open", rep, err)
 	}
@@ -147,7 +157,7 @@ func TestDoctorFindsABrokenTaskFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	ts.commitRawFile(model.TaskPath(a.ULID), "not a task\n")
-	rep, err := ts.Doctor(false)
+	rep, err := ts.doctorOne(false)
 	if err != nil || len(rep.Findings) == 0 {
 		t.Fatalf("Doctor = %+v, %v; want findings", rep, err)
 	}
@@ -173,7 +183,7 @@ func TestDoctorFixRepairsAnIDClash(t *testing.T) {
 	}
 	written = 0
 	ts.editRawFile(model.TaskPath(b.ULID), "id: ME-2", "id: ME-1")
-	rep, err := ts.Doctor(false)
+	rep, err := ts.doctorOne(false)
 	if err != nil || len(rep.Findings) == 0 || len(rep.Repaired) != 0 {
 		t.Fatalf("Doctor = %+v, %v; want the clash found and nothing repaired", rep, err)
 	}
@@ -185,7 +195,7 @@ func TestDoctorFixRepairsAnIDClash(t *testing.T) {
 		t.Errorf("no finding says --fix fixes it: %+v", rep.Findings)
 	}
 	before := ts.head()
-	rep, err = ts.Doctor(true)
+	rep, err = ts.doctorOne(true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +217,7 @@ func TestDoctorFixRepairsAnIDClash(t *testing.T) {
 	if st, err := sync.ReadState(s); err != nil || st.PendingSince.IsZero() {
 		t.Errorf("sync state = %+v, %v; want the repair pending", st, err)
 	}
-	if rep, err := ts.Doctor(true); err != nil || len(rep.Repaired) != 0 || len(rep.Findings) != 0 {
+	if rep, err := ts.doctorOne(true); err != nil || len(rep.Repaired) != 0 || len(rep.Findings) != 0 {
 		t.Errorf("second fix = %+v, %v; want nothing", rep, err)
 	}
 }

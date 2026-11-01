@@ -184,30 +184,61 @@ type Fixed struct {
 	Line   string          `json:"-"`
 }
 
-// DoctorReport is what Doctor found: what --fix repaired, and the findings
-// that are left, as doctor --fix --json prints them. Without --fix, Repaired
-// is empty and only Findings is of interest.
+// DoctorReport is what Doctor found in one store: what --fix repaired, and
+// the findings that are left, as doctor --fix --json prints them. Without
+// --fix, Repaired is empty and only Findings is of interest.
 type DoctorReport struct {
+	Store    string           `json:"store"`
 	Repaired []Fixed          `json:"repaired"`
 	Findings []doctor.Finding `json:"findings"`
 }
 
 // Doctor finds what is wrong with the files, the work tree and git of the
-// store. With fix it first repairs, in one commit, what a sync repairs.
-func (ss *Session) Doctor(fix bool) (DoctorReport, error) {
-	c, e, err := ss.Entry()
+// stores: the one --store names, or else every store of config.yaml, in its
+// order, each with the references that lead to another mounted store. With
+// fix it first repairs, in one commit per store, what a sync repairs; a
+// store that is read-only is not repaired, and a warning says so.
+func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
+	c, _, err := ss.Config()
 	if err != nil {
-		return DoctorReport{}, err
+		return nil, err
 	}
-	var r DoctorReport
-	var openErr error
-	if fix {
-		var s *store.Store
-		// A store that does not open is told of by the findings, which say why.
-		if s, openErr = ss.openStoreAt(e.Path); openErr == nil {
-			if r.Repaired, err = ss.fixStore(c, e, s); err != nil {
-				return DoctorReport{}, err
-			}
+	entries := c.Stores
+	if ss.StoreName != "" || len(entries) == 0 {
+		e, err := c.Select(ss.StoreName)
+		if err != nil {
+			return nil, selectError(ss.StoreName, err)
+		}
+		entries = []config.StoreEntry{e}
+	}
+	out := make([]DoctorReport, 0, len(entries))
+	for _, e := range entries {
+		r, err := ss.doctorStore(c, e, fix)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+// doctorStore is Doctor for the store e.
+func (ss *Session) doctorStore(c *config.Config, e config.StoreEntry, fix bool) (DoctorReport, error) {
+	r := DoctorReport{Store: e.Name}
+	// A store that does not open is told of by the findings, which say why;
+	// it is not repaired, and its references are not looked at.
+	s, openErr := ss.openStoreAt(e.Path)
+	if fix && openErr == nil {
+		repaired, err := ss.fixStore(c, e, s)
+		var ro *ReadOnlyError
+		switch {
+		case errors.As(err, &ro):
+			ss.warn(fmt.Sprintf("%s is read-only, so it is not fixed (%s)", e.Name, ro.Access.Why()))
+		case err != nil:
+			return DoctorReport{}, err
+		case len(repaired) > 0:
+			r.Repaired = repaired
+			ss.dropMount() // the repair went in through a handle of its own
 		}
 	}
 	fs, err := doctor.Run(e.Path)
@@ -216,6 +247,9 @@ func (ss *Session) Doctor(fix bool) (DoctorReport, error) {
 	}
 	if openErr != nil && len(fs) == 0 {
 		return DoctorReport{}, openErr
+	}
+	if openErr == nil {
+		fs = append(fs, ss.crossStoreFindings(e.Name)...)
 	}
 	r.Findings = fs
 	return r, nil

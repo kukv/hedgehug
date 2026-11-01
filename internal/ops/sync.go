@@ -160,6 +160,7 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 	for _, u := range res.Invalid {
 		r.Invalid = append(r.Invalid, u.String())
 	}
+	r.Warnings = append(r.Warnings, ss.crossStoreWarnings(e.Name)...)
 	return r, nil
 }
 

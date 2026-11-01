@@ -22,37 +22,62 @@ func (a *app) doctorCmd() *cobra.Command {
 }
 
 func (a *app) doctor(fix bool) error {
-	r, err := a.ss.Doctor(fix)
+	rs, err := a.ss.Doctor(fix)
 	if err != nil {
 		return err
 	}
-	if !fix {
-		return a.printFindings(r.Findings)
+	failing := false
+	for i, r := range rs {
+		failing = failing || doctor.Failing(r.Findings)
+		if a.jsonOut {
+			if r.Repaired == nil {
+				rs[i].Repaired = []ops.Fixed{}
+			}
+			if r.Findings == nil {
+				rs[i].Findings = []doctor.Finding{}
+			}
+			continue
+		}
+		if err := a.writeDoctor(r, fix, len(rs) > 1, i == 0); err != nil {
+			return err
+		}
 	}
 	if a.jsonOut {
-		if r.Repaired == nil {
-			r.Repaired = []ops.Fixed{}
-		}
-		if r.Findings == nil {
-			r.Findings = []doctor.Finding{}
-		}
-		if err := a.printJSON(r); err != nil {
-			return err
-		}
-		if len(r.Findings) > 0 {
-			return errFindings
-		}
-		return nil
-	}
-	if len(r.Repaired) == 0 {
-		if _, err := fmt.Fprintln(a.stdout, "Nothing to repair"); err != nil {
+		if err := a.printJSON(rs); err != nil {
 			return err
 		}
 	}
-	for _, x := range r.Repaired {
-		if _, err := fmt.Fprintln(a.stdout, x.Line); err != nil {
+	if failing {
+		return errFindings
+	}
+	return nil
+}
+
+// writeDoctor writes the text of one store's report: under a heading with
+// the store's name when there are several stores (a blank line apart), the
+// repairs when --fix asked for them, and the findings.
+func (a *app) writeDoctor(r ops.DoctorReport, fix, heading, first bool) error {
+	if heading {
+		if !first {
+			if _, err := fmt.Fprintln(a.stdout); err != nil {
+				return err
+			}
+		}
+		if _, err := fmt.Fprintf(a.stdout, "== %s\n", r.Store); err != nil {
 			return err
 		}
 	}
-	return a.printFindings(r.Findings)
+	if fix {
+		if len(r.Repaired) == 0 {
+			if _, err := fmt.Fprintln(a.stdout, "Nothing to repair"); err != nil {
+				return err
+			}
+		}
+		for _, x := range r.Repaired {
+			if _, err := fmt.Fprintln(a.stdout, x.Line); err != nil {
+				return err
+			}
+		}
+	}
+	return a.writeFindings(r.Findings)
 }

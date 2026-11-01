@@ -1,0 +1,3 @@
+AA-2 (<ULID-1>) Alpha child: blocked_by: task <ULID-2> is not in this store
+AA-2 (<ULID-1>): blocked_by points at bravo-long's BB-3; references stay inside a store (warning)
+2 problems
