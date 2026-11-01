@@ -224,7 +224,8 @@ func idOrULIDShown(ix *index.Index, e *index.Entry) string {
 	return e.ULID.String()
 }
 
-// idOrULID is the id of e, or its ULID when it has none.
+// idOrULID is the id of e, or its ULID when it has none. The id is not
+// qualified: crossStore writes the store name apart from it.
 func idOrULID(e *index.Entry) string {
 	if e.ID != "" {
 		return e.ID

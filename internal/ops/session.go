@@ -122,7 +122,7 @@ func (ss *Session) Mount() (*mount.Set, error) {
 	if err != nil {
 		return nil, err
 	}
-	set, err := mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Warn: ss.warn, Qualified: ss.qualified(c)})
+	set, err := mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Warn: ss.warn, Qualified: ss.qualifiedNow(c)})
 	if err != nil {
 		return nil, err
 	}
@@ -288,6 +288,15 @@ func (ss *Session) qualified(c *config.Config) func(prefix string) bool {
 		mc.shared, mc.sharedDone = mount.SharedPrefixes(c), true
 	}
 	return mc.shared
+}
+
+// qualifiedNow is qualified asked again at each use, for what is kept long:
+// a mounted set must follow a write that changes which prefixes are shared.
+func (ss *Session) qualifiedNow(c *config.Config) func(prefix string) bool {
+	return func(prefix string) bool {
+		fn := ss.qualified(c)
+		return fn != nil && fn(prefix)
+	}
 }
 
 // forgetQualified drops what qualified worked out, for the next call to

@@ -70,7 +70,7 @@ func (a *app) printUndo(res ops.UndoResult) error {
 	for _, k := range res.Kept {
 		fmt.Fprintf(&b, "  kept %s (changed later by %s)", k.Field, k.Author)
 		if several {
-			b.WriteString(" in " + cmp.Or(k.Task, k.Path))
+			b.WriteString(" in " + cmp.Or(k.Label, k.Path))
 		}
 		b.WriteString("\n")
 	}

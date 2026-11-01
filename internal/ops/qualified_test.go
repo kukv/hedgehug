@@ -3,7 +3,72 @@ package ops
 import (
 	"strings"
 	"testing"
+
+	"github.com/kukv/hedgehug/internal/gitrepo"
+	"github.com/kukv/hedgehug/internal/store"
 )
+
+func TestUndoKeptLabelIsQualifiedAndTaskIsNot(t *testing.T) {
+	ts := newTwoStoreSessionWith(t, "XX", "XX")
+	a := ts.ForStore("org-a")
+	if _, err := a.Set("XX-1", []Assign{{Key: "title", Op: "=", Value: "b"}}); err != nil {
+		t.Fatal(err)
+	}
+	// someone else changes the title after alice's write
+	s, ix, err := a.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, _ := a.Resolve(ix, "XX-1")
+	if _, err := s.Update(store.Op{Name: "set", Task: e.ULID, Author: gitrepo.Signature{Name: "Bob", Email: "bob@example.com"}, Account: "github.com/bob"}, func(tx *store.Tx) error {
+		task, err := tx.Task(e.ULID)
+		if err != nil {
+			return err
+		}
+		task.Title = "c"
+		return tx.PutTask(task)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := a.Undo()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Kept) != 1 || res.Kept[0].Task != "XX-1" || res.Kept[0].Label != "org-a:XX-1" {
+		t.Errorf("Kept = %+v; want Task XX-1 and Label org-a:XX-1", res.Kept)
+	}
+}
+
+func TestMountedPathFollowsAPrefixThatBecomesShared(t *testing.T) {
+	ts := newTwoStoreSession(t) // API and WEB
+	set, err := ts.Mount()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, _ := set.Get("org-b")
+	ix, err := m.Index()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := ix.QualifyID("API-1"); got != "API-1" {
+		t.Fatalf("before: QualifyID = %q", got)
+	}
+	// org-b gets the prefix org-a has; a write of the session drops what it
+	// knew of the shared prefixes
+	b := ts.ForStore("org-b")
+	s, bix, err := b.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	w2 := *bix.Workspaces()[0]
+	w2.IDPrefix = "API"
+	if _, err := b.UpdateCommit(s, store.Op{Name: "workspace"}, func(tx *store.Tx) error { return tx.PutWorkspace(&w2) }); err != nil {
+		t.Fatal(err)
+	}
+	if got := ix.QualifyID("API-1"); got != "org-b:API-1" {
+		t.Errorf("after: the mounted index's QualifyID = %q; want org-b:API-1", got)
+	}
+}
 
 func TestTaskLabelFollowsWhetherThePrefixIsShared(t *testing.T) {
 	for _, tc := range []struct {
