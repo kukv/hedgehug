@@ -108,6 +108,18 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 			return res, err
 		}
 	}
+	// A person who runs hh sync gets a read-only store judged again at once,
+	// whatever infoInterval says: the permission may have come back. A check
+	// that fails leaves the access as it was, with its warning.
+	if opt.Explicit && acc.ReadOnly {
+		a, warns, err := CheckAccess(s, opt, opt.Now())
+		res.Warnings = append(res.Warnings, warns...)
+		if err != nil {
+			res.Warnings = append(res.Warnings, "check the access: "+err.Error())
+		} else {
+			acc = a
+		}
+	}
 	before, err := r.Head()
 	if err != nil {
 		return res, err

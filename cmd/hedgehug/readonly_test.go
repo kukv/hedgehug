@@ -110,7 +110,10 @@ func TestSyncShowsUnpushable(t *testing.T) {
 	}
 }
 
-func TestSyncPrintsUnpushable(t *testing.T) {
+// Runs everywhere (no read-only directory): access.json says the GitHub
+// permission is read, and sync --status, which syncs and judges nothing, shows
+// the reason and the commits not pushed.
+func TestSyncStatusShowsGitHubReadOnlyAndUnpushed(t *testing.T) {
 	te := newTestEnv(t)
 	bare := filepath.Join(t.TempDir(), "x.git")
 	if err := gitrepo.InitBare(bare); err != nil {
@@ -123,6 +126,30 @@ func TestSyncPrintsUnpushable(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := sync.WriteAccess(s, sync.Access{ReadOnly: true, Reason: sync.ReasonGitHub, Checked: te.now}); err != nil {
+		t.Fatal(err)
+	}
+	out := te.ok("sync", "--status")
+	if !strings.Contains(out, "read-only:     the GitHub permission is read") || !strings.Contains(out, "1 commit not pushed") {
+		t.Errorf("status = %q", out)
+	}
+}
+
+func TestSyncPrintsUnpushable(t *testing.T) {
+	te := newTestEnv(t)
+	bare := filepath.Join(t.TempDir(), "x.git")
+	if err := gitrepo.InitBare(bare); err != nil {
+		t.Fatal(err)
+	}
+	te.ok("store", "init", "me", "--prefix", "ME", "--remote", bare)
+	te.ok("add", "one")
+	s, err := store.Open(te.storeDir("me"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// An explicit sync judges a read-only store again, so the bare is
+	// really not writable.
+	gitrepotest.LockObjects(t, bare)
+	if err := sync.WriteAccess(s, sync.Access{ReadOnly: true, Reason: sync.ReasonNotWritable, Checked: te.now}); err != nil {
 		t.Fatal(err)
 	}
 	out := te.ok("sync")

@@ -37,7 +37,7 @@ func postForm(hc *http.Client, u string, form url.Values, out any) error {
 	req.Header.Set("Accept", "application/json")
 	res, err := defaultHTTP(hc).Do(req) //nolint:gosec // G704: web is the web base of a host in config.yaml
 	if err != nil {
-		return err
+		return requestErr("POST", u, err)
 	}
 	defer func() { _ = res.Body.Close() }()
 	data, err := io.ReadAll(res.Body)

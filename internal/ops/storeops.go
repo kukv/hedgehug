@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -143,6 +144,12 @@ func (ss *Session) StoreInit(in StoreInitInput) (StoreInitResult, error) {
 		}
 		return nil
 	}); err != nil {
+		// The remotes kept what was pushed, though the store here is removed:
+		// the way to use it comes with the error.
+		if kept := made.keptWithCommits(c, in.Remotes, len(pushed) > 0); len(kept) > 0 {
+			err = fmt.Errorf("%w\nthe commits were pushed to %s and stay there; to use them, run %s",
+				err, strings.Join(kept, ", "), addCommand(name, kept))
+		}
 		return StoreInitResult{}, undo(err)
 	}
 	return StoreInitResult{Name: name, Path: dir, Workspace: ws, Remotes: in.Remotes, Pushed: pushed}, nil
@@ -162,6 +169,28 @@ func (m madeRemotes) undo() error {
 		errs = append(errs, os.RemoveAll(b)) //nolint:gosec // G703: a bare repository this command just made
 	}
 	return errors.Join(errs...)
+}
+
+// keptWithCommits is the remotes among remotes that hold the commits of a
+// store that was pushed, and are not removed by undo or told of by note: the
+// ones that were there before the command (an empty GitHub repository, a local
+// bare).
+func (m madeRemotes) keptWithCommits(c *config.Config, remotes []string, pushed bool) []string {
+	if !pushed {
+		return nil
+	}
+	var kept []string
+
+	for _, u := range remotes {
+		if slices.Contains(m.github, u) {
+			continue
+		}
+		if p, ok := gitrepo.LocalPath(c.Rewrite(u)); ok && slices.Contains(m.bares, p) {
+			continue
+		}
+		kept = append(kept, u)
+	}
+	return kept
 }
 
 // note tells of the GitHub repositories left behind.

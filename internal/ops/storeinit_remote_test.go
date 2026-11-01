@@ -328,6 +328,28 @@ func TestStoreInitConfigFailureRemovesTheBare(t *testing.T) {
 	notExist(t, bare, "the bare made by the failed init")
 }
 
+// A store pushed to a remote that was there before (an existing bare) and
+// then refused by config.yaml: the store here is removed, the remote keeps the
+// commits, and the error says how to use them.
+func TestStoreInitConfigFailureAfterPushTellsOfTheRemote(t *testing.T) {
+	ts := newTestSession(t)
+	bare := filepath.Join(t.TempDir(), "r.git")
+	if err := gitrepo.InitBare(bare); err != nil {
+		t.Fatal(err)
+	}
+	theirs := filepath.Join(t.TempDir(), "theirs")
+	hookConfigWrite(t, ts, func(c *config.Config) error { return c.AddStore("race", theirs, nil) })
+	_, err := ts.StoreInit(StoreInitInput{Name: "race", Prefix: "RC", Remotes: []string{bare}})
+	wantErr(t, err, KindConflict, "store.exists")
+	if !strings.Contains(err.Error(), "stay there") || !strings.Contains(err.Error(), "hedgehug store add race --remote "+bare) {
+		t.Errorf("err = %v", err)
+	}
+	if ok, herr := gitrepo.HeadHasFile(bare, ".hedgehug/store.yaml"); herr != nil || !ok {
+		t.Errorf("the bare lost the commits: %v %v", ok, herr)
+	}
+	notExist(t, storeDirOf(t, ts, "race"), "the store directory")
+}
+
 // Only the accounts of the host of the remote are offered; with none on that
 // host the way to set one up is given.
 func TestStoreInitChoiceIsOfTheRemotesHost(t *testing.T) {

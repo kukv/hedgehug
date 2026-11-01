@@ -254,13 +254,36 @@ func TestSyncExplicitClearsPushDeniedBackgroundDoesNot(t *testing.T) {
 // cannot be pushed.
 func TestSyncReportsUnpushable(t *testing.T) {
 	ts := newTestSession(t)
+	bare := addBareRemote(t, ts)
+	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	// An explicit sync judges a read-only store again, so the bare is
+	// really not writable.
+	gitrepotest.LockObjects(t, bare)
+	makeReadOnly(t, ts, sync.ReasonNotWritable)
+	reps, err := ts.Sync(false, true)
+	if err != nil || len(reps) != 1 || reps[0].Unpushable != 2 || len(reps[0].Pushed) != 0 { // the first commit of the store, and the task
+		t.Fatalf("Sync = %+v, %v", reps, err)
+	}
+	st, err := ts.SyncStatus()
+	if err != nil || st[0].ReadOnly != "the remote cannot be written" || st[0].Unpushed == nil || *st[0].Unpushed != 2 {
+		t.Errorf("SyncStatus = %+v, %v", st, err)
+	}
+}
+
+// Runs everywhere (no read-only directory): a store that access.json says is
+// read-only by the GitHub permission, synced in the background (nothing judges
+// it again), reports the commits it cannot push and the GitHub reason.
+func TestBackgroundSyncReportsUnpushableByGitHubPermission(t *testing.T) {
+	ts := newTestSession(t)
 	addBareRemote(t, ts)
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
 	makeReadOnly(t, ts, sync.ReasonGitHub)
-	reps, err := ts.Sync(false, true)
-	if err != nil || len(reps) != 1 || reps[0].Unpushable != 2 || len(reps[0].Pushed) != 0 { // the first commit of the store, and the task
+	reps, err := ts.Sync(false, false)
+	if err != nil || len(reps) != 1 || reps[0].Unpushable != 2 || len(reps[0].Pushed) != 0 {
 		t.Fatalf("Sync = %+v, %v", reps, err)
 	}
 	st, err := ts.SyncStatus()

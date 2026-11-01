@@ -190,7 +190,7 @@ func (ss *Session) PurgeTargets(arg string) (*index.Index, *index.Entry, []*inde
 // fails with purge.changed when the tasks under it are no longer those.
 func (ss *Session) Purge(arg string, confirmed []model.ULID) (AffectedResult, error) {
 	if len(confirmed) == 0 {
-		return AffectedResult{}, newErr(KindUsage, "purge.unconfirmed", errors.New("purge needs the tasks the user confirmed"))
+		return AffectedResult{}, confirmRequired("purge " + arg)
 	}
 	return ss.purge(arg, confirmed)
 }

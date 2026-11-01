@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"path/filepath"
@@ -77,7 +78,11 @@ func (ss *Session) Token(c *config.Config, acct config.Account) (string, error) 
 	}
 	tok, err := auth.Token(acct, ss.AuthOptions(c, acct))
 	if err != nil {
-		return "", err
+		var oe *Error
+		if errors.As(err, &oe) {
+			return "", err
+		}
+		return "", newErr(KindInvalid, "auth.token", err, "account", acct.Name)
 	}
 	e.tok, e.ok = tok, true
 	return tok, nil

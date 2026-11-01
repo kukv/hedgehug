@@ -218,12 +218,13 @@ func (ss *Session) storeStatus(e config.StoreEntry) StoreStatus {
 		return x
 	}
 	x.LastError = st.LastError
+	// A broken access.json is a reason in ReadOnly, not an error that hides
+	// the rest: the next sync judges the access again.
 	acc, err := sync.ReadAccess(s)
-	if err != nil {
-		x.Error = err.Error()
-		return x
-	}
-	if acc.ReadOnly {
+	switch {
+	case err != nil:
+		x.ReadOnly = "access.json is broken; run hedgehug sync"
+	case acc.ReadOnly:
 		x.ReadOnly = acc.Why()
 	}
 	x.PendingSince, x.LastAttempt, x.LastSuccess = timePtr(st.PendingSince), timePtr(st.LastAttempt), timePtr(st.LastSuccess)

@@ -117,7 +117,7 @@ func (c *Client) do(method, url string, in, out any) (http.Header, error) {
 	}
 	res, err := c.hc.Do(req) //nolint:gosec // G704: the URL is the API base of a host in config.yaml
 	if err != nil {
-		return nil, err
+		return nil, requestErr(method, url, err)
 	}
 	defer func() { _ = res.Body.Close() }()
 	data, readErr := io.ReadAll(res.Body)
@@ -133,6 +133,17 @@ func (c *Client) do(method, url string, in, out any) (http.Header, error) {
 		}
 	}
 	return res.Header, nil
+}
+
+// requestErr is the error of a request that got no answer, as "METHOD url:
+// cause". The *url.Error of net/http carries the method and the URL itself, so
+// it is replaced by its cause, which errors.Is and errors.As still reach.
+func requestErr(method, u string, err error) error {
+	var ue *neturl.Error
+	if errors.As(err, &ue) {
+		err = ue.Err
+	}
+	return fmt.Errorf("%s %s: %w", method, u, err)
 }
 
 func statusError(res *http.Response, data []byte) error {

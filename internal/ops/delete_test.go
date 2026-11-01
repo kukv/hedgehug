@@ -33,7 +33,7 @@ func TestPurgeNeedsAConfirmation(t *testing.T) {
 	}
 	for _, confirmed := range [][]model.ULID{nil, {}} {
 		_, err := ts.Purge("ME-1", confirmed)
-		wantErr(t, err, KindUsage, "purge.unconfirmed")
+		wantErr(t, err, KindUsage, "confirm.required")
 	}
 	// Nothing was purged by the refusals.
 	_, _, targets, err := ts.PurgeTargets("ME-1")

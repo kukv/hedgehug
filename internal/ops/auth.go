@@ -96,7 +96,19 @@ func (ss *Session) AuthLogin(in AuthLoginInput) (AuthLoginResult, error) {
 	}
 	login, err := github.New(h, tok, ss.HTTPClient).User()
 	if err != nil {
-		return AuthLoginResult{}, fmt.Errorf("check the token: %w", err)
+		if errors.Is(err, github.ErrUnauthorized) {
+			// No "run hedgehug auth login" hint: that is what is being run.
+			return AuthLoginResult{}, newErr(KindInvalid, "auth.unauthorized",
+				fmt.Errorf("%s refused the token: %w; check that it is valid and has not expired", host, err), "account", name)
+		}
+		who := acct
+		if !known {
+			who = config.Account{Name: "<name>", Host: host, Login: "(new account)"}
+			if name != "" {
+				who.Name = name
+			}
+		}
+		return AuthLoginResult{}, githubErr(err, who, "check the token")
 	}
 	if login = strings.TrimSpace(login); login == "" {
 		return AuthLoginResult{}, errors.New("check the token: GitHub gave no login")
@@ -113,7 +125,7 @@ func (ss *Session) AuthLogin(in AuthLoginInput) (AuthLoginResult, error) {
 	added := false
 	if known {
 		if !strings.EqualFold(acct.Login, login) {
-			return AuthLoginResult{}, fmt.Errorf("the token is of %s/%s, not of account %s (%s)", host, login, acct.Name, acct.ID())
+			return AuthLoginResult{}, fmt.Errorf("the token is of %s/%s, not of account %s (%s); it stays valid on GitHub, so revoke it in GitHub's settings (Settings → Applications → Authorized GitHub Apps) if it is not wanted", host, login, acct.Name, acct.ID())
 		}
 		acct.Token = config.TokenSource{Kind: kind}
 	} else {

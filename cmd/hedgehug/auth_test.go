@@ -221,7 +221,7 @@ func TestAuthLoginEmptyStdin(t *testing.T) {
 	// A last line with no newline is a token.
 	te.stdin = "t-unknown"
 	code, _, errs := te.run("auth", "login", "--with-token")
-	if code != 1 || !strings.Contains(errs, "check the token") || !strings.Contains(errs, "401") {
+	if code != 1 || !strings.Contains(errs, "refused the token") || !strings.Contains(errs, "401") {
 		t.Errorf("unknown token: exit %d, %q", code, errs)
 	}
 	if b := te.configText(); strings.Contains(b, "accounts") {
