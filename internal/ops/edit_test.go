@@ -97,6 +97,7 @@ func TestCheckEditRefusals(t *testing.T) {
 		{"rank", "rank: a0", "rank: b0", "rank", "rank cannot be changed here; use hedgehug mv"},
 		{"workspace", ws, "workspace: " + model.NewULID().String(), "workspace", "workspace cannot be changed here; use hedgehug mv --workspace"},
 		{"ulid", "ulid: " + es.Entry.ULID.String(), "ulid: 01JZZZZZZZZZZZZZZZZZZZZZZZ", "ulid", "ulid cannot be changed"},
+		{"moved_to", "title: a", "title: a\nmoved_to: 01JC0M3R5W7M2X9V4T6R5N8P1B", "moved_to", "moved_to cannot be set by hand; use hedgehug mv --store"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

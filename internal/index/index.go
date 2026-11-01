@@ -23,7 +23,9 @@ type Index struct {
 	tree  plumbing.Hash
 	sc    *schema.Schema // schema.yaml as tree has it
 	tasks map[model.ULID]*Entry
-	name  string // the store's name, set by SetStoreName; Refresh keeps it
+	// forwards are the task files that moved to another store; they are not tasks.
+	forwards map[model.ULID]*ForwardEntry
+	name     string // the store's name, set by SetStoreName; Refresh keeps it
 	// qualified says whether ids of a prefix show with the store's name,
 	// set by SetQualified; Refresh keeps it
 	qualified func(prefix string) bool

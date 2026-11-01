@@ -105,6 +105,9 @@ func loadRepair(in RepairInput) *repairer {
 			continue
 		}
 		b := in.Files.Read(p)
+		if model.IsForward(b) {
+			continue // not a task; the rules for forwards are in the file merge
+		}
 		if t, err := model.DecodeTask(b); err == nil && t.ULID == u {
 			r.tasks[u] = t
 			r.order = append(r.order, u)

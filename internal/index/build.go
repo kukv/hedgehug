@@ -55,6 +55,7 @@ func (ix *Index) rebuild(tree plumbing.Hash) error {
 		return err
 	}
 	tasks := map[model.ULID]*Entry{}
+	forwards := map[model.ULID]*ForwardEntry{}
 	decoded := map[model.ULID]*model.Task{}
 	for p, err := range ix.repo.Files(tree, "tasks/") {
 		if err != nil {
@@ -68,6 +69,12 @@ func (ix *Index) rebuild(tree plumbing.Hash) error {
 		if err != nil {
 			return err
 		}
+		if model.IsForward(b) {
+			if forwards[ulid], err = ix.newForwardEntry(ulid, b); err != nil {
+				return err
+			}
+			continue
+		}
 		tasks[ulid], decoded[ulid] = newEntry(ulid, b)
 	}
 	n, err := ix.readNotes(tree, []string{"comments/", "worklogs/"}, func(ulid model.ULID) bool { return tasks[ulid] != nil })
@@ -77,7 +84,7 @@ func (ix *Index) rebuild(tree plumbing.Hash) error {
 	for _, e := range tasks {
 		n.attach(e)
 	}
-	ix.sc, ix.tasks = sc, tasks
+	ix.sc, ix.tasks, ix.forwards = sc, tasks, forwards
 	ix.derive()
 	if err := ix.revalidateAndFindProblems(tree, slices.Collect(maps.Keys(tasks)), decoded); err != nil {
 		return err
@@ -161,7 +168,7 @@ func (ix *Index) ancestors(t *model.Task) []model.ULID {
 
 const (
 	cacheName   = "index" // in .hedgehug/local
-	cacheFormat = 6       // bump when Entry or cache changes
+	cacheFormat = 7       // bump when Entry or cache changes
 )
 
 // cache is the index as it is kept on disk, for one tree of HEAD.
@@ -169,6 +176,8 @@ type cache struct {
 	Format int
 	Tree   plumbing.Hash
 	Tasks  []*Entry
+	// Forwards are kept because the ids they had are read from the history.
+	Forwards []*ForwardEntry
 }
 
 // load reads the cache into tasks and returns the tree it is for. It
@@ -186,13 +195,17 @@ func (ix *Index) load() (plumbing.Hash, bool) {
 	for _, e := range c.Tasks {
 		ix.tasks[e.ULID] = e
 	}
+	ix.forwards = make(map[model.ULID]*ForwardEntry, len(c.Forwards))
+	for _, f := range c.Forwards {
+		ix.forwards[f.ULID] = f
+	}
 	return c.Tree, true
 }
 
 // save writes the cache. A failure is ignored: the next Open rebuilds. It
 // takes no lock, since a cache is right for its tree whoever writes last.
 func (ix *Index) save() {
-	c := cache{Format: cacheFormat, Tree: ix.tree, Tasks: slices.Collect(maps.Values(ix.tasks))}
+	c := cache{Format: cacheFormat, Tree: ix.tree, Tasks: slices.Collect(maps.Values(ix.tasks)), Forwards: ix.Forwards()}
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(&c); err != nil {
 		return
@@ -242,21 +255,24 @@ func (ix *Index) update(from, to plumbing.Hash) error {
 		noted[ulid] = true
 		if c.Deleted {
 			delete(ix.tasks, ulid)
+			delete(ix.forwards, ulid)
 			continue
 		}
 		b, err := ix.read(to, c.Path)
 		if err != nil {
 			return err
 		}
-		ix.tasks[ulid], decoded[ulid] = newEntry(ulid, b)
+		if decoded[ulid], err = ix.setFile(ulid, b); err != nil {
+			return err
+		}
 	}
 	// An entry holds what the comments add to the body, so a task whose
 	// comments changed is read again too, and checked again as its entry is
 	// new.
 	var reread []model.ULID
 	for ulid, done := range noted {
-		if done {
-			continue
+		if done || ix.forwards[ulid] != nil {
+			continue // a forward has no comments to add to
 		}
 		b, err := ix.read(to, model.TaskPath(ulid))
 		if errors.Is(err, fs.ErrNotExist) {
@@ -265,7 +281,9 @@ func (ix *Index) update(from, to plumbing.Hash) error {
 		if err != nil {
 			return err
 		}
-		ix.tasks[ulid], decoded[ulid] = newEntry(ulid, b)
+		if decoded[ulid], err = ix.setFile(ulid, b); err != nil {
+			return err
+		}
 		reread = append(reread, ulid)
 	}
 	var dirs []string
@@ -300,6 +318,25 @@ func (ix *Index) update(from, to plumbing.Hash) error {
 	}
 	ix.tree = to // only now: after an error, from stays the tree the tasks match
 	return nil
+}
+
+// setFile makes the entry of ulid from its file data, a task or a forward,
+// and drops the other kind of entry it had. It returns the task when the
+// file is one that decodes.
+func (ix *Index) setFile(ulid model.ULID, data []byte) (*model.Task, error) {
+	if model.IsForward(data) {
+		f, err := ix.newForwardEntry(ulid, data)
+		if err != nil {
+			return nil, err
+		}
+		delete(ix.tasks, ulid)
+		ix.forwards[ulid] = f
+		return nil, nil
+	}
+	delete(ix.forwards, ulid)
+	e, t := newEntry(ulid, data)
+	ix.tasks[ulid] = e
+	return t, nil
 }
 
 // revalidateAndFindProblems revalidates ulids against tree, then finds the

@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -65,6 +66,9 @@ func DecodeTask(data []byte) (*Task, error) {
 	d, err := ParseDoc(front, 1)
 	if err != nil {
 		return nil, err
+	}
+	if d.Get("moved_to") != nil {
+		return nil, fmt.Errorf("%w", ErrForward)
 	}
 	t := &Task{Body: body, doc: d}
 	for _, f := range []struct {

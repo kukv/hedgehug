@@ -91,17 +91,22 @@ func ignoreRel[T any](decode func([]byte) (T, error)) func(string, []byte) (T, e
 	return func(_ string, b []byte) (T, error) { return decode(b) }
 }
 
+// Task reads the task ulid. A forward is not a task: the error wraps both
+// model.ErrForward and ErrNotFound, so that the code that treats a task that
+// is not here as absent (a parent, a reference, a task to be written anew)
+// treats a forward the same.
 func (s *Store) Task(ulid model.ULID) (*model.Task, error) {
-	return readDecode(s.dir, model.TaskPath(ulid), model.DecodeTask)
+	t, err := readDecode(s.dir, model.TaskPath(ulid), model.DecodeTask)
+	if errors.Is(err, model.ErrForward) {
+		err = fmt.Errorf("%w: %w", ErrNotFound, err)
+	}
+	return t, err
 }
 
 // Tasks returns every task file. One that does not decode, or holds a task
-// of another ULID, yields a *FileError and no task.
+// of another ULID, yields a *FileError and no task. A forward is not a task:
+// it is skipped (Forwards yields it).
 func (s *Store) Tasks() iter.Seq2[*model.Task, error] {
-	match := func(rel string) bool {
-		_, err := model.ParseTaskPath(rel)
-		return err == nil
-	}
 	decode := func(rel string, b []byte) (*model.Task, error) {
 		t, err := model.DecodeTask(b)
 		if err != nil {
@@ -112,7 +117,50 @@ func (s *Store) Tasks() iter.Seq2[*model.Task, error] {
 		}
 		return t, nil
 	}
-	return walk(s, "tasks", match, decode)
+	return func(yield func(*model.Task, error) bool) {
+		for t, err := range walk(s, "tasks", isTaskPath, decode) {
+			if errors.Is(err, model.ErrForward) {
+				continue
+			}
+			if !yield(t, err) {
+				return
+			}
+		}
+	}
+}
+
+// Forwards returns every forward: a task file that moved to another store.
+// One that does not decode, or holds a ULID other than the one of its path,
+// yields a *FileError and no forward. A file that is a task is skipped.
+func (s *Store) Forwards() iter.Seq2[*model.Forward, error] {
+	decode := func(rel string, b []byte) (*model.Forward, error) {
+		if !model.IsForward(b) {
+			return nil, nil
+		}
+		f, err := model.DecodeForward(b)
+		if err != nil {
+			return nil, err
+		}
+		if model.TaskPath(f.ULID) != rel {
+			return nil, fmt.Errorf("%w (ulid %s)", ErrULIDMismatch, f.ULID)
+		}
+		return f, nil
+	}
+	return func(yield func(*model.Forward, error) bool) {
+		for f, err := range walk(s, "tasks", isTaskPath, decode) {
+			if f == nil && err == nil {
+				continue
+			}
+			if !yield(f, err) {
+				return
+			}
+		}
+	}
+}
+
+func isTaskPath(rel string) bool {
+	_, err := model.ParseTaskPath(rel)
+	return err == nil
 }
 
 // Comments returns the comments on task.

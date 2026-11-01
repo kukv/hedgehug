@@ -423,6 +423,21 @@ func TestRepairBrokenParentIsNotDeleted(t *testing.T) {
 	}
 }
 
+// A forward is not a task, and not a broken file either: it is left as it is.
+func TestRepairSkipsForwards(t *testing.T) {
+	x, fwd := "01JD0000000000000000000001", "01JD0000000000000000000002"
+	forward := []byte("---\nulid: " + fwd + "\nmoved_to: 01JC0M3R5W7M2X9V4T6R5N8P1B\n---\n")
+	f := memFiles{
+		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
+		pathOf(x):                          taskFile(x, "WEB-1", wsA, "", "2026-10-31T10:00:00Z"),
+		pathOf(fwd):                        forward,
+	}
+	after, rs := repair(t, RepairInput{Files: f})
+	if len(rs) != 0 || !bytes.Equal(after[pathOf(fwd)], forward) || !bytes.Equal(after[pathOf(x)], f[pathOf(x)]) {
+		t.Errorf("repaired = %+v", rs)
+	}
+}
+
 func TestRepairMismatchedIDDoesNotKeepACollision(t *testing.T) {
 	x, y := "01JD0000000000000000000001", "01JD0000000000000000000002"
 	f := memFiles{

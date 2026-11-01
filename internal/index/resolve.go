@@ -76,6 +76,15 @@ func (ix *Index) IDNumbers() (map[string]int, error) {
 			}
 		}
 	}
+	// A forward keeps the ids of the task it was, so that they are not used
+	// again.
+	for _, f := range ix.forwards {
+		for _, k := range append([]string{f.ID}, f.FormerIDs...) {
+			if p, n, ok := model.ParseTaskID(k); ok && n > out[p] {
+				out[p] = n
+			}
+		}
+	}
 	return out, nil
 }
 
