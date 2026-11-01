@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -342,6 +343,62 @@ func TestFinishLeftoverOtherStates(t *testing.T) {
 	}
 	if l, _ := FindLeftover(dir); !l.None() {
 		t.Errorf("leftover = %+v", l)
+	}
+}
+
+// The local files of an old store the swap did not carry over are brought
+// over before it goes; one that cannot be read keeps the old store.
+func TestFinishLeftoverCarriesLocalFiles(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "s")
+	before := dir + ".before-rewrite-1"
+	local := func(d string) string { return filepath.Join(d, ".hedgehug", "local") }
+	for _, d := range []string{dir, before} {
+		if err := os.MkdirAll(local(d), 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write := func(d, name, data string) {
+		if err := os.WriteFile(filepath.Join(local(d), name), []byte(data), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(before, "sync.json", "old")
+	write(before, "late.json", "late")
+	write(dir, "sync.json", "new")
+	l, err := FindLeftover(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := FinishLeftover(dir, l); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(filepath.Join(local(dir), "late.json")); err != nil || string(b) != "late" {
+		t.Errorf("late.json = %q, %v", b, err)
+	}
+	if b, err := os.ReadFile(filepath.Join(local(dir), "sync.json")); err != nil || string(b) != "new" {
+		t.Errorf("sync.json = %q, %v (the new store's file is kept)", b, err)
+	}
+	if exists(t, before) {
+		t.Error("the old store is left")
+	}
+
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("a file that cannot be read needs a permission that is enforced")
+	}
+	if err := os.MkdirAll(local(before), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	write(before, "secret.json", "x")
+	if err := os.Chmod(filepath.Join(local(before), "secret.json"), 0); err != nil {
+		t.Fatal(err)
+	}
+	l, _ = FindLeftover(dir)
+	if err := FinishLeftover(dir, l); err == nil {
+		t.Error("an unreadable local file did not fail")
+	}
+	if !exists(t, before) {
+		t.Error("the old store was removed although its files were not carried over")
 	}
 }
 

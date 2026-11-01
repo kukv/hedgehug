@@ -459,7 +459,9 @@ func tellRewrite(ns *store.Store, head plumbing.Hash, opt Options, b *Rebuild) (
 // is removed. The caller holds none of the store's locks and has closed
 // its git files. It checks first that the old one is as it was when b was
 // made (its HEAD is b.OldHead, nothing uncommitted); if not, it removes
-// b.Dir and returns ErrRebuildStale; then it brings over what changed in
+// b.Dir and returns ErrRebuildStale (it looks again after the first rename,
+// for a commit made in between, and puts the old store back if there is one);
+// then it brings over what changed in
 // .hedgehug/local since the copy (any other failure to look at the old
 // store leaves b.Dir, for FinishLeftover). A rename that fails changes nothing
 // or puts the old store back; only when that fails too is a leftover
@@ -481,6 +483,19 @@ func Swap(dir string, b *Rebuild) error {
 	if err := os.Rename(dir, before); err != nil {
 		_ = os.RemoveAll(b.Dir)
 		return fmt.Errorf("swap the rebuilt store in: %w", err)
+	}
+	// Nothing new can start in the old store now, but a command that took
+	// its lock in the gap since the check may have committed there; that
+	// commit would go with the old directory. If so, put it back; the next
+	// sync makes the rebuild again.
+	if err := checkUnchanged(before, b); err != nil {
+		if rerr := os.Rename(before, dir); rerr != nil {
+			return errors.Join(err, rerr)
+		}
+		if errors.Is(err, ErrRebuildStale) {
+			_ = os.RemoveAll(b.Dir)
+		}
+		return err
 	}
 	if err := os.Rename(b.Dir, dir); err != nil {
 		err = fmt.Errorf("swap the rebuilt store in: %w", err)
@@ -607,9 +622,55 @@ func FinishLeftover(dir string, l Leftover) error {
 		errs = append(errs, os.RemoveAll(l.New))
 	}
 	for _, p := range l.Before {
+		// A swap that stopped may not have carried over the local files of
+		// the old store (sync.json, the inbox); what is missing is brought
+		// over first, and an old store that could not be read stays.
+		if err := carryMissing(p, dir); err != nil {
+			errs = append(errs, fmt.Errorf("carry over the local files of %s (it is left): %w", p, err))
+			continue
+		}
 		errs = append(errs, os.RemoveAll(p))
 	}
 	return errors.Join(errs...)
+}
+
+// carryMissing brings the local files of the old store at from that the one
+// at to lacks, and the lines of the inbox it lacks.
+func carryMissing(from, to string) error {
+	files, err := localFiles(from)
+	if err != nil {
+		return err
+	}
+	for name := range files {
+		if slices.Contains(ownedLocal, name) {
+			continue
+		}
+		if name == "inbox.jsonl" {
+			old, err := os.ReadFile(filepath.Join(from, filepath.FromSlash(store.LocalDir), name)) //nolint:gosec // a file of the store
+			if err != nil {
+				return err
+			}
+			cur, err := os.ReadFile(filepath.Join(to, filepath.FromSlash(store.LocalDir), name)) //nolint:gosec // a file of the store
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			if err := store.WriteLocalIn(to, name, joinLines(cur, old)); err != nil {
+				return err
+			}
+			continue
+		}
+		_, err := os.Lstat(filepath.Join(to, filepath.FromSlash(store.LocalDir), filepath.FromSlash(name)))
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		if err := copyFile(from, to, name); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Discard removes the clone of b, which will not be swapped in.

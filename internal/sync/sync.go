@@ -1143,20 +1143,16 @@ func pointsAtForward(ix *index.Index, e *index.Entry, field string) bool {
 }
 
 // filesUnderForwards reports whether tree has a comment or worklog file of a
-// task that is a forward.
+// task that is a forward. It looks only below the directories of the
+// forwards, not at every comment of the tree.
 func filesUnderForwards(ix *index.Index, r *gitrepo.Repo, tree plumbing.Hash) (bool, error) {
-	parse := map[string]func(string) (model.ULID, model.ULID, error){
-		"comments/": model.ParseCommentPath,
-		"worklogs/": model.ParseWorklogPath,
-	}
-	for prefix, parseFn := range parse {
-		for p, err := range r.Files(tree, prefix) {
-			if err != nil {
-				return false, err
-			}
-			task, _, perr := parseFn(p)
-			if _, ok := ix.Forward(task); perr == nil && ok {
-				return true, nil
+	for _, f := range ix.Forwards() {
+		if f.Broken != "" {
+			continue
+		}
+		for _, file := range []string{model.CommentPath(f.ULID, model.ULID{}), model.WorklogPath(f.ULID, model.ULID{})} {
+			for _, err := range r.Files(tree, path.Dir(file)+"/") {
+				return err == nil, err // the first file under the forward, or the error
 			}
 		}
 	}

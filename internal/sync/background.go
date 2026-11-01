@@ -232,7 +232,7 @@ func (b *BoundedLog) Release() error {
 		_ = nul.Close()
 		return err
 	}
-	b.nul, b.released = nul, true // nul stays open: it may be the standard handle
+	b.nul, b.released = nul, true // nul stays open until Reopen: it may be the standard handle
 	return nil
 }
 
@@ -260,6 +260,11 @@ func (b *BoundedLog) ReopenAt(dir string) error {
 		if err := redirectStderr(f, false); err != nil {
 			_ = f.Close()
 			return err
+		}
+		// The standard error is the log again; nul is no longer used.
+		if b.nul != nil {
+			_ = b.nul.Close()
+			b.nul = nil
 		}
 	}
 	b.w, b.own, b.released = f, f, false

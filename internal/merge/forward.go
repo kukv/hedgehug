@@ -36,6 +36,10 @@ func (m *merger) forward(ours, theirs Side) (Result, error) {
 		if err != nil {
 			return m.other(ours, theirs) // a forward that does not decode
 		}
+		// The same destination written in another way loses nothing.
+		if w, err := model.DecodeForward(win.Data); err == nil && w.MovedTo == f.MovedTo {
+			return r, nil
+		}
 		r.Overwritten = []Overwritten{{Path: m.path, Field: "moved_to", Value: string(jsonOf(f.MovedTo.String())), Author: lose.Author}}
 		return r, nil
 	}

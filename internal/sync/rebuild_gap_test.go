@@ -1,12 +1,14 @@
 package sync
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 // A write to .hedgehug/local of the old store between the last look and the
@@ -37,6 +39,52 @@ func TestSwapCarriesLocalWritesOfTheGap(t *testing.T) {
 		t.Errorf("inbox.jsonl = %q, %v", b, err)
 	}
 	if left, err := FindLeftover(s.Dir()); err != nil || !left.None() {
+		t.Errorf("leftover = %+v, %v", left, err)
+	}
+}
+
+// A commit made to the old store between the check and the rename would
+// vanish with the old directory: the swap finds it after the first rename,
+// puts the old store back and tells the rebuild is stale.
+func TestSwapFindsACommitOfTheGap(t *testing.T) {
+	c := newCluster(t, 2)
+	sc := newRewriteScene(t, c, func(*rewriteScene) {})
+	dir := c.stores[1].Dir()
+	if err := c.stores[1].Repo().Close(); err != nil {
+		t.Fatal(err)
+	}
+	prev := beforeRename
+	beforeRename = func() {
+		old, err := store.Open(dir)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer func() { _ = old.Repo().Close() }()
+		if _, err := old.Update(c.op(1, "update", sc.keep.ULID), func(tx *store.Tx) error {
+			x, err := tx.Task(sc.keep.ULID)
+			if err != nil {
+				return err
+			}
+			x.Title = "edited in the gap"
+			return tx.PutTask(x)
+		}); err != nil {
+			t.Error(err)
+		}
+	}
+	t.Cleanup(func() { beforeRename = prev })
+	if err := Swap(dir, sc.res.Rebuild); !errors.Is(err, ErrRebuildStale) {
+		t.Fatalf("Swap = %v, want ErrRebuildStale", err)
+	}
+	s, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.stores[1] = s
+	if x := c.task(1, sc.keep.ULID); x == nil || x.Title != "edited in the gap" {
+		t.Errorf("the commit of the gap is lost: %+v", x)
+	}
+	if left, err := FindLeftover(dir); err != nil || !left.None() {
 		t.Errorf("leftover = %+v, %v", left, err)
 	}
 }
