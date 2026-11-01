@@ -166,3 +166,26 @@ func TestResolveNamedStoreWhoseIndexDoesNotOpenIsAnError(t *testing.T) {
 		t.Errorf("warnings = %q", warns)
 	}
 }
+
+func TestResolveAfterAnotherHandleRepackedTheStore(t *testing.T) {
+	a := newStoreAt(t, "org-a", "API")
+	putTasks(t, a, 1, nil)
+	set := openSet(t, a)
+	if _, err := set.Resolve("API-1"); err != nil {
+		t.Fatal(err)
+	}
+	// another handle writes, repacks (the loose objects the first handle
+	// knew are gone) and writes again
+	putTasks(t, a, 1, nil)
+	s, err := store.Open(a.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Repo().Repack(); err != nil {
+		t.Fatal(err)
+	}
+	putTasks(t, a, 1, nil)
+	if hit, err := set.Resolve("API-3"); err != nil || hit.Entry.ID != "API-3" {
+		t.Errorf("Resolve(API-3) = %v, %v", hit, err)
+	}
+}

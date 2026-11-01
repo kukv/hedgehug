@@ -433,6 +433,9 @@ func (ss *Session) ResolveULID(ix *index.Index) func(string) (model.ULID, error)
 // by it; one made later has not. reported says that the one who ran it is
 // told of a failure, so the next command does not tell of it again.
 func (ss *Session) RunSync(s *store.Store, opt sync.Options, reported bool) (res sync.Result, err error) {
+	// The sync writes objects through the handle s; the stores mounted are
+	// opened again after it, so that they see them.
+	defer ss.dropMount()
 	err = s.WithLocalLock("sync.lock", syncLockWait, func() error {
 		started := ss.Now()
 		if _, err := sync.UpdateState(s, func(st *sync.State) { st.LastAttempt = started }); err != nil {

@@ -2,8 +2,14 @@ package ops
 
 import (
 	"bytes"
+	"errors"
+	"path/filepath"
 	"strings"
+	gosync "sync"
 	"testing"
+	"time"
+
+	"github.com/kukv/hedgehug/internal/config"
 
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/sync"
@@ -275,4 +281,171 @@ func TestCommentULIDInTwoStoresIsAmbiguous(t *testing.T) {
 	}
 	_, err := ts.OpenComment(c.ULID.String())
 	wantCode(t, "OpenComment of a ULID in two stores", err, KindAmbiguous, "comment.ambiguous")
+}
+
+// commits is the number of commits of the store name.
+func commits(t *testing.T, ts *testSession, name string) int {
+	t.Helper()
+	s, err := ts.ForStore(name).OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	log, err := s.Repo().Log(nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(log)
+}
+
+// handedOver is an operation on a task or comment that takes its id.
+type handedOver struct {
+	name string
+	task bool // takes the id of a task (else a comment)
+	run  func(ts *testSession, id string) error
+	read bool // reads only
+}
+
+func handedOverOps(t *testing.T) []handedOver {
+	t.Helper()
+	return []handedOver{
+		{name: "Show", task: true, read: true, run: func(ts *testSession, id string) error { _, err := ts.Show(id); return err }},
+		{name: "Log", task: true, read: true, run: func(ts *testSession, id string) error { _, _, err := ts.Log([]string{id}, 0); return err }},
+		{name: "Set", task: true, run: func(ts *testSession, id string) error {
+			_, err := ts.Set(id, []Assign{{Key: "title", Op: "=", Value: "set " + id}})
+			return err
+		}},
+		{name: "SetStatus", task: true, run: func(ts *testSession, id string) error { _, err := ts.SetStatus(id, "in_progress"); return err }},
+		{name: "Watch", task: true, run: func(ts *testSession, id string) error { _, err := ts.Watch(id, false); return err }},
+		{name: "Dep", task: true, run: func(ts *testSession, id string) error { _, err := ts.Dep(id, "org-b:WEB-2", true); return err }},
+		{name: "Move", task: true, run: func(ts *testSession, id string) error {
+			_, err := ts.Move(MoveInput{Arg: id, After: "WEB-2"})
+			return err
+		}},
+		{name: "Edit", task: true, run: func(ts *testSession, id string) error {
+			es, err := ts.BeginEdit(id)
+			if err != nil {
+				return err
+			}
+			_, err = ts.Edit(id, bytes.Replace(es.Bytes, []byte("title: "), []byte("title: edited "), 1))
+			return err
+		}},
+		{name: "Remove", task: true, run: func(ts *testSession, id string) error { _, err := ts.Remove(id); return err }},
+		{name: "Restore", task: true, run: func(ts *testSession, id string) error { _, err := ts.Restore(id); return err }},
+		{name: "RestoreAt", task: true, run: func(ts *testSession, id string) error {
+			_, err := ts.RestoreAt(id, "2026-10-30T12:00:00Z")
+			return err
+		}},
+		{name: "BeginComment", task: true, run: func(ts *testSession, id string) error { _, err := ts.BeginComment(id); return err }},
+		{name: "CommentAdd", task: true, run: func(ts *testSession, id string) error { _, err := ts.CommentAdd(id, "hi"); return err }},
+	}
+}
+
+func TestEveryOperationOnAnIDGoesToTheStoreOfTheTask(t *testing.T) {
+	ts := newTwoStoreSession(t)
+	if _, err := ts.ForStore("org-b").Add(AddInput{Title: "second"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range handedOverOps(t) {
+		a, b := commits(t, ts, "org-a"), commits(t, ts, "org-b")
+		if err := op.run(ts, "WEB-1"); err != nil {
+			// Restore of a live task and RestoreAt of a task that is not older are
+			// refusals of the operation itself, which came from org-b
+			if op.name == "Restore" || op.name == "RestoreAt" {
+				if e := AsError(err); e.Code == "task.not_found" || e.Code == "store.choose" {
+					t.Errorf("%s: %v", op.name, err)
+				}
+				continue
+			}
+			t.Errorf("%s(WEB-1): %v", op.name, err)
+			continue
+		}
+		if got := commits(t, ts, "org-a"); got != a {
+			t.Errorf("%s changed org-a (%d -> %d commits)", op.name, a, got)
+		}
+		if got := commits(t, ts, "org-b"); !op.read && got <= b && op.name != "BeginComment" && op.name != "RestoreAt" {
+			t.Errorf("%s did not write to org-b (%d -> %d commits)", op.name, b, got)
+		}
+		if !op.read && op.name != "BeginComment" && op.name != "RestoreAt" {
+			if got := lastAuthor(t, ts, "org-b"); got != "bob" {
+				t.Errorf("%s wrote as %q; want bob", op.name, got)
+			}
+		}
+	}
+}
+
+func TestEveryOperationOnAnIDRefusesAReadOnlyStoreAfterTheLookup(t *testing.T) {
+	ts := newTwoStoreSession(t)
+	makeStoreReadOnly(t, ts, "org-b")
+	for _, op := range handedOverOps(t) {
+		if op.read {
+			continue
+		}
+		wantCode(t, op.name+"(WEB-1)", op.run(ts, "WEB-1"), KindConflict, "store.read_only")
+		wantCode(t, op.name+"(WEB-999)", op.run(ts, "WEB-999"), KindNotFound, "task.not_found")
+		wantCode(t, op.name+"(org-b:WEB-999)", op.run(ts, "org-b:WEB-999"), KindConflict, "store.read_only")
+		ts.StoreName = "org-b"
+		wantCode(t, op.name+"(WEB-999) with --store org-b", op.run(ts, "WEB-999"), KindConflict, "store.read_only")
+		ts.StoreName = ""
+	}
+}
+
+func TestSecondIDThatNoStoreHasIsNotFound(t *testing.T) {
+	ts := newTwoStoreSession(t)
+	_, err := ts.Dep("API-1", "org-b:WEB-999", true)
+	wantCode(t, "Dep(API-1, org-b:WEB-999)", err, KindNotFound, "task.not_found")
+	_, err = ts.Dep("API-1", "WEB-999", true)
+	wantCode(t, "Dep(API-1, WEB-999)", err, KindNotFound, "task.not_found")
+	_, err = ts.Dep("API-1", "org-b:WEB-1", true)
+	wantCode(t, "Dep(API-1, org-b:WEB-1)", err, KindInvalid, "ref.cross_store")
+}
+
+func TestNoStoresIsTheErrorOfSelect(t *testing.T) {
+	d := t.TempDir()
+	env := map[string]string{"HOME": d, "USERPROFILE": d, "HEDGEHUG_HOME": filepath.Join(d, "hh"), "HEDGEHUG_AUTO_SYNC": "0"}
+	ss := &Session{Getenv: func(k string) string { return env[k] }, Now: time.Now}
+	if _, err := ss.Show("X-1"); !errors.Is(err, config.ErrNoStores) {
+		t.Errorf("Show with no store = %v; want ErrNoStores", err)
+	}
+	if _, err := ss.Set("X-1", nil); !errors.Is(err, config.ErrNoStores) {
+		t.Errorf("Set with no store = %v; want ErrNoStores", err)
+	}
+	if _, err := ss.CommentEdit("01JZZZZZZZZZZZZZZZZZZZZZZZ", "x"); !errors.Is(err, config.ErrNoStores) {
+		t.Errorf("CommentEdit with no store = %v; want ErrNoStores", err)
+	}
+}
+
+func TestOperationsOnTwoStoresRunConcurrently(t *testing.T) {
+	ts := newTwoStoreSession(t)
+	var wg gosync.WaitGroup
+	errs := make([]error, 12)
+	for i := range errs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			switch i % 3 {
+			case 0:
+				_, errs[i] = ts.Show("WEB-1")
+			case 1:
+				_, errs[i] = ts.Set("API-1", []Assign{{Key: "title", Op: "=", Value: "t"}})
+			default:
+				_, err := ts.Dep("API-1", "WEB-1", true)
+				if AsError(err) == nil || AsError(err).Code != "ref.cross_store" {
+					errs[i] = errors.New("Dep: want ref.cross_store, got " + errString(err))
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("operation %d: %v", i, err)
+		}
+	}
+}
+
+func errString(err error) string {
+	if err == nil {
+		return "nil"
+	}
+	return err.Error()
 }

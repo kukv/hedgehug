@@ -49,9 +49,9 @@ func (ss *Session) forTask(arg string) (*Session, string, error) {
 		return nil, "", newErr(KindUsage, "store.conflict",
 			fmt.Errorf("%q is in %s, but --store is %s", arg, name, ss.StoreName), "store", ss.StoreName, "named", name)
 	}
-	// With one store there is nothing to look in: it is the store, decided
-	// as Select does, before the task is looked up.
-	if ss.StoreName != "" || len(c.Stores) == 1 {
+	// With one store (or none: Select says so) there is nothing to look in:
+	// it is the store, decided as Select does, before the task is looked up.
+	if ss.StoreName != "" || len(c.Stores) <= 1 {
 		return ss, arg, nil
 	}
 	set, err := ss.Mount()
@@ -78,8 +78,8 @@ func (ss *Session) mountResolveError(set *mount.Set, arg string, err error) erro
 		return newErr(KindAmbiguous, "task.ambiguous", err, "input", arg, "candidates", lines)
 	case errors.As(err, &ie):
 		// within one store: let that store spell the candidates out
+		var found error
 		for _, m := range set.Stores {
-			var found error
 			_ = m.With(func(ix *index.Index) {
 				if _, rerr := ix.Resolve(arg); errors.As(rerr, &ie) {
 					_, found = ss.Resolve(ix, arg)
@@ -89,6 +89,7 @@ func (ss *Session) mountResolveError(set *mount.Set, arg string, err error) erro
 				return found
 			}
 		}
+		return fmt.Errorf("%q is ambiguous in a store, but no store says so: %w", arg, err)
 	case errors.Is(err, store.ErrNotFound):
 		return newErr(KindNotFound, "task.not_found", err, "input", arg)
 	}
@@ -105,7 +106,7 @@ func (ss *Session) forComment(arg string) (*Session, error) {
 		return nil, err
 	}
 	// With one store the store is decided first, as for a task.
-	if ss.StoreName != "" || len(c.Stores) == 1 {
+	if ss.StoreName != "" || len(c.Stores) <= 1 {
 		return ss, nil
 	}
 	set, err := ss.Mount()
@@ -115,9 +116,13 @@ func (ss *Session) forComment(arg string) (*Session, error) {
 	var in []*mount.Mounted
 	notFound := commentNotFound(arg, fmt.Errorf("comment %q: %w", arg, store.ErrNotFound))
 	for _, m := range set.Stores {
-		refs, err := m.Store.CommentULIDs()
-		if err != nil {
+		var refs []store.CommentRef
+		var refsErr error
+		if err := m.With(func(*index.Index) { refs, refsErr = m.Store.CommentULIDs() }); err != nil {
 			return nil, err
+		}
+		if refsErr != nil {
+			return nil, refsErr
 		}
 		if _, err := resolveComment(refs, arg); err != nil {
 			notFound = err
@@ -150,30 +155,31 @@ func crossStore(storeName, id string) error {
 // within the store of ix. An input not in the store that some other mounted
 // store has is refused: KindInvalid, ref.cross_store, Args "store", "id".
 // A "<store>:" naming this store is taken off; naming another store is
-// ref.cross_store too.
+// ref.cross_store when that store has the task and task.not_found when it
+// does not. The stores are mounted only when the input is not in ix, or
+// names a store.
 func (ss *Session) ResolveRef(ix *index.Index, arg string) (*index.Entry, error) {
-	set, err := ss.Mount()
-	if err != nil {
-		return ss.Resolve(ix, arg)
-	}
 	self := ix.StoreName()
 	if self == "" {
 		self = ss.StoreName
 	}
 	in := arg
-	if m, rest, ok := set.SplitStore(arg); ok {
-		if m.Name != self {
-			id := rest
-			if e, ok := findIn(m, rest); ok {
-				id = idOrULID(e)
+	if c, _, err := ss.Config(); err == nil {
+		if name, rest, ok := strings.Cut(arg, ":"); ok && storeNamed(c, name) {
+			if name == self {
+				in = rest
+			} else {
+				return nil, ss.otherStoreRef(name, rest, arg)
 			}
-			return nil, crossStore(m.Name, id)
 		}
-		in = rest
 	}
 	e, err := ss.Resolve(ix, in)
 	if err == nil || KindOf(err) != KindNotFound {
 		return e, err
+	}
+	set, merr := ss.Mount()
+	if merr != nil {
+		return nil, err
 	}
 	for _, m := range set.Stores {
 		if m.Name == self {
@@ -184,6 +190,19 @@ func (ss *Session) ResolveRef(ix *index.Index, arg string) (*index.Entry, error)
 		}
 	}
 	return nil, err
+}
+
+// otherStoreRef is the error of the input arg, "<name>:<rest>", that names
+// a store other than the one the reference is made in.
+func (ss *Session) otherStoreRef(name, rest, arg string) error {
+	if set, err := ss.Mount(); err == nil {
+		if m, ok := set.Get(name); ok {
+			if te, ok := findIn(m, rest); ok {
+				return crossStore(name, idOrULID(te))
+			}
+		}
+	}
+	return newErr(KindNotFound, "task.not_found", fmt.Errorf("%q: %w", arg, store.ErrNotFound), "input", arg)
 }
 
 // findIn is the task arg names in the store m.

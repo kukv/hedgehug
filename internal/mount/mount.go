@@ -25,8 +25,10 @@ type Mounted struct {
 	// the index, opened by Index on first use and kept
 	mu gosync.Mutex
 	ix *index.Index
-	// use serializes With: an index is not safe for concurrent use
+	// use serializes With: an index is not safe for concurrent use. It also
+	// guards Store and ix when With opens them again.
 	use gosync.Mutex
+	now func() time.Time // Options.Now, for the store opened again
 }
 
 // Index opens the index of the store on first use and keeps it. The index
@@ -48,20 +50,45 @@ func (m *Mounted) Index() (*index.Index, error) {
 }
 
 // With runs fn on the index of the store, brought up to HEAD, while no other
-// With uses it. The index is not to be kept past fn. An error opening or
-// refreshing the index is returned and fn is not run.
+// With uses it. The index (and m.Store) is not to be kept past fn. When the
+// index cannot be brought up to HEAD, as after another handle repacked the
+// store, the store and its index are opened again once. An error then is
+// returned and fn is not run.
 func (m *Mounted) With(fn func(ix *index.Index)) error {
-	ix, err := m.Index()
-	if err != nil {
-		return err
-	}
 	m.use.Lock()
 	defer m.use.Unlock()
-	if err := ix.Refresh(); err != nil {
+	ix, err := m.Index()
+	if err == nil {
+		if err = ix.Refresh(); err == nil {
+			fn(ix)
+			return nil
+		}
+	}
+	if ix, err = m.reopen(); err != nil {
 		return err
 	}
 	fn(ix)
 	return nil
+}
+
+// reopen opens the store and its index again; With holds m.use.
+func (m *Mounted) reopen() (*index.Index, error) {
+	s, err := store.Open(m.Entry.Path)
+	if err != nil {
+		return nil, err
+	}
+	if m.now != nil {
+		s.SetNow(m.now)
+	}
+	ix, err := index.Open(s)
+	if err != nil {
+		return nil, err
+	}
+	ix.SetStoreName(m.Name)
+	m.mu.Lock()
+	m.Store, m.ix = s, ix
+	m.mu.Unlock()
+	return ix, nil
 }
 
 // Skipped is a store of stores[] that did not open.
@@ -108,7 +135,7 @@ func Open(c *config.Config, opt Options) (*Set, error) {
 		if err != nil {
 			acc = sync.Access{}
 		}
-		set.Stores = append(set.Stores, &Mounted{Name: e.Name, Entry: e, Store: s, ULID: s.Meta().ULID, Access: acc})
+		set.Stores = append(set.Stores, &Mounted{Name: e.Name, Entry: e, Store: s, ULID: s.Meta().ULID, Access: acc, now: opt.Now})
 	}
 	return set, nil
 }

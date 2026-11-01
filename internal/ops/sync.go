@@ -98,9 +98,6 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 		return r, err
 	}
 	opt.Explicit = explicit
-	// The sync writes objects through this handle; the stores mounted are
-	// opened again after it, so that they see them.
-	defer ss.dropMount()
 	res, err := ss.RunSync(s, opt, true)
 	if err != nil {
 		return r, err
