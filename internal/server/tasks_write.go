@@ -29,13 +29,16 @@ func commitPtr(hex string) *string {
 func (s *Server) viewsOf(ss *ops.Session, ulids ...model.ULID) ([]*ops.TaskView, error) {
 	_, ix, err := ss.Open()
 	if err != nil {
-		return nil, err
+		return nil, problemOf(err)
 	}
 	out := make([]*ops.TaskView, 0, len(ulids))
 	for _, u := range ulids {
 		e, ok := ix.Task(u)
 		if !ok {
-			return nil, fmt.Errorf("task %s is not in the index after the write", u)
+			// Another process purged it after the write.
+			p := newProblem(http.StatusNotFound, "task.gone", fmt.Sprintf("%s is no longer in the store", u))
+			p.Args = map[string]any{"id": u.String()}
+			return nil, p
 		}
 		out = append(out, listView(ix, e))
 	}
@@ -135,6 +138,9 @@ func (f *Fields) assigns() ([]ops.Assign, error) {
 	}
 	slices.Sort(names)
 	for _, n := range names {
+		if slices.Contains(model.TaskKeys(), n) {
+			return nil, fmt.Errorf("props: %s is a field of the task, not a property", n)
+		}
 		if err := add(n, f.Props[n]); err != nil {
 			return nil, err
 		}
@@ -162,7 +168,7 @@ type affectedOutput struct{ Body affectedWrite }
 func (s *Server) writeOut(ss *ops.Session, u model.ULID, commit string) (*taskWriteOutput, error) {
 	vs, err := s.viewsOf(ss, u)
 	if err != nil {
-		return nil, problemOf(err)
+		return nil, err
 	}
 	return &taskWriteOutput{Body: taskWrite{Task: vs[0], Commit: commitPtr(commit)}}, nil
 }
@@ -178,7 +184,7 @@ func (s *Server) affectedOut(ss *ops.Session, r ops.AffectedResult) (*affectedOu
 	}
 	vs, err := s.viewsOf(ss, ulids...)
 	if err != nil {
-		return nil, problemOf(err)
+		return nil, err
 	}
 	return &affectedOutput{Body: affectedWrite{Tasks: vs, Commit: commitPtr(r.Commit)}}, nil
 }
@@ -344,7 +350,8 @@ func (s *Server) purge(ss *ops.Session, id, confirm string) (*affectedOutput, er
 		}
 		u, err := model.ParseULID(c)
 		if err != nil {
-			return nil, badRequest(fmt.Errorf("confirm: %w", err))
+			// Not a ULID is not the tasks to purge.
+			return nil, unconfirmed(ix, targets)
 		}
 		confirmed = append(confirmed, u)
 	}
@@ -352,21 +359,31 @@ func (s *Server) purge(ss *ops.Session, id, confirm string) (*affectedOutput, er
 		return nil, unconfirmed(ix, targets)
 	}
 	res, err := ss.Purge(id, confirmed)
-	if ops.AsError(err) != nil && ops.AsError(err).Code == "purge.changed" {
-		ix, _, targets, err2 := ss.PurgeTargets(id)
-		if err2 != nil {
-			return nil, problemOf(err2)
-		}
-		return nil, unconfirmed(ix, targets)
-	}
 	if err != nil {
-		return nil, problemOf(err)
+		return nil, purgeFailed(err, func() (*index.Index, []*index.Entry, error) {
+			ix, _, targets, err := ss.PurgeTargets(id)
+			return ix, targets, err
+		})
 	}
 	out := &affectedOutput{Body: affectedWrite{Commit: commitPtr(res.Commit)}}
 	for _, e := range res.Targets {
 		out.Body.ULIDs = append(out.Body.ULIDs, e.ULID.String())
 	}
 	return out, nil
+}
+
+// purgeFailed is the problem of err, what Purge returned. When the tasks
+// changed after the confirmation it is purge.unconfirmed with the tasks now,
+// read by targets.
+func purgeFailed(err error, targets func() (*index.Index, []*index.Entry, error)) *Problem {
+	if e := ops.AsError(err); e != nil && e.Code == "purge.changed" {
+		ix, ts, err2 := targets()
+		if err2 != nil {
+			return problemOf(err2)
+		}
+		return unconfirmed(ix, ts)
+	}
+	return problemOf(err)
 }
 
 // unconfirmed is the purge.unconfirmed problem with the tasks to purge.

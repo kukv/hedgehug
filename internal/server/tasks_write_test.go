@@ -1,9 +1,12 @@
 package server
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/index"
+	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/ops"
 )
 
@@ -181,4 +184,55 @@ func TestAssignsOf(t *testing.T) {
 	if _, err := assignsOf("k", map[string]any{}); err == nil {
 		t.Error("an object is refused")
 	}
+}
+
+func TestPurgeConfirmNotAULID(t *testing.T) {
+	ts := newTestServer(t)
+	p := ts.add("p", "")
+	ts.call("DELETE", "/api/tasks/"+p, nil, 200, nil) //nolint:bodyclose // raw reads the body into memory
+	pr := ts.problem("DELETE", "/api/tasks/"+p+"?purge=true&confirm=nope", nil, 409)
+	if pr.Type != "purge.unconfirmed" || len(pr.Args["targets"].([]any)) != 1 {
+		t.Errorf("confirm that is no ULID: %+v", pr)
+	}
+}
+
+func TestPurgeFailed(t *testing.T) {
+	ix := &index.Index{}
+	var ts []*index.Entry
+	read := func() (*index.Index, []*index.Entry, error) { return ix, ts, nil }
+	// purge.changed asks again, over the tasks as they are now.
+	changed := &ops.Error{Kind: ops.KindConflict, Code: "purge.changed", Err: errors.New("changed")}
+	if p := purgeFailed(changed, read); p.Type != "purge.unconfirmed" || p.Status != 409 {
+		t.Errorf("changed: %+v", p)
+	}
+	// Failing to read them is that error.
+	if p := purgeFailed(changed, func() (*index.Index, []*index.Entry, error) {
+		return nil, nil, &ops.Error{Kind: ops.KindNotFound, Code: "task.gone", Err: errors.New("gone")}
+	}); p.Type != "task.gone" {
+		t.Errorf("read failed: %+v", p)
+	}
+	// Any other error is its own problem.
+	if p := purgeFailed(&ops.Error{Kind: ops.KindNotFound, Code: "task.gone", Err: errors.New("gone")}, read); p.Type != "task.gone" {
+		t.Errorf("other: %+v", p)
+	}
+}
+
+func TestViewsOfGone(t *testing.T) {
+	ts := newTestServer(t)
+	_, err := ts.srv.viewsOf(ts.srv.session(""), model.NewULID())
+	var p *Problem
+	if !errors.As(err, &p) || p.Status != 404 || p.Type != "task.gone" {
+		t.Errorf("viewsOf of a task not in the index = %v", err)
+	}
+}
+
+func TestPropsRefuseTaskKeys(t *testing.T) {
+	ts := newTestServer(t)
+	id := ts.add("one", "")
+	for _, k := range append(model.TaskKeys(), "blocked_by") {
+		if p := ts.problem("PATCH", "/api/tasks/"+id, map[string]any{"props": map[string]any{k: "x"}}, 400); p.Type != "request.invalid" {
+			t.Errorf("props.%s: %+v", k, p)
+		}
+	}
+	ts.problem("POST", "/api/tasks", map[string]any{"title": "t", "props": map[string]any{"title": "x"}}, 400)
 }
