@@ -161,13 +161,21 @@ func (f *moveFixture) moveInLocked(in MoveIn, l *Locked) error {
 	return err
 }
 
+// wheres is the one where a test gives, or none for "".
+func wheres(where string) []string {
+	if where == "" {
+		return nil
+	}
+	return []string{where}
+}
+
 func (f *moveFixture) moveOut(scoped string) error { return f.moveOutLocked(scoped, nil) }
 
 func (f *moveFixture) moveOutLocked(scoped string, l *Locked) error {
 	_, err := f.src.Update(Op{Name: "move-out", Detail: f.p.ID + " " + f.p.Title, Author: testAuthor, Locked: l}, func(tx *Tx) error {
 		return tx.MoveOut(MoveOut{
 			To: f.dst.Meta().ULID, Tasks: []model.ULID{f.p.ULID, f.c.ULID, f.g.ULID},
-			Unlinked: f.unlinked, Scoped: scoped,
+			Unlinked: f.unlinked, Scoped: wheres(scoped),
 		})
 	})
 	return err
@@ -329,11 +337,11 @@ func TestMoveInRefusesWhatTheSchemaDoes(t *testing.T) {
 func TestMoveInScoped(t *testing.T) {
 	f := newMoveFixture(t, "SRC", "DST", nil)
 	in := f.in()
-	in.Scoped = &schema.Scoped{Where: "project:" + f.p.ULID.String(), Statuses: scopedStatuses}
+	in.Scoped = []schema.Scoped{{Where: "project:" + f.p.ULID.String(), Statuses: scopedStatuses}}
 	if err := f.moveIn(in); err != nil {
 		t.Fatal(err)
 	}
-	if sc := f.dst.Schema(); len(sc.Scoped) != 1 || sc.Scoped[0].Where != in.Scoped.Where {
+	if sc := f.dst.Schema(); len(sc.Scoped) != 1 || sc.Scoped[0].Where != in.Scoped[0].Where {
 		t.Errorf("scoped = %+v", sc.Scoped)
 	}
 	if err := f.moveIn(in); err != nil { // a rerun replaces the entry
@@ -341,6 +349,36 @@ func TestMoveInScoped(t *testing.T) {
 	}
 	if n := len(f.dst.Schema().Scoped); n != 1 {
 		t.Errorf("%d scoped entries after a rerun", n)
+	}
+}
+
+func TestMoveInScopedSeveral(t *testing.T) {
+	f := newMoveFixture(t, "SRC", "DST", nil)
+	in := f.in()
+	in.Scoped = []schema.Scoped{
+		{Where: "project:" + f.p.ULID.String(), Statuses: scopedStatuses},
+		{Where: "project:" + f.c.ULID.String(), Statuses: scopedStatuses},
+	}
+	if err := f.moveIn(in); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(f.dst.Schema().Scoped); n != 2 {
+		t.Errorf("%d scoped entries, want 2", n)
+	}
+}
+
+func TestNoteFiles(t *testing.T) {
+	f := newMoveFixture(t, "SRC", "DST", nil)
+	got, err := f.src.NoteFiles(f.c.ULID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[f.commentPath] == nil || got[f.worklogPath] == nil {
+		t.Fatalf("C has a comment and a worklog entry; got %v", got)
+	}
+	none, err := f.src.NoteFiles(f.g.ULID)
+	if err != nil || len(none) != 0 {
+		t.Errorf("G has notes %v, %v", none, err)
 	}
 }
 
@@ -635,7 +673,7 @@ func TestMoveInValidatesAgainstTheScopedItBrings(t *testing.T) {
 	f.g.Status = "backlog"
 	f.p.Kind = "project" // the scoped entry applies below a project
 	in := f.in()
-	in.Scoped = &schema.Scoped{Where: "project:" + f.p.ULID.String(), Workflow: &schema.Workflow{Required: schema.Lists{{Key: "backlog", Values: []string{"due"}}}}}
+	in.Scoped = []schema.Scoped{{Where: "project:" + f.p.ULID.String(), Workflow: &schema.Workflow{Required: schema.Lists{{Key: "backlog", Values: []string{"due"}}}}}}
 	var ve *ValidationError
 	if err := f.moveIn(in); !errors.As(err, &ve) || ve.Task != f.g.ULID {
 		t.Fatalf("with the scoped entry: err = %v, want a *ValidationError for G", err)

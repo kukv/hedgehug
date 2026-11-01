@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"iter"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -179,6 +180,33 @@ func (s *Store) Worklogs(task model.ULID) iter.Seq2[*model.Worklog, error] {
 		return err == nil && t == task
 	}
 	return walk(s, path.Dir(model.WorklogPath(task, model.ULID{})), match, ignoreRel(model.DecodeWorklog))
+}
+
+// NoteFiles returns the comment and worklog files of task as they are, by
+// path (relative to the store); none gives an empty map.
+func (s *Store) NoteFiles(task model.ULID) (map[string][]byte, error) {
+	out := map[string][]byte{}
+	for _, dir := range []string{path.Dir(model.CommentPath(task, model.ULID{})), path.Dir(model.WorklogPath(task, model.ULID{}))} {
+		entries, err := os.ReadDir(s.path(dir))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			rel := dir + "/" + e.Name()
+			b, err := atomicfile.ReadFile(s.path(rel))
+			if err != nil {
+				return nil, err
+			}
+			out[rel] = b
+		}
+	}
+	return out, nil
 }
 
 func (s *Store) Sprint(ulid model.ULID) (*model.Sprint, error) {

@@ -1,0 +1,18 @@
+{
+  "from": "alpha",
+  "to": "bravo-long",
+  "tasks": [
+    {
+      "ulid": "<ULID-1>",
+      "old_id": "AA-2",
+      "new_id": "BB-3"
+    }
+  ],
+  "unlinked": [
+    {
+      "task": "<ULID-2>",
+      "field": "blocked_by",
+      "target": "<ULID-1>"
+    }
+  ]
+}

@@ -270,6 +270,13 @@ func lineage(t *model.Task, sc *schema.Schema, read func(model.ULID) (*model.Tas
 	return parentKind, ancestors, nil
 }
 
+// Lineage is the kind of t's parent and the ancestors schema.For needs, as a
+// write works them out (see lineage), for a caller that checks a task before
+// it is written. read gives the tasks of the place t is to be written in.
+func Lineage(t *model.Task, sc *schema.Schema, read func(model.ULID) (*model.Task, error)) (parentKind string, ancestors []model.ULID, err error) {
+	return lineage(t, sc, read)
+}
+
 // WorkspaceTakenError means a workspace write would give a workspace the id
 // prefix or the name that another workspace has.
 type WorkspaceTakenError struct{ Msg string }

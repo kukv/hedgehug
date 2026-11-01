@@ -1,0 +1,5 @@
+STORE       ID    ULID                        STATUS  KIND     ASSIGNEES  LABELS  TITLE
+bravo-long  BB-1  <ULID-1>  done    task                        Bravo task
+bravo-long  BB-4  <ULID-2>  todo    task                        Alpha child
+bravo-long  BB-2  <ULID-3>  todo    task                        Bravo other
+bravo-long  BB-3  <ULID-4>  todo    project                     Alpha project

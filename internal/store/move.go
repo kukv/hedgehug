@@ -214,7 +214,7 @@ type MoveIn struct {
 	Parent    *model.ULID       // the new parent of the root; nil for the workspace's root
 	Notes     map[string][]byte // the comment and worklog files of the tasks, by path (same paths here)
 	Unlinked  []Unlink
-	Scoped    *schema.Scoped // to add to this store's schema.yaml, or nil
+	Scoped    []schema.Scoped // to add to this store's schema.yaml
 }
 
 // MoveIn writes in in tx: each task with its workspace set to in.Workspace,
@@ -273,7 +273,7 @@ func (tx *Tx) MoveIn(in MoveIn) error {
 		moved[i] = t
 	}
 
-	if in.Scoped != nil {
+	if len(in.Scoped) > 0 {
 		base := tx.schema
 		if base == nil {
 			base = tx.s.Schema()
@@ -282,8 +282,10 @@ func (tx *Tx) MoveIn(in MoveIn) error {
 		if err != nil {
 			return err
 		}
-		sc.Scoped = slices.DeleteFunc(sc.Scoped, func(s schema.Scoped) bool { return s.Where == in.Scoped.Where })
-		sc.Scoped = append(sc.Scoped, *in.Scoped)
+		for _, add := range in.Scoped {
+			sc.Scoped = slices.DeleteFunc(sc.Scoped, func(s schema.Scoped) bool { return s.Where == add.Where })
+			sc.Scoped = append(sc.Scoped, add)
+		}
 		if err := tx.PutSchema(sc); err != nil {
 			return err
 		}
@@ -357,7 +359,7 @@ type MoveOut struct {
 	To       model.ULID   // the destination store's ulid
 	Tasks    []model.ULID // the tasks moved; the root first
 	Unlinked []Unlink
-	Scoped   string // the where (project:<ULID>) of the scoped entry to remove, or ""
+	Scoped   []string // the where (project:<ULID>) of the scoped entries to remove
 }
 
 // MoveOut writes out in tx: each task file becomes a forward to out.To, its
@@ -423,17 +425,18 @@ func (tx *Tx) MoveOut(out MoveOut) error {
 			return err
 		}
 	}
-	if out.Scoped != "" {
+	if len(out.Scoped) > 0 {
 		base := tx.schema
 		if base == nil {
 			base = tx.s.Schema()
 		}
-		if slices.ContainsFunc(base.Scoped, func(s schema.Scoped) bool { return s.Where == out.Scoped }) {
+		gone := func(s schema.Scoped) bool { return slices.Contains(out.Scoped, s.Where) }
+		if slices.ContainsFunc(base.Scoped, gone) {
 			sc, err := cloneSchema(base)
 			if err != nil {
 				return err
 			}
-			sc.Scoped = slices.DeleteFunc(sc.Scoped, func(s schema.Scoped) bool { return s.Where == out.Scoped })
+			sc.Scoped = slices.DeleteFunc(sc.Scoped, gone)
 			if err := tx.PutSchema(sc); err != nil {
 				return err
 			}
