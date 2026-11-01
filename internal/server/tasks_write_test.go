@@ -25,15 +25,15 @@ type affectedBody struct {
 func TestCreateTask(t *testing.T) {
 	ts := newTestServer(t)
 	var out taskWriteBody
-	ts.call("POST", "/api/tasks", map[string]any{"title": "one", "labels": []string{"a", "b"}}, 201, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("POST", "/api/tasks", map[string]any{"title": "one", "labels": []string{"a", "b"}}, 201, &out)
 	if out.Task == nil || out.Task.ID != "ME-1" || out.Commit == nil || len(out.Task.Labels) != 2 {
 		t.Fatalf("created = %+v", out)
 	}
-	ts.call("POST", "/api/tasks", map[string]any{"title": "p", "kind": "project"}, 201, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("POST", "/api/tasks", map[string]any{"title": "p", "kind": "project"}, 201, &out)
 	if out.Task.Kind != "project" {
 		t.Errorf("kind = %q", out.Task.Kind)
 	}
-	ts.call("POST", "/api/tasks", map[string]any{"title": "c", "parent": "ME-2"}, 201, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("POST", "/api/tasks", map[string]any{"title": "c", "parent": "ME-2"}, 201, &out)
 	if out.Task.Parent == nil {
 		t.Errorf("parent = nil")
 	}
@@ -45,7 +45,7 @@ func TestPatchTask(t *testing.T) {
 	id := ts.add("one", "")
 	blocker := ts.add("blocker", "")
 	var out taskWriteBody
-	ts.call("PATCH", "/api/tasks/"+id, map[string]any{ //nolint:bodyclose // raw reads the body into memory
+	ts.call("PATCH", "/api/tasks/"+id, map[string]any{
 		"title": "two", "labels": []string{"x"}, "blocked_by": []string{blocker}, "body": "hello\n",
 	}, 200, &out)
 	if out.Task.Title != "two" || len(out.Task.Labels) != 1 || len(out.Task.BlockedBy) != 1 || out.Commit == nil {
@@ -57,11 +57,11 @@ func TestPatchTask(t *testing.T) {
 		t.Errorf("body = %q", got.Body)
 	}
 	// The same values again: no commit.
-	ts.call("PATCH", "/api/tasks/"+id, map[string]any{"title": "two"}, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("PATCH", "/api/tasks/"+id, map[string]any{"title": "two"}, 200, &out)
 	if out.Commit != nil {
 		t.Errorf("no change made commit %v", *out.Commit)
 	}
-	ts.call("PATCH", "/api/tasks/"+id, map[string]any{"labels": []string{}}, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("PATCH", "/api/tasks/"+id, map[string]any{"labels": []string{}}, 200, &out)
 	if len(out.Task.Labels) != 0 {
 		t.Errorf("labels = %v, want none", out.Task.Labels)
 	}
@@ -81,11 +81,11 @@ func TestMoveTask(t *testing.T) {
 	a := ts.add("a", "")
 	b := ts.add("b", "")
 	var out taskWriteBody
-	ts.call("POST", "/api/tasks/"+b+"/move", map[string]any{"parent": a}, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("POST", "/api/tasks/"+b+"/move", map[string]any{"parent": a}, 200, &out)
 	if out.Task.Parent == nil || out.Commit == nil {
 		t.Fatalf("moved = %+v", out)
 	}
-	ts.call("POST", "/api/tasks/"+b+"/move", map[string]any{"root": true}, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("POST", "/api/tasks/"+b+"/move", map[string]any{"root": true}, 200, &out)
 	if out.Task.Parent != nil {
 		t.Errorf("parent = %v, want none", *out.Task.Parent)
 	}
@@ -97,14 +97,14 @@ func TestRemoveRestoreTask(t *testing.T) {
 	p := ts.add("p", "")
 	ts.add("c", p)
 	var out affectedBody
-	ts.call("DELETE", "/api/tasks/"+p, nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("DELETE", "/api/tasks/"+p, nil, 200, &out)
 	if len(out.Tasks) != 2 || out.Tasks[0].DeletedAt == nil || out.Commit == nil {
 		t.Fatalf("removed = %+v", out)
 	}
 	if pr := ts.problem("PATCH", "/api/tasks/"+p, map[string]any{"title": "x"}, 409); pr.Type != "task.deleted" {
 		t.Errorf("patch of deleted: %+v", pr)
 	}
-	ts.call("POST", "/api/tasks/"+p+"/restore", nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("POST", "/api/tasks/"+p+"/restore", nil, 200, &out)
 	if len(out.Tasks) != 2 || out.Tasks[0].DeletedAt != nil {
 		t.Errorf("restored = %+v", out)
 	}
@@ -115,7 +115,7 @@ func TestPurgeNeedsConfirm(t *testing.T) {
 	p := ts.add("p", "")
 	c := ts.add("c", p)
 	var out affectedBody
-	ts.call("DELETE", "/api/tasks/"+p, nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("DELETE", "/api/tasks/"+p, nil, 200, &out)
 	pr := ts.problem("DELETE", "/api/tasks/"+p+"?purge=true", nil, 409)
 	targets, _ := pr.Args["targets"].([]any)
 	if pr.Type != "purge.unconfirmed" || len(targets) != 2 {
@@ -134,7 +134,7 @@ func TestPurgeNeedsConfirm(t *testing.T) {
 	if pr.Type != "purge.unconfirmed" {
 		t.Errorf("partial confirm: %+v", pr)
 	}
-	ts.call("DELETE", "/api/tasks/"+p+"?purge=true&confirm="+strings.Join(ulids, ","), nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("DELETE", "/api/tasks/"+p+"?purge=true&confirm="+strings.Join(ulids, ","), nil, 200, &out)
 	if len(out.ULIDs) != 2 || out.Commit == nil {
 		t.Fatalf("purged = %+v", out)
 	}
@@ -153,11 +153,11 @@ func TestRestoreAtCommit(t *testing.T) {
 	ts := newTestServer(t)
 	id := ts.add("one", "")
 	var hist []ops.LogView
-	ts.call("GET", "/api/tasks/"+id+"/history", nil, 200, &hist) //nolint:bodyclose // raw reads the body into memory
+	ts.call("GET", "/api/tasks/"+id+"/history", nil, 200, &hist)
 	first := hist[0].Hash
 	var out taskWriteBody
-	ts.call("PATCH", "/api/tasks/"+id, map[string]any{"title": "two"}, 200, &out)  //nolint:bodyclose // raw reads the body into memory
-	ts.call("POST", "/api/tasks/"+id+"/history/"+first+"/restore", nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("PATCH", "/api/tasks/"+id, map[string]any{"title": "two"}, 200, &out)
+	ts.call("POST", "/api/tasks/"+id+"/history/"+first+"/restore", nil, 200, &out)
 	if out.Task.Title != "one" || out.Commit == nil {
 		t.Errorf("restored at = %+v", out)
 	}
@@ -189,7 +189,7 @@ func TestAssignsOf(t *testing.T) {
 func TestPurgeConfirmNotAULID(t *testing.T) {
 	ts := newTestServer(t)
 	p := ts.add("p", "")
-	ts.call("DELETE", "/api/tasks/"+p, nil, 200, nil) //nolint:bodyclose // raw reads the body into memory
+	ts.call("DELETE", "/api/tasks/"+p, nil, 200, nil)
 	pr := ts.problem("DELETE", "/api/tasks/"+p+"?purge=true&confirm=nope", nil, 409)
 	if pr.Type != "purge.unconfirmed" || len(pr.Args["targets"].([]any)) != 1 {
 		t.Errorf("confirm that is no ULID: %+v", pr)

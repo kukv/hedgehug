@@ -28,7 +28,7 @@ func TestHealth(t *testing.T) {
 		Version string `json:"version"`
 		PID     int    `json:"pid"`
 	}
-	ts.call("GET", "/api/health", nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("GET", "/api/health", nil, 200, &out)
 	if out.Version != "test" || out.PID != os.Getpid() {
 		t.Errorf("health = %+v", out)
 	}
@@ -41,11 +41,11 @@ func TestTokenRequired(t *testing.T) {
 		if auth != "" {
 			req.Header.Set("Authorization", auth)
 		}
-		resp := ts.raw(req) //nolint:bodyclose // raw reads the body into memory
-		if resp.StatusCode != 401 {
-			t.Errorf("Authorization %q: status %d, want 401", auth, resp.StatusCode)
+		resp := ts.raw(req)
+		if resp.Status != 401 {
+			t.Errorf("Authorization %q: status %d, want 401", auth, resp.Status)
 		}
-		b, _ := io.ReadAll(resp.Body)
+		b := resp.Body
 		if !strings.Contains(string(b), `"type":"auth.token"`) {
 			t.Errorf("Authorization %q: body %s", auth, b)
 		}
@@ -80,9 +80,9 @@ func TestHostRefused(t *testing.T) {
 			req, _ := http.NewRequest("GET", ts.hs.URL+path, nil)
 			req.Host = host
 			req.Header.Set("Authorization", "Bearer "+testToken)
-			resp := ts.raw(req) //nolint:bodyclose // raw reads the body into memory
-			if resp.StatusCode != 403 {
-				t.Errorf("Host %q %s: status %d, want 403", host, path, resp.StatusCode)
+			resp := ts.raw(req)
+			if resp.Status != 403 {
+				t.Errorf("Host %q %s: status %d, want 403", host, path, resp.Status)
 			}
 			if ct := resp.Header.Get("Content-Type"); ct != "application/problem+json" {
 				t.Errorf("Host %q %s: Content-Type %q", host, path, ct)
@@ -92,8 +92,8 @@ func TestHostRefused(t *testing.T) {
 	req, _ := http.NewRequest("GET", ts.hs.URL+"/api/health", nil)
 	req.Host = "localhost:" + itoa(ts.port)
 	req.Header.Set("Authorization", "Bearer "+testToken)
-	if resp := ts.raw(req); resp.StatusCode != 200 { //nolint:bodyclose // raw reads the body into memory
-		t.Errorf("Host localhost:<port>: status %d, want 200", resp.StatusCode)
+	if resp := ts.raw(req); resp.Status != 200 {
+		t.Errorf("Host localhost:<port>: status %d, want 200", resp.Status)
 	}
 }
 
@@ -101,10 +101,10 @@ func TestNotBuiltPage(t *testing.T) {
 	ts := newTestServer(t) // Options.Static is nil
 	for _, path := range []string{"/", "/tasks/ME-1", "/index.html"} {
 		req, _ := http.NewRequest("GET", ts.hs.URL+path, nil)
-		resp := ts.raw(req) //nolint:bodyclose // raw reads the body into memory
-		b, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode != 200 || !strings.Contains(string(b), "make web") {
-			t.Errorf("%s: status %d body %s", path, resp.StatusCode, b)
+		resp := ts.raw(req)
+		b := resp.Body
+		if resp.Status != 200 || !strings.Contains(string(b), "make web") {
+			t.Errorf("%s: status %d body %s", path, resp.Status, b)
 		}
 	}
 	p := ts.problemNoSpec("GET", "/api/nope", nil, 404) // not in the spec, so not validated
@@ -193,10 +193,10 @@ func (ts *testServer) problemNoSpec(method, path string, body any, want int) Pro
 	req, _ := http.NewRequest(method, ts.hs.URL+path, rd)
 	req.Header.Set("Authorization", "Bearer "+testToken)
 	req.Header.Set("Content-Type", "application/json")
-	resp := ts.raw(req) //nolint:bodyclose // raw reads the body into memory
-	raw, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != want {
-		ts.t.Fatalf("%s %s: status %d, want %d; body %s", method, path, resp.StatusCode, want, raw)
+	resp := ts.raw(req)
+	raw := resp.Body
+	if resp.Status != want {
+		ts.t.Fatalf("%s %s: status %d, want %d; body %s", method, path, resp.Status, want, raw)
 	}
 	var p Problem
 	if err := json.Unmarshal(raw, &p); err != nil {

@@ -42,11 +42,11 @@ func TestListTasks(t *testing.T) {
 	ts.add("one", "")
 	ts.add("two", "")
 	var out listBody
-	ts.call("GET", "/api/tasks", nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("GET", "/api/tasks", nil, 200, &out)
 	if len(out.Tasks) != 2 || out.Roots != nil {
 		t.Fatalf("tasks = %+v", out)
 	}
-	ts.call("GET", "/api/tasks?q="+url.QueryEscape("one"), nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("GET", "/api/tasks?q="+url.QueryEscape("one"), nil, 200, &out)
 	if len(out.Tasks) != 1 || out.Tasks[0].Title != "one" {
 		t.Errorf("q=one: %+v", out.Tasks)
 	}
@@ -54,8 +54,8 @@ func TestListTasks(t *testing.T) {
 
 func TestListTasksEmptyIsArray(t *testing.T) {
 	ts := newTestServer(t)
-	resp := ts.call("GET", "/api/tasks", nil, 200, nil) //nolint:bodyclose // raw reads the body into memory
-	b := readAll(t, resp)
+	resp := ts.call("GET", "/api/tasks", nil, 200, nil)
+	b := resp.Body
 	if string(b) != `{"tasks":[]}`+"\n" && string(b) != `{"tasks":[]}` {
 		t.Errorf("body = %s, want an empty tasks array", b)
 	}
@@ -65,7 +65,7 @@ func TestListTasksGroups(t *testing.T) {
 	ts := newTestServer(t)
 	ts.add("one", "")
 	var out listBody
-	ts.call("GET", "/api/tasks?q="+url.QueryEscape("group:status"), nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("GET", "/api/tasks?q="+url.QueryEscape("group:status"), nil, 200, &out)
 	if len(out.Groups) == 0 || len(out.Groups[0].ULIDs) != 1 {
 		t.Errorf("groups = %+v", out.Groups)
 	}
@@ -80,7 +80,7 @@ func TestTreeHasProgress(t *testing.T) {
 	pv, _ := res.View()
 	ts.add("child", pv.ID)
 	var out listBody
-	ts.call("GET", "/api/tasks?tree=true", nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("GET", "/api/tasks?tree=true", nil, 200, &out)
 	if len(out.Roots) != 1 || len(out.Roots[0].Children) != 1 || out.Tasks != nil {
 		t.Fatalf("tree = %+v", out)
 	}
@@ -102,7 +102,7 @@ func TestListHasChecklistAndProgress(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out listBody
-	ts.call("GET", "/api/tasks", nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("GET", "/api/tasks", nil, 200, &out)
 	for _, v := range out.Tasks {
 		switch v.ID {
 		case pv.ID:
@@ -121,12 +121,12 @@ func TestShowTask(t *testing.T) {
 	ts := newTestServer(t)
 	id := ts.add("one", "")
 	var out ops.ShowView
-	ts.call("GET", "/api/tasks/"+id, nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("GET", "/api/tasks/"+id, nil, 200, &out)
 	if out.TaskView == nil || out.ID != id || out.Comments == nil || len(out.History) == 0 {
 		t.Errorf("show = %+v", out)
 	}
 	ulid := out.ULID
-	ts.call("GET", "/api/tasks/"+ulid, nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("GET", "/api/tasks/"+ulid, nil, 200, &out)
 	if out.ID != id {
 		t.Errorf("by ULID: %s", out.ID)
 	}
@@ -164,11 +164,11 @@ func TestTaskHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out []ops.LogView
-	ts.call("GET", "/api/tasks/"+id+"/history", nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("GET", "/api/tasks/"+id+"/history", nil, 200, &out)
 	if len(out) != 2 || out[0].Op == nil || *out[0].Op != "set" {
 		t.Fatalf("history = %+v", out)
 	}
-	ts.call("GET", "/api/tasks/"+id+"/history?limit=1", nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("GET", "/api/tasks/"+id+"/history?limit=1", nil, 200, &out)
 	if len(out) != 1 {
 		t.Errorf("limit=1: %d entries", len(out))
 	}
@@ -214,8 +214,8 @@ func (ts *testServer) rawTask(id string, ulid model.ULID, front string) {
 
 func TestEmptyTreeIsArray(t *testing.T) {
 	ts := newTestServer(t)
-	resp := ts.call("GET", "/api/tasks?tree=true", nil, 200, nil) //nolint:bodyclose // raw reads the body into memory
-	if b := string(readAll(t, resp)); b != `{"roots":[]}`+"\n" && b != `{"roots":[]}` {
+	resp := ts.call("GET", "/api/tasks?tree=true", nil, 200, nil)
+	if b := string(resp.Body); b != `{"roots":[]}`+"\n" && b != `{"roots":[]}` {
 		t.Errorf("body = %s, want an empty roots array", b)
 	}
 }
@@ -226,7 +226,7 @@ func TestTreeParentCycle(t *testing.T) {
 	ts.rawTask("ME-1", x, "title: X\nparent: "+y.String()+"\n")
 	ts.rawTask("ME-2", y, "title: Y\nparent: "+x.String()+"\n")
 	var out listBody
-	ts.call("GET", "/api/tasks?tree=true", nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("GET", "/api/tasks?tree=true", nil, 200, &out)
 	if len(out.Roots) != 0 || len(out.Cycle) != 2 || !out.Cycle[0].InCycle {
 		t.Errorf("roots = %d, cycle = %+v", len(out.Roots), out.Cycle)
 	}
@@ -236,16 +236,16 @@ func TestStoreParamNamesTheStore(t *testing.T) {
 	ts := newTestServer(t)
 	id := ts.add("one", "")
 	var out listBody
-	ts.call("GET", "/api/tasks?store=me", nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("GET", "/api/tasks?store=me", nil, 200, &out)
 	if len(out.Tasks) != 1 {
 		t.Errorf("list: %+v", out.Tasks)
 	}
 	var sv ops.ShowView
-	ts.call("GET", "/api/tasks/"+id+"?store=me", nil, 200, &sv) //nolint:bodyclose // raw reads the body into memory
+	ts.call("GET", "/api/tasks/"+id+"?store=me", nil, 200, &sv)
 	if sv.ID != id {
 		t.Errorf("show: %s", sv.ID)
 	}
-	ts.call("GET", "/api/tasks/"+id+"/history?store=me", nil, 200, nil) //nolint:bodyclose // raw reads the body into memory
+	ts.call("GET", "/api/tasks/"+id+"/history?store=me", nil, 200, nil)
 }
 
 func TestShowByFormerID(t *testing.T) {
@@ -255,7 +255,7 @@ func TestShowByFormerID(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out ops.ShowView
-	ts.call("GET", "/api/tasks/"+old, nil, 200, &out) //nolint:bodyclose // raw reads the body into memory
+	ts.call("GET", "/api/tasks/"+old, nil, 200, &out)
 	if out.ID == old || out.TaskView == nil || out.Title != "one" {
 		t.Errorf("show by former ID %s: %+v", old, out.TaskView)
 	}

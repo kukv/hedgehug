@@ -90,7 +90,12 @@ func (s *Server) registerActivity() {
 		OperationID: "list-activity", Method: http.MethodGet, Path: "/api/activity",
 		Summary: "List the commits of the store, newest first, as hh log", Tags: []string{"activity"},
 	}, func(_ context.Context, in *activityInput) (*activityOutput, error) {
-		ix, entries, err := s.session(in.Store).Log(nil, 0)
+		// Without a filter the first Limit commits are the answer.
+		limit := 0
+		if in.Author == "" && in.Sync == "" {
+			limit = in.Limit
+		}
+		ix, entries, err := s.session(in.Store).Log(nil, limit)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -118,13 +123,29 @@ func (s *Server) registerActivity() {
 		Summary: "List the inbox of every store, newest first, as hh inbox", Tags: []string{"notifications"},
 	}, func(_ context.Context, in *notificationsInput) (*notificationsOutput, error) {
 		ss := s.session("")
-		_, unread, err := ss.InboxList(false)
+		// Warnings reach the log once, however many times the boxes are read.
+		seen := map[string]bool{}
+		warn := ss.Warn
+		ss.Warn = func(m string) {
+			if !seen[m] {
+				seen[m] = true
+				warn(m)
+			}
+		}
+		stores, warnings, err := ss.InboxStores()
+		for _, w := range warnings {
+			ss.Warn(w)
+		}
+		if err != nil {
+			return nil, problemOf(err)
+		}
+		unread, err := ss.InboxListOf(stores, false)
 		if err != nil {
 			return nil, problemOf(err)
 		}
 		items := unread
 		if in.All {
-			if _, items, err = ss.InboxList(true); err != nil {
+			if items, err = ss.InboxListOf(stores, true); err != nil {
 				return nil, problemOf(err)
 			}
 		}

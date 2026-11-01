@@ -112,27 +112,33 @@ func (ts *testServer) session() *ops.Session {
 	return &ops.Session{Getenv: ts.getenv, Now: time.Now, Warn: func(string) {}}
 }
 
-// raw sends req as it is and returns the response, its body read into
-// memory so that it can be read again.
-func (ts *testServer) raw(req *http.Request) *http.Response {
+// reply is what the tests need of a response: its body is read into memory
+// and closed.
+type reply struct {
+	Status int
+	Header http.Header
+	Body   []byte
+}
+
+// raw sends req as it is and returns the response.
+func (ts *testServer) raw(req *http.Request) *reply {
 	ts.t.Helper()
 	resp, err := ts.hs.Client().Do(req)
 	if err != nil {
 		ts.t.Fatal(err)
 	}
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
-	_ = resp.Body.Close()
 	if err != nil {
 		ts.t.Fatal(err)
 	}
-	resp.Body = io.NopCloser(bytes.NewReader(b))
-	return resp
+	return &reply{Status: resp.StatusCode, Header: resp.Header, Body: b}
 }
 
 // call sends method path with body as JSON (none when nil) and the token,
 // checks the status is want and the response is as api/openapi.yaml says,
 // and decodes the body into out (when not nil).
-func (ts *testServer) call(method, path string, body any, want int, out any) *http.Response {
+func (ts *testServer) call(method, path string, body any, want int, out any) *reply {
 	ts.t.Helper()
 	var rd io.Reader
 	if body != nil {
@@ -151,17 +157,16 @@ func (ts *testServer) call(method, path string, body any, want int, out any) *ht
 		req.Header.Set("Content-Type", "application/json")
 	}
 	resp := ts.raw(req)
-	b, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != want {
-		ts.t.Fatalf("%s %s: status %d, want %d; body %s", method, path, resp.StatusCode, want, b)
+	b := resp.Body
+	if resp.Status != want {
+		ts.t.Fatalf("%s %s: status %d, want %d; body %s", method, path, resp.Status, want, b)
 	}
-	resp.Body = io.NopCloser(bytes.NewReader(b))
-	if ok, errs := specValidator(ts.t).ValidateHttpResponse(req, resp); !ok {
+	r := &http.Response{StatusCode: resp.Status, Header: resp.Header, Body: io.NopCloser(bytes.NewReader(b))}
+	if ok, errs := specValidator(ts.t).ValidateHttpResponse(req, r); !ok {
 		for _, e := range errs {
 			ts.t.Errorf("%s %s: response not as api/openapi.yaml says: %s (%s)", method, path, e.Message, e.Reason)
 		}
 	}
-	resp.Body = io.NopCloser(bytes.NewReader(b))
 	if out != nil {
 		if err := json.Unmarshal(b, out); err != nil {
 			ts.t.Fatalf("%s %s: %v; body %s", method, path, err, b)
@@ -174,20 +179,11 @@ func (ts *testServer) call(method, path string, body any, want int, out any) *ht
 func (ts *testServer) problem(method, path string, body any, want int) Problem {
 	ts.t.Helper()
 	var p Problem
-	resp := ts.call(method, path, body, want, &p) //nolint:bodyclose // raw reads the body into memory
+	resp := ts.call(method, path, body, want, &p)
 	if ct := resp.Header.Get("Content-Type"); ct != "application/problem+json" {
 		ts.t.Errorf("%s %s: Content-Type %q, want application/problem+json", method, path, ct)
 	}
 	return p
-}
-
-func readAll(t *testing.T, resp *http.Response) []byte {
-	t.Helper()
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return b
 }
 
 func mustULID(t *testing.T, s string) model.ULID {
