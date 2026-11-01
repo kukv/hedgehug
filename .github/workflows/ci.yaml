@@ -12,6 +12,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# The same build everywhere as on a developer's machine (mise.toml): without
+# -trimpath the build cache keys the packages by their directory.
+env:
+  GOFLAGS: -trimpath
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -33,35 +38,38 @@ jobs:
           go mod tidy
           git diff --exit-code -- go.mod go.sum
 
+      # The lint cache is saved on a push to main only, as the Go caches are,
+      # so that a pull request cannot poison what main reads.
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.15.0
+          skip-save-cache: ${{ github.event_name != 'push' }}
+          args: --verbose
 
       - name: Format check
         run: golangci-lint fmt --diff ./...
 
-  # hedgehug は Linux / macOS / Windows 向けに1つのバイナリを配る。
-  # データの置き場所やパス区切りは OS ごとに違うので、テストは3つの OS で回す。
-  test:
+  # hedgehug は Linux と macOS 向けに配る（Windows では WSL で Linux 版を使う）。
+  # データの置き場所やファイルシステムが OS ごとに違うので、テストは2つの OS で回す。
+  # 1つのジョブでは4コアで CPU 律速になるので、パッケージを3つの shard に分けて同時に回す。
+  test-shard:
+    name: test (${{ matrix.os }}, ${{ matrix.shard }})
     strategy:
-      # 1つの OS の失敗で、ほかの OS の結果を隠さない。
+      # 1つの shard の失敗で、ほかの結果を隠さない。
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        # -race はテストを5倍ほど遅くする。検出するデータ競合は OS によらないので、
-        # macOS では外す（Windows は今のまま）。
+        os: [ubuntu-latest, macos-latest]
+        shard: [1, 2, 3]
+        # -race はテストを数倍遅くする。検出するデータ競合は OS によらないので、
+        # ubuntu だけで付ける。カバレッジとテストの結果も ubuntu の分をまとめる。
         include:
           - os: ubuntu-latest
             race: -race
-          - os: windows-latest
-            race: -race
+            report: true
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     permissions:
       contents: read
-      actions: read
-      checks: write
-      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -77,8 +85,7 @@ jobs:
 
       # Go のビルドキャッシュとモジュールキャッシュを復元する。キャッシュポイズニングを避けるため、
       # 保存は main への push だけで行い（PR は復元のみ）、復元したモジュールは go mod verify で確かめる。
-      # キーは go.mod と go.sum だけなので、依存が変わるまで同じキャッシュを使う。
-      # 自分のパッケージは、キャッシュを作ったときから変わっていればコンパイルし直す。
+      # shard ごとにビルドするパッケージが違うので、キーに shard を入れる。
       - name: Locate Go caches
         id: go-env
         shell: bash
@@ -92,24 +99,55 @@ jobs:
           path: |
             ${{ steps.go-env.outputs.gocache }}
             ${{ steps.go-env.outputs.gomodcache }}
-          key: go-${{ runner.os }}-${{ runner.arch }}-test${{ matrix.race }}-${{ hashFiles('go.mod', 'go.sum') }}
+          key: go-${{ runner.os }}-${{ runner.arch }}-test${{ matrix.race }}-shard${{ matrix.shard }}-${{ hashFiles('go.mod', 'go.sum') }}
 
       - name: Verify the module cache
         run: go mod verify
 
-      # Windows の既定の pwsh は -coverprofile=coverage.out をドットで分けてしまうため、
-      # 3つの OS とも bash で同じコマンドを使う。
-      # Windows のランナーの TEMP は OS のディスク（C:）にあり、ファイルの作成や fsync が遅い。
-      # テストの t.TempDir() をワークスペースと同じ D: の runner.temp に作る。
-      # Go は Windows で TMP、Unix で TMPDIR を読むので、ubuntu と macos は変わらない。
+      # shard 1 と 2 は重いパッケージを1つずつ、shard 3 は残りすべて。
+      # 新しいパッケージは何もしなくても shard 3 に入る。
+      - name: Choose the packages
+        id: pkgs
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          mod=$(go list -m)
+          case "$SHARD" in
+            1) pkgs="$mod/internal/ops" ;;
+            2) pkgs="$mod/cmd/hedgehug" ;;
+            3) pkgs=$(go list ./... | grep -vxF -e "$mod/internal/ops" -e "$mod/cmd/hedgehug" | tr '\n' ' ') ;;
+          esac
+          echo "list=$pkgs" >> "$GITHUB_OUTPUT"
+
       # 復元したキャッシュには main のテスト結果も入っているので、-count=1 で毎回テストを実行する。
       - name: Test
         shell: bash
         env:
-          TMP: ${{ runner.temp }}
-          TEMP: ${{ runner.temp }}
           RACE: ${{ matrix.race }}
-        run: gotestsum --format testdox --junitfile test-report.xml -- ${RACE:+"$RACE"} -count=1 -coverprofile=coverage.out -covermode=atomic ./...
+          REPORT: ${{ matrix.report }}
+          SHARD: ${{ matrix.shard }}
+          PKGS: ${{ steps.pkgs.outputs.list }}
+        run: |
+          cover=()
+          if [ -n "$REPORT" ]; then cover=(-coverprofile="coverage-$SHARD.out" -covermode=atomic); fi
+          # shellcheck disable=SC2086 # PKGS is a list of packages
+          gotestsum --format testdox --junitfile "test-report-$SHARD.xml" --jsonfile "test-$SHARD.json" -- \
+            ${RACE:+"$RACE"} -count=1 "${cover[@]}" $PKGS
+
+      # パッケージごとの時間を手順の要約に出す。shard の分け方を均すときに使う。
+      - name: Package times
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          {
+            echo "| seconds | package |"
+            echo "| ---: | --- |"
+            jq -r 'select(.Test == null and (.Action == "pass" or .Action == "fail")) | "\(.Elapsed)\t\(.Package)"' "test-$SHARD.json" |
+              sort -rn | awk -F'\t' '{ printf "| %s | %s |\n", $1, $2 }'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
@@ -119,20 +157,69 @@ jobs:
             ${{ steps.go-env.outputs.gomodcache }}
           key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && matrix.report }}
+        with:
+          name: test-results-${{ matrix.shard }}
+          path: |
+            test-report-${{ matrix.shard }}.xml
+            coverage-${{ matrix.shard }}.out
+          retention-days: 1
+          if-no-files-found: ignore
+
+  # 必須チェックにするのはこのジョブだけ。shard の数や分け方を変えても名前は変わらない。
+  # ubuntu の shard の結果とカバレッジを1つにまとめて投稿し、どれかの shard が
+  # 失敗・取り消しになっていれば失敗する。
+  test:
+    needs: test-shard
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      checks: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: ${{ !cancelled() }}
+        with:
+          pattern: test-results-*
+          merge-multiple: true
+
+      # go test のカバレッジのファイルは、先頭の mode の行のあとに行を並べただけなので、
+      # 2つ目以降の mode の行を除いてつなげば1つになる。
+      - name: Merge the coverage
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(coverage-*.out)
+          if [ ${#files[@]} -eq 0 ]; then exit 0; fi
+          { echo "mode: atomic"; for f in "${files[@]}"; do tail -n +2 "$f"; done; } > coverage.out
+
       # 書き込めない GITHUB_TOKEN の PR（fork と Dependabot）では投稿が失敗して CI が赤くなるため、
-      # 同じリポジトリの PR だけで投稿する。チェックとカバレッジのコメントは PR に1つなので、
-      # 3つの OS が上書きし合わないよう ubuntu だけが投稿する。
+      # 同じリポジトリの PR だけで投稿する。
       - name: Test Report
         uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
-        if: ${{ !cancelled() && matrix.os == 'ubuntu-latest' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
         with:
           name: Test Report
-          path: test-report.xml
+          path: test-report-*.xml
           reporter: java-junit
 
       - name: Report coverage
         uses: k1LoW/octocov-action@a167dc0dee441b7ffc45e1b862ab55ec0d87f278 # v1.5.2
-        if: ${{ !cancelled() && matrix.os == 'ubuntu-latest' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
+
+      - name: Every shard passed
+        env:
+          RESULT: ${{ needs.test-shard.result }}
+        run: test "$RESULT" = success
 
   # Hedgehug は git なしで動く（親設計の「外部依存ゼロ」）。git を PATH から外して全テストを流し、
   # どこかが git の実行ファイルを呼ぶようになったらここで気付く。
