@@ -1,14 +1,11 @@
 package store
 
 import (
-	"bytes"
 	"cmp"
 	"errors"
 	"fmt"
 	"path"
-	"runtime"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -123,39 +120,24 @@ func cloneSchema(sc *schema.Schema) (*schema.Schema, error) {
 	return schema.Decode(b)
 }
 
-// heldLock marks a store whose lock LockInOrder holds, and the goroutine
-// that holds it.
-type heldLock struct{ gid uint64 }
-
-// heldByThisGoroutine reports whether LockInOrder holds the lock of s for
-// the calling goroutine, which then does not take it again.
-func (s *Store) heldByThisGoroutine() bool {
-	h := s.held.Load()
-	return h != nil && h.gid == goroutineID()
-}
-
-// goroutineID is the number of the calling goroutine. Go has no other way to
-// tell the goroutine that holds a lock from the others, and an Update of
-// another goroutine must wait for the lock like one of another process.
-func goroutineID() uint64 {
-	var buf [64]byte
-	b := bytes.TrimPrefix(buf[:runtime.Stack(buf[:], false)], []byte("goroutine "))
-	if i := bytes.IndexByte(b, ' '); i >= 0 {
-		b = b[:i]
-	}
-	id, _ := strconv.ParseUint(string(b), 10, 64)
-	return id
-}
-
-// Locked holds the store locks of several stores, taken in the order of the
-// stores' ULIDs: the file lock, which keeps other processes out, and the
-// mutex of the Store, which keeps the other goroutines out. While it is held,
-// Update and UpdateCommit of those stores in the goroutine that took it use
-// them and do not take them again; the others wait for Release.
+// Locked holds the store locks (the lock files) of several stores, taken in
+// the order of the stores' ULIDs. An Update or UpdateCommit that names it in
+// Op.Locked uses the hold of its store and does not take the lock again; any
+// other writer, in this process or another, waits for Release.
+//
+// The holder must pass the same *Store it gave to LockInOrder (a second handle
+// on the same directory would wait for the first), must not call LockInOrder
+// again for a store it holds, and must not call CommitMerge, which takes the
+// lock itself and fails with ErrLocked after lockWait.
 type Locked struct {
 	stores []*Store
 	locks  []*fileLock
 	once   sync.Once
+}
+
+// holds reports whether l holds the lock of s. It is false for a nil l.
+func (l *Locked) holds(s *Store) bool {
+	return l != nil && slices.Contains(l.stores, s)
 }
 
 // afterLock is called with each store after LockInOrder took its lock;
@@ -163,7 +145,8 @@ type Locked struct {
 var afterLock = func(*Store) {}
 
 // LockInOrder takes the store lock of each of ss, smallest ULID first. A
-// store given twice is locked once.
+// store given twice (the same *Store, or two with one ULID) is locked once,
+// through the first handle given; the caller passes that handle in Op.Locked.
 func LockInOrder(ss ...*Store) (*Locked, error) {
 	var uniq []*Store
 	for _, s := range ss {
@@ -175,18 +158,14 @@ func LockInOrder(ss ...*Store) (*Locked, error) {
 		return strings.Compare(a.meta.ULID.String(), b.meta.ULID.String())
 	})
 	l := &Locked{}
-	gid := goroutineID()
 	for _, s := range uniq {
-		s.mu.Lock()
 		fl, err := acquire(s.path(lockPath), s.lockWait)
 		if err != nil {
-			s.mu.Unlock()
 			l.Release()
 			return nil, fmt.Errorf("lock %s: %w", s.meta.Name, err)
 		}
 		l.stores = append(l.stores, s)
 		l.locks = append(l.locks, fl)
-		s.held.Store(&heldLock{gid: gid})
 		afterLock(s)
 	}
 	return l, nil
@@ -197,10 +176,8 @@ func LockInOrder(ss ...*Store) (*Locked, error) {
 func (l *Locked) Release() {
 	l.once.Do(func() {
 		for i := len(l.stores) - 1; i >= 0; i-- {
-			l.stores[i].held.Store(nil)
 			// The OS drops the lock with the file whatever release says.
 			_ = l.locks[i].release()
-			l.stores[i].mu.Unlock()
 		}
 	})
 }
@@ -363,8 +340,9 @@ type MoveOut struct {
 // comments and worklog entries go, the tasks that stay lose their references
 // to them (out.Unlinked), numbers.yaml keeps their numbers (D13: those of the
 // prefixes of this store's workspaces), and the scoped entry goes. It adds
-// the trailers of spec step 8 and D11, and when the operation has neither a
-// Task nor a Detail, sets the Detail to the root's id and title.
+// the trailers of spec step 8 and D11: Hedgehug-Task for each task (the root
+// first; not the root when Op.Task names it), Hedgehug-Moved-To and
+// Hedgehug-Unlinked. The caller gives the operation its Detail (D11).
 func (tx *Tx) MoveOut(out MoveOut) error {
 	if tx.done {
 		return errTxDone
@@ -378,21 +356,15 @@ func (tx *Tx) MoveOut(out MoveOut) error {
 	}
 	prefixes := map[string]bool{}
 	for w, err := range tx.s.Workspaces() {
-		if err == nil {
-			prefixes[w.IDPrefix] = true
+		if err != nil {
+			return err // its prefix would be lost from numbers.yaml
 		}
+		prefixes[w.IDPrefix] = true
 	}
-	for i, ulid := range out.Tasks {
+	for _, ulid := range out.Tasks {
 		t, err := tx.task(ulid)
 		if err != nil {
 			return fmt.Errorf("move out %s: %w", ulid, err)
-		}
-		if i == 0 && tx.op.Task.IsZero() && tx.op.Detail == "" {
-			label := t.ID
-			if label == "" {
-				label = ulid.String()
-			}
-			tx.SetDetail(strings.TrimSpace(label + " " + t.Title))
 		}
 		if err := tx.recordNumbersOf(t, prefixes); err != nil {
 			return err
@@ -444,7 +416,9 @@ func (tx *Tx) MoveOut(out MoveOut) error {
 		}
 	}
 
-	tx.AddTrailer("Hedgehug-Task", out.Tasks[0].String())
+	if tx.op.Task.IsZero() {
+		tx.AddTrailer("Hedgehug-Task", out.Tasks[0].String())
+	}
 	tx.addMoveTrailers(out.Tasks[1:], "Hedgehug-Moved-To", out.To, out.Unlinked)
 	return nil
 }

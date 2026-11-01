@@ -43,6 +43,10 @@ type Op struct {
 	// AllowEmpty, because what they hold is read under the store lock.
 	Trailers   []gitrepo.Trailer
 	AllowEmpty bool
+	// Locked is the hold of the store lock the caller took with LockInOrder
+	// on this store; the operation then does not take the file lock. Nil for
+	// an operation that does not hold it.
+	Locked *Locked
 }
 
 // Tx collects the writes of one operation. Its Put methods only queue a
@@ -370,15 +374,18 @@ func (s *Store) UpdateCommit(op Op, fn func(*Tx) error) (hash plumbing.Hash, err
 	if op.Name == "" {
 		return plumbing.ZeroHash, errors.New("the operation has no name")
 	}
-	// The goroutine that holds the store through LockInOrder holds s.mu and
-	// the file lock already; the others wait for them like for any writer.
-	if !s.heldByThisGoroutine() {
+	// An operation that names the Locked that holds this store's file lock
+	// does not take it again: a second handle on the lock file would wait for
+	// the first. Any other writer waits for Release.
+	if op.Locked.holds(s) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		l, aerr := acquire(s.path(lockPath), s.lockWait)
+	} else {
+		l, aerr := s.lockStore()
 		if aerr != nil {
 			return plumbing.ZeroHash, aerr
 		}
+		defer s.mu.Unlock()
 		// A release error is dropped when the operation succeeded: release
 		// closes the file, which drops the OS lock on Unix and Windows anyway,
 		// and the caller must not think a committed operation failed. When the
@@ -453,6 +460,25 @@ func (s *Store) UpdateCommit(op Op, fn func(*Tx) error) (hash plumbing.Hash, err
 		s.schema.Store(tx.schema)
 	}
 	return hash, nil
+}
+
+// lockStore takes s.mu and the file lock, and returns with both held. While
+// the file is held by someone else it waits without s.mu, so that a holder
+// of a Locked in this process, which needs s.mu, is not kept out by it.
+func (s *Store) lockStore() (*fileLock, error) {
+	deadline := time.Now().Add(s.lockWait)
+	for {
+		s.mu.Lock()
+		l, err := acquire(s.path(lockPath), 0)
+		if err == nil {
+			return l, nil
+		}
+		s.mu.Unlock()
+		if !errors.Is(err, ErrLocked) || time.Now().After(deadline) {
+			return nil, err
+		}
+		time.Sleep(lockPoll)
+	}
 }
 
 // changes stamps the queued writes and returns those that alter a file.

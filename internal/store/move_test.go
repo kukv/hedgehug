@@ -154,13 +154,17 @@ func (f *moveFixture) in() MoveIn {
 	}
 }
 
-func (f *moveFixture) moveIn(in MoveIn) error {
-	_, err := f.dst.Update(Op{Name: "move-in", Task: f.p.ULID, Author: testAuthor}, func(tx *Tx) error { return tx.MoveIn(in) })
+func (f *moveFixture) moveIn(in MoveIn) error { return f.moveInLocked(in, nil) }
+
+func (f *moveFixture) moveInLocked(in MoveIn, l *Locked) error {
+	_, err := f.dst.Update(Op{Name: "move-in", Task: f.p.ULID, Author: testAuthor, Locked: l}, func(tx *Tx) error { return tx.MoveIn(in) })
 	return err
 }
 
-func (f *moveFixture) moveOut(scoped string) error {
-	_, err := f.src.Update(Op{Name: "move-out", Author: testAuthor}, func(tx *Tx) error {
+func (f *moveFixture) moveOut(scoped string) error { return f.moveOutLocked(scoped, nil) }
+
+func (f *moveFixture) moveOutLocked(scoped string, l *Locked) error {
+	_, err := f.src.Update(Op{Name: "move-out", Detail: f.p.ID + " " + f.p.Title, Author: testAuthor, Locked: l}, func(tx *Tx) error {
 		return tx.MoveOut(MoveOut{
 			To: f.dst.Meta().ULID, Tasks: []model.ULID{f.p.ULID, f.c.ULID, f.g.ULID},
 			Unlinked: f.unlinked, Scoped: scoped,
@@ -450,10 +454,10 @@ func TestMoveBothSides(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer l.Release()
-	if err := f.moveIn(f.in()); err != nil {
+	if err := f.moveInLocked(f.in(), l); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.moveOut(""); err != nil {
+	if err := f.moveOutLocked("", l); err != nil {
 		t.Fatal(err)
 	}
 	var live, forwards int
@@ -487,7 +491,7 @@ func TestLockInOrder(t *testing.T) {
 		t.Errorf("locked in the order %v, want a then b", order)
 	}
 
-	// Another goroutine's Update waits for the lock like another process's.
+	// A writer without the hold waits for Release, in this process too.
 	done := make(chan error, 1)
 	go func() {
 		_, err := a.Update(Op{Name: "x", Author: testAuthor}, func(tx *Tx) error { return tx.PutFile("a.txt", []byte("x")) })
@@ -495,12 +499,12 @@ func TestLockInOrder(t *testing.T) {
 	}()
 	select {
 	case err := <-done:
-		t.Fatalf("another goroutine's Update did not wait: %v", err)
+		t.Fatalf("an Update without the hold did not wait: %v", err)
 	case <-time.After(300 * time.Millisecond):
 	}
-	// The holder is not kept waiting by its own locks.
+	// The holder, naming the hold, does not wait for its own locks.
 	for _, s := range []*Store{a, b} {
-		if _, err := s.Update(Op{Name: "y", Author: testAuthor}, func(tx *Tx) error { return tx.PutFile("y.txt", []byte("y")) }); err != nil {
+		if _, err := s.Update(Op{Name: "y", Author: testAuthor, Locked: l}, func(tx *Tx) error { return tx.PutFile("y.txt", []byte("y")) }); err != nil {
 			t.Errorf("the holder's Update on %s: %v", s.meta.Name, err)
 		}
 	}
@@ -515,10 +519,7 @@ func TestLockInOrder(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("the waiting Update did not go on after Release")
 	}
-	if a.held.Load() != nil || b.held.Load() != nil {
-		t.Error("a store is still marked held")
-	}
-	// After Release the holder takes the lock itself again.
+	// After Release the hold means nothing: the lock is taken again.
 	if _, err := a.Update(Op{Name: "z", Author: testAuthor}, func(tx *Tx) error { return tx.PutFile("z.txt", []byte("z")) }); err != nil {
 		t.Error(err)
 	}
@@ -537,9 +538,6 @@ func TestLockInOrderFailureReleasesWhatItTook(t *testing.T) {
 	}
 	if err := other.release(); err != nil {
 		t.Fatal(err)
-	}
-	if a.held.Load() != nil {
-		t.Error("a is still marked held")
 	}
 	l, err := LockInOrder(a, b) // a was let go, and b is free now
 	if err != nil {
@@ -566,5 +564,24 @@ func TestMoveInKeepsTheOtherTargetsOfAProperty(t *testing.T) {
 	}
 	if got := f.c.Props.Get("relates"); len(got.Content) != 2 {
 		t.Error("the caller's task changed")
+	}
+}
+
+// The scoped entry a move brings is in force for the validation of the
+// tasks of the same Tx: a field the entry requires for a status is checked.
+func TestMoveInValidatesAgainstTheScopedItBrings(t *testing.T) {
+	f := newMoveFixture(t, "SRC", "DST", nil)
+	f.g.Status = "backlog"
+	if err := f.moveIn(f.in()); err != nil {
+		t.Fatalf("without the scoped entry: %v", err)
+	}
+	f = newMoveFixture(t, "SRC", "DST", nil)
+	f.g.Status = "backlog"
+	f.p.Kind = "project" // the scoped entry applies below a project
+	in := f.in()
+	in.Scoped = &schema.Scoped{Where: "project:" + f.p.ULID.String(), Workflow: &schema.Workflow{Required: schema.Lists{{Key: "backlog", Values: []string{"due"}}}}}
+	var ve *ValidationError
+	if err := f.moveIn(in); !errors.As(err, &ve) || ve.Task != f.g.ULID {
+		t.Fatalf("with the scoped entry: err = %v, want a *ValidationError for G", err)
 	}
 }
