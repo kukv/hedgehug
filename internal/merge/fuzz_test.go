@@ -30,10 +30,10 @@ func FuzzSymmetric(f *testing.F) {
 // FuzzForwardSymmetric checks the same for a task file of which a side is a
 // forward, or removed.
 func FuzzForwardSymmetric(f *testing.F) {
-	f.Add(uint8(0), uint8(1), "a", "b", int64(1), int64(2))
-	f.Add(uint8(1), uint8(1), "a", "a", int64(2), int64(2))
-	f.Add(uint8(2), uint8(0), "b", "a", int64(1), int64(1))
-	f.Add(uint8(3), uint8(2), "", "", int64(0), int64(0))
+	f.Add(uint8(4), uint8(0), uint8(1), "a", "b", int64(1), int64(2)) // no base
+	f.Add(uint8(0), uint8(1), uint8(1), "a", "a", int64(2), int64(2)) // a task base
+	f.Add(uint8(1), uint8(2), uint8(0), "b", "a", int64(1), int64(1)) // a forward base
+	f.Add(uint8(3), uint8(3), uint8(2), "", "", int64(0), int64(0))
 	variant := func(v uint8) []byte {
 		switch v % 5 {
 		case 0:
@@ -47,8 +47,8 @@ func FuzzForwardSymmetric(f *testing.F) {
 		}
 		return nil
 	}
-	f.Fuzz(func(t *testing.T, ov, tv uint8, oa, ta string, ot, tt int64) {
-		base := task("2026-10-31T09:00:00Z", "title: base")
+	f.Fuzz(func(t *testing.T, bv, ov, tv uint8, oa, ta string, ot, tt int64) {
+		base := variant(bv)
 		o := Side{Data: variant(ov), Author: oa, Time: time.Unix(ot%1e9, 0)}
 		th := Side{Data: variant(tv), Author: ta, Time: time.Unix(tt%1e9, 0)}
 		a, err1 := Merge(taskPath, schema.Default(), base, o, th, LWW)

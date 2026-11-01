@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -109,6 +110,12 @@ func TestSyncForwardWinsAndRepairs(t *testing.T) {
 			trailers = append(trailers, tr.Key+": "+tr.Value)
 		}
 	}
+	for _, p := range []string{model.TaskPath(x.ULID), model.CommentPath(x.ULID, old), model.CommentPath(x.ULID, fresh)} {
+		want := "Hedgehug-Overwritten: " + url.PathEscape(p) + " * "
+		if !slices.ContainsFunc(trailers, func(s string) bool { return strings.HasPrefix(s, want) && strings.HasSuffix(s, " github.com/u1") }) {
+			t.Errorf("no trailer %q in %q", want, trailers)
+		}
+	}
 	for _, want := range []string{"Hedgehug-Repaired: " + child.ULID.String() + " parent_moved", "Hedgehug-Repaired: " + z.ULID.String() + " ref_moved"} {
 		if !slices.ContainsFunc(trailers, func(s string) bool { return strings.HasPrefix(s, want) }) {
 			t.Errorf("no trailer %q in %q", want, trailers)
@@ -143,5 +150,51 @@ func TestRepairHeadDropsFilesUnderForward(t *testing.T) {
 	v, ok := e[0].Trailer("Hedgehug-Overwritten")
 	if !ok || !strings.Contains(v, " * ") {
 		t.Errorf("trailer = %q", v)
+	}
+}
+
+// Two clones move the same task to different stores: the merge keeps one
+// moved_to, by the order of the merge, and records the other.
+func TestSyncTwoForwardsKeepOneMovedTo(t *testing.T) {
+	c := newCluster(t, 2)
+	x := c.addTask(0, "x")
+	c.sync(0)
+	c.sync(1)
+	dest := [2]model.ULID{model.NewULID(), model.NewULID()}
+	for i := range dest {
+		if _, err := c.stores[i].Update(c.op(i, "move-out", x.ULID), func(tx *store.Tx) error {
+			return tx.MoveOut(store.MoveOut{To: dest[i], Tasks: []model.ULID{x.ULID}})
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c.sync(0)
+	r := c.sync(1)
+	c.sync(0)
+	if c.headTree(0) != c.headTree(1) {
+		t.Fatal("trees differ")
+	}
+	b, err := c.stores[1].Repo().ReadFile(c.headTree(1), model.TaskPath(x.ULID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := model.DecodeForward(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lose := dest[0]
+	if f.MovedTo == dest[0] {
+		lose = dest[1]
+	} else if f.MovedTo != dest[1] {
+		t.Fatalf("moved_to = %s; want one of %v", f.MovedTo, dest)
+	}
+	var lost []merge.Overwritten
+	for _, o := range r.Overwritten {
+		if o.Path == model.TaskPath(x.ULID) {
+			lost = append(lost, o)
+		}
+	}
+	if len(lost) != 1 || lost[0].Field != "moved_to" || lost[0].Value != `"`+lose.String()+`"` {
+		t.Errorf("overwritten = %+v; want moved_to %s", lost, lose)
 	}
 }

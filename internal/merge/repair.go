@@ -365,10 +365,17 @@ func (r *repairer) removeMovedRefs() {
 	}
 	for _, u := range r.order {
 		t := r.tasks[u]
+		told := map[string]bool{} // one record per field and target
+		tellOnce := func(field string, target model.ULID) {
+			if k := field + " " + target.String(); !told[k] {
+				told[k] = true
+				r.movedRef(u, field, target)
+			}
+		}
 		for _, target := range slices.Clone(t.BlockedBy) {
 			if r.forwards[target] {
 				t.BlockedBy = slices.DeleteFunc(t.BlockedBy, func(x model.ULID) bool { return x == target })
-				r.movedRef(u, "blocked_by", target)
+				tellOnce("blocked_by", target)
 			}
 		}
 		for _, f := range slices.Clone(t.Props) {
@@ -376,7 +383,7 @@ func (r *repairer) removeMovedRefs() {
 				continue
 			}
 			for _, target := range r.dropFromProp(t, f) {
-				r.movedRef(u, "props."+f.Key, target)
+				tellOnce("props."+f.Key, target)
 			}
 		}
 	}

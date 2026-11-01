@@ -207,7 +207,11 @@ func (ss *Session) movedHint(ix *index.Index, storeName string, it inbox.Item) s
 
 // movedTo looks for the task a forward of the store storeName points at.
 func (ss *Session) movedTo(storeName, input string, f *index.ForwardEntry) *mount.MovedError {
-	set, _ := ss.Mount() // without the mounts, the store is only named by its ULID
+	set, err := ss.Mount()
+	if err != nil {
+		// without the mounts, the store is only named by its ULID
+		ss.warn(fmt.Sprintf("cannot look for the store the task moved to: %v", err))
+	}
 	var from *mount.Mounted
 	if set != nil {
 		from, _ = set.Get(storeName)

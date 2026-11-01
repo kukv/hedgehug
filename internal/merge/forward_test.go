@@ -206,3 +206,19 @@ func TestRepairDropsFilesUnderForward(t *testing.T) {
 		t.Errorf("dropped = %+v", dropped)
 	}
 }
+
+func TestRepairForwardListedTwiceIsToldOnce(t *testing.T) {
+	f := memFiles{
+		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
+		pathOf(fwdTask):                    forwardFile(fwdTask, storeB),
+		pathOf(childTask): taskFile(childTask, "WEB-2", wsA, "", "2026-10-31T10:00:00Z",
+			"blocked_by: ["+fwdTask+", "+fwdTask+"]", "props:\n  duplicates: ["+fwdTask+", "+fwdTask+"]"),
+	}
+	after, rs, _ := forwardRepair(t, f)
+	if got := decoded(t, after[pathOf(childTask)]); len(got.BlockedBy) != 0 || got.Props.Get("duplicates") != nil {
+		t.Errorf("blocked_by %v props %v", got.BlockedBy, got.Props)
+	}
+	if len(rs) != 2 {
+		t.Errorf("repaired = %+v; want one record per field and target", rs)
+	}
+}

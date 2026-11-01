@@ -806,8 +806,7 @@ func needsRepair(ix *index.Index, r *gitrepo.Repo, tree plumbing.Hash) (bool, er
 	for _, e := range ix.Tasks() {
 		for _, p := range ix.Problems(e.ULID) {
 			parent := p.Field == "parent" && (p.Code == schema.CodeCycle || p.Code == schema.CodeMissingRef || p.Code == index.CodeParentDeleted)
-			// With forwards in the store, a missing reference may be to one.
-			moved := p.Code == schema.CodeMissingRef && len(ix.Forwards()) > 0
+			moved := p.Code == schema.CodeMissingRef && pointsAtForward(ix, e, p.Field)
 			if parent || moved || slices.Contains(repairCodes, p.Code) {
 				return true, nil
 			}
@@ -1018,6 +1017,16 @@ func (o Options) storeName() string {
 		return "the store"
 	}
 	return o.Name
+}
+
+// pointsAtForward reports whether the reference of e through field (parent,
+// blocked_by or a task_ref property) names a forward.
+func pointsAtForward(ix *index.Index, e *index.Entry, field string) bool {
+	targets := e.Targets(field)
+	if field == "parent" && e.Parent != nil {
+		targets = []model.ULID{*e.Parent}
+	}
+	return slices.ContainsFunc(targets, func(u model.ULID) bool { _, ok := ix.Forward(u); return ok })
 }
 
 // filesUnderForwards reports whether tree has a comment or worklog file of a
