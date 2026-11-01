@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -80,22 +81,31 @@ func (o Options) run(name string, args ...string) ([]byte, []byte, error) {
 // Key is the keychain key of the account: <host>/<login>.
 func Key(a config.Account) string { return a.Host + "/" + a.Login }
 
-// Token returns the token of the account a, from where its token: says.
+// secretWord matches what has the shape of a GitHub token, also when it is
+// glued to a word before it.
+var secretWord = regexp.MustCompile(`(?:gho_|ghp_|ghs_|ghu_|github_pat_)[A-Za-z0-9_]*`)
+
+// hideTokens is s with the words shaped like a token replaced by ***.
+func hideTokens(s string) string { return secretWord.ReplaceAllString(s, "***") }
+
+// Token returns the token of the account a, from where its token: says. The
+// token is trimmed, and one that is empty is an error that says what to do.
 func Token(a config.Account, opt Options) (string, error) {
 	switch a.Token.Kind {
 	case "":
 		return "", ErrNoToken
 	case "gh":
 		out, errb, err := opt.run("gh", "auth", "token", "--hostname", a.Host, "--user", a.Login)
-		if err != nil {
-			return "", fmt.Errorf("gh auth token for %s: %w: %s (run gh auth login --hostname %s, or change token: of account %s)",
-				Key(a), err, strings.TrimSpace(string(errb)), a.Host, a.Name)
+		tok := strings.TrimSpace(string(out))
+		if err != nil || tok == "" {
+			return "", fmt.Errorf("gh auth token for %s: %w (run gh auth login --hostname %s, or change token: of account %s)",
+				Key(a), ghFailure(err, errb), a.Host, a.Name)
 		}
-		return strings.TrimSpace(string(out)), nil
+		return tok, nil
 	case "env":
 		v := ""
 		if opt.Getenv != nil {
-			v = opt.Getenv(a.Token.Env)
+			v = strings.TrimSpace(opt.Getenv(a.Token.Env))
 		}
 		if v == "" {
 			return "", fmt.Errorf("%s is not set (the token of account %s)", a.Token.Env, a.Name)
@@ -103,14 +113,29 @@ func Token(a config.Account, opt Options) (string, error) {
 		return v, nil
 	case "keychain":
 		v, err := opt.Keychain().Get(Service, Key(a))
-		if errors.Is(err, ErrNotFound) {
+		if errors.Is(err, ErrNotFound) || (err == nil && strings.TrimSpace(v) == "") {
 			return "", fmt.Errorf("the keychain has no token of %s; run hedgehug auth login %s --with-token", Key(a), a.Name)
 		}
-		return v, err
+		return strings.TrimSpace(v), err
 	case "device":
 		return deviceToken(a, opt)
 	}
 	return "", fmt.Errorf("account %s: unknown token source %q", a.Name, a.Token.Kind)
+}
+
+// ghFailure says why gh gave no token: its error, then what it wrote to its
+// standard error with the tokens hidden.
+func ghFailure(err error, stderr []byte) error {
+	msg := hideTokens(strings.TrimSpace(string(stderr)))
+	switch {
+	case err == nil && msg == "":
+		return errors.New("it printed no token")
+	case err == nil:
+		return fmt.Errorf("it printed no token: %s", msg)
+	case msg == "":
+		return err
+	}
+	return fmt.Errorf("%w: %s", err, msg)
 }
 
 // SaveToken keeps token in the keychain as the token of a.

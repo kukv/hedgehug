@@ -5,15 +5,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 
-	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/gitrepo/gitrepotest"
-	"github.com/kukv/hedgehug/internal/ops"
 )
 
 func TestSyncThroughRewrite(t *testing.T) {
@@ -134,69 +131,5 @@ func TestSyncWithoutTheTokenSaysWhy(t *testing.T) {
 	code, _, errs := te.run("store", "init", "me", "--prefix", "ME", "--remote", "https://git.example.com/org-a/x.git")
 	if code == 0 || !strings.Contains(errs, "HH_TOKEN is not set") {
 		t.Errorf("exit %d\n%s", code, errs)
-	}
-}
-
-func TestConnFor(t *testing.T) {
-	te := newTestEnv(t)
-	te.env["HH_TOKEN"] = "tok-1"
-	te.writeConfigYAML("accounts:\n" +
-		"  - {name: a, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n" +
-		"  - {name: b, host: github.com, login: bob}\n" +
-		"url_rewrites:\n  - {from: \"https://github.com/\", to: \"/srv/remotes/\"}\n")
-	newApp := func() *app {
-		e := &env{getenv: te.getenv, now: func() time.Time { return te.now }}
-		return &app{env: e, ss: &ops.Session{Getenv: e.getenv, Now: e.now}}
-	}
-	a := newApp()
-	c, _, err := a.ss.Config()
-	if err != nil {
-		t.Fatal(err)
-	}
-	conn := a.connFor(c, config.StoreEntry{Account: "a"})
-	if got := conn.Rewrite("https://github.com/org/x.git"); got != "/srv/remotes/org/x.git" {
-		t.Errorf("Rewrite = %q", got)
-	}
-	for _, u := range []string{"git@github.com:org/x.git", "ssh://git@github.com/org/x.git", "/srv/remotes/org/x.git", "file:///srv/x.git"} {
-		if au, err := conn.Auth(u); au != nil || err != nil {
-			t.Errorf("Auth(%q) = %v, %v; want none", u, au, err)
-		}
-	}
-	au, err := conn.Auth("https://github.com/org/x.git")
-	if b, ok := au.(*githttp.BasicAuth); err != nil || !ok || b.Username != "x-access-token" || b.Password != "tok-1" {
-		t.Errorf("Auth(https) = %#v, %v", au, err)
-	}
-	// The token is got once a run: it stays when the variable goes.
-	te.env["HH_TOKEN"] = ""
-	au, err = conn.Auth("http://github.com/org/x.git")
-	if b, ok := au.(*githttp.BasicAuth); err != nil || !ok || b.Password != "tok-1" {
-		t.Errorf("second Auth = %#v, %v", au, err)
-	}
-	// Only the account's own host gets the token, whatever the case or port.
-	for u, want := range map[string]bool{
-		"https://github.com/org/x.git":      true,
-		"https://GitHub.com:8443/org/x.git": true,
-		"http://github.com/org/x.git":       true,
-		"https://mirror.example.com/x.git":  false,
-		"https://github.com.evil.test/x":    false,
-		"https://api.github.com/x":          false,
-	} {
-		au, err := conn.Auth(u)
-		if err != nil || (au != nil) != want {
-			t.Errorf("Auth(%q) = %v, %v; want token %v", u, au, err, want)
-		}
-	}
-	// An account with no token, and a name that is no account.
-	for _, name := range []string{"b", "nobody"} {
-		if au, err := a.connFor(c, config.StoreEntry{Account: name}).Auth("https://github.com/org/x.git"); au != nil || err != nil {
-			t.Errorf("account %q: Auth = %v, %v; want none", name, au, err)
-		}
-	}
-	// A token that cannot be got is an error, and is asked for again.
-	a2 := newApp()
-	for range 2 {
-		if _, err := a2.connFor(c, config.StoreEntry{Account: "a"}).Auth("https://github.com/org/x.git"); err == nil || !strings.Contains(err.Error(), "HH_TOKEN is not set") {
-			t.Errorf("a missing token = %v", err)
-		}
 	}
 }

@@ -3,14 +3,15 @@ package ops
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	gosync "sync"
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
 
+	"github.com/kukv/hedgehug/internal/auth"
 	"github.com/kukv/hedgehug/internal/config"
-	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
@@ -41,9 +42,10 @@ type Session struct {
 	// index and before it writes, or write config.yaml after an operation
 	// read it and before it updates it, as another process could.
 	BeforeUpdate func()
-	// Conn is how the remotes of a store are reached (url_rewrites and the
-	// token of its account); nil reaches them as they are.
-	Conn func(c *config.Config, e config.StoreEntry) gitrepo.Conn
+	Keyring      auth.Keyring // nil is the OS keychain
+	HTTPClient   *http.Client // nil is a client with a 30-second timeout
+	// Run runs a command (gh) and gives its output; nil runs the command.
+	Run func(name string, args ...string) (stdout, stderr []byte, err error)
 
 	// the writer of the store, read from config.yaml once per session; an
 	// error is not kept, so the next call reads again
@@ -51,6 +53,10 @@ type Session struct {
 	writerDone bool
 	writerAcct config.Account
 	writerOK   bool
+
+	// the tokens got, shared with the sessions ForStore makes
+	tokMu  gosync.Mutex
+	tokens *tokenCache
 }
 
 // ForStore is a session of its own on the store name, with the same outside
@@ -65,16 +71,11 @@ func (ss *Session) ForStore(name string) *Session {
 		Warn:         ss.Warn,
 		AfterWrite:   ss.AfterWrite,
 		BeforeUpdate: ss.BeforeUpdate,
-		Conn:         ss.Conn,
+		Keyring:      ss.Keyring,
+		HTTPClient:   ss.HTTPClient,
+		Run:          ss.Run,
+		tokens:       ss.tokenCache(),
 	}
-}
-
-// conn is how the remotes of the store e are reached.
-func (ss *Session) conn(c *config.Config, e config.StoreEntry) gitrepo.Conn {
-	if ss.Conn == nil {
-		return gitrepo.Conn{}
-	}
-	return ss.Conn(c, e)
 }
 
 // location is where a date without a zone is read.
@@ -261,7 +262,7 @@ func (ss *Session) SyncOptions(c *config.Config, e config.StoreEntry) (sync.Opti
 	if err != nil {
 		return sync.Options{}, err
 	}
-	opt := sync.Options{Remotes: e.Remotes, Author: author, Me: c.Me(), Now: ss.Now, Conn: ss.conn(c, e)}
+	opt := sync.Options{Remotes: e.Remotes, Author: author, Me: c.Me(), Now: ss.Now, Conn: ss.Conn(c, e)}
 	if ok {
 		opt.Account = acct.ID()
 	}

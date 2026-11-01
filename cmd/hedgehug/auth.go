@@ -111,13 +111,13 @@ func (a *app) authLogin(name, host string, hostGiven, withToken bool) error {
 			return err
 		}
 	} else {
-		dt, err = auth.DeviceLogin(h, a.authOptions(c, config.Account{Host: host}), a.showDeviceCode)
+		dt, err = auth.DeviceLogin(h, a.ss.AuthOptions(c, config.Account{Host: host}), a.showDeviceCode)
 		if err != nil {
 			return err
 		}
 		tok = dt.AccessToken
 	}
-	login, err := github.New(h, tok, a.httpClient).User()
+	login, err := github.New(h, tok, a.ss.HTTPClient).User()
 	if err != nil {
 		return fmt.Errorf("check the token: %w", err)
 	}
@@ -150,7 +150,7 @@ func (a *app) authLogin(name, host string, hostGiven, withToken bool) error {
 		added = true
 	}
 	// The keychain first: config.yaml names a token only once it is kept.
-	k := a.authOptions(c, acct).Keychain()
+	k := a.ss.AuthOptions(c, acct).Keychain()
 	if kind == "device" {
 		err = auth.SaveDeviceToken(acct, dt, k)
 	} else {
@@ -212,9 +212,9 @@ func (a *app) authStatus() error {
 		if acct.Token.Kind == "" {
 			continue
 		}
-		tok, err := a.tokenFor(c, acct)
+		tok, err := a.ss.Token(c, acct)
 		if err == nil {
-			x.Login, err = github.New(c.Host(acct.Host), tok, a.httpClient).User()
+			x.Login, err = github.New(c.Host(acct.Host), tok, a.ss.HTTPClient).User()
 			err = github.Describe(err, acct.ID(), acct.Name, "check the token")
 		}
 		switch {
@@ -224,7 +224,7 @@ func (a *app) authStatus() error {
 			x.OK, x.Error = false, fmt.Sprintf("the token is of %s/%s", acct.Host, x.Login)
 		}
 		if acct.Token.Kind == "device" {
-			if dt, err := auth.LoadDeviceToken(acct, a.authOptions(c, acct).Keychain()); err == nil && !dt.ExpiresAt.IsZero() {
+			if dt, err := auth.LoadDeviceToken(acct, a.ss.AuthOptions(c, acct).Keychain()); err == nil && !dt.ExpiresAt.IsZero() {
 				x.Expires = &dt.ExpiresAt
 			}
 		}
@@ -279,7 +279,7 @@ func (a *app) authLogout(name string) error {
 	}
 	removed := false
 	if acct.Token.Kind == "keychain" || acct.Token.Kind == "device" {
-		if err := auth.Delete(acct, a.authOptions(c, acct).Keychain()); err != nil {
+		if err := auth.Delete(acct, a.ss.AuthOptions(c, acct).Keychain()); err != nil {
 			return err
 		}
 		removed = true

@@ -55,11 +55,32 @@ type Client struct {
 	hc         *http.Client
 }
 
+// defaultHTTP is hc, or a client with a 30-second timeout when hc is nil, in
+// either case refusing a redirect to another origin than the request's:
+// the token must not follow it. hc is copied, not changed; a policy it has
+// of its own is applied after this one.
 func defaultHTTP(hc *http.Client) *http.Client {
+	var c http.Client
 	if hc == nil {
-		return &http.Client{Timeout: 30 * time.Second}
+		c.Timeout = 30 * time.Second
+	} else {
+		c = *hc
 	}
-	return hc
+	own := c.CheckRedirect
+	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if originOf(req.URL) != originOf(via[0].URL) {
+			return fmt.Errorf("the redirect from %s to %s is not followed: it is another origin, and the token stays here",
+				via[0].URL.Redacted(), req.URL.Redacted())
+		}
+		if own != nil {
+			return own(req, via)
+		}
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		return nil
+	}
+	return &c
 }
 
 // New makes a client of the host h with token. hc nil is a client with a
@@ -150,11 +171,22 @@ func statusError(res *http.Response, data []byte) error {
 	return fmt.Errorf("GitHub answered %d: %s", res.StatusCode, msg.Message)
 }
 
-// sameOrigin reports whether u has the scheme and host of the API base.
+// sameOrigin reports whether u has the origin of the API base: the scheme,
+// the host without case and the port, where the port of the scheme is the
+// default one when it is not written.
 func (c *Client) sameOrigin(u string) bool {
 	a, err1 := neturl.Parse(c.api)
 	b, err2 := neturl.Parse(u)
-	return err1 == nil && err2 == nil && a.Scheme == b.Scheme && a.Host == b.Host
+	return err1 == nil && err2 == nil && originOf(a) == originOf(b)
+}
+
+func originOf(u *neturl.URL) string {
+	scheme := strings.ToLower(u.Scheme)
+	port := u.Port()
+	if port == "" {
+		port = map[string]string{"http": "80", "https": "443"}[scheme]
+	}
+	return scheme + "://" + strings.ToLower(u.Hostname()) + ":" + port
 }
 
 var nextLink = regexp.MustCompile(`<([^>]+)>;\s*rel="next"`)

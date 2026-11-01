@@ -87,6 +87,8 @@ func TestForStoreCopiesEveryExportedField(t *testing.T) {
 			f.SetString("x")
 		case reflect.Pointer:
 			f.Set(reflect.New(f.Type().Elem()))
+		case reflect.Interface:
+			f.Set(reflect.ValueOf(&fakeKeyring{}))
 		default:
 			t.Fatalf("Session.%s is a %s; teach this test to set it", sf.Name, f.Kind())
 		}
@@ -109,6 +111,10 @@ func TestForStoreCopiesEveryExportedField(t *testing.T) {
 		if got.Field(i).Kind() == reflect.Pointer && got.Field(i).Pointer() != v.Field(i).Pointer() {
 			t.Errorf("ForStore does not share Session.%s", sf.Name)
 		}
+	}
+	// The tokens are shared: they are of the accounts, not of a store.
+	if sub := src.ForStore("other"); sub.tokens == nil || sub.tokens != src.tokens {
+		t.Error("ForStore does not share the token cache")
 	}
 	// The cache of the writer is not carried over.
 	ts := newTestSession(t)

@@ -17,8 +17,6 @@ type app struct {
 	ss      *ops.Session
 	jsonOut bool
 	noColor bool
-
-	tokens map[string]string // the token of each account, got once per run
 }
 
 // usageError is a mistake in the flags or arguments; it exits 2.

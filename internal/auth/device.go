@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/config"
@@ -97,7 +98,7 @@ func deviceToken(a config.Account, opt Options) (string, error) {
 		return "", err
 	}
 	if fresh(t, opt.now()) {
-		return t.AccessToken, nil
+		return accessToken(a, t)
 	}
 	if opt.LockFile == "" {
 		return "", errors.New("auth: LockFile is not set")
@@ -135,5 +136,14 @@ func deviceToken(a config.Account, opt Options) (string, error) {
 		}
 		return "", err
 	}
-	return t.AccessToken, nil
+	return accessToken(a, t)
+}
+
+// accessToken is the access token of t, trimmed; an empty one is not a login.
+func accessToken(a config.Account, t DeviceToken) (string, error) {
+	tok := strings.TrimSpace(t.AccessToken)
+	if tok == "" {
+		return "", fmt.Errorf("the keychain has no access token of %s; run hedgehug auth login %s", Key(a), a.Name)
+	}
+	return tok, nil
 }
