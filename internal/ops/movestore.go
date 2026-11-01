@@ -155,8 +155,14 @@ func (ss *Session) MoveStore(in MoveStoreInput) (MoveStoreResult, error) {
 		if w.resumed {
 			return MoveStoreResult{}, err
 		}
+		// Half a move is a state the rerun settles, whatever the I/O error
+		// that stopped it: a conflict, not an unknown failure.
+		kind := KindOf(err)
+		if kind == KindUnknown {
+			kind = KindConflict
+		}
 		return MoveStoreResult{}, &Error{
-			Kind: KindOf(err), Code: "move.unfinished",
+			Kind: kind, Code: "move.unfinished",
 			Args: map[string]any{"store": j.toName},
 			Err:  fmt.Errorf("moved into %s; run the same command again to finish the source: %w", j.toName, err),
 		}

@@ -147,6 +147,7 @@ func TestAsError(t *testing.T) {
 		{store.ErrLocked, KindConflict, "store.locked"},
 		{fmt.Errorf("a: %w", isync.ErrDirty), KindConflict, "sync.dirty"},
 		{fmt.Errorf("a: %w", isync.ErrUnrelated), KindConflict, "sync.unrelated"},
+		{fmt.Errorf("a: %w", isync.ErrForcePush), KindConflict, "sync.force_push"},
 		{config.ErrNoStores, KindConflict, "store.none"},
 		{errors.New("other"), KindUnknown, ""},
 	}

@@ -291,7 +291,9 @@ func (p *Poller) headMoved(name string, st *polled, head plumbing.Hash) {
 			viewsCh = true
 		}
 		if u, ok := ops.TaskOfPath(c.Path); ok {
-			if c.Deleted {
+			// A task that became a forward is gone from the list of the
+			// store: the file is still there, but not as a task.
+			if b, err := r.ReadFile(to, c.Path); c.Deleted || (err == nil && model.IsForward(b)) {
 				addOnce(&ev.Removed, u)
 			} else {
 				addOnce(&ev.ULIDs, u)

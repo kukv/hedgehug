@@ -572,7 +572,7 @@ func (r *rewriteRun) run(s *store.Store, l *store.Locked, conn gitrepo.Conn, res
 			_, err := s.Task(u)
 			if err == nil {
 				live = append(live, u)
-			} else if !errors.Is(err, store.ErrNotFound) && !errors.Is(err, model.ErrForward) {
+			} else if !errors.Is(err, store.ErrNotFound) { // a forward is ErrNotFound too
 				return err
 			}
 		}

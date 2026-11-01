@@ -96,6 +96,8 @@ func classify(err error) *Error {
 		return newErr(KindConflict, "sync.dirty", err)
 	case errors.Is(err, sync.ErrUnrelated):
 		return newErr(KindConflict, "sync.unrelated", err)
+	case errors.Is(err, sync.ErrForcePush):
+		return newErr(KindConflict, "sync.force_push", err)
 	case errors.Is(err, config.ErrNoStores):
 		return newErr(KindConflict, "store.none", err)
 	}
