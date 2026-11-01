@@ -14,6 +14,7 @@ import (
 
 func (a *app) logCmd() *cobra.Command {
 	var limit int
+	var workspaces []string
 	cmd := &cobra.Command{
 		Use:   "log [id]",
 		Short: "Show the commits of the store, or of one task",
@@ -22,10 +23,11 @@ func (a *app) logCmd() *cobra.Command {
 			if limit < 0 {
 				return usageErrorf("-n must not be negative")
 			}
-			return a.log(args, limit)
+			return a.log(args, workspaces, limit)
 		},
 	}
 	cmd.Flags().IntVarP(&limit, "limit", "n", 0, "show at most this many commits (0 for all)")
+	cmd.Flags().StringSliceVar(&workspaces, "workspace", nil, "only the commits of these workspaces (name, prefix or ULID; comma-separated)")
 	return cmd
 }
 
@@ -60,8 +62,8 @@ func storeLogText(logs []ops.StoreLog, many bool) string {
 	return b.String()
 }
 
-func (a *app) log(args []string, limit int) error {
-	res, err := a.ss.Log(args, limit)
+func (a *app) log(args, workspaces []string, limit int) error {
+	res, err := a.ss.LogIn(args, workspaces, limit)
 	if err != nil {
 		return err
 	}

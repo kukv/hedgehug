@@ -8,7 +8,7 @@ func TestSprintRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Name != "Sprint 24" || s.Start.String() != "2026-11-02" || s.End.String() != "2026-11-13" ||
+	if s.Workspace.String() != "01JBZ8K3QW7M2X9V4T6R5N8P0C" || s.Name != "Sprint 24" || s.Start.String() != "2026-11-02" || s.End.String() != "2026-11-13" ||
 		s.State != SprintActive || s.Goal != "ログイン改修を出す" || s.Body != "## 振り返り\n" {
 		t.Errorf("decoded = %+v", s)
 	}
@@ -24,7 +24,7 @@ func TestReleaseRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Name != "v2.4" || r.Date.String() != "2026-11-20" || r.State != ReleaseUnreleased || r.Body != "" {
+	if r.Workspace.String() != "01JBZ8K3QW7M2X9V4T6R5N8P0C" || r.Name != "v2.4" || r.Date.String() != "2026-11-20" || r.State != ReleaseUnreleased || r.Body != "" {
 		t.Errorf("decoded = %+v", r)
 	}
 	out, err := r.Encode()

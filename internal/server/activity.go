@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -31,6 +32,8 @@ type activityInput struct {
 	Limit  int    `query:"limit" default:"100" minimum:"1" maximum:"1000"`
 	Author string `query:"author" doc:"Only the commits of this account (its ID)"`
 	Sync   string `query:"sync" enum:"only,exclude" doc:"only: the merges and repairs of syncs; exclude: all but them"`
+	// Workspace is a comma-separated string, as confirm is.
+	Workspace string `query:"workspace" doc:"Only the commits of these workspaces (ULID, name or id prefix), comma-separated, as hh log --workspace"`
 }
 
 type activityOutput struct{ Body []ops.LogView }
@@ -97,7 +100,11 @@ func (s *Server) registerActivity() {
 		if in.Author == "" && in.Sync == "" {
 			limit = in.Limit
 		}
-		r, err := s.session(in.Store).Log(nil, limit)
+		var workspaces []string
+		if in.Workspace != "" {
+			workspaces = strings.Split(in.Workspace, ",")
+		}
+		r, err := s.session(in.Store).LogIn(nil, workspaces, limit)
 		if err != nil {
 			return nil, problemOf(err)
 		}

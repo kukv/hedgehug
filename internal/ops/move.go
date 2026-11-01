@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 
@@ -25,6 +26,19 @@ type MoveResult struct {
 	Tasks  []*model.Task
 	OldIDs []string
 	Moved  bool
+	// Detached is what the move took off the tasks that went to another
+	// workspace: the sprint and the releases that are not of the new one.
+	// Only the tasks that lost something are listed.
+	Detached []Detached
+}
+
+// Detached is the sprint and the releases a move took off one task, by name;
+// a sprint or release whose file cannot be read is named by its ULID.
+type Detached struct {
+	Task     model.ULID `json:"task"`
+	ID       string     `json:"id" doc:"The id of the task after the move"`
+	Sprint   string     `json:"sprint,omitempty" doc:"The name of the sprint taken off"`
+	Releases []string   `json:"releases,omitempty" doc:"The names of the releases taken off"`
 }
 
 // Move moves a task under another parent, to another workspace, or among its
@@ -78,6 +92,13 @@ func (ss *Session) Move(in MoveInput) (MoveResult, error) {
 	if err != nil {
 		return MoveResult{}, err
 	}
+	for i := range res.Detached {
+		for _, t := range res.Tasks {
+			if t.ULID == res.Detached[i].Task {
+				res.Detached[i].ID = t.ID
+			}
+		}
+	}
 	res.TaskResult = TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: commitHex(hash)}
 	return res, nil
 }
@@ -121,12 +142,65 @@ func (ss *Session) MoveInTx(tx *store.Tx, ix *index.Index, e, p *index.Entry, w 
 		if ulid == e.ULID {
 			t.Parent, t.Rank = to.parent, to.rank
 		}
+		if res.Moved {
+			d, err := detachFromOtherWorkspaces(tx, t)
+			if err != nil {
+				return res, err
+			}
+			if d.Sprint != "" || len(d.Releases) > 0 {
+				res.Detached = append(res.Detached, d)
+			}
+		}
 		if err := tx.PutTask(t); err != nil {
 			return res, err
 		}
 		res.Tasks = append(res.Tasks, t)
 	}
 	return res, nil
+}
+
+// detachFromOtherWorkspaces takes off t, which is now in its new workspace,
+// the sprint and the releases that are not of that workspace, and says what it
+// took. A sprint or release that is gone or cannot be read is not known to be
+// of the workspace, so it goes too.
+func detachFromOtherWorkspaces(tx *store.Tx, t *model.Task) (Detached, error) {
+	d := Detached{Task: t.ULID}
+	if t.Sprint != nil {
+		sp, err := tx.Sprint(*t.Sprint)
+		switch {
+		case err == nil && sp.Workspace == t.Workspace:
+		case err == nil:
+			d.Sprint, t.Sprint = sp.Name, nil
+		case unreadable(err):
+			d.Sprint, t.Sprint = t.Sprint.String(), nil
+		default:
+			return d, err
+		}
+	}
+	var kept []model.ULID
+	for _, u := range t.Releases {
+		r, err := tx.Release(u)
+		switch {
+		case err == nil && r.Workspace == t.Workspace:
+			kept = append(kept, u)
+		case err == nil:
+			d.Releases = append(d.Releases, r.Name)
+		case unreadable(err):
+			d.Releases = append(d.Releases, u.String())
+		default:
+			return d, err
+		}
+	}
+	if len(d.Releases) > 0 {
+		t.Releases = kept
+	}
+	return d, nil
+}
+
+// unreadable reports whether err says a sprint or release file is missing or
+// does not decode.
+func unreadable(err error) bool {
+	return errors.Is(err, store.ErrNotFound) || errors.As(err, new(*model.DecodeError))
 }
 
 // moveTarget is where Move puts a task.

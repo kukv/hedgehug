@@ -62,6 +62,18 @@ func TestActivity(t *testing.T) {
 		t.Errorf("author: %d entries, want the two adds", len(out))
 	}
 	ts.problem("GET", "/api/activity?sync=maybe", nil, 400)
+	// a workspace by its prefix or ULID; the adds tell their workspace
+	ts.call("GET", "/api/activity?workspace=ME&limit=1", nil, 200, &out)
+	if len(out) != 1 || out[0].Workspace == nil || out[0].Workspace.Name != "me" {
+		t.Fatalf("workspace=ME: %+v", out)
+	}
+	if p := ts.problem("GET", "/api/activity?workspace="+out[0].Workspace.ULID+",nope", nil, 404); p.Type != "workspace.not_found" {
+		t.Errorf("problem = %+v", p)
+	}
+	ts.call("GET", "/api/activity?workspace="+out[0].Workspace.ULID, nil, 200, &out)
+	if len(out) < 2 {
+		t.Errorf("workspace=<ULID>: %d entries, want the two adds at least", len(out))
+	}
 }
 
 func TestNotifications(t *testing.T) {

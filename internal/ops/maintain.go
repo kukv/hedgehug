@@ -304,6 +304,7 @@ func (ss *Session) fixStore(c *config.Config, e config.StoreEntry, s *store.Stor
 				f.Title, name = w.Name, w.Name+" ("+x.ULID.String()+")"
 			}
 		}
+		x.Value = detachedName(s, x.Kind, x.Value)
 		f.Line = fmt.Sprintf("repaired: %s: %s", name, fixedContent(ix, x))
 		out = append(out, f)
 	}

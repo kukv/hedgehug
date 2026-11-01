@@ -61,6 +61,8 @@ type Tx struct {
 	schema    *schema.Schema // set by PutSchema
 
 	workspaces map[model.ULID]*model.Workspace // put workspaces; nil for a removed one
+	sprints    map[model.ULID]*model.Sprint    // put sprints
+	releases   map[model.ULID]*model.Release   // put releases
 	numbers    model.Numbers                   // the purged numbers; nil until read
 	oldIDs     []oldID                         // what assignIDs changed
 	oldRanks   []oldRank                       // what rerank changed
@@ -152,7 +154,11 @@ func (tx *Tx) PutSprint(sp *model.Sprint) error {
 	if sp.ULID.IsZero() {
 		return errors.New("the sprint has no ulid")
 	}
-	return tx.put(model.SprintPath(sp.ULID), &pending{encode: sp.Encode, created: &sp.Created, updated: &sp.Updated})
+	if err := tx.put(model.SprintPath(sp.ULID), &pending{encode: sp.Encode, created: &sp.Created, updated: &sp.Updated}); err != nil {
+		return err
+	}
+	tx.sprints[sp.ULID] = sp
+	return nil
 }
 
 func (tx *Tx) PutWorkspace(w *model.Workspace) error {
@@ -206,6 +212,36 @@ func (tx *Tx) Workspace(ulid model.ULID) (*model.Workspace, error) {
 	return tx.workspace(ulid)
 }
 
+// Sprint reads a sprint as it will be after the writes queued so far.
+func (tx *Tx) Sprint(ulid model.ULID) (*model.Sprint, error) {
+	if tx.done {
+		return nil, errTxDone
+	}
+	return tx.sprint(ulid)
+}
+
+func (tx *Tx) sprint(ulid model.ULID) (*model.Sprint, error) {
+	if sp, ok := tx.sprints[ulid]; ok {
+		return sp, nil
+	}
+	return tx.s.Sprint(ulid)
+}
+
+// Release reads a release as it will be after the writes queued so far.
+func (tx *Tx) Release(ulid model.ULID) (*model.Release, error) {
+	if tx.done {
+		return nil, errTxDone
+	}
+	return tx.release(ulid)
+}
+
+func (tx *Tx) release(ulid model.ULID) (*model.Release, error) {
+	if r, ok := tx.releases[ulid]; ok {
+		return r, nil
+	}
+	return tx.s.Release(ulid)
+}
+
 func (tx *Tx) workspace(ulid model.ULID) (*model.Workspace, error) {
 	if w, ok := tx.workspaces[ulid]; ok {
 		if w == nil {
@@ -220,7 +256,11 @@ func (tx *Tx) PutRelease(r *model.Release) error {
 	if r.ULID.IsZero() {
 		return errors.New("the release has no ulid")
 	}
-	return tx.put(model.ReleasePath(r.ULID), &pending{encode: r.Encode, created: &r.Created, updated: &r.Updated})
+	if err := tx.put(model.ReleasePath(r.ULID), &pending{encode: r.Encode, created: &r.Created, updated: &r.Updated}); err != nil {
+		return err
+	}
+	tx.releases[r.ULID] = r
+	return nil
 }
 
 func (tx *Tx) PutTemplate(t *model.Template) error {
@@ -378,7 +418,10 @@ func (s *Store) UpdateCommit(op Op, fn func(*Tx) error) (hash plumbing.Hash, err
 	}
 	s.schema.Store(cached)
 
-	tx := &Tx{s: s, op: op, pending: map[string]*pending{}, tasks: map[model.ULID]*model.Task{}, workspaces: map[model.ULID]*model.Workspace{}}
+	tx := &Tx{
+		s: s, op: op, pending: map[string]*pending{}, tasks: map[model.ULID]*model.Task{}, workspaces: map[model.ULID]*model.Workspace{},
+		sprints: map[model.ULID]*model.Sprint{}, releases: map[model.ULID]*model.Release{},
+	}
 	// assignIDs and rerank change the caller's tasks; a failed operation
 	// leaves them as they were given.
 	defer func() {

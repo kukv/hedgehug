@@ -126,6 +126,28 @@ components:
       required:
         - title
       type: object
+    Detached:
+      additionalProperties: false
+      properties:
+        id:
+          description: The id of the task after the move
+          type: string
+        releases:
+          description: The names of the releases taken off
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        sprint:
+          description: The name of the sprint taken off
+          type: string
+        task:
+          type: string
+      required:
+        - task
+        - id
+      type: object
     DoctorReport:
       additionalProperties: false
       properties:
@@ -398,6 +420,8 @@ components:
           type:
             - string
             - "null"
+        workspace:
+          $ref: "#/components/schemas/WorkspaceRef"
       required:
         - hash
         - date
@@ -1266,6 +1290,13 @@ components:
           type:
             - string
             - "null"
+        detached:
+          description: "What a move to another workspace took off the tasks: the sprint and the releases that are not of the new workspace, as hh mv tells it"
+          items:
+            $ref: "#/components/schemas/Detached"
+          type:
+            - array
+            - "null"
         note:
           description: What restore at a commit has to say, as hh restore --at prints it
           type: string
@@ -1572,6 +1603,13 @@ paths:
             enum:
               - only
               - exclude
+            type: string
+        - description: Only the commits of these workspaces (ULID, name or id prefix), comma-separated, as hh log --workspace
+          explode: false
+          in: query
+          name: workspace
+          schema:
+            description: Only the commits of these workspaces (ULID, name or id prefix), comma-separated, as hh log --workspace
             type: string
       responses:
         "200":

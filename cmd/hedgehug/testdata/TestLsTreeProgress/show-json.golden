@@ -39,6 +39,11 @@
         "email": "alice@example.com"
       },
       "store": "me",
+      "workspace": {
+        "ulid": "<ULID-2>",
+        "name": "me",
+        "id_prefix": "ME"
+      },
       "op": "edit",
       "task": "<ULID-1>",
       "id": "ME-2",
@@ -52,6 +57,11 @@
         "email": "alice@example.com"
       },
       "store": "me",
+      "workspace": {
+        "ulid": "<ULID-2>",
+        "name": "me",
+        "id_prefix": "ME"
+      },
       "op": "add",
       "task": "<ULID-1>",
       "id": "ME-2",
