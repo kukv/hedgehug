@@ -66,6 +66,32 @@ func TestRewriteHistoryAfterPurgeMovedWithStore(t *testing.T) {
 	}
 }
 
+// tasksInHistory answers for several tasks in one pass: the live, the moved
+// whose forward is purged, and one that never was there.
+func TestTasksInHistorySeveralULIDs(t *testing.T) {
+	f := newRewriteFx(t, false)
+	f.moved(t)
+	if _, _, err := f.org().PurgeMoved(true); err != nil {
+		t.Fatal(err)
+	}
+	never := model.NewULID()
+	got, err := tasksInHistory(f.repo(t), []model.ULID{f.p, f.c, f.g, f.first, f.o, never})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range []model.ULID{f.p, f.c, f.g, f.first, f.o} {
+		if !got[u] {
+			t.Errorf("%s is not found", u)
+		}
+	}
+	if got[never] {
+		t.Error("a task that never was there is found")
+	}
+	if got, err := tasksInHistory(f.repo(t), nil); err != nil || len(got) != 0 {
+		t.Errorf("no ULIDs: %v, %v", got, err)
+	}
+}
+
 // With two stores that have the task in their history, the user picks.
 func TestRewriteHistoryTwoStoresHaveItInTheHistory(t *testing.T) {
 	f := newMoveFx(t)

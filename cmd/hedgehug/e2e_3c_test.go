@@ -3,8 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io/fs"
+	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -87,8 +90,9 @@ func TestE2EPhase3c(t *testing.T) {
 	dev, fake, _ := initDevenv(t, devenv)
 	alice, bob := devUserOf(t, bin, devenv, dev, "alice"), devUserOf(t, bin, devenv, dev, "bob")
 
-	// 1. A task in each of the three stores; the STORE column shows them, and
-	// each store's commits are by the account of that store.
+	// 1. A task in each of the three stores; the STORE column shows each on a
+	// row of its own store, and each store's commits are by the account of
+	// that store.
 	alice.ok("add", "mine", "--store", "me")
 	alice.ok("add", "ops", "--store", "org-b")
 	proj := addTask(t, alice, "project", "--store", "org-a", "--kind", "project")
@@ -97,9 +101,18 @@ func TestE2EPhase3c(t *testing.T) {
 	alice.ok("dep", "add", child.ULID, "--blocked-by", keep.ULID)
 	alice.ok("sync")
 	out := alice.ok("ls")
-	for _, want := range []string{"STORE", "me ", "org-a", "org-b"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("ls lacks %q:\n%s", want, out)
+	if !strings.HasPrefix(out, "STORE") {
+		t.Errorf("ls has no STORE column:\n%s", out)
+	}
+	for store, title := range map[string]string{"me": "mine", "org-b": "ops", "org-a": "project"} {
+		found := false
+		for _, l := range strings.Split(out, "\n") {
+			if f := strings.Fields(l); len(f) > 0 && f[0] == store && strings.HasSuffix(l, title) {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("ls has no row of %q in the store %s:\n%s", title, store, out)
 		}
 	}
 	for name, author := range map[string]string{"me": "github.com/alice", "org-a": "github.com/alice-corp", "org-b": "github.com/alice-corp"} {
@@ -141,6 +154,10 @@ func TestE2EPhase3c(t *testing.T) {
 	// bob edits and comments on the child before the move, and does not push.
 	bob.ok("set", child.ID, "title=child by bob", "--store", "org-a")
 	bob.ok("comment", child.ID, "bob was here", "--store", "org-a")
+	// the paths of the child and of bob's comment on it, while he has them
+	childPaths := pathsWith(t, bob, "org-a", child.ULID)
+	// Commit times are seconds: the move must be a second later than bob's
+	// edit, or the two would tie.
 	time.Sleep(1100 * time.Millisecond)
 
 	// 2. alice moves the project, with the child, to org-b.
@@ -176,8 +193,12 @@ func TestE2EPhase3c(t *testing.T) {
 	if out := alice.ok("show", child.ULID, "--json"); strings.Contains(out, keep.ULID) {
 		t.Errorf("the child still refers to keep:\n%s", out)
 	}
-	if got := taskFilePath(t, alice, "org-a", proj.ULID); got == "" {
-		t.Error("org-a has no forward file")
+	// The forward is a file of org-a at the path of the task, with none of
+	// the task's content.
+	forwardRel := taskFilePath(t, alice, "org-a", proj.ULID)
+	forward, err := os.ReadFile(filepath.Join(alice.home, "stores", "org-a", filepath.FromSlash(forwardRel)))
+	if err != nil || len(forward) == 0 || strings.Contains(string(forward), "title: project") {
+		t.Errorf("the forward file %s = %q, %v; want a forward, not the task", forwardRel, forward, err)
 	}
 	code, _, errs := alice.run("", "show", "org-a:"+proj.ID)
 	want := proj.ID + " moved to org-b (org-b:" + moved.ID + ")"
@@ -189,27 +210,34 @@ func TestE2EPhase3c(t *testing.T) {
 	}
 	alice.ok("sync")
 
-	// 3. bob's edit of the child lost to the move: he is told, and where.
+	// 3. bob's edit of the child lost to the move: he is told, and where. The
+	// child in org-b keeps the title it had when it moved.
 	bob.ok("sync")
+	if x := taskOf(t, bob, "org-b:"+movedChild.ID); x.Title != "child" {
+		t.Errorf("bob's edit reached the child in org-b: %+v", x)
+	}
 	inbox := bob.ok("inbox")
 	if !strings.Contains(inbox, "overwritten") || !strings.Contains(inbox, "→ apply it to org-b's "+movedChild.ID) {
 		t.Errorf("bob's inbox lacks the notice with the new place of the child (%s):\n%s", movedChild.ID, inbox)
 	}
-	_, blog := storeLog(t, bob, "org-a")
-	overwritten := false
-	for _, e := range blog {
-		if len(e.TrailerValues("Hedgehug-Overwritten")) > 0 {
-			overwritten = true
-		}
+	if n := len(overwrittenNaming(t, bob, child.ULID)); n == 0 {
+		t.Error("no commit of bob's org-a has Hedgehug-Overwritten naming the child")
 	}
-	if !overwritten {
-		t.Error("no commit of bob's org-a has Hedgehug-Overwritten")
+	// the paths of everything the rewrite must remove from bob's history:
+	// the project, the child and bob's comment on it (not in his tree any more)
+	purged := append(pathsWith(t, bob, "org-a", proj.ULID), childPaths...)
+	if len(purged) < 3 {
+		t.Fatalf("paths of the project, the child and the comment = %v", purged)
 	}
-
-	bobPath := taskFilePath(t, bob, "org-a", proj.ULID) // the forward is at the path of the task
 
 	// 4. purge --moved takes the forward files away.
-	alice.ok("purge", "--moved", "--store", "org-a", "--yes")
+	pm := alice.ok("purge", "--moved", "--store", "org-a", "--yes")
+	if !strings.Contains(pm, "Removed 2 forward files") {
+		t.Errorf("purge --moved printed %q, want the two forwards removed", pm)
+	}
+	if _, err := os.Stat(filepath.Join(alice.home, "stores", "org-a", filepath.FromSlash(forwardRel))); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("the forward file is still there: %v", err)
+	}
 	if code, _, errs := alice.run("", "show", "org-a:"+proj.ID); code == 0 || strings.Contains(errs, "moved to") {
 		t.Errorf("show of the old id after purge --moved: exit %d, %q", code, errs)
 	}
@@ -220,43 +248,102 @@ func TestE2EPhase3c(t *testing.T) {
 	// rid of the moved project (D34: its forward is gone, so the task is named
 	// by its place in org-b).
 	bob.ok("set", keep.ID, "title=keep by bob", "--store", "org-a")
+	if !inHistory(t, bob, "org-a", purged) {
+		t.Fatalf("%v are in no commit of bob's org-a before the rewrite; the checks below would prove nothing", purged)
+	}
 	code, rout, rerr := inProcess(t, alice, "org-a\n", "purge", "--rewrite-history", moved.ID)
 	if code != 0 {
 		t.Fatalf("purge --rewrite-history: exit %d\nstdout: %s\nstderr: %s", code, rout, rerr)
 	}
-	inHistory := func() bool {
-		repo, log := storeLog(t, bob, "org-a")
-		for _, e := range log {
-			tree, err := repo.TreeOf(e.Hash)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for p, err := range repo.Files(tree, "tasks/") {
-				if err != nil {
-					t.Fatal(err)
-				}
-				if p == bobPath {
-					return true
-				}
-			}
-		}
-		return false
-	}
-	if !inHistory() {
-		t.Fatalf("%s is in no commit of bob's org-a before the rewrite; the check below would prove nothing", bobPath)
-	}
+	// a second round, so that nothing comes back from either side
+	bob.ok("sync")
+	alice.ok("sync")
 	bob.ok("sync")
 
-	// bob's org-a was made again: his edit is back, and the task is in no
-	// commit of it.
+	// bob's org-a was made again: his edit is back, and nothing of the
+	// project, the child or the comment is in any commit of it or of alice's,
+	// nor named by a trailer.
 	if x := taskOf(t, bob, "org-a:"+keep.ID); x.Title != "keep by bob" {
 		t.Errorf("bob's edit did not come back: %+v", x)
 	}
-	if inHistory() {
-		t.Errorf("%s is still in a commit of bob's org-a", bobPath)
+	for _, u := range []*devUser{bob, alice} {
+		if inHistory(t, u, "org-a", purged) {
+			t.Errorf("%v are still in a commit of %s's org-a", purged, filepath.Base(u.home))
+		}
+		for _, ulid := range []string{proj.ULID, child.ULID} {
+			if got := overwrittenNaming(t, u, ulid); len(got) > 0 {
+				t.Errorf("%s's org-a still names %s in %v", filepath.Base(u.home), ulid, got)
+			}
+		}
 	}
 	inbox = bob.ok("inbox")
 	if !strings.Contains(inbox, "rewrite_applied") {
 		t.Errorf("bob's inbox lacks rewrite_applied:\n%s", inbox)
 	}
+}
+
+// pathsWith lists the files of the work tree of the store name of u whose
+// path has the ULID: the task file, and the comments under it.
+func pathsWith(t *testing.T, u *devUser, name, ulid string) []string {
+	t.Helper()
+	dir := filepath.Join(u.home, "stores", name)
+	var out []string
+	for _, top := range []string{"tasks", "comments"} {
+		err := filepath.WalkDir(filepath.Join(dir, top), func(p string, d fs.DirEntry, err error) error {
+			if err == nil && !d.IsDir() && strings.Contains(p, ulid) {
+				rel, err := filepath.Rel(dir, p)
+				if err != nil {
+					return err
+				}
+				out = append(out, filepath.ToSlash(rel))
+			}
+			return err
+		})
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			t.Fatal(err)
+		}
+	}
+	return out
+}
+
+// inHistory reports whether any of the paths is a file of some commit of the
+// store name of u.
+func inHistory(t *testing.T, u *devUser, name string, paths []string) bool {
+	t.Helper()
+	repo, log := storeLog(t, u, name)
+	for _, e := range log {
+		tree, err := repo.TreeOf(e.Hash)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, prefix := range []string{"tasks/", "comments/"} {
+			for p, err := range repo.Files(tree, prefix) {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if slices.Contains(paths, p) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// overwrittenNaming lists the Hedgehug-Overwritten and Hedgehug-Repaired
+// lines, in the commits of the store org-a of u, that name the ULID.
+func overwrittenNaming(t *testing.T, u *devUser, ulid string) []string {
+	t.Helper()
+	_, log := storeLog(t, u, "org-a")
+	var out []string
+	for _, e := range log {
+		for _, key := range []string{"Hedgehug-Overwritten", "Hedgehug-Repaired"} {
+			for _, v := range e.TrailerValues(key) {
+				if strings.Contains(v, ulid) {
+					out = append(out, key+": "+v)
+				}
+			}
+		}
+	}
+	return out
 }

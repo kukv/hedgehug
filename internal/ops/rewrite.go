@@ -289,6 +289,17 @@ func (ss *Session) rewriteTargets(arg, explicit string) (string, []RewriteTarget
 			return "", nil, err
 		}
 	}
+	// D34: the files a store ever had, walked once per store for all the
+	// tasks looked for.
+	seen := map[string]map[model.ULID]bool{}
+	hist := func(m *mount.Mounted) (map[model.ULID]bool, error) {
+		if h, ok := seen[m.Name]; ok {
+			return h, nil
+		}
+		h, err := tasksInHistory(m.Store.Repo(), ulids)
+		seen[m.Name] = h
+		return h, err
+	}
 	pick := explicit
 	if pick == "" {
 		var holders []string
@@ -300,8 +311,10 @@ func (ss *Session) rewriteTargets(arg, explicit string) (string, []RewriteTarget
 			var herr error
 			if err := m.With(func(ix *index.Index) {
 				if _, has = ix.Forward(root); !has {
-					// D34: the file may be in the history only, as after purge --moved
-					has, herr = inHistory(m.Store.Repo(), root)
+					// the file may be in the history only, as after purge --moved
+					var h map[model.ULID]bool
+					h, herr = hist(m)
+					has = h[root]
 				}
 			}); err != nil {
 				return "", nil, err
@@ -333,9 +346,9 @@ func (ss *Session) rewriteTargets(arg, explicit string) (string, []RewriteTarget
 				targets = append(targets, RewriteTarget{ULID: u, ID: ix.DisplayID(e), Title: e.Title, Live: true})
 			} else if f, ok := ix.Forward(u); ok {
 				targets = append(targets, RewriteTarget{ULID: u, ID: f.ID, Title: titles[u]})
-			} else if in, err := inHistory(m.Store.Repo(), u); err != nil {
+			} else if h, err := hist(m); err != nil {
 				herr = err
-			} else if in {
+			} else if h[u] {
 				targets = append(targets, RewriteTarget{ULID: u, Title: titles[u]})
 			}
 		}
@@ -351,11 +364,64 @@ func (ss *Session) rewriteTargets(arg, explicit string) (string, []RewriteTarget
 	return pick, targets, nil
 }
 
-// inHistory reports whether the file of the task u is in some commit of the
-// repository (D34): a task whose forward was purged is still there.
-func inHistory(r *gitrepo.Repo, u model.ULID) (bool, error) {
-	log, err := r.Log([]string{model.TaskPath(u)}, 1)
-	return len(log) > 0, err
+// tasksInHistory reports which of want have their task file in some commit of
+// the repository (D34): a task whose forward was purged is still there. It
+// walks the history once, comparing each commit with its first parent (a
+// commit that a merge brought in is walked too), and stops when all are found.
+func tasksInHistory(r *gitrepo.Repo, want []model.ULID) (map[model.ULID]bool, error) {
+	found := map[model.ULID]bool{}
+	if len(want) == 0 {
+		return found, nil
+	}
+	wanted := make(map[model.ULID]bool, len(want))
+	for _, u := range want {
+		wanted[u] = true
+	}
+	note := func(p string) {
+		parts := strings.Split(p, "/")
+		if len(parts) != 4 || parts[0] != "tasks" {
+			return
+		}
+		if u, err := model.ParseULID(strings.TrimSuffix(parts[3], ".md")); err == nil && wanted[u] {
+			found[u] = true
+		}
+	}
+	log, err := r.Log(nil, 0)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range log {
+		if len(found) == len(wanted) {
+			break
+		}
+		to, err := r.TreeOf(e.Hash)
+		if err != nil {
+			return nil, err
+		}
+		if len(e.Parents) == 0 {
+			for p, err := range r.Files(to, "tasks/") {
+				if err != nil {
+					return nil, err
+				}
+				note(p)
+			}
+			continue
+		}
+		from, err := r.TreeOf(e.Parents[0])
+		if err != nil {
+			return nil, err
+		}
+		cs, err := r.DiffTrees(from, to, "tasks/")
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range cs {
+			if !c.Deleted {
+				note(c.Path)
+			}
+		}
+	}
+	return found, nil
 }
 
 // prepare does step 3: it syncs the store, refuses a store that is
