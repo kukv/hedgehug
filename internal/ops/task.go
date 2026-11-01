@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
@@ -44,7 +45,7 @@ type AddInput struct {
 
 // Add adds a task.
 func (ss *Session) Add(in AddInput) (TaskResult, error) {
-	s, ix, err := ss.Open()
+	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return TaskResult{}, err
 	}
@@ -127,7 +128,7 @@ func (ss *Session) Add(in AddInput) (TaskResult, error) {
 
 // Set applies assigns to the task arg names.
 func (ss *Session) Set(arg string, assigns []Assign) (TaskResult, error) {
-	s, ix, err := ss.Open()
+	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return TaskResult{}, err
 	}
@@ -161,7 +162,7 @@ func (ss *Session) Set(arg string, assigns []Assign) (TaskResult, error) {
 // SetStatus sets the status of the task arg names; an empty status means the
 // default status of the done category.
 func (ss *Session) SetStatus(arg, name string) (TaskResult, error) {
-	s, ix, err := ss.Open()
+	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return TaskResult{}, err
 	}
@@ -203,7 +204,7 @@ func (ss *Session) SetStatus(arg, name string) (TaskResult, error) {
 // Dep makes the task arg names blocked by the task blockerArg names, or, with
 // add false, no longer blocked by it.
 func (ss *Session) Dep(arg, blockerArg string, add bool) (TaskResult, error) {
-	s, ix, err := ss.Open()
+	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return TaskResult{}, err
 	}
@@ -247,16 +248,16 @@ var errNoAccounts = newErr(KindConflict, "account.none", errors.New("accounts ar
 // Watch adds the writer of the store to the watchers of the task arg
 // names, or, with on false, takes it out.
 func (ss *Session) Watch(arg string, on bool) (TaskResult, error) {
+	s, ix, err := ss.OpenForWrite()
+	if err != nil {
+		return TaskResult{}, err
+	}
 	acct, ok, err := ss.Writer()
 	if err != nil {
 		return TaskResult{}, err
 	}
 	if !ok {
 		return TaskResult{}, errNoAccounts
-	}
-	s, ix, err := ss.Open()
-	if err != nil {
-		return TaskResult{}, err
 	}
 	e, err := ss.Resolve(ix, arg)
 	if err != nil {
@@ -277,7 +278,7 @@ func (ss *Session) Watch(arg string, on bool) (TaskResult, error) {
 		if on {
 			AddWatchers(t, acct.ID())
 		} else {
-			t.Watchers = slices.DeleteFunc(t.Watchers, func(w string) bool { return strings.EqualFold(w, acct.ID()) })
+			t.Watchers = slices.DeleteFunc(t.Watchers, func(w string) bool { return config.SameAccount(w, acct.ID()) })
 		}
 		return tx.PutTask(t)
 	})
@@ -291,7 +292,7 @@ func (ss *Session) Watch(arg string, on bool) (TaskResult, error) {
 // at the end. Accounts compare without case.
 func AddWatchers(t *model.Task, accts ...string) {
 	for _, acct := range accts {
-		if !slices.ContainsFunc(t.Watchers, func(w string) bool { return strings.EqualFold(w, acct) }) {
+		if !slices.ContainsFunc(t.Watchers, func(w string) bool { return config.SameAccount(w, acct) }) {
 			t.Watchers = append(t.Watchers, acct)
 		}
 	}
@@ -318,7 +319,7 @@ func NewMentions(old, now, writerHost string) []string {
 	was := mentionedAccounts(old, writerHost)
 	var out []string
 	for _, m := range mentionedAccounts(now, writerHost) {
-		if !slices.ContainsFunc(was, func(w string) bool { return strings.EqualFold(w, m) }) {
+		if !slices.ContainsFunc(was, func(w string) bool { return config.SameAccount(w, m) }) {
 			out = append(out, m)
 		}
 	}
@@ -339,7 +340,7 @@ func (ss *Session) WriterHost() (string, error) {
 // did not in before.
 func watchNewAssignees(t *model.Task, before []string) {
 	for _, as := range t.Assignees {
-		if !slices.ContainsFunc(before, func(b string) bool { return strings.EqualFold(b, as) }) {
+		if !slices.ContainsFunc(before, func(b string) bool { return config.SameAccount(b, as) }) {
 			AddWatchers(t, as)
 		}
 	}

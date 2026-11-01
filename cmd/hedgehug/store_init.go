@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -21,12 +23,12 @@ func (a *app) storeCmd() *cobra.Command {
 			return usageErrorf("a subcommand is needed")
 		},
 	}
-	cmd.AddCommand(a.storeInitCmd(), a.storeAddCmd(), a.storeListCmd(), a.storeRemoveCmd())
+	cmd.AddCommand(a.storeInitCmd(), a.storeAddCmd(), a.storeListCmd(), a.storeRemoveCmd(), a.storeDefaultCmd(), a.storeDiscoverCmd())
 	return cmd
 }
 
 func (a *app) storeInitCmd() *cobra.Command {
-	var template, prefix, wsName string
+	var template, prefix, wsName, account, path string
 	var remotes []string
 	cmd := &cobra.Command{
 		Use:   "init <name>",
@@ -44,18 +46,30 @@ func (a *app) storeInitCmd() *cobra.Command {
 			default:
 				return usageErrorf("--template: %q is not a template; the one there is is dev", template)
 			}
-			return a.storeInit(args[0], prefix, wsName, sc, remotes)
+			return a.storeInit(ops.StoreInitInput{Name: args[0], Prefix: prefix, Workspace: wsName, Schema: sc, Remotes: remotes, Account: account, Path: path})
 		},
 	}
 	cmd.Flags().StringVar(&prefix, "prefix", "", "the id prefix of the first workspace, such as WEB")
 	cmd.Flags().StringVar(&wsName, "workspace", "", "the name of the first workspace (default: the store's name)")
 	cmd.Flags().StringArrayVar(&remotes, "remote", nil, "a remote to push the store to, which must be empty; the first is origin, the others are mirrors")
+	cmd.Flags().StringVar(&account, "account", "", "the account that writes the store and makes its GitHub repository (default: the only account)")
+	cmd.Flags().StringVar(&path, "path", "", "where to make the store (default: under the data directory)")
 	cmd.Flags().StringVar(&template, "template", "", "start from a template: dev adds a review status")
 	return cmd
 }
 
-func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema, remotes []string) error {
-	r, err := a.ss.StoreInit(ops.StoreInitInput{Name: name, Prefix: prefix, Workspace: wsName, Schema: sc, Remotes: remotes})
+func (a *app) storeInit(in ops.StoreInitInput) error {
+	r, err := a.ss.StoreInit(in)
+	// A remote on GitHub with no account to make it: on a terminal, ask which.
+	if e := ops.AsError(err); e != nil && e.Code == "choice.required" && e.Args["what"] == "--account" && a.isTerminal(a.stdin) {
+		candidates, _ := e.Args["candidates"].([]string)
+		var picked string
+		if picked, err = a.askChoice("Which account makes the repository?", candidates); err != nil {
+			return err
+		}
+		in.Account = picked
+		r, err = a.ss.StoreInit(in)
+	}
 	if err != nil {
 		return err
 	}
@@ -79,4 +93,27 @@ func (a *app) storeInit(name, prefix, wsName string, sc *schema.Schema, remotes 
 		_, err = fmt.Fprintf(a.stdout, "Pushed to %s\n", strings.Join(r.Pushed, ", "))
 	}
 	return err
+}
+
+// askChoice lists candidates on stderr and reads the number of the one to
+// pick from stdin.
+func (a *app) askChoice(question string, candidates []string) (string, error) {
+	var b strings.Builder
+	b.WriteString(question + "\n")
+	for i, c := range candidates {
+		fmt.Fprintf(&b, "  %d) %s\n", i+1, c)
+	}
+	b.WriteString("Number: ")
+	if _, err := fmt.Fprint(a.stderr, b.String()); err != nil {
+		return "", err
+	}
+	line, err := a.readLine()
+	if err != nil && line == "" {
+		return "", errors.New("canceled")
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(line))
+	if err != nil || n < 1 || n > len(candidates) {
+		return "", usageErrorf("%q is not one of 1-%d", strings.TrimSpace(line), len(candidates))
+	}
+	return candidates[n-1], nil
 }

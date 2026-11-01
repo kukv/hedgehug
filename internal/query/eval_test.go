@@ -78,6 +78,7 @@ func TestRunFilters(t *testing.T) {
 		{"label:BACKEND", Options{}, []string{"a"}},
 		{"label:none", Options{}, []string{"P", "E", "b"}},
 		{"assignee:@me", me, []string{"a"}},
+		{"assignee:@me", Options{Me: []string{"github.com/Alice"}}, []string{"a"}}, // an account ID is compared without case
 		{"assignee:github.com/alice", Options{}, []string{"a"}},
 		{"parent:" + f.ids["E"].String(), Options{}, []string{"a"}},
 		{"parent:none", Options{}, []string{"P", "b", "c"}},

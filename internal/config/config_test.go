@@ -297,12 +297,12 @@ func addAndRead(t *testing.T, p Paths) string {
 
 func TestSaveKeepsSequenceIndent(t *testing.T) {
 	for _, tc := range []struct{ name, in, want string }{
-		{"indented", "stores:\n  - name: a\n    path: /x\n", "stores:\n  - name: a\n    path: /x\n  - name: b\n    path: /elsewhere/b\n"},
-		{"flush", "stores:\n- name: a\n  path: /x\n", "stores:\n- name: a\n  path: /x\n- name: b\n  path: /elsewhere/b\n"},
-		{"no file", "", "stores:\n  - name: b\n    path: /elsewhere/b\n"},
-		{"other list flush, no stores", "other:\n- x\n", "other:\n- x\nstores:\n- name: b\n  path: /elsewhere/b\n"},
-		{"other list indented, no stores", "other:\n  - x\n", "other:\n  - x\nstores:\n  - name: b\n    path: /elsewhere/b\n"},
-		{"empty stores", "stores:\n", "stores:\n  - name: b\n    path: /elsewhere/b\n"},
+		{"indented", "stores:\n  - name: a\n    path: /x\n", "stores:\n  - name: a\n    path: /x\n  - name: b\n    path: /elsewhere/b\ndefault_store: b\n"},
+		{"flush", "stores:\n- name: a\n  path: /x\n", "stores:\n- name: a\n  path: /x\n- name: b\n  path: /elsewhere/b\ndefault_store: b\n"},
+		{"no file", "", "stores:\n  - name: b\n    path: /elsewhere/b\ndefault_store: b\n"},
+		{"other list flush, no stores", "other:\n- x\n", "other:\n- x\nstores:\n- name: b\n  path: /elsewhere/b\ndefault_store: b\n"},
+		{"other list indented, no stores", "other:\n  - x\n", "other:\n  - x\nstores:\n  - name: b\n    path: /elsewhere/b\ndefault_store: b\n"},
+		{"empty stores", "stores:\n", "stores:\n  - name: b\n    path: /elsewhere/b\ndefault_store: b\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := testPaths(t)
@@ -383,7 +383,7 @@ func TestLoadAccountsRemotesSync(t *testing.T) {
   - name: personal
     host: github.com
     login: alice
-    token: secret
+    token: gh
 stores:
   - name: org-a
     path: /s/org-a
@@ -499,7 +499,7 @@ func TestAddAndRemoveStoreKeepsComments(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(p.ConfigFile)
-	want := "# mine\nstores:\n  - name: c\n    path: /c # third\n  - name: b\n    path: /b\n    remotes: [/r/b.git]\nlog_level: debug # keep\n"
+	want := "# mine\nstores:\n  - name: c\n    path: /c # third\n  - name: b\n    path: /b\n    remotes: [/r/b.git]\nlog_level: debug # keep\ndefault_store: b\n"
 	if string(b) != want {
 		t.Errorf("config.yaml =\n%s\nwant\n%s", b, want)
 	}
@@ -568,5 +568,170 @@ func TestRemoveStoreKeepsNeighborComments(t *testing.T) {
 	}
 	if strings.Contains(string(b), "# about b") {
 		t.Error("the comment of the removed item is still there")
+	}
+}
+
+func TestLoadPhase3Keys(t *testing.T) {
+	p := testPaths(t)
+	writeConfig(t, p, `accounts:
+  - name: personal
+    host: github.com
+    login: alice
+    token: gh
+  - name: work
+    host: github.com
+    login: alice-corp
+    token: env:WORK_TOKEN
+  - name: plain
+    host: ghe.example.com
+    login: al
+hosts:
+  - host: ghe.example.com
+    client_id: Iv23abc
+  - host: github.com
+    api: http://127.0.0.1:7777
+    web: http://127.0.0.1:7777
+default_store: me
+url_rewrites:
+  - {from: "https://github.com/", to: "/tmp/remotes/"}
+repo_accounts:
+  - {match: github.com/org-a/*, account: work}
+  - {match: "*", account: personal}
+stores:
+  - name: me
+    path: /tmp/me
+`)
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Accounts[0].Token; got != (TokenSource{Kind: "gh"}) {
+		t.Errorf("personal token = %+v", got)
+	}
+	if got := c.Accounts[1].Token; got != (TokenSource{Kind: "env", Env: "WORK_TOKEN"}) {
+		t.Errorf("work token = %+v", got)
+	}
+	if got := c.Accounts[2].Token; got != (TokenSource{}) {
+		t.Errorf("plain token = %+v", got)
+	}
+	if c.DefaultStore != "me" {
+		t.Errorf("default_store = %q", c.DefaultStore)
+	}
+	if len(c.URLRewrites) != 1 || c.URLRewrites[0] != (URLRewrite{From: "https://github.com/", To: "/tmp/remotes/"}) {
+		t.Errorf("url_rewrites = %+v", c.URLRewrites)
+	}
+	if len(c.RepoAccounts) != 2 || c.RepoAccounts[0] != (RepoAccount{Match: "github.com/org-a/*", Account: "work"}) {
+		t.Errorf("repo_accounts = %+v", c.RepoAccounts)
+	}
+	if h := c.Host("github.com"); h.API != "http://127.0.0.1:7777" || h.Web != "http://127.0.0.1:7777" {
+		t.Errorf("github.com = %+v", h)
+	}
+	if h := c.Host("ghe.example.com"); h.API != "https://ghe.example.com/api/v3" || h.Web != "https://ghe.example.com" || h.ClientID != "Iv23abc" {
+		t.Errorf("ghe = %+v", h)
+	}
+}
+
+func TestLoadPhase3KeyErrors(t *testing.T) {
+	for _, tc := range []struct{ name, yaml, want string }{
+		{"bad token", "accounts:\n  - {name: a, host: h, login: l, token: password}\n", "token"},
+		{"empty env", "accounts:\n  - {name: a, host: h, login: l, token: \"env:\"}\n", "token"},
+		{"host missing", "hosts:\n  - {api: http://x}\n", "hosts: host is missing"},
+		{"host twice", "hosts:\n  - {host: h}\n  - {host: h}\n", "listed twice"},
+		{"bad api", "hosts:\n  - {host: h, api: \"ftp://x\"}\n", "api"},
+		{"unknown default", "default_store: nope\n", "default_store"},
+		{"rewrite from missing", "url_rewrites:\n  - {to: /x}\n", "url_rewrites"},
+		{"repo account unknown", "repo_accounts:\n  - {match: \"*\", account: nope}\n", "repo_accounts"},
+		{"bad glob", "accounts:\n  - {name: a, host: h, login: l}\nrepo_accounts:\n  - {match: \"[\", account: a}\n", "match"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testPaths(t)
+			writeConfig(t, p, tc.yaml)
+			_, err := Load(p)
+			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), p.ConfigFile) {
+				t.Errorf("err = %v, want one with %q and the file", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestDefaultStoreFollowsAddAndRemove(t *testing.T) {
+	p := testPaths(t)
+	writeConfig(t, p, "# keep me\n")
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AddStore("me", filepath.Join(p.Home, "me"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AddStore("org", filepath.Join(p.Home, "org"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if c.DefaultStore != "me" {
+		t.Errorf("default = %q, want the first store", c.DefaultStore)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	c, err = Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.DefaultStore != "me" {
+		t.Errorf("default after load = %q", c.DefaultStore)
+	}
+	if err := c.SetDefaultStore("org"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetDefaultStore("nope"); err == nil {
+		t.Error("SetDefaultStore(nope) = nil")
+	}
+	if err := c.RemoveStore("org"); err != nil {
+		t.Fatal(err)
+	}
+	if c.DefaultStore != "" {
+		t.Errorf("default after removing it = %q", c.DefaultStore)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p.ConfigFile)
+	if strings.Contains(string(b), "default_store") || !strings.Contains(string(b), "# keep me") {
+		t.Errorf("config.yaml = %s", b)
+	}
+}
+
+func TestAddAccountAndToken(t *testing.T) {
+	p := testPaths(t)
+	writeConfig(t, p, "accounts:\n  - name: a\n    host: github.com\n    login: alice\n    note: keep\n")
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AddAccount(Account{Name: "a", Host: "github.com", Login: "x"}); err == nil {
+		t.Error("AddAccount with a name in use = nil")
+	}
+	if err := c.AddAccount(Account{Name: "work", Host: "github.com", Login: "alice-corp", Token: TokenSource{Kind: "device"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetAccountToken("a", TokenSource{Kind: "keychain"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	c, err = Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a, _ := c.Account("a"); a.Token.Kind != "keychain" {
+		t.Errorf("a = %+v", a)
+	}
+	if a, ok := c.Account("work"); !ok || a.Login != "alice-corp" || a.Token.Kind != "device" {
+		t.Errorf("work = %+v %v", a, ok)
+	}
+	b, _ := os.ReadFile(p.ConfigFile)
+	if !strings.Contains(string(b), "note: keep") {
+		t.Errorf("an unknown key was lost: %s", b)
 	}
 }

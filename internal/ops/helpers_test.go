@@ -163,7 +163,7 @@ func otherSession(t *testing.T, ts *testSession, now time.Time) *testSession {
 func cloneSession(t *testing.T, ts *testSession, remote string, now time.Time) *testSession {
 	t.Helper()
 	c := otherSession(t, ts, now)
-	if _, err := c.StoreAdd("me", []string{remote}, ""); err != nil {
+	if _, err := c.StoreAdd("me", []string{remote}, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	return c

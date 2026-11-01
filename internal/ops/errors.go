@@ -4,6 +4,8 @@ package ops
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/index"
@@ -98,4 +100,22 @@ func classify(err error) *Error {
 		return newErr(KindConflict, "store.none", err)
 	}
 	return &Error{Kind: KindUnknown, Err: err}
+}
+
+// ErrFindings is returned with a result that found problems (auth status):
+// the result is complete, and the CLI exits 1 once it has printed it.
+var ErrFindings = errors.New("problems found")
+
+// choiceRequired is what an operation returns when it needs the caller to
+// pick one of candidates and none was given.
+func choiceRequired(what string, candidates []string) *Error {
+	return newErr(KindUsage, "choice.required",
+		fmt.Errorf("%s is needed; pick one of: %s", what, strings.Join(candidates, ", ")),
+		"what", what, "candidates", candidates)
+}
+
+// confirmRequired is what an operation returns when it needs a confirmation
+// and the caller gave none (--yes).
+func confirmRequired(what string) *Error {
+	return newErr(KindUsage, "confirm.required", fmt.Errorf("%s: confirm with --yes", what), "what", what)
 }

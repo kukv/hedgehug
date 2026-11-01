@@ -6,13 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/kukv/hedgehug/internal/auth"
 	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
@@ -30,7 +34,13 @@ type env struct {
 	getenv         func(string) string
 	isTerminal     func(any) bool // reports whether a stream is a terminal
 	now            func() time.Time
-	beforeUpdate   func() // for tests: runs before each write; nil in the binary
+	beforeUpdate   func()       // for tests: runs before each write; nil in the binary
+	keyring        auth.Keyring // nil is the OS keychain
+	httpClient     *http.Client // nil is a client with a 30-second timeout
+	// run runs a command (gh) and gives its output; nil runs the command.
+	run func(name string, args ...string) (stdout, stderr []byte, err error)
+	// openURL opens a URL in the browser; nil means no browser can be opened.
+	openURL func(url string) error
 }
 
 func init() {
@@ -49,6 +59,7 @@ func main() {
 		getenv:     os.Getenv,
 		isTerminal: isTerminal,
 		now:        time.Now,
+		openURL:    openURL,
 	}))
 }
 
@@ -65,6 +76,9 @@ func run(args []string, e *env) int {
 		Getenv:       e.getenv,
 		Now:          e.now,
 		BeforeUpdate: e.beforeUpdate,
+		Keyring:      e.keyring,
+		HTTPClient:   e.httpClient,
+		Run:          e.run,
 		Warn:         func(m string) { _, _ = fmt.Fprintln(e.stderr, "warning: "+m) },
 		AfterWrite: func(s *store.Store, en config.StoreEntry) {
 			if !ops.SyncsInBackground(en) {
@@ -99,4 +113,18 @@ func run(args []string, e *env) int {
 // that carry a list on the lines after it.
 func writeErr(w io.Writer, err error) {
 	_, _ = fmt.Fprintln(w, "hedgehug: "+describe(err))
+}
+
+// openURL opens u in the browser of the OS.
+func openURL(u string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", u) //nolint:gosec // G204: the command is fixed; u is the verification URL the host gave
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", u) //nolint:gosec // G204: the command is fixed; u is the verification URL the host gave
+	default:
+		cmd = exec.Command("xdg-open", u) //nolint:gosec // G204: the command is fixed; u is the verification URL the host gave
+	}
+	return cmd.Start()
 }

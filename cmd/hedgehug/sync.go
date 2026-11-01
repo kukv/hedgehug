@@ -41,7 +41,7 @@ func (a *app) syncBackground() error {
 }
 
 func (a *app) sync() error {
-	reps, err := a.ss.Sync(false)
+	reps, err := a.ss.Sync(false, true)
 	if len(reps) == 0 {
 		if err != nil {
 			return err
@@ -83,6 +83,12 @@ func (a *app) printSync(r ops.SyncReport) error {
 			b.WriteString(", pushed to " + strings.Join(r.Pushed, ", "))
 		}
 		b.WriteString("\n")
+	}
+	switch {
+	case r.Unpushable == 1:
+		b.WriteString("  read-only: 1 commit not pushed\n")
+	case r.Unpushable > 1:
+		fmt.Fprintf(&b, "  read-only: %d commits not pushed\n", r.Unpushable)
 	}
 	for _, x := range r.Repaired {
 		fmt.Fprintf(&b, "  %s\n", repairedLine(x))
@@ -154,6 +160,9 @@ func (a *app) syncStatus() error {
 		}
 		if x.LastError != "" {
 			fmt.Fprintf(&b, "  last error:    %s\n", x.LastError)
+		}
+		if x.ReadOnly != "" {
+			fmt.Fprintf(&b, "  read-only:     %s\n", x.ReadOnly)
 		}
 		switch {
 		case x.Unpushed == nil:

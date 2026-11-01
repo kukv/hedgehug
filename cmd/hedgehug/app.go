@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 
@@ -17,6 +18,16 @@ type app struct {
 	ss      *ops.Session
 	jsonOut bool
 	noColor bool
+	in      *bufio.Reader // the one buffered reader over stdin; see readLine
+}
+
+// readLine reads a line of stdin. Every prompt reads through the one reader,
+// so that a buffered second answer is not lost to a reader of its own.
+func (a *app) readLine() (string, error) {
+	if a.in == nil {
+		a.in = bufio.NewReader(a.stdin)
+	}
+	return a.in.ReadString('\n')
 }
 
 // usageError is a mistake in the flags or arguments; it exits 2.
@@ -52,7 +63,7 @@ func (a *app) rootCmd() *cobra.Command {
 	pf.StringVar(&a.ss.StoreName, "store", "", "the store to work on, by name")
 	pf.BoolVar(&a.jsonOut, "json", false, "print JSON")
 	pf.BoolVar(&a.noColor, "no-color", false, "do not color the output")
-	root.AddCommand(a.storeCmd(), a.addCmd(), a.lsCmd(), a.showCmd(), a.setCmd(), a.statusCmd(), a.doneCmd(), a.depCmd(), a.rmCmd(), a.restoreCmd(), a.undoCmd(), a.purgeCmd(), a.mvCmd(), a.editCmd(), a.commentCmd(), a.logCmd(), a.schemaCmd(), a.doctorCmd(), a.workspaceCmd(), a.viewCmd(), a.syncCmd(), a.inboxCmd(), a.watchCmd(), a.unwatchCmd(), a.mergeDriverCmd())
+	root.AddCommand(a.storeCmd(), a.addCmd(), a.lsCmd(), a.showCmd(), a.setCmd(), a.statusCmd(), a.doneCmd(), a.depCmd(), a.rmCmd(), a.restoreCmd(), a.undoCmd(), a.purgeCmd(), a.mvCmd(), a.editCmd(), a.commentCmd(), a.logCmd(), a.schemaCmd(), a.doctorCmd(), a.workspaceCmd(), a.viewCmd(), a.syncCmd(), a.inboxCmd(), a.watchCmd(), a.unwatchCmd(), a.mergeDriverCmd(), a.authCmd())
 	return root
 }
 

@@ -80,3 +80,25 @@ func TestLockReleasedOnKill(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestWithFileLock(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "sub", "auth.lock")
+	inside := make(chan struct{})
+	release := make(chan struct{})
+	go func() {
+		_ = WithFileLock(p, time.Second, func() error {
+			close(inside)
+			<-release
+			return nil
+		})
+	}()
+	<-inside
+	if err := WithFileLock(p, 100*time.Millisecond, func() error { return nil }); !errors.Is(err, ErrLocked) {
+		t.Errorf("second lock = %v, want ErrLocked", err)
+	}
+	close(release)
+	want := errors.New("from fn")
+	if err := WithFileLock(p, time.Second, func() error { return want }); !errors.Is(err, want) {
+		t.Errorf("err = %v, want fn's", err)
+	}
+}

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"strings"
@@ -111,7 +110,7 @@ func (a *app) confirm(ix *index.Index, targets []*index.Entry) error {
 	if _, err := fmt.Fprint(a.stderr, b.String()); err != nil {
 		return err
 	}
-	line, err := bufio.NewReader(a.stdin).ReadString('\n')
+	line, err := a.readLine()
 	if err != nil && line == "" {
 		return errors.New("purge canceled")
 	}

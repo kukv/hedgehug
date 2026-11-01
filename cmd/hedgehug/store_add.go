@@ -9,7 +9,7 @@ import (
 
 func (a *app) storeAddCmd() *cobra.Command {
 	var remotes []string
-	var path string
+	var path, account string
 	cmd := &cobra.Command{
 		Use:   "add <name> --remote <url>...",
 		Short: "Add a store that others made, by cloning it",
@@ -18,16 +18,17 @@ func (a *app) storeAddCmd() *cobra.Command {
 			if len(remotes) == 0 {
 				return usageErrorf("--remote is required: the remote to clone the store from")
 			}
-			return a.storeAdd(args[0], remotes, path)
+			return a.storeAdd(args[0], remotes, path, account)
 		},
 	}
 	cmd.Flags().StringArrayVar(&remotes, "remote", nil, "a remote of the store; the first is cloned, the others are mirrors")
 	cmd.Flags().StringVar(&path, "path", "", "where to clone the store (default: under the data directory, as store init does)")
+	cmd.Flags().StringVar(&account, "account", "", "the account that reaches the store (default: the only account)")
 	return cmd
 }
 
-func (a *app) storeAdd(name string, remotes []string, path string) error {
-	r, err := a.ss.StoreAdd(name, remotes, path)
+func (a *app) storeAdd(name string, remotes []string, path, account string) error {
+	r, err := a.ss.StoreAdd(name, remotes, path, account)
 	if err != nil {
 		return err
 	}

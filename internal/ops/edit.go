@@ -30,7 +30,7 @@ type EditSession struct {
 
 // BeginEdit resolves arg to a live task and reads its file.
 func (ss *Session) BeginEdit(arg string) (*EditSession, error) {
-	s, ix, err := ss.Open()
+	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return nil, err
 	}

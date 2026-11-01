@@ -104,6 +104,9 @@ func (ss *Session) ViewSave(name string, ch ViewChange) (ViewResult, error) {
 	if err != nil {
 		return ViewResult{}, err
 	}
+	if err := ss.checkWritable(s); err != nil {
+		return ViewResult{}, err
+	}
 	var v *view.View
 	hash, err := ss.UpdateCommit(s, viewOp("save "+name), func(tx *store.Tx) error {
 		es, err := view.List(s.Dir())
@@ -232,6 +235,9 @@ func (ss *Session) ViewRemove(name string) (ViewResult, error) {
 	if err != nil {
 		return ViewResult{}, err
 	}
+	if err := ss.checkWritable(s); err != nil {
+		return ViewResult{}, err
+	}
 	var v *view.View
 	hash, err := ss.UpdateCommit(s, viewOp("rm "+name), func(tx *store.Tx) error {
 		e, ok, err := view.Find(s.Dir(), name)
@@ -262,6 +268,9 @@ func (ss *Session) ViewRename(oldName, newName string) (ViewResult, error) {
 	}
 	s, err := ss.OpenStore()
 	if err != nil {
+		return ViewResult{}, err
+	}
+	if err := ss.checkWritable(s); err != nil {
 		return ViewResult{}, err
 	}
 	v := view.New(newName)

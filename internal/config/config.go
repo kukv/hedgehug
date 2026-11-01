@@ -13,6 +13,7 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 // ErrNoStores means config.yaml lists no store.
@@ -32,6 +33,34 @@ type Account struct {
 	Name  string
 	Host  string
 	Login string
+	Token TokenSource
+}
+
+// TokenSource is where the token of an account comes from: gh, an
+// environment variable, the keychain, or the device flow. Kind is empty for
+// an account that uses no token.
+type TokenSource struct {
+	Kind string // "", "gh", "env", "keychain" or "device"
+	Env  string // the variable, for env
+}
+
+// String is the value of token: in config.yaml.
+func (t TokenSource) String() string {
+	if t.Kind == "env" {
+		return "env:" + t.Env
+	}
+	return t.Kind
+}
+
+func parseTokenSource(s string) (TokenSource, bool) {
+	switch s {
+	case "gh", "keychain", "device":
+		return TokenSource{Kind: s}, true
+	}
+	if v, ok := strings.CutPrefix(s, "env:"); ok && v != "" {
+		return TokenSource{Kind: "env", Env: v}, true
+	}
+	return TokenSource{}, false
 }
 
 // ID is host/login, which names the account in Hedgehug-Author trailers.
@@ -49,12 +78,17 @@ const (
 	defaultPushInterval = 30 * time.Second
 )
 
-// Config is config.yaml. Only stores, accounts and sync are read; the rest
-// of the file, comments included, is kept as it was by Save.
+// Config is config.yaml. Only stores, accounts, hosts, default_store,
+// url_rewrites, repo_accounts and sync are read; the rest of the file,
+// comments included, is kept as it was by Save.
 type Config struct {
-	Stores   []StoreEntry
-	Accounts []Account
-	Sync     SyncConfig
+	Stores       []StoreEntry
+	Accounts     []Account
+	Hosts        []Host
+	DefaultStore string
+	URLRewrites  []URLRewrite
+	RepoAccounts []RepoAccount
+	Sync         SyncConfig
 
 	file string
 	home string
@@ -64,6 +98,9 @@ type Config struct {
 	// the key ("stores:\n- name: a"), and false for the indented style.
 	flush bool
 }
+
+// File is the path of config.yaml.
+func (c *Config) File() string { return c.file }
 
 // Load reads config.yaml. A missing file is a config with no stores.
 func Load(p Paths) (*Config, error) {
@@ -98,60 +135,88 @@ func Load(p Paths) (*Config, error) {
 	if err := c.loadAccounts(valueOf(root, "accounts")); err != nil {
 		return nil, err
 	}
+	if err := c.loadHosts(valueOf(root, "hosts")); err != nil {
+		return nil, err
+	}
+	if err := c.loadRewrites(valueOf(root, "url_rewrites")); err != nil {
+		return nil, err
+	}
 	if err := c.loadSync(valueOf(root, "sync")); err != nil {
 		return nil, err
 	}
-	seq := valueOf(root, "stores")
+	if err := c.loadStores(valueOf(root, "stores")); err != nil {
+		return nil, err
+	}
+	if err := c.loadRepoAccounts(valueOf(root, "repo_accounts")); err != nil {
+		return nil, err
+	}
+	if d := valueOf(root, "default_store"); d != nil {
+		v, ok := text(d)
+		if !ok {
+			return nil, c.errAt(d, "default_store must be a store name")
+		}
+		if v != "" {
+			if !slices.ContainsFunc(c.Stores, func(s StoreEntry) bool { return s.Name == v }) {
+				return nil, c.errAt(d, fmt.Sprintf("default_store: no store is named %q", v))
+			}
+			c.DefaultStore = v
+		}
+	}
+	return c, nil
+}
+
+// loadStores reads the stores list.
+func (c *Config) loadStores(seq *yaml.Node) error {
 	if seq == nil || seq.Tag == "!!null" {
-		return c, nil
+		return nil
 	}
 	if seq.Kind != yaml.SequenceNode {
-		return nil, c.errAt(seq, "stores: want a list")
+		return c.errAt(seq, "stores: want a list")
 	}
 	seen := map[string]bool{}
 	for _, it := range seq.Content {
 		if it.Kind != yaml.MappingNode {
-			return nil, c.errAt(it, "stores: want a mapping with name and path")
+			return c.errAt(it, "stores: want a mapping with name and path")
 		}
-		name, path := valueOf(it, "name"), valueOf(it, "path")
+		name, storePath := valueOf(it, "name"), valueOf(it, "path")
 		if name == nil || name.Value == "" {
-			return nil, c.errAt(it, "stores: name is missing")
+			return c.errAt(it, "stores: name is missing")
 		}
-		if path == nil || path.Value == "" {
-			return nil, c.errAt(it, "stores: path is missing")
+		if storePath == nil || storePath.Value == "" {
+			return c.errAt(it, "stores: path is missing")
 		}
 		if seen[name.Value] {
-			return nil, c.errAt(it, fmt.Sprintf("stores: %q is listed twice", name.Value))
+			return c.errAt(it, fmt.Sprintf("stores: %q is listed twice", name.Value))
 		}
 		seen[name.Value] = true
-		e := StoreEntry{Name: name.Value, Path: c.expand(path.Value)}
+		e := StoreEntry{Name: name.Value, Path: c.expand(storePath.Value)}
 		if rs := valueOf(it, "remotes"); rs != nil && rs.Tag != "!!null" {
 			if rs.Kind != yaml.SequenceNode {
-				return nil, c.errAt(rs, "stores: remotes: want a list")
+				return c.errAt(rs, "stores: remotes: want a list")
 			}
 			for _, r := range rs.Content {
 				if r.Kind != yaml.ScalarNode || r.Value == "" {
-					return nil, c.errAt(r, "stores: remotes: want a list of strings")
+					return c.errAt(r, "stores: remotes: want a list of strings")
 				}
 				e.Remotes = append(e.Remotes, r.Value)
 			}
 		}
 		if a := valueOf(it, "account"); a != nil && a.Tag != "!!null" {
 			if a.Kind != yaml.ScalarNode || a.Value == "" {
-				return nil, c.errAt(a, "stores: account: want the name of an account")
+				return c.errAt(a, "stores: account: want the name of an account")
 			}
 			if !c.hasAccount(a.Value) {
-				return nil, c.errAt(a, fmt.Sprintf("stores: account %q is not in accounts", a.Value))
+				return c.errAt(a, fmt.Sprintf("stores: account %q is not in accounts", a.Value))
 			}
 			e.Account = a.Value
 		}
 		c.Stores = append(c.Stores, e)
 	}
-	return c, nil
+	return nil
 }
 
-// loadAccounts reads the accounts list. Keys other than name, host and login
-// (a token, say) are ignored and stay in the file.
+// loadAccounts reads the accounts list. Keys other than name, host, login
+// and token are ignored and stay in the file.
 func (c *Config) loadAccounts(seq *yaml.Node) error {
 	if seq == nil || seq.Tag == "!!null" {
 		return nil
@@ -168,14 +233,30 @@ func (c *Config) loadAccounts(seq *yaml.Node) error {
 			key string
 			dst *string
 		}{{"name", &a.Name}, {"host", &a.Host}, {"login", &a.Login}} {
-			v := valueOf(it, f.key)
-			if v == nil || v.Value == "" {
+			v, _ := text(valueOf(it, f.key))
+			if v == "" {
 				return c.errAt(it, fmt.Sprintf("accounts: %s is missing", f.key))
 			}
-			*f.dst = v.Value
+			*f.dst = v
+		}
+		if n := valueOf(it, "token"); n != nil {
+			v, ok := text(n)
+			if !ok {
+				return c.errAt(n, "accounts: token must be gh, env:<VAR>, keychain or device")
+			}
+			if v != "" {
+				ts, ok := parseTokenSource(v)
+				if !ok {
+					return c.errAt(n, fmt.Sprintf("accounts: token %q: want gh, env:<VAR>, keychain or device", v))
+				}
+				a.Token = ts
+			}
 		}
 		if c.hasAccount(a.Name) {
 			return c.errAt(it, fmt.Sprintf("accounts: %q is listed twice", a.Name))
+		}
+		if slices.ContainsFunc(c.Accounts, func(x Account) bool { return SameAccount(x.ID(), a.ID()) }) {
+			return c.errAt(it, fmt.Sprintf("accounts: %q is listed twice", a.ID()))
 		}
 		c.Accounts = append(c.Accounts, a)
 	}
@@ -271,13 +352,7 @@ func (c *Config) AddStore(name, path string, remotes []string) error {
 			return fmt.Errorf("a store named %q is already set up", name)
 		}
 	}
-	if c.doc == nil {
-		c.doc = &yaml.Node{Kind: yaml.DocumentNode}
-	}
-	if len(c.doc.Content) == 0 {
-		c.doc.Content = []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}
-	}
-	root := c.doc.Content[0]
+	root := c.root()
 	seq := valueOf(root, "stores")
 	switch {
 	case seq == nil:
@@ -300,6 +375,115 @@ func (c *Config) AddStore(name, path string, remotes []string) error {
 	}
 	seq.Content = append(seq.Content, item)
 	c.Stores = append(c.Stores, StoreEntry{Name: name, Path: path, Remotes: slices.Clone(remotes)})
+	if c.DefaultStore == "" {
+		return c.SetDefaultStore(name)
+	}
+	return nil
+}
+
+// Account returns the account named name.
+func (c *Config) Account(name string) (Account, bool) {
+	for _, a := range c.Accounts {
+		if a.Name == name {
+			return a, true
+		}
+	}
+	return Account{}, false
+}
+
+// root returns the top mapping of the document, making one when the file
+// is empty.
+func (c *Config) root() *yaml.Node {
+	if c.doc == nil {
+		c.doc = &yaml.Node{Kind: yaml.DocumentNode}
+	}
+	if len(c.doc.Content) == 0 {
+		c.doc.Content = []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}
+	}
+	return c.doc.Content[0]
+}
+
+// setKey sets key of the mapping m to v, adding it at the end when missing.
+func setKey(m *yaml.Node, key string, v *yaml.Node) {
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == key {
+			m.Content[i+1] = v
+			return
+		}
+	}
+	m.Content = append(m.Content, scalar(key), v)
+}
+
+// deleteKey removes key from the mapping m.
+func deleteKey(m *yaml.Node, key string) {
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == key {
+			m.Content = slices.Delete(m.Content, i, i+2)
+			return
+		}
+	}
+}
+
+// AddAccount adds an account to the end of accounts. Save writes it.
+func (c *Config) AddAccount(a Account) error {
+	if c.hasAccount(a.Name) {
+		return fmt.Errorf("an account named %q is already set up", a.Name)
+	}
+	root := c.root()
+	seq := valueOf(root, "accounts")
+	switch {
+	case seq == nil:
+		seq = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+		root.Content = append(root.Content, scalar("accounts"), seq)
+	case seq.Tag == "!!null":
+		*seq = yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+	}
+	item := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map", Content: []*yaml.Node{
+		scalar("name"), scalar(a.Name), scalar("host"), scalar(a.Host), scalar("login"), scalar(a.Login),
+	}}
+	if a.Token.Kind != "" {
+		item.Content = append(item.Content, scalar("token"), scalar(a.Token.String()))
+	}
+	seq.Content = append(seq.Content, item)
+	c.Accounts = append(c.Accounts, a)
+	return nil
+}
+
+// SetAccountToken changes where the token of the account name comes from;
+// an empty Kind removes token. Save writes it.
+func (c *Config) SetAccountToken(name string, t TokenSource) error {
+	i := slices.IndexFunc(c.Accounts, func(a Account) bool { return a.Name == name })
+	if i < 0 {
+		return fmt.Errorf("no account is named %q", name)
+	}
+	for _, it := range valueOf(c.root(), "accounts").Content {
+		if n := valueOf(it, "name"); n != nil && n.Value == name {
+			if t.Kind == "" {
+				deleteKey(it, "token")
+			} else {
+				setKey(it, "token", scalar(t.String()))
+			}
+		}
+	}
+	c.Accounts[i].Token = t
+	return nil
+}
+
+// SetDefaultStore makes name the default store; "" removes the default.
+// Save writes it.
+func (c *Config) SetDefaultStore(name string) error {
+	if name == "" {
+		if c.doc != nil && len(c.doc.Content) > 0 {
+			deleteKey(c.doc.Content[0], "default_store")
+		}
+		c.DefaultStore = ""
+		return nil
+	}
+	if !slices.ContainsFunc(c.Stores, func(s StoreEntry) bool { return s.Name == name }) {
+		return fmt.Errorf("no store is named %q", name)
+	}
+	setKey(c.root(), "default_store", scalar(name))
+	c.DefaultStore = name
 	return nil
 }
 
@@ -342,7 +526,35 @@ func (c *Config) RemoveStore(name string) error {
 		}
 	}
 	c.Stores = slices.Delete(c.Stores, i, i+1)
+	if c.DefaultStore == name {
+		return c.SetDefaultStore("")
+	}
 	return nil
+}
+
+// updateWait is how long Update waits for config.lock.
+const updateWait = 30 * time.Second
+
+// Update changes config.yaml under config.lock: it reads the file again,
+// applies fn to what it read, and saves that. Nothing is written when fn
+// fails. On success c holds what was written, so a CLI and a server that
+// write at once keep each other's changes.
+func (c *Config) Update(fn func(*Config) error) error {
+	lock := filepath.Join(filepath.Dir(c.file), "config.lock")
+	return store.WithFileLock(lock, updateWait, func() error {
+		fresh, err := Load(Paths{Home: c.home, ConfigFile: c.file})
+		if err != nil {
+			return err
+		}
+		if err := fn(fresh); err != nil {
+			return err
+		}
+		if err := fresh.Save(); err != nil {
+			return err
+		}
+		*c = *fresh
+		return nil
+	})
 }
 
 // Save writes config.yaml through a temporary file and a rename.

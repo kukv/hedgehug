@@ -3,12 +3,14 @@ package ops
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	gosync "sync"
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
 
+	"github.com/kukv/hedgehug/internal/auth"
 	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
@@ -37,8 +39,13 @@ type Session struct {
 	Warn       func(msg string)                          // warnings; the CLI prints "warning: "+msg to stderr
 	AfterWrite func(s *store.Store, e config.StoreEntry) // after a commit; nil does nothing more
 	// BeforeUpdate lets a test write to the store after an operation read its
-	// index and before it writes, as another process could.
+	// index and before it writes, or write config.yaml after an operation
+	// read it and before it updates it, as another process could.
 	BeforeUpdate func()
+	Keyring      auth.Keyring // nil is the OS keychain
+	HTTPClient   *http.Client // nil is a client with a 30-second timeout
+	// Run runs a command (gh) and gives its output; nil runs the command.
+	Run func(name string, args ...string) (stdout, stderr []byte, err error)
 
 	// the writer of the store, read from config.yaml once per session; an
 	// error is not kept, so the next call reads again
@@ -46,6 +53,10 @@ type Session struct {
 	writerDone bool
 	writerAcct config.Account
 	writerOK   bool
+
+	// the tokens got, shared with the sessions ForStore makes
+	tokMu  gosync.Mutex
+	tokens *tokenCache
 }
 
 // ForStore is a session of its own on the store name, with the same outside
@@ -60,6 +71,10 @@ func (ss *Session) ForStore(name string) *Session {
 		Warn:         ss.Warn,
 		AfterWrite:   ss.AfterWrite,
 		BeforeUpdate: ss.BeforeUpdate,
+		Keyring:      ss.Keyring,
+		HTTPClient:   ss.HTTPClient,
+		Run:          ss.Run,
+		tokens:       ss.tokenCache(),
 	}
 }
 
@@ -191,6 +206,11 @@ func (ss *Session) Update(s *store.Store, op store.Op, fn func(*store.Tx) error)
 // zero hash when the operation changed nothing. The author is the store's
 // account, or the git config when the store has none.
 func (ss *Session) UpdateCommit(s *store.Store, op store.Op, fn func(*store.Tx) error) (plumbing.Hash, error) {
+	// Operations refuse a read-only store when they open it (OpenForWrite);
+	// this catches a write that did not come through there.
+	if err := ss.checkWritable(s); err != nil {
+		return plumbing.ZeroHash, err
+	}
 	acct, ok, err := ss.Writer()
 	if err != nil {
 		return plumbing.ZeroHash, err
@@ -247,7 +267,7 @@ func (ss *Session) SyncOptions(c *config.Config, e config.StoreEntry) (sync.Opti
 	if err != nil {
 		return sync.Options{}, err
 	}
-	opt := sync.Options{Remotes: e.Remotes, Author: author, Me: c.Me(), Now: ss.Now}
+	opt := sync.Options{Name: e.Name, Remotes: e.Remotes, Author: author, Me: c.Me(), Now: ss.Now, Conn: ss.Conn(c, e), GitHub: ss.githubRepoOf(c, e)}
 	if ok {
 		opt.Account = acct.ID()
 	}
@@ -363,15 +383,5 @@ func (ss *Session) RunSync(s *store.Store, opt sync.Options, reported bool) (res
 // Unpushed counts the commits of s that origin did not have as of the last
 // fetch or push. A store that never pushed has all of them.
 func Unpushed(s *store.Store) (int, error) {
-	r := s.Repo()
-	head, err := r.Head()
-	if err != nil {
-		return 0, err
-	}
-	remote, err := r.RemoteHead("origin")
-	if err != nil {
-		return 0, err
-	}
-	es, err := r.Between(head, remote)
-	return len(es), err
+	return sync.Unpushed(s.Repo())
 }
