@@ -159,6 +159,10 @@ func scopedLines(p ops.MovePlan) string {
 	var b strings.Builder
 	for _, d := range p.Scoped.Dropped {
 		what, name, _ := strings.Cut(d, " ")
+		if what == "transitions" {
+			fmt.Fprintf(&b, "scoped: dropped transitions from %q (no target in %s)\n", name, p.To)
+			continue
+		}
 		fmt.Fprintf(&b, "scoped: dropped %s %q (not in %s)\n", what, name, p.To)
 	}
 	return b.String()

@@ -36,8 +36,7 @@ func (s *Schema) Carry(sc Scoped, templateExists func(name string) bool) (Scoped
 	}
 	if sc.Workflow != nil {
 		w := Workflow{
-			Transitions: carryLists(sc.Workflow.Transitions, hasStatus, hasStatus,
-				func(name string) { drop("status", name) }, func(name string) { drop("status", name) }),
+			Transitions: carryTransitions(sc.Workflow.Transitions, hasStatus, drop),
 			Required: carryLists(sc.Workflow.Required, hasStatus, hasField,
 				func(name string) { drop("status", name) }, func(name string) { drop("prop", name) }),
 		}
@@ -102,6 +101,34 @@ func carryLists(l Lists, keepKey, keepValue func(string) bool, dropKey, dropValu
 			} else {
 				dropValue(v)
 			}
+		}
+		out = append(out, List{Key: x.Key, Values: kept})
+	}
+	return out
+}
+
+// carryTransitions is carryLists for workflow.transitions. A key whose targets
+// are all gone is dropped too, so that status follows the workflow of the
+// store; an empty list would forbid every move from it. It is told as
+// "transitions <status>".
+func carryTransitions(l Lists, has func(string) bool, drop func(what, name string)) Lists {
+	var out Lists
+	for _, x := range l {
+		if !has(x.Key) {
+			drop("status", x.Key)
+			continue
+		}
+		kept := []string{}
+		for _, v := range x.Values {
+			if has(v) {
+				kept = append(kept, v)
+			} else {
+				drop("status", v)
+			}
+		}
+		if len(kept) == 0 && len(x.Values) > 0 {
+			drop("transitions", x.Key)
+			continue
 		}
 		out = append(out, List{Key: x.Key, Values: kept})
 	}

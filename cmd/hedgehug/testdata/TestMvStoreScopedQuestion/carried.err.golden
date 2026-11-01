@@ -1,3 +1,4 @@
 The scoped schema of AA-4 Scoped project — [c]arry / [d]rop: scoped: dropped status "review" (not in bravo-long)
+scoped: dropped transitions from "backlog" (no target in bravo-long)
 The content before the move stays in the git history of alpha, and anyone who can read alpha can see it; use hedgehug purge --rewrite-history to remove it
 Move 1 tasks to bravo-long? [y/N] 

@@ -245,9 +245,12 @@ func TestMoveStoreFollowsTheGivenParentAndWorkspace(t *testing.T) {
 	}
 	in := f.in()
 	in.Workspace = "second"
-	in.Parent = "WEB-1" // the parent is in org-b's first workspace; and a task cannot hold a project
+	in.Parent = "WEB-1" // the parent is in org-b's first workspace
 	_, err = f.ts.MoveStore(in)
 	mustCode(t, err, KindInvalid, "move.invalid")
+	if !strings.Contains(err.Error(), "the parent is in workspace") {
+		t.Errorf("err = %v; want the parent to be named as in another workspace", err)
+	}
 
 	in.Parent = ""
 	if _, err := f.ts.MoveStore(in); err != nil {
@@ -281,8 +284,8 @@ func TestMoveStoreUnderAParent(t *testing.T) {
 	in = f2.in()
 	in.Parent = "API-1"
 	_, err = f2.ts.MoveStore(in)
-	if err == nil || KindOf(err) == KindUnknown {
-		t.Errorf("err = %v; want a refusal of a parent from the source", err)
+	if err == nil || KindOf(err) != KindInvalid || AsError(err).Code != "ref.cross_store" {
+		t.Errorf("err = %v; want KindInvalid ref.cross_store for a parent of the source", err)
 	}
 }
 
@@ -439,6 +442,11 @@ func TestMoveStoreScopedThatCannotBeCarried(t *testing.T) {
 
 func TestMoveStoreRerunFinishesTheSource(t *testing.T) {
 	f := newMoveFx(t)
+	f.setSchema(t, func(sc *schema.Schema) {
+		sc.Scoped = []schema.Scoped{{Where: "project:" + f.p.String(), Statuses: []string{"backlog", "todo", "in_progress", "done", "canceled"}}}
+	})
+	in := f.in()
+	in.Scoped = "carry"
 	as, _ := f.ts.ForStore("org-a").OpenStore()
 	gPath := filepath.Join(as.Dir(), filepath.FromSlash(model.TaskPath(f.g)))
 	gBytes, err := os.ReadFile(gPath)
@@ -451,8 +459,8 @@ func TestMoveStoreRerunFinishesTheSource(t *testing.T) {
 			_ = os.Remove(gPath)
 		}
 	}
-	_, err = f.ts.MoveStore(f.in())
-	mustCode(t, err, KindOf(err), "move.unfinished")
+	_, err = f.ts.MoveStore(in)
+	mustCode(t, err, KindNotFound, "move.unfinished")
 	if !strings.Contains(err.Error(), "moved into org-b; run the same command again to finish the source") {
 		t.Errorf("err = %v", err)
 	}
@@ -465,11 +473,11 @@ func TestMoveStoreRerunFinishesTheSource(t *testing.T) {
 		t.Fatalf("the source changed: %v", err)
 	}
 
-	res, err := f.ts.MoveStore(f.in())
+	res, err := f.ts.MoveStore(in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !res.Resumed || len(res.Moved) != 3 {
+	if !res.Resumed || !res.Carried || len(res.Moved) != 3 {
 		t.Errorf("res = %+v", res)
 	}
 	if f.head(t, "org-b") != hb {
@@ -654,5 +662,33 @@ func TestMoveStoreUnlinksSprintAndReleases(t *testing.T) {
 	bs, _ := f.ts.ForStore("org-b").OpenStore()
 	if c, _ := bs.Task(f.c); c.Sprint != nil {
 		t.Errorf("sprint = %v in the destination", c.Sprint)
+	}
+}
+
+func TestMoveStoreParentsComeBeforeTheirChildren(t *testing.T) {
+	ts := newTwoStoreSession(t)
+	a := ts.ForStore("org-a")
+	add := func(title, parent string) model.ULID {
+		r, err := a.Add(AddInput{Title: title, Parent: parent})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r.ULID
+	}
+	root := add("R", "")
+	g := add("G", "API-2") // older than C
+	c := add("C", "API-2")
+	if _, err := a.Move(MoveInput{Arg: "API-3", Parent: "API-4"}); err != nil {
+		t.Fatal(err)
+	}
+	if g.String() >= c.String() {
+		t.Fatalf("G %s should sort before C %s", g, c)
+	}
+	res, err := ts.MoveStore(MoveStoreInput{Arg: "API-2", To: "org-b", Yes: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Moved) != 3 || res.Moved[0].ULID != root || res.Moved[1].ULID != c || res.Moved[2].ULID != g {
+		t.Errorf("moved = %+v; want R, C, G", res.Moved)
 	}
 }

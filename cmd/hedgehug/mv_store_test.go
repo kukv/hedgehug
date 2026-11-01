@@ -8,6 +8,7 @@ import (
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
+	hhsync "github.com/kukv/hedgehug/internal/sync"
 )
 
 // newMoveStoreEnv is newTwoStoreEnv (alpha AA-1 project and AA-2 under it;
@@ -101,7 +102,10 @@ func TestMvStoreScopedQuestion(t *testing.T) {
 	te.putStoreSchema("alpha", func(sc *schema.Schema) {
 		sc.Statuses = append(sc.Statuses, schema.Status{Name: "review", Category: schema.CategoryDoing})
 		u, _ := model.ParseULID(p.ULID)
-		sc.Scoped = []schema.Scoped{{Where: "project:" + u.String(), Statuses: []string{"backlog", "todo", "review", "in_progress", "done", "canceled"}}}
+		sc.Scoped = []schema.Scoped{{
+			Where: "project:" + u.String(), Statuses: []string{"backlog", "todo", "review", "in_progress", "done", "canceled"},
+			Workflow: &schema.Workflow{Transitions: schema.Lists{{Key: "backlog", Values: []string{"review"}}}},
+		}}
 	})
 	// off a terminal the choice is a usage error
 	te.goldenRun("no-scoped", 2, "mv", p.ID, "--store", "bravo-long", "--yes")
@@ -131,4 +135,27 @@ func TestMvStoreAsksTheWorkspace(t *testing.T) {
 	te.terminal = true
 	te.stdin = "2\ny\n"
 	te.goldenRun("asked", 0, "mv", "AA-1", "--store", "bravo-long")
+}
+
+func TestMvStoreTellsWhoCannotSeeItAnymore(t *testing.T) {
+	te := newMoveStoreEnv(t)
+	for name, ids := range map[string][]string{
+		"alpha":      {"github.com/alice", "github.com/bob", "github.com/carol"},
+		"bravo-long": {"github.com/alice"},
+	} {
+		s, err := store.Open(te.storeDir(name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		cs := []hhsync.Collaborator{}
+		for _, id := range ids {
+			cs = append(cs, hhsync.Collaborator{ID: id, Permission: "write"})
+		}
+		if err := hhsync.WriteMembers(s, hhsync.Members{Collaborators: cs}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	te.terminal = true
+	te.stdin = "y\n"
+	te.goldenRun("hidden", 0, "mv", "AA-2", "--store", "bravo-long")
 }

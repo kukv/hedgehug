@@ -162,7 +162,7 @@ func (ss *Session) MoveStore(in MoveStoreInput) (MoveStoreResult, error) {
 		}
 	}
 
-	res := MoveStoreResult{Plan: w.plan, Carried: len(w.scopedIn) > 0, Resumed: w.resumed}
+	res := MoveStoreResult{Plan: w.plan, Carried: len(w.scopedIn) > 0 || w.carriedBefore, Resumed: w.resumed}
 	for _, t := range w.tasks {
 		nt, err := j.dst.Task(t.ULID)
 		if err != nil {
@@ -211,6 +211,9 @@ type moveWork struct {
 	scopedIn  []schema.Scoped // carried to the destination
 	scopedOut []string        // the wheres to take off the source
 	resumed   bool            // the destination has the tasks already (D12)
+	// carriedBefore: on a rerun, the destination holds a scoped entry of the
+	// projects, so the first run carried (its Dropped list is not known).
+	carriedBefore bool
 }
 
 // moveSource is the session of the store the task in.Arg is in, and arg as
@@ -275,7 +278,9 @@ func (ss *Session) openMove(in MoveStoreInput) (*moveJob, error) {
 	return j, nil
 }
 
-// load works the move out from the indexes as they are now.
+// load works the move out from the indexes as they are now. MoveStore runs it
+// twice, before and under the locks: the first run fails early (choice,
+// confirmation, schema) without taking a lock; the second is the one written.
 func (j *moveJob) load() (*moveWork, error) {
 	w := &moveWork{}
 	root, err := j.from.Resolve(j.srcIx, j.arg)
@@ -285,7 +290,9 @@ func (j *moveJob) load() (*moveWork, error) {
 	if err := NotDeleted(j.srcIx, root); err != nil {
 		return nil, err
 	}
-	// Step 1: the task and everything under it, deleted tasks too.
+	// Step 1: the task and everything under it, deleted tasks too. Descendants
+	// walks depth first from the root, so every parent comes before its
+	// children whatever their ULIDs are (MoveIn needs that).
 	entries := append([]*index.Entry{root}, Descendants(j.srcIx, root.ULID, every)...)
 	inM := make(map[model.ULID]bool, len(entries))
 	for _, x := range entries {
@@ -301,8 +308,14 @@ func (j *moveJob) load() (*moveWork, error) {
 	}
 	var rest []*model.Task
 	for t, err := range j.src.Tasks() {
+		var fe *store.FileError
+		if errors.As(err, &fe) {
+			// A file that does not decode holds no reference we could cut.
+			j.from.warn(fmt.Sprintf("%s does not decode; references in it are not cut: %v", fe.Path, fe.Err))
+			continue
+		}
 		if err != nil {
-			continue // a file that does not decode holds no reference we could cut
+			return nil, err
 		}
 		if !inM[t.ULID] {
 			rest = append(rest, t)
@@ -342,6 +355,12 @@ func (j *moveJob) load() (*moveWork, error) {
 	}
 	if resumed {
 		w.resumed = true
+		// What the first run carried is what the destination has now.
+		for _, sp := range j.dstIx.Schema().Scoped {
+			if slices.Contains(w.scopedOut, sp.Where) {
+				w.carriedBefore = true
+			}
+		}
 		return w, nil
 	}
 
