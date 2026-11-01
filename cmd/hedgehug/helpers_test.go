@@ -188,6 +188,9 @@ func (te *testEnv) withOtherWriter(account string, fn func()) {
 		case strings.HasPrefix(l, "accounts:"):
 			skipping = true
 		case skipping && (strings.HasPrefix(l, " ") || strings.HasPrefix(l, "-")):
+		case strings.HasPrefix(strings.TrimSpace(l), "account: "):
+			// stores[].account names the account that is being replaced; the
+			// other writer's stores have none.
 		default:
 			skipping = false
 			rest = append(rest, l)
