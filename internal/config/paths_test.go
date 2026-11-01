@@ -69,6 +69,9 @@ func TestResolve(t *testing.T) {
 			if p.ConfigFile != tc.wantConfig {
 				t.Errorf("ConfigFile = %q, want %q", p.ConfigFile, tc.wantConfig)
 			}
+			if p.DataDir != filepath.Dir(tc.wantStores) {
+				t.Errorf("DataDir = %q, want %q", p.DataDir, filepath.Dir(tc.wantStores))
+			}
 			if p.StoresDir != tc.wantStores {
 				t.Errorf("StoresDir = %q, want %q", p.StoresDir, tc.wantStores)
 			}

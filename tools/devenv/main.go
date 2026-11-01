@@ -22,6 +22,7 @@ import (
 	"github.com/kukv/hedgehug/internal/fakegh"
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 	"github.com/kukv/hedgehug/internal/sync"
 )
@@ -37,7 +38,17 @@ var bareRemotes = []string{
 	filepath.Join("remotes", "kukv", "hh-tasks.git"),
 	filepath.Join("remotes", "org-a", "hh-shared.git"),
 	filepath.Join("remotes", "org-b", "hh-ops.git"),
+	webRemote,
 }
+
+// webRemote is the bare repository of the code repository org-a/web: not a
+// store, it holds a README.
+var webRemote = filepath.Join("remotes", "org-a", "web.git")
+
+const (
+	webURL    = "https://github.com/org-a/web.git"
+	webRepoID = "github.com/org-a/web"
+)
 
 var users = []string{"alice", "bob"}
 
@@ -210,6 +221,9 @@ func initEnv(dir, fakeghURL string, stdout io.Writer) error {
 			return err
 		}
 	}
+	if err := seedWeb(dir); err != nil {
+		return fmt.Errorf("web: %w", err)
+	}
 	seed := filepath.Join(dir, "fakegh.json")
 	if err := writeSeed(seed); err != nil {
 		return err
@@ -223,8 +237,9 @@ func initEnv(dir, fakeghURL string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(stdout, "Created %s with users %s.\nStart the fake GitHub with: go run ./cmd/fakegh serve --addr %s --seed %s\nUse one with: eval \"$(go run ./tools/devenv env %s --dir %s)\"\n",
-		dir, strings.Join(users, " and "), fu.Host, shellQuote(seed), users[0], shellQuote(dir))
+	_, err = fmt.Fprintf(stdout, "Created %s with users %s.\nStart the fake GitHub with: go run ./cmd/fakegh serve --addr %s --seed %s\nUse one with: eval \"$(go run ./tools/devenv env %s --dir %s)\"\nThen add a task from the code repository with: cd %s && hedgehug add \"...\"\n",
+		dir, strings.Join(users, " and "), fu.Host, shellQuote(seed), users[0], shellQuote(dir),
+		shellQuote(filepath.Join(dir, "users", "alice", "src", "web")))
 	return err
 }
 
@@ -307,7 +322,80 @@ func initUser(dir, u, fakeghURL string) error {
 			return fmt.Errorf("store %s: %w", ds.name, err)
 		}
 	}
+	if u == "alice" {
+		return addWebProject(home, p, getenv)
+	}
 	return nil
+}
+
+// seedWeb puts one commit, a README, in the bare repository of web. It works
+// in a directory under dir that it removes, and pushes to the bare repository
+// by its path, so that no rewrite is needed before config.yaml exists.
+func seedWeb(dir string) error {
+	work, err := os.MkdirTemp(dir, ".web-seed-")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.RemoveAll(work) }() //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+	r, err := gitrepo.Init(work)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(work, "README.md"), []byte("# web\n"), 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+		return err
+	}
+	if _, err := r.Commit(gitrepo.Commit{
+		Paths:   []string{"README.md"},
+		Subject: "Add README",
+		Author:  gitrepo.Signature{Name: "alice", Email: "alice@example.com"},
+		When:    time.Now(),
+	}); err != nil {
+		return err
+	}
+	if err := r.SetRemotes([]string{filepath.Join(dir, webRemote)}); err != nil {
+		return err
+	}
+	return r.Push("origin")
+}
+
+// addWebProject adds the project "Web release" to alice's org-a store, with
+// web in its repos, pushes it so that bob's clone of org-a has it, and clones
+// web into src/web. The clone keeps origin at the URL on GitHub.
+func addWebProject(home string, p config.Paths, getenv func(string) string) error {
+	var warnings []string
+	ss := &ops.Session{Getenv: getenv, Now: time.Now, StoreName: "org-a", Warn: func(m string) { warnings = append(warnings, m) }}
+	if _, err := ss.Add(ops.AddInput{Title: "Web release", Kind: "project", Repos: []string{webRepoID}}); err != nil {
+		return fmt.Errorf("add project: %w", err)
+	}
+	if len(warnings) > 0 {
+		return fmt.Errorf("add project: warning: %s", strings.Join(warnings, "; "))
+	}
+	c, err := config.Load(p)
+	if err != nil {
+		return err
+	}
+	e, err := c.Select("org-a")
+	if err != nil {
+		return err
+	}
+	acct, ok := c.Writer(e)
+	if !ok {
+		return errors.New("org-a has no account that writes it")
+	}
+	author, err := config.CommitAuthor(acct, true, getenv)
+	if err != nil {
+		return err
+	}
+	s, err := store.Open(e.Path)
+	if err != nil {
+		return err
+	}
+	conn := gitrepo.Conn{Rewrite: c.Rewrite}
+	if _, err := sync.Run(s, sync.Options{Remotes: e.Remotes, Author: author, Account: acct.ID(), Me: c.Me(), Conn: conn}); err != nil {
+		return err
+	}
+	_, err = gitrepo.CloneWith(webURL, filepath.Join(home, "src", "web"), conn)
+	return err
 }
 
 // addDevStore makes (and pushes) or clones the store ds as the user of p, and

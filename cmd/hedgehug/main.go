@@ -34,9 +34,10 @@ type env struct {
 	getenv         func(string) string
 	isTerminal     func(any) bool // reports whether a stream is a terminal
 	now            func() time.Time
-	beforeUpdate   func()       // for tests: runs before each write; nil in the binary
-	keyring        auth.Keyring // nil is the OS keychain
-	httpClient     *http.Client // nil is a client with a 30-second timeout
+	getwd          func() (string, error) // the current directory; nil means none, which skips the stages of hedgehug add that read it
+	beforeUpdate   func()                 // for tests: runs before each write; nil in the binary
+	keyring        auth.Keyring           // nil is the OS keychain
+	httpClient     *http.Client           // nil is a client with a 30-second timeout
 	// run runs a command (gh) and gives its output; nil runs the command.
 	run func(name string, args ...string) (stdout, stderr []byte, err error)
 	// openURL opens a URL in the browser; nil means no browser can be opened.
@@ -61,6 +62,7 @@ func main() {
 		getenv:     os.Getenv,
 		isTerminal: isTerminal,
 		now:        time.Now,
+		getwd:      os.Getwd,
 		openURL:    openURL,
 	}))
 }
@@ -105,7 +107,7 @@ func run(args []string, e *env) int {
 	}
 	writeErr(e.stderr, err)
 	var ue usageError
-	if errors.As(err, &ue) || ops.KindOf(err) == ops.KindUsage || strings.HasPrefix(err.Error(), "unknown command") {
+	if errors.As(err, &ue) || ops.KindOf(err) == ops.KindUsage || ops.KindOf(err) == ops.KindAmbiguous || strings.HasPrefix(err.Error(), "unknown command") {
 		return 2
 	}
 	return 1

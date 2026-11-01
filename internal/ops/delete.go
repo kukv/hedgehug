@@ -70,6 +70,13 @@ func every(*index.Entry) bool { return true }
 // Remove deletes the task arg names and the tasks under it; they can be
 // restored.
 func (ss *Session) Remove(arg string) (AffectedResult, error) {
+	ts, arg, err := ss.forTask(arg)
+	if err != nil {
+		return AffectedResult{}, err
+	}
+	if ts != ss {
+		return ts.Remove(arg)
+	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return AffectedResult{}, err
@@ -120,6 +127,13 @@ func (ss *Session) Remove(arg string) (AffectedResult, error) {
 // Restore restores the deleted task arg names and what the same Remove
 // deleted under it.
 func (ss *Session) Restore(arg string) (AffectedResult, error) {
+	ts, arg, err := ss.forTask(arg)
+	if err != nil {
+		return AffectedResult{}, err
+	}
+	if ts != ss {
+		return ts.Restore(arg)
+	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return AffectedResult{}, err
@@ -249,7 +263,7 @@ func current(ix *index.Index, e *index.Entry) (*index.Entry, error) {
 	}
 	cur, ok := ix.Task(e.ULID)
 	if !ok {
-		return nil, newErr(KindNotFound, "task.gone", fmt.Errorf("%s is no longer in the store", TaskLabel(e)), "id", TaskFileName(e))
+		return nil, newErr(KindNotFound, "task.gone", fmt.Errorf("%s is no longer in the store", TaskLabel(ix, e)), "id", TaskFileName(e))
 	}
 	return cur, nil
 }
@@ -376,6 +390,13 @@ type RestoreAtResult struct {
 // be given twice, and moving to another workspace is the job of Move with a
 // workspace, which moves the tasks under it too.
 func (ss *Session) RestoreAt(arg, at string) (RestoreAtResult, error) {
+	ts, arg, err := ss.forTask(arg)
+	if err != nil {
+		return RestoreAtResult{}, err
+	}
+	if ts != ss {
+		return ts.RestoreAt(arg, at)
+	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return RestoreAtResult{}, err
@@ -397,7 +418,7 @@ func (ss *Session) RestoreAt(arg, at string) (RestoreAtResult, error) {
 		}
 		data, err := s.Repo().ReadAt(commit, model.TaskPath(e.ULID))
 		if errors.Is(err, fs.ErrNotExist) {
-			return newErr(KindNotFound, "restore_at.not_found", fmt.Errorf("%s did not exist at %s", cmp.Or(e.ID, e.ULID.String()), at), "at", at)
+			return newErr(KindNotFound, "restore_at.not_found", fmt.Errorf("%s did not exist at %s", cmp.Or(ix.DisplayID(e), e.ULID.String()), at), "at", at)
 		}
 		if err != nil {
 			return err
@@ -420,7 +441,7 @@ func (ss *Session) RestoreAt(arg, at string) (RestoreAtResult, error) {
 		old.ID, old.FormerIDs = cur.ID, cur.FormerIDs
 		if old.Workspace != cur.Workspace {
 			note = fmt.Sprintf("the workspace stays %s; move it with hedgehug mv %s --workspace %s",
-				workspaceName(ix, cur.Workspace), cur.ID, workspaceName(ix, old.Workspace))
+				workspaceName(ix, cur.Workspace), ix.QualifyID(cur.ID), workspaceName(ix, old.Workspace))
 			old.Workspace = cur.Workspace
 		}
 		return tx.PutTask(old)

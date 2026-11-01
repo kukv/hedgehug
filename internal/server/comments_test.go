@@ -16,6 +16,7 @@ type commentBody struct {
 
 func TestComments(t *testing.T) {
 	ts := newTestServer(t)
+	ts.withAccount() // only the author edits a comment
 	id := ts.add("one", "")
 	var out commentBody
 	ts.call("POST", "/api/tasks/"+id+"/comments", map[string]any{"body": "first"}, 201, &out)

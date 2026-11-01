@@ -91,21 +91,24 @@ func TestDoctorFindsAndRepairs(t *testing.T) {
 		t.Fatal(err)
 	}
 	ts.commitRaw(rel, strings.Replace(string(b), "id: "+idB, "id: ME-1", 1))
-	var rep struct {
-		Findings []map[string]any `json:"findings"`
-		Repaired []map[string]any `json:"repaired"`
+	var reps []doctorReport
+	ts.call("GET", "/api/doctor", nil, 200, &reps)
+	if len(reps) != 1 {
+		t.Fatalf("doctor = %+v; want one report", reps)
 	}
-	ts.call("GET", "/api/doctor", nil, 200, &rep)
+	rep := reps[0]
 	if len(rep.Findings) == 0 || len(rep.Repaired) != 0 {
 		t.Fatalf("doctor = %+v; want the clash found", rep)
 	}
-	ts.call("POST", "/api/doctor/fix", nil, 200, &rep)
+	ts.call("POST", "/api/doctor/fix", nil, 200, &reps)
+	rep = reps[0]
 	if len(rep.Repaired) != 1 || rep.Repaired[0]["kind"] != "id_collision" {
 		t.Fatalf("doctor fix = %+v; want one repair", rep)
 	}
 
 	ts.commitRaw(rel, "not a task\n")
-	ts.call("GET", "/api/doctor", nil, 200, &rep)
+	ts.call("GET", "/api/doctor", nil, 200, &reps)
+	rep = reps[0]
 	var named bool
 	for _, f := range rep.Findings {
 		w, _ := f["where"].(string)

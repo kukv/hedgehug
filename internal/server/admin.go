@@ -99,7 +99,7 @@ type storeInitOutput struct {
 	}
 }
 
-type doctorOutput struct{ Body ops.DoctorReport }
+type doctorOutput struct{ Body []ops.DoctorReport }
 
 // workspaceOut is the output of a write to a workspace. The view counts the
 // tasks from the index the operation read (refreshed after a renumbering), so
@@ -290,11 +290,13 @@ func (s *Server) doctor(store string, fix bool) (*doctorOutput, error) {
 	if err != nil {
 		return nil, problemOf(err)
 	}
-	if r.Findings == nil {
-		r.Findings = []doctor.Finding{}
-	}
-	if r.Repaired == nil {
-		r.Repaired = []ops.Fixed{}
+	for i := range r {
+		if r[i].Findings == nil {
+			r[i].Findings = []doctor.Finding{}
+		}
+		if r[i].Repaired == nil {
+			r[i].Repaired = []ops.Fixed{}
+		}
 	}
 	return &doctorOutput{Body: r}, nil
 }

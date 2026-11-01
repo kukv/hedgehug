@@ -95,12 +95,13 @@ func (s *Server) registerActivity() {
 		if in.Author == "" && in.Sync == "" {
 			limit = in.Limit
 		}
-		ix, entries, err := s.session(in.Store).Log(nil, limit)
+		r, err := s.session(in.Store).Log(nil, limit)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		kept := []gitrepo.LogEntry{}
-		for _, e := range entries {
+		kept := []ops.StoreLog{}
+		for _, l := range r.Logs {
+			e := l.Entry
 			op, _ := e.Trailer("Hedgehug-Op")
 			author, _ := e.Trailer("Hedgehug-Author")
 			isSync := slices.Contains(syncOps, op)
@@ -110,12 +111,12 @@ func (s *Server) registerActivity() {
 			case in.Author != "" && author != in.Author:
 				continue
 			}
-			kept = append(kept, e)
+			kept = append(kept, l)
 			if len(kept) == in.Limit {
 				break
 			}
 		}
-		return &activityOutput{Body: ops.LogViewsOf(ix, kept)}, nil
+		return &activityOutput{Body: ops.StoreLogViews(kept)}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -132,10 +133,7 @@ func (s *Server) registerActivity() {
 				warn(m)
 			}
 		}
-		stores, warnings, err := ss.InboxStores()
-		for _, w := range warnings {
-			ss.Warn(w)
-		}
+		stores, err := ss.InboxStores()
 		if err != nil {
 			return nil, problemOf(err)
 		}

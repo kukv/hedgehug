@@ -37,20 +37,35 @@ func (r TaskResult) View() (*TaskView, error) {
 }
 
 // AddInput is what Add makes a task from. Empty Kind and Status take the
-// schema's defaults; Parent and Workspace are names, as the user gives them.
+// schema's defaults; Parent and Workspace are names, as the user gives them,
+// read in the store the task goes to (Parent goes through ResolveRef). Store
+// is that store ("" selects as the session does; one other than the
+// session's own --store is store.conflict); Repos are the repo IDs to put on
+// the task.
 type AddInput struct {
+	Store                                  string
 	Title, Parent, Workspace, Kind, Status string
+	Repos                                  []string
 	Assigns                                []Assign
 }
 
 // Add adds a task.
 func (ss *Session) Add(in AddInput) (TaskResult, error) {
+	if in.Store != "" && in.Store != ss.StoreName {
+		if ss.StoreName != "" {
+			return TaskResult{}, newErr(KindUsage, "store.conflict",
+				fmt.Errorf("the task goes to %s, but --store is %s", in.Store, ss.StoreName), "store", ss.StoreName, "named", in.Store)
+		}
+		to := in.Store
+		in.Store = ""
+		return ss.ForStore(to).Add(in)
+	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return TaskResult{}, err
 	}
 	sc := ix.Schema()
-	t := &model.Task{ULID: model.NewULID(), Title: in.Title, Kind: in.Kind, Status: in.Status}
+	t := &model.Task{ULID: model.NewULID(), Title: in.Title, Kind: in.Kind, Status: in.Status, Repos: slices.Clone(in.Repos)}
 	if t.Kind == "" {
 		k, ok := sc.DefaultKind()
 		if !ok {
@@ -66,7 +81,7 @@ func (ss *Session) Add(in AddInput) (TaskResult, error) {
 		t.Status = st.Name
 	}
 	if in.Parent != "" {
-		p, err := ss.Resolve(ix, in.Parent)
+		p, err := ss.ResolveRef(ix, in.Parent)
 		if err != nil {
 			return TaskResult{}, err
 		}
@@ -128,6 +143,13 @@ func (ss *Session) Add(in AddInput) (TaskResult, error) {
 
 // Set applies assigns to the task arg names.
 func (ss *Session) Set(arg string, assigns []Assign) (TaskResult, error) {
+	ts, arg, err := ss.forTask(arg)
+	if err != nil {
+		return TaskResult{}, err
+	}
+	if ts != ss {
+		return ts.Set(arg, assigns)
+	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return TaskResult{}, err
@@ -162,6 +184,13 @@ func (ss *Session) Set(arg string, assigns []Assign) (TaskResult, error) {
 // SetStatus sets the status of the task arg names; an empty status means the
 // default status of the done category.
 func (ss *Session) SetStatus(arg, name string) (TaskResult, error) {
+	ts, arg, err := ss.forTask(arg)
+	if err != nil {
+		return TaskResult{}, err
+	}
+	if ts != ss {
+		return ts.SetStatus(arg, name)
+	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return TaskResult{}, err
@@ -204,6 +233,13 @@ func (ss *Session) SetStatus(arg, name string) (TaskResult, error) {
 // Dep makes the task arg names blocked by the task blockerArg names, or, with
 // add false, no longer blocked by it.
 func (ss *Session) Dep(arg, blockerArg string, add bool) (TaskResult, error) {
+	ts, arg, err := ss.forTask(arg)
+	if err != nil {
+		return TaskResult{}, err
+	}
+	if ts != ss {
+		return ts.Dep(arg, blockerArg, add)
+	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return TaskResult{}, err
@@ -215,7 +251,7 @@ func (ss *Session) Dep(arg, blockerArg string, add bool) (TaskResult, error) {
 	if err := NotDeleted(ix, e); err != nil {
 		return TaskResult{}, err
 	}
-	b, err := ss.Resolve(ix, blockerArg)
+	b, err := ss.ResolveRef(ix, blockerArg)
 	if err != nil {
 		return TaskResult{}, err
 	}
@@ -248,6 +284,13 @@ var errNoAccounts = newErr(KindConflict, "account.none", errors.New("accounts ar
 // Watch adds the writer of the store to the watchers of the task arg
 // names, or, with on false, takes it out.
 func (ss *Session) Watch(arg string, on bool) (TaskResult, error) {
+	ts, arg, err := ss.forTask(arg)
+	if err != nil {
+		return TaskResult{}, err
+	}
+	if ts != ss {
+		return ts.Watch(arg, on)
+	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
 		return TaskResult{}, err
@@ -368,7 +411,7 @@ func WatchInTx(tx *store.Tx, task model.ULID, accts ...string) error {
 // to restore.
 func NotDeleted(ix *index.Index, e *index.Entry) error {
 	if e.DeletedAt != nil {
-		return newErr(KindConflict, "task.deleted", fmt.Errorf("%s is deleted; restore %s first", RefName(ix, e.ULID), TaskFileName(e)), "id", TaskFileName(e))
+		return newErr(KindConflict, "task.deleted", fmt.Errorf("%s is deleted; restore %s first", RefName(ix, e.ULID), idOrULIDShown(ix, e)), "id", TaskFileName(e))
 	}
 	return nil
 }

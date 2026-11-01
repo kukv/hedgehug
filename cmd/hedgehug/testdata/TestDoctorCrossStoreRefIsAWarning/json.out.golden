@@ -1,0 +1,25 @@
+[
+  {
+    "store": "alpha",
+    "repaired": [],
+    "findings": [
+      {
+        "check": "task",
+        "where": "AA-2 (<ULID-1>) Alpha child",
+        "msg": "blocked_by: task <ULID-2> is not in this store",
+        "severity": "error"
+      },
+      {
+        "check": "cross_store_ref",
+        "where": "AA-2 (<ULID-1>) Alpha child",
+        "msg": "blocked_by points at bravo-long's BB-3; references stay inside a store",
+        "severity": "warning"
+      }
+    ]
+  },
+  {
+    "store": "bravo-long",
+    "repaired": [],
+    "findings": []
+  }
+]

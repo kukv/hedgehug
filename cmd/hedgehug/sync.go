@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -100,7 +99,7 @@ func (a *app) printSync(r ops.SyncReport) error {
 		}
 		what := o.Path
 		if o.ID != "" {
-			what = o.ID
+			what = o.Label
 		}
 		hint := ""
 		if o.Notice != "" {
@@ -125,15 +124,12 @@ func (a *app) printSync(r ops.SyncReport) error {
 // repairedLine is the line of one repair: a new id as "ORG-2 (ULID) → ORG-3",
 // the others as "repaired: ORG-4 (ULID) kind".
 func repairedLine(x ops.Repaired) string {
-	if x.Kind == "id_collision" {
-		var v struct{ Old, New string }
-		if err := json.Unmarshal(x.Value, &v); err == nil && v.Old != "" && v.New != "" {
-			return fmt.Sprintf("%s (%s) → %s", v.Old, x.ULID, v.New)
-		}
+	if x.Line != "" {
+		return x.Line
 	}
 	name := x.ULID
 	if x.ID != "" {
-		name = x.ID + " (" + x.ULID + ")"
+		name = x.Label + " (" + x.ULID + ")"
 	}
 	return fmt.Sprintf("repaired: %s %s", name, x.Kind)
 }

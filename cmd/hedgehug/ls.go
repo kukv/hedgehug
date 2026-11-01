@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/index"
+	"github.com/kukv/hedgehug/internal/mount"
 	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/query"
 )
@@ -59,14 +59,14 @@ func (a *app) ls(q *query.Query, ulidsOnly bool, tmpl *template.Template) error 
 	if err != nil {
 		return err
 	}
-	ix, all := res.Index, res.Entries
+	all := res.Entries
 	switch {
 	case ulidsOnly:
 		return a.printULIDs(all)
 	case tmpl != nil:
-		return a.printFormat(ix, all, tmpl, nil)
+		return a.printFormat(all, tmpl, nil)
 	case a.jsonOut || !ops.HasTerm(q, "group"):
-		return a.printTasks(ix, all)
+		return a.printTasks(all, res.Many)
 	}
 	for i, g := range res.Groups {
 		key := g.Key
@@ -78,20 +78,20 @@ func (a *app) ls(q *query.Query, ulidsOnly bool, tmpl *template.Template) error 
 				return err
 			}
 		}
-		if _, err := fmt.Fprintf(a.stdout, "== %s (%d)\n", key, len(g.Tasks)); err != nil {
+		if _, err := fmt.Fprintf(a.stdout, "== %s (%d)\n", key, len(g.Entries)); err != nil {
 			return err
 		}
-		if err := a.printTasks(ix, g.Tasks); err != nil {
+		if err := a.printTasks(g.Entries, res.Many); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (a *app) printULIDs(es []*index.Entry) error {
+func (a *app) printULIDs(es []mount.Entry) error {
 	var b strings.Builder
 	for _, e := range es {
-		b.WriteString(e.ULID.String() + "\n")
+		b.WriteString(e.Entry.ULID.String() + "\n")
 	}
 	_, err := fmt.Fprint(a.stdout, b.String())
 	return err
@@ -101,10 +101,14 @@ func (a *app) printULIDs(es []*index.Entry) error {
 // of the JSON field names. extra, when not nil, adds keys to each map. A
 // template that fails, as on a key that is not there, is a usage error; the
 // output is held until every task is done, so none of it is printed then.
-func (a *app) printFormat(ix *index.Index, es []*index.Entry, tmpl *template.Template, extra func(m map[string]any, e *index.Entry)) error {
+func (a *app) printFormat(es []mount.Entry, tmpl *template.Template, extra func(m map[string]any, e mount.Entry)) error {
 	var out bytes.Buffer
 	for _, e := range es {
-		b, err := json.Marshal(ops.TaskViewOf(ix, e))
+		ix, err := e.Store.Index()
+		if err != nil {
+			return err
+		}
+		b, err := json.Marshal(ops.TaskViewOf(ix, e.Entry))
 		if err != nil {
 			return err
 		}

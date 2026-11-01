@@ -63,26 +63,29 @@ func TestInboxEmptyAndUnknownItem(t *testing.T) {
 
 func TestInboxStoresWarnsOfMissingAccounts(t *testing.T) {
 	ts := newTestSession(t)
-	stores, warnings, err := ts.InboxStores()
+	stores, err := ts.InboxStores()
 	if err != nil || len(stores) != 1 || stores[0].Name != "me" {
 		t.Fatalf("InboxStores = %v, %v; want the store me", stores, err)
 	}
-	if !slices.Equal(warnings, []string{"accounts are not set up in config.yaml; mentions and assignments cannot be told"}) {
-		t.Errorf("warnings = %q", warnings)
+	want := []string{"accounts are not set up in config.yaml; mentions and assignments cannot be told"}
+	if !slices.Equal(ts.warns, want) {
+		t.Errorf("warnings = %q", ts.warns)
 	}
-	if _, _, err := ts.InboxList(false); err != nil || !slices.Equal(ts.warns, warnings) {
-		t.Errorf("InboxList warned %q, %v; want %q", ts.warns, err, warnings)
+	ts.warns = nil
+	if _, _, err := ts.InboxList(false); err != nil || !slices.Equal(ts.warns, want) {
+		t.Errorf("InboxList warned %q, %v; want %q", ts.warns, err, want)
 	}
 	ts.appendConfig(aliceAccount)
-	if _, warnings, err := ts.InboxStores(); err != nil || len(warnings) != 0 {
-		t.Errorf("with an account: warnings %q, %v; want none", warnings, err)
+	ts.warns = nil
+	if _, err := ts.InboxStores(); err != nil || len(ts.warns) != 0 {
+		t.Errorf("with an account: warnings %q, %v; want none", ts.warns, err)
 	}
 }
 
 func TestInboxStoresUnknownStore(t *testing.T) {
 	ts := newTestSession(t)
 	ts.StoreName = "nope"
-	if _, _, err := ts.InboxStores(); err == nil {
+	if _, err := ts.InboxStores(); err == nil {
 		t.Fatal("InboxStores of an unknown store succeeded")
 	}
 }
@@ -173,7 +176,7 @@ func TestInboxReadOfSaysWhichItems(t *testing.T) {
 	ts := newTestSession(t)
 	task := ts.addTask("t", nil)
 	u := ts.addItem(overwritten(task, "c1", "title", `"x"`))
-	stores, _, err := ts.InboxStores()
+	stores, err := ts.InboxStores()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -597,7 +600,7 @@ func TestInboxRevertLeavesTheSessionAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stores, _, err := ts.InboxStores()
+	stores, err := ts.InboxStores()
 	if err != nil || len(stores) != 2 {
 		t.Fatalf("InboxStores = %d stores, %v; want 2", len(stores), err)
 	}

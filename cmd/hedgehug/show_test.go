@@ -45,8 +45,8 @@ func TestShow(t *testing.T) {
 	}
 
 	out := te.ok("show", a.ID)
-	// The heading is the title alone; the id and the ULID are the first fields.
-	if want := "Write the spec\n  id          " + a.ID + "\n  ulid        " + a.ULID + "\n  workspace   me (ME, "; !strings.HasPrefix(out, want) {
+	// The heading is the title alone; the id, the ULID and the store are the first fields.
+	if want := "Write the spec\n  id          " + a.ID + "\n  ulid        " + a.ULID + "\n  store       me\n  workspace   me (ME, "; !strings.HasPrefix(out, want) {
 		t.Errorf("show does not start with %q:\n%s", want, out)
 	}
 	for _, want := range []string{

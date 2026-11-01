@@ -140,7 +140,7 @@ func (a *app) printAffected(ix *index.Index, e *index.Entry, targets []*index.En
 		}
 		return a.printJSON(out)
 	}
-	line := fmt.Sprintf("%s %s %s", verb, a.style().id(ops.TaskLabel(e)), e.Title)
+	line := fmt.Sprintf("%s %s %s", verb, a.style().id(ops.TaskLabel(ix, e)), e.Title)
 	switch n := len(targets) - 1; n {
 	case 0:
 	case 1:

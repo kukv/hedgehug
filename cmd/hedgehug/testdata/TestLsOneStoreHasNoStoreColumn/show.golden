@@ -1,0 +1,18 @@
+Only
+  id          ME-1
+  ulid        <ULID-1>
+  store       me
+  workspace   me (ME, <ULID-2>)
+  kind        task
+  status      todo
+  parent      -
+  assignees   -
+  watchers    -
+  labels      -
+  repos       -
+  blocked_by  -
+  created     <TIME> by -
+  updated     <TIME>
+
+History:
+<HASH>  <TIME>  Alice  hedgehug: add ME-1 (<ULID-1>) Only

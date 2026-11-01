@@ -70,14 +70,16 @@ func (s *Server) registerTaskReads() {
 			if err != nil {
 				return nil, problemOf(err)
 			}
-			roots := make([]*ops.TaskView, 0, len(r.Roots))
-			for _, n := range r.Roots {
-				roots = append(roots, ops.TreeViewOf(r.Index, n))
+			roots := []*ops.TaskView{}
+			for _, ts := range r.Stores {
+				for _, n := range ts.Roots {
+					roots = append(roots, ops.TreeViewOf(ts.Index, n))
+				}
+				for _, n := range ts.Cycle {
+					out.Body.Cycle = append(out.Body.Cycle, ops.TreeViewOf(ts.Index, n))
+				}
 			}
 			out.Body.Roots = &roots
-			for _, n := range r.Cycle {
-				out.Body.Cycle = append(out.Body.Cycle, ops.TreeViewOf(r.Index, n))
-			}
 			return out, nil
 		}
 		r, err := ss.List(q)
@@ -86,14 +88,18 @@ func (s *Server) registerTaskReads() {
 		}
 		tasks := make([]*ops.TaskView, 0, len(r.Entries))
 		for _, e := range r.Entries {
-			tasks = append(tasks, listView(r.Index, e))
+			ix, err := e.Store.Index()
+			if err != nil {
+				return nil, problemOf(err)
+			}
+			tasks = append(tasks, listView(ix, e.Entry))
 		}
 		out.Body.Tasks = &tasks
 		if ops.HasTerm(q, "group") {
 			for _, g := range r.Groups {
-				gv := groupView{Key: g.Key, ULIDs: make([]string, len(g.Tasks))}
-				for i, e := range g.Tasks {
-					gv.ULIDs[i] = e.ULID.String()
+				gv := groupView{Key: g.Key, ULIDs: make([]string, len(g.Entries))}
+				for i, e := range g.Entries {
+					gv.ULIDs[i] = e.Entry.ULID.String()
 				}
 				out.Body.Groups = append(out.Body.Groups, gv)
 			}
@@ -116,10 +122,10 @@ func (s *Server) registerTaskReads() {
 		OperationID: "get-task-history", Method: http.MethodGet, Path: "/api/tasks/{id}/history",
 		Summary: "List the commits of a task, newest first", Tags: []string{"tasks"},
 	}, func(_ context.Context, in *historyInput) (*historyOutput, error) {
-		ix, entries, err := s.session(in.Store).Log([]string{in.ID}, in.Limit)
+		r, err := s.session(in.Store).Log([]string{in.ID}, in.Limit)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return &historyOutput{Body: ops.LogViewsOf(ix, entries)}, nil
+		return &historyOutput{Body: ops.StoreLogViews(r.Logs)}, nil
 	})
 }

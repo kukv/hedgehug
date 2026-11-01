@@ -35,6 +35,7 @@ type testEnv struct {
 	now      time.Time
 	env      map[string]string // more variables, looked up after the fixed ones
 	tmp      string            // the directory of temporary files, set by editWith
+	dir      string            // the current directory of the runs; "" for none
 
 	beforeUpdate func() // Session.BeforeUpdate of the next runs; meanwhile sets it
 }
@@ -85,6 +86,7 @@ func (te *testEnv) run(args ...string) (code int, stdout, stderr string) {
 		isTerminal: func(any) bool { return te.terminal },
 		now:        func() time.Time { return te.now },
 		openURL:    te.openURL,
+		getwd:      func() (string, error) { return te.dir, nil },
 
 		beforeUpdate: te.beforeUpdate,
 	}

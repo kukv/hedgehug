@@ -46,18 +46,8 @@ func (a *app) inboxCmd() *cobra.Command {
 	return cmd
 }
 
-// openInbox opens the stores the command works on. The warnings of the
-// opening go to stderr.
-func (a *app) openInbox() ([]ops.InboxStore, error) {
-	stores, warnings, err := a.ss.InboxStores()
-	for _, w := range warnings {
-		_, _ = fmt.Fprintln(a.stderr, "hedgehug: warning: "+w)
-	}
-	return stores, err
-}
-
 func (a *app) inboxList(all bool) error {
-	stores, err := a.openInbox()
+	stores, err := a.ss.InboxStores()
 	if err != nil {
 		return err
 	}
@@ -90,7 +80,7 @@ func (a *app) inboxRead(args []string, all bool) error {
 	if err != nil {
 		return err
 	}
-	stores, err := a.openInbox()
+	stores, err := a.ss.InboxStores()
 	if err != nil {
 		return err
 	}
@@ -117,7 +107,7 @@ func (a *app) inboxRevert(arg string) error {
 	if err != nil {
 		return err
 	}
-	stores, err := a.openInbox()
+	stores, err := a.ss.InboxStores()
 	if err != nil {
 		return err
 	}

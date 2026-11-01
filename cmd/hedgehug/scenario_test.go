@@ -15,6 +15,7 @@ import (
 func TestScenario(t *testing.T) {
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
+	te.writeAccounts("github.com", "alice")
 	step := func(op string, args ...string) {
 		t.Helper()
 		before := len(te.log("me"))
@@ -99,9 +100,16 @@ func TestScenario(t *testing.T) {
 	if n := len(te.log("me")); n != 20 {
 		t.Errorf("commits = %d, want 20", n)
 	}
-	for _, c := range te.log("me") {
-		if c.Author.Email != "alice@example.com" {
-			t.Errorf("commit %s by %s, want alice", c.Hash, c.Author.Email)
+	// store init was made before the account was set up; every commit after
+	// it is the account's.
+	log := te.log("me")
+	for i, c := range log {
+		want := "alice@users.noreply.github.com"
+		if i == len(log)-1 {
+			want = "alice@example.com"
+		}
+		if c.Author.Email != want {
+			t.Errorf("commit %s by %s, want %s", c.Hash, c.Author.Email, want)
 		}
 	}
 }

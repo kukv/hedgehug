@@ -1,6 +1,7 @@
 {
   "ulid": "<ULID-1>",
   "id": "ME-2",
+  "store": "me",
   "workspace": {
     "ulid": "<ULID-2>",
     "name": "me",
@@ -37,6 +38,7 @@
         "name": "Alice",
         "email": "alice@example.com"
       },
+      "store": "me",
       "op": "edit",
       "task": "<ULID-1>",
       "id": "ME-2",
@@ -49,6 +51,7 @@
         "name": "Alice",
         "email": "alice@example.com"
       },
+      "store": "me",
       "op": "add",
       "task": "<ULID-1>",
       "id": "ME-2",

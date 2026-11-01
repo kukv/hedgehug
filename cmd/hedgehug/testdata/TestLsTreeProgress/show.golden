@@ -2,6 +2,7 @@ Project
   1/2
   id          ME-1
   ulid        <ULID-1>
+  store       me
   workspace   me (ME, <ULID-2>)
   kind        project
   status      todo

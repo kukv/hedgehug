@@ -84,6 +84,9 @@ func TestSchemaCheckProblems(t *testing.T) {
 	if len(fs) != 2 || fs[0]["check"] != "template" || fs[0]["hint"] == "" || fs[1]["check"] != "task" {
 		t.Errorf("findings = %v", fs)
 	}
+	if fs[0]["severity"] != "error" || fs[1]["severity"] != "error" {
+		t.Errorf("severity = %q, %q; want error for every finding of schema check", fs[0]["severity"], fs[1]["severity"])
+	}
 	if _, ok := fs[1]["hint"]; ok {
 		t.Errorf("empty hint is not omitted: %v", fs[1])
 	}

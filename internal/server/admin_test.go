@@ -109,18 +109,22 @@ func TestStores(t *testing.T) {
 	ts.problem("POST", "/api/stores", map[string]any{"name": "team", "prefix": "TX"}, 409)
 }
 
+// doctorReport is a store's report of /api/doctor.
+type doctorReport struct {
+	Store    string           `json:"store"`
+	Findings []map[string]any `json:"findings"`
+	Repaired []map[string]any `json:"repaired"`
+}
+
 func TestDoctor(t *testing.T) {
 	ts := newTestServer(t)
-	var rep struct {
-		Findings []map[string]any `json:"findings"`
-		Repaired []map[string]any `json:"repaired"`
+	var reps []doctorReport
+	ts.call("GET", "/api/doctor", nil, 200, &reps)
+	if len(reps) != 1 || reps[0].Store != "me" || reps[0].Findings == nil {
+		t.Errorf("doctor = %+v", reps)
 	}
-	ts.call("GET", "/api/doctor", nil, 200, &rep)
-	if rep.Findings == nil {
-		t.Errorf("doctor = %+v", rep)
-	}
-	ts.call("POST", "/api/doctor/fix", nil, 200, &rep)
-	if rep.Repaired == nil || rep.Findings == nil {
-		t.Errorf("doctor fix = %+v", rep)
+	ts.call("POST", "/api/doctor/fix", nil, 200, &reps)
+	if len(reps) != 1 || reps[0].Repaired == nil || reps[0].Findings == nil {
+		t.Errorf("doctor fix = %+v", reps)
 	}
 }

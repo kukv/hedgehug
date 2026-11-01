@@ -47,7 +47,7 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 	}
 	var b strings.Builder
 	for i, t := range res.Tasks {
-		fmt.Fprintf(&b, "  %s → %s\n", res.OldIDs[i], t.ID)
+		fmt.Fprintf(&b, "  %s → %s\n", res.Index.QualifyID(res.OldIDs[i]), res.Index.QualifyID(t.ID))
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())
 	return err

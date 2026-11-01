@@ -44,17 +44,21 @@ func TestListTreeShowLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(l.Entries) != 1 || l.Entries[0].ID != "ME-2" {
-		t.Fatalf("List = %v", l.Entries)
+	if len(l.Entries) != 1 || l.Entries[0].Entry.ID != "ME-2" || l.Entries[0].Store.Name != "me" || l.Many || len(l.Stores) != 1 {
+		t.Fatalf("List = %+v", l)
 	}
 	tr, err := ts.Tree(q)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tr.Roots) != 1 || tr.Roots[0].Entry.ID != "ME-1" || !tr.Roots[0].Context {
-		t.Fatalf("Tree roots = %+v; want ME-1 as context", tr.Roots)
+	if len(tr.Stores) != 1 || tr.Many {
+		t.Fatalf("Tree has %d stores, many %v; want one", len(tr.Stores), tr.Many)
 	}
-	if c := tr.Roots[0].Children; len(c) != 1 || c[0].Entry.ID != "ME-2" || c[0].Context {
+	roots := tr.Stores[0].Roots
+	if len(roots) != 1 || roots[0].Entry.ID != "ME-1" || !roots[0].Context {
+		t.Fatalf("Tree roots = %+v; want ME-1 as context", roots)
+	}
+	if c := roots[0].Children; len(c) != 1 || c[0].Entry.ID != "ME-2" || c[0].Context {
 		t.Fatalf("Tree children = %+v", c)
 	}
 	sh, err := ts.Show("ME-2")
@@ -64,12 +68,12 @@ func TestListTreeShowLog(t *testing.T) {
 	if sh.Task.Title != "c" || len(sh.History) != 1 {
 		t.Errorf("Show = %q with %d commits; want c with 1", sh.Task.Title, len(sh.History))
 	}
-	_, entries, err := ts.Log(nil, 0)
+	lr, err := ts.Log(nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) < 3 {
-		t.Errorf("Log has %d commits; want at least 3", len(entries))
+	if len(lr.Logs) < 3 || lr.Many {
+		t.Errorf("Log has %d commits, many %v; want at least 3 of one store", len(lr.Logs), lr.Many)
 	}
 }
 
@@ -94,10 +98,10 @@ func TestListGroupsAndErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(l.Groups) != 2 || len(l.Entries) != 2 || l.Index == nil {
+	if len(l.Groups) != 2 || len(l.Entries) != 2 {
 		t.Fatalf("List = %d groups, %d entries", len(l.Groups), len(l.Entries))
 	}
-	if l.Entries[0].Title != l.Groups[0].Tasks[0].Title || l.Entries[1].Title != l.Groups[1].Tasks[0].Title {
+	if l.Entries[0].Entry.Title != l.Groups[0].Entries[0].Entry.Title || l.Entries[1].Entry.Title != l.Groups[1].Entries[0].Entry.Title {
 		t.Errorf("Entries are not the groups' tasks in order: %v", l.Entries)
 	}
 	// A key the schema does not have parses, and fails when it runs.
@@ -138,13 +142,13 @@ func TestTreeViewOfAndFlatten(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Only the ancestors of g are drawn, c2 and q are not.
-	if got := ids(Flatten(tr.Roots)); !slices.Equal(got, []string{"ME-1", "ME-2", "ME-3"}) {
+	if got := ids(Flatten(tr.Stores[0].Roots)); !slices.Equal(got, []string{"ME-1", "ME-2", "ME-3"}) {
 		t.Fatalf("Flatten = %v; want ME-1 ME-2 ME-3", got)
 	}
-	if len(tr.Cycle) != 0 {
-		t.Errorf("Cycle = %v; want none", ids(tr.Cycle))
+	if len(tr.Stores[0].Cycle) != 0 {
+		t.Errorf("Cycle = %v; want none", ids(tr.Stores[0].Cycle))
 	}
-	v := TreeViewOf(tr.Index, tr.Roots[0])
+	v := TreeViewOf(tr.Stores[0].Index, tr.Stores[0].Roots[0])
 	if v.ID != "ME-1" || !v.Context || v.InCycle || len(v.Children) != 1 {
 		t.Fatalf("TreeViewOf root = %+v", v)
 	}
@@ -160,7 +164,7 @@ func TestTreeViewOfAndFlatten(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := ids(Flatten(all.Roots)); !slices.Equal(got, []string{"ME-1", "ME-2", "ME-3", "ME-4", "ME-5"}) {
+	if got := ids(Flatten(all.Stores[0].Roots)); !slices.Equal(got, []string{"ME-1", "ME-2", "ME-3", "ME-4", "ME-5"}) {
 		t.Errorf("Flatten(all) = %v", got)
 	}
 	if Flatten(nil) != nil {
@@ -212,17 +216,18 @@ func TestTreeParentCycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tr.Roots) != 0 || len(tr.Cycle) != 2 {
-		t.Fatalf("Roots = %v, Cycle = %v; want no roots and the two members", ids(tr.Roots), ids(tr.Cycle))
+	ts0 := tr.Stores[0]
+	if len(ts0.Roots) != 0 || len(ts0.Cycle) != 2 {
+		t.Fatalf("Roots = %v, Cycle = %v; want no roots and the two members", ids(ts0.Roots), ids(ts0.Cycle))
 	}
-	for _, n := range tr.Cycle {
+	for _, n := range ts0.Cycle {
 		if !n.InCycle {
 			t.Errorf("%s is not marked InCycle", n.Entry.ID)
 		}
 	}
 	// C hangs under exactly one member and is not itself in the cycle.
 	var under *TreeNode
-	for _, n := range tr.Cycle {
+	for _, n := range ts0.Cycle {
 		for _, ch := range n.Children {
 			if ch.Entry.ID == "ME-3" {
 				under = ch
@@ -232,7 +237,7 @@ func TestTreeParentCycle(t *testing.T) {
 	if under == nil || under.InCycle {
 		t.Fatalf("C is not drawn under a cycle member, or is marked InCycle: %+v", under)
 	}
-	v := TreeViewOf(tr.Index, tr.Cycle[0])
+	v := TreeViewOf(ts0.Index, ts0.Cycle[0])
 	if !v.InCycle {
 		t.Errorf("TreeViewOf(cycle[0]).InCycle = false")
 	}
@@ -240,6 +245,7 @@ func TestTreeParentCycle(t *testing.T) {
 
 func TestShowFullTask(t *testing.T) {
 	ts := newTestSession(t)
+	ts.asAccount("alice")
 	a := ts.addTask("a", func(t *model.Task) { t.Body = "the body\n"; t.Watchers = []string{"bob"}; t.Repos = []string{"r1"} })
 	b := ts.addTask("b", nil)
 	c := ts.addTask("c", nil)
@@ -297,7 +303,7 @@ func TestShowFullTask(t *testing.T) {
 	}
 
 	v := ShowViewOf(r)
-	if v.ID != "ME-1" || v.Body != "the body\n" || !slices.Equal(v.Watchers, []string{"bob"}) || !slices.Equal(v.Repos, []string{"r1"}) {
+	if v.ID != "ME-1" || v.Body != "the body\n" || !slices.Equal(v.Watchers, []string{"bob", "github.com/alice"}) || !slices.Equal(v.Repos, []string{"r1"}) {
 		t.Errorf("ShowViewOf = %+v", v)
 	}
 	if len(v.Comments) != 2 || v.Comments[0].Body != "first\n" || v.Comments[0].ULID != r.Comments[0].ULID.String() {
@@ -383,20 +389,26 @@ func TestLogAndTaskLog(t *testing.T) {
 	if _, err := ts.CommentAdd("ME-1", "hi"); err != nil {
 		t.Fatal(err)
 	}
-	ix, all, err := ts.Log(nil, 0)
+	allLog, err := ts.Log(nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ix == nil {
-		t.Fatal("Log returned no index")
+	all := entriesOf(allLog)
+	ix := allLog.Logs[0].Index
+	if ix == nil || allLog.Logs[0].Store != "me" {
+		t.Fatalf("Log returned %+v", allLog.Logs[0])
 	}
-	_, two, err := ts.Log(nil, 2)
-	if err != nil || len(two) != 2 || two[0].Hash != all[0].Hash {
-		t.Fatalf("Log(nil, 2) = %d commits, %v", len(two), err)
+	twoLog, err := ts.Log(nil, 2)
+	if err != nil || len(twoLog.Logs) != 2 || twoLog.Logs[0].Entry.Hash != all[0].Hash {
+		t.Fatalf("Log(nil, 2) = %d commits, %v", len(twoLog.Logs), err)
 	}
-	_, one, err := ts.Log([]string{"ME-1"}, 0)
+	oneLog, err := ts.Log([]string{"ME-1"}, 0)
 	if err != nil {
 		t.Fatal(err)
+	}
+	one := entriesOf(oneLog)
+	if oneLog.Logs[0].Store != "me" || oneLog.Logs[0].Index == nil {
+		t.Errorf("Log(ME-1) = %+v", oneLog.Logs[0])
 	}
 	// ME-1: its add and its comment; not the add of ME-2.
 	if len(one) != 2 {
@@ -414,8 +426,17 @@ func TestLogAndTaskLog(t *testing.T) {
 	if err != nil || len(tl) != 1 || tl[0].Hash != one[0].Hash {
 		t.Errorf("TaskLog(limit 1) = %d commits, %v; want the newest", len(tl), err)
 	}
-	_, _, err = ts.Log([]string{"ME-9"}, 0)
+	_, err = ts.Log([]string{"ME-9"}, 0)
 	wantErr(t, err, KindNotFound, "task.not_found")
+}
+
+// entriesOf is the commits of lr.
+func entriesOf(lr LogResult) []gitrepo.LogEntry {
+	var out []gitrepo.LogEntry
+	for _, l := range lr.Logs {
+		out = append(out, l.Entry)
+	}
+	return out
 }
 
 func mustTrailer(t *testing.T, e gitrepo.LogEntry, key string) string {
@@ -441,10 +462,11 @@ func TestLogViewsOfAndSubjectNow(t *testing.T) {
 	if _, err := ts.Add(AddInput{Title: "Alpha"}); err != nil {
 		t.Fatal(err)
 	}
-	ix, entries, err := ts.Log(nil, 0)
+	lr, err := ts.Log(nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
+	ix, entries := lr.Logs[0].Index, entriesOf(lr)
 	e, _ := ix.Task(mustULID(t, mustTrailer(t, entries[0], "Hedgehug-Task")))
 	views := LogViewsOf(ix, entries)
 	if len(views) != len(entries) {
@@ -457,19 +479,19 @@ func TestLogViewsOfAndSubjectNow(t *testing.T) {
 	if v.Op == nil || *v.Op != "add" || v.Task == nil || *v.Task != e.ULID.String() || v.ID == nil || *v.ID != "ME-1" {
 		t.Errorf("view trailers = op %v task %v id %v", v.Op, v.Task, v.ID)
 	}
-	if got, want := SubjectNow(ix, entries[0]), "hedgehug: add "+TaskLabel(e)+" Alpha"; got != want {
+	if got, want := SubjectNow(ix, entries[0]), "hedgehug: add "+TaskLabel(ix, e)+" Alpha"; got != want {
 		t.Errorf("SubjectNow = %q; want %q", got, want)
 	}
 
 	// A subject written with an old label shows the label now.
 	old := entries[0]
 	old.Subject = "hedgehug: add OLD-7 Alpha"
-	if got, want := SubjectNow(ix, old), "hedgehug: add "+TaskLabel(e)+" Alpha"; got != want {
+	if got, want := SubjectNow(ix, old), "hedgehug: add "+TaskLabel(ix, e)+" Alpha"; got != want {
 		t.Errorf("SubjectNow(old label) = %q; want %q", got, want)
 	}
 	// No title: no trailing space.
 	old.Subject = "hedgehug: add OLD-7"
-	if got, want := SubjectNow(ix, old), "hedgehug: add "+TaskLabel(e); got != want {
+	if got, want := SubjectNow(ix, old), "hedgehug: add "+TaskLabel(ix, e); got != want {
 		t.Errorf("SubjectNow(no title) = %q; want %q", got, want)
 	}
 	// Left as they are: no trailers, another op, a task the index lacks, a bad ULID.

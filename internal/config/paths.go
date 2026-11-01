@@ -15,8 +15,8 @@ var goos = runtime.GOOS
 type Paths struct {
 	Home       string // the user's home directory
 	ConfigFile string // config.yaml
-	DataDir    string // the data of hedgehug: stores/ and ui.json
-	StoresDir  string // the directory new stores go in, one per name
+	DataDir    string // where Hedgehug keeps its data: context.json, ui.json and stores/
+	StoresDir  string // the directory new stores go in, one per name; DataDir/stores
 }
 
 // Resolve finds the paths. HEDGEHUG_HOME holds both config.yaml and stores/
