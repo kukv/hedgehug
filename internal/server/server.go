@@ -185,6 +185,10 @@ func (s *Server) Start(ctx context.Context) {
 	}()
 }
 
+// CloseEvents ends the connections to /api/events, so that the HTTP server
+// can shut down; the GUI connects again to the next server.
+func (s *Server) CloseEvents() { s.hub.Close() }
+
 // Shutdown ends the event streams, stops the loop and the poller, and waits
 // for the pushes of the writes not pushed, 10 seconds at most. A second call
 // does nothing.
