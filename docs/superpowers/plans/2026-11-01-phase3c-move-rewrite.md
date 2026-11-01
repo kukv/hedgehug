@@ -69,6 +69,7 @@
 | D31 | undo と Store 間の移動（利用者の決定。2026-11-01） | 自分の最後の操作が `move-in`・`move-out` なら undo せず、`KindConflict`、`undo.blocked`、`a move between stores cannot be undone; move it back with hedgehug mv --store`。`rewrite-history` なら `undo.blocked`、`a history rewrite cannot be undone`。undo の対象の操作が変えたタスクが、その後に転送ファイルになっていたら、何も変えずに `task.moved`（D4 の文面と Args） |
 | D32 | sprint・releases（利用者の決定。2026-11-01） | M のタスクの `sprint` と `releases` は移動先で外す。`store.Unlinks` が `Unlink{Task, Field: "sprint" か "releases", Target: <sprint・release の ULID>}` として返し、確認の一覧（`unlink: API-12 sprint <sprint の名前か ULID>`）と `Hedgehug-Unlinked` に出る。`links` はそのまま |
 | D33 | `before` が手元にないときの照合（利用者の決定。2026-11-01） | 新しい先頭から親をたどり、手元で追っている origin の先頭と author（名前・メール・時刻）と committer（名前・メール・時刻）がすべて同じコミットがあれば `Recorded`。なければ `Unexpected`。記録の形は変えない |
+| D34 | 履歴にだけあるタスクの書き換え（利用者の決定。2026-11-02） | 対象の Store の HEAD にファイルがなくても、その Store の履歴にその ULID のタスクファイルのパスがあれば対象にする（`purge --moved` の後でも消せる）。`--store` がなければ、履歴にその ULID を持つマウント中の Store（移動先を除く）が対象。2つ以上なら `--store` を求める（`choice.required`） |
 | D30 | 新しい操作の名前の表示 | `log` とアクティビティは `Hedgehug-Op` の `move-in`・`move-out`・`purge-moved`・`rewrite-history`・`replay` をそのまま出す（今の操作と同じ扱い）。`ops/read.go` と `server/activity.go` が知らない操作名で落ちないことをテストで確かめる |
 
 ---
