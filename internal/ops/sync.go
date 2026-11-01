@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -320,7 +321,8 @@ func (ss *Session) SyncBackground(log io.Writer) error {
 	if err != nil {
 		return backgroundFailed(ss, log, e.Name, err)
 	}
-	log = sync.BoundLog(s, log)
+	bounded := sync.BoundLog(s, log)
+	log = bounded
 	opt, err := ss.SyncOptions(c, e)
 	if err == nil {
 		logWarnings := func(res sync.Result) {
@@ -337,19 +339,41 @@ func (ss *Session) SyncBackground(log io.Writer) error {
 			// A history rewrite was found. The swap waits until Background
 			// has let go of bg.lock, which is in the store it replaces.
 			return func() error {
+				// sync.log is in the directory the swap replaces: let go of
+				// it, and open the new one after.
+				if err := bounded.Release(); err != nil {
+					sync.Discard(res.Rebuild)
+					return err
+				}
 				next, err := ss.swapRebuilt(s, opt, false, res)
+				// With no store at the path a swap that stopped is left for
+				// the repair; opening the log would make a directory there.
+				if _, serr := os.Stat(e.Path); serr == nil {
+					if rerr := bounded.Reopen(); rerr != nil {
+						err = errors.Join(err, rerr)
+					}
+				}
 				logWarnings(next)
+				if err == nil && next.Swapped {
+					_, _ = fmt.Fprintf(log, "%s sync %s: took in a history rewrite\n", ss.Now().Format(time.RFC3339), e.Name)
+				}
 				return err
 			}, nil
 		})
 	}
 	if err != nil {
 		// The same text a failed run left in sync.json already; the others
-		// (SyncOptions, the lock) are told of by the next command.
-		_, stateErr := sync.UpdateState(s, func(st *sync.State) {
-			st.LastError, st.ErrorReported = err.Error(), false
-		})
-		err = errors.Join(err, stateErr)
+		// (SyncOptions, the lock) are told of by the next command. s may be
+		// closed (a swap failed); UpdateState works by the path of the store,
+		// not by the repository, but when the swap left no store at the path
+		// it would make a directory there, which the repair of the swap takes
+		// for a store: the log has the error then.
+		if _, serr := os.Stat(e.Path); serr == nil {
+			_, stateErr := sync.UpdateState(s, func(st *sync.State) {
+				st.LastError, st.ErrorReported = err.Error(), false
+			})
+			err = errors.Join(err, stateErr)
+		}
 	}
 	return backgroundFailed(ss, log, e.Name, err)
 }

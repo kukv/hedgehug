@@ -376,35 +376,42 @@ func copyLocal(from, to *store.Store, b *Rebuild) error {
 // after the rebuild was made, and a command may write there until the swap.
 // The inbox's items are joined line by line, so the notices of the rebuild
 // stay; the files the rebuild writes itself are left as they are.
-func syncLocal(dir string, b *Rebuild) error {
-	files, err := localFiles(dir)
+//
+// It copies from the store at from to the one at to, what differs from seen,
+// and returns the stamps it saw, for the next pass.
+func syncLocal(from, to string, seen map[string]stamp) (map[string]stamp, error) {
+	files, err := localFiles(from)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for name, st := range files {
-		if b.seen[name] == st || slices.Contains(ownedLocal, name) {
+		if seen[name] == st || slices.Contains(ownedLocal, name) {
 			continue
 		}
 		if name != "inbox.jsonl" {
-			if err := copyFile(dir, b.Dir, name); err != nil {
-				return err
+			if err := copyFile(from, to, name); err != nil {
+				return nil, err
 			}
 			continue
 		}
-		old, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(store.LocalDir), name)) //nolint:gosec // a file of the store
+		old, err := os.ReadFile(filepath.Join(from, filepath.FromSlash(store.LocalDir), name)) //nolint:gosec // a file of the store
 		if err != nil {
-			return err
+			return nil, err
 		}
-		cur, err := os.ReadFile(filepath.Join(b.Dir, filepath.FromSlash(store.LocalDir), name)) //nolint:gosec // a file of the store
+		cur, err := os.ReadFile(filepath.Join(to, filepath.FromSlash(store.LocalDir), name)) //nolint:gosec // a file of the store
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return err
+			return nil, err
 		}
-		if err := store.WriteLocalIn(b.Dir, name, joinLines(cur, old)); err != nil {
-			return err
+		if err := store.WriteLocalIn(to, name, joinLines(cur, old)); err != nil {
+			return nil, err
 		}
 	}
-	return nil
+	return files, nil
 }
+
+// beforeRename runs between the last look at what changed in
+// .hedgehug/local and the first rename of the swap; tests write there.
+var beforeRename = func() {}
 
 // joinLines is cur with the lines of more it lacks added.
 func joinLines(cur, more []byte) []byte {
@@ -465,9 +472,11 @@ func Swap(dir string, b *Rebuild) error {
 		}
 		return err
 	}
-	if err := syncLocal(dir, b); err != nil {
+	seen, err := syncLocal(dir, b.Dir, b.seen)
+	if err != nil {
 		return err
 	}
+	beforeRename()
 	before := dir + beforePrefix + time.Now().UTC().Format("20060102T150405.000000000")
 	if err := os.Rename(dir, before); err != nil {
 		_ = os.RemoveAll(b.Dir)
@@ -480,6 +489,12 @@ func Swap(dir string, b *Rebuild) error {
 		}
 		_ = os.RemoveAll(b.Dir)
 		return err
+	}
+	// What was written to the old store in the gap since the look above is
+	// brought over now, from where it was moved to.
+	if _, err := syncLocal(before, dir, seen); err != nil {
+		// The rebuilt store is in place; the old one stays for a look.
+		return fmt.Errorf("carry over the local files of %s: %w", before, err)
 	}
 	_ = os.RemoveAll(before)
 	return nil
