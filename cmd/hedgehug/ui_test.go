@@ -65,6 +65,7 @@ func (te *testEnv) startUI(args ...string) *runningUI {
 		openURL:   func(s string) error { u.mu.Lock(); u.opened = append(u.opened, s); u.mu.Unlock(); return nil },
 		uiContext: func() (context.Context, context.CancelFunc) { return ctx, stop },
 	}
+	te.t.Cleanup(func() { u.stop(); <-u.done }) // before any Fatalf below
 	go func() { u.done <- run(append([]string{"ui"}, args...), e) }()
 	deadline := time.Now().Add(10 * time.Second)
 	for {
@@ -75,6 +76,7 @@ func (te *testEnv) startUI(args ...string) *runningUI {
 		}
 		select {
 		case code := <-u.done:
+			u.done <- code // for the Cleanup
 			te.t.Fatalf("hh ui exited %d: %s", code, u.stdout.String())
 		default:
 		}
@@ -83,7 +85,6 @@ func (te *testEnv) startUI(args ...string) *runningUI {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	te.t.Cleanup(func() { u.stop(); <-u.done })
 	return u
 }
 
@@ -207,5 +208,35 @@ func TestUIPortInUse(t *testing.T) {
 	code, _, errs := te.run("ui", "--no-open", "--port", port)
 	if code != 1 || !strings.Contains(errs, "listen tcp") {
 		t.Errorf("exit %d, stderr %q", code, errs)
+	}
+}
+
+func TestUIKeepsAUIJSONThatIsNotItsOwn(t *testing.T) {
+	for name, other := range map[string]func(token string) string{
+		"other token": func(string) string {
+			return `{"port":1,"token":"other","pid":` + strconv.Itoa(os.Getpid()) + `,"version":"x"}`
+		},
+		"other pid": func(token string) string {
+			return `{"port":1,"token":"` + token + `","pid":` + strconv.Itoa(os.Getpid()+1) + `,"version":"x"}`
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			te := newTestEnv(t)
+			te.ok("store", "init", "me", "--prefix", "ME")
+			u := te.startUI("--no-open")
+			content := other(u.token)
+			if err := os.WriteFile(filepath.Join(te.hhHome, "ui.json"), []byte(content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			u.stop()
+			if code := <-u.done; code != 0 {
+				t.Errorf("exit %d", code)
+			}
+			u.done <- 0 // for the Cleanup
+			b, err := os.ReadFile(filepath.Join(te.hhHome, "ui.json"))
+			if err != nil || string(b) != content {
+				t.Errorf("ui.json = %q, %v; want it kept", b, err)
+			}
+		})
 	}
 }

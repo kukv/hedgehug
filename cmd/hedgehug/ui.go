@@ -101,6 +101,7 @@ func (a *app) ui(port int, noOpen bool) error {
 
 	select {
 	case <-ctx.Done():
+		stop() // a second Ctrl-C ends the process while it shuts down
 	case err := <-served:
 		if !errors.Is(err, http.ErrServerClosed) {
 			_ = srv.Shutdown(context.Background())
