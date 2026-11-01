@@ -717,3 +717,42 @@ func TestMoveStoreWarnsOnceOfAFileThatDoesNotDecode(t *testing.T) {
 		t.Errorf("%d warnings about %s; want 1 (all: %q)", n, rel, f.ts.warns)
 	}
 }
+
+// A task that moved away can move back: the move-in replaces the forward
+// with the task, which gets a new id of the source, keeps its former ids, and
+// the store it left now holds the forward.
+func TestMoveStoreBackToTheStoreItLeft(t *testing.T) {
+	f := newMoveFx(t)
+	ts := f.ts
+	if _, err := ts.MoveStore(f.in()); err != nil {
+		t.Fatal(err)
+	}
+	res, err := ts.MoveStore(MoveStoreInput{Arg: "WEB-2", To: "org-a", Yes: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Resumed || len(res.Moved) != 3 {
+		t.Fatalf("res = %+v", res)
+	}
+	as, err := ts.ForStore("org-a").OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bs, err := ts.ForStore("org-b").OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := as.Task(f.p)
+	if err != nil {
+		t.Fatalf("the project is not a task of org-a again: %v", err)
+	}
+	// API-5 is taken and API-2..4 are recorded as given: the numbers go on.
+	if p.ID != "API-6" || !slices.Contains(p.FormerIDs, "API-2") || !slices.Contains(p.FormerIDs, "WEB-2") {
+		t.Errorf("id %s former %v", p.ID, p.FormerIDs)
+	}
+	for _, u := range []model.ULID{f.p, f.c, f.g} {
+		if _, err := bs.Task(u); !errors.Is(err, model.ErrForward) {
+			t.Errorf("%s in org-b: %v; want a forward", u, err)
+		}
+	}
+}

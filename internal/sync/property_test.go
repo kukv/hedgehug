@@ -407,6 +407,40 @@ func sameJSON(a, b string) bool {
 	return reflect.DeepEqual(x, y)
 }
 
+// wasLostWhole reports whether the file at path was recorded overwritten
+// whole (Field "*": a forward won over the task) with the value in it. The
+// task may have come back to the store since, in a version that does not have
+// the value any more. A null is told by nothing but the record.
+func (h *history) wasLostWhole(path, value string) bool {
+	needle := value
+	var s string
+	if json.Unmarshal([]byte(value), &s) == nil {
+		needle = s
+	}
+	return slices.ContainsFunc(h.lost, func(l lost) bool {
+		if l.path != path || l.field != "*" {
+			return false
+		}
+		var text string
+		if json.Unmarshal([]byte(l.value), &text) != nil {
+			return false
+		}
+		if value == "null" || strings.Contains(text, needle) {
+			return true
+		}
+		// A time is written in the zone of the clone that made it.
+		at, err := time.Parse(time.RFC3339Nano, needle)
+		if err != nil {
+			return false
+		}
+		return slices.ContainsFunc(strings.Split(text, "\n"), func(line string) bool {
+			_, v, ok := strings.Cut(line, ": ")
+			x, err := time.Parse(time.RFC3339Nano, v)
+			return ok && err == nil && x.Equal(at)
+		})
+	})
+}
+
 func (h *history) wasLost(path, field, value string) bool {
 	return slices.ContainsFunc(h.lost, func(l lost) bool {
 		return l.path == path && l.field == field && sameJSON(l.value, value)
@@ -438,7 +472,7 @@ func (h *history) checkWrites(ps *problems, writes []write) {
 			h.checkWorkspace(ps, w, writes)
 		default:
 			if h.v.fwd[w.task] != nil {
-				h.checkForwarded(ps, w)
+				h.checkForwarded(ps, w, writes)
 				continue
 			}
 			t := h.v.tasks[w.task]
@@ -454,16 +488,16 @@ func (h *history) checkWrites(ps *problems, writes []write) {
 }
 
 // checkForwarded checks a write to a task that left the store for another.
-// The write went with the task when the move-out knew of it; otherwise it was
-// made beside the move and lost to the forward, which the merge records as
-// the task file overwritten whole (Field "*").
-func (h *history) checkForwarded(ps *problems, w write) {
-	for _, e := range h.entries {
-		if slices.Contains(e.TrailerValues("Hedgehug-Op"), "move-out") &&
-			slices.Contains(e.TrailerValues("Hedgehug-Task"), w.task.String()) &&
-			(e.Hash == w.commit || h.isAncestor(w.commit, e.Hash)) {
-			return
-		}
+// The write went with the task when the move-out knew of it, or another write
+// of the same value did (two clones that move the same task in write the same
+// title: a merge sees one change). Otherwise it was made beside the move and
+// lost to the forward, which the merge records as the task file overwritten
+// whole (Field "*").
+func (h *history) checkForwarded(ps *problems, w write, writes []write) {
+	if h.movedOut(w) || h.replaced(w, writes) || h.wasRepaired(w.task, w.field) || slices.ContainsFunc(writes, func(o write) bool {
+		return o.task == w.task && o.field == w.field && sameJSON(o.value, w.value) && h.movedOut(o)
+	}) {
+		return
 	}
 	// A comment is a file of its own under the forward, dropped by itself.
 	file := model.TaskPath(w.task)
@@ -480,6 +514,31 @@ func (h *history) checkForwarded(ps *problems, w write) {
 		return
 	}
 	ps.add("task %s moved to another store, and %s %s written by clone %d beside the move is not in the move-out or in Hedgehug-Overwritten", w.task, w.field, w.value, w.clone)
+}
+
+// commentDropped reports whether the comment of w was dropped, whole, from
+// under a forward (the task moved away beside it and came back since).
+func (h *history) commentDropped(w write) bool {
+	var c string
+	_ = json.Unmarshal([]byte(w.value), &c)
+	u, err := model.ParseULID(c)
+	if err != nil {
+		h.c.t.Fatal(err)
+	}
+	file := model.CommentPath(w.task, u)
+	return slices.ContainsFunc(h.lost, func(l lost) bool { return l.path == file && l.field == "*" })
+}
+
+// movedOut reports whether the move-out of w's task knew of w.
+func (h *history) movedOut(w write) bool {
+	for _, e := range h.entries {
+		if slices.Contains(e.TrailerValues("Hedgehug-Op"), "move-out") &&
+			slices.Contains(e.TrailerValues("Hedgehug-Task"), w.task.String()) &&
+			(e.Hash == w.commit || h.isAncestor(w.commit, e.Hash)) {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *history) checkWorkspace(ps *problems, w write, writes []write) {
@@ -504,23 +563,30 @@ func (h *history) checkWorkspace(ps *problems, w write, writes []write) {
 
 func (h *history) checkTaskWrite(ps *problems, w write, t *model.Task, writes []write) {
 	path := model.TaskPath(t.ULID)
+	// A write that a move-out knew of went to the other store with the task
+	// (and may have come back in a version of the move-in). What became of it
+	// there is checked by the writes the move-in made in that store.
+	moved := h.movedOut(w)
 	lose := func() {
+		if moved {
+			return
+		}
 		ps.add("task %s (%s): %s %s written by clone %d is lost", t.ULID, t.ID, w.field, w.value, w.clone)
 	}
 	switch w.field {
 	case "id":
 		var id string
 		_ = json.Unmarshal([]byte(w.value), &id)
-		if t.ID != id && !slices.Contains(t.FormerIDs, id) {
+		if t.ID != id && !slices.Contains(t.FormerIDs, id) && !h.wasLostWhole(path, w.value) {
 			lose()
 		}
 		h.checkNotReused(ps, w, id)
 	case "body":
-		if !slices.Contains(strings.Split(t.Body, "\n"), w.value) && !h.replaced(w, writes) {
+		if !slices.Contains(strings.Split(t.Body, "\n"), w.value) && !h.replaced(w, writes) && !h.wasLostWhole(path, w.value) {
 			lose()
 		}
 	case "labels":
-		if !slices.Contains(t.Labels, w.value) && !h.replaced(w, writes) {
+		if !slices.Contains(t.Labels, w.value) && !h.replaced(w, writes) && !h.wasLostWhole(path, w.value) {
 			lose()
 		}
 	case "comment":
@@ -531,7 +597,7 @@ func (h *history) checkTaskWrite(ps *problems, w write, t *model.Task, writes []
 			}
 			found = found || js(cm.ULID.String()) == w.value
 		}
-		if !found {
+		if !found && !h.commentDropped(w) {
 			lose()
 		}
 	default:
@@ -551,7 +617,7 @@ func (h *history) checkTaskWrite(ps *problems, w write, t *model.Task, writes []
 			ps.add("unknown field %s", w.field)
 			return
 		}
-		if !sameJSON(final, w.value) && !h.replaced(w, writes) && !h.wasRepaired(t.ULID, w.field) && !h.wasLost(path, w.field, w.value) && !h.reverts(w, writes) {
+		if !moved && !sameJSON(final, w.value) && !h.replaced(w, writes) && !h.wasRepaired(t.ULID, w.field) && !h.wasLost(path, w.field, w.value) && !h.wasLostWhole(path, w.value) && !h.reverts(w, writes) {
 			ps.add("task %s (%s): %s %s written by clone %d is lost (final %s)", t.ULID, t.ID, w.field, w.value, w.clone, final)
 		}
 	}

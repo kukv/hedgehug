@@ -701,13 +701,6 @@ func opBlock(c *cluster, i int, rnd *rand.Rand) []write {
 	return nil
 }
 
-// has reports whether the store has a file for the task: a task or a forward.
-func (v *view) has(u model.ULID) bool {
-	_, task := v.tasks[u]
-	_, fwd := v.fwd[u]
-	return task || fwd
-}
-
 // opMoveStore moves a task and everything under it, deleted ones too, from
 // clone i of src to clone i of dst, as hedgehug mv --store does: the two
 // stores are locked in the order of their ULIDs, dst gets the move-in commit,
@@ -715,10 +708,10 @@ func (v *view) has(u model.ULID) bool {
 // tasks, for the checks; nil when nothing moved.
 func opMoveStore(src, dst *cluster, i int, rnd *rand.Rand) []write {
 	sv, dv := src.view(i), dst.view(i)
-	// A task moves once: dst would hold a forward and a task of one ULID if it
-	// went back, and the destination of a ULID is one store.
+	// A task may come back to a store that holds its forward: the move-in
+	// replaces the forward. One that dst holds as a task cannot move in.
 	t := sv.pickTask(rnd, func(x *model.Task) bool {
-		return live(x) && !slices.ContainsFunc(sv.subtree(x.ULID), dv.has)
+		return live(x) && !slices.ContainsFunc(sv.subtree(x.ULID), func(u model.ULID) bool { return dv.tasks[u] != nil })
 	})
 	to := dv.pickWS(rnd, func(*model.Workspace) bool { return true })
 	if t == nil || to == nil {
