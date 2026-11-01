@@ -261,8 +261,12 @@ func (r *Repo) removeEmptyDirs(dir string) {
 }
 
 // ForcePush sends main to the remote even when the remote is not its
-// ancestor, and sets refs/remotes/<remote>/main.
-func (r *Repo) ForcePush(remote string) error { return r.push(remote, true) }
+// ancestor, and sets refs/remotes/<remote>/main. A non-zero expect is a
+// lease: the push is ErrRejected unless the remote's main is expect, so a
+// commit pushed since expect was fetched is not lost.
+func (r *Repo) ForcePush(remote string, expect plumbing.Hash) error {
+	return r.push(remote, true, expect)
+}
 
 // SetTracking sets refs/remotes/<remote>/main to h (D23: put it back).
 func (r *Repo) SetTracking(remote string, h plumbing.Hash) error {

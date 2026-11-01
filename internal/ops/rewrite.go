@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing"
+
 	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/index"
@@ -464,7 +466,7 @@ func (r *rewriteRun) run(s *store.Store, l *store.Locked, conn gitrepo.Conn, res
 		if err := s.WriteLocal(rewriteProgressFile, b); err != nil {
 			return err
 		}
-	} else if err := r.originStill(repo, prog); err != nil {
+	} else if _, err := r.originStill(repo, prog); err != nil {
 		return err
 	}
 
@@ -477,8 +479,11 @@ func (r *rewriteRun) run(s *store.Store, l *store.Locked, conn gitrepo.Conn, res
 		// A run that stopped after it finds them gone.
 		var live []model.ULID
 		for _, u := range prog.Live {
-			if _, err := s.Task(u); err == nil {
+			_, err := s.Task(u)
+			if err == nil {
 				live = append(live, u)
+			} else if !errors.Is(err, store.ErrNotFound) && !errors.Is(err, model.ErrForward) {
+				return err
 			}
 		}
 		if len(live) > 0 {
@@ -537,14 +542,15 @@ func (r *rewriteRun) run(s *store.Store, l *store.Locked, conn gitrepo.Conn, res
 
 	// Step 8: origin first; its failure keeps rewrite-in-progress.json, so
 	// that the next run pushes again and a sync is refused until then.
-	if err := r.originStill(repo, prog); err != nil {
+	expect, err := r.originStill(repo, prog)
+	if err != nil {
 		return err
 	}
 	remotes := repo.Remotes()
 	if len(remotes) == 0 {
 		return newErr(KindInvalid, "rewrite.no_remote", fmt.Errorf("%s has no remote", name), "store", name)
 	}
-	if err := repo.ForcePush(remotes[0]); err != nil {
+	if err := repo.ForcePush(remotes[0], expect); err != nil {
 		return fmt.Errorf("%w; the history of %s is rewritten here, run purge --rewrite-history again to push it", err, name)
 	}
 	res.Pushed = append(res.Pushed, remotes[0])
@@ -552,7 +558,7 @@ func (r *rewriteRun) run(s *store.Store, l *store.Locked, conn gitrepo.Conn, res
 		return err
 	}
 	for _, m := range remotes[1:] {
-		if err := repo.ForcePush(m); err != nil {
+		if err := repo.ForcePush(m, plumbing.ZeroHash); err != nil {
 			res.Warnings = append(res.Warnings, fmt.Sprintf("push %s: %v", m, err))
 			continue
 		}
@@ -571,21 +577,21 @@ func (r *rewriteRun) run(s *store.Store, l *store.Locked, conn gitrepo.Conn, res
 // rewrite began (prog.Before: the push is due) or already at HEAD (the push
 // was made). A commit pushed by someone else meanwhile would be lost by the
 // force push.
-func (r *rewriteRun) originStill(repo *gitrepo.Repo, prog *rewriteProgress) error {
+func (r *rewriteRun) originStill(repo *gitrepo.Repo, prog *rewriteProgress) (plumbing.Hash, error) {
 	fetched, err := repo.Fetch("origin")
 	if err != nil {
-		return fmt.Errorf("%w; the history of %s is rewritten here, run purge --rewrite-history again to push it", err, r.plan.Store)
+		return plumbing.ZeroHash, fmt.Errorf("%w; the history of %s is rewritten here, run purge --rewrite-history again to push it", err, r.plan.Store)
 	}
 	head, err := repo.Head()
 	if err != nil {
-		return err
+		return plumbing.ZeroHash, err
 	}
 	if fetched.String() != prog.Before && fetched != head {
 		name := r.plan.Store
-		return newErr(KindConflict, "rewrite.origin_moved",
+		return plumbing.ZeroHash, newErr(KindConflict, "rewrite.origin_moved",
 			fmt.Errorf("origin of %s changed since the history rewrite began; nothing is pushed, and %s is kept: fix it by hand or delete it to give the rewrite up", name, rewriteProgressFile), "store", name)
 	}
-	return nil
+	return fetched, nil
 }
 
 // rewriteRecorded reports whether HEAD already has the record of the

@@ -250,7 +250,7 @@ func TestForcePush(t *testing.T) {
 	if err := a.r.Push("origin"); !errors.Is(err, ErrRejected) {
 		t.Fatalf("Push of a rewritten history = %v, want ErrRejected", err)
 	}
-	if err := a.r.ForcePush("origin"); err != nil {
+	if err := a.r.ForcePush("origin", plumbing.ZeroHash); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := a.r.RemoteHead("origin"); got != nh {
@@ -264,7 +264,7 @@ func TestForcePush(t *testing.T) {
 		t.Errorf("remote main = %s, want %s", got.Hash(), nh)
 	}
 	// Pushing the same head again is not an error.
-	if err := a.r.ForcePush("origin"); err != nil {
+	if err := a.r.ForcePush("origin", plumbing.ZeroHash); err != nil {
 		t.Errorf("second ForcePush = %v", err)
 	}
 	if err := a.r.SetTracking("origin", old); err != nil {
@@ -288,5 +288,50 @@ func TestClose(t *testing.T) {
 	}
 	if got, err := r2.ReadAt(h, "a.md"); err != nil || string(got) != "a\n" {
 		t.Errorf("a.md after reopen = %q, %v", got, err)
+	}
+}
+
+// A lease that is not the remote's main is ErrRejected and changes nothing;
+// the right one goes through.
+func TestForcePushLease(t *testing.T) {
+	remote := newBare(t)
+	a, b := cloneTwo(t, remote)
+	old := commitHead(t, a.r, a.dir, map[string]string{"x.md": "x\n", "y.md": "y\n"})
+	if err := a.r.Push("origin"); err != nil {
+		t.Fatal(err)
+	}
+	nh, _, err := a.r.RewriteHistory(old, Rewrite{Drop: func(p string) bool { return p == "y.md" }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.r.ResetMain(nh); err != nil {
+		t.Fatal(err)
+	}
+	// b pushes a new commit on top of old meanwhile
+	if _, err := b.r.Fetch("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.r.ResetMain(old); err != nil {
+		t.Fatal(err)
+	}
+	moved := commitHead(t, b.r, b.dir, map[string]string{"z.md": "z\n"})
+	if err := b.r.Push("origin"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.r.ForcePush("origin", old); !errors.Is(err, ErrRejected) {
+		t.Fatalf("ForcePush with a stale lease = %v, want ErrRejected", err)
+	}
+	bare, err := Open(remote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := bare.r.Reference(mainRef, true); got.Hash() != moved {
+		t.Errorf("remote main = %s, want %s", got.Hash(), moved)
+	}
+	if err := a.r.ForcePush("origin", moved); err != nil {
+		t.Fatalf("ForcePush with the right lease = %v", err)
+	}
+	if got, _ := bare.r.Reference(mainRef, true); got.Hash() != nh {
+		t.Errorf("remote main = %s, want %s", got.Hash(), nh)
 	}
 }
