@@ -15,8 +15,9 @@ import (
 	"github.com/kukv/hedgehug/internal/model"
 )
 
-// yaml merges schema.yaml, automations.yaml or store.yaml key by key. The
-// result is the document of the side it is built on, with its comments.
+// yaml merges schema.yaml, automations.yaml, store.yaml or a view key by
+// key. The result is the document of the side it is built on, with its
+// comments.
 func (m *merger) yaml(base []byte, ours, theirs Side) (Result, error) {
 	if ours.Data == nil || theirs.Data == nil {
 		return m.revive(ours, theirs), nil
@@ -158,10 +159,10 @@ type YAMLValue struct {
 	Node *yaml.Node
 }
 
-// YAMLValues lists the values of schema.yaml, automations.yaml or
-// store.yaml as the merge sees them: the keys of mappings and the items of
-// the lists it tells apart are followed, by the key or the item's identity
-// (which is not itself listed), and anything else is one value.
+// YAMLValues lists the values of a file that ByKey reports, as the merge
+// sees them: the keys of mappings and the items of the lists it tells apart
+// are followed, by the key or the item's identity (which is not itself
+// listed), and anything else is one value.
 //
 // The versions of a file need not agree on where a value starts. When one
 // version holds one value where another has values under it (a mapping on

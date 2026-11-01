@@ -482,6 +482,71 @@ func TestMergeSchemaBothSides(t *testing.T) {
 	}
 }
 
+func TestMergeViewBothSides(t *testing.T) {
+	c := newCluster(t, 2)
+	const p = "views/w.yaml"
+	put := func(i int, data string) {
+		t.Helper()
+		if _, err := c.stores[i].Update(c.op(i, "view", model.ULID{}), func(tx *store.Tx) error { return tx.PutFile(p, []byte(data)) }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put(0, "layout: table\nquery: \"\"\n")
+	c.sync(0)
+	c.sync(1)
+	put(0, "layout: kanban\nquery: \"\"\n")
+	put(1, "layout: table\nquery: \"status:todo\"\n")
+	c.sync(0)
+	r := c.sync(1)
+	if r.Merges != 1 || len(r.Overwritten) != 0 {
+		t.Errorf("result = %+v", r)
+	}
+	b, err := os.ReadFile(filepath.Join(c.stores[1].Dir(), filepath.FromSlash(p)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "layout: kanban\nquery: \"status:todo\"\n" {
+		t.Errorf("merged view =\n%s", b)
+	}
+	c.sync(0)
+	if c.headTree(0) != c.headTree(1) {
+		t.Error("clones differ")
+	}
+}
+
+func TestMergeViewSameKey(t *testing.T) {
+	c := newCluster(t, 2)
+	const p = "views/w.yaml"
+	base := time.Now().Add(-time.Hour).Truncate(time.Second)
+	put := func(i int, at time.Duration, data string) {
+		t.Helper()
+		c.stores[i].SetNow(func() time.Time { return base.Add(at) })
+		if _, err := c.stores[i].Update(c.op(i, "view", model.ULID{}), func(tx *store.Tx) error { return tx.PutFile(p, []byte(data)) }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put(0, 0, "layout: table\nquery: \"\"\n")
+	c.sync(0)
+	c.sync(1)
+	// u1 changes the query first, then the layout, so the file as a whole
+	// changed last on u1's side; the query itself changed last on u0's.
+	put(1, 10*time.Second, "layout: table\nquery: \"status:done\"\n")
+	put(0, 20*time.Second, "layout: table\nquery: \"status:todo\"\n")
+	put(1, 30*time.Second, "layout: kanban\nquery: \"status:done\"\n")
+	c.sync(0)
+	r := c.sync(1)
+	if len(r.Overwritten) != 1 || r.Overwritten[0].Path != p || r.Overwritten[0].Field != "query" || r.Overwritten[0].Value != `"status:done"` {
+		t.Errorf("overwritten = %+v", r.Overwritten)
+	}
+	b, err := os.ReadFile(filepath.Join(c.stores[1].Dir(), filepath.FromSlash(p)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "layout: kanban\nquery: \"status:todo\"\n" {
+		t.Errorf("merged view =\n%s", b)
+	}
+}
+
 func TestState(t *testing.T) {
 	c := newCluster(t, 1)
 	s := c.stores[0]
