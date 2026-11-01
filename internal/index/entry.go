@@ -13,30 +13,33 @@ import (
 
 // Entry is what the index keeps of one task.
 type Entry struct {
-	ULID       model.ULID
-	ID         string
-	FormerIDs  []string
-	Workspace  model.ULID
-	Kind       string
-	Title      string
-	Parent     *model.ULID
-	Rank       model.Rank
-	Status     string
-	Assignees  []string
-	Watchers   []string
-	Labels     []string
-	BlockedBy  []model.ULID
-	Props      []Prop // in file order; queries read them by the schema's types
-	Created    time.Time
-	Updated    time.Time
-	DeletedAt  *time.Time
-	Text       string             // title and body in lower case, for free-text search
-	Mentions   []string           // accounts mentioned in the body and the comments not deleted (login or host/login, as written), each once, in order
-	Refs       []string           // ids referred to as #<ID> there, each once, in order
-	Comments   []CommentEntry     // in ULID order, deleted ones included
-	Worklogs   []WorklogEntry     // in ULID order, deleted ones included
-	Violations []schema.Violation // against the schema where the task sits
-	Broken     string             // why the file did not decode; empty when it did
+	ULID      model.ULID
+	ID        string
+	FormerIDs []string
+	Workspace model.ULID
+	Kind      string
+	Title     string
+	Parent    *model.ULID
+	Rank      model.Rank
+	Status    string
+	Assignees []string
+	Watchers  []string
+	Labels    []string
+	BlockedBy []model.ULID
+	Props     []Prop // in file order; queries read them by the schema's types
+	Created   time.Time
+	Updated   time.Time
+	DeletedAt *time.Time
+	Text      string   // title and body in lower case, for free-text search
+	Mentions  []string // accounts mentioned in the body and the comments not deleted (login or host/login, as written), each once, in order
+	Refs      []string // ids referred to as #<ID> there, each once, in order
+	// The checkbox items of the body, and those checked; total is 0 when it has none.
+	ChecklistDone  int
+	ChecklistTotal int
+	Comments       []CommentEntry     // in ULID order, deleted ones included
+	Worklogs       []WorklogEntry     // in ULID order, deleted ones included
+	Violations     []schema.Violation // against the schema where the task sits
+	Broken         string             // why the file did not decode; empty when it did
 	// BrokenNumbers is, for a file that did not decode, the largest number
 	// of each prefix among its words of the form of an id; numbering counts
 	// them, since the file's ids cannot be read.
@@ -98,6 +101,7 @@ func EntryOf(t *model.Task) *Entry {
 		Mentions:  Mentions(t.Body),
 		Refs:      TaskRefs(t.Body),
 	}
+	e.ChecklistDone, e.ChecklistTotal = Checklist(t.Body)
 	for _, f := range t.Props {
 		e.Props = append(e.Props, Prop{Key: f.Key, Values: scalars(f.Value)})
 	}

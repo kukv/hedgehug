@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"unicode/utf8"
 
 	"golang.org/x/text/width"
 
@@ -56,14 +55,14 @@ func writeTable(w io.Writer, header []string, rows [][]string, paint func(r, c i
 	widths := make([]int, len(header))
 	for _, row := range all {
 		for c, cell := range row {
-			widths[c] = max(widths[c], utf8.RuneCountInString(cell))
+			widths[c] = max(widths[c], displayWidth(cell))
 		}
 	}
 	var b strings.Builder
 	for r, row := range all {
 		for c, cell := range row {
 			if c < len(row)-1 {
-				cell += strings.Repeat(" ", widths[c]-utf8.RuneCountInString(cell)) + "  "
+				cell += strings.Repeat(" ", widths[c]-displayWidth(cell)) + "  "
 			}
 			if paint != nil {
 				cell = paint(r-1, c, cell)

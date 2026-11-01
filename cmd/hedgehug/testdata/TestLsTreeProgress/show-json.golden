@@ -1,0 +1,58 @@
+{
+  "ulid": "<ULID-1>",
+  "id": "ME-2",
+  "workspace": {
+    "ulid": "<ULID-2>",
+    "name": "me",
+    "id_prefix": "ME"
+  },
+  "kind": "task",
+  "title": "Alpha",
+  "parent": "<ULID-3>",
+  "rank": "a0",
+  "status": "done",
+  "assignees": [],
+  "labels": [],
+  "blocked_by": [],
+  "props": {},
+  "created": "<TIME>",
+  "updated": "<TIME>",
+  "deleted_at": null,
+  "problems": [],
+  "checklist": {
+    "done": 1,
+    "total": 2
+  },
+  "body": "- [x] one\n- [ ] two\n",
+  "watchers": [],
+  "repos": [],
+  "comments": [],
+  "reverse": {},
+  "referenced_by": [],
+  "history": [
+    {
+      "hash": "<HASH>",
+      "date": "<TIME>",
+      "author": {
+        "name": "Alice",
+        "email": "alice@example.com"
+      },
+      "op": "edit",
+      "task": "<ULID-1>",
+      "id": "ME-2",
+      "subject": "hedgehug: edit ME-2 Alpha"
+    },
+    {
+      "hash": "<HASH>",
+      "date": "<TIME>",
+      "author": {
+        "name": "Alice",
+        "email": "alice@example.com"
+      },
+      "op": "add",
+      "task": "<ULID-1>",
+      "id": "ME-2",
+      "subject": "hedgehug: add ME-2 Alpha"
+    }
+  ]
+}

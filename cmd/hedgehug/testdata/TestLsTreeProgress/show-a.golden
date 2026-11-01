@@ -1,0 +1,22 @@
+Alpha
+  ☑ 1/2
+  id          ME-2
+  ulid        <ULID-1>
+  workspace   me (ME, <ULID-2>)
+  kind        task
+  status      done
+  parent      ME-1 (<ULID-3>) Project
+  assignees   -
+  watchers    -
+  labels      -
+  repos       -
+  blocked_by  -
+  created     <TIME> by -
+  updated     <TIME>
+
+- [x] one
+- [ ] two
+
+History:
+<HASH>  <TIME>  Alice  hedgehug: edit ME-2 (<ULID-1>) Alpha
+<HASH>  <TIME>  Alice  hedgehug: add ME-2 (<ULID-1>) Alpha

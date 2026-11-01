@@ -20,13 +20,14 @@ import (
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 	"github.com/kukv/hedgehug/internal/sync"
+	"github.com/kukv/hedgehug/internal/view"
 )
 
 // lookPath finds hedgehug on PATH; tests replace it.
 var lookPath = exec.LookPath
 
 // fileRoots are the directories of a store whose files doctor reads.
-var fileRoots = []string{"tasks", "comments", "worklogs", "sprints", "releases", "templates", "workspaces"}
+var fileRoots = []string{"tasks", "comments", "worklogs", "sprints", "releases", "templates", "workspaces", "views"}
 
 // indexCodes are the problems of a task that come from the shape of the
 // store, not from the schema.
@@ -62,12 +63,14 @@ func Run(dir string) ([]Finding, error) {
 		})
 	}
 	schemaOK := false
+	var sch *schema.Schema
 	if data, err := os.ReadFile(filepath.Join(dir, schema.Path)); err != nil { //nolint:gosec // G304: the path is built from the store root and a fixed or walked name
 		out = append(out, Finding{Check: "schema", Where: schema.Path, Msg: err.Error(), Hint: brokenHint})
 	} else {
 		sc, fs := SchemaFile(data)
 		out = append(out, fs...)
 		schemaOK = sc != nil
+		sch = sc
 	}
 	if !schemaOK {
 		out = append(out, Finding{
@@ -82,6 +85,11 @@ func Run(dir string) ([]Finding, error) {
 		return nil, err
 	}
 	out = append(out, fileFs...)
+	views, _ := view.List(dir) // checkFiles reports what cannot be read
+	out = append(out, checkViewNames(views)...)
+	if schemaOK {
+		out = append(out, checkViewColumns(views, sch)...)
+	}
 
 	// 3 and 4. the work tree and the git objects.
 	repo, err := gitrepo.Open(dir)
@@ -469,6 +477,21 @@ func checkFile(dir, root, rel string) (string, error) {
 		if err := model.ValidIDPrefix(w.IDPrefix); err != nil {
 			return bad("%v", err)
 		}
+	case "views":
+		name, ok := model.IsViewPath(rel)
+		if !ok {
+			return bad("is not a view: views holds <name>.yaml files only")
+		}
+		if err := view.ValidName(name); err != nil {
+			return bad("the name is not a valid view name: %v", err)
+		}
+		v, err := view.Decode(name, data)
+		if err != nil {
+			return bad("does not decode: %v", err)
+		}
+		if ps := v.Problems(); len(ps) > 0 {
+			return bad("%s", ps[0])
+		}
 	case "templates":
 		name, ok := strings.CutSuffix(path.Base(rel), ".md")
 		if !ok || path.Dir(rel) != "templates" || model.ValidTemplateName(name) != nil {
@@ -479,4 +502,48 @@ func checkFile(dir, root, rel string) (string, error) {
 		}
 	}
 	return "", nil
+}
+
+// checkViewNames finds two views whose names differ only in case, which a
+// file system that folds case cannot hold apart, and the second and later
+// problems of a view (checkFile reports the first).
+func checkViewNames(es []view.Entry) []Finding {
+	var out []Finding
+	hint := func(rel string) string {
+		return "fix the file by hand and commit, or restore it with `git restore " + rel + "`"
+	}
+	for i, e := range es {
+		for j, o := range es {
+			if i != j && e.Name != o.Name && view.SameName(e.Name, o.Name) {
+				out = append(out, Finding{
+					Check: "file", Where: e.Rel,
+					Msg: "has the same name as " + o.Rel + " but for case; rename one of them with hedgehug view rename", Hint: hint(e.Rel),
+				})
+			}
+		}
+		if e.View != nil {
+			for _, p := range e.View.Problems()[min(1, len(e.View.Problems())):] {
+				out = append(out, Finding{Check: "file", Where: e.Rel, Msg: p, Hint: hint(e.Rel)})
+			}
+		}
+	}
+	return out
+}
+
+// checkViewColumns finds the columns of views that the schema does not have.
+func checkViewColumns(es []view.Entry, sc *schema.Schema) []Finding {
+	var out []Finding
+	for _, e := range es {
+		if e.View == nil {
+			continue
+		}
+		for _, c := range e.View.MissingColumns(sc) {
+			out = append(out, Finding{
+				Check: "view", Where: e.Rel,
+				Msg:  fmt.Sprintf("column %q is not a field or a property of the schema; the GUI skips it", c),
+				Hint: "change the columns with hedgehug view save " + e.Name + " --columns ...",
+			})
+		}
+	}
+	return out
 }

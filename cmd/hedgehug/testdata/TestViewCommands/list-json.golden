@@ -1,0 +1,38 @@
+[
+  {
+    "name": "tree",
+    "layout": "tree",
+    "query": "kind:task",
+    "table": {
+      "columns": [
+        "id",
+        "title",
+        "status",
+        "assignee",
+        "due"
+      ],
+      "group_by": "none"
+    },
+    "kanban": {
+      "columns": "status",
+      "swimlane": "none"
+    }
+  },
+  {
+    "name": "今週",
+    "layout": "table",
+    "query": "status:todo",
+    "table": {
+      "columns": [
+        "id",
+        "title",
+        "due"
+      ],
+      "group_by": "parent"
+    },
+    "kanban": {
+      "columns": "status",
+      "swimlane": "none"
+    }
+  }
+]

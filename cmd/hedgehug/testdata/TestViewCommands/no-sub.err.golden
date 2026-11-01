@@ -1,0 +1,21 @@
+Usage:
+  hedgehug view [flags]
+  hedgehug view [command]
+
+Available Commands:
+  list        List the saved views
+  rename      Rename a saved view
+  rm          Remove a saved view
+  save        Save a view, or change the settings given of a saved one
+  show        List the tasks of a saved view
+
+Flags:
+  -h, --help   help for view
+
+Global Flags:
+      --json           print JSON
+      --no-color       do not color the output
+      --store string   the store to work on, by name
+
+Use "hedgehug view [command] --help" for more information about a command.
+hedgehug: a subcommand is needed

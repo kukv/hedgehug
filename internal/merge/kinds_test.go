@@ -323,3 +323,46 @@ func TestOtherFileByTime(t *testing.T) {
 		t.Errorf("r = %q %v", r.Data, r.Overwritten)
 	}
 }
+
+func TestViewYAMLByKey(t *testing.T) {
+	const p = "views/今週.yaml"
+	base := []byte("layout: table\nquery: \"status:todo\"\ntable:\n  columns: [id, title]\n")
+	ours := []byte("layout: kanban\nquery: \"status:todo\"\ntable:\n  columns: [id, title]\n")
+	theirs := []byte("layout: table\nquery: \"status:todo\"\ntable:\n  columns: [id, title, due]\n")
+	r := mergeSym(t, p, Side{Data: base}, Side{Data: ours, Author: "a", When: whenAt(time.Unix(1, 0))}, Side{Data: theirs, Author: "b", When: whenAt(time.Unix(2, 0))})
+	if want := "layout: kanban\nquery: \"status:todo\"\ntable:\n  columns: [id, title, due]\n"; string(r.Data) != want {
+		t.Errorf("merged =\n%s\nwant\n%s", r.Data, want)
+	}
+	if len(r.Overwritten) != 0 {
+		t.Errorf("overwritten = %v", r.Overwritten)
+	}
+
+	// Both change the query: the later change wins and the other is recorded.
+	o2 := []byte("layout: table\nquery: \"status:done\"\ntable:\n  columns: [id, title]\n")
+	t2 := []byte("layout: table\nquery: \"status:doing\"\ntable:\n  columns: [id, title]\n")
+	r = mergeSym(t, p, Side{Data: base}, Side{Data: o2, Author: "a", When: whenAt(time.Unix(1, 0))}, Side{Data: t2, Author: "b", When: whenAt(time.Unix(2, 0))})
+	if !bytes.Contains(r.Data, []byte("status:doing")) {
+		t.Errorf("merged =\n%s", r.Data)
+	}
+	want := []Overwritten{{Path: p, Field: "query", Value: `"status:done"`, Author: "a"}}
+	if !sameOverwritten(r.Overwritten, want) {
+		t.Errorf("overwritten = %v", r.Overwritten)
+	}
+
+	// One side removes the view, the other changes it: the change stays.
+	r = mergeSym(t, p, Side{Data: base}, Side{Data: nil, Author: "a"}, Side{Data: theirs, Author: "b"})
+	if string(r.Data) != string(theirs) || len(r.Notices) != 1 || r.Notices[0].Kind != Revived || r.Notices[0].Author != "a" {
+		t.Errorf("remove vs change = %q %v", r.Data, r.Notices)
+	}
+}
+
+func TestByKey(t *testing.T) {
+	for p, want := range map[string]bool{
+		"schema.yaml": true, model.AutomationsPath: true, model.StoreMetaPath: true,
+		"views/a.yaml": true, "views/sub/a.yaml": false, "views/a.md": false, "tasks/0/1/x.md": false,
+	} {
+		if got := ByKey(p); got != want {
+			t.Errorf("ByKey(%q) = %v", p, got)
+		}
+	}
+}
