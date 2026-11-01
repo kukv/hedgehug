@@ -9,6 +9,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // Builtins are the fields of a task that a table column can name besides
@@ -24,11 +26,13 @@ var reserved = []string{
 	"CON", "PRN", "AUX", "NUL",
 	"COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
 	"LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+	"COM¹", "COM²", "COM³", "LPT¹", "LPT²", "LPT³", "CONIN$", "CONOUT$",
 }
 
 // ValidName reports whether name can name a view on every system: 1 to 64
-// characters, none of / \ : * ? " < > | or a control character, no space
-// or dot at either end, and not a name Windows reserves.
+// characters and 250 bytes, in Unicode NFC, none of / \ : * ? " < > | or a
+// control or format character, no space or dot at either end, and not a
+// name Windows reserves.
 func ValidName(name string) error {
 	n := utf8.RuneCountInString(name)
 	base, _, _ := strings.Cut(name, ".")
@@ -39,10 +43,14 @@ func ValidName(name string) error {
 		return errors.New("view name is empty")
 	case n > 64:
 		return fmt.Errorf("view name %q is longer than 64 characters", name)
+	case len(name) > 250:
+		return fmt.Errorf("view name %q is longer than 250 bytes", name)
+	case !norm.NFC.IsNormalString(name):
+		return fmt.Errorf("view name %q is not in Unicode NFC", name)
 	case strings.ContainsAny(name, `/\:*?"<>|`):
 		return fmt.Errorf(`view name %q contains one of / \ : * ? " < > |`, name)
-	case strings.IndexFunc(name, unicode.IsControl) >= 0:
-		return fmt.Errorf("view name %q contains a control character", name)
+	case strings.IndexFunc(name, func(r rune) bool { return unicode.IsControl(r) || unicode.In(r, unicode.Cf) }) >= 0:
+		return fmt.Errorf("view name %q contains a control or format character", name)
 	case strings.TrimFunc(name, unicode.IsSpace) != name:
 		return fmt.Errorf("view name %q starts or ends with a space", name)
 	case strings.HasPrefix(name, ".") || strings.HasSuffix(name, "."):
@@ -54,5 +62,8 @@ func ValidName(name string) error {
 }
 
 // SameName reports whether a and b name the same view: names that differ
-// only in case are one name, since a file system may not tell them apart.
-func SameName(a, b string) bool { return strings.EqualFold(a, b) }
+// only in case or in Unicode normalization are one name, since a file system
+// may not tell them apart.
+func SameName(a, b string) bool {
+	return strings.EqualFold(norm.NFC.String(a), norm.NFC.String(b))
+}
