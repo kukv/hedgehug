@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -46,7 +47,7 @@ type Server struct {
 	mux  *http.ServeMux
 	api  huma.API
 
-	logMu sync.Mutex //nolint:unused // used by logf
+	logMu sync.Mutex
 }
 
 // New makes the server. Call SetPort with the port it listens on before
@@ -72,6 +73,7 @@ func apiConfig() huma.Config {
 	c := huma.DefaultConfig("Hedgehug", APIVersion)
 	c.OpenAPIPath, c.DocsPath, c.SchemasPath = "", "", ""
 	c.CreateHooks = nil
+	c.Components.Schemas = huma.NewMapRegistry("#/components/schemas/", schemaName)
 	c.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
 		"bearer": {Type: "http", Scheme: "bearer"},
 	}
@@ -79,10 +81,24 @@ func apiConfig() huma.Config {
 	return c
 }
 
+// schemaName names the schemas of the OpenAPI document as huma does, except
+// that ops.Problem (a finding of the index about a task) is IndexProblem, as
+// Problem is the body of every error.
+func schemaName(t reflect.Type, hint string) string {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t.PkgPath() == reflect.TypeFor[ops.Problem]().PkgPath() && t.Name() == "Problem" {
+		return "IndexProblem"
+	}
+	return huma.DefaultSchemaNamer(t, hint)
+}
+
 // register adds every operation. Each later file adds its own register
 // function here.
 func (s *Server) register() {
 	s.registerHealth()
+	s.registerTaskReads()
 }
 
 // SetPort sets the port the Host check allows.
@@ -98,7 +114,7 @@ func (s *Server) API() huma.API { return s.api }
 // session is the ops.Session of one request, on the store named store ("" as
 // config.Select picks). Its warnings go to the log; its writes tell the sync
 // loop (Task 7).
-func (s *Server) session(storeName string) *ops.Session { //nolint:unused // used by the operations of later tasks
+func (s *Server) session(storeName string) *ops.Session {
 	return &ops.Session{
 		Getenv:     s.opt.Getenv,
 		Now:        s.opt.Now,
@@ -112,15 +128,16 @@ func (s *Server) session(storeName string) *ops.Session { //nolint:unused // use
 }
 
 // logf writes a line to the log.
-func (s *Server) logf(format string, args ...any) { //nolint:unused // used by the operations of later tasks
+func (s *Server) logf(format string, args ...any) {
 	s.logMu.Lock()
 	defer s.logMu.Unlock()
 	_, _ = fmt.Fprintf(s.opt.Log, format+"\n", args...)
 }
 
-// storeParam is the store a request is on: ?store=<name>, or as
-// config.Select picks without it. The inputs of per-store operations embed it.
-type storeParam struct { //nolint:unused // embedded by the inputs of later tasks
+// StoreParam is the store a request is on: ?store=<name>, or as config.Select
+// picks without it. The inputs of per-store operations embed it. It is
+// exported because huma skips an embedded struct whose type is not.
+type StoreParam struct {
 	Store string `query:"store" doc:"The store; without it, the one hedgehug picks as the CLI does"`
 }
 
