@@ -149,6 +149,67 @@ func (r *Repo) LastChange(from, base plumbing.Hash, path string) (e LogEntry, ok
 	return entry(best), true, nil
 }
 
+// LastChanges is LastChange for several paths in one walk of the history:
+// for each path that some commit changed, the commit LastChange would
+// return. A commit costs one diff of its tree with each parent's, not a
+// lookup of every path.
+func (r *Repo) LastChanges(from, base plumbing.Hash, paths []string) (map[string]LogEntry, error) {
+	cs, err := r.side(from, base)
+	if err != nil {
+		return nil, err
+	}
+	want := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		want[p] = true
+	}
+	best := map[string]*object.Commit{}
+	take := func(c *object.Commit, p string) {
+		if b := best[p]; b == nil || !c.Author.When.Before(b.Author.When) {
+			best[p] = c
+		}
+	}
+	for _, c := range cs {
+		if c.NumParents() == 0 {
+			for _, p := range paths {
+				h, err := blobAt(c, p)
+				if err != nil {
+					return nil, err
+				}
+				if !h.IsZero() {
+					take(c, p)
+				}
+			}
+			continue
+		}
+		changed := map[string]int{} // path: parents it differs from
+		for _, ph := range c.ParentHashes {
+			p, err := r.commit(ph)
+			if err != nil {
+				return nil, err
+			}
+			diff, err := r.DiffTrees(p.TreeHash, c.TreeHash, "")
+			if err != nil {
+				return nil, err
+			}
+			for _, d := range diff {
+				if want[d.Path] {
+					changed[d.Path]++
+				}
+			}
+		}
+		for p, n := range changed {
+			if n == c.NumParents() {
+				take(c, p)
+			}
+		}
+	}
+	out := make(map[string]LogEntry, len(best))
+	for p, c := range best {
+		out[p] = entry(c)
+	}
+	return out, nil
+}
+
 // side returns the commits of Between, in its order. Commits never change, so
 // the result is kept for the next call with the same from and base; callers
 // must not modify it.

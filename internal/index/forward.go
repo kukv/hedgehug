@@ -105,6 +105,59 @@ func (ix *Index) newForwardEntry(ulid model.ULID, data []byte) (*ForwardEntry, e
 	return e, nil
 }
 
+// decodeForwardEntry is newForwardEntry without the id: the caller finds
+// the ids of several forwards at once (resolveForwardIDs).
+func decodeForwardEntry(ulid model.ULID, data []byte) *ForwardEntry {
+	f, err := model.DecodeForward(data)
+	if err == nil && f.ULID != ulid {
+		err = fmt.Errorf("ulid %s does not match the file name", f.ULID)
+	}
+	if err != nil {
+		return &ForwardEntry{ULID: ulid, Broken: err.Error()}
+	}
+	return &ForwardEntry{ULID: ulid, MovedTo: f.MovedTo}
+}
+
+// resolveForwardIDs gives the entries their id and former ids as lastTask
+// would, with one walk of the history for all of them: the commit that last
+// changed each file is found together, and only a forward whose previous
+// version is a forward too goes on by itself.
+func (ix *Index) resolveForwardIDs(entries []*ForwardEntry) error {
+	var todo []*ForwardEntry
+	var paths []string
+	for _, e := range entries {
+		if e.Broken == "" {
+			todo = append(todo, e)
+			paths = append(paths, model.TaskPath(e.ULID))
+		}
+	}
+	if len(todo) == 0 {
+		return nil
+	}
+	head, err := ix.repo.Head()
+	if err != nil {
+		return err
+	}
+	last, err := ix.repo.LastChanges(head, plumbing.ZeroHash, paths)
+	if err != nil {
+		return err
+	}
+	for i, e := range todo {
+		c, ok := last[paths[i]]
+		if !ok || len(c.Parents) == 0 {
+			continue
+		}
+		t, err := ix.taskAt(e.ULID, c.Parents[0], maxForwardHops-1)
+		if err != nil {
+			return err
+		}
+		if t != nil {
+			e.ID, e.FormerIDs = t.ID, t.FormerIDs
+		}
+	}
+	return nil
+}
+
 // lastTask reads the last version of the file of ulid that was a task, from
 // the history of HEAD: it finds the commit that last changed the file and
 // reads the file as that commit's first parent had it, going further back
@@ -124,23 +177,57 @@ func (ix *Index) lastTask(ulid model.ULID) (*model.Task, error) {
 		if !ok || len(c.Parents) == 0 {
 			return nil, nil
 		}
-		before := c.Parents[0]
-		b, err := ix.repo.ReadAt(before, p)
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, nil
+		t, forward, err := ix.versionAt(p, c.Parents[0])
+		if err != nil || !forward {
+			return t, err
 		}
+		from = c.Parents[0]
+	}
+	return nil, nil
+}
+
+// taskAt is the file of ulid as the commit before had it, as a task; when
+// that is a forward, the search goes on from there for at most hops more.
+func (ix *Index) taskAt(ulid model.ULID, before plumbing.Hash, hops int) (*model.Task, error) {
+	p := model.TaskPath(ulid)
+	t, forward, err := ix.versionAt(p, before)
+	if err != nil || !forward {
+		return t, err
+	}
+	from := before
+	for range hops {
+		c, ok, err := ix.repo.LastChange(from, plumbing.ZeroHash, p)
 		if err != nil {
 			return nil, err
 		}
-		if model.IsForward(b) {
-			from = before
-			continue
+		if !ok || len(c.Parents) == 0 {
+			return nil, nil
 		}
-		t, err := model.DecodeTask(b)
-		if err != nil {
-			return nil, nil //nolint:nilerr // a version that does not decode gives no id
+		if t, forward, err = ix.versionAt(p, c.Parents[0]); err != nil || !forward {
+			return t, err
 		}
-		return t, nil
+		from = c.Parents[0]
 	}
 	return nil, nil
+}
+
+// versionAt reads the file p as the commit has it: the task when it is one
+// that decodes, forward when it is a forward. A missing or undecodable file
+// gives neither.
+func (ix *Index) versionAt(p string, commit plumbing.Hash) (t *model.Task, forward bool, err error) {
+	b, err := ix.repo.ReadAt(commit, p)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	if model.IsForward(b) {
+		return nil, true, nil
+	}
+	t, derr := model.DecodeTask(b)
+	if derr != nil {
+		return nil, false, nil //nolint:nilerr // a version that does not decode gives no id
+	}
+	return t, false, nil
 }

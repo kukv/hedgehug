@@ -71,12 +71,13 @@ func (ix *Index) rebuild(tree plumbing.Hash) error {
 		}
 		e, t, forward := newEntry(ulid, b)
 		if forward {
-			if forwards[ulid], err = ix.newForwardEntry(ulid, b); err != nil {
-				return err
-			}
+			forwards[ulid] = decodeForwardEntry(ulid, b)
 			continue
 		}
 		tasks[ulid], decoded[ulid] = e, t
+	}
+	if err := ix.resolveForwardIDs(slices.Collect(maps.Values(forwards))); err != nil {
+		return err
 	}
 	n, err := ix.readNotes(tree, []string{"comments/", "worklogs/"}, func(ulid model.ULID) bool { return tasks[ulid] != nil })
 	if err != nil {
