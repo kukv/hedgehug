@@ -567,6 +567,51 @@ func TestMoveInKeepsTheOtherTargetsOfAProperty(t *testing.T) {
 	}
 }
 
+// The sprint and the releases of the tasks moved are cut, and stay in the
+// source's tasks only as the forward leaves nothing; links stay.
+func TestMoveInTakesOffSprintAndReleases(t *testing.T) {
+	f := newMoveFixture(t, "SRC", "DST", nil)
+	sprint, r1, r2 := model.NewULID(), model.NewULID(), model.NewULID()
+	f.c.Sprint = &sprint
+	f.c.Releases = []model.ULID{r1, r2}
+	f.c.Links = []model.Link{{Type: "pr", Ref: "o/r#1"}}
+	mustPut(t, f.src, f.c)
+	f.c, _ = f.src.Task(f.c.ULID)
+	f.moved = []*model.Task{f.p, f.c, f.g}
+	f.unlinked = Unlinks(f.src.Schema(), f.moved, []*model.Task{f.out})
+	var fields []string
+	for _, u := range f.unlinked {
+		if u.Task == f.c.ULID {
+			fields = append(fields, u.Field+" "+u.Target.String())
+		}
+	}
+	want := []string{"releases " + r1.String(), "releases " + r2.String(), "sprint " + sprint.String()}
+	slices.Sort(want)
+	if !slices.Equal(fields, want) {
+		t.Fatalf("unlinks of C = %v, want %v", fields, want)
+	}
+	if err := f.moveIn(f.in()); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := f.dst.Task(f.c.ULID)
+	if c.Sprint != nil || len(c.Releases) != 0 || len(c.Links) != 1 {
+		t.Errorf("sprint %v, releases %v, links %v", c.Sprint, c.Releases, c.Links)
+	}
+	got := lastCommit(t, f.dst).TrailerValues("Hedgehug-Unlinked")
+	for _, u := range f.unlinked {
+		if !slices.Contains(got, u.String()) {
+			t.Errorf("no trailer for %s", u)
+		}
+	}
+	if len(got) != len(f.unlinked) {
+		t.Errorf("unlinked trailers = %v", got)
+	}
+	// the caller's task keeps them
+	if f.c.Sprint == nil || len(f.c.Releases) != 2 {
+		t.Error("the caller's task changed")
+	}
+}
+
 // The scoped entry a move brings is in force for the validation of the
 // tasks of the same Tx: a field the entry requires for a status is checked.
 func TestMoveInValidatesAgainstTheScopedItBrings(t *testing.T) {

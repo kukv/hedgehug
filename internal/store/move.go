@@ -30,10 +30,11 @@ func (u Unlink) String() string {
 
 const propsPrefix = "props."
 
-// Unlinks are the references between the tasks moved and the tasks that
-// stay (rest), both ways: blocked_by and the properties that sc types
-// task_ref. References inside either group are not listed. They come in the
-// order of Task, Field, Target.
+// Unlinks are the references a move cuts: those between the tasks moved and
+// the tasks that stay (rest), both ways (blocked_by and the properties that sc
+// types task_ref; references inside either group are not listed), and the
+// sprint and the releases of the tasks moved, which are files of this store.
+// They come in the order of Task, Field, Target.
 func Unlinks(sc *schema.Schema, moved, rest []*model.Task) []Unlink {
 	in := func(list []*model.Task) map[model.ULID]bool {
 		m := make(map[model.ULID]bool, len(list))
@@ -58,6 +59,15 @@ func Unlinks(sc *schema.Schema, moved, rest []*model.Task) []Unlink {
 		}
 	}
 	collect(moved, in(rest))
+	// The sprint and the releases are files of this store, which the moved tasks leave.
+	for _, t := range moved {
+		if t.Sprint != nil {
+			out = append(out, Unlink{Task: t.ULID, Field: "sprint", Target: *t.Sprint})
+		}
+		for _, r := range t.Releases {
+			out = append(out, Unlink{Task: t.ULID, Field: "releases", Target: r})
+		}
+	}
 	collect(rest, in(moved))
 	slices.SortFunc(out, func(a, b Unlink) int {
 		return cmp.Or(
@@ -74,6 +84,16 @@ func Unlinks(sc *schema.Schema, moved, rest []*model.Task) []Unlink {
 func dropRef(t *model.Task, u Unlink) {
 	if u.Field == "blocked_by" {
 		t.BlockedBy = slices.DeleteFunc(slices.Clone(t.BlockedBy), func(x model.ULID) bool { return x == u.Target })
+		return
+	}
+	switch u.Field {
+	case "sprint":
+		if t.Sprint != nil && *t.Sprint == u.Target {
+			t.Sprint = nil
+		}
+		return
+	case "releases":
+		t.Releases = slices.DeleteFunc(slices.Clone(t.Releases), func(x model.ULID) bool { return x == u.Target })
 		return
 	}
 	key := strings.TrimPrefix(u.Field, propsPrefix)
