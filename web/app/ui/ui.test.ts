@@ -100,6 +100,17 @@ describe("IdLabel", () => {
     expect(getByRole("button", { name: "ULID をコピー" })).not.toHaveAttribute("tabindex");
   });
 
+  it("href の ID にフォーカスがあっても keydown は window に届く（C・⌘K のため）", async () => {
+    const seen = vi.fn();
+    window.addEventListener("keydown", seen);
+    const { getByRole } = render(IdLabel, {
+      props: { id: "REL-6", ulid: "01HXYZULID", href: "/tasks/01HXYZULID" },
+    });
+    await fireEvent.keyDown(getByRole("link", { name: "REL-6" }), { key: "c" });
+    window.removeEventListener("keydown", seen);
+    expect(seen).toHaveBeenCalledTimes(1);
+  });
+
   it("alwaysUlid なら常に ULID を出す", () => {
     const { getByText } = render(IdLabel, {
       props: { id: "REL-6", ulid: "01HXYZULID", alwaysUlid: true },

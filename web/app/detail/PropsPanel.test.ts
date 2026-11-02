@@ -1,5 +1,6 @@
-import { fireEvent, screen } from "@testing-library/svelte";
+import { fireEvent, screen, waitFor } from "@testing-library/svelte";
 import { describe, expect, it } from "vitest";
+import CreateHost from "../create/CreateHost.svelte";
 import PropsPanel from "./PropsPanel.svelte";
 import { makeCore, mount, showView } from "./testkit";
 
@@ -41,6 +42,18 @@ describe("PropsPanel", () => {
     expect(k.save.flush).toHaveBeenCalledWith("U6");
     await fireEvent.change(screen.getByLabelText("due"), { target: { value: "2026-11-09" } });
     expect(k.save.edit).toHaveBeenCalledWith("U6", "shared", "props.due", "2026-11-09");
+  });
+
+  it("closes the status menu when C opens the create dialog over it", async () => {
+    const k = makeCore({ show });
+    mount(PropsPanel, { show }, k);
+    mount(CreateHost, {}, k);
+    await fireEvent.click(screen.getByRole("button", { name: "ステータス" }));
+    const item = screen.getByRole("menuitem", { name: "完了 · done" });
+    item.focus();
+    await fireEvent.keyDown(item, { key: "c" });
+    expect(await screen.findByRole("dialog")).toHaveTextContent("タスクを作成");
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
   });
 
   it("edits a number while typing and commits on blur", async () => {

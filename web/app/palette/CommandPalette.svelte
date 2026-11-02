@@ -192,7 +192,10 @@
   const flat = $derived(groups.flatMap((g) => g.items));
   const activeKey = $derived(flat[active]?.key);
   const error = $derived(picking ? pickError : found.error);
-  const waitingSchema = $derived(picking !== null && !c.schema.get(picking.store) && !pickError);
+  const waitingSchema = $derived.by(() => {
+    schemaRev.current; // the schema of the store arrives later than the pick
+    return picking !== null && !c.schema.get(picking.store) && !pickError;
+  });
   const empty = $derived(
     flat.length === 0 && (picking !== null || input.trim() !== "") && !error && !waitingSchema,
   );

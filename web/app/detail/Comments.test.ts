@@ -202,6 +202,26 @@ describe("Comments", () => {
     expect(screen.getByText("自分の")).toBeInTheDocument();
   });
 
+  it("shows an edit of a comment posted here, and keeps it when a read brings it as it was posted", async () => {
+    const { k, container, rerender } = setup();
+    const mine = { ulid: "C9", author: "koki", created: "2026-11-04T12:00:00Z", body: "自分の" };
+    k.api.POST.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
+    k.api.PATCH.mockImplementation(() =>
+      ok({ comment: { ...mine, body: "直した自分の" }, commit: "c5" }),
+    );
+    typeInto(container, "自分の", 0);
+    await fireEvent.click(await screen.findByRole("button", { name: "コメント" }));
+    expect(await screen.findByText("自分の")).toBeInTheDocument();
+    const edits = screen.getAllByRole("button", { name: "編集" });
+    await fireEvent.click(edits[edits.length - 1] as HTMLElement);
+    typeInto(container, "直した自分の", 0);
+    await fireEvent.click(await screen.findByRole("button", { name: "保存" }));
+    expect(await screen.findByText("直した自分の")).toBeInTheDocument();
+    await rerender({ show: { ...show, comments: [c1, mine] }, readonly: false });
+    expect(screen.getByText("直した自分の")).toBeInTheDocument();
+    expect(screen.queryByText("自分の")).toBeNull();
+  });
+
   it("posts once when the key is pressed twice before the answer", async () => {
     const { k, container } = setup();
     k.api.POST.mockImplementation(() => new Promise(() => {}));

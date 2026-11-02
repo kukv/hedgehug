@@ -41,7 +41,10 @@
     if (!e.currentTarget.contains(e.relatedTarget as Node | null)) focus = false;
   }}
   onclick={(e) => e.stopPropagation()}
-  onkeydown={(e) => e.stopPropagation()}
+  onkeydown={(e) => {
+    // A link is a stop of the Tab key: the shortcuts of the window (C, ⌘K) keep working on it.
+    if (!href) e.stopPropagation();
+  }}
 >
   {#if href}
     <a class="id link" {href} onclick={onopen}>{id}</a>

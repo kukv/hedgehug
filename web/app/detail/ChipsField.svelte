@@ -28,25 +28,28 @@
   const listId = `chips-${Math.random().toString(36).slice(2)}`;
   const hint = $derived(text.trim() === "" ? null : (hintFor?.(text.trim()) ?? null));
 
-  function add() {
+  // add returns false when the text is refused (the error is shown).
+  function add(): boolean {
     const t = text.trim();
-    if (t === "") return;
+    if (t === "") return true;
     const v = transform ? transform(t) : t;
     if (v === null) {
       error = invalidMessage;
-      return;
+      return false;
     }
     error = "";
     text = "";
     if (!values.includes(v)) onchange([...values, v]);
+    return true;
   }
 
   function onkeydown(e: KeyboardEvent) {
     // While an IME converts text, Enter confirms the conversion: it is not the end of a chip.
     if (e.isComposing || e.keyCode === 229) return;
     if (e.key === "Enter" && modKey(e)) {
-      // The dialog this field is in creates on ⌘↵: it gets the key, with this chip in.
-      add();
+      // The dialog this field is in creates on ⌘↵: it gets the key, with this chip in. Text that
+      // is refused keeps the key, so the dialog does not create without it.
+      if (!add()) e.preventDefault();
     } else if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
       add();

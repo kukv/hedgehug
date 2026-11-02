@@ -109,9 +109,16 @@
         }),
       );
       cache.noteOwnCommit(r.commit);
+      // A comment posted here and not read yet is edited where it is held too; once a read has it as
+      // it was posted, the edit stays over it until the read has the edit.
+      const posted = overlay.added.find((a) => a.ulid === c.ulid);
+      if (posted) overlay.added = overlay.added.map((a) => (a === posted ? r.comment : a));
       overlay.changed = {
         ...overlay.changed,
-        [c.ulid]: { view: r.comment, from: show.comments?.find((x) => x.ulid === c.ulid)?.body },
+        [c.ulid]: {
+          view: r.comment,
+          from: show.comments?.find((x) => x.ulid === c.ulid)?.body ?? posted?.body,
+        },
       };
       editingId = null;
     } catch (e) {

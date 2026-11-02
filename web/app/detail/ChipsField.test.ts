@@ -31,6 +31,29 @@ describe("ChipsField", () => {
     expect(e.defaultPrevented).toBe(false);
   });
 
+  it("keeps the event from the dialog when the typed text is invalid, so nothing is created", async () => {
+    const onchange = vi.fn();
+    render(ChipsField, {
+      values: [],
+      label: "リポジトリ",
+      onchange,
+      transform: (t: string) => (t.includes("/") ? t : null),
+      invalidMessage: "読めません",
+    });
+    const input = screen.getByRole("textbox", { name: "リポジトリ" });
+    await fireEvent.input(input, { target: { value: "nope" } });
+    const e = new KeyboardEvent("keydown", {
+      key: "Enter",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    input.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(true);
+    expect(await screen.findByRole("alert")).toHaveTextContent("読めません");
+    expect(onchange).not.toHaveBeenCalled();
+  });
+
   it("does not add a chip while an IME is converting", async () => {
     const onchange = vi.fn();
     render(ChipsField, { values: [], label: "担当者", onchange });

@@ -141,6 +141,16 @@ describe("CreateProject", () => {
     await waitFor(() => expect(k.api.POST).toHaveBeenCalledTimes(1));
   });
 
+  it("does not create with Ctrl+Enter while the repository typed is invalid", async () => {
+    const { k } = setup();
+    await name("p");
+    const repo = screen.getByRole("textbox", { name: "リポジトリ" });
+    await fireEvent.input(repo, { target: { value: "not a repo" } });
+    await fireEvent.keyDown(repo, { key: "Enter", ctrlKey: true });
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(k.api.POST).not.toHaveBeenCalled();
+  });
+
   it("cannot be created without a name", () => {
     setup();
     expect(screen.getByRole("button", { name: "作成" })).toBeDisabled();

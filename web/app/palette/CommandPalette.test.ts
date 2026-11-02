@@ -324,7 +324,12 @@ describe("CommandPalette", () => {
       subs.add(fn);
       return () => subs.delete(fn);
     };
+    let arrive!: () => void;
+    const gate = new Promise<void>((r) => {
+      arrive = r;
+    });
     const load = vi.fn(async () => {
+      await gate;
       loaded = true;
       for (const fn of subs) fn();
       return schema;
@@ -336,7 +341,10 @@ describe("CommandPalette", () => {
     await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">" } });
     await fireEvent.click(await screen.findByRole("option", { name: /ステータスを変更/ }));
     expect(load).toHaveBeenCalledWith("shared");
+    expect(await screen.findByText("読み込み中…")).toBeInTheDocument();
+    arrive();
     expect(await screen.findByRole("option", { name: /doing/ })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("読み込み中…")).toBeNull());
   });
 
   it("says so when the schema of the store cannot be read", async () => {
