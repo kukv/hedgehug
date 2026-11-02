@@ -76,6 +76,28 @@ test("Enter adds right below the row in one commit, even past a hidden sibling",
   expect(commitCount(hh)).toBe(before + 1);
 });
 
+test("a second title typed straight after the first lands right below it", async ({ page, hh }) => {
+  hh.add("Alpha");
+  hh.add("Bravo");
+  await hh.open(page);
+
+  await row(page, "Alpha").click();
+  await page.keyboard.press("Enter");
+  const input = page.getByRole("textbox", { name: "新しいタスクのタイトル" });
+  await input.fill("First");
+  await page.keyboard.press("Enter");
+  // The input is empty again once the task is made, and keeps the focus while the tree reads the
+  // new task: the keys typed now go into it.
+  await expect(input).toHaveValue("");
+  await expect(input).toBeFocused();
+  await page.keyboard.type("Second");
+  await page.keyboard.press("Enter");
+  await expect(row(page, "Second")).toBeVisible();
+
+  await expect.poll(() => rootOrder(hh)).toEqual(["Alpha", "First", "Second", "Bravo"]);
+  await expect(input).toBeFocused();
+});
+
 test("Tab indents under the previous sibling and Shift+Tab brings it back", async ({
   page,
   hh,
@@ -103,6 +125,43 @@ test("Alt+Up moves a task before its previous sibling", async ({ page, hh }) => 
   await row(page, "Charlie").click();
   await page.keyboard.press("Alt+ArrowUp");
   await expect.poll(() => rootOrder(hh)).toEqual(["Alpha", "Charlie", "Bravo"]);
+});
+
+test("Alt+Up pressed twice moves a task two places", async ({ page, hh }) => {
+  hh.add("Alpha");
+  hh.add("Bravo");
+  hh.add("Charlie");
+  hh.add("Delta");
+  await hh.open(page);
+
+  await row(page, "Delta").click();
+  await page.keyboard.press("Alt+ArrowUp");
+  await expect.poll(() => rootOrder(hh)).toEqual(["Alpha", "Bravo", "Delta", "Charlie"]);
+  // The page moves the row when it has read the tree again; the key then acts on the rows as
+  // they are now, and the row still has the focus.
+  await expect(page.getByRole("treeitem")).toHaveText([/Alpha/, /Bravo/, /Delta/, /Charlie/]);
+  await expect(row(page, "Delta")).toBeFocused();
+  await page.keyboard.press("Alt+ArrowUp");
+  await expect.poll(() => rootOrder(hh)).toEqual(["Alpha", "Delta", "Bravo", "Charlie"]);
+  await expect(row(page, "Delta")).toBeFocused();
+});
+
+test("Alt+Down pressed twice moves a task two places", async ({ page, hh }) => {
+  hh.add("Alpha");
+  hh.add("Bravo");
+  hh.add("Charlie");
+  hh.add("Delta");
+  await hh.open(page);
+
+  await row(page, "Alpha").click();
+  await page.keyboard.press("Alt+ArrowDown");
+  await expect.poll(() => rootOrder(hh)).toEqual(["Bravo", "Alpha", "Charlie", "Delta"]);
+  await expect(page.getByRole("treeitem")).toHaveText([/Bravo/, /Alpha/, /Charlie/, /Delta/]);
+  await expect(row(page, "Alpha")).toBeFocused();
+  await page.keyboard.press("Alt+ArrowDown");
+  await expect.poll(() => rootOrder(hh)).toEqual(["Bravo", "Charlie", "Alpha", "Delta"]);
+  await expect(page.getByRole("treeitem")).toHaveText([/Bravo/, /Charlie/, /Alpha/, /Delta/]);
+  await expect(row(page, "Alpha")).toBeFocused();
 });
 
 test("Space toggles done and back", async ({ page, hh }) => {

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { unwrap } from "../../core/api/client";
-  import { cliStoreInit } from "../../core/cli";
+  import { cliStoreInit, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import { hrefOf, router } from "../router";
@@ -32,8 +32,8 @@
   const remotes = $derived(remote.trim() ? [remote.trim()] : undefined);
   const cli = $derived(
     cliStoreInit({
-      name: name.trim() || "NAME",
-      prefix: prefix || "PREFIX",
+      name: name.trim() || new Placeholder("名前"),
+      prefix: prefix || new Placeholder("接頭辞"),
       workspace: workspace.trim() || undefined,
       remotes,
     }),
@@ -87,7 +87,14 @@
   }
 </script>
 
-<Dialog {open} title="Store を作成" width={620} {cli} onclose={close}>
+<Dialog
+  {open}
+  title="Store を作成"
+  width={620}
+  {cli}
+  cliDisabled={!!(nameError || prefixError)}
+  onclose={close}
+>
   <div class="form" role="presentation" {onkeydown}>
     <div class="field">
       <label for="{uid}-name">名前</label>

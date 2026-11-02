@@ -19,7 +19,11 @@ vi.mock("../router", () => ({
   router: {
     route: { name: "project", ulid: "P" },
     go: h.go,
-    href: (r: { ulid: string }) => `/tasks/${r.ulid}`,
+    href: (r: { name: string; ulid: string }) => (r.name === "home" ? "/" : `/tasks/${r.ulid}`),
+  },
+  onLinkClick: (e: MouseEvent, path: string) => {
+    e.preventDefault();
+    h.go(path);
   },
 }));
 vi.mock("../toast.svelte", () => ({ toast: h.toast }));
@@ -63,6 +67,7 @@ function setup(
     noDone?: boolean;
     blocked?: string[];
     noProject?: boolean;
+    noWorkspace?: boolean;
     detailError?: unknown;
   } = {},
 ) {
@@ -132,14 +137,18 @@ function setup(
       subscribe: (fn: () => void) => ev.subscribe(fn),
     },
     stores: {
-      workspace: () => ({
-        store: "shared",
-        tone: "purple",
-        ulid: "W1",
-        name: "release",
-        prefix: "REL",
-        projects: [],
-      }),
+      loaded: () => true,
+      workspace: () =>
+        over.noWorkspace
+          ? undefined
+          : {
+              store: "shared",
+              tone: "purple",
+              ulid: "W1",
+              name: "release",
+              prefix: "REL",
+              projects: [],
+            },
       workspaces: () => [
         {
           store: "shared",
@@ -167,6 +176,8 @@ function setup(
     core,
     api,
     watchTree,
+    // The tree is read again
+    emit: () => ev.emit(),
     // The schema of the store arrives
     loadSchema() {
       schemaNow = usedSchema;
@@ -459,7 +470,7 @@ describe("TreeView", () => {
     expect(document.activeElement?.getAttribute("data-ulid")).not.toBe("M101");
   });
 
-  it("says why when the project cannot be shown", () => {
+  it("says so, with a way home, when the project is not there", async () => {
     const detailError = Object.assign(Object.create(ApiError.prototype), {
       status: 404,
       type: "task.not_found",
@@ -469,8 +480,130 @@ describe("TreeView", () => {
     });
     setup({ noProject: true, detailError });
     render(TreeView, { view: { kind: "project", ulid: "P" } });
-    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByText("プロジェクトが見つかりません")).toBeInTheDocument();
     expect(screen.queryByText("読み込み中…")).toBeNull();
+    await fireEvent.click(screen.getByRole("button", { name: "ホームへ戻る" }));
+    expect(h.go).toHaveBeenCalledWith("/");
+  });
+
+  it("says why when the project cannot be shown for another reason", () => {
+    const detailError = Object.assign(Object.create(ApiError.prototype), {
+      status: 500,
+      type: "internal",
+      detail: "boom",
+      args: {},
+      body: {},
+    });
+    setup({ noProject: true, detailError });
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByText("プロジェクトが見つかりません")).toBeNull();
+    expect(screen.queryByText("読み込み中…")).toBeNull();
+  });
+
+  it("says so, with a way home, when the workspace is not there", async () => {
+    setup({ noWorkspace: true });
+    render(TreeView, { view: { kind: "workspace", store: "shared", ulid: "W9" } });
+    expect(screen.getByText("ワークスペース「W9」が見つかりません")).toBeInTheDocument();
+    expect(screen.queryByText("読み込み中…")).toBeNull();
+    await fireEvent.click(screen.getByRole("button", { name: "ホームへ戻る" }));
+    expect(h.go).toHaveBeenCalledWith("/");
+  });
+
+  it("forgets the selection of another screen when it comes up", () => {
+    selection.set("T1");
+    setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    expect(selection.ulid).toBeNull();
+  });
+
+  it("keeps one row for the Tab key when the selection is not a row of the screen", async () => {
+    setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    selection.set("NOT-HERE");
+    await waitFor(() =>
+      expect(screen.getAllByRole("treeitem")[0]).toHaveAttribute("tabindex", "0"),
+    );
+    expect(
+      screen.getAllByRole("treeitem").filter((r) => r.getAttribute("tabindex") === "0"),
+    ).toHaveLength(1);
+    selection.set("T3");
+    await waitFor(() =>
+      expect(
+        screen.getByText("Web のクライアントを更新").closest('[role="treeitem"]'),
+      ).toHaveAttribute("tabindex", "0"),
+    );
+  });
+
+  it("keeps the input where it was until the new task is in the tree", async () => {
+    const { api } = setup();
+    api.POST.mockResolvedValue(
+      ok({ task: task("N1", "task", "P", { id: "REL-20", title: "一件目" }), commit: "c1" }),
+    );
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const row = screen.getByText("API v2 への移行").closest('[role="treeitem"]') as HTMLElement;
+    await fireEvent.click(row);
+    await fireEvent.keyDown(row, { key: "Enter" });
+    const input = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
+    await fireEvent.input(input, { target: { value: "一件目" } });
+    await fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
+    // the tree has not read the new task yet: the input stays below the epic and its child
+    await waitFor(() => expect(input).toHaveValue(""));
+    const next = screen.getByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
+    const order = (el: Element) =>
+      screen.getByText("Web のクライアントを更新").compareDocumentPosition(el);
+    expect(order(next) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    expect(next).toBe(input);
+    expect(input).toHaveFocus();
+  });
+
+  it("opens a link of the breadcrumb through the router", async () => {
+    setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    await fireEvent.click(screen.getByRole("link", { name: /release/ }));
+    expect(h.go).toHaveBeenCalledWith("/tasks/W1");
+  });
+
+  it("writes the keys of the footer as the platform does", () => {
+    setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    expect(screen.getByText("Shift+Tab")).toBeInTheDocument();
+    expect(screen.getByText("Alt+↑")).toBeInTheDocument();
+    expect(screen.getByText("Alt+↓")).toBeInTheDocument();
+  });
+
+  it("does not take the focus from an element the user moved it to", async () => {
+    const { emit } = setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const row = screen
+      .getByText("Web のクライアントを更新")
+      .closest('[role="treeitem"]') as HTMLElement;
+    row.focus();
+    expect(row).toHaveFocus();
+    const filter = screen.getByLabelText("フィルタ（hh ls と同じクエリ）");
+    filter.focus();
+    emit();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(filter).toHaveFocus();
+  });
+
+  it("opens the new parent only once the task has moved", async () => {
+    const { api } = setup();
+    api.POST.mockRejectedValueOnce(new Error("書き込めません"));
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    await fireEvent.click(screen.getByRole("button", { name: "折りたたむ: API v2 への移行" }));
+    expect(screen.queryByText("移行ガイドを書く")).toBeNull();
+    const row = screen
+      .getByText("Web のクライアントを更新")
+      .closest('[role="treeitem"]') as HTMLElement;
+    await fireEvent.click(row);
+    await fireEvent.keyDown(row, { key: "Tab" }); // under the epic; it fails
+    await waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText("移行ガイドを書く")).toBeNull();
+    api.POST.mockResolvedValueOnce(ok({ task: task("T3", "task", "E1"), commit: "c9" }));
+    await fireEvent.keyDown(row, { key: "Tab" });
+    expect(await screen.findByText("移行ガイドを書く")).toBeInTheDocument();
   });
 
   it("sets the status chosen in the S menu", async () => {

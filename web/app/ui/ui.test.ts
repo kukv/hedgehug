@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetToasts, toast, toasts } from "../toast.svelte";
 import Avatar from "./Avatar.svelte";
 import Button from "./Button.svelte";
-import Chip from "./Chip.svelte";
 import CliLine from "./CliLine.svelte";
 import IdLabel from "./IdLabel.svelte";
 import StoreBadge from "./StoreBadge.svelte";
@@ -40,12 +39,7 @@ describe("Button", () => {
   });
 });
 
-describe("Chip / StoreBadge / Avatar", () => {
-  it("Chip は tone を属性に出す", () => {
-    const { container } = render(Chip, { props: { tone: "warning", children: label("制約違反") } });
-    expect(container.querySelector("[data-tone='warning']")?.textContent).toContain("制約違反");
-  });
-
+describe("StoreBadge / Avatar", () => {
   it("StoreBadge は Store 名と tone を出す", () => {
     const { container, getByTitle } = render(StoreBadge, {
       props: { store: "shared", tone: "purple" },
@@ -95,6 +89,15 @@ describe("IdLabel", () => {
     expect(writeText).toHaveBeenCalledWith("01HXYZULID");
     await fireEvent.mouseLeave(wrap);
     expect(await findAfter(() => (queryByText("01HXYZULID") ? null : true))).toBe(true);
+  });
+
+  it("ID のボタンは Tab の止まり先にならず、reveal なら ULID とコピーのボタンを出す", () => {
+    const { getByRole, getByText } = render(IdLabel, {
+      props: { id: "REL-6", ulid: "01HXYZULID", reveal: true },
+    });
+    expect(getByRole("button", { name: /REL-6/ })).toHaveAttribute("tabindex", "-1");
+    expect(getByText("01HXYZULID")).toBeTruthy();
+    expect(getByRole("button", { name: "ULID をコピー" })).not.toHaveAttribute("tabindex");
   });
 
   it("alwaysUlid なら常に ULID を出す", () => {

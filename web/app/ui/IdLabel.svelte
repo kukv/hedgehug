@@ -1,12 +1,14 @@
 <script lang="ts">
   import { copyText } from "./clipboard";
 
-  type Props = { id: string; ulid: string; alwaysUlid?: boolean };
-  let { id, ulid, alwaysUlid = false }: Props = $props();
+  // reveal: the owner shows the ULID (a row of the tree does while the keyboard is on it), to
+  // read. The ID is not a stop of the Tab key: the row is.
+  type Props = { id: string; ulid: string; alwaysUlid?: boolean; reveal?: boolean };
+  let { id, ulid, alwaysUlid = false, reveal = false }: Props = $props();
 
   let hover = $state(false);
   let focus = $state(false);
-  const show = $derived(hover || focus);
+  const show = $derived(hover || focus || reveal);
   let copied = $state(false);
 
   async function copy(e: MouseEvent) {
@@ -33,7 +35,7 @@
   onclick={(e) => e.stopPropagation()}
   onkeydown={(e) => e.stopPropagation()}
 >
-  <button type="button" class="id">{id}</button>
+  <button type="button" class="id" tabindex="-1">{id}</button>
   {#if alwaysUlid}
     <span class="ulid">{ulid}</span>
   {:else if show}

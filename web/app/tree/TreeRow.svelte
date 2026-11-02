@@ -46,6 +46,9 @@
   const due = $derived(propText(task, "due"));
   const priority = $derived(propText(task, "priority"));
   const assignee = $derived(task.assignees?.[0]);
+  // The keyboard is on the row (not the pointer): the ULID shows, to read. Copying it by key is
+  // left to the task detail, which always shows it.
+  let keyboardOn = $state(false);
   const progress = $derived(task.progress && task.progress.total > 0 ? task.progress : undefined);
   const percent = $derived(progress ? Math.round((progress.done / progress.total) * 100) : 0);
 </script>
@@ -64,6 +67,8 @@
   tabindex={focusable ? 0 : -1}
   data-ulid={row.ulid}
   onclick={onselect}
+  onfocus={(e) => (keyboardOn = e.currentTarget.matches(":focus-visible"))}
+  onblur={() => (keyboardOn = false)}
   {@attach dnd}
 >
   <span class="lead" style:padding-left="{0.4 + row.depth * 1.6}rem">
@@ -88,7 +93,7 @@
     {/if}
     <StatusIcon status={task.status} {category} />
     <KindIcon kind={task.kind} {role} />
-    <IdLabel id={task.id} ulid={task.ulid} />
+    <IdLabel id={task.id} ulid={task.ulid} reveal={keyboardOn} />
     <span class="title" class:closed class:container={role === "container"}>{task.title}</span>
 
     {#if progress}

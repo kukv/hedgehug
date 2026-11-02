@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createVirtualizer } from "@tanstack/svelte-virtual";
-  import { tick } from "svelte";
+  import { tick, untrack } from "svelte";
   import type { Attachment } from "svelte/attachments";
   import type { TaskView } from "../../core/api/client";
   import { cliLs } from "../../core/cli";
@@ -8,8 +8,8 @@
   import { core } from "../context";
   import Icon from "../icons/Icon.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
-  import { modKey } from "../keys";
-  import { router } from "../router";
+  import { kbdLabel, modKey } from "../keys";
+  import { onLinkClick, router } from "../router";
   import { selection } from "../selection.svelte";
   import Empty from "../states/Empty.svelte";
   import { useSubscribe } from "../svelte-store";
@@ -48,6 +48,8 @@
   let { view: scope }: { view: Scope } = $props();
 
   const c = core();
+  // The selection is one for the whole app: a row of another screen is not one of this.
+  selection.set(null);
   const cacheRev = useSubscribe(c.cache, () => ({}));
   const storesRev = useSubscribe(c.stores, () => ({}));
   const schemaRev = useSubscribe(c.schema, () => ({}));
@@ -71,6 +73,11 @@
     return store ? c.schema.get(store) : undefined;
   });
   const viewRoot = $derived(scope.kind === "project" ? scope.ulid : null);
+  // The workspace the address names is not in the stores (removed, or never there).
+  const workspaceMissing = $derived.by(() => {
+    storesRev.current;
+    return scope.kind === "workspace" && !workspace && c.stores.loaded();
+  });
   const base = $derived<QueryBase | null>(
     scope.kind === "workspace"
       ? workspace
@@ -99,6 +106,7 @@
     cacheRev.current;
     return project ? null : (detail?.error() ?? null);
   });
+  const notFound = $derived(workspaceMissing || projectError?.status === 404);
   // Keys that need the schema, pressed before it is read, wait here and run once it is.
   let waiting: KeyInput[] = [];
   let schemaFailed = false;
@@ -203,15 +211,28 @@
     return countMatched(roots, viewRoot, taskOf);
   });
 
-  type Adding = { after: string | null; parent: string | null; depth: number };
+  // after: the row the input goes below. trail: the rows it went below before, oldest first. The
+  // tree reads a task made only after the write, so the input waits at the newest of them that
+  // is shown, and moves below the new task once that is.
+  type Adding = {
+    after: string | null;
+    parent: string | null;
+    depth: number;
+    trail?: string[];
+  };
   let adding = $state<Adding | null>(null);
+  const MAX_TRAIL = 20;
   type Item = { type: "row"; row: FlatRow } | { type: "add"; depth: number };
   const items = $derived.by<Item[]>(() => {
     const list: Item[] = rows.map((row) => ({ type: "row", row }));
     if (!adding) return list;
     let at = list.length;
     if (adding.after !== null) {
-      const i = rows.findIndex((r) => r.ulid === adding?.after);
+      const anchors = [...(adding.trail ?? []), adding.after];
+      let i = -1;
+      for (let k = anchors.length - 1; k >= 0 && i < 0; k--) {
+        i = rows.findIndex((r) => r.ulid === anchors[k]);
+      }
       if (i >= 0) {
         const depth = rows[i]?.depth ?? 0;
         at = i + 1;
@@ -246,6 +267,33 @@
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     }
   }
+  // The page may move the element of a row when the rows change (the tree is read again after a
+  // move, or someone else reorders), and the browser then drops its focus. The row that has the
+  // focus before the update gets it back after, if the focus fell to the body; a focus the user
+  // put on something else is left alone.
+  const ADD_INPUT = "#add"; // the input row, which is not a task
+  let heldRow: string | null = null;
+  $effect.pre(() => {
+    items;
+    const el = document.activeElement;
+    heldRow =
+      el instanceof HTMLElement
+        ? (el.getAttribute("data-ulid") ?? (el.closest(".add") ? ADD_INPUT : null))
+        : null;
+  });
+  $effect(() => {
+    items;
+    const held = heldRow;
+    heldRow = null;
+    if (!held) return;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    if (held === ADD_INPUT) {
+      void tick().then(() => scroller?.querySelector<HTMLElement>(".add input")?.focus());
+      return;
+    }
+    if (rows.some((r) => r.ulid === held)) void focusRow(held);
+  });
   function toggle(ulid: string, openIt: boolean) {
     const next = new Set(collapsed);
     if (openIt) next.delete(ulid);
@@ -278,6 +326,18 @@
       totalSize = v.getTotalSize();
     }),
   );
+  // A long list draws the rows in view only: the input row is made to be in view.
+  const addIndex = $derived(items.findIndex((it) => it.type === "add"));
+  $effect(() => {
+    if (!virtualized || addIndex < 0) return;
+    untrack(() => vinst)?.scrollToIndex(addIndex);
+  });
+  // The key of a row is its task, so the input row and the rows keep their elements (and the
+  // title typed) when the window moves or the list changes above them.
+  function itemKey(i: number): string {
+    const it = items[i];
+    return it ? (it.type === "row" ? it.row.ulid : "add") : `#${i}`;
+  }
   // The window is only asked for while the list is long.
   $effect(() => {
     vinst?.setOptions({
@@ -327,8 +387,9 @@
         case "move": {
           const t = taskOf(a.ulid);
           if (!t) break;
-          if (a.to.parent) toggle(a.to.parent, true);
           await moveTask(c, t, a.to);
+          // Show the new parent's children only once the task is there.
+          if (a.to.parent) toggle(a.to.parent, true);
           await focusRow(a.ulid);
           break;
         }
@@ -414,7 +475,8 @@
       });
       select(created.ulid);
       // keep going below the new row, as an outliner does
-      adding = { after: created.ulid, parent: a.parent, depth: a.depth };
+      const trail = [...(a.trail ?? []), ...(a.after ? [a.after] : [])].slice(-MAX_TRAIL);
+      adding = { after: created.ulid, parent: a.parent, depth: a.depth, trail };
       return true;
     } catch (err) {
       toast({ message: errorMessage(err) });
@@ -489,7 +551,10 @@
   const cli = $derived(
     cliLs(combine(cliBase, applied), true, scope.kind === "workspace" ? store : undefined),
   );
-  const rowFocus = $derived(selection.ulid ?? rows[0]?.ulid ?? null);
+  // One row takes the Tab key: the selected one when it is shown, else the first.
+  const rowFocus = $derived(
+    rows.find((r) => r.ulid === selection.ulid)?.ulid ?? rows[0]?.ulid ?? null,
+  );
   const noTasks = $derived(
     withoutTerm(applied, NO_CANCELED).trim() === "" && !(canceledCount && canceledCount > 0),
   );
@@ -498,6 +563,10 @@
   );
   // Spread, because Biome reads a prop called scope as the HTML attribute.
   const emptyProps = $derived({ scope: scope.kind, name: crumbTitle });
+  const notFoundProps = $derived({
+    scope: scope.kind,
+    name: scope.kind === "workspace" ? scope.ulid : "",
+  });
 </script>
 
 <section class="tree" aria-label="ツリー">
@@ -508,10 +577,12 @@
       {/if}
       {#if scope.kind === "project"}
         {#if workspace}
-          <a
-            class="ws"
-            href={router.href({ name: "workspace", store: workspace.store, ulid: workspace.ulid })}
-          >
+          {@const wsHref = router.href({
+            name: "workspace",
+            store: workspace.store,
+            ulid: workspace.ulid,
+          })}
+          <a class="ws" href={wsHref} onclick={(e) => onLinkClick(e, wsHref)}>
             <Icon name="workspace" size={16} />{workspace.name}
           </a>
           <span class="sep" aria-hidden="true">›</span>
@@ -603,7 +674,13 @@
         {/if}
       {/snippet}
 
-      {#if projectError}
+      {#if notFound}
+        <Empty
+          variant="notfound"
+          {...notFoundProps}
+          onHome={() => router.go(router.href({ name: "home" }))}
+        />
+      {:else if projectError}
         <p class="note" role="alert">{errorMessage(projectError)}</p>
       {:else if loading && rows.length === 0}
         <p class="note">読み込み中…</p>
@@ -621,7 +698,7 @@
 
       {#if virtualized}
         <div class="vbox" style:height="{totalSize}px">
-          {#each windowed as v (v.index)}
+          {#each windowed as v (itemKey(v.index))}
             {@const item = items[v.index]}
             {#if item}
               <div class="vrow" style:transform="translateY({v.start}px)">
@@ -662,8 +739,10 @@
 
   <footer class="keys">
     <span><kbd>Enter</kbd> 下に追加</span>
-    <span><kbd>Tab</kbd> / <kbd>⇧Tab</kbd> 字下げ・戻す</span>
-    <span><kbd>⌥↑↓</kbd> 並べ替え</span>
+    <span><kbd>{kbdLabel("tab")}</kbd> / <kbd>{kbdLabel("shift+tab")}</kbd> 字下げ・戻す</span>
+    <span>
+      <kbd>{kbdLabel("alt+arrowup")}</kbd> <kbd>{kbdLabel("alt+arrowdown")}</kbd> 並べ替え
+    </span>
     <span><kbd>Space</kbd> 完了</span>
     <span><kbd>S</kbd> ステータス</span>
     <span><kbd>K</kbd> 種類</span>

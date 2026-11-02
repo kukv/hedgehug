@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { cliWorkspaceAdd } from "../core/cli";
+  import { cliWorkspaceAdd, Placeholder } from "../core/cli";
   import { takeToken } from "../core/token";
   import { setCore } from "./context";
   import { createCore } from "./core-factory";
@@ -77,7 +77,11 @@
         <Empty
           variant="noworkspace"
           commands={dir.current.names.map((store) =>
-            cliWorkspaceAdd({ name: "NAME", prefix: "PREFIX", store }),
+            cliWorkspaceAdd({
+              name: new Placeholder("名前"),
+              prefix: new Placeholder("接頭辞"),
+              store,
+            }),
           )}
         />
       {/if}

@@ -13,6 +13,7 @@ import {
   cliSync,
   cliWatch,
   cliWorkspaceAdd,
+  Placeholder,
   quoteArg,
 } from "./cli";
 
@@ -120,5 +121,18 @@ describe("commands", () => {
     expect(
       cliStoreInit({ name: "shared", prefix: "WEB", workspace: "web", remotes: ["git@x:a/b.git"] }),
     ).toBe("hh store init shared --prefix WEB --workspace web --remote git@x:a/b.git");
+  });
+
+  it("writes a placeholder as it is, so that a shell refuses the line", () => {
+    const name = new Placeholder("名前");
+    const prefix = new Placeholder("接頭辞");
+    expect(cliStoreInit({ name, prefix })).toBe("hh store init <名前> --prefix <接頭辞>");
+    expect(cliWorkspaceAdd({ name, prefix, store: "a b" })).toBe(
+      'hh workspace add <名前> --prefix <接頭辞> --store "a b"',
+    );
+    // what a person types is still quoted
+    expect(cliStoreInit({ name: "<名前>", prefix: "ME" })).toBe(
+      'hh store init "<名前>" --prefix ME',
+    );
   });
 });

@@ -2,7 +2,8 @@
   import { onDestroy } from "svelte";
   import { copyText } from "./clipboard";
 
-  let { command }: { command: string } = $props();
+  // disabled: the command is not complete, so it is not copied
+  let { command, disabled = false }: { command: string; disabled?: boolean } = $props();
   let copied = $state(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -22,7 +23,8 @@
   type="button"
   class="cli"
   onclick={copy}
-  title="クリックでコピー"
+  {disabled}
+  title={disabled ? "入力がそろうとコピーできます" : "クリックでコピー"}
   aria-label="コマンドをコピー: {command}"
 >
   <span class="text">$ {command}</span>

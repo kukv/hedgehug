@@ -14,24 +14,36 @@ export function quoteArg(s: string): string {
   return `"${s.replace(/["\\$`]/g, "\\$&")}"`;
 }
 
+// A stand-in for an argument that is not known yet, shown as <名前>. It is not quoted: a shell
+// reads <名前> as a redirection from a file and refuses the line, so a command copied before the
+// input is complete makes nothing.
+export class Placeholder {
+  readonly text: string;
+  constructor(text: string) {
+    this.text = `<${text}>`;
+  }
+}
+type Arg = string | Placeholder;
+
 // withPositionals writes a command whose arguments the user typed (a title,
 // a query, a name). When one starts with - it would be read as a flag, so the
 // flags go first and -- comes before it. Otherwise the order is the one the
 // command has always had: positionalsFirst puts them before the flags.
 function withPositionals(
   head: string[],
-  pos: string[],
-  flags: string[],
+  pos: Arg[],
+  flags: Arg[],
   positionalsFirst: boolean,
 ): string {
-  if (pos.some((p) => p.startsWith("-"))) return cliLine([...head, ...flags, "--", ...pos]);
+  if (pos.some((p) => typeof p === "string" && p.startsWith("-")))
+    return cliLine([...head, ...flags, "--", ...pos]);
   return cliLine(positionalsFirst ? [...head, ...pos, ...flags] : [...head, ...flags, ...pos]);
 }
 
 // cliLine is the command for args, without the "$ " that the screen puts in
 // front.
-export function cliLine(args: string[]): string {
-  return ["hh", ...args.map(quoteArg)].join(" ");
+export function cliLine(args: Arg[]): string {
+  return ["hh", ...args.map((a) => (a instanceof Placeholder ? a.text : quoteArg(a)))].join(" ");
 }
 
 export function cliAdd(i: {
@@ -103,7 +115,7 @@ export function cliSync(store?: string): string {
 }
 
 // cliWorkspaceAdd is hh workspace add; --store is the global flag that picks the store.
-export function cliWorkspaceAdd(i: { name: string; prefix: string; store: string }): string {
+export function cliWorkspaceAdd(i: { name: Arg; prefix: Arg; store: string }): string {
   return withPositionals(
     ["workspace", "add"],
     [i.name],
@@ -113,12 +125,12 @@ export function cliWorkspaceAdd(i: { name: string; prefix: string; store: string
 }
 
 export function cliStoreInit(i: {
-  name: string;
-  prefix: string;
+  name: Arg;
+  prefix: Arg;
   workspace?: string;
   remotes?: string[];
 }): string {
-  const a = ["--prefix", i.prefix];
+  const a: Arg[] = ["--prefix", i.prefix];
   if (i.workspace) a.push("--workspace", i.workspace);
   for (const r of i.remotes ?? []) a.push("--remote", r);
   return withPositionals(["store", "init"], [i.name], a, true);

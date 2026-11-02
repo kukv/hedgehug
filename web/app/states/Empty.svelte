@@ -5,12 +5,13 @@
   import CliLine from "../ui/CliLine.svelte";
 
   type Props = {
-    variant: "empty" | "nomatch" | "noworkspace";
+    variant: "empty" | "nomatch" | "noworkspace" | "notfound";
     scope?: "project" | "workspace";
     name?: string;
     note?: string;
     onCreate?: () => void;
     onClear?: () => void;
+    onHome?: () => void;
     commands?: string[];
   };
   let {
@@ -20,6 +21,7 @@
     note,
     onCreate,
     onClear,
+    onHome,
     commands = [],
   }: Props = $props();
 </script>
@@ -37,6 +39,14 @@
       <Button variant="primary" onclick={onCreate}>
         タスクを作成 <kbd>{kbdLabel("c")}</kbd>
       </Button>
+    {/if}
+  </div>
+{:else if variant === "notfound"}
+  <div class="empty">
+    <Icon name="folder" size={28} />
+    <b>{scope === "project" ? "プロジェクト" : `ワークスペース「${name}」`}が見つかりません</b>
+    {#if onHome}
+      <Button size="sm" onclick={onHome}>ホームへ戻る</Button>
     {/if}
   </div>
 {:else if variant === "noworkspace"}

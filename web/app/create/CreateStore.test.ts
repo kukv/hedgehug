@@ -123,6 +123,19 @@ describe("CreateStore", () => {
     expect(getByRole("button", { name: /hh store init me/ }).textContent).toContain("ME");
   });
 
+  it("入力がそろうまでは、足元の hh は <名前> の形でコピーできない", async () => {
+    const { getByLabelText, getByRole } = mount();
+    const line = () => getByRole("button", { name: /hh store init/ }) as HTMLButtonElement;
+    expect(line().textContent).toContain("hh store init <名前> --prefix <接頭辞>");
+    expect(line().disabled).toBe(true);
+    await type(getByLabelText("名前"), "me");
+    expect(line().disabled).toBe(true);
+    await type(getByLabelText("ID の接頭辞"), "m");
+    expect(line().disabled).toBe(true);
+    await type(getByLabelText("ID の接頭辞"), "me");
+    expect(line().disabled).toBe(false);
+  });
+
   it("変換中（isComposing）の Enter では作成しない", async () => {
     const { getByLabelText, post } = mount();
     await type(getByLabelText("名前"), "me");

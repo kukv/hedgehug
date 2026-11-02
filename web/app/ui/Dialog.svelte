@@ -16,11 +16,12 @@
     title: string;
     width: 560 | 620 | 760;
     cli?: string;
+    cliDisabled?: boolean; // the command is not complete yet: it cannot be copied
     onclose: () => void;
     children: Snippet;
     footer?: Snippet;
   };
-  let { open, title, width, cli, onclose, children, footer }: Props = $props();
+  let { open, title, width, cli, cliDisabled = false, onclose, children, footer }: Props = $props();
 
   const uid = $props.id();
   const me = Symbol("dialog");
@@ -101,7 +102,7 @@
       {#if cli || footer}
         <footer class="foot">
           {#if cli}
-            <div class="cli"><CliLine command={cli} /></div>
+            <div class="cli"><CliLine command={cli} disabled={cliDisabled} /></div>
           {/if}
           {#if footer}
             <div class="actions">{@render footer()}</div>

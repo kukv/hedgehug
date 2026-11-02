@@ -73,6 +73,7 @@ const symbols: Record<string, string> = {
   arrowup: "↑",
   arrowdown: "↓",
   space: "Space",
+  tab: "Tab",
 };
 
 /** "mod+k" as the label of the key: ⌘K on a Mac, Ctrl+K elsewhere. */
