@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createVirtualizer } from "@tanstack/svelte-virtual";
   import { tick } from "svelte";
+  import type { Attachment } from "svelte/attachments";
   import type { TaskView } from "../../core/api/client";
   import { cliLs } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
@@ -466,6 +467,15 @@
     if (over.decision.ok) return over.place;
     return over.decision.silent ? null : "reject";
   }
+  let refusalHeight = $state(0);
+  // The panel's height, taken again when its words change.
+  const measureRefusal: Attachment<HTMLElement> = (el) => {
+    refusal;
+    refusalHeight = el.offsetHeight;
+    return () => {
+      refusalHeight = 0;
+    };
+  };
   const refusal = $derived(
     over && !over.decision.ok && !over.decision.silent ? over.decision : null,
   );
@@ -533,6 +543,8 @@
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div
       class="scroller"
+      class:refusing={!!refusal}
+      style:--refusal-h={refusalHeight > 0 ? `${refusalHeight}px` : undefined}
       role="tree"
       aria-label="{crumbTitle} のタスク"
       tabindex="-1"
@@ -634,7 +646,7 @@
     </div>
 
     {#if refusal && !refusal.ok}
-      <aside class="refusal" role="status">
+      <aside class="refusal" role="status" {@attach measureRefusal}>
         <strong>{refusal.title}</strong>
         <p>{refusal.reason}</p>
       </aside>
@@ -735,6 +747,10 @@
     overflow: auto;
     padding: 0 1rem;
     outline: none;
+  }
+  /* The refusal lies over the foot of the list: leave room to scroll the last rows above it. */
+  .scroller.refusing {
+    padding-bottom: calc(var(--refusal-h, 6rem) + 1rem);
   }
   .list {
     display: flex;

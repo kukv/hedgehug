@@ -161,8 +161,11 @@ describe("TreeView drag and drop", () => {
     expect(await screen.findByText("ここには置けません")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("エピックはタスクの下に置けません");
     expect(screen.getByRole("status")).toHaveTextContent("（shared の schema.yaml の kinds）");
+    const tree = screen.getByRole("tree");
+    expect(tree).toHaveClass("refusing");
     row("T7").onOver(null, null);
     await waitFor(() => expect(screen.queryByText("ここには置けません")).toBeNull());
+    expect(tree).not.toHaveClass("refusing");
   });
 
   it("marks a place a drop would be accepted on, and says nothing", async () => {
