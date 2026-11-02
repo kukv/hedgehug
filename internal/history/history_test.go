@@ -3,6 +3,7 @@ package history_test
 import (
 	"bytes"
 	"errors"
+	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -210,6 +211,24 @@ func TestOpenOrdersAndLooksUp(t *testing.T) {
 	c := h.All()[0]
 	if c.Op != "update" || c.Email != testAuthor.Email || c.Gen != 4 || c.Writer() != testAuthor.Email {
 		t.Fatalf("commit fields: %+v", c)
+	}
+}
+
+func TestOpenCanceledSavesNothing(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	writeTask(t, s, model.NewULID(), "a")
+	cancel := make(chan struct{})
+	close(cancel)
+	if _, err := history.Open(s, history.Options{Cancel: cancel}); !errors.Is(err, history.ErrCanceled) {
+		t.Fatalf("err = %v, want ErrCanceled", err)
+	}
+	if _, err := os.Stat(s.LocalPath("history")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a canceled Open left %s: %v", s.LocalPath("history"), err)
+	}
+	// Not canceled, the same store is indexed.
+	if _, err := history.Open(s, history.Options{}); err != nil {
+		t.Fatal(err)
 	}
 }
 

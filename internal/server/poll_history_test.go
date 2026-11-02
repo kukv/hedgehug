@@ -4,6 +4,9 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/history"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 // The poller builds the history index of a store it looks at, so that the
@@ -28,24 +31,28 @@ func TestPollBuildsTheHistoryIndex(t *testing.T) {
 	})
 }
 
-// Release does not return while the history index of the store is built: the
-// repository is closed after it, and the directory may be swapped next.
-func TestReleaseWaitsForTheHistoryBuild(t *testing.T) {
+// Release cancels a build of the history index that is running and returns
+// once it ended, before the repository is closed and the directory swapped.
+func TestReleaseCancelsTheHistoryBuild(t *testing.T) {
 	t.Parallel()
-	ts, _ := pollServer(t)
+	ts := newTestServer(t) // its poller does not run: poll is called by hand
 	_, e, err := ts.session().Entry()
 	if err != nil {
 		t.Fatal(err)
 	}
 	p := ts.srv.poller
-	p.mu.Lock()
-	st := p.stores[e.Name]
-	p.mu.Unlock()
-	if st == nil {
-		t.Fatal("the poller does not hold the store")
+	started := make(chan struct{})
+	p.openHistory = func(_ *store.Store, opt history.Options) (*history.History, error) {
+		close(started)
+		<-opt.Cancel // a build that only the cancel ends
+		return nil, history.ErrCanceled
 	}
-	st.histDone.Wait() // a build the poll started is over
-	st.histDone.Add(1) // a build that is not over
+	p.poll(false) // the first sight of the store starts its build
+	select {
+	case <-started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the build did not start")
+	}
 
 	released := make(chan struct{})
 	go func() {
@@ -54,13 +61,7 @@ func TestReleaseWaitsForTheHistoryBuild(t *testing.T) {
 	}()
 	select {
 	case <-released:
-		t.Fatal("Release returned while a build was running")
-	case <-time.After(100 * time.Millisecond):
-	}
-	st.histDone.Done()
-	select {
-	case <-released:
 	case <-time.After(10 * time.Second):
-		t.Fatal("Release did not return after the build ended")
+		t.Fatal("Release did not return while a build was running")
 	}
 }

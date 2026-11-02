@@ -25,6 +25,10 @@ import (
 // each store.
 const pollInterval = 300 * time.Millisecond
 
+// historyRounds is how many times a build of the history index goes on when
+// HEAD moved meanwhile; the next HEAD move starts another build.
+const historyRounds = 3
+
 type tasksChanged struct {
 	Store   string   `json:"store"`
 	ULIDs   []string `json:"ulids" doc:"The tasks whose file or comments changed"`
@@ -64,8 +68,21 @@ type polled struct {
 	// histBusy is true while a goroutine brings the history index of the
 	// store to HEAD; histDone is that goroutine's. Whoever lets go of the
 	// store (its directory may be swapped or removed) waits for histDone.
-	histBusy atomic.Bool
-	histDone sync.WaitGroup
+	histBusy   atomic.Bool
+	histDone   sync.WaitGroup
+	histCancel chan struct{} // closed to stop the build
+	cancelOnce sync.Once
+}
+
+func newPolled(path string, s *store.Store) *polled {
+	return &polled{path: path, s: s, histCancel: make(chan struct{})}
+}
+
+// stopHistory cancels the build of the history index of st and waits for it
+// to end.
+func (st *polled) stopHistory() {
+	st.cancelOnce.Do(func() { close(st.histCancel) })
+	st.histDone.Wait()
 }
 
 // Poller reads the HEAD and the sync state of each store every
@@ -77,6 +94,10 @@ type Poller struct {
 	kick chan struct{}
 
 	interval time.Duration // how long Run waits between looks; pollInterval
+
+	// openHistory builds the history index of a store; history.Open. A seam
+	// for the tests.
+	openHistory func(*store.Store, history.Options) (*history.History, error)
 
 	pollMu sync.Mutex // one poll at a time; held while reading, not p.mu
 
@@ -90,14 +111,15 @@ type Poller struct {
 }
 
 func newPoller(s *Server, hub *Hub) *Poller {
-	return &Poller{s: s, hub: hub, kick: make(chan struct{}, 1), interval: pollInterval, stores: map[string]*polled{}}
+	return &Poller{s: s, hub: hub, kick: make(chan struct{}, 1), interval: pollInterval, stores: map[string]*polled{}, openHistory: history.Open}
 }
 
 // Release lets go of the store at path, whose directory is about to be
 // swapped for a rebuild after a force push (D26): its index and its
 // repository files are closed, and the next poll opens the store again and
 // tells the clients that its tasks changed. It waits for a poll that is
-// reading.
+// reading, and cancels the build of the history index of the store and waits
+// for it to end.
 func (p *Poller) Release(path string) {
 	p.pollMu.Lock()
 	defer p.pollMu.Unlock()
@@ -118,7 +140,7 @@ func (p *Poller) Release(path string) {
 	// The repository is closed once the build of the history index, which
 	// reads it, is over; the wait is made without p.mu, so hello does not wait.
 	for _, st := range gone {
-		st.histDone.Wait()
+		st.stopHistory()
 		_ = st.s.Repo().Close()
 	}
 }
@@ -216,9 +238,9 @@ func (p *Poller) pollLocked(publish bool) {
 				continue
 			}
 			if st != nil {
-				st.histDone.Wait() // the store of the old path is let go
+				st.stopHistory() // the store of the old path is let go
 			}
-			st = &polled{path: e.Path, s: s}
+			st = newPolled(e.Path, s)
 			fresh = true
 			p.mu.Lock()
 			swapped := p.released[e.Name]
@@ -274,7 +296,7 @@ func (p *Poller) pollLocked(publish bool) {
 	p.mu.Unlock()
 	// A store no longer targeted may be removed from the disk next.
 	for _, st := range dropped {
-		st.histDone.Wait()
+		st.stopHistory()
 	}
 	if len(stamps) == 0 {
 		return
@@ -375,8 +397,9 @@ func (p *Poller) refresh(st *polled) {
 
 // buildHistory builds the history index of st in the background, so that the
 // commands that need it find it, and a poll does not wait for it. One build
-// runs per store; it goes on until the index is at the HEAD it sees when it
-// ends. The index is a cache, so a failure is ignored.
+// runs per store, on a handle of its own (a repository is not safe for
+// concurrent use); it goes on, for a few rounds, until the index is at the
+// HEAD it sees when it ends. The index is a cache, so a failure is ignored.
 func (p *Poller) buildHistory(st *polled) {
 	if !st.histBusy.CompareAndSwap(false, true) {
 		return
@@ -385,19 +408,24 @@ func (p *Poller) buildHistory(st *polled) {
 	go func() {
 		defer st.histDone.Done()
 		defer st.histBusy.Store(false)
-		for {
-			h, err := history.Open(st.s, history.Options{})
+		s, err := store.Open(st.path)
+		if err != nil {
+			return
+		}
+		defer func() { _ = s.Repo().Close() }()
+		for range historyRounds {
+			h, err := p.openHistory(s, history.Options{Cancel: st.histCancel})
 			if err != nil {
 				return
 			}
-			if head, err := st.s.Repo().Head(); err != nil || head == h.Tip() {
+			if head, err := s.Repo().Head(); err != nil || head == h.Tip() {
 				return
 			}
 		}
 	}()
 }
 
-// waitBuilds waits for the builds of the history indexes in progress.
+// waitBuilds stops the builds of the history indexes in progress.
 func (p *Poller) waitBuilds() {
 	p.pollMu.Lock()
 	defer p.pollMu.Unlock()
@@ -408,7 +436,7 @@ func (p *Poller) waitBuilds() {
 	}
 	p.mu.Unlock()
 	for _, st := range all {
-		st.histDone.Wait()
+		st.stopHistory()
 	}
 }
 

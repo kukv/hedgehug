@@ -61,7 +61,13 @@ func newer(a, b Commit) bool {
 // add are done: 0 at the start, then now and then while they are added.
 type Options struct {
 	Progress func(done, total int)
+	// Cancel, when closed, stops Open between two commits with ErrCanceled;
+	// nothing is saved then.
+	Cancel <-chan struct{}
 }
+
+// ErrCanceled: Open was stopped by Options.Cancel.
+var ErrCanceled = errors.New("history index build canceled")
 
 // ErrNotIndexed: a commit asked about is not in the index.
 var ErrNotIndexed = errors.New("commit not in the history index")
@@ -103,7 +109,7 @@ func Open(s *store.Store, opt Options) (*History, error) {
 			return nil, err
 		}
 	}
-	if err := h.add(added, opt.Progress); err != nil {
+	if err := h.add(added, opt); err != nil {
 		return nil, err
 	}
 	h.tip = head
@@ -165,12 +171,18 @@ func (h *History) newCommits(head plumbing.Hash) (added []gitrepo.LogEntry, reac
 }
 
 // add indexes the commits, parents first.
-func (h *History) add(added []gitrepo.LogEntry, progress func(done, total int)) error {
+func (h *History) add(added []gitrepo.LogEntry, opt Options) error {
+	progress := opt.Progress
 	total := len(added)
 	if progress != nil && total > 0 {
 		progress(0, total) // so that whoever times the work starts at its start
 	}
 	for i, e := range added {
+		select {
+		case <-opt.Cancel:
+			return ErrCanceled
+		default:
+		}
 		_, files, err := h.repo.ChangedFiles(e.Hash)
 		if err != nil {
 			return err
