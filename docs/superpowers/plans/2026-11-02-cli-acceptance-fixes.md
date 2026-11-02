@@ -8678,3 +8678,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Task 11: GUI の `undo.blocked` は拒否の理由（`op`: `purge`・`move-in`・`move-out`、なければワークスペース）で文言を分ける。
 - Task 10 の後回しの Minor 5 件もこの回で直した（`unexpected_force_push` を 1 つにまとめる、doc コメントの折り返し、`openStoreAt` のハンドルをすべての経路で閉じる、`TestPurgeRewriteHistoryIsGone` を purge のテストに移す、`Purged` のない入れ替えは古い `rebuild-keep` の印を先に消す）。
 - phase3 の spec と design-review に「2026-11-02 の変更」の節を足し、転送ファイルの `moved_at` と `purge --moved` の廃止を書いた。Task 13 Step 1 の探す語に `moved_to`・`転送ファイル` を足した。
+
+### Task 1〜4（PR A。Task 9〜11 のマージ後）
+
+- Task 1: `dropDefaultAccount`（3 パッケージ）は、外すアカウントが config.yaml になければテストを失敗させる。`internal/ops` の `appendConfig` は既定のアカウントが残っているときだけ外す（`hasDefaultAccount`）。`TestWatchAddsAndRemovesMe` は `dropDefaultAccount` を `Add` の前に置く。golden の `store list` の account 列は `github.com/alice` になる。
+- Task 2: 引数なしの `hedgehug auth` は許可リストにないので、アカウントがなければ入口で止まり終了コード 1（アカウントがあれば今までどおり 2）。アカウントがないときは `beforeCommand`（背景の同期）を呼ばず、`beforeRun` が読んだ config を `Session.BeforeCommand(cfg, …)` に渡す。`internal/ops` の `dropAccounts` は yaml.Node で `accounts` のキーだけを消す。`web/e2e/harness.ts`（PR #31 の Playwright）は `.gitconfig`・`HOME`・`GIT_CONFIG_GLOBAL` をやめ、`HEDGEHUG_HOME/config.yaml` にアカウント `e2e` を書く（`store: null` でも書く。`hh ui` がアカウントなしで止まるため）。
+- Task 3: テストの定数 `aliceAccount` は既存の定数と衝突するので `personalAccount` にした。`printPinned` の複数形は `internal/plural` を使う。
+- Task 4: リフレッシュの前の `client_id` の確認に合わせ、`internal/auth/device_test.go` の `Host{Web: …}` 3 か所に `ClientID` を足した。
+- 最終レビュー: アカウントがないときの文言（`errNoAccounts`、`undo` の拒否、`NoAccountsWarning`、GUI の `account.none`）を `hedgehug auth add` を案内する形・`no account is set up` に揃えた。
