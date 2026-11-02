@@ -1,20 +1,38 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { takeToken } from "../core/token";
+  import { auth } from "./auth-state.svelte";
   import { setCore } from "./context";
   import { createCore } from "./core-factory";
   import { router } from "./router";
   import Sidebar from "./sidebar/Sidebar.svelte";
+  import Banners from "./states/Banners.svelte";
+  import Disconnected from "./states/Disconnected.svelte";
+  import NoToken from "./states/NoToken.svelte";
+  import Onboarding from "./states/Onboarding.svelte";
+  import { useSubscribe } from "./svelte-store";
   import TreeView from "./tree/TreeView.svelte";
   import Toasts from "./ui/Toasts.svelte";
 
   const token = takeToken(location, sessionStorage, history);
-  const c = createCore({ token: () => token });
+  const c = createCore({ token: () => token, onUnauthorized: () => auth.markLost() });
   setCore(c);
+
+  const conn = useSubscribe(c.conn, () => ({ state: c.conn.state, lastOpenAt: c.conn.lastOpenAt }));
+  const dir = useSubscribe(c.stores, () => {
+    const first = c.stores.workspaces()[0];
+    return {
+      loaded: c.stores.loaded(),
+      count: c.stores.stores().length,
+      first: first ? { store: first.store, ulid: first.ulid } : null,
+    };
+  });
+  const noToken = $derived(token === null || auth.lost);
+  const onboarding = $derived(dir.current.loaded && dir.current.count === 0);
 
   onMount(() => {
     router.go(location.pathname, { replace: true });
-    c.conn.start();
+    if (token) c.conn.start();
     return () => c.conn.stop();
   });
 </script>
@@ -24,7 +42,7 @@
     <Sidebar />
   </aside>
   <div class="body">
-    <!-- banners -->
+    <Banners />
     <main class="main" id="main">
       <!-- routes -->
       {#if router.route.name === "workspace"}
@@ -37,10 +55,23 @@
         {#key router.route.ulid}
           <TreeView view={{ kind: "project", ulid: router.route.ulid }} />
         {/key}
+      {:else if router.route.name === "home" && dir.current.first}
+        <!-- "/" is the tree of the first workspace -->
+        {#key `${dir.current.first.store}/${dir.current.first.ulid}`}
+          <TreeView view={{ kind: "workspace", ...dir.current.first }} />
+        {/key}
       {/if}
     </main>
   </div>
 </div>
+{#if noToken}
+  <NoToken />
+{:else if onboarding}
+  <Onboarding />
+{/if}
+{#if !noToken && conn.current.state === "down"}
+  <Disconnected lastOpenAt={conn.current.lastOpenAt} />
+{/if}
 <Toasts />
 
 <style>
