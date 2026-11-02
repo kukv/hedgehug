@@ -32,6 +32,7 @@ type AuthLoginResult struct {
 	ID      string `json:"id"`
 	Added   bool   `json:"added"`
 	Uses    string `json:"-"`
+	Pinned  Pinned `json:"-"` // when an account was added: the stores that were given the account they used
 }
 
 // AuthLogin gets a token by the device flow, or takes the one given, checks
@@ -159,6 +160,7 @@ func (ss *Session) AuthLogin(in AuthLoginInput) (AuthLoginResult, error) {
 	if err != nil {
 		return AuthLoginResult{}, err
 	}
+	var pinned Pinned
 	err = ss.updateConfig(c, func(c *config.Config) error {
 		if added {
 			for _, x := range c.Accounts { // another writer may have added it since the read
@@ -167,7 +169,9 @@ func (ss *Session) AuthLogin(in AuthLoginInput) (AuthLoginResult, error) {
 						"account", x.Name)
 				}
 			}
-			return c.AddAccount(acct)
+			p, err := addAccount(c, acct)
+			pinned = p
+			return err
 		}
 		if _, ok := c.Account(acct.Name); !ok {
 			return newErr(KindNotFound, "account.not_found", fmt.Errorf("no account is named %q", acct.Name), "name", acct.Name)
@@ -187,7 +191,7 @@ func (ss *Session) AuthLogin(in AuthLoginInput) (AuthLoginResult, error) {
 		}
 		return AuthLoginResult{}, err
 	}
-	return AuthLoginResult{Account: acct.Name, ID: acct.ID(), Added: added}, nil
+	return AuthLoginResult{Account: acct.Name, ID: acct.ID(), Added: added, Pinned: pinned}, nil
 }
 
 // AuthStatus is what auth status says of one account. State is "ok", "error"
@@ -201,6 +205,120 @@ type AuthStatus struct {
 	State   string     `json:"state"`
 	Login   string     `json:"login,omitempty"` // what GitHub says the token is of
 	Error   string     `json:"error,omitempty"`
+}
+
+// Pinned is what addAccount wrote before it added an account: Stores, the
+// stores that had no account: of their own, were given Account, the only
+// account there was.
+type Pinned struct {
+	Account string
+	Stores  []string
+}
+
+// addAccount adds acct to c. A store with no account: uses the only account
+// there is, and has none to use once a second one is added (config.yaml then
+// fails to load), so the stores are given that account first.
+func addAccount(c *config.Config, acct config.Account) (Pinned, error) {
+	var pinned Pinned
+	if len(c.Accounts) == 1 {
+		pinned.Account = c.Accounts[0].Name
+		for _, e := range c.Stores {
+			if e.Account != "" {
+				continue
+			}
+			if err := c.SetStoreAccount(e.Name, pinned.Account); err != nil {
+				return Pinned{}, err
+			}
+			pinned.Stores = append(pinned.Stores, e.Name)
+		}
+	}
+	return pinned, c.AddAccount(acct)
+}
+
+// AuthAddInput is what hh auth add is given. Host "" is github.com. Token is
+// "gh", "env:VAR" or "keychain"; "" is an account that uses no token.
+type AuthAddInput struct {
+	Name  string
+	Login string
+	Host  string
+	Token string
+}
+
+// AuthAddResult is the account AuthAdd wrote, as auth add --json prints it.
+// Token is where its token comes from, left out for none.
+type AuthAddResult struct {
+	Name   string `json:"name"`
+	ID     string `json:"id"`
+	Token  string `json:"token,omitempty"`
+	Pinned Pinned `json:"-"`
+}
+
+// AuthAdd adds an account to config.yaml. It gets no token (neither gh nor
+// the keychain is asked) and asks GitHub nothing; auth status checks it. The
+// stores that would be left with no account get it in the same write
+// (addAccount).
+func (ss *Session) AuthAdd(in AuthAddInput) (AuthAddResult, error) {
+	name, login, host := strings.TrimSpace(in.Name), strings.TrimSpace(in.Login), strings.TrimSpace(in.Host)
+	if name == "" {
+		return AuthAddResult{}, newErr(KindUsage, "auth.name", errors.New("an account name is needed"))
+	}
+	if login == "" {
+		return AuthAddResult{}, newErr(KindUsage, "auth.login", errors.New("the login of the account is needed"))
+	}
+	if host == "" {
+		host = "github.com"
+	}
+	tok, err := parseAddToken(strings.TrimSpace(in.Token))
+	if err != nil {
+		return AuthAddResult{}, err
+	}
+	acct := config.Account{Name: name, Host: host, Login: login, Token: tok}
+	c, _, err := ss.Config()
+	if err != nil {
+		return AuthAddResult{}, err
+	}
+	var pinned Pinned
+	if err := ss.updateConfig(c, func(c *config.Config) error {
+		if err := checkNewAccount(c, acct); err != nil {
+			return err
+		}
+		p, err := addAccount(c, acct)
+		pinned = p
+		return err
+	}); err != nil {
+		return AuthAddResult{}, err
+	}
+	return AuthAddResult{Name: acct.Name, ID: acct.ID(), Token: tok.String(), Pinned: pinned}, nil
+}
+
+// parseAddToken reads --token of auth add: gh, env:VAR or keychain. device
+// is left out: it comes only from a login.
+func parseAddToken(s string) (config.TokenSource, error) {
+	switch {
+	case s == "":
+		return config.TokenSource{}, nil
+	case s == "gh" || s == "keychain":
+		return config.TokenSource{Kind: s}, nil
+	}
+	if v, ok := strings.CutPrefix(s, "env:"); ok && v != "" {
+		return config.TokenSource{Kind: "env", Env: v}, nil
+	}
+	return config.TokenSource{}, newErr(KindUsage, "auth.token_source", fmt.Errorf("--token %q: want gh, env:<VAR> or keychain", s), "token", s)
+}
+
+// checkNewAccount refuses an account whose name, or whose host and login
+// (compared without case), an account of c has already: the rules config.yaml
+// is loaded by.
+func checkNewAccount(c *config.Config, acct config.Account) error {
+	for _, x := range c.Accounts {
+		switch {
+		case x.Name == acct.Name:
+			return newErr(KindConflict, "account.exists", fmt.Errorf("an account named %q is set up already (%s)", x.Name, x.ID()), "name", x.Name)
+		case config.SameAccount(x.ID(), acct.ID()):
+			return newErr(KindConflict, "account.exists", fmt.Errorf("account %s (%s) is set up already", x.Name, x.ID()), "name", x.Name)
+		}
+	}
+	return nil
 }
 
 // AuthStatus checks the token of each account against GitHub. When any is in
