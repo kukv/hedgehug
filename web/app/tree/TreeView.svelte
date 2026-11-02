@@ -17,6 +17,7 @@
   import StoreBadge from "../ui/StoreBadge.svelte";
   import AddRow from "./AddRow.svelte";
   import { createBelow, moveTask, patchTask } from "./actions";
+  import { type DropDecision, type DropPlace, dropDecision, rowDnd, treeAutoScroll } from "./dnd";
   import FilterBar from "./FilterBar.svelte";
   import { baseQuery, combine, hasTerm, NO_CANCELED, type QueryBase, withoutTerm } from "./filter";
   import {
@@ -413,6 +414,55 @@
     }
   }
 
+  // --- drag and drop ---------------------------------------------------------------------
+  let dragging = $state<string | null>(null);
+  let over = $state<{ ulid: string; place: DropPlace; decision: DropDecision } | null>(null);
+
+  function decide(sourceUlid: string, targetUlid: string, place: DropPlace): DropDecision | null {
+    const dragged = taskOf(sourceUlid);
+    const target = taskOf(targetUlid);
+    if (!dragged || !target) return null;
+    const siblings = rows.filter((r) => r.parent === target.parent).map((r) => r.ulid);
+    return dropDecision({ dragged, target, place, schema, taskOf, siblings });
+  }
+
+  function setOver(targetUlid: string, place: DropPlace | null, sourceUlid: string | null) {
+    if (!place || !sourceUlid) {
+      if (over?.ulid === targetUlid) over = null;
+      return;
+    }
+    if (over?.ulid === targetUlid && over.place === place) return;
+    const decision = decide(sourceUlid, targetUlid, place);
+    over = decision ? { ulid: targetUlid, place, decision } : null;
+  }
+
+  async function dropOn(sourceUlid: string, targetUlid: string, place: DropPlace) {
+    over = null;
+    dragging = null;
+    const d = decide(sourceUlid, targetUlid, place);
+    const t = taskOf(sourceUlid);
+    if (!d || !t) return;
+    if (!d.ok) {
+      if (!d.silent) toast({ message: `${d.title}。${d.reason}` });
+      return;
+    }
+    try {
+      if (d.to.parent) toggle(d.to.parent, true);
+      await moveTask(c, t, d.to);
+    } catch (err) {
+      toast({ message: errorMessage(err) });
+    }
+  }
+
+  function dropMarkOf(ulid: string): "before" | "after" | "child" | "reject" | null {
+    if (over?.ulid !== ulid) return null;
+    if (over.decision.ok) return over.place;
+    return over.decision.silent ? null : "reject";
+  }
+  const refusal = $derived(
+    over && !over.decision.ok && !over.decision.silent ? over.decision : null,
+  );
+
   // --- reading the screen ---------------------------------------------------------------
   const cli = $derived(
     cliLs(combine(cliBase, applied), true, scope.kind === "workspace" ? store : undefined),
@@ -480,6 +530,7 @@
     tabindex="-1"
     bind:this={scroller}
     {onkeydown}
+    {@attach treeAutoScroll()}
   >
     {#snippet entry(item: Item)}
       {#if item.type === "row"}
@@ -492,6 +543,19 @@
           blockedBy={openBlocker(item.row.task, taskOf, isClosed, blocked.has(item.row.ulid))}
           onselect={() => select(item.row.ulid)}
           ontoggle={() => toggle(item.row.ulid, !item.row.expanded)}
+          dragging={dragging === item.row.ulid}
+          dropMark={dropMarkOf(item.row.ulid)}
+          dnd={rowDnd({
+            ulid: item.row.ulid,
+            depth: item.row.depth,
+            onDragStart: () => (dragging = item.row.ulid),
+            onDragEnd: () => {
+              dragging = null;
+              over = null;
+            },
+            onOver: (place, source) => setOver(item.row.ulid, place, source),
+            onDrop: (source, place) => void dropOn(source, item.row.ulid, place),
+          })}
         />
       {:else}
         <AddRow
@@ -559,6 +623,13 @@
       </div>
     {/if}
   </div>
+
+  {#if refusal && !refusal.ok}
+    <aside class="refusal" role="status">
+      <strong>{refusal.title}</strong>
+      <p>{refusal.reason}</p>
+    </aside>
+  {/if}
 
   <footer class="keys">
     <span><kbd>Enter</kbd> 下に追加</span>
@@ -688,6 +759,22 @@
     background: var(--sunken);
     font-family: var(--font-mono);
     font-size: 0.7rem;
+    color: var(--ink-2);
+  }
+  .refusal {
+    margin: 0 1rem 0.5rem;
+    padding: 0.625rem 0.875rem;
+    border: var(--hairline) solid var(--danger);
+    border-radius: var(--radius-8);
+    background: var(--danger-weak);
+    color: var(--ink);
+  }
+  .refusal strong {
+    color: var(--danger);
+  }
+  .refusal p {
+    margin: 0.25rem 0 0;
+    font-size: 0.78rem;
     color: var(--ink-2);
   }
   .dnd {

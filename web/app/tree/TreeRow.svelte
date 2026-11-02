@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Attachment } from "svelte/attachments";
   import type { LiveMark } from "../../core/cache";
   import { formatDate } from "../../core/format";
   import type { SchemaView } from "../../core/schema";
@@ -19,8 +20,23 @@
     blockedBy: string | undefined; // the ID of the first blocker, when the task is blocked
     onselect: () => void;
     ontoggle: () => void;
+    dnd?: Attachment<HTMLElement>; // makes the row draggable and a drop target
+    dragging?: boolean; // this row is being dragged
+    dropMark?: "before" | "after" | "child" | "reject" | null; // what a drop on this row would do
   };
-  let { row, schema, selected, focusable, live, blockedBy, onselect, ontoggle }: Props = $props();
+  let {
+    row,
+    schema,
+    selected,
+    focusable,
+    live,
+    blockedBy,
+    onselect,
+    ontoggle,
+    dnd,
+    dragging = false,
+    dropMark = null,
+  }: Props = $props();
 
   const task = $derived(row.task);
   const category = $derived(schema?.statuses?.find((s) => s.name === task.status)?.category);
@@ -39,6 +55,8 @@
 <div
   class="row"
   class:selected
+  class:dragging
+  data-drop={dropMark ?? undefined}
   role="treeitem"
   aria-level={row.depth + 1}
   aria-selected={selected}
@@ -46,6 +64,7 @@
   tabindex={focusable ? 0 : -1}
   data-ulid={row.ulid}
   onclick={onselect}
+  {@attach dnd}
 >
   <span class="lead" style:padding-left="{0.4 + row.depth * 1.6}rem">
     {#if row.hasChildren}
@@ -95,6 +114,9 @@
         <Icon name="warning" size={11} />{problemLabel(problem)}
       </span>
     {/if}
+    {#if dropMark === "reject"}
+      <span class="refuse"><Icon name="forbid" size={11} />ここには置けません</span>
+    {/if}
   </span>
 
   <span class="tail">
@@ -133,6 +155,47 @@
   }
   .row:focus-visible {
     box-shadow: inset 0 0 0 var(--hairline) var(--accent);
+  }
+  .row.dragging {
+    opacity: 0.45;
+  }
+  .row[data-drop="before"]::before,
+  .row[data-drop="after"]::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: calc(var(--hairline) * 2);
+    border-radius: var(--radius-4);
+    background: var(--accent);
+    pointer-events: none;
+  }
+  .row[data-drop="before"]::before {
+    top: 0;
+  }
+  .row[data-drop="after"]::after {
+    bottom: 0;
+  }
+  .row[data-drop="child"] {
+    background: var(--accent-weak);
+    box-shadow: inset 0 0 0 calc(var(--hairline) * 1.5) var(--accent);
+  }
+  .row[data-drop="reject"] {
+    background: var(--danger-weak);
+    box-shadow: inset 0 0 0 calc(var(--hairline) * 1.5) var(--danger);
+  }
+  .refuse {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    height: 1.25rem;
+    padding: 0 0.5rem;
+    border-radius: var(--radius-pill);
+    background: var(--danger);
+    color: var(--surface);
+    font-size: 0.72rem;
+    font-weight: 500;
   }
   .lead {
     flex: 1 1 auto;
