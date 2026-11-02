@@ -33,6 +33,25 @@ jobs:
           go-version-file: go.mod
           cache: false
 
+      # golangci-lint の時間の大半は、パッケージを読み込むためのビルド（依存を含む）。
+      # テストと同じく Go のビルドキャッシュとモジュールキャッシュを使い、保存は main への push だけで行う。
+      - name: Locate Go caches
+        id: go-env
+        run: |
+          echo "gocache=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+          echo "gomodcache=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: go-cache
+        with:
+          path: |
+            ${{ steps.go-env.outputs.gocache }}
+            ${{ steps.go-env.outputs.gomodcache }}
+          key: go-${{ runner.os }}-${{ runner.arch }}-lint-${{ hashFiles('go.mod', 'go.sum') }}
+
+      - name: Verify the module cache
+        run: go mod verify
+
       - name: Verify go.mod and go.sum are tidy
         run: |
           go mod tidy
@@ -44,10 +63,17 @@ jobs:
         with:
           version: v2.15.0
           skip-save-cache: ${{ github.event_name != 'push' }}
-          args: --verbose
 
       - name: Format check
         run: golangci-lint fmt --diff ./...
+
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ${{ steps.go-env.outputs.gocache }}
+            ${{ steps.go-env.outputs.gomodcache }}
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
   # hedgehug は Linux と macOS 向けに配る（Windows では WSL で Linux 版を使う）。
   # データの置き場所やファイルシステムが OS ごとに違うので、テストは2つの OS で回す。
