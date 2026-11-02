@@ -126,8 +126,11 @@ describe("Enter", () => {
       parent: "P",
     });
   });
-  it("does nothing with the modifier: the detail is another screen", () => {
-    expect(keyAction(key("Enter", { mod: true }), ctx("T1"))).toEqual({ type: "none" });
+  it("opens the detail with the modifier", () => {
+    expect(keyAction(key("Enter", { mod: true }), ctx("T1"))).toEqual({
+      type: "open-detail",
+      ulid: "T1",
+    });
   });
   it("does nothing with no selection or with Shift / Alt", () => {
     expect(keyAction(key("Enter"), ctx(null))).toEqual({ type: "none" });

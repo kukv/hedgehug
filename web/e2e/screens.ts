@@ -14,6 +14,12 @@ import { expect, type Locator, type Page } from "@playwright/test";
 //   Toasts      one role "status" holds all the toasts: each has its message, and a link
 //               ("開く") or the button "取り消し"; other regions with role "status" exist
 //               (the save state, the bands of a task), so find a toast by its text
+//   Detail      the title is the textbox "タイトル"; the body is the textbox "本文"; the
+//               save state is the status "保存の状態" ("保存中…", "保存済み",
+//               "保存済み · push 待ち"); the property panel is the complementary region
+//               "プロパティ"; status, kind and the enum properties are buttons that open a
+//               menu of menuitems, named by the label ("ステータス", "priority"); a date
+//               property is an input labelled by its name ("due")
 
 //
 // Exceptions that hold on to a CSS class, because no role or text tells them apart: change them
@@ -36,9 +42,27 @@ export async function treeReady(page: Page): Promise<void> {
   await expect(page.getByRole("button", { name: /種類: \S/ })).toBeVisible();
 }
 
+export function createDialog(page: Page): Locator {
+  return page.getByRole("dialog", { name: "タスクを作成" });
+}
+
+/** Waits until the create dialog can create (it has read the schema of the store). */
+export async function createReady(dialog: Locator): Promise<void> {
+  await expect(dialog.getByRole("button", { name: /^作成/ })).toBeEnabled();
+}
+
 /** The toasts that have the text. */
 export function toast(page: Page, text: string | RegExp): Locator {
   return page.getByRole("status").filter({ hasText: text });
+}
+
+export function properties(page: Page): Locator {
+  return page.getByRole("complementary", { name: "プロパティ" });
+}
+
+/** The save state of the detail, once a change is on disk. */
+export function saved(page: Page): Locator {
+  return page.getByRole("status", { name: "保存の状態" }).filter({ hasText: /^保存済み/ });
 }
 
 /**

@@ -11,19 +11,26 @@ hedgehug is a single Go binary for Linux and macOS (on Windows, it runs in WSL).
   `.github/workflows/ci-backend.yaml`)
 - [gotestsum](https://github.com/gotestyourself/gotestsum) for `make test` and `make cover`
 - [GoReleaser](https://goreleaser.com/) v2 for `make release-check`
+- Node and pnpm, for the GUI in `web/` (the versions are pinned in `mise.toml`; `mise install`
+  installs them)
 - run `go env -w GOFLAGS=-trimpath` once: without it the build cache keys the packages of this module by their directory, so every worktree compiles and caches them again (`mise.toml` sets the same, but mise reads its `[env]` only for a trusted config). Note that this setting applies to all your Go projects, not just this repository; if you want it for this repository only, run `mise trust` on `mise.toml` instead
 
 ```bash
-make check          # everything CI checks: tidy, lint, fmt, test
+make check          # everything CI checks: tidy, lint, fmt, test, and the GUI (make web-check)
 make test           # tests with the race detector
 make cover          # tests with the race detector and coverage
 make fmt            # format with gofumpt + goimports
 make release-check  # goreleaser config and cross-compiling
-make build          # bin/hedgehug
+make web            # the GUI into web/dist (the binary embeds it)
+make build          # bin/hedgehug, with the GUI
+make e2e            # Playwright against bin/hedgehug
 make clean-cache    # empty the Go build cache when it grows too large
 
 go run ./cmd/hedgehug --version
 ```
+
+Run `pnpm fix` in `web/` before you commit GUI code: `make web-check` fails on anything Biome
+would format differently.
 
 Do not commit while `make check` fails. CI does not check the release configuration, so
 run `make release-check` too when you change `.goreleaser.yaml`.

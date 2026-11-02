@@ -21,6 +21,7 @@ export type KeyAction =
   | { type: "select"; ulid: string }
   | { type: "toggle"; ulid: string; open: boolean }
   | { type: "add-below"; after: string; parent: string | null }
+  | { type: "open-detail"; ulid: string }
   | { type: "move"; ulid: string; to: MoveArgs }
   | { type: "set-status"; ulid: string; status: string }
   | { type: "menu"; which: "status" | "kind"; ulid: string }
@@ -70,7 +71,8 @@ export function keyAction(k: KeyInput, c: KeyContext): KeyAction {
       return parent ? { type: "select", ulid: parent.ulid } : NONE;
     }
     case "Enter":
-      if (k.mod || k.shift || k.alt) return NONE;
+      if (k.mod) return { type: "open-detail", ulid: row.ulid };
+      if (k.shift || k.alt) return NONE;
       return { type: "add-below", after: row.ulid, parent: row.parent };
     case "Tab":
       if (k.mod || k.alt) return NONE;

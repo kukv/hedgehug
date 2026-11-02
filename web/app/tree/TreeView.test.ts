@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../core/api/client";
+import { closeCreate, createState } from "../create-state.svelte";
 import { selection } from "../selection.svelte";
 import { emitter } from "../test-utils";
 import { schema, task } from "./fixtures";
@@ -201,6 +202,7 @@ beforeEach(() => {
   h.go.mockReset();
   h.toast.mockReset();
   selection.set(null);
+  closeCreate();
 });
 
 describe("TreeView", () => {
@@ -212,11 +214,22 @@ describe("TreeView", () => {
     expect(screen.getByText("3 件 · 中止 0 件を除外")).toBeInTheDocument();
   });
 
-  it("selects a row on click", async () => {
+  it("clears the selection when the screen goes away", async () => {
+    setup();
+    const { unmount } = render(TreeView, { view: { kind: "project", ulid: "P" } });
+    await fireEvent.click(screen.getByText("Web のクライアントを更新"));
+    expect(selection.ulid).toBe("T3");
+    unmount();
+    expect(selection.ulid).toBeNull();
+  });
+
+  it("selects a row on click and opens the detail on double click", async () => {
     setup();
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     await fireEvent.click(screen.getByText("Web のクライアントを更新"));
     expect(selection.ulid).toBe("T3");
+    await fireEvent.dblClick(screen.getByText("Web のクライアントを更新"));
+    expect(h.go).toHaveBeenCalledWith("/tasks/T3");
   });
 
   it("keeps the title typed before the schema is read, and adds the task once it is", async () => {
@@ -872,11 +885,12 @@ describe("TreeView", () => {
 describe("TreeView empty states", () => {
   const empty = [{ ulid: "P", children: [] }];
 
-  it("says that an empty project has no task yet, with no button for a screen that is not there", () => {
+  it("offers to create the first task of an empty project", async () => {
     setup({ roots: empty });
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     expect(screen.getByText("リリース準備 v2.4 にはまだタスクがありません")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /タスクを作成/ })).toBeNull();
+    await fireEvent.click(screen.getByRole("button", { name: /タスクを作成/ }));
+    expect(createState.request).toEqual({ kind: "task", parent: "P" });
   });
 
   it("says that nothing matches a filter and clears it", async () => {

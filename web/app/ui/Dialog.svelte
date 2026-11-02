@@ -37,7 +37,11 @@
     const opener = document.activeElement as HTMLElement | null;
     stack.push(me);
     tick().then(() => {
-      const first = body?.querySelector<HTMLElement>(FOCUSABLE) ?? focusables()[0] ?? panel;
+      const first =
+        body?.querySelector<HTMLElement>("[data-autofocus]") ??
+        body?.querySelector<HTMLElement>(FOCUSABLE) ??
+        focusables()[0] ??
+        panel;
       first?.focus();
     });
     return () => {
@@ -49,6 +53,8 @@
 
   function onkeydown(e: KeyboardEvent) {
     if (!open || !panel || stack[stack.length - 1] !== me) return;
+    // Esc while an IME converts text only cancels the conversion.
+    if (e.isComposing || e.keyCode === 229) return;
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();

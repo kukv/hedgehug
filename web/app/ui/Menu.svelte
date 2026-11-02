@@ -123,6 +123,13 @@
     }
   }
 
+  // Something else took the focus (a dialog or the palette opened by a key): the menu is not wanted any more.
+  function onfocusout(e: FocusEvent) {
+    const to = e.relatedTarget as Node | null;
+    if (!to || !root || root.contains(to) || anchor?.contains(to)) return;
+    onclose();
+  }
+
   function onwindowpointerdown(e: PointerEvent) {
     const t = e.target as Node | null;
     if (!root || root.contains(t) || anchor?.contains(t)) return;
@@ -141,6 +148,7 @@
   style:top="{pos.top}px"
   style:left="{pos.left}px"
   {onkeydown}
+  {onfocusout}
 >
   {#each items as it, i (it.value)}
     <button

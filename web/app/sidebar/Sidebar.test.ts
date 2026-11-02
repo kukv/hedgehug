@@ -1,5 +1,7 @@
 import { cleanup, fireEvent } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { closeCreate, createState } from "../create-state.svelte";
+import { closePalette, palette } from "../palette-state.svelte";
 import { renderWithCore } from "../test-utils";
 import Sidebar from "./Sidebar.svelte";
 
@@ -35,6 +37,8 @@ function mount() {
 
 beforeEach(() => {
   history.replaceState(null, "", "/");
+  closePalette();
+  closeCreate();
 });
 afterEach(() => {
   cleanup();
@@ -94,5 +98,34 @@ describe("Sidebar", () => {
     const { getByRole } = mount();
     await fireEvent.click(getByRole("link", { name: /リリース準備 v2.4/ }));
     expect(location.pathname).toBe("/projects/01PRJ1");
+  });
+
+  it("ほかのダイアログが開いている間は ⌘K を無視する", async () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
+    mount();
+    const dlg = document.createElement("div");
+    dlg.setAttribute("aria-modal", "true");
+    document.body.append(dlg);
+    await fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    expect(palette.open).toBe(false);
+    dlg.remove();
+    await fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    expect(palette.open).toBe(true);
+  });
+
+  it("検索欄と ⌘K でパレットを開く", async () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
+    const { getByRole } = mount();
+    await fireEvent.click(getByRole("button", { name: /ID・検索・コマンド/ }));
+    expect(palette.open).toBe(true);
+    closePalette();
+    await fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    expect(palette.open).toBe(true);
+  });
+
+  it("プロジェクトを追加で作成ダイアログの要求を出す", async () => {
+    const { getByRole } = mount();
+    await fireEvent.click(getByRole("button", { name: "プロジェクトを追加" }));
+    expect(createState.request).toEqual({ kind: "project" });
   });
 });

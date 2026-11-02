@@ -1,7 +1,11 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { core } from "../context";
+  import { openCreate } from "../create-state.svelte";
   import Icon from "../icons/Icon.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
+  import { kbdLabel, registerShortcut } from "../keys";
+  import { openPalette } from "../palette-state.svelte";
   import { hrefOf, onLinkClick, router } from "../router";
   import { useSubscribe } from "../svelte-store";
   import StoreBadge from "../ui/StoreBadge.svelte";
@@ -10,6 +14,14 @@
   const { stores } = core();
   const workspaces = useSubscribe(stores, () => stores.workspaces());
   const route = $derived(router.route);
+
+  onMount(() =>
+    registerShortcut("mod+k", () => {
+      // Another dialog is open: leave it alone. The palette itself is not one.
+      if (document.querySelector('[aria-modal="true"]:not([data-palette])')) return;
+      openPalette();
+    }),
+  );
 
   function workspaceActive(store: string, ulid: string, index: number): boolean {
     const r = route;
@@ -24,9 +36,23 @@
     <span class="host">{location.host}</span>
   </div>
 
+  <button type="button" class="search" onclick={openPalette}>
+    <Icon name="search" size={15} />
+    <span class="ph">ID・検索・コマンド</span>
+    <kbd>{kbdLabel("mod+k")}</kbd>
+  </button>
+
   <section class="ws-section" aria-label="ワークスペース">
     <div class="ws-head">
       <span class="ws-title">ワークスペース</span>
+      <button
+        type="button"
+        class="add"
+        aria-label="プロジェクトを追加"
+        onclick={() => openCreate({ kind: "project" })}
+      >
+        <Icon name="folder-plus" size={14} />
+      </button>
     </div>
 
     {#each workspaces.current as w, i (`${w.store}/${w.ulid}`)}
@@ -110,6 +136,26 @@
     font-family: var(--font-mono);
     font-size: var(--fs-11);
   }
+  .search {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    width: 100%;
+    min-height: var(--control-h);
+    padding: 0 var(--space-10);
+    border: 1px solid var(--line-input);
+    border-radius: var(--radius-8);
+    background: var(--surface);
+    color: var(--label);
+    text-align: left;
+    cursor: pointer;
+  }
+  .ph {
+    flex: 1;
+  }
+  kbd {
+    font-size: var(--fs-11);
+  }
   .ws-section {
     display: flex;
     flex-direction: column;
@@ -126,6 +172,21 @@
     font-size: var(--fs-11);
     font-weight: 600;
     letter-spacing: 0.04em;
+  }
+  .add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--control-h-sm);
+    height: var(--control-h-sm);
+    border: 0;
+    border-radius: var(--radius-6);
+    background: transparent;
+    color: var(--label);
+    cursor: pointer;
+  }
+  .add:hover {
+    background: var(--hover);
   }
   .ws {
     display: flex;

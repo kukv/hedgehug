@@ -47,6 +47,8 @@ type DetailState = {
   ulid: string | null;
   error: ApiError | null;
   seq: number;
+  // the latest fetch: a fetch that a newer one overtook waits for it
+  last: Promise<void>;
 };
 
 type Mark = { mark: LiveMark; commit: string; timer: ReturnType<typeof setTimeout> };
@@ -107,6 +109,18 @@ export class TaskCache {
   // each task, so that a fetch sent before a write does not undo it.
   private epoch = 0;
   private readonly lastWrite = new Map<string, number>();
+  // lastChange holds the epoch of the latest change an event brought (a change from outside, not
+  // a write of this tab): a read that began before it is older than what the event started to fetch.
+  private readonly lastChange = new Map<string, number>();
+  // resyncAt is the epoch of the last resync: what changed while the connection was lost is not in lastChange.
+  private resyncAt = 0;
+  // rowSeqs holds the latest fetch (a number from rowSeq) of a row nobody holds, so that an answer a newer one
+  // overtook is dropped. An entry lasts only while its fetch is on its way.
+  private rowSeq = 0;
+  private readonly rowSeqs = new Map<string, number>();
+  // rowSince holds, for each row, the since of the last read that put it in or found it the same (the
+  // epoch of the write for a write): a row an event or a resync changed after that is older than the task.
+  private readonly rowSince = new Map<string, number>();
   private dirty = false;
   private refreshQueued = false;
   private refreshAll = false;
@@ -116,7 +130,10 @@ export class TaskCache {
     this.api = opts.api;
     this.now = opts.now ?? Date.now;
     opts.conn.on("tasks.changed", (e) => this.onTasksChanged(e));
-    opts.conn.on("resync", () => this.queueRefresh(null));
+    opts.conn.on("resync", () => {
+      this.resyncAt = ++this.epoch;
+      this.queueRefresh(null);
+    });
   }
 
   task(ulid: string): TaskView | undefined {
@@ -172,7 +189,7 @@ export class TaskCache {
   watchDetail(idOrUlid: string) {
     let s = this.details.get(idOrUlid);
     if (!s) {
-      s = { key: idOrUlid, refs: 0, ulid: null, error: null, seq: 0 };
+      s = { key: idOrUlid, refs: 0, ulid: null, error: null, seq: 0, last: Promise.resolve() };
       this.details.set(idOrUlid, s);
       void this.fetchDetail(s);
     }
@@ -215,6 +232,23 @@ export class TaskCache {
     this.flush();
   }
 
+  // epochNow is the point a read begins at: pass it to prime, taken before the request is sent.
+  epochNow(): number {
+    return this.epoch;
+  }
+
+  // prime takes in tasks a read brought (a search, a lookup): not a write, so a fetch that is on
+  // its way is not held back by it. since is the epochNow of before the read was sent: a task
+  // written or changed by an event after that is newer than what the read brought.
+  prime(tasks: (TaskView | ShowView)[], since: number): void {
+    for (const t of tasks) {
+      if (!this.changedSince(t.ulid, since)) this.ingest(t, since);
+      // a row in the cache is fetched again once the round of that event or resync has answered
+      else if (!this.rows.has(t.ulid)) this.refetchStale(t.ulid, t.store);
+    }
+    this.flush();
+  }
+
   // setBody puts the text a write sent into the detail: the answer of a write
   // is a row, which has no body.
   setBody(ulid: string, body: string): void {
@@ -231,6 +265,10 @@ export class TaskCache {
 
   private wroteSince(ulid: string, since: number): boolean {
     return (this.lastWrite.get(ulid) ?? 0) > since;
+  }
+
+  private changedSince(ulid: string, since: number): boolean {
+    return Math.max(this.lastChange.get(ulid) ?? 0, this.resyncAt) > since;
   }
 
   // refreshTrees fetches the trees on screen again and resolves once they hold the answer, so
@@ -353,6 +391,7 @@ export class TaskCache {
     const sig = JSON.stringify(row);
     const old = this.rows.get(row.ulid);
     if (since !== undefined && this.wroteSince(row.ulid, since)) return old ?? row;
+    this.rowSince.set(row.ulid, since ?? this.epoch);
     if (old && this.rowSigs.get(row.ulid) === sig) return old;
     this.rows.set(row.ulid, row);
     this.rowSigs.set(row.ulid, sig);
@@ -362,14 +401,20 @@ export class TaskCache {
 
   // ---- details
 
-  private async fetchDetail(s: DetailState): Promise<void> {
+  private fetchDetail(s: DetailState): Promise<void> {
+    const p = this.runDetail(s);
+    s.last = p;
+    return p;
+  }
+
+  private async runDetail(s: DetailState): Promise<void> {
     const seq = ++s.seq;
     const since = this.epoch;
     try {
       const show = await unwrap(
         this.api.GET("/api/tasks/{id}", { params: { path: { id: s.key } } }),
       );
-      if (seq !== s.seq) return;
+      if (seq !== s.seq) return s.last; // a newer fetch is on its way
       const stale = this.wroteSince(show.ulid, since);
       const gone = this.gone(show.ulid, since);
       const row = this.ingest(show, since);
@@ -377,13 +422,14 @@ export class TaskCache {
         this.putShow(stale ? { ...show, ...row } : show);
       }
       // The answer is older than a write (an event came before the answer of
-      // the write): what only a ShowView has is fetched again after the write.
-      if (stale && !gone) this.queueRefresh([show.ulid]);
+      // the write): what only a ShowView has is fetched again after the write. An event that came
+      // before the first answer of a detail opened by its ID did not know its ULID: it is fetched again.
+      if ((stale || this.changedSince(show.ulid, since)) && !gone) this.queueRefresh([show.ulid]);
       if (s.error || s.ulid !== show.ulid) this.dirty = true;
       s.ulid = show.ulid;
       s.error = null;
     } catch (e) {
-      if (seq !== s.seq) return;
+      if (seq !== s.seq) return s.last;
       const err = toApiError(e);
       s.error = err;
       this.dirty = true;
@@ -410,6 +456,8 @@ export class TaskCache {
     this.shows.delete(ulid);
     this.showSigs.delete(ulid);
     this.dropMark(ulid);
+    this.rowSeqs.delete(ulid);
+    this.rowSince.delete(ulid);
     this.dirty = true;
   }
 
@@ -422,6 +470,7 @@ export class TaskCache {
       const label = SYNC_OPS.has(e.op) ? "同期で更新 · 今" : "CLI で更新 · 今";
       for (const u of ulids) this.setMark(u, label, e.commit);
     }
+    for (const u of [...ulids, ...removed]) this.lastChange.set(u, ++this.epoch);
     for (const u of removed) {
       this.markWrite(u);
       this.forget(u);
@@ -450,7 +499,9 @@ export class TaskCache {
 
   // queueRefresh fetches again what is on screen: every query (a create, a
   // move or a delete changes the order), and the details of ulids; null is
-  // every detail. Events that come in one turn make one round of requests.
+  // every detail. Events that come in one turn make one round of requests. Once the round has
+  // answered, a row of ulids (every row after a resync) that no answer brought is fetched by itself:
+  // the change took it out of the query that held it.
   private queueRefresh(ulids: string[] | null): void {
     if (ulids === null) this.refreshAll = true;
     else for (const u of ulids) this.refreshUlids.add(u);
@@ -462,11 +513,72 @@ export class TaskCache {
       const us = this.refreshUlids;
       this.refreshAll = false;
       this.refreshUlids = new Set();
-      for (const s of this.queries.values()) void this.fetchQuery(s);
+      const round: Promise<unknown>[] = [];
+      for (const s of this.queries.values()) round.push(this.fetchQuery(s));
       for (const s of this.details.values()) {
-        if (all || us.has(s.key) || (s.ulid !== null && us.has(s.ulid))) void this.fetchDetail(s);
+        if (all || us.has(s.key) || (s.ulid !== null && us.has(s.ulid)))
+          round.push(this.fetchDetail(s));
       }
+      // A row no query or detail holds (the blocker of a task, a crumb) has nobody to fetch it again.
+      // After a resync that is every row it holds: the events of the time it was not connected are lost.
+      const held = this.heldUlids();
+      for (const u of all ? [...this.rows.keys()] : us) {
+        if (this.rows.has(u) && !held.has(u)) void this.fetchRow(u);
+      }
+      void Promise.all(round).then(() => {
+        for (const u of all ? [...this.rows.keys()] : us)
+          if (this.rows.has(u)) this.refetchStale(u);
+      });
     });
+  }
+
+  private heldUlids(): Set<string> {
+    const held = new Set<string>();
+    const walk = (ns: TreeNode[]) => {
+      for (const n of ns) {
+        held.add(n.ulid);
+        walk(n.children);
+      }
+    };
+    for (const s of this.queries.values()) {
+      for (const u of s.ulids) held.add(u);
+      walk(s.roots);
+      for (const u of s.cycle) held.add(u);
+    }
+    for (const s of this.details.values()) if (s.ulid) held.add(s.ulid);
+    return held;
+  }
+
+  // refetchStale fetches a row that is not in the cache, or whose last read is older than an event or
+  // a resync: for a read whose answer was dropped as older than that, and for the rows of a round of
+  // queueRefresh once it has answered. One fetch at a time: one on its way does the same when its own
+  // answer is dropped. Each fetch again needs a new event, so it ends once they stop.
+  private refetchStale(ulid: string, store?: string): void {
+    if (this.rows.has(ulid) && !this.changedSince(ulid, this.rowSince.get(ulid) ?? 0)) return;
+    if (this.rowSeqs.has(ulid)) return;
+    void this.fetchRow(ulid, store);
+  }
+
+  private async fetchRow(ulid: string, store?: string): Promise<void> {
+    const since = this.epoch;
+    const seq = ++this.rowSeq;
+    this.rowSeqs.set(ulid, seq);
+    store ??= this.rows.get(ulid)?.store;
+    try {
+      const show = await unwrap(
+        this.api.GET("/api/tasks/{id}", { params: { path: { id: ulid }, query: { store } } }),
+      );
+      if (seq !== this.rowSeqs.get(ulid)) return; // a newer fetch of this row is on its way
+      this.rowSeqs.delete(ulid);
+      if (this.changedSince(ulid, since)) this.refetchStale(ulid, store);
+      else if (!this.gone(ulid, since)) this.ingest(show, since);
+    } catch (e) {
+      if (seq !== this.rowSeqs.get(ulid)) return;
+      this.rowSeqs.delete(ulid);
+      if (e instanceof ApiError && e.status === 404 && !this.wroteSince(ulid, since))
+        this.forget(ulid);
+    }
+    this.flush();
   }
 
   private flush(): void {
