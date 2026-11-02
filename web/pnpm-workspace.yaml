@@ -1,0 +1,32 @@
+# --- サプライチェーン強化 (bright-room/repository-fanout の設定に準拠) ---
+# 公開から 7 日 (10080 分) 未満のバージョンは推移的依存も含めインストールしない
+minimumReleaseAge: 10080
+# パッケージの信頼レベル (provenance) が前回より下がったらインストールを止める
+trustPolicy: no-downgrade
+# 未承認のビルドスクリプトを持つ依存があれば install を非ゼロ終了で失敗させる
+strictDepBuilds: true
+# 推移的依存が git / tarball URL 等の exotic source を使うのを禁止（直接依存のみ可）
+blockExoticSubdeps: true
+# peer 依存の欠落・不整合があれば install を失敗させる
+strictPeerDependencies: true
+# 7 日を待たずに入れるもの。下の overrides の脆弱性の修正版 (minimatch 11.0.1、2026-10-27 公開) と
+# その依存だけ。修正を待たせないため
+minimumReleaseAgeExclude:
+  - minimatch@11.0.1
+  - "@isaacs/nonrecursive-glob-match@1.0.1"
+
+# openapi-typescript (最新 7.13.0) の peer は typescript ^5.x だが、svelte-check が
+# 対応する TypeScript 6 を使う。pnpm gen が 6 で同じ型を出すことは確かめてある。
+# openapi-typescript が 6 を peer に含めたら削除すること。
+peerDependencyRules:
+  allowedVersions:
+    openapi-typescript>typescript: "6"
+
+# 脆弱性修正版を推移的依存に強制する。
+# `pnpm update <名前>` は推移的依存にしか現れないパッケージには効かないため、
+# 直接依存を持たないものはここで固定する。修正が上流に取り込まれて不要になったら削除すること。
+overrides:
+  # GHSA-g3hv-75wg-m249 (DoS)。@redocly/openapi-core (openapi-typescript) が 5.x を使い、
+  # 修正は 11.0.1 だけ。redocly が minimatch を呼ぶのはリモートの $ref のヘッダーの照合だけで、
+  # pnpm gen はそこを通らない
+  minimatch: 11.0.1

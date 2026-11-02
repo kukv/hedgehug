@@ -3,6 +3,8 @@ version: 2
 before:
   hooks:
     - go mod tidy
+    # The binaries embed web/dist. It is not in git, so build it here.
+    - make web
 
 builds:
   - id: hedgehug
