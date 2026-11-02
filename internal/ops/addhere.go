@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"slices"
@@ -36,6 +37,9 @@ func (ss *Session) AddHere(in AddHereInput) (AddHereResult, *hhctx.Confirm, *hhc
 		return AddHereResult{}, nil, nil, err
 	}
 	ctx := in.Context
+	if ctx.Parent == "" && ctx.Project == "" {
+		ctx.Sibling = cmp.Or(in.Task.Before, in.Task.After)
+	}
 	if ctx.Store == "" {
 		ctx.Store = ss.StoreName
 	}
@@ -72,7 +76,11 @@ func (ss *Session) AddHere(in AddHereInput) (AddHereResult, *hhctx.Confirm, *hhc
 	task.Store = dest.Store.Name
 	task.Workspace = dest.Workspace.ULID.String()
 	task.Parent = ""
-	if dest.Parent != nil {
+	if ctx.Sibling != "" {
+		// the sibling decided the place: Add takes the parent and the workspace from it, and
+		// says add.position for a --workspace that does not fit
+		task.Workspace = ctx.Workspace
+	} else if dest.Parent != nil {
 		task.Parent = dest.Parent.ULID.String()
 		// a --workspace given with the parent is for Add to check against it
 		task.Workspace = ctx.Workspace

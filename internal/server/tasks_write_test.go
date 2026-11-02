@@ -84,6 +84,7 @@ func TestCreateTaskBeforeAfter(t *testing.T) {
 	if out.Task.Parent == nil {
 		t.Fatalf("created = %+v", out)
 	}
+	k3Parent := *out.Task.Parent
 	ts.call("GET", "/api/tasks", nil, 200, &list)
 	got = nil
 	for _, x := range list.Tasks {
@@ -92,6 +93,25 @@ func TestCreateTaskBeforeAfter(t *testing.T) {
 		}
 	}
 	if want := []string{"k1", "k3", "k2"}; !slices.Equal(got, want) {
+		t.Errorf("children = %v; want %v", got, want)
+	}
+
+	// no parent and no workspace: the sibling's
+	ts.call("POST", "/api/tasks", map[string]any{"title": "k4", "after": k1}, 201, &out)
+	if out.Task.Parent == nil || out.Task.Workspace == nil {
+		t.Fatalf("created = %+v", out)
+	}
+	if *out.Task.Parent != k3Parent {
+		t.Errorf("parent = %v; want %s", *out.Task.Parent, k3Parent)
+	}
+	ts.call("GET", "/api/tasks", nil, 200, &list)
+	got = nil
+	for _, x := range list.Tasks {
+		if x.Parent != nil {
+			got = append(got, x.Title)
+		}
+	}
+	if want := []string{"k1", "k4", "k3", "k2"}; !slices.Equal(got, want) {
 		t.Errorf("children = %v; want %v", got, want)
 	}
 }

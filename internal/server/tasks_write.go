@@ -204,8 +204,8 @@ type createInput struct {
 		Labels    []string       `json:"labels,omitempty"`
 		Repos     []string       `json:"repos,omitempty" doc:"The repo IDs to put on the task"`
 		Props     map[string]any `json:"props,omitempty" doc:"Property name to value"`
-		Before    string         `json:"before,omitempty" doc:"Put it before this sibling"`
-		After     string         `json:"after,omitempty" doc:"Put it after this sibling"`
+		Before    string         `json:"before,omitempty" doc:"Put it before this sibling; without a parent, it goes under the sibling's parent and in its workspace"`
+		After     string         `json:"after,omitempty" doc:"Put it after this sibling; without a parent, it goes under the sibling's parent and in its workspace"`
 	}
 }
 

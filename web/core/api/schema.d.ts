@@ -568,10 +568,10 @@ export interface components {
             total: number;
         };
         CreateInputBody: {
-            /** @description Put it after this sibling */
+            /** @description Put it after this sibling; without a parent, it goes under the sibling's parent and in its workspace */
             after?: string;
             assignees?: string[] | null;
-            /** @description Put it before this sibling */
+            /** @description Put it before this sibling; without a parent, it goes under the sibling's parent and in its workspace */
             before?: string;
             /** @description The body in Markdown */
             body?: string;

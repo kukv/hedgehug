@@ -279,7 +279,6 @@ func TestAddPositionErrors(t *testing.T) {
 		kind Kind
 		code string
 	}{
-		{"not a sibling", AddInput{Title: "t", Workspace: "me", After: "ME-3"}, KindInvalid, "add.position"},
 		{"under another parent", AddInput{Title: "t", Parent: "ME-2", Before: "ME-2"}, KindInvalid, "add.position"},
 		{"deleted", AddInput{Title: "t", Workspace: "me", After: "ME-1"}, KindInvalid, "add.position"},
 		{"other workspace", AddInput{Title: "t", Workspace: "me", After: "API-1"}, KindInvalid, "add.position"},

@@ -29,8 +29,11 @@ const UseGoneWarning = "the project of hedgehug use is not found (hedgehug use -
 type Input struct {
 	Dir                               string // the current directory; "" skips stages 3 and 4
 	Store, Project, Parent, Workspace string // --store, --project, --parent, --workspace
-	DefaultStore                      string // config's default_store
-	Interactive                       bool   // stdin is a terminal: stages 3–5 may ask
+	// Sibling is the --before or --after task. With no Parent or Project it
+	// decides the destination (stage 1): the sibling's parent and workspace.
+	Sibling      string
+	DefaultStore string // config's default_store
+	Interactive  bool   // stdin is a terminal: stages 3–5 may ask
 	// The answers to what an earlier call asked; zero when not asked.
 	BranchParent  Answer // stage 3
 	PickProject   string // stage 4: the store-qualified id picked
@@ -214,7 +217,7 @@ func repoIDsOf(repo *git.Repository) []string {
 // explicit is stage 1.
 func (r *resolver) explicit(*git.Repository, []string) (result, error) {
 	in := r.in
-	if in.Store == "" && in.Project == "" && in.Parent == "" && in.Workspace == "" {
+	if in.Store == "" && in.Project == "" && in.Parent == "" && in.Workspace == "" && in.Sibling == "" {
 		return result{}, nil
 	}
 	if in.Parent != "" && in.Project != "" {
@@ -231,6 +234,10 @@ func (r *resolver) explicit(*git.Repository, []string) (result, error) {
 				fmt.Errorf("%s is a %s, not a project", label, e.Kind), "id", label, "kind", e.Kind)
 		}
 		d, err := parentDest(m, e, 1)
+		return result{dest: d}, err
+	}
+	if in.Sibling != "" {
+		d, err := r.siblingDest(in.Sibling)
 		return result{dest: d}, err
 	}
 	if in.Store == "" {
@@ -301,6 +308,43 @@ func (r *resolver) findTask(arg string) (*mount.Mounted, *index.Entry, error) {
 func (r *resolver) hasStore(name string) bool {
 	_, ok := r.set.Get(name)
 	return ok
+}
+
+// siblingDest is the destination of a task that goes next to the task arg
+// names: under its parent, in its workspace. A --workspace that names another
+// one is kept, for Add to refuse.
+func (r *resolver) siblingDest(arg string) (*Destination, error) {
+	m, sib, err := r.findTask(arg)
+	if err != nil {
+		return nil, err
+	}
+	var d *Destination
+	var rerr error
+	if err := m.With(func(ix *index.Index) {
+		w, ok := ix.Workspace(sib.Workspace)
+		if !ok {
+			w = &model.Workspace{ULID: sib.Workspace}
+		}
+		if r.in.Workspace != "" {
+			var f *model.Workspace
+			if f, rerr = ix.ResolveWorkspace(r.in.Workspace); rerr != nil {
+				rerr = &LookupError{What: "workspace", Input: r.in.Workspace, Store: m, Err: rerr}
+				return
+			}
+			w = f
+		}
+		cw := *w
+		d = &Destination{Store: m, Workspace: &cw, Stage: 1}
+		if sib.Parent != nil {
+			if p, ok := ix.Task(*sib.Parent); ok {
+				cp := *p
+				d.Parent = &cp
+			}
+		}
+	}); err != nil {
+		return nil, err
+	}
+	return d, rerr
 }
 
 // parentDest is the destination under the entry e of m.
