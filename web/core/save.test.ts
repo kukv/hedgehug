@@ -243,6 +243,7 @@ describe("SaveController", () => {
   });
 
   it("saves the next edit after a subscriber threw inside a save", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
     const { save, patches } = setup();
     let boom = true;
     save.subscribe(() => {
@@ -258,6 +259,7 @@ describe("SaveController", () => {
     await save.flush("A");
     expect(patches().map((p) => (p.body as { title: string }).title)).toEqual(["one", "two"]);
     expect(save.state("A").kind).toBe("saved");
+    err.mockRestore();
   });
 
   it("saves the next edit after the cache threw on an answer", async () => {
