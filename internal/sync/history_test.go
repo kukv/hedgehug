@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
+	histidx "github.com/kukv/hedgehug/internal/history"
 	"github.com/kukv/hedgehug/internal/model"
 )
 
@@ -94,7 +96,7 @@ func TestMergeAuthorOfTheSameTimeIsTheLargerWriter(t *testing.T) {
 	// Both sides changed the file in the same second: the larger writer is
 	// the author, on either side.
 	for _, sides := range [][2]plumbing.Hash{{small, large}, {large, small}} {
-		got, err := mergeAuthor(s, base, sides[0], sides[1])("a.md")
+		got, err := mergeAuthor(r, historyOf(s), base, sides[0], sides[1])("a.md")
 		if err != nil || got != "c@x" {
 			t.Errorf("mergeAuthor(head %s, remote %s) = %q, %v; want c@x", sides[0], sides[1], got, err)
 		}
@@ -117,5 +119,37 @@ func TestSidesOtherFile(t *testing.T) {
 	}
 	if o.Author != "github.com/u0" || o.Time.IsZero() {
 		t.Errorf("ours = %q %v", o.Author, o.Time)
+	}
+}
+
+// The history index is a cache: a head it lacks, an index that cannot be
+// opened, or none at all, still gives the author by walking.
+func TestHeadAuthorFallsBackToTheWalk(t *testing.T) {
+	t.Parallel()
+	s := newCluster(t, 1).stores[0]
+	r := s.Repo()
+	stale, err := histidx.Open(s, histidx.Options{}) // before the next commit
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(s.Dir(), "a.md"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	head, err := r.Commit(gitrepo.Commit{
+		Paths: []string{"a.md"}, Parents: []plumbing.Hash{mustHead(t, s)}, Subject: "x",
+		Author: gitrepo.Signature{Name: "n", Email: "w@x"}, When: time.Now(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, open := range map[string]historyOpener{
+		"head not in the index":  func() (*histidx.History, error) { return stale, nil },
+		"index cannot be opened": func() (*histidx.History, error) { return nil, errors.New("broken") },
+		"no index":               nil,
+	} {
+		got, err := headAuthor(r, open, head)("a.md")
+		if err != nil || got != "w@x" {
+			t.Errorf("%s: author = %q, %v; want w@x", name, got, err)
+		}
 	}
 }

@@ -165,7 +165,7 @@ func MakeRebuild(s *store.Store, opt Options) (b *Rebuild, err error) {
 	}
 	defer func() { _ = ns.Repo().Close() }()
 	ns.SetNow(opt.Now)
-	newHead, err := replay(s, ns, nr, tracked, oldHead, head, opt, b)
+	newHead, err := replay(r, ns, nr, tracked, oldHead, head, opt, b)
 	if err != nil {
 		return nil, err
 	}
@@ -210,8 +210,7 @@ func taskOfPath(p string) (model.ULID, bool) {
 // origin, as one commit in ns; it returns the head of ns then. The files of
 // the tasks the new history lacks are left out of the merge, and a task of
 // them that the unpushed commits changed goes to b.Purged.
-func replay(s *store.Store, ns *store.Store, nr *gitrepo.Repo, tracked, oldHead, head plumbing.Hash, opt Options, b *Rebuild) (plumbing.Hash, error) {
-	r := s.Repo()
+func replay(r *gitrepo.Repo, ns *store.Store, nr *gitrepo.Repo, tracked, oldHead, head plumbing.Hash, opt Options, b *Rebuild) (plumbing.Hash, error) {
 	mine, err := r.Between(oldHead, tracked)
 	if err != nil {
 		return head, err
@@ -238,7 +237,7 @@ func replay(s *store.Store, ns *store.Store, nr *gitrepo.Repo, tracked, oldHead,
 	// The merge is computed from the new head's side, so that its files are
 	// the changes to make to the clone; the rule is symmetric.
 	opt.origin, opt.skip = head, skip
-	m, err := mergeTrees(s, base, head, oldHead, opt)
+	m, err := mergeTrees(r, nil, base, head, oldHead, opt) // head is new on origin: no index has it
 	if err != nil {
 		return head, err
 	}

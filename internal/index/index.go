@@ -11,6 +11,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
+	"github.com/kukv/hedgehug/internal/history"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
@@ -29,6 +30,12 @@ type Index struct {
 	// qualified says whether ids of a prefix show with the store's name,
 	// set by SetQualified; Refresh keeps it
 	qualified func(prefix string) bool
+
+	// lc finds the last change of a file for the forwards met in one update;
+	// update drops it, so that the history index is opened once per update.
+	lc lastChangeFunc
+	// openHistory opens the history index; nil means history.Open.
+	openHistory func() (*history.History, error)
 
 	// Read from the tree each time it changes; the cache does not hold them.
 	workspaces map[model.ULID]*model.Workspace

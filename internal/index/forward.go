@@ -169,7 +169,10 @@ func (ix *Index) resolveForwardIDs(entries []*ForwardEntry) error {
 // decode.
 func (ix *Index) lastTask(ulid model.ULID) (*model.Task, error) {
 	p := model.TaskPath(ulid)
-	lc := ix.lastChanger()
+	if ix.lc == nil {
+		ix.lc = ix.lastChanger()
+	}
+	lc := ix.lc
 	from, err := ix.repo.Head()
 	if err != nil {
 		return nil, err
@@ -222,15 +225,22 @@ type lastChangeFunc func(from plumbing.Hash, p string) (gitrepo.LogEntry, bool, 
 
 // lastChanger returns a lastChangeFunc that reads the history index, opened
 // on the first call so that an index with no forward to resolve never loads
-// it. A commit the index does not have is searched by walking.
+// it. The index is a cache: when it cannot be opened, or does not have the
+// commit asked about, the history is searched by walking.
 func (ix *Index) lastChanger() lastChangeFunc {
 	var h *history.History
+	tried := false
 	return func(from plumbing.Hash, p string) (gitrepo.LogEntry, bool, error) {
-		if h == nil {
-			var err error
-			if h, err = history.Open(ix.s, history.Options{}); err != nil {
-				return gitrepo.LogEntry{}, false, err
+		if !tried {
+			tried = true
+			open := ix.openHistory
+			if open == nil {
+				open = func() (*history.History, error) { return history.Open(ix.s, history.Options{}) }
 			}
+			h, _ = open() // on an error h stays nil and every call walks
+		}
+		if h == nil {
+			return ix.repo.LastChange(from, plumbing.ZeroHash, p)
 		}
 		c, ok, err := h.LastChange(p, from)
 		if errors.Is(err, history.ErrNotIndexed) {
