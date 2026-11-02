@@ -112,7 +112,7 @@ func TestAssignIDsRefusesABadPrefix(t *testing.T) {
 		}
 		mustWrite(t, s, model.WorkspacePath(ws.ULID), string(b)) // as if edited by hand
 		err = put(s, newTaskIn(ws, "x"))
-		if err == nil || !strings.Contains(err.Error(), model.WorkspacePath(ws.ULID)) || !strings.Contains(err.Error(), "hedgehug workspace prefix") {
+		if err == nil || !strings.Contains(err.Error(), model.WorkspacePath(ws.ULID)) || !strings.Contains(err.Error(), "hedgehug workspace set-prefix") {
 			t.Errorf("prefix %q: err = %v", prefix, err)
 		}
 	}

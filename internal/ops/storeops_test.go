@@ -307,7 +307,7 @@ func TestStoreAddWarnsOfPrefixDuplicates(t *testing.T) {
 		t.Fatalf("warns = %q; want one", other.warns)
 	}
 	w := other.warns[0]
-	if !strings.HasPrefix(w, "ME is also the id prefix of workspace ") || !strings.Contains(w, "; the one set later (workspace ") || !strings.HasSuffix(w, ") should change it with hedgehug workspace prefix") {
+	if !strings.HasPrefix(w, "ME is also the id prefix of workspace ") || !strings.Contains(w, "; the one set later (workspace ") || !strings.HasSuffix(w, ") should change it with hedgehug workspace set-prefix") {
 		t.Errorf("warning = %q", w)
 	}
 }
@@ -328,7 +328,7 @@ func TestWarnPrefixDuplicatesNamesTheLaterWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	ts.warnPrefixDuplicates(c, "late", s)
-	want := "ME is also the id prefix of workspace me in store me; the one set later (workspace late in store late) should change it with hedgehug workspace prefix"
+	want := "ME is also the id prefix of workspace me in store me; the one set later (workspace late in store late) should change it with hedgehug workspace set-prefix"
 	if len(ts.warns) != 1 || ts.warns[0] != want {
 		t.Errorf("warns = %q; want %q", ts.warns, want)
 	}

@@ -686,7 +686,7 @@ func duplicateContent(ix *index.Index, it inbox.Item, storeName string, manyStor
 	if manyStores {
 		where = " --store " + storeName
 	}
-	return fmt.Sprintf("%s is also used by %s; change it with hedgehug%s workspace prefix %s <new prefix>", prefix, text, where, ws)
+	return fmt.Sprintf("%s is also used by %s; change it with hedgehug%s workspace set-prefix %s <new prefix>", prefix, text, where, ws)
 }
 
 // compactJSON is v on one line without spaces between tokens.

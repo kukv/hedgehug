@@ -536,7 +536,7 @@ func (ss *Session) warnPrefixDuplicates(c *config.Config, name string, s *store.
 			if !setLater(m, w) {
 				later = fmt.Sprintf("workspace %s in store %s", w.Name, u.Store)
 			}
-			ss.warn(fmt.Sprintf("%s is also the id prefix of workspace %s in store %s; the one set later (%s) should change it with hedgehug workspace prefix",
+			ss.warn(fmt.Sprintf("%s is also the id prefix of workspace %s in store %s; the one set later (%s) should change it with hedgehug workspace set-prefix",
 				m.IDPrefix, w.Name, u.Store, later))
 		}
 	}

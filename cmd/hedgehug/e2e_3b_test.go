@@ -222,7 +222,7 @@ func TestE2EPhase3b(t *testing.T) {
 	var c struct {
 		ULID string `json:"ulid"`
 	}
-	if err := json.Unmarshal([]byte(bob.ok("comment", "WEB-1", "from bob", "--json")), &c); err != nil || c.ULID == "" {
+	if err := json.Unmarshal([]byte(bob.ok("comment", "add", "WEB-1", "from bob", "--json")), &c); err != nil || c.ULID == "" {
 		t.Fatalf("bob's comment: %v", err)
 	}
 	bob.ok("sync")
@@ -243,7 +243,7 @@ func TestE2EPhase3b(t *testing.T) {
 
 	// mentions: bob is a collaborator of org-a, so there is no warning; once
 	// GitHub no longer lists him and a sync has read that, a mention warns.
-	if _, errs := alice.okIn("", "comment", "WEB-1", "hello @bob"); strings.Contains(errs, "cannot read") {
+	if _, errs := alice.okIn("", "comment", "add", "WEB-1", "hello @bob"); strings.Contains(errs, "cannot read") {
 		t.Errorf("a mention of a reader warned: %q", errs)
 	}
 	if err := fake.SetPerm("org-a/hh-shared", "bob", "none"); err != nil {
@@ -274,7 +274,7 @@ func TestE2EPhase3b(t *testing.T) {
 	if mem, err := hhsync.ReadMembers(orgA); err != nil || mem.Collaborators == nil || slices.ContainsFunc(mem.Collaborators, func(c hhsync.Collaborator) bool { return strings.HasSuffix(c.ID, "/bob") }) {
 		t.Errorf("members.json after the sync: %+v (%v), want collaborators without bob", mem, err)
 	}
-	if _, errs := alice.okIn("", "comment", "WEB-1", "again @bob"); !strings.Contains(errs, "warning: bob cannot read org-a") {
+	if _, errs := alice.okIn("", "comment", "add", "WEB-1", "again @bob"); !strings.Contains(errs, "warning: bob cannot read org-a") {
 		t.Errorf("a mention of someone who cannot read: %q", errs)
 	}
 }

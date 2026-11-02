@@ -14,13 +14,30 @@ import (
 
 func (a *app) commentCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "comment <id> [text...]",
+		Use:   "comment",
 		Short: "Add a comment to a task, or edit or delete one",
-		Long:  "Add a comment to a task. Without text, the body is written in $EDITOR.",
-		Args:  minArgs(1),
-		RunE:  func(_ *cobra.Command, args []string) error { return a.commentAdd(args[0], args[1:]) },
+		// hedgehug comment <id> was the way to add one; say so rather than
+		// fail with an unknown command.
+		Args: func(_ *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				return usageErrorf("%q is not a subcommand; add a comment with hedgehug comment add <id> [text...] (the others are edit and rm)", args[0])
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.SetOut(cmd.ErrOrStderr())
+			_ = cmd.Usage()
+			return usageErrorf("a subcommand is needed")
+		},
 	}
 	cmd.AddCommand(
+		&cobra.Command{
+			Use:   "add <id> [text...]",
+			Short: "Add a comment to a task",
+			Long:  "Add a comment to a task. Without text, the body is written in $EDITOR.",
+			Args:  minArgs(1),
+			RunE:  func(_ *cobra.Command, args []string) error { return a.commentAdd(args[0], args[1:]) },
+		},
 		&cobra.Command{
 			Use:   "edit <comment-ulid>",
 			Short: "Edit the body of a comment in $EDITOR",

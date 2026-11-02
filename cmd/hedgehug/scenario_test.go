@@ -48,7 +48,7 @@ func TestScenario(t *testing.T) {
 	// body for comment edit.
 	te.editWith(setLine(te.raw(g.ULID), "title", "Form fields"), "second\n")
 	step("edit", "edit", g.ID)
-	step("comment", "comment", g.ID, "first")
+	step("comment", "comment", "add", g.ID, "first")
 	cm := te.comments(g.ULID)
 	if len(cm) != 1 {
 		t.Fatalf("comments = %d, want 1", len(cm))

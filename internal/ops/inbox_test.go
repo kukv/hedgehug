@@ -452,11 +452,11 @@ func TestDuplicateContent(t *testing.T) {
 		many bool
 		want string
 	}{
-		{"prefix of one store", item("prefix_duplicate", w, `"ME"`), false, "ME is also used by another workspace; change it with hedgehug workspace prefix me <new prefix>"},
-		{"prefix with many stores", item("prefix_duplicate", w, `"ME"`), true, "ME is also used by another workspace; change it with hedgehug --store s1 workspace prefix me <new prefix>"},
-		{"prefix of another store", item("prefix_duplicate", w, `{"store":"other","workspace":"w9"}`), false, "ME is also used by workspace w9 in store other; change it with hedgehug workspace prefix me <new prefix>"},
+		{"prefix of one store", item("prefix_duplicate", w, `"ME"`), false, "ME is also used by another workspace; change it with hedgehug workspace set-prefix me <new prefix>"},
+		{"prefix with many stores", item("prefix_duplicate", w, `"ME"`), true, "ME is also used by another workspace; change it with hedgehug --store s1 workspace set-prefix me <new prefix>"},
+		{"prefix of another store", item("prefix_duplicate", w, `{"store":"other","workspace":"w9"}`), false, "ME is also used by workspace w9 in store other; change it with hedgehug workspace set-prefix me <new prefix>"},
 		{"name of one store", item("name_duplicate", w, `"me"`), false, "me is also the name of another workspace; change it with hedgehug workspace rename me <new name>"},
-		{"workspace not in the index", item("prefix_duplicate", other.String(), `"ZZ"`), false, "ZZ is also used by another workspace; change it with hedgehug workspace prefix " + other.String() + " <new prefix>"},
+		{"workspace not in the index", item("prefix_duplicate", other.String(), `"ZZ"`), false, "ZZ is also used by another workspace; change it with hedgehug workspace set-prefix " + other.String() + " <new prefix>"},
 	} {
 		if got := duplicateContent(ix, c.it, "s1", c.many); got != c.want {
 			t.Errorf("%s: %q; want %q", c.name, got, c.want)
@@ -487,7 +487,7 @@ func TestDuplicateContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, ix, _ = ts.Open()
-	if got, want := duplicateContent(ix, item("prefix_duplicate", w, `"ME"`), "s1", false), "ME is also used by workspace me2; change it with hedgehug workspace prefix me <new prefix>"; got != want {
+	if got, want := duplicateContent(ix, item("prefix_duplicate", w, `"ME"`), "s1", false), "ME is also used by workspace me2; change it with hedgehug workspace set-prefix me <new prefix>"; got != want {
 		t.Errorf("shared prefix: %q; want %q", got, want)
 	}
 	if got, want := duplicateContent(ix, item("name_duplicate", w, `"me2"`), "s1", false), "me2 is also the name of workspace me2; change it with hedgehug workspace rename me <new name>"; got != want {

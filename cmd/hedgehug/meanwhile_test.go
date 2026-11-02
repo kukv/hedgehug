@@ -72,7 +72,7 @@ func TestWorkspacePrefixRenumbersATaskAddedMeanwhile(t *testing.T) {
 	p := te.addJSON("p")
 	var c model.ULID
 	te.meanwhile(putChild(p.ULID, &c))
-	out := te.ok("workspace", "prefix", "me", "NEW")
+	out := te.ok("workspace", "set-prefix", "me", "NEW")
 	if got := te.task(c.String()); got.ID != "NEW-2" {
 		t.Errorf("the task added meanwhile: id %s", got.ID)
 	}
@@ -282,7 +282,7 @@ func TestWorkspaceSubjectsSeeARenameMeanwhile(t *testing.T) {
 		t.Errorf("rename subject = %q", subj)
 	}
 	te.meanwhile(rename(me, "other"))
-	te.ok("workspace", "prefix", "last", "NEW")
+	te.ok("workspace", "set-prefix", "last", "NEW")
 	if subj, _ := te.lastCommit(); subj != "hedgehug: workspace prefix other ME → NEW" {
 		t.Errorf("prefix subject = %q", subj)
 	}
@@ -315,7 +315,7 @@ func TestWorkspacePrefixToAPrefixSetMeanwhileChangesNothing(t *testing.T) {
 		return tx.PutWorkspace(w)
 	})
 	before := len(te.log("me"))
-	out := te.ok("workspace", "prefix", "me", "NEW")
+	out := te.ok("workspace", "set-prefix", "me", "NEW")
 	if !strings.HasPrefix(out, "No changes") || strings.Contains(out, "→") {
 		t.Errorf("prefix =\n%s", out)
 	}

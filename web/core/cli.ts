@@ -99,10 +99,10 @@ export const cliRestore = (id: string): string => cliLine(["restore", id]);
 export const cliRestoreAt = (id: string, commit: string): string =>
   cliLine(["restore", id, "--at", commit]);
 
-// cliComment is hh comment (add), hh comment edit <comment> or hh comment rm
-// <comment>; edit and rm take the ULID of the comment as cid.
+// cliComment is hh comment add <id>, hh comment edit <comment> or hh comment
+// rm <comment>; edit and rm take the ULID of the comment as cid.
 export function cliComment(id: string, kind: "add" | "edit" | "rm", cid?: string): string {
-  if (kind === "add") return cliLine(["comment", id]);
+  if (kind === "add") return cliLine(["comment", "add", id]);
   return cliLine(["comment", kind, cid ?? id]);
 }
 
