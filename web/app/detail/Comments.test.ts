@@ -277,6 +277,42 @@ describe("Comments", () => {
     });
   }
 
+  for (const edited of [false, true]) {
+    it(`deletes a comment posted here before a read has it${edited ? ", after an edit" : ""}`, async () => {
+      const { k, container, rerender } = setup();
+      const mine = { ulid: "C9", author: "koki", created: "2026-11-04T12:00:00Z", body: "自分の" };
+      const other = { ulid: "C2", author: "sato", created: "2026-11-04T11:00:00Z", body: "他の人" };
+      k.api.POST.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
+      k.api.PATCH.mockImplementation(() =>
+        ok({ comment: { ...mine, body: "直した自分の" }, commit: "c5" }),
+      );
+      k.api.DELETE.mockImplementation(() => ok({ comment: mine, commit: "c6" }));
+      typeInto(container, "自分の", 0);
+      await fireEvent.click(await screen.findByRole("button", { name: "コメント" }));
+      let text = "自分の";
+      expect(await screen.findByText(text)).toBeInTheDocument();
+      if (edited) {
+        const edits = screen.getAllByRole("button", { name: "編集" });
+        await fireEvent.click(edits[edits.length - 1] as HTMLElement);
+        text = "直した自分の";
+        typeInto(container, text, 0);
+        await fireEvent.click(await screen.findByRole("button", { name: "保存" }));
+        expect(await screen.findByText(text)).toBeInTheDocument();
+      }
+      const removes = screen.getAllByRole("button", { name: "削除" });
+      await fireEvent.click(removes[removes.length - 1] as HTMLElement);
+      const dialog = await screen.findByRole("dialog", { name: "コメントを削除" });
+      await fireEvent.click(within(dialog).getByRole("button", { name: "削除" }));
+      await waitFor(() => expect(screen.queryByText(text)).toBeNull());
+      expect(screen.getByRole("heading", { name: /コメント/ })).toHaveTextContent("1");
+      // a read that lacks it (sent before the post, or after the deletion)
+      await rerender({ show: { ...show, comments: [c1, other] }, readonly: false });
+      expect(await screen.findByText("他の人")).toBeInTheDocument();
+      expect(screen.queryByText(text)).toBeNull();
+      expect(screen.queryByText("自分の")).toBeNull();
+    });
+  }
+
   it("posts once when the key is pressed twice before the answer", async () => {
     const { k, container } = setup();
     k.api.POST.mockImplementation(() => new Promise(() => {}));

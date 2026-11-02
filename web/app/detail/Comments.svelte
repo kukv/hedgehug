@@ -154,7 +154,12 @@
         }),
       );
       cache.noteOwnCommit(r.commit);
-      overlay.removed = [...overlay.removed, c.ulid];
+      if (overlay.added.some((a) => a.ulid === c.ulid)) {
+        // posted here and not read yet: what was written here is all there is of it
+        const { [c.ulid]: _, ...changed } = overlay.changed;
+        overlay.added = overlay.added.filter((a) => a.ulid !== c.ulid);
+        overlay.changed = changed;
+      } else overlay.removed = [...overlay.removed, c.ulid];
       deleting = null;
       toast({ message: "コメントを削除しました" });
     } catch (e) {
