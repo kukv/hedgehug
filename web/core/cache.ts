@@ -432,8 +432,9 @@ export class TaskCache {
         this.putShow(stale ? { ...show, ...row } : show);
       }
       // The answer is older than a write (an event came before the answer of
-      // the write): what only a ShowView has is fetched again after the write.
-      if (stale && !gone) this.queueRefresh([show.ulid]);
+      // the write): what only a ShowView has is fetched again after the write. An event that came
+      // before the first answer of a detail opened by its ID did not know its ULID: it is fetched again.
+      if ((stale || this.changedSince(show.ulid, since)) && !gone) this.queueRefresh([show.ulid]);
       if (s.error || s.ulid !== show.ulid) this.dirty = true;
       s.ulid = show.ulid;
       s.error = null;

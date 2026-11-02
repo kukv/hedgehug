@@ -788,6 +788,26 @@ describe("TaskCache a row that leaves the query holding it", () => {
     w.dispose();
   });
 
+  it("fetches a detail opened by its ID again when an event came before its first answer", async () => {
+    let v = 0;
+    const held: (() => void)[] = [];
+    const { cache, conn } = setup(() => {
+      const t = showOf(tv("X", `v${v}`));
+      return new Promise((done) => held.push(() => done(t)));
+    });
+    const d = cache.watchDetail("T-X"); // its ULID is not known until it answers
+    await vi.waitFor(() => expect(held).toHaveLength(1));
+    v = 1;
+    conn.emit("tasks.changed", changed("shared", ["X"], "c1"));
+    await settle();
+    held.shift()?.(); // it answers v0, older than the event
+    await vi.waitFor(() => expect(held).toHaveLength(1));
+    held.shift()?.();
+    await vi.waitFor(() => expect(cache.detail("X")?.title).toBe("v1"));
+    expect(cache.task("X")?.title).toBe("v1");
+    d.dispose();
+  });
+
   it("waits for the newer fetch of a detail before it looks for rows no answer brought", async () => {
     let v = 0;
     const held: (() => void)[] = [];
