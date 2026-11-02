@@ -122,7 +122,7 @@ func TestAddHereRepoPutsTheRepoOnTheTask(t *testing.T) {
 		t.Errorf("Repo with repos given: repos = %q", got)
 	}
 	// Repo outside a repository is a usage error
-	_, _, _, err = ts.AddHere(AddHereInput{Context: hhctx.Input{Dir: t.TempDir(), Store: "org-a"}, Repo: true, Task: AddInput{Title: "bare"}})
+	_, _, _, err = ts.AddHere(AddHereInput{Context: hhctx.Input{Dir: repoDir(t, "", ""), Store: "org-a"}, Repo: true, Task: AddInput{Title: "bare"}})
 	wantCode(t, "Repo outside a repository", err, KindUsage, "add.repo_unavailable")
 	// no repository, no link
 	r, _, _, err = ts.AddHere(AddHereInput{Context: hhctx.Input{Dir: t.TempDir(), Store: "org-a"}, Task: AddInput{Title: "bare"}})

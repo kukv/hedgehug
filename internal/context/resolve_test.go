@@ -391,11 +391,12 @@ func TestNeedRepoFailsBeforeAnyQuestion(t *testing.T) {
 	t.Parallel()
 	_, set := newWorld(t)
 	// not a repository, a repository without a remote, and a remote that gives no repo ID
+	// (every directory is in a repository of its own, so the search upwards
+	// never reaches a checkout that TMPDIR may be in)
 	for name, dir := range map[string]string{
-		"no repository": t.TempDir(),
-		"no remote":     gitDir(t, ""),
-		"no repo id":    gitDir(t, "", "origin", "/tmp/x.git"),
-		"no directory":  "",
+		"no remote":    gitDir(t, ""),
+		"no repo id":   gitDir(t, "", "origin", "/tmp/x.git"),
+		"no directory": "",
 	} {
 		_, cf, ch, _, err := resolve(t, set, State{}, Input{Dir: dir, Interactive: true, NeedRepo: true})
 		if cf != nil || ch != nil {

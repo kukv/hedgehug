@@ -54,15 +54,18 @@ func TestAddInACloneGoesUnderItsProjectAndLinksTheRepoOnlyWithRepo(t *testing.T)
 	if repos := te.task(got.ULID).Repos; len(repos) != 0 {
 		t.Errorf("without --repo: repos = %q", repos)
 	}
-	// --repo puts the repository on the task; a -p repos= assignment is a set
-	// and replaces the list, as it always did
-	l := te.addJSON("linked", "--repo")
-	if repos := te.task(l.ULID).Repos; len(repos) != 1 || repos[0] != "github.com/org-a/web" {
-		t.Errorf("--repo: repos = %q; want the repository", repos)
+	// --repo puts the repository first, whatever -p repos= or repos+= says
+	l := te.addJSON("linked", "--repo", "-p", "repos=github.com/o/other")
+	if repos := te.task(l.ULID).Repos; len(repos) != 2 || repos[0] != "github.com/org-a/web" || repos[1] != "github.com/o/other" {
+		t.Errorf("--repo: repos = %q; want the repository first, then the one given", repos)
 	}
-	o := te.addJSON("replaced", "--repo", "-p", "repos=github.com/o/other")
-	if repos := te.task(o.ULID).Repos; len(repos) != 1 || repos[0] != "github.com/o/other" {
-		t.Errorf("--repo with -p repos=: repos = %q; want the assignment to replace the list", repos)
+	m := te.addJSON("appended", "--repo", "-p", "repos+=github.com/o/other")
+	if repos := te.task(m.ULID).Repos; len(repos) != 2 || repos[0] != "github.com/org-a/web" || repos[1] != "github.com/o/other" {
+		t.Errorf("--repo with repos+=: repos = %q; want the repository first, then the one given", repos)
+	}
+	d := te.addJSON("listed", "--repo", "-p", "repos=github.com/org-a/web")
+	if repos := te.task(d.ULID).Repos; len(repos) != 1 || repos[0] != "github.com/org-a/web" {
+		t.Errorf("--repo with the repository listed: repos = %q; want it once", repos)
 	}
 	// an explicit workspace is the root, whatever the repository says
 	root := te.addJSON("elsewhere", "--workspace", "me")

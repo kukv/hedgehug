@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
-	"slices"
 
 	hhctx "github.com/kukv/hedgehug/internal/context"
 	"github.com/kukv/hedgehug/internal/index"
@@ -86,8 +85,8 @@ func (ss *Session) AddHere(in AddHereInput) (AddHereResult, *hhctx.Confirm, *hhc
 		// a --workspace given with the parent is for Add to check against it
 		task.Workspace = ctx.Workspace
 	}
-	if in.Repo && !slices.Contains(task.Repos, dest.RepoID) {
-		task.Repos = append([]string{dest.RepoID}, task.Repos...)
+	if in.Repo {
+		task.FirstRepo = dest.RepoID
 	}
 	res, err := ss.Add(task)
 	if err != nil {
