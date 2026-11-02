@@ -156,7 +156,7 @@ func TestE2EPhase3b(t *testing.T) {
 	// with web on the task, and told where it went.
 	projectULID := taskOf(t, alice, "org-a:ORG-1").ULID
 	web := filepath.Join(alice.home, "src", "web")
-	out, _ = alice.okIn(web, "add", "x")
+	out, _ = alice.okIn(web, "add", "x", "--repo")
 	if !strings.Contains(out, "→ added to org-a / Web release") {
 		t.Errorf("add in the clone of web:\n%s", out)
 	}
@@ -184,8 +184,13 @@ func TestE2EPhase3b(t *testing.T) {
 	if onBranch.Parent == web1 || onBranch.Parent != projectULID {
 		t.Errorf("the task on the branch hh/WEB-1-x has parent %s, want the project %s (not WEB-1 %s)", onBranch.Parent, projectULID, web1)
 	}
-	if out, _ := alice.okIn(web, "add", "z", "--no-repo"); !strings.Contains(out, "added to org-a / Web release") {
-		t.Errorf("add --no-repo in the clone:\n%s", out)
+	// without --repo the task goes to the same place and has no repo on it
+	var plain taskInfo
+	out, _ = alice.okIn(web, "add", "z", "--json")
+	if err := json.Unmarshal([]byte(out), &plain); err != nil || plain.Parent != projectULID {
+		t.Errorf("add without --repo in the clone: %v %q (project %s)", err, out, projectULID)
+	} else if x := taskOf(t, alice, plain.ULID); len(x.Repos) != 0 {
+		t.Errorf("a task added in the clone without --repo has repos %q", x.Repos)
 	}
 
 	// use: the id is shown with its store as ORG is in two (D7); new tasks go

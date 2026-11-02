@@ -20,8 +20,10 @@ func (te *testEnv) cloneDir(branch, url string) {
 	if err != nil {
 		te.t.Fatal(err)
 	}
-	if _, err := repo.CreateRemote(&gitconfig.RemoteConfig{Name: "origin", URLs: []string{url}}); err != nil {
-		te.t.Fatal(err)
+	if url != "" {
+		if _, err := repo.CreateRemote(&gitconfig.RemoteConfig{Name: "origin", URLs: []string{url}}); err != nil {
+			te.t.Fatal(err)
+		}
 	}
 	if branch != "" {
 		if err := repo.Storer.SetReference(plumbing.NewSymbolicReference(plumbing.HEAD, plumbing.NewBranchReferenceName(branch))); err != nil {
@@ -31,11 +33,12 @@ func (te *testEnv) cloneDir(branch, url string) {
 	te.dir = dir
 }
 
-func TestAddInACloneLinksTheRepoAndGoesUnderItsProject(t *testing.T) {
+func TestAddInACloneGoesUnderItsProjectAndLinksTheRepoOnlyWithRepo(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	te.cloneDir("", "https://github.com/Org-A/Web.git")
-	p := te.addJSON("Web release", "--kind", "project")
+	// the project is found by the repo on it, so it is added with --repo
+	p := te.addJSON("Web release", "--kind", "project", "--repo")
 	if got := te.task(p.ULID).Repos; len(got) != 1 || got[0] != "github.com/org-a/web" {
 		t.Fatalf("project repos = %q; want the repo ID of origin", got)
 	}
@@ -43,17 +46,23 @@ func TestAddInACloneLinksTheRepoAndGoesUnderItsProject(t *testing.T) {
 	if !strings.HasSuffix(out, "→ added to me / Web release\n") {
 		t.Errorf("stdout = %q", out)
 	}
+	// without --repo the place is the same and the repository is not on the task
 	got := te.addJSON("again")
 	if got.Store != "me" || got.Parent == nil || *got.Parent != p.ULID || got.Workspace == nil || got.Workspace.Name != "me" {
 		t.Errorf("task = %+v; want store me, parent %s, workspace me", got, p.ULID)
 	}
-	if repos := te.task(got.ULID).Repos; len(repos) != 1 || repos[0] != "github.com/org-a/web" {
-		t.Errorf("repos = %q", repos)
+	if repos := te.task(got.ULID).Repos; len(repos) != 0 {
+		t.Errorf("without --repo: repos = %q", repos)
 	}
-	// --no-repo leaves the link off
-	n := te.addJSON("unlinked", "--no-repo")
-	if repos := te.task(n.ULID).Repos; len(repos) != 0 {
-		t.Errorf("--no-repo: repos = %q", repos)
+	// --repo puts the repository on the task; a -p repos= assignment is a set
+	// and replaces the list, as it always did
+	l := te.addJSON("linked", "--repo")
+	if repos := te.task(l.ULID).Repos; len(repos) != 1 || repos[0] != "github.com/org-a/web" {
+		t.Errorf("--repo: repos = %q; want the repository", repos)
+	}
+	o := te.addJSON("replaced", "--repo", "-p", "repos=github.com/o/other")
+	if repos := te.task(o.ULID).Repos; len(repos) != 1 || repos[0] != "github.com/o/other" {
+		t.Errorf("--repo with -p repos=: repos = %q; want the assignment to replace the list", repos)
 	}
 	// an explicit workspace is the root, whatever the repository says
 	root := te.addJSON("elsewhere", "--workspace", "me")
@@ -65,12 +74,37 @@ func TestAddInACloneLinksTheRepoAndGoesUnderItsProject(t *testing.T) {
 	}
 }
 
+func TestAddRepoNeedsARepositoryAndNoRepoIsGone(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	before := len(te.log("me"))
+	// no current repository
+	code, _, errs := te.run("add", "x", "--repo")
+	if code != 2 || !strings.Contains(errs, "--repo needs the current directory to be in a git repository with a remote that gives a repo ID") {
+		t.Errorf("--repo outside a repository: exit %d, stderr %q", code, errs)
+	}
+	// a repository without a remote
+	te.cloneDir("", "")
+	code, _, errs = te.run("add", "x", "--repo")
+	if code != 2 || !strings.Contains(errs, "--repo needs the current directory") {
+		t.Errorf("--repo in a repository without a remote: exit %d, stderr %q", code, errs)
+	}
+	// --no-repo was removed
+	code, _, errs = te.run("add", "x", "--no-repo")
+	if code != 2 || !strings.Contains(errs, "unknown flag: --no-repo") {
+		t.Errorf("--no-repo: exit %d, stderr %q; want 2 and an unknown flag", code, errs)
+	}
+	if n := len(te.log("me")); n != before {
+		t.Errorf("commits = %d, want %d: nothing is written", n, before)
+	}
+}
+
 func TestAddAsksThePlaceOnATerminal(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	te.cloneDir("", "https://github.com/org-a/web")
-	te.addJSON("Web A", "--kind", "project")
-	te.addJSON("Web B", "--kind", "project", "--workspace", "me")
+	te.addJSON("Web A", "--kind", "project", "--repo")
+	te.addJSON("Web B", "--kind", "project", "--workspace", "me", "--repo")
 	te.terminal = true
 
 	// two projects, none recent: a numbered list and no default
@@ -109,8 +143,8 @@ func TestAddWithoutRecentAndNoTerminalNamesTheCandidates(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	te.cloneDir("", "https://github.com/org-a/web")
-	te.addJSON("Web A", "--kind", "project")
-	te.addJSON("Web B", "--kind", "project", "--workspace", "me")
+	te.addJSON("Web A", "--kind", "project", "--repo")
+	te.addJSON("Web B", "--kind", "project", "--workspace", "me", "--repo")
 	code, _, errs := te.run("add", "x")
 	if code != 2 || !strings.Contains(errs, "me:ME-1") || !strings.Contains(errs, "me:ME-2") {
 		t.Errorf("exit %d, stderr %q; want 2 with the candidates", code, errs)

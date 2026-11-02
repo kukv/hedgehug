@@ -387,6 +387,30 @@ func TestRepoIDIsSetWhateverStageDecided(t *testing.T) {
 	}
 }
 
+func TestNeedRepoFailsBeforeAnyQuestion(t *testing.T) {
+	t.Parallel()
+	_, set := newWorld(t)
+	// not a repository, a repository without a remote, and a remote that gives no repo ID
+	for name, dir := range map[string]string{
+		"no repository": t.TempDir(),
+		"no remote":     gitDir(t, ""),
+		"no repo id":    gitDir(t, "", "origin", "/tmp/x.git"),
+		"no directory":  "",
+	} {
+		_, cf, ch, _, err := resolve(t, set, State{}, Input{Dir: dir, Interactive: true, NeedRepo: true})
+		if cf != nil || ch != nil {
+			t.Errorf("%s: asked %v %v before failing", name, cf, ch)
+		}
+		wantKind(t, err, KindUsage, "add.repo_unavailable")
+	}
+	// with a repo ID it is not an error, and the stages are the same as without
+	dir := gitDir(t, "", "origin", "https://github.com/o/r.git")
+	d := mustDest(t, set, State{}, Input{Dir: dir, Parent: "WEB-1", NeedRepo: true})
+	if d.Stage != 1 || d.RepoID != "github.com/o/r" {
+		t.Errorf("stage %d RepoID %q", d.Stage, d.RepoID)
+	}
+}
+
 func TestDefaultStage(t *testing.T) {
 	t.Parallel()
 	_, set := newWorld(t)

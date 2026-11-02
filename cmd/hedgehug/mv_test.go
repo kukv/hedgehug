@@ -65,16 +65,16 @@ func TestAddAfterBefore(t *testing.T) {
 	a := te.addJSON("A")
 	b := te.addJSON("B")
 	n := len(te.log("me"))
-	te.ok("add", "after-a", "--no-repo", "--after", a.ID)
+	te.ok("add", "after-a", "--after", a.ID)
 	if got := len(te.log("me")); got != n+1 {
 		t.Errorf("commits %d -> %d; want one new commit", n, got)
 	}
-	te.ok("add", "before-b", "--no-repo", "--before", b.ID)
+	te.ok("add", "before-b", "--before", b.ID)
 	got := strings.Fields(te.ok("ls", "--tree", "--format", "{{.title}}"))
 	if want := []string{"A", "after-a", "before-b", "B"}; !slices.Equal(got, want) {
 		t.Errorf("order = %v; want %v", got, want)
 	}
-	code, _, stderr := te.run("add", "x", "--no-repo", "--before", a.ID, "--after", b.ID)
+	code, _, stderr := te.run("add", "x", "--before", a.ID, "--after", b.ID)
 	if code != 2 || !strings.Contains(stderr, "not both") {
 		t.Errorf("both: code %d stderr %q", code, stderr)
 	}
