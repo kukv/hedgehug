@@ -21,6 +21,8 @@
     typed = applied;
   });
 
+  $effect(() => () => clearTimeout(timer));
+
   function input(e: Event) {
     typed = (e.currentTarget as HTMLInputElement).value;
     clearTimeout(timer);

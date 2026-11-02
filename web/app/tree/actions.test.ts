@@ -57,7 +57,7 @@ describe("createBelow", () => {
 
   it("creates and then moves after the row above it", async () => {
     const d = deps();
-    const t = await createBelow(d, { ...base, after: "T1", afterIsLast: false });
+    const t = await createBelow(d, { ...base, after: "T1" });
     expect(d.api.POST).toHaveBeenNthCalledWith(1, "/api/tasks", {
       params: { query: { store: "shared" } },
       body: { title: "new", kind: "task", parent: "P" },
@@ -69,15 +69,21 @@ describe("createBelow", () => {
     expect(t.ulid).toBe("N1");
   });
 
-  it("does not move when it goes after the last sibling", async () => {
+  it("moves even after the last row shown: the filter may hide later siblings", async () => {
     const d = deps();
-    await createBelow(d, { ...base, after: "T9", afterIsLast: true });
+    await createBelow(d, { ...base, after: "T9" });
+    expect(d.api.POST).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not move when it goes to the end of the list", async () => {
+    const d = deps();
+    await createBelow(d, { ...base, after: null });
     expect(d.api.POST).toHaveBeenCalledTimes(1);
   });
 
   it("names the workspace when there is no parent", async () => {
     const d = deps();
-    await createBelow(d, { ...base, parent: null, after: null, afterIsLast: true });
+    await createBelow(d, { ...base, parent: null, after: null });
     expect(d.api.POST).toHaveBeenCalledWith("/api/tasks", {
       params: { query: { store: "shared" } },
       body: { title: "new", kind: "task", workspace: "REL" },

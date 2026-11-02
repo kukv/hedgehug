@@ -9,6 +9,9 @@ const h = vi.hoisted(() => ({
   core: undefined as unknown,
   go: vi.fn(),
   toast: vi.fn(),
+  // The window of the virtualizer: where it starts, and how long it takes to follow scrollToIndex.
+  vstart: 0,
+  vdelay: 0,
 }));
 
 vi.mock("../context", () => ({ core: () => h.core }));
@@ -23,13 +26,23 @@ vi.mock("../toast.svelte", () => ({ toast: h.toast }));
 vi.mock("@tanstack/svelte-virtual", () => ({
   createVirtualizer: () => ({
     subscribe(fn: (v: unknown) => void) {
-      fn({
+      const inst = {
         getVirtualItems: () =>
-          Array.from({ length: 10 }, (_, i) => ({ index: i, start: i * 39, size: 39, key: i })),
+          Array.from({ length: 10 }, (_, i) => {
+            const index = h.vstart + i;
+            return { index, start: index * 39, size: 39, key: index };
+          }),
         getTotalSize: () => 39 * 250,
         setOptions() {},
-        scrollToIndex() {},
-      });
+        scrollToIndex(i: number) {
+          if (h.vdelay === 0) return;
+          setTimeout(() => {
+            h.vstart = Math.max(0, i - 5);
+            fn(inst);
+          }, h.vdelay);
+        },
+      };
+      fn(inst);
       return () => {};
     },
     setOptions() {},
@@ -47,14 +60,32 @@ function setup(
     many?: number;
     noSchema?: boolean;
     schemaFails?: boolean;
+    noDone?: boolean;
+    blocked?: string[];
+    noProject?: boolean;
+    detailError?: unknown;
   } = {},
 ) {
-  const tasks = new Map([
+  const tasks = new Map<string, ReturnType<typeof task>>([
     ["P", task("P", "project", null, { context: true, id: "REL-15", title: "リリース準備 v2.4" })],
     ["E1", task("E1", "epic", "P", { id: "REL-1", title: "API v2 への移行" })],
     ["T1", task("T1", "task", "E1", { id: "REL-4", title: "移行ガイドを書く" })],
-    ["T3", task("T3", "task", "P", { id: "REL-6", title: "Web のクライアントを更新" })],
+    [
+      "T3",
+      task("T3", "task", "P", {
+        id: "REL-6",
+        title: "Web のクライアントを更新",
+        ...(over.blocked ? { blocked_by: [{ ulid: "B9", id: "REL-9", title: "待たせる" }] } : {}),
+      }),
+    ],
   ]);
+  if (over.noProject) tasks.delete("P");
+  const usedSchema = over.noDone
+    ? ({
+        ...schema,
+        statuses: schema.statuses?.filter((s) => s.category !== "done"),
+      } as typeof schema)
+    : schema;
   let roots = over.roots ?? [
     {
       ulid: "P",
@@ -72,7 +103,7 @@ function setup(
     roots = [{ ulid: "P", children: kids }];
   }
   const ev = emitter();
-  let schemaNow: typeof schema | undefined = over.noSchema ? undefined : schema;
+  let schemaNow: typeof schema | undefined = over.noSchema ? undefined : usedSchema;
   const watchTree = vi.fn(() => ({
     roots: () => roots,
     error: () => over.error ?? null,
@@ -86,13 +117,17 @@ function setup(
       task: (u: string) => tasks.get(u),
       live: () => undefined,
       watchTree,
-      watchList: vi.fn(() => ({
-        ulids: () => [],
+      watchList: vi.fn((q: { q: string }) => ({
+        ulids: () => (q.q.includes("is:blocked") ? (over.blocked ?? []) : []),
         error: () => null,
         loading: () => false,
         dispose() {},
       })),
-      watchDetail: vi.fn(() => ({ ulid: () => "P", error: () => null, dispose() {} })),
+      watchDetail: vi.fn(() => ({
+        ulid: () => "P",
+        error: () => over.detailError ?? null,
+        dispose() {},
+      })),
       applyWrite: vi.fn(),
       subscribe: (fn: () => void) => ev.subscribe(fn),
     },
@@ -122,7 +157,7 @@ function setup(
       get: () => schemaNow,
       load: async () => {
         if (over.schemaFails) throw new Error("schema.yaml が読めません");
-        return schema;
+        return usedSchema;
       },
       subscribe: (fn: () => void) => ev.subscribe(fn),
     },
@@ -134,13 +169,15 @@ function setup(
     watchTree,
     // The schema of the store arrives
     loadSchema() {
-      schemaNow = schema;
+      schemaNow = usedSchema;
       ev.emit();
     },
   };
 }
 
 beforeEach(() => {
+  h.vstart = 0;
+  h.vdelay = 0;
   h.go.mockReset();
   h.toast.mockReset();
   selection.set(null);
@@ -330,6 +367,139 @@ describe("TreeView", () => {
     setup({ error });
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     expect(screen.getByRole("alert")).toHaveTextContent("term 1 (foo:bar): unknown key");
+  });
+
+  it("does not run the row keys from the chevron button", async () => {
+    const { api } = setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    await fireEvent.click(screen.getByText("Web のクライアントを更新"));
+    const chev = screen.getByRole("button", { name: "折りたたむ: API v2 への移行" });
+    await fireEvent.keyDown(chev, { key: " " });
+    await fireEvent.keyDown(chev, { key: "Enter" });
+    expect(api.PATCH).not.toHaveBeenCalled();
+    expect(screen.queryByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）")).toBeNull();
+  });
+
+  it("gives the focus back to the row when the add row is closed", async () => {
+    setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const row = screen.getByText("API v2 への移行").closest('[role="treeitem"]') as HTMLElement;
+    await fireEvent.click(row);
+    await fireEvent.keyDown(row, { key: "Enter" });
+    const input = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
+    await fireEvent.keyDown(input, { key: "Escape" });
+    await waitFor(() => expect(row).toHaveFocus());
+    await fireEvent.keyDown(row, { key: "Enter" });
+    const again = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
+    await fireEvent.keyDown(again, { key: "Enter" }); // an empty title closes it
+    await waitFor(() => expect(row).toHaveFocus());
+  });
+
+  it("moves after the selected row even when it is the last one shown", async () => {
+    const { api } = setup();
+    api.POST.mockImplementation(async (path: string) =>
+      path === "/api/tasks"
+        ? ok({ task: task("N1", "task", "P"), commit: "c1" })
+        : ok({ task: task("N1", "task", "P"), commit: "c2" }),
+    );
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const row = screen
+      .getByText("Web のクライアントを更新")
+      .closest('[role="treeitem"]') as HTMLElement;
+    await fireEvent.click(row);
+    await fireEvent.keyDown(row, { key: "Enter" });
+    const input = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
+    await fireEvent.input(input, { target: { value: "直下" } });
+    await fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
+    expect(api.POST).toHaveBeenNthCalledWith(2, "/api/tasks/{id}/move", {
+      params: { path: { id: "N1" }, query: { store: "shared" } },
+      body: { after: "T3" },
+    });
+  });
+
+  it("waits for a row the window draws late, and focuses it", async () => {
+    setup({ many: 250 });
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const first = screen.getAllByRole("treeitem")[0] as HTMLElement;
+    await fireEvent.click(first);
+    selection.set("M100");
+    h.vdelay = 30;
+    await fireEvent.keyDown(first, { key: "ArrowDown" });
+    await waitFor(() => {
+      expect(document.activeElement?.getAttribute("data-ulid")).toBe("M101");
+    });
+  });
+
+  it("says why when the project cannot be shown", () => {
+    const detailError = Object.assign(Object.create(ApiError.prototype), {
+      status: 404,
+      type: "task.not_found",
+      detail: "no such task",
+      args: { id: "P" },
+      body: {},
+    });
+    setup({ noProject: true, detailError });
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByText("読み込み中…")).toBeNull();
+  });
+
+  it("sets the status chosen in the S menu", async () => {
+    const { api } = setup();
+    api.PATCH.mockResolvedValue(
+      ok({ task: task("T3", "task", "P", { status: "doing" }), commit: "c3" }),
+    );
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const row = screen
+      .getByText("Web のクライアントを更新")
+      .closest('[role="treeitem"]') as HTMLElement;
+    await fireEvent.click(row);
+    await fireEvent.keyDown(row, { key: "s" });
+    await fireEvent.click(await screen.findByRole("menuitem", { name: /doing/ }));
+    await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
+    expect(api.PATCH).toHaveBeenCalledWith("/api/tasks/{id}", {
+      params: { path: { id: "T3" }, query: { store: "shared" } },
+      body: { status: "doing" },
+    });
+  });
+
+  it("sets the kind chosen in the K menu", async () => {
+    const { api } = setup();
+    api.PATCH.mockResolvedValue(
+      ok({ task: task("T3", "bug", "P", { status: "todo" }), commit: "c3" }),
+    );
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const row = screen
+      .getByText("Web のクライアントを更新")
+      .closest('[role="treeitem"]') as HTMLElement;
+    await fireEvent.click(row);
+    await fireEvent.keyDown(row, { key: "k" });
+    await fireEvent.click(await screen.findByRole("menuitem", { name: /バグ/ }));
+    await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
+    expect(api.PATCH).toHaveBeenCalledWith("/api/tasks/{id}", {
+      params: { path: { id: "T3" }, query: { store: "shared" } },
+      body: { kind: "bug" },
+    });
+  });
+
+  it("says why Space does nothing when the schema has no done status", async () => {
+    const { api } = setup({ noDone: true });
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const row = screen
+      .getByText("Web のクライアントを更新")
+      .closest('[role="treeitem"]') as HTMLElement;
+    await fireEvent.click(row);
+    await fireEvent.keyDown(row, { key: " " });
+    await waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
+    expect(h.toast.mock.calls[0]?.[0].message).toContain("完了にできません");
+    expect(api.PATCH).not.toHaveBeenCalled();
+  });
+
+  it("shows the blocker's ID on a task the server says is blocked", () => {
+    setup({ blocked: ["T3"] });
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    expect(screen.getByText(/REL-9 待ち/)).toBeInTheDocument();
   });
 
   it("draws only the window of rows when the list is long", () => {

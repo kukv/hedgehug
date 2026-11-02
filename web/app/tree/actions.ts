@@ -37,11 +37,11 @@ export type CreateBelow = {
   parent: string | null; // ULID; null for the top of a workspace
   workspace: string; // the prefix, used when there is no parent
   after: string | null; // the row it goes below; null for the end
-  afterIsLast: boolean; // that row is the last sibling, so no move is needed
 };
 
-// createBelow adds a task and, unless it already is in place at the end of its
-// siblings, moves it right after the row above. That is two commits.
+// createBelow adds a task and, unless it goes to the end of the list, moves it
+// right after the row above. That is two commits. The row above may be the last
+// one shown while the filter hides later siblings, so the move is not skipped for it.
 export async function createBelow(d: Deps, i: CreateBelow): Promise<TaskView> {
   const r = await unwrap(
     d.api.POST("/api/tasks", {
@@ -54,6 +54,6 @@ export async function createBelow(d: Deps, i: CreateBelow): Promise<TaskView> {
     }),
   );
   d.cache.applyWrite({ task: r.task, commit: r.commit });
-  if (i.after === null || i.afterIsLast) return r.task;
+  if (i.after === null) return r.task;
   return moveTask(d, r.task, { after: i.after });
 }

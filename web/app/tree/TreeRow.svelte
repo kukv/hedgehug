@@ -60,6 +60,7 @@
           ontoggle();
         }}
         ondblclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => e.stopPropagation()}
       >
         <Icon name={row.expanded ? "chevron-down" : "chevron-right"} size={14} />
       </button>
@@ -69,7 +70,7 @@
     <StatusIcon status={task.status} {category} />
     <KindIcon kind={task.kind} {role} />
     <IdLabel id={task.id} ulid={task.ulid} />
-    <span class="title" class:closed class:container={task.kind === "epic"}>{task.title}</span>
+    <span class="title" class:closed class:container={role === "container"}>{task.title}</span>
 
     {#if progress}
       <span class="progress">

@@ -74,10 +74,21 @@
   const apiBase = $derived(base ? baseQuery(base, "api") : null);
   const cliBase = $derived(base ? baseQuery(base, "cli") : "");
 
+  type DetailHandle = ReturnType<typeof c.cache.watchDetail>;
+  let detail = $state<DetailHandle | null>(null);
   $effect(() => {
     if (scope.kind !== "project") return;
     const h = c.cache.watchDetail(scope.ulid);
-    return () => h.dispose();
+    detail = h;
+    return () => {
+      h.dispose();
+      detail = null;
+    };
+  });
+  // Why the project cannot be shown (deleted, not found, not fetched).
+  const projectError = $derived.by(() => {
+    cacheRev.current;
+    return project ? null : (detail?.error() ?? null);
   });
   // Keys that need the schema, pressed before it is read, wait here and run once it is.
   let waiting: KeyInput[] = [];
@@ -205,11 +216,21 @@
   function select(ulid: string | null) {
     selection.set(ulid);
   }
+  const FOCUS_FRAMES = 20;
   async function focusRow(ulid: string) {
     const i = items.findIndex((it) => it.type === "row" && it.row.ulid === ulid);
     if (i >= 0) vinst?.scrollToIndex(i);
     await tick();
-    scroller?.querySelector<HTMLElement>(`[data-ulid="${ulid}"]`)?.focus();
+    // A long list draws the row after the window moves: wait a few frames for it.
+    for (let frame = 0; ; frame++) {
+      const el = scroller?.querySelector<HTMLElement>(`[data-ulid="${ulid}"]`);
+      if (el) {
+        el.focus();
+        return;
+      }
+      if (!virtualized || frame >= FOCUS_FRAMES) return;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    }
   }
   function toggle(ulid: string, openIt: boolean) {
     const next = new Set(collapsed);
@@ -367,7 +388,6 @@
       adding = null;
       return;
     }
-    const siblings = rows.filter((r) => r.parent === a.parent);
     try {
       const created = await createBelow(c, {
         title,
@@ -376,7 +396,6 @@
         parent: a.parent,
         workspace: workspace.prefix,
         after: a.after,
-        afterIsLast: a.after === null || siblings[siblings.length - 1]?.ulid === a.after,
       });
       select(created.ulid);
       // keep going below the new row, as an outliner does
@@ -475,12 +494,18 @@
           ready={!!(store && workspace && schema)}
           onstart={() => {}}
           onsubmit={submitAdd}
-          oncancel={() => (adding = null)}
+          oncancel={() => {
+            const back = adding?.after ?? selection.ulid;
+            adding = null;
+            if (back) void focusRow(back);
+          }}
         />
       {/if}
     {/snippet}
 
-    {#if loading && rows.length === 0}
+    {#if projectError}
+      <p class="note" role="alert">{errorMessage(projectError)}</p>
+    {:else if loading && rows.length === 0}
       <p class="note">読み込み中…</p>
     {:else if rows.length === 0 && !adding && !treeError}
       {#if noTasks}
