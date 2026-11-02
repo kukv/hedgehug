@@ -492,10 +492,15 @@ func Swap(dir string, b *Rebuild) error {
 	if err != nil {
 		return err
 	}
+	keep := len(b.Purged) > 0
+	if !keep {
+		// A mark left by a swap that died before its first rename is not
+		// this swap's: it would make the old store stay.
+		removeKeepMarker(dir)
+	}
 	beforeRename()
 	when := time.Now().UTC().Format("20060102T150405.000000000")
 	before := dir + beforePrefix + when
-	keep := len(b.Purged) > 0
 	if keep {
 		// Written before the first rename, so that whoever finds the old
 		// store left behind knows it is not to be removed.

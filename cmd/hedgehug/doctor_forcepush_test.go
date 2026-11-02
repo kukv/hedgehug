@@ -8,17 +8,6 @@ import (
 	"github.com/kukv/hedgehug/internal/gitrepo/gitrepotest"
 )
 
-// The option that rewrote the history is gone: an unknown flag is a usage error.
-func TestPurgeRewriteHistoryIsGone(t *testing.T) {
-	t.Parallel()
-	te := newStoreEnv(t)
-	x := te.addJSON("x")
-	code, _, errs := te.run("purge", "--rewrite-history", x.ID)
-	if code != 2 || !strings.Contains(errs, "unknown flag: --rewrite-history") {
-		t.Errorf("exit %d, stderr %q; want a usage error", code, errs)
-	}
-}
-
 // The whole round: origin is force pushed, hh sync stops and says why, hh
 // doctor tells of it, hh doctor --fix clones the store again with the
 // unpushed work put back, and the sync after it pushes that work.

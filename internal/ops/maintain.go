@@ -279,7 +279,7 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 			if err != nil {
 				r, err = DoctorReport{Store: e.Name, Repaired: repaired[i]}, nil
 			}
-			r.Findings = append(r.Findings, doctor.Finding{Check: "unexpected_force_push", Where: e.Name, Msg: "cannot clone the store again: " + rerr.Error(), Hint: "fix the cause and run hedgehug doctor --fix again"})
+			r.Findings = withRebuildFailure(r.Findings, e.Name, rerr)
 		}
 		if err != nil {
 			return nil, err
@@ -344,13 +344,30 @@ func (ss *Session) doctorStore(e config.StoreEntry, only bool, repaired []Fixed,
 	return r, nil
 }
 
-// forcePushFinding is unexpected_force_push (D23): the last sync found the history of origin differing from the store's, and the file it left is still there.
+// forcePushFinding is unexpected_force_push (D23): the last sync found the
+// history of origin differing from the store's, and the file it left is
+// still there.
 func forcePushFinding(name string, s *store.Store) ([]doctor.Finding, error) {
 	_, ok, err := sync.ReadForcePush(s)
 	if err != nil || !ok {
 		return nil, err
 	}
 	return []doctor.Finding{{Check: "unexpected_force_push", Where: name, Msg: sync.ErrForcePush.Error(), Hint: "hedgehug doctor --fix clones the store again from origin and puts the unpushed changes back; the old store is kept when some could not be put back"}}, nil
+}
+
+// withRebuildFailure tells, in the unexpected_force_push finding the store
+// already has, that cloning it again failed; a store without one gets a
+// finding of its own. There is one finding of the force push either way.
+func withRebuildFailure(fs []doctor.Finding, name string, rerr error) []doctor.Finding {
+	const hint = "fix the cause and run hedgehug doctor --fix again"
+	for i := range fs {
+		if fs[i].Check == "unexpected_force_push" {
+			fs[i].Msg += "; cannot clone the store again: " + rerr.Error()
+			fs[i].Hint = hint
+			return fs
+		}
+	}
+	return append(fs, doctor.Finding{Check: "unexpected_force_push", Where: name, Msg: "cannot clone the store again: " + rerr.Error(), Hint: hint})
 }
 
 // fixStore repairs the files of HEAD of the store e, opened as s, as a sync

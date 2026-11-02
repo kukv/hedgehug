@@ -66,6 +66,7 @@ func (ss *Session) rebuildStore(c *config.Config, e config.StoreEntry) (*Rebuilt
 	if err != nil {
 		return nil, nil // the findings tell of a store that does not open
 	}
+	defer func() { _ = s.Repo().Close() }() // a second close, after the explicit one below, does nothing
 	if _, ok, err := sync.ReadForcePush(s); err != nil || !ok {
 		return nil, err
 	}

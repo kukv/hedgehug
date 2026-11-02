@@ -181,6 +181,17 @@ func TestPurgeUsageErrors(t *testing.T) {
 
 // A deleted task with a task under it that is not deleted stays; the other
 // deleted tasks go, and purge tells of the one that stays.
+// The option that rewrote the history is gone: an unknown flag is a usage error.
+func TestPurgeRewriteHistoryIsGone(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	x := te.addJSON("x")
+	code, _, errs := te.run("purge", "--rewrite-history", x.ID)
+	if code != 2 || !strings.Contains(errs, "unknown flag: --rewrite-history") {
+		t.Errorf("exit %d, stderr %q; want a usage error", code, errs)
+	}
+}
+
 func TestPurgeKeepsATaskWithALiveChild(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)

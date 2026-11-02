@@ -136,3 +136,56 @@ func TestSwapLeavesNoKeepMarkerInTheNewStore(t *testing.T) {
 		t.Errorf("the kept store has no keep marker: %v", err)
 	}
 }
+
+// A keep marker left in the live store by a swap that died before its first
+// rename does not make a later swap that dropped nothing keep the old store.
+// The removal of the old store is made to fail (its .hedgehug/local cannot be
+// written, from the gap before the rename), so that it is a leftover; what
+// finishes the leftover must remove it, not keep it.
+func TestSwapIgnoresAStaleKeepMarker(t *testing.T) {
+	// 直列: パッケージ変数 beforeRename の差し替え
+	if os.Geteuid() == 0 {
+		t.Skip("root removes what is read-only")
+	}
+	c := newCluster(t, 2)
+	sc := newRewriteScene(t, c, func(*rewriteScene) {})
+	dir := c.stores[1].Dir()
+	local := filepath.Join(dir, filepath.FromSlash(store.LocalDir))
+	if err := os.WriteFile(filepath.Join(local, keepMarker), []byte("stale\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if len(sc.rb.Purged) != 0 {
+		t.Fatalf("setup: Purged = %v", sc.rb.Purged)
+	}
+	prev := beforeRename
+	beforeRename = func() {
+		if err := os.Chmod(local, 0o500); err != nil {
+			t.Error(err)
+		}
+	}
+	t.Cleanup(func() { beforeRename = prev })
+	c.swap(sc.rb)
+	if sc.rb.Kept != "" {
+		t.Errorf("Kept = %q; the old store was kept because of a stale marker", sc.rb.Kept)
+	}
+	l, err := FindLeftover(dir)
+	if err != nil || l.None() {
+		t.Fatalf("setup: leftover = %+v, %v; the removal of the old store should have failed", l, err)
+	}
+	m, err := filepath.Glob(dir + beforePrefix + "*")
+	if err != nil || len(m) != 1 {
+		t.Fatalf("old stores = %v, %v", m, err)
+	}
+	oldLocal := filepath.Join(m[0], filepath.FromSlash(store.LocalDir))
+	t.Cleanup(func() { _ = os.Chmod(oldLocal, 0o750) })
+	if _, err := os.Stat(filepath.Join(oldLocal, keepMarker)); !os.IsNotExist(err) {
+		t.Errorf("the old store carries the stale marker: %v", err)
+	}
+	if err := os.Chmod(oldLocal, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	kept, err := FinishLeftoverKept(dir, l)
+	if err != nil || len(kept) != 0 {
+		t.Errorf("FinishLeftoverKept = %v, %v; want the old store removed", kept, err)
+	}
+}
