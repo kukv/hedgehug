@@ -70,7 +70,7 @@ func TestInboxStoresWarnsOfMissingAccounts(t *testing.T) {
 	if err != nil || len(stores) != 1 || stores[0].Name != "me" {
 		t.Fatalf("InboxStores = %v, %v; want the store me", stores, err)
 	}
-	want := []string{"accounts are not set up in config.yaml; mentions and assignments cannot be told"}
+	want := []string{"no account is set up; mentions and assignments cannot be told"}
 	if !slices.Equal(ts.warns, want) {
 		t.Errorf("warnings = %q", ts.warns)
 	}

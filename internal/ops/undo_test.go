@@ -76,7 +76,7 @@ func TestUndoNeedsAccounts(t *testing.T) {
 	ts := newTestSession(t)
 	ts.dropDefaultAccount()
 	_, err := ts.Undo()
-	if err == nil || err.Error() != "accounts are not set up in config.yaml; hedgehug undo needs them to find your operations" {
+	if err == nil || err.Error() != "no account is set up; hedgehug undo needs one to find your operations; add one with hedgehug auth add <name> --login <login> (or hedgehug auth login)" {
 		t.Fatalf("Undo = %v; want the accounts message", err)
 	}
 	var oe *Error
