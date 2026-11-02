@@ -145,7 +145,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 - `kind` の既定は `schema.DefaultKind()`。`status` の既定は `Schema.DefaultStatus(todo)` で引く。プロジェクトの上書きでカテゴリの既定は外せないので、置き場所によらず同じになる。
 - `--parent` が削除済みのタスクならエラーにして、先に戻すよう案内する（`restore` と同じ文言）。
 - `rank` は兄弟（同じ親の、削除されていないタスク）の最後の rank と空の間に作る（`model.Between(last, "")`）。兄弟がなければ `Between("", "")`。
-- `--before` / `--after` で、兄弟の直前・直後に作る（`mv` と同じ。兄弟でない名前（削除済み、ほかの親・ワークスペースの下）は `add.position`、両方の指定は使い方のエラー `position.both`。`mv` も両方の指定を `position.both` で拒む）。1コミットで済む。
+- `--before` / `--after` で、兄弟の直前・直後に作る（`mv` と同じ。兄弟でない名前（削除済み、ほかの親・ワークスペースの下）は `add.position`、両方の指定は使い方のエラー `position.both`。`mv` も両方の指定を `position.both` で拒む）。1コミットで済む。`--parent` を省いて `--before` / `--after` だけを付けたときは、親とワークスペースを指定した兄弟のものにする（ブランチなどの文脈や、親の確認の対話は使わない）。`--parent` や `--workspace` を明示して兄弟と食い違うときだけ `add.position`。
 - `-p` は `set` と同じ書き方（下の `set`）。
 - 種類に紐づくテンプレートは展開しない（フェーズ6）。
 - 出力は、作ったタスクの短縮 ID とタイトル。
@@ -215,6 +215,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 
 - `--parent` / `--root` がなければ親は変えない。
 - `--before` / `--after` の相手は、移動先の兄弟でなければエラー。指定がなければ末尾に置く。rank は前後の兄弟の rank の間に作る（`model.Between`）。
+- すでにその位置にいる（親もワークスペースも rank の並びも変わらない）ときは、何も書かず、コミットも作らずに終える。
 - 親も位置も指定がなければエラー。
 - 削除済みのタスクを `--parent` に指定したらエラーにして、先に戻すよう案内する（`restore` と同じ文言）。
 - 循環と置き場所の検査は Store の書き込みに任せる。
