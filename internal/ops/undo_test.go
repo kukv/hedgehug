@@ -167,6 +167,44 @@ func TestUndoBlockedByTasksOfAWorkspace(t *testing.T) {
 	}
 }
 
+func TestUndoRestoresARemovedWorkspace(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	ts.appendConfig(aliceAccount)
+	if _, err := ts.WorkspaceAdd("w2", "WW"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.WorkspaceRemove("w2"); err != nil {
+		t.Fatal(err)
+	}
+	if _, wss, err := ts.WorkspaceList(); err != nil || listsWorkspace(wss, "w2") {
+		t.Fatalf("workspaces after rm = %v, %v; want w2 gone", wss, err)
+	}
+	res, err := ts.Undo()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Found || !res.Changed || len(res.Kept) != 0 {
+		t.Errorf("Undo = found %v, changed %v, kept %v; want true, true, none", res.Found, res.Changed, res.Kept)
+	}
+	_, wss, err := ts.WorkspaceList()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !listsWorkspace(wss, "w2") {
+		t.Errorf("workspaces after undo = %v; want w2 back", wss)
+	}
+}
+
+func listsWorkspace(wss []WorkspaceView, name string) bool {
+	for _, w := range wss {
+		if w.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 func TestUndoTarget(t *testing.T) {
 	t.Parallel()
 	hash := func(b byte) plumbing.Hash { return plumbing.Hash{b} }
