@@ -242,15 +242,21 @@ func (ss *Session) moveTargetOf(ix *index.Index, e, p *index.Entry, w *model.Wor
 		to.workspace = w.ULID
 	}
 	var err error
-	to.rank, err = ss.rankAt(ix, e.ULID, to.parent, to.workspace, before, after)
+	to.rank, err = ss.rankAt(ix, e.ULID, to.parent, to.workspace, before, after, "move.invalid")
 	return to, err
 }
 
 // rankAt returns the rank for ulid under parent in workspace ws: just before
 // or after a sibling, or after every sibling. Siblings that share a rank are
 // ordered by id, so no rank lies between them: next to one of a group, the
-// task goes past the group on the side asked for.
-func (ss *Session) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, ws model.ULID, before, after string) (model.Rank, error) {
+// task goes past the group on the side asked for. Giving both before and
+// after is position.both; a sibling that is not one (deleted, or under another
+// parent or workspace) is the error code the caller gives, move.invalid for
+// Move and add.position for Add.
+func (ss *Session) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, ws model.ULID, before, after, code string) (model.Rank, error) {
+	if before != "" && after != "" {
+		return "", newErr(KindUsage, "position.both", errors.New("give --before or --after, not both"))
+	}
 	if before == "" && after == "" {
 		return EndRank(ix, parent, ws, ulid)
 	}
@@ -264,7 +270,10 @@ func (ss *Session) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, 
 	}
 	sib := Siblings(ix, parent, ws, ulid)
 	if !slices.ContainsFunc(sib, func(e *index.Entry) bool { return e.ULID == x.ULID }) {
-		return "", newErr(KindInvalid, "move.invalid", fmt.Errorf("%s is not under the same parent", RefName(ix, x.ULID)))
+		if code == "add.position" {
+			return "", newErr(KindInvalid, code, fmt.Errorf("%s is not a sibling of the new task (it is deleted, or under another parent or workspace)", RefName(ix, x.ULID)))
+		}
+		return "", newErr(KindInvalid, code, fmt.Errorf("%s is not under the same parent", RefName(ix, x.ULID)))
 	}
 	var lower, higher model.Rank
 	for _, e := range sib {

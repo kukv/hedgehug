@@ -32,8 +32,6 @@ func (a *app) mvCmd() *cobra.Command {
 			switch {
 			case parent != "" && root:
 				return usageErrorf("give --parent or --root, not both")
-			case before != "" && after != "":
-				return usageErrorf("give --before or --after, not both")
 			case parent == "" && !root && before == "" && after == "" && workspace == "":
 				return usageErrorf("say where to: --workspace, --parent, --root, --before or --after")
 			}

@@ -37,6 +37,8 @@ export function cliLine(args: string[]): string {
 export function cliAdd(i: {
   title: string;
   parent?: string;
+  after?: string;
+  before?: string;
   workspace?: string;
   store?: string;
   kind?: string;
@@ -47,6 +49,8 @@ export function cliAdd(i: {
   if (i.store) a.push("--store", i.store);
   if (i.workspace) a.push("--workspace", i.workspace);
   if (i.parent) a.push("--parent", i.parent);
+  if (i.after) a.push("--after", i.after);
+  if (i.before) a.push("--before", i.before);
   if (i.kind) a.push("--kind", i.kind);
   if (i.body) a.push("--body", i.body);
   for (const [k, v] of Object.entries(i.props ?? {})) a.push("-p", `${k}=${v}`);

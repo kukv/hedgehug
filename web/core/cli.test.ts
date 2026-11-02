@@ -61,6 +61,10 @@ describe("commands", () => {
       'hh add "Switch DNS" --store shared --workspace main --parent REL-8 --kind task --body "line 1\nline 2" -p points=2 -p priority=high',
     );
     expect(cliAdd({ title: "x" })).toBe("hh add x");
+    expect(cliAdd({ title: "x", parent: "REL-8", after: "REL-9" })).toBe(
+      "hh add x --parent REL-8 --after REL-9",
+    );
+    expect(cliAdd({ title: "x", before: "REL-9" })).toBe("hh add x --before REL-9");
   });
 
   it("writes hh ls", () => {

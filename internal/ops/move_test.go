@@ -13,15 +13,15 @@ import (
 	"github.com/kukv/hedgehug/internal/model"
 )
 
-// order returns the ids of the live tasks under parent in the first workspace.
-func (ts *testSession) order(parent *model.ULID) []string {
+// order returns the ids of the live tasks under parent in the workspace ws.
+func (ts *testSession) order(ws model.ULID, parent *model.ULID) []string {
 	ts.t.Helper()
 	_, ix, err := ts.Open()
 	if err != nil {
 		ts.t.Fatal(err)
 	}
 	got := []string{}
-	for _, e := range Siblings(ix, parent, ix.Workspaces()[0].ULID, model.ULID{}) {
+	for _, e := range Siblings(ix, parent, ws, model.ULID{}) {
 		got = append(got, e.ID)
 	}
 	return got
@@ -45,13 +45,13 @@ func TestMoveParentAndOrder(t *testing.T) {
 	if len(res.Tasks) != 1 || res.Tasks[0].ID != "ME-3" || !slices.Equal(res.OldIDs, []string{"ME-3"}) {
 		t.Errorf("tasks = %v old ids = %v; want just ME-3", res.Tasks, res.OldIDs)
 	}
-	if got, want := strings.Join(ts.order(nil), " "), "ME-3 ME-1 ME-2"; got != want {
+	if got, want := strings.Join(ts.order(ts.workspaceULID("me"), nil), " "), "ME-3 ME-1 ME-2"; got != want {
 		t.Errorf("order = %s; want %s", got, want)
 	}
 	if _, err := ts.Move(MoveInput{Arg: "ME-3", After: "ME-1"}); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := strings.Join(ts.order(nil), " "), "ME-1 ME-3 ME-2"; got != want {
+	if got, want := strings.Join(ts.order(ts.workspaceULID("me"), nil), " "), "ME-1 ME-3 ME-2"; got != want {
 		t.Errorf("order after --after = %s; want %s", got, want)
 	}
 	if _, err := ts.Move(MoveInput{Arg: "ME-1", Parent: "ME-2"}); err != nil {
@@ -59,7 +59,7 @@ func TestMoveParentAndOrder(t *testing.T) {
 	}
 	_, ix, _ := ts.Open()
 	p, _ := ts.Resolve(ix, "ME-2")
-	if got, want := strings.Join(ts.order(&p.ULID), " "), "ME-1"; got != want {
+	if got, want := strings.Join(ts.order(ts.workspaceULID("me"), &p.ULID), " "), "ME-1"; got != want {
 		t.Errorf("children of ME-2 = %s; want %s", got, want)
 	}
 	// ME-1 is under ME-2 now, so ME-2 under ME-1 would be a cycle; the store
@@ -79,7 +79,7 @@ func TestMoveParentAndOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := strings.Join(ts.order(nil), " "), "ME-3 ME-2 ME-1"; got != want {
+	if got, want := strings.Join(ts.order(ts.workspaceULID("me"), nil), " "), "ME-3 ME-2 ME-1"; got != want {
 		t.Errorf("order after --root = %s; want %s", got, want)
 	}
 }
@@ -209,6 +209,7 @@ func TestMoveErrors(t *testing.T) {
 func TestAddBeforeAfter(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
+	me := ts.workspaceULID("me")
 	for _, title := range []string{"a", "b", "c"} {
 		if _, err := ts.Add(AddInput{Title: title}); err != nil {
 			t.Fatal(err)
@@ -233,26 +234,106 @@ func TestAddBeforeAfter(t *testing.T) {
 	if !res.Committed || logLen() != n+1 {
 		t.Errorf("committed %v, commits %d -> %d; want one new commit", res.Committed, n, logLen())
 	}
-	if got, want := strings.Join(ts.order(nil), " "), "ME-1 ME-4 ME-2 ME-3"; got != want {
+	if got, want := strings.Join(ts.order(me, nil), " "), "ME-1 ME-4 ME-2 ME-3"; got != want {
 		t.Errorf("order after --after = %s; want %s", got, want)
 	}
 	if _, err := ts.Add(AddInput{Title: "before c", Before: "ME-3"}); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := strings.Join(ts.order(nil), " "), "ME-1 ME-4 ME-2 ME-5 ME-3"; got != want {
+	if got, want := strings.Join(ts.order(me, nil), " "), "ME-1 ME-4 ME-2 ME-5 ME-3"; got != want {
 		t.Errorf("order after --before = %s; want %s", got, want)
 	}
+}
 
-	// a sibling that is not under the same parent
-	if _, err := ts.Add(AddInput{Title: "kid", Parent: "ME-2"}); err != nil {
+func TestAddAfterUnderParent(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	me := ts.workspaceULID("me")
+	for _, in := range []AddInput{{Title: "p"}, {Title: "k1", Parent: "ME-1"}, {Title: "k2", Parent: "ME-1"}} {
+		if _, err := ts.Add(in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := ts.Add(AddInput{Title: "mid", Parent: "ME-1", After: "ME-2"}); err != nil {
 		t.Fatal(err)
 	}
-	n = logLen()
-	_, err = ts.Add(AddInput{Title: "x", After: "ME-6"})
-	wantErr(t, err, KindInvalid, "move.invalid")
-	_, err = ts.Add(AddInput{Title: "y", Parent: "ME-2", Before: "ME-1"})
-	wantErr(t, err, KindInvalid, "move.invalid")
-	if logLen() != n {
-		t.Error("a failed add left a commit")
+	p := ulidOf(t, ts, "ME-1")
+	if got, want := strings.Join(ts.order(me, &p), " "), "ME-2 ME-4 ME-3"; got != want {
+		t.Errorf("order = %s; want %s", got, want)
 	}
+}
+
+func TestAddPositionErrors(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	ts.addWorkspace("api", "API")
+	for _, in := range []AddInput{{Title: "a", Workspace: "me"}, {Title: "b", Workspace: "me"}, {Title: "kid", Parent: "ME-2"}, {Title: "x", Workspace: "api"}} {
+		if _, err := ts.Add(in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ts.deleteTask("ME-1")
+	for _, tc := range []struct {
+		name string
+		in   AddInput
+		kind Kind
+		code string
+	}{
+		{"not a sibling", AddInput{Title: "t", Workspace: "me", After: "ME-3"}, KindInvalid, "add.position"},
+		{"under another parent", AddInput{Title: "t", Parent: "ME-2", Before: "ME-2"}, KindInvalid, "add.position"},
+		{"deleted", AddInput{Title: "t", Workspace: "me", After: "ME-1"}, KindInvalid, "add.position"},
+		{"other workspace", AddInput{Title: "t", Workspace: "me", After: "API-1"}, KindInvalid, "add.position"},
+		{"both", AddInput{Title: "t", Workspace: "me", Before: "ME-2", After: "ME-2"}, KindUsage, "position.both"},
+	} {
+		before := ts.head()
+		_, err := ts.Add(tc.in)
+		wantErr(t, err, tc.kind, tc.code)
+		if ts.head() != before {
+			t.Errorf("%s: a failed add left a commit", tc.name)
+		}
+	}
+	_, err := ts.Move(MoveInput{Arg: "ME-2", Before: "ME-2", After: "ME-2"})
+	wantErr(t, err, KindUsage, "position.both")
+}
+
+// Siblings that share a rank are ordered by id and no rank lies between them,
+// so the new task goes past the group on the side asked for.
+func TestAddNextToSiblingsWithTheSameRank(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	me := ts.workspaceULID("me")
+	for _, title := range []string{"a", "b", "d"} {
+		if _, err := ts.Add(AddInput{Title: title}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a, b := ts.addedTask("ME-1"), ts.addedTask("ME-2")
+	ts.editRawFile(model.TaskPath(b.ULID), "rank: "+string(b.Rank), "rank: "+string(a.Rank))
+	if _, err := ts.Add(AddInput{Title: "after A", After: "ME-1"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.Add(AddInput{Title: "before B", Before: "ME-2"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(ts.order(me, nil), " "), "ME-5 ME-1 ME-2 ME-4 ME-3"; got != want {
+		t.Errorf("order = %s; want %s", got, want)
+	}
+}
+
+// addedTask is the task id names, as the store has it.
+func (ts *testSession) addedTask(id string) *model.Task {
+	ts.t.Helper()
+	s, err := ts.OpenStore()
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	r, err := ts.Show(id)
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	tk, err := s.Task(r.Entry.ULID)
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	return tk
 }

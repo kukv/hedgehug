@@ -145,7 +145,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 - `kind` の既定は `schema.DefaultKind()`。`status` の既定は `Schema.DefaultStatus(todo)` で引く。プロジェクトの上書きでカテゴリの既定は外せないので、置き場所によらず同じになる。
 - `--parent` が削除済みのタスクならエラーにして、先に戻すよう案内する（`restore` と同じ文言）。
 - `rank` は兄弟（同じ親の、削除されていないタスク）の最後の rank と空の間に作る（`model.Between(last, "")`）。兄弟がなければ `Between("", "")`。
-- `--before` / `--after` で、兄弟の直前・直後に作る（`mv` と同じ。兄弟でない名前はエラー、両方の指定は使い方のエラー）。1コミットで済む。
+- `--before` / `--after` で、兄弟の直前・直後に作る（`mv` と同じ。兄弟でない名前（削除済み、ほかの親・ワークスペースの下）は `add.position`、両方の指定は使い方のエラー `position.both`。`mv` も両方の指定を `position.both` で拒む）。1コミットで済む。
 - `-p` は `set` と同じ書き方（下の `set`）。
 - 種類に紐づくテンプレートは展開しない（フェーズ6）。
 - 出力は、作ったタスクの短縮 ID とタイトル。

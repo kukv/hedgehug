@@ -64,19 +64,18 @@ func TestAddAfterBefore(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("A")
 	b := te.addJSON("B")
+	n := len(te.log("me"))
 	te.ok("add", "after-a", "--no-repo", "--after", a.ID)
-	te.ok("add", "before-b", "--no-repo", "--before", b.ID)
-	var titles []string
-	for _, l := range strings.Split(te.ok("ls", "--tree", "--no-color"), "\n") {
-		if i := strings.LastIndex(l, "  "); i >= 0 {
-			titles = append(titles, l[i+2:])
-		}
+	if got := len(te.log("me")); got != n+1 {
+		t.Errorf("commits %d -> %d; want one new commit", n, got)
 	}
-	if got := strings.Join(titles, ","); got != "A,after-a,before-b,B" {
-		t.Errorf("order = %s", got)
+	te.ok("add", "before-b", "--no-repo", "--before", b.ID)
+	got := strings.Fields(te.ok("ls", "--tree", "--format", "{{.title}}"))
+	if want := []string{"A", "after-a", "before-b", "B"}; !slices.Equal(got, want) {
+		t.Errorf("order = %v; want %v", got, want)
 	}
 	code, _, stderr := te.run("add", "x", "--no-repo", "--before", a.ID, "--after", b.ID)
-	if code == 0 || !strings.Contains(stderr, "not both") {
+	if code != 2 || !strings.Contains(stderr, "not both") {
 		t.Errorf("both: code %d stderr %q", code, stderr)
 	}
 }

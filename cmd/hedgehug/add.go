@@ -22,9 +22,6 @@ func (a *app) addCmd() *cobra.Command {
 		Short: "Add a task",
 		Args:  minArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if before != "" && after != "" {
-				return usageErrorf("give --before or --after, not both")
-			}
 			assigns, err := ops.ParseAssigns(props)
 			if err != nil {
 				return err

@@ -88,6 +88,15 @@ describe("errorMessage", () => {
     );
   });
 
+  it("words the errors of a position given to an add", () => {
+    expect(errorMessage(err("add.position", {}, "ME-3 is not a sibling"))).toBe(
+      "この位置には作れません: ME-3 is not a sibling",
+    );
+    expect(errorMessage(err("position.both"))).toBe(
+      "前に置くか後ろに置くか、どちらか一方を指定してください",
+    );
+  });
+
   it("shows the type and the detail of an unknown type", () => {
     expect(errorMessage(err("weird.thing", {}, "boom"))).toBe(
       "操作に失敗しました（weird.thing）: boom",

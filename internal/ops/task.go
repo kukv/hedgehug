@@ -128,7 +128,7 @@ func (ss *Session) Add(in AddInput) (TaskResult, error) {
 			return TaskResult{}, err
 		}
 	}
-	if t.Rank, err = ss.rankAt(ix, t.ULID, t.Parent, t.Workspace, in.Before, in.After); err != nil {
+	if t.Rank, err = ss.rankAt(ix, t.ULID, t.Parent, t.Workspace, in.Before, in.After, "add.position"); err != nil {
 		return TaskResult{}, err
 	}
 	if t.CreatedBy, err = ss.AccountID(); err != nil {
