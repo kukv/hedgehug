@@ -106,6 +106,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notifications/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark items read, all of them or the ids given, as hh inbox read */
+        post: operations["read-notifications"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/notifications/{id}": {
         parameters: {
             query?: never;
@@ -168,6 +185,24 @@ export interface paths {
         /** Tell whether a tab shows the GUI */
         put: operations["set-presence"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/purge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the deleted tasks and the forward files hh purge would remove */
+        get: operations["list-purge"];
+        put?: never;
+        /** Remove, for good, what the confirmed plan lists, as hh purge after its question */
+        post: operations["purge"];
         delete?: never;
         options?: never;
         head?: never;
@@ -760,6 +795,16 @@ export interface components {
             /** @description true marks it read; items cannot be marked unread */
             read: boolean;
         };
+        NotificationReadInputBody: {
+            /** @description true marks every unread item read; not with ids */
+            all?: boolean;
+            /** @description The ULIDs of the items to mark read; not with all */
+            ids?: string[] | null;
+        };
+        NotificationReadOutputBody: {
+            /** @description The ULIDs of the items marked read, as hh inbox read --json */
+            read: string[];
+        };
         Overwritten: {
             author?: string;
             field: string;
@@ -818,6 +863,34 @@ export interface components {
             symmetric?: boolean;
             type: string;
             values?: string[] | null;
+        };
+        PurgeForward: {
+            /** Format: date-time */
+            moved_at: string;
+            moved_to: string;
+            ulid: string;
+        };
+        PurgeInputBody: {
+            /** @description The plan GET /api/purge showed and the user agreed to; if what is to be purged is no longer that, the answer is 409 purge.changed */
+            confirmed: components["schemas"]["PurgePlan"];
+            /** @description As GET /api/purge; 90d without it */
+            older_than?: string;
+        };
+        PurgePlan: {
+            forwards: components["schemas"]["PurgeForward"][];
+            store: string;
+            tasks: components["schemas"]["PurgeTask"][];
+        };
+        PurgeResult: {
+            commit?: string;
+            forwards: components["schemas"]["PurgeForward"][];
+            store: string;
+            tasks: components["schemas"]["PurgeTask"][];
+        };
+        PurgeTask: {
+            id: string;
+            title: string;
+            ulid: string;
         };
         Rebuilt: {
             dropped: string[] | null;
@@ -1410,6 +1483,42 @@ export interface operations {
             };
         };
     };
+    "read-notifications": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationReadInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationReadOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     "update-notification": {
         parameters: {
             query?: {
@@ -1533,6 +1642,76 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "list-purge": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+                /** @description Only what is older than this many days, such as 90d (0d for everything), as hh purge --older-than */
+                older_than?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurgePlan"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    purge: {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PurgeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurgeResult"];
+                };
             };
             /** @description Error */
             default: {

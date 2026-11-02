@@ -120,6 +120,7 @@ func (s *Server) register() {
 	s.registerTaskWrites()
 	s.registerComments()
 	s.registerActivity()
+	s.registerPurge()
 	s.registerAdmin()
 	s.registerViews()
 	s.registerSync()

@@ -590,6 +590,31 @@ components:
       required:
         - read
       type: object
+    NotificationReadInputBody:
+      additionalProperties: false
+      properties:
+        all:
+          description: true marks every unread item read; not with ids
+          type: boolean
+        ids:
+          description: The ULIDs of the items to mark read; not with all
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      type: object
+    NotificationReadOutputBody:
+      additionalProperties: false
+      properties:
+        read:
+          description: The ULIDs of the items marked read, as hh inbox read --json
+          items:
+            type: string
+          type: array
+      required:
+        - read
+      type: object
     Overwritten:
       additionalProperties: false
       properties:
@@ -718,6 +743,85 @@ components:
             - "null"
       required:
         - type
+      type: object
+    PurgeForward:
+      additionalProperties: false
+      properties:
+        moved_at:
+          format: date-time
+          type: string
+        moved_to:
+          type: string
+        ulid:
+          type: string
+      required:
+        - ulid
+        - moved_to
+        - moved_at
+      type: object
+    PurgeInputBody:
+      additionalProperties: false
+      properties:
+        confirmed:
+          $ref: "#/components/schemas/PurgePlan"
+          description: The plan GET /api/purge showed and the user agreed to; if what is to be purged is no longer that, the answer is 409 purge.changed
+        older_than:
+          description: As GET /api/purge; 90d without it
+          type: string
+      required:
+        - confirmed
+      type: object
+    PurgePlan:
+      additionalProperties: false
+      properties:
+        forwards:
+          items:
+            $ref: "#/components/schemas/PurgeForward"
+          type: array
+        store:
+          type: string
+        tasks:
+          items:
+            $ref: "#/components/schemas/PurgeTask"
+          type: array
+      required:
+        - store
+        - tasks
+        - forwards
+      type: object
+    PurgeResult:
+      additionalProperties: false
+      properties:
+        commit:
+          type: string
+        forwards:
+          items:
+            $ref: "#/components/schemas/PurgeForward"
+          type: array
+        store:
+          type: string
+        tasks:
+          items:
+            $ref: "#/components/schemas/PurgeTask"
+          type: array
+      required:
+        - store
+        - tasks
+        - forwards
+      type: object
+    PurgeTask:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        ulid:
+          type: string
+      required:
+        - ulid
+        - id
+        - title
       type: object
     Rebuilt:
       additionalProperties: false
@@ -1964,6 +2068,39 @@ paths:
       summary: List the inbox of every store (of ?store= only), newest first, as hh inbox
       tags:
         - notifications
+  /api/notifications/read:
+    post:
+      operationId: read-notifications
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationReadInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationReadOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Mark items read, all of them or the ids given, as hh inbox read
+      tags:
+        - notifications
   /api/notifications/{id}:
     patch:
       operationId: update-notification
@@ -2086,6 +2223,73 @@ paths:
       summary: Tell whether a tab shows the GUI
       tags:
         - sync
+  /api/purge:
+    get:
+      operationId: list-purge
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: Only what is older than this many days, such as 90d (0d for everything), as hh purge --older-than
+          explode: false
+          in: query
+          name: older_than
+          schema:
+            default: 90d
+            description: Only what is older than this many days, such as 90d (0d for everything), as hh purge --older-than
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurgePlan"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: List the deleted tasks and the forward files hh purge would remove
+      tags:
+        - maintenance
+    post:
+      operationId: purge
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PurgeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurgeResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Remove, for good, what the confirmed plan lists, as hh purge after its question
+      tags:
+        - maintenance
   /api/schema:
     get:
       operationId: get-schema

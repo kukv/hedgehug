@@ -128,6 +128,62 @@ func TestNotifications(t *testing.T) {
 	ts.problem("PATCH", "/api/notifications/short", map[string]any{"read": true}, 400)
 }
 
+func TestNotificationsReadMany(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	id := ts.add("mine", "")
+	var show ops.ShowView
+	ts.call("GET", "/api/tasks/"+id, nil, 200, &show)
+	u := mustULID(t, show.ULID)
+	first := ts.notifyMe(overwrittenItem(u, id, "title", `"first"`))
+	second := ts.notifyMe(inbox.Item{Kind: inbox.Mention, Task: u, ID: id, Commit: "c2", Time: time.Now()})
+	third := ts.notifyMe(inbox.Item{Kind: inbox.Mention, Task: u, ID: id, Commit: "c3", Time: time.Now()})
+	var items []struct {
+		ULID string `json:"ulid"`
+	}
+
+	// ids marks those and no others.
+	var res struct {
+		Read []string `json:"read"`
+	}
+	ts.call("POST", "/api/notifications/read", map[string]any{"ids": []string{first, second}}, 200, &res)
+	if len(res.Read) != 2 {
+		t.Errorf("read = %v", res.Read)
+	}
+	ts.call("GET", "/api/notifications", nil, 200, &items)
+	if len(items) != 1 || items[0].ULID != third {
+		t.Errorf("unread after ids = %+v; want only %s", items, third)
+	}
+
+	// all marks every unread item.
+	ts.call("POST", "/api/notifications/read", map[string]any{"all": true}, 200, &res)
+	if len(res.Read) != 1 || res.Read[0] != third {
+		t.Errorf("read all = %v", res.Read)
+	}
+	ts.call("GET", "/api/notifications", nil, 200, &items)
+	if len(items) != 0 {
+		t.Errorf("unread after all = %+v", items)
+	}
+
+	// Both, neither, an empty ids and all: false are the caller's mistake.
+	for _, body := range []map[string]any{
+		{"all": true, "ids": []string{first}},
+		{},
+		{"ids": []string{}},
+		{"all": false},
+	} {
+		if p := ts.problem("POST", "/api/notifications/read", body, 400); p.Type != "notification.read_args" {
+			t.Errorf("body %v: %+v", body, p)
+		}
+	}
+	if p := ts.problem("POST", "/api/notifications/read", map[string]any{"ids": []string{"abc"}}, 400); p.Type != "inbox.ulid" {
+		t.Errorf("non-ULID id: %+v", p)
+	}
+	if p := ts.problem("POST", "/api/notifications/read", map[string]any{"ids": []string{model.NewULID().String()}}, 404); p.Type != "inbox.not_found" {
+		t.Errorf("missing id: %+v", p)
+	}
+}
+
 func TestUndoNothingIsConflict(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)

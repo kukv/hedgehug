@@ -67,6 +67,18 @@ describe("errorMessage", () => {
     );
   });
 
+  it("words purge and the bulk read of notifications", () => {
+    expect(errorMessage(err("purge.changed"))).toBe(
+      "確認のあとにタスクが変わりました。もう一度確かめてください",
+    );
+    expect(errorMessage(err("purge.bad_period", { value: "abc" }))).toBe(
+      "「abc」は期間ではありません。90d のように日数で書いてください（0d はすべて）",
+    );
+    expect(errorMessage(err("notification.read_args"))).toBe(
+      "すべてを既読にするか、通知を指定してください（両方は指定できません）",
+    );
+  });
+
   it("words undo.blocked by the operation", () => {
     expect(errorMessage(err("undo.blocked", { op: "purge" }))).toBe(
       "完全に消したものは取り消せません",

@@ -114,6 +114,9 @@ const messages: Record<string, Make> = {
     withDetail(`${str(a, "key")} に「${str(a, "value")}」は指定できません`, e),
 
   // deleting and restoring
+  "purge.changed": () => "確認のあとにタスクが変わりました。もう一度確かめてください",
+  "purge.bad_period": (a) =>
+    `「${str(a, "value")}」は期間ではありません。90d のように日数で書いてください（0d はすべて）`,
   "restore_at.bad_time": (a) => `「${str(a, "at")}」は時刻でもコミットでもありません`,
   "restore.forward": (a) => `${str(a, "at")} の時点では、このタスクは別の Store へ移っていました`,
   "restore_at.not_found": (a) =>
@@ -226,6 +229,8 @@ const messages: Record<string, Make> = {
   "inbox.not_found": (a) => `${str(a, "input")} という通知は見つかりません`,
   "inbox.not_revertable": (_, e) => withDetail("この通知の操作は取り消せません", e),
   "notification.unread": () => "通知を未読には戻せません",
+  "notification.read_args": () =>
+    "すべてを既読にするか、通知を指定してください（両方は指定できません）",
 
   // choices and confirmations (the CLI asks; the GUI picks first)
   "choice.required": (a) => `${str(a, "what")} を選んでください（${list(a, "candidates")}）`,
