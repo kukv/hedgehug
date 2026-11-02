@@ -48,10 +48,24 @@ test("Ctrl+Enter creates", async ({ page, hh }) => {
   const dialog = createDialog(page);
   await dialog.getByRole("textbox", { name: "タイトル" }).fill("From the keyboard");
   await createReady(dialog);
-  await page.keyboard.press("Control+Enter");
+  await page.keyboard.press("ControlOrMeta+Enter");
   await expect(toast(page, "DM-1 を作成しました")).toBeVisible();
   await expect(row(page, "From the keyboard")).toBeVisible();
   expect(hh.show("DM-1").title).toBe("From the keyboard");
+});
+
+test("C on a task detail makes a child of that task", async ({ page, hh }) => {
+  const parent = hh.add("Parent task");
+  await hh.open(page, `/tasks/${parent.ulid}`);
+  await page.keyboard.press("c");
+  const dialog = createDialog(page);
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText(parent.id, { exact: true })).toBeVisible();
+  await dialog.getByRole("textbox", { name: "タイトル" }).fill("Child of the detail");
+  await createReady(dialog);
+  await dialog.getByRole("button", { name: /^作成/ }).click();
+  await expect(toast(page, "DM-2 を作成しました")).toBeVisible();
+  expect(hh.show("DM-2").parent).toBe(parent.ulid);
 });
 
 test("Create more keeps the dialog and empties the title and the body", async ({ page, hh }) => {

@@ -5,7 +5,8 @@
 //     stream is open, so a change made by the CLI after hh.open reaches the page as an event
 //   - the sidebar shows the sync card, with the button "今すぐ同期"
 //   - the detail at /tasks/<ulid> follows the store: the button "ステータス" shows the label of
-//     the current status
+//     the current status, the textbox "タイトル" holds the current title, and the status "ブロック"
+//     (the band) lists the blockers that are not done yet and is gone when there are none
 import { expect, test } from "./harness";
 import { properties, row } from "./screens";
 
@@ -77,4 +78,26 @@ test("the detail follows a status changed by the CLI", async ({ page, hh }) => {
 
   hh.hh("set", t.id, "status=in_progress");
   await expect(status).toContainText("進行中");
+});
+
+test("the detail follows a title changed by the CLI", async ({ page, hh }) => {
+  const t = hh.add("Before the change");
+  await hh.open(page, `/tasks/${t.ulid}`);
+  const title = page.getByRole("textbox", { name: "タイトル" });
+  await expect(title).toHaveValue("Before the change");
+
+  hh.hh("set", t.id, "title=After the change");
+  await expect(title).toHaveValue("After the change");
+});
+
+test("the band of the blockers goes when the CLI finishes the blocker", async ({ page, hh }) => {
+  const blocked = hh.add("Waits for it");
+  const blocker = hh.add("The blocker");
+  hh.hh("dep", "add", blocked.id, "--blocked-by", blocker.id);
+  await hh.open(page, `/tasks/${blocked.ulid}`);
+  const band = page.getByRole("status", { name: "ブロック" });
+  await expect(band).toContainText("The blocker");
+
+  hh.hh("done", blocker.id);
+  await expect(band).toHaveCount(0);
 });
