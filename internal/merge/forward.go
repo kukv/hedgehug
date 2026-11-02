@@ -14,33 +14,45 @@ import (
 //
 // Two forwards that name different stores are merged by moved_to alone: the
 // side that changed the file last wins, and the other store is recorded.
-// Under OursWins ours takes the file.
+// Two forwards that name the same store are merged by moved_at: the later one
+// is kept. Under OursWins ours takes the file.
 func (m *merger) forward(ours, theirs Side) (Result, error) {
 	of, tf := model.IsForward(ours.Data), model.IsForward(theirs.Data)
-	win, lose := ours, theirs
+	theirsWin := false
+	// the two forwards as they decode (nil when one does not), read once
+	var fo, ft *model.Forward
+	if of && tf {
+		fo, _ = model.DecodeForward(ours.Data)
+		ft, _ = model.DecodeForward(theirs.Data)
+	}
 	switch {
 	case m.p == OursWins:
 	case of && tf:
-		if !later(ours.Time, theirs.Time, ours.Author, theirs.Author, ours.Data, theirs.Data) {
-			win, lose = theirs, ours
+		theirsWin = !later(ours.Time, theirs.Time, ours.Author, theirs.Author, ours.Data, theirs.Data)
+		// the same destination: the later move is the one to keep
+		if fo != nil && ft != nil && fo.MovedTo == ft.MovedTo && !fo.MovedAt.Equal(ft.MovedAt) {
+			theirsWin = ft.MovedAt.After(fo.MovedAt)
 		}
 	case tf:
-		win, lose = theirs, ours
+		theirsWin = true
+	}
+	win, lose, fwin, flose := ours, theirs, fo, ft
+	if theirsWin {
+		win, lose, fwin, flose = theirs, ours, ft, fo
 	}
 	r := Result{Data: win.Data}
 	if m.p != LWW {
 		return r, nil
 	}
 	if of && tf {
-		f, err := model.DecodeForward(lose.Data)
-		if err != nil {
+		if flose == nil {
 			return m.other(ours, theirs) // a forward that does not decode
 		}
 		// The same destination written in another way loses nothing.
-		if w, err := model.DecodeForward(win.Data); err == nil && w.MovedTo == f.MovedTo {
+		if fwin != nil && fwin.MovedTo == flose.MovedTo {
 			return r, nil
 		}
-		r.Overwritten = []Overwritten{{Path: m.path, Field: "moved_to", Value: string(jsonOf(f.MovedTo.String())), Author: lose.Author}}
+		r.Overwritten = []Overwritten{{Path: m.path, Field: "moved_to", Value: string(jsonOf(flose.MovedTo.String())), Author: lose.Author}}
 		return r, nil
 	}
 	v := []byte("null")

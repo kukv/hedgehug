@@ -248,7 +248,7 @@ func TestShowAMovedTask(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	fwd := "---\nulid: " + moved.ULID + "\nmoved_to: " + sb.Meta().ULID.String() + "\n---\n"
+	fwd := "---\nulid: " + moved.ULID + "\nmoved_to: " + sb.Meta().ULID.String() + "\nmoved_at: 2026-10-31T10:00:00Z\n---\n"
 	if _, err := sa.Update(store.Op{Name: "move-out", Author: author}, func(tx *store.Tx) error {
 		return tx.PutFile(model.TaskPath(ulid), []byte(fwd))
 	}); err != nil {

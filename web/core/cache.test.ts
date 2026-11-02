@@ -349,16 +349,6 @@ describe("TaskCache writes", () => {
     expect(fn).toHaveBeenCalled();
     w.dispose();
   });
-
-  it("forgets the tasks purged", async () => {
-    const { cache } = setup(() => ({ tasks: [tv("A"), tv("B")] }));
-    const w = cache.watchList({ q: "", tree: false });
-    await vi.waitFor(() => expect(w.loading()).toBe(false));
-    cache.applyWrite({ ulids: ["A"], commit: "c9" });
-    expect(cache.task("A")).toBeUndefined();
-    expect(cache.task("B")).toBeDefined();
-    w.dispose();
-  });
 });
 
 describe("TaskCache fetch order", () => {
@@ -440,17 +430,20 @@ describe("TaskCache fetch order", () => {
     const gate = new Promise<void>((r) => {
       open = r;
     });
-    const { cache } = setup(async () => {
+    let calls = 0;
+    const { cache, conn } = setup(async () => {
+      const first = calls++ === 0;
       await gate;
-      return { tasks: [tv("A"), tv("B")] };
+      return { tasks: first ? [tv("A"), tv("B")] : [tv("B")] };
     });
     const w = cache.watchList({ q: "", tree: false });
-    cache.applyWrite({ ulids: ["A"], commit: "c1" });
+    await vi.waitFor(() => expect(calls).toBe(1));
+    conn.emit("tasks.changed", changed("shared", [], "c1", "purge", ["A"]));
     open();
     await vi.waitFor(() => expect(w.loading()).toBe(false));
+    await vi.waitFor(() => expect(w.ulids()).toEqual(["B"]));
     expect(cache.task("A")).toBeUndefined();
     expect(cache.task("B")).toBeDefined();
-    expect(w.ulids()).toEqual(["B"]);
     w.dispose();
   });
 
@@ -459,12 +452,15 @@ describe("TaskCache fetch order", () => {
     const gate = new Promise<void>((r) => {
       open = r;
     });
-    const { cache } = setup(async () => {
+    let calls = 0;
+    const { cache, conn } = setup(async () => {
+      const first = calls++ === 0;
       await gate;
-      return { roots: [tv("R", "r", { children: [tv("A"), tv("B")] })] };
+      return { roots: [tv("R", "r", { children: first ? [tv("A"), tv("B")] : [tv("B")] })] };
     });
     const w = cache.watchTree({ q: "", tree: true });
-    cache.applyWrite({ ulids: ["A"], commit: "c1" });
+    await vi.waitFor(() => expect(calls).toBe(1));
+    conn.emit("tasks.changed", changed("shared", [], "c1", "purge", ["A"]));
     open();
     await vi.waitFor(() => expect(w.loading()).toBe(false));
     expect(w.roots()).toEqual([{ ulid: "R", children: [{ ulid: "B", children: [] }] }]);

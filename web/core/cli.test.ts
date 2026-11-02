@@ -4,7 +4,6 @@ import {
   cliComment,
   cliLs,
   cliMv,
-  cliPurge,
   cliRestore,
   cliRestoreAt,
   cliRm,
@@ -106,7 +105,6 @@ describe("commands", () => {
   it("writes the others", () => {
     expect(cliRm("REL-8")).toBe("hh rm REL-8");
     expect(cliRestore("REL-8")).toBe("hh restore REL-8");
-    expect(cliPurge("REL-8")).toBe("hh purge REL-8");
     expect(cliRestoreAt("REL-8", "abc123")).toBe("hh restore REL-8 --at abc123");
     expect(cliComment("REL-8", "add")).toBe("hh comment REL-8");
     expect(cliComment("REL-8", "edit", "01HX")).toBe("hh comment edit 01HX");

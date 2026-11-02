@@ -440,6 +440,9 @@ func TestMoveOut(t *testing.T) {
 		if err != nil || fw.MovedTo != to || fw.ULID != x.ULID {
 			t.Errorf("forward of %s = %+v, %v", x.Title, fw, err)
 		}
+		if !fw.MovedAt.Equal(testNow.Truncate(time.Second)) {
+			t.Errorf("moved_at of %s = %v; want the time of the move, %v", x.Title, fw.MovedAt, testNow)
+		}
 	}
 	for _, rel := range []string{f.commentPath, f.worklogPath} {
 		if _, err := os.Stat(f.src.path(rel)); err == nil {

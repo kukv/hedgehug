@@ -85,6 +85,7 @@ func UndoTarget(log []gitrepo.LogEntry, me string) (gitrepo.LogEntry, bool) {
 var undoBlocked = map[string]string{
 	"move-in":  "a move between stores cannot be undone; move it back with hedgehug mv --store",
 	"move-out": "a move between stores cannot be undone; move it back with hedgehug mv --store",
+	"purge":    "a purge cannot be undone",
 }
 
 // forwardHitError is a task file that undo would write over a forward: the
@@ -147,7 +148,7 @@ func undoInTx(tx *store.Tx, s *store.Store, ix *index.Index, me string) (UndoRes
 	}
 	op, _ := c.Trailer("Hedgehug-Op")
 	if why, blocked := undoBlocked[op]; blocked {
-		return res, newErr(KindConflict, "undo.blocked", errors.New(why))
+		return res, newErr(KindConflict, "undo.blocked", errors.New(why), "op", op)
 	}
 	res.Commit, res.Found = c, true
 	tx.SetDetail(UndoSubject(c))
@@ -389,7 +390,7 @@ func (u *undoer) workspace(ulid model.ULID, ours, merged []byte) error {
 			return nil
 		}
 		if n := CountTasks(u.ix, ulid, true); n > 0 {
-			return newErr(KindConflict, "undo.blocked", fmt.Errorf("the workspace still has %d tasks; move them with hedgehug mv --workspace or purge them", n))
+			return newErr(KindConflict, "undo.blocked", fmt.Errorf("the workspace still has %d tasks; move them with hedgehug mv --workspace, or delete them with hedgehug rm and remove them with hedgehug purge --older-than 0d --store <store>", n))
 		}
 		u.res.Changed = true
 		return u.tx.RemoveWorkspace(ulid)

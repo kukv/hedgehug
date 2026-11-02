@@ -3,10 +3,8 @@ package server
 import (
 	"errors"
 	"slices"
-	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/ops"
 )
@@ -19,7 +17,6 @@ type taskWriteBody struct {
 
 type affectedBody struct {
 	Tasks  []*ops.TaskView `json:"tasks"`
-	ULIDs  []string        `json:"ulids"`
 	Commit *string         `json:"commit"`
 }
 
@@ -206,44 +203,21 @@ func TestRemoveRestoreTask(t *testing.T) {
 	}
 }
 
-func TestPurgeNeedsConfirm(t *testing.T) {
+// The API has no purge: ?purge=true is not a parameter, so the call is the
+// plain delete of hh rm and the task stays, deleted.
+func TestDeleteTaskHasNoPurge(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
 	p := ts.add("p", "")
-	c := ts.add("c", p)
 	var out affectedBody
-	ts.call("DELETE", "/api/tasks/"+p, nil, 200, &out)
-	pr := ts.problem("DELETE", "/api/tasks/"+p+"?purge=true", nil, 409)
-	targets, _ := pr.Args["targets"].([]any)
-	if pr.Type != "purge.unconfirmed" || len(targets) != 2 {
-		t.Fatalf("unconfirmed = %+v", pr)
+	ts.call("DELETE", "/api/tasks/"+p+"?purge=true", nil, 200, &out)
+	if len(out.Tasks) != 1 || out.Tasks[0].DeletedAt == nil || out.Commit == nil {
+		t.Fatalf("delete = %+v, want the task deleted", out)
 	}
-	var ulids []string
-	for _, x := range targets {
-		m := x.(map[string]any)
-		ulids = append(ulids, m["ulid"].(string))
-		if m["id"] == "" || m["title"] == "" {
-			t.Errorf("target = %v", m)
-		}
-	}
-	// A wrong list is refused with the targets as they are.
-	pr = ts.problem("DELETE", "/api/tasks/"+p+"?purge=true&confirm="+ulids[0], nil, 409)
-	if pr.Type != "purge.unconfirmed" {
-		t.Errorf("partial confirm: %+v", pr)
-	}
-	ts.call("DELETE", "/api/tasks/"+p+"?purge=true&confirm="+strings.Join(ulids, ","), nil, 200, &out)
-	if len(out.ULIDs) != 2 || out.Commit == nil {
-		t.Fatalf("purged = %+v", out)
-	}
-	ts.problem("GET", "/api/tasks/"+c, nil, 404)
-}
-
-func TestPurgeLiveTaskIsConflict(t *testing.T) {
-	t.Parallel()
-	ts := newTestServer(t)
-	p := ts.add("p", "")
-	if pr := ts.problem("DELETE", "/api/tasks/"+p+"?purge=true", nil, 409); pr.Type == "purge.unconfirmed" {
-		t.Errorf("a live task: %+v, want the refusal of ops", pr)
+	var got ops.TaskView
+	ts.call("GET", "/api/tasks/"+p, nil, 200, &got)
+	if got.DeletedAt == nil {
+		t.Errorf("the task is %+v, want it still there, deleted", got)
 	}
 }
 
@@ -283,39 +257,6 @@ func TestAssignsOf(t *testing.T) {
 	}
 	if _, err := assignsOf("k", map[string]any{}); err == nil {
 		t.Error("an object is refused")
-	}
-}
-
-func TestPurgeConfirmNotAULID(t *testing.T) {
-	t.Parallel()
-	ts := newTestServer(t)
-	p := ts.add("p", "")
-	ts.call("DELETE", "/api/tasks/"+p, nil, 200, nil)
-	pr := ts.problem("DELETE", "/api/tasks/"+p+"?purge=true&confirm=nope", nil, 409)
-	if pr.Type != "purge.unconfirmed" || len(pr.Args["targets"].([]any)) != 1 {
-		t.Errorf("confirm that is no ULID: %+v", pr)
-	}
-}
-
-func TestPurgeFailed(t *testing.T) {
-	t.Parallel()
-	ix := &index.Index{}
-	var ts []*index.Entry
-	read := func() (*index.Index, []*index.Entry, error) { return ix, ts, nil }
-	// purge.changed asks again, over the tasks as they are now.
-	changed := &ops.Error{Kind: ops.KindConflict, Code: "purge.changed", Err: errors.New("changed")}
-	if p := purgeFailed(changed, read); p.Type != "purge.unconfirmed" || p.Status != 409 {
-		t.Errorf("changed: %+v", p)
-	}
-	// Failing to read them is that error.
-	if p := purgeFailed(changed, func() (*index.Index, []*index.Entry, error) {
-		return nil, nil, &ops.Error{Kind: ops.KindNotFound, Code: "task.gone", Err: errors.New("gone")}
-	}); p.Type != "task.gone" {
-		t.Errorf("read failed: %+v", p)
-	}
-	// Any other error is its own problem.
-	if p := purgeFailed(&ops.Error{Kind: ops.KindNotFound, Code: "task.gone", Err: errors.New("gone")}, read); p.Type != "task.gone" {
-		t.Errorf("other: %+v", p)
 	}
 }
 

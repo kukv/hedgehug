@@ -16,8 +16,12 @@ const (
 	taskU  = "01JBZ8K3QW7M2X9V4T6R5N8P0A"
 )
 
-func forwardFile(ulid, to string) []byte {
-	return []byte("---\nulid: " + ulid + "\nmoved_to: " + to + "\n---\n")
+const movedAt = "2026-10-31T10:00:00Z"
+
+func forwardFile(ulid, to string) []byte { return forwardFileAt(ulid, to, movedAt) }
+
+func forwardFileAt(ulid, to, at string) []byte {
+	return []byte("---\nulid: " + ulid + "\nmoved_to: " + to + "\nmoved_at: " + at + "\n---\n")
 }
 
 func TestMergeForwardBeatsEditedTask(t *testing.T) {
@@ -228,5 +232,25 @@ func TestRepairForwardListedTwiceIsToldOnce(t *testing.T) {
 	}
 	if len(rs) != 2 {
 		t.Errorf("repaired = %+v; want one record per field and target", rs)
+	}
+}
+
+// Two forwards of the same store: the later moved_at is kept, whichever
+// side it is on and whatever the commit times say, and nothing is recorded as
+// lost (the destination is the same).
+func TestMergeTwoForwardsOfTheSameStoreKeepTheLaterMovedAt(t *testing.T) {
+	t.Parallel()
+	base := task("2026-10-31T10:00:00Z", "title: old")
+	early := forwardFileAt(taskU, storeB, "2026-10-31T10:00:00Z")
+	late := forwardFileAt(taskU, storeB, "2026-10-31T11:00:00Z")
+	at := time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
+	// the side with the earlier moved_at was written later by the clock of the commit
+	withEarly := Side{Data: early, Author: "a", Time: at.Add(time.Minute)}
+	withLate := Side{Data: late, Author: "b", Time: at}
+	for name, sides := range map[string][2]Side{"ours": {withLate, withEarly}, "theirs": {withEarly, withLate}} {
+		r := mergeTask(t, side(base, ""), sides[0], sides[1])
+		if !bytes.Equal(r.Data, late) || len(r.Overwritten) != 0 {
+			t.Errorf("%s has the later moved_at: got %s, overwritten %+v", name, r.Data, r.Overwritten)
+		}
 	}
 }

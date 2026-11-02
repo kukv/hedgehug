@@ -8621,7 +8621,7 @@ CLI の受入テストで、この spec の次の点を変えた。詳細は `do
 - <このファイルに関係する項目だけを、spec の節番号付きで1行ずつ>
 ```
 
-該当箇所は `grep -nF` で探す: `comment <id>`、`workspace prefix`、`no-repo`、`purge --moved`、`purge <id>`、`rewrite-history`、`rewrites.yaml`、`store remove`、`--purge`、`builtinClientID`、`client ID`、`user.name`、`.gitconfig`、`アカウントのない`、`account がない`。
+該当箇所は `grep -nF` で探す: `comment <id>`、`workspace prefix`、`no-repo`、`purge --moved`、`purge <id>`、`moved_to`、`転送ファイル`、`rewrite-history`、`rewrites.yaml`、`store remove`、`--purge`、`builtinClientID`、`client ID`、`user.name`、`.gitconfig`、`アカウントのない`、`account がない`。
 
 - [ ] **Step 2: spec のコミット**
 
@@ -8668,3 +8668,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - `Swap` は古い Store を最初から `.kept-` に動かさず、入れ替えの間は `.before-rewrite-` で動かす。戻せなかった変更（`Purged`）があるときは、最初の rename の前に古い Store の `.hedgehug/local/rebuild-keep` に印を書き、入れ替えが済んでから `<dir>.kept-<UTC 時刻>` に改名する。`FinishLeftover` は印のある `.before-rewrite-` を消さずに `.kept-` に改名し、改名できなければ残してそのパスをエラーで返す（レビューの指摘: `.kept-` へ直接 rename すると、止まった入れ替えの仕上げが古い Store を見落とし、間に入ったコミットが本流から外れうる）。
 - 入れ替えのあとの `syncLocal` の失敗は、作り直しの失敗の指摘にせず、`Rebuild.Warnings` の警告にする。
 - テストの細部: `internal/ops/rebuild_test.go` の指摘の数は `merge_driver` の指摘を除いて数える（`hedgehug` が PATH にない環境のため）。`internal/index/forward_merge_test.go` は消した `ResetMain` の代わりに go-git の HardReset を使う。`api/openapi.yaml` と `web/core/api/schema.d.ts` を作り直した。
+
+### Task 9・11（PR は Task 9・11 だけ。Task 1〜8 より先に入れた）
+
+- Task 1〜8 より先に入れたので、テストは今の環境に合わせた（`TestUndoDoesNotTakeBackAPurge` は `writeAccounts` を自分で呼ぶ）。挙動は plan のまま。
+- Task 9: phase4 の spec の完全削除の記述は、表にあった箇所のほかに 3 か所（4c の細部、E2E の行、Dialogs の追記）も消した。`internal/server/poll_test.go` の `PurgeUnchecked` は `Purge(0, true)` にした。
+- Task 11: `cmd/hedgehug` にあった同名の `plural` 関数は消して `plural.Pick` にした。JSON の golden の `<store>` は `<store>` になる。
+- Task 11: `--yes` でロックの下で計算し直したときに新しく「残す」ことになったタスクは、一覧のときに出していない ID だけを警告する（spec §9 の「残して警告で ID を並べる」）。壊れた転送ファイルは数が増えたときだけ警告する。
+- Task 11: GUI の `undo.blocked` は拒否の理由（`op`: `purge`・`move-in`・`move-out`、なければワークスペース）で文言を分ける。
+- Task 10 の後回しの Minor 5 件もこの回で直した（`unexpected_force_push` を 1 つにまとめる、doc コメントの折り返し、`openStoreAt` のハンドルをすべての経路で閉じる、`TestPurgeRewriteHistoryIsGone` を purge のテストに移す、`Purged` のない入れ替えは古い `rebuild-keep` の印を先に消す）。
+- phase3 の spec と design-review に「2026-11-02 の変更」の節を足し、転送ファイルの `moved_at` と `purge --moved` の廃止を書いた。Task 13 Step 1 の探す語に `moved_to`・`転送ファイル` を足した。

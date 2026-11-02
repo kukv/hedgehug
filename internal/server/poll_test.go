@@ -111,7 +111,7 @@ func TestPollRemoved(t *testing.T) {
 		t.Fatal(err)
 	}
 	ts.srv.poller.settle()
-	if _, err := ts.session().PurgeUnchecked(res.ULID.String()); err != nil {
+	if _, err := ts.session().Purge(0, true); err != nil {
 		t.Fatal(err)
 	}
 	e := waitEvent[tasksChanged](t, ch, func(e tasksChanged) bool { return e.Op == "purge" })

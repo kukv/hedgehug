@@ -52,7 +52,7 @@ func (ss *Session) duplicates() ([]duplicate, error) {
 }
 
 // text is "in org-b (WEB-45) and org-c (OPS-3); remove the one not needed with
-// hedgehug rm and hedgehug purge" (D19).
+// hedgehug rm and hedgehug purge --older-than 0d --store <store>" (D19).
 func (d duplicate) text() string {
 	parts := make([]string, len(d.Places))
 	for i, p := range d.Places {
@@ -62,7 +62,7 @@ func (d duplicate) text() string {
 	if n := len(parts); n > 1 {
 		list = strings.Join(parts[:n-1], ", ") + " and " + parts[n-1]
 	}
-	return "in " + list + "; remove the one not needed with hedgehug rm and hedgehug purge"
+	return "in " + list + "; remove the one not needed with hedgehug rm and hedgehug purge --older-than 0d --store <store>"
 }
 
 // in tells whether the store name has the task.

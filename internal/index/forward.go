@@ -8,6 +8,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
 
@@ -24,6 +25,7 @@ const maxForwardHops = 20
 type ForwardEntry struct {
 	ULID      model.ULID
 	MovedTo   model.ULID // the ulid of the store it moved to
+	MovedAt   time.Time  // when it moved
 	ID        string     // the id the task had when it was last a task here; "" when not found
 	FormerIDs []string
 	Broken    string // why the forward did not decode; empty when it did
@@ -94,7 +96,7 @@ func (ix *Index) newForwardEntry(ulid model.ULID, data []byte) (*ForwardEntry, e
 	if err != nil {
 		return &ForwardEntry{ULID: ulid, Broken: err.Error()}, nil
 	}
-	e := &ForwardEntry{ULID: ulid, MovedTo: f.MovedTo}
+	e := &ForwardEntry{ULID: ulid, MovedTo: f.MovedTo, MovedAt: f.MovedAt}
 	t, err := ix.lastTask(ulid)
 	if err != nil {
 		return nil, err
@@ -115,7 +117,7 @@ func decodeForwardEntry(ulid model.ULID, data []byte) *ForwardEntry {
 	if err != nil {
 		return &ForwardEntry{ULID: ulid, Broken: err.Error()}
 	}
-	return &ForwardEntry{ULID: ulid, MovedTo: f.MovedTo}
+	return &ForwardEntry{ULID: ulid, MovedTo: f.MovedTo, MovedAt: f.MovedAt}
 }
 
 // resolveForwardIDs gives the entries their id and former ids as lastTask

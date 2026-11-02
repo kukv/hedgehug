@@ -203,23 +203,13 @@ export class TaskCache {
     this.flush();
   }
 
-  // applyWrite takes in the answer of a write: the tasks as they are now,
-  // and the ULIDs purged.
-  applyWrite(r: {
-    task?: TaskView;
-    tasks?: TaskView[];
-    ulids?: string[];
-    commit?: string | null;
-  }): void {
+  // applyWrite takes in the answer of a write: the tasks as they are now.
+  applyWrite(r: { task?: TaskView; tasks?: TaskView[]; commit?: string | null }): void {
     for (const t of [...(r.task ? [r.task] : []), ...(r.tasks ?? [])]) {
       this.markWrite(t.ulid);
       const row = this.ingest(t);
       const show = this.shows.get(t.ulid);
       if (show) this.putShow({ ...show, ...row });
-    }
-    for (const u of r.ulids ?? []) {
-      this.markWrite(u);
-      this.forget(u);
     }
     this.noteOwnCommit(r.commit);
     this.flush();

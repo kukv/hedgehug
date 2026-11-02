@@ -389,11 +389,20 @@ func (ss *Session) StoreAdd(name string, remotes []string, path, account string)
 		// KindInvalid, not KindUsage: the CLI exits 1.
 		return StoreAddResult{}, newErr(KindInvalid, "store.clone_failed", err, "remote", remotes[0])
 	}
-	undo := func(err error) error { return errors.Join(err, clearDir(dir, existed)) }
-	s, err := ss.openStoreAt(dir)
+	// The handle is closed before the directory goes: Windows cannot remove
+	// open pack files.
+	var s *store.Store
+	undo := func(err error) error {
+		if s != nil {
+			_ = s.Repo().Close()
+		}
+		return errors.Join(err, clearDir(dir, existed))
+	}
+	s, err = ss.openStoreAt(dir)
 	if err != nil {
 		return StoreAddResult{}, undo(newErr(KindInvalid, "store.not_hedgehug", fmt.Errorf("%s is not a hedgehug store: %w", remotes[0], err), "name", name))
 	}
+	defer func() { _ = s.Repo().Close() }()
 	if err := s.Repo().RegisterMergeDriver(); err != nil {
 		return StoreAddResult{}, undo(err)
 	}
@@ -551,6 +560,7 @@ func (ss *Session) StoreList() ([]StoreView, error) {
 			if st, err := sync.ReadState(s); err == nil {
 				out[i].LastSuccess = timePtr(st.LastSuccess)
 			}
+			_ = s.Repo().Close()
 		}
 	}
 	return out, nil
@@ -643,6 +653,7 @@ func (ss *Session) checkPushed(e config.StoreEntry) error {
 	if err != nil {
 		return unpushed(fmt.Errorf("store %s: %w; delete the directory by hand if you mean to", e.Name, err))
 	}
+	defer func() { _ = s.Repo().Close() }()
 	n, err := Unpushed(s)
 	if err != nil {
 		return err
