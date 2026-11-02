@@ -259,7 +259,11 @@ func TestPollNewStoreTellsTheClients(t *testing.T) {
 	if _, err := ts.session().StoreInit(ops.StoreInitInput{Name: "later", Prefix: "LT", Workspace: "later"}); err != nil {
 		t.Fatal(err)
 	}
-	waitEvent(t, ch, func(e tasksChanged) bool { return e.Store == "later" })
+	e := waitEvent(t, ch, func(e tasksChanged) bool { return e.Store == "later" })
+	if e.Commit == "" {
+		t.Error("the event of a new store has no commit; it says HEAD now")
+	}
+	waitEvent(t, ch, func(e syncStatus) bool { return e.Store == "later" })
 }
 
 func TestPollStoreThatComesBackTellsTheClients(t *testing.T) {
@@ -296,7 +300,42 @@ func TestPollStoreThatComesBackTellsTheClients(t *testing.T) {
 	}
 	// What happened while it was away is not known: the clients read it again.
 	ts.srv.poller.poll(true)
-	waitEvent(t, ch, func(e tasksChanged) bool { return e.Store == "later" })
+	e2 := waitEvent(t, ch, func(e tasksChanged) bool { return e.Store == "later" })
+	if e2.Commit == "" {
+		t.Error("the event of a store that came back has no commit")
+	}
+}
+
+// The server starts with no store (Onboarding): a poll that finds none has looked, and the first
+// store made after it tells the clients, though it may already hold the first task.
+func TestPollFirstStoreAfterNoStoreTellsTheClients(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	if _, err := ts.session().StoreRemove("me", false); err != nil {
+		t.Fatal(err)
+	}
+	ts.srv.poller = newPoller(ts.srv, ts.srv.hub)
+	ch, cancel := ts.srv.hub.Subscribe()
+	ctx, stop := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	ts.srv.poller.interval = 10 * time.Millisecond
+	go func() {
+		defer close(done)
+		ts.srv.poller.Run(ctx)
+	}()
+	t.Cleanup(func() { stop(); cancel(); <-done })
+	eventually(t, "the look of the poller at no store", func() bool {
+		ts.srv.poller.mu.Lock()
+		defer ts.srv.poller.mu.Unlock()
+		return ts.srv.poller.scanned
+	})
+	if _, err := ts.session().StoreInit(ops.StoreInitInput{Name: "first", Prefix: "FT", Workspace: "first"}); err != nil {
+		t.Fatal(err)
+	}
+	e := waitEvent(t, ch, func(e tasksChanged) bool { return e.Store == "first" })
+	if e.Commit == "" {
+		t.Error("the event has no commit")
+	}
 }
 
 func TestPollFailedFirstLookIsNotTheFirstLook(t *testing.T) {

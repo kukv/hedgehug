@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"slices"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/go-git/go-git/v5/plumbing"
 
+	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
@@ -154,6 +156,11 @@ func (p *Poller) pollLocked(publish bool) {
 		return
 	}
 	targets, err := ss.SyncTargets(c, true)
+	if errors.Is(err, config.ErrNoStores) {
+		// No store is a look to the end too: the one that comes after it (the first one,
+		// made from Onboarding) is a store that appeared after the first look.
+		targets, err = nil, nil
+	}
 	if err != nil {
 		return
 	}
@@ -181,8 +188,13 @@ func (p *Poller) pollLocked(publish bool) {
 		seen[e.Name] = true
 		st := p.stores[e.Name]
 		fresh := false
+		announced := false // the clients were told to read the store again
 		if st == nil || st.path != e.Path {
 			s, err := p.s.session(e.Name).OpenStore()
+			if err != nil {
+				continue
+			}
+			first, err := s.Repo().Head()
 			if err != nil {
 				continue
 			}
@@ -198,7 +210,8 @@ func (p *Poller) pollLocked(publish bool) {
 				// commits made before this look are not known (a page that made a
 				// task in a store just created would never be told), so the clients
 				// read it again.
-				p.hub.Publish(tasksChanged{Store: e.Name, ULIDs: []string{}, Removed: []string{}})
+				p.hub.Publish(tasksChanged{Store: e.Name, ULIDs: []string{}, Removed: []string{}, Commit: first.String()})
+				announced = true
 			}
 		}
 		head, err := st.s.Repo().Head()
@@ -216,7 +229,7 @@ func (p *Poller) pollLocked(publish bool) {
 		u := update{name: e.Name, st: st, head: head, sync: st.sync, fresh: fresh}
 		if v, ok := statuses[e.Name]; ok && !reflect.DeepEqual(v, st.sync) {
 			u.sync = v
-			if publish && !fresh {
+			if publish && (!fresh || announced) {
 				p.hub.Publish(v)
 			}
 		}
