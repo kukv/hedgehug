@@ -191,6 +191,7 @@ type Fixed struct {
 // --fix, Repaired is empty and only Findings is of interest.
 type DoctorReport struct {
 	Store    string           `json:"store"`
+	Rebuilt  *Rebuilt         `json:"rebuilt,omitempty"`
 	Repaired []Fixed          `json:"repaired"`
 	Findings []doctor.Finding `json:"findings"`
 }
@@ -213,14 +214,22 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 		}
 		entries = []config.StoreEntry{e}
 	}
-	// A swap after a history rewrite that stopped is finished first, so the
-	// store opens (rewrite_leftover).
-	// One that fails is that store's finding; the others go on.
+	// A swap that stopped is finished first, so the store opens. A store a
+	// sync found force pushed is then cloned again, before the repairs: they
+	// are made on the new history. One that fails is that store's finding;
+	// the others go on.
 	finishErr := map[string]error{}
+	rebuildErr := map[string]error{}
+	rebuilt := make([]*Rebuilt, len(entries))
 	if fix {
-		for _, e := range entries {
+		for i, e := range entries {
 			if err := ss.finishRebuild(e); err != nil {
 				finishErr[e.Name] = err
+				continue
+			}
+			var err error
+			if rebuilt[i], err = ss.rebuildStore(c, e); err != nil {
+				rebuildErr[e.Name] = err
 			}
 		}
 	}
@@ -264,11 +273,18 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 				// the store did not open for want of the finish: say that
 				r, err = DoctorReport{Store: e.Name, Repaired: repaired[i]}, nil
 			}
-			r.Findings = append(r.Findings, doctor.Finding{Check: "rewrite_leftover", Where: e.Path, Msg: "cannot finish the rebuild after a history rewrite: " + ferr.Error(), Hint: "fix the cause and run hedgehug doctor --fix again"})
+			r.Findings = append(r.Findings, doctor.Finding{Check: "git", Where: e.Path, Msg: "cannot finish the rebuild after a history rewrite: " + ferr.Error(), Hint: "fix the cause and run hedgehug doctor --fix again"})
+		}
+		if rerr := rebuildErr[e.Name]; rerr != nil {
+			if err != nil {
+				r, err = DoctorReport{Store: e.Name, Repaired: repaired[i]}, nil
+			}
+			r.Findings = append(r.Findings, doctor.Finding{Check: "unexpected_force_push", Where: e.Name, Msg: "cannot clone the store again: " + rerr.Error(), Hint: "fix the cause and run hedgehug doctor --fix again"})
 		}
 		if err != nil {
 			return nil, err
 		}
+		r.Rebuilt = rebuilt[i]
 		out = append(out, r)
 	}
 	return out, nil
@@ -301,16 +317,6 @@ func (ss *Session) doctorFix(c *config.Config, e config.StoreEntry) ([]Fixed, er
 // else a finding of its own, so that the reports of the others stand.
 func (ss *Session) doctorStore(e config.StoreEntry, only bool, repaired []Fixed, duplicates func() []duplicate) (DoctorReport, error) {
 	r := DoctorReport{Store: e.Name, Repaired: repaired}
-	left, err := rewriteLeftoverFinding(e)
-	if err != nil {
-		return DoctorReport{}, err
-	}
-	if _, serr := os.Lstat(e.Path); os.IsNotExist(serr) && len(left) > 0 {
-		// The swap after a history rewrite stopped before the rebuilt store
-		// took the place: nothing else can be said until it is finished.
-		r.Findings = left
-		return r, nil
-	}
 	// A store that does not open is told of by the findings, which say why;
 	// its references are not looked at.
 	opened, openErr := ss.openStoreAt(e.Path)
@@ -318,7 +324,6 @@ func (ss *Session) doctorStore(e config.StoreEntry, only bool, repaired []Fixed,
 	if err != nil {
 		return DoctorReport{}, err
 	}
-	fs = append(fs, left...)
 	if openErr != nil && len(fs) == 0 {
 		if only {
 			return DoctorReport{}, openErr
@@ -339,15 +344,13 @@ func (ss *Session) doctorStore(e config.StoreEntry, only bool, repaired []Fixed,
 	return r, nil
 }
 
-// forcePushFinding is unexpected_force_push (D23): the last sync found the
-// history of origin rewritten without a record, and the file it left is
-// still there.
+// forcePushFinding is unexpected_force_push (D23): the last sync found the history of origin differing from the store's, and the file it left is still there.
 func forcePushFinding(name string, s *store.Store) ([]doctor.Finding, error) {
 	_, ok, err := sync.ReadForcePush(s)
 	if err != nil || !ok {
 		return nil, err
 	}
-	return []doctor.Finding{{Check: "unexpected_force_push", Where: name, Msg: sync.ErrForcePush.Error(), Hint: "check the history of origin; if it is right, clone the store again"}}, nil
+	return []doctor.Finding{{Check: "unexpected_force_push", Where: name, Msg: sync.ErrForcePush.Error(), Hint: "hedgehug doctor --fix clones the store again from origin and puts the unpushed changes back; the old store is kept when some could not be put back"}}, nil
 }
 
 // fixStore repairs the files of HEAD of the store e, opened as s, as a sync

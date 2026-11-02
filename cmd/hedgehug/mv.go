@@ -163,7 +163,7 @@ func (a *app) confirmMove(p ops.MovePlan) error {
 	for _, l := range v.Scoped {
 		b.WriteString(l + "\n")
 	}
-	fmt.Fprintf(&b, "The content before the move stays in the git history of %[1]s, and anyone who can read %[1]s can see it; use hedgehug purge --rewrite-history to remove it\n", v.From)
+	fmt.Fprintf(&b, "The content before the move stays in the git history of %[1]s, and anyone who can read %[1]s can see it\n", v.From)
 	if len(v.Hidden) > 0 {
 		fmt.Fprintf(&b, "No longer visible to: %s\n", strings.Join(v.Hidden, ", "))
 	}

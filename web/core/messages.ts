@@ -164,7 +164,7 @@ const messages: Record<string, Make> = {
   "sync.dirty": () => "コミットしていない変更があるため同期できません",
   "sync.unrelated": () => "リモートの履歴がこの Store の履歴と無関係です",
   "sync.force_push": () =>
-    "リモートの履歴が Hedgehug の記録なしに書き換えられています。hh doctor で確かめてください",
+    "リモートの履歴が手元と食い違っています。確かめてから、hh doctor --fix で clone し直してください",
   "sync.background_needs_store": () => "バックグラウンドの同期には Store の指定が必要です",
 
   // accounts and GitHub

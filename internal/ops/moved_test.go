@@ -133,12 +133,11 @@ func TestDepOnAMovedTask(t *testing.T) {
 	wantMoved(t, ts, err, map[string]any{"store": "org-b"})
 }
 
-func TestUndoRefusesMovesAndRewrites(t *testing.T) {
+func TestUndoRefusesMoves(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct{ op, why string }{
 		{"move-in", "a move between stores cannot be undone; move it back with hedgehug mv --store"},
 		{"move-out", "a move between stores cannot be undone; move it back with hedgehug mv --store"},
-		{"rewrite-history", "a history rewrite cannot be undone"},
 	} {
 		t.Run(tc.op, func(t *testing.T) {
 			ts := newTwoStoreSession(t)
