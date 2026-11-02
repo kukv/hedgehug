@@ -162,7 +162,7 @@ func TestUndoBlockedByTasksOfAWorkspace(t *testing.T) {
 	alice := ts.asWriter(bobAccount, aliceAccount)
 	_, err = alice.Undo()
 	var oe *Error
-	if KindOf(err) != KindConflict || !errors.As(err, &oe) || oe.Code != "undo.blocked" || !strings.Contains(err.Error(), "the workspace still has 1 tasks") {
+	if KindOf(err) != KindConflict || !errors.As(err, &oe) || oe.Code != "undo.blocked" || !strings.Contains(err.Error(), "the workspace still has 1 task") {
 		t.Fatalf("Undo = %v; want KindConflict undo.blocked naming 1 task", err)
 	}
 }

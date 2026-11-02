@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/plural"
 )
 
 func (a *app) syncCmd() *cobra.Command {
@@ -77,17 +78,14 @@ func (a *app) printSync(r ops.SyncReport) error {
 	if r.NoRemote {
 		fmt.Fprintf(&b, "Nothing to sync: %s has no remote\n", r.Store)
 	} else {
-		fmt.Fprintf(&b, "Synced %s: %d merges", r.Store, r.Merges)
+		fmt.Fprintf(&b, "Synced %s: %s", r.Store, plural.Count(r.Merges, "merge"))
 		if len(r.Pushed) > 0 {
 			b.WriteString(", pushed to " + strings.Join(r.Pushed, ", "))
 		}
 		b.WriteString("\n")
 	}
-	switch {
-	case r.Unpushable == 1:
-		b.WriteString("  read-only: 1 commit not pushed\n")
-	case r.Unpushable > 1:
-		fmt.Fprintf(&b, "  read-only: %d commits not pushed\n", r.Unpushable)
+	if r.Unpushable > 0 {
+		fmt.Fprintf(&b, "  read-only: %s not pushed\n", plural.Count(r.Unpushable, "commit"))
 	}
 	for _, x := range r.Repaired {
 		fmt.Fprintf(&b, "  %s\n", repairedLine(x))
@@ -108,7 +106,8 @@ func (a *app) printSync(r ops.SyncReport) error {
 		fmt.Fprintf(&b, "  overwritten: %s %s (%s's value was replaced%s)\n", what, o.Field, who, hint)
 	}
 	if n := len(r.Invalid); n > 0 {
-		fmt.Fprintf(&b, "  invalid: %d tasks now have problems; find them with hedgehug ls is:invalid\n", n)
+		fmt.Fprintf(&b, "  invalid: %s now %s problems; find %s with hedgehug ls is:invalid\n",
+			plural.Count(n, "task"), plural.Pick(n, "has", "have"), plural.Pick(n, "it", "them"))
 	}
 	if _, err := fmt.Fprint(a.stdout, b.String()); err != nil {
 		return err
@@ -160,13 +159,10 @@ func (a *app) syncStatus() error {
 		if x.ReadOnly != "" {
 			fmt.Fprintf(&b, "  read-only:     %s\n", x.ReadOnly)
 		}
-		switch {
-		case x.Unpushed == nil:
+		if x.Unpushed == nil {
 			b.WriteString("  no remote\n")
-		case *x.Unpushed == 1:
-			b.WriteString("  1 commit not pushed\n")
-		default:
-			fmt.Fprintf(&b, "  %d commits not pushed\n", *x.Unpushed)
+		} else {
+			fmt.Fprintf(&b, "  %s not pushed\n", plural.Count(*x.Unpushed, "commit"))
 		}
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())

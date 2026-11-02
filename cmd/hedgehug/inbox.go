@@ -92,7 +92,7 @@ func (a *app) inboxRead(args []string, all bool) error {
 	if a.jsonOut {
 		return a.printJSON(map[string][]string{"read": read})
 	}
-	_, err = fmt.Fprintf(a.stdout, "Marked %d %s read\n", len(read), plural.Pick(len(read), "item", "items"))
+	_, err = fmt.Fprintf(a.stdout, "Marked %s read\n", plural.Count(len(read), "item"))
 	return err
 }
 

@@ -6,12 +6,16 @@
 
 ## 2026-11-02 の変更
 
-CLI の受入テストで、この spec の次の点を変えた。詳細は `docs/superpowers/specs/2026-11-02-cli-acceptance-fixes-design.md`（§9、§9.1、§11）。
+CLI の受入テストで、この spec の次の点を変えた。詳細は `docs/superpowers/specs/2026-11-02-cli-acceptance-fixes-design.md`（§5、§6、§7、§9、§9.1、§10、§11）。
 
 - 転送ファイル（「転送ファイル（internal/model）」）は `ulid`・`moved_to`・`moved_at` を持つ。`moved_at` は移動した時刻（RFC 3339）で必須。持たない転送ファイルは壊れたファイルとして扱う
 - 転送先が同じ転送ファイルどうしが合流したときは、`moved_at` の大きい方を採る（「同期での扱い」）
 - `hh purge --moved` はなくなり、`hh purge --older-than <N>d` に置き換えた。転送ファイルは、`moved_at` が期間より古いものを削除済みのタスクと一緒に消す（§9）。`Hedgehug-Op: purge-moved` も使わない
 - `hh undo` は purge を取り消せず、`a purge cannot be undone` と出す
+- `hh purge --rewrite-history` と `.hedgehug/rewrites.yaml` の記録、同期の中の自動の作り直しはなくなった。同期は origin の履歴の食い違いを見つけたら止まり、`hh doctor --fix` が push していない変更を退避し、clone し直し、戻す（§10）。`mv --store` の履歴の警告は `purge --rewrite-history` を案内しない
+- client ID はバイナリに組み込まない（`builtinClientID` は消した）。Device Flow は `hosts[].client_id` を書いたときだけ使える。空なら `hosts[].client_id` か `token: gh`・`env:<VAR>`・`--with-token` を案内して止める（§6）
+- アカウントは必須。`accounts` が 2 つ以上あるとき、`stores[].account` のない Store は config.yaml の読み込みのエラー。コミットの作者は常にアカウントから作る（§5.1〜§5.3）。トークンなしのアカウントを足す `hh auth add <name> --login <login> [--host] [--token]` を足した（§5.4）
+- `hh add` は既定で repos を付けず、`--repo` を付けたときだけカレントのリポジトリの repo ID を足す。`--no-repo` は廃止（§7）。git worktree の中でもカレントのリポジトリを見つける（§8）
 
 ## 位置づけ
 
@@ -142,7 +146,7 @@ host とアカウント ID の比較は `internal/config` の1つずつの関数
 | 確認 | `mv --store`、`purge --moved` | `[y/N]` | `--yes` が必須。なければ `confirm.required`（終了コード2）（2026-11-02 に変更。冒頭の節を参照） |
 | 選択 | ワークスペース、既定の Store、repo の段の候補、`--scoped`、`discover --from` のアカウント | 番号で選ぶ | 選ぶフラグが必須。なければ候補を並べた `choice.required`（終了コード2）。既定（repo の段の `recent`）があれば既定を使う |
 | 推測の確認 | ブランチ名の段、ブラウザを開くか | `[Y/n]` | 飛ばす |
-| 取り返しのつかない操作 | `purge --rewrite-history` | Store 名を入力 | 常にエラー（`--yes` でも通さない） |
+| 取り返しのつかない操作 | `purge --rewrite-history` | Store 名を入力 | 常にエラー（`--yes` でも通さない）（2026-11-02 に変更。冒頭の節を参照） |
 
 `internal/ops` は聞かない。答えは入力（`Yes`、選んだ値、入力された Store 名）で受け取り、足りなければ `choice.required`・`confirm.required` を候補付きで返す。CLI は端末ならそれを見て聞き直し、GUI はダイアログを出す。`store discover` は一覧を出すのが目的のコマンドなので、端末でないときは一覧だけを出す（「選択」の例外）。
 
@@ -234,7 +238,7 @@ repo_accounts:
 ```
 
 - `accounts[].token`: `gh`、`env:<変数名>`、`keychain`、`device` のどれか。`config.TokenSource{Kind, Env}` で持ち、`Kind` は `""`・`gh`・`env`・`keychain`・`device`。省略したアカウントはトークンを使わない（フェーズ2の設定はすべてこれ。ローカルのパスの remote は今までどおり動く）。それ以外の値は読み込みのエラー（ファイルのパスと行を入れる。既存の読み込みのエラーと同じ形）。
-- `hosts[]`: `host` は必須で重複（大文字小文字を区別しない）を禁止する。`host` はポートなしのホスト名で書く（remote の URL の host はポートを除いて比べるため、ポート付きで書いても一致しない）。`api` の既定は、`github.com` なら `https://api.github.com`、それ以外は `https://<host>/api/v3`。`web` の既定は `https://<host>`。`client_id` の既定は組み込みの値（github.com のみ。付録の App の client ID。`internal/auth` の変数 `builtinClientID` で、App の登録まで空）。
+- `hosts[]`: `host` は必須で重複（大文字小文字を区別しない）を禁止する。`host` はポートなしのホスト名で書く（remote の URL の host はポートを除いて比べるため、ポート付きで書いても一致しない）。`api` の既定は、`github.com` なら `https://api.github.com`、それ以外は `https://<host>/api/v3`。`web` の既定は `https://<host>`。`client_id` の既定は組み込みの値（github.com のみ。付録の App の client ID。`internal/auth` の変数 `builtinClientID` で、App の登録まで空）。（2026-11-02 に変更。冒頭の節を参照）
 - `default_store`: `stores[]` の名前。ない名前を指していたら読み込みのエラー。
 - `url_rewrites[]`: `from` と `to` は必須。適用は「git の通信」の節。
 - `repo_accounts[]`: `match` は repo ID の glob（`path.Match`。`*` は全体にも一致する）、`account` は `accounts[]` の名前。ない名前は読み込みのエラー。フェーズ3は読み込みと検査だけ。
@@ -274,7 +278,7 @@ repo_accounts:
 | `hh auth status` | アカウントごとに、名前、`<host>/<login>`、token の種類、`device` の期限（期限なしは `-`）、状態を出す。状態は `ok`、エラーの文（トークンが取れない、`GET /user` の失敗、login が config と合わない）、token のないアカウントは `-`（調べない）。エラーが1つでもあれば終了コード1。`--json` は `{name, id, token, expires, state: "ok"|"error"|"none", login, error}`（値のないキーは省く） |
 | `hh auth logout <name>` | keychain の値を消す（`keychain` と `device`。`device` は `auth.lock` の中で）。config のアカウントは残す。`gh` と `env` は「Hedgehug が持っているものはありません」と出して終了コード0 |
 
-Device Flow の流れ: `POST {web}/login/device/code`（`client_id`）→ `user_code` と `verification_uri` を出す（端末ならブラウザを開くかを `[Y/n]` で聞く。開くのは OS の既定の方法で、macOS は `open`、Windows は `rundll32 url.dll,FileProtocolHandler`、それ以外は `xdg-open`。開けなくても URL とコードは出ているので警告だけにする）→ `interval` ごとに `POST {web}/login/oauth/access_token` を呼び、`authorization_pending` は待ち、`slow_down` は間隔を5秒延ばし、`expired_token` と `access_denied` はエラー。client ID が空（App の登録前）なら、「hosts の client_id を設定してください」のエラー。
+Device Flow の流れ: `POST {web}/login/device/code`（`client_id`）→ `user_code` と `verification_uri` を出す（端末ならブラウザを開くかを `[Y/n]` で聞く。開くのは OS の既定の方法で、macOS は `open`、Windows は `rundll32 url.dll,FileProtocolHandler`、それ以外は `xdg-open`。開けなくても URL とコードは出ているので警告だけにする）→ `interval` ごとに `POST {web}/login/oauth/access_token` を呼び、`authorization_pending` は待ち、`slow_down` は間隔を5秒延ばし、`expired_token` と `access_denied` はエラー。client ID が空（App の登録前）なら、「hosts の client_id を設定してください」のエラー。（2026-11-02 に変更。冒頭の節を参照）
 
 ## GitHub API（internal/github）
 
@@ -456,7 +460,7 @@ CLI の `hh add` で入れ先を決める。上から順に試し、最初に当
 5. **既定の Store**: `default_store` のワークスペースのルート。`default_store` がなければ、Store が1つならそれ、2つ以上なら端末で選ばせ、端末でなければエラー（`--store` か `hh store default` を案内）。ワークスペースは1つならそれ、2つ以上なら端末で選ばせ、端末でなければエラー（`--workspace` を案内）。
 
 - 決まった入れ先が読み取り専用の Store なら、その時点で拒否する。
-- **repo リンクの自動付与**: 4 で repo ID が作れたとき（カレントが git リポジトリの中で、正規化できる remote があるとき）は、どの段で入れ先が決まったかによらず、新しいタスクの `repos` にその repo ID（`origin` のもの、なければ名前順で最初のもの）を足す。`--no-repo` で付けない。
+- **repo リンクの自動付与**: 4 で repo ID が作れたとき（カレントが git リポジトリの中で、正規化できる remote があるとき）は、どの段で入れ先が決まったかによらず、新しいタスクの `repos` にその repo ID（`origin` のもの、なければ名前順で最初のもの）を足す。`--no-repo` で付けない。（2026-11-02 に変更。冒頭の節を参照）
 - **直近の記録**: 4 で project を選んだとき（1件でも）、`recent[<repo ID>]` をその project にする。
 - **表示**: 作成時に、今の出力の後に1行 `→ org-a / リリース準備 に追加しました` を足す（`<Store 名> / <親のタイトル>`。ルートならワークスペース名）。`--json` には `store` と `parent`（ULID か null）、`workspace` を足す。
 
@@ -505,12 +509,12 @@ moved_at: 2026-11-02T09:30:00Z   # 移動した時刻（RFC 3339、必須。な�
 
 - 7 の後に 8 が失敗したら、エラーに「移動先には書きました。同じコマンドをもう一度実行すると移動元を仕上げます」と出す。再実行で、移動先に M の ULID がすでに同じ内容で（`move-in` のコミットの後に）あれば 7 を飛ばして 8 だけを行う。
 - 7 と 8 は、それぞれの Store のロックの中で行う。2つのロックは Store の ULID の小さい順に取る（「ロック」。逆向きの移動が同時に走っても待ち合わない）。
-- `hh undo`: 最後の操作が `move-in`・`move-out` なら undo せずに `hh mv --store` で戻すよう案内し、`rewrite-history` なら取り消せないと出す（`undo.blocked`）。undo の対象の操作が変えたタスクがその後に移動していたら、何も変えずに移動の案内を出す（利用者の決定。2026-11-01）。
+- `hh undo`: 最後の操作が `move-in`・`move-out` なら undo せずに `hh mv --store` で戻すよう案内し、`rewrite-history` なら取り消せないと出す（`undo.blocked`）。undo の対象の操作が変えたタスクがその後に移動していたら、何も変えずに移動の案内を出す（利用者の決定。2026-11-01）。（2026-11-02 に変更。冒頭の節を参照）
 - 転送ファイルにだけ当たる ID・ULID の案内: `API-12 は org-b へ移動しました（org-b:WEB-45）`。移動先の Store がマウントされていなければ、`API-12 は別の Store（ULID 01JC0…）へ移動しました。その Store をマウントすると辿れます`。終了コード1。
 
 ### 履歴の警告
 
-5 で毎回、`移動前の内容は org-a の git 履歴に残り、org-a を読める人は過去の内容を見られます。消すには hh purge --rewrite-history を使います` を出す。両方の Store の `members.json` の `collaborators` が取れていれば、移動元にいて移動先にいない人を `見えなくなる人: github.com/bob, github.com/carol` として足す。
+5 で毎回、`移動前の内容は org-a の git 履歴に残り、org-a を読める人は過去の内容を見られます。消すには hh purge --rewrite-history を使います` を出す。両方の Store の `members.json` の `collaborators` が取れていれば、移動元にいて移動先にいない人を `見えなくなる人: github.com/bob, github.com/carol` として足す。（2026-11-02 に変更。冒頭の節を参照）
 
 ### `hh purge --moved [--store s] [--yes]`（2026-11-02 に変更。冒頭の節を参照）
 
@@ -529,7 +533,7 @@ moved_at: 2026-11-02T09:30:00Z   # 移動した時刻（RFC 3339、必須。な�
 
 同じ ULID の生きたタスクが2つ以上のマウント中の Store にあるとき（同時に別の Store へ移した場合など）。`doctor` の検査 `duplicate_across_stores`（警告）と、同期の後の警告で、`01JBZ… が org-b（WEB-45）と org-c（OPS-3）の両方にあります。不要な方を hh rm と hh purge で消してください` と出す。ID の解決で ULID を入力したときは、2つ以上の Store で当たったときの規則（Store 名付きで並べたエラー）になる。
 
-## 履歴の書き換え
+## 履歴の書き換え（2026-11-02 に変更。冒頭の節を参照）
 
 ### `hh purge --rewrite-history <id> [--store s]`
 
@@ -584,13 +588,13 @@ moved_at: 2026-11-02T09:30:00Z   # 移動した時刻（RFC 3339、必須。な�
 | `hh store default [<name>]` | 3a | 既定の Store |
 | ID を受け取るコマンド全部 | 3b | 全 Store からの解決、Store 名付きの ID |
 | `hh ls`、`ls --tree`、`show`、`inbox`、`log` | 3b | 全 Store、STORE の列、`store:` |
-| `hh add [--project] [--no-repo]` | 3b | コンテキスト解決 |
+| `hh add [--project] [--no-repo]` | 3b | コンテキスト解決（2026-11-02 に変更。冒頭の節を参照） |
 | `hh use [<project>] [--clear]` | 3b | 「コンテキスト解決」 |
 | `hh comment edit/rm` | 3b | 本人確認 |
 | `hh mv --store [--scoped] [--yes]` | 3c | 「Store 間の移動」 |
 | `hh purge --moved`、`purge --rewrite-history` | 3c | 「Store 間の移動」「履歴の書き換え」（2026-11-02 に変更。冒頭の節を参照） |
 
-足すコマンドはすべて `--json` に対応する（`purge --rewrite-history` の確認は `--json` でも端末の入力を求める）。
+足すコマンドはすべて `--json` に対応する（`purge --rewrite-history` の確認は `--json` でも端末の入力を求める）。（2026-11-02 に変更。冒頭の節を参照）
 
 ## doctor の追加
 
@@ -689,7 +693,7 @@ spec の承認後に、次を親設計に書き足す。
 - 「読み取り専用のマウント」: 判定の時点と方法、`access.json`、読み取り専用での同期。
 - 「メンバー」: `members.json`、コラボレーターが取れないときの扱い。
 - 「Store 間の移動（昇格）」: 2つのコミットと再実行、スキーマに合わないタスクの拒否（利用者の決定）、`Hedgehug-Moved-From`・`Hedgehug-Moved-To`・`Hedgehug-Unlinked`、番号を `numbers.yaml` に記録すること、同時の変更との競合（利用者の決定）、`parent_moved`・`ref_moved`、Store をまたぐ ULID の重複。
-- 「Store 間の移動（昇格）」の履歴の書き換え: `rewrites.yaml`、予期しない force push、作り直しと未 push の変更の自動の取り込み（利用者の決定）。
+- 「Store 間の移動（昇格）」の履歴の書き換え: `rewrites.yaml`、予期しない force push、作り直しと未 push の変更の自動の取り込み（利用者の決定）。（2026-11-02 に変更。冒頭の節を参照）
 - 「コンテキスト解決」: `--project` の意味、ブランチ名の段で端末でないときは飛ばすこと、`recent`、`default_store`、`context.json`。
 - 「メンションと通知」: コメントの本人確認（author が空なら誰もできない。利用者の決定）。inbox に届くものに「移動済みのタスクへの変更」と「履歴の書き換えの取り込み」を足す。
 - 「名前と識別子」の trailer の表に `Hedgehug-Moved-From`、`Hedgehug-Moved-To`、`Hedgehug-Unlinked` を足す。
@@ -720,7 +724,7 @@ Hedgehug 専用の GitHub App を、kukv のアカウント（または配布用
    - Account permissions と Organization permissions: なし
 4. 「Where can this GitHub App be installed?」: Any account。
 5. 作成後、App の設定ページの「Client ID」（`Iv23li` で始まる文字列）を控える。クライアントシークレットと秘密鍵は作らない（Device Flow には要らない）。
-6. Client ID を `internal/auth` の組み込みの値に入れる（client ID は公開してよい値）。
+6. Client ID を `internal/auth` の組み込みの値に入れる（client ID は公開してよい値）。（2026-11-02 に変更。冒頭の節を参照）
 7. Org で使うときは、その Org に App をインストールし、Store のリポジトリへのアクセスを許す。インストールできない場合は `token: gh` を使う。
 
 Administration の権限は、`store init` で GitHub にリポジトリを作るときに必要になる。App のユーザートークンは「App とユーザーの両方が持つ権限」の範囲でしか使えないため、ユーザーが Org でリポジトリを作れない場合は作成が 403 になる。そのときはエラーに「GitHub で空のリポジトリを作り、hh store init --remote でその URL を指定してください（作成は飛ばします）」を添える。既存の空のリポジトリが GitHub にあるとき（作成が 422）は、`store init` は作成を飛ばしてそのリポジトリを使う（上記）。

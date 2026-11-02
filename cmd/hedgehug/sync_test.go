@@ -183,6 +183,15 @@ func TestSyncStatus(t *testing.T) {
 	alice.goldenOK("status-json", "sync", "--status", "--json")
 }
 
+func TestSyncStatusSaysOneCommit(t *testing.T) {
+	t.Parallel()
+	alice, _, _ := twoUsers(t)
+	alice.ok("add", "a")
+	if out := alice.ok("sync", "--status"); !strings.Contains(out, "  1 commit not pushed\n") || strings.Contains(out, "1 commits") {
+		t.Errorf("sync --status:\n%s", out)
+	}
+}
+
 func TestSyncStatusNoRemote(t *testing.T) {
 	t.Parallel()
 	te := newTestEnv(t)

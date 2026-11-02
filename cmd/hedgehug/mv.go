@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/plural"
 )
 
 func (a *app) mvCmd() *cobra.Command {
@@ -167,7 +168,7 @@ func (a *app) confirmMove(p ops.MovePlan) error {
 	if len(v.Hidden) > 0 {
 		fmt.Fprintf(&b, "No longer visible to: %s\n", strings.Join(v.Hidden, ", "))
 	}
-	fmt.Fprintf(&b, "Move %d tasks to %s? [y/N] ", len(v.Tasks), v.To)
+	fmt.Fprintf(&b, "Move %s to %s? [y/N] ", plural.Count(len(v.Tasks), "task"), v.To)
 	if _, err := fmt.Fprint(a.stderr, b.String()); err != nil {
 		return err
 	}

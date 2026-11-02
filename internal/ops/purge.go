@@ -11,6 +11,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/plural"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -125,7 +126,7 @@ func (ss *Session) warnPurgeLeft(notDeleted []string, broken int) {
 		ss.warn("kept (a task under each is not deleted): " + strings.Join(notDeleted, ", "))
 	}
 	if broken > 0 {
-		ss.warn(fmt.Sprintf("%d broken forward files left; see hedgehug doctor", broken))
+		ss.warn(plural.Count(broken, "broken forward file") + " left; see hedgehug doctor")
 	}
 }
 

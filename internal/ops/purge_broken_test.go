@@ -116,7 +116,7 @@ func TestPurgeLeavesABrokenForward(t *testing.T) {
 	if len(plan.Forwards) != 3 {
 		t.Errorf("plan = %+v; want the 3 forwards that decode", plan)
 	}
-	if len(warned) != 1 || !strings.Contains(warned[0], "1 broken forward files left; see hedgehug doctor") {
+	if len(warned) != 1 || !strings.Contains(warned[0], "1 broken forward file left; see hedgehug doctor") {
 		t.Errorf("warnings = %v", warned)
 	}
 	res, err := a.Purge(0, true)

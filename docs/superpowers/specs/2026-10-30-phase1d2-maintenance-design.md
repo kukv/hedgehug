@@ -4,6 +4,13 @@
 - 親設計: Hedgehug 設計ドキュメント（https://claude.ai/artifact/8d4dcVbePAxR2BxhMtkqnc）の「実装フェーズ」1. Core とファイル形式、「CLI 仕様」「データ形式」の「コメント」、「同期とマージ」の「消失への耐性」、「開発環境」
 - 前段: `docs/superpowers/specs/2026-10-30-phase1d1-cli-design.md`（ほか 1a〜1c の spec）
 
+## 2026-11-02 の変更
+
+CLI の受入テストで、この spec の次の点を変えた。詳細は `docs/superpowers/specs/2026-11-02-cli-acceptance-fixes-design.md`（§2、§5.3）。
+
+- `comment <id> [text...]` は `comment add <id> [text...]` になった。`comment <id>` は使い方の誤り（終了コード 2）にし、`add`・`edit`・`rm` を案内する（§2）
+- コミットの作者はアカウントから作り、`.gitconfig` は読まない。devenv は `.gitconfig` を作らず、`env` は `GIT_CONFIG_GLOBAL` を出さない（§5.3）
+
 ## 位置づけ
 
 | 段階 | 内容 |
@@ -133,7 +140,7 @@ func (s *Store) CommentIDs() ([]CommentRef, error)
 6. デコードの失敗、4 の拒否、5 の Store の検査の違反（`ValidationError`）のときは、理由を出して再編集を確かめる。開き直すときは前回の編集内容のまま開く。中止したら一時ファイルのパスを出して終了 1。
 7. Op は `edit`。出力は `set` と同じ（`--json` は書いた後のタスク）。
 
-### `comment <id> [text...]`
+### `comment <id> [text...]`（2026-11-02 に変更。冒頭の節を参照）
 
 - text は空白でつなぐ。省略したら空の一時ファイルをエディタで開く。
 - 空白だけの本文は「空のコメント」でエラー、コミットしない。
@@ -264,7 +271,7 @@ index は HEAD のツリーを読み、2 は作業ツリーを読む。未コミ
 - dir がすでにあればエラーにして `reset` を案内する。
 - 目印のファイル `<dir>/.hedgehug-devenv` を最初に作る。
 - `users/alice` と `users/bob` を作る。それぞれについて:
-  - `users/<u>/.gitconfig` に `user.name = <u>`、`user.email = <u>@example.com` を書く。
+  - `users/<u>/.gitconfig` に `user.name = <u>`、`user.email = <u>@example.com` を書く。（2026-11-02 に変更。冒頭の節を参照）
   - `users/<u>` を `HEDGEHUG_HOME` とした `config.Paths` で、Store `me` を `store.Create` で作り、config.yaml に足す。CLI のコマンドは通さず、`internal/config` と `internal/store` を直接呼ぶ。
 - 最後に `env` の使い方を出す。
 
@@ -274,7 +281,7 @@ index は HEAD のツリーを読み、2 は作業ツリーを読む。未コミ
 
 ### `env <user> [--dir <path>]`
 
-- `export HEDGEHUG_HOME=<dir>/users/<u>` と `export GIT_CONFIG_GLOBAL=<dir>/users/<u>/.gitconfig` を出す。`eval "$(go run ./tools/devenv env alice)"` で使う。HOME は変えない（作者の読み出しは `GIT_CONFIG_GLOBAL` を優先するので足りる）。
+- `export HEDGEHUG_HOME=<dir>/users/<u>` と `export GIT_CONFIG_GLOBAL=<dir>/users/<u>/.gitconfig` を出す。`eval "$(go run ./tools/devenv env alice)"` で使う。HOME は変えない（作者の読み出しは `GIT_CONFIG_GLOBAL` を優先するので足りる）。（2026-11-02 に変更。冒頭の節を参照）
 - パスは絶対パスで出す。存在しない利用者はエラー。
 
 ## エラー
@@ -295,7 +302,7 @@ index は HEAD のツリーを読み、2 は作業ツリーを読む。未コミ
   - `log`: Store 全体と1タスク、`-n`、`--json`。`show` の `History` と `history`。
   - `schema check` / `doctor`: テキストと JSON の形、終了コード。
   - `schema migrate`: 4つの対象それぞれの改名と統合、schema.yaml の参照の書き換え、既定のステータスの引き継ぎと拒否、prop の型の違いと両方に値があるタスク、削除済みと壊れたタスク、遷移の検査を飛ばすこと、新しい違反での拒否、`--dry-run`、schema.yaml の未知のキーとコメントが残ること、1コミット。
-- **devenv**: `init` の中身（2人分の .gitconfig と Store と config.yaml）、既存の dir での `init` のエラー、`reset`、目印のない dir を `reset` が消さないこと、`env` の出力。
+- **devenv**: `init` の中身（2人分の .gitconfig と Store と config.yaml）、既存の dir での `init` のエラー、`reset`、目印のない dir を `reset` が消さないこと、`env` の出力。（2026-11-02 に変更。冒頭の節を参照）
 - **シナリオ**: 1d-1 のシナリオに、`edit`、`comment`（追加・編集・削除）、`log`、`schema check`、`doctor` を足す。全操作が git 履歴に1コミットずつ残り、最後に `doctor` が問題なしで終わることを確かめる。
 
 ## 持ち越しの直し

@@ -412,7 +412,7 @@ func TestRepairCommitAfterHandMerge(t *testing.T) {
 	if op, _ := e[0].Trailer("Hedgehug-Op"); op != "repair" {
 		t.Errorf("HEAD is not the repair commit: %+v", e[0])
 	}
-	if e[0].Subject != "hedgehug: repair 1 issues" {
+	if e[0].Subject != "hedgehug: repair 1 issue" {
 		t.Errorf("subject = %q", e[0].Subject)
 	}
 }

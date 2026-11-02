@@ -263,7 +263,7 @@ func TestWorkspaceRmAfterRmNeedsAPurge(t *testing.T) {
 	x := te.addJSON("x", "--workspace", "api")
 	te.ok("rm", x.ID)
 	code, _, errs := te.run("workspace", "rm", "api")
-	want := "move them with hedgehug mv --workspace, or delete them with hedgehug rm and remove them with hedgehug purge --older-than 0d --store <store>"
+	want := "move it with hedgehug mv --workspace, or delete it with hedgehug rm and remove it with hedgehug purge --older-than 0d --store <store>"
 	if code != 1 || !strings.Contains(errs, want) {
 		t.Errorf("workspace rm: exit %d, stderr %q; want it to say %q", code, errs, want)
 	}
