@@ -81,7 +81,7 @@ func TestAddRepoNeedsARepositoryAndNoRepoIsGone(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	before := len(te.log("me"))
-	// no current repository
+	// no current directory
 	code, _, errs := te.run("add", "x", "--repo")
 	if code != 2 || !strings.Contains(errs, "--repo needs the current directory to be in a git repository with a remote that gives a repo ID") {
 		t.Errorf("--repo outside a repository: exit %d, stderr %q", code, errs)

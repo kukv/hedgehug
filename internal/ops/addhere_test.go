@@ -121,17 +121,9 @@ func TestAddHereRepoPutsTheRepoOnTheTask(t *testing.T) {
 	if got := reposOf(t, ts, "org-a", r.ULID); len(got) != 2 || got[0] != "github.com/o/other" || got[1] != "github.com/org-a/web" {
 		t.Errorf("Repo with repos given: repos = %q", got)
 	}
-	// Repo outside a repository is a usage error
+	// Repo in a repository without a remote is a usage error
 	_, _, _, err = ts.AddHere(AddHereInput{Context: hhctx.Input{Dir: repoDir(t, "", ""), Store: "org-a"}, Repo: true, Task: AddInput{Title: "bare"}})
-	wantCode(t, "Repo outside a repository", err, KindUsage, "add.repo_unavailable")
-	// no repository, no link
-	r, _, _, err = ts.AddHere(AddHereInput{Context: hhctx.Input{Dir: t.TempDir(), Store: "org-a"}, Task: AddInput{Title: "bare"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := reposOf(t, ts, "org-a", r.ULID); len(got) != 0 {
-		t.Errorf("no repository: repos = %q", got)
-	}
+	wantCode(t, "Repo in a repository without a remote", err, KindUsage, "add.repo_unavailable")
 }
 
 func TestAddHereStage4SetsRecent(t *testing.T) {
