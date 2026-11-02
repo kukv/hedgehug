@@ -20,12 +20,12 @@ const health = (version: string) => ({
   response: new Response(null, { status: 200 }),
 });
 
-function core(names: string[], get = vi.fn(async () => health("0.9.0"))) {
+function core(names: string[], get = vi.fn(async () => health("0.9.0")), loaded = true) {
   return {
     api: { GET: get },
     stores: {
       stores: () => names.map((name) => ({ name })),
-      loaded: () => true,
+      loaded: () => loaded,
       subscribe: () => () => {},
     },
   };
@@ -118,6 +118,16 @@ describe("SettingsRoute", () => {
     expect(queryByRole("navigation", { name: "設定のナビゲーション" })).toBeNull();
     await fireEvent.click(getByRole("button", { name: "ホームへ戻る" }));
     expect(location.pathname).toBe("/");
+  });
+
+  it("Store の一覧を読み終えるまでは、見つからないとは言わない", () => {
+    history.replaceState(null, "", "/settings/workspaces/nope");
+    const { queryByText } = renderWithCore(
+      SettingsRoute,
+      { page: { page: "workspaces", store: "nope" } },
+      core([], undefined, false),
+    );
+    expect(queryByText(/見つかりません/)).toBeNull();
   });
 
   it("本文にその Store のワークスペースの一覧を出す", () => {

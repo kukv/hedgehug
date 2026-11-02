@@ -93,7 +93,10 @@
       {@const href = hrefOf({ name: "workspace", store: w.store, ulid: w.ulid, tab: "overview" })}
       {@const wsHere = workspaceActive(w.store, w.ulid, i)}
       <div class="ws">
-        <div class="ws-row" class:open={menu?.entry === w}>
+        <div
+          class="ws-row"
+          class:open={menu?.entry.store === w.store && menu?.entry.ulid === w.ulid}
+        >
           <a
             {href}
             class="ws-link"
@@ -303,6 +306,7 @@
     flex: 1;
     min-width: 0;
     min-height: var(--row-h);
+    padding-right: var(--control-h-sm);
   }
   .project {
     min-height: 30px;

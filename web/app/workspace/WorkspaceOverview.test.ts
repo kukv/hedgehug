@@ -52,7 +52,7 @@ const done = tv("D1", "終わったもの", { id: "REL-3", rank: "d", status: "d
 const canceled = tv("X1", "やめたもの", { id: "REL-4", rank: "e", status: "canceled" });
 const all = [project, child, rootLate, rootEarly, done, canceled];
 
-function setup(initial: TaskView[], route?: (path: string) => unknown) {
+function setup(initial: TaskView[], route?: (path: string) => unknown, schemaFails = false) {
   const rows = { current: initial };
   const { api, calls } = fakeApi((r) => {
     const own = route?.(r.path);
@@ -65,7 +65,17 @@ function setup(initial: TaskView[], route?: (path: string) => unknown) {
   const r = renderWithCore(
     WorkspaceOverview,
     { entry },
-    { cache, schema: { get: () => schema, load: async () => schema, subscribe: none } },
+    {
+      cache,
+      schema: {
+        get: () => (schemaFails ? undefined : schema),
+        load: async () => {
+          if (schemaFails) throw new Error("schema down");
+          return schema;
+        },
+        subscribe: none,
+      },
+    },
   );
   return { ...r, rows, conn, cache, calls };
 }
@@ -90,6 +100,15 @@ describe("WorkspaceOverview", () => {
     expect(
       screen.getByRole("img", { name: "未着手 1 · 進行中 3 · 完了 1 · 中止 1" }),
     ).toBeInTheDocument();
+  });
+
+  it("says why the band is missing when the schema cannot be read, and still counts", async () => {
+    setup(all, undefined, true);
+    expect(await screen.findByText("6 件 · プロジェクト 1")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "スキーマを読めないため、カテゴリ別の件数を出せません",
+    );
+    expect(screen.queryByRole("img", { name: /未着手/ })).toBeNull();
   });
 
   it("lists the projects with progress, due date and assignee", async () => {

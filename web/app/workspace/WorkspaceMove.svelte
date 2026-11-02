@@ -22,7 +22,12 @@
 
   // A task goes to another workspace of its own Store: another Store is a different move.
   const choices = $derived(all.current.filter((w) => w.store === task.store));
-  const here = $derived(task.workspace.ulid);
+  // The workspace the task is in now: it may have been moved from outside while this is open.
+  const taskRev = useSubscribe(cache, () => ({}));
+  const here = $derived.by(() => {
+    taskRev.current;
+    return cache.task(task.ulid)?.workspace.ulid ?? task.workspace.ulid;
+  });
   let picked = $state("");
   const target = $derived(
     choices.find((w) => workspaceKey(w) === picked && w.ulid !== here) ??

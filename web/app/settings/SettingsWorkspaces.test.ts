@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from "@testing-library/svelte";
+import { cleanup, fireEvent, screen, within } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { formatDate } from "../../core/format";
 import { makeCore, mount, taskView } from "../detail/testkit";
@@ -64,6 +64,27 @@ describe("SettingsWorkspaces", () => {
       "設定",
     ]);
     expect(screen.queryByText("api")).toBeNull(); // a workspace of another store
+  });
+
+  it("says so when the store has no workspace, and a dash for a prefix never set", () => {
+    const k = makeCore({
+      workspaces: [
+        entry({ store: "empty-store", ulid: "E1", name: "e", prefixSet: "0001-01-01T00:00:00Z" }),
+      ],
+    });
+    mount(SettingsWorkspaces, { store: "none" }, k);
+    expect(screen.getByText("この Store にはワークスペースがありません")).toBeInTheDocument();
+    cleanup();
+    mount(
+      SettingsWorkspaces,
+      { store: "empty-store" },
+      makeCore({
+        workspaces: [
+          entry({ store: "empty-store", ulid: "E1", name: "e", prefixSet: "0001-01-01T00:00:00Z" }),
+        ],
+      }),
+    );
+    expect(screen.getByRole("rowheader", { name: "e" }).parentElement).toHaveTextContent("—");
   });
 
   it("links each row to the settings tab of the workspace", async () => {

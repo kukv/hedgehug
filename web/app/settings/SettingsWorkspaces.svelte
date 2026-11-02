@@ -1,6 +1,6 @@
 <script lang="ts">
   import { cliLine } from "../../core/cli";
-  import { formatDate } from "../../core/format";
+  import { prefixDay } from "../../core/workspace";
   import { core } from "../context";
   import { onLinkClick, router } from "../router";
   import { useSubscribe } from "../svelte-store";
@@ -54,10 +54,14 @@
           <td class="mono">{w.prefix}</td>
           <td class="num">{w.projects.length}</td>
           <td class="num">{w.tasks + w.deleted}</td>
-          <td class="mono">{formatDate(w.prefixSet, now)}</td>
+          <td class="mono">{prefixDay(w.prefixSet, now)}</td>
           <td class="end">
             <a {href} aria-label="{w.name} の設定" onclick={(e) => onLinkClick(e, href)}>設定</a>
           </td>
+        </tr>
+      {:else}
+        <tr>
+          <td colspan="6" class="none">この Store にはワークスペースがありません</td>
         </tr>
       {/each}
     </tbody>

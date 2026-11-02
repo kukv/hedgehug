@@ -1,4 +1,5 @@
 import type { Schemas } from "./api/client";
+import { formatDate } from "./format";
 import type { WorkspaceEntry } from "./stores";
 
 // The same rules as ValidName and ValidIDPrefix in internal/model.
@@ -74,4 +75,10 @@ export function detachedText(ds: Schemas["Detached"][] | null | undefined): stri
 // dialog is open); entry itself when the directory no longer lists it.
 export function currentEntry(all: WorkspaceEntry[], entry: WorkspaceEntry): WorkspaceEntry {
   return all.find((x) => x.store === entry.store && x.ulid === entry.ulid) ?? entry;
+}
+
+// prefixDay is the day the prefix was last set. A workspace without a prefix_set (the zero time,
+// year 1, which doctor reports) has none: "—".
+export function prefixDay(iso: string, now: Date): string {
+  return iso === "" || iso.startsWith("0001-") ? "—" : formatDate(iso, now);
 }

@@ -68,4 +68,6 @@ test("the toast of a workspace removal takes it back", async ({ page, hh }) => {
 
   await expect(toast(page, "ワークスペースの変更を取り消しました")).toBeVisible();
   await expect.poll(() => list().map((w) => w.name)).toContain("sandbox");
+  // The screen follows the undo through the events, not through a reload of its own.
+  await expect(page.getByRole("link", { name: /sandbox/ }).first()).toBeVisible();
 });

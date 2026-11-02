@@ -69,8 +69,19 @@ describe("routeStore", () => {
     expect(routeStore({ name: "task", ulid: "T1" }, taskOf)).toBe("backend");
   });
 
-  it("has none elsewhere, or for a task the cache does not hold", () => {
+  it("takes the store of the first workspace at home, which shows its overview", () => {
+    expect(routeStore({ name: "home" }, taskOf, { store: "shared" })).toBe("shared");
     expect(routeStore({ name: "home" }, taskOf)).toBeUndefined();
+  });
+
+  it("takes the store of the settings page, none for /settings that names no store", () => {
+    expect(routeStore({ name: "settings", page: "workspaces", store: "org-b/ops" }, taskOf)).toBe(
+      "org-b/ops",
+    );
+    expect(routeStore({ name: "settings", page: "workspaces", store: "" }, taskOf)).toBeUndefined();
+  });
+
+  it("has none for a task the cache does not hold", () => {
     expect(routeStore({ name: "task", ulid: "NOPE" }, taskOf)).toBeUndefined();
   });
 });

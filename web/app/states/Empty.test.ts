@@ -34,6 +34,15 @@ describe("Empty", () => {
     expect(onHome).toHaveBeenCalledTimes(1);
   });
 
+  it("notfound: Store の名前を出す", () => {
+    const { getByText } = renderWithCore(Empty, {
+      variant: "notfound",
+      scope: "store",
+      name: "nope",
+    });
+    expect(getByText("Store「nope」が見つかりません")).toBeTruthy();
+  });
+
   it("notfound: プロジェクトは名前を出さない", () => {
     const { getByText } = renderWithCore(Empty, { variant: "notfound", scope: "project" });
     expect(getByText("プロジェクトが見つかりません")).toBeTruthy();

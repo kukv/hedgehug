@@ -6,7 +6,7 @@
 
   type Props = {
     variant: "empty" | "nomatch" | "noworkspace" | "notfound";
-    scope?: "project" | "workspace";
+    scope?: "project" | "workspace" | "store";
     name?: string;
     note?: string;
     onCreate?: () => void;
@@ -24,6 +24,14 @@
     onHome,
     commands = [],
   }: Props = $props();
+
+  const notfoundLabel = $derived(
+    scope === "project"
+      ? "プロジェクト"
+      : scope === "store"
+        ? `Store「${name}」`
+        : `ワークスペース「${name}」`,
+  );
 </script>
 
 {#if variant === "empty"}
@@ -44,7 +52,7 @@
 {:else if variant === "notfound"}
   <div class="empty">
     <Icon name="folder" size={28} />
-    <b>{scope === "project" ? "プロジェクト" : `ワークスペース「${name}」`}が見つかりません</b>
+    <b>{notfoundLabel}が見つかりません</b>
     {#if onHome}
       <Button size="sm" onclick={onHome}>ホームへ戻る</Button>
     {/if}

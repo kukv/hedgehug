@@ -8,9 +8,9 @@
 
 <!-- The whole window is one layout: the nav on the left takes the place of the main sidebar. -->
 <div class="settings">
-  <aside class="nav">
+  <div class="nav">
     <SettingsNav {page} />
-  </aside>
+  </div>
   <section class="content" aria-label="設定の本文">
     {@render children?.()}
   </section>

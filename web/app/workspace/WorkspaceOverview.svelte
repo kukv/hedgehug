@@ -42,8 +42,13 @@
   });
 
   // The categories need the schema of the store; the band waits for it.
+  let schemaError = $state.raw<unknown>(null);
   $effect(() => {
-    void c.schema.load(store).catch(() => undefined);
+    schemaError = null;
+    const s = store;
+    c.schema.load(s).catch((e: unknown) => {
+      if (s === store) schemaError = e;
+    });
   });
   const schema = $derived.by(() => {
     schemaRev.current;
@@ -109,7 +114,11 @@
     <section class="counts" aria-label="件数">
       <p class="total">{total} 件{loading ? "" : ` · プロジェクト ${projects.length}`}</p>
       <p class="note">削除済みは含めません</p>
-      {#if counts}
+      {#if schemaError}
+        <p class="msg error" role="alert">
+          スキーマを読めないため、カテゴリ別の件数を出せません · {errorMessage(schemaError)}
+        </p>
+      {:else if counts}
         <div
           class="band"
           role="img"

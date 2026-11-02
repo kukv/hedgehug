@@ -142,6 +142,7 @@ export type CommandEnv = {
   addWorkspace: () => void;
   undo: () => void;
   workspaces: WorkspaceEntry[];
+  storeNames: string[]; // every mounted store, also one with no workspace
   go: (path: string) => void;
   hrefs: {
     workspace: (store: string, ulid: string) => string;
@@ -159,6 +160,8 @@ export type CommandEnv = {
 // taskCommands are the commands about one task.
 export function taskCommands(env: CommandEnv, t: TaskView): PaletteGroup {
   const href = env.hrefs.task(t.ulid);
+  // A task goes to another workspace of its own store: with none, there is nothing to offer.
+  const canMove = env.workspaces.some((w) => w.store === t.store && w.ulid !== t.workspace.ulid);
   return {
     name: `${t.id} に対して`,
     items: [
@@ -187,13 +190,17 @@ export function taskCommands(env: CommandEnv, t: TaskView): PaletteGroup {
         href,
         run: () => env.go(href),
       },
-      {
-        type: "command",
-        key: `task-move:${t.ulid}`,
-        label: "別のワークスペースへ移動…",
-        icon: "workspace",
-        run: () => env.moveTask(t),
-      },
+      ...(canMove
+        ? [
+            {
+              type: "command" as const,
+              key: `task-move:${t.ulid}`,
+              label: "別のワークスペースへ移動…",
+              icon: "workspace" as const,
+              run: () => env.moveTask(t),
+            },
+          ]
+        : []),
     ],
   };
 }
@@ -285,7 +292,7 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
   });
 
   // The page that lists the workspaces of a store, in the settings.
-  const lists: CommandItem[] = [...new Set(env.workspaces.map((w) => w.store))].map((store) => {
+  const lists: CommandItem[] = env.storeNames.map((store) => {
     const href = env.hrefs.settingsWorkspaces(store);
     return {
       type: "command",

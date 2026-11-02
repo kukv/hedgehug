@@ -4,6 +4,7 @@ import {
   NAME_RULE,
   nameProblem,
   PREFIX_RULE,
+  prefixDay,
   prefixProblem,
   removeBlocker,
 } from "./workspace";
@@ -99,5 +100,14 @@ describe("detachedText", () => {
     ).toBe(
       "SH-12 はスプリント Sprint 44 とリリース v2.4、v2.5 から外れました。SH-13 はリリース v2.4 から外れました",
     );
+  });
+});
+
+describe("prefixDay", () => {
+  it("shows the day the prefix was set, and a dash for the zero time or nothing", () => {
+    const now = new Date(2026, 10, 3);
+    expect(prefixDay("2026-10-29T12:00:00Z", now)).toBe("10/29");
+    expect(prefixDay("0001-01-01T00:00:00Z", now)).toBe("—");
+    expect(prefixDay("", now)).toBe("—");
   });
 });

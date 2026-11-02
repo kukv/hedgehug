@@ -51,6 +51,13 @@ describe("WorkspaceMove", () => {
     expect(screen.queryByRole("radio", { name: /api/ })).toBeNull(); // another store
   });
 
+  it("takes the workspace the task is in now from the cache, not the one it had when opened", () => {
+    const k = makeCore({ workspaces: spaces, tasks: [moved] }); // moved from outside: now in shared
+    mount(WorkspaceMove, { task, onclose: vi.fn() }, k);
+    expect(screen.getByRole("radio", { name: /^shared/ })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "release（REL）" })).not.toBeDisabled();
+  });
+
   it("explains the move, with the prefix of the workspace picked", async () => {
     setup();
     expect(

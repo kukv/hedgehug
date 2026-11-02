@@ -1,8 +1,8 @@
 <script lang="ts">
   import { core } from "../context";
   import { hrefOf, router, type SettingsPage } from "../router";
+  import Empty from "../states/Empty.svelte";
   import { useSubscribe } from "../svelte-store";
-  import Button from "../ui/Button.svelte";
   import SettingsLayout from "./SettingsLayout.svelte";
   import SettingsWorkspaces from "./SettingsWorkspaces.svelte";
 
@@ -13,6 +13,8 @@
     names: c.stores.stores().map((s) => s.name),
     loaded: c.stores.loaded(),
   }));
+  // Not written as scope="..." in the markup: Biome reads that name as the HTML attribute.
+  const missingProps = { scope: "store" as const };
   const first = $derived(dir.current.names[0] ?? null);
   // A Store that is not mounted: said so, like a workspace that is not there.
   const missing = $derived(
@@ -29,22 +31,14 @@
 </script>
 
 {#if missing}
-  <div class="missing">
-    <b>Store「{page.store}」が見つかりません</b>
-    <Button size="sm" onclick={() => router.go(hrefOf({ name: "home" }))}>ホームへ戻る</Button>
-  </div>
+  <Empty
+    variant="notfound"
+    {...missingProps}
+    name={page.store}
+    onHome={() => router.go(hrefOf({ name: "home" }))}
+  />
 {:else if page.store !== ""}
   <SettingsLayout {page}>
     <SettingsWorkspaces store={page.store} />
   </SettingsLayout>
 {/if}
-
-<style>
-  .missing {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-12);
-    align-items: center;
-    padding: var(--space-20) var(--gutter);
-  }
-</style>

@@ -192,6 +192,7 @@ function env(over: Partial<CommandEnv> = {}): CommandEnv {
     addWorkspace: vi.fn(),
     undo: vi.fn(),
     workspaces: [ws],
+    storeNames: ["shared"],
     go: vi.fn(),
     hrefs: {
       workspace: (s, u) => `/workspaces/${s}/${u}`,
@@ -322,6 +323,13 @@ describe("buildCommands", () => {
     ]);
   });
 
+  it("lists the workspaces of a store that has none, once per store", () => {
+    const gs = buildCommands(env({ workspaces: [], storeNames: ["shared", "empty"] }), ">設定");
+    expect(
+      gs[0]?.items.map((i) => (i.type === "command" ? `${i.label}|${i.store ?? ""}` : "")),
+    ).toEqual(["設定のワークスペース一覧を開く|shared", "設定のワークスペース一覧を開く|empty"]);
+  });
+
   it("adds the commands for the selected task", () => {
     const t = task("T1", "task", null, { id: "REL-6" });
     const gs = buildCommands(env({ selected: t }), ">");
@@ -330,8 +338,19 @@ describe("buildCommands", () => {
 });
 
 describe("taskCommands", () => {
+  it("offers no move when the store has no other workspace, and none in another store", () => {
+    const t = task("T1", "task", null, { id: "REL-6" });
+    const none = taskCommands(env(), t);
+    expect(none.items).toHaveLength(3);
+    const elsewhere = taskCommands(
+      env({ workspaces: [ws, { ...ws, store: "backend", ulid: "W2", name: "ops" }] }),
+      t,
+    );
+    expect(elsewhere.items.map((i) => i.key)).not.toContain("task-move:T1");
+  });
+
   it("changes the status in the palette, creates a child, and opens the detail", () => {
-    const e = env();
+    const e = env({ workspaces: [ws, { ...ws, ulid: "W2", name: "ops", prefix: "OPS" }] });
     const t = task("T1", "task", null, { id: "REL-6" });
     const g = taskCommands(e, t);
     expect(g.name).toBe("REL-6 に対して");

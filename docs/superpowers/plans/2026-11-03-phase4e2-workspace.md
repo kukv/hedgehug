@@ -7837,10 +7837,41 @@ git commit -m "feat(web): サイドバーのワークスペースの「…」、
 4. **設定のあいだのサイドバー。** サイドバーは `hidden` にして、設定のナビに替える（サイドバーは外さない。アプリのキーを登録しているため）
 5. **サイドバーの「＋」は、キャンバスどおりプロジェクトの追加のまま（利用者）。** 4d の作成のプロジェクトのダイアログを開く（4d の `openCreate({ kind: "project" })` のまま、触らない）。ワークスペースの追加の入口は、設定のワークスペース一覧のボタンとコマンドパレットの「ワークスペースを追加」
 6. **ワークスペースへのリンクは概要。** Store を作った直後だけは、最初のタスクを足す行のあるツリー
-7. **undo は今の画面の Store を渡す。** ワークスペースの画面ならその Store、プロジェクトとタスクの画面ならそのタスクの Store、ほかは渡さない。パレットの「設定を開く」は、ワークスペースの設定タブと設定のワークスペース一覧の両方。概要の問い合わせは `workspace:<ULID>`（足元の `hh ls` の行は名前と `--store`）
+7. **undo は今の画面の Store を渡す。** ワークスペースの画面ならその Store、設定の画面（`/settings/...`）ならその URL の Store（`/settings` のように名前がなければ渡さない）、`/` ならそこに概要が出る最初のワークスペースの Store、プロジェクトとタスクの画面ならそのタスクの Store、ほかは渡さない。パレットの「設定を開く」は、ワークスペースの設定タブと設定のワークスペース一覧の両方。概要の問い合わせは `workspace:<ULID>`（足元の `hh ls` の行は名前と `--store`）
 8. **接頭辞を最後に変えた日を出す（利用者）。** 概要 plan の細部 24 の前提「`prefix_set` が API にない」は誤りで、`WorkspaceView.prefix_set` がある。`WorkspaceEntry.prefixSet` を Task 1 が足し、Task 2 が設定のタブ（「最後に変えたのは <日付>」）と設定のワークスペース一覧（列）に出す。日付は `core/format.ts` の `formatDate`
 9. **「別のワークスペースへ移動…」の入口（利用者）。** タスク詳細の見出しの「…」（その他の操作）とツリーの行の「…」（Task 2 が新設）、加えてパレットの選んだタスクのコマンド（Task 3 の Step 8）
 10. **ワークスペースの削除。** 残り（削除済みを含む）があれば確認を開かずに設定タブへ移る（Task 2）。削除が済んだトーストには取り消し（`runUndo`）を付ける（利用者）。4d のタスクの削除と揃えるため。Task 2 は Task 3 の `runUndo` より先なので、トーストの取り消しは Task 3 の Step 9 で足す
 11. **テストの部品。** `web/app/workspace/testkit.ts`（Task 2a）を Task 2b・3 が使う。`WorkspaceEntry` を作る既存の型付きフィクスチャへの `tasks`・`deleted`・`prefixSet` の追加は Task 1 が持つ。Task 2・3 が足す新しいフィクスチャは、自分で 3 項目を持つ
 12. **undo の E2E の正規表現。** `undo.spec.ts` の `/変更を取り消しました/` は、実装の段階で実物のトーストの文言を確かめて、ID 入りに絞ってよい（Task 3 の Step 10）
 13. **実行の順。** 番号の順（1 → 2 → 3 → 4）。画面につなぐ結線は、Task 2・3 のファイルを import するので Task 4 として独立させた
+
+## 実装で plan から変えた点（2026-11-03）
+
+本文のコードと食い違っていても、次が正。
+
+- **F1（利用者の決定）: プロジェクトの数え方。** 設定のワークスペース一覧の「プロジェクト」列は `WorkspaceEntry.projects` の件数（kind が `project`）。`project-counts.ts` とそのテスト、そのための `watchList`・`schema.load`・「…」表示は作らない。本文の `project-counts` の記述（4360・4373・4384・4700・4739 行付近）は使わない。概要 plan の細部 28 の文言も直した。
+- **F2: 移動の API。** `WorkspaceMove` は `body: { workspace: to.ulid }`（ULID）を送る。足元の `hh mv … --workspace <名前>` は名前のまま。
+- **F3: 余白。** 概要の `.overview` に `padding: var(--space-20) var(--gutter) 0`、`WorkspaceSettings` の `.settings` に `padding: 0 var(--gutter)`。
+- **F4: 凡例。** 概要のカテゴリの凡例の点は `StatusIcon`（形）。帯は `role="img"` と `aria-label`。
+- **F5: 寸法。** 色は 16 進数・rgb を書かずトークンを使う。罫線の 1〜2px、列幅、max-width は plan どおり（4d の R9 と同じ）。
+- **F6: 重複の整理。** ダイアログの失敗の帯は `ui/FormError.svelte`。`WorkspaceMove` の選択肢は `create/WorkspaceChoice.svelte`（`isDisabled`・`note`・`showStore`・`label` を足した）。開いている間の件数は `core/workspace.ts` の `currentEntry`。busy/failure と IME 判定つき Enter はダイアログごと。
+- **F7: 途中のコミット。** Task 1〜3 のあいだは本文が空の画面を許し、入口の判定は最終の差分で行った。
+- **F8: E2E。** Task 2b・3 の E2E は Task 4 の結線のあとに流した。
+- **F9〜F13: 機械的な読み替え。** 検証は `pnpm fix && pnpm check && pnpm lint` と対象の vitest。プロジェクトのタブは「ツリー」1つ（F10）。行の「…」は `schema` があるときだけ `onmore` を渡し、スキーマ前は同じ幅の `.more-slot`（F11）。`CreateStore.test.ts` を Task 1 に含めた（F12）。undo の E2E の正規表現は ID 入りの文言（`${id} の変更を取り消しました`）に絞った。
+- **Ruling: 見出しの作り直し。** `WorkspacePage` の見出しは、概要と ツリー/設定の切り替えで作り直される。決めたこと 1（概要は `WorkspaceOverview` が自分で見出しを描く）を保つため直さない。状態を持たないので見た目も動作も変わらない。
+- **Ruling: 余白。** `.main` と見出しの `--gutter` が二重になるのは 4d のツリーと同じ構造で、退行ではないため変えない（利用者の決定、2026-11-03）。
+- **Task 2b: 存在しない Store の設定 URL。** `/settings/workspaces/<store>` の Store が Store 一覧になければ、レイアウトを出さず `states/Empty` の `notfound`（`scope="store"`、「Store「x」が見つかりません」）とホームへの戻りを出す。Store 一覧を読み終えるまでは何も言わない。4d-3 の存在しないワークスペースと同じ形。
+- **Task 4: `.foot` と `.more-slot`。** `.overview` に `flex: 1 1 auto` を足し、足元の `hh ls` が窓の下端に来るようにした。TreeRow の「…」はスキーマが来ると列が 1.75rem 増えて期限・担当がずれたため、スキーマ前は同じ幅の `.more-slot`（`aria-hidden`）を置く。幅は `.more` と共通の規則に1つにまとめた。
+
+### 最終レビューで直した点
+
+- **`/` と設定の画面の undo（利用者の決定）。** `routeStore` に `first` を足し、`/` は最初のワークスペースの Store、設定の画面は `page.store` を渡す（決めたこと 7 を上のとおり直した）。Store が複数あっても失敗しない。
+- 概要でスキーマを読めないときは、帯の場所に「スキーマを読めないため、カテゴリ別の件数を出せません」と理由を出す。
+- 設定のワークスペース一覧は、0 件のとき「この Store にはワークスペースがありません」の行を出す。`prefix_set` がゼロ値（year 1）のときは日付の代わりに「—」（`core/workspace.ts` の `prefixDay`）。
+- ワークスペース設定の削除の `CliLine` は、削除できないとき無効。
+- サイドバーの「…」は `.ws-link` に右の余白を足して長い名前の省略記号と重ならないようにし、開いている印は `store` と `ulid` で比べる（再読み込みで外れない）。
+- `SettingsLayout` の外側の `<aside>` を `<div>` にした（ナビの `<nav>` がランドマーク）。
+- 移動のダイアログの「今のワークスペース」はキャッシュの今の値を読む。
+- パレットの「別のワークスペースへ移動…」は、同じ Store にほかのワークスペースがないとき出さない。「設定のワークスペース一覧を開く」は Store の名前の一覧（`CommandEnv.storeNames`）から作り、ワークスペースが 0 の Store にも出る。
+- ワークスペース削除の取り消しの E2E は、サイドバーに行が戻ることも確かめる。
+- Go のテストを1本足した: ワークスペースの削除を undo で戻す単体テスト（`internal/ops/undo_test.go`、コードは変えていない）。plan の「この回は Go を触らない」の例外で、利用者の決定。

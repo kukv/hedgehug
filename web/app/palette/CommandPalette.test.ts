@@ -104,7 +104,7 @@ function setup() {
     },
     stores: {
       stores: () => [{ name: "shared" }, { name: "backend" }],
-      workspaces: () => [ws],
+      workspaces: () => [ws, { ...ws, ulid: "W2", name: "ops", prefix: "OPS" }],
       tone: () => "purple",
       subscribe: none,
     },
@@ -193,10 +193,17 @@ describe("CommandPalette", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("takes back in the store of the task on screen, and in none elsewhere", async () => {
+  it("takes back in the store of the task on screen, of the settings, and of the first workspace at home", async () => {
     setup();
     h.route = { name: "task", ulid: "U9" };
     render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">取り消" } });
+    await fireEvent.keyDown(box(), { key: "Enter" });
+    expect(h.runUndo).toHaveBeenLastCalledWith(expect.anything(), "backend");
+
+    closePalette();
+    h.route = { name: "settings", store: "backend" };
     openPalette();
     await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">取り消" } });
     await fireEvent.keyDown(box(), { key: "Enter" });
@@ -207,7 +214,7 @@ describe("CommandPalette", () => {
     openPalette();
     await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">取り消" } });
     await fireEvent.keyDown(box(), { key: "Enter" });
-    expect(h.runUndo).toHaveBeenLastCalledWith(expect.anything(), undefined);
+    expect(h.runUndo).toHaveBeenLastCalledWith(expect.anything(), "shared");
   });
 
   it("opens the settings of the workspace", async () => {
@@ -216,7 +223,7 @@ describe("CommandPalette", () => {
     openPalette();
     await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">設定" } });
     await fireEvent.click(
-      await screen.findByRole("option", { name: /ワークスペースの設定を開く/ }),
+      await screen.findByRole("option", { name: /ワークスペースの設定を開く.*release/ }),
     );
     expect(h.go).toHaveBeenCalledWith("/workspaces/shared/W1/settings");
     expect(palette.open).toBe(false);

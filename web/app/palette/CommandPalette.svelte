@@ -141,9 +141,10 @@
       undo: () =>
         void runUndo(
           c,
-          routeStore(router.route, (u) => c.cache.task(u)),
+          routeStore(router.route, (u) => c.cache.task(u), c.stores.workspaces()[0]),
         ),
       workspaces: c.stores.workspaces(),
+      storeNames: c.stores.stores().map((s) => s.name),
       go: (path) => router.go(path),
       hrefs: {
         workspace: (store, ulid) =>

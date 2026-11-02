@@ -2,10 +2,9 @@
   import { untrack } from "svelte";
   import { unwrap } from "../../core/api/client";
   import { cliWorkspaceRename, cliWorkspaceRm, Placeholder } from "../../core/cli";
-  import { formatDate } from "../../core/format";
   import { errorMessage } from "../../core/messages";
   import type { WorkspaceEntry } from "../../core/stores";
-  import { nameProblem, removeBlocker } from "../../core/workspace";
+  import { nameProblem, prefixDay, removeBlocker } from "../../core/workspace";
   import { core } from "../context";
   import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
@@ -38,7 +37,7 @@
   );
   const count = $derived(entry.tasks + entry.deleted);
   // The day the prefix was last set, as a date (this year without the year).
-  const prefixDay = $derived(formatDate(entry.prefixSet, new Date()));
+  const prefixOn = $derived(prefixDay(entry.prefixSet, new Date()));
   const blocker = $derived(removeBlocker(entry));
 
   const renameCli = $derived(
@@ -130,7 +129,7 @@
     </div>
     <p class="msg">
       このワークスペースのタスクは {entry.prefix}-1, {entry.prefix}-2 … と振ります ·
-      最後に変えたのは {prefixDay}
+      最後に変えたのは {prefixOn}
     </p>
     <p class="msg">
       変えると、配下の {count} 件（削除済みを含む）の ID を新しい接頭辞で振り直します（1
@@ -167,7 +166,10 @@
         削除
       </Button>
     </div>
-    <CliLine command={cliWorkspaceRm({ workspace: entry.name, store: entry.store })} />
+    <CliLine
+      command={cliWorkspaceRm({ workspace: entry.name, store: entry.store })}
+      disabled={blocker !== null}
+    />
   </section>
 </div>
 

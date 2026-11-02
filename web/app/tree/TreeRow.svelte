@@ -365,12 +365,15 @@
     display: flex;
     justify-content: center;
   }
-  .more {
+  .more,
+  .more-slot {
     flex: 0 0 auto;
+    width: 1.75rem;
+  }
+  .more {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 1.75rem;
     height: 1.75rem;
     border: 0;
     border-radius: var(--radius-4);
@@ -378,10 +381,6 @@
     color: var(--muted);
     opacity: 0;
     cursor: pointer;
-  }
-  .more-slot {
-    flex: 0 0 auto;
-    width: 1.75rem;
   }
   .row:hover .more,
   .row.selected .more,
