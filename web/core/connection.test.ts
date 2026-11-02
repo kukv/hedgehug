@@ -154,6 +154,36 @@ describe("Connection", () => {
     t.conn.stop();
   });
 
+  it("keeps the connection when a listener throws, and still calls the others", async () => {
+    const s1 = sseStream();
+    const t = setup([s1]);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const second = vi.fn();
+    t.conn.on("tasks.changed", () => {
+      throw new Error("listener failed");
+    });
+    t.conn.on("tasks.changed", second);
+    t.conn.start();
+    s1.send(hello("c1", { shared: "h1" }));
+    await t.until(() => t.conn.state === "open");
+    s1.send(
+      ev("tasks.changed", {
+        store: "shared",
+        ulids: [],
+        removed: [],
+        commit: "h2",
+        op: "",
+        author: "",
+      }),
+    );
+    await t.until(() => second.mock.calls.length === 1);
+    expect(errors).toHaveBeenCalledTimes(1);
+    expect(t.calls.length).toBe(1);
+    expect(t.conn.state).toBe("open");
+    errors.mockRestore();
+    t.conn.stop();
+  });
+
   it("reconnects after 1, 2, 4, 5 and 5 seconds and shows the state meanwhile", async () => {
     const s1 = sseStream();
     const s2 = sseStream();

@@ -107,7 +107,17 @@ export class Connection {
   }
 
   private notify(): void {
-    for (const fn of [...this.subs]) fn();
+    for (const fn of [...this.subs]) this.guard(fn);
+  }
+
+  // guard runs one listener. A listener that throws must not break the
+  // connection or skip the others, so its error is only reported.
+  private guard(fn: () => void): void {
+    try {
+      fn();
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   private setState(s: ConnState): void {
@@ -117,7 +127,9 @@ export class Connection {
   }
 
   private emit<K extends keyof Handlers>(event: K, ...args: Parameters<Handlers[K]>): void {
-    for (const fn of [...this.handlers[event]] as ((...a: unknown[]) => void)[]) fn(...args);
+    for (const fn of [...this.handlers[event]] as ((...a: unknown[]) => void)[]) {
+      this.guard(() => fn(...args));
+    }
   }
 
   // loop connects, reads until the stream ends, and tries again after a
@@ -149,7 +161,10 @@ export class Connection {
       const t = this.opts.token();
       if (t) headers.Authorization = `Bearer ${t}`;
       const res = await this.opts.fetch("/api/events", { headers, signal: ctl.signal });
-      if (!res.ok || !res.body) return false;
+      if (!res.ok || !res.body) {
+        await res.body?.cancel();
+        return false;
+      }
       const feed = parseEventStream((m) => {
         if (this.running !== run) return;
         if (m.event === "hello") opened = true;
