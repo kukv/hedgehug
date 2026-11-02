@@ -35,6 +35,16 @@ function open(over: Record<string, unknown> = {}) {
 }
 
 describe("Dialog", () => {
+  it("初期フォーカスは data-autofocus の要素を先に選ぶ", async () => {
+    const marked = createRawSnippet(() => ({
+      render: () =>
+        `<div><button type="button">先頭</button><input aria-label="名前" data-autofocus /></div>`,
+    }));
+    const { getByLabelText } = open({ children: marked });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(getByLabelText("名前")).toHaveFocus();
+  });
+
   it("title を見出しにし、role=dialog・aria-modal・aria-labelledby を付ける", () => {
     const { getByRole } = open();
     const d = getByRole("dialog", { name: "タスクを作成" });

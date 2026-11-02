@@ -37,7 +37,11 @@
     const opener = document.activeElement as HTMLElement | null;
     stack.push(me);
     tick().then(() => {
-      const first = body?.querySelector<HTMLElement>(FOCUSABLE) ?? focusables()[0] ?? panel;
+      const first =
+        body?.querySelector<HTMLElement>("[data-autofocus]") ??
+        body?.querySelector<HTMLElement>(FOCUSABLE) ??
+        focusables()[0] ??
+        panel;
       first?.focus();
     });
     return () => {

@@ -97,7 +97,8 @@ describe("CreateProject", () => {
 
   it("focuses the name as soon as the dialog opens", async () => {
     setup();
-    await waitFor(() => expect(screen.getByRole("textbox", { name: "名前" })).toHaveFocus());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByRole("textbox", { name: "名前" })).toHaveFocus();
   });
 
   it("shows the command with <名前> and cannot copy it until a name is typed", async () => {
@@ -105,6 +106,19 @@ describe("CreateProject", () => {
     const cmd = screen.getByRole("button", { name: /コマンドをコピー/ });
     expect(cmd).toHaveTextContent("<名前>");
     expect(cmd).toBeDisabled();
+  });
+
+  it("decides the workspace when the stores finish loading after the dialog opened", async () => {
+    const k = makeCore();
+    k.stores.workspaces.mockReturnValue([]);
+    mount(CreateProject, { request: { kind: "project" }, onclose: vi.fn() }, k);
+    await fireEvent.input(screen.getByRole("textbox", { name: "名前" }), {
+      target: { value: "早押し" },
+    });
+    expect(screen.getByRole("button", { name: "作成" })).toBeDisabled();
+    k.stores.workspaces.mockReturnValue(workspaces);
+    k.notify();
+    await waitFor(() => expect(screen.getByRole("button", { name: "作成" })).toBeEnabled());
   });
 
   it("cannot be created without a name", () => {

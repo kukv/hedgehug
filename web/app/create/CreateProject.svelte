@@ -36,6 +36,21 @@
   const ws = $derived(entries.current.find((w) => workspaceKey(w) === wsKey));
   const showChoice = $derived(entries.current.length >= 2);
 
+  // Opened while the stores are still loading: decide again when they have loaded.
+  $effect(() => {
+    const list = entries.current;
+    if (wsKey !== "" || list.length === 0) return;
+    const again = untrack(() =>
+      resolveCreateContext({
+        selection: selection.ulid,
+        route: router.route,
+        task: (u) => cache.task(u),
+        workspaces: list,
+      }),
+    );
+    if (again.workspace) wsKey = workspaceKey(again.workspace);
+  });
+
   const sc = useSubscribe(schema, () => (ws ? schema.get(ws.store) : undefined));
   $effect(() => {
     if (ws) void schema.load(ws.store);
@@ -71,7 +86,7 @@
     if (due) props.due = due;
     return cliAdd({
       title: title.trim() || new Placeholder("名前"),
-      kind: "project",
+      kind: projectKind || "project",
       store: ws?.store,
       workspace: showChoice ? ws?.name : undefined,
       props: Object.keys(props).length > 0 ? props : undefined,

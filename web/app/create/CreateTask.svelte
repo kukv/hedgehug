@@ -256,6 +256,7 @@
         type="text"
         aria-label="タイトル"
         bind:this={titleEl}
+        data-autofocus
         bind:value={title}
         onkeydown={onTitleKey}
         autocomplete="off"
@@ -424,6 +425,9 @@
     color: var(--ink-2);
     font-size: var(--fs-13);
     cursor: pointer;
+  }
+  .kinds label:focus-within {
+    outline: 2px solid var(--accent);
   }
   .kinds label.on {
     background: var(--ink);

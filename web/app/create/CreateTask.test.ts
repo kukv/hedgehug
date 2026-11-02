@@ -159,7 +159,9 @@ describe("CreateTask", () => {
 
   it("focuses the title as soon as the dialog opens", async () => {
     setup();
-    await waitFor(() => expect(screen.getByRole("textbox", { name: "タイトル" })).toHaveFocus());
+    // Dialog moves the focus after a tick: look once everything has settled.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByRole("textbox", { name: "タイトル" })).toHaveFocus();
   });
 
   it("shows the command with <タイトル> and cannot copy it until a title is typed", async () => {
