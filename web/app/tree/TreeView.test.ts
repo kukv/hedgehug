@@ -448,6 +448,21 @@ describe("TreeView", () => {
     expect(api.POST).not.toHaveBeenCalledWith("/api/tasks/{id}/move", expect.anything());
   });
 
+  it("leaves the Esc of a conversion to the input method, and closes the input on any other Esc", async () => {
+    setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const row = screen.getByText("API v2 への移行").closest('[role="treeitem"]') as HTMLElement;
+    await fireEvent.click(row);
+    await fireEvent.keyDown(row, { key: "Enter" });
+    const input = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
+    await fireEvent.input(input, { target: { value: "にほん" } });
+    await fireEvent.keyDown(input, { key: "Escape", isComposing: true });
+    expect(input).toBeInTheDocument();
+    expect(input).toHaveValue("にほん");
+    await fireEvent.keyDown(input, { key: "Escape" });
+    await waitFor(() => expect(input).not.toBeInTheDocument());
+  });
+
   it("does not open the input again when Esc closed it while the task was being made", async () => {
     const { api } = setup();
     let answer: (v: unknown) => void = () => {};

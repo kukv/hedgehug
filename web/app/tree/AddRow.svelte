@@ -45,7 +45,7 @@
     if (e.key === "Enter" && !e.isComposing) {
       e.preventDefault();
       void submit();
-    } else if (e.key === "Escape") {
+    } else if (e.key === "Escape" && !e.isComposing) {
       e.preventDefault();
       oncancel();
     }
