@@ -253,7 +253,8 @@ export class TaskCache {
   prime(tasks: (TaskView | ShowView)[], since: number): void {
     for (const t of tasks) {
       if (!this.changedSince(t.ulid, since)) this.ingest(t, since);
-      else this.refetchStale(t.ulid, t.store);
+      // a row in the cache is fetched again once the round of that event or resync has answered
+      else if (!this.rows.has(t.ulid)) this.refetchStale(t.ulid, t.store);
     }
     this.flush();
   }
