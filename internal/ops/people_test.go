@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/index"
+	"github.com/kukv/hedgehug/internal/model"
 )
 
 func mustAssigns(t *testing.T, args ...string) []Assign {
@@ -59,13 +60,15 @@ func TestPeopleOfOneStore(t *testing.T) {
 	if _, err := ts.ForStore("org-b").Add(AddInput{Title: "b", Assigns: mustAssigns(t, "assignees+=in-b")}); err != nil {
 		t.Fatal(err)
 	}
+	// org-a's account is alice and org-b's is bob; each one's commits carry
+	// the Hedgehug-Author of its own account.
 	a, err := ts.ForStore("org-a").People()
-	if err != nil || !slices.Contains(a, "in-a") || slices.Contains(a, "in-b") || !slices.IsSorted(a) {
-		t.Errorf("People of org-a = %q, %v; want in-a and not in-b", a, err)
+	if wantA := []string{"github.com/alice", "in-a"}; err != nil || !slices.Equal(a, wantA) {
+		t.Errorf("People of org-a = %q, %v; want %q", a, err, wantA)
 	}
 	all, err := ts.People()
-	if err != nil || !slices.Contains(all, "in-a") || !slices.Contains(all, "in-b") || !slices.IsSorted(all) {
-		t.Errorf("People of every store = %q, %v; want both in-a and in-b", all, err)
+	if wantAll := []string{"github.com/alice", "github.com/bob", "in-a", "in-b"}; err != nil || !slices.Equal(all, wantAll) {
+		t.Errorf("People of every store = %q, %v; want %q", all, err, wantAll)
 	}
 	_, err = ts.ForStore("nope").People()
 	wantErr(t, err, KindNotFound, "")
@@ -110,5 +113,66 @@ func TestPeopleNamesCanBeMentioned(t *testing.T) {
 	// An account is named by the mention of its ID and by its login alone.
 	if !index.MentionNames("alice", me) || !index.MentionNames(me, me) {
 		t.Errorf("a mention of alice or %s does not name the account %s", me, me)
+	}
+}
+
+// Each source of a name is the only one for some name, so that dropping the
+// source shows: the Hedgehug-Author of a commit (an account that only
+// committed), the author of a comment who is not a watcher, and an assignee
+// who is not a watcher.
+func TestPeopleEachSource(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	ts.asAccount("alice")
+	a, err := ts.Add(AddInput{Title: "a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Only a commit of dave's: nothing he writes names him.
+	ts.asAccount("dave")
+	if _, err := ts.Set("ME-1", mustAssigns(t, "title=edited")); err != nil {
+		t.Fatal(err)
+	}
+	// A comment by erin, who does not watch the task; the commit that holds
+	// it is made as alice, so only the comment names erin.
+	ts.asAccount("alice")
+	c, err := ts.CommentAdd("ME-1", "hi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts.editRawFile(model.CommentPath(a.ULID, c.Ref.Comment), "github.com/alice", "github.com/erin")
+	// An assignee who does not watch the task: an assignee is made a watcher
+	// as set, so the watch is taken off by a second set.
+	for _, as := range []string{"assignees+=frank", "watchers-=frank"} {
+		if _, err := ts.Set("ME-1", mustAssigns(t, as)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := ts.People()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"github.com/alice", "github.com/dave", "github.com/erin", "frank"}
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
+		t.Errorf("People = %q; want %q", got, want)
+	}
+}
+
+// Account IDs are not case-sensitive (sync.Members, index.MentionNames), so
+// names that differ only in case are one; the one that sorts first stays.
+func TestPeopleFoldsCase(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	if _, err := ts.Add(AddInput{Title: "a", Assigns: mustAssigns(t, "assignees+=alice", "assignees+=Alice", "assignees+=ALICE", "assignees+=bob")}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ts.People()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"ALICE", "bob"}; !slices.Equal(got, want) {
+		t.Errorf("People = %q; want %q", got, want)
 	}
 }

@@ -11,9 +11,10 @@ import (
 )
 
 // ShowAt is the task arg as it was at at (a time or a commit, as RestoreAt
-// takes it), read from the commit and written nowhere. The id, the workspace
-// and the problems are those of now; the comments, the history and the
-// relations are left empty.
+// takes it), read from the commit and written nowhere. The id and the
+// workspace are those of now; the problems, the relations (reverse and
+// referenced_by), the comments and the history are left empty, and the
+// progress is not filled.
 func (ss *Session) ShowAt(arg, at string) (ShowView, error) {
 	ts, arg, err := ss.forTask(arg)
 	if err != nil {

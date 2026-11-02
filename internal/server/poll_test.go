@@ -141,6 +141,8 @@ func TestPollSyncState(t *testing.T) {
 	t.Parallel()
 	ts, ch := pollServer(t)
 	ts.srv.poller.settle()
+	// push_at is told for a store the loop has synced.
+	ts.srv.loop.Synced("me")
 	s, err := ts.session().OpenStore()
 	if err != nil {
 		t.Fatal(err)
@@ -152,8 +154,11 @@ func TestPollSyncState(t *testing.T) {
 	if e.Store != "me" {
 		t.Errorf("event = %+v", e)
 	}
-	if e.PushAt == nil || !e.PushAt.Equal(e.PendingSince.Add(30*time.Second)) {
-		t.Errorf("push_at = %v; want pending_since + 30s", e.PushAt)
+	ts.srv.loop.mu.Lock()
+	last := ts.srv.loop.last["me"]
+	ts.srv.loop.mu.Unlock()
+	if want := maxTime(*e.PendingSince, last).Add(30 * time.Second); e.PushAt == nil || !e.PushAt.Equal(want) {
+		t.Errorf("push_at = %v; want %v (30s after the later of pending_since and the last sync)", e.PushAt, want)
 	}
 }
 

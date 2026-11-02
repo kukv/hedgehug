@@ -250,12 +250,15 @@ func (s *Server) registerTaskWrites() {
 		if b.Labels != nil {
 			f.Labels = &b.Labels
 		}
+		if b.Repos != nil {
+			f.Repos = &b.Repos
+		}
 		assigns, err := f.assigns()
 		if err != nil {
 			return nil, badRequest(err)
 		}
 		ss := s.session(in.Store)
-		res, err := ss.Add(ops.AddInput{Title: b.Title, Parent: b.Parent, Workspace: b.Workspace, Kind: b.Kind, Status: b.Status, Body: b.Body, Repos: b.Repos, Assigns: assigns})
+		res, err := ss.Add(ops.AddInput{Title: b.Title, Parent: b.Parent, Workspace: b.Workspace, Kind: b.Kind, Status: b.Status, Body: b.Body, Assigns: assigns})
 		if err != nil {
 			return nil, problemOf(err)
 		}

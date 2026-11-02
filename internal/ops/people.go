@@ -3,6 +3,7 @@ package ops
 import (
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/index"
@@ -14,6 +15,8 @@ import (
 // are those of the store the session selects, or of every store; sorted, each
 // once. A name that cannot be written as a mention (@login or @host/login,
 // as index.Mentions reads it) is left out: the GUI writes the name after an @.
+// Names are the same account when they differ only in case, as in
+// index.MentionNames; the one that sorts first is kept.
 func (ss *Session) People() ([]string, error) {
 	set, err := ss.listSet()
 	if err != nil {
@@ -59,5 +62,13 @@ func (ss *Session) People() ([]string, error) {
 			add(a)
 		}
 	}
-	return slices.AppendSeq([]string{}, slices.Values(slices.Sorted(maps.Keys(seen)))), nil
+	out := []string{}
+	folded := map[string]bool{}
+	for _, n := range slices.Sorted(maps.Keys(seen)) {
+		if k := strings.ToLower(n); !folded[k] {
+			folded[k] = true
+			out = append(out, n)
+		}
+	}
+	return out, nil
 }

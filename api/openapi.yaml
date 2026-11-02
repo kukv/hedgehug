@@ -1174,7 +1174,7 @@ components:
           format: date-time
           type: string
         push_at:
-          description: When the background sync pushes the writes not pushed yet (pending_since + sync.push_interval); absent when nothing waits
+          description: "When the background sync pushes the writes not pushed yet: sync.push_interval after pending_since, but not before sync.push_interval after the last sync and not after next_fetch, which syncs too; absent when nothing waits, before the first sync and while a sync runs"
           format: date-time
           type: string
         read_only:
@@ -2585,7 +2585,7 @@ paths:
         - tasks
   /api/tasks/{id}/history/{commit}:
     get:
-      description: history and comments are empty. A task that did not exist at the commit is restore_at.not_found.
+      description: The id and the workspace are those of now. problems, reverse, referenced_by, comments and history are empty, and progress is not filled. A task that did not exist at the commit is restore_at.not_found.
       operationId: show-task-at
       parameters:
         - description: The store; without it, the one hedgehug picks as the CLI does
@@ -2602,12 +2602,12 @@ paths:
           schema:
             description: The ID, a former ID, or the ULID of the task
             type: string
-        - description: The commit to bring the task back to
+        - description: The commit or the time to look at; nothing is changed
           in: path
           name: commit
           required: true
           schema:
-            description: The commit to bring the task back to
+            description: The commit or the time to look at; nothing is changed
             type: string
       responses:
         "200":

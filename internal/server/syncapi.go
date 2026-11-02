@@ -7,25 +7,27 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/ops"
 )
 
 type syncStatus struct {
 	ops.StoreStatus
 	NextFetch *time.Time `json:"next_fetch,omitempty" doc:"When the loop fetches next; absent before its first sync"`
-	PushAt    *time.Time `json:"push_at,omitempty" doc:"When the background sync pushes the writes not pushed yet (pending_since + sync.push_interval); absent when nothing waits"`
+	PushAt    *time.Time `json:"push_at,omitempty" doc:"When the background sync pushes the writes not pushed yet: sync.push_interval after pending_since, but not before sync.push_interval after the last sync and not after next_fetch, which syncs too; absent when nothing waits, before the first sync and while a sync runs"`
 }
 
 // newSyncStatus is st with when the loop fetches next and when the writes
-// waiting are pushed (push is sync.push_interval).
-func newSyncStatus(st ops.StoreStatus, l *Loop, push time.Duration) syncStatus {
+// waiting are pushed, as the loop schedules them with c's sync intervals.
+func newSyncStatus(st ops.StoreStatus, l *Loop, c *config.Config) syncStatus {
 	v := syncStatus{StoreStatus: st}
 	if t, ok := l.NextFetch(st.Store); ok {
 		v.NextFetch = &t
 	}
 	if st.PendingSince != nil {
-		t := st.PendingSince.Add(push)
-		v.PushAt = &t
+		if t, ok := l.PushAt(st.Store, *st.PendingSince, l.fetchInterval(c), c.Sync.PushInterval); ok {
+			v.PushAt = &t
+		}
 	}
 	return v
 }
@@ -53,7 +55,7 @@ func (s *Server) registerSync() {
 		}
 		out := &struct{ Body []syncStatus }{[]syncStatus{}}
 		for _, st := range sts {
-			out.Body = append(out.Body, newSyncStatus(st, s.loop, c.Sync.PushInterval))
+			out.Body = append(out.Body, newSyncStatus(st, s.loop, c))
 		}
 		return out, nil
 	})

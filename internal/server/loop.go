@@ -161,24 +161,44 @@ func (l *Loop) targets() (*config.Config, []config.StoreEntry) {
 // interval after its last sync, or push after its first write that is not
 // pushed, but not sooner than push after its last sync.
 func (l *Loop) due(e config.StoreEntry, now time.Time, interval, push time.Duration) time.Time {
-	l.mu.Lock()
-	last, synced := l.last[e.Name]
-	running := l.running[e.Name]
-	l.mu.Unlock()
-	if running {
+	due, synced, running := l.schedule(e.Name, l.pendingSince(e), interval, push)
+	switch {
+	case running:
 		return now.Add(interval) // looked at again when it ends
-	}
-	if !synced {
+	case !synced:
 		return now
 	}
-	due := last.Add(interval)
-	if pending := l.pendingSince(e); !pending.IsZero() {
-		due = minTime(due, maxTime(pending.Add(push), last.Add(push)))
-	}
 	l.mu.Lock()
-	l.next[e.Name] = last.Add(interval)
+	l.next[e.Name] = l.last[e.Name].Add(interval)
 	l.mu.Unlock()
 	return due
+}
+
+// schedule is when the store name is synced next, for a store that has been
+// synced and does not run: the fetch interval after its last sync, or, when
+// pending (the first write not pushed) is not zero, push after it, but not
+// sooner than push after the last sync and not later than the fetch. It is
+// the one place that has this rule; due and the status of the sync use it.
+func (l *Loop) schedule(name string, pending time.Time, interval, push time.Duration) (due time.Time, synced, running bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	last, synced := l.last[name]
+	if running = l.running[name]; running || !synced {
+		return time.Time{}, synced, running
+	}
+	due = last.Add(interval)
+	if !pending.IsZero() {
+		due = minTime(due, maxTime(pending.Add(push), last.Add(push)))
+	}
+	return due, true, false
+}
+
+// PushAt is when the loop pushes the writes of name that wait since pending:
+// what due makes of them. False for a store not synced yet or running, which
+// the loop syncs, and so pushes, now.
+func (l *Loop) PushAt(name string, pending time.Time, interval, push time.Duration) (time.Time, bool) {
+	due, synced, running := l.schedule(name, pending, interval, push)
+	return due, synced && !running
 }
 
 // pendingSince is the first write of e not pushed; zero when there is none
