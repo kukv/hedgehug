@@ -133,6 +133,51 @@ test("Esc closes the input even when the task is still being made, and the row k
   await expect.poll(() => rootOrder(hh)).toEqual(["Slow", "Alpha", "Bravo"]);
 });
 
+test("Alt+Up pressed three times in a row moves a task three places, one commit each", async ({
+  page,
+  hh,
+}) => {
+  for (const t of ["A", "B", "C", "D", "E"]) hh.add(t);
+  await hh.open(page);
+  await treeReady(page);
+  await page.route(/\/api\/tasks\/[^/]+\/move\?/, async (route) => {
+    await new Promise((r) => setTimeout(r, 700));
+    await route.continue();
+  });
+  const before = commitCount(hh);
+
+  await row(page, "E").click();
+  await page.keyboard.press("Alt+ArrowUp");
+  await page.keyboard.press("Alt+ArrowUp");
+  await page.keyboard.press("Alt+ArrowUp");
+
+  await expect.poll(() => rootOrder(hh), { timeout: 15000 }).toEqual(["A", "E", "B", "C", "D"]);
+  expect(commitCount(hh)).toBe(before + 3);
+  await expect(row(page, "E")).toBeFocused();
+});
+
+test("a failed move drops the presses still waiting and says so once", async ({ page, hh }) => {
+  for (const t of ["A", "B", "C", "D", "E"]) hh.add(t);
+  await hh.open(page);
+  await treeReady(page);
+  let requests = 0;
+  await page.route(/\/api\/tasks\/[^/]+\/move\?/, async (route) => {
+    requests++;
+    await new Promise((r) => setTimeout(r, 300));
+    await route.abort();
+  });
+
+  await row(page, "E").click();
+  await page.keyboard.press("Alt+ArrowUp");
+  await page.keyboard.press("Alt+ArrowUp");
+  await page.keyboard.press("Alt+ArrowUp");
+
+  await expect(page.locator(".toast")).toHaveCount(1);
+  await page.waitForTimeout(1000);
+  expect(requests).toBe(1);
+  expect(rootOrder(hh)).toEqual(["A", "B", "C", "D", "E"]);
+});
+
 test("Tab indents under the previous sibling and Shift+Tab brings it back", async ({
   page,
   hh,

@@ -178,6 +178,11 @@ function setup(
     watchTree,
     // The tree is read again
     emit: () => ev.emit(),
+    // The tree is read again, and the order of the children of P is now this
+    reorder(order: string[]) {
+      roots = [{ ulid: "P", children: order.map((u) => ({ ulid: u, children: [] })) }];
+      ev.emit();
+    },
     // The schema of the store arrives
     loadSchema() {
       schemaNow = usedSchema;
@@ -443,6 +448,66 @@ describe("TreeView", () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.queryByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）")).toBeNull();
     expect(row).toHaveFocus();
+  });
+
+  describe("keys that move a task, pressed one after another", () => {
+    async function start(over: { many: number }) {
+      const t = setup(over);
+      render(TreeView, { view: { kind: "project", ulid: "P" } });
+      const row = screen.getByText("many 3").closest('[role="treeitem"]') as HTMLElement;
+      await fireEvent.click(row);
+      return { ...t, row };
+    }
+    const moved = (to: object) => ({
+      params: { path: { id: "M3" }, query: { store: "shared" } },
+      body: to,
+    });
+
+    it("sends each press in turn, deciding on the rows the move before it left", async () => {
+      const { api, row, reorder } = await start({ many: 4 });
+      api.POST.mockResolvedValue(ok({ task: task("M3", "task", "P"), commit: "c" }));
+      await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
+      await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
+      await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
+      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
+      expect(api.POST).toHaveBeenLastCalledWith("/api/tasks/{id}/move", moved({ before: "M2" }));
+      // The next one waits until the tree shows the first move.
+      await new Promise((r) => setTimeout(r, 60));
+      expect(api.POST).toHaveBeenCalledTimes(1);
+      reorder(["M0", "M1", "M3", "M2"]);
+      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
+      expect(api.POST).toHaveBeenLastCalledWith("/api/tasks/{id}/move", moved({ before: "M1" }));
+      reorder(["M0", "M3", "M1", "M2"]);
+      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(3));
+      expect(api.POST).toHaveBeenLastCalledWith("/api/tasks/{id}/move", moved({ before: "M0" }));
+    });
+
+    it("drops the moves still waiting when one fails, and says so once", async () => {
+      const { api, row, reorder } = await start({ many: 4 });
+      api.POST.mockImplementation(
+        () => new Promise((_, reject) => setTimeout(() => reject(new Error("書き込めません")), 30)),
+      );
+      await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
+      await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
+      await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
+      await waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
+      reorder(["M0", "M1", "M3", "M2"]);
+      await new Promise((r) => setTimeout(r, 60));
+      expect(api.POST).toHaveBeenCalledTimes(1);
+      expect(h.toast).toHaveBeenCalledTimes(1);
+    });
+
+    it("drops the moves still waiting when the selection leaves the row", async () => {
+      const { api, row, reorder } = await start({ many: 4 });
+      api.POST.mockResolvedValue(ok({ task: task("M3", "task", "P"), commit: "c" }));
+      await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
+      await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
+      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
+      selection.set("M0");
+      reorder(["M0", "M1", "M3", "M2"]);
+      await new Promise((r) => setTimeout(r, 60));
+      expect(api.POST).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("waits for a row the window draws late, and focuses it", async () => {

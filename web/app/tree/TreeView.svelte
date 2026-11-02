@@ -125,8 +125,7 @@
     waiting = [];
     void (async () => {
       for (const k of keys) {
-        const a = actionOf(k);
-        if (a.type !== "none") await run(a);
+        await dispatch(k);
       }
     })();
   });
@@ -363,13 +362,74 @@
       else waiting.push(k);
       return;
     }
+    // A move waits for the moves before it, and the key may act on the rows they leave.
+    if (isMoveKey(k) && moves > 0) {
+      e.preventDefault();
+      void dispatch(k);
+      return;
+    }
     const a = actionOf(k);
     if (a.type === "none") return;
     e.preventDefault();
-    void run(a);
+    void dispatch(k, a);
   }
 
-  async function run(a: KeyAction) {
+  // The keys that move a task: Alt+Up/Down, Tab, Shift+Tab.
+  function isMoveKey(k: KeyInput): boolean {
+    if (k.mod) return false;
+    if (k.key === "Tab") return !k.alt;
+    return k.alt && !k.shift && (k.key === "ArrowUp" || k.key === "ArrowDown");
+  }
+
+  // The moves go one after another: a move is decided on the rows the move before it left, so
+  // three presses move a task three places. A failure, or the selection leaving the row, drops
+  // the moves still waiting.
+  let moveChain: Promise<void> = Promise.resolve();
+  let moveEpoch = 0;
+  let moves = 0;
+  const MOVE_WAIT_MS = 5000;
+  let gone = false;
+  $effect(() => () => {
+    gone = true;
+  });
+  const rowsShape = () => rows.map((r) => `${r.ulid}>${r.parent}`).join(",");
+  // Resolves once the rows differ from the shape given (the tree has been read again).
+  async function rowsChangedFrom(shape: string) {
+    const until = Date.now() + MOVE_WAIT_MS;
+    while (!gone && rowsShape() === shape && Date.now() < until) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
+  function dispatch(k: KeyInput, decided?: KeyAction): Promise<void> {
+    if (!isMoveKey(k)) {
+      const a = decided ?? actionOf(k);
+      return a.type === "none" ? Promise.resolve() : run(a).then(() => {});
+    }
+    const epoch = moveEpoch;
+    const at = selection.ulid;
+    moves++;
+    moveChain = moveChain.then(async () => {
+      try {
+        if (epoch !== moveEpoch || selection.ulid !== at) return;
+        const a = actionOf(k);
+        if (a.type === "none") return;
+        const shape = rowsShape();
+        const done = await run(a);
+        if (!done || a.type !== "move") {
+          moveEpoch++;
+          return;
+        }
+        await rowsChangedFrom(shape);
+      } finally {
+        moves--;
+      }
+    });
+    return moveChain;
+  }
+
+  // run says whether the action went through: false for a refusal or a failed write.
+  async function run(a: KeyAction): Promise<boolean> {
     try {
       switch (a.type) {
         case "select":
@@ -403,10 +463,12 @@
           break;
         case "reject":
           toast({ message: `${a.rejection.title}。${a.rejection.reason}` });
-          break;
+          return false;
       }
+      return true;
     } catch (err) {
       toast({ message: errorMessage(err) });
+      return false;
     }
   }
 
