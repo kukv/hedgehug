@@ -44,6 +44,8 @@ const defaultAccountYAML = "accounts:\n  - name: alice\n    host: github.com\n  
 // testAccount is the account of defaultAccountYAML.
 var testAccount = config.Account{Name: "alice", Host: "github.com", Login: "alice"}
 
+// storeAccountRE matches the account: alice line of a store in config.yaml,
+// which store init writes.
 var storeAccountRE = regexp.MustCompile(`(?m)^[ \t]+account: alice\n`)
 
 // appendDefaultAccount adds defaultAccountYAML to the end of config.yaml.
@@ -71,6 +73,9 @@ func (ts *testSession) dropDefaultAccount() {
 	if err != nil {
 		ts.t.Fatal(err)
 	}
+	if !strings.Contains(string(b), defaultAccountYAML) {
+		ts.t.Fatalf("config.yaml has no default account to drop:\n%s", b)
+	}
 	text := storeAccountRE.ReplaceAllString(strings.Replace(string(b), defaultAccountYAML, "", 1), "")
 	if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
 		ts.t.Fatal(err)
@@ -78,11 +83,21 @@ func (ts *testSession) dropDefaultAccount() {
 	ts.resetWriter()
 }
 
+// hasDefaultAccount reports whether config.yaml still has defaultAccountYAML.
+func (ts *testSession) hasDefaultAccount() bool {
+	ts.t.Helper()
+	b, err := os.ReadFile(filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml")) //nolint:gosec // the config of the test
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(b), defaultAccountYAML)
+}
+
 // appendConfig adds text to config.yaml; text that has accounts: replaces the
-// default account.
+// default account, if it is still there.
 func (ts *testSession) appendConfig(text string) {
 	ts.t.Helper()
-	if strings.Contains(text, "accounts:") {
+	if strings.Contains(text, "accounts:") && ts.hasDefaultAccount() {
 		ts.dropDefaultAccount()
 	}
 	_, p, err := ts.Config()

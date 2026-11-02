@@ -279,6 +279,10 @@ func slicesEqual[T comparable](a, b []T) bool { return slices.Equal(a, b) }
 // defaultAccountYAML is the account every test server starts with.
 const defaultAccountYAML = "accounts:\n  - name: alice\n    host: github.com\n    login: alice\n"
 
+// storeAccountRE matches the account: alice line of a store in config.yaml,
+// which store init writes.
+var storeAccountRE = regexp.MustCompile(`(?m)^[ \t]+account: alice\n`)
+
 // dropDefaultAccount removes it, and the stores' reference to it, for the
 // tests that have no account or set up their own.
 func (ts *testServer) dropDefaultAccount() {
@@ -288,8 +292,10 @@ func (ts *testServer) dropDefaultAccount() {
 	if err != nil {
 		ts.t.Fatal(err)
 	}
-	text := strings.Replace(string(b), defaultAccountYAML, "", 1)
-	text = regexp.MustCompile(`(?m)^\s+account: alice\n`).ReplaceAllString(text, "")
+	if !strings.Contains(string(b), defaultAccountYAML) {
+		ts.t.Fatalf("config.yaml has no default account to drop:\n%s", b)
+	}
+	text := storeAccountRE.ReplaceAllString(strings.Replace(string(b), defaultAccountYAML, "", 1), "")
 	if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
 		ts.t.Fatal(err)
 	}

@@ -81,8 +81,11 @@ func (te *testEnv) dropDefaultAccount() {
 	te.t.Helper()
 	p := filepath.Join(te.hhHome, "config.yaml")
 	b, err := os.ReadFile(p) //nolint:gosec // the config of the test
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err != nil {
 		te.t.Fatal(err)
+	}
+	if !strings.Contains(string(b), defaultAccountYAML) {
+		te.t.Fatalf("config.yaml has no default account to drop:\n%s", b)
 	}
 	text := storeAccountRE.ReplaceAllString(strings.Replace(string(b), defaultAccountYAML, "", 1), "")
 	if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
