@@ -159,7 +159,9 @@
         const { [c.ulid]: _, ...changed } = overlay.changed;
         overlay.added = overlay.added.filter((a) => a.ulid !== c.ulid);
         overlay.changed = changed;
-      } else overlay.removed = [...overlay.removed, c.ulid];
+      }
+      // a read sent before the deletion may still bring it
+      overlay.removed = [...overlay.removed, c.ulid];
       deleting = null;
       toast({ message: "コメントを削除しました" });
     } catch (e) {
