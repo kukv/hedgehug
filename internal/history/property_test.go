@@ -61,6 +61,11 @@ func runProperty(t *testing.T, seed, steps int) {
 	clock := 0
 	next := 0
 	tick := func() time.Time {
+		if rnd.IntN(8) == 0 {
+			// Clock skew: older than what was written before, so a child can
+			// be older than its parent and When order disagrees with Gen order.
+			return t0.Add(time.Duration(clock-1-rnd.IntN(5)) * time.Second)
+		}
 		if rnd.IntN(2) == 0 {
 			clock += 1 + rnd.IntN(3)
 		}
@@ -161,10 +166,11 @@ func runProperty(t *testing.T, seed, steps int) {
 					if okb {
 						files[q] = vb
 					}
-				case 2: // both: b's where it has the file
-					if okb {
+				case 2: // each file from a random side (the other when one lacks it)
+					switch {
+					case oka && okb && rnd.IntN(2) == 0, !oka && okb:
 						files[q] = vb
-					} else if oka {
+					case oka:
 						files[q] = va
 					}
 				default: // new content where either has the file
