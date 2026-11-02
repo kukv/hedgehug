@@ -107,6 +107,11 @@ export class TaskCache {
   // each task, so that a fetch sent before a write does not undo it.
   private epoch = 0;
   private readonly lastWrite = new Map<string, number>();
+  // lastChange holds the epoch of the latest change an event brought (a change from outside, not
+  // a write of this tab): a read that began before it is older than what the event started to fetch.
+  private readonly lastChange = new Map<string, number>();
+  // rowSeqs counts the fetches of a row nobody holds, so that an answer a newer one overtook is dropped.
+  private readonly rowSeqs = new Map<string, number>();
   private dirty = false;
   private refreshQueued = false;
   private refreshAll = false;
@@ -232,9 +237,11 @@ export class TaskCache {
 
   // prime takes in tasks a read brought (a search, a lookup): not a write, so a fetch that is on
   // its way is not held back by it. since is the epochNow of before the read was sent: a task
-  // written after that is newer than what the read brought.
+  // written or changed by an event after that is newer than what the read brought.
   prime(tasks: (TaskView | ShowView)[], since: number): void {
-    for (const t of tasks) this.ingest(t, since);
+    for (const t of tasks) {
+      if (!this.changedSince(t.ulid, since)) this.ingest(t, since);
+    }
     this.flush();
   }
 
@@ -254,6 +261,10 @@ export class TaskCache {
 
   private wroteSince(ulid: string, since: number): boolean {
     return (this.lastWrite.get(ulid) ?? 0) > since;
+  }
+
+  private changedSince(ulid: string, since: number): boolean {
+    return (this.lastChange.get(ulid) ?? 0) > since;
   }
 
   // refreshTrees fetches the trees on screen again and resolves once they hold the answer, so
@@ -445,6 +456,7 @@ export class TaskCache {
       const label = SYNC_OPS.has(e.op) ? "同期で更新 · 今" : "CLI で更新 · 今";
       for (const u of ulids) this.setMark(u, label, e.commit);
     }
+    for (const u of [...ulids, ...removed]) this.lastChange.set(u, ++this.epoch);
     for (const u of removed) {
       this.markWrite(u);
       this.forget(u);
@@ -490,8 +502,9 @@ export class TaskCache {
         if (all || us.has(s.key) || (s.ulid !== null && us.has(s.ulid))) void this.fetchDetail(s);
       }
       // A row no query or detail holds (the blocker of a task, a crumb) has nobody to fetch it again.
+      // After a resync that is every row it holds: the events of the time it was not connected are lost.
       const held = this.heldUlids();
-      for (const u of us) {
+      for (const u of all ? [...this.rows.keys()] : us) {
         if (this.rows.has(u) && !held.has(u)) void this.fetchRow(u);
       }
     });
@@ -516,13 +529,17 @@ export class TaskCache {
 
   private async fetchRow(ulid: string): Promise<void> {
     const since = this.epoch;
+    const seq = (this.rowSeqs.get(ulid) ?? 0) + 1;
+    this.rowSeqs.set(ulid, seq);
     const store = this.rows.get(ulid)?.store;
     try {
       const show = await unwrap(
         this.api.GET("/api/tasks/{id}", { params: { path: { id: ulid }, query: { store } } }),
       );
-      if (!this.gone(ulid, since)) this.ingest(show, since);
+      if (seq !== this.rowSeqs.get(ulid)) return; // a newer fetch of this row is on its way
+      if (!this.gone(ulid, since) && !this.changedSince(ulid, since)) this.ingest(show, since);
     } catch (e) {
+      if (seq !== this.rowSeqs.get(ulid)) return;
       if (e instanceof ApiError && e.status === 404 && !this.wroteSince(ulid, since))
         this.forget(ulid);
     }
