@@ -39,9 +39,8 @@ export type CreateBelow = {
   after: string | null; // the row it goes below; null for the end
 };
 
-// createBelow adds a task and, unless it goes to the end of the list, moves it
-// right after the row above. That is two commits. The row above may be the last
-// one shown while the filter hides later siblings, so the move is not skipped for it.
+// createBelow adds a task right after the row above it (or at the end when
+// there is none) in one commit.
 export async function createBelow(d: Deps, i: CreateBelow): Promise<TaskView> {
   const r = await unwrap(
     d.api.POST("/api/tasks", {
@@ -50,10 +49,10 @@ export async function createBelow(d: Deps, i: CreateBelow): Promise<TaskView> {
         title: i.title,
         kind: i.kind,
         ...(i.parent ? { parent: i.parent } : { workspace: i.workspace }),
+        ...(i.after ? { after: i.after } : {}),
       },
     }),
   );
   d.cache.applyWrite({ task: r.task, commit: r.commit });
-  if (i.after === null) return r.task;
-  return moveTask(d, r.task, { after: i.after });
+  return r.task;
 }

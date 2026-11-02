@@ -294,14 +294,11 @@ describe("TreeView", () => {
     const input = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
     await fireEvent.input(input, { target: { value: "新しい" } });
     await fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
-    expect(api.POST).toHaveBeenNthCalledWith(1, "/api/tasks", {
+    await waitFor(() => expect(api.POST).toHaveBeenCalled());
+    expect(api.POST).toHaveBeenCalledTimes(1);
+    expect(api.POST).toHaveBeenCalledWith("/api/tasks", {
       params: { query: { store: "shared" } },
-      body: { title: "新しい", kind: "task", parent: "P" },
-    });
-    expect(api.POST).toHaveBeenNthCalledWith(2, "/api/tasks/{id}/move", {
-      params: { path: { id: "N1" }, query: { store: "shared" } },
-      body: { after: "E1" },
+      body: { title: "新しい", kind: "task", parent: "P", after: "E1" },
     });
   });
 
@@ -395,13 +392,9 @@ describe("TreeView", () => {
     await waitFor(() => expect(row).toHaveFocus());
   });
 
-  it("moves after the selected row even when it is the last one shown", async () => {
+  it("adds right below the selected row even when it is the last one shown, in one request", async () => {
     const { api } = setup();
-    api.POST.mockImplementation(async (path: string) =>
-      path === "/api/tasks"
-        ? ok({ task: task("N1", "task", "P"), commit: "c1" })
-        : ok({ task: task("N1", "task", "P"), commit: "c2" }),
-    );
+    api.POST.mockResolvedValue(ok({ task: task("N1", "task", "P"), commit: "c1" }));
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     const row = screen
       .getByText("Web のクライアントを更新")
@@ -411,11 +404,13 @@ describe("TreeView", () => {
     const input = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
     await fireEvent.input(input, { target: { value: "直下" } });
     await fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
-    expect(api.POST).toHaveBeenNthCalledWith(2, "/api/tasks/{id}/move", {
-      params: { path: { id: "N1" }, query: { store: "shared" } },
-      body: { after: "T3" },
+    await waitFor(() => expect(api.POST).toHaveBeenCalled());
+    expect(api.POST).toHaveBeenCalledTimes(1);
+    expect(api.POST).toHaveBeenCalledWith("/api/tasks", {
+      params: { query: { store: "shared" } },
+      body: { title: "直下", kind: "task", parent: "P", after: "T3" },
     });
+    expect(api.POST).not.toHaveBeenCalledWith("/api/tasks/{id}/move", expect.anything());
   });
 
   it("waits for a row the window draws late, and focuses it", async () => {

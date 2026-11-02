@@ -55,30 +55,24 @@ describe("patchTask", () => {
 describe("createBelow", () => {
   const base = { title: "new", kind: "task", store: "shared", parent: "P", workspace: "REL" };
 
-  it("creates and then moves after the row above it", async () => {
+  it("creates right after the row above it, in one request", async () => {
     const d = deps();
     const t = await createBelow(d, { ...base, after: "T1" });
-    expect(d.api.POST).toHaveBeenNthCalledWith(1, "/api/tasks", {
+    expect(d.api.POST).toHaveBeenCalledTimes(1);
+    expect(d.api.POST).toHaveBeenCalledWith("/api/tasks", {
       params: { query: { store: "shared" } },
-      body: { title: "new", kind: "task", parent: "P" },
-    });
-    expect(d.api.POST).toHaveBeenNthCalledWith(2, "/api/tasks/{id}/move", {
-      params: { path: { id: "N1" }, query: { store: "shared" } },
-      body: { after: "T1" },
+      body: { title: "new", kind: "task", parent: "P", after: "T1" },
     });
     expect(t.ulid).toBe("N1");
   });
 
-  it("moves even after the last row shown: the filter may hide later siblings", async () => {
-    const d = deps();
-    await createBelow(d, { ...base, after: "T9" });
-    expect(d.api.POST).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not move when it goes to the end of the list", async () => {
+  it("names no position when it goes to the end of the list", async () => {
     const d = deps();
     await createBelow(d, { ...base, after: null });
-    expect(d.api.POST).toHaveBeenCalledTimes(1);
+    expect(d.api.POST).toHaveBeenCalledWith("/api/tasks", {
+      params: { query: { store: "shared" } },
+      body: { title: "new", kind: "task", parent: "P" },
+    });
   });
 
   it("names the workspace when there is no parent", async () => {
