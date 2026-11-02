@@ -1,0 +1,3 @@
+minimumReleaseAgeExclude:
+  - '@tanstack/svelte-virtual@3.13.51'
+  - '@tanstack/virtual-core@3.19.10'

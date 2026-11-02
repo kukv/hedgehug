@@ -1,5 +1,7 @@
 [tools]
 "github:gotestyourself/gotestsum" = "1.13.0"
+node = "24.22.1"
+pnpm = "12.16.1"
 
 [env]
 # Without -trimpath the build cache keys the packages of this module by their

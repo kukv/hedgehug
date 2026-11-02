@@ -48,3 +48,8 @@ dist/
 
 ### build ###
 /cmd/hedgehug/hedgehug
+
+### web ###
+node_modules/
+/web/test-results/
+/web/playwright-report/

@@ -2,5 +2,12 @@
   "extends": [
     "github>bright-room/renovate-config",
     "github>bright-room/renovate-config:go"
+  ],
+  "packageRules": [
+    {
+      "description": "pnpm is pinned in mise.toml and in web/package.json (packageManager); update both in one PR",
+      "matchDepNames": ["pnpm"],
+      "groupName": "pnpm"
+    }
   ]
 }
