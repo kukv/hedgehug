@@ -16,6 +16,7 @@ import (
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/mount"
+	"github.com/kukv/hedgehug/internal/plural"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -535,10 +536,7 @@ func InboxContent(ix *index.Index, it inbox.Item, storeName string, manyStores b
 			Replayed int    `json:"replayed"`
 		}
 		_ = json.Unmarshal(it.Detail, &d) // an item that does not decode tells no store
-		changes := fmt.Sprintf("%d unpushed changes", d.Replayed)
-		if d.Replayed == 1 {
-			changes = "1 unpushed change"
-		}
+		changes := plural.Count(d.Replayed, "unpushed change")
 		return fmt.Sprintf("the history rewrite of %s was taken in (%s put back)", d.Store, changes)
 	case inbox.PurgedChange:
 		id := it.ID

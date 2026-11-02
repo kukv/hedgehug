@@ -62,6 +62,24 @@ func TestLs(t *testing.T) {
 
 // broken is in every task for --format, empty when the task is not broken,
 // so that {{if .broken}} works on a key that must be there.
+func TestLsHelpExplainsATermThatStartsWithADash(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	out := te.ok("ls", "--help")
+	want := "A term that starts with - (a negation, such as -status:done) is read as a\nflag; put it after --: hedgehug ls -- -status:done"
+	if !strings.Contains(out, want) {
+		t.Errorf("ls --help lacks the note about -:\n%s", out)
+	}
+	// and what it says works
+	todo := te.addJSON("still open")
+	done := te.addJSON("finished")
+	te.ok("done", done.ID)
+	got := te.ok("ls", "--ulids-only", "--", "-status:done")
+	if !strings.Contains(got, todo.ULID) || strings.Contains(got, done.ULID) {
+		t.Errorf("ls -- -status:done = %q; want only %s", got, todo.ULID)
+	}
+}
+
 func TestLsFormatBroken(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)

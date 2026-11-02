@@ -17,6 +17,7 @@ import (
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/merge"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/plural"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 	"github.com/kukv/hedgehug/internal/sync"
@@ -199,7 +200,7 @@ func checkInbox(dir string) []Finding {
 	if waiting > 0 {
 		out = append(out, Finding{
 			Check: "inbox", Where: inbox.RecordsPath,
-			Msg:  fmt.Sprintf("%d merge driver records are not in the inbox yet", waiting),
+			Msg:  fmt.Sprintf("%s %s not in the inbox yet", plural.Count(waiting, "merge driver record"), plural.Pick(waiting, "is", "are")),
 			Hint: "run hedgehug inbox",
 		})
 	}

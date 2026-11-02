@@ -1,7 +1,7 @@
 == alpha
 <ULID-1>: in alpha (AA-1) and bravo-long (BB-1); remove the one not needed with hedgehug rm and hedgehug purge --older-than 0d --store <store> (warning)
-1 problems
+1 problem
 
 == bravo-long
 <ULID-1>: in alpha (AA-1) and bravo-long (BB-1); remove the one not needed with hedgehug rm and hedgehug purge --older-than 0d --store <store> (warning)
-1 problems
+1 problem

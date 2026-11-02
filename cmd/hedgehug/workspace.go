@@ -9,6 +9,7 @@ import (
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/plural"
 )
 
 func (a *app) workspaceCmd() *cobra.Command {
@@ -95,7 +96,7 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 		return a.printWorkspace(r.Index, w, "")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Changed the id prefix of %s to %s (%s); renumbered %d tasks\n", w.Name, w.IDPrefix, w.ULID, r.Renumbered)
+	fmt.Fprintf(&b, "Changed the id prefix of %s to %s (%s); renumbered %s\n", w.Name, w.IDPrefix, w.ULID, plural.Count(r.Renumbered, "task"))
 	for _, c := range r.IDs {
 		fmt.Fprintf(&b, "  %s → %s\n", r.Index.QualifyID(c.Old), r.Index.QualifyID(c.New))
 	}

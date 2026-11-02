@@ -16,6 +16,7 @@ import (
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/merge"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/plural"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -390,7 +391,7 @@ func (u *undoer) workspace(ulid model.ULID, ours, merged []byte) error {
 			return nil
 		}
 		if n := CountTasks(u.ix, ulid, true); n > 0 {
-			return newErr(KindConflict, "undo.blocked", fmt.Errorf("the workspace still has %d tasks; move them with hedgehug mv --workspace, or delete them with hedgehug rm and remove them with hedgehug purge --older-than 0d --store <store>", n))
+			return newErr(KindConflict, "undo.blocked", fmt.Errorf("the workspace still has %s; move them with hedgehug mv --workspace, or delete them with hedgehug rm and remove them with hedgehug purge --older-than 0d --store <store>", plural.Count(n, "task")))
 		}
 		u.res.Changed = true
 		return u.tx.RemoveWorkspace(ulid)

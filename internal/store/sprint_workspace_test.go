@@ -106,7 +106,7 @@ func TestRemoveWorkspaceWithSprintOrRelease(t *testing.T) {
 			t.Fatal(err)
 		}
 		_, err = s.Update(Op{Name: "workspace", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveWorkspace(other) })
-		if err == nil || !strings.Contains(err.Error(), "still has 1 "+what) {
+		if err == nil || !strings.Contains(err.Error(), "still has 1 "+strings.TrimSuffix(what, "s")) {
 			t.Errorf("%s: err = %v, want a refusal that says the workspace still has 1 %s", what, err, what)
 		}
 		if _, err := s.Workspace(other); err != nil {

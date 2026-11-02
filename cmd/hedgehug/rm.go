@@ -7,6 +7,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/plural"
 )
 
 func (a *app) rmCmd() *cobra.Command {
@@ -66,12 +67,8 @@ func (a *app) printAffected(ix *index.Index, e *index.Entry, targets []*index.En
 		return a.printJSON(out)
 	}
 	line := fmt.Sprintf("%s %s %s", verb, a.style().id(ops.TaskLabel(ix, e)), e.Title)
-	switch n := len(targets) - 1; n {
-	case 0:
-	case 1:
-		line += " and 1 task under it"
-	default:
-		line += fmt.Sprintf(" and %d tasks under it", n)
+	if n := len(targets) - 1; n > 0 {
+		line += " and " + plural.Count(n, "task") + " under it"
 	}
 	_, err := fmt.Fprintln(a.stdout, line)
 	return err

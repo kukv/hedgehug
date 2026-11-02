@@ -15,6 +15,7 @@ import (
 	"github.com/kukv/hedgehug/internal/config"
 	hhctx "github.com/kukv/hedgehug/internal/context"
 	"github.com/kukv/hedgehug/internal/gitrepo"
+	"github.com/kukv/hedgehug/internal/plural"
 )
 
 // Candidate is a store that StoreDiscover offers. Account is the account that
@@ -96,7 +97,7 @@ func (ss *Session) StoreMount(cands []Candidate) (MountResult, error) {
 		names[i] = f.Name
 	}
 	return res, newErr(KindInvalid, "store.mount_failed",
-		fmt.Errorf("%d of %d stores could not be added: %s", len(res.Failed), len(cands), strings.Join(names, ", ")),
+		fmt.Errorf("%d of %s could not be added: %s", len(res.Failed), plural.Count(len(cands), "store"), strings.Join(names, ", ")),
 		"failed", names)
 }
 

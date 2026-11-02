@@ -10,6 +10,7 @@ import (
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/mount"
+	"github.com/kukv/hedgehug/internal/plural"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 	"github.com/kukv/hedgehug/internal/sync"
@@ -176,7 +177,7 @@ func (ss *Session) MoveStore(in MoveStoreInput) (MoveStoreResult, error) {
 		return MoveStoreResult{}, err
 	}
 	if !in.Yes {
-		ce := confirmRequired(fmt.Sprintf("move %d tasks to %s", len(w.tasks), j.toName))
+		ce := confirmRequired(fmt.Sprintf("move %s to %s", plural.Count(len(w.tasks), "task"), j.toName))
 		ce.Args["plan"] = w.plan.View()
 		return MoveStoreResult{}, &MoveConfirmError{Confirm: ce, Plan: w.plan}
 	}
