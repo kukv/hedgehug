@@ -8,7 +8,8 @@
     kindLabel: string; // "タスク"
     ready?: boolean; // false while the schema of the store is not read: the title waits
     onstart: () => void;
-    onsubmit: (title: string) => void | Promise<void>;
+    // false: the task was not made, so the title stays
+    onsubmit: (title: string) => boolean | Promise<boolean>;
     oncancel: () => void;
   };
   let {
@@ -34,8 +35,7 @@
     if (busy || !ready) return;
     busy = true;
     try {
-      await onsubmit(t);
-      title = "";
+      if ((await onsubmit(t)) !== false) title = "";
     } finally {
       busy = false;
     }

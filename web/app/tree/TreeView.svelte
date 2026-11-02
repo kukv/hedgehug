@@ -217,12 +217,17 @@
     selection.set(ulid);
   }
   const FOCUS_FRAMES = 20;
+  // Each call takes a number; a call that is no longer the latest gives up its wait.
+  let focusSeq = 0;
   async function focusRow(ulid: string) {
+    const seq = ++focusSeq;
     const i = items.findIndex((it) => it.type === "row" && it.row.ulid === ulid);
     if (i >= 0) vinst?.scrollToIndex(i);
     await tick();
     // A long list draws the row after the window moves: wait a few frames for it.
     for (let frame = 0; ; frame++) {
+      // Another row was asked for, or the add row opened and took the focus: leave it be.
+      if (seq !== focusSeq || adding) return;
       const el = scroller?.querySelector<HTMLElement>(`[data-ulid="${ulid}"]`);
       if (el) {
         el.focus();
@@ -376,9 +381,10 @@
     adding = a;
   }
 
-  async function submitAdd(title: string) {
+  // submitAdd says whether the task was made: the title typed stays when it was not.
+  async function submitAdd(title: string): Promise<boolean> {
     const a = adding;
-    if (!a || !store || !workspace || !schema) return;
+    if (!a || !store || !workspace || !schema) return false;
     const parent = a.parent ? taskOf(a.parent) : undefined;
     const kind = pickKind(schema, parent?.kind ?? null);
     if (!kind) {
@@ -386,7 +392,7 @@
         message: `${parent ? `${kindLabel(schema, parent.kind)}の下` : "ルート"}に置ける種類がありません（${store} の schema.yaml の kinds）`,
       });
       adding = null;
-      return;
+      return true;
     }
     try {
       const created = await createBelow(c, {
@@ -400,8 +406,10 @@
       select(created.ulid);
       // keep going below the new row, as an outliner does
       adding = { after: created.ulid, parent: a.parent, depth: a.depth };
+      return true;
     } catch (err) {
       toast({ message: errorMessage(err) });
+      return false;
     }
   }
 

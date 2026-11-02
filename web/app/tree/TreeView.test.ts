@@ -426,6 +426,39 @@ describe("TreeView", () => {
     });
   });
 
+  it("keeps the title and the focus when the task cannot be made", async () => {
+    const { api } = setup();
+    api.POST.mockRejectedValue(new Error("書き込めません"));
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const row = screen.getByText("API v2 への移行").closest('[role="treeitem"]') as HTMLElement;
+    await fireEvent.click(row);
+    await fireEvent.keyDown(row, { key: "Enter" });
+    const input = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
+    await fireEvent.input(input, { target: { value: "残る" } });
+    await fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(input).toHaveValue("残る"));
+    expect(input).toHaveFocus();
+  });
+
+  it("lets a late wait for a row give way to a newer one", async () => {
+    setup({ many: 250 });
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const first = screen.getAllByRole("treeitem")[0] as HTMLElement;
+    await fireEvent.click(first);
+    selection.set("M100");
+    h.vdelay = 80;
+    await fireEvent.keyDown(first, { key: "ArrowDown" }); // M101, drawn after 80ms
+    selection.set("M200");
+    h.vdelay = 10;
+    await fireEvent.keyDown(first, { key: "ArrowUp" }); // M199, drawn after 10ms
+    await waitFor(() => expect(document.activeElement?.getAttribute("data-ulid")).toBe("M199"));
+    // The first request draws its window late (and moves the mock window back): it must not
+    // then take the focus for M101.
+    await new Promise((r) => setTimeout(r, 200));
+    expect(document.activeElement?.getAttribute("data-ulid")).not.toBe("M101");
+  });
+
   it("says why when the project cannot be shown", () => {
     const detailError = Object.assign(Object.create(ApiError.prototype), {
       status: 404,
