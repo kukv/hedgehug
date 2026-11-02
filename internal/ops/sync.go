@@ -84,8 +84,10 @@ func (ss *Session) Sync(all, explicit bool) ([]SyncReport, error) {
 			broken = append(broken, e.Name)
 			continue
 		}
-		if _, err := ss.openStoreAt(e.Path); err != nil {
+		if s, err := ss.openStoreAt(e.Path); err != nil {
 			broken = append(broken, e.Name)
+		} else {
+			_ = s.Repo().Close()
 		}
 	}
 	defer ss.muteOpenWarnings(broken)()
@@ -119,6 +121,7 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 	if err != nil {
 		return r, err
 	}
+	defer func() { _ = s.Repo().Close() }()
 	opt, err := ss.SyncOptions(c, e)
 	if err != nil {
 		return r, err
@@ -254,6 +257,7 @@ func (ss *Session) storeStatus(e config.StoreEntry) StoreStatus {
 		x.Error = err.Error()
 		return x
 	}
+	defer func() { _ = s.Repo().Close() }()
 	st, err := sync.ReadState(s)
 	if err != nil {
 		x.Error = err.Error()
@@ -312,6 +316,7 @@ func (ss *Session) SyncBackground(log io.Writer) error {
 	if err != nil {
 		return backgroundFailed(ss, log, e.Name, err)
 	}
+	defer func() { _ = s.Repo().Close() }()
 	log = sync.BoundLog(s, log)
 	opt, err := ss.SyncOptions(c, e)
 	if err == nil {
@@ -374,7 +379,8 @@ func (ss *Session) BeforeCommand(start func(s *store.Store, name string) error, 
 			report(e.Name, msg)
 		}
 		if st, err := sync.ReadState(s); err == nil && sync.Due(st, ss.Now(), cfg.Sync.Interval) {
-			_ = start(s, e.Name)
+			_ = start(s, e.Name) // starts a process of its own; it does not keep s
 		}
+		_ = s.Repo().Close()
 	}
 }

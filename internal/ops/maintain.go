@@ -47,6 +47,7 @@ func (ss *Session) SchemaCheck() ([]doctor.Finding, error) {
 		}
 		return nil, err
 	}
+	defer func() { _ = s.Repo().Close() }()
 	// plain ids: the report is the store's own, under its heading
 	ix, err := index.Open(s)
 	if err != nil {
@@ -236,8 +237,10 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 	// The reports tell of a store that does not open; the mount need not.
 	var broken []string
 	for _, e := range entries {
-		if _, err := ss.openStoreAt(e.Path); err != nil {
+		if s, err := ss.openStoreAt(e.Path); err != nil {
 			broken = append(broken, e.Name)
+		} else {
+			_ = s.Repo().Close()
 		}
 	}
 	defer ss.muteOpenWarnings(broken)()
@@ -298,6 +301,7 @@ func (ss *Session) doctorFix(c *config.Config, e config.StoreEntry) ([]Fixed, er
 	if err != nil {
 		return nil, nil
 	}
+	defer func() { _ = s.Repo().Close() }()
 	repaired, err := ss.fixStore(c, e, s)
 	var ro *ReadOnlyError
 	switch {
@@ -320,6 +324,9 @@ func (ss *Session) doctorStore(e config.StoreEntry, only bool, repaired []Fixed,
 	// A store that does not open is told of by the findings, which say why;
 	// its references are not looked at.
 	opened, openErr := ss.openStoreAt(e.Path)
+	if openErr == nil {
+		defer func() { _ = opened.Repo().Close() }()
+	}
 	fs, err := doctor.Run(e.Path)
 	if err != nil {
 		return DoctorReport{}, err
