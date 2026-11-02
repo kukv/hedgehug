@@ -1,11 +1,12 @@
-import { render, screen, waitFor } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { tick } from "svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { schema, task } from "./fixtures";
 
 type Opts = {
   ulid: string;
+  openChildren: boolean;
   onDragStart: () => void;
-  onDragEnd: () => void;
   onOver: (place: string | null, source: string | null) => void;
   onDrop: (source: string, place: string) => void;
 };
@@ -13,6 +14,8 @@ const h = vi.hoisted(() => ({
   core: undefined as unknown,
   toast: vi.fn(),
   rows: new Map<string, unknown>(),
+  attached: 0,
+  dragEnd: undefined as undefined | (() => void),
 }));
 
 vi.mock("../context", () => ({ core: () => h.core }));
@@ -33,8 +36,13 @@ vi.mock("./dnd", async (orig) => {
   const real = await orig<typeof import("./dnd")>();
   return {
     ...real,
-    rowDnd: (o: Opts) => () => {
-      h.rows.set(o.ulid, o);
+    rowDnd: (get: () => Opts) => () => {
+      h.attached++;
+      h.rows.set(get().ulid, get());
+      return () => {};
+    },
+    treeDragEnd: (onEnd: () => void) => () => {
+      h.dragEnd = onEnd;
       return () => {};
     },
     treeAutoScroll: () => () => () => {},
@@ -51,12 +59,13 @@ function setup() {
     ["E8", task("E8", "epic", "P", { id: "REL-8", title: "リリース作業" })],
     ["T7", task("T7", "task", "P", { id: "REL-7", title: "スキーマを再生成" })],
     ["T9", task("T9", "task", "P", { id: "REL-9", title: "負荷試験" })],
+    ["T1", task("T1", "task", "E8", { id: "REL-1", title: "子" })],
   ]);
   const roots = [
     {
       ulid: "P",
       children: [
-        { ulid: "E8", children: [] },
+        { ulid: "E8", children: [{ ulid: "T1", children: [] }] },
         { ulid: "T7", children: [] },
         { ulid: "T9", children: [] },
       ],
@@ -99,13 +108,49 @@ const row = (u: string) => h.rows.get(u) as Opts;
 beforeEach(() => {
   h.toast.mockReset();
   h.rows.clear();
+  h.attached = 0;
+  h.dragEnd = undefined;
 });
 
 describe("TreeView drag and drop", () => {
   it("registers every row for dragging", () => {
     setup();
     render(TreeView, { view: { kind: "project", ulid: "P" } });
-    expect([...h.rows.keys()].sort()).toEqual(["E8", "T7", "T9"]);
+    expect([...h.rows.keys()].sort()).toEqual(["E8", "T1", "T7", "T9"]);
+  });
+
+  it("tells the row whether it is open with children", () => {
+    setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    expect(row("E8").openChildren).toBe(true);
+    expect(row("T7").openChildren).toBe(false);
+  });
+
+  it("attaches each row once, however the screen is redrawn", async () => {
+    setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const n = h.attached;
+    row("T7").onOver("after", "T9");
+    row("T7").onOver(null, null);
+    await tick();
+    expect(h.attached).toBe(n);
+  });
+
+  it("clears the drag state when the drag ends anywhere", async () => {
+    setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    row("T9").onDragStart();
+    row("T7").onOver("child", "T9");
+    const el = screen.getByText("負荷試験").closest('[role="treeitem"]');
+    await waitFor(() => expect(el?.className).toContain("dragging"));
+    await waitFor(() => expect(el).not.toHaveAttribute("data-drop", "reject"));
+    h.dragEnd?.();
+    await waitFor(() => expect(el?.className).not.toContain("dragging"));
+    await waitFor(() =>
+      expect(screen.getByText("スキーマを再生成").closest('[role="treeitem"]')).not.toHaveAttribute(
+        "data-drop",
+      ),
+    );
   });
 
   it("marks the row a drop would be refused on, and explains why", async () => {
@@ -176,5 +221,53 @@ describe("TreeView drag and drop", () => {
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     row("E8").onDrop("T9", "before");
     await waitFor(() => expect(h.toast).toHaveBeenCalled());
+    expect(h.toast.mock.calls[0]?.[0].message).toContain("ここには移せません");
+    expect(h.toast.mock.calls[0]?.[0].message).toContain("x is not under the same parent");
+  });
+
+  it("says nothing and sends nothing for a drop on itself", async () => {
+    const { api } = setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    row("T7").onDrop("T7", "child");
+    await tick();
+    expect(api.POST).not.toHaveBeenCalled();
+    expect(h.toast).not.toHaveBeenCalled();
+  });
+
+  it("does not open the new parent when the move fails", async () => {
+    const { api } = setup();
+    api.POST.mockResolvedValue({
+      error: { type: "move.invalid", title: "Invalid", status: 422, detail: "x" },
+      response: new Response(null, { status: 422 }),
+    });
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    // fold E8, then drop T9 into it
+    await fireEvent.click(screen.getByRole("button", { name: /折りたたむ: リリース作業/ }));
+    expect(screen.queryByText("子")).toBeNull();
+    row("E8").onDrop("T9", "child");
+    await waitFor(() => expect(h.toast).toHaveBeenCalled());
+    expect(screen.queryByText("子")).toBeNull();
+  });
+
+  it("opens the new parent once the move has gone through", async () => {
+    const { api } = setup();
+    api.POST.mockResolvedValue(ok({ task: task("T9", "task", "E8"), commit: "c1" }));
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    await fireEvent.click(screen.getByRole("button", { name: /折りたたむ: リリース作業/ }));
+    expect(screen.queryByText("子")).toBeNull();
+    row("E8").onDrop("T9", "child");
+    expect(await screen.findByText("子")).toBeInTheDocument();
+  });
+
+  it("sends root: true next to a top-level task", async () => {
+    const { api } = setup();
+    api.POST.mockResolvedValue(ok({ task: task("E8", "epic", null), commit: "c1" }));
+    render(TreeView, { view: { kind: "workspace", store: "shared", ulid: "W1" } });
+    row("P").onDrop("E8", "after");
+    await waitFor(() => expect(api.POST).toHaveBeenCalled());
+    expect(api.POST).toHaveBeenCalledWith("/api/tasks/{id}/move", {
+      params: { path: { id: "E8" }, query: { store: "shared" } },
+      body: { root: true, after: "P" },
+    });
   });
 });

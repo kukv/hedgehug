@@ -18,21 +18,14 @@ const all = [
 const map = new Map(all.map((t) => [t.ulid, t]));
 const taskOf = (u: string) => map.get(u);
 const at = (u: string) => map.get(u) as NonNullable<ReturnType<typeof taskOf>>;
-const siblings = ["E1", "T7", "E8"]; // under P, in order
 
-function decide(
-  dragged: string,
-  target: string,
-  place: "before" | "after" | "child",
-  sib = siblings,
-) {
+function decide(dragged: string, target: string, place: "before" | "after" | "child") {
   return dropDecision({
     dragged: at(dragged),
     target: at(target),
     place,
     schema,
     taskOf,
-    siblings: sib,
   });
 }
 
@@ -63,12 +56,11 @@ describe("dropDecision: where the task goes", () => {
         place: "after",
         schema,
         taskOf,
-        siblings: ["R1"],
       }),
     ).toEqual({ ok: true, to: { root: true, after: "R1" } });
   });
   it("moves among the siblings of another parent", () => {
-    expect(decide("T8", "T1", "before", ["T1", "T2"])).toEqual({
+    expect(decide("T8", "T1", "before")).toEqual({
       ok: true,
       to: { parent: "E1", before: "T1" },
     });
@@ -87,7 +79,7 @@ describe("dropDecision: what it refuses", () => {
   });
   it("refuses a place whose parent is a task when the kind needs another parent", () => {
     // before T8: the parent would be T7, a task
-    expect(decide("E8", "T8", "before", ["T8"])).toMatchObject({
+    expect(decide("E8", "T8", "before")).toMatchObject({
       ok: false,
       title: "エピックはタスクの下に置けません",
     });
@@ -101,7 +93,6 @@ describe("dropDecision: what it refuses", () => {
         place: "child",
         schema,
         taskOf,
-        siblings: [],
       }),
     ).toMatchObject({ ok: false, silent: false, title: "別の Store のタスクの下には置けません" });
     expect(
@@ -111,7 +102,6 @@ describe("dropDecision: what it refuses", () => {
         place: "after",
         schema,
         taskOf,
-        siblings: [],
       }),
     ).toMatchObject({ ok: false, title: "別の Store の並びには置けません" });
   });
@@ -126,7 +116,6 @@ describe("dropDecision: what it refuses", () => {
         place: "child",
         schema,
         taskOf,
-        siblings: [],
       }),
     ).toMatchObject({ ok: false, silent: false, title: "別のワークスペースには置けません" });
   });
@@ -136,7 +125,7 @@ describe("dropDecision: what it refuses", () => {
       silent: false,
       title: "自分の子孫の下には置けません",
     });
-    expect(decide("E1", "T1", "before", ["T1", "T2"])).toMatchObject({
+    expect(decide("E1", "T1", "before")).toMatchObject({
       ok: false,
       title: "自分の子孫の下には置けません",
     });
@@ -153,7 +142,6 @@ describe("dropDecision: what it refuses", () => {
         place: "child",
         schema: undefined,
         taskOf,
-        siblings,
       }),
     ).toMatchObject({ ok: false, silent: false, title: "少し待ってからやり直してください" });
   });
@@ -166,7 +154,6 @@ describe("dropDecision: what it refuses", () => {
         place: "after",
         schema,
         taskOf,
-        siblings: ["O1"],
       }),
     ).toMatchObject({ ok: false, title: "置き先の親を読み込めていません" });
   });
@@ -177,13 +164,10 @@ describe("dropDecision: what it ignores", () => {
     expect(decide("T7", "T7", "child")).toMatchObject({ ok: false, silent: true });
     expect(decide("T7", "T7", "before")).toMatchObject({ ok: false, silent: true });
   });
-  it("ignores a move to where the task already is", () => {
-    // the order is E1, T7, E8
-    expect(decide("T7", "E1", "after")).toMatchObject({ ok: false, silent: true });
-    expect(decide("T7", "E8", "before")).toMatchObject({ ok: false, silent: true });
-  });
-  it("does not ignore a real reorder", () => {
-    expect(decide("T7", "E1", "before")).toEqual({ ok: true, to: { parent: "P", before: "E1" } });
-    expect(decide("T7", "E8", "after")).toEqual({ ok: true, to: { parent: "P", after: "E8" } });
+  it("leaves a move to where the task already is to the server", () => {
+    // The screen may list only some of the siblings, so it cannot tell.
+    expect(decide("T7", "E1", "after")).toEqual({ ok: true, to: { parent: "P", after: "E1" } });
+    expect(decide("T7", "E8", "before")).toEqual({ ok: true, to: { parent: "P", before: "E8" } });
+    expect(decide("T8", "T7", "child")).toEqual({ ok: true, to: { parent: "T7" } });
   });
 });

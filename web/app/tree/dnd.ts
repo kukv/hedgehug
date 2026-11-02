@@ -2,6 +2,7 @@ import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
   draggable,
   dropTargetForElements,
+  monitorForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
 import {
@@ -22,13 +23,11 @@ export type DropInput = {
   place: DropPlace;
   schema: SchemaView | undefined;
   taskOf: (ulid: string) => TaskView | undefined;
-  // The ULIDs of the target's siblings as listed, the target included (and the
-  // dragged task, when it is one of them).
-  siblings: string[];
 };
 
-// silent: nothing to do and nothing to say (a drop on itself, or where the
-// task already is).
+// silent: nothing to do and nothing to say (a drop on itself). A move to where
+// the task already is is not judged here: the screen may list only some of the
+// siblings, and the server answers such a move without an error.
 export type DropDecision =
   | { ok: true; to: MoveArgs }
   | { ok: false; silent: boolean; title: string; reason: string };
@@ -90,14 +89,6 @@ export function dropDecision(i: DropInput): DropDecision {
   const rejection = checkParent(i.schema, dragged, parent ?? null);
   if (rejection) return refuse(rejection.title, rejection.reason);
 
-  if (place !== "child" && dragged.parent === target.parent) {
-    const from = i.siblings.indexOf(dragged.ulid);
-    const to = i.siblings.indexOf(target.ulid);
-    if (from >= 0 && to >= 0 && (place === "before" ? from + 1 === to : from - 1 === to)) {
-      return silent;
-    }
-  }
-
   if (place === "child") return { ok: true, to: { parent: target.ulid } };
   const next = place === "before" ? { before: target.ulid } : { after: target.ulid };
   return {
@@ -123,48 +114,67 @@ export function placeOf(ins: Instruction | null): DropPlace | null {
 
 const ROW = "tree-row";
 // One level of indentation, passed to the hitbox, which does not use it in the
-// standard mode.
+// modes used here.
 const INDENT = 26;
 
 export type RowDndOptions = {
   ulid: string;
   depth: number;
+  // The row has children and shows them: its lower part makes a child, as its
+  // middle does (a task put after it would land below its children).
+  openChildren: boolean;
   onDragStart: () => void;
-  onDragEnd: () => void;
   // The place a drop on this row would mean and the task being dragged; both
   // null when the pointer leaves.
   onOver: (place: DropPlace | null, sourceUlid: string | null) => void;
   onDrop: (sourceUlid: string, place: DropPlace) => void;
 };
 
-// rowDnd makes a row draggable and a drop target. Use it as {@attach rowDnd(o)}.
-export function rowDnd(o: RowDndOptions): Attachment<HTMLElement> {
+// rowDnd makes a row draggable and a drop target. Use it as {@attach rowDnd(get)}.
+// The options are read when needed, so one attachment serves the row for as
+// long as it lives, whatever the options become.
+export function rowDnd(get: () => RowDndOptions): Attachment<HTMLElement> {
   return (el) =>
     combine(
       draggable({
         element: el,
-        getInitialData: () => ({ type: ROW, ulid: o.ulid }),
-        onDragStart: o.onDragStart,
-        onDrop: o.onDragEnd,
+        getInitialData: () => ({ type: ROW, ulid: get().ulid }),
+        onDragStart: () => get().onDragStart(),
       }),
       dropTargetForElements({
         element: el,
         canDrop: ({ source }) => source.data.type === ROW,
         getData: ({ input, element }) =>
           attachInstruction(
-            { type: ROW, ulid: o.ulid },
-            { input, element, currentLevel: o.depth, indentPerLevel: INDENT, mode: "standard" },
+            { type: ROW, ulid: get().ulid },
+            {
+              input,
+              element,
+              currentLevel: get().depth,
+              indentPerLevel: INDENT,
+              mode: get().openChildren ? "expanded" : "standard",
+            },
           ),
         onDrag: ({ self, source }) =>
-          o.onOver(placeOf(extractInstruction(self.data)), String(source.data.ulid)),
-        onDragLeave: () => o.onOver(null, null),
+          get().onOver(placeOf(extractInstruction(self.data)), String(source.data.ulid)),
+        onDragLeave: () => get().onOver(null, null),
         onDrop: ({ self, source }) => {
           const place = placeOf(extractInstruction(self.data));
-          o.onOver(null, null);
-          if (place) o.onDrop(String(source.data.ulid), place);
+          get().onOver(null, null);
+          if (place) get().onDrop(String(source.data.ulid), place);
         },
       }),
     );
+}
+
+// treeDragEnd calls onEnd when the drag of a row ends, wherever it ends: dropped
+// outside the tree, cancelled, or with the dragged row gone from a long list.
+export function treeDragEnd(onEnd: () => void): Attachment<HTMLElement> {
+  return () =>
+    monitorForElements({
+      canMonitor: ({ source }) => source.data.type === ROW,
+      onDrop: onEnd,
+    });
 }
 
 // treeAutoScroll scrolls the list when a drag nears its edge.

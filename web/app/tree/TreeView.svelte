@@ -17,7 +17,14 @@
   import StoreBadge from "../ui/StoreBadge.svelte";
   import AddRow from "./AddRow.svelte";
   import { createBelow, moveTask, patchTask } from "./actions";
-  import { type DropDecision, type DropPlace, dropDecision, rowDnd, treeAutoScroll } from "./dnd";
+  import {
+    type DropDecision,
+    type DropPlace,
+    dropDecision,
+    rowDnd,
+    treeAutoScroll,
+    treeDragEnd,
+  } from "./dnd";
   import FilterBar from "./FilterBar.svelte";
   import { baseQuery, combine, hasTerm, NO_CANCELED, type QueryBase, withoutTerm } from "./filter";
   import {
@@ -422,8 +429,7 @@
     const dragged = taskOf(sourceUlid);
     const target = taskOf(targetUlid);
     if (!dragged || !target) return null;
-    const siblings = rows.filter((r) => r.parent === target.parent).map((r) => r.ulid);
-    return dropDecision({ dragged, target, place, schema, taskOf, siblings });
+    return dropDecision({ dragged, target, place, schema, taskOf });
   }
 
   function setOver(targetUlid: string, place: DropPlace | null, sourceUlid: string | null) {
@@ -447,8 +453,9 @@
       return;
     }
     try {
-      if (d.to.parent) toggle(d.to.parent, true);
       await moveTask(c, t, d.to);
+      // Show the new parent's children only once the task is there.
+      if (d.to.parent) toggle(d.to.parent, true);
     } catch (err) {
       toast({ message: errorMessage(err) });
     }
@@ -522,114 +529,117 @@
     onchange={(q) => (applied = q)}
   />
 
-  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-  <div
-    class="scroller"
-    role="tree"
-    aria-label="{crumbTitle} のタスク"
-    tabindex="-1"
-    bind:this={scroller}
-    {onkeydown}
-    {@attach treeAutoScroll()}
-  >
-    {#snippet entry(item: Item)}
-      {#if item.type === "row"}
-        <TreeRow
-          row={item.row}
-          {schema}
-          selected={selection.ulid === item.row.ulid}
-          focusable={rowFocus === item.row.ulid}
-          live={c.cache.live(item.row.ulid)}
-          blockedBy={openBlocker(item.row.task, taskOf, isClosed, blocked.has(item.row.ulid))}
-          onselect={() => select(item.row.ulid)}
-          ontoggle={() => toggle(item.row.ulid, !item.row.expanded)}
-          dragging={dragging === item.row.ulid}
-          dropMark={dropMarkOf(item.row.ulid)}
-          dnd={rowDnd({
-            ulid: item.row.ulid,
-            depth: item.row.depth,
-            onDragStart: () => (dragging = item.row.ulid),
-            onDragEnd: () => {
-              dragging = null;
-              over = null;
-            },
-            onOver: (place, source) => setOver(item.row.ulid, place, source),
-            onDrop: (source, place) => void dropOn(source, item.row.ulid, place),
-          })}
-        />
-      {:else}
-        <AddRow
-          editing={true}
-          depth={item.depth}
-          where={whereLabel}
-          kindLabel={schema && addKind ? kindLabel(schema, addKind) : ""}
-          ready={!!(store && workspace && schema)}
-          onstart={() => {}}
-          onsubmit={submitAdd}
-          oncancel={() => {
-            const back = adding?.after ?? selection.ulid;
-            adding = null;
-            if (back) void focusRow(back);
-          }}
-        />
+  <div class="body">
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <div
+      class="scroller"
+      role="tree"
+      aria-label="{crumbTitle} のタスク"
+      tabindex="-1"
+      bind:this={scroller}
+      {onkeydown}
+      {@attach treeAutoScroll()}
+      {@attach treeDragEnd(() => {
+        dragging = null;
+        over = null;
+      })}
+    >
+      {#snippet entry(item: Item)}
+        {#if item.type === "row"}
+          <TreeRow
+            row={item.row}
+            {schema}
+            selected={selection.ulid === item.row.ulid}
+            focusable={rowFocus === item.row.ulid}
+            live={c.cache.live(item.row.ulid)}
+            blockedBy={openBlocker(item.row.task, taskOf, isClosed, blocked.has(item.row.ulid))}
+            onselect={() => select(item.row.ulid)}
+            ontoggle={() => toggle(item.row.ulid, !item.row.expanded)}
+            dragging={dragging === item.row.ulid}
+            dropMark={dropMarkOf(item.row.ulid)}
+            dnd={rowDnd(() => ({
+              ulid: item.row.ulid,
+              depth: item.row.depth,
+              openChildren: item.row.hasChildren && item.row.expanded,
+              onDragStart: () => (dragging = item.row.ulid),
+              onOver: (place, source) => setOver(item.row.ulid, place, source),
+              onDrop: (source, place) => void dropOn(source, item.row.ulid, place),
+            }))}
+          />
+        {:else}
+          <AddRow
+            editing={true}
+            depth={item.depth}
+            where={whereLabel}
+            kindLabel={schema && addKind ? kindLabel(schema, addKind) : ""}
+            ready={!!(store && workspace && schema)}
+            onstart={() => {}}
+            onsubmit={submitAdd}
+            oncancel={() => {
+              const back = adding?.after ?? selection.ulid;
+              adding = null;
+              if (back) void focusRow(back);
+            }}
+          />
+        {/if}
+      {/snippet}
+
+      {#if projectError}
+        <p class="note" role="alert">{errorMessage(projectError)}</p>
+      {:else if loading && rows.length === 0}
+        <p class="note">読み込み中…</p>
+      {:else if rows.length === 0 && !adding && !treeError}
+        {#if noTasks}
+          <Empty variant="empty" {...emptyProps} />
+        {:else}
+          <Empty
+            variant="nomatch"
+            note={hasTerm(applied, NO_CANCELED) ? "中止を除外しています" : undefined}
+            onClear={() => (applied = "")}
+          />
+        {/if}
       {/if}
-    {/snippet}
 
-    {#if projectError}
-      <p class="note" role="alert">{errorMessage(projectError)}</p>
-    {:else if loading && rows.length === 0}
-      <p class="note">読み込み中…</p>
-    {:else if rows.length === 0 && !adding && !treeError}
-      {#if noTasks}
-        <Empty variant="empty" {...emptyProps} />
+      {#if virtualized}
+        <div class="vbox" style:height="{totalSize}px">
+          {#each windowed as v (v.index)}
+            {@const item = items[v.index]}
+            {#if item}
+              <div class="vrow" style:transform="translateY({v.start}px)">
+                {@render entry(item)}
+              </div>
+            {/if}
+          {/each}
+        </div>
       {:else}
-        <Empty
-          variant="nomatch"
-          note={hasTerm(applied, NO_CANCELED) ? "中止を除外しています" : undefined}
-          onClear={() => (applied = "")}
-        />
+        <div class="list">
+          {#each items as item (item.type === "row" ? item.row.ulid : "add")}
+            {@render entry(item)}
+          {/each}
+        </div>
       {/if}
-    {/if}
 
-    {#if virtualized}
-      <div class="vbox" style:height="{totalSize}px">
-        {#each windowed as v (v.index)}
-          {@const item = items[v.index]}
-          {#if item}
-            <div class="vrow" style:transform="translateY({v.start}px)">
-              {@render entry(item)}
-            </div>
-          {/if}
-        {/each}
-      </div>
-    {:else}
-      <div class="list">
-        {#each items as item (item.type === "row" ? item.row.ulid : "add")}
-          {@render entry(item)}
-        {/each}
-      </div>
-    {/if}
+      {#if !adding}
+        <div class="foot-add">
+          <AddRow
+            editing={false}
+            where={whereLabel}
+            kindLabel={schema && addKind ? kindLabel(schema, addKind) : ""}
+            onstart={() => startAdd({ after: null, parent: viewRoot, depth: 0 })}
+            onsubmit={submitAdd}
+            oncancel={() => {}}
+          />
+        </div>
+      {/if}
+    </div>
 
-    {#if !adding}
-      <div class="foot-add">
-        <AddRow
-          editing={false}
-          where={whereLabel}
-          kindLabel={schema && addKind ? kindLabel(schema, addKind) : ""}
-          onstart={() => startAdd({ after: null, parent: viewRoot, depth: 0 })}
-          onsubmit={submitAdd}
-          oncancel={() => {}}
-        />
-      </div>
+    {#if refusal && !refusal.ok}
+      <aside class="refusal" role="status">
+        <strong>{refusal.title}</strong>
+        <p>{refusal.reason}</p>
+      </aside>
     {/if}
   </div>
-
-  {#if refusal && !refusal.ok}
-    <aside class="refusal" role="status">
-      <strong>{refusal.title}</strong>
-      <p>{refusal.reason}</p>
-    </aside>
-  {/if}
 
   <footer class="keys">
     <span><kbd>Enter</kbd> 下に追加</span>
@@ -714,9 +724,14 @@
     color: var(--ink);
     font-weight: 600;
   }
-  .scroller {
+  .body {
+    position: relative;
     flex: 1 1 auto;
     min-height: 0;
+  }
+  .scroller {
+    box-sizing: border-box;
+    height: 100%;
     overflow: auto;
     padding: 0 1rem;
     outline: none;
@@ -762,7 +777,13 @@
     color: var(--ink-2);
   }
   .refusal {
-    margin: 0 1rem 0.5rem;
+    /* Over the list, not in the flow: showing it must not resize the scroller. */
+    position: absolute;
+    right: 1rem;
+    bottom: 0.5rem;
+    left: 1rem;
+    z-index: 1;
+    pointer-events: none;
     padding: 0.625rem 0.875rem;
     border: var(--hairline) solid var(--danger);
     border-radius: var(--radius-8);
