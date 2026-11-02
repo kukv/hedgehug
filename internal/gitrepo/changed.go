@@ -103,7 +103,7 @@ func (r *Repo) diffTrees(a, b *object.Tree, dir string, fn func(string)) error {
 			if sb, err = r.tree(eb.Hash); err != nil {
 				return err
 			}
-		} else if inB && !(inA && ea.Mode != filemode.Dir) {
+		} else if inB && (!inA || ea.Mode == filemode.Dir) {
 			fn(dir + n)
 		}
 		if sa != nil || sb != nil {

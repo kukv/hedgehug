@@ -11,6 +11,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
@@ -72,17 +73,85 @@ var ErrCanceled = errors.New("history index build canceled")
 // ErrNotIndexed: a commit asked about is not in the index.
 var ErrNotIndexed = errors.New("commit not in the history index")
 
+// rec is a Commit as the index keeps it: the strings are numbers into
+// History.strs, so that 100,000 of them take little memory and little time
+// to load.
+type rec struct {
+	hash      plumbing.Hash
+	sec       int64  // author time, Unix seconds
+	zone      int32  // its offset from UTC, seconds
+	gen       uint32 // as Commit.Gen
+	author    uint32
+	email     uint32
+	op        uint32
+	task      uint32
+	workspace uint32
+}
+
+// zones are the *time.Location of the offsets met, shared by all indexes.
+var zones sync.Map // int (seconds east of UTC) -> *time.Location
+
+func zoneOf(off int) *time.Location {
+	if z, ok := zones.Load(off); ok {
+		return z.(*time.Location)
+	}
+	z, _ := zones.LoadOrStore(off, time.FixedZone("", off))
+	return z.(*time.Location)
+}
+
 // History is the index of the commits of one store.
 type History struct {
-	repo    *gitrepo.Repo
-	tip     plumbing.Hash
-	commits []Commit // in the order they were added; indices are stable
-	byHash  map[plumbing.Hash]int
-	byPath  map[string][]int // indices into commits, ascending
+	repo   *gitrepo.Repo
+	tip    plumbing.Hash
+	recs   []rec    // in the order they were added; indices are stable
+	strs   []string // the strings of recs, in the order they were first met
+	strIdx map[string]uint32
+	// byHash is made when first needed (hashes), not when the index is
+	// loaded: most users of a loaded index never ask for a commit by hash.
+	byHash     map[plumbing.Hash]int
+	hashesOnce sync.Once
+	byPath     map[string][]int // indices into recs, ascending
 }
 
 func newHistory(repo *gitrepo.Repo) *History {
-	return &History{repo: repo, byHash: map[plumbing.Hash]int{}, byPath: map[string][]int{}}
+	return &History{repo: repo, byPath: map[string][]int{}}
+}
+
+// hashes returns the index of each commit by its hash.
+func (h *History) hashes() map[plumbing.Hash]int {
+	h.hashesOnce.Do(func() {
+		h.byHash = make(map[plumbing.Hash]int, len(h.recs))
+		for i, r := range h.recs {
+			h.byHash[r.hash] = i
+		}
+	})
+	return h.byHash
+}
+
+// intern returns the number of the string v in strs.
+func (h *History) intern(v string) uint32 {
+	if h.strIdx == nil {
+		h.strIdx = make(map[string]uint32, len(h.strs))
+		for i, s := range h.strs {
+			h.strIdx[s] = uint32(i)
+		}
+	}
+	if i, ok := h.strIdx[v]; ok {
+		return i
+	}
+	i := uint32(len(h.strs)) //nolint:gosec // few distinct strings
+	h.strs = append(h.strs, v)
+	h.strIdx[v] = i
+	return i
+}
+
+// commit is the Commit of the i-th record.
+func (h *History) commit(i int) Commit {
+	r := &h.recs[i]
+	return Commit{
+		Hash: r.hash, When: time.Unix(r.sec, 0).In(zoneOf(int(r.zone))), Gen: r.gen,
+		Author: h.strs[r.author], Email: h.strs[r.email], Op: h.strs[r.op], Task: h.strs[r.task], Workspace: h.strs[r.workspace],
+	}
 }
 
 // Open loads the index of s, brings it to HEAD and saves it.
@@ -130,12 +199,13 @@ func (h *History) newCommits(head plumbing.Hash) (added []gitrepo.LogEntry, reac
 		e    gitrepo.LogEntry
 		next int
 	}
+	known := h.hashes()
 	seen := map[plumbing.Hash]bool{}
 	visit := func(hash plumbing.Hash) (*frame, error) {
 		if hash == h.tip {
 			reached = true
 		}
-		if _, ok := h.byHash[hash]; ok || seen[hash] {
+		if _, ok := known[hash]; ok || seen[hash] {
 			return nil, nil
 		}
 		seen[hash] = true
@@ -177,6 +247,7 @@ func (h *History) add(added []gitrepo.LogEntry, opt Options) error {
 	if progress != nil && total > 0 {
 		progress(0, total) // so that whoever times the work starts at its start
 	}
+	known := h.hashes()
 	for i, e := range added {
 		select {
 		case <-opt.Cancel:
@@ -189,8 +260,8 @@ func (h *History) add(added []gitrepo.LogEntry, opt Options) error {
 		}
 		c := Commit{Hash: e.Hash, When: e.When, Gen: 1, Email: e.Author.Email}
 		for _, p := range e.Parents {
-			if pi, ok := h.byHash[p]; ok {
-				c.Gen = max(c.Gen, h.commits[pi].Gen+1)
+			if pi, ok := known[p]; ok {
+				c.Gen = max(c.Gen, h.recs[pi].gen+1)
 			}
 		}
 		c.Author, _ = e.Trailer("Hedgehug-Author")
@@ -206,9 +277,13 @@ func (h *History) add(added []gitrepo.LogEntry, opt Options) error {
 }
 
 func (h *History) put(c Commit, files []string) {
-	i := len(h.commits)
-	h.commits = append(h.commits, c)
-	h.byHash[c.Hash] = i
+	i := len(h.recs)
+	_, off := c.When.Zone()
+	h.recs = append(h.recs, rec{
+		hash: c.Hash, sec: c.When.Unix(), zone: int32(off), gen: c.Gen, //nolint:gosec // an offset is within a day
+		author: h.intern(c.Author), email: h.intern(c.Email), op: h.intern(c.Op), task: h.intern(c.Task), workspace: h.intern(c.Workspace),
+	})
+	h.hashes()[c.Hash] = i
 	for _, p := range files {
 		h.byPath[p] = append(h.byPath[p], i)
 	}
@@ -220,14 +295,14 @@ func (h *History) Tip() plumbing.Hash { return h.tip }
 
 // Has reports whether the commit c is in the index.
 func (h *History) Has(c plumbing.Hash) bool {
-	_, ok := h.byHash[c]
+	_, ok := h.hashes()[c]
 	return ok
 }
 
 func (h *History) sorted(idx []int) []Commit {
 	out := make([]Commit, len(idx))
 	for i, j := range idx {
-		out[i] = h.commits[j]
+		out[i] = h.commit(j)
 	}
 	slices.SortFunc(out, func(a, b Commit) int {
 		switch {
@@ -243,7 +318,7 @@ func (h *History) sorted(idx []int) []Commit {
 
 // All returns every commit, newest first.
 func (h *History) All() []Commit {
-	idx := make([]int, len(h.commits))
+	idx := make([]int, len(h.recs))
 	for i := range idx {
 		idx[i] = i
 	}
@@ -279,15 +354,15 @@ func (h *History) Task(u model.ULID) []Commit {
 
 // Authors returns the distinct non-empty Hedgehug-Author values, sorted.
 func (h *History) Authors() []string {
-	set := map[string]struct{}{}
-	for _, c := range h.commits {
-		if c.Author != "" {
-			set[c.Author] = struct{}{}
+	set := map[uint32]struct{}{}
+	for _, r := range h.recs {
+		if h.strs[r.author] != "" {
+			set[r.author] = struct{}{}
 		}
 	}
 	out := make([]string, 0, len(set))
 	for a := range set {
-		out = append(out, a)
+		out = append(out, h.strs[a])
 	}
 	slices.Sort(out)
 	return out

@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"maps"
 	"slices"
-	"time"
 
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -59,30 +58,33 @@ func putU(b *bytes.Buffer, v uint64) { b.Write(binary.AppendUvarint(b.AvailableB
 func putI(b *bytes.Buffer, v int64)  { b.Write(binary.AppendVarint(b.AvailableBuffer(), v)) }
 
 func (h *History) save(s *store.Store) {
-	var strs strTable
-	// The strings are numbered while the body is written, so the body goes
-	// to its own buffer and the table is written before it.
+	// The strings of the commits come first, as the index numbers them; the
+	// paths are numbered while the body is written, so the body goes to its
+	// own buffer and the table is written before it.
+	strs := strTable{list: slices.Clone(h.strs), idx: make(map[string]int, len(h.strs))}
+	for i, v := range h.strs {
+		strs.idx[v] = i
+	}
 	var body bytes.Buffer
-	putU(&body, uint64(len(h.commits)))
-	for _, c := range h.commits {
-		body.Write(c.Hash[:])
-		_, off := c.When.Zone()
-		putI(&body, c.When.Unix())
-		putI(&body, int64(off))
-		putU(&body, uint64(c.Gen))
-		for _, v := range []string{c.Author, c.Email, c.Op, c.Task, c.Workspace} {
-			putU(&body, uint64(strs.id(v)))
+	putU(&body, uint64(len(h.recs)))
+	for _, r := range h.recs {
+		body.Write(r.hash[:])
+		putI(&body, r.sec)
+		putI(&body, int64(r.zone))
+		putU(&body, uint64(r.gen))
+		for _, v := range []uint32{r.author, r.email, r.op, r.task, r.workspace} {
+			putU(&body, uint64(v))
 		}
 	}
 	putU(&body, uint64(len(h.byPath)))
 	// Sorted, so that the same index always gives the same bytes.
 	for _, p := range slices.Sorted(maps.Keys(h.byPath)) {
 		idx := h.byPath[p]
-		putU(&body, uint64(strs.id(p)))
+		putU(&body, uint64(strs.id(p))) //nolint:gosec // an index
 		putU(&body, uint64(len(idx)))
 		prev := 0
 		for _, i := range idx {
-			putU(&body, uint64(i-prev))
+			putU(&body, uint64(i-prev)) //nolint:gosec // ascending
 			prev = i
 		}
 	}
@@ -145,7 +147,7 @@ func (r *reader) count() int {
 		r.bad = true
 		return 0
 	}
-	return int(n)
+	return int(n) //nolint:gosec // at most len(r.b)
 }
 
 // load reads the saved index into h and reports whether it could. On false
@@ -164,32 +166,32 @@ func (h *History) load(s *store.Store) bool {
 	for i := range strs {
 		strs[i] = string(r.bytes(r.uvarint()))
 	}
-	str := func() string {
+	h.strs = strs
+	str := func() uint32 {
 		i := r.uvarint()
 		if i >= uint64(len(strs)) {
 			r.bad = true
-			return ""
+			return 0
 		}
-		return strs[i]
+		return uint32(i) //nolint:gosec // below len(strs)
 	}
 	n := r.count()
-	h.commits = make([]Commit, 0, n)
+	h.recs = make([]rec, 0, n)
 	for range n {
-		var c Commit
-		copy(c.Hash[:], r.bytes(hashLen))
-		sec := r.varint()
+		var c rec
+		copy(c.hash[:], r.bytes(hashLen))
+		c.sec = r.varint()
 		off := r.varint()
 		if off < -maxZoneOffset || off > maxZoneOffset {
 			return false
 		}
-		c.When = time.Unix(sec, 0).In(time.FixedZone("", int(off)))
-		c.Gen = uint32(r.uvarint())
-		c.Author, c.Email, c.Op, c.Task, c.Workspace = str(), str(), str(), str(), str()
+		c.zone = int32(off)
+		c.gen = uint32(r.uvarint()) //nolint:gosec // a generation
+		c.author, c.email, c.op, c.task, c.workspace = str(), str(), str(), str(), str()
 		if r.bad {
 			return false
 		}
-		h.byHash[c.Hash] = len(h.commits)
-		h.commits = append(h.commits, c)
+		h.recs = append(h.recs, c)
 	}
 	np := r.count()
 	for range np {
@@ -199,11 +201,11 @@ func (h *History) load(s *store.Store) bool {
 		prev := 0
 		for j := range m {
 			d := r.uvarint()
-			if (j > 0 && d == 0) || d >= uint64(len(h.commits)) {
+			if (j > 0 && d == 0) || d >= uint64(len(h.recs)) {
 				return false
 			}
-			prev += int(d)
-			if prev >= len(h.commits) {
+			prev += int(d) //nolint:gosec // below len(h.recs)
+			if prev >= len(h.recs) {
 				return false
 			}
 			idx = append(idx, prev)
@@ -211,14 +213,19 @@ func (h *History) load(s *store.Store) bool {
 		if r.bad {
 			return false
 		}
-		h.byPath[p] = idx
+		h.byPath[strs[p]] = idx
 	}
-	if r.bad || len(r.b) != 0 || len(h.byHash) != len(h.commits) {
+	if r.bad || len(r.b) != 0 {
 		return false
 	}
 	if h.tip.IsZero() {
-		return len(h.commits) == 0
+		return len(h.recs) == 0
 	}
-	_, ok := h.byHash[h.tip]
-	return ok
+	// the tip was the last commit added, or near it
+	for i := len(h.recs) - 1; i >= 0; i-- {
+		if h.recs[i].hash == h.tip {
+			return true
+		}
+	}
+	return false
 }
