@@ -9,7 +9,7 @@ export type Api = ReturnType<typeof createApi>;
 
 // ApiError is a problem+json response of the server. type is the Code of the
 // error (task.not_found...); args are its arguments; body is the whole
-// problem, for what args do not hold (purge.unconfirmed lists its targets).
+// problem, for what args do not hold (schema.violation lists what it broke).
 export class ApiError extends Error {
   readonly status: number;
   readonly type: string;

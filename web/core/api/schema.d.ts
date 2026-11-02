@@ -290,7 +290,7 @@ export interface paths {
         get: operations["get-task"];
         put?: never;
         post?: never;
-        /** Delete a task and the tasks under it (hh rm), or purge them (hh purge) */
+        /** Delete a task and the tasks under it (hh rm) */
         delete: operations["delete-task"];
         options?: never;
         head?: never;
@@ -537,8 +537,6 @@ export interface components {
             commit: string | null;
             /** @description The task and the tasks under it, as they are now */
             tasks?: components["schemas"]["TaskView"][] | null;
-            /** @description The tasks purged */
-            ulids?: string[] | null;
         };
         CommentEditInputBody: {
             /** @description The comment in Markdown */
@@ -1862,10 +1860,6 @@ export interface operations {
             query?: {
                 /** @description The store; without it, the one hedgehug picks as the CLI does */
                 store?: string;
-                /** @description Remove the files for good; the task must be deleted already */
-                purge?: boolean;
-                /** @description With purge: the ULIDs the user agreed to purge, comma-separated, as purge.unconfirmed listed them */
-                confirm?: string;
             };
             header?: never;
             path: {

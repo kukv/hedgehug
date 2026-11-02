@@ -65,11 +65,6 @@ describe("errorMessage", () => {
     );
   });
 
-  it("counts the targets of purge.unconfirmed", () => {
-    const targets = [{ ulid: "a" }, { ulid: "b" }];
-    expect(errorMessage(err("purge.unconfirmed", { targets }))).toContain("2 件");
-  });
-
   it("lists what a schema violation broke", () => {
     const m = errorMessage(
       err("schema.violation", {

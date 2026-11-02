@@ -14,13 +14,6 @@ components:
           type:
             - array
             - "null"
-        ulids:
-          description: The tasks purged
-          items:
-            type: string
-          type:
-            - array
-            - "null"
       required:
         - commit
       type: object
@@ -2333,20 +2326,6 @@ paths:
           schema:
             description: The ID, a former ID, or the ULID of the task
             type: string
-        - description: Remove the files for good; the task must be deleted already
-          explode: false
-          in: query
-          name: purge
-          schema:
-            description: Remove the files for good; the task must be deleted already
-            type: boolean
-        - description: "With purge: the ULIDs the user agreed to purge, comma-separated, as purge.unconfirmed listed them"
-          explode: false
-          in: query
-          name: confirm
-          schema:
-            description: "With purge: the ULIDs the user agreed to purge, comma-separated, as purge.unconfirmed listed them"
-            type: string
       responses:
         "200":
           content:
@@ -2360,7 +2339,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
           description: Error
-      summary: Delete a task and the tasks under it (hh rm), or purge them (hh purge)
+      summary: Delete a task and the tasks under it (hh rm)
       tags:
         - tasks
     get:
