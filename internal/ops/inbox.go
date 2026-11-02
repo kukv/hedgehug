@@ -83,6 +83,7 @@ func (ss *Session) openInboxStore(c *config.Config, e config.StoreEntry) (st Inb
 			_, err = box.Catch(c.Me(), head)
 		}
 		if err != nil {
+			_ = s.Repo().Close() // the caller gets no store to close
 			return InboxStore{}, nil, err
 		}
 	}
