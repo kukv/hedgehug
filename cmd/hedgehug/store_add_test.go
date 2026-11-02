@@ -135,6 +135,22 @@ func TestStoreRemoveDeletes(t *testing.T) {
 	}
 }
 
+// A directory that is already gone is only taken out of the config.
+func TestStoreRemoveOfADirectoryThatIsGone(t *testing.T) {
+	t.Parallel()
+	alice, _, _ := twoUsers(t)
+	dir := alice.storeDir("org")
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if out := alice.ok("store", "remove", "org"); out != "Removed store org from the config; "+dir+" was not there\n" {
+		t.Errorf("remove = %q", out)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("the directory came back: %v", err)
+	}
+}
+
 func TestStoreRemoveWithoutRemote(t *testing.T) {
 	t.Parallel()
 	te := newTestEnv(t)

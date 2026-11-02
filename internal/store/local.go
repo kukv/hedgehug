@@ -64,7 +64,7 @@ func (s *Store) WithLocalLock(name string, wait time.Duration, fn func() error) 
 	if err := validLocalName(name); err != nil {
 		return err
 	}
-	l, err := acquire(s.path(LocalDir+"/"+name), wait)
+	l, err := acquireStore(s.dir, s.path(LocalDir+"/"+name), wait)
 	if err != nil {
 		return err
 	}

@@ -92,6 +92,8 @@ func classify(err error) *Error {
 		return newErr(KindConflict, "workspace.taken", err)
 	case errors.Is(err, store.ErrLocked):
 		return newErr(KindConflict, "store.locked", err)
+	case errors.Is(err, store.ErrStoreGone):
+		return newErr(KindConflict, "store.gone", err)
 	case errors.Is(err, sync.ErrDirty):
 		return newErr(KindConflict, "sync.dirty", err)
 	case errors.Is(err, sync.ErrUnrelated):
