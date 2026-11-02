@@ -1,5 +1,6 @@
 import { type Api, unwrap } from "./api/client";
 import type { Connection } from "./connection";
+import { callAll } from "./listeners";
 
 // PeopleCache keeps the names that @ offers, by store: the people on the
 // tasks of the store and the authors of its commits (GET /api/people). A
@@ -56,7 +57,7 @@ export class PeopleCache {
         const old = this.names.get(store);
         if (old && old.length === next.length && old.every((n, i) => n === next[i])) return old;
         this.names.set(store, next);
-        for (const fn of [...this.subs]) fn();
+        callAll(this.subs);
         return next;
       })
       .finally(() => {

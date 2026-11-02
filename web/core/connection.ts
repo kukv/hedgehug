@@ -1,4 +1,5 @@
 import type { Api, Schemas } from "./api/client";
+import { callAll } from "./listeners";
 import { parseEventStream } from "./sse";
 
 export type ConnState = "connecting" | "open" | "reconnecting" | "down";
@@ -107,7 +108,7 @@ export class Connection {
   }
 
   private notify(): void {
-    for (const fn of [...this.subs]) this.guard(fn);
+    callAll(this.subs);
   }
 
   // guard runs one listener. A listener that throws must not break the

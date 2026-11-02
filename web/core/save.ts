@@ -1,6 +1,7 @@
 import { type Api, ApiError, type Schemas, unwrap } from "./api/client";
 import type { TaskCache } from "./cache";
 import type { Connection } from "./connection";
+import { callAll } from "./listeners";
 import { errorMessage } from "./messages";
 
 export type PatchField =
@@ -163,7 +164,7 @@ export class SaveController {
   }
 
   private notify(): void {
-    for (const fn of [...this.subs]) fn();
+    callAll(this.subs);
   }
 
   private async send(ulid: string): Promise<void> {

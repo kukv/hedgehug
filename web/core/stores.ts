@@ -1,6 +1,7 @@
 import { type Api, ApiError, type Schemas, type TaskView, unwrap } from "./api/client";
 import type { TaskCache } from "./cache";
 import type { Connection } from "./connection";
+import { callAll } from "./listeners";
 
 export type StoreTone =
   | "teal"
@@ -210,6 +211,6 @@ export class StoreDirectory {
     }
     const same = next.length === this.result.length && next.every((e, i) => e === this.result[i]);
     if (!same) this.result = next;
-    if (!same || force) for (const fn of [...this.subs]) fn();
+    if (!same || force) callAll(this.subs);
   }
 }

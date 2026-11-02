@@ -1,5 +1,6 @@
 import { type Api, type Schemas, unwrap } from "./api/client";
 import type { Connection } from "./connection";
+import { callAll } from "./listeners";
 
 export type SchemaView = Schemas["SchemaView"];
 export type KindDef = Schemas["KindDef"];
@@ -55,7 +56,7 @@ export class SchemaCache {
         if (this.sigs.get(store) === sig) return this.schemas.get(store) as SchemaView;
         this.schemas.set(store, s);
         this.sigs.set(store, sig);
-        for (const fn of [...this.subs]) fn();
+        callAll(this.subs);
         return s;
       })
       .finally(() => {

@@ -1,5 +1,6 @@
 import { type Api, ApiError, type ShowView, type TaskView, unwrap } from "./api/client";
 import type { Connection, TasksChanged } from "./connection";
+import { callAll } from "./listeners";
 
 export type LiveMark = { label: "CLI で更新 · 今" | "同期で更新 · 今"; until: number };
 export type ListQuery = { q: string; tree: boolean; store?: string };
@@ -450,6 +451,6 @@ export class TaskCache {
   private flush(): void {
     if (!this.dirty) return;
     this.dirty = false;
-    for (const fn of [...this.subs]) fn();
+    callAll(this.subs);
   }
 }

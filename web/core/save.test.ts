@@ -275,4 +275,18 @@ describe("SaveController", () => {
     expect(patches()).toHaveLength(2);
     expect(save.state("A").kind).toBe("saved");
   });
+
+  it("sends the PATCH and ends saved when a subscriber throws on every change", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { save, patches } = setup();
+    save.subscribe(() => {
+      throw new Error("subscriber");
+    });
+    save.edit("A", "shared", "title", "one");
+    await save.flush("A");
+    expect(patches()).toHaveLength(1);
+    expect(save.state("A").kind).toBe("saved");
+    expect(save.editing("A", "title")).toBe(false);
+    err.mockRestore();
+  });
 });
