@@ -39,9 +39,9 @@ func worktreeDir(t *testing.T, branch, url string) string {
 // branch from the HEAD of the worktree.
 func TestWorktreeFindsTheRepoAndItsOwnBranch(t *testing.T) {
 	t.Parallel()
-	w, set := newWorld(t)
+	w, _ := newWorld(t)
 	p := put(t, w.a, "Web release", project("github.com/org-a/web"))
-	set = openSet(t, w.a, w.b)
+	set := openSet(t, w.a, w.b)
 	dir := worktreeDir(t, "hh/WEB-1-login", "https://github.com/Org-A/Web.git")
 	if fi, err := os.Stat(filepath.Join(dir, ".git")); err != nil || fi.IsDir() {
 		t.Fatalf(".git of the worktree = %v, %v; want a file", fi, err)

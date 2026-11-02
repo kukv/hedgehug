@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
 
@@ -146,6 +147,8 @@ func TestConcurrentAddsGetDistinctIDs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// the test checks that no ID is given twice, not how long a writer waits
+	s.lockWait, other.lockWait = time.Minute, time.Minute
 	var wg sync.WaitGroup
 	tasks := make([]*model.Task, 20)
 	for i := range tasks {

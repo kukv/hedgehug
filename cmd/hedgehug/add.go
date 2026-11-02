@@ -45,7 +45,7 @@ func (a *app) addCmd() *cobra.Command {
 	f.StringVar(&before, "before", "", "put it just before this sibling (without --parent, under the sibling's parent)")
 	f.StringVar(&after, "after", "", "put it just after this sibling (without --parent, under the sibling's parent)")
 	f.StringVar(&body, "body", "", "the body, in Markdown")
-	f.BoolVar(&withRepo, "repo", false, "put the current repository on the task (a repo ID from its origin)")
+	f.BoolVar(&withRepo, "repo", false, "put the current repository on the task (the repo ID of its remote: origin, else another remote)")
 	f.StringArrayVarP(&props, "prop", "p", nil, "set a field or a property, as in hedgehug set (repeatable)")
 	return cmd
 }

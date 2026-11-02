@@ -12,8 +12,10 @@ import (
 func fakeStoreDir(t *testing.T) (dir, lock string) {
 	t.Helper()
 	dir = t.TempDir()
-	if err := os.Mkdir(filepath.Join(dir, ".git"), 0o750); err != nil {
-		t.Fatal(err)
+	for _, d := range []string{".git", ".hedgehug"} {
+		if err := os.Mkdir(filepath.Join(dir, d), 0o750); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return dir, filepath.Join(dir, ".hedgehug", "local", "lock")
 }
@@ -34,10 +36,11 @@ func TestAcquireStoreOfADirectoryThatIsGone(t *testing.T) {
 	}
 }
 
+// Serial: it replaces the package variable afterLockMiss.
+//
 // A writer that waits for the lock while the store is removed does not get
 // the lock of the file that is gone.
 func TestAcquireStoreWaitingWhileTheLockFileIsRemoved(t *testing.T) {
-	// Serial: it replaces the package variable afterLockMiss.
 	dir, lock := fakeStoreDir(t)
 	held, err := acquireStore(dir, lock, time.Second)
 	if err != nil {
@@ -64,6 +67,41 @@ func TestAcquireStoreWaitingWhileTheLockFileIsRemoved(t *testing.T) {
 	}
 	if err := <-errc; !errors.Is(err, ErrStoreGone) {
 		t.Fatalf("waiter: err = %v; want ErrStoreGone", err)
+	}
+}
+
+// A store whose .hedgehug directory is gone, as when it is removed between
+// the check and the lock, is not made again.
+func TestAcquireStoreMakesNoDirectoryOfARemovedStore(t *testing.T) {
+	t.Parallel()
+	dir, lock := fakeStoreDir(t)
+	if err := os.RemoveAll(filepath.Join(dir, ".hedgehug")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := acquireStore(dir, lock, time.Second); !errors.Is(err, ErrStoreGone) {
+		t.Fatalf("err = %v; want ErrStoreGone", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".hedgehug")); !os.IsNotExist(err) {
+		t.Errorf(".hedgehug was made again: %v", err)
+	}
+}
+
+// The unlocked writes of .hedgehug/local make the directories below
+// .hedgehug but never .hedgehug itself.
+func TestWriteLocalMakesNoDirectoryOfARemovedStore(t *testing.T) {
+	t.Parallel()
+	dir, _ := fakeStoreDir(t)
+	if err := WriteLocalIn(dir, "overwritten/x.json", []byte("{}")); err != nil {
+		t.Fatalf("with .hedgehug: %v", err)
+	}
+	if err := os.RemoveAll(filepath.Join(dir, ".hedgehug")); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteLocalIn(dir, "index.json", []byte("{}")); !errors.Is(err, ErrStoreGone) {
+		t.Fatalf("err = %v; want ErrStoreGone", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".hedgehug")); !os.IsNotExist(err) {
+		t.Errorf(".hedgehug was made again: %v", err)
 	}
 }
 

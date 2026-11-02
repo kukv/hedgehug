@@ -54,7 +54,7 @@ func TestAddInACloneGoesUnderItsProjectAndLinksTheRepoOnlyWithRepo(t *testing.T)
 	if repos := te.task(got.ULID).Repos; len(repos) != 0 {
 		t.Errorf("without --repo: repos = %q", repos)
 	}
-	// --repo puts the repository first, whatever -p repos= or repos+= says
+	// --repo puts the repository first, unless -p already lists it
 	l := te.addJSON("linked", "--repo", "-p", "repos=github.com/o/other")
 	if repos := te.task(l.ULID).Repos; len(repos) != 2 || repos[0] != "github.com/org-a/web" || repos[1] != "github.com/o/other" {
 		t.Errorf("--repo: repos = %q; want the repository first, then the one given", repos)

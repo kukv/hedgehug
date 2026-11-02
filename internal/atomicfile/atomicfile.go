@@ -11,10 +11,16 @@ import (
 // in the same directory, syncs it and renames it over path, so a reader sees
 // either the old or the new content, never a part.
 func WriteFile(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
+	return WriteFileInDir(path, data)
+}
+
+// WriteFileInDir is WriteFile for a directory that exists: it creates none,
+// and fails with fs.ErrNotExist when the directory is missing.
+func WriteFileInDir(path string, data []byte) error {
+	dir := filepath.Dir(path)
 	f, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
 	if err != nil {
 		return err

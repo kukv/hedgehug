@@ -469,7 +469,7 @@ func TestStoreRemoveOfAStoreThatDoesNotOpen(t *testing.T) {
 	}
 	_, err := ts.StoreRemove("me", false)
 	wantErr(t, err, KindConflict, "store.unpushed")
-	if !strings.HasPrefix(err.Error(), "store me: ") || !strings.HasSuffix(err.Error(), "; delete the directory by hand if you mean to") {
+	if !strings.HasPrefix(err.Error(), "store me: ") || !strings.HasSuffix(err.Error(), "; delete the directory by hand if you mean to, or use --keep to take the store out of the config and leave it") {
 		t.Errorf("message = %q", err)
 	}
 }

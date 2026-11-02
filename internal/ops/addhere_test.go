@@ -113,8 +113,10 @@ func TestAddHereRepoPutsTheRepoOnTheTask(t *testing.T) {
 		t.Errorf("Repo: repos = %q; want the repo ID", got)
 	}
 	// the repo ID goes first, and is not repeated when the task has it
-	r, _, _, err = ts.AddHere(AddHereInput{Context: hhctx.Input{Dir: dir, Store: "org-a"}, Repo: true,
-		Task: AddInput{Title: "both", Repos: []string{"github.com/o/other", "github.com/org-a/web"}}})
+	r, _, _, err = ts.AddHere(AddHereInput{
+		Context: hhctx.Input{Dir: dir, Store: "org-a"}, Repo: true,
+		Task: AddInput{Title: "both", Repos: []string{"github.com/o/other", "github.com/org-a/web"}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

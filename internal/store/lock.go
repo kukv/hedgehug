@@ -2,8 +2,10 @@ package store
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -30,6 +32,12 @@ func acquire(path string, wait time.Duration) (*fileLock, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil { //nolint:gosec // G703: paths are built from the store root
 		return nil, err
 	}
+	return lockFile(path, wait)
+}
+
+// lockFile takes the lock on the file at path, made when missing, in a
+// directory that exists.
+func lockFile(path string, wait time.Duration) (*fileLock, error) {
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600) //nolint:gosec // G703: paths are built from the store root
 	if err != nil {
 		return nil, err
@@ -72,17 +80,24 @@ func WithFileLock(path string, wait time.Duration, fn func() error) (err error) 
 
 // ErrStoreGone means the directory of the store was removed, before the lock
 // was taken or while it was waited for.
-var ErrStoreGone = errors.New("the store directory is gone")
+var ErrStoreGone = errors.New("the store directory was removed or replaced; run the command again")
 
 // acquireStore takes the lock file at path in the store at dir. It creates no
-// directory for a store that is gone, and fails with ErrStoreGone when the
+// directory above .hedgehug/local, so a store removed meanwhile is not made
+// again, and fails with ErrStoreGone when the
 // store is removed while the lock is waited for: the lock file is then not
 // the file at path any more, and a write would land in a deleted store.
 func acquireStore(dir, path string, wait time.Duration) (*fileLock, error) {
 	if !storeHere(dir) {
 		return nil, ErrStoreGone
 	}
-	l, err := acquire(path, wait)
+	if err := mkdirInStore(dir, path); err != nil {
+		return nil, err
+	}
+	l, err := lockFile(filepath.Clean(path), wait)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, ErrStoreGone
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +106,31 @@ func acquireStore(dir, path string, wait time.Duration) (*fileLock, error) {
 		return nil, ErrStoreGone
 	}
 	return l, nil
+}
+
+// mkdirInStore makes the directories of path that are below the first
+// directory of the store (.hedgehug), one level at a time with no MkdirAll: a
+// missing parent means the store was removed, which is ErrStoreGone, and it is
+// not made again.
+func mkdirInStore(dir, path string) error {
+	rel, err := filepath.Rel(dir, filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	cur := dir
+	for i, part := range strings.Split(rel, string(filepath.Separator)) {
+		cur = filepath.Join(cur, part)
+		if i == 0 {
+			continue // .hedgehug holds a tracked file: a live store has it
+		}
+		if err := os.Mkdir(cur, 0o750); err != nil && !errors.Is(err, fs.ErrExist) { //nolint:gosec // G703: paths are built from the store root
+			if errors.Is(err, fs.ErrNotExist) {
+				return ErrStoreGone
+			}
+			return err
+		}
+	}
+	return nil
 }
 
 func storeHere(dir string) bool {

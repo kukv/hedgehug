@@ -81,7 +81,7 @@ func (a *app) storeRemoveCmd() *cobra.Command {
 		Short: "Remove a store and delete its directory",
 		Long: `Remove takes the store out of config.yaml and deletes its directory.
 
-It refuses when the store has commits that are not pushed, or has no remote: the tasks could not be got back. Run hedgehug sync --store <name> first. With --keep it only takes the store out of config.yaml and leaves the directory, and checks nothing.`,
+It refuses when the store has commits that are not pushed, changes that are not committed, or no remote: the tasks could not be got back. Run hedgehug sync --store <name> first. With --keep it only takes the store out of config.yaml and leaves the directory, and checks nothing.`,
 		Args: exactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error { return a.storeRemove(args[0], keep) },
 	}

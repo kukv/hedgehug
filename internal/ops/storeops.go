@@ -678,7 +678,7 @@ func (ss *Session) lockToDelete(e config.StoreEntry) (func(), error) {
 	}
 	s, err := ss.openStoreAt(e.Path)
 	if err != nil {
-		return nil, unpushed(fmt.Errorf("store %s: %w; delete the directory by hand if you mean to", e.Name, err))
+		return nil, unpushed(fmt.Errorf("store %s: %w; delete the directory by hand if you mean to, or use --keep to take the store out of the config and leave it", e.Name, err))
 	}
 	l, err := store.LockInOrder(s)
 	if err != nil {
@@ -713,7 +713,7 @@ func checkPushed(e config.StoreEntry, s *store.Store) error {
 		for i, f := range st {
 			paths[i] = f.Path
 		}
-		return unpushed(fmt.Errorf("store %s has changes that are not committed (%s); commit or restore them, or delete the directory by hand if you mean to lose them", e.Name, strings.Join(paths, ", ")))
+		return unpushed(fmt.Errorf("store %s has changes that are not committed (%s); commit or restore them, or use --keep to leave the directory, or delete it by hand if you mean to lose them", e.Name, strings.Join(paths, ", ")))
 	}
 	if n > 0 {
 		return unpushed(fmt.Errorf("store %s has %s not pushed; run hedgehug sync --store %s first, or use --keep to leave the directory", e.Name, plural.Count(n, "commit"), e.Name))
