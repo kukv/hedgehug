@@ -8660,3 +8660,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 1. 既存の spec は本文を書き換えず、冒頭に「2026-11-02 の変更」の節を足し、該当箇所に印を付ける（spec の「後片付け」は「節を足すか、記述を直す」のどちらでもよいとしている。決定の経緯を残すため前者にする）
 
+
+## 実装で plan から変えた点
+
+### Task 10（PR は Task 10 だけ。ほかの Task はそのマージ後）
+
+- `Swap` は古い Store を最初から `.kept-` に動かさず、入れ替えの間は `.before-rewrite-` で動かす。戻せなかった変更（`Purged`）があるときは、最初の rename の前に古い Store の `.hedgehug/local/rebuild-keep` に印を書き、入れ替えが済んでから `<dir>.kept-<UTC 時刻>` に改名する。`FinishLeftover` は印のある `.before-rewrite-` を消さずに `.kept-` に改名し、改名できなければ残してそのパスをエラーで返す（レビューの指摘: `.kept-` へ直接 rename すると、止まった入れ替えの仕上げが古い Store を見落とし、間に入ったコミットが本流から外れうる）。
+- 入れ替えのあとの `syncLocal` の失敗は、作り直しの失敗の指摘にせず、`Rebuild.Warnings` の警告にする。
+- テストの細部: `internal/ops/rebuild_test.go` の指摘の数は `merge_driver` の指摘を除いて数える（`hedgehug` が PATH にない環境のため）。`internal/index/forward_merge_test.go` は消した `ResetMain` の代わりに go-git の HardReset を使う。`api/openapi.yaml` と `web/core/api/schema.d.ts` を作り直した。
