@@ -223,6 +223,12 @@ const messages: Record<string, Make> = {
     `列 ${str(a, "column")} は、フィールドでもスキーマのプロパティでもありません`,
   "view.tree_order": () => "ツリーのビューは rank の順に並ぶため、group: と sort: は使えません",
   "migrate.invalid": (_, e) => withDetail("移行するとスキーマに合わないタスクがあります", e),
+  "scoped.not_container": (a) =>
+    `${str(a, "id")} は ${str(a, "kind")} で、プロジェクトやエピックのようなコンテナではないため、上書きを設定できません`,
+  "scoped.invalid": (a, e) =>
+    list(a, "problems")
+      ? `上書きがスキーマに合いません: ${list(a, "problems")}`
+      : withDetail("上書きがスキーマに合いません", e),
 
   // notifications
   "inbox.ulid": (a) => `${str(a, "input")} は完全な ULID ではありません`,

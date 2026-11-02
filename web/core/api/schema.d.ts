@@ -260,6 +260,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/schema/scoped/{project}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change the override of a project, as hh schema scope set */
+        put: operations["put-scoped"];
+        post?: never;
+        /** Remove the override of a project, as hh schema scope rm */
+        delete: operations["delete-scoped"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stores": {
         parameters: {
             query?: never;
@@ -942,6 +960,28 @@ export interface components {
             templates?: components["schemas"]["TemplatesDef"];
             where: string;
             workflow?: components["schemas"]["WorkflowDef"];
+        };
+        ScopedProject: {
+            id?: string;
+            title?: string;
+            ulid: string;
+        };
+        ScopedPutInputBody: {
+            /** @description Status to the fields needed to enter it, on top of the store's. Leave it out to keep what the override has; an empty object takes it off */
+            required?: {
+                [key: string]: string[] | null;
+            };
+            /** @description The statuses to show; the default of each category has to be in it. Leave it out to keep what the override has; an empty list takes it off, so the store's statuses show */
+            statuses?: string[];
+            /** @description Status to the statuses it may move to, on top of the store's. Leave it out to keep what the override has; an empty object takes it off */
+            transitions?: {
+                [key: string]: string[] | null;
+            };
+        };
+        ScopedView: {
+            commit: string | null;
+            project: components["schemas"]["ScopedProject"];
+            scoped?: components["schemas"]["ScopedDef"];
         };
         ShowView: {
             assignees: string[] | null;
@@ -1811,6 +1851,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MigrateOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "put-scoped": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The project: its ID or ULID */
+                project: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScopedPutInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScopedView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "delete-scoped": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The project: its ID or ULID */
+                project: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScopedView"];
                 };
             };
             /** @description Error */

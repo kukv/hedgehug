@@ -976,6 +976,60 @@ components:
       required:
         - where
       type: object
+    ScopedProject:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        ulid:
+          type: string
+      required:
+        - ulid
+      type: object
+    ScopedPutInputBody:
+      additionalProperties: false
+      properties:
+        required:
+          additionalProperties:
+            items:
+              type: string
+            type:
+              - array
+              - "null"
+          description: Status to the fields needed to enter it, on top of the store's. Leave it out to keep what the override has; an empty object takes it off
+          type: object
+        statuses:
+          description: The statuses to show; the default of each category has to be in it. Leave it out to keep what the override has; an empty list takes it off, so the store's statuses show
+          items:
+            type: string
+          type: array
+        transitions:
+          additionalProperties:
+            items:
+              type: string
+            type:
+              - array
+              - "null"
+          description: Status to the statuses it may move to, on top of the store's. Leave it out to keep what the override has; an empty object takes it off
+          type: object
+      type: object
+    ScopedView:
+      additionalProperties: false
+      properties:
+        commit:
+          type:
+            - string
+            - "null"
+        project:
+          $ref: "#/components/schemas/ScopedProject"
+        scoped:
+          $ref: "#/components/schemas/ScopedDef"
+      required:
+        - project
+        - commit
+      type: object
     ShowView:
       additionalProperties: false
       properties:
@@ -2373,6 +2427,79 @@ paths:
                 $ref: "#/components/schemas/Problem"
           description: Error
       summary: Rename or merge a status, kind, property or value, as hh migrate
+      tags:
+        - schema
+  /api/schema/scoped/{project}:
+    delete:
+      operationId: delete-scoped
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: "The project: its ID or ULID"
+          in: path
+          name: project
+          required: true
+          schema:
+            description: "The project: its ID or ULID"
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScopedView"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Remove the override of a project, as hh schema scope rm
+      tags:
+        - schema
+    put:
+      operationId: put-scoped
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: "The project: its ID or ULID"
+          in: path
+          name: project
+          required: true
+          schema:
+            description: "The project: its ID or ULID"
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScopedPutInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScopedView"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Change the override of a project, as hh schema scope set
       tags:
         - schema
   /api/stores:

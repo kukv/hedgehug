@@ -115,6 +115,24 @@ describe("errorMessage", () => {
     expect(m).toContain("この親には置けません（parent）");
   });
 
+  it("words the errors of an override of a project", () => {
+    expect(errorMessage(err("scoped.not_container", { id: "ME-2", kind: "task" }))).toBe(
+      "ME-2 は task で、プロジェクトやエピックのようなコンテナではないため、上書きを設定できません",
+    );
+    expect(
+      errorMessage(
+        err("scoped.invalid", {
+          problems: ['scoped[0].statuses: "done" is the default of done and cannot be hidden'],
+        }),
+      ),
+    ).toBe(
+      '上書きがスキーマに合いません: scoped[0].statuses: "done" is the default of done and cannot be hidden',
+    );
+    expect(errorMessage(err("scoped.invalid", {}, "boom"))).toBe(
+      "上書きがスキーマに合いません: boom",
+    );
+  });
+
   it("joins the details of request.invalid", () => {
     const body = { errors: [{ message: "expected string" }, { message: "too short" }] };
     expect(errorMessage(err("request.invalid", {}, "validation failed", body))).toBe(

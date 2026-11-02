@@ -21,6 +21,7 @@ const labels: Record<string, string> = {
   "rewrite-history": "履歴の書き換え",
   "revert-overwritten": "上書きの取り消し",
   migrate: "スキーマの移行",
+  schema: "スキーマの上書きの変更",
   workspace: "ワークスペースの変更",
   view: "ビューの変更",
   setup: "同期の準備",
