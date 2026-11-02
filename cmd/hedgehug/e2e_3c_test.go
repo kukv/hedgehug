@@ -197,16 +197,16 @@ func TestE2EPhase3c(t *testing.T) {
 	if n := len(overwrittenNaming(t, bob, child.ULID)); n == 0 {
 		t.Error("no commit of bob's org-a has Hedgehug-Overwritten naming the child")
 	}
-	// 4. purge --moved takes the forward files away.
-	pm := alice.ok("purge", "--moved", "--store", "org-a", "--yes")
-	if !strings.Contains(pm, "Removed 2 forward files") {
-		t.Errorf("purge --moved printed %q, want the two forwards removed", pm)
+	// 4. purge takes the forward files away.
+	pm := alice.ok("purge", "--older-than", "0d", "--store", "org-a", "--yes")
+	if !strings.Contains(pm, "2 forward files") {
+		t.Errorf("purge printed %q, want the two forwards removed", pm)
 	}
 	if _, err := os.Stat(filepath.Join(alice.home, "stores", "org-a", filepath.FromSlash(forwardRel))); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("the forward file is still there: %v", err)
 	}
 	if code, _, errs := alice.run("", "show", "org-a:"+proj.ID); code == 0 || strings.Contains(errs, "moved to") {
-		t.Errorf("show of the old id after purge --moved: exit %d, %q", code, errs)
+		t.Errorf("show of the old id after purge: exit %d, %q", code, errs)
 	}
 	alice.ok("sync")
 	bob.ok("sync")

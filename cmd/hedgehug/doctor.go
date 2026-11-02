@@ -8,6 +8,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/doctor"
 	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/plural"
 )
 
 func (a *app) doctorCmd() *cobra.Command {
@@ -102,7 +103,7 @@ func (a *app) writeDoctor(r ops.DoctorReport, fix, heading, first bool) error {
 // force push, on lines of their own: what was put back, then, when some
 // changes could not be, where the old store is.
 func (a *app) writeRebuilt(store string, b *ops.Rebuilt) error {
-	if _, err := fmt.Fprintf(a.stdout, "Cloned %s again from origin; put back %d %s\n", store, b.Replayed, plural(b.Replayed, "unpushed commit", "unpushed commits")); err != nil {
+	if _, err := fmt.Fprintf(a.stdout, "Cloned %s again from origin; put back %d %s\n", store, b.Replayed, plural.Pick(b.Replayed, "unpushed commit", "unpushed commits")); err != nil {
 		return err
 	}
 	if len(b.Dropped) == 0 {

@@ -13,7 +13,7 @@ import (
 const forwardStoreULID = "01JC0M3R5W7M2X9V4T6R5N8P1B"
 
 func forwardFile(ulid string) string {
-	return "---\nulid: " + ulid + "\nmoved_to: " + forwardStoreULID + "\n---\n"
+	return "---\nulid: " + ulid + "\nmoved_to: " + forwardStoreULID + "\nmoved_at: 2026-10-31T10:00:00Z\n---\n"
 }
 
 // Tasks skips a forward; forwardsOf yields it; Task names it with ErrForward.
@@ -24,7 +24,7 @@ func TestForwards(t *testing.T) {
 	mustWrite(t, s, model.TaskPath(a), taskFile(taskA, "A"))
 	mustWrite(t, s, model.TaskPath(b), forwardFile(taskB))
 	bad := mustULID(t, cmt1)
-	mustWrite(t, s, model.TaskPath(bad), "---\nulid: "+cmt1+"\nmoved_to: "+forwardStoreULID+"\ntitle: x\n---\n")
+	mustWrite(t, s, model.TaskPath(bad), "---\nulid: "+cmt1+"\nmoved_to: "+forwardStoreULID+"\nmoved_at: 2026-10-31T10:00:00Z\ntitle: x\n---\n")
 
 	for task, err := range s.Tasks() {
 		if err != nil || task.ULID != a {
@@ -54,13 +54,13 @@ func TestForwards(t *testing.T) {
 	}
 }
 
-// A forward can be removed (purge --moved).
+// A forward can be removed (purge).
 func TestForwardIsRemoved(t *testing.T) {
 	t.Parallel()
 	s := newTestStore(t)
 	b := mustULID(t, taskB)
 	mustWrite(t, s, model.TaskPath(b), forwardFile(taskB))
-	if _, err := s.Update(Op{Name: "purge-moved", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveTask(b) }); err != nil {
+	if _, err := s.Update(Op{Name: "purge", Author: testAuthor}, func(tx *Tx) error { return tx.RemoveTask(b) }); err != nil {
 		t.Fatalf("RemoveTask: %v", err)
 	}
 	if _, err := s.Task(b); !errors.Is(err, ErrNotFound) || errors.Is(err, model.ErrForward) {

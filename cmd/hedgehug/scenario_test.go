@@ -88,7 +88,7 @@ func TestScenario(t *testing.T) {
 	step("rm", "rm", p.ID)
 	step("restore", "restore", p.ID)
 	step("rm", "rm", p.ID)
-	step("purge", "purge", p.ID, "--yes")
+	step("purge", "purge", "--older-than", "0d", "--yes")
 	if out := te.ok("ls", "is:deleted", "--ulids-only"); out != "" {
 		t.Errorf("deleted tasks remain after purge: %q", out)
 	}

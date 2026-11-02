@@ -115,7 +115,7 @@ func TestPurgeSeesChildrenAddedMeanwhile(t *testing.T) {
 	te.ok("rm", p.ID)
 	var c model.ULID
 	te.meanwhile(putChild(p.ULID, &c)) // deleted, so it goes with p
-	te.ok("purge", p.ID, "--yes")
+	te.ok("purge", "--older-than", "0d", "--yes")
 	s, err := store.Open(te.storeDir("me"))
 	if err != nil {
 		t.Fatal(err)
@@ -124,6 +124,7 @@ func TestPurgeSeesChildrenAddedMeanwhile(t *testing.T) {
 		t.Error("the deleted child added meanwhile is not purged")
 	}
 
+	// A child added meanwhile that is not deleted keeps its deleted parent.
 	q := te.addJSON("q")
 	te.ok("rm", q.ID)
 	te.meanwhile(func(tx *store.Tx) error {
@@ -137,8 +138,11 @@ func TestPurgeSeesChildrenAddedMeanwhile(t *testing.T) {
 		live.DeletedAt = nil
 		return tx.PutTask(live)
 	})
-	if code, _, stderr := te.run("purge", q.ID, "--yes"); code != 1 || !strings.Contains(stderr, "not deleted") {
-		t.Errorf("purge over a live child added meanwhile: exit %d, stderr %q", code, stderr)
+	if code, out, stderr := te.run("purge", "--older-than", "0d", "--yes"); code != 0 || out != "Nothing to purge\n" {
+		t.Errorf("purge over a live child added meanwhile: exit %d, stdout %q, stderr %q", code, out, stderr)
+	}
+	if got := te.task(q.ULID); got.DeletedAt == nil {
+		t.Error("the parent of a live child lost its deleted_at")
 	}
 
 	// After a confirmation, a change to what is purged stops the purge.
@@ -146,7 +150,7 @@ func TestPurgeSeesChildrenAddedMeanwhile(t *testing.T) {
 	te.ok("rm", r.ID)
 	te.terminal, te.stdin = true, "y\n"
 	te.meanwhile(putChild(r.ULID, &c))
-	if code, _, stderr := te.run("purge", r.ID); code != 1 || !strings.Contains(stderr, "run purge again") {
+	if code, _, stderr := te.run("purge", "--older-than", "0d"); code != 1 || !strings.Contains(stderr, "run purge again") {
 		t.Errorf("purge after a change: exit %d, stderr %q", code, stderr)
 	}
 	if _, err := s.Task(c); err != nil {
@@ -195,14 +199,14 @@ func TestRestoreRefusesATaskRestoredMeanwhile(t *testing.T) {
 	}
 }
 
-func TestPurgeRefusesATaskRestoredMeanwhile(t *testing.T) {
+func TestPurgeSeesATaskRestoredMeanwhile(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	p := te.addJSON("p")
 	te.ok("rm", p.ID)
 	te.meanwhile(changeTask(p.ULID, func(t *model.Task) { t.DeletedAt = nil }))
-	if code, _, stderr := te.run("purge", p.ID, "--yes"); code != 1 || !strings.Contains(stderr, "not deleted") {
-		t.Errorf("purge: exit %d, stderr %q", code, stderr)
+	if code, out, stderr := te.run("purge", "--older-than", "0d", "--yes"); code != 0 || out != "Nothing to purge\n" {
+		t.Errorf("purge: exit %d, stdout %q, stderr %q", code, out, stderr)
 	}
 	if got := te.task(p.ULID); got.DeletedAt != nil {
 		t.Error("the task restored meanwhile is changed")

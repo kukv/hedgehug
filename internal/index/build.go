@@ -170,7 +170,7 @@ func (ix *Index) ancestors(t *model.Task) []model.ULID {
 
 const (
 	cacheName   = "index" // in .hedgehug/local
-	cacheFormat = 7       // bump when Entry or cache changes
+	cacheFormat = 8       // bump when Entry or cache changes
 )
 
 // cache is the index as it is kept on disk, for one tree of HEAD.

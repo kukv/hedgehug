@@ -61,11 +61,6 @@ func wantReadOnly(t *testing.T, what string, err error) {
 func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
-	live, err := ts.Add(AddInput{Title: "one"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	liveID := RefName(live.Index, live.ULID)
 	makeReadOnly(t, ts, sync.ReasonGitHub)
 	ops := []struct {
 		name string
@@ -92,11 +87,12 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 		{"Remove", func() error { _, err := ts.Remove("ME-99"); return err }},
 		{"Restore", func() error { _, err := ts.Restore("ME-99"); return err }},
 		{"RestoreAt", func() error { _, err := ts.RestoreAt("ME-99", "2026-10-01"); return err }},
-		// A task that is not deleted: purge says "not deleted" once it is
-		// let through, and must not get that far.
-		{"PurgeTargets", func() error { _, _, _, err := ts.PurgeTargets(liveID); return err }},
-		{"Purge", func() error { _, err := ts.Purge(liveID, []model.ULID{live.ULID}); return err }},
-		{"PurgeUnchecked", func() error { _, err := ts.PurgeUnchecked(liveID); return err }},
+		{"PurgeList", func() error { _, err := ts.PurgeList(0); return err }},
+		{"Purge", func() error { _, err := ts.Purge(0, true); return err }},
+		{"PurgeConfirmed", func() error {
+			_, err := ts.PurgeConfirmed(0, PurgePlan{Tasks: []PurgeTask{{ULID: model.NewULID()}}})
+			return err
+		}},
 		{"Migrate", func() error {
 			_, _, err := ts.Migrate(schema.Migration{Target: schema.TargetStatus, Old: "todo", New: "ready"}, false)
 			return err

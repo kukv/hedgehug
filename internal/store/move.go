@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"go.yaml.in/yaml/v4"
 
@@ -366,7 +367,8 @@ type MoveOut struct {
 	Scoped   []string // the where (project:<ULID>) of the scoped entries to remove
 }
 
-// MoveOut writes out in tx: each task file becomes a forward to out.To, its
+// MoveOut writes out in tx: each task file becomes a forward to out.To (with the time of the move as
+// moved_at), its
 // comments and worklog entries go, the tasks that stay lose their references
 // to them (out.Unlinked), numbers.yaml keeps their numbers (D13: those of the
 // prefixes of this store's workspaces), and the scoped entry goes. It adds
@@ -408,7 +410,7 @@ func (tx *Tx) MoveOut(out MoveOut) error {
 				return err
 			}
 		}
-		b, err := (&model.Forward{ULID: ulid, MovedTo: out.To}).Encode()
+		b, err := (&model.Forward{ULID: ulid, MovedTo: out.To, MovedAt: tx.s.now().UTC().Truncate(time.Second)}).Encode()
 		if err != nil {
 			return err
 		}

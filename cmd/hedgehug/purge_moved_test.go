@@ -40,81 +40,6 @@ func newForwardEnv(t *testing.T) *testEnv {
 	return te
 }
 
-func TestPurgeMovedListAndConfirmOnATerminal(t *testing.T) {
-	t.Parallel()
-	te := newForwardEnv(t)
-	te.terminal = true
-	te.stdin = "n\n"
-	before := len(te.log("alpha"))
-	te.goldenRun("declined", 1, "purge", "--moved", "--store", "alpha")
-	if got := len(te.log("alpha")); got != before {
-		t.Errorf("a declined purge wrote %d commits", got-before)
-	}
-	te.stdin = "y\n"
-	te.goldenRun("accepted", 0, "purge", "--moved", "--store", "alpha")
-	if got := len(te.log("alpha")); got != before+1 {
-		t.Errorf("commits = %d; want %d", got, before+1)
-	}
-	te.goldenRun("none", 0, "purge", "--moved", "--store", "alpha")
-}
-
-func TestPurgeMovedYesAndJSON(t *testing.T) {
-	t.Parallel()
-	te := newForwardEnv(t)
-	te.goldenRun("without-yes", 2, "purge", "--moved", "--store", "alpha")
-	out := te.ok("purge", "--moved", "--store", "alpha", "--yes", "--json")
-	var got struct {
-		Removed []struct {
-			ULID    string `json:"ulid"`
-			ID      string `json:"id"`
-			ToStore string `json:"to_store"`
-			ToID    string `json:"to_id"`
-		} `json:"removed"`
-		Commit string `json:"commit"`
-	}
-	if err := json.Unmarshal([]byte(out), &got); err != nil {
-		t.Fatal(err)
-	}
-	if len(got.Removed) != 1 || got.Removed[0].ID != "AA-2" || got.Removed[0].ToStore != "bravo-long" || got.Removed[0].ToID != "BB-3" || got.Commit == "" {
-		t.Errorf("json = %s", out)
-	}
-	te.golden("none-json", te.ok("purge", "--moved", "--store", "alpha", "--yes", "--json"))
-}
-
-func TestPurgeMovedYesText(t *testing.T) {
-	t.Parallel()
-	te := newForwardEnv(t)
-	te.goldenOK("yes", "purge", "--moved", "--store", "alpha", "--yes")
-	te.goldenOK("none", "purge", "--moved", "--store", "alpha", "--yes")
-}
-
-func TestPurgeMovedNeedsAStoreWhenThereAreSeveral(t *testing.T) {
-	t.Parallel()
-	te := newForwardEnv(t)
-	te.goldenRun("no-store", 1, "purge", "--moved", "--yes")
-}
-
-// A forward to a store that is not mounted is listed with the ULID of that
-// store.
-func TestPurgeMovedListsAStoreNotMounted(t *testing.T) {
-	t.Parallel()
-	te := newForwardEnv(t)
-	te.ok("store", "remove", "bravo-long")
-	te.terminal = true
-	te.stdin = "n\n"
-	te.goldenRun("list", 1, "purge", "--moved")
-	te.stdin = ""
-	te.terminal = false
-	te.golden("json", te.ok("purge", "--moved", "--yes", "--json"))
-}
-
-func TestPurgeMovedAndAnIDDoNotMix(t *testing.T) {
-	t.Parallel()
-	te := newForwardEnv(t)
-	te.goldenRun("with-id", 2, "purge", "--moved", "AA-1", "--store", "alpha", "--yes")
-	te.goldenRun("neither", 2, "purge", "--store", "alpha")
-}
-
 // The forward file a mounted-nowhere store leaves is told of by doctor as an
 // info, which does not fail it.
 func TestDoctorForwardTargetIsAnInfo(t *testing.T) {
@@ -153,7 +78,7 @@ func TestDuplicateAcrossStoresIsAWarning(t *testing.T) {
 	te.goldenRun("doctor", 1, "doctor")
 	te.goldenRun("doctor-json", 1, "doctor", "--json")
 	code, _, stderr := te.run("sync", "--store", "alpha")
-	if code != 0 || !strings.Contains(stderr, "warning: alpha: ") || !strings.Contains(stderr, " is in alpha (AA-1) and bravo-long (BB-1); remove the one not needed with hedgehug rm and hedgehug purge") {
+	if code != 0 || !strings.Contains(stderr, "warning: alpha: ") || !strings.Contains(stderr, " is in alpha (AA-1) and bravo-long (BB-1); remove the one not needed with hedgehug rm and hedgehug purge --older-than 0d --store <store>") {
 		t.Errorf("sync: exit %d\nstderr %s", code, stderr)
 	}
 }
@@ -176,7 +101,7 @@ func TestSyncBringsADuplicateAcrossStores(t *testing.T) {
 	bob.ok("sync")
 	alice.ok("mv", "AA-1", "--store", "charlie", "--yes")
 	code, _, stderr := alice.run("sync", "--store", "bravo-long")
-	want := " is in bravo-long (BB-1) and charlie (CC-1); remove the one not needed with hedgehug rm and hedgehug purge"
+	want := " is in bravo-long (BB-1) and charlie (CC-1); remove the one not needed with hedgehug rm and hedgehug purge --older-than 0d --store <store>"
 	if code != 0 || !strings.Contains(stderr, "warning: bravo-long: ") || !strings.Contains(stderr, want) {
 		t.Errorf("sync: exit %d\nstderr %s", code, stderr)
 	}

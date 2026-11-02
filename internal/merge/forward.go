@@ -14,7 +14,8 @@ import (
 //
 // Two forwards that name different stores are merged by moved_to alone: the
 // side that changed the file last wins, and the other store is recorded.
-// Under OursWins ours takes the file.
+// Two forwards that name the same store are merged by moved_at: the later one
+// is kept. Under OursWins ours takes the file.
 func (m *merger) forward(ours, theirs Side) (Result, error) {
 	of, tf := model.IsForward(ours.Data), model.IsForward(theirs.Data)
 	win, lose := ours, theirs
@@ -23,6 +24,10 @@ func (m *merger) forward(ours, theirs Side) (Result, error) {
 	case of && tf:
 		if !later(ours.Time, theirs.Time, ours.Author, theirs.Author, ours.Data, theirs.Data) {
 			win, lose = theirs, ours
+		}
+		// the same destination: the later move is the one to keep
+		if w, l, ok := laterMovedAt(ours, theirs); ok {
+			win, lose = w, l
 		}
 	case tf:
 		win, lose = theirs, ours
@@ -49,4 +54,20 @@ func (m *merger) forward(ours, theirs Side) (Result, error) {
 	}
 	r.Overwritten = []Overwritten{{Path: m.path, Field: "*", Value: string(v), Author: lose.Author}}
 	return r, nil
+}
+
+// laterMovedAt picks, of two forwards that name the same store, the one with
+// the later moved_at. ok is false when either does not decode, they name
+// different stores, or the times are the same; the caller then goes by the
+// time of the commits.
+func laterMovedAt(ours, theirs Side) (win, lose Side, ok bool) {
+	o, oerr := model.DecodeForward(ours.Data)
+	t, terr := model.DecodeForward(theirs.Data)
+	if oerr != nil || terr != nil || o.MovedTo != t.MovedTo || o.MovedAt.Equal(t.MovedAt) {
+		return Side{}, Side{}, false
+	}
+	if t.MovedAt.After(o.MovedAt) {
+		return theirs, ours, true
+	}
+	return ours, theirs, true
 }

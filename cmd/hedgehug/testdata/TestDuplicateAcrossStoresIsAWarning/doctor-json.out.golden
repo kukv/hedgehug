@@ -6,7 +6,7 @@
       {
         "check": "duplicate_across_stores",
         "where": "<ULID-1>",
-        "msg": "in alpha (AA-1) and bravo-long (BB-1); remove the one not needed with hedgehug rm and hedgehug purge",
+        "msg": "in alpha (AA-1) and bravo-long (BB-1); remove the one not needed with hedgehug rm and hedgehug purge --older-than 0d --store \u003cstore\u003e",
         "severity": "warning"
       }
     ]
@@ -18,7 +18,7 @@
       {
         "check": "duplicate_across_stores",
         "where": "<ULID-1>",
-        "msg": "in alpha (AA-1) and bravo-long (BB-1); remove the one not needed with hedgehug rm and hedgehug purge",
+        "msg": "in alpha (AA-1) and bravo-long (BB-1); remove the one not needed with hedgehug rm and hedgehug purge --older-than 0d --store \u003cstore\u003e",
         "severity": "warning"
       }
     ]

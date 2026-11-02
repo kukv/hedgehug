@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"slices"
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
@@ -179,82 +178,6 @@ func (ss *Session) Restore(arg string) (AffectedResult, error) {
 	return AffectedResult{Index: ix, Entry: e, Targets: targets, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
 }
 
-// PurgeTargets lists what Purge would remove, for the caller to confirm: the
-// index, the task arg names and the tasks under it. It refuses when one of
-// them is not deleted.
-func (ss *Session) PurgeTargets(arg string) (*index.Index, *index.Entry, []*index.Entry, error) {
-	_, ix, err := ss.OpenForWrite()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	e, err := ss.Resolve(ix, arg)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	targets, err := purgeTargets(ix, e)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return ix, e, targets, nil
-}
-
-// Purge removes the files of the task arg names and of the tasks under it for
-// good. confirmed is the ULIDs of the tasks the caller showed to the user
-// (PurgeTargets lists them) and the user agreed to: it is required, and Purge
-// fails with purge.changed when the tasks under it are no longer those.
-func (ss *Session) Purge(arg string, confirmed []model.ULID) (AffectedResult, error) {
-	if len(confirmed) == 0 {
-		return AffectedResult{}, confirmRequired("purge " + arg)
-	}
-	return ss.purge(arg, confirmed)
-}
-
-// PurgeUnchecked is Purge for a purge that was not confirmed (hedgehug purge
-// --yes): it works from the tasks as they are under the lock.
-func (ss *Session) PurgeUnchecked(arg string) (AffectedResult, error) {
-	return ss.purge(arg, nil)
-}
-
-// purge is Purge; a nil confirmed skips the comparison.
-func (ss *Session) purge(arg string, confirmed []model.ULID) (AffectedResult, error) {
-	s, ix, err := ss.OpenForWrite()
-	if err != nil {
-		return AffectedResult{}, err
-	}
-	e, err := ss.Resolve(ix, arg)
-	if err != nil {
-		return AffectedResult{}, err
-	}
-	now, err := purgeTargets(ix, e)
-	if err != nil {
-		return AffectedResult{}, err
-	}
-	hash, err := ss.UpdateCommit(s, store.Op{Name: "purge", Task: e.ULID}, func(tx *store.Tx) error {
-		// Read again under the lock: a task restored or added under it
-		// since must not be purged unchecked, nor left behind.
-		var err error
-		if e, err = current(ix, e); err != nil {
-			return err
-		}
-		if now, err = purgeTargets(ix, e); err != nil {
-			return err
-		}
-		if confirmed != nil && !sameTasks(now, confirmed) {
-			return newErr(KindConflict, "purge.changed", errors.New("the tasks under it changed after the confirmation; run purge again"))
-		}
-		for _, x := range now {
-			if err := tx.RemoveTask(x.ULID); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return AffectedResult{}, err
-	}
-	return AffectedResult{Index: ix, Entry: e, Targets: now, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
-}
-
 // current refreshes ix, as an operation does under the lock, and returns e as
 // it is now.
 func current(ix *index.Index, e *index.Entry) (*index.Entry, error) {
@@ -276,18 +199,17 @@ func notDeletedYet(ix *index.Index, e *index.Entry) error {
 	return nil
 }
 
-// isDeleted refuses to restore or purge the task e when it is not deleted;
-// hint ends the message.
-func isDeleted(ix *index.Index, e *index.Entry, hint string) error {
+// isDeleted refuses to restore the task e when it is not deleted.
+func isDeleted(ix *index.Index, e *index.Entry) error {
 	if e.DeletedAt == nil {
-		return newErr(KindConflict, "task.not_deleted", fmt.Errorf("%s is not deleted%s", RefName(ix, e.ULID), hint), "id", TaskFileName(e))
+		return newErr(KindConflict, "task.not_deleted", fmt.Errorf("%s is not deleted", RefName(ix, e.ULID)), "id", TaskFileName(e))
 	}
 	return nil
 }
 
 // restorable refuses to restore e when it is not deleted or its parent is.
 func restorable(ix *index.Index, e *index.Entry) error {
-	if err := isDeleted(ix, e, ""); err != nil {
+	if err := isDeleted(ix, e); err != nil {
 		return err
 	}
 	if e.Parent != nil {
@@ -296,36 +218,6 @@ func restorable(ix *index.Index, e *index.Entry) error {
 		}
 	}
 	return nil
-}
-
-// purgeTargets returns e and every task under it, refusing when one of them
-// is not deleted.
-func purgeTargets(ix *index.Index, e *index.Entry) ([]*index.Entry, error) {
-	if err := isDeleted(ix, e, "; delete it with hedgehug rm first"); err != nil {
-		return nil, err
-	}
-	targets := append([]*index.Entry{e}, Descendants(ix, e.ULID, every)...)
-	for _, d := range targets[1:] {
-		if d.DeletedAt == nil {
-			return nil, newErr(KindConflict, "purge.child_not_deleted", fmt.Errorf("%s under it is not deleted", RefName(ix, d.ULID)), "id", TaskFileName(d))
-		}
-	}
-	return targets, nil
-}
-
-// sameTasks reports whether a and b hold the same tasks.
-func sameTasks(a []*index.Entry, b []model.ULID) bool {
-	ulids := func(n int, at func(int) model.ULID) []string {
-		out := make([]string, n)
-		for i := range out {
-			out[i] = at(i).String()
-		}
-		slices.Sort(out)
-		return out
-	}
-	return slices.Equal(
-		ulids(len(a), func(i int) model.ULID { return a[i].ULID }),
-		ulids(len(b), func(i int) model.ULID { return b[i] }))
 }
 
 // ParseAtTime reads at as a time: RFC 3339, or a date, which stands for the
