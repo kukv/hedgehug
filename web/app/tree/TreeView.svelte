@@ -18,6 +18,8 @@
   import Menu from "../ui/Menu.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
   import Tabs from "../ui/Tabs.svelte";
+  import { openWorkspaceMove } from "../workspace/dialogs-state.svelte";
+  import { MOVE_VALUE, moveWorkspaceItem } from "../workspace/move-menu";
   import AddRow from "./AddRow.svelte";
   import { createBelow, moveTask, patchTask } from "./actions";
   import {
@@ -353,7 +355,8 @@
   });
 
   // --- keys ------------------------------------------------------------------------
-  let menu = $state<{ which: "status" | "kind"; ulid: string } | null>(null);
+  // "row" is the "…" button of a row; S and K open the other two.
+  let menu = $state<{ which: "status" | "kind" | "row"; ulid: string } | null>(null);
 
   function actionOf(k: KeyInput): KeyAction {
     return keyAction(k, { rows, selected: selection.ulid, schema, viewRoot, taskOf });
@@ -479,6 +482,10 @@
   const menuTask = $derived(menu ? taskOf(menu.ulid) : undefined);
   const menuItems = $derived.by(() => {
     if (!menu || !menuTask || !schema) return [];
+    if (menu.which === "row") {
+      storesRev.current;
+      return [moveWorkspaceItem(menuTask, c.stores.workspaces())];
+    }
     if (menu.which === "status") {
       return (schema.statuses ?? []).map((s) => ({ value: s.name, label: s.label || s.name }));
     }
@@ -493,6 +500,10 @@
     const which = menu?.which;
     menu = null;
     if (!t || !which) return;
+    if (which === "row") {
+      if (value === MOVE_VALUE) openWorkspaceMove(t);
+      return;
+    }
     try {
       await patchTask(c, t, which === "status" ? { status: value } : { kind: value });
     } catch (err) {
@@ -727,6 +738,7 @@
             }}
             ontoggle={() => toggle(item.row.ulid, !item.row.expanded)}
             onopen={() => open(item.row.ulid)}
+            onmore={schema ? () => (menu = { which: "row", ulid: item.row.ulid }) : undefined}
             dragging={dragging === item.row.ulid}
             dropMark={dropMarkOf(item.row.ulid)}
             dnd={rowDnd(() => ({

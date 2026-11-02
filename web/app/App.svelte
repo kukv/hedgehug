@@ -18,6 +18,7 @@
   import { useSubscribe } from "./svelte-store";
   import TreeView from "./tree/TreeView.svelte";
   import Toasts from "./ui/Toasts.svelte";
+  import WorkspaceDialogs from "./workspace/WorkspaceDialogs.svelte";
   import WorkspacePage from "./workspace/WorkspacePage.svelte";
 
   const token = takeToken(location, sessionStorage, history);
@@ -114,6 +115,7 @@
   <Disconnected lastOpenAt={conn.current.lastOpenAt} />
 {/if}
 <CreateHost />
+<WorkspaceDialogs />
 <CommandPalette />
 <Toasts />
 

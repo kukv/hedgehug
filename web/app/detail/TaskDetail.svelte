@@ -5,13 +5,17 @@
   import { formatDateTime } from "../../core/format";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
+  import Icon from "../icons/Icon.svelte";
   import { onLinkClick, router } from "../router";
   import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import CliLine from "../ui/CliLine.svelte";
   import { copyText } from "../ui/clipboard";
+  import Menu from "../ui/Menu.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
+  import { openWorkspaceMove } from "../workspace/dialogs-state.svelte";
+  import { MOVE_VALUE, moveWorkspaceItem } from "../workspace/move-menu";
   import BodyEditor from "./BodyEditor.svelte";
   import Checklist from "./Checklist.svelte";
   import Comments from "./Comments.svelte";
@@ -47,6 +51,16 @@
   });
   const s = $derived<ShowView | undefined>(shown.current);
   const locked = $derived(s ? s.deleted_at != null || !!s.broken : false);
+
+  // The "…" menu of the header: the button it hangs from while it is open.
+  const spaces = useSubscribe(stores, () => stores.workspaces());
+  let more = $state<HTMLElement | null>(null);
+  const moreItems = $derived(s ? [moveWorkspaceItem(s, spaces.current)] : []);
+  function pickMore(value: string) {
+    const task = s;
+    more = null;
+    if (task && value === MOVE_VALUE) openWorkspaceMove(task);
+  }
 
   $effect(() => {
     const store = s?.store;
@@ -220,7 +234,25 @@
           >{watching ? "ウォッチ中" : "ウォッチ"}</Button
         >
         {#if s.deleted_at == null && !s.broken}
+          <Button
+            size="sm"
+            aria-label="その他の操作"
+            aria-haspopup="menu"
+            aria-expanded={more !== null}
+            onclick={(e) => (more = e.currentTarget)}
+          >
+            <Icon name="more" size={14} />
+          </Button>
           <DeleteDialogs show={s} variant="delete" />
+          {#if more}
+            <Menu
+              anchor={more}
+              items={moreItems}
+              label="その他の操作"
+              onselect={pickMore}
+              onclose={() => (more = null)}
+            />
+          {/if}
         {/if}
       </div>
     </header>

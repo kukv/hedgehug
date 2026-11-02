@@ -4,6 +4,7 @@ import { ApiError } from "../../core/api/client";
 import { closeCreate, createState } from "../create-state.svelte";
 import { selection } from "../selection.svelte";
 import { emitter } from "../test-utils";
+import { closeWorkspaceDialog, workspaceDialog } from "../workspace/dialogs-state.svelte";
 import { schema, task } from "./fixtures";
 
 const h = vi.hoisted(() => ({
@@ -874,6 +875,50 @@ describe("TreeView", () => {
       params: { path: { id: "T3" }, query: { store: "shared" } },
       body: { kind: "bug" },
     });
+  });
+
+  it("opens the move dialog from the … menu of a row", async () => {
+    const { core } = setup();
+    const w = (ulid: string, name: string, prefix: string) => ({
+      store: "shared",
+      tone: "purple",
+      ulid,
+      name,
+      prefix,
+      projects: [],
+      tasks: 1,
+      deleted: 0,
+      prefixSet: "2026-10-29T12:00:00Z",
+    });
+    core.stores.workspaces = () => [w("W1", "release", "REL"), w("W2", "shared", "SH")] as never;
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "メニュー: Web のクライアントを更新" }),
+    );
+    await fireEvent.click(
+      await screen.findByRole("menuitem", { name: /別のワークスペースへ移動/ }),
+    );
+    expect(workspaceDialog.current).toMatchObject({ kind: "move", task: { ulid: "T3" } });
+    closeWorkspaceDialog();
+  });
+
+  it("turns the move item off when the store has no other workspace", async () => {
+    setup(); // one workspace only
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "メニュー: Web のクライアントを更新" }),
+    );
+    expect(
+      await screen.findByRole("menuitem", { name: /別のワークスペースへ移動/ }),
+    ).toBeDisabled();
+    expect(workspaceDialog.current).toBeNull();
+  });
+
+  it("has no … button on a row until the schema is read", async () => {
+    setup({ noSchema: true });
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    await screen.findByText("Web のクライアントを更新");
+    expect(screen.queryByRole("button", { name: /^メニュー:/ })).toBeNull();
   });
 
   it("says why Space does nothing when the schema has no done status", async () => {
