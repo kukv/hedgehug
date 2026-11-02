@@ -5,6 +5,8 @@
   import { useSubscribe } from "../svelte-store";
   import TreeView from "../tree/TreeView.svelte";
   import WorkspaceHeader from "./WorkspaceHeader.svelte";
+  import WorkspaceOverview from "./WorkspaceOverview.svelte";
+  import WorkspaceSettings from "./WorkspaceSettings.svelte";
 
   type Props = { store: string; ulid: string; tab: WorkspaceTab };
   let { store, ulid, tab }: Props = $props();
@@ -23,12 +25,14 @@
   <div class="page">
     {#if tab === "overview"}
       <!-- The overview draws its own heading, which has the buttons that make a task or a project. -->
-      <WorkspaceHeader {entry} tab="overview" />
+      <WorkspaceOverview {entry} />
     {:else}
       <WorkspaceHeader {entry} {tab} />
       <div class="body">
         {#if tab === "tree"}
           <TreeView view={{ kind: "workspace", store, ulid }} />
+        {:else}
+          <WorkspaceSettings {entry} />
         {/if}
       </div>
     {/if}

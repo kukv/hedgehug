@@ -3,6 +3,8 @@
 //     the navigation "ビューの切り替え" holds the links 概要, ツリー and 設定; the current one has
 //     aria-current="page". The tabs are links (the address, back and reload keep the tab)
 //   - the sidebar ("メインナビゲーション") has the link "設定" (the gear, /settings)
+//   - for each workspace the sidebar has the button "<名前> の操作（設定を開く・削除）" that opens
+//     the menu "ワークスペースの操作" with 設定を開く and 削除…
 //   - the settings take the window: the navigation "設定のナビゲーション" (with the link
 //     "Hedgehug に戻る" and the version) is shown in place of the sidebar
 import type { Page } from "@playwright/test";
@@ -61,6 +63,16 @@ test("the settings tab is the right end of the tabs", async ({ page, hh }) => {
     "page",
   );
   await expect(heading(page)).toBeVisible();
+});
+
+test("the … of a workspace row opens its settings", async ({ page, hh }) => {
+  await hh.open(page);
+  await sidebar(page).getByRole("button", { name: "demo の操作（設定を開く・削除）" }).click();
+  const menu = page.getByRole("menu", { name: "ワークスペースの操作" });
+  await expect(menu.getByRole("menuitem")).toHaveText(["設定を開く", "削除…"]);
+  await menu.getByRole("menuitem", { name: "設定を開く" }).click();
+  await expect(page).toHaveURL(/\/workspaces\/demo\/[^/]+\/settings$/);
+  await expect(menu).toHaveCount(0);
 });
 
 test("/settings goes to the workspaces of the first store, with its own nav in place of the sidebar", async ({

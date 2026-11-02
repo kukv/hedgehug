@@ -163,6 +163,9 @@
       >
         <Icon name="more" size={14} />
       </button>
+    {:else}
+      <!-- The button comes with the schema: its place is kept so the columns do not move. -->
+      <span class="more-slot" aria-hidden="true"></span>
     {/if}
   </span>
 </div>
@@ -375,6 +378,10 @@
     color: var(--muted);
     opacity: 0;
     cursor: pointer;
+  }
+  .more-slot {
+    flex: 0 0 auto;
+    width: 1.75rem;
   }
   .row:hover .more,
   .row.selected .more,

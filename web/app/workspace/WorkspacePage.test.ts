@@ -1,8 +1,19 @@
 import { cleanup } from "@testing-library/svelte";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceEntry } from "../../core/stores";
 import { renderWithCore } from "../test-utils";
 import WorkspacePage from "./WorkspacePage.svelte";
+
+// The bodies of the tabs have their own tests: here each only says which one is drawn.
+const { marker } = vi.hoisted(() => ({
+  marker: (what: string) => (anchor: Comment, props: { entry: { name: string } }) => {
+    const p = document.createElement("p");
+    p.textContent = `${what} of ${props.entry.name}`;
+    anchor.before(p);
+  },
+}));
+vi.mock("./WorkspaceOverview.svelte", () => ({ default: marker("overview") }));
+vi.mock("./WorkspaceSettings.svelte", () => ({ default: marker("settings") }));
 
 const entry: WorkspaceEntry = {
   store: "shared",
@@ -41,13 +52,20 @@ beforeEach(() => history.replaceState(null, "", "/"));
 afterEach(cleanup);
 
 describe("WorkspacePage", () => {
-  it.each(["overview", "settings"] as const)("%s のタブでも見出しとタブを出す", (tab) => {
-    const { getByRole } = mount(tab);
+  it("設定のタブは見出しとタブの下に設定を出す", () => {
+    const { getByRole, getByText } = mount("settings");
     expect(getByRole("heading", { level: 1, name: "release" })).toBeTruthy();
     expect(
       getByRole("navigation", { name: "ビューの切り替え" }).querySelector("[aria-current]")
         ?.textContent,
-    ).toContain(tab === "overview" ? "概要" : "設定");
+    ).toContain("設定");
+    expect(getByText("settings of release")).toBeTruthy();
+  });
+
+  it("概要のタブは見出しごと WorkspaceOverview に任せる", () => {
+    const { getByText, queryByRole } = mount("overview");
+    expect(getByText("overview of release")).toBeTruthy();
+    expect(queryByRole("heading", { level: 1 })).toBeNull(); // the page draws none of its own
   });
 
   it("ワークスペースがないときは、そう言ってホームへ戻れる", () => {

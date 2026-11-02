@@ -251,6 +251,7 @@
 
 <style>
   .overview {
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
     gap: var(--space-28);

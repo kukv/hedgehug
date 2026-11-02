@@ -4,6 +4,7 @@
   import { useSubscribe } from "../svelte-store";
   import Button from "../ui/Button.svelte";
   import SettingsLayout from "./SettingsLayout.svelte";
+  import SettingsWorkspaces from "./SettingsWorkspaces.svelte";
 
   let { page }: { page: SettingsPage } = $props();
 
@@ -33,7 +34,9 @@
     <Button size="sm" onclick={() => router.go(hrefOf({ name: "home" }))}>ホームへ戻る</Button>
   </div>
 {:else if page.store !== ""}
-  <SettingsLayout {page} />
+  <SettingsLayout {page}>
+    <SettingsWorkspaces store={page.store} />
+  </SettingsLayout>
 {/if}
 
 <style>

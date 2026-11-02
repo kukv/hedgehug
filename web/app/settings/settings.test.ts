@@ -6,6 +6,15 @@ import SettingsLayout from "./SettingsLayout.svelte";
 import SettingsNav from "./SettingsNav.svelte";
 import SettingsRoute from "./SettingsRoute.svelte";
 
+// SettingsWorkspaces has its own test: here it only says it was drawn, and for which Store.
+vi.mock("./SettingsWorkspaces.svelte", () => ({
+  default: (anchor: Comment, props: { store: string }) => {
+    const p = document.createElement("p");
+    p.textContent = `workspaces of ${props.store}`;
+    anchor.before(p);
+  },
+}));
+
 const health = (version: string) => ({
   data: { pid: 1, version },
   response: new Response(null, { status: 200 }),
@@ -109,6 +118,17 @@ describe("SettingsRoute", () => {
     expect(queryByRole("navigation", { name: "設定のナビゲーション" })).toBeNull();
     await fireEvent.click(getByRole("button", { name: "ホームへ戻る" }));
     expect(location.pathname).toBe("/");
+  });
+
+  it("本文にその Store のワークスペースの一覧を出す", () => {
+    const { getByRole, getByText } = renderWithCore(
+      SettingsRoute,
+      { page },
+      core(["shared", "me"]),
+    );
+    expect(getByRole("region", { name: "設定の本文" })).toContainElement(
+      getByText("workspaces of shared"),
+    );
   });
 
   it("/settings は最初の Store のワークスペースに置き換える（履歴を積まない）", async () => {
