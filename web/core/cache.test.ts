@@ -62,6 +62,35 @@ describe("TaskCache lists", () => {
     w.dispose();
   });
 
+  it("marks the context ancestors on the tree node, not on the row", async () => {
+    let ctx = true;
+    const { cache, conn } = setup((req) => {
+      if (req.query.get("tree") === "true") {
+        return { roots: [tv("R", "r", { context: ctx, children: [tv("A", "a")] })] };
+      }
+      return { tasks: [tv("R", "r")] }; // another query finds R itself: no context
+    });
+    const w = cache.watchTree({ q: "x", tree: true });
+    await vi.waitFor(() => expect(w.loading()).toBe(false));
+    expect(w.roots()).toEqual([
+      { ulid: "R", context: true, children: [{ ulid: "A", children: [] }] },
+    ]);
+    expect(cache.task("R")).not.toHaveProperty("context");
+
+    const l = cache.watchList({ q: "y", tree: false });
+    await vi.waitFor(() => expect(l.loading()).toBe(false));
+    expect(w.roots()[0]?.context).toBe(true);
+
+    // the tree follows the answer when the mark itself changes
+    ctx = false;
+    conn.emit("resync");
+    await settle();
+    await settle();
+    expect(w.roots()[0]).toEqual({ ulid: "R", children: [{ ulid: "A", children: [] }] });
+    w.dispose();
+    l.dispose();
+  });
+
   it("keeps the objects of the tasks that did not change when it fetches again", async () => {
     let titleB = "b";
     const { cache, conn } = setup(() => ({

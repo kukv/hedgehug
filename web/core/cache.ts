@@ -4,7 +4,10 @@ import { callAll } from "./listeners";
 
 export type LiveMark = { label: "CLI で更新 · 今" | "同期で更新 · 今"; until: number };
 export type ListQuery = { q: string; tree: boolean; store?: string };
-export type TreeNode = { ulid: string; children: TreeNode[] };
+// context is true for a task the tree holds only as the ancestor of a task the
+// query found. It is a mark of this tree, not of the task: another query may
+// find the same task, so the row does not keep it.
+export type TreeNode = { ulid: string; children: TreeNode[]; context?: boolean };
 
 // How long a task stays marked as changed from outside.
 const MARK_MS = 10_000;
@@ -58,7 +61,8 @@ function reuseNodes(next: TreeNode[], prev: TreeNode[]): TreeNode[] {
     const p = before.get(n.ulid);
     if (!p) return n;
     const children = reuseNodes(n.children, p.children);
-    return children === p.children ? p : { ulid: n.ulid, children };
+    if (children === p.children && p.context === n.context) return p;
+    return n.context ? { ulid: n.ulid, children, context: true } : { ulid: n.ulid, children };
   });
   return sameList(out, prev) ? prev : out;
 }
@@ -72,11 +76,12 @@ function toApiError(e: unknown): ApiError {
   });
 }
 
-// rowOf is the row of a task: a TaskView without its children, and without
-// what a ShowView adds.
+// rowOf is the row of a task: a TaskView without its children, without
+// what a ShowView adds, and without context (that belongs to the tree).
 function rowOf(v: object): TaskView {
   const o = { ...v } as Record<string, unknown>;
   for (const k of SHOW_ONLY) delete o[k];
+  delete o.context;
   return o as TaskView;
 }
 
@@ -313,10 +318,14 @@ export class TaskCache {
   private ingestTrees(ts: TaskView[], since: number): TreeNode[] {
     return ts
       .filter((t) => !this.gone(t.ulid, since))
-      .map((t) => ({
-        ulid: this.ingest(t, since).ulid,
-        children: this.ingestTrees(t.children ?? [], since),
-      }));
+      .map((t) => {
+        const node: TreeNode = {
+          ulid: this.ingest(t, since).ulid,
+          children: this.ingestTrees(t.children ?? [], since),
+        };
+        if (t.context) node.context = true;
+        return node;
+      });
   }
 
   // gone is whether a task was purged after the fetch began: the answer is
