@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../core/api/client";
+import { closeCreate, createState } from "../create-state.svelte";
 import { selection } from "../selection.svelte";
 import { emitter } from "../test-utils";
 import { schema, task } from "./fixtures";
@@ -201,6 +202,7 @@ beforeEach(() => {
   h.go.mockReset();
   h.toast.mockReset();
   selection.set(null);
+  closeCreate();
 });
 
 describe("TreeView", () => {
@@ -874,11 +876,12 @@ describe("TreeView", () => {
 describe("TreeView empty states", () => {
   const empty = [{ ulid: "P", children: [] }];
 
-  it("says that an empty project has no task yet, with no button for a screen that is not there", () => {
+  it("offers to create the first task of an empty project", async () => {
     setup({ roots: empty });
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     expect(screen.getByText("リリース準備 v2.4 にはまだタスクがありません")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /タスクを作成/ })).toBeNull();
+    await fireEvent.click(screen.getByRole("button", { name: /タスクを作成/ }));
+    expect(createState.request).toEqual({ kind: "task", parent: "P" });
   });
 
   it("says that nothing matches a filter and clears it", async () => {

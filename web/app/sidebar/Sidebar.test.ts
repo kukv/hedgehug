@@ -1,5 +1,6 @@
 import { cleanup, fireEvent } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { closeCreate, createState } from "../create-state.svelte";
 import { renderWithCore } from "../test-utils";
 import Sidebar from "./Sidebar.svelte";
 
@@ -35,6 +36,7 @@ function mount() {
 
 beforeEach(() => {
   history.replaceState(null, "", "/");
+  closeCreate();
 });
 afterEach(() => {
   cleanup();
@@ -94,5 +96,11 @@ describe("Sidebar", () => {
     const { getByRole } = mount();
     await fireEvent.click(getByRole("link", { name: /リリース準備 v2.4/ }));
     expect(location.pathname).toBe("/projects/01PRJ1");
+  });
+
+  it("プロジェクトを追加で作成ダイアログの要求を出す", async () => {
+    const { getByRole } = mount();
+    await fireEvent.click(getByRole("button", { name: "プロジェクトを追加" }));
+    expect(createState.request).toEqual({ kind: "project" });
   });
 });

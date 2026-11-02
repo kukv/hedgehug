@@ -4,6 +4,7 @@
   import { takeToken } from "../core/token";
   import { setCore } from "./context";
   import { createCore } from "./core-factory";
+  import CreateHost from "./create/CreateHost.svelte";
   import TaskDetail from "./detail/TaskDetail.svelte";
   import { router } from "./router";
   import Sidebar from "./sidebar/Sidebar.svelte";
@@ -101,6 +102,7 @@
 {#if down}
   <Disconnected lastOpenAt={conn.current.lastOpenAt} />
 {/if}
+<CreateHost />
 <Toasts />
 
 <style>

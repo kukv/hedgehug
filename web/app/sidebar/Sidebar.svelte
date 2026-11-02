@@ -1,5 +1,6 @@
 <script lang="ts">
   import { core } from "../context";
+  import { openCreate } from "../create-state.svelte";
   import Icon from "../icons/Icon.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
   import { hrefOf, onLinkClick, router } from "../router";
@@ -27,6 +28,14 @@
   <section class="ws-section" aria-label="ワークスペース">
     <div class="ws-head">
       <span class="ws-title">ワークスペース</span>
+      <button
+        type="button"
+        class="add"
+        aria-label="プロジェクトを追加"
+        onclick={() => openCreate({ kind: "project" })}
+      >
+        <Icon name="folder-plus" size={14} />
+      </button>
     </div>
 
     {#each workspaces.current as w, i (`${w.store}/${w.ulid}`)}
@@ -126,6 +135,21 @@
     font-size: var(--fs-11);
     font-weight: 600;
     letter-spacing: 0.04em;
+  }
+  .add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: 0;
+    border-radius: var(--radius-6);
+    background: transparent;
+    color: var(--label);
+    cursor: pointer;
+  }
+  .add:hover {
+    background: var(--hover);
   }
   .ws {
     display: flex;

@@ -47,7 +47,7 @@ export function cliLine(args: Arg[]): string {
 }
 
 export function cliAdd(i: {
-  title: string;
+  title: Arg;
   parent?: string;
   after?: string;
   before?: string;

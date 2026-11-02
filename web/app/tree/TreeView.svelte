@@ -6,6 +6,7 @@
   import { cliLs } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
+  import { openCreate } from "../create-state.svelte";
   import Icon from "../icons/Icon.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
   import { kbdLabel, modKey } from "../keys";
@@ -763,7 +764,11 @@
         <p class="note">読み込み中…</p>
       {:else if rows.length === 0 && !adding && !treeError}
         {#if noTasks}
-          <Empty variant="empty" {...emptyProps} />
+          <Empty
+            variant="empty"
+            {...emptyProps}
+            onCreate={() => openCreate({ kind: "task", parent: viewRoot ?? undefined })}
+          />
         {:else}
           <Empty
             variant="nomatch"
