@@ -14,10 +14,14 @@
   import StoreBadge from "../ui/StoreBadge.svelte";
   import BodyEditor from "./BodyEditor.svelte";
   import Checklist from "./Checklist.svelte";
+  import Comments from "./Comments.svelte";
   import { toggleChecklistLine } from "./checklist-items";
+  import DeleteDialogs from "./DeleteDialogs.svelte";
   import FieldInput from "./FieldInput.svelte";
+  import History from "./History.svelte";
   import { ancestorChain, type Crumb, collapseCrumbs, createLookup } from "./lookup";
   import PropsPanel from "./PropsPanel.svelte";
+  import Relations from "./Relations.svelte";
   import { isWatching } from "./watch";
 
   let { ulid }: { ulid: string } = $props();
@@ -194,7 +198,9 @@
         <Button size="sm" onclick={toggleWatch} disabled={s.deleted_at != null}
           >{watching ? "ウォッチ中" : "ウォッチ"}</Button
         >
-        <!-- delete-action -->
+        {#if s.deleted_at == null && !s.broken}
+          <DeleteDialogs show={s} variant="delete" />
+        {/if}
       </div>
     </header>
 
@@ -230,7 +236,7 @@
     {#if s.deleted_at != null}
       <div class="band deleted" role="status" aria-label="削除済み">
         <span>削除済み（{formatDateTime(s.deleted_at, new Date())}）。編集はできません。</span>
-        <!-- deleted-actions -->
+        <DeleteDialogs show={s} variant="deleted" />
       </div>
     {/if}
 
@@ -285,7 +291,9 @@
             />
           </section>
           <Checklist body={liveBody ?? s.body} readonly={locked} ontoggle={toggleCheck} />
-          <!-- detail-sections -->
+          <Relations show={s} readonly={locked} />
+          <Comments show={s} readonly={locked} />
+          <History show={s} readonly={locked} />
         </article>
         <aside aria-label="プロパティ">
           <PropsPanel show={s} readonly={locked} />
