@@ -154,10 +154,6 @@
     flex: 1;
   }
   kbd {
-    padding: 1px 5px;
-    border: 1px solid var(--line-input);
-    border-radius: var(--radius-4);
-    color: var(--label);
     font-size: var(--fs-11);
   }
   .ws-section {
@@ -181,8 +177,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: var(--control-h-sm);
+    height: var(--control-h-sm);
     border: 0;
     border-radius: var(--radius-6);
     background: transparent;

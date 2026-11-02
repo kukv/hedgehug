@@ -38,6 +38,17 @@ describe("Relations", () => {
     await waitFor(() => expect(within(group).getByText("変更後の題")).toBeInTheDocument());
   });
 
+  it("keeps the ID a link and shows the ULID to copy when the pointer is on it", async () => {
+    setup();
+    const group = await screen.findByRole("group", { name: "ブロックされている" });
+    const link = within(group).getByRole("link", { name: "REL-2" });
+    expect(link).toHaveAttribute("href", "/tasks/UB");
+    expect(within(group).queryByText("UB")).toBeNull();
+    await fireEvent.mouseEnter(link.parentElement as HTMLElement);
+    expect(within(group).getByText("UB")).toBeInTheDocument();
+    expect(within(group).getByRole("button", { name: "ULID をコピー" })).toBeInTheDocument();
+  });
+
   it("removes a blocker with a PATCH of the rest", async () => {
     const { k } = setup();
     k.api.PATCH.mockImplementation(() => ok({ task: taskView({ ulid: "U6" }), commit: "c1" }));

@@ -3,8 +3,16 @@
 
   // reveal: the owner shows the ULID (a row of the tree does while the keyboard is on it), to
   // read. The ID is not a stop of the Tab key: the row is.
-  type Props = { id: string; ulid: string; alwaysUlid?: boolean; reveal?: boolean };
-  let { id, ulid, alwaysUlid = false, reveal = false }: Props = $props();
+  // href: the ID is a link (a task listed in a detail), and onopen is how the app follows it.
+  type Props = {
+    id: string;
+    ulid: string;
+    alwaysUlid?: boolean;
+    reveal?: boolean;
+    href?: string;
+    onopen?: (e: MouseEvent) => void;
+  };
+  let { id, ulid, alwaysUlid = false, reveal = false, href, onopen }: Props = $props();
 
   let hover = $state(false);
   let focus = $state(false);
@@ -35,7 +43,11 @@
   onclick={(e) => e.stopPropagation()}
   onkeydown={(e) => e.stopPropagation()}
 >
-  <button type="button" class="id" tabindex="-1">{id}</button>
+  {#if href}
+    <a class="id link" {href} onclick={onopen}>{id}</a>
+  {:else}
+    <button type="button" class="id" tabindex="-1">{id}</button>
+  {/if}
   {#if alwaysUlid}
     <span class="ulid">{ulid}</span>
   {:else if show}
@@ -63,6 +75,10 @@
     font-family: var(--font-mono);
     font-size: var(--fs-mono);
     cursor: default;
+  }
+  .link {
+    text-decoration: none;
+    cursor: pointer;
   }
   .ulid {
     color: var(--muted);

@@ -6,6 +6,7 @@
   import { onLinkClick, router } from "../router";
   import { useSubscribe } from "../svelte-store";
   import Button from "../ui/Button.svelte";
+  import IdLabel from "../ui/IdLabel.svelte";
   import FieldInput from "./FieldInput.svelte";
   import { createLookup, crumbsSig } from "./lookup";
   import {
@@ -136,12 +137,12 @@
         {#each g.items as it (it.raw)}
           <li>
             <StatusIcon status={it.status ?? "todo"} category={categoryOf(it.status)} />
-            <a
-              class="id"
+            <IdLabel
+              id={it.id}
+              ulid={it.ulid}
               href={router.href({ name: "task", ulid: it.ulid })}
-              onclick={(e) => onLinkClick(e, router.href({ name: "task", ulid: it.ulid }))}
-              >{it.id}</a
-            >
+              onopen={(e) => onLinkClick(e, router.href({ name: "task", ulid: it.ulid }))}
+            />
             <span class="title">{it.title}</span>
             {#if g.removable && !readonly}
               <button
@@ -213,12 +214,6 @@
     align-items: center;
     min-height: var(--control-h-sm);
     font-size: var(--fs-13);
-  }
-  .id {
-    font-family: var(--font-mono);
-    font-size: var(--fs-12);
-    color: var(--muted);
-    text-decoration: none;
   }
   .title {
     flex: 1;
