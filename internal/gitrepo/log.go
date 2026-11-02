@@ -91,25 +91,37 @@ func (r *Repo) Log(prefixes []string, limit int) ([]LogEntry, error) {
 	return out, nil
 }
 
+// WalkFirstParents calls fn with the commits from from along the first
+// parents, newest first, until fn returns false. The zero hash has none.
+func (r *Repo) WalkFirstParents(from plumbing.Hash, fn func(LogEntry) bool) error {
+	for h := from; !h.IsZero(); {
+		c, err := r.r.CommitObject(h)
+		if err != nil {
+			return fmt.Errorf("commit %s: %w", h, err)
+		}
+		if !fn(entry(c)) {
+			return nil
+		}
+		h = plumbing.ZeroHash
+		if len(c.ParentHashes) > 0 {
+			h = c.ParentHashes[0]
+		}
+	}
+	return nil
+}
+
 // LogFrom returns the commits from from along the first parents, newest
 // first: the history of the line from was made on, without the commits a
 // merge brought in. A limit above zero caps the number of entries. The zero
 // hash has an empty log.
 func (r *Repo) LogFrom(from plumbing.Hash, limit int) ([]LogEntry, error) {
 	var out []LogEntry
-	for h := from; !h.IsZero(); {
-		c, err := r.r.CommitObject(h)
-		if err != nil {
-			return nil, fmt.Errorf("commit %s: %w", h, err)
-		}
-		out = append(out, entry(c))
-		if limit > 0 && len(out) >= limit {
-			break
-		}
-		h = plumbing.ZeroHash
-		if len(c.ParentHashes) > 0 {
-			h = c.ParentHashes[0]
-		}
+	err := r.WalkFirstParents(from, func(e LogEntry) bool {
+		out = append(out, e)
+		return limit <= 0 || len(out) < limit
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }
