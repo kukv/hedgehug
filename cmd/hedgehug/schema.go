@@ -24,7 +24,7 @@ func (a *app) schemaCmd() *cobra.Command {
 			return usageErrorf("a subcommand is needed")
 		},
 	}
-	cmd.AddCommand(a.checkCmd(), a.migrateCmd())
+	cmd.AddCommand(a.checkCmd(), a.migrateCmd(), a.scopeCmd())
 	return cmd
 }
 
