@@ -24,7 +24,7 @@ func (ss *Session) finishRebuild(e config.StoreEntry) error {
 	if err != nil {
 		// No store (or a broken one) to lock: the swap is finished as it is.
 		if _, serr := os.Lstat(e.Path); errors.Is(serr, fs.ErrNotExist) {
-			return sync.FinishLeftover(e.Path, l)
+			return ss.finishLeftover(e, l)
 		}
 		return nil // the store's own problem; the sync tells of it
 	}
@@ -34,8 +34,17 @@ func (ss *Session) finishRebuild(e config.StoreEntry) error {
 		if err != nil || l.None() {
 			return err
 		}
-		return sync.FinishLeftover(e.Path, l)
+		return ss.finishLeftover(e, l)
 	})
+}
+
+// finishLeftover is sync.FinishLeftover, telling where an old store was kept.
+func (ss *Session) finishLeftover(e config.StoreEntry, l sync.Leftover) error {
+	kept, err := sync.FinishLeftoverKept(e.Path, l)
+	for _, p := range kept {
+		ss.warn(fmt.Sprintf("the old store of %s, with changes that were not put back, is kept at %s", e.Name, p))
+	}
+	return err
 }
 
 // Rebuilt is what doctor --fix did to a store a sync found force pushed: it
@@ -90,6 +99,9 @@ func (ss *Session) rebuildStore(c *config.Config, e config.StoreEntry) (*Rebuilt
 	}
 	if err != nil {
 		return nil, err
+	}
+	for _, w := range b.Warnings {
+		ss.warn(e.Name + ": " + w)
 	}
 	if left, lerr := sync.FindLeftover(dir); lerr == nil && !left.None() {
 		ss.warn(sync.LeftoverMessage(e.Name))

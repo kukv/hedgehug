@@ -27,6 +27,11 @@ const (
 	// when the rebuild could not put back all its unpushed changes. It is
 	// not a leftover (FindLeftover does not see it): nothing removes it.
 	keptPrefix = ".kept-"
+	// keepMarker is a file in .hedgehug/local of the old store, written
+	// before the swap moves it away, that says it must be kept: whoever
+	// would remove a .before-rewrite- directory with it renames it to
+	// keptPrefix instead. It is not carried over to the new store.
+	keepMarker = "rebuild-keep"
 )
 
 // ErrDirtyRebuild means the store has changes that were not committed, which
@@ -63,6 +68,9 @@ type Rebuild struct {
 	// Kept is where Swap left the old store; "" when it removed it. The old
 	// store is kept when Purged is not empty.
 	Kept string
+	// Warnings are what failed after the swap was done, which Swap did not
+	// undo (the old store stays where it is).
+	Warnings []string
 
 	seen map[string]stamp // the local files copyLocal copied
 }
@@ -305,7 +313,7 @@ func findDropped(r, nr *gitrepo.Repo, base, oldHead, head plumbing.Hash, b *Rebu
 // atomic write names it so; LocalFiles skips it too), not a file of its
 // own.
 func skipLocal(name string) bool {
-	return name == "lock" || strings.HasSuffix(name, ".lock") || name == "index" || name == forcePushFile ||
+	return name == "lock" || strings.HasSuffix(name, ".lock") || name == "index" || name == forcePushFile || name == keepMarker ||
 		strings.HasPrefix(name, ".")
 }
 
@@ -485,13 +493,20 @@ func Swap(dir string, b *Rebuild) error {
 		return err
 	}
 	beforeRename()
-	prefix := beforePrefix
-	if len(b.Purged) > 0 {
-		prefix = keptPrefix
+	when := time.Now().UTC().Format("20060102T150405.000000000")
+	before := dir + beforePrefix + when
+	keep := len(b.Purged) > 0
+	if keep {
+		// Written before the first rename, so that whoever finds the old
+		// store left behind knows it is not to be removed.
+		if err := store.WriteLocalIn(dir, keepMarker, []byte("the unpushed changes of this store were not all put back; keep it\n")); err != nil {
+			_ = os.RemoveAll(b.Dir)
+			return fmt.Errorf("swap the rebuilt store in: %w", err)
+		}
 	}
-	before := dir + prefix + time.Now().UTC().Format("20060102T150405.000000000")
 	if err := os.Rename(dir, before); err != nil {
 		_ = os.RemoveAll(b.Dir)
+		removeKeepMarker(dir)
 		return fmt.Errorf("swap the rebuilt store in: %w", err)
 	}
 	// Nothing new can start in the old store now, but a command that took
@@ -509,6 +524,7 @@ func Swap(dir string, b *Rebuild) error {
 			// merr says that FinishLeftover may not know the rebuild is stale.
 			return errors.Join(err, rerr, merr)
 		}
+		removeKeepMarker(dir)
 		if errors.Is(err, ErrRebuildStale) {
 			_ = os.RemoveAll(b.Dir)
 		}
@@ -519,6 +535,7 @@ func Swap(dir string, b *Rebuild) error {
 		if rerr := os.Rename(before, dir); rerr != nil {
 			return errors.Join(err, rerr)
 		}
+		removeKeepMarker(dir)
 		_ = os.RemoveAll(b.Dir)
 		return err
 	}
@@ -526,14 +543,30 @@ func Swap(dir string, b *Rebuild) error {
 	// brought over now, from where it was moved to.
 	if _, err := syncLocal(before, dir, seen); err != nil {
 		// The rebuilt store is in place; the old one stays for a look.
-		return fmt.Errorf("carry over the local files of %s: %w", before, err)
+		b.Warnings = append(b.Warnings, fmt.Sprintf("carry over the local files of %s: %v", before, err))
+		if keep {
+			b.Kept = before
+		}
+		return nil
 	}
-	if len(b.Purged) > 0 {
+	if !keep {
+		_ = os.RemoveAll(before)
+		return nil
+	}
+	kept := dir + keptPrefix + when
+	if err := os.Rename(before, kept); err != nil {
+		// It stays where it is, with the marker: nothing removes it.
+		b.Warnings = append(b.Warnings, fmt.Sprintf("rename the old store %s to %s: %v", before, kept, err))
 		b.Kept = before
 		return nil
 	}
-	_ = os.RemoveAll(before)
+	b.Kept = kept
 	return nil
+}
+
+// removeKeepMarker removes the marker of a store that stays in its place.
+func removeKeepMarker(dir string) {
+	_ = os.Remove(filepath.Join(dir, filepath.FromSlash(store.LocalDir), keepMarker))
 }
 
 // checkUnchanged returns ErrRebuildStale unless the store at dir is as it
@@ -621,6 +654,20 @@ func (e *LeftoverError) Error() string { return LeftoverMessage(e.Name) }
 // left. With no store at dir, the rebuilt one takes its place; with only an
 // old one left, it is put back. Then what remains beside the store goes.
 func FinishLeftover(dir string, l Leftover) error {
+	_, err := FinishLeftoverKept(dir, l)
+	return err
+}
+
+// FinishLeftoverKept is FinishLeftover that also returns where it kept an
+// old store that carries keepMarker: that one is renamed to keptPrefix, not
+// removed; when it cannot be, it stays and the error names it.
+func FinishLeftoverKept(dir string, l Leftover) (kept []string, err error) {
+	keptPaths := &kept
+	err = finishLeftover(dir, l, keptPaths)
+	return kept, err
+}
+
+func finishLeftover(dir string, l Leftover, keptPaths *[]string) error {
 	if _, err := os.Lstat(dir); errors.Is(err, fs.ErrNotExist) {
 		stale := false
 		if l.New != "" {
@@ -635,6 +682,7 @@ func FinishLeftover(dir string, l Leftover) error {
 			if err := os.Rename(last, dir); err != nil {
 				return fmt.Errorf("finish the rebuild: %w", err)
 			}
+			removeKeepMarker(dir)
 			l.Before = l.Before[:len(l.Before)-1]
 		case l.New != "":
 			if err := os.Rename(l.New, dir); err != nil {
@@ -650,6 +698,7 @@ func FinishLeftover(dir string, l Leftover) error {
 			if err := os.Rename(last, dir); err != nil {
 				return fmt.Errorf("finish the rebuild: %w", err)
 			}
+			removeKeepMarker(dir)
 			l.Before = l.Before[:len(l.Before)-1]
 		}
 	} else if err != nil {
@@ -665,6 +714,17 @@ func FinishLeftover(dir string, l Leftover) error {
 		// over first, and an old store that could not be read stays.
 		if err := carryMissing(p, dir); err != nil {
 			errs = append(errs, fmt.Errorf("carry over the local files of %s (it is left): %w", p, err))
+			continue
+		}
+		if _, err := os.Lstat(filepath.Join(p, filepath.FromSlash(store.LocalDir), keepMarker)); err == nil {
+			// The old store holds changes the rebuild did not put back: it
+			// is kept, never removed.
+			kept := dir + keptPrefix + strings.TrimPrefix(filepath.Base(p), filepath.Base(dir)+beforePrefix)
+			if err := os.Rename(p, kept); err != nil {
+				errs = append(errs, fmt.Errorf("the old store %s must be kept, and could not be renamed to %s (it is left): %w", p, kept, err))
+				continue
+			}
+			*keptPaths = append(*keptPaths, kept)
 			continue
 		}
 		errs = append(errs, os.RemoveAll(p))
