@@ -5,6 +5,7 @@
   import { createCore } from "./core-factory";
   import { router } from "./router";
   import Sidebar from "./sidebar/Sidebar.svelte";
+  import TreeView from "./tree/TreeView.svelte";
   import Toasts from "./ui/Toasts.svelte";
 
   const token = takeToken(location, sessionStorage, history);
@@ -26,6 +27,17 @@
     <!-- banners -->
     <main class="main" id="main">
       <!-- routes -->
+      {#if router.route.name === "workspace"}
+        {#key `${router.route.store}/${router.route.ulid}`}
+          <TreeView
+            view={{ kind: "workspace", store: router.route.store, ulid: router.route.ulid }}
+          />
+        {/key}
+      {:else if router.route.name === "project"}
+        {#key router.route.ulid}
+          <TreeView view={{ kind: "project", ulid: router.route.ulid }} />
+        {/key}
+      {/if}
     </main>
   </div>
 </div>

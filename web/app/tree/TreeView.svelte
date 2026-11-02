@@ -1,0 +1,663 @@
+<script lang="ts">
+  import { createVirtualizer } from "@tanstack/svelte-virtual";
+  import { tick } from "svelte";
+  import type { TaskView } from "../../core/api/client";
+  import { cliLs } from "../../core/cli";
+  import { errorMessage } from "../../core/messages";
+  import { core } from "../context";
+  import Icon from "../icons/Icon.svelte";
+  import KindIcon from "../icons/KindIcon.svelte";
+  import { modKey } from "../keys";
+  import { router } from "../router";
+  import { selection } from "../selection.svelte";
+  import Empty from "../states/Empty.svelte";
+  import { useSubscribe } from "../svelte-store";
+  import { toast } from "../toast.svelte";
+  import Menu from "../ui/Menu.svelte";
+  import StoreBadge from "../ui/StoreBadge.svelte";
+  import AddRow from "./AddRow.svelte";
+  import { createBelow, moveTask, patchTask } from "./actions";
+  import FilterBar from "./FilterBar.svelte";
+  import { baseQuery, combine, hasTerm, NO_CANCELED, type QueryBase, withoutTerm } from "./filter";
+  import {
+    countLabel,
+    countMatched,
+    type FlatRow,
+    flatten,
+    ROW_HEIGHT,
+    VIRTUALIZE_AT,
+  } from "./flatten";
+  import { type KeyAction, type KeyInput, keyAction, needsSchema } from "./keyboard";
+  import { openBlocker } from "./marks";
+  import { checkParent, kindLabel, pickKind } from "./placement";
+  import TreeRow from "./TreeRow.svelte";
+
+  type Scope =
+    | { kind: "workspace"; store: string; ulid: string }
+    | { kind: "project"; ulid: string };
+  // The prop is not called scope: Biome reads that name as the HTML attribute.
+  let { view: scope }: { view: Scope } = $props();
+
+  const c = core();
+  const cacheRev = useSubscribe(c.cache, () => ({}));
+  const storesRev = useSubscribe(c.stores, () => ({}));
+  const schemaRev = useSubscribe(c.schema, () => ({}));
+
+  // --- what the view shows -------------------------------------------------
+  const project = $derived.by(() => {
+    cacheRev.current;
+    return scope.kind === "project" ? c.cache.task(scope.ulid) : undefined;
+  });
+  const store = $derived(scope.kind === "workspace" ? scope.store : project?.store);
+  const workspace = $derived.by(() => {
+    storesRev.current;
+    if (scope.kind === "workspace") return c.stores.workspace(scope.store, scope.ulid);
+    if (!project) return undefined;
+    return c.stores
+      .workspaces()
+      .find((w) => w.store === project.store && w.ulid === project.workspace.ulid);
+  });
+  const schema = $derived.by(() => {
+    schemaRev.current;
+    return store ? c.schema.get(store) : undefined;
+  });
+  const viewRoot = $derived(scope.kind === "project" ? scope.ulid : null);
+  const base = $derived<QueryBase | null>(
+    scope.kind === "workspace"
+      ? workspace
+        ? { kind: "workspace", name: workspace.name }
+        : null
+      : project
+        ? { kind: "project", ulid: project.ulid, id: project.id }
+        : null,
+  );
+  const apiBase = $derived(base ? baseQuery(base, "api") : null);
+  const cliBase = $derived(base ? baseQuery(base, "cli") : "");
+
+  $effect(() => {
+    if (scope.kind !== "project") return;
+    const h = c.cache.watchDetail(scope.ulid);
+    return () => h.dispose();
+  });
+  // Keys that need the schema, pressed before it is read, wait here and run once it is.
+  let waiting: KeyInput[] = [];
+  let schemaFailed = false;
+  $effect(() => {
+    if (!store) return;
+    schemaFailed = false;
+    c.schema.load(store).catch((err) => {
+      schemaFailed = true;
+      if (waiting.length > 0) toast({ message: errorMessage(err) });
+      waiting = [];
+    });
+  });
+  $effect(() => {
+    if (!schema || waiting.length === 0) return;
+    const keys = waiting;
+    waiting = [];
+    void (async () => {
+      for (const k of keys) {
+        const a = actionOf(k);
+        if (a.type !== "none") await run(a);
+      }
+    })();
+  });
+
+  // --- the query -----------------------------------------------------------
+  // The default filter leaves the canceled tasks out; clearing the field shows them.
+  let applied = $state<string>(NO_CANCELED);
+
+  type TreeHandle = ReturnType<typeof c.cache.watchTree>;
+  type ListHandle = ReturnType<typeof c.cache.watchList>;
+  let tree = $state<TreeHandle | null>(null);
+  let blockedList = $state<ListHandle | null>(null);
+  let canceledList = $state<ListHandle | null>(null);
+
+  $effect(() => {
+    if (!apiBase || !store) {
+      tree = null;
+      return;
+    }
+    const h = c.cache.watchTree({ q: combine(apiBase, applied), tree: true, store });
+    tree = h;
+    return () => h.dispose();
+  });
+  $effect(() => {
+    if (!apiBase || !store) {
+      blockedList = null;
+      return;
+    }
+    const h = c.cache.watchList({ q: combine(apiBase, "is:blocked"), tree: false, store });
+    blockedList = h;
+    return () => h.dispose();
+  });
+  $effect(() => {
+    if (!apiBase || !store || !hasTerm(applied, NO_CANCELED)) {
+      canceledList = null;
+      return;
+    }
+    const q = combine(apiBase, `${withoutTerm(applied, NO_CANCELED)} status:canceled`);
+    const h = c.cache.watchList({ q, tree: false, store });
+    canceledList = h;
+    return () => h.dispose();
+  });
+
+  const roots = $derived.by(() => {
+    cacheRev.current;
+    return tree?.roots() ?? [];
+  });
+  const loading = $derived.by(() => {
+    cacheRev.current;
+    return base === null || (tree?.loading() ?? true);
+  });
+  const treeError = $derived.by(() => {
+    cacheRev.current;
+    return tree?.error() ?? null;
+  });
+  const blocked = $derived.by(() => {
+    cacheRev.current;
+    return new Set(blockedList?.ulids() ?? []);
+  });
+  const canceledCount = $derived.by(() => {
+    cacheRev.current;
+    return canceledList ? canceledList.ulids().length : null;
+  });
+
+  function isClosed(t: TaskView): boolean {
+    const category = c.schema.get(t.store)?.statuses?.find((s) => s.name === t.status)?.category;
+    return category === "done" || category === "canceled";
+  }
+
+  function taskOf(ulid: string): TaskView | undefined {
+    return c.cache.task(ulid);
+  }
+
+  // --- the rows --------------------------------------------------------------
+  let collapsed = $state<ReadonlySet<string>>(new Set());
+  const rows = $derived.by(() => {
+    cacheRev.current;
+    return flatten(roots, viewRoot, taskOf, collapsed);
+  });
+  const matched = $derived.by(() => {
+    cacheRev.current;
+    return countMatched(roots, viewRoot, taskOf);
+  });
+
+  type Adding = { after: string | null; parent: string | null; depth: number };
+  let adding = $state<Adding | null>(null);
+  type Item = { type: "row"; row: FlatRow } | { type: "add"; depth: number };
+  const items = $derived.by<Item[]>(() => {
+    const list: Item[] = rows.map((row) => ({ type: "row", row }));
+    if (!adding) return list;
+    let at = list.length;
+    if (adding.after !== null) {
+      const i = rows.findIndex((r) => r.ulid === adding?.after);
+      if (i >= 0) {
+        const depth = rows[i]?.depth ?? 0;
+        at = i + 1;
+        while (at < rows.length && (rows[at]?.depth ?? 0) > depth) at++;
+      }
+    }
+    list.splice(at, 0, { type: "add", depth: adding.depth });
+    return list;
+  });
+
+  function select(ulid: string | null) {
+    selection.set(ulid);
+  }
+  async function focusRow(ulid: string) {
+    const i = items.findIndex((it) => it.type === "row" && it.row.ulid === ulid);
+    if (i >= 0) vinst?.scrollToIndex(i);
+    await tick();
+    scroller?.querySelector<HTMLElement>(`[data-ulid="${ulid}"]`)?.focus();
+  }
+  function toggle(ulid: string, openIt: boolean) {
+    const next = new Set(collapsed);
+    if (openIt) next.delete(ulid);
+    else next.add(ulid);
+    collapsed = next;
+  }
+
+  // --- virtual scrolling -------------------------------------------------------
+  const virtualized = $derived(items.length > VIRTUALIZE_AT);
+  let scroller = $state<HTMLDivElement | null>(null);
+  type Virtualizer = {
+    getVirtualItems(): { index: number; start: number }[];
+    getTotalSize(): number;
+    scrollToIndex(i: number): void;
+    setOptions(o: { count: number; getScrollElement: () => HTMLDivElement | null }): void;
+  };
+  let vinst = $state.raw<Virtualizer | null>(null);
+  let windowed = $state<{ index: number; start: number }[]>([]);
+  let totalSize = $state(0);
+  const virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
+    count: 0,
+    getScrollElement: () => scroller,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 12,
+  });
+  $effect(() =>
+    virtualizer.subscribe((v) => {
+      vinst = v as unknown as Virtualizer;
+      windowed = v.getVirtualItems();
+      totalSize = v.getTotalSize();
+    }),
+  );
+  // The window is only asked for while the list is long.
+  $effect(() => {
+    vinst?.setOptions({
+      count: virtualized ? items.length : 0,
+      getScrollElement: () => scroller,
+    });
+  });
+
+  // --- keys ------------------------------------------------------------------------
+  let menu = $state<{ which: "status" | "kind"; ulid: string } | null>(null);
+
+  function actionOf(k: KeyInput): KeyAction {
+    return keyAction(k, { rows, selected: selection.ulid, schema, viewRoot, taskOf });
+  }
+
+  function onkeydown(e: KeyboardEvent) {
+    if ((e.target as HTMLElement).closest("input, textarea, select, [contenteditable='true']"))
+      return;
+    const k = { key: e.key, shift: e.shiftKey, alt: e.altKey, mod: modKey(e) };
+    if (!schema && needsSchema(k)) {
+      e.preventDefault();
+      if (schemaFailed) toast({ message: `${store} の schema.yaml を読み込めていません` });
+      else waiting.push(k);
+      return;
+    }
+    const a = actionOf(k);
+    if (a.type === "none") return;
+    e.preventDefault();
+    void run(a);
+  }
+
+  async function run(a: KeyAction) {
+    try {
+      switch (a.type) {
+        case "select":
+          select(a.ulid);
+          await focusRow(a.ulid);
+          break;
+        case "toggle":
+          toggle(a.ulid, a.open);
+          break;
+        case "add-below": {
+          const depth = rows.find((r) => r.ulid === a.after)?.depth ?? 0;
+          adding = { after: a.after, parent: a.parent, depth };
+          break;
+        }
+        case "move": {
+          const t = taskOf(a.ulid);
+          if (!t) break;
+          if (a.to.parent) toggle(a.to.parent, true);
+          await moveTask(c, t, a.to);
+          await focusRow(a.ulid);
+          break;
+        }
+        case "set-status": {
+          const t = taskOf(a.ulid);
+          if (t) await patchTask(c, t, { status: a.status });
+          break;
+        }
+        case "menu":
+          menu = { which: a.which, ulid: a.ulid };
+          break;
+        case "reject":
+          toast({ message: `${a.rejection.title}。${a.rejection.reason}` });
+          break;
+      }
+    } catch (err) {
+      toast({ message: errorMessage(err) });
+    }
+  }
+
+  const menuTask = $derived(menu ? taskOf(menu.ulid) : undefined);
+  const menuItems = $derived.by(() => {
+    if (!menu || !menuTask || !schema) return [];
+    if (menu.which === "status") {
+      return (schema.statuses ?? []).map((s) => ({ value: s.name, label: s.label || s.name }));
+    }
+    const parent = menuTask.parent ? taskOf(menuTask.parent) : undefined;
+    return (schema.kinds ?? []).map((k) => {
+      const why = checkParent(schema, { ...menuTask, kind: k.name }, parent ?? null);
+      return { value: k.name, label: k.label || k.name, disabled: why !== null, hint: why?.title };
+    });
+  });
+  async function pickFromMenu(value: string) {
+    const t = menuTask;
+    const which = menu?.which;
+    menu = null;
+    if (!t || !which) return;
+    try {
+      await patchTask(c, t, which === "status" ? { status: value } : { kind: value });
+    } catch (err) {
+      toast({ message: errorMessage(err) });
+    }
+  }
+
+  // --- adding ------------------------------------------------------------------------
+  const addKind = $derived.by(() => {
+    if (!schema) return null;
+    const parentId = adding ? adding.parent : viewRoot;
+    const parent = parentId ? taskOf(parentId) : undefined;
+    return pickKind(schema, parent?.kind ?? null);
+  });
+  const whereLabel = $derived(
+    scope.kind === "project" && project
+      ? `${project.workspace.name} / ${project.title}`
+      : (workspace?.name ?? ""),
+  );
+
+  function startAdd(a: Adding) {
+    adding = a;
+  }
+
+  async function submitAdd(title: string) {
+    const a = adding;
+    if (!a || !store || !workspace || !schema) return;
+    const parent = a.parent ? taskOf(a.parent) : undefined;
+    const kind = pickKind(schema, parent?.kind ?? null);
+    if (!kind) {
+      toast({
+        message: `${parent ? `${kindLabel(schema, parent.kind)}の下` : "ルート"}に置ける種類がありません（${store} の schema.yaml の kinds）`,
+      });
+      adding = null;
+      return;
+    }
+    const siblings = rows.filter((r) => r.parent === a.parent);
+    try {
+      const created = await createBelow(c, {
+        title,
+        kind,
+        store,
+        parent: a.parent,
+        workspace: workspace.prefix,
+        after: a.after,
+        afterIsLast: a.after === null || siblings[siblings.length - 1]?.ulid === a.after,
+      });
+      select(created.ulid);
+      // keep going below the new row, as an outliner does
+      adding = { after: created.ulid, parent: a.parent, depth: a.depth };
+    } catch (err) {
+      toast({ message: errorMessage(err) });
+    }
+  }
+
+  // --- reading the screen ---------------------------------------------------------------
+  const cli = $derived(
+    cliLs(combine(cliBase, applied), true, scope.kind === "workspace" ? store : undefined),
+  );
+  const rowFocus = $derived(selection.ulid ?? rows[0]?.ulid ?? null);
+  const noTasks = $derived(
+    withoutTerm(applied, NO_CANCELED).trim() === "" && !(canceledCount && canceledCount > 0),
+  );
+  const crumbTitle = $derived(
+    scope.kind === "project" ? (project?.title ?? "") : (workspace?.name ?? ""),
+  );
+  // Spread, because Biome reads a prop called scope as the HTML attribute.
+  const emptyProps = $derived({ scope: scope.kind, name: crumbTitle });
+</script>
+
+<section class="tree" aria-label="ツリー">
+  <header class="head">
+    <nav class="crumb" aria-label="パンくず">
+      {#if store}
+        <StoreBadge {store} tone={c.stores.tone(store)} />
+      {/if}
+      {#if scope.kind === "project"}
+        {#if workspace}
+          <a
+            class="ws"
+            href={router.href({ name: "workspace", store: workspace.store, ulid: workspace.ulid })}
+          >
+            <Icon name="workspace" size={16} />{workspace.name}
+          </a>
+          <span class="sep" aria-hidden="true">›</span>
+        {/if}
+        <KindIcon kind="project" />
+        <h1>{crumbTitle}</h1>
+        {#if project}
+          <span class="id">{project.id}</span>
+        {/if}
+      {:else}
+        <Icon name="workspace" size={16} />
+        <h1>{crumbTitle}</h1>
+        {#if workspace}
+          <span class="id">{workspace.prefix}</span>
+        {/if}
+      {/if}
+    </nav>
+  </header>
+
+  <nav class="tabs" aria-label="ビューの切り替え">
+    <span class="tab" aria-current="page">ツリー</span>
+  </nav>
+
+  <FilterBar
+    base={cliBase}
+    {applied}
+    count={countLabel(matched, canceledCount)}
+    {cli}
+    error={treeError}
+    onchange={(q) => (applied = q)}
+  />
+
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+  <div
+    class="scroller"
+    role="tree"
+    aria-label="{crumbTitle} のタスク"
+    tabindex="-1"
+    bind:this={scroller}
+    {onkeydown}
+  >
+    {#snippet entry(item: Item)}
+      {#if item.type === "row"}
+        <TreeRow
+          row={item.row}
+          {schema}
+          selected={selection.ulid === item.row.ulid}
+          focusable={rowFocus === item.row.ulid}
+          live={c.cache.live(item.row.ulid)}
+          blockedBy={openBlocker(item.row.task, taskOf, isClosed, blocked.has(item.row.ulid))}
+          onselect={() => select(item.row.ulid)}
+          ontoggle={() => toggle(item.row.ulid, !item.row.expanded)}
+        />
+      {:else}
+        <AddRow
+          editing={true}
+          depth={item.depth}
+          where={whereLabel}
+          kindLabel={schema && addKind ? kindLabel(schema, addKind) : ""}
+          ready={!!(store && workspace && schema)}
+          onstart={() => {}}
+          onsubmit={submitAdd}
+          oncancel={() => (adding = null)}
+        />
+      {/if}
+    {/snippet}
+
+    {#if loading && rows.length === 0}
+      <p class="note">読み込み中…</p>
+    {:else if rows.length === 0 && !adding && !treeError}
+      {#if noTasks}
+        <Empty variant="empty" {...emptyProps} />
+      {:else}
+        <Empty
+          variant="nomatch"
+          note={hasTerm(applied, NO_CANCELED) ? "中止を除外しています" : undefined}
+          onClear={() => (applied = "")}
+        />
+      {/if}
+    {/if}
+
+    {#if virtualized}
+      <div class="vbox" style:height="{totalSize}px">
+        {#each windowed as v (v.index)}
+          {@const item = items[v.index]}
+          {#if item}
+            <div class="vrow" style:transform="translateY({v.start}px)">
+              {@render entry(item)}
+            </div>
+          {/if}
+        {/each}
+      </div>
+    {:else}
+      <div class="list">
+        {#each items as item (item.type === "row" ? item.row.ulid : "add")}
+          {@render entry(item)}
+        {/each}
+      </div>
+    {/if}
+
+    {#if !adding}
+      <div class="foot-add">
+        <AddRow
+          editing={false}
+          where={whereLabel}
+          kindLabel={schema && addKind ? kindLabel(schema, addKind) : ""}
+          onstart={() => startAdd({ after: null, parent: viewRoot, depth: 0 })}
+          onsubmit={submitAdd}
+          oncancel={() => {}}
+        />
+      </div>
+    {/if}
+  </div>
+
+  <footer class="keys">
+    <span><kbd>Enter</kbd> 下に追加</span>
+    <span><kbd>Tab</kbd> / <kbd>⇧Tab</kbd> 字下げ・戻す</span>
+    <span><kbd>⌥↑↓</kbd> 並べ替え</span>
+    <span><kbd>Space</kbd> 完了</span>
+    <span><kbd>S</kbd> ステータス</span>
+    <span><kbd>K</kbd> 種類</span>
+    <span class="dnd">ドラッグで並べ替え・親の付け替え（置ける親の種類だけ受け付けます）</span>
+  </footer>
+</section>
+
+{#if menu && menuItems.length > 0}
+  <Menu
+    anchor={scroller?.querySelector<HTMLElement>(`[data-ulid="${menu.ulid}"]`) ?? null}
+    items={menuItems}
+    onselect={(v) => void pickFromMenu(v)}
+    onclose={() => {
+      const u = menu?.ulid;
+      menu = null;
+      if (u) void focusRow(u);
+    }}
+  />
+{/if}
+
+<style>
+  .tree {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+  }
+  .head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1.125rem 1.75rem 0;
+  }
+  .crumb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.625rem;
+    min-width: 0;
+  }
+  .ws {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    color: var(--ink-2);
+    text-decoration: none;
+  }
+  .sep {
+    color: var(--muted-2);
+  }
+  h1 {
+    margin: 0;
+    font-size: 1.19rem;
+    font-weight: 600;
+  }
+  .id {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .tabs {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.625rem 1.75rem 0;
+    border-bottom: var(--hairline) solid var(--line);
+  }
+  .tab {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.25rem;
+    padding: 0 0.75rem;
+    margin-bottom: calc(var(--hairline) * -1);
+    border-bottom: 2px solid var(--ink);
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .scroller {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 0 1rem;
+    outline: none;
+  }
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--hairline);
+  }
+  .vbox {
+    position: relative;
+    width: 100%;
+  }
+  .vrow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+  .foot-add {
+    margin-top: 0.375rem;
+  }
+  .note {
+    margin: 1rem 0.75rem;
+    color: var(--muted);
+  }
+  .keys {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.125rem;
+    padding: 0.625rem 1.75rem;
+    border-top: var(--hairline) solid var(--line);
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+  kbd {
+    padding: 0 0.3rem;
+    border: var(--hairline) solid var(--line);
+    border-radius: var(--radius-4);
+    background: var(--sunken);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--ink-2);
+  }
+  .dnd {
+    margin-left: auto;
+  }
+</style>
