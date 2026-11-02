@@ -21,8 +21,10 @@
     changed: Record<string, CommentView>;
     removed: string[];
   }>({ added: [], changed: {}, removed: [] });
+  // A comment commit leaves the task's `updated` as it is, so the comments themselves are the key.
+  const readKey = $derived(JSON.stringify(show.comments ?? []));
   $effect(() => {
-    void show.updated;
+    void readKey;
     overlay = { added: [], changed: {}, removed: [] };
   });
   const list = $derived.by(() => {

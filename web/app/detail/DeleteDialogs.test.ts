@@ -72,6 +72,32 @@ describe("DeleteDialogs (variant deleted)", () => {
     await waitFor(() => expect(toasts.list[0]?.message).toBe("REL-6 を復元しました"));
   });
 
+  it("sends the restore once while it is running", async () => {
+    const k = makeCore({ show: gone });
+    let done: (v: Awaited<ReturnType<typeof ok>>) => void = () => {};
+    k.api.POST.mockImplementation(
+      () => new Promise<Awaited<ReturnType<typeof ok>>>((r) => (done = r)),
+    );
+    mount(DeleteDialogs, { show: gone, variant: "deleted" }, k);
+    const btn = screen.getByRole("button", { name: "復元" });
+    await fireEvent.click(btn);
+    expect(btn).toBeDisabled();
+    await fireEvent.click(btn);
+    expect(k.api.POST).toHaveBeenCalledTimes(1);
+    done({ data: { commit: "c1", tasks: [] }, response: new Response() });
+    await waitFor(() => expect(btn).toBeEnabled());
+  });
+
+  it("shows only the error, without the confirmation, when the probe fails for another reason", async () => {
+    const k = makeCore({ show: gone });
+    k.api.DELETE.mockImplementation(() => fail(404, "task.not_found"));
+    mount(DeleteDialogs, { show: gone, variant: "deleted" }, k);
+    await fireEvent.click(screen.getByRole("button", { name: "完全に削除" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("textbox", { name: "Store 名" })).toBeNull();
+  });
+
   it("purges only after the targets are listed and the store name is typed", async () => {
     const k = makeCore({ show: gone });
     k.api.DELETE.mockImplementationOnce(() =>

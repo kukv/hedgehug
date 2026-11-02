@@ -21,7 +21,8 @@
   let logs = $state<Log[]>([]);
   let loadError = $state("");
   $effect(() => {
-    void show.updated;
+    // Any commit gives a new show (a comment does not move `updated`).
+    void show;
     let live = true;
     unwrap(
       api.GET("/api/tasks/{id}/history", {

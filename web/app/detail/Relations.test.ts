@@ -39,6 +39,20 @@ describe("Relations", () => {
     );
   });
 
+  it("disables the controls while a change is being written, so the next one cannot lose it", async () => {
+    const { k } = setup();
+    let done: (v: Awaited<ReturnType<typeof ok>>) => void = () => {};
+    k.api.PATCH.mockImplementation(
+      () => new Promise<Awaited<ReturnType<typeof ok>>>((r) => (done = r)),
+    );
+    const remove = await screen.findByRole("button", { name: "REL-2 を外す" });
+    await fireEvent.click(remove);
+    expect(remove).toBeDisabled();
+    expect(screen.getByRole("button", { name: "関連を追加" })).toBeDisabled();
+    done({ data: { task: taskView({ ulid: "U6" }), commit: "c1" }, response: new Response() });
+    await waitFor(() => expect(remove).toBeEnabled());
+  });
+
   it("adds a relation: pick the kind, search, pick a task", async () => {
     const { k } = setup();
     k.api.GET.mockImplementation(() =>

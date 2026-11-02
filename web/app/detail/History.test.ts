@@ -53,6 +53,16 @@ describe("History", () => {
     expect(rows[1]).toHaveTextContent("作成");
   });
 
+  it("reads the log again when only a comment was saved (updated unchanged)", async () => {
+    const { k, rerender } = setup();
+    await screen.findByText(/koki · 変更/);
+    const calls = () =>
+      k.api.GET.mock.calls.filter((c: unknown[]) => c[0] === "/api/tasks/{id}/history").length;
+    expect(calls()).toBe(1);
+    await rerender({ show: { ...show, comments: [{ ulid: "C1" }] }, readonly: false });
+    await waitFor(() => expect(calls()).toBe(2));
+  });
+
   it("offers 'この時点に戻す' on every commit but the newest", async () => {
     setup();
     await screen.findByText(/koki · 変更/);

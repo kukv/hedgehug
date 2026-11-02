@@ -89,6 +89,23 @@ describe("Comments", () => {
     expect(await screen.findByText("直しました")).toBeInTheDocument();
   });
 
+  it("drops its overlay when the comments are read again, even if the task's updated did not change", async () => {
+    const { k, container, rerender } = setup();
+    k.api.PATCH.mockImplementation(() =>
+      ok({ comment: { ...c1, body: "直しました" }, commit: "c2" }),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "編集" }));
+    typeInto(container, "直しました", 0);
+    await fireEvent.click(await screen.findByRole("button", { name: "保存" }));
+    expect(await screen.findByText("直しました")).toBeInTheDocument();
+    await rerender({
+      show: { ...show, comments: [{ ...c1, body: "別の人が直した" }] },
+      readonly: false,
+    });
+    expect(await screen.findByText("別の人が直した")).toBeInTheDocument();
+    expect(screen.queryByText("直しました")).toBeNull();
+  });
+
   it("shows comment.not_author under the comment when someone else's comment is edited", async () => {
     const { k } = setup();
     k.api.PATCH.mockImplementation(() => fail(409, "comment.not_author", { author: "tanaka" }));

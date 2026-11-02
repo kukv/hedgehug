@@ -50,8 +50,8 @@
     try {
       targets = await probePurge(deps, ref);
     } catch (e) {
+      // Not a purge.unconfirmed: no confirmation to show, only the error.
       error = errorMessage(e);
-      targets = [];
     }
   }
 
@@ -78,12 +78,16 @@
   }
 
   async function restore() {
+    if (busy) return;
+    busy = true;
     const { id } = show;
     try {
       await restoreTask(deps, ref);
       toast({ message: `${id} を復元しました` });
     } catch (e) {
       toast({ message: errorMessage(e) });
+    } finally {
+      busy = false;
     }
   }
 
@@ -126,7 +130,7 @@
 {#if variant === "delete"}
   <Button size="sm" onclick={() => void openDelete()}>削除</Button>
 {:else}
-  <Button size="sm" onclick={() => void restore()}>復元</Button>
+  <Button size="sm" disabled={busy} onclick={() => void restore()}>復元</Button>
   <Button size="sm" variant="danger" onclick={() => void openPurge()}>完全に削除</Button>
 {/if}
 
@@ -179,7 +183,9 @@
     <p>タスクのファイルとコメントを消します。Hedgehug からは復元できません。</p>
     <p>git の履歴には残ります。番号 {show.id} は再利用しません。</p>
     {#if targets === null}
-      <p class="muted">対象を調べています…</p>
+      {#if !error}
+        <p class="muted">対象を調べています…</p>
+      {/if}
     {:else}
       <ul>
         {#each targets as t (t.ulid)}

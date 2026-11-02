@@ -47,7 +47,12 @@
   const categoryOf = (status: string | null) =>
     sc.current?.statuses?.find((s) => s.name === status)?.category ?? "todo";
 
+  // One write at a time: the next body is built from `show`, which has the last one only after its answer.
+  let busy = $state(false);
+
   async function patch(body: RefPatch): Promise<boolean> {
+    if (busy) return false;
+    busy = true;
     error = "";
     try {
       const r = await unwrap(
@@ -61,6 +66,8 @@
     } catch (e) {
       error = errorMessage(e);
       return false;
+    } finally {
+      busy = false;
     }
   }
 
@@ -79,7 +86,7 @@
     <h2 id="rel-h">関連</h2>
     <span class="hint">同じ Store（{show.store}）のタスクだけを参照できます</span>
     {#if !readonly}
-      <Button size="sm" onclick={() => (adding = !adding)}>関連を追加</Button>
+      <Button size="sm" disabled={busy} onclick={() => (adding = !adding)}>関連を追加</Button>
     {/if}
   </div>
 
@@ -120,6 +127,7 @@
                 type="button"
                 class="remove"
                 aria-label="{it.id} を外す"
+                disabled={busy}
                 onclick={() => remove(g, it)}
               >
                 ×
