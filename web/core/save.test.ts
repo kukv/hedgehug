@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { TaskCache } from "./cache";
 import { SaveController } from "./save";
-import { FakeConn, fakeApi, problem, tv } from "./testing";
+import { FakeConn, fakeApi, problem, showOf, tv } from "./testing";
 
 function setup(route: Parameters<typeof fakeApi>[0] = () => ({})) {
   const { api, calls } = fakeApi((r) => {
@@ -149,5 +149,47 @@ describe("SaveController", () => {
     await save.flush("A");
     expect(patches()).toHaveLength(0);
     expect(save.state("A")).toEqual({ kind: "idle" });
+  });
+
+  it("puts the sent body into the detail before editing turns false", async () => {
+    const { save, cache } = setup((r) =>
+      r.method === "GET" ? showOf(tv("A", "a"), { body: "old" }) : {},
+    );
+    const w = cache.watchDetail("A");
+    await vi.waitFor(() => expect(w.ulid()).toBe("A"));
+    const seen: { editing: boolean; body?: string }[] = [];
+    save.subscribe(() =>
+      seen.push({ editing: save.editing("A", "body"), body: cache.detail("A")?.body }),
+    );
+    save.edit("A", "shared", "body", "new text");
+    await save.flush("A");
+    expect(cache.detail("A")?.body).toBe("new text");
+    expect(save.editing("A", "body")).toBe(false);
+    for (const s of seen) if (!s.editing) expect(s.body).toBe("new text");
+    w.dispose();
+  });
+
+  it("is not saved while another edit is waiting", async () => {
+    const { save, timers } = setup();
+    let fired = false;
+    save.subscribe(() => {
+      if (fired || save.state("A").kind !== "saving") return;
+      fired = true;
+      save.edit("A", "shared", "title", "again");
+    });
+    save.edit("A", "shared", "title", "one");
+    await save.flush("A");
+    expect(save.state("A").kind).toBe("saving");
+    expect(timers).toHaveLength(1);
+    await save.flush("A");
+    expect(save.state("A").kind).toBe("saved");
+  });
+
+  it("drops the chain of a task when its last PATCH is over", async () => {
+    const { save } = setup();
+    save.edit("A", "shared", "title", "x");
+    await save.flush("A");
+    await Promise.resolve();
+    expect((save as unknown as { chains: Map<string, unknown> }).chains.size).toBe(0);
   });
 });

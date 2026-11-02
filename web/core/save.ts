@@ -107,6 +107,9 @@ export class SaveController {
     // One PATCH of a task at a time, in the order of the edits.
     const next = (this.chains.get(ulid) ?? Promise.resolve()).then(() => this.send(ulid));
     this.chains.set(ulid, next);
+    void next.then(() => {
+      if (this.chains.get(ulid) === next) this.chains.delete(ulid);
+    });
     return next;
   }
 
@@ -150,7 +153,11 @@ export class SaveController {
         }),
       );
       this.cache.applyWrite({ task: w.task, commit: w.commit });
-      this.states.set(ulid, { kind: "saved", pendingPush: false });
+      const body = fields.get("body");
+      if (typeof body === "string") this.cache.setBody(ulid, body);
+      // An edit still waiting means the task is not saved yet.
+      const waiting = (this.pending.get(ulid)?.size ?? 0) > 0 || this.timers.has(ulid);
+      this.states.set(ulid, waiting ? { kind: "saving" } : { kind: "saved", pendingPush: false });
     } catch (e) {
       // Keep the edits for the retry, unless the field was edited again.
       const again = this.pending.get(ulid) ?? new Map<PatchField, unknown>();

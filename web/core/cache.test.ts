@@ -238,3 +238,70 @@ describe("TaskCache writes", () => {
     w.dispose();
   });
 });
+
+describe("TaskCache fetch order", () => {
+  it("does not let a list sent before a write undo the write", async () => {
+    let open!: () => void;
+    const gate = new Promise<void>((r) => {
+      open = r;
+    });
+    const { cache } = setup(async () => {
+      await gate;
+      return { tasks: [tv("A", "old")] };
+    });
+    const w = cache.watchList({ q: "", tree: false });
+    cache.applyWrite({ task: tv("A", "new"), commit: "c1" });
+    open();
+    await vi.waitFor(() => expect(w.loading()).toBe(false));
+    expect(w.ulids()).toEqual(["A"]);
+    expect(cache.task("A")?.title).toBe("new");
+    w.dispose();
+  });
+
+  it("does not let a detail sent before a write undo the write", async () => {
+    let n = 0;
+    let open!: () => void;
+    const gate = new Promise<void>((r) => {
+      open = r;
+    });
+    const { cache, conn } = setup(async () => {
+      if (n++ === 0) return showOf(tv("A", "a"), { body: "b" });
+      await gate;
+      return showOf(tv("A", "old"), { body: "b" });
+    });
+    const w = cache.watchDetail("A");
+    await vi.waitFor(() => expect(w.ulid()).toBe("A"));
+    conn.emit("resync"); // a second fetch is on its way when the write comes
+    await settle();
+    cache.applyWrite({ task: tv("A", "new"), commit: "c1" });
+    open();
+    await settle();
+    await settle();
+    expect(cache.task("A")?.title).toBe("new");
+    expect(cache.detail("A")?.title).toBe("new");
+    w.dispose();
+  });
+
+  it("does not notify when a detail fetched again did not change", async () => {
+    const { cache, conn } = setup(() => showOf(tv("A", "a")));
+    const w = cache.watchDetail("A");
+    await vi.waitFor(() => expect(w.ulid()).toBe("A"));
+    const fn = vi.fn();
+    cache.subscribe(fn);
+    conn.emit("resync");
+    await settle();
+    await settle();
+    expect(fn).not.toHaveBeenCalled();
+    w.dispose();
+  });
+
+  it("ignores the answer of a list whose watch was released", async () => {
+    const { cache, calls } = setup(() => ({ tasks: [tv("A")] }));
+    const w = cache.watchList({ q: "", tree: false });
+    w.dispose();
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    await settle();
+    await settle();
+    expect(cache.task("A")).toBeUndefined();
+  });
+});

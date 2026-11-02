@@ -61,7 +61,7 @@ export function fakeApi(route: (r: Req) => unknown): { api: Api; calls: Req[] } 
     if (req.method !== "GET" && req.method !== "DELETE") body = await req.json().catch(() => null);
     const r: Req = { method: req.method, path: url.pathname, query: url.searchParams, body };
     calls.push(r);
-    const out = route(r);
+    const out = await route(r);
     return out instanceof Response ? out : Response.json(out ?? {});
   }) as unknown as typeof fetch;
   return { api: createApi({ token: () => "tok", fetch: f }), calls };

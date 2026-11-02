@@ -32,6 +32,7 @@ type QueryState = {
   error: ApiError | null;
   loading: boolean;
   seq: number;
+  released: boolean;
 };
 
 type DetailState = {
@@ -94,6 +95,10 @@ export class TaskCache {
   private readonly marks = new Map<string, Mark>();
   private readonly own = new Set<string>();
   private readonly subs = new Set<() => void>();
+  // epoch counts the writes; lastWrite holds the epoch of the latest write of
+  // each task, so that a fetch sent before a write does not undo it.
+  private epoch = 0;
+  private readonly lastWrite = new Map<string, number>();
   private dirty = false;
   private refreshQueued = false;
   private refreshAll = false;
@@ -199,13 +204,35 @@ export class TaskCache {
     commit?: string | null;
   }): void {
     for (const t of [...(r.task ? [r.task] : []), ...(r.tasks ?? [])]) {
+      this.markWrite(t.ulid);
       const row = this.ingest(t);
       const show = this.shows.get(t.ulid);
       if (show) this.putShow({ ...show, ...row });
     }
-    for (const u of r.ulids ?? []) this.forget(u);
+    for (const u of r.ulids ?? []) {
+      this.markWrite(u);
+      this.forget(u);
+    }
     this.noteOwnCommit(r.commit);
     this.flush();
+  }
+
+  // setBody puts the text a write sent into the detail: the answer of a write
+  // is a row, which has no body.
+  setBody(ulid: string, body: string): void {
+    const show = this.shows.get(ulid);
+    if (!show) return;
+    this.markWrite(ulid);
+    this.putShow({ ...show, body });
+    this.flush();
+  }
+
+  private markWrite(ulid: string): void {
+    this.lastWrite.set(ulid, ++this.epoch);
+  }
+
+  private wroteSince(ulid: string, since: number): boolean {
+    return (this.lastWrite.get(ulid) ?? 0) > since;
   }
 
   // ---- queries
@@ -223,6 +250,7 @@ export class TaskCache {
         error: null,
         loading: true,
         seq: 0,
+        released: false,
       };
       this.queries.set(key, s);
       void this.fetchQuery(s);
@@ -233,33 +261,35 @@ export class TaskCache {
 
   private release(s: QueryState): void {
     if (--s.refs > 0) return;
+    s.released = true;
     for (const [k, v] of this.queries) if (v === s) this.queries.delete(k);
   }
 
   private async fetchQuery(s: QueryState): Promise<void> {
     const seq = ++s.seq;
+    const since = this.epoch;
     const { q, tree, store } = s.query;
     try {
       const out = await unwrap(
         this.api.GET("/api/tasks", { params: { query: { q, tree, store } } }),
       );
-      if (seq !== s.seq) return; // a newer fetch is on its way
+      if (seq !== s.seq || s.released) return; // a newer fetch is on its way
       if (tree) {
         const roots = reuseNodes(
-          (out.roots ?? []).map((t) => this.ingestTree(t)),
+          (out.roots ?? []).map((t) => this.ingestTree(t, since)),
           s.roots,
         );
         if (roots !== s.roots) {
           s.roots = roots;
           this.dirty = true;
         }
-        const cycle = (out.cycle ?? []).map((t) => this.ingestTree(t).ulid);
+        const cycle = (out.cycle ?? []).map((t) => this.ingestTree(t, since).ulid);
         if (!sameList(cycle, s.cycle)) {
           s.cycle = cycle;
           this.dirty = true;
         }
       } else {
-        const ulids = (out.tasks ?? []).map((t) => this.ingest(t).ulid);
+        const ulids = (out.tasks ?? []).map((t) => this.ingest(t, since).ulid);
         if (!sameList(ulids, s.ulids)) {
           s.ulids = ulids;
           this.dirty = true;
@@ -268,7 +298,7 @@ export class TaskCache {
       if (s.error) this.dirty = true;
       s.error = null;
     } catch (e) {
-      if (seq !== s.seq) return;
+      if (seq !== s.seq || s.released) return;
       s.error = toApiError(e);
       this.dirty = true;
     }
@@ -280,15 +310,18 @@ export class TaskCache {
   }
 
   // ingestTree takes in a task and, under it, its children.
-  private ingestTree(t: TaskView): TreeNode {
-    const row = this.ingest(t);
-    return { ulid: row.ulid, children: (t.children ?? []).map((c) => this.ingestTree(c)) };
+  private ingestTree(t: TaskView, since: number): TreeNode {
+    const row = this.ingest(t, since);
+    return { ulid: row.ulid, children: (t.children ?? []).map((c) => this.ingestTree(c, since)) };
   }
 
-  private ingest(t: TaskView | ShowView): TaskView {
+  // ingest takes in a row. since is the epoch when the fetch that brought it
+  // began: a row of a task written after that is older than the one held.
+  private ingest(t: TaskView | ShowView, since?: number): TaskView {
     const row = rowOf(t);
     const sig = JSON.stringify(row);
     const old = this.rows.get(row.ulid);
+    if (old && since !== undefined && this.wroteSince(row.ulid, since)) return old;
     if (old && this.rowSigs.get(row.ulid) === sig) return old;
     this.rows.set(row.ulid, row);
     this.rowSigs.set(row.ulid, sig);
@@ -300,26 +333,29 @@ export class TaskCache {
 
   private async fetchDetail(s: DetailState): Promise<void> {
     const seq = ++s.seq;
+    const since = this.epoch;
     try {
       const show = await unwrap(
         this.api.GET("/api/tasks/{id}", { params: { path: { id: s.key } } }),
       );
       if (seq !== s.seq) return;
-      this.ingest(show);
-      this.putShow(show);
+      const row = this.ingest(show, since);
+      const stale = this.wroteSince(show.ulid, since);
+      if (!stale || !this.shows.has(show.ulid)) this.putShow(stale ? { ...show, ...row } : show);
+      if (s.error || s.ulid !== show.ulid) this.dirty = true;
       s.ulid = show.ulid;
       s.error = null;
     } catch (e) {
       if (seq !== s.seq) return;
       const err = toApiError(e);
       s.error = err;
+      this.dirty = true;
       if (err.status === 404 && s.ulid) {
         this.shows.delete(s.ulid);
         this.showSigs.delete(s.ulid);
         s.ulid = null;
       }
     }
-    this.dirty = true;
     this.flush();
   }
 
