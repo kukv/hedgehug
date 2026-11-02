@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { cliWorkspaceAdd } from "../core/cli";
   import { takeToken } from "../core/token";
   import { auth } from "./auth-state.svelte";
   import { setCore } from "./context";
@@ -8,6 +9,7 @@
   import Sidebar from "./sidebar/Sidebar.svelte";
   import Banners from "./states/Banners.svelte";
   import Disconnected from "./states/Disconnected.svelte";
+  import Empty from "./states/Empty.svelte";
   import NoToken from "./states/NoToken.svelte";
   import Onboarding from "./states/Onboarding.svelte";
   import { useSubscribe } from "./svelte-store";
@@ -24,6 +26,7 @@
     return {
       loaded: c.stores.loaded(),
       count: c.stores.stores().length,
+      names: c.stores.stores().map((s) => s.name),
       first: first ? { store: first.store, ulid: first.ulid } : null,
     };
   });
@@ -68,6 +71,14 @@
         {#key `${dir.current.first.store}/${dir.current.first.ulid}`}
           <TreeView view={{ kind: "workspace", ...dir.current.first }} />
         {/key}
+      {:else if router.route.name === "home" && dir.current.loaded && dir.current.count > 0}
+        <!-- stores exist but none has a workspace -->
+        <Empty
+          variant="noworkspace"
+          commands={dir.current.names.map((store) =>
+            cliWorkspaceAdd({ name: "NAME", prefix: "PREFIX", store }),
+          )}
+        />
       {/if}
     </main>
   </div>

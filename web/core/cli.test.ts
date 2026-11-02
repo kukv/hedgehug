@@ -12,6 +12,7 @@ import {
   cliStoreInit,
   cliSync,
   cliWatch,
+  cliWorkspaceAdd,
   quoteArg,
 } from "./cli";
 
@@ -113,6 +114,9 @@ describe("commands", () => {
     expect(cliWatch("REL-8", false)).toBe("hh unwatch REL-8");
     expect(cliSync()).toBe("hh sync");
     expect(cliSync("shared")).toBe("hh sync --store shared");
+    expect(cliWorkspaceAdd({ name: "web", prefix: "WEB", store: "shared" })).toBe(
+      "hh workspace add web --prefix WEB --store shared",
+    );
     expect(
       cliStoreInit({ name: "shared", prefix: "WEB", workspace: "web", remotes: ["git@x:a/b.git"] }),
     ).toBe("hh store init shared --prefix WEB --workspace web --remote git@x:a/b.git");

@@ -102,6 +102,16 @@ export function cliSync(store?: string): string {
   return cliLine(store ? ["sync", "--store", store] : ["sync"]);
 }
 
+// cliWorkspaceAdd is hh workspace add; --store is the global flag that picks the store.
+export function cliWorkspaceAdd(i: { name: string; prefix: string; store: string }): string {
+  return withPositionals(
+    ["workspace", "add"],
+    [i.name],
+    ["--prefix", i.prefix, "--store", i.store],
+    true,
+  );
+}
+
 export function cliStoreInit(i: {
   name: string;
   prefix: string;

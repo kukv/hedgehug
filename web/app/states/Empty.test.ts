@@ -9,6 +9,18 @@ afterEach(() => {
 });
 
 describe("Empty", () => {
+  it("noworkspace: 案内と、Store ごとの hh workspace add をコピーできる形で出す", () => {
+    const { getByText, getAllByRole } = renderWithCore(Empty, {
+      variant: "noworkspace",
+      commands: [
+        "hh workspace add NAME --prefix PREFIX --store a",
+        "hh workspace add NAME --prefix PREFIX --store b",
+      ],
+    });
+    expect(getByText("ワークスペースがありません")).toBeTruthy();
+    expect(getAllByRole("button", { name: /hh workspace add/ })).toHaveLength(2);
+  });
+
   it("empty: プロジェクトの名前とタスクを作成のボタン（C）", async () => {
     const onCreate = vi.fn();
     const { getByText, getByRole } = renderWithCore(Empty, {

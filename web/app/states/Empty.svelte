@@ -2,16 +2,26 @@
   import Icon from "../icons/Icon.svelte";
   import { kbdLabel } from "../keys";
   import Button from "../ui/Button.svelte";
+  import CliLine from "../ui/CliLine.svelte";
 
   type Props = {
-    variant: "empty" | "nomatch";
+    variant: "empty" | "nomatch" | "noworkspace";
     scope?: "project" | "workspace";
     name?: string;
     note?: string;
     onCreate?: () => void;
     onClear?: () => void;
+    commands?: string[];
   };
-  let { variant, scope = "project", name = "", note, onCreate, onClear }: Props = $props();
+  let {
+    variant,
+    scope = "project",
+    name = "",
+    note,
+    onCreate,
+    onClear,
+    commands = [],
+  }: Props = $props();
 </script>
 
 {#if variant === "empty"}
@@ -28,6 +38,15 @@
         タスクを作成 <kbd>{kbdLabel("c")}</kbd>
       </Button>
     {/if}
+  </div>
+{:else if variant === "noworkspace"}
+  <div class="empty">
+    <Icon name="folder" size={28} />
+    <b>ワークスペースがありません</b>
+    <span class="text">端末でワークスペースを足すと、ここにツリーが出ます。</span>
+    {#each commands as c (c)}
+      <CliLine command={c} />
+    {/each}
   </div>
 {:else}
   <div class="empty">

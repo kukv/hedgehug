@@ -132,4 +132,25 @@ describe("App のゲート", () => {
       expect(asked.some((u) => u.includes("/api/tasks") && u.includes("workspace"))).toBe(true),
     );
   });
+
+  it("Store はあるのにワークスペースが 0 件なら、空の状態と Store ごとの hh コマンドを出す", async () => {
+    history.replaceState(null, "", "/#token=tkn");
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("/api/events")) return new Promise(() => {});
+      if (url.includes("/api/workspaces")) return json([]);
+      if (url.includes("/api/stores")) {
+        return json([
+          { name: "me", path: "/p", remotes: [] },
+          { name: "team", path: "/q", remotes: [] },
+        ]);
+      }
+      return new Promise(() => {});
+    });
+    const { findByText, getByRole, queryByText } = render(App);
+    expect(await findByText("ワークスペースがありません")).toBeTruthy();
+    expect(getByRole("button", { name: /--store me/ })).toBeTruthy();
+    expect(getByRole("button", { name: /--store team/ })).toBeTruthy();
+    expect(queryByText("Hedgehug へようこそ")).toBeNull();
+  });
 });
