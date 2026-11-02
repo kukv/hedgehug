@@ -69,6 +69,15 @@ describe("SyncCard", () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
+  it("最終同期だけのときも、時間が進むと相対表示が変わる", async () => {
+    const { getByText, findByText } = mount([
+      status({ store: "a", unpushed: 0, last_success: "2026-11-02T09:00:00Z" }),
+    ]);
+    expect(getByText("今")).toBeTruthy();
+    vi.advanceTimersByTime(60_000);
+    expect(await findByText("1 分前")).toBeTruthy();
+  });
+
   it("送信待ち: 未 push のコミット数と、push までの秒数", () => {
     const { getByText } = mount([
       status({

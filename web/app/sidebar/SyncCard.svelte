@@ -18,9 +18,9 @@
   let now = $state(Date.now());
   let busy = $state(false);
 
-  // Only the countdowns (next fetch, push in n seconds) need the clock to move.
+  // Only what is drawn from the clock (countdowns, "n minutes ago") needs it to move.
   const ticking = $derived(
-    (summary.kind === "synced" && summary.nextFetch !== null) ||
+    (summary.kind === "synced" && (summary.nextFetch !== null || summary.lastSuccess !== null)) ||
       (summary.kind === "pending" && summary.pushAt !== null),
   );
 
