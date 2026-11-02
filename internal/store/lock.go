@@ -78,15 +78,16 @@ func WithFileLock(path string, wait time.Duration, fn func() error) (err error) 
 	return fn()
 }
 
-// ErrStoreGone means the directory of the store was removed, before the lock
-// was taken or while it was waited for.
+// ErrStoreGone means the directory of the store was removed or replaced (by
+// doctor --fix's swap, for one), before the lock was taken or while it was
+// waited for.
 var ErrStoreGone = errors.New("the store directory was removed or replaced; run the command again")
 
 // acquireStore takes the lock file at path in the store at dir. It creates no
 // directory above .hedgehug/local, so a store removed meanwhile is not made
-// again, and fails with ErrStoreGone when the
-// store is removed while the lock is waited for: the lock file is then not
-// the file at path any more, and a write would land in a deleted store.
+// again, and fails with ErrStoreGone when the store is removed while the lock
+// is waited for: the lock file is then not the file at path any more, and a
+// write would land in a deleted store.
 func acquireStore(dir, path string, wait time.Duration) (*fileLock, error) {
 	if !storeHere(dir) {
 		return nil, ErrStoreGone
