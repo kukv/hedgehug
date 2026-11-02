@@ -3,6 +3,8 @@ package ops
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,9 +37,54 @@ func (ts *testSession) addTask(title string, edit func(*model.Task)) *model.Task
 	return got
 }
 
-// appendConfig adds text to config.yaml.
+// defaultAccountYAML is the account every test session starts with: the
+// commits are alice's.
+const defaultAccountYAML = "accounts:\n  - name: alice\n    host: github.com\n    login: alice\n"
+
+// testAccount is the account of defaultAccountYAML.
+var testAccount = config.Account{Name: "alice", Host: "github.com", Login: "alice"}
+
+var storeAccountRE = regexp.MustCompile(`(?m)^[ \t]+account: alice\n`)
+
+// appendDefaultAccount adds defaultAccountYAML to the end of config.yaml.
+func (ts *testSession) appendDefaultAccount() {
+	ts.t.Helper()
+	if err := os.MkdirAll(ts.env["HEDGEHUG_HOME"], 0o750); err != nil {
+		ts.t.Fatal(err)
+	}
+	f, err := os.OpenFile(filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // the config of the test
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	if _, err := f.WriteString(defaultAccountYAML); err != nil {
+		ts.t.Fatal(err)
+	}
+}
+
+// dropDefaultAccount removes defaultAccountYAML, and the stores' reference to
+// it, for the tests that have no account or set up their own.
+func (ts *testSession) dropDefaultAccount() {
+	ts.t.Helper()
+	p := filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml")
+	b, err := os.ReadFile(p) //nolint:gosec // the config of the test
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	text := storeAccountRE.ReplaceAllString(strings.Replace(string(b), defaultAccountYAML, "", 1), "")
+	if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
+		ts.t.Fatal(err)
+	}
+	ts.resetWriter()
+}
+
+// appendConfig adds text to config.yaml; text that has accounts: replaces the
+// default account.
 func (ts *testSession) appendConfig(text string) {
 	ts.t.Helper()
+	if strings.Contains(text, "accounts:") {
+		ts.dropDefaultAccount()
+	}
 	_, p, err := ts.Config()
 	if err != nil {
 		ts.t.Fatal(err)
@@ -87,7 +134,7 @@ func newTestSession(t *testing.T) *testSession {
 		t.Fatal(err)
 	}
 	dir := filepath.Join(p.StoresDir, "me")
-	author, err := config.CommitAuthor(config.Account{}, false, ts.Getenv)
+	author, err := config.CommitAuthor(testAccount, true, ts.Getenv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,6 +148,7 @@ func newTestSession(t *testing.T) *testSession {
 	if err := c.Save(); err != nil {
 		t.Fatal(err)
 	}
+	ts.appendDefaultAccount()
 	return ts
 }
 
@@ -155,6 +203,7 @@ func otherSession(t *testing.T, ts *testSession, now time.Time) *testSession {
 		Now:    func() time.Time { return now },
 		Warn:   func(m string) { c.warns = append(c.warns, m) },
 	}
+	c.appendDefaultAccount()
 	return c
 }
 

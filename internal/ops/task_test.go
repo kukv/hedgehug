@@ -256,6 +256,7 @@ func TestDepErrors(t *testing.T) {
 func TestWatchAddsAndRemovesMe(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
+	ts.dropDefaultAccount()
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
@@ -456,6 +457,7 @@ func TestNewMentions(t *testing.T) {
 func TestWriterHost(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
+	ts.dropDefaultAccount()
 	if h, err := ts.WriterHost(); err != nil || h != "" {
 		t.Errorf("WriterHost without an account = %q, %v", h, err)
 	}

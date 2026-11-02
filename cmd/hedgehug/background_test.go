@@ -94,6 +94,7 @@ func TestSyncBackgroundRecordsAFailureBeforeTheRun(t *testing.T) {
 	te.ok("store", "init", "org", "--prefix", "ORG", "--remote", remote)
 	// No account and no author in the user's gitconfig: the options of the
 	// sync cannot be made.
+	te.dropDefaultAccount()
 	if err := os.Remove(filepath.Join(te.home, ".gitconfig")); err != nil {
 		t.Fatal(err)
 	}

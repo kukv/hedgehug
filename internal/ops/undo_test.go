@@ -74,6 +74,7 @@ func TestUndoOnEmptyHistoryIsConflict(t *testing.T) {
 func TestUndoNeedsAccounts(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
+	ts.dropDefaultAccount()
 	_, err := ts.Undo()
 	if err == nil || err.Error() != "accounts are not set up in config.yaml; hedgehug undo needs them to find your operations" {
 		t.Fatalf("Undo = %v; want the accounts message", err)

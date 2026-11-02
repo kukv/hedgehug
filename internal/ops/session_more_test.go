@@ -89,6 +89,7 @@ func TestWriterIsReadOnce(t *testing.T) {
 func TestAccountIDWithoutAccountIsEmpty(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
+	ts.dropDefaultAccount()
 	if id, err := ts.AccountID(); err != nil || id != "" {
 		t.Errorf("AccountID = %q, %v; want empty, nil", id, err)
 	}

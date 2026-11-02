@@ -30,6 +30,9 @@ func fakeSession(t *testing.T, st fakegh.State, accounts string) (*testSession, 
 	t.Cleanup(srv.Close)
 	ts := newTestSession(t)
 	ts.env["HH_TOKEN"] = "t-alice"
+	if accounts == "" {
+		ts.dropDefaultAccount()
+	}
 	ts.appendConfig("hosts:\n  - {host: github.com, api: \"" + srv.URL + "\", web: \"" + srv.URL + "\"}\n" + accounts)
 	return ts, fake
 }

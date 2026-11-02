@@ -185,7 +185,9 @@ func TestAddWithAccount(t *testing.T) {
 
 func TestAddWithoutAccountUsesGitConfig(t *testing.T) {
 	t.Parallel()
-	te := newStoreEnv(t)
+	te := newTestEnv(t)
+	te.dropDefaultAccount()
+	te.ok("store", "init", "me", "--prefix", "ME")
 	x := te.addJSON("x")
 	if c := te.headCommit("me"); c.Author.Email != "alice@example.com" || strings.Contains(c.Message, "Hedgehug-Author") {
 		t.Errorf("commit = %+v", c)

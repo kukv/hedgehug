@@ -25,7 +25,7 @@ func TestLog(t *testing.T) {
 	if len(all) != 5 {
 		t.Fatalf("log has %d lines, want 5:\n%s", len(all), strings.Join(all, "\n"))
 	}
-	re := regexp.MustCompile(`^[0-9a-f]{7}  \d{4}-\d{2}-\d{2} \d{2}:\d{2}  Alice  hedgehug: `)
+	re := regexp.MustCompile(`^[0-9a-f]{7}  \d{4}-\d{2}-\d{2} \d{2}:\d{2}  alice  hedgehug: `)
 	for _, l := range all {
 		if !re.MatchString(l) {
 			t.Errorf("log line %q does not match %s", l, re)
@@ -35,7 +35,7 @@ func TestLog(t *testing.T) {
 		t.Errorf("log is not newest first:\n%s", strings.Join(all, "\n"))
 	}
 	c := te.log("me")[0]
-	want := c.Hash.String()[:7] + "  " + c.Author.When.In(time.Local).Format("2006-01-02 15:04") + "  Alice  "
+	want := c.Hash.String()[:7] + "  " + c.Author.When.In(time.Local).Format("2006-01-02 15:04") + "  alice  "
 	if !strings.HasPrefix(all[0], want) {
 		t.Errorf("first line = %q, want prefix %q", all[0], want)
 	}
@@ -89,7 +89,7 @@ func TestLogJSON(t *testing.T) {
 		t.Fatalf("log --json has %d entries, want 2", len(got))
 	}
 	e := got[0]
-	if len(e.Hash) != 40 || e.Date == "" || e.Author.Name != "Alice" || e.Author.Email != "alice@example.com" {
+	if len(e.Hash) != 40 || e.Date == "" || e.Author.Name != "alice" || e.Author.Email != "alice@users.noreply.github.com" {
 		t.Errorf("entry = %+v", e)
 	}
 	if e.Op == nil || *e.Op != "add" || e.Task == nil || *e.Task != a.ULID || !strings.HasPrefix(e.Subj, "hedgehug: add ") {

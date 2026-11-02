@@ -65,6 +65,7 @@ func TestInboxEmptyAndUnknownItem(t *testing.T) {
 func TestInboxStoresWarnsOfMissingAccounts(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
+	ts.dropDefaultAccount()
 	stores, err := ts.InboxStores()
 	if err != nil || len(stores) != 1 || stores[0].Name != "me" {
 		t.Fatalf("InboxStores = %v, %v; want the store me", stores, err)

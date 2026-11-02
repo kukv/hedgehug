@@ -346,6 +346,10 @@ func TestShowViewOfEmpty(t *testing.T) {
 	if _, err := ts.Add(AddInput{Title: "bare"}); err != nil {
 		t.Fatal(err)
 	}
+	// The writer of the add is a watcher; take it off for the empty view.
+	if _, err := ts.Watch("ME-1", false); err != nil {
+		t.Fatal(err)
+	}
 	r, err := ts.Show("ME-1")
 	if err != nil {
 		t.Fatal(err)
@@ -486,7 +490,7 @@ func TestLogViewsOfAndSubjectNow(t *testing.T) {
 		t.Fatalf("%d views for %d commits", len(views), len(entries))
 	}
 	v := views[0]
-	if v.Hash != entries[0].Hash.String() || v.Subject != entries[0].Subject || v.Author.Name != "Alice" || v.Author.Email != "alice@example.com" {
+	if v.Hash != entries[0].Hash.String() || v.Subject != entries[0].Subject || v.Author.Name != "alice" || v.Author.Email != "alice@users.noreply.github.com" {
 		t.Errorf("view = %+v", v)
 	}
 	if v.Op == nil || *v.Op != "add" || v.Task == nil || *v.Task != e.ULID.String() || v.ID == nil || *v.ID != "ME-1" {

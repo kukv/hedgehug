@@ -215,6 +215,7 @@ func TestAuthLoginWrongKind(t *testing.T) {
 func TestAuthLoginEmptyStdin(t *testing.T) {
 	keyring.MockInit()
 	te := newTestEnv(t)
+	te.dropDefaultAccount()
 	te.withFake(fakegh.State{})
 	for _, in := range []string{"", "\n", "  \n"} {
 		te.stdin = in
@@ -380,6 +381,7 @@ func TestAuthLogout(t *testing.T) {
 func TestAuthStatusEmptyAndBare(t *testing.T) {
 	keyring.MockInit()
 	te := newTestEnv(t)
+	te.dropDefaultAccount()
 	if out := te.ok("auth", "status"); !strings.Contains(out, "auth login") {
 		t.Errorf("status = %q", out)
 	}

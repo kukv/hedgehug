@@ -135,7 +135,6 @@ func TestDoctorSpansStores(t *testing.T) {
 func TestNotificationsSpanStores(t *testing.T) {
 	t.Parallel()
 	ts := twoStores(t)
-	ts.withAccount()
 	now := time.Now()
 	for store, id := range map[string]string{"me": "ME-1", "team": "TM-1"} {
 		var show ops.ShowView
@@ -233,7 +232,6 @@ func TestChecklistAndProgressPerStore(t *testing.T) {
 func TestActivityFiltersMergedList(t *testing.T) {
 	t.Parallel()
 	ts := twoStores(t)
-	ts.withAccount()
 	for _, store := range []string{"me", "team", "me", "team"} {
 		ss := ts.session()
 		ss.StoreName = store
@@ -244,8 +242,8 @@ func TestActivityFiltersMergedList(t *testing.T) {
 	var out []ops.LogView
 	author := "?author=" + ts.accountID()
 	ts.call("GET", "/api/activity"+author, nil, 200, &out)
-	if len(out) != 4 {
-		t.Fatalf("author = %d commits; want the 4 adds", len(out))
+	if len(out) != 8 {
+		t.Fatalf("author = %d commits; want 8: the 2 inits, the 2 adds of twoStores and the 4 adds", len(out))
 	}
 	// The limit cuts the merged list, not each store's.
 	ts.call("GET", "/api/activity"+author+"&limit=1", nil, 200, &out)

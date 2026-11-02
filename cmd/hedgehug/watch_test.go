@@ -87,6 +87,7 @@ func TestAutoWatchersOnCommentEdit(t *testing.T) {
 func TestNoWatcherWithoutAccounts(t *testing.T) {
 	t.Parallel()
 	te := newTestEnv(t)
+	te.dropDefaultAccount()
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.ok("add", "x")
 	te.ok("comment", "ME-1", "hi @carol")

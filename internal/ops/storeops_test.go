@@ -40,8 +40,8 @@ func TestStoreInitListRemove(t *testing.T) {
 	if err != nil || len(list) != 2 || list[0].Name != "me" || list[1].Name != "team" || list[1].Path != res.Path {
 		t.Fatalf("StoreList = %+v, %v; want me and team", list, err)
 	}
-	if list[1].Remotes == nil || len(list[1].Remotes) != 0 || list[1].LastSuccess != nil || list[1].Account != "" {
-		t.Errorf("the row of team = %+v; want empty remotes (not nil), no sync, no account", list[1])
+	if list[1].Remotes == nil || len(list[1].Remotes) != 0 || list[1].LastSuccess != nil || list[1].Account != "github.com/alice" {
+		t.Errorf("the row of team = %+v; want empty remotes (not nil), no sync, the account github.com/alice", list[1])
 	}
 	rm, err := ts.StoreRemove("team", false)
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -24,7 +25,8 @@ import (
 )
 
 // testEnv runs the command with HEDGEHUG_HOME and HOME in temporary
-// directories, and an author in HOME/.gitconfig.
+// directories, an author in HOME/.gitconfig, and the account alice in
+// config.yaml.
 type testEnv struct {
 	t        *testing.T
 	home     string
@@ -56,7 +58,36 @@ func newTestEnv(t *testing.T) *testEnv {
 	if err := os.WriteFile(filepath.Join(te.home, ".gitconfig"), []byte("[user]\n\tname = Alice\n\temail = alice@example.com\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(te.hhHome, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(te.hhHome, "config.yaml"), []byte(defaultAccountYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	return te
+}
+
+// defaultAccountYAML is the account every test environment starts with: the
+// commits are alice's and the id in the output is github.com/alice.
+const defaultAccountYAML = "accounts:\n  - name: alice\n    host: github.com\n    login: alice\n"
+
+// storeAccountRE matches the account: alice line of a store in config.yaml,
+// which store init writes.
+var storeAccountRE = regexp.MustCompile(`(?m)^[ \t]+account: alice\n`)
+
+// dropDefaultAccount removes the account newTestEnv wrote, and the stores'
+// reference to it, for the tests that have no account or set up their own.
+func (te *testEnv) dropDefaultAccount() {
+	te.t.Helper()
+	p := filepath.Join(te.hhHome, "config.yaml")
+	b, err := os.ReadFile(p) //nolint:gosec // the config of the test
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		te.t.Fatal(err)
+	}
+	text := storeAccountRE.ReplaceAllString(strings.Replace(string(b), defaultAccountYAML, "", 1), "")
+	if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
+		te.t.Fatal(err)
+	}
 }
 
 func (te *testEnv) getenv(k string) string {
@@ -143,6 +174,7 @@ func (te *testEnv) headCommit(name string) *object.Commit {
 // writeAccounts puts one account at the start of config.yaml.
 func (te *testEnv) writeAccounts(host, login string) { //nolint:unparam // every test uses github.com; the host keeps call sites readable
 	te.t.Helper()
+	te.dropDefaultAccount()
 	if err := os.MkdirAll(te.hhHome, 0o750); err != nil {
 		te.t.Fatal(err)
 	}
@@ -160,6 +192,9 @@ func (te *testEnv) writeAccounts(host, login string) { //nolint:unparam // every
 // writeConfigYAML puts s at the start of config.yaml.
 func (te *testEnv) writeConfigYAML(s string) {
 	te.t.Helper()
+	if strings.Contains(s, "accounts:") {
+		te.dropDefaultAccount()
+	}
 	if err := os.MkdirAll(te.hhHome, 0o750); err != nil {
 		te.t.Fatal(err)
 	}

@@ -172,7 +172,7 @@ func TestPeopleFoldsCase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"ALICE", "bob"}; !slices.Equal(got, want) {
+	if want := []string{"ALICE", "bob", "github.com/alice"}; !slices.Equal(got, want) {
 		t.Errorf("People = %q; want %q", got, want)
 	}
 }

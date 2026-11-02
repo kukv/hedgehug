@@ -8,16 +8,16 @@ Alpha
   status      done
   parent      ME-1 (<ULID-3>) Project
   assignees   -
-  watchers    -
+  watchers    github.com/alice
   labels      -
   repos       -
   blocked_by  -
-  created     <TIME> by -
+  created     <TIME> by github.com/alice
   updated     <TIME>
 
 - [x] one
 - [ ] two
 
 History:
-<HASH>  <TIME>  Alice  hedgehug: edit ME-2 (<ULID-1>) Alpha
-<HASH>  <TIME>  Alice  hedgehug: add ME-2 (<ULID-1>) Alpha
+<HASH>  <TIME>  alice  hedgehug: edit ME-2 (<ULID-1>) Alpha
+<HASH>  <TIME>  alice  hedgehug: add ME-2 (<ULID-1>) Alpha

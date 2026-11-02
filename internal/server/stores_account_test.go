@@ -11,6 +11,7 @@ import (
 func TestStoresAccountIsHostSlashLogin(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
+	ts.dropDefaultAccount()
 	_, p, err := ts.session().Config()
 	if err != nil {
 		t.Fatal(err)

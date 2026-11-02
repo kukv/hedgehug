@@ -262,6 +262,7 @@ func TestGitHub(t *testing.T) {
 func TestPickAccount(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
+	ts.dropDefaultAccount()
 	c, _, err := ts.Config()
 	if err != nil {
 		t.Fatal(err)

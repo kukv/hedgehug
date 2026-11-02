@@ -108,6 +108,7 @@ func TestCommentAuthorOps(t *testing.T) {
 func TestCommentWithoutAuthor(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
+	ts.dropDefaultAccount()
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
