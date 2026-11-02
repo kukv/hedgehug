@@ -73,7 +73,7 @@
 - `--purge` は廃止する。
 - 出力: 消したとき `Removed store <name> and deleted <path>`、`--keep` のとき今の `Removed store <name> from the config; <path> is left`。
 - `default_store` が指していたら消すのは今と同じ。
-- 消す処理は、ディレクトリのロック（store のロック）を取ってから行う（今の `--purge` と同じ）。
+- 消す処理は、ディレクトリのロック（store のロック）を、確かめる前から消し終わるまで持つ（今の `--purge` は取っていないので足す）。
 
 ## 5. アカウントを必須にする
 
@@ -185,10 +185,10 @@ hh purge [--older-than <N>d] [--store <name>] [--yes]
 - 「履歴を書き換える機能」と「書き換えられた履歴に追従する機能」を分ける（2026-11-02 に利用者が決定。1 セットにしていたのが設計の誤り）。前者は消し、後者は書き換えの記録に頼らない doctor の修復にする。
 - 消すもの（追従の側）: `.hedgehug/rewrites.yaml` の記録（`internal/model/rewrites.go`）と、記録を見て同期の中で自動で clone し直す処理（`internal/sync/rewrite.go` の `Detect` の記録を読む部分、`rewrites-applied.json`、ミラーの書き換えの扱い）、doctor の `rewrite_leftover` の検査、それらのテスト。
 - 同期: fetch のあと、origin の先頭が手元で追っていた履歴を含まなければ、今と同じく同期を止めて `force-push.json` に記録する（今の `ErrForcePush`）。文言は「origin の履歴が手元と食い違っている。確かめて hedgehug doctor --fix で clone し直す」の旨にする。同期の中では自動で直さない（誤った force push でも全員の手元がそれに揃ってしまうため）。
-- doctor: 今の `unexpected_force_push` の検査はそのまま。`--fix` で直す対象に足す。直し方は、push していない変更を退避し、origin から clone し直し、退避した変更を戻す（今の `internal/sync/rebuild.go` の作り直しを、記録なしで使う）。直したら `force-push.json` を消す。`--fix` の 1 コミットの修復（親の循環など）とは別の手順なので、出力では作り直しを別の行で知らせる。戻せなかった変更があれば、退避先のパスを出す。
+- doctor: 今の `unexpected_force_push` の検査はそのまま。`--fix` で直す対象に足す。直し方は、push していない変更を退避し、origin から clone し直し、退避した変更を戻す（今の `internal/sync/rebuild.go` の作り直しを、記録なしで使う）。直したら `force-push.json` を消す。`--fix` の 1 コミットの修復（親の循環など）とは別の手順なので、出力では作り直しを別の行で知らせる。戻せなかった変更があれば、退避先のパスを出す。入れ替えの直前に古い方の HEAD が変わっていたら（今の作り直しは次の同期でやり直す）、入れ替えずにやめて `hedgehug doctor --fix` のやり直しを案内する。
 - マージ後の修復（親の循環、ID の重複など）は別の仕組みで、変えない。
 - `mv --store` の確認の文言から `use hedgehug purge --rewrite-history to remove it` を消し、「移動前の内容は <store> の git 履歴に残り、<store> を読める人は見られる」までにする。
-- 親設計の「Store 間の移動（昇格）」の `hh purge --rewrite-history` の段落を、「履歴から消す機能は持たない。消す必要があれば git filter-repo で手作業で書き換え、ほかのクローンは次の同期で作り直される」に直す。ドキュメント（フェーズ7）にこの手順を書く。
+- 親設計の「Store 間の移動（昇格）」の `hh purge --rewrite-history` の段落を、「履歴から消す機能は持たない。消す必要があれば git filter-repo で手作業で書き換え、ほかのクローンは次の同期で食い違いを見つけて止まり、hedgehug doctor --fix で clone し直す」に直す。ドキュメント（フェーズ7）にこの手順を書く。
 
 ## 11. GUI と API の完全削除を外す
 
@@ -224,3 +224,12 @@ flag; put it after --: hedgehug ls -- -status:done
 - 各決定に、変更後の動きを確かめるテストを足し、廃止したコマンド・オプションが使い方の誤りになることを確かめる。
 - ローカル受入テスト手順を、変更後のバイナリで最初から最後まで通す。
 - 全テストは仕上げに 1 回だけ回す。
+
+## plan で決めた細部（2026-11-02、利用者の承認）
+
+plan `docs/superpowers/plans/2026-11-02-cli-acceptance-fixes.md` の各 Task 末尾の「spec にない細部」は、すべて承認済み。主なもの:
+
+- `undo` は `purge` のコミットを `undo.blocked`（`a purge cannot be undone`）で断る（今のコードは断っていなかった）。
+- 英語の複数形は葉のパッケージ `internal/plural`（`Count`・`Pick`）に置き、`cmd`・`ops` に加えて `doctor`・`store`・`sync` の文言も揃える。
+- `doctor --fix` の作り直し: 同期の中で入れ替える仕組みとミラーの force push を消す。戻せなかった変更があれば古い Store を `<path>.kept-<時刻>` に残す。作り直しは push せず次の同期に任せる。読み取り専用の Store も作り直す。
+- `store remove --json` の `purged` は `deleted` に改名する。アカウントが 2 つ以上で `--account` がないときの `store init`・`store add` は `choice.required` で拒否する。`DELETE /api/tasks/{id}?purge=true` の `purge` は無視して通常の削除にする。`purge --older-than` の境界は「以前」を含み、上限は `36500d`。
