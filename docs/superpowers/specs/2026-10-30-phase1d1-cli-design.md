@@ -4,6 +4,15 @@
 - 親設計: Hedgehug 設計ドキュメント（https://claude.ai/artifact/8d4dcVbePAxR2BxhMtkqnc）の「実装フェーズ」1. Core とファイル形式、「CLI 仕様」「ローカル設定」「開発環境」
 - 前段: `docs/superpowers/specs/2026-10-30-phase1a-model-format-design.md`、`docs/superpowers/specs/2026-10-30-phase1b-store-git-design.md`、`docs/superpowers/specs/2026-10-30-phase1c-index-query-design.md`
 
+## 2026-11-02 の変更
+
+CLI の受入テストで、この spec の次の点を変えた。詳細は `docs/superpowers/specs/2026-11-02-cli-acceptance-fixes-design.md`（§3、§5、§9、§10）。
+
+- コミットの作者は常に Store のアカウントから作る（`<login> <login@users.noreply.<host>>`）。git の設定（`.gitconfig`・`GIT_CONFIG_GLOBAL`）は読まない（§5.3）。アカウントは必須で、ないときに動くのは `auth login`・`auth add`・`auth status`・help・version・`merge-driver` だけ（§5.1）
+- `show` は件名を見出しにせず `title` の項目行で出す。進捗は `status` の直後の `checklist`・`progress` の行で出す（§3）
+- `purge <id> [--yes]` はなくなり、`hh purge [--older-than <N>d] [--store <name>] [--yes]`（既定 `90d`）に置き換えた。期間より前に削除されたタスクと転送ファイルをまとめて消す（§9）
+- `purge --moved`・`--rewrite-history` もなくなった（§9、§10）
+
 ## 位置づけ
 
 | 段階 | 内容 |
@@ -25,7 +34,7 @@
 
 - `edit`、`comment`、`log`、`schema check`、`doctor`、`show` の直近の履歴、devenv: 1d-2
 - `restore --at`、`undo`、`.gitattributes` と merge driver: フェーズ2
-- `mv --store`、`purge --moved` / `--rewrite-history`、`store init --remote`、`store add/remove/list/discover`、`use`、コンテキスト解決、アカウントと `@me`: フェーズ3
+- `mv --store`、`purge --moved` / `--rewrite-history`、`store init --remote`、`store add/remove/list/discover`、`use`、コンテキスト解決、アカウントと `@me`: フェーズ3（2026-11-02 に変更。冒頭の節を参照）
 - `set --query`、`add --template`、種類に紐づくテンプレートの展開: フェーズ6
 - `completion`、性能目標: フェーズ7
 
@@ -93,11 +102,11 @@ stores:
 
 ## 作者
 
-- `Op.Author` には git のグローバル設定の `user.name` と `user.email` を使う。go-git の `LoadConfig` はプロセスの環境変数を読み、テストから注入できない。そこで `getenv` から決めたパスの gitconfig を読む。
+- `Op.Author` には git のグローバル設定の `user.name` と `user.email` を使う。go-git の `LoadConfig` はプロセスの環境変数を読み、テストから注入できない。そこで `getenv` から決めたパスの gitconfig を読む。（2026-11-02 に変更。冒頭の節を参照）
 - 読むファイルは、`GIT_CONFIG_GLOBAL` があればそのファイルだけ。なければ `$XDG_CONFIG_HOME/git/config`（なければ `~/.config/git/config`）、`~/.gitconfig` の順に読み、後のファイルが勝つ（git と同じ）。
 - どちらかが空なら、`git config --global user.name` / `user.email` での設定を案内するエラーにする。読み出しは書き込みをするコマンドでだけ行う（読むだけのコマンドは git の設定がなくても動く）。
 - アカウントによる作者の決定はフェーズ3。それまで `query.Options.Me` は空にする（1c で決めたとおり）。
-- `created_by` の値にはアカウントが要るので、フェーズ3までは空のままにする。`show` は `by -` と出す。
+- `created_by` の値にはアカウントが要るので、フェーズ3までは空のままにする。`show` は `by -` と出す。（2026-11-02 に変更。冒頭の節を参照）
 
 ## store.Create の修正
 
@@ -164,7 +173,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 
 ### `show <id>`
 
-- 出すもの: フィールド（短縮 ID、キー、種類、タイトル、ステータス、親、担当者、ウォッチャー、ラベル、repos、blocked_by、props、作成・更新・削除の日時と作成者）、本文、コメント（`Store.Comments`）、問題（`Index.Problems`）、逆方向の関連（`blocks` と、task_ref の `inverse`）。
+- 出すもの: フィールド（短縮 ID、キー、種類、タイトル、ステータス、親、担当者、ウォッチャー、ラベル、repos、blocked_by、props、作成・更新・削除の日時と作成者）、本文、コメント（`Store.Comments`）、問題（`Index.Problems`）、逆方向の関連（`blocks` と、task_ref の `inverse`）。（2026-11-02 に変更。冒頭の節を参照）
 - ファイルが読めない（decode できない）壊れたタスクは、本文とコメントの代わりに index の値と `broken: <理由>` の行を出す。コメントは読まない。
 - 参照先のタスクは短縮 ID とタイトルで出す。参照先がなければ ID のまま出して「見つからない」と添える。
 - 直近の履歴は 1d-2 で足す。
@@ -205,7 +214,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 - 親が削除済みならエラーにして、先に親を戻すよう案内する。
 - 削除されていなければエラー。
 
-### `purge <id> [--yes]`
+### `purge <id> [--yes]`（2026-11-02 に変更。冒頭の節を参照）
 
 - 削除済みのタスクだけを対象にする。子孫もすべて削除済みでなければエラー。
 - 本人と子孫のファイルを `Tx.RemoveTask` で消して1コミットにする。ほかのタスクからの参照はそのまま残る（参照先なしは `doctor` と `is:invalid` で分かる）。
@@ -262,7 +271,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 
 - **config**: 環境変数の組み合わせごとの場所（`HEDGEHUG_HOME`、XDG の片方だけ、相対パス、どちらもなし）。config.yaml の読み書きで、未知のキー、要素の未知のキー、コメントが残ること。`~/` の展開。重複した名前と欠けたキーのエラー。Store の選び方の3通り。作者の読み出しとその欠け。
 - **store.Create**: スキーマを渡せる。呼び出し側の `meta` が変わらない。途中で失敗したとき、作ったディレクトリまたは中身が残らず、同じ場所に作り直せる。
-- **cmd/hedgehug**: `t.TempDir()` を `HEDGEHUG_HOME` と HOME（`.gitconfig` を置く）にして `run` を呼ぶ。コマンドごとに次を確かめる。
+- **cmd/hedgehug**: `t.TempDir()` を `HEDGEHUG_HOME` と HOME（`.gitconfig` を置く）にして `run` を呼ぶ。コマンドごとに次を確かめる。（2026-11-02 に変更。冒頭の節を参照）
   - 出力（表、ツリー、JSON、`--ids-only`、`--format`）
   - 1コマンドが1コミットになり、`Hedgehug-Op` と `Hedgehug-Task` の trailer が付くこと
   - エラーの終了コードとメッセージ（曖昧な ID、存在しない ID、検査の違反、使い方の誤り）

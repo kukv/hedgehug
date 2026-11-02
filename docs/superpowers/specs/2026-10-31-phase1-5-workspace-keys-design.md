@@ -4,6 +4,12 @@
 - 親設計: Hedgehug 設計ドキュメント（https://claude.ai/artifact/8d4dcVbePAxR2BxhMtkqnc）の「人が読める ID」「書き込みの流れ」「実装フェーズ」「詰めるべき詳細」。本書の決定に合わせて親設計も書き換える（「設計ドキュメントの書き換え」）
 - 前段: `docs/superpowers/specs/2026-10-30-phase1d2-maintenance-design.md`（ほか 1a〜1d-1 の spec）
 
+## 2026-11-02 の変更
+
+CLI の受入テストで、この spec の次の点を変えた。詳細は `docs/superpowers/specs/2026-11-02-cli-acceptance-fixes-design.md`（§1）。
+
+- `hh workspace prefix <ws> <P>` は `hh workspace set-prefix <ws> <P>` に改名した。動き・出力・`--json`・コミットの件名（`hedgehug: workspace prefix …`）は変えていない。出力の `renumbered N tasks` は 1 のとき `1 task` になる（§12.1）
+
 ## 位置づけ
 
 設計ドキュメント rev 232〜234 で、ID の採番が「同期の push で確定」から「作成時に採番」に変わった。フェーズ2（同期とマージ）の前に、ID の採番と、CLI のすべての表示・入力を ID にすることを済ませる。
@@ -51,7 +57,7 @@ Web フロントエンドのタスク。
 ```
 
 - `ulid`・`name`・`id_prefix`・`prefix_set` は必須
-- `prefix_set` は接頭辞を最後に設定した時刻。Store 間の重複で先勝ちを判定するのに使う。`hh workspace prefix` で更新する
+- `prefix_set` は接頭辞を最後に設定した時刻。Store 間の重複で先勝ちを判定するのに使う。`hh workspace prefix` で更新する（2026-11-02 に変更。冒頭の節を参照）
 - `name` は Store の中で一意（大文字小文字を区別しない）。使える文字は Store 名と同じ規則で、定義は `model.ValidName` の1つ（`config.ValidStoreName` と `model.ValidWorkspaceName` はこれを使う）
 - `model.Workspace` を `model.Sprint` と同じ作りで足し、`model.WorkspacePath(ulid)` を `workspaces/<ULID>.md` とする
 
@@ -179,7 +185,7 @@ func (s *Store) SetIDNumbers(f IDNumbers)
 | `hh workspace add <名前> --prefix <接頭辞>` | ワークスペースを作る |
 | `hh workspace ls` | 名前・接頭辞・ULID・タスク数（削除済みを除く）を出す |
 | `hh workspace rename <ws> <新しい名前>` | 名前を変える |
-| `hh workspace prefix <ws> <新しい接頭辞>` | 接頭辞を変え、配下の全タスク（削除済みを含む）を1コミットで振り直す。`prefix_set` を更新する |
+| `hh workspace prefix <ws> <新しい接頭辞>` | 接頭辞を変え、配下の全タスク（削除済みを含む）を1コミットで振り直す。`prefix_set` を更新する（2026-11-02 に変更。冒頭の節を参照） |
 | `hh workspace rm <ws>` | タスクが1件もないとき（削除済みを含む）だけ消す。残っていれば件数を示し、`mv --workspace` か `purge` を案内する |
 
 - `<ws>` は名前・接頭辞・ULID のどれでも指定でき、大文字小文字を区別しない
@@ -281,7 +287,7 @@ a1b2c3d  2026-10-31 10:00  kukv  hedgehug: status API-7 (01JBZ8K3QW7M2X9V4T6R5N8
 
 - 採番: 最大値を `id`・`former_ids`・`numbers.yaml` から取る、削除済みも数える、同じ操作で複数件を振る、`IDNumbers` の有無で結果が同じ
 - 並行性: 2つの Store ハンドルから並行して add しても ID が重複しない
-- 振り直し: ワークスペースをまたぐ `mv`、`workspace prefix`、手で接頭辞を変えた後の書き込み。番号を再利用しない、古い ID で引ける
+- 振り直し: ワークスペースをまたぐ `mv`、`workspace prefix`、手で接頭辞を変えた後の書き込み。番号を再利用しない、古い ID で引ける（2026-11-02 に変更。冒頭の節を参照）
 - purge: 最大番号のタスクを purge した後の add で次の番号になる。`former_ids` の番号も記録される
 - 接頭辞: 形式、Store の中での重複、config に登録された他の Store との重複、開けない Store を飛ばす
 - 書き込み時の検査: ワークスペースのないタスク、親とワークスペースが違う子、タスクの残るワークスペースの削除
