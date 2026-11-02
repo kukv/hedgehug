@@ -7,12 +7,12 @@ Only
   status      todo
   parent      -
   assignees   -
-  watchers    -
+  watchers    github.com/alice
   labels      -
   repos       -
   blocked_by  -
-  created     <TIME> by -
+  created     <TIME> by github.com/alice
   updated     <TIME>
 
 History:
-<HASH>  <TIME>  Alice  hedgehug: add ME-1 (<ULID-1>) Only
+<HASH>  <TIME>  alice  hedgehug: add ME-1 (<ULID-1>) Only

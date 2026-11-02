@@ -168,7 +168,7 @@ const messages: Record<string, Make> = {
 
   // accounts and GitHub
   "account.none": () =>
-    "アカウントが設定されていません。hh auth login か config.yaml の accounts で足してください",
+    "アカウントが設定されていません。hh auth add <名前> --login <ログイン>（または hh auth login）で足してください",
   "account.not_found": (a) =>
     `${str(a, "name")} というアカウントはありません` +
     (list(a, "candidates") ? `（登録済み: ${list(a, "candidates")}）` : ""),

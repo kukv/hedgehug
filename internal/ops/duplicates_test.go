@@ -34,10 +34,7 @@ func duplicateFx(t *testing.T) *moveFx {
 	if err := os.WriteFile(p, old, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	author, err := config.CommitAuthor(config.Account{}, false, f.ts.Getenv)
-	if err != nil {
-		t.Fatal(err)
-	}
+	author := config.CommitAuthor(testAccount)
 	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{model.TaskPath(f.p)}, Subject: "raw", Author: author, When: time.Now()}); err != nil {
 		t.Fatal(err)
 	}

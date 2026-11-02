@@ -93,6 +93,9 @@ func authSession(t *testing.T, st fakegh.State, accounts string) (*testSession, 
 	ts := newTestSession(t)
 	k := newKR()
 	ts.Keyring = k
+	if accounts == "" {
+		ts.dropDefaultAccount()
+	}
 	ts.appendConfig("hosts:\n  - {host: github.com, api: \"" + srv.URL + "\", web: \"" + srv.URL + "\", client_id: Iv23test}\n" + accounts)
 	return ts, k
 }

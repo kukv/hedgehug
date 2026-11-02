@@ -129,21 +129,16 @@ func TestDeviceTokenRoundTrip(t *testing.T) {
 	}
 }
 
-// 直列: パッケージ変数 builtinClientID の差し替え
+// Hedgehug has no client ID of its own: it is the one hosts: names, on any
+// host, github.com too.
 func TestClientID(t *testing.T) {
-	if got := ClientID(config.Host{Host: "ghe", ClientID: "Iv23x"}); got != "Iv23x" {
-		t.Errorf("override = %q", got)
-	}
-	if got := ClientID(config.Host{Host: "ghe"}); got != "" {
-		t.Errorf("ghe without one = %q", got)
-	}
-	old := builtinClientID
-	builtinClientID = "Iv23builtin"
-	defer func() { builtinClientID = old }()
-	if got := ClientID(config.Host{Host: "github.com"}); got != "Iv23builtin" {
-		t.Errorf("github.com = %q", got)
-	}
-	if got := ClientID(config.Host{Host: "GitHub.com"}); got != "Iv23builtin" {
-		t.Errorf("GitHub.com (case) = %q", got)
+	t.Parallel()
+	for _, host := range []string{"github.com", "GitHub.com", "ghe"} {
+		if got := ClientID(config.Host{Host: host, ClientID: "Iv23x"}); got != "Iv23x" {
+			t.Errorf("%s with client_id = %q", host, got)
+		}
+		if got := ClientID(config.Host{Host: host}); got != "" {
+			t.Errorf("%s without client_id = %q; want none", host, got)
+		}
 	}
 }

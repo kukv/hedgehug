@@ -65,11 +65,12 @@ func TestInboxEmptyAndUnknownItem(t *testing.T) {
 func TestInboxStoresWarnsOfMissingAccounts(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
+	ts.dropDefaultAccount()
 	stores, err := ts.InboxStores()
 	if err != nil || len(stores) != 1 || stores[0].Name != "me" {
 		t.Fatalf("InboxStores = %v, %v; want the store me", stores, err)
 	}
-	want := []string{"accounts are not set up in config.yaml; mentions and assignments cannot be told"}
+	want := []string{"no account is set up; mentions and assignments cannot be told"}
 	if !slices.Equal(ts.warns, want) {
 		t.Errorf("warnings = %q", ts.warns)
 	}
@@ -481,10 +482,7 @@ func TestDuplicateContent(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(e.Path, filepath.FromSlash(rel)), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	author, err := config.CommitAuthor(config.Account{}, false, ts.Getenv)
-	if err != nil {
-		t.Fatal(err)
-	}
+	author := config.CommitAuthor(testAccount)
 	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: author, When: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
@@ -598,10 +596,7 @@ func TestInboxRevertLeavesTheSessionAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := filepath.Join(p.StoresDir, "other")
-	author, err := config.CommitAuthor(config.Account{}, false, ts.Getenv)
-	if err != nil {
-		t.Fatal(err)
-	}
+	author := config.CommitAuthor(testAccount)
 	ws := &model.Workspace{ULID: model.NewULID(), Name: "other", IDPrefix: "OT"}
 	os2, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "other"}, schema.Default(), ws, author, "", ts.Now)
 	if err != nil {

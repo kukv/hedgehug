@@ -50,10 +50,7 @@ func refTo(t *testing.T, ts *testSession, line string) (from model.ULID) {
 	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	author, err := config.CommitAuthor(config.Account{}, false, ts.Getenv)
-	if err != nil {
-		t.Fatal(err)
-	}
+	author := config.CommitAuthor(testAccount)
 	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: author, When: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
@@ -175,10 +172,7 @@ func editRaw(t *testing.T, ts *testSession, name string, ulid model.ULID, old, r
 	if err := os.WriteFile(p, []byte(strings.Replace(string(b), old, repl, 1)), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	author, err := config.CommitAuthor(config.Account{}, false, ts.Getenv)
-	if err != nil {
-		t.Fatal(err)
-	}
+	author := config.CommitAuthor(testAccount)
 	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: author, When: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
@@ -207,6 +201,9 @@ func TestDoctorKeepsTheOtherStoresWhenOneDoesNotOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := c.AddStore("gone", filepath.Join(t.TempDir(), "gone"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetStoreAccount("gone", "alice"); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.Save(); err != nil {
@@ -270,6 +267,9 @@ func TestMuteOpenWarningsIsCountedPerCaller(t *testing.T) {
 	if err := c.AddStore("gone", filepath.Join(t.TempDir(), "gone"), nil); err != nil {
 		t.Fatal(err)
 	}
+	if err := c.SetStoreAccount("gone", "alice"); err != nil {
+		t.Fatal(err)
+	}
 	if err := c.Save(); err != nil {
 		t.Fatal(err)
 	}
@@ -300,6 +300,9 @@ func TestConcurrentDoctorCallsDoNotWarnOfWhatTheyReport(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := c.AddStore("gone", filepath.Join(t.TempDir(), "gone"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetStoreAccount("gone", "alice"); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.Save(); err != nil {
@@ -364,6 +367,9 @@ func TestSyncWarnsOfCrossStoreRefs(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := c.AddStore("org-a", e.Path, []string{remote}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetStoreAccount("org-a", "alice"); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.Save(); err != nil {

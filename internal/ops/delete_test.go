@@ -221,10 +221,7 @@ func TestRestoreAtByTimeAndCommit(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(e.Path, filepath.FromSlash(rel)), bytes.Replace(b, []byte("title: orig"), []byte("title: v1"), 1), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	author, err := config.CommitAuthor(config.Account{}, false, ts.Getenv)
-	if err != nil {
-		t.Fatal(err)
-	}
+	author := config.CommitAuthor(testAccount)
 	v1, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: author, When: time.Date(2020, 1, 1, 20, 0, 0, 0, time.UTC)})
 	if err != nil {
 		t.Fatal(err)

@@ -28,8 +28,8 @@ func TestStoreInit(t *testing.T) {
 		t.Error("the default store has the review status")
 	}
 	log := te.log("me")
-	if len(log) != 1 || log[0].Author.Name != "Alice" || log[0].Author.Email != "alice@example.com" {
-		t.Errorf("log = %v, want one commit by Alice", log)
+	if len(log) != 1 || log[0].Author.Name != "alice" || log[0].Author.Email != "alice@users.noreply.github.com" {
+		t.Errorf("log = %v, want one commit by alice", log)
 	}
 	b, err := os.ReadFile(filepath.Join(te.hhHome, "config.yaml"))
 	if err != nil {
@@ -118,21 +118,6 @@ func TestStoreSelection(t *testing.T) {
 	code, _, stderr = te.run("workspace", "ls")
 	if code != 1 || !strings.Contains(stderr, "--store") {
 		t.Errorf("workspace ls with two stores: exit %d, stderr %q", code, stderr)
-	}
-}
-
-func TestStoreInitNoAuthor(t *testing.T) {
-	t.Parallel()
-	te := newTestEnv(t)
-	if err := os.Remove(filepath.Join(te.home, ".gitconfig")); err != nil {
-		t.Fatal(err)
-	}
-	code, _, stderr := te.run("store", "init", "me", "--prefix", "ME")
-	if code != 1 || !strings.Contains(stderr, "user.name") {
-		t.Errorf("exit %d, stderr %q", code, stderr)
-	}
-	if _, err := os.Stat(te.storeDir("me")); err == nil {
-		t.Error("a store was made with no author")
 	}
 }
 

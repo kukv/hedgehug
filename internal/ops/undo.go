@@ -33,7 +33,7 @@ func (ss *Session) Undo() (UndoResult, error) {
 		return UndoResult{}, err
 	}
 	if !ok {
-		return UndoResult{}, newErr(KindConflict, "account.none", errors.New("accounts are not set up in config.yaml; hedgehug undo needs them to find your operations"))
+		return UndoResult{}, newErr(KindConflict, "account.none", errors.New("no account is set up; hedgehug undo needs one to find your operations; add one with hedgehug auth add <name> --login <login> (or hedgehug auth login)"))
 	}
 	var res UndoResult
 	hash, err := ss.UpdateCommit(s, store.Op{Name: "undo"}, func(tx *store.Tx) error {

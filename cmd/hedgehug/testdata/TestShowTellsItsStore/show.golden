@@ -7,12 +7,12 @@ Bravo task
   status      done
   parent      -
   assignees   -
-  watchers    -
+  watchers    github.com/alice
   labels      -
   repos       -
   blocked_by  -
-  created     <TIME> by -
+  created     <TIME> by github.com/alice
   updated     <TIME>
 
 History:
-<HASH>  <TIME>  Alice  hedgehug: add BB-1 (<ULID-1>) Bravo task
+<HASH>  <TIME>  alice  hedgehug: add BB-1 (<ULID-1>) Bravo task

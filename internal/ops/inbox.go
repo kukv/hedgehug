@@ -29,7 +29,7 @@ type InboxStore struct {
 
 // NoAccountsWarning is the warning of InboxStores for a config without
 // accounts, where mentions and assignments cannot be told.
-const NoAccountsWarning = "accounts are not set up in config.yaml; mentions and assignments cannot be told"
+const NoAccountsWarning = "no account is set up; mentions and assignments cannot be told"
 
 // InboxStores opens the stores the operation works on, after the inbox of
 // each has taken in what reached the store since it last looked and the

@@ -90,14 +90,6 @@ func TestUndoJSON(t *testing.T) {
 	}
 }
 
-func TestUndoWithoutAccounts(t *testing.T) {
-	t.Parallel()
-	te := newTestEnv(t)
-	te.ok("store", "init", "me", "--prefix", "ME")
-	te.ok("add", "x")
-	te.goldenRun("undo", 1, "undo")
-}
-
 func TestUndoNothing(t *testing.T) {
 	t.Parallel()
 	te := newTestEnv(t)

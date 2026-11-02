@@ -14,7 +14,7 @@ func TestPeopleAPI(t *testing.T) {
 
 	var people []string
 	ts.call("GET", "/api/people", nil, 200, &people)
-	want := []string{"bob", "carol", "zed"}
+	want := []string{"bob", "carol", "github.com/alice", "zed"}
 	if !slices.Equal(people, want) {
 		t.Errorf("people = %q; want %q", people, want)
 	}

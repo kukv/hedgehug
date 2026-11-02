@@ -183,18 +183,6 @@ func TestAddWithAccount(t *testing.T) {
 	}
 }
 
-func TestAddWithoutAccountUsesGitConfig(t *testing.T) {
-	t.Parallel()
-	te := newStoreEnv(t)
-	x := te.addJSON("x")
-	if c := te.headCommit("me"); c.Author.Email != "alice@example.com" || strings.Contains(c.Message, "Hedgehug-Author") {
-		t.Errorf("commit = %+v", c)
-	}
-	if got := te.task(x.ULID).CreatedBy; got != "" {
-		t.Errorf("created_by = %q", got)
-	}
-}
-
 func TestStoreInitWithAccount(t *testing.T) {
 	t.Parallel()
 	te := newTestEnv(t)

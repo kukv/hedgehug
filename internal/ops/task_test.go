@@ -259,9 +259,14 @@ func TestWatchAddsAndRemovesMe(t *testing.T) {
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
+	// The writer of the task watches it; take them off, then drop the account.
+	if _, err := ts.Watch("ME-1", false); err != nil {
+		t.Fatal(err)
+	}
+	ts.dropDefaultAccount()
 	// With no account in config.yaml there is no "me" to watch with.
 	_, err := ts.Watch("ME-1", true)
-	if err == nil || !strings.Contains(err.Error(), "accounts are not set up") {
+	if err == nil || !strings.Contains(err.Error(), "no account is set up") {
 		t.Fatalf("Watch without an account: %v", err)
 	}
 	var ne *Error
@@ -456,6 +461,7 @@ func TestNewMentions(t *testing.T) {
 func TestWriterHost(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
+	ts.dropDefaultAccount()
 	if h, err := ts.WriterHost(); err != nil || h != "" {
 		t.Errorf("WriterHost without an account = %q, %v", h, err)
 	}

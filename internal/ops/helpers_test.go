@@ -3,8 +3,12 @@ package ops
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
+
+	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/gitrepo"
@@ -35,9 +39,170 @@ func (ts *testSession) addTask(title string, edit func(*model.Task)) *model.Task
 	return got
 }
 
-// appendConfig adds text to config.yaml.
+// defaultAccountYAML is the account every test session starts with: the
+// commits are alice's.
+const defaultAccountYAML = "accounts:\n  - name: alice\n    host: github.com\n    login: alice\n"
+
+// testAccount is the account of defaultAccountYAML.
+var testAccount = config.Account{Name: "alice", Host: "github.com", Login: "alice"}
+
+// storeAccountRE matches the account: alice line of a store in config.yaml,
+// which store init writes.
+var storeAccountRE = regexp.MustCompile(`(?m)^[ \t]+account: alice\n`)
+
+// appendDefaultAccount adds defaultAccountYAML to the end of config.yaml.
+func (ts *testSession) appendDefaultAccount() {
+	ts.t.Helper()
+	if err := os.MkdirAll(ts.env["HEDGEHUG_HOME"], 0o750); err != nil {
+		ts.t.Fatal(err)
+	}
+	f, err := os.OpenFile(filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // the config of the test
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	if _, err := f.WriteString(defaultAccountYAML); err != nil {
+		ts.t.Fatal(err)
+	}
+}
+
+// dropDefaultAccount removes defaultAccountYAML, and the stores' reference to
+// it, for the tests that have no account or set up their own.
+func (ts *testSession) dropDefaultAccount() {
+	ts.t.Helper()
+	p := filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml")
+	b, err := os.ReadFile(p) //nolint:gosec // the config of the test
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	if !strings.Contains(string(b), defaultAccountYAML) {
+		ts.t.Fatalf("config.yaml has no default account to drop:\n%s", b)
+	}
+	text := storeAccountRE.ReplaceAllString(strings.Replace(string(b), defaultAccountYAML, "", 1), "")
+	if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
+		ts.t.Fatal(err)
+	}
+	ts.resetWriter()
+}
+
+// nameAccountOfStores gives the stores that have no account the account name,
+// the first of the accounts that replaced the default one: with two or more
+// accounts a store without one does not load.
+func (ts *testSession) nameAccountOfStores(name string) {
+	ts.t.Helper()
+	p := filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml")
+	b, err := os.ReadFile(p) //nolint:gosec // the config of the test
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	var doc yaml.Node
+	if err := yaml.Load(b, &doc); err != nil {
+		ts.t.Fatal(err)
+	}
+	root := doc.Content[0]
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value != "stores" {
+			continue
+		}
+		for _, st := range root.Content[i+1].Content {
+			named := false
+			for j := 0; j+1 < len(st.Content); j += 2 {
+				named = named || st.Content[j].Value == "account"
+			}
+			if !named {
+				st.Content = append(st.Content,
+					&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "account"},
+					&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: name})
+			}
+		}
+	}
+	out, err := yaml.Dump(&doc, yaml.WithLineWidth(-1), yaml.WithIndent(2))
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	if err := os.WriteFile(p, out, 0o600); err != nil {
+		ts.t.Fatal(err)
+	}
+	ts.resetWriter()
+}
+
+// firstAccountName is the name: of the first account in the accounts: text.
+func firstAccountName(t *testing.T, text string) string {
+	t.Helper()
+	i := strings.Index(text, "accounts:")
+	if i < 0 {
+		t.Fatal("no accounts: in the config text")
+	}
+	m := regexp.MustCompile(`name:\s*"?([\w-]+)`).FindStringSubmatch(text[i:])
+	if m == nil {
+		return ""
+	}
+	return m[1]
+}
+
+// dropAccounts removes the accounts: section from config.yaml.
+func (ts *testSession) dropAccounts() {
+	ts.t.Helper()
+	p := filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml")
+	b, err := os.ReadFile(p) //nolint:gosec // the config of the test
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	var doc yaml.Node
+	if err := yaml.Load(b, &doc); err != nil {
+		ts.t.Fatal(err)
+	}
+	if len(doc.Content) > 0 {
+		root := doc.Content[0]
+		for i := 0; i+1 < len(root.Content); i += 2 {
+			if root.Content[i].Value == "accounts" {
+				root.Content = append(root.Content[:i], root.Content[i+2:]...)
+				break
+			}
+		}
+	}
+	out, err := yaml.Dump(&doc, yaml.WithLineWidth(-1), yaml.WithIndent(2))
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	if err := os.WriteFile(p, out, 0o600); err != nil {
+		ts.t.Fatal(err)
+	}
+	ts.resetWriter()
+}
+
+// BeforeCommand is Session.BeforeCommand for the config as it is now.
+func (ts *testSession) BeforeCommand(start func(s *store.Store, name string) error, report func(store, msg string)) {
+	ts.t.Helper()
+	c, _, err := ts.Config()
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	ts.Session.BeforeCommand(c, start, report)
+}
+
+// hasDefaultAccount reports whether config.yaml still has defaultAccountYAML.
+func (ts *testSession) hasDefaultAccount() bool {
+	ts.t.Helper()
+	b, err := os.ReadFile(filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml")) //nolint:gosec // the config of the test
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(b), defaultAccountYAML)
+}
+
+// appendConfig adds text to config.yaml; text that has accounts: replaces the
+// default account, if it is still there.
 func (ts *testSession) appendConfig(text string) {
 	ts.t.Helper()
+	if strings.Contains(text, "accounts:") {
+		if ts.hasDefaultAccount() {
+			ts.dropDefaultAccount()
+		}
+		if strings.Count(text, "login:") > 1 {
+			defer ts.nameAccountOfStores(firstAccountName(ts.t, text))
+		}
+	}
 	_, p, err := ts.Config()
 	if err != nil {
 		ts.t.Fatal(err)
@@ -68,9 +233,6 @@ func newTestSession(t *testing.T) *testSession {
 	if err := os.MkdirAll(home, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte("[user]\n\tname = Alice\n\temail = alice@example.com\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
 	ts := &testSession{t: t, env: map[string]string{
 		"HOME":               home,
 		"HEDGEHUG_HOME":      filepath.Join(d, "hh"),
@@ -87,10 +249,7 @@ func newTestSession(t *testing.T) *testSession {
 		t.Fatal(err)
 	}
 	dir := filepath.Join(p.StoresDir, "me")
-	author, err := config.CommitAuthor(config.Account{}, false, ts.Getenv)
-	if err != nil {
-		t.Fatal(err)
-	}
+	author := config.CommitAuthor(testAccount)
 	ws := &model.Workspace{ULID: model.NewULID(), Name: "me", IDPrefix: "ME"}
 	if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "me"}, schema.Default(), ws, author, "", ts.Now); err != nil {
 		t.Fatal(err)
@@ -101,6 +260,7 @@ func newTestSession(t *testing.T) *testSession {
 	if err := c.Save(); err != nil {
 		t.Fatal(err)
 	}
+	ts.appendDefaultAccount()
 	return ts
 }
 
@@ -155,6 +315,7 @@ func otherSession(t *testing.T, ts *testSession, now time.Time) *testSession {
 		Now:    func() time.Time { return now },
 		Warn:   func(m string) { c.warns = append(c.warns, m) },
 	}
+	c.appendDefaultAccount()
 	return c
 }
 
@@ -199,9 +360,6 @@ func newTwoStoreSessionWith(t *testing.T, prefixA, prefixB string) *testSession 
 	if err := os.MkdirAll(home, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte("[user]\n\tname = Carol\n\temail = carol@example.com\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
 	ts := &testSession{t: t, env: map[string]string{
 		"HOME":               home,
 		"HEDGEHUG_HOME":      filepath.Join(d, "hh"),
@@ -225,10 +383,7 @@ func newTwoStoreSessionWith(t *testing.T, prefixA, prefixB string) *testSession 
 	for _, sp := range []struct{ name, prefix, acct string }{{"org-a", prefixA, "alice"}, {"org-b", prefixB, "bob"}} {
 		dir := filepath.Join(p.StoresDir, sp.name)
 		acct, _ := c.Account(sp.acct)
-		author, err := config.CommitAuthor(acct, true, ts.Getenv)
-		if err != nil {
-			t.Fatal(err)
-		}
+		author := config.CommitAuthor(acct)
 		ws := &model.Workspace{ULID: model.NewULID(), Name: sp.name, IDPrefix: sp.prefix}
 		if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: sp.name}, schema.Default(), ws, author, "", ts.Now); err != nil {
 			t.Fatal(err)

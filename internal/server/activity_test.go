@@ -13,7 +13,6 @@ import (
 func TestUndo(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	ts.withAccount()
 	id := ts.add("one", "")
 	var w taskWriteBody
 	ts.call("PATCH", "/api/tasks/"+id, map[string]any{"title": "two"}, 200, &w)
@@ -36,6 +35,7 @@ func TestUndo(t *testing.T) {
 func TestUndoWithoutAccountIsConflict(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
+	ts.dropDefaultAccount()
 	if p := ts.problem("POST", "/api/undo", nil, 409); p.Type != "account.none" {
 		t.Errorf("problem = %+v", p)
 	}
@@ -44,7 +44,6 @@ func TestUndoWithoutAccountIsConflict(t *testing.T) {
 func TestActivity(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	ts.withAccount()
 	ts.add("one", "")
 	ts.add("two", "")
 	var out []ops.LogView
@@ -61,8 +60,8 @@ func TestActivity(t *testing.T) {
 		t.Errorf("sync=only: %d entries, want none", len(out))
 	}
 	ts.call("GET", "/api/activity?author="+ts.accountID(), nil, 200, &out)
-	if len(out) != 2 {
-		t.Errorf("author: %d entries, want the two adds", len(out))
+	if len(out) != 3 {
+		t.Errorf("author: %d entries, want the init and the two adds", len(out))
 	}
 	ts.problem("GET", "/api/activity?sync=maybe", nil, 400)
 	// a workspace by its prefix or ULID; the adds tell their workspace
@@ -130,7 +129,6 @@ func TestNotifications(t *testing.T) {
 func TestUndoNothingIsConflict(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	ts.withAccount()
 	if p := ts.problem("POST", "/api/undo", nil, 409); p.Type != "undo.nothing" {
 		t.Errorf("problem = %+v", p)
 	}
@@ -139,6 +137,7 @@ func TestUndoNothingIsConflict(t *testing.T) {
 func TestNotificationsWarnOnce(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t) // no account: NoAccountsWarning
+	ts.dropDefaultAccount()
 	ts.call("GET", "/api/notifications?all=true", nil, 200, nil)
 	if n := strings.Count(ts.log.String(), ops.NoAccountsWarning); n != 1 {
 		t.Errorf("warned %d times: %q", n, ts.log.String())

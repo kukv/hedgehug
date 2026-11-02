@@ -25,7 +25,9 @@
     "total": 2
   },
   "body": "- [x] one\n- [ ] two\n",
-  "watchers": [],
+  "watchers": [
+    "github.com/alice"
+  ],
   "repos": [],
   "comments": [],
   "reverse": {},
@@ -35,8 +37,8 @@
       "hash": "<HASH>",
       "date": "<TIME>",
       "author": {
-        "name": "Alice",
-        "email": "alice@example.com"
+        "name": "alice",
+        "email": "alice@users.noreply.github.com"
       },
       "store": "me",
       "workspace": {
@@ -53,8 +55,8 @@
       "hash": "<HASH>",
       "date": "<TIME>",
       "author": {
-        "name": "Alice",
-        "email": "alice@example.com"
+        "name": "alice",
+        "email": "alice@users.noreply.github.com"
       },
       "store": "me",
       "workspace": {

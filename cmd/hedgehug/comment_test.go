@@ -48,7 +48,7 @@ func TestCommentAddFromArgs(t *testing.T) {
 	before := len(te.log("me"))
 
 	got := te.commentJSON("comment", x.ID, "hello", "world")
-	if got.Body != "hello world\n" || got.Task != x.ULID || len(got.ULID) != 26 || got.Author != "" || got.DeletedAt != nil {
+	if got.Body != "hello world\n" || got.Task != x.ULID || len(got.ULID) != 26 || got.Author != "github.com/alice" || got.DeletedAt != nil {
 		t.Errorf("comment = %+v", got)
 	}
 	cs := te.comments(x.ULID)
@@ -316,8 +316,15 @@ func TestCommentUnknown(t *testing.T) {
 	}
 }
 
-// putComments writes comments with the given ULIDs on task ulid.
+// putComments writes comments by github.com/alice with the given ULIDs on
+// task ulid.
 func (te *testEnv) putComments(ulid string, commentULIDs ...string) {
+	te.t.Helper()
+	te.putCommentsBy(ulid, "github.com/alice", commentULIDs...)
+}
+
+// putCommentsBy writes comments by author with the given ULIDs on task ulid.
+func (te *testEnv) putCommentsBy(ulid, author string, commentULIDs ...string) {
 	te.t.Helper()
 	s, err := store.Open(te.storeDir("me"))
 	if err != nil {
@@ -325,7 +332,7 @@ func (te *testEnv) putComments(ulid string, commentULIDs ...string) {
 	}
 	if _, err := s.Update(store.Op{Name: "comment", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
 		for _, commentULID := range commentULIDs {
-			if err := tx.PutComment(mustULID(te.t, ulid), &model.Comment{ULID: mustULID(te.t, commentULID), Author: "github.com/alice", Body: "body " + commentULID + "\n"}); err != nil {
+			if err := tx.PutComment(mustULID(te.t, ulid), &model.Comment{ULID: mustULID(te.t, commentULID), Author: author, Body: "body " + commentULID + "\n"}); err != nil {
 				return err
 			}
 		}
@@ -356,10 +363,12 @@ func TestShowCommentULID(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	x := te.addJSON("Alpha")
-	c := te.commentJSON("comment", x.ID, "has an author-less comment")
+	// A comment with no author stays a possible shape of the file.
+	const a = "01HZZZZZZZZZZZZZZZZZZZ0001"
+	te.putCommentsBy(x.ULID, "", a)
 
 	out := te.ok("show", x.ID)
-	if !strings.Contains(out, "\n  "+c.ULID+"  -  2026-") {
+	if !strings.Contains(out, "\n  "+a+"  -  ") {
 		t.Errorf("show does not print the ULID and - for the author:\n%s", out)
 	}
 	var got struct {
@@ -369,8 +378,8 @@ func TestShowCommentULID(t *testing.T) {
 		t.Fatal(err)
 	}
 	// ulid, author, created and body.
-	if len(got.Comments) != 1 || got.Comments[0]["ulid"] != c.ULID || len(got.Comments[0]) != 4 {
-		t.Errorf("comments = %+v, want only ulid %q, author, created and body", got.Comments, c.ULID)
+	if len(got.Comments) != 1 || got.Comments[0]["ulid"] != a || len(got.Comments[0]) != 4 {
+		t.Errorf("comments = %+v, want only ulid %q, author, created and body", got.Comments, a)
 	}
 }
 
