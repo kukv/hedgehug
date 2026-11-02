@@ -209,6 +209,35 @@ func TestUndoTarget(t *testing.T) {
 	}
 }
 
+func TestUndoScannerStopsAtTarget(t *testing.T) {
+	t.Parallel()
+	hash := func(b byte) plumbing.Hash { return plumbing.Hash{b} }
+	other := func(b byte) gitrepo.LogEntry {
+		return gitrepo.LogEntry{Hash: hash(b), Parents: []plumbing.Hash{hash(0xff)}, Trailers: []gitrepo.Trailer{{Key: "Hedgehug-Author", Value: "you"}, {Key: "Hedgehug-Op", Value: "set"}}}
+	}
+	mine := gitrepo.LogEntry{Hash: hash(3), Parents: []plumbing.Hash{hash(0xff)}, Trailers: []gitrepo.Trailer{{Key: "Hedgehug-Author", Value: "me"}, {Key: "Hedgehug-Op", Value: "add"}}}
+	log := []gitrepo.LogEntry{other(10), other(9), mine}
+	for b := byte(8); b >= 4; b-- {
+		log = append(log, other(b))
+	}
+	var sc undoScanner
+	n := 0
+	var got gitrepo.LogEntry
+	for _, e := range log {
+		n++
+		if c, ok := sc.next(e, "me"); ok {
+			got = c
+			break
+		}
+	}
+	if n != 3 {
+		t.Fatalf("read %d entries, want 3", n)
+	}
+	if got.Hash != mine.Hash {
+		t.Fatalf("target %v, want %v", got.Hash, mine.Hash)
+	}
+}
+
 func TestCountTasks(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)

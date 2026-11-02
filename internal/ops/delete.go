@@ -249,16 +249,19 @@ func commitAt(r *gitrepo.Repo, at string, loc *time.Location) (plumbing.Hash, er
 	if err != nil {
 		return plumbing.ZeroHash, err
 	}
-	log, err := r.LogFrom(head, 0)
+	// Stop at the first commit made at or before t.
+	found := plumbing.ZeroHash
+	err = r.WalkFirstParents(head, func(e gitrepo.LogEntry) bool {
+		if !e.When.After(t) {
+			found = e.Hash
+			return false
+		}
+		return true
+	})
 	if err != nil {
 		return plumbing.ZeroHash, err
 	}
-	for _, e := range log {
-		if !e.When.After(t) {
-			return e.Hash, nil
-		}
-	}
-	return plumbing.ZeroHash, nil
+	return found, nil
 }
 
 // workspaceName is the name of the workspace, or its ULID when the store has
