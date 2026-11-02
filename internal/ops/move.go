@@ -243,7 +243,46 @@ func (ss *Session) moveTargetOf(ix *index.Index, e, p *index.Entry, w *model.Wor
 	}
 	var err error
 	to.rank, err = ss.rankAt(ix, e.ULID, to.parent, to.workspace, before, after, "move.invalid")
+	if err == nil && ss.alreadyThere(ix, e, to, before, after) {
+		// Nothing moves, so the rank stays and the store has nothing to commit.
+		to.rank = e.Rank
+	}
 	return to, err
+}
+
+// alreadyThere says whether e, which rankAt has found a place for, already
+// stands there: under the same parent in the same workspace, last when no
+// sibling is named, or right after (before) the sibling named with a rank of
+// its own. Tasks of one rank are ordered by id and the new rank lies past the
+// whole group, so e next to a task of the same rank may still move.
+func (ss *Session) alreadyThere(ix *index.Index, e *index.Entry, to moveTarget, before, after string) bool {
+	if to.workspace != e.Workspace || !sameParent(to.parent, e.Parent) {
+		return false
+	}
+	sib := Siblings(ix, to.parent, to.workspace, model.ULID{})
+	at := slices.IndexFunc(sib, func(x *index.Entry) bool { return x.ULID == e.ULID })
+	if at < 0 {
+		return false
+	}
+	ref := before
+	if ref == "" {
+		ref = after
+	}
+	if ref == "" {
+		return at == len(sib)-1
+	}
+	x, err := ss.ResolveRef(ix, ref)
+	if err != nil {
+		return false
+	}
+	if before != "" {
+		return at+1 < len(sib) && sib[at+1].ULID == x.ULID && e.Rank < x.Rank
+	}
+	return at > 0 && sib[at-1].ULID == x.ULID && e.Rank > x.Rank
+}
+
+func sameParent(a, b *model.ULID) bool {
+	return a == nil && b == nil || a != nil && b != nil && *a == *b
 }
 
 // CheckPosition refuses both before and after (position.both). The CLI calls

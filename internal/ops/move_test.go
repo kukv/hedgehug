@@ -337,3 +337,65 @@ func (ts *testSession) addedTask(id string) *model.Task {
 	}
 	return tk
 }
+
+// A move to where the task already is keeps its rank, so nothing is committed;
+// a move that changes the order still commits.
+func TestMoveToTheSamePlaceIsNotCommitted(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	me := ts.workspaceULID("me")
+	for _, title := range []string{"a", "b", "c"} {
+		if _, err := ts.Add(AddInput{Title: title}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, c := range []struct {
+		name string
+		in   MoveInput
+		want bool // committed
+		list string
+	}{
+		{"after the task just before", MoveInput{Arg: "ME-2", After: "ME-1"}, false, "ME-1 ME-2 ME-3"},
+		{"before the task just after", MoveInput{Arg: "ME-2", Before: "ME-3"}, false, "ME-1 ME-2 ME-3"},
+		{"to the end when last", MoveInput{Arg: "ME-3", Root: true}, false, "ME-1 ME-2 ME-3"},
+		{"before a task two places on", MoveInput{Arg: "ME-1", Before: "ME-3"}, true, "ME-2 ME-1 ME-3"},
+		{"after a task two places on", MoveInput{Arg: "ME-2", After: "ME-3"}, true, "ME-1 ME-3 ME-2"},
+		{"to the end when not last", MoveInput{Arg: "ME-1", Root: true}, true, "ME-3 ME-2 ME-1"},
+	} {
+		res, err := ts.Move(c.in)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if res.Committed != c.want {
+			t.Errorf("%s: committed = %v; want %v", c.name, res.Committed, c.want)
+		}
+		if got := strings.Join(ts.order(me, nil), " "); got != c.list {
+			t.Errorf("%s: order = %s; want %s", c.name, got, c.list)
+		}
+	}
+}
+
+// Tasks of one rank are ordered by id and a move next to one of them goes past
+// the group, so it is not a move to where the task is.
+func TestMoveNextToATaskOfTheSameRankStillMoves(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	me := ts.workspaceULID("me")
+	for _, title := range []string{"a", "b", "c"} {
+		if _, err := ts.Add(AddInput{Title: title}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a, b := ts.addedTask("ME-1"), ts.addedTask("ME-2")
+	ts.editRawFile(model.TaskPath(b.ULID), "rank: "+string(b.Rank), "rank: "+string(a.Rank))
+	res, err := ts.Move(MoveInput{Arg: "ME-2", After: "ME-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Committed {
+		t.Error("moving past a task of the same rank did not commit")
+	}
+	if got, want := strings.Join(ts.order(me, nil), " "), "ME-1 ME-2 ME-3"; got != want {
+		t.Errorf("order = %s; want %s", got, want)
+	}
+}
