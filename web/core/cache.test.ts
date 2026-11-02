@@ -578,6 +578,30 @@ describe("TaskCache reads that are not writes (prime)", () => {
   });
 });
 
+describe("TaskCache a read of a row that is not in the cache", () => {
+  it("keeps up with the task after an event came while the read was on its way", async () => {
+    let title = "fresh1";
+    const { cache, conn } = setup((r) => showOf(tv(r.path.split("/").pop() ?? "", title)));
+    const since = cache.epochNow(); // a lookup of X is sent here
+    conn.emit("tasks.changed", changed("shared", ["X"], "c1")); // X is not in the cache: nothing fetches it
+    cache.prime([tv("X", "old")], since); // the lookup answers after that
+    await vi.waitFor(() => expect(cache.task("X")?.title).toBe("fresh1"));
+    title = "fresh2";
+    conn.emit("tasks.changed", changed("shared", ["X"], "c2"));
+    await vi.waitFor(() => expect(cache.task("X")?.title).toBe("fresh2"));
+  });
+
+  it("drops a read that began before a resync", async () => {
+    const { cache, conn } = setup((r) => showOf(tv(r.path.split("/").pop() ?? "", "fresh")));
+    cache.prime([tv("B", "b")], cache.epochNow());
+    const since = cache.epochNow(); // a search is sent here
+    conn.emit("resync");
+    await vi.waitFor(() => expect(cache.task("B")?.title).toBe("fresh"));
+    cache.prime([tv("B", "old")], since); // its answer comes after the resync's fetch
+    expect(cache.task("B")?.title).toBe("fresh");
+  });
+});
+
 describe("TaskCache rows nobody holds", () => {
   const getsOf = (calls: Req[], u: string) => calls.filter((c) => c.path === `/api/tasks/${u}`);
 
@@ -623,11 +647,16 @@ describe("TaskCache rows nobody holds", () => {
     await vi.waitFor(() => expect(cache.task("B")).toBeUndefined());
   });
 
-  it("drops the answer a newer fetch of the same row overtook", async () => {
+  const gated = () => {
     let open!: () => void;
     const gate = new Promise<void>((r) => {
       open = r;
     });
+    return { gate, open };
+  };
+
+  it("drops the answer a newer fetch of the same row overtook", async () => {
+    const { gate, open } = gated();
     let n = 0;
     const { cache, conn } = setup(async () => {
       if (n++ === 0) {
@@ -637,13 +666,47 @@ describe("TaskCache rows nobody holds", () => {
       return showOf(tv("B", "newer"));
     });
     cache.prime([tv("B", "b")], cache.epochNow());
-    conn.emit("tasks.changed", changed("shared", ["B"], "c1"));
+    conn.emit("resync");
     await settle();
-    conn.emit("tasks.changed", changed("shared", ["B"], "c2"));
+    conn.emit("resync");
     await vi.waitFor(() => expect(cache.task("B")?.title).toBe("newer"));
     open();
     await settle();
     await settle();
     expect(cache.task("B")?.title).toBe("newer");
+  });
+
+  it("does not forget a row on the 404 of a fetch a newer one overtook", async () => {
+    const { gate, open } = gated();
+    let n = 0;
+    const { cache, conn } = setup(async () => {
+      if (n++ === 0) {
+        await gate;
+        return problem(404, "not_found");
+      }
+      return showOf(tv("B", "newer"));
+    });
+    cache.prime([tv("B", "b")], cache.epochNow());
+    conn.emit("resync");
+    await settle();
+    conn.emit("resync");
+    await vi.waitFor(() => expect(cache.task("B")?.title).toBe("newer"));
+    open();
+    await settle();
+    await settle();
+    expect(cache.task("B")?.title).toBe("newer");
+  });
+
+  it("keeps no sequence of a row once its fetch has answered, nor of a row it forgot", async () => {
+    const { cache, conn } = setup((r) =>
+      r.path.endsWith("/G") ? problem(404, "not_found") : showOf(tv("B", "fresh")),
+    );
+    const seqs = () => (cache as unknown as { rowSeqs: Map<string, number> }).rowSeqs;
+    cache.prime([tv("B", "b"), tv("G", "g")], cache.epochNow());
+    conn.emit("resync");
+    await vi.waitFor(() => expect(cache.task("G")).toBeUndefined());
+    await settle();
+    expect(cache.task("B")?.title).toBe("fresh");
+    expect(seqs().size).toBe(0);
   });
 });

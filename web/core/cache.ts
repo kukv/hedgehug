@@ -110,7 +110,11 @@ export class TaskCache {
   // lastChange holds the epoch of the latest change an event brought (a change from outside, not
   // a write of this tab): a read that began before it is older than what the event started to fetch.
   private readonly lastChange = new Map<string, number>();
-  // rowSeqs counts the fetches of a row nobody holds, so that an answer a newer one overtook is dropped.
+  // resyncAt is the epoch of the last resync: what changed while the connection was lost is not in lastChange.
+  private resyncAt = 0;
+  // rowSeqs holds the latest fetch (a number from rowSeq) of a row nobody holds, so that an answer a newer one
+  // overtook is dropped. An entry lasts only while its fetch is on its way.
+  private rowSeq = 0;
   private readonly rowSeqs = new Map<string, number>();
   private dirty = false;
   private refreshQueued = false;
@@ -121,7 +125,10 @@ export class TaskCache {
     this.api = opts.api;
     this.now = opts.now ?? Date.now;
     opts.conn.on("tasks.changed", (e) => this.onTasksChanged(e));
-    opts.conn.on("resync", () => this.queueRefresh(null));
+    opts.conn.on("resync", () => {
+      this.resyncAt = ++this.epoch;
+      this.queueRefresh(null);
+    });
   }
 
   task(ulid: string): TaskView | undefined {
@@ -241,6 +248,8 @@ export class TaskCache {
   prime(tasks: (TaskView | ShowView)[], since: number): void {
     for (const t of tasks) {
       if (!this.changedSince(t.ulid, since)) this.ingest(t, since);
+      // Nothing fetches a row nobody holds when its event came: the read has the old row, so fetch it now.
+      else if (!this.rows.has(t.ulid)) void this.fetchRow(t.ulid, t.store);
     }
     this.flush();
   }
@@ -264,7 +273,7 @@ export class TaskCache {
   }
 
   private changedSince(ulid: string, since: number): boolean {
-    return (this.lastChange.get(ulid) ?? 0) > since;
+    return Math.max(this.lastChange.get(ulid) ?? 0, this.resyncAt) > since;
   }
 
   // refreshTrees fetches the trees on screen again and resolves once they hold the answer, so
@@ -444,6 +453,7 @@ export class TaskCache {
     this.shows.delete(ulid);
     this.showSigs.delete(ulid);
     this.dropMark(ulid);
+    this.rowSeqs.delete(ulid);
     this.dirty = true;
   }
 
@@ -527,19 +537,21 @@ export class TaskCache {
     return held;
   }
 
-  private async fetchRow(ulid: string): Promise<void> {
+  private async fetchRow(ulid: string, store?: string): Promise<void> {
     const since = this.epoch;
-    const seq = (this.rowSeqs.get(ulid) ?? 0) + 1;
+    const seq = ++this.rowSeq;
     this.rowSeqs.set(ulid, seq);
-    const store = this.rows.get(ulid)?.store;
+    store ??= this.rows.get(ulid)?.store;
     try {
       const show = await unwrap(
         this.api.GET("/api/tasks/{id}", { params: { path: { id: ulid }, query: { store } } }),
       );
       if (seq !== this.rowSeqs.get(ulid)) return; // a newer fetch of this row is on its way
+      this.rowSeqs.delete(ulid);
       if (!this.gone(ulid, since) && !this.changedSince(ulid, since)) this.ingest(show, since);
     } catch (e) {
       if (seq !== this.rowSeqs.get(ulid)) return;
+      this.rowSeqs.delete(ulid);
       if (e instanceof ApiError && e.status === 404 && !this.wroteSince(ulid, since))
         this.forget(ulid);
     }
