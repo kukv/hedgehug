@@ -4,6 +4,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/testenv"
 )
 
 // fakeClock is a Clock that moves only when Advance is called.
@@ -11,6 +13,7 @@ type fakeClock struct {
 	mu      sync.Mutex
 	now     time.Time
 	waiters []fakeWaiter
+	afters  int // calls of After
 }
 
 type fakeWaiter struct {
@@ -29,6 +32,7 @@ func (c *fakeClock) Now() time.Time {
 func (c *fakeClock) After(d time.Duration) <-chan time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.afters++
 	ch := make(chan time.Time, 1)
 	if d <= 0 {
 		ch <- c.now
@@ -36,6 +40,14 @@ func (c *fakeClock) After(d time.Duration) <-chan time.Time {
 	}
 	c.waiters = append(c.waiters, fakeWaiter{c.now.Add(d), ch})
 	return ch
+}
+
+// afterCalls is how many times After was called: the loop calls it each time
+// it parks, so a new call means the loop looked again.
+func (c *fakeClock) afterCalls() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.afters
 }
 
 // Advance moves the clock by d and fires the waiters that are due.
@@ -73,13 +85,7 @@ func (c *fakeClock) waitWaiter(t *testing.T, at time.Time) {
 // eventually waits up to 10 seconds of real time for cond.
 func eventually(t *testing.T, what string, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	testenv.WaitFor(t, what, cond)
 }
 
 func TestFakeClock(t *testing.T) {

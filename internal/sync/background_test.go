@@ -67,9 +67,9 @@ func TestBackgroundWaitsAndRuns(t *testing.T) {
 	now := time.Now()
 	_ = MarkPending(c.stores[0], now)
 	runs := 0
-	err := Background(c.stores[0], c.opts[0], 50*time.Millisecond, func() error {
+	err := Background(c.stores[0], c.opts[0], 10*time.Millisecond, func() error {
 		runs++
-		if time.Since(now) < 50*time.Millisecond {
+		if time.Since(now) < 10*time.Millisecond {
 			t.Error("ran before push_interval")
 		}
 		_, err := UpdateState(c.stores[0], func(st *State) { st.PendingSince = time.Time{} })

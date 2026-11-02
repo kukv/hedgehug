@@ -12,6 +12,7 @@ func sprintFile(ulid, ws string) []byte {
 }
 
 func TestRepairWorkspaceMismatchDetachesSprintAndReleases(t *testing.T) {
+	t.Parallel()
 	p, c := "01JD0000000000000000000001", "01JD0000000000000000000002"
 	spA, relA, relB := "01JD0000000000000000000011", "01JD0000000000000000000012", "01JD0000000000000000000013"
 	f := memFiles{
@@ -39,6 +40,7 @@ func TestRepairWorkspaceMismatchDetachesSprintAndReleases(t *testing.T) {
 }
 
 func TestRepairWorkspaceMismatchDetachesWhatCannotBeRead(t *testing.T) {
+	t.Parallel()
 	p, c := "01JD0000000000000000000001", "01JD0000000000000000000002"
 	gone := "01JD0000000000000000000011"
 	f := memFiles{
@@ -57,6 +59,7 @@ func TestRepairWorkspaceMismatchDetachesWhatCannotBeRead(t *testing.T) {
 }
 
 func TestRepairKeepsSprintOfTaskThatDidNotMove(t *testing.T) {
+	t.Parallel()
 	x := "01JD0000000000000000000001"
 	sp := "01JD0000000000000000000011"
 	f := memFiles{

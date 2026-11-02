@@ -12,7 +12,7 @@ import (
 // process does not keep the holder out of the store: the holder's own
 // Update, which needs s.mu, goes through at once.
 func TestCommitMergeWaitsWithoutHoldingTheMutex(t *testing.T) {
-	t.Parallel()
+	// 直列: パッケージ変数 onLockWait の差し替え
 	s := newTestStore(t)
 	s.lockWait = 3 * time.Second
 	head, err := s.repo.Head()
@@ -23,12 +23,24 @@ func TestCommitMergeWaitsWithoutHoldingTheMutex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	waiting := make(chan struct{}, 1)
+	onLockWait = func() {
+		select {
+		case waiting <- struct{}{}:
+		default:
+		}
+	}
+	t.Cleanup(func() { onLockWait = func() {} })
 	merged := make(chan error, 1)
 	go func() {
 		_, err := s.CommitMerge(head, []plumbing.Hash{head}, map[string][]byte{"m.txt": []byte("m")}, Op{Name: "repair", Author: testAuthor}, nil)
 		merged <- err
 	}()
-	time.Sleep(200 * time.Millisecond) // CommitMerge is waiting for the file lock
+	select {
+	case <-waiting: // CommitMerge is waiting for the file lock, without s.mu
+	case err := <-merged:
+		t.Fatalf("CommitMerge ended before it waited for the lock: %v", err)
+	}
 
 	done := make(chan error, 1)
 	go func() {

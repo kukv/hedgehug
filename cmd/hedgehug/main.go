@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/pkg/browser"
-	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
 	"github.com/kukv/hedgehug/internal/auth"
@@ -44,14 +43,6 @@ type env struct {
 	openURL func(url string) error
 	// uiContext is for tests: what hh ui runs until; nil is Ctrl-C and SIGTERM.
 	uiContext func() (context.Context, context.CancelFunc)
-}
-
-func init() {
-	// On Windows cobra lists every process on each run, about 40ms, to tell
-	// whether Explorer started the command and if so to ask for cmd.exe.
-	// hedgehug is run from a shell; started from Explorer it prints its
-	// usage as it does with no arguments.
-	cobra.MousetrapHelpText = ""
 }
 
 func main() {

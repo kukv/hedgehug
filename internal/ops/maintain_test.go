@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -68,9 +67,6 @@ func newCheckedSession(t *testing.T) *testSession {
 	t.Helper()
 	bin := t.TempDir()
 	name := "hedgehug"
-	if runtime.GOOS == "windows" {
-		name += ".exe"
-	}
 	if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"), 0o700); err != nil { //nolint:gosec // a stand-in for the binary
 		t.Fatal(err)
 	}

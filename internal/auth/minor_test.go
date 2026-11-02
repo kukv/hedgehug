@@ -13,6 +13,7 @@ import (
 )
 
 func TestDeleteNotFoundIsNoError(t *testing.T) {
+	t.Parallel()
 	k := newMem()
 	if err := Delete(acct("keychain", ""), k); err != nil {
 		t.Errorf("Delete of nothing = %v", err)
@@ -30,6 +31,7 @@ func (f failKeyring) Set(string, string, string) error   { return f.err }
 func (f failKeyring) Delete(string, string) error        { return f.err }
 
 func TestBrokenDeviceTokenJSON(t *testing.T) {
+	t.Parallel()
 	k := newMem()
 	a := acct("device", "")
 	_ = k.Set(Service, Key(a), "{not json")
@@ -42,12 +44,14 @@ func TestBrokenDeviceTokenJSON(t *testing.T) {
 }
 
 func TestTokenUnknownKind(t *testing.T) {
+	t.Parallel()
 	if _, err := Token(acct("vault", ""), Options{}); err == nil || !strings.Contains(err.Error(), `unknown token source "vault"`) {
 		t.Errorf("Token = %v", err)
 	}
 }
 
 func TestDeviceNotLoggedInSaysWhatToRun(t *testing.T) {
+	t.Parallel()
 	_, err := Token(acct("device", ""), Options{Keyring: newMem()})
 	if err == nil || !strings.Contains(err.Error(), "not logged in") || !strings.Contains(err.Error(), "hedgehug auth login a") {
 		t.Errorf("Token = %v", err)
@@ -55,6 +59,7 @@ func TestDeviceNotLoggedInSaysWhatToRun(t *testing.T) {
 }
 
 func TestWrapKeyring(t *testing.T) {
+	t.Parallel()
 	if wrapKeyring(nil) != nil {
 		t.Error("nil is not nil")
 	}
@@ -71,6 +76,7 @@ func TestWrapKeyring(t *testing.T) {
 }
 
 func TestOptionsKeychain(t *testing.T) {
+	t.Parallel()
 	if _, ok := (Options{}).Keychain().(osKeyring); !ok {
 		t.Errorf("nil Keyring gave %T, want the OS keychain", Options{}.Keychain())
 	}
@@ -80,6 +86,7 @@ func TestOptionsKeychain(t *testing.T) {
 	}
 }
 
+// 直列: パッケージ変数 lockWait の差し替え
 func TestWithLock(t *testing.T) {
 	if err := WithLock(Options{}, func() error { return nil }); err == nil || !strings.Contains(err.Error(), "LockFile") {
 		t.Errorf("no lock file = %v", err)
@@ -94,7 +101,7 @@ func TestWithLock(t *testing.T) {
 		t.Errorf("WithLock = %v, want fn's error", err)
 	}
 	old := lockWait
-	lockWait = 50 * time.Millisecond
+	lockWait = 5 * time.Millisecond
 	t.Cleanup(func() { lockWait = old })
 	var busy error
 	if err := store.WithFileLock(lock, time.Second, func() error {

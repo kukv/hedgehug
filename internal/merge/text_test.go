@@ -3,6 +3,7 @@ package merge
 import "testing"
 
 func TestDiff3(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, base, a, b, want string }{
 		{"only a", "1\n2\n3\n", "1\nA\n3\n", "1\n2\n3\n", "1\nA\n3\n"},
 		{"apart", "1\n2\n3\n4\n", "A\n2\n3\n4\n", "1\n2\n3\nB\n", "A\n2\n3\nB\n"},
@@ -22,6 +23,7 @@ func TestDiff3(t *testing.T) {
 }
 
 func TestDiff3Regions(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct{ name, base, a, b, want string }{
 		// a's one change overlaps two of b's, so all three become one region.
 		{"bridge", "1\n2\n3\n4\n5\n", "1\nA\nA\nA\n5\n", "1\nB\n3\nB\n5\n", "1\nA\nA\nA\n-----\nB\n3\nB\n5\n"},

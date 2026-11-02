@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -21,6 +20,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	hhsync "github.com/kukv/hedgehug/internal/sync"
+	"github.com/kukv/hedgehug/internal/testenv"
 )
 
 // testEnv runs the command with HEDGEHUG_HOME and HOME in temporary
@@ -61,7 +61,7 @@ func newTestEnv(t *testing.T) *testEnv {
 
 func (te *testEnv) getenv(k string) string {
 	switch k {
-	case "HOME", "USERPROFILE":
+	case "HOME":
 		return te.home
 	case "HEDGEHUG_HOME":
 		return te.hhHome
@@ -216,6 +216,13 @@ func TestMain(m *testing.M) {
 	if script := os.Getenv("HH_TEST_EDITOR_SCRIPT"); script != "" {
 		os.Exit(testEditor(script, os.Args[len(os.Args)-1]))
 	}
+	// Everything the tests make, the binaries buildHedgehug and buildDevenv
+	// make included, goes in a directory of this process that cleanup removes.
+	cleanup, err := testenv.Setup()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "testenv:", err)
+		os.Exit(1)
+	}
 	// No test reaches the keychain of the machine.
 	keyring.MockInit()
 	// A program built with -race sleeps a second when it exits, by default,
@@ -228,23 +235,12 @@ func TestMain(m *testing.M) {
 	pathDir, err := os.MkdirTemp("", "hedgehug-path-")
 	if err == nil {
 		name := "hedgehug"
-		if runtime.GOOS == "windows" {
-			name += ".exe" // exec.LookPath tries the PATHEXT names only
-		}
 		if err := os.WriteFile(filepath.Join(pathDir, name), nil, 0o700); err == nil { //nolint:gosec // an empty file that only has to be found
 			_ = os.Setenv("PATH", pathDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 		}
 	}
 	code := m.Run()
-	if pathDir != "" {
-		_ = os.RemoveAll(pathDir)
-	}
-	if builtDir != "" {
-		_ = os.RemoveAll(builtDir)
-	}
-	if devenvDir != "" {
-		_ = os.RemoveAll(devenvDir)
-	}
+	cleanup()
 	os.Exit(code)
 }
 
@@ -290,7 +286,6 @@ func (te *testEnv) handEdit(name, id, old, replacement string) { //nolint:unpara
 
 var (
 	buildOnce sync.Once
-	builtDir  string // the directory of the binary buildHedgehug made
 	builtBin  string
 	buildErr  error
 )
@@ -300,14 +295,12 @@ var (
 func buildHedgehug(t *testing.T) string {
 	t.Helper()
 	buildOnce.Do(func() {
-		builtDir, buildErr = os.MkdirTemp("", "hedgehug-bin-")
-		if buildErr != nil {
+		builtDir, err := os.MkdirTemp("", "hedgehug-bin-")
+		if err != nil {
+			buildErr = err
 			return
 		}
 		name := "hedgehug"
-		if runtime.GOOS == "windows" {
-			name += ".exe"
-		}
 		builtBin = filepath.Join(builtDir, name)
 		if out, err := exec.Command("go", goBuildArgs(builtBin, ".")...).CombinedOutput(); err != nil { //nolint:gosec // the arguments are ours
 			buildErr = fmt.Errorf("go build: %w\n%s", err, out)
@@ -410,11 +403,11 @@ func (te *testEnv) runBinary(bin string, args ...string) {
 	te.t.Helper()
 	cmd := exec.Command(bin, args...) //nolint:gosec // the binary the test built
 	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "HOME=") && !strings.HasPrefix(kv, "USERPROFILE=") && !strings.HasPrefix(kv, "HEDGEHUG_") {
+		if !strings.HasPrefix(kv, "HOME=") && !strings.HasPrefix(kv, "HEDGEHUG_") {
 			cmd.Env = append(cmd.Env, kv)
 		}
 	}
-	cmd.Env = append(cmd.Env, "HOME="+te.home, "USERPROFILE="+te.home, "HEDGEHUG_HOME="+te.hhHome)
+	cmd.Env = append(cmd.Env, "HOME="+te.home, "HEDGEHUG_HOME="+te.hhHome)
 	for k, v := range te.env {
 		cmd.Env = append(cmd.Env, k+"="+v)
 	}

@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"os"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -12,7 +11,7 @@ import (
 // after the destination was written: the source file of AA-2 cannot be read.
 func unfinishedMove(t *testing.T, te *testEnv) {
 	t.Helper()
-	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+	if os.Geteuid() == 0 {
 		t.Skip("a file that cannot be read needs a permission that is enforced")
 	}
 	path, _ := te.storeTaskFile("alpha", "AA-2")

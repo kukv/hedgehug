@@ -6,6 +6,7 @@ import (
 )
 
 func TestIsLoopback(t *testing.T) {
+	t.Parallel()
 	for h, want := range map[string]bool{
 		"127.0.0.1": true, "127.1.2.3": true, "::1": true, "[::1]": true,
 		"localhost": true, "LocalHost": true,
@@ -20,6 +21,7 @@ func TestIsLoopback(t *testing.T) {
 }
 
 func TestLoadHostsPlainHTTP(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, yaml, want string }{
 		{"api", "hosts:\n  - {host: ghe.example.com, api: \"http://ghe.example.com/api/v3\"}\n", ":2: hosts: api \"http://ghe.example.com/api/v3\" uses plain http"},
 		{"web", "hosts:\n  - {host: ghe.example.com, web: \"HTTP://ghe.example.com\"}\n", ":2: hosts: web \"HTTP://ghe.example.com\" uses plain http"},

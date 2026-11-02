@@ -6,6 +6,7 @@ import (
 )
 
 func TestSplitFrontmatter(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, in, front, body string
 	}{
@@ -31,6 +32,7 @@ func TestSplitFrontmatter(t *testing.T) {
 }
 
 func TestJoinFrontmatter(t *testing.T) {
+	t.Parallel()
 	if got, want := string(joinFrontmatter([]byte("a: 1\n"), "body\r\n")), "---\na: 1\n---\nbody\n"; got != want {
 		t.Errorf("join = %q, want %q", got, want)
 	}

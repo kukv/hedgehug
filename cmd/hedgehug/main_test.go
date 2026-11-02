@@ -8,18 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-
-	"github.com/spf13/cobra"
 )
-
-// cobra on Windows lists every process on each run to tell whether Explorer
-// started the command, about 40ms a run; hedgehug turns that off.
-func TestNoExplorerCheck(t *testing.T) {
-	t.Parallel()
-	if cobra.MousetrapHelpText != "" {
-		t.Errorf("cobra.MousetrapHelpText = %q, want empty", cobra.MousetrapHelpText)
-	}
-}
 
 func TestRun(t *testing.T) {
 	t.Parallel()

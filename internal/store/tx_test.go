@@ -240,7 +240,7 @@ func TestTxUnusableAfterUpdate(t *testing.T) {
 func TestUpdateLockedElsewhere(t *testing.T) {
 	t.Parallel()
 	s := newTestStore(t)
-	s.lockWait = 100 * time.Millisecond
+	s.lockWait = 20 * time.Millisecond
 	l, err := acquire(s.path(lockPath), time.Second)
 	if err != nil {
 		t.Fatal(err)

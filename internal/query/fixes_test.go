@@ -11,6 +11,7 @@ import (
 )
 
 func TestRunErrorUnwraps(t *testing.T) {
+	t.Parallel()
 	s := newStore(t)
 	for _, ulid := range []string{"01JBZ8K3QW7M2X9V4T6RAAA001", "01JBZ8K3QW7M2X9V4T6RBBB001"} {
 		taskULID, err := model.ParseULID(ulid)
@@ -38,6 +39,7 @@ func TestRunErrorUnwraps(t *testing.T) {
 }
 
 func TestRunBlockedByClosedOrGone(t *testing.T) {
+	t.Parallel()
 	s := newStore(t)
 	done, canceled, deleted := newTask("done"), newTask("canceled"), newTask("deleted")
 	done.Status, canceled.Status = "done", "canceled"
@@ -59,6 +61,7 @@ func TestRunBlockedByClosedOrGone(t *testing.T) {
 }
 
 func TestRunNumberNotFinite(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	for _, q := range []string{"points:NaN", "points>Inf", "points<-inf"} {
 		parsed, err := Parse(q)

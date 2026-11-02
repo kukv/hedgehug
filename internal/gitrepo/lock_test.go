@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -21,7 +20,7 @@ func TestCommitWaitsForIndexLock(t *testing.T) {
 	if err := os.WriteFile(lock, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	indexLockWait = 50 * time.Millisecond
+	indexLockWait = 5 * time.Millisecond
 	t.Cleanup(func() { indexLockWait = 2 * time.Second })
 	writeFile(t, dir, "a.md", "a\n")
 	if _, err := r.Commit(Commit{Paths: []string{"a.md"}, Subject: "s", Author: Signature{"a", "a@x"}, When: time.Now()}); !errors.Is(err, ErrGitBusy) {
@@ -50,7 +49,7 @@ func TestCommitTakesTheLockWhenItIsReleased(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		time.Sleep(150 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 		_ = os.Remove(lock)
 	}()
 	writeFile(t, dir, "a.md", "a\n")
@@ -75,7 +74,7 @@ func TestFastForwardWaitsForIndexLock(t *testing.T) {
 	if err := os.WriteFile(lock, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	indexLockWait = 50 * time.Millisecond
+	indexLockWait = 5 * time.Millisecond
 	t.Cleanup(func() { indexLockWait = 2 * time.Second })
 	if err := b.r.FastForward(theirs, []string{"x.md"}); !errors.Is(err, ErrGitBusy) {
 		t.Errorf("FastForward with index.lock = %v", err)
@@ -220,9 +219,6 @@ func TestRepackFailureLeavesNoFiles(t *testing.T) {
 
 func TestRepackWritesReadOnlyPacks(t *testing.T) {
 	t.Parallel()
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows has no permission bits for others")
-	}
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	commitFiles(t, r, dir, map[string]string{"a.md": "1"})

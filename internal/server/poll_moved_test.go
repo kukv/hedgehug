@@ -23,6 +23,7 @@ func TestPollMovedTaskIsRemoved(t *testing.T) {
 	ch, cancel := ts.srv.hub.Subscribe()
 	ctx, stop := context.WithCancel(context.Background())
 	done := make(chan struct{})
+	ts.srv.poller.interval = 10 * time.Millisecond
 	go func() {
 		defer close(done)
 		ts.srv.poller.Run(ctx)
@@ -33,7 +34,7 @@ func TestPollMovedTaskIsRemoved(t *testing.T) {
 		defer ts.srv.poller.mu.Unlock()
 		return len(ts.srv.poller.stores) > 1
 	})
-	time.Sleep(2 * pollInterval)
+	ts.srv.poller.settle()
 
 	if _, err := ts.session().MoveStore(ops.MoveStoreInput{Arg: moved.ULID.String(), To: "team", Yes: true}); err != nil {
 		t.Fatal(err)

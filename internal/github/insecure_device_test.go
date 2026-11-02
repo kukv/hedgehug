@@ -9,6 +9,7 @@ import (
 // The device flow posts secrets (device code, refresh token): never over
 // plain http to a host that is not loopback, and the userinfo is not echoed.
 func TestDeviceFlowPlainHTTPGetsNoRequest(t *testing.T) {
+	t.Parallel()
 	called := false
 	hc := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 		called = true

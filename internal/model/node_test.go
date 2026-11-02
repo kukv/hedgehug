@@ -36,6 +36,7 @@ func encode(t *testing.T, e *Encoder, extra Fields) string {
 }
 
 func TestPutKeepsUnchangedNode(t *testing.T) {
+	t.Parallel()
 	d := parse(t, "rank: \"a0V\"\n")
 	e := d.Encoder()
 	e.Put("rank", "a0V", false)
@@ -45,6 +46,7 @@ func TestPutKeepsUnchangedNode(t *testing.T) {
 }
 
 func TestPutKeepsComments(t *testing.T) {
+	t.Parallel()
 	d := parse(t, "# head\nkey: WEB-42 # note\n")
 	e := d.Encoder()
 	e.Put("key", "WEB-43", false)
@@ -54,6 +56,7 @@ func TestPutKeepsComments(t *testing.T) {
 }
 
 func TestPutZero(t *testing.T) {
+	t.Parallel()
 	d := parse(t, "labels: [a]\n")
 	e := d.Encoder()
 	e.Put("labels", []string{}, true) // present: kept, written empty
@@ -65,6 +68,7 @@ func TestPutZero(t *testing.T) {
 }
 
 func TestPutNilNodeWritesNull(t *testing.T) {
+	t.Parallel()
 	d := parse(t, "gh: {}\n")
 	e := d.Encoder()
 	e.Put("gh", (*yaml.Node)(nil), false)
@@ -74,6 +78,7 @@ func TestPutNilNodeWritesNull(t *testing.T) {
 }
 
 func TestPutStyles(t *testing.T) {
+	t.Parallel()
 	type link struct {
 		Type string `yaml:"type"`
 		Ref  string `yaml:"ref"`
@@ -97,6 +102,7 @@ func TestPutStyles(t *testing.T) {
 }
 
 func TestPutKeepsBlockStyle(t *testing.T) {
+	t.Parallel()
 	d := parse(t, "labels:\n- a\n")
 	e := d.Encoder()
 	e.Put("labels", []string{"a", "b"}, false)
@@ -106,6 +112,7 @@ func TestPutKeepsBlockStyle(t *testing.T) {
 }
 
 func TestBytesOrdersKeys(t *testing.T) {
+	t.Parallel()
 	d := parse(t, "b: 1\nz: 9 # unknown\na: 2\n")
 	e := d.Encoder()
 	e.Put("a", 2, false)
@@ -116,6 +123,7 @@ func TestBytesOrdersKeys(t *testing.T) {
 }
 
 func TestDocDecode(t *testing.T) {
+	t.Parallel()
 	d, err := ParseDoc([]byte("title: 2026-11-03\nlabels: [a, 2026-01-01]\nn: abc\nnone: null\n"), 1)
 	if err != nil {
 		t.Fatal(err)
@@ -144,6 +152,7 @@ func TestDocDecode(t *testing.T) {
 }
 
 func TestParseDocRejectsNonMapping(t *testing.T) {
+	t.Parallel()
 	if _, err := ParseDoc([]byte("- a\n"), 0); err == nil {
 		t.Error("ParseDoc accepted a list")
 	}
@@ -154,6 +163,7 @@ func TestParseDocRejectsNonMapping(t *testing.T) {
 }
 
 func TestFields(t *testing.T) {
+	t.Parallel()
 	var f Fields
 	f.Set("a", node(t, 1))
 	f.Set("b", node(t, 2))
@@ -168,6 +178,7 @@ func TestFields(t *testing.T) {
 }
 
 func TestNodeEqual(t *testing.T) {
+	t.Parallel()
 	d := parse(t, "a: \"x\"\nb: [1, 2]\nc: {k: v}\n")
 	for _, tc := range []struct {
 		key  string
@@ -201,6 +212,7 @@ type named struct {
 }
 
 func TestPutMergesChangedItemByName(t *testing.T) {
+	t.Parallel()
 	src := "items:\n# head\n- name: a # first\n  x: keep\n  label: A\n- {name: b, x: keep} # second\n"
 	e := parse(t, src).Encoder()
 	e.Put("items", []named{{"b", "B"}, {"a", "AA"}}, false)
@@ -211,6 +223,7 @@ func TestPutMergesChangedItemByName(t *testing.T) {
 }
 
 func TestPutMergesRenamedItemByPosition(t *testing.T) {
+	t.Parallel()
 	src := "items:\n- name: a # first\n  x: keep\n- {name: b, x: keep} # second\n"
 	e := parse(t, src).Encoder()
 	e.Put("items", []named{{Name: "z"}, {Name: "b"}}, false)
@@ -221,6 +234,7 @@ func TestPutMergesRenamedItemByPosition(t *testing.T) {
 }
 
 func TestPutMergesMapValues(t *testing.T) {
+	t.Parallel()
 	src := "m:\n  # head\n  a: {name: a, x: keep} # first\n  b: {name: b} # second\n"
 	e := parse(t, src).Encoder()
 	e.Put("m", map[string]named{"a": {"a", "A"}, "b": {Name: "b"}}, false)
@@ -231,6 +245,7 @@ func TestPutMergesMapValues(t *testing.T) {
 }
 
 func TestPutMergesRenamedMapKeyByPosition(t *testing.T) {
+	t.Parallel()
 	src := "m:\n  # head\n  a: {name: a, x: keep} # first\n  b: {name: b} # second\n"
 	e := parse(t, src).Encoder()
 	e.Put("m", map[string]named{"z": {Name: "a"}, "b": {Name: "b"}}, false)
@@ -241,6 +256,7 @@ func TestPutMergesRenamedMapKeyByPosition(t *testing.T) {
 }
 
 func TestTaskLinkChangeKeepsOtherLinks(t *testing.T) {
+	t.Parallel()
 	src := "---\nulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nlinks:\n- type: github_pr # PR\n  ref: r1\n  sync: \"\"\n  x: keep\n- {type: github_issue, ref: r2, x: keep} # issue\n---\n"
 	task, err := DecodeTask([]byte(src))
 	if err != nil {
@@ -258,6 +274,7 @@ func TestTaskLinkChangeKeepsOtherLinks(t *testing.T) {
 }
 
 func TestTaskPropChangeKeepsOtherComments(t *testing.T) {
+	t.Parallel()
 	task, err := DecodeTask(readFile(t, "testdata/task/full.md"))
 	if err != nil {
 		t.Fatal(err)
@@ -275,6 +292,7 @@ func TestTaskPropChangeKeepsOtherComments(t *testing.T) {
 }
 
 func TestPutKeepsBlockMappingsInList(t *testing.T) {
+	t.Parallel()
 	d := parse(t, "links:\n- type: x\n  ref: r\n")
 	e := d.Encoder()
 	e.Put("links", []pair{{"x", "r"}, {"a", "b"}}, false)
@@ -285,6 +303,7 @@ func TestPutKeepsBlockMappingsInList(t *testing.T) {
 }
 
 func TestPutAppendsFlowMappingToFlowList(t *testing.T) {
+	t.Parallel()
 	d := parse(t, "links:\n- {type: x, ref: r}\n")
 	e := d.Encoder()
 	e.Put("links", []pair{{"x", "r"}, {"a", "b"}}, false)
@@ -295,6 +314,7 @@ func TestPutAppendsFlowMappingToFlowList(t *testing.T) {
 }
 
 func TestParseDocCommentOnly(t *testing.T) {
+	t.Parallel()
 	d, err := ParseDoc([]byte("# just a comment\n"), 5)
 	if err != nil || d.Get("x") != nil || d.line != 5 {
 		t.Errorf("ParseDoc(comment) = %+v, %v", d, err)
@@ -302,6 +322,7 @@ func TestParseDocCommentOnly(t *testing.T) {
 }
 
 func TestParseDocErrorLines(t *testing.T) {
+	t.Parallel()
 	_, err := ParseDoc([]byte("\n- a\n"), 3)
 	var de *DecodeError
 	if !errors.As(err, &de) || de.Line != 5 {
@@ -314,6 +335,7 @@ func TestParseDocErrorLines(t *testing.T) {
 }
 
 func TestDecodeErrorString(t *testing.T) {
+	t.Parallel()
 	inner := errors.New("bad")
 	for _, tc := range []struct {
 		e    DecodeError
@@ -331,6 +353,7 @@ func TestDecodeErrorString(t *testing.T) {
 }
 
 func TestParseDocRejects(t *testing.T) {
+	t.Parallel()
 	for name, src := range map[string]string{
 		"anchor":    "a: &x 1\n",
 		"alias":     "a: &x 1\nb: *x\n",
@@ -350,6 +373,7 @@ func TestParseDocRejects(t *testing.T) {
 }
 
 func TestParseDocRejectsTags(t *testing.T) {
+	t.Parallel()
 	for name, src := range map[string]string{
 		"binary": "a: 1\ntitle: !!binary aGk=\n",
 		"str":    "a: 1\nx: !!str 12\n",
@@ -378,6 +402,7 @@ func TestParseDocRejectsTags(t *testing.T) {
 }
 
 func TestNilFieldValueWritesNull(t *testing.T) {
+	t.Parallel()
 	if _, err := yaml.Dump(Fields{{"a", nil}}); err != nil {
 		t.Fatalf("Dump(Fields with nil) = %v", err)
 	}
@@ -389,6 +414,7 @@ func TestNilFieldValueWritesNull(t *testing.T) {
 }
 
 func TestBytesRejectsDuplicateKeys(t *testing.T) {
+	t.Parallel()
 	for name, extra := range map[string]Fields{
 		"extra repeats a put key": {{"k", node(t, 1)}},
 		"extra has a key twice":   {{"x", node(t, 1)}, {"x", node(t, 2)}},

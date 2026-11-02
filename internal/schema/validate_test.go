@@ -30,6 +30,7 @@ func codes(vs []Violation) []string {
 }
 
 func TestValidateTaskOK(t *testing.T) {
+	t.Parallel()
 	s := Default()
 	s.Props = append(s.Props,
 		Prop{Name: "area", Type: TypeMultiEnum, Values: []string{"backend", "frontend"}},
@@ -64,6 +65,7 @@ func TestValidateTaskOK(t *testing.T) {
 }
 
 func TestValidateTaskViolations(t *testing.T) {
+	t.Parallel()
 	s := Default()
 	s.Props = append(s.Props,
 		Prop{Name: "area", Type: TypeMultiEnum, Values: []string{"backend"}},
@@ -107,6 +109,7 @@ func TestValidateTaskViolations(t *testing.T) {
 }
 
 func TestValidateTaskNumberOK(t *testing.T) {
+	t.Parallel()
 	for _, v := range []string{"1.5", "-3", "1e3"} {
 		vs, _ := ValidateTask(taskWith(t, "  points: "+v+"\n"), Default().For(nil))
 		if len(vs) != 0 {
@@ -116,6 +119,7 @@ func TestValidateTaskNumberOK(t *testing.T) {
 }
 
 func TestValidateTaskRank(t *testing.T) {
+	t.Parallel()
 	task := taskWith(t, "")
 	task.Rank = "a0"
 	if vs, _ := ValidateTask(task, Default().For(nil)); len(vs) != 0 {
@@ -129,6 +133,7 @@ func TestValidateTaskRank(t *testing.T) {
 }
 
 func TestValidatePlacement(t *testing.T) {
+	t.Parallel()
 	e := Default().For(nil)
 	for _, tc := range []struct {
 		kind, parent string
@@ -150,6 +155,7 @@ func TestValidatePlacement(t *testing.T) {
 }
 
 func TestValidateTransition(t *testing.T) {
+	t.Parallel()
 	s := Default()
 	s.Workflow = Workflow{
 		Transitions: Lists{{"backlog", []string{"todo"}}},
@@ -185,6 +191,7 @@ func TestValidateTransition(t *testing.T) {
 }
 
 func TestValidateWrite(t *testing.T) {
+	t.Parallel()
 	s := Default()
 	s.Workflow = Workflow{
 		Transitions: Lists{{"backlog", []string{"todo"}}},
@@ -242,6 +249,7 @@ func TestValidateWrite(t *testing.T) {
 // With skipTransitions, as in a migration, a required field counts only
 // when the write empties it: a task that lacked it before is not refused.
 func TestValidateWriteSkipTransitionsRequired(t *testing.T) {
+	t.Parallel()
 	s := Default()
 	s.Statuses = append(s.Statuses, Status{Name: "doing", Category: CategoryDoing})
 	s.Workflow = Workflow{Required: Lists{{"doing", []string{"assignees"}}}}

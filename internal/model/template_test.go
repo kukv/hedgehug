@@ -7,6 +7,7 @@ import (
 )
 
 func TestTemplateRoundTrip(t *testing.T) {
+	t.Parallel()
 	src := readFile(t, "testdata/template/release-checklist.md")
 	tp, err := DecodeTemplate("release-checklist", src)
 	if err != nil {
@@ -24,6 +25,7 @@ func TestTemplateRoundTrip(t *testing.T) {
 }
 
 func TestTemplateChildrenKeepUnknownKeys(t *testing.T) {
+	t.Parallel()
 	src := readFile(t, "testdata/template/children.md")
 	tp, err := DecodeTemplate("children", src)
 	if err != nil {
@@ -53,6 +55,7 @@ func TestTemplateChildrenKeepUnknownKeys(t *testing.T) {
 // Encoder.Put compares values with reflect.DeepEqual. Values holding Fields
 // must compare equal when decoded twice from the same node.
 func TestTemplateItemsDecodeEqualTwice(t *testing.T) {
+	t.Parallel()
 	d := parse(t, "children:\n- {title: a, props: {points: 2, area: [x]}}\n")
 	var a, b []TemplateItem
 	if err := d.Get("children").Decode(&a); err != nil {
@@ -67,6 +70,7 @@ func TestTemplateItemsDecodeEqualTwice(t *testing.T) {
 }
 
 func TestNewTemplateEncode(t *testing.T) {
+	t.Parallel()
 	var points Fields
 	points.Set("points", node(t, 2))
 	tp := &Template{Name: "x", Item: TemplateItem{Kind: "task", Children: []TemplateItem{
@@ -91,6 +95,7 @@ func TestNewTemplateEncode(t *testing.T) {
 }
 
 func TestTemplateChildrenReadStringsRaw(t *testing.T) {
+	t.Parallel()
 	src := "---\nchildren: [{title: 2026-11-03, labels: [2026-11-05], body: 2026-11-06, children: [{title: 2026-11-04}]}]\n---\n"
 	tp, err := DecodeTemplate("x", []byte(src))
 	if err != nil {
@@ -121,6 +126,7 @@ func TestTemplateChildrenReadStringsRaw(t *testing.T) {
 }
 
 func TestDecodeTemplateRejectsBadName(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"", "../x", "a/b"} {
 		if _, err := DecodeTemplate(name, []byte("---\nkind: task\n---\n")); err == nil {
 			t.Errorf("DecodeTemplate(%q) succeeded", name)
@@ -129,6 +135,7 @@ func TestDecodeTemplateRejectsBadName(t *testing.T) {
 }
 
 func TestAssigneesYAML(t *testing.T) {
+	t.Parallel()
 	tp, err := DecodeTemplate("x", []byte("---\nassignees: [github.com/a]\n---\n"))
 	if err != nil || tp.Item.Assignees.Inherit || len(tp.Item.Assignees.Logins) != 1 {
 		t.Errorf("decoded = %+v, %v", tp, err)

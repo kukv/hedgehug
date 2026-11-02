@@ -21,6 +21,7 @@ func answer(t *testing.T, code int, body string) *Client {
 }
 
 func TestStatusEdges(t *testing.T) {
+	t.Parallel()
 	// A 403 that is not a rate limit is ErrForbidden, with or without a message.
 	if _, err := answer(t, 403, `{"message":"Resource not accessible"}`).User(); !errors.Is(err, ErrForbidden) || !strings.Contains(err.Error(), "Resource not accessible") {
 		t.Errorf("403 = %v", err)
@@ -44,6 +45,7 @@ func TestStatusEdges(t *testing.T) {
 }
 
 func TestCreateRepoForUser(t *testing.T) {
+	t.Parallel()
 	var path string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path = r.URL.Path
@@ -57,6 +59,7 @@ func TestCreateRepoForUser(t *testing.T) {
 }
 
 func TestDeviceErrors(t *testing.T) {
+	t.Parallel()
 	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
 	}))

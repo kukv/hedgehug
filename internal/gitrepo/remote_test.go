@@ -217,20 +217,6 @@ func TestRegisterMergeDriver(t *testing.T) {
 	}
 }
 
-func TestLocalPath(t *testing.T) {
-	t.Parallel()
-	for in, want := range map[string]string{
-		"/C:/x/y.git":    "C:/x/y.git",
-		`/d:\x\y.git`:    `d:\x\y.git`,
-		"/home/u/y.git":  "/home/u/y.git",
-		"relative/y.git": "relative/y.git",
-	} {
-		if got := localPath(in); got != want {
-			t.Errorf("localPath(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 func TestCloneFailureLeavesNoDirectory(t *testing.T) {
 	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "clone")

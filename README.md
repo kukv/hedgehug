@@ -5,6 +5,8 @@
 A local-first task manager that uses git as its storage and sync layer, with a CLI and
 a GUI in a single binary.
 
+It runs on Linux and macOS. On Windows, use it in WSL.
+
 > **Status: setting up.** The repository has its CI, lint and release configuration, but
 > no features yet. Nothing here is ready to use.
 

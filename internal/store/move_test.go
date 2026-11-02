@@ -554,7 +554,7 @@ func TestLockInOrder(t *testing.T) {
 	select {
 	case err := <-done:
 		t.Fatalf("an Update without the hold did not wait: %v", err)
-	case <-time.After(300 * time.Millisecond):
+	case <-time.After(60 * time.Millisecond):
 	}
 	// The holder, naming the hold, does not wait for its own locks.
 	for _, s := range []*Store{a, b} {
@@ -579,7 +579,7 @@ func TestLockInOrder(t *testing.T) {
 	}
 	// An Op that still names the released Locked takes the file lock too:
 	// with another holder on it, it waits and fails.
-	a.lockWait = 100 * time.Millisecond
+	a.lockWait = 20 * time.Millisecond
 	other, err := acquire(a.path(lockPath), time.Second)
 	if err != nil {
 		t.Fatal(err)
@@ -594,7 +594,7 @@ func TestLockInOrderFailureReleasesWhatItTook(t *testing.T) {
 	t.Parallel()
 	a, _ := newMoveStore(t, "a", "AAA", nil)
 	b, _ := newMoveStore(t, "b", "BBB", nil)
-	b.lockWait = 50 * time.Millisecond
+	b.lockWait = 10 * time.Millisecond
 	other, err := acquire(b.path(lockPath), time.Second) // another process holds b
 	if err != nil {
 		t.Fatal(err)

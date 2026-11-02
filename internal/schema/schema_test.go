@@ -16,6 +16,7 @@ func readFull(t *testing.T) []byte {
 }
 
 func TestSchemaRoundTrip(t *testing.T) {
+	t.Parallel()
 	src := readFull(t)
 	s, err := Decode(src)
 	if err != nil {
@@ -39,6 +40,7 @@ func TestSchemaRoundTrip(t *testing.T) {
 }
 
 func TestSchemaEditKeepsComments(t *testing.T) {
+	t.Parallel()
 	s, err := Decode(readFull(t))
 	if err != nil {
 		t.Fatal(err)
@@ -60,6 +62,7 @@ func TestSchemaEditKeepsComments(t *testing.T) {
 }
 
 func TestSchemaKeepsUnknownKeys(t *testing.T) {
+	t.Parallel()
 	src, err := os.ReadFile("testdata/extras.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -97,6 +100,7 @@ func TestSchemaKeepsUnknownKeys(t *testing.T) {
 }
 
 func TestDefaultEncodesAndDecodes(t *testing.T) {
+	t.Parallel()
 	for name, s := range map[string]*Schema{"Default": Default(), "Dev": Dev()} {
 		out, err := s.Encode()
 		if err != nil {
@@ -128,6 +132,7 @@ func TestDefaultEncodesAndDecodes(t *testing.T) {
 }
 
 func TestLookups(t *testing.T) {
+	t.Parallel()
 	s := Default()
 	if st, ok := s.DefaultStatus(CategoryDoing); !ok || st.Name != "in_progress" {
 		t.Errorf("DefaultStatus(doing) = %+v, %v", st, ok)
@@ -144,6 +149,7 @@ func TestLookups(t *testing.T) {
 }
 
 func TestDecodeErrors(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"statuses: {a: b}\n",
 		"props: [a]\n",
@@ -178,6 +184,7 @@ func encodeString(t *testing.T, s *Schema) string {
 }
 
 func TestEncodeKeepsNotesOfOtherItems(t *testing.T) {
+	t.Parallel()
 	s, src := decodeNotes(t)
 	if got := encodeString(t, s); got != src {
 		t.Fatalf("round trip changed the file:\n%s", got)
@@ -198,6 +205,7 @@ func TestEncodeKeepsNotesOfOtherItems(t *testing.T) {
 }
 
 func TestEncodeRenameKeepsNotes(t *testing.T) {
+	t.Parallel()
 	s, src := decodeNotes(t)
 	s.Statuses[0].Name = "open"
 	want := strings.Replace(src, "- name: todo # 最初", "- name: open # 最初", 1)
@@ -207,6 +215,7 @@ func TestEncodeRenameKeepsNotes(t *testing.T) {
 }
 
 func TestEncodeAddAndRemoveItems(t *testing.T) {
+	t.Parallel()
 	s, src := decodeNotes(t)
 	s.Statuses = append(s.Statuses, Status{Name: "canceled", Category: CategoryCanceled})
 	want := strings.Replace(src, "  x-note: keep\nkinds:", "  x-note: keep\n- name: canceled\n  category: canceled\nkinds:", 1)
@@ -223,6 +232,7 @@ func TestEncodeAddAndRemoveItems(t *testing.T) {
 }
 
 func TestEncodeTransitionKeepsOtherComments(t *testing.T) {
+	t.Parallel()
 	s, src := decodeNotes(t)
 	s.Workflow.Transitions[0].Values = append(s.Workflow.Transitions[0].Values, "done")
 	want := strings.Replace(src, "todo: [doing] # 開始", "todo: [doing, done] # 開始", 1)
@@ -232,6 +242,7 @@ func TestEncodeTransitionKeepsOtherComments(t *testing.T) {
 }
 
 func TestEncodeScopedKeepsNotes(t *testing.T) {
+	t.Parallel()
 	src, err := os.ReadFile("testdata/extras.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -248,6 +259,7 @@ func TestEncodeScopedKeepsNotes(t *testing.T) {
 }
 
 func TestEncodeKeepsEmptyListOfSibling(t *testing.T) {
+	t.Parallel()
 	src := "kinds: [{name: a, role: work, parents: []}, {name: b, role: work}]\n"
 	s, err := Decode([]byte(src))
 	if err != nil {
@@ -266,6 +278,7 @@ func TestEncodeKeepsEmptyListOfSibling(t *testing.T) {
 }
 
 func TestEncodeChangedItemKeepsZeroKnownKey(t *testing.T) {
+	t.Parallel()
 	s, src := decodeNotes(t)
 	s.Statuses[2].Label = "完了"
 	want := strings.Replace(src, "- name: done\n  category: done\n", "- name: done\n  label: 完了\n  category: done\n", 1)

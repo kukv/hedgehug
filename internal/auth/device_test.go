@@ -37,6 +37,7 @@ func fakeHost(t *testing.T, st fakegh.State) (*fakegh.Server, config.Host, *atom
 }
 
 func TestDeviceLogin(t *testing.T) {
+	t.Parallel()
 	zero := 0
 	_, h, _ := fakeHost(t, fakegh.State{Users: []string{"alice"}, DeviceInterval: &zero, AutoApprove: "alice"})
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
@@ -54,6 +55,7 @@ func TestDeviceLogin(t *testing.T) {
 }
 
 func TestDeviceLoginWaits(t *testing.T) {
+	t.Parallel()
 	zero := 0
 	s, h, _ := fakeHost(t, fakegh.State{Users: []string{"alice"}, DeviceInterval: &zero})
 	var codes []string
@@ -74,6 +76,7 @@ func TestDeviceLoginWaits(t *testing.T) {
 }
 
 func TestDeviceLoginExpires(t *testing.T) {
+	t.Parallel()
 	zero := 0
 	_, h, _ := fakeHost(t, fakegh.State{Users: []string{"alice"}, DeviceInterval: &zero})
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
@@ -104,6 +107,7 @@ func tokenServer(t *testing.T, bodies ...map[string]any) config.Host {
 }
 
 func TestDeviceLoginSlowDown(t *testing.T) {
+	t.Parallel()
 	h := tokenServer(t,
 		map[string]any{"error": "authorization_pending"},
 		map[string]any{"error": "slow_down"},
@@ -120,6 +124,7 @@ func TestDeviceLoginSlowDown(t *testing.T) {
 }
 
 func TestDeviceLoginErrors(t *testing.T) {
+	t.Parallel()
 	for code, want := range map[string]string{
 		"access_denied":                "denied",
 		"expired_token":                "expired",
@@ -169,6 +174,7 @@ func (b *barrierKeyring) Set(service, user, secret string) error {
 }
 
 func TestDeviceRefresh(t *testing.T) {
+	t.Parallel()
 	zero := 0
 	_, h, refreshes := fakeHost(t, fakegh.State{Users: []string{"alice"}, DeviceInterval: &zero, AutoApprove: "alice"})
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
@@ -219,6 +225,7 @@ func TestDeviceRefresh(t *testing.T) {
 }
 
 func TestDeviceTokenEdges(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	a := config.Account{Name: "a", Host: "github.com", Login: "alice", Token: config.TokenSource{Kind: "device"}}
 	k := newMem()
@@ -240,6 +247,7 @@ func TestDeviceTokenEdges(t *testing.T) {
 }
 
 func TestDeviceRefreshKeepFails(t *testing.T) {
+	t.Parallel()
 	zero := 0
 	_, h, _ := fakeHost(t, fakegh.State{Users: []string{"alice"}, DeviceInterval: &zero, AutoApprove: "alice"})
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
@@ -262,6 +270,7 @@ func TestDeviceRefreshKeepFails(t *testing.T) {
 }
 
 func TestDeviceNoExpiry(t *testing.T) {
+	t.Parallel()
 	h := tokenServer(t, map[string]any{"access_token": "ghu_1", "refresh_token": "ghr_1"})
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	dt, err := DeviceLogin(h, Options{Now: func() time.Time { return now }, Sleep: func(time.Duration) {}}, func(*github.DeviceCode) {})
@@ -279,6 +288,7 @@ func TestDeviceNoExpiry(t *testing.T) {
 }
 
 func TestDeviceRefreshNeedsHost(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	a := config.Account{Name: "a", Host: "github.com", Login: "alice", Token: config.TokenSource{Kind: "device"}}
 	k := newMem()
@@ -289,9 +299,10 @@ func TestDeviceRefreshNeedsHost(t *testing.T) {
 	}
 }
 
+// 直列: パッケージ変数 lockWait の差し替え
 func TestDeviceRefreshLockBusy(t *testing.T) {
 	old := lockWait
-	lockWait = 50 * time.Millisecond
+	lockWait = 5 * time.Millisecond
 	t.Cleanup(func() { lockWait = old })
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	a := config.Account{Name: "a", Host: "github.com", Login: "alice", Token: config.TokenSource{Kind: "device"}}
@@ -312,6 +323,7 @@ func TestDeviceRefreshLockBusy(t *testing.T) {
 }
 
 func TestDeviceRefreshLockFails(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	a := config.Account{Name: "a", Host: "github.com", Login: "alice", Token: config.TokenSource{Kind: "device"}}
 	k := newMem()

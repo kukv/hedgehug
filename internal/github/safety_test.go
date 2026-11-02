@@ -20,6 +20,7 @@ func brokenBody() *httptest.Server {
 }
 
 func TestReadFailure(t *testing.T) {
+	t.Parallel()
 	srv := brokenBody()
 	defer srv.Close()
 	c := New(config.Host{API: srv.URL}, "t", nil)
@@ -35,6 +36,7 @@ func TestReadFailure(t *testing.T) {
 }
 
 func TestNextPageOtherHost(t *testing.T) {
+	t.Parallel()
 	var gotAuth string
 	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")

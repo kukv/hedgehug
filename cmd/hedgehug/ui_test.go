@@ -10,12 +10,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/testenv"
 )
 
 // syncBuffer is a bytes.Buffer safe to read while the command writes.
@@ -68,12 +69,11 @@ func (te *testEnv) startUI(args ...string) *runningUI {
 	}
 	te.t.Cleanup(func() { u.stop(); <-u.done }) // before any Fatalf below
 	go func() { u.done <- run(append([]string{"ui"}, args...), e) }()
-	deadline := time.Now().Add(10 * time.Second)
-	for {
+	testenv.WaitFor(te.t, "hh ui to print its URL", func() bool {
 		if m := uiURL.FindStringSubmatch(u.stdout.String()); m != nil {
 			u.port, _ = strconv.Atoi(m[1])
 			u.token = m[2]
-			break
+			return true
 		}
 		select {
 		case code := <-u.done:
@@ -81,11 +81,8 @@ func (te *testEnv) startUI(args ...string) *runningUI {
 			te.t.Fatalf("hh ui exited %d: %s", code, u.stdout.String())
 		default:
 		}
-		if time.Now().After(deadline) {
-			te.t.Fatalf("hh ui printed no URL: %q", u.stdout.String())
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+		return false
+	})
 	return u
 }
 
@@ -137,7 +134,7 @@ func TestUIStartsAndStops(t *testing.T) {
 	if info == nil || int(info["port"].(float64)) != u.port || info["token"] != u.token || int(info["pid"].(float64)) != os.Getpid() {
 		t.Fatalf("ui.json = %v", info)
 	}
-	if runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
+	if st.Mode().Perm() != 0o600 {
 		t.Errorf("ui.json mode %v, want 0600", st.Mode().Perm())
 	}
 	u.stop()
@@ -156,9 +153,7 @@ func TestUIOpensTheBrowser(t *testing.T) {
 	te.ok("store", "init", "me", "--prefix", "ME")
 	u := te.startUI()
 	// The URL is printed, then opened: wait for the second.
-	for i := 0; i < 500 && len(u.openedURLs()) == 0; i++ {
-		time.Sleep(10 * time.Millisecond)
-	}
+	testenv.WaitFor(t, "the browser to be opened", func() bool { return len(u.openedURLs()) > 0 })
 	if len(u.openedURLs()) != 1 || !strings.Contains(u.openedURLs()[0], "#token="+u.token) {
 		t.Errorf("opened %v", u.openedURLs())
 	}
@@ -170,7 +165,7 @@ func TestUIReusesTheRunningServer(t *testing.T) {
 	te.ok("store", "init", "me", "--prefix", "ME")
 	u := te.startUI("--no-open")
 	var opened []string
-	te.openURL = func(s string) error { time.Sleep(50 * time.Millisecond); opened = append(opened, s); return nil } // slow: hh ui must wait for it
+	te.openURL = func(s string) error { time.Sleep(10 * time.Millisecond); opened = append(opened, s); return nil } // slow: hh ui must wait for it
 	code, out, errs := te.run("ui")
 	if code != 0 || !strings.Contains(out, "Hedgehug UI is running: ") || !strings.Contains(out, "#token="+u.token) {
 		t.Fatalf("second hh ui: %d %q %q", code, out, errs)

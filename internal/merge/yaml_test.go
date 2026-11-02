@@ -12,6 +12,7 @@ import (
 )
 
 func TestNumbersNeverGoDown(t *testing.T) {
+	t.Parallel()
 	const base = "WEB: 3\nAPI: 2\n"
 	for _, c := range []struct {
 		name         string
@@ -31,6 +32,7 @@ func TestNumbersNeverGoDown(t *testing.T) {
 }
 
 func TestYAMLDuplicateItemKeysMergeWhole(t *testing.T) {
+	t.Parallel()
 	base := []byte("statuses:\n- {name: a, x: 1}\n")
 	ours := []byte("statuses:\n- {name: a, x: 1}\n- {name: a, x: 2}\n")
 	theirs := []byte("statuses:\n- {name: a, x: 3}\n")
@@ -46,6 +48,7 @@ func TestYAMLDuplicateItemKeysMergeWhole(t *testing.T) {
 
 // The result writes its lists as the side it is built on does.
 func TestYAMLKeepsListIndent(t *testing.T) {
+	t.Parallel()
 	const (
 		indented = "rules:\n  - id: r1\n    do: b\n"
 		flush    = "rules:\n- id: r1\n  do: a\n- id: r2\n  do: a\n"
@@ -67,6 +70,7 @@ func TestYAMLKeepsListIndent(t *testing.T) {
 // yaml.v4 indents all the lists of a file alike, so a file that mixes the
 // styles comes out in the style of its first block list.
 func TestYAMLMixedListIndent(t *testing.T) {
+	t.Parallel()
 	base := []byte("a:\n- x\nb:\n- y\nc: 0\n")
 	ours := []byte("a:\n  - x\nb:\n- y\nc: 1\n")
 	theirs := []byte("a:\n- x\nb:\n- y\nc: 2\n")
@@ -77,6 +81,7 @@ func TestYAMLMixedListIndent(t *testing.T) {
 }
 
 func TestNumbersUnreadableSide(t *testing.T) {
+	t.Parallel()
 	broken := []byte("WEB: [\n")
 	r := mergeSym(t, model.NumbersPath, Side{Data: []byte("WEB: 3\nAPI: 2\n")}, Side{Data: broken, Author: "a"}, Side{Data: []byte("WEB: 1\n"), Author: "b"})
 	n, err := model.DecodeNumbers(r.Data)
@@ -89,6 +94,7 @@ func TestNumbersUnreadableSide(t *testing.T) {
 }
 
 func TestWhenOf(t *testing.T) {
+	t.Parallel()
 	t1, t2, t3 := time.Unix(1, 0), time.Unix(2, 0), time.Unix(3, 0)
 	when := WhenOf(map[string]time.Time{
 		PathKey([]string{"statuses", "a", "x"}): t2,
@@ -121,6 +127,7 @@ func TestWhenOf(t *testing.T) {
 // A list whose items share an identity key is one value: When is asked
 // about the list, and answers with the changes under it.
 func TestYAMLDuplicateItemKeysThroughWhen(t *testing.T) {
+	t.Parallel()
 	at := func(u int64) func([]string) time.Time {
 		return WhenOf(map[string]time.Time{PathKey([]string{"statuses", "a", "x"}): time.Unix(u, 0)})
 	}
@@ -135,6 +142,7 @@ func TestYAMLDuplicateItemKeysThroughWhen(t *testing.T) {
 }
 
 func TestYAMLBlankSide(t *testing.T) {
+	t.Parallel()
 	base := []byte("a: 1\n")
 	theirs := []byte("a: 2\nb: 1\n")
 	for _, c := range []struct{ ours, want string }{
@@ -156,6 +164,7 @@ func TestYAMLBlankSide(t *testing.T) {
 
 // When is asked about the paths YAMLValues lists, and only those.
 func TestYAMLValuesAreWhatWhenIsAsked(t *testing.T) {
+	t.Parallel()
 	doc := func(v string) []byte {
 		return []byte("statuses:\n- {name: todo, category: " + v + "}\n- {name: done, category: " + v + "}\nprops:\n  p: {type: " + v +
 			", values: [" + v + "]}\nworkflow:\n  transitions: {todo: [" + v + "]}\nx: " + v + "\n")
@@ -185,6 +194,7 @@ func TestYAMLValuesAreWhatWhenIsAsked(t *testing.T) {
 }
 
 func TestYAMLValuesOfBlankAndBroken(t *testing.T) {
+	t.Parallel()
 	if v, err := YAMLValues([]byte("# c\n")); err != nil || len(v) != 0 {
 		t.Errorf("blank: %v %v", v, err)
 	}

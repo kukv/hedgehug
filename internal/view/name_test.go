@@ -6,6 +6,7 @@ import (
 )
 
 func TestValidName(t *testing.T) {
+	t.Parallel()
 	good := []string{"a", "今週のリリース作業", "Sprint 12 (web)", "a.b", strings.Repeat("あ", 64), "CONSOLE", "con-x", "COM10", "CONIN"}
 	for _, n := range good {
 		if err := ValidName(n); err != nil {
@@ -25,6 +26,7 @@ func TestValidName(t *testing.T) {
 }
 
 func TestSameName(t *testing.T) {
+	t.Parallel()
 	if !SameName("Release", "release") || SameName("a", "b") {
 		t.Error("SameName folds case and nothing else")
 	}
@@ -34,6 +36,7 @@ func TestSameName(t *testing.T) {
 }
 
 func TestIsBuiltin(t *testing.T) {
+	t.Parallel()
 	for _, c := range []string{"id", "title", "kind", "status", "assignee", "label", "parent", "created", "updated"} {
 		if !IsBuiltin(c) {
 			t.Errorf("%s is not builtin", c)

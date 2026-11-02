@@ -414,7 +414,7 @@ func TestSecondIDThatNoStoreHasIsNotFound(t *testing.T) {
 func TestNoStoresIsTheErrorOfSelect(t *testing.T) {
 	t.Parallel()
 	d := t.TempDir()
-	env := map[string]string{"HOME": d, "USERPROFILE": d, "HEDGEHUG_HOME": filepath.Join(d, "hh"), "HEDGEHUG_AUTO_SYNC": "0"}
+	env := map[string]string{"HOME": d, "HEDGEHUG_HOME": filepath.Join(d, "hh"), "HEDGEHUG_AUTO_SYNC": "0"}
 	ss := &Session{Getenv: func(k string) string { return env[k] }, Now: time.Now}
 	if _, err := ss.Show("X-1"); !errors.Is(err, config.ErrNoStores) {
 		t.Errorf("Show with no store = %v; want ErrNoStores", err)

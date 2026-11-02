@@ -9,6 +9,7 @@ import (
 
 // gh's standard error goes into the error, with the tokens it names hidden.
 func TestTokenGhHidesTokensInStderr(t *testing.T) {
+	t.Parallel()
 	secrets := []string{
 		"gho_abc123", "ghp_DEF456", "ghs_789xyz", "ghu_Q1w2", "github_pat_11AAA_bbbCCC",
 		"my_ghp_glued1", "tokenghu_glued2", "xgithub_pat_glued3",
@@ -34,6 +35,7 @@ func TestTokenGhHidesTokensInStderr(t *testing.T) {
 // A token that is empty once trimmed is an error with what to do, whichever
 // way it was got.
 func TestTokenEmptyIsAnError(t *testing.T) {
+	t.Parallel()
 	k := newMem()
 	if err := k.Set(Service, "github.com/alice", " \n"); err != nil {
 		t.Fatal(err)
@@ -85,6 +87,7 @@ func TestTokenEmptyIsAnError(t *testing.T) {
 }
 
 func TestTokenIsTrimmed(t *testing.T) {
+	t.Parallel()
 	if tok, err := Token(acct("env", "HH"), Options{Getenv: func(string) string { return "  t1\n" }}); err != nil || tok != "t1" {
 		t.Errorf("env = %q, %v", tok, err)
 	}

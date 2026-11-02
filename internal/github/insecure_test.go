@@ -15,6 +15,7 @@ func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { retu
 
 // A plain http API on a host that is not loopback gets no request, so no token.
 func TestPlainHTTPAPIGetsNoRequest(t *testing.T) {
+	t.Parallel()
 	called := false
 	hc := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 		called = true
@@ -31,6 +32,7 @@ func TestPlainHTTPAPIGetsNoRequest(t *testing.T) {
 
 // A loopback http server still works.
 func TestLoopbackHTTPAPIWorks(t *testing.T) {
+	t.Parallel()
 	var got string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = r.Header.Get("Authorization")

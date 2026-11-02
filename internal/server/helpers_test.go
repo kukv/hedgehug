@@ -90,7 +90,7 @@ func newTestServerWith(t *testing.T, edit func(*Options)) *testServer {
 		t.Fatal(err)
 	}
 	ts := &testServer{t: t, log: &bytes.Buffer{}, env: map[string]string{
-		"HOME": home, "USERPROFILE": home,
+		"HOME":               home,
 		"HEDGEHUG_HOME":      filepath.Join(d, "hh"),
 		"HEDGEHUG_AUTO_SYNC": "0",
 	}}

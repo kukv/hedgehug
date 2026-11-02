@@ -200,7 +200,6 @@ func TestMirrorRejectedMergedNextRound(t *testing.T) {
 }
 
 func TestPushRoundsRunOut(t *testing.T) {
-	replace(t, &retryWait, time.Millisecond)
 	c := newCluster(t, 2)
 	a := c.addTask(0, "a")
 	pushes := 0

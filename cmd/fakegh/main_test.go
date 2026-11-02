@@ -37,6 +37,7 @@ func whoami(t *testing.T, base, tok string) (string, int) {
 }
 
 func TestCommands(t *testing.T) {
+	t.Parallel()
 	s := fakegh.New(fakegh.State{Users: []string{"bob"}, Repos: []*fakegh.Repo{{Owner: "org-a", Name: "x"}}})
 	srv := httptest.NewServer(s)
 	defer srv.Close()
@@ -132,6 +133,7 @@ func TestCommands(t *testing.T) {
 
 // Each command takes only its own flags: one it does not use is an error.
 func TestFlagsArePerCommand(t *testing.T) {
+	t.Parallel()
 	for _, args := range [][]string{
 		{"serve", "--server", "x"},
 		{"perm", "set", "org-a/x", "bob", "read", "--user", "bob"},
@@ -147,6 +149,7 @@ func TestFlagsArePerCommand(t *testing.T) {
 }
 
 func TestServeCommandErrors(t *testing.T) {
+	t.Parallel()
 	missing := filepath.Join(t.TempDir(), "nope.json")
 	var errb bytes.Buffer
 	if code := run([]string{"serve", "--seed", missing}, &bytes.Buffer{}, &errb); code != 1 || !strings.Contains(errb.String(), "nope.json") {
@@ -160,6 +163,7 @@ func TestServeCommandErrors(t *testing.T) {
 
 // serveOn answers the requests of the handler on the listener it is given.
 func TestServeOn(t *testing.T) {
+	t.Parallel()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

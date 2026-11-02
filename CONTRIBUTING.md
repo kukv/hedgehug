@@ -4,26 +4,33 @@ Thanks for taking the time to improve hedgehug.
 
 ## Getting started
 
-hedgehug is a single Go binary for Linux, macOS and Windows. You need:
+hedgehug is a single Go binary for Linux and macOS (on Windows, it runs in WSL). You need:
 
 - the Go version in `go.mod`
 - [golangci-lint](https://golangci-lint.run/) v2 (the version CI uses is pinned in
   `.github/workflows/ci.yaml`)
-- [gotestsum](https://github.com/gotestyourself/gotestsum) for `make test`
+- [gotestsum](https://github.com/gotestyourself/gotestsum) for `make test` and `make cover`
 - [GoReleaser](https://goreleaser.com/) v2 for `make release-check`
+- run `go env -w GOFLAGS=-trimpath` once: without it the build cache keys the packages of this module by their directory, so every worktree compiles and caches them again (`mise.toml` sets the same, but mise reads its `[env]` only for a trusted config). Note that this setting applies to all your Go projects, not just this repository; if you want it for this repository only, run `mise trust` on `mise.toml` instead
 
 ```bash
 make check          # everything CI checks: tidy, lint, fmt, test
-make test           # tests with the race detector and coverage
+make test           # tests with the race detector
+make cover          # tests with the race detector and coverage
 make fmt            # format with gofumpt + goimports
-make release-check  # goreleaser config and cross-compiling for 3 OSes
+make release-check  # goreleaser config and cross-compiling
 make build          # bin/hedgehug
+make clean-cache    # empty the Go build cache when it grows too large
 
 go run ./cmd/hedgehug --version
 ```
 
 Do not commit while `make check` fails. CI does not check the release configuration, so
 run `make release-check` too when you change `.goreleaser.yaml`.
+
+On Windows, develop in WSL. The disk of WSL (ext4.vhdx) grows with what is written and does
+not shrink when files are deleted; run `wsl --manage <distro> --set-sparse true` once on the
+Windows side so that the space of deleted files goes back to the drive.
 
 ## Before you change code
 
@@ -47,9 +54,9 @@ If a rule gets in the way, propose changing the rule rather than working around 
 
 ## Pull requests
 
-- CI runs on every pull request: `ci.yaml` (tidy, lint, format, and the tests on Linux,
-  macOS and Windows) and `security.yaml` (hidden-content scan, gitleaks, dependency
-  scanning, zizmor, actionlint). All of them must pass.
+- CI runs on every pull request: `ci.yaml` (tidy, lint, format, and the tests on Linux
+  and macOS, split into shards that run at once) and `security.yaml` (hidden-content
+  scan, gitleaks, dependency scanning, zizmor, actionlint). All of them must pass.
 - Pin any GitHub Action you add to a full commit SHA with a `# vX.Y.Z` comment. Renovate
   follows the pins.
 - Commit messages use a `feat:` / `fix:` / `docs:` / `refactor:` / `test:` / `chore:` /
@@ -83,7 +90,7 @@ git tag v0.1.0 && git push origin v0.1.0
 ```
 
 The tag push starts `.github/workflows/release.yaml`, which runs GoReleaser: it builds
-the binaries for Linux, macOS and Windows (amd64 and arm64), stamps the version that
+the binaries for Linux and macOS (amd64 and arm64), stamps the version that
 `hedgehug --version` prints, and creates the GitHub Release. Its notes are generated
 from the pull request labels, following `.github/release.yaml`.
 

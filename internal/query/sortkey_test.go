@@ -12,6 +12,7 @@ import (
 )
 
 func TestCompareSortKeys(t *testing.T) {
+	t.Parallel()
 	none := SortKey{None: true}
 	place := func(class, place int, text string) SortKey {
 		return SortKey{Class: class, Place: place, Text: text, By: "place"}
@@ -55,6 +56,7 @@ func TestCompareSortKeys(t *testing.T) {
 }
 
 func TestRunGivesSortKeys(t *testing.T) {
+	t.Parallel()
 	ix := sortFixture(t)
 	parsed := func(s string) *Query {
 		q, err := Parse(s)
@@ -111,6 +113,7 @@ func TestRunGivesSortKeys(t *testing.T) {
 }
 
 func TestErrorUnknown(t *testing.T) {
+	t.Parallel()
 	ix := sortFixture(t)
 	tests := []struct {
 		q       string
@@ -148,6 +151,7 @@ func TestErrorUnknown(t *testing.T) {
 // A value naming a task the store does not have matches no task, and Run
 // tells which values it did not find.
 func TestRunValueOfATaskTheStoreLacks(t *testing.T) {
+	t.Parallel()
 	ix := sortFixture(t)
 	ix.SetStoreName("here")
 	all := run(t, ix, "", Options{})[0]
@@ -191,6 +195,7 @@ func TestRunValueOfATaskTheStoreLacks(t *testing.T) {
 }
 
 func TestRunMissingTaskIsAnErrorUnlessAllowed(t *testing.T) {
+	t.Parallel()
 	ix := sortFixture(t)
 	q, _ := Parse("parent:ZZ-9")
 	if _, err := Run(ix, q, Options{}); !errors.Is(err, store.ErrNotFound) {
@@ -202,6 +207,7 @@ func TestRunMissingTaskIsAnErrorUnlessAllowed(t *testing.T) {
 // (CompareSortKeys on the keys) give the same sign for every pair of values,
 // ascending and descending, so that neither drifts from the other.
 func TestSortAndSortKeyAgree(t *testing.T) {
+	t.Parallel()
 	title := func(e *index.Entry) []string { return single(e.Title) }
 	cases := []struct {
 		name   string

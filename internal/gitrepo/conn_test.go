@@ -200,7 +200,7 @@ func TestLocalPathAndWritable(t *testing.T) {
 	t.Parallel()
 	for in, want := range map[string]bool{
 		"/tmp/x.git": true, "file:///tmp/x.git": true, "https://h/x": false, "git@h:o/r.git": false,
-		`C:\x\y.git`: true, "file:///C:/x/y.git": true, "ssh://git@h/o/r.git": false, "": false, "rel/x.git": false,
+		"ssh://git@h/o/r.git": false, "": false, "rel/x.git": false,
 	} {
 		if _, ok := LocalPath(in); ok != want {
 			t.Errorf("LocalPath(%q) ok = %v", in, ok)

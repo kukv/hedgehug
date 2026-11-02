@@ -10,6 +10,7 @@ func envOf(m map[string]string) func(string) string {
 	return func(k string) string { return m[k] }
 }
 
+// 直列: パッケージ変数 goos の差し替え
 func TestResolve(t *testing.T) {
 	h := filepath.Join(t.TempDir(), "home")
 	hh := filepath.Join(t.TempDir(), "hh")
@@ -52,11 +53,6 @@ func TestResolve(t *testing.T) {
 			map[string]string{"HOME": h},
 			filepath.Join(h, "Library", "Application Support", "hedgehug", "config.yaml"), filepath.Join(h, ".local", "share", "hedgehug", "stores"),
 		},
-		{
-			"Windows defaults", "windows",
-			map[string]string{"USERPROFILE": h, "APPDATA": xc, "LOCALAPPDATA": xd},
-			filepath.Join(xc, "hedgehug", "config.yaml"), filepath.Join(xd, "hedgehug", "stores"),
-		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			old := goos
@@ -79,6 +75,7 @@ func TestResolve(t *testing.T) {
 	}
 }
 
+// 直列: パッケージ変数 goos の差し替え
 func TestResolveNeedsHome(t *testing.T) {
 	old := goos
 	goos = "linux"
@@ -89,9 +86,10 @@ func TestResolveNeedsHome(t *testing.T) {
 }
 
 func TestResolveDataDir(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	home := filepath.Join(root, "h")
-	env := map[string]string{"HOME": home, "USERPROFILE": home}
+	env := map[string]string{"HOME": home}
 	get := func(k string) string { return env[k] }
 
 	env["HEDGEHUG_HOME"] = filepath.Join(root, "hh")

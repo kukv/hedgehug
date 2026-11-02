@@ -21,6 +21,7 @@ func pollServer(t *testing.T) (*testServer, <-chan sseEvent) {
 	ch, cancel := ts.srv.hub.Subscribe()
 	ctx, stop := context.WithCancel(context.Background())
 	done := make(chan struct{})
+	ts.srv.poller.interval = 10 * time.Millisecond
 	go func() {
 		defer close(done)
 		ts.srv.poller.Run(ctx)
@@ -35,6 +36,14 @@ func pollServer(t *testing.T) (*testServer, <-chan sseEvent) {
 		return len(ts.srv.poller.stores) > 0
 	})
 	return ts, ch
+}
+
+// settle makes the poller look twice without publishing: the first look sets
+// the HEADs and the stamps, the second lets the inbox mark settle. pollMu
+// keeps it from overlapping Run.
+func (p *Poller) settle() {
+	p.poll(false)
+	p.poll(false)
 }
 
 // waitEvent returns the first event of type T, skipping the others.
@@ -61,7 +70,7 @@ func waitEvent[T any](t *testing.T, ch <-chan sseEvent, match func(T) bool) T {
 func TestPollTasksChanged(t *testing.T) {
 	t.Parallel()
 	ts, ch := pollServer(t)
-	time.Sleep(2 * pollInterval) // the first look sets the HEADs; it sends nothing
+	ts.srv.poller.settle() // the first look sets the HEADs; it sends nothing
 	res, err := ts.session().Add(ops.AddInput{Title: "one"})
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +88,7 @@ func TestPollCommentChangesItsTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(2 * pollInterval)
+	ts.srv.poller.settle()
 	if _, err := ts.session().CommentAdd(res.ULID.String(), "hi"); err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +108,7 @@ func TestPollRemoved(t *testing.T) {
 	if _, err := ts.session().Remove(res.ULID.String()); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(2 * pollInterval)
+	ts.srv.poller.settle()
 	if _, err := ts.session().PurgeUnchecked(res.ULID.String()); err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +124,7 @@ func TestPollSchemaAndViews(t *testing.T) {
 	if _, err := ts.session().Add(ops.AddInput{Title: "one"}); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(2 * pollInterval)
+	ts.srv.poller.settle()
 	sc := schema.Default()
 	if _, _, err := ts.session().Migrate(schema.Migration{Target: schema.TargetStatus, Old: sc.Statuses[0].Name, New: "renamed"}, false); err != nil {
 		t.Fatal(err)
@@ -131,7 +140,7 @@ func TestPollSchemaAndViews(t *testing.T) {
 func TestPollSyncState(t *testing.T) {
 	t.Parallel()
 	ts, ch := pollServer(t)
-	time.Sleep(2 * pollInterval)
+	ts.srv.poller.settle()
 	s, err := ts.session().OpenStore()
 	if err != nil {
 		t.Fatal(err)
@@ -156,7 +165,7 @@ func TestPollUnread(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(2 * pollInterval)
+	ts.srv.poller.settle()
 	nid := ts.notifyMe(overwrittenItem(res.ULID, v.ID, "title", `"first"`))
 	waitEvent[unreadEvent](t, ch, func(e unreadEvent) bool { return e.Count == 1 })
 	// hh inbox read in another process: no HEAD moves, the files of the
@@ -185,7 +194,8 @@ func TestPollFirstLookSendsNothing(t *testing.T) {
 		defer ts.srv.poller.mu.Unlock()
 		return ts.srv.poller.looked
 	})
-	time.Sleep(2 * pollInterval)
+	ts.srv.poller.poll(true)
+	ts.srv.poller.poll(true)
 	select {
 	case e := <-ch:
 		t.Errorf("event on the first looks: %+v", e)

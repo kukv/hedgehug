@@ -3,7 +3,6 @@ package gitrepotest
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 )
 
@@ -12,10 +11,10 @@ import (
 // gitrepo.Writable is false. unlock gives the write permission back; the
 // cleanup of the test calls it too, so that TempDir can remove the
 // directory. The test is skipped where a directory cannot be made read-only
-// to the user who runs it: on Windows, and as root.
+// to the user who runs it: as root.
 func LockObjects(t testing.TB, dir string) (unlock func()) {
 	t.Helper()
-	if runtime.GOOS == "windows" || os.Getuid() == 0 {
+	if os.Getuid() == 0 {
 		t.Skip("no read-only directories here")
 	}
 	var dirs []string

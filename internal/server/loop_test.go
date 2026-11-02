@@ -47,8 +47,11 @@ func TestLoopIntervalVisibleAndHidden(t *testing.T) {
 
 	// Hidden (no client): 2 minutes is not enough, 10 is.
 	settle(t, ts, clk, t0.Add(10*time.Minute))
+	n := clk.afterCalls()
 	clk.Advance(2 * time.Minute)
-	time.Sleep(100 * time.Millisecond)
+	ts.srv.loop.Wake()
+	eventually(t, "the loop to look again", func() bool { return clk.afterCalls() > n })
+	eventually(t, "the loop to park", ts.srv.loop.parked)
 	if got := ts.state().LastAttempt; !got.Equal(first) {
 		t.Fatalf("hidden: synced after 2 minutes (%v)", got)
 	}
@@ -74,8 +77,11 @@ func TestLoopPushesAfterWrite(t *testing.T) {
 		t.Fatal("the write is not pending")
 	}
 	settle(t, ts, clk, t0.Add(30*time.Second))
+	n := clk.afterCalls()
 	clk.Advance(29 * time.Second)
-	time.Sleep(100 * time.Millisecond)
+	ts.srv.loop.Wake()
+	eventually(t, "the loop to look again", func() bool { return clk.afterCalls() > n })
+	eventually(t, "the loop to park", ts.srv.loop.parked)
 	if remoteHead(t, remote) == *out.Commit {
 		t.Fatal("pushed before push_interval")
 	}
@@ -110,9 +116,9 @@ func TestDrainGivesUp(t *testing.T) {
 	var out taskWriteBody
 	ts.call("POST", "/api/tasks", map[string]any{"title": "one"}, 201, &out)
 	start := time.Now()
-	ts.srv.loop.Drain(200 * time.Millisecond)
+	ts.srv.loop.Drain(20 * time.Millisecond)
 	if d := time.Since(start); d > 2*time.Second {
-		t.Errorf("Drain took %v, want about 200ms", d)
+		t.Errorf("Drain took %v, want about 20ms", d)
 	}
 }
 
@@ -128,6 +134,9 @@ func TestDrainSyncsAgainAfterARunningSync(t *testing.T) {
 	t.Parallel()
 	ts, _, remote := loopServer(t)
 	waitFirstSync(t, ts)
+	// The sync at start writes LastSuccess and is still running after that;
+	// start below would do nothing then, and the stalling fn would not run.
+	eventually(t, "the loop to park", ts.srv.loop.parked)
 	var mu sync.Mutex
 	calls := 0
 	release := make(chan struct{})
@@ -166,8 +175,11 @@ func TestLoopDoesNotRetryWithinPushInterval(t *testing.T) {
 	clk.Advance(30 * time.Second)
 	eventually(t, "the first try", func() bool { return calls.Load() == 1 })
 	settle(t, ts, clk, t0.Add(60*time.Second))
+	n := clk.afterCalls()
 	clk.Advance(29 * time.Second)
-	time.Sleep(100 * time.Millisecond)
+	ts.srv.loop.Wake()
+	eventually(t, "the loop to look again", func() bool { return clk.afterCalls() > n })
+	eventually(t, "the loop to park", ts.srv.loop.parked)
 	if n := calls.Load(); n != 1 {
 		t.Fatalf("%d syncs 29 seconds after a failed one", n)
 	}
@@ -187,11 +199,18 @@ func TestLoopDoesNotOverlapSyncsOfAStore(t *testing.T) {
 	settle(t, ts, clk, t0.Add(30*time.Second))
 	clk.Advance(30 * time.Second)
 	eventually(t, "the sync to start", func() bool { return calls.Load() == 1 })
+	// The loop has ended its decision on the start of the sync, so a new call
+	// of After below is its look at the hour that passed.
+	eventually(t, "the loop to wait", func() bool { return !ts.srv.loop.deciding.Load() })
+	n := clk.afterCalls()
 	clk.Advance(time.Hour)
 	ts.srv.loop.Wake()
-	time.Sleep(200 * time.Millisecond)
-	if n := calls.Load(); n != 1 {
-		t.Errorf("%d syncs of one store at once", n)
+	eventually(t, "the loop to look again", func() bool { return clk.afterCalls() > n })
+	ts.srv.loop.mu.Lock()
+	active := ts.srv.loop.active
+	ts.srv.loop.mu.Unlock()
+	if active != 1 || calls.Load() != 1 {
+		t.Errorf("%d syncs of one store at once, %d calls", active, calls.Load())
 	}
 	close(block)
 }

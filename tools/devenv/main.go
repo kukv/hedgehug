@@ -303,7 +303,7 @@ func initUser(dir, u, fakeghURL string) error {
 	}
 	getenv := func(k string) string {
 		switch k {
-		case "HEDGEHUG_HOME", "HOME", "USERPROFILE":
+		case "HEDGEHUG_HOME", "HOME":
 			return home
 		}
 		return ""

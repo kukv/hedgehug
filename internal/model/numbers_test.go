@@ -3,6 +3,7 @@ package model
 import "testing"
 
 func TestNumbers(t *testing.T) {
+	t.Parallel()
 	n := Numbers{"WEB": 42, "API": 7}
 	b, err := n.Encode()
 	if err != nil {

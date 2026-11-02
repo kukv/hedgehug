@@ -37,11 +37,11 @@ func Resolve(getenv func(string) string) (Paths, error) {
 	}
 	cfg := abs(getenv("XDG_CONFIG_HOME"))
 	if cfg == "" {
-		cfg = defaultConfigDir(getenv, h)
+		cfg = defaultConfigDir(h)
 	}
 	data := abs(getenv("XDG_DATA_HOME"))
 	if data == "" {
-		data = defaultDataDir(getenv, h)
+		data = defaultDataDir(h)
 	}
 	p.ConfigFile = filepath.Join(cfg, "hedgehug", "config.yaml")
 	p.DataDir = filepath.Join(data, "hedgehug")
@@ -49,40 +49,23 @@ func Resolve(getenv func(string) string) (Paths, error) {
 	return p, nil
 }
 
-// home is the user's home directory: USERPROFILE on Windows, HOME elsewhere.
+// home is the user's home directory, $HOME.
 func home(getenv func(string) string) (string, error) {
-	key := "HOME"
-	if goos == "windows" {
-		key = "USERPROFILE"
-	}
-	h := abs(getenv(key))
+	h := abs(getenv("HOME"))
 	if h == "" {
-		return "", errors.New("the home directory is not known: $" + key + " is not set to an absolute path")
+		return "", errors.New("the home directory is not known: $HOME is not set to an absolute path")
 	}
 	return h, nil
 }
 
-func defaultConfigDir(getenv func(string) string, home string) string {
-	switch goos {
-	case "windows":
-		if d := abs(getenv("APPDATA")); d != "" {
-			return d
-		}
-		return filepath.Join(home, "AppData", "Roaming")
-	case "darwin":
+func defaultConfigDir(home string) string {
+	if goos == "darwin" {
 		return filepath.Join(home, "Library", "Application Support")
-	default:
-		return filepath.Join(home, ".config")
 	}
+	return filepath.Join(home, ".config")
 }
 
-func defaultDataDir(getenv func(string) string, home string) string {
-	if goos == "windows" {
-		if d := abs(getenv("LOCALAPPDATA")); d != "" {
-			return d
-		}
-		return filepath.Join(home, "AppData", "Local")
-	}
+func defaultDataDir(home string) string {
 	return filepath.Join(home, ".local", "share")
 }
 

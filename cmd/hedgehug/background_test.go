@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/testenv"
 )
 
 // waitChildDone waits until the detached child of te has cleared
@@ -20,23 +21,19 @@ func waitChildDone(t *testing.T, te *testEnv) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
+	testenv.WaitFor(t, "the background child to finish", func() bool {
 		b, err := os.ReadFile(state) //nolint:gosec // the state of the test
-		if err == nil && !strings.Contains(string(b), "pending_since") {
-			free := true
-			for _, l := range []string{"bg.lock", "sync.lock"} {
-				if s.WithLocalLock(l, 0, func() error { return nil }) != nil {
-					free = false
-				}
-			}
-			if free {
-				return
+		if err != nil || strings.Contains(string(b), "pending_since") {
+			return false
+		}
+		free := true
+		for _, l := range []string{"bg.lock", "sync.lock"} {
+			if s.WithLocalLock(l, 0, func() error { return nil }) != nil {
+				free = false
 			}
 		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatal("the background child did not finish")
+		return free
+	})
 }
 
 // settled is twoUsers with alice's sync done after her last write: the clock

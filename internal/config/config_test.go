@@ -33,6 +33,7 @@ func writeConfig(t *testing.T, p Paths, s string) {
 }
 
 func TestLoadMissingFile(t *testing.T) {
+	t.Parallel()
 	c, err := Load(testPaths(t))
 	if err != nil {
 		t.Fatal(err)
@@ -43,6 +44,7 @@ func TestLoadMissingFile(t *testing.T) {
 }
 
 func TestLoadExpandsHome(t *testing.T) {
+	t.Parallel()
 	p := testPaths(t)
 	writeConfig(t, p, "stores:\n  - name: me\n    path: ~/data/me\n  - name: abs\n    path: "+filepath.ToSlash(filepath.Join(p.Home, "x"))+"\n")
 	c, err := Load(p)
@@ -56,6 +58,7 @@ func TestLoadExpandsHome(t *testing.T) {
 }
 
 func TestLoadErrors(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, yaml, want string }{
 		{"duplicate name", "stores:\n  - {name: a, path: /a}\n  - {name: a, path: /b}\n", ":3:"},
 		{"missing path", "stores:\n  - name: a\n", ":2:"},
@@ -78,6 +81,7 @@ func TestLoadErrors(t *testing.T) {
 }
 
 func TestAddStoreKeepsTheRest(t *testing.T) {
+	t.Parallel()
 	p := testPaths(t)
 	writeConfig(t, p, `# my settings
 accounts:
@@ -122,6 +126,7 @@ sync:
 }
 
 func TestSetStoreAccount(t *testing.T) {
+	t.Parallel()
 	p := testPaths(t)
 	writeConfig(t, p, `accounts:
   - name: personal
@@ -165,6 +170,7 @@ stores:
 }
 
 func TestAddStoreToMissingFile(t *testing.T) {
+	t.Parallel()
 	p := testPaths(t)
 	c, err := Load(p)
 	if err != nil {
@@ -187,6 +193,7 @@ func TestAddStoreToMissingFile(t *testing.T) {
 }
 
 func TestNullStoresIsEmpty(t *testing.T) {
+	t.Parallel()
 	p := testPaths(t)
 	writeConfig(t, p, "stores:\n")
 	c, err := Load(p)
@@ -213,6 +220,7 @@ func TestNullStoresIsEmpty(t *testing.T) {
 }
 
 func TestAddStoreRefusesDuplicates(t *testing.T) {
+	t.Parallel()
 	p := testPaths(t)
 	c, _ := Load(p)
 	if err := c.AddStore("a", "/a", nil); err != nil {
@@ -224,6 +232,7 @@ func TestAddStoreRefusesDuplicates(t *testing.T) {
 }
 
 func TestSelect(t *testing.T) {
+	t.Parallel()
 	one := &Config{Stores: []StoreEntry{{Name: "me", Path: "/me"}}}
 	two := &Config{Stores: []StoreEntry{{Name: "me", Path: "/me"}, {Name: "work", Path: "/work"}}}
 	none := &Config{}
@@ -263,6 +272,7 @@ func TestSelect(t *testing.T) {
 }
 
 func TestValidStoreName(t *testing.T) {
+	t.Parallel()
 	for _, ok := range []string{"me", "org-a", "a_1", "0x"} {
 		if err := ValidStoreName(ok); err != nil {
 			t.Errorf("ValidStoreName(%q) = %v", ok, err)
@@ -296,6 +306,7 @@ func addAndRead(t *testing.T, p Paths) string {
 }
 
 func TestSaveKeepsSequenceIndent(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, in, want string }{
 		{"indented", "stores:\n  - name: a\n    path: /x\n", "stores:\n  - name: a\n    path: /x\n  - name: b\n    path: /elsewhere/b\ndefault_store: b\n"},
 		{"flush", "stores:\n- name: a\n  path: /x\n", "stores:\n- name: a\n  path: /x\n- name: b\n  path: /elsewhere/b\ndefault_store: b\n"},
@@ -317,6 +328,7 @@ func TestSaveKeepsSequenceIndent(t *testing.T) {
 }
 
 func TestSaveFollowsSymlink(t *testing.T) {
+	t.Parallel()
 	p := testPaths(t)
 	target := filepath.Join(filepath.Dir(p.ConfigFile), "real", "dotfiles.yaml")
 	writeConfig(t, p, "")
@@ -346,6 +358,7 @@ func TestSaveFollowsSymlink(t *testing.T) {
 }
 
 func TestSaveKeepsCommentOnlyFile(t *testing.T) {
+	t.Parallel()
 	p := testPaths(t)
 	writeConfig(t, p, "# my config\n")
 	got := addAndRead(t, p)
@@ -355,6 +368,7 @@ func TestSaveKeepsCommentOnlyFile(t *testing.T) {
 }
 
 func TestRelativePathIsUnderConfigDir(t *testing.T) {
+	t.Parallel()
 	p := testPaths(t)
 	writeConfig(t, p, "stores:\n  - name: me\n    path: stores/me\n")
 	c, err := Load(p)
@@ -379,6 +393,7 @@ func cfgPaths(t *testing.T, src string) Paths {
 }
 
 func TestLoadAccountsRemotesSync(t *testing.T) {
+	t.Parallel()
 	p := cfgPaths(t, `accounts:
   - name: personal
     host: github.com
@@ -416,6 +431,7 @@ sync:
 }
 
 func TestSyncDefaults(t *testing.T) {
+	t.Parallel()
 	c, err := Load(cfgPaths(t, "stores: []\n"))
 	if err != nil {
 		t.Fatal(err)
@@ -430,6 +446,7 @@ func TestSyncDefaults(t *testing.T) {
 }
 
 func TestWriterRules(t *testing.T) {
+	t.Parallel()
 	two := `accounts:
   - {name: a, host: github.com, login: a}
   - {name: b, host: github.com, login: b}
@@ -463,6 +480,7 @@ stores:
 }
 
 func TestBadAccountAndSync(t *testing.T) {
+	t.Parallel()
 	for _, src := range []string{
 		"accounts:\n  - {name: a, host: github.com}\n",                                                     // no login
 		"accounts:\n  - {name: a, host: h, login: x}\n  - {name: a, host: h, login: y}\n",                  // twice
@@ -481,6 +499,7 @@ func TestBadAccountAndSync(t *testing.T) {
 }
 
 func TestAddAndRemoveStoreKeepsComments(t *testing.T) {
+	t.Parallel()
 	p := cfgPaths(t, "# mine\nstores:\n  - name: a # first\n    path: /a\n  - name: c\n    path: /c # third\nlog_level: debug # keep\n")
 	c, err := Load(p)
 	if err != nil {
@@ -510,6 +529,7 @@ func TestAddAndRemoveStoreKeepsComments(t *testing.T) {
 }
 
 func TestNullAccountIsNoAccount(t *testing.T) {
+	t.Parallel()
 	c, err := Load(cfgPaths(t, "accounts:\n  - {name: a, host: h, login: x}\n  - {name: b, host: h, login: y}\nstores:\n  - {name: s, path: /s, account: null}\n"))
 	if err != nil || c.Stores[0].Account != "" {
 		t.Errorf("null account: %+v, %v", c.Stores, err)
@@ -517,6 +537,7 @@ func TestNullAccountIsNoAccount(t *testing.T) {
 }
 
 func TestWriterNamedButMissingAccount(t *testing.T) {
+	t.Parallel()
 	c := &Config{Accounts: []Account{{Name: "a", Host: "h", Login: "x"}}}
 	if a, ok := c.Writer(StoreEntry{Name: "s", Account: "gone"}); ok {
 		t.Errorf("Writer = %+v, true; want no writer", a)
@@ -524,6 +545,7 @@ func TestWriterNamedButMissingAccount(t *testing.T) {
 }
 
 func TestAddStoreRefusesEmptyRemote(t *testing.T) {
+	t.Parallel()
 	c, _ := Load(testPaths(t))
 	if err := c.AddStore("a", "/a", []string{"/r", ""}); err == nil {
 		t.Error("AddStore with an empty remote succeeded")
@@ -534,6 +556,7 @@ func TestAddStoreRefusesEmptyRemote(t *testing.T) {
 }
 
 func TestRemoveOnlyStoreKeepsKey(t *testing.T) {
+	t.Parallel()
 	p := cfgPaths(t, "# top\nstores:\n  - name: a\n    path: /a\nlog: 1\n")
 	c, _ := Load(p)
 	if err := c.RemoveStore("a"); err != nil {
@@ -553,6 +576,7 @@ func TestRemoveOnlyStoreKeepsKey(t *testing.T) {
 }
 
 func TestRemoveStoreKeepsNeighborComments(t *testing.T) {
+	t.Parallel()
 	p := cfgPaths(t, "stores:\n  # about a\n  - name: a\n    path: /a\n  # about b\n  - name: b\n    path: /b\n  # about c\n  - name: c\n    path: /c\n")
 	c, _ := Load(p)
 	if err := c.RemoveStore("b"); err != nil {
@@ -572,6 +596,7 @@ func TestRemoveStoreKeepsNeighborComments(t *testing.T) {
 }
 
 func TestLoadPhase3Keys(t *testing.T) {
+	t.Parallel()
 	p := testPaths(t)
 	writeConfig(t, p, `accounts:
   - name: personal
@@ -632,6 +657,7 @@ stores:
 }
 
 func TestLoadPhase3KeyErrors(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ name, yaml, want string }{
 		{"bad token", "accounts:\n  - {name: a, host: h, login: l, token: password}\n", "token"},
 		{"empty env", "accounts:\n  - {name: a, host: h, login: l, token: \"env:\"}\n", "token"},
@@ -655,6 +681,7 @@ func TestLoadPhase3KeyErrors(t *testing.T) {
 }
 
 func TestDefaultStoreFollowsAddAndRemove(t *testing.T) {
+	t.Parallel()
 	p := testPaths(t)
 	writeConfig(t, p, "# keep me\n")
 	c, err := Load(p)
@@ -702,6 +729,7 @@ func TestDefaultStoreFollowsAddAndRemove(t *testing.T) {
 }
 
 func TestAddAccountAndToken(t *testing.T) {
+	t.Parallel()
 	p := testPaths(t)
 	writeConfig(t, p, "accounts:\n  - name: a\n    host: github.com\n    login: alice\n    note: keep\n")
 	c, err := Load(p)

@@ -12,6 +12,7 @@ import (
 )
 
 func TestNewULIDIsParseable(t *testing.T) {
+	t.Parallel()
 	a, b := NewULID(), NewULID()
 	if a.String() >= b.String() {
 		t.Errorf("NewULIDis not increasing: %s then %s", a, b)
@@ -23,6 +24,7 @@ func TestNewULIDIsParseable(t *testing.T) {
 }
 
 func TestULIDGob(t *testing.T) {
+	t.Parallel()
 	type holder struct {
 		ULID   ULID
 		Parent *ULID
@@ -45,6 +47,7 @@ func TestULIDGob(t *testing.T) {
 }
 
 func TestParseULID(t *testing.T) {
+	t.Parallel()
 	const s = "01JBZ8K3QW7M2X9V4T6R5N8P0A"
 	for _, tc := range []struct {
 		in      string
@@ -70,6 +73,7 @@ func TestParseULID(t *testing.T) {
 }
 
 func TestULIDYAML(t *testing.T) {
+	t.Parallel()
 	type doc struct {
 		ULID ULID `yaml:"ulid"`
 	}
@@ -93,6 +97,7 @@ func TestULIDYAML(t *testing.T) {
 }
 
 func TestDecodeError(t *testing.T) {
+	t.Parallel()
 	inner := errors.New("boom")
 	e := &DecodeError{Field: "status", Line: 3, Err: inner}
 	if got, want := e.Error(), "status (line 3): boom"; got != want {
@@ -107,6 +112,7 @@ func TestDecodeError(t *testing.T) {
 }
 
 func TestULIDJSON(t *testing.T) {
+	t.Parallel()
 	a := NewULID()
 	b, err := json.Marshal(map[string]ULID{"u": a})
 	if err != nil || string(b) != `{"u":"`+a.String()+`"}` {
