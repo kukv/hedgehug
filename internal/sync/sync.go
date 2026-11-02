@@ -70,17 +70,6 @@ type Result struct {
 	// other stores' prefixes, the inbox, finding the invalid tasks,
 	// repacking.
 	Warnings []string
-	// Rewrite is the history rewrite of origin that is recorded and not yet
-	// taken in; the sync stopped before changing the store.
-	Rewrite *model.Rewrite
-	// Rebuild is the clone made again for Rewrite, ready to be swapped in;
-	// Run does not swap it (the caller releases the locks first). The store
-	// is as it was.
-	Rebuild *Rebuild
-	// Swapped is set by the caller that put Rebuild in the place of the
-	// store. Reopen is set by a caller that closed the Store handle the sync
-	// was given (it swapped, or tried to): the caller of that opens it again.
-	Swapped, Reopen bool
 	// Unpushable counts the commits not pushed because the store is read-only.
 	Unpushable int
 }
@@ -171,7 +160,6 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 	// A mirror that cannot be reached is left out, and told of as a
 	// warning; origin is the remote the sync is for.
 	down := map[string]error{}
-	diverged := map[string]bool{}
 	for round := 0; ; round++ {
 		res.Pushed = nil // a rejected mirror makes another round; report the last one
 		var up []string
@@ -189,45 +177,14 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 				continue
 			}
 			if i == 0 {
-				if err := checkOrigin(s, tracked, opt, &res); err != nil {
+				if err := checkOrigin(s, tracked, opt); err != nil {
 					return res, err
-				}
-				if res.Rewrite != nil {
-					return res, rebuild(s, tracked, opt, &res)
 				}
 			}
 			delete(down, name) // a warning tells of how the last round went
 			up = append(up, name)
 		}
-		// A mirror that still has the history before a rewrite is not merged
-		// (it would bring back what the rewrite removed); it is force pushed
-		// to below. Origin comes first, so HEAD has its rewrites.yaml.
-		stale := map[string]plumbing.Hash{}
-		left := map[string]bool{}
-		for i, name := range up {
-			if i > 0 {
-				mirror, err := r.RemoteHead(name)
-				if err != nil {
-					return res, err
-				}
-				head, err := r.Head()
-				if err != nil {
-					return res, err
-				}
-				state, err := staleMirror(r, head, mirror)
-				if err != nil {
-					return res, err
-				}
-				if state == mirrorStale {
-					stale[name] = mirror
-					continue
-				}
-				if state == mirrorDiverged {
-					left[name] = true
-					diverged[name] = true
-					continue
-				}
-			}
+		for _, name := range up {
 			if err := mergeRemote(s, name, opt, &res); err != nil {
 				return res, err
 			}
@@ -268,15 +225,7 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 		res.Pushed = append(res.Pushed, "origin")
 		rejected := false
 		for _, name := range up[1:] {
-			if left[name] {
-				continue
-			}
-			var err error
-			if mirror, old := stale[name]; old {
-				err = r.ForcePush(name, mirror)
-			} else {
-				err = r.Push(name)
-			}
+			err := r.Push(name)
 			switch {
 			case err == nil:
 				res.Pushed = append(res.Pushed, name)
@@ -298,9 +247,6 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 	}
 	for _, name := range r.Remotes()[1:] {
 		warn("sync mirror "+name, down[name])
-		if diverged[name] {
-			res.Warnings = append(res.Warnings, name+" has commits that are in neither history; it is not pushed")
-		}
 	}
 	refreshInfo(s, opt, &res)
 	warn("check the other stores' id prefixes", prefixDuplicates(s, opt, &res))

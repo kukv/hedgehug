@@ -173,6 +173,8 @@ components:
           type:
             - array
             - "null"
+        rebuilt:
+          $ref: "#/components/schemas/Rebuilt"
         repaired:
           items:
             $ref: "#/components/schemas/Fixed"
@@ -703,6 +705,24 @@ components:
             - "null"
       required:
         - type
+      type: object
+    Rebuilt:
+      additionalProperties: false
+      properties:
+        dropped:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        kept:
+          type: string
+        replayed:
+          format: int64
+          type: integer
+      required:
+        - replayed
+        - dropped
       type: object
     Ref:
       additionalProperties: false

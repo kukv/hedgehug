@@ -390,7 +390,7 @@ func TestDoctorFindsAnUnexpectedForcePush(t *testing.T) {
 		t.Fatalf("Doctor = %+v, %v; want one finding", rep, err)
 	}
 	f := rep.Findings[0]
-	if f.Check != "unexpected_force_push" || f.Where != e.Name || !strings.Contains(f.Msg, "without a record of Hedgehug") || f.Hint == "" {
+	if f.Check != "unexpected_force_push" || f.Where != e.Name || !strings.Contains(f.Msg, "differs from this store's") || !strings.Contains(f.Hint, "doctor --fix") {
 		t.Errorf("finding = %+v", f)
 	}
 }

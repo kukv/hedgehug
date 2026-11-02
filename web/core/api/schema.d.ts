@@ -602,6 +602,7 @@ export interface components {
         };
         DoctorReport: {
             findings: components["schemas"]["Finding"][] | null;
+            rebuilt?: components["schemas"]["Rebuilt"];
             repaired: components["schemas"]["Fixed"][] | null;
             store: string;
         };
@@ -813,6 +814,12 @@ export interface components {
             symmetric?: boolean;
             type: string;
             values?: string[] | null;
+        };
+        Rebuilt: {
+            dropped: string[] | null;
+            kept?: string;
+            /** Format: int64 */
+            replayed: number;
         };
         Ref: {
             id: string;

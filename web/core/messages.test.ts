@@ -54,7 +54,7 @@ describe("errorMessage", () => {
 
   it("words sync.force_push", () => {
     expect(errorMessage(err("sync.force_push"))).toBe(
-      "リモートの履歴が Hedgehug の記録なしに書き換えられています。hh doctor で確かめてください",
+      "リモートの履歴が手元と食い違っています。確かめてから、hh doctor --fix で clone し直してください",
     );
   });
 

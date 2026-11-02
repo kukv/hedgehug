@@ -83,9 +83,8 @@ func UndoTarget(log []gitrepo.LogEntry, me string) (gitrepo.LogEntry, bool) {
 
 // undoBlocked are the operations undo does not take back, with why.
 var undoBlocked = map[string]string{
-	"move-in":         "a move between stores cannot be undone; move it back with hedgehug mv --store",
-	"move-out":        "a move between stores cannot be undone; move it back with hedgehug mv --store",
-	"rewrite-history": "a history rewrite cannot be undone",
+	"move-in":  "a move between stores cannot be undone; move it back with hedgehug mv --store",
+	"move-out": "a move between stores cannot be undone; move it back with hedgehug mv --store",
 }
 
 // forwardHitError is a task file that undo would write over a forward: the

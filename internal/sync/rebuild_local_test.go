@@ -30,7 +30,7 @@ func TestSwapCarriesLocalChangesMadeAfterTheCopy(t *testing.T) {
 	if err := old.WriteLocal("inbox.jsonl", append(cur, line...)); err != nil {
 		t.Fatal(err)
 	}
-	c.swap(sc.res)
+	c.swap(sc.rb)
 	s := c.stores[1]
 	if b, err := s.ReadLocal("note.json"); err != nil || string(b) != "new\n" {
 		t.Errorf("note.json = %q, %v", b, err)
@@ -47,10 +47,5 @@ func TestSwapCarriesLocalChangesMadeAfterTheCopy(t *testing.T) {
 		if !slices.Contains(kinds, want) {
 			t.Errorf("inbox kinds = %v, want %s", kinds, want)
 		}
-	}
-	// the files the rebuild writes itself are the rebuild's
-	applied, err := ReadApplied(s)
-	if err != nil || len(applied) != 1 || !applied[0].Equal(sc.rec.At) {
-		t.Errorf("applied = %v, %v", applied, err)
 	}
 }

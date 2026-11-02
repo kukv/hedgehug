@@ -102,6 +102,11 @@ func trackingRef(remote string) plumbing.ReferenceName {
 	return plumbing.NewRemoteReferenceName(remote, "main")
 }
 
+// SetTracking sets refs/remotes/<remote>/main to h.
+func (r *Repo) SetTracking(remote string, h plumbing.Hash) error {
+	return r.r.Storer.SetReference(plumbing.NewHashReference(trackingRef(remote), h))
+}
+
 // Fetch updates refs/remotes/<remote>/main and returns its hash, or the zero
 // hash when the remote is empty.
 func (r *Repo) Fetch(remote string) (plumbing.Hash, error) {
@@ -142,11 +147,7 @@ var beforePush = func() {}
 // The commit main is at when Push starts is sent, and becomes
 // refs/remotes/<remote>/main; a commit made during the push is not taken as
 // being on the remote.
-func (r *Repo) Push(remote string) error { return r.push(remote, false, plumbing.ZeroHash) }
-
-// push sends main to the remote; force sends it even when the remote is not
-// its ancestor.
-func (r *Repo) push(remote string, force bool, lease plumbing.Hash) error {
+func (r *Repo) Push(remote string) error {
 	h, err := r.Head()
 	if err != nil {
 		return err
@@ -172,24 +173,12 @@ func (r *Repo) push(remote string, force bool, lease plumbing.Hash) error {
 	}
 	defer func() { _ = p.Close() }()
 	beforePush()
-	spec := h.String() + ":refs/heads/main"
-	if force {
-		spec = "+" + spec
-	}
-	opts := &git.PushOptions{
+	err = p.r.Push(&git.PushOptions{
 		RemoteName: remote,
 		RemoteURL:  to,
 		Auth:       auth,
-		RefSpecs:   []config.RefSpec{config.RefSpec(spec)},
-		Force:      force,
-	}
-	if force && !lease.IsZero() {
-		// go-git checks a lease for a ref source only, not for a hash
-		// source; the caller holds the store lock, so main is h.
-		opts.RefSpecs = []config.RefSpec{config.RefSpec("+" + mainRef.String() + ":refs/heads/main")}
-		opts.ForceWithLease = &git.ForceWithLease{RefName: mainRef, Hash: lease}
-	}
-	err = p.r.Push(opts)
+		RefSpecs:   []config.RefSpec{config.RefSpec(h.String() + ":refs/heads/main")},
+	})
 	if err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) && (errors.Is(err, git.ErrNonFastForwardUpdate) || strings.Contains(err.Error(), "non-fast-forward")) {
 		return ErrRejected
 	}
