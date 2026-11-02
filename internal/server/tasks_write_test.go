@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -39,6 +40,23 @@ func TestCreateTask(t *testing.T) {
 		t.Errorf("parent = nil")
 	}
 	ts.problem("POST", "/api/tasks", map[string]any{}, 400)
+}
+
+func TestCreateTaskWithBodyAndRepos(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	var out taskWriteBody
+	ts.call("POST", "/api/tasks", map[string]any{
+		"title": "spec", "body": "line one\n\nline two\n", "repos": []string{"github.com/o/r"},
+	}, 201, &out)
+	if out.Task == nil || out.Commit == nil {
+		t.Fatalf("created = %+v", out)
+	}
+	s, _ := ts.session().OpenStore()
+	got, _ := s.Task(mustULID(t, out.Task.ULID))
+	if got.Body != "line one\n\nline two\n" || len(got.Repos) != 1 || got.Repos[0] != "github.com/o/r" {
+		t.Errorf("body = %q, repos = %q", got.Body, got.Repos)
+	}
 }
 
 func TestPatchTask(t *testing.T) {
@@ -247,4 +265,23 @@ func TestPropsRefuseTaskKeys(t *testing.T) {
 		}
 	}
 	ts.problem("POST", "/api/tasks", map[string]any{"title": "t", "props": map[string]any{"title": "x"}}, 400)
+}
+
+// POST reads repos as PATCH does: a repo given twice is kept once, and an
+// empty one is refused.
+func TestCreateTaskReposAsPatchReadsThem(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	var out taskWriteBody
+	ts.call("POST", "/api/tasks", map[string]any{"title": "a", "repos": []string{"github.com/o/r", "github.com/o/r", "github.com/o/s"}}, 201, &out)
+	s, _ := ts.session().OpenStore()
+	got, _ := s.Task(mustULID(t, out.Task.ULID))
+	if want := []string{"github.com/o/r", "github.com/o/s"}; !slices.Equal(got.Repos, want) {
+		t.Errorf("repos = %q; want %q", got.Repos, want)
+	}
+	patched := ts.problem("PATCH", "/api/tasks/"+out.Task.ID, map[string]any{"repos": []string{"github.com/o/r", ""}}, 422)
+	created := ts.problem("POST", "/api/tasks", map[string]any{"title": "b", "repos": []string{"github.com/o/r", ""}}, 422)
+	if created.Type != patched.Type {
+		t.Errorf("an empty repo: POST %q, PATCH %q; want the same", created.Type, patched.Type)
+	}
 }

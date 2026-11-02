@@ -199,8 +199,10 @@ type createInput struct {
 		Workspace string         `json:"workspace,omitempty" doc:"The workspace, by name or prefix"`
 		Kind      string         `json:"kind,omitempty" doc:"project for hh add --kind project"`
 		Status    string         `json:"status,omitempty"`
+		Body      string         `json:"body,omitempty" doc:"The body in Markdown"`
 		Assignees []string       `json:"assignees,omitempty"`
 		Labels    []string       `json:"labels,omitempty"`
+		Repos     []string       `json:"repos,omitempty" doc:"The repo IDs to put on the task"`
 		Props     map[string]any `json:"props,omitempty" doc:"Property name to value"`
 	}
 }
@@ -248,12 +250,15 @@ func (s *Server) registerTaskWrites() {
 		if b.Labels != nil {
 			f.Labels = &b.Labels
 		}
+		if b.Repos != nil {
+			f.Repos = &b.Repos
+		}
 		assigns, err := f.assigns()
 		if err != nil {
 			return nil, badRequest(err)
 		}
 		ss := s.session(in.Store)
-		res, err := ss.Add(ops.AddInput{Title: b.Title, Parent: b.Parent, Workspace: b.Workspace, Kind: b.Kind, Status: b.Status, Assigns: assigns})
+		res, err := ss.Add(ops.AddInput{Title: b.Title, Parent: b.Parent, Workspace: b.Workspace, Kind: b.Kind, Status: b.Status, Body: b.Body, Assigns: assigns})
 		if err != nil {
 			return nil, problemOf(err)
 		}

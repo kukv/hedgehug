@@ -118,6 +118,26 @@ func TestAddSetStatusDep(t *testing.T) {
 	}
 }
 
+func TestAddBodyAndRepos(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	r, err := ts.Add(AddInput{Title: "with a body", Body: "first\n\nsecond\n", Repos: []string{"github.com/o/r"}})
+	if err != nil || !r.Committed {
+		t.Fatalf("Add = %+v, %v", r, err)
+	}
+	s, err := ts.OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Task(r.ULID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Body != "first\n\nsecond\n" || !slices.Equal(got.Repos, []string{"github.com/o/r"}) {
+		t.Errorf("body = %q, repos = %q", got.Body, got.Repos)
+	}
+}
+
 func TestSetDeletedIsConflict(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)

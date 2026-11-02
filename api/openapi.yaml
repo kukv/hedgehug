@@ -99,6 +99,9 @@ components:
           type:
             - array
             - "null"
+        body:
+          description: The body in Markdown
+          type: string
         kind:
           description: project for hh add --kind project
           type: string
@@ -115,6 +118,13 @@ components:
           additionalProperties: {}
           description: Property name to value
           type: object
+        repos:
+          description: The repo IDs to put on the task
+          items:
+            type: string
+          type:
+            - array
+            - "null"
         status:
           type: string
         title:
@@ -1163,6 +1173,10 @@ components:
         pending_since:
           format: date-time
           type: string
+        push_at:
+          description: "When the background sync pushes the writes not pushed yet: sync.push_interval after pending_since, but not before sync.push_interval after the last sync and not after next_fetch, which syncs too; absent when nothing waits, before the first sync and while a sync runs"
+          format: date-time
+          type: string
         read_only:
           type: string
         remotes:
@@ -1963,6 +1977,37 @@ paths:
       summary: Write my overwritten value back, as hh inbox revert
       tags:
         - notifications
+  /api/people:
+    get:
+      operationId: list-people
+      parameters:
+        - description: The store; without it, the people of every store
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the people of every store
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  type: string
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: "List the names to offer after an @: assignees, watchers, comment authors and commit authors"
+      tags:
+        - tasks
   /api/presence:
     put:
       operationId: set-presence
@@ -2536,6 +2581,48 @@ paths:
                 $ref: "#/components/schemas/Problem"
           description: Error
       summary: List the commits of a task, newest first
+      tags:
+        - tasks
+  /api/tasks/{id}/history/{commit}:
+    get:
+      description: The id and the workspace are those of now. problems, reverse, referenced_by, comments and history are empty, and progress is not filled. A task that did not exist at the commit is restore_at.not_found.
+      operationId: show-task-at
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+        - description: The commit or the time to look at; nothing is changed
+          in: path
+          name: commit
+          required: true
+          schema:
+            description: The commit or the time to look at; nothing is changed
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShowView"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Show a task as it was at a commit, read and written nowhere
       tags:
         - tasks
   /api/tasks/{id}/history/{commit}/restore:

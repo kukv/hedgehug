@@ -14,7 +14,7 @@ import (
 )
 
 func (a *app) addCmd() *cobra.Command {
-	var parent, project, kind, status, workspace string
+	var parent, project, kind, status, workspace, body string
 	var noRepo bool
 	var props []string
 	cmd := &cobra.Command{
@@ -29,7 +29,7 @@ func (a *app) addCmd() *cobra.Command {
 			return a.add(ops.AddHereInput{
 				Context: hhctx.Input{Parent: parent, Project: project, Workspace: workspace},
 				NoRepo:  noRepo,
-				Task:    ops.AddInput{Title: strings.Join(args, " "), Kind: kind, Status: status, Assigns: assigns},
+				Task:    ops.AddInput{Title: strings.Join(args, " "), Kind: kind, Status: status, Body: body, Assigns: assigns},
 			})
 		},
 	}
@@ -39,6 +39,7 @@ func (a *app) addCmd() *cobra.Command {
 	f.StringVar(&kind, "kind", "", "the kind (default: the schema's default kind)")
 	f.StringVar(&status, "status", "", "the status (default: the default status of the todo category)")
 	f.StringVar(&workspace, "workspace", "", "the workspace (default: the parent's, or the only one)")
+	f.StringVar(&body, "body", "", "the body, in Markdown")
 	f.BoolVar(&noRepo, "no-repo", false, "do not put the current repository on the task")
 	f.StringArrayVarP(&props, "prop", "p", nil, "set a field or a property, as in hedgehug set (repeatable)")
 	return cmd

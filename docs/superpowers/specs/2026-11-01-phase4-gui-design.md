@@ -14,9 +14,11 @@
 | 4a 操作の層を移す | `cmd/hedgehug` の操作を `internal/ops` に移す。挙動は変えない | 既存の CLI のゴールデンテストとシナリオテストが、期待値を変えずに通る |
 | 4b 保存済みビューと進捗 | `views/` の形式、マージ、doctor の検査、`hh view`。チェックリストとプロジェクトの進捗を ops の結果と CLI に入れる | CLI でビューの保存・一覧・表示・削除・名前の変更ができ、同期でマージされる。`hh ls --tree`・`hh show` に進捗が出る |
 | 4c サーバー | REST API、SSE、同期ループ、`hh ui`、起動とセキュリティ、埋め込み、OpenAPI | Go のテストで全エンドポイントと SSE を確かめ、CLI の変更が SSE で届く |
-| 4d フロントエンドの土台と中心の画面 | ツールチェーンと CI、`web/core`、見た目の基準、サイドバー、ツリー、タスク詳細、作成、コマンドパレット、異常系と空の状態 | ブラウザでツリーと詳細からタスクを作成・編集でき、CLI の変更が即時に反映される（E2E） |
+| 4d フロントエンドの土台と中心の画面 | ツールチェーンと CI、`web/core`、見た目の基準、サイドバー（4e の画面への入口を除く）、ツリー、タスク詳細、作成、コマンドパレット、異常系と空の状態、Onboarding と CreateStore。作成の本文とリポジトリ・push の予定時刻・人の候補・時点のタスクの API | ブラウザでツリーと詳細からタスクを作成・編集でき、CLI の変更が即時に反映される（E2E） |
 | 4e 残りの画面 | 「画面と範囲」の残りすべて | 「画面と範囲」がすべて GUI で動く |
 | 4f フェーズ3の画面 | フェーズ3のマージ後に、フェーズ3の機能の画面 | フェーズ3の機能が GUI でもできる |
+
+4d は大きいため、plan・ブランチ・PR を4回に分ける（2026-11-02 に利用者が決定）: 4d-1 は Go の修正（作成の本文とリポジトリ、`push_at`、人の候補、時点のタスクの API、`hh add --body`。テストの一時ディレクトリの片付けと、書き込み中の読み取りで参照が見えない競合（go-git が参照のファイルを空にしてから書くため。3b の CI の flaky の原因）の修正は、PR #28（CI の短縮）で先に入れた）、4d-2 はツールチェーンと CI・`web/core`、4d-3 は見た目の基準と骨組み・サイドバー・ツリーとドラッグ・異常系と空の状態・Onboarding と CreateStore とその E2E、4d-4 はタスク詳細・作成・コマンドパレットと残りの E2E。どの回も、まだない画面への入口（作成の C キー、⌘K、行から詳細を開く操作など）はその画面を作る回まで出さない。4d の完了条件は 4d-4 で満たす。
 
 4a は、並行して進んでいるフェーズ3より先に main に入れ、フェーズ3のブランチを rebase してもらう。キャンバスの修正は 4d の前に、親設計の修正は本 spec の承認と同時に行う。
 
@@ -45,6 +47,7 @@
 - undo は確認ダイアログを出さない（取り消しにくい操作ではないため）
 - 4b の細部（2026-11-01）: 進捗は親設計どおり work 役割の子孫で数える。`--json` の進捗は `ls --tree` と `show` だけ。tree のビューで `sort:`・`group:` は保存時に拒否。名前の大文字小文字だけの変更は拒否し、Windows の予約名も拒否。組み込みの列は9個。名前のバイト数・NFC・書式文字・Windows の追加の予約名も拒否し、CLI の表の列幅は全角を2桁で数える（既存の表も含む）
 - 4c の細部（2026-11-01）: `PATCH /tasks/{id}` は CLI のコマンドに合わせ、`hh set` の範囲と本文を1コミットにする（本文だけなら op は edit、ほかは set）。移動は `POST /tasks/{id}/move`、復元は `POST /tasks/{id}/restore`。完全削除は `confirm` なしで 409 `purge.unconfirmed` と対象を返し、`confirm=<ULID>,…` で送り直す。Store は `?store=` で指定し、省略は CLI と同じ（3b のあと: 一覧・ツリー・履歴・アクティビティ・doctor・通知は全 Store にまたがり、各タスクに `store` が付く。doctor は Store ごとの配列。ID で指す書き込みは ID が Store を決める。Store が複数あるときの `?store=` なしの作成は ops のまま 422 `store.choose`。2026-11-01 に利用者が決定）。表示の状態は SSE の接続ごとの `client`（最初のイベント `hello` で渡す）に結びつけ、切断したタブは数えない。応答はテストで libopenapi-validator を使って `api/openapi.yaml` と照合する。アクティビティのワークスペース（2026-11-02 に利用者が決定）: コミットのワークスペースは trailer `Hedgehug-Workspace` があればそれ、なければ `Hedgehug-Task` のタスクが今いるワークスペースで、どちらもなければなし（応答の `workspace` を省く。OpenAPI の生成がオブジェクトを nullable にできないため）。`hh log --workspace <名前|接頭辞|ULID>,…` と `GET /activity?workspace=…` はそのコミットだけを出し、limit は残したものを数える。名前は Store ごとに引き、どの Store にもなければ `workspace.not_found`。タスクの log と一緒には使えない（`log.workspace_with_task`）。同じ理由で、クエリの `workspace:` も、そのワークスペースのない Store では何にも当たらないだけにする（どの Store にもなければ誤り。タスクの ID と同じ）。ほかの細部（エラーの形と状態、各エンドポイントの入出力、同期ループの再試行と停止、`hh ui` の出力と `ui.json` の場所など）は `docs/superpowers/plans/2026-11-01-phase4c-server.md` の「この plan で埋める spec にない細部」のとおり
+- 4d の細部（2026-11-02）: Biome は `html.experimentalFullSupportEnabled` で `.svelte` のテンプレートも整形・lint し、版は exact で固定する。サイドバーの 4e の画面への入口（保存済みビュー・マイタスク・通知・アクティビティ・「…」メニュー・ワークスペースの概要）は 4e まで出さず、4d のワークスペースの行は `workspace:<名前>` のツリーを開く（4e で概要に変える）。Onboarding と CreateStore は 4d で作る。Store の色は `GET /stores` の順に7色を順に割り当て（灰色は閲覧のみ用）、色を選ぶ画面と保存場所は 4f。作成で本文とリポジトリを渡せるよう `POST /tasks` に `body`・`repos`、`hh add` に `--body` を足す（1コミットのまま）。ツリーのフィルタ欄の既定は `-status:canceled`。`SyncStatus` に `push_at` を足して「n 秒後に push」を出す。本文とコメントの `@`・`#` の補完を作り、`@` の候補に `GET /people` を足す。時点への復元は `GET /tasks/{id}/history/{commit}` で変わる点を並べてから戻す。ほかの細部は `docs/superpowers/plans/2026-11-02-phase4d-web.md` の「この plan で埋める spec にない細部」のとおり
 
 ## 範囲
 
@@ -203,9 +206,10 @@ huma v2 を標準の ServeMux の上（humago）で使う。パスはすべて `
 
 | 資源 | エンドポイント | 呼ぶ ops |
 |---|---|---|
-| タスク | `GET /tasks?q=&tree=`、`GET /tasks/{id}`、`POST /tasks`、`PATCH /tasks/{id}`、`POST /tasks/{id}/move`、`POST /tasks/{id}/restore`、`DELETE /tasks/{id}` | ls / ls --tree、show、add、set・edit（本文）、mv、restore、rm |
+| タスク | `GET /tasks?q=&tree=`、`GET /tasks/{id}`、`POST /tasks`（`body`・`repos` も受ける）、`PATCH /tasks/{id}`、`POST /tasks/{id}/move`、`POST /tasks/{id}/restore`、`DELETE /tasks/{id}` | ls / ls --tree、show、add、set・edit（本文）、mv、restore、rm |
 | 完全削除 | `DELETE /tasks/{id}?purge=true&confirm=<ULID>,…` | purge（`confirm` がない・対象と違うときは 409 `purge.unconfirmed` と対象を返す） |
-| 履歴 | `GET /tasks/{id}/history`、`POST /tasks/{id}/history/{commit}/restore` | log、restore --at |
+| 履歴 | `GET /tasks/{id}/history`、`GET /tasks/{id}/history/{commit}`（その時点のタスク）、`POST /tasks/{id}/history/{commit}/restore` | log、restore --at |
+| 人 | `GET /people`（`@` の候補。担当者・ウォッチャー・コメントの作者・コミットの作者） | なし |
 | コメント | `POST /tasks/{id}/comments`、`PATCH /tasks/{id}/comments/{cid}`、`DELETE /tasks/{id}/comments/{cid}` | comment add / edit / rm |
 | ウォッチ | `PUT /tasks/{id}/watchers/me`、`DELETE /tasks/{id}/watchers/me` | watch / unwatch |
 | 取り消し | `POST /undo` | undo（自分の直前の操作） |
@@ -215,7 +219,7 @@ huma v2 を標準の ServeMux の上（humago）で使う。パスはすべて `
 | スキーマ | `GET /schema`、`GET /schema/check`、`POST /schema/migrate` | schema check、migrate |
 | Store | `GET /stores`、`POST /stores` | store list、store init |
 | 保守 | `GET /doctor`、`POST /doctor/fix` | doctor、doctor --fix |
-| 同期 | `GET /sync`、`POST /sync` | sync status、sync |
+| 同期 | `GET /sync`（`push_at` を含む）、`POST /sync` | sync status、sync |
 | 保存済みビュー | `GET /views`、`GET /views/{name}`、`PUT /views/{name}`、`PATCH /views/{name}`（名前の変更）、`DELETE /views/{name}` | view list / show / save / rename / rm |
 | 表示の状態 | `PUT /presence` | なし（同期ループの間隔を変える） |
 | 状態の確認 | `GET /health` | なし |
@@ -282,7 +286,7 @@ huma v2 を標準の ServeMux の上（humago）で使う。パスはすべて `
 
 - API クライアント: `openapi-fetch`。型は `api/openapi.yaml` から `openapi-typescript` で生成する
 - SSE: fetch でストリームを読み、トークンをヘッダで送る。切れたら間隔を延ばしながら再接続し、再接続後は表示中のデータを取り直す
-- タスクのキャッシュ: ULID をキーにした正規化キャッシュ。`tasks.changed` で該当の ULID だけを取り直す。自分の書き込みのコミットは、応答のハッシュと照合して見分け、それ以外の変更は10秒間「CLI で更新 · 今」の印を付ける
+- タスクのキャッシュ: ULID をキーにした正規化キャッシュ。`tasks.changed` では、表示中の詳細のうち該当の ULID を取り直し、表示中の一覧・ツリーは問い合わせを取り直す（作成・移動・削除で並びが変わるため）。変わらないタスクは同じオブジェクトのまま残し、再描画しない。自分の書き込みのコミットは、応答のハッシュと照合して見分け、それ以外の変更は10秒間「CLI で更新 · 今」の印を付ける
 - 保存の制御: 入力が 2 秒止まったとき、またはフォーカスが外れたときに `PATCH` する。保存中・保存済み・push 待ちの状態を持つ
 - `hh` コマンドの組み立て: フィルタ欄とダイアログの足元に出す CLI の文字列
 - エラーの文言: problem+json の `type` と引数から、日本語の文言を作る
@@ -314,7 +318,7 @@ huma v2 を標準の ServeMux の上（humago）で使う。パスはすべて `
 - pnpm、Vite、Biome（フォーマットと lint。`biome ci` を CI で実行）、`svelte-check`（警告ゼロ）、Vitest（core の単体テストと `@testing-library/svelte` のコンポーネントのテスト）、Playwright
 - `make web` で SPA をビルドする。`make build` と goreleaser は先に `make web` を実行する。`make check` に web の検査を足す
 - CI に web のジョブを足す（install → biome ci → svelte-check → vitest → build）。Go のジョブは dist なしで通る
-- E2E は Linux のジョブで、web をビルドしたバイナリを使う。一時 Store を作って `hh ui --no-open` を起動し、主な流れを確かめる: 作成、編集と自動保存、ツリーのドラッグ、カンバンの移動、CLI の変更が SSE で反映されること、通知の既読と revert、保存済みビュー、undo、削除と復元
+- E2E は Linux のジョブで、web をビルドしたバイナリを使う。一時 Store を作って `hh ui --no-open` を起動し、主な流れを確かめる: 作成、編集と自動保存、ツリーのドラッグ、カンバンの移動、CLI の変更が SSE で反映されること、通知の既読と revert、保存済みビュー、undo、削除と復元。4d はそのうち作成・編集と自動保存・ツリーのドラッグ・SSE の反映・削除と復元と完全削除・Onboarding を作り、カンバン・通知・保存済みビュー・undo は 4e で足す
 
 ## キャンバスの修正
 
@@ -339,6 +343,7 @@ huma v2 を標準の ServeMux の上（humago）で使う。パスはすべて `
 - 「技術選定」の HTTP を「huma v2（標準 net/http の ServeMux の上）。OpenAPI 3.1 を生成する」にし、`pkg/browser`、Biome、openapi-typescript を足す
 - 「データ形式」に `views/<name>.yaml` の形式を足し、「フィールドごとのマージ規則」に views を足す
 - 「コマンド一覧」の `hh view` に `rm` と `rename` を足す
+- 「コマンド一覧」の `hh add` に `--body`（本文）を足す（4d、2026-11-02）
 - 「実装フェーズ」: フェーズ4の「全ビュー」を本 spec の「画面と範囲」にし、4a〜4f を書く。フェーズ3・5・6の項目に、それぞれの画面（本 spec の「後のフェーズ」）を足す
 - 「GUI 仕様」: 起動情報の `ui.json`、`Host` の検査、HEAD のポーリングによる変更の検知、SSE のイベント、表示の状態による同期の間隔を書く
 - 「計画」と「GUI 仕様」: スプリントとリリースをワークスペースに属するものにし（`workspace` は必須、名前の重複はワークスペースの中で検査、ワークスペースが変わるときは移り先のものでない `sprint`・`releases` を外して名前で知らせる、残っているワークスペースは削除できない）、サイドバーを Store の段のないワークスペース › プロジェクトの入れ子にし、Store ごとの表示の切り替えを設定に移す（2026-11-01、rev 317 に反映済み）

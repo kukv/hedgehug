@@ -54,6 +54,15 @@ type historyInput struct {
 
 type historyOutput struct{ Body []ops.LogView }
 
+type showAtInput struct {
+	TaskParam
+	Commit string `path:"commit" doc:"The commit or the time to look at; nothing is changed"`
+}
+
+type peopleInput struct {
+	Store string `query:"store" doc:"The store; without it, the people of every store"`
+}
+
 func (s *Server) registerTaskReads() {
 	huma.Register(s.api, huma.Operation{
 		OperationID: "list-tasks", Method: http.MethodGet, Path: "/api/tasks",
@@ -127,5 +136,28 @@ func (s *Server) registerTaskReads() {
 			return nil, problemOf(err)
 		}
 		return &historyOutput{Body: ops.StoreLogViews(r.Logs)}, nil
+	})
+
+	huma.Register(s.api, huma.Operation{
+		OperationID: "list-people", Method: http.MethodGet, Path: "/api/people",
+		Summary: "List the names to offer after an @: assignees, watchers, comment authors and commit authors", Tags: []string{"tasks"},
+	}, func(_ context.Context, in *peopleInput) (*struct{ Body []string }, error) {
+		names, err := s.session(in.Store).People()
+		if err != nil {
+			return nil, problemOf(err)
+		}
+		return &struct{ Body []string }{Body: names}, nil
+	})
+
+	huma.Register(s.api, huma.Operation{
+		OperationID: "show-task-at", Method: http.MethodGet, Path: "/api/tasks/{id}/history/{commit}",
+		Summary: "Show a task as it was at a commit, read and written nowhere", Tags: []string{"tasks"},
+		Description: "The id and the workspace are those of now. problems, reverse, referenced_by, comments and history are empty, and progress is not filled. A task that did not exist at the commit is restore_at.not_found.",
+	}, func(_ context.Context, in *showAtInput) (*showOutput, error) {
+		v, err := s.session(in.Store).ShowAt(in.ID, in.Commit)
+		if err != nil {
+			return nil, problemOf(err)
+		}
+		return &showOutput{Body: &v}, nil
 	})
 }
