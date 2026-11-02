@@ -165,7 +165,10 @@ describe("TreeView drag and drop", () => {
     expect(tree).toHaveClass("refusing");
     row("T7").onOver(null, null);
     await waitFor(() => expect(screen.queryByText("ここには置けません")).toBeNull());
-    expect(tree).not.toHaveClass("refusing");
+    // The room stays while the drag goes on, so the rows do not move.
+    expect(tree).toHaveClass("refusing");
+    h.dragEnd?.();
+    await waitFor(() => expect(tree).not.toHaveClass("refusing"));
   });
 
   it("marks a place a drop would be accepted on, and says nothing", async () => {

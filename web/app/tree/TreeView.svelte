@@ -446,6 +446,8 @@
   async function dropOn(sourceUlid: string, targetUlid: string, place: DropPlace) {
     over = null;
     dragging = null;
+    roomForRefusal = false;
+    refusalHeight = 0;
     const d = decide(sourceUlid, targetUlid, place);
     const t = taskOf(sourceUlid);
     if (!d || !t) return;
@@ -471,11 +473,14 @@
   // The panel's height, taken again when its words change.
   const measureRefusal: Attachment<HTMLElement> = (el) => {
     refusal;
-    refusalHeight = el.offsetHeight;
-    return () => {
-      refusalHeight = 0;
-    };
+    refusalHeight = Math.max(refusalHeight, el.offsetHeight);
   };
+  // Once the panel has shown, the room for it stays until the drag ends: taking it
+  // back would shorten the list under the pointer and move the rows.
+  let roomForRefusal = $state(false);
+  $effect(() => {
+    if (refusal) roomForRefusal = true;
+  });
   const refusal = $derived(
     over && !over.decision.ok && !over.decision.silent ? over.decision : null,
   );
@@ -543,7 +548,7 @@
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div
       class="scroller"
-      class:refusing={!!refusal}
+      class:refusing={roomForRefusal}
       style:--refusal-h={refusalHeight > 0 ? `${refusalHeight}px` : undefined}
       role="tree"
       aria-label="{crumbTitle} のタスク"
@@ -554,6 +559,8 @@
       {@attach treeDragEnd(() => {
         dragging = null;
         over = null;
+        roomForRefusal = false;
+        refusalHeight = 0;
       })}
     >
       {#snippet entry(item: Item)}
