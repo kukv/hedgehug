@@ -60,6 +60,15 @@ describe("SyncCard", () => {
     expect(await findByText("1:10")).toBeTruthy();
   });
 
+  it("カウントダウンを出さないときは interval を回さない", () => {
+    const spy = vi.spyOn(globalThis, "setInterval");
+    mount([status({ store: "a", unpushed: 0 })]);
+    expect(spy).not.toHaveBeenCalled();
+    cleanup();
+    mount([status({ store: "a", unpushed: 0, next_fetch: "2026-11-02T09:01:42Z" })]);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
   it("送信待ち: 未 push のコミット数と、push までの秒数", () => {
     const { getByText } = mount([
       status({

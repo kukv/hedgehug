@@ -90,6 +90,11 @@ describe("summarizeSync", () => {
     expect(s).toMatchObject({ kind: "offline", unpushed: 5 });
   });
 
+  it("remote がなければオフラインでも同期済み（remote なし）", () => {
+    const s = summarizeSync([st({ store: "me", remotes: [] })], false);
+    expect(s).toMatchObject({ kind: "synced", noRemote: true });
+  });
+
   it("remote のない Store の未 push は数えない", () => {
     const s = summarizeSync(
       [st({ store: "me", remotes: [], unpushed: 4 }), st({ store: "a", unpushed: 0 })],

@@ -18,18 +18,22 @@
   let now = $state(Date.now());
   let busy = $state(false);
 
-  onMount(() => {
+  // Only the countdowns (next fetch, push in n seconds) need the clock to move.
+  const ticking = $derived(
+    (summary.kind === "synced" && summary.nextFetch !== null) ||
+      (summary.kind === "pending" && summary.pushAt !== null),
+  );
+
+  $effect(() => {
+    if (!ticking) return;
+    now = Date.now();
     const tick = setInterval(() => {
       now = Date.now();
     }, 1000);
-    const off = registerShortcut("shift+mod+s", () => {
-      void syncNow();
-    });
-    return () => {
-      clearInterval(tick);
-      off();
-    };
+    return () => clearInterval(tick);
   });
+
+  onMount(() => registerShortcut("shift+mod+s", () => void syncNow()));
 
   const pad = (n: number) => String(n).padStart(2, "0");
 

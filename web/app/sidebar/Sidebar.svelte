@@ -31,12 +31,13 @@
 
     {#each workspaces.current as w, i (`${w.store}/${w.ulid}`)}
       {@const href = hrefOf({ name: "workspace", store: w.store, ulid: w.ulid })}
+      {@const wsHere = workspaceActive(w.store, w.ulid, i)}
       <div class="ws">
         <a
           {href}
           class="ws-link"
-          class:active={workspaceActive(w.store, w.ulid, i)}
-          aria-current={workspaceActive(w.store, w.ulid, i) ? "page" : undefined}
+          class:active={wsHere}
+          aria-current={wsHere ? "page" : undefined}
           onclick={(e) => onLinkClick(e, href)}
         >
           <Icon name="workspace" size={13} />

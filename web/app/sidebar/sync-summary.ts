@@ -50,6 +50,7 @@ export function summarizeSync(statuses: Iterable<SyncStatus>, online: boolean): 
     const message = st.last_error || st.error;
     if (message) s.errors.push({ store: st.store, message });
   }
+  if (s.noRemote) return s;
   if (!online) s.kind = "offline";
   else if (s.errors.length > 0) s.kind = "error";
   else if (s.unpushed > 0 || s.pendingSince) s.kind = "pending";
