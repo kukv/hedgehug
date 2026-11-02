@@ -12,6 +12,9 @@ import {
   cliSync,
   cliWatch,
   cliWorkspaceAdd,
+  cliWorkspaceRename,
+  cliWorkspaceRm,
+  cliWorkspaceSetPrefix,
   Placeholder,
   quoteArg,
 } from "./cli";
@@ -99,6 +102,29 @@ describe("commands", () => {
     );
     expect(cliMv("REL-8", { root: true, before: "REL-2" })).toBe(
       "hh mv REL-8 --root --before REL-2",
+    );
+  });
+
+  it("writes hh mv --workspace, and hh workspace rename, set-prefix and rm", () => {
+    expect(cliMv("REL-6", { workspace: "shared" })).toBe("hh mv REL-6 --workspace shared");
+    expect(cliMv("REL-6", { workspace: new Placeholder("ワークスペース") })).toBe(
+      "hh mv REL-6 --workspace <ワークスペース>",
+    );
+    expect(cliWorkspaceRename({ workspace: "release", name: "releases", store: "shared" })).toBe(
+      "hh workspace rename release releases --store shared",
+    );
+    expect(
+      cliWorkspaceRename({
+        workspace: "release",
+        name: new Placeholder("新しい名前"),
+        store: "shared",
+      }),
+    ).toBe("hh workspace rename release <新しい名前> --store shared");
+    expect(cliWorkspaceSetPrefix({ workspace: "release", prefix: "RLS", store: "shared" })).toBe(
+      "hh workspace set-prefix release RLS --store shared",
+    );
+    expect(cliWorkspaceRm({ workspace: "sandbox", store: "shared" })).toBe(
+      "hh workspace rm sandbox --store shared",
     );
   });
 

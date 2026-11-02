@@ -14,7 +14,7 @@ const MARK = "CLI で更新 · 今";
 
 test("a task added by the CLI appears with the mark, which goes away", async ({ page, hh }) => {
   hh.add("Already here");
-  await hh.open(page);
+  await hh.openTree(page);
   await expect(row(page, "Already here")).toBeVisible();
 
   hh.add("From the terminal");
@@ -27,7 +27,7 @@ test("a task added by the CLI appears with the mark, which goes away", async ({ 
 
 test("a title changed by the CLI is shown in place, with the mark", async ({ page, hh }) => {
   const t = hh.add("Old title");
-  await hh.open(page);
+  await hh.openTree(page);
   await expect(row(page, "Old title")).toBeVisible();
 
   hh.hh("set", t.id, "title=New title");
@@ -38,7 +38,7 @@ test("a title changed by the CLI is shown in place, with the mark", async ({ pag
 test("a task deleted by the CLI leaves the tree", async ({ page, hh }) => {
   const t = hh.add("Doomed");
   hh.add("Stays");
-  await hh.open(page);
+  await hh.openTree(page);
   await expect(row(page, "Doomed")).toBeVisible();
 
   hh.hh("rm", t.id);
@@ -48,7 +48,7 @@ test("a task deleted by the CLI leaves the tree", async ({ page, hh }) => {
 
 test("a task added in the page does not get the mark", async ({ page, hh }) => {
   const other = hh.add("Someone else's");
-  await hh.open(page);
+  await hh.openTree(page);
 
   await row(page, "Someone else's").click();
   await page.keyboard.press("Enter");

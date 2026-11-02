@@ -1,0 +1,53 @@
+import { cleanup, fireEvent, render, within } from "@testing-library/svelte";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import Tabs from "./Tabs.svelte";
+
+beforeEach(() => history.replaceState(null, "", "/"));
+afterEach(cleanup);
+
+const items = [
+  { label: "概要", href: "/workspaces/shared/W1", current: false },
+  { label: "ツリー", href: "/workspaces/shared/W1/tree", current: true },
+];
+
+describe("Tabs", () => {
+  it("タブはリンクで、今のタブだけ aria-current=page", () => {
+    const { getByRole } = render(Tabs, { items });
+    const nav = getByRole("navigation", { name: "ビューの切り替え" });
+    const tree = within(nav).getByRole("link", { name: "ツリー" });
+    expect(tree.getAttribute("href")).toBe("/workspaces/shared/W1/tree");
+    expect(tree.getAttribute("aria-current")).toBe("page");
+    expect(within(nav).getByRole("link", { name: "概要" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("右端の項目を最後に出し、アイコンをつけられる", () => {
+    const { getAllByRole, container } = render(Tabs, {
+      items,
+      end: {
+        label: "設定",
+        href: "/workspaces/shared/W1/settings",
+        current: false,
+        icon: "settings",
+      },
+    });
+    const links = getAllByRole("link");
+    expect(links.map((a) => a.textContent?.trim())).toEqual(["概要", "ツリー", "設定"]);
+    expect(links[2]?.querySelector("svg")).toBeTruthy();
+    expect(container.querySelectorAll("svg")).toHaveLength(1);
+  });
+
+  it("押すと router で移動する（ページは読み込み直さない）", async () => {
+    const { getByRole } = render(Tabs, { items });
+    const ev = new MouseEvent("click", { button: 0, bubbles: true, cancelable: true });
+    getByRole("link", { name: "概要" }).dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(location.pathname).toBe("/workspaces/shared/W1");
+    await fireEvent.click(getByRole("link", { name: "ツリー" }));
+    expect(location.pathname).toBe("/workspaces/shared/W1/tree");
+  });
+
+  it("label でナビゲーションの名前を変えられる", () => {
+    const { getByRole } = render(Tabs, { items, label: "プロジェクトのタブ" });
+    expect(getByRole("navigation", { name: "プロジェクトのタブ" })).toBeTruthy();
+  });
+});

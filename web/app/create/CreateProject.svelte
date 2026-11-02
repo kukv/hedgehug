@@ -122,7 +122,10 @@
       cache.applyWrite({ task: r.task, commit: r.commit });
       toast({
         message: `${r.task.id} を作成しました · ${ws.name}`,
-        link: { label: "開く", href: router.href({ name: "project", ulid: r.task.ulid }) },
+        link: {
+          label: "開く",
+          href: router.href({ name: "project", ulid: r.task.ulid, tab: "tree" }),
+        },
       });
       onclose();
     } catch (e) {

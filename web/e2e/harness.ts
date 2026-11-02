@@ -65,6 +65,33 @@ export class Hedgehug {
     return JSON.parse(this.hh(...args, "--json")) as T;
   }
 
+  /** GETs the API, as the page does. */
+  async get<T>(path: string): Promise<T> {
+    const r = await fetch(`${this.origin}${path}`, {
+      headers: { Authorization: `Bearer ${this.token}` },
+    });
+    if (!r.ok) throw new Error(`GET ${path}: ${r.status} ${await r.text()}`);
+    return (await r.json()) as T;
+  }
+
+  /** The path of the tree tab of the first workspace of the first store, which "/" is the overview of. */
+  async treePath(): Promise<string> {
+    const stores = await this.get<{ name: string }[]>("/api/stores");
+    const store = stores[0]?.name;
+    if (!store) throw new Error("hh ui has no store");
+    const spaces = await this.get<{ ulid: string }[]>(
+      `/api/workspaces?store=${encodeURIComponent(store)}`,
+    );
+    const space = spaces[0];
+    if (!space) throw new Error(`the store ${store} has no workspace`);
+    return `/workspaces/${encodeURIComponent(store)}/${space.ulid}/tree`;
+  }
+
+  /** Opens the tree tab of the first workspace, and waits until the page is live. */
+  async openTree(page: Page): Promise<void> {
+    await this.open(page, await this.treePath());
+  }
+
   add(title: string, ...args: string[]): TaskJson {
     return this.json<TaskJson>("add", title, ...args);
   }
