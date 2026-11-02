@@ -63,6 +63,8 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
+    // While an IME converts text, Enter and the arrows act on the conversion, not on the list.
+    if (e.isComposing || e.keyCode === 229) return;
     if (e.key === "ArrowDown" && results.length > 0) {
       e.preventDefault();
       active = (active + 1) % results.length;

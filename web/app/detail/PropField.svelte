@@ -4,8 +4,8 @@
   import type { PropRow } from "./prop-rows";
 
   // The editor of one property of the schema, by the type of the property. The detail panel and
-  // the create dialog share it. A row without an editor (the schema does not define it) is not
-  // drawn here.
+  // the create dialog share it. The caller leaves out the rows without an editor (properties the
+  // schema does not define); the text editor is the fallback for the rest.
   let {
     row,
     value,
