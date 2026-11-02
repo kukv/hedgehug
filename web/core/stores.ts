@@ -71,16 +71,7 @@ export class StoreDirectory {
       const sig = this.readOnlyNow();
       if (sig !== this.readOnlySig) this.update();
     });
-    // Before the first hello the constructor's reload is the first one: the
-    // resync of that hello does not reload again.
-    let first = opts.conn.lastOpenAt === null;
-    opts.conn.on("resync", () => {
-      if (first) {
-        first = false;
-        return;
-      }
-      this.queueReload();
-    });
+    opts.conn.on("resync", () => this.queueReload());
     opts.conn.on("tasks.changed", () => this.queueReload());
     void this.reload().catch(() => undefined);
   }

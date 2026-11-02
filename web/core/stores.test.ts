@@ -161,23 +161,6 @@ describe("StoreDirectory", () => {
 describe("StoreDirectory requests", () => {
   const storeCalls = (calls: { path: string }[]) => calls.filter((c) => c.path === "/api/stores");
 
-  it("does not reload at the resync of the first hello", async () => {
-    const world = baseWorld();
-    const { api, calls } = fakeApi((r) => {
-      if (r.path === "/api/stores") return world.stores;
-      if (r.path === "/api/workspaces") return world.spaces[r.query.get("store") ?? ""] ?? [];
-      return { tasks: world.projects };
-    });
-    const conn = new FakeConn();
-    conn.lastOpenAt = null;
-    const cache = new TaskCache({ api, conn: conn.asConnection() });
-    const dir = new StoreDirectory({ api, conn: conn.asConnection(), cache });
-    await vi.waitFor(() => expect(dir.loaded()).toBe(true));
-    conn.emit("resync");
-    await settle();
-    expect(storeCalls(calls)).toHaveLength(1);
-  });
-
   it("reloads once for the events of one turn", async () => {
     const { dir, conn, calls } = setup(baseWorld());
     await vi.waitFor(() => expect(dir.loaded()).toBe(true));

@@ -374,18 +374,18 @@ describe("TaskCache fetch order", () => {
 });
 
 describe("TaskCache start-up and watchList", () => {
-  it("does not fetch again at the resync of the first hello", async () => {
-    const { api, calls } = fakeApi(() => ({ tasks: [tv("A")] }));
+  it("picks up a change made between the first fetch and the first hello", async () => {
+    let title = "old";
+    const { api, calls } = fakeApi(() => ({ tasks: [tv("A", title)] }));
     const conn = new FakeConn();
     conn.lastOpenAt = null; // not open yet
     const cache = new TaskCache({ api, conn: conn.asConnection() });
     const w = cache.watchList({ q: "", tree: false });
     await vi.waitFor(() => expect(w.loading()).toBe(false));
+    expect(cache.task("A")?.title).toBe("old");
+    title = "new"; // committed before the stream subscribed
     conn.emit("resync"); // the first hello
-    await settle();
-    expect(listCalls(calls)).toHaveLength(1);
-    conn.emit("resync"); // a later one fetches
-    await settle();
+    await vi.waitFor(() => expect(cache.task("A")?.title).toBe("new"));
     expect(listCalls(calls)).toHaveLength(2);
     w.dispose();
   });

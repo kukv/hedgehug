@@ -107,17 +107,8 @@ export class TaskCache {
   constructor(opts: { api: Api; conn: Connection; now?: () => number }) {
     this.api = opts.api;
     this.now = opts.now ?? Date.now;
-    // Before the first hello, what is watched was fetched when the watch began:
-    // the resync of that hello does not fetch it again.
-    let first = opts.conn.lastOpenAt === null;
     opts.conn.on("tasks.changed", (e) => this.onTasksChanged(e));
-    opts.conn.on("resync", () => {
-      if (first) {
-        first = false;
-        return;
-      }
-      this.queueRefresh(null);
-    });
+    opts.conn.on("resync", () => this.queueRefresh(null));
   }
 
   task(ulid: string): TaskView | undefined {
