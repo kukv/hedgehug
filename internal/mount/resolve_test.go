@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -231,7 +232,13 @@ func TestResolveAfterAnotherHandleRepackedTheStore(t *testing.T) {
 		}
 		return m
 	}
-	for range 4 {
+	// The sizes of the packs are not fixed, so write and consolidate until
+	// one is merged (they are of about one size, so it takes a few rounds).
+	n := 2 // tasks so far
+	for len(seen) == 0 || len(packs()) >= len(seen) {
+		if n > 40 {
+			t.Fatalf("no pack was merged after %d rounds: %v", n, packs())
+		}
 		if err := s.Repo().Consolidate(); err != nil {
 			t.Fatal(err)
 		}
@@ -239,13 +246,13 @@ func TestResolveAfterAnotherHandleRepackedTheStore(t *testing.T) {
 			seen[p] = true
 		}
 		putTasks(t, a, 1, nil)
-	}
-	if len(packs()) >= len(seen) {
-		t.Fatalf("no pack was removed: %v of %d", packs(), len(seen))
+		n++
 	}
 	putTasks(t, a, 1, nil)
-	if hit, err := set.Resolve("API-7"); err != nil || hit.Entry.ID != "API-7" {
-		t.Errorf("Resolve(API-7) = %v, %v", hit, err)
+	n++
+	want := "API-" + strconv.Itoa(n)
+	if hit, err := set.Resolve(want); err != nil || hit.Entry.ID != want {
+		t.Errorf("Resolve(%s) = %v, %v", want, hit, err)
 	}
 }
 

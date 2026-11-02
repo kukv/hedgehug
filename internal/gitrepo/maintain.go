@@ -136,7 +136,21 @@ func (r *Repo) Consolidate() error {
 	for i, p := range packs {
 		sizes[i] = p.size
 	}
-	picked := packs[:pickGeometric(sizes)]
+	// One run merges about packCap at most; the pack encoder works out the
+	// deltas again, so a bigger merge is slow.
+	k := pickGeometric(sizes)
+	var total int64
+	for _, sz := range sizes[:k] {
+		total += sz
+	}
+	for k > 0 && total > packCap {
+		k--
+		total -= sizes[k]
+	}
+	if k < 2 {
+		k = 0
+	}
+	picked := packs[:k]
 	var loose []plumbing.Hash
 	err = los.ForEachObjectHash(func(h plumbing.Hash) error {
 		loose = append(loose, h)
@@ -180,6 +194,11 @@ func (r *Repo) Consolidate() error {
 		// The .idx goes first: a .pack alone is never read.
 		removeReadOnly(old + ".idx")
 		removeReadOnly(old + ".pack")
+	}
+	// And again now that they are gone, so that the storage does not look
+	// for objects in them.
+	if ri, ok := r.r.Storer.(interface{ Reindex() }); ok {
+		ri.Reindex()
 	}
 	for _, h := range loose {
 		if err := los.DeleteLooseObject(h); err != nil {

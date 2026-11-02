@@ -2,7 +2,7 @@ package gitrepo
 
 import (
 	"errors"
-	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"slices"
@@ -39,25 +39,28 @@ func packFiles(t *testing.T, dir string) []string {
 	return m
 }
 
-func looseHashes(t *testing.T, r *Repo) []plumbing.Hash {
+// putBlob writes a loose blob of n pseudo-random bytes (seeded by seed, so
+// they do not compress and the same seed gives the same hash).
+func putBlob(t *testing.T, r *Repo, seed int64, n int) plumbing.Hash {
 	t.Helper()
-	var hs []plumbing.Hash
-	err := r.r.Storer.(storer.LooseObjectStorer).ForEachObjectHash(func(h plumbing.Hash) error {
-		hs = append(hs, h)
-		return nil
-	})
+	buf := make([]byte, n)
+	_, _ = rand.New(rand.NewSource(seed)).Read(buf) //nolint:gosec // G404: test data
+	obj := r.r.Storer.NewEncodedObject()
+	obj.SetType(plumbing.BlobObject)
+	w, _ := obj.Writer()
+	_, _ = w.Write(buf)
+	_ = w.Close()
+	h, err := r.r.Storer.SetEncodedObject(obj)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return hs
+	return h
 }
 
-// addPack commits once and moves the loose objects into a pack of their own,
-// the way a fetch leaves one.
-func addPack(t *testing.T, r *Repo, dir string, i int) {
+// packOf moves the loose objects hs into a pack of their own, the way a
+// fetch leaves one.
+func packOf(t *testing.T, r *Repo, hs ...plumbing.Hash) {
 	t.Helper()
-	commitFiles(t, r, dir, map[string]string{fmt.Sprintf("f%d.md", i): fmt.Sprint(i)})
-	hs := looseHashes(t, r)
 	if _, err := r.writePack(hs); err != nil {
 		t.Fatal(err)
 	}
@@ -68,6 +71,41 @@ func addPack(t *testing.T, r *Repo, dir string, i int) {
 			t.Fatal(err)
 		}
 	}
+}
+
+// addPack adds a pack of one blob of 2000 bytes that do not compress, so
+// the packs added this way are of about one size, whatever else changes.
+func addPack(t *testing.T, r *Repo, i int) plumbing.Hash {
+	t.Helper()
+	h := putBlob(t, r, int64(i), 2000)
+	packOf(t, r, h)
+	return h
+}
+
+// packSizes returns the sizes of the packs the next Consolidate sees,
+// smallest first.
+func packSizes(t *testing.T, r *Repo) []int64 {
+	t.Helper()
+	ps, err := r.smallPacks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []int64
+	for _, p := range ps {
+		out = append(out, p.size)
+	}
+	return out
+}
+
+// wantPick fails the test unless the geometric rule picks want of the packs,
+// so that a change in pack sizes shows up as a broken premise.
+func wantPick(t *testing.T, r *Repo, want int) []int64 {
+	t.Helper()
+	sz := packSizes(t, r)
+	if k := pickGeometric(sz); k != want {
+		t.Fatalf("the rule picks %d of the packs %v, want %d", k, sz, want)
+	}
+	return sz
 }
 
 func isLoose(dir string, h plumbing.Hash) bool {
@@ -81,12 +119,13 @@ func TestConsolidate(t *testing.T) {
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	for i := range 3 {
-		addPack(t, r, dir, i)
+		addPack(t, r, i)
 	}
 	commitFiles(t, r, dir, map[string]string{"loose.md": "x"})
 	if n, err := r.SmallPacks(); err != nil || n != 3 {
 		t.Fatalf("SmallPacks = %d, %v", n, err)
 	}
+	wantPick(t, r, 3)
 	if err := r.Consolidate(); err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +249,7 @@ func TestConsolidateLeavesPacksFromPackCap(t *testing.T) {
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	for i := range 3 {
-		addPack(t, r, dir, i)
+		addPack(t, r, i)
 	}
 	before := packFiles(t, dir)
 	packCap = 1 // every pack is "large" now
@@ -256,7 +295,7 @@ func TestConsolidateFailureLeavesNoFiles(t *testing.T) {
 			dir := t.TempDir()
 			r, _ := Init(dir)
 			for i := range 2 {
-				addPack(t, r, dir, i)
+				addPack(t, r, i)
 			}
 			commitFiles(t, r, dir, map[string]string{"a.md": "1"})
 			tc.setup(t, dir)
@@ -282,9 +321,10 @@ func TestConsolidateKeepsObjectsWrittenMeanwhile(t *testing.T) {
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	for i := range 2 {
-		addPack(t, r, dir, i)
+		addPack(t, r, i)
 	}
 	commitFiles(t, r, dir, map[string]string{"a.md": "1"})
+	wantPick(t, r, 2)
 	var late plumbing.Hash
 	afterPackWrite = func() error {
 		obj := r.r.Storer.NewEncodedObject()
@@ -308,5 +348,126 @@ func TestConsolidateKeepsObjectsWrittenMeanwhile(t *testing.T) {
 	}
 	if n, _ := r.SmallPacks(); n != 1 {
 		t.Errorf("packs = %d, want 1", n)
+	}
+}
+
+func TestConsolidateLeavesTheBiggerPackOfMixedSizes(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	r, _ := Init(dir)
+	var small []plumbing.Hash
+	for i := range 3 {
+		small = append(small, addPack(t, r, i))
+	}
+	big := putBlob(t, r, 10, 40000)
+	packOf(t, r, big)
+	wantPick(t, r, 3) // 2000, 2000, 2000, 40000: the big one is over twice the rest
+	before := packFiles(t, dir)
+	if err := r.Consolidate(); err != nil {
+		t.Fatal(err)
+	}
+	after := packFiles(t, dir)
+	if len(after) != 4 { // the big pack and the new one, .pack and .idx each
+		t.Fatalf("pack files = %v", after)
+	}
+	kept := 0
+	for _, p := range before {
+		if slices.Contains(after, p) {
+			kept++
+		}
+	}
+	if kept != 2 {
+		t.Errorf("%d of the old files are left, want only the two of the big pack", kept)
+	}
+	o, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range append(small, big) {
+		if _, err := o.r.Storer.EncodedObject(plumbing.BlobObject, h); err != nil {
+			t.Errorf("object %s: %v", h, err)
+		}
+	}
+}
+
+// B holds everything A holds and one more object, so the pack the merge
+// writes is B itself: it must stay, and A must go.
+func TestConsolidateKeepsThePackThatEqualsTheNewOne(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	r, _ := Init(dir)
+	x := addPack(t, r, 1)
+	// The same blob again, loose, with one more, packed together.
+	if h := putBlob(t, r, 1, 2000); h != x {
+		t.Fatal("same seed, different hash")
+	}
+	y := putBlob(t, r, 2, 100)
+	packOf(t, r, x, y)
+	wantPick(t, r, 2)
+	before := packFiles(t, dir)
+	if err := r.Consolidate(); err != nil {
+		t.Fatal(err)
+	}
+	after := packFiles(t, dir)
+	if len(after) != 2 {
+		t.Fatalf("pack files %v, want one pack (were %v)", after, before)
+	}
+	if !slices.Contains(before, after[0]) || !slices.Contains(before, after[1]) {
+		t.Errorf("the pack left, %v, is not B of %v: the case was not reached", after, before)
+	}
+	o, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range []plumbing.Hash{x, y} {
+		if _, err := o.r.Storer.EncodedObject(plumbing.BlobObject, h); err != nil {
+			t.Errorf("object %s: %v", h, err)
+		}
+	}
+}
+
+func TestConsolidateMergesAboutPackCapAtMost(t *testing.T) {
+	// replaces packCap: not parallel
+	t.Cleanup(func() { packCap = PackCap })
+	three := func() (*Repo, string) {
+		dir := t.TempDir()
+		r, _ := Init(dir)
+		for i := range 3 {
+			addPack(t, r, i)
+		}
+		return r, dir
+	}
+
+	// two fit under the cap, three do not: two are merged
+	r, _ := three()
+	sz := wantPick(t, r, 3)
+	packCap = sz[0] + sz[1] + 1
+	if sz[2] >= packCap {
+		t.Fatalf("a pack is over the cap: %v, %d", sz, packCap)
+	}
+	if err := r.Consolidate(); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := r.SmallPacks(); n != 2 {
+		t.Errorf("packs = %d, want 2 (one left, one new)", n)
+	}
+	if err := r.Verify(); err != nil {
+		t.Errorf("Verify: %v", err)
+	}
+
+	// not even two fit under the cap: nothing is merged
+	packCap = PackCap
+	r, dir := three()
+	sz = wantPick(t, r, 3)
+	packCap = sz[2] + 1
+	if sz[0]+sz[1] <= packCap {
+		t.Fatalf("two packs fit under the cap: %v, %d", sz, packCap)
+	}
+	before := packFiles(t, dir)
+	if err := r.Consolidate(); err != nil {
+		t.Fatal(err)
+	}
+	if after := packFiles(t, dir); !slices.Equal(before, after) {
+		t.Errorf("packs = %v, want %v", after, before)
 	}
 }
