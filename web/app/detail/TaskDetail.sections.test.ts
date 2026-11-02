@@ -24,10 +24,10 @@ describe("TaskDetail sections", () => {
     expect(screen.queryByRole("button", { name: "復元" })).toBeNull();
   });
 
-  it("has restore and purge instead of delete for a deleted task", async () => {
+  it("has restore instead of delete for a deleted task", async () => {
     setup({ deleted_at: "2026-11-03T10:00:00Z" });
     expect(await screen.findByRole("button", { name: "復元" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "完全に削除" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "完全に削除" })).toBeNull();
     expect(screen.queryByRole("button", { name: "削除" })).toBeNull();
   });
 });

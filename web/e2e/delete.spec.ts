@@ -4,11 +4,8 @@
 //     tasks that go with it and has the button "<n + 1> 件を削除" (just "削除" when
 //     nothing is under the task); after the delete the toast says "「<title>」を削除しました"
 //     and has the button "取り消し"
-//   - the detail of a deleted task shows the status "削除済み" with the buttons "復元" and
-//     "完全に削除"; "復元" shows the toast "<ID> を復元しました"
-//   - "完全に削除" opens the dialog named "<ID> を完全に削除"; its textbox "Store 名"
-//     must hold the store's name before the button "完全に削除" of the dialog enables;
-//     after the purge the toast says "<ID> を完全に削除しました" and the page goes to "/"
+//   - the detail of a deleted task shows the status "削除済み" with the button "復元";
+//     "復元" shows the toast "<ID> を復元しました"
 import { expect, test } from "./harness";
 import { toast } from "./screens";
 
@@ -55,30 +52,3 @@ test("Undo in the toast restores the task", async ({ page, hh }) => {
   await deleted.getByRole("button", { name: "取り消し" }).click();
   await expect.poll(() => hh.show(t.id).deleted_at).toBeNull();
 });
-
-test("a deleted task can be purged once the store's name is typed", async ({ page, hh }) => {
-  const t = hh.add("Gone for good");
-  hh.hh("rm", t.id);
-  await hh.open(page, `/tasks/${t.ulid}`);
-  await expect(page.getByRole("status", { name: "削除済み" })).toBeVisible();
-
-  await page.getByRole("button", { name: "完全に削除" }).click();
-  const dialog = page.getByRole("dialog", { name: `${t.id} を完全に削除` });
-  const confirm = dialog.getByRole("button", { name: "完全に削除" });
-  await expect(confirm).toBeDisabled();
-  await dialog.getByRole("textbox", { name: "Store 名" }).fill("demo");
-  await expect(confirm).toBeEnabled();
-  await confirm.click();
-
-  await expect(dialog).toBeHidden();
-  await expect(toast(page, `${t.id} を完全に削除しました`)).toBeVisible();
-  await expect(page).toHaveURL(`${hh.origin}/`);
-  await expect.poll(() => status(hh.origin, hh.token, t.ulid)).toBe(404);
-});
-
-async function status(origin: string, token: string, ulid: string): Promise<number> {
-  const r = await fetch(`${origin}/api/tasks/${ulid}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return r.status;
-}
