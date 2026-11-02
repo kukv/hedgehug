@@ -519,7 +519,7 @@ func TestStoreDefault(t *testing.T) {
 func TestStoreDefaultNoStore(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
-	if _, err := ts.StoreRemove("me", false); err != nil {
+	if _, err := ts.StoreRemove("me", true); err != nil {
 		t.Fatal(err)
 	}
 	if name, err := ts.StoreDefault(""); err != nil || name != "" {

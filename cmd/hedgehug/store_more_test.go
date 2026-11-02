@@ -69,31 +69,31 @@ func TestStoreRemoveJSON(t *testing.T) {
 	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	var got struct {
-		Name   string `json:"name"`
-		Purged bool   `json:"purged"`
+		Name    string `json:"name"`
+		Deleted bool   `json:"deleted"`
 	}
-	out := alice.goldenOK("remove", "store", "remove", "org", "--purge", "--json")
-	if err := json.Unmarshal([]byte(out), &got); err != nil || got.Name != "org" || !got.Purged {
+	out := alice.goldenOK("remove", "store", "remove", "org", "--json")
+	if err := json.Unmarshal([]byte(out), &got); err != nil || got.Name != "org" || !got.Deleted {
 		t.Errorf("remove --json = %s, %v", out, err)
 	}
 }
 
-func TestStoreRemovePurgeRefusesDirtyTree(t *testing.T) {
+func TestStoreRemoveRefusesDirtyTree(t *testing.T) {
 	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	dir := alice.storeDir("org")
 	if err := os.WriteFile(filepath.Join(dir, "notes.md"), []byte("hand edit\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	code, _, errs := alice.run("store", "remove", "org", "--purge")
+	code, _, errs := alice.run("store", "remove", "org")
 	if code != 1 || !strings.Contains(errs, "not committed") || !strings.Contains(errs, "notes.md") {
 		t.Errorf("code %d, stderr %s", code, errs)
 	}
 	if _, err := os.Stat(dir); err != nil {
-		t.Errorf("a refused purge removed the directory: %v", err)
+		t.Errorf("a refused removal removed the directory: %v", err)
 	}
 	if out := alice.ok("store", "list"); !strings.Contains(out, "org") {
-		t.Errorf("a refused purge took the store out of the config: %s", out)
+		t.Errorf("a refused removal took the store out of the config: %s", out)
 	}
 }
 

@@ -220,7 +220,7 @@ func TestDoctorFixRepairsAnIDClash(t *testing.T) {
 func TestDoctorNoStores(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
-	if _, err := ts.StoreRemove("me", false); err != nil {
+	if _, err := ts.StoreRemove("me", true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := ts.Doctor(false); KindOf(err) != KindConflict {

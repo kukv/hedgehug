@@ -100,25 +100,33 @@ func TestStoreListAndRemove(t *testing.T) {
 		t.Errorf("list = %s", out)
 	}
 	alice.ok("add", "unpushed")
-	if code, _, errs := alice.run("store", "remove", "org", "--purge"); code != 1 || !strings.Contains(errs, "hedgehug sync") {
-		t.Errorf("purge with unpushed commits: %d %s", code, errs)
+	code, _, errs := alice.run("store", "remove", "org")
+	if code != 1 || !strings.Contains(errs, "hedgehug sync --store org") || !strings.Contains(errs, "--keep") {
+		t.Errorf("remove with unpushed commits: %d %s", code, errs)
 	}
 	if _, err := os.Stat(alice.storeDir("org")); err != nil {
-		t.Errorf("a refused purge removed the directory: %v", err)
+		t.Errorf("a refused removal removed the directory: %v", err)
 	}
-	alice.ok("store", "remove", "org")
+	if out := alice.ok("store", "list"); !strings.Contains(out, "org") {
+		t.Errorf("a refused removal took the store out of the config: %s", out)
+	}
+	if out := alice.ok("store", "remove", "org", "--keep"); out != "Removed store org from the config; "+alice.storeDir("org")+" is left\n" {
+		t.Errorf("remove --keep = %q", out)
+	}
 	if out := alice.ok("store", "list"); strings.Contains(out, "org") {
 		t.Errorf("list after remove = %s", out)
 	}
 	if _, err := os.Stat(alice.storeDir("org")); err != nil {
-		t.Errorf("remove without --purge removed the directory: %v", err)
+		t.Errorf("remove --keep removed the directory: %v", err)
 	}
 }
 
-func TestStoreRemovePurge(t *testing.T) {
+func TestStoreRemoveDeletes(t *testing.T) {
 	t.Parallel()
 	alice, _, _ := twoUsers(t)
-	alice.ok("store", "remove", "org", "--purge")
+	if out := alice.ok("store", "remove", "org"); out != "Removed store org and deleted "+alice.storeDir("org")+"\n" {
+		t.Errorf("remove = %q", out)
+	}
 	if _, err := os.Stat(alice.storeDir("org")); !os.IsNotExist(err) {
 		t.Errorf("the directory is left: %v", err)
 	}
@@ -127,12 +135,29 @@ func TestStoreRemovePurge(t *testing.T) {
 	}
 }
 
-func TestStoreRemovePurgeWithoutRemote(t *testing.T) {
+func TestStoreRemoveWithoutRemote(t *testing.T) {
 	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
-	if code, _, errs := te.run("store", "remove", "me", "--purge"); code != 1 || !strings.Contains(errs, "no remote") {
+	code, _, errs := te.run("store", "remove", "me")
+	if code != 1 || !strings.Contains(errs, "no remote") || !strings.Contains(errs, "--keep") {
 		t.Errorf("code %d, stderr %s", code, errs)
+	}
+	if _, err := os.Stat(te.storeDir("me")); err != nil {
+		t.Errorf("a refused removal removed the directory: %v", err)
+	}
+	te.ok("store", "remove", "me", "--keep")
+}
+
+// --purge is gone: deleting is what remove does.
+func TestStoreRemovePurgeFlagIsGone(t *testing.T) {
+	t.Parallel()
+	alice, _, _ := twoUsers(t)
+	if code, _, errs := alice.run("store", "remove", "org", "--purge"); code != 2 || !strings.Contains(errs, "unknown flag: --purge") {
+		t.Errorf("remove --purge: exit %d, stderr %q", code, errs)
+	}
+	if _, err := os.Stat(alice.storeDir("org")); err != nil {
+		t.Errorf("a refused command removed the directory: %v", err)
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/kukv/hedgehug/internal/github"
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/plural"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 	"github.com/kukv/hedgehug/internal/sync"
@@ -582,17 +583,21 @@ func (ss *Session) StoreList() ([]StoreView, error) {
 }
 
 // StoreRemoveResult is the store StoreRemove took out of the config, as
-// store remove --json prints it.
+// store remove --json prints it. Deleted is whether the directory of the
+// store was deleted.
 type StoreRemoveResult struct {
-	Name   string `json:"name"`
-	Path   string `json:"path"`
-	Purged bool   `json:"purged"`
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	Deleted bool   `json:"deleted"`
 }
 
-// StoreRemove takes the store name out of config.yaml and leaves its
-// directory. With purge it deletes the directory too, unless commits are not
-// pushed yet.
-func (ss *Session) StoreRemove(name string, purge bool) (StoreRemoveResult, error) {
+// StoreRemove takes the store name out of config.yaml and deletes its
+// directory. With keep it only takes the store out; a directory that is not
+// there is not deleted either. The deletion is refused, with KindConflict
+// "store.unpushed", when the tasks could not be got back: commits are not
+// pushed, or there is no remote. The store lock is held from that check until
+// the directory is gone.
+func (ss *Session) StoreRemove(name string, keep bool) (StoreRemoveResult, error) {
 	c, _, err := ss.Config()
 	if err != nil {
 		return StoreRemoveResult{}, err
@@ -604,9 +609,15 @@ func (ss *Session) StoreRemove(name string, purge bool) (StoreRemoveResult, erro
 		}
 		return StoreRemoveResult{}, newErr(KindNotFound, "store.not_found", err, "name", name)
 	}
-	if purge {
-		if err := ss.checkPushed(e); err != nil {
-			return StoreRemoveResult{}, err
+	deleting := false
+	if !keep {
+		if _, serr := os.Stat(e.Path); !errors.Is(serr, fs.ErrNotExist) {
+			release, err := ss.lockToDelete(e)
+			if err != nil {
+				return StoreRemoveResult{}, err
+			}
+			defer release()
+			deleting = true
 		}
 	}
 	if err := ss.updateConfig(c, func(c *config.Config) error {
@@ -617,12 +628,12 @@ func (ss *Session) StoreRemove(name string, purge bool) (StoreRemoveResult, erro
 	}); err != nil {
 		return StoreRemoveResult{}, err
 	}
-	if purge {
+	if deleting {
 		if err := os.RemoveAll(e.Path); err != nil {
 			return StoreRemoveResult{}, err
 		}
 	}
-	return StoreRemoveResult{Name: name, Path: e.Path, Purged: purge}, nil
+	return StoreRemoveResult{Name: name, Path: e.Path, Deleted: deleting}, nil
 }
 
 // StoreDefault makes name the default store and returns the default; an empty
@@ -657,18 +668,38 @@ func (ss *Session) StoreDefault(name string) (string, error) {
 	return c.DefaultStore, nil
 }
 
-// checkPushed refuses to delete a store whose commits are not all on its
-// origin, or that has no origin to hold them.
-func (ss *Session) checkPushed(e config.StoreEntry) error {
+// lockToDelete checks that deleting the directory of e loses nothing, and
+// returns the function that lets go of the lock and the handle of the store,
+// which the caller calls once the directory is gone.
+func (ss *Session) lockToDelete(e config.StoreEntry) (func(), error) {
 	unpushed := func(err error) error { return newErr(KindConflict, "store.unpushed", err, "name", e.Name) }
 	if len(e.Remotes) == 0 {
-		return unpushed(fmt.Errorf("store %s has no remote, so its commits are only in %s; delete the directory by hand if you mean to lose them", e.Name, e.Path))
+		return nil, unpushed(fmt.Errorf("store %s has no remote, so removing %s would lose its tasks for good; use --keep to take the store out of the config and leave the directory, or delete the directory yourself if you do not need it", e.Name, e.Path))
 	}
 	s, err := ss.openStoreAt(e.Path)
 	if err != nil {
-		return unpushed(fmt.Errorf("store %s: %w; delete the directory by hand if you mean to", e.Name, err))
+		return nil, unpushed(fmt.Errorf("store %s: %w; delete the directory by hand if you mean to", e.Name, err))
 	}
-	defer func() { _ = s.Repo().Close() }()
+	l, err := store.LockInOrder(s)
+	if err != nil {
+		_ = s.Repo().Close()
+		return nil, classify(err)
+	}
+	release := func() {
+		l.Release()
+		_ = s.Repo().Close()
+	}
+	if err := checkPushed(e, s); err != nil {
+		release()
+		return nil, err
+	}
+	return release, nil
+}
+
+// checkPushed refuses a store whose commits are not all on its origin, or
+// that has changes that are not committed.
+func checkPushed(e config.StoreEntry, s *store.Store) error {
+	unpushed := func(err error) error { return newErr(KindConflict, "store.unpushed", err, "name", e.Name) }
 	n, err := Unpushed(s)
 	if err != nil {
 		return err
@@ -685,7 +716,7 @@ func (ss *Session) checkPushed(e config.StoreEntry) error {
 		return unpushed(fmt.Errorf("store %s has changes that are not committed (%s); commit or restore them, or delete the directory by hand if you mean to lose them", e.Name, strings.Join(paths, ", ")))
 	}
 	if n > 0 {
-		return unpushed(fmt.Errorf("store %s has %d commits not pushed; run hedgehug sync --store %s first", e.Name, n, e.Name))
+		return unpushed(fmt.Errorf("store %s has %s not pushed; run hedgehug sync --store %s first, or use --keep to leave the directory", e.Name, plural.Count(n, "commit"), e.Name))
 	}
 	return nil
 }
