@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { tick, untrack } from "svelte";
   import type { TaskView } from "../../core/api/client";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
@@ -15,7 +15,7 @@
   import { toast } from "../toast.svelte";
   import { patchTask } from "../tree/actions";
   import StoreBadge from "../ui/StoreBadge.svelte";
-  import { readRecent, rememberTask } from "./recent";
+  import { fetchMissing, readRecent, rememberTask } from "./recent";
   import {
     buildCommands,
     type CommandEnv,
@@ -45,6 +45,24 @@
     if (router.route.name !== "task") return;
     rememberTask(router.route.ulid);
     recentUlids = readRecent();
+  });
+
+  // Opening the palette fills the list up to eight: what the cache lacks is fetched.
+  $effect(() => {
+    if (!palette.open) return;
+    untrack(() => {
+      recentUlids = readRecent();
+      void fetchMissing(
+        {
+          api: c.api,
+          has: (u) => !!c.cache.task(u),
+          prime: (tasks) => c.cache.applyWrite({ tasks }),
+        },
+        recentUlids,
+      ).then(() => {
+        recentUlids = readRecent();
+      });
+    });
   });
 
   // Start from an empty palette each time it opens.
@@ -229,6 +247,7 @@
   >
     <div
       class="panel"
+      data-palette
       role="dialog"
       aria-modal="true"
       aria-label="ID・検索・コマンド"

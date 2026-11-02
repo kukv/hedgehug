@@ -15,7 +15,13 @@
   const workspaces = useSubscribe(stores, () => stores.workspaces());
   const route = $derived(router.route);
 
-  onMount(() => registerShortcut("mod+k", () => openPalette()));
+  onMount(() =>
+    registerShortcut("mod+k", () => {
+      // Another dialog is open: leave it alone. The palette itself is not one.
+      if (document.querySelector('[aria-modal="true"]:not([data-palette])')) return;
+      openPalette();
+    }),
+  );
 
   function workspaceActive(store: string, ulid: string, index: number): boolean {
     const r = route;

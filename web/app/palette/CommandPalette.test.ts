@@ -322,4 +322,36 @@ describe("CommandPalette", () => {
     expect(e.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(input);
   });
+
+  it("fetches the recent tasks the cache lacks and drops one that is gone", async () => {
+    const { api } = setup();
+    const gone = {
+      error: { type: "task.not_found", title: "NF", status: 404 },
+      response: new Response(null, { status: 404 }),
+    };
+    const u7 = task("U7", "task", null, { id: "REL-7", title: "あとから届く" });
+    api.GET.mockImplementation((async (
+      path: string,
+      opts: { params: { path?: { id: string } } },
+    ) => {
+      if (path === "/api/tasks/{id}") return opts.params.path?.id === "U7" ? ok(u7) : gone;
+      return ok({ tasks: [] });
+    }) as never);
+    const core = h.core as { cache: { task: (u: string) => unknown; applyWrite: unknown } };
+    const known = core.cache.task;
+    const store = new Map<string, unknown>();
+    core.cache.task = (u: string) => store.get(u) ?? known(u);
+    core.cache.applyWrite = vi.fn((r: { tasks: { ulid: string }[] }) => {
+      for (const t of r.tasks) store.set(t.ulid, t);
+    });
+    localStorage.setItem("hedgehug.recent", JSON.stringify(["U6", "U7", "U8"]));
+    render(CommandPalette);
+    openPalette();
+    expect(await screen.findByText("あとから届く")).toBeInTheDocument();
+    expect(api.GET).toHaveBeenCalledWith("/api/tasks/{id}", { params: { path: { id: "U7" } } });
+    expect(api.GET).toHaveBeenCalledWith("/api/tasks/{id}", { params: { path: { id: "U8" } } });
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem("hedgehug.recent") ?? "[]")).toEqual(["U6", "U7"]),
+    );
+  });
 });

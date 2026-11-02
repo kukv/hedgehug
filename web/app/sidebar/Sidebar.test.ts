@@ -100,6 +100,19 @@ describe("Sidebar", () => {
     expect(location.pathname).toBe("/projects/01PRJ1");
   });
 
+  it("ほかのダイアログが開いている間は ⌘K を無視する", async () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
+    mount();
+    const dlg = document.createElement("div");
+    dlg.setAttribute("aria-modal", "true");
+    document.body.append(dlg);
+    await fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    expect(palette.open).toBe(false);
+    dlg.remove();
+    await fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    expect(palette.open).toBe(true);
+  });
+
   it("検索欄と ⌘K でパレットを開く", async () => {
     vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
     const { getByRole } = mount();
