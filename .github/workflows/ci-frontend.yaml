@@ -52,3 +52,35 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  # 実際のバイナリ（GUI を埋め込んだもの）をブラウザで動かす。
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # v5.2.3
+        with:
+          install_args: node pnpm
+
+      - name: Install dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      # ブラウザと、その共有ライブラリ（apt）を入れる。make e2e は同じブラウザを入れ直さない。
+      - name: Install the browser
+        working-directory: web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: E2E
+        run: make e2e
