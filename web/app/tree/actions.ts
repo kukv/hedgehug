@@ -4,7 +4,12 @@ import type { MoveArgs } from "./placement";
 
 type Deps = Pick<AppCore, "api" | "cache">;
 
-export async function moveTask(d: Deps, task: TaskView, to: MoveArgs): Promise<TaskView> {
+// moveTask says the commit it made; null when the task was already there.
+export async function moveTask(
+  d: Deps,
+  task: TaskView,
+  to: MoveArgs,
+): Promise<{ task: TaskView; commit: string | null }> {
   const r = await unwrap(
     d.api.POST("/api/tasks/{id}/move", {
       params: { path: { id: task.ulid }, query: { store: task.store } },
@@ -12,7 +17,7 @@ export async function moveTask(d: Deps, task: TaskView, to: MoveArgs): Promise<T
     }),
   );
   d.cache.applyWrite({ task: r.task, commit: r.commit });
-  return r.task;
+  return { task: r.task, commit: r.commit ?? null };
 }
 
 export async function patchTask(

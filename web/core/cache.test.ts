@@ -145,6 +145,61 @@ describe("TaskCache lists", () => {
     w1.dispose();
   });
 
+  describe("whenTreesSeen", () => {
+    // The first fetch answers at once; the ones after it wait for open().
+    function gated() {
+      let release: () => void = () => {};
+      let gate: Promise<void> | null = null;
+      let n = 0;
+      const t = setup(async () => {
+        if (n++ > 0 && gate) await gate;
+        return { roots: [tv("R")] };
+      });
+      return {
+        ...t,
+        close() {
+          gate = new Promise<void>((r) => (release = r));
+        },
+        open: () => release(),
+      };
+    }
+
+    it("resolves once the trees are fetched again after the event of the commit", async () => {
+      const { cache, conn, close, open } = gated();
+      const w = cache.watchTree({ q: "", tree: true });
+      await vi.waitFor(() => expect(w.loading()).toBe(false));
+      close();
+      let seen = false;
+      void cache.whenTreesSeen("c1").then(() => (seen = true));
+      conn.emit("tasks.changed", changed("shared", ["R"], "c1"));
+      await settle();
+      expect(seen).toBe(false); // the fetch is not back yet
+      open();
+      await vi.waitFor(() => expect(seen).toBe(true));
+      w.dispose();
+    });
+
+    it("is resolved at once for a commit whose event came before the wait", async () => {
+      const { cache, conn } = setup(() => ({ roots: [tv("R")] }));
+      const w = cache.watchTree({ q: "", tree: true });
+      await vi.waitFor(() => expect(w.loading()).toBe(false));
+      conn.emit("tasks.changed", changed("shared", ["R"], "c1"));
+      await settle();
+      await cache.whenTreesSeen("c1");
+      w.dispose();
+    });
+
+    it("resolves the waits that began before a reconnect, once the trees are fetched again", async () => {
+      const { cache, conn } = setup(() => ({ roots: [tv("R")] }));
+      const w = cache.watchTree({ q: "", tree: true });
+      await vi.waitFor(() => expect(w.loading()).toBe(false));
+      const p = cache.whenTreesSeen("never-announced");
+      conn.emit("resync");
+      await p;
+      w.dispose();
+    });
+  });
+
   it("holds the error of a query", async () => {
     const { cache } = setup(() => problem(400, "query.invalid"));
     const w = cache.watchList({ q: "(", tree: false });

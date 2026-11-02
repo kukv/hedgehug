@@ -387,17 +387,23 @@
   let moveChain: Promise<void> = Promise.resolve();
   let moveEpoch = 0;
   let moves = 0;
-  const MOVE_WAIT_MS = 5000;
-  let gone = false;
-  $effect(() => () => {
-    gone = true;
-  });
-  const rowsShape = () => rows.map((r) => `${r.ulid}>${r.parent}`).join(",");
-  // Resolves once the rows differ from the shape given (the tree has been read again).
-  async function rowsChangedFrom(shape: string) {
-    const until = Date.now() + MOVE_WAIT_MS;
-    while (!gone && rowsShape() === shape && Date.now() < until) {
-      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+  // The tree is read again after a commit by the event of the commit. If that does not come the
+  // move counts as failed, so that the presses waiting are not held for ever.
+  const TREE_WAIT_MS = 10000;
+  async function treeSeen(commit: string) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        c.cache.whenTreesSeen(commit),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error("並べ替えがツリーに届くのを待てませんでした")),
+            TREE_WAIT_MS,
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -414,13 +420,11 @@
         if (epoch !== moveEpoch || selection.ulid !== at) return;
         const a = actionOf(k);
         if (a.type === "none") return;
-        const shape = rowsShape();
         const done = await run(a);
         if (!done || a.type !== "move") {
           moveEpoch++;
           return;
         }
-        await rowsChangedFrom(shape);
       } finally {
         moves--;
       }
@@ -447,10 +451,12 @@
         case "move": {
           const t = taskOf(a.ulid);
           if (!t) break;
-          await moveTask(c, t, a.to);
+          const { commit } = await moveTask(c, t, a.to);
           // Show the new parent's children only once the task is there.
           if (a.to.parent) toggle(a.to.parent, true);
           await focusRow(a.ulid);
+          // The next move is decided on the rows this one left: wait for the tree to show it.
+          if (commit) await treeSeen(commit);
           break;
         }
         case "set-status": {

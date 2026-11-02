@@ -115,6 +115,7 @@ function setup(
     loading: () => false,
     dispose() {},
   }));
+  const seen: (() => void)[] = [];
   const api = { POST: vi.fn(), PATCH: vi.fn() };
   const core = {
     api,
@@ -134,6 +135,8 @@ function setup(
         dispose() {},
       })),
       applyWrite: vi.fn(),
+      // The commit is shown by the tree once reorder() is called.
+      whenTreesSeen: vi.fn(() => new Promise<void>((resolve) => seen.push(resolve))),
       subscribe: (fn: () => void) => ev.subscribe(fn),
     },
     stores: {
@@ -182,6 +185,7 @@ function setup(
     reorder(order: string[]) {
       roots = [{ ulid: "P", children: order.map((u) => ({ ulid: u, children: [] })) }];
       ev.emit();
+      for (const done of seen.splice(0)) done();
     },
     // The schema of the store arrives
     loadSchema() {
@@ -480,6 +484,34 @@ describe("TreeView", () => {
       reorder(["M0", "M3", "M1", "M2"]);
       await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(3));
       expect(api.POST).toHaveBeenLastCalledWith("/api/tasks/{id}/move", moved({ before: "M0" }));
+    });
+
+    it("sends the next press at once after a move that changed nothing", async () => {
+      const { api, row, core } = await start({ many: 4 });
+      api.POST.mockResolvedValue(ok({ task: task("M3", "task", "P"), commit: null }));
+      await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
+      await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
+      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
+      expect(core.cache.whenTreesSeen).not.toHaveBeenCalled();
+    });
+
+    it("counts a tree that never shows the move as a failure, once", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const { api, row } = await start({ many: 4 });
+        api.POST.mockResolvedValue(ok({ task: task("M3", "task", "P"), commit: "c" }));
+        await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
+        await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
+        await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
+        expect(h.toast).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(10_000);
+        await waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(api.POST).toHaveBeenCalledTimes(1);
+        expect(h.toast).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("drops the moves still waiting when one fails, and says so once", async () => {
