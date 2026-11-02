@@ -1,6 +1,7 @@
 import { cleanup, fireEvent } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { closeCreate, createState } from "../create-state.svelte";
+import { closePalette, palette } from "../palette-state.svelte";
 import { renderWithCore } from "../test-utils";
 import Sidebar from "./Sidebar.svelte";
 
@@ -36,6 +37,7 @@ function mount() {
 
 beforeEach(() => {
   history.replaceState(null, "", "/");
+  closePalette();
   closeCreate();
 });
 afterEach(() => {
@@ -96,6 +98,16 @@ describe("Sidebar", () => {
     const { getByRole } = mount();
     await fireEvent.click(getByRole("link", { name: /リリース準備 v2.4/ }));
     expect(location.pathname).toBe("/projects/01PRJ1");
+  });
+
+  it("検索欄と ⌘K でパレットを開く", async () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
+    const { getByRole } = mount();
+    await fireEvent.click(getByRole("button", { name: /ID・検索・コマンド/ }));
+    expect(palette.open).toBe(true);
+    closePalette();
+    await fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    expect(palette.open).toBe(true);
   });
 
   it("プロジェクトを追加で作成ダイアログの要求を出す", async () => {

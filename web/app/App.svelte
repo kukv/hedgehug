@@ -6,6 +6,7 @@
   import { createCore } from "./core-factory";
   import CreateHost from "./create/CreateHost.svelte";
   import TaskDetail from "./detail/TaskDetail.svelte";
+  import CommandPalette from "./palette/CommandPalette.svelte";
   import { router } from "./router";
   import Sidebar from "./sidebar/Sidebar.svelte";
   import Banners from "./states/Banners.svelte";
@@ -103,6 +104,7 @@
   <Disconnected lastOpenAt={conn.current.lastOpenAt} />
 {/if}
 <CreateHost />
+<CommandPalette />
 <Toasts />
 
 <style>

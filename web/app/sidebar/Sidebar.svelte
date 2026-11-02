@@ -1,8 +1,11 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
   import Icon from "../icons/Icon.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
+  import { kbdLabel, registerShortcut } from "../keys";
+  import { openPalette } from "../palette-state.svelte";
   import { hrefOf, onLinkClick, router } from "../router";
   import { useSubscribe } from "../svelte-store";
   import StoreBadge from "../ui/StoreBadge.svelte";
@@ -11,6 +14,8 @@
   const { stores } = core();
   const workspaces = useSubscribe(stores, () => stores.workspaces());
   const route = $derived(router.route);
+
+  onMount(() => registerShortcut("mod+k", () => openPalette()));
 
   function workspaceActive(store: string, ulid: string, index: number): boolean {
     const r = route;
@@ -24,6 +29,12 @@
     <span class="logo" aria-hidden="true">hh</span>
     <span class="host">{location.host}</span>
   </div>
+
+  <button type="button" class="search" onclick={openPalette}>
+    <Icon name="search" size={15} />
+    <span class="ph">ID・検索・コマンド</span>
+    <kbd>{kbdLabel("mod+k")}</kbd>
+  </button>
 
   <section class="ws-section" aria-label="ワークスペース">
     <div class="ws-head">
@@ -117,6 +128,30 @@
   .host {
     color: var(--label);
     font-family: var(--font-mono);
+    font-size: var(--fs-11);
+  }
+  .search {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    width: 100%;
+    min-height: var(--control-h);
+    padding: 0 var(--space-10);
+    border: 1px solid var(--line-input);
+    border-radius: var(--radius-8);
+    background: var(--surface);
+    color: var(--label);
+    text-align: left;
+    cursor: pointer;
+  }
+  .ph {
+    flex: 1;
+  }
+  kbd {
+    padding: 1px 5px;
+    border: 1px solid var(--line-input);
+    border-radius: var(--radius-4);
+    color: var(--label);
     font-size: var(--fs-11);
   }
   .ws-section {
