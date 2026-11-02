@@ -737,6 +737,58 @@ describe("TaskCache rows nobody holds", () => {
   });
 });
 
+describe("TaskCache a row that leaves the query holding it", () => {
+  // A tree of status:todo: X is in it while it is todo. The server reads it as it is now.
+  const todoTree = () => {
+    let status: "todo" | "done" = "todo";
+    const s = setup((r) => {
+      const x = tv("X", "x", { status });
+      if (r.path === "/api/tasks") return { roots: status === "todo" ? [x] : [] };
+      return showOf(x);
+    });
+    const w = s.cache.watchTree({ q: "status:todo", tree: true });
+    const rowGets = () => s.calls.filter((c) => c.path === "/api/tasks/X");
+    return { ...s, w, rowGets, finish: () => (status = "done") };
+  };
+
+  it("fetches the row again when the tree it was in, fetched again on its event, no longer has it", async () => {
+    const { cache, conn, calls, w, rowGets, finish } = todoTree();
+    await vi.waitFor(() => expect(w.loading()).toBe(false));
+    expect(cache.task("X")?.status).toBe("todo");
+    finish();
+    conn.emit("tasks.changed", changed("shared", ["X"], "c1"));
+    await vi.waitFor(() => expect(cache.task("X")?.status).toBe("done"));
+    expect(w.roots()).toEqual([]);
+    expect(listCalls(calls)).toHaveLength(2);
+    expect(rowGets()).toHaveLength(1);
+    w.dispose();
+  });
+
+  it("fetches the row again when the tree, fetched again on resync, no longer has it", async () => {
+    const { cache, conn, w, rowGets, finish } = todoTree();
+    await vi.waitFor(() => expect(w.loading()).toBe(false));
+    finish();
+    conn.emit("resync");
+    await vi.waitFor(() => expect(cache.task("X")?.status).toBe("done"));
+    expect(rowGets()).toHaveLength(1);
+    w.dispose();
+  });
+
+  it("does not fetch a row the tree fetched again still has", async () => {
+    const { cache, conn, calls, w, rowGets } = todoTree();
+    await vi.waitFor(() => expect(w.loading()).toBe(false));
+    conn.emit("tasks.changed", changed("shared", ["X"], "c1"));
+    await vi.waitFor(() => expect(listCalls(calls)).toHaveLength(2));
+    conn.emit("resync");
+    await vi.waitFor(() => expect(listCalls(calls)).toHaveLength(3));
+    await settle();
+    await settle();
+    expect(cache.task("X")?.status).toBe("todo");
+    expect(rowGets()).toHaveLength(0);
+    w.dispose();
+  });
+});
+
 describe("TaskCache the order of reads, answers, events and resyncs", () => {
   // A step: E the task changes and its event comes, R the connection is lost while the task changes
   // and comes back (resync), A every read on its way answers, P the lookup that began before every

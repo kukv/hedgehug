@@ -47,6 +47,8 @@ type DetailState = {
   ulid: string | null;
   error: ApiError | null;
   seq: number;
+  // the latest fetch: a fetch that a newer one overtook waits for it
+  last: Promise<void>;
 };
 
 type Mark = { mark: LiveMark; commit: string; timer: ReturnType<typeof setTimeout> };
@@ -116,6 +118,9 @@ export class TaskCache {
   // overtook is dropped. An entry lasts only while its fetch is on its way.
   private rowSeq = 0;
   private readonly rowSeqs = new Map<string, number>();
+  // rowSince holds, for each row, the since of the last read that put it in or found it the same (the
+  // epoch of the write for a write): a row an event or a resync changed after that is older than the task.
+  private readonly rowSince = new Map<string, number>();
   private dirty = false;
   private refreshQueued = false;
   private refreshAll = false;
@@ -184,7 +189,7 @@ export class TaskCache {
   watchDetail(idOrUlid: string) {
     let s = this.details.get(idOrUlid);
     if (!s) {
-      s = { key: idOrUlid, refs: 0, ulid: null, error: null, seq: 0 };
+      s = { key: idOrUlid, refs: 0, ulid: null, error: null, seq: 0, last: Promise.resolve() };
       this.details.set(idOrUlid, s);
       void this.fetchDetail(s);
     }
@@ -248,7 +253,7 @@ export class TaskCache {
   prime(tasks: (TaskView | ShowView)[], since: number): void {
     for (const t of tasks) {
       if (!this.changedSince(t.ulid, since)) this.ingest(t, since);
-      else this.refetchMissing(t.ulid, t.store);
+      else this.refetchStale(t.ulid, t.store);
     }
     this.flush();
   }
@@ -395,6 +400,7 @@ export class TaskCache {
     const sig = JSON.stringify(row);
     const old = this.rows.get(row.ulid);
     if (since !== undefined && this.wroteSince(row.ulid, since)) return old ?? row;
+    this.rowSince.set(row.ulid, since ?? this.epoch);
     if (old && this.rowSigs.get(row.ulid) === sig) return old;
     this.rows.set(row.ulid, row);
     this.rowSigs.set(row.ulid, sig);
@@ -404,14 +410,20 @@ export class TaskCache {
 
   // ---- details
 
-  private async fetchDetail(s: DetailState): Promise<void> {
+  private fetchDetail(s: DetailState): Promise<void> {
+    const p = this.runDetail(s);
+    s.last = p;
+    return p;
+  }
+
+  private async runDetail(s: DetailState): Promise<void> {
     const seq = ++s.seq;
     const since = this.epoch;
     try {
       const show = await unwrap(
         this.api.GET("/api/tasks/{id}", { params: { path: { id: s.key } } }),
       );
-      if (seq !== s.seq) return;
+      if (seq !== s.seq) return s.last; // a newer fetch is on its way
       const stale = this.wroteSince(show.ulid, since);
       const gone = this.gone(show.ulid, since);
       const row = this.ingest(show, since);
@@ -425,7 +437,7 @@ export class TaskCache {
       s.ulid = show.ulid;
       s.error = null;
     } catch (e) {
-      if (seq !== s.seq) return;
+      if (seq !== s.seq) return s.last;
       const err = toApiError(e);
       s.error = err;
       this.dirty = true;
@@ -453,6 +465,7 @@ export class TaskCache {
     this.showSigs.delete(ulid);
     this.dropMark(ulid);
     this.rowSeqs.delete(ulid);
+    this.rowSince.delete(ulid);
     this.dirty = true;
   }
 
@@ -494,7 +507,9 @@ export class TaskCache {
 
   // queueRefresh fetches again what is on screen: every query (a create, a
   // move or a delete changes the order), and the details of ulids; null is
-  // every detail. Events that come in one turn make one round of requests.
+  // every detail. Events that come in one turn make one round of requests. Once the round has
+  // answered, a row of ulids (every row after a resync) that no answer brought is fetched by itself:
+  // the change took it out of the query that held it.
   private queueRefresh(ulids: string[] | null): void {
     if (ulids === null) this.refreshAll = true;
     else for (const u of ulids) this.refreshUlids.add(u);
@@ -506,9 +521,11 @@ export class TaskCache {
       const us = this.refreshUlids;
       this.refreshAll = false;
       this.refreshUlids = new Set();
-      for (const s of this.queries.values()) void this.fetchQuery(s);
+      const round: Promise<unknown>[] = [];
+      for (const s of this.queries.values()) round.push(this.fetchQuery(s));
       for (const s of this.details.values()) {
-        if (all || us.has(s.key) || (s.ulid !== null && us.has(s.ulid))) void this.fetchDetail(s);
+        if (all || us.has(s.key) || (s.ulid !== null && us.has(s.ulid)))
+          round.push(this.fetchDetail(s));
       }
       // A row no query or detail holds (the blocker of a task, a crumb) has nobody to fetch it again.
       // After a resync that is every row it holds: the events of the time it was not connected are lost.
@@ -516,6 +533,10 @@ export class TaskCache {
       for (const u of all ? [...this.rows.keys()] : us) {
         if (this.rows.has(u) && !held.has(u)) void this.fetchRow(u);
       }
+      void Promise.all(round).then(() => {
+        for (const u of all ? [...this.rows.keys()] : us)
+          if (this.rows.has(u)) this.refetchStale(u);
+      });
     });
   }
 
@@ -536,12 +557,13 @@ export class TaskCache {
     return held;
   }
 
-  // refetchMissing is for a read whose answer was dropped as older than an event or a resync. A row
-  // the cache holds is fetched again by that event or resync; one it does not hold has nobody to fetch
-  // it, so it is fetched here. One fetch at a time: one on its way began after the read, and does
-  // the same when its own answer is dropped. Each fetch again needs a new event, so it ends once they stop.
-  private refetchMissing(ulid: string, store?: string): void {
-    if (this.rows.has(ulid) || this.rowSeqs.has(ulid)) return;
+  // refetchStale fetches a row that is not in the cache, or whose last read is older than an event or
+  // a resync: for a read whose answer was dropped as older than that, and for the rows of a round of
+  // queueRefresh once it has answered. One fetch at a time: one on its way does the same when its own
+  // answer is dropped. Each fetch again needs a new event, so it ends once they stop.
+  private refetchStale(ulid: string, store?: string): void {
+    if (this.rows.has(ulid) && !this.changedSince(ulid, this.rowSince.get(ulid) ?? 0)) return;
+    if (this.rowSeqs.has(ulid)) return;
     void this.fetchRow(ulid, store);
   }
 
@@ -556,7 +578,7 @@ export class TaskCache {
       );
       if (seq !== this.rowSeqs.get(ulid)) return; // a newer fetch of this row is on its way
       this.rowSeqs.delete(ulid);
-      if (this.changedSince(ulid, since)) this.refetchMissing(ulid, store);
+      if (this.changedSince(ulid, since)) this.refetchStale(ulid, store);
       else if (!this.gone(ulid, since)) this.ingest(show, since);
     } catch (e) {
       if (seq !== this.rowSeqs.get(ulid)) return;
