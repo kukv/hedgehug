@@ -4,6 +4,14 @@
 - 親設計: Hedgehug 設計ドキュメント（https://claude.ai/artifact/8d4dcVbePAxR2BxhMtkqnc）の「実装フェーズ」2. 同期とマージ、「同期とマージ」の章、「データ形式」の「人が読める ID」「ワークスペース」、「メンションと通知」、「開発環境」
 - 前段: `docs/superpowers/specs/2026-10-31-phase1-5-workspace-keys-design.md`（ほか 1a〜1d-2 の spec）
 
+## 2026-11-02 の変更
+
+CLI の受入テストで、この spec の次の点を変えた。詳細は `docs/superpowers/specs/2026-11-02-cli-acceptance-fixes-design.md`（§4、§5、§10）。
+
+- アカウントは必須になり、アカウントのない Store はなくなった。コミットの作者は常に Store のアカウントから作り、git の設定を読む経路は消した（§5.2、§5.3）
+- `hh store remove` は既定でディレクトリも消す。push していないコミットかコミットしていない変更があるか、remote がなければ拒否し、`--keep` で config から外すだけにする。`--purge` は廃止（§4）
+- `purge --rewrite-history` は廃止した。force push を見つけた同期は止まり、`hh doctor --fix` が push していない変更を退避して clone し直し、戻す（§10）
+
 ## 位置づけ
 
 フェーズ2は1つの spec と1つのブランチで作る。親設計がフェーズ2に挙げたものはすべて入れる。
@@ -30,7 +38,7 @@
 
 - `url_rewrites`、`hh store init` で bare リポジトリを作ること、`hh store discover`: フェーズ3。フェーズ2の bare remote は devenv が作る
 - トークンを使う認証（`accounts[].token`）: フェーズ3。フェーズ2の remote はローカルのパスだけを想定し、認証を使わない
-- Store 間の移動での振り直し、履歴の書き換え（`purge --rewrite-history`）の検出: フェーズ3
+- Store 間の移動での振り直し、履歴の書き換え（`purge --rewrite-history`）の検出: フェーズ3（2026-11-02 に変更。冒頭の節を参照）
 - 接頭辞が重複した Store の `org-a:API-12` の表示: Store のマウント（フェーズ3）で作る。フェーズ2は重複の案内（inbox と doctor）まで
 - メンション先に Store を読む権限がないときの警告: メンバー一覧（フェーズ3）が要る
 - 自動化の通知: 自動化（フェーズ5）が inbox に同じ仕組みで足す
@@ -81,7 +89,7 @@ tools/devenv/
 - config.yaml の `accounts[]` から `host` と `login` を読む。アカウントの ID は `<host>/<login>`（例 `github.com/alice`）。
 - Store の書き手は `stores[].account` が指すアカウント。指定がなく、アカウントが1つだけならそれを使う。どちらもなければ書き手は空で、`created_by` と `author` は空のまま、`Hedgehug-Author` を付けない。`hh inbox` は「accounts が設定されていない」と警告する。
 - 「自分」は `accounts[]` のすべてのアカウント（親設計の「自分」の定義どおり）。
-- コミットの author は、親設計の「author はその Store に紐付くアカウント」に従い、書き手のアカウントから作る（利用者の決定）。名前は `login`、メールは `<login>@users.noreply.<host>`（例 `alice <alice@users.noreply.github.com>`）。push すると Store を読める全員に見えるので、本当のメールアドレスは使わない。login はタスクのデータ（`assignees`、`created_by` など）にすでにあるので、新しく見える情報はない。git の設定（`.gitconfig`）がなくても動く。
+- コミットの author は、親設計の「author はその Store に紐付くアカウント」に従い、書き手のアカウントから作る（利用者の決定）。名前は `login`、メールは `<login>@users.noreply.<host>`（例 `alice <alice@users.noreply.github.com>`）。push すると Store を読める全員に見えるので、本当のメールアドレスは使わない。login はタスクのデータ（`assignees`、`created_by` など）にすでにあるので、新しく見える情報はない。git の設定（`.gitconfig`）がなくても動く。（2026-11-02 に変更。冒頭の節を参照）
 - 書き手がいない Store（accounts が設定されていない）では、今と同じく git の設定から取る。`config.Author` のコメント「Accounts replace this in phase 3」はこの決定に合わせて直す。
 
 ### trailer
@@ -442,7 +450,7 @@ mention・assigned・watch は、各コミットの差分（変わる前と後�
 | `hh store init <name> --prefix <接頭辞> --remote <url>...` | フェーズ1.5の初期化（`--prefix` 必須）に加え、remotes を config.yaml に記録し、merge driver を登録し、初回の push をする。remote は空の bare リポジトリを前提にする。空でなく push が拒否されたら、`hh store add` を案内してエラーにする |
 | `hh store add <name> --remote <url>... [--path <dir>]` | origin を clone し、config.yaml に登録し、merge driver を登録する。path の既定は `store init` と同じ。clone した Store のワークスペースを登録済みの他の Store と照合し、重複があれば警告する（どちらの `prefix_set` が後か、後の側で `hh workspace prefix` を使うよう案内する）。登録はする（重複は ID の重複を生まず、Store 名付きの表示はフェーズ3で作る） |
 | `hh store list` | config.yaml の Store の名前、パス、remotes、アカウント、最後の同期を出す（親設計の `hh store add/remove/list`。`store add` と一緒に作る） |
-| `hh store remove <name>` | config.yaml から外す。ディレクトリは消さない（`--purge` で消す。未 push のコミットか未コミットの変更があれば拒否し、`hh sync` を案内する。remote のない Store は全コミットが未 push なので拒否する） |
+| `hh store remove <name>` | config.yaml から外す。ディレクトリは消さない（`--purge` で消す。未 push のコミットか未コミットの変更があれば拒否し、`hh sync` を案内する。remote のない Store は全コミットが未 push なので拒否する）（2026-11-02 に変更。冒頭の節を参照） |
 | `hh inbox` / `inbox read` / `inbox revert` | 前記 |
 | `hh watch` / `hh unwatch` | 前記 |
 | `hh undo` | 前記 |
@@ -516,7 +524,7 @@ sync:
 - **repair**: 表の各行。親の2つ組・3つ組の循環（base あり・なし）、削除済みの親、消されたワークスペースの復活、不正な接頭辞の base への戻し、ワークスペースの違う子、ID の衝突（origin にある側を残す、どちらもない・両方あるときは ULID の小さい側、3つ以上の組、振った番号がマージした集合の最大 + 1 になる、読めないファイルと numbers.yaml の番号を数える）、接頭辞の不一致の振り直し、接頭辞と名前の重複の案内。決定性（同じ入力から同じ結果）。
 - **gitrepo**: インプロセスの file transport で fetch / push / clone（git の実行ファイルを呼ばないことを、PATH を空にして確かめる）、拒否の検出、`LastChange`、`DiffTrees`、`FastForward`、`Repack`。
 - **doctor --fix**: remote のない Store で親の循環・ID の重複・ワークスペースの不一致を1コミットで直す、直せない問題が残れば終了コード 1、直すものがなければコミットしない。
-- **author**: accounts がある Store のコミットが `login <login@users.noreply.host>`、ない Store は git の設定、`.gitconfig` がなくてもアカウントがあればコミットできる。
+- **author**: accounts がある Store のコミットが `login <login@users.noreply.host>`、ない Store は git の設定、`.gitconfig` がなくてもアカウントがあればコミットできる。（2026-11-02 に変更。冒頭の節を参照）
 - **index.lock**: ロックがあれば待って `ErrGitBusy`、終わったら消える、merge driver は取らない。
 - **rank**: 同じ rank の兄弟が ID の順に並ぶ、書き込んだタスクだけが振り直され組の外との順が変わらない。
 - **クエリ**: `mentions:@me`（本文・コメント・削除済みコメントを除く・`@login` と `@host/login`）、`watching:@me`、`is:overwritten`、accounts からの `@me`。

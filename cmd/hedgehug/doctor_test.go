@@ -161,7 +161,7 @@ func TestDoctorMergeDriverAndInbox(t *testing.T) {
 		t.Fatal(err)
 	}
 	code, out, _ = te.run("doctor")
-	if code != 1 || !strings.Contains(out, "1 merge driver records are not in the inbox yet") || !strings.Contains(out, "hint: run hedgehug inbox") {
+	if code != 1 || !strings.Contains(out, "1 merge driver record is not in the inbox yet") || !strings.Contains(out, "hint: run hedgehug inbox") {
 		t.Errorf("exit %d\n%s", code, out)
 	}
 }

@@ -20,6 +20,9 @@ func (a *app) lsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ls [query]",
 		Short: "List tasks",
+		Long: "List the tasks that match the query.\n\n" +
+			"A term that starts with - (a negation, such as -status:done) is read as a\n" +
+			"flag; put it after --: hedgehug ls -- -status:done",
 		RunE: func(_ *cobra.Command, args []string) error {
 			n := 0
 			for _, on := range []bool{a.jsonOut, ulidsOnly, format != ""} {

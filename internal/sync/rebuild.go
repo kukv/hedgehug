@@ -16,6 +16,7 @@ import (
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/plural"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -254,7 +255,7 @@ func replay(r *gitrepo.Repo, ns *store.Store, nr *gitrepo.Repo, tracked, oldHead
 	if len(m.files) == 0 && len(m.lost) == 0 && len(m.notices) == 0 && len(m.repaired) == 0 {
 		return head, nil
 	}
-	op := store.Op{Name: "replay", Detail: fmt.Sprintf("%d unpushed commits", len(mine)), Author: opt.Author, Account: opt.Account, AllowEmpty: true}
+	op := store.Op{Name: "replay", Detail: plural.Count(len(mine), "unpushed commit"), Author: opt.Author, Account: opt.Account, AllowEmpty: true}
 	return ns.CommitMerge(head, []plumbing.Hash{head}, m.files, op, m.trailers())
 }
 

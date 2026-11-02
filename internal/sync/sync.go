@@ -21,6 +21,7 @@ import (
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/merge"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/plural"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -825,7 +826,7 @@ func repairHead(s *store.Store, ix *index.Index, opt Options, res *Result) error
 		if err := dirty(r, slices.Collect(maps.Keys(fixed))); err != nil {
 			return err
 		}
-		op := store.Op{Name: "repair", Detail: fmt.Sprintf("%d issues", len(repaired)), Author: opt.Author, Account: opt.Account}
+		op := store.Op{Name: "repair", Detail: plural.Count(len(repaired), "issue"), Author: opt.Author, Account: opt.Account}
 		beforeCommit()
 		_, err = s.CommitMerge(head, []plumbing.Hash{head}, fixed, op, append(overwrittenTrailers(dropped), repairedTrailers(repaired)...))
 		if errors.Is(err, store.ErrHeadMoved) && try < tries {

@@ -107,7 +107,7 @@ func TestSchemaCheckBrokenSchemaFile(t *testing.T) {
 	}
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	if len(lines) != 3 || !strings.HasPrefix(lines[0], "schema.yaml: ") ||
-		lines[1] != "  hint: restore schema.yaml with `git restore schema.yaml`, or fix it by hand and commit" || lines[2] != "1 problems" {
+		lines[1] != "  hint: restore schema.yaml with `git restore schema.yaml`, or fix it by hand and commit" || lines[2] != "1 problem" {
 		t.Errorf("output:\n%s", out)
 	}
 }

@@ -86,7 +86,7 @@ func TestWorkspaceAddRenamePrefixRemove(t *testing.T) {
 	}
 	_, err = ts.WorkspaceRemove("front")
 	wantErr(t, err, KindConflict, "workspace.not_empty")
-	if want := "workspace front still has 1 tasks; move them with hedgehug mv --workspace, or delete them with hedgehug rm and remove them with hedgehug purge --older-than 0d --store <store>"; err.Error() != want {
+	if want := "workspace front still has 1 task; move it with hedgehug mv --workspace, or delete it with hedgehug rm and remove it with hedgehug purge --older-than 0d --store <store>"; err.Error() != want {
 		t.Errorf("message = %q; want %q", err, want)
 	}
 	ts.addWorkspace("empty", "EM")
@@ -286,5 +286,21 @@ func TestWorkspaceOnANamedStoreDoesNotTouchTheSession(t *testing.T) {
 	}
 	if _, wss, _ := sub.WorkspaceList(); len(wss) != 2 {
 		t.Errorf("the store team has %d workspaces; want 2", len(wss))
+	}
+}
+
+func TestWorkspaceRemoveRefusalSaysThemForSeveralTasks(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	ts.addWorkspace("api", "API")
+	for _, title := range []string{"a", "b"} {
+		if _, err := ts.Add(AddInput{Title: title, Workspace: "api"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := ts.WorkspaceRemove("api")
+	wantErr(t, err, KindConflict, "workspace.not_empty")
+	if want := "workspace api still has 2 tasks; move them with hedgehug mv --workspace, or delete them with hedgehug rm and remove them with hedgehug purge --older-than 0d --store <store>"; err.Error() != want {
+		t.Errorf("message = %q; want %q", err, want)
 	}
 }

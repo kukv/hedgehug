@@ -7,6 +7,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/plural"
 	"github.com/kukv/hedgehug/internal/store"
 )
 
@@ -42,10 +43,7 @@ func (e *AmbiguousError) Error() string {
 	for _, c := range e.Candidates {
 		stores[c.Store] = true
 	}
-	where := fmt.Sprintf("%d stores", len(stores))
-	if len(stores) == 1 {
-		where = "1 store"
-	}
+	where := plural.Count(len(stores), "store")
 	return fmt.Sprintf("%q matches %d tasks in %s:\n  %s", e.Input, len(e.Candidates), where, strings.Join(lines, "\n  "))
 }
 

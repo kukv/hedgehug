@@ -15,6 +15,7 @@ import (
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/merge"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/plural"
 	"github.com/kukv/hedgehug/internal/schema"
 	"github.com/kukv/hedgehug/internal/store"
 	"github.com/kukv/hedgehug/internal/sync"
@@ -169,10 +170,7 @@ func brokenTask(err error) (model.ULID, bool) {
 
 // TaskCount is n tasks in words: "1 task", "3 tasks".
 func TaskCount(n int) string {
-	if n == 1 {
-		return "1 task"
-	}
-	return fmt.Sprintf("%d tasks", n)
+	return plural.Count(n, "task")
 }
 
 // Fixed is something doctor --fix repaired. Line is the text line, made when

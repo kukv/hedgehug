@@ -7,6 +7,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/doctor"
 	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/plural"
 )
 
 // errFindings is what a command that found problems returns: the problems
@@ -79,6 +80,6 @@ func (a *app) writeFindings(fs []doctor.Finding) error {
 			_, _ = fmt.Fprintf(a.stdout, "  hint: %s\n", f.Hint)
 		}
 	}
-	_, err := fmt.Fprintf(a.stdout, "%d problems\n", len(fs))
+	_, err := fmt.Fprintln(a.stdout, plural.Count(len(fs), "problem"))
 	return err
 }

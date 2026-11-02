@@ -167,7 +167,7 @@ hh purge [--older-than <N>d] [--store <name>] [--yes]
 - 子が削除されていない削除済みタスク（doctor が直す前の状態）は消さずに残し、警告で ID を並べる。今の `purge.child_not_deleted` の判定を使う。
 - 確認: 端末なら対象（Store ごとに、削除済みタスクの ID とタイトル、転送ファイルの数）を出して `[y/N]` で聞く。`--yes` で聞かない。端末でなく `--yes` もなければ、確認が要るエラー（終了コード 2）。今の `purge --moved` の確認と同じ形。
 - 出力: `Purged N tasks and M forward files from <store>`（12 の複数形）。対象がなければ `Nothing to purge`。`--json` は `{store, tasks:[{ulid,id,title}], forwards:[{ulid,moved_to,moved_at}], commit}`。
-- `workspace rm` は削除済みタスクも数えるので、`rm` した直後は消せない。拒否の文言（今の `… or purge them`）を `… move them with hedgehug mv --workspace, or delete them with hedgehug rm and remove them with hedgehug purge --older-than 0d --store <store>` にする。`undo` の同じ文言も同じにする。
+- `workspace rm` は削除済みタスクも数えるので、`rm` した直後は消せない。拒否の文言（今の `… or purge them`）を `… move them with hedgehug mv --workspace, or delete them with hedgehug rm and remove them with hedgehug purge --older-than 0d --store <store>` にする。`undo` の同じ文言も同じにする。タスクが 1 件のときは 3 つの `them` を `it` にする（2026-11-03 に利用者が決定）。
 - コミットの op は今の `purge` と `purge-moved` を `purge` 1 つにする。
 - `undo` は今の `purge` と同じく取り消せない操作として扱う（理由の文言も今のまま）。
 - `purge <id>`・`purge --moved` は廃止する。位置引数を渡したら使い方の誤りにし、`--older-than` を案内する。

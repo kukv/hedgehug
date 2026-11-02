@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/plural"
 	"github.com/kukv/hedgehug/internal/schema"
 )
 
@@ -128,10 +129,10 @@ func (tx *Tx) checkWorkspacesEmptyOfSprints() error {
 			continue
 		}
 		if sprints[ulid] > 0 {
-			return fmt.Errorf("workspace %s still has %d sprints", ulid, sprints[ulid])
+			return fmt.Errorf("workspace %s still has %s", ulid, plural.Count(sprints[ulid], "sprint"))
 		}
 		if releases[ulid] > 0 {
-			return fmt.Errorf("workspace %s still has %d releases", ulid, releases[ulid])
+			return fmt.Errorf("workspace %s still has %s", ulid, plural.Count(releases[ulid], "release"))
 		}
 	}
 	return nil

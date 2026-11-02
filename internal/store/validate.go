@@ -8,6 +8,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/atomicfile"
 	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/plural"
 	"github.com/kukv/hedgehug/internal/schema"
 )
 
@@ -246,7 +247,7 @@ func (tx *Tx) validateWorkspaces() error {
 			continue
 		}
 		if count[ulid] > 0 {
-			return fmt.Errorf("workspace %s still has %d tasks", ulid, count[ulid])
+			return fmt.Errorf("workspace %s still has %s", ulid, plural.Count(count[ulid], "task"))
 		}
 		if rel, ok := broken[ulid]; ok {
 			return fmt.Errorf("workspace %s may still have a task: %s does not decode and names it; fix or remove the file first", ulid, rel)
