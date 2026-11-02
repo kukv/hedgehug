@@ -16,6 +16,7 @@ function core(names: string[], get = vi.fn(async () => health("0.9.0"))) {
     api: { GET: get },
     stores: {
       stores: () => names.map((name) => ({ name })),
+      loaded: () => true,
       subscribe: () => () => {},
     },
   };
@@ -95,6 +96,19 @@ describe("SettingsRoute", () => {
     const { getByRole } = renderWithCore(SettingsRoute, { page }, core(["shared", "me"]));
     expect(getByRole("navigation", { name: "設定のナビゲーション" })).toBeTruthy();
     expect(location.pathname).toBe("/settings/workspaces/shared");
+  });
+
+  it("存在しない Store の URL は見つからない旨とホームへの戻りを出し、レイアウトは出さない", async () => {
+    history.replaceState(null, "", "/settings/workspaces/nope");
+    const { getByText, getByRole, queryByRole } = renderWithCore(
+      SettingsRoute,
+      { page: { page: "workspaces", store: "nope" } },
+      core(["shared"]),
+    );
+    expect(getByText("Store「nope」が見つかりません")).toBeTruthy();
+    expect(queryByRole("navigation", { name: "設定のナビゲーション" })).toBeNull();
+    await fireEvent.click(getByRole("button", { name: "ホームへ戻る" }));
+    expect(location.pathname).toBe("/");
   });
 
   it("/settings は最初の Store のワークスペースに置き換える（履歴を積まない）", async () => {
