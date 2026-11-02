@@ -9,7 +9,7 @@
 CLI の受入テストで、この spec の次の点を変えた。詳細は `docs/superpowers/specs/2026-11-02-cli-acceptance-fixes-design.md`（§4、§5、§10）。
 
 - アカウントは必須になり、アカウントのない Store はなくなった。コミットの作者は常に Store のアカウントから作り、git の設定を読む経路は消した（§5.2、§5.3）
-- `hh store remove` は既定でディレクトリも消す。push していないコミットがあるか remote がなければ拒否し、`--keep` で config から外すだけにする。`--purge` は廃止（§4）
+- `hh store remove` は既定でディレクトリも消す。push していないコミットかコミットしていない変更があるか、remote がなければ拒否し、`--keep` で config から外すだけにする。`--purge` は廃止（§4）
 - `purge --rewrite-history` は廃止した。force push を見つけた同期は止まり、`hh doctor --fix` が push していない変更を退避して clone し直し、戻す（§10）
 
 ## 位置づけ

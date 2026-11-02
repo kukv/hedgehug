@@ -25,7 +25,7 @@ CLI の受入テストで、この spec の次の点を変えた。詳細は `do
 
 ### 1d-1 で扱うもの
 
-- `internal/config`: 設定とデータの場所、`config.yaml` の読み書き、Store の選び方、git の作者の読み出し
+- `internal/config`: 設定とデータの場所、`config.yaml` の読み書き、Store の選び方、git の作者の読み出し（2026-11-02 に変更。冒頭の節を参照）
 - `internal/store`: `Create` の修正（スキーマを渡せる、失敗時の後始末、`meta` を書き換えない）
 - `cmd/hedgehug`: cobra によるコマンド定義と出力。`store init`、`add`、`ls`、`show`、`set`、`status`、`done`、`rm`、`restore`、`purge`、`mv`、`dep`
 - goreleaser: `hh` の別名ビルド
@@ -44,7 +44,7 @@ CLI の受入テストで、この spec の次の点を変えた。詳細は `do
 internal/config/
   paths.go         HEDGEHUG_HOME と XDG からの場所の決定
   config.go        config.yaml の読み書き（yaml.Node で未知のキーとコメントを残す）
-  author.go        git のグローバル設定から作者を読む
+  author.go        git のグローバル設定から作者を読む（2026-11-02 に変更。冒頭の節を参照）
 internal/store/
   store.go         Create の修正
 cmd/hedgehug/
@@ -103,8 +103,8 @@ stores:
 ## 作者
 
 - `Op.Author` には git のグローバル設定の `user.name` と `user.email` を使う。go-git の `LoadConfig` はプロセスの環境変数を読み、テストから注入できない。そこで `getenv` から決めたパスの gitconfig を読む。（2026-11-02 に変更。冒頭の節を参照）
-- 読むファイルは、`GIT_CONFIG_GLOBAL` があればそのファイルだけ。なければ `$XDG_CONFIG_HOME/git/config`（なければ `~/.config/git/config`）、`~/.gitconfig` の順に読み、後のファイルが勝つ（git と同じ）。
-- どちらかが空なら、`git config --global user.name` / `user.email` での設定を案内するエラーにする。読み出しは書き込みをするコマンドでだけ行う（読むだけのコマンドは git の設定がなくても動く）。
+- 読むファイルは、`GIT_CONFIG_GLOBAL` があればそのファイルだけ。なければ `$XDG_CONFIG_HOME/git/config`（なければ `~/.config/git/config`）、`~/.gitconfig` の順に読み、後のファイルが勝つ（git と同じ）。（2026-11-02 に変更。冒頭の節を参照）
+- どちらかが空なら、`git config --global user.name` / `user.email` での設定を案内するエラーにする。読み出しは書き込みをするコマンドでだけ行う（読むだけのコマンドは git の設定がなくても動く）。（2026-11-02 に変更。冒頭の節を参照）
 - アカウントによる作者の決定はフェーズ3。それまで `query.Options.Me` は空にする（1c で決めたとおり）。
 - `created_by` の値にはアカウントが要るので、フェーズ3までは空のままにする。`show` は `by -` と出す。（2026-11-02 に変更。冒頭の節を参照）
 
@@ -269,7 +269,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
 
 ## テスト
 
-- **config**: 環境変数の組み合わせごとの場所（`HEDGEHUG_HOME`、XDG の片方だけ、相対パス、どちらもなし）。config.yaml の読み書きで、未知のキー、要素の未知のキー、コメントが残ること。`~/` の展開。重複した名前と欠けたキーのエラー。Store の選び方の3通り。作者の読み出しとその欠け。
+- **config**: 環境変数の組み合わせごとの場所（`HEDGEHUG_HOME`、XDG の片方だけ、相対パス、どちらもなし）。config.yaml の読み書きで、未知のキー、要素の未知のキー、コメントが残ること。`~/` の展開。重複した名前と欠けたキーのエラー。Store の選び方の3通り。作者の読み出しとその欠け。（2026-11-02 に変更。冒頭の節を参照）
 - **store.Create**: スキーマを渡せる。呼び出し側の `meta` が変わらない。途中で失敗したとき、作ったディレクトリまたは中身が残らず、同じ場所に作り直せる。
 - **cmd/hedgehug**: `t.TempDir()` を `HEDGEHUG_HOME` と HOME（`.gitconfig` を置く）にして `run` を呼ぶ。コマンドごとに次を確かめる。（2026-11-02 に変更。冒頭の節を参照）
   - 出力（表、ツリー、JSON、`--ids-only`、`--format`）
@@ -278,7 +278,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, author gitrepo
   - `rm` / `restore` の子孫の扱い（同じ rm で消えたものだけ戻る）、`purge` の確認と `--yes`
   - `ls --tree` の祖先の補完と循環の見出し
   - `set` の書き方の各形と、型ごとの値の解釈
-- **シナリオ**: フェーズ1の完了条件のうち CLI の分を通しで確かめる1本。`store init` → `add`（親子と孫）→ `ls --tree` → `set` / `status` / `done` / `mv` / `dep` → `rm` → `restore` → `rm` → `purge` の順に実行し、各操作が git 履歴に1コミットずつ残ることを確かめる。
+- **シナリオ**: フェーズ1の完了条件のうち CLI の分を通しで確かめる1本。`store init` → `add`（親子と孫）→ `ls --tree` → `set` / `status` / `done` / `mv` / `dep` → `rm` → `restore` → `rm` → `purge` の順に実行し、各操作が git 履歴に1コミットずつ残ることを確かめる。（2026-11-02 に変更。冒頭の節を参照）
 
 ## 持ち越しの回収
 

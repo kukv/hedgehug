@@ -8694,3 +8694,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Task 7: 既定で消すようになったので、Store のロック（`tx.go`・`move.go`・`local.go`）は `acquireStore` で取る。Store の根に `.git` がなければ、ディレクトリを作らずに `ErrStoreGone`（`store.gone`、KindConflict）を返す。待っている間にロックのファイルが消されたか入れ替わったとき（`os.SameFile` で比べる）も同じエラーになる。作るのは `.hedgehug` の下のディレクトリだけで、ロックなしの `WriteLocal` も同じ扱い。`WithFileLock`（Store の外のロック）は今のまま。GUI の文言も足した。
 - Task 8: `-p repos=…`・`repos+=…` を付けても、`--repo` の repo ID が先頭に残る（`AddInput.FirstRepo`。assigns を適用したあとに足す）。すでに repos にあれば動かさない（細部 3）。`TestNeedRepoFailsBeforeAnyQuestion` は、TMPDIR がリポジトリの中でも通るよう、素の一時ディレクトリの項目を外した。
 - 全体: `internal/store` の `TestConcurrentAddsGetDistinctIDs` は、負荷の下で待ちの上限を超えないよう lockWait を 1 分にした。`internal/server` の `Loop.parked()`（テスト用）は、遅れて届く Wake を数で数え、静止の判定を誤らないようにした（`TestLoopIntervalVisibleAndHidden` のぶれ）。
+
+### Task 12・13（PR C。Task 5〜8 のマージ後）
+
+- Task 12: 一覧の 9（`cmd/hedgehug` の 3 引数の `plural`）と 14（`storeops.go`）は Task 11・7 で直っていた。17（`internal/ops/inbox.go`）は残っていたので直した。一覧のほかに `cmd/hedgehug/doctor.go` の `put back %d %s`（Task 10 の `doctor --fix` の出力）と、`internal/mount/resolve.go` の曖昧さのエラーの中の手書きの `1 store` / `%d stores` も `plural.Count` にした（出力は変わらない）。`TestSyncStatusSaysOneCommit` は変更前から通る（`sync --status` の手書きの switch が 1 を扱っていた）ので、回帰防止として残した。
+- Task 13: 既存の spec は 6 本（phase1d1・1d2・1.5・2・3・3 の design-review）に「2026-11-02 の変更」の節と印を付けた。phase1d1 には `add --no-repo` の記述がなかった（phase3 にある）。phase1.5 のコミットの件名（`hedgehug: workspace prefix …`）は変えていないので印を付けない。
+- Task 13: 受入テスト手順に、`workspace set-prefix`、`add --repo`（リポジトリの外で拒否されることも）、旧い `comment <id>`・`purge <id>` が使い方の誤りになること、`store remove` の拒否と `--keep`・既定の削除、`ls --help` のステップを足した。`.gitconfig` を作る手順と `GIT_CONFIG_GLOBAL` は消した（通しは `GIT_CONFIG_GLOBAL=/dev/null` で行い、git の設定がなくても動くことを確かめた）。GUI は起動していない。
+- Task 13: CLI リファレンスの「単独環境」（アカウントなし）の例は、アカウントが必須になって再現できないので、アカウント 1 つの「1 人の環境」で取り直した。devenv の例は取り直さず、文言が変わった行（複数形、`comment add`）だけを今の文言に直し、そのことをページに書いた。「確認で気づいた点」は「受入テストで決めたこと」にして、各点の扱いを書いた。
