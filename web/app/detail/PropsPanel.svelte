@@ -11,7 +11,13 @@
   import PropField from "./PropField.svelte";
   import { propRows, statusOptions } from "./prop-rows";
 
-  let { show, readonly = false }: { show: ShowView; readonly?: boolean } = $props();
+  // parentKind is the kind of the parent as the screen read it (the cache may not have the parent when
+  // the detail is opened by its URL); undefined: not read yet.
+  let {
+    show,
+    readonly = false,
+    parentKind: readKind,
+  }: { show: ShowView; readonly?: boolean; parentKind?: string } = $props();
 
   const { cache, save, schema, stores } = core();
   const sc = useSubscribe(schema, () => schema.get(show.store));
@@ -23,11 +29,18 @@
     void schema.load(show.store);
   });
 
-  const parentKind = $derived(show.parent ? (cache.task(show.parent)?.kind ?? null) : null);
+  // null: no parent; undefined: there is one whose kind is not known, so no kind is ruled out here (the server decides).
+  const parentKind = $derived(
+    show.parent ? (readKind ?? cache.task(show.parent)?.kind ?? undefined) : null,
+  );
   const kindOptions = $derived<Option[]>(
     (sc.current?.kinds ?? []).map((k) => {
       const current = sc.current;
-      const usable = k.name === show.kind || !current || canParent(current, k.name, parentKind);
+      const usable =
+        k.name === show.kind ||
+        !current ||
+        parentKind === undefined ||
+        canParent(current, k.name, parentKind);
       return {
         value: k.name,
         label: k.label || k.name,

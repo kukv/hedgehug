@@ -95,6 +95,21 @@ describe("Menu", () => {
     outside.remove();
   });
 
+  it("フォーカスが外の要素へ移ったら閉じる（ダイアログやパレットが開いたとき）。anchor へ移ったときは除く", async () => {
+    const anchor = document.createElement("button");
+    const other = document.createElement("input");
+    document.body.append(anchor, other);
+    const { onclose, getAllByRole } = open({ anchor });
+    await vi.waitFor(() => expect(focused()).toContain("未着手"));
+    anchor.focus();
+    expect(onclose).not.toHaveBeenCalled();
+    getAllByRole("menuitem")[0]?.focus();
+    other.focus();
+    expect(onclose).toHaveBeenCalledTimes(1);
+    anchor.remove();
+    other.remove();
+  });
+
   it("anchor の下に置く", () => {
     const anchor = document.createElement("div");
     anchor.getBoundingClientRect = () =>

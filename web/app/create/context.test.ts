@@ -48,6 +48,13 @@ describe("resolveCreateContext", () => {
     expect(c.parent?.id).toBe("REL-6");
   });
 
+  it("does not fall back to a row selected earlier when the task of the detail is deleted or not read yet", () => {
+    for (const ulid of ["UD", "UNKNOWN"]) {
+      const c = resolveCreateContext({ ...base, selection: "UE", route: { name: "task", ulid } });
+      expect(c.parent).toBeNull();
+    }
+  });
+
   it("puts the task under the parent a request names, before anything else", () => {
     const c = resolveCreateContext({
       ...base,

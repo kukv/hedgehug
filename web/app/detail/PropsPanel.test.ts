@@ -78,6 +78,20 @@ describe("PropsPanel", () => {
     expect(screen.getByRole("menuitem", { name: /^プロジェクト/ })).toBeDisabled();
   });
 
+  it("takes the kind of the parent the screen read when the cache lacks the parent", async () => {
+    const child = showView({ ...show, parent: "UP" });
+    mount(PropsPanel, { show: child, parentKind: "task" }, makeCore({ show: child }));
+    await fireEvent.click(screen.getByRole("button", { name: "種類" }));
+    expect(screen.getByRole("menuitem", { name: /^プロジェクト/ })).toBeDisabled();
+  });
+
+  it("rules no kind out while the kind of the parent is not known", async () => {
+    const child = showView({ ...show, parent: "UP" });
+    mount(PropsPanel, { show: child }, makeCore({ show: child }));
+    await fireEvent.click(screen.getByRole("button", { name: "種類" }));
+    expect(screen.getByRole("menuitem", { name: /^プロジェクト/ })).not.toBeDisabled();
+  });
+
   it("does not edit when read-only", () => {
     mount(PropsPanel, { show, readonly: true }, makeCore({ show }));
     expect(screen.getByRole("button", { name: "ステータス" })).toBeDisabled();

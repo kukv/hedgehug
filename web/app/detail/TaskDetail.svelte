@@ -89,6 +89,7 @@
   });
 
   const crumbs = $derived(collapseCrumbs(chain));
+  const parentCrumb = $derived(chain.at(-1)?.ulid === s?.parent ? chain.at(-1) : undefined);
   const kindLabel = $derived(
     sc.current?.kinds?.find((k) => k.name === s?.kind)?.label || s?.kind || "",
   );
@@ -306,7 +307,7 @@
           <History show={s} readonly={locked} />
         </article>
         <aside aria-label="プロパティ">
-          <PropsPanel show={s} readonly={locked} />
+          <PropsPanel show={s} readonly={locked} parentKind={parentCrumb?.kind} />
         </aside>
       </div>
     {/if}

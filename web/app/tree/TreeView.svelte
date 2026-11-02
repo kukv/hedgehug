@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createVirtualizer } from "@tanstack/svelte-virtual";
-  import { tick, untrack } from "svelte";
+  import { onDestroy, tick, untrack } from "svelte";
   import type { Attachment } from "svelte/attachments";
   import type { TaskView } from "../../core/api/client";
   import { cliLs } from "../../core/cli";
@@ -51,6 +51,8 @@
   const c = core();
   // The selection is one for the whole app: a row of another screen is not one of this.
   selection.set(null);
+  // And a row of this screen is not one of the next: a task detail that opens a create must not find it.
+  onDestroy(() => selection.set(null));
   const cacheRev = useSubscribe(c.cache, () => ({}));
   const storesRev = useSubscribe(c.stores, () => ({}));
   const schemaRev = useSubscribe(c.schema, () => ({}));

@@ -214,6 +214,15 @@ describe("TreeView", () => {
     expect(screen.getByText("3 件 · 中止 0 件を除外")).toBeInTheDocument();
   });
 
+  it("clears the selection when the screen goes away", async () => {
+    setup();
+    const { unmount } = render(TreeView, { view: { kind: "project", ulid: "P" } });
+    await fireEvent.click(screen.getByText("Web のクライアントを更新"));
+    expect(selection.ulid).toBe("T3");
+    unmount();
+    expect(selection.ulid).toBeNull();
+  });
+
   it("selects a row on click and opens the detail on double click", async () => {
     setup();
     render(TreeView, { view: { kind: "project", ulid: "P" } });
