@@ -34,6 +34,30 @@ describe("errorMessage", () => {
     );
   });
 
+  it("words task.moved with and without the store and the new ID", () => {
+    expect(errorMessage(err("task.moved", { input: "REL-9", store: "work", id: "REL-10" }))).toBe(
+      "REL-9 は work へ移りました（今の ID は REL-10）",
+    );
+    expect(errorMessage(err("task.moved", { input: "REL-9", store: "work" }))).toBe(
+      "REL-9 は work へ移りました",
+    );
+    expect(errorMessage(err("task.moved", { input: "REL-9" }))).toBe(
+      "REL-9 は別の Store へ移りました",
+    );
+  });
+
+  it("words restore.forward with the point in time", () => {
+    expect(errorMessage(err("restore.forward", { at: "abc123" }))).toBe(
+      "abc123 の時点では、このタスクは別の Store へ移っていました",
+    );
+  });
+
+  it("words sync.force_push", () => {
+    expect(errorMessage(err("sync.force_push"))).toBe(
+      "リモートの履歴が Hedgehug の記録なしに書き換えられています。hh doctor で確かめてください",
+    );
+  });
+
   it("tells the two auth.token apart", () => {
     expect(errorMessage(err("auth.token", { account: "work" }))).toContain("work");
     expect(errorMessage(err("auth.token"))).toBe(

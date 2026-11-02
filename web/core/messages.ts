@@ -55,6 +55,13 @@ const messages: Record<string, Make> = {
   "task.already_deleted": (a) => `${str(a, "id")} はすでに削除されています`,
   "task.not_deleted": (a) => `${str(a, "id")} は削除されていません`,
   "task.workspace_mismatch": () => "親のワークスペースがこの Store にないか、指定と合いません",
+  "task.moved": (a) => {
+    const input = str(a, "input");
+    const store = str(a, "store");
+    if (store && a.id) return `${input} は ${store} へ移りました（今の ID は ${str(a, "id")}）`;
+    if (store) return `${input} は ${store} へ移りました`;
+    return `${input} は別の Store へ移りました`;
+  },
   "workspace.not_found": (a) => `${str(a, "input")} というワークスペースは見つかりません`,
   "workspace.ambiguous": (a) => `${str(a, "input")} に当てはまるワークスペースが複数あります`,
   "workspace.taken": (_, e) => withDetail("そのワークスペースの名前はすでに使われています", e),
@@ -112,6 +119,7 @@ const messages: Record<string, Make> = {
       : "完全に削除するには確認が必要です";
   },
   "restore_at.bad_time": (a) => `「${str(a, "at")}」は時刻でもコミットでもありません`,
+  "restore.forward": (a) => `${str(a, "at")} の時点では、このタスクは別の Store へ移っていました`,
   "restore_at.not_found": (a) =>
     a.at
       ? `${str(a, "at")} の時点にはこのタスクがありませんでした`
@@ -153,6 +161,8 @@ const messages: Record<string, Make> = {
   "store.mount_failed": (a) => `追加できなかった Store があります（${list(a, "failed")}）`,
   "sync.dirty": () => "コミットしていない変更があるため同期できません",
   "sync.unrelated": () => "リモートの履歴がこの Store の履歴と無関係です",
+  "sync.force_push": () =>
+    "リモートの履歴が Hedgehug の記録なしに書き換えられています。hh doctor で確かめてください",
   "sync.background_needs_store": () => "バックグラウンドの同期には Store の指定が必要です",
 
   // accounts and GitHub
