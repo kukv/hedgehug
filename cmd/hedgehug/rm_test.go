@@ -111,35 +111,3 @@ func TestRmJSON(t *testing.T) {
 		t.Errorf("rm --json = %+v", got)
 	}
 }
-
-func TestPurge(t *testing.T) {
-	t.Parallel()
-	te := newStoreEnv(t)
-	p, c, g := tree3(te)
-	if code, _, stderr := te.run("purge", p.ID, "--yes"); code != 1 || !strings.Contains(stderr, "hedgehug rm") {
-		t.Errorf("purge of a live task: exit %d, stderr %q", code, stderr)
-	}
-	te.ok("rm", g.ID)
-	if code, _, stderr := te.run("purge", c.ID, "--yes"); code != 1 || !strings.Contains(stderr, "not deleted") {
-		t.Errorf("purge with a live descendant: exit %d, stderr %q", code, stderr)
-	}
-	te.ok("rm", p.ID)
-	if code, _, stderr := te.run("purge", p.ID); code != 2 || !strings.Contains(stderr, "--yes") {
-		t.Errorf("purge without --yes off a terminal: exit %d, stderr %q", code, stderr)
-	}
-
-	// On a terminal it asks; anything but y keeps the files.
-	te.terminal, te.stdin = true, "n\n"
-	if code, _, stderr := te.run("purge", p.ID); code != 1 || !strings.Contains(stderr, "3 tasks") {
-		t.Errorf("purge answered n: exit %d, stderr %q", code, stderr)
-	}
-	te.stdin = "y\n"
-	te.ok("purge", p.ID)
-	te.terminal, te.stdin = false, ""
-	if !strings.Contains(te.log("me")[0].Message, "Hedgehug-Op: purge") {
-		t.Error("not a purge commit")
-	}
-	if out := te.ok("ls", "is:deleted", "--ulids-only"); out != "" {
-		t.Errorf("purged tasks are still there: %q", out)
-	}
-}

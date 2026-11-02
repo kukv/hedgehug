@@ -49,7 +49,7 @@ func TestWorkspaceAddRenamePrefixRemove(t *testing.T) {
 	}
 	_, err = ts.WorkspaceRemove("front")
 	wantErr(t, err, KindConflict, "workspace.not_empty")
-	if want := "workspace front still has 1 tasks; move them with hedgehug mv --workspace or purge them"; err.Error() != want {
+	if want := "workspace front still has 1 tasks; move them with hedgehug mv --workspace, or delete them with hedgehug rm and remove them with hedgehug purge --older-than 0d --store <store>"; err.Error() != want {
 		t.Errorf("message = %q; want %q", err, want)
 	}
 	ts.addWorkspace("empty", "EM")

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
@@ -85,8 +84,10 @@ func (ss *Session) Sync(all, explicit bool) ([]SyncReport, error) {
 			broken = append(broken, e.Name)
 			continue
 		}
-		if _, err := ss.openStoreAt(e.Path); err != nil {
+		if s, err := ss.openStoreAt(e.Path); err != nil {
 			broken = append(broken, e.Name)
+		} else {
+			_ = s.Repo().Close()
 		}
 	}
 	defer ss.muteOpenWarnings(broken)()
@@ -112,8 +113,7 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 		r.NoRemote = true
 		return r, nil
 	}
-	// A swap after a history rewrite that stopped is finished first (spec:
-	// 作り直しと未 push の変更の取り込み).
+	// A swap that stopped is finished first.
 	if err := ss.finishRebuild(e); err != nil {
 		return r, err
 	}
@@ -121,19 +121,13 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 	if err != nil {
 		return r, err
 	}
+	defer func() { _ = s.Repo().Close() }()
 	opt, err := ss.SyncOptions(c, e)
 	if err != nil {
 		return r, err
 	}
 	opt.Explicit = explicit
 	res, err := ss.RunSync(s, opt, true)
-	if res.Reopen {
-		// s was closed for the swap.
-		var oerr error
-		if s, oerr = ss.openStoreAt(e.Path); oerr != nil {
-			err = errors.Join(err, oerr)
-		}
-	}
 	if err != nil {
 		return r, err
 	}
@@ -263,6 +257,7 @@ func (ss *Session) storeStatus(e config.StoreEntry) StoreStatus {
 		x.Error = err.Error()
 		return x
 	}
+	defer func() { _ = s.Repo().Close() }()
 	st, err := sync.ReadState(s)
 	if err != nil {
 		x.Error = err.Error()
@@ -321,81 +316,27 @@ func (ss *Session) SyncBackground(log io.Writer) error {
 	if err != nil {
 		return backgroundFailed(ss, log, e.Name, err)
 	}
-	bounded := sync.BoundLog(s, log)
-	defer func() { _ = bounded.Close() }() // after the last line of the log
-	log = bounded
+	defer func() { _ = s.Repo().Close() }()
+	log = sync.BoundLog(s, log)
 	opt, err := ss.SyncOptions(c, e)
 	if err == nil {
-		logWarnings := func(res sync.Result) {
+		err = sync.Background(s, opt, c.Sync.PushInterval, func() error {
+			res, err := ss.RunSync(s, opt, false)
 			for _, w := range res.Warnings { // such as a mirror that is down; for sync.log
 				_, _ = fmt.Fprintln(log, "warning: "+w)
 			}
-		}
-		err = sync.BackgroundThen(s, opt, c.Sync.PushInterval, func() (func() error, error) {
-			res, err := ss.runSyncLocked(s, opt, false)
-			logWarnings(res)
-			if err != nil || res.Rebuild == nil {
-				return nil, err
-			}
-			// A history rewrite was found. The swap waits until Background
-			// has let go of bg.lock, which is in the store it replaces.
-			return func() error {
-				// sync.log is in the directory the swap replaces: let go of
-				// it, and open the new one after.
-				if err := bounded.Release(); err != nil {
-					sync.Discard(res.Rebuild)
-					return err
-				}
-				next, err := ss.swapRebuilt(s, opt, false, res)
-				if rerr := reopenLog(bounded, e.Path); rerr != nil {
-					err = errors.Join(err, rerr)
-				}
-				logWarnings(next)
-				if err == nil && next.Swapped {
-					_, _ = fmt.Fprintf(log, "%s sync %s: took in a history rewrite\n", ss.Now().Format(time.RFC3339), e.Name)
-				}
-				return err
-			}, nil
+			return err
 		})
 	}
 	if err != nil {
 		// The same text a failed run left in sync.json already; the others
-		// (SyncOptions, the lock) are told of by the next command. s may be
-		// closed (a swap failed); UpdateState works by the path of the store,
-		// not by the repository, but when the swap left no store at the path
-		// it would make a directory there, which the repair of the swap takes
-		// for a store: only the log has the error then, in the directory the
-		// swap left (reopenLog).
-		if _, serr := os.Stat(e.Path); serr == nil {
-			_, stateErr := sync.UpdateState(s, func(st *sync.State) {
-				st.LastError, st.ErrorReported = err.Error(), false
-			})
-			err = errors.Join(err, stateErr)
-		}
+		// (SyncOptions, the lock) are told of by the next command.
+		_, stateErr := sync.UpdateState(s, func(st *sync.State) {
+			st.LastError, st.ErrorReported = err.Error(), false
+		})
+		err = errors.Join(err, stateErr)
 	}
 	return backgroundFailed(ss, log, e.Name, err)
-}
-
-// reopenLog opens the sync.log of the store at path again after the swap.
-// With no store at the path (a swap that stopped, left for the repair) it
-// opens the one in the old store that was moved away, or else in the
-// rebuild, so that what is logged after is not lost; opening it at the path
-// would make a directory there.
-func reopenLog(l *sync.BoundedLog, path string) error {
-	if _, err := os.Stat(path); err == nil {
-		return l.Reopen()
-	}
-	left, err := sync.FindLeftover(path)
-	if err != nil {
-		return err
-	}
-	switch {
-	case len(left.Before) > 0:
-		return l.ReopenAt(left.Before[len(left.Before)-1])
-	case left.New != "":
-		return l.ReopenAt(left.New)
-	}
-	return nil
 }
 
 // backgroundFailed logs err for sync.log and ends the child with exit code 0:
@@ -412,16 +353,12 @@ func backgroundFailed(ss *Session, log io.Writer, name string, err error) error 
 // a store with a remote is.
 func SyncsInBackground(e config.StoreEntry) bool { return len(e.Remotes) > 0 }
 
-// BeforeCommand reports the failure of a background sync that the user has
-// not been told of (through report), and starts one for each store with a
-// remote that is due (through start; sync.Start for the CLI). What goes
-// wrong here is left to the command itself to tell: it fails on the same
-// store or config.
-func (ss *Session) BeforeCommand(start func(s *store.Store, name string) error, report func(store, msg string)) {
-	cfg, _, err := ss.Config()
-	if err != nil {
-		return
-	}
+// BeforeCommand, for the config cfg the command has read, reports the
+// failure of a background sync that the user has not been told of (through
+// report), and starts one for each store with a remote that is due (through
+// start; sync.Start for the CLI). What goes wrong here is left to the
+// command itself to tell: it fails on the same store or config.
+func (ss *Session) BeforeCommand(cfg *config.Config, start func(s *store.Store, name string) error, report func(store, msg string)) {
 	targets, err := ss.SyncTargets(cfg, false)
 	if err != nil {
 		return
@@ -438,7 +375,8 @@ func (ss *Session) BeforeCommand(start func(s *store.Store, name string) error, 
 			report(e.Name, msg)
 		}
 		if st, err := sync.ReadState(s); err == nil && sync.Due(st, ss.Now(), cfg.Sync.Interval) {
-			_ = start(s, e.Name)
+			_ = start(s, e.Name) // starts a process of its own; it does not keep s
 		}
+		_ = s.Repo().Close()
 	}
 }

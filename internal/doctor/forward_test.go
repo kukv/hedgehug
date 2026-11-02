@@ -13,9 +13,9 @@ func TestRunForwardFiles(t *testing.T) {
 	put(t, s, newTask("A"))
 	good, bad, mismatch := model.NewULID(), model.NewULID(), model.NewULID()
 	dest := "01JC0M3R5W7M2X9V4T6R5N8P1B"
-	writeFile(t, dir, model.TaskPath(good), "---\nulid: "+good.String()+"\nmoved_to: "+dest+"\n---\n")
-	writeFile(t, dir, model.TaskPath(bad), "---\nulid: "+bad.String()+"\nmoved_to: "+dest+"\ntitle: x\n---\n")
-	writeFile(t, dir, model.TaskPath(mismatch), "---\nulid: "+good.String()+"\nmoved_to: "+dest+"\n---\n")
+	writeFile(t, dir, model.TaskPath(good), "---\nulid: "+good.String()+"\nmoved_to: "+dest+"\nmoved_at: 2026-10-31T10:00:00Z\n---\n")
+	writeFile(t, dir, model.TaskPath(bad), "---\nulid: "+bad.String()+"\nmoved_to: "+dest+"\nmoved_at: 2026-10-31T10:00:00Z\ntitle: x\n---\n")
+	writeFile(t, dir, model.TaskPath(mismatch), "---\nulid: "+good.String()+"\nmoved_to: "+dest+"\nmoved_at: 2026-10-31T10:00:00Z\n---\n")
 	fs := run(t, dir)
 	for _, f := range fs {
 		if f.Check == "file" && f.Where == model.TaskPath(good) {

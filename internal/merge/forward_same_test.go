@@ -11,7 +11,7 @@ func TestMergeTwoForwardsOfTheSameStoreRecordNothing(t *testing.T) {
 	t.Parallel()
 	base := task("2026-10-31T10:00:00Z", "title: old")
 	plain := forwardFile(taskU, storeB)
-	spaced := []byte("---\nmoved_to:   " + storeB + "\nulid: " + taskU + "\n---\n\n")
+	spaced := []byte("---\nmoved_to:   " + storeB + "\nulid: " + taskU + "\nmoved_at: 2026-10-31T10:00:00Z\n---\n\n")
 	at := time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
 	o := Side{Data: plain, Author: "a", Time: at}
 	th := Side{Data: spaced, Author: "b", Time: at.Add(time.Minute)}

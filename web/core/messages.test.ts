@@ -52,9 +52,21 @@ describe("errorMessage", () => {
     );
   });
 
+  it("words undo.blocked by the operation", () => {
+    expect(errorMessage(err("undo.blocked", { op: "purge" }))).toBe(
+      "完全に消したものは取り消せません",
+    );
+    for (const op of ["move-in", "move-out"]) {
+      expect(errorMessage(err("undo.blocked", { op }))).toBe(
+        "Store 間の移動は取り消せません。hh mv --store で元の Store へ戻してください",
+      );
+    }
+    expect(errorMessage(err("undo.blocked"))).toContain("ワークスペースにまだタスクがあるため");
+  });
+
   it("words sync.force_push", () => {
     expect(errorMessage(err("sync.force_push"))).toBe(
-      "リモートの履歴が Hedgehug の記録なしに書き換えられています。hh doctor で確かめてください",
+      "リモートの履歴が手元と食い違っています。確かめてから、hh doctor --fix で clone し直してください",
     );
   });
 
@@ -63,11 +75,6 @@ describe("errorMessage", () => {
     expect(errorMessage(err("auth.token"))).toBe(
       "この画面は hh ui が開いた URL からだけ使えます。端末で hh ui を実行してください",
     );
-  });
-
-  it("counts the targets of purge.unconfirmed", () => {
-    const targets = [{ ulid: "a" }, { ulid: "b" }];
-    expect(errorMessage(err("purge.unconfirmed", { targets }))).toContain("2 件");
   });
 
   it("lists what a schema violation broke", () => {

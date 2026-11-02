@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/plural"
 )
 
 func (a *app) inboxCmd() *cobra.Command {
@@ -91,15 +92,8 @@ func (a *app) inboxRead(args []string, all bool) error {
 	if a.jsonOut {
 		return a.printJSON(map[string][]string{"read": read})
 	}
-	_, err = fmt.Fprintf(a.stdout, "Marked %d %s read\n", len(read), plural(len(read), "item", "items"))
+	_, err = fmt.Fprintf(a.stdout, "Marked %d %s read\n", len(read), plural.Pick(len(read), "item", "items"))
 	return err
-}
-
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return one
-	}
-	return many
 }
 
 func (a *app) inboxRevert(arg string) error {

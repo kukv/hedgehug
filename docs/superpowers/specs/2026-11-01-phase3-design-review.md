@@ -6,6 +6,10 @@
 - 結果: 2026-11-01、利用者が決1〜決20 をすべて推奨のとおり承認した。
 - 確認の後にすること: spec と plan を直し、ブランチを main へ rebase し、Task 8 の修正から再開する（「6. 再開の手順」）。この文書を出すまで、コードには触っていない。
 
+## 2026-11-02 の変更
+
+CLI の受入テストで、`purge --moved` を `hh purge --older-than <N>d` に置き換え、転送ファイルに必須の `moved_at` を持たせ、転送先が同じ転送ファイルは `moved_at` の大きい方を採ることにした。詳細は `docs/superpowers/specs/2026-11-01-phase3-stores-accounts-design.md` の「2026-11-02 の変更」と `docs/superpowers/specs/2026-11-02-cli-acceptance-fixes-design.md`。
+
 ## 0. いまの状態
 
 - ブランチ `phase3-stores-accounts`（未 push）は残っている。作業していた worktree（drifting-rolling-puddle）は消えていたので、この worktree（stateful-hugging-barto）に checkout した。
@@ -112,7 +116,7 @@ spec は、端末でないときの動きを質問ごとに別々に決めてい
 
 | 種類 | 例 | 端末 | 端末でないとき |
 | --- | --- | --- | --- |
-| 確認 | `mv --store`、`purge --moved` | `[y/N]` | `--yes` が必須。なければ終了コード2 |
+| 確認 | `mv --store`、`purge --moved` | `[y/N]` | `--yes` が必須。なければ終了コード2（2026-11-02 に変更。冒頭の節を参照） |
 | 選択 | ワークスペース、既定の Store、repo の段の候補、`--scoped` | 番号で選ぶ | 選ぶフラグが必須。なければ候補を並べて終了コード2。ただし「直近」など既定があれば既定を使う（repo の段の `recent`） |
 | 推測の確認 | ブランチ名の段、ブラウザを開くか | `[Y/n]` | 飛ばす（推測は使わない） |
 | 取り返しのつかない操作 | `purge --rewrite-history` | Store 名を入力 | 常にエラー（`--yes` でも通さない） |
@@ -200,7 +204,7 @@ spec は、転送ファイルとタスクの競合（フィールドごとの差
 
 - **決19**: 次のように規則を減らす。
   1. 移動したタスクに属するファイル（タスクファイル、その下のコメントと作業時間の記録）へのもう片側の変更は、ファイルごとに負けとし、`Hedgehug-Overwritten: <パス> * <ファイル全体の JSON> <author>` で全文を記録する。タスクファイルもコメントと同じ扱いにし、フィールドごとの差分は取らない。
-  2. 転送ファイルどうし（`moved_to` が違う）は、専用の規則を作らず、ふつうのフィールドのマージ（`moved_to` の LWW と `Hedgehug-Overwritten`）に任せる。結果は spec と同じになる。
+  2. 転送ファイルどうし（`moved_to` が違う）は、専用の規則を作らず、ふつうのフィールドのマージ（`moved_to` の LWW と `Hedgehug-Overwritten`）に任せる。結果は spec と同じになる。（2026-11-02 に変更。冒頭の節を参照）
   3. 転送ファイルと削除は 1 に含まれる（削除もそのファイルへの変更）。
   4. `parent_moved` は、今の `parent_deleted`（子をルートへ移す）の条件に「親が転送ファイル」を足して同じ処理で直す。通知の種類は `parent_moved` として分ける。
   5. `ref_moved` は今のところ同じ形の修復がないので、そのまま作る。

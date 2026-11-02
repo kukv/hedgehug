@@ -15,7 +15,7 @@
 | 4b 保存済みビューと進捗 | `views/` の形式、マージ、doctor の検査、`hh view`。チェックリストとプロジェクトの進捗を ops の結果と CLI に入れる | CLI でビューの保存・一覧・表示・削除・名前の変更ができ、同期でマージされる。`hh ls --tree`・`hh show` に進捗が出る |
 | 4c サーバー | REST API、SSE、同期ループ、`hh ui`、起動とセキュリティ、埋め込み、OpenAPI | Go のテストで全エンドポイントと SSE を確かめ、CLI の変更が SSE で届く |
 | 4d フロントエンドの土台と中心の画面 | ツールチェーンと CI、`web/core`、見た目の基準、サイドバー（4e の画面への入口を除く）、ツリー、タスク詳細、作成、コマンドパレット、異常系と空の状態、Onboarding と CreateStore。作成の本文とリポジトリ・push の予定時刻・人の候補・時点のタスクの API | ブラウザでツリーと詳細からタスクを作成・編集でき、CLI の変更が即時に反映される（E2E） |
-| 4e 残りの画面 | 「画面と範囲」の残りすべて | 「画面と範囲」がすべて GUI で動く |
+| 4e 残りの画面 | 「画面と範囲」の残りすべて。設定 → 同期と保守（SettingsGeneral）に、期間を指定した purge（`hh purge --older-than`）の画面と API を足す（2026-11-02 に利用者が決定。GUI のタスク詳細からの完全削除は持たない） | 「画面と範囲」がすべて GUI で動く |
 | 4f フェーズ3の画面 | フェーズ3のマージ後に、フェーズ3の機能の画面 | フェーズ3の機能が GUI でもできる |
 
 4d は大きいため、plan・ブランチ・PR を4回に分ける（2026-11-02 に利用者が決定）: 4d-1 は Go の修正（作成の本文とリポジトリ、`push_at`、人の候補、時点のタスクの API、`hh add --body`。テストの一時ディレクトリの片付けと、書き込み中の読み取りで参照が見えない競合（go-git が参照のファイルを空にしてから書くため。3b の CI の flaky の原因）の修正は、PR #28（CI の短縮）で先に入れた）、4d-2 はツールチェーンと CI・`web/core`、4d-3 は見た目の基準と骨組み・サイドバー・ツリーとドラッグ・異常系と空の状態・Onboarding と CreateStore とその E2E、4d-4 はタスク詳細・作成・コマンドパレットと残りの E2E。どの回も、まだない画面への入口（作成の C キー、⌘K、行から詳細を開く操作など）はその画面を作る回まで出さない。4d の完了条件は 4d-4 で満たす。
@@ -46,8 +46,9 @@
 - 4a でも ops の層の単体テストを足す
 - undo は確認ダイアログを出さない（取り消しにくい操作ではないため）
 - 4b の細部（2026-11-01）: 進捗は親設計どおり work 役割の子孫で数える。`--json` の進捗は `ls --tree` と `show` だけ。tree のビューで `sort:`・`group:` は保存時に拒否。名前の大文字小文字だけの変更は拒否し、Windows の予約名も拒否。組み込みの列は9個。名前のバイト数・NFC・書式文字・Windows の追加の予約名も拒否し、CLI の表の列幅は全角を2桁で数える（既存の表も含む）
-- 4c の細部（2026-11-01）: `PATCH /tasks/{id}` は CLI のコマンドに合わせ、`hh set` の範囲と本文を1コミットにする（本文だけなら op は edit、ほかは set）。移動は `POST /tasks/{id}/move`、復元は `POST /tasks/{id}/restore`。完全削除は `confirm` なしで 409 `purge.unconfirmed` と対象を返し、`confirm=<ULID>,…` で送り直す。Store は `?store=` で指定し、省略は CLI と同じ（3b のあと: 一覧・ツリー・履歴・アクティビティ・doctor・通知は全 Store にまたがり、各タスクに `store` が付く。doctor は Store ごとの配列。ID で指す書き込みは ID が Store を決める。Store が複数あるときの `?store=` なしの作成は ops のまま 422 `store.choose`。2026-11-01 に利用者が決定）。表示の状態は SSE の接続ごとの `client`（最初のイベント `hello` で渡す）に結びつけ、切断したタブは数えない。応答はテストで libopenapi-validator を使って `api/openapi.yaml` と照合する。アクティビティのワークスペース（2026-11-02 に利用者が決定）: コミットのワークスペースは trailer `Hedgehug-Workspace` があればそれ、なければ `Hedgehug-Task` のタスクが今いるワークスペースで、どちらもなければなし（応答の `workspace` を省く。OpenAPI の生成がオブジェクトを nullable にできないため）。`hh log --workspace <名前|接頭辞|ULID>,…` と `GET /activity?workspace=…` はそのコミットだけを出し、limit は残したものを数える。名前は Store ごとに引き、どの Store にもなければ `workspace.not_found`。タスクの log と一緒には使えない（`log.workspace_with_task`）。同じ理由で、クエリの `workspace:` も、そのワークスペースのない Store では何にも当たらないだけにする（どの Store にもなければ誤り。タスクの ID と同じ）。ほかの細部（エラーの形と状態、各エンドポイントの入出力、同期ループの再試行と停止、`hh ui` の出力と `ui.json` の場所など）は `docs/superpowers/plans/2026-11-01-phase4c-server.md` の「この plan で埋める spec にない細部」のとおり。4d-3 のあと（2026-11-02）: `POST /tasks` は `after`・`before` で兄弟の直前・直後に作り（1 コミット）、`parent` と `workspace` を省いて兄弟だけを送ると親とワークスペースは兄弟のものになる。`parent`・`workspace` を明示して兄弟と食い違うと 422 `add.position`。`POST /tasks/{id}/move` も含め `before` と `after` の両方は 400 `position.both`（黙って片方を使わない）。今と同じ位置への move はコミットしない（応答は `commit: null`）。poll は、起動のあとに現れた Store（Store が 0 件の状態から最初の Store が現れた場合も含む）を最初に見たとき、空の `tasks.changed`（`commit` は今の HEAD）と `sync.state` を出す。作成前の履歴を知らないクライアントが取り直すため
+- 4c の細部（2026-11-01）: `PATCH /tasks/{id}` は CLI のコマンドに合わせ、`hh set` の範囲と本文を1コミットにする（本文だけなら op は edit、ほかは set）。移動は `POST /tasks/{id}/move`、復元は `POST /tasks/{id}/restore`。Store は `?store=` で指定し、省略は CLI と同じ（3b のあと: 一覧・ツリー・履歴・アクティビティ・doctor・通知は全 Store にまたがり、各タスクに `store` が付く。doctor は Store ごとの配列。ID で指す書き込みは ID が Store を決める。Store が複数あるときの `?store=` なしの作成は ops のまま 422 `store.choose`。2026-11-01 に利用者が決定）。表示の状態は SSE の接続ごとの `client`（最初のイベント `hello` で渡す）に結びつけ、切断したタブは数えない。応答はテストで libopenapi-validator を使って `api/openapi.yaml` と照合する。アクティビティのワークスペース（2026-11-02 に利用者が決定）: コミットのワークスペースは trailer `Hedgehug-Workspace` があればそれ、なければ `Hedgehug-Task` のタスクが今いるワークスペースで、どちらもなければなし（応答の `workspace` を省く。OpenAPI の生成がオブジェクトを nullable にできないため）。`hh log --workspace <名前|接頭辞|ULID>,…` と `GET /activity?workspace=…` はそのコミットだけを出し、limit は残したものを数える。名前は Store ごとに引き、どの Store にもなければ `workspace.not_found`。タスクの log と一緒には使えない（`log.workspace_with_task`）。同じ理由で、クエリの `workspace:` も、そのワークスペースのない Store では何にも当たらないだけにする（どの Store にもなければ誤り。タスクの ID と同じ）。ほかの細部（エラーの形と状態、各エンドポイントの入出力、同期ループの再試行と停止、`hh ui` の出力と `ui.json` の場所など）は `docs/superpowers/plans/2026-11-01-phase4c-server.md` の「この plan で埋める spec にない細部」のとおり。4d-3 のあと（2026-11-02）: `POST /tasks` は `after`・`before` で兄弟の直前・直後に作り（1 コミット）、`parent` と `workspace` を省いて兄弟だけを送ると親とワークスペースは兄弟のものになる。`parent`・`workspace` を明示して兄弟と食い違うと 422 `add.position`。`POST /tasks/{id}/move` も含め `before` と `after` の両方は 400 `position.both`（黙って片方を使わない）。今と同じ位置への move はコミットしない（応答は `commit: null`）。poll は、起動のあとに現れた Store（Store が 0 件の状態から最初の Store が現れた場合も含む）を最初に見たとき、空の `tasks.changed`（`commit` は今の HEAD）と `sync.state` を出す。作成前の履歴を知らないクライアントが取り直すため
 - 4d の細部（2026-11-02）: Biome は `html.experimentalFullSupportEnabled` で `.svelte` のテンプレートも整形・lint し、版は exact で固定する。サイドバーの 4e の画面への入口（保存済みビュー・マイタスク・通知・アクティビティ・「…」メニュー・ワークスペースの概要）は 4e まで出さず、4d のワークスペースの行は `workspace:<名前>` のツリーを開く（4e で概要に変える）。Onboarding と CreateStore は 4d で作る。Store の色は `GET /stores` の順に7色を順に割り当て（灰色は閲覧のみ用）、色を選ぶ画面と保存場所は 4f。作成で本文とリポジトリを渡せるよう `POST /tasks` に `body`・`repos`、`hh add` に `--body` を足す（1コミットのまま）。ツリーのフィルタ欄の既定は `-status:canceled`。`SyncStatus` に `push_at` を足して「n 秒後に push」を出す。本文とコメントの `@`・`#` の補完を作り、`@` の候補に `GET /people` を足す。時点への復元は `GET /tasks/{id}/history/{commit}` で変わる点を並べてから戻す。ほかの細部は `docs/superpowers/plans/2026-11-02-phase4d-web.md` の「この plan で埋める spec にない細部」のとおり
+- GUI と API の完全削除を外す（2026-11-02 に利用者が決定）: `DELETE /tasks/{id}` の `purge`・`confirm` と `purge.unconfirmed` の応答、タスク詳細の「完全削除」を持たない。完全削除は CLI の `hh purge [--older-than <期間>]` が行い、GUI では「設定 → 同期と保守」に期間を指定した purge を置く（画面と API は 4e で作る）
 - 4d-3 の細部（2026-11-02、利用者の決定）: Enter の下に追加は、作成の `after` で常に直下に 1 コミットで作る（作成と move の 2 コミットにしない）。子が開いている行の下側 1/4 へのドロップは「後ろ」ではなく「子にする」。Store はあるがワークスペースが 0 件のホームは「ワークスペースがありません」と `hh workspace add` の行を出す（GUI の入口は作らない）。存在しないワークスペース・プロジェクトの URL は、空の状態で「ワークスペース「X」が見つかりません」「プロジェクトが見つかりません」と知らせ、ホームへ戻るボタンを出す。入力がそろう前の `hh` の行は `<名前>`・`<接頭辞>` の形にして（貼ると端末のエラーになり何も作らない）、CreateStore は必要な入力がそろうまでコピーを無効にする（ワークスペースが 0 件の空の状態の行は、形を示すためコピーできる）。Space は、切り替え先のカテゴリにステータスがなければ送らずに理由をトーストで出す。フォントは unicode-range の分割版の woff2 だけを同梱する。e2e ジョブは必須チェックにしない。実装で plan から変えた点は `docs/superpowers/plans/2026-11-02-phase4d3-tree.md` の末尾
 - 4d-4 の細部（2026-11-02〜03、利用者の決定）: タスク詳細のコメントの削除は確認ダイアログを出す（取り消しは付けない）。値を 1 つしか持てない関連の種類に値があるときは、関連の追加のメニューでその種類を無効にして「すでに設定されています（外してから追加）」を出す。GUI が出す `hh add` の行にはいつも `--no-repo` を付ける。ダイアログが開いている間は ⌘K でコマンドパレットを開かない。パレットの「最近開いたもの」は、キャッシュにない分を `GET /tasks/{id}` で取っていつも 8 件出す（404 は記録から外す）。画面のキャッシュは、クエリの取り直しの結果から外れた行（ステータスが変わって絞り込みに合わなくなった行など）だけを個別に取り直す。実装で plan から変えた点は `docs/superpowers/plans/2026-11-02-phase4d4-detail-create.md` の末尾
 
@@ -67,18 +68,18 @@
 | Kanban | ステータスまたはカテゴリを列にする、スイムレーン（担当者・プロジェクト）、ドラッグでのステータス変更、ビューを保存（layout: kanban） | WIP 上限と遷移の制約の表示（6）、ガントからのビューの保存と保存済みビューのガント表示（6。`layout: gantt` と一緒に足す） |
 | Table | セルの直接編集、並び替え、グループ化、列の選択 | 複数選択での一括編集（6、`hh set --query` と一緒に作る） |
 | MyTasks | `assignee:@me` のタスクを期限・プロジェクトでまとめる | ワークスペース別のまとめ（Store はバッジで示す。2026-11-01 に利用者が決定）と、非表示の Store の案内（3） |
-| TaskDetail | プロパティ、本文（Markdown エディタ）、コメント、関連と逆方向・バックリンク、チェックリストの進捗、ウォッチ、履歴と restore --at、削除と完全削除 | PR・Issue（5）、作業時間の記録（6） |
+| TaskDetail | プロパティ、本文（Markdown エディタ）、コメント、関連と逆方向・バックリンク、チェックリストの進捗、ウォッチ、履歴と restore --at、削除 | PR・Issue（5）、作業時間の記録（6） |
 | Inbox | 一覧、既読、上書きされた値を自分の値に戻す | 自動化の結果（5） |
 | Activity | 変更のフィード、人と同期での絞り込み、ワークスペースでの絞り込み（検索つきのチェックボックスのリストで複数選択。Store ごとに見出しを付け、未選択はすべて。`?workspace=` を使う。2026-11-02 に利用者が決定） | 自動化での絞り込み（5） |
 | ProjectSettings | `scoped` の上書き（表示するステータス、種類、プロパティ）の閲覧と編集。Store の値と並べて表示 | テンプレートと自動化の欄（6・5） |
 | CreateTask / CreateProject | add、add --kind project。入れ先のワークスペースと接頭辞を出す（番号は予告せず、作成後のトーストで知らせる）。親がなく、表示中の全 Store を合わせてワークスペースが2つ以上あるときだけワークスペースの選択欄を出し（Store のバッジ付き。ワークスペースで入れ先の Store も決まるので Store は選ばせない）、既定は今開いている画面のワークスペース。親があれば親のワークスペースに固定する | テンプレートの選択（6） |
 | CreateStore | store init（名前・接頭辞・最初のワークスペース・remote） | — |
-| Dialogs | 削除・完全削除の確認、ビューを保存、ワークスペースの追加・接頭辞の変更の確認・削除の確認（名前の変更は WorkspaceSettings でその場で行う）、別のワークスペースへの移動（mv --workspace。外れるスプリント・リリースを名前で出す） | — |
+| Dialogs | 削除の確認、ビューを保存、ワークスペースの追加・接頭辞の変更の確認・削除の確認（名前の変更は WorkspaceSettings でその場で行う）、別のワークスペースへの移動（mv --workspace。外れるスプリント・リリースを名前で出す） | — |
 | CommandPalette | ID・タイトルでの検索、画面の移動、操作の実行 | — |
 | States | 空の状態、読み込み中、サーバーに接続できない、同期のエラー、壊れたファイル（doctor への案内） | — |
 | Onboarding | Store が1つもないときの初回起動（store init へ） | Store の発見とマウント（3） |
 | SettingsSchema | スキーマの閲覧、schema check、migrate | テンプレート（6） |
-| SettingsGeneral | 同期の状態と間隔、doctor と修復 | — |
+| SettingsGeneral | 同期の状態と間隔、doctor と修復、期間を指定した purge（削除済みタスクと転送ファイルの完全削除。`hh purge --older-than` と同じ。4e） | — |
 | SettingsWorkspaces | Store ごとの設定の「ワークスペース」: 名前・接頭辞・プロジェクト数・タスク数の一覧、追加、各ワークスペースの設定タブへの移動 | — |
 | SettingsNav | 上の設定画面への移動 | アカウント・Store（3）、自動化（5） |
 
@@ -209,7 +210,6 @@ huma v2 を標準の ServeMux の上（humago）で使う。パスはすべて `
 | 資源 | エンドポイント | 呼ぶ ops |
 |---|---|---|
 | タスク | `GET /tasks?q=&tree=`、`GET /tasks/{id}`、`POST /tasks`（`body`・`repos`・`after`・`before` も受ける）、`PATCH /tasks/{id}`、`POST /tasks/{id}/move`、`POST /tasks/{id}/restore`、`DELETE /tasks/{id}` | ls / ls --tree、show、add、set・edit（本文）、mv、restore、rm |
-| 完全削除 | `DELETE /tasks/{id}?purge=true&confirm=<ULID>,…` | purge（`confirm` がない・対象と違うときは 409 `purge.unconfirmed` と対象を返す） |
 | 履歴 | `GET /tasks/{id}/history`、`GET /tasks/{id}/history/{commit}`（その時点のタスク）、`POST /tasks/{id}/history/{commit}/restore` | log、restore --at |
 | 人 | `GET /people`（`@` の候補。担当者・ウォッチャー・コメントの作者・コミットの作者） | なし |
 | コメント | `POST /tasks/{id}/comments`、`PATCH /tasks/{id}/comments/{cid}`、`DELETE /tasks/{id}/comments/{cid}` | comment add / edit / rm |
@@ -320,7 +320,7 @@ huma v2 を標準の ServeMux の上（humago）で使う。パスはすべて `
 - pnpm、Vite、Biome（フォーマットと lint。`biome ci` を CI で実行）、`svelte-check`（警告ゼロ）、Vitest（core の単体テストと `@testing-library/svelte` のコンポーネントのテスト）、Playwright
 - `make web` で SPA をビルドする。`make build` と goreleaser は先に `make web` を実行する。`make check` に web の検査を足す
 - CI に web のジョブを足す（install → biome ci → svelte-check → vitest → build）。Go のジョブは dist なしで通る
-- E2E は Linux のジョブで、web をビルドしたバイナリを使う。一時 Store を作って `hh ui --no-open` を起動し、主な流れを確かめる: 作成、編集と自動保存、ツリーのドラッグ、カンバンの移動、CLI の変更が SSE で反映されること、通知の既読と revert、保存済みビュー、undo、削除と復元。4d はそのうち作成・編集と自動保存・ツリーのドラッグ・SSE の反映・削除と復元と完全削除・Onboarding を作り、カンバン・通知・保存済みビュー・undo は 4e で足す
+- E2E は Linux のジョブで、web をビルドしたバイナリを使う。一時 Store を作って `hh ui --no-open` を起動し、主な流れを確かめる: 作成、編集と自動保存、ツリーのドラッグ、カンバンの移動、CLI の変更が SSE で反映されること、通知の既読と revert、保存済みビュー、undo、削除と復元。4d はそのうち作成・編集と自動保存・ツリーのドラッグ・SSE の反映・削除と復元・Onboarding を作り、カンバン・通知・保存済みビュー・undo は 4e で足す
 
 ## キャンバスの修正
 
@@ -330,7 +330,7 @@ huma v2 を標準の ServeMux の上（humago）で使う。パスはすべて `
 - Activity の「キーを確定 · Hedgehug-Op: number」を、ID の振り直しの実際の記録に直す
 - 呼び方の「キー」を「ID」にする（Sidebar の「キー・検索・コマンド」など）。スキーマのキーなど、ID でない「キー」はそのまま
 - `former_keys` を `former_ids` にする
-- 接頭辞をプロジェクトに持たせていた描写を、ワークスペースの前提に直す（2026-11-01 に利用者が決定。上の表の Sidebar・CreateTask / CreateProject の行）: CreateProject の接頭辞の欄、プロジェクトの見出しの「接頭辞 REL」、SettingsSchema の種類ごとの接頭辞の列、CreateStore の「既定のキーの接頭辞」と「採番は最初の remote で判定」、SettingsStores の「キーの採番に使う」。CreateStore は最初のワークスペースの名前と接頭辞を入れる形にし、Dialogs にワークスペースの追加・名前の変更・接頭辞の変更・削除と、削除・完全削除の確認を足し、StoreMove に移動先のワークスペースの選択を足す
+- 接頭辞をプロジェクトに持たせていた描写を、ワークスペースの前提に直す（2026-11-01 に利用者が決定。上の表の Sidebar・CreateTask / CreateProject の行）: CreateProject の接頭辞の欄、プロジェクトの見出しの「接頭辞 REL」、SettingsSchema の種類ごとの接頭辞の列、CreateStore の「既定のキーの接頭辞」と「採番は最初の remote で判定」、SettingsStores の「キーの採番に使う」。CreateStore は最初のワークスペースの名前と接頭辞を入れる形にし、Dialogs にワークスペースの追加・名前の変更・接頭辞の変更・削除と、削除の確認を足し、StoreMove に移動先のワークスペースの選択を足す
 - 短縮 ULID（`where: project:01JBZ7XXH2`、履歴の trailer、タスク詳細の ULID）を完全な ULID にする
 - Activity の Store 間の移動の op を `move-in` にする（フェーズ3の spec のとおり）
 - サンプルデータをワークスペースの決まり（子は親と同じワークスペース、接頭辞は Store をまたいで重ねない）に揃える

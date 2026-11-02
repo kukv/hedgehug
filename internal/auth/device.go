@@ -27,7 +27,7 @@ var errCodeExpired = errors.New("the code expired before it was entered; run hed
 func DeviceLogin(h config.Host, opt Options, show Prompt) (DeviceToken, error) {
 	id := ClientID(h)
 	if id == "" {
-		return DeviceToken{}, fmt.Errorf("no GitHub App client ID for %s; set client_id of the host in hosts of config.yaml", h.Host)
+		return DeviceToken{}, fmt.Errorf("the device flow needs hosts[].client_id for %s in config.yaml; or use token: gh, token: env:<VAR>, or hedgehug auth login <name> --with-token", h.Host)
 	}
 	dc, err := github.RequestDeviceCode(opt.HTTP, h.Web, id)
 	if err != nil {
@@ -119,6 +119,9 @@ func deviceToken(a config.Account, opt Options) (string, error) {
 	}
 	if opt.Host.Web == "" {
 		return "", errors.New("auth: Host is not set")
+	}
+	if ClientID(opt.Host) == "" {
+		return "", fmt.Errorf("refreshing the token of %s needs hosts[].client_id for %s in config.yaml; run hedgehug auth login %s", Key(a), a.Host, a.Name)
 	}
 	err = WithLock(opt, func() error {
 		if t, err = LoadDeviceToken(a, k); err != nil {

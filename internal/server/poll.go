@@ -86,7 +86,7 @@ func newPoller(s *Server, hub *Hub) *Poller {
 }
 
 // Release lets go of the store at path, whose directory is about to be
-// swapped for a rebuild after a history rewrite (D26): its index and its
+// swapped for a rebuild after a force push (D26): its index and its
 // repository files are closed, and the next poll opens the store again and
 // tells the clients that its tasks changed. It waits for a poll that is
 // reading.

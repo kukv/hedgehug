@@ -427,7 +427,7 @@ func TestRepairBrokenParentIsNotDeleted(t *testing.T) {
 func TestRepairSkipsForwards(t *testing.T) {
 	t.Parallel()
 	x, fwd := "01JD0000000000000000000001", "01JD0000000000000000000002"
-	forward := []byte("---\nulid: " + fwd + "\nmoved_to: 01JC0M3R5W7M2X9V4T6R5N8P1B\n---\n")
+	forward := []byte("---\nulid: " + fwd + "\nmoved_to: 01JC0M3R5W7M2X9V4T6R5N8P1B\nmoved_at: 2026-10-31T10:00:00Z\n---\n")
 	f := memFiles{
 		model.WorkspacePath(mustULID(wsA)): wsFile(wsA, "web", "WEB"),
 		pathOf(x):                          taskFile(x, "WEB-1", wsA, "", "2026-10-31T10:00:00Z"),

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
@@ -18,7 +19,7 @@ const (
 )
 
 func forwardOf(ulid model.ULID, dest string) string {
-	return "---\nulid: " + ulid.String() + "\nmoved_to: " + dest + "\n---\n"
+	return "---\nulid: " + ulid.String() + "\nmoved_to: " + dest + "\nmoved_at: 2026-10-31T10:00:00Z\n---\n"
 }
 
 // putWithID writes a task and returns it as read back, with its id.
@@ -129,6 +130,17 @@ func TestForwardAfterForwardKeepsTheID(t *testing.T) {
 	}
 }
 
+func TestForwardEntryHasMovedAt(t *testing.T) {
+	t.Parallel()
+	s, dir := newStore(t)
+	moved := putWithID(t, s, newTask("moved"))
+	commitRaw(t, s, dir, model.TaskPath(moved.ULID), forwardOf(moved.ULID, destStore))
+	f, ok := mustOpen(t, s).Forward(moved.ULID)
+	if !ok || !f.MovedAt.Equal(time.Date(2026, 10, 31, 10, 0, 0, 0, time.UTC)) {
+		t.Errorf("forward = %+v, %v; want moved_at 2026-10-31T10:00:00Z", f, ok)
+	}
+}
+
 func TestForwardWithoutHistoryHasNoID(t *testing.T) {
 	t.Parallel()
 	s, dir := newStore(t)
@@ -144,7 +156,7 @@ func TestBrokenForward(t *testing.T) {
 	t.Parallel()
 	s, dir := newStore(t)
 	ulid := model.NewULID()
-	commitRaw(t, s, dir, model.TaskPath(ulid), "---\nulid: "+ulid.String()+"\nmoved_to: "+destStore+"\ntitle: x\n---\n")
+	commitRaw(t, s, dir, model.TaskPath(ulid), "---\nulid: "+ulid.String()+"\nmoved_to: "+destStore+"\nmoved_at: 2026-10-31T10:00:00Z\ntitle: x\n---\n")
 	ix := mustOpen(t, s)
 	f, ok := ix.Forward(ulid)
 	if !ok || f.Broken == "" || !strings.Contains(f.Broken, "title") {

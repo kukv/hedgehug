@@ -88,7 +88,7 @@ func TestScenario(t *testing.T) {
 	step("rm", "rm", p.ID)
 	step("restore", "restore", p.ID)
 	step("rm", "rm", p.ID)
-	step("purge", "purge", p.ID, "--yes")
+	step("purge", "purge", "--older-than", "0d", "--yes")
 	if out := te.ok("ls", "is:deleted", "--ulids-only"); out != "" {
 		t.Errorf("deleted tasks remain after purge: %q", out)
 	}
@@ -102,16 +102,10 @@ func TestScenario(t *testing.T) {
 	if n := len(te.log("me")); n != 20 {
 		t.Errorf("commits = %d, want 20", n)
 	}
-	// store init was made before the account was set up; every commit after
-	// it is the account's.
-	log := te.log("me")
-	for i, c := range log {
-		want := "alice@users.noreply.github.com"
-		if i == len(log)-1 {
-			want = "alice@example.com"
-		}
-		if c.Author.Email != want {
-			t.Errorf("commit %s by %s, want %s", c.Hash, c.Author.Email, want)
+	// Every commit is the account's.
+	for _, c := range te.log("me") {
+		if c.Author.Email != "alice@users.noreply.github.com" {
+			t.Errorf("commit %s by %s, want alice@users.noreply.github.com", c.Hash, c.Author.Email)
 		}
 	}
 }

@@ -26,7 +26,7 @@ func movedPair(t *testing.T) (a, b config.StoreEntry, task *model.Task) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fwd := "---\nulid: " + task.ULID.String() + "\nmoved_to: " + bs.Meta().ULID.String() + "\n---\n"
+	fwd := "---\nulid: " + task.ULID.String() + "\nmoved_to: " + bs.Meta().ULID.String() + "\nmoved_at: 2026-10-31T10:00:00Z\n---\n"
 	if _, err := as.Update(store.Op{Name: "move-out", Author: testAuthor}, func(tx *store.Tx) error {
 		return tx.PutFile(model.TaskPath(task.ULID), []byte(fwd))
 	}); err != nil {

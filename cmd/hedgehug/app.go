@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/ops"
 	"github.com/kukv/hedgehug/internal/store"
 	"github.com/kukv/hedgehug/internal/sync"
@@ -48,7 +49,7 @@ func (a *app) rootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		Args:          cobra.NoArgs,
 		// Every subcommand uses this one: none has a hook of its own.
-		PersistentPreRun: a.beforeCommand,
+		PersistentPreRunE: a.beforeRun,
 		// completion comes in phase 7.
 		CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -80,16 +81,51 @@ func asUsage(f cobra.PositionalArgs) cobra.PositionalArgs {
 	}
 }
 
+// noAccountCommands are the commands that run when no account is set up
+// (spec §5.1): the ones that set one up, and merge-driver, which git calls in
+// the middle of a sync. --help and --version never reach beforeRun.
+var noAccountCommands = map[string]bool{
+	"hedgehug auth login":   true,
+	"hedgehug auth add":     true,
+	"hedgehug auth status":  true,
+	"hedgehug help":         true,
+	"hedgehug merge-driver": true,
+}
+
+// errNoAccountSetUp is what a command that needs an account answers when
+// there is none.
+var errNoAccountSetUp = errors.New("no account is set up; add one with hedgehug auth add <name> --login <login> (or hedgehug auth login)")
+
+// beforeRun is the hook of every command: it stops a command that needs an
+// account when none is set up, then runs beforeCommand.
+func (a *app) beforeRun(cmd *cobra.Command, _ []string) error {
+	c, _, err := a.ss.Config()
+	if !noAccountCommands[cmd.CommandPath()] {
+		if err != nil {
+			return err
+		}
+		if len(c.Accounts) == 0 {
+			return errNoAccountSetUp
+		}
+	}
+	// With no account (or no readable config) there is no store to sync in
+	// the background, and a child process would only stop at its own entry.
+	if err == nil && len(c.Accounts) > 0 {
+		a.beforeCommand(cmd, c)
+	}
+	return nil
+}
+
 // beforeCommand reports the failure of a background sync that the user has
 // not been told of, and starts one for each store with a remote that is due
 // (ops.BeforeCommand), except in the sync itself and in a merge driver.
-func (a *app) beforeCommand(cmd *cobra.Command, _ []string) {
+func (a *app) beforeCommand(cmd *cobra.Command, cfg *config.Config) {
 	for c := cmd; c != nil; c = c.Parent() {
 		if c.Parent() != nil && c.Parent().Parent() == nil && (c.Name() == "sync" || c.Name() == "merge-driver" || c.Name() == "ui") {
 			return // the sync itself, a merge in the middle of one, and hh ui, whose server syncs
 		}
 	}
-	a.ss.BeforeCommand(
+	a.ss.BeforeCommand(cfg,
 		func(s *store.Store, name string) error { return sync.Start(s, name, a.getenv) },
 		func(name, msg string) {
 			_, _ = fmt.Fprintf(a.stderr, "hedgehug: background sync of %s failed: %s (run hedgehug sync)\n", name, msg)

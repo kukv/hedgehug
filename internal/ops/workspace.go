@@ -252,7 +252,7 @@ func (ss *Session) WorkspaceRemove(arg string) (WorkspaceResult, error) {
 	}
 	if n := CountTasks(ix, ws.ULID, true); n > 0 {
 		return WorkspaceResult{}, newErr(KindConflict, "workspace.not_empty",
-			fmt.Errorf("workspace %s still has %d tasks; move them with hedgehug mv --workspace or purge them", ws.Name, n))
+			fmt.Errorf("workspace %s still has %d tasks; move them with hedgehug mv --workspace, or delete them with hedgehug rm and remove them with hedgehug purge --older-than 0d --store <store>", ws.Name, n))
 	}
 	w := ws
 	hash, err := ss.UpdateCommit(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {

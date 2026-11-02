@@ -1,5 +1,5 @@
 // Command devenv sets up a throwaway development environment with two users,
-// alice and bob, each with their own HEDGEHUG_HOME, git identity, accounts and
+// alice and bob, each with their own HEDGEHUG_HOME, accounts and
 // stores, and the seed of the fake GitHub (fakegh) they talk to. It is for
 // developers of Hedgehug and is not shipped.
 package main
@@ -289,16 +289,10 @@ func configHead(dir, u, fakeghURL string) string {
 	return b.String()
 }
 
-// initUser makes the home of the user u: .gitconfig (the author, and the
-// rewrite of url_rewrites as insteadOf), config.yaml and the stores.
+// initUser makes the home of the user u: config.yaml and the stores.
 func initUser(dir, u, fakeghURL string) error {
 	home := filepath.Join(dir, "users", u)
 	if err := os.MkdirAll(home, 0o750); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
-		return err
-	}
-	gitconfig := "[user]\n\tname = " + u + "\n\temail = " + u + "@example.com\n" +
-		"[url \"" + filepath.ToSlash(filepath.Join(dir, "remotes")) + "/\"]\n\tinsteadOf = https://github.com/\n"
-	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte(gitconfig), 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return err
 	}
 	getenv := func(k string) string {
@@ -318,7 +312,7 @@ func initUser(dir, u, fakeghURL string) error {
 		return err
 	}
 	for _, ds := range stores[u] {
-		if err := addDevStore(p, getenv, ds); err != nil {
+		if err := addDevStore(p, ds); err != nil {
 			return fmt.Errorf("store %s: %w", ds.name, err)
 		}
 	}
@@ -382,10 +376,7 @@ func addWebProject(home string, p config.Paths, getenv func(string) string) erro
 	if !ok {
 		return errors.New("org-a has no account that writes it")
 	}
-	author, err := config.CommitAuthor(acct, true, getenv)
-	if err != nil {
-		return err
-	}
+	author := config.CommitAuthor(acct)
 	s, err := store.Open(e.Path)
 	if err != nil {
 		return err
@@ -401,7 +392,7 @@ func addWebProject(home string, p config.Paths, getenv func(string) string) erro
 // addDevStore makes (and pushes) or clones the store ds as the user of p, and
 // adds it to their config.yaml with its account. It works in this process, so
 // no background sync starts, and reaches the remote through url_rewrites.
-func addDevStore(p config.Paths, getenv func(string) string, ds devStore) error {
+func addDevStore(p config.Paths, ds devStore) error {
 	c, err := config.Load(p)
 	if err != nil {
 		return err
@@ -410,10 +401,7 @@ func addDevStore(p config.Paths, getenv func(string) string, ds devStore) error 
 	if !ok {
 		return fmt.Errorf("no account named %s", ds.account)
 	}
-	author, err := config.CommitAuthor(acct, true, getenv)
-	if err != nil {
-		return err
-	}
+	author := config.CommitAuthor(acct)
 	var remotes []string
 	if ds.remote != "" {
 		remotes = []string{ds.remote}
@@ -473,7 +461,7 @@ func printEnv(dir, user string, stdout io.Writer) error {
 		return fmt.Errorf("%s: %w; run `devenv init` first", home, err)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "export HEDGEHUG_HOME=%s\nexport GIT_CONFIG_GLOBAL=%s\n", shellQuote(home), shellQuote(filepath.Join(home, ".gitconfig")))
+	fmt.Fprintf(&b, "export HEDGEHUG_HOME=%s\n", shellQuote(home))
 	for _, k := range slices.Sorted(maps.Keys(tokens[user])) {
 		fmt.Fprintf(&b, "export %s=%s\n", k, shellQuote(tokens[user][k]))
 	}

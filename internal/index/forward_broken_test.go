@@ -14,7 +14,7 @@ func TestResolveForwardSkipsABrokenForward(t *testing.T) {
 	t.Parallel()
 	s, dir := newStore(t)
 	ulid := model.NewULID()
-	commitRaw(t, s, dir, model.TaskPath(ulid), "---\nulid: "+ulid.String()+"\nmoved_to: "+destStore+"\ntitle: x\n---\n")
+	commitRaw(t, s, dir, model.TaskPath(ulid), "---\nulid: "+ulid.String()+"\nmoved_to: "+destStore+"\nmoved_at: 2026-10-31T10:00:00Z\ntitle: x\n---\n")
 	ix := mustOpen(t, s)
 	if _, ok := ix.Forward(ulid); !ok {
 		t.Fatal("the broken forward is not in the index")

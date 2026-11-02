@@ -11,6 +11,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/github"
 	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/plural"
 )
 
 func (a *app) authCmd() *cobra.Command {
@@ -52,7 +53,7 @@ func (a *app) authCmd() *cobra.Command {
 		Args:  exactArgs(1),
 		RunE:  func(_ *cobra.Command, args []string) error { return a.authLogout(args[0]) },
 	}
-	cmd.AddCommand(login, status, logout)
+	cmd.AddCommand(a.authAddCmd(), login, status, logout)
 	return cmd
 }
 
@@ -64,6 +65,60 @@ func (a *app) readToken() (string, error) {
 		return "", fmt.Errorf("read the token from stdin: %w", err)
 	}
 	return line, nil
+}
+
+func (a *app) authAddCmd() *cobra.Command {
+	var login, host, token string
+	cmd := &cobra.Command{
+		Use:   "add <name> --login <login>",
+		Short: "Add an account to config.yaml",
+		Long: `Add writes an account to config.yaml. It gets no token and asks GitHub nothing; hedgehug auth status checks the account.
+
+--token says where the token comes from: gh, env:<VAR> or keychain. Without it the account uses no token. For keychain, give the token afterwards with hedgehug auth login <name> --with-token.
+
+When this is the second account, the stores that had no account: are given the first, so that they keep the account they used.`,
+		Args: exactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			if login == "" {
+				return usageErrorf("--login is required: the GitHub login of the account")
+			}
+			return a.authAdd(args[0], login, host, token)
+		},
+	}
+	cmd.Flags().StringVar(&login, "login", "", "the GitHub login of the account")
+	cmd.Flags().StringVar(&host, "host", "github.com", "the host of the account")
+	cmd.Flags().StringVar(&token, "token", "", "where the token comes from: gh, env:<VAR> or keychain (default: none)")
+	return cmd
+}
+
+func (a *app) authAdd(name, login, host, token string) error {
+	res, err := a.ss.AuthAdd(ops.AuthAddInput{Name: name, Login: login, Host: host, Token: token})
+	if err != nil {
+		return err
+	}
+	if a.jsonOut {
+		return a.printJSON(res)
+	}
+	if _, err := fmt.Fprintf(a.stdout, "Added account %s (%s)\n", res.Name, res.ID); err != nil {
+		return err
+	}
+	if err := a.printPinned(res.Pinned); err != nil {
+		return err
+	}
+	if res.Token == "keychain" {
+		_, err = fmt.Fprintf(a.stdout, "Give it the token with: hedgehug auth login %s --with-token\n", res.Name)
+	}
+	return err
+}
+
+// printPinned tells which stores were given an account when a second account
+// was added; nothing when none was.
+func (a *app) printPinned(p ops.Pinned) error {
+	if len(p.Stores) == 0 {
+		return nil
+	}
+	_, err := fmt.Fprintf(a.stdout, "Set account %s on %s %s\n", p.Account, plural.Pick(len(p.Stores), "store", "stores"), strings.Join(p.Stores, ", "))
+	return err
 }
 
 func (a *app) authLogin(name, host string, hostGiven, withToken bool) error {
@@ -86,8 +141,10 @@ func (a *app) authLogin(name, host string, hostGiven, withToken bool) error {
 	if a.jsonOut {
 		return a.printJSON(res)
 	}
-	_, err = fmt.Fprintf(a.stdout, "Logged in as %s (account %s)\n", res.ID, res.Account)
-	return err
+	if _, err := fmt.Fprintf(a.stdout, "Logged in as %s (account %s)\n", res.ID, res.Account); err != nil {
+		return err
+	}
+	return a.printPinned(res.Pinned)
 }
 
 // showDeviceCode tells where to enter the code, and on a terminal offers to
@@ -116,7 +173,7 @@ func (a *app) authStatus() error {
 		return err
 	}
 	if len(out) == 0 {
-		_, perr := fmt.Fprintln(a.stdout, "No account is set up; run hedgehug auth login")
+		_, perr := fmt.Fprintln(a.stdout, "No account is set up; add one with hedgehug auth add <name> --login <login> (or hedgehug auth login)")
 		return perr
 	}
 	rows := make([][]string, len(out))

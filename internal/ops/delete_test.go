@@ -14,52 +14,6 @@ import (
 	"github.com/kukv/hedgehug/internal/model"
 )
 
-// ulidsOf is what a caller keeps of the targets it showed: their ULIDs.
-func ulidsOf(es []*index.Entry) []model.ULID {
-	out := make([]model.ULID, len(es))
-	for i, e := range es {
-		out[i] = e.ULID
-	}
-	return out
-}
-
-func TestPurgeNeedsAConfirmation(t *testing.T) {
-	t.Parallel()
-	ts := newTestSession(t)
-	if _, err := ts.Add(AddInput{Title: "p"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ts.Remove("ME-1"); err != nil {
-		t.Fatal(err)
-	}
-	for _, confirmed := range [][]model.ULID{nil, {}} {
-		_, err := ts.Purge("ME-1", confirmed)
-		wantErr(t, err, KindUsage, "confirm.required")
-	}
-	// Nothing was purged by the refusals.
-	_, _, targets, err := ts.PurgeTargets("ME-1")
-	if err != nil || len(targets) != 1 {
-		t.Fatalf("PurgeTargets after the refusals = %d targets, %v; want the task still there", len(targets), err)
-	}
-	// Other tasks than the ones that are purged do not confirm it.
-	other := model.NewULID()
-	_, err = ts.Purge("ME-1", []model.ULID{other})
-	wantErr(t, err, KindConflict, "purge.changed")
-	// PurgeUnchecked goes through without the list.
-	r, err := ts.PurgeUnchecked("ME-1")
-	if err != nil || !r.Committed || len(r.Targets) != 1 {
-		t.Fatalf("PurgeUnchecked = %+v, %v", r, err)
-	}
-	if r.Commit == "" {
-		t.Error("PurgeUnchecked left no commit hash")
-	}
-	// The purged task is gone, but Views still describes it as it was.
-	vs, err := r.Views()
-	if err != nil || len(vs) != 1 || vs[0].ID != "ME-1" || vs[0].DeletedAt == nil {
-		t.Errorf("Views of a purged task = %+v, %v; want ME-1 as it was, deleted", vs, err)
-	}
-}
-
 func TestRemoveRestorePurge(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
@@ -87,29 +41,17 @@ func TestRemoveRestorePurge(t *testing.T) {
 	if len(r.Targets) != 2 || r.Targets[0].ID != "ME-1" || r.Targets[1].ID != "ME-2" {
 		t.Errorf("Restore targets = %v; want ME-1 and ME-2", r.Targets)
 	}
-	_, _, _, err = ts.PurgeTargets("ME-1")
-	wantErr(t, err, KindConflict, "task.not_deleted")
-	if err != nil && !strings.HasSuffix(err.Error(), " is not deleted; delete it with hedgehug rm first") {
-		t.Errorf("message = %q", err)
-	}
 	if _, err := ts.Remove("ME-1"); err != nil {
 		t.Fatal(err)
 	}
-	ix, e, targets, err := ts.PurgeTargets("ME-1")
+	pr, err := ts.Purge(0, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ix == nil || e.ID != "ME-1" || len(targets) != 2 {
-		t.Fatalf("PurgeTargets = %v %v %d targets; want ME-1 and 2 targets", ix != nil, e.ID, len(targets))
+	if pr.Commit == "" || len(pr.Tasks) != 2 || pr.Tasks[0].ID != "ME-1" {
+		t.Errorf("Purge = %+v; want ME-1 and ME-2 and a commit", pr)
 	}
-	pr, err := ts.Purge("ME-1", ulidsOf(targets))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !pr.Committed || len(pr.Targets) != 2 || pr.Entry.ID != "ME-1" {
-		t.Errorf("Purge = committed %v, %d targets, entry %s", pr.Committed, len(pr.Targets), pr.Entry.ID)
-	}
-	_, ix, _ = ts.Open()
+	_, ix, _ := ts.Open()
 	for _, id := range []string{"ME-1", "ME-2"} {
 		_, err := ts.Resolve(ix, id)
 		wantErr(t, err, KindNotFound, "task.not_found")
@@ -191,72 +133,6 @@ func TestRemoveTruncatesToSecond(t *testing.T) {
 	}
 }
 
-func TestPurgeChildNotDeleted(t *testing.T) {
-	t.Parallel()
-	ts := newTestSession(t)
-	for _, in := range []AddInput{{Title: "p"}, {Title: "c", Parent: "ME-1"}} {
-		if _, err := ts.Add(in); err != nil {
-			t.Fatal(err)
-		}
-	}
-	ts.deleteTask("ME-1") // the parent only
-	_, _, _, err := ts.PurgeTargets("ME-1")
-	wantErr(t, err, KindConflict, "purge.child_not_deleted")
-	if err != nil && (!strings.Contains(err.Error(), "ME-2") || !strings.HasSuffix(err.Error(), " under it is not deleted")) {
-		t.Errorf("message = %q", err)
-	}
-	_, err = ts.PurgeUnchecked("ME-1")
-	wantErr(t, err, KindConflict, "purge.child_not_deleted")
-	_, _, _, err = ts.PurgeTargets("ME-9")
-	wantErr(t, err, KindNotFound, "task.not_found")
-}
-
-func TestPurgeWithStaleTargetsIsConflict(t *testing.T) {
-	t.Parallel()
-	ts := newTestSession(t)
-	if _, err := ts.Add(AddInput{Title: "p"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ts.Remove("ME-1"); err != nil {
-		t.Fatal(err)
-	}
-	_, _, targets, err := ts.PurgeTargets("ME-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(targets) != 1 {
-		t.Fatalf("targets = %d; want 1", len(targets))
-	}
-	// A task deleted under it after the listing changes the targets.
-	if _, err := ts.Restore("ME-1"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ts.Add(AddInput{Title: "c", Parent: "ME-1"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ts.Remove("ME-1"); err != nil {
-		t.Fatal(err)
-	}
-	_, err = ts.Purge("ME-1", ulidsOf(targets))
-	wantErr(t, err, KindConflict, "purge.changed")
-	if err != nil && err.Error() != "the tasks under it changed after the confirmation; run purge again" {
-		t.Errorf("message = %q", err)
-	}
-	// Nothing was removed.
-	_, ix, _ := ts.Open()
-	if _, err := ts.Resolve(ix, "ME-2"); err != nil {
-		t.Errorf("ME-2 after the refused purge: %v", err)
-	}
-	// With the current targets it goes through.
-	_, _, targets, err = ts.PurgeTargets("ME-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ts.Purge("ME-1", ulidsOf(targets)); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestCurrentOfPurgedTaskIsGone(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
@@ -271,7 +147,7 @@ func TestCurrentOfPurgedTaskIsGone(t *testing.T) {
 	if _, err := ts.Remove("ME-1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.PurgeUnchecked("ME-1"); err != nil {
+	if _, err := ts.Purge(0, true); err != nil {
 		t.Fatal(err)
 	}
 	_, err = current(ix, e)
@@ -345,10 +221,7 @@ func TestRestoreAtByTimeAndCommit(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(e.Path, filepath.FromSlash(rel)), bytes.Replace(b, []byte("title: orig"), []byte("title: v1"), 1), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	author, err := config.CommitAuthor(config.Account{}, false, ts.Getenv)
-	if err != nil {
-		t.Fatal(err)
-	}
+	author := config.CommitAuthor(testAccount)
 	v1, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: author, When: time.Date(2020, 1, 1, 20, 0, 0, 0, time.UTC)})
 	if err != nil {
 		t.Fatal(err)
@@ -479,25 +352,6 @@ func TestParseAtTime(t *testing.T) {
 		got, ok := ParseAtTime(c.in, loc)
 		if ok != c.ok || !got.Equal(c.want) {
 			t.Errorf("ParseAtTime(%q) = %v %v, want %v %v", c.in, got, ok, c.want, c.ok)
-		}
-	}
-}
-
-func TestSameTasks(t *testing.T) {
-	t.Parallel()
-	a := &index.Entry{ULID: model.NewULID()}
-	b := &index.Entry{ULID: model.NewULID()}
-	for _, c := range []struct {
-		x, y []*index.Entry
-		want bool
-	}{
-		{[]*index.Entry{a, b}, []*index.Entry{b, a}, true},
-		{[]*index.Entry{a}, []*index.Entry{a, b}, false},
-		{[]*index.Entry{a}, []*index.Entry{b}, false},
-		{nil, nil, true},
-	} {
-		if got := sameTasks(c.x, ulidsOf(c.y)); got != c.want {
-			t.Errorf("sameTasks = %v; want %v", got, c.want)
 		}
 	}
 }

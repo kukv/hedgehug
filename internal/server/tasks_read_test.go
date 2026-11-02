@@ -213,10 +213,7 @@ func (ts *testServer) rawTask(id string, ulid model.ULID, front string) {
 	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
 		ts.t.Fatal(err)
 	}
-	author, err := config.CommitAuthor(config.Account{}, false, ts.getenv)
-	if err != nil {
-		ts.t.Fatal(err)
-	}
+	author := config.CommitAuthor(testAccount)
 	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: author, When: time.Now()}); err != nil {
 		ts.t.Fatal(err)
 	}

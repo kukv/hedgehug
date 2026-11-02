@@ -73,7 +73,7 @@ const messages: Record<string, Make> = {
   "workspace.bad_prefix": (a) => `「${str(a, "value")}」は ID の接頭辞に使えません`,
   "workspace.prefix_taken": (a) => `ID の接頭辞 ${str(a, "prefix")} はすでに使われています`,
   "workspace.not_empty": () =>
-    "ワークスペースにまだタスクがあります。別のワークスペースへ移すか、完全に削除してください",
+    "ワークスペースにまだタスクがあります（削除済みを含む）。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください",
   "workspace.one_change": () =>
     "名前と接頭辞は同時に変えられません。どちらか一方を指定してください",
 
@@ -110,16 +110,6 @@ const messages: Record<string, Make> = {
     withDetail(`${str(a, "key")} に「${str(a, "value")}」は指定できません`, e),
 
   // deleting and restoring
-  "purge.changed": () => "確認のあとにタスクが変わりました。もう一度確かめてください",
-  "purge.child_not_deleted": (a) =>
-    `${str(a, "id")} が削除されていないため、完全には削除できません`,
-  "purge.unconfirmed": (a) => {
-    const t = a.targets;
-    const n = Array.isArray(t) ? t.length : 0;
-    return n > 0
-      ? `${n} 件のタスクを完全に削除します。対象を確かめてください`
-      : "完全に削除するには確認が必要です";
-  },
   "restore_at.bad_time": (a) => `「${str(a, "at")}」は時刻でもコミットでもありません`,
   "restore.forward": (a) => `${str(a, "at")} の時点では、このタスクは別の Store へ移っていました`,
   "restore_at.not_found": (a) =>
@@ -127,8 +117,17 @@ const messages: Record<string, Make> = {
       ? `${str(a, "at")} の時点にはこのタスクがありませんでした`
       : "その時点にはこのタスクがありませんでした",
   "undo.nothing": () => "取り消せる操作がありません",
-  "undo.blocked": () =>
-    "ワークスペースにまだタスクがあるため取り消せません。別のワークスペースへ移すか、完全に削除してください",
+  "undo.blocked": (a) => {
+    switch (str(a, "op")) {
+      case "purge":
+        return "完全に消したものは取り消せません";
+      case "move-in":
+      case "move-out":
+        return "Store 間の移動は取り消せません。hh mv --store で元の Store へ戻してください";
+      default:
+        return "ワークスペースにまだタスクがあるため取り消せません。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください";
+    }
+  },
 
   // comments
   "comment.not_found": (a) =>
@@ -164,12 +163,12 @@ const messages: Record<string, Make> = {
   "sync.dirty": () => "コミットしていない変更があるため同期できません",
   "sync.unrelated": () => "リモートの履歴がこの Store の履歴と無関係です",
   "sync.force_push": () =>
-    "リモートの履歴が Hedgehug の記録なしに書き換えられています。hh doctor で確かめてください",
+    "リモートの履歴が手元と食い違っています。確かめてから、hh doctor --fix で clone し直してください",
   "sync.background_needs_store": () => "バックグラウンドの同期には Store の指定が必要です",
 
   // accounts and GitHub
   "account.none": () =>
-    "アカウントが設定されていません。hh auth login か config.yaml の accounts で足してください",
+    "アカウントが設定されていません。hh auth add <名前> --login <ログイン>（または hh auth login）で足してください",
   "account.not_found": (a) =>
     `${str(a, "name")} というアカウントはありません` +
     (list(a, "candidates") ? `（登録済み: ${list(a, "candidates")}）` : ""),

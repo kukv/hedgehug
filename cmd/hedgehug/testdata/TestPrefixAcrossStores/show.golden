@@ -7,12 +7,12 @@ Alpha task
   status      todo
   parent      -
   assignees   -
-  watchers    -
+  watchers    github.com/alice
   labels      -
   repos       -
   blocked_by  -
-  created     <TIME> by -
+  created     <TIME> by github.com/alice
   updated     <TIME>
 
 History:
-<HASH>  <TIME>  Alice  hedgehug: add org-a:API-1 (<ULID-1>) Alpha task
+<HASH>  <TIME>  alice  hedgehug: add org-a:API-1 (<ULID-1>) Alpha task

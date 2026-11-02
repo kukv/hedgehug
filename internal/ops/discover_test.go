@@ -60,8 +60,8 @@ func TestDiscoverFrom(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []Candidate{
-		{Name: "hh-shared", URL: "https://github.com/org-a/hh-shared.git", Permission: "write"},
-		{Name: "hh-ops", URL: "https://github.com/org-b/hh-ops.git", Permission: "write"},
+		{Name: "hh-shared", URL: "https://github.com/org-a/hh-shared.git", Permission: "write", Account: "alice"},
+		{Name: "hh-ops", URL: "https://github.com/org-b/hh-ops.git", Permission: "write", Account: "alice"},
 	}
 	// The walk is in the order of the names: org-a before org-b.
 	if len(cands) != 2 {
@@ -90,12 +90,12 @@ func TestDiscoverFromAccounts(t *testing.T) {
 	remotes := filepath.Join(t.TempDir(), "remotes")
 	storesUnder(t, remotes, "https://github.com/org-a/hh-shared.git")
 
-	// No account: the candidate has none.
+	// The only account: the candidate has it.
 	ts := newTestSession(t)
 	ts.appendConfig(rewriteTo(remotes))
 	cands, err := ts.StoreDiscover(DiscoverInput{From: remotes})
-	if err != nil || len(cands) != 1 || cands[0].Account != "" {
-		t.Fatalf("no account: %+v, %v", cands, err)
+	if err != nil || len(cands) != 1 || cands[0].Account != "alice" {
+		t.Fatalf("the only account: %+v, %v", cands, err)
 	}
 
 	// One account: it is the one, without asking.

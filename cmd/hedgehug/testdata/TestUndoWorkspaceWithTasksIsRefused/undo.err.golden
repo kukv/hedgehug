@@ -1,1 +1,1 @@
-hedgehug: workspaces/<ULID-1>.md: the workspace still has 1 tasks; move them with hedgehug mv --workspace or purge them
+hedgehug: workspaces/<ULID-1>.md: the workspace still has 1 tasks; move them with hedgehug mv --workspace, or delete them with hedgehug rm and remove them with hedgehug purge --older-than 0d --store <store>

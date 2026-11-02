@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/gitrepo"
 )
 
 // testPaths returns paths under a temporary directory.
@@ -138,6 +140,7 @@ func TestSetStoreAccount(t *testing.T) {
 stores:
   - name: a
     path: ~/a
+    account: personal
   - name: b
     path: ~/b
     account: personal
@@ -451,14 +454,17 @@ func TestWriterRules(t *testing.T) {
   - {name: a, host: github.com, login: a}
   - {name: b, host: github.com, login: b}
 stores:
-  - {name: s, path: /s}
+  - {name: s, path: /s, account: a}
   - {name: t, path: /t, account: b}
 `
 	c, err := Load(cfgPaths(t, two))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := c.Writer(c.Stores[0]); ok {
+	// Such a store does not load (TestLoadStoreWithoutAccount); the config
+	// built by hand has no writer for it.
+	byHand := &Config{Accounts: []Account{{Name: "a", Host: "github.com", Login: "a"}, {Name: "b", Host: "github.com", Login: "b"}}}
+	if _, ok := byHand.Writer(StoreEntry{Name: "s"}); ok {
 		t.Error("two accounts and no stores[].account: want no writer")
 	}
 	if a, ok := c.Writer(c.Stores[1]); !ok || a.Name != "b" {
@@ -466,6 +472,7 @@ stores:
 	}
 	one := strings.Replace(two, "  - {name: b, host: github.com, login: b}\n", "", 1)
 	one = strings.Replace(one, ", account: b", "", 1)
+	one = strings.Replace(one, ", account: a", "", 1)
 	c, err = Load(cfgPaths(t, one))
 	if err != nil {
 		t.Fatal(err)
@@ -530,7 +537,7 @@ func TestAddAndRemoveStoreKeepsComments(t *testing.T) {
 
 func TestNullAccountIsNoAccount(t *testing.T) {
 	t.Parallel()
-	c, err := Load(cfgPaths(t, "accounts:\n  - {name: a, host: h, login: x}\n  - {name: b, host: h, login: y}\nstores:\n  - {name: s, path: /s, account: null}\n"))
+	c, err := Load(cfgPaths(t, "accounts:\n  - {name: a, host: h, login: x}\nstores:\n  - {name: s, path: /s, account: null}\n"))
 	if err != nil || c.Stores[0].Account != "" {
 		t.Errorf("null account: %+v, %v", c.Stores, err)
 	}
@@ -625,6 +632,7 @@ repo_accounts:
 stores:
   - name: me
     path: /tmp/me
+    account: personal
 `)
 	c, err := Load(p)
 	if err != nil {
@@ -761,5 +769,33 @@ func TestAddAccountAndToken(t *testing.T) {
 	b, _ := os.ReadFile(p.ConfigFile)
 	if !strings.Contains(string(b), "note: keep") {
 		t.Errorf("an unknown key was lost: %s", b)
+	}
+}
+
+func TestCommitAuthor(t *testing.T) {
+	t.Parallel()
+	got := CommitAuthor(Account{Name: "work", Host: "github.com", Login: "alice-w"})
+	if want := (gitrepo.Signature{Name: "alice-w", Email: "alice-w@users.noreply.github.com"}); got != want {
+		t.Errorf("CommitAuthor = %+v, want %+v", got, want)
+	}
+}
+
+// A store with no account uses the only account; with two or more it does
+// not load (spec §5.2).
+func TestLoadStoreWithoutAccount(t *testing.T) {
+	t.Parallel()
+	one := "accounts:\n  - {name: a, host: github.com, login: a}\nstores:\n  - {name: s, path: /s}\n"
+	c, err := Load(cfgPaths(t, one))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a, ok := c.Writer(c.Stores[0]); !ok || a.Name != "a" {
+		t.Errorf("one account: Writer = %+v, %v", a, ok)
+	}
+	two := "accounts:\n  - {name: a, host: github.com, login: a}\n  - {name: b, host: github.com, login: b}\nstores:\n  - {name: s, path: /s}\n  - {name: t, path: /t, account: b}\n"
+	p := cfgPaths(t, two)
+	_, err = Load(p)
+	if err == nil || !strings.Contains(err.Error(), p.ConfigFile) || !strings.Contains(err.Error(), `stores: "s" has no account`) {
+		t.Errorf("Load = %v; want the file and the store s", err)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
@@ -30,7 +31,15 @@ func TestForwardThroughAMergeKeepsTheID(t *testing.T) {
 		t.Fatal(err)
 	}
 	// the main line: other work on the same base
-	if err := r.ResetMain(base); err != nil {
+	gr, err := git.PlainOpen(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, err := gr.Worktree()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Reset(&git.ResetOptions{Commit: base, Mode: git.HardReset}); err != nil {
 		t.Fatal(err)
 	}
 	put(t, s, newTask("other"))

@@ -28,6 +28,9 @@ func addGoneStore(t *testing.T, ts *testSession, withRemote bool) {
 	if err := c.AddStore("gone", filepath.Join(t.TempDir(), "gone"), remotes); err != nil {
 		t.Fatal(err)
 	}
+	if err := c.SetStoreAccount("gone", "alice"); err != nil {
+		t.Fatal(err)
+	}
 	if err := c.Save(); err != nil {
 		t.Fatal(err)
 	}

@@ -50,3 +50,12 @@ func newRepo(dir string, r *git.Repository) *Repo {
 	}
 	return &Repo{dir: dir, r: r}
 }
+
+// Close lets go of the files the repository holds open (the object
+// storage), so its directory can be renamed on Windows.
+func (r *Repo) Close() error {
+	if c, ok := r.r.Storer.(interface{ Close() error }); ok {
+		return c.Close()
+	}
+	return nil
+}

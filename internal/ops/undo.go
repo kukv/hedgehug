@@ -33,7 +33,7 @@ func (ss *Session) Undo() (UndoResult, error) {
 		return UndoResult{}, err
 	}
 	if !ok {
-		return UndoResult{}, newErr(KindConflict, "account.none", errors.New("accounts are not set up in config.yaml; hedgehug undo needs them to find your operations"))
+		return UndoResult{}, newErr(KindConflict, "account.none", errors.New("no account is set up; hedgehug undo needs one to find your operations; add one with hedgehug auth add <name> --login <login> (or hedgehug auth login)"))
 	}
 	var res UndoResult
 	hash, err := ss.UpdateCommit(s, store.Op{Name: "undo"}, func(tx *store.Tx) error {
@@ -83,9 +83,9 @@ func UndoTarget(log []gitrepo.LogEntry, me string) (gitrepo.LogEntry, bool) {
 
 // undoBlocked are the operations undo does not take back, with why.
 var undoBlocked = map[string]string{
-	"move-in":         "a move between stores cannot be undone; move it back with hedgehug mv --store",
-	"move-out":        "a move between stores cannot be undone; move it back with hedgehug mv --store",
-	"rewrite-history": "a history rewrite cannot be undone",
+	"move-in":  "a move between stores cannot be undone; move it back with hedgehug mv --store",
+	"move-out": "a move between stores cannot be undone; move it back with hedgehug mv --store",
+	"purge":    "a purge cannot be undone",
 }
 
 // forwardHitError is a task file that undo would write over a forward: the
@@ -148,7 +148,7 @@ func undoInTx(tx *store.Tx, s *store.Store, ix *index.Index, me string) (UndoRes
 	}
 	op, _ := c.Trailer("Hedgehug-Op")
 	if why, blocked := undoBlocked[op]; blocked {
-		return res, newErr(KindConflict, "undo.blocked", errors.New(why))
+		return res, newErr(KindConflict, "undo.blocked", errors.New(why), "op", op)
 	}
 	res.Commit, res.Found = c, true
 	tx.SetDetail(UndoSubject(c))
@@ -390,7 +390,7 @@ func (u *undoer) workspace(ulid model.ULID, ours, merged []byte) error {
 			return nil
 		}
 		if n := CountTasks(u.ix, ulid, true); n > 0 {
-			return newErr(KindConflict, "undo.blocked", fmt.Errorf("the workspace still has %d tasks; move them with hedgehug mv --workspace or purge them", n))
+			return newErr(KindConflict, "undo.blocked", fmt.Errorf("the workspace still has %d tasks; move them with hedgehug mv --workspace, or delete them with hedgehug rm and remove them with hedgehug purge --older-than 0d --store <store>", n))
 		}
 		u.res.Changed = true
 		return u.tx.RemoveWorkspace(ulid)

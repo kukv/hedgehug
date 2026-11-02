@@ -97,7 +97,6 @@ export function cliMv(
 
 export const cliRm = (id: string): string => cliLine(["rm", id]);
 export const cliRestore = (id: string): string => cliLine(["restore", id]);
-export const cliPurge = (id: string): string => cliLine(["purge", id]);
 export const cliRestoreAt = (id: string, commit: string): string =>
   cliLine(["restore", id, "--at", commit]);
 

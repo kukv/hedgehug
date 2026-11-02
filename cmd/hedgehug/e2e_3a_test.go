@@ -179,6 +179,10 @@ func TestE2EPhase3a(t *testing.T) {
 	if err := os.MkdirAll(carol, 0o750); err != nil {
 		t.Fatal(err)
 	}
+	// Task 3 replaces this with hedgehug auth add.
+	if err := os.WriteFile(filepath.Join(carol, "config.yaml"), []byte("accounts:\n  - {name: carol, host: github.com, login: carol}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	c := &devUser{t: t, bin: bin, home: carol, env: append(slicesWithout(bob.env, "HEDGEHUG_HOME=", "HOME="), "HEDGEHUG_HOME="+carol, "HOME="+carol)}
 	c.ok("store", "discover", "--from", filepath.Join(dev, "remotes"), "--all")
 	if out := c.ok("store", "list"); !strings.Contains(out, "hh-ops") || !strings.Contains(out, "hh-shared") || !strings.Contains(out, "hh-tasks") {

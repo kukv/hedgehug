@@ -17,7 +17,7 @@ type Host struct {
 	Host     string
 	API      string // the REST API base, without a trailing slash
 	Web      string // the web base, for the device flow
-	ClientID string // empty: the built-in one of internal/auth, on github.com
+	ClientID string // client_id of the GitHub App for the device flow; empty: the device flow is not available on the host
 }
 
 // URLRewrite points the URLs that start with From at To, right before a

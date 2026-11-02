@@ -87,25 +87,6 @@ func TestStoreFlagOnAStoreWithoutRemoteStartsNothing(t *testing.T) {
 	}
 }
 
-func TestSyncBackgroundRecordsAFailureBeforeTheRun(t *testing.T) {
-	t.Parallel()
-	te := newTestEnv(t)
-	remote := te.bare("shared")
-	te.ok("store", "init", "org", "--prefix", "ORG", "--remote", remote)
-	// No account and no author in the user's gitconfig: the options of the
-	// sync cannot be made.
-	if err := os.Remove(filepath.Join(te.home, ".gitconfig")); err != nil {
-		t.Fatal(err)
-	}
-	if code, _, errs := te.run("sync", "--background", "--store", "org"); code != 0 || !strings.Contains(errs, "sync org:") {
-		t.Fatalf("code = %d, stderr = %s", code, errs)
-	}
-	_, _, errs := te.run("ls")
-	if !strings.Contains(errs, "hedgehug: background sync of org failed:") {
-		t.Errorf("stderr = %s", errs)
-	}
-}
-
 func TestReadStartsBackgroundSyncOnlyWhenDue(t *testing.T) {
 	alice := settled(t)
 	var started int

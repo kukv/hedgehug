@@ -35,7 +35,7 @@ func movedFixture(t *testing.T, ts *testSession) model.ULID {
 	if _, err := ts.ForStore("org-b").UpdateCommit(sb, store.Op{Name: "move-in", Task: ulid}, func(tx *store.Tx) error { return tx.PutTask(nt) }); err != nil {
 		t.Fatal(err)
 	}
-	fwd := "---\nulid: " + ulid.String() + "\nmoved_to: " + sb.Meta().ULID.String() + "\n---\n"
+	fwd := "---\nulid: " + ulid.String() + "\nmoved_to: " + sb.Meta().ULID.String() + "\nmoved_at: 2026-10-31T10:00:00Z\n---\n"
 	if _, err := sa.Update(store.Op{Name: "move-out", Author: movedAuthor, Detail: "API-1 org-a task"}, func(tx *store.Tx) error {
 		return tx.PutFile(model.TaskPath(ulid), []byte(fwd))
 	}); err != nil {
@@ -133,12 +133,12 @@ func TestDepOnAMovedTask(t *testing.T) {
 	wantMoved(t, ts, err, map[string]any{"store": "org-b"})
 }
 
-func TestUndoRefusesMovesAndRewrites(t *testing.T) {
+func TestUndoRefusesMoves(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct{ op, why string }{
 		{"move-in", "a move between stores cannot be undone; move it back with hedgehug mv --store"},
 		{"move-out", "a move between stores cannot be undone; move it back with hedgehug mv --store"},
-		{"rewrite-history", "a history rewrite cannot be undone"},
+		{"purge", "a purge cannot be undone"},
 	} {
 		t.Run(tc.op, func(t *testing.T) {
 			ts := newTwoStoreSession(t)
@@ -158,6 +158,9 @@ func TestUndoRefusesMovesAndRewrites(t *testing.T) {
 			var oe *Error
 			if !errors.As(err, &oe) || oe.Kind != KindConflict || oe.Code != "undo.blocked" || err.Error() != tc.why {
 				t.Fatalf("Undo = %v; want KindConflict undo.blocked %q", err, tc.why)
+			}
+			if oe.Args["op"] != tc.op {
+				t.Errorf("Args = %v; want op %q", oe.Args, tc.op)
 			}
 			if after := headOf(t, s); after != before {
 				t.Errorf("HEAD moved from %s to %s", before, after)

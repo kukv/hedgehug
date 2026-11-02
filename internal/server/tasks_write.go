@@ -7,11 +7,9 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/ops"
 )
@@ -160,7 +158,6 @@ type taskWriteOutput struct{ Body taskWrite }
 
 type affectedWrite struct {
 	Tasks  []*ops.TaskView `json:"tasks,omitempty" doc:"The task and the tasks under it, as they are now"`
-	ULIDs  []string        `json:"ulids,omitempty" doc:"The tasks purged"`
 	Commit *string         `json:"commit"`
 }
 
@@ -226,12 +223,6 @@ type moveInput struct {
 		Before    string `json:"before,omitempty" doc:"Put it before this sibling"`
 		After     string `json:"after,omitempty" doc:"Put it after this sibling"`
 	}
-}
-
-type deleteInput struct {
-	TaskParam
-	Purge   bool   `query:"purge" doc:"Remove the files for good; the task must be deleted already"`
-	Confirm string `query:"confirm" doc:"With purge: the ULIDs the user agreed to purge, comma-separated, as purge.unconfirmed listed them"`
 }
 
 type restoreAtInput struct {
@@ -318,17 +309,14 @@ func (s *Server) registerTaskWrites() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "delete-task", Method: http.MethodDelete, Path: "/api/tasks/{id}",
-		Summary: "Delete a task and the tasks under it (hh rm), or purge them (hh purge)", Tags: []string{"tasks"},
-	}, func(_ context.Context, in *deleteInput) (*affectedOutput, error) {
+		Summary: "Delete a task and the tasks under it (hh rm)", Tags: []string{"tasks"},
+	}, func(_ context.Context, in *TaskParam) (*affectedOutput, error) {
 		ss := s.session(in.Store)
-		if !in.Purge {
-			res, err := ss.Remove(in.ID)
-			if err != nil {
-				return nil, problemOf(err)
-			}
-			return s.affectedOut(ss, res)
+		res, err := ss.Remove(in.ID)
+		if err != nil {
+			return nil, problemOf(err)
 		}
-		return s.purge(ss, in.ID, in.Confirm)
+		return s.affectedOut(ss, res)
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -347,81 +335,4 @@ func (s *Server) registerTaskWrites() {
 		out.Body.Note = res.Note
 		return out, nil
 	})
-}
-
-// purge purges the task id after the confirmation: without confirm, or
-// with a list that is not the tasks to purge, it is refused with
-// purge.unconfirmed and those tasks, for the GUI to ask the user.
-func (s *Server) purge(ss *ops.Session, id, confirm string) (*affectedOutput, error) {
-	ix, _, targets, err := ss.PurgeTargets(id)
-	if err != nil {
-		return nil, problemOf(err)
-	}
-	var confirmed []model.ULID
-	for _, c := range strings.Split(confirm, ",") {
-		if c == "" {
-			continue
-		}
-		u, err := model.ParseULID(c)
-		if err != nil {
-			// Not a ULID is not the tasks to purge.
-			return nil, unconfirmed(ix, targets)
-		}
-		confirmed = append(confirmed, u)
-	}
-	if !sameULIDs(targets, confirmed) {
-		return nil, unconfirmed(ix, targets)
-	}
-	res, err := ss.Purge(id, confirmed)
-	if err != nil {
-		return nil, purgeFailed(err, func() (*index.Index, []*index.Entry, error) {
-			ix, _, targets, err := ss.PurgeTargets(id)
-			return ix, targets, err
-		})
-	}
-	out := &affectedOutput{Body: affectedWrite{Commit: commitPtr(res.Commit)}}
-	for _, e := range res.Targets {
-		out.Body.ULIDs = append(out.Body.ULIDs, e.ULID.String())
-	}
-	return out, nil
-}
-
-// purgeFailed is the problem of err, what Purge returned. When the tasks
-// changed after the confirmation it is purge.unconfirmed with the tasks now,
-// read by targets.
-func purgeFailed(err error, targets func() (*index.Index, []*index.Entry, error)) *Problem {
-	if e := ops.AsError(err); e != nil && e.Code == "purge.changed" {
-		ix, ts, err2 := targets()
-		if err2 != nil {
-			return problemOf(err2)
-		}
-		return unconfirmed(ix, ts)
-	}
-	return problemOf(err)
-}
-
-// unconfirmed is the purge.unconfirmed problem with the tasks to purge.
-func unconfirmed(ix *index.Index, targets []*index.Entry) *Problem {
-	ts := make([]map[string]string, len(targets))
-	for i, e := range targets {
-		v := ops.TaskViewOf(ix, e)
-		ts[i] = map[string]string{"ulid": v.ULID, "id": v.ID, "title": v.Title}
-	}
-	p := newProblem(http.StatusConflict, "purge.unconfirmed", fmt.Sprintf("purging %d tasks for good needs a confirmation", len(targets)))
-	p.Args = map[string]any{"targets": ts}
-	return p
-}
-
-// sameULIDs reports whether confirmed holds the ULIDs of targets, in any
-// order.
-func sameULIDs(targets []*index.Entry, confirmed []model.ULID) bool {
-	if len(targets) != len(confirmed) {
-		return false
-	}
-	for _, e := range targets {
-		if !slices.Contains(confirmed, e.ULID) {
-			return false
-		}
-	}
-	return true
 }

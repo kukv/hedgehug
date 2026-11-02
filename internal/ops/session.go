@@ -43,9 +43,9 @@ type Session struct {
 	// index and before it writes, or write config.yaml after an operation
 	// read it and before it updates it, as another process could.
 	BeforeUpdate func()
-	// BeforeSwap is told the path of a store before a sync swaps the
-	// directory of a rebuild in for it (after a history rewrite): whoever
-	// holds that store open, such as the GUI server's index, lets go of it.
+	// BeforeSwap is told the path of a store before doctor --fix swaps the
+	// directory of a rebuild in for it (after a force push): whoever holds
+	// that store open, such as the GUI server's index, lets go of it.
 	// ForStore copies it. nil does nothing.
 	BeforeSwap func(path string)
 	Keyring    auth.Keyring // nil is the OS keychain
@@ -468,7 +468,7 @@ func (ss *Session) Update(s *store.Store, op store.Op, fn func(*store.Tx) error)
 
 // UpdateCommit runs one operation as one commit and returns its hash, the
 // zero hash when the operation changed nothing. The author is the store's
-// account, or the git config when the store has none.
+// account.
 func (ss *Session) UpdateCommit(s *store.Store, op store.Op, fn func(*store.Tx) error) (plumbing.Hash, error) {
 	// Operations refuse a read-only store when they open it (OpenForWrite);
 	// this catches a write that did not come through there.
@@ -479,14 +479,11 @@ func (ss *Session) UpdateCommit(s *store.Store, op store.Op, fn func(*store.Tx) 
 	if err != nil {
 		return plumbing.ZeroHash, err
 	}
-	author, err := config.CommitAuthor(acct, ok, ss.Getenv)
-	if err != nil {
-		return plumbing.ZeroHash, err
+	if !ok {
+		return plumbing.ZeroHash, errNoAccounts
 	}
-	op.Author = author
-	if ok {
-		op.Account = acct.ID()
-	}
+	op.Author = config.CommitAuthor(acct)
+	op.Account = acct.ID()
 	if ss.BeforeUpdate != nil {
 		ss.BeforeUpdate()
 	}
@@ -528,14 +525,10 @@ func (ss *Session) markWritten(s *store.Store) {
 // stores whose id prefixes it checks.
 func (ss *Session) SyncOptions(c *config.Config, e config.StoreEntry) (sync.Options, error) {
 	acct, ok := c.Writer(e)
-	author, err := config.CommitAuthor(acct, ok, ss.Getenv)
-	if err != nil {
-		return sync.Options{}, err
+	if !ok {
+		return sync.Options{}, errNoAccounts
 	}
-	opt := sync.Options{Name: e.Name, Remotes: e.Remotes, Author: author, Me: c.Me(), Now: ss.Now, Conn: ss.Conn(c, e), GitHub: ss.githubRepoOf(c, e)}
-	if ok {
-		opt.Account = acct.ID()
-	}
+	opt := sync.Options{Name: e.Name, Remotes: e.Remotes, Author: config.CommitAuthor(acct), Account: acct.ID(), Me: c.Me(), Now: ss.Now, Conn: ss.Conn(c, e), GitHub: ss.githubRepoOf(c, e)}
 	for _, o := range c.Stores {
 		if o.Name != e.Name {
 			opt.Others = append(opt.Others, sync.OtherStore{Name: o.Name, Path: o.Path})
@@ -618,34 +611,14 @@ func (ss *Session) ResolveULID(ix *index.Index) func(string) (model.ULID, error)
 // RunSync syncs s under .hedgehug/local/sync.lock, and keeps in sync.json
 // how it went. A write that was pending when the sync began has been pushed
 // by it; one made later has not. reported says that the one who ran it is
-// told of a failure, so the next command does not tell of it again.
-//
-// When the sync finds a history rewrite it makes the store again beside the
-// old one and, once it has let go of its locks, swaps it in (swapRebuilt);
-// Result.Reopen then says that s is closed.
+// told of a failure, so the next command does not tell of it again. A
+// history of origin that differs from the store's stops it (ErrForcePush);
+// hedgehug doctor --fix clones the store again.
 func (ss *Session) RunSync(s *store.Store, opt sync.Options, reported bool) (res sync.Result, err error) {
-	res, err = ss.runSyncLocked(s, opt, reported)
-	if res.Rebuild == nil || err != nil {
-		return res, err
-	}
-	return ss.swapRebuilt(s, opt, reported, res)
-}
-
-// runSyncLocked is RunSync up to the swap: the sync under sync.lock. A
-// rebuild it made is in Result.Rebuild, not swapped in; on an error it is
-// removed.
-func (ss *Session) runSyncLocked(s *store.Store, opt sync.Options, reported bool) (res sync.Result, err error) {
 	// The sync writes objects through the handle s; the stores mounted are
 	// opened again after it, so that they see them.
 	defer ss.dropMount()
 	err = s.WithLocalLock("sync.lock", syncLockWait, func() error {
-		// The history was made again here and origin has not got it yet
-		// (D29): a sync would merge the old history back.
-		if unfinished, err := rewriteUnfinished(s); err != nil {
-			return err
-		} else if unfinished {
-			return errRewriteInProgress(ss.storeNameOf(s))
-		}
 		started := ss.Now()
 		if _, err := sync.UpdateState(s, func(st *sync.State) { st.LastAttempt = started }); err != nil {
 			return err
@@ -670,58 +643,7 @@ func (ss *Session) runSyncLocked(s *store.Store, opt sync.Options, reported bool
 		})
 		return errors.Join(runErr, stateErr)
 	})
-	if err != nil && res.Rebuild != nil {
-		sync.Discard(res.Rebuild)
-		res.Rebuild = nil
-	}
 	return res, err
-}
-
-// swapRebuilt puts the clone the sync made again after a history rewrite in
-// the place of the store s, now that the sync has let go of its locks (spec:
-// 作り直しと未 push の変更の取り込み, 5 and 6), and syncs the new store, which
-// pushes what the rebuild put back. s is closed on the way; Result.Swapped
-// tells the caller so.
-func (ss *Session) swapRebuilt(s *store.Store, opt sync.Options, reported bool, res sync.Result) (sync.Result, error) {
-	dir, name := s.Dir(), ss.storeNameOf(s)
-	if ss.BeforeSwap != nil {
-		ss.BeforeSwap(dir)
-	}
-	ss.closeMounted(dir)
-	ss.dropMount()
-	res.Reopen = true // s is closed from here
-	if err := s.Repo().Close(); err != nil {
-		sync.Discard(res.Rebuild)
-		return res, err
-	}
-	err := sync.Swap(dir, res.Rebuild)
-	if errors.Is(err, sync.ErrRebuildStale) {
-		res.Rebuild = nil
-		res.Warnings = append(res.Warnings, fmt.Sprintf("%s changed while it was rebuilt after a history rewrite, so the rebuild was not used; the next sync makes it again", name))
-		return res, nil
-	}
-	if err != nil {
-		res.Rebuild = nil
-		return res, err
-	}
-	res.Swapped = true
-	res.Notices = append(res.Notices, res.Rebuild.Notices...)
-	res.Rebuild = nil
-	if left, lerr := sync.FindLeftover(dir); lerr == nil && !left.None() {
-		res.Warnings = append(res.Warnings, sync.LeftoverMessage(name))
-	}
-	ns, err := ss.openStoreAt(dir)
-	if err != nil {
-		return res, err
-	}
-	defer func() { _ = ns.Repo().Close() }() // the caller opens the store again
-	next, err := ss.RunSync(ns, opt, reported)
-	next.Swapped, next.Reopen = true, true
-	next.Warnings = append(res.Warnings, next.Warnings...)
-	next.Notices = append(res.Notices, next.Notices...)
-	next.Overwritten = append(res.Overwritten, next.Overwritten...)
-	next.Repaired = append(res.Repaired, next.Repaired...)
-	return next, err
 }
 
 // Unpushed counts the commits of s that origin did not have as of the last

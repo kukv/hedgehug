@@ -30,7 +30,7 @@ func putCommit(t *testing.T, r *Repo, parent plumbing.Hash, author, committer ob
 	return h
 }
 
-func TestHasSameCommit(t *testing.T) {
+func TestFindSameCommit(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	r, err := Init(dir)
@@ -62,9 +62,12 @@ func TestHasSameCommit(t *testing.T) {
 		{"committer time differs", late, false},
 		{"author differs", other, false},
 	} {
-		got, err := r.HasSameCommit(tc.from, tracked)
+		_, got, err := r.FindSameCommit(tc.from, tracked)
 		if err != nil || got != tc.want {
-			t.Errorf("%s: HasSameCommit = %v, %v; want %v", tc.name, got, err, tc.want)
+			t.Errorf("%s: FindSameCommit found = %v, %v; want %v", tc.name, got, err, tc.want)
 		}
+	}
+	if got, found, err := r.FindSameCommit(onTop, tracked); err != nil || !found || got != twin {
+		t.Errorf("FindSameCommit(onTop) = %s, %v, %v; want the twin %s", got, found, err, twin)
 	}
 }

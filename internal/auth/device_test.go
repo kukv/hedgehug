@@ -49,8 +49,13 @@ func TestDeviceLogin(t *testing.T) {
 	if !dt.ExpiresAt.Equal(now.Add(8*time.Hour)) || dt.RefreshExpiresAt.Before(now.Add(4000*time.Hour)) {
 		t.Errorf("expiry = %v, %v", dt.ExpiresAt, dt.RefreshExpiresAt)
 	}
-	if _, err := DeviceLogin(config.Host{Host: "ghe", Web: h.Web}, Options{}, func(*github.DeviceCode) {}); err == nil || !strings.Contains(err.Error(), "client_id") {
-		t.Errorf("no client ID = %v", err)
+	// No client_id, no request: the host is github.com too, and its web is a
+	// live fakegh that would answer.
+	noID := config.Host{Host: "github.com", Web: h.Web}
+	_, err = DeviceLogin(noID, Options{}, func(*github.DeviceCode) { t.Error("the code was shown") })
+	want := "the device flow needs hosts[].client_id for github.com in config.yaml; or use token: gh, token: env:<VAR>, or hedgehug auth login <name> --with-token"
+	if err == nil || err.Error() != want {
+		t.Errorf("no client ID = %v; want %q", err, want)
 	}
 }
 
@@ -240,7 +245,7 @@ func TestDeviceTokenEdges(t *testing.T) {
 	}
 	// Past the end of the refresh token: no request, a new login.
 	opt.LockFile = filepath.Join(t.TempDir(), "auth.lock")
-	opt.Host = config.Host{Web: "http://127.0.0.1:1"}
+	opt.Host = config.Host{Web: "http://127.0.0.1:1", ClientID: "Iv23x"}
 	if _, err := Token(a, opt); err == nil || !strings.Contains(err.Error(), "expired") || !strings.Contains(err.Error(), "hedgehug auth login a") {
 		t.Errorf("refresh expired = %v", err)
 	}
@@ -299,6 +304,31 @@ func TestDeviceRefreshNeedsHost(t *testing.T) {
 	}
 }
 
+func TestDeviceRefreshNeedsClientID(t *testing.T) {
+	t.Parallel()
+	_, h, refreshes := fakeHost(t, fakegh.State{Users: []string{"alice"}})
+	h.ClientID = ""
+	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	a := config.Account{Name: "a", Host: "github.com", Login: "alice", Token: config.TokenSource{Kind: "device"}}
+	k := newMem()
+	opt := Options{Keyring: k, Host: h, Now: func() time.Time { return now }, LockFile: filepath.Join(t.TempDir(), "auth.lock")}
+
+	// A token that does not end soon needs no client_id.
+	_ = SaveDeviceToken(a, DeviceToken{AccessToken: "x", RefreshToken: "r", ExpiresAt: now.Add(8 * time.Hour)}, k)
+	if tok, err := Token(a, opt); err != nil || tok != "x" {
+		t.Errorf("fresh token = %q, %v", tok, err)
+	}
+	// One that ends soon needs a refresh, which fails before any request.
+	_ = SaveDeviceToken(a, DeviceToken{AccessToken: "x", RefreshToken: "r", ExpiresAt: now}, k)
+	_, err := Token(a, opt)
+	if err == nil || !strings.Contains(err.Error(), "needs hosts[].client_id for github.com in config.yaml") || !strings.Contains(err.Error(), "hedgehug auth login a") {
+		t.Errorf("refresh without client_id = %v", err)
+	}
+	if refreshes.Load() != 0 {
+		t.Errorf("%d refresh requests were made", refreshes.Load())
+	}
+}
+
 // 直列: パッケージ変数 lockWait の差し替え
 func TestDeviceRefreshLockBusy(t *testing.T) {
 	old := lockWait
@@ -309,7 +339,7 @@ func TestDeviceRefreshLockBusy(t *testing.T) {
 	k := newMem()
 	_ = SaveDeviceToken(a, DeviceToken{AccessToken: "x", RefreshToken: "r", ExpiresAt: now}, k)
 	lock := filepath.Join(t.TempDir(), "auth.lock")
-	opt := Options{Keyring: k, Host: config.Host{Web: "http://127.0.0.1:1"}, Now: func() time.Time { return now }, LockFile: lock}
+	opt := Options{Keyring: k, Host: config.Host{Web: "http://127.0.0.1:1", ClientID: "Iv23x"}, Now: func() time.Time { return now }, LockFile: lock}
 	var err error
 	if lerr := store.WithFileLock(lock, time.Second, func() error {
 		_, err = Token(a, opt)
@@ -333,7 +363,7 @@ func TestDeviceRefreshLockFails(t *testing.T) {
 	if err := os.WriteFile(parent, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	opt := Options{Keyring: k, Host: config.Host{Web: "http://127.0.0.1:1"}, Now: func() time.Time { return now }, LockFile: filepath.Join(parent, "auth.lock")}
+	opt := Options{Keyring: k, Host: config.Host{Web: "http://127.0.0.1:1", ClientID: "Iv23x"}, Now: func() time.Time { return now }, LockFile: filepath.Join(parent, "auth.lock")}
 	_, err := Token(a, opt)
 	if err == nil || strings.Contains(err.Error(), "another hedgehug") {
 		t.Errorf("lock failure = %v, want the plain error", err)
