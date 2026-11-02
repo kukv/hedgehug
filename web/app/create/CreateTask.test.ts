@@ -51,7 +51,7 @@ describe("CreateTask", () => {
     expect(screen.queryByRole("radiogroup", { name: "ワークスペース" })).toBeNull();
     expect(screen.getByText(/親と同じワークスペース/)).toBeInTheDocument();
     await typeTitle("新しい作業");
-    expect(screen.getByText(/--parent REL-8/)).toBeInTheDocument();
+    expect(screen.getByText(/--no-repo.*--parent REL-8/)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
     await fireEvent.click(screen.getByRole("button", { name: /^作成/ }));
     await waitFor(() => expect(onclose).toHaveBeenCalled());

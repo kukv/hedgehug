@@ -57,7 +57,8 @@ export function cliAdd(i: {
   body?: string;
   props?: Record<string, string>;
 }): string {
-  const a: string[] = [];
+  // The GUI names where the task goes: hh must not link it to the repository it runs in.
+  const a: string[] = ["--no-repo"];
   if (i.store) a.push("--store", i.store);
   if (i.workspace) a.push("--workspace", i.workspace);
   if (i.parent) a.push("--parent", i.parent);

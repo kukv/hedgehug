@@ -42,7 +42,9 @@ describe("CreateProject", () => {
     await fireEvent.keyDown(who, { key: "Enter" });
     await fireEvent.change(screen.getByLabelText("due"), { target: { value: "2026-12-01" } });
 
-    expect(screen.getByText(/--kind project/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/--no-repo.*--kind project.*-p repos=github.com\/org-a\/web/),
+    ).toBeInTheDocument();
     await fireEvent.click(screen.getByRole("button", { name: "作成" }));
     await waitFor(() => expect(onclose).toHaveBeenCalled());
     expect(k.api.POST).toHaveBeenCalledWith("/api/tasks", {

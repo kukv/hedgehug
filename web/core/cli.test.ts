@@ -60,13 +60,13 @@ describe("commands", () => {
         props: { points: "2", priority: "high" },
       }),
     ).toBe(
-      'hh add "Switch DNS" --store shared --workspace main --parent REL-8 --kind task --body "line 1\nline 2" -p points=2 -p priority=high',
+      'hh add "Switch DNS" --no-repo --store shared --workspace main --parent REL-8 --kind task --body "line 1\nline 2" -p points=2 -p priority=high',
     );
-    expect(cliAdd({ title: "x" })).toBe("hh add x");
+    expect(cliAdd({ title: "x" })).toBe("hh add x --no-repo");
     expect(cliAdd({ title: "x", parent: "REL-8", after: "REL-9" })).toBe(
-      "hh add x --parent REL-8 --after REL-9",
+      "hh add x --no-repo --parent REL-8 --after REL-9",
     );
-    expect(cliAdd({ title: "x", before: "REL-9" })).toBe("hh add x --before REL-9");
+    expect(cliAdd({ title: "x", before: "REL-9" })).toBe("hh add x --no-repo --before REL-9");
   });
 
   it("writes hh ls", () => {
@@ -83,8 +83,8 @@ describe("commands", () => {
     expect(cliLs("-status:canceled", true, "shared")).toBe(
       "hh ls --store shared --tree -- -status:canceled",
     );
-    expect(cliAdd({ title: "-x", store: "demo" })).toBe("hh add --store demo -- -x");
-    expect(cliAdd({ title: "-x", body: "-y" })).toBe("hh add --body -y -- -x");
+    expect(cliAdd({ title: "-x", store: "demo" })).toBe("hh add --no-repo --store demo -- -x");
+    expect(cliAdd({ title: "-x", body: "-y" })).toBe("hh add --no-repo --body -y -- -x");
     expect(cliStoreInit({ name: "-s", prefix: "WEB" })).toBe("hh store init --prefix WEB -- -s");
   });
 
