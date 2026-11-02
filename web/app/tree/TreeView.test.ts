@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../core/api/client";
 import { selection } from "../selection.svelte";
@@ -135,8 +135,8 @@ function setup(
         dispose() {},
       })),
       applyWrite: vi.fn(),
-      // The commit is shown by the tree once reorder() is called.
-      whenTreesSeen: vi.fn(() => new Promise<void>((resolve) => seen.push(resolve))),
+      // The tree is read again once reorder() is called.
+      refreshTrees: vi.fn(() => new Promise<void>((resolve) => seen.push(resolve))),
       subscribe: (fn: () => void) => ev.subscribe(fn),
     },
     stores: {
@@ -492,26 +492,32 @@ describe("TreeView", () => {
       await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
       await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
       await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
-      expect(core.cache.whenTreesSeen).not.toHaveBeenCalled();
+      expect(core.cache.refreshTrees).not.toHaveBeenCalled();
     });
 
-    it("counts a tree that never shows the move as a failure, once", async () => {
-      vi.useFakeTimers({ shouldAdvanceTime: true });
-      try {
-        const { api, row } = await start({ many: 4 });
-        api.POST.mockResolvedValue(ok({ task: task("M3", "task", "P"), commit: "c" }));
-        await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
-        await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
-        await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
-        expect(h.toast).not.toHaveBeenCalled();
-        await vi.advanceTimersByTimeAsync(10_000);
-        await waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
-        await vi.advanceTimersByTimeAsync(1_000);
-        expect(api.POST).toHaveBeenCalledTimes(1);
-        expect(h.toast).toHaveBeenCalledTimes(1);
-      } finally {
-        vi.useRealTimers();
-      }
+    it("counts a tree that cannot be read again as a failure, once, and drops the rest", async () => {
+      const { api, row, core } = await start({ many: 4 });
+      api.POST.mockResolvedValue(ok({ task: task("M3", "task", "P"), commit: "c" }));
+      vi.mocked(core.cache.refreshTrees).mockRejectedValueOnce(new Error("読めません"));
+      await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
+      await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
+      await waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
+      await new Promise((r) => setTimeout(r, 60));
+      expect(api.POST).toHaveBeenCalledTimes(1);
+      expect(h.toast).toHaveBeenCalledTimes(1);
+    });
+
+    it("sends nothing more, and says nothing, once the view is gone", async () => {
+      const { api, row, reorder } = await start({ many: 4 });
+      api.POST.mockResolvedValue(ok({ task: task("M3", "task", "P"), commit: "c" }));
+      await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
+      await fireEvent.keyDown(row, { key: "ArrowUp", altKey: true });
+      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
+      cleanup();
+      reorder(["M0", "M1", "M3", "M2"]);
+      await new Promise((r) => setTimeout(r, 60));
+      expect(api.POST).toHaveBeenCalledTimes(1);
+      expect(h.toast).not.toHaveBeenCalled();
     });
 
     it("drops the moves still waiting when one fails, and says so once", async () => {

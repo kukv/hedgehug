@@ -95,12 +95,16 @@ function setup() {
       watchList: () => ({ ulids: () => [], error: () => null, loading: () => false, dispose() {} }),
       watchDetail: () => ({ ulid: () => "P", error: () => null, dispose() {} }),
       applyWrite: vi.fn(),
+      refreshTrees: vi.fn(async () => {}),
       subscribe: none,
     },
     stores: { workspace: () => ws, workspaces: () => [ws], tone: () => "purple", subscribe: none },
     schema: { get: () => schema, load: async () => schema, subscribe: none },
   };
-  return { api };
+  return {
+    api,
+    refresh: (h.core as { cache: { refreshTrees: ReturnType<typeof vi.fn> } }).cache.refreshTrees,
+  };
 }
 
 const row = (u: string) => h.rows.get(u) as Opts;
@@ -199,6 +203,21 @@ describe("TreeView drag and drop", () => {
       params: { path: { id: "T9" }, query: { store: "shared" } },
       body: { parent: "E8" },
     });
+  });
+
+  it("sends a drop only after the tree shows the move before it", async () => {
+    const { api, refresh } = setup();
+    let shown: () => void = () => {};
+    refresh.mockReturnValueOnce(new Promise<void>((resolve) => (shown = resolve)));
+    api.POST.mockResolvedValue(ok({ task: task("T9", "task", "P"), commit: "c1" }));
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    row("E8").onDrop("T9", "before");
+    row("E8").onDrop("T7", "before");
+    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 40));
+    expect(api.POST).toHaveBeenCalledTimes(1);
+    shown();
+    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
   });
 
   it("reorders next to a sibling", async () => {

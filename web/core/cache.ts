@@ -37,8 +37,8 @@ type QueryState = {
   loading: boolean;
   seq: number;
   released: boolean;
-  // the latest fetch: a fetch that a newer one overtook waits for it
-  last: Promise<void>;
+  // the latest fetch (true: its answer is held): a fetch that a newer one overtook waits for it
+  last: Promise<boolean>;
 };
 
 type DetailState = {
@@ -111,21 +111,12 @@ export class TaskCache {
   private refreshQueued = false;
   private refreshAll = false;
   private refreshUlids = new Set<string>();
-  // The commits whose tasks.changed came since the queries were last fetched again, the commits
-  // the queries have been fetched again after, and those waiting for that.
-  private refreshCommits = new Set<string>();
-  private refreshResync = false;
-  private readonly treeSeen = new Set<string>();
-  private treeWaiters = new Map<string, (() => void)[]>();
 
   constructor(opts: { api: Api; conn: Connection; now?: () => number }) {
     this.api = opts.api;
     this.now = opts.now ?? Date.now;
     opts.conn.on("tasks.changed", (e) => this.onTasksChanged(e));
-    opts.conn.on("resync", () => {
-      this.refreshResync = true;
-      this.queueRefresh(null);
-    });
+    opts.conn.on("resync", () => this.queueRefresh(null));
   }
 
   task(ulid: string): TaskView | undefined {
@@ -252,27 +243,14 @@ export class TaskCache {
     return (this.lastWrite.get(ulid) ?? 0) > since;
   }
 
-  // whenTreesSeen resolves once the trees on screen have been fetched again after the commit
-  // (the tasks.changed of a write makes that fetch), so that they show what the commit did. A
-  // reconnect fetches them all again and so resolves every wait that began before it.
-  whenTreesSeen(commit: string): Promise<void> {
-    if (this.treeSeen.has(commit)) return Promise.resolve();
-    return new Promise((resolve) => {
-      const list = this.treeWaiters.get(commit) ?? [];
-      list.push(resolve);
-      this.treeWaiters.set(commit, list);
-    });
-  }
-
-  private markTreesSeen(commits: Iterable<string>): void {
-    for (const c of commits) {
-      this.treeSeen.add(c);
-      if (this.treeSeen.size > OWN_COMMITS * 4) {
-        this.treeSeen.delete(this.treeSeen.values().next().value as string);
-      }
-      for (const done of this.treeWaiters.get(c) ?? []) done();
-      this.treeWaiters.delete(c);
-    }
+  // refreshTrees fetches the trees on screen again and resolves once they hold the answer, so
+  // that a caller that has just written can decide on the order the write left. It rejects with
+  // the error of a tree that could not be read: the order held is then the old one.
+  async refreshTrees(): Promise<void> {
+    const trees = [...this.queries.values()].filter((s) => s.query.tree);
+    const done = await Promise.all(trees.map((s) => this.fetchQuery(s)));
+    const failed = trees.find((_, i) => !done[i]);
+    if (failed) throw failed.error ?? new Error("tree not read");
   }
 
   // ---- queries
@@ -291,7 +269,7 @@ export class TaskCache {
         loading: true,
         seq: 0,
         released: false,
-        last: Promise.resolve(),
+        last: Promise.resolve(true),
       };
       this.queries.set(key, s);
       void this.fetchQuery(s);
@@ -306,21 +284,22 @@ export class TaskCache {
     for (const [k, v] of this.queries) if (v === s) this.queries.delete(k);
   }
 
-  private fetchQuery(s: QueryState): Promise<void> {
+  private fetchQuery(s: QueryState): Promise<boolean> {
     const p = this.runFetch(s);
     s.last = p;
     return p;
   }
 
-  private async runFetch(s: QueryState): Promise<void> {
+  private async runFetch(s: QueryState): Promise<boolean> {
     const seq = ++s.seq;
+    let failed = false;
     const since = this.epoch;
     const { q, tree, store } = s.query;
     try {
       const out = await unwrap(
         this.api.GET("/api/tasks", { params: { query: { q, tree, store } } }),
       );
-      if (seq !== s.seq || s.released) return seq !== s.seq ? s.last : undefined; // a newer fetch is on its way
+      if (seq !== s.seq || s.released) return seq !== s.seq ? s.last : true; // a newer fetch is on its way
       if (tree) {
         const roots = reuseNodes(this.ingestTrees(out.roots ?? [], since), s.roots);
         if (roots !== s.roots) {
@@ -344,15 +323,17 @@ export class TaskCache {
       if (s.error) this.dirty = true;
       s.error = null;
     } catch (e) {
-      if (seq !== s.seq || s.released) return seq !== s.seq ? s.last : undefined;
+      if (seq !== s.seq || s.released) return seq !== s.seq ? s.last : true;
       s.error = toApiError(e);
       this.dirty = true;
+      failed = true;
     }
     if (s.loading) {
       s.loading = false;
       this.dirty = true;
     }
     this.flush();
+    return !failed;
   }
 
   // ingestTree takes in a task and, under it, its children.
@@ -455,7 +436,6 @@ export class TaskCache {
       this.markWrite(u);
       this.forget(u);
     }
-    this.refreshCommits.add(e.commit);
     this.queueRefresh([...ulids, ...removed]);
     this.flush();
   }
@@ -492,15 +472,7 @@ export class TaskCache {
       const us = this.refreshUlids;
       this.refreshAll = false;
       this.refreshUlids = new Set();
-      const commits = this.refreshCommits;
-      this.refreshCommits = new Set();
-      const resync = this.refreshResync;
-      this.refreshResync = false;
-      const waiting = resync ? [...this.treeWaiters.keys()] : [];
-      const fetches = [...this.queries.values()].map((s) => this.fetchQuery(s));
-      void Promise.all(fetches).then(() => {
-        this.markTreesSeen([...commits, ...waiting]);
-      });
+      for (const s of this.queries.values()) void this.fetchQuery(s);
       for (const s of this.details.values()) {
         if (all || us.has(s.key) || (s.ulid !== null && us.has(s.ulid))) void this.fetchDetail(s);
       }

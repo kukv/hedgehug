@@ -381,30 +381,31 @@
     return k.alt && !k.shift && (k.key === "ArrowUp" || k.key === "ArrowDown");
   }
 
-  // The moves go one after another: a move is decided on the rows the move before it left, so
-  // three presses move a task three places. A failure, or the selection leaving the row, drops
-  // the moves still waiting.
+  // The moves (keys and drops) go one after another: a move is decided on the rows the move before
+  // it left, so three presses move a task three places. A failure, a refusal, the selection
+  // leaving the row, or the view going away drops the moves still waiting.
   let moveChain: Promise<void> = Promise.resolve();
   let moveEpoch = 0;
   let moves = 0;
-  // The tree is read again after a commit by the event of the commit. If that does not come the
-  // move counts as failed, so that the presses waiting are not held for ever.
-  const TREE_WAIT_MS = 10000;
-  async function treeSeen(commit: string) {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      await Promise.race([
-        c.cache.whenTreesSeen(commit),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () => reject(new Error("並べ替えがツリーに届くのを待てませんでした")),
-            TREE_WAIT_MS,
-          );
-        }),
-      ]);
-    } finally {
-      clearTimeout(timer);
-    }
+  let gone = false;
+  $effect(() => () => {
+    gone = true;
+    moveEpoch++;
+  });
+
+  // job says whether the move went through; at is the row the selection must stay on.
+  function enqueueMove(job: () => Promise<boolean>, at?: string | null): Promise<void> {
+    const epoch = moveEpoch;
+    moves++;
+    moveChain = moveChain.then(async () => {
+      try {
+        if (epoch !== moveEpoch || (at !== undefined && selection.ulid !== at)) return;
+        if (!(await job())) moveEpoch++;
+      } finally {
+        moves--;
+      }
+    });
+    return moveChain;
   }
 
   function dispatch(k: KeyInput, decided?: KeyAction): Promise<void> {
@@ -412,24 +413,11 @@
       const a = decided ?? actionOf(k);
       return a.type === "none" ? Promise.resolve() : run(a).then(() => {});
     }
-    const epoch = moveEpoch;
-    const at = selection.ulid;
-    moves++;
-    moveChain = moveChain.then(async () => {
-      try {
-        if (epoch !== moveEpoch || selection.ulid !== at) return;
-        const a = actionOf(k);
-        if (a.type === "none") return;
-        const done = await run(a);
-        if (!done || a.type !== "move") {
-          moveEpoch++;
-          return;
-        }
-      } finally {
-        moves--;
-      }
-    });
-    return moveChain;
+    return enqueueMove(async () => {
+      // The rows are those the moves before this one left.
+      const a = actionOf(k);
+      return a.type === "none" ? true : run(a);
+    }, selection.ulid);
   }
 
   // run says whether the action went through: false for a refusal or a failed write.
@@ -455,8 +443,8 @@
           // Show the new parent's children only once the task is there.
           if (a.to.parent) toggle(a.to.parent, true);
           await focusRow(a.ulid);
-          // The next move is decided on the rows this one left: wait for the tree to show it.
-          if (commit) await treeSeen(commit);
+          // The next move is decided on the rows this one left: read the tree again.
+          if (commit) await c.cache.refreshTrees();
           break;
         }
         case "set-status": {
@@ -473,7 +461,7 @@
       }
       return true;
     } catch (err) {
-      toast({ message: errorMessage(err) });
+      if (!gone) toast({ message: errorMessage(err) });
       return false;
     }
   }
@@ -581,20 +569,25 @@
     dragging = null;
     roomForRefusal = false;
     refusalHeight = 0;
-    const d = decide(sourceUlid, targetUlid, place);
-    const t = taskOf(sourceUlid);
-    if (!d || !t) return;
-    if (!d.ok) {
-      if (!d.silent) toast({ message: `${d.title}。${d.reason}` });
-      return;
-    }
-    try {
-      await moveTask(c, t, d.to);
-      // Show the new parent's children only once the task is there.
-      if (d.to.parent) toggle(d.to.parent, true);
-    } catch (err) {
-      toast({ message: errorMessage(err) });
-    }
+    void enqueueMove(async () => {
+      const d = decide(sourceUlid, targetUlid, place);
+      const t = taskOf(sourceUlid);
+      if (!d || !t) return true;
+      if (!d.ok) {
+        if (!d.silent && !gone) toast({ message: `${d.title}。${d.reason}` });
+        return true;
+      }
+      try {
+        const { commit } = await moveTask(c, t, d.to);
+        // Show the new parent's children only once the task is there.
+        if (d.to.parent) toggle(d.to.parent, true);
+        if (commit) await c.cache.refreshTrees();
+        return true;
+      } catch (err) {
+        if (!gone) toast({ message: errorMessage(err) });
+        return false;
+      }
+    });
   }
 
   function dropMarkOf(ulid: string): "before" | "after" | "child" | "reject" | null {

@@ -156,6 +156,32 @@ test("Alt+Up pressed three times in a row moves a task three places, one commit 
   await expect(row(page, "E")).toBeFocused();
 });
 
+test("presses in a row still all go through when the CLI commits in between", async ({
+  page,
+  hh,
+}) => {
+  for (const t of ["A", "B", "C", "D", "E"]) hh.add(t);
+  await hh.open(page);
+  await treeReady(page);
+  await page.route(/\/api\/tasks\/[^/]+\/move\?/, async (route) => {
+    await new Promise((r) => setTimeout(r, 500));
+    await route.continue();
+  });
+
+  await row(page, "E").click();
+  await page.keyboard.press("Alt+ArrowUp");
+  await page.keyboard.press("Alt+ArrowUp");
+  await page.keyboard.press("Alt+ArrowUp");
+  // Other commits land in the same poll windows as the moves.
+  hh.add("Zed one");
+  hh.add("Zed two");
+
+  await expect
+    .poll(() => rootOrder(hh), { timeout: 15000 })
+    .toEqual(["A", "E", "B", "C", "D", "Zed one", "Zed two"]);
+  await expect(toast(page, /失敗|できません/)).toHaveCount(0);
+});
+
 test("a failed move drops the presses still waiting and says so once", async ({ page, hh }) => {
   for (const t of ["A", "B", "C", "D", "E"]) hh.add(t);
   await hh.open(page);
