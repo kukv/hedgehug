@@ -17,6 +17,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
+	histidx "github.com/kukv/hedgehug/internal/history"
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/merge"
@@ -406,7 +407,7 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 	if base.IsZero() {
 		return fmt.Errorf("merge %s: %w", name, ErrUnrelated)
 	}
-	m, err := mergeTrees(r, base, head, remote, opt)
+	m, err := mergeTrees(s, base, head, remote, opt)
 	if err != nil {
 		return err
 	}
@@ -452,7 +453,8 @@ func (m *merged) trailers() []gitrepo.Trailer {
 // merge.Merge (schema.yaml first, for the others to use), and the repair
 // runs over the result. The files are the changes to make to ours. base need
 // not be an ancestor of either side (the replay after a history rewrite).
-func mergeTrees(r *gitrepo.Repo, base, ours, theirs plumbing.Hash, opt Options) (*merged, error) {
+func mergeTrees(s *store.Store, base, ours, theirs plumbing.Hash, opt Options) (*merged, error) {
+	r := s.Repo()
 	var trees [3]plumbing.Hash
 	for i, c := range []plumbing.Hash{base, ours, theirs} {
 		var err error
@@ -561,7 +563,7 @@ func mergeTrees(r *gitrepo.Repo, base, ours, theirs plumbing.Hash, opt Options) 
 		Base:     baseSnap,
 		OnOrigin: onOrigin,
 		Changed:  func(p string) bool { return changed[p] },
-		Author:   keepError(&authorErr, mergeAuthor(r, base, ours, theirs)),
+		Author:   keepError(&authorErr, mergeAuthor(s, base, ours, theirs)),
 		Now:      opt.Now().Truncate(time.Second),
 	})
 	if err = errors.Join(err, authorErr); err != nil {
@@ -668,7 +670,9 @@ func keepError(errp *error, f func(string) (string, error)) func(string) string 
 // over base: the side that changed it, the later one when both did (then
 // the larger author, as the merge decides), or, when neither did, whoever
 // changed it last before.
-func mergeAuthor(r *gitrepo.Repo, base, head, remote plumbing.Hash) func(string) (string, error) {
+func mergeAuthor(s *store.Store, base, head, remote plumbing.Hash) func(string) (string, error) {
+	r := s.Repo()
+	before := headAuthor(s, head)
 	return func(p string) (string, error) {
 		o, okO, err := r.LastChange(head, base, p)
 		if err != nil {
@@ -689,18 +693,36 @@ func mergeAuthor(r *gitrepo.Repo, base, head, remote plumbing.Hash) func(string)
 		case okT:
 			return t.Writer(), nil
 		}
-		return headAuthor(r, head)(p)
+		return before(p)
 	}
 }
 
-// headAuthor tells who last changed a file in the history of head.
-func headAuthor(r *gitrepo.Repo, head plumbing.Hash) func(string) (string, error) {
+// headAuthor tells who last changed a file in the history of head. It reads
+// the history index, opened on the first call; a head the index does not
+// have is searched by walking.
+func headAuthor(s *store.Store, head plumbing.Hash) func(string) (string, error) {
+	var h *histidx.History
+	opened := false
 	return func(p string) (string, error) {
-		e, ok, err := r.LastChange(head, plumbing.ZeroHash, p)
+		if !opened {
+			opened = true
+			var err error
+			if h, err = histidx.Open(s, histidx.Options{}); err != nil {
+				return "", err
+			}
+		}
+		c, ok, err := h.LastChange(p, head)
+		if errors.Is(err, histidx.ErrNotIndexed) {
+			e, ok, err := s.Repo().LastChange(head, plumbing.ZeroHash, p)
+			if err != nil || !ok {
+				return "", err
+			}
+			return e.Writer(), nil
+		}
 		if err != nil || !ok {
 			return "", err
 		}
-		return e.Writer(), nil
+		return c.Writer(), nil
 	}
 }
 
@@ -811,7 +833,7 @@ func repairHead(s *store.Store, ix *index.Index, opt Options, res *Result) error
 			Files:    snap,
 			OnOrigin: onOrigin,
 			Changed:  func(string) bool { return true },
-			Author:   keepError(&authorErr, headAuthor(r, head)),
+			Author:   keepError(&authorErr, headAuthor(s, head)),
 			Now:      opt.Now().Truncate(time.Second),
 		})
 		if err = errors.Join(err, authorErr); err != nil {
@@ -894,7 +916,7 @@ func prefixDuplicates(s *store.Store, opt Options, res *Result) error {
 	if err != nil {
 		return err
 	}
-	who := headAuthor(s.Repo(), head)
+	who := headAuthor(s, head)
 	var mine []*model.Workspace
 	var prefixes []string
 	for m, err := range s.Workspaces() {

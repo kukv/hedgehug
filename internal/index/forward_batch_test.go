@@ -42,3 +42,23 @@ func TestColdBuildResolvesSeveralForwardsInOnePass(t *testing.T) {
 		t.Errorf("a forward with no history = %+v, %v", f, ok)
 	}
 }
+
+// Comments written after the last edit of a task and before it moved are not
+// changes of the task file: the id of the forward is still the task's.
+func TestForwardIDIgnoresCommitsOfOtherFiles(t *testing.T) {
+	t.Parallel()
+	s, dir := newStore(t)
+	a := putWithID(t, s, newTask("a"), "OLD-1")
+	commitRaw(t, s, dir, model.CommentPath(a.ULID, model.NewULID()), "---\n---\nnote\n")
+	put(t, s, newTask("other"))
+	commitRaw(t, s, dir, model.TaskPath(a.ULID), forwardOf(a.ULID, destStore))
+
+	ix := mustOpen(t, s)
+	f, ok := ix.Forward(a.ULID)
+	if !ok || f.ID != a.ID || !slices.Equal(f.FormerIDs, a.FormerIDs) {
+		t.Errorf("forward = %+v, %v; want id %s former %v", f, ok, a.ID, a.FormerIDs)
+	}
+	if one, err := ix.lastTask(a.ULID); err != nil || one == nil || one.ID != a.ID {
+		t.Errorf("lastTask = %+v, %v", one, err)
+	}
+}
