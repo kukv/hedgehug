@@ -1,0 +1,18 @@
+import { createSubscriber } from "svelte/reactivity";
+
+/**
+ * Reads a core object from runes. The read re-runs whenever the object notifies,
+ * and the subscription lives only while something reads it.
+ */
+export function useSubscribe<T>(
+  source: { subscribe(fn: () => void): () => void },
+  read: () => T,
+): { readonly current: T } {
+  const subscribe = createSubscriber((update) => source.subscribe(update));
+  return {
+    get current(): T {
+      subscribe();
+      return read();
+    },
+  };
+}

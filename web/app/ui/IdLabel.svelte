@@ -1,0 +1,93 @@
+<script lang="ts">
+  import { copyText } from "./clipboard";
+
+  type Props = { id: string; ulid: string; alwaysUlid?: boolean };
+  let { id, ulid, alwaysUlid = false }: Props = $props();
+
+  let hover = $state(false);
+  let focus = $state(false);
+  const show = $derived(hover || focus);
+  let copied = $state(false);
+
+  async function copy(e: MouseEvent) {
+    e.stopPropagation();
+    if (await copyText(ulid)) {
+      copied = true;
+      setTimeout(() => {
+        copied = false;
+      }, 1500);
+    }
+  }
+</script>
+
+<!-- biome-ignore lint/a11y/noStaticElementInteractions: hover and focus only reveal the ULID; the buttons inside are the interactive elements -->
+<span
+  class="idl"
+  role="presentation"
+  onmouseenter={() => (hover = true)}
+  onmouseleave={() => (hover = false)}
+  onfocusin={() => (focus = true)}
+  onfocusout={(e) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) focus = false;
+  }}
+  onclick={(e) => e.stopPropagation()}
+  onkeydown={(e) => e.stopPropagation()}
+>
+  <button type="button" class="id" aria-label="{id} の ULID を表示">{id}</button>
+  {#if alwaysUlid}
+    <span class="ulid">{ulid}</span>
+  {:else if show}
+    <span class="pop" role="tooltip">
+      <span class="ulid">{ulid}</span>
+      <button type="button" class="copy" onclick={copy} aria-label="ULID をコピー">
+        {copied ? "コピーしました" : "コピー"}
+      </button>
+    </span>
+  {/if}
+</span>
+
+<style>
+  .idl {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-8);
+  }
+  .id {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: var(--fs-mono);
+    cursor: default;
+  }
+  .ulid {
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: var(--fs-mono);
+  }
+  .pop {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 20;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-8);
+    padding: var(--space-6) var(--space-8);
+    border-radius: var(--radius-8);
+    background: var(--surface);
+    box-shadow: var(--shadow-popover);
+    white-space: nowrap;
+  }
+  .copy {
+    height: var(--control-h-sm);
+    padding: 0 var(--space-8);
+    border: 1px solid var(--line-input);
+    border-radius: var(--radius-6);
+    background: var(--surface);
+    font-size: var(--fs-12);
+    cursor: pointer;
+  }
+</style>

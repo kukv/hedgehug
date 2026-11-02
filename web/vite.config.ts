@@ -21,6 +21,17 @@ function keepGitkeep(): Plugin {
   };
 }
 
+// @fontsource lists woff2 and then woff for each font file, and Vite copies both. Every browser
+// that runs this app reads woff2, so drop the woff and keep dist to woff2 only.
+const woff2Only = {
+  postcssPlugin: "hedgehug-woff2-only",
+  Declaration: {
+    src(decl: { value: string }) {
+      decl.value = decl.value.replace(/,\s*url\([^)]*\.woff\)\s*format\(["']woff["']\)/g, "");
+    },
+  },
+};
+
 // In development, `pnpm dev` serves the page and proxies /api to the server
 // that `hh ui --no-open` started. HEDGEHUG_UI is the URL it printed
 // (http://127.0.0.1:<port>/#token=<token>): the proxy goes to its origin, and
@@ -29,6 +40,7 @@ const ui = process.env.HEDGEHUG_UI ? new URL(process.env.HEDGEHUG_UI) : null;
 
 export default defineConfig({
   plugins: [svelte(), keepGitkeep()],
+  css: { postcss: { plugins: [woff2Only] } },
   build: {
     outDir: "dist",
     emptyOutDir: true,
