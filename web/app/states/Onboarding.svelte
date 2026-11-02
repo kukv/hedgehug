@@ -7,7 +7,7 @@
   let creating = $state(false);
 </script>
 
-<div class="onb">
+<div class="onb" data-blocking>
   <div class="brand">
     <span class="logo" aria-hidden="true">hh</span>
     <span class="welcome">Hedgehug へようこそ</span>

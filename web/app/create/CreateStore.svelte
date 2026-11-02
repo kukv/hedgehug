@@ -48,6 +48,13 @@
     failure = null;
   }
 
+  // While a create is running the dialog stays: closing it then would let the success navigate away unasked.
+  function close() {
+    if (busy) return;
+    failure = null;
+    onclose();
+  }
+
   async function submit() {
     touched = true;
     if (busy || nameError || prefixError) return;
@@ -73,14 +80,14 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") {
+    if (e.key === "Enter" && !e.isComposing && (e.target as HTMLElement).tagName === "INPUT") {
       e.preventDefault();
       void submit();
     }
   }
 </script>
 
-<Dialog {open} title="Store を作成" width={620} {cli} {onclose}>
+<Dialog {open} title="Store を作成" width={620} {cli} onclose={close}>
   <div class="form" role="presentation" {onkeydown}>
     <div class="field">
       <label for="{uid}-name">名前</label>
@@ -146,7 +153,7 @@
   </div>
 
   {#snippet footer()}
-    <Button onclick={onclose}>キャンセル</Button>
+    <Button disabled={busy} onclick={close}>キャンセル</Button>
     <Button variant="primary" disabled={busy} onclick={submit}>
       {busy ? "作成中…" : "Store を作る"}
     </Button>

@@ -281,4 +281,33 @@ describe("Connection", () => {
     expect(t.conn.lastOpenAt).toBeNull();
     t.conn.stop();
   });
+
+  it("calls onUnauthorized for a 401 auth.token of /api/events, and for nothing else", async () => {
+    const calls: string[] = [];
+    let res: () => Response = () =>
+      new Response(JSON.stringify({ type: "auth.token" }), { status: 401 });
+    const f = (async (input: RequestInfo | URL) => {
+      if (typeof input === "string") {
+        calls.push(input);
+        return res();
+      }
+      return new Response(null, { status: 204 });
+    }) as unknown as typeof fetch;
+    const onUnauthorized = vi.fn();
+    const sleep = () => new Promise<void>(() => {});
+    const api = createApi({ token: () => "tok", fetch: f });
+    const conn = new Connection({ token: () => "tok", fetch: f, api, sleep, onUnauthorized });
+    conn.start();
+    await vi.waitFor(() => expect(onUnauthorized).toHaveBeenCalledTimes(1));
+    conn.stop();
+
+    onUnauthorized.mockClear();
+    res = () => new Response(JSON.stringify({ type: "other" }), { status: 401 });
+    const conn2 = new Connection({ token: () => "tok", fetch: f, api, sleep, onUnauthorized });
+    conn2.start();
+    await vi.waitFor(() => expect(conn2.state).toBe("down"));
+    expect(onUnauthorized).not.toHaveBeenCalled();
+    conn2.stop();
+    expect(calls).toHaveLength(2);
+  });
 });

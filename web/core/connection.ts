@@ -30,6 +30,7 @@ export class Connection {
     now: () => number;
     sleep: (ms: number) => Promise<void>;
     doc: Document | undefined;
+    onUnauthorized: (() => void) | undefined;
   };
   private _state: ConnState = "connecting";
   private _lastOpenAt: number | null = null;
@@ -55,6 +56,7 @@ export class Connection {
     now?: () => number;
     sleep?: (ms: number) => Promise<void>;
     doc?: Document;
+    onUnauthorized?: () => void;
   }) {
     this.opts = {
       token: opts.token,
@@ -63,6 +65,7 @@ export class Connection {
       now: opts.now ?? Date.now,
       sleep: opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
       doc: opts.doc ?? (typeof document !== "undefined" ? document : undefined),
+      onUnauthorized: opts.onUnauthorized,
     };
   }
 
@@ -163,7 +166,18 @@ export class Connection {
       if (t) headers.Authorization = `Bearer ${t}`;
       const res = await this.opts.fetch("/api/events", { headers, signal: ctl.signal });
       if (!res.ok || !res.body) {
-        await res.body?.cancel();
+        if (res.status === 401 && this.opts.onUnauthorized) {
+          // the same rule as the API client: only a refused token (auth.token) counts
+          const p: unknown = await res.json().catch(() => null);
+          if (
+            typeof p === "object" &&
+            p !== null &&
+            (p as { type?: unknown }).type === "auth.token"
+          ) {
+            this.opts.onUnauthorized();
+          }
+        }
+        await res.body?.cancel().catch(() => undefined);
         return false;
       }
       const feed = parseEventStream((m) => {

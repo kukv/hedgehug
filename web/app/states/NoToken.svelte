@@ -2,7 +2,7 @@
   import CliLine from "../ui/CliLine.svelte";
 </script>
 
-<div class="gate" role="alert">
+<div class="gate" role="alert" data-blocking>
   <span class="logo" aria-hidden="true">hh</span>
   <h1>Hedgehug の画面を開けません</h1>
   <p>この画面は hh ui が開いた URL からだけ使えます。端末で hh ui を実行してください。</p>

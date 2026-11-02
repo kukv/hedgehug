@@ -8,4 +8,8 @@ export const auth = {
   markLost(): void {
     lost = true;
   },
+  /** For tests: forgets that the token was refused. */
+  reset(): void {
+    lost = false;
+  },
 };

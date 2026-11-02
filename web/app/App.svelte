@@ -29,6 +29,14 @@
   });
   const noToken = $derived(token === null || auth.lost);
   const onboarding = $derived(dir.current.loaded && dir.current.count === 0);
+  const down = $derived(!noToken && conn.current.state === "down");
+  // The gates cover the screen; nothing behind them may take focus or keys.
+  const blocked = $derived(noToken || onboarding || down);
+
+  // A refused token will not get better by trying again.
+  $effect(() => {
+    if (noToken) c.conn.stop();
+  });
 
   onMount(() => {
     router.go(location.pathname, { replace: true });
@@ -37,7 +45,7 @@
   });
 </script>
 
-<div class="app">
+<div class="app" inert={blocked}>
   <aside class="side">
     <Sidebar />
   </aside>
@@ -69,7 +77,7 @@
 {:else if onboarding}
   <Onboarding />
 {/if}
-{#if !noToken && conn.current.state === "down"}
+{#if down}
   <Disconnected lastOpenAt={conn.current.lastOpenAt} />
 {/if}
 <Toasts />

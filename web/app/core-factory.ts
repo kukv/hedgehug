@@ -13,7 +13,12 @@ export function createCore(opts: {
   onUnauthorized?: () => void;
 }): AppCore {
   const api = createApi(opts);
-  const conn = new Connection({ token: opts.token, fetch: opts.fetch, api });
+  const conn = new Connection({
+    token: opts.token,
+    fetch: opts.fetch,
+    api,
+    onUnauthorized: opts.onUnauthorized,
+  });
   const cache = new TaskCache({ api, conn });
   const save = new SaveController({ api, cache, conn });
   const stores = new StoreDirectory({ api, conn, cache });

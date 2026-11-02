@@ -90,4 +90,19 @@ describe("registerShortcut", () => {
     offA();
     offB();
   });
+
+  it("全画面のゲート（data-blocking）が出ている間は、⌘ 付きも含めて効かない", () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
+    const fn = vi.fn();
+    const off = registerShortcut("mod+k", fn);
+    const gate = document.createElement("div");
+    gate.setAttribute("data-blocking", "");
+    document.body.append(gate);
+    press({ key: "k", ctrlKey: true });
+    expect(fn).not.toHaveBeenCalled();
+    gate.remove();
+    press({ key: "k", ctrlKey: true });
+    expect(fn).toHaveBeenCalledTimes(1);
+    off();
+  });
 });

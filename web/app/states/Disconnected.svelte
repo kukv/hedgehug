@@ -11,7 +11,7 @@
   });
 </script>
 
-<div class="veil" role="alert">
+<div class="veil" role="alert" data-blocking>
   <Icon name="wifi-off" size={26} />
   <b>Hedgehug のサーバーに接続できません</b>
   <span class="text">

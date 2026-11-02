@@ -43,6 +43,8 @@ const entries = new Set<Entry>();
 
 function onKeydown(e: KeyboardEvent): void {
   if (e.isComposing) return;
+  // A full-screen gate (no token, no server, no store) stops every shortcut, ⌘/Ctrl ones too.
+  if (document.querySelector("[data-blocking]")) return;
   for (const en of entries) {
     if (!matches(e, en.combo)) continue;
     // A key without ⌘/Ctrl is for typing in a field or a dialog.

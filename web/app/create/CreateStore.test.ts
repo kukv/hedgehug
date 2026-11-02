@@ -122,4 +122,59 @@ describe("CreateStore", () => {
     await type(getByLabelText("ID の接頭辞"), "me");
     expect(getByRole("button", { name: /hh store init me/ }).textContent).toContain("ME");
   });
+
+  it("変換中（isComposing）の Enter では作成しない", async () => {
+    const { getByLabelText, post } = mount();
+    await type(getByLabelText("名前"), "me");
+    const prefix = getByLabelText("ID の接頭辞");
+    await type(prefix, "me");
+    await fireEvent.keyDown(prefix, { key: "Enter", isComposing: true });
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  it("作成できたあとに stores.reload が失敗しても、作成の成功として扱う", async () => {
+    const post = vi.fn().mockResolvedValue({ data: created, response: new Response() });
+    const reload = vi.fn().mockRejectedValue(new Error("network"));
+    const onclose = vi.fn();
+    const { getByLabelText, getByRole, queryByRole } = renderWithCore(
+      CreateStore,
+      { open: true, onclose },
+      { api: { POST: post }, stores: { reload, subscribe: () => () => {} } },
+    );
+    await type(getByLabelText("名前"), "me");
+    await type(getByLabelText("ID の接頭辞"), "me");
+    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
+    await vi.waitFor(() => expect(onclose).toHaveBeenCalledTimes(1));
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(queryByRole("alert")).toBeNull();
+    expect(toasts.list.map((t) => t.message)).toEqual(["Store「me」を作りました"]);
+    expect(location.pathname).toBe("/workspaces/me/01HWSME");
+  });
+
+  it("キャンセルすると失敗の表示を消す", async () => {
+    const post = vi.fn().mockRejectedValue(new Error("boom"));
+    const { getByLabelText, getByRole, queryByRole, onclose } = mount(post);
+    await type(getByLabelText("名前"), "me");
+    await type(getByLabelText("ID の接頭辞"), "ME");
+    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
+    await vi.waitFor(() => getByRole("alert"));
+    await fireEvent.click(getByRole("button", { name: "キャンセル" }));
+    expect(onclose).toHaveBeenCalledTimes(1);
+    expect(queryByRole("alert")).toBeNull();
+  });
+
+  it("作成中はキャンセルできず、閉じない", async () => {
+    let finish: (v: unknown) => void = () => {};
+    const post = vi.fn().mockReturnValue(new Promise((r) => (finish = r)));
+    const { getByLabelText, getByRole, onclose } = mount(post);
+    await type(getByLabelText("名前"), "me");
+    await type(getByLabelText("ID の接頭辞"), "ME");
+    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
+    const cancel = getByRole("button", { name: "キャンセル" }) as HTMLButtonElement;
+    expect(cancel.disabled).toBe(true);
+    await fireEvent.keyDown(window, { key: "Escape" });
+    expect(onclose).not.toHaveBeenCalled();
+    finish({ data: created, response: new Response() });
+    await vi.waitFor(() => expect(onclose).toHaveBeenCalledTimes(1));
+  });
 });
