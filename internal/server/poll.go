@@ -75,6 +75,7 @@ type Poller struct {
 	released map[string]bool // stores swapped for a rebuild, to tell the clients once
 	unread   int
 	looked   bool   // a poll has run
+	scanned  bool   // a poll has read the stores to the end (set under mu)
 	lastFail string // the last error of InboxList that was logged
 }
 
@@ -190,9 +191,9 @@ func (p *Poller) pollLocked(publish bool) {
 			p.mu.Lock()
 			swapped := p.released[e.Name]
 			delete(p.released, e.Name)
-			looked := p.looked
+			scanned := p.scanned
 			p.mu.Unlock()
-			if (swapped || looked) && publish {
+			if (swapped || scanned) && publish {
 				// The store was made again, or it appeared after the first look: the
 				// commits made before this look are not known (a page that made a
 				// task in a store just created would never be told), so the clients
@@ -229,6 +230,7 @@ func (p *Poller) pollLocked(publish bool) {
 		u.st.head, u.st.sync = u.head, u.sync
 		p.stores[u.name] = u.st
 	}
+	p.scanned = true
 	for name := range p.stores {
 		if !seen[name] {
 			delete(p.stores, name)

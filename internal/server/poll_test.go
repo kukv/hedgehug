@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -258,4 +260,66 @@ func TestPollNewStoreTellsTheClients(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitEvent(t, ch, func(e tasksChanged) bool { return e.Store == "later" })
+}
+
+func TestPollStoreThatComesBackTellsTheClients(t *testing.T) {
+	t.Parallel()
+	ts, ch := pollServer(t)
+	ts.srv.poller.settle()
+	if _, err := ts.session().StoreInit(ops.StoreInitInput{Name: "later", Prefix: "LT", Workspace: "later"}); err != nil {
+		t.Fatal(err)
+	}
+	waitEvent(t, ch, func(e tasksChanged) bool { return e.Store == "later" })
+	ts.srv.poller.settle()
+
+	c, _, err := ts.session().Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := c.Select("later")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.session().StoreRemove("later", false); err != nil {
+		t.Fatal(err)
+	}
+	ts.srv.poller.settle() // the poller forgets the store
+	c, _, err = ts.session().Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AddStore("later", e.Path, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	// What happened while it was away is not known: the clients read it again.
+	ts.srv.poller.poll(true)
+	waitEvent(t, ch, func(e tasksChanged) bool { return e.Store == "later" })
+}
+
+func TestPollFailedFirstLookIsNotTheFirstLook(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	ch, cancel := ts.srv.hub.Subscribe()
+	defer cancel()
+	cfg := filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml")
+	good, err := os.ReadFile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfg, []byte(": not yaml ["), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ts.srv.poller.poll(true) // returns early: the stores were not read
+	if err := os.WriteFile(cfg, good, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ts.srv.poller.poll(true) // the first look of the stores: it sends nothing
+	select {
+	case e := <-ch:
+		t.Errorf("event on the first look of the stores: %+v", e)
+	default:
+	}
 }

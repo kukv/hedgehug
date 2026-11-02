@@ -96,8 +96,8 @@ jobs:
         working-directory: web
         run: pnpm install --frozen-lockfile
 
-      # Playwright のブラウザは版ごとにキャッシュする（版は pnpm-lock.yaml に固定されている）。
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      # Playwright のブラウザは版ごとにキャッシュする（版は pnpm-lock.yaml に固定されている）。Go と同じく、保存は main への push だけ。
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: browser-cache
         with:
           path: ~/.cache/ms-playwright
@@ -127,6 +127,12 @@ jobs:
             ${{ steps.go-env.outputs.gomodcache }}
           key: ${{ steps.go-cache.outputs.cache-primary-key }}
 
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.event_name == 'push' && steps.browser-cache.outputs.cache-hit != 'true'
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.browser-cache.outputs.cache-primary-key }}
+
       # 失敗したときは trace（失敗したテストの画面の記録）と HTML のレポートを残す。
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
@@ -135,5 +141,5 @@ jobs:
           path: |
             web/test-results
             web/playwright-report
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: ignore
