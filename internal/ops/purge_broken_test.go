@@ -167,9 +167,13 @@ func TestPurgeGoneUnderTheLockIsNoCommit(t *testing.T) {
 	if _, err := a.Purge(0, true); err != nil {
 		t.Fatal(err)
 	}
+	headBefore, logBefore := f.head(t, "org-a"), len(f.log(t, "org-a"))
 	res, err := a.PurgeConfirmed(0, plan)
 	wantErr(t, err, KindConflict, "purge.changed")
 	if res.Commit != "" {
 		t.Errorf("commit = %q", res.Commit)
+	}
+	if head, n := f.head(t, "org-a"), len(f.log(t, "org-a")); head != headBefore || n != logBefore {
+		t.Errorf("the refused purge moved HEAD: %s -> %s, %d -> %d commits", headBefore, head, logBefore, n)
 	}
 }

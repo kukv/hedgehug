@@ -138,8 +138,14 @@ func TestPurgeSeesChildrenAddedMeanwhile(t *testing.T) {
 		live.DeletedAt = nil
 		return tx.PutTask(live)
 	})
+	before := len(te.log("me"))
 	if code, out, stderr := te.run("purge", "--older-than", "0d", "--yes"); code != 0 || out != "Nothing to purge\n" {
 		t.Errorf("purge over a live child added meanwhile: exit %d, stdout %q, stderr %q", code, out, stderr)
+	} else if !strings.Contains(stderr, "warning: kept (a task under each is not deleted): "+q.ID+"\n") {
+		t.Errorf("stderr %q; want the warning to name %s, which stays only since the lock", stderr, q.ID)
+	}
+	if got := len(te.log("me")); got != before+1 { // the write of the meanwhile, and no purge
+		t.Errorf("commits = %d; want %d: the meanwhile write and no purge", got, before+1)
 	}
 	if got := te.task(q.ULID); got.DeletedAt == nil {
 		t.Error("the parent of a live child lost its deleted_at")
@@ -205,8 +211,12 @@ func TestPurgeSeesATaskRestoredMeanwhile(t *testing.T) {
 	p := te.addJSON("p")
 	te.ok("rm", p.ID)
 	te.meanwhile(changeTask(p.ULID, func(t *model.Task) { t.DeletedAt = nil }))
+	before := len(te.log("me"))
 	if code, out, stderr := te.run("purge", "--older-than", "0d", "--yes"); code != 0 || out != "Nothing to purge\n" {
 		t.Errorf("purge: exit %d, stdout %q, stderr %q", code, out, stderr)
+	}
+	if got := len(te.log("me")); got != before+1 { // the write of the meanwhile, and no purge
+		t.Errorf("commits = %d; want %d: the meanwhile write and no purge", got, before+1)
 	}
 	if got := te.task(p.ULID); got.DeletedAt != nil {
 		t.Error("the task restored meanwhile is changed")

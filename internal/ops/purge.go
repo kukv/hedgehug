@@ -173,7 +173,7 @@ func (ss *Session) purge(days int, confirmed *PurgePlan, yes bool) (PurgeResult,
 	if err != nil {
 		return PurgeResult{}, err
 	}
-	plan, _, _ := ss.purgePlan(e.Name, ix, days)
+	plan, notDeleted, broken := ss.purgePlan(e.Name, ix, days)
 	if plan.Empty() && confirmed == nil {
 		return PurgeResult{PurgePlan: plan}, nil
 	}
@@ -181,6 +181,8 @@ func (ss *Session) purge(days int, confirmed *PurgePlan, yes bool) (PurgeResult,
 		return PurgeResult{}, confirmRequired("purge")
 	}
 	op := store.Op{Name: "purge", Detail: fmt.Sprintf("older than %dd", days)}
+	var lockedNotDeleted []string
+	var lockedBroken int
 	hash, err := ss.UpdateCommit(s, op, func(tx *store.Tx) error {
 		// Read again under the lock: what came in by a sync since is removed
 		// too when the removal was not confirmed one by one; if it was, a
@@ -188,7 +190,7 @@ func (ss *Session) purge(days int, confirmed *PurgePlan, yes bool) (PurgeResult,
 		if err := ix.Refresh(); err != nil {
 			return err
 		}
-		plan, _, _ = ss.purgePlan(e.Name, ix, days)
+		plan, lockedNotDeleted, lockedBroken = ss.purgePlan(e.Name, ix, days)
 		if confirmed != nil && !slices.Equal(plan.keys(), confirmed.keys()) {
 			return newErr(KindConflict, "purge.changed", errors.New("what is to be purged changed after the confirmation; run purge again"))
 		}
@@ -207,5 +209,10 @@ func (ss *Session) purge(days int, confirmed *PurgePlan, yes bool) (PurgeResult,
 	if err != nil {
 		return PurgeResult{}, err
 	}
+	// What the first look left was told of by the caller (PurgeList) or is
+	// not asked about; what is left only since the lock is told of now.
+	ss.warnPurgeLeft(
+		slices.DeleteFunc(lockedNotDeleted, func(id string) bool { return slices.Contains(notDeleted, id) }),
+		max(0, lockedBroken-broken))
 	return PurgeResult{PurgePlan: plan, Commit: commitHex(hash)}, nil
 }

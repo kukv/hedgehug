@@ -134,6 +134,9 @@ func TestPurgeForwardsAndJSON(t *testing.T) {
 	if f, ok := none["forwards"].([]any); !ok || len(f) != 0 || none["commit"] != nil {
 		t.Errorf("none = %v; want empty lists and no commit", none)
 	}
+	if tasks, ok := none["tasks"].([]any); !ok || len(tasks) != 0 {
+		t.Errorf("none tasks = %v; want []", none["tasks"])
+	}
 	if code, _, errs := te.run("show", "alpha:AA-2"); code == 0 || strings.Contains(errs, "moved to") {
 		t.Errorf("show of the old id after the purge: exit %d, %q", code, errs)
 	}

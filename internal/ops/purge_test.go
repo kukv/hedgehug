@@ -207,7 +207,7 @@ func TestPurgeRecordsTheNumbers(t *testing.T) {
 func TestPurgeConfirmedRefusesChanges(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
-	ts.addDeleted("first", daysAgo(ts, 100), nil)
+	first := ts.addDeleted("first", daysAgo(ts, 100), nil)
 	plan, err := ts.PurgeList(90)
 	if err != nil {
 		t.Fatal(err)
@@ -218,6 +218,9 @@ func TestPurgeConfirmedRefusesChanges(t *testing.T) {
 	wantErr(t, err, KindConflict, "purge.changed")
 	if _, ok := mustIndex2(t, ts).Task(later.ULID); !ok {
 		t.Error("a refused purge removed a task")
+	}
+	if _, ok := mustIndex2(t, ts).Task(first.ULID); !ok {
+		t.Error("a refused purge removed the confirmed task")
 	}
 	// nothing confirmed is no confirmation
 	_, err = ts.PurgeConfirmed(90, PurgePlan{})
