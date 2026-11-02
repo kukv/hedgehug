@@ -93,32 +93,39 @@ func TestAddHereRefusesAReadOnlyStore(t *testing.T) {
 	wantCode(t, "AddHere(read-only, by parent)", err, KindConflict, "store.read_only")
 }
 
-func TestAddHerePutsTheRepoOnTheTask(t *testing.T) {
+func TestAddHereRepoPutsTheRepoOnTheTask(t *testing.T) {
 	t.Parallel()
 	ts := newTwoStoreSession(t)
 	dir := repoDir(t, "", "https://github.com/Org-A/Web.git")
-	r, _, _, err := ts.AddHere(AddHereInput{Context: hhctx.Input{Dir: dir, Store: "org-a"}, Task: AddInput{Title: "linked"}})
+	// without Repo the repository is not put on the task
+	r, _, _, err := ts.AddHere(AddHereInput{Context: hhctx.Input{Dir: dir, Store: "org-a"}, Task: AddInput{Title: "unlinked"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reposOf(t, ts, "org-a", r.ULID); len(got) != 0 {
+		t.Errorf("without Repo: repos = %q", got)
+	}
+	r, _, _, err = ts.AddHere(AddHereInput{Context: hhctx.Input{Dir: dir, Store: "org-a"}, Repo: true, Task: AddInput{Title: "linked"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := reposOf(t, ts, "org-a", r.ULID); len(got) != 1 || got[0] != "github.com/org-a/web" {
-		t.Errorf("repos = %q; want the repo ID", got)
+		t.Errorf("Repo: repos = %q; want the repo ID", got)
 	}
-	r, _, _, err = ts.AddHere(AddHereInput{Context: hhctx.Input{Dir: dir, Store: "org-a"}, NoRepo: true, Task: AddInput{Title: "unlinked"}})
+	// the repo ID goes first, and is not repeated when the task has it
+	r, _, _, err = ts.AddHere(AddHereInput{
+		Context: hhctx.Input{Dir: dir, Store: "org-a"}, Repo: true,
+		Task: AddInput{Title: "both", Repos: []string{"github.com/o/other", "github.com/org-a/web"}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := reposOf(t, ts, "org-a", r.ULID); len(got) != 0 {
-		t.Errorf("--no-repo: repos = %q", got)
+	if got := reposOf(t, ts, "org-a", r.ULID); len(got) != 2 || got[0] != "github.com/o/other" || got[1] != "github.com/org-a/web" {
+		t.Errorf("Repo with repos given: repos = %q", got)
 	}
-	// no repository, no link
-	r, _, _, err = ts.AddHere(AddHereInput{Context: hhctx.Input{Dir: t.TempDir(), Store: "org-a"}, Task: AddInput{Title: "bare"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := reposOf(t, ts, "org-a", r.ULID); len(got) != 0 {
-		t.Errorf("no repository: repos = %q", got)
-	}
+	// Repo in a repository without a remote is a usage error
+	_, _, _, err = ts.AddHere(AddHereInput{Context: hhctx.Input{Dir: repoDir(t, "", ""), Store: "org-a"}, Repo: true, Task: AddInput{Title: "bare"}})
+	wantCode(t, "Repo in a repository without a remote", err, KindUsage, "add.repo_unavailable")
 }
 
 func TestAddHereStage4SetsRecent(t *testing.T) {
@@ -129,7 +136,7 @@ func TestAddHereStage4SetsRecent(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := repoDir(t, "", "https://github.com/org-a/web")
-	r, _, _, err := ts.AddHere(AddHereInput{Context: hhctx.Input{Dir: dir}, Task: AddInput{Title: "in the project"}})
+	r, _, _, err := ts.AddHere(AddHereInput{Context: hhctx.Input{Dir: dir}, Repo: true, Task: AddInput{Title: "in the project"}})
 	if err != nil {
 		t.Fatal(err)
 	}

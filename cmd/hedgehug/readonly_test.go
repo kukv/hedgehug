@@ -32,7 +32,7 @@ func TestReadOnlyRefusesWrites(t *testing.T) {
 		{"set", "ME-99", "title=x"},
 		{"done", "ME-1"},
 		{"rm", "ME-1"},
-		{"comment", "ME-1", "hi"},
+		{"comment", "add", "ME-1", "hi"},
 		{"workspace", "add", "w", "--prefix", "WW"},
 		{"purge", "--older-than", "0d", "--yes"},
 		{"undo"},

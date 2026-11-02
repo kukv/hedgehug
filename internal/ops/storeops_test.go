@@ -43,12 +43,12 @@ func TestStoreInitListRemove(t *testing.T) {
 	if list[1].Remotes == nil || len(list[1].Remotes) != 0 || list[1].LastSuccess != nil || list[1].Account != "github.com/alice" {
 		t.Errorf("the row of team = %+v; want empty remotes (not nil), no sync, the account github.com/alice", list[1])
 	}
-	rm, err := ts.StoreRemove("team", false)
+	rm, err := ts.StoreRemove("team", true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if rm != (StoreRemoveResult{Name: "team", Path: res.Path}) || !exists(res.Path) {
-		t.Errorf("StoreRemove = %+v; want the directory left", rm)
+		t.Errorf("StoreRemove --keep = %+v; want the directory left", rm)
 	}
 	if list, _ := ts.StoreList(); len(list) != 1 || list[0].Name != "me" {
 		t.Errorf("StoreList after the removal = %+v", list)
@@ -307,7 +307,7 @@ func TestStoreAddWarnsOfPrefixDuplicates(t *testing.T) {
 		t.Fatalf("warns = %q; want one", other.warns)
 	}
 	w := other.warns[0]
-	if !strings.HasPrefix(w, "ME is also the id prefix of workspace ") || !strings.Contains(w, "; the one set later (workspace ") || !strings.HasSuffix(w, ") should change it with hedgehug workspace prefix") {
+	if !strings.HasPrefix(w, "ME is also the id prefix of workspace ") || !strings.Contains(w, "; the one set later (workspace ") || !strings.HasSuffix(w, ") should change it with hedgehug workspace set-prefix") {
 		t.Errorf("warning = %q", w)
 	}
 }
@@ -328,7 +328,7 @@ func TestWarnPrefixDuplicatesNamesTheLaterWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	ts.warnPrefixDuplicates(c, "late", s)
-	want := "ME is also the id prefix of workspace me in store me; the one set later (workspace late in store late) should change it with hedgehug workspace prefix"
+	want := "ME is also the id prefix of workspace me in store me; the one set later (workspace late in store late) should change it with hedgehug workspace set-prefix"
 	if len(ts.warns) != 1 || ts.warns[0] != want {
 		t.Errorf("warns = %q; want %q", ts.warns, want)
 	}
@@ -403,24 +403,23 @@ func TestStoreRemoveNotFound(t *testing.T) {
 	}
 }
 
-func TestStoreRemovePurgeRefusals(t *testing.T) {
+func TestStoreRemoveRefusals(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
 	e := func() config.StoreEntry { _, e, _ := ts.Entry(); return e }()
 
 	// No remote: the commits are only here.
-	_, err := ts.StoreRemove("me", true)
+	_, err := ts.StoreRemove("me", false)
 	wantErr(t, err, KindConflict, "store.unpushed")
-	if want := "store me has no remote, so its commits are only in " + e.Path + "; delete the directory by hand if you mean to lose them"; err.Error() != want {
+	if want := "store me has no remote, so removing " + e.Path + " would lose its tasks for good; use --keep to take the store out of the config and leave the directory, or delete the directory yourself if you do not need it"; err.Error() != want {
 		t.Errorf("message = %q; want %q", err, want)
 	}
 
-	remote := addBareRemote(t, ts)
-	_ = remote
+	addBareRemote(t, ts)
 	// A remote the store never pushed to: all its commits are unpushed.
-	_, err = ts.StoreRemove("me", true)
+	_, err = ts.StoreRemove("me", false)
 	wantErr(t, err, KindConflict, "store.unpushed")
-	if !strings.Contains(err.Error(), "store me has ") || !strings.HasSuffix(err.Error(), " commits not pushed; run hedgehug sync --store me first") {
+	if !strings.Contains(err.Error(), "store me has ") || !strings.Contains(err.Error(), "not pushed; run hedgehug sync --store me first") || !strings.Contains(err.Error(), "--keep") {
 		t.Errorf("message = %q", err)
 	}
 
@@ -431,7 +430,7 @@ func TestStoreRemovePurgeRefusals(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(e.Path, "stray.txt"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err = ts.StoreRemove("me", true)
+	_, err = ts.StoreRemove("me", false)
 	wantErr(t, err, KindConflict, "store.unpushed")
 	if !strings.HasPrefix(err.Error(), "store me has changes that are not committed (") || !strings.Contains(err.Error(), "stray.txt") {
 		t.Errorf("message = %q", err)
@@ -444,17 +443,23 @@ func TestStoreRemovePurgeRefusals(t *testing.T) {
 	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = ts.StoreRemove("me", true)
+	_, err = ts.StoreRemove("me", false)
 	wantErr(t, err, KindConflict, "store.unpushed")
-	if want := "store me has 1 commits not pushed; run hedgehug sync --store me first"; err.Error() != want {
-		t.Errorf("message = %q; want %q", err, want)
+	if !strings.Contains(err.Error(), "run hedgehug sync --store me first") || !strings.Contains(err.Error(), "--keep") {
+		t.Errorf("message = %q", err)
 	}
 	if list, _ := ts.StoreList(); len(list) != 1 || !exists(e.Path) {
-		t.Error("a refused purge removed the store")
+		t.Error("a refused removal removed the store")
+	}
+
+	// --keep takes the store out all the same, and checks nothing.
+	res, err := ts.StoreRemove("me", true)
+	if err != nil || res != (StoreRemoveResult{Name: "me", Path: e.Path}) || !exists(e.Path) {
+		t.Errorf("StoreRemove --keep = %+v, %v; want the store out of the config and the directory left", res, err)
 	}
 }
 
-func TestStoreRemovePurgeOfAStoreThatDoesNotOpen(t *testing.T) {
+func TestStoreRemoveOfAStoreThatDoesNotOpen(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
 	addBareRemote(t, ts)
@@ -462,14 +467,14 @@ func TestStoreRemovePurgeOfAStoreThatDoesNotOpen(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(e.Path, model.StoreMetaPath), []byte("not: [yaml\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := ts.StoreRemove("me", true)
+	_, err := ts.StoreRemove("me", false)
 	wantErr(t, err, KindConflict, "store.unpushed")
-	if !strings.HasPrefix(err.Error(), "store me: ") || !strings.HasSuffix(err.Error(), "; delete the directory by hand if you mean to") {
+	if !strings.HasPrefix(err.Error(), "store me: ") || !strings.HasSuffix(err.Error(), "; delete the directory by hand if you mean to, or use --keep to take the store out of the config and leave it") {
 		t.Errorf("message = %q", err)
 	}
 }
 
-func TestStoreRemovePurgeDeletesAPushedStore(t *testing.T) {
+func TestStoreRemoveDeletesAPushedStore(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
 	addBareRemote(t, ts)
@@ -480,14 +485,57 @@ func TestStoreRemovePurgeDeletesAPushedStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, e, _ := ts.Entry()
-	res, err := ts.StoreRemove("me", true)
+	res, err := ts.StoreRemove("me", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res != (StoreRemoveResult{Name: "me", Path: e.Path, Purged: true}) || exists(e.Path) {
+	if res != (StoreRemoveResult{Name: "me", Path: e.Path, Deleted: true}) || exists(e.Path) {
 		t.Errorf("StoreRemove = %+v; want the directory deleted (%v)", res, exists(e.Path))
 	}
 	if list, _ := ts.StoreList(); len(list) != 0 {
 		t.Errorf("StoreList = %+v", list)
+	}
+}
+
+// A directory that is not there has nothing to lose: the store is only taken
+// out of the config, with or without a remote.
+func TestStoreRemoveOfADirectoryThatIsGone(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	_, e, _ := ts.Entry()
+	if err := os.RemoveAll(e.Path); err != nil {
+		t.Fatal(err)
+	}
+	res, err := ts.StoreRemove("me", false)
+	if err != nil || res != (StoreRemoveResult{Name: "me", Path: e.Path}) {
+		t.Errorf("StoreRemove = %+v, %v; want the config changed and nothing deleted", res, err)
+	}
+	if list, _ := ts.StoreList(); len(list) != 0 {
+		t.Errorf("StoreList = %+v", list)
+	}
+}
+
+// The store lock is held from the check until the directory is gone, so that
+// nothing is written between the two: it is held when the config is written,
+// which comes between them.
+func TestStoreRemoveHoldsTheStoreLock(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	addBareRemote(t, ts)
+	if _, err := ts.Sync(false, true); err != nil {
+		t.Fatal(err)
+	}
+	_, e, _ := ts.Entry()
+	lock := filepath.Join(e.Path, ".hedgehug", "local", "lock")
+	if heldElsewhere(lock) {
+		t.Fatal("the store is locked before the removal")
+	}
+	held := false
+	ts.BeforeUpdate = func() { held = heldElsewhere(lock) }
+	if _, err := ts.StoreRemove("me", false); err != nil {
+		t.Fatal(err)
+	}
+	if !held {
+		t.Error("the store lock was not held while the config was written")
 	}
 }

@@ -45,7 +45,7 @@ func newForwardEnv(t *testing.T) *testEnv {
 func TestDoctorForwardTargetIsAnInfo(t *testing.T) {
 	t.Parallel()
 	te := newForwardEnv(t)
-	te.ok("store", "remove", "bravo-long")
+	te.ok("store", "remove", "bravo-long", "--keep")
 	te.goldenRun("text", 0, "doctor")
 	te.goldenRun("json", 0, "doctor", "--json")
 }

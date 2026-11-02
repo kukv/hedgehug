@@ -148,6 +148,7 @@ func TestAsError(t *testing.T) {
 		{fmt.Errorf("x: %w", store.ErrNotFound), KindNotFound, "not_found"},
 		{&store.ValidationError{}, KindInvalid, "schema.violation"},
 		{store.ErrLocked, KindConflict, "store.locked"},
+		{store.ErrStoreGone, KindConflict, "store.gone"},
 		{fmt.Errorf("a: %w", isync.ErrDirty), KindConflict, "sync.dirty"},
 		{fmt.Errorf("a: %w", isync.ErrUnrelated), KindConflict, "sync.unrelated"},
 		{fmt.Errorf("a: %w", isync.ErrForcePush), KindConflict, "sync.force_push"},

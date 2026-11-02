@@ -517,7 +517,7 @@ func (s *Store) lockStore() (*fileLock, error) {
 	deadline := time.Now().Add(s.lockWait)
 	for {
 		s.mu.Lock()
-		l, err := acquire(s.path(lockPath), 0)
+		l, err := acquireStore(s.dir, s.path(lockPath), 0)
 		if err == nil {
 			return l, nil
 		}

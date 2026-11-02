@@ -34,6 +34,7 @@ type Input struct {
 	Sibling      string
 	DefaultStore string // config's default_store
 	Interactive  bool   // stdin is a terminal: stages 3–5 may ask
+	NeedRepo     bool   // --repo: fail unless the current directory has a repo ID
 	// The answers to what an earlier call asked; zero when not asked.
 	BranchParent  Answer // stage 3
 	PickProject   string // stage 4: the store-qualified id picked
@@ -153,6 +154,10 @@ func Resolve(set *mount.Set, st State, in Input, warn func(string)) (*Destinatio
 		repo = openRepo(in.Dir)
 	}
 	ids := repoIDsOf(repo)
+	if in.NeedRepo && len(ids) == 0 {
+		return nil, nil, nil, newError(KindUsage, "add.repo_unavailable",
+			errors.New("--repo needs the current directory to be in a git repository with a remote that gives a repo ID"))
+	}
 	stages := []func(*git.Repository, []string) (result, error){r.explicit, r.use, r.branch, r.repo, r.defaults}
 	for _, stage := range stages {
 		res, err := stage(repo, ids)
@@ -172,7 +177,10 @@ func Resolve(set *mount.Set, st State, in Input, warn func(string)) (*Destinatio
 
 // openRepo opens the git repository at dir or above it; nil when there is none.
 func openRepo(dir string) *git.Repository {
-	repo, err := git.PlainOpenWithOptions(dir, &git.PlainOpenOptions{DetectDotGit: true})
+	// A worktree's .git is a file that points into the .git of the main
+	// repository, where the remotes are: without the common dir the
+	// repository looks like one with no remote. HEAD is the worktree's own.
+	repo, err := git.PlainOpenWithOptions(dir, &git.PlainOpenOptions{DetectDotGit: true, EnableDotGitCommonDir: true})
 	if err != nil {
 		return nil
 	}

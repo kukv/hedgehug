@@ -23,7 +23,7 @@ func TestStoreDefault(t *testing.T) {
 	if code, _, errs := te.run("store", "default", "nope"); code != 1 || !strings.Contains(errs, "me, org") {
 		t.Errorf("unknown name: exit %d, %q", code, errs)
 	}
-	te.ok("store", "remove", "org")
+	te.ok("store", "remove", "org", "--keep")
 	if out := te.ok("store", "default"); strings.TrimSpace(out) != "-" {
 		t.Errorf("after removing the default: %q", out)
 	}

@@ -53,7 +53,10 @@ type AddInput struct {
 	Body                                   string
 	Before, After                          string
 	Repos                                  []string
-	Assigns                                []Assign
+	// FirstRepo is put at the front of the repos once the Assigns are applied,
+	// unless the task has it already (AddHere with Repo).
+	FirstRepo string
+	Assigns   []Assign
 }
 
 // Add adds a task.
@@ -154,6 +157,9 @@ func (ss *Session) Add(in AddInput) (TaskResult, error) {
 		if err := ApplyAssign(t, as, sc, ss.ResolveULID(ix)); err != nil {
 			return TaskResult{}, err
 		}
+	}
+	if in.FirstRepo != "" && !slices.Contains(t.Repos, in.FirstRepo) {
+		t.Repos = append([]string{in.FirstRepo}, t.Repos...)
 	}
 	if t.Rank, err = ss.rankAt(ix, t.ULID, t.Parent, t.Workspace, in.Before, in.After, "add.position"); err != nil {
 		return TaskResult{}, err

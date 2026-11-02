@@ -1,11 +1,11 @@
-Alpha
-  ☑ 1/2
+  title       Alpha
   id          ME-2
   ulid        <ULID-1>
   store       me
   workspace   me (ME, <ULID-2>)
   kind        task
   status      done
+  checklist   ☑ 1/2
   parent      ME-1 (<ULID-3>) Project
   assignees   -
   watchers    github.com/alice

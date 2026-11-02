@@ -155,7 +155,7 @@ func TestPurgeNeedsAStoreWhenThereAreSeveral(t *testing.T) {
 func TestPurgeAForwardToAStoreNotMounted(t *testing.T) {
 	t.Parallel()
 	te := newForwardEnv(t)
-	te.ok("store", "remove", "bravo-long")
+	te.ok("store", "remove", "bravo-long", "--keep")
 	if out := te.ok("purge", "--older-than", "0d", "--yes"); out != "Purged 0 tasks and 1 forward file from alpha\n" {
 		t.Errorf("printed %q", out)
 	}

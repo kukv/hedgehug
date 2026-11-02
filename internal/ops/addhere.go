@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
-	"slices"
 
 	hhctx "github.com/kukv/hedgehug/internal/context"
 	"github.com/kukv/hedgehug/internal/index"
@@ -14,7 +13,7 @@ import (
 // AddHereInput is hh add with the context: what Resolve takes, and the task.
 type AddHereInput struct {
 	Context hhctx.Input
-	NoRepo  bool
+	Repo    bool     // put the repo ID of the current repository on the task
 	Task    AddInput // Store, Parent and Workspace are set from the destination
 }
 
@@ -26,7 +25,7 @@ type AddHereResult struct {
 
 // AddHere resolves the destination (its Confirm and Choice are returned for
 // the CLI to ask), refuses a read-only store there, adds the task with the
-// repo ID of the current repository unless NoRepo, and sets recent when
+// repo ID of the current repository when Repo, and sets recent when
 // stage 4 picked a project (after the commit).
 //
 // The session's own --store is the Store of the context when that has none,
@@ -37,6 +36,7 @@ func (ss *Session) AddHere(in AddHereInput) (AddHereResult, *hhctx.Confirm, *hhc
 		return AddHereResult{}, nil, nil, err
 	}
 	ctx := in.Context
+	ctx.NeedRepo = in.Repo
 	if ctx.Parent == "" && ctx.Project == "" {
 		ctx.Sibling = cmp.Or(in.Task.Before, in.Task.After)
 	}
@@ -85,8 +85,8 @@ func (ss *Session) AddHere(in AddHereInput) (AddHereResult, *hhctx.Confirm, *hhc
 		// a --workspace given with the parent is for Add to check against it
 		task.Workspace = ctx.Workspace
 	}
-	if dest.RepoID != "" && !in.NoRepo && !slices.Contains(task.Repos, dest.RepoID) {
-		task.Repos = append([]string{dest.RepoID}, task.Repos...)
+	if in.Repo {
+		task.FirstRepo = dest.RepoID
 	}
 	res, err := ss.Add(task)
 	if err != nil {

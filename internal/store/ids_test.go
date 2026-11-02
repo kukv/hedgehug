@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
 
@@ -112,7 +113,7 @@ func TestAssignIDsRefusesABadPrefix(t *testing.T) {
 		}
 		mustWrite(t, s, model.WorkspacePath(ws.ULID), string(b)) // as if edited by hand
 		err = put(s, newTaskIn(ws, "x"))
-		if err == nil || !strings.Contains(err.Error(), model.WorkspacePath(ws.ULID)) || !strings.Contains(err.Error(), "hedgehug workspace prefix") {
+		if err == nil || !strings.Contains(err.Error(), model.WorkspacePath(ws.ULID)) || !strings.Contains(err.Error(), "hedgehug workspace set-prefix") {
 			t.Errorf("prefix %q: err = %v", prefix, err)
 		}
 	}
@@ -146,6 +147,8 @@ func TestConcurrentAddsGetDistinctIDs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// the test checks that no ID is given twice, not how long a writer waits
+	s.lockWait, other.lockWait = time.Minute, time.Minute
 	var wg sync.WaitGroup
 	tasks := make([]*model.Task, 20)
 	for i := range tasks {

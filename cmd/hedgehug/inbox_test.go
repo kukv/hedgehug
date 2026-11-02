@@ -124,7 +124,7 @@ func TestInboxAssignedAndMention(t *testing.T) {
 	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	alice.ok("set", "ORG-1", "assignees+=github.com/bob")
-	alice.ok("comment", "ORG-1", "look @bob")
+	alice.ok("comment", "add", "ORG-1", "look @bob")
 	alice.ok("sync")
 	bob.ok("sync")
 	bob.goldenOK("inbox", "inbox")
@@ -151,7 +151,7 @@ func TestInboxRead(t *testing.T) {
 	t.Parallel()
 	alice, bob, _ := twoUsers(t)
 	alice.ok("set", "ORG-1", "assignees+=github.com/bob")
-	alice.ok("comment", "ORG-1", "look @bob")
+	alice.ok("comment", "add", "ORG-1", "look @bob")
 	alice.ok("sync")
 	bob.ok("sync")
 	before := inboxItems(t, bob)
@@ -392,7 +392,7 @@ func TestInboxDuplicateNameMatchesTheName(t *testing.T) {
 	if got := ops.InboxContent(ix, item("name_duplicate", `"Web"`), "org", false); got != "Web is also the name of another workspace; change it with hedgehug workspace rename web <new name>" {
 		t.Errorf("name: %q", got)
 	}
-	if got := ops.InboxContent(ix, item("prefix_duplicate", `"WEB"`), "org", false); got != "WEB is also used by another workspace; change it with hedgehug workspace prefix web <new prefix>" {
+	if got := ops.InboxContent(ix, item("prefix_duplicate", `"WEB"`), "org", false); got != "WEB is also used by another workspace; change it with hedgehug workspace set-prefix web <new prefix>" {
 		t.Errorf("prefix: %q", got)
 	}
 	if got := ops.InboxContent(ix, item("name_duplicate", `""`), "org", false); !strings.Contains(got, "another workspace") {

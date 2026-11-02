@@ -8686,3 +8686,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Task 3: テストの定数 `aliceAccount` は既存の定数と衝突するので `personalAccount` にした。`printPinned` の複数形は `internal/plural` を使う。
 - Task 4: リフレッシュの前の `client_id` の確認に合わせ、`internal/auth/device_test.go` の `Host{Web: …}` 3 か所に `ClientID` を足した。
 - 最終レビュー: アカウントがないときの文言（`errNoAccounts`、`undo` の拒否、`NoAccountsWarning`、GUI の `account.none`）を `hedgehug auth add` を案内する形・`no account is set up` に揃えた。
+
+### Task 5〜8（PR B。Task 1〜4 のマージ後）
+
+- Task 5: `comment` の親コマンドは、引数があれば `comment add <id>` を案内する使い方の誤り（終了コード 2）にする。`workspace prefix` を案内していた文言（doctor・store/ids・ops の inbox・storeops）も `workspace set-prefix` にした。
+- Task 7: `store remove` の拒否（未 push・未コミット・Store を開けない）は `--keep` を案内する。ディレクトリがもうないときの出力は plan どおり `… was not there`。
+- Task 7: 既定で消すようになったので、Store のロック（`tx.go`・`move.go`・`local.go`）は `acquireStore` で取る。Store の根に `.git` がなければ、ディレクトリを作らずに `ErrStoreGone`（`store.gone`、KindConflict）を返す。待っている間にロックのファイルが消されたか入れ替わったとき（`os.SameFile` で比べる）も同じエラーになる。作るのは `.hedgehug` の下のディレクトリだけで、ロックなしの `WriteLocal` も同じ扱い。`WithFileLock`（Store の外のロック）は今のまま。GUI の文言も足した。
+- Task 8: `-p repos=…`・`repos+=…` を付けても、`--repo` の repo ID が先頭に残る（`AddInput.FirstRepo`。assigns を適用したあとに足す）。すでに repos にあれば動かさない（細部 3）。`TestNeedRepoFailsBeforeAnyQuestion` は、TMPDIR がリポジトリの中でも通るよう、素の一時ディレクトリの項目を外した。
+- 全体: `internal/store` の `TestConcurrentAddsGetDistinctIDs` は、負荷の下で待ちの上限を超えないよう lockWait を 1 分にした。`internal/server` の `Loop.parked()`（テスト用）は、遅れて届く Wake を数で数え、静止の判定を誤らないようにした（`TestLoopIntervalVisibleAndHidden` のぶれ）。

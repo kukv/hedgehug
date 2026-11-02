@@ -322,7 +322,7 @@ func checkWorkspaces(ix *index.Index) []Finding {
 				out = append(out, Finding{
 					Check: "workspace", Where: model.WorkspacePath(pair[0].ULID),
 					Msg:  fmt.Sprintf("has the same %s as workspace %s (%s)", what, pair[1].Name, pair[1].ULID),
-					Hint: "change one with hedgehug workspace prefix (or rename)",
+					Hint: "change one with hedgehug workspace set-prefix (or rename)",
 				})
 			}
 		}

@@ -153,6 +153,8 @@ const messages: Record<string, Make> = {
   "store.conflict": (a) =>
     `${str(a, "named")} の ID ですが、指定された Store は ${str(a, "store")} です`,
   "store.locked": () => "別の hh が書き込み中です。少し待ってからやり直してください",
+  "store.gone": () =>
+    "Store のディレクトリが削除されたか入れ替わりました。もう一度実行してください",
   "store.unpushed": (a) =>
     `${str(a, "name")} にはまだ push していない変更があります。先に同期してください`,
   "store.remote_required": () => "リモートの URL が必要です",

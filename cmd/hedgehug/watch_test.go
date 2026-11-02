@@ -25,10 +25,10 @@ func watchersOf(t *testing.T, te *testEnv, id string) []string {
 func TestAutoWatchers(t *testing.T) {
 	t.Parallel()
 	alice, _, _ := twoUsers(t)
-	alice.ok("add", "x")                                          // ORG-2: the writer watches
-	alice.ok("set", "ORG-2", "assignees+=github.com/bob")         // the assignee watches
-	alice.ok("comment", "ORG-2", "ping @carol")                   // the mentioned account, on the writer's host, watches
-	alice.ok("comment", "ORG-2", "and @example.com/dave, see me") // a mention with a host is kept as written
+	alice.ok("add", "x")                                                 // ORG-2: the writer watches
+	alice.ok("set", "ORG-2", "assignees+=github.com/bob")                // the assignee watches
+	alice.ok("comment", "add", "ORG-2", "ping @carol")                   // the mentioned account, on the writer's host, watches
+	alice.ok("comment", "add", "ORG-2", "and @example.com/dave, see me") // a mention with a host is kept as written
 	want := []string{"github.com/alice", "github.com/bob", "github.com/carol", "example.com/dave"}
 	if got := watchersOf(t, alice, "ORG-2"); !slices.Equal(got, want) {
 		t.Errorf("watchers = %v, want %v", got, want)
@@ -71,7 +71,7 @@ func TestAutoWatchersOnEditMention(t *testing.T) {
 
 func TestAutoWatchersOnCommentEdit(t *testing.T) {
 	alice, _, _ := twoUsers(t)
-	alice.ok("comment", "ORG-1", "hello")
+	alice.ok("comment", "add", "ORG-1", "hello")
 	var j struct{ Comments []struct{ ULID string } }
 	if err := json.Unmarshal([]byte(alice.ok("show", "ORG-1", "--json")), &j); err != nil || len(j.Comments) != 1 {
 		t.Fatalf("comments = %+v, %v", j.Comments, err)
@@ -106,7 +106,7 @@ func TestShowReferencedBy(t *testing.T) {
 	if out := alice.ok("show", "ORG-1"); strings.Contains(out, "Referenced by") {
 		t.Errorf("a section without references: %s", out)
 	}
-	alice.ok("comment", "ORG-2", "after #ORG-1")
+	alice.ok("comment", "add", "ORG-2", "after #ORG-1")
 	out := alice.ok("show", "ORG-1")
 	if !regexp.MustCompile(`Referenced by:\n\s+ORG-2 \([0-9A-Z]{26}\) b\n`).MatchString(out) {
 		t.Errorf("show = %s", out)
@@ -130,7 +130,7 @@ func TestCommentEditOnBrokenTask(t *testing.T) {
 	te := newStoreEnv(t)
 	te.writeAccounts("github.com", "alice")
 	x := te.addJSON("Alpha")
-	te.ok("comment", x.ULID, "hello")
+	te.ok("comment", "add", x.ULID, "hello")
 	var j struct{ Comments []struct{ ULID string } }
 	if err := json.Unmarshal([]byte(te.ok("show", x.ULID, "--json")), &j); err != nil || len(j.Comments) != 1 {
 		t.Fatalf("comments = %+v, %v", j.Comments, err)

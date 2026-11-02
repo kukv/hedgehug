@@ -80,6 +80,6 @@ func TestStoreRemoveRechecksExistenceInUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	hookConfigWrite(t, ts, func(c *config.Config) error { return c.RemoveStore("team") })
-	_, err := ts.StoreRemove("team", false)
+	_, err := ts.StoreRemove("team", true)
 	wantErr(t, err, KindNotFound, "store.not_found")
 }

@@ -129,7 +129,7 @@ func TestDoctorForwardTarget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.ts.StoreRemove("org-b", false); err != nil {
+	if _, err := f.ts.StoreRemove("org-b", true); err != nil {
 		t.Fatal(err)
 	}
 	f.ts.dropMount()

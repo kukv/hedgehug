@@ -82,7 +82,7 @@ func (tx *Tx) assignIDs() error {
 			return err
 		}
 		if err := model.ValidIDPrefix(ws.IDPrefix); err != nil {
-			return fmt.Errorf("%s: %w; fix it with hedgehug workspace prefix", model.WorkspacePath(ws.ULID), err)
+			return fmt.Errorf("%s: %w; fix it with hedgehug workspace set-prefix", model.WorkspacePath(ws.ULID), err)
 		}
 		if p, _, ok := model.ParseTaskID(t.ID); ok && p == ws.IDPrefix {
 			continue

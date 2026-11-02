@@ -44,7 +44,22 @@ func (s *Store) WriteLocal(name string, data []byte) error {
 	if err := validLocalName(name); err != nil {
 		return err
 	}
-	return atomicfile.WriteFile(s.path(LocalDir+"/"+name), data)
+	return writeLocalAt(s.dir, name, data)
+}
+
+// writeLocalAt writes the file name of .hedgehug/local of the store at dir,
+// making the directories below .hedgehug but not .hedgehug itself, so that a
+// store removed meanwhile is not made again: ErrStoreGone.
+func writeLocalAt(dir, name string, data []byte) error {
+	path := filepath.Join(dir, filepath.FromSlash(LocalDir+"/"+name))
+	if err := mkdirInStore(dir, path); err != nil {
+		return err
+	}
+	err := atomicfile.WriteFileInDir(path, data)
+	if errors.Is(err, fs.ErrNotExist) {
+		return ErrStoreGone
+	}
+	return err
 }
 
 // WriteLocalIn is WriteLocal for the store in dir, which it does not open: the
@@ -54,7 +69,7 @@ func WriteLocalIn(dir, name string, data []byte) error {
 	if err := validLocalName(name); err != nil {
 		return err
 	}
-	return atomicfile.WriteFile(filepath.Join(dir, filepath.FromSlash(LocalDir+"/"+name)), data)
+	return writeLocalAt(dir, name, data)
 }
 
 // WithLocalLock runs fn holding the file lock .hedgehug/local/<name>,
@@ -64,7 +79,7 @@ func (s *Store) WithLocalLock(name string, wait time.Duration, fn func() error) 
 	if err := validLocalName(name); err != nil {
 		return err
 	}
-	l, err := acquire(s.path(LocalDir+"/"+name), wait)
+	l, err := acquireStore(s.dir, s.path(LocalDir+"/"+name), wait)
 	if err != nil {
 		return err
 	}

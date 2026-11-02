@@ -16,7 +16,7 @@ func TestLog(t *testing.T) {
 	a := te.addJSON("First")
 	b := te.addJSON("Second")
 	te.ok("set", a.ID, "labels+=x")
-	te.ok("comment", a.ID, "hello")
+	te.ok("comment", "add", a.ID, "hello")
 
 	lines := func(args ...string) []string {
 		return strings.Split(strings.TrimRight(te.ok(args...), "\n"), "\n")
@@ -138,7 +138,7 @@ func TestShowHistory(t *testing.T) {
 	te := newStoreEnv(t)
 	a := te.addJSON("First")
 	for range 6 {
-		te.ok("comment", a.ID, "c")
+		te.ok("comment", "add", a.ID, "c")
 	}
 	out := te.ok("show", a.ID)
 	_, hist, ok := strings.Cut(out, "\nHistory:\n")

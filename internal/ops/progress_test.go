@@ -78,6 +78,30 @@ func TestChecklistOfAndText(t *testing.T) {
 			t.Errorf("ProgressText(%v, %v) = %q; want %q", c.c, c.p, got, c.want)
 		}
 	}
+	for _, c := range []struct {
+		c    *Count
+		want string
+	}{
+		{nil, ""},
+		{&Count{0, 0}, "☑ 0/0"},
+		{&Count{1, 3}, "☑ 1/3"},
+	} {
+		if got := ChecklistText(c.c); got != c.want {
+			t.Errorf("ChecklistText(%v) = %q; want %q", c.c, got, c.want)
+		}
+	}
+	for _, c := range []struct {
+		c    *Count
+		want string
+	}{
+		{nil, ""},
+		{&Count{0, 0}, "0/0"},
+		{&Count{1, 2}, "1/2"},
+	} {
+		if got := ProgressFractionText(c.c); got != c.want {
+			t.Errorf("ProgressFractionText(%v) = %q; want %q", c.c, got, c.want)
+		}
+	}
 }
 
 func TestViewHasChecklistAndProgress(t *testing.T) {

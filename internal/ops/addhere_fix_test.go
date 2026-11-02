@@ -9,7 +9,7 @@ import (
 	"github.com/kukv/hedgehug/internal/store"
 )
 
-func TestAddHereNoRepoStillSetsRecent(t *testing.T) {
+func TestAddHereWithoutRepoStillSetsRecent(t *testing.T) {
 	t.Parallel()
 	ts := newTwoStoreSession(t)
 	p, err := ts.ForStore("org-a").Add(AddInput{Title: "Web release", Kind: "project", Repos: []string{"github.com/org-a/web"}})
@@ -17,12 +17,12 @@ func TestAddHereNoRepoStillSetsRecent(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := repoDir(t, "", "https://github.com/org-a/web")
-	r, _, _, err := ts.AddHere(AddHereInput{Context: hhctx.Input{Dir: dir}, NoRepo: true, Task: AddInput{Title: "x"}})
+	r, _, _, err := ts.AddHere(AddHereInput{Context: hhctx.Input{Dir: dir}, Task: AddInput{Title: "x"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(reposOf(t, ts, "org-a", r.ULID)) != 0 {
-		t.Errorf("--no-repo put a repo on the task")
+		t.Errorf("an add without Repo put a repo on the task")
 	}
 	if got := loadContext(t, ts).Recent["github.com/org-a/web"]; got.Project != p.ULID {
 		t.Errorf("recent = %+v; want the project %s", got, p.ULID)

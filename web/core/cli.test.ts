@@ -106,7 +106,7 @@ describe("commands", () => {
     expect(cliRm("REL-8")).toBe("hh rm REL-8");
     expect(cliRestore("REL-8")).toBe("hh restore REL-8");
     expect(cliRestoreAt("REL-8", "abc123")).toBe("hh restore REL-8 --at abc123");
-    expect(cliComment("REL-8", "add")).toBe("hh comment REL-8");
+    expect(cliComment("REL-8", "add")).toBe("hh comment add REL-8");
     expect(cliComment("REL-8", "edit", "01HX")).toBe("hh comment edit 01HX");
     expect(cliComment("REL-8", "rm", "01HX")).toBe("hh comment rm 01HX");
     expect(cliWatch("REL-8", true)).toBe("hh watch REL-8");

@@ -284,7 +284,7 @@ func TestPollStoreThatComesBackTellsTheClients(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.session().StoreRemove("later", false); err != nil {
+	if _, err := ts.session().StoreRemove("later", true); err != nil {
 		t.Fatal(err)
 	}
 	ts.srv.poller.settle() // the poller forgets the store
@@ -311,7 +311,7 @@ func TestPollStoreThatComesBackTellsTheClients(t *testing.T) {
 func TestPollFirstStoreAfterNoStoreTellsTheClients(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	if _, err := ts.session().StoreRemove("me", false); err != nil {
+	if _, err := ts.session().StoreRemove("me", true); err != nil {
 		t.Fatal(err)
 	}
 	ts.srv.poller = newPoller(ts.srv, ts.srv.hub)

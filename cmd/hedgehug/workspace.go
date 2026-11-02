@@ -49,7 +49,7 @@ func (a *app) workspaceCmd() *cobra.Command {
 			RunE:  func(_ *cobra.Command, args []string) error { return a.workspaceRename(args[0], args[1]) },
 		},
 		&cobra.Command{
-			Use:   "prefix <workspace> <P>",
+			Use:   "set-prefix <workspace> <P>",
 			Short: "Change the id prefix of a workspace and renumber its tasks",
 			Args:  exactArgs(2),
 			RunE:  func(_ *cobra.Command, args []string) error { return a.workspacePrefix(args[0], args[1]) },

@@ -38,14 +38,6 @@ func (a *app) show(arg string) error {
 func (a *app) showText(storeName string, ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []ops.Relation, back []*index.Entry, history []gitrepo.LogEntry) string {
 	st := a.style()
 	var b strings.Builder
-	title := e.Title
-	if title == "" {
-		title = "-" // a file that does not decode
-	}
-	b.WriteString(title + "\n")
-	if p := ops.ProgressText(ops.ChecklistOf(e), ops.ProgressOf(ix, e)); p != "" {
-		b.WriteString("  " + p + "\n")
-	}
 	field := func(k string, vs ...string) {
 		v := strings.Join(vs, ", ")
 		if v == "" {
@@ -60,6 +52,7 @@ func (a *app) showText(storeName string, ix *index.Index, e *index.Entry, t *mod
 		}
 		return out
 	}
+	field("title", e.Title) // "-" for a file that does not decode
 	field("id", ix.DisplayID(e))
 	field("ulid", e.ULID.String())
 	field("store", storeName)
@@ -79,6 +72,12 @@ func (a *app) showText(storeName string, ix *index.Index, e *index.Entry, t *mod
 	}
 	field("kind", e.Kind)
 	field("status", e.Status)
+	if c := ops.ChecklistText(ops.ChecklistOf(e)); c != "" {
+		field("checklist", c)
+	}
+	if p := ops.ProgressFractionText(ops.ProgressOf(ix, e)); p != "" {
+		field("progress", p)
+	}
 	if e.Parent != nil {
 		field("parent", ops.RefName(ix, *e.Parent))
 	} else {

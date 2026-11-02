@@ -129,7 +129,7 @@ func TestE2EPhase3c(t *testing.T) {
 
 	// bob edits and comments on the child before the move, and does not push.
 	bob.ok("set", child.ID, "title=child by bob", "--store", "org-a")
-	bob.ok("comment", child.ID, "bob was here", "--store", "org-a")
+	bob.ok("comment", "add", child.ID, "bob was here", "--store", "org-a")
 	// Commit times are seconds: the move must be a second later than bob's
 	// edit, or the two would tie.
 	sleepToNextSecond()

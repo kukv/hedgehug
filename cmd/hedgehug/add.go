@@ -15,7 +15,7 @@ import (
 
 func (a *app) addCmd() *cobra.Command {
 	var parent, project, kind, status, workspace, body, before, after string
-	var noRepo bool
+	var withRepo bool
 	var props []string
 	cmd := &cobra.Command{
 		Use:   "add <title>",
@@ -31,7 +31,7 @@ func (a *app) addCmd() *cobra.Command {
 			}
 			return a.add(ops.AddHereInput{
 				Context: hhctx.Input{Parent: parent, Project: project, Workspace: workspace},
-				NoRepo:  noRepo,
+				Repo:    withRepo,
 				Task:    ops.AddInput{Title: strings.Join(args, " "), Kind: kind, Status: status, Body: body, Assigns: assigns, Before: before, After: after},
 			})
 		},
@@ -45,7 +45,7 @@ func (a *app) addCmd() *cobra.Command {
 	f.StringVar(&before, "before", "", "put it just before this sibling (without --parent, under the sibling's parent)")
 	f.StringVar(&after, "after", "", "put it just after this sibling (without --parent, under the sibling's parent)")
 	f.StringVar(&body, "body", "", "the body, in Markdown")
-	f.BoolVar(&noRepo, "no-repo", false, "do not put the current repository on the task")
+	f.BoolVar(&withRepo, "repo", false, "put the current repository on the task (the repo ID of its remote: origin, else another remote)")
 	f.StringArrayVarP(&props, "prop", "p", nil, "set a field or a property, as in hedgehug set (repeatable)")
 	return cmd
 }

@@ -176,7 +176,7 @@ func TestAddWithAccount(t *testing.T) {
 	if c.Author.Name != "alice" || c.Author.Email != "alice@users.noreply.github.com" || !strings.Contains(c.Message, "Hedgehug-Author: github.com/alice") {
 		t.Errorf("commit = %+v", c)
 	}
-	te.ok("comment", x.ID, "hi")
+	te.ok("comment", "add", x.ID, "hi")
 	cs := te.comments(x.ULID)
 	if len(cs) != 1 || cs[0].Author != "github.com/alice" {
 		t.Errorf("comments = %+v", cs)

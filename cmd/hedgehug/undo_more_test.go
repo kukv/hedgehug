@@ -29,7 +29,7 @@ func TestUndoComment(t *testing.T) {
 	te.writeAccounts("github.com", "alice")
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.ok("add", "x")
-	te.ok("comment", "ME-1", "hello")
+	te.ok("comment", "add", "ME-1", "hello")
 	if got := te.ok("show", "ME-1", "--json"); !strings.Contains(got, "hello") {
 		t.Fatalf("no comment: %s", got)
 	}
@@ -45,7 +45,7 @@ func TestUndoAddKeepsTaskOthersChanged(t *testing.T) {
 	te.writeAccounts("github.com", "alice")
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.ok("add", "x")
-	te.withOtherWriter("github.com/bob", func() { te.ok("comment", "ME-1", "from bob") }) // bob becomes a watcher too
+	te.withOtherWriter("github.com/bob", func() { te.ok("comment", "add", "ME-1", "from bob") }) // bob becomes a watcher too
 	te.goldenOK("undo", "undo")
 	if got := te.ok("show", "ME-1", "--json"); !strings.Contains(got, "from bob") {
 		t.Errorf("the task or its comment is gone: %s", got)

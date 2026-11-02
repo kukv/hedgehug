@@ -75,30 +75,35 @@ func (a *app) storeList() error {
 }
 
 func (a *app) storeRemoveCmd() *cobra.Command {
-	var purge bool
+	var keep bool
 	cmd := &cobra.Command{
 		Use:   "remove <name>",
-		Short: "Take a store out of the config",
-		Long:  "Remove takes the store out of config.yaml and leaves its directory. With --purge it deletes the directory too, unless commits are not pushed yet.",
-		Args:  exactArgs(1),
-		RunE:  func(_ *cobra.Command, args []string) error { return a.storeRemove(args[0], purge) },
+		Short: "Remove a store and delete its directory",
+		Long: `Remove takes the store out of config.yaml and deletes its directory.
+
+It refuses when the store has commits that are not pushed, changes that are not committed, or no remote: the tasks could not be got back. Run hedgehug sync --store <name> first. With --keep it only takes the store out of config.yaml and leaves the directory, and checks nothing.`,
+		Args: exactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error { return a.storeRemove(args[0], keep) },
 	}
-	cmd.Flags().BoolVar(&purge, "purge", false, "delete the directory of the store too")
+	cmd.Flags().BoolVar(&keep, "keep", false, "take the store out of the config and leave its directory")
 	return cmd
 }
 
-func (a *app) storeRemove(name string, purge bool) error {
-	r, err := a.ss.StoreRemove(name, purge)
+func (a *app) storeRemove(name string, keep bool) error {
+	r, err := a.ss.StoreRemove(name, keep)
 	if err != nil {
 		return err
 	}
 	if a.jsonOut {
 		return a.printJSON(r)
 	}
-	if purge {
+	switch {
+	case r.Deleted:
 		_, err = fmt.Fprintf(a.stdout, "Removed store %s and deleted %s\n", name, r.Path)
-	} else {
+	case keep:
 		_, err = fmt.Fprintf(a.stdout, "Removed store %s from the config; %s is left\n", name, r.Path)
+	default:
+		_, err = fmt.Fprintf(a.stdout, "Removed store %s from the config; %s was not there\n", name, r.Path)
 	}
 	return err
 }

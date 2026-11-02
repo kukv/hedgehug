@@ -156,7 +156,7 @@ func TestE2EPhase3b(t *testing.T) {
 	// with web on the task, and told where it went.
 	projectULID := taskOf(t, alice, "org-a:ORG-1").ULID
 	web := filepath.Join(alice.home, "src", "web")
-	out, _ = alice.okIn(web, "add", "x")
+	out, _ = alice.okIn(web, "add", "x", "--repo")
 	if !strings.Contains(out, "→ added to org-a / Web release") {
 		t.Errorf("add in the clone of web:\n%s", out)
 	}
@@ -184,8 +184,13 @@ func TestE2EPhase3b(t *testing.T) {
 	if onBranch.Parent == web1 || onBranch.Parent != projectULID {
 		t.Errorf("the task on the branch hh/WEB-1-x has parent %s, want the project %s (not WEB-1 %s)", onBranch.Parent, projectULID, web1)
 	}
-	if out, _ := alice.okIn(web, "add", "z", "--no-repo"); !strings.Contains(out, "added to org-a / Web release") {
-		t.Errorf("add --no-repo in the clone:\n%s", out)
+	// without --repo the task goes to the same place and has no repo on it
+	var plain taskInfo
+	out, _ = alice.okIn(web, "add", "z", "--json")
+	if err := json.Unmarshal([]byte(out), &plain); err != nil || plain.Parent != projectULID {
+		t.Errorf("add without --repo in the clone: %v %q (project %s)", err, out, projectULID)
+	} else if x := taskOf(t, alice, plain.ULID); len(x.Repos) != 0 {
+		t.Errorf("a task added in the clone without --repo has repos %q", x.Repos)
 	}
 
 	// use: the id is shown with its store as ORG is in two (D7); new tasks go
@@ -222,7 +227,7 @@ func TestE2EPhase3b(t *testing.T) {
 	var c struct {
 		ULID string `json:"ulid"`
 	}
-	if err := json.Unmarshal([]byte(bob.ok("comment", "WEB-1", "from bob", "--json")), &c); err != nil || c.ULID == "" {
+	if err := json.Unmarshal([]byte(bob.ok("comment", "add", "WEB-1", "from bob", "--json")), &c); err != nil || c.ULID == "" {
 		t.Fatalf("bob's comment: %v", err)
 	}
 	bob.ok("sync")
@@ -243,7 +248,7 @@ func TestE2EPhase3b(t *testing.T) {
 
 	// mentions: bob is a collaborator of org-a, so there is no warning; once
 	// GitHub no longer lists him and a sync has read that, a mention warns.
-	if _, errs := alice.okIn("", "comment", "WEB-1", "hello @bob"); strings.Contains(errs, "cannot read") {
+	if _, errs := alice.okIn("", "comment", "add", "WEB-1", "hello @bob"); strings.Contains(errs, "cannot read") {
 		t.Errorf("a mention of a reader warned: %q", errs)
 	}
 	if err := fake.SetPerm("org-a/hh-shared", "bob", "none"); err != nil {
@@ -274,7 +279,7 @@ func TestE2EPhase3b(t *testing.T) {
 	if mem, err := hhsync.ReadMembers(orgA); err != nil || mem.Collaborators == nil || slices.ContainsFunc(mem.Collaborators, func(c hhsync.Collaborator) bool { return strings.HasSuffix(c.ID, "/bob") }) {
 		t.Errorf("members.json after the sync: %+v (%v), want collaborators without bob", mem, err)
 	}
-	if _, errs := alice.okIn("", "comment", "WEB-1", "again @bob"); !strings.Contains(errs, "warning: bob cannot read org-a") {
+	if _, errs := alice.okIn("", "comment", "add", "WEB-1", "again @bob"); !strings.Contains(errs, "warning: bob cannot read org-a") {
 		t.Errorf("a mention of someone who cannot read: %q", errs)
 	}
 }
