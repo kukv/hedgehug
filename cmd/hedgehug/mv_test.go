@@ -80,6 +80,26 @@ func TestAddAfterBefore(t *testing.T) {
 	}
 }
 
+// Both --before and --after are refused first: nothing is asked or looked up.
+func TestAddAndMvRefuseBothPositionsFirst(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	p := te.addJSON("P")
+	te.cloneDir("hh/"+p.ID+"-login", "https://github.com/org-a/other")
+	te.terminal = true
+	te.stdin = "n\n"
+	for _, args := range [][]string{
+		{"add", "x", "-p", "bogus", "--before", "ME-9", "--after", "ME-9"},
+		{"add", "x", "--before", p.ID, "--after", p.ID},
+		{"mv", "ME-9", "--before", "ME-9", "--after", "ME-9"},
+	} {
+		code, _, stderr := te.run(args...)
+		if code != 2 || !strings.Contains(stderr, "give --before or --after, not both") || strings.Contains(stderr, "Add as a child") {
+			t.Errorf("%v: code %d stderr %q", args, code, stderr)
+		}
+	}
+}
+
 // A merge can leave siblings with one rank; they are ordered by id and no
 // rank lies between them, so mv puts the task past the group on the side it
 // was asked for, whatever its own id.

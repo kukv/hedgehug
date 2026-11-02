@@ -22,6 +22,9 @@ func (a *app) addCmd() *cobra.Command {
 		Short: "Add a task",
 		Args:  minArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
+			if err := ops.CheckPosition(before, after); err != nil {
+				return err
+			}
 			assigns, err := ops.ParseAssigns(props)
 			if err != nil {
 				return err

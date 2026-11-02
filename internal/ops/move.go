@@ -246,6 +246,15 @@ func (ss *Session) moveTargetOf(ix *index.Index, e, p *index.Entry, w *model.Wor
 	return to, err
 }
 
+// CheckPosition refuses both before and after (position.both). The CLI calls
+// it as soon as it has read the flags, before it asks or looks anything up.
+func CheckPosition(before, after string) error {
+	if before != "" && after != "" {
+		return newErr(KindUsage, "position.both", errors.New("give --before or --after, not both"))
+	}
+	return nil
+}
+
 // rankAt returns the rank for ulid under parent in workspace ws: just before
 // or after a sibling, or after every sibling. Siblings that share a rank are
 // ordered by id, so no rank lies between them: next to one of a group, the
@@ -254,8 +263,8 @@ func (ss *Session) moveTargetOf(ix *index.Index, e, p *index.Entry, w *model.Wor
 // parent or workspace) is the error code the caller gives, move.invalid for
 // Move and add.position for Add.
 func (ss *Session) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, ws model.ULID, before, after, code string) (model.Rank, error) {
-	if before != "" && after != "" {
-		return "", newErr(KindUsage, "position.both", errors.New("give --before or --after, not both"))
+	if err := CheckPosition(before, after); err != nil {
+		return "", err
 	}
 	if before == "" && after == "" {
 		return EndRank(ix, parent, ws, ulid)
