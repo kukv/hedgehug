@@ -282,6 +282,24 @@ describe("TaskCache fetch order", () => {
     w.dispose();
   });
 
+  it("does not bring back a task purged after the list was sent", async () => {
+    let open!: () => void;
+    const gate = new Promise<void>((r) => {
+      open = r;
+    });
+    const { cache } = setup(async () => {
+      await gate;
+      return { tasks: [tv("A"), tv("B")] };
+    });
+    const w = cache.watchList({ q: "", tree: false });
+    cache.applyWrite({ ulids: ["A"], commit: "c1" });
+    open();
+    await vi.waitFor(() => expect(w.loading()).toBe(false));
+    expect(cache.task("A")).toBeUndefined();
+    expect(cache.task("B")).toBeDefined();
+    w.dispose();
+  });
+
   it("does not notify when a detail fetched again did not change", async () => {
     const { cache, conn } = setup(() => showOf(tv("A", "a")));
     const w = cache.watchDetail("A");

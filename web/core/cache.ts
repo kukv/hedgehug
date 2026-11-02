@@ -321,7 +321,7 @@ export class TaskCache {
     const row = rowOf(t);
     const sig = JSON.stringify(row);
     const old = this.rows.get(row.ulid);
-    if (old && since !== undefined && this.wroteSince(row.ulid, since)) return old;
+    if (since !== undefined && this.wroteSince(row.ulid, since)) return old ?? row;
     if (old && this.rowSigs.get(row.ulid) === sig) return old;
     this.rows.set(row.ulid, row);
     this.rowSigs.set(row.ulid, sig);
@@ -339,9 +339,12 @@ export class TaskCache {
         this.api.GET("/api/tasks/{id}", { params: { path: { id: s.key } } }),
       );
       if (seq !== s.seq) return;
-      const row = this.ingest(show, since);
       const stale = this.wroteSince(show.ulid, since);
-      if (!stale || !this.shows.has(show.ulid)) this.putShow(stale ? { ...show, ...row } : show);
+      const gone = stale && !this.rows.has(show.ulid); // purged after the fetch began
+      const row = this.ingest(show, since);
+      if (!gone && (!stale || !this.shows.has(show.ulid))) {
+        this.putShow(stale ? { ...show, ...row } : show);
+      }
       if (s.error || s.ulid !== show.ulid) this.dirty = true;
       s.ulid = show.ulid;
       s.error = null;
@@ -385,7 +388,10 @@ export class TaskCache {
       const label = SYNC_OPS.has(e.op) ? "同期で更新 · 今" : "CLI で更新 · 今";
       for (const u of ulids) this.setMark(u, label, e.commit);
     }
-    for (const u of removed) this.forget(u);
+    for (const u of removed) {
+      this.markWrite(u);
+      this.forget(u);
+    }
     this.queueRefresh([...ulids, ...removed]);
     this.flush();
   }
