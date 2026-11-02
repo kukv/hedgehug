@@ -3,6 +3,8 @@ package history
 import (
 	"bytes"
 	"encoding/binary"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/store"
@@ -29,6 +31,8 @@ const (
 	fileMagic  = "HHHI"
 	fileFormat = 1
 	hashLen    = 20
+
+	maxZoneOffset = 18 * 60 * 60 // seconds; an offset beyond ±18h is damage
 )
 
 // strTable gives each distinct string a number.
@@ -49,8 +53,10 @@ func (t *strTable) id(s string) int {
 	return len(t.list) - 1
 }
 
-func putU(b *bytes.Buffer, v uint64) { b.Write(binary.AppendUvarint(nil, v)) }
-func putI(b *bytes.Buffer, v int64)  { b.Write(binary.AppendVarint(nil, v)) }
+// putU and putI append into the buffer's spare capacity, so a number does
+// not allocate.
+func putU(b *bytes.Buffer, v uint64) { b.Write(binary.AppendUvarint(b.AvailableBuffer(), v)) }
+func putI(b *bytes.Buffer, v int64)  { b.Write(binary.AppendVarint(b.AvailableBuffer(), v)) }
 
 func (h *History) save(s *store.Store) {
 	var strs strTable
@@ -69,7 +75,9 @@ func (h *History) save(s *store.Store) {
 		}
 	}
 	putU(&body, uint64(len(h.byPath)))
-	for p, idx := range h.byPath {
+	// Sorted, so that the same index always gives the same bytes.
+	for _, p := range slices.Sorted(maps.Keys(h.byPath)) {
+		idx := h.byPath[p]
 		putU(&body, uint64(strs.id(p)))
 		putU(&body, uint64(len(idx)))
 		prev := 0
@@ -171,6 +179,9 @@ func (h *History) load(s *store.Store) bool {
 		copy(c.Hash[:], r.bytes(hashLen))
 		sec := r.varint()
 		off := r.varint()
+		if off < -maxZoneOffset || off > maxZoneOffset {
+			return false
+		}
 		c.When = time.Unix(sec, 0).In(time.FixedZone("", int(off)))
 		c.Gen = uint32(r.uvarint())
 		c.Author, c.Email, c.Op, c.Task, c.Workspace = str(), str(), str(), str(), str()

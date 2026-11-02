@@ -96,9 +96,6 @@ func setMain(t *testing.T, s *store.Store, h plumbing.Hash) {
 	}
 }
 
-// resetMain moves main back to h, as a hand edit or a force push could.
-func resetMain(t *testing.T, s *store.Store, h plumbing.Hash) { setMain(t, s, h) }
-
 func hashes(cs []history.Commit) []plumbing.Hash {
 	out := make([]plumbing.Hash, len(cs))
 	for i, c := range cs {
@@ -272,7 +269,7 @@ func TestOpenRebuildsWhenTipIsGone(t *testing.T) {
 	if _, err := history.Open(s, history.Options{}); err != nil {
 		t.Fatal(err)
 	}
-	resetMain(t, s, base) // HEAD back: the indexed tip is no longer in its history
+	setMain(t, s, base) // HEAD back, as a force push could: the indexed tip is no longer in its history
 	c := writeTask(t, s, model.NewULID(), "b")
 	h, err := history.Open(s, history.Options{})
 	if err != nil {
