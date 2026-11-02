@@ -7,7 +7,7 @@ import type { WorkspaceEntry } from "../../core/stores";
 import { changed, FakeConn, fakeApi, problem, tv } from "../../core/testing";
 import { closeCreate, createState } from "../create-state.svelte";
 import { router } from "../router";
-import { renderWithCore } from "../test-utils";
+import { emitter, renderWithCore } from "../test-utils";
 import { schema } from "../tree/fixtures";
 import WorkspaceOverview from "./WorkspaceOverview.svelte";
 
@@ -61,23 +61,29 @@ function setup(initial: TaskView[], route?: (path: string) => unknown, schemaFai
   });
   const conn = new FakeConn();
   const cache = new TaskCache({ api, conn: conn.asConnection() });
-  const none = () => () => {};
+  const sch = emitter();
+  let schemaReady = !schemaFails;
   const r = renderWithCore(
     WorkspaceOverview,
     { entry },
     {
       cache,
       schema: {
-        get: () => (schemaFails ? undefined : schema),
+        get: () => (schemaReady ? schema : undefined),
         load: async () => {
           if (schemaFails) throw new Error("schema down");
           return schema;
         },
-        subscribe: none,
+        subscribe: sch.subscribe,
       },
     },
   );
-  return { ...r, rows, conn, cache, calls };
+  // Puts the schema in the store by another path after the load has failed.
+  const schemaArrives = () => {
+    schemaReady = true;
+    sch.emit();
+  };
+  return { ...r, rows, conn, cache, calls, schemaArrives };
 }
 
 describe("WorkspaceOverview", () => {
@@ -109,6 +115,18 @@ describe("WorkspaceOverview", () => {
       "スキーマを読めないため、カテゴリ別の件数を出せません",
     );
     expect(screen.queryByRole("img", { name: /未着手/ })).toBeNull();
+  });
+
+  it("shows the band once the schema arrives, even after its load failed", async () => {
+    const { schemaArrives } = setup(all, undefined, true);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "スキーマを読めないため、カテゴリ別の件数を出せません",
+    );
+    schemaArrives();
+    expect(
+      await screen.findByRole("img", { name: "未着手 1 · 進行中 3 · 完了 1 · 中止 1" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("lists the projects with progress, due date and assignee", async () => {

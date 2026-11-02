@@ -114,7 +114,7 @@
     <section class="counts" aria-label="件数">
       <p class="total">{total} 件{loading ? "" : ` · プロジェクト ${projects.length}`}</p>
       <p class="note">削除済みは含めません</p>
-      {#if schemaError}
+      {#if schemaError && !schema}
         <p class="msg error" role="alert">
           スキーマを読めないため、カテゴリ別の件数を出せません · {errorMessage(schemaError)}
         </p>
