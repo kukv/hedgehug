@@ -143,15 +143,37 @@ func (ts *testSession) dropAccounts() {
 	if err != nil {
 		ts.t.Fatal(err)
 	}
-	text, _, _ := strings.Cut("\n"+string(b), "\naccounts:")
-	text = strings.TrimPrefix(text, "\n")
-	if text != "" {
-		text += "\n"
+	var doc yaml.Node
+	if err := yaml.Load(b, &doc); err != nil {
+		ts.t.Fatal(err)
 	}
-	if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
+	if len(doc.Content) > 0 {
+		root := doc.Content[0]
+		for i := 0; i+1 < len(root.Content); i += 2 {
+			if root.Content[i].Value == "accounts" {
+				root.Content = append(root.Content[:i], root.Content[i+2:]...)
+				break
+			}
+		}
+	}
+	out, err := yaml.Dump(&doc, yaml.WithLineWidth(-1), yaml.WithIndent(2))
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	if err := os.WriteFile(p, out, 0o600); err != nil {
 		ts.t.Fatal(err)
 	}
 	ts.resetWriter()
+}
+
+// BeforeCommand is Session.BeforeCommand for the config as it is now.
+func (ts *testSession) BeforeCommand(start func(s *store.Store, name string) error, report func(store, msg string)) {
+	ts.t.Helper()
+	c, _, err := ts.Config()
+	if err != nil {
+		ts.t.Fatal(err)
+	}
+	ts.Session.BeforeCommand(c, start, report)
 }
 
 // hasDefaultAccount reports whether config.yaml still has defaultAccountYAML.
