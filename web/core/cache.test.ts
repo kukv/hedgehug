@@ -297,6 +297,24 @@ describe("TaskCache fetch order", () => {
     await vi.waitFor(() => expect(w.loading()).toBe(false));
     expect(cache.task("A")).toBeUndefined();
     expect(cache.task("B")).toBeDefined();
+    expect(w.ulids()).toEqual(["B"]);
+    w.dispose();
+  });
+
+  it("does not bring back a task purged after the tree was sent", async () => {
+    let open!: () => void;
+    const gate = new Promise<void>((r) => {
+      open = r;
+    });
+    const { cache } = setup(async () => {
+      await gate;
+      return { roots: [tv("R", "r", { children: [tv("A"), tv("B")] })] };
+    });
+    const w = cache.watchTree({ q: "", tree: true });
+    cache.applyWrite({ ulids: ["A"], commit: "c1" });
+    open();
+    await vi.waitFor(() => expect(w.loading()).toBe(false));
+    expect(w.roots()).toEqual([{ ulid: "R", children: [{ ulid: "B", children: [] }] }]);
     w.dispose();
   });
 

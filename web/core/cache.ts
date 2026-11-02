@@ -275,21 +275,20 @@ export class TaskCache {
       );
       if (seq !== s.seq || s.released) return; // a newer fetch is on its way
       if (tree) {
-        const roots = reuseNodes(
-          (out.roots ?? []).map((t) => this.ingestTree(t, since)),
-          s.roots,
-        );
+        const roots = reuseNodes(this.ingestTrees(out.roots ?? [], since), s.roots);
         if (roots !== s.roots) {
           s.roots = roots;
           this.dirty = true;
         }
-        const cycle = (out.cycle ?? []).map((t) => this.ingestTree(t, since).ulid);
+        const cycle = this.ingestTrees(out.cycle ?? [], since).map((n) => n.ulid);
         if (!sameList(cycle, s.cycle)) {
           s.cycle = cycle;
           this.dirty = true;
         }
       } else {
-        const ulids = (out.tasks ?? []).map((t) => this.ingest(t, since).ulid);
+        const ulids = (out.tasks ?? [])
+          .filter((t) => !this.gone(t.ulid, since))
+          .map((t) => this.ingest(t, since).ulid);
         if (!sameList(ulids, s.ulids)) {
           s.ulids = ulids;
           this.dirty = true;
@@ -310,9 +309,19 @@ export class TaskCache {
   }
 
   // ingestTree takes in a task and, under it, its children.
-  private ingestTree(t: TaskView, since: number): TreeNode {
-    const row = this.ingest(t, since);
-    return { ulid: row.ulid, children: (t.children ?? []).map((c) => this.ingestTree(c, since)) };
+  private ingestTrees(ts: TaskView[], since: number): TreeNode[] {
+    return ts
+      .filter((t) => !this.gone(t.ulid, since))
+      .map((t) => ({
+        ulid: this.ingest(t, since).ulid,
+        children: this.ingestTrees(t.children ?? [], since),
+      }));
+  }
+
+  // gone is whether a task was purged after the fetch began: the answer is
+  // older than that, so it does not list the task.
+  private gone(ulid: string, since: number): boolean {
+    return this.wroteSince(ulid, since) && !this.rows.has(ulid);
   }
 
   // ingest takes in a row. since is the epoch when the fetch that brought it
@@ -340,7 +349,7 @@ export class TaskCache {
       );
       if (seq !== s.seq) return;
       const stale = this.wroteSince(show.ulid, since);
-      const gone = stale && !this.rows.has(show.ulid); // purged after the fetch began
+      const gone = this.gone(show.ulid, since);
       const row = this.ingest(show, since);
       if (!gone && (!stale || !this.shows.has(show.ulid))) {
         this.putShow(stale ? { ...show, ...row } : show);
