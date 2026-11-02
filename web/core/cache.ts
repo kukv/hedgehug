@@ -4,7 +4,10 @@ import { callAll } from "./listeners";
 
 export type LiveMark = { label: "CLI で更新 · 今" | "同期で更新 · 今"; until: number };
 export type ListQuery = { q: string; tree: boolean; store?: string };
-export type TreeNode = { ulid: string; children: TreeNode[] };
+// context is true for a task the tree holds only as the ancestor of a task the
+// query found. It is a mark of this tree, not of the task: another query may
+// find the same task, so the row does not keep it.
+export type TreeNode = { ulid: string; children: TreeNode[]; context?: boolean };
 
 // How long a task stays marked as changed from outside.
 const MARK_MS = 10_000;
@@ -34,6 +37,8 @@ type QueryState = {
   loading: boolean;
   seq: number;
   released: boolean;
+  // the latest fetch (null: its answer is held; else why not): a fetch that a newer one overtook waits for it
+  last: Promise<ApiError | null>;
 };
 
 type DetailState = {
@@ -58,7 +63,8 @@ function reuseNodes(next: TreeNode[], prev: TreeNode[]): TreeNode[] {
     const p = before.get(n.ulid);
     if (!p) return n;
     const children = reuseNodes(n.children, p.children);
-    return children === p.children ? p : { ulid: n.ulid, children };
+    if (children === p.children && p.context === n.context) return p;
+    return n.context ? { ulid: n.ulid, children, context: true } : { ulid: n.ulid, children };
   });
   return sameList(out, prev) ? prev : out;
 }
@@ -72,11 +78,12 @@ function toApiError(e: unknown): ApiError {
   });
 }
 
-// rowOf is the row of a task: a TaskView without its children, and without
-// what a ShowView adds.
+// rowOf is the row of a task: a TaskView without its children, without
+// what a ShowView adds, and without context (that belongs to the tree).
 function rowOf(v: object): TaskView {
   const o = { ...v } as Record<string, unknown>;
   for (const k of SHOW_ONLY) delete o[k];
+  delete o.context;
   return o as TaskView;
 }
 
@@ -236,6 +243,16 @@ export class TaskCache {
     return (this.lastWrite.get(ulid) ?? 0) > since;
   }
 
+  // refreshTrees fetches the trees on screen again and resolves once they hold the answer, so
+  // that a caller that has just written can decide on the order the write left. It rejects with
+  // the error of a tree that could not be read: the order held is then the old one.
+  async refreshTrees(): Promise<void> {
+    const trees = [...this.queries.values()].filter((s) => s.query.tree);
+    const errors = await Promise.all(trees.map((s) => this.fetchQuery(s)));
+    const failed = errors.find((e) => e !== null);
+    if (failed) throw failed;
+  }
+
   // ---- queries
 
   private acquire(q: ListQuery): QueryState {
@@ -252,6 +269,7 @@ export class TaskCache {
         loading: true,
         seq: 0,
         released: false,
+        last: Promise.resolve(null),
       };
       this.queries.set(key, s);
       void this.fetchQuery(s);
@@ -266,15 +284,22 @@ export class TaskCache {
     for (const [k, v] of this.queries) if (v === s) this.queries.delete(k);
   }
 
-  private async fetchQuery(s: QueryState): Promise<void> {
+  private fetchQuery(s: QueryState): Promise<ApiError | null> {
+    const p = this.runFetch(s);
+    s.last = p;
+    return p;
+  }
+
+  private async runFetch(s: QueryState): Promise<ApiError | null> {
     const seq = ++s.seq;
+    let failed: ApiError | null = null;
     const since = this.epoch;
     const { q, tree, store } = s.query;
     try {
       const out = await unwrap(
         this.api.GET("/api/tasks", { params: { query: { q, tree, store } } }),
       );
-      if (seq !== s.seq || s.released) return; // a newer fetch is on its way
+      if (seq !== s.seq || s.released) return seq !== s.seq ? s.last : null; // a newer fetch is on its way
       if (tree) {
         const roots = reuseNodes(this.ingestTrees(out.roots ?? [], since), s.roots);
         if (roots !== s.roots) {
@@ -298,8 +323,9 @@ export class TaskCache {
       if (s.error) this.dirty = true;
       s.error = null;
     } catch (e) {
-      if (seq !== s.seq || s.released) return;
+      if (seq !== s.seq || s.released) return seq !== s.seq ? s.last : null;
       s.error = toApiError(e);
+      failed = s.error;
       this.dirty = true;
     }
     if (s.loading) {
@@ -307,16 +333,21 @@ export class TaskCache {
       this.dirty = true;
     }
     this.flush();
+    return failed;
   }
 
   // ingestTree takes in a task and, under it, its children.
   private ingestTrees(ts: TaskView[], since: number): TreeNode[] {
     return ts
       .filter((t) => !this.gone(t.ulid, since))
-      .map((t) => ({
-        ulid: this.ingest(t, since).ulid,
-        children: this.ingestTrees(t.children ?? [], since),
-      }));
+      .map((t) => {
+        const node: TreeNode = {
+          ulid: this.ingest(t, since).ulid,
+          children: this.ingestTrees(t.children ?? [], since),
+        };
+        if (t.context) node.context = true;
+        return node;
+      });
   }
 
   // gone is whether a task was purged after the fetch began: the answer is

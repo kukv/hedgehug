@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TaskCache } from "./cache";
+import { errorMessage } from "./messages";
 import { changed, FakeConn, fakeApi, problem, type Req, settle, showOf, tv } from "./testing";
 
 afterEach(() => {
@@ -62,6 +63,35 @@ describe("TaskCache lists", () => {
     w.dispose();
   });
 
+  it("marks the context ancestors on the tree node, not on the row", async () => {
+    let ctx = true;
+    const { cache, conn } = setup((req) => {
+      if (req.query.get("tree") === "true") {
+        return { roots: [tv("R", "r", { context: ctx, children: [tv("A", "a")] })] };
+      }
+      return { tasks: [tv("R", "r")] }; // another query finds R itself: no context
+    });
+    const w = cache.watchTree({ q: "x", tree: true });
+    await vi.waitFor(() => expect(w.loading()).toBe(false));
+    expect(w.roots()).toEqual([
+      { ulid: "R", context: true, children: [{ ulid: "A", children: [] }] },
+    ]);
+    expect(cache.task("R")).not.toHaveProperty("context");
+
+    const l = cache.watchList({ q: "y", tree: false });
+    await vi.waitFor(() => expect(l.loading()).toBe(false));
+    expect(w.roots()[0]?.context).toBe(true);
+
+    // the tree follows the answer when the mark itself changes
+    ctx = false;
+    conn.emit("resync");
+    await settle();
+    await settle();
+    expect(w.roots()[0]).toEqual({ ulid: "R", children: [{ ulid: "A", children: [] }] });
+    w.dispose();
+    l.dispose();
+  });
+
   it("keeps the objects of the tasks that did not change when it fetches again", async () => {
     let titleB = "b";
     const { cache, conn } = setup(() => ({
@@ -114,6 +144,98 @@ describe("TaskCache lists", () => {
     await settle();
     expect(listCalls(calls).length).toBe(before + 1);
     w1.dispose();
+  });
+
+  describe("refreshTrees", () => {
+    it("fetches the trees again, and no list, and resolves once the answer is held", async () => {
+      let n = 0;
+      let release: () => void = () => {};
+      const gate = new Promise<void>((r) => (release = r));
+      const { cache, calls } = setup(async (r) => {
+        if (r.query.get("tree") !== "true") return { tasks: [] };
+        if (n++ > 0) await gate;
+        return { roots: [tv(n > 1 ? "NEW" : "OLD")] };
+      });
+      const w = cache.watchTree({ q: "", tree: true });
+      const l = cache.watchList({ q: "x", tree: false });
+      await vi.waitFor(() => expect(w.loading()).toBe(false));
+      const lists = listCalls(calls).filter((c) => c.query.get("tree") !== "true").length;
+      let done = false;
+      const p = cache.refreshTrees().then(() => (done = true));
+      await settle();
+      expect(done).toBe(false);
+      expect(w.roots().map((x) => x.ulid)).toEqual(["OLD"]);
+      release();
+      await p;
+      expect(w.roots().map((x) => x.ulid)).toEqual(["NEW"]);
+      expect(listCalls(calls).filter((c) => c.query.get("tree") !== "true")).toHaveLength(lists);
+      w.dispose();
+      l.dispose();
+    });
+
+    it("rejects when a tree cannot be read, and keeps the tree it holds", async () => {
+      let fail = false;
+      const { cache } = setup(() => (fail ? problem(500, "internal") : { roots: [tv("R")] }));
+      const w = cache.watchTree({ q: "", tree: true });
+      await vi.waitFor(() => expect(w.loading()).toBe(false));
+      fail = true;
+      await expect(cache.refreshTrees()).rejects.toMatchObject({ type: "internal" });
+      expect(w.roots().map((x) => x.ulid)).toEqual(["R"]);
+      w.dispose();
+    });
+
+    it("resolves, with no error, when the tree is let go while it is being read", async () => {
+      let n = 0;
+      let release: () => void = () => {};
+      const gate = new Promise<void>((r) => (release = r));
+      const { cache } = setup(async () => {
+        if (n++ > 0) await gate;
+        return { roots: [tv("R")] };
+      });
+      const w = cache.watchTree({ q: "", tree: true });
+      await vi.waitFor(() => expect(w.loading()).toBe(false));
+      const p = cache.refreshTrees();
+      w.dispose();
+      release();
+      await p;
+    });
+
+    it("rejects with an error that errorMessage words in Japanese", async () => {
+      const { cache } = setup(() => problem(500, "internal"));
+      const w = cache.watchTree({ q: "", tree: true });
+      await vi.waitFor(() => expect(w.error()).not.toBeNull());
+      const err = await cache.refreshTrees().catch((e: unknown) => e);
+      expect(errorMessage(err)).toMatch(/[ぁ-んァ-ン]/);
+      w.dispose();
+    });
+
+    it("resolves with nothing to read when no tree is on screen", async () => {
+      const { cache } = setup(() => ({ tasks: [] }));
+      await cache.refreshTrees();
+    });
+
+    it("waits for the newer fetch when one overtakes it, and keeps the newer answer", async () => {
+      let n = 0;
+      let release: () => void = () => {};
+      const gate = new Promise<void>((r) => (release = r));
+      const { cache, conn } = setup(async () => {
+        const call = n++;
+        if (call === 1) {
+          await gate; // the slow one: it is overtaken by the one the event makes
+          return { roots: [tv("STALE")] };
+        }
+        return { roots: [tv(call === 0 ? "OLD" : "NEW")] };
+      });
+      const w = cache.watchTree({ q: "", tree: true });
+      await vi.waitFor(() => expect(w.loading()).toBe(false));
+      const p = cache.refreshTrees();
+      conn.emit("tasks.changed", changed("shared", ["R"], "c1"));
+      await vi.waitFor(() => expect(w.roots().map((x) => x.ulid)).toEqual(["NEW"]));
+      release();
+      await p;
+      expect(w.roots().map((x) => x.ulid)).toEqual(["NEW"]);
+      w.dispose();
+    });
   });
 
   it("holds the error of a query", async () => {

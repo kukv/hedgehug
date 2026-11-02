@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -246,5 +248,117 @@ func TestChildTaskIsCommentsOnly(t *testing.T) {
 	}
 	if _, ok := childTask(model.WorklogPath(task, other)); ok {
 		t.Error("a worklog path changes no task")
+	}
+}
+
+func TestPollNewStoreTellsTheClients(t *testing.T) {
+	t.Parallel()
+	ts, ch := pollServer(t)
+	ts.srv.poller.settle()
+	// A store made after the first look: its first commits may come before the poller sees it.
+	if _, err := ts.session().StoreInit(ops.StoreInitInput{Name: "later", Prefix: "LT", Workspace: "later"}); err != nil {
+		t.Fatal(err)
+	}
+	e := waitEvent(t, ch, func(e tasksChanged) bool { return e.Store == "later" })
+	if e.Commit == "" {
+		t.Error("the event of a new store has no commit; it says HEAD now")
+	}
+	waitEvent(t, ch, func(e syncStatus) bool { return e.Store == "later" })
+}
+
+func TestPollStoreThatComesBackTellsTheClients(t *testing.T) {
+	t.Parallel()
+	ts, ch := pollServer(t)
+	ts.srv.poller.settle()
+	if _, err := ts.session().StoreInit(ops.StoreInitInput{Name: "later", Prefix: "LT", Workspace: "later"}); err != nil {
+		t.Fatal(err)
+	}
+	waitEvent(t, ch, func(e tasksChanged) bool { return e.Store == "later" })
+	ts.srv.poller.settle()
+
+	c, _, err := ts.session().Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := c.Select("later")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.session().StoreRemove("later", false); err != nil {
+		t.Fatal(err)
+	}
+	ts.srv.poller.settle() // the poller forgets the store
+	c, _, err = ts.session().Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AddStore("later", e.Path, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	// What happened while it was away is not known: the clients read it again.
+	ts.srv.poller.poll(true)
+	e2 := waitEvent(t, ch, func(e tasksChanged) bool { return e.Store == "later" })
+	if e2.Commit == "" {
+		t.Error("the event of a store that came back has no commit")
+	}
+}
+
+// The server starts with no store (Onboarding): a poll that finds none has looked, and the first
+// store made after it tells the clients, though it may already hold the first task.
+func TestPollFirstStoreAfterNoStoreTellsTheClients(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	if _, err := ts.session().StoreRemove("me", false); err != nil {
+		t.Fatal(err)
+	}
+	ts.srv.poller = newPoller(ts.srv, ts.srv.hub)
+	ch, cancel := ts.srv.hub.Subscribe()
+	ctx, stop := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	ts.srv.poller.interval = 10 * time.Millisecond
+	go func() {
+		defer close(done)
+		ts.srv.poller.Run(ctx)
+	}()
+	t.Cleanup(func() { stop(); cancel(); <-done })
+	eventually(t, "the look of the poller at no store", func() bool {
+		ts.srv.poller.mu.Lock()
+		defer ts.srv.poller.mu.Unlock()
+		return ts.srv.poller.scanned
+	})
+	if _, err := ts.session().StoreInit(ops.StoreInitInput{Name: "first", Prefix: "FT", Workspace: "first"}); err != nil {
+		t.Fatal(err)
+	}
+	e := waitEvent(t, ch, func(e tasksChanged) bool { return e.Store == "first" })
+	if e.Commit == "" {
+		t.Error("the event has no commit")
+	}
+}
+
+func TestPollFailedFirstLookIsNotTheFirstLook(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	ch, cancel := ts.srv.hub.Subscribe()
+	defer cancel()
+	cfg := filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml")
+	good, err := os.ReadFile(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfg, []byte(": not yaml ["), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ts.srv.poller.poll(true) // returns early: the stores were not read
+	if err := os.WriteFile(cfg, good, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ts.srv.poller.poll(true) // the first look of the stores: it sends nothing
+	select {
+	case e := <-ch:
+		t.Errorf("event on the first look of the stores: %+v", e)
+	default:
 	}
 }

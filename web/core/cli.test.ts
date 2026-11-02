@@ -12,6 +12,8 @@ import {
   cliStoreInit,
   cliSync,
   cliWatch,
+  cliWorkspaceAdd,
+  Placeholder,
   quoteArg,
 } from "./cli";
 
@@ -61,6 +63,10 @@ describe("commands", () => {
       'hh add "Switch DNS" --store shared --workspace main --parent REL-8 --kind task --body "line 1\nline 2" -p points=2 -p priority=high',
     );
     expect(cliAdd({ title: "x" })).toBe("hh add x");
+    expect(cliAdd({ title: "x", parent: "REL-8", after: "REL-9" })).toBe(
+      "hh add x --parent REL-8 --after REL-9",
+    );
+    expect(cliAdd({ title: "x", before: "REL-9" })).toBe("hh add x --before REL-9");
   });
 
   it("writes hh ls", () => {
@@ -109,8 +115,24 @@ describe("commands", () => {
     expect(cliWatch("REL-8", false)).toBe("hh unwatch REL-8");
     expect(cliSync()).toBe("hh sync");
     expect(cliSync("shared")).toBe("hh sync --store shared");
+    expect(cliWorkspaceAdd({ name: "web", prefix: "WEB", store: "shared" })).toBe(
+      "hh workspace add web --prefix WEB --store shared",
+    );
     expect(
       cliStoreInit({ name: "shared", prefix: "WEB", workspace: "web", remotes: ["git@x:a/b.git"] }),
     ).toBe("hh store init shared --prefix WEB --workspace web --remote git@x:a/b.git");
+  });
+
+  it("writes a placeholder as it is, so that a shell refuses the line", () => {
+    const name = new Placeholder("名前");
+    const prefix = new Placeholder("接頭辞");
+    expect(cliStoreInit({ name, prefix })).toBe("hh store init <名前> --prefix <接頭辞>");
+    expect(cliWorkspaceAdd({ name, prefix, store: "a b" })).toBe(
+      'hh workspace add <名前> --prefix <接頭辞> --store "a b"',
+    );
+    // what a person types is still quoted
+    expect(cliStoreInit({ name: "<名前>", prefix: "ME" })).toBe(
+      'hh store init "<名前>" --prefix ME',
+    );
   });
 });

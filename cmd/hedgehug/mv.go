@@ -19,6 +19,9 @@ func (a *app) mvCmd() *cobra.Command {
 		Short: "Move a task under another parent or among its siblings, or to another store",
 		Args:  exactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
+			if err := ops.CheckPosition(before, after); err != nil {
+				return err
+			}
 			if to != "" {
 				// Here --store is the destination; the task is looked up in every store.
 				if root || before != "" || after != "" {
@@ -32,8 +35,6 @@ func (a *app) mvCmd() *cobra.Command {
 			switch {
 			case parent != "" && root:
 				return usageErrorf("give --parent or --root, not both")
-			case before != "" && after != "":
-				return usageErrorf("give --before or --after, not both")
 			case parent == "" && !root && before == "" && after == "" && workspace == "":
 				return usageErrorf("say where to: --workspace, --parent, --root, --before or --after")
 			}

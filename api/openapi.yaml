@@ -93,12 +93,18 @@ components:
     CreateInputBody:
       additionalProperties: false
       properties:
+        after:
+          description: Put it after this sibling; without a parent, it goes under the sibling's parent and in its workspace
+          type: string
         assignees:
           items:
             type: string
           type:
             - array
             - "null"
+        before:
+          description: Put it before this sibling; without a parent, it goes under the sibling's parent and in its workspace
+          type: string
         body:
           description: The body in Markdown
           type: string

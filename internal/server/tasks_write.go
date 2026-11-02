@@ -204,6 +204,8 @@ type createInput struct {
 		Labels    []string       `json:"labels,omitempty"`
 		Repos     []string       `json:"repos,omitempty" doc:"The repo IDs to put on the task"`
 		Props     map[string]any `json:"props,omitempty" doc:"Property name to value"`
+		Before    string         `json:"before,omitempty" doc:"Put it before this sibling; without a parent, it goes under the sibling's parent and in its workspace"`
+		After     string         `json:"after,omitempty" doc:"Put it after this sibling; without a parent, it goes under the sibling's parent and in its workspace"`
 	}
 }
 
@@ -258,7 +260,7 @@ func (s *Server) registerTaskWrites() {
 			return nil, badRequest(err)
 		}
 		ss := s.session(in.Store)
-		res, err := ss.Add(ops.AddInput{Title: b.Title, Parent: b.Parent, Workspace: b.Workspace, Kind: b.Kind, Status: b.Status, Body: b.Body, Assigns: assigns})
+		res, err := ss.Add(ops.AddInput{Title: b.Title, Parent: b.Parent, Workspace: b.Workspace, Kind: b.Kind, Status: b.Status, Body: b.Body, Assigns: assigns, Before: b.Before, After: b.After})
 		if err != nil {
 			return nil, problemOf(err)
 		}

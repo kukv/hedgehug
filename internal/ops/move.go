@@ -242,15 +242,69 @@ func (ss *Session) moveTargetOf(ix *index.Index, e, p *index.Entry, w *model.Wor
 		to.workspace = w.ULID
 	}
 	var err error
-	to.rank, err = ss.rankAt(ix, e.ULID, to.parent, to.workspace, before, after)
+	to.rank, err = ss.rankAt(ix, e.ULID, to.parent, to.workspace, before, after, "move.invalid")
+	if err == nil && ss.alreadyThere(ix, e, to, before, after) {
+		// Nothing moves, so the rank stays and the store has nothing to commit.
+		to.rank = e.Rank
+	}
 	return to, err
+}
+
+// alreadyThere says whether e, which rankAt has found a place for, already
+// stands there: under the same parent in the same workspace, last when no
+// sibling is named, or right after (before) the sibling named with a rank of
+// its own. Tasks of one rank are ordered by id and the new rank lies past the
+// whole group, so e next to a task of the same rank may still move.
+func (ss *Session) alreadyThere(ix *index.Index, e *index.Entry, to moveTarget, before, after string) bool {
+	if to.workspace != e.Workspace || !sameParent(to.parent, e.Parent) {
+		return false
+	}
+	sib := Siblings(ix, to.parent, to.workspace, model.ULID{})
+	at := slices.IndexFunc(sib, func(x *index.Entry) bool { return x.ULID == e.ULID })
+	if at < 0 {
+		return false
+	}
+	ref := before
+	if ref == "" {
+		ref = after
+	}
+	if ref == "" {
+		return at == len(sib)-1
+	}
+	x, err := ss.ResolveRef(ix, ref)
+	if err != nil {
+		return false
+	}
+	if before != "" {
+		return at+1 < len(sib) && sib[at+1].ULID == x.ULID && e.Rank < x.Rank
+	}
+	return at > 0 && sib[at-1].ULID == x.ULID && e.Rank > x.Rank
+}
+
+func sameParent(a, b *model.ULID) bool {
+	return a == nil && b == nil || a != nil && b != nil && *a == *b
+}
+
+// CheckPosition refuses both before and after (position.both). The CLI calls
+// it as soon as it has read the flags, before it asks or looks anything up.
+func CheckPosition(before, after string) error {
+	if before != "" && after != "" {
+		return newErr(KindUsage, "position.both", errors.New("give --before or --after, not both"))
+	}
+	return nil
 }
 
 // rankAt returns the rank for ulid under parent in workspace ws: just before
 // or after a sibling, or after every sibling. Siblings that share a rank are
 // ordered by id, so no rank lies between them: next to one of a group, the
-// task goes past the group on the side asked for.
-func (ss *Session) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, ws model.ULID, before, after string) (model.Rank, error) {
+// task goes past the group on the side asked for. Giving both before and
+// after is position.both; a sibling that is not one (deleted, or under another
+// parent or workspace) is the error code the caller gives, move.invalid for
+// Move and add.position for Add.
+func (ss *Session) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, ws model.ULID, before, after, code string) (model.Rank, error) {
+	if err := CheckPosition(before, after); err != nil {
+		return "", err
+	}
 	if before == "" && after == "" {
 		return EndRank(ix, parent, ws, ulid)
 	}
@@ -264,7 +318,10 @@ func (ss *Session) rankAt(ix *index.Index, ulid model.ULID, parent *model.ULID, 
 	}
 	sib := Siblings(ix, parent, ws, ulid)
 	if !slices.ContainsFunc(sib, func(e *index.Entry) bool { return e.ULID == x.ULID }) {
-		return "", newErr(KindInvalid, "move.invalid", fmt.Errorf("%s is not under the same parent", RefName(ix, x.ULID)))
+		if code == "add.position" {
+			return "", newErr(KindInvalid, code, fmt.Errorf("%s is not a sibling of the new task (it is deleted, or under another parent or workspace)", RefName(ix, x.ULID)))
+		}
+		return "", newErr(KindInvalid, code, fmt.Errorf("%s is not under the same parent", RefName(ix, x.ULID)))
 	}
 	var lower, higher model.Rank
 	for _, e := range sib {

@@ -1,0 +1,48 @@
+<script lang="ts" module>
+  // Paths are the ones of the Foundations artboard (16px grid, 1.4 stroke).
+  const kinds: Record<string, string> = {
+    project: "M2.5 4.5h4l1.5 1.5h5.5v6.5h-11z",
+    epic: "M8 2.5l5.5 2.8L8 8.1 2.5 5.3zM2.5 8.2L8 11l5.5-2.8M2.5 11L8 13.8l5.5-2.8",
+    story: "M4.5 2.5h7v11L8 11.2l-3.5 2.3z",
+    task: "M3 3h10v10H3zM5.6 8.1l1.7 1.7 3.1-3.4",
+    bug: "M5.5 7a2.5 2.5 0 0 1 5 0v3a2.5 2.5 0 0 1-5 0zM8 7v5.5M5.5 9H2.8M13.2 9h-2.7M6 5.2L4.4 3.6M10 5.2l1.6-1.6M5.6 11.6l-1.8 1.4M10.4 11.6l1.8 1.4",
+  };
+
+  // A kind a store added: a container gets the stacked shape, work gets a square.
+  const containerShape = "M8 2.5l5.5 2.8L8 8.1 2.5 5.3zM2.5 8.2L8 11l5.5-2.8M2.5 11L8 13.8l5.5-2.8";
+  const workShape = "M3 3h10v10H3z";
+</script>
+
+<script lang="ts">
+  type Props = { kind: string; role?: string; size?: number };
+  let { kind, role, size = 16 }: Props = $props();
+
+  const known = $derived(kind in kinds);
+  const d = $derived(kinds[kind] ?? (role === "container" ? containerShape : workShape));
+  const shape = $derived(known ? kind : role === "container" ? "container" : "work");
+</script>
+
+<svg
+  width={size}
+  height={size}
+  viewBox="0 0 16 16"
+  data-kind={shape}
+  style:--k={kind === "bug" ? "var(--danger)" : "var(--icon)"}
+  aria-hidden="true"
+>
+  <path
+    {d}
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.4"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+  />
+</svg>
+
+<style>
+  svg {
+    flex: 0 0 auto;
+    color: var(--k);
+  }
+</style>

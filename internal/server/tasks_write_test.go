@@ -42,6 +42,80 @@ func TestCreateTask(t *testing.T) {
 	ts.problem("POST", "/api/tasks", map[string]any{}, 400)
 }
 
+func TestCreateTaskBeforeAfter(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	a := ts.add("a", "")
+	b := ts.add("b", "")
+	var out taskWriteBody
+	ts.call("POST", "/api/tasks", map[string]any{"title": "after a", "after": a}, 201, &out)
+	if out.Commit == nil {
+		t.Fatalf("created = %+v", out)
+	}
+	mid := out.Task.ID
+	ts.call("POST", "/api/tasks", map[string]any{"title": "before b", "before": b}, 201, &out)
+	last := out.Task.ID
+	var list listBody
+	ts.call("GET", "/api/tasks", nil, 200, &list)
+	var got []string
+	for _, x := range list.Tasks {
+		got = append(got, x.ID)
+	}
+	if want := []string{a, mid, last, b}; !slices.Equal(got, want) {
+		t.Errorf("order = %v; want %v", got, want)
+	}
+	p := ts.problem("POST", "/api/tasks", map[string]any{"title": "x", "parent": a, "after": b}, 422)
+	if p.Type != "add.position" {
+		t.Errorf("type = %q; want add.position", p.Type)
+	}
+	p = ts.problem("POST", "/api/tasks", map[string]any{"title": "x", "before": a, "after": b}, 400)
+	if p.Type != "position.both" {
+		t.Errorf("type = %q; want position.both", p.Type)
+	}
+	p = ts.problem("POST", "/api/tasks/"+b+"/move", map[string]any{"before": a, "after": a}, 400)
+	if p.Type != "position.both" {
+		t.Errorf("move: type = %q; want position.both", p.Type)
+	}
+
+	// under a parent, next to one of its children
+	k1 := ts.add("k1", a)
+	ts.add("k2", a)
+	ts.call("POST", "/api/tasks", map[string]any{"title": "k3", "parent": a, "after": k1}, 201, &out)
+	if out.Task.Parent == nil {
+		t.Fatalf("created = %+v", out)
+	}
+	k3Parent := *out.Task.Parent
+	ts.call("GET", "/api/tasks", nil, 200, &list)
+	got = nil
+	for _, x := range list.Tasks {
+		if x.Parent != nil {
+			got = append(got, x.Title)
+		}
+	}
+	if want := []string{"k1", "k3", "k2"}; !slices.Equal(got, want) {
+		t.Errorf("children = %v; want %v", got, want)
+	}
+
+	// no parent and no workspace: the sibling's
+	ts.call("POST", "/api/tasks", map[string]any{"title": "k4", "after": k1}, 201, &out)
+	if out.Task.Parent == nil || out.Task.Workspace == nil {
+		t.Fatalf("created = %+v", out)
+	}
+	if *out.Task.Parent != k3Parent {
+		t.Errorf("parent = %v; want %s", *out.Task.Parent, k3Parent)
+	}
+	ts.call("GET", "/api/tasks", nil, 200, &list)
+	got = nil
+	for _, x := range list.Tasks {
+		if x.Parent != nil {
+			got = append(got, x.Title)
+		}
+	}
+	if want := []string{"k1", "k4", "k3", "k2"}; !slices.Equal(got, want) {
+		t.Errorf("children = %v; want %v", got, want)
+	}
+}
+
 func TestCreateTaskWithBodyAndRepos(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)

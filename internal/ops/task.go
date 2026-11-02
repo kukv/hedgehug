@@ -41,11 +41,17 @@ func (r TaskResult) View() (*TaskView, error) {
 // read in the store the task goes to (Parent goes through ResolveRef). Store
 // is that store ("" selects as the session does; one other than the
 // session's own --store is store.conflict); Body is the Markdown body of the
-// task, as it is written; Repos are the repo IDs to put on the task.
+// task, as it is written; Repos are the repo IDs to put on the task. Before
+// and After are task names, as the user gives them: the task goes just before
+// or after that sibling, as in Move, instead of after every sibling. With a
+// sibling and no Parent, the task goes under the sibling's parent and in its
+// workspace; a Parent or Workspace that does not fit the sibling is
+// add.position.
 type AddInput struct {
 	Store                                  string
 	Title, Parent, Workspace, Kind, Status string
 	Body                                   string
+	Before, After                          string
 	Repos                                  []string
 	Assigns                                []Assign
 }
@@ -81,6 +87,27 @@ func (ss *Session) Add(in AddInput) (TaskResult, error) {
 		}
 		t.Status = st.Name
 	}
+	if err := CheckPosition(in.Before, in.After); err != nil {
+		return TaskResult{}, err
+	}
+	fromSibling := in.Parent == "" && (in.Before != "" || in.After != "")
+	if fromSibling {
+		x, err := ss.ResolveRef(ix, in.Before+in.After)
+		if err != nil {
+			return TaskResult{}, err
+		}
+		t.Workspace = x.Workspace
+		if x.Parent != nil {
+			p, ok := ix.Task(*x.Parent)
+			if !ok {
+				return TaskResult{}, newErr(KindInvalid, "add.position", fmt.Errorf("the parent of %s is not in this store", RefName(ix, x.ULID)))
+			}
+			if err := LiveParent(ix, p); err != nil {
+				return TaskResult{}, err
+			}
+			t.Parent = &p.ULID
+		}
+	}
 	if in.Parent != "" {
 		p, err := ss.ResolveRef(ix, in.Parent)
 		if err != nil {
@@ -97,7 +124,10 @@ func (ss *Session) Add(in AddInput) (TaskResult, error) {
 		if err != nil {
 			return TaskResult{}, err
 		}
-		if in.Parent != "" && w.ULID != t.Workspace {
+		if fromSibling {
+			// not the sibling's: rankAt says the sibling is not one
+			t.Workspace = w.ULID
+		} else if in.Parent != "" && w.ULID != t.Workspace {
 			pw, ok := ix.Workspace(t.Workspace)
 			if !ok {
 				return TaskResult{}, newErr(KindInvalid, "task.workspace_mismatch", fmt.Errorf("the parent's workspace %s is not in this store", t.Workspace))
@@ -105,7 +135,7 @@ func (ss *Session) Add(in AddInput) (TaskResult, error) {
 			return TaskResult{}, newErr(KindInvalid, "task.workspace_mismatch", fmt.Errorf("the parent is in workspace %s", pw.Name))
 		}
 		t.Workspace = w.ULID
-	} else if in.Parent == "" {
+	} else if in.Parent == "" && !fromSibling {
 		wss := ix.Workspaces()
 		if len(wss) == 0 {
 			return TaskResult{}, newErr(KindConflict, "workspace.none", errors.New("the store has no workspace; add one with hedgehug workspace add <name> --prefix <PREFIX>"))
@@ -125,7 +155,7 @@ func (ss *Session) Add(in AddInput) (TaskResult, error) {
 			return TaskResult{}, err
 		}
 	}
-	if t.Rank, err = EndRank(ix, t.Parent, t.Workspace, t.ULID); err != nil {
+	if t.Rank, err = ss.rankAt(ix, t.ULID, t.Parent, t.Workspace, in.Before, in.After, "add.position"); err != nil {
 		return TaskResult{}, err
 	}
 	if t.CreatedBy, err = ss.AccountID(); err != nil {
