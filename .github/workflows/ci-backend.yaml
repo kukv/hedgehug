@@ -1,4 +1,4 @@
-name: CI
+name: CI (backend)
 
 on:
   pull_request:
@@ -307,36 +307,3 @@ jobs:
             ${{ steps.go-env.outputs.gocache }}
             ${{ steps.go-env.outputs.gomodcache }}
           key: ${{ steps.go-cache.outputs.cache-primary-key }}
-
-  # GUI（web/）。Node は1つの OS で確かめれば足りるので ubuntu だけで回す。
-  web:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    defaults:
-      run:
-        working-directory: web
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # mise.toml に固定した Node と pnpm を入れる。
-      - uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # v5.2.3
-        with:
-          install_args: node pnpm
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      # core/api/schema.d.ts は api/openapi.yaml から作る。古ければここで気付く。
-      - name: Verify the API types are up to date
-        run: |
-          pnpm gen
-          git diff --exit-code -- core/api/schema.d.ts
-      - name: Lint
-        run: pnpm lint
-      - name: Type check
-        run: pnpm check
-      - name: Test
-        run: pnpm test
-      - name: Build
-        run: pnpm build

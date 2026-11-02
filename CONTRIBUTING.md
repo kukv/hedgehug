@@ -8,7 +8,7 @@ hedgehug is a single Go binary for Linux and macOS (on Windows, it runs in WSL).
 
 - the Go version in `go.mod`
 - [golangci-lint](https://golangci-lint.run/) v2 (the version CI uses is pinned in
-  `.github/workflows/ci.yaml`)
+  `.github/workflows/ci-backend.yaml`)
 - [gotestsum](https://github.com/gotestyourself/gotestsum) for `make test` and `make cover`
 - [GoReleaser](https://goreleaser.com/) v2 for `make release-check`
 - run `go env -w GOFLAGS=-trimpath` once: without it the build cache keys the packages of this module by their directory, so every worktree compiles and caches them again (`mise.toml` sets the same, but mise reads its `[env]` only for a trusted config). Note that this setting applies to all your Go projects, not just this repository; if you want it for this repository only, run `mise trust` on `mise.toml` instead
@@ -54,9 +54,10 @@ If a rule gets in the way, propose changing the rule rather than working around 
 
 ## Pull requests
 
-- CI runs on every pull request: `ci.yaml` (tidy, lint, format, and the tests on Linux
-  and macOS, split into shards that run at once) and `security.yaml` (hidden-content
-  scan, gitleaks, dependency scanning, zizmor, actionlint). All of them must pass.
+- CI runs on every pull request: `ci-backend.yaml` (tidy, lint, format, and the tests on
+  Linux and macOS, split into shards that run at once), `ci-frontend.yaml` (the GUI in
+  `web/`) and `security.yaml` (hidden-content scan, gitleaks, dependency scanning, zizmor,
+  actionlint). All of them must pass.
 - Pin any GitHub Action you add to a full commit SHA with a `# vX.Y.Z` comment. Renovate
   follows the pins.
 - Commit messages use a `feat:` / `fix:` / `docs:` / `refactor:` / `test:` / `chore:` /
