@@ -163,7 +163,7 @@ func TestAuthAddErrors(t *testing.T) {
 		msg  string
 	}{
 		{"no login", []string{"auth", "add", "work"}, 2, "--login is required"},
-		{"no name", []string{"auth", "add", "--login", "bob"}, 2, ""},
+		{"no name", []string{"auth", "add", "--login", "bob"}, 2, "accepts 1 arg(s), received 0"},
 		{"device", []string{"auth", "add", "work", "--login", "bob", "--token", "device"}, 2, "want gh, env:<VAR> or keychain"},
 		{"same name", []string{"auth", "add", "personal", "--login", "bob"}, 1, "set up already"},
 		{"same login", []string{"auth", "add", "other", "--login", "Alice"}, 1, "set up already"},
