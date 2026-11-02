@@ -466,6 +466,48 @@ describe("TreeView", () => {
     await waitFor(() => expect(input).not.toBeInTheDocument());
   });
 
+  it("closes the input, with what was typed, when another row is clicked, and selects that row", async () => {
+    setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const row = screen.getByText("API v2 への移行").closest('[role="treeitem"]') as HTMLElement;
+    const other = screen
+      .getByText("Web のクライアントを更新")
+      .closest('[role="treeitem"]') as HTMLElement;
+    await fireEvent.click(row);
+    await fireEvent.keyDown(row, { key: "Enter" });
+    const input = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
+    await fireEvent.input(input, { target: { value: "打ちかけ" } });
+    await fireEvent.click(other);
+    await waitFor(() => expect(input).not.toBeInTheDocument());
+    expect(selection.ulid).toBe("T3");
+    expect(other).toHaveFocus();
+  });
+
+  it("does not open the input again when a row was clicked while the task was being made", async () => {
+    const { api } = setup();
+    let answer: (v: unknown) => void = () => {};
+    api.POST.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const row = screen.getByText("API v2 への移行").closest('[role="treeitem"]') as HTMLElement;
+    const other = screen
+      .getByText("Web のクライアントを更新")
+      .closest('[role="treeitem"]') as HTMLElement;
+    await fireEvent.click(row);
+    await fireEvent.keyDown(row, { key: "Enter" });
+    const input = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
+    await fireEvent.input(input, { target: { value: "遅い" } });
+    await fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(api.POST).toHaveBeenCalled());
+    await fireEvent.click(other);
+    await waitFor(() => expect(input).not.toBeInTheDocument());
+
+    answer(ok({ task: task("N1", "task", "E1"), commit: "c1" }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）")).toBeNull();
+    expect(selection.ulid).toBe("T3");
+    expect(other).toHaveFocus();
+  });
+
   it("does not open the input again when Esc closed it while the task was being made", async () => {
     const { api } = setup();
     let answer: (v: unknown) => void = () => {};

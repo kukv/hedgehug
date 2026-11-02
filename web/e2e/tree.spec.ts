@@ -160,6 +160,42 @@ test("the row keys work after the ID or the chevron of the row was clicked", asy
   await expect.poll(() => rootOrder(hh)).toEqual(["Other", "Parent"]);
 });
 
+test("a click on a row closes the input, also while the task is being made", async ({
+  page,
+  hh,
+}) => {
+  hh.add("Alpha");
+  hh.add("Bravo");
+  await hh.open(page);
+  await treeReady(page);
+  const input = page.getByRole("textbox", { name: "新しいタスクのタイトル" });
+
+  // Typed and not sent: the click closes the input and drops the text.
+  await row(page, "Alpha").click();
+  await page.keyboard.press("Enter");
+  await input.fill("draft");
+  await row(page, "Bravo").click();
+  await expect(input).toHaveCount(0);
+  await expect(row(page, "Bravo")).toBeFocused();
+  await expect(row(page, "Bravo")).toHaveAttribute("aria-selected", "true");
+
+  // Sent, and the answer is late: the click closes the input, and it stays closed.
+  await page.route(/\/api\/tasks\?/, async (route) => {
+    if (route.request().method() === "POST") await new Promise((r) => setTimeout(r, 1000));
+    await route.continue();
+  });
+  await page.keyboard.press("Enter");
+  await input.fill("Slow");
+  await page.keyboard.press("Enter");
+  await row(page, "Alpha").click();
+  await expect(input).toHaveCount(0);
+  await expect(row(page, "Slow")).toBeVisible();
+  await expect(input).toHaveCount(0);
+  await expect(row(page, "Alpha")).toBeFocused();
+  await page.keyboard.press("k");
+  await expect(page.getByRole("menu")).toBeVisible();
+});
+
 test("Alt+Up pressed three times in a row moves a task three places, one commit each", async ({
   page,
   hh,

@@ -709,7 +709,11 @@
             focusable={rowFocus === item.row.ulid}
             live={c.cache.live(item.row.ulid)}
             blockedBy={openBlocker(item.row.task, taskOf, isClosed, blocked.has(item.row.ulid))}
-            onselect={() => select(item.row.ulid)}
+            onselect={() => {
+              // A click on a row closes the input row, and what was typed with it.
+              adding = null;
+              select(item.row.ulid);
+            }}
             ontoggle={() => toggle(item.row.ulid, !item.row.expanded)}
             dragging={dragging === item.row.ulid}
             dropMark={dropMarkOf(item.row.ulid)}
