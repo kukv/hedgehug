@@ -36,13 +36,15 @@
   function reconcile() {
     const base = show.comments ?? [];
     const has = new Set(base.map((c) => c.ulid));
+    const added = overlay.added.filter((a) => !has.has(a.ulid));
     const changed: typeof overlay.changed = {};
     for (const [u, o] of Object.entries(overlay.changed)) {
       const now = base.find((c) => c.ulid === u);
-      if (now && now.body === o.from) changed[u] = o;
+      // A comment posted here that the read does not have yet keeps its edit for the read that has it.
+      if (now ? now.body === o.from : added.some((a) => a.ulid === u)) changed[u] = o;
     }
     overlay = {
-      added: overlay.added.filter((a) => !has.has(a.ulid)),
+      added,
       changed,
       removed: overlay.removed.filter((u) => has.has(u)),
     };

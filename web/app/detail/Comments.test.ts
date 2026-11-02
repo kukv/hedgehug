@@ -245,6 +245,38 @@ describe("Comments", () => {
     expect(screen.queryByText("自分の")).toBeNull();
   });
 
+  for (const texts of [["直した1"], ["直した1", "直した2"]]) {
+    it(`keeps the edit of a comment posted here through a read that lacks it (${texts.length} edits)`, async () => {
+      const { k, container, rerender } = setup();
+      const mine = { ulid: "C9", author: "koki", created: "2026-11-04T12:00:00Z", body: "自分の" };
+      const other = { ulid: "C2", author: "sato", created: "2026-11-04T11:00:00Z", body: "他の人" };
+      k.api.POST.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
+      let n = 0;
+      k.api.PATCH.mockImplementation(() =>
+        ok({ comment: { ...mine, body: texts[n++] }, commit: "c5" }),
+      );
+      typeInto(container, "自分の", 0);
+      await fireEvent.click(await screen.findByRole("button", { name: "コメント" }));
+      expect(await screen.findByText("自分の")).toBeInTheDocument();
+      const edit = async (text: string) => {
+        const edits = screen.getAllByRole("button", { name: "編集" });
+        await fireEvent.click(edits[edits.length - 1] as HTMLElement);
+        typeInto(container, text, 0);
+        await fireEvent.click(await screen.findByRole("button", { name: "保存" }));
+        expect(await screen.findByText(text)).toBeInTheDocument();
+      };
+      await edit(texts[0] as string);
+      // a read sent before the post comes late, with the comment of someone else
+      await rerender({ show: { ...show, comments: [c1, other] }, readonly: false });
+      expect(await screen.findByText("他の人")).toBeInTheDocument();
+      if (texts[1]) await edit(texts[1]);
+      // then a read that has the comment as it was posted
+      await rerender({ show: { ...show, comments: [c1, other, mine] }, readonly: false });
+      expect(screen.getByText(texts[texts.length - 1] as string)).toBeInTheDocument();
+      expect(screen.queryByText("自分の")).toBeNull();
+    });
+  }
+
   it("posts once when the key is pressed twice before the answer", async () => {
     const { k, container } = setup();
     k.api.POST.mockImplementation(() => new Promise(() => {}));
