@@ -40,6 +40,11 @@ describe("Disconnected", () => {
     expect(getByText("5 秒ごとに再接続しています")).toBeTruthy();
   });
 
+  it("画面全体をおおう面で、ショートカットも止める（data-blocking）", () => {
+    const { getByRole } = renderWithCore(Disconnected, { lastOpenAt: null });
+    expect(getByRole("alert").hasAttribute("data-blocking")).toBe(true);
+  });
+
   it("一度も接続できていなければ時刻を出さない", () => {
     const { queryByText, getByText } = renderWithCore(Disconnected, { lastOpenAt: null });
     expect(queryByText(/時点のもの/)).toBeNull();

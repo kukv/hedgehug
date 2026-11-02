@@ -2,7 +2,6 @@
   import { onMount } from "svelte";
   import { cliWorkspaceAdd } from "../core/cli";
   import { takeToken } from "../core/token";
-  import { auth } from "./auth-state.svelte";
   import { setCore } from "./context";
   import { createCore } from "./core-factory";
   import { router } from "./router";
@@ -17,7 +16,9 @@
   import Toasts from "./ui/Toasts.svelte";
 
   const token = takeToken(location, sessionStorage, history);
-  const c = createCore({ token: () => token, onUnauthorized: () => auth.markLost() });
+  // Whether the server refused the token (401 auth.token); this page then shows NoToken.
+  let lost = $state(false);
+  const c = createCore({ token: () => token, onUnauthorized: () => (lost = true) });
   setCore(c);
 
   const conn = useSubscribe(c.conn, () => ({ state: c.conn.state, lastOpenAt: c.conn.lastOpenAt }));
@@ -30,7 +31,7 @@
       first: first ? { store: first.store, ulid: first.ulid } : null,
     };
   });
-  const noToken = $derived(token === null || auth.lost);
+  const noToken = $derived(token === null || lost);
   const onboarding = $derived(dir.current.loaded && dir.current.count === 0);
   const down = $derived(!noToken && conn.current.state === "down");
   // The gates cover the screen; nothing behind them may take focus or keys.

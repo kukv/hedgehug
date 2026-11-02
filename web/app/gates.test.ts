@@ -2,10 +2,8 @@ import { cleanup, render, waitFor } from "@testing-library/svelte";
 import { flushSync } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.svelte";
-import { auth } from "./auth-state.svelte";
 
 beforeEach(() => {
-  auth.reset();
   vi.stubGlobal("fetch", () => new Promise(() => {}));
   sessionStorage.clear();
   history.replaceState(null, "", "/");
@@ -20,7 +18,7 @@ const isInert = (el: Element | null) =>
   el !== null && (el.hasAttribute("inert") || (el as Element & { inert?: boolean }).inert === true);
 
 describe("App のゲート", () => {
-  it("トークンがなければトークンの画面を出す", () => {
+  it("トークンがなければトークンの画面を出す", async () => {
     const { getByText } = render(App);
     flushSync();
     expect(
@@ -30,7 +28,7 @@ describe("App のゲート", () => {
     ).toBeTruthy();
   });
 
-  it("トークンがあればトークンの画面は出さない", () => {
+  it("トークンがあればトークンの画面は出さない", async () => {
     history.replaceState(null, "", "/#token=tkn");
     const { queryByText } = render(App);
     flushSync();
