@@ -15,7 +15,7 @@ import (
 	"github.com/kukv/hedgehug/internal/store"
 )
 
-// AffectedResult is what rm, restore and purge return: the task and the
+// AffectedResult is what rm and restore return: the task and the
 // descendants that went with it. Index is the one read before the write; the
 // CLI refreshes it to print what the write left.
 type AffectedResult struct {
@@ -27,7 +27,7 @@ type AffectedResult struct {
 }
 
 // Views are the tasks of Targets as the write left them, refreshed from the
-// store; a purged task, which is gone, is as it was.
+// store.
 func (r AffectedResult) Views() ([]*TaskView, error) {
 	if err := r.Index.Refresh(); err != nil {
 		return nil, err

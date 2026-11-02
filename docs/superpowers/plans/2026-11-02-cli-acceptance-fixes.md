@@ -8621,7 +8621,7 @@ CLI の受入テストで、この spec の次の点を変えた。詳細は `do
 - <このファイルに関係する項目だけを、spec の節番号付きで1行ずつ>
 ```
 
-該当箇所は `grep -nF` で探す: `comment <id>`、`workspace prefix`、`no-repo`、`purge --moved`、`purge <id>`、`rewrite-history`、`rewrites.yaml`、`store remove`、`--purge`、`builtinClientID`、`client ID`、`user.name`、`.gitconfig`、`アカウントのない`、`account がない`。
+該当箇所は `grep -nF` で探す: `comment <id>`、`workspace prefix`、`no-repo`、`purge --moved`、`purge <id>`、`moved_to`、`転送ファイル`、`rewrite-history`、`rewrites.yaml`、`store remove`、`--purge`、`builtinClientID`、`client ID`、`user.name`、`.gitconfig`、`アカウントのない`、`account がない`。
 
 - [ ] **Step 2: spec のコミット**
 

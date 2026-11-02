@@ -52,6 +52,18 @@ describe("errorMessage", () => {
     );
   });
 
+  it("words undo.blocked by the operation", () => {
+    expect(errorMessage(err("undo.blocked", { op: "purge" }))).toBe(
+      "完全に消したものは取り消せません",
+    );
+    for (const op of ["move-in", "move-out"]) {
+      expect(errorMessage(err("undo.blocked", { op }))).toBe(
+        "Store 間の移動は取り消せません。hh mv --store で元の Store へ戻してください",
+      );
+    }
+    expect(errorMessage(err("undo.blocked"))).toContain("ワークスペースにまだタスクがあるため");
+  });
+
   it("words sync.force_push", () => {
     expect(errorMessage(err("sync.force_push"))).toBe(
       "リモートの履歴が手元と食い違っています。確かめてから、hh doctor --fix で clone し直してください",

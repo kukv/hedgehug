@@ -4,6 +4,15 @@
 - 親設計: Hedgehug 設計ドキュメント（https://claude.ai/artifact/8d4dcVbePAxR2BxhMtkqnc）の「実装フェーズ」3. 複数 Store とアカウント、「Store とアカウント」の章、「コンテキスト解決」、「メンションと通知」、「GUI 仕様」の「複数 Store の見せ方」（CLI に当たる部分）、「開発環境」
 - 前段: `docs/superpowers/specs/2026-10-31-phase2-sync-merge-design.md`（ほか 1a〜1.5 の spec）
 
+## 2026-11-02 の変更
+
+CLI の受入テストで、この spec の次の点を変えた。詳細は `docs/superpowers/specs/2026-11-02-cli-acceptance-fixes-design.md`（§9、§9.1、§11）。
+
+- 転送ファイル（「転送ファイル（internal/model）」）は `ulid`・`moved_to`・`moved_at` を持つ。`moved_at` は移動した時刻（RFC 3339）で必須。持たない転送ファイルは壊れたファイルとして扱う
+- 転送先が同じ転送ファイルどうしが合流したときは、`moved_at` の大きい方を採る（「同期での扱い」）
+- `hh purge --moved` はなくなり、`hh purge --older-than <N>d` に置き換えた。転送ファイルは、`moved_at` が期間より古いものを削除済みのタスクと一緒に消す（§9）。`Hedgehug-Op: purge-moved` も使わない
+- `hh undo` は purge を取り消せず、`a purge cannot be undone` と出す
+
 ## 位置づけ
 
 フェーズ3は1つの spec で設計し、plan・実装・PR を 3a → 3b → 3c の3つに分ける（利用者の決定）。依存の順に並べた。
@@ -12,7 +21,7 @@
 | --- | --- | --- |
 | 3a | 設定と認証、GitHub API と fakegh、Store の作成と発見 | 認証、`internal/github`、fakegh、`store init/discover`、読み取り専用、メンバー一覧 |
 | 3b | マウントと統合ビュー、コンテキスト解決 | `internal/mount`、Store をまたぐクエリと ID の解決、参照の検査、コメントの本人確認、メンションの警告、`internal/context`、`hh use` |
-| 3c | Store 間の移動、履歴の書き換え | `mv --store`、転送ファイル、`purge --moved`、`purge --rewrite-history` と他のクローンでの取り込み |
+| 3c | Store 間の移動、履歴の書き換え | `mv --store`、転送ファイル、`purge --moved`、`purge --rewrite-history` と他のクローンでの取り込み |（2026-11-02 に変更。冒頭の節を参照）
 
 devenv とテストは、各段で動く範囲を足す（「開発環境」「テスト」）。完了条件の E2E は 3c で通す。
 
@@ -48,7 +57,7 @@ devenv とテストは、各段で動く範囲を足す（「開発環境」「�
 
 - **マウント**: config.yaml の `stores[]` に登録した Store。マウント中の Store の集合を `internal/mount` が扱う
 - **Store 名付きの ID**: `org-a:API-12` の形。入力ではどこでも受け付け、表示では接頭辞が Store 間で重複している間だけ使う
-- **転送ファイル**: Store 間の移動で移動元に残す、`ulid` と `moved_to` だけを持つタスクファイル
+- **転送ファイル**: Store 間の移動で移動元に残す、`ulid` と `moved_to` だけを持つタスクファイル（2026-11-02 に変更。冒頭の節を参照）
 - **repo ID**: remote URL を正規化した `github.com/org-a/api` の形
 
 ## 利用者の決定（2026-11-01）
@@ -130,7 +139,7 @@ host とアカウント ID の比較は `internal/config` の1つずつの関数
 
 | 種類 | 例 | 端末 | 端末でないとき |
 | --- | --- | --- | --- |
-| 確認 | `mv --store`、`purge --moved` | `[y/N]` | `--yes` が必須。なければ `confirm.required`（終了コード2） |
+| 確認 | `mv --store`、`purge --moved` | `[y/N]` | `--yes` が必須。なければ `confirm.required`（終了コード2） |（2026-11-02 に変更。冒頭の節を参照）
 | 選択 | ワークスペース、既定の Store、repo の段の候補、`--scoped`、`discover --from` のアカウント | 番号で選ぶ | 選ぶフラグが必須。なければ候補を並べた `choice.required`（終了コード2）。既定（repo の段の `recent`）があれば既定を使う |
 | 推測の確認 | ブランチ名の段、ブラウザを開くか | `[Y/n]` | 飛ばす |
 | 取り返しのつかない操作 | `purge --rewrite-history` | Store 名を入力 | 常にエラー（`--yes` でも通さない） |
@@ -474,10 +483,11 @@ CLI の `hh add` で入れ先を決める。上から順に試し、最初に当
 ---
 ulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A
 moved_to: 01JC0STORE...      # 移動先の Store の ULID（store.yaml の ulid）
+moved_at: 2026-11-02T09:30:00Z   # 移動した時刻（RFC 3339、必須。ない転送ファイルは壊れたファイル。2026-11-02 に追加）
 ---
 ```
 
-- タスクと同じパス（`tasks/<a>/<b>/<ULID>.md`）に置く。`model.DecodeTask` は `moved_to` を持つファイルを `*model.Forward` として返す（`ulid` と `moved_to` だけを読み、ほかのキーがあれば壊れたファイル扱い）。
+- タスクと同じパス（`tasks/<a>/<b>/<ULID>.md`）に置く。`model.DecodeTask` は `moved_to` を持つファイルを `*model.Forward` として返す（`ulid` と `moved_to` だけを読み、ほかのキーがあれば壊れたファイル扱い）。（2026-11-02 に変更。冒頭の節を参照）
 - index は転送ファイルをタスクとして扱わず、`ix.Forwards()` として別に持つ。`Resolve` は転送ファイルの ULID には当たらない。
 - 古い ID からの案内のため、index は転送ファイルごとに、そのパスがタスクだった最後の版を git の履歴から1回読み、その `id` と `former_ids` を覚える（キャッシュに残す。転送ファイルの形は変えない。利用者の決定。2026-11-01）。
 
@@ -502,14 +512,14 @@ moved_to: 01JC0STORE...      # 移動先の Store の ULID（store.yaml の ulid
 
 5 で毎回、`移動前の内容は org-a の git 履歴に残り、org-a を読める人は過去の内容を見られます。消すには hh purge --rewrite-history を使います` を出す。両方の Store の `members.json` の `collaborators` が取れていれば、移動元にいて移動先にいない人を `見えなくなる人: github.com/bob, github.com/carol` として足す。
 
-### `hh purge --moved [--store s] [--yes]`
+### `hh purge --moved [--store s] [--yes]`（2026-11-02 に変更。冒頭の節を参照）
 
-その Store の転送ファイルを一覧（ULID と、移動先の Store 名か ULID、移動先での今の ID が分かればそれ）で出し、端末なら確認、端末でなければ `--yes` を求め、1コミットで消す（`Hedgehug-Op: purge-moved`）。0件なら何もしない。
+その Store の転送ファイルを一覧（ULID と、移動先の Store 名か ULID、移動先での今の ID が分かればそれ）で出し、端末なら確認、端末でなければ `--yes` を求め、1コミットで消す（`Hedgehug-Op: purge-moved`）。0件なら何もしない。（2026-11-02 に変更。冒頭の節を参照）
 
 ### 同期での扱い（internal/merge）
 
 - **移動したタスクに属するファイル**: 片側がタスクを転送ファイルに変え、もう片側がそのタスクに属するファイル（タスクファイル、その下のコメントと作業時間の記録）を変えていたら（追加・変更・削除）、転送ファイルの側を採る。もう片側の変更はファイルごとに負けとし、`Hedgehug-Overwritten: <パス> * <ファイル全体の JSON> <author>` で全文を記録する（タスクファイルもコメントと同じ扱いで、フィールドごとの差分は取らない。削除なら値は `null`）。inbox の上書きの通知に、移動先（`org-b の WEB-45 に反映してください`。移動先がマウントされていなければ Store の ULID）を添え、inbox で全文を見られる。`inbox revert` は、移動済みのタスクには「移動先で直してください」と出して何もしない。
-- **転送ファイルと転送ファイル**: 専用の規則は作らない。両側が別の Store へ移していたら（`moved_to` が違う）、ふつうのフィールドのマージ（`moved_to` の LWW と `Hedgehug-Overwritten`）で決まる。負けた移動先には生きたタスクが残るので、「Store をまたぐ ULID の重複」になる（下記）。
+- **転送ファイルと転送ファイル**: 専用の規則は作らない。両側が別の Store へ移していたら（`moved_to` が違う）、ふつうのフィールドのマージ（`moved_to` の LWW と `Hedgehug-Overwritten`）で決まる。負けた移動先には生きたタスクが残るので、「Store をまたぐ ULID の重複」になる（下記）。（2026-11-02 に変更。冒頭の節を参照）
 - **修復**（`Repair`）:
   - `parent_moved`: 今の `parent_deleted` の条件に「親が転送ファイル」を足し、同じ処理（子をルートへ移す、rank は末尾）で直す。通知の種類は `parent_moved` として分ける（`Hedgehug-Repaired: <ULID> parent_moved {"from": 元の親, "to": null} <author>`）。
   - `ref_moved`: `blocked_by` と `task_ref` が転送ファイルを指していたら外す。`Hedgehug-Repaired: <ULID> ref_moved {"field":..., "target":...} <author>`。
@@ -578,7 +588,7 @@ moved_to: 01JC0STORE...      # 移動先の Store の ULID（store.yaml の ulid
 | `hh use [<project>] [--clear]` | 3b | 「コンテキスト解決」 |
 | `hh comment edit/rm` | 3b | 本人確認 |
 | `hh mv --store [--scoped] [--yes]` | 3c | 「Store 間の移動」 |
-| `hh purge --moved`、`purge --rewrite-history` | 3c | 「Store 間の移動」「履歴の書き換え」 |
+| `hh purge --moved`、`purge --rewrite-history` | 3c | 「Store 間の移動」「履歴の書き換え」 |（2026-11-02 に変更。冒頭の節を参照）
 
 足すコマンドはすべて `--json` に対応する（`purge --rewrite-history` の確認は `--json` でも端末の入力を求める）。
 

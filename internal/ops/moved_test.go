@@ -159,6 +159,9 @@ func TestUndoRefusesMoves(t *testing.T) {
 			if !errors.As(err, &oe) || oe.Kind != KindConflict || oe.Code != "undo.blocked" || err.Error() != tc.why {
 				t.Fatalf("Undo = %v; want KindConflict undo.blocked %q", err, tc.why)
 			}
+			if oe.Args["op"] != tc.op {
+				t.Errorf("Args = %v; want op %q", oe.Args, tc.op)
+			}
 			if after := headOf(t, s); after != before {
 				t.Errorf("HEAD moved from %s to %s", before, after)
 			}

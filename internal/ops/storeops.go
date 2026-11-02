@@ -389,8 +389,16 @@ func (ss *Session) StoreAdd(name string, remotes []string, path, account string)
 		// KindInvalid, not KindUsage: the CLI exits 1.
 		return StoreAddResult{}, newErr(KindInvalid, "store.clone_failed", err, "remote", remotes[0])
 	}
-	undo := func(err error) error { return errors.Join(err, clearDir(dir, existed)) }
-	s, err := ss.openStoreAt(dir)
+	// The handle is closed before the directory goes: Windows cannot remove
+	// open pack files.
+	var s *store.Store
+	undo := func(err error) error {
+		if s != nil {
+			_ = s.Repo().Close()
+		}
+		return errors.Join(err, clearDir(dir, existed))
+	}
+	s, err = ss.openStoreAt(dir)
 	if err != nil {
 		return StoreAddResult{}, undo(newErr(KindInvalid, "store.not_hedgehug", fmt.Errorf("%s is not a hedgehug store: %w", remotes[0], err), "name", name))
 	}

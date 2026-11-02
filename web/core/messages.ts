@@ -117,8 +117,17 @@ const messages: Record<string, Make> = {
       ? `${str(a, "at")} の時点にはこのタスクがありませんでした`
       : "その時点にはこのタスクがありませんでした",
   "undo.nothing": () => "取り消せる操作がありません",
-  "undo.blocked": () =>
-    "ワークスペースにまだタスクがあるため取り消せません。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください",
+  "undo.blocked": (a) => {
+    switch (str(a, "op")) {
+      case "purge":
+        return "完全に消したものは取り消せません";
+      case "move-in":
+      case "move-out":
+        return "Store 間の移動は取り消せません。hh mv --store で元の Store へ戻してください";
+      default:
+        return "ワークスペースにまだタスクがあるため取り消せません。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください";
+    }
+  },
 
   // comments
   "comment.not_found": (a) =>
