@@ -463,6 +463,11 @@ func (ss *Session) StoreAdd(name string, remotes []string, path, account string)
 	}); err != nil {
 		return StoreAddResult{}, undo(err)
 	}
+	// The index is a cache: a store it cannot be built for is added all the
+	// same, and the next command that needs it builds it again.
+	if _, err := ss.openHistory(s, name); err != nil {
+		ss.warn(fmt.Sprintf("%s: could not index its history: %v", name, err))
+	}
 	ss.warnPrefixDuplicates(c, name, s)
 	return StoreAddResult{Name: name, Path: dir, Remotes: remotes}, nil
 }

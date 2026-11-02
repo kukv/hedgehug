@@ -7,11 +7,13 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/config"
+	"github.com/kukv/hedgehug/internal/history"
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
@@ -58,6 +60,12 @@ type polled struct {
 	head  plumbing.Hash
 	sync  syncStatus
 	stamp string
+
+	// histBusy is true while a goroutine brings the history index of the
+	// store to HEAD; histDone is that goroutine's. Whoever lets go of the
+	// store (its directory may be swapped or removed) waits for histDone.
+	histBusy atomic.Bool
+	histDone sync.WaitGroup
 }
 
 // Poller reads the HEAD and the sync state of each store every
@@ -93,18 +101,25 @@ func newPoller(s *Server, hub *Hub) *Poller {
 func (p *Poller) Release(path string) {
 	p.pollMu.Lock()
 	defer p.pollMu.Unlock()
+	var gone []*polled
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	for name, st := range p.stores {
 		if st.path != path {
 			continue
 		}
-		_ = st.s.Repo().Close()
+		gone = append(gone, st)
 		delete(p.stores, name)
 		if p.released == nil {
 			p.released = map[string]bool{}
 		}
 		p.released[name] = true
+	}
+	p.mu.Unlock()
+	// The repository is closed once the build of the history index, which
+	// reads it, is over; the wait is made without p.mu, so hello does not wait.
+	for _, st := range gone {
+		st.histDone.Wait()
+		_ = st.s.Repo().Close()
 	}
 }
 
@@ -119,6 +134,8 @@ func (p *Poller) Kick() {
 
 // Run polls until ctx is done.
 func (p *Poller) Run(ctx context.Context) {
+	// A build of a history index still writing would outlive the server.
+	defer p.waitBuilds()
 	for ctx.Err() == nil {
 		p.poll(true)
 		t := time.NewTimer(p.interval)
@@ -198,6 +215,9 @@ func (p *Poller) pollLocked(publish bool) {
 			if err != nil {
 				continue
 			}
+			if st != nil {
+				st.histDone.Wait() // the store of the old path is let go
+			}
 			st = &polled{path: e.Path, s: s}
 			fresh = true
 			p.mu.Lock()
@@ -238,18 +258,24 @@ func (p *Poller) pollLocked(publish bool) {
 			stamps[e.Name] = stamp
 		}
 	}
+	var dropped []*polled
 	p.mu.Lock()
 	for _, u := range updates {
 		u.st.head, u.st.sync = u.head, u.sync
 		p.stores[u.name] = u.st
 	}
 	p.scanned = true
-	for name := range p.stores {
+	for name, st := range p.stores {
 		if !seen[name] {
+			dropped = append(dropped, st)
 			delete(p.stores, name)
 		}
 	}
 	p.mu.Unlock()
+	// A store no longer targeted may be removed from the disk next.
+	for _, st := range dropped {
+		st.histDone.Wait()
+	}
 	if len(stamps) == 0 {
 		return
 	}
@@ -332,8 +358,10 @@ func (p *Poller) headMoved(name string, st *polled, head plumbing.Hash) {
 	}
 }
 
-// refresh brings the index of st to HEAD, for the requests that follow.
+// refresh brings the index of st to HEAD, for the requests that follow, and
+// starts bringing its history index to HEAD too.
 func (p *Poller) refresh(st *polled) {
+	defer p.buildHistory(st)
 	if st.ix != nil && st.ix.Refresh() == nil {
 		return
 	}
@@ -343,6 +371,45 @@ func (p *Poller) refresh(st *polled) {
 		return
 	}
 	st.ix = ix
+}
+
+// buildHistory builds the history index of st in the background, so that the
+// commands that need it find it, and a poll does not wait for it. One build
+// runs per store; it goes on until the index is at the HEAD it sees when it
+// ends. The index is a cache, so a failure is ignored.
+func (p *Poller) buildHistory(st *polled) {
+	if !st.histBusy.CompareAndSwap(false, true) {
+		return
+	}
+	st.histDone.Add(1)
+	go func() {
+		defer st.histDone.Done()
+		defer st.histBusy.Store(false)
+		for {
+			h, err := history.Open(st.s, history.Options{})
+			if err != nil {
+				return
+			}
+			if head, err := st.s.Repo().Head(); err != nil || head == h.Tip() {
+				return
+			}
+		}
+	}()
+}
+
+// waitBuilds waits for the builds of the history indexes in progress.
+func (p *Poller) waitBuilds() {
+	p.pollMu.Lock()
+	defer p.pollMu.Unlock()
+	p.mu.Lock()
+	var all []*polled
+	for _, st := range p.stores {
+		all = append(all, st)
+	}
+	p.mu.Unlock()
+	for _, st := range all {
+		st.histDone.Wait()
+	}
 }
 
 // childTask is the task of the comment file at path.
