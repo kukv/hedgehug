@@ -60,8 +60,6 @@ func TestLs(t *testing.T) {
 	}
 }
 
-// broken is in every task for --format, empty when the task is not broken,
-// so that {{if .broken}} works on a key that must be there.
 func TestLsHelpExplainsATermThatStartsWithADash(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
@@ -80,6 +78,8 @@ func TestLsHelpExplainsATermThatStartsWithADash(t *testing.T) {
 	}
 }
 
+// broken is in every task for --format, empty when the task is not broken,
+// so that {{if .broken}} works on a key that must be there.
 func TestLsFormatBroken(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
