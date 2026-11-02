@@ -88,7 +88,7 @@ func TestNotifications(t *testing.T) {
 	ts.call("GET", "/api/tasks/"+id, nil, 200, &show)
 	u := mustULID(t, show.ULID)
 	// Another writer's title won over mine ("first"): the sync told me.
-	nid := ts.notifyMe(overwrittenItem(u, id, "title", `"first"`))
+	nid := ts.notifyMe(overwrittenItem(u, id, `"first"`))
 	var items []struct {
 		ULID string `json:"ulid"`
 		Kind string `json:"kind"`
@@ -135,7 +135,7 @@ func TestNotificationsReadMany(t *testing.T) {
 	var show ops.ShowView
 	ts.call("GET", "/api/tasks/"+id, nil, 200, &show)
 	u := mustULID(t, show.ULID)
-	first := ts.notifyMe(overwrittenItem(u, id, "title", `"first"`))
+	first := ts.notifyMe(overwrittenItem(u, id, `"first"`))
 	second := ts.notifyMe(inbox.Item{Kind: inbox.Mention, Task: u, ID: id, Commit: "c2", Time: time.Now()})
 	third := ts.notifyMe(inbox.Item{Kind: inbox.Mention, Task: u, ID: id, Commit: "c3", Time: time.Now()})
 	var items []struct {
@@ -194,8 +194,8 @@ func TestNotificationsReadStoreParam(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mine := ts.notifyIn("me", overwrittenItem(v.ULID, v.ULID.String(), "title", `"x"`))
-	theirs := ts.notifyIn("team", overwrittenItem(v.ULID, v.ULID.String(), "title", `"y"`))
+	mine := ts.notifyIn("me", overwrittenItem(v.ULID, v.ULID.String(), `"x"`))
+	theirs := ts.notifyIn("team", overwrittenItem(v.ULID, v.ULID.String(), `"y"`))
 	var res struct {
 		Read []string `json:"read"`
 	}
