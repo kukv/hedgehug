@@ -591,6 +591,32 @@ describe("TaskCache a read of a row that is not in the cache", () => {
     await vi.waitFor(() => expect(cache.task("X")?.title).toBe("fresh2"));
   });
 
+  it("keeps up with the task after a second event came while the fetch the read started was on its way", async () => {
+    let v = 0;
+    const held: (() => void)[] = [];
+    const { cache, conn, calls } = setup((r) => {
+      const t = showOf(tv(r.path.split("/").pop() ?? "", `v${v}`)); // the server reads it as it is now
+      return new Promise((done) => held.push(() => done(t)));
+    });
+    const since = cache.epochNow(); // a lookup of X is sent here
+    v = 1;
+    conn.emit("tasks.changed", changed("shared", ["X"], "c1"));
+    cache.prime([tv("X", "v0")], since); // dropped: it fetches X
+    await vi.waitFor(() => expect(held).toHaveLength(1));
+    v = 2;
+    conn.emit("tasks.changed", changed("shared", ["X"], "c2")); // while that fetch is on its way
+    held.shift()?.(); // it answers v1, older than the event
+    await vi.waitFor(() => expect(held).toHaveLength(1));
+    held.shift()?.();
+    await vi.waitFor(() => expect(cache.task("X")?.title).toBe("v2"));
+    v = 3;
+    conn.emit("tasks.changed", changed("shared", ["X"], "c3")); // X is in the cache now: the event fetches it
+    await vi.waitFor(() => expect(held).toHaveLength(1));
+    held.shift()?.();
+    await vi.waitFor(() => expect(cache.task("X")?.title).toBe("v3"));
+    expect(calls.filter((c) => c.path === "/api/tasks/X")).toHaveLength(3);
+  });
+
   it("drops a read that began before a resync", async () => {
     const { cache, conn } = setup((r) => showOf(tv(r.path.split("/").pop() ?? "", "fresh")));
     cache.prime([tv("B", "b")], cache.epochNow());
@@ -709,4 +735,69 @@ describe("TaskCache rows nobody holds", () => {
     expect(cache.task("B")?.title).toBe("fresh");
     expect(seqs().size).toBe(0);
   });
+});
+
+describe("TaskCache the order of reads, answers, events and resyncs", () => {
+  // A step: E the task changes and its event comes, R the connection is lost while the task changes
+  // and comes back (resync), A every read on its way answers, P the lookup that began before every
+  // step answers (it brought the task as it was at the start).
+  type Step = "E" | "R" | "A" | "P";
+  const orders = (): Step[][] => {
+    const out: Step[][] = [];
+    const grow = (seq: Step[]) => {
+      for (let i = 0; i <= seq.length; i++) out.push([...seq.slice(0, i), "P", ...seq.slice(i)]);
+      if (seq.length < 3) for (const s of ["E", "R", "A"] as const) grow([...seq, s]);
+    };
+    grow([]);
+    return out;
+  };
+
+  const run = async (steps: Step[], cached: boolean) => {
+    let v = 0;
+    const held: (() => void)[] = [];
+    const { cache, conn, calls } = setup((r) => {
+      const t = showOf(tv(r.path.split("/").pop() ?? "", `v${v}`));
+      return new Promise((done) => held.push(() => done(t)));
+    });
+    if (cache.epochNow() !== 0) throw new Error("unexpected epoch");
+    if (cached) cache.prime([tv("X", "v0")], cache.epochNow());
+    const since = cache.epochNow(); // the lookup of X is sent here
+    const answerAll = async () => {
+      await settle();
+      for (const f of held.splice(0)) f();
+      await settle();
+      await settle();
+    };
+    for (const s of steps) {
+      if (s === "E") {
+        v++;
+        conn.emit("tasks.changed", changed("shared", ["X"], `c${v}`));
+      } else if (s === "R") {
+        v++;
+        conn.emit("resync");
+      } else if (s === "A") await answerAll();
+      else cache.prime([tv("X", "v0")], since);
+      await settle();
+    }
+    // The events stop: the reads on their way must end, with the task as it is now.
+    let rounds = 0;
+    for (; held.length > 0 || rounds === 0; rounds++) {
+      if (rounds > 10) throw new Error(`${steps.join("")}: the reads do not end`);
+      await answerAll();
+    }
+    return { title: cache.task("X")?.title, want: `v${v}`, gets: calls.length, events: v };
+  };
+
+  for (const cached of [false, true]) {
+    it(`ends with the task as it is now, whatever the order (${cached ? "in" : "not in"} the cache)`, async () => {
+      const failed: string[] = [];
+      for (const steps of orders()) {
+        const r = await run(steps, cached);
+        if (r.title !== r.want) failed.push(`${steps.join("")}: ${r.title} (want ${r.want})`);
+        // a read for each event or resync and one for the lookup, at most
+        if (r.gets > r.events + 1) failed.push(`${steps.join("")}: ${r.gets} reads`);
+      }
+      expect(failed).toEqual([]);
+    });
+  }
 });

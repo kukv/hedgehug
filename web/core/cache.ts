@@ -248,8 +248,7 @@ export class TaskCache {
   prime(tasks: (TaskView | ShowView)[], since: number): void {
     for (const t of tasks) {
       if (!this.changedSince(t.ulid, since)) this.ingest(t, since);
-      // Nothing fetches a row nobody holds when its event came: the read has the old row, so fetch it now.
-      else if (!this.rows.has(t.ulid)) void this.fetchRow(t.ulid, t.store);
+      else this.refetchMissing(t.ulid, t.store);
     }
     this.flush();
   }
@@ -537,6 +536,15 @@ export class TaskCache {
     return held;
   }
 
+  // refetchMissing is for a read whose answer was dropped as older than an event or a resync. A row
+  // the cache holds is fetched again by that event or resync; one it does not hold has nobody to fetch
+  // it, so it is fetched here. One fetch at a time: one on its way began after the read, and does
+  // the same when its own answer is dropped. Each fetch again needs a new event, so it ends once they stop.
+  private refetchMissing(ulid: string, store?: string): void {
+    if (this.rows.has(ulid) || this.rowSeqs.has(ulid)) return;
+    void this.fetchRow(ulid, store);
+  }
+
   private async fetchRow(ulid: string, store?: string): Promise<void> {
     const since = this.epoch;
     const seq = ++this.rowSeq;
@@ -548,7 +556,8 @@ export class TaskCache {
       );
       if (seq !== this.rowSeqs.get(ulid)) return; // a newer fetch of this row is on its way
       this.rowSeqs.delete(ulid);
-      if (!this.gone(ulid, since) && !this.changedSince(ulid, since)) this.ingest(show, since);
+      if (this.changedSince(ulid, since)) this.refetchMissing(ulid, store);
+      else if (!this.gone(ulid, since)) this.ingest(show, since);
     } catch (e) {
       if (seq !== this.rowSeqs.get(ulid)) return;
       this.rowSeqs.delete(ulid);
