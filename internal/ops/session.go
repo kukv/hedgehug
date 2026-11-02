@@ -50,6 +50,10 @@ type Session struct {
 	BeforeSwap func(path string)
 	Keyring    auth.Keyring // nil is the OS keychain
 	HTTPClient *http.Client // nil is a client with a 30-second timeout
+	// Progress is told how far the history index of a store has come while it
+	// is built on the spot: done of total commits. ForStore copies it; nil
+	// does nothing.
+	Progress func(store string, done, total int)
 	// Run runs a command (gh) and gives its output; nil runs the command.
 	Run func(name string, args ...string) (stdout, stderr []byte, err error)
 
@@ -101,6 +105,7 @@ func (ss *Session) ForStore(name string) *Session {
 		Keyring:      ss.Keyring,
 		HTTPClient:   ss.HTTPClient,
 		Run:          ss.Run,
+		Progress:     ss.Progress,
 		tokens:       ss.tokenCache(),
 		mounts:       ss.mountCache(),
 	}

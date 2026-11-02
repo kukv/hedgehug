@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/kukv/hedgehug/internal/gitrepo"
+	"github.com/kukv/hedgehug/internal/history"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/mount"
 )
@@ -49,16 +49,20 @@ func (ss *Session) People() ([]string, error) {
 				add(c.Author)
 			}
 		}
-		var entries []gitrepo.LogEntry
-		var logErr error
-		if err := m.With(func(*index.Index) { entries, logErr = m.Store.Repo().Log(nil, 0) }); err != nil {
+		var authors []string
+		var histErr error
+		if err := m.With(func(*index.Index) {
+			var h *history.History
+			if h, histErr = ss.openHistory(m.Store, m.Name); histErr == nil {
+				authors = h.Authors()
+			}
+		}); err != nil {
 			return nil, classify(err)
 		}
-		if logErr != nil {
-			return nil, logErr
+		if histErr != nil {
+			return nil, histErr
 		}
-		for _, en := range entries {
-			a, _ := en.Trailer("Hedgehug-Author")
+		for _, a := range authors {
 			add(a)
 		}
 	}
