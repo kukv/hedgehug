@@ -150,6 +150,45 @@ func TestScopedSetKeepsTemplatesAndUnknownKeys(t *testing.T) {
 	}
 }
 
+func TestScopedSetLeavesEmptyScopedListBehind(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	p := ts.addProject("Web")
+	statuses := slices.Clone(fourStatuses)
+	if _, err := ts.ScopedSet(p.String(), schema.ScopedChange{Statuses: &statuses}); err != nil {
+		t.Fatal(err)
+	}
+	none := []string{}
+	if _, err := ts.ScopedSet(p.String(), schema.ScopedChange{Statuses: &none}); err != nil {
+		t.Fatal(err)
+	}
+	if _, text := ts.storeSchema(); !strings.Contains(text, "scoped: []") {
+		t.Errorf("schema.yaml:\n%s", text)
+	}
+}
+
+func TestScopedSetOnABrokenSchemaIsScopedInvalid(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	p := ts.addProject("Web")
+	_, text := ts.storeSchema()
+	// a transition to a status that does not exist: the schema is broken before the change
+	ts.commitRawFile("schema.yaml", text+"scoped:\n  - where: project:"+p.String()+"\n    workflow:\n      transitions:\n        todo: [nope]\n")
+	head := ts.head()
+	statuses := slices.Clone(fourStatuses)
+	_, err := ts.ScopedSet(p.String(), schema.ScopedChange{Statuses: &statuses})
+	e := AsError(err)
+	if e == nil || e.Kind != KindInvalid || e.Code != "scoped.invalid" {
+		t.Fatalf("err = %v", err)
+	}
+	if ps, _ := e.Args["problems"].([]string); len(ps) == 0 {
+		t.Errorf("Args = %+v, want the problems", e.Args)
+	}
+	if ts.head() != head {
+		t.Error("a refused change wrote a commit")
+	}
+}
+
 func TestScopedSetRefusesWhatSchemaCheckRefuses(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
@@ -219,7 +258,7 @@ func TestScopedRemove(t *testing.T) {
 	_, text := ts.storeSchema()
 	ts.commitRawFile("schema.yaml", text+"scoped:\n  - where: project:"+p.String()+
 		"\n    statuses: [todo, in_progress, done, canceled]\n    templates:\n      only: [bug]\n  - where: project:"+other.String()+
-		"\n    statuses: [todo, in_progress, done, canceled]\n")
+		"\n    statuses: [todo, in_progress, done, canceled]\n    note: keep me\n    templates:\n      only: [bug]\n")
 
 	r, err := ts.ScopedRemove(p.String())
 	if err != nil || !r.Committed || r.Scoped != nil || lastOp(t, ts) != "schema" {
@@ -231,6 +270,10 @@ func TestScopedRemove(t *testing.T) {
 	}
 	if _, ok := sc.ScopedFor(other); !ok {
 		t.Error("the other project lost its override")
+	}
+	_, text = ts.storeSchema()
+	if !strings.Contains(text, "note: keep me") || !strings.Contains(text, "only: [bug]") {
+		t.Errorf("the unknown key or the templates of the other override are gone:\n%s", text)
 	}
 
 	head := ts.head()

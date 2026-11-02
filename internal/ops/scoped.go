@@ -115,11 +115,21 @@ func (ss *Session) ScopedSet(arg string, ch schema.ScopedChange) (ScopedResult, 
 		return ScopedResult{}, err
 	}
 	id := ix.DisplayID(e)
-	if k, ok := ix.Schema().Kind(e.Kind); !ok || k.Role != schema.RoleContainer {
-		return ScopedResult{}, newErr(KindInvalid, "scoped.not_container",
-			fmt.Errorf("%s is a %s, which is not a container", id, e.Kind), "id", id, "kind", e.Kind)
+	if err := scopedContainer(ix.Schema(), id, e.Kind); err != nil {
+		return ScopedResult{}, err
 	}
-	return ss.scopedWrite(s, ix, e.ULID, e, func(sc *schema.Schema) *schema.Schema { return sc.WithScoped(e.ULID, ch) })
+	// the same check again under the lock, on the task and the schema the write sees
+	guard := func(tx *store.Tx, cur *schema.Schema) error {
+		t, err := tx.Task(e.ULID)
+		if err != nil {
+			return newErr(KindNotFound, "task.not_found", fmt.Errorf("%s: %w", id, err), "id", id)
+		}
+		if t.DeletedAt != nil {
+			return newErr(KindConflict, "task.deleted", fmt.Errorf("%s is deleted; restore %s first", id, id), "id", id)
+		}
+		return scopedContainer(cur, id, t.Kind)
+	}
+	return ss.scopedWrite(s, ix, e.ULID, e, guard, func(sc *schema.Schema) *schema.Schema { return sc.WithScoped(e.ULID, ch) })
 }
 
 // ScopedRemove removes the override of the project arg names, templates
@@ -135,15 +145,20 @@ func (ss *Session) ScopedRemove(arg string) (ScopedResult, error) {
 	if err != nil {
 		return ScopedResult{}, err
 	}
-	return ss.scopedWrite(s, ix, ulid, e, func(sc *schema.Schema) *schema.Schema { return sc.WithoutScoped(ulid) })
+	return ss.scopedWrite(s, ix, ulid, e, nil, func(sc *schema.Schema) *schema.Schema { return sc.WithoutScoped(ulid) })
 }
 
 // scopedWrite writes the schema that next makes from the one the store has
-// under its lock.
-func (ss *Session) scopedWrite(s *store.Store, ix *index.Index, ulid model.ULID, e *index.Entry, next func(*schema.Schema) *schema.Schema) (ScopedResult, error) {
+// under its lock. guard, when given, checks the project under the same lock.
+func (ss *Session) scopedWrite(s *store.Store, ix *index.Index, ulid model.ULID, e *index.Entry, guard func(*store.Tx, *schema.Schema) error, next func(*schema.Schema) *schema.Schema) (ScopedResult, error) {
 	var after *schema.Schema
 	hash, err := ss.UpdateCommit(s, store.Op{Name: "schema", Task: ulid}, func(tx *store.Tx) error {
 		cur := s.Schema()
+		if guard != nil {
+			if err := guard(tx, cur); err != nil {
+				return err
+			}
+		}
 		after = next(cur)
 		if ps := after.NewProblems(cur.Check()); len(ps) > 0 {
 			return scopedInvalid(ps)
@@ -170,4 +185,13 @@ func scopedInvalid(ps []schema.Problem) error {
 		msgs[i] = p.String()
 	}
 	return newErr(KindInvalid, "scoped.invalid", fmt.Errorf("the override breaks the schema: %s", strings.Join(msgs, "; ")), "problems", msgs)
+}
+
+// scopedContainer refuses a kind of sc whose role is not container.
+func scopedContainer(sc *schema.Schema, id, kind string) error {
+	if k, ok := sc.Kind(kind); !ok || k.Role != schema.RoleContainer {
+		return newErr(KindInvalid, "scoped.not_container",
+			fmt.Errorf("%s is a %s, which is not a container", id, kind), "id", id, "kind", kind)
+	}
+	return nil
 }
