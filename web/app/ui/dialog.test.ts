@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
-import { createRawSnippet, flushSync } from "svelte";
+import { createRawSnippet, flushSync, mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Dialog from "./Dialog.svelte";
 import Menu from "./Menu.svelte";
@@ -92,8 +92,14 @@ describe("Dialog", () => {
     const onclose = vi.fn();
     const onMenuClose = vi.fn();
     const inner = createRawSnippet(() => ({ render: () => "<div></div>" }));
-    render(Dialog, { props: { open: true, title: "親", width: 560, onclose, children: inner } });
-    const m = render(Menu, {
+    const d = render(Dialog, {
+      props: { open: true, title: "親", width: 560, onclose, children: inner },
+    });
+    flushSync();
+    // The menu is rendered inside the dialog's own DOM.
+    const host = d.getByRole("dialog");
+    const m = mount(Menu, {
+      target: host,
       props: {
         anchor: null,
         items: [{ value: "a", label: "A" }],
@@ -102,9 +108,12 @@ describe("Dialog", () => {
       },
     });
     flushSync();
-    await fireEvent.keyDown(m.getByRole("menu"), { key: "Escape" });
+    const menu = d.getByRole("menu");
+    expect(host.contains(menu)).toBe(true);
+    await fireEvent.keyDown(menu, { key: "Escape" });
     expect(onMenuClose).toHaveBeenCalledTimes(1);
     expect(onclose).not.toHaveBeenCalled();
+    unmount(m);
   });
 
   it("重ねて開いたときは一番上のダイアログだけが Esc で閉じる", async () => {
