@@ -424,6 +424,27 @@ describe("TreeView", () => {
     expect(api.POST).not.toHaveBeenCalledWith("/api/tasks/{id}/move", expect.anything());
   });
 
+  it("does not open the input again when Esc closed it while the task was being made", async () => {
+    const { api } = setup();
+    let answer: (v: unknown) => void = () => {};
+    api.POST.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const row = screen.getByText("API v2 への移行").closest('[role="treeitem"]') as HTMLElement;
+    await fireEvent.click(row);
+    await fireEvent.keyDown(row, { key: "Enter" });
+    const input = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
+    await fireEvent.input(input, { target: { value: "遅い" } });
+    await fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(api.POST).toHaveBeenCalled());
+    await fireEvent.keyDown(input, { key: "Escape" });
+    await waitFor(() => expect(row).toHaveFocus());
+
+    answer(ok({ task: task("N1", "task", "E1"), commit: "c1" }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）")).toBeNull();
+    expect(row).toHaveFocus();
+  });
+
   it("waits for a row the window draws late, and focuses it", async () => {
     setup({ many: 250 });
     render(TreeView, { view: { kind: "project", ulid: "P" } });

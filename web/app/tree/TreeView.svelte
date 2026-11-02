@@ -473,6 +473,9 @@
         workspace: workspace.prefix,
         after: a.after,
       });
+      // Esc (or a click elsewhere) closed the input while the task was being made: it stays closed,
+      // and the focus stays where the user put it.
+      if (adding !== a) return true;
       select(created.ulid);
       // keep going below the new row, as an outliner does
       const trail = [...(a.trail ?? []), ...(a.after ? [a.after] : [])].slice(-MAX_TRAIL);

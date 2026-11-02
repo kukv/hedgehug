@@ -98,6 +98,41 @@ test("a second title typed straight after the first lands right below it", async
   await expect(input).toBeFocused();
 });
 
+test("Esc closes the input even when the task is still being made, and the row keys work", async ({
+  page,
+  hh,
+}) => {
+  hh.add("Alpha");
+  hh.add("Bravo");
+  await hh.open(page);
+  await treeReady(page);
+  // A slow commit (a signed one, say): the answer of the create comes after the Esc.
+  await page.route(/\/api\/tasks\?/, async (route) => {
+    if (route.request().method() === "POST") await new Promise((r) => setTimeout(r, 1000));
+    await route.continue();
+  });
+
+  await row(page, "Alpha").click();
+  await page.keyboard.press("Enter");
+  const input = page.getByRole("textbox", { name: "新しいタスクのタイトル" });
+  await input.fill("Slow");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Escape");
+  await expect(input).toHaveCount(0);
+  // The create finishes later: the input must not come back and take the focus.
+  await expect(row(page, "Slow")).toBeVisible();
+  await expect(input).toHaveCount(0);
+  await expect(row(page, "Alpha")).toBeFocused();
+
+  // The keys act on the rows again: K opens the menu of kinds, and Alt+Down moves the task.
+  await page.keyboard.press("k");
+  await expect(page.getByRole("menu")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await page.keyboard.press("Alt+ArrowDown");
+  await expect.poll(() => rootOrder(hh)).toEqual(["Slow", "Alpha", "Bravo"]);
+});
+
 test("Tab indents under the previous sibling and Shift+Tab brings it back", async ({
   page,
   hh,
