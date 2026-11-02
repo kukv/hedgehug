@@ -184,6 +184,28 @@ describe("SchemaCache", () => {
     expect(fn).not.toHaveBeenCalled();
   });
 
+  it("does not let an older fetch that ends last overwrite the newer schema", async () => {
+    let n = 0;
+    let release: (s: SchemaView) => void = () => undefined;
+    const newer = { ...schema, kinds: kinds.slice(0, 2) };
+    const { api } = fakeApi(() => {
+      n++;
+      if (n === 1) return Promise.resolve(schema);
+      if (n === 2) return new Promise<SchemaView>((r) => (release = r));
+      return newer;
+    });
+    const conn = new FakeConn();
+    const cache = new SchemaCache({ api, conn: conn.asConnection() });
+    await cache.load("shared");
+    conn.emit("resync"); // fetch 2, held
+    await settle();
+    conn.emit("schema.changed", { store: "shared" }); // fetch 3, quick
+    await vi.waitFor(() => expect(cache.get("shared")?.kinds?.length).toBe(2));
+    release(schema);
+    await settle();
+    expect(cache.get("shared")?.kinds?.length).toBe(2);
+  });
+
   it("leaves alone a store nobody asked for at schema.changed", async () => {
     const { cache, conn, calls } = setup();
     conn.emit("schema.changed", { store: "other" });

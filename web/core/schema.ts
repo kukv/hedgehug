@@ -15,6 +15,7 @@ export class SchemaCache {
   private readonly schemas = new Map<string, SchemaView>();
   private readonly sigs = new Map<string, string>();
   private readonly loading = new Map<string, Promise<SchemaView>>();
+  private readonly seqs = new Map<string, number>();
   private readonly subs = new Set<() => void>();
 
   constructor(opts: { api: Api; conn: Connection }) {
@@ -42,8 +43,14 @@ export class SchemaCache {
   private fetch(store: string): Promise<SchemaView> {
     const running = this.loading.get(store);
     if (running) return running;
+    const seq = (this.seqs.get(store) ?? 0) + 1;
+    this.seqs.set(store, seq);
     const p = unwrap(this.api.GET("/api/schema", { params: { query: { store } } }))
       .then((s) => {
+        // An older fetch that ends after a newer one has started gives way to it.
+        if (this.seqs.get(store) !== seq) {
+          return this.loading.get(store) ?? this.schemas.get(store) ?? s;
+        }
         const sig = JSON.stringify(s);
         if (this.sigs.get(store) === sig) return this.schemas.get(store) as SchemaView;
         this.schemas.set(store, s);

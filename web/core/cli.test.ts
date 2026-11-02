@@ -29,6 +29,14 @@ describe("quoteArg", () => {
     expect(quoteArg("")).toBe('""');
   });
 
+  it("single-quotes an argument with ! or a leading =", () => {
+    expect(quoteArg("Fix it!")).toBe("'Fix it!'");
+    expect(quoteArg("a!b")).toBe("'a!b'");
+    expect(quoteArg("it's!")).toBe("'it'\\''s!'");
+    expect(quoteArg("=foo")).toBe("'=foo'");
+    expect(quoteArg("a=b")).toBe("a=b");
+  });
+
   it('escapes " \\ $ and ` with a backslash', () => {
     expect(quoteArg('say "hi"')).toBe('"say \\"hi\\""');
     expect(quoteArg("a\\b c")).toBe('"a\\\\b c"');
@@ -62,6 +70,16 @@ describe("commands", () => {
     expect(cliLs("workspace:main -status:canceled", true, "shared")).toBe(
       'hh ls --store shared --tree "workspace:main -status:canceled"',
     );
+  });
+
+  it("puts -- before an argument that starts with -", () => {
+    expect(cliLs("-status:canceled", false)).toBe("hh ls -- -status:canceled");
+    expect(cliLs("-status:canceled", true, "shared")).toBe(
+      "hh ls --store shared --tree -- -status:canceled",
+    );
+    expect(cliAdd({ title: "-x", store: "demo" })).toBe("hh add --store demo -- -x");
+    expect(cliAdd({ title: "-x", body: "-y" })).toBe("hh add --body -y -- -x");
+    expect(cliStoreInit({ name: "-s", prefix: "WEB" })).toBe("hh store init --prefix WEB -- -s");
   });
 
   it("writes hh set, with the operators of a list", () => {

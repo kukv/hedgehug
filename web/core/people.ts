@@ -9,15 +9,24 @@ export class PeopleCache {
   private readonly api: Api;
   private readonly names = new Map<string, string[]>();
   private readonly stale = new Set<string>();
-  private readonly loading = new Map<string, Promise<string[]>>();
+  private readonly loading = new Map<string, { p: Promise<string[]>; version: number }>();
+  private readonly versions = new Map<string, number>();
+  private readonly seqs = new Map<string, number>();
   private readonly subs = new Set<() => void>();
 
   constructor(opts: { api: Api; conn: Connection }) {
     this.api = opts.api;
-    opts.conn.on("tasks.changed", (e) => this.stale.add(e.store));
+    opts.conn.on("tasks.changed", (e) => this.touch(e.store));
     opts.conn.on("resync", () => {
-      for (const store of this.names.keys()) this.stale.add(store);
+      for (const store of this.names.keys()) this.touch(store);
     });
+  }
+
+  // touch makes the names of the store stale, and a fetch on its way is no
+  // longer an answer to the next load (it may have read the older state).
+  private touch(store: string): void {
+    this.stale.add(store);
+    this.versions.set(store, (this.versions.get(store) ?? 0) + 1);
   }
 
   // get is the names last read, which may be stale.
@@ -30,13 +39,20 @@ export class PeopleCache {
   load(store: string): Promise<string[]> {
     const have = this.names.get(store);
     if (have && !this.stale.has(store)) return Promise.resolve(have);
+    const version = this.versions.get(store) ?? 0;
     const running = this.loading.get(store);
-    if (running) return running;
-    this.stale.delete(store);
+    if (running && running.version === version) return running.p;
+    const seq = (this.seqs.get(store) ?? 0) + 1;
+    this.seqs.set(store, seq);
     const p = unwrap(this.api.GET("/api/people", { params: { query: { store } } }))
       .then((list) => {
         const next = list ?? [];
-        // A change that came while this was on its way makes the next load fetch again.
+        // An older fetch that ends after a newer one has started gives way to it.
+        if (this.seqs.get(store) !== seq) {
+          return this.loading.get(store)?.p ?? this.names.get(store) ?? next;
+        }
+        // A change that came while this was on its way leaves the store stale.
+        if (this.versions.get(store) === version) this.stale.delete(store);
         const old = this.names.get(store);
         if (old && old.length === next.length && old.every((n, i) => n === next[i])) return old;
         this.names.set(store, next);
@@ -44,9 +60,9 @@ export class PeopleCache {
         return next;
       })
       .finally(() => {
-        if (this.loading.get(store) === p) this.loading.delete(store);
+        if (this.loading.get(store)?.p === p) this.loading.delete(store);
       });
-    this.loading.set(store, p);
+    this.loading.set(store, { p, version });
     return p;
   }
 

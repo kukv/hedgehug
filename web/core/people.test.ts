@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { matchPeople, PeopleCache } from "./people";
-import { changed, FakeConn, fakeApi } from "./testing";
+import { changed, FakeConn, fakeApi, problem, settle } from "./testing";
 
 function setup() {
   const world: Record<string, string[]> = { shared: ["alice", "bob"] };
@@ -53,6 +53,41 @@ describe("PeopleCache", () => {
     const first = await people.load("shared");
     conn.emit("tasks.changed", changed("shared", ["U"], "c1"));
     expect(await people.load("shared")).toBe(first);
+  });
+
+  it("leaves the store stale when the fetch fails", async () => {
+    let fail = false;
+    const { api, calls } = fakeApi(() => (fail ? problem(500, "internal") : ["alice"]));
+    const conn = new FakeConn();
+    const people = new PeopleCache({ api, conn: conn.asConnection() });
+    await people.load("shared");
+    conn.emit("tasks.changed", changed("shared", ["U"], "c1"));
+    fail = true;
+    await expect(people.load("shared")).rejects.toThrow();
+    fail = false;
+    await people.load("shared");
+    expect(calls).toHaveLength(3);
+  });
+
+  it("fetches again for a load after a change that came during a fetch", async () => {
+    let n = 0;
+    let release: (v: string[]) => void = () => undefined;
+    const { api, calls } = fakeApi(() => {
+      n++;
+      if (n === 1) return new Promise<string[]>((r) => (release = r));
+      return ["alice", "bob"];
+    });
+    const conn = new FakeConn();
+    const people = new PeopleCache({ api, conn: conn.asConnection() });
+    const first = people.load("shared");
+    await settle();
+    conn.emit("tasks.changed", changed("shared", ["U"], "c1"));
+    const second = await people.load("shared");
+    expect(second).toEqual(["alice", "bob"]);
+    expect(calls).toHaveLength(2);
+    release(["alice"]);
+    expect(await first).toEqual(["alice", "bob"]);
+    expect(people.get("shared")).toEqual(["alice", "bob"]);
   });
 
   it("makes everything stale at resync", async () => {
