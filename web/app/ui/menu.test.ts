@@ -105,6 +105,31 @@ describe("Menu", () => {
     expect(menu.style.left).toBe("30px");
   });
 
+  it("閉じたら開いた元の要素へフォーカスを戻す", async () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    const { getByRole, unmount } = open();
+    await vi.waitFor(() => expect(focused()).toContain("未着手"));
+    await fireEvent.keyDown(getByRole("menu"), { key: "Escape" });
+    unmount();
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
+
+  it("選んだ結果でフォーカスが別へ移っていたら奪わない", async () => {
+    const opener = document.createElement("button");
+    const other = document.createElement("button");
+    document.body.append(opener, other);
+    opener.focus();
+    const { unmount } = open();
+    other.focus();
+    unmount();
+    expect(document.activeElement).toBe(other);
+    opener.remove();
+    other.remove();
+  });
+
   it("item の snippet で項目の中身を差し替えられる", () => {
     const item = createRawSnippet(() => ({ render: () => '<span data-custom="1">★</span>' }));
     const { container } = open({ item });

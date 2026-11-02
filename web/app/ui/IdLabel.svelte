@@ -33,7 +33,7 @@
   onclick={(e) => e.stopPropagation()}
   onkeydown={(e) => e.stopPropagation()}
 >
-  <button type="button" class="id" aria-label="{id} の ULID を表示">{id}</button>
+  <button type="button" class="id">{id}</button>
   {#if alwaysUlid}
     <span class="ulid">{ulid}</span>
   {:else if show}

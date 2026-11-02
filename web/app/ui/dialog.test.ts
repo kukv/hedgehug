@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import { createRawSnippet, flushSync } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Dialog from "./Dialog.svelte";
+import Menu from "./Menu.svelte";
 
 const body = createRawSnippet(() => ({
   render: () => `<div><input aria-label="名前" /><input aria-label="本文" /></div>`,
@@ -85,6 +86,25 @@ describe("Dialog", () => {
   it("cli があれば足元に CliLine を出す", () => {
     const { getByRole } = open({ cli: "hh add Foo" });
     expect(getByRole("button", { name: /hh add Foo/ })).toBeTruthy();
+  });
+
+  it("Dialog の中の Menu で Esc を押すと Menu だけが閉じ、Dialog は閉じない", async () => {
+    const onclose = vi.fn();
+    const onMenuClose = vi.fn();
+    const inner = createRawSnippet(() => ({ render: () => "<div></div>" }));
+    render(Dialog, { props: { open: true, title: "親", width: 560, onclose, children: inner } });
+    const m = render(Menu, {
+      props: {
+        anchor: null,
+        items: [{ value: "a", label: "A" }],
+        onselect: vi.fn(),
+        onclose: onMenuClose,
+      },
+    });
+    flushSync();
+    await fireEvent.keyDown(m.getByRole("menu"), { key: "Escape" });
+    expect(onMenuClose).toHaveBeenCalledTimes(1);
+    expect(onclose).not.toHaveBeenCalled();
   });
 
   it("重ねて開いたときは一番上のダイアログだけが Esc で閉じる", async () => {

@@ -84,6 +84,19 @@ describe("IdLabel", () => {
     expect(writeText).toHaveBeenCalledWith("01HXYZULID");
   });
 
+  it("ホバーで ULID とコピーのボタンを出し、外れると消す", async () => {
+    const { getByRole, queryByText, getByText } = render(IdLabel, {
+      props: { id: "REL-6", ulid: "01HXYZULID" },
+    });
+    const wrap = getByText("REL-6").parentElement as HTMLElement;
+    await fireEvent.mouseEnter(wrap);
+    expect(await findAfter(() => queryByText("01HXYZULID"))).toBeTruthy();
+    await fireEvent.click(getByRole("button", { name: "ULID をコピー" }));
+    expect(writeText).toHaveBeenCalledWith("01HXYZULID");
+    await fireEvent.mouseLeave(wrap);
+    expect(await findAfter(() => (queryByText("01HXYZULID") ? null : true))).toBe(true);
+  });
+
   it("alwaysUlid なら常に ULID を出す", () => {
     const { getByText } = render(IdLabel, {
       props: { id: "REL-6", ulid: "01HXYZULID", alwaysUlid: true },

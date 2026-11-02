@@ -71,10 +71,16 @@
   }
 
   onMount(() => {
+    const opener = document.activeElement as HTMLElement | null;
     place();
     const at = items.findIndex((it) => it.value === selected && !it.disabled);
     active = at >= 0 ? at : firstEnabled();
     focusActive();
+    return () => {
+      // Give the focus back, unless the choice has already moved it somewhere else.
+      const now = document.activeElement;
+      if (!now || now === document.body || root?.contains(now)) opener?.focus?.();
+    };
   });
 
   function choose(i: number) {
