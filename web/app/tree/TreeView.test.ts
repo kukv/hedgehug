@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../core/api/client";
 import { closeCreate, createState } from "../create-state.svelte";
@@ -775,6 +775,26 @@ describe("TreeView", () => {
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     await fireEvent.click(screen.getByRole("link", { name: /release/ }));
     expect(h.go).toHaveBeenCalledWith("/tasks/W1");
+  });
+
+  it("shows the tab of a project as a link to its tree", () => {
+    setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const tabs = screen.getByRole("navigation", { name: "ビューの切り替え" });
+    // The only tab of a project is its tree (F10).
+    expect(within(tabs).getAllByRole("link")).toHaveLength(1);
+    expect(within(tabs).getByRole("link", { name: "ツリー" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("leaves the heading and the tabs of a workspace to its page", () => {
+    setup();
+    render(TreeView, { view: { kind: "workspace", store: "shared", ulid: "W1" } });
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "ビューの切り替え" })).toBeNull();
+    expect(screen.getByRole("tree", { name: "release のタスク" })).toBeInTheDocument();
   });
 
   it("writes the keys of the footer as the platform does", () => {

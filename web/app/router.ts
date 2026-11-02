@@ -1,10 +1,17 @@
 import { createSubscriber } from "svelte/reactivity";
 
+// The tabs the screens have so far; 4e-3 adds kanban and table, 4e-4 the settings of a project.
+export type WorkspaceTab = "overview" | "tree" | "settings";
+export type ProjectTab = "tree";
+// store is "" for /settings, which names no Store: the screen goes to the first one.
+export type SettingsPage = { page: "workspaces"; store: string };
+
 export type Route =
   | { name: "home" }
-  | { name: "workspace"; store: string; ulid: string }
-  | { name: "project"; ulid: string }
-  | { name: "task"; ulid: string };
+  | { name: "workspace"; store: string; ulid: string; tab: WorkspaceTab }
+  | { name: "project"; ulid: string; tab: ProjectTab }
+  | { name: "task"; ulid: string }
+  | ({ name: "settings" } & SettingsPage);
 
 function decode(s: string): string {
   try {
@@ -17,13 +24,25 @@ function decode(s: string): string {
 /** The route of a path, or null when the path is none of ours. */
 function matchRoute(pathname: string): Route | null {
   const seg = pathname.split("/").filter(Boolean).map(decode);
-  const [head, a, b] = seg;
+  const [head, a, b, c] = seg;
   if (head === undefined) return { name: "home" };
-  if (head === "workspaces" && seg.length === 3 && a && b) {
-    return { name: "workspace", store: a, ulid: b };
+  if (head === "workspaces" && a && b) {
+    if (seg.length === 3) return { name: "workspace", store: a, ulid: b, tab: "overview" };
+    if (seg.length === 4 && (c === "tree" || c === "settings")) {
+      return { name: "workspace", store: a, ulid: b, tab: c };
+    }
+    return null;
   }
-  if (head === "projects" && seg.length === 2 && a) return { name: "project", ulid: a };
+  if (head === "projects" && a && (seg.length === 2 || (seg.length === 3 && b === "tree"))) {
+    return { name: "project", ulid: a, tab: "tree" };
+  }
   if (head === "tasks" && seg.length === 2 && a) return { name: "task", ulid: a };
+  if (head === "settings" && seg.length === 1) {
+    return { name: "settings", page: "workspaces", store: "" };
+  }
+  if (head === "settings" && seg.length === 3 && a === "workspaces" && b) {
+    return { name: "settings", page: "workspaces", store: b };
+  }
   return null;
 }
 
@@ -36,12 +55,16 @@ export function hrefOf(r: Route): string {
   switch (r.name) {
     case "home":
       return "/";
-    case "workspace":
-      return `/workspaces/${encodeURIComponent(r.store)}/${encodeURIComponent(r.ulid)}`;
+    case "workspace": {
+      const base = `/workspaces/${encodeURIComponent(r.store)}/${encodeURIComponent(r.ulid)}`;
+      return r.tab === "overview" ? base : `${base}/${r.tab}`;
+    }
     case "project":
       return `/projects/${encodeURIComponent(r.ulid)}`;
     case "task":
       return `/tasks/${encodeURIComponent(r.ulid)}`;
+    case "settings":
+      return r.store === "" ? "/settings" : `/settings/workspaces/${encodeURIComponent(r.store)}`;
   }
 }
 

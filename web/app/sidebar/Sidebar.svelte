@@ -14,6 +14,8 @@
   const { stores } = core();
   const workspaces = useSubscribe(stores, () => stores.workspaces());
   const route = $derived(router.route);
+  // /settings names no Store: the settings go to the first one.
+  const settingsHref = hrefOf({ name: "settings", page: "workspaces", store: "" });
 
   onMount(() =>
     registerShortcut("mod+k", () => {
@@ -34,6 +36,15 @@
   <div class="top">
     <span class="logo" aria-hidden="true">hh</span>
     <span class="host">{location.host}</span>
+    <a
+      class="gear"
+      href={settingsHref}
+      aria-label="設定"
+      aria-current={route.name === "settings" ? "page" : undefined}
+      onclick={(e) => onLinkClick(e, settingsHref)}
+    >
+      <Icon name="settings" size={16} />
+    </a>
   </div>
 
   <button type="button" class="search" onclick={openPalette}>
@@ -56,7 +67,7 @@
     </div>
 
     {#each workspaces.current as w, i (`${w.store}/${w.ulid}`)}
-      {@const href = hrefOf({ name: "workspace", store: w.store, ulid: w.ulid })}
+      {@const href = hrefOf({ name: "workspace", store: w.store, ulid: w.ulid, tab: "overview" })}
       {@const wsHere = workspaceActive(w.store, w.ulid, i)}
       <div class="ws">
         <a
@@ -77,7 +88,7 @@
         </a>
         <div class="projects">
           {#each w.projects as p (p.ulid)}
-            {@const phref = hrefOf({ name: "project", ulid: p.ulid })}
+            {@const phref = hrefOf({ name: "project", ulid: p.ulid, tab: "tree" })}
             {@const here = route.name === "project" && route.ulid === p.ulid}
             <a
               href={phref}
@@ -135,6 +146,19 @@
     color: var(--label);
     font-family: var(--font-mono);
     font-size: var(--fs-11);
+  }
+  .gear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--control-h-sm);
+    height: var(--control-h-sm);
+    margin-left: auto;
+    border-radius: var(--radius-6);
+    color: var(--label);
+  }
+  .gear:hover {
+    background: var(--hover);
   }
   .search {
     display: flex;

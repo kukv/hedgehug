@@ -22,4 +22,20 @@ describe("App", () => {
     expect(location.hash).toBe("");
     expect(sessionStorage.getItem("hedgehug.token")).toBe("tkn");
   });
+
+  it("設定の画面ではサイドバーを隠してナビに替える（サイドバーは残す）", () => {
+    history.replaceState(null, "", "/settings/workspaces/shared#token=tkn");
+    const { container } = render(App);
+    flushSync();
+    expect(container.querySelector("aside.side")).toHaveAttribute("hidden");
+    expect(container.querySelector("main")).toHaveClass("flush");
+    expect(location.pathname).toBe("/settings/workspaces/shared");
+  });
+
+  it("設定以外の画面ではサイドバーを出す", () => {
+    history.replaceState(null, "", "/tasks/01HTK#token=tkn");
+    const { container } = render(App);
+    flushSync();
+    expect(container.querySelector("aside.side")).not.toHaveAttribute("hidden");
+  });
 });

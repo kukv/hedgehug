@@ -176,11 +176,21 @@
         <StoreBadge store={s.store} tone={stores.tone(s.store)} />
         <span class="sep">›</span>
         <a
-          href={router.href({ name: "workspace", store: s.store, ulid: s.workspace.ulid })}
+          href={router.href({
+            name: "workspace",
+            store: s.store,
+            ulid: s.workspace.ulid,
+            tab: "overview",
+          })}
           onclick={(e) =>
             onLinkClick(
               e,
-              router.href({ name: "workspace", store: s.store, ulid: s.workspace.ulid }),
+              router.href({
+                name: "workspace",
+                store: s.store,
+                ulid: s.workspace.ulid,
+                tab: "overview",
+              }),
             )}
           >{s.workspace.name}</a
         >

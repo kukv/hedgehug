@@ -24,7 +24,7 @@ test("Ctrl+click on a sidebar link opens a tab that keeps the token", async ({
     link.click({ modifiers: ["Control"] }),
   ]);
   await expect(tab).toHaveURL(/\/workspaces\/demo\//);
-  await expect(tab.getByRole("tree", { name: "demo のタスク" })).toBeVisible();
+  await expect(tab.getByRole("heading", { level: 1, name: "demo" })).toBeVisible();
   await expect(tab.getByText("この画面は hh ui が開いた URL からだけ使えます")).toHaveCount(0);
 });
 

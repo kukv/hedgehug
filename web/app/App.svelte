@@ -8,6 +8,7 @@
   import TaskDetail from "./detail/TaskDetail.svelte";
   import CommandPalette from "./palette/CommandPalette.svelte";
   import { router } from "./router";
+  import SettingsRoute from "./settings/SettingsRoute.svelte";
   import Sidebar from "./sidebar/Sidebar.svelte";
   import Banners from "./states/Banners.svelte";
   import Disconnected from "./states/Disconnected.svelte";
@@ -17,6 +18,7 @@
   import { useSubscribe } from "./svelte-store";
   import TreeView from "./tree/TreeView.svelte";
   import Toasts from "./ui/Toasts.svelte";
+  import WorkspacePage from "./workspace/WorkspacePage.svelte";
 
   const token = takeToken(location, sessionStorage, history);
   // Whether the server refused the token (401 auth.token); this page then shows NoToken.
@@ -34,6 +36,10 @@
       first: first ? { store: first.store, ulid: first.ulid } : null,
     };
   });
+  const route = $derived(router.route);
+  // The settings take the whole window: their nav stands where the sidebar stands. The sidebar
+  // stays mounted, because the keys of the app (⌘K, ⇧⌘S) are registered by it.
+  const inSettings = $derived(route.name === "settings");
   const noToken = $derived(token === null || lost);
   const onboarding = $derived(dir.current.loaded && dir.current.count === 0);
   const down = $derived(!noToken && conn.current.state === "down");
@@ -52,34 +58,38 @@
   });
 </script>
 
-<div class="app" inert={blocked}>
-  <aside class="side">
+<div class="app" class:settings={inSettings} inert={blocked}>
+  <aside class="side" hidden={inSettings}>
     <Sidebar />
   </aside>
   <div class="body">
     <Banners />
-    <main class="main" id="main">
+    <main class="main" class:flush={inSettings} id="main">
       <!-- routes -->
-      {#if router.route.name === "workspace"}
-        {#key `${router.route.store}/${router.route.ulid}`}
-          <TreeView
-            view={{ kind: "workspace", store: router.route.store, ulid: router.route.ulid }}
+      {#if route.name === "workspace"}
+        {#key `${route.store}/${route.ulid}`}
+          <WorkspacePage store={route.store} ulid={route.ulid} tab={route.tab} />
+        {/key}
+      {:else if route.name === "project"}
+        {#key route.ulid}
+          <TreeView view={{ kind: "project", ulid: route.ulid }} />
+        {/key}
+      {:else if route.name === "task"}
+        {#key route.ulid}
+          <TaskDetail ulid={route.ulid} />
+        {/key}
+      {:else if route.name === "settings"}
+        <SettingsRoute page={route} />
+      {:else if route.name === "home" && dir.current.first}
+        <!-- "/" is the overview of the first workspace -->
+        {#key `${dir.current.first.store}/${dir.current.first.ulid}`}
+          <WorkspacePage
+            store={dir.current.first.store}
+            ulid={dir.current.first.ulid}
+            tab="overview"
           />
         {/key}
-      {:else if router.route.name === "project"}
-        {#key router.route.ulid}
-          <TreeView view={{ kind: "project", ulid: router.route.ulid }} />
-        {/key}
-      {:else if router.route.name === "task"}
-        {#key router.route.ulid}
-          <TaskDetail ulid={router.route.ulid} />
-        {/key}
-      {:else if router.route.name === "home" && dir.current.first}
-        <!-- "/" is the tree of the first workspace -->
-        {#key `${dir.current.first.store}/${dir.current.first.ulid}`}
-          <TreeView view={{ kind: "workspace", ...dir.current.first }} />
-        {/key}
-      {:else if router.route.name === "home" && dir.current.loaded && dir.current.count > 0}
+      {:else if route.name === "home" && dir.current.loaded && dir.current.count > 0}
         <!-- stores exist but none has a workspace -->
         <Empty
           variant="noworkspace"
@@ -123,6 +133,10 @@
     border-right: 1px solid var(--line);
     background: var(--sidebar);
   }
+  /* The settings have their own nav in place of the sidebar. */
+  .app.settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .body {
     display: flex;
     flex-direction: column;
@@ -135,6 +149,9 @@
     min-height: 0;
     overflow: auto;
     padding: var(--space-20) var(--gutter);
+  }
+  .main.flush {
+    padding: 0;
   }
   @media (max-width: 819px) {
     .app {

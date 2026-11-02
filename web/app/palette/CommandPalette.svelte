@@ -138,8 +138,9 @@
       workspaces: c.stores.workspaces(),
       go: (path) => router.go(path),
       hrefs: {
-        workspace: (store, ulid) => router.href({ name: "workspace", store, ulid }),
-        project: (ulid) => router.href({ name: "project", ulid }),
+        workspace: (store, ulid) =>
+          router.href({ name: "workspace", store, ulid, tab: "overview" }),
+        project: (ulid) => router.href({ name: "project", ulid, tab: "tree" }),
         task: (ulid) => router.href({ name: "task", ulid }),
       },
       selected: sel ? (c.cache.task(sel) ?? null) : null,

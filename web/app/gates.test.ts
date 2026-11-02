@@ -1,4 +1,4 @@
-import { cleanup, render, waitFor } from "@testing-library/svelte";
+import { cleanup, render } from "@testing-library/svelte";
 import { flushSync } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.svelte";
@@ -102,12 +102,10 @@ describe("App のゲート", () => {
     expect(await findByText("Hedgehug へようこそ")).toBeTruthy();
   });
 
-  it("ホーム / は最初のワークスペースのツリーを開く", async () => {
+  it("ホーム / は最初のワークスペースの概要を開く（URL は / のまま）", async () => {
     history.replaceState(null, "", "/#token=tkn");
-    const asked: string[] = [];
     vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : (input as Request).url;
-      asked.push(url);
       if (url.includes("/api/events")) return new Promise(() => {});
       if (url.includes("/api/workspaces")) {
         return json([
@@ -117,6 +115,7 @@ describe("App のゲート", () => {
             id_prefix: "ME",
             prefix_set: "2026-11-02T00:00:00Z",
             tasks: 0,
+            deleted: 0,
           },
         ]);
       }
@@ -125,10 +124,13 @@ describe("App のゲート", () => {
       }
       return new Promise(() => {});
     });
-    render(App);
-    await waitFor(() =>
-      expect(asked.some((u) => u.includes("/api/tasks") && u.includes("workspace"))).toBe(true),
-    );
+    const { findByRole, getByRole } = render(App);
+    expect(await findByRole("heading", { level: 1, name: "me" })).toBeTruthy();
+    expect(
+      getByRole("navigation", { name: "ビューの切り替え" }).querySelector("[aria-current]")
+        ?.textContent,
+    ).toContain("概要");
+    expect(location.pathname).toBe("/");
   });
 
   it("Store はあるのにワークスペースが 0 件なら、空の状態と Store ごとの hh コマンドを出す", async () => {

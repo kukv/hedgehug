@@ -15,7 +15,7 @@ test("the dialog creates a task in one commit and the toast opens its detail", a
   page,
   hh,
 }) => {
-  await hh.open(page);
+  await hh.openTree(page);
   await page.keyboard.press("c");
   const dialog = createDialog(page);
   await expect(dialog).toBeVisible();
@@ -43,7 +43,7 @@ test("the dialog creates a task in one commit and the toast opens its detail", a
 });
 
 test("Ctrl+Enter creates", async ({ page, hh }) => {
-  await hh.open(page);
+  await hh.openTree(page);
   await page.keyboard.press("c");
   const dialog = createDialog(page);
   await dialog.getByRole("textbox", { name: "タイトル" }).fill("From the keyboard");
@@ -92,7 +92,7 @@ test("the selected row is the parent, and the kinds it cannot hold are disabled"
 }) => {
   const project = hh.add("Release", "--kind", "project");
   const task = hh.add("A plain task", "--parent", project.id);
-  await hh.open(page);
+  await hh.openTree(page);
 
   await row(page, "Release").click();
   await page.keyboard.press("c");

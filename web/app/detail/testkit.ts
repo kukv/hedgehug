@@ -93,8 +93,28 @@ export function fail(
 }
 
 export const workspaces: WorkspaceEntry[] = [
-  { store: "shared", tone: "purple", ulid: "W1", name: "release", prefix: "REL", projects: [] },
-  { store: "shared", tone: "purple", ulid: "W2", name: "shared", prefix: "SH", projects: [] },
+  {
+    store: "shared",
+    tone: "purple",
+    ulid: "W1",
+    name: "release",
+    prefix: "REL",
+    tasks: 24,
+    deleted: 1,
+    prefixSet: "2026-10-29T12:00:00Z",
+    projects: [],
+  },
+  {
+    store: "shared",
+    tone: "purple",
+    ulid: "W2",
+    name: "shared",
+    prefix: "SH",
+    tasks: 0,
+    deleted: 0,
+    prefixSet: "2026-10-29T12:00:00Z",
+    projects: [],
+  },
 ];
 
 export type FakeCoreOptions = {

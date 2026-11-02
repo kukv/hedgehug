@@ -59,6 +59,27 @@ describe("Sidebar", () => {
     }
   });
 
+  it("右上の歯車は設定（/settings）を開く", async () => {
+    const { getByRole } = mount();
+    const gear = getByRole("link", { name: "設定" });
+    expect(gear.getAttribute("href")).toBe("/settings");
+    expect(gear.getAttribute("aria-current")).toBeNull();
+    await fireEvent.click(gear);
+    expect(location.pathname).toBe("/settings");
+  });
+
+  it("設定を開いている間は歯車を aria-current にする", () => {
+    history.replaceState(null, "", "/settings/workspaces/shared");
+    const { getByRole } = mount();
+    expect(getByRole("link", { name: "設定" }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("ワークスペースはどのタブにいても今いる行にする", () => {
+    history.replaceState(null, "", "/workspaces/shared/01WSREL/tree");
+    const { getByRole } = mount();
+    expect(getByRole("link", { name: /release/ }).getAttribute("aria-current")).toBe("page");
+  });
+
   it("ワークスペース › プロジェクトの入れ子と進捗を出す", () => {
     const { getByRole, getByText } = mount();
     const ws = getByRole("link", { name: /release/ });
