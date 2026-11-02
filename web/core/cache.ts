@@ -225,6 +225,19 @@ export class TaskCache {
     this.flush();
   }
 
+  // epochNow is the point a read begins at: pass it to prime, taken before the request is sent.
+  epochNow(): number {
+    return this.epoch;
+  }
+
+  // prime takes in tasks a read brought (a search, a lookup): not a write, so a fetch that is on
+  // its way is not held back by it. since is the epochNow of before the read was sent: a task
+  // written after that is newer than what the read brought.
+  prime(tasks: (TaskView | ShowView)[], since: number): void {
+    for (const t of tasks) this.ingest(t, since);
+    this.flush();
+  }
+
   // setBody puts the text a write sent into the detail: the answer of a write
   // is a row, which has no body.
   setBody(ulid: string, body: string): void {
@@ -476,7 +489,44 @@ export class TaskCache {
       for (const s of this.details.values()) {
         if (all || us.has(s.key) || (s.ulid !== null && us.has(s.ulid))) void this.fetchDetail(s);
       }
+      // A row no query or detail holds (the blocker of a task, a crumb) has nobody to fetch it again.
+      const held = this.heldUlids();
+      for (const u of us) {
+        if (this.rows.has(u) && !held.has(u)) void this.fetchRow(u);
+      }
     });
+  }
+
+  private heldUlids(): Set<string> {
+    const held = new Set<string>();
+    const walk = (ns: TreeNode[]) => {
+      for (const n of ns) {
+        held.add(n.ulid);
+        walk(n.children);
+      }
+    };
+    for (const s of this.queries.values()) {
+      for (const u of s.ulids) held.add(u);
+      walk(s.roots);
+      for (const u of s.cycle) held.add(u);
+    }
+    for (const s of this.details.values()) if (s.ulid) held.add(s.ulid);
+    return held;
+  }
+
+  private async fetchRow(ulid: string): Promise<void> {
+    const since = this.epoch;
+    const store = this.rows.get(ulid)?.store;
+    try {
+      const show = await unwrap(
+        this.api.GET("/api/tasks/{id}", { params: { path: { id: ulid }, query: { store } } }),
+      );
+      if (!this.gone(ulid, since)) this.ingest(show, since);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404 && !this.wroteSince(ulid, since))
+        this.forget(ulid);
+    }
+    this.flush();
   }
 
   private flush(): void {

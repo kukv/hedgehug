@@ -19,7 +19,7 @@
   import DeleteDialogs from "./DeleteDialogs.svelte";
   import FieldInput from "./FieldInput.svelte";
   import History from "./History.svelte";
-  import { ancestorChain, type Crumb, collapseCrumbs, createLookup } from "./lookup";
+  import { ancestorChain, type Crumb, collapseCrumbs, createLookup, crumbsSig } from "./lookup";
   import PropsPanel from "./PropsPanel.svelte";
   import Relations from "./Relations.svelte";
   import { isWatching } from "./watch";
@@ -56,8 +56,18 @@
   // Ancestors for the breadcrumb, and the blockers that are not done yet.
   let chain = $state<Crumb[]>([]);
   let blockers = $state<Crumb[]>([]);
+  // The other tasks the crumbs and the blockers show change in the cache without this task changing.
+  const aroundSig = useSubscribe(cache, () =>
+    crumbsSig(cache, [
+      ...(s?.parent ? [s.parent] : []),
+      ...(s?.blocked_by ?? []).map((r) => r.ulid),
+      ...chain.map((c) => c.ulid),
+    ]),
+  );
+  const around = $derived(aroundSig.current);
   $effect(() => {
     const cur = s;
+    void around;
     if (!cur) return;
     const lookup = createLookup({ api, cache, store: cur.store });
     const categories = new Map((sc.current?.statuses ?? []).map((st) => [st.name, st.category]));

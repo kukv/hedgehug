@@ -68,8 +68,10 @@ function taskItem(t: TaskLike, hrefOf: (ulid: string) => string, note?: string):
 export type SearchDeps = {
   api: Api;
   hrefOf: (ulid: string) => string;
-  // Puts what the search found in the cache.
-  prime: (tasks: TaskView[]) => void;
+  // The point a read begins at (take it before the request is sent), and what puts what the search found in the
+  // cache, as a read of that point.
+  epoch: () => number;
+  prime: (tasks: TaskView[], since: number) => void;
 };
 
 export type SearchResult = { groups: PaletteGroup[]; error: unknown };
@@ -98,13 +100,14 @@ export async function searchTasks(
 ): Promise<SearchResult> {
   const text = input.trim();
   if (text === "") return { groups: [], error: null };
+  const since = d.epoch();
   try {
     if (mode === "query") {
       const list = await unwrap(
         d.api.GET("/api/tasks", { params: { query: { q: text, tree: false } } }),
       );
       const tasks = list.tasks ?? [];
-      d.prime(tasks);
+      d.prime(tasks, since);
       const items = tasks.slice(0, MAX).map((t) => taskItem(t, d.hrefOf));
       return {
         groups: items.length ? [{ name: `クエリに一致 · ${tasks.length} 件`, items }] : [],
@@ -121,7 +124,7 @@ export async function searchTasks(
       }
     }
     const tasks = await findTasks(d.api, text, { limit: MAX });
-    d.prime(tasks);
+    d.prime(tasks, since);
     for (const t of tasks) {
       if (!found.has(t.ulid)) found.set(t.ulid, taskItem(t, d.hrefOf));
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ancestorChain, type Crumb, collapseCrumbs, createLookup } from "./lookup";
+import { ancestorChain, type Crumb, collapseCrumbs, createLookup, crumbsSig } from "./lookup";
 import { makeCore, ok, showView, taskView } from "./testkit";
 
 describe("createLookup", () => {
@@ -20,6 +20,16 @@ describe("createLookup", () => {
     expect(k.api.GET).toHaveBeenCalledTimes(1);
     k.api.GET.mockImplementation(() => Promise.reject(new Error("down")));
     expect(await lookup("REL-10")).toBeUndefined();
+  });
+
+  it("puts what it fetched in the cache, so that the row follows the task", async () => {
+    const k = makeCore();
+    const show = showView({ ulid: "U9", id: "REL-9" });
+    k.api.GET.mockImplementation(() => ok(show));
+    k.cache.epochNow.mockReturnValue(7);
+    const lookup = createLookup({ api: k.api as never, cache: k.cache as never, store: "shared" });
+    await lookup("REL-9");
+    expect(k.cache.prime).toHaveBeenCalledWith([show], 7);
   });
 });
 
@@ -58,5 +68,19 @@ describe("collapseCrumbs", () => {
   it("keeps three or fewer and collapses the middle of longer chains", () => {
     expect(collapseCrumbs([1, 2, 3])).toEqual([1, 2, 3]);
     expect(collapseCrumbs([1, 2, 3, 4, 5])).toEqual([1, null, 4, 5]);
+  });
+});
+
+describe("crumbsSig", () => {
+  it("changes with the title or the status of a cached task, and not with the rest", () => {
+    const rows = [taskView({ ulid: "U1", title: "one" })];
+    const cache = { task: (u: string) => rows.find((t) => t.ulid === u) };
+    const a = crumbsSig(cache, ["U1", "U2"]);
+    rows[0] = taskView({ ulid: "U1", title: "one", rank: "b0" });
+    expect(crumbsSig(cache, ["U1", "U2"])).toBe(a);
+    rows[0] = taskView({ ulid: "U1", title: "uno" });
+    expect(crumbsSig(cache, ["U1", "U2"])).not.toBe(a);
+    rows[0] = taskView({ ulid: "U1", title: "one", status: "done" });
+    expect(crumbsSig(cache, ["U1", "U2"])).not.toBe(a);
   });
 });

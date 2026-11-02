@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick, untrack } from "svelte";
-  import type { TaskView } from "../../core/api/client";
+  import type { ShowView, TaskView } from "../../core/api/client";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
@@ -29,6 +29,7 @@
   const c = core();
   const cacheRev = useSubscribe(c.cache, () => ({}));
   const storesRev = useSubscribe(c.stores, () => ({}));
+  const schemaRev = useSubscribe(c.schema, () => ({}));
 
   let input = $state("");
   let active = $state(0);
@@ -36,6 +37,8 @@
   let found = $state<{ groups: PaletteGroup[]; error: unknown }>({ groups: [], error: null });
   let inputEl = $state<HTMLInputElement | null>(null);
   let listEl = $state<HTMLDivElement | null>(null);
+  // Why the statuses of the task picked could not be listed (the schema of its store did not load).
+  let pickError = $state<unknown>(null);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let seq = 0;
 
@@ -56,7 +59,8 @@
         {
           api: c.api,
           has: (u) => !!c.cache.task(u),
-          prime: (tasks) => c.cache.applyWrite({ tasks }),
+          epoch: () => c.cache.epochNow(),
+          prime: (tasks, since) => c.cache.prime(tasks, since),
         },
         recentUlids,
       ).then(() => {
@@ -83,7 +87,8 @@
   const deps = {
     api: c.api,
     hrefOf: (ulid: string) => router.href({ name: "task", ulid }),
-    prime: (tasks: TaskView[]) => c.cache.applyWrite({ tasks }),
+    epoch: () => c.cache.epochNow(),
+    prime: (tasks: (TaskView | ShowView)[], since: number) => c.cache.prime(tasks, since),
   };
 
   $effect(() => {
@@ -113,8 +118,13 @@
 
   function pickStatus(t: TaskView) {
     picking = t;
+    pickError = null;
     input = "";
     active = 0;
+    // The palette finds tasks of every store; the schema of this one may not be read yet.
+    c.schema.load(t.store).catch((e: unknown) => {
+      if (picking?.ulid === t.ulid) pickError = e;
+    });
   }
 
   const env = $derived.by<CommandEnv>(() => {
@@ -160,6 +170,7 @@
 
   const groups = $derived.by<PaletteGroup[]>(() => {
     cacheRev.current;
+    schemaRev.current;
     if (picking) return statusGroups(picking);
     if (mode === "command" || input.trim() === "") return buildCommands(env, input);
     const out = [...found.groups];
@@ -180,8 +191,11 @@
   });
   const flat = $derived(groups.flatMap((g) => g.items));
   const activeKey = $derived(flat[active]?.key);
-  const empty = $derived(flat.length === 0 && input.trim() !== "" && found.error === null);
-  const error = $derived(found.error);
+  const error = $derived(picking ? pickError : found.error);
+  const waitingSchema = $derived(picking !== null && !c.schema.get(picking.store) && !pickError);
+  const empty = $derived(
+    flat.length === 0 && (picking !== null || input.trim() !== "") && !error && !waitingSchema,
+  );
 
   $effect(() => {
     if (active >= flat.length) active = Math.max(0, flat.length - 1);
@@ -328,6 +342,8 @@
           <p class="msg error" role="alert">
             {errorMessage(error)}
           </p>
+        {:else if waitingSchema}
+          <p class="msg">読み込み中…</p>
         {:else if empty}
           <p class="msg">一致するものがありません</p>
         {/if}

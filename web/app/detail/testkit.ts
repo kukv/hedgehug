@@ -125,6 +125,8 @@ export function makeCore(opts: FakeCoreOptions = {}) {
       dispose: vi.fn(),
     })),
     applyWrite: vi.fn(),
+    prime: vi.fn(),
+    epochNow: vi.fn(() => 0),
     noteOwnCommit: vi.fn(),
     subscribe,
   };

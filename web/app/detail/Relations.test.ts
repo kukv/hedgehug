@@ -26,6 +26,18 @@ describe("Relations", () => {
     expect(within(group).getByText("破壊的変更")).toBeInTheDocument();
   });
 
+  it("follows the title and the status of a related task when the cache takes in a change", async () => {
+    const tasks = [blocker];
+    const k = makeCore({ show, tasks });
+    k.schema.subscribe = () => () => false; // only the cache tells this screen about the other tasks
+    mount(Relations, { show, readonly: false }, k);
+    const group = await screen.findByRole("group", { name: "ブロックされている" });
+    expect(within(group).getByText("破壊的変更")).toBeInTheDocument();
+    tasks[0] = { ...blocker, title: "変更後の題" };
+    k.notify();
+    await waitFor(() => expect(within(group).getByText("変更後の題")).toBeInTheDocument());
+  });
+
   it("removes a blocker with a PATCH of the rest", async () => {
     const { k } = setup();
     k.api.PATCH.mockImplementation(() => ok({ task: taskView({ ulid: "U6" }), commit: "c1" }));

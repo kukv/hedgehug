@@ -127,6 +127,27 @@ describe("TaskDetail", () => {
     await waitFor(() => expect(screen.queryByText(/にブロックされています/)).toBeNull());
   });
 
+  it("follows the blocker and the parent when the cache takes in a change of them", async () => {
+    const blocked = {
+      blocked_by: [{ ulid: "UB", id: "REL-2", title: "API の破壊的変更をまとめる" }],
+    };
+    const open = taskView({ ulid: "UB", id: "REL-2", title: "blocker", status: "in_progress" });
+    const tasks = [parent, open];
+    const k = makeCore({ show: { ...base, ...blocked }, account: "github.com/koki", tasks });
+    k.schema.subscribe = () => () => false; // only the cache tells this screen about the other tasks
+    mount(TaskDetail, { ulid: U }, k);
+    expect(await screen.findByText(/にブロックされています/)).toHaveTextContent("REL-2");
+    tasks[1] = { ...open, status: "done" };
+    tasks[0] = { ...parent, title: "API v3 への移行" };
+    k.notify();
+    await waitFor(() => expect(screen.queryByText(/にブロックされています/)).toBeNull());
+    await waitFor(() =>
+      expect(screen.getByRole("navigation", { name: "パンくず" })).toHaveTextContent(
+        "REL-1 API v3 への移行",
+      ),
+    );
+  });
+
   it("toggles a checklist item by rewriting the body and flushing at once", async () => {
     const { k } = setup();
     await fireEvent.click(screen.getByRole("checkbox", { name: "b" }));

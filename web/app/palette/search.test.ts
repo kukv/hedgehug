@@ -66,6 +66,7 @@ function deps(over: { tasks?: TaskView[]; listError?: unknown } = {}) {
   const d: SearchDeps = {
     api: { GET } as unknown as SearchDeps["api"],
     hrefOf: (u) => `/tasks/${u}`,
+    epoch: () => 42,
     prime,
   };
   return { d, GET, prime };
@@ -110,7 +111,7 @@ describe("searchTasks: ID and text", () => {
     expect(GET).toHaveBeenCalledWith("/api/tasks", {
       params: { query: { q: '"api" "v2"', store: undefined } },
     });
-    expect(prime).toHaveBeenCalledWith(found);
+    expect(prime).toHaveBeenCalledWith(found, 42);
     expect(r.groups[0]?.items.map((i) => (i.type === "task" ? i.id : ""))).toEqual(["REL-9"]);
   });
 

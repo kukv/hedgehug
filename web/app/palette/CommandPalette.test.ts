@@ -84,6 +84,8 @@ function setup() {
     cache: {
       task: (u: string) => (u === "U6" ? rel6 : undefined),
       applyWrite: vi.fn(),
+      epochNow: () => 0,
+      prime: vi.fn(),
       subscribe: none,
     },
     stores: {
@@ -312,6 +314,46 @@ describe("CommandPalette", () => {
     expect(await screen.findByRole("option", { name: /doing/ })).toBeInTheDocument();
   });
 
+  it("lists the statuses of a task whose store schema is not read yet, once it is", async () => {
+    setup();
+    const core = h.core as { schema: { get: unknown; load: unknown; subscribe: unknown } };
+    const subs = new Set<() => void>();
+    let loaded = false;
+    core.schema.get = () => (loaded ? schema : undefined);
+    core.schema.subscribe = (fn: () => void) => {
+      subs.add(fn);
+      return () => subs.delete(fn);
+    };
+    const load = vi.fn(async () => {
+      loaded = true;
+      for (const fn of subs) fn();
+      return schema;
+    });
+    core.schema.load = load;
+    selection.set("U6");
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">" } });
+    await fireEvent.click(await screen.findByRole("option", { name: /ステータスを変更/ }));
+    expect(load).toHaveBeenCalledWith("shared");
+    expect(await screen.findByRole("option", { name: /doing/ })).toBeInTheDocument();
+  });
+
+  it("says so when the schema of the store cannot be read", async () => {
+    setup();
+    const core = h.core as { schema: { get: unknown; load: unknown } };
+    core.schema.get = () => undefined;
+    core.schema.load = async () => {
+      throw new Error("down");
+    };
+    selection.set("U6");
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">" } });
+    await fireEvent.click(await screen.findByRole("option", { name: /ステータスを変更/ }));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+  });
+
   it("keeps Tab inside the palette", async () => {
     setup();
     render(CommandPalette);
@@ -337,12 +379,12 @@ describe("CommandPalette", () => {
       if (path === "/api/tasks/{id}") return opts.params.path?.id === "U7" ? ok(u7) : gone;
       return ok({ tasks: [] });
     }) as never);
-    const core = h.core as { cache: { task: (u: string) => unknown; applyWrite: unknown } };
+    const core = h.core as { cache: { task: (u: string) => unknown; prime: unknown } };
     const known = core.cache.task;
     const store = new Map<string, unknown>();
     core.cache.task = (u: string) => store.get(u) ?? known(u);
-    core.cache.applyWrite = vi.fn((r: { tasks: { ulid: string }[] }) => {
-      for (const t of r.tasks) store.set(t.ulid, t);
+    core.cache.prime = vi.fn((tasks: { ulid: string }[]) => {
+      for (const t of tasks) store.set(t.ulid, t);
     });
     localStorage.setItem("hedgehug.recent", JSON.stringify(["U6", "U7", "U8"]));
     render(CommandPalette);

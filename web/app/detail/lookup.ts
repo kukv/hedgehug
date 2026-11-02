@@ -26,11 +26,11 @@ function crumbOf(
   };
 }
 
-// createLookup finds a task by ID or ULID: the cache first, then GET /tasks/{id}. Requests for the same key that
-// are in flight at once share one request; nothing is kept afterwards, so a title that changed is read again.
+// createLookup finds a task by ID or ULID: the cache first, then GET /tasks/{id}, whose answer goes in the cache.
+// Requests for the same key that are in flight at once share one request.
 export function createLookup(opts: {
   api: Api;
-  cache: Pick<TaskCache, "task">;
+  cache: Pick<TaskCache, "task" | "prime" | "epochNow">;
   store: string;
 }): Lookup {
   const inflight = new Map<string, Promise<Crumb | undefined>>();
@@ -39,17 +39,36 @@ export function createLookup(opts: {
     if (hit) return Promise.resolve(crumbOf(hit));
     let p = inflight.get(key);
     if (!p) {
+      const since = opts.cache.epochNow();
       p = unwrap(
         opts.api.GET("/api/tasks/{id}", {
           params: { path: { id: key }, query: { store: opts.store } },
         }),
       )
-        .then(crumbOf, () => undefined)
+        .then(
+          (show) => {
+            // Held in the cache, the row is fetched again when the task changes.
+            opts.cache.prime([show], since);
+            return crumbOf(show);
+          },
+          () => undefined,
+        )
         .finally(() => inflight.delete(key));
       inflight.set(key, p);
     }
     return p;
   };
+}
+
+// crumbsSig is a string that changes when the cached row of any of the tasks changes in what a crumb shows,
+// so that a screen that looked those tasks up can look them up again.
+export function crumbsSig(cache: Pick<TaskCache, "task">, ulids: string[]): string {
+  return ulids
+    .map((u) => {
+      const t = cache.task(u);
+      return t ? [t.id, t.title, t.kind, t.status, t.parent].join("\u0001") : "";
+    })
+    .join("\u0002");
 }
 
 // ancestorChain walks up from start (a parent ULID) and returns the ancestors, the root first. It stops at a

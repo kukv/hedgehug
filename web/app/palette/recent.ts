@@ -1,4 +1,4 @@
-import { type Api, ApiError, type TaskView, unwrap } from "../../core/api/client";
+import { type Api, ApiError, type ShowView, unwrap } from "../../core/api/client";
 
 const KEY = "hedgehug.recent";
 const MAX = 8;
@@ -42,8 +42,9 @@ export function forgetTask(
 export type RecentDeps = {
   api: Api;
   has: (ulid: string) => boolean;
-  // Puts what was fetched in the cache.
-  prime: (tasks: TaskView[]) => void;
+  // The point a read begins at, and what puts what was fetched in the cache as a read of that point.
+  epoch: () => number;
+  prime: (tasks: ShowView[], since: number) => void;
 };
 
 // fetchMissing gets the tasks of the list that the cache does not have. One that is gone
@@ -57,9 +58,10 @@ export async function fetchMissing(
     ulids
       .filter((u) => !d.has(u))
       .map(async (u) => {
+        const since = d.epoch();
         try {
           const show = await unwrap(d.api.GET("/api/tasks/{id}", { params: { path: { id: u } } }));
-          d.prime([show as unknown as TaskView]);
+          d.prime([show], since);
         } catch (e) {
           if (e instanceof ApiError && e.status === 404) forgetTask(u, storage);
         }

@@ -7,7 +7,7 @@
   import { useSubscribe } from "../svelte-store";
   import Button from "../ui/Button.svelte";
   import FieldInput from "./FieldInput.svelte";
-  import { createLookup } from "./lookup";
+  import { createLookup, crumbsSig } from "./lookup";
   import {
     addRefBody,
     buildGroups,
@@ -25,9 +25,18 @@
   const sc = useSubscribe(schema, () => schema.get(show.store));
 
   let groups = $state<RelGroup[]>([]);
+  // The titles and statuses shown are those of other tasks, which change in the cache without this one changing.
+  const aroundSig = useSubscribe(cache, () =>
+    crumbsSig(
+      cache,
+      groups.flatMap((g) => g.items.map((i) => i.ulid)),
+    ),
+  );
+  const around = $derived(aroundSig.current);
   $effect(() => {
     const cur = show;
     const def = sc.current;
+    void around;
     if (!def) return;
     const lookup = createLookup({ api, cache, store: cur.store });
     let live = true;
