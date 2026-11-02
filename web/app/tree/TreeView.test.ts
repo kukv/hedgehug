@@ -397,7 +397,7 @@ describe("TreeView", () => {
     expect(screen.queryByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）")).toBeNull();
   });
 
-  it("puts the focus on the row when its ID or chevron is clicked, so the row keys keep working", async () => {
+  it("selects the row and puts the focus on it when its ID or chevron is clicked, so the row keys keep working", async () => {
     setup();
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     const row = screen.getByText("API v2 への移行").closest('[role="treeitem"]') as HTMLElement;
@@ -406,10 +406,13 @@ describe("TreeView", () => {
     id.focus();
     await fireEvent.click(id);
     expect(row).toHaveFocus();
+    expect(selection.ulid).toBe("E1");
     const chev = screen.getByRole("button", { name: "折りたたむ: API v2 への移行" });
+    selection.set(null);
     chev.focus();
     await fireEvent.click(chev);
     expect(row).toHaveFocus();
+    expect(selection.ulid).toBe("E1");
   });
 
   it("gives the focus back to the row when the add row is closed", async () => {

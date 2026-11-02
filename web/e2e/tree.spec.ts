@@ -144,9 +144,12 @@ test("the row keys work after the ID or the chevron of the row was clicked", asy
   await treeReady(page);
 
   // The ID and the chevron are buttons: a click focuses them, and they stop the keys.
-  await row(page, "Parent").click();
+  await row(page, "Other").locator("button.id").click();
+  await expect(row(page, "Other")).toBeFocused();
+  await expect(row(page, "Other")).toHaveAttribute("aria-selected", "true");
   await row(page, "Parent").locator("button.id").click();
   await expect(row(page, "Parent")).toBeFocused();
+  await expect(row(page, "Parent")).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("k");
   await expect(page.getByRole("menu")).toBeVisible();
   await page.keyboard.press("Escape");

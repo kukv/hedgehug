@@ -54,7 +54,6 @@
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<!-- biome-ignore lint/a11y/useKeyWithClickEvents: the keys are handled by the tree that holds the rows -->
 <div
   class="row"
   class:selected
@@ -66,11 +65,12 @@
   aria-expanded={row.hasChildren ? row.expanded : undefined}
   tabindex={focusable ? 0 : -1}
   data-ulid={row.ulid}
-  onclick={onselect}
   onclickcapture={(e) => {
-    // A click on the ID or the chevron puts the focus on that button, and the buttons stop the
-    // keys: the row keys would not reach the tree. The row takes the focus.
-    if (e.target !== e.currentTarget) e.currentTarget.focus();
+    // A click anywhere in the row selects it and puts the focus on it, also a click on the ID or
+    // the chevron, which stop the click and the keys: the focus left on those buttons would keep
+    // the row keys from the tree.
+    onselect();
+    e.currentTarget.focus();
   }}
   onfocus={(e) => (keyboardOn = e.currentTarget.matches(":focus-visible"))}
   onblur={() => (keyboardOn = false)}
