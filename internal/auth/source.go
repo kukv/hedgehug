@@ -22,22 +22,9 @@ const Service = "hedgehug"
 // ErrNoToken means the account has no token: in config.yaml.
 var ErrNoToken = errors.New("the account has no token")
 
-// builtinClientID is the client ID of the Hedgehug GitHub App on github.com.
-// It is set once the App is registered (see the appendix of the phase 3
-// spec); a client ID is not a secret.
-var builtinClientID = ""
-
-// ClientID is the client ID of the device flow on the host h: the one of
-// hosts, or the built-in one on github.com.
-func ClientID(h config.Host) string {
-	if h.ClientID != "" {
-		return h.ClientID
-	}
-	if config.SameHost(h.Host, "github.com") {
-		return builtinClientID
-	}
-	return ""
-}
+// ClientID is the client ID of the device flow on the host h: client_id of
+// hosts: in config.yaml, or empty. Hedgehug carries no client ID of its own.
+func ClientID(h config.Host) string { return h.ClientID }
 
 // Options is what getting a token needs from outside.
 type Options struct {

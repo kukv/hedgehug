@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/fakegh"
+	"github.com/kukv/hedgehug/internal/github"
 )
 
 // cfgStore is a store that setConfig writes into config.yaml; account is
@@ -232,5 +233,23 @@ func TestAuthLoginPinsTheStoresOfTheOnlyAccount(t *testing.T) {
 	res, err = ts.AuthLogin(AuthLoginInput{Name: "work", Host: "github.com", WithToken: true, Token: "t-bob"})
 	if err != nil || res.Added || len(res.Pinned.Stores) != 0 {
 		t.Errorf("second login = %+v, %v; want the token replaced and nothing pinned", res, err)
+	}
+}
+
+// No client_id, no device flow: the login stops before it asks GitHub for a
+// code, and writes nothing.
+func TestAuthLoginDeviceNeedsClientID(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	k := newKR()
+	ts.Keyring = k
+	ts.setConfig("", cfgStore{"me", ""})
+	before := ts.configBytes()
+	_, err := ts.AuthLogin(AuthLoginInput{Host: "github.com", ShowCode: func(*github.DeviceCode) { t.Error("the code was shown") }})
+	if err == nil || !strings.Contains(err.Error(), "the device flow needs hosts[].client_id for github.com in config.yaml") {
+		t.Fatalf("err = %v", err)
+	}
+	if len(k.m) != 0 || !bytes.Equal(before, ts.configBytes()) {
+		t.Errorf("keychain = %v, config.yaml changed = %v", k.m, !bytes.Equal(before, ts.configBytes()))
 	}
 }

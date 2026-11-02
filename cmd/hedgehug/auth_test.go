@@ -432,3 +432,17 @@ func TestAuthStatusNoneIsLeftBare(t *testing.T) {
 		t.Errorf("table = %q", out)
 	}
 }
+
+func TestAuthLoginDeviceNeedsClientID(t *testing.T) {
+	t.Parallel()
+	te := newTestEnv(t)
+	te.replaceConfigYAML("accounts:\n  - {name: work, host: github.com, login: alice}\n")
+	code, out, errs := te.run("auth", "login", "work")
+	want := "hedgehug: the device flow needs hosts[].client_id for github.com in config.yaml; or use token: gh, token: env:<VAR>, or hedgehug auth login <name> --with-token\n"
+	if code != 1 || out != "" || !strings.Contains(errs, want) {
+		t.Errorf("exit %d, stdout %q, stderr %q; want exit 1 and %q", code, out, errs, want)
+	}
+	if b := te.configText(); strings.Contains(b, "token:") {
+		t.Errorf("config.yaml = %s; want no token written", b)
+	}
+}
