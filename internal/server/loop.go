@@ -27,7 +27,9 @@ type Loop struct {
 	syncFn  func(store string) // the sync of one store; tests replace it
 
 	wake     chan struct{}
-	deciding atomic.Bool // the loop is between waking and waiting (for tests)
+	deciding atomic.Bool   // the loop is between waking and waiting (for tests)
+	wakes    atomic.Uint64 // requests to look again, counted before they are sent (for tests)
+	decided  atomic.Uint64 // wakes that the last decision of the loop had seen (for tests)
 
 	mu      sync.Mutex
 	last    map[string]time.Time // store → when its last sync started
@@ -52,6 +54,7 @@ func newLoop(s *Server, clock Clock, visible func() bool) *Loop {
 // Wake makes the loop look again now: after a write, or when the GUI shows
 // or hides.
 func (l *Loop) Wake() {
+	l.wakes.Add(1)
 	select {
 	case l.wake <- struct{}{}:
 	default:
@@ -61,9 +64,11 @@ func (l *Loop) Wake() {
 // Run runs the loop until ctx is done.
 func (l *Loop) Run(ctx context.Context) {
 	for ctx.Err() == nil {
+		seen := l.wakes.Load()
 		l.deciding.Store(true)
 		wait := l.step()
 		timer := l.clock.After(wait)
+		l.decided.Store(seen)
 		l.deciding.Store(false)
 		select {
 		case <-ctx.Done():
@@ -239,6 +244,7 @@ func (l *Loop) start(name string) {
 		if l.active == 0 {
 			close(l.idle)
 		}
+		l.wakes.Add(1) // the Wake below is owed from here on, so the loop is not parked
 		l.mu.Unlock()
 		l.noteNext(name)
 		l.onState(name)
@@ -387,9 +393,12 @@ func maxTime(a, b time.Time) time.Time {
 }
 
 // parked reports whether the loop waits with nothing left to look at: no
-// sync runs, no wake is pending, and it is not deciding (tests).
+// sync runs, every wake has been seen by a decision that ended, and the loop
+// is not deciding (tests). A wake counts from when it is owed, not when it is
+// received: a Wake that is about to be sent, or that the loop has taken from
+// its channel and not yet started to decide on, leaves it unparked.
 func (l *Loop) parked() bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.active == 0 && len(l.wake) == 0 && !l.deciding.Load()
+	return l.active == 0 && l.decided.Load() == l.wakes.Load() && !l.deciding.Load()
 }
