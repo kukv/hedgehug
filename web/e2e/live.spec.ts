@@ -4,8 +4,10 @@
 //   - hh.open waits for the page's PUT /api/presence, which it sends once the event
 //     stream is open, so a change made by the CLI after hh.open reaches the page as an event
 //   - the sidebar shows the sync card, with the button "今すぐ同期"
+//   - the detail at /tasks/<ulid> follows the store: the button "ステータス" shows the label of
+//     the current status
 import { expect, test } from "./harness";
-import { row } from "./screens";
+import { properties, row } from "./screens";
 
 const MARK = "CLI で更新 · 今";
 
@@ -65,4 +67,14 @@ test("the sidebar lists the workspace and the sync card is there", async ({ page
   const nav = page.getByRole("navigation", { name: "メインナビゲーション" });
   await expect(nav.getByRole("link", { name: /demo/ })).toBeVisible();
   await expect(nav.getByRole("button", { name: /今すぐ同期/ })).toBeVisible();
+});
+
+test("the detail follows a status changed by the CLI", async ({ page, hh }) => {
+  const t = hh.add("Watched");
+  await hh.open(page, `/tasks/${t.ulid}`);
+  const status = properties(page).getByRole("button", { name: "ステータス" });
+  await expect(status).toContainText("未着手");
+
+  hh.hh("set", t.id, "status=in_progress");
+  await expect(status).toContainText("進行中");
 });
