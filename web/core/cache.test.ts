@@ -860,6 +860,10 @@ describe("TaskCache the order of reads, answers, events and resyncs", () => {
   // X, a query that finds X only as it was at the start (its first change takes X out), or a detail.
   type Holder = "missing" | "cached" | "query" | "leaving" | "detail";
 
+  // The cache works with microtasks and promises only, so one turn of the event loop lets
+  // everything on its way finish (a timer of 1 ms each would take half a minute here).
+  const flush = () => new Promise<void>((r) => setImmediate(r));
+
   const run = async (steps: Step[], holder: Holder) => {
     let v = 0;
     let removed = false;
@@ -874,10 +878,10 @@ describe("TaskCache the order of reads, answers, events and resyncs", () => {
       return new Promise((done) => held.push(() => done(out)));
     });
     const answerAll = async () => {
-      await settle();
+      await flush();
       for (const f of held.splice(0)) f();
-      await settle();
-      await settle();
+      await flush();
+      await flush();
     };
     const query = holder === "query" || holder === "leaving";
     const w = query ? cache.watchList({ q: "", tree: false }) : null;
@@ -903,7 +907,7 @@ describe("TaskCache the order of reads, answers, events and resyncs", () => {
         conn.emit("tasks.changed", changed("shared", [], "d", "delete", ["X"]));
       } else if (s === "A") await answerAll();
       else cache.prime([tv("X", "v0")], since);
-      await settle();
+      await flush();
     }
     // The changes stop: the reads on their way must end, with the task as it is now (or gone).
     let rounds = 0;
