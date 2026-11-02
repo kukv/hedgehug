@@ -7,6 +7,11 @@
     "name": "me",
     "id_prefix": "ME"
   },
+  "project": {
+    "ulid": "<ULID-3>",
+    "id": "ME-1",
+    "title": "Web A"
+  },
   "kind": "task",
   "title": "second",
   "parent": "<ULID-3>",

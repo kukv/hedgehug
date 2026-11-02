@@ -617,6 +617,7 @@ export interface components {
             hint?: string;
             msg: string;
             severity: string;
+            task?: string;
             where: string;
         };
         FindingsOutputBody: {
@@ -693,6 +694,10 @@ export interface components {
             /** @description The tasks found, without tree */
             tasks?: components["schemas"]["TaskView"][];
         };
+        LogTrailer: {
+            key: string;
+            value: string;
+        };
         LogView: {
             author: components["schemas"]["LogViewAuthorStruct"];
             /** Format: date-time */
@@ -703,6 +708,7 @@ export interface components {
             store: string;
             subject: string;
             task: string | null;
+            trailers: components["schemas"]["LogTrailer"][] | null;
             workspace?: components["schemas"]["WorkspaceRef"];
         };
         LogViewAuthorStruct: {
@@ -886,6 +892,7 @@ export interface components {
             parent: string | null;
             problems: components["schemas"]["IndexProblem"][] | null;
             progress?: components["schemas"]["Count"];
+            project?: components["schemas"]["Ref"];
             props: {
                 [key: string]: unknown;
             };
@@ -958,6 +965,11 @@ export interface components {
         };
         SyncStatus: {
             error?: string;
+            /**
+             * Format: int64
+             * @description sync.interval of config.yaml, in seconds
+             */
+            interval: number;
             /** Format: date-time */
             last_attempt?: string;
             last_error?: string;
@@ -975,6 +987,11 @@ export interface components {
              * @description When the background sync pushes the writes not pushed yet: sync.push_interval after pending_since, but not before sync.push_interval after the last sync and not after next_fetch, which syncs too; absent when nothing waits, before the first sync and while a sync runs
              */
             push_at?: string;
+            /**
+             * Format: int64
+             * @description sync.push_interval of config.yaml, in seconds
+             */
+            push_interval: number;
             read_only?: string;
             remotes: string[] | null;
             store: string;
@@ -1000,6 +1017,7 @@ export interface components {
             parent: string | null;
             problems: components["schemas"]["IndexProblem"][] | null;
             progress?: components["schemas"]["Count"];
+            project?: components["schemas"]["Ref"];
             props: {
                 [key: string]: unknown;
             };
@@ -1106,6 +1124,8 @@ export interface components {
             ulid: string;
         };
         WorkspaceView: {
+            /** Format: int64 */
+            deleted: number;
             id_prefix: string;
             name: string;
             /** Format: date-time */
@@ -1132,7 +1152,7 @@ export interface operations {
     "list-activity": {
         parameters: {
             query?: {
-                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                /** @description The store; without it, the commits of every store */
                 store?: string;
                 limit?: number;
                 /** @description Only the commits of this account (its ID) */

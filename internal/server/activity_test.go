@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"go.yaml.in/yaml/v4"
+
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/ops"
@@ -141,5 +143,62 @@ func TestNotificationsWarnOnce(t *testing.T) {
 	ts.call("GET", "/api/notifications?all=true", nil, 200, nil)
 	if n := strings.Count(ts.log.String(), ops.NoAccountsWarning); n != 1 {
 		t.Errorf("warned %d times: %q", n, ts.log.String())
+	}
+}
+
+func TestActivityStoreDescription(t *testing.T) {
+	t.Parallel()
+	y, err := OpenAPIYAML()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Paths map[string]map[string]struct {
+			Parameters []struct {
+				Name        string `yaml:"name"`
+				Description string `yaml:"description"`
+			} `yaml:"parameters"`
+		} `yaml:"paths"`
+	}
+	if err := yaml.Unmarshal(y, &doc); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range doc.Paths["/api/activity"]["get"].Parameters {
+		if p.Name == "store" {
+			if !strings.Contains(p.Description, "every store") {
+				t.Errorf("store = %q; want it to say that without it every store is read", p.Description)
+			}
+			return
+		}
+	}
+	t.Fatal("GET /api/activity has no store parameter")
+}
+
+func TestActivityWithoutStoreReadsEveryStore(t *testing.T) {
+	t.Parallel()
+	ts := twoStores(t)
+	ss := ts.session()
+	ss.StoreName = "me"
+	if _, err := ss.Add(ops.AddInput{Title: "in me"}); err != nil {
+		t.Fatal(err)
+	}
+	ss.StoreName = "team"
+	if _, err := ss.Add(ops.AddInput{Title: "in team"}); err != nil {
+		t.Fatal(err)
+	}
+	var out []ops.LogView
+	ts.call("GET", "/api/activity", nil, 200, &out)
+	stores := map[string]bool{}
+	for _, v := range out {
+		stores[v.Store] = true
+	}
+	if !stores["me"] || !stores["team"] {
+		t.Errorf("stores in the activity = %v; want me and team", stores)
+	}
+	ts.call("GET", "/api/activity?store=team", nil, 200, &out)
+	for _, v := range out {
+		if v.Store != "team" {
+			t.Errorf("?store=team gave a commit of %q", v.Store)
+		}
 	}
 }

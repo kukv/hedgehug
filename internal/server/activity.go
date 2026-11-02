@@ -28,7 +28,7 @@ type undoWrite struct {
 type undoOutput struct{ Body undoWrite }
 
 type activityInput struct {
-	StoreParam
+	Store  string `query:"store" doc:"The store; without it, the commits of every store"`
 	Limit  int    `query:"limit" default:"100" minimum:"1" maximum:"1000"`
 	Author string `query:"author" doc:"Only the commits of this account (its ID)"`
 	Sync   string `query:"sync" enum:"only,exclude" doc:"only: the merges and repairs of syncs; exclude: all but them"`

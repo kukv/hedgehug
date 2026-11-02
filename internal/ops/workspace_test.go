@@ -10,6 +10,43 @@ import (
 	"github.com/kukv/hedgehug/internal/model"
 )
 
+func TestWorkspaceDeletedCount(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	ts.addWorkspace("docs", "DOC")
+	var last string
+	for _, title := range []string{"a", "b", "c"} {
+		r, err := ts.Add(AddInput{Title: title, Workspace: "docs"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		last = r.ULID.String()
+	}
+	if _, err := ts.Remove(last); err != nil {
+		t.Fatal(err)
+	}
+	_, wss, err := ts.WorkspaceList()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var docs *WorkspaceView
+	for i := range wss {
+		if wss[i].Name == "docs" {
+			docs = &wss[i]
+		}
+	}
+	if docs == nil || docs.Tasks != 2 || docs.Deleted != 1 {
+		t.Fatalf("docs = %+v; want 2 tasks and 1 deleted", docs)
+	}
+
+	// the refusal counts the deleted ones too, and gives the number
+	_, err = ts.WorkspaceRemove("docs")
+	wantErr(t, err, KindConflict, "workspace.not_empty")
+	if n, ok := AsError(err).Args["tasks"].(int); !ok || n != 3 {
+		t.Errorf("args = %#v; want tasks = 3 (deleted included)", AsError(err).Args)
+	}
+}
+
 func TestWorkspaceAddRenamePrefixRemove(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)

@@ -97,7 +97,13 @@ describe("StoreDirectory", () => {
     await vi.waitFor(() => expect(dir.workspace("s1", "W1")?.tone).toBe("orange"));
     const fn = vi.fn();
     dir.subscribe(fn);
-    conn.changeSync({ store: "s1", remotes: [], read_only: "no write access" });
+    conn.changeSync({
+      store: "s1",
+      remotes: [],
+      interval: 120,
+      push_interval: 30,
+      read_only: "no write access",
+    });
     expect(dir.tone("s1")).toBe("readonly");
     expect(fn).toHaveBeenCalled();
     expect(dir.workspace("s1", "W1")?.tone).toBe("readonly");

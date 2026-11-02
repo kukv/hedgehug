@@ -122,7 +122,8 @@ func TestWorkspaceErrors(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
 	ts.add("one", "")
-	if p := ts.problem("DELETE", "/api/workspaces/me", nil, 409); p.Type != "workspace.not_empty" {
+	p := ts.problem("DELETE", "/api/workspaces/me", nil, 409)
+	if p.Type != "workspace.not_empty" || p.Args["tasks"] != float64(1) {
 		t.Errorf("not empty: %+v", p)
 	}
 	if p := ts.problem("GET", "/api/workspaces?store=nope", nil, 404); p.Type != "store.not_found" {

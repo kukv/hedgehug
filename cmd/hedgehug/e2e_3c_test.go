@@ -164,7 +164,14 @@ func TestE2EPhase3c(t *testing.T) {
 	if movedChild.Store != "org-b" || movedChild.Parent != proj.ULID || movedChild.ID != mv.Tasks[1].NewID {
 		t.Errorf("the child is %+v, want it in org-b under the project", movedChild)
 	}
-	if out := alice.ok("show", child.ULID, "--json"); strings.Contains(out, keep.ULID) {
+	// The history keeps the Hedgehug-Unlinked trailer, which names keep, so
+	// only the fields of the task are looked at.
+	var childView struct {
+		BlockedBy []struct {
+			ULID string `json:"ulid"`
+		} `json:"blocked_by"`
+	}
+	if out := alice.ok("show", child.ULID, "--json"); json.Unmarshal([]byte(out), &childView) != nil || len(childView.BlockedBy) != 0 {
 		t.Errorf("the child still refers to keep:\n%s", out)
 	}
 	// The forward is a file of org-a at the path of the task, with none of

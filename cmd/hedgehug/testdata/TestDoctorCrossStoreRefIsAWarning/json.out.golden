@@ -6,6 +6,7 @@
       {
         "check": "task",
         "where": "AA-2 (<ULID-1>) Alpha child",
+        "task": "<ULID-1>",
         "msg": "blocked_by: task <ULID-2> is not in this store",
         "severity": "error"
       },

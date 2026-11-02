@@ -72,8 +72,12 @@ const messages: Record<string, Make> = {
   "workspace.bad_name": (a) => `「${str(a, "value")}」はワークスペースの名前に使えません`,
   "workspace.bad_prefix": (a) => `「${str(a, "value")}」は ID の接頭辞に使えません`,
   "workspace.prefix_taken": (a) => `ID の接頭辞 ${str(a, "prefix")} はすでに使われています`,
-  "workspace.not_empty": () =>
-    "ワークスペースにまだタスクがあります（削除済みを含む）。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください",
+  "workspace.not_empty": (a) =>
+    `${
+      str(a, "tasks")
+        ? `ワークスペースにタスクが ${str(a, "tasks")} 件（削除済みを含む）残っています`
+        : "ワークスペースにまだタスクがあります（削除済みを含む）"
+    }。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください`,
   "workspace.one_change": () =>
     "名前と接頭辞は同時に変えられません。どちらか一方を指定してください",
 

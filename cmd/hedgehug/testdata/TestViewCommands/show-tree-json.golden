@@ -36,6 +36,11 @@
           "name": "me",
           "id_prefix": "ME"
         },
+        "project": {
+          "ulid": "<ULID-1>",
+          "id": "ME-1",
+          "title": "Project"
+        },
         "kind": "task",
         "title": "Alpha",
         "parent": "<ULID-1>",
@@ -58,6 +63,11 @@
           "ulid": "<ULID-2>",
           "name": "me",
           "id_prefix": "ME"
+        },
+        "project": {
+          "ulid": "<ULID-1>",
+          "id": "ME-1",
+          "title": "Project"
         },
         "kind": "task",
         "title": "Beta",

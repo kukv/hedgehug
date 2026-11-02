@@ -46,6 +46,15 @@ describe("errorMessage", () => {
     );
   });
 
+  it("words workspace.not_empty with the number of tasks, deleted ones included", () => {
+    expect(errorMessage(err("workspace.not_empty", { tasks: 3 }))).toBe(
+      "ワークスペースにタスクが 3 件（削除済みを含む）残っています。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください",
+    );
+    expect(errorMessage(err("workspace.not_empty"))).toBe(
+      "ワークスペースにまだタスクがあります（削除済みを含む）。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください",
+    );
+  });
+
   it("words restore.forward with the point in time", () => {
     expect(errorMessage(err("restore.forward", { at: "abc123" }))).toBe(
       "abc123 の時点では、このタスクは別の Store へ移っていました",

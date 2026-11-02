@@ -162,6 +162,9 @@ func TestPollSyncState(t *testing.T) {
 	if want := maxTime(*e.PendingSince, last).Add(30 * time.Second); e.PushAt == nil || !e.PushAt.Equal(want) {
 		t.Errorf("push_at = %v; want %v (30s after the later of pending_since and the last sync)", e.PushAt, want)
 	}
+	if e.Interval <= 0 || e.PushInterval <= 0 {
+		t.Errorf("interval = %d, push_interval = %d; want the sync.* intervals in seconds", e.Interval, e.PushInterval)
+	}
 }
 
 func TestPollUnread(t *testing.T) {
