@@ -47,6 +47,21 @@ func (s *Store) WriteLocal(name string, data []byte) error {
 	return writeLocalAt(s.dir, name, data)
 }
 
+// AppendLocal adds data to the end of the file name of .hedgehug/local,
+// which must exist, in one write. It takes no lock: whoever reads the file
+// must cope with what two writers, or a write cut short, leave.
+func (s *Store) AppendLocal(name string, data []byte) error {
+	if err := validLocalName(name); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(s.path(LocalDir+"/"+name), os.O_WRONLY|os.O_APPEND, 0) //nolint:gosec // inside the store
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data)
+	return errors.Join(err, f.Close())
+}
+
 // writeLocalAt writes the file name of .hedgehug/local of the store at dir,
 // making the directories below .hedgehug but not .hedgehug itself, so that a
 // store removed meanwhile is not made again: ErrStoreGone.

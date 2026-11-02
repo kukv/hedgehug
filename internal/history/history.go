@@ -112,6 +112,18 @@ type History struct {
 	byHash     map[plumbing.Hash]int
 	hashesOnce sync.Once
 	byPath     map[string][]int // indices into recs, ascending
+
+	// What the file holds (file.go): whether the index came from a file that
+	// can be added to, and how much of the index is in it.
+	fromFile   bool
+	tailBad    bool // the file ends in something that is not a chunk
+	chunks     int
+	chunkBytes int
+	mainBytes  int
+	savedRecs  int
+	savedStrs  int
+	savedTip   plumbing.Hash
+	pending    map[string][]int // paths changed by the commits put since, for a chunk
 }
 
 func newHistory(repo *gitrepo.Repo) *History {
@@ -293,6 +305,12 @@ func (h *History) put(c Commit, parent uint32, files []string) {
 	h.hashes()[c.Hash] = i
 	for _, p := range files {
 		h.byPath[p] = append(h.byPath[p], i)
+		if h.fromFile {
+			if h.pending == nil {
+				h.pending = map[string][]int{}
+			}
+			h.pending[p] = append(h.pending[p], i)
+		}
 	}
 }
 
