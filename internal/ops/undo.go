@@ -391,7 +391,7 @@ func (u *undoer) workspace(ulid model.ULID, ours, merged []byte) error {
 			return nil
 		}
 		if n := CountTasks(u.ix, ulid, true); n > 0 {
-			return newErr(KindConflict, "undo.blocked", fmt.Errorf("the workspace still has %s; move them with hedgehug mv --workspace, or delete them with hedgehug rm and remove them with hedgehug purge --older-than 0d --store <store>", plural.Count(n, "task")))
+			return newErr(KindConflict, "undo.blocked", fmt.Errorf("the workspace still has %[1]s; move %[2]s with hedgehug mv --workspace, or delete %[2]s with hedgehug rm and remove %[2]s with hedgehug purge --older-than 0d --store <store>", plural.Count(n, "task"), plural.Pick(n, "it", "them")))
 		}
 		u.res.Changed = true
 		return u.tx.RemoveWorkspace(ulid)
