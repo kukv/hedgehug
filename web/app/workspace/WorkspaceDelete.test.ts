@@ -2,8 +2,11 @@ import { fireEvent, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fail, makeCore, mount, ok } from "../detail/testkit";
 import { resetToasts, toasts } from "../toast.svelte";
+import { runUndo } from "../undo";
 import { entry, written } from "./testkit";
 import WorkspaceDelete from "./WorkspaceDelete.svelte";
+
+vi.mock("../undo", () => ({ runUndo: vi.fn(async () => {}) }));
 
 const sandbox = entry({ ulid: "W3", name: "sandbox", prefix: "SBX", tasks: 0, deleted: 0 });
 
@@ -36,6 +39,17 @@ describe("WorkspaceDelete", () => {
     });
     expect(k.stores.reload).toHaveBeenCalled();
     expect(toasts.list[0]?.message).toBe("ワークスペース sandbox を削除しました");
+  });
+
+  it("puts an undo on the toast, which takes the removal back in the store of the workspace", async () => {
+    const { onclose } = setup();
+    await fireEvent.click(screen.getByRole("button", { name: "削除" }));
+    await waitFor(() => expect(onclose).toHaveBeenCalled());
+    const undo = toasts.list[0]?.undo;
+    expect(undo).toBeTypeOf("function");
+    await undo?.();
+    expect(runUndo).toHaveBeenCalledTimes(1);
+    expect(runUndo).toHaveBeenCalledWith(expect.anything(), "shared");
   });
 
   it("leaves the screen of the workspace that is removed", async () => {

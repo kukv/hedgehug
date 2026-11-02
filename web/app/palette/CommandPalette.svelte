@@ -15,6 +15,8 @@
   import { toast } from "../toast.svelte";
   import { patchTask } from "../tree/actions";
   import StoreBadge from "../ui/StoreBadge.svelte";
+  import { routeStore, runUndo } from "../undo";
+  import { openWorkspaceAdd, openWorkspaceMove } from "../workspace/dialogs-state.svelte";
   import { fetchMissing, readRecent, rememberTask } from "./recent";
   import {
     buildCommands,
@@ -135,17 +137,27 @@
       syncNow: () => void runSync(c.api),
       createTask: (parent) => openCreate({ kind: "task", parent }),
       createProject: () => openCreate({ kind: "project" }),
+      addWorkspace: () => openWorkspaceAdd(),
+      undo: () =>
+        void runUndo(
+          c,
+          routeStore(router.route, (u) => c.cache.task(u)),
+        ),
       workspaces: c.stores.workspaces(),
       go: (path) => router.go(path),
       hrefs: {
         workspace: (store, ulid) =>
           router.href({ name: "workspace", store, ulid, tab: "overview" }),
+        workspaceSettings: (store, ulid) =>
+          router.href({ name: "workspace", store, ulid, tab: "settings" }),
+        settingsWorkspaces: (store) => router.href({ name: "settings", page: "workspaces", store }),
         project: (ulid) => router.href({ name: "project", ulid, tab: "tree" }),
         task: (ulid) => router.href({ name: "task", ulid }),
       },
       selected: sel ? (c.cache.task(sel) ?? null) : null,
       recent: recentUlids.flatMap((u) => c.cache.task(u) ?? []),
       pickStatus,
+      moveTask: (t) => openWorkspaceMove(t),
     };
   });
 

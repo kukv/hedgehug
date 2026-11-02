@@ -7,9 +7,12 @@ import { schema, task } from "../tree/fixtures";
 
 const h = vi.hoisted(() => ({
   core: undefined as unknown,
-  route: { name: "home" } as { name: string; ulid?: string },
+  route: { name: "home" } as { name: string; ulid?: string; store?: string },
   go: vi.fn(),
   toast: vi.fn(),
+  runUndo: vi.fn(async () => {}),
+  addWorkspace: vi.fn(),
+  moveWorkspace: vi.fn(),
 }));
 
 vi.mock("../context", () => ({ core: () => h.core }));
@@ -19,15 +22,25 @@ vi.mock("../router", () => ({
       return h.route;
     },
     go: h.go,
-    href: (r: { name: string; ulid?: string; store?: string }) =>
+    href: (r: { name: string; ulid?: string; store?: string; tab?: string }) =>
       r.name === "task"
         ? `/tasks/${r.ulid}`
         : r.name === "project"
           ? `/projects/${r.ulid}`
-          : `/workspaces/${r.store}/${r.ulid}`,
+          : r.name === "settings"
+            ? `/settings/workspaces/${r.store}`
+            : `/workspaces/${r.store}/${r.ulid}${r.tab === "overview" ? "" : `/${r.tab}`}`,
   },
 }));
 vi.mock("../toast.svelte", () => ({ toast: h.toast }));
+vi.mock("../undo", async (orig) => ({
+  ...(await orig<typeof import("../undo")>()),
+  runUndo: h.runUndo,
+}));
+vi.mock("../workspace/dialogs-state.svelte", () => ({
+  openWorkspaceAdd: h.addWorkspace,
+  openWorkspaceMove: h.moveWorkspace,
+}));
 
 import CommandPalette from "./CommandPalette.svelte";
 
@@ -82,7 +95,8 @@ function setup() {
   h.core = {
     api,
     cache: {
-      task: (u: string) => (u === "U6" ? rel6 : undefined),
+      task: (u: string) =>
+        u === "U6" ? rel6 : u === "U9" ? { ...rel6, ulid: "U9", store: "backend" } : undefined,
       applyWrite: vi.fn(),
       epochNow: () => 0,
       prime: vi.fn(),
@@ -104,6 +118,9 @@ const box = () => screen.getByRole("combobox");
 beforeEach(() => {
   h.go.mockReset();
   h.toast.mockReset();
+  h.runUndo.mockClear();
+  h.addWorkspace.mockClear();
+  h.moveWorkspace.mockClear();
   localStorage.clear();
   closePalette();
   closeCreate();
@@ -146,6 +163,62 @@ describe("CommandPalette", () => {
     expect(screen.getByText("コマンド", { selector: "[data-mode]" })).toBeInTheDocument();
     await fireEvent.keyDown(box(), { key: "Enter" });
     await waitFor(() => expect(api.POST).toHaveBeenCalledWith("/api/sync"));
+    expect(palette.open).toBe(false);
+  });
+
+  it("adds a workspace from the command", async () => {
+    setup();
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), {
+      target: { value: ">ワークスペースを追加" },
+    });
+    await screen.findByRole("option", { name: /ワークスペースを追加/ });
+    await fireEvent.keyDown(box(), { key: "Enter" });
+    expect(h.addWorkspace).toHaveBeenCalledTimes(1);
+    expect(palette.open).toBe(false);
+  });
+
+  it("takes back the last operation without asking, in the store of the workspace on screen", async () => {
+    const { api } = setup();
+    h.route = { name: "workspace", store: "backend", ulid: "W9" };
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">取り消" } });
+    await screen.findByRole("option", { name: /直前の操作を取り消す/ });
+    await fireEvent.keyDown(box(), { key: "Enter" });
+    expect(h.runUndo).toHaveBeenCalledTimes(1);
+    expect(h.runUndo).toHaveBeenCalledWith(expect.objectContaining({ api }), "backend");
+    expect(palette.open).toBe(false);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("takes back in the store of the task on screen, and in none elsewhere", async () => {
+    setup();
+    h.route = { name: "task", ulid: "U9" };
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">取り消" } });
+    await fireEvent.keyDown(box(), { key: "Enter" });
+    expect(h.runUndo).toHaveBeenLastCalledWith(expect.anything(), "backend");
+
+    closePalette();
+    h.route = { name: "home" };
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">取り消" } });
+    await fireEvent.keyDown(box(), { key: "Enter" });
+    expect(h.runUndo).toHaveBeenLastCalledWith(expect.anything(), undefined);
+  });
+
+  it("opens the settings of the workspace", async () => {
+    setup();
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">設定" } });
+    await fireEvent.click(
+      await screen.findByRole("option", { name: /ワークスペースの設定を開く/ }),
+    );
+    expect(h.go).toHaveBeenCalledWith("/workspaces/shared/W1/settings");
     expect(palette.open).toBe(false);
   });
 
@@ -223,6 +296,18 @@ describe("CommandPalette", () => {
     expect(await screen.findByText("REL-6 に対して")).toBeInTheDocument();
     await fireEvent.click(screen.getByRole("option", { name: /子タスクを作る/ }));
     expect(createState.request).toEqual({ kind: "task", parent: "U6" });
+  });
+
+  it("opens the move dialog for the selected task from the command", async () => {
+    setup();
+    selection.set("U6");
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">移動" } });
+    await fireEvent.click(await screen.findByRole("option", { name: /別のワークスペースへ移動/ }));
+    expect(h.moveWorkspace).toHaveBeenCalledTimes(1);
+    expect(h.moveWorkspace).toHaveBeenCalledWith(expect.objectContaining({ ulid: "U6" }));
+    expect(palette.open).toBe(false);
   });
 
   it("does nothing on Enter or the arrows while the IME is composing", async () => {

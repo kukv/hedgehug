@@ -11,10 +11,12 @@
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
   import FormError from "../ui/FormError.svelte";
+  import { runUndo } from "../undo";
 
   let { entry, onclose }: { entry: WorkspaceEntry; onclose: () => void } = $props();
 
-  const { api, stores } = core();
+  const c = core();
+  const { api, stores } = c;
   const all = useSubscribe(stores, () => stores.workspaces());
   // The counts move while the dialog is open: read the workspace as it is now.
   const w = $derived(currentEntry(all.current, entry));
@@ -45,7 +47,10 @@
       if (r.name === "workspace" && r.store === gone.store && r.ulid === gone.ulid) {
         router.go(hrefOf({ name: "home" }));
       }
-      toast({ message: `ワークスペース ${gone.name} を削除しました` });
+      toast({
+        message: `ワークスペース ${gone.name} を削除しました`,
+        undo: () => runUndo(c, gone.store),
+      });
       onclose();
     } catch (e) {
       failure = errorMessage(e);

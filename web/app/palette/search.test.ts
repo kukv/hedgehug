@@ -189,16 +189,21 @@ function env(over: Partial<CommandEnv> = {}): CommandEnv {
     syncNow: vi.fn(),
     createTask: vi.fn(),
     createProject: vi.fn(),
+    addWorkspace: vi.fn(),
+    undo: vi.fn(),
     workspaces: [ws],
     go: vi.fn(),
     hrefs: {
       workspace: (s, u) => `/workspaces/${s}/${u}`,
+      workspaceSettings: (s, u) => `/workspaces/${s}/${u}/settings`,
+      settingsWorkspaces: (s) => `/settings/workspaces/${s}`,
       project: (u) => `/projects/${u}`,
       task: (u) => `/tasks/${u}`,
     },
     selected: null,
     recent: [],
     pickStatus: vi.fn(),
+    moveTask: vi.fn(),
     ...over,
   };
 }
@@ -221,8 +226,12 @@ describe("buildCommands", () => {
       "今すぐ同期する",
       "タスクを作成",
       "プロジェクトを作成",
+      "ワークスペースを追加",
+      "直前の操作を取り消す",
       "release を開く",
+      "ワークスペースの設定を開く",
       "リリース準備 v2.4 を開く",
+      "設定のワークスペース一覧を開く",
     ]);
   });
 
@@ -258,10 +267,59 @@ describe("buildCommands", () => {
     const sync = gs[0]?.items[0];
     if (sync?.type === "command") sync.run();
     expect(e.syncNow).toHaveBeenCalled();
-    const proj = gs[1]?.items[1];
+    const proj = gs[1]?.items[2];
     expect(proj).toMatchObject({ href: "/projects/P1", store: "shared" });
     if (proj?.type === "command") proj.run();
     expect(e.go).toHaveBeenCalledWith("/projects/P1");
+  });
+
+  it("adds a workspace and takes back the last operation", () => {
+    const e = env();
+    const items = buildCommands(e, ">")[0]?.items ?? [];
+    const add = items.find((i) => i.key === "cmd:workspace-add");
+    const undo = items.find((i) => i.key === "cmd:undo");
+    expect(add).toMatchObject({ label: "ワークスペースを追加", icon: "plus" });
+    expect(undo).toMatchObject({ label: "直前の操作を取り消す", icon: "undo" });
+    if (add?.type === "command") add.run();
+    expect(e.addWorkspace).toHaveBeenCalledTimes(1);
+    if (undo?.type === "command") undo.run();
+    expect(e.undo).toHaveBeenCalledTimes(1);
+    expect(labels(buildCommands(e, ">取り消"))).toEqual(["直前の操作を取り消す"]);
+    expect(labels(buildCommands(e, ">追加"))).toEqual(["ワークスペースを追加"]);
+  });
+
+  it("opens the settings of a workspace, named by the workspace, and the list of a store", () => {
+    const e = env();
+    const gs = buildCommands(e, ">設定");
+    expect(gs.map((g) => g.name)).toEqual(["開く"]);
+    const [settings, list] = gs[0]?.items ?? [];
+    expect(settings).toMatchObject({
+      label: "ワークスペースの設定を開く",
+      note: "release",
+      store: "shared",
+      href: "/workspaces/shared/W1/settings",
+    });
+    expect(list).toMatchObject({
+      label: "設定のワークスペース一覧を開く",
+      store: "shared",
+      href: "/settings/workspaces/shared",
+    });
+    if (settings?.type === "command") settings.run();
+    expect(e.go).toHaveBeenCalledWith("/workspaces/shared/W1/settings");
+    if (list?.type === "command") list.run();
+    expect(e.go).toHaveBeenCalledWith("/settings/workspaces/shared");
+  });
+
+  it("lists the settings of a workspace for each workspace, the list once for a store", () => {
+    const second = { ...ws, ulid: "W2", name: "ops", prefix: "OPS", projects: [] };
+    const gs = buildCommands(env({ workspaces: [ws, second] }), ">設定");
+    expect(
+      gs[0]?.items.map((i) => (i.type === "command" ? `${i.label}|${i.note ?? ""}` : "")),
+    ).toEqual([
+      "ワークスペースの設定を開く|release",
+      "ワークスペースの設定を開く|ops",
+      "設定のワークスペース一覧を開く|",
+    ]);
   });
 
   it("adds the commands for the selected task", () => {
@@ -277,7 +335,15 @@ describe("taskCommands", () => {
     const t = task("T1", "task", null, { id: "REL-6" });
     const g = taskCommands(e, t);
     expect(g.name).toBe("REL-6 に対して");
-    const [status, child, detail] = g.items;
+    const [status, child, detail, move] = g.items;
+    expect(g.items).toHaveLength(4);
+    expect(move).toMatchObject({
+      key: "task-move:T1",
+      label: "別のワークスペースへ移動…",
+      icon: "workspace",
+    });
+    if (move?.type === "command") move.run();
+    expect(e.moveTask).toHaveBeenCalledWith(t);
     expect(status).toMatchObject({ label: "ステータスを変更…", keepOpen: true });
     expect(child).toMatchObject({ label: "子タスクを作る", kbd: "C" });
     expect(detail).toMatchObject({ label: "詳細を開く", kbd: "⌘↵", href: "/tasks/T1" });

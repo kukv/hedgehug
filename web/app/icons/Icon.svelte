@@ -20,7 +20,8 @@
     | "filter"
     | "forbid"
     | "checklist"
-    | "status";
+    | "status"
+    | "undo";
 
   type Def = { box: 16 | 24; w: number; d: string };
 
@@ -70,6 +71,7 @@
     filter: { box: 24, w: 2, d: "M3 5h18l-7 8v6l-4-2v-4z" },
     forbid: { box: 16, w: 1.4, d: "M8 2.5a5.5 5.5 0 1 1 0 11a5.5 5.5 0 0 1 0-11zM4.1 4.1l7.8 7.8" },
     checklist: { box: 24, w: 2, d: "M4 6l2 2 3-3.5M4 14l2 2 3-3.5M13 7h7M13 15h7" },
+    undo: { box: 24, w: 2, d: "M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" },
     status: {
       box: 16,
       w: 1.4,
