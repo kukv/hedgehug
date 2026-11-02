@@ -200,7 +200,13 @@
 
 <svelte:window
   onkeydown={(e) => {
-    if (e.key === "Enter" && modKey(e) && !e.defaultPrevented) {
+    if (
+      e.key === "Enter" &&
+      modKey(e) &&
+      !e.defaultPrevented &&
+      !e.isComposing &&
+      e.keyCode !== 229
+    ) {
       e.preventDefault();
       void submit(false);
     }

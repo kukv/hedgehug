@@ -123,6 +123,24 @@ describe("CreateProject", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "作成" })).toBeEnabled());
   });
 
+  it("creates with Ctrl+Enter, not while an IME composes, and not when a field took the key", async () => {
+    const { k } = setup();
+    await name("p");
+    await fireEvent.keyDown(window, { key: "Enter", ctrlKey: true, isComposing: true });
+    expect(k.api.POST).not.toHaveBeenCalled();
+    const e = new KeyboardEvent("keydown", {
+      key: "Enter",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    e.preventDefault();
+    window.dispatchEvent(e);
+    expect(k.api.POST).not.toHaveBeenCalled();
+    await fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+    await waitFor(() => expect(k.api.POST).toHaveBeenCalledTimes(1));
+  });
+
   it("cannot be created without a name", () => {
     setup();
     expect(screen.getByRole("button", { name: "作成" })).toBeDisabled();

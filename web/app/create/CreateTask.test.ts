@@ -141,6 +141,26 @@ describe("CreateTask", () => {
     await waitFor(() => expect(k.api.POST).toHaveBeenCalledTimes(1));
   });
 
+  it("creates with Ctrl+Enter typed in the assignee field, with the assignee, once", async () => {
+    const { k } = setup();
+    await typeTitle("x");
+    await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
+    const assignee = screen.getByRole("textbox", { name: "担当者" });
+    await fireEvent.input(assignee, { target: { value: "sato" } });
+    await fireEvent.keyDown(assignee, { key: "Enter", ctrlKey: true });
+    await waitFor(() => expect(k.api.POST).toHaveBeenCalledTimes(1));
+    const [, init] = k.api.POST.mock.calls[0] as [string, { body: object }];
+    expect(init.body).toMatchObject({ assignees: ["sato"] });
+  });
+
+  it("does not create with Ctrl+Enter while an IME composes", async () => {
+    const { k } = setup();
+    await typeTitle("x");
+    await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
+    await fireEvent.keyDown(window, { key: "Enter", ctrlKey: true, isComposing: true });
+    expect(k.api.POST).not.toHaveBeenCalled();
+  });
+
   it("creates with Ctrl+Enter in the body editor, once", async () => {
     const { k, container } = setup();
     await typeTitle("x");
@@ -155,6 +175,14 @@ describe("CreateTask", () => {
     await waitFor(() => expect(k.api.POST).toHaveBeenCalledTimes(1));
     const [, init] = k.api.POST.mock.calls[0] as [string, { body: { body: string } }];
     expect(init.body.body).toBe("メモ");
+  });
+
+  it("focuses the title as soon as the dialog opens with a parent", async () => {
+    const k = makeCore({ tasks: [parent] });
+    mount(CreateTask, { request: { kind: "task", parent: "UP" }, onclose: vi.fn() }, k);
+    expect(screen.getByRole("button", { name: "親を外す" })).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByRole("textbox", { name: "タイトル" })).toHaveFocus();
   });
 
   it("focuses the title as soon as the dialog opens", async () => {

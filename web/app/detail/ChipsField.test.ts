@@ -15,6 +15,22 @@ describe("ChipsField", () => {
     expect(onchange).toHaveBeenCalledTimes(1);
   });
 
+  it("adds the typed chip on Ctrl+Enter and leaves the event to the dialog", async () => {
+    const onchange = vi.fn();
+    render(ChipsField, { values: [], label: "担当者", onchange });
+    const input = screen.getByRole("textbox", { name: "担当者" });
+    await fireEvent.input(input, { target: { value: "sato" } });
+    const e = new KeyboardEvent("keydown", {
+      key: "Enter",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    input.dispatchEvent(e);
+    expect(onchange).toHaveBeenCalledWith(["sato"]);
+    expect(e.defaultPrevented).toBe(false);
+  });
+
   it("does not add a chip while an IME is converting", async () => {
     const onchange = vi.fn();
     render(ChipsField, { values: [], label: "担当者", onchange });

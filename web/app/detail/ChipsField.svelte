@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { modKey } from "../keys";
+
   let {
     values,
     label,
@@ -42,7 +44,10 @@
   function onkeydown(e: KeyboardEvent) {
     // While an IME converts text, Enter confirms the conversion: it is not the end of a chip.
     if (e.isComposing || e.keyCode === 229) return;
-    if (e.key === "Enter" || e.key === ",") {
+    if (e.key === "Enter" && modKey(e)) {
+      // The dialog this field is in creates on ⌘↵: it gets the key, with this chip in.
+      add();
+    } else if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
       add();
     } else if (e.key === "Backspace" && text === "" && values.length > 0) {
