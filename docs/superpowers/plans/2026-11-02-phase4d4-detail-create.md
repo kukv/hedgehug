@@ -3236,7 +3236,7 @@ git commit -m "feat(web): タスク詳細のプロパティ・本文・チェッ
 **この Task で決めたこと**
 - コメントの入力と編集は `BodyEditor`（`@`・`#` の補完つき）。⌘↵ で送る。コメントは書き込みのあと `show.updated` が変わる（SSE で詳細が取り直される）まで、返ってきた `CommentView` を重ねて表示する
 - 「この時点に戻す」: 行を押すと `showAt`（`GET /api/tasks/{id}/history/{commit}`）でその時点のタスクを読み、`diffForRestore` で変わる項目だけを「今 → 戻したあと」の表にして確認する。何も変わらなければ「この時点と同じです」を出して戻すボタンを出さない。そのコミットにタスクがなければ（`restore_at.not_found`）エラーを出す。戻したら応答の `note` をトーストに出す
-- 完全削除: ダイアログを開いたときに `DELETE …?purge=true`（`confirm` なし）を送って 409 `purge.unconfirmed` の対象を受け取り、並べる。Store 名を入力するまで送れない。送り直しでも 409 なら新しい対象に差し替えて入力を空に戻す
+- 完全削除: ダイアログを開いたときに `DELETE …?purge=true`（`confirm` なし）を送って 409 `purge.unconfirmed` の対象を受け取り、並べる。Store 名を入力するまで送れない。送り直しでも 409 なら新しい対象に差し替えて入力を空に戻す（2026-11-03: main の決定 4ea022c で完全削除を GUI と API から外した。末尾「実装で plan から変えた点」の利用者の決定 7）
 - 関連の種類を選ぶメニューは `FieldInput` の `select`（`ui/Menu`）
 
 - [ ] **Step 1: 失敗するテストを書く**
@@ -9074,7 +9074,7 @@ Expected: PASS（6 tests）
 - [ ] **Step 7: 全体を通す**
 
 Run: `cd web && pnpm fix && pnpm lint && pnpm check && cd .. && make e2e`
-Expected: Biome・svelte-check にエラーなし。`make e2e` が 33 テスト（実装では 50 件）すべて PASS（`pnpm exec playwright test --repeat-each=3` でも）
+Expected: Biome・svelte-check にエラーなし。`make e2e` が 33 テスト（実装では 49 件。完全削除を外す前は 50 件）すべて PASS（`pnpm exec playwright test --repeat-each=3` でも）
 
 - [ ] **Step 8: コミット**
 ```bash
@@ -9200,7 +9200,7 @@ Run: `make web`
 Expected: `vite build` が警告を出さない（どのチャンクも 500 kB 未満。CodeMirror は `codemirror-base` と `codemirror` の2つに分かれる）
 
 Run: `make e2e`
-Expected: 33 テスト（実装では 50 件。末尾の C-4）すべて PASS
+Expected: 33 テスト（実装では 49 件。完全削除を外す前は 50 件。末尾の C-4）すべて PASS
 
 Run: `git status --short`
 Expected: 何も出ない（`web/dist` の `.gitkeep` が消えていない、`pnpm-lock.yaml` が変わっていない、`schema.d.ts` が古くない）
@@ -9238,7 +9238,7 @@ git commit -m "docs: GUI の開発手順を足す"
 **関連**: `heading`「関連」、「同じ Store（<名前>）のタスクだけを参照できます」、`button`「関連を追加」→ `button`「関連の種類」（`menu`）と `combobox`「タスクを検索」→ `option`「<ID> <題>」、各グループは `group`（名前は「ブロックされている」など）、`button`「<ID> を外す」、エラーは `alert`。
 **コメント**: `heading`「コメント n」、`textbox`「コメントを書く」（CodeMirror。⌘↵ で送る）、`button`「コメント」、各コメントに `button`「編集」「削除」、編集中は `textbox`「コメントを編集」と `button`「保存」「キャンセル」。削除のトースト「コメントを削除しました」。他人のコメントは `alert`（`comment.not_author` の文言）。
 **履歴**: `heading`「履歴」、各行に `button`「この時点に戻す」（最新の行にはない）→ `dialog`「<ID> を <日時> の状態に戻す」（変わる項目の `table`、`button`「N 項目を戻す」。同じなら「この時点と同じです」）。
-**削除**: `button`「削除」→ `dialog`「<ID> <題> を削除」（配下があれば「配下の N 件も一緒に削除します」、`button`「N 件を削除」か「削除」）。トーストは「「<題>」を削除しました」と取り消し。削除済みの詳細は `button`「復元」（トースト「<ID> を復元しました」）と `button`「完全に削除」→ `dialog`「<ID> を完全に削除」（対象の一覧、`textbox`「Store 名」に Store 名を入れると `button`「完全に削除」が押せる。成功したら `/` へ）。
+**削除**: `button`「削除」→ `dialog`「<ID> <題> を削除」（配下があれば「配下の N 件も一緒に削除します」、`button`「N 件を削除」か「削除」）。トーストは「「<題>」を削除しました」と取り消し。削除済みの詳細は `button`「復元」（トースト「<ID> を復元しました」）と `button`「完全に削除」→ `dialog`「<ID> を完全に削除」（対象の一覧、`textbox`「Store 名」に Store 名を入れると `button`「完全に削除」が押せる。成功したら `/` へ）。（2026-11-03: main の決定 4ea022c で完全削除を GUI と API から外した。末尾「実装で plan から変えた点」の利用者の決定 7）。削除済みの詳細は「復元」だけになった
 
 ### 実装で plan から変えた点（2026-11-03、レビューのあと）
 
@@ -9252,6 +9252,7 @@ git commit -m "docs: GUI の開発手順を足す"
 4. **ダイアログが開いている間は、⌘K でパレットを開かない（Task 14）。** Sidebar の ⌘K は `[aria-modal="true"]:not([data-palette])` があれば何もしない（パレットのパネルが `data-palette` を持つ）。
 5. **最近開いたものは、キャッシュにない分を `GET /api/tasks/{ulid}` で取り、いつも 8 件出す（Task 14。概要 plan の細部 47 を補う）。** パレットを開いたとき、`palette/recent.ts` の `fetchMissing` が取りに行き、`cache.prime` で入れる。404（消えたタスク）は記録（`hedgehug.recent`）から外す。ほかの失敗は何もしない。
 6. **取り直しの絞り込みから外れた行は、その行だけ取り直す（最終レビュー、2026-11-03。外れた行だけ取り直す案）。** クエリの取り直しの結果に含まれなくなった行（ステータスが変わって `status:todo` のツリーから外れた行など）は、キャッシュに古い姿が残る。その回のクエリ・詳細の取り直しがすべて終わったあと、`us`（resync なら全行）のうちキャッシュにある行で、読み取りの印（`rowSince`）がイベント・resync より古いものを `GET` で取り直す。結果に残った行は印が新しいので、余分な `GET` は出ない。
+7. **完全削除は GUI と API から外した（main の決定 4ea022c、2026-11-02。マージ後の 2026-11-03）。** `DELETE /api/tasks/{id}` の `purge`・`confirm`、`purge.unconfirmed`、`cliPurge`、`purge.*` のメッセージ、`cache.applyWrite` の `ulids` が main から消えたので、4d-4 も合わせた。削除済みの詳細は「復元」だけを出す。`delete-actions.ts` の `probePurge`・`purgeTargetsOf`・`purgeTask`・`Target` と `DeleteDialogs.svelte` の purge のダイアログ、そのテストと `delete.spec.ts` の完全削除の E2E を消した。E2E は 49 件（50 から 1 件減）。完全削除は `hh purge --older-than` に一本化し、GUI は 4e の「設定 → 同期と保守」に置く。
 
 #### Ruling（controller の裁定）
 
@@ -9272,12 +9273,12 @@ git commit -m "docs: GUI の開発手順を足す"
 - **C-15: `history-labels` に、コミットへ書く op をすべて足した。** `internal/ops`・sync・store を grep して確かめた（init、status、dep、watch、unwatch、move-in、move-out、purge-moved、rewrite-history、revert-overwritten、migrate、workspace、view、setup、replay）。全 op に日本語があることを確かめるテストを足した。
 - **C-16: palette.spec は `ControlOrMeta+k`・`ControlOrMeta+Enter`。**
 - **C-17: 「開いた直後にタイトル（名前）にフォーカスがある」テストを足し、通らなければ通るように直す。** Task 13 のレビューで、最初のテストが偽の合格だった（Dialog の初期フォーカスが上書きしていた）ので、Dialog は `[data-autofocus]` を先に選ぶようにし、`CreateTask` のタイトルに付けた。
-- **C-18: 完全削除の 1 行目は「タスクのファイルとコメントを消します。Hedgehug からは復元できません。」。** 履歴と番号の扱いは 2 行目に分けた。
+- **C-18: 完全削除の 1 行目は「タスクのファイルとコメントを消します。Hedgehug からは復元できません。」。** 履歴と番号の扱いは 2 行目に分けた。（完全削除のダイアログごと外れた。main の決定 4ea022c）
 - **C-9・C-15・C-16・C-18 のような影響の小さい指摘も、plan どおりに戻さず直す。**（CLAUDE.md の残さない方針）
 - **コマンドパレットの同期は `sidebar/sync-run.svelte.ts`（`runSync`・`syncRun.busy`）で SyncCard と共有する。** `syncMessage(reports)` で結果を出し、実行中の 2 回目は何もしない。plan のパレットは結果を見なかった。
 - **Task 17 の Step 4（`make check`・release-check・web・e2e の全体の検査）は、最終レビューの修正のあとに 1 回だけ回す。** 利用者の「全テストは仕上げに 1 回」に従う。
 - **README の `make e2e` の説明は「Chromium が無ければ入れる」。** Makefile の `e2e` は実行のたびに `playwright install chromium` を呼ぶ。
-- **delete.spec の完全削除の確認は、`hh show` でなく `GET /api/tasks/<ulid>` が 404 になるまで poll する。** `hh show` は失敗時に CLI の stderr をテスト出力に出す。
+- **delete.spec の完全削除の確認は、`hh show` でなく `GET /api/tasks/<ulid>` が 404 になるまで poll する。** `hh show` は失敗時に CLI の stderr をテスト出力に出す。（完全削除の E2E ごと外れた。main の決定 4ea022c）
 - **最終レビューの再レビュー 1〜5 の指摘の裁定（下の「最終レビューで直した点」の 11〜13 番の根拠）。**
   - 持たれていない行: resync でも持たれていない行に `fetchRow` する。ULID ごとの `seq` で古い応答を捨てる。`cache.task()` を読む箇所の退行を避けるため、行をキャッシュに入れない別の方法は取らない。
   - 古い読み取りの順序づけ: ULID ごとの `lastChange`（`tasks.changed` の epoch）を持ち、`prime`・`fetchRow` は、それより前に始まった読み取りを捨てる。
@@ -9292,9 +9293,9 @@ git commit -m "docs: GUI の開発手順を足す"
 2. **読み取りは書き込みとして入れない。** `epochNow()` と `prime(tasks, since)` を足し（`markWrite` なし）、パレットの検索・最近開いたものの取得は、要求の前の epoch を取って `prime` する。`recent.ts` の二重キャストは消えた。
 3. **パレットのステータス変更はスキーマの読み込みを待つ。** `pickStatus` が `schema.load(store)` を呼び、パレットが `schemaRev` を購読する。読み込み中は「読み込み中…」、失敗は `errorMessage`。
 4. **チップ欄で ⌘↵ が効く。** `ChipsField` は ⌘↵ のとき、チップを足すだけで `preventDefault` せず、ダイアログへ通す。入力が拒否されたときだけ `preventDefault`。CreateTask・CreateProject の window の ⌘↵ は `defaultPrevented` と IME 変換中を見る。
-5. **E2E は 50 件。** 作成・編集・削除・パレットの 16 件のあと、live.spec に「タイトルの追従」「ブロックの帯」、create.spec に「詳細で C → 子」を足し、`Control+Enter` を `ControlOrMeta+Enter` に揃えた。
+5. **E2E は 50 件（完全削除を外したあとは 49 件）。** 作成・編集・削除・パレットの 16 件のあと、live.spec に「タイトルの追従」「ブロックの帯」、create.spec に「詳細で C → 子」を足し、`Control+Enter` を `ControlOrMeta+Enter` に揃えた。
 6. **Menu は `focusout` で `relatedTarget` が Menu・anchor の外なら閉じる。** TreeView は破棄時に選択を消し、`resolveCreateContext` は task の route で selection を見ない。TaskDetail は親の種類を `PropsPanel` の `parentKind` に渡す。パレットの同期結果の文言も、SyncCard と同じ `syncMessage` を使う。
-7. **Comments の送信・編集の保存、削除・完全削除・復元の確認は、実行中の二重実行を止める。** 実行中は確認ダイアログを閉じられず、キャンセルを無効にする。`DeleteDialogs` の `openDelete`・`openPurge` は開いた回の番号で古い応答を捨てる。
+7. **Comments の送信・編集の保存、削除・完全削除・復元の確認は、実行中の二重実行を止める。** 実行中は確認ダイアログを閉じられず、キャンセルを無効にする。`DeleteDialogs` の `openDelete`・`openPurge` は開いた回の番号で古い応答を捨てる。（`openPurge` と purge の確認は外れた。main の決定 4ea022c）
 8. **関連の各行は ID のリンクのまま ULID のホバー表示とコピーを出す。** `IdLabel` に `href`・`onopen` を足した。`href` のときは keydown を止めない。Sidebar の `.add` は `--control-h-sm`。
 9. **Comments の重ね表示は、全部を捨てず項目ごとに照らし合わせる。** `added` は読み直しに現れたら外し、`changed` は `base` の本文が編集前のままなら残し、`removed` は `base` から消えたら外す。`CommentView` に `updated` がないので、`changed` は編集時の本文（`from`）と比べる。投稿したばかりのコメントの編集は `added` の中も差し替え、読み直しが投稿時の本文で来ても、そのコメントを含まなくても編集を残す。投稿直後のコメントを読み直しの前に削除したときは、`added`・`changed` から外したうえで `removed` にも足し、削除の前に出た読み直しでも出さない。
 10. **History は `show` の参照が変わるたびに履歴を取り直し、Comments の重ね表示は `show.comments` が変わったときに解く。** コメントだけのコミットは `updated` を変えないので、`updated` を見ると履歴と重ね表示が更新されなかった。
