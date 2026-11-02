@@ -8,6 +8,7 @@ import (
 
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/cache"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/storage/filesystem"
 )
@@ -46,6 +47,9 @@ func Open(dir string) (*Repo, error) {
 // newRepo wraps r, whose objects it reads through a cachedStorage.
 func newRepo(dir string, r *git.Repository) *Repo {
 	if s, ok := r.Storer.(*filesystem.Storage); ok {
+		// Keep the packs open: go-git opens a pack for every object it reads
+		// otherwise. Close lets go of them.
+		s = filesystem.NewStorageWithOptions(s.Filesystem(), cache.NewObjectLRUDefault(), filesystem.Options{KeepDescriptors: true})
 		r.Storer = newCachedStorage(s)
 	}
 	return &Repo{dir: dir, r: r}

@@ -186,6 +186,11 @@ func (r *Repo) Consolidate() error {
 	if ri, ok := r.r.Storer.(interface{ Reindex() }); ok {
 		ri.Reindex()
 	}
+	// The storage keeps the packs it read open; they must not be open when
+	// they are removed (Windows). It opens them again when it needs them.
+	if err := r.Close(); err != nil {
+		return err
+	}
 	for _, p := range picked {
 		old := strings.TrimSuffix(p.idx, ".idx")
 		if old == base {
