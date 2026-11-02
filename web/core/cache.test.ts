@@ -265,7 +265,9 @@ describe("TaskCache fetch order", () => {
       open = r;
     });
     const { cache, conn } = setup(async () => {
-      if (n++ === 0) return showOf(tv("A", "a"), { body: "b" });
+      const k = n++;
+      if (k === 0) return showOf(tv("A", "a"), { body: "b" });
+      if (k > 1) return showOf(tv("A", "new"), { body: "b" }); // fetched again after the write
       await gate;
       return showOf(tv("A", "old"), { body: "b" });
     });
@@ -279,6 +281,35 @@ describe("TaskCache fetch order", () => {
     await settle();
     expect(cache.task("A")?.title).toBe("new");
     expect(cache.detail("A")?.title).toBe("new");
+    w.dispose();
+  });
+
+  it("fetches the detail again when an event came before the answer of the write", async () => {
+    let n = 0;
+    let repos = ["old/repo"];
+    let open!: () => void;
+    const gate = new Promise<void>((r) => {
+      open = r;
+    });
+    const { cache, conn, calls } = setup(async () => {
+      if (n++ === 1) {
+        // the fetch the event started; the write is committed by now
+        repos = ["new/repo"];
+        await gate;
+        return showOf(tv("A", "new"), { repos });
+      }
+      return showOf(tv("A", n === 1 ? "a" : "new"), { repos });
+    });
+    const w = cache.watchDetail("A");
+    await vi.waitFor(() => expect(w.ulid()).toBe("A"));
+    expect(cache.detail("A")?.repos).toEqual(["old/repo"]);
+
+    conn.emit("tasks.changed", changed("shared", ["A"], "c1"));
+    await settle();
+    cache.applyWrite({ task: tv("A", "new"), commit: "c1" });
+    open();
+    await vi.waitFor(() => expect(cache.detail("A")?.repos).toEqual(["new/repo"]));
+    expect(calls.filter((c) => c.path === "/api/tasks/A")).toHaveLength(3);
     w.dispose();
   });
 
@@ -339,5 +370,32 @@ describe("TaskCache fetch order", () => {
     await settle();
     await settle();
     expect(cache.task("A")).toBeUndefined();
+  });
+});
+
+describe("TaskCache start-up and watchList", () => {
+  it("does not fetch again at the resync of the first hello", async () => {
+    const { api, calls } = fakeApi(() => ({ tasks: [tv("A")] }));
+    const conn = new FakeConn();
+    conn.lastOpenAt = null; // not open yet
+    const cache = new TaskCache({ api, conn: conn.asConnection() });
+    const w = cache.watchList({ q: "", tree: false });
+    await vi.waitFor(() => expect(w.loading()).toBe(false));
+    conn.emit("resync"); // the first hello
+    await settle();
+    expect(listCalls(calls)).toHaveLength(1);
+    conn.emit("resync"); // a later one fetches
+    await settle();
+    expect(listCalls(calls)).toHaveLength(2);
+    w.dispose();
+  });
+
+  it("lists in a flat list even when tree: true is passed", async () => {
+    const { cache, calls } = setup(() => ({ tasks: [tv("A")], roots: [tv("R")] }));
+    const w = cache.watchList({ q: "", tree: true });
+    await vi.waitFor(() => expect(w.loading()).toBe(false));
+    expect(listCalls(calls)[0]?.query.get("tree")).toBe("false");
+    expect(w.ulids()).toEqual(["A"]);
+    w.dispose();
   });
 });

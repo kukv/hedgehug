@@ -20,7 +20,7 @@ web-check:
 	git diff --exit-code -- web/core/api/schema.d.ts
 	cd web && pnpm lint && pnpm check && pnpm test
 
-# Run the browser tests against bin/hedgehug (mirrors the CI e2e job).
+# Run the browser tests against bin/hedgehug.
 e2e: build
 	cd web && pnpm exec playwright install chromium
 	cd web && pnpm e2e

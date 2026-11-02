@@ -107,8 +107,17 @@ export class TaskCache {
   constructor(opts: { api: Api; conn: Connection; now?: () => number }) {
     this.api = opts.api;
     this.now = opts.now ?? Date.now;
+    // Before the first hello, what is watched was fetched when the watch began:
+    // the resync of that hello does not fetch it again.
+    let first = opts.conn.lastOpenAt === null;
     opts.conn.on("tasks.changed", (e) => this.onTasksChanged(e));
-    opts.conn.on("resync", () => this.queueRefresh(null));
+    opts.conn.on("resync", () => {
+      if (first) {
+        first = false;
+        return;
+      }
+      this.queueRefresh(null);
+    });
   }
 
   task(ulid: string): TaskView | undefined {
@@ -129,7 +138,7 @@ export class TaskCache {
   }
 
   watchList(q: ListQuery) {
-    const s = this.acquire(q);
+    const s = this.acquire({ ...q, tree: false });
     let done = false;
     return {
       ulids: () => s.ulids,
@@ -354,6 +363,9 @@ export class TaskCache {
       if (!gone && (!stale || !this.shows.has(show.ulid))) {
         this.putShow(stale ? { ...show, ...row } : show);
       }
+      // The answer is older than a write (an event came before the answer of
+      // the write): what only a ShowView has is fetched again after the write.
+      if (stale && !gone) this.queueRefresh([show.ulid]);
       if (s.error || s.ulid !== show.ulid) this.dirty = true;
       s.ulid = show.ulid;
       s.error = null;

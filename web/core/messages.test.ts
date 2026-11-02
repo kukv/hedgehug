@@ -100,4 +100,10 @@ describe("errorMessage", () => {
     );
     expect(errorMessage("x")).toBe("操作に失敗しました: x");
   });
+
+  it("says in Japanese that the server cannot be reached", () => {
+    expect(
+      errorMessage(new ApiError({ status: 0, type: "network", detail: "Failed to fetch" })),
+    ).toBe("サーバーに接続できません");
+  });
 });

@@ -192,4 +192,87 @@ describe("SaveController", () => {
     await Promise.resolve();
     expect((save as unknown as { chains: Map<string, unknown> }).chains.size).toBe(0);
   });
+
+  it("does not send a field the server refused with the next edit of another field", async () => {
+    let status: number | null = 422;
+    const { save, patches } = setup((r) => {
+      const b = r.body as { status?: string };
+      return status && b.status ? problem(status, "schema.violation") : {};
+    });
+    save.edit("A", "shared", "status", "bogus");
+    await save.flush("A");
+    save.edit("A", "shared", "title", "t");
+    await save.flush("A");
+    expect(patches().map((p) => p.body)).toEqual([{ status: "bogus" }, { title: "t" }]);
+    const s = save.state("A");
+    expect(s.kind === "error" && s.message).toContain("スキーマに合わない変更です");
+    expect(save.editing("A", "status")).toBe(true);
+
+    // Nothing else waits: a retry sends it again.
+    status = null;
+    await save.flush("A");
+    expect(patches()[2]?.body).toEqual({ status: "bogus" });
+    expect(save.state("A").kind).toBe("saved");
+  });
+
+  it("sends a refused field again when it is edited again", async () => {
+    let refuse = true;
+    const { save, patches } = setup((r) =>
+      refuse && (r.body as { status?: string }).status ? problem(422, "schema.violation") : {},
+    );
+    save.edit("A", "shared", "status", "bogus");
+    await save.flush("A");
+    refuse = false;
+    save.edit("A", "shared", "title", "t");
+    save.edit("A", "shared", "status", "done");
+    await save.flush("A");
+    expect(patches()[1]?.body).toEqual({ title: "t", status: "done" });
+    expect(save.state("A").kind).toBe("saved");
+  });
+
+  it("merges the fields of a failure that may pass (5xx) into the next save", async () => {
+    let fail = true;
+    const { save, patches } = setup(() => (fail ? problem(500, "internal") : {}));
+    save.edit("A", "shared", "status", "done");
+    await save.flush("A");
+    fail = false;
+    save.edit("A", "shared", "title", "t");
+    await save.flush("A");
+    expect(patches()[1]?.body).toEqual({ status: "done", title: "t" });
+    expect(save.state("A").kind).toBe("saved");
+  });
+
+  it("saves the next edit after a subscriber threw inside a save", async () => {
+    const { save, patches } = setup();
+    let boom = true;
+    save.subscribe(() => {
+      if (boom && save.state("A").kind === "saved") {
+        boom = false;
+        throw new Error("subscriber");
+      }
+    });
+    save.edit("A", "shared", "title", "one");
+    await save.flush("A"); // does not reject
+    expect(save.editing("A", "title")).toBe(false);
+    save.edit("A", "shared", "title", "two");
+    await save.flush("A");
+    expect(patches().map((p) => (p.body as { title: string }).title)).toEqual(["one", "two"]);
+    expect(save.state("A").kind).toBe("saved");
+  });
+
+  it("saves the next edit after the cache threw on an answer", async () => {
+    const { save, cache, patches } = setup();
+    const apply = vi.spyOn(cache, "applyWrite").mockImplementationOnce(() => {
+      throw new Error("cache");
+    });
+    save.edit("A", "shared", "title", "one");
+    await save.flush("A");
+    expect(save.state("A").kind).toBe("error");
+    expect(save.editing("A", "title")).toBe(true);
+    apply.mockRestore();
+    save.edit("A", "shared", "title", "two");
+    await save.flush("A");
+    expect(patches()).toHaveLength(2);
+    expect(save.state("A").kind).toBe("saved");
+  });
 });

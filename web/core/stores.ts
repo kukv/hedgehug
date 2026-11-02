@@ -55,6 +55,7 @@ export class StoreDirectory {
   private isLoaded = false;
   private err: ApiError | null = null;
   private seq = 0;
+  private reloadQueued = false;
   private result: WorkspaceEntry[] = [];
   private readOnlySig = "";
   private readonly projects: { ulids: () => string[] };
@@ -70,9 +71,28 @@ export class StoreDirectory {
       const sig = this.readOnlyNow();
       if (sig !== this.readOnlySig) this.update();
     });
-    opts.conn.on("resync", () => void this.reload().catch(() => undefined));
-    opts.conn.on("tasks.changed", () => void this.reload().catch(() => undefined));
+    // Before the first hello the constructor's reload is the first one: the
+    // resync of that hello does not reload again.
+    let first = opts.conn.lastOpenAt === null;
+    opts.conn.on("resync", () => {
+      if (first) {
+        first = false;
+        return;
+      }
+      this.queueReload();
+    });
+    opts.conn.on("tasks.changed", () => this.queueReload());
     void this.reload().catch(() => undefined);
+  }
+
+  // queueReload reloads once for the events that come in one turn.
+  private queueReload(): void {
+    if (this.reloadQueued) return;
+    this.reloadQueued = true;
+    queueMicrotask(() => {
+      this.reloadQueued = false;
+      void this.reload().catch(() => undefined);
+    });
   }
 
   stores(): Schemas["StoreItem"][] {
@@ -112,7 +132,7 @@ export class StoreDirectory {
   }
 
   // reload fetches the stores and the workspaces of each again. A store whose
-  // workspaces cannot be read has none in the list.
+  // workspaces cannot be read keeps the ones it had.
   async reload(): Promise<void> {
     const seq = ++this.seq;
     let items: Schemas["StoreItem"][];
@@ -140,7 +160,7 @@ export class StoreDirectory {
           );
           return [s.name, ws ?? []];
         } catch {
-          return [s.name, []];
+          return [s.name, this.spaces.get(s.name) ?? []];
         }
       }),
     );

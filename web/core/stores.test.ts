@@ -157,3 +157,57 @@ describe("StoreDirectory", () => {
     await expect(dir.reload()).rejects.toThrow();
   });
 });
+
+describe("StoreDirectory requests", () => {
+  const storeCalls = (calls: { path: string }[]) => calls.filter((c) => c.path === "/api/stores");
+
+  it("does not reload at the resync of the first hello", async () => {
+    const world = baseWorld();
+    const { api, calls } = fakeApi((r) => {
+      if (r.path === "/api/stores") return world.stores;
+      if (r.path === "/api/workspaces") return world.spaces[r.query.get("store") ?? ""] ?? [];
+      return { tasks: world.projects };
+    });
+    const conn = new FakeConn();
+    conn.lastOpenAt = null;
+    const cache = new TaskCache({ api, conn: conn.asConnection() });
+    const dir = new StoreDirectory({ api, conn: conn.asConnection(), cache });
+    await vi.waitFor(() => expect(dir.loaded()).toBe(true));
+    conn.emit("resync");
+    await settle();
+    expect(storeCalls(calls)).toHaveLength(1);
+  });
+
+  it("reloads once for the events of one turn", async () => {
+    const { dir, conn, calls } = setup(baseWorld());
+    await vi.waitFor(() => expect(dir.loaded()).toBe(true));
+    await settle();
+    const before = storeCalls(calls).length;
+    conn.emit("tasks.changed", changed("shared", ["P1"], "c1"));
+    conn.emit("tasks.changed", changed("shared", ["P2"], "c2"));
+    conn.emit("resync");
+    await settle();
+    await settle();
+    expect(storeCalls(calls)).toHaveLength(before + 1);
+  });
+
+  it("keeps the workspaces of a store whose workspaces could not be fetched", async () => {
+    const world = baseWorld();
+    let fail = false;
+    const { api } = fakeApi((r) => {
+      if (r.path === "/api/stores") return world.stores;
+      if (r.path === "/api/workspaces") {
+        if (fail && r.query.get("store") === "shared") return problem(500, "internal");
+        return world.spaces[r.query.get("store") ?? ""] ?? [];
+      }
+      return { tasks: world.projects };
+    });
+    const conn = new FakeConn();
+    const cache = new TaskCache({ api, conn: conn.asConnection() });
+    const dir = new StoreDirectory({ api, conn: conn.asConnection(), cache });
+    await vi.waitFor(() => expect(dir.workspaces().length).toBe(3));
+    fail = true;
+    await dir.reload();
+    expect(dir.workspaces().map((w) => w.name)).toEqual(["api", "web", "home"]);
+  });
+});

@@ -225,6 +225,7 @@ const messages: Record<string, Make> = {
   "confirm.required": (a) => `${str(a, "what")} には確認が必要です`,
 
   // the server itself
+  network: () => "サーバーに接続できません",
   "request.invalid": (_, e) => {
     const body = e.body as { errors?: { message?: string }[] } | undefined;
     const ms = (body?.errors ?? []).map((x) => x.message).filter(Boolean);
