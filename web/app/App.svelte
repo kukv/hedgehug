@@ -4,6 +4,7 @@
   import { setCore } from "./context";
   import { createCore } from "./core-factory";
   import { router } from "./router";
+  import Sidebar from "./sidebar/Sidebar.svelte";
   import Toasts from "./ui/Toasts.svelte";
 
   const token = takeToken(location, sessionStorage, history);
@@ -19,7 +20,7 @@
 
 <div class="app">
   <aside class="side">
-    <!-- sidebar -->
+    <Sidebar />
   </aside>
   <div class="body">
     <!-- banners -->
