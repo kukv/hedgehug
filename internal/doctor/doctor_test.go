@@ -217,7 +217,10 @@ func TestRunIndexProblems(t *testing.T) {
 	putRaw(t, s, dir, a)
 	fs := run(t, dir)
 	if len(fs) != 1 || fs[0].Check != "task" || fs[0].Where != "TST-1 ("+a.ULID.String()+") A" || !strings.Contains(fs[0].Msg, "parent") {
-		t.Errorf("findings = %+v", fs)
+		t.Fatalf("findings = %+v", fs)
+	}
+	if fs[0].Task != a.ULID.String() {
+		t.Errorf("task = %q; want the ULID %s", fs[0].Task, a.ULID)
 	}
 }
 
@@ -230,6 +233,11 @@ func TestRunSchemaProblems(t *testing.T) {
 	fs := run(t, dir)
 	if got := checks(fs); !slices.Equal(got, []string{"task"}) {
 		t.Errorf("checks = %v\n%+v", got, fs)
+	}
+	for _, f := range fs {
+		if f.Check == "task" && f.Task != bad.ULID.String() {
+			t.Errorf("task = %q; want %s", f.Task, bad.ULID)
+		}
 	}
 }
 

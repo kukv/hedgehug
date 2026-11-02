@@ -82,9 +82,21 @@ describe("SaveController", () => {
     expect(kinds).toContain("saving");
     expect(save.state("A")).toEqual({ kind: "saved", pendingPush: false });
 
-    conn.changeSync({ store: "shared", remotes: ["origin"], unpushed: 2 });
+    conn.changeSync({
+      store: "shared",
+      remotes: ["origin"],
+      interval: 120,
+      push_interval: 30,
+      unpushed: 2,
+    });
     expect(save.state("A")).toEqual({ kind: "saved", pendingPush: true });
-    conn.changeSync({ store: "shared", remotes: ["origin"], unpushed: 0 });
+    conn.changeSync({
+      store: "shared",
+      remotes: ["origin"],
+      interval: 120,
+      push_interval: 30,
+      unpushed: 0,
+    });
     expect(save.state("A")).toEqual({ kind: "saved", pendingPush: false });
   });
 

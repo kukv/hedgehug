@@ -31,6 +31,7 @@ func (v Severity) MarshalJSON() ([]byte, error) {
 type Finding struct {
 	Check    string   `json:"check"`          // the kind of check, one of checkOrder
 	Where    string   `json:"where"`          // a file and the place in it, or a task: its id, ULID and title
+	Task     string   `json:"task,omitempty"` // the ULID of the task, for a finding about one task of the store
 	Msg      string   `json:"msg"`            //
 	Hint     string   `json:"hint,omitempty"` // how to fix it; empty when there is no advice
 	Severity Severity `json:"severity"`       // Error when empty

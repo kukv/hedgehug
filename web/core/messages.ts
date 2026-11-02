@@ -72,8 +72,12 @@ const messages: Record<string, Make> = {
   "workspace.bad_name": (a) => `「${str(a, "value")}」はワークスペースの名前に使えません`,
   "workspace.bad_prefix": (a) => `「${str(a, "value")}」は ID の接頭辞に使えません`,
   "workspace.prefix_taken": (a) => `ID の接頭辞 ${str(a, "prefix")} はすでに使われています`,
-  "workspace.not_empty": () =>
-    "ワークスペースにまだタスクがあります（削除済みを含む）。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください",
+  "workspace.not_empty": (a) =>
+    `${
+      typeof a.tasks === "number"
+        ? `ワークスペースにタスクが ${a.tasks} 件（削除済みを含む）残っています`
+        : "ワークスペースにまだタスクがあります（削除済みを含む）"
+    }。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください`,
   "workspace.one_change": () =>
     "名前と接頭辞は同時に変えられません。どちらか一方を指定してください",
 
@@ -110,6 +114,9 @@ const messages: Record<string, Make> = {
     withDetail(`${str(a, "key")} に「${str(a, "value")}」は指定できません`, e),
 
   // deleting and restoring
+  "purge.changed": () => "確認のあとにタスクが変わりました。もう一度確かめてください",
+  "purge.bad_period": (a) =>
+    `「${str(a, "value")}」は期間ではありません。90d のように日数で書いてください（0d はすべて）`,
   "restore_at.bad_time": (a) => `「${str(a, "at")}」は時刻でもコミットでもありません`,
   "restore.forward": (a) => `${str(a, "at")} の時点では、このタスクは別の Store へ移っていました`,
   "restore_at.not_found": (a) =>
@@ -216,12 +223,20 @@ const messages: Record<string, Make> = {
     `列 ${str(a, "column")} は、フィールドでもスキーマのプロパティでもありません`,
   "view.tree_order": () => "ツリーのビューは rank の順に並ぶため、group: と sort: は使えません",
   "migrate.invalid": (_, e) => withDetail("移行するとスキーマに合わないタスクがあります", e),
+  "scoped.not_container": (a) =>
+    `${str(a, "id")} は ${str(a, "kind")} で、プロジェクトやエピックのようなコンテナではないため、上書きを設定できません`,
+  "scoped.invalid": (a, e) =>
+    list(a, "problems")
+      ? `上書きがスキーマに合いません: ${list(a, "problems")}`
+      : withDetail("上書きがスキーマに合いません", e),
 
   // notifications
   "inbox.ulid": (a) => `${str(a, "input")} は完全な ULID ではありません`,
   "inbox.not_found": (a) => `${str(a, "input")} という通知は見つかりません`,
   "inbox.not_revertable": (_, e) => withDetail("この通知の操作は取り消せません", e),
   "notification.unread": () => "通知を未読には戻せません",
+  "notification.read_args": () =>
+    "すべてを既読にするか、通知を指定してください（両方は指定できません）",
 
   // choices and confirmations (the CLI asks; the GUI picks first)
   "choice.required": (a) => `${str(a, "what")} を選んでください（${list(a, "candidates")}）`,

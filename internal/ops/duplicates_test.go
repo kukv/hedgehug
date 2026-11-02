@@ -74,7 +74,7 @@ func TestDoctorDuplicateAcrossStores(t *testing.T) {
 	want := "in org-a (API-2) and org-b (" + bID + "); remove the one not needed with hedgehug rm and hedgehug purge --older-than 0d --store <store>"
 	for _, store := range []string{"org-a", "org-b"} {
 		got := findingsOf(t, f.ts, store, "duplicate_across_stores")
-		if len(got) != 1 || got[0].Where != f.p.String() || got[0].Msg != want || got[0].Severity != doctor.Warning {
+		if len(got) != 1 || got[0].Where != f.p.String() || got[0].Task != f.p.String() || got[0].Msg != want || got[0].Severity != doctor.Warning {
 			t.Errorf("%s: findings = %+v; want one warning for %s: %s", store, got, f.p, want)
 		}
 	}

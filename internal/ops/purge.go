@@ -51,8 +51,8 @@ type PurgeForward struct {
 // PurgePlan is what purge removes from a store.
 type PurgePlan struct {
 	Store    string         `json:"store"`
-	Tasks    []PurgeTask    `json:"tasks"`
-	Forwards []PurgeForward `json:"forwards"`
+	Tasks    []PurgeTask    `json:"tasks" nullable:"false"`
+	Forwards []PurgeForward `json:"forwards" nullable:"false"`
 }
 
 // Empty reports whether there is nothing to purge.

@@ -162,6 +162,9 @@ func TestPollSyncState(t *testing.T) {
 	if want := maxTime(*e.PendingSince, last).Add(30 * time.Second); e.PushAt == nil || !e.PushAt.Equal(want) {
 		t.Errorf("push_at = %v; want %v (30s after the later of pending_since and the last sync)", e.PushAt, want)
 	}
+	if e.Interval <= 0 || e.PushInterval <= 0 {
+		t.Errorf("interval = %v, push_interval = %v; want the sync.* intervals in seconds", e.Interval, e.PushInterval)
+	}
 }
 
 func TestPollUnread(t *testing.T) {
@@ -176,7 +179,7 @@ func TestPollUnread(t *testing.T) {
 		t.Fatal(err)
 	}
 	ts.srv.poller.settle()
-	nid := ts.notifyMe(overwrittenItem(res.ULID, v.ID, "title", `"first"`))
+	nid := ts.notifyMe(overwrittenItem(res.ULID, v.ID, `"first"`))
 	waitEvent[unreadEvent](t, ch, func(e unreadEvent) bool { return e.Count == 1 })
 	// hh inbox read in another process: no HEAD moves, the files of the
 	// inbox do.
@@ -224,7 +227,7 @@ func TestPollInboxStampIsStable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ts.notifyMe(overwrittenItem(res.ULID, v.ID, "title", `"first"`))
+	ts.notifyMe(overwrittenItem(res.ULID, v.ID, `"first"`))
 	ts.srv.poller.poll(false)
 	ts.srv.poller.poll(false) // the Catch of the first moved the mark; it settles here
 	s, err := ts.session().OpenStore()

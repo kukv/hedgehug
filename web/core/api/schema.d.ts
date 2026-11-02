@@ -106,6 +106,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notifications/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark items read, all of them or the ids given, as hh inbox read */
+        post: operations["read-notifications"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/notifications/{id}": {
         parameters: {
             query?: never;
@@ -174,6 +191,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/purge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the deleted tasks and the forward files hh purge would remove */
+        get: operations["list-purge"];
+        put?: never;
+        /** Remove, for good, what the confirmed plan lists, as hh purge after its question */
+        post: operations["purge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/schema": {
         parameters: {
             query?: never;
@@ -220,6 +255,24 @@ export interface paths {
         /** Rename or merge a status, kind, property or value, as hh migrate */
         post: operations["migrate-schema"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/schema/scoped/{project}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change the override of a project, as hh schema scope set */
+        put: operations["put-scoped"];
+        post?: never;
+        /** Remove the override of a project, as hh schema scope rm */
+        delete: operations["delete-scoped"];
         options?: never;
         head?: never;
         patch?: never;
@@ -617,6 +670,7 @@ export interface components {
             hint?: string;
             msg: string;
             severity: string;
+            task?: string;
             where: string;
         };
         FindingsOutputBody: {
@@ -693,6 +747,10 @@ export interface components {
             /** @description The tasks found, without tree */
             tasks?: components["schemas"]["TaskView"][];
         };
+        LogTrailer: {
+            key: string;
+            value: string;
+        };
         LogView: {
             author: components["schemas"]["LogViewAuthorStruct"];
             /** Format: date-time */
@@ -703,6 +761,7 @@ export interface components {
             store: string;
             subject: string;
             task: string | null;
+            trailers: components["schemas"]["LogTrailer"][];
             workspace?: components["schemas"]["WorkspaceRef"];
         };
         LogViewAuthorStruct: {
@@ -753,6 +812,16 @@ export interface components {
         NotificationPatchInputBody: {
             /** @description true marks it read; items cannot be marked unread */
             read: boolean;
+        };
+        NotificationReadInputBody: {
+            /** @description true marks every unread item read; not with ids */
+            all?: boolean;
+            /** @description The ULIDs of the items to mark read; not with all */
+            ids?: string[];
+        };
+        NotificationReadOutputBody: {
+            /** @description The ULIDs of the items marked read, as hh inbox read --json */
+            read: string[];
         };
         Overwritten: {
             author?: string;
@@ -813,6 +882,34 @@ export interface components {
             type: string;
             values?: string[] | null;
         };
+        PurgeForward: {
+            /** Format: date-time */
+            moved_at: string;
+            moved_to: string;
+            ulid: string;
+        };
+        PurgeInputBody: {
+            /** @description The plan GET /api/purge showed and the user agreed to; if what is to be purged is no longer that, the answer is 409 purge.changed */
+            confirmed: components["schemas"]["PurgePlan"];
+            /** @description As GET /api/purge; 90d without it */
+            older_than?: string;
+        };
+        PurgePlan: {
+            forwards: components["schemas"]["PurgeForward"][];
+            store: string;
+            tasks: components["schemas"]["PurgeTask"][];
+        };
+        PurgeResult: {
+            commit?: string;
+            forwards: components["schemas"]["PurgeForward"][];
+            store: string;
+            tasks: components["schemas"]["PurgeTask"][];
+        };
+        PurgeTask: {
+            id: string;
+            title: string;
+            ulid: string;
+        };
         Rebuilt: {
             dropped: string[] | null;
             kept?: string;
@@ -864,6 +961,28 @@ export interface components {
             where: string;
             workflow?: components["schemas"]["WorkflowDef"];
         };
+        ScopedProject: {
+            id?: string;
+            title?: string;
+            ulid: string;
+        };
+        ScopedPutInputBody: {
+            /** @description Status to the fields needed to enter it, on top of the store's. Leave it out to keep what the override has; an empty object takes it off */
+            required?: {
+                [key: string]: string[] | null;
+            };
+            /** @description The statuses to show; the default of each category has to be in it. Leave it out to keep what the override has; an empty list takes it off, so the store's statuses show */
+            statuses?: string[];
+            /** @description Status to the statuses it may move to, on top of the store's. Leave it out to keep what the override has; an empty object takes it off */
+            transitions?: {
+                [key: string]: string[] | null;
+            };
+        };
+        ScopedView: {
+            commit: string | null;
+            project: components["schemas"]["ScopedProject"];
+            scoped?: components["schemas"]["ScopedDef"];
+        };
         ShowView: {
             assignees: string[] | null;
             blocked_by: components["schemas"]["Ref"][] | null;
@@ -886,6 +1005,7 @@ export interface components {
             parent: string | null;
             problems: components["schemas"]["IndexProblem"][] | null;
             progress?: components["schemas"]["Count"];
+            project?: components["schemas"]["Ref"];
             props: {
                 [key: string]: unknown;
             };
@@ -958,6 +1078,11 @@ export interface components {
         };
         SyncStatus: {
             error?: string;
+            /**
+             * Format: double
+             * @description sync.interval of config.yaml, in seconds (fractions allowed)
+             */
+            interval: number;
             /** Format: date-time */
             last_attempt?: string;
             last_error?: string;
@@ -975,6 +1100,11 @@ export interface components {
              * @description When the background sync pushes the writes not pushed yet: sync.push_interval after pending_since, but not before sync.push_interval after the last sync and not after next_fetch, which syncs too; absent when nothing waits, before the first sync and while a sync runs
              */
             push_at?: string;
+            /**
+             * Format: double
+             * @description sync.push_interval of config.yaml, in seconds (fractions allowed)
+             */
+            push_interval: number;
             read_only?: string;
             remotes: string[] | null;
             store: string;
@@ -1000,6 +1130,7 @@ export interface components {
             parent: string | null;
             problems: components["schemas"]["IndexProblem"][] | null;
             progress?: components["schemas"]["Count"];
+            project?: components["schemas"]["Ref"];
             props: {
                 [key: string]: unknown;
             };
@@ -1106,6 +1237,8 @@ export interface components {
             ulid: string;
         };
         WorkspaceView: {
+            /** Format: int64 */
+            deleted: number;
             id_prefix: string;
             name: string;
             /** Format: date-time */
@@ -1132,7 +1265,7 @@ export interface operations {
     "list-activity": {
         parameters: {
             query?: {
-                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                /** @description The store; without it, the commits of every store */
                 store?: string;
                 limit?: number;
                 /** @description Only the commits of this account (its ID) */
@@ -1390,6 +1523,42 @@ export interface operations {
             };
         };
     };
+    "read-notifications": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationReadInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationReadOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     "update-notification": {
         parameters: {
             query?: {
@@ -1525,6 +1694,76 @@ export interface operations {
             };
         };
     };
+    "list-purge": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+                /** @description Only what is older than this many days, such as 90d (0d for everything), as hh purge --older-than */
+                older_than?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurgePlan"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    purge: {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PurgeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurgeResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     "get-schema": {
         parameters: {
             query?: {
@@ -1612,6 +1851,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MigrateOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "put-scoped": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The project: its ID or ULID */
+                project: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScopedPutInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScopedView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "delete-scoped": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The project: its ID or ULID */
+                project: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScopedView"];
                 };
             };
             /** @description Error */

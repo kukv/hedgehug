@@ -3,6 +3,7 @@ package ops
 import (
 	"time"
 
+	hhctx "github.com/kukv/hedgehug/internal/context"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
@@ -10,11 +11,14 @@ import (
 
 // TaskView is a task as --json prints it.
 type TaskView struct {
-	ULID      string         `json:"ulid"`
-	ID        string         `json:"id"`
-	Store     string         `json:"store"`
-	FormerIDs []string       `json:"former_ids,omitempty"`
-	Workspace *WorkspaceRef  `json:"workspace"`
+	ULID      string        `json:"ulid"`
+	ID        string        `json:"id"`
+	Store     string        `json:"store"`
+	FormerIDs []string      `json:"former_ids,omitempty"`
+	Workspace *WorkspaceRef `json:"workspace"`
+	// Project is the nearest ancestor of kind project (the projects the GUI
+	// lists, kind:project); it is left out for a task with none.
+	Project   *Ref           `json:"project,omitempty"`
 	Kind      string         `json:"kind"`
 	Title     string         `json:"title"`
 	Parent    *string        `json:"parent"`
@@ -92,6 +96,7 @@ func TaskViewOf(ix *index.Index, e *index.Entry) *TaskView {
 			j.Workspace.Name, j.Workspace.IDPrefix = w.Name, w.IDPrefix
 		}
 	}
+	j.Project = projectOf(ix, e)
 	for _, b := range e.BlockedBy {
 		j.BlockedBy = append(j.BlockedBy, RefOf(ix, b))
 	}
@@ -112,6 +117,29 @@ func TaskViewOf(ix *index.Index, e *index.Entry) *TaskView {
 		j.Problems = append(j.Problems, Problem{p.Code, p.Field, p.Msg})
 	}
 	return j
+}
+
+// projectOf is the nearest ancestor of e of kind project, or nil. e itself is
+// not looked at. An ancestor the index does not have, or a cycle of parents,
+// ends the walk with nil.
+func projectOf(ix *index.Index, e *index.Entry) *Ref {
+	seen := map[model.ULID]bool{e.ULID: true}
+	for p := e.Parent; p != nil; {
+		if seen[*p] {
+			return nil
+		}
+		seen[*p] = true
+		a, ok := ix.Task(*p)
+		if !ok {
+			return nil
+		}
+		if a.Kind == hhctx.ProjectKind {
+			r := RefOf(ix, a.ULID)
+			return &r
+		}
+		p = a.Parent
+	}
+	return nil
 }
 
 // RefOf names the task ulid, with an empty id and title when the index does

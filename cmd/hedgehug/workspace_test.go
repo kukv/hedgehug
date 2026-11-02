@@ -163,7 +163,7 @@ func TestWorkspaceJSON(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	te.addJSON("a")
-	want := []string{"id_prefix", "name", "prefix_set", "tasks", "ulid"}
+	want := []string{"deleted", "id_prefix", "name", "prefix_set", "tasks", "ulid"}
 	var added map[string]any
 	te.wsJSON(&added, "add", "web", "--prefix", "WEB")
 	if !slices.Equal(fieldNames(added), want) || added["name"] != "web" || added["id_prefix"] != "WEB" || added["tasks"] != 0.0 {

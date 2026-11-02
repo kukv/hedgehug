@@ -134,4 +134,9 @@ func TestDoctorTaskSprintAndReleasesOfOtherWorkspace(t *testing.T) {
 	if !strings.Contains(got[0].Msg+got[1].Msg, "sprint: sprint "+theirs.ULID.String()) || !strings.Contains(got[0].Msg+got[1].Msg, "releases: release "+theirRel.ULID.String()) {
 		t.Errorf("findings = %+v", got)
 	}
+	for _, f := range got {
+		if f.Task == "" || !strings.Contains(f.Where, f.Task) {
+			t.Errorf("task = %q for %q; want the ULID of the task, which Where names", f.Task, f.Where)
+		}
+	}
 }
