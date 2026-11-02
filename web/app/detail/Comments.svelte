@@ -117,7 +117,10 @@
         ...overlay.changed,
         [c.ulid]: {
           view: r.comment,
-          from: show.comments?.find((x) => x.ulid === c.ulid)?.body ?? posted?.body,
+          from:
+            show.comments?.find((x) => x.ulid === c.ulid)?.body ??
+            overlay.changed[c.ulid]?.from ??
+            posted?.body,
         },
       };
       editingId = null;

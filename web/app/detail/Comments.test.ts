@@ -222,6 +222,29 @@ describe("Comments", () => {
     expect(screen.queryByText("自分の")).toBeNull();
   });
 
+  it("keeps the second edit of a comment posted here when a read brings it as it was posted", async () => {
+    const { k, container, rerender } = setup();
+    const mine = { ulid: "C9", author: "koki", created: "2026-11-04T12:00:00Z", body: "自分の" };
+    k.api.POST.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
+    let n = 0;
+    k.api.PATCH.mockImplementation(() =>
+      ok({ comment: { ...mine, body: n++ === 0 ? "直した1" : "直した2" }, commit: "c5" }),
+    );
+    typeInto(container, "自分の", 0);
+    await fireEvent.click(await screen.findByRole("button", { name: "コメント" }));
+    expect(await screen.findByText("自分の")).toBeInTheDocument();
+    for (const text of ["直した1", "直した2"]) {
+      const edits = screen.getAllByRole("button", { name: "編集" });
+      await fireEvent.click(edits[edits.length - 1] as HTMLElement);
+      typeInto(container, text, 0);
+      await fireEvent.click(await screen.findByRole("button", { name: "保存" }));
+      expect(await screen.findByText(text)).toBeInTheDocument();
+    }
+    await rerender({ show: { ...show, comments: [c1, mine] }, readonly: false });
+    expect(screen.getByText("直した2")).toBeInTheDocument();
+    expect(screen.queryByText("自分の")).toBeNull();
+  });
+
   it("posts once when the key is pressed twice before the answer", async () => {
     const { k, container } = setup();
     k.api.POST.mockImplementation(() => new Promise(() => {}));
