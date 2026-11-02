@@ -1,8 +1,33 @@
 # 既知の不具合: Windows の Chrome / Edge でツリーのキー操作が効かない
 
-- 状態: 未解決（2026-11-02 に報告、PR #31 のマージ時点で残っている）
-- 優先度: 必ず直す。GUI の中心の操作が、利用者の実際の環境で使えない
-- 調査: Windows 側の Claude Code で行う。この文書はその引き継ぎ資料
+- 状態: 解決（2026-11-03）。原因は GUI ではなく、ブラウザ拡張の Vimium だった。利用者が Vimium を止めることにしたので、GUI のコードは変えない。詳しくは「調査の結果」
+- 調査: Windows 側の Claude Code で行った。この文書はその引き継ぎ資料と、調査の結果
+
+## 調査の結果（2026-11-03）
+
+利用者と同じ形（WSL2 の Ubuntu で `hedgehug ui`、Windows 11 の Chrome 157 で開く。拡張はそのまま）で、下の「証拠の取り方」のスニペットを使って調べた。
+
+### 症状 1・3: Vimium がキーを奪っていた
+
+Chrome に Vimium 2.4.2 が入っていた。Vimium は window の capture で keydown を受け、自分のキーなら `stopImmediatePropagation` と `preventDefault` で握りつぶす。対になる keyup も握りつぶす。拡張の content script はページのスクリプトより先に listener を付けるので、ページの listener は window の capture でも、そのキーを一度も受け取れない（Vimium のソースにも「ページが先にキーを取れないよう window に付ける」と書いてある）。
+
+- 症状 1（入力中の Esc）: 入力欄にフォーカスがあると Vimium は insert mode になり、Esc の keydown で `activeElement.blur()` を呼んで、その Esc を握りつぶす（`content_scripts/mode_insert.js`）。`AddRow` に Esc が届かないので入力行は閉じず、文字が残ったままフォーカスだけ外れる。記録: 入力欄で `test` と打って Esc を押すと、Esc の keydown がページに一度も届かないまま `focusout input.title -> null` が起き、フォーカスは body に移り、入力行の値は `test` のまま。変換中の Esc（keyCode 229）は Vimium が IME に任せるので、この症状は変換中でないときに出る。
+- 症状 3（K）: Vimium の既定のキーで `K` は nextTab、`k` は scrollUp（`j` も scrollDown）。行にフォーカスがあると Vimium は normal mode なので、K を握りつぶす。記録: `k`・`K`・`j` は keydown も keyup もページに届かず、同じ行で押した `s` と `↓` は届いてツリーが処理した。
+- アプリのほかのキーで Vimium の既定と重なるものはない（`c`、`s`・`S`、Space、Tab、Enter、矢印、Alt+↑↓、Ctrl+K、Ctrl+Shift+S）。
+
+PR #31 の直しが効かなかったのは、どれもページにキーが届いたあとの処理を直したもので、届かないことは直せないから。Playwright の Chromium には拡張が入っていないので再現しなかった。
+
+### 症状 2: Windows 側では起きていない
+
+合成のキー（連打と 1 秒間隔、↑ と ↓）でも、利用者の実際のキーボード（日本語入力オン・オフ）でも、Alt+↑↓ はすべてツリーに届き、押した回数だけ並べ替わった。実キーボードの記録では Alt+↑↓ の keydown 51 回がすべて行に届き、握りつぶされたものはなかった。`preventDefault` されなかったのは、端の行でそれ以上動かせないとき（`keyAction` が `none`）だけ。利用者も「Windows 側だと問題なく動いてそう」と確かめた。Vimium の既定のキーに Alt+矢印はない。
+
+### 対処
+
+ページ側からは Vimium より先にキーを受け取れないので、GUI のコードでは直せない（入力欄が行き先なしにフォーカスを失ったら閉じる、K を別のキーにする、などの回避は spec の変更になる）。利用者に聞き、利用者が Vimium を止めることにした。GUI のコードは変えない。
+
+### 調査で分かった、ほかのこと
+
+- Windows でネイティブにビルドすると `internal/atomicfile`（`Rename` と `ReadFile` が `atomicfile_unix.go` にしかない）と `internal/testenv`（`syscall.Kill`）でコンパイルが通らない。afc3dc1 で Windows 向けのコードをやめ、README に「Windows では WSL を使う」と書いてあるので、これは想定どおり。Windows で調べるときは `GOOS=linux` でビルドして WSL で起動する。
 
 ## 症状
 
