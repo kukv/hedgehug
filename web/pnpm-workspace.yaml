@@ -1,3 +1,7 @@
 minimumReleaseAgeExclude:
   - '@tanstack/svelte-virtual@3.13.51'
   - '@tanstack/virtual-core@3.19.10'
+overrides:
+  # GHSA-g3hv-75wg-m249 (DoS). @redocly/openapi-core (openapi-typescript) pins 5.x; only 11.0.1 has the fix.
+  # redocly calls minimatch only to match the headers of a remote $ref, which pnpm gen does not use.
+  minimatch: 11.0.1
