@@ -133,6 +133,30 @@ test("Esc closes the input even when the task is still being made, and the row k
   await expect.poll(() => rootOrder(hh)).toEqual(["Slow", "Alpha", "Bravo"]);
 });
 
+test("the row keys work after the ID or the chevron of the row was clicked", async ({
+  page,
+  hh,
+}) => {
+  const parent = hh.add("Parent");
+  hh.add("Child", "--parent", parent.id);
+  hh.add("Other");
+  await hh.open(page);
+  await treeReady(page);
+
+  // The ID and the chevron are buttons: a click focuses them, and they stop the keys.
+  await row(page, "Parent").click();
+  await row(page, "Parent").locator("button.id").click();
+  await expect(row(page, "Parent")).toBeFocused();
+  await page.keyboard.press("k");
+  await expect(page.getByRole("menu")).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await row(page, "Parent").locator("button.chev").click();
+  await expect(row(page, "Parent")).toBeFocused();
+  await page.keyboard.press("Alt+ArrowDown");
+  await expect.poll(() => rootOrder(hh)).toEqual(["Other", "Parent"]);
+});
+
 test("Alt+Up pressed three times in a row moves a task three places, one commit each", async ({
   page,
   hh,

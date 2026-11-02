@@ -397,6 +397,21 @@ describe("TreeView", () => {
     expect(screen.queryByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）")).toBeNull();
   });
 
+  it("puts the focus on the row when its ID or chevron is clicked, so the row keys keep working", async () => {
+    setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const row = screen.getByText("API v2 への移行").closest('[role="treeitem"]') as HTMLElement;
+    // A click focuses the button it lands on (the mouse down does it); jsdom does not.
+    const id = screen.getByRole("button", { name: "REL-1" });
+    id.focus();
+    await fireEvent.click(id);
+    expect(row).toHaveFocus();
+    const chev = screen.getByRole("button", { name: "折りたたむ: API v2 への移行" });
+    chev.focus();
+    await fireEvent.click(chev);
+    expect(row).toHaveFocus();
+  });
+
   it("gives the focus back to the row when the add row is closed", async () => {
     setup();
     render(TreeView, { view: { kind: "project", ulid: "P" } });

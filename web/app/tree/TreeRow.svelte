@@ -67,6 +67,11 @@
   tabindex={focusable ? 0 : -1}
   data-ulid={row.ulid}
   onclick={onselect}
+  onclickcapture={(e) => {
+    // A click on the ID or the chevron puts the focus on that button, and the buttons stop the
+    // keys: the row keys would not reach the tree. The row takes the focus.
+    if (e.target !== e.currentTarget) e.currentTarget.focus();
+  }}
   onfocus={(e) => (keyboardOn = e.currentTarget.matches(":focus-visible"))}
   onblur={() => (keyboardOn = false)}
   {@attach dnd}
