@@ -41,11 +41,14 @@ func (r TaskResult) View() (*TaskView, error) {
 // read in the store the task goes to (Parent goes through ResolveRef). Store
 // is that store ("" selects as the session does; one other than the
 // session's own --store is store.conflict); Body is the Markdown body of the
-// task, as it is written; Repos are the repo IDs to put on the task.
+// task, as it is written; Repos are the repo IDs to put on the task. Before
+// and After are task names, as the user gives them: the task goes just before
+// or after that sibling, as in Move, instead of after every sibling.
 type AddInput struct {
 	Store                                  string
 	Title, Parent, Workspace, Kind, Status string
 	Body                                   string
+	Before, After                          string
 	Repos                                  []string
 	Assigns                                []Assign
 }
@@ -125,7 +128,7 @@ func (ss *Session) Add(in AddInput) (TaskResult, error) {
 			return TaskResult{}, err
 		}
 	}
-	if t.Rank, err = EndRank(ix, t.Parent, t.Workspace, t.ULID); err != nil {
+	if t.Rank, err = ss.rankAt(ix, t.ULID, t.Parent, t.Workspace, in.Before, in.After); err != nil {
 		return TaskResult{}, err
 	}
 	if t.CreatedBy, err = ss.AccountID(); err != nil {

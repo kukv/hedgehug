@@ -205,3 +205,54 @@ func TestMoveErrors(t *testing.T) {
 		t.Fatal("moving to an unknown workspace succeeded")
 	}
 }
+
+func TestAddBeforeAfter(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	for _, title := range []string{"a", "b", "c"} {
+		if _, err := ts.Add(AddInput{Title: title}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	logLen := func() int {
+		s, err := ts.OpenStore()
+		if err != nil {
+			t.Fatal(err)
+		}
+		l, err := s.Repo().Log(nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(l)
+	}
+	n := logLen()
+	res, err := ts.Add(AddInput{Title: "after a", After: "ME-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Committed || logLen() != n+1 {
+		t.Errorf("committed %v, commits %d -> %d; want one new commit", res.Committed, n, logLen())
+	}
+	if got, want := strings.Join(ts.order(nil), " "), "ME-1 ME-4 ME-2 ME-3"; got != want {
+		t.Errorf("order after --after = %s; want %s", got, want)
+	}
+	if _, err := ts.Add(AddInput{Title: "before c", Before: "ME-3"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(ts.order(nil), " "), "ME-1 ME-4 ME-2 ME-5 ME-3"; got != want {
+		t.Errorf("order after --before = %s; want %s", got, want)
+	}
+
+	// a sibling that is not under the same parent
+	if _, err := ts.Add(AddInput{Title: "kid", Parent: "ME-2"}); err != nil {
+		t.Fatal(err)
+	}
+	n = logLen()
+	_, err = ts.Add(AddInput{Title: "x", After: "ME-6"})
+	wantErr(t, err, KindInvalid, "move.invalid")
+	_, err = ts.Add(AddInput{Title: "y", Parent: "ME-2", Before: "ME-1"})
+	wantErr(t, err, KindInvalid, "move.invalid")
+	if logLen() != n {
+		t.Error("a failed add left a commit")
+	}
+}

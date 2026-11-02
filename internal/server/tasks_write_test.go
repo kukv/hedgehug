@@ -42,6 +42,31 @@ func TestCreateTask(t *testing.T) {
 	ts.problem("POST", "/api/tasks", map[string]any{}, 400)
 }
 
+func TestCreateTaskBeforeAfter(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	a := ts.add("a", "")
+	b := ts.add("b", "")
+	var out taskWriteBody
+	ts.call("POST", "/api/tasks", map[string]any{"title": "after a", "after": a}, 201, &out)
+	if out.Commit == nil {
+		t.Fatalf("created = %+v", out)
+	}
+	mid := out.Task.ID
+	ts.call("POST", "/api/tasks", map[string]any{"title": "before b", "before": b}, 201, &out)
+	last := out.Task.ID
+	var list listBody
+	ts.call("GET", "/api/tasks", nil, 200, &list)
+	var got []string
+	for _, x := range list.Tasks {
+		got = append(got, x.ID)
+	}
+	if want := []string{a, mid, last, b}; !slices.Equal(got, want) {
+		t.Errorf("order = %v; want %v", got, want)
+	}
+	ts.problem("POST", "/api/tasks", map[string]any{"title": "x", "parent": a, "after": b}, 422)
+}
+
 func TestCreateTaskWithBodyAndRepos(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)

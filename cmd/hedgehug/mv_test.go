@@ -59,6 +59,28 @@ func TestMv(t *testing.T) {
 	}
 }
 
+func TestAddAfterBefore(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	a := te.addJSON("A")
+	b := te.addJSON("B")
+	te.ok("add", "after-a", "--no-repo", "--after", a.ID)
+	te.ok("add", "before-b", "--no-repo", "--before", b.ID)
+	var titles []string
+	for _, l := range strings.Split(te.ok("ls", "--tree", "--no-color"), "\n") {
+		if i := strings.LastIndex(l, "  "); i >= 0 {
+			titles = append(titles, l[i+2:])
+		}
+	}
+	if got := strings.Join(titles, ","); got != "A,after-a,before-b,B" {
+		t.Errorf("order = %s", got)
+	}
+	code, _, stderr := te.run("add", "x", "--no-repo", "--before", a.ID, "--after", b.ID)
+	if code == 0 || !strings.Contains(stderr, "not both") {
+		t.Errorf("both: code %d stderr %q", code, stderr)
+	}
+}
+
 // A merge can leave siblings with one rank; they are ordered by id and no
 // rank lies between them, so mv puts the task past the group on the side it
 // was asked for, whatever its own id.

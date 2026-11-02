@@ -568,7 +568,11 @@ export interface components {
             total: number;
         };
         CreateInputBody: {
+            /** @description Put it after this sibling */
+            after?: string;
             assignees?: string[] | null;
+            /** @description Put it before this sibling */
+            before?: string;
             /** @description The body in Markdown */
             body?: string;
             /** @description project for hh add --kind project */

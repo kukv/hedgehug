@@ -14,7 +14,7 @@ import (
 )
 
 func (a *app) addCmd() *cobra.Command {
-	var parent, project, kind, status, workspace, body string
+	var parent, project, kind, status, workspace, body, before, after string
 	var noRepo bool
 	var props []string
 	cmd := &cobra.Command{
@@ -22,6 +22,9 @@ func (a *app) addCmd() *cobra.Command {
 		Short: "Add a task",
 		Args:  minArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
+			if before != "" && after != "" {
+				return usageErrorf("give --before or --after, not both")
+			}
 			assigns, err := ops.ParseAssigns(props)
 			if err != nil {
 				return err
@@ -29,7 +32,7 @@ func (a *app) addCmd() *cobra.Command {
 			return a.add(ops.AddHereInput{
 				Context: hhctx.Input{Parent: parent, Project: project, Workspace: workspace},
 				NoRepo:  noRepo,
-				Task:    ops.AddInput{Title: strings.Join(args, " "), Kind: kind, Status: status, Body: body, Assigns: assigns},
+				Task:    ops.AddInput{Title: strings.Join(args, " "), Kind: kind, Status: status, Body: body, Assigns: assigns, Before: before, After: after},
 			})
 		},
 	}
@@ -39,6 +42,8 @@ func (a *app) addCmd() *cobra.Command {
 	f.StringVar(&kind, "kind", "", "the kind (default: the schema's default kind)")
 	f.StringVar(&status, "status", "", "the status (default: the default status of the todo category)")
 	f.StringVar(&workspace, "workspace", "", "the workspace (default: the parent's, or the only one)")
+	f.StringVar(&before, "before", "", "put it just before this sibling")
+	f.StringVar(&after, "after", "", "put it just after this sibling")
 	f.StringVar(&body, "body", "", "the body, in Markdown")
 	f.BoolVar(&noRepo, "no-repo", false, "do not put the current repository on the task")
 	f.StringArrayVarP(&props, "prop", "p", nil, "set a field or a property, as in hedgehug set (repeatable)")

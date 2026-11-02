@@ -93,12 +93,18 @@ components:
     CreateInputBody:
       additionalProperties: false
       properties:
+        after:
+          description: Put it after this sibling
+          type: string
         assignees:
           items:
             type: string
           type:
             - array
             - "null"
+        before:
+          description: Put it before this sibling
+          type: string
         body:
           description: The body in Markdown
           type: string
