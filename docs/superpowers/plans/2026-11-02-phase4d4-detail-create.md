@@ -8574,7 +8574,7 @@ git commit -m "feat(web): ⌘K のコマンドパレット（ID・旧 ID・ULID�
 
 ### Task 16b: E2E（作成・編集・削除・パレットの spec）
 
-Task 16a のハーネスの上に、タスクの詳細（Task 11・12）・作成ダイアログ（Task 13）・コマンドパレット（Task 14）を使う spec を足す。4d-3 の実物の上で `make e2e` を通した（16a の 17 テストと合わせて 33 テスト）。
+Task 16a のハーネスの上に、タスクの詳細（Task 11・12）・作成ダイアログ（Task 13）・コマンドパレット（Task 14）を使う spec を足す。4d-3 の実物の上で `make e2e` を通した（16a の 17 テストと合わせて 33 テスト。実装では 47 件、最終レビューのあとは 50 件。末尾の「実装で plan から変えた点」の C-4）。
 
 **この E2E が見つけて、Task 12・13 に直しを入れたもの**:
 - Task 12 の `DeleteDialogs.svelte`: 完全削除が成功してキャッシュがタスクを忘れると、`show` が消えて `${show.id}` が `TypeError` になり、トーストも `/` への移動も出なかった。`await` の前に値を読む
@@ -9074,7 +9074,7 @@ Expected: PASS（6 tests）
 - [ ] **Step 7: 全体を通す**
 
 Run: `cd web && pnpm fix && pnpm lint && pnpm check && cd .. && make e2e`
-Expected: Biome・svelte-check にエラーなし。`make e2e` が 33 テストすべて PASS（`pnpm exec playwright test --repeat-each=3` でも）
+Expected: Biome・svelte-check にエラーなし。`make e2e` が 33 テスト（実装では 50 件）すべて PASS（`pnpm exec playwright test --repeat-each=3` でも）
 
 - [ ] **Step 8: コミット**
 ```bash
@@ -9200,7 +9200,7 @@ Run: `make web`
 Expected: `vite build` が警告を出さない（どのチャンクも 500 kB 未満。CodeMirror は `codemirror-base` と `codemirror` の2つに分かれる）
 
 Run: `make e2e`
-Expected: 33 テストすべて PASS
+Expected: 33 テスト（実装では 50 件。末尾の C-4）すべて PASS
 
 Run: `git status --short`
 Expected: 何も出ない（`web/dist` の `.gitkeep` が消えていない、`pnpm-lock.yaml` が変わっていない、`schema.d.ts` が古くない）
@@ -9239,3 +9239,72 @@ git commit -m "docs: GUI の開発手順を足す"
 **コメント**: `heading`「コメント n」、`textbox`「コメントを書く」（CodeMirror。⌘↵ で送る）、`button`「コメント」、各コメントに `button`「編集」「削除」、編集中は `textbox`「コメントを編集」と `button`「保存」「キャンセル」。削除のトースト「コメントを削除しました」。他人のコメントは `alert`（`comment.not_author` の文言）。
 **履歴**: `heading`「履歴」、各行に `button`「この時点に戻す」（最新の行にはない）→ `dialog`「<ID> を <日時> の状態に戻す」（変わる項目の `table`、`button`「N 項目を戻す」。同じなら「この時点と同じです」）。
 **削除**: `button`「削除」→ `dialog`「<ID> <題> を削除」（配下があれば「配下の N 件も一緒に削除します」、`button`「N 件を削除」か「削除」）。トーストは「「<題>」を削除しました」と取り消し。削除済みの詳細は `button`「復元」（トースト「<ID> を復元しました」）と `button`「完全に削除」→ `dialog`「<ID> を完全に削除」（対象の一覧、`textbox`「Store 名」に Store 名を入れると `button`「完全に削除」が押せる。成功したら `/` へ）。
+
+### 実装で plan から変えた点（2026-11-03、レビューのあと）
+
+この plan の各 Task のコードは plan を書いた時点のもの。実装とレビューの途中で、次を変えた。「利用者の決定」は利用者がはっきり決めたもの、「Ruling」は controller が決めて台帳（`.superpowers/sdd/2026-11-02-phase4d4-detail-create/progress.md`）に残したもの、C-1〜C-18 は実装前の照合（`preflight-scan.md`・`preflight-rulings.md`）の裁定。
+
+#### 利用者の決定
+
+1. **コメントの削除は確認ダイアログを出す（取り消しは付けない。Task 12、2026-11-02）。** `ui/Dialog`、名前は「コメントを削除」、本文は「このコメントを削除します。元に戻せません。」、ボタンは「キャンセル」と「削除」（danger）、足元は `hh comment rm <ULID>`。失敗（`comment.not_author` など）はダイアログの中に `alert` で出して開いたままにする。成功のトースト「コメントを削除しました」はそのまま。E2E は、コメント行の「削除」を押し、名前「コメントを削除」の `dialog` の中の「削除」を押す。
+2. **1 つしか持てない関連の種類に値があるときは、「関連の種類」のメニューでその項目を無効にする（Task 12）。** `hint` は「すでに設定されています（外してから追加）」。黙って値を置き換えない。
+3. **GUI が出す `hh add` の行には、いつも `--no-repo` を付ける（Task 13）。** `cliAdd` が先頭のフラグとして付ける（タスクとプロジェクトの作成ダイアログ。リポジトリの指定は `-p repos=…` のまま）。ツリーの「下に追加」の行には `hh` の行がない。
+4. **ダイアログが開いている間は、⌘K でパレットを開かない（Task 14）。** Sidebar の ⌘K は `[aria-modal="true"]:not([data-palette])` があれば何もしない（パレットのパネルが `data-palette` を持つ）。
+5. **最近開いたものは、キャッシュにない分を `GET /api/tasks/{ulid}` で取り、いつも 8 件出す（Task 14。概要 plan の細部 47 を補う）。** パレットを開いたとき、`palette/recent.ts` の `fetchMissing` が取りに行き、`cache.prime` で入れる。404（消えたタスク）は記録（`hedgehug.recent`）から外す。ほかの失敗は何もしない。
+6. **取り直しの絞り込みから外れた行は、その行だけ取り直す（最終レビュー I1、2026-11-03。案 (a)）。** クエリの取り直しの結果に含まれなくなった行（ステータスが変わって `status:todo` のツリーから外れた行など）は、キャッシュに古い姿が残る。その回のクエリ・詳細の取り直しがすべて終わったあと、`us`（resync なら全行）のうちキャッシュにある行で、読み取りの印（`rowSince`）がイベント・resync より古いものを `GET` で取り直す。結果に残った行は印が新しいので、余分な `GET` は出ない。
+
+#### Ruling（controller の裁定）
+
+- **C-1: `CommandPalette.svelte` に `openCreate` の import を足した。**
+- **C-2: TreeRow の `onclick={onselect}` は今のコードにない。** `onclickcapture` のブロックの次に `ondblclick={onopen}` を足した。
+- **C-3: TreeView のフッターの `⌘↵` は `kbdLabel("mod+enter")`。**
+- **C-4: E2E の件数。** plan 本文の「33」は、実装前の既存 31 + 16b の 16 = 47 と読む。最終レビューの修正のあとは 50 件（下の 18 番）。本文の該当 3 か所に注記した。
+- **C-5: 作成ダイアログ（タスク・プロジェクト）の足元の `hh` の行は、4d-3 の利用者の決定 8 に合わせる。** 空欄は `<タイトル>`・`<名前>` の形で、入力がそろうまでコピーできない（`Placeholder`・`cliDisabled`）。`cliAdd` の `title` を `Arg`（string | Placeholder）に広げた。
+- **C-6: IME 変換中（`e.isComposing` または keyCode 229）は、`ui/Dialog` の Esc、`ChipsField` の Enter と `,`、`TaskPicker` の Enter と矢印、パレットの入力欄のキーで何もしない。** 4d-3 の「変換中の Esc は変換の取り消しだけ」に揃えた。テストを 1 件ずつ足した（TaskPicker は Task 11 で作るので Task 11 で直した）。
+- **C-7: パレットの「選んでいるタスク」は、route がタスク詳細ならそのタスクを先にし、なければ `selection.ulid`。** 前のツリーの選択に効く不具合を避ける。
+- **C-8: パレットのエラー表示は `errorMessage(error)` だけ。** `detail` を重ねて出さない（4d-3 R5 と同じ）。
+- **C-9: パレットのキー表示は `kbdLabel("shift+mod+s")`・`kbdLabel("mod+enter")`。** `CommandEnv` の `mac` は外した。Windows・Linux は `Ctrl+Shift+S`。テストは `navigator.platform` の差し替えで確かめる。
+- **C-10: `@codemirror/autocomplete` は入っているので `pnpm add` は不要。**
+- **C-11: `vite build` は警告を出さない（出たら不具合）。**
+- **C-12: vitest の絞りは `pnpm vitest run app`。**
+- **C-13: 「Ctrl+Enter in the body editor, once」のテストは、本文に「メモ」を打ち、POST の body が `"メモ"` で 1 回だけ呼ばれたことを確かめる。**
+- **C-14: プロパティの欄の分岐は、共有の `web/app/detail/PropField.svelte` に出した。** `PropsPanel` と Task 13 の `CreateTask` が使い、`statusOptions` も `prop-rows.ts` に出した。plan の丸ごと重複を避ける。bool は値を `String(value)` にして選択に渡す（plan のままだと boolean の true が「はい」に当たらない）。
+- **C-15: `history-labels` に、コミットへ書く op をすべて足した。** `internal/ops`・sync・store を grep して確かめた（init、status、dep、watch、unwatch、move-in、move-out、purge-moved、rewrite-history、revert-overwritten、migrate、workspace、view、setup、replay）。全 op に日本語があることを確かめるテストを足した。
+- **C-16: palette.spec は `ControlOrMeta+k`・`ControlOrMeta+Enter`。**
+- **C-17: 「開いた直後にタイトル（名前）にフォーカスがある」テストを足し、通らなければ通るように直す。** Task 13 のレビューで、最初のテストが偽の合格だった（Dialog の初期フォーカスが上書きしていた）ので、Dialog は `[data-autofocus]` を先に選ぶようにし、`CreateTask` のタイトルに付けた。
+- **C-18: 完全削除の 1 行目は「タスクのファイルとコメントを消します。Hedgehug からは復元できません。」。** 履歴と番号の扱いは 2 行目に分けた。
+- **C-9・C-15・C-16・C-18 のような影響の小さい指摘も、plan どおりに戻さず直す。**（CLAUDE.md の残さない方針）
+- **コマンドパレットの同期は `sidebar/sync-run.svelte.ts`（`runSync`・`syncRun.busy`）で SyncCard と共有する。** `syncMessage(reports)` で結果を出し、実行中の 2 回目は何もしない。plan のパレットは結果を見なかった。
+- **Task 17 の Step 4（`make check`・release-check・web・e2e の全体の検査）は、最終レビューの修正のあとに 1 回だけ回す。** 利用者の「全テストは仕上げに 1 回」に従う。
+- **README の `make e2e` の説明は「Chromium が無ければ入れる」。** Makefile の `e2e` は実行のたびに `playwright install chromium` を呼ぶ。
+- **delete.spec の完全削除の確認は、`hh show` でなく `GET /api/tasks/<ulid>` が 404 になるまで poll する。** `hh show` は失敗時に CLI の stderr をテスト出力に出す。
+- **最終レビューの再レビュー 1〜5 の指摘の裁定（下の 15〜17 番の根拠）。**
+  - N1: resync でも持たれていない行に `fetchRow` する。ULID ごとの `seq` で古い応答を捨てる。`cache.task()` を読む箇所の退行を避けるため、案 (イ) は取らない。
+  - I4(b): ULID ごとの `lastChange`（`tasks.changed` の epoch）を持ち、`prime`・`fetchRow` は、それより前に始まった読み取りを捨てる。
+  - 読み取りの応答を捨てたとき、その行がキャッシュになければ必ず取り直す（`seq` で重複を除く）のを、`prime`・`fetchRow` のどの経路でも 1 か所（`refetchMissing`。5 回目に `refetchStale` にまとめた）で行う。窓を 1 つずつ塞ぐ直しが 2 回続いたため、構造で直した。
+  - M2: 投稿直後のコメントを読み直しの前に削除したら、`added`・`changed` から外したうえで `removed` にも足す。削除の前に出た読み直しが古い姿で届いても出さない（`reconcile` が、読み直しに現れなくなったあとで `removed` から外す）。
+
+#### 最終レビューで直した点
+
+最終レビュー（5bffa01..6e34c65、opus）の指摘と、再レビュー 5 回の指摘を、すべて直した。直さなかったのは「最近開いたものの 404 以外の失敗は開くたびに取り直す」の 1 件だけで、triage で直さないと決めた。
+
+7. **詳細のほかのタスクがキャッシュで追従する（I1・I4）。** `core/cache.ts` に、`tasks.changed` で「どのクエリ・詳細も持たない行」を `GET /api/tasks/{id}` で取り直す `fetchRow`（持ち主の判定は `heldUlids`）を足した。`createLookup` は取った行を `cache.prime` で入れる。TaskDetail（パンくず・ブロックの帯）と Relations は `crumbsSig`（行の題・ステータスなどの署名）を購読して引き直す。
+8. **読み取りは書き込みとして入れない（I4）。** `epochNow()` と `prime(tasks, since)` を足し（`markWrite` なし）、パレットの検索・最近開いたものの取得は、要求の前の epoch を取って `prime` する。`recent.ts` の二重キャストは消えた。
+9. **パレットのステータス変更はスキーマの読み込みを待つ（I3）。** `pickStatus` が `schema.load(store)` を呼び、パレットが `schemaRev` を購読する。読み込み中は「読み込み中…」、失敗は `errorMessage`。
+10. **チップ欄で ⌘↵ が効く（I2）。** `ChipsField` は ⌘↵ のとき、チップを足すだけで `preventDefault` せず、ダイアログへ通す。入力が拒否されたときだけ `preventDefault`（N6）。CreateTask・CreateProject の window の ⌘↵ は `defaultPrevented` と IME 変換中を見る。
+11. **Menu は `focusout` で `relatedTarget` が Menu・anchor の外なら閉じる（Minor 1）。** TreeView は破棄時に選択を消し、`resolveCreateContext` は task の route で selection を見ない（Minor 2）。TaskDetail は親の種類を `PropsPanel` の `parentKind` に渡す（Minor 3）。
+12. **Comments の送信・編集の保存、削除・完全削除・復元の確認は、実行中の二重実行を止める（Minor 4・5）。** 実行中は確認ダイアログを閉じられず、キャンセルを無効にする。`DeleteDialogs` の `openDelete`・`openPurge` は開いた回の番号で古い応答を捨てる。
+13. **関連の各行は ID のリンクのまま ULID のホバー表示とコピーを出す（Minor 6）。** `IdLabel` に `href`・`onopen` を足した。`href` のときは keydown を止めない（N5）。Sidebar の `.add` は `--control-h-sm`（Minor 7）。
+14. **Comments の重ね表示は、全部を捨てず項目ごとに照らし合わせる。** `added` は読み直しに現れたら外し、`changed` は `base` の本文が編集前のままなら残し、`removed` は `base` から消えたら外す。`CommentView` に `updated` がないので、`changed` は編集時の本文（`from`）と比べる。投稿したばかりのコメントの編集は `added` の中も差し替え、読み直しが投稿時の本文で来ても、そのコメントを含まなくても編集を残す（N7・R2・S2）。History は `show` の参照が変わるたびに履歴を取り直し、Comments の重ね表示は `show.comments` が変わったときに解く（Task 12 のレビューの I-1。コメントだけのコミットは `updated` を変えない）。
+15. **`cache.ts` の読み取りの順序づけ。** ULID ごとの `rowSeq`（全体のカウンタ。応答が届いたとき・`forget` のときに消す）で、追い越された応答（成功も失敗も）を捨てる。`lastChange`（ULID ごと）と `resyncAt` で、イベント・resync より前に始まった読み取りを捨て（`changedSince`）、捨てた行がキャッシュになければ `refetchStale` が取り直す。`lastChange`・`lastWrite` は行を忘れても消さない（消すと removed の直後の読み取りを通すおそれがある）。
+16. **行ごとの `rowSince`。** その行を最後に入れた（同じと確かめた）読み取りの `since`。`applyWrite` は書き込みの epoch。`queueRefresh` はその回の `fetchQuery`・`fetchDetail` がすべて終わったあと、`us` のうちキャッシュにある行に `refetchStale` を呼ぶ（利用者の決定 6）。`fetchDetail` に `last` を足し、追い越された詳細の取り直しは新しい方を待つ。
+17. **ID で開いた詳細の最初の応答の前に `tasks.changed` が来たら、詳細を取り直す（作業中に見つけた既存の窓）。** `runDetail` の成功側で、書き込みの stale と同じ形で `changedSince(show.ulid, since)` なら `queueRefresh([show.ulid])` を出す。
+18. **E2E は 50 件。** 16b の 16 件のあと、最終レビューの修正で live.spec に「タイトルの追従」「ブロックの帯」、create.spec に「詳細で C → 子」を足し、`Control+Enter` を `ControlOrMeta+Enter` に揃えた。
+19. **`cache.test.ts` の「順序の表」。** 手順 E（イベント）・R（resync）・W（自分の書き込み）・A（走っている読み取りがすべて応答）と、D（removed）・P（最初の lookup の応答）を並べ、持ち主 5 通り（missing・cached・query・leaving・detail）で回す（391 の並び）。最後に `cache.task(X)` が最新、`rowSeqs` が空、読み取りが尽きること、GET の数が変更の数の 2 倍以下であることを見る。`settle()`（`setTimeout`）を `setImmediate` の flush に替えて 31.5 秒を 6.7 秒にした（`refetchStale` を外すと missing と leaving が落ちる）。
+20. **共有の部品: `PropField`（C-14）・`sync-run`・`IdLabel` の `href`・`Dialog` の `data-autofocus`。** 重複させず 1 か所にした。
+
+#### 台帳に残した前提
+
+- 削除済みの行を lookup が読むと、404 の `GET` が 1 本出る（`prime` の前からの挙動）。
+- クエリの取り直しが失敗した回は、その回の `us`（resync なら全行）のうちキャッシュにある行に `GET` が 1 本ずつ出る（失敗時に確認を飛ばすと、絞り込みから外れた古い行が残るため）。
+- resync ごとの `GET` の数の上限は、Store のタスク数。
