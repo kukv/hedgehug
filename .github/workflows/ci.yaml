@@ -85,7 +85,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [ops, cli, sync-property, sync-property-stores, sync-server, others]
         # -race はテストを数倍遅くする。検出するデータ競合は OS によらないので、
         # ubuntu だけで付ける。カバレッジとテストの結果も ubuntu の分をまとめる。
         include:
@@ -125,14 +125,15 @@ jobs:
           path: |
             ${{ steps.go-env.outputs.gocache }}
             ${{ steps.go-env.outputs.gomodcache }}
-          key: go-${{ runner.os }}-${{ runner.arch }}-test${{ matrix.race }}-shard${{ matrix.shard }}-${{ hashFiles('go.mod', 'go.sum') }}
+          key: go-${{ runner.os }}-${{ runner.arch }}-test${{ matrix.race }}-${{ matrix.shard }}-${{ hashFiles('go.mod', 'go.sum') }}
 
       - name: Verify the module cache
         run: go mod verify
 
       # 何を回すかは、パッケージごとの時間（下の Package times）で均した分け方:
-      # 1 = ops、2 = cmd/hedgehug、3・4 = sync の2つの property テスト（seed が多く重い）、
-      # 5 = sync の残りと server、6 = 残りのパッケージすべて（新しいパッケージは何もしなくても 6 に入る）。
+      # ops = internal/ops、cli = cmd/hedgehug、sync-property・sync-property-stores = sync の
+      # 2つの property テスト（seed が多く重い）、sync-server = sync の残りと server、
+      # others = 残りのパッケージすべて（新しいパッケージは何もしなくても others に入る）。
       # 復元したキャッシュには main のテスト結果も入っているので、-count=1 で毎回テストを実行する。
       - name: Test
         shell: bash
@@ -145,12 +146,12 @@ jobs:
           prop='^TestPropertyConverges(Stores)?$'
           # shellcheck disable=SC2207 # package paths have no spaces
           case "$SHARD" in
-            1) args=("$mod/internal/ops") ;;
-            2) args=("$mod/cmd/hedgehug") ;;
-            3) args=(-run '^TestPropertyConverges$' "$mod/internal/sync") ;;
-            4) args=(-run '^TestPropertyConvergesStores$' "$mod/internal/sync") ;;
-            5) args=(-skip "$prop" "$mod/internal/sync" "$mod/internal/server") ;;
-            6) args=($(go list ./... | grep -vxF -e "$mod/internal/ops" -e "$mod/cmd/hedgehug" -e "$mod/internal/sync" -e "$mod/internal/server")) ;;
+            ops) args=("$mod/internal/ops") ;;
+            cli) args=("$mod/cmd/hedgehug") ;;
+            sync-property) args=(-run '^TestPropertyConverges$' "$mod/internal/sync") ;;
+            sync-property-stores) args=(-run '^TestPropertyConvergesStores$' "$mod/internal/sync") ;;
+            sync-server) args=(-skip "$prop" "$mod/internal/sync" "$mod/internal/server") ;;
+            others) args=($(go list ./... | grep -vxF -e "$mod/internal/ops" -e "$mod/cmd/hedgehug" -e "$mod/internal/sync" -e "$mod/internal/server")) ;;
             *) echo "unknown shard $SHARD"; exit 1 ;;
           esac
           cover=()

@@ -66,20 +66,20 @@ Windows をやめたあとは、`GOOS=windows` のビルドは通らなくてよ
 
 ### テストのジョブを分ける
 
-- test のマトリクスを `os: [ubuntu-latest, macos-latest]` × `shard: 1〜6` にする。ubuntu は -race 付き、macOS は race なし（いまと同じ）
+- test のマトリクスを `os: [ubuntu-latest, macos-latest]` × `shard` の6つにする。ubuntu は -race 付き、macOS は race なし（いまと同じ）。ジョブの名前は `test (ubuntu-latest, ops)` のように、shard の担当が分かる名前にする
 - 分け方は、最初の CI のパッケージごとの時間を見て決めた。internal/sync が race 付きで 140〜157 秒かかり、そのほとんどが2つの property テストだったため、最初に考えた3つでは均せなかった。6つに分け、各 shard の担当は次のとおり
-  1. internal/ops
-  2. cmd/hedgehug
-  3. internal/sync の `TestPropertyConverges`
-  4. internal/sync の `TestPropertyConvergesStores`
-  5. internal/sync の残りと internal/server
-  6. 残りのすべて
-- 新しいパッケージが漏れないよう、6 は「1〜5 に含まれないすべて」として `go list ./...` から引く。新しいパッケージは 6 に入る
-- キャッシュのキーは OS・race の有無・shard の番号で決める。shard ごとにビルドするパッケージが違うため。保存は今と同じく main への push のときだけ、各 shard が自分の分を保存する。キーが OS・race・shard ごとなので 12 個になる（ubuntu は1つ約 385MB、macOS は約 331MB の見込みで、合わせて約 4.3GB）。nogit と lint の分を足しても、リポジトリの上限 10GB に収まる。ただし go.mod・go.sum が変わるたびに新しいキーの組が増える。古いものは GitHub が使われない順に消す
+  - `ops`: internal/ops
+  - `cli`: cmd/hedgehug
+  - `sync-property`: internal/sync の `TestPropertyConverges`
+  - `sync-property-stores`: internal/sync の `TestPropertyConvergesStores`
+  - `sync-server`: internal/sync の残りと internal/server
+  - `others`: 残りのすべて
+- 新しいパッケージが漏れないよう、`others` は「ほかの shard に含まれないすべて」として `go list ./...` から引く。新しいパッケージは `others` に入る
+- キャッシュのキーは OS・race の有無・shard の名前で決める。shard ごとにビルドするパッケージが違うため。保存は今と同じく main への push のときだけ、各 shard が自分の分を保存する。キーが OS・race・shard ごとなので 12 個になる（ubuntu は1つ約 385MB、macOS は約 331MB の見込みで、合わせて約 4.3GB）。nogit と lint の分を足しても、リポジトリの上限 10GB に収まる。ただし go.mod・go.sum が変わるたびに新しいキーの組が増える。古いものは GitHub が使われない順に消す
 
 ### 結果をまとめるジョブ
 
-- ubuntu の各 shard は JUnit（`test-report-<n>.xml`）とカバレッジ（`coverage-<n>.out`）を artifact として上げる
+- ubuntu の各 shard は JUnit（`test-report-<shard>.xml`）とカバレッジ（`coverage-<shard>.out`）を artifact として上げる
 - report ジョブ（ubuntu、全 shard のあと、`!cancelled()`）がそれらを落とし、カバレッジを1つにつなぐ（2つ目以降の `mode:` の行を除く）。そのうえで Test Report（dorny、`test-report-*.xml`）と octocov に渡す。投稿する条件は今と同じ（同じリポジトリの PR、Dependabot を除く）
 ### 必須チェック
 
