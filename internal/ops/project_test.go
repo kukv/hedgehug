@@ -1,6 +1,11 @@
 package ops
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/kukv/hedgehug/internal/index"
+	"github.com/kukv/hedgehug/internal/model"
+)
 
 func TestTaskViewProject(t *testing.T) {
 	t.Parallel()
@@ -52,4 +57,23 @@ func TestTaskViewProject(t *testing.T) {
 	check("an epic at the root: no project", rootEpicChild, nil)
 	check("the project itself: not itself", proj, nil)
 	check("a task with no parent", loose, nil)
+}
+
+// A parent the index does not have, and a task that is its own parent, end
+// the walk with no project instead of failing or looping.
+func TestProjectOfStopsAtUnknownParentAndCycle(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	_, ix, err := ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	missing := model.NewULID()
+	if got := projectOf(ix, &index.Entry{ULID: model.NewULID(), Parent: &missing}); got != nil {
+		t.Errorf("unknown parent: project = %+v; want none", got)
+	}
+	self := model.NewULID()
+	if got := projectOf(ix, &index.Entry{ULID: self, Parent: &self}); got != nil {
+		t.Errorf("own parent: project = %+v; want none", got)
+	}
 }

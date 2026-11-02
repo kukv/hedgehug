@@ -74,8 +74,8 @@ const messages: Record<string, Make> = {
   "workspace.prefix_taken": (a) => `ID の接頭辞 ${str(a, "prefix")} はすでに使われています`,
   "workspace.not_empty": (a) =>
     `${
-      str(a, "tasks")
-        ? `ワークスペースにタスクが ${str(a, "tasks")} 件（削除済みを含む）残っています`
+      typeof a.tasks === "number"
+        ? `ワークスペースにタスクが ${a.tasks} 件（削除済みを含む）残っています`
         : "ワークスペースにまだタスクがあります（削除済みを含む）"
     }。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください`,
   "workspace.one_change": () =>

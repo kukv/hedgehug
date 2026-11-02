@@ -104,6 +104,7 @@ func TestSyncAPIPushAtBeforeTheFirstSync(t *testing.T) {
 }
 
 func TestSyncAPIIntervals(t *testing.T) {
+	t.Parallel()
 	ts, _, _ := loopServer(t)
 	waitFirstSync(t, ts)
 

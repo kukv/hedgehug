@@ -50,6 +50,12 @@ describe("errorMessage", () => {
     expect(errorMessage(err("workspace.not_empty", { tasks: 3 }))).toBe(
       "ワークスペースにタスクが 3 件（削除済みを含む）残っています。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください",
     );
+    expect(errorMessage(err("workspace.not_empty", { tasks: 0 }))).toBe(
+      "ワークスペースにタスクが 0 件（削除済みを含む）残っています。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください",
+    );
+    expect(errorMessage(err("workspace.not_empty", { tasks: "x" }))).toBe(
+      "ワークスペースにまだタスクがあります（削除済みを含む）。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください",
+    );
     expect(errorMessage(err("workspace.not_empty"))).toBe(
       "ワークスペースにまだタスクがあります（削除済みを含む）。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください",
     );

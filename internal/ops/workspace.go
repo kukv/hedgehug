@@ -23,8 +23,17 @@ type WorkspaceView struct {
 
 // WorkspaceViewOf is w as ix counts its tasks.
 func WorkspaceViewOf(ix *index.Index, w *model.Workspace) WorkspaceView {
-	live := CountTasks(ix, w.ULID, false)
-	return WorkspaceView{ULID: w.ULID.String(), Name: w.Name, IDPrefix: w.IDPrefix, PrefixSet: w.PrefixSet, Tasks: live, Deleted: CountTasks(ix, w.ULID, true) - live}
+	var live, deleted int
+	for _, e := range ix.Tasks() {
+		switch {
+		case e.Workspace != w.ULID:
+		case e.DeletedAt == nil:
+			live++
+		default:
+			deleted++
+		}
+	}
+	return WorkspaceView{ULID: w.ULID.String(), Name: w.Name, IDPrefix: w.IDPrefix, PrefixSet: w.PrefixSet, Tasks: live, Deleted: deleted}
 }
 
 // IDChange is a task id that a change of the id prefix replaced.

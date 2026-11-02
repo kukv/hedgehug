@@ -217,7 +217,7 @@ func TestRunIndexProblems(t *testing.T) {
 	putRaw(t, s, dir, a)
 	fs := run(t, dir)
 	if len(fs) != 1 || fs[0].Check != "task" || fs[0].Where != "TST-1 ("+a.ULID.String()+") A" || !strings.Contains(fs[0].Msg, "parent") {
-		t.Errorf("findings = %+v", fs)
+		t.Fatalf("findings = %+v", fs)
 	}
 	if fs[0].Task != a.ULID.String() {
 		t.Errorf("task = %q; want the ULID %s", fs[0].Task, a.ULID)
