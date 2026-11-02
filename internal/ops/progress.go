@@ -62,15 +62,32 @@ func ProgressOf(ix *index.Index, e *index.Entry) *Count {
 	return c
 }
 
-// ProgressText is the checklist and the progress as the CLI writes them:
-// "☑ 2/5  3/14", either alone, or "" with neither.
+// ChecklistText is the checklist as the CLI writes it, "☑ 2/5", or "" with
+// none.
+func ChecklistText(c *Count) string {
+	if c == nil {
+		return ""
+	}
+	return fmt.Sprintf("☑ %d/%d", c.Done, c.Total)
+}
+
+// ProgressFractionText is the progress as the CLI writes it, "3/14", or ""
+// with none.
+func ProgressFractionText(c *Count) string {
+	if c == nil {
+		return ""
+	}
+	return fmt.Sprintf("%d/%d", c.Done, c.Total)
+}
+
+// ProgressText is the checklist and the progress as one line of the tree
+// writes them: "☑ 2/5  3/14", either alone, or "" with neither.
 func ProgressText(checklist, progress *Count) string {
 	var parts []string
-	if checklist != nil {
-		parts = append(parts, fmt.Sprintf("☑ %d/%d", checklist.Done, checklist.Total))
-	}
-	if progress != nil {
-		parts = append(parts, fmt.Sprintf("%d/%d", progress.Done, progress.Total))
+	for _, p := range []string{ChecklistText(checklist), ProgressFractionText(progress)} {
+		if p != "" {
+			parts = append(parts, p)
+		}
 	}
 	return strings.Join(parts, "  ")
 }

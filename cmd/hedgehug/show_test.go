@@ -46,8 +46,8 @@ func TestShow(t *testing.T) {
 	}
 
 	out := te.ok("show", a.ID)
-	// The heading is the title alone; the id, the ULID and the store are the first fields.
-	if want := "Write the spec\n  id          " + a.ID + "\n  ulid        " + a.ULID + "\n  store       me\n  workspace   me (ME, "; !strings.HasPrefix(out, want) {
+	// The title is the first field; the id, the ULID and the store follow.
+	if want := "  title       Write the spec\n  id          " + a.ID + "\n  ulid        " + a.ULID + "\n  store       me\n  workspace   me (ME, "; !strings.HasPrefix(out, want) {
 		t.Errorf("show does not start with %q:\n%s", want, out)
 	}
 	for _, want := range []string{
@@ -87,6 +87,51 @@ func TestShow(t *testing.T) {
 	}
 }
 
+// 直列: editWith が t.Setenv（EDITOR と HH_TEST_EDITOR_SCRIPT）を使う
+func TestShowTitleChecklistAndProgressAreFields(t *testing.T) {
+	te := newStoreEnv(t)
+	p := te.addJSON("Project", "--kind", "project")
+	a := te.addJSON("Alpha", "--parent", p.ID, "--status", "done")
+	b := te.addJSON("Beta", "--parent", p.ID)
+	te.editWith(te.raw(a.ULID) + "- [x] one\n- [ ] two\n- [ ] three\n")
+	te.ok("edit", a.ID)
+
+	// a project: the progress of its tasks (Alpha is done, Beta is not), no checklist
+	out := te.ok("show", p.ID)
+	if want := "  title       Project\n  id          " + p.ID + "\n"; !strings.HasPrefix(out, want) {
+		t.Errorf("show of the project does not start with %q:\n%s", want, out)
+	}
+	if want := "  status      todo\n  progress    1/2\n  parent      -\n"; !strings.Contains(out, want) {
+		t.Errorf("show of the project lacks %q:\n%s", want, out)
+	}
+	if strings.Contains(out, "checklist") {
+		t.Errorf("a project without a checklist has a checklist line:\n%s", out)
+	}
+
+	// a task with a checklist in the body: the checklist, no progress
+	out = te.ok("show", a.ID)
+	if want := "  title       Alpha\n"; !strings.HasPrefix(out, want) {
+		t.Errorf("show of the task does not start with %q:\n%s", want, out)
+	}
+	if want := "  status      done\n  checklist   ☑ 1/3\n  parent      "; !strings.Contains(out, want) {
+		t.Errorf("show of the task lacks %q:\n%s", want, out)
+	}
+	if strings.Contains(out, "progress") {
+		t.Errorf("a task of the work role has a progress line:\n%s", out)
+	}
+
+	// neither: no line for either
+	out = te.ok("show", b.ID)
+	if strings.Contains(out, "checklist") || strings.Contains(out, "progress") {
+		t.Errorf("a task with neither has a checklist or progress line:\n%s", out)
+	}
+
+	// the heading line is gone: the output no longer starts with the title alone
+	if strings.HasPrefix(out, "Beta\n") {
+		t.Errorf("show still starts with a heading:\n%s", out)
+	}
+}
+
 func TestShowErrors(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
@@ -122,6 +167,9 @@ func TestShowBroken(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := te.ok("show", x.ULID)
+	if !strings.HasPrefix(out, "  title       -\n") {
+		t.Errorf("show of a broken task does not start with a title of -:\n%s", out)
+	}
 	if !strings.Contains(out, "\nbroken: ") {
 		t.Errorf("show of a broken task has no broken line:\n%s", out)
 	}
