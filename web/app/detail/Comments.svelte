@@ -1,5 +1,6 @@
 <script lang="ts">
   import { type ShowView, unwrap } from "../../core/api/client";
+  import { cliComment } from "../../core/cli";
   import { formatDateTime } from "../../core/format";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
@@ -7,6 +8,7 @@
   import { toast } from "../toast.svelte";
   import Avatar from "../ui/Avatar.svelte";
   import Button from "../ui/Button.svelte";
+  import Dialog from "../ui/Dialog.svelte";
   import BodyEditor from "./BodyEditor.svelte";
 
   type CommentView = NonNullable<ShowView["comments"]>[number];
@@ -88,8 +90,19 @@
     }
   }
 
+  // The comment waiting for the confirmation of its deletion.
+  let deleting = $state<CommentView | null>(null);
+  let deleteError = $state("");
+  let deleteBusy = $state(false);
+
+  function askRemove(c: CommentView) {
+    deleting = c;
+    deleteError = "";
+  }
+
   async function remove(c: CommentView) {
-    errors = {};
+    deleteBusy = true;
+    deleteError = "";
     try {
       const r = await unwrap(
         api.DELETE("/api/tasks/{id}/comments/{cid}", {
@@ -98,9 +111,12 @@
       );
       cache.noteOwnCommit(r.commit);
       overlay.removed = [...overlay.removed, c.ulid];
+      deleting = null;
       toast({ message: "コメントを削除しました" });
     } catch (e) {
-      errors = { ...errors, [c.ulid]: errorMessage(e) };
+      deleteError = errorMessage(e);
+    } finally {
+      deleteBusy = false;
     }
   }
 </script>
@@ -136,7 +152,7 @@
             {#if !readonly}
               <div class="row">
                 <Button size="sm" variant="ghost" onclick={() => startEdit(c)}>編集</Button>
-                <Button size="sm" variant="ghost" onclick={() => void remove(c)}>削除</Button>
+                <Button size="sm" variant="ghost" onclick={() => askRemove(c)}>削除</Button>
               </div>
             {/if}
           {/if}
@@ -169,6 +185,28 @@
     {/if}
   {/if}
 </section>
+
+{#if deleting}
+  {@const target = deleting}
+  <Dialog
+    open
+    title="コメントを削除"
+    width={560}
+    cli={cliComment(show.id, "rm", target.ulid)}
+    onclose={() => (deleting = null)}
+  >
+    <p>このコメントを削除します。元に戻せません。</p>
+    {#if deleteError}
+      <p class="error" role="alert">{deleteError}</p>
+    {/if}
+    {#snippet footer()}
+      <Button onclick={() => (deleting = null)}>キャンセル</Button>
+      <Button variant="danger" disabled={deleteBusy} onclick={() => void remove(target)}
+        >削除</Button
+      >
+    {/snippet}
+  </Dialog>
+{/if}
 
 <style>
   h2 {

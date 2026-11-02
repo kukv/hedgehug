@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/svelte";
+import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetToasts, toasts } from "../toast.svelte";
 import Comments from "./Comments.svelte";
@@ -118,6 +118,14 @@ describe("Comments", () => {
     const { k } = setup();
     k.api.DELETE.mockImplementation(() => ok({ comment: c1, commit: "c3" }));
     await fireEvent.click(screen.getByRole("button", { name: "削除" }));
+    const dialog = await screen.findByRole("dialog", { name: "コメントを削除" });
+    expect(
+      within(dialog).getByText("このコメントを削除します。元に戻せません。"),
+    ).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("hh comment rm C1");
+    expect(k.api.DELETE).not.toHaveBeenCalled();
+    await fireEvent.click(within(dialog).getByRole("button", { name: "削除" }));
+    await waitFor(() => expect(k.api.DELETE).toHaveBeenCalled());
     expect(k.api.DELETE).toHaveBeenCalledWith("/api/tasks/{id}/comments/{cid}", {
       params: { path: { id: "U6", cid: "C1" }, query: { store: "shared" } },
     });
@@ -125,6 +133,25 @@ describe("Comments", () => {
       expect(screen.queryByText("ガイドでは「カーソル」で統一します。")).toBeNull(),
     );
     expect(toasts.list[0]?.message).toBe("コメントを削除しました");
+  });
+
+  it("does not delete when the confirmation is cancelled", async () => {
+    const { k } = setup();
+    await fireEvent.click(screen.getByRole("button", { name: "削除" }));
+    const dialog = await screen.findByRole("dialog", { name: "コメントを削除" });
+    await fireEvent.click(within(dialog).getByRole("button", { name: "キャンセル" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(k.api.DELETE).not.toHaveBeenCalled();
+    expect(screen.getByText("ガイドでは「カーソル」で統一します。")).toBeInTheDocument();
+  });
+
+  it("shows the error in the confirmation and keeps it open", async () => {
+    const { k } = setup();
+    k.api.DELETE.mockImplementation(() => fail(409, "comment.not_author", { author: "tanaka" }));
+    await fireEvent.click(screen.getByRole("button", { name: "削除" }));
+    const dialog = await screen.findByRole("dialog", { name: "コメントを削除" });
+    await fireEvent.click(within(dialog).getByRole("button", { name: "削除" }));
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
   });
 
   it("has no form when read-only", () => {

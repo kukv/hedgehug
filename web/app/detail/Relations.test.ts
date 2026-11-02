@@ -53,6 +53,17 @@ describe("Relations", () => {
     await waitFor(() => expect(remove).toBeEnabled());
   });
 
+  it("disables a single-valued kind that already has a value, with the reason", async () => {
+    const withDup = showView({ ...show, props: { duplicates: "UD" } });
+    const k = makeCore({ show: withDup, tasks: [blocker] });
+    mount(Relations, { show: withDup, readonly: false }, k);
+    await fireEvent.click(screen.getByRole("button", { name: "関連を追加" }));
+    await fireEvent.click(screen.getByRole("button", { name: "関連の種類" }));
+    expect(screen.getByRole("menuitem", { name: /重複している/ })).toBeDisabled();
+    expect(screen.getByText("すでに設定されています（外してから追加）")).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /関連/ })).toBeEnabled();
+  });
+
   it("adds a relation: pick the kind, search, pick a task", async () => {
     const { k } = setup();
     k.api.GET.mockImplementation(() =>
