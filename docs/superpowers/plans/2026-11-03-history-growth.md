@@ -954,3 +954,22 @@ git commit -m "test(history): 10 万コミットでの計測を足し、結果�
 
 - Task 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 の順。
 - PR は 1 つ（spec の決定を 1 つのまとまりとして入れる）。分けるときは Task 1〜7（索引）と 8（pack）の 2 つにできる。
+
+---
+
+## plan から変えた点
+
+Task 1〜9 の実装で plan と違うことになった点。判断の根拠は `.superpowers/sdd/2026-11-03-history-growth/progress.md` の Ruling にある。
+
+- **Task 2**: 4 つのテストは、plan にコードがなくコメントの指示だけだったので、実装者が書き切った。
+- **Task 3**: 索引のファイルは、パスを整列して書き（同じ索引は同じバイト列になる）、時差が ±18 時間を超えるものは壊れたものとして作り直す。
+- **Task 4**: `TaskLog` に Store の名前の引数を足した（呼び出し 2 箇所）。ブリーフの「マージコミットを出さない」は、2 つのクローンが同じタスクの別のフィールドを変えた場合には誤りで、フィールド単位のマージの結果は両方の親と違うので、spec 2.3（案 A）どおりマージも出す。進みの表示のため、`history` は作るコミットがあるとき最初に `progress(0, total)` を 1 回呼ぶ（1 秒の計時が作り始めからになる）。`history.Open` が失敗したときは、`headAuthor`・`lastChanger` は失敗を伝えず、従来の全履歴の歩きに戻る。
+- **Task 5**: `replay`（force push の後の head は旧 Store の索引にない）では索引を開かずに歩く。転送ファイルの元の ID を引く `lastTask` は、更新ごとに 1 つの `lastChanger` を共有し、索引を 1 回だけ開く。
+- **Task 7**: `history.Options.Cancel` と `ErrCanceled` を足した（plan にない）。サーバーの索引づくりは自分の Store のハンドルを開き、Release・パスの変更・対象から外れた Store・終了のときは中断して終わるのを待つ。やり直しは 3 回までにした。
+- **Task 8**: `Repack` を `Consolidate` に置き換えた。1 回の統合でまとめる量は、幾何の規則で選んだ pack の合計が `packCap` を超えないよう、大きい方から外す（plan は規則の結果をそのまま使う）。2 つ未満になればゆるいオブジェクトだけを書く。古い pack を消した後にもう一度 `Reindex` する。消せない古い pack は失敗にせず次の統合に任せる。統合のテストは pack の大きさに頼らない形にした。
+- **Task 9**:
+  - 「`store.Init` 相当」は `store.Create`。`Synth` は `store.Create` で Store を作り、go-git の plumbing で全オブジェクトを pack 1 つに書く（ゆるいオブジェクトを 60 万個作らない）。キャッシュの名前は `c<commits>-t<tasks>-s<seed>-v<layout>` で、合成の形を変えたときに古い Store を使わないよう版を付けた。置き場所は `$HH_BENCH_CACHE`、なければユーザーのキャッシュディレクトリの `hh-bench`（`go env GOCACHE` ではない）。
+  - 合成する Store のタスクは階層を付けた（プロジェクト 50 件の下にタスクが約 100 件ずつ）。すべて最上位に置くと、書き込みのたびに兄弟 5,000 件を読む時間が `undo` の計測に入る。
+  - 計測の途中で、索引の読み込みを速くするために `history` の中身を変えた（ファイルの形式は同じ）: コミットごとの文字列を番号で持つ、hash の引き（`byHash`）を使うときまで作らない、時差の `*time.Location` を使い回す。10 万コミットでの読み込みは 40〜50ms から 11〜13ms になった。
+  - `BenchmarkShowAfterOneCommit` と、索引のファイルの大きさの記録（`BenchmarkBuild`）を足した。spec 6.2 の「HEAD が 1 つ進んだ直後」と「索引のファイルの大きさ」に当たる。
+  - 速さの目標のうち 3 つ（HEAD が 1 つ進んだ直後の `show`、`undo`、`restore --at`）は、計測の結果、満たせなかった。数字と原因は spec の 8 に書いた。
