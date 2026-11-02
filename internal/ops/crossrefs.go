@@ -35,7 +35,7 @@ func (ss *Session) crossStoreFindings(name string) []doctor.Finding {
 	for _, r := range refs {
 		// the same words as the Where of a check of the store's own tasks
 		where := taskLabel(r.From.ID, r.From.ID, r.From.ULID) + " " + r.From.Title
-		out = append(out, doctor.Finding{Check: "cross_store_ref", Where: where, Msg: crossRefMsg(r), Severity: doctor.Warning})
+		out = append(out, doctor.Finding{Check: "cross_store_ref", Where: where, Task: r.From.ULID.String(), Msg: crossRefMsg(r), Severity: doctor.Warning})
 	}
 	doctor.Sort(out)
 	return out

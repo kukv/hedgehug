@@ -9,6 +9,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
+	"github.com/kukv/hedgehug/internal/store"
 )
 
 // addProject adds a task of kind project and returns its ULID.
@@ -335,5 +336,38 @@ func TestScopedSetCanBeUndone(t *testing.T) {
 	sc, _ := ts.storeSchema()
 	if _, ok := sc.ScopedFor(p); ok {
 		t.Errorf("the override is still there after undo: %+v", sc.Scoped)
+	}
+}
+
+// Under the lock, a project that is gone is task.not_found with the same arg
+// as the others (input); a file that cannot be read is not "not found".
+func TestScopedGuardErrors(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	p := ts.addProject("Web")
+	s, _, err := ts.OpenForWrite()
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := func(id string, ulid model.ULID) error {
+		_, err := ts.UpdateCommit(s, store.Op{Name: "schema", Task: ulid}, func(tx *store.Tx) error {
+			return scopedGuard(id, ulid)(tx, s.Schema())
+		})
+		return err
+	}
+	gone := model.NewULID()
+	if e := AsError(run("WEB-9", gone)); e == nil || e.Kind != KindNotFound || e.Code != "task.not_found" || e.Args["input"] != "WEB-9" {
+		t.Errorf("gone: %+v", e)
+	}
+	_, entry, err := ts.Entry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(entry.Path, model.TaskPath(p)), []byte("not a task"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err = run("WEB-1", p)
+	if err == nil || KindOf(err) == KindNotFound {
+		t.Errorf("unreadable: kind %v (%v); want an error that is not not_found", KindOf(err), err)
 	}
 }

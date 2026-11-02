@@ -761,7 +761,7 @@ export interface components {
             store: string;
             subject: string;
             task: string | null;
-            trailers: components["schemas"]["LogTrailer"][] | null;
+            trailers: components["schemas"]["LogTrailer"][];
             workspace?: components["schemas"]["WorkspaceRef"];
         };
         LogViewAuthorStruct: {
@@ -1079,8 +1079,8 @@ export interface components {
         SyncStatus: {
             error?: string;
             /**
-             * Format: int64
-             * @description sync.interval of config.yaml, in seconds
+             * Format: double
+             * @description sync.interval of config.yaml, in seconds (fractions allowed)
              */
             interval: number;
             /** Format: date-time */
@@ -1101,8 +1101,8 @@ export interface components {
              */
             push_at?: string;
             /**
-             * Format: int64
-             * @description sync.push_interval of config.yaml, in seconds
+             * Format: double
+             * @description sync.push_interval of config.yaml, in seconds (fractions allowed)
              */
             push_interval: number;
             read_only?: string;

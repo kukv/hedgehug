@@ -163,7 +163,7 @@ func TestPollSyncState(t *testing.T) {
 		t.Errorf("push_at = %v; want %v (30s after the later of pending_since and the last sync)", e.PushAt, want)
 	}
 	if e.Interval <= 0 || e.PushInterval <= 0 {
-		t.Errorf("interval = %d, push_interval = %d; want the sync.* intervals in seconds", e.Interval, e.PushInterval)
+		t.Errorf("interval = %v, push_interval = %v; want the sync.* intervals in seconds", e.Interval, e.PushInterval)
 	}
 }
 

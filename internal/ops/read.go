@@ -428,7 +428,7 @@ type LogView struct {
 	Subject   string        `json:"subject"`
 	// Trailers are all the trailers of the commit, in the order they are
 	// written (Hedgehug-Overwritten, Hedgehug-Moved-From...); [] with none.
-	Trailers []LogTrailer `json:"trailers"`
+	Trailers []LogTrailer `json:"trailers" nullable:"false"`
 }
 
 func logViewOf(ix *index.Index, e gitrepo.LogEntry) LogView {

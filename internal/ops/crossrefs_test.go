@@ -73,7 +73,7 @@ func TestDoctorCoversEveryStoreAndFindsCrossStoreRefs(t *testing.T) {
 	}
 	want := doctor.Finding{
 		Check: "cross_store_ref", Where: "API-1 (" + from.String() + ") org-a task",
-		Msg: "parent points at org-b's WEB-1; references stay inside a store", Severity: doctor.Warning,
+		Task: from.String(), Msg: "parent points at org-b's WEB-1; references stay inside a store", Severity: doctor.Warning,
 	}
 	if len(cross) != 1 || cross[0] != want {
 		t.Errorf("org-a cross_store_ref findings = %+v; want [%+v]", cross, want)
@@ -115,7 +115,7 @@ func TestDoctorCrossStoreRefWhereIsThePlainIDWhenThePrefixIsShared(t *testing.T)
 	}
 	want := doctor.Finding{
 		Check: "cross_store_ref", Where: "API-1 (" + from.String() + ") org-a task",
-		Msg: "parent points at org-b's API-1; references stay inside a store", Severity: doctor.Warning,
+		Task: from.String(), Msg: "parent points at org-b's API-1; references stay inside a store", Severity: doctor.Warning,
 	}
 	if len(cross) != 1 || cross[0] != want {
 		t.Errorf("findings = %+v; want [%+v]", cross, want)

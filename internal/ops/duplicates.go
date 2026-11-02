@@ -76,7 +76,7 @@ func duplicateFindings(name string, ds []duplicate) []doctor.Finding {
 	var out []doctor.Finding
 	for _, d := range ds {
 		if d.in(name) {
-			out = append(out, doctor.Finding{Check: "duplicate_across_stores", Where: d.ULID.String(), Msg: d.text(), Severity: doctor.Warning})
+			out = append(out, doctor.Finding{Check: "duplicate_across_stores", Where: d.ULID.String(), Task: d.ULID.String(), Msg: d.text(), Severity: doctor.Warning})
 		}
 	}
 	return out

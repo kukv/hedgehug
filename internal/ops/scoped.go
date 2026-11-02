@@ -119,17 +119,26 @@ func (ss *Session) ScopedSet(arg string, ch schema.ScopedChange) (ScopedResult, 
 		return ScopedResult{}, err
 	}
 	// the same check again under the lock, on the task and the schema the write sees
-	guard := func(tx *store.Tx, cur *schema.Schema) error {
-		t, err := tx.Task(e.ULID)
+	guard := scopedGuard(id, e.ULID)
+	return ss.scopedWrite(s, ix, e.ULID, e, guard, func(sc *schema.Schema) *schema.Schema { return sc.WithScoped(e.ULID, ch) })
+}
+
+// scopedGuard checks the project ulid, which id names, under the lock of the
+// write: it is there, not deleted, and a container in the schema cur.
+func scopedGuard(id string, ulid model.ULID) func(*store.Tx, *schema.Schema) error {
+	return func(tx *store.Tx, cur *schema.Schema) error {
+		t, err := tx.Task(ulid)
+		if errors.Is(err, store.ErrNotFound) {
+			return newErr(KindNotFound, "task.not_found", fmt.Errorf("%s: %w", id, err), "input", id)
+		}
 		if err != nil {
-			return newErr(KindNotFound, "task.not_found", fmt.Errorf("%s: %w", id, err), "id", id)
+			return err
 		}
 		if t.DeletedAt != nil {
 			return newErr(KindConflict, "task.deleted", fmt.Errorf("%s is deleted; restore %s first", id, id), "id", id)
 		}
 		return scopedContainer(cur, id, t.Kind)
 	}
-	return ss.scopedWrite(s, ix, e.ULID, e, guard, func(sc *schema.Schema) *schema.Schema { return sc.WithScoped(e.ULID, ch) })
 }
 
 // ScopedRemove removes the override of the project arg names, templates

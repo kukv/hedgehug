@@ -15,8 +15,8 @@ type syncStatus struct {
 	ops.StoreStatus
 	NextFetch    *time.Time `json:"next_fetch,omitempty" doc:"When the loop fetches next; absent before its first sync"`
 	PushAt       *time.Time `json:"push_at,omitempty" doc:"When the background sync pushes the writes not pushed yet: sync.push_interval after pending_since, but not before sync.push_interval after the last sync and not after next_fetch, which syncs too; absent when nothing waits, before the first sync and while a sync runs"`
-	Interval     int        `json:"interval" doc:"sync.interval of config.yaml, in seconds"`
-	PushInterval int        `json:"push_interval" doc:"sync.push_interval of config.yaml, in seconds"`
+	Interval     float64    `json:"interval" doc:"sync.interval of config.yaml, in seconds (fractions allowed)"`
+	PushInterval float64    `json:"push_interval" doc:"sync.push_interval of config.yaml, in seconds (fractions allowed)"`
 }
 
 // newSyncStatus is st with when the loop fetches next and when the writes
@@ -24,8 +24,8 @@ type syncStatus struct {
 func newSyncStatus(st ops.StoreStatus, l *Loop, c *config.Config) syncStatus {
 	v := syncStatus{
 		StoreStatus:  st,
-		Interval:     int(c.Sync.Interval / time.Second),
-		PushInterval: int(c.Sync.PushInterval / time.Second),
+		Interval:     c.Sync.Interval.Seconds(),
+		PushInterval: c.Sync.PushInterval.Seconds(),
 	}
 	if t, ok := l.NextFetch(st.Store); ok {
 		v.NextFetch = &t

@@ -447,9 +447,7 @@ components:
         trailers:
           items:
             $ref: "#/components/schemas/LogTrailer"
-          type:
-            - array
-            - "null"
+          type: array
         workspace:
           $ref: "#/components/schemas/WorkspaceRef"
       required:
@@ -1356,9 +1354,9 @@ components:
         error:
           type: string
         interval:
-          description: sync.interval of config.yaml, in seconds
-          format: int64
-          type: integer
+          description: sync.interval of config.yaml, in seconds (fractions allowed)
+          format: double
+          type: number
         last_attempt:
           format: date-time
           type: string
@@ -1379,9 +1377,9 @@ components:
           format: date-time
           type: string
         push_interval:
-          description: sync.push_interval of config.yaml, in seconds
-          format: int64
-          type: integer
+          description: sync.push_interval of config.yaml, in seconds (fractions allowed)
+          format: double
+          type: number
         read_only:
           type: string
         remotes:

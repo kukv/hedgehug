@@ -128,3 +128,29 @@ func TestSyncAPIIntervals(t *testing.T) {
 		t.Errorf("push_interval = %d; want sync.push_interval in seconds, %d", st[0].PushInterval, want)
 	}
 }
+
+// interval and push_interval are seconds as a number, so 500ms is 0.5.
+func TestSyncAPIIntervalsAreSecondsWithFractions(t *testing.T) {
+	t.Parallel()
+	ts, _, _ := loopServer(t)
+	waitFirstSync(t, ts)
+	eventually(t, "the loop to end the sync", ts.srv.loop.parked)
+	f, err := os.OpenFile(filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml"), os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("sync:\n  interval: 90s\n  push_interval: 500ms\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var st []struct {
+		Interval     float64 `json:"interval"`
+		PushInterval float64 `json:"push_interval"`
+	}
+	ts.call("GET", "/api/sync", nil, 200, &st)
+	if len(st) != 1 || st[0].Interval != 90 || st[0].PushInterval != 0.5 {
+		t.Errorf("status = %+v; want interval 90 and push_interval 0.5", st)
+	}
+}
