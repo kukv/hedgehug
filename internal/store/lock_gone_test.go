@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -36,12 +37,16 @@ func TestAcquireStoreOfADirectoryThatIsGone(t *testing.T) {
 // A writer that waits for the lock while the store is removed does not get
 // the lock of the file that is gone.
 func TestAcquireStoreWaitingWhileTheLockFileIsRemoved(t *testing.T) {
-	t.Parallel()
+	// Serial: it replaces the package variable afterLockMiss.
 	dir, lock := fakeStoreDir(t)
 	held, err := acquireStore(dir, lock, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
+	blocked := make(chan struct{})
+	var once sync.Once
+	afterLockMiss = func() { once.Do(func() { close(blocked) }) }
+	t.Cleanup(func() { afterLockMiss = func() {} })
 	errc := make(chan error, 1)
 	go func() {
 		l, err := acquireStore(dir, lock, 5*time.Second)
@@ -50,7 +55,7 @@ func TestAcquireStoreWaitingWhileTheLockFileIsRemoved(t *testing.T) {
 		}
 		errc <- err
 	}()
-	time.Sleep(300 * time.Millisecond) // the waiter has the old file open and is polling
+	<-blocked // the waiter has the old file open and found it locked
 	if err := os.Remove(lock); err != nil {
 		t.Fatal(err)
 	}

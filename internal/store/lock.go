@@ -16,6 +16,10 @@ const lockWait = 10 * time.Second
 
 var lockPoll = 50 * time.Millisecond
 
+// afterLockMiss is called each time acquire finds the lock taken, with the
+// lock file open; tests use it to know a waiter is blocked.
+var afterLockMiss = func() {}
+
 // fileLock is an exclusive OS lock on a file. The lock belongs to the file
 // handle, so two handles in one process exclude each other, and the OS drops
 // it when the process exits.
@@ -40,6 +44,7 @@ func acquire(path string, wait time.Duration) (*fileLock, error) {
 		if ok {
 			return &fileLock{f}, nil
 		}
+		afterLockMiss()
 		if time.Now().After(deadline) {
 			_ = f.Close()
 			return nil, ErrLocked
