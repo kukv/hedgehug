@@ -353,11 +353,11 @@ func backgroundFailed(ss *Session, log io.Writer, name string, err error) error 
 // a store with a remote is.
 func SyncsInBackground(e config.StoreEntry) bool { return len(e.Remotes) > 0 }
 
-// BeforeCommand, for the config cfg the command has read, reports the failure of a background sync that the user has
-// not been told of (through report), and starts one for each store with a
-// remote that is due (through start; sync.Start for the CLI). What goes
-// wrong here is left to the command itself to tell: it fails on the same
-// store or config.
+// BeforeCommand, for the config cfg the command has read, reports the
+// failure of a background sync that the user has not been told of (through
+// report), and starts one for each store with a remote that is due (through
+// start; sync.Start for the CLI). What goes wrong here is left to the
+// command itself to tell: it fails on the same store or config.
 func (ss *Session) BeforeCommand(cfg *config.Config, start func(s *store.Store, name string) error, report func(store, msg string)) {
 	targets, err := ss.SyncTargets(cfg, false)
 	if err != nil {

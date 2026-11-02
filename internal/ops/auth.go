@@ -294,10 +294,10 @@ func (ss *Session) AuthAdd(in AuthAddInput) (AuthAddResult, error) {
 // parseAddToken reads --token of auth add: gh, env:VAR or keychain. device
 // is left out: it comes only from a login.
 func parseAddToken(s string) (config.TokenSource, error) {
-	switch {
-	case s == "":
+	switch s {
+	case "":
 		return config.TokenSource{}, nil
-	case s == "gh" || s == "keychain":
+	case "gh", "keychain":
 		return config.TokenSource{Kind: s}, nil
 	}
 	if v, ok := strings.CutPrefix(s, "env:"); ok && v != "" {

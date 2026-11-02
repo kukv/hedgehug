@@ -266,7 +266,7 @@ func TestWatchAddsAndRemovesMe(t *testing.T) {
 	ts.dropDefaultAccount()
 	// With no account in config.yaml there is no "me" to watch with.
 	_, err := ts.Watch("ME-1", true)
-	if err == nil || !strings.Contains(err.Error(), "accounts are not set up") {
+	if err == nil || !strings.Contains(err.Error(), "no account is set up") {
 		t.Fatalf("Watch without an account: %v", err)
 	}
 	var ne *Error

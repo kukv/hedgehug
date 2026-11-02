@@ -359,10 +359,11 @@ type StoreAddResult struct {
 
 // StoreAdd adds the store that others made by cloning it from the first of
 // remotes, to path (under the data directory when empty), with the account
-// named account (the only account when empty; with two or more it is needed). A
-// clone that fails halfway removes what it made. A prefix that a workspace of
-// another store has too is warned of. Whether this machine may write to the
-// store is checked once it is added; a check that fails is a warning.
+// named account (the only account when empty; with two or more it is
+// needed). A clone that fails halfway removes what it made. A prefix that a
+// workspace of another store has too is warned of. Whether this machine may
+// write to the store is checked once it is added; a check that fails is a
+// warning.
 func (ss *Session) StoreAdd(name string, remotes []string, path, account string) (StoreAddResult, error) {
 	if len(remotes) == 0 {
 		return StoreAddResult{}, newErr(KindUsage, "store.remote_required", errors.New("a remote is needed"))

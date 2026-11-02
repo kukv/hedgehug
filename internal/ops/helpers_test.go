@@ -127,8 +127,13 @@ func (ts *testSession) nameAccountOfStores(name string) {
 }
 
 // firstAccountName is the name: of the first account in the accounts: text.
-func firstAccountName(text string) string {
-	m := regexp.MustCompile(`name:\s*"?([\w-]+)`).FindStringSubmatch(text[strings.Index(text, "accounts:"):])
+func firstAccountName(t *testing.T, text string) string {
+	t.Helper()
+	i := strings.Index(text, "accounts:")
+	if i < 0 {
+		t.Fatal("no accounts: in the config text")
+	}
+	m := regexp.MustCompile(`name:\s*"?([\w-]+)`).FindStringSubmatch(text[i:])
 	if m == nil {
 		return ""
 	}
@@ -195,7 +200,7 @@ func (ts *testSession) appendConfig(text string) {
 			ts.dropDefaultAccount()
 		}
 		if strings.Count(text, "login:") > 1 {
-			defer ts.nameAccountOfStores(firstAccountName(text))
+			defer ts.nameAccountOfStores(firstAccountName(ts.t, text))
 		}
 	}
 	_, p, err := ts.Config()

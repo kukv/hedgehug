@@ -11,6 +11,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/github"
 	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/plural"
 )
 
 func (a *app) authCmd() *cobra.Command {
@@ -116,11 +117,7 @@ func (a *app) printPinned(p ops.Pinned) error {
 	if len(p.Stores) == 0 {
 		return nil
 	}
-	word := "stores"
-	if len(p.Stores) == 1 {
-		word = "store"
-	}
-	_, err := fmt.Fprintf(a.stdout, "Set account %s on %s %s\n", p.Account, word, strings.Join(p.Stores, ", "))
+	_, err := fmt.Fprintf(a.stdout, "Set account %s on %s %s\n", p.Account, plural.Pick(len(p.Stores), "store", "stores"), strings.Join(p.Stores, ", "))
 	return err
 }
 

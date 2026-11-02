@@ -13,8 +13,18 @@ const noAccountMessage = "hedgehug: no account is set up; add one with hedgehug 
 func TestCommandsNeedAnAccount(t *testing.T) {
 	t.Parallel()
 	for _, args := range [][]string{
-		{"ls"}, {"add", "x"}, {"show", "ME-1"}, {"store", "init", "me", "--prefix", "ME"}, {"store", "list"},
-		{"sync"}, {"doctor"}, {"inbox"}, {"undo"}, {"ui"}, {"auth", "logout", "x"}, {"workspace", "ls"},
+		{"ls"},
+		{"add", "x"},
+		{"show", "ME-1"},
+		{"store", "init", "me", "--prefix", "ME"},
+		{"store", "list"},
+		{"sync"},
+		{"doctor"},
+		{"inbox"},
+		{"undo"},
+		{"ui"},
+		{"auth", "logout", "x"},
+		{"workspace", "ls"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			t.Parallel()
