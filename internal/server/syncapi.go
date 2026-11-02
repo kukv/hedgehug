@@ -13,6 +13,21 @@ import (
 type syncStatus struct {
 	ops.StoreStatus
 	NextFetch *time.Time `json:"next_fetch,omitempty" doc:"When the loop fetches next; absent before its first sync"`
+	PushAt    *time.Time `json:"push_at,omitempty" doc:"When the background sync pushes the writes not pushed yet (pending_since + sync.push_interval); absent when nothing waits"`
+}
+
+// newSyncStatus is st with when the loop fetches next and when the writes
+// waiting are pushed (push is sync.push_interval).
+func newSyncStatus(st ops.StoreStatus, l *Loop, push time.Duration) syncStatus {
+	v := syncStatus{StoreStatus: st}
+	if t, ok := l.NextFetch(st.Store); ok {
+		v.NextFetch = &t
+	}
+	if st.PendingSince != nil {
+		t := st.PendingSince.Add(push)
+		v.PushAt = &t
+	}
+	return v
 }
 
 type presenceInput struct {
@@ -27,17 +42,18 @@ func (s *Server) registerSync() {
 		OperationID: "get-sync", Method: http.MethodGet, Path: "/api/sync",
 		Summary: "How the syncs went, as hh sync --status", Tags: []string{"sync"},
 	}, func(context.Context, *struct{}) (*struct{ Body []syncStatus }, error) {
-		sts, err := s.session("").SyncStatus()
+		ss := s.session("")
+		c, _, err := ss.Config()
+		if err != nil {
+			return nil, problemOf(err)
+		}
+		sts, err := ss.SyncStatus()
 		if err != nil {
 			return nil, problemOf(err)
 		}
 		out := &struct{ Body []syncStatus }{[]syncStatus{}}
 		for _, st := range sts {
-			v := syncStatus{StoreStatus: st}
-			if t, ok := s.loop.NextFetch(st.Store); ok {
-				v.NextFetch = &t
-			}
-			out.Body = append(out.Body, v)
+			out.Body = append(out.Body, newSyncStatus(st, s.loop, c.Sync.PushInterval))
 		}
 		return out, nil
 	})

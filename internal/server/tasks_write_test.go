@@ -41,6 +41,23 @@ func TestCreateTask(t *testing.T) {
 	ts.problem("POST", "/api/tasks", map[string]any{}, 400)
 }
 
+func TestCreateTaskWithBodyAndRepos(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	var out taskWriteBody
+	ts.call("POST", "/api/tasks", map[string]any{
+		"title": "spec", "body": "line one\n\nline two\n", "repos": []string{"github.com/o/r"},
+	}, 201, &out)
+	if out.Task == nil || out.Commit == nil {
+		t.Fatalf("created = %+v", out)
+	}
+	s, _ := ts.session().OpenStore()
+	got, _ := s.Task(mustULID(t, out.Task.ULID))
+	if got.Body != "line one\n\nline two\n" || len(got.Repos) != 1 || got.Repos[0] != "github.com/o/r" {
+		t.Errorf("body = %q, repos = %q", got.Body, got.Repos)
+	}
+}
+
 func TestPatchTask(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)

@@ -40,11 +40,12 @@ func (r TaskResult) View() (*TaskView, error) {
 // schema's defaults; Parent and Workspace are names, as the user gives them,
 // read in the store the task goes to (Parent goes through ResolveRef). Store
 // is that store ("" selects as the session does; one other than the
-// session's own --store is store.conflict); Repos are the repo IDs to put on
-// the task.
+// session's own --store is store.conflict); Body is the Markdown body of the
+// task, as it is written; Repos are the repo IDs to put on the task.
 type AddInput struct {
 	Store                                  string
 	Title, Parent, Workspace, Kind, Status string
+	Body                                   string
 	Repos                                  []string
 	Assigns                                []Assign
 }
@@ -65,7 +66,7 @@ func (ss *Session) Add(in AddInput) (TaskResult, error) {
 		return TaskResult{}, err
 	}
 	sc := ix.Schema()
-	t := &model.Task{ULID: model.NewULID(), Title: in.Title, Kind: in.Kind, Status: in.Status, Repos: slices.Clone(in.Repos)}
+	t := &model.Task{ULID: model.NewULID(), Title: in.Title, Kind: in.Kind, Status: in.Status, Body: in.Body, Repos: slices.Clone(in.Repos)}
 	if t.Kind == "" {
 		k, ok := sc.DefaultKind()
 		if !ok {

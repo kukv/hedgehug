@@ -159,11 +159,7 @@ func (p *Poller) pollLocked(publish bool) {
 	statuses := map[string]syncStatus{}
 	if sts, err := ss.SyncStatus(); err == nil {
 		for _, st := range sts {
-			v := syncStatus{StoreStatus: st}
-			if t, ok := p.s.loop.NextFetch(st.Store); ok {
-				v.NextFetch = &t
-			}
-			statuses[st.Store] = v
+			statuses[st.Store] = newSyncStatus(st, p.s.loop, c.Sync.PushInterval)
 		}
 	}
 	// Only poll writes p.stores and the fields of a polled, and polls run

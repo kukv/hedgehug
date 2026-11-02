@@ -104,6 +104,22 @@ func TestAddProps(t *testing.T) {
 	}
 }
 
+func TestAddBody(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	got := te.addJSON("Spec", "--body", "line one\n\nline two\n", "-p", "repos=github.com/o/r")
+	tk := te.task(got.ULID)
+	if tk.Body != "line one\n\nline two\n" || len(tk.Repos) != 1 || tk.Repos[0] != "github.com/o/r" {
+		t.Errorf("body = %q, repos = %q", tk.Body, tk.Repos)
+	}
+	if n := len(te.log("me")); n != 2 {
+		t.Errorf("commits = %d, want 2 (init, add): the body is part of the add", n)
+	}
+	if bare := te.addJSON("Bare"); te.task(bare.ULID).Body != "" {
+		t.Errorf("a task added without --body has body %q", te.task(bare.ULID).Body)
+	}
+}
+
 func TestAddErrors(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)

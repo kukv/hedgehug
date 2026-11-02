@@ -152,6 +152,9 @@ func TestPollSyncState(t *testing.T) {
 	if e.Store != "me" {
 		t.Errorf("event = %+v", e)
 	}
+	if e.PushAt == nil || !e.PushAt.Equal(e.PendingSince.Add(30*time.Second)) {
+		t.Errorf("push_at = %v; want pending_since + 30s", e.PushAt)
+	}
 }
 
 func TestPollUnread(t *testing.T) {
