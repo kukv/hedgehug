@@ -112,6 +112,24 @@ func runProperty(t *testing.T, seed, steps int) {
 			fail("%s: Task(u2)\n got %v\nwant %v", label, got, want)
 		}
 		reach := naive(t, s.Repo(), head)
+		// AtOrBefore answers as a walk down the first parents does.
+		for range 4 {
+			from := reach[rnd.IntN(len(reach))]
+			at := t0.Add(time.Duration(rnd.IntN(clock+3)-1) * time.Second)
+			want, wantOK := plumbing.ZeroHash, false
+			if err := s.Repo().WalkFirstParents(from, func(e gitrepo.LogEntry) bool {
+				if !e.When.After(at) {
+					want, wantOK = e.Hash, true
+					return false
+				}
+				return true
+			}); err != nil {
+				fail("%s: walk: %v", label, err)
+			}
+			if got, ok, err := h.AtOrBefore(from, at); err != nil || ok != wantOK || got != want {
+				fail("%s: AtOrBefore(%v, %v) = %v, %v, %v; want %v, %v", label, from, at, got, ok, err, want, wantOK)
+			}
+		}
 		for range 4 {
 			from := reach[rnd.IntN(len(reach))]
 			q := paths[rnd.IntN(len(paths))]

@@ -17,7 +17,8 @@ import (
 //	strings         uvarint count, then each as uvarint length + bytes
 //	commits         uvarint count, then each: hash (20 bytes), author time
 //	                (varint Unix seconds), zone offset (varint seconds),
-//	                gen (uvarint), then the string indices (uvarint) of
+//	                gen (uvarint), parent (uvarint: 1 + the index of the
+//	                first parent, 0 for none), then the string indices (uvarint) of
 //	                Author, Email, Op, Task and Workspace
 //	paths           uvarint count, then each: string index of the path,
 //	                uvarint count of commits, then the commit indices
@@ -28,7 +29,7 @@ import (
 // range, indices not ascending) makes load report false.
 const (
 	fileMagic  = "HHHI"
-	fileFormat = 1
+	fileFormat = 2
 	hashLen    = 20
 
 	maxZoneOffset = 18 * 60 * 60 // seconds; an offset beyond ±18h is damage
@@ -72,6 +73,7 @@ func (h *History) save(s *store.Store) {
 		putI(&body, r.sec)
 		putI(&body, int64(r.zone))
 		putU(&body, uint64(r.gen))
+		putU(&body, uint64(r.parent))
 		for _, v := range []uint32{r.author, r.email, r.op, r.task, r.workspace} {
 			putU(&body, uint64(v))
 		}
@@ -187,6 +189,11 @@ func (h *History) load(s *store.Store) bool {
 		}
 		c.zone = int32(off)
 		c.gen = uint32(r.uvarint()) //nolint:gosec // a generation
+		p := r.uvarint()
+		if p > uint64(len(h.recs)) { // before this commit
+			return false
+		}
+		c.parent = uint32(p) //nolint:gosec // at most len(h.recs)
 		c.author, c.email, c.op, c.task, c.workspace = str(), str(), str(), str(), str()
 		if r.bad {
 			return false

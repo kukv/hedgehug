@@ -81,6 +81,7 @@ type rec struct {
 	sec       int64  // author time, Unix seconds
 	zone      int32  // its offset from UTC, seconds
 	gen       uint32 // as Commit.Gen
+	parent    uint32 // 1 + the index of the first parent; 0 for a root commit
 	author    uint32
 	email     uint32
 	op        uint32
@@ -259,6 +260,12 @@ func (h *History) add(added []gitrepo.LogEntry, opt Options) error {
 			return err
 		}
 		c := Commit{Hash: e.Hash, When: e.When, Gen: 1, Email: e.Author.Email}
+		var parent uint32
+		if len(e.Parents) > 0 {
+			if pi, ok := known[e.Parents[0]]; ok {
+				parent = uint32(pi) + 1 //nolint:gosec // an index
+			}
+		}
 		for _, p := range e.Parents {
 			if pi, ok := known[p]; ok {
 				c.Gen = max(c.Gen, h.recs[pi].gen+1)
@@ -268,7 +275,7 @@ func (h *History) add(added []gitrepo.LogEntry, opt Options) error {
 		c.Op, _ = e.Trailer("Hedgehug-Op")
 		c.Task, _ = e.Trailer("Hedgehug-Task")
 		c.Workspace, _ = e.Trailer("Hedgehug-Workspace")
-		h.put(c, files)
+		h.put(c, parent, files)
 		if progress != nil && ((i+1)%progressInterval == 0 || i+1 == total) {
 			progress(i+1, total)
 		}
@@ -276,11 +283,11 @@ func (h *History) add(added []gitrepo.LogEntry, opt Options) error {
 	return nil
 }
 
-func (h *History) put(c Commit, files []string) {
+func (h *History) put(c Commit, parent uint32, files []string) {
 	i := len(h.recs)
 	_, off := c.When.Zone()
 	h.recs = append(h.recs, rec{
-		hash: c.Hash, sec: c.When.Unix(), zone: int32(off), gen: c.Gen, //nolint:gosec // an offset is within a day
+		hash: c.Hash, parent: parent, sec: c.When.Unix(), zone: int32(off), gen: c.Gen, //nolint:gosec // an offset is within a day
 		author: h.intern(c.Author), email: h.intern(c.Email), op: h.intern(c.Op), task: h.intern(c.Task), workspace: h.intern(c.Workspace),
 	})
 	h.hashes()[c.Hash] = i
@@ -411,4 +418,24 @@ func (h *History) Entries(cs []Commit, limit int) ([]gitrepo.LogEntry, error) {
 		out = append(out, e)
 	}
 	return out, nil
+}
+
+// AtOrBefore returns the newest commit on the first-parent line from the
+// commit from that was made at or before t; false when there is none. It
+// is ErrNotIndexed when from is not in the index.
+func (h *History) AtOrBefore(from plumbing.Hash, t time.Time) (plumbing.Hash, bool, error) {
+	i, ok := h.hashes()[from]
+	if !ok {
+		return plumbing.ZeroHash, false, ErrNotIndexed
+	}
+	for {
+		r := &h.recs[i]
+		if !time.Unix(r.sec, 0).After(t) {
+			return r.hash, true, nil
+		}
+		if r.parent == 0 {
+			return plumbing.ZeroHash, false, nil
+		}
+		i = int(r.parent) - 1
+	}
 }
