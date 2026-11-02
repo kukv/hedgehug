@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TaskCache } from "./cache";
+import { errorMessage } from "./messages";
 import { changed, FakeConn, fakeApi, problem, type Req, settle, showOf, tv } from "./testing";
 
 afterEach(() => {
@@ -180,6 +181,31 @@ describe("TaskCache lists", () => {
       fail = true;
       await expect(cache.refreshTrees()).rejects.toMatchObject({ type: "internal" });
       expect(w.roots().map((x) => x.ulid)).toEqual(["R"]);
+      w.dispose();
+    });
+
+    it("resolves, with no error, when the tree is let go while it is being read", async () => {
+      let n = 0;
+      let release: () => void = () => {};
+      const gate = new Promise<void>((r) => (release = r));
+      const { cache } = setup(async () => {
+        if (n++ > 0) await gate;
+        return { roots: [tv("R")] };
+      });
+      const w = cache.watchTree({ q: "", tree: true });
+      await vi.waitFor(() => expect(w.loading()).toBe(false));
+      const p = cache.refreshTrees();
+      w.dispose();
+      release();
+      await p;
+    });
+
+    it("rejects with an error that errorMessage words in Japanese", async () => {
+      const { cache } = setup(() => problem(500, "internal"));
+      const w = cache.watchTree({ q: "", tree: true });
+      await vi.waitFor(() => expect(w.error()).not.toBeNull());
+      const err = await cache.refreshTrees().catch((e: unknown) => e);
+      expect(errorMessage(err)).toMatch(/[ぁ-んァ-ン]/);
       w.dispose();
     });
 

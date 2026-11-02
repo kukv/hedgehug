@@ -193,6 +193,22 @@ describe("TreeView drag and drop", () => {
     expect(api.POST).not.toHaveBeenCalled();
   });
 
+  it("drops the drops still waiting when one is refused", async () => {
+    const { api, refresh } = setup();
+    let shown: () => void = () => {};
+    refresh.mockReturnValueOnce(new Promise<void>((resolve) => (shown = resolve)));
+    api.POST.mockResolvedValue(ok({ task: task("T9", "task", "P"), commit: "c1" }));
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    row("E8").onDrop("T9", "before"); // goes through, and waits for the tree
+    row("T7").onDrop("E8", "child"); // refused: an epic under a task
+    row("E8").onDrop("T7", "before"); // waits behind the refused one
+    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
+    shown();
+    await waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 40));
+    expect(api.POST).toHaveBeenCalledTimes(1);
+  });
+
   it("makes a child on an accepted drop", async () => {
     const { api } = setup();
     api.POST.mockResolvedValue(ok({ task: task("T9", "task", "E8"), commit: "c1" }));

@@ -575,7 +575,9 @@
       if (!d || !t) return true;
       if (!d.ok) {
         if (!d.silent && !gone) toast({ message: `${d.title}。${d.reason}` });
-        return true;
+        // A refusal drops the moves still waiting, as a refused key does; a drop that changes
+        // nothing (silent) does not.
+        return d.silent;
       }
       try {
         const { commit } = await moveTask(c, t, d.to);

@@ -37,8 +37,8 @@ type QueryState = {
   loading: boolean;
   seq: number;
   released: boolean;
-  // the latest fetch (true: its answer is held): a fetch that a newer one overtook waits for it
-  last: Promise<boolean>;
+  // the latest fetch (null: its answer is held; else why not): a fetch that a newer one overtook waits for it
+  last: Promise<ApiError | null>;
 };
 
 type DetailState = {
@@ -248,9 +248,9 @@ export class TaskCache {
   // the error of a tree that could not be read: the order held is then the old one.
   async refreshTrees(): Promise<void> {
     const trees = [...this.queries.values()].filter((s) => s.query.tree);
-    const done = await Promise.all(trees.map((s) => this.fetchQuery(s)));
-    const failed = trees.find((_, i) => !done[i]);
-    if (failed) throw failed.error ?? new Error("tree not read");
+    const errors = await Promise.all(trees.map((s) => this.fetchQuery(s)));
+    const failed = errors.find((e) => e !== null);
+    if (failed) throw failed;
   }
 
   // ---- queries
@@ -269,7 +269,7 @@ export class TaskCache {
         loading: true,
         seq: 0,
         released: false,
-        last: Promise.resolve(true),
+        last: Promise.resolve(null),
       };
       this.queries.set(key, s);
       void this.fetchQuery(s);
@@ -284,22 +284,22 @@ export class TaskCache {
     for (const [k, v] of this.queries) if (v === s) this.queries.delete(k);
   }
 
-  private fetchQuery(s: QueryState): Promise<boolean> {
+  private fetchQuery(s: QueryState): Promise<ApiError | null> {
     const p = this.runFetch(s);
     s.last = p;
     return p;
   }
 
-  private async runFetch(s: QueryState): Promise<boolean> {
+  private async runFetch(s: QueryState): Promise<ApiError | null> {
     const seq = ++s.seq;
-    let failed = false;
+    let failed: ApiError | null = null;
     const since = this.epoch;
     const { q, tree, store } = s.query;
     try {
       const out = await unwrap(
         this.api.GET("/api/tasks", { params: { query: { q, tree, store } } }),
       );
-      if (seq !== s.seq || s.released) return seq !== s.seq ? s.last : true; // a newer fetch is on its way
+      if (seq !== s.seq || s.released) return seq !== s.seq ? s.last : null; // a newer fetch is on its way
       if (tree) {
         const roots = reuseNodes(this.ingestTrees(out.roots ?? [], since), s.roots);
         if (roots !== s.roots) {
@@ -323,17 +323,17 @@ export class TaskCache {
       if (s.error) this.dirty = true;
       s.error = null;
     } catch (e) {
-      if (seq !== s.seq || s.released) return seq !== s.seq ? s.last : true;
+      if (seq !== s.seq || s.released) return seq !== s.seq ? s.last : null;
       s.error = toApiError(e);
+      failed = s.error;
       this.dirty = true;
-      failed = true;
     }
     if (s.loading) {
       s.loading = false;
       this.dirty = true;
     }
     this.flush();
-    return !failed;
+    return failed;
   }
 
   // ingestTree takes in a task and, under it, its children.
