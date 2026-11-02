@@ -11,7 +11,7 @@ hedgehug is a single Go binary for Linux and macOS (on Windows, it runs in WSL).
   `.github/workflows/ci.yaml`)
 - [gotestsum](https://github.com/gotestyourself/gotestsum) for `make test` and `make cover`
 - [GoReleaser](https://goreleaser.com/) v2 for `make release-check`
-- run `go env -w GOFLAGS=-trimpath` once: without it the build cache keys the packages of this module by their directory, so every worktree compiles and caches them again (`mise.toml` sets the same, but mise reads its `[env]` only for a trusted config)
+- run `go env -w GOFLAGS=-trimpath` once: without it the build cache keys the packages of this module by their directory, so every worktree compiles and caches them again (`mise.toml` sets the same, but mise reads its `[env]` only for a trusted config). Note that this setting applies to all your Go projects, not just this repository; if you want it for this repository only, run `mise trust` on `mise.toml` instead
 
 ```bash
 make check          # everything CI checks: tidy, lint, fmt, test

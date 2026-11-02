@@ -66,10 +66,16 @@ Windows をやめたあとは、`GOOS=windows` のビルドは通らなくてよ
 
 ### テストのジョブを分ける
 
-- test のマトリクスを `os: [ubuntu-latest, macos-latest]` × `shard: 3 つ` にする。ubuntu は -race 付き、macOS は race なし（いまと同じ）
-- 分け方は、パッケージの一覧を3つに分けて ci.yaml に書く。最初の PR の CI でパッケージごとの時間を出し（gotestsum の JSON から集計する）、3つの合計が均等になるように決める。候補は `internal/ops`／`cmd/hedgehug`／その他
-- 新しいパッケージが漏れないよう、3つ目は「1つ目と2つ目に含まれないすべて」として `go list ./...` から引く
-- キャッシュのキーは OS・race の有無・shard の番号で決める。shard ごとにビルドするパッケージが違うため。保存は今と同じく main への push のときだけ、各 shard が自分の分を保存する（1つ約 385MB × 6 と nogit の約 315MB で約 2.6GB。リポジトリの上限 10GB に収まる）
+- test のマトリクスを `os: [ubuntu-latest, macos-latest]` × `shard: 1〜6` にする。ubuntu は -race 付き、macOS は race なし（いまと同じ）
+- 分け方は、最初の CI のパッケージごとの時間を見て決めた。internal/sync が race 付きで 140〜157 秒かかり、そのほとんどが2つの property テストだったため、最初に考えた3つでは均せなかった。6つに分け、各 shard の担当は次のとおり
+  1. internal/ops
+  2. cmd/hedgehug
+  3. internal/sync の `TestPropertyConverges`
+  4. internal/sync の `TestPropertyConvergesStores`
+  5. internal/sync の残りと internal/server
+  6. 残りのすべて
+- 新しいパッケージが漏れないよう、6 は「1〜5 に含まれないすべて」として `go list ./...` から引く。新しいパッケージは 6 に入る
+- キャッシュのキーは OS・race の有無・shard の番号で決める。shard ごとにビルドするパッケージが違うため。保存は今と同じく main への push のときだけ、各 shard が自分の分を保存する。キーが OS・race・shard ごとなので 12 個になる（ubuntu は1つ約 385MB、macOS は約 331MB の見込みで、合わせて約 4.3GB）。nogit と lint の分を足しても、リポジトリの上限 10GB に収まる。ただし go.mod・go.sum が変わるたびに新しいキーの組が増える。古いものは GitHub が使われない順に消す
 
 ### 結果をまとめるジョブ
 
@@ -77,15 +83,15 @@ Windows をやめたあとは、`GOOS=windows` のビルドは通らなくてよ
 - report ジョブ（ubuntu、全 shard のあと、`!cancelled()`）がそれらを落とし、カバレッジを1つにつなぐ（2つ目以降の `mode:` の行を除く）。そのうえで Test Report（dorny、`test-report-*.xml`）と octocov に渡す。投稿する条件は今と同じ（同じリポジトリの PR、Dependabot を除く）
 ### 必須チェック
 
-ruleset `protect-default-branch`（id 26175024）は `test (ubuntu-latest)`・`test (macos-latest)`・`test (windows-latest)` を必須にしている。このままだと Windows のジョブがなくなった PR はマージできない。
+ruleset `protect-default-branch`（id 26175024）は、もともと `test (ubuntu-latest)`・`test (macos-latest)`・`test (windows-latest)` を必須にしていた。このままだと Windows のジョブがなくなった PR はマージできない。
 
 - report ジョブの名前を `test` にし、全 shard の結果を見て、1つでも失敗・取り消しがあれば失敗する（`needs` と `if: always()`、`needs.*.result` を確かめる）。shard の数や分け方を変えても、必須チェックの名前は変わらない
-- ruleset の必須チェックから3つの `test (…)` を外し、`test` を足す。ruleset の変更は利用者の承認を得てから `gh api` で行う。PR の CI が緑になったのを確かめてから変える
+- ruleset の必須チェックを、3つの `test (…)` から `test` 1つに変えた（2026-11-02、利用者の承認を得て `gh api` で変更済み）
 
 ### lint
 
 - golangci-lint-action の自前のキャッシュは PR でも保存している（`skip-save-cache: false`）。テストと同じく保存は main への push だけにする（PR では `skip-save-cache: true`）
-- 2分12秒の内訳を最初の PR の CI で確かめる。Go のビルドキャッシュを復元して短くなるなら、テストと同じ方式（保存は main だけ、`go mod verify`）で入れる。短くならなければ入れない
+- 2分12秒の内訳を最初の PR の CI で確かめたところ、golangci-lint の 2分7秒のうち 1分59秒がパッケージの読み込みだった。そこで lint にも Go のビルドキャッシュを足した（テストと同じ方式。保存は main だけ、`go mod verify`）
 
 ### そのまま残すもの
 
@@ -144,3 +150,8 @@ WSL の仮想ディスク（ext4.vhdx）は書き込みで膨らみ、中のフ�
   - テストの件数が減っていない（Windows だけのテストを消した分を除く。消したものは PR の説明に挙げる）
   - `GOFLAGS=-trimpath` で、別の worktree のビルドがキャッシュに当たる（`go build -x` で compile が走らないこと）
   - `testenv` の後始末を `internal/testenv` のテストで確かめる: テストのバイナリを子として起動して `hedgehug-test-<子の pid>` を作らせ、SIGKILL で止める。そのあと掃除の関数を呼ぶと、そのディレクトリが消え、動いているプロセス（自分）のディレクトリは残る
+
+## 実装で足したこと
+
+- 書き込み中の読み取りで参照が見えない競合を直した。go-git は参照のファイルを切り詰めてから書くため、その間に読むと「参照が見つからない」になっていた。参照は一時ファイルに書いて rename で置き換える。参照名の検査は go-git の公開の `IsSafe` だけにした（利用者の決定）
+- `TestDrainSyncsAgainAfterARunningSync` が不安定だった問題を直した。原因はテストの中の順序で、本番のコードの問題ではない

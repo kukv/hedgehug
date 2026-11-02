@@ -30,7 +30,7 @@ tidy-check:
 test:
 	gotestsum --format testdox -- -race ./...
 
-# Run tests with the race detector and coverage (mirrors the CI test step).
+# Run tests with the race detector and coverage (what CI reports as coverage).
 cover:
 	gotestsum --format testdox -- -race -coverprofile=coverage.out -covermode=atomic ./...
 

@@ -52,6 +52,9 @@ func TestHeadIsAlwaysReadableWhileCommitting(t *testing.T) {
 			}
 		}()
 	}
+	// Stop the readers even if the writer below fails the test; the normal
+	// path stops them before it checks the result, so this may run twice.
+	defer func() { stop.Store(true); wg.Wait() }()
 	for i := 1; i <= 50; i++ {
 		writeFile(t, dir, "a.md", fmt.Sprint(i))
 		_, err := w.Commit(Commit{Paths: []string{"a.md"}, Subject: fmt.Sprint(i), Author: author, When: time.Now()})

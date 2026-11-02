@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -56,6 +57,17 @@ func TestSweepRemovesTheDirectoryOfAGoneProcess(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
+	// The child sleeps for an hour: kill it even if the test fails before the
+	// kill below. The kill must also happen before Sweep, so the function can
+	// run twice; the Once makes the second call a no-op.
+	var once sync.Once
+	killChild := func() {
+		once.Do(func() {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		})
+	}
+	t.Cleanup(killChild)
 	line, err := bufio.NewReader(out).ReadString('\n')
 	if err != nil {
 		t.Fatal(err)
@@ -64,8 +76,7 @@ func TestSweepRemovesTheDirectoryOfAGoneProcess(t *testing.T) {
 	if filepath.Dir(child) != base {
 		t.Fatalf("the child made %s, not in %s", child, base)
 	}
-	_ = cmd.Process.Kill()
-	_ = cmd.Wait()
+	killChild()
 
 	alive := filepath.Join(base, prefix+strconv.Itoa(os.Getpid()))
 	other := filepath.Join(base, prefix+"x")
