@@ -22,6 +22,7 @@ import (
 	"github.com/pb33f/libopenapi"
 	validator "github.com/pb33f/libopenapi-validator"
 
+	"github.com/kukv/hedgehug/internal/config"
 	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/model"
@@ -86,9 +87,6 @@ func newTestServerWith(t *testing.T, edit func(*Options)) *testServer {
 	d := t.TempDir()
 	home := filepath.Join(d, "home")
 	if err := os.MkdirAll(home, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte("[user]\n\tname = Alice\n\temail = alice@example.com\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	ts := &testServer{t: t, log: &bytes.Buffer{}, env: map[string]string{
@@ -275,6 +273,9 @@ func mustULID(t *testing.T, s string) model.ULID {
 }
 
 func slicesEqual[T comparable](a, b []T) bool { return slices.Equal(a, b) }
+
+// testAccount is the account of defaultAccountYAML.
+var testAccount = config.Account{Name: "alice", Host: "github.com", Login: "alice"}
 
 // defaultAccountYAML is the account every test server starts with.
 const defaultAccountYAML = "accounts:\n  - name: alice\n    host: github.com\n    login: alice\n"

@@ -210,6 +210,9 @@ func (c *Config) loadStores(seq *yaml.Node) error {
 			}
 			e.Account = a.Value
 		}
+		if e.Account == "" && len(c.Accounts) > 1 {
+			return c.errAt(it, fmt.Sprintf("stores: %q has no account; with %d accounts every store needs account: <name>", e.Name, len(c.Accounts)))
+		}
 		c.Stores = append(c.Stores, e)
 	}
 	return nil

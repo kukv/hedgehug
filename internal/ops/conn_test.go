@@ -275,7 +275,8 @@ func TestPickAccount(t *testing.T) {
 	if acct, ok, err := ts.PickAccount(c, ""); !ok || err != nil || acct.Name != "a" {
 		t.Errorf("the only account: %v %v %v", acct, ok, err)
 	}
-	ts.appendConfig("  - {name: b, host: github.com, login: bob}\n")
+	ts.dropAccounts()
+	ts.appendConfig("accounts:\n  - {name: a, host: github.com, login: alice}\n  - {name: b, host: github.com, login: bob}\n")
 	c, _, _ = ts.Config()
 	if _, ok, err := ts.PickAccount(c, ""); ok || err != nil {
 		t.Errorf("two accounts, no name: ok=%v err=%v", ok, err)

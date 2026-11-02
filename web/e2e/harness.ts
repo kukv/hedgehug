@@ -48,9 +48,6 @@ export class Hedgehug {
       ...process.env,
       HEDGEHUG_HOME: join(home, "hh"),
       HEDGEHUG_AUTO_SYNC: "0",
-      // The author of the commits comes from the global git config.
-      HOME: join(home, "user"),
-      GIT_CONFIG_GLOBAL: join(home, "user", ".gitconfig"),
     };
   }
 
@@ -116,10 +113,11 @@ export class Hedgehug {
 /** Starts hh ui on a new home with the store, or with no store when it is null. */
 export async function startHedgehug(store: StoreSpec | null): Promise<Hedgehug> {
   const home = mkdtempSync(join(tmpdir(), "hh-e2e-"));
-  mkdirSync(join(home, "user"));
+  // hh needs an account; the author of the commits is its login.
+  mkdirSync(join(home, "hh"));
   writeFileSync(
-    join(home, "user", ".gitconfig"),
-    "[user]\n\tname = E2E\n\temail = e2e@example.com\n",
+    join(home, "hh", "config.yaml"),
+    "accounts:\n  - name: e2e\n    host: github.com\n    login: e2e\n",
   );
   const env = Hedgehug.env(home);
   if (store) {

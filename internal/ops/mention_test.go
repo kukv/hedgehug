@@ -108,18 +108,24 @@ func TestCommentAuthorOps(t *testing.T) {
 func TestCommentWithoutAuthor(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
-	ts.dropDefaultAccount()
-	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
+	r, err := ts.Add(AddInput{Title: "a"})
+	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := ts.CommentAdd("ME-1", "nobody")
-	if err != nil || c.Comment.Author != "" {
-		t.Fatalf("CommentAdd = %+v, %v", c.Comment, err)
+	// A comment file with no author, as an older store may hold one.
+	s, err := ts.OpenStore()
+	if err != nil {
+		t.Fatal(err)
 	}
-	ts.asAccount("alice")
-	_, err = ts.CommentEdit(c.Ref.Comment.String(), "x")
+	cu := model.NewULID()
+	if _, err := ts.Update(s, store.Op{Name: "comment", Task: r.ULID}, func(tx *store.Tx) error {
+		return tx.PutComment(r.ULID, &model.Comment{ULID: cu, Body: "nobody\n"})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = ts.CommentEdit(cu.String(), "x")
 	wantErr(t, err, KindConflict, "comment.no_author")
-	_, err = ts.CommentRemove(c.Ref.Comment.String())
+	_, err = ts.CommentRemove(cu.String())
 	wantErr(t, err, KindConflict, "comment.no_author")
 }
 

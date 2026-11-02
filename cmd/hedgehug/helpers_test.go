@@ -25,8 +25,7 @@ import (
 )
 
 // testEnv runs the command with HEDGEHUG_HOME and HOME in temporary
-// directories, an author in HOME/.gitconfig, and the account alice in
-// config.yaml.
+// directories, and the account alice in config.yaml.
 type testEnv struct {
 	t        *testing.T
 	home     string
@@ -53,9 +52,6 @@ func newTestEnv(t *testing.T) *testEnv {
 		env:    map[string]string{},
 	}
 	if err := os.MkdirAll(te.home, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(te.home, ".gitconfig"), []byte("[user]\n\tname = Alice\n\temail = alice@example.com\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(te.hhHome, 0o750); err != nil {

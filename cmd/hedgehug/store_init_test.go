@@ -121,22 +121,6 @@ func TestStoreSelection(t *testing.T) {
 	}
 }
 
-func TestStoreInitNoAuthor(t *testing.T) {
-	t.Parallel()
-	te := newTestEnv(t)
-	te.dropDefaultAccount()
-	if err := os.Remove(filepath.Join(te.home, ".gitconfig")); err != nil {
-		t.Fatal(err)
-	}
-	code, _, stderr := te.run("store", "init", "me", "--prefix", "ME")
-	if code != 1 || !strings.Contains(stderr, "user.name") {
-		t.Errorf("exit %d, stderr %q", code, stderr)
-	}
-	if _, err := os.Stat(te.storeDir("me")); err == nil {
-		t.Error("a store was made with no author")
-	}
-}
-
 func TestStoreInitNeedsPrefix(t *testing.T) {
 	t.Parallel()
 	te := newTestEnv(t)

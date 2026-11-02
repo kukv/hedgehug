@@ -71,19 +71,11 @@ func (ss *Session) StoreInit(in StoreInitInput) (StoreInitResult, error) {
 	if err := ss.CheckPrefixElsewhere(prefix, name); err != nil {
 		return StoreInitResult{}, err
 	}
-	// Account, or the only account. Without either, the store has no account
-	// (a remote on a GitHub host then fails in prepareRemotes).
+	// Account, or the only account. With neither, a remote on a GitHub host
+	// fails in prepareRemotes; any other store is stopped after it.
 	acct, haveAcct, err := ss.PickAccount(c, in.Account)
 	if err != nil {
 		return StoreInitResult{}, err
-	}
-	author, err := config.CommitAuthor(acct, haveAcct, ss.Getenv)
-	if err != nil {
-		return StoreInitResult{}, err
-	}
-	accountID := ""
-	if haveAcct {
-		accountID = acct.ID()
 	}
 	dir := filepath.Join(p.StoresDir, name)
 	if in.Path != "" {
@@ -100,6 +92,11 @@ func (ss *Session) StoreInit(in StoreInitInput) (StoreInitResult, error) {
 		// made holds what was made before the failure, GitHub repos too.
 		return StoreInitResult{}, made.note(err)
 	}
+	if !haveAcct {
+		// No remote asked for an account; a store needs one all the same.
+		return StoreInitResult{}, made.note(errors.Join(noAccountChoice(c), made.undo()))
+	}
+	author, accountID := config.CommitAuthor(acct), acct.ID()
 	ws := &model.Workspace{ULID: model.NewULID(), Name: wsName, IDPrefix: prefix}
 	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, in.Schema, ws, author, accountID, ss.Now)
 	if err != nil {
@@ -284,6 +281,20 @@ func (ss *Session) prepareRemotes(c *config.Config, e config.StoreEntry, acct co
 	return m, nil
 }
 
+// noAccountChoice is the error for a store made with no account named while
+// c has two or more: the choice among them. With none at all it is
+// errNoAccounts.
+func noAccountChoice(c *config.Config) error {
+	if len(c.Accounts) == 0 {
+		return errNoAccounts
+	}
+	names := make([]string, len(c.Accounts))
+	for i, a := range c.Accounts {
+		names[i] = a.Name
+	}
+	return choiceRequired("--account", names)
+}
+
 // noAccountFor is the error for the remote u on the GitHub host host when no
 // account was picked: a choice among the accounts of that host, or, with none
 // on it, the way to set one up.
@@ -348,7 +359,7 @@ type StoreAddResult struct {
 
 // StoreAdd adds the store that others made by cloning it from the first of
 // remotes, to path (under the data directory when empty), with the account
-// named account (none is set when empty, and the only account writes). A
+// named account (the only account when empty; with two or more it is needed). A
 // clone that fails halfway removes what it made. A prefix that a workspace of
 // another store has too is warned of. Whether this machine may write to the
 // store is checked once it is added; a check that fails is a warning.
@@ -368,11 +379,14 @@ func (ss *Session) StoreAdd(name string, remotes []string, path, account string)
 	}
 	// An account that is named must be there, before anything is cloned.
 	e := config.StoreEntry{Name: name, Remotes: remotes}
+	acct, ok, err := ss.PickAccount(c, account)
+	if err != nil {
+		return StoreAddResult{}, err
+	}
+	if !ok {
+		return StoreAddResult{}, noAccountChoice(c)
+	}
 	if account != "" {
-		acct, _, err := ss.PickAccount(c, account)
-		if err != nil {
-			return StoreAddResult{}, err
-		}
 		e.Account = acct.Name
 	}
 	dir := filepath.Join(p.StoresDir, name)

@@ -48,7 +48,7 @@ func (a *app) rootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		Args:          cobra.NoArgs,
 		// Every subcommand uses this one: none has a hook of its own.
-		PersistentPreRun: a.beforeCommand,
+		PersistentPreRunE: a.beforeRun,
 		// completion comes in phase 7.
 		CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -78,6 +78,37 @@ func asUsage(f cobra.PositionalArgs) cobra.PositionalArgs {
 		}
 		return nil
 	}
+}
+
+// noAccountCommands are the commands that run when no account is set up
+// (spec §5.1): the ones that set one up, and merge-driver, which git calls in
+// the middle of a sync. --help and --version never reach beforeRun.
+var noAccountCommands = map[string]bool{
+	"hedgehug auth login":   true,
+	"hedgehug auth add":     true,
+	"hedgehug auth status":  true,
+	"hedgehug help":         true,
+	"hedgehug merge-driver": true,
+}
+
+// errNoAccountSetUp is what a command that needs an account answers when
+// there is none.
+var errNoAccountSetUp = errors.New("no account is set up; add one with hedgehug auth add <name> --login <login> (or hedgehug auth login)")
+
+// beforeRun is the hook of every command: it stops a command that needs an
+// account when none is set up, then runs beforeCommand.
+func (a *app) beforeRun(cmd *cobra.Command, args []string) error {
+	if !noAccountCommands[cmd.CommandPath()] {
+		c, _, err := a.ss.Config()
+		if err != nil {
+			return err
+		}
+		if len(c.Accounts) == 0 {
+			return errNoAccountSetUp
+		}
+	}
+	a.beforeCommand(cmd, args)
+	return nil
 }
 
 // beforeCommand reports the failure of a background sync that the user has

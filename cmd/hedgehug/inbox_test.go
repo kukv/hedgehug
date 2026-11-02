@@ -205,14 +205,6 @@ func TestInboxRejectsBadArguments(t *testing.T) {
 	}
 }
 
-func TestInboxWithoutAccounts(t *testing.T) {
-	t.Parallel()
-	te := newTestEnv(t)
-	te.dropDefaultAccount()
-	te.ok("store", "init", "me", "--prefix", "ME")
-	te.goldenRun("inbox", 0, "inbox")
-}
-
 func TestInboxPrefixDuplicate(t *testing.T) {
 	t.Parallel()
 	alice, bob, _ := twoUsers(t)

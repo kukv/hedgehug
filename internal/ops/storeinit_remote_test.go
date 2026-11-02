@@ -96,18 +96,22 @@ func TestStoreInitWritesTheAccount(t *testing.T) {
 	}
 }
 
-// With two accounts and none named, a store with no GitHub remote has no
-// account, and nothing is written for it.
-func TestStoreInitNoAccountPicked(t *testing.T) {
+// With two accounts and none named, a store with no GitHub remote is refused,
+// and nothing is written for it.
+func TestStoreInitNoAccountPickedIsRefused(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
 	ts.appendConfig("accounts:\n  - {name: a, host: github.com, login: alice}\n  - {name: b, host: github.com, login: bob}\n")
-	if _, err := ts.StoreInit(StoreInitInput{Name: "x", Prefix: "XX"}); err != nil {
+	_, err := ts.StoreInit(StoreInitInput{Name: "x", Prefix: "XX"})
+	wantErr(t, err, KindUsage, "choice.required")
+	if got := namedStores(t, ts, "x"); len(got) != 0 {
+		t.Errorf("stores named x = %+v, want none", got)
+	}
+	if _, err := ts.StoreInit(StoreInitInput{Name: "x", Prefix: "XX", Account: "b"}); err != nil {
 		t.Fatal(err)
 	}
-	got := namedStores(t, ts, "x")
-	if len(got) != 1 || got[0].Account != "" {
-		t.Errorf("stores named x = %+v, want one with no account", got)
+	if got := namedStores(t, ts, "x"); len(got) != 1 || got[0].Account != "b" {
+		t.Errorf("stores named x = %+v, want one with the account b", got)
 	}
 }
 

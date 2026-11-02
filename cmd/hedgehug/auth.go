@@ -116,7 +116,7 @@ func (a *app) authStatus() error {
 		return err
 	}
 	if len(out) == 0 {
-		_, perr := fmt.Fprintln(a.stdout, "No account is set up; run hedgehug auth login")
+		_, perr := fmt.Fprintln(a.stdout, "No account is set up; add one with hedgehug auth add <name> --login <login> (or hedgehug auth login)")
 		return perr
 	}
 	rows := make([][]string, len(out))

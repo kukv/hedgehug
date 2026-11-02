@@ -37,12 +37,8 @@ func TestInitCreatesUsers(t *testing.T) {
 	}
 	for _, u := range []string{"alice", "bob"} {
 		home := filepath.Join(dir, "users", u)
-		gc, err := os.ReadFile(filepath.Join(home, ".gitconfig"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !strings.Contains(string(gc), "name = "+u) || !strings.Contains(string(gc), "email = "+u+"@example.com") {
-			t.Errorf("%s .gitconfig = %q", u, gc)
+		if _, err := os.Stat(filepath.Join(home, ".gitconfig")); err == nil {
+			t.Errorf("%s has a .gitconfig; the author is the account's login", u)
 		}
 		cfg, err := os.ReadFile(filepath.Join(home, "config.yaml"))
 		if err != nil {
@@ -205,7 +201,7 @@ func TestEnv(t *testing.T) {
 		t.Fatalf("env = %d, stderr %q", code, stderr)
 	}
 	home := filepath.Join(dir, "users", "alice")
-	want := "export HEDGEHUG_HOME='" + home + "'\nexport GIT_CONFIG_GLOBAL='" + filepath.Join(home, ".gitconfig") + "'\n" +
+	want := "export HEDGEHUG_HOME='" + home + "'\n" +
 		"export HH_DEV_TOKEN='dev-alice'\nexport HH_DEV_TOKEN_WORK='dev-alice-corp'\n"
 	if stdout != want {
 		t.Errorf("env = %q, want %q", stdout, want)
@@ -307,10 +303,6 @@ func TestInitPhase3a(t *testing.T) {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("alice's config lacks %q:\n%s", want, b)
 		}
-	}
-	gc, _ := os.ReadFile(filepath.Join(dir, "users", "alice", ".gitconfig"))
-	if !strings.Contains(string(gc), "insteadOf = https://github.com/") {
-		t.Errorf("alice's .gitconfig = %q", gc)
 	}
 	for _, r := range []string{"kukv/hh-tasks.git", "org-a/hh-shared.git", "org-b/hh-ops.git"} {
 		if ok, err := gitrepo.HeadHasFile(filepath.Join(dir, "remotes", r), ".hedgehug/store.yaml"); err != nil || !ok {

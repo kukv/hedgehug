@@ -84,21 +84,6 @@ func TestAutoWatchersOnCommentEdit(t *testing.T) {
 	}
 }
 
-func TestNoWatcherWithoutAccounts(t *testing.T) {
-	t.Parallel()
-	te := newTestEnv(t)
-	te.dropDefaultAccount()
-	te.ok("store", "init", "me", "--prefix", "ME")
-	te.ok("add", "x")
-	te.ok("comment", "ME-1", "hi @carol")
-	if got := watchersOf(t, te, "ME-1"); len(got) != 0 {
-		t.Errorf("watchers = %v, want none", got)
-	}
-	for _, c := range []string{"watch", "unwatch"} {
-		te.goldenRun(c, 1, c, "ME-1")
-	}
-}
-
 func TestWatchUnwatch(t *testing.T) {
 	t.Parallel()
 	_, bob, _ := twoUsers(t)

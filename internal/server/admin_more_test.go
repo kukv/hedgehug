@@ -67,10 +67,7 @@ func (ts *testServer) commitRaw(rel, body string) {
 	if err := os.WriteFile(filepath.Join(e.Path, filepath.FromSlash(rel)), []byte(body), 0o600); err != nil {
 		ts.t.Fatal(err)
 	}
-	author, err := config.CommitAuthor(config.Account{}, false, ts.getenv)
-	if err != nil {
-		ts.t.Fatal(err)
-	}
+	author := config.CommitAuthor(testAccount)
 	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: author, When: time.Now()}); err != nil {
 		ts.t.Fatal(err)
 	}

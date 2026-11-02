@@ -72,8 +72,8 @@ func TestWatchMe(t *testing.T) {
 func TestWatchMeWithoutAccountIsConflict(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	ts.dropDefaultAccount()
 	id := ts.add("one", "")
+	ts.dropDefaultAccount()
 	if p := ts.problem("PUT", "/api/tasks/"+id+"/watchers/me", nil, 409); p.Type != "account.none" {
 		t.Errorf("problem = %+v", p)
 	}

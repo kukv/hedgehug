@@ -468,7 +468,7 @@ func (ss *Session) Update(s *store.Store, op store.Op, fn func(*store.Tx) error)
 
 // UpdateCommit runs one operation as one commit and returns its hash, the
 // zero hash when the operation changed nothing. The author is the store's
-// account, or the git config when the store has none.
+// account.
 func (ss *Session) UpdateCommit(s *store.Store, op store.Op, fn func(*store.Tx) error) (plumbing.Hash, error) {
 	// Operations refuse a read-only store when they open it (OpenForWrite);
 	// this catches a write that did not come through there.
@@ -479,14 +479,11 @@ func (ss *Session) UpdateCommit(s *store.Store, op store.Op, fn func(*store.Tx) 
 	if err != nil {
 		return plumbing.ZeroHash, err
 	}
-	author, err := config.CommitAuthor(acct, ok, ss.Getenv)
-	if err != nil {
-		return plumbing.ZeroHash, err
+	if !ok {
+		return plumbing.ZeroHash, errNoAccounts
 	}
-	op.Author = author
-	if ok {
-		op.Account = acct.ID()
-	}
+	op.Author = config.CommitAuthor(acct)
+	op.Account = acct.ID()
 	if ss.BeforeUpdate != nil {
 		ss.BeforeUpdate()
 	}
@@ -528,14 +525,10 @@ func (ss *Session) markWritten(s *store.Store) {
 // stores whose id prefixes it checks.
 func (ss *Session) SyncOptions(c *config.Config, e config.StoreEntry) (sync.Options, error) {
 	acct, ok := c.Writer(e)
-	author, err := config.CommitAuthor(acct, ok, ss.Getenv)
-	if err != nil {
-		return sync.Options{}, err
+	if !ok {
+		return sync.Options{}, errNoAccounts
 	}
-	opt := sync.Options{Name: e.Name, Remotes: e.Remotes, Author: author, Me: c.Me(), Now: ss.Now, Conn: ss.Conn(c, e), GitHub: ss.githubRepoOf(c, e)}
-	if ok {
-		opt.Account = acct.ID()
-	}
+	opt := sync.Options{Name: e.Name, Remotes: e.Remotes, Author: config.CommitAuthor(acct), Account: acct.ID(), Me: c.Me(), Now: ss.Now, Conn: ss.Conn(c, e), GitHub: ss.githubRepoOf(c, e)}
 	for _, o := range c.Stores {
 		if o.Name != e.Name {
 			opt.Others = append(opt.Others, sync.OtherStore{Name: o.Name, Path: o.Path})

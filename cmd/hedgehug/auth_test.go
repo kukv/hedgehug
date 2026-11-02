@@ -382,13 +382,19 @@ func TestAuthStatusEmptyAndBare(t *testing.T) {
 	keyring.MockInit()
 	te := newTestEnv(t)
 	te.dropDefaultAccount()
-	if out := te.ok("auth", "status"); !strings.Contains(out, "auth login") {
-		t.Errorf("status = %q", out)
+	const want = "No account is set up; add one with hedgehug auth add <name> --login <login> (or hedgehug auth login)\n"
+	if out := te.ok("auth", "status"); out != want {
+		t.Errorf("status = %q, want %q", out, want)
 	}
 	if out := te.ok("auth", "status", "--json"); strings.TrimSpace(out) != "[]" {
 		t.Errorf("status --json = %q", out)
 	}
-	if code, _, errs := te.run("auth"); code != 2 || !strings.Contains(errs, "subcommand") {
+	// A bare auth is not on the list of commands that run without an account
+	// (the entry stops it); with one it is a usage error.
+	if code, _, errs := te.run("auth"); code != 1 || !strings.Contains(errs, "no account is set up") {
+		t.Errorf("auth without an account: exit %d, %q", code, errs)
+	}
+	if code, _, errs := newTestEnv(t).run("auth"); code != 2 || !strings.Contains(errs, "subcommand") {
 		t.Errorf("auth: exit %d, %q", code, errs)
 	}
 }

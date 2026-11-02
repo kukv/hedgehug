@@ -197,7 +197,7 @@ func TestStoreAddErrors(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(work, "x.txt"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	author, _ := config.CommitAuthor(config.Account{}, false, ts.Getenv)
+	author := config.CommitAuthor(testAccount)
 	if _, err := r.Commit(gitrepo.Commit{Paths: []string{"x.txt"}, Subject: "x", Author: author, When: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
@@ -259,6 +259,34 @@ func TestStoreAddClonesToAPath(t *testing.T) {
 	}
 }
 
+// With two accounts a store cannot do without one: store add asks for it.
+func TestStoreAddNeedsTheAccountWhenThereAreTwo(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	remote := addBareRemote(t, ts)
+	if _, err := ts.Sync(false, true); err != nil {
+		t.Fatal(err)
+	}
+	other := otherSession(t, ts, ts.Now())
+	other.appendConfig("accounts:\n  - {name: a, host: github.com, login: alice}\n  - {name: b, host: github.com, login: bob}\n")
+	_, err := other.StoreAdd("copy", []string{remote}, "", "")
+	wantErr(t, err, KindUsage, "choice.required")
+	if _, err := other.StoreAdd("copy", []string{remote}, "", "b"); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := other.StoreList(); len(list) != 1 || list[0].Account != "github.com/bob" {
+		t.Errorf("StoreList = %+v; want the account github.com/bob", list)
+	}
+}
+
+func TestWriteWithoutAnAccountIsRefused(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	ts.dropDefaultAccount()
+	_, err := ts.Add(AddInput{Title: "x"})
+	wantErr(t, err, KindConflict, "account.none")
+}
+
 func TestStoreAddWarnsOfPrefixDuplicates(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
@@ -290,7 +318,7 @@ func TestWarnPrefixDuplicatesNamesTheLaterWorkspace(t *testing.T) {
 	c, p, _ := ts.Config()
 	// Two stores that share the prefix ME, the second set later (the store stamps a zero time with now).
 	later := &model.Workspace{ULID: model.NewULID(), Name: "late", IDPrefix: "ME", PrefixSet: ts.Now().Add(time.Hour)}
-	author, _ := config.CommitAuthor(config.Account{}, false, ts.Getenv)
+	author := config.CommitAuthor(testAccount)
 	dir := filepath.Join(p.StoresDir, "late")
 	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "late"}, schema.Default(), later, author, "", ts.Now)
 	if err != nil {
