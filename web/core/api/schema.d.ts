@@ -799,7 +799,7 @@ export interface components {
             /** @description true marks every unread item read; not with ids */
             all?: boolean;
             /** @description The ULIDs of the items to mark read; not with all */
-            ids?: string[] | null;
+            ids?: string[];
         };
         NotificationReadOutputBody: {
             /** @description The ULIDs of the items marked read, as hh inbox read --json */

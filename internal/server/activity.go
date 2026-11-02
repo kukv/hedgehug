@@ -68,7 +68,7 @@ type notificationReadInput struct {
 	StoreParam
 	Body struct {
 		All bool     `json:"all,omitempty" doc:"true marks every unread item read; not with ids"`
-		IDs []string `json:"ids,omitempty" doc:"The ULIDs of the items to mark read; not with all"`
+		IDs []string `json:"ids,omitempty" nullable:"false" doc:"The ULIDs of the items to mark read; not with all"`
 	}
 }
 

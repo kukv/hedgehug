@@ -184,6 +184,31 @@ func TestNotificationsReadMany(t *testing.T) {
 	}
 }
 
+// ?store= picks the store whose items are marked read.
+func TestNotificationsReadStoreParam(t *testing.T) {
+	t.Parallel()
+	ts := twoStores(t)
+	ss := ts.session()
+	ss.StoreName = "team"
+	v, err := ss.Add(ops.AddInput{Title: "in team"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mine := ts.notifyIn("me", overwrittenItem(v.ULID, v.ULID.String(), "title", `"x"`))
+	theirs := ts.notifyIn("team", overwrittenItem(v.ULID, v.ULID.String(), "title", `"y"`))
+	var res struct {
+		Read []string `json:"read"`
+	}
+	ts.call("POST", "/api/notifications/read?store=team", map[string]any{"all": true}, 200, &res)
+	if len(res.Read) != 1 || res.Read[0] != theirs {
+		t.Fatalf("read = %v; want only %s", res.Read, theirs)
+	}
+	ts.call("POST", "/api/notifications/read?store=me", map[string]any{"ids": []string{mine}}, 200, &res)
+	if len(res.Read) != 1 || res.Read[0] != mine {
+		t.Errorf("read = %v; want only %s", res.Read, mine)
+	}
+}
+
 func TestUndoNothingIsConflict(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)

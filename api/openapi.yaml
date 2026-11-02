@@ -600,9 +600,7 @@ components:
           description: The ULIDs of the items to mark read; not with all
           items:
             type: string
-          type:
-            - array
-            - "null"
+          type: array
       type: object
     NotificationReadOutputBody:
       additionalProperties: false
