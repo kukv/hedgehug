@@ -70,7 +70,7 @@ type Result struct {
 	Notices     []inbox.Item // what the sync added to the inbox
 	// Warnings are what failed after the push, which the sync did not undo:
 	// other stores' prefixes, the inbox, finding the invalid tasks,
-	// repacking.
+	// consolidating the packs.
 	Warnings []string
 	// Unpushable counts the commits not pushed because the store is read-only.
 	Unpushable int
@@ -88,7 +88,8 @@ const (
 // Replaced by tests.
 var (
 	retryWait    = 500 * time.Millisecond // the first wait after a rejected push; it doubles
-	repackAt     = 6700                   // repack when there are more loose objects
+	repackAt     = 6700                   // consolidate when there are more loose objects
+	packsAt      = 16                     // or more packs below gitrepo.PackCap
 	beforeCommit = func() {}              // runs before each fast-forward, merge or repair commit
 	onFullRepair = func() {}              // runs when the repair reads every file of HEAD
 )
@@ -255,8 +256,10 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 	warn("find the invalid tasks", findInvalid(s, ix, was, before, &res))
 	n, err := r.LooseObjects()
 	warn("count the loose objects", err)
-	if err == nil && n > repackAt {
-		warn("repack", r.Repack())
+	packs, perr := r.SmallPacks()
+	warn("count the packs", perr)
+	if (err == nil && n > repackAt) || (perr == nil && packs > packsAt) {
+		warn("consolidate the packs", r.Consolidate())
 	}
 	return res, nil
 }

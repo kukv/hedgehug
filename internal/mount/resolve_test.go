@@ -214,19 +214,38 @@ func TestResolveAfterAnotherHandleRepackedTheStore(t *testing.T) {
 	if _, err := set.Resolve("API-1"); err != nil {
 		t.Fatal(err)
 	}
-	// another handle writes, repacks (the loose objects the first handle
+	// another handle writes, consolidates (the loose objects the first handle
 	// knew are gone) and writes again
 	putTasks(t, a, 1, nil)
 	s, err := store.Open(a.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Repo().Repack(); err != nil {
-		t.Fatal(err)
+	// a pack after each write, so that some are merged into a new one and
+	// removed: the packs the first handle knew are gone
+	seen := map[string]bool{}
+	packs := func() []string {
+		m, err := filepath.Glob(filepath.Join(a.Path, ".git", "objects", "pack", "*.pack"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	for range 4 {
+		if err := s.Repo().Consolidate(); err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range packs() {
+			seen[p] = true
+		}
+		putTasks(t, a, 1, nil)
+	}
+	if len(packs()) >= len(seen) {
+		t.Fatalf("no pack was removed: %v of %d", packs(), len(seen))
 	}
 	putTasks(t, a, 1, nil)
-	if hit, err := set.Resolve("API-3"); err != nil || hit.Entry.ID != "API-3" {
-		t.Errorf("Resolve(API-3) = %v, %v", hit, err)
+	if hit, err := set.Resolve("API-7"); err != nil || hit.Entry.ID != "API-7" {
+		t.Errorf("Resolve(API-7) = %v, %v", hit, err)
 	}
 }
 
