@@ -107,6 +107,28 @@ func TestLogJSON(t *testing.T) {
 	}
 }
 
+func TestLogWorkspaceThroughTheIndex(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	te.ok("workspace", "add", "api", "--prefix", "API")
+	te.ok("add", "m1", "--workspace", "me")
+	te.ok("add", "a1", "--workspace", "api")
+	te.ok("add", "m2", "--workspace", "me")
+	te.ok("add", "a2", "--workspace", "api")
+	te.ok("add", "m3", "--workspace", "me")
+	if got, want := subjects(te.ok("log", "--workspace", "api")), []string{"add", "add", "workspace"}; !slices.Equal(got, want) { // a2, a1 and the workspace add itself
+		t.Fatalf("log --workspace api = %v, want %v", got, want)
+	}
+	out := te.ok("log", "--workspace", "me", "-n", "2")
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) != 2 || !strings.Contains(lines[0], "m3") || !strings.Contains(lines[1], "m2") {
+		t.Errorf("log --workspace me -n 2 want m3 then m2 (the newest kept):\n%s", out)
+	}
+	if strings.Contains(out, "a1") || strings.Contains(out, "a2") {
+		t.Errorf("another workspace's commits in:\n%s", out)
+	}
+}
+
 func TestLogShowsCurrentID(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)

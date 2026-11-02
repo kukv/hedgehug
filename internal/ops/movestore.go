@@ -585,9 +585,6 @@ func (j *moveJob) moveInRecorded(tasks []*model.Task) (bool, error) {
 	}
 	from := j.src.Meta().ULID.String()
 	for _, c := range log {
-		if op, _ := c.Trailer("Hedgehug-Op"); op != "move-in" {
-			continue
-		}
 		if f, _ := c.Trailer("Hedgehug-Moved-From"); f != from {
 			continue
 		}

@@ -58,7 +58,7 @@ func newer(a, b Commit) bool {
 }
 
 // Options of Open. Progress, when set, is told how many of the commits to
-// add are done, now and then while they are added.
+// add are done: 0 at the start, then now and then while they are added.
 type Options struct {
 	Progress func(done, total int)
 }
@@ -167,6 +167,9 @@ func (h *History) newCommits(head plumbing.Hash) (added []gitrepo.LogEntry, reac
 // add indexes the commits, parents first.
 func (h *History) add(added []gitrepo.LogEntry, progress func(done, total int)) error {
 	total := len(added)
+	if progress != nil && total > 0 {
+		progress(0, total) // so that whoever times the work starts at its start
+	}
 	for i, e := range added {
 		_, files, err := h.repo.ChangedFiles(e.Hash)
 		if err != nil {

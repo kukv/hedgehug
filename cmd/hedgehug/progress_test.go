@@ -17,7 +17,7 @@ func TestProgress(t *testing.T) {
 		p(store, done, total)
 		return out.String()
 	}
-	if got := step(0, "me", 1000, 5000); got != "" {
+	if got := step(0, "me", 0, 5000); got != "" {
 		t.Errorf("first call wrote %q", got)
 	}
 	if got := step(500*time.Millisecond, "me", 2000, 5000); got != "" {
@@ -34,12 +34,25 @@ func TestProgress(t *testing.T) {
 	}
 }
 
+func TestProgressStartsAtTheStartOfTheWork(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+	var out bytes.Buffer
+	p := newProgress(&out, func() time.Time { return now })
+	p("me", 0, 5000)
+	now = now.Add(1100 * time.Millisecond) // the first 1000 commits took longer than a second
+	p("me", 1000, 5000)
+	if got, want := out.String(), "Indexing the history of me: 1000/5000 commits\n"; got != want {
+		t.Errorf("wrote %q, want %q", got, want)
+	}
+}
+
 func TestProgressSaysNothingForQuickWork(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
 	var out bytes.Buffer
 	p := newProgress(&out, func() time.Time { return now })
-	p("me", 1000, 2000)
+	p("me", 0, 2000)
 	now = now.Add(100 * time.Millisecond)
 	p("me", 2000, 2000)
 	if out.Len() != 0 {
@@ -52,7 +65,7 @@ func TestProgressEndWithoutAnEarlierLineSaysNothing(t *testing.T) {
 	now := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
 	var out bytes.Buffer
 	p := newProgress(&out, func() time.Time { return now })
-	p("me", 1000, 1001)
+	p("me", 0, 1001)
 	now = now.Add(2 * time.Second)
 	p("me", 1001, 1001)
 	if out.Len() != 0 {

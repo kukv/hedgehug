@@ -226,8 +226,8 @@ func TestOpenAddsOnlyNewCommits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(totals, []int{1}) || !slices.Equal(dones, []int{1}) {
-		t.Fatalf("progress done %v of %v, want 1 of 1", dones, totals)
+	if !slices.Equal(totals, []int{1, 1}) || !slices.Equal(dones, []int{0, 1}) {
+		t.Fatalf("progress done %v of %v, want 0 and 1 of 1", dones, totals)
 	}
 	if len(h.All()) != 3 {
 		t.Fatalf("%d commits, want 3", len(h.All()))
@@ -256,7 +256,7 @@ func TestProgressEveryThousand(t *testing.T) {
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(dones, []int{1000, 1001}) {
+	if !slices.Equal(dones, []int{0, 1000, 1001}) {
 		t.Fatalf("progress %v", dones)
 	}
 }
