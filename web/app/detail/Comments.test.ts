@@ -154,6 +154,86 @@ describe("Comments", () => {
     expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
   });
 
+  it("keeps what was written here when a read brings only the change of someone else", async () => {
+    const { k, container, rerender } = setup();
+    k.api.PATCH.mockImplementation(() =>
+      ok({ comment: { ...c1, body: "直しました" }, commit: "c2" }),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "編集" }));
+    typeInto(container, "直しました", 0);
+    await fireEvent.click(await screen.findByRole("button", { name: "保存" }));
+    expect(await screen.findByText("直しました")).toBeInTheDocument();
+    const other = { ulid: "C2", author: "sato", created: "2026-11-04T11:00:00Z", body: "他の人" };
+    await rerender({ show: { ...show, comments: [c1, other] }, readonly: false });
+    expect(await screen.findByText("他の人")).toBeInTheDocument();
+    expect(screen.getByText("直しました")).toBeInTheDocument();
+    await rerender({
+      show: { ...show, comments: [{ ...c1, body: "直しました" }, other] },
+      readonly: false,
+    });
+    expect(screen.getByText("直しました")).toBeInTheDocument();
+  });
+
+  it("keeps a comment deleted here hidden until the read lacks it", async () => {
+    const { k, rerender } = setup();
+    k.api.DELETE.mockImplementation(() => ok({ comment: c1, commit: "c5" }));
+    await fireEvent.click(screen.getByRole("button", { name: "削除" }));
+    const dialog = await screen.findByRole("dialog", { name: "コメントを削除" });
+    await fireEvent.click(within(dialog).getByRole("button", { name: "削除" }));
+    await waitFor(() => expect(screen.queryByText(c1.body)).toBeNull());
+    const other = { ulid: "C2", author: "sato", created: "2026-11-04T11:00:00Z", body: "他の人" };
+    await rerender({ show: { ...show, comments: [c1, other] }, readonly: false });
+    expect(await screen.findByText("他の人")).toBeInTheDocument();
+    expect(screen.queryByText(c1.body)).toBeNull();
+    await rerender({ show: { ...show, comments: [other] }, readonly: false });
+    expect(screen.getByText("他の人")).toBeInTheDocument();
+  });
+
+  it("keeps a comment posted here until the read has it", async () => {
+    const { k, container, rerender } = setup();
+    const mine = { ulid: "C9", author: "koki", created: "2026-11-04T12:00:00Z", body: "自分の" };
+    k.api.POST.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
+    typeInto(container, "自分の", 0);
+    await fireEvent.click(await screen.findByRole("button", { name: "コメント" }));
+    expect(await screen.findByText("自分の")).toBeInTheDocument();
+    const other = { ulid: "C2", author: "sato", created: "2026-11-04T11:00:00Z", body: "他の人" };
+    await rerender({ show: { ...show, comments: [c1, other] }, readonly: false });
+    expect(await screen.findByText("他の人")).toBeInTheDocument();
+    expect(screen.getByText("自分の")).toBeInTheDocument();
+  });
+
+  it("posts once when the key is pressed twice before the answer", async () => {
+    const { k, container } = setup();
+    k.api.POST.mockImplementation(() => new Promise(() => {}));
+    typeInto(container, "x", 0);
+    const editor = viewOf(container, 0).contentDOM;
+    const press = () =>
+      fireEvent.keyDown(editor, { key: "Enter", code: "Enter", keyCode: 13, ctrlKey: true });
+    await press();
+    await press();
+    expect(k.api.POST).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "コメント" })).toBeDisabled();
+  });
+
+  it("cannot close the confirmation while the deletion runs, so its error is not lost", async () => {
+    const { k } = setup();
+    let release!: () => void;
+    k.api.DELETE.mockImplementation(
+      () =>
+        new Promise((r) => {
+          release = () => r(fail(409, "comment.not_author", { author: "tanaka" }));
+        }),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "削除" }));
+    const dialog = await screen.findByRole("dialog", { name: "コメントを削除" });
+    await fireEvent.click(within(dialog).getByRole("button", { name: "削除" }));
+    expect(within(dialog).getByRole("button", { name: "キャンセル" })).toBeDisabled();
+    await fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.getByRole("dialog", { name: "コメントを削除" })).toBeInTheDocument();
+    release();
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+  });
+
   it("has no form when read-only", () => {
     setup(true);
     expect(screen.queryByRole("button", { name: "コメント" })).toBeNull();

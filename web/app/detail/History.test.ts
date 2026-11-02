@@ -96,6 +96,25 @@ describe("History", () => {
     expect(toasts.list[0]?.message).toBe("2 項目を戻しました");
   });
 
+  it("cannot close the restore confirmation while the restore runs, so its error shows", async () => {
+    const { k } = setup();
+    let release!: () => void;
+    k.api.POST.mockImplementation(
+      () =>
+        new Promise((r) => {
+          release = () => r(fail(409, "store.read_only", { store: "shared" }));
+        }),
+    );
+    await fireEvent.click(await screen.findByRole("button", { name: "この時点に戻す" }));
+    const dialog = await screen.findByRole("dialog");
+    await fireEvent.click(await within(dialog).findByRole("button", { name: "2 項目を戻す" }));
+    expect(within(dialog).getByRole("button", { name: "キャンセル" })).toBeDisabled();
+    await fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    release();
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+  });
+
   it("says so, and offers no restore, when the task is the same as at that time", async () => {
     setup(false, show);
     await fireEvent.click(await screen.findByRole("button", { name: "この時点に戻す" }));

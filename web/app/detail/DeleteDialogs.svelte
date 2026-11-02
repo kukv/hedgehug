@@ -30,32 +30,46 @@
   let busy = $state(false);
   let error = $state("");
 
+  // The number of the open: the answer of an earlier one does not fill a later one.
+  let round = 0;
+
+  // Closing while a write runs would leave its error in a dialog nobody sees.
+  function close() {
+    if (!busy) open = null;
+  }
+
   async function openDelete() {
+    const mine = ++round;
     open = "delete";
     error = "";
     descendants = null;
     try {
-      descendants = await collectDescendants(api, show.store, show.ulid);
+      const found = await collectDescendants(api, show.store, show.ulid);
+      if (mine === round) descendants = found;
     } catch (e) {
+      if (mine !== round) return;
       error = errorMessage(e);
       descendants = [];
     }
   }
 
   async function openPurge() {
+    const mine = ++round;
     open = "purge";
     error = "";
     typed = "";
     targets = null;
     try {
-      targets = await probePurge(deps, ref);
+      const found = await probePurge(deps, ref);
+      if (mine === round) targets = found;
     } catch (e) {
       // Not a purge.unconfirmed: no confirmation to show, only the error.
-      error = errorMessage(e);
+      if (mine === round) error = errorMessage(e);
     }
   }
 
   async function confirmDelete() {
+    if (busy) return;
     busy = true;
     error = "";
     // Read before the await: the answer of the write changes the cache, and `show` with it.
@@ -92,7 +106,7 @@
   }
 
   async function confirmPurge() {
-    if (!targets) return;
+    if (!targets || busy) return;
     busy = true;
     error = "";
     // Read before the await: once the task is purged the cache forgets it, and `show` is gone.
@@ -140,7 +154,7 @@
     title="{show.id} {show.title} を削除"
     width={560}
     cli={cliRm(show.id)}
-    onclose={() => (open = null)}
+    onclose={close}
   >
     {#if descendants === null}
       <p class="muted">配下を調べています…</p>
@@ -163,7 +177,7 @@
       <p class="error" role="alert">{error}</p>
     {/if}
     {#snippet footer()}
-      <Button onclick={() => (open = null)}>キャンセル</Button>
+      <Button disabled={busy} onclick={close}>キャンセル</Button>
       <Button
         variant="danger"
         disabled={busy || descendants === null}
@@ -173,13 +187,7 @@
     {/snippet}
   </Dialog>
 {:else if open === "purge"}
-  <Dialog
-    open
-    title="{show.id} を完全に削除"
-    width={560}
-    cli={cliPurge(show.id)}
-    onclose={() => (open = null)}
-  >
+  <Dialog open title="{show.id} を完全に削除" width={560} cli={cliPurge(show.id)} onclose={close}>
     <p>タスクのファイルとコメントを消します。Hedgehug からは復元できません。</p>
     <p>git の履歴には残ります。番号 {show.id} は再利用しません。</p>
     {#if targets === null}
@@ -207,7 +215,7 @@
       <p class="error" role="alert">{error}</p>
     {/if}
     {#snippet footer()}
-      <Button onclick={() => (open = null)}>キャンセル</Button>
+      <Button disabled={busy} onclick={close}>キャンセル</Button>
       <Button
         variant="danger"
         disabled={busy || targets === null || targets.length === 0 || typed !== show.store}

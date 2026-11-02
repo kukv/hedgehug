@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { type ShowView, unwrap } from "../../core/api/client";
   import { cliComment } from "../../core/cli";
   import { formatDateTime } from "../../core/format";
@@ -17,24 +18,41 @@
 
   const { api, cache } = core();
 
-  // What was written here, until the task is read again (show.updated changes) and has it.
+  // What was written here, each until the task is read again and says it (or says something newer). from is the
+  // text the comment had in the task when it was edited.
   let overlay = $state<{
     added: CommentView[];
-    changed: Record<string, CommentView>;
+    changed: Record<string, { view: CommentView; from: string | undefined }>;
     removed: string[];
   }>({ added: [], changed: {}, removed: [] });
   // A comment commit leaves the task's `updated` as it is, so the comments themselves are the key.
   const readKey = $derived(JSON.stringify(show.comments ?? []));
   $effect(() => {
     void readKey;
-    overlay = { added: [], changed: {}, removed: [] };
+    untrack(reconcile);
   });
+
+  // A read that brings the change of someone else, before it has what was written here, keeps what was written.
+  function reconcile() {
+    const base = show.comments ?? [];
+    const has = new Set(base.map((c) => c.ulid));
+    const changed: typeof overlay.changed = {};
+    for (const [u, o] of Object.entries(overlay.changed)) {
+      const now = base.find((c) => c.ulid === u);
+      if (now && now.body === o.from) changed[u] = o;
+    }
+    overlay = {
+      added: overlay.added.filter((a) => !has.has(a.ulid)),
+      changed,
+      removed: overlay.removed.filter((u) => has.has(u)),
+    };
+  }
   const list = $derived.by(() => {
     const base = show.comments ?? [];
     return [
       ...base
         .filter((c) => !overlay.removed.includes(c.ulid))
-        .map((c) => overlay.changed[c.ulid] ?? c),
+        .map((c) => overlay.changed[c.ulid]?.view ?? c),
       ...overlay.added.filter((a) => !base.some((c) => c.ulid === a.ulid)),
     ];
   });
@@ -47,9 +65,13 @@
   let errors = $state<Record<string, string>>({});
   const submitKey = kbdLabel("mod+enter");
 
+  // One write at a time: a second key or click before the answer would post the comment twice.
+  let writing = $state(false);
+
   async function post() {
     const body = draft.trim();
-    if (body === "") return;
+    if (body === "" || writing) return;
+    writing = true;
     formError = "";
     try {
       const r = await unwrap(
@@ -64,6 +86,8 @@
       writer?.setText("");
     } catch (e) {
       formError = errorMessage(e);
+    } finally {
+      writing = false;
     }
   }
 
@@ -74,6 +98,8 @@
   }
 
   async function saveEdit(c: CommentView) {
+    if (writing) return;
+    writing = true;
     errors = {};
     try {
       const r = await unwrap(
@@ -83,10 +109,15 @@
         }),
       );
       cache.noteOwnCommit(r.commit);
-      overlay.changed = { ...overlay.changed, [c.ulid]: r.comment };
+      overlay.changed = {
+        ...overlay.changed,
+        [c.ulid]: { view: r.comment, from: show.comments?.find((x) => x.ulid === c.ulid)?.body },
+      };
       editingId = null;
     } catch (e) {
       errors = { ...errors, [c.ulid]: errorMessage(e) };
+    } finally {
+      writing = false;
     }
   }
 
@@ -101,6 +132,7 @@
   }
 
   async function remove(c: CommentView) {
+    if (deleteBusy) return;
     deleteBusy = true;
     deleteError = "";
     try {
@@ -144,7 +176,13 @@
               onsubmit={() => void saveEdit(c)}
             />
             <div class="row">
-              <Button size="sm" variant="primary" onclick={() => void saveEdit(c)}>保存</Button>
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={writing}
+                onclick={() => void saveEdit(c)}
+                >保存</Button
+              >
               <Button size="sm" onclick={() => (editingId = null)}>キャンセル</Button>
             </div>
           {:else}
@@ -176,7 +214,10 @@
         onedit={(t) => (draft = t)}
         onsubmit={() => void post()}
       />
-      <Button variant="primary" disabled={draft.trim() === ""} onclick={() => void post()}
+      <Button
+        variant="primary"
+        disabled={draft.trim() === "" || writing}
+        onclick={() => void post()}
         >コメント</Button
       >
     </div>
@@ -193,14 +234,16 @@
     title="コメントを削除"
     width={560}
     cli={cliComment(show.id, "rm", target.ulid)}
-    onclose={() => (deleting = null)}
+    onclose={() => {
+      if (!deleteBusy) deleting = null;
+    }}
   >
     <p>このコメントを削除します。元に戻せません。</p>
     {#if deleteError}
       <p class="error" role="alert">{deleteError}</p>
     {/if}
     {#snippet footer()}
-      <Button onclick={() => (deleting = null)}>キャンセル</Button>
+      <Button disabled={deleteBusy} onclick={() => (deleting = null)}>キャンセル</Button>
       <Button variant="danger" disabled={deleteBusy} onclick={() => void remove(target)}
         >削除</Button
       >

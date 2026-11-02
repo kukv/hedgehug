@@ -145,4 +145,79 @@ describe("DeleteDialogs (variant deleted)", () => {
     expect(box).toHaveValue("");
     expect(within(dialog).getByRole("alert")).toHaveTextContent("対象が変わりました");
   });
+
+  it("cannot close the delete confirmation while the deletion runs, so its error shows", async () => {
+    const k = makeCore({ show });
+    k.api.GET.mockImplementation(() => ok({ tasks: [] }));
+    let release!: () => void;
+    k.api.DELETE.mockImplementation(
+      () =>
+        new Promise((r) => {
+          release = () => r(fail(409, "store.read_only", { store: "shared" }));
+        }),
+    );
+    mount(DeleteDialogs, { show, variant: "delete" }, k);
+    await fireEvent.click(screen.getByRole("button", { name: "削除" }));
+    const dialog = await screen.findByRole("dialog");
+    const del = await within(dialog).findByRole("button", { name: "削除" });
+    await waitFor(() => expect(del).toBeEnabled());
+    await fireEvent.click(del);
+    expect(within(dialog).getByRole("button", { name: "キャンセル" })).toBeDisabled();
+    await fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    release();
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+  });
+
+  it("does not let the answer of an earlier open of the delete confirmation fill a later one", async () => {
+    const k = makeCore({ show });
+    let first!: (v: unknown) => void;
+    let n = 0;
+    k.api.GET.mockImplementation(() =>
+      n++ === 0
+        ? new Promise((r) => {
+            first = r;
+          })
+        : ok({ tasks: [] }),
+    );
+    mount(DeleteDialogs, { show, variant: "delete" }, k);
+    await fireEvent.click(screen.getByRole("button", { name: "削除" }));
+    let dialog = await screen.findByRole("dialog");
+    await fireEvent.click(within(dialog).getByRole("button", { name: "キャンセル" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await fireEvent.click(screen.getByRole("button", { name: "削除" }));
+    dialog = await screen.findByRole("dialog");
+    expect(
+      await within(dialog).findByText("ファイルは残るので、あとから復元できます。"),
+    ).toBeInTheDocument();
+    first(await ok({ tasks: [taskView({ ulid: "A", id: "REL-9", title: "古い答えの子" })] }));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(within(dialog).queryByText("古い答えの子")).toBeNull();
+  });
+
+  it("cannot close the purge confirmation while the purge runs", async () => {
+    const k = makeCore({ show: gone });
+    let release!: () => void;
+    k.api.DELETE.mockImplementationOnce(() =>
+      fail(409, "purge.unconfirmed", { targets }),
+    ).mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          release = () => r(fail(409, "store.read_only", { store: "shared" }));
+        }),
+    );
+    mount(DeleteDialogs, { show: gone, variant: "deleted" }, k);
+    await fireEvent.click(screen.getByRole("button", { name: "完全に削除" }));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText("REL-7");
+    await fireEvent.input(within(dialog).getByRole("textbox", { name: "Store 名" }), {
+      target: { value: "shared" },
+    });
+    await fireEvent.click(within(dialog).getByRole("button", { name: "完全に削除" }));
+    expect(within(dialog).getByRole("button", { name: "キャンセル" })).toBeDisabled();
+    await fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    release();
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+  });
 });

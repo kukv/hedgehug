@@ -70,8 +70,13 @@
     }
   }
 
+  // Closing while the restore runs would leave its error in a dialog nobody sees.
+  function close() {
+    if (!busy) target = null;
+  }
+
   async function restore() {
-    if (!target) return;
+    if (!target || busy) return;
     busy = true;
     error = "";
     try {
@@ -121,7 +126,7 @@
     title="{show.id} を {when(target)} の状態に戻す"
     width={620}
     cli={cliRestoreAt(show.id, target.hash)}
-    onclose={() => (target = null)}
+    onclose={close}
   >
     {#if changes === null}
       <p class="muted">この時点との違いを調べています…</p>
@@ -152,7 +157,7 @@
       <p class="error" role="alert">{error}</p>
     {/if}
     {#snippet footer()}
-      <Button onclick={() => (target = null)}>キャンセル</Button>
+      <Button disabled={busy} onclick={close}>キャンセル</Button>
       {#if changes && changes.length > 0}
         <Button variant="confirm" disabled={busy} onclick={() => void restore()}
           >{changes.length}
