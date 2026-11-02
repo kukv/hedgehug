@@ -1,14 +1,21 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.6.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true,
+    "root": ".."
+  },
   "files": {
     "includes": [
-      "**",
-      "!dist",
-      "!test-results",
-      "!playwright-report",
+      "app/**/*.ts",
+      "app/**/*.svelte",
+      "app/**/*.css",
+      "core/**/*.ts",
       "!core/api/schema.d.ts",
-      "!pnpm-lock.yaml",
-      "!pnpm-workspace.yaml"
+      "e2e/**/*.ts",
+      "*.ts",
+      "*.js"
     ]
   },
   "formatter": {
@@ -16,6 +23,15 @@
     "indentStyle": "space",
     "indentWidth": 2,
     "lineWidth": 100
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "style": {
+        "noNonNullAssertion": "warn"
+      }
+    }
   },
   "javascript": {
     "formatter": {
@@ -27,12 +43,6 @@
     "formatter": {
       "enabled": true,
       "indentScriptAndStyle": true
-    }
-  },
-  "linter": {
-    "enabled": true,
-    "rules": {
-      "preset": "recommended"
     }
   },
   "assist": {

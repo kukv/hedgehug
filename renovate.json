@@ -1,13 +1,8 @@
 {
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "github>bright-room/renovate-config",
-    "github>bright-room/renovate-config:go"
-  ],
-  "packageRules": [
-    {
-      "description": "pnpm is pinned in mise.toml and in web/package.json (packageManager); update both in one PR",
-      "matchDepNames": ["pnpm"],
-      "groupName": "pnpm"
-    }
+    "github>bright-room/renovate-config:go",
+    "github>bright-room/renovate-config:typescript"
   ]
 }

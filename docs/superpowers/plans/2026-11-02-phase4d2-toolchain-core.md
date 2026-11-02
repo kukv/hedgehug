@@ -4561,3 +4561,7 @@ git commit -m "feat(web): CLI の文字列・Store とスキーマ・人とタ�
 - `people.ts`・`schema.ts`: 取得に成功したときだけ新しいとみなし、取得中の `tasks.changed` のあとは取り直す。Store ごとの連番で、古い取得が新しい結果を上書きしない
 - `cli.ts`: 利用者の入力が位置引数になるもの（`cliAdd` のタイトル、`cliLs` のクエリ、`cliStoreInit` の名前）は、フラグを先に並べ、位置引数が `-` で始まるときはその前に `--` を置く（`hh ls -status:canceled` はフラグとして拒否されるため。既定のフィルタの足元は `hh ls -- -status:canceled`）。`!` を含む引数と `=` で始まる引数は単引用符で囲む（シェルの履歴展開と zsh の `=` 展開を避ける）
 - `Makefile` の `e2e` のコメントは、CI のジョブ（Task 16a で足す）を指さない文にした
+- CI（PR #30 で利用者の指示）: `ci.yaml` を `ci-backend.yaml` に改名し、`web` ジョブを `ci-frontend.yaml` に移した。ワークフローのステップの間は1行空ける。`jdx/mise-action` の `install_args` は `mise.toml` のキー（`github:gotestyourself/gotestsum`）で書く。リリースの `mise-action` は `cache: false`（zizmor の cache-poisoning）
+- ツールの版（同）: Node 26.13.0、TypeScript 6.0.3（7 は svelte-check が未対応。openapi-typescript の peer は `peerDependencyRules` で 6 を許す）、`@types/node` 26 系。公開から 7 日未満の版は入れない（`minimumReleaseAge: 10080`）ので、各ライブラリは 7 日たった中で最新（biome 2.6.3・svelte 5.57.2・@tanstack/svelte-virtual 3.13.48・@types/node 26.6.5）。`package.json` に `engines.node: ">=26"`
+- `pnpm-workspace.yaml` と `biome.json` は kukv/koto の設定に合わせた（`trustPolicy`・`strictDepBuilds`・`blockExoticSubdeps`・`strictPeerDependencies`、Biome の `vcs.useIgnoreFile` と対象のファイルの列挙、`noNonNullAssertion: warn`）。minimatch は脆弱性（GHSA-g3hv-75wg-m249）の修正版 11.0.1 に `overrides` で上げ、7 日を待たずに入れる。修正版のない deepmerge（GHSA-gcqx-w48m-w2h4）は `web/osv-scanner.toml` で 2027-02-01 まで無視する
+- Renovate は bright-room/renovate-config の既定・`:go`・`:typescript` だけを使う（自前のルールは書かない）
