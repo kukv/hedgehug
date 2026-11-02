@@ -143,7 +143,7 @@ describe("CommandPalette", () => {
     expect(await screen.findByText("今すぐ同期する")).toBeInTheDocument();
     expect(screen.getByText("コマンド", { selector: "[data-mode]" })).toBeInTheDocument();
     await fireEvent.keyDown(box(), { key: "Enter" });
-    await waitFor(() => expect(api.POST).toHaveBeenCalledWith("/api/sync", {}));
+    await waitFor(() => expect(api.POST).toHaveBeenCalledWith("/api/sync"));
     expect(palette.open).toBe(false);
   });
 
@@ -258,5 +258,68 @@ describe("CommandPalette", () => {
     openPalette();
     expect(await screen.findByText("Ctrl+↵", { selector: "kbd" })).toBeInTheDocument();
     platform.mockRestore();
+  });
+
+  it("says which stores failed to sync, and does not start a second sync while one runs", async () => {
+    const { api } = setup();
+    let release: (v: unknown) => void = () => {};
+    api.POST.mockImplementation(
+      () =>
+        new Promise((r) => {
+          release = r;
+        }) as never,
+    );
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">同期" } });
+    await fireEvent.keyDown(await screen.findByRole("combobox"), { key: "Enter" });
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">同期" } });
+    await fireEvent.keyDown(box(), { key: "Enter" });
+    expect(api.POST).toHaveBeenCalledTimes(1);
+    release(
+      ok([
+        { store: "shared", ok: true },
+        { store: "backend", ok: false, error: "boom" },
+      ]),
+    );
+    await waitFor(() => expect(h.toast).toHaveBeenCalled());
+    expect(h.toast.mock.calls[0]?.[0].message).toContain("backend");
+  });
+
+  it("goes back to the first item when Esc leaves the status list", async () => {
+    setup();
+    selection.set("U6");
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">" } });
+    await fireEvent.click(await screen.findByRole("option", { name: /ステータスを変更/ }));
+    await screen.findByText("ステータス", { selector: "[data-mode]" });
+    await fireEvent.keyDown(box(), { key: "ArrowDown" });
+    await fireEvent.keyDown(box(), { key: "Escape" });
+    expect(await screen.findByText("ID", { selector: "[data-mode]" })).toBeInTheDocument();
+    expect(screen.getAllByRole("option")[0]).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("matches a status name in any case", async () => {
+    setup();
+    selection.set("U6");
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">" } });
+    await fireEvent.click(await screen.findByRole("option", { name: /ステータスを変更/ }));
+    await fireEvent.input(box(), { target: { value: "DOI" } });
+    expect(await screen.findByRole("option", { name: /doing/ })).toBeInTheDocument();
+  });
+
+  it("keeps Tab inside the palette", async () => {
+    setup();
+    render(CommandPalette);
+    openPalette();
+    const input = await screen.findByRole("combobox");
+    const e = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    input.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(input);
   });
 });

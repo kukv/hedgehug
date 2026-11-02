@@ -1,22 +1,19 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { unwrap } from "../../core/api/client";
   import { formatRelative } from "../../core/format";
-  import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import Icon from "../icons/Icon.svelte";
   import { kbdLabel, registerShortcut } from "../keys";
   import { online } from "../online";
   import { useSubscribe } from "../svelte-store";
-  import { toast } from "../toast.svelte";
-  import { summarizeSync, syncMessage } from "./sync-summary";
+  import { runSync, syncRun } from "./sync-run.svelte";
+  import { summarizeSync } from "./sync-summary";
 
   const { api, conn } = core();
   const statuses = useSubscribe(conn, () => conn.sync);
   const summary = $derived(summarizeSync(statuses.current.values(), online.current));
 
   let now = $state(Date.now());
-  let busy = $state(false);
 
   // Only what is drawn from the clock (countdowns, "n minutes ago") needs it to move.
   const ticking = $derived(
@@ -53,18 +50,7 @@
     return s < 60 ? `${s} 秒後に push` : `${Math.ceil(s / 60)} 分後に push`;
   }
 
-  async function syncNow() {
-    if (busy) return;
-    busy = true;
-    try {
-      const reports = await unwrap(api.POST("/api/sync"));
-      toast({ message: syncMessage(reports) });
-    } catch (e) {
-      toast({ message: errorMessage(e) });
-    } finally {
-      busy = false;
-    }
-  }
+  const syncNow = () => runSync(api);
 </script>
 
 <div class="card">
@@ -116,12 +102,12 @@
   <button
     type="button"
     class="now"
-    disabled={busy}
+    disabled={syncRun.busy}
     onclick={syncNow}
     title={kbdLabel("shift+mod+s")}
   >
     <Icon name="sync" size={14} />
-    {busy ? "同期中…" : "今すぐ同期"}
+    {syncRun.busy ? "同期中…" : "今すぐ同期"}
   </button>
 </div>
 

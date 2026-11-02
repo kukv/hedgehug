@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { type TaskView, unwrap } from "../../core/api/client";
+  import type { TaskView } from "../../core/api/client";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
@@ -10,6 +10,7 @@
   import { closePalette, palette } from "../palette-state.svelte";
   import { router } from "../router";
   import { selection } from "../selection.svelte";
+  import { runSync } from "../sidebar/sync-run.svelte";
   import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import { patchTask } from "../tree/actions";
@@ -84,15 +85,6 @@
     return () => clearTimeout(timer);
   });
 
-  async function syncNow() {
-    try {
-      await unwrap(c.api.POST("/api/sync", {}));
-      toast({ message: "同期しました" });
-    } catch (e) {
-      toast({ message: errorMessage(e) });
-    }
-  }
-
   async function setStatus(t: TaskView, status: string) {
     try {
       await patchTask(c, t, { status });
@@ -112,7 +104,7 @@
     storesRev.current;
     const sel = router.route.name === "task" ? router.route.ulid : selection.ulid;
     return {
-      syncNow: () => void syncNow(),
+      syncNow: () => void runSync(c.api),
       createTask: (parent) => openCreate({ kind: "task", parent }),
       createProject: () => openCreate({ kind: "project" }),
       workspaces: c.stores.workspaces(),
@@ -133,7 +125,9 @@
     const items = (c.schema.get(t.store)?.statuses ?? [])
       .filter(
         (s) =>
-          word === "" || (s.label || s.name).toLowerCase().includes(word) || s.name.includes(word),
+          word === "" ||
+          (s.label || s.name).toLowerCase().includes(word) ||
+          s.name.toLowerCase().includes(word),
       )
       .map((s) => ({
         type: "command" as const,
@@ -191,6 +185,13 @@
     it.run();
   }
 
+  // The input is the only thing to focus in the palette: Tab keeps the focus there.
+  function trapTab(e: KeyboardEvent) {
+    if (e.key !== "Tab") return;
+    e.preventDefault();
+    inputEl?.focus();
+  }
+
   function onkeydown(e: KeyboardEvent) {
     if (e.isComposing || e.keyCode === 229) return;
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -209,6 +210,7 @@
       if (picking) {
         picking = null;
         input = "";
+        active = 0;
       } else {
         closePalette();
       }
@@ -225,7 +227,14 @@
       if (e.target === e.currentTarget) closePalette();
     }}
   >
-    <div class="panel" role="dialog" aria-modal="true" aria-label="ID・検索・コマンド">
+    <div
+      class="panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label="ID・検索・コマンド"
+      tabindex="-1"
+      onkeydown={trapTab}
+    >
       <div class="head">
         <Icon name="search" size={16} />
         <input
@@ -398,7 +407,7 @@
   }
   .item.active {
     background: var(--accent-weak);
-    box-shadow: inset 0 0 0 var(--hairline) var(--accent-weak);
+    box-shadow: inset 0 0 0 var(--hairline) var(--accent);
   }
   .key {
     flex: 0 0 auto;
