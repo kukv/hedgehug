@@ -8701,3 +8701,4 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Task 13: 既存の spec は 6 本（phase1d1・1d2・1.5・2・3・3 の design-review）に「2026-11-02 の変更」の節と印を付けた。phase1d1 には `add --no-repo` の記述がなかった（phase3 にある）。phase1.5 のコミットの件名（`hedgehug: workspace prefix …`）は変えていないので印を付けない。
 - Task 13: 受入テスト手順に、`workspace set-prefix`、`add --repo`（リポジトリの外で拒否されることも）、旧い `comment <id>`・`purge <id>` が使い方の誤りになること、`store remove` の拒否と `--keep`・既定の削除、`ls --help` のステップを足した。`.gitconfig` を作る手順と `GIT_CONFIG_GLOBAL` は消した（通しは `GIT_CONFIG_GLOBAL=/dev/null` で行い、git の設定がなくても動くことを確かめた）。GUI は起動していない。
 - Task 13: CLI リファレンスの「単独環境」（アカウントなし）の例は、アカウントが必須になって再現できないので、アカウント 1 つの「1 人の環境」で取り直した。devenv の例は取り直さず、文言が変わった行（複数形、`comment add`）だけを今の文言に直し、そのことをページに書いた。「確認で気づいた点」は「受入テストで決めたこと」にして、各点の扱いを書いた。
+- 最終レビューの後（2026-11-03、利用者の決定）: `workspace rm` と `undo` のワークスペースの拒否の文言は、タスクが 1 件のとき 3 つの `them` を `it` にする（`plural.Pick(n, "it", "them")`）。spec §9 にも書いた。
