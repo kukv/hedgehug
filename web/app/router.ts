@@ -3,7 +3,8 @@ import { createSubscriber } from "svelte/reactivity";
 export type Route =
   | { name: "home" }
   | { name: "workspace"; store: string; ulid: string }
-  | { name: "project"; ulid: string };
+  | { name: "project"; ulid: string }
+  | { name: "task"; ulid: string };
 
 function decode(s: string): string {
   try {
@@ -22,6 +23,7 @@ function matchRoute(pathname: string): Route | null {
     return { name: "workspace", store: a, ulid: b };
   }
   if (head === "projects" && seg.length === 2 && a) return { name: "project", ulid: a };
+  if (head === "tasks" && seg.length === 2 && a) return { name: "task", ulid: a };
   return null;
 }
 
@@ -38,6 +40,8 @@ export function hrefOf(r: Route): string {
       return `/workspaces/${encodeURIComponent(r.store)}/${encodeURIComponent(r.ulid)}`;
     case "project":
       return `/projects/${encodeURIComponent(r.ulid)}`;
+    case "task":
+      return `/tasks/${encodeURIComponent(r.ulid)}`;
   }
 }
 

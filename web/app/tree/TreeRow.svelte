@@ -20,6 +20,7 @@
     blockedBy: string | undefined; // the ID of the first blocker, when the task is blocked
     onselect: () => void;
     ontoggle: () => void;
+    onopen: () => void;
     dnd?: Attachment<HTMLElement>; // makes the row draggable and a drop target
     dragging?: boolean; // this row is being dragged
     dropMark?: "before" | "after" | "child" | "reject" | null; // what a drop on this row would do
@@ -33,6 +34,7 @@
     blockedBy,
     onselect,
     ontoggle,
+    onopen,
     dnd,
     dragging = false,
     dropMark = null,
@@ -72,6 +74,7 @@
     onselect();
     e.currentTarget.focus();
   }}
+  ondblclick={onopen}
   onfocus={(e) => (keyboardOn = e.currentTarget.matches(":focus-visible"))}
   onblur={() => (keyboardOn = false)}
   {@attach dnd}

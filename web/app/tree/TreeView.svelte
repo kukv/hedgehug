@@ -293,6 +293,9 @@
     }
     if (rows.some((r) => r.ulid === held)) void focusRow(held);
   });
+  function open(ulid: string) {
+    router.go(router.href({ name: "task", ulid }));
+  }
   function toggle(ulid: string, openIt: boolean) {
     const next = new Set(collapsed);
     if (openIt) next.delete(ulid);
@@ -430,6 +433,9 @@
           break;
         case "toggle":
           toggle(a.ulid, a.open);
+          break;
+        case "open-detail":
+          open(a.ulid);
           break;
         case "add-below": {
           const depth = rows.find((r) => r.ulid === a.after)?.depth ?? 0;
@@ -715,6 +721,7 @@
               select(item.row.ulid);
             }}
             ontoggle={() => toggle(item.row.ulid, !item.row.expanded)}
+            onopen={() => open(item.row.ulid)}
             dragging={dragging === item.row.ulid}
             dropMark={dropMarkOf(item.row.ulid)}
             dnd={rowDnd(() => ({
@@ -816,6 +823,7 @@
     <span><kbd>Space</kbd> 完了</span>
     <span><kbd>S</kbd> ステータス</span>
     <span><kbd>K</kbd> 種類</span>
+    <span><kbd>{kbdLabel("mod+enter")}</kbd> 詳細を開く</span>
     <span class="dnd">ドラッグで並べ替え・親の付け替え（置ける親の種類だけ受け付けます）</span>
   </footer>
 </section>

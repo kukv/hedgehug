@@ -4,6 +4,7 @@
   import { takeToken } from "../core/token";
   import { setCore } from "./context";
   import { createCore } from "./core-factory";
+  import TaskDetail from "./detail/TaskDetail.svelte";
   import { router } from "./router";
   import Sidebar from "./sidebar/Sidebar.svelte";
   import Banners from "./states/Banners.svelte";
@@ -66,6 +67,10 @@
       {:else if router.route.name === "project"}
         {#key router.route.ulid}
           <TreeView view={{ kind: "project", ulid: router.route.ulid }} />
+        {/key}
+      {:else if router.route.name === "task"}
+        {#key router.route.ulid}
+          <TaskDetail ulid={router.route.ulid} />
         {/key}
       {:else if router.route.name === "home" && dir.current.first}
         <!-- "/" is the tree of the first workspace -->

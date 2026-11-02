@@ -11,7 +11,7 @@ describe("parseRoute", () => {
     ["/workspaces/shared/01HWS", { name: "workspace", store: "shared", ulid: "01HWS" }],
     ["/workspaces/org-b%2Fops/01HWS", { name: "workspace", store: "org-b/ops", ulid: "01HWS" }],
     ["/projects/01HPR", { name: "project", ulid: "01HPR" }],
-    ["/tasks/01HTK/", { name: "home" }], // the detail is another screen
+    ["/tasks/01HTK/", { name: "task", ulid: "01HTK" }],
     ["/nothing/here", { name: "home" }],
     ["/workspaces/shared", { name: "home" }],
   ])("%s", (path, route) => {
@@ -25,6 +25,7 @@ describe("hrefOf", () => {
     expect(hrefOf(r)).toBe("/workspaces/org-b%2Fops/01HWS");
     expect(parseRoute(hrefOf(r))).toEqual(r);
     expect(hrefOf({ name: "home" })).toBe("/");
+    expect(hrefOf({ name: "task", ulid: "01HTK" })).toBe("/tasks/01HTK");
   });
 });
 

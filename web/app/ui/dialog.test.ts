@@ -58,6 +58,13 @@ describe("Dialog", () => {
     expect(onclose).toHaveBeenCalledTimes(1);
   });
 
+  it("変換中の Esc では閉じない", async () => {
+    const { onclose } = open();
+    await fireEvent.keyDown(window, { key: "Escape", isComposing: true });
+    await fireEvent.keyDown(window, { key: "Escape", keyCode: 229 });
+    expect(onclose).not.toHaveBeenCalled();
+  });
+
   it("閉じるボタンで閉じる", async () => {
     const { onclose, getByRole } = open();
     await fireEvent.click(getByRole("button", { name: "閉じる" }));

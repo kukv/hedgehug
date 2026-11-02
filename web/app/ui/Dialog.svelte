@@ -49,6 +49,8 @@
 
   function onkeydown(e: KeyboardEvent) {
     if (!open || !panel || stack[stack.length - 1] !== me) return;
+    // Esc while an IME converts text only cancels the conversion.
+    if (e.isComposing || e.keyCode === 229) return;
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();

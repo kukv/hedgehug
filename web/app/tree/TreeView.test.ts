@@ -212,11 +212,13 @@ describe("TreeView", () => {
     expect(screen.getByText("3 件 · 中止 0 件を除外")).toBeInTheDocument();
   });
 
-  it("selects a row on click", async () => {
+  it("selects a row on click and opens the detail on double click", async () => {
     setup();
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     await fireEvent.click(screen.getByText("Web のクライアントを更新"));
     expect(selection.ulid).toBe("T3");
+    await fireEvent.dblClick(screen.getByText("Web のクライアントを更新"));
+    expect(h.go).toHaveBeenCalledWith("/tasks/T3");
   });
 
   it("keeps the title typed before the schema is read, and adds the task once it is", async () => {
