@@ -156,7 +156,11 @@ export async function startHedgehug(store: StoreSpec | null): Promise<Hedgehug> 
 
   const u = new URL(url);
   const token = new URLSearchParams(u.hash.slice(1)).get("token");
-  if (!token) throw new Error(`no token in ${url}`);
+  if (!token) {
+    proc.kill("SIGKILL");
+    rmSync(home, { recursive: true, force: true });
+    throw new Error(`no token in ${url}`);
+  }
   return new Hedgehug(home, u.origin, token, proc, () => err);
 }
 

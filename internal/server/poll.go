@@ -190,9 +190,13 @@ func (p *Poller) pollLocked(publish bool) {
 			p.mu.Lock()
 			swapped := p.released[e.Name]
 			delete(p.released, e.Name)
+			looked := p.looked
 			p.mu.Unlock()
-			if swapped && publish {
-				// The store was made again: what changed is not known.
+			if (swapped || looked) && publish {
+				// The store was made again, or it appeared after the first look: the
+				// commits made before this look are not known (a page that made a
+				// task in a store just created would never be told), so the clients
+				// read it again.
 				p.hub.Publish(tasksChanged{Store: e.Name, ULIDs: []string{}, Removed: []string{}})
 			}
 		}

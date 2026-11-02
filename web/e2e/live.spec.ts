@@ -3,7 +3,7 @@
 //   - a change the page made itself shows no such mark
 //   - hh.open waits for the page's PUT /api/presence, which it sends once the event
 //     stream is open, so a change made by the CLI after hh.open reaches the page as an event
-//   - the sidebar shows the sync card: "未 push" and "今すぐ同期" for the store
+//   - the sidebar shows the sync card, with the button "今すぐ同期"
 import { expect, test } from "./harness";
 import { row } from "./screens";
 

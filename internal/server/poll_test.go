@@ -248,3 +248,14 @@ func TestChildTaskIsCommentsOnly(t *testing.T) {
 		t.Error("a worklog path changes no task")
 	}
 }
+
+func TestPollNewStoreTellsTheClients(t *testing.T) {
+	t.Parallel()
+	ts, ch := pollServer(t)
+	ts.srv.poller.settle()
+	// A store made after the first look: its first commits may come before the poller sees it.
+	if _, err := ts.session().StoreInit(ops.StoreInitInput{Name: "later", Prefix: "LT", Workspace: "later"}); err != nil {
+		t.Fatal(err)
+	}
+	waitEvent(t, ch, func(e tasksChanged) bool { return e.Store == "later" })
+}

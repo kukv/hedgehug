@@ -15,6 +15,13 @@ import { expect, type Locator, type Page } from "@playwright/test";
 //               ("開く") or the button "取り消し"; other regions with role "status" exist
 //               (the save state, the bands of a task), so find a toast by its text
 
+//
+// Exceptions that hold on to a CSS class, because no role or text tells them apart: change them
+// together with the screen. `.scroller` is the scrolling box of the tree (tree.spec.ts scrolls it
+// itself while a drag is held, where the wheel does not work); `.row.dragging` is the row being
+// dragged; `aside.refusal` is the panel under the tree that says why a drop is refused (the toast
+// after the drop has the same words, and so does the chip, so the text cannot find the panel).
+
 /** The row of the tree whose text has the title. Titles in the specs are unique. */
 export function row(page: Page, title: string): Locator {
   return page.getByRole("treeitem").filter({ hasText: title });

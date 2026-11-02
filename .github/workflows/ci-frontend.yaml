@@ -73,14 +73,67 @@ jobs:
         with:
           install_args: node pnpm
 
+      # Go のビルドキャッシュとモジュールキャッシュを復元する。保存は main への push だけ（backend と同じ）。
+      - name: Locate Go caches
+        id: go-env
+        shell: bash
+        run: |
+          echo "gocache=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+          echo "gomodcache=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: go-cache
+        with:
+          path: |
+            ${{ steps.go-env.outputs.gocache }}
+            ${{ steps.go-env.outputs.gomodcache }}
+          key: go-${{ runner.os }}-${{ runner.arch }}-e2e-${{ hashFiles('go.mod', 'go.sum') }}
+
+      - name: Verify the module cache
+        run: go mod verify
+
       - name: Install dependencies
         working-directory: web
         run: pnpm install --frozen-lockfile
 
-      # ブラウザと、その共有ライブラリ（apt）を入れる。make e2e は同じブラウザを入れ直さない。
+      # Playwright のブラウザは版ごとにキャッシュする（版は pnpm-lock.yaml に固定されている）。
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: browser-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}
+
+      # ブラウザが無いときはブラウザと共有ライブラリ（apt）を入れる。キャッシュがあるときは共有ライブラリだけ。
+      # make e2e の playwright install chromium は、取得済みのブラウザなら何も取りに行かない。
       - name: Install the browser
         working-directory: web
-        run: pnpm exec playwright install --with-deps chromium
+        env:
+          CACHE_HIT: ${{ steps.browser-cache.outputs.cache-hit }}
+        run: |
+          if [ "$CACHE_HIT" = "true" ]; then
+            pnpm exec playwright install-deps chromium
+          else
+            pnpm exec playwright install --with-deps chromium
+          fi
 
       - name: E2E
         run: make e2e
+
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: github.event_name == 'push' && steps.go-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ${{ steps.go-env.outputs.gocache }}
+            ${{ steps.go-env.outputs.gomodcache }}
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}
+
+      # 失敗したときは trace（失敗したテストの画面の記録）と HTML のレポートを残す。
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: e2e-traces
+          path: |
+            web/test-results
+            web/playwright-report
+          retention-days: 7
+          if-no-files-found: ignore

@@ -11,8 +11,8 @@ test("Ctrl+click on a sidebar link opens a tab that keeps the token", async ({
   hh,
   context,
 }) => {
-  // The browser opens the tab as a copy of this one (Chromium copies sessionStorage to a tab
-  // opened from a link, with a modifier key or not), so the token goes with it.
+  // The click calls window.open without noopener (app/router.ts), so the browser opens the
+  // tab as a copy of this one and copies sessionStorage to it: the token goes with it.
   hh.add("Anything");
   await hh.open(page);
   const link = page

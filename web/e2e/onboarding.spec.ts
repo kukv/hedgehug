@@ -7,6 +7,8 @@
 //     at the foot, and the buttons "キャンセル" and "Store を作る"
 //   - a prefix that is not an upper-case letter followed by upper-case letters or
 //     digits (2 to 10 in all) is refused with a message and nothing is made
+//   - a store with no workspace (hh workspace rm) shows "ワークスペースがありません" and the
+//     line `hh workspace add ...` on the home
 //   - after the create the toast says "Store「<name>」を作りました", and the page shows
 //     the tree of the new store's first workspace, which the sidebar lists as a link
 import { expect, test } from "./harness";
@@ -52,4 +54,16 @@ test("a prefix of the wrong shape is refused and nothing is made", async ({ page
     dialog.getByText("接頭辞は英大文字と数字の 2〜10 文字で、英字から始めてください"),
   ).toBeVisible();
   expect(hh.hh("store", "list")).not.toContain("team");
+});
+
+test.describe("a store with no workspace", () => {
+  test.use({ store: { name: "demo", prefix: "DM" } });
+
+  test("the home says so and shows the command to add one", async ({ page, hh }) => {
+    hh.hh("workspace", "rm", "demo");
+    await hh.open(page);
+
+    await expect(page.getByText("ワークスペースがありません")).toBeVisible();
+    await expect(page.getByText(/hh workspace add/)).toBeVisible();
+  });
 });

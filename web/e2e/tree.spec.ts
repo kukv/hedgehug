@@ -3,7 +3,8 @@
 //     starts as "-status:canceled" and the foot of the tree shows the `hh ls` of the filter
 //   - a click on a row selects and focuses it; the keys below act on the focused row
 //       Enter       opens the textbox "新しいタスクのタイトル" below the row; Enter in it adds
-//                   a sibling after the row (an add, then a move: two commits)
+//                   a sibling right after the row: one create request that carries `after`
+//                   (one commit), even when siblings hidden by the filter sit in between
 //       Tab/Shift+Tab   indent under the previous sibling / outdent after the parent
 //       Alt+Up      move before the previous sibling
 //       Space       toggles between the done and the todo default statuses
@@ -14,9 +15,17 @@
 //   - the row being dragged carries the class "dragging" and the refusal is shown only while
 //     the pointer is over a refused target; both go away when the drag ends. The refusal lies
 //     over the foot of the tree, which leaves room below the last row to scroll it clear
-//   - a tree of more than 200 rows is drawn as a window of rows (virtual scrolling)
+//   - a tree of more than 200 rows (VIRTUALIZE_AT in app/tree/flatten.ts) is drawn as a window
+//     of rows (virtual scrolling); a tree of 200 or fewer draws every row
+//   - a drop on the lower quarter of a row whose children are shown makes the task its child;
+//     on a row without shown children it puts the task after the row
 import { expect, type Hedgehug, test } from "./harness";
 import { dragRow, row, toast, treeReady } from "./screens";
+
+/** The number of commits in the store. */
+function commitCount(hh: Hedgehug): number {
+  return hh.hh("log").trim().split("\n").length;
+}
 
 /** The titles of the tasks at the root, in the order of their ranks. */
 function rootOrder(hh: Hedgehug): string[] {
@@ -39,6 +48,32 @@ test("Enter adds a sibling right below the selected row", async ({ page, hh }) =
   await expect(row(page, "Alpha two")).toBeVisible();
 
   await expect.poll(() => rootOrder(hh)).toEqual(["Alpha", "Alpha two", "Bravo"]);
+});
+
+test("Enter adds right below the row in one commit, even past a hidden sibling", async ({
+  page,
+  hh,
+}) => {
+  const alpha = hh.add("Alpha");
+  hh.add("Bravo");
+  // The canceled task sits between Alpha and Bravo; the default filter hides it.
+  const hidden = hh.add("Hidden between", "--after", alpha.id);
+  hh.hh("set", hidden.id, "status=canceled");
+  expect(rootOrder(hh)).toEqual(["Alpha", "Hidden between", "Bravo"]);
+  await hh.open(page);
+  await expect(row(page, "Hidden between")).toHaveCount(0);
+  const before = commitCount(hh);
+
+  await row(page, "Alpha").click();
+  await page.keyboard.press("Enter");
+  await page.getByRole("textbox", { name: "新しいタスクのタイトル" }).fill("Right after");
+  await page.keyboard.press("Enter");
+  await expect(row(page, "Right after")).toBeVisible();
+
+  await expect
+    .poll(() => rootOrder(hh))
+    .toEqual(["Alpha", "Right after", "Hidden between", "Bravo"]);
+  expect(commitCount(hh)).toBe(before + 1);
 });
 
 test("Tab indents under the previous sibling and Shift+Tab brings it back", async ({
@@ -101,6 +136,22 @@ test("dragging a row after another reorders; onto the middle makes it a child", 
   await dragRow(page, row(page, "Bravo"), row(page, "Charlie"), "child");
   await expect.poll(() => hh.show(b.id).parent).toBe(c.ulid);
   await expect(row(page, "Bravo")).toHaveAttribute("aria-level", "2");
+});
+
+test("dropping on the lower quarter of an open parent makes the task its child", async ({
+  page,
+  hh,
+}) => {
+  const parent = hh.add("Parent");
+  hh.add("Existing child", "--parent", parent.id);
+  const moved = hh.add("Mover");
+  await hh.open(page);
+  await treeReady(page);
+  await expect(row(page, "Existing child")).toBeVisible();
+
+  await dragRow(page, row(page, "Mover"), row(page, "Parent"), "after");
+  await expect.poll(() => hh.show(moved.id).parent).toBe(parent.ulid);
+  await expect(row(page, "Mover")).toHaveAttribute("aria-level", "2");
 });
 
 test("a drop the schema does not allow says why and changes nothing", async ({ page, hh }) => {
@@ -192,21 +243,26 @@ test("a tree of 300 tasks is drawn as a window of rows and scrolls to the end", 
   hh,
 }) => {
   test.setTimeout(120_000);
+  // One request at a time: the order of the ranks is the order of the titles. Requests made
+  // at the same time were slower (the server writes one at a time and they fight for the
+  // lock: 15 s against 9 s for 300 tasks) and made the order a race.
   for (let i = 1; i <= 300; i++) {
     await hh.post("/api/tasks", { title: `Task ${String(i).padStart(3, "0")}` });
   }
+  const first = "Task 001";
+  const last = "Task 300";
   await hh.open(page);
 
   const rows = page.getByRole("treeitem");
-  await expect(row(page, "Task 001")).toBeVisible();
+  await expect(row(page, first)).toBeVisible();
   // Only the rows near the window are in the page.
   expect(await rows.count()).toBeLessThan(100);
-  await expect(row(page, "Task 300")).toHaveCount(0);
+  await expect(row(page, last)).toHaveCount(0);
 
   // Scroll to the end: the last row is drawn then, and the rows far from it are not.
-  await row(page, "Task 001").hover();
+  await row(page, first).hover();
   await page.mouse.wheel(0, 1_000_000);
-  await expect(row(page, "Task 300")).toBeVisible();
-  await expect(row(page, "Task 001")).toHaveCount(0);
+  await expect(row(page, last)).toBeVisible();
+  await expect(row(page, first)).toHaveCount(0);
   expect(await rows.count()).toBeLessThan(100);
 });
