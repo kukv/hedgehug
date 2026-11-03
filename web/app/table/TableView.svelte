@@ -159,6 +159,11 @@
     schemaRev.current;
     return scope.schemas(shownStores);
   });
+  // A store whose schema could not be read and has been read since is not a failure any more.
+  const unreadStores = $derived.by(() => {
+    schemaRev.current;
+    return schemaFailed.filter((s) => !c.schema.get(s));
+  });
 
   // --- the table -----------------------------------------------------------------------------
   const ctx = $derived.by<SortCtx>(() => {
@@ -187,7 +192,12 @@
     })),
   );
   // The order of the headers is not saved: a sort to keep is written in the filter as sort:.
-  let sorting = $state<SortingState>([]);
+  let sortState = $state<SortingState>([]);
+  // A sort of a column that is not shown is not kept: it would come back with the column.
+  const sorting = $derived(sortState.filter((o) => specs.some((s) => s.id === o.id)));
+  $effect(() => {
+    if (sorting.length !== sortState.length) sortState = sorting;
+  });
   const table = createTable({
     features,
     // A click sorts ascending first, then descending, then back to the order of the query.
@@ -206,7 +216,7 @@
       },
     },
     onSortingChange: (u) => {
-      sorting = typeof u === "function" ? u(sorting) : u;
+      sortState = typeof u === "function" ? u(sorting) : u;
     },
   });
   const headers = $derived(table.getHeaderGroups()[0]?.headers ?? []);
@@ -515,7 +525,7 @@
             />
           {/if}
         {/if}
-        {#each schemaFailed as store (store)}
+        {#each unreadStores as store (store)}
           <p class="note" role="alert">{store} の schema.yaml を読み込めていません</p>
         {/each}
       </div>

@@ -75,6 +75,8 @@ type Over = {
   saveState?: { kind: string; message?: string };
   many?: number;
   canceled?: string[];
+  // The stores whose schema cannot be read (until it is put in the schemas).
+  unreadable?: string[];
 };
 
 function setup(over: Over = {}) {
@@ -140,6 +142,7 @@ function setup(over: Over = {}) {
     subscribe: ev.subscribe,
   };
   const schemas: Record<string, SchemaView> = { shared, me };
+  for (const s of over.unreadable ?? []) delete schemas[s];
   h.core = {
     cache: { task: (u: string) => tasks.get(u), watchList, subscribe: ev.subscribe },
     stores: {
@@ -149,7 +152,11 @@ function setup(over: Over = {}) {
     },
     schema: {
       get: (s: string) => schemas[s],
-      load: async (s: string) => schemas[s],
+      load: async (s: string) => {
+        const v = schemas[s];
+        if (!v) throw new Error("unreadable");
+        return v;
+      },
       subscribe: ev.subscribe,
     },
     save,
@@ -167,7 +174,7 @@ function setup(over: Over = {}) {
       stores.map((s) => schemas[s]).filter((s): s is SchemaView => s !== undefined),
     ...over.scope,
   };
-  return { save, watchList };
+  return { save, watchList, ev, schemas };
 }
 
 function mount(props: Record<string, unknown> = {}) {
@@ -567,6 +574,33 @@ describe("TableView", () => {
     expect(screen.getByRole("table")).toHaveAttribute("aria-rowcount", "251");
     const rows = [...document.querySelectorAll("tbody tr")];
     expect(rows[0]).toHaveAttribute("aria-rowindex", "32");
+  });
+
+  it("tells the store whose schema cannot be read, and stops once it has been read", async () => {
+    const { ev, schemas } = setup({ unreadable: ["shared"] });
+    mount();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "shared の schema.yaml を読み込めていません",
+    );
+    schemas.shared = shared;
+    ev.emit();
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  });
+
+  it("forgets the sort of a column that is taken out, and does not bring it back with the column", async () => {
+    setup();
+    const { rerender } = mount();
+    await fireEvent.click(
+      within(screen.getByRole("columnheader", { name: /^ID/ })).getByRole("button"),
+    );
+    expect(screen.getByRole("columnheader", { name: /^ID/ })).toHaveAttribute(
+      "aria-sort",
+      "ascending",
+    );
+    await rerender({ settings: { ...SETTINGS, columns: ["title", "status"] } });
+    await rerender({ settings: SETTINGS });
+    expect(screen.getByRole("columnheader", { name: /^ID/ })).toHaveAttribute("aria-sort", "none");
+    expect(order()).toEqual(["REL-4", "REL-2", "REL-9"]);
   });
 
   it("waits for the schema before it draws a property", async () => {
