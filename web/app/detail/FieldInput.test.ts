@@ -42,6 +42,26 @@ describe("FieldInput", () => {
     expect(onedit).toHaveBeenLastCalledWith("");
   });
 
+  it("text: takes the value back on blur when a refused edit is no longer pending", async () => {
+    const { rerender } = render(FieldInput, {
+      editor: "text",
+      value: "A",
+      label: "area",
+      pending: false,
+      onedit: vi.fn(),
+      oncommit: vi.fn(),
+    });
+    const input = screen.getByRole("textbox", { name: "area" });
+    await fireEvent.focus(input);
+    await fireEvent.input(input, { target: { value: "B" } });
+    await rerender({ value: "A", pending: true });
+    // The server refused it and the edit was taken back; the user is still in the input.
+    await rerender({ value: "A", pending: false });
+    expect(input).toHaveValue("B");
+    await fireEvent.blur(input);
+    expect(input).toHaveValue("A");
+  });
+
   it("does not overwrite what is typed while a save is pending, and takes the new value afterwards", async () => {
     const { rerender } = render(FieldInput, {
       editor: "text",

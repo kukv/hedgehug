@@ -162,6 +162,7 @@ export class SaveController {
   // task can show the value the server holds and say why, instead of offering to send the same again.
   // It returns the words of the error, or null when the server refused nothing. An edit that may
   // still pass (a failure of the network, a 5xx) stays for the retry.
+  // It drops every field of the refused PATCH, because the server turns the request down as a whole.
   takeRefused(ulid: string): string | null {
     const left = this.rejected.get(ulid);
     if (!left || left.size === 0) return null;
