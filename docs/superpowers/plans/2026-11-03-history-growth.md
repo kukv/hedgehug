@@ -978,7 +978,9 @@ Task 1〜9 の実装で plan と違うことになった点。判断の根拠は
     - 索引の保存を追記にする: HEAD が進んだとき、新しいコミットと変わったパスを CRC 付きの塊としてファイルの終わりに足す（版は 3、`Store.AppendLocal` を足した）。塊が欠けている・合わない・前の tip につながらないときは、そこまでを読んで残りは git から足し、次の保存でファイルを書き直す。塊が 100 を超えるか、元の半分に近づいたら書き直す。
   - なお `show`（1 つ進んだ直後）と `undo` は、WSL では go-git の固定費（pack の索引の読み込み約 150ms、書き込み 1 回 200ms 前後）のため目標に届かない。mac では届く。固定費は別のブレストで扱う（spec の決定 9）。
 - **Task 9 のレビューの後**（作業場所を WSL から mac に移して続けた）:
-  - 索引のファイルの版を 4 にした。追記の塊に、前のコミットと文字列の数を持たせる。同じ tip でも一から書き直したファイルは文字列の番号が違い、別のハンドルが前のファイルに対して作った塊を読むと、番号が別の文字列を指していた。
+  - 索引のファイルの版を 5 にした。ファイルの最初の部分の終わりに、その CRC-32 を「ファイルの ID」として書く。追記の塊には、続けるファイルの ID と、前のコミットと文字列の数を持たせる。同じ tip でも、一から書き直したファイルや、途中まで追記してから書き直したファイルは文字列の番号が違う（件数が同じこともある）。別のハンドルが前のファイルに対して作った塊を読むと、番号が別の文字列を指していた。
+  - `History.LastChange` は、from より世代の大きい候補には `IsAncestor` を呼ばない（祖先でないとき履歴を全部歩いていた）。
+  - 最終レビューの指摘で、索引に置き換えて使われなくなった `Repo.LastChanges`・`Repo.Log`（`PathFilter` の分岐を含む）・`UndoTarget` を消した。テストは `LogFrom`・`Between`・`undoScanner` で同じことを確かめる。2 つのハンドルが交互に書くテストと、マージを含む GUI のタスク履歴の API のテストを足した。
   - `KeepDescriptors` により、開いて捨てるハンドルが pack を GC まで開いたまま持つようになった。`ops.Session.Close` と `mount.Set.Close` を足し、Session が開いた Store と Set を覚えてまとめて閉じる。サーバーは request・poll・同期の 1 回ごとに閉じる。`dropMount` は捨てる Set を閉じる。mount の reopen・`SharedPrefixes`、doctor、poll の差し替え、`StoreInit`・`StoreAdd`・`store.Create`・`CloneWith` の失敗時の片付けでも閉じる。確かめるために `gitrepo.Live`（閉じていない Repo の数）を足した。
   - `BenchmarkFixedCost`（開いて最初のコミットを読む、書き込み 1 回）を足し、決定 9 の根拠を `make bench-history` で取り直せるようにした。mac での計測を spec の 8 節に足した。
   - golangci-lint を CI と同じ 2.15.0 に `mise.toml` で固定した。手元の 2.13.2 は Go 1.27.3 を型検査できない。2.15.0 で出る main からの指摘 2 件（`Hub.Subscribe`・`Poller.Snapshot` の unexported-return）は、パッケージの中だけで使うので小文字にした。
