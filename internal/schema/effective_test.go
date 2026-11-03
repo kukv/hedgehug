@@ -44,6 +44,24 @@ func TestForPicksNearestScopedAncestor(t *testing.T) {
 	}
 }
 
+func TestScopeOfNamesTheAncestorForApplies(t *testing.T) {
+	t.Parallel()
+	s := fullSchema(t)
+	release := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0B")
+	epic := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0F")
+	ops := mustULID(t, "01JBZ8K3QW7M2X9V4T6R5N8P0C")
+
+	if got, ok := s.ScopeOf([]model.ULID{epic, release}); !ok || got != release {
+		t.Errorf("ScopeOf(epic, release) = %v, %v; want release", got, ok)
+	}
+	if got, ok := s.ScopeOf([]model.ULID{ops, release}); !ok || got != ops {
+		t.Errorf("the nearest must win: %v, %v", got, ok)
+	}
+	if _, ok := s.ScopeOf(nil); ok {
+		t.Error("no ancestors: want none")
+	}
+}
+
 func TestCanTransition(t *testing.T) {
 	t.Parallel()
 	s := fullSchema(t)

@@ -1134,6 +1134,8 @@ components:
               - array
               - "null"
           type: object
+        scope:
+          type: string
         status:
           type: string
         store:
@@ -1470,6 +1472,8 @@ components:
           additionalProperties: {}
           type: object
         rank:
+          type: string
+        scope:
           type: string
         status:
           type: string

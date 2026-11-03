@@ -1015,6 +1015,7 @@ export interface components {
             reverse: {
                 [key: string]: components["schemas"]["Ref"][] | null;
             };
+            scope?: string;
             status: string;
             store: string;
             title: string;
@@ -1135,6 +1136,7 @@ export interface components {
                 [key: string]: unknown;
             };
             rank: string;
+            scope?: string;
             status: string;
             store: string;
             title: string;

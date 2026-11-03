@@ -18,7 +18,11 @@ type TaskView struct {
 	Workspace *WorkspaceRef `json:"workspace"`
 	// Project is the nearest ancestor of kind project (the projects the GUI
 	// lists, kind:project); it is left out for a task with none.
-	Project   *Ref           `json:"project,omitempty"`
+	Project *Ref `json:"project,omitempty"`
+	// Scope is the ULID of the ancestor (or the task itself, when it is a
+	// container) whose schema override applies to the task, chosen as a write
+	// is checked (schema.For); left out when none does.
+	Scope     string         `json:"scope,omitempty"`
 	Kind      string         `json:"kind"`
 	Title     string         `json:"title"`
 	Parent    *string        `json:"parent"`
@@ -97,6 +101,7 @@ func TaskViewOf(ix *index.Index, e *index.Entry) *TaskView {
 		}
 	}
 	j.Project = projectOf(ix, e)
+	j.Scope = scopeOf(ix, e)
 	for _, b := range e.BlockedBy {
 		j.BlockedBy = append(j.BlockedBy, RefOf(ix, b))
 	}
@@ -140,6 +145,35 @@ func projectOf(ix *index.Index, e *index.Entry) *Ref {
 		p = a.Parent
 	}
 	return nil
+}
+
+// scopeOf is the ULID of the ancestor whose override applies to e, or "". It
+// builds the ancestor list the way a write does (store.Lineage): e first when
+// it is a container, then its parents nearest first, stopping at a task the
+// index lacks or at a cycle.
+func scopeOf(ix *index.Index, e *index.Entry) string {
+	sc := ix.Schema()
+	if len(sc.Scoped) == 0 {
+		return ""
+	}
+	var ancestors []model.ULID
+	if k, ok := sc.Kind(e.Kind); ok && k.Role == schema.RoleContainer {
+		ancestors = append(ancestors, e.ULID)
+	}
+	seen := map[model.ULID]bool{e.ULID: true}
+	for p := e.Parent; p != nil && !seen[*p]; {
+		seen[*p] = true
+		a, ok := ix.Task(*p)
+		if !ok {
+			break
+		}
+		ancestors = append(ancestors, a.ULID)
+		p = a.Parent
+	}
+	if u, ok := sc.ScopeOf(ancestors); ok {
+		return u.String()
+	}
+	return ""
 }
 
 // RefOf names the task ulid, with an empty id and title when the index does
