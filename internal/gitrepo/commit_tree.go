@@ -84,10 +84,12 @@ func (r *Repo) commitStaged(c Commit) (plumbing.Hash, error) {
 }
 
 // badSignature is what git does not allow in a name or an email; go-git's
-// Worktree.Commit drops it too.
+// Worktree.Commit drops it too. Adapted from go-git v5.19.3
+// (worktree_commit.go, invalidCharactersRe), Apache-2.0.
 var badSignature = regexp.MustCompile(`[<>\n]`)
 
-// moveHead points HEAD, or the branch it is on, at h.
+// moveHead points HEAD, or the branch it is on, at h. Adapted from go-git
+// v5.19.3 (worktree_commit.go, Worktree.updateHEAD), Apache-2.0.
 func (r *Repo) moveHead(h plumbing.Hash) error {
 	ref, err := r.r.Storer.Reference(plumbing.HEAD)
 	if err != nil {
@@ -157,7 +159,8 @@ func (r *Repo) editTree(base plumbing.Hash, edits map[string]*index.Entry, root 
 	if len(entries) == 0 && !root {
 		return plumbing.ZeroHash, true, nil
 	}
-	// git orders a directory as if its name ended in "/".
+	// git orders a directory as if its name ended in "/". Adapted from go-git
+	// v5.19.3 (worktree_commit.go, sortableEntries.sortName), Apache-2.0.
 	key := func(e object.TreeEntry) string {
 		if e.Mode == filemode.Dir {
 			return e.Name + "/"
