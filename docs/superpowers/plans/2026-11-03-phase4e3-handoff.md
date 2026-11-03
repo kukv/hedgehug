@@ -1,37 +1,25 @@
 # フェーズ 4e-3 の引き継ぎ（2026-11-03 時点）
 
-4e-3（カンバン・テーブル・保存済みビュー・マイタスク）の plan は、通しの確認（組み上げ）まで終わった。残りは利用者の承認と、そのあとの実装。
+4e-3（カンバン・テーブル・保存済みビュー・クエリの画面・マイタスク）は実装まで終わった。残りは PR。
 
 ## いまの状態
 
-- ブランチ `phase4e3-views`（main の 79a5277 から）。文書だけ（plan・概要 plan・spec・この文書）
-- plan: `docs/superpowers/plans/2026-11-03-phase4e3-views.md`（Task 1〜7、末尾に「決めたこと」1〜21 と「組み上げで直した点」）
-- 概要 plan `2026-11-03-phase4e-screens.md` の細部 36・39・58 を利用者の決定に合わせて直し、細部 81〜90 を足した
-- spec `docs/superpowers/specs/2026-11-01-phase4-gui-design.md` に 4e-3 の決定の段落を足した
+- ブランチ `phase4e3-views`（main の 79a5277 から）。`git log origin/main..HEAD` が実装の全部
+- plan: `docs/superpowers/plans/2026-11-03-phase4e3-views.md`（Task 1〜7、末尾に「決めたこと」と「組み上げで直した点」。レビューでの直しもそこにある）
+- 概要 plan `2026-11-03-phase4e-screens.md` の細部 36・39・48〜50・58 を利用者の決定に合わせて直し、細部 81〜90 を足した。spec `docs/superpowers/specs/2026-11-01-phase4-gui-design.md` に 4e-3 の決定の段落がある
 
-## 利用者の決定（2026-11-03、すべて推奨案）
+## やったこと
 
-plan 末尾の「決めたこと」と概要 plan の細部 81〜90 に記録済み。
+- Task 1〜7 をすべて実装し、Task ごとに spec とコード品質のレビューを受けて直した。最後に最終レビューを受け、その指摘も直した（カテゴリの定義の一本化、`defaultStatus` の削除、`useListScope` への共通化、フィルタをタブをまたいで残す、`PUT` の記述を `PATCH` に揃える、operationId を `update-view` にする、など）
+- 検査: `go vet`・`gofmt`・`go test -race ./...`、`pnpm fix`・`pnpm check`・`biome ci`、`vitest` 全件、`make e2e`（84 件が PASS）
 
-1. 保存していないクエリの画面は `/query/<layout>?q=`（全 Store で評価、レイアウトの切り替えは保存しない、「ビューを保存」あり。router はこのルートだけ `?q=` を残す）
-2. `hh view show` は `--store` をビューを読む場所としてだけ使い、クエリは常に全マウント Store で評価する（親設計「ビューは常に統合する」に合わせる）
-3. プロジェクトのカンバンは scoped の `statuses` に加え、タスクのいる表示外のステータスの列も出す（タスクを隠さない）
-4. カンバンで移す先の必須の項目のうち、ダイアログで入力できないもの（親・ブロッカー・ウォッチャー・リポジトリなど）が欠けていれば、移動を止めて「詳細で入力」へ案内する（サーバーの 422 を起こさない）
-5. 「もしかして」は編集距離 2 以内、なければ打った語（3 文字以上）を含む名前
+## 実装中の利用者の決定（2026-11-03）
 
-## やったこと（2026-11-03、mac）
+plan の「決めたこと」と「組み上げで直した点」、spec に記録済み。
 
-- plan の各 Task の末尾の「要相談」の節を消した（結論は「決めたこと」にあり、本文はそれに合っていた）。Task 3 の最初の Step（負荷下の時間切れの直し）は、TreeView・BodyEditor・`vitest.config.ts` の3つが plan に入っていることを確かめた
-- 通しの確認: main（79a5277）の写し1つ（使い捨てのローカルブランチ `integ-4e3`。push していない）に Task 1→7 を順にそのまま当て、各 Task の終わりに検査を流した。最後に `go test -race ./...`（全パッケージ ok）、`vitest` 全件（120 ファイル・1238 件）、`pnpm build`、`make e2e` の全件を 3 回（1 回目は既存の `live.spec.ts` の1件が負荷で落ち、2・3 回目は 83 件すべて PASS）
-- 食い違いと見つけた不具合は plan の「組み上げで直した点」に記録し、plan の本文を直した。主なもの: Task 2 の `useListScope` の `apiBase`・`cliBase` を `$derived` にする（Task 7 Step 20b）、ビューの書き込みを取り消したらビューの一覧を読み直す（Task 7 Step 20c）、E2E の目印と待ち方、macOS の newtab
-- plan 冒頭の「着手の前に」を、通しの確認でやったことに書き換えた
+1. `TaskView.scope`: サーバーが、タスクのスキーマを決める scoped の上書きの祖先の ULID を返す。カンバンの事前の判定はこれで引く
+2. `PATCH /api/views/{name}` を、改名に加えて設定の変更（`layout`・`query`・`columns`・`group_by`・`kanban_columns`・`swimlane`）にも使えるように広げる。ビューの画面のレイアウト切り替えと「ビューを更新」はこれで送る。ビューが無ければ作らず 404（`view.not_found`）。CLI の `hh view save` は変えない
 
-## 利用者の承認（2026-11-03）
+## 次
 
-- plan を承認した
-- 親設計の「保存済みビュー」に「`hh view show` の `--store` はビューを読む場所としてだけ使い、クエリは常にマウント中の全 Store で評価する（絞るのはクエリの `store:`）。GUI のビューも同じ」を足した
-- `live.spec.ts` の既存の競合は、main への別の直しにした（PR #42 `fix-poll-per-commit`）
-
-## 承認のあと
-
-新しいセッションで SDD（subagent-driven-development）。実装者は sonnet。Task の番号の順に1つずつ（同時に2人動かすとコミットが混ざる）。Task 2〜6 の画面は Task 7 の結線まで入口が出ないので、E2E の全件は Task 7 で流す。最後に最終レビュー（opus）と PR。
+PR を作る（`live.spec.ts` の既存の競合は PR #42 `fix-poll-per-commit` で別に直している。`a task added in the page does not get the mark` が `make e2e` で1度落ちることがあるのは、その競合）。
