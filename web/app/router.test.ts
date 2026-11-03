@@ -206,6 +206,13 @@ describe("router", () => {
     expect(history.length).toBe(before);
   });
 
+  it("q の + は %2B で書き、parseRoute が + のまま読み戻す", () => {
+    const r = { name: "query", layout: "table", q: "a+b" } as const;
+    expect(hrefOf(r)).toBe("/query/table?q=a%2Bb");
+    const url = new URL(hrefOf(r), "http://x");
+    expect(parseRoute(url.pathname, url.search)).toEqual(r);
+  });
+
   it("replace は履歴を積まずに URL を替える", () => {
     router.go("/query/kanban?q=a");
     const before = history.length;
