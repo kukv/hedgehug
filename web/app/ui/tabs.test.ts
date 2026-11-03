@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, within } from "@testing-library/svelte";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Tabs from "./Tabs.svelte";
 
 beforeEach(() => history.replaceState(null, "", "/"));
@@ -44,6 +44,34 @@ describe("Tabs", () => {
     expect(location.pathname).toBe("/workspaces/shared/W1");
     await fireEvent.click(getByRole("link", { name: "ツリー" }));
     expect(location.pathname).toBe("/workspaces/shared/W1/tree");
+  });
+
+  it("onselect のあるタブは、押すとその場で onselect を呼び、移動しない", async () => {
+    const onselect = vi.fn();
+    const same = "/views/shared/weekly";
+    const { getByRole } = render(Tabs, {
+      items: [
+        { label: "ツリー", href: same, current: true },
+        { label: "カンバン", href: same, current: false, onselect },
+      ],
+    });
+    const ev = new MouseEvent("click", { button: 0, bubbles: true, cancelable: true });
+    getByRole("link", { name: "カンバン" }).dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(onselect).toHaveBeenCalledTimes(1);
+    expect(location.pathname).toBe("/");
+  });
+
+  it("onselect のあるタブも、⌘ を押して押すと新しいタブで href を開く", async () => {
+    const onselect = vi.fn();
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    const { getByRole } = render(Tabs, {
+      items: [{ label: "カンバン", href: "/views/shared/weekly", current: false, onselect }],
+    });
+    await fireEvent.click(getByRole("link", { name: "カンバン" }), { metaKey: true });
+    expect(onselect).not.toHaveBeenCalled();
+    expect(open).toHaveBeenCalledWith(`${location.origin}/views/shared/weekly`, "_blank");
+    open.mockRestore();
   });
 
   it("label でナビゲーションの名前を変えられる", () => {
