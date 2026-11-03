@@ -183,7 +183,7 @@ export class ViewDirectory {
       for (const n of old.filter((o) => !names.includes(o))) {
         this.byStore.delete(n);
         this.fetched.delete(n);
-        this.seqs.delete(n);
+        // seqs keeps its counter: a fetch still on its way must not match a later one.
       }
       for (const n of names.filter((x) => !old.includes(x))) void this.fetch(n);
     }
@@ -213,12 +213,14 @@ export class ViewDirectory {
   }
 
   // apply takes in the answer of a write, and drops a fetch that is on its way: it may have read the
-  // store before the write.
+  // store before the write, and would take the written view away for a moment. That fetch may also
+  // hold a change of another client, so the store is read again after the write.
   private apply(store: string, change: (vs: SavedView[]) => SavedView[]): void {
     this.bump(store);
     this.byStore.set(store, change(this.byStore.get(store) ?? []).sort(byName));
     this.fetched.add(store);
     this.rebuild();
+    void this.fetch(store);
   }
 
   // rebuild makes the list again, keeping the entries that did not change as they were, and tells the

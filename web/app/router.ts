@@ -87,7 +87,11 @@ export function hrefOf(r: Route): string {
     case "view":
       return `/views/${encodeURIComponent(r.store)}/${encodeURIComponent(r.view)}`;
     case "query":
-      return r.q === "" ? `/query/${r.layout}` : `/query/${r.layout}?q=${encodeURIComponent(r.q)}`;
+      // URLSearchParams writes the form the browser keeps (' as %27, a space as +), so a route
+      // that is shown already compares equal to its own href.
+      return r.q === ""
+        ? `/query/${r.layout}`
+        : `/query/${r.layout}?${new URLSearchParams({ q: r.q }).toString()}`;
     case "my":
       return "/my";
     case "settings":

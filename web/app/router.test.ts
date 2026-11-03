@@ -124,7 +124,7 @@ describe("hrefOf", () => {
     );
     expect(hrefOf({ name: "query", layout: "table", q: "" })).toBe("/query/table");
     expect(hrefOf({ name: "query", layout: "kanban", q: "assignee:@me -status:done" })).toBe(
-      "/query/kanban?q=assignee%3A%40me%20-status%3Adone",
+      "/query/kanban?q=assignee%3A%40me+-status%3Adone",
     );
     expect(hrefOf({ name: "my" })).toBe("/my");
   });
@@ -199,12 +199,19 @@ describe("router", () => {
     expect(router.route).toEqual({ name: "query", layout: "tree", q: "b" });
   });
 
+  it("' を含む q でも、いま表示中のルートへの go は履歴を積まない", () => {
+    router.go("/query/table?q=title%3A%27a%20b%27");
+    const before = history.length;
+    router.go(hrefOf(router.route));
+    expect(history.length).toBe(before);
+  });
+
   it("replace は履歴を積まずに URL を替える", () => {
     router.go("/query/kanban?q=a");
     const before = history.length;
     router.replace("/query/kanban?q=a%20b");
     expect(history.length).toBe(before);
-    expect(location.search).toBe("?q=a%20b");
+    expect(location.search).toBe("?q=a+b");
     expect(router.route).toEqual({ name: "query", layout: "kanban", q: "a b" });
     router.replace("/unknown");
     expect(location.pathname).toBe("/");

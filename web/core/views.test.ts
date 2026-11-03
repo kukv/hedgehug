@@ -131,9 +131,19 @@ function setup(world: Record<string, SavedView[] | "fail"> = {}) {
     }
     const name = decodeURIComponent(r.path.slice("/api/views/".length));
     const body = r.body as Record<string, unknown>;
-    if (r.method === "PUT")
-      return { view: view(name, { ...body } as Partial<SavedView>), commit: "c1" };
-    if (r.method === "PATCH") return { view: view(body.name as string), commit: "c2" };
+    // A write changes the world too, as the server does: the fetch after it reads the result.
+    const cur = (Array.isArray(w[store]) ? w[store] : []) as SavedView[];
+    if (r.method === "PUT") {
+      const v = view(name, { ...body } as Partial<SavedView>);
+      w[store] = [...cur.filter((x) => x.name !== name), v];
+      return { view: v, commit: "c1" };
+    }
+    if (r.method === "PATCH") {
+      const v = view(body.name as string);
+      w[store] = [...cur.filter((x) => x.name !== name), v];
+      return { view: v, commit: "c2" };
+    }
+    w[store] = cur.filter((x) => x.name !== name);
     return { view: view(name), commit: "c3" };
   });
   const conn = new FakeConn();
@@ -308,7 +318,9 @@ describe("ViewDirectory", () => {
     const { api } = fakeApi((r) => {
       if (r.method !== "GET") return { view: view("new"), commit: "c1" };
       n++;
-      return n === 1 ? Promise.resolve([view("old")]) : new Promise((res) => (release = res));
+      if (n === 1) return Promise.resolve([view("old")]);
+      if (n === 2) return new Promise((res) => (release = res));
+      return Promise.resolve([view("old"), view("new")]); // the fetch after the write
     });
     const conn = new FakeConn();
     const dir = new ViewDirectory({
@@ -325,5 +337,60 @@ describe("ViewDirectory", () => {
     release([view("old")]); // read before the write
     await settle();
     expect(names(dir)).toEqual(["shared/new", "shared/old"]);
+  });
+
+  it("reads the store again after a write, so a change of another client is not lost", async () => {
+    const holds: Array<(vs: SavedView[]) => void> = [];
+    let n = 0;
+    const { api } = fakeApi((r) => {
+      if (r.method !== "GET") return { view: view("mine"), commit: "c1" };
+      n++;
+      return n === 1
+        ? Promise.resolve([view("a")])
+        : n === 2
+          ? new Promise<SavedView[]>((res) => holds.push(res))
+          : Promise.resolve([view("a"), view("mine"), view("other")]);
+    });
+    const conn = new FakeConn();
+    const dir = new ViewDirectory({
+      api,
+      conn: conn.asConnection(),
+      stores: new FakeStores(["shared"]) as unknown as StoreDirectory,
+      cache: { noteOwnCommit() {} } as unknown as TaskCache,
+    });
+    await vi.waitFor(() => expect(dir.loaded()).toBe(true));
+    conn.emit("views.changed", { store: "shared" }); // the fetch is held
+    await settle();
+    await dir.save("shared", "mine", {});
+    expect(names(dir)).toContain("shared/mine");
+    holds[0]?.([view("a"), view("other")]); // overtaken by the write: dropped
+    await vi.waitFor(() => expect(names(dir)).toEqual(["shared/a", "shared/mine", "shared/other"]));
+  });
+
+  it("keeps the counter of a store that went and came back: an old fetch stays dropped", async () => {
+    const holds: Array<(vs: SavedView[]) => void> = [];
+    let n = 0;
+    const { api } = fakeApi(() => {
+      n++;
+      if (n === 1) return new Promise<SavedView[]>((res) => holds.push(res));
+      if (n === 2) return Promise.resolve([view("new")]);
+      return [];
+    });
+    const stores = new FakeStores(["s"]);
+    const dir = new ViewDirectory({
+      api,
+      conn: new FakeConn().asConnection(),
+      stores: stores as unknown as StoreDirectory,
+      cache: { noteOwnCommit() {} } as unknown as TaskCache,
+    });
+    await settle();
+    stores.names = [];
+    stores.change();
+    stores.names = ["s"];
+    stores.change();
+    await vi.waitFor(() => expect(names(dir)).toEqual(["s/new"]));
+    holds[0]?.([view("old")]);
+    await settle();
+    expect(names(dir)).toEqual(["s/new"]);
   });
 });
