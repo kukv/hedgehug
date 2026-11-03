@@ -132,7 +132,7 @@ func settle(t *testing.T, ts *testServer, clk *fakeClock, at time.Time) {
 
 func TestDrainSyncsAgainAfterARunningSync(t *testing.T) {
 	t.Parallel()
-	ts, _, remote := loopServer(t)
+	ts, clk, remote := loopServer(t)
 	waitFirstSync(t, ts)
 	// The sync at start writes LastSuccess and is still running after that;
 	// start below would do nothing then, and the stalling fn would not run.
@@ -154,6 +154,11 @@ func TestDrainSyncsAgainAfterARunningSync(t *testing.T) {
 	ts.srv.loop.start("me")
 	var out taskWriteBody
 	ts.call("POST", "/api/tasks", map[string]any{"title": "one"}, 201, &out)
+	// A sync clears the pending mark only if it began after the write. The
+	// clock is fake and would stay at the instant of the write, so the sync
+	// of Drain would leave the write pending and Drain would sync once more
+	// (a third call) whenever the first sync ended before Drain began.
+	clk.Advance(time.Second)
 	go func() { time.Sleep(100 * time.Millisecond); close(release) }()
 	ts.srv.loop.Drain(10 * time.Second)
 	mu.Lock()
