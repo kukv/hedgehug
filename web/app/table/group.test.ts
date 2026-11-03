@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { TaskView } from "../../core/api/client";
 import { schema as base, task } from "../tree/fixtures";
 import type { SortCtx } from "./columns";
-import { groupTasks } from "./group";
+import { groupTasks, windowWithHeld } from "./group";
 
 const parents: Record<string, TaskView> = {
   E1: task("E1", "epic", null, {
@@ -94,6 +94,23 @@ describe("groupTasks", () => {
       "T2",
       "T3",
       "T4",
+    ]);
+  });
+});
+
+describe("windowWithHeld", () => {
+  const range = { startIndex: 20, endIndex: 25, overscan: 2, count: 100 };
+
+  it("is the window with its overscan, and the rows that are held", () => {
+    expect(windowWithHeld(range, [])).toEqual([18, 19, 20, 21, 22, 23, 24, 25, 26, 27]);
+    expect(windowWithHeld(range, [90, 3, 22])).toEqual([
+      3, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 90,
+    ]);
+  });
+
+  it("stays inside the list", () => {
+    expect(windowWithHeld({ startIndex: 0, endIndex: 2, overscan: 5, count: 4 }, [9])).toEqual([
+      0, 1, 2, 3,
     ]);
   });
 });

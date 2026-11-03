@@ -22,6 +22,7 @@
   import { router } from "../router";
   import Empty from "../states/Empty.svelte";
   import { useSubscribe } from "../svelte-store";
+  import { toast } from "../toast.svelte";
   import { combine, hasTerm, NO_CANCELED, withoutTerm } from "../tree/filter";
   import { countLabel, VIRTUALIZE_AT } from "../tree/flatten";
   import Button from "../ui/Button.svelte";
@@ -38,7 +39,14 @@
     sortKey,
     toggleColumn,
   } from "./columns";
-  import { GROUP_HEIGHT, type GroupBy, groupTasks, ROW_HEIGHT, type TableItem } from "./group";
+  import {
+    GROUP_HEIGHT,
+    type GroupBy,
+    groupTasks,
+    ROW_HEIGHT,
+    type TableItem,
+    windowWithHeld,
+  } from "./group";
   import TableCell from "./TableCell.svelte";
 
   let {
@@ -165,6 +173,20 @@
     return schemaFailed.filter((s) => !c.schema.get(s));
   });
 
+  // --- a row being edited keeps its place -------------------------------------------------
+  // A save changes the task, and the sort or the group of the table would move its row: the cell
+  // that has the focus would be drawn again and lose it, and the keys typed after that would go to
+  // the shortcuts of the screen. So a row the user is in (the focus is in it, or an edit of it is
+  // waiting, on its way or failed) is laid out as it was when the user came to it: frozen holds the
+  // task at that time, and the order and the groups are made from it. The cells are still drawn from
+  // the task as it is now. The rest of the table follows the changes; the row moves when it is let go.
+  let focused = $state<string | null>(null);
+  let frozen = $state.raw<ReadonlyMap<string, TaskView>>(new Map());
+  function freeze(t: TaskView) {
+    if (!frozen.has(t.ulid)) frozen = new Map(frozen).set(t.ulid, t);
+  }
+  const placed = $derived(tasks.map((t) => frozen.get(t.ulid) ?? t));
+
   // --- the table -----------------------------------------------------------------------------
   const ctx = $derived.by<SortCtx>(() => {
     cacheRev.current;
@@ -208,7 +230,7 @@
       return columnDefs;
     },
     get data() {
-      return tasks;
+      return placed;
     },
     state: {
       get sorting() {
@@ -232,9 +254,46 @@
 
   // --- editing a cell --------------------------------------------------------------------------
   function edit(t: TaskView, field: PatchField, value: unknown) {
+    freeze(t);
     c.save.edit(t.ulid, t.store, field, value);
   }
   const commit = (t: TaskView) => void c.save.flush(t.ulid);
+
+  // A row is let go when the focus has left it and nothing of it is waiting, on its way or failed.
+  function holds(ulid: string): boolean {
+    if (focused === ulid) return true;
+    const st = saves.current.state(ulid);
+    if (st.kind === "saving" || st.kind === "error") return true;
+    return specs.some((s) => {
+      const f = patchFieldOf(s);
+      return f !== null && saves.current.editing(ulid, f);
+    });
+  }
+  $effect(() => {
+    // The effect follows the SaveController, whatever holds() reads.
+    saves.current;
+    // An edit the server turned down is taken back, so that the cell shows the value of the server
+    // (a retry would send the same again); the toast says why.
+    for (const u of frozen.keys()) {
+      const why = c.save.takeRefused(u);
+      if (why !== null) toast({ message: `${c.cache.task(u)?.id ?? u}: ${why}` });
+    }
+    const let_go = [...frozen.keys()].filter((u) => !holds(u));
+    if (let_go.length > 0) {
+      const next = new Map(frozen);
+      for (const u of let_go) next.delete(u);
+      frozen = next;
+    }
+  });
+  function focusIn(t: TaskView) {
+    focused = t.ulid;
+    freeze(t);
+  }
+  function focusOut(e: FocusEvent, t: TaskView) {
+    if (focused === t.ulid && !(e.currentTarget as Node).contains(e.relatedTarget as Node | null)) {
+      focused = null;
+    }
+  }
 
   // --- virtual scrolling -------------------------------------------------------------------
   const virtualized = $derived(items.length > VIRTUALIZE_AT);
@@ -242,7 +301,16 @@
   type Virtualizer = {
     getVirtualItems(): { index: number; start: number }[];
     getTotalSize(): number;
-    setOptions(o: { count: number; getScrollElement: () => HTMLDivElement | null }): void;
+    setOptions(o: {
+      count: number;
+      getScrollElement: () => HTMLDivElement | null;
+      rangeExtractor: (range: {
+        startIndex: number;
+        endIndex: number;
+        overscan: number;
+        count: number;
+      }) => number[];
+    }): void;
   };
   let vinst = $state.raw<Virtualizer | null>(null);
   let windowed = $state<{ index: number; start: number }[]>([]);
@@ -267,10 +335,18 @@
     }),
   );
   // The window is only asked for while the list is long.
+  // The rows held stay drawn when they are scrolled out of the window, with the focus in them.
+  const heldIndexes = $derived(
+    items.flatMap((it, i) =>
+      it.type === "row" && (focused === it.task.ulid || frozen.has(it.task.ulid)) ? [i] : [],
+    ),
+  );
   $effect(() => {
+    const held = heldIndexes;
     vinst?.setOptions({
       count: virtualized ? items.length : 0,
       getScrollElement: () => scroller,
+      rangeExtractor: (range) => windowWithHeld(range, held),
     });
   });
 
@@ -399,7 +475,7 @@
       </td>
     </tr>
   {:else}
-    {@const t = item.task}
+    {@const t = taskOf(item.task.ulid) ?? item.task}
     {@const st = saves.current.state(t.ulid)}
     <tr
       class="row"
@@ -407,6 +483,8 @@
       class:placed={start !== undefined}
       style:transform={start === undefined ? undefined : `translateY(${start}px)`}
       data-ulid={t.ulid}
+      onfocusin={() => focusIn(t)}
+      onfocusout={(e) => focusOut(e, t)}
     >
       <td class="mark">
         {#if st.kind === "saving"}
@@ -459,7 +537,11 @@
       <div class="inner" style:--cols={template} style:min-width="{minWidth}rem">
         <!-- The table elements are laid out as a grid, so that the columns line up and the
           virtualizer can place a row; they keep their roles. -->
-        <table aria-label="タスクの表" aria-colcount={specs.length + 1} aria-rowcount={items.length + 1}>
+        <table
+          aria-label="タスクの表"
+          aria-colcount={specs.length + 1}
+          aria-rowcount={items.length + 1}
+        >
           <thead>
             <tr class="head" aria-rowindex={1}>
               <th class="hcell" scope="col"><span class="sr">保存の状態</span></th>

@@ -69,9 +69,9 @@
 
   async function focusActive() {
     await tick();
-    root?.querySelectorAll<HTMLElement>(
-        '[role="menuitem"], [role="menuitemcheckbox"]',
-      )[active]?.focus();
+    root
+      ?.querySelectorAll<HTMLElement>('[role="menuitem"], [role="menuitemcheckbox"]')
+      [active]?.focus();
   }
 
   function move(i: number) {
@@ -160,6 +160,7 @@
   {onfocusout}
 >
   {#each items as it, i (it.value)}
+    <!-- biome-ignore lint/a11y/useAriaPropsSupportedByRole: aria-checked is set only with the role menuitemcheckbox -->
     <button
       type="button"
       role={it.checked === undefined ? "menuitem" : "menuitemcheckbox"}

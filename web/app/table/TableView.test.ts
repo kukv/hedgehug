@@ -1,10 +1,12 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
+import { tick } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TaskView } from "../../core/api/client";
 import type { SchemaView } from "../../core/schema";
 import type { TableSettings } from "../../core/views";
 import { closeCreate, createState } from "../create-state.svelte";
 import { emitter } from "../test-utils";
+import { resetToasts, toasts } from "../toast.svelte";
 import { schema as base, task } from "../tree/fixtures";
 
 const h = vi.hoisted(() => ({
@@ -134,10 +136,18 @@ function setup(over: Over = {}) {
     loading: () => over.loading ?? false,
     dispose() {},
   }));
+  const pending = new Set<string>();
+  // The words of the server for a task whose edit it turned down.
+  const refused = new Map<string, string>();
   const save = {
     edit: vi.fn(),
     flush: vi.fn(async () => {}),
-    editing: () => false,
+    editing: (u: string) => pending.has(u),
+    takeRefused: (u: string) => {
+      const why = refused.get(u) ?? null;
+      refused.delete(u);
+      return why;
+    },
     state: () => over.saveState ?? { kind: "idle" },
     subscribe: ev.subscribe,
   };
@@ -174,7 +184,12 @@ function setup(over: Over = {}) {
       stores.map((s) => schemas[s]).filter((s): s is SchemaView => s !== undefined),
     ...over.scope,
   };
-  return { save, watchList, ev, schemas };
+  // The server answers a write: the task as it is now.
+  const write = (ulid: string, patch: Partial<TaskView>) => {
+    tasks.set(ulid, { ...(tasks.get(ulid) as TaskView), ...patch });
+    ev.emit();
+  };
+  return { save, watchList, ev, schemas, tasks, pending, refused, write };
 }
 
 function mount(props: Record<string, unknown> = {}) {
@@ -198,6 +213,7 @@ beforeEach(() => {
   h.vstart = 0;
   h.go.mockReset();
   closeCreate();
+  resetToasts();
 });
 afterEach(cleanup);
 
@@ -327,6 +343,25 @@ describe("TableView", () => {
       expect(retry).toHaveAttribute("title", "値が正しくありません");
       await fireEvent.click(retry as HTMLElement);
       expect(save.flush).toHaveBeenCalledWith("T1");
+    });
+  });
+
+  describe("an edit the server turns down", () => {
+    it("says why in a toast, once, and takes the edit back instead of offering to send it again", async () => {
+      const { refused, ev } = setup();
+      mount();
+      await fireEvent.click(screen.getByRole("button", { name: "ステータス: REL-4" }));
+      await fireEvent.click(screen.getByRole("menuitem", { name: /done/ }));
+      expect(toasts.list).toEqual([]);
+      refused.set("T1", "done にするには points が必要です");
+      ev.emit();
+      await tick();
+      expect(toasts.list.map((t) => t.message)).toEqual([
+        "REL-4: done にするには points が必要です",
+      ]);
+      ev.emit();
+      await tick();
+      expect(toasts.list).toHaveLength(1);
     });
   });
 
@@ -556,6 +591,77 @@ describe("TableView", () => {
       expect(order()[0]).toBe("REL-100");
       const row = document.querySelector<HTMLElement>("tr.row");
       expect(row).toHaveStyle({ transform: "translateY(0px)" });
+    });
+  });
+
+  describe("a row being edited", () => {
+    const BY_TITLE: TableSettings = { columns: ["id", "title", "status"], groupBy: "none" };
+    const sortByTitle = () =>
+      fireEvent.click(
+        within(screen.getByRole("columnheader", { name: /^タイトル/ })).getByRole("button"),
+      );
+
+    it("keeps its place and its focus while the focus is in it, and moves when the focus leaves", async () => {
+      const { write } = setup();
+      mount({ settings: BY_TITLE });
+      await sortByTitle();
+      const before = order();
+      expect(before).toHaveLength(3);
+      const last = before[2] as string;
+      const input = screen.getByRole("textbox", { name: `タイトル: ${last}` });
+      input.focus();
+      await fireEvent.input(input, { target: { value: "AAA" } });
+      write(last === "REL-9" ? "T3" : last === "REL-4" ? "T1" : "T2", { title: "AAA" });
+      await tick();
+      expect(order()).toEqual(before);
+      expect(input).toHaveFocus();
+      input.blur();
+      await tick();
+      expect(order()[0]).toBe(last);
+    });
+
+    it("keeps its place while its save is not answered, and does not remount the cell", async () => {
+      const { write, pending, ev } = setup();
+      mount({ settings: BY_TITLE });
+      await sortByTitle();
+      const before = order();
+      const last = before[2] as string;
+      const ulid = last === "REL-9" ? "T3" : last === "REL-4" ? "T1" : "T2";
+      const input = screen.getByRole("textbox", { name: `タイトル: ${last}` });
+      input.focus();
+      await fireEvent.input(input, { target: { value: "AAA" } });
+      pending.add(ulid);
+      input.blur();
+      write(ulid, { title: "AAA" });
+      await tick();
+      expect(order()).toEqual(before);
+      expect(screen.getByRole("textbox", { name: `タイトル: ${last}` })).toBe(input);
+      expect(input).toHaveValue("AAA");
+      pending.delete(ulid);
+      ev.emit();
+      await tick();
+      expect(order()[0]).toBe(last);
+    });
+
+    it("stays in its group when its status changes, with the focus on the cell", async () => {
+      const { write } = setup();
+      mount({ settings: { ...BY_TITLE, groupBy: "status" } });
+      const heads = () =>
+        [...document.querySelectorAll(".group")].map((e) =>
+          e.textContent?.replace(/\s+/g, " ").trim(),
+        );
+      expect(heads()).toEqual(["backlog 1 件", "todo 1 件", "doing 1 件"]);
+      const pick = screen.getByRole("button", { name: "ステータス: REL-4" });
+      await fireEvent.click(pick);
+      await fireEvent.click(screen.getByRole("menuitem", { name: /doing/ }));
+      write("T1", { status: "doing" });
+      await tick();
+      expect(heads()).toEqual(["backlog 1 件", "todo 1 件", "doing 1 件"]);
+      expect(screen.getByRole("button", { name: "ステータス: REL-4" })).toBe(pick);
+      expect(pick).toHaveFocus();
+      pick.blur();
+      await tick();
+      expect(heads()).toEqual(["backlog 1 件", "doing 2 件"]);
     });
   });
 

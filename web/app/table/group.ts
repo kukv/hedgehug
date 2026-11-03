@@ -113,3 +113,17 @@ export function groupTasks(tasks: TaskView[], by: GroupBy, ctx: SortCtx): TableI
     })),
   ]);
 }
+
+// windowWithHeld is the indexes the virtualizer draws: its window with the overscan, and the rows
+// that are held (the one being edited), so that a row keeps its element, and its focus, when it is
+// scrolled out of the window.
+export function windowWithHeld(
+  range: { startIndex: number; endIndex: number; overscan: number; count: number },
+  held: number[],
+): number[] {
+  const out = new Set(held.filter((i) => i >= 0 && i < range.count));
+  const from = Math.max(range.startIndex - range.overscan, 0);
+  const to = Math.min(range.endIndex + range.overscan, range.count - 1);
+  for (let i = from; i <= to; i++) out.add(i);
+  return [...out].sort((a, b) => a - b);
+}
