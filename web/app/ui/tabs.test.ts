@@ -82,6 +82,7 @@ describe("Tabs", () => {
     const a = getByRole("link", { name: "ツリー" });
     expect(a).toHaveAttribute("aria-disabled", "true");
     expect(a).toHaveAttribute("title", "理由です");
+    expect(a).toHaveAccessibleDescription("理由です");
     const ev = new MouseEvent("click", { button: 0, bubbles: true, cancelable: true });
     a.dispatchEvent(ev);
     expect(ev.defaultPrevented).toBe(true);

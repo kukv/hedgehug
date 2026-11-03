@@ -169,7 +169,7 @@ export class ViewDirectory {
       r = await this.patch(store, name, body);
     } catch (e) {
       // The view is gone (another client renamed or removed it): the list drops it too.
-      if (e instanceof ApiError && e.status === 404)
+      if (e instanceof ApiError && e.type === "view.not_found")
         this.apply(store, (vs) => vs.filter((v) => v.name !== name));
       throw e;
     }

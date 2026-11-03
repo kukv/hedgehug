@@ -229,7 +229,8 @@ describe("ViewPage", () => {
     const why = "ツリーのビューは rank の順に並ぶため、group: と sort: は使えません";
     expect(tab("ツリー")).toHaveAttribute("aria-disabled", "true");
     expect(tab("ツリー")).toHaveAttribute("title", why);
-    expect(screen.getByText(`ツリーには切り替えられません。${why}`)).toBeVisible();
+    expect(tab("ツリー")).toHaveAccessibleDescription(why);
+    expect(screen.queryByText(/ツリーには切り替えられません/)).toBeNull();
     await fireEvent.click(tab("ツリー"));
     expect(views.update).not.toHaveBeenCalled();
     expect(tab("カンバン")).not.toHaveAttribute("aria-disabled");

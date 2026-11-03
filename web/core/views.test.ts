@@ -342,6 +342,23 @@ describe("ViewDirectory", () => {
     expect(names(dir)).toEqual([]);
   });
 
+  it("update keeps the list when the 404 is not about the view (an unknown store)", async () => {
+    const { api } = fakeApi((r) =>
+      r.method === "GET" ? [view("weekly")] : problem(404, "store.not_found", { store: "shared" }),
+    );
+    const dir = new ViewDirectory({
+      api,
+      conn: new FakeConn().asConnection(),
+      stores: new FakeStores(["shared"]) as unknown as StoreDirectory,
+      cache: { noteOwnCommit() {} } as unknown as TaskCache,
+    });
+    await vi.waitFor(() => expect(dir.loaded()).toBe(true));
+    await expect(dir.update("shared", "weekly", { layout: "kanban" })).rejects.toMatchObject({
+      type: "store.not_found",
+    });
+    expect(names(dir)).toEqual(["shared/weekly"]);
+  });
+
   it("throws the error of a write and leaves the list as it was", async () => {
     const { api } = fakeApi((r) =>
       r.method === "GET" ? [view("weekly")] : problem(409, "view.name_taken", { name: "weekly" }),

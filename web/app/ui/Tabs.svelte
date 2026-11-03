@@ -22,6 +22,7 @@
 
   type Props = { items: TabItem[]; end?: TabEnd; label?: string };
   let { items, end, label = "ビューの切り替え" }: Props = $props();
+  const uid = $props.id();
 
   function pick(e: MouseEvent, it: TabItem) {
     if (it.disabled) {
@@ -47,10 +48,14 @@
       href={it.href}
       aria-current={it.current ? "page" : undefined}
       aria-disabled={it.disabled ? "true" : undefined}
+      aria-describedby={it.disabled ? `${uid}-${it.label}` : undefined}
       title={it.disabled}
       onclick={(e) => pick(e, it)}
       >{it.label}</a
     >
+    {#if it.disabled}
+      <span class="reason" id="{uid}-{it.label}">{it.disabled}</span>
+    {/if}
   {/each}
   {#if end}
     <a
@@ -89,6 +94,14 @@
   }
   .tab:hover {
     color: var(--ink);
+  }
+  .reason {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .tab[aria-disabled="true"] {
     color: var(--muted);

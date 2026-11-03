@@ -177,9 +177,6 @@
       </div>
     {/if}
     <Tabs {items} label="レイアウトの切り替え" />
-    {#if treeBlock}
-      <p class="problem blocked">ツリーには切り替えられません。{treeBlock}</p>
-    {/if}
     <div class="switch">
       <span class="hint">切り替えは保存したビューの layout を変えます（1 コミット）</span>
       <CliLine command={switchCli} />
@@ -291,9 +288,6 @@
     border-radius: var(--radius-8);
     background: var(--warning-weak);
     font-size: var(--fs-13);
-  }
-  .blocked {
-    margin: var(--space-8) var(--gutter) 0;
   }
   .body {
     flex: 1 1 auto;
