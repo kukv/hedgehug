@@ -191,10 +191,11 @@ describe("decideDrop", () => {
     expect(d.ok ? "" : d.reason).toContain("REL-1 仕事");
   });
 
-  it("uses the workflow of the project of the task", () => {
+  it("uses the workflow of the scope the server names for the task", () => {
     const t = task("A", "task", null, {
       status: "todo",
       project: { ulid: "P1", id: "P-1", title: "p" },
+      scope: "P1",
     });
     expect(decideDrop({ ...base, task: t, column: col("done") })).toMatchObject({
       ok: false,
@@ -203,6 +204,35 @@ describe("decideDrop", () => {
     expect(decideDrop({ ...base, task: t, column: col("doing") })).toMatchObject({
       ok: true,
       fill: ["area"],
+    });
+  });
+
+  describe("the scope is the one the server names, not the project", () => {
+    const withEpic = {
+      ...schema,
+      scoped: [
+        ...(schema.scoped ?? []),
+        { where: "project:E1", workflow: { required: { done: ["labels"] } } },
+      ],
+    } as unknown as SchemaView;
+    const project = { ulid: "P1", id: "P-1", title: "p" };
+
+    it("asks what the override of an epic needs, though the project has another", () => {
+      const t = task("A", "task", null, { status: "doing", props: {}, project, scope: "E1" });
+      const d = decideDrop({ ...base, task: t, schema: withEpic, column: col("done") });
+      expect(d).toMatchObject({ ok: true, fill: ["points", "assignees", "labels"] });
+    });
+
+    it("allows the move the epic allows, though the project forbids it", () => {
+      const t = task("A", "task", null, { status: "todo", props: {}, project, scope: "E1" });
+      const d = decideDrop({ ...base, task: t, schema: withEpic, column: col("done") });
+      expect(d).toMatchObject({ ok: true, status: "done" });
+    });
+
+    it("applies no override to a task the server gives none", () => {
+      const t = task("A", "task", null, { status: "todo", props: {}, project });
+      const d = decideDrop({ ...base, task: t, schema: withEpic, column: col("done") });
+      expect(d).toMatchObject({ ok: true, status: "done" });
     });
   });
 

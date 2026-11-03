@@ -7,7 +7,8 @@ import { type Column, columnKeyOf } from "./board";
 type Scoped = NonNullable<SchemaView["scoped"]>[number];
 type Transitions = Record<string, string[] | null>;
 
-// The override of a project (its scoped entry in schema.yaml), by the ULID of the project.
+// The override of a container (its scoped entry in schema.yaml, where: project:<ULID>), by the ULID
+// of the container: the project a board is of, or the scope the server names for a task.
 function scopedOf(schema: SchemaView, project: string | undefined): Scoped | undefined {
   if (!project) return undefined;
   return (schema.scoped ?? []).find((s) => s.where === `project:${project}`);
@@ -168,7 +169,9 @@ export function decideDrop(i: DropInput): DropDecision {
         : `${name}は ${task.store} にあり、その schema.yaml に「${column.label}」というステータスがありません。`,
     );
   }
-  const project = task.project?.ulid;
+  // The override the server applies to the task: that of the nearest ancestor (or the task itself)
+  // that has one, not necessarily its project (TaskView.scope).
+  const project = task.scope || undefined;
   if (!canTransition(schema, project, task.status, to)) {
     const label = (s: string) => schema.statuses?.find((x) => x.name === s)?.label || s;
     return refuse(
