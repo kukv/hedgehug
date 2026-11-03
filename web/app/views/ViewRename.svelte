@@ -1,7 +1,7 @@
 <script lang="ts">
   import { cliViewRename, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
-  import type { ViewEntry } from "../../core/views";
+  import type { ViewDraft, ViewEntry } from "../../core/views";
   import { core } from "../context";
   import { router } from "../router";
   import { useSubscribe } from "../svelte-store";
@@ -9,9 +9,14 @@
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
   import FormError from "../ui/FormError.svelte";
+  import { carryDraft } from "./dialogs-state.svelte";
   import { sameViewName } from "./draft";
 
-  let { entry, onclose }: { entry: ViewEntry; onclose: () => void } = $props();
+  let {
+    entry,
+    carry = null,
+    onclose,
+  }: { entry: ViewEntry; carry?: ViewDraft | null; onclose: () => void } = $props();
 
   const { views } = core();
   const uid = $props.id();
@@ -57,6 +62,8 @@
       // The screen of the old name has nothing to show now: it goes to the new one.
       const r = router.route;
       if (r.name === "view" && r.store === entry.store && r.view === from) {
+        // What was not saved goes with the view to its new name.
+        if (carry) carryDraft(entry.store, renamed.name, carry);
         router.go(router.href({ name: "view", store: entry.store, view: renamed.name }), {
           replace: true,
         });

@@ -13,7 +13,7 @@
   {/key}
 {:else if d?.kind === "rename"}
   {#key d}
-    <ViewRename entry={d.entry} onclose={closeViewDialog} />
+    <ViewRename entry={d.entry} carry={d.carry} onclose={closeViewDialog} />
   {/key}
 {:else if d?.kind === "delete"}
   {#key d}

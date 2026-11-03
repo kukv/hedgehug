@@ -2,15 +2,27 @@ import { fireEvent, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../core/api/client";
 import { cliViewRename } from "../../core/cli";
+import { DEFAULT_KANBAN, DEFAULT_TABLE, type ViewDraft } from "../../core/views";
 import { resetToasts, toasts } from "../toast.svelte";
+import { takeCarriedDraft } from "./dialogs-state.svelte";
 import { makeViews, mountWithViews, viewEntry } from "./testkit";
 import ViewRename from "./ViewRename.svelte";
 
 const weekly = viewEntry({ name: "weekly" });
 
-function setup(views = makeViews([weekly, viewEntry({ name: "Sprint" })])) {
+const unsaved: ViewDraft = {
+  layout: "table",
+  query: "assignee:@me",
+  kanban: DEFAULT_KANBAN,
+  table: DEFAULT_TABLE,
+};
+
+function setup(
+  views = makeViews([weekly, viewEntry({ name: "Sprint" })]),
+  carry: ViewDraft | null = null,
+) {
   const onclose = vi.fn();
-  const r = mountWithViews(ViewRename, { entry: weekly, onclose }, { views });
+  const r = mountWithViews(ViewRename, { entry: weekly, carry, onclose }, { views });
   return { onclose, ...r };
 }
 
@@ -51,6 +63,25 @@ describe("ViewRename", () => {
     await waitFor(() => expect(onclose).toHaveBeenCalled());
     expect(location.pathname).toBe("/views/shared/monthly");
     expect(history.length).toBe(before);
+  });
+
+  it("開いているビューの未保存の変更は、新しい名前の画面へ持ち越す", async () => {
+    history.replaceState(null, "", "/views/shared/weekly");
+    const { onclose } = setup(undefined, unsaved);
+    await typeName("monthly");
+    await fireEvent.click(screen.getByRole("button", { name: "改名" }));
+    await waitFor(() => expect(onclose).toHaveBeenCalled());
+    expect(takeCarriedDraft("shared", "monthly")).toEqual(unsaved);
+    expect(takeCarriedDraft("shared", "monthly")).toBeNull();
+  });
+
+  it("未保存の変更がなければ持ち越さない", async () => {
+    history.replaceState(null, "", "/views/shared/weekly");
+    const { onclose } = setup();
+    await typeName("monthly");
+    await fireEvent.click(screen.getByRole("button", { name: "改名" }));
+    await waitFor(() => expect(onclose).toHaveBeenCalled());
+    expect(takeCarriedDraft("shared", "monthly")).toBeNull();
   });
 
   it("ほかの画面にいれば動かさない", async () => {
