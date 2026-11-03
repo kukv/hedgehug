@@ -288,7 +288,78 @@
 - Modify: `docs/superpowers/plans/2026-11-03-phase4e-screens.md`（「4e-4 の plan で足した細部」に 91〜105 を写し、実装で変えたものを直す）、`docs/superpowers/specs/2026-11-01-phase4-gui-design.md`（4e-4 の決定の段落）、引き継ぎ `docs/superpowers/plans/2026-11-03-phase4e4-handoff.md`（新規）
 - Modify: この plan の末尾に「決めたこと」（実装中に決めたもの・直したもの）
 
-- [ ] Step 1: spec の「画面と範囲」の各行（Sidebar〜SettingsNav）を1つずつ見て、フェーズ4で作るものがすべて GUI にあることを確かめ、表にして plan の末尾に残す。足りないものはこの Task で作る
-- [ ] Step 2: spec の E2E の一覧（作成、編集と自動保存、ツリーのドラッグ、カンバンの移動、CLI の変更が SSE で反映、通知の既読と revert、保存済みビュー、undo、削除と復元）がすべて `web/e2e` にあることを確かめる
-- [ ] Step 3: 全体の検査: `go vet ./...`・`gofmt -l .`・`go test -race ./...`、`cd web && pnpm fix && pnpm check && pnpm exec biome ci . && pnpm exec vitest run && pnpm build`、`make e2e` を3回（3回とも全件 PASS。落ちたら失敗の出力を残して直す）
-- [ ] Step 4: ドキュメントを直してコミット `docs(plan): 4e-4 の決めたことを概要 plan と spec に写し、引き継ぎを書く`
+- [x] Step 1: spec の「画面と範囲」の各行（Sidebar〜SettingsNav）を1つずつ見て、フェーズ4で作るものがすべて GUI にあることを確かめ、表にして plan の末尾に残す。足りないものはこの Task で作る
+- [x] Step 2: spec の E2E の一覧（作成、編集と自動保存、ツリーのドラッグ、カンバンの移動、CLI の変更が SSE で反映、通知の既読と revert、保存済みビュー、undo、削除と復元）がすべて `web/e2e` にあることを確かめる
+- [x] Step 3: 全体の検査: `go vet ./...`・`gofmt -l .`・`go test -race ./...`、`cd web && pnpm fix && pnpm check && pnpm exec biome ci . && pnpm exec vitest run && pnpm build`、`make e2e` を3回（3回とも全件 PASS。落ちたら失敗の出力を残して直す）
+- [x] Step 4: ドキュメントを直してコミット `docs(plan): 4e-4 の決めたことを概要 plan と spec に写し、引き継ぎを書く`
+
+---
+
+## 画面と範囲の確かめ（4e-4 の終わり）
+
+Task 7 で、spec の「画面と範囲」の各行と E2E の一覧を、コードを見て一つずつ確かめた。`grep -rn "4e-4" web/app web/core web/e2e` は 0 件（「まだ出さない」の検査やコメントは残っていない）。足りないものはなかった。
+
+| アートボード | 確かめたこと（場所） | 結果 |
+|---|---|---|
+| Sidebar | 保存済みビューの一覧と layout の切り替え（`sidebar/Sidebar.svelte`、`views/ViewPage.svelte`）、ワークスペースの行（Store のバッジ・接頭辞）› プロジェクトと進捗（`done/total`）、行の「…」の「設定を開く」「削除…」、`SyncCard` の状態と「今すぐ同期」、通知の未読数 | ある |
+| Workspace | `WorkspaceHeader` のタブ（概要・ツリー・カンバン・テーブル・設定）、`WorkspaceOverview` の件数とプロジェクトの一覧（進捗・期限・担当）とプロジェクトの外のルートのタスク、タスク・プロジェクトの作成ボタン | ある |
+| WorkspaceSettings | `WorkspaceSettings.svelte` の名前の編集、「接頭辞を変更…」（`PrefixChange`）、ULID のコピー、削除（残っていれば無効で理由） | ある |
+| Main（ツリー） | `tree/TreeView.svelte`・`keyboard.ts`（追加・字下げ・並べ替え・完了、ドラッグ）、`FilterBar`、`list/SaveViewButton` | ある |
+| Project | `ProjectHeader`（ワークスペース › プロジェクトと Store のバッジ、ワークスペースへ戻る）、進捗、タスク詳細の見出しのパンくずと Store のバッジ（`detail/TaskDetail.svelte`） | ある |
+| Kanban | `kanban/KanbanView.svelte`（ステータス・カテゴリの列、担当者・プロジェクトのスイムレーン、ドラッグ、必須の項目の `RequiredDialog`、ビューを保存） | ある |
+| Table | `table/TableView.svelte`・`TableCell.svelte`（セルの編集、並び替え、グループ、列の選択） | ある |
+| MyTasks | `my/MyTasks.svelte`・`my/groups.ts`（期限・プロジェクトでまとめる） | ある |
+| TaskDetail | `detail/` のプロパティ・`BodyEditor`・`Comments`・`Relations`（逆方向とバックリンク）・`Checklist`・ウォッチ・`History`（この時点に戻す）・`DeleteDialogs` | ある |
+| Inbox | `inbox/InboxPage.svelte`（一覧、既読、自分の値に戻す） | ある |
+| Activity | `activity/ActivityPage.svelte`・`WorkspacePicker.svelte`（人と同期、ワークスペースの複数選択） | ある |
+| ProjectSettings | `project/ProjectSettings.svelte`・`ConstraintEditor.svelte`・`ProjectViolations.svelte`（表示するステータス、遷移の制約、必須の項目、Store の値と並べる、全部戻す） | ある |
+| CreateTask / CreateProject | `create/CreateTask.svelte`・`CreateProject.svelte`・`WorkspaceChoice.svelte`（ワークスペースが2つ以上のときだけ選択欄、親があれば固定） | ある |
+| CreateStore | `create/CreateStore.svelte` | ある |
+| Dialogs | 削除の確認（`DeleteDialogs`）、ビューを保存・改名・削除（`views/`）、ワークスペースの追加・接頭辞・削除・移動（`workspace/`） | ある |
+| CommandPalette | `palette/CommandPalette.svelte`・`search.ts`（ID・タイトルの検索、画面の移動、操作） | ある |
+| States | `states/Empty.svelte`（空の状態）・`Disconnected.svelte`・`Banners.svelte`（同期のエラー、オフライン）・`NoToken.svelte`、壊れたファイルは `TaskDetail` の帯で `hh doctor` へ案内 | ある |
+| Onboarding | `states/Onboarding.svelte`（Store が1つもないとき） | ある |
+| SettingsSchema | `settings/SettingsSchema.svelte`・`SchemaCheck.svelte`・`MigrateDialog.svelte` | ある |
+| SettingsGeneral | `settings/SettingsGeneral.svelte`（同期の状態と間隔）・`DoctorSection.svelte`・`PurgeSection.svelte` | ある |
+| SettingsWorkspaces | `settings/SettingsWorkspaces.svelte`（一覧、追加、設定タブへ） | ある |
+| SettingsNav | `settings/SettingsNav.svelte`・`SettingsLayout.svelte` | ある |
+
+「後のフェーズ」の欄にあるもの（ガント・バックログ・スプリント・リリース・レポートのタブ、一括編集、PR・Issue、作業時間、自動化、アカウント・Store の設定など）と、フェーズ4で作らないアートボードは、spec のとおり出していない。
+
+### E2E の一覧（spec の「4d・4e フロントエンド」）
+
+| 項目 | `web/e2e` の spec |
+|---|---|
+| 作成 | `create.spec.ts` |
+| 編集と自動保存 | `edit.spec.ts` |
+| ツリーのドラッグ | `tree.spec.ts`（「dragging a row after another reorders; …」ほか） |
+| カンバンの移動 | `kanban.spec.ts` |
+| CLI の変更が SSE で反映 | `live.spec.ts` |
+| 通知の既読と revert | `inbox.spec.ts` |
+| 保存済みビュー | `views.spec.ts` |
+| undo | `undo.spec.ts` |
+| 削除と復元 | `delete.spec.ts` |
+
+すべてある。このほかに、この回で `activity.spec.ts`・`project-settings.spec.ts`・`maintenance.spec.ts`・`schema.spec.ts` を足した。
+
+## 決めたこと
+
+実装中に plan が決めていなかったもの。概要 plan の細部 106〜129 に写してある。
+
+- **通知**: 足元は `hh inbox --all`。既読にした上書きの行はボタンなし。同期の修復の文は detail の種類ごとに分ける。タブは `/inbox?tab=overwritten|mention|repair` でアドレスに持つ
+- **アクティビティ**: すべての trailer を出す。タスクはあるが ID がないログは ULID を出す。`limit` の上限は 1000。日時を読めないコミットは「日時不明」にまとめる
+- **プロジェクトの設定**: scoped を1件返す GET がないので `SchemaView.scoped` から読む。`PUT`・`DELETE` のあとに `SchemaCache.reload(store)`。すでにエントリのあるステータスへの追加はそのエントリに併合する。必須にできる項目は `internal/schema/check.go` から取る。`ConstraintEditor` と `ProjectViolations` に分ける
+- **同期と保守**: `/settings` は `/settings/general` に置き換える。窓が隠れているあいだの fetch は `max(interval, 10 分)`。`SyncCard` は任意の `store` を受ける。ナビの Store の選択欄は作り直さず、選びを残す
+- **doctor**: API は `DoctorReport[]`。修復のあとは応答の findings を使い、二度目の GET は送らない。ID は `GET /api/tasks/{ulid}` で引く。severity が info のものも扱う。E2E の harness は `Hedgehug.env()` で `hedgehug` を PATH に載せる（merge driver が見つかるように）
+- **purge**: 日数はテキスト欄で、NFKC で全角を半角にして 0〜36500 を受ける
+- **スキーマ**: `schema.changed` では check だけを取り直す。migrate のあとに行が消えたらフォーカスを h1 へ。定義が1つなら「併合する…」を出さない。ワークフローは文の一覧で見せる。check の欄は `SchemaCheck.svelte`。タブは `/settings/schema/<store>?tab=kinds|props|workflow`
+
+## 組み上げで直した点
+
+plan の誤りで、組み上げの途中で実物に合わせたもの。
+
+- Task 3: plan の `GET /api/schema/scoped/{project}` は実在しない（scoped の API は `PUT`・`DELETE` だけ）。上書きは `GET /api/schema` の `SchemaView.scoped` から読むように直した（37419ae）。使わなくなる `cliScopeShow` も外した（fddc3ec）
+- Task 5: doctor の応答の型は plan の `FindingsOutputBody` ではなく `DoctorReport[]`（Store ごとの配列）だった。それに合わせ、修復のあとも応答の findings を使う
+- Task 1・3: plan が挙げた `cliInboxRead`・`cliInboxRevert`・`cliScopeShow` は呼ぶ画面がなく、使われないので作らずに外した（d174483、fddc3ec）
+- Task 6: 概要 plan の細部 74 と plan の足元の「`hh migrate …`」は、実際のコマンドでは `hh schema migrate …`。足元の文字列を直し、`cliSchemaMigrate` の使われない `dryRun` も外した（f039062）
+- Task 6: 通知とスキーマのタブはアドレスに持たず状態だけだったため、戻る・再読み込みで失われた。アドレスに持たせ、タブの一覧の出どころを1つにした（d5993e7、98dd30d）
