@@ -121,9 +121,11 @@ func TestLogWorkspaceThroughTheIndex(t *testing.T) {
 	}
 	out := te.ok("log", "--workspace", "me", "-n", "2")
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	// The title ends each line; a hash or a ULID may hold "a2" too.
-	if len(lines) != 2 || !strings.HasSuffix(lines[0], " m3") || !strings.HasSuffix(lines[1], " m2") {
-		t.Errorf("log --workspace me -n 2 want m3 then m2 (the newest kept), and no other workspace's commits:\n%s", out)
+	// The title ends the line; the hash at its head may hold "m3" or "a1" too.
+	// a2 was added between m2 and m3, so two lines m3 then m2 also say that
+	// the commits of api are left out.
+	if len(lines) != 2 || !strings.HasSuffix(lines[0], ") m3") || !strings.HasSuffix(lines[1], ") m2") {
+		t.Errorf("log --workspace me -n 2 want m3 then m2 (the newest kept), and no commit of api:\n%s", out)
 	}
 }
 

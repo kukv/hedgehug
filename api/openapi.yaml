@@ -1531,13 +1531,13 @@ components:
       additionalProperties: false
       properties:
         author:
-          description: The Hedgehug-Author of HEAD; empty when unknown
+          description: The Hedgehug-Author of the commit; empty when unknown
           type: string
         commit:
-          description: HEAD now
+          description: "The commit of the change: HEAD, or one of the commits since the last look"
           type: string
         op:
-          description: The Hedgehug-Op of HEAD; empty for a commit made by hand
+          description: The Hedgehug-Op of the commit; empty for a commit made by hand
           type: string
         removed:
           description: The tasks whose file is gone (purged)
