@@ -334,6 +334,67 @@ func BenchmarkRestoreAt(b *testing.B) {
 	}
 }
 
+// BenchmarkFixedCost is what go-git costs every command, apart from the
+// indexes (spec decision 9): "firstRead" opens the repository and reads the
+// HEAD commit, which reads the pack's .idx; "write" is one write of a task
+// title from a new session, which builds the tree from the git index.
+func BenchmarkFixedCost(b *testing.B) {
+	src := indexed(b, benchSource(b))
+	b.Run("firstRead", func(b *testing.B) {
+		for b.Loop() {
+			r, err := gitrepo.Open(src)
+			if err != nil {
+				b.Fatal(err)
+			}
+			h, err := r.Head()
+			if err != nil {
+				b.Fatal(err)
+			}
+			if _, err := r.Entry(h); err != nil {
+				b.Fatal(err)
+			}
+			b.StopTimer()
+			_ = r.Close()
+			b.StartTimer()
+		}
+	})
+	b.Run("write", func(b *testing.B) {
+		for b.Loop() {
+			b.StopTimer()
+			dir := filepath.Join(workDir(b), "store")
+			historytest.Clone(b, src, dir)
+			ss := session(b, dir, "alice")
+			b.StartTimer()
+			s, err := ss.OpenStore()
+			if err != nil {
+				b.Fatal(err)
+			}
+			var task model.ULID
+			for t, err := range s.Tasks() {
+				if err != nil {
+					b.Fatal(err)
+				}
+				task = t.ULID
+				break
+			}
+			if _, err := ss.Update(s, store.Op{Name: "edit", Task: task}, func(tx *store.Tx) error {
+				t, err := tx.Task(task)
+				if err != nil {
+					return err
+				}
+				t.Title += " (changed)"
+				return tx.PutTask(t)
+			}); err != nil {
+				b.Fatal(err)
+			}
+			b.StopTimer()
+			_ = s.Repo().Close()
+			_ = os.RemoveAll(filepath.Dir(dir))
+			b.StartTimer()
+		}
+	})
+}
+
 // addPack writes a pack of n random blobs of size bytes into the repository
 // in dir, as a fetch does.
 func addPack(b *testing.B, dir string, n, size int) {
