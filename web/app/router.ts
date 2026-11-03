@@ -16,6 +16,7 @@ export type Route =
   | { name: "view"; store: string; view: string }
   | { name: "query"; layout: Layout; q: string }
   | { name: "my" }
+  | { name: "inbox" }
   | ({ name: "settings" } & SettingsPage);
 
 const WORKSPACE_TABS: readonly string[] = ["tree", "kanban", "table", "settings"];
@@ -55,6 +56,7 @@ function matchRoute(pathname: string, search: string): Route | null {
     return { name: "query", layout: a as Layout, q: new URLSearchParams(search).get("q") ?? "" };
   }
   if (head === "my" && seg.length === 1) return { name: "my" };
+  if (head === "inbox" && seg.length === 1) return { name: "inbox" };
   if (head === "settings" && seg.length === 1) {
     return { name: "settings", page: "workspaces", store: "" };
   }
@@ -94,6 +96,8 @@ export function hrefOf(r: Route): string {
         : `/query/${r.layout}?${new URLSearchParams({ q: r.q }).toString()}`;
     case "my":
       return "/my";
+    case "inbox":
+      return "/inbox";
     case "settings":
       return r.store === "" ? "/settings" : `/settings/workspaces/${encodeURIComponent(r.store)}`;
   }

@@ -78,11 +78,40 @@ describe("Sidebar", () => {
     expect(getByText(location.host)).toBeTruthy();
   });
 
-  it("通知とアクティビティの入口は 4e-4 まで出さない", () => {
-    const { queryByText } = mount();
-    for (const t of ["通知", "アクティビティ"]) {
-      expect(queryByText(t)).toBeNull();
-    }
+  it("通知の行が出る。アクティビティの入口はまだ出さない", () => {
+    const { getByRole, queryByText } = mount();
+    expect(getByRole("link", { name: /通知/ })).toBeTruthy();
+    expect(queryByText("アクティビティ")).toBeNull();
+  });
+
+  it("通知は /inbox を開く行。マイタスクの下に並び、今の画面なら aria-current", async () => {
+    const { getByRole, getAllByRole } = mount();
+    const link = getByRole("link", { name: /通知/ });
+    expect(link.getAttribute("href")).toBe("/inbox");
+    expect(link.getAttribute("aria-current")).toBeNull();
+    const names = getAllByRole("link").map((a) => a.textContent?.trim());
+    expect(names.indexOf("通知")).toBe(names.findIndex((t) => t?.startsWith("マイタスク")) + 1);
+    await fireEvent.click(link);
+    expect(location.pathname).toBe("/inbox");
+    cleanup();
+    const again = mount();
+    expect(again.getByRole("link", { name: /通知/ }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("通知の行は未読の数を出す。0 なら出さない", () => {
+    const none = mount();
+    expect(none.getByRole("link", { name: /通知/ }).textContent?.trim()).toBe("通知");
+    cleanup();
+    const some = mount({
+      conn: {
+        state: "open",
+        sync: new Map(),
+        unread: 3,
+        subscribe: () => () => {},
+        on: () => () => {},
+      },
+    });
+    expect(some.getByRole("link", { name: /通知/ }).textContent).toMatch(/3/);
   });
 
   it("マイタスクは /my を開く行。今の画面なら aria-current", async () => {

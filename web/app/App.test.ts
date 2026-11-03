@@ -64,6 +64,14 @@ describe("App", () => {
     expect(location.pathname).toBe("/my");
   });
 
+  it("/inbox は通知の画面", () => {
+    history.replaceState(null, "", "/inbox#token=tkn");
+    const { getByRole } = render(App);
+    flushSync();
+    expect(getByRole("heading", { level: 1, name: "通知" })).toBeTruthy();
+    expect(location.pathname).toBe("/inbox");
+  });
+
   it("/views/<Store>/<名前> はビューの画面。名前は URL から戻して渡す", () => {
     history.replaceState(null, "", "/views/org-b%2Fops/%E4%BB%8A%E9%80%B1#token=tkn");
     const { getByText } = render(App);

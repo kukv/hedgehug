@@ -172,6 +172,7 @@
         view: (store, view) => router.href({ name: "view", store, view }),
         query: (layout, q) => router.href({ name: "query", layout, q }),
         my: () => router.href({ name: "my" }),
+        inbox: () => router.href({ name: "inbox" }),
       },
       selected: sel ? (c.cache.task(sel) ?? null) : null,
       recent: recentUlids.flatMap((u) => c.cache.task(u) ?? []),

@@ -38,6 +38,10 @@ import { expect, type Locator, type Page } from "@playwright/test";
 //               dialogs "ビューを保存" / "ビュー <名前> を改名" / "ビュー <名前> を削除"
 //   My tasks    /my (heading "マイタスク"); the groups are regions named "今日", "今週", ...; the sidebar
 //               link "マイタスク" carries the count
+//   Inbox       /inbox (heading "通知"); the navigation "通知の種類" (links すべて / 上書き / メンション /
+//               同期の修復, each with the number unread); a row is a listitem with the buttons
+//               "自分の値に戻す", "このままにする" (overwritten) or "既読にする"; "すべて既読にする";
+//               the sidebar link "通知" carries the number of unread
 
 //
 // Exceptions that hold on to a CSS class, because no role or text tells them apart: change them

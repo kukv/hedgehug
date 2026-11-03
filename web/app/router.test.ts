@@ -53,6 +53,9 @@ describe("parseRoute", () => {
     ["/query", { name: "home" }],
     ["/my", { name: "my" }],
     ["/my/extra", { name: "home" }],
+    ["/inbox", { name: "inbox" }],
+    ["/inbox/", { name: "inbox" }],
+    ["/inbox/extra", { name: "home" }],
     ["/tasks/01HTK/", { name: "task", ulid: "01HTK" }],
     ["/settings", { name: "settings", page: "workspaces", store: "" }],
     ["/settings/workspaces/shared", { name: "settings", page: "workspaces", store: "shared" }],
@@ -75,6 +78,7 @@ describe("parseRoute", () => {
     });
     expect(parseRoute("/query/tree", "?x=1")).toEqual({ name: "query", layout: "tree", q: "" });
     expect(parseRoute("/my", "?q=a")).toEqual({ name: "my" });
+    expect(parseRoute("/inbox", "?q=a")).toEqual({ name: "inbox" });
     expect(parseRoute("/projects/01HPR/table", "?q=a")).toEqual({
       name: "project",
       ulid: "01HPR",
@@ -90,6 +94,8 @@ describe("hrefOf", () => {
     expect(parseRoute(hrefOf(r))).toEqual(r);
     expect(hrefOf({ name: "home" })).toBe("/");
     expect(hrefOf({ name: "task", ulid: "01HTK" })).toBe("/tasks/01HTK");
+    expect(hrefOf({ name: "inbox" })).toBe("/inbox");
+    expect(parseRoute(hrefOf({ name: "inbox" }))).toEqual({ name: "inbox" });
   });
 
   it("タブはパスの末尾に付ける。概要は付けない", () => {

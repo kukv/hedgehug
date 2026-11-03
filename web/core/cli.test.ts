@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   cliAdd,
   cliComment,
+  cliInbox,
+  cliInboxRead,
+  cliInboxRevert,
   cliLs,
   cliMv,
   cliRestore,
@@ -82,6 +85,18 @@ describe("commands", () => {
     expect(cliLs("workspace:main -status:canceled", true, "shared")).toBe(
       'hh ls --store shared --tree "workspace:main -status:canceled"',
     );
+  });
+
+  it("writes hh inbox, hh inbox read and hh inbox revert", () => {
+    expect(cliInbox()).toBe("hh inbox");
+    expect(cliInbox({ all: true })).toBe("hh inbox --all");
+    expect(cliInbox({ all: true, store: "shared" })).toBe("hh inbox --all --store shared");
+    expect(cliInboxRead(["01HABC"])).toBe("hh inbox read 01HABC");
+    expect(cliInboxRead(["01HABC", "01HDEF"], "shared")).toBe(
+      "hh inbox read 01HABC 01HDEF --store shared",
+    );
+    expect(cliInboxRead("all")).toBe("hh inbox read --all");
+    expect(cliInboxRevert("01HABC")).toBe("hh inbox revert 01HABC");
   });
 
   it("puts -- before an argument that starts with -", () => {

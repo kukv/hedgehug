@@ -6,6 +6,7 @@
   import { createCore } from "./core-factory";
   import CreateHost from "./create/CreateHost.svelte";
   import TaskDetail from "./detail/TaskDetail.svelte";
+  import InboxPage from "./inbox/InboxPage.svelte";
   import MyTasks from "./my/MyTasks.svelte";
   import CommandPalette from "./palette/CommandPalette.svelte";
   import ProjectPage from "./project/ProjectPage.svelte";
@@ -92,6 +93,8 @@
         <QueryPage layout={route.layout} q={route.q} />
       {:else if route.name === "my"}
         <MyTasks />
+      {:else if route.name === "inbox"}
+        <InboxPage />
       {:else if route.name === "settings"}
         <SettingsRoute page={route} />
       {:else if route.name === "home" && dir.current.first}

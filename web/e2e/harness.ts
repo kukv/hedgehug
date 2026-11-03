@@ -8,7 +8,8 @@ import { test as base, expect, type Page } from "@playwright/test";
 // points at another one.
 const BIN = process.env.HEDGEHUG_BIN ?? resolve(import.meta.dirname, "../../bin/hedgehug");
 
-export type StoreSpec = { name: string; prefix: string; workspace?: string };
+/** remote: the store gets a bare repository of its own as its remote, for a test with a second user. */
+export type StoreSpec = { name: string; prefix: string; workspace?: string; remote?: boolean };
 
 /** The store every test starts with, unless it says store: null. */
 export const DEFAULT_STORE: StoreSpec = { name: "demo", prefix: "DM" };
@@ -40,6 +41,8 @@ export class Hedgehug {
     readonly token: string,
     private readonly proc: ChildProcess,
     readonly stderr: () => string,
+    /** The path of the bare repository the store pushes to, when the store has one. */
+    readonly remote: string | null = null,
   ) {}
 
   /** The environment of every hh process of this test. */
@@ -137,6 +140,40 @@ export class Hedgehug {
   }
 }
 
+/**
+ * A second user of the store of a Hedgehug that has a remote: the CLI on a home and an account of
+ * their own (login "bob"), with the same store added from the remote.
+ */
+export class Peer {
+  private constructor(readonly home: string) {}
+
+  static start(owner: Hedgehug, name: string): Peer {
+    if (!owner.remote) throw new Error("the store has no remote: use store: { remote: true }");
+    const home = mkdtempSync(join(tmpdir(), "hh-e2e-peer-"));
+    mkdirSync(join(home, "hh"));
+    writeFileSync(
+      join(home, "hh", "config.yaml"),
+      "accounts:\n  - name: bob\n    host: github.com\n    login: bob\n",
+    );
+    const peer = new Peer(home);
+    peer.hh("store", "add", name, "--remote", owner.remote);
+    return peer;
+  }
+
+  /** Runs hh as the second user and returns its standard output. */
+  hh(...args: string[]): string {
+    return execFileSync(BIN, args, {
+      cwd: this.home,
+      env: Hedgehug.env(this.home),
+      encoding: "utf8",
+    });
+  }
+
+  stop(): void {
+    rmSync(this.home, { recursive: true, force: true });
+  }
+}
+
 /** Starts hh ui on a new home with the store, or with no store when it is null. */
 export async function startHedgehug(store: StoreSpec | null): Promise<Hedgehug> {
   const home = mkdtempSync(join(tmpdir(), "hh-e2e-"));
@@ -147,10 +184,18 @@ export async function startHedgehug(store: StoreSpec | null): Promise<Hedgehug> 
     "accounts:\n  - name: e2e\n    host: github.com\n    login: e2e\n",
   );
   const env = Hedgehug.env(home);
+  let remote: string | null = null;
   if (store) {
     const args = ["store", "init", store.name, "--prefix", store.prefix];
     if (store.workspace) args.push("--workspace", store.workspace);
+    if (store.remote) {
+      remote = join(home, "remote.git");
+      execFileSync("git", ["init", "--bare", "--quiet", remote], { encoding: "utf8" });
+      args.push("--remote", remote);
+    }
     execFileSync(BIN, args, { cwd: home, env, encoding: "utf8" });
+    // The remote gets the first commits, so that a second user can add the store from it.
+    if (remote) execFileSync(BIN, ["sync"], { cwd: home, env, encoding: "utf8" });
   }
 
   const proc = spawn(BIN, ["ui", "--no-open"], { cwd: home, env });
@@ -186,13 +231,15 @@ export async function startHedgehug(store: StoreSpec | null): Promise<Hedgehug> 
     rmSync(home, { recursive: true, force: true });
     throw new Error(`no token in ${url}`);
   }
-  return new Hedgehug(home, u.origin, token, proc, () => err);
+  return new Hedgehug(home, u.origin, token, proc, () => err, remote);
 }
 
 type Fixtures = {
   /** The store hh starts with; null starts hh with no store at all. */
   store: StoreSpec | null;
   hh: Hedgehug;
+  /** A second user of the store, which needs store: { ...DEFAULT_STORE, remote: true }. */
+  peer: Peer;
 };
 
 export const test = base.extend<Fixtures>({
@@ -203,6 +250,14 @@ export const test = base.extend<Fixtures>({
       await use(h);
     } finally {
       await h.stop();
+    }
+  },
+  peer: async ({ hh, store }, use) => {
+    const p = Peer.start(hh, store?.name ?? DEFAULT_STORE.name);
+    try {
+      await use(p);
+    } finally {
+      p.stop();
     }
   },
 });

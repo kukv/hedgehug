@@ -140,7 +140,7 @@ test("the kanban and the table are tabs of a workspace and of a project", async 
   await expect(row(page, "Ship it")).toBeVisible();
 });
 
-test("the sidebar has the tasks of the person and none of the screens of 4e-4", async ({
+test("the sidebar has the tasks of the person and the inbox, and not the activity yet", async ({
   page,
   hh,
 }) => {
@@ -149,6 +149,6 @@ test("the sidebar has the tasks of the person and none of the screens of 4e-4", 
     "href",
     "/my",
   );
-  await expect(sidebar(page).getByText("通知")).toHaveCount(0);
+  await expect(sidebar(page).getByRole("link", { name: /通知/ })).toHaveAttribute("href", "/inbox");
   await expect(sidebar(page).getByText("アクティビティ")).toHaveCount(0);
 });
