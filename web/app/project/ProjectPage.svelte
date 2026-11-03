@@ -3,6 +3,7 @@
   import { useListScope } from "../list/scope.svelte";
   import TreeTab from "../list/TreeTab.svelte";
   import type { ProjectTab } from "../router";
+  import { NO_CANCELED } from "../tree/filter";
   import ProjectHeader from "./ProjectHeader.svelte";
 
   // The page of a project: the heading with the tabs, and the tab. The tabs read the project
@@ -12,15 +13,18 @@
 
   const view = $derived({ kind: "project" as const, ulid });
   const scope = useListScope(() => view);
+  // The filter of the tree, the kanban and the table: one for the page, so it stays when the tab
+  // changes (it is not saved: D7). The default leaves the canceled tasks out.
+  let query = $state(NO_CANCELED);
 </script>
 
 <div class="page">
   <ProjectHeader {ulid} project={scope.project} workspace={scope.workspace} {tab} />
   <div class="body">
     {#if tab === "tree"}
-      <TreeTab {view} />
+      <TreeTab {view} {query} onquery={(q) => (query = q)} />
     {:else}
-      <ListTab {view} layout={tab} />
+      <ListTab {view} layout={tab} {query} onquery={(q) => (query = q)} />
     {/if}
   </div>
 </div>

@@ -39,10 +39,10 @@ const stores = (count: number) => ({
 });
 const cache = { task: () => undefined, subscribe: () => () => {} };
 
-function mount(count = 1) {
+function mount(count = 1, query = "-status:canceled", onquery = vi.fn()) {
   return renderWithCore(
     TreeTab,
-    { view: { kind: "workspace" as const, store: "shared", ulid: "W1" } },
+    { view: { kind: "workspace" as const, store: "shared", ulid: "W1" }, query, onquery },
     { stores: stores(count), cache },
   );
 }
@@ -56,9 +56,15 @@ describe("TreeTab", () => {
     expect(getByText("filter: -status:canceled")).toBeTruthy();
   });
 
-  it("opens the save dialog with the fixed part and the filter, as a tree", async () => {
-    const { getByRole } = mount();
+  it("passes the change of the filter to its owner", async () => {
+    const onquery = vi.fn();
+    const { getByRole } = mount(1, "-status:canceled", onquery);
     await fireEvent.click(getByRole("button", { name: "絞り込む" }));
+    expect(onquery).toHaveBeenCalledWith("kind:bug");
+  });
+
+  it("opens the save dialog with the fixed part and the filter, as a tree", async () => {
+    const { getByRole } = mount(1, "kind:bug");
     await fireEvent.click(getByRole("button", { name: "ビューを保存" }));
     expect(open).toHaveBeenCalledWith({
       draft: {
@@ -74,7 +80,11 @@ describe("TreeTab", () => {
   it("cannot save before the workspace is known", () => {
     const { getByRole } = renderWithCore(
       TreeTab,
-      { view: { kind: "workspace" as const, store: "shared", ulid: "W1" } },
+      {
+        view: { kind: "workspace" as const, store: "shared", ulid: "W1" },
+        query: "-status:canceled",
+        onquery: vi.fn(),
+      },
       { stores: { ...stores(1), workspace: () => undefined, loaded: () => false }, cache },
     );
     expect(getByRole("button", { name: "ビューを保存" })).toBeDisabled();

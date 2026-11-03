@@ -20,25 +20,35 @@ const workspace: ListScope = { kind: "workspace", store: "shared", ulid: "W1" };
 
 afterEach(() => closeViewDialog());
 
+const QUERY = "-status:canceled";
+
 describe("ListTab", () => {
-  it("カンバンのタブ: フィルタの既定は -status:canceled、設定は既定", () => {
-    mountWithViews(ListTab, { view: workspace, layout: "kanban" });
+  it("カンバンのタブ: フィルタは渡されたもの、設定は既定", () => {
+    mountWithViews(ListTab, { view: workspace, layout: "kanban", query: QUERY, onquery: vi.fn() });
     expect(JSON.parse(screen.getByTestId("kanban").dataset.view ?? "")).toEqual(workspace);
-    expect(screen.getByTestId("kanban-query")).toHaveTextContent("-status:canceled");
+    expect(screen.getByTestId("kanban-query")).toHaveTextContent(QUERY);
     expect(screen.getByTestId("kanban-settings")).toHaveTextContent("status/none");
   });
 
   it("テーブルのタブ: 設定は id,title,status,assignee,due・グループなし", () => {
-    mountWithViews(ListTab, { view: workspace, layout: "table" });
-    expect(screen.getByTestId("table-query")).toHaveTextContent("-status:canceled");
+    mountWithViews(ListTab, { view: workspace, layout: "table", query: QUERY, onquery: vi.fn() });
+    expect(screen.getByTestId("table-query")).toHaveTextContent(QUERY);
     expect(screen.getByTestId("table-settings")).toHaveTextContent(
       "id,title,status,assignee,due/none",
     );
   });
 
-  it("フィルタと設定は画面の状態で、保存のダイアログに渡る（D7・D8）", async () => {
-    mountWithViews(ListTab, { view: workspace, layout: "kanban" });
+  it("フィルタの変更は持ち主に渡し、フィルタと設定は保存のダイアログに渡る（D7・D8）", async () => {
+    const onquery = vi.fn();
+    const { rerender } = mountWithViews(ListTab, {
+      view: workspace,
+      layout: "kanban",
+      query: QUERY,
+      onquery,
+    });
     await fireEvent.click(screen.getByRole("button", { name: "kanban-set-query" }));
+    expect(onquery).toHaveBeenCalledWith("assignee:@me");
+    await rerender({ view: workspace, layout: "kanban", query: "assignee:@me", onquery });
     await fireEvent.click(screen.getByRole("button", { name: "kanban-set-swimlane" }));
     expect(screen.getByTestId("kanban-query")).toHaveTextContent("assignee:@me");
     expect(screen.getByTestId("kanban-settings")).toHaveTextContent("status/assignee");
@@ -54,10 +64,15 @@ describe("ListTab", () => {
     });
   });
 
-  it("カンバンとテーブルのタブを替えても、フィルタは残る", async () => {
-    const { rerender } = mountWithViews(ListTab, { view: workspace, layout: "kanban" });
-    await fireEvent.click(screen.getByRole("button", { name: "kanban-set-query" }));
-    await rerender({ view: workspace, layout: "table" });
+  it("カンバンとテーブルのタブを替えても、渡されたフィルタで表示し、保存にも渡る", async () => {
+    const onquery = vi.fn();
+    const { rerender } = mountWithViews(ListTab, {
+      view: workspace,
+      layout: "kanban",
+      query: "assignee:@me",
+      onquery,
+    });
+    await rerender({ view: workspace, layout: "table", query: "assignee:@me", onquery });
     expect(screen.queryByTestId("kanban")).toBeNull();
     expect(screen.getByTestId("table-query")).toHaveTextContent("assignee:@me");
     await fireEvent.click(screen.getByRole("button", { name: "table-set-group" }));

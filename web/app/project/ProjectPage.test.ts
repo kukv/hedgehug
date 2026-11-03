@@ -1,4 +1,4 @@
-import { cleanup, screen, within } from "@testing-library/svelte";
+import { cleanup, fireEvent, screen, within } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TaskView } from "../../core/api/client";
 import { renderWithCore } from "../test-utils";
@@ -7,18 +7,31 @@ import { entry } from "../workspace/testkit";
 import ProjectPage from "./ProjectPage.svelte";
 
 // The bodies of the tabs have their own tests: here each only says which one is drawn.
+type TabProps = { query: string; onquery: (q: string) => void };
+// What a tab is given for its filter, and a button that changes it as the field would.
+const filterOf = (props: TabProps) => {
+  const f = document.createElement("span");
+  f.textContent = `filter: ${props.query}`;
+  const b = document.createElement("button");
+  b.textContent = "set-filter";
+  b.onclick = () => props.onquery("kind:bug");
+  return [f, b];
+};
 vi.mock("../list/TreeTab.svelte", () => ({
-  default: (anchor: Comment) => {
+  default: (anchor: Comment, props: TabProps) => {
     const p = document.createElement("p");
     p.textContent = "tree tab";
-    anchor.before(p);
+    anchor.before(p, ...filterOf(props));
   },
 }));
 vi.mock("../list/ListTab.svelte", () => ({
-  default: (anchor: Comment, props: { layout: string; view: { kind: string; ulid: string } }) => {
+  default: (
+    anchor: Comment,
+    props: TabProps & { layout: string; view: { kind: string; ulid: string } },
+  ) => {
     const p = document.createElement("p");
     p.textContent = `${props.layout} tab of ${props.view.kind} ${props.view.ulid}`;
-    anchor.before(p);
+    anchor.before(p, ...filterOf(props));
   },
 }));
 
@@ -65,6 +78,17 @@ describe("ProjectPage", () => {
     mount(tab);
     expect(screen.getByText(`${tab} tab of project P1`)).toBeTruthy();
     expect(screen.queryByText("tree tab")).toBeNull();
+  });
+
+  it("keeps the filter across the tabs, and starts with the one that leaves the canceled out", async () => {
+    const { rerender } = mount("tree");
+    expect(screen.getByText("filter: -status:canceled")).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "set-filter" }));
+    for (const tab of ["kanban", "table", "tree"] as const) {
+      await rerender({ ulid: "P1", tab });
+      // The stand-ins leave what they drew, so the last filter shown is the tab drawn last.
+      expect(screen.getAllByText(/^filter:/).at(-1)?.textContent).toBe("filter: kind:bug");
+    }
   });
 
   it("draws the tabs at once, before the project is read, and leaves the body to say it is missing", () => {
