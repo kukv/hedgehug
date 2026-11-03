@@ -137,8 +137,10 @@ func (p *Poller) Release(path string) {
 		p.released[name] = true
 	}
 	p.mu.Unlock()
-	// The repository is closed once the build of the history index, which
-	// reads it, is over; the wait is made without p.mu, so hello does not wait.
+	// The build of the history index reads the files under the directory
+	// through a handle of its own, so the directory must not be renamed or
+	// removed until it is over; the wait is made without p.mu, so hello does
+	// not wait.
 	for _, st := range gone {
 		st.stopHistory()
 		_ = st.s.Repo().Close()

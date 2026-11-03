@@ -70,7 +70,9 @@ var (
 	live   = map[string]int{}
 )
 
-// Live is how many repositories in or under dir have not been closed.
+// Live is how many repositories in or under dir have not been closed. A
+// handle that is read and reopened after Close was called on it (as
+// Consolidate does when it closes the repository itself) is not counted.
 func Live(dir string) int {
 	liveMu.Lock()
 	defer liveMu.Unlock()
