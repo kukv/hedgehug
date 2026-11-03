@@ -64,8 +64,14 @@ const wsOf = {
 };
 
 function setup(
-  over: { oneStore?: boolean; betaSchema?: "none" | "ok" | "nodone"; roots?: unknown } = {},
+  over: {
+    oneStore?: boolean;
+    betaSchema?: "none" | "ok" | "nodone";
+    roots?: unknown;
+    wsLate?: boolean; // GET /api/stores has not answered yet
+  } = {},
 ) {
+  let wsReady = !over.wsLate;
   const tasks = new Map([
     ["A1", task("A1", "epic", null, { store: "alpha", workspace: wsOf.alpha, title: "alpha one" })],
     ["A2", task("A2", "task", "A1", { store: "alpha", workspace: wsOf.alpha, title: "alpha two" })],
@@ -115,10 +121,11 @@ function setup(
       subscribe: ev.subscribe,
     },
     stores: {
-      loaded: () => true,
+      loaded: () => wsReady,
       stores: () => (over.oneStore ? [{ name: "alpha" }] : [{ name: "alpha" }, { name: "beta" }]),
-      workspace: (s: "alpha" | "beta", u: string) => (wsOf[s]?.ulid === u ? entry(s) : undefined),
-      workspaces: () => [entry("alpha"), entry("beta")],
+      workspace: (s: "alpha" | "beta", u: string) =>
+        wsReady && wsOf[s]?.ulid === u ? entry(s) : undefined,
+      workspaces: () => (wsReady ? [entry("alpha"), entry("beta")] : []),
       tone: (s: string) => (s === "alpha" ? "teal" : "orange"),
       subscribe: ev.subscribe,
     },
@@ -136,6 +143,11 @@ function setup(
     // The schema of beta arrives
     loadBeta() {
       betaSchema = schema;
+      ev.emit();
+    },
+    // GET /api/stores answers
+    loadWorkspaces() {
+      wsReady = true;
       ev.emit();
     },
   };
@@ -320,6 +332,44 @@ describe("TreeView over every store", () => {
       expect(api.PATCH).toHaveBeenCalledWith("/api/tasks/{id}", {
         params: { path: { id: "B1" }, query: { store: "beta" } },
         body: { status: "done" },
+      }),
+    );
+  });
+
+  it("drops a held key when another row is selected before the schema arrives", async () => {
+    const { api, loadBeta } = setup({ betaSchema: "none" });
+    api.PATCH.mockResolvedValue(
+      ok({ task: task("A2", "task", "A1", { store: "alpha", status: "done" }), commit: "c1" }),
+    );
+    render(TreeView, { view: all, query: "" });
+    const b1 = treeitem("beta one");
+    await fireEvent.click(b1);
+    await fireEvent.keyDown(b1, { key: " " }); // waits for the schema of beta
+    await fireEvent.click(treeitem("alpha two"));
+    loadBeta();
+    await new Promise((r) => setTimeout(r, 30));
+    // Neither the row it was pressed on (no longer selected) nor the selected one is completed.
+    expect(api.PATCH).not.toHaveBeenCalled();
+  });
+
+  it("makes the task of the foot input once the workspace has loaded", async () => {
+    const { api, loadWorkspaces } = setup({ wsLate: true });
+    api.POST.mockResolvedValue(
+      ok({
+        task: task("N1", "task", null, { store: "alpha", workspace: wsOf.alpha }),
+        commit: "c1",
+      }),
+    );
+    render(TreeView, { view: { kind: "workspace", store: "alpha", ulid: "WA" }, query: "" });
+    await fireEvent.click(screen.getByRole("button", { name: /タスクを追加/ }));
+    loadWorkspaces();
+    const input = await screen.findByPlaceholderText("タイトルを入力して Enter（Esc で閉じる）");
+    await fireEvent.input(input, { target: { value: "新規" } });
+    await fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() =>
+      expect(api.POST).toHaveBeenCalledWith("/api/tasks", {
+        params: { query: { store: "alpha" } },
+        body: expect.objectContaining({ title: "新規", workspace: "AAA" }),
       }),
     );
   });

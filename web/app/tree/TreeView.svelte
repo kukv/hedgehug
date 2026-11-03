@@ -101,7 +101,8 @@
   // Keys that need the schema, pressed before it is read, wait here with the store of the task they
   // act on, and run once the schema of that store is read, in the order pressed. A store whose
   // schema could not be read is in failed; failed is read only while the schema is missing.
-  type Waiting = { key: KeyInput; store: string };
+  // ulid is the row that was selected when the key was pressed: the key runs only if it still is.
+  type Waiting = { key: KeyInput; store: string; ulid: string | null };
   let waiting: Waiting[] = [];
   const failed = new Set<string>();
   // The stores of the rows. A child is in the store of its parent, so the roots hold them all. The
@@ -130,6 +131,7 @@
     waiting = n < 0 ? [] : waiting.slice(n);
     void (async () => {
       for (const w of keys) {
+        if (selection.ulid !== w.ulid) continue;
         await dispatch(w.key);
       }
     })();
@@ -393,7 +395,7 @@
       e.preventDefault();
       if (failed.has(keyStore))
         toast({ message: `${keyStore} の schema.yaml を読み込めていません` });
-      else waiting.push({ key: k, store: keyStore });
+      else waiting.push({ key: k, store: keyStore, ulid: selection.ulid });
       return;
     }
     // A move waits for the moves before it, and the key may act on the rows they leave.
@@ -545,9 +547,11 @@
 
   // --- adding ------------------------------------------------------------------------
   // Where a task made now would go: the row it goes below, else the view's own workspace.
-  const addStore = $derived(adding ? adding.store : ls.store);
+  // An input at the foot of a view of one store carries neither (see startFootAdd): they are read
+  // from the view at the moment they are used, so the input works once the workspace is loaded.
+  const addStore = $derived(adding?.store ?? ls.store);
   const addWorkspace = $derived(
-    adding ? workspaceOf(adding.store, adding.workspace) : ls.workspace,
+    adding?.workspace ? workspaceOf(adding.store, adding.workspace) : ls.workspace,
   );
   const addSchema = $derived(schemaOf(addStore));
   const addKind = $derived.by(() => {
@@ -575,17 +579,17 @@
         after: null,
         parent: viewRoot,
         depth: 0,
-        store: ls.store,
-        workspace: ls.workspace?.ulid,
+        store: undefined,
+        workspace: undefined,
       });
   }
 
   // submitAdd says whether the task was made: the title typed stays when it was not.
   async function submitAdd(title: string): Promise<boolean> {
     const a = adding;
-    const store = a?.store;
-    const workspace = workspaceOf(store, a?.workspace);
-    const schema = schemaOf(store);
+    const store = addStore;
+    const workspace = addWorkspace;
+    const schema = addSchema;
     if (!a || !store || !workspace || !schema) return false;
     const parent = a.parent ? taskOf(a.parent) : undefined;
     const kind = pickKind(schema, parent?.kind ?? null);
