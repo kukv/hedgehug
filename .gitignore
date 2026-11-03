@@ -48,6 +48,7 @@ dist/
 
 ### build ###
 /cmd/hedgehug/hedgehug
+/THIRD_PARTY_LICENSES
 
 ### web ###
 node_modules/

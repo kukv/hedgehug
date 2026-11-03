@@ -1,4 +1,4 @@
-.PHONY: generate build web web-check e2e fmt fmt-check lint tidy-check test cover clean-cache bench-history check release-check
+.PHONY: generate build web licenses web-check e2e fmt fmt-check lint tidy-check test cover clean-cache bench-history check release-check
 
 # Write the generated files (api/openapi.yaml).
 generate:
@@ -7,6 +7,12 @@ generate:
 # Build the GUI into web/dist, which the binary embeds.
 web:
 	cd web && pnpm install --frozen-lockfile && pnpm build
+
+# Write THIRD_PARTY_LICENSES, which the release archives ship: the license texts
+# of the Go standard library and modules, then those of the web bundle (which
+# make web writes to web/dist).
+licenses: web
+	go run ./tools/licenses web/dist/THIRD_PARTY_LICENSES > THIRD_PARTY_LICENSES
 
 # Build the binary into bin/, with the GUI.
 build: web
