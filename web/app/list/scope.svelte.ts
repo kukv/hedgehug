@@ -68,6 +68,10 @@ export function useListScope(get: () => ListScope) {
     return null;
   });
   const ready = $derived(get().kind === "all" || base !== null);
+  // Strings, so an effect that reads them runs again when the query changes, not each time the
+  // workspace is read again (a new object with the same name).
+  const apiBase = $derived(base ? baseQuery(base, "api") : "");
+  const cliBase = $derived(base ? baseQuery(base, "cli") : "");
   const manyStores = $derived.by(() => {
     storesRev.current;
     return c.stores.stores().length >= 2;
@@ -88,11 +92,11 @@ export function useListScope(get: () => ListScope) {
     },
     /** The fixed part of the query for the API (the project by ULID); "" for every store or while not ready. */
     get apiBase(): string {
-      return base ? baseQuery(base, "api") : "";
+      return apiBase;
     },
     /** The fixed part as the user would type it in hh (the project by ID); "" for every store or while not ready. */
     get cliBase(): string {
-      return base ? baseQuery(base, "cli") : "";
+      return cliBase;
     },
     /** The store of the workspace or project; undefined for every store. */
     get store(): string | undefined {

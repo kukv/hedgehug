@@ -150,6 +150,27 @@ describe("useListScope: a workspace", () => {
     stop();
   });
 
+  it("tells an effect that reads the query only when the query changes, not when the workspace is read again", () => {
+    const { w, stores } = setup();
+    let runs = 0;
+    const stop = $effect.root(() => {
+      const s = useListScope(() => ({ kind: "workspace", store: "shared", ulid: "W1" }));
+      $effect(() => {
+        // What the tree reads to start its query: reading it again would reload the tree.
+        const read = [s.ready, s.apiBase, s.cliBase, s.store];
+        if (read.length > 0) runs++;
+      });
+    });
+    flushSync();
+    const before = runs;
+    // The stores are read again (a task was made): an equal workspace, a new object.
+    w.workspaces = [entry()];
+    stores.emit();
+    flushSync();
+    expect(runs).toBe(before);
+    stop();
+  });
+
   it("follows the scope it is given", () => {
     setup({ workspaces: [entry(), entry({ ulid: "W2", name: "web" })] });
     let current = $state<ListScope>({ kind: "workspace", store: "shared", ulid: "W1" });
