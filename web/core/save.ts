@@ -158,6 +158,25 @@ export class SaveController {
     return !!this.pending.get(ulid)?.has(field) || !!this.sending.get(ulid)?.has(field);
   }
 
+  // takeRefused drops the edits the server turned down for good, so that a screen that shows the
+  // task can show the value the server holds and say why, instead of offering to send the same again.
+  // It returns the words of the error, or null when the server refused nothing. An edit that may
+  // still pass (a failure of the network, a 5xx) stays for the retry.
+  takeRefused(ulid: string): string | null {
+    const left = this.rejected.get(ulid);
+    if (!left || left.size === 0) return null;
+    const message = left.values().next().value as string;
+    const fields = this.pending.get(ulid);
+    for (const k of left.keys()) fields?.delete(k);
+    if (fields && fields.size === 0) this.pending.delete(ulid);
+    this.rejected.delete(ulid);
+    if (!this.pending.has(ulid) && !this.sending.has(ulid) && !this.timers.has(ulid)) {
+      this.states.set(ulid, { kind: "idle" });
+    }
+    this.notify();
+    return message;
+  }
+
   subscribe(fn: () => void): () => void {
     this.subs.add(fn);
     return () => this.subs.delete(fn);

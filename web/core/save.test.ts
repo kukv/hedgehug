@@ -242,6 +242,44 @@ describe("SaveController", () => {
     expect(save.state("A").kind).toBe("saved");
   });
 
+  it("takes back the fields the server refused, with the words of the error, and goes idle", async () => {
+    const { save, patches } = setup((r) =>
+      (r.body as { status?: string }).status ? problem(422, "schema.violation") : {},
+    );
+    save.edit("A", "shared", "status", "bogus");
+    await save.flush("A");
+    expect(save.editing("A", "status")).toBe(true);
+    expect(save.takeRefused("A")).toContain("スキーマに合わない変更です");
+    expect(save.editing("A", "status")).toBe(false);
+    expect(save.state("A").kind).toBe("idle");
+    expect(save.takeRefused("A")).toBeNull();
+    await save.flush("A");
+    expect(patches()).toHaveLength(1);
+  });
+
+  it("keeps the edits that may pass when it takes back the refused ones", async () => {
+    let n = 0;
+    const { save } = setup((r) => {
+      n++;
+      return (r.body as { status?: string }).status ? problem(422, "schema.violation") : {};
+    });
+    save.edit("A", "shared", "status", "bogus");
+    await save.flush("A");
+    save.edit("A", "shared", "title", "t");
+    expect(save.takeRefused("A")).not.toBeNull();
+    expect(save.editing("A", "title")).toBe(true);
+    expect(save.state("A").kind).toBe("error");
+    expect(n).toBe(1);
+  });
+
+  it("does not take back a failure that may pass (5xx)", async () => {
+    const { save } = setup(() => problem(500, "internal"));
+    save.edit("A", "shared", "status", "done");
+    await save.flush("A");
+    expect(save.takeRefused("A")).toBeNull();
+    expect(save.editing("A", "status")).toBe(true);
+  });
+
   it("merges the fields of a failure that may pass (5xx) into the next save", async () => {
     let fail = true;
     const { save, patches } = setup(() => (fail ? problem(500, "internal") : {}));
