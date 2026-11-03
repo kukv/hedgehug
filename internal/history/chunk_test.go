@@ -117,3 +117,69 @@ func TestFileIsWrittenAgainAfterManyChunks(t *testing.T) {
 		t.Fatalf("the file has %d bytes", len(data))
 	}
 }
+
+// TestChunkOnAnotherTableIsNotRead checks that a chunk added by a handle
+// that read one file is not read on top of another file of the same tip
+// whose strings are numbered otherwise (the file was written again from
+// nothing in between): its numbers would name other strings.
+func TestChunkOnAnotherTableIsNotRead(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	u := model.NewULID()
+	writeTask(t, s, u, "a")
+	if _, err := history.Open(s, history.Options{}); err != nil {
+		t.Fatal(err)
+	}
+	// a new task brings new strings, added after the paths of the file
+	writeTask(t, s, model.NewULID(), "b")
+	if _, err := history.Open(s, history.Options{}); err != nil {
+		t.Fatal(err)
+	}
+	added, err := s.ReadLocal("history")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the same tip written from nothing: the strings come before the paths
+	if err := s.WriteLocal("history", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := history.Open(s, history.Options{}); err != nil {
+		t.Fatal(err)
+	}
+	whole, err := s.ReadLocal("history")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the chunk the first handle adds for the next commit
+	if err := s.WriteLocal("history", added); err != nil {
+		t.Fatal(err)
+	}
+	u3 := model.NewULID()
+	writeTask(t, s, u3, "c")
+	h, err := history.Open(s, history.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := s.ReadLocal("history")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(data, added) || len(data) == len(added) {
+		t.Fatal("the commit was not added to the file")
+	}
+	chunk := data[len(added):]
+	if err := s.WriteLocal("history", append(bytes.Clone(whole), chunk...)); err != nil {
+		t.Fatal(err)
+	}
+	got, err := history.Open(s, history.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	same := func(a, b history.Commit) bool {
+		return a.Hash == b.Hash && a.Task == b.Task && a.Author == b.Author && a.Email == b.Email &&
+			a.Op == b.Op && a.Workspace == b.Workspace
+	}
+	if !slices.EqualFunc(got.All(), h.All(), same) || !slices.Equal(hashes(got.Task(u3)), hashes(h.Task(u3))) {
+		t.Fatal("the chunk was read with the numbers of another file")
+	}
+}

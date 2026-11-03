@@ -32,7 +32,11 @@ import (
 //	                writing it again: uvarint length of the body, the body,
 //	                the CRC-32 (IEEE, 4 bytes little endian) of the body.
 //	                The body is: the tip before (20 bytes), the tip after
-//	                (20 bytes), the new strings as above, the new commits as
+//	                (20 bytes), the numbers of commits and of strings
+//	                before it (uvarint each; the file it goes on is the one
+//	                with those numbers, not only that tip, as another file
+//	                of the tip may number its strings otherwise), the new
+//	                strings as above, the new commits as
 //	                above (their parents and string indices count those
 //	                before them), and the paths they changed, each: the
 //	                path (uvarint length + bytes), the number of the new
@@ -41,12 +45,12 @@ import (
 // Anything that does not fit in the first part (magic, format, truncation,
 // an index out of range, indices not ascending) makes load report false.
 // The chunks are only a gain: the first one that does not fit (cut short,
-// wrong checksum, not on the tip before it, out of range) ends the file for
+// wrong checksum, not on the file before it, out of range) ends the file for
 // the reader, who then has an older index and brings it to HEAD; the next
 // save writes the file again.
 const (
 	fileMagic  = "HHHI"
-	fileFormat = 3
+	fileFormat = 4
 	hashLen    = 20
 
 	maxZoneOffset = 18 * 60 * 60 // seconds; an offset beyond ±18h is damage
@@ -141,6 +145,8 @@ func (h *History) appendChunk(s *store.Store) error {
 	var body bytes.Buffer
 	body.Write(h.savedTip[:])
 	body.Write(h.tip[:])
+	putU(&body, uint64(h.savedRecs)) //nolint:gosec // not negative
+	putU(&body, uint64(h.savedStrs)) //nolint:gosec // not negative
 	putStrings(&body, h.strs[h.savedStrs:])
 	putU(&body, uint64(len(h.recs)-h.savedRecs)) //nolint:gosec // not negative
 	for _, r := range h.recs[h.savedRecs:] {
@@ -347,6 +353,9 @@ func (h *History) applyChunk(r *reader) bool {
 	copy(before[:], b.bytes(hashLen))
 	copy(after[:], b.bytes(hashLen))
 	if b.bad || before != h.tip {
+		return false
+	}
+	if b.uvarint() != uint64(len(h.recs)) || b.uvarint() != uint64(len(h.strs)) || b.bad {
 		return false
 	}
 	strs := b.strings()
