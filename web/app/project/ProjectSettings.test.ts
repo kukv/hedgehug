@@ -52,6 +52,8 @@ function setup(opts: Opts = {}) {
   });
   // The schema cache: what the Store holds, and the moment it reads it again.
   const cache = emitter();
+  // reading the schema again after a write of ours: the cache tells what the Store holds now
+  const reload = vi.fn(async () => cache.emit());
   const api = {
     GET: vi.fn(() => ok({ tasks: state.violations })),
     PUT: vi.fn((_path: string, init: { body: Record<string, unknown> }) => {
@@ -111,11 +113,12 @@ function setup(opts: Opts = {}) {
       schema: {
         get: () => ({ ...sch, scoped: state.scoped ? [state.scoped] : [] }),
         load: async () => sch,
+        reload,
         subscribe: cache.subscribe,
       },
     },
   );
-  return { ...r, api, conn, state, schemaChanged: cache.emit };
+  return { ...r, api, conn, state, reload, schemaChanged: cache.emit };
 }
 
 const save = () => screen.getByRole("button", { name: "保存" });
@@ -195,7 +198,7 @@ describe("ProjectSettings", () => {
   });
 
   it("saves a status taken off with that part alone, then toasts and goes quiet", async () => {
-    const { api } = setup();
+    const { api, reload } = setup();
     const group = await screen.findByRole("group", { name: "表示するステータス" });
     await fireEvent.click(within(group).getByRole("checkbox", { name: /待機中/ }));
     expect(save()).toBeEnabled();
@@ -209,6 +212,8 @@ describe("ProjectSettings", () => {
       expect(toasts.list.map((t) => t.message)).toEqual(["プロジェクトの設定を保存しました"]),
     );
     expect(save()).toBeDisabled();
+    // the schema is read again at once, not when the server's event comes
+    expect(reload).toHaveBeenCalledWith("shared");
   });
 
   it("goes back to the Store's statuses with an empty list", async () => {
@@ -348,7 +353,7 @@ describe("ProjectSettings", () => {
   });
 
   it("asks before it takes the whole override off, and says the templates go too", async () => {
-    const { api, schemaChanged } = setup({
+    const { api, schemaChanged, reload } = setup({
       scoped: { where: "project:P1", statuses: ["todo", "in_progress", "done", "canceled"] },
     });
     const reset = await screen.findByRole("button", { name: "すべて Store の値に戻す…" });
@@ -376,7 +381,7 @@ describe("ProjectSettings", () => {
     expect(toasts.list.map((t) => t.message)).toEqual([
       "プロジェクトの設定を Store の値に戻しました",
     ]);
-    // the Store has nothing of the project once the schema is read again
+    expect(reload).toHaveBeenCalledWith("shared");
     schemaChanged();
     await waitFor(() => expect(reset).toBeDisabled());
   });
@@ -469,6 +474,29 @@ describe("ProjectSettings", () => {
       await waitFor(() => expect(screen.queryByText(/ほかで変更されました/)).toBeNull());
       expect(within(group).getByRole("checkbox", { name: /待機中/ })).toBeChecked();
       expect(save()).toBeDisabled();
+    });
+
+    it("takes in the other person's override once the edit is undone by hand", async () => {
+      const { api, state, schemaChanged } = setup();
+      const group = await screen.findByRole("group", { name: "表示するステータス" });
+      await fireEvent.click(within(group).getByRole("checkbox", { name: /待機中/ }));
+      state.scoped = {
+        where: "project:P1",
+        workflow: { transitions: {}, required: { done: ["area"] } },
+      };
+      schemaChanged();
+      await screen.findByText(/ほかで変更されました/);
+      await fireEvent.click(within(group).getByRole("checkbox", { name: /待機中/ }));
+      await waitFor(() => expect(screen.queryByText(/ほかで変更されました/)).toBeNull());
+      expect(
+        within(screen.getByRole("list", { name: "必須の項目" })).getByText("area"),
+      ).toBeTruthy();
+      // the next edit is made over the other person's override, and keeps it
+      await fireEvent.click(within(group).getByRole("checkbox", { name: /待機中/ }));
+      await fireEvent.click(save());
+      await waitFor(() => expect(api.PUT).toHaveBeenCalledTimes(1));
+      expect(putBody(api)).toEqual({ statuses: ["todo", "in_progress", "done", "canceled"] });
+      expect(state.scoped?.workflow?.required).toEqual({ done: ["area"] });
     });
 
     it("takes in what the Store holds after its own save, without saying it changed", async () => {

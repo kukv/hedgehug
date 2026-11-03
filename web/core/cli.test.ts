@@ -11,7 +11,6 @@ import {
   cliRm,
   cliScopeRm,
   cliScopeSet,
-  cliScopeShow,
   cliSet,
   cliStoreInit,
   cliSync,
@@ -217,8 +216,8 @@ describe("commands", () => {
     ).toBe("hh store init shared --prefix WEB --workspace web --remote git@x:a/b.git");
   });
 
-  it("writes hh schema scope show and rm; --store only when it is given", () => {
-    expect(cliScopeShow("REL-15")).toBe("hh schema scope show REL-15");
+  it("writes hh schema scope rm; --store only when it is given", () => {
+    expect(cliScopeRm("REL-15")).toBe("hh schema scope rm REL-15");
     expect(cliScopeRm("REL-15", "shared")).toBe("hh schema scope rm REL-15 --store shared");
   });
 

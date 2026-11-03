@@ -205,10 +205,6 @@ export function cliStoreInit(i: {
   return withPositionals(["store", "init"], [i.name], a, true);
 }
 
-export function cliScopeShow(id: string, store?: string): string {
-  return cliLine(["schema", "scope", "show", id, ...(store ? ["--store", store] : [])]);
-}
-
 export function cliScopeRm(id: string, store?: string): string {
   return cliLine(["schema", "scope", "rm", id, ...(store ? ["--store", store] : [])]);
 }

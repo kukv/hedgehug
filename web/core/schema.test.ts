@@ -193,6 +193,17 @@ describe("SchemaCache", () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
+  it("reload fetches a held store at once, and leaves one nobody asked for", async () => {
+    const { cache, calls, set } = setup();
+    await cache.reload("shared");
+    expect(calls).toHaveLength(0);
+    await cache.load("shared");
+    set({ ...schema, kinds: kinds.slice(0, 2) });
+    await cache.reload("shared");
+    expect(cache.get("shared")?.kinds?.length).toBe(2);
+    expect(calls).toHaveLength(2);
+  });
+
   it("keeps the same object when the schema did not change", async () => {
     const { cache, conn, calls } = setup();
     const first = await cache.load("shared");

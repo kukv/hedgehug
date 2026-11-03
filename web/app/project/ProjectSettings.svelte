@@ -76,9 +76,11 @@
   $effect(() => {
     const sig = heldSig;
     const d = heldDraft;
+    // dirty is read here, so the draft takes in the held override once an edit is undone by hand.
+    const editing = dirty;
     if (!schema) return;
     untrack(() => {
-      if (sig === seenSig || dirty) return;
+      if (sig === seenSig || editing) return;
       base = d;
       draft = d;
       seenSig = sig;
@@ -180,6 +182,7 @@
       );
       base = draftOf(r.scoped);
       draft = base;
+      void c.schema.reload(store);
       toast({ message: "プロジェクトの設定を保存しました" });
     } catch (e) {
       failure = errorMessage(e);
@@ -201,6 +204,7 @@
       base = draftOf(r.scoped);
       draft = base;
       resetOpen = false;
+      void c.schema.reload(store);
       toast({ message: "プロジェクトの設定を Store の値に戻しました" });
     } catch (e) {
       resetFailure = errorMessage(e);

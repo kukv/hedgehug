@@ -36,6 +36,14 @@ export class SchemaCache {
     return this.fetch(store);
   }
 
+  // reload fetches the schema of the store again now (after a write of ours, without waiting for
+  // schema.changed). A store nobody asked for is left alone; a failure leaves the schema held.
+  async reload(store: string): Promise<void> {
+    if (!this.schemas.has(store)) return;
+    this.loading.delete(store);
+    await this.fetch(store).catch(() => undefined);
+  }
+
   subscribe(fn: () => void): () => void {
     this.subs.add(fn);
     return () => this.subs.delete(fn);
