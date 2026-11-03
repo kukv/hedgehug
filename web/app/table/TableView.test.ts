@@ -135,6 +135,9 @@ function setup(over: Over = {}) {
     ev.emit();
   };
   let ulids = over.ulids ?? ["T1", "T2", "T3"];
+  const setUlids = (u: string[]) => {
+    ulids = u;
+  };
   if (over.many) {
     ulids = Array.from({ length: over.many }, (_, i) => {
       tasks.set(`N${i}`, task(`N${i}`, "task", null, { id: `REL-${100 + i}`, title: `many ${i}` }));
@@ -214,7 +217,7 @@ function setup(over: Over = {}) {
     tasks.set(ulid, { ...(tasks.get(ulid) as TaskView), ...patch });
     ev.emit();
   };
-  return { save, watchList, watchDetail, ev, schemas, tasks, pending, refused, write, readParent };
+  return { save, watchList, watchDetail, ev, schemas, tasks, pending, refused, write, readParent, setUlids };
 }
 
 function mount(props: Record<string, unknown> = {}) {
@@ -720,6 +723,41 @@ describe("TableView", () => {
       ev.emit();
       await tick();
       expect(order()[0]).toBe(last);
+    });
+
+    it("shows the value of the server again once a refused edit is taken back and the focus leaves", async () => {
+      const { pending, refused, ev } = setup();
+      mount({ settings: BY_TITLE });
+      const input = screen.getByRole("textbox", { name: "タイトル: REL-4" });
+      input.focus();
+      await fireEvent.input(input, { target: { value: "B" } });
+      pending.add("T1");
+      ev.emit();
+      await tick();
+      pending.delete("T1");
+      refused.set("T1", "no");
+      ev.emit();
+      await tick();
+      expect(input).toHaveValue("B");
+      input.blur();
+      await tick();
+      expect(input).toHaveValue("移行ガイドを書く");
+    });
+
+    it("keeps a row that no longer matches the query while the user is in it, and drops it after", async () => {
+      const { setUlids, ev } = setup();
+      mount({ settings: BY_TITLE });
+      const input = screen.getByRole("textbox", { name: "タイトル: REL-2" });
+      input.focus();
+      setUlids(["T1", "T3"]);
+      ev.emit();
+      await tick();
+      expect(order()).toEqual(["REL-4", "REL-2", "REL-9"]);
+      expect(screen.getByRole("textbox", { name: "タイトル: REL-2" })).toBe(input);
+      expect(input).toHaveFocus();
+      input.blur();
+      await tick();
+      expect(order()).toEqual(["REL-4", "REL-9"]);
     });
 
     it("stays in its group when its status changes, with the focus on the cell", async () => {

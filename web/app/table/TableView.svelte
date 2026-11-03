@@ -213,7 +213,22 @@
   function freeze(t: TaskView) {
     if (!frozen.has(t.ulid)) frozen = new Map(frozen).set(t.ulid, t);
   }
-  const placed = $derived(tasks.map((t) => frozen.get(t.ulid) ?? t));
+  // A row held that the list does not have any more (the edit took it out of the query) stays where
+  // it was in the list until it is let go, so that its cell is not taken away from under the user.
+  let lastOrder: string[] = [];
+  const placed = $derived.by(() => {
+    const out = tasks.map((t) => frozen.get(t.ulid) ?? t);
+    const listed = new Set(out.map((t) => t.ulid));
+    const stay = [...frozen]
+      .filter(([u]) => !listed.has(u))
+      .sort(([a], [b]) => lastOrder.indexOf(a) - lastOrder.indexOf(b));
+    for (const [u, t] of stay) {
+      const at = lastOrder.indexOf(u);
+      out.splice(at < 0 ? out.length : Math.min(at, out.length), 0, t);
+    }
+    lastOrder = out.map((t) => t.ulid);
+    return out;
+  });
 
   // --- the table -----------------------------------------------------------------------------
   const ctx = $derived.by<SortCtx>(() => {
