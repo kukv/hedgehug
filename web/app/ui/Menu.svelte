@@ -1,5 +1,12 @@
 <script lang="ts" module>
-  export type MenuItem = { value: string; label: string; disabled?: boolean; hint?: string };
+  // checked makes the item a checkbox of a menu that stays open (menuitemcheckbox).
+  export type MenuItem = {
+    value: string;
+    label: string;
+    disabled?: boolean;
+    hint?: string;
+    checked?: boolean;
+  };
 </script>
 
 <script lang="ts">
@@ -62,7 +69,9 @@
 
   async function focusActive() {
     await tick();
-    root?.querySelectorAll<HTMLElement>('[role="menuitem"]')[active]?.focus();
+    root?.querySelectorAll<HTMLElement>(
+        '[role="menuitem"], [role="menuitemcheckbox"]',
+      )[active]?.focus();
   }
 
   function move(i: number) {
@@ -153,7 +162,8 @@
   {#each items as it, i (it.value)}
     <button
       type="button"
-      role="menuitem"
+      role={it.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+      aria-checked={it.checked}
       class="item"
       class:selected={it.value === selected}
       tabindex={i === active ? 0 : -1}
