@@ -283,9 +283,9 @@ describe("commands", () => {
     expect(cliSchemaMigrate({ target: "status", old: "triage", new: "todo" })).toBe(
       "hh schema migrate status triage todo",
     );
-    expect(
-      cliSchemaMigrate({ target: "kind", old: "bug", new: "defect", dryRun: true, store: "a b" }),
-    ).toBe('hh schema migrate kind bug defect --dry-run --store "a b"');
+    expect(cliSchemaMigrate({ target: "kind", old: "bug", new: "defect", store: "a b" })).toBe(
+      'hh schema migrate kind bug defect --store "a b"',
+    );
     expect(cliSchemaMigrate({ target: "prop", old: "area", new: "team" })).toBe(
       "hh schema migrate prop area team",
     );
@@ -299,8 +299,8 @@ describe("commands", () => {
     expect(cliSchemaMigrate({ target: "status", old: "triage", new: next })).toBe(
       "hh schema migrate status triage <新しい名前>",
     );
-    expect(cliSchemaMigrate({ target: "status", old: "triage", new: "-x", dryRun: true })).toBe(
-      "hh schema migrate status --dry-run -- triage -x",
+    expect(cliSchemaMigrate({ target: "status", old: "triage", new: "-x" })).toBe(
+      "hh schema migrate status -- triage -x",
     );
   });
 });

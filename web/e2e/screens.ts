@@ -47,6 +47,17 @@ import { expect, type Locator, type Page } from "@playwright/test";
 //   Activity    /activity (heading "アクティビティ"); the button "<n> / <m> ワークスペース" opens the dialog
 //               "ワークスペースで絞り込む"; the group "変更の種類" has すべて / 人 / 同期; a commit is a listitem
 //               with the author, the op, the subject and the ID as a link; the sidebar link "アクティビティ"
+//   Maintenance /settings/general has the region "診断と修復" with, for each Store, the region "診断: <Store>"
+//               ("問題は見つかりませんでした", or the findings as listitems with the link "<ID> を開く"; the
+//               buttons "もう一度実行" and "修復…" open the dialog "doctor で修復する" with "修復する"; the
+//               region "修復の結果"), and the region "削除済みタスクの完全削除" (the textbox "N 日より古い
+//               もの", the buttons "確かめる" and "完全に削除…", the dialog "完全に削除する")
+//   Schema      /settings/schema/<store> (heading "スキーマ"); the navigation "スキーマの種類" has the links
+//               ステータス / 種類 / プロパティと関連 / ワークフロー; a row of a table is named by the definition
+//               and its buttons are "名前を変える…（<名前>）" and "併合する…（<名前>）"; the regions
+//               "プロジェクトごとの上書き" and "スキーマの検査"; the dialog "ステータス「<名前>」の名前を変える"
+//               (or "を併合する") has the textbox "新しい名前" (the combobox "併合先"), the dry run
+//               "<n> 件のタスクが書き換わります" and the button "名前を変える" / "併合する"
 
 //
 // Exceptions that hold on to a CSS class, because no role or text tells them apart: change them

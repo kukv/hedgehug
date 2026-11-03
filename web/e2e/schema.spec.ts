@@ -7,6 +7,7 @@
 //   - the region "スキーマの検査" says "スキーマとタスクは合っています" when `hh schema check` finds nothing
 //   - the dialog "ステータス「<名前>」の名前を変える" has the textbox "新しい名前", the sentence "<n> 件のタスクが
 //     書き換わります" (the dry run) and the button "名前を変える"; a toast says "<n> 件を書き換えました"
+//   - the dialog "ステータス「<名前>」を併合する" has the combobox "併合先" in place of the textbox and the button "併合する"
 import type { Page } from "@playwright/test";
 import { expect, test } from "./harness";
 
