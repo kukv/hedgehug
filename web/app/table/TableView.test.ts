@@ -129,9 +129,11 @@ function setup(over: Over = {}) {
       }),
     ],
   ]);
-  const readParent = (u: string) => {
-    const p = parents.get(u);
-    if (p) tasks.set(u, p);
+  // The tree of the query brings the ancestors of the tasks it finds, once it has answered.
+  let treeLoading = (over.parent ?? "read") !== "fail";
+  const readParent = (_u?: string) => {
+    for (const [u, p] of parents) tasks.set(u, p);
+    treeLoading = false;
     ev.emit();
   };
   let ulids = over.ulids ?? ["T1", "T2", "T3"];
@@ -144,12 +146,14 @@ function setup(over: Over = {}) {
       return `N${i}`;
     });
   }
-  const watchDetail = vi.fn((u: string) => {
+  const watchTree = vi.fn((_q: { q: string; tree: boolean; store?: string }) => {
     const mode = over.parent ?? "read";
-    if (mode === "read") queueMicrotask(() => readParent(u));
+    if (mode === "read") queueMicrotask(() => readParent());
     return {
-      ulid: () => (tasks.has(u) ? u : null),
-      error: () => (mode === "fail" ? new Error("404") : null),
+      roots: () => [],
+      cycle: () => [],
+      error: () => (mode === "fail" ? new Error("boom") : null),
+      loading: () => treeLoading,
       dispose: vi.fn(),
     };
   });
@@ -180,7 +184,7 @@ function setup(over: Over = {}) {
     cache: {
       task: (u: string) => tasks.get(u),
       watchList,
-      watchDetail,
+      watchTree,
       subscribe: ev.subscribe,
     },
     stores: {
@@ -217,7 +221,19 @@ function setup(over: Over = {}) {
     tasks.set(ulid, { ...(tasks.get(ulid) as TaskView), ...patch });
     ev.emit();
   };
-  return { save, watchList, watchDetail, ev, schemas, tasks, pending, refused, write, readParent, setUlids };
+  return {
+    save,
+    watchList,
+    watchTree,
+    ev,
+    schemas,
+    tasks,
+    pending,
+    refused,
+    write,
+    readParent,
+    setUlids,
+  };
 }
 
 function mount(props: Record<string, unknown> = {}) {
@@ -396,15 +412,36 @@ describe("TableView", () => {
   });
 
   describe("parents the query does not list", () => {
-    it("reads each missing parent once, and lets go of them with the screen", async () => {
-      const { watchDetail } = setup();
+    type Handle = { dispose: ReturnType<typeof vi.fn> };
+
+    it("reads the ancestors with one tree of the query of the list, and lets go of it with the screen", async () => {
+      const { watchTree } = setup();
       const { unmount } = mount({ settings: { ...SETTINGS, columns: ["id", "parent"] } });
       await waitFor(() => expect(screen.getAllByRole("link", { name: "REL-1" })).toHaveLength(2));
-      expect(watchDetail.mock.calls).toEqual([["E1"]]);
-      const handle = watchDetail.mock.results[0]?.value as { dispose: ReturnType<typeof vi.fn> };
+      expect(watchTree.mock.calls).toEqual([
+        [{ q: "workspace:release -status:canceled", tree: true, store: "shared" }],
+      ]);
+      const handle = watchTree.mock.results[0]?.value as Handle;
       expect(handle.dispose).not.toHaveBeenCalled();
       unmount();
       expect(handle.dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it("reads the tree only while the parent column, the kind column or the group of parents is shown", async () => {
+      const { watchTree } = setup();
+      const { rerender } = mount();
+      expect(watchTree).not.toHaveBeenCalled();
+      await rerender({ settings: { ...SETTINGS, columns: ["id", "kind"] } });
+      expect(watchTree).toHaveBeenCalledTimes(1);
+      const first = watchTree.mock.results[0]?.value as Handle;
+      await rerender({ settings: SETTINGS });
+      expect(first.dispose).toHaveBeenCalledTimes(1);
+      await rerender({ settings: { ...SETTINGS, groupBy: "parent" } });
+      expect(watchTree).toHaveBeenCalledTimes(2);
+      const second = watchTree.mock.results[1]?.value as Handle;
+      expect(second.dispose).not.toHaveBeenCalled();
+      await rerender({ settings: SETTINGS });
+      expect(second.dispose).toHaveBeenCalledTimes(1);
     });
 
     it("shows a parent on its way apart from no parent, and sorts by it once it is read", async () => {

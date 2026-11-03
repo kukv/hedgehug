@@ -175,30 +175,34 @@
 
   // --- the parents the query does not list ---------------------------------------------------
   // The list holds the tasks the query found, so a parent that the query does not find is not in the
-  // cache unless something else read it. The table reads it through the cache (watchDetail, which
-  // the detail and the breadcrumb use), and lets go of it when no task shown has it as a parent.
-  type DetailHandle = ReturnType<typeof c.cache.watchDetail>;
-  const parentWatches = new Map<string, DetailHandle>();
+  // cache unless something else read it. The tree of the same query brings the tasks with their
+  // ancestors in one request (the cache keeps them as rows and reads them again with the queries),
+  // so the table opens it, only while something shows the parent: the parent column, the kind column
+  // (the kinds a parent allows) or the group of parents.
+  const needsParents = $derived(
+    settings.groupBy === "parent" || shown.some((s) => s.id === "parent" || s.id === "kind"),
+  );
+  type TreeHandle = ReturnType<typeof c.cache.watchTree>;
+  let tree = $state.raw<TreeHandle | null>(null);
   $effect(() => {
-    cacheRev.current;
-    const wanted = new Set(tasks.flatMap((t) => (t.parent ? [t.parent] : [])));
-    for (const u of wanted) {
-      if (!parentWatches.has(u) && !c.cache.task(u)) parentWatches.set(u, c.cache.watchDetail(u));
+    if (!scope.ready || !needsParents) {
+      tree = null;
+      return;
     }
-    for (const [u, h] of parentWatches) {
-      if (wanted.has(u)) continue;
-      h.dispose();
-      parentWatches.delete(u);
-    }
+    const h = c.cache.watchTree({
+      q: joinQuery(scope.apiBase, query),
+      tree: true,
+      store: scope.store,
+    });
+    tree = h;
+    return () => h.dispose();
   });
-  $effect(() => () => {
-    for (const h of parentWatches.values()) h.dispose();
-    parentWatches.clear();
-  });
-  // A parent that is not in the cache is on its way, until the read says it cannot be had.
+  // A parent that is not in the cache is on its way until the tree has answered; if it still is
+  // not there after that, or the tree could not be read, it cannot be had.
   const parentLoading = (ulid: string): boolean => {
     cacheRev.current;
-    return !c.cache.task(ulid) && !parentWatches.get(ulid)?.error();
+    if (c.cache.task(ulid)) return false;
+    return tree === null || (tree.loading() && !tree.error());
   };
 
   // --- a row being edited keeps its place -------------------------------------------------
@@ -237,7 +241,7 @@
     return {
       schemaOf: (store) => c.schema.get(store),
       taskOf: (ulid) => c.cache.task(ulid),
-      loading: (ulid) => !c.cache.task(ulid) && !parentWatches.get(ulid)?.error(),
+      loading: parentLoading,
       storeOrder: storeNames,
     };
   });
