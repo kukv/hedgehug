@@ -266,7 +266,12 @@
     dragging = null;
     required = null;
     const seq = ++dropSeq;
-    dropChain = dropChain.then(() => runDrop(col, lane, source, seq));
+    // A failure outside the write must not leave the chain rejected: the drops after it go on.
+    dropChain = dropChain
+      .then(() => runDrop(col, lane, source, seq))
+      .catch((err) => {
+        if (!gone) toast({ message: errorMessage(err) });
+      });
   }
 
   async function runDrop(col: Column, lane: string, source: DragSource, seq: number) {

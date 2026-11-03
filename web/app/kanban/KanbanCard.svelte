@@ -104,7 +104,6 @@
     border: var(--hairline) solid var(--line);
     border-radius: var(--radius-8);
     background: var(--surface);
-    box-shadow: var(--shadow-card);
     cursor: pointer;
   }
   .card:hover {

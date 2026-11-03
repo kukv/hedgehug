@@ -621,6 +621,25 @@ describe("KanbanView: dragging a card", () => {
       workflow: { transitions: {}, required: { done: ["watchers"] } },
     } as unknown as SchemaView;
 
+    it("keeps taking drops after one failed outside the write, and says why", async () => {
+      const { api } = await ready();
+      const cache = (h.core as { cache: { task: (u: string) => TaskView | undefined } }).cache;
+      const task = cache.task;
+      let boom = true;
+      cache.task = (u) => {
+        if (boom) {
+          boom = false;
+          throw new Error("cache broke");
+        }
+        return task(u);
+      };
+      cellFor("doing")?.onDrop(dragA);
+      await waitFor(() => expect(h.toast).toHaveBeenCalled());
+      expect(h.toast.mock.calls[0]?.[0].message).toContain("cache broke");
+      cellFor("doing")?.onDrop(dragA);
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+    });
+
     it("drops the dialog of a drop another drop has come after", async () => {
       const s = setup({ schemas: { shared: needy } });
       mountView();

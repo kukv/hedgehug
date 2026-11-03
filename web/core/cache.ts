@@ -130,6 +130,11 @@ export class TaskCache {
     this.api = opts.api;
     this.now = opts.now ?? Date.now;
     opts.conn.on("tasks.changed", (e) => this.onTasksChanged(e));
+    // An override added to or removed from schema.yaml changes the scope of tasks no event names.
+    opts.conn.on("schema.changed", () => {
+      this.resyncAt = ++this.epoch;
+      this.queueRefresh(null);
+    });
     opts.conn.on("resync", () => {
       this.resyncAt = ++this.epoch;
       this.queueRefresh(null);

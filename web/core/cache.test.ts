@@ -119,6 +119,20 @@ describe("TaskCache lists", () => {
     w.dispose();
   });
 
+  it("fetches the rows again when the schema of a store changes, for the scope they carry", async () => {
+    let scope: string | undefined;
+    const { cache, conn } = setup(() => ({ tasks: [tv("A", "a", scope ? { scope } : {})] }));
+    const w = cache.watchList({ q: "", tree: false });
+    await vi.waitFor(() => expect(w.loading()).toBe(false));
+    expect(cache.task("A")?.scope).toBeUndefined();
+
+    // an override added in schema.yaml moves no task: only schema.changed says so
+    scope = "E1";
+    conn.emit("schema.changed", { store: "shared" });
+    await vi.waitFor(() => expect(cache.task("A")?.scope).toBe("E1"));
+    w.dispose();
+  });
+
   it("notifies only when something changed", async () => {
     const { cache, conn } = setup(() => ({ tasks: [tv("A")] }));
     const w = cache.watchList({ q: "", tree: false });
