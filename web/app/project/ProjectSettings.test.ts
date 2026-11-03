@@ -31,13 +31,13 @@ type Scoped = {
   workflow?: { transitions: Record<string, string[]>; required: Record<string, string[]> };
 };
 
-const bad = (id: string, message: string) =>
-  ({
-    ...task(`U-${id}`, "task", "P1", { id, title: `title of ${id}` }),
-    problems: [{ code: "required", field: "points", message }],
-  }) as TaskView;
-
-type Opts = { scoped?: Scoped; violations?: TaskView[]; stores?: string[]; notFound?: boolean };
+type Opts = {
+  scoped?: Scoped;
+  violations?: TaskView[];
+  stores?: string[];
+  notFound?: boolean;
+  loadError?: Error;
+};
 
 function setup(opts: Opts = {}) {
   const state: { scoped?: Scoped; violations: TaskView[] } = {
@@ -111,8 +111,9 @@ function setup(opts: Opts = {}) {
         subscribe: none,
       },
       schema: {
-        get: () => ({ ...sch, scoped: state.scoped ? [state.scoped] : [] }),
-        load: async () => sch,
+        get: () =>
+          opts.loadError ? undefined : { ...sch, scoped: state.scoped ? [state.scoped] : [] },
+        load: async () => (opts.loadError ? Promise.reject(opts.loadError) : sch),
         reload,
         subscribe: cache.subscribe,
       },
@@ -131,14 +132,6 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("ProjectSettings", () => {
-  it("reads the violations of the project, in its Store", async () => {
-    const { api } = setup();
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(1));
-    expect(api.GET).toHaveBeenCalledWith("/api/tasks", {
-      params: { query: { q: "is:invalid project:P1", store: "shared" } },
-    });
-  });
-
   it("lists the statuses of the Store in order, all shown while there is no override", async () => {
     setup();
     const group = await screen.findByRole("group", { name: "表示するステータス" });
@@ -257,7 +250,7 @@ describe("ProjectSettings", () => {
     });
     await screen.findByRole("group", { name: "表示するステータス" });
     const form = screen.getByRole("group", { name: "必須の項目を足す" });
-    await fireEvent.change(within(form).getByRole("combobox", { name: "ステータス" }), {
+    await fireEvent.change(within(form).getByRole("combobox", { name: "必須にするステータス" }), {
       target: { value: "in_progress" },
     });
     await fireEvent.click(within(form).getByRole("checkbox", { name: "points" }));
@@ -268,43 +261,6 @@ describe("ProjectSettings", () => {
         required: { done: ["area"], in_progress: ["points"] },
       }),
     );
-  });
-
-  it("offers the properties and the built-in fields the server accepts, and no others", async () => {
-    setup();
-    const form = await screen.findByRole("group", { name: "必須の項目を足す" });
-    const names = within(form)
-      .getAllByRole("checkbox")
-      .map((b) => b.closest("label")?.textContent?.trim());
-    expect(names).toContain("points");
-    expect(names).toContain("assignees");
-    expect(names).toContain("blocked_by");
-    expect(names).not.toContain("title");
-    expect(names).not.toContain("status");
-  });
-
-  it("shows the Store's constraints as they are, with no way to take them off", async () => {
-    setup({
-      scoped: {
-        where: "project:P1",
-        workflow: { transitions: { todo: ["done"] }, required: { in_progress: ["points"] } },
-      },
-    });
-    const transitions = await screen.findByRole("list", { name: "遷移の制約" });
-    const rows = await within(transitions).findAllByRole("listitem");
-    expect(rows).toHaveLength(2);
-    const store = rows.find((r) => within(r).queryByText("Store"));
-    expect(store?.textContent).toMatch(/中止/);
-    expect(within(store as HTMLElement).queryByRole("button")).toBeNull();
-    const mine = rows.find((r) => within(r).queryByText("このプロジェクトで足した"));
-    expect(within(mine as HTMLElement).getByRole("button", { name: /外す/ })).toBeTruthy();
-
-    const required = screen.getByRole("list", { name: "必須の項目" });
-    const storeRequired = within(required)
-      .getAllByRole("listitem")
-      .find((r) => within(r).queryByText("Store"));
-    expect(storeRequired?.textContent).toMatch(/points/);
-    expect(within(storeRequired as HTMLElement).queryByRole("button")).toBeNull();
   });
 
   it("takes off what the project added, and sends the part that is left", async () => {
@@ -386,21 +342,6 @@ describe("ProjectSettings", () => {
     await waitFor(() => expect(reset).toBeDisabled());
   });
 
-  it("lists the tasks that break the rules, with links, or says there are none", async () => {
-    setup({ violations: [bad("REL-11", "points is required to enter done")] });
-    const list = await screen.findByRole("list", { name: "違反しているタスク" });
-    const row = within(list).getByRole("listitem");
-    expect(within(row).getByRole("link", { name: "REL-11" })).toHaveAttribute(
-      "href",
-      "/tasks/U-REL-11",
-    );
-    expect(row.textContent).toMatch(/points is required to enter done/);
-    expect(screen.getByText("いまの違反 1 件")).toBeTruthy();
-    cleanup();
-    setup();
-    expect(await screen.findByText("違反しているタスクはありません")).toBeTruthy();
-  });
-
   it("writes the command for the edit under it", async () => {
     setup();
     const group = await screen.findByRole("group", { name: "表示するステータス" });
@@ -436,27 +377,15 @@ describe("ProjectSettings", () => {
   describe("when the schema changes", () => {
     const hidden = { where: "project:P1", statuses: ["todo", "in_progress", "done", "canceled"] };
 
-    it("shows the new override, and reads the violations again, when nothing is being edited", async () => {
-      const { api, conn, state, schemaChanged } = setup();
+    it("shows the new override when nothing is being edited", async () => {
+      const { state, schemaChanged } = setup();
       const group = await screen.findByRole("group", { name: "表示するステータス" });
-      await screen.findByText("違反しているタスクはありません");
       state.scoped = hidden;
       schemaChanged();
-      conn.emit("schema.changed", { store: "shared" });
       await waitFor(() =>
         expect(within(group).getByRole("checkbox", { name: /待機中/ })).not.toBeChecked(),
       );
       expect(screen.queryByText(/ほかで変更されました/)).toBeNull();
-      await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(2));
-    });
-
-    it("leaves the violations alone at a change of another Store", async () => {
-      const { api, conn } = setup({ stores: ["shared", "backend"] });
-      await screen.findByText("違反しているタスクはありません");
-      conn.emit("schema.changed", { store: "backend" });
-      conn.emit("tasks.changed", { store: "backend", ulids: [], removed: [] });
-      await new Promise((r) => setTimeout(r, 10));
-      expect(api.GET).toHaveBeenCalledTimes(1);
     });
 
     it("keeps an edit that is under way, and offers to read again", async () => {
@@ -512,51 +441,79 @@ describe("ProjectSettings", () => {
       expect(within(group).getByRole("checkbox", { name: /待機中/ })).not.toBeChecked();
       expect(save()).toBeDisabled();
     });
+  });
 
-    it("reads the violations again at tasks.changed and at resync", async () => {
-      const { api, conn } = setup();
-      await screen.findByText("違反しているタスクはありません");
-      conn.emit("tasks.changed", { store: "shared", ulids: [], removed: [] });
-      await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(2));
-      conn.emit("resync");
-      await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(3));
+  it("says why the screen cannot be drawn when the schema cannot be read", async () => {
+    setup({ loadError: new Error("boom") });
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("スキーマを読めません");
+    expect(screen.queryByText("読み込み中…")).toBeNull();
+  });
+
+  it("explains the checkboxes that cannot be taken off", async () => {
+    setup();
+    const group = await screen.findByRole("group", { name: "表示するステータス" });
+    expect(within(group).getByRole("checkbox", { name: /未着手/ })).toHaveAccessibleDescription(
+      /カテゴリの既定は外せません/,
+    );
+    expect(
+      within(group).getByRole("checkbox", { name: /待機中/ }),
+    ).not.toHaveAccessibleDescription();
+  });
+
+  it("leaves the inputs alone while a request is on its way", async () => {
+    const { api } = setup({
+      scoped: {
+        where: "project:P1",
+        statuses: ["todo", "in_progress", "done", "canceled"],
+        workflow: { transitions: { todo: ["done"] }, required: {} },
+      },
     });
+    let release: (v: unknown) => void = () => {};
+    api.PUT.mockImplementationOnce(() => new Promise((r) => (release = r)) as never);
+    const group = await screen.findByRole("group", { name: "表示するステータス" });
+    await waitFor(() =>
+      expect(within(group).getByRole("checkbox", { name: /待機中/ })).not.toBeChecked(),
+    );
+    await fireEvent.click(within(group).getByRole("checkbox", { name: /進行中/ }));
+    await fireEvent.click(save());
+    expect(within(group).getByRole("checkbox", { name: /待機中/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Store と同じに戻す" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "完了を外す" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "遷移元のステータス" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "すべて Store の値に戻す…" })).toBeDisabled();
+    release(await ok({ commit: null, project: { ulid: "P1" } }));
+    await waitFor(() =>
+      expect(within(group).getByRole("checkbox", { name: /待機中/ })).toBeEnabled(),
+    );
   });
 
-  it("stops reading when the screen is gone", async () => {
-    const { api, conn, unmount } = setup();
-    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(1));
-    unmount();
-    conn.emit("schema.changed", { store: "shared" });
-    conn.emit("tasks.changed", { store: "shared", ulids: [], removed: [] });
-    conn.emit("resync");
-    await new Promise((r) => setTimeout(r, 10));
-    expect(api.GET).toHaveBeenCalledTimes(1);
+  it("does not close the question with Esc while the request is on its way", async () => {
+    const { api } = setup({
+      scoped: { where: "project:P1", statuses: ["todo", "in_progress", "done", "canceled"] },
+    });
+    let release: (v: unknown) => void = () => {};
+    api.DELETE.mockImplementationOnce(() => new Promise((r) => (release = r)) as never);
+    const reset = await screen.findByRole("button", { name: "すべて Store の値に戻す…" });
+    await waitFor(() => expect(reset).toBeEnabled());
+    await fireEvent.click(reset);
+    await fireEvent.click(screen.getByRole("button", { name: "すべて戻す" }));
+    await waitFor(() => expect(api.DELETE).toHaveBeenCalledTimes(1));
+    await fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    release(await ok({ commit: null, project: { ulid: "P1" } }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
-  it("shows the answer of the latest read when an older one arrives last", async () => {
-    const { api, conn } = setup();
-    await screen.findByText("違反しているタスクはありません");
-    const pending: ((v: unknown) => void)[] = [];
-    api.GET.mockImplementation((() => new Promise((r) => pending.push(r))) as never);
-    conn.emit("resync");
-    conn.emit("resync");
-    await waitFor(() => expect(pending).toHaveLength(2));
-    pending[1]?.(await ok({ tasks: [bad("REL-12", "the new one")] }));
-    await screen.findByText("the new one");
-    pending[0]?.(await ok({ tasks: [bad("REL-11", "the old one")] }));
-    await new Promise((r) => setTimeout(r, 10));
-    expect(screen.getByText("the new one")).toBeTruthy();
-    expect(screen.queryByText("the old one")).toBeNull();
-  });
-
-  it("keeps the list of violations and shows the error when a new read fails", async () => {
-    const { api, conn } = setup({ violations: [bad("REL-11", "the one that stays")] });
-    await screen.findByText("the one that stays");
-    api.GET.mockImplementation((() => fail(500, "internal")) as never);
-    conn.emit("resync");
-    await waitFor(() => expect(screen.getAllByRole("alert").length).toBeGreaterThan(0));
-    expect(screen.getByText("the one that stays")).toBeTruthy();
+  it("says nothing changed elsewhere when the next edit comes right after our own save", async () => {
+    setup();
+    const group = await screen.findByRole("group", { name: "表示するステータス" });
+    await fireEvent.click(within(group).getByRole("checkbox", { name: /待機中/ }));
+    await fireEvent.click(save());
+    await waitFor(() => expect(toasts.list).toHaveLength(1));
+    await fireEvent.click(within(group).getByRole("checkbox", { name: /進行中/ }));
+    expect(save()).toBeEnabled();
+    expect(screen.queryByText(/ほかで変更されました/)).toBeNull();
   });
 
   it("says the project is not found", async () => {

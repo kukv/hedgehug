@@ -1,7 +1,7 @@
 // Screens this spec relies on (see screens.ts for the shared list):
 //   - /projects/<ULID>/settings is the settings of a project (the tab "設定" at the right end of the tabs
 //     in the navigation "ビューの切り替え"): the group "表示するステータス" has a checkbox for each status
-//     of the Store (named by its label); the group "必須の項目を足す" has the combobox "ステータス", a
+//     of the Store (named by its label); the group "必須の項目を足す" has the combobox "必須にするステータス", a
 //     checkbox for each field (named by the field) and the button "必須の項目を足す"; the button "保存"
 //     writes the override and a toast says "プロジェクトの設定を保存しました"; "すべて Store の値に戻す…"
 //     opens the dialog "プロジェクトの設定を Store の値に戻す", whose button "すべて戻す" takes the
@@ -20,12 +20,6 @@ const tab = (page: Page, name: string) =>
   page.getByRole("navigation", { name: "ビューの切り替え" }).getByRole("link", { name });
 const scopeShow = (hh: Hedgehug, id: string) => hh.hh("schema", "scope", "show", id);
 
-// The page reads the schema again when the server says it changed, a moment after the save.
-const schemaRead = (page: Page) =>
-  page.waitForResponse(
-    (r) => new URL(r.url()).pathname === "/api/schema" && r.request().method() === "GET",
-  );
-
 test("a status taken off is saved, and the kanban of the project loses its column", async ({
   page,
   hh,
@@ -39,14 +33,12 @@ test("a status taken off is saved, and the kanban of the project loses its colum
   await statuses(page)
     .getByRole("checkbox", { name: /待機中/ })
     .uncheck();
-  const read = schemaRead(page);
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await expect(saved(page)).toBeVisible();
 
   expect(scopeShow(hh, project.id)).toContain(
     "statuses: backlog, todo, on_hold, in_progress, done, canceled",
   );
-  await read;
   await tab(page, "カンバン").click();
   await expect(column(page, "in_progress")).toBeVisible();
   await expect(column(page, "waiting")).toHaveCount(0);
@@ -61,15 +53,15 @@ test("a field the workflow needs is asked for on the kanban after it is saved", 
   await hh.open(page, `/projects/${project.ulid}/settings`);
 
   const form = page.getByRole("group", { name: "必須の項目を足す" });
-  await form.getByRole("combobox", { name: "ステータス" }).selectOption({ label: "進行中" });
+  await form
+    .getByRole("combobox", { name: "必須にするステータス" })
+    .selectOption({ label: "進行中" });
   await form.getByRole("checkbox", { name: "points", exact: true }).check();
   await form.getByRole("button", { name: "必須の項目を足す" }).click();
-  const read = schemaRead(page);
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await expect(saved(page)).toBeVisible();
   expect(scopeShow(hh, project.id)).toMatch(/required:\n\s+in_progress: points/);
 
-  await read;
   await tab(page, "カンバン").click();
   const card = page.locator(`li[data-ulid="${ship.ulid}"]`);
   await expect(card).toBeVisible();

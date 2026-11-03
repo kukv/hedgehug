@@ -395,16 +395,16 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
     };
   });
 
-  const open = env.project;
-  const projectSettingsHref = open ? env.hrefs.projectSettings(open.ulid) : "";
-  const projectSettings: CommandItem[] = open
+  const inProject = env.project;
+  const projectSettingsHref = inProject ? env.hrefs.projectSettings(inProject.ulid) : "";
+  const projectSettings: CommandItem[] = inProject
     ? [
         {
           type: "command",
-          key: `open:project-settings:${open.ulid}`,
+          key: `open:project-settings:${inProject.ulid}`,
           label: "プロジェクトの設定を開く",
           icon: "settings",
-          note: open.title || undefined,
+          note: inProject.title || undefined,
           href: projectSettingsHref,
           run: () => env.go(projectSettingsHref),
         },

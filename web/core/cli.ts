@@ -225,10 +225,11 @@ export function cliScopeSet(i: {
     if (entries.length === 0) return [flag, ""];
     return entries.flatMap(([k, v]) => [flag, `${k}=${v.join(",")}`]);
   };
-  const a: Arg[] = ["schema", "scope", "set", i.id];
+  const head = ["schema", "scope", "set", i.id];
+  const a: Arg[] = [...head];
   if (i.statuses) a.push("--statuses", i.statuses.join(","));
   a.push(...lists("--transition", i.transitions), ...lists("--required", i.required));
-  if (a.length === 4) a.push(new Placeholder("変更"));
+  if (a.length === head.length) a.push(new Placeholder("変更"));
   if (i.store) a.push("--store", i.store);
   return cliLine(a);
 }
