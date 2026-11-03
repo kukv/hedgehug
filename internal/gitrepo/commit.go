@@ -37,8 +37,9 @@ type Commit struct {
 	AllowEmpty bool
 }
 
-// Commit stages exactly c.Paths and commits the index. A path that is on
-// disk is added; one that is not is dropped from the index.
+// Commit stages exactly c.Paths, which name files, and commits HEAD's tree
+// with them as staged. A path that is on disk is added; one that is not is
+// dropped from the index and from the tree.
 //
 // Paths are staged one by one so that a commit costs the same however many
 // files the store holds: go-git's plain Add takes the status of the whole
@@ -51,8 +52,9 @@ type Commit struct {
 // its tree is the same as the first parent's, and without any path: the
 // parents or the caller alone make it a change.
 //
-// The tree is made from HEAD's with only the trees above c.Paths made again
-// (commitStaged), not from the whole index.
+// The tree is made from HEAD's (an empty one before the first commit) with
+// only the trees above c.Paths made again (commitStaged), not from the whole
+// index: anything else staged is left out.
 func (r *Repo) Commit(c Commit) (h plumbing.Hash, err error) {
 	if len(c.Paths) == 0 && len(c.Parents) < 2 && !c.AllowEmpty {
 		return plumbing.ZeroHash, ErrNothingToCommit
