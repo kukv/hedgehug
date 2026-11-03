@@ -321,6 +321,18 @@ describe("TableView", () => {
     ).toBeInTheDocument();
   });
 
+  it("writes the name and the Store of a saved view into the command that saves the settings", () => {
+    setup();
+    mount({
+      settings: { columns: ["id", "due"], groupBy: "status" },
+      saved: { name: "今週", store: "shared" },
+    });
+    const line = screen.getByLabelText(
+      /^コマンドをコピー: hh view save 今週 --layout table --query .* --columns id,due --group-by status --store shared$/,
+    );
+    expect(line).toBeEnabled();
+  });
+
   it("shows the command that would save the settings, not to copy until it has a name", () => {
     setup();
     mount({ settings: { columns: ["id", "due"], groupBy: "status" } });

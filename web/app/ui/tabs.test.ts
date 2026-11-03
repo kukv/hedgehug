@@ -74,6 +74,21 @@ describe("Tabs", () => {
     open.mockRestore();
   });
 
+  it("disabled のタブは理由を title に持ち、押しても動かず onselect も呼ばない", async () => {
+    const onselect = vi.fn();
+    const { getByRole } = render(Tabs, {
+      items: [{ label: "ツリー", href: "/x", current: false, onselect, disabled: "理由です" }],
+    });
+    const a = getByRole("link", { name: "ツリー" });
+    expect(a).toHaveAttribute("aria-disabled", "true");
+    expect(a).toHaveAttribute("title", "理由です");
+    const ev = new MouseEvent("click", { button: 0, bubbles: true, cancelable: true });
+    a.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(onselect).not.toHaveBeenCalled();
+    expect(location.pathname).toBe("/");
+  });
+
   it("label でナビゲーションの名前を変えられる", () => {
     const { getByRole } = render(Tabs, { items, label: "プロジェクトのタブ" });
     expect(getByRole("navigation", { name: "プロジェクトのタブ" })).toBeTruthy();

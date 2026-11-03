@@ -11,12 +11,18 @@
     settings: TableSettings;
     onsettings: (s: TableSettings) => void;
     cli?: string;
+    saved?: { name: string; store: string };
     actions?: Snippet;
   };
-  let { view, query, onquery, settings, onsettings, cli, actions }: Props = $props();
+  let { view, query, onquery, settings, onsettings, cli, saved, actions }: Props = $props();
 </script>
 
-<div data-testid="table" data-view={JSON.stringify(view)} data-cli={cli}>
+<div
+  data-testid="table"
+  data-view={JSON.stringify(view)}
+  data-cli={cli}
+  data-saved={saved ? JSON.stringify(saved) : undefined}
+>
   <span data-testid="table-query">{query}</span>
   <span data-testid="table-settings">{settings.columns.join(",")}/{settings.groupBy}</span>
   <button type="button" onclick={() => onquery("assignee:@me")}>table-set-query</button>

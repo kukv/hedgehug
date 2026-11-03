@@ -413,6 +413,16 @@ describe("KanbanView: the settings", () => {
     expect(onsettings).toHaveBeenLastCalledWith({ columns: "status", swimlane: "project" });
   });
 
+  it("writes the name and the Store of a saved view into the command that saves the settings", async () => {
+    setup();
+    mountView({ saved: { name: "今週", store: "shared" } });
+    expect(
+      await screen.findByLabelText(
+        "コマンドをコピー: hh view save 今週 --layout kanban --kanban-columns status --swimlane none --store shared",
+      ),
+    ).toBeEnabled();
+  });
+
   it("shows the command of the screen: hh ls, or the one it is given, and the one that saves the settings", async () => {
     setup();
     mountView({ settings: { columns: "category", swimlane: "assignee" } });

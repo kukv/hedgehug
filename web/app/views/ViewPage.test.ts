@@ -4,7 +4,7 @@ import { ApiError } from "../../core/api/client";
 import { cliViewSave, cliViewShow } from "../../core/cli";
 import { draftOf, saveBodyOf } from "../../core/views";
 import { resetToasts, toasts } from "../toast.svelte";
-import { closeViewDialog, viewDialog } from "./dialogs-state.svelte";
+import { carryDraft, closeViewDialog, viewDialog } from "./dialogs-state.svelte";
 import { makeViews, mountWithViews, viewEntry } from "./testkit";
 import ViewPage from "./ViewPage.svelte";
 
@@ -93,7 +93,7 @@ describe("ViewPage", () => {
   });
 
   it("切り替えをサーバーが断ったら、その言葉をトーストに出して、layout は変わらない", async () => {
-    const { views } = setup([viewEntry({ name: "weekly", layout: "kanban", query: "sort:title" })]);
+    const { views } = setup([viewEntry({ name: "weekly", layout: "kanban", query: "kind:task" })]);
     views.save.mockRejectedValueOnce(new ApiError({ status: 422, type: "view.tree_order" }));
     await fireEvent.click(tab("ツリー"));
     await waitFor(() => expect(toasts.list).toHaveLength(1));
@@ -199,6 +199,54 @@ describe("ViewPage", () => {
     await fireEvent.click(screen.getByRole("button", { name: "ビューの操作（改名・削除）" }));
     await fireEvent.click(screen.getByRole("menuitem", { name: "削除…" }));
     expect(viewDialog.current).toMatchObject({ kind: "delete", entry: weekly });
+  });
+
+  it("未保存の変更があるまま改名を開くと、その変更を持って行く。なければ持たない", async () => {
+    setup();
+    await fireEvent.click(screen.getByRole("button", { name: "ビューの操作（改名・削除）" }));
+    await fireEvent.click(screen.getByRole("menuitem", { name: "改名…" }));
+    expect(viewDialog.current).toMatchObject({ kind: "rename", carry: null });
+    closeViewDialog();
+
+    await fireEvent.click(screen.getByRole("button", { name: "table-set-query" }));
+    await fireEvent.click(screen.getByRole("button", { name: "ビューの操作（改名・削除）" }));
+    await fireEvent.click(screen.getByRole("menuitem", { name: "改名…" }));
+    expect(viewDialog.current).toMatchObject({
+      kind: "rename",
+      carry: { layout: "table", query: "assignee:@me" },
+    });
+  });
+
+  it("改名で持ち越された変更があれば、開いたときから「未保存の変更」になる", () => {
+    carryDraft("shared", "weekly", { ...draftOf(weekly.view), query: "assignee:@me" });
+    setup();
+    expect(screen.getByText("未保存の変更")).toBeVisible();
+    expect(screen.getByTestId("table-query")).toHaveTextContent("assignee:@me");
+  });
+
+  it("保存したクエリに sort: があれば、ツリーのタブを無効にして理由を出す（細部 54）", async () => {
+    const { views } = setup([viewEntry({ name: "weekly", layout: "table", query: "sort:title" })]);
+    const why = "ツリーのビューは rank の順に並ぶため、group: と sort: は使えません";
+    expect(tab("ツリー")).toHaveAttribute("aria-disabled", "true");
+    expect(tab("ツリー")).toHaveAttribute("title", why);
+    expect(screen.getByText(`ツリーには切り替えられません。${why}`)).toBeVisible();
+    await fireEvent.click(tab("ツリー"));
+    expect(views.save).not.toHaveBeenCalled();
+    expect(tab("カンバン")).not.toHaveAttribute("aria-disabled");
+  });
+
+  it("問題がなければツリーのタブは有効", () => {
+    setup();
+    expect(tab("ツリー")).not.toHaveAttribute("aria-disabled");
+    expect(screen.queryByText(/ツリーには切り替えられません/)).toBeNull();
+  });
+
+  it("カンバン・テーブルには、ビューの名前と Store を渡す（設定を保存するコマンドに使う）", () => {
+    setup();
+    expect(JSON.parse(screen.getByTestId("table").dataset.saved ?? "")).toEqual({
+      name: "weekly",
+      store: "shared",
+    });
   });
 
   it("同じ名前のビューが別の Store にあっても、URL の Store のものを出す（細部 53）", () => {

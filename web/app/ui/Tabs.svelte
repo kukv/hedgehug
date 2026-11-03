@@ -1,8 +1,17 @@
 <script lang="ts" module>
   import type { IconName } from "../icons/Icon.svelte";
 
-  /** onselect: the tab does something in place (the layout of a saved view); href is where a new tab opens. */
-  export type TabItem = { label: string; href: string; current: boolean; onselect?: () => void };
+  /**
+   * onselect: the tab does something in place (the layout of a saved view); href is where a new tab opens.
+   * disabled: the reason the tab cannot be used; it does nothing when pressed.
+   */
+  export type TabItem = {
+    label: string;
+    href: string;
+    current: boolean;
+    onselect?: () => void;
+    disabled?: string;
+  };
   /** The tab at the right end (the settings), which can have an icon. */
   export type TabEnd = TabItem & { icon?: IconName };
 </script>
@@ -15,6 +24,10 @@
   let { items, end, label = "ビューの切り替え" }: Props = $props();
 
   function pick(e: MouseEvent, it: TabItem) {
+    if (it.disabled) {
+      e.preventDefault();
+      return;
+    }
     const plain = e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
     if (it.onselect && plain && !e.defaultPrevented) {
       e.preventDefault();
@@ -33,6 +46,8 @@
       class:current={it.current}
       href={it.href}
       aria-current={it.current ? "page" : undefined}
+      aria-disabled={it.disabled ? "true" : undefined}
+      title={it.disabled}
       onclick={(e) => pick(e, it)}
       >{it.label}</a
     >
@@ -74,6 +89,11 @@
   }
   .tab:hover {
     color: var(--ink);
+  }
+  .tab[aria-disabled="true"] {
+    color: var(--muted);
+    opacity: 0.6;
+    cursor: not-allowed;
   }
   .tab.current {
     border-bottom-color: var(--ink);

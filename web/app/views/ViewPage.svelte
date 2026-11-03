@@ -24,7 +24,7 @@
   import Menu from "../ui/Menu.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
   import Tabs from "../ui/Tabs.svelte";
-  import { openViewDelete, openViewRename } from "./dialogs-state.svelte";
+  import { openViewDelete, openViewRename, takeCarriedDraft } from "./dialogs-state.svelte";
   import { LAYOUTS, treeOrderProblem } from "./draft";
 
   // A saved view (細部 50): it opens in the layout it was saved with, and the tabs change that
@@ -48,7 +48,10 @@
   // the group). local is null while the screen is as saved. The layout is always the saved one:
   // a tab changes it in the file at once, and an edit that is not saved does not go with it (D6).
   const saved = $derived(entry ? draftOf(entry.view) : null);
-  let local = $state.raw<ViewDraft | null>(null);
+  // It starts with the change a rename carried over; the page is keyed by store and name, so the
+  // first values are the ones to ask for.
+  // svelte-ignore state_referenced_locally
+  let local = $state.raw<ViewDraft | null>(takeCarriedDraft(store, name));
   const draft = $derived(saved ? { ...(local ?? saved), layout: saved.layout } : null);
   const dirty = $derived(local !== null && saved !== null && !sameDraft(local, saved));
   const problem = $derived(draft ? treeOrderProblem(draft) : null);
@@ -87,12 +90,19 @@
     }
   }
 
+  // The server refuses the tree for a saved query that has a sort: or a group: (view.tree_order).
+  const treeBlock = $derived(
+    saved && saved.layout !== "tree"
+      ? treeOrderProblem({ layout: "tree", query: saved.query })
+      : null,
+  );
   const items = $derived(
     LAYOUTS.map((t) => ({
       label: t.label,
       href: router.href({ name: "view", store, view: name }),
       current: t.layout === saved?.layout,
       onselect: () => void switchLayout(t.layout),
+      disabled: t.layout === "tree" ? (treeBlock ?? undefined) : undefined,
     })),
   );
 
@@ -104,7 +114,7 @@
   function pickMore(value: string) {
     more = null;
     if (!entry) return;
-    if (value === "rename") openViewRename(entry);
+    if (value === "rename") openViewRename(entry, dirty ? local : null);
     else openViewDelete(entry);
   }
 
@@ -167,6 +177,9 @@
       </div>
     {/if}
     <Tabs {items} label="レイアウトの切り替え" />
+    {#if treeBlock}
+      <p class="problem blocked">ツリーには切り替えられません。{treeBlock}</p>
+    {/if}
     <div class="switch">
       <span class="hint">切り替えは保存したビューの layout を変えます（1 コミット）</span>
       <CliLine command={switchCli} />
@@ -180,6 +193,7 @@
           settings={draft.kanban}
           onsettings={(s: KanbanSettings) => edit({ kanban: s })}
           cli={showCli}
+          saved={{ name, store }}
         />
       {:else if saved.layout === "table"}
         <TableView
@@ -189,6 +203,7 @@
           settings={draft.table}
           onsettings={(s: TableSettings) => edit({ table: s })}
           cli={showCli}
+          saved={{ name, store }}
         />
       {:else}
         <TreeView
@@ -276,6 +291,9 @@
     border-radius: var(--radius-8);
     background: var(--warning-weak);
     font-size: var(--fs-13);
+  }
+  .blocked {
+    margin: var(--space-8) var(--gutter) 0;
   }
   .body {
     flex: 1 1 auto;

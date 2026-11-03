@@ -37,10 +37,12 @@
     settings: KanbanSettings;
     onsettings: (s: KanbanSettings) => void;
     cli?: string;
+    /** The saved view this screen shows: the command that saves the settings names it. */
+    saved?: { name: string; store: string };
     actions?: Snippet;
   };
   // The prop is not called scope: Biome reads that name as the HTML attribute.
-  let { view: scope, query, onquery, settings, onsettings, cli, actions }: Props = $props();
+  let { view: scope, query, onquery, settings, onsettings, cli, saved, actions }: Props = $props();
 
   const c = core();
   const ls = useListScope(() => scope);
@@ -356,7 +358,8 @@
   // The settings of this screen as the command that saves them in a view.
   const saveLine = $derived(
     cliViewSave({
-      name: new Placeholder("名前"),
+      name: saved?.name ?? new Placeholder("名前"),
+      store: saved?.store,
       body: {
         layout: "kanban",
         kanban_columns: settings.columns,

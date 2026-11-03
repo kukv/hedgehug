@@ -56,6 +56,7 @@
     settings,
     onsettings,
     cli,
+    saved,
     actions,
   }: {
     view: ListScope;
@@ -64,6 +65,8 @@
     settings: TableSettings;
     onsettings: (s: TableSettings) => void;
     cli?: string;
+    /** The saved view this screen shows: the command that saves the settings names it. */
+    saved?: { name: string; store: string };
     actions?: Snippet;
   } = $props();
 
@@ -459,7 +462,8 @@
   // Where the settings of the table would be saved as a view; the name is the user's to give.
   const saveCli = $derived(
     cliViewSave({
-      name: new Placeholder("名前"),
+      name: saved?.name ?? new Placeholder("名前"),
+      store: saved?.store,
       body: {
         layout: "table",
         query: joinQuery(scope.saveBase, query),
@@ -509,7 +513,7 @@
       列 {shown.length}
     </Button>
     <!-- The name is not given yet, so the line is not complete to copy. -->
-    <CliLine command={saveCli} disabled />
+    <CliLine command={saveCli} disabled={!saved} />
   </div>
 {/snippet}
 
