@@ -41,7 +41,7 @@ function bucketsOf(t: TaskView, by: Exclude<GroupBy, "none">, ctx: SortCtx): Buc
         {
           type: "group",
           key: t.parent,
-          label: p ? p.title : ctx.loading?.(t.parent) ? "読み込み中…" : "不明な親",
+          label: p ? p.title : ctx.loading?.(t) ? "読み込み中…" : "不明な親",
           id: p?.id,
           ulid: t.parent,
           progress: p?.progress && p.progress.total > 0 ? p.progress : undefined,

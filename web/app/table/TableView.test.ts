@@ -131,9 +131,12 @@ function setup(over: Over = {}) {
   ]);
   // The tree of the query brings the ancestors of the tasks it finds, once it has answered.
   let treeLoading = (over.parent ?? "read") !== "fail";
+  // The tasks the answer of the tree has.
+  const answered = new Set<string>();
   const readParent = (_u?: string) => {
     for (const [u, p] of parents) tasks.set(u, p);
     treeLoading = false;
+    for (const u of ulids) answered.add(u);
     ev.emit();
   };
   let ulids = over.ulids ?? ["T1", "T2", "T3"];
@@ -150,7 +153,7 @@ function setup(over: Over = {}) {
     const mode = over.parent ?? "read";
     if (mode === "read") queueMicrotask(() => readParent());
     return {
-      roots: () => [],
+      roots: () => [...answered].map((ulid) => ({ ulid, children: [] })),
       cycle: () => [],
       error: () => (mode === "fail" ? new Error("boom") : null),
       loading: () => treeLoading,
@@ -224,6 +227,7 @@ function setup(over: Over = {}) {
   return {
     save,
     watchList,
+    answered,
     watchTree,
     ev,
     schemas,
@@ -425,6 +429,36 @@ describe("TableView", () => {
       expect(handle.dispose).not.toHaveBeenCalled();
       unmount();
       expect(handle.dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it("asks for the tree without the sort: and group: terms, which it does not take", async () => {
+      const { watchTree } = setup();
+      mount({
+        query: 'sort:due group:status title:"sort:x" -status:canceled',
+        settings: { ...SETTINGS, columns: ["id", "parent"] },
+      });
+      await waitFor(() => expect(screen.getAllByRole("link", { name: "REL-1" })).toHaveLength(2));
+      expect(watchTree.mock.calls[0]?.[0].q).toBe(
+        'workspace:release title:"sort:x" -status:canceled',
+      );
+    });
+
+    it("keeps a parent of a task new in the list on its way until the tree has answered for the task", async () => {
+      const { tasks, setUlids, answered, ev } = setup();
+      mount({ settings: { ...SETTINGS, columns: ["id", "parent"] } });
+      await waitFor(() => expect(screen.getAllByRole("link", { name: "REL-1" })).toHaveLength(2));
+      tasks.set("T4", task("T4", "task", "E2", { id: "REL-20", title: "new", status: "todo" }));
+      setUlids(["T1", "T2", "T3", "T4"]);
+      ev.emit();
+      await tick();
+      expect(screen.getAllByLabelText("親を読み込み中")).toHaveLength(1);
+      expect(screen.queryByLabelText("親を読み込めません")).toBeNull();
+      // The tree answers, and the parent is not to be had.
+      answered.add("T4");
+      ev.emit();
+      await tick();
+      expect(screen.queryByLabelText("親を読み込み中")).toBeNull();
+      expect(screen.getAllByLabelText("親を読み込めません")).toHaveLength(1);
     });
 
     it("reads the tree only while the parent column, the kind column or the group of parents is shown", async () => {

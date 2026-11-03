@@ -23,7 +23,7 @@
   import Empty from "../states/Empty.svelte";
   import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
-  import { combine, hasTerm, NO_CANCELED, withoutTerm } from "../tree/filter";
+  import { combine, hasTerm, NO_CANCELED, withoutOrder, withoutTerm } from "../tree/filter";
   import { countLabel, VIRTUALIZE_AT } from "../tree/flatten";
   import Button from "../ui/Button.svelte";
   import CliLine from "../ui/CliLine.svelte";
@@ -190,20 +190,38 @@
       tree = null;
       return;
     }
+    // The tree is in the order of the ranks: it does not take sort: or group:.
     const h = c.cache.watchTree({
-      q: joinQuery(scope.apiBase, query),
+      q: joinQuery(scope.apiBase, withoutOrder(query)),
       tree: true,
       store: scope.store,
     });
     tree = h;
     return () => h.dispose();
   });
-  // A parent that is not in the cache is on its way until the tree has answered; if it still is
-  // not there after that, or the tree could not be read, it cannot be had.
-  const parentLoading = (ulid: string): boolean => {
+  // The tasks the tree has answered for. A task that is new in the list is not among them until the
+  // tree has been read again, and its parent is not in the cache before that.
+  const inTree = $derived.by(() => {
     cacheRev.current;
-    if (c.cache.task(ulid)) return false;
-    return tree === null || (tree.loading() && !tree.error());
+    const out = new Set<string>();
+    const walk = (ns: { ulid: string; children: unknown[] }[]) => {
+      for (const n of ns) {
+        out.add(n.ulid);
+        walk(n.children as typeof ns);
+      }
+    };
+    walk(tree?.roots() ?? []);
+    for (const u of tree?.cycle() ?? []) out.add(u);
+    return out;
+  });
+  // The parent of a task is not in the cache: it is on its way until the tree has answered for the
+  // task; if it is still not there after that, or the tree could not be read, it cannot be had.
+  const parentLoading = (t: TaskView): boolean => {
+    cacheRev.current;
+    if (!t.parent || c.cache.task(t.parent)) return false;
+    if (tree === null) return true;
+    if (tree.error()) return false;
+    return tree.loading() || !inTree.has(t.ulid);
   };
 
   // --- a row being edited keeps its place -------------------------------------------------
@@ -560,7 +578,7 @@
             tone={c.stores.tone(t.store)}
             pending={field ? saves.current.editing(t.ulid, field) : false}
             {taskOf}
-            parentLoading={t.parent ? parentLoading(t.parent) : false}
+            parentLoading={parentLoading(t)}
             onedit={(f, v) => edit(t, f, v)}
             oncommit={() => commit(t)}
           />

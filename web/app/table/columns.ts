@@ -101,9 +101,9 @@ export type SortKey = string | number | undefined;
 export type SortCtx = {
   schemaOf: (store: string) => SchemaView | undefined;
   taskOf: (ulid: string) => TaskView | undefined;
-  // Whether a task that is not in the cache is on its way (a parent being read), as against not
-  // found. Without it, a task that is not there is not found.
-  loading?: (ulid: string) => boolean;
+  // Whether the parent of the task, which is not in the cache, is on its way, as against not
+  // found. Without it, a parent that is not there is not found.
+  loading?: (task: TaskView) => boolean;
   // The names of the stores in the order of GET /api/stores.
   storeOrder: string[];
 };

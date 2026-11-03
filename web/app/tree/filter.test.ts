@@ -6,6 +6,7 @@ import {
   NO_CANCELED,
   splitTerms,
   toggleTerm,
+  withoutOrder,
   withoutTerm,
 } from "./filter";
 
@@ -47,5 +48,31 @@ describe("terms", () => {
     expect(toggleTerm("a:b", NO_CANCELED)).toBe(`a:b ${NO_CANCELED}`);
     expect(toggleTerm(`a:b ${NO_CANCELED}`, NO_CANCELED)).toBe("a:b");
     expect(toggleTerm("", NO_CANCELED)).toBe(NO_CANCELED);
+  });
+});
+
+describe("withoutOrder", () => {
+  it("takes out the sort: and group: terms, which a tree does not take", () => {
+    expect(withoutOrder("workspace:a sort:due,-title group:status -status:canceled")).toBe(
+      "workspace:a -status:canceled",
+    );
+    expect(withoutOrder("sort:due")).toBe("");
+    expect(withoutOrder("sort:due group:parent sort:id")).toBe("");
+  });
+
+  it("takes out a negated term and a comparison on the key, as the query parser reads the key", () => {
+    expect(withoutOrder("a:b -sort:due c:d")).toBe("a:b c:d");
+    expect(withoutOrder("a:b sort<3 group>=2 c:d")).toBe("a:b c:d");
+  });
+
+  it("keeps the terms that only have the word in them", () => {
+    const q = 'title:"sort:x" "sort:y" sorted:1 group_by:x assignee:sort -status:canceled';
+    expect(withoutOrder(q)).toBe(q);
+    expect(withoutOrder('"a b" sort:"x y" tag:z')).toBe('"a b" tag:z');
+  });
+
+  it("leaves a query that has none as it is", () => {
+    expect(withoutOrder("assignee:@me")).toBe("assignee:@me");
+    expect(withoutOrder("")).toBe("");
   });
 });
