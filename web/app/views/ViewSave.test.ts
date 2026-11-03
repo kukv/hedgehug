@@ -179,7 +179,7 @@ describe("ViewSave", () => {
     const views = makeViews();
     const { ApiError } = await import("../../core/api/client");
     views.save.mockRejectedValueOnce(
-      new ApiError({ status: 422, type: "view.bad_name", args: { value: "a/b" } }),
+      new ApiError({ status: 400, type: "view.bad_name", args: { value: "a/b" } }),
     );
     const { onclose } = setup({ views });
     await typeName("a/b");

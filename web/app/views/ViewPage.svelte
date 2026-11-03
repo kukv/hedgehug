@@ -28,7 +28,7 @@
   import { LAYOUTS, treeOrderProblem } from "./draft";
 
   // A saved view (細部 50): it opens in the layout it was saved with, and the tabs change that
-  // layout in place (a PUT of the layout only).
+  // layout in place (a PATCH of the layout only).
   type Props = { store: string; name: string };
   let { store, name }: Props = $props();
 

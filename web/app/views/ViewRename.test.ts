@@ -110,7 +110,7 @@ describe("ViewRename", () => {
   it("サーバーが断ったら、その言葉を出して開いたままにする", async () => {
     const views = makeViews([weekly]);
     views.rename.mockRejectedValueOnce(
-      new ApiError({ status: 422, type: "view.bad_name", args: { value: "a/b" } }),
+      new ApiError({ status: 400, type: "view.bad_name", args: { value: "a/b" } }),
     );
     const { onclose } = setup(views);
     await typeName("a/b");

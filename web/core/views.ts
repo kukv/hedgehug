@@ -72,7 +72,7 @@ export function saveBodyOf(d: ViewDraft): ViewSaveBody {
 }
 
 // sameDraft says whether a and b hold the same settings. The layout is left out: a screen changes it
-// at once (PUT {layout}) and does not count it as an unsaved change.
+// at once (PATCH {layout}) and does not count it as an unsaved change.
 export function sameDraft(a: ViewDraft, b: ViewDraft): boolean {
   return (
     a.query.trim() === b.query.trim() &&

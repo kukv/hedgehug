@@ -53,7 +53,7 @@ export function sameViewName(a: string, b: string): boolean {
   return a.normalize("NFC").toLowerCase() === b.normalize("NFC").toLowerCase();
 }
 
-const TREE_ORDER = new ApiError({ status: 422, type: "view.tree_order" });
+const TREE_ORDER = new ApiError({ status: 400, type: "view.tree_order" });
 
 /**
  * Why a tree view cannot keep this query (細部 54): the tree follows rank, so the server refuses a

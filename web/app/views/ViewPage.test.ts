@@ -94,7 +94,7 @@ describe("ViewPage", () => {
 
   it("切り替えをサーバーが断ったら、その言葉をトーストに出して、layout は変わらない", async () => {
     const { views } = setup([viewEntry({ name: "weekly", layout: "kanban", query: "kind:task" })]);
-    views.update.mockRejectedValueOnce(new ApiError({ status: 422, type: "view.tree_order" }));
+    views.update.mockRejectedValueOnce(new ApiError({ status: 400, type: "view.tree_order" }));
     await fireEvent.click(tab("ツリー"));
     await waitFor(() => expect(toasts.list).toHaveLength(1));
     expect(toasts.list[0]?.message).toBe(
@@ -179,7 +179,7 @@ describe("ViewPage", () => {
   it("更新をサーバーが断ったら、トーストに出して未保存のまま残す", async () => {
     const { views } = setup();
     views.update.mockRejectedValueOnce(
-      new ApiError({ status: 422, type: "view.bad_column", args: { column: "x" } }),
+      new ApiError({ status: 400, type: "view.bad_column", args: { column: "x" } }),
     );
     await fireEvent.click(screen.getByRole("button", { name: "table-set-query" }));
     await fireEvent.click(screen.getByRole("button", { name: "ビューを更新" }));
