@@ -1,6 +1,7 @@
 package gitrepo
 
 import (
+	"maps"
 	"slices"
 
 	"github.com/go-git/go-git/v5/plumbing"
@@ -33,7 +34,7 @@ func (r *Repo) ChangedFiles(h plumbing.Hash) (LogEntry, []string, error) {
 	}
 	if c.NumParents() == 0 {
 		var out []string
-		if err := r.diffTrees(nil, t, "", func(p string) { out = append(out, p) }); err != nil {
+		if err := r.diffTrees(nil, t, "", func(p string, _ bool) { out = append(out, p) }); err != nil {
 			return LogEntry{}, nil, err
 		}
 		slices.Sort(out)
@@ -49,7 +50,7 @@ func (r *Repo) ChangedFiles(h plumbing.Hash) (LogEntry, []string, error) {
 		if err != nil {
 			return LogEntry{}, nil, err
 		}
-		if err := r.diffTrees(pt, t, "", func(path string) { count[path]++ }); err != nil {
+		if err := r.diffTrees(pt, t, "", func(path string, _ bool) { count[path]++ }); err != nil {
 			return LogEntry{}, nil, err
 		}
 	}
@@ -65,9 +66,12 @@ func (r *Repo) ChangedFiles(h plumbing.Hash) (LogEntry, []string, error) {
 
 // diffTrees calls fn with every file path that differs between a and b
 // (either may be nil, an empty tree), going down only into directories
-// whose hashes differ. A path that is not a directory is a file here,
-// a submodule (which a store does not have) too, as git log -- path counts it.
-func (r *Repo) diffTrees(a, b *object.Tree, dir string, fn func(string)) error {
+// whose hashes differ. deleted is true for a file that a has and b does
+// not. A path that is not a directory is a file here, a submodule (which a
+// store does not have) too, as git log -- path counts it. The names of a
+// directory come in order, a directory not set apart from a file of the
+// same prefix, as go-git's object.DiffTree lists them.
+func (r *Repo) diffTrees(a, b *object.Tree, dir string, fn func(path string, deleted bool)) error {
 	byName := func(t *object.Tree) map[string]object.TreeEntry {
 		m := map[string]object.TreeEntry{}
 		if t != nil {
@@ -85,7 +89,7 @@ func (r *Repo) diffTrees(a, b *object.Tree, dir string, fn func(string)) error {
 	for n := range bm {
 		names[n] = true
 	}
-	for n := range names {
+	for _, n := range slices.Sorted(maps.Keys(names)) {
 		ea, inA := am[n]
 		eb, inB := bm[n]
 		if inA && inB && ea.Hash == eb.Hash && ea.Mode == eb.Mode {
@@ -98,19 +102,22 @@ func (r *Repo) diffTrees(a, b *object.Tree, dir string, fn func(string)) error {
 				return err
 			}
 		} else if inA {
-			fn(dir + n)
+			fn(dir+n, !inB || eb.Mode == filemode.Dir)
 		}
 		if inB && eb.Mode == filemode.Dir {
 			if sb, err = r.tree(eb.Hash); err != nil {
 				return err
 			}
-		} else if inB && (!inA || ea.Mode == filemode.Dir) {
-			fn(dir + n)
 		}
 		if sa != nil || sb != nil {
 			if err := r.diffTrees(sa, sb, dir+n+"/", fn); err != nil {
 				return err
 			}
+		}
+		// After the contents of a directory that became this file, as
+		// go-git lists them.
+		if inB && eb.Mode != filemode.Dir && (!inA || ea.Mode == filemode.Dir) {
+			fn(dir+n, false)
 		}
 	}
 	return nil

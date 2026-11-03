@@ -11,7 +11,6 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/go-git/go-git/v5/utils/merkletrie"
 )
 
 // ErrTreeNotFound means a tree the caller named is not in the repository.
@@ -56,25 +55,13 @@ func (r *Repo) DiffTrees(from, to plumbing.Hash, prefix string) ([]Change, error
 	if err != nil {
 		return nil, err
 	}
-	cs, err := object.DiffTree(a, b)
-	if err != nil {
-		return nil, err
-	}
 	var out []Change
-	for _, c := range cs {
-		action, err := c.Action()
-		if err != nil {
-			return nil, err
+	err = r.diffTrees(a, b, "", func(path string, deleted bool) {
+		if strings.HasPrefix(path, prefix) {
+			out = append(out, Change{Path: path, Deleted: deleted})
 		}
-		ch := Change{Path: c.To.Name}
-		if action == merkletrie.Delete {
-			ch = Change{Path: c.From.Name, Deleted: true}
-		}
-		if strings.HasPrefix(ch.Path, prefix) {
-			out = append(out, ch)
-		}
-	}
-	return out, nil
+	})
+	return out, err
 }
 
 // ReadFile returns the content of path in tree. A missing path is
