@@ -435,12 +435,43 @@ func TestLogAndTaskLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tl, err := ts.TaskLog(s, e.ULID, 1)
+	tl, err := ts.TaskLog(s, "me", e.ULID, 1)
 	if err != nil || len(tl) != 1 || tl[0].Hash != one[0].Hash {
 		t.Errorf("TaskLog(limit 1) = %d commits, %v; want the newest", len(tl), err)
 	}
 	_, err = ts.Log([]string{"ME-9"}, 0)
 	wantErr(t, err, KindNotFound, "task.not_found")
+}
+
+func TestTaskLogReportsProgressOfBuildingTheIndex(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	type call struct {
+		store       string
+		done, total int
+	}
+	var calls []call
+	ts.Progress = func(store string, done, total int) { calls = append(calls, call{store, done, total}) }
+	if _, err := ts.Log([]string{"ME-1"}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) == 0 {
+		t.Fatal("Progress was not called for a store without an index")
+	}
+	if last := calls[len(calls)-1]; last.store != "me" || last.done != last.total || last.total < 2 {
+		t.Errorf("last Progress call = %+v, want store me, done == total >= 2 (init and add)", last)
+	}
+	// the index is in place now: nothing is left to do
+	calls = nil
+	if _, err := ts.Log([]string{"ME-1"}, 0); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 0 {
+		t.Errorf("Progress called %d times with the index in place", len(calls))
+	}
 }
 
 // entriesOf is the commits of lr.

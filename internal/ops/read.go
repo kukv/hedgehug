@@ -3,12 +3,12 @@ package ops
 import (
 	"cmp"
 	"errors"
-	"path"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
+	"github.com/kukv/hedgehug/internal/history"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/mount"
@@ -48,6 +48,7 @@ func (ss *Session) listSet() (*mount.Set, error) {
 	if err != nil {
 		return nil, err
 	}
+	ss.keep(set.Close)
 	for _, sk := range toWarn {
 		ss.warnSkipped(sk)
 	}
@@ -61,7 +62,9 @@ func (ss *Session) MountedCount() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	return len(mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }}).Stores), nil
+	set := mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }})
+	defer set.Close()
+	return len(set.Stores), nil
 }
 
 // queryMounted runs q on the stores of set that store: and --store leave. A
@@ -315,7 +318,7 @@ func (ss *Session) Show(arg string) (ShowResult, error) {
 	}
 	r.Relations = reverse(ix, e.ULID)
 	r.Back = ix.Backlinks(e.ULID)
-	if r.History, err = ss.TaskLog(s, e.ULID, ShowHistory); err != nil {
+	if r.History, err = ss.TaskLog(s, ix.StoreName(), e.ULID, ShowHistory); err != nil {
 		return ShowResult{}, err
 	}
 	return r, nil
@@ -462,12 +465,23 @@ func logViewOf(ix *index.Index, e gitrepo.LogEntry) LogView {
 // trailer names, or else the one the task of its Hedgehug-Task is in now.
 // A commit with neither, or of a task the index does not have, has none.
 func logWorkspace(ix *index.Index, e gitrepo.LogEntry) (model.ULID, bool) {
-	if v, ok := e.Trailer("Hedgehug-Workspace"); ok {
-		ulid, err := model.ParseULID(v)
+	ws, _ := e.Trailer("Hedgehug-Workspace")
+	task, _ := e.Trailer("Hedgehug-Task")
+	return workspaceOf(ix, ws, task)
+}
+
+// commitWorkspace is logWorkspace for a commit of the history index.
+func commitWorkspace(ix *index.Index, c history.Commit) (model.ULID, bool) {
+	return workspaceOf(ix, c.Workspace, c.Task)
+}
+
+func workspaceOf(ix *index.Index, ws, task string) (model.ULID, bool) {
+	if ws != "" {
+		ulid, err := model.ParseULID(ws)
 		return ulid, err == nil
 	}
-	if v, ok := e.Trailer("Hedgehug-Task"); ok {
-		if ulid, err := model.ParseULID(v); err == nil {
+	if task != "" {
+		if ulid, err := model.ParseULID(task); err == nil {
 			if t, ok := ix.Task(ulid); ok && !t.Workspace.IsZero() {
 				return t.Workspace, true
 			}
@@ -566,7 +580,7 @@ func (ss *Session) LogIn(args, workspaces []string, limit int) (LogResult, error
 		if err != nil {
 			return LogResult{}, err
 		}
-		entries, err := ss.TaskLog(s, e.ULID, limit)
+		entries, err := ss.TaskLog(s, ix.StoreName(), e.ULID, limit)
 		if err != nil {
 			return LogResult{}, err
 		}
@@ -581,17 +595,39 @@ func (ss *Session) LogIn(args, workspaces []string, limit int) (LogResult, error
 		m, _ := set.Get(ss.StoreName)
 		stores = []*mount.Mounted{m}
 	}
-	readLimit := limit
-	if len(workspaces) > 0 {
-		readLimit = 0 // the limit counts the commits kept
-	}
 	found := make([]bool, len(workspaces))
 	notFound := make([]error, len(workspaces))
 	var all []StoreLog
 	for _, m := range stores {
 		var entries []gitrepo.LogEntry
 		var logErr error
-		if err := m.With(func(*index.Index) { entries, logErr = m.Store.Repo().Log(nil, readLimit) }); err != nil {
+		if err := m.With(func(ix *index.Index) {
+			var h *history.History
+			if h, logErr = ss.openHistory(m.Store, m.Name); logErr != nil {
+				return
+			}
+			cs := h.All()
+			if len(workspaces) > 0 {
+				keep := map[model.ULID]bool{}
+				for i, arg := range workspaces {
+					w, err := ResolveWorkspace(ix, arg)
+					if errors.Is(err, store.ErrNotFound) {
+						notFound[i] = err // another store may have it
+						continue
+					}
+					if err != nil {
+						logErr = err
+						return
+					}
+					keep[w.ULID], found[i] = true, true
+				}
+				cs = slices.DeleteFunc(cs, func(c history.Commit) bool {
+					ws, ok := commitWorkspace(ix, c)
+					return !ok || !keep[ws]
+				})
+			}
+			entries, logErr = h.Entries(cs, limit)
+		}); err != nil {
 			return LogResult{}, classify(err)
 		}
 		if logErr != nil {
@@ -601,26 +637,7 @@ func (ss *Session) LogIn(args, workspaces []string, limit int) (LogResult, error
 		if err != nil {
 			return LogResult{}, classify(err)
 		}
-		logs := storeLogs(m.Name, ix, entries)
-		if len(workspaces) > 0 {
-			keep := map[model.ULID]bool{}
-			for i, arg := range workspaces {
-				w, err := ResolveWorkspace(ix, arg)
-				if errors.Is(err, store.ErrNotFound) {
-					notFound[i] = err // another store may have it
-					continue
-				}
-				if err != nil {
-					return LogResult{}, err
-				}
-				keep[w.ULID], found[i] = true, true
-			}
-			logs = slices.DeleteFunc(logs, func(l StoreLog) bool {
-				ws, ok := logWorkspace(ix, l.Entry)
-				return !ok || !keep[ws]
-			})
-		}
-		all = append(all, logs...)
+		all = append(all, storeLogs(m.Name, ix, entries)...)
 	}
 	for i, ok := range found {
 		if !ok {
@@ -643,11 +660,22 @@ func storeLogs(name string, ix *index.Index, entries []gitrepo.LogEntry) []Store
 }
 
 // TaskLog returns the commits that touched the task, its comments or its
-// work logs.
-func (ss *Session) TaskLog(s *store.Store, ulid model.ULID, limit int) ([]gitrepo.LogEntry, error) {
-	return s.Repo().Log([]string{
-		model.TaskPath(ulid),
-		path.Dir(model.CommentPath(ulid, model.ULID{})) + "/",
-		path.Dir(model.WorklogPath(ulid, model.ULID{})) + "/",
-	}, limit)
+// work logs, newest first. name is the name of the store s, for the progress
+// of building its history index.
+func (ss *Session) TaskLog(s *store.Store, name string, ulid model.ULID, limit int) ([]gitrepo.LogEntry, error) {
+	h, err := ss.openHistory(s, name)
+	if err != nil {
+		return nil, err
+	}
+	return h.Entries(h.Task(ulid), limit)
+}
+
+// openHistory opens the history index of s, telling ss.Progress how far the
+// work of bringing it up to HEAD has come.
+func (ss *Session) openHistory(s *store.Store, name string) (*history.History, error) {
+	var opt history.Options
+	if ss.Progress != nil {
+		opt.Progress = func(done, total int) { ss.Progress(name, done, total) }
+	}
+	return history.Open(s, opt)
 }

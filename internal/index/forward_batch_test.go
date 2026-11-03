@@ -1,9 +1,11 @@
 package index
 
 import (
+	"errors"
 	"slices"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/history"
 	"github.com/kukv/hedgehug/internal/model"
 )
 
@@ -40,5 +42,72 @@ func TestColdBuildResolvesSeveralForwardsInOnePass(t *testing.T) {
 	}
 	if f, ok := ix.Forward(lone); !ok || f.ID != "" || len(f.FormerIDs) != 0 {
 		t.Errorf("a forward with no history = %+v, %v", f, ok)
+	}
+}
+
+// Comments written after the last edit of a task and before it moved are not
+// changes of the task file: the id of the forward is still the task's.
+func TestForwardIDIgnoresCommitsOfOtherFiles(t *testing.T) {
+	t.Parallel()
+	s, dir := newStore(t)
+	a := putWithID(t, s, newTask("a"), "OLD-1")
+	commitRaw(t, s, dir, model.CommentPath(a.ULID, model.NewULID()), "---\n---\nnote\n")
+	put(t, s, newTask("other"))
+	commitRaw(t, s, dir, model.TaskPath(a.ULID), forwardOf(a.ULID, destStore))
+
+	ix := mustOpen(t, s)
+	f, ok := ix.Forward(a.ULID)
+	if !ok || f.ID != a.ID || !slices.Equal(f.FormerIDs, a.FormerIDs) {
+		t.Errorf("forward = %+v, %v; want id %s former %v", f, ok, a.ID, a.FormerIDs)
+	}
+	if one, err := ix.lastTask(a.ULID); err != nil || one == nil || one.ID != a.ID {
+		t.Errorf("lastTask = %+v, %v", one, err)
+	}
+}
+
+// The history index is a cache: a commit it lacks, or an index that cannot be
+// opened, still gives the last change by walking; and it is opened once for
+// all the lookups of an update.
+func TestLastChangerFallsBackToTheWalk(t *testing.T) {
+	t.Parallel()
+	s, dir := newStore(t)
+	a := putWithID(t, s, newTask("a"))
+	stale, err := history.Open(s, history.Options{}) // before the next commit
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitRaw(t, s, dir, model.TaskPath(a.ULID), rawTask(a.ULID, "title: changed\n"))
+	head, err := s.Repo().Head()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ix := mustOpen(t, s)
+	opens := 0
+	for name, open := range map[string]func() (*history.History, error){
+		"commit not in the index": func() (*history.History, error) { opens++; return stale, nil },
+		"index cannot be opened":  func() (*history.History, error) { opens++; return nil, errors.New("broken") },
+	} {
+		opens = 0
+		ix.openHistory = open
+		lc := ix.lastChanger()
+		for range 3 {
+			e, ok, err := lc(head, model.TaskPath(a.ULID))
+			if err != nil || !ok || e.Hash != head {
+				t.Errorf("%s: last change = %v, %v, %v; want %s", name, e.Hash, ok, err, head)
+			}
+		}
+		if opens != 1 {
+			t.Errorf("%s: opened %d times, want 1", name, opens)
+		}
+	}
+	// lastTask shares one lastChanger between its calls.
+	opens, ix.lc = 0, nil
+	for range 2 {
+		if _, err := ix.lastTask(a.ULID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if opens != 1 {
+		t.Errorf("lastTask opened the index %d times, want 1", opens)
 	}
 }

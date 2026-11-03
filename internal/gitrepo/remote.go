@@ -241,6 +241,7 @@ func CloneWith(url, dir string, c Conn) (*Repo, error) {
 		if err = afterClone(repo, url); err == nil {
 			return repo, nil
 		}
+		_ = repo.Close() // before its files go (Windows)
 	} else {
 		err = fmt.Errorf("clone %s: %w", url, err)
 	}

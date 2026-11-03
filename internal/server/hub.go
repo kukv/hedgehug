@@ -18,10 +18,10 @@ type Hub struct {
 
 func newHub() *Hub { return &Hub{subs: map[chan sseEvent]struct{}{}} }
 
-// Subscribe returns the events from now on, and the function that stops
+// subscribe returns the events from now on, and the function that stops
 // them. The channel is closed when the subscriber falls behind or the hub
 // closes.
-func (h *Hub) Subscribe() (<-chan sseEvent, func()) {
+func (h *Hub) subscribe() (<-chan sseEvent, func()) {
 	ch := make(chan sseEvent, hubBuffer)
 	h.mu.Lock()
 	defer h.mu.Unlock()

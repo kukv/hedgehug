@@ -221,6 +221,8 @@ func (ix *Index) save() {
 // A task whose file, comments or worklog entries changed has all its
 // comments and entries read again.
 func (ix *Index) update(from, to plumbing.Hash) error {
+	ix.lc = nil
+	defer func() { ix.lc = nil }()
 	sc, err := ix.readSchema(to)
 	if err != nil {
 		return err

@@ -51,7 +51,7 @@ func TestInitCreatesUsers(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: Open: %v", u, err)
 		}
-		log, err := s.Repo().Log(nil, 0)
+		log, err := logOf(s.Repo(), 0)
 		if err != nil || len(log) == 0 {
 			t.Fatalf("%s: log = %v, %v", u, log, err)
 		}
@@ -100,7 +100,7 @@ func TestInitMakesSharedStore(t *testing.T) {
 		if got := s.Repo().Remotes(); len(got) != 1 || got[0] != "origin" {
 			t.Errorf("%s: org-a remotes = %v, want [origin]", u, got)
 		}
-		log, err := s.Repo().Log(nil, 0)
+		log, err := logOf(s.Repo(), 0)
 		if err != nil || len(log) == 0 {
 			t.Fatalf("%s: log = %v, %v", u, log, err)
 		}
@@ -368,4 +368,14 @@ func TestInitMakesWebRepoAndProject(t *testing.T) {
 			t.Errorf("%s: org-a has %d Web release projects with repos, want 1", u, found)
 		}
 	}
+}
+
+// logOf is the first-parent log of HEAD of r, newest first, capped at limit
+// when it is above zero.
+func logOf(r *gitrepo.Repo, limit int) ([]gitrepo.LogEntry, error) {
+	head, err := r.Head()
+	if err != nil {
+		return nil, err
+	}
+	return r.LogFrom(head, limit)
 }

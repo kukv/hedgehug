@@ -95,7 +95,7 @@ func (f *moveFx) log(t *testing.T, name string) []gitrepo.LogEntry {
 	if err != nil {
 		t.Fatal(err)
 	}
-	l, err := s.Repo().Log(nil, 0)
+	l, err := logOf(s.Repo(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}

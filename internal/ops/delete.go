@@ -236,7 +236,8 @@ func ParseAtTime(at string, loc *time.Location) (time.Time, bool) {
 // newest commit on the first-parent line from HEAD made at or before it (the
 // zero hash when there is none); for anything else, the commit it names, an
 // abbreviated hash included.
-func commitAt(r *gitrepo.Repo, at string, loc *time.Location) (plumbing.Hash, error) {
+func (ss *Session) commitAt(s *store.Store, name, at string) (plumbing.Hash, error) {
+	r, loc := s.Repo(), ss.location()
 	t, ok := ParseAtTime(at, loc)
 	if !ok {
 		h, err := r.ResolveCommit(at)
@@ -249,16 +250,25 @@ func commitAt(r *gitrepo.Repo, at string, loc *time.Location) (plumbing.Hash, er
 	if err != nil {
 		return plumbing.ZeroHash, err
 	}
-	log, err := r.LogFrom(head, 0)
+	// The history index is a cache: when it cannot be had, walk.
+	if h, err := ss.openHistory(s, name); err == nil {
+		if found, _, err := h.AtOrBefore(head, t); err == nil {
+			return found, nil
+		}
+	}
+	// Stop at the first commit made at or before t.
+	found := plumbing.ZeroHash
+	err = r.WalkFirstParents(head, func(e gitrepo.LogEntry) bool {
+		if !e.When.After(t) {
+			found = e.Hash
+			return false
+		}
+		return true
+	})
 	if err != nil {
 		return plumbing.ZeroHash, err
 	}
-	for _, e := range log {
-		if !e.When.After(t) {
-			return e.Hash, nil
-		}
-	}
-	return plumbing.ZeroHash, nil
+	return found, nil
 }
 
 // workspaceName is the name of the workspace, or its ULID when the store has
@@ -297,7 +307,7 @@ func (ss *Session) RestoreAt(arg, at string) (RestoreAtResult, error) {
 	if err != nil {
 		return RestoreAtResult{}, err
 	}
-	commit, err := commitAt(s.Repo(), at, ss.location())
+	commit, err := ss.commitAt(s, ix.StoreName(), at)
 	if err != nil {
 		return RestoreAtResult{}, err
 	}

@@ -99,6 +99,7 @@ func Run(dir string) ([]Finding, error) {
 		Sort(out)
 		return out, nil
 	}
+	defer func() { _ = repo.Close() }()
 	st, err := repo.Status()
 	if err != nil {
 		out = append(out, Finding{Check: "git", Where: ".git", Msg: "cannot read the status: " + err.Error()})
@@ -262,6 +263,7 @@ func checkStore(dir string) []Finding {
 	if err != nil {
 		return []Finding{{Check: "git", Where: dir, Msg: "cannot open the store: " + err.Error()}}
 	}
+	defer func() { _ = s.Repo().Close() }()
 	ix, err := index.Open(s)
 	if err != nil {
 		return []Finding{{

@@ -103,7 +103,9 @@ func (ss *Session) StoreInit(in StoreInitInput) (StoreInitResult, error) {
 	if err != nil {
 		return StoreInitResult{}, made.note(errors.Join(err, made.undo()))
 	}
+	defer func() { _ = s.Repo().Close() }()
 	undo := func(err error) error {
+		_ = s.Repo().Close()                                               // before the files go (Windows)
 		return made.note(errors.Join(err, os.RemoveAll(dir), made.undo())) //nolint:gosec // G703: dir is the store this command just made
 	}
 	if err := s.Repo().RegisterMergeDriver(); err != nil {
@@ -401,10 +403,12 @@ func (ss *Session) StoreAdd(name string, remotes []string, path, account string)
 	_, statErr := os.Lstat(dir)
 	existed := statErr == nil
 	// A failed clone removes what it made itself.
-	if _, err := gitrepo.CloneWith(remotes[0], dir, ss.Conn(c, e)); err != nil {
+	cloned, err := gitrepo.CloneWith(remotes[0], dir, ss.Conn(c, e))
+	if err != nil {
 		// KindInvalid, not KindUsage: the CLI exits 1.
 		return StoreAddResult{}, newErr(KindInvalid, "store.clone_failed", err, "remote", remotes[0])
 	}
+	_ = cloned.Close() // the store is opened below
 	// The handle is closed before the directory goes: Windows cannot remove
 	// open pack files.
 	var s *store.Store
@@ -462,6 +466,11 @@ func (ss *Session) StoreAdd(name string, remotes []string, path, account string)
 		return nil
 	}); err != nil {
 		return StoreAddResult{}, undo(err)
+	}
+	// The index is a cache: a store it cannot be built for is added all the
+	// same, and the next command that needs it builds it again.
+	if _, err := ss.openHistory(s, name); err != nil {
+		ss.warn(fmt.Sprintf("%s: could not index its history: %v", name, err))
 	}
 	ss.warnPrefixDuplicates(c, name, s)
 	return StoreAddResult{Name: name, Path: dir, Remotes: remotes}, nil
@@ -610,13 +619,15 @@ func (ss *Session) StoreRemove(name string, keep bool) (StoreRemoveResult, error
 		return StoreRemoveResult{}, newErr(KindNotFound, "store.not_found", err, "name", name)
 	}
 	deleting := false
+	var closeRepo func()
 	if !keep {
 		if _, serr := os.Stat(e.Path); !errors.Is(serr, fs.ErrNotExist) {
-			release, err := ss.lockToDelete(e)
+			release, closer, err := ss.lockToDelete(e)
 			if err != nil {
 				return StoreRemoveResult{}, err
 			}
 			defer release()
+			closeRepo = closer
 			deleting = true
 		}
 	}
@@ -629,6 +640,9 @@ func (ss *Session) StoreRemove(name string, keep bool) (StoreRemoveResult, error
 		return StoreRemoveResult{}, err
 	}
 	if deleting {
+		// No git file of the directory may be open when it goes (Windows).
+		closeRepo()
+		ss.closeMounted(e.Path)
 		if err := os.RemoveAll(e.Path); err != nil {
 			return StoreRemoveResult{}, err
 		}
@@ -671,29 +685,30 @@ func (ss *Session) StoreDefault(name string) (string, error) {
 // lockToDelete checks that deleting the directory of e loses nothing, and
 // returns the function that lets go of the lock and the handle of the store,
 // which the caller calls once the directory is gone.
-func (ss *Session) lockToDelete(e config.StoreEntry) (func(), error) {
+func (ss *Session) lockToDelete(e config.StoreEntry) (release, closeRepo func(), err error) {
 	unpushed := func(err error) error { return newErr(KindConflict, "store.unpushed", err, "name", e.Name) }
 	if len(e.Remotes) == 0 {
-		return nil, unpushed(fmt.Errorf("store %s has no remote, so removing %s would lose its tasks for good; use --keep to take the store out of the config and leave the directory, or delete the directory yourself if you do not need it", e.Name, e.Path))
+		return nil, nil, unpushed(fmt.Errorf("store %s has no remote, so removing %s would lose its tasks for good; use --keep to take the store out of the config and leave the directory, or delete the directory yourself if you do not need it", e.Name, e.Path))
 	}
 	s, err := ss.openStoreAt(e.Path)
 	if err != nil {
-		return nil, unpushed(fmt.Errorf("store %s: %w; delete the directory by hand if you mean to, or use --keep to take the store out of the config and leave it", e.Name, err))
+		return nil, nil, unpushed(fmt.Errorf("store %s: %w; delete the directory by hand if you mean to, or use --keep to take the store out of the config and leave it", e.Name, err))
 	}
 	l, err := store.LockInOrder(s)
 	if err != nil {
 		_ = s.Repo().Close()
-		return nil, classify(err)
+		return nil, nil, classify(err)
 	}
-	release := func() {
+	release = func() {
 		l.Release()
 		_ = s.Repo().Close()
 	}
+	closeRepo = func() { _ = s.Repo().Close() }
 	if err := checkPushed(e, s); err != nil {
 		release()
-		return nil, err
+		return nil, nil, err
 	}
-	return release, nil
+	return release, closeRepo, nil
 }
 
 // checkPushed refuses a store whose commits are not all on its origin, or

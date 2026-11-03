@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/config"
+	"github.com/kukv/hedgehug/internal/history"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/mount"
@@ -568,15 +569,22 @@ func (j *moveJob) moveInRecorded(tasks []*model.Task) (bool, error) {
 		want[i] = t.ULID.String()
 	}
 	slices.Sort(want)
-	log, err := j.dst.Repo().Log(nil, 0)
+	h, err := j.to.openHistory(j.dst, j.toName)
+	if err != nil {
+		return false, err
+	}
+	var moveIns []history.Commit
+	for _, c := range h.All() {
+		if c.Op == "move-in" {
+			moveIns = append(moveIns, c)
+		}
+	}
+	log, err := h.Entries(moveIns, 0)
 	if err != nil {
 		return false, err
 	}
 	from := j.src.Meta().ULID.String()
 	for _, c := range log {
-		if op, _ := c.Trailer("Hedgehug-Op"); op != "move-in" {
-			continue
-		}
 		if f, _ := c.Trailer("Hedgehug-Moved-From"); f != from {
 			continue
 		}

@@ -237,7 +237,7 @@ func replay(r *gitrepo.Repo, ns *store.Store, nr *gitrepo.Repo, tracked, oldHead
 	// The merge is computed from the new head's side, so that its files are
 	// the changes to make to the clone; the rule is symmetric.
 	opt.origin, opt.skip = head, skip
-	m, err := mergeTrees(r, base, head, oldHead, opt)
+	m, err := mergeTrees(r, nil, base, head, oldHead, opt) // head is new on origin: no index has it
 	if err != nil {
 		return head, err
 	}
