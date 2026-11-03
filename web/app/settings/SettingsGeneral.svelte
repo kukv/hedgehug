@@ -6,6 +6,8 @@
   import { useSubscribe } from "../svelte-store";
   import CliLine from "../ui/CliLine.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
+  import DoctorSection from "./DoctorSection.svelte";
+  import PurgeSection from "./PurgeSection.svelte";
 
   // A window that is hidden fetches every max(sync.interval, 10 minutes) (internal/server/loop.go).
   const HIDDEN_FETCH = 10 * 60;
@@ -68,6 +70,18 @@
         </section>
       {/each}
     {/if}
+  </section>
+
+  <section class="sec" aria-labelledby="doctor-h">
+    <h2 id="doctor-h">診断と修復</h2>
+    {#each dir.current as name (name)}
+      <DoctorSection store={name} {many} />
+    {/each}
+  </section>
+
+  <section class="sec" aria-labelledby="purge-h">
+    <h2 id="purge-h">削除済みタスクの完全削除</h2>
+    <PurgeSection stores={dir.current} />
   </section>
 </div>
 

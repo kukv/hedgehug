@@ -303,6 +303,17 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
     },
   ];
 
+  // The page asks for the diagnosis when it is opened.
+  const doctorHref = env.hrefs.settingsGeneral();
+  commands.push({
+    type: "command",
+    key: "cmd:doctor",
+    label: "doctor を実行",
+    icon: "checklist",
+    href: doctorHref,
+    run: () => env.go(doctorHref),
+  });
+
   const myHref = env.hrefs.my();
   const my: CommandItem = {
     type: "command",

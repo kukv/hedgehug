@@ -240,6 +240,7 @@ describe("buildCommands", () => {
       "プロジェクトを作成",
       "ワークスペースを追加",
       "直前の操作を取り消す",
+      "doctor を実行",
       "release を開く",
       "ワークスペースの設定を開く",
       "リリース準備 v2.4 を開く",
@@ -337,6 +338,19 @@ describe("buildCommands", () => {
     expect(items[0]).toMatchObject({
       label: "設定の同期と保守を開く",
       icon: "settings",
+      href: "/settings/general",
+    });
+    if (items[0]?.type === "command") items[0].run();
+    expect(e.go).toHaveBeenCalledWith("/settings/general");
+  });
+
+  it("runs the diagnosis by opening the sync and maintenance settings, which asks for it", () => {
+    const e = env({ storeNames: ["shared", "ops"] });
+    const items = buildCommands(e, ">doctor").flatMap((g) => g.items);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      label: "doctor を実行",
+      icon: "checklist",
       href: "/settings/general",
     });
     if (items[0]?.type === "command") items[0].run();

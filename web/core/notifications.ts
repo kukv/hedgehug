@@ -82,7 +82,7 @@ export type NotificationText = { label: string; text: string; mine?: string };
 
 const MOVED_AWAY = "移った先のワークスペースにはありません";
 
-function repairedText(detail: Obj): string {
+export function repairedText(detail: Obj): string {
   const kind = str(detail.kind);
   const value = detail.value;
   switch (kind) {

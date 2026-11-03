@@ -263,6 +263,16 @@ describe("CommandPalette", () => {
     expect(palette.open).toBe(false);
   });
 
+  it("runs the diagnosis in the sync and maintenance settings", async () => {
+    setup();
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">doctor" } });
+    await fireEvent.click(await screen.findByRole("option", { name: /doctor を実行/ }));
+    expect(h.go).toHaveBeenCalledWith("/settings/general");
+    expect(palette.open).toBe(false);
+  });
+
   it("opens the settings of the workspace", async () => {
     setup();
     render(CommandPalette);

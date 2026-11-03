@@ -4,6 +4,22 @@ import type { SyncStatus } from "../../core/connection";
 import { renderWithCore } from "../test-utils";
 import SettingsGeneral from "./SettingsGeneral.svelte";
 
+// DoctorSection and PurgeSection have their own tests: here they only say they were drawn, and for what.
+vi.mock("./DoctorSection.svelte", () => ({
+  default: (anchor: Comment, props: { store: string; many: boolean }) => {
+    const p = document.createElement("p");
+    p.textContent = `doctor of ${props.store} many=${props.many}`;
+    anchor.before(p);
+  },
+}));
+vi.mock("./PurgeSection.svelte", () => ({
+  default: (anchor: Comment, props: { stores: string[] }) => {
+    const p = document.createElement("p");
+    p.textContent = `purge of ${props.stores.join(",")}`;
+    anchor.before(p);
+  },
+}));
+
 const status = (over: Partial<SyncStatus> & { store: string }): SyncStatus => ({
   remotes: ["origin"],
   interval: 120,
@@ -124,5 +140,34 @@ describe("SettingsGeneral", () => {
     const { getByText, queryByRole } = mount([], ["a"]);
     expect(getByText("同期の状態をまだ受け取っていません")).toBeTruthy();
     expect(queryByRole("region", { name: "Store: a" })).toBeNull();
+  });
+
+  it("診断と修復は Store ごとの段で、削除済みタスクの完全削除は Store の一覧を渡して1つ", () => {
+    const { getByRole, getByText, queryByText } = mount([status({ store: "a" })], ["a", "b"]);
+    const doctor = getByRole("region", { name: "診断と修復" });
+    expect(within(doctor).getByText("doctor of a many=true")).toBeTruthy();
+    expect(within(doctor).getByText("doctor of b many=true")).toBeTruthy();
+    const purge = getByRole("region", { name: "削除済みタスクの完全削除" });
+    expect(within(purge).getByText("purge of a,b")).toBeTruthy();
+    expect(getByText("purge of a,b")).toBeTruthy();
+    expect(queryByText("doctor of a many=false")).toBeNull();
+  });
+
+  it("Store が1つのときは many=false", () => {
+    const { getByText } = mount([status({ store: "a" })]);
+    expect(getByText("doctor of a many=false")).toBeTruthy();
+    expect(getByText("purge of a")).toBeTruthy();
+  });
+
+  it("診断の段の名前は同期の状態の段（Store: a）と重ならない", () => {
+    const { getAllByRole } = mount([status({ store: "a" })]);
+    expect(getAllByRole("region", { name: "Store: a" })).toHaveLength(1);
+  });
+
+  it("インデックスの作り直し・repack・merge driver の登録は出さない", () => {
+    const { container } = mount([status({ store: "a" })]);
+    for (const t of ["作り直", "repack", "登録する", "--moved"]) {
+      expect(container.textContent).not.toContain(t);
+    }
   });
 });

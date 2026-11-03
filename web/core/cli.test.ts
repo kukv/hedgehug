@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   cliAdd,
   cliComment,
+  cliDoctor,
   cliInbox,
   cliLog,
   cliLs,
   cliMv,
+  cliPurge,
   cliRestore,
   cliRestoreAt,
   cliRm,
@@ -98,6 +100,18 @@ describe("commands", () => {
     expect(cliLog([])).toBe("hh log");
     expect(cliLog(["release", "payments"])).toBe("hh log --workspace release,payments");
     expect(cliLog(["my work"])).toBe('hh log --workspace "my work"');
+  });
+
+  it("writes hh doctor, with --fix and --store", () => {
+    expect(cliDoctor({})).toBe("hh doctor");
+    expect(cliDoctor({ fix: true })).toBe("hh doctor --fix");
+    expect(cliDoctor({ fix: true, store: "shared" })).toBe("hh doctor --fix --store shared");
+    expect(cliDoctor({ store: "shared" })).toBe("hh doctor --store shared");
+  });
+
+  it("writes hh purge --older-than <N>d", () => {
+    expect(cliPurge(90)).toBe("hh purge --older-than 90d");
+    expect(cliPurge(0, "shared")).toBe("hh purge --older-than 0d --store shared");
   });
 
   it("puts -- before an argument that starts with -", () => {

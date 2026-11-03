@@ -125,6 +125,19 @@ export function cliLog(workspaces: string[]): string {
   return cliLine(workspaces.length > 0 ? ["log", "--workspace", workspaces.join(",")] : ["log"]);
 }
 
+// cliDoctor is hh doctor; fix repairs what a sync repairs.
+export function cliDoctor(i: { fix?: boolean; store?: string }): string {
+  const a: string[] = ["doctor"];
+  if (i.fix) a.push("--fix");
+  if (i.store) a.push("--store", i.store);
+  return cliLine(a);
+}
+
+// cliPurge is hh purge --older-than <days>d.
+export function cliPurge(days: number, store?: string): string {
+  return cliLine(["purge", "--older-than", `${days}d`, ...(store ? ["--store", store] : [])]);
+}
+
 export function cliSync(store?: string): string {
   return cliLine(store ? ["sync", "--store", store] : ["sync"]);
 }
