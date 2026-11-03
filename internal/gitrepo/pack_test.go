@@ -111,3 +111,55 @@ func TestOpenPackSkipsOtherVersions(t *testing.T) {
 		t.Errorf("openPack of a short index = %v, want errSkipPack", err)
 	}
 }
+
+// A fanout that decreases, or that exceeds the object count, is an error and
+// not a huge read.
+func TestPackFindBadFanout(t *testing.T) {
+	t.Parallel()
+	h := plumbing.NewHash("7f00000000000000000000000000000000000001")
+	for name, set := range map[string][2]uint32{
+		"decreasing": {0x7e, 5}, // fanout[0x7e] = 5 > fanout[0x7f] = 1
+		"too large":  {0x7f, 1000},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			base := filepath.Join(t.TempDir(), "pack-x")
+			writeIdx(t, base, map[plumbing.Hash]int64{h: 12})
+			b, err := os.ReadFile(base + ".idx")
+			if err != nil {
+				t.Fatal(err)
+			}
+			binary.BigEndian.PutUint32(b[idxFanout+4*int(set[0]):], set[1])
+			if err := os.WriteFile(base+".idx", b, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			p, err := openPack(base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = p.close() }()
+			if _, _, err := p.find(h); err == nil {
+				t.Error("find of a bad fanout succeeded")
+			}
+		})
+	}
+}
+
+// A size varint that overflows int64 is an error.
+func TestPackEntryAtBadSize(t *testing.T) {
+	t.Parallel()
+	base := filepath.Join(t.TempDir(), "pack-x")
+	writeIdx(t, base, map[plumbing.Hash]int64{plumbing.NewHash("0000000000000000000000000000000000000001"): 12})
+	head := []byte{0xbf, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f}
+	if err := os.WriteFile(base+".pack", head, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p, err := openPack(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = p.close() }()
+	if _, err := p.entryAt(0); err == nil {
+		t.Error("entryAt of an overflowing size succeeded")
+	}
+}

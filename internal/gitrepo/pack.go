@@ -80,7 +80,10 @@ func (p *pack) find(h plumbing.Hash) (int64, bool, error) {
 		lo = p.fanout[h[0]-1]
 	}
 	hi := p.fanout[h[0]]
-	if lo >= hi {
+	if hi < lo || hi > p.fanout[255] {
+		return 0, false, fmt.Errorf("%s.idx: bad fanout", p.base)
+	}
+	if lo == hi {
 		return 0, false, nil
 	}
 	n := int(hi - lo)
@@ -134,6 +137,9 @@ func (p *pack) entryAt(off int64) (packEntry, error) {
 	for shift := 4; c&0x80 != 0; shift += 7 {
 		c = r.next()
 		e.size |= int64(c&0x7f) << shift
+	}
+	if e.size < 0 { // a varint that overflowed
+		return packEntry{}, fmt.Errorf("%s.pack at %d: bad object size", p.base, off)
 	}
 	switch e.typ {
 	case plumbing.OFSDeltaObject:
