@@ -28,7 +28,7 @@ type undoWrite struct {
 type undoOutput struct{ Body undoWrite }
 
 type activityInput struct {
-	StoreParam
+	Store  string `query:"store" doc:"The store; without it, the commits of every store"`
 	Limit  int    `query:"limit" default:"100" minimum:"1" maximum:"1000"`
 	Author string `query:"author" doc:"Only the commits of this account (its ID)"`
 	Sync   string `query:"sync" enum:"only,exclude" doc:"only: the merges and repairs of syncs; exclude: all but them"`
@@ -61,6 +61,20 @@ type notificationPatchInput struct {
 	NotificationParam
 	Body struct {
 		Read bool `json:"read" doc:"true marks it read; items cannot be marked unread"`
+	}
+}
+
+type notificationReadInput struct {
+	StoreParam
+	Body struct {
+		All bool     `json:"all,omitempty" doc:"true marks every unread item read; not with ids"`
+		IDs []string `json:"ids,omitempty" nullable:"false" doc:"The ULIDs of the items to mark read; not with all"`
+	}
+}
+
+type notificationReadOutput struct {
+	Body struct {
+		Read []string `json:"read" nullable:"false" doc:"The ULIDs of the items marked read, as hh inbox read --json"`
 	}
 }
 
@@ -186,6 +200,32 @@ func (s *Server) registerActivity() {
 		}
 		s.poller.Kick()
 		return nil, nil
+	})
+
+	huma.Register(s.api, huma.Operation{
+		OperationID: "read-notifications", Method: http.MethodPost, Path: "/api/notifications/read",
+		Summary: "Mark items read, all of them or the ids given, as hh inbox read", Tags: []string{"notifications"},
+	}, func(_ context.Context, in *notificationReadInput) (*notificationReadOutput, error) {
+		if in.Body.All == (len(in.Body.IDs) > 0) {
+			return nil, newProblem(http.StatusBadRequest, "notification.read_args", "give either all: true or ids, not both and not neither")
+		}
+		ss := s.session(in.Store)
+		ulids, err := ops.ParseInboxItems(in.Body.IDs)
+		if err != nil {
+			return nil, problemOf(err)
+		}
+		stores, err := ss.InboxStores()
+		if err != nil {
+			return nil, problemOf(err)
+		}
+		read, err := ss.InboxReadOf(stores, ulids, in.Body.All)
+		if err != nil {
+			return nil, problemOf(err)
+		}
+		s.poller.Kick()
+		out := &notificationReadOutput{}
+		out.Body.Read = read
+		return out, nil
 	})
 
 	huma.Register(s.api, huma.Operation{

@@ -46,9 +46,36 @@ describe("errorMessage", () => {
     );
   });
 
+  it("words workspace.not_empty with the number of tasks, deleted ones included", () => {
+    expect(errorMessage(err("workspace.not_empty", { tasks: 3 }))).toBe(
+      "ワークスペースにタスクが 3 件（削除済みを含む）残っています。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください",
+    );
+    expect(errorMessage(err("workspace.not_empty", { tasks: 0 }))).toBe(
+      "ワークスペースにタスクが 0 件（削除済みを含む）残っています。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください",
+    );
+    expect(errorMessage(err("workspace.not_empty", { tasks: "x" }))).toBe(
+      "ワークスペースにまだタスクがあります（削除済みを含む）。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください",
+    );
+    expect(errorMessage(err("workspace.not_empty"))).toBe(
+      "ワークスペースにまだタスクがあります（削除済みを含む）。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください",
+    );
+  });
+
   it("words restore.forward with the point in time", () => {
     expect(errorMessage(err("restore.forward", { at: "abc123" }))).toBe(
       "abc123 の時点では、このタスクは別の Store へ移っていました",
+    );
+  });
+
+  it("words purge and the bulk read of notifications", () => {
+    expect(errorMessage(err("purge.changed"))).toBe(
+      "確認のあとにタスクが変わりました。もう一度確かめてください",
+    );
+    expect(errorMessage(err("purge.bad_period", { value: "abc" }))).toBe(
+      "「abc」は期間ではありません。90d のように日数で書いてください（0d はすべて）",
+    );
+    expect(errorMessage(err("notification.read_args"))).toBe(
+      "すべてを既読にするか、通知を指定してください（両方は指定できません）",
     );
   });
 
@@ -86,6 +113,24 @@ describe("errorMessage", () => {
       }),
     );
     expect(m).toContain("この親には置けません（parent）");
+  });
+
+  it("words the errors of an override of a project", () => {
+    expect(errorMessage(err("scoped.not_container", { id: "ME-2", kind: "task" }))).toBe(
+      "ME-2 は task で、プロジェクトやエピックのようなコンテナではないため、上書きを設定できません",
+    );
+    expect(
+      errorMessage(
+        err("scoped.invalid", {
+          problems: ['scoped[0].statuses: "done" is the default of done and cannot be hidden'],
+        }),
+      ),
+    ).toBe(
+      '上書きがスキーマに合いません: scoped[0].statuses: "done" is the default of done and cannot be hidden',
+    );
+    expect(errorMessage(err("scoped.invalid", {}, "boom"))).toBe(
+      "上書きがスキーマに合いません: boom",
+    );
   });
 
   it("joins the details of request.invalid", () => {

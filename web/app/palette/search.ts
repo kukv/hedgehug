@@ -37,7 +37,7 @@ export type CommandItem = {
   type: "command";
   key: string;
   label: string;
-  icon: "sync" | "plus" | "status" | "folder" | "workspace";
+  icon: "sync" | "plus" | "status" | "folder" | "workspace" | "settings" | "undo";
   kbd?: string;
   note?: string;
   store?: string;
@@ -139,21 +139,29 @@ export type CommandEnv = {
   syncNow: () => void;
   createTask: (parent?: string) => void;
   createProject: () => void;
+  addWorkspace: () => void;
+  undo: () => void;
   workspaces: WorkspaceEntry[];
+  storeNames: string[]; // every mounted store, also one with no workspace
   go: (path: string) => void;
   hrefs: {
     workspace: (store: string, ulid: string) => string;
+    workspaceSettings: (store: string, ulid: string) => string;
+    settingsWorkspaces: (store: string) => string;
     project: (ulid: string) => string;
     task: (ulid: string) => string;
   };
   selected: TaskView | null; // the task the commands for a task are about
   recent: TaskView[]; // the tasks opened last, the latest first
   pickStatus: (t: TaskView) => void;
+  moveTask: (t: TaskView) => void;
 };
 
 // taskCommands are the commands about one task.
 export function taskCommands(env: CommandEnv, t: TaskView): PaletteGroup {
   const href = env.hrefs.task(t.ulid);
+  // A task goes to another workspace of its own store: with none, there is nothing to offer.
+  const canMove = env.workspaces.some((w) => w.store === t.store && w.ulid !== t.workspace.ulid);
   return {
     name: `${t.id} に対して`,
     items: [
@@ -182,6 +190,17 @@ export function taskCommands(env: CommandEnv, t: TaskView): PaletteGroup {
         href,
         run: () => env.go(href),
       },
+      ...(canMove
+        ? [
+            {
+              type: "command" as const,
+              key: `task-move:${t.ulid}`,
+              label: "別のワークスペースへ移動…",
+              icon: "workspace" as const,
+              run: () => env.moveTask(t),
+            },
+          ]
+        : []),
     ],
   };
 }
@@ -218,6 +237,20 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
       icon: "plus",
       run: env.createProject,
     },
+    {
+      type: "command",
+      key: "cmd:workspace-add",
+      label: "ワークスペースを追加",
+      icon: "plus",
+      run: env.addWorkspace,
+    },
+    {
+      type: "command",
+      key: "cmd:undo",
+      label: "直前の操作を取り消す",
+      icon: "undo",
+      run: env.undo,
+    },
   ];
 
   const places: CommandItem[] = env.workspaces.flatMap((w) => {
@@ -230,6 +263,17 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
       store: w.store,
       href: wsHref,
       run: () => env.go(wsHref),
+    };
+    const settingsHref = env.hrefs.workspaceSettings(w.store, w.ulid);
+    const settings: CommandItem = {
+      type: "command",
+      key: `open:ws-settings:${w.store}:${w.ulid}`,
+      label: "ワークスペースの設定を開く",
+      icon: "settings",
+      note: w.name,
+      store: w.store,
+      href: settingsHref,
+      run: () => env.go(settingsHref),
     };
     const projects = w.projects.map((p): CommandItem => {
       const href = env.hrefs.project(p.ulid);
@@ -244,7 +288,21 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
         run: () => env.go(href),
       };
     });
-    return [ws, ...projects];
+    return [ws, settings, ...projects];
+  });
+
+  // The page that lists the workspaces of a store, in the settings.
+  const lists: CommandItem[] = env.storeNames.map((store) => {
+    const href = env.hrefs.settingsWorkspaces(store);
+    return {
+      type: "command",
+      key: `open:settings-workspaces:${store}`,
+      label: "設定のワークスペース一覧を開く",
+      icon: "settings",
+      store,
+      href,
+      run: () => env.go(href),
+    };
   });
 
   const recent = env.recent
@@ -254,7 +312,7 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
   const groups: PaletteGroup[] = [
     { name: "コマンド", items: commands.filter(keep) },
     { name: "最近開いたもの", items: recent },
-    { name: "開く", items: places.filter(keep) },
+    { name: "開く", items: [...places, ...lists].filter(keep) },
   ];
   if (env.selected) {
     const g = taskCommands(env, env.selected);

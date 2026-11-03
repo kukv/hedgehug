@@ -337,12 +337,12 @@ func (ts *testServer) notifyIn(storeName string, it inbox.Item) string {
 	return added[0].ULID.String()
 }
 
-// overwrittenItem is the item a sync makes when it overwrote field of the
+// overwrittenItem is the item a sync makes when it overwrote the title of the
 // task (ulid, id) of mine; value is the JSON of my value.
-func overwrittenItem(ulid model.ULID, id, field, value string) inbox.Item {
+func overwrittenItem(ulid model.ULID, id, value string) inbox.Item {
 	return inbox.Item{
 		Kind: inbox.Overwritten, Task: ulid, ID: id, Path: model.TaskPath(ulid), Commit: "c1",
 		Time:   time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC),
-		Detail: json.RawMessage(`{"field":"` + field + `","value":` + value + `}`),
+		Detail: json.RawMessage(`{"field":"title","value":` + value + `}`),
 	}
 }

@@ -204,6 +204,8 @@ components:
           type: string
         severity:
           type: string
+        task:
+          type: string
         where:
           type: string
       required:
@@ -405,6 +407,17 @@ components:
             $ref: "#/components/schemas/TaskView"
           type: array
       type: object
+    LogTrailer:
+      additionalProperties: false
+      properties:
+        key:
+          type: string
+        value:
+          type: string
+      required:
+        - key
+        - value
+      type: object
     LogView:
       additionalProperties: false
       properties:
@@ -431,6 +444,10 @@ components:
           type:
             - string
             - "null"
+        trailers:
+          items:
+            $ref: "#/components/schemas/LogTrailer"
+          type: array
         workspace:
           $ref: "#/components/schemas/WorkspaceRef"
       required:
@@ -442,6 +459,7 @@ components:
         - task
         - id
         - subject
+        - trailers
       type: object
     LogViewAuthorStruct:
       additionalProperties: false
@@ -567,6 +585,29 @@ components:
         read:
           description: true marks it read; items cannot be marked unread
           type: boolean
+      required:
+        - read
+      type: object
+    NotificationReadInputBody:
+      additionalProperties: false
+      properties:
+        all:
+          description: true marks every unread item read; not with ids
+          type: boolean
+        ids:
+          description: The ULIDs of the items to mark read; not with all
+          items:
+            type: string
+          type: array
+      type: object
+    NotificationReadOutputBody:
+      additionalProperties: false
+      properties:
+        read:
+          description: The ULIDs of the items marked read, as hh inbox read --json
+          items:
+            type: string
+          type: array
       required:
         - read
       type: object
@@ -698,6 +739,85 @@ components:
             - "null"
       required:
         - type
+      type: object
+    PurgeForward:
+      additionalProperties: false
+      properties:
+        moved_at:
+          format: date-time
+          type: string
+        moved_to:
+          type: string
+        ulid:
+          type: string
+      required:
+        - ulid
+        - moved_to
+        - moved_at
+      type: object
+    PurgeInputBody:
+      additionalProperties: false
+      properties:
+        confirmed:
+          $ref: "#/components/schemas/PurgePlan"
+          description: The plan GET /api/purge showed and the user agreed to; if what is to be purged is no longer that, the answer is 409 purge.changed
+        older_than:
+          description: As GET /api/purge; 90d without it
+          type: string
+      required:
+        - confirmed
+      type: object
+    PurgePlan:
+      additionalProperties: false
+      properties:
+        forwards:
+          items:
+            $ref: "#/components/schemas/PurgeForward"
+          type: array
+        store:
+          type: string
+        tasks:
+          items:
+            $ref: "#/components/schemas/PurgeTask"
+          type: array
+      required:
+        - store
+        - tasks
+        - forwards
+      type: object
+    PurgeResult:
+      additionalProperties: false
+      properties:
+        commit:
+          type: string
+        forwards:
+          items:
+            $ref: "#/components/schemas/PurgeForward"
+          type: array
+        store:
+          type: string
+        tasks:
+          items:
+            $ref: "#/components/schemas/PurgeTask"
+          type: array
+      required:
+        - store
+        - tasks
+        - forwards
+      type: object
+    PurgeTask:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        ulid:
+          type: string
+      required:
+        - ulid
+        - id
+        - title
       type: object
     Rebuilt:
       additionalProperties: false
@@ -854,6 +974,60 @@ components:
       required:
         - where
       type: object
+    ScopedProject:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        ulid:
+          type: string
+      required:
+        - ulid
+      type: object
+    ScopedPutInputBody:
+      additionalProperties: false
+      properties:
+        required:
+          additionalProperties:
+            items:
+              type: string
+            type:
+              - array
+              - "null"
+          description: Status to the fields needed to enter it, on top of the store's. Leave it out to keep what the override has; an empty object takes it off
+          type: object
+        statuses:
+          description: The statuses to show; the default of each category has to be in it. Leave it out to keep what the override has; an empty list takes it off, so the store's statuses show
+          items:
+            type: string
+          type: array
+        transitions:
+          additionalProperties:
+            items:
+              type: string
+            type:
+              - array
+              - "null"
+          description: Status to the statuses it may move to, on top of the store's. Leave it out to keep what the override has; an empty object takes it off
+          type: object
+      type: object
+    ScopedView:
+      additionalProperties: false
+      properties:
+        commit:
+          type:
+            - string
+            - "null"
+        project:
+          $ref: "#/components/schemas/ScopedProject"
+        scoped:
+          $ref: "#/components/schemas/ScopedDef"
+      required:
+        - project
+        - commit
+      type: object
     ShowView:
       additionalProperties: false
       properties:
@@ -933,6 +1107,8 @@ components:
             - "null"
         progress:
           $ref: "#/components/schemas/Count"
+        project:
+          $ref: "#/components/schemas/Ref"
         props:
           additionalProperties: {}
           type: object
@@ -1177,6 +1353,10 @@ components:
       properties:
         error:
           type: string
+        interval:
+          description: sync.interval of config.yaml, in seconds (fractions allowed)
+          format: double
+          type: number
         last_attempt:
           format: date-time
           type: string
@@ -1196,6 +1376,10 @@ components:
           description: "When the background sync pushes the writes not pushed yet: sync.push_interval after pending_since, but not before sync.push_interval after the last sync and not after next_fetch, which syncs too; absent when nothing waits, before the first sync and while a sync runs"
           format: date-time
           type: string
+        push_interval:
+          description: sync.push_interval of config.yaml, in seconds (fractions allowed)
+          format: double
+          type: number
         read_only:
           type: string
         remotes:
@@ -1210,6 +1394,8 @@ components:
           format: int64
           type: integer
       required:
+        - interval
+        - push_interval
         - store
         - remotes
       type: object
@@ -1278,6 +1464,8 @@ components:
             - "null"
         progress:
           $ref: "#/components/schemas/Count"
+        project:
+          $ref: "#/components/schemas/Ref"
         props:
           additionalProperties: {}
           type: object
@@ -1552,6 +1740,9 @@ components:
     WorkspaceView:
       additionalProperties: false
       properties:
+        deleted:
+          format: int64
+          type: integer
         id_prefix:
           type: string
         name:
@@ -1570,6 +1761,7 @@ components:
         - id_prefix
         - prefix_set
         - tasks
+        - deleted
       type: object
     WorkspaceWrite:
       additionalProperties: false
@@ -1604,12 +1796,12 @@ paths:
     get:
       operationId: list-activity
       parameters:
-        - description: The store; without it, the one hedgehug picks as the CLI does
+        - description: The store; without it, the commits of every store
           explode: false
           in: query
           name: store
           schema:
-            description: The store; without it, the one hedgehug picks as the CLI does
+            description: The store; without it, the commits of every store
             type: string
         - explode: false
           in: query
@@ -1926,6 +2118,39 @@ paths:
       summary: List the inbox of every store (of ?store= only), newest first, as hh inbox
       tags:
         - notifications
+  /api/notifications/read:
+    post:
+      operationId: read-notifications
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationReadInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationReadOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Mark items read, all of them or the ids given, as hh inbox read
+      tags:
+        - notifications
   /api/notifications/{id}:
     patch:
       operationId: update-notification
@@ -2048,6 +2273,73 @@ paths:
       summary: Tell whether a tab shows the GUI
       tags:
         - sync
+  /api/purge:
+    get:
+      operationId: list-purge
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: Only what is older than this many days, such as 90d (0d for everything), as hh purge --older-than
+          explode: false
+          in: query
+          name: older_than
+          schema:
+            default: 90d
+            description: Only what is older than this many days, such as 90d (0d for everything), as hh purge --older-than
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurgePlan"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: List the deleted tasks and the forward files hh purge would remove
+      tags:
+        - maintenance
+    post:
+      operationId: purge
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PurgeInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurgeResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Remove, for good, what the confirmed plan lists, as hh purge after its question
+      tags:
+        - maintenance
   /api/schema:
     get:
       operationId: get-schema
@@ -2133,6 +2425,79 @@ paths:
                 $ref: "#/components/schemas/Problem"
           description: Error
       summary: Rename or merge a status, kind, property or value, as hh migrate
+      tags:
+        - schema
+  /api/schema/scoped/{project}:
+    delete:
+      operationId: delete-scoped
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: "The project: its ID or ULID"
+          in: path
+          name: project
+          required: true
+          schema:
+            description: "The project: its ID or ULID"
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScopedView"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Remove the override of a project, as hh schema scope rm
+      tags:
+        - schema
+    put:
+      operationId: put-scoped
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: "The project: its ID or ULID"
+          in: path
+          name: project
+          required: true
+          schema:
+            description: "The project: its ID or ULID"
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScopedPutInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScopedView"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Change the override of a project, as hh schema scope set
       tags:
         - schema
   /api/stores:

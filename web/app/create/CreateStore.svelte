@@ -71,7 +71,8 @@
       toast({ message: `Store「${r.name}」を作りました` });
       reset();
       onclose();
-      router.go(hrefOf({ name: "workspace", store: r.name, ulid: r.workspace.ulid }));
+      // The tree, where the first task is added.
+      router.go(hrefOf({ name: "workspace", store: r.name, ulid: r.workspace.ulid, tab: "tree" }));
     } catch (e) {
       failure = errorMessage(e);
     } finally {

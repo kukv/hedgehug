@@ -24,6 +24,9 @@ func TestWorkspaces(t *testing.T) {
 	if len(list) != 1 || list[0].IDPrefix != "ME" || list[0].Tasks != 1 {
 		t.Fatalf("workspaces = %+v", list)
 	}
+	if list[0].Deleted != 0 {
+		t.Errorf("deleted = %d; want 0", list[0].Deleted)
+	}
 	var out workspaceBody
 	ts.call("POST", "/api/workspaces", map[string]any{"name": "web", "prefix": "WEB"}, 201, &out)
 	if out.Workspace.Name != "web" || out.Commit == nil {

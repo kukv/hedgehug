@@ -85,10 +85,11 @@ export function cliSet(id: string, assigns: Record<string, string>): string {
 
 export function cliMv(
   id: string,
-  to: { parent?: string; root?: boolean; before?: string; after?: string },
+  to: { parent?: string; root?: boolean; before?: string; after?: string; workspace?: Arg },
 ): string {
-  const a = ["mv", id];
+  const a: Arg[] = ["mv", id];
   if (to.parent) a.push("--parent", to.parent);
+  if (to.workspace) a.push("--workspace", to.workspace);
   if (to.root) a.push("--root");
   if (to.before) a.push("--before", to.before);
   if (to.after) a.push("--after", to.after);
@@ -123,6 +124,33 @@ export function cliWorkspaceAdd(i: { name: Arg; prefix: Arg; store: string }): s
     true,
   );
 }
+
+// cliWorkspaceRename is hh workspace rename <workspace> <name>.
+export function cliWorkspaceRename(i: { workspace: string; name: Arg; store: string }): string {
+  return withPositionals(
+    ["workspace", "rename"],
+    [i.workspace, i.name],
+    ["--store", i.store],
+    true,
+  );
+}
+
+// cliWorkspaceSetPrefix is hh workspace set-prefix <workspace> <P>.
+export function cliWorkspaceSetPrefix(i: {
+  workspace: string;
+  prefix: Arg;
+  store: string;
+}): string {
+  return withPositionals(
+    ["workspace", "set-prefix"],
+    [i.workspace, i.prefix],
+    ["--store", i.store],
+    true,
+  );
+}
+
+export const cliWorkspaceRm = (i: { workspace: string; store: string }): string =>
+  cliLine(["workspace", "rm", i.workspace, "--store", i.store]);
 
 export function cliStoreInit(i: {
   name: Arg;

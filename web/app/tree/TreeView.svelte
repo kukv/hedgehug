@@ -17,6 +17,9 @@
   import { toast } from "../toast.svelte";
   import Menu from "../ui/Menu.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
+  import Tabs from "../ui/Tabs.svelte";
+  import { openWorkspaceMove } from "../workspace/dialogs-state.svelte";
+  import { MOVE_VALUE, moveWorkspaceItem } from "../workspace/move-menu";
   import AddRow from "./AddRow.svelte";
   import { createBelow, moveTask, patchTask } from "./actions";
   import {
@@ -352,7 +355,8 @@
   });
 
   // --- keys ------------------------------------------------------------------------
-  let menu = $state<{ which: "status" | "kind"; ulid: string } | null>(null);
+  // "row" is the "…" button of a row; S and K open the other two.
+  let menu = $state<{ which: "status" | "kind" | "row"; ulid: string } | null>(null);
 
   function actionOf(k: KeyInput): KeyAction {
     return keyAction(k, { rows, selected: selection.ulid, schema, viewRoot, taskOf });
@@ -478,6 +482,10 @@
   const menuTask = $derived(menu ? taskOf(menu.ulid) : undefined);
   const menuItems = $derived.by(() => {
     if (!menu || !menuTask || !schema) return [];
+    if (menu.which === "row") {
+      storesRev.current;
+      return [moveWorkspaceItem(menuTask, c.stores.workspaces())];
+    }
     if (menu.which === "status") {
       return (schema.statuses ?? []).map((s) => ({ value: s.name, label: s.label || s.name }));
     }
@@ -492,6 +500,10 @@
     const which = menu?.which;
     menu = null;
     if (!t || !which) return;
+    if (which === "row") {
+      if (value === MOVE_VALUE) openWorkspaceMove(t);
+      return;
+    }
     try {
       await patchTask(c, t, which === "status" ? { status: value } : { kind: value });
     } catch (err) {
@@ -645,17 +657,19 @@
 </script>
 
 <section class="tree" aria-label="ツリー">
-  <header class="head">
-    <nav class="crumb" aria-label="パンくず">
-      {#if store}
-        <StoreBadge {store} tone={c.stores.tone(store)} />
-      {/if}
-      {#if scope.kind === "project"}
+  <!-- The workspace has its own heading and tabs (WorkspaceHeader), which sit above this view. -->
+  {#if scope.kind === "project"}
+    <header class="head">
+      <nav class="crumb" aria-label="パンくず">
+        {#if store}
+          <StoreBadge {store} tone={c.stores.tone(store)} />
+        {/if}
         {#if workspace}
           {@const wsHref = router.href({
             name: "workspace",
             store: workspace.store,
             ulid: workspace.ulid,
+            tab: "overview",
           })}
           <a class="ws" href={wsHref} onclick={(e) => onLinkClick(e, wsHref)}>
             <Icon name="workspace" size={16} />{workspace.name}
@@ -667,19 +681,18 @@
         {#if project}
           <span class="id">{project.id}</span>
         {/if}
-      {:else}
-        <Icon name="workspace" size={16} />
-        <h1>{crumbTitle}</h1>
-        {#if workspace}
-          <span class="id">{workspace.prefix}</span>
-        {/if}
-      {/if}
-    </nav>
-  </header>
-
-  <nav class="tabs" aria-label="ビューの切り替え">
-    <span class="tab" aria-current="page">ツリー</span>
-  </nav>
+      </nav>
+    </header>
+    <Tabs
+      items={[
+        {
+          label: "ツリー",
+          href: router.href({ name: "project", ulid: scope.ulid, tab: "tree" }),
+          current: true,
+        },
+      ]}
+    />
+  {/if}
 
   <FilterBar
     base={cliBase}
@@ -725,6 +738,7 @@
             }}
             ontoggle={() => toggle(item.row.ulid, !item.row.expanded)}
             onopen={() => open(item.row.ulid)}
+            onmore={schema ? () => (menu = { which: "row", ulid: item.row.ulid }) : undefined}
             dragging={dragging === item.row.ulid}
             dropMark={dropMarkOf(item.row.ulid)}
             dnd={rowDnd(() => ({
@@ -890,22 +904,6 @@
     font-family: var(--font-mono);
     font-size: 0.75rem;
     color: var(--muted);
-  }
-  .tabs {
-    display: flex;
-    gap: 0.25rem;
-    padding: 0.625rem 1.75rem 0;
-    border-bottom: var(--hairline) solid var(--line);
-  }
-  .tab {
-    display: inline-flex;
-    align-items: center;
-    min-height: 2.25rem;
-    padding: 0 0.75rem;
-    margin-bottom: calc(var(--hairline) * -1);
-    border-bottom: 2px solid var(--ink);
-    color: var(--ink);
-    font-weight: 600;
   }
   .body {
     position: relative;

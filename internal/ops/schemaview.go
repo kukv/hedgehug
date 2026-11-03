@@ -80,17 +80,22 @@ func SchemaViewOf(sc *schema.Schema) SchemaView {
 		v.Props[p.Name] = PropDef{string(p.Type), p.Values, p.Multi, p.Label, p.Inverse, p.Symmetric}
 	}
 	for _, s := range sc.Scoped {
-		d := ScopedDef{Where: s.Where, Statuses: s.Statuses}
-		if s.Workflow != nil {
-			w := workflowDefOf(*s.Workflow)
-			d.Workflow = &w
-		}
-		if s.Templates != nil {
-			d.Templates = &TemplatesDef{Only: s.Templates.Only, Default: s.Templates.Default}
-		}
-		v.Scoped = append(v.Scoped, d)
+		v.Scoped = append(v.Scoped, ScopedDefOf(s))
 	}
 	return v
+}
+
+// ScopedDefOf is s as ScopedDef.
+func ScopedDefOf(s schema.Scoped) ScopedDef {
+	d := ScopedDef{Where: s.Where, Statuses: s.Statuses}
+	if s.Workflow != nil {
+		w := workflowDefOf(*s.Workflow)
+		d.Workflow = &w
+	}
+	if s.Templates != nil {
+		d.Templates = &TemplatesDef{Only: s.Templates.Only, Default: s.Templates.Default}
+	}
+	return d
 }
 
 func workflowDefOf(w schema.Workflow) WorkflowDef {

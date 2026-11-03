@@ -285,7 +285,7 @@ func checkStore(dir string) []Finding {
 			if p.Field != "" {
 				msg = p.Field + ": " + msg
 			}
-			fs = append(fs, Finding{Check: "task", Where: taskWhere(e), Msg: msg, Hint: fixHint(p)})
+			fs = append(fs, Finding{Check: "task", Where: taskWhere(e), Task: e.ULID.String(), Msg: msg, Hint: fixHint(p)})
 		}
 	}
 	return fs

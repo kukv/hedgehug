@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
   import Icon from "../icons/Icon.svelte";
@@ -8,12 +9,16 @@
   import { openPalette } from "../palette-state.svelte";
   import { hrefOf, onLinkClick, router } from "../router";
   import { useSubscribe } from "../svelte-store";
+  import Menu from "../ui/Menu.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
+  import { openWorkspaceDelete } from "../workspace/dialogs-state.svelte";
   import SyncCard from "./SyncCard.svelte";
 
   const { stores } = core();
   const workspaces = useSubscribe(stores, () => stores.workspaces());
   const route = $derived(router.route);
+  // /settings names no Store: the settings go to the first one.
+  const settingsHref = hrefOf({ name: "settings", page: "workspaces", store: "" });
 
   onMount(() =>
     registerShortcut("mod+k", () => {
@@ -22,6 +27,26 @@
       openPalette();
     }),
   );
+
+  // The menu of the "…" of a workspace row: the workspace, and the button it opens from.
+  let menu = $state<{ entry: WorkspaceEntry; anchor: HTMLElement } | null>(null);
+  const menuItems = [
+    { value: "settings", label: "設定を開く" },
+    { value: "delete", label: "削除…" },
+  ];
+
+  function pickMenu(value: string) {
+    const m = menu;
+    menu = null;
+    if (!m) return;
+    if (value === "settings") {
+      router.go(
+        hrefOf({ name: "workspace", store: m.entry.store, ulid: m.entry.ulid, tab: "settings" }),
+      );
+    } else {
+      openWorkspaceDelete(m.entry);
+    }
+  }
 
   function workspaceActive(store: string, ulid: string, index: number): boolean {
     const r = route;
@@ -34,6 +59,15 @@
   <div class="top">
     <span class="logo" aria-hidden="true">hh</span>
     <span class="host">{location.host}</span>
+    <a
+      class="gear"
+      href={settingsHref}
+      aria-label="設定"
+      aria-current={route.name === "settings" ? "page" : undefined}
+      onclick={(e) => onLinkClick(e, settingsHref)}
+    >
+      <Icon name="settings" size={16} />
+    </a>
   </div>
 
   <button type="button" class="search" onclick={openPalette}>
@@ -56,28 +90,42 @@
     </div>
 
     {#each workspaces.current as w, i (`${w.store}/${w.ulid}`)}
-      {@const href = hrefOf({ name: "workspace", store: w.store, ulid: w.ulid })}
+      {@const href = hrefOf({ name: "workspace", store: w.store, ulid: w.ulid, tab: "overview" })}
       {@const wsHere = workspaceActive(w.store, w.ulid, i)}
       <div class="ws">
-        <a
-          {href}
-          class="ws-link"
-          class:active={wsHere}
-          aria-current={wsHere ? "page" : undefined}
-          onclick={(e) => onLinkClick(e, href)}
+        <div
+          class="ws-row"
+          class:open={menu?.entry.store === w.store && menu?.entry.ulid === w.ulid}
         >
-          <Icon name="workspace" size={13} />
-          <span class="ws-text">
-            <span class="ws-name">{w.name}</span>
-            <span class="ws-meta">
-              <StoreBadge store={w.store} tone={w.tone} compact />
-              <span class="prefix" title="ID の接頭辞">{w.prefix}</span>
+          <a
+            {href}
+            class="ws-link"
+            class:active={wsHere}
+            aria-current={wsHere ? "page" : undefined}
+            onclick={(e) => onLinkClick(e, href)}
+          >
+            <Icon name="workspace" size={13} />
+            <span class="ws-text">
+              <span class="ws-name">{w.name}</span>
+              <span class="ws-meta">
+                <StoreBadge store={w.store} tone={w.tone} compact />
+                <span class="prefix" title="ID の接頭辞">{w.prefix}</span>
+              </span>
             </span>
-          </span>
-        </a>
+          </a>
+          <button
+            type="button"
+            class="more"
+            aria-label="{w.name} の操作（設定を開く・削除）"
+            aria-haspopup="menu"
+            onclick={(e) => (menu = { entry: w, anchor: e.currentTarget })}
+          >
+            <Icon name="more" size={14} />
+          </button>
+        </div>
         <div class="projects">
           {#each w.projects as p (p.ulid)}
-            {@const phref = hrefOf({ name: "project", ulid: p.ulid })}
+            {@const phref = hrefOf({ name: "project", ulid: p.ulid, tab: "tree" })}
             {@const here = route.name === "project" && route.ulid === p.ulid}
             <a
               href={phref}
@@ -103,6 +151,16 @@
 
   <div class="sync"><SyncCard /></div>
 </nav>
+
+{#if menu}
+  <Menu
+    anchor={menu.anchor}
+    label="ワークスペースの操作"
+    items={menuItems}
+    onselect={pickMenu}
+    onclose={() => (menu = null)}
+  />
+{/if}
 
 <style>
   .side {
@@ -135,6 +193,19 @@
     color: var(--label);
     font-family: var(--font-mono);
     font-size: var(--fs-11);
+  }
+  .gear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--control-h-sm);
+    height: var(--control-h-sm);
+    margin-left: auto;
+    border-radius: var(--radius-6);
+    color: var(--label);
+  }
+  .gear:hover {
+    background: var(--hover);
   }
   .search {
     display: flex;
@@ -193,6 +264,34 @@
     flex-direction: column;
     gap: 1px;
   }
+  .ws-row {
+    display: flex;
+    align-items: center;
+  }
+  /* The "…" shows when the row is pointed at or has the focus, or while its menu is open. */
+  .more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: var(--control-h-sm);
+    height: var(--control-h-sm);
+    margin-left: calc(var(--control-h-sm) * -1);
+    border: 0;
+    border-radius: var(--radius-6);
+    background: transparent;
+    color: var(--label);
+    opacity: 0;
+    cursor: pointer;
+  }
+  .ws-row:hover .more,
+  .ws-row:focus-within .more,
+  .ws-row.open .more {
+    opacity: 1;
+  }
+  .more:hover {
+    background: var(--hover);
+  }
   .ws-link,
   .project {
     display: flex;
@@ -204,7 +303,10 @@
     text-decoration: none;
   }
   .ws-link {
+    flex: 1;
+    min-width: 0;
     min-height: var(--row-h);
+    padding-right: var(--control-h-sm);
   }
   .project {
     min-height: 30px;

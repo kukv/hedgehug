@@ -102,3 +102,55 @@ func TestSyncAPIPushAtBeforeTheFirstSync(t *testing.T) {
 		t.Errorf("status = %+v; want pending_since and no push_at", st)
 	}
 }
+
+func TestSyncAPIIntervals(t *testing.T) {
+	t.Parallel()
+	ts, _, _ := loopServer(t)
+	waitFirstSync(t, ts)
+
+	c, _, err := ts.session().Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var st []struct {
+		Store        string `json:"store"`
+		Interval     int    `json:"interval"`
+		PushInterval int    `json:"push_interval"`
+	}
+	ts.call("GET", "/api/sync", nil, 200, &st)
+	if len(st) != 1 {
+		t.Fatalf("status = %+v", st)
+	}
+	if want := int(c.Sync.Interval / time.Second); st[0].Interval != want || want <= 0 {
+		t.Errorf("interval = %d; want sync.interval in seconds, %d", st[0].Interval, want)
+	}
+	if want := int(c.Sync.PushInterval / time.Second); st[0].PushInterval != want || want <= 0 {
+		t.Errorf("push_interval = %d; want sync.push_interval in seconds, %d", st[0].PushInterval, want)
+	}
+}
+
+// interval and push_interval are seconds as a number, so 500ms is 0.5.
+func TestSyncAPIIntervalsAreSecondsWithFractions(t *testing.T) {
+	t.Parallel()
+	ts, _, _ := loopServer(t)
+	waitFirstSync(t, ts)
+	eventually(t, "the loop to end the sync", ts.srv.loop.parked)
+	f, err := os.OpenFile(filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml"), os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("sync:\n  interval: 90s\n  push_interval: 500ms\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var st []struct {
+		Interval     float64 `json:"interval"`
+		PushInterval float64 `json:"push_interval"`
+	}
+	ts.call("GET", "/api/sync", nil, 200, &st)
+	if len(st) != 1 || st[0].Interval != 90 || st[0].PushInterval != 0.5 {
+		t.Errorf("status = %+v; want interval 90 and push_interval 0.5", st)
+	}
+}

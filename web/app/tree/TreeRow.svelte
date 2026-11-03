@@ -21,6 +21,7 @@
     onselect: () => void;
     ontoggle: () => void;
     onopen: () => void;
+    onmore?: () => void; // the "…" button: the menu of the row
     dnd?: Attachment<HTMLElement>; // makes the row draggable and a drop target
     dragging?: boolean; // this row is being dragged
     dropMark?: "before" | "after" | "child" | "reject" | null; // what a drop on this row would do
@@ -35,6 +36,7 @@
     onselect,
     ontoggle,
     onopen,
+    onmore,
     dnd,
     dragging = false,
     dropMark = null,
@@ -145,6 +147,26 @@
         <Avatar name={assignee} />
       {/if}
     </span>
+    {#if onmore}
+      <button
+        type="button"
+        class="more"
+        tabindex="-1"
+        aria-label="メニュー: {task.title}"
+        aria-haspopup="menu"
+        onclick={(e) => {
+          e.stopPropagation();
+          onmore();
+        }}
+        ondblclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => e.stopPropagation()}
+      >
+        <Icon name="more" size={14} />
+      </button>
+    {:else}
+      <!-- The button comes with the schema: its place is kept so the columns do not move. -->
+      <span class="more-slot" aria-hidden="true"></span>
+    {/if}
   </span>
 </div>
 
@@ -342,5 +364,30 @@
     width: 1.5rem;
     display: flex;
     justify-content: center;
+  }
+  .more,
+  .more-slot {
+    flex: 0 0 auto;
+    width: 1.75rem;
+  }
+  .more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 1.75rem;
+    border: 0;
+    border-radius: var(--radius-4);
+    background: transparent;
+    color: var(--muted);
+    opacity: 0;
+    cursor: pointer;
+  }
+  .row:hover .more,
+  .row.selected .more,
+  .more:focus-visible {
+    opacity: 1;
+  }
+  .more:hover {
+    background: var(--hover);
   }
 </style>

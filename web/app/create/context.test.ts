@@ -28,14 +28,17 @@ describe("resolveCreateContext", () => {
     const c = resolveCreateContext({
       ...base,
       selection: "UE",
-      route: { name: "project", ulid: "UP" },
+      route: { name: "project", ulid: "UP", tab: "tree" },
     });
     expect(c.parent?.id).toBe("REL-8");
     expect(c.workspace?.name).toBe("release");
   });
 
   it("uses the project when nothing is selected", () => {
-    const c = resolveCreateContext({ ...base, route: { name: "project", ulid: "UP" } });
+    const c = resolveCreateContext({
+      ...base,
+      route: { name: "project", ulid: "UP", tab: "tree" },
+    });
     expect(c.parent?.id).toBe("REL-1");
   });
 
@@ -60,7 +63,7 @@ describe("resolveCreateContext", () => {
       ...base,
       requestParent: "US",
       selection: "UE",
-      route: { name: "project", ulid: "UP" },
+      route: { name: "project", ulid: "UP", tab: "tree" },
     });
     expect(c.parent?.id).toBe("SH-3");
     expect(c.workspace?.name).toBe("shared");
@@ -70,7 +73,7 @@ describe("resolveCreateContext", () => {
     const c = resolveCreateContext({
       ...base,
       selection: "UD",
-      route: { name: "workspace", store: "shared", ulid: "W2" },
+      route: { name: "workspace", store: "shared", ulid: "W2", tab: "tree" },
     });
     expect(c.parent).toBeNull();
     expect(c.workspace?.name).toBe("shared");
@@ -78,8 +81,10 @@ describe("resolveCreateContext", () => {
 
   it("is the root of the workspace on a workspace screen, and of the first workspace elsewhere", () => {
     expect(
-      resolveCreateContext({ ...base, route: { name: "workspace", store: "shared", ulid: "W2" } })
-        .workspace?.ulid,
+      resolveCreateContext({
+        ...base,
+        route: { name: "workspace", store: "shared", ulid: "W2", tab: "tree" },
+      }).workspace?.ulid,
     ).toBe("W2");
     expect(resolveCreateContext(base)).toEqual({ parent: null, workspace: workspaces[0] });
     expect(resolveCreateContext({ ...base, workspaces: [] })).toEqual({

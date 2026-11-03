@@ -15,6 +15,7 @@ const ws = (ulid: string, name: string, prefix: string) => ({
   id_prefix: prefix,
   prefix_set: "2026-11-01T00:00:00Z",
   tasks: 0,
+  deleted: 0,
 });
 const project = (ulid: string, storeName: string, wsUlid: string, rank: string, title = ulid) =>
   tv(ulid, title, {
@@ -97,7 +98,13 @@ describe("StoreDirectory", () => {
     await vi.waitFor(() => expect(dir.workspace("s1", "W1")?.tone).toBe("orange"));
     const fn = vi.fn();
     dir.subscribe(fn);
-    conn.changeSync({ store: "s1", remotes: [], read_only: "no write access" });
+    conn.changeSync({
+      store: "s1",
+      remotes: [],
+      interval: 120,
+      push_interval: 30,
+      read_only: "no write access",
+    });
     expect(dir.tone("s1")).toBe("readonly");
     expect(fn).toHaveBeenCalled();
     expect(dir.workspace("s1", "W1")?.tone).toBe("readonly");
@@ -121,6 +128,26 @@ describe("StoreDirectory", () => {
     conn.emit("resync");
     await vi.waitFor(() => expect(dir.workspaces().length).toBe(5));
     expect(dir.stores().map((s) => s.name)).toEqual(["shared", "personal", "third"]);
+  });
+
+  it("carries the counts of the tasks and of the deleted ones and the day of the prefix, and tells when they change", async () => {
+    const first = baseWorld();
+    first.spaces.shared = [{ ...ws("W1", "api", "API"), tasks: 5, deleted: 2 }];
+    const { dir, conn, world } = setup(first);
+    await vi.waitFor(() => expect(dir.workspace("shared", "W1")?.tasks).toBe(5));
+    expect(dir.workspace("shared", "W1")?.deleted).toBe(2);
+    expect(dir.workspace("shared", "W1")?.prefixSet).toBe("2026-11-01T00:00:00Z");
+
+    const fn = vi.fn();
+    dir.subscribe(fn);
+    world.spaces.shared = [
+      { ...ws("W1", "api", "API"), tasks: 6, deleted: 3, prefix_set: "2026-11-02T00:00:00Z" },
+    ];
+    conn.emit("tasks.changed", changed("shared", [], "c1"));
+    await vi.waitFor(() => expect(dir.workspace("shared", "W1")?.tasks).toBe(6));
+    expect(dir.workspace("shared", "W1")?.deleted).toBe(3);
+    expect(dir.workspace("shared", "W1")?.prefixSet).toBe("2026-11-02T00:00:00Z");
+    expect(fn).toHaveBeenCalled();
   });
 
   it("follows the projects through the task cache", async () => {

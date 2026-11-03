@@ -18,12 +18,23 @@ type WorkspaceView struct {
 	Name      string    `json:"name"`
 	IDPrefix  string    `json:"id_prefix"`
 	PrefixSet time.Time `json:"prefix_set"`
-	Tasks     int       `json:"tasks"` // not deleted
+	Tasks     int       `json:"tasks"`   // not deleted
+	Deleted   int       `json:"deleted"` // deleted and not purged yet
 }
 
 // WorkspaceViewOf is w as ix counts its tasks.
 func WorkspaceViewOf(ix *index.Index, w *model.Workspace) WorkspaceView {
-	return WorkspaceView{ULID: w.ULID.String(), Name: w.Name, IDPrefix: w.IDPrefix, PrefixSet: w.PrefixSet, Tasks: CountTasks(ix, w.ULID, false)}
+	var live, deleted int
+	for _, e := range ix.Tasks() {
+		switch {
+		case e.Workspace != w.ULID:
+		case e.DeletedAt == nil:
+			live++
+		default:
+			deleted++
+		}
+	}
+	return WorkspaceView{ULID: w.ULID.String(), Name: w.Name, IDPrefix: w.IDPrefix, PrefixSet: w.PrefixSet, Tasks: live, Deleted: deleted}
 }
 
 // IDChange is a task id that a change of the id prefix replaced.
@@ -253,7 +264,7 @@ func (ss *Session) WorkspaceRemove(arg string) (WorkspaceResult, error) {
 	}
 	if n := CountTasks(ix, ws.ULID, true); n > 0 {
 		return WorkspaceResult{}, newErr(KindConflict, "workspace.not_empty",
-			fmt.Errorf("workspace %[1]s still has %[2]s; move %[3]s with hedgehug mv --workspace, or delete %[3]s with hedgehug rm and remove %[3]s with hedgehug purge --older-than 0d --store <store>", ws.Name, plural.Count(n, "task"), plural.Pick(n, "it", "them")))
+			fmt.Errorf("workspace %[1]s still has %[2]s; move %[3]s with hedgehug mv --workspace, or delete %[3]s with hedgehug rm and remove %[3]s with hedgehug purge --older-than 0d --store <store>", ws.Name, plural.Count(n, "task"), plural.Pick(n, "it", "them")), "tasks", n)
 	}
 	w := ws
 	hash, err := ss.UpdateCommit(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {

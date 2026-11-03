@@ -72,7 +72,7 @@ describe("CreateStore", () => {
     });
     expect(reload).toHaveBeenCalledTimes(1);
     expect(toasts.list.map((t) => t.message)).toEqual(["Store「me」を作りました"]);
-    expect(location.pathname).toBe("/workspaces/me/01HWSME");
+    expect(location.pathname).toBe("/workspaces/me/01HWSME/tree");
   });
 
   it("最初のワークスペースと remote を渡す", async () => {
@@ -161,7 +161,7 @@ describe("CreateStore", () => {
     expect(reload).toHaveBeenCalledTimes(1);
     expect(queryByRole("alert")).toBeNull();
     expect(toasts.list.map((t) => t.message)).toEqual(["Store「me」を作りました"]);
-    expect(location.pathname).toBe("/workspaces/me/01HWSME");
+    expect(location.pathname).toBe("/workspaces/me/01HWSME/tree");
   });
 
   it("キャンセルすると失敗の表示を消す", async () => {

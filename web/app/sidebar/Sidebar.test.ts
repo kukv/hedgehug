@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { closeCreate, createState } from "../create-state.svelte";
 import { closePalette, palette } from "../palette-state.svelte";
 import { renderWithCore } from "../test-utils";
+import { openWorkspaceDelete } from "../workspace/dialogs-state.svelte";
 import Sidebar from "./Sidebar.svelte";
+
+vi.mock("../workspace/dialogs-state.svelte", () => ({
+  openWorkspaceDelete: vi.fn(),
+}));
 
 const workspaces = [
   {
@@ -36,6 +41,7 @@ function mount() {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   history.replaceState(null, "", "/");
   closePalette();
   closeCreate();
@@ -57,6 +63,27 @@ describe("Sidebar", () => {
     for (const t of ["マイタスク", "通知", "アクティビティ", "保存済みビュー"]) {
       expect(queryByText(t)).toBeNull();
     }
+  });
+
+  it("右上の歯車は設定（/settings）を開く", async () => {
+    const { getByRole } = mount();
+    const gear = getByRole("link", { name: "設定" });
+    expect(gear.getAttribute("href")).toBe("/settings");
+    expect(gear.getAttribute("aria-current")).toBeNull();
+    await fireEvent.click(gear);
+    expect(location.pathname).toBe("/settings");
+  });
+
+  it("設定を開いている間は歯車を aria-current にする", () => {
+    history.replaceState(null, "", "/settings/workspaces/shared");
+    const { getByRole } = mount();
+    expect(getByRole("link", { name: "設定" }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("ワークスペースはどのタブにいても今いる行にする", () => {
+    history.replaceState(null, "", "/workspaces/shared/01WSREL/tree");
+    const { getByRole } = mount();
+    expect(getByRole("link", { name: /release/ }).getAttribute("aria-current")).toBe("page");
   });
 
   it("ワークスペース › プロジェクトの入れ子と進捗を出す", () => {
@@ -127,5 +154,32 @@ describe("Sidebar", () => {
     const { getByRole } = mount();
     await fireEvent.click(getByRole("button", { name: "プロジェクトを追加" }));
     expect(createState.request).toEqual({ kind: "project" });
+  });
+
+  it("ワークスペースの「…」は設定を開く・削除…の 2 つを出す", async () => {
+    const { getByRole, getAllByRole } = mount();
+    await fireEvent.click(getByRole("button", { name: "release の操作（設定を開く・削除）" }));
+    expect(getByRole("menu", { name: "ワークスペースの操作" })).toBeTruthy();
+    expect(getAllByRole("menuitem").map((i) => i.textContent?.trim())).toEqual([
+      "設定を開く",
+      "削除…",
+    ]);
+  });
+
+  it("「設定を開く」はそのワークスペースの設定のタブへ移る", async () => {
+    const { getByRole, queryByRole } = mount();
+    await fireEvent.click(getByRole("button", { name: "release の操作（設定を開く・削除）" }));
+    await fireEvent.click(getByRole("menuitem", { name: "設定を開く" }));
+    expect(location.pathname).toBe("/workspaces/shared/01WSREL/settings");
+    expect(queryByRole("menu")).toBeNull();
+  });
+
+  it("「削除…」は削除の確認を開く（ワークスペースを渡す）", async () => {
+    const { getByRole, queryByRole } = mount();
+    await fireEvent.click(getByRole("button", { name: "ops の操作（設定を開く・削除）" }));
+    await fireEvent.click(getByRole("menuitem", { name: "削除…" }));
+    expect(openWorkspaceDelete).toHaveBeenCalledWith(workspaces[1]);
+    expect(location.pathname).toBe("/");
+    expect(queryByRole("menu")).toBeNull();
   });
 });

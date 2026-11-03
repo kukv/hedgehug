@@ -7,6 +7,8 @@ import SyncCard from "./SyncCard.svelte";
 
 const status = (over: Partial<SyncStatus> & { store: string }): SyncStatus => ({
   remotes: ["origin"],
+  interval: 120,
+  push_interval: 30,
   ...over,
 });
 

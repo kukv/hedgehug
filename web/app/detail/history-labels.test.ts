@@ -28,6 +28,7 @@ describe("opLabel", () => {
       "move-in",
       "move-out",
       "migrate",
+      "schema",
       "undo",
       "workspace",
       "comment",

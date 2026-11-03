@@ -94,7 +94,7 @@ func checkOwners(ix *index.Index, group []named) []Finding {
 // sprint or release ulid of another workspace.
 func otherWorkspace(e *index.Entry, field, what string, ulid model.ULID) Finding {
 	return Finding{
-		Check: "task", Where: taskWhere(e),
+		Check: "task", Where: taskWhere(e), Task: e.ULID.String(),
 		Msg:  fmt.Sprintf("%s: %s %s is not in the workspace of this task", field, what, ulid),
 		Hint: "take it off with hedgehug edit, or move the task back to its workspace",
 	}
@@ -108,7 +108,7 @@ func missing[T any](_ T, err error) bool { return errors.Is(err, store.ErrNotFou
 // release that is not in the store, as the one for a missing task is.
 func notInStore(e *index.Entry, field, what string, ulid model.ULID) Finding {
 	return Finding{
-		Check: "task", Where: taskWhere(e),
+		Check: "task", Where: taskWhere(e), Task: e.ULID.String(),
 		Msg:  fmt.Sprintf("%s: %s %s is not in this store", field, what, ulid),
 		Hint: "take it off with hedgehug edit",
 	}

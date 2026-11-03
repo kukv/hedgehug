@@ -407,6 +407,12 @@ func ShowViewOf(r ShowResult) *ShowView {
 	return j
 }
 
+// LogTrailer is a trailer of a commit message: "Key: Value".
+type LogTrailer struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
 // LogView is a commit as --json prints it.
 type LogView struct {
 	Hash   string    `json:"hash"`
@@ -423,11 +429,18 @@ type LogView struct {
 	Task      *string       `json:"task"`
 	ID        *string       `json:"id"` // the current id of the task
 	Subject   string        `json:"subject"`
+	// Trailers are all the trailers of the commit, in the order they are
+	// written (Hedgehug-Overwritten, Hedgehug-Moved-From...); [] with none.
+	Trailers []LogTrailer `json:"trailers" nullable:"false"`
 }
 
 func logViewOf(ix *index.Index, e gitrepo.LogEntry) LogView {
 	j := LogView{Hash: e.Hash.String(), Date: e.When, Subject: e.Subject, Store: ix.StoreName()}
 	j.Author.Name, j.Author.Email = e.Author.Name, e.Author.Email
+	j.Trailers = make([]LogTrailer, len(e.Trailers))
+	for i, t := range e.Trailers {
+		j.Trailers[i] = LogTrailer{Key: t.Key, Value: t.Value}
+	}
 	if v, ok := e.Trailer("Hedgehug-Op"); ok {
 		j.Op = &v
 	}

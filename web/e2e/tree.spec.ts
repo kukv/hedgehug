@@ -1,6 +1,8 @@
 // Screens this spec relies on (see screens.ts for the shared list):
-//   - "/" is the tree of the first workspace; the filter box "フィルタ（hh ls と同じクエリ）"
-//     starts as "-status:canceled" and the foot of the tree shows the `hh ls` of the filter
+//   - the tree is the "ツリー" tab of the first workspace, /workspaces/<store>/<ulid>/tree (the
+//     harness opens it with hh.openTree; "/" is the overview); the filter box
+//     "フィルタ（hh ls と同じクエリ）" starts as "-status:canceled" and the foot of the tree
+//     shows the `hh ls` of the filter
 //   - a click on a row selects and focuses it; the keys below act on the focused row
 //       Enter       opens the textbox "新しいタスクのタイトル" below the row; Enter in it adds
 //                   a sibling right after the row: one create request that carries `after`
@@ -39,7 +41,7 @@ function rootOrder(hh: Hedgehug): string[] {
 test("Enter adds a sibling right below the selected row", async ({ page, hh }) => {
   hh.add("Alpha");
   hh.add("Bravo");
-  await hh.open(page);
+  await hh.openTree(page);
 
   await row(page, "Alpha").click();
   await page.keyboard.press("Enter");
@@ -60,7 +62,7 @@ test("Enter adds right below the row in one commit, even past a hidden sibling",
   const hidden = hh.add("Hidden between", "--after", alpha.id);
   hh.hh("set", hidden.id, "status=canceled");
   expect(rootOrder(hh)).toEqual(["Alpha", "Hidden between", "Bravo"]);
-  await hh.open(page);
+  await hh.openTree(page);
   await expect(row(page, "Hidden between")).toHaveCount(0);
   const before = commitCount(hh);
 
@@ -79,7 +81,7 @@ test("Enter adds right below the row in one commit, even past a hidden sibling",
 test("a second title typed straight after the first lands right below it", async ({ page, hh }) => {
   hh.add("Alpha");
   hh.add("Bravo");
-  await hh.open(page);
+  await hh.openTree(page);
 
   await row(page, "Alpha").click();
   await page.keyboard.press("Enter");
@@ -104,7 +106,7 @@ test("Esc closes the input even when the task is still being made, and the row k
 }) => {
   hh.add("Alpha");
   hh.add("Bravo");
-  await hh.open(page);
+  await hh.openTree(page);
   await treeReady(page);
   // A slow commit (a signed one, say): the answer of the create comes after the Esc.
   await page.route(/\/api\/tasks\?/, async (route) => {
@@ -140,7 +142,7 @@ test("the row keys work after the ID or the chevron of the row was clicked", asy
   const parent = hh.add("Parent");
   hh.add("Child", "--parent", parent.id);
   hh.add("Other");
-  await hh.open(page);
+  await hh.openTree(page);
   await treeReady(page);
 
   // The ID and the chevron are buttons: a click focuses them, and they stop the keys.
@@ -166,7 +168,7 @@ test("a click on a row closes the input, also while the task is being made", asy
 }) => {
   hh.add("Alpha");
   hh.add("Bravo");
-  await hh.open(page);
+  await hh.openTree(page);
   await treeReady(page);
   const input = page.getByRole("textbox", { name: "新しいタスクのタイトル" });
 
@@ -201,7 +203,7 @@ test("Alt+Up pressed three times in a row moves a task three places, one commit 
   hh,
 }) => {
   for (const t of ["A", "B", "C", "D", "E"]) hh.add(t);
-  await hh.open(page);
+  await hh.openTree(page);
   await treeReady(page);
   await page.route(/\/api\/tasks\/[^/]+\/move\?/, async (route) => {
     await new Promise((r) => setTimeout(r, 700));
@@ -224,7 +226,7 @@ test("presses in a row still all go through when the CLI commits in between", as
   hh,
 }) => {
   for (const t of ["A", "B", "C", "D", "E"]) hh.add(t);
-  await hh.open(page);
+  await hh.openTree(page);
   await treeReady(page);
   await page.route(/\/api\/tasks\/[^/]+\/move\?/, async (route) => {
     await new Promise((r) => setTimeout(r, 500));
@@ -247,7 +249,7 @@ test("presses in a row still all go through when the CLI commits in between", as
 
 test("a failed move drops the presses still waiting and says so once", async ({ page, hh }) => {
   for (const t of ["A", "B", "C", "D", "E"]) hh.add(t);
-  await hh.open(page);
+  await hh.openTree(page);
   await treeReady(page);
   let requests = 0;
   await page.route(/\/api\/tasks\/[^/]+\/move\?/, async (route) => {
@@ -273,7 +275,7 @@ test("Tab indents under the previous sibling and Shift+Tab brings it back", asyn
 }) => {
   const a = hh.add("Alpha");
   const b = hh.add("Bravo");
-  await hh.open(page);
+  await hh.openTree(page);
 
   await row(page, "Bravo").click();
   await page.keyboard.press("Tab");
@@ -289,7 +291,7 @@ test("Alt+Up moves a task before its previous sibling", async ({ page, hh }) => 
   hh.add("Alpha");
   hh.add("Bravo");
   hh.add("Charlie");
-  await hh.open(page);
+  await hh.openTree(page);
 
   await row(page, "Charlie").click();
   await page.keyboard.press("Alt+ArrowUp");
@@ -301,7 +303,7 @@ test("Alt+Up pressed twice moves a task two places", async ({ page, hh }) => {
   hh.add("Bravo");
   hh.add("Charlie");
   hh.add("Delta");
-  await hh.open(page);
+  await hh.openTree(page);
 
   await row(page, "Delta").click();
   await page.keyboard.press("Alt+ArrowUp");
@@ -320,7 +322,7 @@ test("Alt+Down pressed twice moves a task two places", async ({ page, hh }) => {
   hh.add("Bravo");
   hh.add("Charlie");
   hh.add("Delta");
-  await hh.open(page);
+  await hh.openTree(page);
 
   await row(page, "Alpha").click();
   await page.keyboard.press("Alt+ArrowDown");
@@ -335,7 +337,7 @@ test("Alt+Down pressed twice moves a task two places", async ({ page, hh }) => {
 
 test("Space toggles done and back", async ({ page, hh }) => {
   const t = hh.add("Finish me");
-  await hh.open(page);
+  await hh.openTree(page);
 
   await row(page, "Finish me").click();
   await page.keyboard.press("Space");
@@ -353,7 +355,7 @@ test("dragging a row after another reorders; onto the middle makes it a child", 
   hh.add("Alpha");
   const b = hh.add("Bravo");
   const c = hh.add("Charlie");
-  await hh.open(page);
+  await hh.openTree(page);
   await treeReady(page);
 
   await dragRow(page, row(page, "Alpha"), row(page, "Charlie"), "after");
@@ -373,7 +375,7 @@ test("dropping on the lower quarter of an open parent makes the task its child",
   const parent = hh.add("Parent");
   hh.add("Existing child", "--parent", parent.id);
   const moved = hh.add("Mover");
-  await hh.open(page);
+  await hh.openTree(page);
   await treeReady(page);
   await expect(row(page, "Existing child")).toBeVisible();
 
@@ -386,7 +388,7 @@ test("a drop the schema does not allow says why and changes nothing", async ({ p
   // The default schema lets an epic sit at the root or under a project only.
   const epic = hh.add("Big epic", "--kind", "epic");
   hh.add("Small task");
-  await hh.open(page);
+  await hh.openTree(page);
   await treeReady(page);
 
   await dragRow(page, row(page, "Big epic"), row(page, "Small task"), "child", async () => {
@@ -400,7 +402,7 @@ test("a drop the schema does not allow says why and changes nothing", async ({ p
 test("the dragging mark and the refusal go away when the drag ends", async ({ page, hh }) => {
   hh.add("Big epic", "--kind", "epic");
   hh.add("Small task");
-  await hh.open(page);
+  await hh.openTree(page);
   await treeReady(page);
 
   const marked = page.locator(".row.dragging");
@@ -426,7 +428,7 @@ test("the refusal does not cover the last row once the tree is scrolled to its e
   for (let i = 1; i <= 40; i++) {
     await hh.post("/api/tasks", { title: `Filler ${String(i).padStart(2, "0")}` });
   }
-  await hh.open(page);
+  await hh.openTree(page);
   await treeReady(page);
 
   await dragRow(page, row(page, "Big epic"), row(page, "Filler 01"), "child", async () => {
@@ -453,7 +455,7 @@ test("the filter box narrows the tree and shows the command", async ({ page, hh 
   hh.add("Hide this");
   const canceled = hh.add("Dropped");
   hh.hh("set", canceled.id, "status=canceled");
-  await hh.open(page);
+  await hh.openTree(page);
 
   await expect(row(page, "Keep this")).toBeVisible();
   await expect(row(page, "Dropped")).toHaveCount(0); // canceled tasks are out by default
@@ -479,7 +481,7 @@ test("a tree of 300 tasks is drawn as a window of rows and scrolls to the end", 
   }
   const first = "Task 001";
   const last = "Task 300";
-  await hh.open(page);
+  await hh.openTree(page);
 
   const rows = page.getByRole("treeitem");
   await expect(row(page, first)).toBeVisible();
