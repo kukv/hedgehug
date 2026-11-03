@@ -25,6 +25,7 @@
   const settingsHref = hrefOf({ name: "settings", page: "workspaces", store: "" });
   const myHref = hrefOf({ name: "my" });
   const inboxHref = hrefOf({ name: "inbox" });
+  const activityHref = hrefOf({ name: "activity", workspaces: [], sync: "" });
 
   // The count beside "マイタスク" is the number the screen shows with its own query (細部 55). It
   // is left out while the list is read, and when the query does not run (no account).
@@ -122,6 +123,16 @@
       {#if unread.current > 0}
         <span class="count">{unread.current}</span>
       {/if}
+    </a>
+    <a
+      href={activityHref}
+      class="nav-link"
+      class:active={route.name === "activity"}
+      aria-current={route.name === "activity" ? "page" : undefined}
+      onclick={(e) => onLinkClick(e, activityHref)}
+    >
+      <Icon name="activity" size={14} />
+      <span class="nav-text">アクティビティ</span>
     </a>
   </div>
 

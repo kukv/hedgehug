@@ -46,7 +46,9 @@ vi.mock("../router", () => ({
                   ? "/my"
                   : r.name === "inbox"
                     ? "/inbox"
-                    : `/workspaces/${r.store}/${r.ulid}${r.tab === "overview" ? "" : `/${r.tab}`}`,
+                    : r.name === "activity"
+                      ? "/activity"
+                      : `/workspaces/${r.store}/${r.ulid}${r.tab === "overview" ? "" : `/${r.tab}`}`,
   },
 }));
 vi.mock("../views/dialogs-state.svelte", () => ({ openViewSave: h.saveView }));
@@ -328,6 +330,10 @@ describe("CommandPalette", () => {
     await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">通知" } });
     await fireEvent.click(await screen.findByRole("option", { name: /通知を開く/ }));
     expect(h.go).toHaveBeenLastCalledWith("/inbox");
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">アクティ" } });
+    await fireEvent.click(await screen.findByRole("option", { name: /アクティビティを開く/ }));
+    expect(h.go).toHaveBeenLastCalledWith("/activity");
     openPalette();
     await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">ブロック" } });
     await fireEvent.click(await screen.findByRole("option", { name: /ブロック中 を開く/ }));

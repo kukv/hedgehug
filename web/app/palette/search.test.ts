@@ -207,6 +207,7 @@ function env(over: Partial<CommandEnv> = {}): CommandEnv {
       query: (l, q) => `/query/${l}?${new URLSearchParams({ q })}`,
       my: () => "/my",
       inbox: () => "/inbox",
+      activity: () => "/activity",
     },
     selected: null,
     recent: [],
@@ -242,6 +243,7 @@ describe("buildCommands", () => {
       "設定のワークスペース一覧を開く",
       "マイタスクを開く",
       "通知を開く",
+      "アクティビティを開く",
     ]);
   });
 
@@ -348,10 +350,11 @@ describe("buildCommands", () => {
     const gs = buildCommands(e, ">");
     const opens = gs.find((g) => g.name === "開く")?.items ?? [];
     expect(
-      opens.slice(-4).map((i) => (i.type === "command" ? [i.label, i.store, i.href] : [])),
+      opens.slice(-5).map((i) => (i.type === "command" ? [i.label, i.store, i.href] : [])),
     ).toEqual([
       ["マイタスクを開く", undefined, "/my"],
       ["通知を開く", undefined, "/inbox"],
+      ["アクティビティを開く", undefined, "/activity"],
       [
         "今週のリリース作業 を開く",
         "shared",

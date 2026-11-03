@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { cliWorkspaceAdd, Placeholder } from "../core/cli";
   import { takeToken } from "../core/token";
+  import ActivityPage from "./activity/ActivityPage.svelte";
   import { setCore } from "./context";
   import { createCore } from "./core-factory";
   import CreateHost from "./create/CreateHost.svelte";
@@ -95,6 +96,8 @@
         <MyTasks />
       {:else if route.name === "inbox"}
         <InboxPage />
+      {:else if route.name === "activity"}
+        <ActivityPage workspaces={route.workspaces} sync={route.sync} />
       {:else if route.name === "settings"}
         <SettingsRoute page={route} />
       {:else if route.name === "home" && dir.current.first}

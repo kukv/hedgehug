@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { hrefOf, onLinkClick, parseRoute, router } from "./router";
+import { hrefOf, onLinkClick, parseRoute, type Route, router } from "./router";
 
 beforeEach(() => {
   history.replaceState(null, "", "/");
@@ -56,6 +56,9 @@ describe("parseRoute", () => {
     ["/inbox", { name: "inbox" }],
     ["/inbox/", { name: "inbox" }],
     ["/inbox/extra", { name: "home" }],
+    ["/activity", { name: "activity", workspaces: [], sync: "" }],
+    ["/activity/", { name: "activity", workspaces: [], sync: "" }],
+    ["/activity/extra", { name: "home" }],
     ["/tasks/01HTK/", { name: "task", ulid: "01HTK" }],
     ["/settings", { name: "settings", page: "workspaces", store: "" }],
     ["/settings/workspaces/shared", { name: "settings", page: "workspaces", store: "shared" }],
@@ -96,6 +99,33 @@ describe("hrefOf", () => {
     expect(hrefOf({ name: "task", ulid: "01HTK" })).toBe("/tasks/01HTK");
     expect(hrefOf({ name: "inbox" })).toBe("/inbox");
     expect(parseRoute(hrefOf({ name: "inbox" }))).toEqual({ name: "inbox" });
+  });
+
+  it("アクティビティは ?workspace=（ULID のカンマ区切り）と ?sync= を持つ", () => {
+    expect(parseRoute("/activity", "?workspace=A,B&sync=only")).toEqual({
+      name: "activity",
+      workspaces: ["A", "B"],
+      sync: "only",
+    });
+    expect(parseRoute("/activity", "?workspace=A%2CB&sync=exclude")).toEqual({
+      name: "activity",
+      workspaces: ["A", "B"],
+      sync: "exclude",
+    });
+    // a sync that is none of the two is "all", and empty items of the list are dropped
+    expect(parseRoute("/activity", "?workspace=A,,&sync=x")).toEqual({
+      name: "activity",
+      workspaces: ["A"],
+      sync: "",
+    });
+    expect(hrefOf({ name: "activity", workspaces: [], sync: "" })).toBe("/activity");
+    expect(hrefOf({ name: "activity", workspaces: ["A", "B"], sync: "" })).toBe(
+      "/activity?workspace=A,B",
+    );
+    expect(hrefOf({ name: "activity", workspaces: [], sync: "only" })).toBe("/activity?sync=only");
+    const r: Route = { name: "activity", workspaces: ["A", "B"], sync: "exclude" };
+    expect(hrefOf(r)).toBe("/activity?workspace=A,B&sync=exclude");
+    expect(parseRoute("/activity", "?workspace=A,B&sync=exclude")).toEqual(r);
   });
 
   it("タブはパスの末尾に付ける。概要は付けない", () => {
@@ -196,6 +226,14 @@ describe("router", () => {
     router.go("/my?q=status%3Atodo");
     expect(location.pathname).toBe("/my");
     expect(location.search).toBe("");
+  });
+
+  it("/activity への go は ?workspace= と ?sync= を残し、ほかの query は捨てる", () => {
+    router.go("/activity?workspace=A,B&sync=only&x=1#y");
+    expect(location.pathname + location.search).toBe("/activity?workspace=A,B&sync=only");
+    expect(router.route).toEqual({ name: "activity", workspaces: ["A", "B"], sync: "only" });
+    router.go("/activity?sync=exclude");
+    expect(router.route).toEqual({ name: "activity", workspaces: [], sync: "exclude" });
   });
 
   it("q だけ替えた /query への go は route を替える", () => {

@@ -72,6 +72,15 @@ describe("App", () => {
     expect(location.pathname).toBe("/inbox");
   });
 
+  it("/activity はアクティビティの画面。絞り込みを残す", () => {
+    history.replaceState(null, "", "/activity?workspace=W1&sync=only#token=tkn");
+    const { getByRole } = render(App);
+    flushSync();
+    expect(getByRole("heading", { level: 1, name: "アクティビティ" })).toBeTruthy();
+    expect(getByRole("button", { name: "同期" }).getAttribute("aria-pressed")).toBe("true");
+    expect(location.pathname + location.search).toBe("/activity?workspace=W1&sync=only");
+  });
+
   it("/views/<Store>/<名前> はビューの画面。名前は URL から戻して渡す", () => {
     history.replaceState(null, "", "/views/org-b%2Fops/%E4%BB%8A%E9%80%B1#token=tkn");
     const { getByText } = render(App);

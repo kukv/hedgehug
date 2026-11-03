@@ -8,6 +8,9 @@ export type ProjectTab = "tree" | "kanban" | "table";
 // store is "" for /settings, which names no Store: the screen goes to the first one.
 export type SettingsPage = { page: "workspaces"; store: string };
 
+// "" is every commit; exclude is the ones of people, only the ones of syncs.
+export type ActivitySync = "" | "exclude" | "only";
+
 export type Route =
   | { name: "home" }
   | { name: "workspace"; store: string; ulid: string; tab: WorkspaceTab }
@@ -17,6 +20,7 @@ export type Route =
   | { name: "query"; layout: Layout; q: string }
   | { name: "my" }
   | { name: "inbox" }
+  | { name: "activity"; workspaces: string[]; sync: ActivitySync }
   | ({ name: "settings" } & SettingsPage);
 
 const WORKSPACE_TABS: readonly string[] = ["tree", "kanban", "table", "settings"];
@@ -31,7 +35,7 @@ function decode(s: string): string {
   }
 }
 
-/** The route of a path, or null when the path is none of ours. Only /query/<layout> reads the search (?q=). */
+/** The route of a path, or null when the path is none of ours. Only /query/<layout> (?q=) and /activity (?workspace=, ?sync=) read the search. */
 function matchRoute(pathname: string, search: string): Route | null {
   const seg = pathname.split("/").filter(Boolean).map(decode);
   const [head, a, b, c] = seg;
@@ -57,6 +61,15 @@ function matchRoute(pathname: string, search: string): Route | null {
   }
   if (head === "my" && seg.length === 1) return { name: "my" };
   if (head === "inbox" && seg.length === 1) return { name: "inbox" };
+  if (head === "activity" && seg.length === 1) {
+    const p = new URLSearchParams(search);
+    const sync = p.get("sync");
+    return {
+      name: "activity",
+      workspaces: (p.get("workspace") ?? "").split(",").filter(Boolean),
+      sync: sync === "exclude" || sync === "only" ? sync : "",
+    };
+  }
   if (head === "settings" && seg.length === 1) {
     return { name: "settings", page: "workspaces", store: "" };
   }
@@ -66,12 +79,12 @@ function matchRoute(pathname: string, search: string): Route | null {
   return null;
 }
 
-/** Unknown paths are the home route. search is read for /query/<layout> only. */
+/** Unknown paths are the home route. search is read for /query/<layout> and /activity only. */
 export function parseRoute(pathname: string, search = ""): Route {
   return matchRoute(pathname, search) ?? { name: "home" };
 }
 
-/** The path of a route; the query screen's also holds ?q= (left out when q is empty). */
+/** The path of a route; the query screen's also holds ?q= (left out when q is empty), the activity's its filters. */
 export function hrefOf(r: Route): string {
   switch (r.name) {
     case "home":
@@ -98,6 +111,14 @@ export function hrefOf(r: Route): string {
       return "/my";
     case "inbox":
       return "/inbox";
+    case "activity": {
+      // The ULIDs of the workspaces are written with their commas, as the API takes them.
+      const p = new URLSearchParams();
+      if (r.workspaces.length > 0) p.set("workspace", r.workspaces.join(","));
+      if (r.sync !== "") p.set("sync", r.sync);
+      const q = p.toString().replaceAll("%2C", ",");
+      return q === "" ? "/activity" : `/activity?${q}`;
+    }
     case "settings":
       return r.store === "" ? "/settings" : `/settings/workspaces/${encodeURIComponent(r.store)}`;
   }
@@ -125,7 +146,7 @@ export const router = {
 
   /**
    * Moves to a path of ours; anything else goes to "/". The query and the hash are dropped,
-   * except for the ?q= of /query/<layout>.
+   * except for the ?q= of /query/<layout> and the filters of /activity.
    */
   go(path: string, opts: { replace?: boolean } = {}): void {
     const url = new URL(path, location.origin);

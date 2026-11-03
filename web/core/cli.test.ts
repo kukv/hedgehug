@@ -3,6 +3,7 @@ import {
   cliAdd,
   cliComment,
   cliInbox,
+  cliLog,
   cliLs,
   cliMv,
   cliRestore,
@@ -89,6 +90,12 @@ describe("commands", () => {
     expect(cliInbox()).toBe("hh inbox");
     expect(cliInbox({ all: true })).toBe("hh inbox --all");
     expect(cliInbox({ all: true, store: "shared" })).toBe("hh inbox --all --store shared");
+  });
+
+  it("writes hh log, with the workspaces by name", () => {
+    expect(cliLog([])).toBe("hh log");
+    expect(cliLog(["release", "payments"])).toBe("hh log --workspace release,payments");
+    expect(cliLog(["my work"])).toBe('hh log --workspace "my work"');
   });
 
   it("puts -- before an argument that starts with -", () => {

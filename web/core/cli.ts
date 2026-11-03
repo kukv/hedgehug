@@ -120,6 +120,11 @@ export function cliInbox(i: { all?: boolean; store?: string } = {}): string {
   return cliLine(a);
 }
 
+// cliLog is hh log; without --store it reads every store, as the screen does.
+export function cliLog(workspaces: string[]): string {
+  return cliLine(workspaces.length > 0 ? ["log", "--workspace", workspaces.join(",")] : ["log"]);
+}
+
 export function cliSync(store?: string): string {
   return cliLine(store ? ["sync", "--store", store] : ["sync"]);
 }

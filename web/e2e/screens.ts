@@ -42,6 +42,9 @@ import { expect, type Locator, type Page } from "@playwright/test";
 //               同期の修復, each with the number unread); a row is a listitem with the buttons
 //               "自分の値に戻す", "このままにする" (overwritten) or "既読にする"; "すべて既読にする";
 //               the sidebar link "通知" carries the number of unread
+//   Activity    /activity (heading "アクティビティ"); the button "<n> / <m> ワークスペース" opens the dialog
+//               "ワークスペースで絞り込む"; the group "変更の種類" has すべて / 人 / 同期; a commit is a listitem
+//               with the author, the op, the subject and the ID as a link; the sidebar link "アクティビティ"
 
 //
 // Exceptions that hold on to a CSS class, because no role or text tells them apart: change them

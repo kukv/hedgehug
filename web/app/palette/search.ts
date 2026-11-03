@@ -49,6 +49,7 @@ export type CommandItem = {
     | "undo"
     | "checklist"
     | "bell"
+    | "activity"
     | "filter";
   kbd?: string;
   note?: string;
@@ -168,6 +169,7 @@ export type CommandEnv = {
     query: (layout: Layout, q: string) => string;
     my: () => string;
     inbox: () => string;
+    activity: () => string;
   };
   selected: TaskView | null; // the task the commands for a task are about
   recent: TaskView[]; // the tasks opened last, the latest first
@@ -316,6 +318,15 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
     href: inboxHref,
     run: () => env.go(inboxHref),
   };
+  const activityHref = env.hrefs.activity();
+  const activity: CommandItem = {
+    type: "command",
+    key: "open:activity",
+    label: "アクティビティを開く",
+    icon: "activity",
+    href: activityHref,
+    run: () => env.go(activityHref),
+  };
   const saved: CommandItem[] = env.views.map((v) => {
     const href = env.hrefs.view(v.store, v.view.name);
     return {
@@ -389,7 +400,7 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
   const groups: PaletteGroup[] = [
     { name: "コマンド", items: commands.filter(keep) },
     { name: "最近開いたもの", items: recent },
-    { name: "開く", items: [...places, ...lists, my, inbox, ...saved].filter(keep) },
+    { name: "開く", items: [...places, ...lists, my, inbox, activity, ...saved].filter(keep) },
   ];
   if (env.selected) {
     const g = taskCommands(env, env.selected);
