@@ -4,7 +4,7 @@
   import CliLine from "../ui/CliLine.svelte";
 
   type Props = {
-    base: string; // the fixed part, as the user would type it
+    base: string; // the fixed part, as the user would type it; "" for none (every store)
     applied: string; // what is applied now
     count: string; // "16 件 · 中止 1 件を除外"
     cli: string; // the hh ls line
@@ -42,7 +42,9 @@
 <div class="bar">
   <div class="field" class:bad={message !== null}>
     <Icon name="filter" size={15} />
-    <span class="base" title="この画面で固定のクエリ">{base}</span>
+    {#if base}
+      <span class="base" title="この画面で固定のクエリ">{base}</span>
+    {/if}
     <label class="sr" for="tree-q">フィルタ（hh ls と同じクエリ）</label>
     <input
       id="tree-q"

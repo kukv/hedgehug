@@ -1,5 +1,6 @@
 // The hh command that does what a dialog or a filter does, shown under it
 // for the user to copy (Foundations: the same operation as a command).
+import type { ViewSaveBody } from "./views";
 
 const PLAIN = /^[\p{L}\p{N}_\-.,:/@%+=]+$/u;
 
@@ -151,6 +152,33 @@ export function cliWorkspaceSetPrefix(i: {
 
 export const cliWorkspaceRm = (i: { workspace: string; store: string }): string =>
   cliLine(["workspace", "rm", i.workspace, "--store", i.store]);
+
+// cliViewSave is hh view save <name>; a flag is written for each setting body holds (the others stay
+// as saved, as a PUT leaves them). --store is the global flag that picks the store.
+export function cliViewSave(i: { name: Arg; store?: string; body: ViewSaveBody }): string {
+  const b = i.body;
+  const a: Arg[] = [];
+  if (b.layout !== undefined) a.push("--layout", b.layout);
+  if (b.query !== undefined) a.push("--query", b.query);
+  if (b.columns !== undefined) a.push("--columns", b.columns.join(","));
+  if (b.group_by !== undefined) a.push("--group-by", b.group_by);
+  if (b.kanban_columns !== undefined) a.push("--kanban-columns", b.kanban_columns);
+  if (b.swimlane !== undefined) a.push("--swimlane", b.swimlane);
+  if (i.store) a.push("--store", i.store);
+  return withPositionals(["view", "save"], [i.name], a, true);
+}
+
+export function cliViewShow(name: string, store?: string): string {
+  return withPositionals(["view", "show"], [name], store ? ["--store", store] : [], true);
+}
+
+export function cliViewRm(name: string, store?: string): string {
+  return withPositionals(["view", "rm"], [name], store ? ["--store", store] : [], true);
+}
+
+export function cliViewRename(name: string, to: Arg, store?: string): string {
+  return withPositionals(["view", "rename"], [name, to], store ? ["--store", store] : [], true);
+}
 
 export function cliStoreInit(i: {
   name: Arg;
