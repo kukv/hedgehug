@@ -20,9 +20,10 @@ export function undoMessage(r: UndoWrite): string {
     : `${what}を取り消しました`;
 }
 
-// routeStore is the store the screen is about: the store of a workspace, of the settings page, or
-// of the project or task it shows (the cache may not have it yet). Home shows the overview of the
-// first workspace, so it is that one's store. Elsewhere there is none.
+// routeStore is the store the screen is about: the store of a workspace, of the settings page, of a
+// saved view, or of the project or task it shows (the cache may not have it yet). Home shows the
+// overview of the first workspace, so it is that one's store. Elsewhere there is none (the query
+// screen and the tasks of the person list every store).
 export function routeStore(
   route: Route,
   taskOf: (ulid: string) => { store: string } | undefined,
@@ -30,6 +31,7 @@ export function routeStore(
 ): string | undefined {
   if (route.name === "workspace") return route.store;
   if (route.name === "settings") return route.store || undefined;
+  if (route.name === "view") return route.store;
   if (route.name === "home") return first?.store;
   if (route.name === "project" || route.name === "task") return taskOf(route.ulid)?.store;
   return undefined;
@@ -39,11 +41,17 @@ export function routeStore(
 // went. It does not ask first: the spec holds that an undo is not hard to take back. The store is
 // the one the screen is about; without it the server picks one as the CLI does, which asks the
 // user to choose when there are several.
-export async function runUndo(c: Pick<AppCore, "api" | "cache">, store?: string): Promise<void> {
+export async function runUndo(
+  c: Pick<AppCore, "api" | "cache" | "views">,
+  store?: string,
+): Promise<void> {
   try {
     const r = await unwrap(c.api.POST("/api/undo", { params: { query: { store } } }));
     // The commit is this tab's own: its tasks.changed is not shown as a change from outside.
     c.cache.noteOwnCommit(r.commit);
+    // The server tells views.changed from its poll, which misses a write taken back before it
+    // looked (the store is as it was): the list of views would keep what this tab wrote.
+    if (r.undone.op === "view") c.views.refresh(r.undone.store);
     toast({ message: undoMessage(r) });
   } catch (e) {
     toast({ message: errorMessage(e) });

@@ -6,7 +6,7 @@
 
   type Props = {
     variant: "empty" | "nomatch" | "noworkspace" | "notfound";
-    scope?: "project" | "workspace" | "store";
+    scope?: "project" | "workspace" | "store" | "view";
     name?: string;
     note?: string;
     onCreate?: () => void;
@@ -30,7 +30,9 @@
       ? "プロジェクト"
       : scope === "store"
         ? `Store「${name}」`
-        : `ワークスペース「${name}」`,
+        : scope === "view"
+          ? `ビュー「${name}」`
+          : `ワークスペース「${name}」`,
   );
 </script>
 

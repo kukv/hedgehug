@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { parentRule } from "../../core/schema";
 import {
@@ -244,5 +244,43 @@ describe("CreateTask", () => {
     const k = makeCore({ tasks: [parent] });
     mount(CreateTask, { request: { kind: "task", parent: "UP" }, onclose: vi.fn() }, k);
     expect(screen.getByText("REL-8")).toBeInTheDocument();
+  });
+
+  describe("the status of a column of the kanban", () => {
+    async function createWith(request: Record<string, unknown>) {
+      const k = makeCore({ tasks: [parent] });
+      k.api.POST.mockImplementation(() => ok({ task: created, commit: "c1" }));
+      mount(CreateTask, { request: { kind: "task", ...request }, onclose: vi.fn() }, k);
+      await typeTitle("列から");
+      await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
+      return {
+        k,
+        send: async () => {
+          await fireEvent.click(screen.getByRole("button", { name: /^作成/ }));
+          await waitFor(() => expect(k.api.POST).toHaveBeenCalled());
+          const [, init] = k.api.POST.mock.calls[0] as [string, { body: Record<string, unknown> }];
+          return init.body;
+        },
+      };
+    }
+
+    it("starts the task in the status the request names, and the command says so", async () => {
+      const { send } = await createWith({ status: "waiting" });
+      expect(screen.getByText(/-p status=waiting/)).toBeInTheDocument();
+      expect((await send()).status).toBe("waiting");
+    });
+
+    it("starts it in the default status of the category the request names", async () => {
+      const { send } = await createWith({ category: "doing" });
+      expect((await send()).status).toBe("in_progress");
+    });
+
+    it("falls back to the category, then to todo, for a status the workspace lacks", async () => {
+      const a = await createWith({ status: "review", category: "done" });
+      expect((await a.send()).status).toBe("done");
+      cleanup();
+      const b = await createWith({ status: "review" });
+      expect((await b.send()).status).toBe("todo");
+    });
   });
 });

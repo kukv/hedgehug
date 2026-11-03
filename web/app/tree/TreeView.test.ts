@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../core/api/client";
 import { closeCreate, createState } from "../create-state.svelte";
@@ -143,6 +143,7 @@ function setup(
     },
     stores: {
       loaded: () => true,
+      stores: () => [{ name: "shared" }],
       workspace: () =>
         over.noWorkspace
           ? undefined
@@ -666,21 +667,29 @@ describe("TreeView", () => {
   });
 
   it("lets a late wait for a row give way to a newer one", async () => {
-    setup({ many: 250 });
-    render(TreeView, { view: { kind: "project", ulid: "P" } });
-    const first = screen.getAllByRole("treeitem")[0] as HTMLElement;
-    await fireEvent.click(first);
-    selection.set("M100");
-    h.vdelay = 80;
-    await fireEvent.keyDown(first, { key: "ArrowDown" }); // M101, drawn after 80ms
-    selection.set("M200");
-    h.vdelay = 10;
-    await fireEvent.keyDown(first, { key: "ArrowUp" }); // M199, drawn after 10ms
-    await waitFor(() => expect(document.activeElement?.getAttribute("data-ulid")).toBe("M199"));
-    // The first request draws its window late (and moves the mock window back): it must not
-    // then take the focus for M101.
-    await new Promise((r) => setTimeout(r, 200));
-    expect(document.activeElement?.getAttribute("data-ulid")).not.toBe("M101");
+    // The clock is a fake one: with real timers, a busy machine (the suites of other workers)
+    // held the 10ms draw past the 1s of waitFor, and the test failed with the focus on nothing.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame"] });
+    try {
+      setup({ many: 250 });
+      render(TreeView, { view: { kind: "project", ulid: "P" } });
+      const first = screen.getAllByRole("treeitem")[0] as HTMLElement;
+      await fireEvent.click(first);
+      selection.set("M100");
+      h.vdelay = 80;
+      await fireEvent.keyDown(first, { key: "ArrowDown" }); // M101, drawn after 80ms
+      selection.set("M200");
+      h.vdelay = 10;
+      await fireEvent.keyDown(first, { key: "ArrowUp" }); // M199, drawn after 10ms
+      await vi.advanceTimersByTimeAsync(40);
+      expect(document.activeElement?.getAttribute("data-ulid")).toBe("M199");
+      // The first request draws its window late (and moves the mock window back): it must not
+      // then take the focus for M101.
+      await vi.advanceTimersByTimeAsync(200);
+      expect(document.activeElement?.getAttribute("data-ulid")).not.toBe("M101");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("says so, with a way home, when the project is not there", async () => {
@@ -771,23 +780,13 @@ describe("TreeView", () => {
     expect(input).toHaveFocus();
   });
 
-  it("opens a link of the breadcrumb through the router", async () => {
+  it("leaves the heading, the breadcrumb and the tabs of a project to its page", () => {
     setup();
     render(TreeView, { view: { kind: "project", ulid: "P" } });
-    await fireEvent.click(screen.getByRole("link", { name: /release/ }));
-    expect(h.go).toHaveBeenCalledWith("/tasks/W1");
-  });
-
-  it("shows the tab of a project as a link to its tree", () => {
-    setup();
-    render(TreeView, { view: { kind: "project", ulid: "P" } });
-    const tabs = screen.getByRole("navigation", { name: "ビューの切り替え" });
-    // The only tab of a project is its tree (F10).
-    expect(within(tabs).getAllByRole("link")).toHaveLength(1);
-    expect(within(tabs).getByRole("link", { name: "ツリー" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "パンくず" })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "ビューの切り替え" })).toBeNull();
+    expect(screen.getByRole("tree")).toBeInTheDocument();
   });
 
   it("leaves the heading and the tabs of a workspace to its page", () => {

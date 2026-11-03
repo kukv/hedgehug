@@ -1,7 +1,9 @@
 import { type Api, type TaskView, unwrap } from "../../core/api/client";
 import { searchTasks as findTasks } from "../../core/search";
 import type { WorkspaceEntry } from "../../core/stores";
+import type { ViewEntry } from "../../core/views";
 import { kbdLabel } from "../keys";
+import type { Layout } from "../router";
 
 export type PaletteMode = "id" | "query" | "command";
 
@@ -37,7 +39,16 @@ export type CommandItem = {
   type: "command";
   key: string;
   label: string;
-  icon: "sync" | "plus" | "status" | "folder" | "workspace" | "settings" | "undo";
+  icon:
+    | "sync"
+    | "plus"
+    | "status"
+    | "folder"
+    | "workspace"
+    | "settings"
+    | "undo"
+    | "checklist"
+    | "filter";
   kbd?: string;
   note?: string;
   store?: string;
@@ -141,7 +152,9 @@ export type CommandEnv = {
   createProject: () => void;
   addWorkspace: () => void;
   undo: () => void;
+  saveQuery: (q: string) => void; // opens the dialog that saves the query as a view
   workspaces: WorkspaceEntry[];
+  views: ViewEntry[]; // the saved views of every store
   storeNames: string[]; // every mounted store, also one with no workspace
   go: (path: string) => void;
   hrefs: {
@@ -150,6 +163,9 @@ export type CommandEnv = {
     settingsWorkspaces: (store: string) => string;
     project: (ulid: string) => string;
     task: (ulid: string) => string;
+    view: (store: string, name: string) => string;
+    query: (layout: Layout, q: string) => string;
+    my: () => string;
   };
   selected: TaskView | null; // the task the commands for a task are about
   recent: TaskView[]; // the tasks opened last, the latest first
@@ -205,6 +221,33 @@ export function taskCommands(env: CommandEnv, t: TaskView): PaletteGroup {
   };
 }
 
+// queryCommands are what the palette offers for the query that was typed: the screen of the
+// query as a table (nothing is saved), and the dialog that saves it as a view. The bulk update
+// of the matches the design shows is not made (phase 6).
+export function queryCommands(env: CommandEnv, q: string): PaletteGroup {
+  const href = env.hrefs.query("table", q);
+  return {
+    name: "このクエリで",
+    items: [
+      {
+        type: "command",
+        key: "query-table",
+        label: "テーブルで開く",
+        icon: "filter",
+        href,
+        run: () => env.go(href),
+      },
+      {
+        type: "command",
+        key: "query-save",
+        label: "ビューとして保存…",
+        icon: "filter",
+        run: () => env.saveQuery(q),
+      },
+    ],
+  };
+}
+
 // buildCommands lists the commands, then where to go, then the commands for
 // the selected task. text is the input, with or without the leading >; a word
 // in it narrows the list by its label and note.
@@ -252,6 +295,29 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
       run: env.undo,
     },
   ];
+
+  const myHref = env.hrefs.my();
+  const my: CommandItem = {
+    type: "command",
+    key: "open:my",
+    label: "マイタスクを開く",
+    icon: "checklist",
+    href: myHref,
+    run: () => env.go(myHref),
+  };
+  const saved: CommandItem[] = env.views.map((v) => {
+    const href = env.hrefs.view(v.store, v.view.name);
+    return {
+      type: "command",
+      key: `open:view:${v.store}:${v.view.name}`,
+      label: `${v.view.name} を開く`,
+      icon: "filter",
+      note: "保存済みビュー",
+      store: v.store,
+      href,
+      run: () => env.go(href),
+    };
+  });
 
   const places: CommandItem[] = env.workspaces.flatMap((w) => {
     const wsHref = env.hrefs.workspace(w.store, w.ulid);
@@ -312,7 +378,7 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
   const groups: PaletteGroup[] = [
     { name: "コマンド", items: commands.filter(keep) },
     { name: "最近開いたもの", items: recent },
-    { name: "開く", items: [...places, ...lists].filter(keep) },
+    { name: "開く", items: [...places, ...lists, my, ...saved].filter(keep) },
   ];
   if (env.selected) {
     const g = taskCommands(env, env.selected);

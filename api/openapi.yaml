@@ -1134,6 +1134,8 @@ components:
               - array
               - "null"
           type: object
+        scope:
+          type: string
         status:
           type: string
         store:
@@ -1471,6 +1473,8 @@ components:
           type: object
         rank:
           type: string
+        scope:
+          type: string
         status:
           type: string
         store:
@@ -1626,14 +1630,31 @@ components:
       required:
         - count
       type: object
-    ViewRenameInputBody:
+    ViewPatchInputBody:
       additionalProperties: false
       properties:
-        name:
-          description: The new name
+        columns:
+          description: The columns of the table
+          items:
+            type: string
+          type: array
+        group_by:
           type: string
-      required:
-        - name
+        kanban_columns:
+          type: string
+        layout:
+          enum:
+            - tree
+            - table
+            - kanban
+          type: string
+        name:
+          description: The new name; a rename cannot come with settings
+          type: string
+        query:
+          type: string
+        swimlane:
+          type: string
       type: object
     ViewSaveInputBody:
       additionalProperties: false
@@ -3303,7 +3324,7 @@ paths:
       tags:
         - views
     patch:
-      operationId: rename-view
+      operationId: update-view
       parameters:
         - description: The store; without it, the one hedgehug picks as the CLI does
           explode: false
@@ -3323,7 +3344,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ViewRenameInputBody"
+              $ref: "#/components/schemas/ViewPatchInputBody"
         required: true
       responses:
         "200":
@@ -3338,7 +3359,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
           description: Error
-      summary: Rename a saved view, as hh view rename
+      summary: Rename a saved view (as hh view rename), or change the settings that are given of a view that exists (404 if it does not, unlike PUT; a rename cannot come with settings)
       tags:
         - views
     put:

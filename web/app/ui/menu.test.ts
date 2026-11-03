@@ -32,6 +32,21 @@ describe("Menu", () => {
     await vi.waitFor(() => expect(focused()).toContain("未着手"));
   });
 
+  it("checked を持つ項目は menuitemcheckbox で、aria-checked に状態を出し、矢印で回れる", async () => {
+    const { getAllByRole, queryAllByRole } = open({
+      items: [
+        { value: "a", label: "甲", checked: true },
+        { value: "b", label: "乙", checked: false },
+      ],
+    });
+    const boxes = getAllByRole("menuitemcheckbox");
+    expect(boxes.map((b) => b.getAttribute("aria-checked"))).toEqual(["true", "false"]);
+    expect(queryAllByRole("menuitem")).toHaveLength(0);
+    await vi.waitFor(() => expect(focused()).toContain("甲"));
+    await fireEvent.keyDown(boxes[0] as HTMLElement, { key: "ArrowDown" });
+    await vi.waitFor(() => expect(focused()).toContain("乙"));
+  });
+
   it("selected の項目から始める", async () => {
     open({ selected: "done" });
     await vi.waitFor(() => expect(focused()).toContain("完了"));

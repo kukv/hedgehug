@@ -4,6 +4,7 @@ import { Connection } from "../core/connection";
 import { SaveController } from "../core/save";
 import { SchemaCache } from "../core/schema";
 import { StoreDirectory } from "../core/stores";
+import { ViewDirectory } from "../core/views";
 import type { AppCore } from "./context";
 
 /** Builds the one set of core objects the whole app shares. */
@@ -23,5 +24,6 @@ export function createCore(opts: {
   const save = new SaveController({ api, cache, conn });
   const stores = new StoreDirectory({ api, conn, cache });
   const schema = new SchemaCache({ api, conn });
-  return { api, conn, cache, save, stores, schema };
+  const views = new ViewDirectory({ api, conn, stores, cache });
+  return { api, conn, cache, save, stores, schema, views };
 }

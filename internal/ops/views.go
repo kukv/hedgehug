@@ -92,6 +92,29 @@ func nameTaken(name, existing string) error {
 // ViewSave creates the view name, or changes the settings ch gives of the
 // view that has it.
 func (ss *Session) ViewSave(name string, ch ViewChange) (ViewResult, error) {
+	return ss.writeView(name, ch, true)
+}
+
+// ViewPatch is what a PATCH of a view does: it renames the view to *to, or changes the settings ch
+// gives, but not both (one operation is one commit, and a rename keeps the bytes of the file).
+func (ss *Session) ViewPatch(name string, to *string, ch ViewChange) (ViewResult, error) {
+	if to == nil {
+		return ss.ViewUpdate(name, ch)
+	}
+	if ch != (ViewChange{}) {
+		return ViewResult{}, newErr(KindUsage, "view.rename_with_settings",
+			errors.New("a view is renamed or has its settings changed, not both in one request"))
+	}
+	return ss.ViewRename(name, *to)
+}
+
+// ViewUpdate changes the settings ch gives of the view name, which must exist: unlike ViewSave it
+// never creates one, so an update that comes after the view was renamed or removed fails.
+func (ss *Session) ViewUpdate(name string, ch ViewChange) (ViewResult, error) {
+	return ss.writeView(name, ch, false)
+}
+
+func (ss *Session) writeView(name string, ch ViewChange, create bool) (ViewResult, error) {
 	if err := badViewName(name); err != nil {
 		return ViewResult{}, err
 	}
@@ -107,17 +130,23 @@ func (ss *Session) ViewSave(name string, ch ViewChange) (ViewResult, error) {
 	if err := ss.checkWritable(s); err != nil {
 		return ViewResult{}, err
 	}
+	verb := "save"
+	if !create {
+		verb = "update"
+	}
 	var v *view.View
-	hash, err := ss.UpdateCommit(s, viewOp("save "+name), func(tx *store.Tx) error {
+	hash, err := ss.UpdateCommit(s, viewOp(verb+" "+name), func(tx *store.Tx) error {
 		es, err := view.List(s.Dir())
 		if err != nil {
 			return err
 		}
-		if other, ok := sameNameOf(es, name); ok {
+		if other, ok := sameNameOf(es, name); ok && create {
 			return nameTaken(name, other)
 		}
 		i := slices.IndexFunc(es, func(e view.Entry) bool { return e.Name == name })
 		switch {
+		case i < 0 && !create:
+			return viewNotFound(name)
 		case i < 0:
 			v = view.New(name)
 			v.Layout = "tree"

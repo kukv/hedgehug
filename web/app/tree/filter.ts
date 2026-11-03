@@ -36,10 +36,33 @@ export function baseQuery(b: QueryBase, form: "api" | "cli"): string {
 }
 
 // combine puts the base before the user's input. Every term of a query is
-// ANDed, so joining them narrows the base and never leaves it.
+// ANDed, so joining them narrows the base and never leaves it. A view over
+// every store has no base: its query is the user's input alone.
 export function combine(base: string, user: string): string {
   const u = user.trim();
+  if (base === "") return u;
   return u ? `${base} ${u}` : base;
+}
+
+// withoutOrder takes out the sort: and group: terms. The tree of a query orders by rank, so the
+// server turns down one that has either (query.tree_order). The key of a term is what comes before
+// the first ':', '<' or '>' outside quotes, after a leading '-', as the query parser reads it.
+export function withoutOrder(q: string): string {
+  return splitTerms(q)
+    .filter((term) => {
+      const body = term.startsWith("-") ? term.slice(1) : term;
+      let quoted = false;
+      for (let i = 0; i < body.length; i++) {
+        const ch = body[i];
+        if (ch === '"') quoted = !quoted;
+        else if (!quoted && (ch === ":" || ch === "<" || ch === ">")) {
+          const key = body.slice(0, i);
+          return key !== "sort" && key !== "group";
+        }
+      }
+      return true;
+    })
+    .join(" ");
 }
 
 export const hasTerm = (user: string, term: string) => splitTerms(user).includes(term);

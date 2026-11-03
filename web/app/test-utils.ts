@@ -21,7 +21,7 @@ export function emitter() {
   };
 }
 
-/** A core made of fakes; `over` replaces any of the six objects. */
+/** A core made of fakes; `over` replaces any of the seven objects. */
 export function fakeCore(over: Partial<Record<keyof AppCore, unknown>> = {}): AppCore {
   const e = emitter();
   const base = {
@@ -36,7 +36,11 @@ export function fakeCore(over: Partial<Record<keyof AppCore, unknown>> = {}): Ap
       start() {},
       stop() {},
     },
-    cache: { subscribe: e.subscribe },
+    cache: {
+      subscribe: e.subscribe,
+      // a query that finds nothing
+      watchList: () => ({ ulids: () => [], error: () => null, loading: () => false, dispose() {} }),
+    },
     save: { subscribe: e.subscribe },
     stores: {
       stores: () => [],
@@ -48,6 +52,12 @@ export function fakeCore(over: Partial<Record<keyof AppCore, unknown>> = {}): Ap
       subscribe: e.subscribe,
     },
     schema: { subscribe: e.subscribe },
+    views: {
+      list: () => [],
+      get: () => undefined,
+      loaded: () => true,
+      subscribe: e.subscribe,
+    },
   };
   return { ...base, ...over } as unknown as AppCore;
 }

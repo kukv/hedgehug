@@ -1,5 +1,5 @@
 import type { TaskView } from "../../core/api/client";
-import { defaultStatus, type SchemaView } from "../../core/schema";
+import { defaultStatusIn, type SchemaView } from "../../core/schema";
 import type { FlatRow } from "./flatten";
 import { checkParent, type MoveArgs, type Rejection } from "./placement";
 
@@ -81,7 +81,7 @@ export function keyAction(k: KeyInput, c: KeyContext): KeyAction {
       if (k.mod || k.alt || k.shift || !c.schema) return NONE;
       const done = c.schema.statuses?.find((s) => s.name === row.task.status)?.category === "done";
       const category = done ? "todo" : "done";
-      const status = defaultStatus(c.schema, category);
+      const status = defaultStatusIn(c.schema, category);
       if (status === "") {
         // The schema has no status of that category: there is nothing to patch to.
         return {
@@ -105,8 +105,10 @@ export function keyAction(k: KeyInput, c: KeyContext): KeyAction {
   }
 }
 
+// The siblings share the parent and the store: the top rows of a view over several stores sit under
+// the same null, and a task cannot be put before, after or under one of another store.
 function siblingsOf(row: FlatRow, c: KeyContext): FlatRow[] {
-  return c.rows.filter((r) => r.parent === row.parent);
+  return c.rows.filter((r) => r.parent === row.parent && r.task.store === row.task.store);
 }
 
 function reorder(dir: -1 | 1, row: FlatRow, c: KeyContext): KeyAction {

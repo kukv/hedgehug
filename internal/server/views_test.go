@@ -57,3 +57,36 @@ func TestViewNameTaken(t *testing.T) {
 		t.Errorf("taken: %+v", p)
 	}
 }
+
+func TestViewPatchUpdatesOnlyAnExistingView(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	var out struct {
+		View   ops.SavedView `json:"view"`
+		Commit *string       `json:"commit"`
+	}
+	ts.call("PUT", "/api/views/w", map[string]any{"layout": "table", "query": "status:todo", "columns": []string{"id", "title"}}, 200, nil)
+	ts.call("PATCH", "/api/views/w", map[string]any{"layout": "kanban"}, 200, &out)
+	if out.View.Layout != "kanban" || out.View.Query != "status:todo" || len(out.View.Table.Columns) != 2 || out.Commit == nil {
+		t.Errorf("patched = %+v", out)
+	}
+	ts.call("PATCH", "/api/views/w", map[string]any{"query": "kind:task", "swimlane": "assignee"}, 200, &out)
+	if out.View.Query != "kind:task" || out.View.Kanban.Swimlane != "assignee" || out.View.Layout != "kanban" {
+		t.Errorf("patched = %+v", out)
+	}
+	// A view that is not there is not made.
+	if p := ts.problem("PATCH", "/api/views/gone", map[string]any{"layout": "table"}, 404); p.Type != "view.not_found" {
+		t.Errorf("missing: %+v", p)
+	}
+	ts.problem("GET", "/api/views/gone", nil, 404)
+	// The view that results is checked as a save checks it.
+	ts.call("PUT", "/api/views/t", map[string]any{"layout": "table", "query": "sort:due"}, 200, nil)
+	if p := ts.problem("PATCH", "/api/views/t", map[string]any{"layout": "tree"}, 400); p.Type != "view.tree_order" {
+		t.Errorf("tree order: %+v", p)
+	}
+	// A rename and settings are two operations.
+	if p := ts.problem("PATCH", "/api/views/w", map[string]any{"name": "x", "layout": "table"}, 400); p.Type != "view.rename_with_settings" {
+		t.Errorf("both: %+v", p)
+	}
+	ts.problem("GET", "/api/views/x", nil, 404)
+}

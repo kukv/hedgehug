@@ -10,6 +10,10 @@ import {
   cliSet,
   cliStoreInit,
   cliSync,
+  cliViewRename,
+  cliViewRm,
+  cliViewSave,
+  cliViewShow,
   cliWatch,
   cliWorkspaceAdd,
   cliWorkspaceRename,
@@ -125,6 +129,55 @@ describe("commands", () => {
     );
     expect(cliWorkspaceRm({ workspace: "sandbox", store: "shared" })).toBe(
       "hh workspace rm sandbox --store shared",
+    );
+  });
+
+  it("writes hh view save with a flag for each setting the body holds", () => {
+    expect(
+      cliViewSave({
+        name: "weekly",
+        store: "shared",
+        body: {
+          layout: "table",
+          query: "status:todo assignee:@me",
+          columns: ["id", "title", "due"],
+          group_by: "parent",
+        },
+      }),
+    ).toBe(
+      'hh view save weekly --layout table --query "status:todo assignee:@me" --columns id,title,due --group-by parent --store shared',
+    );
+    expect(
+      cliViewSave({
+        name: "board",
+        body: { layout: "kanban", kanban_columns: "category", swimlane: "assignee" },
+      }),
+    ).toBe("hh view save board --layout kanban --kanban-columns category --swimlane assignee");
+    expect(cliViewSave({ name: "board", body: {} })).toBe("hh view save board");
+    expect(cliViewSave({ name: "board", body: { query: "" } })).toBe(
+      'hh view save board --query ""',
+    );
+    expect(cliViewSave({ name: "w", body: { query: "-status:canceled" } })).toBe(
+      "hh view save w --query -status:canceled",
+    );
+    expect(
+      cliViewSave({ name: new Placeholder("名前"), store: "a b", body: { layout: "tree" } }),
+    ).toBe('hh view save <名前> --layout tree --store "a b"');
+    expect(cliViewSave({ name: "-x", body: { layout: "tree" } })).toBe(
+      "hh view save --layout tree -- -x",
+    );
+  });
+
+  it("writes hh view show, rm and rename; --store only when it is given", () => {
+    expect(cliViewShow("weekly")).toBe("hh view show weekly");
+    expect(cliViewShow("今週の作業", "shared")).toBe("hh view show 今週の作業 --store shared");
+    expect(cliViewRm("weekly", "shared")).toBe("hh view rm weekly --store shared");
+    expect(cliViewRm("weekly")).toBe("hh view rm weekly");
+    expect(cliViewRename("weekly", "monthly", "shared")).toBe(
+      "hh view rename weekly monthly --store shared",
+    );
+    expect(cliViewRename("weekly", new Placeholder("新しい名前"))).toBe(
+      "hh view rename weekly <新しい名前>",
     );
   });
 

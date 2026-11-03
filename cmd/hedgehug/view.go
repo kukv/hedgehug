@@ -59,8 +59,11 @@ func (a *app) viewCmd() *cobra.Command {
 		&cobra.Command{
 			Use:   "show <name>",
 			Short: "List the tasks of a saved view",
-			Args:  exactArgs(1),
-			RunE:  func(_ *cobra.Command, args []string) error { return a.viewShow(args[0]) },
+			Long: "List the tasks of a saved view.\n\n" +
+				"--store names the store the view is saved in. The query runs on every\n" +
+				"store, as the GUI shows a view; store: in the query narrows it.",
+			Args: exactArgs(1),
+			RunE: func(_ *cobra.Command, args []string) error { return a.viewShow(args[0]) },
 		},
 		&cobra.Command{
 			Use:   "rm <name>",
@@ -134,6 +137,11 @@ func (a *app) viewShow(name string) error {
 	if err != nil {
 		return err
 	}
+	// --store says where the view is read from. The tasks are the query's, on
+	// every store, as the GUI shows a view; store: in the query narrows it.
+	own := a.ss
+	a.ss = own.ForStore("")
+	defer func() { a.ss = own }()
 	if v.Layout == "tree" {
 		return a.lsTree(q, false, nil)
 	}

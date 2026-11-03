@@ -273,3 +273,36 @@ describe("other keys", () => {
     expect(keyAction(key("Escape"), ctx("T1"))).toEqual({ type: "none" });
   });
 });
+
+describe("a view over several stores", () => {
+  // The top rows of two stores sit under the same null parent.
+  const two = new Map([
+    ["A1", task("A1", "project", null, { store: "alpha" })],
+    ["A2", task("A2", "project", null, { store: "alpha" })],
+    ["B1", task("B1", "project", null, { store: "beta" })],
+    ["B2", task("B2", "project", null, { store: "beta" })],
+  ]);
+  const twoOf = (u: string) => two.get(u);
+  const roots = ["A1", "A2", "B1", "B2"].map((ulid) => ({ ulid, children: [] }));
+  const multi = (selected: string): KeyContext => ({
+    rows: flatten(roots, null, twoOf, new Set()),
+    selected,
+    schema,
+    viewRoot: null,
+    taskOf: twoOf,
+  });
+
+  it("reorders within a store and stops at the edge of it", () => {
+    expect(keyAction(key("ArrowUp", { alt: true }), multi("A2"))).toEqual({
+      type: "move",
+      ulid: "A2",
+      to: { before: "A1" },
+    });
+    expect(keyAction(key("ArrowDown", { alt: true }), multi("A2"))).toEqual({ type: "none" });
+    expect(keyAction(key("ArrowUp", { alt: true }), multi("B1"))).toEqual({ type: "none" });
+  });
+  it("does not indent the first top row of a store under the last one of another", () => {
+    expect(keyAction(key("Tab"), multi("B1"))).toEqual({ type: "none" });
+    expect(keyAction(key("Tab"), multi("B2"))).toMatchObject({ type: "reject" });
+  });
+});

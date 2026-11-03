@@ -113,10 +113,10 @@ export function parentRule(s: SchemaView, childKind: string): string {
   return `${label}を置ける親は${listJa(names)}だけです`;
 }
 
-// defaultStatus is the status a task gets when it moves to the todo or the
-// done category: the one the schema marks default, else the first of the
-// category. It is "" when the category has none.
-export function defaultStatus(s: SchemaView, category: "todo" | "done"): string {
+// defaultStatusIn is the status a task gets when it moves into a category
+// (todo, doing, done or canceled): the one the schema marks default, else the
+// first of the category. It is "" when the category has none.
+export function defaultStatusIn(s: SchemaView, category: string): string {
   const of = (s.statuses ?? []).filter((x) => x.category === category);
   return (of.find((x) => x.default) ?? of[0])?.name ?? "";
 }

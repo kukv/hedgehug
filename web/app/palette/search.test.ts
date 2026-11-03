@@ -6,6 +6,7 @@ import {
   buildCommands,
   type CommandEnv,
   detectMode,
+  queryCommands,
   type SearchDeps,
   searchTasks,
   taskCommands,
@@ -191,7 +192,9 @@ function env(over: Partial<CommandEnv> = {}): CommandEnv {
     createProject: vi.fn(),
     addWorkspace: vi.fn(),
     undo: vi.fn(),
+    saveQuery: vi.fn(),
     workspaces: [ws],
+    views: [],
     storeNames: ["shared"],
     go: vi.fn(),
     hrefs: {
@@ -200,6 +203,9 @@ function env(over: Partial<CommandEnv> = {}): CommandEnv {
       settingsWorkspaces: (s) => `/settings/workspaces/${s}`,
       project: (u) => `/projects/${u}`,
       task: (u) => `/tasks/${u}`,
+      view: (s, n) => `/views/${s}/${encodeURIComponent(n)}`,
+      query: (l, q) => `/query/${l}?${new URLSearchParams({ q })}`,
+      my: () => "/my",
     },
     selected: null,
     recent: [],
@@ -233,6 +239,7 @@ describe("buildCommands", () => {
       "ワークスペースの設定を開く",
       "リリース準備 v2.4 を開く",
       "設定のワークスペース一覧を開く",
+      "マイタスクを開く",
     ]);
   });
 
@@ -330,6 +337,50 @@ describe("buildCommands", () => {
     ).toEqual(["設定のワークスペース一覧を開く|shared", "設定のワークスペース一覧を開く|empty"]);
   });
 
+  it("opens the tasks of the person, and each saved view with the store it is in", () => {
+    const views = [
+      { store: "shared", tone: "purple" as const, view: { name: "今週のリリース作業" } },
+      { store: "backend", tone: "orange" as const, view: { name: "ブロック中" } },
+    ] as CommandEnv["views"];
+    const e = env({ views });
+    const gs = buildCommands(e, ">");
+    const opens = gs.find((g) => g.name === "開く")?.items ?? [];
+    expect(
+      opens.slice(-3).map((i) => (i.type === "command" ? [i.label, i.store, i.href] : [])),
+    ).toEqual([
+      ["マイタスクを開く", undefined, "/my"],
+      [
+        "今週のリリース作業 を開く",
+        "shared",
+        "/views/shared/%E4%BB%8A%E9%80%B1%E3%81%AE%E3%83%AA%E3%83%AA%E3%83%BC%E3%82%B9%E4%BD%9C%E6%A5%AD",
+      ],
+      [
+        "ブロック中 を開く",
+        "backend",
+        "/views/backend/%E3%83%96%E3%83%AD%E3%83%83%E3%82%AF%E4%B8%AD",
+      ],
+    ]);
+    const view = opens.at(-2);
+    if (view?.type === "command") view.run();
+    expect(e.go).toHaveBeenCalledWith(
+      "/views/shared/%E4%BB%8A%E9%80%B1%E3%81%AE%E3%83%AA%E3%83%AA%E3%83%BC%E3%82%B9%E4%BD%9C%E6%A5%AD",
+    );
+  });
+
+  it("narrows the places to open by the word, the saved views too", () => {
+    const views = [
+      { store: "backend", tone: "orange" as const, view: { name: "ブロック中" } },
+    ] as CommandEnv["views"];
+    const gs = buildCommands(env({ views }), ">ブロック");
+    expect(gs.map((g) => g.name)).toEqual(["開く"]);
+    expect(gs[0]?.items.map((i) => (i.type === "command" ? i.label : ""))).toEqual([
+      "ブロック中 を開く",
+    ]);
+    expect(
+      buildCommands(env(), ">マイ")[0]?.items.map((i) => (i.type === "command" ? i.label : "")),
+    ).toEqual(["マイタスクを開く"]);
+  });
+
   it("adds the commands for the selected task", () => {
     const t = task("T1", "task", null, { id: "REL-6" });
     const gs = buildCommands(env({ selected: t }), ">");
@@ -372,5 +423,27 @@ describe("taskCommands", () => {
     expect(e.createTask).toHaveBeenCalledWith("T1");
     if (detail?.type === "command") detail.run();
     expect(e.go).toHaveBeenCalledWith("/tasks/T1");
+  });
+});
+
+describe("queryCommands", () => {
+  it("opens the query as a table without saving, and saves it as a view", () => {
+    const e = env();
+    const g = queryCommands(e, "status:doing assignee:@me");
+    expect(g.name).toBe("このクエリで");
+    expect(g.items.map((i) => (i.type === "command" ? i.label : ""))).toEqual([
+      "テーブルで開く",
+      "ビューとして保存…",
+    ]);
+    const [open, save] = g.items;
+    expect(open).toMatchObject({
+      href: "/query/table?q=status%3Adoing+assignee%3A%40me",
+    });
+    if (open?.type === "command") open.run();
+    expect(e.go).toHaveBeenCalledWith("/query/table?q=status%3Adoing+assignee%3A%40me");
+    if (save?.type === "command") save.run();
+    expect(e.saveQuery).toHaveBeenCalledWith("status:doing assignee:@me");
+    // a command of the query is not one of the bulk update, which is for phase 6
+    expect(g.items.some((i) => i.type === "command" && /まとめて更新/.test(i.label))).toBe(false);
   });
 });

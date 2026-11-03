@@ -16,6 +16,8 @@
   import { patchTask } from "../tree/actions";
   import StoreBadge from "../ui/StoreBadge.svelte";
   import { routeStore, runUndo } from "../undo";
+  import { openViewSave } from "../views/dialogs-state.svelte";
+  import { newDraft } from "../views/draft";
   import { openWorkspaceAdd, openWorkspaceMove } from "../workspace/dialogs-state.svelte";
   import { fetchMissing, readRecent, rememberTask } from "./recent";
   import {
@@ -24,6 +26,7 @@
     detectMode,
     type PaletteGroup,
     type PaletteItem,
+    queryCommands,
     searchTasks,
     taskCommands,
   } from "./search";
@@ -32,11 +35,14 @@
   const cacheRev = useSubscribe(c.cache, () => ({}));
   const storesRev = useSubscribe(c.stores, () => ({}));
   const schemaRev = useSubscribe(c.schema, () => ({}));
+  const viewsRev = useSubscribe(c.views, () => ({}));
 
   let input = $state("");
   let active = $state(0);
   let picking = $state<TaskView | null>(null);
   let found = $state<{ groups: PaletteGroup[]; error: unknown }>({ groups: [], error: null });
+  // The text `found` was computed for: what it says is true of that text only.
+  let foundFor = $state("");
   let inputEl = $state<HTMLInputElement | null>(null);
   let listEl = $state<HTMLDivElement | null>(null);
   // Why the statuses of the task picked could not be listed (the schema of its store did not load).
@@ -78,6 +84,7 @@
     active = 0;
     picking = null;
     found = { groups: [], error: null };
+    foundFor = "";
     void tick().then(() => inputEl?.focus());
   });
 
@@ -100,12 +107,16 @@
     seq++;
     if (!palette.open || picking || m === "command" || text.trim() === "") {
       found = { groups: [], error: null };
+      foundFor = "";
       return;
     }
     const mine = seq;
     timer = setTimeout(async () => {
       const r = await searchTasks(deps, text, m);
-      if (mine === seq) found = r;
+      if (mine === seq) {
+        found = r;
+        foundFor = text.trim();
+      }
     }, 150);
     return () => clearTimeout(timer);
   });
@@ -132,12 +143,16 @@
   const env = $derived.by<CommandEnv>(() => {
     cacheRev.current;
     storesRev.current;
+    viewsRev.current;
     const sel = router.route.name === "task" ? router.route.ulid : selection.ulid;
     return {
       syncNow: () => void runSync(c.api),
       createTask: (parent) => openCreate({ kind: "task", parent }),
       createProject: () => openCreate({ kind: "project" }),
       addWorkspace: () => openWorkspaceAdd(),
+      // A query typed in the palette is saved as a table, which holds any query (a tree cannot sort).
+      saveQuery: (query) => openViewSave({ draft: newDraft({ layout: "table", query }) }),
+      views: c.views.list(),
       undo: () =>
         void runUndo(
           c,
@@ -154,6 +169,9 @@
         settingsWorkspaces: (store) => router.href({ name: "settings", page: "workspaces", store }),
         project: (ulid) => router.href({ name: "project", ulid, tab: "tree" }),
         task: (ulid) => router.href({ name: "task", ulid }),
+        view: (store, view) => router.href({ name: "view", store, view }),
+        query: (layout, q) => router.href({ name: "query", layout, q }),
+        my: () => router.href({ name: "my" }),
       },
       selected: sel ? (c.cache.task(sel) ?? null) : null,
       recent: recentUlids.flatMap((u) => c.cache.task(u) ?? []),
@@ -188,6 +206,11 @@
     if (picking) return statusGroups(picking);
     if (mode === "command" || input.trim() === "") return buildCommands(env, input);
     const out = [...found.groups];
+    // A query that found tasks can be opened as a table or saved as a view.
+    // Only for the text the search was made for: the one typed since is not checked yet.
+    if (mode === "query" && !found.error && found.groups.length > 0 && foundFor === input.trim()) {
+      out.push(queryCommands(env, input.trim()));
+    }
     const first = found.groups.flatMap((g) => g.items).find((i) => i.type === "task");
     if (mode === "id" && first?.type === "task") {
       const t = c.cache.task(first.ulid);

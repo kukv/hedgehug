@@ -41,7 +41,8 @@
 
   // The text the user is typing. An outside change is taken only when nothing is pending and the input has no focus.
   let local = $state(untrack(() => asText(value)));
-  let focused = false;
+  // $state, so that leaving the input runs the effect again: a value kept while a save was pending is replaced then.
+  let focused = $state(false);
   $effect(() => {
     const v = asText(value);
     if (!focused && !pending) local = v;

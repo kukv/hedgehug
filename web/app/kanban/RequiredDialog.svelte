@@ -1,0 +1,198 @@
+<script lang="ts">
+  import type { Schemas, TaskView } from "../../core/api/client";
+  import { cliSet } from "../../core/cli";
+  import { errorMessage } from "../../core/messages";
+  import type { SchemaView } from "../../core/schema";
+  import FieldInput from "../detail/FieldInput.svelte";
+  import PropField from "../detail/PropField.svelte";
+  import { propRows } from "../detail/prop-rows";
+  import { onLinkClick, router } from "../router";
+  import Button from "../ui/Button.svelte";
+  import Dialog from "../ui/Dialog.svelte";
+
+  type Props = {
+    task: TaskView;
+    status: string; // the status the card is dropped on
+    fields: string[]; // the required fields the task lacks and this dialog takes in (requiredGap.fill)
+    elsewhere: string[]; // the ones only the task detail can fill (requiredGap.elsewhere)
+    schema: SchemaView;
+    // Sends the status and the fields in one PATCH. A failure is thrown and shown here.
+    onsubmit: (body: Schemas["PatchInputBody"]) => Promise<void>;
+    onclose: () => void;
+  };
+  let { task, status, fields, elsewhere, schema, onsubmit, onclose }: Props = $props();
+
+  const statusLabel = $derived(schema.statuses?.find((s) => s.name === status)?.label || status);
+  const rows = $derived(propRows(schema, {}));
+  const rowOf = (name: string) => rows.find((r) => r.name === name);
+  const NAMES: Record<string, string> = {
+    assignees: "担当者",
+    labels: "ラベル",
+    parent: "親",
+    blocked_by: "ブロックしているタスク",
+    watchers: "ウォッチャー",
+    repos: "リポジトリ",
+    sprint: "スプリント",
+    releases: "リリース",
+    links: "リンク",
+  };
+  const labelOf = (name: string): string =>
+    NAMES[name] ?? schema.props[name]?.label ?? rowOf(name)?.label ?? name;
+  const detailHref = $derived(router.href({ name: "task", ulid: task.ulid }));
+
+  let assignees = $state<string[]>([]);
+  let labels = $state<string[]>([]);
+  let values = $state<Record<string, unknown>>({});
+  let busy = $state(false);
+  let error = $state("");
+
+  const empty = (v: unknown) =>
+    v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0);
+  const currentOf = (name: string): unknown =>
+    name === "assignees" ? assignees : name === "labels" ? labels : values[name];
+  const complete = $derived(fields.every((f) => !empty(currentOf(f))));
+
+  const title = $derived(
+    `${task.id} を${statusLabel}にするには ${[...fields, ...elsewhere].map(labelOf).join("・")} が必要です`,
+  );
+  const cli = $derived(
+    cliSet(task.id, {
+      status,
+      ...Object.fromEntries(
+        fields
+          .filter((f) => !empty(currentOf(f)))
+          .map((f) => {
+            const v = currentOf(f);
+            return [f, Array.isArray(v) ? v.join(",") : String(v)];
+          }),
+      ),
+    }),
+  );
+
+  async function submit() {
+    if (!complete || elsewhere.length > 0 || busy) return;
+    busy = true;
+    error = "";
+    const body: Schemas["PatchInputBody"] = { status };
+    if (fields.includes("assignees")) body.assignees = assignees;
+    if (fields.includes("labels")) body.labels = labels;
+    const sent = Object.fromEntries(
+      fields.filter((f) => f !== "assignees" && f !== "labels").map((f) => [f, values[f]]),
+    );
+    if (Object.keys(sent).length > 0) body.props = sent;
+    try {
+      await onsubmit(body);
+      onclose();
+    } catch (e) {
+      error = errorMessage(e);
+    } finally {
+      busy = false;
+    }
+  }
+</script>
+
+<Dialog open {title} width={560} {cli} cliDisabled={!complete || elsewhere.length > 0} {onclose}>
+  <div class="form">
+    {#each fields as name (name)}
+      <div class="prow">
+        <span class="lbl">{labelOf(name)}</span>
+        {#if name === "assignees"}
+          <FieldInput
+            editor="chips"
+            label="担当者"
+            value={assignees}
+            onedit={(v) => (assignees = v as string[])}
+            oncommit={() => {}}
+          />
+        {:else if name === "labels"}
+          <FieldInput
+            editor="chips"
+            label="ラベル"
+            value={labels}
+            onedit={(v) => (labels = v as string[])}
+            oncommit={() => {}}
+          />
+        {:else}
+          {@const row = rowOf(name)}
+          {#if row}
+            <PropField
+              {row}
+              value={values[name] ?? null}
+              onedit={(v) => (values[name] = v)}
+              oncommit={() => {}}
+            />
+          {/if}
+        {/if}
+      </div>
+    {/each}
+    {#each elsewhere as name (name)}
+      <div class="prow">
+        <span class="lbl">{labelOf(name)}</span>
+        <a
+          class="detail"
+          href={detailHref}
+          onclick={(e) => {
+            onLinkClick(e, detailHref);
+            onclose();
+          }}
+          >詳細で入力</a
+        >
+      </div>
+    {/each}
+    {#if elsewhere.length > 0}
+      <p class="note">
+        {fields.length > 0
+          ? "ここで入力できない項目"
+          : "この項目"}はタスクの詳細で入力してください。入力するまで{statusLabel}にはできません。
+      </p>
+    {:else}
+      <p class="note">ステータスと入力した項目は、1回の保存（1コミット）で変わります。</p>
+    {/if}
+    {#if error}
+      <p class="error" role="alert">{error}</p>
+    {/if}
+  </div>
+
+  {#snippet footer()}
+    <Button onclick={onclose}>やめる</Button>
+    <Button
+      variant="primary"
+      disabled={!complete || elsewhere.length > 0 || busy}
+      onclick={() => void submit()}
+    >
+      {statusLabel}にする
+    </Button>
+  {/snippet}
+</Dialog>
+
+<style>
+  .form {
+    display: grid;
+    gap: var(--space-12);
+  }
+  .prow {
+    display: grid;
+    grid-template-columns: 7em minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-8);
+  }
+  .lbl {
+    font-size: var(--fs-12);
+    font-weight: 600;
+    color: var(--ink-2);
+  }
+  .detail {
+    color: var(--accent);
+    font-size: var(--fs-13);
+  }
+  .note {
+    margin: 0;
+    font-size: var(--fs-12);
+    color: var(--muted);
+  }
+  .error {
+    margin: 0;
+    font-size: var(--fs-12);
+    color: var(--danger);
+  }
+</style>

@@ -1,23 +1,22 @@
 <script lang="ts">
   import { createVirtualizer } from "@tanstack/svelte-virtual";
-  import { onDestroy, tick, untrack } from "svelte";
+  import { onDestroy, type Snippet, tick, untrack } from "svelte";
   import type { Attachment } from "svelte/attachments";
   import type { TaskView } from "../../core/api/client";
   import { cliLs } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
-  import Icon from "../icons/Icon.svelte";
-  import KindIcon from "../icons/KindIcon.svelte";
   import { kbdLabel, modKey } from "../keys";
-  import { onLinkClick, router } from "../router";
+  import ListBar from "../list/ListBar.svelte";
+  import type { ListScope } from "../list/scope";
+  import { useListScope } from "../list/scope.svelte";
+  import { router } from "../router";
   import { selection } from "../selection.svelte";
   import Empty from "../states/Empty.svelte";
   import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Menu from "../ui/Menu.svelte";
-  import StoreBadge from "../ui/StoreBadge.svelte";
-  import Tabs from "../ui/Tabs.svelte";
   import { openWorkspaceMove } from "../workspace/dialogs-state.svelte";
   import { MOVE_VALUE, moveWorkspaceItem } from "../workspace/move-menu";
   import AddRow from "./AddRow.svelte";
@@ -30,8 +29,7 @@
     treeAutoScroll,
     treeDragEnd,
   } from "./dnd";
-  import FilterBar from "./FilterBar.svelte";
-  import { baseQuery, combine, hasTerm, NO_CANCELED, type QueryBase, withoutTerm } from "./filter";
+  import { combine, hasTerm, NO_CANCELED, withoutTerm } from "./filter";
   import {
     countLabel,
     countMatched,
@@ -43,13 +41,22 @@
   import { type KeyAction, type KeyInput, keyAction, needsSchema } from "./keyboard";
   import { openBlocker } from "./marks";
   import { checkParent, kindLabel, pickKind } from "./placement";
+  import { orderRootsByStore, storesOf } from "./stores-order";
   import TreeRow from "./TreeRow.svelte";
 
-  type Scope =
-    | { kind: "workspace"; store: string; ulid: string }
-    | { kind: "project"; ulid: string };
+  type Props = {
+    view: ListScope;
+    // The filter, when the screen that holds this view owns it (a saved view, the query screen).
+    // Without it the view keeps the filter itself, from -status:canceled.
+    query?: string;
+    onquery?: (q: string) => void;
+    // The line at the foot, in place of the hh ls of the filter.
+    cli?: string;
+    // At the right of the filter bar.
+    actions?: Snippet;
+  };
   // The prop is not called scope: Biome reads that name as the HTML attribute.
-  let { view: scope }: { view: Scope } = $props();
+  let { view: scope, query, onquery, cli: cliLine, actions }: Props = $props();
 
   const c = core();
   // The selection is one for the whole app: a row of another screen is not one of this.
@@ -61,84 +68,86 @@
   const schemaRev = useSubscribe(c.schema, () => ({}));
 
   // --- what the view shows -------------------------------------------------
-  const project = $derived.by(() => {
-    cacheRev.current;
-    return scope.kind === "project" ? c.cache.task(scope.ulid) : undefined;
-  });
-  const store = $derived(scope.kind === "workspace" ? scope.store : project?.store);
-  const workspace = $derived.by(() => {
-    storesRev.current;
-    if (scope.kind === "workspace") return c.stores.workspace(scope.store, scope.ulid);
-    if (!project) return undefined;
-    return c.stores
-      .workspaces()
-      .find((w) => w.store === project.store && w.ulid === project.workspace.ulid);
-  });
-  const schema = $derived.by(() => {
+  // Where the view is (a workspace, a project, or every store) is resolved once, by useListScope.
+  const ls = useListScope(() => scope);
+  const all = $derived(scope.kind === "all");
+  const viewRoot = $derived(scope.kind === "project" ? scope.ulid : null);
+  // A view over every store lists the tasks of several stores, so each row has the schema of its
+  // own store: the kinds, the statuses and the keys are read from that one, never from a single schema.
+  function schemaOf(store: string | undefined) {
     schemaRev.current;
     return store ? c.schema.get(store) : undefined;
-  });
-  const viewRoot = $derived(scope.kind === "project" ? scope.ulid : null);
-  // The workspace the address names is not in the stores (removed, or never there).
-  const workspaceMissing = $derived.by(() => {
+  }
+  function toneOf(store: string) {
     storesRev.current;
-    return scope.kind === "workspace" && !workspace && c.stores.loaded();
+    return c.stores.tone(store);
+  }
+  function workspaceOf(store: string | undefined, ulid: string | undefined) {
+    storesRev.current;
+    return store && ulid ? c.stores.workspace(store, ulid) : undefined;
+  }
+  // The stores in the order of GET /api/stores: the order a view over every store lists them in.
+  const storeOrder = $derived.by(() => {
+    storesRev.current;
+    return all ? c.stores.stores().map((s) => s.name) : [];
   });
-  const base = $derived<QueryBase | null>(
-    scope.kind === "workspace"
-      ? workspace
-        ? { kind: "workspace", name: workspace.name }
-        : null
-      : project
-        ? { kind: "project", ulid: project.ulid, id: project.id }
-        : null,
-  );
-  const apiBase = $derived(base ? baseQuery(base, "api") : null);
-  const cliBase = $derived(base ? baseQuery(base, "cli") : "");
+  // Each row shows its store when the view can hold the tasks of more than one.
+  const multi = $derived(all && storeOrder.length >= 2);
 
-  type DetailHandle = ReturnType<typeof c.cache.watchDetail>;
-  let detail = $state<DetailHandle | null>(null);
-  $effect(() => {
-    if (scope.kind !== "project") return;
-    const h = c.cache.watchDetail(scope.ulid);
-    detail = h;
-    return () => {
-      h.dispose();
-      detail = null;
-    };
-  });
-  // Why the project cannot be shown (deleted, not found, not fetched).
-  const projectError = $derived.by(() => {
+  // Keys that need the schema, pressed before it is read, wait here with the store of the task they
+  // act on, and run once the schema of that store is read, in the order pressed. A store whose
+  // schema could not be read is in failed; failed is read only while the schema is missing.
+  // ulid is the row that was selected when the key was pressed: the key runs only if it still is.
+  type Waiting = { key: KeyInput; store: string; ulid: string | null };
+  let waiting: Waiting[] = [];
+  const failed = new Set<string>();
+  // The stores of the rows. A child is in the store of its parent, so the roots hold them all. The
+  // value is a string, so the schemas are asked for again only when the set of stores changes.
+  const storesKey = $derived.by(() => {
     cacheRev.current;
-    return project ? null : (detail?.error() ?? null);
-  });
-  const notFound = $derived(workspaceMissing || projectError?.status === 404);
-  // Keys that need the schema, pressed before it is read, wait here and run once it is.
-  let waiting: KeyInput[] = [];
-  let schemaFailed = false;
-  $effect(() => {
-    if (!store) return;
-    schemaFailed = false;
-    c.schema.load(store).catch((err) => {
-      schemaFailed = true;
-      if (waiting.length > 0) toast({ message: errorMessage(err) });
-      waiting = [];
-    });
+    return (ls.store ? [ls.store] : storesOf(roots, taskOf)).join("\n");
   });
   $effect(() => {
-    if (!schema || waiting.length === 0) return;
-    const keys = waiting;
-    waiting = [];
+    for (const store of storesKey === "" ? [] : storesKey.split("\n")) {
+      failed.delete(store);
+      c.schema.load(store).catch((err) => {
+        failed.add(store);
+        if (waiting.some((w) => w.store === store)) toast({ message: errorMessage(err) });
+        waiting = waiting.filter((w) => w.store !== store);
+      });
+    }
+  });
+  $effect(() => {
+    schemaRev.current;
+    if (waiting.length === 0) return;
+    // The keys go in order: one that waits for a schema holds back the ones after it.
+    const n = waiting.findIndex((w) => !c.schema.get(w.store));
+    const keys = n < 0 ? waiting : waiting.slice(0, n);
+    if (keys.length === 0) return;
+    waiting = n < 0 ? [] : waiting.slice(n);
     void (async () => {
-      for (const k of keys) {
-        await dispatch(k);
+      for (const w of keys) {
+        if (selection.ulid !== w.ulid) continue;
+        await dispatch(w.key);
       }
     })();
   });
+  // The keys act on the selected task, so on the schema of its store.
+  const keyStore = $derived.by(() => {
+    cacheRev.current;
+    const selected = selection.ulid ? taskOf(selection.ulid) : undefined;
+    return selected?.store ?? ls.store;
+  });
+  const keySchema = $derived(schemaOf(keyStore));
 
   // --- the query -----------------------------------------------------------
   // The default filter leaves the canceled tasks out; clearing the field shows them.
-  let applied = $state<string>(NO_CANCELED);
+  let own = $state<string>(NO_CANCELED);
+  const applied = $derived(query ?? own);
+  function setApplied(q: string) {
+    if (query === undefined) own = q;
+    onquery?.(q);
+  }
 
   type TreeHandle = ReturnType<typeof c.cache.watchTree>;
   type ListHandle = ReturnType<typeof c.cache.watchList>;
@@ -146,42 +155,51 @@
   let blockedList = $state<ListHandle | null>(null);
   let canceledList = $state<ListHandle | null>(null);
 
+  // A view over every store asks without a store: the answer lists the tasks of all of them.
   $effect(() => {
-    if (!apiBase || !store) {
+    if (!ls.ready) {
       tree = null;
       return;
     }
-    const h = c.cache.watchTree({ q: combine(apiBase, applied), tree: true, store });
+    const h = c.cache.watchTree({ q: combine(ls.apiBase, applied), tree: true, store: ls.store });
     tree = h;
     return () => h.dispose();
   });
   $effect(() => {
-    if (!apiBase || !store) {
+    if (!ls.ready) {
       blockedList = null;
       return;
     }
-    const h = c.cache.watchList({ q: combine(apiBase, "is:blocked"), tree: false, store });
+    const h = c.cache.watchList({
+      q: combine(ls.apiBase, "is:blocked"),
+      tree: false,
+      store: ls.store,
+    });
     blockedList = h;
     return () => h.dispose();
   });
   $effect(() => {
-    if (!apiBase || !store || !hasTerm(applied, NO_CANCELED)) {
+    if (!ls.ready || !hasTerm(applied, NO_CANCELED)) {
       canceledList = null;
       return;
     }
-    const q = combine(apiBase, `${withoutTerm(applied, NO_CANCELED)} status:canceled`);
-    const h = c.cache.watchList({ q, tree: false, store });
+    const q = combine(ls.apiBase, `${withoutTerm(applied, NO_CANCELED)} status:canceled`);
+    const h = c.cache.watchList({ q, tree: false, store: ls.store });
     canceledList = h;
     return () => h.dispose();
   });
 
+  // The roots of a view over every store come in one answer. The order by store is derived from the
+  // tree, the tasks and the stores as they are each time this is computed, and kept nowhere: when
+  // any of them changes later, the order is made again, so no moment of arrival can leave it wrong.
   const roots = $derived.by(() => {
     cacheRev.current;
-    return tree?.roots() ?? [];
+    const r = tree?.roots() ?? [];
+    return all ? orderRootsByStore(r, storeOrder, taskOf) : r;
   });
   const loading = $derived.by(() => {
     cacheRev.current;
-    return base === null || (tree?.loading() ?? true);
+    return !ls.ready || (tree?.loading() ?? true);
   });
   const treeError = $derived.by(() => {
     cacheRev.current;
@@ -218,11 +236,14 @@
 
   // after: the row the input goes below. trail: the rows it went below before, oldest first. The
   // tree reads a task made only after the write, so the input waits at the newest of them that
-  // is shown, and moves below the new task once that is.
+  // is shown, and moves below the new task once that is. store and workspace (its ULID) are where
+  // the task is made: those of the row it goes below, or of the view for the input at the foot.
   type Adding = {
     after: string | null;
     parent: string | null;
     depth: number;
+    store: string | undefined;
+    workspace: string | undefined;
     trail?: string[];
   };
   let adding = $state<Adding | null>(null);
@@ -359,17 +380,18 @@
   let menu = $state<{ which: "status" | "kind" | "row"; ulid: string } | null>(null);
 
   function actionOf(k: KeyInput): KeyAction {
-    return keyAction(k, { rows, selected: selection.ulid, schema, viewRoot, taskOf });
+    return keyAction(k, { rows, selected: selection.ulid, schema: keySchema, viewRoot, taskOf });
   }
 
   function onkeydown(e: KeyboardEvent) {
     if ((e.target as HTMLElement).closest("input, textarea, select, [contenteditable='true']"))
       return;
     const k = { key: e.key, shift: e.shiftKey, alt: e.altKey, mod: modKey(e) };
-    if (!schema && needsSchema(k)) {
+    if (keyStore && !keySchema && needsSchema(k)) {
       e.preventDefault();
-      if (schemaFailed) toast({ message: `${store} の schema.yaml を読み込めていません` });
-      else waiting.push(k);
+      if (failed.has(keyStore))
+        toast({ message: `${keyStore} の schema.yaml を読み込めていません` });
+      else waiting.push({ key: k, store: keyStore, ulid: selection.ulid });
       return;
     }
     // A move waits for the moves before it, and the key may act on the rows they leave.
@@ -445,8 +467,15 @@
           open(a.ulid);
           break;
         case "add-below": {
-          const depth = rows.find((r) => r.ulid === a.after)?.depth ?? 0;
-          adding = { after: a.after, parent: a.parent, depth };
+          const row = rows.find((r) => r.ulid === a.after);
+          // The task goes into the store and the workspace of the row it goes below.
+          adding = {
+            after: a.after,
+            parent: a.parent,
+            depth: row?.depth ?? 0,
+            store: row?.task.store,
+            workspace: row?.task.workspace.ulid,
+          };
           break;
         }
         case "move": {
@@ -481,17 +510,18 @@
 
   const menuTask = $derived(menu ? taskOf(menu.ulid) : undefined);
   const menuItems = $derived.by(() => {
-    if (!menu || !menuTask || !schema) return [];
+    const menuSchema = schemaOf(menuTask?.store);
+    if (!menu || !menuTask || !menuSchema) return [];
     if (menu.which === "row") {
       storesRev.current;
       return [moveWorkspaceItem(menuTask, c.stores.workspaces())];
     }
     if (menu.which === "status") {
-      return (schema.statuses ?? []).map((s) => ({ value: s.name, label: s.label || s.name }));
+      return (menuSchema.statuses ?? []).map((s) => ({ value: s.name, label: s.label || s.name }));
     }
     const parent = menuTask.parent ? taskOf(menuTask.parent) : undefined;
-    return (schema.kinds ?? []).map((k) => {
-      const why = checkParent(schema, { ...menuTask, kind: k.name }, parent ?? null);
+    return (menuSchema.kinds ?? []).map((k) => {
+      const why = checkParent(menuSchema, { ...menuTask, kind: k.name }, parent ?? null);
       return { value: k.name, label: k.label || k.name, disabled: why !== null, hint: why?.title };
     });
   });
@@ -512,25 +542,50 @@
   }
 
   // --- adding ------------------------------------------------------------------------
+  // Where a task made now would go: the row it goes below, else the view's own workspace.
+  // An input at the foot of a view of one store carries neither (see startFootAdd): they are read
+  // from the view at the moment they are used, so the input works once the workspace is loaded.
+  const addStore = $derived(adding?.store ?? ls.store);
+  const addWorkspace = $derived(
+    adding?.workspace ? workspaceOf(adding.store, adding.workspace) : ls.workspace,
+  );
+  const addSchema = $derived(schemaOf(addStore));
   const addKind = $derived.by(() => {
-    if (!schema) return null;
+    if (!addSchema) return null;
     const parentId = adding ? adding.parent : viewRoot;
     const parent = parentId ? taskOf(parentId) : undefined;
-    return pickKind(schema, parent?.kind ?? null);
+    return pickKind(addSchema, parent?.kind ?? null);
   });
-  const whereLabel = $derived(
-    scope.kind === "project" && project
-      ? `${project.workspace.name} / ${project.title}`
-      : (workspace?.name ?? ""),
-  );
+  const whereLabel = $derived.by(() => {
+    if (all) return addWorkspace ? `${addWorkspace.store} / ${addWorkspace.name}` : "";
+    return scope.kind === "project" && ls.project
+      ? `${ls.project.workspace.name} / ${ls.project.title}`
+      : (ls.workspace?.name ?? "");
+  });
 
   function startAdd(a: Adding) {
     adding = a;
+  }
+  // The input at the foot: a view over every store has no workspace of its own to make a task in, so
+  // the create dialog, which asks for one, opens instead.
+  function startFootAdd() {
+    if (all) openCreate({ kind: "task" });
+    else
+      startAdd({
+        after: null,
+        parent: viewRoot,
+        depth: 0,
+        store: undefined,
+        workspace: undefined,
+      });
   }
 
   // submitAdd says whether the task was made: the title typed stays when it was not.
   async function submitAdd(title: string): Promise<boolean> {
     const a = adding;
+    const store = addStore;
+    const workspace = addWorkspace;
+    const schema = addSchema;
     if (!a || !store || !workspace || !schema) return false;
     const parent = a.parent ? taskOf(a.parent) : undefined;
     const kind = pickKind(schema, parent?.kind ?? null);
@@ -556,7 +611,14 @@
       select(created.ulid);
       // keep going below the new row, as an outliner does
       const trail = [...(a.trail ?? []), ...(a.after ? [a.after] : [])].slice(-MAX_TRAIL);
-      adding = { after: created.ulid, parent: a.parent, depth: a.depth, trail };
+      adding = {
+        after: created.ulid,
+        parent: a.parent,
+        depth: a.depth,
+        store: a.store,
+        workspace: a.workspace,
+        trail,
+      };
       return true;
     } catch (err) {
       toast({ message: errorMessage(err) });
@@ -572,7 +634,7 @@
     const dragged = taskOf(sourceUlid);
     const target = taskOf(targetUlid);
     if (!dragged || !target) return null;
-    return dropDecision({ dragged, target, place, schema, taskOf });
+    return dropDecision({ dragged, target, place, schema: schemaOf(dragged.store), taskOf });
   }
 
   function setOver(targetUlid: string, place: DropPlace | null, sourceUlid: string | null) {
@@ -635,8 +697,9 @@
   );
 
   // --- reading the screen ---------------------------------------------------------------
-  const cli = $derived(
-    cliLs(combine(cliBase, applied), true, scope.kind === "workspace" ? store : undefined),
+  const footCli = $derived(
+    cliLine ??
+      cliLs(combine(ls.cliBase, applied), true, scope.kind === "workspace" ? ls.store : undefined),
   );
   // One row takes the Tab key: the selected one when it is shown, else the first.
   const rowFocus = $derived(
@@ -645,62 +708,19 @@
   const noTasks = $derived(
     withoutTerm(applied, NO_CANCELED).trim() === "" && !(canceledCount && canceledCount > 0),
   );
-  const crumbTitle = $derived(
-    scope.kind === "project" ? (project?.title ?? "") : (workspace?.name ?? ""),
-  );
-  // Spread, because Biome reads a prop called scope as the HTML attribute.
-  const emptyProps = $derived({ scope: scope.kind, name: crumbTitle });
-  const notFoundProps = $derived({
-    scope: scope.kind,
-    name: scope.kind === "workspace" ? scope.ulid : "",
-  });
 </script>
 
 <section class="tree" aria-label="ツリー">
-  <!-- The workspace has its own heading and tabs (WorkspaceHeader), which sit above this view. -->
-  {#if scope.kind === "project"}
-    <header class="head">
-      <nav class="crumb" aria-label="パンくず">
-        {#if store}
-          <StoreBadge {store} tone={c.stores.tone(store)} />
-        {/if}
-        {#if workspace}
-          {@const wsHref = router.href({
-            name: "workspace",
-            store: workspace.store,
-            ulid: workspace.ulid,
-            tab: "overview",
-          })}
-          <a class="ws" href={wsHref} onclick={(e) => onLinkClick(e, wsHref)}>
-            <Icon name="workspace" size={16} />{workspace.name}
-          </a>
-          <span class="sep" aria-hidden="true">›</span>
-        {/if}
-        <KindIcon kind="project" />
-        <h1>{crumbTitle}</h1>
-        {#if project}
-          <span class="id">{project.id}</span>
-        {/if}
-      </nav>
-    </header>
-    <Tabs
-      items={[
-        {
-          label: "ツリー",
-          href: router.href({ name: "project", ulid: scope.ulid, tab: "tree" }),
-          current: true,
-        },
-      ]}
-    />
-  {/if}
-
-  <FilterBar
-    base={cliBase}
+  <!-- The heading and the tabs of a workspace (WorkspaceHeader) and of a project (ProjectHeader)
+       sit above this view, in their pages. -->
+  <ListBar
+    base={ls.cliBase}
     {applied}
     count={countLabel(matched, canceledCount)}
-    {cli}
+    cli={footCli}
     error={treeError}
-    onchange={(q) => (applied = q)}
+    onchange={setApplied}
+    {actions}
   />
 
   <div class="body">
@@ -710,7 +730,7 @@
       class:refusing={roomForRefusal}
       style:--refusal-h={refusalHeight > 0 ? `${refusalHeight}px` : undefined}
       role="tree"
-      aria-label="{crumbTitle} のタスク"
+      aria-label={all ? "タスク" : `${ls.crumbTitle} のタスク`}
       tabindex="-1"
       bind:this={scroller}
       {onkeydown}
@@ -726,7 +746,8 @@
         {#if item.type === "row"}
           <TreeRow
             row={item.row}
-            {schema}
+            schema={schemaOf(item.row.task.store)}
+            storeTone={multi ? toneOf(item.row.task.store) : undefined}
             selected={selection.ulid === item.row.ulid}
             focusable={rowFocus === item.row.ulid}
             live={c.cache.live(item.row.ulid)}
@@ -738,7 +759,9 @@
             }}
             ontoggle={() => toggle(item.row.ulid, !item.row.expanded)}
             onopen={() => open(item.row.ulid)}
-            onmore={schema ? () => (menu = { which: "row", ulid: item.row.ulid }) : undefined}
+            onmore={schemaOf(item.row.task.store)
+              ? () => (menu = { which: "row", ulid: item.row.ulid })
+              : undefined}
             dragging={dragging === item.row.ulid}
             dropMark={dropMarkOf(item.row.ulid)}
             dnd={rowDnd(() => ({
@@ -755,8 +778,8 @@
             editing={true}
             depth={item.depth}
             where={whereLabel}
-            kindLabel={schema && addKind ? kindLabel(schema, addKind) : ""}
-            ready={!!(store && workspace && schema)}
+            kindLabel={addSchema && addKind ? kindLabel(addSchema, addKind) : ""}
+            ready={!!(addStore && addWorkspace && addSchema)}
             onstart={() => {}}
             onsubmit={submitAdd}
             oncancel={() => {
@@ -768,28 +791,28 @@
         {/if}
       {/snippet}
 
-      {#if notFound}
+      {#if ls.notFound}
         <Empty
           variant="notfound"
-          {...notFoundProps}
+          {...ls.notFoundProps}
           onHome={() => router.go(router.href({ name: "home" }))}
         />
-      {:else if projectError}
-        <p class="note" role="alert">{errorMessage(projectError)}</p>
+      {:else if ls.error}
+        <p class="note" role="alert">{errorMessage(ls.error)}</p>
       {:else if loading && rows.length === 0}
         <p class="note">読み込み中…</p>
       {:else if rows.length === 0 && !adding && !treeError}
-        {#if noTasks}
+        {#if noTasks && !all}
           <Empty
             variant="empty"
-            {...emptyProps}
+            {...ls.emptyProps}
             onCreate={() => openCreate({ kind: "task", parent: viewRoot ?? undefined })}
           />
         {:else}
           <Empty
             variant="nomatch"
             note={hasTerm(applied, NO_CANCELED) ? "中止を除外しています" : undefined}
-            onClear={() => (applied = "")}
+            onClear={applied.trim() === "" ? undefined : () => setApplied("")}
           />
         {/if}
       {/if}
@@ -817,9 +840,9 @@
         <div class="foot-add">
           <AddRow
             editing={false}
-            where={whereLabel}
-            kindLabel={schema && addKind ? kindLabel(schema, addKind) : ""}
-            onstart={() => startAdd({ after: null, parent: viewRoot, depth: 0 })}
+            where={all ? "" : whereLabel}
+            kindLabel={addSchema && addKind ? kindLabel(addSchema, addKind) : ""}
+            onstart={startFootAdd}
             onsubmit={submitAdd}
             oncancel={() => {}}
           />
@@ -870,40 +893,6 @@
     height: 100%;
     min-width: 0;
     min-height: 0;
-  }
-  .head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 1.125rem 1.75rem 0;
-  }
-  .crumb {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.625rem;
-    min-width: 0;
-  }
-  .ws {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    color: var(--ink-2);
-    text-decoration: none;
-  }
-  .sep {
-    color: var(--muted-2);
-  }
-  h1 {
-    margin: 0;
-    font-size: 1.19rem;
-    font-weight: 600;
-  }
-  .id {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--muted);
   }
   .body {
     position: relative;

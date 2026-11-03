@@ -151,12 +151,22 @@ func (ix *Index) parentKind(t *model.Task) (string, bool) {
 // first, led by t itself when it is a container. The walk stops at a
 // missing or broken task, and when it comes back to a task it has seen.
 func (ix *Index) ancestors(t *model.Task) []model.ULID {
+	return ix.lineage(t.ULID, t.Kind, t.Parent)
+}
+
+// Ancestors is ancestors for the task e of the index: what Schema.For needs
+// to tell which override applies to it.
+func (ix *Index) Ancestors(e *Entry) []model.ULID {
+	return ix.lineage(e.ULID, e.Kind, e.Parent)
+}
+
+func (ix *Index) lineage(ulid model.ULID, kind string, parent *model.ULID) []model.ULID {
 	var out []model.ULID
-	if k, ok := ix.sc.Kind(t.Kind); ok && k.Role == schema.RoleContainer {
-		out = append(out, t.ULID)
+	if k, ok := ix.sc.Kind(kind); ok && k.Role == schema.RoleContainer {
+		out = append(out, ulid)
 	}
-	seen := map[model.ULID]bool{t.ULID: true}
-	for p := t.Parent; p != nil && !seen[*p]; {
+	seen := map[model.ULID]bool{ulid: true}
+	for p := parent; p != nil && !seen[*p]; {
 		seen[*p] = true
 		e := ix.tasks[*p]
 		if e == nil || e.Broken != "" {

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Schemas } from "./api/client";
 import {
   canParent,
-  defaultStatus,
+  defaultStatusIn,
   parentRule,
   propEditorOf,
   SchemaCache,
@@ -90,10 +90,10 @@ describe("parentRule", () => {
   });
 });
 
-describe("defaultStatus", () => {
+describe("defaultStatusIn: todo and done", () => {
   it("is the default of the category", () => {
-    expect(defaultStatus(schema, "todo")).toBe("todo");
-    expect(defaultStatus(schema, "done")).toBe("done");
+    expect(defaultStatusIn(schema, "todo")).toBe("todo");
+    expect(defaultStatusIn(schema, "done")).toBe("done");
   });
 
   it("falls back to the first of the category, and to empty", () => {
@@ -104,8 +104,29 @@ describe("defaultStatus", () => {
         { name: "b", category: "todo" },
       ],
     };
-    expect(defaultStatus(s, "todo")).toBe("a");
-    expect(defaultStatus(s, "done")).toBe("");
+    expect(defaultStatusIn(s, "todo")).toBe("a");
+    expect(defaultStatusIn(s, "done")).toBe("");
+  });
+});
+
+describe("defaultStatusIn", () => {
+  const s: SchemaView = {
+    ...schema,
+    statuses: [
+      { name: "todo", category: "todo", default: true },
+      { name: "wip", category: "doing" },
+      { name: "review", category: "doing", default: true },
+      { name: "done", category: "done", default: true },
+    ],
+  };
+
+  it("is the default of any category, else its first status", () => {
+    expect(defaultStatusIn(s, "doing")).toBe("review");
+    expect(defaultStatusIn(s, "todo")).toBe("todo");
+  });
+
+  it("is empty for a category the schema has no status in", () => {
+    expect(defaultStatusIn(s, "canceled")).toBe("");
   });
 });
 

@@ -5,6 +5,7 @@ import type { Connection } from "../core/connection";
 import type { SaveController } from "../core/save";
 import type { SchemaCache } from "../core/schema";
 import type { StoreDirectory } from "../core/stores";
+import type { ViewDirectory } from "../core/views";
 
 export type AppCore = {
   api: Api;
@@ -13,6 +14,7 @@ export type AppCore = {
   save: SaveController;
   stores: StoreDirectory;
   schema: SchemaCache;
+  views: ViewDirectory;
 };
 
 /** The key of the context; tests pass it to render to replace the core. */

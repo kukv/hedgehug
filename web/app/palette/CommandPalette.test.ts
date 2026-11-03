@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
   runUndo: vi.fn(async () => {}),
   addWorkspace: vi.fn(),
   moveWorkspace: vi.fn(),
+  saveView: vi.fn(),
 }));
 
 vi.mock("../context", () => ({ core: () => h.core }));
@@ -22,16 +23,31 @@ vi.mock("../router", () => ({
       return h.route;
     },
     go: h.go,
-    href: (r: { name: string; ulid?: string; store?: string; tab?: string }) =>
+    href: (r: {
+      name: string;
+      ulid?: string;
+      store?: string;
+      tab?: string;
+      view?: string;
+      layout?: string;
+      q?: string;
+    }) =>
       r.name === "task"
         ? `/tasks/${r.ulid}`
         : r.name === "project"
           ? `/projects/${r.ulid}`
           : r.name === "settings"
             ? `/settings/workspaces/${r.store}`
-            : `/workspaces/${r.store}/${r.ulid}${r.tab === "overview" ? "" : `/${r.tab}`}`,
+            : r.name === "view"
+              ? `/views/${r.store}/${r.view}`
+              : r.name === "query"
+                ? `/query/${r.layout}?q=${r.q}`
+                : r.name === "my"
+                  ? "/my"
+                  : `/workspaces/${r.store}/${r.ulid}${r.tab === "overview" ? "" : `/${r.tab}`}`,
   },
 }));
+vi.mock("../views/dialogs-state.svelte", () => ({ openViewSave: h.saveView }));
 vi.mock("../toast.svelte", () => ({ toast: h.toast }));
 vi.mock("../undo", async (orig) => ({
   ...(await orig<typeof import("../undo")>()),
@@ -50,7 +66,7 @@ const rel6 = task("U6", "task", null, {
   title: "Web の API クライアントを v2 に更新",
 });
 
-function setup() {
+function setup(found: unknown[] = []) {
   const none = () => () => {};
   const ws = {
     store: "shared",
@@ -86,7 +102,7 @@ function setup() {
             response: new Response(null, { status: 400 }),
           };
         }
-        return ok({ tasks: [] });
+        return ok({ tasks: found });
       },
     ),
     POST: vi.fn(async () => ok([])),
@@ -109,6 +125,10 @@ function setup() {
       subscribe: none,
     },
     schema: { get: () => schema, load: async () => schema, subscribe: none },
+    views: {
+      list: () => [{ store: "backend", tone: "orange", view: { name: "ブロック中" } }],
+      subscribe: none,
+    },
   };
   return { api };
 }
@@ -121,6 +141,7 @@ beforeEach(() => {
   h.runUndo.mockClear();
   h.addWorkspace.mockClear();
   h.moveWorkspace.mockClear();
+  h.saveView.mockClear();
   localStorage.clear();
   closePalette();
   closeCreate();
@@ -292,6 +313,73 @@ describe("CommandPalette", () => {
     await fireEvent.input(await screen.findByRole("combobox"), { target: { value: "foo:bar" } });
     expect(await screen.findByRole("alert")).toHaveTextContent("term 1 (foo:bar): unknown key");
     expect(screen.getByText("クエリ", { selector: "[data-mode]" })).toBeInTheDocument();
+  });
+
+  it("opens the tasks of the person and a saved view from the commands", async () => {
+    setup();
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">開く" } });
+    await fireEvent.click(await screen.findByRole("option", { name: /マイタスクを開く/ }));
+    expect(h.go).toHaveBeenCalledWith("/my");
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">ブロック" } });
+    await fireEvent.click(await screen.findByRole("option", { name: /ブロック中 を開く/ }));
+    expect(h.go).toHaveBeenLastCalledWith("/views/backend/ブロック中");
+  });
+
+  it("offers to open a query that found tasks as a table, and to save it as a view", async () => {
+    setup([rel6]);
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), {
+      target: { value: "status:doing assignee:@me" },
+    });
+    expect(await screen.findByRole("group", { name: "このクエリで" })).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole("option", { name: /ビューとして保存/ }));
+    expect(h.saveView).toHaveBeenCalledWith({
+      draft: {
+        layout: "table",
+        query: "status:doing assignee:@me",
+        kanban: { columns: "status", swimlane: "none" },
+        table: { columns: ["id", "title", "status", "assignee", "due"], groupBy: "none" },
+      },
+    });
+    expect(palette.open).toBe(false);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), {
+      target: { value: "status:doing assignee:@me" },
+    });
+    await fireEvent.click(await screen.findByRole("option", { name: /テーブルで開く/ }));
+    expect(h.go).toHaveBeenCalledWith("/query/table?q=status:doing assignee:@me");
+  });
+
+  it("offers nothing for a query typed after the one that was searched, until it is searched", async () => {
+    setup([rel6]);
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), {
+      target: { value: "status:doing" },
+    });
+    expect(await screen.findByRole("group", { name: "このクエリで" })).toBeInTheDocument();
+    // the new text has not been searched yet: it may be a wrong query
+    await fireEvent.input(box(), { target: { value: "status:doing kind:bug" } });
+    expect(screen.queryByRole("group", { name: "このクエリで" })).toBeNull();
+    expect(await screen.findByRole("group", { name: "このクエリで" })).toBeInTheDocument();
+  });
+
+  it("offers nothing for a query that found nothing or does not run", async () => {
+    setup();
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), {
+      target: { value: "status:doing" },
+    });
+    expect(await screen.findByText("一致するものがありません")).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "このクエリで" })).toBeNull();
+    await fireEvent.input(box(), { target: { value: "foo:bar" } });
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "このクエリで" })).toBeNull();
   });
 
   it("offers the commands for the selected task", async () => {

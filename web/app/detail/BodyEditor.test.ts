@@ -71,15 +71,21 @@ describe("BodyEditor", () => {
     );
     const { container } = mount(BodyEditor, props({ value: "" }), k);
     const view = viewOf(container);
-    view.dispatch({
-      changes: { from: 0, insert: "@su" },
-      selection: { anchor: 3 },
-      userEvent: "input.type",
-    });
-    await vi.waitFor(() =>
+    // The completion starts 100ms after the typing (CodeMirror's activateOnTypingDelay). The clock
+    // is a fake one: on a busy machine the real 100ms ran past the 1s of waitFor.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      view.dispatch({
+        changes: { from: 0, insert: "@su" },
+        selection: { anchor: 3 },
+        userEvent: "input.type",
+      });
+      await vi.advanceTimersByTimeAsync(150);
       expect(k.api.GET).toHaveBeenCalledWith("/api/people", {
         params: { query: { store: "shared" } },
-      }),
-    );
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

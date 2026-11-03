@@ -221,6 +221,7 @@ const messages: Record<string, Make> = {
   "view.bad_value": (_, e) => withDetail("ビューの設定が正しくありません", e),
   "view.bad_column": (a) =>
     `列 ${str(a, "column")} は、フィールドでもスキーマのプロパティでもありません`,
+  "view.rename_with_settings": () => "ビューの改名と設定の変更は、いっしょにはできません",
   "view.tree_order": () => "ツリーのビューは rank の順に並ぶため、group: と sort: は使えません",
   "migrate.invalid": (_, e) => withDetail("移行するとスキーマに合わないタスクがあります", e),
   "scoped.not_container": (a) =>

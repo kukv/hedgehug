@@ -1,6 +1,8 @@
-import { cleanup, fireEvent } from "@testing-library/svelte";
+import { cleanup, fireEvent, within } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../../core/api/client";
 import { closeCreate, createState } from "../create-state.svelte";
+import { MY_QUERY } from "../my/groups";
 import { closePalette, palette } from "../palette-state.svelte";
 import { renderWithCore } from "../test-utils";
 import { openWorkspaceDelete } from "../workspace/dialogs-state.svelte";
@@ -32,13 +34,31 @@ const workspaces = [
   },
 ];
 
-function mount() {
+function mount(over: Record<string, unknown> = {}) {
   return renderWithCore(
     Sidebar,
     {},
-    { stores: { workspaces: () => workspaces, subscribe: () => () => {} } },
+    { stores: { workspaces: () => workspaces, subscribe: () => () => {} }, ...over },
   );
 }
+
+// A cache whose query for the tasks of the person finds these tasks, or does not run.
+function myCache(found: { ulids?: string[]; loading?: boolean; error?: unknown }) {
+  const watchList = vi.fn((_q: { q: string; tree: boolean }) => ({
+    ulids: () => found.ulids ?? [],
+    loading: () => found.loading ?? false,
+    error: () => found.error ?? null,
+    dispose: vi.fn(),
+  }));
+  return { watchList, cache: { subscribe: () => () => {}, watchList } };
+}
+
+const savedViews = (...entries: [store: string, tone: string, name: string][]) => ({
+  list: () => entries.map(([store, tone, name]) => ({ store, tone, view: { name } })),
+  get: () => undefined,
+  loaded: () => true,
+  subscribe: () => () => {},
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -58,11 +78,108 @@ describe("Sidebar", () => {
     expect(getByText(location.host)).toBeTruthy();
   });
 
-  it("4e の入口（マイタスク・通知・アクティビティ・保存済みビュー）は出さない", () => {
+  it("通知とアクティビティの入口は 4e-4 まで出さない", () => {
     const { queryByText } = mount();
-    for (const t of ["マイタスク", "通知", "アクティビティ", "保存済みビュー"]) {
+    for (const t of ["通知", "アクティビティ"]) {
       expect(queryByText(t)).toBeNull();
     }
+  });
+
+  it("マイタスクは /my を開く行。今の画面なら aria-current", async () => {
+    const { getByRole } = mount();
+    const link = getByRole("link", { name: /マイタスク/ });
+    expect(link.getAttribute("href")).toBe("/my");
+    expect(link.getAttribute("aria-current")).toBeNull();
+    await fireEvent.click(link);
+    expect(location.pathname).toBe("/my");
+    cleanup();
+    const again = mount();
+    expect(again.getByRole("link", { name: /マイタスク/ }).getAttribute("aria-current")).toBe(
+      "page",
+    );
+  });
+
+  it("マイタスクの件数は、マイタスクの画面の既定のクエリを全 Store に問い合わせた数", () => {
+    const { watchList, cache } = myCache({ ulids: ["A", "B", "C"] });
+    const { getByRole } = mount({ cache });
+    expect(watchList).toHaveBeenCalledWith({ q: MY_QUERY, tree: false });
+    expect(getByRole("link", { name: /マイタスク/ })).toHaveTextContent("マイタスク 3");
+  });
+
+  it("読み込み中と、クエリが走らないとき（アカウントがない）は件数を出さない", () => {
+    const loading = mount({ cache: myCache({ loading: true, ulids: ["A"] }).cache });
+    expect(loading.getByRole("link", { name: /マイタスク/ })).toHaveTextContent(/^マイタスク$/);
+    cleanup();
+    const failed = mount({
+      cache: myCache({ error: new ApiError({ status: 400, type: "account.none" }) }).cache,
+    });
+    expect(failed.getByRole("link", { name: /マイタスク/ })).toHaveTextContent(/^マイタスク$/);
+  });
+
+  it("保存済みビューがなければ、その見出しも出さない", () => {
+    const { queryByRole, queryByText } = mount();
+    expect(queryByRole("region", { name: "保存済みビュー" })).toBeNull();
+    expect(queryByText("保存済みビュー")).toBeNull();
+  });
+
+  it("保存済みビューを並べ、/views/<Store>/<名前> を開く。ツールチップは保存先の Store", async () => {
+    const views = savedViews(
+      ["shared", "purple", "今週のリリース作業"],
+      ["backend", "orange", "ブロック中"],
+      ["org-b/ops", "teal", "a/b を含む名前"],
+    );
+    const { getByRole } = mount({ views });
+    const region = getByRole("region", { name: "保存済みビュー" });
+    const links = within(region).getAllByRole("link");
+    expect(links.map((a) => a.textContent?.trim())).toEqual([
+      "今週のリリース作業",
+      "ブロック中",
+      "a/b を含む名前",
+    ]);
+    expect(links.map((a) => a.getAttribute("href"))).toEqual([
+      "/views/shared/%E4%BB%8A%E9%80%B1%E3%81%AE%E3%83%AA%E3%83%AA%E3%83%BC%E3%82%B9%E4%BD%9C%E6%A5%AD",
+      "/views/backend/%E3%83%96%E3%83%AD%E3%83%83%E3%82%AF%E4%B8%AD",
+      "/views/org-b%2Fops/a%2Fb%20%E3%82%92%E5%90%AB%E3%82%80%E5%90%8D%E5%89%8D",
+    ]);
+    expect(links.map((a) => a.getAttribute("title"))).toEqual([
+      "shared の views/ に保存",
+      "backend の views/ に保存",
+      "org-b/ops の views/ に保存",
+    ]);
+    // the colour of the store is the dot (the store's token), not a hex
+    expect(links[0]?.querySelector(".dot")?.getAttribute("style")).toBe(
+      "background: var(--store-purple-dot);",
+    );
+    await fireEvent.click(links[1] as HTMLElement);
+    expect(location.pathname).toBe("/views/backend/%E3%83%96%E3%83%AD%E3%83%83%E3%82%AF%E4%B8%AD");
+  });
+
+  it("同じ名前のビューは、Store の色の点とツールチップで見分ける", () => {
+    const views = savedViews(
+      ["shared", "purple", "ブロック中"],
+      ["backend", "orange", "ブロック中"],
+    );
+    const { getByRole } = mount({ views });
+    const links = within(getByRole("region", { name: "保存済みビュー" })).getAllByRole("link");
+    expect(links.map((a) => a.getAttribute("title"))).toEqual([
+      "shared の views/ に保存",
+      "backend の views/ に保存",
+    ]);
+    expect(links.map((a) => a.querySelector(".dot")?.getAttribute("style"))).toEqual([
+      "background: var(--store-purple-dot);",
+      "background: var(--store-orange-dot);",
+    ]);
+  });
+
+  it("開いているビューだけ aria-current にする", () => {
+    history.replaceState(null, "", "/views/backend/%E3%83%96%E3%83%AD%E3%83%83%E3%82%AF%E4%B8%AD");
+    const views = savedViews(
+      ["shared", "purple", "ブロック中"],
+      ["backend", "orange", "ブロック中"],
+    );
+    const { getByRole } = mount({ views });
+    const links = within(getByRole("region", { name: "保存済みビュー" })).getAllByRole("link");
+    expect(links.map((a) => a.getAttribute("aria-current"))).toEqual([null, "page"]);
   });
 
   it("右上の歯車は設定（/settings）を開く", async () => {

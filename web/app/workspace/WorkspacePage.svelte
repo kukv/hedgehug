@@ -1,9 +1,11 @@
 <script lang="ts">
   import { core } from "../context";
+  import ListTab from "../list/ListTab.svelte";
+  import TreeTab from "../list/TreeTab.svelte";
   import { router, type WorkspaceTab } from "../router";
   import Empty from "../states/Empty.svelte";
   import { useSubscribe } from "../svelte-store";
-  import TreeView from "../tree/TreeView.svelte";
+  import { NO_CANCELED } from "../tree/filter";
   import WorkspaceHeader from "./WorkspaceHeader.svelte";
   import WorkspaceOverview from "./WorkspaceOverview.svelte";
   import WorkspaceSettings from "./WorkspaceSettings.svelte";
@@ -17,6 +19,9 @@
     loaded: c.stores.loaded(),
   }));
   const entry = $derived(found.current.entry);
+  // The filter of the tree, the kanban and the table: one for the page, so it stays when the tab
+  // changes (it is not saved: D7). The default leaves the canceled tasks out.
+  let query = $state(NO_CANCELED);
   // Spread, because Biome reads a prop called scope as the HTML attribute.
   const notFoundProps = $derived({ scope: "workspace" as const, name: ulid });
 </script>
@@ -30,7 +35,14 @@
       <WorkspaceHeader {entry} {tab} />
       <div class="body">
         {#if tab === "tree"}
-          <TreeView view={{ kind: "workspace", store, ulid }} />
+          <TreeTab view={{ kind: "workspace", store, ulid }} {query} onquery={(q) => (query = q)} />
+        {:else if tab === "kanban" || tab === "table"}
+          <ListTab
+            view={{ kind: "workspace", store, ulid }}
+            layout={tab}
+            {query}
+            onquery={(q) => (query = q)}
+          />
         {:else}
           <WorkspaceSettings {entry} />
         {/if}

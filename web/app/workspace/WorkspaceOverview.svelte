@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { CATEGORIES, CATEGORY_LABEL } from "../../core/categories";
   import { cliLs } from "../../core/cli";
   import { formatDate } from "../../core/format";
   import { errorMessage } from "../../core/messages";
@@ -17,7 +18,7 @@
   import Button from "../ui/Button.svelte";
   import CliLine from "../ui/CliLine.svelte";
   import IdLabel from "../ui/IdLabel.svelte";
-  import { CATEGORIES, CATEGORY_LABEL, countByCategory, projectsOf, rootsOf } from "./counts";
+  import { countByCategory, projectsOf, rootsOf } from "./counts";
   import WorkspaceHeader from "./WorkspaceHeader.svelte";
 
   let { entry }: { entry: WorkspaceEntry } = $props();

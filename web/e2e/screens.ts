@@ -25,6 +25,19 @@ import { expect, type Locator, type Page } from "@playwright/test";
 //               タスク" (name them exactly: the second name starts with the first), whose rows are
 //               named by the ID and the title; the buttons "タスクを作成" and "プロジェクトを作成"
 //   Undo        the palette command "直前の操作を取り消す"; the toast says "<ID> の変更を取り消しました"
+//   Kanban      the board is the section "カンバンの盤面": a list for each column, ul[data-column=
+//               "<status or category>"], whose cards are li[data-ulid="<ULID>"]; a card is dragged
+//               onto a list (dragCard); a status that needs a field opens the dialog
+//               "<ID> を<ステータス>にするには <項目> が必要です"
+//   Table       a row is a set of inputs named by the column and the ID: the textbox "タイトル: <ID>",
+//               the button "ステータス: <ID>"; the filter field is the textbox
+//               "フィルタ（hh ls と同じクエリ）" on every list screen
+//   Views       /views/<Store>/<名前> (heading <名前>, navigation "レイアウトの切り替え", the status
+//               "未保存の変更" and the button "ビューを更新", the button "ビューの操作（改名・削除）"),
+//               /query/<layout>?q= (heading "クエリ"), the sidebar region "保存済みビュー", the
+//               dialogs "ビューを保存" / "ビュー <名前> を改名" / "ビュー <名前> を削除"
+//   My tasks    /my (heading "マイタスク"); the groups are regions named "今日", "今週", ...; the sidebar
+//               link "マイタスク" carries the count
 
 //
 // Exceptions that hold on to a CSS class, because no role or text tells them apart: change them
@@ -68,6 +81,11 @@ export function properties(page: Page): Locator {
 /** The save state of the detail, once a change is on disk. */
 export function saved(page: Page): Locator {
   return page.getByRole("status", { name: "保存の状態" }).filter({ hasText: /^保存済み/ });
+}
+
+/** Drags a card of the kanban onto the list of another column (the middle of the list). */
+export async function dragCard(page: Page, card: Locator, cell: Locator): Promise<void> {
+  await dragRow(page, card, cell, "child");
 }
 
 /**

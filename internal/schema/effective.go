@@ -18,14 +18,30 @@ type Effective struct {
 // of the nearest ancestor that has one applies; overrides of farther
 // ancestors are not combined with it.
 func (s *Schema) For(ancestors []model.ULID) *Effective {
+	if i, _ := s.scopeAmong(ancestors); i >= 0 {
+		return &Effective{s: s, scope: &s.Scoped[i]}
+	}
+	return &Effective{s: s}
+}
+
+// ScopeOf returns the ancestor whose override For applies to a task with
+// these ancestors (nearest first, as For takes them), and false when none does.
+func (s *Schema) ScopeOf(ancestors []model.ULID) (model.ULID, bool) {
+	i, a := s.scopeAmong(ancestors)
+	return a, i >= 0
+}
+
+// scopeAmong is the index in s.Scoped of the override of the nearest ancestor
+// that has one, and that ancestor; -1 when none has.
+func (s *Schema) scopeAmong(ancestors []model.ULID) (int, model.ULID) {
 	for _, a := range ancestors {
 		for i := range s.Scoped {
 			if w, err := parseWhere(s.Scoped[i].Where); err == nil && w == a {
-				return &Effective{s: s, scope: &s.Scoped[i]}
+				return i, a
 			}
 		}
 	}
-	return &Effective{s: s}
+	return -1, model.ULID{}
 }
 
 func (e *Effective) Schema() *Schema { return e.s }
