@@ -118,7 +118,7 @@
 71. キャンバスのテンプレート（6）・自動化（5）・「最終更新 11/03 koki」は作らない
 72. **SettingsSchema**: Store ごとに、ステータス・種類・プロパティ・ワークフローの閲覧と、各定義を使っているタスクの件数（全タスクをフロントで数える）。上書きのあるプロジェクトの一覧（親設計の「Store の設定画面には、上書きのあるプロジェクトの一覧を出す」）
 73. `schema check` の結果（`GET /api/schema/check`）と、migrate（各行の「名前を変える…」「併合する…」。`dry_run` の結果で変わる件数を確認ダイアログに出してから実行）。キャンバスの追加・削除・色・並び替え・未保存の変更の帯・「YAML を開く」は作らない（spec の範囲は閲覧・check・migrate）
-74. 足元に `hh schema check`・`hh migrate …`
+74. 足元に `hh schema check`・`hh schema migrate …`
 75. **SettingsGeneral**: 同期の状態（4d の同期のカードと同じ値を Store ごと）と間隔（決定 2）
 76. doctor は `GET /api/doctor` の findings を `check` ごとにまとめて出し、なければ「問題は見つかりませんでした」。「もう一度実行」、各 finding のタスクは「<ID> を開く」（細部 6）
 77. 修復は確認ダイアログを挟んで `POST /api/doctor/fix`、結果の `repaired` と残りを出す
@@ -140,3 +140,50 @@
 88. ワークスペース・プロジェクトから保存するクエリは固定の部分（`workspace:<名前>`・`project:<ID>`）＋フィルタ欄で、Store が2つ以上なら先頭に `store:<Store>`。保存したらそのビューを開く。同じ Store に同じ名前があれば保存を無効にして理由を出す
 89. ビューの URL は `/views/<store>/<名前>`。足元は `hh view show <名前> --store <Store>`
 90. プロジェクトの見出し（パンくずとタブ）は `ProjectHeader` にしてツリー・カンバン・テーブルのタブで共有する。カンバンのカードのキーボード操作は作らない
+
+### 4e-4 の plan で足した細部（2026-11-03）
+
+4e-4 の plan（`2026-11-03-phase4e4-settings.md`）を組むときに決めたもの（91〜105）と、組み上げの途中で決めたもの（106〜）。どれも API の形（Store ごとの API）と既存の画面の決まりから導いた。実装で plan から変わった点は、4e-4 の plan 末尾の「決めたこと」と「組み上げで直した点」が詳しい。
+
+91. **通知は全 Store**: `GET /api/notifications?all=true` を `store` なしで1回呼ぶ（全 Store が返る）。未読を上、その中は時刻の新しい順に並べる。Store が2つ以上なら行に Store のバッジ
+92. 通知のタブの数は、そのタブの未読の数。0 なら数を出さない。「割り当て」「ウォッチ」のタブは作らず「すべて」に入る
+93. 「すべて既読にする」は `store` なしで `POST /api/notifications/read {all: true}` を1回。未読が 0 なら無効
+94. 上書きの行のボタンは「自分の値に戻す」と「このままにする」（= 既読にする）。`prefix_duplicate` などワークスペースの通知（`task` がない）は ID のリンクを出さない。ほかの未読の行は「既読にする」。行の ID のリンク（タスク詳細を開く）を押すと、その通知を既読にしてから開く
+95. 通知の一覧は、未読数（`c.conn.unread`）が変わったとき・`resync`・`tasks.changed` で取り直す
+96. **アクティビティの範囲**: `GET /api/activity` を `store` なしで呼ぶ（全 Store）。ワークスペースの絞り込みは選んだワークスペースの ULID をカンマで `workspace=` に渡す。URL の `?workspace=` も ULID のカンマ区切り。人・同期の切り替えは URL の `?sync=exclude|only`（なしはすべて）。足元は `hh log --workspace <名前,…>`（選んだワークスペースの名前が別の Store の名前と重なるときだけ、その分を ULID で書く）
+97. アクティビティの行の時刻は author の時刻をブラウザのローカルの時刻で `HH:MM`、日付の見出しは「今日 · 11/04（水）」「昨日 · 11/03（火）」、それより前は「11/02（月）」（年が違えば `2025/11/02（日）`）。行の ID はタスク詳細へのリンク。`tasks.changed` で取り直す
+98. **プロジェクトの設定のルート**: `/projects/<ULID>/settings`。`ProjectHeader` のタブの右端に「設定」
+99. ProjectSettings の「保存」は、`statuses`・`transitions`・`required` の3つのキーのうち画面で変えたキーだけを `PUT` の本文に入れる。入れたキーは差分ではなく、そのプロジェクトの上書きの全体を持つ。Store と同じに戻すときは `statuses: []`、`transitions: {}`・`required: {}`。変えていなければ「保存」は無効。保存したら `schema.changed` で画面と `SchemaCache` を取り直す
+100. **設定のナビ**: 「このマシン」の段に「同期と保守」（`/settings/general`）、「Store ごとの設定」の段に「ワークスペース」「スキーマ」（`/settings/schema/<store>`）。キャンバスの「スキーマとテンプレート」は「スキーマ」とする。`/settings` は `/settings/general` に置き換える。サイドバーの歯車は `/settings/general`
+101. **同期と保守の範囲**: 同期の状態・doctor は全 Store を Store ごとの段で並べる。purge は Store を選んで行う（Store が2つ以上のときだけ選択欄）。同期の間隔は Store によらず config.yaml の値なので1つだけ出す（最初の Store の `SyncStatus.interval`・`push_interval`）
+102. doctor は画面を開いたときに各 Store へ `GET /api/doctor?store=` を1回送る。「もう一度実行」で取り直す。`tasks.changed` では取り直さない（重い検査のため）。修復の後は、修復の応答の findings をそのまま出す（二度目の GET は送らない。細部 120）
+103. **スキーマの範囲**: 選んだ Store（URL）の `GET /api/schema?store=` と `GET /api/schema/check?store=`。件数は `GET /api/tasks?store=<S>`（削除済みを除く全タスク）をフロントで数える。`schema.changed` では check だけを取り直す（細部 129）。タスクの件数は `tasks.changed`（その Store）で取り直す
+104. migrate のダイアログは新しい名前の入力欄と、入力が止まってから送る `dry_run: true` の結果（変わる件数と、`skipped` の件数）を出し、「名前を変える」（新しい名前が今の定義にないとき）か「併合する」（あるとき）で実行する。行のボタンは「名前を変える…」と「併合する…」の2つで、併合は今の定義から相手を選ぶ。値（`value`）の migrate は enum・multi_enum のプロパティの値の行に出す
+105. パレットのコマンドは、その画面を作った Task で足した: 「通知を開く」、「アクティビティを開く」、「プロジェクトの設定を開く」（プロジェクトの画面とそのタスクの詳細を開いているときだけ）、「設定の同期と保守を開く」、「doctor を実行」（同期と保守を開く）、「設定のスキーマを開く」（Store ごと）
+
+以下は組み上げの途中で決めたもの。
+
+106. **通知の足元**: `hh inbox --all`（既読を含めて一覧する）。既読にした上書きの行はボタンを出さない
+107. 同期の修復の通知の文は、detail の種類（repaired・revived・renumbered・prefix_duplicate・rewrite_applied・purged_change）ごとに分けて書く
+108. **タブはアドレスに持たせる**: 通知は `/inbox?tab=overwritten|mention|repair`（なしはすべて）、スキーマは `/settings/schema/<store>?tab=kinds|props|workflow`（なしはステータス）。タブの一覧は1か所（router）に置き、ルートの解釈・リンク・画面が同じものを使う
+109. アクティビティの行は、trailer をすべて出す。タスクはあるが ID がないログ（削除済みなど）は ULID を出す
+110. アクティビティの `limit` の上限は 1000（サーバーの最大）。「さらに読み込む」はそこまで増やす
+111. 日時を読めないコミットは日付の見出し「日時不明」にまとめる
+112. **プロジェクトの上書きの読み取り**: scoped を1件だけ返す GET の API はない。上書きは `SchemaView.scoped`（`GET /api/schema`）から読む（plan の `GET /api/schema/scoped/{project}` は実在しなかった）
+113. `PUT`・`DELETE /api/schema/scoped/{project}` のあとは `SchemaCache.reload(store)` を呼び、`schema.changed` を待たずに画面を新しくする
+114. すでにエントリのあるステータスへ遷移の制約・必須の項目を足すと、そのエントリに併合する（同じステータスの行を2つ作らない）
+115. 必須にできる項目は `internal/schema/check.go` の規則から取る（サーバーが 422 にしないものだけを選択肢に出す）
+116. プロジェクトの設定は `ConstraintEditor`（遷移の制約と必須の項目の編集）と `ProjectViolations`（いまの違反の一覧）に分ける
+117. **同期のカード**: `SyncCard` は任意の `store` を受け、設定の画面では Store ごとの段に置く。窓が隠れているあいだの fetch は `max(interval, 10 分)`（サーバーの `loop.go` と同じ値）で、画面の説明文にこの値を出す
+118. 設定の画面の Store の選択欄は、ナビを作り直さずに残し、選んだ Store を覚える
+119. **doctor の API の形**: 応答は `DoctorReport[]`（Store ごと）。plan の `FindingsOutputBody` は実際の形ではなかった
+120. 修復の応答の findings をそのまま出し、修復のあとの二度目の GET は送らない
+121. finding のタスクを引く ID は `GET /api/tasks/{ulid}` を通す。severity が info の finding も扱う（警告・誤りとは別の見た目）
+122. E2E の `Hedgehug.env()` は `hedgehug` を PATH に載せる（merge driver が `hedgehug` を探すため）。`HEDGEHUG_BIN` は絶対パスにする
+123. **purge の日数**: テキスト欄で、全角の数字は NFKC で半角にし、0 から 36500 までの整数だけを受ける
+124. **スキーマの修復後の表示**: migrate を実行した行が消えたときは、フォーカスを見出し（h1）へ移す
+125. 「併合する…」は、同じ種類の定義が1つしかないときは出さない（併合先がないため）
+126. ワークフローは、遷移の制約と必須の項目を「X から移せるのは A、B だけ」「X にするには P、Q が必要」の文の一覧で見せる
+127. schema check の欄は `SchemaCheck.svelte` に分ける
+128. CLI の表記: 概要の細部 74 は当初「`hh migrate …`」と書いたが、実際は `hh schema migrate …`（細部 74 は直した）。使わない `cliInboxRead`・`cliInboxRevert`・`cliScopeShow` は作らずに外した
+129. `schema.changed` が届いたら、スキーマの画面は schema check だけを取り直す（定義と件数は自分の操作のあとに取り直しているため）

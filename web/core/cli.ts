@@ -112,6 +112,32 @@ export function cliComment(id: string, kind: "add" | "edit" | "rm", cid?: string
 export const cliWatch = (id: string, on: boolean): string =>
   cliLine([on ? "watch" : "unwatch", id]);
 
+// cliInbox is hh inbox; all also lists the items read.
+export function cliInbox(i: { all?: boolean; store?: string } = {}): string {
+  const a: string[] = ["inbox"];
+  if (i.all) a.push("--all");
+  if (i.store) a.push("--store", i.store);
+  return cliLine(a);
+}
+
+// cliLog is hh log; without --store it reads every store, as the screen does.
+export function cliLog(workspaces: string[]): string {
+  return cliLine(workspaces.length > 0 ? ["log", "--workspace", workspaces.join(",")] : ["log"]);
+}
+
+// cliDoctor is hh doctor; fix repairs what a sync repairs.
+export function cliDoctor(i: { fix?: boolean; store?: string }): string {
+  const a: string[] = ["doctor"];
+  if (i.fix) a.push("--fix");
+  if (i.store) a.push("--store", i.store);
+  return cliLine(a);
+}
+
+// cliPurge is hh purge --older-than <days>d.
+export function cliPurge(days: number, store?: string): string {
+  return cliLine(["purge", "--older-than", `${days}d`, ...(store ? ["--store", store] : [])]);
+}
+
 export function cliSync(store?: string): string {
   return cliLine(store ? ["sync", "--store", store] : ["sync"]);
 }
@@ -190,4 +216,51 @@ export function cliStoreInit(i: {
   if (i.workspace) a.push("--workspace", i.workspace);
   for (const r of i.remotes ?? []) a.push("--remote", r);
   return withPositionals(["store", "init"], [i.name], a, true);
+}
+
+export function cliScopeRm(id: string, store?: string): string {
+  return cliLine(["schema", "scope", "rm", id, ...(store ? ["--store", store] : [])]);
+}
+
+// cliScopeSet is hh schema scope set with the parts that are given (a part that is left out is not
+// touched). A part that is empty takes the override off: "" is its value on the command line.
+// With no part at all the line is not complete yet: <変更> stands where the parts go.
+export function cliScopeSet(i: {
+  id: string;
+  statuses?: string[];
+  transitions?: Record<string, string[]>;
+  required?: Record<string, string[]>;
+  store?: string;
+}): string {
+  const lists = (flag: string, m: Record<string, string[]> | undefined): string[] => {
+    if (!m) return [];
+    const entries = Object.entries(m);
+    if (entries.length === 0) return [flag, ""];
+    return entries.flatMap(([k, v]) => [flag, `${k}=${v.join(",")}`]);
+  };
+  const head = ["schema", "scope", "set", i.id];
+  const a: Arg[] = [...head];
+  if (i.statuses) a.push("--statuses", i.statuses.join(","));
+  a.push(...lists("--transition", i.transitions), ...lists("--required", i.required));
+  if (a.length === head.length) a.push(new Placeholder("変更"));
+  if (i.store) a.push("--store", i.store);
+  return cliLine(a);
+}
+
+export const cliSchemaCheck = (store?: string): string =>
+  cliLine(["schema", "check", ...(store ? ["--store", store] : [])]);
+
+// cliSchemaMigrate is hh schema migrate status|kind|prop <old> <new>, or value <prop> <old> <new>.
+// new is a placeholder until the name is typed.
+export function cliSchemaMigrate(i: {
+  target: "status" | "kind" | "prop" | "value";
+  prop?: string;
+  old: string;
+  new: Arg;
+  store?: string;
+}): string {
+  const flags: Arg[] = [];
+  if (i.store) flags.push("--store", i.store);
+  const pos: Arg[] = i.target === "value" && i.prop ? [i.prop, i.old, i.new] : [i.old, i.new];
+  return withPositionals(["schema", "migrate", i.target], pos, flags, true);
 }

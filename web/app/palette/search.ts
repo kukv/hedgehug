@@ -48,6 +48,8 @@ export type CommandItem = {
     | "settings"
     | "undo"
     | "checklist"
+    | "bell"
+    | "activity"
     | "filter";
   kbd?: string;
   note?: string;
@@ -161,13 +163,19 @@ export type CommandEnv = {
     workspace: (store: string, ulid: string) => string;
     workspaceSettings: (store: string, ulid: string) => string;
     settingsWorkspaces: (store: string) => string;
+    settingsSchema: (store: string) => string;
+    settingsGeneral: () => string;
     project: (ulid: string) => string;
+    projectSettings: (ulid: string) => string;
     task: (ulid: string) => string;
     view: (store: string, name: string) => string;
     query: (layout: Layout, q: string) => string;
     my: () => string;
+    inbox: () => string;
+    activity: () => string;
   };
   selected: TaskView | null; // the task the commands for a task are about
+  project: { ulid: string; title: string } | null; // the project the screen is of (its page or its detail)
   recent: TaskView[]; // the tasks opened last, the latest first
   pickStatus: (t: TaskView) => void;
   moveTask: (t: TaskView) => void;
@@ -296,6 +304,17 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
     },
   ];
 
+  // The page asks for the diagnosis when it is opened.
+  const doctorHref = env.hrefs.settingsGeneral();
+  commands.push({
+    type: "command",
+    key: "cmd:doctor",
+    label: "doctor を実行",
+    icon: "checklist",
+    href: doctorHref,
+    run: () => env.go(doctorHref),
+  });
+
   const myHref = env.hrefs.my();
   const my: CommandItem = {
     type: "command",
@@ -304,6 +323,24 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
     icon: "checklist",
     href: myHref,
     run: () => env.go(myHref),
+  };
+  const inboxHref = env.hrefs.inbox();
+  const inbox: CommandItem = {
+    type: "command",
+    key: "open:inbox",
+    label: "通知を開く",
+    icon: "bell",
+    href: inboxHref,
+    run: () => env.go(inboxHref),
+  };
+  const activityHref = env.hrefs.activity();
+  const activity: CommandItem = {
+    type: "command",
+    key: "open:activity",
+    label: "アクティビティを開く",
+    icon: "activity",
+    href: activityHref,
+    run: () => env.go(activityHref),
   };
   const saved: CommandItem[] = env.views.map((v) => {
     const href = env.hrefs.view(v.store, v.view.name);
@@ -371,6 +408,47 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
     };
   });
 
+  // The schema of a store, in the settings.
+  const schemas: CommandItem[] = env.storeNames.map((store) => {
+    const href = env.hrefs.settingsSchema(store);
+    return {
+      type: "command",
+      key: `open:settings-schema:${store}`,
+      label: "設定のスキーマを開く",
+      icon: "settings",
+      store,
+      href,
+      run: () => env.go(href),
+    };
+  });
+
+  // The sync and the upkeep of this machine: no Store, so one command.
+  const generalHref = env.hrefs.settingsGeneral();
+  const general: CommandItem = {
+    type: "command",
+    key: "open:settings-general",
+    label: "設定の同期と保守を開く",
+    icon: "settings",
+    href: generalHref,
+    run: () => env.go(generalHref),
+  };
+
+  const inProject = env.project;
+  const projectSettingsHref = inProject ? env.hrefs.projectSettings(inProject.ulid) : "";
+  const projectSettings: CommandItem[] = inProject
+    ? [
+        {
+          type: "command",
+          key: `open:project-settings:${inProject.ulid}`,
+          label: "プロジェクトの設定を開く",
+          icon: "settings",
+          note: inProject.title || undefined,
+          href: projectSettingsHref,
+          run: () => env.go(projectSettingsHref),
+        },
+      ]
+    : [];
+
   const recent = env.recent
     .filter((t) => word === "" || `${t.id} ${t.title}`.toLowerCase().includes(word))
     .map((t) => taskItem(t, env.hrefs.task));
@@ -378,7 +456,20 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
   const groups: PaletteGroup[] = [
     { name: "コマンド", items: commands.filter(keep) },
     { name: "最近開いたもの", items: recent },
-    { name: "開く", items: [...places, ...lists, my, ...saved].filter(keep) },
+    {
+      name: "開く",
+      items: [
+        ...places,
+        ...lists,
+        ...schemas,
+        general,
+        ...projectSettings,
+        my,
+        inbox,
+        activity,
+        ...saved,
+      ].filter(keep),
+    },
   ];
   if (env.selected) {
     const g = taskCommands(env, env.selected);

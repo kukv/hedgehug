@@ -12,12 +12,16 @@ export const syncRun = {
   },
 };
 
-/** Runs a sync now and says how it went. A second call while one runs does nothing. */
-export async function runSync(api: Api): Promise<void> {
+/** Runs a sync now (of one store, or of every one) and says how it went. A second call while one runs does nothing. */
+export async function runSync(api: Api, store?: string): Promise<void> {
   if (busy) return;
   busy = true;
   try {
-    const reports = await unwrap(api.POST("/api/sync"));
+    const reports = await unwrap(
+      store === undefined
+        ? api.POST("/api/sync")
+        : api.POST("/api/sync", { params: { query: { store } } }),
+    );
     toast({ message: syncMessage(reports) });
   } catch (e) {
     toast({ message: errorMessage(e) });

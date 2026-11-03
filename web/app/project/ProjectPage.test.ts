@@ -35,13 +35,21 @@ vi.mock("../list/ListTab.svelte", () => ({
   },
 }));
 
+vi.mock("./ProjectSettings.svelte", () => ({
+  default: (anchor: Comment, props: { ulid: string }) => {
+    const p = document.createElement("p");
+    p.textContent = `settings of ${props.ulid}`;
+    anchor.before(p);
+  },
+}));
+
 const project = task("P1", "project", null, {
   id: "REL-15",
   title: "リリース準備 v2.4",
   workspace: { ulid: "W1", name: "release", id_prefix: "REL" },
 }) as TaskView;
 
-function mount(tab: "tree" | "kanban" | "table", read = true) {
+function mount(tab: "tree" | "kanban" | "table" | "settings", read = true) {
   const none = () => () => {};
   return renderWithCore(
     ProjectPage,
@@ -80,6 +88,14 @@ describe("ProjectPage", () => {
     expect(screen.queryByText("tree tab")).toBeNull();
   });
 
+  it("draws the settings of the project, and none of the other tabs, on the settings tab", () => {
+    mount("settings");
+    expect(screen.getByText("settings of P1")).toBeTruthy();
+    expect(screen.queryByText("tree tab")).toBeNull();
+    expect(screen.queryByText(/ tab of project/)).toBeNull();
+    expect(screen.getByRole("link", { name: "設定" })).toHaveAttribute("aria-current", "page");
+  });
+
   it("keeps the filter across the tabs, and starts with the one that leaves the canceled out", async () => {
     const { rerender } = mount("tree");
     expect(screen.getByText("filter: -status:canceled")).toBeTruthy();
@@ -96,7 +112,7 @@ describe("ProjectPage", () => {
     // as the heading of the tree did: no title yet, but the tabs do not pop in later
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("");
     const tabs = screen.getByRole("navigation", { name: "ビューの切り替え" });
-    expect(within(tabs).getAllByRole("link")).toHaveLength(3);
+    expect(within(tabs).getAllByRole("link")).toHaveLength(4);
     expect(within(tabs).getByRole("link", { name: "カンバン" })).toHaveAttribute(
       "aria-current",
       "page",

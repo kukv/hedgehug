@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { hrefOf, onLinkClick, parseRoute, router } from "./router";
+import { hrefOf, onLinkClick, parseRoute, type Route, router } from "./router";
 
 beforeEach(() => {
   history.replaceState(null, "", "/");
@@ -42,7 +42,8 @@ describe("parseRoute", () => {
     ["/projects/01HPR/tree", { name: "project", ulid: "01HPR", tab: "tree" }],
     ["/projects/01HPR/kanban", { name: "project", ulid: "01HPR", tab: "kanban" }],
     ["/projects/01HPR/table", { name: "project", ulid: "01HPR", tab: "table" }],
-    ["/projects/01HPR/settings", { name: "home" }],
+    ["/projects/01HPR/settings", { name: "project", ulid: "01HPR", tab: "settings" }],
+    ["/projects/01HPR/nope", { name: "home" }],
     ["/views/shared/%E4%BB%8A%E9%80%B1", { name: "view", store: "shared", view: "今週" }],
     ["/views/org-b%2Fops/weekly", { name: "view", store: "org-b/ops", view: "weekly" }],
     ["/views/shared", { name: "home" }],
@@ -53,14 +54,31 @@ describe("parseRoute", () => {
     ["/query", { name: "home" }],
     ["/my", { name: "my" }],
     ["/my/extra", { name: "home" }],
+    ["/inbox", { name: "inbox", tab: "all" }],
+    ["/inbox/", { name: "inbox", tab: "all" }],
+    ["/inbox/extra", { name: "home" }],
+    ["/activity", { name: "activity", workspaces: [], sync: "" }],
+    ["/activity/", { name: "activity", workspaces: [], sync: "" }],
+    ["/activity/extra", { name: "home" }],
     ["/tasks/01HTK/", { name: "task", ulid: "01HTK" }],
-    ["/settings", { name: "settings", page: "workspaces", store: "" }],
+    ["/settings", { name: "settings", page: "general" }],
+    ["/settings/general", { name: "settings", page: "general" }],
+    ["/settings/general/extra", { name: "home" }],
     ["/settings/workspaces/shared", { name: "settings", page: "workspaces", store: "shared" }],
     [
       "/settings/workspaces/org-b%2Fops",
       { name: "settings", page: "workspaces", store: "org-b/ops" },
     ],
-    ["/settings/general", { name: "home" }],
+    [
+      "/settings/schema/shared",
+      { name: "settings", page: "schema", store: "shared", tab: "statuses" },
+    ],
+    [
+      "/settings/schema/org-b%2Fops",
+      { name: "settings", page: "schema", store: "org-b/ops", tab: "statuses" },
+    ],
+    ["/settings/schema", { name: "home" }],
+    ["/settings/schema/shared/extra", { name: "home" }],
     ["/nothing/here", { name: "home" }],
     ["/workspaces/shared", { name: "home" }],
   ])("%s", (path, route) => {
@@ -75,6 +93,7 @@ describe("parseRoute", () => {
     });
     expect(parseRoute("/query/tree", "?x=1")).toEqual({ name: "query", layout: "tree", q: "" });
     expect(parseRoute("/my", "?q=a")).toEqual({ name: "my" });
+    expect(parseRoute("/inbox", "?q=a")).toEqual({ name: "inbox", tab: "all" });
     expect(parseRoute("/projects/01HPR/table", "?q=a")).toEqual({
       name: "project",
       ulid: "01HPR",
@@ -90,6 +109,38 @@ describe("hrefOf", () => {
     expect(parseRoute(hrefOf(r))).toEqual(r);
     expect(hrefOf({ name: "home" })).toBe("/");
     expect(hrefOf({ name: "task", ulid: "01HTK" })).toBe("/tasks/01HTK");
+    expect(hrefOf({ name: "inbox", tab: "all" })).toBe("/inbox");
+    expect(parseRoute(hrefOf({ name: "inbox", tab: "all" }))).toEqual({
+      name: "inbox",
+      tab: "all",
+    });
+  });
+
+  it("アクティビティは ?workspace=（ULID のカンマ区切り）と ?sync= を持つ", () => {
+    expect(parseRoute("/activity", "?workspace=A,B&sync=only")).toEqual({
+      name: "activity",
+      workspaces: ["A", "B"],
+      sync: "only",
+    });
+    expect(parseRoute("/activity", "?workspace=A%2CB&sync=exclude")).toEqual({
+      name: "activity",
+      workspaces: ["A", "B"],
+      sync: "exclude",
+    });
+    // a sync that is none of the two is "all", and empty items of the list are dropped
+    expect(parseRoute("/activity", "?workspace=A,,&sync=x")).toEqual({
+      name: "activity",
+      workspaces: ["A"],
+      sync: "",
+    });
+    expect(hrefOf({ name: "activity", workspaces: [], sync: "" })).toBe("/activity");
+    expect(hrefOf({ name: "activity", workspaces: ["A", "B"], sync: "" })).toBe(
+      "/activity?workspace=A,B",
+    );
+    expect(hrefOf({ name: "activity", workspaces: [], sync: "only" })).toBe("/activity?sync=only");
+    const r: Route = { name: "activity", workspaces: ["A", "B"], sync: "exclude" };
+    expect(hrefOf(r)).toBe("/activity?workspace=A,B&sync=exclude");
+    expect(parseRoute("/activity", "?workspace=A,B&sync=exclude")).toEqual(r);
   });
 
   it("タブはパスの末尾に付ける。概要は付けない", () => {
@@ -102,7 +153,9 @@ describe("hrefOf", () => {
       { ...ws, tab: "settings" },
       { name: "project", ulid: "01HPR", tab: "tree" },
       { name: "settings", page: "workspaces", store: "org-b/ops" },
-      { name: "settings", page: "workspaces", store: "" },
+      { name: "settings", page: "schema", store: "org-b/ops", tab: "statuses" },
+      { name: "inbox", tab: "all" },
+      { name: "settings", page: "general" },
     ] as const) {
       expect(parseRoute(hrefOf(r))).toEqual(r);
     }
@@ -113,6 +166,9 @@ describe("hrefOf", () => {
       "/projects/01HPR/kanban",
     );
     expect(hrefOf({ name: "project", ulid: "01HPR", tab: "table" })).toBe("/projects/01HPR/table");
+    expect(hrefOf({ name: "project", ulid: "01HPR", tab: "settings" })).toBe(
+      "/projects/01HPR/settings",
+    );
     const ws = { name: "workspace", store: "shared", ulid: "01HWS" } as const;
     expect(hrefOf({ ...ws, tab: "kanban" })).toBe("/workspaces/shared/01HWS/kanban");
     expect(hrefOf({ ...ws, tab: "table" })).toBe("/workspaces/shared/01HWS/table");
@@ -144,11 +200,14 @@ describe("hrefOf", () => {
     }
   });
 
-  it("設定のパスは Store 名を符号化し、Store がなければ /settings", () => {
+  it("設定のパスは Store 名を符号化する。同期と保守は /settings/general", () => {
     expect(hrefOf({ name: "settings", page: "workspaces", store: "org-b/ops" })).toBe(
       "/settings/workspaces/org-b%2Fops",
     );
-    expect(hrefOf({ name: "settings", page: "workspaces", store: "" })).toBe("/settings");
+    expect(hrefOf({ name: "settings", page: "general" })).toBe("/settings/general");
+    expect(hrefOf({ name: "settings", page: "schema", store: "org-b/ops", tab: "statuses" })).toBe(
+      "/settings/schema/org-b%2Fops",
+    );
   });
 });
 
@@ -190,6 +249,14 @@ describe("router", () => {
     router.go("/my?q=status%3Atodo");
     expect(location.pathname).toBe("/my");
     expect(location.search).toBe("");
+  });
+
+  it("/activity への go は ?workspace= と ?sync= を残し、ほかの query は捨てる", () => {
+    router.go("/activity?workspace=A,B&sync=only&x=1#y");
+    expect(location.pathname + location.search).toBe("/activity?workspace=A,B&sync=only");
+    expect(router.route).toEqual({ name: "activity", workspaces: ["A", "B"], sync: "only" });
+    router.go("/activity?sync=exclude");
+    expect(router.route).toEqual({ name: "activity", workspaces: [], sync: "exclude" });
   });
 
   it("q だけ替えた /query への go は route を替える", () => {
@@ -255,5 +322,46 @@ describe("onLinkClick", () => {
       expect(e.defaultPrevented).toBe(false);
     }
     expect(location.pathname).toBe("/");
+  });
+});
+
+describe("the tab of a screen is in its address", () => {
+  it("the inbox has ?tab= for every tab but the first; an unknown tab is the first", () => {
+    expect(parseRoute("/inbox", "?tab=overwritten")).toEqual({ name: "inbox", tab: "overwritten" });
+    expect(parseRoute("/inbox", "?tab=mention")).toEqual({ name: "inbox", tab: "mention" });
+    expect(parseRoute("/inbox", "?tab=repair")).toEqual({ name: "inbox", tab: "repair" });
+    expect(parseRoute("/inbox", "?tab=nope")).toEqual({ name: "inbox", tab: "all" });
+    expect(hrefOf({ name: "inbox", tab: "mention" })).toBe("/inbox?tab=mention");
+  });
+
+  it("the schema has ?tab= for every tab but the first; an unknown tab is the first", () => {
+    for (const tab of ["kinds", "props", "workflow"] as const) {
+      expect(parseRoute("/settings/schema/shared", `?tab=${tab}`)).toEqual({
+        name: "settings",
+        page: "schema",
+        store: "shared",
+        tab,
+      });
+    }
+    expect(parseRoute("/settings/schema/shared", "?tab=nope")).toEqual({
+      name: "settings",
+      page: "schema",
+      store: "shared",
+      tab: "statuses",
+    });
+    expect(hrefOf({ name: "settings", page: "schema", store: "org-b/ops", tab: "props" })).toBe(
+      "/settings/schema/org-b%2Fops?tab=props",
+    );
+  });
+
+  it("router.go keeps the tab, and a tab of a path that is not the screen's is dropped", () => {
+    router.go("/inbox?tab=mention");
+    expect(location.pathname + location.search).toBe("/inbox?tab=mention");
+    router.go("/settings/schema/shared?tab=kinds");
+    expect(location.pathname + location.search).toBe("/settings/schema/shared?tab=kinds");
+    router.go("/my?tab=kinds");
+    expect(location.pathname + location.search).toBe("/my");
+    router.go("/settings/workspaces/shared?tab=kinds");
+    expect(location.pathname + location.search).toBe("/settings/workspaces/shared");
   });
 });

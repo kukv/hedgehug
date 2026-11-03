@@ -7,7 +7,7 @@ import { schema, task } from "../tree/fixtures";
 
 const h = vi.hoisted(() => ({
   core: undefined as unknown,
-  route: { name: "home" } as { name: string; ulid?: string; store?: string },
+  route: { name: "home" } as { name: string; ulid?: string; store?: string; page?: string },
   go: vi.fn(),
   toast: vi.fn(),
   runUndo: vi.fn(async () => {}),
@@ -31,20 +31,27 @@ vi.mock("../router", () => ({
       view?: string;
       layout?: string;
       q?: string;
+      page?: string;
     }) =>
       r.name === "task"
         ? `/tasks/${r.ulid}`
         : r.name === "project"
-          ? `/projects/${r.ulid}`
+          ? `/projects/${r.ulid}${r.tab && r.tab !== "tree" ? `/${r.tab}` : ""}`
           : r.name === "settings"
-            ? `/settings/workspaces/${r.store}`
+            ? r.page === "general"
+              ? "/settings/general"
+              : `/settings/workspaces/${r.store}`
             : r.name === "view"
               ? `/views/${r.store}/${r.view}`
               : r.name === "query"
                 ? `/query/${r.layout}?q=${r.q}`
                 : r.name === "my"
                   ? "/my"
-                  : `/workspaces/${r.store}/${r.ulid}${r.tab === "overview" ? "" : `/${r.tab}`}`,
+                  : r.name === "inbox"
+                    ? "/inbox"
+                    : r.name === "activity"
+                      ? "/activity"
+                      : `/workspaces/${r.store}/${r.ulid}${r.tab === "overview" ? "" : `/${r.tab}`}`,
   },
 }));
 vi.mock("../views/dialogs-state.svelte", () => ({ openViewSave: h.saveView }));
@@ -112,7 +119,13 @@ function setup(found: unknown[] = []) {
     api,
     cache: {
       task: (u: string) =>
-        u === "U6" ? rel6 : u === "U9" ? { ...rel6, ulid: "U9", store: "backend" } : undefined,
+        u === "U6"
+          ? rel6
+          : u === "U9"
+            ? { ...rel6, ulid: "U9", store: "backend" }
+            : u === "P1"
+              ? task("P1", "project", null, { id: "REL-15", title: "リリース準備 v2.4" })
+              : undefined,
       applyWrite: vi.fn(),
       epochNow: () => 0,
       prime: vi.fn(),
@@ -224,7 +237,7 @@ describe("CommandPalette", () => {
     expect(h.runUndo).toHaveBeenLastCalledWith(expect.anything(), "backend");
 
     closePalette();
-    h.route = { name: "settings", store: "backend" };
+    h.route = { name: "settings", page: "workspaces", store: "backend" };
     openPalette();
     await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">取り消" } });
     await fireEvent.keyDown(box(), { key: "Enter" });
@@ -236,6 +249,28 @@ describe("CommandPalette", () => {
     await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">取り消" } });
     await fireEvent.keyDown(box(), { key: "Enter" });
     expect(h.runUndo).toHaveBeenLastCalledWith(expect.anything(), "shared");
+  });
+
+  it("opens the sync and maintenance settings", async () => {
+    setup();
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), {
+      target: { value: ">同期と保守" },
+    });
+    await fireEvent.click(await screen.findByRole("option", { name: /設定の同期と保守を開く/ }));
+    expect(h.go).toHaveBeenCalledWith("/settings/general");
+    expect(palette.open).toBe(false);
+  });
+
+  it("runs the diagnosis in the sync and maintenance settings", async () => {
+    setup();
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">doctor" } });
+    await fireEvent.click(await screen.findByRole("option", { name: /doctor を実行/ }));
+    expect(h.go).toHaveBeenCalledWith("/settings/general");
+    expect(palette.open).toBe(false);
   });
 
   it("opens the settings of the workspace", async () => {
@@ -323,9 +358,40 @@ describe("CommandPalette", () => {
     await fireEvent.click(await screen.findByRole("option", { name: /マイタスクを開く/ }));
     expect(h.go).toHaveBeenCalledWith("/my");
     openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">通知" } });
+    await fireEvent.click(await screen.findByRole("option", { name: /通知を開く/ }));
+    expect(h.go).toHaveBeenLastCalledWith("/inbox");
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">アクティ" } });
+    await fireEvent.click(await screen.findByRole("option", { name: /アクティビティを開く/ }));
+    expect(h.go).toHaveBeenLastCalledWith("/activity");
+    openPalette();
     await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">ブロック" } });
     await fireEvent.click(await screen.findByRole("option", { name: /ブロック中 を開く/ }));
     expect(h.go).toHaveBeenLastCalledWith("/views/backend/ブロック中");
+  });
+
+  it.each([
+    ["the page of a project", { name: "project", ulid: "P1" }, true],
+    ["the detail of a project", { name: "task", ulid: "P1" }, true],
+    ["the detail of a task that is none", { name: "task", ulid: "U6" }, false],
+    ["the home", { name: "home" }, false],
+  ])("opens the settings of the project from %s: %s", async (_, route, offered) => {
+    setup();
+    h.route = route;
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), {
+      target: { value: ">プロジェクトの設定" },
+    });
+    if (!offered) {
+      await waitFor(() =>
+        expect(screen.queryByRole("option", { name: /プロジェクトの設定/ })).toBeNull(),
+      );
+      return;
+    }
+    await fireEvent.click(await screen.findByRole("option", { name: /プロジェクトの設定を開く/ }));
+    expect(h.go).toHaveBeenLastCalledWith("/projects/P1/settings");
   });
 
   it("offers to open a query that found tasks as a table, and to save it as a view", async () => {

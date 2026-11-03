@@ -3,7 +3,13 @@
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-const pad = (n: number): string => String(n).padStart(2, "0");
+export const pad = (n: number): string => String(n).padStart(2, "0");
+
+// daysAgo: how many calendar days (of the local time) d is before now; 0 is today, 1 is yesterday.
+export function daysAgo(d: Date, now: Date): number {
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  return Math.round((day(now) - day(d)) / 86_400_000);
+}
 
 // parse reads an ISO date (2026-11-07, a date property) as that day in the
 // local time zone, and an ISO time as the moment it is.
@@ -23,6 +29,13 @@ export function formatDate(iso: string, now: Date): string {
 export function formatDateTime(iso: string, now: Date): string {
   const d = parse(iso);
   return `${formatDate(iso, now)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// formatTime: 09:05, in the local time; --:-- for a time that is none.
+export function formatTime(iso: string): string {
+  const d = parse(iso);
+  if (Number.isNaN(d.getTime())) return "--:--";
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 // formatRelative: 今, 3 分前, 2 時間前, and the date from a day on.
@@ -45,4 +58,16 @@ export function avatarTone(name: string): 0 | 1 | 2 | 3 {
   let h = 0;
   for (const c of name) h = (h * 31 + (c.codePointAt(0) ?? 0)) >>> 0;
   return (h % 4) as 0 | 1 | 2 | 3;
+}
+
+// formatDuration: seconds as they read, 30 秒, 2 分, 1 時間 30 分.
+export function formatDuration(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const parts = [h > 0 ? `${h} 時間` : "", m > 0 ? `${m} 分` : "", s > 0 ? `${s} 秒` : ""].filter(
+    Boolean,
+  );
+  return parts.length > 0 ? parts.join(" ") : "0 秒";
 }

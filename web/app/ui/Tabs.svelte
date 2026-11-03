@@ -4,6 +4,7 @@
   /**
    * onselect: the tab does something in place (the layout of a saved view); href is where a new tab opens.
    * disabled: the reason the tab cannot be used; it does nothing when pressed.
+   * count: a number shown after the label (left out when it is 0 or not given).
    */
   export type TabItem = {
     label: string;
@@ -11,6 +12,7 @@
     current: boolean;
     onselect?: () => void;
     disabled?: string;
+    count?: number;
   };
   /** The tab at the right end (the settings), which can have an icon. */
   export type TabEnd = TabItem & { icon?: IconName };
@@ -51,7 +53,10 @@
       aria-describedby={it.disabled ? `${uid}-${it.label}` : undefined}
       title={it.disabled}
       onclick={(e) => pick(e, it)}
-      >{it.label}</a
+      >{it.label}
+      {#if it.count}
+        <span class="count">{it.count}</span>
+      {/if}</a
     >
     {#if it.disabled}
       <span class="reason" id="{uid}-{it.label}">{it.disabled}</span>
@@ -94,6 +99,12 @@
   }
   .tab:hover {
     color: var(--ink);
+  }
+  .count {
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: var(--fs-11);
+    font-weight: 400;
   }
   .reason {
     position: absolute;

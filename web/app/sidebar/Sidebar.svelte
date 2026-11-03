@@ -15,14 +15,16 @@
   import { openWorkspaceDelete } from "../workspace/dialogs-state.svelte";
   import SyncCard from "./SyncCard.svelte";
 
-  const { stores, cache, views } = core();
+  const { stores, cache, views, conn } = core();
   const workspaces = useSubscribe(stores, () => stores.workspaces());
   const savedViews = useSubscribe(views, () => views.list());
   const cacheRev = useSubscribe(cache, () => ({}));
+  const unread = useSubscribe(conn, () => conn.unread);
   const route = $derived(router.route);
-  // /settings names no Store: the settings go to the first one.
-  const settingsHref = hrefOf({ name: "settings", page: "workspaces", store: "" });
+  const settingsHref = hrefOf({ name: "settings", page: "general" });
   const myHref = hrefOf({ name: "my" });
+  const inboxHref = hrefOf({ name: "inbox", tab: "all" });
+  const activityHref = hrefOf({ name: "activity", workspaces: [], sync: "" });
 
   // The count beside "マイタスク" is the number the screen shows with its own query (細部 55). It
   // is left out while the list is read, and when the query does not run (no account).
@@ -107,6 +109,29 @@
       {#if myCount !== null}
         <span class="count">{myCount}</span>
       {/if}
+    </a>
+    <a
+      href={inboxHref}
+      class="nav-link"
+      class:active={route.name === "inbox"}
+      aria-current={route.name === "inbox" ? "page" : undefined}
+      onclick={(e) => onLinkClick(e, inboxHref)}
+    >
+      <Icon name="bell" size={14} />
+      <span class="nav-text">通知</span>
+      {#if unread.current > 0}
+        <span class="count">{unread.current}</span>
+      {/if}
+    </a>
+    <a
+      href={activityHref}
+      class="nav-link"
+      class:active={route.name === "activity"}
+      aria-current={route.name === "activity" ? "page" : undefined}
+      onclick={(e) => onLinkClick(e, activityHref)}
+    >
+      <Icon name="activity" size={14} />
+      <span class="nav-text">アクティビティ</span>
     </a>
   </div>
 

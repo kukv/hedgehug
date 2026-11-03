@@ -11,8 +11,10 @@
     reveal?: boolean;
     href?: string;
     onopen?: (e: MouseEvent) => void;
+    // the middle button: the browser opens the link in a new tab by itself
+    onaux?: (e: MouseEvent) => void;
   };
-  let { id, ulid, alwaysUlid = false, reveal = false, href, onopen }: Props = $props();
+  let { id, ulid, alwaysUlid = false, reveal = false, href, onopen, onaux }: Props = $props();
 
   let hover = $state(false);
   let focus = $state(false);
@@ -47,7 +49,7 @@
   }}
 >
   {#if href}
-    <a class="id link" {href} onclick={onopen}>{id}</a>
+    <a class="id link" {href} onclick={onopen} onauxclick={onaux}>{id}</a>
   {:else}
     <button type="button" class="id" tabindex="-1">{id}</button>
   {/if}

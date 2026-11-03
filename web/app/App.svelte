@@ -2,10 +2,12 @@
   import { onMount } from "svelte";
   import { cliWorkspaceAdd, Placeholder } from "../core/cli";
   import { takeToken } from "../core/token";
+  import ActivityPage from "./activity/ActivityPage.svelte";
   import { setCore } from "./context";
   import { createCore } from "./core-factory";
   import CreateHost from "./create/CreateHost.svelte";
   import TaskDetail from "./detail/TaskDetail.svelte";
+  import InboxPage from "./inbox/InboxPage.svelte";
   import MyTasks from "./my/MyTasks.svelte";
   import CommandPalette from "./palette/CommandPalette.svelte";
   import ProjectPage from "./project/ProjectPage.svelte";
@@ -92,6 +94,10 @@
         <QueryPage layout={route.layout} q={route.q} />
       {:else if route.name === "my"}
         <MyTasks />
+      {:else if route.name === "inbox"}
+        <InboxPage tab={route.tab} />
+      {:else if route.name === "activity"}
+        <ActivityPage workspaces={route.workspaces} sync={route.sync} />
       {:else if route.name === "settings"}
         <SettingsRoute page={route} />
       {:else if route.name === "home" && dir.current.first}

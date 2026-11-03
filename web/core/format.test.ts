@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { avatarTone, formatDate, formatDateTime, formatRelative, initials } from "./format";
+import {
+  avatarTone,
+  daysAgo,
+  formatDate,
+  formatDateTime,
+  formatDuration,
+  formatRelative,
+  formatTime,
+  initials,
+} from "./format";
 
 const now = new Date(2026, 10, 4, 12, 0, 0); // 2026-11-04 12:00 local
 const at = (y: number, mo: number, d: number, h = 0, mi = 0, s = 0) =>
@@ -21,6 +30,18 @@ describe("formatDateTime", () => {
   it("shows the time too", () => {
     expect(formatDateTime(at(2026, 11, 4, 10, 12), now)).toBe("11/04 10:12");
     expect(formatDateTime(at(2025, 3, 2, 9, 5), now)).toBe("2025/03/02 09:05");
+  });
+});
+
+describe("formatTime", () => {
+  it("pads the hour and the minute, and never writes 24", () => {
+    expect(formatTime(at(2026, 11, 4, 9, 5))).toBe("09:05");
+    expect(formatTime(at(2026, 11, 4, 0, 5))).toBe("00:05");
+    expect(formatTime(at(2026, 11, 4, 23, 59))).toBe("23:59");
+  });
+
+  it("is --:-- for a time that is none", () => {
+    expect(formatTime("not a time")).toBe("--:--");
   });
 });
 
@@ -49,5 +70,38 @@ describe("initials and avatarTone", () => {
       expect(avatarTone(n)).toBe(t);
     }
     expect(new Set(["a", "b", "c", "d"].map(avatarTone)).size).toBe(4);
+  });
+});
+
+describe("formatDuration", () => {
+  it("reads seconds as 秒, 分, 時間 and joins what is left", () => {
+    expect(formatDuration(30)).toBe("30 秒");
+    expect(formatDuration(60)).toBe("1 分");
+    expect(formatDuration(120)).toBe("2 分");
+    expect(formatDuration(90)).toBe("1 分 30 秒");
+    expect(formatDuration(3600)).toBe("1 時間");
+    expect(formatDuration(5400)).toBe("1 時間 30 分");
+    expect(formatDuration(3661)).toBe("1 時間 1 分 1 秒");
+  });
+
+  it("rounds a fraction to the second, and 0 is 0 秒", () => {
+    expect(formatDuration(0.4)).toBe("0 秒");
+    expect(formatDuration(29.6)).toBe("30 秒");
+    expect(formatDuration(0)).toBe("0 秒");
+    expect(formatDuration(-5)).toBe("0 秒");
+  });
+});
+
+describe("daysAgo", () => {
+  const now = new Date(2026, 10, 4, 0, 5);
+  it("counts the calendar days, not the hours", () => {
+    expect(daysAgo(new Date(2026, 10, 4, 23, 59), now)).toBe(0);
+    expect(daysAgo(new Date(2026, 10, 3, 23, 59), now)).toBe(1);
+    expect(daysAgo(new Date(2026, 10, 1, 8, 0), now)).toBe(3);
+    expect(daysAgo(new Date(2026, 10, 5, 8, 0), now)).toBe(-1);
+  });
+  it("is not moved by the change of summer time", () => {
+    expect(daysAgo(new Date(2026, 2, 7, 12), new Date(2026, 2, 9, 12))).toBe(2);
+    expect(daysAgo(new Date(2026, 9, 31, 12), new Date(2026, 10, 2, 12))).toBe(2);
   });
 });

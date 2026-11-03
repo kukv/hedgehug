@@ -2,11 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   cliAdd,
   cliComment,
+  cliDoctor,
+  cliInbox,
+  cliLog,
   cliLs,
   cliMv,
+  cliPurge,
   cliRestore,
   cliRestoreAt,
   cliRm,
+  cliSchemaCheck,
+  cliSchemaMigrate,
+  cliScopeRm,
+  cliScopeSet,
   cliSet,
   cliStoreInit,
   cliSync,
@@ -82,6 +90,30 @@ describe("commands", () => {
     expect(cliLs("workspace:main -status:canceled", true, "shared")).toBe(
       'hh ls --store shared --tree "workspace:main -status:canceled"',
     );
+  });
+
+  it("writes hh inbox", () => {
+    expect(cliInbox()).toBe("hh inbox");
+    expect(cliInbox({ all: true })).toBe("hh inbox --all");
+    expect(cliInbox({ all: true, store: "shared" })).toBe("hh inbox --all --store shared");
+  });
+
+  it("writes hh log, with the workspaces by name", () => {
+    expect(cliLog([])).toBe("hh log");
+    expect(cliLog(["release", "payments"])).toBe("hh log --workspace release,payments");
+    expect(cliLog(["my work"])).toBe('hh log --workspace "my work"');
+  });
+
+  it("writes hh doctor, with --fix and --store", () => {
+    expect(cliDoctor({})).toBe("hh doctor");
+    expect(cliDoctor({ fix: true })).toBe("hh doctor --fix");
+    expect(cliDoctor({ fix: true, store: "shared" })).toBe("hh doctor --fix --store shared");
+    expect(cliDoctor({ store: "shared" })).toBe("hh doctor --store shared");
+  });
+
+  it("writes hh purge --older-than <N>d", () => {
+    expect(cliPurge(90)).toBe("hh purge --older-than 90d");
+    expect(cliPurge(0, "shared")).toBe("hh purge --older-than 0d --store shared");
   });
 
   it("puts -- before an argument that starts with -", () => {
@@ -200,6 +232,35 @@ describe("commands", () => {
     ).toBe("hh store init shared --prefix WEB --workspace web --remote git@x:a/b.git");
   });
 
+  it("writes hh schema scope rm; --store only when it is given", () => {
+    expect(cliScopeRm("REL-15")).toBe("hh schema scope rm REL-15");
+    expect(cliScopeRm("REL-15", "shared")).toBe("hh schema scope rm REL-15 --store shared");
+  });
+
+  it("writes hh schema scope set with the parts that are given; an empty part takes it off", () => {
+    expect(
+      cliScopeSet({
+        id: "REL-15",
+        statuses: ["todo", "done"],
+        transitions: { todo: ["in_progress", "done"], waiting: ["done"] },
+        required: { in_progress: ["points", "assignees"] },
+        store: "shared",
+      }),
+    ).toBe(
+      "hh schema scope set REL-15 --statuses todo,done --transition todo=in_progress,done" +
+        " --transition waiting=done --required in_progress=points,assignees --store shared",
+    );
+    expect(cliScopeSet({ id: "REL-15", statuses: [], transitions: {}, required: {} })).toBe(
+      'hh schema scope set REL-15 --statuses "" --transition "" --required ""',
+    );
+    expect(cliScopeSet({ id: "REL-15", required: { done: ["points"] } })).toBe(
+      "hh schema scope set REL-15 --required done=points",
+    );
+    expect(cliScopeSet({ id: "REL-15", store: "shared" })).toBe(
+      "hh schema scope set REL-15 <変更> --store shared",
+    );
+  });
+
   it("writes a placeholder as it is, so that a shell refuses the line", () => {
     const name = new Placeholder("名前");
     const prefix = new Placeholder("接頭辞");
@@ -210,6 +271,36 @@ describe("commands", () => {
     // what a person types is still quoted
     expect(cliStoreInit({ name: "<名前>", prefix: "ME" })).toBe(
       'hh store init "<名前>" --prefix ME',
+    );
+  });
+
+  it("writes hh schema check, with --store only when asked", () => {
+    expect(cliSchemaCheck()).toBe("hh schema check");
+    expect(cliSchemaCheck("shared")).toBe("hh schema check --store shared");
+  });
+
+  it("writes hh schema migrate for each target; value takes the property first", () => {
+    expect(cliSchemaMigrate({ target: "status", old: "triage", new: "todo" })).toBe(
+      "hh schema migrate status triage todo",
+    );
+    expect(cliSchemaMigrate({ target: "kind", old: "bug", new: "defect", store: "a b" })).toBe(
+      'hh schema migrate kind bug defect --store "a b"',
+    );
+    expect(cliSchemaMigrate({ target: "prop", old: "area", new: "team" })).toBe(
+      "hh schema migrate prop area team",
+    );
+    expect(cliSchemaMigrate({ target: "value", prop: "priority", old: "mid", new: "normal" })).toBe(
+      "hh schema migrate value priority mid normal",
+    );
+  });
+
+  it("puts a placeholder where the new name goes while it is not typed, and guards a leading -", () => {
+    const next = new Placeholder("新しい名前");
+    expect(cliSchemaMigrate({ target: "status", old: "triage", new: next })).toBe(
+      "hh schema migrate status triage <新しい名前>",
+    );
+    expect(cliSchemaMigrate({ target: "status", old: "triage", new: "-x" })).toBe(
+      "hh schema migrate status -- triage -x",
     );
   });
 });

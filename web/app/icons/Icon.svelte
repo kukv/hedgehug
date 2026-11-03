@@ -21,7 +21,9 @@
     | "forbid"
     | "checklist"
     | "status"
-    | "undo";
+    | "undo"
+    | "bell"
+    | "activity";
 
   type Def = { box: 16 | 24; w: number; d: string };
 
@@ -71,6 +73,12 @@
     filter: { box: 24, w: 2, d: "M3 5h18l-7 8v6l-4-2v-4z" },
     forbid: { box: 16, w: 1.4, d: "M8 2.5a5.5 5.5 0 1 1 0 11a5.5 5.5 0 0 1 0-11zM4.1 4.1l7.8 7.8" },
     checklist: { box: 24, w: 2, d: "M4 6l2 2 3-3.5M4 14l2 2 3-3.5M13 7h7M13 15h7" },
+    bell: {
+      box: 24,
+      w: 2,
+      d: "M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0",
+    },
+    activity: { box: 24, w: 2, d: "M3 12h4l3-8 4 16 3-8h4" },
     undo: { box: 24, w: 2, d: "M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" },
     status: {
       box: 16,

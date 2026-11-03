@@ -20,6 +20,20 @@ describe("Tabs", () => {
     expect(within(nav).getByRole("link", { name: "概要" }).getAttribute("aria-current")).toBeNull();
   });
 
+  it("count は 1 以上のときだけ、ラベルの後ろに数を出す", () => {
+    const { getByRole } = render(Tabs, {
+      items: [
+        { label: "二", href: "/a", current: true, count: 2 },
+        { label: "零", href: "/b", current: false, count: 0 },
+        { label: "なし", href: "/c", current: false },
+      ],
+    });
+    const count = (name: string) => getByRole("link", { name }).querySelector(".count");
+    expect(count("二 2")?.textContent).toBe("2");
+    expect(count("零")).toBeNull();
+    expect(count("なし")).toBeNull();
+  });
+
   it("右端の項目を最後に出し、アイコンをつけられる", () => {
     const { getAllByRole, container } = render(Tabs, {
       items,

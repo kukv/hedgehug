@@ -25,11 +25,26 @@
     };
   });
 
-  const itemHref = $derived(hrefOf({ name: "settings", page: "workspaces", store: page.store }));
+  // The page of this machine names no Store: the one picked here (the first until one is) is the
+  // Store that the items of a Store lead to.
+  let picked = $state<string | null>(null);
+  // On a page of a Store the pick follows that Store; on the general page it keeps the last one.
+  const pageStore = $derived("store" in page ? page.store : null);
+  $effect(() => {
+    if (pageStore !== null) picked = pageStore;
+  });
+  const store = $derived(
+    pageStore ??
+      (picked !== null && names.current.includes(picked) ? picked : (names.current[0] ?? "")),
+  );
+  const generalHref = hrefOf({ name: "settings", page: "general" });
+  const workspacesHref = $derived(hrefOf({ name: "settings", page: "workspaces", store }));
+  const schemaHref = $derived(hrefOf({ name: "settings", page: "schema", store, tab: "statuses" }));
   const homeHref = hrefOf({ name: "home" });
 
-  function pick(store: string) {
-    router.go(hrefOf({ name: "settings", page: page.page, store }));
+  function pick(next: string) {
+    if ("store" in page) router.go(hrefOf({ name: "settings", ...page, store: next }));
+    else picked = next;
   }
 </script>
 
@@ -40,27 +55,51 @@
   </a>
   <h2>設定</h2>
 
+  <section class="group" aria-label="このマシン">
+    <span class="cap">このマシン</span>
+    <a
+      class="item"
+      class:on={page.page === "general"}
+      href={generalHref}
+      aria-current={page.page === "general" ? "page" : undefined}
+      onclick={(e) => onLinkClick(e, generalHref)}
+    >
+      <Icon name="sync" size={14} />同期と保守
+    </a>
+  </section>
+
   <section class="group" aria-label="Store ごとの設定">
     <span class="cap">Store ごとの設定</span>
     {#if names.current.length >= 2}
       <label class="store">
         <span class="label">設定する Store</span>
-        <select value={page.store} onchange={(e) => pick(e.currentTarget.value)}>
+        <select value={store} onchange={(e) => pick(e.currentTarget.value)}>
           {#each names.current as n (n)}
             <option value={n}>{n}</option>
           {/each}
         </select>
       </label>
     {/if}
-    <a
-      class="item"
-      class:on={page.page === "workspaces"}
-      href={itemHref}
-      aria-current={page.page === "workspaces" ? "page" : undefined}
-      onclick={(e) => onLinkClick(e, itemHref)}
-    >
-      <Icon name="workspace" size={14} />ワークスペース
-    </a>
+    {#if store !== ""}
+      <a
+        class="item"
+        class:on={page.page === "workspaces"}
+        href={workspacesHref}
+        aria-current={page.page === "workspaces" ? "page" : undefined}
+        onclick={(e) => onLinkClick(e, workspacesHref)}
+      >
+        <Icon name="workspace" size={14} />ワークスペース
+      </a>
+      <a
+        class="item"
+        class:on={page.page === "schema"}
+        href={schemaHref}
+        aria-current={page.page === "schema" ? "page" : undefined}
+        onclick={(e) => onLinkClick(e, schemaHref)}
+      >
+        <Icon name="checklist" size={14} />スキーマ
+      </a>
+    {/if}
     <p class="note">
       Store ごとの設定は、その Store を使う全員に共有されます（git に書かれます）。
     </p>

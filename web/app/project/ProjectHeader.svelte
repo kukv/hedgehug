@@ -9,7 +9,7 @@
   import Tabs from "../ui/Tabs.svelte";
 
   // The heading of a project: where it is (Store, workspace), its name and ID, and the tabs.
-  // 4e-4 adds the settings of the project at the right end.
+  // The settings of the project are the tab at the right end.
   // The project is not there until it is read: the heading has no title then (as the tree's had),
   // and the tabs, which only need the ULID, are drawn at once.
   type Props = { ulid: string; project?: TaskView; workspace?: WorkspaceEntry; tab: ProjectTab };
@@ -22,6 +22,12 @@
     { label: "カンバン", href: at("kanban"), current: tab === "kanban" },
     { label: "テーブル", href: at("table"), current: tab === "table" },
   ]);
+  const end = $derived({
+    label: "設定",
+    href: at("settings"),
+    current: tab === "settings",
+    icon: "settings" as const,
+  });
 </script>
 
 <header class="head">
@@ -42,13 +48,13 @@
       <span class="sep" aria-hidden="true">›</span>
     {/if}
     <KindIcon kind="project" />
-    <h1>{project?.title ?? ""}</h1>
+    <h1 tabindex="-1">{project?.title ?? ""}</h1>
     {#if project}
       <span class="id">{project.id}</span>
     {/if}
   </nav>
 </header>
-<Tabs {items} />
+<Tabs {items} {end} />
 
 <style>
   .head {

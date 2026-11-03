@@ -78,11 +78,56 @@ describe("Sidebar", () => {
     expect(getByText(location.host)).toBeTruthy();
   });
 
-  it("通知とアクティビティの入口は 4e-4 まで出さない", () => {
-    const { queryByText } = mount();
-    for (const t of ["通知", "アクティビティ"]) {
-      expect(queryByText(t)).toBeNull();
-    }
+  it("通知とアクティビティの行が出る", () => {
+    const { getByRole } = mount();
+    expect(getByRole("link", { name: /通知/ })).toBeTruthy();
+    expect(getByRole("link", { name: /アクティビティ/ })).toBeTruthy();
+  });
+
+  it("アクティビティは /activity を開く行。通知の下に並び、今の画面なら aria-current", async () => {
+    const { getByRole, getAllByRole } = mount();
+    const link = getByRole("link", { name: /アクティビティ/ });
+    expect(link.getAttribute("href")).toBe("/activity");
+    expect(link.getAttribute("aria-current")).toBeNull();
+    const names = getAllByRole("link").map((a) => a.textContent?.trim());
+    expect(names.indexOf("アクティビティ")).toBe(names.indexOf("通知") + 1);
+    await fireEvent.click(link);
+    expect(location.pathname).toBe("/activity");
+    cleanup();
+    const again = mount();
+    expect(again.getByRole("link", { name: /アクティビティ/ }).getAttribute("aria-current")).toBe(
+      "page",
+    );
+  });
+
+  it("通知は /inbox を開く行。マイタスクの下に並び、今の画面なら aria-current", async () => {
+    const { getByRole, getAllByRole } = mount();
+    const link = getByRole("link", { name: /通知/ });
+    expect(link.getAttribute("href")).toBe("/inbox");
+    expect(link.getAttribute("aria-current")).toBeNull();
+    const names = getAllByRole("link").map((a) => a.textContent?.trim());
+    expect(names.indexOf("通知")).toBe(names.findIndex((t) => t?.startsWith("マイタスク")) + 1);
+    await fireEvent.click(link);
+    expect(location.pathname).toBe("/inbox");
+    cleanup();
+    const again = mount();
+    expect(again.getByRole("link", { name: /通知/ }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("通知の行は未読の数を出す。0 なら出さない", () => {
+    const none = mount();
+    expect(none.getByRole("link", { name: /通知/ }).textContent?.trim()).toBe("通知");
+    cleanup();
+    const some = mount({
+      conn: {
+        state: "open",
+        sync: new Map(),
+        unread: 3,
+        subscribe: () => () => {},
+        on: () => () => {},
+      },
+    });
+    expect(some.getByRole("link", { name: /通知/ }).textContent).toMatch(/3/);
   });
 
   it("マイタスクは /my を開く行。今の画面なら aria-current", async () => {
@@ -182,13 +227,13 @@ describe("Sidebar", () => {
     expect(links.map((a) => a.getAttribute("aria-current"))).toEqual([null, "page"]);
   });
 
-  it("右上の歯車は設定（/settings）を開く", async () => {
+  it("右上の歯車は設定の同期と保守（/settings/general）を開く", async () => {
     const { getByRole } = mount();
     const gear = getByRole("link", { name: "設定" });
-    expect(gear.getAttribute("href")).toBe("/settings");
+    expect(gear.getAttribute("href")).toBe("/settings/general");
     expect(gear.getAttribute("aria-current")).toBeNull();
     await fireEvent.click(gear);
-    expect(location.pathname).toBe("/settings");
+    expect(location.pathname).toBe("/settings/general");
   });
 
   it("設定を開いている間は歯車を aria-current にする", () => {

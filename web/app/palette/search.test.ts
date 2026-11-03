@@ -201,13 +201,19 @@ function env(over: Partial<CommandEnv> = {}): CommandEnv {
       workspace: (s, u) => `/workspaces/${s}/${u}`,
       workspaceSettings: (s, u) => `/workspaces/${s}/${u}/settings`,
       settingsWorkspaces: (s) => `/settings/workspaces/${s}`,
+      settingsSchema: (s) => `/settings/schema/${s}`,
+      settingsGeneral: () => "/settings/general",
       project: (u) => `/projects/${u}`,
+      projectSettings: (u) => `/projects/${u}/settings`,
       task: (u) => `/tasks/${u}`,
       view: (s, n) => `/views/${s}/${encodeURIComponent(n)}`,
       query: (l, q) => `/query/${l}?${new URLSearchParams({ q })}`,
       my: () => "/my",
+      inbox: () => "/inbox",
+      activity: () => "/activity",
     },
     selected: null,
+    project: null,
     recent: [],
     pickStatus: vi.fn(),
     moveTask: vi.fn(),
@@ -235,11 +241,16 @@ describe("buildCommands", () => {
       "プロジェクトを作成",
       "ワークスペースを追加",
       "直前の操作を取り消す",
+      "doctor を実行",
       "release を開く",
       "ワークスペースの設定を開く",
       "リリース準備 v2.4 を開く",
       "設定のワークスペース一覧を開く",
+      "設定のスキーマを開く",
+      "設定の同期と保守を開く",
       "マイタスクを開く",
+      "通知を開く",
+      "アクティビティを開く",
     ]);
   });
 
@@ -254,7 +265,10 @@ describe("buildCommands", () => {
   });
 
   it("filters by the words after >", () => {
-    expect(labels(buildCommands(env(), ">同期"))).toEqual(["今すぐ同期する"]);
+    expect(labels(buildCommands(env(), ">同期"))).toEqual([
+      "今すぐ同期する",
+      "設定の同期と保守を開く",
+    ]);
     expect(labels(buildCommands(env(), "> リリース"))).toEqual(["リリース準備 v2.4 を開く"]);
     expect(buildCommands(env(), ">zzz")).toEqual([]);
   });
@@ -300,7 +314,7 @@ describe("buildCommands", () => {
     const e = env();
     const gs = buildCommands(e, ">設定");
     expect(gs.map((g) => g.name)).toEqual(["開く"]);
-    const [settings, list] = gs[0]?.items ?? [];
+    const [settings, list, schema] = gs[0]?.items ?? [];
     expect(settings).toMatchObject({
       label: "ワークスペースの設定を開く",
       note: "release",
@@ -316,6 +330,41 @@ describe("buildCommands", () => {
     expect(e.go).toHaveBeenCalledWith("/workspaces/shared/W1/settings");
     if (list?.type === "command") list.run();
     expect(e.go).toHaveBeenCalledWith("/settings/workspaces/shared");
+    expect(schema).toMatchObject({
+      label: "設定のスキーマを開く",
+      icon: "settings",
+      store: "shared",
+      href: "/settings/schema/shared",
+    });
+    if (schema?.type === "command") schema.run();
+    expect(e.go).toHaveBeenCalledWith("/settings/schema/shared");
+  });
+
+  it("opens the sync and maintenance settings, once whatever the number of stores", () => {
+    const e = env({ storeNames: ["shared", "ops"] });
+    const gs = buildCommands(e, ">同期と保守");
+    const items = gs.flatMap((g) => g.items);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      label: "設定の同期と保守を開く",
+      icon: "settings",
+      href: "/settings/general",
+    });
+    if (items[0]?.type === "command") items[0].run();
+    expect(e.go).toHaveBeenCalledWith("/settings/general");
+  });
+
+  it("runs the diagnosis by opening the sync and maintenance settings, which asks for it", () => {
+    const e = env({ storeNames: ["shared", "ops"] });
+    const items = buildCommands(e, ">doctor").flatMap((g) => g.items);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      label: "doctor を実行",
+      icon: "checklist",
+      href: "/settings/general",
+    });
+    if (items[0]?.type === "command") items[0].run();
+    expect(e.go).toHaveBeenCalledWith("/settings/general");
   });
 
   it("lists the settings of a workspace for each workspace, the list once for a store", () => {
@@ -327,14 +376,37 @@ describe("buildCommands", () => {
       "ワークスペースの設定を開く|release",
       "ワークスペースの設定を開く|ops",
       "設定のワークスペース一覧を開く|",
+      "設定のスキーマを開く|",
+      "設定の同期と保守を開く|",
     ]);
+  });
+
+  it("opens the settings of the project that is open, and offers nothing when none is", () => {
+    expect(buildCommands(env(), ">プロジェクトの設定")).toEqual([]);
+    const e = env({ project: { ulid: "P1", title: "リリース準備 v2.4" } });
+    const gs = buildCommands(e, ">プロジェクトの設定");
+    expect(gs.map((g) => g.name)).toEqual(["開く"]);
+    const [item] = gs[0]?.items ?? [];
+    expect(item).toMatchObject({
+      label: "プロジェクトの設定を開く",
+      note: "リリース準備 v2.4",
+      href: "/projects/P1/settings",
+    });
+    if (item?.type === "command") item.run();
+    expect(e.go).toHaveBeenCalledWith("/projects/P1/settings");
   });
 
   it("lists the workspaces of a store that has none, once per store", () => {
     const gs = buildCommands(env({ workspaces: [], storeNames: ["shared", "empty"] }), ">設定");
     expect(
       gs[0]?.items.map((i) => (i.type === "command" ? `${i.label}|${i.store ?? ""}` : "")),
-    ).toEqual(["設定のワークスペース一覧を開く|shared", "設定のワークスペース一覧を開く|empty"]);
+    ).toEqual([
+      "設定のワークスペース一覧を開く|shared",
+      "設定のワークスペース一覧を開く|empty",
+      "設定のスキーマを開く|shared",
+      "設定のスキーマを開く|empty",
+      "設定の同期と保守を開く|",
+    ]);
   });
 
   it("opens the tasks of the person, and each saved view with the store it is in", () => {
@@ -346,9 +418,11 @@ describe("buildCommands", () => {
     const gs = buildCommands(e, ">");
     const opens = gs.find((g) => g.name === "開く")?.items ?? [];
     expect(
-      opens.slice(-3).map((i) => (i.type === "command" ? [i.label, i.store, i.href] : [])),
+      opens.slice(-5).map((i) => (i.type === "command" ? [i.label, i.store, i.href] : [])),
     ).toEqual([
       ["マイタスクを開く", undefined, "/my"],
+      ["通知を開く", undefined, "/inbox"],
+      ["アクティビティを開く", undefined, "/activity"],
       [
         "今週のリリース作業 を開く",
         "shared",

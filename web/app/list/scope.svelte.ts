@@ -3,7 +3,7 @@ import { quoteArg } from "../../core/cli";
 import type { SchemaView } from "../../core/schema";
 import type { WorkspaceEntry } from "../../core/stores";
 import { core } from "../context";
-import { useSubscribe } from "../svelte-store";
+import { useManyStores, useSubscribe } from "../svelte-store";
 import { baseQuery } from "../tree/filter";
 import type { ListScope } from "./scope";
 
@@ -14,6 +14,7 @@ export function useListScope(get: () => ListScope) {
   const c = core();
   const cacheRev = useSubscribe(c.cache, () => ({}));
   const storesRev = useSubscribe(c.stores, () => ({}));
+  const manyStores = useManyStores(c.stores);
   const schemaRev = useSubscribe(c.schema, () => ({}));
 
   type DetailHandle = ReturnType<typeof c.cache.watchDetail>;
@@ -72,10 +73,6 @@ export function useListScope(get: () => ListScope) {
   // workspace is read again (a new object with the same name).
   const apiBase = $derived(base ? baseQuery(base, "api") : "");
   const cliBase = $derived(base ? baseQuery(base, "cli") : "");
-  const manyStores = $derived.by(() => {
-    storesRev.current;
-    return c.stores.stores().length >= 2;
-  });
 
   // What the screens tell the empty and the not-found screens. A view over every store is neither:
   // it is never empty with a create button, and never not found.
@@ -141,7 +138,7 @@ export function useListScope(get: () => ListScope) {
     get saveBase(): string {
       if (!base || !store) return "";
       const own = baseQuery(base, "cli");
-      return manyStores ? `store:${quoteArg(store)} ${own}` : own;
+      return manyStores.current ? `store:${quoteArg(store)} ${own}` : own;
     },
     /**
      * The schemas of the stores that are loaded, in the order asked. One that is not is fetched, and
