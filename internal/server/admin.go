@@ -117,7 +117,9 @@ func (s *Server) registerAdmin() {
 		OperationID: "list-workspaces", Method: http.MethodGet, Path: "/api/workspaces",
 		Summary: "List the workspaces, as hh workspace ls", Tags: []string{"workspaces"},
 	}, func(_ context.Context, in *StoreParam) (*struct{ Body []ops.WorkspaceView }, error) {
-		_, ws, err := s.session(in.Store).WorkspaceList()
+		ss := s.session(in.Store)
+		defer ss.Close()
+		_, ws, err := ss.WorkspaceList()
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -132,6 +134,7 @@ func (s *Server) registerAdmin() {
 		Summary: "Add a workspace, as hh workspace add", Tags: []string{"workspaces"},
 	}, func(_ context.Context, in *workspaceAddInput) (*workspaceOutput, error) {
 		ss := s.session(in.Store)
+		defer ss.Close()
 		r, err := ss.WorkspaceAdd(in.Body.Name, in.Body.Prefix)
 		if err != nil {
 			return nil, problemOf(err)
@@ -145,6 +148,7 @@ func (s *Server) registerAdmin() {
 	}, func(_ context.Context, in *workspacePatchInput) (*workspaceOutput, error) {
 		b := in.Body
 		ss := s.session(in.Store)
+		defer ss.Close()
 		var r ops.WorkspaceResult
 		var err error
 		switch {
@@ -168,6 +172,7 @@ func (s *Server) registerAdmin() {
 		Summary: "Remove an empty workspace, as hh workspace rm", Tags: []string{"workspaces"},
 	}, func(_ context.Context, in *WorkspaceParam) (*workspaceOutput, error) {
 		ss := s.session(in.Store)
+		defer ss.Close()
 		r, err := ss.WorkspaceRemove(in.ID)
 		if err != nil {
 			return nil, problemOf(err)
@@ -179,7 +184,9 @@ func (s *Server) registerAdmin() {
 		OperationID: "get-schema", Method: http.MethodGet, Path: "/api/schema",
 		Summary: "Show schema.yaml", Tags: []string{"schema"},
 	}, func(_ context.Context, in *StoreParam) (*struct{ Body ops.SchemaView }, error) {
-		_, ix, err := s.session(in.Store).Open()
+		ss := s.session(in.Store)
+		defer ss.Close()
+		_, ix, err := ss.Open()
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -190,7 +197,9 @@ func (s *Server) registerAdmin() {
 		OperationID: "check-schema", Method: http.MethodGet, Path: "/api/schema/check",
 		Summary: "Check the schema and the tasks, as hh schema check", Tags: []string{"schema"},
 	}, func(_ context.Context, in *StoreParam) (*findingsOutput, error) {
-		fs, err := s.session(in.Store).SchemaCheck()
+		ss := s.session(in.Store)
+		defer ss.Close()
+		fs, err := ss.SchemaCheck()
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -209,6 +218,7 @@ func (s *Server) registerAdmin() {
 			return nil, badRequest(errors.New("prop is given with target value, and only then"))
 		}
 		ss := s.session(in.Store)
+		defer ss.Close()
 		ix, plan, err := ss.Migrate(m, b.DryRun)
 		if err != nil {
 			return nil, problemOf(err)
@@ -234,6 +244,7 @@ func (s *Server) registerAdmin() {
 		Summary: "List the stores, as hh store list", Tags: []string{"stores"},
 	}, func(context.Context, *struct{}) (*storesOutput, error) {
 		ss := s.session("")
+		defer ss.Close()
 		list, err := ss.StoreList()
 		if err != nil {
 			return nil, problemOf(err)
@@ -255,6 +266,7 @@ func (s *Server) registerAdmin() {
 	}, func(_ context.Context, in *storeInitInput) (*storeInitOutput, error) {
 		b := in.Body
 		ss := s.session("")
+		defer ss.Close()
 		r, err := ss.StoreInit(ops.StoreInitInput{Name: b.Name, Prefix: b.Prefix, Workspace: b.Workspace, Remotes: b.Remotes, Account: b.Account})
 		if err != nil {
 			return nil, problemOf(err)
@@ -264,7 +276,9 @@ func (s *Server) registerAdmin() {
 		out.Body.Remotes, out.Body.Pushed = append([]string{}, r.Remotes...), append([]string{}, r.Pushed...)
 		out.Body.Workspace = ops.WorkspaceView{ULID: r.Workspace.ULID.String(), Name: r.Workspace.Name, IDPrefix: r.Workspace.IDPrefix, PrefixSet: r.Workspace.PrefixSet}
 		// StoreInit leaves the time of the prefix out of its workspace; the store has it.
-		if _, ws, err := s.session(r.Name).WorkspaceList(); err == nil && len(ws) == 1 {
+		made := s.session(r.Name)
+		defer made.Close()
+		if _, ws, err := made.WorkspaceList(); err == nil && len(ws) == 1 {
 			out.Body.Workspace = ws[0]
 		}
 		return out, nil
@@ -286,7 +300,9 @@ func (s *Server) registerAdmin() {
 }
 
 func (s *Server) doctor(store string, fix bool) (*doctorOutput, error) {
-	r, err := s.session(store).Doctor(fix)
+	ss := s.session(store)
+	defer ss.Close()
+	r, err := ss.Doctor(fix)
 	if err != nil {
 		return nil, problemOf(err)
 	}

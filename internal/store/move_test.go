@@ -34,7 +34,7 @@ func newMoveStore(t *testing.T, name, prefix string, sc *schema.Schema) (*Store,
 
 func lastCommit(t *testing.T, s *Store) gitrepo.LogEntry {
 	t.Helper()
-	es, err := s.repo.Log(nil, 1)
+	es, err := logOf(s.repo, 1)
 	if err != nil || len(es) != 1 {
 		t.Fatalf("log = %v, %v", es, err)
 	}
@@ -710,4 +710,14 @@ func TestMoveInValidatesAgainstTheScopedItBrings(t *testing.T) {
 	if err := f.moveIn(in); !errors.As(err, &ve) || ve.Task != f.g.ULID {
 		t.Fatalf("with the scoped entry: err = %v, want a *ValidationError for G", err)
 	}
+}
+
+// logOf is the first-parent log of HEAD of r, newest first, capped at limit
+// when it is above zero.
+func logOf(r *gitrepo.Repo, limit int) ([]gitrepo.LogEntry, error) {
+	head, err := r.Head()
+	if err != nil {
+		return nil, err
+	}
+	return r.LogFrom(head, limit)
 }

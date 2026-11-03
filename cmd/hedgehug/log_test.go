@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -106,6 +107,28 @@ func TestLogJSON(t *testing.T) {
 	}
 }
 
+func TestLogWorkspaceThroughTheIndex(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	te.ok("workspace", "add", "api", "--prefix", "API")
+	te.ok("add", "m1", "--workspace", "me")
+	te.ok("add", "a1", "--workspace", "api")
+	te.ok("add", "m2", "--workspace", "me")
+	te.ok("add", "a2", "--workspace", "api")
+	te.ok("add", "m3", "--workspace", "me")
+	if got, want := subjects(te.ok("log", "--workspace", "api")), []string{"add", "add", "workspace"}; !slices.Equal(got, want) { // a2, a1 and the workspace add itself
+		t.Fatalf("log --workspace api = %v, want %v", got, want)
+	}
+	out := te.ok("log", "--workspace", "me", "-n", "2")
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if len(lines) != 2 || !strings.Contains(lines[0], "m3") || !strings.Contains(lines[1], "m2") {
+		t.Errorf("log --workspace me -n 2 want m3 then m2 (the newest kept):\n%s", out)
+	}
+	if strings.Contains(out, "a1") || strings.Contains(out, "a2") {
+		t.Errorf("another workspace's commits in:\n%s", out)
+	}
+}
+
 func TestLogShowsCurrentID(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
@@ -154,5 +177,53 @@ func TestShowHistory(t *testing.T) {
 	}
 	if len(j.History) != 5 || len(j.History[0].Hash) != 40 {
 		t.Errorf("history = %+v", j.History)
+	}
+}
+
+// mergedTwoUsers makes a store in which alice and bob changed the same task
+// in different fields and synced, so that bob's history has a merge commit.
+func mergedTwoUsers(t *testing.T) (bob *testEnv) {
+	t.Helper()
+	alice, bob, _ := twoUsers(t)
+	base := alice.now
+	alice.now = base.Add(2 * time.Hour)
+	alice.ok("set", "ORG-1", "title=from alice")
+	bob.now = base.Add(time.Hour)
+	bob.ok("status", "ORG-1", "in_progress")
+	alice.ok("sync")
+	bob.now = base.Add(3 * time.Hour)
+	bob.ok("sync")
+	return bob
+}
+
+// subjects is the verb of each line of log output.
+func subjects(out string) []string {
+	var got []string
+	for _, l := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		_, subj, _ := strings.Cut(l, "hedgehug: ")
+		got = append(got, strings.Fields(subj)[0])
+	}
+	return got
+}
+
+func TestLogTaskAcrossAMerge(t *testing.T) {
+	t.Parallel()
+	bob := mergedTwoUsers(t)
+	// both sides, newest first; the merge changed the file against both
+	// parents, so it is listed; the store's init is not
+	want := []string{"merge", "set", "status", "add"}
+	if got := subjects(bob.ok("log", "ORG-1")); !slices.Equal(got, want) {
+		t.Errorf("log ORG-1 = %v, want %v", got, want)
+	}
+}
+
+func TestLogStoreNewestFirstAcrossAMerge(t *testing.T) {
+	t.Parallel()
+	bob := mergedTwoUsers(t)
+	if got, want := subjects(bob.ok("log", "-n", "2")), []string{"merge", "set"}; !slices.Equal(got, want) {
+		t.Errorf("log -n 2 = %v, want %v", got, want)
+	}
+	if got, want := subjects(bob.ok("log")), []string{"merge", "set", "status", "add", "init"}; !slices.Equal(got, want) {
+		t.Errorf("log = %v, want %v", got, want)
 	}
 }

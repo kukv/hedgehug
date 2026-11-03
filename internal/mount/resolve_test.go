@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -214,19 +215,44 @@ func TestResolveAfterAnotherHandleRepackedTheStore(t *testing.T) {
 	if _, err := set.Resolve("API-1"); err != nil {
 		t.Fatal(err)
 	}
-	// another handle writes, repacks (the loose objects the first handle
+	// another handle writes, consolidates (the loose objects the first handle
 	// knew are gone) and writes again
 	putTasks(t, a, 1, nil)
 	s, err := store.Open(a.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Repo().Repack(); err != nil {
-		t.Fatal(err)
+	// a pack after each write, so that some are merged into a new one and
+	// removed: the packs the first handle knew are gone
+	seen := map[string]bool{}
+	packs := func() []string {
+		m, err := filepath.Glob(filepath.Join(a.Path, ".git", "objects", "pack", "*.pack"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return m
+	}
+	// The sizes of the packs are not fixed, so write and consolidate until
+	// one is merged (they are of about one size, so it takes a few rounds).
+	n := 2 // tasks so far
+	for len(seen) == 0 || len(packs()) >= len(seen) {
+		if n > 40 {
+			t.Fatalf("no pack was merged after %d rounds: %v", n, packs())
+		}
+		if err := s.Repo().Consolidate(); err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range packs() {
+			seen[p] = true
+		}
+		putTasks(t, a, 1, nil)
+		n++
 	}
 	putTasks(t, a, 1, nil)
-	if hit, err := set.Resolve("API-3"); err != nil || hit.Entry.ID != "API-3" {
-		t.Errorf("Resolve(API-3) = %v, %v", hit, err)
+	n++
+	want := "API-" + strconv.Itoa(n)
+	if hit, err := set.Resolve(want); err != nil || hit.Entry.ID != want {
+		t.Errorf("Resolve(%s) = %v, %v", want, hit, err)
 	}
 }
 

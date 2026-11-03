@@ -60,7 +60,9 @@ func (s *Server) registerScoped() {
 		if b.Statuses == nil && b.Transitions == nil && b.Required == nil {
 			return nil, badRequest(errors.New("give statuses, transitions or required"))
 		}
-		r, err := s.session(in.Store).ScopedSet(in.Project, schema.ScopedChange{
+		ss := s.session(in.Store)
+		defer ss.Close()
+		r, err := ss.ScopedSet(in.Project, schema.ScopedChange{
 			Statuses: b.Statuses, Transitions: listsOf(b.Transitions), Required: listsOf(b.Required),
 		})
 		if err != nil {
@@ -73,7 +75,9 @@ func (s *Server) registerScoped() {
 		OperationID: "delete-scoped", Method: http.MethodDelete, Path: "/api/schema/scoped/{project}",
 		Summary: "Remove the override of a project, as hh schema scope rm", Tags: []string{"schema"},
 	}, func(_ context.Context, in *ScopedParam) (*scopedOutput, error) {
-		r, err := s.session(in.Store).ScopedRemove(in.Project)
+		ss := s.session(in.Store)
+		defer ss.Close()
+		r, err := ss.ScopedRemove(in.Project)
 		if err != nil {
 			return nil, problemOf(err)
 		}

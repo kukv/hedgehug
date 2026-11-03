@@ -111,7 +111,9 @@ func (l *Loop) fetchInterval(c *config.Config) time.Duration {
 
 // noteNext records when name is fetched next, from its last sync.
 func (l *Loop) noteNext(name string) {
-	c, _, err := l.s.session("").Config()
+	ss := l.s.session("")
+	defer ss.Close()
+	c, _, err := ss.Config()
 	if err != nil {
 		l.configFailed(err)
 		return
@@ -142,6 +144,7 @@ func (l *Loop) configFailed(err error) {
 // targets are the stores with a remote, as config.yaml has them now.
 func (l *Loop) targets() (*config.Config, []config.StoreEntry) {
 	ss := l.s.session("")
+	defer ss.Close()
 	c, _, err := ss.Config()
 	if err != nil {
 		l.configFailed(err)
@@ -209,7 +212,9 @@ func (l *Loop) PushAt(name string, pending time.Time, interval, push time.Durati
 // pendingSince is the first write of e not pushed; zero when there is none
 // or sync.json does not read.
 func (l *Loop) pendingSince(e config.StoreEntry) time.Time {
-	s, err := l.s.session(e.Name).OpenStore()
+	ss := l.s.session(e.Name)
+	defer ss.Close()
+	s, err := ss.OpenStore()
 	if err != nil {
 		return time.Time{}
 	}
@@ -256,6 +261,7 @@ func (l *Loop) start(name string) {
 // does it.
 func (l *Loop) syncStore(name string) {
 	ss := l.s.session(name)
+	defer ss.Close()
 	c, _, err := ss.Config()
 	if err != nil {
 		l.s.logf("sync %s: %v", name, err)

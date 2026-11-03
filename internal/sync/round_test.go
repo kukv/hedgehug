@@ -217,10 +217,34 @@ func TestPushRoundsRunOut(t *testing.T) {
 	}
 }
 
-func TestRepack(t *testing.T) {
+func TestConsolidateByLooseObjects(t *testing.T) {
 	c := newCluster(t, 1)
 	replace(t, &repackAt, 0)
 	c.addTask(0, "a")
+	r := c.sync(0)
+	if n, err := c.stores[0].Repo().LooseObjects(); err != nil || n != 0 || len(r.Warnings) != 0 {
+		t.Errorf("loose objects %d, %v; warnings %v", n, err, r.Warnings)
+	}
+}
+
+func TestConsolidateByPackCount(t *testing.T) {
+	c := newCluster(t, 1)
+	replace(t, &repackAt, 0)
+	c.addTask(0, "a")
+	c.sync(0)
+	if n, err := c.stores[0].Repo().SmallPacks(); err != nil || n == 0 {
+		t.Fatalf("packs %d, %v", n, err)
+	}
+	// few loose objects, and as many packs as the limit: nothing happens
+	replace(t, &repackAt, 1<<20)
+	replace(t, &packsAt, 1<<20)
+	c.addTask(0, "b")
+	c.sync(0)
+	if n, _ := c.stores[0].Repo().LooseObjects(); n == 0 {
+		t.Fatal("consolidated below both limits")
+	}
+	// more packs than the limit
+	replace(t, &packsAt, 0)
 	r := c.sync(0)
 	if n, err := c.stores[0].Repo().LooseObjects(); err != nil || n != 0 || len(r.Warnings) != 0 {
 		t.Errorf("loose objects %d, %v; warnings %v", n, err, r.Warnings)

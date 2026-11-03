@@ -31,7 +31,7 @@ func (ss *Session) ShowAt(arg, at string) (ShowView, error) {
 	if err != nil {
 		return ShowView{}, err
 	}
-	commit, err := commitAt(s.Repo(), at, ss.location())
+	commit, err := ss.commitAt(s, ix.StoreName(), at)
 	if err != nil {
 		return ShowView{}, err
 	}

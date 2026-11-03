@@ -190,7 +190,7 @@ func TestEventsReconnect(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "the poller to see HEAD", func() bool {
-		st, _ := ts.srv.poller.Snapshot()
+		st, _ := ts.srv.poller.snapshot()
 		return st[0].Head != h1.Stores[0].Head
 	})
 	es = ts.events()

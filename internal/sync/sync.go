@@ -17,6 +17,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/gitrepo"
+	histidx "github.com/kukv/hedgehug/internal/history"
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/merge"
@@ -69,7 +70,7 @@ type Result struct {
 	Notices     []inbox.Item // what the sync added to the inbox
 	// Warnings are what failed after the push, which the sync did not undo:
 	// other stores' prefixes, the inbox, finding the invalid tasks,
-	// repacking.
+	// consolidating the packs.
 	Warnings []string
 	// Unpushable counts the commits not pushed because the store is read-only.
 	Unpushable int
@@ -87,7 +88,8 @@ const (
 // Replaced by tests.
 var (
 	retryWait    = 500 * time.Millisecond // the first wait after a rejected push; it doubles
-	repackAt     = 6700                   // repack when there are more loose objects
+	repackAt     = 6700                   // consolidate when there are more loose objects
+	packsAt      = 16                     // or more packs below gitrepo.PackCap
 	beforeCommit = func() {}              // runs before each fast-forward, merge or repair commit
 	onFullRepair = func() {}              // runs when the repair reads every file of HEAD
 )
@@ -254,8 +256,10 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 	warn("find the invalid tasks", findInvalid(s, ix, was, before, &res))
 	n, err := r.LooseObjects()
 	warn("count the loose objects", err)
-	if err == nil && n > repackAt {
-		warn("repack", r.Repack())
+	packs, perr := r.SmallPacks()
+	warn("count the packs", perr)
+	if (err == nil && n > repackAt) || (perr == nil && packs > packsAt) {
+		warn("consolidate the packs", r.Consolidate())
 	}
 	return res, nil
 }
@@ -406,7 +410,7 @@ func mergeCommit(s *store.Store, name string, head, remote plumbing.Hash, opt Op
 	if base.IsZero() {
 		return fmt.Errorf("merge %s: %w", name, ErrUnrelated)
 	}
-	m, err := mergeTrees(r, base, head, remote, opt)
+	m, err := mergeTrees(r, historyOf(s), base, head, remote, opt)
 	if err != nil {
 		return err
 	}
@@ -452,7 +456,7 @@ func (m *merged) trailers() []gitrepo.Trailer {
 // merge.Merge (schema.yaml first, for the others to use), and the repair
 // runs over the result. The files are the changes to make to ours. base need
 // not be an ancestor of either side (the replay after a history rewrite).
-func mergeTrees(r *gitrepo.Repo, base, ours, theirs plumbing.Hash, opt Options) (*merged, error) {
+func mergeTrees(r *gitrepo.Repo, open historyOpener, base, ours, theirs plumbing.Hash, opt Options) (*merged, error) {
 	var trees [3]plumbing.Hash
 	for i, c := range []plumbing.Hash{base, ours, theirs} {
 		var err error
@@ -561,7 +565,7 @@ func mergeTrees(r *gitrepo.Repo, base, ours, theirs plumbing.Hash, opt Options) 
 		Base:     baseSnap,
 		OnOrigin: onOrigin,
 		Changed:  func(p string) bool { return changed[p] },
-		Author:   keepError(&authorErr, mergeAuthor(r, base, ours, theirs)),
+		Author:   keepError(&authorErr, mergeAuthor(r, open, base, ours, theirs)),
 		Now:      opt.Now().Truncate(time.Second),
 	})
 	if err = errors.Join(err, authorErr); err != nil {
@@ -668,7 +672,8 @@ func keepError(errp *error, f func(string) (string, error)) func(string) string 
 // over base: the side that changed it, the later one when both did (then
 // the larger author, as the merge decides), or, when neither did, whoever
 // changed it last before.
-func mergeAuthor(r *gitrepo.Repo, base, head, remote plumbing.Hash) func(string) (string, error) {
+func mergeAuthor(r *gitrepo.Repo, open historyOpener, base, head, remote plumbing.Hash) func(string) (string, error) {
+	before := headAuthor(r, open, head)
 	return func(p string) (string, error) {
 		o, okO, err := r.LastChange(head, base, p)
 		if err != nil {
@@ -689,13 +694,41 @@ func mergeAuthor(r *gitrepo.Repo, base, head, remote plumbing.Hash) func(string)
 		case okT:
 			return t.Writer(), nil
 		}
-		return headAuthor(r, head)(p)
+		return before(p)
 	}
 }
 
-// headAuthor tells who last changed a file in the history of head.
-func headAuthor(r *gitrepo.Repo, head plumbing.Hash) func(string) (string, error) {
+// historyOpener opens the history index of a store; nil means there is none
+// to use.
+type historyOpener func() (*histidx.History, error)
+
+// historyOf is the opener of the history index of s.
+func historyOf(s *store.Store) historyOpener {
+	return func() (*histidx.History, error) { return histidx.Open(s, histidx.Options{}) }
+}
+
+// headAuthor tells who last changed a file in the history of head. The
+// history index is opened on the first call; it is a cache, so when it
+// cannot be opened, or lacks head, the history is searched by walking.
+func headAuthor(r *gitrepo.Repo, open historyOpener, head plumbing.Hash) func(string) (string, error) {
+	var h *histidx.History
+	tried := false
 	return func(p string) (string, error) {
+		if !tried {
+			tried = true
+			if open != nil {
+				h, _ = open() // on an error h stays nil and every call walks
+			}
+		}
+		if h != nil {
+			c, ok, err := h.LastChange(p, head)
+			if !errors.Is(err, histidx.ErrNotIndexed) {
+				if err != nil || !ok {
+					return "", err
+				}
+				return c.Writer(), nil
+			}
+		}
 		e, ok, err := r.LastChange(head, plumbing.ZeroHash, p)
 		if err != nil || !ok {
 			return "", err
@@ -811,7 +844,7 @@ func repairHead(s *store.Store, ix *index.Index, opt Options, res *Result) error
 			Files:    snap,
 			OnOrigin: onOrigin,
 			Changed:  func(string) bool { return true },
-			Author:   keepError(&authorErr, headAuthor(r, head)),
+			Author:   keepError(&authorErr, headAuthor(s.Repo(), historyOf(s), head)),
 			Now:      opt.Now().Truncate(time.Second),
 		})
 		if err = errors.Join(err, authorErr); err != nil {
@@ -894,7 +927,7 @@ func prefixDuplicates(s *store.Store, opt Options, res *Result) error {
 	if err != nil {
 		return err
 	}
-	who := headAuthor(s.Repo(), head)
+	who := headAuthor(s.Repo(), historyOf(s), head)
 	var mine []*model.Workspace
 	var prefixes []string
 	for m, err := range s.Workspaces() {

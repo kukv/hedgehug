@@ -81,7 +81,9 @@ func (s *Server) registerComments() {
 		OperationID: "add-comment", Method: http.MethodPost, Path: "/api/tasks/{id}/comments", DefaultStatus: http.StatusCreated,
 		Summary: "Add a comment, as hh comment add", Tags: []string{"comments"},
 	}, func(_ context.Context, in *commentInput) (*commentOutput, error) {
-		r, err := s.session(in.Store).CommentAdd(in.ID, in.Body.Body)
+		ss := s.session(in.Store)
+		defer ss.Close()
+		r, err := ss.CommentAdd(in.ID, in.Body.Body)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -93,6 +95,7 @@ func (s *Server) registerComments() {
 		Summary: "Change a comment, as hh comment edit", Tags: []string{"comments"},
 	}, func(_ context.Context, in *commentEditInput) (*commentOutput, error) {
 		ss := s.session(in.Store)
+		defer ss.Close()
 		if err := commentOf(ss, in.ID, in.CID); err != nil {
 			return nil, err
 		}
@@ -108,6 +111,7 @@ func (s *Server) registerComments() {
 		Summary: "Remove a comment, as hh comment rm", Tags: []string{"comments"},
 	}, func(_ context.Context, in *CommentParam) (*commentOutput, error) {
 		ss := s.session(in.Store)
+		defer ss.Close()
 		if err := commentOf(ss, in.ID, in.CID); err != nil {
 			return nil, err
 		}
@@ -130,6 +134,7 @@ func (s *Server) registerComments() {
 			Summary: w.summary, Tags: []string{"tasks"},
 		}, func(_ context.Context, in *TaskParam) (*taskWriteOutput, error) {
 			ss := s.session(in.Store)
+			defer ss.Close()
 			r, err := ss.Watch(in.ID, w.on)
 			if err != nil {
 				return nil, problemOf(err)

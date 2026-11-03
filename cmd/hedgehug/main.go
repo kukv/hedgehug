@@ -74,6 +74,7 @@ func run(args []string, e *env) int {
 		Keyring:      e.keyring,
 		HTTPClient:   e.httpClient,
 		Run:          e.run,
+		Progress:     newProgress(e.stderr, time.Now),
 		Warn:         func(m string) { _, _ = fmt.Fprintln(e.stderr, "warning: "+m) },
 		AfterWrite: func(s *store.Store, en config.StoreEntry) {
 			if !ops.SyncsInBackground(en) {
