@@ -68,9 +68,9 @@ func (r *Repo) ChangedFiles(h plumbing.Hash) (LogEntry, []string, error) {
 // (either may be nil, an empty tree), going down only into directories
 // whose hashes differ. deleted is true for a file that a has and b does
 // not. A path that is not a directory is a file here, a submodule (which a
-// store does not have) too, as git log -- path counts it. The names of a
-// directory come in order, a directory not set apart from a file of the
-// same prefix, as go-git's object.DiffTree lists them.
+// store does not have) too, as git log -- path counts it. The entries of a
+// directory come sorted by their bare names (directory "a" before file
+// "a.md"), as go-git's object.DiffTree lists them.
 func (r *Repo) diffTrees(a, b *object.Tree, dir string, fn func(path string, deleted bool)) error {
 	byName := func(t *object.Tree) map[string]object.TreeEntry {
 		m := map[string]object.TreeEntry{}
