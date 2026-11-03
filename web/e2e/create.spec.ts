@@ -57,6 +57,8 @@ test("Ctrl+Enter creates", async ({ page, hh }) => {
 test("C on a task detail makes a child of that task", async ({ page, hh }) => {
   const parent = hh.add("Parent task");
   await hh.open(page, `/tasks/${parent.ulid}`);
+  // C makes a child of the task the screen holds: wait until the detail has read it
+  await expect(page.getByRole("textbox", { name: "タイトル" })).toHaveValue("Parent task");
   await page.keyboard.press("c");
   const dialog = createDialog(page);
   await expect(dialog).toBeVisible();

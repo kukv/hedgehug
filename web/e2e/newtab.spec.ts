@@ -6,7 +6,7 @@
 //     からだけ使えます"
 import { expect, test } from "./harness";
 
-test("Ctrl+click on a sidebar link opens a tab that keeps the token", async ({
+test("Ctrl+click (Cmd+click on macOS) on a sidebar link opens a tab that keeps the token", async ({
   page,
   hh,
   context,
@@ -21,7 +21,7 @@ test("Ctrl+click on a sidebar link opens a tab that keeps the token", async ({
   await expect(link).toBeVisible();
   const [tab] = await Promise.all([
     context.waitForEvent("page"),
-    link.click({ modifiers: ["Control"] }),
+    link.click({ modifiers: ["ControlOrMeta"] }),
   ]);
   await expect(tab).toHaveURL(/\/workspaces\/demo\//);
   await expect(tab.getByRole("heading", { level: 1, name: "demo" })).toBeVisible();
