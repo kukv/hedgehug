@@ -108,6 +108,11 @@ func newTestServerWith(t *testing.T, edit func(*Options)) *testServer {
 		edit(&opt)
 	}
 	ts.srv = New(opt)
+	// A poll by hand, or hello before the poller looked, starts builds of
+	// history indexes that only Run waits for; one still writing would race
+	// the removal of the temporary directory. Cleanups run last first, so
+	// this runs after the HTTP server closed and before the removal.
+	t.Cleanup(ts.srv.poller.waitBuilds)
 	ts.hs = httptest.NewServer(ts.srv.Handler())
 	t.Cleanup(ts.hs.Close)
 	_, p, err := net.SplitHostPort(ts.hs.Listener.Addr().String())
