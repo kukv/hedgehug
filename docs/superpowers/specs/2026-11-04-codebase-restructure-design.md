@@ -27,7 +27,7 @@
 | 7 | JSON の形 | CLI の `--json` を server と同じ usecase の型に一本化する。CLI にしかない項目は足す |
 | 8 | Windows | 実装は含めない。osfs の `_unix.go` に閉じ込めるところまで |
 | 9 | spec の単位 | 構成（本 spec）と E を分ける |
-| 10 | PR | 5 つに分け、機械的な移動を最初に行う（6 節） |
+| 10 | PR | 6 つに分け、機械的な移動を最初に行う。最後の PR 6 は、完了後のパッケージ構成を見て利用者が最終判断をする回（6 節。PR 6 は 2026-11-04 利用者が追加） |
 | 11 | cli・server のテスト | テストも usecase を通す。データの準備と書き込み結果の確認を usecase の操作で書き直し、4.2 のルールをテストにもかける。回 4 で本体と一緒に行う（2026-11-04 利用者が決定） |
 | 12 | テスト用の部品 | `lib/testenv`・`lib/fakegh`・`lib/gitrepo/gitrepotest`・`storage/history/historytest` は、どの層のテストからも import してよい（2026-11-04 利用者が決定） |
 
@@ -196,6 +196,7 @@ CLI の本体を `internal/app/cli` に移し、`cmd/hedgehug/main.go` は `cli.
 | 3. usecase の再編 | mount と context の解体（2.2）、途中残りの検出を storage/store へ、2.3 の領域分け | 変わらない |
 | 4. 入口の境界 | 4.2〜4.4。cli・server のテストの書き直し（決定 11）。cli・server の depguard のルール（4.2、テストを含む）を有効にする | 4.3 の 2 か所だけ変わる |
 | 5. テストと仕上げ | 5 節、depguard の残りのルール（2 節の層の向き）を有効にする、shard の見直し、親設計の書き直し（8 節） | 変わらない |
+| 6. 最終確認 | PR 5 のマージ後の main で `go list` から層別のパッケージ構成と依存を作り直し、層別構成の Artifact（https://claude.ai/artifact/WFTVztg3Wvhgj4UnCwzsiH）を更新する。2.1 の配置・2 節の層の向き・4.2 の禁止と突き合わせ、ずれと層の向きに反する依存の一覧を添えて利用者に見せる。利用者が最終判断をする。直すものが出たら、この PR で直す | 変わらない |
 
 - 途中残りの検出を storage へ移すのは PR 3 で行い、E には依存させない。
 - CI の shard は、PR 1 でパスだけを書き換える（`ops` → `internal/app/usecase`、`cli` → `internal/app/cli`、`sync` → `internal/app/remote/replicate`）。ここで作るのは `internal/app/usecase` と `internal/app/cli` の単一パッケージで、サブパッケージ（仮置きの mount・current、maintenance、のちの 11 の usecase 領域）は PR 5 で shard を作り直すまで `others` に入る。PR 5 で、CI の要約に出るパッケージごとの時間を見て shard の分け方を決め直す。必須チェックの名前（`test`）は変えない。
@@ -203,7 +204,7 @@ CLI の本体を `internal/app/cli` に移し、`cmd/hedgehug/main.go` は `cli.
 ## 7. 確かめ方
 
 - 各 PR で `go build ./...`・`go vet ./...`・golangci-lint を通す。全テストは各 PR の仕上げに 1 回回す。
-- PR 1〜3・5 は挙動を変えないので、既存のテストがそのまま通ることで確かめる。テストの中身の変更は import と型の名前の書き換えだけにする。
+- PR 1〜3・5・6 は挙動を変えないので、既存のテストがそのまま通ることで確かめる。テストの中身の変更は import と型の名前の書き換えだけにする。
 - PR 4 は 4.3 のとおり、変わる 2 か所は先にテストを書き、それ以外は今の出力と同じことをテストで確かめる。cli・server のテストの書き直し（決定 11）は、準備と確認の手段を usecase に替えるだけで、確かめる内容（期待する出力・ファイル・コミット）は変えない。PR 4 で cli・server の depguard を有効にした時点で、4.2 の禁止がテストを含めて lint で通ることを確かめる。
 - PR 5 で depguard の残りのルールを有効にした時点で、2 節の層の向きが lint で通ることを確かめる。
 

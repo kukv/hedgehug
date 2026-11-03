@@ -1,6 +1,6 @@
 # コードベースの構成見直し（概要）
 
-> 5 つの PR に分ける（2026-11-04 に利用者が決定）。この文書は 5 回に共通の決まりと回の分け方。Task の本文は各回の plan に書く: `2026-11-04-restructure1-move.md`（移動と改名）、`2026-11-04-restructure2-osfs.md`（OS の境界）、`2026-11-04-restructure3-usecase.md`（usecase の再編）、`2026-11-04-restructure4-entry.md`（入口の境界）、`2026-11-04-restructure5-tests.md`（テストと仕上げ）。各回は前の回のマージの後に main から切り、その時点のコードを読んで plan を書く（前の回でファイルの場所と行が変わるため。フェーズ 4e と同じ進め方）。
+> 6 つの PR に分ける（2026-11-04 に利用者が決定。回 6 の最終確認は同日に利用者が追加）。この文書は 6 回に共通の決まりと回の分け方。Task の本文は各回の plan に書く: `2026-11-04-restructure1-move.md`（移動と改名）、`2026-11-04-restructure2-osfs.md`（OS の境界）、`2026-11-04-restructure3-usecase.md`（usecase の再編）、`2026-11-04-restructure4-entry.md`（入口の境界）、`2026-11-04-restructure5-tests.md`（テストと仕上げ）、`2026-11-04-restructure6-review.md`（最終確認）。各回は前の回のマージの後に main から切り、その時点のコードを読んで plan を書く（前の回でファイルの場所と行が変わるため。フェーズ 4e と同じ進め方）。
 
 **Goal:** spec のとおり、パッケージを lib・domain・storage・remote・usecase・cli/server の層に並べ、層の向きを lint で強制する。
 
@@ -30,3 +30,4 @@
 | 3 usecase の再編 | 2.2 の mount と context の解体、途中残りの検出を storage/store へ、2.3 の領域分け | `usecase/mount`・`usecase/current` がなくなる。ops の旧ファイルが 2.3 の 11 領域と土台に分かれる。storage/mount が replicate を import しない |
 | 4 入口の境界 | 4.2〜4.4、cli・server のテストの書き直し（決定 11） | cli と server が、テストを含めて storage・remote・lib/gitrepo・lib/github を import しない（例外は決定 12 のテスト用の部品）。cli・server の depguard のルールが有効で通る。`cli/prompt` の 2 つの部品で 7 つの確認が書かれている。変わる 2 か所の JSON がテストで固定されている |
 | 5 テストと仕上げ | 5 節、depguard の残りのルール、shard の見直し、親設計（8 節） | depguard が全ルールで有効で通る。`final_*_test.go` がなくなる。`cli/scenario` ができる。親設計の「パッケージ構成」節が 2.1 と一致する |
+| 6 最終確認 | spec 6 節の PR 6。回 5 のマージ後の main で層別構成の Artifact を作り直し、spec と突き合わせる | Artifact が回 5 の後の `go list` の結果で更新されている。2.1 の配置とのずれ、層の向きに反する依存、4.2 の禁止に反する依存の一覧（どれも 0 件のはず）を添えて利用者に見せ、利用者が最終判断を出している。直すものが出たら、この回で直してマージしている |
