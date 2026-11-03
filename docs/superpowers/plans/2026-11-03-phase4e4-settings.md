@@ -174,7 +174,7 @@
 **Files:**
 - Create: `web/app/project/ProjectSettings.svelte`・`ProjectSettings.test.ts`、`web/core/scoped.ts`・`scoped.test.ts`（画面の編集中の値と Store の値から `PUT` の本文を作る、違反の件数のクエリ）
 - Modify: `router.ts`・`router.test.ts`（`ProjectTab` に `"settings"`）、`project/ProjectHeader.svelte`・`ProjectHeader.test.ts`（タブの右端に「設定」。`// 4e-4 adds …` のコメントを消す）、`project/ProjectPage.svelte`（設定のタブで `ProjectSettings` を出す）
-- Modify: `cli.ts`・`cli.test.ts`（`cliScopeShow`・`cliScopeSet`・`cliScopeRm`）、`palette/search.ts` とテスト（「プロジェクトの設定を開く」）
+- Modify: `cli.ts`・`cli.test.ts`（`cliScopeSet`・`cliScopeRm`）、`palette/search.ts` とテスト（「プロジェクトの設定を開く」）
 - Create: `web/e2e/project-settings.spec.ts`
 
 **使うもの:** 上書きの読み取りは `c.schema` の `SchemaView.scoped`（`where: project:<ULID>` の項目。scoped の GET の API はない）、`PUT /api/schema/scoped/{project}`（`ScopedPutInputBody`）、`DELETE /api/schema/scoped/{project}`、`c.schema`（Store の `SchemaView`。ステータス・カテゴリ・既定・ワークフロー）、`GET /api/tasks?q=is:invalid project:<ULID>&store=`（細部 70）、`c.conn.on("schema.changed"|"tasks.changed")`、`ui/Dialog`・`ui/Button`・`ui/CliLine`・`icons`（ステータスの形）
