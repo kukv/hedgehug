@@ -117,3 +117,35 @@ func TestViewStoreFlag(t *testing.T) {
 		t.Error("show in me found a view of the other store")
 	}
 }
+
+// --store names the store a view is saved in; view show lists the tasks of its
+// query on every store, and store: in the query narrows it.
+func TestViewShowAcrossStores(t *testing.T) {
+	t.Parallel()
+	te := newTwoStoreEnv(t)
+	te.ok("--store", "alpha", "view", "save", "open", "--layout", "table", "--query", "status:todo")
+	te.ok("--store", "alpha", "view", "save", "all-tree", "--layout", "tree")
+	te.ok("--store", "alpha", "view", "save", "only-bravo", "--query", "store:bravo-long")
+	te.ok("--store", "bravo-long", "view", "save", "from-bravo", "--layout", "table", "--query", "kind:task")
+	te.goldenOK("table", "--store", "alpha", "view", "show", "open")
+	te.goldenOK("tree", "--store", "alpha", "view", "show", "all-tree")
+	te.goldenOK("narrowed", "--store", "alpha", "view", "show", "only-bravo")
+	te.goldenOK("saved-in-bravo", "--store", "bravo-long", "view", "show", "from-bravo")
+
+	var got []ops.TaskView
+	if err := json.Unmarshal([]byte(te.ok("--store", "alpha", "view", "show", "open", "--json")), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 || got[0].Store != "alpha" || got[2].Store != "bravo-long" {
+		t.Errorf("view show --json = %+v; want the 3 todo tasks of both stores", got)
+	}
+	// a view is read from the store named, and from no other
+	if code, _, _ := te.run("--store", "bravo-long", "view", "show", "open"); code == 0 {
+		t.Error("view show in bravo-long found a view of alpha")
+	}
+	// the same tasks as hh ls with the query of the view
+	shown := te.ok("--store", "alpha", "view", "show", "open")
+	if want := te.ok("ls", "status:todo"); shown != want {
+		t.Errorf("view show differs from ls status:todo:\n%s\nvs\n%s", shown, want)
+	}
+}
