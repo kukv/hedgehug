@@ -1,4 +1,4 @@
-import { cleanup, screen } from "@testing-library/svelte";
+import { cleanup, screen, within } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TaskView } from "../../core/api/client";
 import { renderWithCore } from "../test-utils";
@@ -67,9 +67,16 @@ describe("ProjectPage", () => {
     expect(screen.queryByText("tree tab")).toBeNull();
   });
 
-  it("leaves the body to say the project is missing, and draws no heading until it is read", () => {
+  it("draws the tabs at once, before the project is read, and leaves the body to say it is missing", () => {
     mount("kanban", false);
-    expect(screen.queryByRole("heading")).toBeNull();
+    // as the heading of the tree did: no title yet, but the tabs do not pop in later
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("");
+    const tabs = screen.getByRole("navigation", { name: "ビューの切り替え" });
+    expect(within(tabs).getAllByRole("link")).toHaveLength(3);
+    expect(within(tabs).getByRole("link", { name: "カンバン" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(screen.getByText("kanban tab of project P1")).toBeTruthy();
   });
 });

@@ -10,11 +10,13 @@
 
   // The heading of a project: where it is (Store, workspace), its name and ID, and the tabs.
   // 4e-4 adds the settings of the project at the right end.
-  type Props = { project: TaskView; workspace?: WorkspaceEntry; tab: ProjectTab };
-  let { project, workspace, tab }: Props = $props();
+  // The project is not there until it is read: the heading has no title then (as the tree's had),
+  // and the tabs, which only need the ULID, are drawn at once.
+  type Props = { ulid: string; project?: TaskView; workspace?: WorkspaceEntry; tab: ProjectTab };
+  let { ulid, project, workspace, tab }: Props = $props();
 
   const c = core();
-  const at = (t: ProjectTab) => router.href({ name: "project", ulid: project.ulid, tab: t });
+  const at = (t: ProjectTab) => router.href({ name: "project", ulid, tab: t });
   const items = $derived([
     { label: "ツリー", href: at("tree"), current: tab === "tree" },
     { label: "カンバン", href: at("kanban"), current: tab === "kanban" },
@@ -24,7 +26,9 @@
 
 <header class="head">
   <nav class="crumb" aria-label="パンくず">
-    <StoreBadge store={project.store} tone={c.stores.tone(project.store)} />
+    {#if project}
+      <StoreBadge store={project.store} tone={c.stores.tone(project.store)} />
+    {/if}
     {#if workspace}
       {@const wsHref = router.href({
         name: "workspace",
@@ -38,8 +42,10 @@
       <span class="sep" aria-hidden="true">›</span>
     {/if}
     <KindIcon kind="project" />
-    <h1>{project.title}</h1>
-    <span class="id">{project.id}</span>
+    <h1>{project?.title ?? ""}</h1>
+    {#if project}
+      <span class="id">{project.id}</span>
+    {/if}
   </nav>
 </header>
 <Tabs {items} />

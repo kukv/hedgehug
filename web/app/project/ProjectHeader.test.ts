@@ -11,10 +11,19 @@ const project = task("P1", "project", null, {
   title: "リリース準備 v2.4",
 }) as TaskView;
 
-function mount(props: { tab: "tree" | "kanban" | "table"; withWorkspace?: boolean }) {
+function mount(props: {
+  tab: "tree" | "kanban" | "table";
+  withWorkspace?: boolean;
+  noProject?: boolean;
+}) {
   return renderWithCore(
     ProjectHeader,
-    { project, workspace: props.withWorkspace === false ? undefined : entry(), tab: props.tab },
+    {
+      ulid: "P1",
+      project: props.noProject ? undefined : project,
+      workspace: props.withWorkspace === false ? undefined : entry(),
+      tab: props.tab,
+    },
     { stores: { tone: () => "purple", subscribe: () => () => {} } },
   );
 }
@@ -59,6 +68,16 @@ describe("ProjectHeader", () => {
       "/projects/P1/table",
     ]);
     expect(links.map((a) => a.getAttribute("aria-current"))).toEqual([null, "page", null]);
+  });
+
+  it("draws the tabs and an empty heading before the project is read", () => {
+    mount({ tab: "table", noProject: true });
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("");
+    expect(screen.queryByText("REL-15")).toBeNull();
+    expect(screen.getByRole("link", { name: "テーブル" })).toHaveAttribute(
+      "href",
+      "/projects/P1/table",
+    );
   });
 
   it("does not offer the settings of a project yet", () => {

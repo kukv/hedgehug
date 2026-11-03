@@ -41,6 +41,8 @@
   let active = $state(0);
   let picking = $state<TaskView | null>(null);
   let found = $state<{ groups: PaletteGroup[]; error: unknown }>({ groups: [], error: null });
+  // The text `found` was computed for: what it says is true of that text only.
+  let foundFor = $state("");
   let inputEl = $state<HTMLInputElement | null>(null);
   let listEl = $state<HTMLDivElement | null>(null);
   // Why the statuses of the task picked could not be listed (the schema of its store did not load).
@@ -82,6 +84,7 @@
     active = 0;
     picking = null;
     found = { groups: [], error: null };
+    foundFor = "";
     void tick().then(() => inputEl?.focus());
   });
 
@@ -104,12 +107,16 @@
     seq++;
     if (!palette.open || picking || m === "command" || text.trim() === "") {
       found = { groups: [], error: null };
+      foundFor = "";
       return;
     }
     const mine = seq;
     timer = setTimeout(async () => {
       const r = await searchTasks(deps, text, m);
-      if (mine === seq) found = r;
+      if (mine === seq) {
+        found = r;
+        foundFor = text.trim();
+      }
     }, 150);
     return () => clearTimeout(timer);
   });
@@ -200,7 +207,8 @@
     if (mode === "command" || input.trim() === "") return buildCommands(env, input);
     const out = [...found.groups];
     // A query that found tasks can be opened as a table or saved as a view.
-    if (mode === "query" && !found.error && found.groups.length > 0) {
+    // Only for the text the search was made for: the one typed since is not checked yet.
+    if (mode === "query" && !found.error && found.groups.length > 0 && foundFor === input.trim()) {
       out.push(queryCommands(env, input.trim()));
     }
     const first = found.groups.flatMap((g) => g.items).find((i) => i.type === "task");

@@ -122,7 +122,27 @@ function fixed(p: Problem, name: string): string {
   // The value is after the operator; the key may hold the same letters.
   const at = p.raw.search(/[:<>=]/);
   const rest = p.raw.slice(at + 1);
-  return `${p.raw.slice(0, at + 1)}${rest.replace(p.word, name)}`;
+  // Only the value that is wrong changes, not a part of another value of the term ("todo,tod").
+  const values = splitValues(rest).map((v) => (v === p.word ? name : v));
+  return `${p.raw.slice(0, at + 1)}${values.join(",")}`;
+}
+
+// splitValues cuts a value at the commas outside double quotes, as the query parser does.
+function splitValues(rest: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let quoted = false;
+  for (const ch of rest) {
+    if (ch === '"') quoted = !quoted;
+    if (ch === "," && !quoted) {
+      out.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  out.push(cur);
+  return out;
 }
 
 /**

@@ -38,6 +38,11 @@ describe("suggestTerm", () => {
     expect(suggestTerm(e, [schema])).toBe("-status:backlog,done");
   });
 
+  it("changes the value that is wrong, not a part of another value of the term", () => {
+    const e = bad('term 1 (status:todo,tod): unknown status or category "tod"');
+    expect(suggestTerm(e, [schema])).toBe("status:todo,todo");
+  });
+
   it("offers the categories as statuses, and the statuses of every store", () => {
     expect(
       suggestTerm(bad('term 1 (status:doin): unknown status or category "doin"'), [schema]),

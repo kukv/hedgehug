@@ -354,6 +354,20 @@ describe("CommandPalette", () => {
     expect(h.go).toHaveBeenCalledWith("/query/table?q=status:doing assignee:@me");
   });
 
+  it("offers nothing for a query typed after the one that was searched, until it is searched", async () => {
+    setup([rel6]);
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), {
+      target: { value: "status:doing" },
+    });
+    expect(await screen.findByRole("group", { name: "このクエリで" })).toBeInTheDocument();
+    // the new text has not been searched yet: it may be a wrong query
+    await fireEvent.input(box(), { target: { value: "status:doing kind:bug" } });
+    expect(screen.queryByRole("group", { name: "このクエリで" })).toBeNull();
+    expect(await screen.findByRole("group", { name: "このクエリで" })).toBeInTheDocument();
+  });
+
   it("offers nothing for a query that found nothing or does not run", async () => {
     setup();
     render(CommandPalette);

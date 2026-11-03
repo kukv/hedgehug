@@ -6,7 +6,7 @@
   import ProjectHeader from "./ProjectHeader.svelte";
 
   // The page of a project: the heading with the tabs, and the tab. The tabs read the project
-  // themselves and say so when it is missing, so the heading waits for it and nothing more.
+  // themselves and say so when it is missing; the heading has no title until it is read.
   type Props = { ulid: string; tab: ProjectTab };
   let { ulid, tab }: Props = $props();
 
@@ -15,9 +15,7 @@
 </script>
 
 <div class="page">
-  {#if scope.project}
-    <ProjectHeader project={scope.project} workspace={scope.workspace} {tab} />
-  {/if}
+  <ProjectHeader {ulid} project={scope.project} workspace={scope.workspace} {tab} />
   <div class="body">
     {#if tab === "tree"}
       <TreeTab {view} />
