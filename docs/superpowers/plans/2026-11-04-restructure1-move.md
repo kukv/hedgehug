@@ -50,7 +50,8 @@
 
 - internal/context を import する 11 ファイルはすべて `hhctx` の別名を付けている。internal/sync は 42 ファイルのうち 11 ファイルが別名（`hhsync` が 10、`isync` が 1）、31 ファイルが別名なし。別名なしで internal/sync を import するファイルは、標準の `sync` を別名なしでは import していない
 - ops・mount・doctor を別名付きで import するファイルはない
-- `current` という識別子を使っているのは、context を import するファイルのうち `internal/ops/storeops.go`（1 か所）・`internal/ops/addhere.go`（2 か所）・`cmd/hedgehug/add.go`（1 か所）。パッケージの `current` を隠してビルドが落ちたら、そのローカル変数を `cur` に直す
+- ops にはパッケージの関数 `current`（`internal/ops/delete.go:183`、索引を更新してタスクの今の姿を返す）があり、パッケージ `current` の import とぶつかってビルドが落ちる。`refreshed` に改名する（Task 1 Step 4）。ローカル変数の `current`（storeops.go・addhere.go・cmd の add.go）は、2026-11-04 の空実行ではぶつからなかった
+- 2026-11-04 に、この plan の Task 1〜2 を空実行して、`go build`・`go vet`・`golangci-lint run`・`go test ./...`（`-race` なし）が通ることを確かめた（確かめた後は元に戻した）。空実行で出た直しは、上の `refreshed` と Task 2 Step 3 の package コメントの 2 つで、どちらも plan に書いてある
 - 移動でずれる相対パス: `internal/server/gen.go` の `go:generate`（`../../api/openapi.yaml`）、`internal/server/server_test.go:161` と `internal/server/helpers_test.go:46` の `filepath.Join("..", "..", "api", "openapi.yaml")`、`cmd/hedgehug/main_test.go:54` の `"../../cmd", "../../internal", "../../tools"`、`cmd/hedgehug/e2e_test.go:42` の `"../../tools/devenv"`、`cmd/hedgehug/helpers_test.go:339` の `goBuildArgs(builtBin, ".")`（CLI のテストはバイナリを `go build .` で作る。移動後は main のパッケージを指す必要がある）
 - `tools/devenv` と `tools/licenses` も internal のパッケージを import している（スクリプトの対象に含める）
 - Go 以外で旧パスを書いているのは、`.github/workflows/ci-backend.yaml`（shard）、`Makefile`（`bench-history`）、`web/` のコメントとテストの説明文 16 か所
@@ -63,6 +64,7 @@
 - Move: 上の一覧の `internal/*` すべて（cmd/hedgehug を除く）
 - Modify: リポジトリ内のすべての `*.go`（import と修飾子）、`web/**/*.ts`・`web/**/*.svelte` のコメント
 - Modify: `internal/app/server/gen.go:3`、`internal/app/server/server_test.go:161`、`internal/app/server/helpers_test.go:46`
+- Modify: `internal/app/usecase/delete.go`・`move.go`・`delete_test.go`（関数 `current` → `refreshed`）
 
 **Interfaces:**
 - Produces: 新しい import パス（一覧の「新」）と新しいパッケージ名 `usecase`・`replicate`・`current`・`maintenance`。Task 2 の CLI はこれを使う
@@ -167,14 +169,22 @@ Expected: エラーなしで終わり、`R  internal/ops/... -> internal/app/use
 filepath.Join("..", "..", "..", "api", "openapi.yaml")
 ```
 
-- [ ] **Step 4: import の並びを直してビルドする**
+- [ ] **Step 4: usecase の関数 current を refreshed に改名する**
+
+`internal/app/usecase/delete.go:181-183` の関数（索引を更新してタスクの今の姿を返す）は、パッケージ `current` の import とぶつかる（`current already declared through import of package current`）。呼んでいる箇所（`delete.go` の 96・153・318 行、`move.go` の 115・119 行、`delete_test.go` の 153 行）ごと改名する。
+
+```bash
+perl -pi -e 's/\bcurrent\(ix, /refreshed(ix, /g; s/^func current\(/func refreshed(/; s#^// current refreshes ix#// refreshed refreshes ix#' internal/app/usecase/delete.go internal/app/usecase/move.go internal/app/usecase/delete_test.go
+```
+
+- [ ] **Step 5: import の並びを直してビルドする**
 
 Run: `golangci-lint fmt ./... && go build ./... && go vet ./...`
 Expected: cmd/hedgehug を含めてビルドと vet が通る（CLI はまだ cmd/hedgehug にあり、新しいパスを import している）。
 
-`current` のローカル変数がパッケージを隠して落ちた場合（`current.Xxx undefined (type ... has no field or method Xxx)` など）は、Files の 3 か所（usecase/storeops.go・usecase/addhere.go・cmd/hedgehug/add.go）のそのローカル変数を `cur` に直して、もう一度実行する。それ以外のエラーが出たら、スクリプトの置換が足りない箇所なので、エラーの行を直す（置換の漏れを手で直すだけで、ロジックは変えない）
+ほかのエラーが出たら、スクリプトの置換が足りない箇所なので、エラーの行を直す（置換の漏れを手で直すだけで、ロジックは変えない）
 
-- [ ] **Step 5: 旧パスが残っていないことを確かめる**
+- [ ] **Step 6: 旧パスが残っていないことを確かめる**
 
 Run:
 
@@ -184,12 +194,12 @@ git grep -nE '(^|[^[:alnum:]_])internal/(atomicfile|plural|gitrepo|github|fakegh
 
 Expected: 何も出ない（`.github` と `Makefile` は Task 3 で直す）
 
-- [ ] **Step 6: 移したパッケージのテストを回す**
+- [ ] **Step 7: 移したパッケージのテストを回す**
 
 Run: `go test ./internal/... ./tools/...`
 Expected: PASS（`-race` なし。全テストは Task 3 で 1 回だけ回す）
 
-- [ ] **Step 7: コミット**
+- [ ] **Step 8: コミット**
 
 ```bash
 git add -A
@@ -222,7 +232,15 @@ perl -pi -e 's/^package main(_test)?$/package cli$1/' internal/app/cli/*.go
 
 - [ ] **Step 2: run.go の main を Main にする**
 
-`internal/app/cli/run.go` の `version` の宣言（今の 25〜27 行）を次にする:
+`internal/app/cli/run.go` の先頭の package コメント（今の 1〜2 行、`// Command hedgehug is a local-first task manager ...`）を次にする（revive の package-comments が `Package cli ...` の形を求める）。元の文は Step 3 で cmd/hedgehug/main.go に移す:
+
+```go
+// Package cli is the body of the hh command: its subcommands, flags and
+// output. cmd/hedgehug only calls Main.
+package cli
+```
+
+`version` の宣言（今の 25〜27 行）を次にする:
 
 ```go
 // version is what --version prints. Main sets it from the version that
@@ -253,7 +271,9 @@ func Main(v string) int {
 - [ ] **Step 3: cmd/hedgehug/main.go を作る**
 
 ```go
-// Command hedgehug is the hh command. Its body is internal/app/cli.
+// Command hedgehug is a local-first task manager that uses git as its storage
+// and sync layer, with a CLI and a GUI in a single binary. Its body is
+// internal/app/cli.
 package main
 
 import (
@@ -356,7 +376,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 - [ ] **Step 3: 旧パスがどこにも残っていないことを確かめる**
 
-Run: Task 1 Step 5 の `git grep` から `':!.github' ':!Makefile'` を外して実行する
+Run: Task 1 Step 6 の `git grep` から `':!.github' ':!Makefile'` を外して実行する
 Expected: 何も出ない
 
 - [ ] **Step 4: 生成物が変わらないことを確かめる**
