@@ -16,6 +16,14 @@
 
 **着手の前に:** 各 Task の「使うもの」の関数・型・部品がまだその場所と名前であることを確かめる。違えば実在のものに合わせる（API の形と画面の言葉は変えない）。
 
+**server の前提（plan を書くときに `internal/server`・`internal/ops` のコードで確かめた。2026-11-03、main の e525019）:**
+- `GET /api/notifications` は `store` を省くと全 Store の inbox を返す（開けない Store は省いて警告）。`PATCH /api/notifications/{id}`・`POST /api/notifications/read`・`POST /api/notifications/{id}/revert` も `store` を省けば全 Store から ULID で引く（`InboxStores`・`InboxReadOf`）
+- `GET /api/activity` は `store` を省くと全 Store。`workspace=` の ULID・名前・接頭辞は Store ごとに引き、どの Store にもないものだけ 404 `workspace.not_found`（`ops.Session.LogIn`）。`hh log` も `--store` なしなら全 Store
+- `GET /api/tasks?store=` の `q` が空なら全タスク（`-status:canceled` の既定は画面のフィルタ欄のもので、API にはない）。`is:invalid` はクエリにある（`internal/query/eval.go`）
+- `ScopedView.scoped` はそのプロジェクトの上書きだけ（Store の値と合わせたものではない）。Store の値は `GET /api/schema` の `statuses`・`workflow`
+- SSE の `schema.changed` はある（`internal/server/events.go`）。scoped の `PUT`・`DELETE` の後に届くかは Task 3 の最初に server のテスト（`internal/server` の scoped のテスト）で確かめ、届かないなら止めて報告する
+- 2 人の利用者の作り方は `cmd/hedgehug/helpers_test.go` の `twoUsers`（bare の remote、`store init --remote`、2 人目は `store add <名前> --remote`）
+
 ## Global Constraints
 
 4d の概要 plan と 4e の概要 plan の Global Constraints をすべて引き継ぐ。
@@ -52,15 +60,15 @@
 
 概要 plan の細部 59〜80 に足すもの。Task 7 で概要 plan の「4e-4 の plan で足した細部」として写す。どれも API の形（Store ごとの API）と既存の画面の決まりから導いたもの。
 
-91. **通知は全 Store を集める**: `GET /api/notifications` は Store ごとなので、`GET /api/stores` の各 Store に `?store=<S>&all=true` を送って集め、未読を上、その中は時刻の新しい順に並べる。Store が2つ以上なら行に Store のバッジ。1つの Store が読めなくても、ほかの Store の通知は出し、読めない Store の名前とエラーを一覧の上に出す
+91. **通知は全 Store**: `GET /api/notifications?all=true` を `store` なしで1回呼ぶ（全 Store が返る）。未読を上、その中は時刻の新しい順に並べる。Store が2つ以上なら行に Store のバッジ
 92. 通知のタブの数は、そのタブの未読の数（キャンバスの数の位置）。0 なら数を出さない。「割り当て」「ウォッチ」のタブは作らず「すべて」に入る（細部 59 のタブのとおり）
-93. 「すべて既読にする」は未読のある Store ごとに `POST /api/notifications/read {all: true}`。未読が 0 なら無効
-94. 上書きの行のボタンはキャンバスどおり「自分の値に戻す」と「このままにする」（= 既読にする）。ほかの未読の行は「既読にする」。行の ID のリンク（タスク詳細を開く）を押すと、その通知を既読にしてから開く（細部 61 の「行を開いたとき」）
+93. 「すべて既読にする」は `store` なしで `POST /api/notifications/read {all: true}` を1回。未読が 0 なら無効
+94. 上書きの行のボタンはキャンバスどおり「自分の値に戻す」と「このままにする」（= 既読にする）。`prefix_duplicate` などワークスペースの通知（`task` がない）は ID のリンクを出さない。ほかの未読の行は「既読にする」。行の ID のリンク（タスク詳細を開く）を押すと、その通知を既読にしてから開く（細部 61 の「行を開いたとき」）
 95. 通知の一覧は、未読数（`c.conn.unread`）が変わったとき・`resync`・`tasks.changed` で取り直す（既読の付け替えはほかのタブや CLI からも起きるため）
-96. **アクティビティの範囲**: `GET /api/activity` を `store` なしで呼ぶ（全 Store）。ワークスペースの絞り込みは選んだワークスペースの ULID をカンマで `workspace=` に渡す。URL の `?workspace=` も ULID のカンマ区切り。人・同期の切り替えは URL の `?sync=exclude|only`（なしはすべて）。足元の `hh log` は、選んだワークスペースが1つの Store だけのときその名前で `--workspace` と `--store` を付け、複数の Store にまたがるときは Store ごとに1行ずつ出す
+96. **アクティビティの範囲**: `GET /api/activity` を `store` なしで呼ぶ（全 Store）。ワークスペースの絞り込みは選んだワークスペースの ULID をカンマで `workspace=` に渡す。URL の `?workspace=` も ULID のカンマ区切り。人・同期の切り替えは URL の `?sync=exclude|only`（なしはすべて）。足元は `hh log --workspace <名前,…>`（`hh log` も `--store` なしで全 Store。選んだワークスペースの名前が別の Store の名前と重なるときだけ、その分を ULID で書く）
 97. アクティビティの行の時刻は author の時刻をブラウザのローカルの時刻で `HH:MM`、日付の見出しは「今日 · 11/04（水）」「昨日 · 11/03（火）」、それより前は「11/02（月）」（年が違えば `2025/11/02（日）`）。行の ID はタスク詳細へのリンク（削除済み・移動済みでも開いた先が案内する）。`tasks.changed` で取り直す
 98. **プロジェクトの設定のルート**: `/projects/<ULID>/settings`。`ProjectHeader` のタブの右端に「設定」。プロジェクトでないタスク（kind が project 以外）の `/projects/<ULID>/settings` は、今のプロジェクトの画面と同じ扱い（既存の `ProjectPage` の振る舞いに合わせる）
-99. ProjectSettings の「保存」は、Store の値と同じに戻した部分も含めて、画面で変えた部分だけを `PUT` の本文に入れる（`statuses` を Store と同じに戻すときは `[]`。4e-1 の「空の指定はその部分を Store の値に戻す」）。変えていなければ「保存」は無効。保存したら `schema.changed` で画面と `SchemaCache` を取り直す
+99. ProjectSettings の「保存」は、`statuses`・`transitions`・`required` の3つのキーのうち画面で変えたキーだけを `PUT` の本文に入れる。入れたキーは差分ではなく、そのプロジェクトの上書きの全体を持つ（`transitions`・`required` は from・ステータスごとの全部の項目の map。1つの項目だけを送らない）。Store と同じに戻すときは `statuses: []`、`transitions: {}`・`required: {}`（4e-1 の「空の指定はその部分を Store の値に戻す」）。変えていなければ「保存」は無効。保存したら `schema.changed` で画面と `SchemaCache` を取り直す
 100. **設定のナビ**: 「このマシン」の段に「同期と保守」（`/settings/general`）、「Store ごとの設定」の段に「ワークスペース」「スキーマ」（`/settings/schema/<store>`）。キャンバスの「スキーマとテンプレート」は「スキーマ」とする（テンプレートはフェーズ6。細部 27）。`/settings` は `/settings/general` に置き換える。サイドバーの歯車は `/settings/general`（細部 18）
 101. **同期と保守の範囲**: 同期の状態・doctor は全 Store を Store ごとの段で並べる。purge は Store を選んで行う（Store が2つ以上のときだけ選択欄）。同期の間隔は Store によらず config.yaml の値なので1つだけ出す（最初の Store の `SyncStatus.interval`・`push_interval`）
 102. doctor は画面を開いたときに各 Store へ `GET /api/doctor?store=` を1回送る。「もう一度実行」で取り直す。`tasks.changed` では取り直さない（重い検査のため）。修復の後は自動で取り直す
@@ -83,10 +91,10 @@
 - Modify: `web/core/messages.ts`（足りない Code があれば）
 - Create: `web/e2e/inbox.spec.ts`。必要なら `web/e2e/harness.ts` に2人目の利用者を作る関数を足す
 
-**使うもの:** `GET /api/notifications?store=&all=true`（`Notification[]`）、`PATCH /api/notifications/{id}?store=`（`{read: true}`）、`POST /api/notifications/read?store=`（`{all: true}`）、`POST /api/notifications/{id}/revert?store=`、`c.stores.stores()`、`c.conn.unread`・`c.conn.subscribe`・`c.conn.on("tasks.changed"|"resync")`、`ui/StoreBadge`・`ui/IdLabel`・`ui/Tabs`・`ui/Button`・`ui/CliLine`、`toast`、`errorMessage`
+**使うもの:** `GET /api/notifications?all=true`（`Notification[]`。`store` なし）、`PATCH /api/notifications/{id}`（`{read: true}`）、`POST /api/notifications/read`（`{all: true}`）、`POST /api/notifications/{id}/revert`、`c.stores.stores()`（Store の数。バッジを出すか）、`c.conn.unread`・`c.conn.subscribe`・`c.conn.on("tasks.changed"|"resync")`、`ui/StoreBadge`・`ui/IdLabel`・`ui/Tabs`・`ui/Button`・`ui/CliLine`、`toast`、`errorMessage`
 
 **作るもの:**
-- `web/core/notifications.ts`: `type InboxTab = "all" | "overwritten" | "mention" | "repair"`、`tabOf(kind): InboxTab[]`（`overwritten` → 上書き、`mention` → メンション、`repaired`・`revived`・`renumbered`・`prefix_duplicate`・`rewrite_applied`・`purged_change` → 同期の修復。どれも「すべて」にも入る）、`sortNotifications(items)`（未読を上、時刻の新しい順、同じなら ULID の大きい順）、`notificationText(n): { label: string; text: string; diff?: { mine: string; theirs: string } }`（kind と detail から日本語の文。下の表）、`loadNotifications(api, stores): Promise<{ items: (Notification)[]; failed: { store: string; error: unknown }[] }>`
+- `web/core/notifications.ts`: `type InboxTab = "all" | "overwritten" | "mention" | "repair"`、`tabOf(kind): InboxTab[]`（`overwritten` → 上書き、`mention` → メンション、`repaired`・`revived`・`renumbered`・`prefix_duplicate`・`rewrite_applied`・`purged_change` → 同期の修復。どれも「すべて」にも入る。`assigned`・`watch` は「すべて」だけ）、`sortNotifications(items)`（未読を上、時刻の新しい順、同じなら ULID の大きい順）、`notificationText(n): { label: string; text: string; mine?: string }`（kind と detail から日本語の文。下の表）
 - `InboxPage.svelte`: 見出し「通知」と説明（キャンバスの「同期で届いた変更から · 自分の書き込みは通知しません · 既読はこのマシンに保存」）、「すべて既読にする」、タブ（すべて・上書き・メンション・同期の修復。数は未読）、行（未読の点、種類の名前、Store のバッジ、ID、タイトル、時刻、文、上書きなら差分とボタン）、空の状態（「通知はありません」、タブごと）、足元の `hh inbox`
 
 **文の表（`notificationText`）:** 作者は `n.author` の login（空なら出さない）。値は JSON をそのまま短く（文字列は引用符なし、配列はカンマ区切り、null は「空」）。
@@ -113,10 +121,10 @@
 - 「すべて既読にする」は確認しない（取り消しにくい操作ではない）
 - サイドバーの「通知」は `/inbox`、未読数はバッジ（0 なら出さない）。今の画面なら強調（既存の行と同じ）
 
-**テストの観点（単体）:** タブの分け方（全 kind）・並び・文の表の各行（detail の欠けを含む）・未知の kind・Store が1つ失敗しても残りを出す・未読数の変化で取り直す・既読・revert の成功と失敗のトースト・「すべて既読にする」が未読のある Store だけに送る・タブの数・空の状態・Store が1つならバッジを出さない・自動化のタブ「割り当て」「ウォッチ」のタブを出さない・足元の CLI。サイドバーは「通知」の行と未読数（`Sidebar.test.ts` の「通知とアクティビティの入口は 4e-4 まで出さない」は、通知の行が出ることとアクティビティの行がまだ出ないことに直す）
+**テストの観点（単体）:** タブの分け方（全 kind。割り当て・ウォッチは「すべて」にだけ入る）・並び・文の表の各行（detail の欠けを含む）・未知の kind・ワークスペースの通知に ID のリンクがない・未読数の変化で取り直す・既読・revert の成功と失敗のトースト・「すべて既読にする」と未読 0 での無効・タブの数・空の状態・Store が1つならバッジを出さない・自動化・割り当て・ウォッチのタブを出さない・足元の CLI。サイドバーは「通知」の行と未読数（`Sidebar.test.ts` の「通知とアクティビティの入口は 4e-4 まで出さない」は、通知の行が出ることとアクティビティの行がまだ出ないことに直す）
 
 **E2E（`inbox.spec.ts`。spec の「通知の既読と revert」）:**
-- 2 人目の利用者（別の `HEDGEHUG_HOME` と別のアカウント。bare の remote を作り、両方がその remote を持つ Store にする）を用意し、`cmd/hedgehug/inbox_test.go` の `conflict` と同じ順（自分が先に set → 相手が後で set → 相手 sync → 自分 sync → 相手 sync）で title の上書きを作る。`HEDGEHUG_AUTO_SYNC=0` のまま CLI の `hh sync` で同期する
+- 2 人目の利用者（別の `HEDGEHUG_HOME` と別のアカウント。bare の remote を作り、両方がその remote を持つ Store にする）を用意し、`cmd/hedgehug/inbox_test.go` の `conflict` と同じ順（自分が先に set → 相手が後で set → 相手 sync → 自分 sync → 相手 sync）で title の上書きを作る（LWW は時刻で決まるので、相手の set は自分の set から 1 秒以上あけてから行う。Go のテストの偽の時計の代わり）。`HEDGEHUG_AUTO_SYNC=0` のまま CLI の `hh sync` で同期する
 - 通知の画面を開くと上書きの行が出て、サイドバーに未読数 1。「自分の値に戻す」でタスクのタイトルが自分の値に戻り（`hh show`）、行が既読になり、未読数が消える
 - メンションの行を既読にする（コメントの `@e2e`）と未読数が減る
 
@@ -196,8 +204,8 @@
 ### Task 4: 設定のナビと同期と保守の骨組み・歯車（細部 75、100〜101）
 
 **Files:**
-- Modify: `router.ts`・`router.test.ts`（`SettingsPage` に `{ page: "general" }` と `{ page: "schema"; store: string }`。`/settings/general`・`/settings/schema/<store>`。`/settings` は general に置き換える。既存の `{ page: "workspaces"; store }` は変えない）
-- Modify: `settings/SettingsRoute.svelte`・`settings/SettingsNav.svelte`・`settings/settings.test.ts`（ナビの2段。「このマシン」: 同期と保守。「Store ごとの設定」: Store の選択・ワークスペース・スキーマ（スキーマの項目は Task 6 で足す。この Task ではまだ出さない）。general を開いているときの Store の選択は、Store ごとの項目のリンク先の Store を選ぶ（今の Store がないので最初の Store））
+- Modify: `router.ts`・`router.test.ts`（`SettingsPage` に `{ page: "general" }` と `/settings/general`。`/settings` は general に置き換える。既存の `{ page: "workspaces"; store }` は変えない。スキーマのルートは Task 6）
+- Modify: `settings/SettingsRoute.svelte`・`settings/SettingsNav.svelte`・`settings/settings.test.ts`（ナビの2段。「このマシン」: 同期と保守。「Store ごとの設定」: Store の選択・ワークスペース（スキーマは Task 6）。general を開いているときの Store の選択は、Store ごとの項目のリンク先の Store を選ぶ（今の Store がないので最初の Store））
 - Create: `web/app/settings/SettingsGeneral.svelte`・`SettingsGeneral.test.ts`（この Task では「同期のタイミング」と「同期の状態」だけ。doctor と purge は Task 5）
 - Modify: `sidebar/Sidebar.svelte`・`Sidebar.test.ts`（歯車を `/settings/general`）、`palette/search.ts` とテスト（「設定の同期と保守を開く」）
 - Modify: `web/e2e/routes.spec.ts`（歯車と `/settings` の行き先の検査を直す）
@@ -206,7 +214,7 @@
 
 **作るもの:** 見出し「同期と保守」と説明「このマシンだけの設定です（Hedgehug の設定ファイル config.yaml の sync）」（パスは `HEDGEHUG_HOME` で変わり API にもないので、キャンバスの `~/.config/hedgehug/config.yaml` は出さない。細部 27 の脚注と同じ）。「同期のタイミング」: push は `push_interval` 秒後にまとめて送る、fetch は表示中 `interval`・非表示中 10 分（細部 8 の「非表示時の 10 分は画面の説明文で出す」）、変えるには config.yaml の `sync.interval`・`sync.push_interval` を編集して `hh ui` を起動し直す旨。プリセット・GitHub の間隔は出さない（決定 2）。秒は「30 秒」「2 分」のように読める形にする（`web/core/format.ts` に関数があれば使う）。「同期の状態」: Store ごとに 4d の同期のカードと同じ内容（最後の成功・エラー・送っていない件数・「今すぐ同期」）
 
-**テストの観点:** ルートの往復（general・schema・workspaces、`/settings` の置き換え）・ナビの2段と今の項目の強調・Store の選択が2つ以上のときだけ・間隔の表示（秒と分）・同期の状態が Store ごと・プリセットと GUI サーバーの欄がない・歯車の行き先・パレット
+**テストの観点:** ルートの往復（general・workspaces、`/settings` の置き換え）・ナビの2段と今の項目の強調・Store の選択が2つ以上のときだけ・間隔の表示（秒と分）・同期の状態が Store ごと・プリセットと GUI サーバーの欄がない・歯車の行き先・パレット
 
 - [ ] Step 1: router のテスト → 実装
 - [ ] Step 2: `settings.test.ts`（ナビ）→ `SettingsNav`・`SettingsRoute`
@@ -247,7 +255,7 @@
 
 **Files:**
 - Create: `web/app/settings/SettingsSchema.svelte`・`SettingsSchema.test.ts`、`web/app/settings/MigrateDialog.svelte`・`MigrateDialog.test.ts`、`web/core/schema-usage.ts`・`schema-usage.test.ts`（定義ごとの件数）
-- Modify: `settings/SettingsRoute.svelte`・`SettingsNav.svelte`・`settings.test.ts`（「スキーマ」の項目）、`cli.ts`・`cli.test.ts`（`cliSchemaCheck`・`cliSchemaMigrate`）、`palette/search.ts` とテスト（「設定のスキーマを開く」Store ごと）
+- Modify: `router.ts`・`router.test.ts`（`SettingsPage` に `{ page: "schema"; store: string }` と `/settings/schema/<store>`）、`settings/SettingsRoute.svelte`・`SettingsNav.svelte`・`settings.test.ts`（「スキーマ」の項目）、`cli.ts`・`cli.test.ts`（`cliSchemaCheck`・`cliSchemaMigrate`）、`palette/search.ts` とテスト（「設定のスキーマを開く」Store ごと）
 - Create: `web/e2e/schema.spec.ts`
 
 **使うもの:** `GET /api/schema?store=`（`SchemaView`）、`GET /api/schema/check?store=`（`FindingsOutputBody`）、`POST /api/schema/migrate?store=`（`MigrateInputBody` → `MigrateOutputBody`）、`GET /api/tasks?store=`（件数）、`c.conn.on("schema.changed"|"tasks.changed")`、`ui/Dialog`・`ui/CliLine`・`icons`
