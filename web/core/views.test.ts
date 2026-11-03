@@ -138,6 +138,14 @@ function setup(world: Record<string, SavedView[] | "fail"> = {}) {
       w[store] = [...cur.filter((x) => x.name !== name), v];
       return { view: v, commit: "c1" };
     }
+    if (r.method === "PATCH" && body.name === undefined) {
+      // An update: it never creates, and what is not sent stays.
+      const at = cur.find((x) => x.name === name);
+      if (!at) return problem(404, "view.not_found", { name });
+      const v = { ...at, ...body } as SavedView;
+      w[store] = cur.map((x) => (x === at ? v : x));
+      return { view: v, commit: "c4" };
+    }
     if (r.method === "PATCH") {
       const v = view(body.name as string);
       w[store] = [...cur.filter((x) => x.name !== name), v];
@@ -306,6 +314,32 @@ describe("ViewDirectory", () => {
     expect(del?.query.get("store")).toBe("shared");
     expect(noteOwnCommit).toHaveBeenCalledWith("c3");
     expect(names(dir)).toEqual(["shared/来週"]);
+  });
+
+  it("update patches the settings, notes the commit and shows the view at once", async () => {
+    const { dir, calls, noteOwnCommit } = setup({ shared: [view("weekly")] });
+    await vi.waitFor(() => expect(dir.loaded()).toBe(true));
+    const updated = await dir.update("shared", "weekly", { layout: "kanban" });
+    expect(updated.layout).toBe("kanban");
+    const patch = calls.find((c) => c.method === "PATCH");
+    expect(patch?.path).toBe("/api/views/weekly");
+    expect(patch?.query.get("store")).toBe("shared");
+    expect(patch?.body).toEqual({ layout: "kanban" });
+    expect(noteOwnCommit).toHaveBeenCalledWith("c4");
+    expect(dir.get("shared", "weekly")?.view.layout).toBe("kanban");
+    expect(dir.get("shared", "weekly")?.view.query).toBe("status:todo");
+  });
+
+  it("update of a view that is gone throws not_found and does not bring the view back", async () => {
+    const { dir, w } = setup({ shared: [view("weekly")] });
+    await vi.waitFor(() => expect(dir.loaded()).toBe(true));
+    w.shared = [];
+    await expect(dir.update("shared", "weekly", { layout: "kanban" })).rejects.toMatchObject({
+      status: 404,
+      type: "view.not_found",
+    });
+    expect(w.shared).toEqual([]);
+    expect(names(dir)).toEqual([]);
   });
 
   it("throws the error of a write and leaves the list as it was", async () => {

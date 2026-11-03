@@ -1,4 +1,4 @@
-import { type Api, type Schemas, unwrap } from "./api/client";
+import { type Api, ApiError, type Schemas, unwrap } from "./api/client";
 import type { TaskCache } from "./cache";
 import type { Connection } from "./connection";
 import { callAll } from "./listeners";
@@ -159,6 +159,29 @@ export class ViewDirectory {
     this.cache.noteOwnCommit(r.commit);
     this.apply(store, (vs) => [...vs.filter((v) => v.name !== name), r.view]);
     return r.view;
+  }
+
+  // update changes the settings body holds of a view that exists (PATCH): unlike save it never
+  // creates the view, so it fails with view.not_found for one that was renamed or removed.
+  async update(store: string, name: string, body: ViewSaveBody): Promise<SavedView> {
+    let r: Awaited<ReturnType<typeof this.patch>>;
+    try {
+      r = await this.patch(store, name, body);
+    } catch (e) {
+      // The view is gone (another client renamed or removed it): the list drops it too.
+      if (e instanceof ApiError && e.status === 404)
+        this.apply(store, (vs) => vs.filter((v) => v.name !== name));
+      throw e;
+    }
+    this.cache.noteOwnCommit(r.commit);
+    this.apply(store, (vs) => [...vs.filter((v) => v.name !== name), r.view]);
+    return r.view;
+  }
+
+  private patch(store: string, name: string, body: ViewSaveBody) {
+    return unwrap(
+      this.api.PATCH("/api/views/{name}", { params: { path: { name }, query: { store } }, body }),
+    );
   }
 
   async rename(store: string, name: string, to: string): Promise<SavedView> {

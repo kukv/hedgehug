@@ -74,7 +74,7 @@ describe("ViewPage", () => {
     const { views } = setup();
     await fireEvent.click(tab("カンバン"));
     await waitFor(() => expect(screen.getByTestId("kanban")).toBeVisible());
-    expect(views.save).toHaveBeenCalledWith("shared", "weekly", { layout: "kanban" });
+    expect(views.update).toHaveBeenCalledWith("shared", "weekly", { layout: "kanban" });
     expect(tab("カンバン")).toHaveAttribute("aria-current", "page");
     expect(location.pathname).toBe("/views/shared/weekly");
     expect(screen.queryByText("未保存の変更")).toBeNull();
@@ -94,7 +94,7 @@ describe("ViewPage", () => {
 
   it("切り替えをサーバーが断ったら、その言葉をトーストに出して、layout は変わらない", async () => {
     const { views } = setup([viewEntry({ name: "weekly", layout: "kanban", query: "kind:task" })]);
-    views.save.mockRejectedValueOnce(new ApiError({ status: 422, type: "view.tree_order" }));
+    views.update.mockRejectedValueOnce(new ApiError({ status: 422, type: "view.tree_order" }));
     await fireEvent.click(tab("ツリー"));
     await waitFor(() => expect(toasts.list).toHaveLength(1));
     expect(toasts.list[0]?.message).toBe(
@@ -119,8 +119,8 @@ describe("ViewPage", () => {
     };
     await fireEvent.click(screen.getByRole("button", { name: "ビューを更新" }));
     await waitFor(() => expect(screen.queryByText("未保存の変更")).toBeNull());
-    expect(views.save).toHaveBeenCalledTimes(1);
-    expect(views.save).toHaveBeenCalledWith(
+    expect(views.update).toHaveBeenCalledTimes(1);
+    expect(views.update).toHaveBeenCalledWith(
       "shared",
       "weekly",
       saveBodyOf({ ...next, query: "assignee:@me" }),
@@ -153,12 +153,12 @@ describe("ViewPage", () => {
     await fireEvent.click(screen.getByRole("button", { name: "table-set-query" }));
     await fireEvent.click(tab("カンバン"));
     await waitFor(() => expect(screen.getByTestId("kanban")).toBeVisible());
-    expect(views.save).toHaveBeenLastCalledWith("shared", "weekly", { layout: "kanban" });
+    expect(views.update).toHaveBeenLastCalledWith("shared", "weekly", { layout: "kanban" });
     expect(screen.getByTestId("kanban-query")).toHaveTextContent("assignee:@me");
     expect(screen.getByText("未保存の変更")).toBeVisible();
     await fireEvent.click(screen.getByRole("button", { name: "ビューを更新" }));
     await waitFor(() => expect(screen.queryByText("未保存の変更")).toBeNull());
-    expect(views.save).toHaveBeenLastCalledWith(
+    expect(views.update).toHaveBeenLastCalledWith(
       "shared",
       "weekly",
       saveBodyOf({ ...draftOf(weekly.view), layout: "kanban", query: "assignee:@me" }),
@@ -173,12 +173,12 @@ describe("ViewPage", () => {
     );
     expect(screen.getByRole("button", { name: "ビューを更新" })).toBeDisabled();
     await fireEvent.click(screen.getByRole("button", { name: "ビューを更新" }));
-    expect(views.save).not.toHaveBeenCalled();
+    expect(views.update).not.toHaveBeenCalled();
   });
 
   it("更新をサーバーが断ったら、トーストに出して未保存のまま残す", async () => {
     const { views } = setup();
-    views.save.mockRejectedValueOnce(
+    views.update.mockRejectedValueOnce(
       new ApiError({ status: 422, type: "view.bad_column", args: { column: "x" } }),
     );
     await fireEvent.click(screen.getByRole("button", { name: "table-set-query" }));
@@ -231,7 +231,7 @@ describe("ViewPage", () => {
     expect(tab("ツリー")).toHaveAttribute("title", why);
     expect(screen.getByText(`ツリーには切り替えられません。${why}`)).toBeVisible();
     await fireEvent.click(tab("ツリー"));
-    expect(views.save).not.toHaveBeenCalled();
+    expect(views.update).not.toHaveBeenCalled();
     expect(tab("カンバン")).not.toHaveAttribute("aria-disabled");
   });
 
@@ -268,6 +268,18 @@ describe("ViewPage", () => {
     expect(await screen.findByText("ビュー「weekly」が見つかりません")).toBeVisible();
     await fireEvent.click(screen.getByRole("button", { name: "ホームへ戻る" }));
     expect(location.pathname).toBe("/");
+  });
+
+  it("ほかのクライアントが改名・削除したあとの更新は、ビューを作り直さず「見つからない」になる", async () => {
+    const { views } = setup();
+    // The directory has not heard of it yet: the write is refused, and the page drops the view.
+    views.update.mockImplementationOnce(async () => {
+      views.set([]);
+      throw new ApiError({ status: 404, type: "view.not_found", args: { name: "weekly" } });
+    });
+    await fireEvent.click(tab("カンバン"));
+    expect(await screen.findByText("ビュー「weekly」が見つかりません")).toBeVisible();
+    expect(views.save).not.toHaveBeenCalled();
   });
 
   it("読み込みが終わるまでは、見つからないと言わない", () => {

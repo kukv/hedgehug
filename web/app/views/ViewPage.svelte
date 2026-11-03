@@ -62,10 +62,10 @@
     if (draft) local = { ...draft, ...part };
   }
 
-  async function write(body: Parameters<typeof views.save>[2]): Promise<boolean> {
+  async function write(body: Parameters<typeof views.update>[2]): Promise<boolean> {
     busy = true;
     try {
-      await views.save(store, name, body);
+      await views.update(store, name, body);
       return true;
     } catch (e) {
       toast({ message: errorMessage(e) });

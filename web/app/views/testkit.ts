@@ -1,6 +1,6 @@
 import { type Component, flushSync } from "svelte";
 import { vi } from "vitest";
-import type { TaskView } from "../../core/api/client";
+import { ApiError, type TaskView } from "../../core/api/client";
 import type { SavedView, ViewEntry, ViewSaveBody } from "../../core/views";
 import { makeCore } from "../detail/testkit";
 import { renderWithCore } from "../test-utils";
@@ -79,6 +79,16 @@ export function makeViews(initial: ViewEntry[] = []) {
       items = at ? items.map((e) => (e === at ? entry : e)) : [...items, entry];
       notify();
       return view;
+    }),
+    update: vi.fn(async (store: string, name: string, body: ViewSaveBody) => {
+      const at = items.find((e) => e.store === store && e.view.name === name);
+      if (!at) {
+        throw new ApiError({ status: 404, type: "view.not_found", args: { name } });
+      }
+      const entry: ViewEntry = { ...at, view: applied(at.view, body) };
+      items = items.map((e) => (e === at ? entry : e));
+      notify();
+      return entry.view;
     }),
     rename: vi.fn(async (store: string, name: string, to: string) => {
       const at = items.find((e) => e.store === store && e.view.name === name);
