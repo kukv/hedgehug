@@ -12,6 +12,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/config"
+	"github.com/kukv/hedgehug/internal/gitrepo"
 	"github.com/kukv/hedgehug/internal/inbox"
 	"github.com/kukv/hedgehug/internal/index"
 	"github.com/kukv/hedgehug/internal/model"
@@ -27,9 +28,9 @@ type tasksChanged struct {
 	Store   string   `json:"store"`
 	ULIDs   []string `json:"ulids" doc:"The tasks whose file or comments changed"`
 	Removed []string `json:"removed" doc:"The tasks whose file is gone (purged)"`
-	Commit  string   `json:"commit" doc:"HEAD now"`
-	Op      string   `json:"op" doc:"The Hedgehug-Op of HEAD; empty for a commit made by hand"`
-	Author  string   `json:"author" doc:"The Hedgehug-Author of HEAD; empty when unknown"`
+	Commit  string   `json:"commit" doc:"The commit of the change: HEAD, or one of the commits since the last look"`
+	Op      string   `json:"op" doc:"The Hedgehug-Op of the commit; empty for a commit made by hand"`
+	Author  string   `json:"author" doc:"The Hedgehug-Author of the commit; empty when unknown"`
 }
 
 type unreadEvent struct {
@@ -280,12 +281,45 @@ func (p *Poller) pollLocked(publish bool) {
 	}
 }
 
-// headMoved publishes the changes from st.head to head.
+// splitMax is the most commits of one look that headMoved tells one by one.
+const splitMax = 50
+
+// headMoved publishes the changes from st.head to head: commit by commit when
+// head follows st.head by first parents (a page knows its own commits, and
+// those of others in between are not shown as its changes; a sync is one
+// merge commit), else as one change.
 func (p *Poller) headMoved(name string, st *polled, head plumbing.Hash) {
 	r := st.s.Repo()
-	ev := tasksChanged{Store: name, ULIDs: []string{}, Removed: []string{}, Commit: head.String()}
-	from, err1 := r.TreeOf(st.head)
-	to, err2 := r.TreeOf(head)
+	if log, err := r.LogFrom(head, splitMax); err == nil {
+		for i, e := range log {
+			if len(e.Parents) == 0 || e.Parents[0] != st.head {
+				continue
+			}
+			for j := i; j >= 0; j-- {
+				from := st.head
+				if j < i {
+					from = log[j+1].Hash
+				}
+				p.publishDiff(name, st, from, log[j])
+			}
+			return
+		}
+	}
+	e := gitrepo.LogEntry{Hash: head}
+	if log, err := r.LogFrom(head, 1); err == nil && len(log) == 1 {
+		e = log[0]
+	}
+	p.publishDiff(name, st, st.head, e)
+}
+
+// publishDiff publishes the changes from the commit from to the commit e.
+func (p *Poller) publishDiff(name string, st *polled, fromCommit plumbing.Hash, e gitrepo.LogEntry) {
+	r := st.s.Repo()
+	ev := tasksChanged{Store: name, ULIDs: []string{}, Removed: []string{}, Commit: e.Hash.String()}
+	ev.Op, _ = e.Trailer("Hedgehug-Op")
+	ev.Author, _ = e.Trailer("Hedgehug-Author")
+	from, err1 := r.TreeOf(fromCommit)
+	to, err2 := r.TreeOf(e.Hash)
 	if err1 != nil || err2 != nil {
 		p.hub.Publish(ev)
 		return
@@ -294,10 +328,6 @@ func (p *Poller) headMoved(name string, st *polled, head plumbing.Hash) {
 	if err != nil {
 		p.hub.Publish(ev)
 		return
-	}
-	if log, err := r.LogFrom(head, 1); err == nil && len(log) == 1 {
-		ev.Op, _ = log[0].Trailer("Hedgehug-Op")
-		ev.Author, _ = log[0].Trailer("Hedgehug-Author")
 	}
 	var schemaCh, viewsCh bool
 	for _, c := range changes {

@@ -1153,11 +1153,11 @@ export interface components {
             task: components["schemas"]["TaskView"];
         };
         TasksChanged: {
-            /** @description The Hedgehug-Author of HEAD; empty when unknown */
+            /** @description The Hedgehug-Author of the commit; empty when unknown */
             author: string;
-            /** @description HEAD now */
+            /** @description The commit of the change: HEAD, or one of the commits since the last look */
             commit: string;
-            /** @description The Hedgehug-Op of HEAD; empty for a commit made by hand */
+            /** @description The Hedgehug-Op of the commit; empty for a commit made by hand */
             op: string;
             /** @description The tasks whose file is gone (purged) */
             removed: string[] | null;
