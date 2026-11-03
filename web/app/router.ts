@@ -2,9 +2,8 @@ import { createSubscriber } from "svelte/reactivity";
 import type { Layout } from "../core/views";
 
 export type { Layout };
-// The tabs the screens have so far; 4e-4 adds the settings of a project.
 export type WorkspaceTab = "overview" | "tree" | "kanban" | "table" | "settings";
-export type ProjectTab = "tree" | "kanban" | "table";
+export type ProjectTab = "tree" | "kanban" | "table" | "settings";
 // store is "" for /settings, which names no Store: the screen goes to the first one.
 export type SettingsPage = { page: "workspaces"; store: string };
 
@@ -24,7 +23,7 @@ export type Route =
   | ({ name: "settings" } & SettingsPage);
 
 const WORKSPACE_TABS: readonly string[] = ["tree", "kanban", "table", "settings"];
-const PROJECT_TABS: readonly string[] = ["tree", "kanban", "table"];
+const PROJECT_TABS: readonly string[] = ["tree", "kanban", "table", "settings"];
 const LAYOUTS: readonly string[] = ["tree", "kanban", "table"];
 
 function decode(s: string): string {

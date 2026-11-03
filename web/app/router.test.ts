@@ -42,7 +42,8 @@ describe("parseRoute", () => {
     ["/projects/01HPR/tree", { name: "project", ulid: "01HPR", tab: "tree" }],
     ["/projects/01HPR/kanban", { name: "project", ulid: "01HPR", tab: "kanban" }],
     ["/projects/01HPR/table", { name: "project", ulid: "01HPR", tab: "table" }],
-    ["/projects/01HPR/settings", { name: "home" }],
+    ["/projects/01HPR/settings", { name: "project", ulid: "01HPR", tab: "settings" }],
+    ["/projects/01HPR/nope", { name: "home" }],
     ["/views/shared/%E4%BB%8A%E9%80%B1", { name: "view", store: "shared", view: "今週" }],
     ["/views/org-b%2Fops/weekly", { name: "view", store: "org-b/ops", view: "weekly" }],
     ["/views/shared", { name: "home" }],
@@ -149,6 +150,9 @@ describe("hrefOf", () => {
       "/projects/01HPR/kanban",
     );
     expect(hrefOf({ name: "project", ulid: "01HPR", tab: "table" })).toBe("/projects/01HPR/table");
+    expect(hrefOf({ name: "project", ulid: "01HPR", tab: "settings" })).toBe(
+      "/projects/01HPR/settings",
+    );
     const ws = { name: "workspace", store: "shared", ulid: "01HWS" } as const;
     expect(hrefOf({ ...ws, tab: "kanban" })).toBe("/workspaces/shared/01HWS/kanban");
     expect(hrefOf({ ...ws, tab: "table" })).toBe("/workspaces/shared/01HWS/table");

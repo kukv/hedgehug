@@ -9,6 +9,9 @@ import {
   cliRestore,
   cliRestoreAt,
   cliRm,
+  cliScopeRm,
+  cliScopeSet,
+  cliScopeShow,
   cliSet,
   cliStoreInit,
   cliSync,
@@ -212,6 +215,35 @@ describe("commands", () => {
     expect(
       cliStoreInit({ name: "shared", prefix: "WEB", workspace: "web", remotes: ["git@x:a/b.git"] }),
     ).toBe("hh store init shared --prefix WEB --workspace web --remote git@x:a/b.git");
+  });
+
+  it("writes hh schema scope show and rm; --store only when it is given", () => {
+    expect(cliScopeShow("REL-15")).toBe("hh schema scope show REL-15");
+    expect(cliScopeRm("REL-15", "shared")).toBe("hh schema scope rm REL-15 --store shared");
+  });
+
+  it("writes hh schema scope set with the parts that are given; an empty part takes it off", () => {
+    expect(
+      cliScopeSet({
+        id: "REL-15",
+        statuses: ["todo", "done"],
+        transitions: { todo: ["in_progress", "done"], waiting: ["done"] },
+        required: { in_progress: ["points", "assignees"] },
+        store: "shared",
+      }),
+    ).toBe(
+      "hh schema scope set REL-15 --statuses todo,done --transition todo=in_progress,done" +
+        " --transition waiting=done --required in_progress=points,assignees --store shared",
+    );
+    expect(cliScopeSet({ id: "REL-15", statuses: [], transitions: {}, required: {} })).toBe(
+      'hh schema scope set REL-15 --statuses "" --transition "" --required ""',
+    );
+    expect(cliScopeSet({ id: "REL-15", required: { done: ["points"] } })).toBe(
+      "hh schema scope set REL-15 --required done=points",
+    );
+    expect(cliScopeSet({ id: "REL-15", store: "shared" })).toBe(
+      "hh schema scope set REL-15 <変更> --store shared",
+    );
   });
 
   it("writes a placeholder as it is, so that a shell refuses the line", () => {

@@ -202,6 +202,7 @@ function env(over: Partial<CommandEnv> = {}): CommandEnv {
       workspaceSettings: (s, u) => `/workspaces/${s}/${u}/settings`,
       settingsWorkspaces: (s) => `/settings/workspaces/${s}`,
       project: (u) => `/projects/${u}`,
+      projectSettings: (u) => `/projects/${u}/settings`,
       task: (u) => `/tasks/${u}`,
       view: (s, n) => `/views/${s}/${encodeURIComponent(n)}`,
       query: (l, q) => `/query/${l}?${new URLSearchParams({ q })}`,
@@ -210,6 +211,7 @@ function env(over: Partial<CommandEnv> = {}): CommandEnv {
       activity: () => "/activity",
     },
     selected: null,
+    project: null,
     recent: [],
     pickStatus: vi.fn(),
     moveTask: vi.fn(),
@@ -332,6 +334,21 @@ describe("buildCommands", () => {
       "ワークスペースの設定を開く|ops",
       "設定のワークスペース一覧を開く|",
     ]);
+  });
+
+  it("opens the settings of the project that is open, and offers nothing when none is", () => {
+    expect(buildCommands(env(), ">プロジェクトの設定")).toEqual([]);
+    const e = env({ project: { ulid: "P1", title: "リリース準備 v2.4" } });
+    const gs = buildCommands(e, ">プロジェクトの設定");
+    expect(gs.map((g) => g.name)).toEqual(["開く"]);
+    const [item] = gs[0]?.items ?? [];
+    expect(item).toMatchObject({
+      label: "プロジェクトの設定を開く",
+      note: "リリース準備 v2.4",
+      href: "/projects/P1/settings",
+    });
+    if (item?.type === "command") item.run();
+    expect(e.go).toHaveBeenCalledWith("/projects/P1/settings");
   });
 
   it("lists the workspaces of a store that has none, once per store", () => {

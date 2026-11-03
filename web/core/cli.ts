@@ -204,3 +204,35 @@ export function cliStoreInit(i: {
   for (const r of i.remotes ?? []) a.push("--remote", r);
   return withPositionals(["store", "init"], [i.name], a, true);
 }
+
+export function cliScopeShow(id: string, store?: string): string {
+  return cliLine(["schema", "scope", "show", id, ...(store ? ["--store", store] : [])]);
+}
+
+export function cliScopeRm(id: string, store?: string): string {
+  return cliLine(["schema", "scope", "rm", id, ...(store ? ["--store", store] : [])]);
+}
+
+// cliScopeSet is hh schema scope set with the parts that are given (a part that is left out is not
+// touched). A part that is empty takes the override off: "" is its value on the command line.
+// With no part at all the line is not complete yet: <変更> stands where the parts go.
+export function cliScopeSet(i: {
+  id: string;
+  statuses?: string[];
+  transitions?: Record<string, string[]>;
+  required?: Record<string, string[]>;
+  store?: string;
+}): string {
+  const lists = (flag: string, m: Record<string, string[]> | undefined): string[] => {
+    if (!m) return [];
+    const entries = Object.entries(m);
+    if (entries.length === 0) return [flag, ""];
+    return entries.flatMap(([k, v]) => [flag, `${k}=${v.join(",")}`]);
+  };
+  const a: Arg[] = ["schema", "scope", "set", i.id];
+  if (i.statuses) a.push("--statuses", i.statuses.join(","));
+  a.push(...lists("--transition", i.transitions), ...lists("--required", i.required));
+  if (a.length === 4) a.push(new Placeholder("変更"));
+  if (i.store) a.push("--store", i.store);
+  return cliLine(a);
+}

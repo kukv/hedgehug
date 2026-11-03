@@ -5,6 +5,7 @@
   import type { ProjectTab } from "../router";
   import { NO_CANCELED } from "../tree/filter";
   import ProjectHeader from "./ProjectHeader.svelte";
+  import ProjectSettings from "./ProjectSettings.svelte";
 
   // The page of a project: the heading with the tabs, and the tab. The tabs read the project
   // themselves and say so when it is missing; the heading has no title until it is read.
@@ -23,6 +24,8 @@
   <div class="body">
     {#if tab === "tree"}
       <TreeTab {view} {query} onquery={(q) => (query = q)} />
+    {:else if tab === "settings"}
+      <ProjectSettings {ulid} />
     {:else}
       <ListTab {view} layout={tab} {query} onquery={(q) => (query = q)} />
     {/if}

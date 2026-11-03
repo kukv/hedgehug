@@ -164,6 +164,7 @@ export type CommandEnv = {
     workspaceSettings: (store: string, ulid: string) => string;
     settingsWorkspaces: (store: string) => string;
     project: (ulid: string) => string;
+    projectSettings: (ulid: string) => string;
     task: (ulid: string) => string;
     view: (store: string, name: string) => string;
     query: (layout: Layout, q: string) => string;
@@ -172,6 +173,7 @@ export type CommandEnv = {
     activity: () => string;
   };
   selected: TaskView | null; // the task the commands for a task are about
+  project: { ulid: string; title: string } | null; // the project the screen is of (its page or its detail)
   recent: TaskView[]; // the tasks opened last, the latest first
   pickStatus: (t: TaskView) => void;
   moveTask: (t: TaskView) => void;
@@ -393,6 +395,22 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
     };
   });
 
+  const open = env.project;
+  const projectSettingsHref = open ? env.hrefs.projectSettings(open.ulid) : "";
+  const projectSettings: CommandItem[] = open
+    ? [
+        {
+          type: "command",
+          key: `open:project-settings:${open.ulid}`,
+          label: "プロジェクトの設定を開く",
+          icon: "settings",
+          note: open.title || undefined,
+          href: projectSettingsHref,
+          run: () => env.go(projectSettingsHref),
+        },
+      ]
+    : [];
+
   const recent = env.recent
     .filter((t) => word === "" || `${t.id} ${t.title}`.toLowerCase().includes(word))
     .map((t) => taskItem(t, env.hrefs.task));
@@ -400,7 +418,10 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
   const groups: PaletteGroup[] = [
     { name: "コマンド", items: commands.filter(keep) },
     { name: "最近開いたもの", items: recent },
-    { name: "開く", items: [...places, ...lists, my, inbox, activity, ...saved].filter(keep) },
+    {
+      name: "開く",
+      items: [...places, ...lists, ...projectSettings, my, inbox, activity, ...saved].filter(keep),
+    },
   ];
   if (env.selected) {
     const g = taskCommands(env, env.selected);

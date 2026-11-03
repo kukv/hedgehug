@@ -2,7 +2,7 @@
 //   - "/" is the overview of the first workspace: the heading (level 1) is the workspace name, and
 //     the navigation "ビューの切り替え" holds the links 概要, ツリー, カンバン, テーブル and 設定; the
 //     current one has aria-current="page". The tabs are links (the address, back and reload keep the
-//     tab). A project has the same navigation with the links ツリー, カンバン and テーブル
+//     tab). A project has the same navigation with the links ツリー, カンバン, テーブル and 設定
 //   - the sidebar ("メインナビゲーション") has the link "設定" (the gear, /settings) and the link
 //     "マイタスク" (/my); it has no entry for the notifications and the activity yet
 //   - for each workspace the sidebar has the button "<名前> の操作（設定を開く・削除）" that opens
@@ -127,7 +127,7 @@ test("the kanban and the table are tabs of a workspace and of a project", async 
 
   await hh.open(page, `/projects/${project.ulid}`);
   await expect(page.getByRole("heading", { level: 1, name: "Release" })).toBeVisible();
-  await expect(tabs(page).getByRole("link")).toHaveText(["ツリー", "カンバン", "テーブル"]);
+  await expect(tabs(page).getByRole("link")).toHaveText(["ツリー", "カンバン", "テーブル", "設定"]);
   await expect(row(page, "Ship it")).toBeVisible();
   await tabs(page).getByRole("link", { name: "カンバン" }).click();
   await expect(page).toHaveURL(new RegExp(`/projects/${project.ulid}/kanban$`));

@@ -35,7 +35,7 @@ vi.mock("../router", () => ({
       r.name === "task"
         ? `/tasks/${r.ulid}`
         : r.name === "project"
-          ? `/projects/${r.ulid}`
+          ? `/projects/${r.ulid}${r.tab && r.tab !== "tree" ? `/${r.tab}` : ""}`
           : r.name === "settings"
             ? `/settings/workspaces/${r.store}`
             : r.name === "view"
@@ -116,7 +116,13 @@ function setup(found: unknown[] = []) {
     api,
     cache: {
       task: (u: string) =>
-        u === "U6" ? rel6 : u === "U9" ? { ...rel6, ulid: "U9", store: "backend" } : undefined,
+        u === "U6"
+          ? rel6
+          : u === "U9"
+            ? { ...rel6, ulid: "U9", store: "backend" }
+            : u === "P1"
+              ? task("P1", "project", null, { id: "REL-15", title: "リリース準備 v2.4" })
+              : undefined,
       applyWrite: vi.fn(),
       epochNow: () => 0,
       prime: vi.fn(),
@@ -338,6 +344,29 @@ describe("CommandPalette", () => {
     await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">ブロック" } });
     await fireEvent.click(await screen.findByRole("option", { name: /ブロック中 を開く/ }));
     expect(h.go).toHaveBeenLastCalledWith("/views/backend/ブロック中");
+  });
+
+  it.each([
+    ["the page of a project", { name: "project", ulid: "P1" }, true],
+    ["the detail of a project", { name: "task", ulid: "P1" }, true],
+    ["the detail of a task that is none", { name: "task", ulid: "U6" }, false],
+    ["the home", { name: "home" }, false],
+  ])("opens the settings of the project from %s: %s", async (_, route, offered) => {
+    setup();
+    h.route = route;
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), {
+      target: { value: ">プロジェクトの設定" },
+    });
+    if (!offered) {
+      await waitFor(() =>
+        expect(screen.queryByRole("option", { name: /プロジェクトの設定/ })).toBeNull(),
+      );
+      return;
+    }
+    await fireEvent.click(await screen.findByRole("option", { name: /プロジェクトの設定を開く/ }));
+    expect(h.go).toHaveBeenLastCalledWith("/projects/P1/settings");
   });
 
   it("offers to open a query that found tasks as a table, and to save it as a view", async () => {

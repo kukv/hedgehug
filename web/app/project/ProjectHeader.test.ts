@@ -12,7 +12,7 @@ const project = task("P1", "project", null, {
 }) as TaskView;
 
 function mount(props: {
-  tab: "tree" | "kanban" | "table";
+  tab: "tree" | "kanban" | "table" | "settings";
   withWorkspace?: boolean;
   noProject?: boolean;
 }) {
@@ -61,13 +61,19 @@ describe("ProjectHeader", () => {
     const links = within(screen.getByRole("navigation", { name: "ビューの切り替え" })).getAllByRole(
       "link",
     );
-    expect(links.map((a) => a.textContent?.trim())).toEqual(["ツリー", "カンバン", "テーブル"]);
+    expect(links.map((a) => a.textContent?.trim())).toEqual([
+      "ツリー",
+      "カンバン",
+      "テーブル",
+      "設定",
+    ]);
     expect(links.map((a) => a.getAttribute("href"))).toEqual([
       "/projects/P1",
       "/projects/P1/kanban",
       "/projects/P1/table",
+      "/projects/P1/settings",
     ]);
-    expect(links.map((a) => a.getAttribute("aria-current"))).toEqual([null, "page", null]);
+    expect(links.map((a) => a.getAttribute("aria-current"))).toEqual([null, "page", null, null]);
   });
 
   it("draws the tabs and an empty heading before the project is read", () => {
@@ -80,8 +86,17 @@ describe("ProjectHeader", () => {
     );
   });
 
-  it("does not offer the settings of a project yet", () => {
+  it("has the settings at the right end of the tabs, marked when it is the tab", () => {
     mount({ tab: "tree" });
-    expect(screen.queryByRole("link", { name: "設定" })).toBeNull();
+    const links = within(screen.getByRole("navigation", { name: "ビューの切り替え" })).getAllByRole(
+      "link",
+    );
+    expect(links.at(-1)).toHaveTextContent("設定");
+    expect(links.at(-1)).toHaveAttribute("href", "/projects/P1/settings");
+    expect(links.at(-1)).not.toHaveAttribute("aria-current");
+    cleanup();
+    mount({ tab: "settings" });
+    expect(screen.getByRole("link", { name: "設定" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "ツリー" })).not.toHaveAttribute("aria-current");
   });
 });

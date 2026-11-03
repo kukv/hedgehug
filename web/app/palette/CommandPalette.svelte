@@ -145,6 +145,16 @@
     storesRev.current;
     viewsRev.current;
     const sel = router.route.name === "task" ? router.route.ulid : selection.ulid;
+    // The project the screen is of: its page, or the detail of a task of the project kind.
+    const here =
+      router.route.name === "project" || router.route.name === "task" ? router.route : null;
+    const open = here ? c.cache.task(here.ulid) : undefined;
+    const project =
+      here?.name === "project"
+        ? { ulid: here.ulid, title: open?.title ?? "" }
+        : open?.kind === "project"
+          ? { ulid: open.ulid, title: open.title }
+          : null;
     return {
       syncNow: () => void runSync(c.api),
       createTask: (parent) => openCreate({ kind: "task", parent }),
@@ -168,6 +178,7 @@
           router.href({ name: "workspace", store, ulid, tab: "settings" }),
         settingsWorkspaces: (store) => router.href({ name: "settings", page: "workspaces", store }),
         project: (ulid) => router.href({ name: "project", ulid, tab: "tree" }),
+        projectSettings: (ulid) => router.href({ name: "project", ulid, tab: "settings" }),
         task: (ulid) => router.href({ name: "task", ulid }),
         view: (store, view) => router.href({ name: "view", store, view }),
         query: (layout, q) => router.href({ name: "query", layout, q }),
@@ -176,6 +187,7 @@
         activity: () => router.href({ name: "activity", workspaces: [], sync: "" }),
       },
       selected: sel ? (c.cache.task(sel) ?? null) : null,
+      project,
       recent: recentUlids.flatMap((u) => c.cache.task(u) ?? []),
       pickStatus,
       moveTask: (t) => openWorkspaceMove(t),

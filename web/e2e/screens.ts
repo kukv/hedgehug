@@ -36,6 +36,8 @@ import { expect, type Locator, type Page } from "@playwright/test";
 //               "未保存の変更" and the button "ビューを更新", the button "ビューの操作（改名・削除）"),
 //               /query/<layout>?q= (heading "クエリ"), the sidebar region "保存済みビュー", the
 //               dialogs "ビューを保存" / "ビュー <名前> を改名" / "ビュー <名前> を削除"
+//   Project     /projects/<ULID>/settings is the tab "設定" at the right end of the navigation
+//               "ビューの切り替え": the groups "表示するステータス" and "必須の項目を足す", the button "保存"
 //   My tasks    /my (heading "マイタスク"); the groups are regions named "今日", "今週", ...; the sidebar
 //               link "マイタスク" carries the count
 //   Inbox       /inbox (heading "通知"); the navigation "通知の種類" (links すべて / 上書き / メンション /
