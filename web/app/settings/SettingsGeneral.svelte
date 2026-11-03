@@ -58,7 +58,8 @@
       <p class="note">同期の状態をまだ受け取っていません</p>
     {:else}
       {#each statuses.current as st (st.store)}
-        <section class="store" aria-label={st.store}>
+        <section class="store" aria-labelledby="store-h-{st.store}">
+          <h3 id="store-h-{st.store}" class="sr">Store: {st.store}</h3>
           {#if many}
             <StoreBadge store={st.store} tone={stores.tone(st.store)} />
           {/if}
@@ -125,6 +126,13 @@
     color: var(--muted);
     font-size: var(--fs-12);
     line-height: 1.6;
+  }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
   .mono {
     font-family: var(--font-mono);

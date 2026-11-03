@@ -104,7 +104,7 @@ test("/settings is the sync and upkeep page, with its own nav in place of the si
   const timing = body.getByRole("region", { name: "同期のタイミング" });
   await expect(timing).toContainText("書き込みの");
   await expect(timing).toContainText("非表示の間は 10 分ごと");
-  await expect(body.getByRole("region", { name: "demo", exact: true })).toBeVisible();
+  await expect(body.getByRole("region", { name: "Store: demo" })).toBeVisible();
 
   await nav
     .getByRole("region", { name: "Store ごとの設定" })

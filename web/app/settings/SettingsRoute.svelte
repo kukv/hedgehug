@@ -16,9 +16,11 @@
   }));
   // Not written as scope="..." in the markup: Biome reads that name as the HTML attribute.
   const missingProps = { scope: "store" as const };
-  // A Store that is not mounted: said so, like a workspace that is not there.
+  // The name of a Store that is not mounted (said so, like a workspace that is not there), or null.
   const missing = $derived(
-    page.page === "workspaces" && dir.current.loaded && !dir.current.names.includes(page.store),
+    page.page === "workspaces" && dir.current.loaded && !dir.current.names.includes(page.store)
+      ? page.store
+      : null,
   );
 
   // /settings is the same page as /settings/general: the address says so.
@@ -28,11 +30,11 @@
   });
 </script>
 
-{#if missing}
+{#if missing !== null}
   <Empty
     variant="notfound"
     {...missingProps}
-    name={page.page === "workspaces" ? page.store : ""}
+    name={missing}
     onHome={() => router.go(hrefOf({ name: "home" }))}
   />
 {:else}

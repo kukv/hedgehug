@@ -92,8 +92,8 @@ describe("SettingsGeneral", () => {
       status({ store: "a", unpushed: 0 }),
       status({ store: "b", unpushed: 3, pending_since: "2026-11-02T08:58:30Z" }),
     ]);
-    const a = getByRole("region", { name: "a" });
-    const b = getByRole("region", { name: "b" });
+    const a = getByRole("region", { name: "Store: a" });
+    const b = getByRole("region", { name: "Store: b" });
     expect(within(a).getByText("同期済み")).toBeTruthy();
     expect(within(b).getByText("送信待ち")).toBeTruthy();
     expect(within(b).getByText("3 コミット")).toBeTruthy();
@@ -106,7 +106,7 @@ describe("SettingsGeneral", () => {
     expect(one.getByRole("button", { name: "コマンドをコピー: hh sync" })).toBeTruthy();
     cleanup();
     const two = mount([status({ store: "a" }), status({ store: "b" })]);
-    const b = two.getByRole("region", { name: "b" });
+    const b = two.getByRole("region", { name: "Store: b" });
     expect(
       within(b).getByRole("button", { name: "コマンドをコピー: hh sync --store b" }),
     ).toBeTruthy();
@@ -123,6 +123,6 @@ describe("SettingsGeneral", () => {
   it("同期の状態をまだ受け取っていないときはそう言う", () => {
     const { getByText, queryByRole } = mount([], ["a"]);
     expect(getByText("同期の状態をまだ受け取っていません")).toBeTruthy();
-    expect(queryByRole("region", { name: "a" })).toBeNull();
+    expect(queryByRole("region", { name: "Store: a" })).toBeNull();
   });
 });
