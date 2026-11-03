@@ -24,15 +24,33 @@
   const dir = useSubscribe(stores, () => stores.stores());
   const all = useSubscribe(views, () => views.list());
 
-  // The Store picked here, else the one asked for, else the default one, else the first.
+  // Only a Store that can be written is a place to save to.
+  const writable = $derived(dir.current.filter((s) => stores.tone(s.name) !== "readonly"));
+  // The Store picked here, else the one asked for, else the default one, else the first (of those
+  // that can be written).
   let picked = $state("");
   const store = $derived(
-    dir.current.find((s) => s.name === picked)?.name ??
-      dir.current.find((s) => s.name === asked)?.name ??
-      dir.current.find((s) => s.default)?.name ??
-      dir.current[0]?.name ??
+    writable.find((s) => s.name === picked)?.name ??
+      writable.find((s) => s.name === asked)?.name ??
+      writable.find((s) => s.default)?.name ??
+      writable[0]?.name ??
       "",
   );
+  // Whether the views of the Store are known: a name is checked against them.
+  const known = useSubscribe(views, () => ({
+    loaded: views.loaded(),
+    failed: views.failed(store),
+  }));
+  const storeProblem = $derived.by(() => {
+    if (dir.current.length > 0 && store === "") {
+      return "書き込める Store がありません（すべて閲覧のみです）";
+    }
+    if (store !== "" && known.current.failed) {
+      return `${store} のビューを読み込めないため、同じ名前のビューがあるか確かめられません`;
+    }
+    return null;
+  });
+  const loading = $derived(!known.current.loaded);
 
   let name = $state("");
   let touched = $state(false);
@@ -51,7 +69,12 @@
       : null,
   );
   const invalid = $derived(
-    store === "" || name === "" || nameProblem !== null || orderProblem !== null,
+    store === "" ||
+      name === "" ||
+      loading ||
+      storeProblem !== null ||
+      nameProblem !== null ||
+      orderProblem !== null,
   );
   // An empty field is not scolded before the first try.
   const nameShown = $derived(name === "" && !touched ? null : nameProblem);
@@ -150,6 +173,11 @@
       <dd class="mono">{draft.query === "" ? "（すべてのタスク）" : draft.query}</dd>
     </dl>
 
+    {#if storeProblem}
+      <p class="problem" role="alert">{storeProblem}</p>
+    {:else if loading}
+      <p class="msg">ビューを読み込んでいます</p>
+    {/if}
     {#if orderProblem}
       <p class="problem" role="alert">{orderProblem}</p>
     {/if}

@@ -104,9 +104,11 @@ export class ViewDirectory {
   private names: string[] = [];
   private readonly byStore = new Map<string, SavedView[]>();
   private readonly fetched = new Set<string>();
+  private readonly unreadable = new Set<string>();
   private readonly seqs = new Map<string, number>();
   private result: ViewEntry[] = [];
   private isLoaded = false;
+  private failedKey = "";
   private readonly subs = new Set<() => void>();
 
   constructor(opts: { api: Api; conn: Connection; stores: StoreDirectory; cache: TaskCache }) {
@@ -136,6 +138,12 @@ export class ViewDirectory {
   // could not be read counts: its views are none).
   loaded(): boolean {
     return this.isLoaded;
+  }
+
+  // failed is true when the last read of the views of a store did not succeed: what list() holds for
+  // it may be missing views, so a screen must not take it as the whole.
+  failed(store: string): boolean {
+    return this.unreadable.has(store);
   }
 
   subscribe(fn: () => void): () => void {
@@ -183,6 +191,7 @@ export class ViewDirectory {
       for (const n of old.filter((o) => !names.includes(o))) {
         this.byStore.delete(n);
         this.fetched.delete(n);
+        this.unreadable.delete(n);
         // seqs keeps its counter: a fetch still on its way must not match a later one.
       }
       for (const n of names.filter((x) => !old.includes(x))) void this.fetch(n);
@@ -202,6 +211,8 @@ export class ViewDirectory {
     }
     if (this.seqs.get(store) !== seq || !this.names.includes(store)) return;
     if (views) this.byStore.set(store, [...views].sort(byName));
+    if (views) this.unreadable.delete(store);
+    else this.unreadable.add(store);
     this.fetched.add(store);
     this.rebuild();
   }
@@ -237,7 +248,9 @@ export class ViewDirectory {
     }
     const loaded = this.dir.loaded() && this.names.every((n) => this.fetched.has(n));
     const same = next.length === this.result.length && next.every((e, i) => e === this.result[i]);
-    if (same && loaded === this.isLoaded) return;
+    const failedKey = [...this.unreadable].sort().join("\0");
+    if (same && loaded === this.isLoaded && failedKey === this.failedKey) return;
+    this.failedKey = failedKey;
     if (!same) this.result = next;
     this.isLoaded = loaded;
     callAll(this.subs);

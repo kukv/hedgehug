@@ -91,6 +91,47 @@ describe("ViewSave", () => {
     await waitFor(() => expect(location.pathname).toBe("/views/me/mine"));
   });
 
+  it("渡された Store が閲覧のみなら、書き込める Store から選び、そこへ保存する", async () => {
+    const { views } = setup({ stores: ["ro", "shared"], readOnly: ["ro"], store: "ro" });
+    expect(screen.getByRole("radio", { name: /shared/ })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /ro/ })).not.toBeChecked();
+    await typeName("weekly");
+    await fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() =>
+      expect(views.save).toHaveBeenCalledWith("shared", "weekly", expect.anything()),
+    );
+  });
+
+  it("書き込める Store がなければ、理由を出して保存できない", async () => {
+    const { views } = setup({ stores: ["ro"], readOnly: ["ro"] });
+    await typeName("weekly");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "書き込める Store がありません（すべて閲覧のみです）",
+    );
+    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+    expect(views.save).not.toHaveBeenCalled();
+  });
+
+  it("ビューの読み込みが終わるまでは保存できない", async () => {
+    const views = makeViews();
+    views.loaded.mockReturnValue(false);
+    setup({ views });
+    await typeName("weekly");
+    expect(screen.getByText("ビューを読み込んでいます")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+  });
+
+  it("保存先のビューを読めていなければ、同じ名前があるか確かめられないので保存できない", async () => {
+    const views = makeViews();
+    views.failed.mockImplementation((s: string) => s === "shared");
+    setup({ views });
+    await typeName("weekly");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "shared のビューを読み込めないため、同じ名前のビューがあるか確かめられません",
+    );
+    expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
+  });
+
   it("画面の Store が渡されていれば、それが最初の選択", () => {
     setup({ stores: ["shared", "me"], store: "me" });
     expect(screen.getByRole("radio", { name: /me/ })).toBeChecked();

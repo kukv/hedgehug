@@ -207,6 +207,23 @@ describe("ViewDirectory", () => {
     expect(names(dir)).toEqual(["shared/weekly"]);
   });
 
+  it("says which stores could not be read, until a later fetch reads them", async () => {
+    const { dir, w, conn } = setup({ shared: [view("weekly")], broken: "fail" });
+    await vi.waitFor(() => expect(dir.loaded()).toBe(true));
+    expect(dir.failed("broken")).toBe(true);
+    expect(dir.failed("shared")).toBe(false);
+    const fn = vi.fn();
+    dir.subscribe(fn);
+    w.broken = [view("mine")];
+    conn.emit("views.changed", { store: "broken" });
+    await vi.waitFor(() => expect(dir.failed("broken")).toBe(false));
+    expect(fn).toHaveBeenCalled();
+    w.shared = "fail";
+    conn.emit("views.changed", { store: "shared" });
+    await vi.waitFor(() => expect(dir.failed("shared")).toBe(true));
+    expect(fn.mock.calls.length).toBeGreaterThan(1);
+  });
+
   it("fetches again only the store of views.changed", async () => {
     const { dir, conn, w, views } = setup({ shared: [view("weekly")], personal: [] });
     await vi.waitFor(() => expect(dir.loaded()).toBe(true));

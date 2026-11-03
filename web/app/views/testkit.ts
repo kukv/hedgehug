@@ -65,6 +65,7 @@ export function makeViews(initial: ViewEntry[] = []) {
       items.find((e) => e.store === store && e.view.name === name),
     ),
     loaded: vi.fn(() => true),
+    failed: vi.fn((_store: string) => false),
     subscribe: (fn: () => void) => {
       subs.add(fn);
       return () => {
