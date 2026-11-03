@@ -65,7 +65,8 @@ func (r *Repo) ChangedFiles(h plumbing.Hash) (LogEntry, []string, error) {
 
 // diffTrees calls fn with every file path that differs between a and b
 // (either may be nil, an empty tree), going down only into directories
-// whose hashes differ.
+// whose hashes differ. A path that is not a directory is a file here,
+// a submodule (which a store does not have) too, as git log -- path counts it.
 func (r *Repo) diffTrees(a, b *object.Tree, dir string, fn func(string)) error {
 	byName := func(t *object.Tree) map[string]object.TreeEntry {
 		m := map[string]object.TreeEntry{}

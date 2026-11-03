@@ -439,7 +439,7 @@ func TestConsolidateMergesAboutPackCapAtMost(t *testing.T) {
 	}
 
 	// two fit under the cap, three do not: two are merged
-	r, _ := three()
+	r, dir := three()
 	sz := wantPick(t, r, 3)
 	packCap = sz[0] + sz[1] + 1
 	if sz[2] >= packCap {
@@ -448,7 +448,8 @@ func TestConsolidateMergesAboutPackCapAtMost(t *testing.T) {
 	if err := r.Consolidate(); err != nil {
 		t.Fatal(err)
 	}
-	if n, _ := r.SmallPacks(); n != 2 {
+	// counted by the files: the merged pack may come out at the cap or under it
+	if n := len(slices.DeleteFunc(packFiles(t, dir), func(p string) bool { return filepath.Ext(p) != ".pack" })); n != 2 {
 		t.Errorf("packs = %d, want 2 (one left, one new)", n)
 	}
 	if err := r.Verify(); err != nil {
@@ -457,7 +458,7 @@ func TestConsolidateMergesAboutPackCapAtMost(t *testing.T) {
 
 	// not even two fit under the cap: nothing is merged
 	packCap = PackCap
-	r, dir := three()
+	r, dir = three()
 	sz = wantPick(t, r, 3)
 	packCap = sz[2] + 1
 	if sz[0]+sz[1] <= packCap {

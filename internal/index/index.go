@@ -33,6 +33,8 @@ type Index struct {
 
 	// lc finds the last change of a file for the forwards met in one update;
 	// update drops it, so that the history index is opened once per update.
+	// Like the rest of the Index, it has no lock: one goroutine at a time
+	// uses an Index (mount.Mounted.With).
 	lc lastChangeFunc
 	// openHistory opens the history index; nil means history.Open.
 	openHistory func() (*history.History, error)
