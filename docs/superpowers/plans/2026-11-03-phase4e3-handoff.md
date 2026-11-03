@@ -1,10 +1,10 @@
 # フェーズ 4e-3 の引き継ぎ（2026-11-03 時点）
 
-4e-3（カンバン・テーブル・保存済みビュー・クエリの画面・マイタスク）は実装まで終わった。残りは PR。
+4e-3（カンバン・テーブル・保存済みビュー・クエリの画面・マイタスク）は PR #47 で main に入り、完了した。
 
 ## いまの状態
 
-- ブランチ `phase4e3-views`（main の 79a5277 から）。`git log origin/main..HEAD` が実装の全部
+- PR #47（ブランチ `phase4e3-views`、main の 79a5277 から）で main にマージ済み
 - plan: `docs/superpowers/plans/2026-11-03-phase4e3-views.md`（Task 1〜7、末尾に「決めたこと」と「組み上げで直した点」。レビューでの直しもそこにある）
 - 概要 plan `2026-11-03-phase4e-screens.md` の細部 36・39・48〜50・58 を利用者の決定に合わせて直し、細部 81〜90 を足した。spec `docs/superpowers/specs/2026-11-01-phase4-gui-design.md` に 4e-3 の決定の段落がある
 
@@ -22,4 +22,4 @@ plan の「決めたこと」と「組み上げで直した点」、spec に記�
 
 ## 次
 
-PR を出してマージする。`live.spec.ts` の既存の競合を直した PR #42 は main に入り、このブランチに取り込んである（取り込んだあと `make e2e` を3回流し、84 件すべて PASS）。`go test -race ./...` の全件でまれに落ちていた `TestDrainSyncsAgainAfterARunningSync`（main にもある、テストの偽の時計の問題）は、このブランチで直した（90d28af）。
+4e-3 で残っている作業はない。マージの前に main（#42〜#44。`live.spec.ts` の既存の競合の直しを含む）を取り込み、`make e2e` を3回流して3回とも 84 件すべて PASS だった。`go test -race ./...` の全件でまれに落ちていた `TestDrainSyncsAgainAfterARunningSync`（テストの偽の時計の問題）も #47 で直した（90d28af）。
