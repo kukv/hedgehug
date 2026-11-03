@@ -1,9 +1,10 @@
 <script lang="ts">
   import { core } from "../context";
+  import ListTab from "../list/ListTab.svelte";
+  import TreeTab from "../list/TreeTab.svelte";
   import { router, type WorkspaceTab } from "../router";
   import Empty from "../states/Empty.svelte";
   import { useSubscribe } from "../svelte-store";
-  import TreeView from "../tree/TreeView.svelte";
   import WorkspaceHeader from "./WorkspaceHeader.svelte";
   import WorkspaceOverview from "./WorkspaceOverview.svelte";
   import WorkspaceSettings from "./WorkspaceSettings.svelte";
@@ -30,7 +31,9 @@
       <WorkspaceHeader {entry} {tab} />
       <div class="body">
         {#if tab === "tree"}
-          <TreeView view={{ kind: "workspace", store, ulid }} />
+          <TreeTab view={{ kind: "workspace", store, ulid }} />
+        {:else if tab === "kanban" || tab === "table"}
+          <ListTab view={{ kind: "workspace", store, ulid }} layout={tab} />
         {:else}
           <WorkspaceSettings {entry} />
         {/if}

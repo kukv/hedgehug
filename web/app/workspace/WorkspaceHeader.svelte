@@ -11,10 +11,11 @@
 
   const at = (t: WorkspaceTab) =>
     router.href({ name: "workspace", store: entry.store, ulid: entry.ulid, tab: t });
-  // 4e-3 puts the kanban and the table between the tree and the settings.
   const items = $derived([
     { label: "概要", href: at("overview"), current: tab === "overview" },
     { label: "ツリー", href: at("tree"), current: tab === "tree" },
+    { label: "カンバン", href: at("kanban"), current: tab === "kanban" },
+    { label: "テーブル", href: at("table"), current: tab === "table" },
   ]);
   const end = $derived({
     label: "設定",

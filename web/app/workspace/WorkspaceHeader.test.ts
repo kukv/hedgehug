@@ -27,17 +27,46 @@ describe("WorkspaceHeader", () => {
     expect(getByText("shared")).toBeTruthy();
   });
 
-  it("タブは概要・ツリーと右端の設定。今のタブだけ aria-current", () => {
+  it("タブは概要・ツリー・カンバン・テーブルと右端の設定。今のタブだけ aria-current", () => {
     const { getByRole } = render(WorkspaceHeader, { entry, tab: "tree" });
     const nav = getByRole("navigation", { name: "ビューの切り替え" });
     const links = within(nav).getAllByRole("link");
-    expect(links.map((a) => a.textContent?.trim())).toEqual(["概要", "ツリー", "設定"]);
+    expect(links.map((a) => a.textContent?.trim())).toEqual([
+      "概要",
+      "ツリー",
+      "カンバン",
+      "テーブル",
+      "設定",
+    ]);
     expect(links.map((a) => a.getAttribute("href"))).toEqual([
       "/workspaces/shared/W1",
       "/workspaces/shared/W1/tree",
+      "/workspaces/shared/W1/kanban",
+      "/workspaces/shared/W1/table",
       "/workspaces/shared/W1/settings",
     ]);
-    expect(links.map((a) => a.getAttribute("aria-current"))).toEqual([null, "page", null]);
+    expect(links.map((a) => a.getAttribute("aria-current"))).toEqual([
+      null,
+      "page",
+      null,
+      null,
+      null,
+    ]);
+  });
+
+  it.each([
+    ["kanban", "カンバン"],
+    ["table", "テーブル"],
+  ] as const)("%s のタブのとき「%s」が今のタブ", (tab, label) => {
+    const { getByRole } = render(WorkspaceHeader, { entry, tab });
+    expect(getByRole("link", { name: label }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("ガント・バックログなど後のフェーズのタブは出さない", () => {
+    const { queryByRole } = render(WorkspaceHeader, { entry, tab: "overview" });
+    for (const name of ["ガント", "バックログ", "スプリント", "リリース", "レポート"]) {
+      expect(queryByRole("link", { name })).toBeNull();
+    }
   });
 
   it("設定のタブのとき設定が今のタブ", () => {

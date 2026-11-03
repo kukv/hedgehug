@@ -7,20 +7,16 @@
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
-  import Icon from "../icons/Icon.svelte";
-  import KindIcon from "../icons/KindIcon.svelte";
   import { kbdLabel, modKey } from "../keys";
   import ListBar from "../list/ListBar.svelte";
   import type { ListScope } from "../list/scope";
   import { useListScope } from "../list/scope.svelte";
-  import { onLinkClick, router } from "../router";
+  import { router } from "../router";
   import { selection } from "../selection.svelte";
   import Empty from "../states/Empty.svelte";
   import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Menu from "../ui/Menu.svelte";
-  import StoreBadge from "../ui/StoreBadge.svelte";
-  import Tabs from "../ui/Tabs.svelte";
   import { openWorkspaceMove } from "../workspace/dialogs-state.svelte";
   import { MOVE_VALUE, moveWorkspaceItem } from "../workspace/move-menu";
   import AddRow from "./AddRow.svelte";
@@ -728,43 +724,8 @@
 </script>
 
 <section class="tree" aria-label="ツリー">
-  <!-- The workspace has its own heading and tabs (WorkspaceHeader), which sit above this view. -->
-  {#if scope.kind === "project"}
-    <header class="head">
-      <nav class="crumb" aria-label="パンくず">
-        {#if ls.store}
-          <StoreBadge store={ls.store} tone={c.stores.tone(ls.store)} />
-        {/if}
-        {#if ls.workspace}
-          {@const wsHref = router.href({
-            name: "workspace",
-            store: ls.workspace.store,
-            ulid: ls.workspace.ulid,
-            tab: "overview",
-          })}
-          <a class="ws" href={wsHref} onclick={(e) => onLinkClick(e, wsHref)}>
-            <Icon name="workspace" size={16} />{ls.workspace.name}
-          </a>
-          <span class="sep" aria-hidden="true">›</span>
-        {/if}
-        <KindIcon kind="project" />
-        <h1>{crumbTitle}</h1>
-        {#if ls.project}
-          <span class="id">{ls.project.id}</span>
-        {/if}
-      </nav>
-    </header>
-    <Tabs
-      items={[
-        {
-          label: "ツリー",
-          href: router.href({ name: "project", ulid: scope.ulid, tab: "tree" }),
-          current: true,
-        },
-      ]}
-    />
-  {/if}
-
+  <!-- The heading and the tabs of a workspace (WorkspaceHeader) and of a project (ProjectHeader)
+       sit above this view, in their pages. -->
   <ListBar
     base={ls.cliBase}
     {applied}
@@ -945,40 +906,6 @@
     height: 100%;
     min-width: 0;
     min-height: 0;
-  }
-  .head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 1.125rem 1.75rem 0;
-  }
-  .crumb {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.625rem;
-    min-width: 0;
-  }
-  .ws {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.375rem;
-    color: var(--ink-2);
-    text-decoration: none;
-  }
-  .sep {
-    color: var(--muted-2);
-  }
-  h1 {
-    margin: 0;
-    font-size: 1.19rem;
-    font-weight: 600;
-  }
-  .id {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--muted);
   }
   .body {
     position: relative;

@@ -14,6 +14,20 @@ const { marker } = vi.hoisted(() => ({
 }));
 vi.mock("./WorkspaceOverview.svelte", () => ({ default: marker("overview") }));
 vi.mock("./WorkspaceSettings.svelte", () => ({ default: marker("settings") }));
+vi.mock("../list/TreeTab.svelte", () => ({
+  default: (anchor: Comment, props: { view: { ulid: string } }) => {
+    const p = document.createElement("p");
+    p.textContent = `tree tab of ${props.view.ulid}`;
+    anchor.before(p);
+  },
+}));
+vi.mock("../list/ListTab.svelte", () => ({
+  default: (anchor: Comment, props: { layout: string; view: { kind: string; ulid: string } }) => {
+    const p = document.createElement("p");
+    p.textContent = `${props.layout} tab of ${props.view.kind} ${props.view.ulid}`;
+    anchor.before(p);
+  },
+}));
 
 const entry: WorkspaceEntry = {
   store: "shared",
@@ -28,7 +42,7 @@ const entry: WorkspaceEntry = {
 };
 
 function mount(
-  tab: "overview" | "tree" | "settings",
+  tab: "overview" | "tree" | "kanban" | "table" | "settings",
   over: { loaded?: boolean; found?: boolean } = {},
 ) {
   const loaded = over.loaded ?? true;
@@ -60,6 +74,23 @@ describe("WorkspacePage", () => {
         ?.textContent,
     ).toContain("設定");
     expect(getByText("settings of release")).toBeTruthy();
+  });
+
+  it("ツリーのタブは見出しの下にツリーを出す", () => {
+    const { getByRole, getByText } = mount("tree");
+    expect(getByRole("heading", { level: 1, name: "release" })).toBeTruthy();
+    expect(getByText("tree tab of W1")).toBeTruthy();
+  });
+
+  it.each(["kanban", "table"] as const)("%s のタブは見出しの下にそのレイアウトを出す", (tab) => {
+    const { getByRole, getByText, queryByText } = mount(tab);
+    expect(getByRole("heading", { level: 1, name: "release" })).toBeTruthy();
+    expect(getByText(`${tab} tab of workspace W1`)).toBeTruthy();
+    expect(queryByText("tree tab of W1")).toBeNull();
+    expect(
+      getByRole("navigation", { name: "ビューの切り替え" }).querySelector("[aria-current]")
+        ?.textContent,
+    ).toContain(tab === "kanban" ? "カンバン" : "テーブル");
   });
 
   it("概要のタブは見出しごと WorkspaceOverview に任せる", () => {
