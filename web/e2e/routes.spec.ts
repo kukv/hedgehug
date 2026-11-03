@@ -11,7 +11,7 @@
 //     "Hedgehug に戻る" and the version) is shown in place of the sidebar; it has the groups "このマシン"
 //     (the link 同期と保守) and "Store ごとの設定" (the link ワークスペース)
 //   - /settings/general has the heading 同期と保守, the region "同期のタイミング" and, for each Store,
-//     the region "同期の状態: <Store>" with the button 今すぐ同期
+//     the region "<Store>" under 同期の状態 with the button 今すぐ同期
 import type { Page } from "@playwright/test";
 import { expect, test } from "./harness";
 import { row } from "./screens";
@@ -86,6 +86,11 @@ test("/settings is the sync and upkeep page, with its own nav in place of the si
 }) => {
   await hh.open(page, "/settings");
   await expect(page).toHaveURL(/\/settings\/general$/);
+  // /settings was replaced, not pushed: back leaves the settings instead of landing on it again
+  await page.goBack();
+  await expect(page).not.toHaveURL(/\/settings/);
+  await page.goForward();
+  await expect(page).toHaveURL(/\/settings\/general$/);
   const nav = page.getByRole("navigation", { name: "設定のナビゲーション" });
   await expect(nav).toBeVisible();
   await expect(
@@ -99,7 +104,7 @@ test("/settings is the sync and upkeep page, with its own nav in place of the si
   const timing = body.getByRole("region", { name: "同期のタイミング" });
   await expect(timing).toContainText("書き込みの");
   await expect(timing).toContainText("非表示の間は 10 分ごと");
-  await expect(body.getByRole("region", { name: "同期の状態: demo" })).toBeVisible();
+  await expect(body.getByRole("region", { name: "demo", exact: true })).toBeVisible();
 
   await nav
     .getByRole("region", { name: "Store ごとの設定" })

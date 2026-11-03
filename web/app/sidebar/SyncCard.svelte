@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { formatRelative } from "../../core/format";
   import { core } from "../context";
   import Icon from "../icons/Icon.svelte";
@@ -10,6 +9,7 @@
   import { summarizeSync } from "./sync-summary";
 
   // store: the card of one store (the settings); without it the card folds every store and owns the key.
+  // busy is shared by all the cards, because runSync runs one sync at a time.
   let { store }: { store?: string } = $props();
 
   const { api, conn } = core();
@@ -38,8 +38,9 @@
     return () => clearInterval(tick);
   });
 
-  onMount(() => {
-    if (store === undefined) return registerShortcut("shift+mod+s", () => void syncNow());
+  $effect(() => {
+    if (store !== undefined) return;
+    return registerShortcut("shift+mod+s", () => void syncNow());
   });
 
   const pad = (n: number) => String(n).padStart(2, "0");

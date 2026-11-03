@@ -28,6 +28,10 @@
   // The page of this machine names no Store: the one picked here (the first until one is) is the
   // Store that the items of a Store lead to.
   let picked = $state<string | null>(null);
+  // On a page of a Store the pick follows that Store; on the general page it keeps the last one.
+  $effect(() => {
+    if (page.page === "workspaces") picked = page.store;
+  });
   const store = $derived(
     page.page === "workspaces"
       ? page.store

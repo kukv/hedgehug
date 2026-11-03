@@ -7,7 +7,7 @@
   import CliLine from "../ui/CliLine.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
 
-  // The fetch of a window that is hidden is every 10 minutes whatever sync.interval says.
+  // A window that is hidden fetches every max(sync.interval, 10 minutes) (internal/server/loop.go).
   const HIDDEN_FETCH = 10 * 60;
 
   const { conn, stores } = core();
@@ -37,7 +37,7 @@
           <dt>fetch</dt>
           <dd>
             表示中は {formatDuration(timing.interval)}ごと、非表示の間は
-            {formatDuration(HIDDEN_FETCH)}ごとに fetch します
+            {formatDuration(Math.max(timing.interval, HIDDEN_FETCH))}ごとに fetch します
           </dd>
         </div>
       </dl>
@@ -58,7 +58,7 @@
       <p class="note">同期の状態をまだ受け取っていません</p>
     {:else}
       {#each statuses.current as st (st.store)}
-        <section class="store" aria-label="同期の状態: {st.store}">
+        <section class="store" aria-label={st.store}>
           {#if many}
             <StoreBadge store={st.store} tone={stores.tone(st.store)} />
           {/if}

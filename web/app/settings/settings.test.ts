@@ -85,6 +85,25 @@ describe("SettingsNav", () => {
     expect(ws.getAttribute("href")).toBe("/settings/workspaces/me");
   });
 
+  it("ワークスペースの Store から同期と保守へ移っても、選んだ Store を覚えている", async () => {
+    const view = renderWithCore(SettingsNav, { page }, core(["me", "shared"]));
+    expect((view.getByLabelText("設定する Store") as HTMLSelectElement).value).toBe("shared");
+    await view.rerender({ page: general });
+    expect((view.getByLabelText("設定する Store") as HTMLSelectElement).value).toBe("shared");
+    expect(view.getByRole("link", { name: /ワークスペース/ }).getAttribute("href")).toBe(
+      "/settings/workspaces/shared",
+    );
+  });
+
+  it("同期と保守で選んだ Store は、ワークスペースの Store が変われば追従する", async () => {
+    const view = renderWithCore(SettingsNav, { page: general }, core(["me", "shared"]));
+    await fireEvent.change(view.getByLabelText("設定する Store"), { target: { value: "shared" } });
+    await view.rerender({ page: { page: "workspaces", store: "me" } });
+    expect((view.getByLabelText("設定する Store") as HTMLSelectElement).value).toBe("me");
+    await view.rerender({ page: general });
+    expect((view.getByLabelText("設定する Store") as HTMLSelectElement).value).toBe("me");
+  });
+
   it("同期と保守で Store を選ぶと、移らずに項目のリンク先の Store が変わる", async () => {
     history.replaceState(null, "", "/settings/general");
     const { getByLabelText, getByRole } = renderWithCore(
@@ -211,6 +230,23 @@ describe("SettingsRoute", () => {
       core([], undefined, false),
     );
     expect(getByText("general")).toBeTruthy();
+  });
+
+  it("ワークスペースから同期と保守へ移ってもナビは作り直さない（Store の選択が残る）", async () => {
+    const view = renderWithCore(SettingsRoute, { page }, core(["me", "shared"]));
+    const nav = view.getByRole("navigation", { name: "設定のナビゲーション" });
+    await view.rerender({ page: general });
+    expect(view.getByRole("navigation", { name: "設定のナビゲーション" })).toBe(nav);
+    expect((view.getByLabelText("設定する Store") as HTMLSelectElement).value).toBe("shared");
+    expect(view.getByText("general")).toBeTruthy();
+  });
+
+  it("/settings/general にいるときは置き換えない", async () => {
+    history.replaceState(null, "", "/settings/general");
+    const replace = vi.spyOn(history, "replaceState");
+    renderWithCore(SettingsRoute, { page: general }, core(["me"]));
+    await Promise.resolve();
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it("/settings は /settings/general に置き換える（履歴を積まない）", async () => {

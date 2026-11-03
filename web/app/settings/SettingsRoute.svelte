@@ -28,19 +28,20 @@
   });
 </script>
 
-{#if page.page === "general"}
-  <SettingsLayout {page}>
-    <SettingsGeneral />
-  </SettingsLayout>
-{:else if missing}
+{#if missing}
   <Empty
     variant="notfound"
     {...missingProps}
-    name={page.store}
+    name={page.page === "workspaces" ? page.store : ""}
     onHome={() => router.go(hrefOf({ name: "home" }))}
   />
 {:else}
+  <!-- one layout for every page: the nav stays mounted when the page changes -->
   <SettingsLayout {page}>
-    <SettingsWorkspaces store={page.store} />
+    {#if page.page === "general"}
+      <SettingsGeneral />
+    {:else}
+      <SettingsWorkspaces store={page.store} />
+    {/if}
   </SettingsLayout>
 {/if}

@@ -80,10 +80,13 @@ describe("formatDuration", () => {
     expect(formatDuration(90)).toBe("1 分 30 秒");
     expect(formatDuration(3600)).toBe("1 時間");
     expect(formatDuration(5400)).toBe("1 時間 30 分");
+    expect(formatDuration(3661)).toBe("1 時間 1 分 1 秒");
   });
 
   it("rounds a fraction to the second, and 0 is 0 秒", () => {
     expect(formatDuration(0.4)).toBe("0 秒");
     expect(formatDuration(29.6)).toBe("30 秒");
+    expect(formatDuration(0)).toBe("0 秒");
+    expect(formatDuration(-5)).toBe("0 秒");
   });
 });
