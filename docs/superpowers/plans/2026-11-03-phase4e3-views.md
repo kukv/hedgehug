@@ -2012,10 +2012,6 @@ git commit -m "feat(web): ビューのキャッシュ・ルート・ListScope・
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 ```
 
-**要相談:**
-1. `viewShow` の実装方式。今は `a.ss` を `own.ForStore("")` に一時的に差し替えて `ls`/`lsTree` を再利用している（変更 6 行）。代案は `ops` に全 Store 版の読み取りを足す方式（変更が大きく、`hh ls` との二重化になる）。推奨: 今の方式。
-2. `router.replace` を購読者に通知するか。通知する（推奨）と `route` が常に URL と一致する代わりに、Task 6 のクエリ画面が自分の `replace` の戻りを受け取る。通知しない案は `route` が URL とずれるので勧めない。
-3. `sameDraft` のクエリの比較は前後の空白を除くだけ（語の順や引用符の正規化はしない）。保存した後に同じ意味で書き方が違うと「未保存の変更」が出る。推奨: このまま（フィルタ欄は入力を trim して渡すので、通常は同じ文字列になる）。
 ### Task 3: ツリーを `ListScope` と外から渡すクエリに対応させる（D5）
 
 ビュー・クエリの画面のツリーは、全 Store のタスクを1本のツリーに並べる。`TreeView` は今、ワークスペースかプロジェクトの1つの Store を前提にスキーマ・ワークスペース・作成先を1つだけ持っている。これを「行ごとの Store」で引く形に直す。ワークスペース・プロジェクトの画面の挙動は変えない（4d・4e-2 の既存テストがそのまま通ること）。
@@ -2034,7 +2030,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes（部 A。Task 2 でできている）:
   - `ListScope`（`web/app/list/scope.ts`）: `{ kind: "workspace"; store: string; ulid: string } | { kind: "project"; ulid: string } | { kind: "all" }`
-  - `useListScope(get: () => ListScope)`（`web/app/list/scope.svelte.ts`）の getter: `ready: boolean`、`notFound: boolean`、`apiBase: string`（all は `""`）、`cliBase: string`（all は `""`）、`store: string | undefined`（all は undefined）、`workspace: WorkspaceEntry | undefined`、`project: TaskView | undefined`、`error: ApiError | null`（プロジェクトを出せない理由。404 以外の表示用。**部 A に追加を頼む。要相談 2**）
+  - `useListScope(get: () => ListScope)`（`web/app/list/scope.svelte.ts`）の getter: `ready: boolean`、`notFound: boolean`、`apiBase: string`（all は `""`）、`cliBase: string`（all は `""`）、`store: string | undefined`（all は undefined）、`workspace: WorkspaceEntry | undefined`、`project: TaskView | undefined`、`error: ApiError | null`（プロジェクトを出せない理由。404 以外の表示用）
   - `ListBar`（`web/app/list/ListBar.svelte`）の props: `{ base; applied; count; cli; error; onchange; controls?; actions? }`
   - 既存: `openCreate`（`create-state.svelte.ts`）、`core().stores.stores()`（`StoreItem[]`、GET /api/stores の順）、`core().stores.workspace(store, ulid)`、`core().stores.tone(store)`、`core().schema.get/load`
 - Produces:
@@ -3424,9 +3420,6 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 - スキーマの読み込みは行の Store の集合が変わったときだけやり直す。読み込めなかった Store は Store ごとに覚え、スキーマが無いあいだだけ読む
 - `combine` は base が空のとき先頭に空白を付けない（全 Store の画面のクエリは利用者の入力だけ）
 
-要相談: 2件
-1. **Store をまたぐドロップの拒否の文言（D5）。** D5 は「別の Store のタスクの下には移せません」と書くが、既存の `dropDecision` は 4d からすでに Store をまたぐドロップを拒否していて、文言は「別の Store のタスクの下には置けません」（子にするとき。ほかの場所は「別の Store の並びには置けません」）で、`dnd.test.ts`・`placement.test.ts` が固定している。選択肢: (a) 既存の文言を使う（拒否の挙動は D5 のとおり。この Task のテストもこの文言で書いてある）、(b) D5 の「移せません」に直し、`dnd.ts`・`placement.ts` と3つのテストの文言を変える。推奨 (a)（挙動は同じで、4d の文言を変えずに済む）。
-2. **部 A への依頼（この Task が前提にする3点）。** (i) `useListScope` に `readonly error: ApiError | null`（プロジェクトを出せない理由。今の `projectError` を移したもの。404 は `notFound` でも true になる）を足す。ブリーフの getter 一覧にないが、TreeView のプロジェクト画面は 404 以外のエラーを警告として出していて、これが無いと既存テスト（`detailError`）が通らない。(ii) `useListScope` は `core()` と `useSubscribe` だけに依存し、`router` を import しない（既存の `TreeView.test.ts`・`TreeView.dnd.test.ts` は `../context` と `../router` をモックして `core` を差し替えるので、`cache.task`・`cache.watchDetail`・`stores.workspace/workspaces/loaded`・`schema.subscribe` だけで動く必要がある）。(iii) `ListBar` は `base` が空のとき（全 Store の画面）、固定のクエリの札（`FilterBar` の `.base`）を出さない。推奨: 3点とも部 A に足してもらう（この複製のスタブは (i)(ii) を満たす形で通してある）。
 ### Task 4: カンバン（列とスイムレーン・ドラッグ・必須の項目のダイアログ）
 
 概要 plan の細部 36〜42（カンバン）・58（読み込み中と空の状態のうちカンバン）と、この回の決定 D3・D4 を作る。画面の状態（クエリ・列とスイムレーンの設定）はこの部品の外（Task 6 の `ListTab`・`ViewPage`・`QueryPage`）が持ち、`KanbanView` は props で受けて `onquery`・`onsettings` で返す。この Task は 3 つに分かれる。(a) 純関数 — 列と行の組み立て `board.ts`、ドロップの判定 `drop.ts`、Pragmatic DnD の薄い包み `dnd.ts`。(b) 作成ダイアログに開始時のステータスを渡す口（細部 42）。(c) 画面 — `KanbanCard`・`RequiredDialog`・`KanbanView`。画面への入口（タブ・App の振り分け）は Task 7 が結線するので、この Task の画面はまだ App から開けない。
@@ -6917,10 +6910,6 @@ git commit -m "feat(web): カンバンの画面（カード・列とスイムレ
 13. **細部 36 を直す（利用者の決定 2026-11-03）**: 「scoped の `statuses` があるプロジェクトの画面ではそれだけ」を、「scoped の `statuses` と、タスクのいる表示外のステータス」に直す。scoped の `statuses` は表示のための絞り込みで、書き込みの検査には使われない（外のステータスのタスクは作れる）ので、そのままではタスクが盤面から消える。タスクのいるステータスの列は残す（scoped の外のものはスキーマの表示名で、どのスキーマにもないステータスは名前のまま末尾に出す。後者はドロップ先にならず「＋」もない）。spec・概要 plan の細部 36 もこの文言に直す。
 14. **テストの境目**: `KanbanView.test.ts` は `useListScope` と `dnd.ts` を差し替える。ドラッグは `dnd.ts` が受け取ったオプション（`onDragStart`・`onOver`・`onDrop`）を呼んで再現する。Pragmatic DnD そのものは E2E（Task 7）で確かめる。カードのタイトルは `<button>` で、その上で押して始めるドラッグは、ブラウザによっては始まらないことがある（`draggable` の中のフォーム部品。Pragmatic DnD の文書には記載がなく、Chromium の E2E でだけ確かめる。Playwright は Chromium だけを使う）。Firefox などで困ったら、カードを `<ul role="listbox">` の中の `<li role="option" tabindex="0">` にして、`onclick` と Enter を `li` に付ける作りに替える（重ね貼りの `::after` がなくなる）。
 
-**要相談:**
-
-1. **要相談: プロジェクトの見出し（パンくずとタブ）が TreeView の中にある。** 今のプロジェクトの画面は、`TreeView` が見出しと `Tabs` を自分で描いている。カンバン・テーブルのタブ（Task 6 の `ListTab`、Task 7 の結線）にも同じ見出しとタブが要る。`KanbanView` は見出しを描かない（ワークスペースの画面は `WorkspaceHeader` が上にあるので同じ形）。案 A（推奨）: Task 3 で `TreeView` から見出しとタブを `web/app/project/ProjectHeader.svelte` に切り出し、Task 6 の `ListTab` と Task 7 の結線がそれを使う（props は `{ ulid: string; tab: ProjectTab }`）。案 B: Task 7 でプロジェクトの見出しを新しく作り、`TreeView` の側の見出しは残す（二重になる）。どちらも Task 3・6・7 の担当の判断。
-2. **要相談: カードのキーボード操作。** spec のキーボード（ツリーの S・K など）にカンバンはない。今のカードは Tab で止まり Enter で詳細が開くだけで、ステータスの変更はマウスのドラッグか詳細からになる。案 A（推奨）: 作らない（spec どおり）。案 B: カードに S でステータスのメニューを開くキーを足す（ツリーの `pickFromMenu` と同じ。選んだ先も `decideDrop` で検査する）。
 ### Task 5: テーブル（列の選択・セルの編集・並び替え・グループ・仮想化）
 
 概要 plan の細部 43〜49（テーブル）と 58（読み込み中と空の状態）を作る。TanStack Table 9 で列・見出し・並び替えの状態・並べ替えた行を持ち、グループの見出しは並べ替えのあとに自前で行の間へ差して平らな配列にし、TanStack Virtual で仮想化する。ビューの保存・レイアウトの切り替え・「ビューを保存」のボタンはこの部品の外（Task 6）。この Task は部品 `TableView` と、その中の純関数（列・並び替えの値・グループ）と、セル `TableCell` だけを作り、画面への入口は出さない（Task 7 が結線する）。
@@ -11917,10 +11906,6 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 
 **確かめたこと（書き手）**: この節のコードは、`web/` の写し（main の 79a5277）に、部 A〜D の名前と型の最小のスタブ（`core/views.ts`、`router.ts` の `Route`・`replace`、`cli.ts` の `cliView*`、`list/scope*`、`AppCore.views`、TreeView・KanbanView・TableView の props）を置いて、`pnpm fix`・`pnpm check`（警告 0）・`pnpm exec biome ci --vcs-enabled=false .`・この Task のテスト（`app/views`・`app/list`・`app/ui`・`app/states`）を通した。スタブの置き換えで落ちた既存のテスト（`router.test.ts` の kanban/table のパス、`core-factory.test.ts` の core の数、TreeView の2つのテスト）は、部 A・B の担当。E2E は流していない。写しで見つけた誤り: `combine("", filter)` は先頭に空白が付くので、全 Store の画面の `saveBase`（`""`）では `.trim()` が要る（`SaveViewButton`）。
 
-**要相談:**
-1. **保存のダイアログで、同じ Store に同じ名前のビューがあるとき。** 細部 51・53 に決めがない。`PUT` は同じ名前を黙って置き換えるため、案は (A) 保存を無効にして「<名前> というビューが <Store> にあります。置き換えるには、そのビューの画面の「ビューを更新」を使います」と出す、(B) 「置き換えて保存」に変えて許す。推奨は A（実装済み。誤って他のビューを壊さない。置き換えは「ビューを更新」で足りる）。B にするなら `ViewSave.svelte` の `taken` を警告の表示に変え、ボタンの名前を替える
-2. **TreeView の `query` の意味（部 B との合わせ）。** `QueryPage`・`ViewPage` は `query=""`（空のクエリ）も外から渡す。部 B の `TreeView` が「`query !== undefined` なら外から持つ」であることが前提。「空文字なら自分で持つ」実装だと、フィルタを空にしたときに既定の `-status:canceled` に戻ってしまう。推奨は `!== undefined`（部 B の Interfaces にその旨を書く）
-3. **`hh view show` の行の置き場所。** 概要の部 E の文は見出しに置くように読めるが、D10 は足元と決めている。D10 を取り、3つの部品の `cli` に渡した（見出しには置かない）。見出しにも置くなら `ViewPage.svelte` の `.title` に `CliLine` を足すだけ。推奨は今のまま
 ### Task 7: マイタスク・もしかして・入口の結線・E2E（細部 55〜58、16・17・34 の 4e-3 分）
 
 Task 2〜6 で作った画面に入口を付ける最後の Task。マイタスクの画面（細部 55〜57）と、クエリの誤りの「もしかして」（細部 58）を作り、ワークスペースとプロジェクトのカンバン・テーブルのタブ、ツリーのタブの「ビューを保存」、サイドバーのマイタスクと保存済みビュー（細部 16・17）、パレットのマイタスク・保存済みビュー・「このクエリで」（細部 34）、App の振り分けをつなぎ、E2E（細部 80 の 4e-3 分）を足す。
