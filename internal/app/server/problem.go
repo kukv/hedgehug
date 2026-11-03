@@ -13,7 +13,7 @@ import (
 )
 
 // Problem is the problem+json body of every error. Type is the Code of the
-// ops error (task.not_found...), for the GUI to pick its words; Detail is the
+// usecase error (task.not_found...), for the GUI to pick its words; Detail is the
 // English message the CLI prints; Args are the arguments of the error.
 type Problem struct {
 	Type   string              `json:"type" doc:"What went wrong, such as task.not_found"`
@@ -93,7 +93,7 @@ func problemOf(err error) *Problem {
 }
 
 // detailOf is the message of err as the CLI prints it after "hedgehug: "
-// (cmd/hedgehug describe).
+// (internal/app/cli describe).
 func detailOf(err error) string {
 	var ve *store.ValidationError
 	if errors.As(err, &ve) {

@@ -89,7 +89,7 @@ func (sp *ScopedPlan) Lines(to string) []string {
 	return out
 }
 
-// MoveView is a MovePlan as a person reads it, and all that leaves ops with
+// MoveView is a MovePlan as a person reads it, and all that leaves usecase with
 // the confirmation (Args "plan"): who moves where, the references cut, who
 // loses sight of the tasks and what the scoped schema loses. It holds no
 // content of the tasks (not their text, comments or worklogs).

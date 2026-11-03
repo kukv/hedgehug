@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// The confirmation leaves ops as a MoveView: ulid, id and title of each
+// The confirmation leaves usecase as a MoveView: ulid, id and title of each
 // task, the references cut and who loses sight; the comments, worklogs and
 // bodies of the tasks are not in it.
 func TestMoveConfirmationHoldsOnlyTheView(t *testing.T) {
@@ -57,7 +57,7 @@ func TestPrepareMoveStoreReturnsTheView(t *testing.T) {
 	}
 }
 
-// The words for what a scoped schema loses are ops's, for every client.
+// The words for what a scoped schema loses are usecase's, for every client.
 func TestScopedPlanLines(t *testing.T) {
 	t.Parallel()
 	var none *ScopedPlan

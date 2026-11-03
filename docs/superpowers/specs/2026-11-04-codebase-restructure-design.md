@@ -45,7 +45,7 @@
 ### 2.1 ディレクトリ
 
 ```
-cmd/hedgehug/main.go        cli.Main() を呼ぶだけ
+cmd/hedgehug/main.go        cli.Main(version) を呼ぶだけ
 cmd/fakegh/                 今のまま
 internal/lib/
   osfs/                     改名・削除・読み書き・ディレクトリ作成・ロック・プロセス起動・パスの比較（旧 atomicfile を統合）
@@ -147,7 +147,7 @@ api/openapi.yaml            今のまま
 
 ### 4.1 cmd/hedgehug（F）
 
-CLI の本体を `internal/app/cli` に移し、`cmd/hedgehug/main.go` は `cli.Main()` を呼ぶだけにする。
+CLI の本体を `internal/app/cli` に移し、`cmd/hedgehug/main.go` は `cli.Main(version)` を呼ぶだけにする。
 
 ### 4.2 cli と server が import してよいもの（A）
 
@@ -194,7 +194,7 @@ CLI の本体を `internal/app/cli` に移し、`cmd/hedgehug/main.go` は `cli.
 | 5. テストと仕上げ | 5 節、depguard を全ルールで有効にする、shard の見直し、親設計の書き直し（8 節） | 変わらない |
 
 - 途中残りの検出を storage へ移すのは PR 3 で行い、E には依存させない。
-- CI の shard は、PR 1 でパスだけを書き換える（`ops` → `internal/app/usecase/...`、`cli` → `internal/app/cli/...`、`sync` → `internal/app/remote/replicate`）。PR 5 で、CI の要約に出るパッケージごとの時間を見て shard の分け方を決め直す。必須チェックの名前（`test`）は変えない。
+- CI の shard は、PR 1 でパスだけを書き換える（`ops` → `internal/app/usecase`、`cli` → `internal/app/cli`、`sync` → `internal/app/remote/replicate`）。ここで作るのは `internal/app/usecase` と `internal/app/cli` の単一パッケージで、サブパッケージ（仮置きの mount・current、maintenance、のちの 11 の usecase 領域）は PR 5 で shard を作り直すまで `others` に入る。PR 5 で、CI の要約に出るパッケージごとの時間を見て shard の分け方を決め直す。必須チェックの名前（`test`）は変えない。
 
 ## 7. 確かめ方
 

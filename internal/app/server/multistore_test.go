@@ -275,7 +275,7 @@ func TestActivityFiltersMergedList(t *testing.T) {
 	}
 }
 
-// With several stores a create names its store; ops does not pick one.
+// With several stores a create names its store; usecase does not pick one.
 func TestCreateNeedsAStoreWhenSeveral(t *testing.T) {
 	t.Parallel()
 	ts := twoStores(t)

@@ -17,7 +17,7 @@ import (
 	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
-// swap puts the rebuild b in the place of clone 1, as ops does after it
+// swap puts the rebuild b in the place of clone 1, as usecase does after it
 // released the locks, and opens the store again.
 func (c *cluster) swap(b *Rebuild) {
 	c.t.Helper()

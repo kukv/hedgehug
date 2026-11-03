@@ -75,7 +75,7 @@ type Choice struct {
 	Default string
 }
 
-// Kind is what an Error means; ops turns it into its own Kind.
+// Kind is what an Error means; usecase turns it into its own Kind.
 type Kind int
 
 const (
@@ -85,7 +85,7 @@ const (
 	KindConflict
 )
 
-// Error is a refusal of Resolve. Code and Args are those of the ops.Error it
+// Error is a refusal of Resolve. Code and Args are those of the usecase.Error it
 // becomes.
 type Error struct {
 	Kind Kind

@@ -13,7 +13,7 @@ import (
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
-// add adds a task through ops, as the CLI would, and returns its ID.
+// add adds a task through usecase, as the CLI would, and returns its ID.
 func (ts *testServer) add(title, parent string) string {
 	ts.t.Helper()
 	res, err := ts.session().Add(usecase.AddInput{Title: title, Parent: parent})

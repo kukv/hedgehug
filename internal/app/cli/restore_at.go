@@ -5,7 +5,7 @@ import (
 )
 
 // restoreAt puts the task back as it was at the point at names; see
-// ops.Session.RestoreAt.
+// usecase.Session.RestoreAt.
 func (a *app) restoreAt(arg, at string) error {
 	res, err := a.ss.RestoreAt(arg, at)
 	if err != nil {

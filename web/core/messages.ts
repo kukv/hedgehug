@@ -41,7 +41,7 @@ function violations(a: Args): string {
     .join(" / ");
 }
 
-// messages has the words for every Code of the ops errors and of the server.
+// messages has the words for every Code of the usecase errors and of the server.
 const messages: Record<string, Make> = {
   // tasks and workspaces
   "task.not_found": (a) => `${str(a, "input")} というタスクは見つかりません`,

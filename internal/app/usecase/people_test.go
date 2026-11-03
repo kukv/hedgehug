@@ -160,7 +160,7 @@ func TestPeopleEachSource(t *testing.T) {
 	}
 }
 
-// Account IDs are not case-sensitive (sync.Members, index.MentionNames), so
+// Account IDs are not case-sensitive (replicate.Members, index.MentionNames), so
 // names that differ only in case are one; the one that sorts first stays.
 func TestPeopleFoldsCase(t *testing.T) {
 	t.Parallel()

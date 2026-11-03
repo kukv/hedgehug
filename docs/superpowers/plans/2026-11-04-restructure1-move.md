@@ -51,7 +51,7 @@
 - internal/context を import する 11 ファイルはすべて `hhctx` の別名を付けている。internal/sync は 42 ファイルのうち 11 ファイルが別名（`hhsync` が 10、`isync` が 1）、31 ファイルが別名なし。別名なしで internal/sync を import するファイルは、標準の `sync` を別名なしでは import していない
 - ops・mount・doctor を別名付きで import するファイルはない
 - ops にはパッケージの関数 `current`（`internal/ops/delete.go:183`、索引を更新してタスクの今の姿を返す）があり、パッケージ `current` の import とぶつかってビルドが落ちる。`refreshed` に改名する（Task 1 Step 4）。ローカル変数の `current`（storeops.go・addhere.go・cmd の add.go）は、2026-11-04 の空実行ではぶつからなかった
-- 2026-11-04 に、この plan の Task 1〜2 を空実行して、`go build`・`go vet`・`golangci-lint run`・`go test ./...`（`-race` なし）が通ることを確かめた（確かめた後は元に戻した）。空実行で出た直しは、上の `refreshed` と Task 2 Step 3 の package コメントの 2 つで、どちらも plan に書いてある
+- 2026-11-04 に、この plan の Task 1〜2 を空実行して、`go build`・`go vet`・`golangci-lint run`・`go test ./...`（`-race` なし）が通ることを確かめた（確かめた後は元に戻した）。空実行で出た直しは、上の `refreshed` と Task 2 Step 2 の package コメントの 2 つで、どちらも plan に書いてある
 - 移動でずれる相対パス: `internal/server/gen.go` の `go:generate`（`../../api/openapi.yaml`）、`internal/server/server_test.go:161` と `internal/server/helpers_test.go:46` の `filepath.Join("..", "..", "api", "openapi.yaml")`、`cmd/hedgehug/main_test.go:54` の `"../../cmd", "../../internal", "../../tools"`、`cmd/hedgehug/e2e_test.go:42` の `"../../tools/devenv"`、`cmd/hedgehug/helpers_test.go:339` の `goBuildArgs(builtBin, ".")`（CLI のテストはバイナリを `go build .` で作る。移動後は main のパッケージを指す必要がある）
 - `tools/devenv` と `tools/licenses` も internal のパッケージを import している（スクリプトの対象に含める）
 - Go 以外で旧パスを書いているのは、`.github/workflows/ci-backend.yaml`（shard）、`Makefile`（`bench-history`）、`web/` のコメントとテストの説明文 16 か所
