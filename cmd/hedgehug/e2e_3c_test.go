@@ -33,7 +33,7 @@ func storeLog(t *testing.T, u *devUser, name string) []gitrepo.LogEntry {
 	if err != nil {
 		t.Fatal(err)
 	}
-	log, err := s.Repo().Log(nil, 0)
+	log, err := logOf(s.Repo(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,4 +235,14 @@ func overwrittenNaming(t *testing.T, u *devUser, ulid string) []string {
 		}
 	}
 	return out
+}
+
+// logOf is the first-parent log of HEAD of r, newest first, capped at limit
+// when it is above zero.
+func logOf(r *gitrepo.Repo, limit int) ([]gitrepo.LogEntry, error) {
+	head, err := r.Head()
+	if err != nil {
+		return nil, err
+	}
+	return r.LogFrom(head, limit)
 }

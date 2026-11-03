@@ -293,7 +293,11 @@ func newHistory(c *cluster) *history {
 		c: c, repo: c.stores[0].Repo(), v: c.view(0), entries: map[plumbing.Hash]gitrepo.LogEntry{},
 		ancestor: map[[2]plumbing.Hash]bool{}, ids: map[plumbing.Hash]map[string][]model.ULID{},
 	}
-	log, err := h.repo.Log(nil, 0)
+	head, err := h.repo.Head()
+	if err != nil {
+		t.Fatal(err)
+	}
+	log, err := h.repo.Between(head, plumbing.ZeroHash)
 	if err != nil {
 		t.Fatal(err)
 	}

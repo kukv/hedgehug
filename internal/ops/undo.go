@@ -64,7 +64,9 @@ func (ss *Session) Undo() (UndoResult, error) {
 // together or set a store up, which are not something a person did.
 var undoSkip = []string{"merge", "repair", "setup", "undo", "init"}
 
-// undoScanner is UndoTarget one entry at a time, newest first.
+// undoScanner finds the commit to undo, one entry at a time, newest first,
+// along the first parents: the newest that the writer made by an operation
+// undo can take back and that no later undo took back.
 type undoScanner struct{ undone map[string]bool }
 
 // next reports whether e is the commit to undo, having seen the newer ones.
@@ -79,19 +81,6 @@ func (s *undoScanner) next(e gitrepo.LogEntry, me string) (gitrepo.LogEntry, boo
 	op, _ := e.Trailer("Hedgehug-Op")
 	if author == me && !slices.Contains(undoSkip, op) && !s.undone[e.Hash.String()] && len(e.Parents) > 0 {
 		return e, true
-	}
-	return gitrepo.LogEntry{}, false
-}
-
-// UndoTarget returns the newest commit of log, which runs newest first along
-// the first parents, that the writer me made by an operation undo can take
-// back and that no later undo took back.
-func UndoTarget(log []gitrepo.LogEntry, me string) (gitrepo.LogEntry, bool) {
-	var s undoScanner
-	for _, e := range log {
-		if c, ok := s.next(e, me); ok {
-			return c, true
-		}
 	}
 	return gitrepo.LogEntry{}, false
 }

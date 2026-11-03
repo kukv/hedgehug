@@ -1,15 +1,12 @@
 package gitrepo
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/go-git/go-git/v5/plumbing/storer"
 )
 
 // LogEntry is one commit as read back from the history.
@@ -51,44 +48,6 @@ func (e LogEntry) Writer() string {
 		return a
 	}
 	return e.Author.Email
-}
-
-// Log returns the commits reachable from HEAD, newest first. With prefixes,
-// only commits that touch a path starting with one of them are returned. A
-// limit above zero caps the number of entries. A repository without commits
-// has an empty log.
-func (r *Repo) Log(prefixes []string, limit int) ([]LogEntry, error) {
-	opts := &git.LogOptions{}
-	if len(prefixes) > 0 {
-		opts.PathFilter = func(p string) bool {
-			for _, pre := range prefixes {
-				if strings.HasPrefix(p, pre) {
-					return true
-				}
-			}
-			return false
-		}
-	}
-	it, err := r.r.Log(opts)
-	if errors.Is(err, plumbing.ErrReferenceNotFound) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer it.Close()
-	var out []LogEntry
-	err = it.ForEach(func(c *object.Commit) error {
-		out = append(out, entry(c))
-		if limit > 0 && len(out) >= limit {
-			return storer.ErrStop
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 // WalkFirstParents calls fn with the commits from from along the first

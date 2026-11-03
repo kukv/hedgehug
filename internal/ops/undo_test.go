@@ -205,7 +205,7 @@ func listsWorkspace(wss []WorkspaceView, name string) bool {
 	return false
 }
 
-func TestUndoTarget(t *testing.T) {
+func TestUndoScannerTarget(t *testing.T) {
 	t.Parallel()
 	hash := func(b byte) plumbing.Hash { return plumbing.Hash{b} }
 	entry := func(h byte, author, op string, parents int, undoes ...byte) gitrepo.LogEntry {
@@ -234,7 +234,14 @@ func TestUndoTarget(t *testing.T) {
 		{"empty", nil, -1},
 	}
 	for _, c := range cases {
-		got, ok := UndoTarget(c.log, "me")
+		var sc undoScanner
+		var got gitrepo.LogEntry
+		var ok bool
+		for _, e := range c.log {
+			if got, ok = sc.next(e, "me"); ok {
+				break
+			}
+		}
 		if c.want < 0 {
 			if ok {
 				t.Errorf("%s: target %v; want none", c.name, got.Hash)
