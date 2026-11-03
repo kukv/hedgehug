@@ -13,7 +13,7 @@
 - Task 1 通知、Task 2 アクティビティ、Task 3 プロジェクトの設定、Task 4 同期と保守の骨組みと設定のナビ、Task 5 doctor と修復・purge、Task 6 スキーマ、Task 7 仕上げ。Go は触っていない（web だけ）
 - Task 7 で、`grep -rn "4e-4" web/app web/core web/e2e` が 0 件であること、spec の「画面と範囲」の全行と E2E の一覧（作成、編集と自動保存、ツリーのドラッグ、カンバンの移動、CLI の変更が SSE で反映、通知の既読と revert、保存済みビュー、undo、削除と復元）がコードにあることを確かめ、plan の末尾に表で残した。足りないものはなかった
 - 最終レビューの直し（plan 末尾の「組み上げで直した点」に項目）: 通知とアクティビティのフォーカス、undo の Store、プロジェクトの設定の再読み込み、スキーマの Store 表示、「2 つ以上の Store」と日付の共通化、e2e の署名
-- 検査: `go vet`・`gofmt -l .`（出力なし）・`go test -race ./...`（28 パッケージ ok）、`pnpm fix`・`pnpm check`・`biome ci`、`vitest`（138 ファイル・1707 件 PASS）、`pnpm build`、`make e2e` を3回（3回とも 101 件 PASS）
+- 検査: `go vet`・`gofmt -l .`（出力なし）・`go test -race ./...`（28 パッケージ ok）、`pnpm fix`・`pnpm check`・`biome ci`、`vitest`（138 ファイル・1708 件 PASS）、`pnpm build`、`make e2e` を3回（3回とも 101 件 PASS）。最後の直し（e10144d）のあとにも `go test -race`・vitest・`make e2e` を1回ずつ流し、すべて通った
 
 ## 実装中の決定
 
