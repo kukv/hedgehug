@@ -337,7 +337,7 @@ func BenchmarkRestoreAt(b *testing.B) {
 // BenchmarkFixedCost is what go-git costs every command, apart from the
 // indexes (spec decision 9): "firstRead" opens the repository and reads the
 // HEAD commit, which reads the pack's .idx; "write" is one write of a task
-// title from a new session, which builds the tree from the git index.
+// title from a new session, opened as a command opens it to write.
 func BenchmarkFixedCost(b *testing.B) {
 	src := indexed(b, benchSource(b))
 	b.Run("firstRead", func(b *testing.B) {
@@ -365,7 +365,7 @@ func BenchmarkFixedCost(b *testing.B) {
 			historytest.Clone(b, src, dir)
 			ss := session(b, dir, "alice")
 			b.StartTimer()
-			s, err := ss.OpenStore()
+			s, _, err := ss.OpenForWrite() // with the task index, as a command writes
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -374,8 +374,10 @@ func BenchmarkFixedCost(b *testing.B) {
 				if err != nil {
 					b.Fatal(err)
 				}
-				task = t.ULID
-				break
+				if t.Parent != nil { // under a project, as the tasks undo takes back
+					task = t.ULID
+					break
+				}
 			}
 			if _, err := ss.Update(s, store.Op{Name: "edit", Task: task}, func(tx *store.Tx) error {
 				t, err := tx.Task(task)
