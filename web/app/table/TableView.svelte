@@ -281,6 +281,7 @@
       return {
         value: s.id,
         label: s.label,
+        checked: shownIds.has(s.id),
         disabled: last,
         hint: last ? "最後の 1 列は外せません" : undefined,
       };
@@ -366,13 +367,13 @@
     {/if}
   </span>
   <span class="item-label">{it.label}</span>
-  <span class="sr">{shownIds.has(it.value) ? "表示中" : "非表示"}</span>
 {/snippet}
 
-{#snippet entry(item: TableItem, start?: number)}
+{#snippet entry(item: TableItem, index: number, start?: number)}
   {#if item.type === "group"}
     <tr
       class="group"
+      aria-rowindex={index + 2}
       class:placed={start !== undefined}
       style:transform={start === undefined ? undefined : `translateY(${start}px)`}
     >
@@ -392,6 +393,7 @@
     {@const st = saves.current.state(t.ulid)}
     <tr
       class="row"
+      aria-rowindex={index + 2}
       class:placed={start !== undefined}
       style:transform={start === undefined ? undefined : `translateY(${start}px)`}
       data-ulid={t.ulid}
@@ -447,9 +449,9 @@
       <div class="inner" style:--cols={template} style:min-width="{minWidth}rem">
         <!-- The table elements are laid out as a grid, so that the columns line up and the
           virtualizer can place a row; they keep their roles. -->
-        <table aria-label="タスクの表" aria-colcount={specs.length + 1}>
+        <table aria-label="タスクの表" aria-colcount={specs.length + 1} aria-rowcount={items.length + 1}>
           <thead>
-            <tr class="head">
+            <tr class="head" aria-rowindex={1}>
               <th class="hcell" scope="col"><span class="sr">保存の状態</span></th>
               {#each headers as h (h.id)}
                 {@const dir = h.column.getIsSorted()}
@@ -473,14 +475,14 @@
               {#each windowed as v (itemKey(v.index))}
                 {@const item = items[v.index]}
                 {#if item}
-                  {@render entry(item, v.start)}
+                  {@render entry(item, v.index, v.start)}
                 {/if}
               {/each}
             </tbody>
           {:else}
             <tbody>
-              {#each items as item (item.type === "row" ? item.key : `#${item.key}`)}
-                {@render entry(item)}
+              {#each items as item, i (item.type === "row" ? item.key : `#${item.key}`)}
+                {@render entry(item, i)}
               {/each}
             </tbody>
           {/if}
@@ -743,9 +745,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
-    border: 1px solid var(--line-input);
+    width: var(--space-16);
+    height: var(--space-16);
+    border: var(--hairline) solid var(--line-input);
     border-radius: var(--radius-4);
     background: var(--surface);
     color: var(--accent-on);

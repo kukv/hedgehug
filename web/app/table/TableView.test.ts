@@ -339,22 +339,26 @@ describe("TableView", () => {
       const { onsettings } = mount();
       await fireEvent.click(screen.getByRole("button", { name: "列 5" }));
       const menu = screen.getByRole("menu", { name: "列" });
-      expect(within(menu).getByRole("menuitem", { name: /^ID 表示中$/ })).toBeInTheDocument();
-      expect(within(menu).getByRole("menuitem", { name: /^親 非表示$/ })).toBeInTheDocument();
+      expect(
+        within(menu).getByRole("menuitemcheckbox", { name: "ID", checked: true }),
+      ).toBeInTheDocument();
+      expect(
+        within(menu).getByRole("menuitemcheckbox", { name: "親", checked: false }),
+      ).toBeInTheDocument();
       // The properties of the schema come after the builtin columns, by name.
       expect(
         within(menu)
-          .getAllByRole("menuitem")
-          .map((i) => i.textContent?.replace(/表示中|非表示/, "").trim())
+          .getAllByRole("menuitemcheckbox")
+          .map((i) => i.textContent?.trim())
           .slice(-2),
       ).toEqual(["期限", "points"]);
-      await fireEvent.click(within(menu).getByRole("menuitem", { name: /^親/ }));
+      await fireEvent.click(within(menu).getByRole("menuitemcheckbox", { name: /^親/ }));
       expect(onsettings).toHaveBeenCalledWith({
         ...SETTINGS,
         columns: [...SETTINGS.columns, "parent"],
       });
       expect(screen.getByRole("menu", { name: "列" })).toBeInTheDocument();
-      await fireEvent.click(within(menu).getByRole("menuitem", { name: /^期限/ }));
+      await fireEvent.click(within(menu).getByRole("menuitemcheckbox", { name: /^期限/ }));
       expect(onsettings).toHaveBeenLastCalledWith({
         ...SETTINGS,
         columns: ["id", "title", "status", "assignee"],
@@ -365,14 +369,14 @@ describe("TableView", () => {
       setup();
       mount({ settings: { ...SETTINGS, columns: ["id"] } });
       await fireEvent.click(screen.getByRole("button", { name: "列 1" }));
-      expect(screen.getByRole("menuitem", { name: /^ID/ })).toBeDisabled();
+      expect(screen.getByRole("menuitemcheckbox", { name: /^ID/ })).toBeDisabled();
     });
 
     it("keeps the names the table does not show when a column is added", async () => {
       setup();
       const { onsettings } = mount({ settings: { ...SETTINGS, columns: ["id", "ghost"] } });
       await fireEvent.click(screen.getByRole("button", { name: "列 1" }));
-      await fireEvent.click(screen.getByRole("menuitem", { name: /^タイトル/ }));
+      await fireEvent.click(screen.getByRole("menuitemcheckbox", { name: /^タイトル/ }));
       expect(onsettings).toHaveBeenCalledWith({ ...SETTINGS, columns: ["id", "ghost", "title"] });
     });
   });
@@ -546,6 +550,23 @@ describe("TableView", () => {
       const row = document.querySelector<HTMLElement>("tr.row");
       expect(row).toHaveStyle({ transform: "translateY(0px)" });
     });
+  });
+
+  it("numbers the rows for a screen reader, the header being the first", () => {
+    setup();
+    mount();
+    expect(screen.getByRole("table")).toHaveAttribute("aria-rowcount", "4");
+    const rows = [...document.querySelectorAll("tbody tr")];
+    expect(rows.map((r) => r.getAttribute("aria-rowindex"))).toEqual(["2", "3", "4"]);
+  });
+
+  it("numbers the rows of the window by their place in the whole list", () => {
+    setup({ many: 250 });
+    h.vstart = 30;
+    mount();
+    expect(screen.getByRole("table")).toHaveAttribute("aria-rowcount", "251");
+    const rows = [...document.querySelectorAll("tbody tr")];
+    expect(rows[0]).toHaveAttribute("aria-rowindex", "32");
   });
 
   it("waits for the schema before it draws a property", async () => {
