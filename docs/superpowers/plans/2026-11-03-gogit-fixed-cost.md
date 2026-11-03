@@ -1749,6 +1749,31 @@ git commit -m "perf(gitrepo): commit で変わったパスの上の tree だけ�
 
 ---
 
+### Task 4b: tree の差分を hash が違うところだけ読む（spec 3.3）
+
+実装中の計測（mac、v2 の合成 Store）で追加した。Task 1〜4 の後、`undo` 1 回で約 1,200 個のオブジェクトを読み、約 1,100 個が `Repo.DiffTrees` だった。go-git の `object.DiffTree` が、hash が同じ兄弟のディレクトリの tree まで開くためである。
+
+**Files:**
+- Modify: `internal/gitrepo/changed.go`（`diffTrees` が消えたかどうかも渡す）
+- Modify: `internal/gitrepo/tree.go`（`DiffTrees` が `diffTrees` を使う）
+- Test: `internal/gitrepo/tree_test.go`
+
+- [ ] **Step 1: go-git と比べるテストを書く**
+
+`tree_test.go` に、いくつかの tree の組について `Repo.DiffTrees` の結果が go-git の `object.DiffTree` から今のコードと同じ方法で作った `[]Change`（パスの順）と一致することを確かめるテストを足す。組: 足す、変える、消す、ディレクトリごと消す、深いディレクトリを足す、ファイルからディレクトリに変える、ディレクトリからファイルに変える、mode だけを変える（実行ビット。`os.Chmod` で 0o755 にして commit）、`prefix` での絞り込み、同じ tree（空）。go-git 側の結果を作るヘルパーは、今の `DiffTrees` の本体（`object.DiffTree` → `Action` → `Change`）をテストに移したものにする。
+
+- [ ] **Step 2: テストを流し、今のコードで通ることを確かめる（比べる相手の確認）**
+
+- [ ] **Step 3: `diffTrees` を `fn func(path string, deleted bool)` にし、`DiffTrees` を書き換える**
+
+`diffTrees` の中で、A にあるファイルは「B に同じ名前のファイルがなければ deleted」、B にあるファイルは今と同じ条件で deleted=false として渡す。`ChangedFiles` は deleted を見ない。`DiffTrees` は `r.tree(from)`・`r.tree(to)` を読み、`diffTrees` で集め、`prefix` で絞り、パスの順に並べて返す。`tree.go` で使わなくなった `merkletrie` の import を消す。
+
+- [ ] **Step 4: `go test -race -count=1 ./...` と `golangci-lint run ./...` が通ることを確かめる**
+
+- [ ] **Step 5: コミット**（`perf(gitrepo): tree の差分で、hash が同じディレクトリを読まない`）
+
+---
+
 ### Task 5: 計測用の合成 Store の pack を delta 付きにする
 
 **Files:**
