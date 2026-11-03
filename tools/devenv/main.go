@@ -18,13 +18,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/config"
-	"github.com/kukv/hedgehug/internal/fakegh"
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/store"
-	"github.com/kukv/hedgehug/internal/sync"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/remote/replicate"
+	"github.com/kukv/hedgehug/internal/app/storage/config"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/lib/fakegh"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 const (
@@ -357,8 +357,8 @@ func seedWeb(dir string) error {
 // web into src/web. The clone keeps origin at the URL on GitHub.
 func addWebProject(home string, p config.Paths, getenv func(string) string) error {
 	var warnings []string
-	ss := &ops.Session{Getenv: getenv, Now: time.Now, StoreName: "org-a", Warn: func(m string) { warnings = append(warnings, m) }}
-	if _, err := ss.Add(ops.AddInput{Title: "Web release", Kind: "project", Repos: []string{webRepoID}}); err != nil {
+	ss := &usecase.Session{Getenv: getenv, Now: time.Now, StoreName: "org-a", Warn: func(m string) { warnings = append(warnings, m) }}
+	if _, err := ss.Add(usecase.AddInput{Title: "Web release", Kind: "project", Repos: []string{webRepoID}}); err != nil {
 		return fmt.Errorf("add project: %w", err)
 	}
 	if len(warnings) > 0 {
@@ -382,7 +382,7 @@ func addWebProject(home string, p config.Paths, getenv func(string) string) erro
 		return err
 	}
 	conn := gitrepo.Conn{Rewrite: c.Rewrite}
-	if _, err := sync.Run(s, sync.Options{Remotes: e.Remotes, Author: author, Account: acct.ID(), Me: c.Me(), Conn: conn}); err != nil {
+	if _, err := replicate.Run(s, replicate.Options{Remotes: e.Remotes, Author: author, Account: acct.ID(), Me: c.Me(), Conn: conn}); err != nil {
 		return err
 	}
 	_, err = gitrepo.CloneWith(webURL, filepath.Join(home, "src", "web"), conn)
@@ -425,7 +425,7 @@ func addDevStore(p config.Paths, ds devStore) error {
 		return err
 	}
 	if !ds.clone && len(remotes) > 0 {
-		if _, err := sync.Run(s, sync.Options{Remotes: remotes, Author: author, Account: acct.ID(), Me: c.Me(), Conn: conn}); err != nil {
+		if _, err := replicate.Run(s, replicate.Options{Remotes: remotes, Author: author, Account: acct.ID(), Me: c.Me(), Conn: conn}); err != nil {
 			return err
 		}
 	}

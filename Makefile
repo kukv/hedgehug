@@ -66,7 +66,7 @@ clean-cache:
 # 100,000 commits (not part of check or CI; see the history-growth spec).
 # The store is made once in $HH_BENCH_CACHE (default: hh-bench in the user cache directory).
 bench-history:
-	HH_BENCH=1 go test ./internal/history -run '^$$' -bench . -benchtime 5x -timeout 60m
+	HH_BENCH=1 go test ./internal/app/storage/history -run '^$$' -bench . -benchtime 5x -timeout 60m
 
 # Run everything the CI checks, locally.
 check: tidy-check lint fmt-check test web-check

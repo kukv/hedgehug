@@ -1,0 +1,368 @@
+package cli
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	git "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
+
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+)
+
+// taskFile returns the path of the task file of ulid in the store me.
+func (te *testEnv) taskFile(ulid string) string {
+	te.t.Helper()
+	return filepath.Join(te.storeDir("me"), filepath.FromSlash(model.TaskPath(mustULID(te.t, ulid))))
+}
+
+// raw returns the task file of ulid as it is.
+func (te *testEnv) raw(ulid string) string {
+	te.t.Helper()
+	b, err := os.ReadFile(te.taskFile(ulid))
+	if err != nil {
+		te.t.Fatal(err)
+	}
+	return string(b)
+}
+
+// commitFile writes data to the task file of ulid and commits it by hand.
+func (te *testEnv) commitFile(ulid, data string) {
+	te.t.Helper()
+	if err := os.WriteFile(te.taskFile(ulid), []byte(data), 0o600); err != nil {
+		te.t.Fatal(err)
+	}
+	r, err := git.PlainOpen(te.storeDir("me"))
+	if err != nil {
+		te.t.Fatal(err)
+	}
+	w, err := r.Worktree()
+	if err != nil {
+		te.t.Fatal(err)
+	}
+	if _, err := w.Add(model.TaskPath(mustULID(te.t, ulid))); err != nil {
+		te.t.Fatal(err)
+	}
+	if _, err := w.Commit("by hand", &git.CommitOptions{Author: &object.Signature{Name: "T", Email: "t@example.com", When: time.Now()}}); err != nil {
+		te.t.Fatal(err)
+	}
+}
+
+// setLine sets the line key: value of a task file, adding it after the ulid
+// line when there is none.
+func setLine(file, key, value string) string {
+	lines := strings.SplitAfter(file, "\n")
+	for i, l := range lines {
+		if strings.HasPrefix(l, key+":") {
+			lines[i] = key + ": " + value + "\n"
+			return strings.Join(lines, "")
+		}
+	}
+	for i, l := range lines {
+		if strings.HasPrefix(l, "ulid:") {
+			return strings.Join(slices.Insert(lines, i+1, key+": "+value+"\n"), "")
+		}
+	}
+	panic("no ulid line in " + file)
+}
+
+func TestEdit(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("Alpha")
+	before := len(te.log("me"))
+	te.editWith(setLine(te.raw(x.ULID), "title", "Renamed"))
+
+	out := te.ok("edit", x.ID)
+	if !strings.HasPrefix(out, "Updated ") || !strings.Contains(out, "Renamed") {
+		t.Errorf("stdout = %q", out)
+	}
+	log := te.log("me")
+	if len(log) != before+1 || !strings.Contains(log[0].Message, "Hedgehug-Op: edit") {
+		t.Errorf("commits = %d (want %d), last %q", len(log), before+1, log[0].Message)
+	}
+	if out := te.ok("show", x.ID); !strings.Contains(out, "Renamed") {
+		t.Errorf("show = %q", out)
+	}
+	if fs := te.tempFiles(); len(fs) != 0 {
+		t.Errorf("temporary files left: %v", fs)
+	}
+
+	// --json prints the task as written.
+	te.editWith(setLine(te.raw(x.ULID), "title", "Again"))
+	var got usecase.TaskView
+	if err := json.Unmarshal([]byte(te.ok("edit", x.ID, "--json")), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Title != "Again" {
+		t.Errorf("edit --json title = %q, want Again", got.Title)
+	}
+}
+
+func TestEditNoChanges(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("Alpha")
+	before := len(te.log("me"))
+	seen := te.editWith(te.raw(x.ULID))
+
+	out := te.ok("edit", x.ID)
+	if !strings.HasPrefix(out, "No changes") {
+		t.Errorf("stdout = %q, want No changes", out)
+	}
+	if n := len(te.log("me")); n != before {
+		t.Errorf("commits = %d, want %d", n, before)
+	}
+	if fs := te.tempFiles(); len(fs) != 0 {
+		t.Errorf("temporary files left: %v", fs)
+	}
+	if s := seen(); len(s) != 1 || s[0] != te.raw(x.ULID) {
+		t.Errorf("the editor saw %q, want the task file", s)
+	}
+}
+
+func TestEditRefused(t *testing.T) {
+	for _, tc := range []struct {
+		key, value, want string
+	}{
+		{"ulid", "", "ulid cannot be changed"},
+		{"id", "WEB-1", "id cannot be changed"},
+		{"created", "2020-01-01T00:00:00Z", "created cannot be changed"},
+		{"updated", "2020-01-01T00:00:00Z", "updated cannot be changed"},
+		{"deleted_at", "2020-01-01T00:00:00Z", "deleted_at cannot be changed"},
+		{"parent", "", "parent cannot be changed here; use hedgehug mv"},
+		{"rank", "a5V", "rank cannot be changed here; use hedgehug mv"},
+		{"former_ids", "[ME-9]", "former_ids cannot be changed"},
+		{"workspace", "", "workspace cannot be changed here; use hedgehug mv --workspace"},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			te := newStoreEnv(t)
+			x := te.addJSON("Alpha")
+			other := te.addJSON("Other")
+			value := tc.value
+			if value == "" {
+				value = other.ULID
+			}
+			edited := setLine(te.raw(x.ULID), tc.key, value)
+			te.editWith(edited)
+			before := len(te.log("me"))
+
+			code, _, stderr := te.run("edit", x.ID)
+			if code != 1 || !strings.Contains(stderr, tc.want) {
+				t.Errorf("exit %d (want 1), stderr %q (want %q)", code, stderr, tc.want)
+			}
+			if strings.Contains(stderr, "[Y/n]") {
+				t.Errorf("asked again without a terminal: %q", stderr)
+			}
+			fs := te.tempFiles()
+			if len(fs) != 1 || !strings.Contains(stderr, fs[0]) {
+				t.Fatalf("temporary files %v, stderr %q: want one, named in stderr", fs, stderr)
+			}
+			if b, _ := os.ReadFile(fs[0]); string(b) != edited {
+				t.Errorf("the kept file = %q, want the edit", b)
+			}
+			if n := len(te.log("me")); n != before {
+				t.Errorf("commits = %d, want %d", n, before)
+			}
+		})
+	}
+}
+
+func TestEditRepairsWorkspace(t *testing.T) {
+	for _, broken := range []string{"", model.NewULID().String()} {
+		te := newStoreEnv(t)
+		x := te.addJSON("Alpha")
+		ws := te.task(x.ULID).Workspace
+		te.commitFile(x.ULID, setLine(te.raw(x.ULID), "workspace", broken))
+		te.editWith(setLine(te.raw(x.ULID), "workspace", ws.String()))
+
+		if code, _, stderr := te.run("edit", x.ID); code != 0 {
+			t.Fatalf("workspace %q: exit %d, stderr %q", broken, code, stderr)
+		}
+		if got := te.task(x.ULID); got.Workspace != ws || got.ID != x.ID {
+			t.Errorf("workspace %q: after the edit %s %s, want %s %s", broken, got.Workspace, got.ID, ws, x.ID)
+		}
+	}
+}
+
+func TestEditRetry(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("Alpha")
+	other := te.addJSON("Other")
+	before := len(te.log("me"))
+	bad := setLine(te.raw(x.ULID), "ulid", other.ULID)
+	good := setLine(te.raw(x.ULID), "title", "Fixed")
+	seen := te.editWith(bad, good)
+	te.terminal, te.stdin = true, "y\n"
+
+	code, out, stderr := te.run("edit", x.ID)
+	if code != 0 || !strings.Contains(out, "Fixed") {
+		t.Fatalf("exit %d, stdout %q, stderr %q", code, out, stderr)
+	}
+	if !strings.Contains(stderr, "Open the editor again? [Y/n] ") {
+		t.Errorf("stderr = %q, want the question", stderr)
+	}
+	if s := seen(); len(s) != 2 || s[1] != bad {
+		t.Errorf("the editor saw %q, want the last edit the second time", s)
+	}
+	if n := len(te.log("me")); n != before+1 {
+		t.Errorf("commits = %d, want %d", n, before+1)
+	}
+	if fs := te.tempFiles(); len(fs) != 0 {
+		t.Errorf("temporary files left: %v", fs)
+	}
+}
+
+func TestEditValidation(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("Alpha")
+	before := len(te.log("me"))
+	te.editWith(setLine(te.raw(x.ULID), "status", "nope"))
+	te.terminal, te.stdin = true, "n\n"
+
+	code, _, stderr := te.run("edit", x.ID)
+	if code != 1 || !strings.Contains(stderr, "breaks the schema") || !strings.Contains(stderr, "[Y/n]") {
+		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
+	}
+	if fs := te.tempFiles(); len(fs) != 1 || !strings.Contains(stderr, fs[0]) || !strings.HasPrefix(filepath.Base(fs[0]), "hedgehug-"+x.ID+"-") {
+		t.Errorf("temporary files %v, stderr %q: want one named after the id, named in stderr", fs, stderr)
+	}
+	if n := len(te.log("me")); n != before {
+		t.Errorf("commits = %d, want %d", n, before)
+	}
+}
+
+func TestEditDecodeError(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("Alpha")
+	te.editWith("not a task\n")
+
+	code, _, stderr := te.run("edit", x.ID)
+	if code != 1 || !strings.Contains(stderr, "decode") {
+		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
+	}
+}
+
+func TestEditBroken(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("Alpha")
+	good := te.raw(x.ULID)
+	broken := "not a task\x00\n: [\n"
+	te.commitFile(x.ULID, broken)
+	before := len(te.log("me"))
+	seen := te.editWith(setLine(good, "title", "Mended"))
+
+	te.ok("edit", x.ULID) // a broken task has no id to give
+	if s := seen(); len(s) != 1 || s[0] != broken {
+		t.Errorf("the editor saw %q, want the broken bytes", s)
+	}
+	if out := te.ok("show", x.ID); strings.Contains(out, "broken:") || !strings.Contains(out, "Mended") {
+		t.Errorf("show = %q", out)
+	}
+	if log := te.log("me"); len(log) != before+1 || !strings.Contains(log[0].Message, "Hedgehug-Op: edit") {
+		t.Errorf("commits = %d (want %d), last %q", len(log), before+1, log[0].Message)
+	}
+
+	// A broken task still keeps its ulid.
+	other := te.addJSON("Other")
+	te.commitFile(x.ULID, broken)
+	te.editWith(setLine(good, "ulid", other.ULID))
+	if code, _, stderr := te.run("edit", x.ULID); code != 1 || !strings.Contains(stderr, "the ulid must stay "+x.ULID) {
+		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
+	}
+}
+
+func TestEditChangedWhileEditing(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("Alpha")
+	before := len(te.log("me"))
+	te.editWith(setLine(te.raw(x.ULID), "title", "Mine") + "TOUCH " + te.taskFile(x.ULID) + "\n")
+	te.terminal, te.stdin = true, "y\n"
+
+	code, _, stderr := te.run("edit", x.ID)
+	if code != 1 || !strings.Contains(stderr, "changed while editing") {
+		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
+	}
+	if strings.Contains(stderr, "[Y/n]") {
+		t.Errorf("asked again: %q", stderr)
+	}
+	if fs := te.tempFiles(); len(fs) != 1 || !strings.Contains(stderr, fs[0]) {
+		t.Errorf("temporary files %v, stderr %q: want one, named in stderr", fs, stderr)
+	}
+	if n := len(te.log("me")); n != before {
+		t.Errorf("commits = %d, want %d", n, before)
+	}
+}
+
+func TestEditDeleted(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("Alpha")
+	te.ok("rm", x.ID)
+	te.editWith()
+
+	code, _, stderr := te.run("edit", x.ID)
+	if code != 1 || !strings.Contains(stderr, "is deleted; restore "+x.ID+" first") {
+		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
+	}
+	if fs := te.tempFiles(); len(fs) != 0 {
+		t.Errorf("the editor was opened: %v", fs)
+	}
+}
+
+func TestEditEditorFails(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("Alpha")
+	before := len(te.log("me"))
+	te.editWith("EXIT1")
+
+	code, _, stderr := te.run("edit", x.ID)
+	if code != 1 || !strings.Contains(stderr, "editor") {
+		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
+	}
+	if fs := te.tempFiles(); len(fs) != 1 || !strings.Contains(stderr, fs[0]) {
+		t.Errorf("temporary files %v, stderr %q: want one, named in stderr", fs, stderr)
+	}
+	if n := len(te.log("me")); n != before {
+		t.Errorf("commits = %d, want %d", n, before)
+	}
+}
+
+// A blank $EDITOR is refused before any temporary file is made.
+func TestEditBlankEditor(t *testing.T) {
+	te := newStoreEnv(t)
+	x := te.addJSON("Alpha")
+	te.editWith()
+	te.env["EDITOR"] = "   "
+
+	code, _, stderr := te.run("edit", x.ID)
+	if code != 1 || !strings.Contains(stderr, "$EDITOR is blank") {
+		t.Errorf("exit %d (want 1), stderr %q", code, stderr)
+	}
+	if fs := te.tempFiles(); len(fs) != 0 {
+		t.Errorf("temporary files left: %v", fs)
+	}
+}
+
+func TestEditorCommand(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		visual, editor string
+		want           []string
+	}{
+		{"code --wait", "nano", []string{"code", "--wait"}},
+		{"", "  nano  -w ", []string{"nano", "-w"}},
+		{"", "", []string{defaultEditor}},
+	} {
+		a := &app{env: &env{getenv: func(k string) string {
+			return map[string]string{"VISUAL": tc.visual, "EDITOR": tc.editor}[k]
+		}}}
+		got, err := a.editor()
+		if err != nil || !slices.Equal(got, tc.want) {
+			t.Errorf("editor() with VISUAL %q, EDITOR %q = %q, %v; want %q", tc.visual, tc.editor, got, err, tc.want)
+		}
+	}
+}

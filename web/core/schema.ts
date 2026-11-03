@@ -157,7 +157,7 @@ const BUILTIN: Record<string, PropEditor> = {
   body: "text",
 };
 
-// The types of a property of the schema (internal/schema PropType) and the
+// The types of a property of the schema (internal/app/domain/schema PropType) and the
 // editor each gets.
 const BY_TYPE: Record<string, PropEditor> = {
   text: "text",

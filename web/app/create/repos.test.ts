@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { repoIdOf } from "./repos";
 
 describe("repoIdOf", () => {
-  it("reads https, ssh, git and scp-like URLs the way internal/context.RepoID does", () => {
+  it("reads https, ssh, git and scp-like URLs the way internal/app/usecase/current.RepoID does", () => {
     expect(repoIdOf("https://github.com/Org-A/Web.git")).toBe("github.com/org-a/web");
     expect(repoIdOf("git@github.com:Org-A/web.git")).toBe("github.com/org-a/web");
     expect(repoIdOf("ssh://git@github.com:22/org-a/web")).toBe("github.com/org-a/web");

@@ -1,0 +1,172 @@
+package server
+
+import (
+	"context"
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+
+	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+)
+
+// TaskParam is the task a request is on: an ID, a former ID or a ULID, as
+// the CLI resolves it.
+type TaskParam struct {
+	StoreParam
+	ID string `path:"id" doc:"The ID, a former ID, or the ULID of the task"`
+}
+
+// listView is a row of a list: the task with its checklist and progress.
+func listView(ix *index.Index, e *index.Entry) *usecase.TaskView {
+	v := usecase.TaskViewOf(ix, e)
+	v.Checklist = usecase.ChecklistOf(e)
+	v.Progress = usecase.ProgressOf(ix, e)
+	return v
+}
+
+type groupView struct {
+	Key   string   `json:"key" doc:"The value of the group; empty for the tasks with none"`
+	ULIDs []string `json:"ulids"`
+}
+
+type listInput struct {
+	StoreParam
+	Q    string `query:"q" doc:"The query, as hh ls takes it; empty for every task"`
+	Tree bool   `query:"tree" doc:"Return the tasks as a tree, as hh ls --tree"`
+}
+
+type listOutput struct {
+	Body struct {
+		Tasks  *[]*usecase.TaskView `json:"tasks,omitempty" doc:"The tasks found, without tree"`
+		Groups []groupView          `json:"groups,omitempty" doc:"The groups, when the query has group:"`
+		Roots  *[]*usecase.TaskView `json:"roots,omitempty" doc:"The roots of the tree, with tree"`
+		Cycle  []*usecase.TaskView  `json:"cycle,omitempty" doc:"The tasks in a parent cycle, with tree"`
+	}
+}
+
+type showOutput struct{ Body *usecase.ShowView }
+
+type historyInput struct {
+	TaskParam
+	Limit int `query:"limit" default:"50" minimum:"1" maximum:"1000"`
+}
+
+type historyOutput struct{ Body []usecase.LogView }
+
+type showAtInput struct {
+	TaskParam
+	Commit string `path:"commit" doc:"The commit or the time to look at; nothing is changed"`
+}
+
+type peopleInput struct {
+	Store string `query:"store" doc:"The store; without it, the people of every store"`
+}
+
+func (s *Server) registerTaskReads() {
+	huma.Register(s.api, huma.Operation{
+		OperationID: "list-tasks", Method: http.MethodGet, Path: "/api/tasks",
+		Summary: "List the tasks a query finds", Tags: []string{"tasks"},
+	}, func(_ context.Context, in *listInput) (*listOutput, error) {
+		q, err := usecase.ParseQuery(in.Q)
+		if err != nil {
+			return nil, problemOf(err)
+		}
+		ss := s.session(in.Store)
+		defer ss.Close()
+		out := &listOutput{}
+		if in.Tree {
+			r, err := ss.Tree(q)
+			if err != nil {
+				return nil, problemOf(err)
+			}
+			roots := []*usecase.TaskView{}
+			for _, ts := range r.Stores {
+				for _, n := range ts.Roots {
+					roots = append(roots, usecase.TreeViewOf(ts.Index, n))
+				}
+				for _, n := range ts.Cycle {
+					out.Body.Cycle = append(out.Body.Cycle, usecase.TreeViewOf(ts.Index, n))
+				}
+			}
+			out.Body.Roots = &roots
+			return out, nil
+		}
+		r, err := ss.List(q)
+		if err != nil {
+			return nil, problemOf(err)
+		}
+		tasks := make([]*usecase.TaskView, 0, len(r.Entries))
+		for _, e := range r.Entries {
+			ix, err := e.Store.Index()
+			if err != nil {
+				return nil, problemOf(err)
+			}
+			tasks = append(tasks, listView(ix, e.Entry))
+		}
+		out.Body.Tasks = &tasks
+		if usecase.HasTerm(q, "group") {
+			for _, g := range r.Groups {
+				gv := groupView{Key: g.Key, ULIDs: make([]string, len(g.Entries))}
+				for i, e := range g.Entries {
+					gv.ULIDs[i] = e.Entry.ULID.String()
+				}
+				out.Body.Groups = append(out.Body.Groups, gv)
+			}
+		}
+		return out, nil
+	})
+
+	huma.Register(s.api, huma.Operation{
+		OperationID: "get-task", Method: http.MethodGet, Path: "/api/tasks/{id}",
+		Summary: "Show a task, as hh show", Tags: []string{"tasks"},
+	}, func(_ context.Context, in *TaskParam) (*showOutput, error) {
+		ss := s.session(in.Store)
+		defer ss.Close()
+		r, err := ss.Show(in.ID)
+		if err != nil {
+			return nil, problemOf(err)
+		}
+		return &showOutput{Body: usecase.ShowViewOf(r)}, nil
+	})
+
+	huma.Register(s.api, huma.Operation{
+		OperationID: "get-task-history", Method: http.MethodGet, Path: "/api/tasks/{id}/history",
+		Summary: "List the commits of a task, newest first", Tags: []string{"tasks"},
+	}, func(_ context.Context, in *historyInput) (*historyOutput, error) {
+		ss := s.session(in.Store)
+		defer ss.Close()
+		r, err := ss.Log([]string{in.ID}, in.Limit)
+		if err != nil {
+			return nil, problemOf(err)
+		}
+		return &historyOutput{Body: usecase.StoreLogViews(r.Logs)}, nil
+	})
+
+	huma.Register(s.api, huma.Operation{
+		OperationID: "list-people", Method: http.MethodGet, Path: "/api/people",
+		Summary: "List the names to offer after an @: assignees, watchers, comment authors and commit authors", Tags: []string{"tasks"},
+	}, func(_ context.Context, in *peopleInput) (*struct{ Body []string }, error) {
+		ss := s.session(in.Store)
+		defer ss.Close()
+		names, err := ss.People()
+		if err != nil {
+			return nil, problemOf(err)
+		}
+		return &struct{ Body []string }{Body: names}, nil
+	})
+
+	huma.Register(s.api, huma.Operation{
+		OperationID: "show-task-at", Method: http.MethodGet, Path: "/api/tasks/{id}/history/{commit}",
+		Summary: "Show a task as it was at a commit, read and written nowhere", Tags: []string{"tasks"},
+		Description: "The id and the workspace are those of now. problems, reverse, referenced_by, comments and history are empty, and progress is not filled. A task that did not exist at the commit is restore_at.not_found.",
+	}, func(_ context.Context, in *showAtInput) (*showOutput, error) {
+		ss := s.session(in.Store)
+		defer ss.Close()
+		v, err := ss.ShowAt(in.ID, in.Commit)
+		if err != nil {
+			return nil, problemOf(err)
+		}
+		return &showOutput{Body: &v}, nil
+	})
+}

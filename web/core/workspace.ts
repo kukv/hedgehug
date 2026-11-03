@@ -2,7 +2,7 @@ import type { Schemas } from "./api/client";
 import { formatDate } from "./format";
 import type { WorkspaceEntry } from "./stores";
 
-// The same rules as ValidName and ValidIDPrefix in internal/model.
+// The same rules as ValidName and ValidIDPrefix in internal/app/domain/model.
 const NAME = /^[a-z0-9][a-z0-9_-]*$/;
 const PREFIX = /^[A-Z][A-Z0-9]{1,9}$/;
 

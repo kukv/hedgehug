@@ -7,7 +7,7 @@ import { statusRank } from "../../core/status-order";
 export type ColumnSpec = { id: string; label: string; readonly: boolean; width: number };
 
 // The columns a view can name besides the properties of the schema, in the order of
-// internal/view Builtins. ID, parent, created and updated are shown, not edited.
+// internal/app/storage/view Builtins. ID, parent, created and updated are shown, not edited.
 const BUILTIN: ColumnSpec[] = [
   { id: "id", label: "ID", readonly: true, width: 6.5 },
   { id: "title", label: "タイトル", readonly: false, width: 22 },

@@ -14,7 +14,7 @@ export type ScopedDraft = { statuses: string[]; transitions: Lists; required: Li
 /** The body of PUT /api/schema/scoped/{project}: only the parts that changed, each as a whole. */
 type ScopedBody = Partial<ScopedDraft>;
 
-// The built-in fields a workflow may require, besides the properties (internal/schema requirableFields).
+// The built-in fields a workflow may require, besides the properties (internal/app/domain/schema requirableFields).
 const REQUIRABLE_BUILTINS = [
   "parent",
   "assignees",

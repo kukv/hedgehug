@@ -47,7 +47,7 @@ export function summaryOf(d: ViewDraft): string {
 
 /**
  * Whether two names are one view for the server: names that differ only in case or in Unicode
- * normalization are the same (internal/view SameName), since a file system may not tell them apart.
+ * normalization are the same (internal/app/storage/view SameName), since a file system may not tell them apart.
  */
 export function sameViewName(a: string, b: string): boolean {
   return a.normalize("NFC").toLowerCase() === b.normalize("NFC").toLowerCase();

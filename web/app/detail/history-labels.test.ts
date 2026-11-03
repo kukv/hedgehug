@@ -10,7 +10,7 @@ describe("opLabel", () => {
     expect(opLabel("restore")).toBe("復元");
     expect(opLabel("merge")).toBe("同期でマージ");
   });
-  it("names every operation internal/ops writes into a commit", () => {
+  it("names every operation internal/app/usecase writes into a commit", () => {
     const ops = [
       "init",
       "add",

@@ -24,7 +24,7 @@ export type ViewDraft = {
   table: TableSettings;
 };
 
-// The defaults of internal/view: what a view that leaves a setting out has.
+// The defaults of internal/app/storage/view: what a view that leaves a setting out has.
 export const DEFAULT_KANBAN: KanbanSettings = { columns: "status", swimlane: "none" };
 export const DEFAULT_TABLE: TableSettings = {
   columns: ["id", "title", "status", "assignee", "due"],

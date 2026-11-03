@@ -6,7 +6,7 @@ import { splitTerms } from "../tree/filter";
 // closest to. The server tells the cause only in English in the detail of query.invalid
 // ("term 1 (status:progres): unknown status or category "progres""), so that is what is read.
 
-// The keys the query reads on its own (internal/query/eval.go, sort.go, mount/query.go).
+// The keys the query reads on its own (internal/app/storage/query/eval.go, sort.go, mount/query.go).
 const QUERY_KEYS = [
   "status",
   "kind",

@@ -9,7 +9,7 @@
   import DoctorSection from "./DoctorSection.svelte";
   import PurgeSection from "./PurgeSection.svelte";
 
-  // A window that is hidden fetches every max(sync.interval, 10 minutes) (internal/server/loop.go).
+  // A window that is hidden fetches every max(sync.interval, 10 minutes) (internal/app/server/loop.go).
   const HIDDEN_FETCH = 10 * 60;
 
   const { conn, stores } = core();

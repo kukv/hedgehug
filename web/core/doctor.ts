@@ -5,7 +5,7 @@ type Finding = Schemas["Finding"];
 export type DoctorReport = Schemas["DoctorReport"];
 export type PurgePlan = Schemas["PurgePlan"];
 
-// The Japanese of the values of Finding.check (internal/doctor: checkOrder, and the workspace check).
+// The Japanese of the values of Finding.check (internal/app/usecase/maintenance: checkOrder, and the workspace check).
 const CHECKS: Record<string, string> = {
   schema: "スキーマ",
   template: "テンプレート",
@@ -82,7 +82,7 @@ export function fixedText(kind: string, value: unknown): string {
   return repairedKnownText({ kind, value }) ?? kind;
 }
 
-// hh purge takes at most this many days (internal/ops/purge.go).
+// hh purge takes at most this many days (internal/app/usecase/purge.go).
 const MAX_PURGE_DAYS = 36500;
 
 /** The days of "N 日より古いもの": a whole number from 0, or null when the input is not one. */

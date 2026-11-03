@@ -2,7 +2,7 @@ import type { SchemaView } from "./schema";
 
 export type Category = "todo" | "doing" | "done" | "canceled";
 
-// The categories in the order sort:status puts them (internal/schema Categories), which is also the
+// The categories in the order sort:status puts them (internal/app/domain/schema Categories), which is also the
 // order the workspace band, the kanban columns and the table groups show them in.
 export const CATEGORIES: readonly Category[] = ["todo", "doing", "done", "canceled"];
 

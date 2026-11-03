@@ -13,7 +13,7 @@ function join(host: string, path: string): string | null {
 }
 
 // repoIdOf turns a remote URL into <host>/<owner>/<repo> in lower case, without .git, a trailing slash or a
-// port, as internal/context.RepoID does (https, http, ssh, git and user@host:path). A local path, or a URL
+// port, as internal/app/usecase/current.RepoID does (https, http, ssh, git and user@host:path). A local path, or a URL
 // without an owner and a repo, gives null. An ID already in that form is accepted as it is.
 export function repoIdOf(input: string): string | null {
   const u = input.trim();
