@@ -1,12 +1,17 @@
 package gitrepo
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/cache"
 	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/go-git/go-git/v5/storage/filesystem"
 )
 
 // removeLoose removes the loose object h from the git directory gitDir.
@@ -108,5 +113,90 @@ func TestFileLoaderReadsObjectsFromMemoryOnceRead(t *testing.T) {
 	}
 	if _, err := s.EncodedObject(plumbing.BlobObject, blob); err != nil {
 		t.Errorf("EncodedObject after the files are gone = %v", err)
+	}
+}
+
+// A command's first read does not load go-git's pack indexes: a pack index
+// go-git cannot load (here, of another version) does not stop it.
+func TestReadWithoutGoGitIndexes(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	r, err := Init(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	makeHistory(t, r, dir, 0, 10)
+	head := mustHead(t, r)
+	packAll(t, r, false)
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	bad := filepath.Join(dir, ".git", "objects", "pack", "pack-"+strings.Repeat("1", 40))
+	if err := os.WriteFile(bad+".idx", append([]byte{0xff, 't', 'O', 'c', 0, 0, 0, 3}, make([]byte, 2000)...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(bad+".pack", nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	g := filesystem.NewStorage(osfs.New(filepath.Join(dir, ".git")), cache.NewObjectLRUDefault())
+	if _, err := g.EncodedObject(plumbing.CommitObject, head); err == nil {
+		t.Fatal("go-git reads the commit despite the bad index; the test proves nothing")
+	}
+	_ = g.Close()
+	r, err = Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = r.Close() }()
+	if b, err := r.ReadAt(head, "tasks/a/task.md"); err != nil || !strings.Contains(string(b), "version 9") {
+		t.Errorf("ReadAt = %q, %v", b, err)
+	}
+}
+
+// After Consolidate moved the loose objects into a pack and closed the
+// repository, every object is read from the new pack.
+func TestReadAfterConsolidate(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	r, err := Init(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = r.Close() }()
+	makeHistory(t, r, dir, 0, 10)
+	if _, err := r.HeadTree(); err != nil { // the reader lists the packs: none yet
+		t.Fatal(err)
+	}
+	if err := r.Consolidate(); err != nil {
+		t.Fatal(err)
+	}
+	checkAll(t, dir, r.r.Storer.(*cachedStorage).reader)
+}
+
+// An object the reader cannot find is asked of go-git, which finds it (here,
+// in a pack whose index is of a version the reader does not read).
+func TestReadFallsBackToGoGit(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	r, err := Init(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = r.Close() }()
+	commitFiles(t, r, dir, map[string]string{"a.md": "1\n"})
+	cs := r.r.Storer.(*cachedStorage)
+	missing := plumbing.NewHash("0123456789012345678901234567890123456789")
+	if _, err := cs.EncodedObject(plumbing.AnyObject, missing); !errors.Is(err, plumbing.ErrObjectNotFound) {
+		t.Errorf("EncodedObject = %v, want ErrObjectNotFound", err)
+	}
+	if err := cs.HasEncodedObject(missing); !errors.Is(err, plumbing.ErrObjectNotFound) {
+		t.Errorf("HasEncodedObject = %v, want ErrObjectNotFound", err)
+	}
+	blob := blobOf(t, r, "a.md")
+	if n, err := cs.EncodedObjectSize(blob); err != nil || n != 2 {
+		t.Errorf("EncodedObjectSize = %d, %v", n, err)
+	}
+	if _, err := cs.EncodedObject(plumbing.TreeObject, blob); !errors.Is(err, plumbing.ErrObjectNotFound) {
+		t.Errorf("EncodedObject of a blob as a tree = %v, want ErrObjectNotFound", err)
 	}
 }
