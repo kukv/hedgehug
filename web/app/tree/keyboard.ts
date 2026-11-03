@@ -1,5 +1,5 @@
 import type { TaskView } from "../../core/api/client";
-import { defaultStatus, type SchemaView } from "../../core/schema";
+import { defaultStatusIn, type SchemaView } from "../../core/schema";
 import type { FlatRow } from "./flatten";
 import { checkParent, type MoveArgs, type Rejection } from "./placement";
 
@@ -81,7 +81,7 @@ export function keyAction(k: KeyInput, c: KeyContext): KeyAction {
       if (k.mod || k.alt || k.shift || !c.schema) return NONE;
       const done = c.schema.statuses?.find((s) => s.name === row.task.status)?.category === "done";
       const category = done ? "todo" : "done";
-      const status = defaultStatus(c.schema, category);
+      const status = defaultStatusIn(c.schema, category);
       if (status === "") {
         // The schema has no status of that category: there is nothing to patch to.
         return {

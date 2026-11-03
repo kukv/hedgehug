@@ -121,11 +121,6 @@ export function defaultStatusIn(s: SchemaView, category: string): string {
   return (of.find((x) => x.default) ?? of[0])?.name ?? "";
 }
 
-// defaultStatus is defaultStatusIn for the todo and the done category.
-export function defaultStatus(s: SchemaView, category: "todo" | "done"): string {
-  return defaultStatusIn(s, category);
-}
-
 export type PropEditor =
   | "status"
   | "kind"
