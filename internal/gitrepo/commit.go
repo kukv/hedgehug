@@ -12,7 +12,6 @@ import (
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/format/index"
-	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
 // ErrNothingToCommit means a commit named no paths, or its paths are the
@@ -38,8 +37,9 @@ type Commit struct {
 	AllowEmpty bool
 }
 
-// Commit stages exactly c.Paths and commits the index. A path that is on
-// disk is added; one that is not is dropped from the index.
+// Commit stages exactly c.Paths, which name files, and commits HEAD's tree
+// with them as staged. A path that is on disk is added; one that is not is
+// dropped from the index and from the tree.
 //
 // Paths are staged one by one so that a commit costs the same however many
 // files the store holds: go-git's plain Add takes the status of the whole
@@ -51,6 +51,10 @@ type Commit struct {
 // A commit with two or more parents, or with AllowEmpty, is made even when
 // its tree is the same as the first parent's, and without any path: the
 // parents or the caller alone make it a change.
+//
+// The tree is made from HEAD's (an empty one before the first commit) with
+// only the trees above c.Paths made again (commitStaged), not from the whole
+// index: anything else staged is left out.
 func (r *Repo) Commit(c Commit) (h plumbing.Hash, err error) {
 	if len(c.Paths) == 0 && len(c.Parents) < 2 && !c.AllowEmpty {
 		return plumbing.ZeroHash, ErrNothingToCommit
@@ -78,13 +82,7 @@ func (r *Repo) Commit(c Commit) (h plumbing.Hash, err error) {
 	if err := r.stage(w, c.Paths); err != nil {
 		return plumbing.ZeroHash, err
 	}
-	sig := &object.Signature{Name: c.Author.Name, Email: c.Author.Email, When: c.When}
-	h, err = w.Commit(message(c), &git.CommitOptions{
-		Author: sig, Committer: sig, Parents: c.Parents, AllowEmptyCommits: len(c.Parents) >= 2 || c.AllowEmpty,
-	})
-	if errors.Is(err, git.ErrEmptyCommit) {
-		return plumbing.ZeroHash, ErrNothingToCommit
-	}
+	h, err = r.commitStaged(c)
 	return h, err
 }
 

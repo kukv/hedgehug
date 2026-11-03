@@ -6,10 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/utils/merkletrie"
 )
 
 // commitFiles writes files (path → content; empty content removes the path)
@@ -89,6 +92,113 @@ func TestDiffTrees(t *testing.T) {
 	none, err := r.DiffTrees(second, second, "")
 	if err != nil || len(none) != 0 {
 		t.Errorf("DiffTrees of the same tree = %v, %v", none, err)
+	}
+}
+
+// goGitDiff is the reference for DiffTrees: go-git's object.DiffTree, with
+// each change turned into a Change and filtered by prefix. Its order is not
+// bytewise path order (a directory "tasks" comes before a file "tasks.md"),
+// so DiffTrees keeps this order, not a full-path sort.
+func goGitDiff(t *testing.T, r *Repo, from, to plumbing.Hash, prefix string) []Change {
+	t.Helper()
+	a, err := r.tree(from)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := r.tree(to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cs, err := object.DiffTree(a, b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []Change
+	for _, c := range cs {
+		action, err := c.Action()
+		if err != nil {
+			t.Fatal(err)
+		}
+		ch := Change{Path: c.To.Name}
+		if action == merkletrie.Delete {
+			ch = Change{Path: c.From.Name, Deleted: true}
+		}
+		if strings.HasPrefix(ch.Path, prefix) {
+			out = append(out, ch)
+		}
+	}
+	return out
+}
+
+// TestDiffTreesMatchesGoGit compares DiffTrees with go-git for every ordered
+// pair of the trees a history of varied edits goes through.
+func TestDiffTreesMatchesGoGit(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	r, err := Init(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trees := []plumbing.Hash{commitFiles(t, r, dir, map[string]string{
+		"tasks/a.md": "a1", "tasks/b.md": "b1", "tasks/sub/deep/x.md": "x1",
+		"tasks.md": "t", "tasks-z/q.md": "q", "schema.yaml": "s1", "gone/g.md": "g",
+		"flip": "file", "keep/k.md": "k",
+	})}
+	step := func(files map[string]string) {
+		trees = append(trees, commitFiles(t, r, dir, files))
+	}
+	step(map[string]string{"tasks/c.md": "c1"})                           // add
+	step(map[string]string{"tasks/a.md": "a2"})                           // change
+	step(map[string]string{"tasks/b.md": ""})                             // delete
+	step(map[string]string{"gone/g.md": ""})                              // a directory goes away
+	step(map[string]string{"tasks/n/e/w/f.md": "f", "n.md": "n"})         // a deep directory comes
+	step(map[string]string{"tasks/sub/deep/x.md": "x2", "tasks.md": "u"}) // nested change
+
+	// A file becomes a directory, then the directory a file.
+	commitPaths := func(paths ...string) {
+		t.Helper()
+		if _, err := r.Commit(Commit{Paths: paths, Subject: "x", Author: author, When: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+		h, err := r.HeadTree()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if h == trees[len(trees)-1] {
+			t.Fatal("the commit did not change the tree")
+		}
+		trees = append(trees, h)
+	}
+	if err := removeFile(dir, "flip"); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, dir, "flip/inner.md", "i")
+	commitPaths("flip", "flip/inner.md")
+	if err := os.RemoveAll(filepath.Join(dir, "flip")); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, dir, "flip", "file again")
+	commitPaths("flip")
+
+	// Only the mode changes.
+	if err := os.Chmod(filepath.Join(dir, "schema.yaml"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	commitPaths("schema.yaml")
+
+	for i, from := range trees {
+		for j, to := range trees {
+			for _, prefix := range []string{"", "tasks/", "tasks", "flip", "nothing/"} {
+				want := goGitDiff(t, r, from, to, prefix)
+				got, err := r.DiffTrees(from, to, prefix)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !slices.Equal(got, want) {
+					t.Errorf("DiffTrees(%d, %d, %q) = %v, want %v", i, j, prefix, got, want)
+				}
+			}
+		}
 	}
 }
 

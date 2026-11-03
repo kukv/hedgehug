@@ -55,7 +55,9 @@ func newRepo(dir string, r *git.Repository) *Repo {
 		// Keep the packs open: go-git opens a pack for every object it reads
 		// otherwise. Close lets go of them.
 		s = filesystem.NewStorageWithOptions(s.Filesystem(), cache.NewObjectLRUDefault(), filesystem.Options{KeepDescriptors: true})
-		r.Storer = newCachedStorage(s)
+		cs := newCachedStorage(s)
+		cs.reader = newObjectReader(cs.gitDir)
+		r.Storer = cs
 	}
 	liveMu.Lock()
 	live[dir]++

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	git "github.com/go-git/go-git/v5"
+	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/format/packfile"
@@ -48,7 +49,7 @@ const UndoWindow = 100
 
 // layout is the version of what Synth makes; it is part of the name of the
 // directory, so that a store of an older layout is not used again.
-const layout = 2
+const layout = 3
 
 // Start is the time of the first commit; each next one is a minute later.
 var Start = time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -536,7 +537,9 @@ func writePack(repo *git.Repository, m *maker) error {
 	if err != nil {
 		return err
 	}
-	if _, err := packfile.NewEncoder(w, m.mem, false).Encode(m.hashes, 0); err != nil {
+	// With deltas, as the packs of a real store are (a fetch, or
+	// Consolidate with the default pack window).
+	if _, err := packfile.NewEncoder(w, m.mem, false).Encode(m.hashes, gitconfig.DefaultPackWindow); err != nil {
 		_ = w.Close()
 		return err
 	}
