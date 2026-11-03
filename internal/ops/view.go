@@ -147,30 +147,16 @@ func projectOf(ix *index.Index, e *index.Entry) *Ref {
 	return nil
 }
 
-// scopeOf is the ULID of the ancestor whose override applies to e, or "". It
-// builds the ancestor list the way a write does (store.Lineage): e first when
-// it is a container, then its parents nearest first, stopping at a task the
-// index lacks or at a cycle.
+// scopeOf is the ULID of the ancestor whose override applies to e, or "". The
+// ancestors are the ones the index checks e against (Index.Ancestors): e first
+// when it is a container, then its parents nearest first, up to a task the
+// index lacks or cannot read.
 func scopeOf(ix *index.Index, e *index.Entry) string {
 	sc := ix.Schema()
 	if len(sc.Scoped) == 0 {
 		return ""
 	}
-	var ancestors []model.ULID
-	if k, ok := sc.Kind(e.Kind); ok && k.Role == schema.RoleContainer {
-		ancestors = append(ancestors, e.ULID)
-	}
-	seen := map[model.ULID]bool{e.ULID: true}
-	for p := e.Parent; p != nil && !seen[*p]; {
-		seen[*p] = true
-		a, ok := ix.Task(*p)
-		if !ok {
-			break
-		}
-		ancestors = append(ancestors, a.ULID)
-		p = a.Parent
-	}
-	if u, ok := sc.ScopeOf(ancestors); ok {
+	if u, ok := sc.ScopeOf(ix.Ancestors(e)); ok {
 		return u.String()
 	}
 	return ""

@@ -3,6 +3,7 @@ package ops
 import (
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/schema"
 )
 
@@ -67,5 +68,45 @@ func TestTaskViewScope(t *testing.T) {
 		if got := scopeOf(c.v); got != c.want {
 			t.Errorf("%s: scope = %q; want %q", c.name, got, c.want)
 		}
+	}
+}
+
+func TestTaskViewScopeStopsAtABrokenAncestor(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	add := func(in AddInput) *TaskView {
+		t.Helper()
+		r, err := ts.Add(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := r.View()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	proj := add(AddInput{Title: "P", Kind: "project"})
+	epic := add(AddInput{Title: "E", Kind: "epic", Parent: proj.ULID})
+	child := add(AddInput{Title: "under epic", Parent: epic.ULID})
+	statuses := []string{"backlog", "todo", "in_progress", "done", "canceled"}
+	for _, u := range []string{proj.ULID, epic.ULID} {
+		if _, err := ts.ScopedSet(u, schema.ScopedChange{Statuses: &statuses}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ts.commitRawFile(model.TaskPath(mustULID(t, epic.ULID)), "not a task\n")
+
+	_, ix, err := ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, ok := ix.Task(mustULID(t, child.ULID))
+	if !ok {
+		t.Fatal("the child is not in the index")
+	}
+	// A write walks no further than a task it cannot read, so no override applies.
+	if got := TaskViewOf(ix, e).Scope; got != "" {
+		t.Errorf("scope = %q; want none past a broken ancestor", got)
 	}
 }
