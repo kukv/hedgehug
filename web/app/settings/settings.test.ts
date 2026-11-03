@@ -1,4 +1,4 @@
-import { cleanup, fireEvent } from "@testing-library/svelte";
+import { cleanup, fireEvent, within } from "@testing-library/svelte";
 import { createRawSnippet } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderWithCore } from "../test-utils";
@@ -11,6 +11,15 @@ vi.mock("./SettingsWorkspaces.svelte", () => ({
   default: (anchor: Comment, props: { store: string }) => {
     const p = document.createElement("p");
     p.textContent = `workspaces of ${props.store}`;
+    anchor.before(p);
+  },
+}));
+
+// SettingsGeneral has its own test too.
+vi.mock("./SettingsGeneral.svelte", () => ({
+  default: (anchor: Comment) => {
+    const p = document.createElement("p");
+    p.textContent = "general";
     anchor.before(p);
   },
 }));
@@ -32,6 +41,7 @@ function core(names: string[], get = vi.fn(async () => health("0.9.0")), loaded 
 }
 
 const page = { page: "workspaces", store: "shared" } as const;
+const general = { page: "general" } as const;
 
 beforeEach(() => history.replaceState(null, "", "/settings/workspaces/shared"));
 afterEach(() => {
@@ -49,11 +59,52 @@ describe("SettingsNav", () => {
     expect(getByRole("heading", { name: "設定" })).toBeTruthy();
   });
 
-  it("まだない画面の項目（同期と保守・スキーマ・アカウントなど）は出さない", () => {
+  it("まだない画面の項目（スキーマ・アカウントなど）は出さない", () => {
     const { queryByText } = renderWithCore(SettingsNav, { page }, core(["shared"]));
-    for (const t of ["同期と保守", "スキーマ", "アカウント", "自動化", "マウント中の Store"]) {
+    for (const t of ["スキーマ", "アカウント", "自動化", "マウント中の Store"]) {
       expect(queryByText(new RegExp(t))).toBeNull();
     }
+  });
+
+  it("2段: 「このマシン」に同期と保守、「Store ごとの設定」にワークスペース", () => {
+    const { getByRole } = renderWithCore(SettingsNav, { page }, core(["shared"]));
+    const machine = getByRole("region", { name: "このマシン" });
+    const link = within(machine).getByRole("link", { name: /同期と保守/ });
+    expect(link.getAttribute("href")).toBe("/settings/general");
+    expect(link.getAttribute("aria-current")).toBeNull();
+    const perStore = getByRole("region", { name: "Store ごとの設定" });
+    expect(within(perStore).getByRole("link", { name: /ワークスペース/ })).toBeTruthy();
+    expect(within(perStore).queryByRole("link", { name: /同期と保守/ })).toBeNull();
+  });
+
+  it("同期と保守を開いているときは、それを今のページにし、ワークスペースは最初の Store に向ける", () => {
+    const { getByRole } = renderWithCore(SettingsNav, { page: general }, core(["me", "shared"]));
+    expect(getByRole("link", { name: /同期と保守/ }).getAttribute("aria-current")).toBe("page");
+    const ws = getByRole("link", { name: /ワークスペース/ });
+    expect(ws.getAttribute("aria-current")).toBeNull();
+    expect(ws.getAttribute("href")).toBe("/settings/workspaces/me");
+  });
+
+  it("同期と保守で Store を選ぶと、移らずに項目のリンク先の Store が変わる", async () => {
+    history.replaceState(null, "", "/settings/general");
+    const { getByLabelText, getByRole } = renderWithCore(
+      SettingsNav,
+      { page: general },
+      core(["me", "shared"]),
+    );
+    const select = getByLabelText("設定する Store") as HTMLSelectElement;
+    expect(select.value).toBe("me");
+    await fireEvent.change(select, { target: { value: "shared" } });
+    expect(location.pathname).toBe("/settings/general");
+    expect(getByRole("link", { name: /ワークスペース/ }).getAttribute("href")).toBe(
+      "/settings/workspaces/shared",
+    );
+  });
+
+  it("Store がなければ Store ごとの項目は出さない", () => {
+    const { queryByRole } = renderWithCore(SettingsNav, { page: general }, core([]));
+    expect(queryByRole("link", { name: /ワークスペース/ })).toBeNull();
+    expect(queryByRole("link", { name: /同期と保守/ })).toBeTruthy();
   });
 
   it("Store が 1 つなら選択欄を出さない", () => {
@@ -141,24 +192,32 @@ describe("SettingsRoute", () => {
     );
   });
 
-  it("/settings は最初の Store のワークスペースに置き換える（履歴を積まない）", async () => {
-    history.replaceState(null, "", "/settings");
-    const before = history.length;
-    const { queryByRole } = renderWithCore(
+  it("同期と保守は Store を持たずに、レイアウトと本文を出す", () => {
+    history.replaceState(null, "", "/settings/general");
+    const { getByRole, getByText } = renderWithCore(
       SettingsRoute,
-      { page: { page: "workspaces", store: "" } },
+      { page: general },
       core(["me", "shared"]),
     );
-    await vi.waitFor(() => expect(location.pathname).toBe("/settings/workspaces/me"));
-    expect(history.length).toBe(before);
-    // while it has no Store the layout is not drawn
-    expect(queryByRole("navigation", { name: "設定のナビゲーション" })).toBeNull();
+    expect(getByRole("region", { name: "設定の本文" })).toContainElement(getByText("general"));
+    expect(location.pathname).toBe("/settings/general");
   });
 
-  it("Store がまだ読めていない間は /settings のまま待つ", async () => {
+  it("同期と保守は Store がまだ読めていなくても出す", () => {
+    history.replaceState(null, "", "/settings/general");
+    const { getByText } = renderWithCore(
+      SettingsRoute,
+      { page: general },
+      core([], undefined, false),
+    );
+    expect(getByText("general")).toBeTruthy();
+  });
+
+  it("/settings は /settings/general に置き換える（履歴を積まない）", async () => {
     history.replaceState(null, "", "/settings");
-    renderWithCore(SettingsRoute, { page: { page: "workspaces", store: "" } }, core([]));
-    await new Promise((r) => setTimeout(r, 20));
-    expect(location.pathname).toBe("/settings");
+    const before = history.length;
+    renderWithCore(SettingsRoute, { page: general }, core(["me", "shared"]));
+    await vi.waitFor(() => expect(location.pathname).toBe("/settings/general"));
+    expect(history.length).toBe(before);
   });
 });

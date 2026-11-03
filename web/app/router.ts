@@ -4,8 +4,8 @@ import type { Layout } from "../core/views";
 export type { Layout };
 export type WorkspaceTab = "overview" | "tree" | "kanban" | "table" | "settings";
 export type ProjectTab = "tree" | "kanban" | "table" | "settings";
-// store is "" for /settings, which names no Store: the screen goes to the first one.
-export type SettingsPage = { page: "workspaces"; store: string };
+// "general" is of this machine and names no Store; the pages of a Store carry it.
+export type SettingsPage = { page: "general" } | { page: "workspaces"; store: string };
 
 // "" is every commit; exclude is the ones of people, only the ones of syncs.
 export type ActivitySync = "" | "exclude" | "only";
@@ -69,8 +69,8 @@ function matchRoute(pathname: string, search: string): Route | null {
       sync: sync === "exclude" || sync === "only" ? sync : "",
     };
   }
-  if (head === "settings" && seg.length === 1) {
-    return { name: "settings", page: "workspaces", store: "" };
+  if (head === "settings" && (seg.length === 1 || (seg.length === 2 && a === "general"))) {
+    return { name: "settings", page: "general" };
   }
   if (head === "settings" && seg.length === 3 && a === "workspaces" && b) {
     return { name: "settings", page: "workspaces", store: b };
@@ -119,7 +119,9 @@ export function hrefOf(r: Route): string {
       return q === "" ? "/activity" : `/activity?${q}`;
     }
     case "settings":
-      return r.store === "" ? "/settings" : `/settings/workspaces/${encodeURIComponent(r.store)}`;
+      return r.page === "general"
+        ? "/settings/general"
+        : `/settings/workspaces/${encodeURIComponent(r.store)}`;
   }
 }
 

@@ -53,3 +53,15 @@ export function avatarTone(name: string): 0 | 1 | 2 | 3 {
   for (const c of name) h = (h * 31 + (c.codePointAt(0) ?? 0)) >>> 0;
   return (h % 4) as 0 | 1 | 2 | 3;
 }
+
+// formatDuration: seconds as they read, 30 秒, 2 分, 1 時間 30 分.
+export function formatDuration(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const parts = [h > 0 ? `${h} 時間` : "", m > 0 ? `${m} 分` : "", s > 0 ? `${s} 秒` : ""].filter(
+    Boolean,
+  );
+  return parts.length > 0 ? parts.join(" ") : "0 秒";
+}

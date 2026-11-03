@@ -9,9 +9,17 @@
   import { runSync, syncRun } from "./sync-run.svelte";
   import { summarizeSync } from "./sync-summary";
 
+  // store: the card of one store (the settings); without it the card folds every store and owns the key.
+  let { store }: { store?: string } = $props();
+
   const { api, conn } = core();
   const statuses = useSubscribe(conn, () => conn.sync);
-  const summary = $derived(summarizeSync(statuses.current.values(), online.current));
+  const summary = $derived(
+    summarizeSync(
+      [...statuses.current.values()].filter((s) => store === undefined || s.store === store),
+      online.current,
+    ),
+  );
 
   let now = $state(Date.now());
 
@@ -30,7 +38,9 @@
     return () => clearInterval(tick);
   });
 
-  onMount(() => registerShortcut("shift+mod+s", () => void syncNow()));
+  onMount(() => {
+    if (store === undefined) return registerShortcut("shift+mod+s", () => void syncNow());
+  });
 
   const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -50,7 +60,7 @@
     return s < 60 ? `${s} 秒後に push` : `${Math.ceil(s / 60)} 分後に push`;
   }
 
-  const syncNow = () => runSync(api);
+  const syncNow = () => runSync(api, store);
 </script>
 
 <div class="card">
@@ -104,7 +114,7 @@
     class="now"
     disabled={syncRun.busy}
     onclick={syncNow}
-    title={kbdLabel("shift+mod+s")}
+    title={store === undefined ? kbdLabel("shift+mod+s") : undefined}
   >
     <Icon name="sync" size={14} />
     {syncRun.busy ? "同期中…" : "今すぐ同期"}

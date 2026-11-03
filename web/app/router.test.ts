@@ -61,13 +61,14 @@ describe("parseRoute", () => {
     ["/activity/", { name: "activity", workspaces: [], sync: "" }],
     ["/activity/extra", { name: "home" }],
     ["/tasks/01HTK/", { name: "task", ulid: "01HTK" }],
-    ["/settings", { name: "settings", page: "workspaces", store: "" }],
+    ["/settings", { name: "settings", page: "general" }],
+    ["/settings/general", { name: "settings", page: "general" }],
+    ["/settings/general/extra", { name: "home" }],
     ["/settings/workspaces/shared", { name: "settings", page: "workspaces", store: "shared" }],
     [
       "/settings/workspaces/org-b%2Fops",
       { name: "settings", page: "workspaces", store: "org-b/ops" },
     ],
-    ["/settings/general", { name: "home" }],
     ["/nothing/here", { name: "home" }],
     ["/workspaces/shared", { name: "home" }],
   ])("%s", (path, route) => {
@@ -139,7 +140,7 @@ describe("hrefOf", () => {
       { ...ws, tab: "settings" },
       { name: "project", ulid: "01HPR", tab: "tree" },
       { name: "settings", page: "workspaces", store: "org-b/ops" },
-      { name: "settings", page: "workspaces", store: "" },
+      { name: "settings", page: "general" },
     ] as const) {
       expect(parseRoute(hrefOf(r))).toEqual(r);
     }
@@ -184,11 +185,11 @@ describe("hrefOf", () => {
     }
   });
 
-  it("設定のパスは Store 名を符号化し、Store がなければ /settings", () => {
+  it("設定のパスは Store 名を符号化する。同期と保守は /settings/general", () => {
     expect(hrefOf({ name: "settings", page: "workspaces", store: "org-b/ops" })).toBe(
       "/settings/workspaces/org-b%2Fops",
     );
-    expect(hrefOf({ name: "settings", page: "workspaces", store: "" })).toBe("/settings");
+    expect(hrefOf({ name: "settings", page: "general" })).toBe("/settings/general");
   });
 });
 

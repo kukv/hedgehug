@@ -12,7 +12,7 @@ const status = (over: Partial<SyncStatus> & { store: string }): SyncStatus => ({
   ...over,
 });
 
-function mount(statuses: SyncStatus[], post = vi.fn()) {
+function mount(statuses: SyncStatus[], post = vi.fn(), props: { store?: string } = {}) {
   const conn = {
     state: "open",
     lastOpenAt: null,
@@ -23,7 +23,7 @@ function mount(statuses: SyncStatus[], post = vi.fn()) {
     start() {},
     stop() {},
   };
-  return { post, ...renderWithCore(SyncCard, {}, { conn, api: { POST: post } }) };
+  return { post, ...renderWithCore(SyncCard, props, { conn, api: { POST: post } }) };
 }
 
 beforeEach(() => {
@@ -166,5 +166,31 @@ describe("SyncCard", () => {
     await fireEvent.click(getByRole("button", { name: /今すぐ同期/ }));
     expect((getByRole("button", { name: /同期中/ }) as HTMLButtonElement).disabled).toBe(true);
     resolve({ data: [], response: new Response() });
+  });
+
+  it("store を渡すと、その Store の状態だけを出し、同期もその Store だけにする", async () => {
+    const post = vi.fn().mockResolvedValue({ data: [], response: new Response() });
+    const { getByText, queryByText, getByRole } = mount(
+      [
+        status({ store: "a", unpushed: 0 }),
+        status({ store: "b", unpushed: 2, pending_since: "2026-11-02T08:58:30Z" }),
+      ],
+      post,
+      { store: "b" },
+    );
+    expect(getByText("送信待ち")).toBeTruthy();
+    expect(queryByText("同期済み")).toBeNull();
+    await fireEvent.click(getByRole("button", { name: /今すぐ同期/ }));
+    await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    expect(post).toHaveBeenCalledWith("/api/sync", { params: { query: { store: "b" } } });
+  });
+
+  it("store を渡したカードは ⇧⌘S を登録しない（画面の全体のキーは1つだけ）", async () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
+    const post = vi.fn().mockResolvedValue({ data: [], response: new Response() });
+    mount([status({ store: "a", unpushed: 0 })], post, { store: "a" });
+    await fireEvent.keyDown(window, { key: "S", ctrlKey: true, shiftKey: true });
+    await Promise.resolve();
+    expect(post).not.toHaveBeenCalled();
   });
 });

@@ -30,7 +30,7 @@ export function routeStore(
   first?: { store: string },
 ): string | undefined {
   if (route.name === "workspace") return route.store;
-  if (route.name === "settings") return route.store || undefined;
+  if (route.name === "settings") return route.page === "workspaces" ? route.store : undefined;
   if (route.name === "view") return route.store;
   if (route.name === "home") return first?.store;
   if (route.name === "project" || route.name === "task") return taskOf(route.ulid)?.store;

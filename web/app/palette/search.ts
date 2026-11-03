@@ -163,6 +163,7 @@ export type CommandEnv = {
     workspace: (store: string, ulid: string) => string;
     workspaceSettings: (store: string, ulid: string) => string;
     settingsWorkspaces: (store: string) => string;
+    settingsGeneral: () => string;
     project: (ulid: string) => string;
     projectSettings: (ulid: string) => string;
     task: (ulid: string) => string;
@@ -395,6 +396,17 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
     };
   });
 
+  // The sync and the upkeep of this machine: no Store, so one command.
+  const generalHref = env.hrefs.settingsGeneral();
+  const general: CommandItem = {
+    type: "command",
+    key: "open:settings-general",
+    label: "設定の同期と保守を開く",
+    icon: "settings",
+    href: generalHref,
+    run: () => env.go(generalHref),
+  };
+
   const inProject = env.project;
   const projectSettingsHref = inProject ? env.hrefs.projectSettings(inProject.ulid) : "";
   const projectSettings: CommandItem[] = inProject
@@ -420,7 +432,16 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
     { name: "最近開いたもの", items: recent },
     {
       name: "開く",
-      items: [...places, ...lists, ...projectSettings, my, inbox, activity, ...saved].filter(keep),
+      items: [
+        ...places,
+        ...lists,
+        general,
+        ...projectSettings,
+        my,
+        inbox,
+        activity,
+        ...saved,
+      ].filter(keep),
     },
   ];
   if (env.selected) {

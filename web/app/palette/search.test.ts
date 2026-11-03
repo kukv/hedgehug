@@ -201,6 +201,7 @@ function env(over: Partial<CommandEnv> = {}): CommandEnv {
       workspace: (s, u) => `/workspaces/${s}/${u}`,
       workspaceSettings: (s, u) => `/workspaces/${s}/${u}/settings`,
       settingsWorkspaces: (s) => `/settings/workspaces/${s}`,
+      settingsGeneral: () => "/settings/general",
       project: (u) => `/projects/${u}`,
       projectSettings: (u) => `/projects/${u}/settings`,
       task: (u) => `/tasks/${u}`,
@@ -243,6 +244,7 @@ describe("buildCommands", () => {
       "ワークスペースの設定を開く",
       "リリース準備 v2.4 を開く",
       "設定のワークスペース一覧を開く",
+      "設定の同期と保守を開く",
       "マイタスクを開く",
       "通知を開く",
       "アクティビティを開く",
@@ -260,7 +262,10 @@ describe("buildCommands", () => {
   });
 
   it("filters by the words after >", () => {
-    expect(labels(buildCommands(env(), ">同期"))).toEqual(["今すぐ同期する"]);
+    expect(labels(buildCommands(env(), ">同期"))).toEqual([
+      "今すぐ同期する",
+      "設定の同期と保守を開く",
+    ]);
     expect(labels(buildCommands(env(), "> リリース"))).toEqual(["リリース準備 v2.4 を開く"]);
     expect(buildCommands(env(), ">zzz")).toEqual([]);
   });
@@ -324,6 +329,20 @@ describe("buildCommands", () => {
     expect(e.go).toHaveBeenCalledWith("/settings/workspaces/shared");
   });
 
+  it("opens the sync and maintenance settings, once whatever the number of stores", () => {
+    const e = env({ storeNames: ["shared", "ops"] });
+    const gs = buildCommands(e, ">同期と保守");
+    const items = gs.flatMap((g) => g.items);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      label: "設定の同期と保守を開く",
+      icon: "settings",
+      href: "/settings/general",
+    });
+    if (items[0]?.type === "command") items[0].run();
+    expect(e.go).toHaveBeenCalledWith("/settings/general");
+  });
+
   it("lists the settings of a workspace for each workspace, the list once for a store", () => {
     const second = { ...ws, ulid: "W2", name: "ops", prefix: "OPS", projects: [] };
     const gs = buildCommands(env({ workspaces: [ws, second] }), ">設定");
@@ -333,6 +352,7 @@ describe("buildCommands", () => {
       "ワークスペースの設定を開く|release",
       "ワークスペースの設定を開く|ops",
       "設定のワークスペース一覧を開く|",
+      "設定の同期と保守を開く|",
     ]);
   });
 
@@ -355,7 +375,11 @@ describe("buildCommands", () => {
     const gs = buildCommands(env({ workspaces: [], storeNames: ["shared", "empty"] }), ">設定");
     expect(
       gs[0]?.items.map((i) => (i.type === "command" ? `${i.label}|${i.store ?? ""}` : "")),
-    ).toEqual(["設定のワークスペース一覧を開く|shared", "設定のワークスペース一覧を開く|empty"]);
+    ).toEqual([
+      "設定のワークスペース一覧を開く|shared",
+      "設定のワークスペース一覧を開く|empty",
+      "設定の同期と保守を開く|",
+    ]);
   });
 
   it("opens the tasks of the person, and each saved view with the store it is in", () => {

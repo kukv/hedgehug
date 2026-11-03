@@ -3,6 +3,7 @@ import {
   avatarTone,
   formatDate,
   formatDateTime,
+  formatDuration,
   formatRelative,
   formatTime,
   initials,
@@ -68,5 +69,21 @@ describe("initials and avatarTone", () => {
       expect(avatarTone(n)).toBe(t);
     }
     expect(new Set(["a", "b", "c", "d"].map(avatarTone)).size).toBe(4);
+  });
+});
+
+describe("formatDuration", () => {
+  it("reads seconds as 秒, 分, 時間 and joins what is left", () => {
+    expect(formatDuration(30)).toBe("30 秒");
+    expect(formatDuration(60)).toBe("1 分");
+    expect(formatDuration(120)).toBe("2 分");
+    expect(formatDuration(90)).toBe("1 分 30 秒");
+    expect(formatDuration(3600)).toBe("1 時間");
+    expect(formatDuration(5400)).toBe("1 時間 30 分");
+  });
+
+  it("rounds a fraction to the second, and 0 is 0 秒", () => {
+    expect(formatDuration(0.4)).toBe("0 秒");
+    expect(formatDuration(29.6)).toBe("30 秒");
   });
 });

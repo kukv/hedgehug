@@ -177,6 +177,7 @@
         workspaceSettings: (store, ulid) =>
           router.href({ name: "workspace", store, ulid, tab: "settings" }),
         settingsWorkspaces: (store) => router.href({ name: "settings", page: "workspaces", store }),
+        settingsGeneral: () => router.href({ name: "settings", page: "general" }),
         project: (ulid) => router.href({ name: "project", ulid, tab: "tree" }),
         projectSettings: (ulid) => router.href({ name: "project", ulid, tab: "settings" }),
         task: (ulid) => router.href({ name: "task", ulid }),

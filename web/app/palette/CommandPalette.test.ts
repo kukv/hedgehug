@@ -7,7 +7,7 @@ import { schema, task } from "../tree/fixtures";
 
 const h = vi.hoisted(() => ({
   core: undefined as unknown,
-  route: { name: "home" } as { name: string; ulid?: string; store?: string },
+  route: { name: "home" } as { name: string; ulid?: string; store?: string; page?: string },
   go: vi.fn(),
   toast: vi.fn(),
   runUndo: vi.fn(async () => {}),
@@ -31,13 +31,16 @@ vi.mock("../router", () => ({
       view?: string;
       layout?: string;
       q?: string;
+      page?: string;
     }) =>
       r.name === "task"
         ? `/tasks/${r.ulid}`
         : r.name === "project"
           ? `/projects/${r.ulid}${r.tab && r.tab !== "tree" ? `/${r.tab}` : ""}`
           : r.name === "settings"
-            ? `/settings/workspaces/${r.store}`
+            ? r.page === "general"
+              ? "/settings/general"
+              : `/settings/workspaces/${r.store}`
             : r.name === "view"
               ? `/views/${r.store}/${r.view}`
               : r.name === "query"
@@ -234,7 +237,7 @@ describe("CommandPalette", () => {
     expect(h.runUndo).toHaveBeenLastCalledWith(expect.anything(), "backend");
 
     closePalette();
-    h.route = { name: "settings", store: "backend" };
+    h.route = { name: "settings", page: "workspaces", store: "backend" };
     openPalette();
     await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">取り消" } });
     await fireEvent.keyDown(box(), { key: "Enter" });
@@ -246,6 +249,18 @@ describe("CommandPalette", () => {
     await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">取り消" } });
     await fireEvent.keyDown(box(), { key: "Enter" });
     expect(h.runUndo).toHaveBeenLastCalledWith(expect.anything(), "shared");
+  });
+
+  it("opens the sync and maintenance settings", async () => {
+    setup();
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), {
+      target: { value: ">同期と保守" },
+    });
+    await fireEvent.click(await screen.findByRole("option", { name: /設定の同期と保守を開く/ }));
+    expect(h.go).toHaveBeenCalledWith("/settings/general");
+    expect(palette.open).toBe(false);
   });
 
   it("opens the settings of the workspace", async () => {

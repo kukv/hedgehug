@@ -21,8 +21,7 @@
   const cacheRev = useSubscribe(cache, () => ({}));
   const unread = useSubscribe(conn, () => conn.unread);
   const route = $derived(router.route);
-  // /settings names no Store: the settings go to the first one.
-  const settingsHref = hrefOf({ name: "settings", page: "workspaces", store: "" });
+  const settingsHref = hrefOf({ name: "settings", page: "general" });
   const myHref = hrefOf({ name: "my" });
   const inboxHref = hrefOf({ name: "inbox" });
   const activityHref = hrefOf({ name: "activity", workspaces: [], sync: "" });

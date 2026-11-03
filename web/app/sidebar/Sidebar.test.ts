@@ -227,13 +227,13 @@ describe("Sidebar", () => {
     expect(links.map((a) => a.getAttribute("aria-current"))).toEqual([null, "page"]);
   });
 
-  it("右上の歯車は設定（/settings）を開く", async () => {
+  it("右上の歯車は設定の同期と保守（/settings/general）を開く", async () => {
     const { getByRole } = mount();
     const gear = getByRole("link", { name: "設定" });
-    expect(gear.getAttribute("href")).toBe("/settings");
+    expect(gear.getAttribute("href")).toBe("/settings/general");
     expect(gear.getAttribute("aria-current")).toBeNull();
     await fireEvent.click(gear);
-    expect(location.pathname).toBe("/settings");
+    expect(location.pathname).toBe("/settings/general");
   });
 
   it("設定を開いている間は歯車を aria-current にする", () => {
