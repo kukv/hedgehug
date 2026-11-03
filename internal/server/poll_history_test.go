@@ -65,3 +65,33 @@ func TestReleaseCancelsTheHistoryBuild(t *testing.T) {
 		t.Fatal("Release did not return while a build was running")
 	}
 }
+
+// A test server whose poller does not run still waits, as it is cleaned up,
+// for the build of the history index that a poll by hand started: the build
+// writes under the temporary directory, which is removed right after.
+func TestTestServerWaitsForTheHistoryBuild(t *testing.T) {
+	t.Parallel()
+	ended := make(chan struct{})
+	t.Run("server", func(t *testing.T) {
+		ts := newTestServer(t) // its poller does not run: poll is called by hand
+		p := ts.srv.poller
+		started := make(chan struct{})
+		p.openHistory = func(_ *store.Store, opt history.Options) (*history.History, error) {
+			defer close(ended)
+			close(started)
+			<-opt.Cancel // a build that only the cancel ends
+			return nil, history.ErrCanceled
+		}
+		p.poll(false) // the first sight of the store starts its build
+		select {
+		case <-started:
+		case <-time.After(10 * time.Second):
+			t.Fatal("the build did not start")
+		}
+	})
+	select {
+	case <-ended:
+	default:
+		t.Fatal("the build of the history index outlived the test server")
+	}
+}
