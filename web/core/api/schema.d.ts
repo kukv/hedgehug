@@ -543,7 +543,7 @@ export interface paths {
         options?: never;
         head?: never;
         /** Rename a saved view (as hh view rename), or change the settings that are given of a view that exists (404 if it does not, unlike PUT; a rename cannot come with settings) */
-        patch: operations["rename-view"];
+        patch: operations["update-view"];
         trace?: never;
     };
     "/api/workspaces": {
@@ -2796,7 +2796,7 @@ export interface operations {
             };
         };
     };
-    "rename-view": {
+    "update-view": {
         parameters: {
             query?: {
                 /** @description The store; without it, the one hedgehug picks as the CLI does */

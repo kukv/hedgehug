@@ -3324,7 +3324,7 @@ paths:
       tags:
         - views
     patch:
-      operationId: rename-view
+      operationId: update-view
       parameters:
         - description: The store; without it, the one hedgehug picks as the CLI does
           explode: false

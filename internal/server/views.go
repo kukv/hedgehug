@@ -98,7 +98,7 @@ func (s *Server) registerViews() {
 	})
 
 	huma.Register(s.api, huma.Operation{
-		OperationID: "rename-view", Method: http.MethodPatch, Path: "/api/views/{name}",
+		OperationID: "update-view", Method: http.MethodPatch, Path: "/api/views/{name}",
 		Summary: "Rename a saved view (as hh view rename), or change the settings that are given of a view that exists (404 if it does not, unlike PUT; a rename cannot come with settings)",
 		Tags:    []string{"views"},
 	}, func(_ context.Context, in *viewPatchInput) (*viewOutput, error) {
