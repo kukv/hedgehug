@@ -140,6 +140,8 @@
     }
     return m;
   });
+  // A store whose schema could not be read and has been read since is not a failure any more.
+  const unread = $derived([...failed].filter((s) => !schemas.has(s)));
   const schemaWaiting = $derived(storesNeeded.some((s) => !schemas.has(s) && !failed.has(s)));
   const storeOrder = $derived.by(() => {
     storesRev.current;
@@ -249,18 +251,37 @@
     );
   }
 
-  async function dropOn(col: Column, lane: string, source: DragSource) {
+  // The drops go one after another: a drop is decided on the card the drop before it left, so a card
+  // dragged again while its write is in flight is not judged on its old status. A drop another one
+  // has come after gives up its dialog, and a board that is gone shows and sends nothing more.
+  let dropChain: Promise<void> = Promise.resolve();
+  let dropSeq = 0;
+  let gone = false;
+  $effect(() => () => {
+    gone = true;
+  });
+
+  function dropOn(col: Column, lane: string, source: DragSource) {
     over = null;
     dragging = null;
+    required = null;
+    const seq = ++dropSeq;
+    dropChain = dropChain.then(() => runDrop(col, lane, source, seq));
+  }
+
+  async function runDrop(col: Column, lane: string, source: DragSource, seq: number) {
+    if (gone) return;
     const t = taskOf(source.ulid);
     let d = decide(source, col, lane);
     if (!t || !d) return;
     try {
       if (d.ok && d.elsewhere.some((f) => f === "watchers" || f === "repos")) {
-        d = decide(source, col, lane, await detailOf(t)) ?? d;
+        const detail = await detailOf(t);
+        if (gone || seq !== dropSeq) return;
+        d = decide(source, col, lane, detail) ?? d;
       }
     } catch (err) {
-      toast({ message: errorMessage(err) });
+      if (!gone) toast({ message: errorMessage(err) });
       return;
     }
     if (!d.ok) {
@@ -272,9 +293,11 @@
       required = { task: t, status: d.status, fields: d.fill, elsewhere: d.elsewhere, schema };
       return;
     }
-    void patchTask(c, t, { status: d.status }).catch((err) =>
-      toast({ message: errorMessage(err) }),
-    );
+    try {
+      await patchTask(c, t, { status: d.status });
+    } catch (err) {
+      if (!gone) toast({ message: errorMessage(err) });
+    }
   }
 
   const refusal = $derived(
@@ -286,7 +309,7 @@
   function addTo(col: Column) {
     openCreate(
       col.status !== null
-        ? { kind: "task", status: col.status }
+        ? { kind: "task", status: col.status, category: col.category }
         : { kind: "task", category: col.key },
     );
   }
@@ -421,9 +444,9 @@
       {/if}
     {/if}
 
-    {#if failed.size > 0 && showBoard}
+    {#if unread.length > 0 && showBoard}
       <p class="note" role="alert">
-        {[...failed].join("、")}
+        {unread.join("、")}
         の schema.yaml を読み込めていません。列は読み込めたものだけです
       </p>
     {/if}
@@ -708,7 +731,7 @@
   }
   .refusal p {
     margin: 0.25rem 0 0;
-    font-size: 0.78rem;
+    font-size: var(--fs-12);
     color: var(--ink-2);
   }
   .keys {
@@ -719,7 +742,7 @@
     padding: 0.625rem 1.75rem;
     border-top: var(--hairline) solid var(--line);
     color: var(--muted);
-    font-size: 0.75rem;
+    font-size: var(--fs-12);
   }
   .save {
     margin-left: auto;

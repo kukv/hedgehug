@@ -320,6 +320,35 @@ describe("KanbanView: the board", () => {
     await waitFor(() => expect(headNames(container)).toEqual(["未着手", "進行中", "完了"]));
   });
 
+  it("clears the warning of a schema that could not be read once it has been read", async () => {
+    setup();
+    let have = false;
+    const listeners = new Set<() => void>();
+    (h.core as { schema: unknown }).schema = {
+      get: () => (have ? schema : undefined),
+      load: async () => {
+        throw new Error("down");
+      },
+      subscribe: (fn: () => void) => {
+        listeners.add(fn);
+        return () => listeners.delete(fn);
+      },
+    };
+    mountView();
+    expect(await screen.findByRole("alert")).toHaveTextContent("schema.yaml を読み込めていません");
+    have = true;
+    for (const f of listeners) f();
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(await screen.findByText("調べる")).toBeInTheDocument();
+  });
+
+  it("draws no row of details under a card that has nothing to show", async () => {
+    setup({ tasks: [task("A", "task", null, { title: "素のカード", status: "todo" })] });
+    const { container } = mountView();
+    await screen.findByText("素のカード");
+    expect(container.querySelector(".meta")).toBeNull();
+  });
+
   it("clears the selection of the screen before, and its own on leaving", () => {
     setup();
     selection.set("old");
@@ -418,7 +447,7 @@ describe("KanbanView: the plus of a column", () => {
     setup();
     mountView();
     await fireEvent.click(await screen.findByRole("button", { name: "レビュー にタスクを追加" }));
-    expect(createState.request).toEqual({ kind: "task", status: "review" });
+    expect(createState.request).toEqual({ kind: "task", status: "review", category: "doing" });
   });
 
   it("opens it in the category of a column of categories", async () => {
@@ -493,6 +522,7 @@ describe("KanbanView: dragging a card", () => {
       "「完了」から「進行中」には移せません",
     );
     cellFor("doing")?.onDrop(dragC);
+    await waitFor(() => expect(h.toast).toHaveBeenCalled());
     expect(h.toast).toHaveBeenCalledWith({
       message: expect.stringContaining("「完了」から「進行中」には移せません。"),
     });
@@ -507,6 +537,7 @@ describe("KanbanView: dragging a card", () => {
     mountView({ settings: { columns: "status", swimlane: "assignee" } });
     await screen.findAllByText("二人で");
     cellFor("doing", "gh/sato")?.onDrop({ ulid: "A", lane: "gh/koki" });
+    await waitFor(() => expect(h.toast).toHaveBeenCalled());
     expect(h.toast).toHaveBeenCalledWith({
       message: expect.stringContaining("担当者の行をまたぐ移動はできません。"),
     });
@@ -558,6 +589,79 @@ describe("KanbanView: dragging a card", () => {
     cellFor("doing")?.onDrop(dragA);
     await waitFor(() => expect(h.toast).toHaveBeenCalled());
     expect(h.toast.mock.calls[0]?.[0].message).toContain("書き込み中");
+  });
+
+  describe("moves that overlap", () => {
+    const deferred = <T>() => {
+      let resolve!: (v: T) => void;
+      let reject!: (e: unknown) => void;
+      const promise = new Promise<T>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    };
+
+    it("decides a second drop of the card only after the first has been written", async () => {
+      const { api, apply } = await ready();
+      const first = deferred<ReturnType<typeof ok>>();
+      api.PATCH.mockImplementationOnce(() => first.promise as never);
+      cellFor("doing")?.onDrop(dragA);
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+      cellFor("review")?.onDrop(dragA);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(api.PATCH).toHaveBeenCalledTimes(1);
+      first.resolve(ok({ task: { ulid: "A" }, commit: "c1" }));
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(2));
+      expect(apply).toHaveBeenCalledTimes(2);
+    });
+
+    const needy = {
+      ...schema,
+      workflow: { transitions: {}, required: { done: ["watchers"] } },
+    } as unknown as SchemaView;
+
+    it("drops the dialog of a drop another drop has come after", async () => {
+      const s = setup({ schemas: { shared: needy } });
+      mountView();
+      await screen.findByText("調べる");
+      const read = deferred<ReturnType<typeof ok>>();
+      s.api.GET.mockImplementationOnce(() => read.promise as never);
+      cellFor("done")?.onDrop(dragA);
+      await waitFor(() => expect(s.api.GET).toHaveBeenCalled());
+      cellFor("review")?.onDrop({ ulid: "B", lane: "" });
+      read.resolve(ok({ watchers: [] }));
+      await waitFor(() => expect(s.api.PATCH).toHaveBeenCalledTimes(1));
+      await new Promise((r) => setTimeout(r, 20));
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    it("shows nothing and sends nothing for a drop that finishes after the board is gone", async () => {
+      const s = setup({ schemas: { shared: needy } });
+      const { unmount } = mountView();
+      await screen.findByText("調べる");
+      const read = deferred<ReturnType<typeof ok>>();
+      s.api.GET.mockImplementationOnce(() => read.promise as never);
+      cellFor("done")?.onDrop(dragA);
+      await waitFor(() => expect(s.api.GET).toHaveBeenCalled());
+      unmount();
+      read.resolve(ok({ watchers: [] }));
+      await new Promise((r) => setTimeout(r, 20));
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(s.api.PATCH).not.toHaveBeenCalled();
+    });
+
+    it("does not toast a failure that comes after the board is gone", async () => {
+      const { api, unmount } = await ready();
+      const write = deferred<ReturnType<typeof ok>>();
+      api.PATCH.mockImplementationOnce(() => write.promise as never);
+      cellFor("doing")?.onDrop(dragA);
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
+      unmount();
+      write.reject(new Error("late"));
+      await new Promise((r) => setTimeout(r, 20));
+      expect(h.toast).not.toHaveBeenCalled();
+    });
   });
 
   describe("a required field only the detail can fill", () => {

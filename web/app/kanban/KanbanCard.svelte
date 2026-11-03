@@ -33,6 +33,10 @@
   );
   const kids = $derived(task.progress?.total ?? 0);
   const people = $derived((task.assignees ?? []).slice(0, 3));
+  const hasMeta = $derived(
+    !!(task.broken || problem || blockedBy || priority || due || kids > 0 || people.length > 0) ||
+      (task.checklist?.total ?? 0) > 0,
+  );
   const more = $derived(Math.max(0, (task.assignees ?? []).length - 3));
 </script>
 
@@ -50,40 +54,42 @@
     {/if}
   </div>
   <button type="button" class="title" class:closed onclick={onopen}>{task.title}</button>
-  <div class="meta">
-    {#if task.broken}
-      <span class="warn" title={task.broken}><Icon name="warning" size={11} />壊れています</span>
-    {:else if problem}
-      <span class="warn" title={problem.message}>
-        <Icon name="warning" size={11} />{problemLabel(problem)}
-      </span>
-    {/if}
-    {#if blockedBy}
-      <span class="blocked"><Icon name="forbid" size={12} />{blockedBy} 待ち</span>
-    {/if}
-    {#if priority}
-      <span class="priority {priority}">{priority}</span>
-    {/if}
-    {#if task.checklist && task.checklist.total > 0}
-      <span class="chip" title="チェックリスト">
-        <Icon name="checklist" size={10} />{task.checklist.done}/{task.checklist.total}
-      </span>
-    {/if}
-    {#if kids > 0}
-      <span class="chip">子 {kids}</span>
-    {/if}
-    {#if due}
-      <span class="due">{formatDate(due, new Date())}</span>
-    {/if}
-    <span class="who">
-      {#each people as a (a)}
-        <Avatar name={a} />
-      {/each}
-      {#if more > 0}
-        <span class="more">+{more}</span>
+  {#if hasMeta}
+    <div class="meta">
+      {#if task.broken}
+        <span class="warn" title={task.broken}><Icon name="warning" size={11} />壊れています</span>
+      {:else if problem}
+        <span class="warn" title={problem.message}>
+          <Icon name="warning" size={11} />{problemLabel(problem)}
+        </span>
       {/if}
-    </span>
-  </div>
+      {#if blockedBy}
+        <span class="blocked"><Icon name="forbid" size={12} />{blockedBy} 待ち</span>
+      {/if}
+      {#if priority}
+        <span class="priority {priority}">{priority}</span>
+      {/if}
+      {#if task.checklist && task.checklist.total > 0}
+        <span class="chip" title="チェックリスト">
+          <Icon name="checklist" size={10} />{task.checklist.done}/{task.checklist.total}
+        </span>
+      {/if}
+      {#if kids > 0}
+        <span class="chip">子 {kids}</span>
+      {/if}
+      {#if due}
+        <span class="due">{formatDate(due, new Date())}</span>
+      {/if}
+      <span class="who">
+        {#each people as a (a)}
+          <Avatar name={a} />
+        {/each}
+        {#if more > 0}
+          <span class="more">+{more}</span>
+        {/if}
+      </span>
+    </div>
+  {/if}
 </li>
 
 <style>
@@ -98,7 +104,7 @@
     border: var(--hairline) solid var(--line);
     border-radius: var(--radius-8);
     background: var(--surface);
-    box-shadow: 0 var(--hairline) 0 rgba(24, 24, 27, 0.04);
+    box-shadow: var(--shadow-card);
     cursor: pointer;
   }
   .card:hover {
@@ -160,9 +166,6 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-6);
-  }
-  .meta:empty {
-    display: none;
   }
   .warn,
   .blocked,

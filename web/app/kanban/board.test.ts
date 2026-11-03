@@ -174,6 +174,15 @@ describe("buildBoard: swimlanes", () => {
     expect(ulids(b.lanes[2]?.cells[todo] ?? [])).toEqual(["B"]);
   });
 
+  it("sorts the assignee rows by the name shown, whatever the host", () => {
+    const tasks = [
+      task("A", "task", null, { assignees: ["github.com/zed"] }),
+      task("B", "task", null, { assignees: ["gitlab.com/amy"] }),
+    ];
+    const b = buildBoard(tasks, opts({ swimlane: "assignee" }));
+    expect(b.lanes.map((l) => l.label)).toEqual(["amy", "zed"]);
+  });
+
   it("makes a row of each project in the order they come, and the tasks outside last", () => {
     const p2 = { ulid: "P2", id: "REL-20", title: "二つ目" };
     const p1 = { ulid: "P1", id: "REL-15", title: "一つ目" };

@@ -143,7 +143,8 @@ function lanesOf(tasks: readonly TaskView[], swimlane: BoardOptions["swimlane"])
     }
   }
   const lanes = [...found].map(([key, label]) => ({ key, label }));
-  if (swimlane === "assignee") lanes.sort((a, b) => a.key.localeCompare(b.key));
+  if (swimlane === "assignee")
+    lanes.sort((a, b) => a.label.localeCompare(b.label) || a.key.localeCompare(b.key));
   return [...lanes.filter((l) => l.key !== NO_LANE), ...lanes.filter((l) => l.key === NO_LANE)];
 }
 
