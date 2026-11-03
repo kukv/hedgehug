@@ -123,6 +123,8 @@
   const command = $derived(cliLog([...new Set(workspaces.map((u) => nameOf(u, spaces.current)))]));
 
   function go(next: { workspaces?: string[]; sync?: ActivitySync }): void {
+    // a load of 「さらに読み込む」 that this takes over does not move the focus
+    askedFrom = null;
     limit = PAGE;
     router.replace(
       router.href({

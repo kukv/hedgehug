@@ -277,6 +277,27 @@ describe("ActivityPage", () => {
       expect(screen.getAllByRole("listitem")[100]).toHaveFocus();
     });
 
+    it("does not move the focus for a load that a change of the filter took over", async () => {
+      const { api } = setup(many(100));
+      const more = await screen.findByRole("button", { name: "さらに読み込む" });
+      const pending: ((v: unknown) => void)[] = [];
+      api.GET.mockImplementation(() => new Promise((r) => pending.push(r)) as never);
+      await fireEvent.click(more);
+      await waitFor(() => expect(pending).toHaveLength(1));
+      // the filter changes: the limit goes back to 100 and the page asks again
+      await fireEvent.click(screen.getByRole("button", { name: "同期" }));
+      await waitFor(() => expect(pending).toHaveLength(2));
+      drop();
+      pending[0]?.(await ok(many(200)));
+      pending[1]?.(await ok(many(100)));
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "さらに読み込む" })).toBeEnabled(),
+      );
+      await new Promise((r) => setTimeout(r, 10));
+      // the load was not the one of the button: the focus is left where it is
+      expect(document.body).toHaveFocus();
+    });
+
     it("goes to the heading when nothing new came and the button is gone", async () => {
       const { api } = setup(many(100));
       const more = await screen.findByRole("button", { name: "さらに読み込む" });
