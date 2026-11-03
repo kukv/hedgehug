@@ -87,7 +87,7 @@
 - Modify: `web/app/App.svelte`（ルートの振り分け）
 - Modify: `web/app/sidebar/Sidebar.svelte`・`Sidebar.test.ts`（「通知」の行と未読数。マイタスクの行の下、キャンバスの Sidebar の並び）
 - Modify: `web/app/palette/search.ts`・`search.test.ts`・`CommandPalette.test.ts`（「通知を開く」）
-- Modify: `web/core/cli.ts`・`cli.test.ts`（`cliInbox`・`cliInboxRead`・`cliInboxRevert`）
+- Modify: `web/core/cli.ts`・`cli.test.ts`（`cliInbox`。足元に出すものだけ）
 - Modify: `web/core/messages.ts`（足りない Code があれば）
 - Create: `web/e2e/inbox.spec.ts`。必要なら `web/e2e/harness.ts` に2人目の利用者を作る関数を足す
 
