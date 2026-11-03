@@ -48,6 +48,7 @@ func (ss *Session) listSet() (*mount.Set, error) {
 	if err != nil {
 		return nil, err
 	}
+	ss.keep(set.Close)
 	for _, sk := range toWarn {
 		ss.warnSkipped(sk)
 	}
@@ -61,7 +62,9 @@ func (ss *Session) MountedCount() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	return len(mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }}).Stores), nil
+	set := mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }})
+	defer set.Close()
+	return len(set.Stores), nil
 }
 
 // queryMounted runs q on the stores of set that store: and --store leave. A

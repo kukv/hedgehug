@@ -100,12 +100,16 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 	if err != nil {
 		return nil, err
 	}
+	var repo *gitrepo.Repo
 	defer func() {
 		if err != nil {
+			if repo != nil {
+				_ = repo.Close() // before the files go (Windows)
+			}
 			err = errors.Join(err, undoCreate(dir, made))
 		}
 	}()
-	repo, err := gitrepo.Init(dir)
+	repo, err = gitrepo.Init(dir)
 	if err != nil {
 		return nil, err
 	}

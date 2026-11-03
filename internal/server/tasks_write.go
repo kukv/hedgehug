@@ -251,6 +251,7 @@ func (s *Server) registerTaskWrites() {
 			return nil, badRequest(err)
 		}
 		ss := s.session(in.Store)
+		defer ss.Close()
 		res, err := ss.Add(ops.AddInput{Title: b.Title, Parent: b.Parent, Workspace: b.Workspace, Kind: b.Kind, Status: b.Status, Body: b.Body, Assigns: assigns, Before: b.Before, After: b.After})
 		if err != nil {
 			return nil, problemOf(err)
@@ -267,6 +268,7 @@ func (s *Server) registerTaskWrites() {
 			return nil, badRequest(err)
 		}
 		ss := s.session(in.Store)
+		defer ss.Close()
 		res, err := ss.Patch(in.ID, ops.PatchInput{Assigns: assigns, Body: in.Body.Body})
 		if err != nil {
 			return nil, problemOf(err)
@@ -283,6 +285,7 @@ func (s *Server) registerTaskWrites() {
 			return nil, badRequest(errors.New("root and parent cannot both be given"))
 		}
 		ss := s.session(in.Store)
+		defer ss.Close()
 		res, err := ss.Move(ops.MoveInput{Arg: in.ID, Workspace: b.Workspace, Parent: b.Parent, Root: b.Root, Before: b.Before, After: b.After})
 		if err != nil {
 			return nil, problemOf(err)
@@ -300,6 +303,7 @@ func (s *Server) registerTaskWrites() {
 		Summary: "Restore a deleted task and the tasks under it, as hh restore", Tags: []string{"tasks"},
 	}, func(_ context.Context, in *TaskParam) (*affectedOutput, error) {
 		ss := s.session(in.Store)
+		defer ss.Close()
 		res, err := ss.Restore(in.ID)
 		if err != nil {
 			return nil, problemOf(err)
@@ -312,6 +316,7 @@ func (s *Server) registerTaskWrites() {
 		Summary: "Delete a task and the tasks under it (hh rm)", Tags: []string{"tasks"},
 	}, func(_ context.Context, in *TaskParam) (*affectedOutput, error) {
 		ss := s.session(in.Store)
+		defer ss.Close()
 		res, err := ss.Remove(in.ID)
 		if err != nil {
 			return nil, problemOf(err)
@@ -324,6 +329,7 @@ func (s *Server) registerTaskWrites() {
 		Summary: "Bring a task back to how it was at a commit, as hh restore --at", Tags: []string{"tasks"},
 	}, func(_ context.Context, in *restoreAtInput) (*taskWriteOutput, error) {
 		ss := s.session(in.Store)
+		defer ss.Close()
 		res, err := ss.RestoreAt(in.ID, in.Commit)
 		if err != nil {
 			return nil, problemOf(err)

@@ -73,6 +73,7 @@ func (s *Server) registerTaskReads() {
 			return nil, problemOf(err)
 		}
 		ss := s.session(in.Store)
+		defer ss.Close()
 		out := &listOutput{}
 		if in.Tree {
 			r, err := ss.Tree(q)
@@ -120,7 +121,9 @@ func (s *Server) registerTaskReads() {
 		OperationID: "get-task", Method: http.MethodGet, Path: "/api/tasks/{id}",
 		Summary: "Show a task, as hh show", Tags: []string{"tasks"},
 	}, func(_ context.Context, in *TaskParam) (*showOutput, error) {
-		r, err := s.session(in.Store).Show(in.ID)
+		ss := s.session(in.Store)
+		defer ss.Close()
+		r, err := ss.Show(in.ID)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -131,7 +134,9 @@ func (s *Server) registerTaskReads() {
 		OperationID: "get-task-history", Method: http.MethodGet, Path: "/api/tasks/{id}/history",
 		Summary: "List the commits of a task, newest first", Tags: []string{"tasks"},
 	}, func(_ context.Context, in *historyInput) (*historyOutput, error) {
-		r, err := s.session(in.Store).Log([]string{in.ID}, in.Limit)
+		ss := s.session(in.Store)
+		defer ss.Close()
+		r, err := ss.Log([]string{in.ID}, in.Limit)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -142,7 +147,9 @@ func (s *Server) registerTaskReads() {
 		OperationID: "list-people", Method: http.MethodGet, Path: "/api/people",
 		Summary: "List the names to offer after an @: assignees, watchers, comment authors and commit authors", Tags: []string{"tasks"},
 	}, func(_ context.Context, in *peopleInput) (*struct{ Body []string }, error) {
-		names, err := s.session(in.Store).People()
+		ss := s.session(in.Store)
+		defer ss.Close()
+		names, err := ss.People()
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -154,7 +161,9 @@ func (s *Server) registerTaskReads() {
 		Summary: "Show a task as it was at a commit, read and written nowhere", Tags: []string{"tasks"},
 		Description: "The id and the workspace are those of now. problems, reverse, referenced_by, comments and history are empty, and progress is not filled. A task that did not exist at the commit is restore_at.not_found.",
 	}, func(_ context.Context, in *showAtInput) (*showOutput, error) {
-		v, err := s.session(in.Store).ShowAt(in.ID, in.Commit)
+		ss := s.session(in.Store)
+		defer ss.Close()
+		v, err := ss.ShowAt(in.ID, in.Commit)
 		if err != nil {
 			return nil, problemOf(err)
 		}

@@ -45,6 +45,7 @@ func (s *Server) registerSync() {
 		Summary: "How the syncs went, as hh sync --status", Tags: []string{"sync"},
 	}, func(context.Context, *struct{}) (*struct{ Body []syncStatus }, error) {
 		ss := s.session("")
+		defer ss.Close()
 		c, _, err := ss.Config()
 		if err != nil {
 			return nil, problemOf(err)
@@ -64,7 +65,9 @@ func (s *Server) registerSync() {
 		OperationID: "sync", Method: http.MethodPost, Path: "/api/sync",
 		Summary: "Sync now: the store given, or every store with a remote, as hh sync", Tags: []string{"sync"},
 	}, func(_ context.Context, in *StoreParam) (*struct{ Body []ops.SyncReport }, error) {
-		reps, err := s.session(in.Store).Sync(false, true)
+		ss := s.session(in.Store)
+		defer ss.Close()
+		reps, err := ss.Sync(false, true)
 		if len(reps) == 0 && err != nil {
 			return nil, problemOf(err)
 		}

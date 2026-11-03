@@ -190,6 +190,7 @@ func (p *Poller) pollLocked(publish bool) {
 		p.mu.Unlock()
 	}()
 	ss := p.s.session("")
+	defer ss.Close()
 	c, _, err := ss.Config()
 	if err != nil {
 		return
@@ -229,16 +230,20 @@ func (p *Poller) pollLocked(publish bool) {
 		fresh := false
 		announced := false // the clients were told to read the store again
 		if st == nil || st.path != e.Path {
+			// This session is not closed: the store it opens is kept in
+			// p.stores, and closed when it is dropped.
 			s, err := p.s.session(e.Name).OpenStore()
 			if err != nil {
 				continue
 			}
 			first, err := s.Repo().Head()
 			if err != nil {
+				_ = s.Repo().Close()
 				continue
 			}
 			if st != nil {
 				st.stopHistory() // the store of the old path is let go
+				_ = st.s.Repo().Close()
 			}
 			st = newPolled(e.Path, s)
 			fresh = true
@@ -258,6 +263,10 @@ func (p *Poller) pollLocked(publish bool) {
 		}
 		head, err := st.s.Repo().Head()
 		if err != nil {
+			if fresh { // not kept in p.stores
+				st.stopHistory()
+				_ = st.s.Repo().Close()
+			}
 			continue
 		}
 		stamp := inbox.Open(st.s).Stamp()
@@ -297,6 +306,7 @@ func (p *Poller) pollLocked(publish bool) {
 	// A store no longer targeted may be removed from the disk next.
 	for _, st := range dropped {
 		st.stopHistory()
+		_ = st.s.Repo().Close()
 	}
 	if len(stamps) == 0 {
 		return

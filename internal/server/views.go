@@ -53,7 +53,9 @@ func (s *Server) registerViews() {
 		OperationID: "list-views", Method: http.MethodGet, Path: "/api/views",
 		Summary: "List the saved views, as hh view list", Tags: []string{"views"},
 	}, func(_ context.Context, in *StoreParam) (*struct{ Body []ops.SavedView }, error) {
-		vs, err := s.session(in.Store).ViewList()
+		ss := s.session(in.Store)
+		defer ss.Close()
+		vs, err := ss.ViewList()
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -64,7 +66,9 @@ func (s *Server) registerViews() {
 		OperationID: "get-view", Method: http.MethodGet, Path: "/api/views/{name}",
 		Summary: "Show a saved view, as hh view show", Tags: []string{"views"},
 	}, func(_ context.Context, in *ViewParam) (*struct{ Body ops.SavedView }, error) {
-		v, err := s.session(in.Store).ViewGet(in.Name)
+		ss := s.session(in.Store)
+		defer ss.Close()
+		v, err := ss.ViewGet(in.Name)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -76,7 +80,9 @@ func (s *Server) registerViews() {
 		Summary: "Save a view; what is not sent stays as saved, as hh view save", Tags: []string{"views"},
 	}, func(_ context.Context, in *viewSaveInput) (*viewOutput, error) {
 		b := in.Body
-		r, err := s.session(in.Store).ViewSave(in.Name, ops.ViewChange{
+		ss := s.session(in.Store)
+		defer ss.Close()
+		r, err := ss.ViewSave(in.Name, ops.ViewChange{
 			Layout: b.Layout, Query: b.Query, GroupBy: b.GroupBy, KanbanColumns: b.KanbanColumns, Swimlane: b.Swimlane, Columns: b.Columns,
 		})
 		if err != nil {
@@ -89,7 +95,9 @@ func (s *Server) registerViews() {
 		OperationID: "rename-view", Method: http.MethodPatch, Path: "/api/views/{name}",
 		Summary: "Rename a saved view, as hh view rename", Tags: []string{"views"},
 	}, func(_ context.Context, in *viewRenameInput) (*viewOutput, error) {
-		r, err := s.session(in.Store).ViewRename(in.Name, in.Body.Name)
+		ss := s.session(in.Store)
+		defer ss.Close()
+		r, err := ss.ViewRename(in.Name, in.Body.Name)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -100,7 +108,9 @@ func (s *Server) registerViews() {
 		OperationID: "remove-view", Method: http.MethodDelete, Path: "/api/views/{name}",
 		Summary: "Remove a saved view, as hh view rm", Tags: []string{"views"},
 	}, func(_ context.Context, in *ViewParam) (*viewOutput, error) {
-		r, err := s.session(in.Store).ViewRemove(in.Name)
+		ss := s.session(in.Store)
+		defer ss.Close()
+		r, err := ss.ViewRemove(in.Name)
 		if err != nil {
 			return nil, problemOf(err)
 		}

@@ -4,7 +4,10 @@ package gitrepo
 
 import (
 	"fmt"
+	"os"
+	"strings"
 	"sync"
+	"sync/atomic"
 
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -19,6 +22,8 @@ type Repo struct {
 	r   *git.Repository
 
 	conn Conn // how Fetch and Push reach a remote; set by SetConn
+
+	closed atomic.Bool // Close was called; see Live
 
 	mu    sync.Mutex
 	sides map[[2]plumbing.Hash][]*object.Commit // side's results by from and base
@@ -52,12 +57,42 @@ func newRepo(dir string, r *git.Repository) *Repo {
 		s = filesystem.NewStorageWithOptions(s.Filesystem(), cache.NewObjectLRUDefault(), filesystem.Options{KeepDescriptors: true})
 		r.Storer = newCachedStorage(s)
 	}
+	liveMu.Lock()
+	live[dir]++
+	liveMu.Unlock()
 	return &Repo{dir: dir, r: r}
+}
+
+// live counts the repositories made by dir that Close was not called on.
+// Tests use it (Live) to check that whoever opened a repository closed it.
+var (
+	liveMu sync.Mutex
+	live   = map[string]int{}
+)
+
+// Live is how many repositories in or under dir have not been closed.
+func Live(dir string) int {
+	liveMu.Lock()
+	defer liveMu.Unlock()
+	n := 0
+	for d, c := range live {
+		if d == dir || strings.HasPrefix(d, dir+string(os.PathSeparator)) {
+			n += c
+		}
+	}
+	return n
 }
 
 // Close lets go of the files the repository holds open (the object
 // storage), so its directory can be renamed on Windows.
 func (r *Repo) Close() error {
+	if r.closed.CompareAndSwap(false, true) {
+		liveMu.Lock()
+		if live[r.dir]--; live[r.dir] == 0 {
+			delete(live, r.dir) // the server opens stores for ever
+		}
+		liveMu.Unlock()
+	}
 	if c, ok := r.r.Storer.(interface{ Close() error }); ok {
 		return c.Close()
 	}
