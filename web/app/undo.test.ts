@@ -69,6 +69,14 @@ describe("routeStore", () => {
     expect(routeStore({ name: "task", ulid: "T1" }, taskOf)).toBe("backend");
   });
 
+  it("takes the store a saved view is saved in, none for the screens of every store", () => {
+    expect(routeStore({ name: "view", store: "org-b/ops", view: "weekly" }, taskOf)).toBe(
+      "org-b/ops",
+    );
+    expect(routeStore({ name: "query", layout: "table", q: "kind:bug" }, taskOf)).toBeUndefined();
+    expect(routeStore({ name: "my" }, taskOf)).toBeUndefined();
+  });
+
   it("takes the store of the first workspace at home, which shows its overview", () => {
     expect(routeStore({ name: "home" }, taskOf, { store: "shared" })).toBe("shared");
     expect(routeStore({ name: "home" }, taskOf)).toBeUndefined();

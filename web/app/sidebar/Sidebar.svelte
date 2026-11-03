@@ -6,6 +6,7 @@
   import Icon from "../icons/Icon.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
   import { kbdLabel, registerShortcut } from "../keys";
+  import { MY_QUERY } from "../my/groups";
   import { openPalette } from "../palette-state.svelte";
   import { hrefOf, onLinkClick, router } from "../router";
   import { useSubscribe } from "../svelte-store";
@@ -14,11 +15,28 @@
   import { openWorkspaceDelete } from "../workspace/dialogs-state.svelte";
   import SyncCard from "./SyncCard.svelte";
 
-  const { stores } = core();
+  const { stores, cache, views } = core();
   const workspaces = useSubscribe(stores, () => stores.workspaces());
+  const savedViews = useSubscribe(views, () => views.list());
+  const cacheRev = useSubscribe(cache, () => ({}));
   const route = $derived(router.route);
   // /settings names no Store: the settings go to the first one.
   const settingsHref = hrefOf({ name: "settings", page: "workspaces", store: "" });
+  const myHref = hrefOf({ name: "my" });
+
+  // The count beside "マイタスク" is the number the screen shows with its own query (細部 55). It
+  // is left out while the list is read, and when the query does not run (no account).
+  let myList = $state.raw<ReturnType<typeof cache.watchList> | null>(null);
+  $effect(() => {
+    const w = cache.watchList({ q: MY_QUERY, tree: false });
+    myList = w;
+    return () => w.dispose();
+  });
+  const myCount = $derived.by(() => {
+    cacheRev.current;
+    if (!myList || myList.loading() || myList.error()) return null;
+    return myList.ulids().length;
+  });
 
   onMount(() =>
     registerShortcut("mod+k", () => {
@@ -75,6 +93,46 @@
     <span class="ph">ID・検索・コマンド</span>
     <kbd>{kbdLabel("mod+k")}</kbd>
   </button>
+
+  <div class="places">
+    <a
+      href={myHref}
+      class="nav-link"
+      class:active={route.name === "my"}
+      aria-current={route.name === "my" ? "page" : undefined}
+      onclick={(e) => onLinkClick(e, myHref)}
+    >
+      <Icon name="checklist" size={14} />
+      <span class="nav-text">マイタスク</span>
+      {#if myCount !== null}
+        <span class="count">{myCount}</span>
+      {/if}
+    </a>
+  </div>
+
+  {#if savedViews.current.length > 0}
+    <section class="views" aria-label="保存済みビュー">
+      <div class="ws-head">
+        <span class="ws-title">保存済みビュー</span>
+      </div>
+      {#each savedViews.current as v (`${v.store}/${v.view.name}`)}
+        {@const vhref = hrefOf({ name: "view", store: v.store, view: v.view.name })}
+        {@const vhere =
+          route.name === "view" && route.store === v.store && route.view === v.view.name}
+        <a
+          href={vhref}
+          class="view"
+          class:active={vhere}
+          aria-current={vhere ? "page" : undefined}
+          title="{v.store} の views/ に保存"
+          onclick={(e) => onLinkClick(e, vhref)}
+        >
+          <span class="dot" style:background="var(--store-{v.tone}-dot)" aria-hidden="true"></span>
+          <span class="p-name">{v.view.name}</span>
+        </a>
+      {/each}
+    </section>
+  {/if}
 
   <section class="ws-section" aria-label="ワークスペース">
     <div class="ws-head">
@@ -293,7 +351,9 @@
     background: var(--hover);
   }
   .ws-link,
-  .project {
+  .project,
+  .nav-link,
+  .view {
     display: flex;
     align-items: center;
     gap: var(--space-8);
@@ -302,17 +362,43 @@
     color: var(--ink-2);
     text-decoration: none;
   }
+  .nav-link {
+    min-height: var(--row-h);
+  }
+  .nav-text {
+    flex: 1;
+  }
+  .count {
+    color: var(--label);
+    font-family: var(--font-mono);
+    font-size: var(--fs-11);
+  }
+  .places,
+  .views {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .dot {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+  }
   .ws-link {
     flex: 1;
     min-width: 0;
     min-height: var(--row-h);
     padding-right: var(--control-h-sm);
   }
-  .project {
+  .project,
+  .view {
     min-height: 30px;
   }
   .ws-link:hover,
-  .project:hover {
+  .project:hover,
+  .nav-link:hover,
+  .view:hover {
     background: var(--hover);
   }
   .active,

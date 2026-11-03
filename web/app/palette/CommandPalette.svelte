@@ -16,6 +16,8 @@
   import { patchTask } from "../tree/actions";
   import StoreBadge from "../ui/StoreBadge.svelte";
   import { routeStore, runUndo } from "../undo";
+  import { openViewSave } from "../views/dialogs-state.svelte";
+  import { newDraft } from "../views/draft";
   import { openWorkspaceAdd, openWorkspaceMove } from "../workspace/dialogs-state.svelte";
   import { fetchMissing, readRecent, rememberTask } from "./recent";
   import {
@@ -24,6 +26,7 @@
     detectMode,
     type PaletteGroup,
     type PaletteItem,
+    queryCommands,
     searchTasks,
     taskCommands,
   } from "./search";
@@ -32,6 +35,7 @@
   const cacheRev = useSubscribe(c.cache, () => ({}));
   const storesRev = useSubscribe(c.stores, () => ({}));
   const schemaRev = useSubscribe(c.schema, () => ({}));
+  const viewsRev = useSubscribe(c.views, () => ({}));
 
   let input = $state("");
   let active = $state(0);
@@ -132,12 +136,16 @@
   const env = $derived.by<CommandEnv>(() => {
     cacheRev.current;
     storesRev.current;
+    viewsRev.current;
     const sel = router.route.name === "task" ? router.route.ulid : selection.ulid;
     return {
       syncNow: () => void runSync(c.api),
       createTask: (parent) => openCreate({ kind: "task", parent }),
       createProject: () => openCreate({ kind: "project" }),
       addWorkspace: () => openWorkspaceAdd(),
+      // A query typed in the palette is saved as a table, which holds any query (a tree cannot sort).
+      saveQuery: (query) => openViewSave({ draft: newDraft({ layout: "table", query }) }),
+      views: c.views.list(),
       undo: () =>
         void runUndo(
           c,
@@ -154,6 +162,9 @@
         settingsWorkspaces: (store) => router.href({ name: "settings", page: "workspaces", store }),
         project: (ulid) => router.href({ name: "project", ulid, tab: "tree" }),
         task: (ulid) => router.href({ name: "task", ulid }),
+        view: (store, view) => router.href({ name: "view", store, view }),
+        query: (layout, q) => router.href({ name: "query", layout, q }),
+        my: () => router.href({ name: "my" }),
       },
       selected: sel ? (c.cache.task(sel) ?? null) : null,
       recent: recentUlids.flatMap((u) => c.cache.task(u) ?? []),
@@ -188,6 +199,10 @@
     if (picking) return statusGroups(picking);
     if (mode === "command" || input.trim() === "") return buildCommands(env, input);
     const out = [...found.groups];
+    // A query that found tasks can be opened as a table or saved as a view.
+    if (mode === "query" && !found.error && found.groups.length > 0) {
+      out.push(queryCommands(env, input.trim()));
+    }
     const first = found.groups.flatMap((g) => g.items).find((i) => i.type === "task");
     if (mode === "id" && first?.type === "task") {
       const t = c.cache.task(first.ulid);

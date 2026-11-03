@@ -6,7 +6,9 @@
   import { createCore } from "./core-factory";
   import CreateHost from "./create/CreateHost.svelte";
   import TaskDetail from "./detail/TaskDetail.svelte";
+  import MyTasks from "./my/MyTasks.svelte";
   import CommandPalette from "./palette/CommandPalette.svelte";
+  import ProjectPage from "./project/ProjectPage.svelte";
   import { router } from "./router";
   import SettingsRoute from "./settings/SettingsRoute.svelte";
   import Sidebar from "./sidebar/Sidebar.svelte";
@@ -16,8 +18,10 @@
   import NoToken from "./states/NoToken.svelte";
   import Onboarding from "./states/Onboarding.svelte";
   import { useSubscribe } from "./svelte-store";
-  import TreeView from "./tree/TreeView.svelte";
   import Toasts from "./ui/Toasts.svelte";
+  import QueryPage from "./views/QueryPage.svelte";
+  import ViewDialogs from "./views/ViewDialogs.svelte";
+  import ViewPage from "./views/ViewPage.svelte";
   import WorkspaceDialogs from "./workspace/WorkspaceDialogs.svelte";
   import WorkspacePage from "./workspace/WorkspacePage.svelte";
 
@@ -53,7 +57,8 @@
   });
 
   onMount(() => {
-    router.go(location.pathname, { replace: true });
+    // The address is made ours (an unknown path goes to "/"); the query screen keeps its ?q=.
+    router.go(location.pathname + location.search, { replace: true });
     if (token) c.conn.start();
     return () => c.conn.stop();
   });
@@ -73,12 +78,20 @@
         {/key}
       {:else if route.name === "project"}
         {#key route.ulid}
-          <TreeView view={{ kind: "project", ulid: route.ulid }} />
+          <ProjectPage ulid={route.ulid} tab={route.tab} />
         {/key}
       {:else if route.name === "task"}
         {#key route.ulid}
           <TaskDetail ulid={route.ulid} />
         {/key}
+      {:else if route.name === "view"}
+        {#key `${route.store}/${route.view}`}
+          <ViewPage store={route.store} name={route.view} />
+        {/key}
+      {:else if route.name === "query"}
+        <QueryPage layout={route.layout} q={route.q} />
+      {:else if route.name === "my"}
+        <MyTasks />
       {:else if route.name === "settings"}
         <SettingsRoute page={route} />
       {:else if route.name === "home" && dir.current.first}
@@ -116,6 +129,7 @@
 {/if}
 <CreateHost />
 <WorkspaceDialogs />
+<ViewDialogs />
 <CommandPalette />
 <Toasts />
 
