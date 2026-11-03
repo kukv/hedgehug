@@ -37,7 +37,9 @@ func (s *Server) registerPurge() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		plan, err := s.session(in.Store).PurgeList(days)
+		ss := s.session(in.Store)
+		defer ss.Close()
+		plan, err := ss.PurgeList(days)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -52,7 +54,9 @@ func (s *Server) registerPurge() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		res, err := s.session(in.Store).PurgeConfirmed(days, in.Body.Confirmed)
+		ss := s.session(in.Store)
+		defer ss.Close()
+		res, err := ss.PurgeConfirmed(days, in.Body.Confirmed)
 		if err != nil {
 			return nil, problemOf(err)
 		}

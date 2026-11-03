@@ -12,6 +12,8 @@ import (
 
 	"github.com/go-git/go-git/v5/plumbing"
 
+	"github.com/kukv/hedgehug/internal/gitrepo"
+	"github.com/kukv/hedgehug/internal/history"
 	"github.com/kukv/hedgehug/internal/model"
 	"github.com/kukv/hedgehug/internal/store"
 )
@@ -140,16 +142,16 @@ func (ix *Index) resolveForwardIDs(entries []*ForwardEntry) error {
 	if err != nil {
 		return err
 	}
-	last, err := ix.repo.LastChanges(head, plumbing.ZeroHash, paths)
-	if err != nil {
-		return err
-	}
+	lc := ix.lastChanger()
 	for i, e := range todo {
-		c, ok := last[paths[i]]
+		c, ok, err := lc(head, paths[i])
+		if err != nil {
+			return err
+		}
 		if !ok || len(c.Parents) == 0 {
 			continue
 		}
-		t, err := ix.taskAt(e.ULID, c.Parents[0], maxForwardHops-1)
+		t, err := ix.taskAt(lc, e.ULID, c.Parents[0], maxForwardHops-1)
 		if err != nil {
 			return err
 		}
@@ -167,12 +169,16 @@ func (ix *Index) resolveForwardIDs(entries []*ForwardEntry) error {
 // decode.
 func (ix *Index) lastTask(ulid model.ULID) (*model.Task, error) {
 	p := model.TaskPath(ulid)
+	if ix.lc == nil {
+		ix.lc = ix.lastChanger()
+	}
+	lc := ix.lc
 	from, err := ix.repo.Head()
 	if err != nil {
 		return nil, err
 	}
 	for range maxForwardHops {
-		c, ok, err := ix.repo.LastChange(from, plumbing.ZeroHash, p)
+		c, ok, err := lc(from, p)
 		if err != nil {
 			return nil, err
 		}
@@ -190,7 +196,7 @@ func (ix *Index) lastTask(ulid model.ULID) (*model.Task, error) {
 
 // taskAt is the file of ulid as the commit before had it, as a task; when
 // that is a forward, the search goes on from there for at most hops more.
-func (ix *Index) taskAt(ulid model.ULID, before plumbing.Hash, hops int) (*model.Task, error) {
+func (ix *Index) taskAt(lc lastChangeFunc, ulid model.ULID, before plumbing.Hash, hops int) (*model.Task, error) {
 	p := model.TaskPath(ulid)
 	t, forward, err := ix.versionAt(p, before)
 	if err != nil || !forward {
@@ -198,7 +204,7 @@ func (ix *Index) taskAt(ulid model.ULID, before plumbing.Hash, hops int) (*model
 	}
 	from := before
 	for range hops {
-		c, ok, err := ix.repo.LastChange(from, plumbing.ZeroHash, p)
+		c, ok, err := lc(from, p)
 		if err != nil {
 			return nil, err
 		}
@@ -211,6 +217,41 @@ func (ix *Index) taskAt(ulid model.ULID, before plumbing.Hash, hops int) (*model
 		from = c.Parents[0]
 	}
 	return nil, nil
+}
+
+// lastChangeFunc finds the newest commit in the history of from that changed
+// the file p, with its parents.
+type lastChangeFunc func(from plumbing.Hash, p string) (gitrepo.LogEntry, bool, error)
+
+// lastChanger returns a lastChangeFunc that reads the history index, opened
+// on the first call so that an index with no forward to resolve never loads
+// it. The index is a cache: when it cannot be opened, or does not have the
+// commit asked about, the history is searched by walking.
+func (ix *Index) lastChanger() lastChangeFunc {
+	var h *history.History
+	tried := false
+	return func(from plumbing.Hash, p string) (gitrepo.LogEntry, bool, error) {
+		if !tried {
+			tried = true
+			open := ix.openHistory
+			if open == nil {
+				open = func() (*history.History, error) { return history.Open(ix.s, history.Options{}) }
+			}
+			h, _ = open() // on an error h stays nil and every call walks
+		}
+		if h == nil {
+			return ix.repo.LastChange(from, plumbing.ZeroHash, p)
+		}
+		c, ok, err := h.LastChange(p, from)
+		if errors.Is(err, history.ErrNotIndexed) {
+			return ix.repo.LastChange(from, plumbing.ZeroHash, p)
+		}
+		if err != nil || !ok {
+			return gitrepo.LogEntry{}, false, err
+		}
+		e, err := ix.repo.Entry(c.Hash)
+		return e, err == nil, err
+	}
 }
 
 // versionAt reads the file p as the commit has it: the task when it is one

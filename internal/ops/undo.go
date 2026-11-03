@@ -64,20 +64,23 @@ func (ss *Session) Undo() (UndoResult, error) {
 // together or set a store up, which are not something a person did.
 var undoSkip = []string{"merge", "repair", "setup", "undo", "init"}
 
-// UndoTarget returns the newest commit of log, which runs newest first along
-// the first parents, that the writer me made by an operation undo can take
-// back and that no later undo took back.
-func UndoTarget(log []gitrepo.LogEntry, me string) (gitrepo.LogEntry, bool) {
-	undone := map[string]bool{}
-	for _, e := range log {
-		for _, h := range e.TrailerValues("Hedgehug-Undo") {
-			undone[h] = true
-		}
-		author, _ := e.Trailer("Hedgehug-Author")
-		op, _ := e.Trailer("Hedgehug-Op")
-		if author == me && !slices.Contains(undoSkip, op) && !undone[e.Hash.String()] && len(e.Parents) > 0 {
-			return e, true
-		}
+// undoScanner finds the commit to undo, one entry at a time, newest first,
+// along the first parents: the newest that the writer made by an operation
+// undo can take back and that no later undo took back.
+type undoScanner struct{ undone map[string]bool }
+
+// next reports whether e is the commit to undo, having seen the newer ones.
+func (s *undoScanner) next(e gitrepo.LogEntry, me string) (gitrepo.LogEntry, bool) {
+	if s.undone == nil {
+		s.undone = map[string]bool{}
+	}
+	for _, h := range e.TrailerValues("Hedgehug-Undo") {
+		s.undone[h] = true
+	}
+	author, _ := e.Trailer("Hedgehug-Author")
+	op, _ := e.Trailer("Hedgehug-Op")
+	if author == me && !slices.Contains(undoSkip, op) && !s.undone[e.Hash.String()] && len(e.Parents) > 0 {
+		return e, true
 	}
 	return gitrepo.LogEntry{}, false
 }
@@ -139,11 +142,17 @@ func undoInTx(tx *store.Tx, s *store.Store, ix *index.Index, me string) (UndoRes
 	if err != nil {
 		return res, err
 	}
-	log, err := r.LogFrom(head, 0)
+	// Read the first parents only until the commit to undo is found.
+	var sc undoScanner
+	var c gitrepo.LogEntry
+	var ok bool
+	err = r.WalkFirstParents(head, func(e gitrepo.LogEntry) bool {
+		c, ok = sc.next(e, me)
+		return !ok
+	})
 	if err != nil {
 		return res, err
 	}
-	c, ok := UndoTarget(log, me)
 	if !ok {
 		return res, nil
 	}

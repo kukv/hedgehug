@@ -22,7 +22,7 @@ func lastAuthor(t *testing.T, ts *testSession, name string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	log, err := s.Repo().Log(nil, 1)
+	log, err := logOf(s.Repo(), 1)
 	if err != nil || len(log) != 1 {
 		t.Fatalf("log of %s: %v %v", name, log, err)
 	}
@@ -299,7 +299,7 @@ func commits(t *testing.T, ts *testSession, name string) int {
 	if err != nil {
 		t.Fatal(err)
 	}
-	log, err := s.Repo().Log(nil, 0)
+	log, err := logOf(s.Repo(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -205,7 +205,7 @@ func listsWorkspace(wss []WorkspaceView, name string) bool {
 	return false
 }
 
-func TestUndoTarget(t *testing.T) {
+func TestUndoScannerTarget(t *testing.T) {
 	t.Parallel()
 	hash := func(b byte) plumbing.Hash { return plumbing.Hash{b} }
 	entry := func(h byte, author, op string, parents int, undoes ...byte) gitrepo.LogEntry {
@@ -234,7 +234,14 @@ func TestUndoTarget(t *testing.T) {
 		{"empty", nil, -1},
 	}
 	for _, c := range cases {
-		got, ok := UndoTarget(c.log, "me")
+		var sc undoScanner
+		var got gitrepo.LogEntry
+		var ok bool
+		for _, e := range c.log {
+			if got, ok = sc.next(e, "me"); ok {
+				break
+			}
+		}
 		if c.want < 0 {
 			if ok {
 				t.Errorf("%s: target %v; want none", c.name, got.Hash)
@@ -244,6 +251,35 @@ func TestUndoTarget(t *testing.T) {
 		if !ok || got.Hash != c.log[c.want].Hash {
 			t.Errorf("%s: target %v, %v; want log[%d]", c.name, got.Hash, ok, c.want)
 		}
+	}
+}
+
+func TestUndoScannerStopsAtTarget(t *testing.T) {
+	t.Parallel()
+	hash := func(b byte) plumbing.Hash { return plumbing.Hash{b} }
+	other := func(b byte) gitrepo.LogEntry {
+		return gitrepo.LogEntry{Hash: hash(b), Parents: []plumbing.Hash{hash(0xff)}, Trailers: []gitrepo.Trailer{{Key: "Hedgehug-Author", Value: "you"}, {Key: "Hedgehug-Op", Value: "set"}}}
+	}
+	mine := gitrepo.LogEntry{Hash: hash(3), Parents: []plumbing.Hash{hash(0xff)}, Trailers: []gitrepo.Trailer{{Key: "Hedgehug-Author", Value: "me"}, {Key: "Hedgehug-Op", Value: "add"}}}
+	log := []gitrepo.LogEntry{other(10), other(9), mine}
+	for b := byte(8); b >= 4; b-- {
+		log = append(log, other(b))
+	}
+	var sc undoScanner
+	n := 0
+	var got gitrepo.LogEntry
+	for _, e := range log {
+		n++
+		if c, ok := sc.next(e, "me"); ok {
+			got = c
+			break
+		}
+	}
+	if n != 3 {
+		t.Fatalf("read %d entries, want 3", n)
+	}
+	if got.Hash != mine.Hash {
+		t.Fatalf("target %v, want %v", got.Hash, mine.Hash)
 	}
 }
 

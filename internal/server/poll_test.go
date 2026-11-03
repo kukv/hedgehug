@@ -21,7 +21,7 @@ import (
 func pollServer(t *testing.T) (*testServer, <-chan sseEvent) {
 	t.Helper()
 	ts := newTestServer(t)
-	ch, cancel := ts.srv.hub.Subscribe()
+	ch, cancel := ts.srv.hub.subscribe()
 	ctx, stop := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	ts.srv.poller.interval = 10 * time.Millisecond
@@ -90,7 +90,7 @@ func TestPollTasksChanged(t *testing.T) {
 func TestPollTellsEachCommitOfALook(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	ch, cancel := ts.srv.hub.Subscribe()
+	ch, cancel := ts.srv.hub.subscribe()
 	t.Cleanup(cancel)
 	ts.srv.poller.settle()
 	one, err := ts.session().Add(ops.AddInput{Title: "one"})
@@ -116,7 +116,7 @@ func TestPollTellsEachCommitOfALook(t *testing.T) {
 func TestPollTellsManyCommitsAsOne(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	ch, cancel := ts.srv.hub.Subscribe()
+	ch, cancel := ts.srv.hub.subscribe()
 	t.Cleanup(cancel)
 	ts.srv.poller.settle()
 	var last ops.TaskResult
@@ -244,7 +244,7 @@ func TestPollFirstLookSendsNothing(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
 	ts.addRemote()
-	ch, cancel := ts.srv.hub.Subscribe()
+	ch, cancel := ts.srv.hub.subscribe()
 	defer cancel()
 	ctx, stop := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -369,7 +369,7 @@ func TestPollFirstStoreAfterNoStoreTellsTheClients(t *testing.T) {
 		t.Fatal(err)
 	}
 	ts.srv.poller = newPoller(ts.srv, ts.srv.hub)
-	ch, cancel := ts.srv.hub.Subscribe()
+	ch, cancel := ts.srv.hub.subscribe()
 	ctx, stop := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	ts.srv.poller.interval = 10 * time.Millisecond
@@ -395,7 +395,7 @@ func TestPollFirstStoreAfterNoStoreTellsTheClients(t *testing.T) {
 func TestPollFailedFirstLookIsNotTheFirstLook(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	ch, cancel := ts.srv.hub.Subscribe()
+	ch, cancel := ts.srv.hub.subscribe()
 	defer cancel()
 	cfg := filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml")
 	good, err := os.ReadFile(cfg)

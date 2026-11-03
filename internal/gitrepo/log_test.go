@@ -6,6 +6,15 @@ import (
 	"time"
 )
 
+// headLog is the first-parent log of HEAD, newest first.
+func headLog(r *Repo, limit int) ([]LogEntry, error) {
+	head, err := r.Head()
+	if err != nil {
+		return nil, err
+	}
+	return r.LogFrom(head, limit)
+}
+
 func TestLog(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -27,12 +36,12 @@ func TestLog(t *testing.T) {
 		}
 	}
 
-	all, err := r.Log(nil, 0)
+	all, err := headLog(r, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(all) != 3 || all[0].Subject != "third" || all[2].Subject != "first" {
-		t.Fatalf("Log(nil, 0) = %+v", all)
+		t.Fatalf("log = %+v", all)
 	}
 	if all[0].Author != author || !all[0].When.Equal(base.Add(2*time.Minute)) {
 		t.Errorf("author/when = %+v %v", all[0].Author, all[0].When)
@@ -47,24 +56,12 @@ func TestLog(t *testing.T) {
 		t.Errorf("Trailers = %+v", all[0].Trailers)
 	}
 
-	for _, tc := range []struct {
-		name     string
-		prefixes []string
-		limit    int
-		want     int
-	}{
-		{"limit", nil, 2, 2},
-		{"file", []string{"a.md"}, 0, 2},
-		{"dir", []string{"d/"}, 0, 1},
-		{"either", []string{"a.md", "d/"}, 0, 3},
-	} {
-		got, err := r.Log(tc.prefixes, tc.limit)
-		if err != nil {
-			t.Fatalf("%s: %v", tc.name, err)
-		}
-		if len(got) != tc.want {
-			t.Errorf("%s: len = %d, want %d", tc.name, len(got), tc.want)
-		}
+	got, err := headLog(r, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Errorf("limit: len = %d, want 2", len(got))
 	}
 
 	// A value may hold ": ", and a key may come more than once.
@@ -80,7 +77,7 @@ func TestLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	last, err := r.Log(nil, 1)
+	last, err := headLog(r, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +95,7 @@ func TestLogEmptyRepo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := r.Log(nil, 0)
+	got, err := headLog(r, 0)
 	if err != nil || len(got) != 0 {
 		t.Errorf("Log = %v, %v", got, err)
 	}
@@ -115,7 +112,7 @@ func TestLogNoTrailers(t *testing.T) {
 	if _, err := r.Commit(Commit{Paths: []string{"a.md"}, Subject: "only: subject", Author: author, When: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	got, err := r.Log(nil, 0)
+	got, err := headLog(r, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

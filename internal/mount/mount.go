@@ -95,14 +95,27 @@ func (m *Mounted) reopen() (*index.Index, error) {
 	}
 	ix, err := index.Open(s)
 	if err != nil {
+		_ = s.Repo().Close()
 		return nil, err
 	}
 	ix.SetStoreName(m.Name)
 	ix.SetQualified(m.qualify)
 	m.mu.Lock()
+	old := m.Store
 	m.Store, m.ix = s, ix
 	m.mu.Unlock()
+	// the old handle keeps the packs it read open (KeepDescriptors), among
+	// them those another handle removed
+	_ = old.Repo().Close()
 	return ix, nil
+}
+
+// Close lets go of the repository files of every store of the set (CloseRepo).
+// The set may be used after, as a store opens its files again when it reads.
+func (s *Set) Close() {
+	for _, m := range s.Stores {
+		_ = m.CloseRepo()
+	}
 }
 
 // Skipped is a store of stores[] that did not open.
@@ -193,6 +206,7 @@ func SharedPrefixes(c *config.Config) func(prefix string) bool {
 			}
 			mine[strings.ToUpper(w.IDPrefix)] = true
 		}
+		_ = s.Repo().Close()
 		for p := range mine {
 			seen[p]++
 		}

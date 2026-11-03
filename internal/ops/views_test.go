@@ -31,7 +31,7 @@ func (ts *testSession) headSubject() string {
 	if err != nil {
 		ts.t.Fatal(err)
 	}
-	es, err := s.Repo().Log(nil, 1)
+	es, err := logOf(s.Repo(), 1)
 	if err != nil || len(es) == 0 {
 		ts.t.Fatalf("log: %v", err)
 	}
@@ -44,7 +44,7 @@ func (ts *testSession) headTrailer(key string) (string, bool) {
 	if err != nil {
 		ts.t.Fatal(err)
 	}
-	es, err := s.Repo().Log(nil, 1)
+	es, err := logOf(s.Repo(), 1)
 	if err != nil || len(es) == 0 {
 		ts.t.Fatalf("log: %v", err)
 	}

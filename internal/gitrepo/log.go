@@ -1,15 +1,12 @@
 package gitrepo
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/go-git/go-git/v5/plumbing/storer"
 )
 
 // LogEntry is one commit as read back from the history.
@@ -53,42 +50,23 @@ func (e LogEntry) Writer() string {
 	return e.Author.Email
 }
 
-// Log returns the commits reachable from HEAD, newest first. With prefixes,
-// only commits that touch a path starting with one of them are returned. A
-// limit above zero caps the number of entries. A repository without commits
-// has an empty log.
-func (r *Repo) Log(prefixes []string, limit int) ([]LogEntry, error) {
-	opts := &git.LogOptions{}
-	if len(prefixes) > 0 {
-		opts.PathFilter = func(p string) bool {
-			for _, pre := range prefixes {
-				if strings.HasPrefix(p, pre) {
-					return true
-				}
-			}
-			return false
+// WalkFirstParents calls fn with the commits from from along the first
+// parents, newest first, until fn returns false. The zero hash has none.
+func (r *Repo) WalkFirstParents(from plumbing.Hash, fn func(LogEntry) bool) error {
+	for h := from; !h.IsZero(); {
+		c, err := r.r.CommitObject(h)
+		if err != nil {
+			return fmt.Errorf("commit %s: %w", h, err)
+		}
+		if !fn(entry(c)) {
+			return nil
+		}
+		h = plumbing.ZeroHash
+		if len(c.ParentHashes) > 0 {
+			h = c.ParentHashes[0]
 		}
 	}
-	it, err := r.r.Log(opts)
-	if errors.Is(err, plumbing.ErrReferenceNotFound) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer it.Close()
-	var out []LogEntry
-	err = it.ForEach(func(c *object.Commit) error {
-		out = append(out, entry(c))
-		if limit > 0 && len(out) >= limit {
-			return storer.ErrStop
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
+	return nil
 }
 
 // LogFrom returns the commits from from along the first parents, newest
@@ -97,19 +75,12 @@ func (r *Repo) Log(prefixes []string, limit int) ([]LogEntry, error) {
 // hash has an empty log.
 func (r *Repo) LogFrom(from plumbing.Hash, limit int) ([]LogEntry, error) {
 	var out []LogEntry
-	for h := from; !h.IsZero(); {
-		c, err := r.r.CommitObject(h)
-		if err != nil {
-			return nil, fmt.Errorf("commit %s: %w", h, err)
-		}
-		out = append(out, entry(c))
-		if limit > 0 && len(out) >= limit {
-			break
-		}
-		h = plumbing.ZeroHash
-		if len(c.ParentHashes) > 0 {
-			h = c.ParentHashes[0]
-		}
+	err := r.WalkFirstParents(from, func(e LogEntry) bool {
+		out = append(out, e)
+		return limit <= 0 || len(out) < limit
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }

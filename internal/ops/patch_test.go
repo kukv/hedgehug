@@ -1,6 +1,10 @@
 package ops
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/kukv/hedgehug/internal/gitrepo"
+)
 
 // headOp is the Hedgehug-Op of the commit at HEAD of the test store.
 func headOp(t *testing.T, ts *testSession) string {
@@ -9,7 +13,7 @@ func headOp(t *testing.T, ts *testSession) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	log, err := s.Repo().Log(nil, 1)
+	log, err := logOf(s.Repo(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +31,7 @@ func TestPatchSetsFieldsAndBodyInOneCommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	before, err := s.Repo().Log(nil, 0)
+	before, err := logOf(s.Repo(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +46,7 @@ func TestPatchSetsFieldsAndBodyInOneCommit(t *testing.T) {
 	if !res.Committed || res.Commit == "" {
 		t.Fatalf("result = %+v, want a commit", res)
 	}
-	after, err := s.Repo().Log(nil, 0)
+	after, err := logOf(s.Repo(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,4 +112,14 @@ func TestPatchUnknownKeyIsInvalid(t *testing.T) {
 	}
 	_, err := ts.Patch("ME-1", PatchInput{Assigns: []Assign{{Key: "nope", Op: "=", Value: "x"}}})
 	wantErr(t, err, KindInvalid, "assign.unknown_key")
+}
+
+// logOf is the first-parent log of HEAD of r, newest first, capped at limit
+// when it is above zero.
+func logOf(r *gitrepo.Repo, limit int) ([]gitrepo.LogEntry, error) {
+	head, err := r.Head()
+	if err != nil {
+		return nil, err
+	}
+	return r.LogFrom(head, limit)
 }

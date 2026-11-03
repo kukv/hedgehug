@@ -87,6 +87,7 @@ func (s *Server) registerActivity() {
 		Summary: "Take back my last operation, as hh undo", Tags: []string{"tasks"},
 	}, func(_ context.Context, in *StoreParam) (*undoOutput, error) {
 		ss := s.session(in.Store)
+		defer ss.Close()
 		r, err := ss.Undo()
 		if err != nil {
 			return nil, problemOf(err)
@@ -118,7 +119,9 @@ func (s *Server) registerActivity() {
 		if in.Workspace != "" {
 			workspaces = strings.Split(in.Workspace, ",")
 		}
-		r, err := s.session(in.Store).LogIn(nil, workspaces, limit)
+		ss := s.session(in.Store)
+		defer ss.Close()
+		r, err := ss.LogIn(nil, workspaces, limit)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -147,6 +150,7 @@ func (s *Server) registerActivity() {
 		Summary: "List the inbox of every store (of ?store= only), newest first, as hh inbox", Tags: []string{"notifications"},
 	}, func(_ context.Context, in *notificationsInput) (*notificationsOutput, error) {
 		ss := s.session(in.Store)
+		defer ss.Close()
 		// Ops warns once per read of the boxes, and the unread and the all
 		// lists below read them twice: the warnings reach the log once.
 		seen := map[string]bool{}
@@ -189,7 +193,9 @@ func (s *Server) registerActivity() {
 		if !in.Body.Read {
 			return nil, newProblem(http.StatusBadRequest, "notification.unread", "an item cannot be marked unread")
 		}
-		if _, err := s.session(in.Store).InboxRead([]string{in.ID}, false); err != nil {
+		ss := s.session(in.Store)
+		defer ss.Close()
+		if _, err := ss.InboxRead([]string{in.ID}, false); err != nil {
 			return nil, problemOf(err)
 		}
 		s.poller.Kick()
@@ -204,6 +210,7 @@ func (s *Server) registerActivity() {
 			return nil, newProblem(http.StatusBadRequest, "notification.read_args", "give either all: true or ids, not both and not neither")
 		}
 		ss := s.session(in.Store)
+		defer ss.Close()
 		ulids, err := ops.ParseInboxItems(in.Body.IDs)
 		if err != nil {
 			return nil, problemOf(err)
@@ -226,7 +233,9 @@ func (s *Server) registerActivity() {
 		OperationID: "revert-notification", Method: http.MethodPost, Path: "/api/notifications/{id}/revert",
 		Summary: "Write my overwritten value back, as hh inbox revert", Tags: []string{"notifications"},
 	}, func(_ context.Context, in *NotificationParam) (*taskWriteOutput, error) {
-		r, err := s.session(in.Store).InboxRevert(in.ID)
+		ss := s.session(in.Store)
+		defer ss.Close()
+		r, err := ss.InboxRevert(in.ID)
 		if err != nil {
 			return nil, problemOf(err)
 		}

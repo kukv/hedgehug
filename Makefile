@@ -1,4 +1,4 @@
-.PHONY: generate build web web-check e2e fmt fmt-check lint tidy-check test cover clean-cache check release-check
+.PHONY: generate build web web-check e2e fmt fmt-check lint tidy-check test cover clean-cache bench-history check release-check
 
 # Write the generated files (api/openapi.yaml).
 generate:
@@ -55,6 +55,12 @@ cover:
 # size limit, so run this when the cache takes too much space.
 clean-cache:
 	go clean -cache -testcache
+
+# Measure the history index and pack consolidation on a synthesized store of
+# 100,000 commits (not part of check or CI; see the history-growth spec).
+# The store is made once in $HH_BENCH_CACHE (default: hh-bench in the user cache directory).
+bench-history:
+	HH_BENCH=1 go test ./internal/history -run '^$$' -bench . -benchtime 5x -timeout 60m
 
 # Run everything the CI checks, locally.
 check: tidy-check lint fmt-check test web-check

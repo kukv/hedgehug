@@ -187,6 +187,61 @@ func TestTaskHistory(t *testing.T) {
 	}
 }
 
+// TestTaskHistoryAcrossAMerge has two clones change different fields of one
+// task and sync, so that the merge of the fields is a commit of its own; the
+// history of the task lists it beside the commits of both sides.
+func TestTaskHistoryAcrossAMerge(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	remote := ts.addRemote()
+	id := ts.add("one", "")
+	if _, err := ts.session().Sync(false, true); err != nil {
+		t.Fatal(err)
+	}
+
+	env := map[string]string{}
+	for k, v := range ts.env {
+		env[k] = v
+	}
+	hh := filepath.Join(t.TempDir(), "hh2")
+	if err := os.MkdirAll(hh, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hh, "config.yaml"), []byte(defaultAccountYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env["HEDGEHUG_HOME"] = hh
+	other := &ops.Session{Getenv: func(k string) string { return env[k] }, Now: time.Now, Warn: func(string) {}}
+	if _, err := other.StoreAdd("me", []string{remote}, "", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := ts.session().Patch(id, ops.PatchInput{Assigns: []ops.Assign{{Key: "title", Op: "=", Value: "from me"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.Patch(id, ops.PatchInput{Assigns: []ops.Assign{{Key: "status", Op: "=", Value: "in_progress"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.Sync(false, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.session().Sync(false, true); err != nil {
+		t.Fatal(err)
+	}
+
+	var out []ops.LogView
+	ts.call("GET", "/api/tasks/"+id+"/history", nil, 200, &out)
+	var got []string
+	for _, v := range out {
+		if v.Op != nil {
+			got = append(got, *v.Op)
+		}
+	}
+	if len(got) != 4 || got[0] != "merge" {
+		t.Errorf("history ops = %v; want the merge first, then both sides and the add", got)
+	}
+}
+
 // rawTask commits a task file past the store's checks, as a sync or a hand
 // edit could.
 func (ts *testServer) rawTask(id string, ulid model.ULID, front string) {

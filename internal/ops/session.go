@@ -50,6 +50,10 @@ type Session struct {
 	BeforeSwap func(path string)
 	Keyring    auth.Keyring // nil is the OS keychain
 	HTTPClient *http.Client // nil is a client with a 30-second timeout
+	// Progress is told how far the history index of a store has come while it
+	// is built on the spot: done of total commits. ForStore copies it; nil
+	// does nothing.
+	Progress func(store string, done, total int)
 	// Run runs a command (gh) and gives its output; nil runs the command.
 	Run func(name string, args ...string) (stdout, stderr []byte, err error)
 
@@ -74,6 +78,10 @@ type Session struct {
 type mountCache struct {
 	mu  gosync.Mutex
 	set *mount.Set
+	// what the session opened and has not let go of (Close): the stores
+	// openStoreAt made and the sets listSet made
+	openedMu gosync.Mutex
+	opened   []func()
 	// the id prefixes that stores share, which qualified works out; sharedMu
 	// is apart from mu, as Mount holds mu while it asks for them
 	sharedMu   gosync.Mutex
@@ -101,6 +109,7 @@ func (ss *Session) ForStore(name string) *Session {
 		Keyring:      ss.Keyring,
 		HTTPClient:   ss.HTTPClient,
 		Run:          ss.Run,
+		Progress:     ss.Progress,
 		tokens:       ss.tokenCache(),
 		mounts:       ss.mountCache(),
 	}
@@ -158,6 +167,7 @@ func (ss *Session) openSet(c *config.Config, strict bool) (set *mount.Set, toWar
 	for _, sk := range set.Skipped {
 		switch {
 		case strict && (ss.StoreName == sk.Name || len(c.Stores) == 1):
+			set.Close() // the caller gets no set to close
 			return nil, nil, openError(sk.Name, sk.Err)
 		case ss.StoreName != "" && ss.StoreName != sk.Name:
 			// not what the command is about
@@ -235,6 +245,32 @@ func (ss *Session) muteOpenWarnings(names []string) (unmute func()) {
 	}
 }
 
+// keep notes how to let go of something the session opened, for Close.
+func (ss *Session) keep(closeFn func()) {
+	mc := ss.mountCache()
+	mc.openedMu.Lock()
+	defer mc.openedMu.Unlock()
+	mc.opened = append(mc.opened, closeFn)
+}
+
+// Close lets go of the repository files of every store the session opened
+// and of the stores it mounted. The GUI server calls it at the end of a
+// request: a store that is not closed keeps its pack files open until it is
+// collected, and Windows cannot rename or remove them. It may be called any
+// number of times, and the session may be used after: what it opens again is
+// noted again. Not to be called while an operation of the session runs.
+func (ss *Session) Close() {
+	mc := ss.mountCache()
+	mc.openedMu.Lock()
+	opened := mc.opened
+	mc.opened = nil
+	mc.openedMu.Unlock()
+	for _, closeFn := range opened {
+		closeFn()
+	}
+	ss.dropMount()
+}
+
 // closeMounted lets go of the repository files of the mounted store whose
 // directory is dir, so that a rename of the directory does not meet them
 // open (Windows).
@@ -254,12 +290,15 @@ func (ss *Session) closeMounted(dir string) {
 }
 
 // dropMount forgets the stores mounted, for the next call to open them
-// again. A write through a handle of its own (a sync) adds objects that a
-// store opened before it does not see.
+// again, after it lets go of their files. A write through a handle of its
+// own (a sync) adds objects that a store opened before it does not see.
 func (ss *Session) dropMount() {
 	mc := ss.mountCache()
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
+	if mc.set != nil {
+		mc.set.Close()
+	}
 	mc.set = nil
 	ss.forgetQualified()
 }
@@ -348,6 +387,7 @@ func (ss *Session) openStoreAt(dir string) (*store.Store, error) {
 		return nil, err
 	}
 	s.SetNow(ss.Now)
+	ss.keep(func() { _ = s.Repo().Close() })
 	return s, nil
 }
 

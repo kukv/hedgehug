@@ -104,6 +104,13 @@ func (ss *Session) rebuildStore(c *config.Config, e config.StoreEntry) (*Rebuilt
 	for _, w := range b.Warnings {
 		ss.warn(e.Name + ": " + w)
 	}
+	// The index is a cache: the swapped-in store works without it.
+	if ns, err := ss.openStoreAt(dir); err == nil {
+		if _, err := ss.openHistory(ns, e.Name); err != nil {
+			ss.warn(fmt.Sprintf("%s: could not index its history: %v", e.Name, err))
+		}
+		_ = ns.Repo().Close()
+	}
 	if left, lerr := sync.FindLeftover(dir); lerr == nil && !left.None() {
 		ss.warn(sync.LeftoverMessage(e.Name))
 	}

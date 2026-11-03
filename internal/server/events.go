@@ -30,14 +30,14 @@ func (s *Server) registerEvents() {
 		"schema.changed":       schemaChanged{},
 		"views.changed":        viewsChanged{},
 	}, func(ctx context.Context, _ *struct{}, send sse.Sender) {
-		events, stop := s.hub.Subscribe() // before hello: nothing after it is missed
+		events, stop := s.hub.subscribe() // before hello: nothing after it is missed
 		defer stop()
 		if s.hub.isClosed() {
 			return // after Shutdown
 		}
 		id := s.presence.Connect()
 		defer s.presence.Disconnect(id)
-		stores, unread := s.poller.Snapshot()
+		stores, unread := s.poller.snapshot()
 		if err := send.Data(helloEvent{Client: id, Stores: stores, Unread: unread}); err != nil {
 			return
 		}

@@ -20,7 +20,7 @@ func TestPollMovedTaskIsRemoved(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ch, cancel := ts.srv.hub.Subscribe()
+	ch, cancel := ts.srv.hub.subscribe()
 	ctx, stop := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	ts.srv.poller.interval = 10 * time.Millisecond
