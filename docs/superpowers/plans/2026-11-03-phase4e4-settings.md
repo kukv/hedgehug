@@ -177,7 +177,7 @@
 - Modify: `cli.ts`・`cli.test.ts`（`cliScopeShow`・`cliScopeSet`・`cliScopeRm`）、`palette/search.ts` とテスト（「プロジェクトの設定を開く」）
 - Create: `web/e2e/project-settings.spec.ts`
 
-**使うもの:** `GET /api/schema/scoped/{project}`（`ScopedView`）、`PUT /api/schema/scoped/{project}`（`ScopedPutInputBody`）、`DELETE /api/schema/scoped/{project}`、`c.schema`（Store の `SchemaView`。ステータス・カテゴリ・既定・ワークフロー）、`GET /api/tasks?q=is:invalid project:<ULID>&store=`（細部 70）、`c.conn.on("schema.changed"|"tasks.changed")`、`ui/Dialog`・`ui/Button`・`ui/CliLine`・`icons`（ステータスの形）
+**使うもの:** 上書きの読み取りは `c.schema` の `SchemaView.scoped`（`where: project:<ULID>` の項目。scoped の GET の API はない）、`PUT /api/schema/scoped/{project}`（`ScopedPutInputBody`）、`DELETE /api/schema/scoped/{project}`、`c.schema`（Store の `SchemaView`。ステータス・カテゴリ・既定・ワークフロー）、`GET /api/tasks?q=is:invalid project:<ULID>&store=`（細部 70）、`c.conn.on("schema.changed"|"tasks.changed")`、`ui/Dialog`・`ui/Button`・`ui/CliLine`・`icons`（ステータスの形）
 
 **作るもの:**
 - 表示するステータス: Store のステータスをスキーマの順にチェックボックスで並べる（形のアイコンとカテゴリ）。カテゴリの既定のステータス（`default: true`）は外せない印（チェックを外せず「カテゴリの既定は外せません」の説明）。上書きがなければ「Store と同じ」と出し、あれば「Store と同じに戻す」
