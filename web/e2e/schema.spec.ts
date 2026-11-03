@@ -13,7 +13,7 @@ import { expect, test } from "./harness";
 
 const region = (page: Page, name: string) => page.getByRole("region", { name });
 const statusRow = (page: Page, name: string) =>
-  page.getByRole("row", { name: new RegExp(`^${name} `) });
+  page.getByRole("row").filter({ has: page.getByRole("rowheader", { name, exact: true }) });
 const SCHEMA = "/settings/schema/demo";
 
 test("the number of tasks of a status is the number the CLI made", async ({ page, hh }) => {
@@ -117,4 +117,25 @@ test("a status is merged into another from the list of the others", async ({ pag
   await expect(page.getByRole("status").filter({ hasText: "1 件を書き換えました" })).toBeVisible();
   expect(hh.show(one.id).status).toBe("backlog");
   await expect(statusRow(page, "on_hold")).toHaveCount(0);
+});
+
+test("a tab is in the address, and a tab opened by address shows that tab", async ({
+  page,
+  hh,
+}) => {
+  await hh.open(page, SCHEMA);
+  const tabs = page.getByRole("navigation", { name: "スキーマの種類" });
+  await tabs.getByRole("link", { name: /^種類/ }).click();
+  await expect(page).toHaveURL(/\/settings\/schema\/demo\?tab=kinds$/);
+  await expect(page.getByRole("table", { name: "種類" })).toBeVisible();
+  await tabs.getByRole("link", { name: /^ステータス/ }).click();
+  await expect(page).toHaveURL(/\/settings\/schema\/demo$/);
+
+  // the address of a tab opens the tab, as a new browser tab does
+  await hh.open(page, `${SCHEMA}?tab=workflow`);
+  await expect(page.getByRole("heading", { level: 2, name: "ワークフロー" })).toBeVisible();
+  await expect(tabs.getByRole("link", { name: /^ワークフロー/ })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
 });

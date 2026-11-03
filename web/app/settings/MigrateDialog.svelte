@@ -13,6 +13,7 @@
 </script>
 
 <script lang="ts">
+  import { tick } from "svelte";
   import { unwrap } from "../../core/api/client";
   import { cliSchemaMigrate, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
@@ -49,6 +50,7 @@
   let failure = $state<string | null>(null);
   // The latest dry run wins: an answer of an older one, or one after the dialog is gone, is dropped.
   let seq = 0;
+  let form: HTMLElement | undefined = $state();
 
   const name = $derived(next.trim());
   const sendable = $derived(name !== "" && name !== old);
@@ -109,6 +111,11 @@
     } finally {
       busy = false;
     }
+    // The button the user pressed was disabled while the run was on, and a disabled control drops the focus.
+    if (failure !== null) {
+      await tick();
+      form?.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+    }
   }
 
   function close(): void {
@@ -149,7 +156,7 @@
 </script>
 
 <Dialog open {title} width={560} {cli} cliDisabled={name === ""} onclose={close}>
-  <div class="form" role="presentation" {onkeydown}>
+  <div class="form" role="presentation" bind:this={form} {onkeydown}>
     {#if mode === "merge"}
       <div class="field">
         <label class="lbl" for="{uid}-to">併合先</label>

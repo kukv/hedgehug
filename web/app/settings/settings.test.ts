@@ -17,9 +17,9 @@ vi.mock("./SettingsWorkspaces.svelte", () => ({
 
 // SettingsSchema too.
 vi.mock("./SettingsSchema.svelte", () => ({
-  default: (anchor: Comment, props: { store: string }) => {
+  default: (anchor: Comment, props: { store: string; tab: string }) => {
     const p = document.createElement("p");
-    p.textContent = `schema of ${props.store}`;
+    p.textContent = `schema of ${props.store} (${props.tab})`;
     anchor.before(p);
   },
 }));
@@ -51,7 +51,7 @@ function core(names: string[], get = vi.fn(async () => health("0.9.0")), loaded 
 
 const page = { page: "workspaces", store: "shared" } as const;
 const general = { page: "general" } as const;
-const schemaPage = { page: "schema", store: "shared" } as const;
+const schemaPage = { page: "schema", store: "shared", tab: "statuses" } as const;
 
 beforeEach(() => history.replaceState(null, "", "/settings/workspaces/shared"));
 afterEach(() => {
@@ -285,16 +285,26 @@ describe("SettingsRoute", () => {
       core(["shared", "me"]),
     );
     expect(getByRole("region", { name: "設定の本文" })).toContainElement(
-      getByText("schema of shared"),
+      getByText("schema of shared (statuses)"),
     );
     expect(location.pathname).toBe("/settings/schema/shared");
+  });
+
+  it("スキーマのタブはページに渡す", () => {
+    history.replaceState(null, "", "/settings/schema/shared?tab=kinds");
+    const { getByText } = renderWithCore(
+      SettingsRoute,
+      { page: { page: "schema", store: "shared", tab: "kinds" } },
+      core(["shared"]),
+    );
+    expect(getByText("schema of shared (kinds)")).toBeTruthy();
   });
 
   it("存在しない Store のスキーマの URL は見つからない旨を出す", () => {
     history.replaceState(null, "", "/settings/schema/nope");
     const { getByText, queryByRole } = renderWithCore(
       SettingsRoute,
-      { page: { page: "schema", store: "nope" } },
+      { page: { page: "schema", store: "nope", tab: "statuses" } },
       core(["shared"]),
     );
     expect(getByText("Store「nope」が見つかりません")).toBeTruthy();
@@ -306,7 +316,7 @@ describe("SettingsRoute", () => {
     const nav = view.getByRole("navigation", { name: "設定のナビゲーション" });
     await view.rerender({ page: schemaPage });
     expect(view.getByRole("navigation", { name: "設定のナビゲーション" })).toBe(nav);
-    expect(view.getByText("schema of shared")).toBeTruthy();
+    expect(view.getByText("schema of shared (statuses)")).toBeTruthy();
   });
 
   it("同期と保守は Store を持たずに、レイアウトと本文を出す", () => {

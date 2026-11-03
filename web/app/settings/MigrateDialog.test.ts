@@ -236,9 +236,13 @@ describe("MigrateDialog", () => {
     });
     await type("review");
     await settle();
-    await fireEvent.click(screen.getByRole("button", { name: "名前を変える" }));
+    const run = screen.getByRole("button", { name: "名前を変える" });
+    run.focus(); // a click focuses the button in a browser; it is disabled while the run is on
+    await fireEvent.click(run);
     await vi.advanceTimersByTimeAsync(0);
     expect(screen.getByRole("alert")).toBeVisible();
+    // the focus a disabled button dropped goes to the field, to try another name
+    expect(input()).toHaveFocus();
     expect(onclose).not.toHaveBeenCalled();
     expect(ondone).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "名前を変える" })).toBeEnabled();

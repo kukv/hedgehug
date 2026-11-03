@@ -1,31 +1,25 @@
 <script lang="ts">
   import { tick, untrack } from "svelte";
-  import { type Schemas, type TaskView, unwrap } from "../../core/api/client";
+  import { type TaskView, unwrap } from "../../core/api/client";
   import { CATEGORY_LABEL, type Category } from "../../core/categories";
-  import { cliSchemaCheck } from "../../core/cli";
-  import { groupFindings, type Severity, severityOf } from "../../core/doctor";
   import { errorMessage } from "../../core/messages";
   import { schemaUsage } from "../../core/schema-usage";
   import { core } from "../context";
-  import Icon, { type IconName } from "../icons/Icon.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
   import StatusIcon from "../icons/StatusIcon.svelte";
-  import { onLinkClick, router } from "../router";
+  import { onLinkClick, router, type SchemaTab } from "../router";
   import { useSubscribe } from "../svelte-store";
   import Button from "../ui/Button.svelte";
-  import CliLine from "../ui/CliLine.svelte";
   import FormError from "../ui/FormError.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
   import Tabs from "../ui/Tabs.svelte";
   import MigrateDialog, { type MigrateTarget } from "./MigrateDialog.svelte";
+  import SchemaCheck from "./SchemaCheck.svelte";
 
   // The schema of a Store (its .hedgehug/schema.yaml), read: how many tasks use each definition, the
   // overrides of the projects, and what `schema check` finds. A name is changed or merged here (migrate);
   // everything else is edited in the YAML.
-  let { store }: { store: string } = $props();
-
-  type Finding = Schemas["Finding"];
-  type SchemaTab = "statuses" | "kinds" | "props" | "workflow";
+  let { store, tab }: { store: string; tab: SchemaTab } = $props();
 
   const c = core();
   const uid = $props.id();
@@ -41,9 +35,12 @@
     return c.stores.stores().length >= 2;
   });
 
-  // The schema is what the page is made from: say so when it cannot be read.
+  // The schema is what the page is made from: say so when it cannot be read, and read it again on
+  // request and at resync (the cache itself only reads again what it holds).
   let schemaError = $state.raw<unknown>(null);
+  let schemaTry = $state(0);
   $effect(() => {
+    schemaTry;
     schemaError = null;
     const s = store;
     let live = true;
@@ -56,13 +53,10 @@
   });
 
   let tasks = $state.raw<TaskView[] | null>(null);
-  let findings = $state.raw<Finding[] | null>(null);
   // A reload that fails keeps what was read; the failure is shown above it.
   let tasksFailure = $state<string | null>(null);
-  let checkFailure = $state<string | null>(null);
   // The latest request of each kind wins: an older answer, or one after the page is gone, is dropped.
   let tasksSeq = 0;
-  let checkSeq = 0;
 
   async function loadTasks(s: string): Promise<void> {
     const mine = ++tasksSeq;
@@ -76,47 +70,28 @@
     }
   }
 
-  async function loadCheck(s: string): Promise<void> {
-    const mine = ++checkSeq;
-    try {
-      const r = await unwrap(c.api.GET("/api/schema/check", { params: { query: { store: s } } }));
-      if (mine !== checkSeq) return;
-      findings = r.findings ?? [];
-      checkFailure = null;
-    } catch (e) {
-      if (mine === checkSeq) checkFailure = errorMessage(e);
-    }
-  }
+  let check: SchemaCheck | undefined = $state();
 
-  // The schema cache reads the schema again at schema.changed itself; the counts and the check follow
-  // the schema and the tasks of this Store.
+  // The schema cache reads the schema again at schema.changed itself, and the check follows its own
+  // events; the counts follow the tasks of this Store.
   $effect(() => {
     const s = store;
     tasks = null;
-    findings = null;
     tasksFailure = null;
-    checkFailure = null;
-    untrack(() => {
-      void loadTasks(s);
-      void loadCheck(s);
-    });
-    const all = () => {
-      void loadTasks(s);
-      void loadCheck(s);
-    };
+    ask = null; // a dialog of another Store would write to this one
+    untrack(() => void loadTasks(s));
     const offs = [
-      c.conn.on("schema.changed", (e) => {
-        if (e.store === s) void loadCheck(s);
-      }),
       c.conn.on("tasks.changed", (e) => {
-        if (e.store === s) all();
+        if (e.store === s) void loadTasks(s);
       }),
-      c.conn.on("resync", all),
+      c.conn.on("resync", () => {
+        void loadTasks(s);
+        if (c.schema.get(s) === undefined) schemaTry++;
+      }),
     ];
     return () => {
       for (const off of offs) off();
       tasksSeq++;
-      checkSeq++;
     };
   });
 
@@ -130,8 +105,6 @@
   const scoped = $derived(schema?.scoped ?? []);
   const taskByUlid = $derived(new Map((tasks ?? []).map((t) => [t.ulid, t])));
 
-  let tab = $state<SchemaTab>("statuses");
-  const here = $derived(router.href({ name: "settings", page: "schema", store }));
   const tabItems = $derived(
     (
       [
@@ -142,9 +115,8 @@
       ] as const
     ).map(([key, label, n]) => ({
       label,
-      href: here,
+      href: router.href({ name: "settings", page: "schema", store, tab: key }),
       current: tab === key,
-      onselect: () => (tab = key),
       count: n,
     })),
   );
@@ -174,20 +146,6 @@
   }
   const projectOf = (where: string): string => where.replace(/^project:/, "");
 
-  const groups = $derived(groupFindings(findings ?? []));
-  const SEVERITY: Record<Severity, { label: string; icon: IconName }> = {
-    error: { label: "エラー", icon: "forbid" },
-    warning: { label: "警告", icon: "warning" },
-    info: { label: "情報", icon: "status" },
-  };
-  const checkSummary = $derived(
-    findings === null
-      ? "検査しています…"
-      : findings.length === 0
-        ? "スキーマとタスクは合っています"
-        : `${findings.length} 件の指摘があります`,
-  );
-
   // migrate: the dialog for a definition, opened from its row.
   type Ask = {
     target: MigrateTarget;
@@ -201,16 +159,14 @@
 
   // The row that opened the dialog may be gone (the name changed): the focus then goes to the heading.
   async function migrated(): Promise<void> {
+    // The events of the write would bring these too; reading now shows the result at once (a read that
+    // an event starts after this one makes this one give way).
     void loadTasks(store);
-    void loadCheck(store);
+    check?.reload();
     await tick();
     const a = document.activeElement;
     if (a === null || a === document.body) heading?.focus();
   }
-
-  const lead = $derived(
-    `${store} を使う全員に共有される定義です（.hedgehug/schema.yaml）。追加・削除・色や並びの変更は YAML を編集してください。名前の変更と併合はこの画面からできます。`,
-  );
 </script>
 
 <div class="page">
@@ -218,11 +174,16 @@
     <h1 bind:this={heading} tabindex="-1">スキーマ</h1>
     <StoreBadge {store} tone={c.stores.tone(store)} />
   </header>
-  <p class="lead">{lead}</p>
+  <p class="lead">
+    {store}
+    を使う全員に共有される定義です（.hedgehug/schema.yaml）。追加・削除・色や並びの変更は YAML
+    を編集してください。名前の変更と併合はこの画面からできます。
+  </p>
 
   {#if schema === undefined}
     {#if schemaError}
       <FormError message="スキーマを読めません · {errorMessage(schemaError)}" />
+      <div><Button onclick={() => schemaTry++}>もう一度読み込む</Button></div>
     {:else}
       <p class="note">読み込み中…</p>
     {/if}
@@ -260,7 +221,7 @@
           どれも todo・doing・done・canceled のいずれかのカテゴリに属し、各カテゴリに既定が 1
           つあります。
         </p>
-        <table>
+        <table aria-labelledby="{uid}-statuses">
           <thead>
             <tr>
               <th scope="col">名前</th>
@@ -304,7 +265,7 @@
           役割は container（まとめる単位）と work（作業項目）の 2
           つです。置ける親に反する配置は書き込み時に拒否されます。
         </p>
-        <table>
+        <table aria-labelledby="{uid}-kinds">
           <thead>
             <tr>
               <th scope="col">名前</th>
@@ -349,7 +310,7 @@
         <p class="note">
           task_ref は同じ Store のタスクだけを参照できます。値の件数は、その値を持つタスクの数です。
         </p>
-        <table>
+        <table aria-labelledby="{uid}-props">
           <thead>
             <tr>
               <th scope="col">名前</th>
@@ -381,9 +342,7 @@
               {#each p.values ?? [] as v (v)}
                 <tr class="value">
                   <th scope="row"><span class="vname">{name} › {v}</span></th>
-                  <td></td>
-                  <td></td>
-                  <td></td>
+                  <td colspan="3"></td>
                   <td class="num">{count(usage?.values[name]?.[v])}</td>
                   <td>
                     <div class="acts">{@render actions("value", v, p.values ?? [], name)}</div>
@@ -453,43 +412,7 @@
       {/if}
     </section>
 
-    <section class="sec" aria-labelledby="{uid}-check">
-      <h2 id="{uid}-check">スキーマの検査</h2>
-      {#if checkFailure}
-        <FormError message="検査の結果を読めません · {checkFailure}" />
-      {/if}
-      <p class="sum" aria-live="polite">{checkSummary}</p>
-      {#each groups as g (g.check)}
-        <div class="group">
-          <h3>{g.name} <span class="n">{g.items.length}</span></h3>
-          <ul class="findings">
-            {#each g.items as f}
-              {@const sev = severityOf(f)}
-              {@const t = f.task ? taskByUlid.get(f.task) : undefined}
-              <li class="finding" data-severity={sev}>
-                <span class="sev"
-                  ><Icon name={SEVERITY[sev].icon} size={14} />{SEVERITY[sev].label}</span
-                >
-                <div class="what">
-                  <p class="msg">{f.msg}</p>
-                  {#if f.hint}
-                    <p class="hint">{f.hint}</p>
-                  {/if}
-                  <p class="where mono">{f.where}</p>
-                  {#if f.task}
-                    {@const href = router.href({ name: "task", ulid: f.task })}
-                    <a class="open" {href} onclick={(e) => onLinkClick(e, href)}>
-                      {t ? `${t.id} を開く` : "タスクを開く"}
-                    </a>
-                  {/if}
-                </div>
-              </li>
-            {/each}
-          </ul>
-        </div>
-      {/each}
-      <div><CliLine command={cliSchemaCheck(many ? store : undefined)} /></div>
-    </section>
+    <SchemaCheck {store} {many} idOf={(ulid) => taskByUlid.get(ulid)?.id} bind:this={check} />
   {/if}
 </div>
 
@@ -534,10 +457,6 @@
     margin: 0;
     font-size: var(--fs-13);
     font-weight: 600;
-  }
-  .n {
-    color: var(--muted);
-    font-weight: 400;
   }
   .lead,
   .note {
@@ -603,8 +522,7 @@
     clip-path: inset(50%);
   }
   .flow,
-  .over,
-  .findings {
+  .over {
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
@@ -623,56 +541,5 @@
   }
   a {
     color: var(--accent);
-  }
-  .sum {
-    margin: 0;
-    font-size: var(--fs-13);
-    color: var(--ink-2);
-  }
-  .group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-6);
-  }
-  .finding {
-    display: flex;
-    gap: var(--space-10);
-  }
-  .sev {
-    display: inline-flex;
-    flex: 0 0 5rem;
-    align-items: baseline;
-    gap: var(--space-4);
-    font-size: var(--fs-12);
-    font-weight: 600;
-  }
-  .finding[data-severity="error"] .sev {
-    color: var(--danger);
-  }
-  .finding[data-severity="warning"] .sev {
-    color: var(--warning);
-  }
-  .finding[data-severity="info"] .sev {
-    color: var(--muted);
-  }
-  .finding .what {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    min-width: 0;
-    color: inherit;
-  }
-  .finding p {
-    margin: 0;
-    overflow-wrap: anywhere;
-  }
-  .hint,
-  .where {
-    color: var(--muted);
-    font-size: var(--fs-12);
-  }
-  .open {
-    align-self: flex-start;
-    font-size: var(--fs-12);
   }
 </style>

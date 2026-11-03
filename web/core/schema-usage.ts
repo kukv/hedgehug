@@ -17,7 +17,7 @@ const zero = (names: string[]): Record<string, number> =>
   Object.fromEntries(names.map((n) => [n, 0]));
 
 const bump = (m: Record<string, number>, k: string): void => {
-  if (k in m) m[k] = (m[k] ?? 0) + 1;
+  if (Object.hasOwn(m, k)) m[k] = (m[k] ?? 0) + 1;
 };
 
 /** How many of the tasks use each definition of the schema; one that nobody uses is 0. */

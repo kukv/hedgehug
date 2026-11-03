@@ -95,7 +95,7 @@
       {:else if route.name === "my"}
         <MyTasks />
       {:else if route.name === "inbox"}
-        <InboxPage />
+        <InboxPage tab={route.tab} />
       {:else if route.name === "activity"}
         <ActivityPage workspaces={route.workspaces} sync={route.sync} />
       {:else if route.name === "settings"}

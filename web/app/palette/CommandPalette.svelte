@@ -177,7 +177,8 @@
         workspaceSettings: (store, ulid) =>
           router.href({ name: "workspace", store, ulid, tab: "settings" }),
         settingsWorkspaces: (store) => router.href({ name: "settings", page: "workspaces", store }),
-        settingsSchema: (store) => router.href({ name: "settings", page: "schema", store }),
+        settingsSchema: (store) =>
+          router.href({ name: "settings", page: "schema", store, tab: "statuses" }),
         settingsGeneral: () => router.href({ name: "settings", page: "general" }),
         project: (ulid) => router.href({ name: "project", ulid, tab: "tree" }),
         projectSettings: (ulid) => router.href({ name: "project", ulid, tab: "settings" }),
@@ -185,7 +186,7 @@
         view: (store, view) => router.href({ name: "view", store, view }),
         query: (layout, q) => router.href({ name: "query", layout, q }),
         my: () => router.href({ name: "my" }),
-        inbox: () => router.href({ name: "inbox" }),
+        inbox: () => router.href({ name: "inbox", tab: "all" }),
         activity: () => router.href({ name: "activity", workspaces: [], sync: "" }),
       },
       selected: sel ? (c.cache.task(sel) ?? null) : null,

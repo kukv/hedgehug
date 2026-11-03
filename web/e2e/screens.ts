@@ -41,7 +41,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 //   My tasks    /my (heading "マイタスク"); the groups are regions named "今日", "今週", ...; the sidebar
 //               link "マイタスク" carries the count
 //   Inbox       /inbox (heading "通知"); the navigation "通知の種類" (links すべて / 上書き / メンション /
-//               同期の修復, each with the number unread); a row is a listitem with the buttons
+//               同期の修復, each with the number unread; the tab is in the address: /inbox?tab=overwritten|mention|repair); a row is a listitem with the buttons
 //               "自分の値に戻す", "このままにする" (overwritten) or "既読にする"; "すべて既読にする";
 //               the sidebar link "通知" carries the number of unread
 //   Activity    /activity (heading "アクティビティ"); the button "<n> / <m> ワークスペース" opens the dialog
@@ -53,7 +53,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 //               region "修復の結果"), and the region "削除済みタスクの完全削除" (the textbox "N 日より古い
 //               もの", the buttons "確かめる" and "完全に削除…", the dialog "完全に削除する")
 //   Schema      /settings/schema/<store> (heading "スキーマ"); the navigation "スキーマの種類" has the links
-//               ステータス / 種類 / プロパティと関連 / ワークフロー; a row of a table is named by the definition
+//               ステータス / 種類 / プロパティと関連 / ワークフロー, whose address is /settings/schema/<store>?tab=kinds|props|workflow; a row of a table is named by the definition
 //               and its buttons are "名前を変える…（<名前>）" and "併合する…（<名前>）"; the regions
 //               "プロジェクトごとの上書き" and "スキーマの検査"; the dialog "ステータス「<名前>」の名前を変える"
 //               (or "を併合する") has the textbox "新しい名前" (the combobox "併合先"), the dry run

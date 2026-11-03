@@ -39,7 +39,7 @@
   );
   const generalHref = hrefOf({ name: "settings", page: "general" });
   const workspacesHref = $derived(hrefOf({ name: "settings", page: "workspaces", store }));
-  const schemaHref = $derived(hrefOf({ name: "settings", page: "schema", store }));
+  const schemaHref = $derived(hrefOf({ name: "settings", page: "schema", store, tab: "statuses" }));
   const homeHref = hrefOf({ name: "home" });
 
   function pick(next: string) {

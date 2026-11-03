@@ -67,12 +67,19 @@ type Opts = {
   // the schema is not in yet and does not come
   pending?: boolean;
   store?: string;
+  tab?: "statuses" | "kinds" | "props" | "workflow";
 };
 
 function setup(opts: Opts = {}) {
   const conn = new FakeConn();
   const cache = emitter();
-  const state = { findings: opts.findings ?? [], schema: opts.schema ?? sch };
+  const state = {
+    findings: opts.findings ?? [],
+    schema: opts.schema ?? sch,
+    failLoad: opts.loadError !== undefined,
+    // the cache holds the schema once it has read it
+    held: opts.loadError === undefined && !opts.pending,
+  };
   const get = vi.fn((path: string, init: { params: { query: { store: string } } }) => {
     if (opts.get) {
       const r = opts.get(path, init);
@@ -86,10 +93,21 @@ function setup(opts: Opts = {}) {
     opts.post ? opts.post(init.body) : ok({ changed: [], skipped: [], commit: null }),
   );
   const reload = vi.fn(async () => {});
+  const load = vi.fn(() =>
+    opts.pending
+      ? new Promise(() => {})
+      : state.failLoad
+        ? Promise.reject(opts.loadError)
+        : Promise.resolve(sch).then((v) => {
+            state.held = true;
+            cache.emit(); // the cache tells the page what it now holds
+            return v;
+          }),
+  );
   const names = opts.stores ?? ["shared"];
   const view = renderWithCore(
     SettingsSchema,
-    { store: opts.store ?? "shared" },
+    { store: opts.store ?? "shared", tab: opts.tab ?? "statuses" },
     {
       api: { GET: get, POST: post },
       conn,
@@ -99,19 +117,14 @@ function setup(opts: Opts = {}) {
         subscribe: () => () => {},
       },
       schema: {
-        get: () => (opts.loadError || opts.pending ? undefined : state.schema),
-        load: () =>
-          opts.pending
-            ? new Promise(() => {})
-            : opts.loadError
-              ? Promise.reject(opts.loadError)
-              : Promise.resolve(sch),
+        get: () => (state.held ? state.schema : undefined),
+        load,
         reload,
         subscribe: cache.subscribe,
       },
     },
   );
-  return { get, post, reload, conn, cache, state, ...view };
+  return { get, post, reload, load, conn, cache, state, ...view };
 }
 
 const calls = (get: ReturnType<typeof setup>["get"], path: string) =>
@@ -159,17 +172,16 @@ describe("SettingsSchema", () => {
   });
 
   it("lists the kinds with the parents they can sit under", async () => {
-    setup();
-    await fireEvent.click(await screen.findByRole("link", { name: /^種類/ }));
-    expect(screen.getByRole("heading", { level: 2, name: "種類" })).toBeVisible();
+    setup({ tab: "kinds" });
+    expect(await screen.findByRole("heading", { level: 2, name: "種類" })).toBeVisible();
     expect(within(row(/^project/)).getByText("ルート")).toBeVisible();
     expect(within(row(/^task/)).getByText("どこにでも")).toBeVisible();
     expect(within(row(/^task/)).getByText("3")).toBeVisible();
   });
 
   it("lists the properties, the values of an enum with their own numbers, and the notes of a reference", async () => {
-    setup();
-    await fireEvent.click(await screen.findByRole("link", { name: /^プロパティ/ }));
+    setup({ tab: "props" });
+    await screen.findByRole("row", { name: /^points/ });
     expect(within(row(/^points/)).getByText("ポイント")).toBeVisible();
     expect(within(row(/^points/)).getByText("number")).toBeVisible();
     expect(within(row(/^relates/)).getByText("複数 · 双方向")).toBeVisible();
@@ -179,16 +191,14 @@ describe("SettingsSchema", () => {
   });
 
   it("shows the transitions and the required fields of the workflow", async () => {
-    setup();
-    await fireEvent.click(await screen.findByRole("link", { name: /^ワークフロー/ }));
-    expect(screen.getByText(/から移せるのは todo だけ/)).toBeVisible();
+    setup({ tab: "workflow" });
+    expect(await screen.findByText(/から移せるのは todo だけ/)).toBeVisible();
     expect(screen.getByText(/に入るには points が必要/)).toBeVisible();
   });
 
   it("says so when the workflow has no constraint", async () => {
-    setup({ schema: { ...sch, workflow: { transitions: {}, required: {} } } });
-    await fireEvent.click(await screen.findByRole("link", { name: /^ワークフロー/ }));
-    expect(screen.getByText("制約はありません")).toBeVisible();
+    setup({ tab: "workflow", schema: { ...sch, workflow: { transitions: {}, required: {} } } });
+    expect(await screen.findByText("制約はありません")).toBeVisible();
     expect(screen.getByText("必須の項目はありません")).toBeVisible();
   });
 
@@ -213,25 +223,45 @@ describe("SettingsSchema", () => {
     );
   });
 
-  it("lists the findings by check, with the ID of the task", async () => {
-    setup({
-      findings: [
-        { check: "schema", msg: "未定義のステータス", severity: "error", where: "statuses[1]" },
-        { check: "task", msg: "親が見つかりません", severity: "warning", where: "x", task: "A" },
-      ],
-    });
-    expect(await screen.findByText("2 件の指摘があります")).toBeVisible();
-    expect(screen.getByRole("heading", { level: 3, name: /^スキーマ/ })).toBeVisible();
-    expect(screen.getByText("未定義のステータス")).toBeVisible();
-    const open = screen.getByRole("link", { name: "REL-A を開く" });
-    expect(open.getAttribute("href")).toBe("/tasks/A");
+  it("names each table by its heading", async () => {
+    const { rerender } = setup();
+    expect(await screen.findByRole("table", { name: "ステータス" })).toBeVisible();
+    await rerender({ tab: "kinds" });
+    expect(screen.getByRole("table", { name: "種類" })).toBeVisible();
+    await rerender({ tab: "props" });
+    expect(screen.getByRole("table", { name: "プロパティと関連" })).toBeVisible();
   });
 
-  it("writes --store in the command only when there are many Stores", async () => {
-    setup({ stores: ["shared", "ops"] });
-    expect(await screen.findByRole("button", { name: /コマンドをコピー/ })).toHaveTextContent(
-      "$ hh schema check --store shared",
+  it("joins the empty cells of a value row into one", async () => {
+    setup({ tab: "props" });
+    const value = await screen.findByRole("row", { name: /priority › low/ });
+    expect(value.querySelectorAll("td[colspan='3']")).toHaveLength(1);
+    expect(value.querySelectorAll("td:empty")).toHaveLength(1);
+  });
+
+  it("each tab is a link to its own address, and the tab of the address is the current one", async () => {
+    setup({ tab: "props", store: "org-b/ops" });
+    await screen.findByRole("table", { name: "プロパティと関連" });
+    const links = within(screen.getByRole("navigation", { name: "スキーマの種類" })).getAllByRole(
+      "link",
     );
+    expect(links.map((l) => l.getAttribute("href"))).toEqual([
+      "/settings/schema/org-b%2Fops",
+      "/settings/schema/org-b%2Fops?tab=kinds",
+      "/settings/schema/org-b%2Fops?tab=props",
+      "/settings/schema/org-b%2Fops?tab=workflow",
+    ]);
+    expect(links.map((l) => l.getAttribute("aria-current"))).toEqual([null, null, "page", null]);
+    await fireEvent.click(links[3] as HTMLElement);
+    expect(location.pathname + location.search).toBe("/settings/schema/org-b%2Fops?tab=workflow");
+  });
+
+  it("closes the dialog when the Store changes, so that it cannot write to the other Store", async () => {
+    const k = setup();
+    await fireEvent.click(await screen.findByRole("button", { name: "名前を変える…（triage）" }));
+    expect(screen.getByRole("dialog")).toBeVisible();
+    await k.rerender({ store: "ops" });
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("does not offer what is not built: adding, deleting, colors, the YAML, the templates", async () => {
@@ -294,21 +324,6 @@ describe("SettingsSchema", () => {
       await waitFor(() => expect(screen.queryByText(/タスクの件数を読めません/)).toBeNull());
     });
 
-    it("shows a failure of the check, and keeps the findings it had", async () => {
-      let n = 0;
-      const { conn } = setup({
-        findings: [{ check: "schema", msg: "古い指摘", severity: "error", where: "w" }],
-        get: (path) =>
-          path === "/api/schema/check" && ++n === 2
-            ? fail(500, "internal", {}, "検査できません")
-            : undefined,
-      });
-      await screen.findByText("古い指摘");
-      conn.emit("schema.changed", { store: "shared" });
-      expect(await screen.findByText(/検査の結果を読めません/)).toBeVisible();
-      expect(screen.getByText("古い指摘")).toBeVisible();
-    });
-
     it("drops the answer of an older request that comes after a newer one", async () => {
       const slow: { resolve?: (v: unknown) => void } = {};
       let n = 0;
@@ -334,13 +349,13 @@ describe("SettingsSchema", () => {
     });
 
     it("leaves every listener when it goes", () => {
-      const offs = [vi.fn(), vi.fn(), vi.fn()];
+      const offs = Array.from({ length: 5 }, () => vi.fn()); // two here, three in the check
       let i = 0;
       const conn = new FakeConn();
       vi.spyOn(conn, "on").mockImplementation(() => offs[i++] ?? (() => {}));
       const view = renderWithCore(
         SettingsSchema,
-        { store: "shared" },
+        { store: "shared", tab: "statuses" },
         {
           api: { GET: vi.fn(() => ok({ tasks: [], findings: [] })) },
           conn,
@@ -353,7 +368,12 @@ describe("SettingsSchema", () => {
     });
 
     it("reads the other Store when the Store changes, and does not show the old numbers meanwhile", async () => {
-      const k = setup();
+      const k = setup({
+        get: (path, init) =>
+          path === "/api/tasks" && init.params.query.store === "ops"
+            ? new Promise(() => {})
+            : undefined,
+      });
       await waitFor(() => expect(within(row(/^todo/)).getByText("2")).toBeVisible());
       await k.rerender({ store: "ops" });
       expect(calls(k.get, "/api/tasks").at(-1)?.[1]).toEqual({
@@ -362,6 +382,9 @@ describe("SettingsSchema", () => {
       expect(calls(k.get, "/api/schema/check").at(-1)?.[1]).toEqual({
         params: { query: { store: "ops" } },
       });
+      // the numbers of the other Store are gone, and the ones of this Store are not in
+      expect(within(row(/^todo/)).queryByText("2")).toBeNull();
+      expect(within(row(/^todo/)).getByText("—")).toBeVisible();
     });
   });
 
@@ -370,6 +393,29 @@ describe("SettingsSchema", () => {
       setup({ loadError: new Error("読めません") });
       const alert = await screen.findByRole("alert");
       expect(alert).toHaveTextContent("スキーマを読めません");
+    });
+
+    it("reads the schema again with the button, and shows it once it comes", async () => {
+      const k = setup({ loadError: new Error("読めません") });
+      await screen.findByRole("alert");
+      k.state.failLoad = false;
+      await fireEvent.click(screen.getByRole("button", { name: "もう一度読み込む" }));
+      expect(await screen.findByRole("table", { name: "ステータス" })).toBeVisible();
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+
+    it("reads the schema again at resync while it is not in, and not when it is", async () => {
+      const k = setup({ loadError: new Error("読めません") });
+      await screen.findByRole("alert");
+      expect(k.load).toHaveBeenCalledTimes(1);
+      k.conn.emit("resync");
+      await waitFor(() => expect(k.load).toHaveBeenCalledTimes(2));
+      k.state.failLoad = false;
+      k.conn.emit("resync");
+      await screen.findByRole("table", { name: "ステータス" });
+      const n = k.load.mock.calls.length;
+      k.conn.emit("resync");
+      expect(k.load).toHaveBeenCalledTimes(n);
     });
 
     it("says it is reading until the schema is in", () => {
@@ -393,12 +439,11 @@ describe("SettingsSchema", () => {
     });
 
     it("opens it for a kind, a property and a value", async () => {
-      setup();
-      await fireEvent.click(await screen.findByRole("link", { name: /^種類/ }));
-      await fireEvent.click(screen.getByRole("button", { name: "名前を変える…（task）" }));
+      const { rerender } = setup({ tab: "kinds" });
+      await fireEvent.click(await screen.findByRole("button", { name: "名前を変える…（task）" }));
       expect(screen.getByRole("dialog", { name: "種類「task」の名前を変える" })).toBeVisible();
       await fireEvent.click(screen.getByRole("button", { name: "キャンセル" }));
-      await fireEvent.click(screen.getByRole("link", { name: /^プロパティ/ }));
+      await rerender({ tab: "props" });
       await fireEvent.click(screen.getByRole("button", { name: "名前を変える…（points）" }));
       expect(
         screen.getByRole("dialog", { name: "プロパティ「points」の名前を変える" }),
@@ -409,9 +454,8 @@ describe("SettingsSchema", () => {
     });
 
     it("offers no merge when nothing else is defined", async () => {
-      setup({ schema: { ...sch, kinds: [sch.kinds[1] as never] } });
-      await fireEvent.click(await screen.findByRole("link", { name: /^種類/ }));
-      expect(screen.getByRole("button", { name: "名前を変える…（task）" })).toBeVisible();
+      setup({ tab: "kinds", schema: { ...sch, kinds: [sch.kinds[1] as never] } });
+      expect(await screen.findByRole("button", { name: "名前を変える…（task）" })).toBeVisible();
       expect(screen.queryByRole("button", { name: "併合する…（task）" })).toBeNull();
     });
 

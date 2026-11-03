@@ -44,7 +44,7 @@
     {#if page.page === "general"}
       <SettingsGeneral />
     {:else if page.page === "schema"}
-      <SettingsSchema store={page.store} />
+      <SettingsSchema store={page.store} tab={page.tab} />
     {:else}
       <SettingsWorkspaces store={page.store} />
     {/if}

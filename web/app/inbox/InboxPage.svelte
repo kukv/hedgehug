@@ -26,6 +26,9 @@
   import StoreBadge from "../ui/StoreBadge.svelte";
   import Tabs from "../ui/Tabs.svelte";
 
+  // The tab is in the address (?tab=), so a tab opened in a new browser tab is the same tab.
+  let { tab }: { tab: InboxTab } = $props();
+
   const c = core();
   const unread = useSubscribe(c.conn, () => c.conn.unread);
   const storesRev = useSubscribe(c.stores, () => ({}));
@@ -33,7 +36,6 @@
   // Every store at once: the server reads each inbox when no store is named.
   let items = $state.raw<Notification[] | null>(null);
   let failure = $state<string | null>(null);
-  let tab = $state<InboxTab>("all");
   // The items (by ULID) and "all" that have a request on their way.
   let busy = $state<string[]>([]);
   let seq = 0;
@@ -84,9 +86,8 @@
   const tabItems = $derived(
     INBOX_TABS.map((t) => ({
       label: t.label,
-      href: router.href({ name: "inbox" }),
+      href: router.href({ name: "inbox", tab: t.tab }),
       current: tab === t.tab,
-      onselect: () => (tab = t.tab),
       count: counts[t.tab],
     })),
   );

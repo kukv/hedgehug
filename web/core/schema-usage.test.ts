@@ -53,4 +53,19 @@ describe("schemaUsage", () => {
     expect(u.statuses.todo).toBe(0);
     expect(u.values.priority).toEqual({ low: 0, high: 0 });
   });
+
+  it("counts only the names the schema defines, whatever a task holds (toString is a name, not a method)", () => {
+    const u = schemaUsage(schema, [
+      t("toString", "constructor", { priority: "valueOf", area: ["toString"], hasOwnProperty: 1 }),
+    ]);
+    expect(u.statuses).toEqual({ todo: 0, done: 0, triage: 0 });
+    expect(u.kinds).toEqual({ task: 0, bug: 0 });
+    expect(u.values.priority).toEqual({ low: 0, high: 0 });
+    expect(u.values.area).toEqual({ be: 0, fe: 0 });
+    const named = {
+      ...schema,
+      statuses: [{ name: "toString" }],
+    } as unknown as SchemaView;
+    expect(schemaUsage(named, [t("toString", "task")]).statuses).toEqual({ toString: 1 });
+  });
 });

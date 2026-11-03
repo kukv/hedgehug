@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Notification } from "../../core/notifications";
+import type { InboxTab, Notification } from "../../core/notifications";
 import { FakeConn } from "../../core/testing";
 import { fail, ok } from "../detail/testkit";
 import { renderWithCore } from "../test-utils";
@@ -57,7 +57,7 @@ const repair = n({
 
 function setup(
   items: Notification[],
-  opts: { stores?: string[]; unreadStores?: boolean; getError?: Error } = {},
+  opts: { stores?: string[]; unreadStores?: boolean; getError?: Error; tab?: InboxTab } = {},
 ) {
   let current = items;
   const conn = new FakeConn();
@@ -73,7 +73,7 @@ function setup(
   const names = opts.stores ?? ["shared"];
   const view = renderWithCore(
     InboxPage,
-    {},
+    { tab: opts.tab ?? "all" },
     {
       api,
       conn,
@@ -151,13 +151,31 @@ describe("InboxPage", () => {
     expect(names).toEqual(["すべて3", "上書き1", "メンション1", "同期の修復"]);
   });
 
+  it("each tab is a link to its own address, and the tab of the address is the current one", async () => {
+    setup([overwritten, mention], { tab: "mention" });
+    await screen.findByText(/メンションしました/);
+    const links = within(screen.getByRole("navigation", { name: "通知の種類" })).getAllByRole(
+      "link",
+    );
+    expect(links.map((l) => l.getAttribute("href"))).toEqual([
+      "/inbox",
+      "/inbox?tab=overwritten",
+      "/inbox?tab=mention",
+      "/inbox?tab=repair",
+    ]);
+    expect(links.map((l) => l.getAttribute("aria-current"))).toEqual([null, null, "page", null]);
+    // it opens in the same tab: the address changes, and App gives the page the tab
+    await fireEvent.click(links[1] as HTMLElement);
+    expect(location.pathname + location.search).toBe("/inbox?tab=overwritten");
+  });
+
   it("a tab shows its own items, and says so when it has none", async () => {
-    setup([overwritten, mention, assigned]);
+    const { view } = setup([overwritten, mention, assigned]);
     await screen.findByText(/上書きされました/);
-    await fireEvent.click(screen.getByRole("link", { name: /メンション/ }));
+    await view.rerender({ tab: "mention" });
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
     expect(screen.queryByText(/担当者に追加/)).toBeNull();
-    await fireEvent.click(screen.getByRole("link", { name: /同期の修復/ }));
+    await view.rerender({ tab: "repair" });
     expect(screen.getByText("同期の修復の通知はありません")).toBeTruthy();
     expect(screen.queryAllByRole("listitem")).toHaveLength(0);
   });

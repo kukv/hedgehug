@@ -23,7 +23,7 @@
   const route = $derived(router.route);
   const settingsHref = hrefOf({ name: "settings", page: "general" });
   const myHref = hrefOf({ name: "my" });
-  const inboxHref = hrefOf({ name: "inbox" });
+  const inboxHref = hrefOf({ name: "inbox", tab: "all" });
   const activityHref = hrefOf({ name: "activity", workspaces: [], sync: "" });
 
   // The count beside "マイタスク" is the number the screen shows with its own query (細部 55). It

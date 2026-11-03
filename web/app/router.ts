@@ -1,14 +1,16 @@
 import { createSubscriber } from "svelte/reactivity";
+import type { InboxTab } from "../core/notifications";
 import type { Layout } from "../core/views";
 
 export type { Layout };
 export type WorkspaceTab = "overview" | "tree" | "kanban" | "table" | "settings";
 export type ProjectTab = "tree" | "kanban" | "table" | "settings";
 // "general" is of this machine and names no Store; the pages of a Store carry it.
+export type SchemaTab = "statuses" | "kinds" | "props" | "workflow";
 export type SettingsPage =
   | { page: "general" }
   | { page: "workspaces"; store: string }
-  | { page: "schema"; store: string };
+  | { page: "schema"; store: string; tab: SchemaTab };
 
 // "" is every commit; exclude is the ones of people, only the ones of syncs.
 export type ActivitySync = "" | "exclude" | "only";
@@ -21,12 +23,14 @@ export type Route =
   | { name: "view"; store: string; view: string }
   | { name: "query"; layout: Layout; q: string }
   | { name: "my" }
-  | { name: "inbox" }
+  | { name: "inbox"; tab: InboxTab }
   | { name: "activity"; workspaces: string[]; sync: ActivitySync }
   | ({ name: "settings" } & SettingsPage);
 
 const WORKSPACE_TABS: readonly string[] = ["tree", "kanban", "table", "settings"];
 const PROJECT_TABS: readonly string[] = ["tree", "kanban", "table", "settings"];
+const INBOX_TABS: readonly string[] = ["overwritten", "mention", "repair"];
+const SCHEMA_TABS: readonly string[] = ["kinds", "props", "workflow"];
 const LAYOUTS: readonly string[] = ["tree", "kanban", "table"];
 
 function decode(s: string): string {
@@ -37,7 +41,7 @@ function decode(s: string): string {
   }
 }
 
-/** The route of a path, or null when the path is none of ours. Only /query/<layout> (?q=) and /activity (?workspace=, ?sync=) read the search. */
+/** The route of a path, or null when the path is none of ours. Only /query/<layout> (?q=), /activity (?workspace=, ?sync=), /inbox (?tab=) and /settings/schema/<store> (?tab=) read the search. */
 function matchRoute(pathname: string, search: string): Route | null {
   const seg = pathname.split("/").filter(Boolean).map(decode);
   const [head, a, b, c] = seg;
@@ -62,7 +66,10 @@ function matchRoute(pathname: string, search: string): Route | null {
     return { name: "query", layout: a as Layout, q: new URLSearchParams(search).get("q") ?? "" };
   }
   if (head === "my" && seg.length === 1) return { name: "my" };
-  if (head === "inbox" && seg.length === 1) return { name: "inbox" };
+  if (head === "inbox" && seg.length === 1) {
+    const tab = new URLSearchParams(search).get("tab") ?? "";
+    return { name: "inbox", tab: INBOX_TABS.includes(tab) ? (tab as InboxTab) : "all" };
+  }
   if (head === "activity" && seg.length === 1) {
     const p = new URLSearchParams(search);
     const sync = p.get("sync");
@@ -76,17 +83,20 @@ function matchRoute(pathname: string, search: string): Route | null {
     return { name: "settings", page: "general" };
   }
   if (head === "settings" && seg.length === 3 && (a === "workspaces" || a === "schema") && b) {
-    return { name: "settings", page: a, store: b };
+    if (a === "workspaces") return { name: "settings", page: a, store: b };
+    const tab = new URLSearchParams(search).get("tab") ?? "";
+    const known = SCHEMA_TABS.includes(tab);
+    return { name: "settings", page: a, store: b, tab: known ? (tab as SchemaTab) : "statuses" };
   }
   return null;
 }
 
-/** Unknown paths are the home route. search is read for /query/<layout> and /activity only. */
+/** Unknown paths are the home route. search is read for /query/<layout>, /activity, /inbox and /settings/schema/<store> only. */
 export function parseRoute(pathname: string, search = ""): Route {
   return matchRoute(pathname, search) ?? { name: "home" };
 }
 
-/** The path of a route; the query screen's also holds ?q= (left out when q is empty), the activity's its filters. */
+/** The path of a route; the query screen's also holds ?q= (left out when q is empty), the activity's its filters, the inbox and the schema their tab (left out for the first). */
 export function hrefOf(r: Route): string {
   switch (r.name) {
     case "home":
@@ -112,7 +122,7 @@ export function hrefOf(r: Route): string {
     case "my":
       return "/my";
     case "inbox":
-      return "/inbox";
+      return r.tab === "all" ? "/inbox" : `/inbox?tab=${r.tab}`;
     case "activity": {
       // The ULIDs of the workspaces are written with their commas, as the API takes them.
       const p = new URLSearchParams();
@@ -122,9 +132,9 @@ export function hrefOf(r: Route): string {
       return q === "" ? "/activity" : `/activity?${q}`;
     }
     case "settings":
-      return r.page === "general"
-        ? "/settings/general"
-        : `/settings/${r.page}/${encodeURIComponent(r.store)}`;
+      if (r.page === "general") return "/settings/general";
+      if (r.page === "workspaces") return `/settings/workspaces/${encodeURIComponent(r.store)}`;
+      return `/settings/schema/${encodeURIComponent(r.store)}${r.tab === "statuses" ? "" : `?tab=${r.tab}`}`;
   }
 }
 
@@ -150,7 +160,7 @@ export const router = {
 
   /**
    * Moves to a path of ours; anything else goes to "/". The query and the hash are dropped,
-   * except for the ?q= of /query/<layout> and the filters of /activity.
+   * except for the ?q= of /query/<layout> the filters of /activity and the tab of /inbox and of the schema.
    */
   go(path: string, opts: { replace?: boolean } = {}): void {
     const url = new URL(path, location.origin);

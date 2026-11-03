@@ -74,6 +74,7 @@ test("a mention is read by its button, and the number of unread goes down", asyn
   ).toContainText("2");
 
   await page.getByRole("link", { name: /メンション/ }).click();
+  await expect(page).toHaveURL(/\/inbox\?tab=mention$/);
   const row = page
     .getByRole("listitem")
     .filter({ hasText: "bob がコメントであなたをメンションしました" });
@@ -85,4 +86,16 @@ test("a mention is read by its button, and the number of unread goes down", asyn
   // the other item is still unread
   await page.getByRole("link", { name: /上書き/ }).click();
   await expect(page.getByRole("button", { name: "自分の値に戻す" })).toBeVisible();
+});
+
+test("the tab is in the address, and the address of a tab opens that tab", async ({ page, hh }) => {
+  await hh.open(page, "/inbox?tab=repair");
+  const tabs = page.getByRole("navigation", { name: "通知の種類" });
+  await expect(tabs.getByRole("link", { name: /同期の修復/ })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(page.getByText("同期の修復の通知はありません")).toBeVisible();
+  await tabs.getByRole("link", { name: /すべて/ }).click();
+  await expect(page).toHaveURL(/\/inbox$/);
 });

@@ -54,8 +54,8 @@ describe("parseRoute", () => {
     ["/query", { name: "home" }],
     ["/my", { name: "my" }],
     ["/my/extra", { name: "home" }],
-    ["/inbox", { name: "inbox" }],
-    ["/inbox/", { name: "inbox" }],
+    ["/inbox", { name: "inbox", tab: "all" }],
+    ["/inbox/", { name: "inbox", tab: "all" }],
     ["/inbox/extra", { name: "home" }],
     ["/activity", { name: "activity", workspaces: [], sync: "" }],
     ["/activity/", { name: "activity", workspaces: [], sync: "" }],
@@ -69,8 +69,14 @@ describe("parseRoute", () => {
       "/settings/workspaces/org-b%2Fops",
       { name: "settings", page: "workspaces", store: "org-b/ops" },
     ],
-    ["/settings/schema/shared", { name: "settings", page: "schema", store: "shared" }],
-    ["/settings/schema/org-b%2Fops", { name: "settings", page: "schema", store: "org-b/ops" }],
+    [
+      "/settings/schema/shared",
+      { name: "settings", page: "schema", store: "shared", tab: "statuses" },
+    ],
+    [
+      "/settings/schema/org-b%2Fops",
+      { name: "settings", page: "schema", store: "org-b/ops", tab: "statuses" },
+    ],
     ["/settings/schema", { name: "home" }],
     ["/settings/schema/shared/extra", { name: "home" }],
     ["/nothing/here", { name: "home" }],
@@ -87,7 +93,7 @@ describe("parseRoute", () => {
     });
     expect(parseRoute("/query/tree", "?x=1")).toEqual({ name: "query", layout: "tree", q: "" });
     expect(parseRoute("/my", "?q=a")).toEqual({ name: "my" });
-    expect(parseRoute("/inbox", "?q=a")).toEqual({ name: "inbox" });
+    expect(parseRoute("/inbox", "?q=a")).toEqual({ name: "inbox", tab: "all" });
     expect(parseRoute("/projects/01HPR/table", "?q=a")).toEqual({
       name: "project",
       ulid: "01HPR",
@@ -103,8 +109,11 @@ describe("hrefOf", () => {
     expect(parseRoute(hrefOf(r))).toEqual(r);
     expect(hrefOf({ name: "home" })).toBe("/");
     expect(hrefOf({ name: "task", ulid: "01HTK" })).toBe("/tasks/01HTK");
-    expect(hrefOf({ name: "inbox" })).toBe("/inbox");
-    expect(parseRoute(hrefOf({ name: "inbox" }))).toEqual({ name: "inbox" });
+    expect(hrefOf({ name: "inbox", tab: "all" })).toBe("/inbox");
+    expect(parseRoute(hrefOf({ name: "inbox", tab: "all" }))).toEqual({
+      name: "inbox",
+      tab: "all",
+    });
   });
 
   it("アクティビティは ?workspace=（ULID のカンマ区切り）と ?sync= を持つ", () => {
@@ -144,7 +153,8 @@ describe("hrefOf", () => {
       { ...ws, tab: "settings" },
       { name: "project", ulid: "01HPR", tab: "tree" },
       { name: "settings", page: "workspaces", store: "org-b/ops" },
-      { name: "settings", page: "schema", store: "org-b/ops" },
+      { name: "settings", page: "schema", store: "org-b/ops", tab: "statuses" },
+      { name: "inbox", tab: "all" },
       { name: "settings", page: "general" },
     ] as const) {
       expect(parseRoute(hrefOf(r))).toEqual(r);
@@ -195,7 +205,7 @@ describe("hrefOf", () => {
       "/settings/workspaces/org-b%2Fops",
     );
     expect(hrefOf({ name: "settings", page: "general" })).toBe("/settings/general");
-    expect(hrefOf({ name: "settings", page: "schema", store: "org-b/ops" })).toBe(
+    expect(hrefOf({ name: "settings", page: "schema", store: "org-b/ops", tab: "statuses" })).toBe(
       "/settings/schema/org-b%2Fops",
     );
   });
@@ -312,5 +322,46 @@ describe("onLinkClick", () => {
       expect(e.defaultPrevented).toBe(false);
     }
     expect(location.pathname).toBe("/");
+  });
+});
+
+describe("the tab of a screen is in its address", () => {
+  it("the inbox has ?tab= for every tab but the first; an unknown tab is the first", () => {
+    expect(parseRoute("/inbox", "?tab=overwritten")).toEqual({ name: "inbox", tab: "overwritten" });
+    expect(parseRoute("/inbox", "?tab=mention")).toEqual({ name: "inbox", tab: "mention" });
+    expect(parseRoute("/inbox", "?tab=repair")).toEqual({ name: "inbox", tab: "repair" });
+    expect(parseRoute("/inbox", "?tab=nope")).toEqual({ name: "inbox", tab: "all" });
+    expect(hrefOf({ name: "inbox", tab: "mention" })).toBe("/inbox?tab=mention");
+  });
+
+  it("the schema has ?tab= for every tab but the first; an unknown tab is the first", () => {
+    for (const tab of ["kinds", "props", "workflow"] as const) {
+      expect(parseRoute("/settings/schema/shared", `?tab=${tab}`)).toEqual({
+        name: "settings",
+        page: "schema",
+        store: "shared",
+        tab,
+      });
+    }
+    expect(parseRoute("/settings/schema/shared", "?tab=nope")).toEqual({
+      name: "settings",
+      page: "schema",
+      store: "shared",
+      tab: "statuses",
+    });
+    expect(hrefOf({ name: "settings", page: "schema", store: "org-b/ops", tab: "props" })).toBe(
+      "/settings/schema/org-b%2Fops?tab=props",
+    );
+  });
+
+  it("router.go keeps the tab, and a tab of a path that is not the screen's is dropped", () => {
+    router.go("/inbox?tab=mention");
+    expect(location.pathname + location.search).toBe("/inbox?tab=mention");
+    router.go("/settings/schema/shared?tab=kinds");
+    expect(location.pathname + location.search).toBe("/settings/schema/shared?tab=kinds");
+    router.go("/my?tab=kinds");
+    expect(location.pathname + location.search).toBe("/my");
+    router.go("/settings/workspaces/shared?tab=kinds");
+    expect(location.pathname + location.search).toBe("/settings/workspaces/shared");
   });
 });
