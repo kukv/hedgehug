@@ -71,17 +71,6 @@ func (s *cachedStorage) HasEncodedObject(h plumbing.Hash) error {
 	return s.Storage.HasEncodedObject(h)
 }
 
-func (s *cachedStorage) EncodedObjectSize(h plumbing.Hash) (int64, error) {
-	if s.reader == nil {
-		return s.Storage.EncodedObjectSize(h)
-	}
-	o, err := s.EncodedObject(plumbing.AnyObject, h)
-	if err != nil {
-		return 0, err
-	}
-	return o.Size(), nil
-}
-
 // Reindex makes go-git and the reader list the packs anew.
 func (s *cachedStorage) Reindex() {
 	s.Storage.Reindex()

@@ -179,8 +179,10 @@ func (o *objectReader) close() error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	var errs []error
-	for _, p := range append(o.packs, o.retired...) {
-		errs = append(errs, p.close())
+	for _, ps := range [][]*pack{o.packs, o.retired} {
+		for _, p := range ps {
+			errs = append(errs, p.close())
+		}
 	}
 	o.packs, o.retired, o.listed = nil, nil, false
 	o.bases.clear()

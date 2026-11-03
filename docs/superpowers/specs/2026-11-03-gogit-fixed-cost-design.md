@@ -46,7 +46,7 @@ WSL の `undo` は、最初の読み込み（約 150ms）と書き込み（200ms
 ### 2.1 置き場所
 
 - `internal/gitrepo` の中に、オブジェクトの読み手を置く（loose と pack）。
-- `cachedStorage`（`storage.go`）の `EncodedObject`・`HasEncodedObject`・`EncodedObjectSize` を、この読み手で答える。go-git の commit・tree の読み込み、`DiffTree`、merge、log は `Storer` のこの 3 つを通るので、呼び出し側は変わらない。今の hash で引く LRU（`cachedStorage.objects`）はそのまま前に置く。
+- `cachedStorage`（`storage.go`）の `EncodedObject`・`HasEncodedObject` を、この読み手で答える。go-git の commit・tree の読み込み、`DiffTree`、merge、log は `Storer` のこの 2 つを通るので、呼び出し側は変わらない。`EncodedObjectSize` は go-git のままにする（go-git では `Tree.Size` だけが使い、hedgehug は使わない）。今の hash で引く LRU（`cachedStorage.objects`）はそのまま前に置く。
 - go-git のままにするもの: 書き込み（`SetEncodedObject`、fetch の `PackfileWriter`）、全オブジェクトをたどる処理（`IterEncodedObjects`。`doctor` の Verify、Repack、pack の統合）、push の `DeltaObject`。これらは go-git が `.idx` を全部読むが、もともと全体を読む処理か、ネットワークを待つ処理である。
 
 ### 2.2 pack を引く

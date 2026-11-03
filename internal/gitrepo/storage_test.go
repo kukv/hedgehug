@@ -173,8 +173,9 @@ func TestReadAfterConsolidate(t *testing.T) {
 	checkAll(t, dir, r.r.Storer.(*cachedStorage).reader)
 }
 
-// An object the reader cannot find is asked of go-git, which finds it (here,
-// in a pack whose index is of a version the reader does not read).
+// An object the reader cannot find is asked of go-git, which does not find
+// it either; an object of another type is not found. EncodedObjectSize is
+// go-git's own.
 func TestReadFallsBackToGoGit(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
