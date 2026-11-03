@@ -116,7 +116,8 @@ type History struct {
 	// What the file holds (file.go): whether the index came from a file that
 	// can be added to, and how much of the index is in it.
 	fromFile   bool
-	tailBad    bool // the file ends in something that is not a chunk
+	fileID     uint32 // the checksum of the first part of the file; chunks name it
+	tailBad    bool   // the file ends in something that is not a chunk
 	chunks     int
 	chunkBytes int
 	mainBytes  int
@@ -407,9 +408,17 @@ func (h *History) LastChange(p string, from plumbing.Hash) (Commit, bool, error)
 		}
 		return cs[0], true, nil
 	}
+	var fromGen uint32
+	if i, ok := h.hashes()[from]; ok {
+		fromGen = h.recs[i].gen
+	}
 	for _, c := range cs {
 		if c.Hash == from {
 			return c, true, nil
+		}
+		// An ancestor has a smaller generation than from.
+		if fromGen > 0 && c.Gen >= fromGen {
+			continue
 		}
 		ok, err := h.repo.IsAncestor(c.Hash, from)
 		if err != nil {

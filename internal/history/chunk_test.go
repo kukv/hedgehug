@@ -118,6 +118,84 @@ func TestFileIsWrittenAgainAfterManyChunks(t *testing.T) {
 	}
 }
 
+// TestChunkOnAFileOfTheSameCountsIsNotRead checks that a chunk is not read
+// on another file of the same tip that has as many commits and strings but
+// numbers them otherwise: one brought up to the tip and written whole has
+// the new strings after the paths, one written from nothing has them before.
+func TestChunkOnAFileOfTheSameCountsIsNotRead(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	u := model.NewULID()
+	for range 30 { // so that a chunk is far from half the file, and is added
+		writeTask(t, s, model.NewULID(), "t")
+	}
+	writeTask(t, s, u, "a")
+	if _, err := history.Open(s, history.Options{}); err != nil {
+		t.Fatal(err)
+	}
+	// a comment brings a new string (its op) and a new path; the damaged end
+	// makes the next save write the file whole
+	writeComment(t, s, u, "b")
+	old, err := s.ReadLocal("history")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WriteLocal("history", append(bytes.Clone(old), 1, 2, 3)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := history.Open(s, history.Options{}); err != nil {
+		t.Fatal(err)
+	}
+	brought, err := s.ReadLocal("history")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WriteLocal("history", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := history.Open(s, history.Options{}); err != nil {
+		t.Fatal(err)
+	}
+	whole, err := s.ReadLocal("history")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(brought) != len(whole) || bytes.Equal(brought, whole) {
+		t.Fatalf("want two files of one length that differ: %d and %d bytes", len(brought), len(whole))
+	}
+	// the chunk the handle of the first file adds for the next commit
+	if err := s.WriteLocal("history", brought); err != nil {
+		t.Fatal(err)
+	}
+	// the op of this commit has another number in the other file
+	writeComment(t, s, u, "c")
+	h, err := history.Open(s, history.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := s.ReadLocal("history")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(data, brought) || len(data) == len(brought) {
+		t.Fatal("the commit was not added to the file")
+	}
+	if err := s.WriteLocal("history", append(bytes.Clone(whole), data[len(brought):]...)); err != nil {
+		t.Fatal(err)
+	}
+	got, err := history.Open(s, history.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	same := func(a, b history.Commit) bool {
+		return a.Hash == b.Hash && a.Task == b.Task && a.Author == b.Author && a.Email == b.Email &&
+			a.Op == b.Op && a.Workspace == b.Workspace
+	}
+	if !slices.EqualFunc(got.All(), h.All(), same) || !slices.Equal(hashes(got.Task(u)), hashes(h.Task(u))) {
+		t.Fatal("the chunk was read with the numbers of another file")
+	}
+}
+
 // TestChunkOnAnotherTableIsNotRead checks that a chunk added by a handle
 // that read one file is not read on top of another file of the same tip
 // whose strings are numbered otherwise (the file was written again from
@@ -126,6 +204,9 @@ func TestChunkOnAnotherTableIsNotRead(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
 	u := model.NewULID()
+	for range 30 { // so that a chunk is far from half the file, and is added
+		writeTask(t, s, model.NewULID(), "t")
+	}
 	writeTask(t, s, u, "a")
 	if _, err := history.Open(s, history.Options{}); err != nil {
 		t.Fatal(err)

@@ -27,15 +27,18 @@ import (
 //	                uvarint count of commits, then the commit indices
 //	                ascending: the first as is, the rest as the difference
 //	                from the one before
+//	file id         the CRC-32 (IEEE, 4 bytes little endian) of all the
+//	                above; it names the file, numbering and all
 //	chunks          none or more, one for each time the index was brought
 //	                to a newer HEAD and added to the file instead of
 //	                writing it again: uvarint length of the body, the body,
 //	                the CRC-32 (IEEE, 4 bytes little endian) of the body.
 //	                The body is: the tip before (20 bytes), the tip after
-//	                (20 bytes), the numbers of commits and of strings
-//	                before it (uvarint each; the file it goes on is the one
-//	                with those numbers, not only that tip, as another file
-//	                of the tip may number its strings otherwise), the new
+//	                (20 bytes), the file id and the numbers of commits and
+//	                of strings before it (4 bytes, uvarint each; the file it
+//	                goes on is that file, not only one of that tip, as
+//	                another file of the tip may number its strings
+//	                otherwise), the new
 //	                strings as above, the new commits as
 //	                above (their parents and string indices count those
 //	                before them), and the paths they changed, each: the
@@ -50,7 +53,7 @@ import (
 // save writes the file again.
 const (
 	fileMagic  = "HHHI"
-	fileFormat = 4
+	fileFormat = 5
 	hashLen    = 20
 
 	maxZoneOffset = 18 * 60 * 60 // seconds; an offset beyond ±18h is damage
@@ -131,10 +134,12 @@ func (h *History) saveAll(s *store.Store) {
 		putU(&buf, uint64(h.intern(p)))
 		putIndices(&buf, h.byPath[p])
 	}
+	id := crc32.ChecksumIEEE(buf.Bytes())
+	buf.Write(binary.LittleEndian.AppendUint32(nil, id))
 	if s.WriteLocal(fileName, buf.Bytes()) != nil {
 		return
 	}
-	h.fromFile, h.tailBad = true, false
+	h.fromFile, h.tailBad, h.fileID = true, false, id
 	h.mainBytes, h.chunkBytes, h.chunks = buf.Len(), 0, 0
 	h.savedRecs, h.savedStrs, h.savedTip = len(h.recs), len(h.strs), h.tip
 	h.pending = nil
@@ -145,6 +150,7 @@ func (h *History) appendChunk(s *store.Store) error {
 	var body bytes.Buffer
 	body.Write(h.savedTip[:])
 	body.Write(h.tip[:])
+	body.Write(binary.LittleEndian.AppendUint32(nil, h.fileID))
 	putU(&body, uint64(h.savedRecs)) //nolint:gosec // not negative
 	putU(&body, uint64(h.savedStrs)) //nolint:gosec // not negative
 	putStrings(&body, h.strs[h.savedStrs:])
@@ -314,6 +320,10 @@ func (h *History) load(s *store.Store) bool {
 	if r.bad {
 		return false
 	}
+	h.fileID = crc32.ChecksumIEEE(data[:len(data)-len(r.b)])
+	if id := r.bytes(4); r.bad || binary.LittleEndian.Uint32(id) != h.fileID {
+		return false
+	}
 	h.mainBytes = len(data) - len(r.b)
 	h.fromFile = true
 	h.savedRecs, h.savedStrs, h.savedTip = len(h.recs), len(h.strs), h.tip
@@ -353,6 +363,9 @@ func (h *History) applyChunk(r *reader) bool {
 	copy(before[:], b.bytes(hashLen))
 	copy(after[:], b.bytes(hashLen))
 	if b.bad || before != h.tip {
+		return false
+	}
+	if id := b.bytes(4); b.bad || binary.LittleEndian.Uint32(id) != h.fileID {
 		return false
 	}
 	if b.uvarint() != uint64(len(h.recs)) || b.uvarint() != uint64(len(h.strs)) || b.bad {
