@@ -163,6 +163,7 @@ export type CommandEnv = {
     workspace: (store: string, ulid: string) => string;
     workspaceSettings: (store: string, ulid: string) => string;
     settingsWorkspaces: (store: string) => string;
+    settingsSchema: (store: string) => string;
     settingsGeneral: () => string;
     project: (ulid: string) => string;
     projectSettings: (ulid: string) => string;
@@ -407,6 +408,20 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
     };
   });
 
+  // The schema of a store, in the settings.
+  const schemas: CommandItem[] = env.storeNames.map((store) => {
+    const href = env.hrefs.settingsSchema(store);
+    return {
+      type: "command",
+      key: `open:settings-schema:${store}`,
+      label: "設定のスキーマを開く",
+      icon: "settings",
+      store,
+      href,
+      run: () => env.go(href),
+    };
+  });
+
   // The sync and the upkeep of this machine: no Store, so one command.
   const generalHref = env.hrefs.settingsGeneral();
   const general: CommandItem = {
@@ -446,6 +461,7 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
       items: [
         ...places,
         ...lists,
+        ...schemas,
         general,
         ...projectSettings,
         my,

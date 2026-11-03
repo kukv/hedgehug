@@ -69,6 +69,10 @@ describe("parseRoute", () => {
       "/settings/workspaces/org-b%2Fops",
       { name: "settings", page: "workspaces", store: "org-b/ops" },
     ],
+    ["/settings/schema/shared", { name: "settings", page: "schema", store: "shared" }],
+    ["/settings/schema/org-b%2Fops", { name: "settings", page: "schema", store: "org-b/ops" }],
+    ["/settings/schema", { name: "home" }],
+    ["/settings/schema/shared/extra", { name: "home" }],
     ["/nothing/here", { name: "home" }],
     ["/workspaces/shared", { name: "home" }],
   ])("%s", (path, route) => {
@@ -140,6 +144,7 @@ describe("hrefOf", () => {
       { ...ws, tab: "settings" },
       { name: "project", ulid: "01HPR", tab: "tree" },
       { name: "settings", page: "workspaces", store: "org-b/ops" },
+      { name: "settings", page: "schema", store: "org-b/ops" },
       { name: "settings", page: "general" },
     ] as const) {
       expect(parseRoute(hrefOf(r))).toEqual(r);
@@ -190,6 +195,9 @@ describe("hrefOf", () => {
       "/settings/workspaces/org-b%2Fops",
     );
     expect(hrefOf({ name: "settings", page: "general" })).toBe("/settings/general");
+    expect(hrefOf({ name: "settings", page: "schema", store: "org-b/ops" })).toBe(
+      "/settings/schema/org-b%2Fops",
+    );
   });
 });
 

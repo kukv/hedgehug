@@ -201,6 +201,7 @@ function env(over: Partial<CommandEnv> = {}): CommandEnv {
       workspace: (s, u) => `/workspaces/${s}/${u}`,
       workspaceSettings: (s, u) => `/workspaces/${s}/${u}/settings`,
       settingsWorkspaces: (s) => `/settings/workspaces/${s}`,
+      settingsSchema: (s) => `/settings/schema/${s}`,
       settingsGeneral: () => "/settings/general",
       project: (u) => `/projects/${u}`,
       projectSettings: (u) => `/projects/${u}/settings`,
@@ -245,6 +246,7 @@ describe("buildCommands", () => {
       "ワークスペースの設定を開く",
       "リリース準備 v2.4 を開く",
       "設定のワークスペース一覧を開く",
+      "設定のスキーマを開く",
       "設定の同期と保守を開く",
       "マイタスクを開く",
       "通知を開く",
@@ -312,7 +314,7 @@ describe("buildCommands", () => {
     const e = env();
     const gs = buildCommands(e, ">設定");
     expect(gs.map((g) => g.name)).toEqual(["開く"]);
-    const [settings, list] = gs[0]?.items ?? [];
+    const [settings, list, schema] = gs[0]?.items ?? [];
     expect(settings).toMatchObject({
       label: "ワークスペースの設定を開く",
       note: "release",
@@ -328,6 +330,14 @@ describe("buildCommands", () => {
     expect(e.go).toHaveBeenCalledWith("/workspaces/shared/W1/settings");
     if (list?.type === "command") list.run();
     expect(e.go).toHaveBeenCalledWith("/settings/workspaces/shared");
+    expect(schema).toMatchObject({
+      label: "設定のスキーマを開く",
+      icon: "settings",
+      store: "shared",
+      href: "/settings/schema/shared",
+    });
+    if (schema?.type === "command") schema.run();
+    expect(e.go).toHaveBeenCalledWith("/settings/schema/shared");
   });
 
   it("opens the sync and maintenance settings, once whatever the number of stores", () => {
@@ -366,6 +376,7 @@ describe("buildCommands", () => {
       "ワークスペースの設定を開く|release",
       "ワークスペースの設定を開く|ops",
       "設定のワークスペース一覧を開く|",
+      "設定のスキーマを開く|",
       "設定の同期と保守を開く|",
     ]);
   });
@@ -392,6 +403,8 @@ describe("buildCommands", () => {
     ).toEqual([
       "設定のワークスペース一覧を開く|shared",
       "設定のワークスペース一覧を開く|empty",
+      "設定のスキーマを開く|shared",
+      "設定のスキーマを開く|empty",
       "設定の同期と保守を開く|",
     ]);
   });

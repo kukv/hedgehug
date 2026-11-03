@@ -5,7 +5,10 @@ export type { Layout };
 export type WorkspaceTab = "overview" | "tree" | "kanban" | "table" | "settings";
 export type ProjectTab = "tree" | "kanban" | "table" | "settings";
 // "general" is of this machine and names no Store; the pages of a Store carry it.
-export type SettingsPage = { page: "general" } | { page: "workspaces"; store: string };
+export type SettingsPage =
+  | { page: "general" }
+  | { page: "workspaces"; store: string }
+  | { page: "schema"; store: string };
 
 // "" is every commit; exclude is the ones of people, only the ones of syncs.
 export type ActivitySync = "" | "exclude" | "only";
@@ -72,8 +75,8 @@ function matchRoute(pathname: string, search: string): Route | null {
   if (head === "settings" && (seg.length === 1 || (seg.length === 2 && a === "general"))) {
     return { name: "settings", page: "general" };
   }
-  if (head === "settings" && seg.length === 3 && a === "workspaces" && b) {
-    return { name: "settings", page: "workspaces", store: b };
+  if (head === "settings" && seg.length === 3 && (a === "workspaces" || a === "schema") && b) {
+    return { name: "settings", page: a, store: b };
   }
   return null;
 }
@@ -121,7 +124,7 @@ export function hrefOf(r: Route): string {
     case "settings":
       return r.page === "general"
         ? "/settings/general"
-        : `/settings/workspaces/${encodeURIComponent(r.store)}`;
+        : `/settings/${r.page}/${encodeURIComponent(r.store)}`;
   }
 }
 

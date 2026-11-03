@@ -246,3 +246,23 @@ export function cliScopeSet(i: {
   if (i.store) a.push("--store", i.store);
   return cliLine(a);
 }
+
+export const cliSchemaCheck = (store?: string): string =>
+  cliLine(["schema", "check", ...(store ? ["--store", store] : [])]);
+
+// cliSchemaMigrate is hh schema migrate status|kind|prop <old> <new>, or value <prop> <old> <new>.
+// new is a placeholder until the name is typed.
+export function cliSchemaMigrate(i: {
+  target: "status" | "kind" | "prop" | "value";
+  prop?: string;
+  old: string;
+  new: Arg;
+  dryRun?: boolean;
+  store?: string;
+}): string {
+  const flags: Arg[] = [];
+  if (i.dryRun) flags.push("--dry-run");
+  if (i.store) flags.push("--store", i.store);
+  const pos: Arg[] = i.target === "value" && i.prop ? [i.prop, i.old, i.new] : [i.old, i.new];
+  return withPositionals(["schema", "migrate", i.target], pos, flags, true);
+}

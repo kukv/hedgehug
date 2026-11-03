@@ -29,23 +29,21 @@
   // Store that the items of a Store lead to.
   let picked = $state<string | null>(null);
   // On a page of a Store the pick follows that Store; on the general page it keeps the last one.
+  const pageStore = $derived("store" in page ? page.store : null);
   $effect(() => {
-    if (page.page === "workspaces") picked = page.store;
+    if (pageStore !== null) picked = pageStore;
   });
   const store = $derived(
-    page.page === "workspaces"
-      ? page.store
-      : picked !== null && names.current.includes(picked)
-        ? picked
-        : (names.current[0] ?? ""),
+    pageStore ??
+      (picked !== null && names.current.includes(picked) ? picked : (names.current[0] ?? "")),
   );
   const generalHref = hrefOf({ name: "settings", page: "general" });
-  const itemHref = $derived(hrefOf({ name: "settings", page: "workspaces", store }));
+  const workspacesHref = $derived(hrefOf({ name: "settings", page: "workspaces", store }));
+  const schemaHref = $derived(hrefOf({ name: "settings", page: "schema", store }));
   const homeHref = hrefOf({ name: "home" });
 
   function pick(next: string) {
-    if (page.page === "workspaces")
-      router.go(hrefOf({ name: "settings", page: "workspaces", store: next }));
+    if ("store" in page) router.go(hrefOf({ name: "settings", ...page, store: next }));
     else picked = next;
   }
 </script>
@@ -86,11 +84,20 @@
       <a
         class="item"
         class:on={page.page === "workspaces"}
-        href={itemHref}
+        href={workspacesHref}
         aria-current={page.page === "workspaces" ? "page" : undefined}
-        onclick={(e) => onLinkClick(e, itemHref)}
+        onclick={(e) => onLinkClick(e, workspacesHref)}
       >
         <Icon name="workspace" size={14} />ワークスペース
+      </a>
+      <a
+        class="item"
+        class:on={page.page === "schema"}
+        href={schemaHref}
+        aria-current={page.page === "schema" ? "page" : undefined}
+        onclick={(e) => onLinkClick(e, schemaHref)}
+      >
+        <Icon name="checklist" size={14} />スキーマ
       </a>
     {/if}
     <p class="note">

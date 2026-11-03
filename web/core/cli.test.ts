@@ -11,6 +11,8 @@ import {
   cliRestore,
   cliRestoreAt,
   cliRm,
+  cliSchemaCheck,
+  cliSchemaMigrate,
   cliScopeRm,
   cliScopeSet,
   cliSet,
@@ -269,6 +271,36 @@ describe("commands", () => {
     // what a person types is still quoted
     expect(cliStoreInit({ name: "<名前>", prefix: "ME" })).toBe(
       'hh store init "<名前>" --prefix ME',
+    );
+  });
+
+  it("writes hh schema check, with --store only when asked", () => {
+    expect(cliSchemaCheck()).toBe("hh schema check");
+    expect(cliSchemaCheck("shared")).toBe("hh schema check --store shared");
+  });
+
+  it("writes hh schema migrate for each target; value takes the property first", () => {
+    expect(cliSchemaMigrate({ target: "status", old: "triage", new: "todo" })).toBe(
+      "hh schema migrate status triage todo",
+    );
+    expect(
+      cliSchemaMigrate({ target: "kind", old: "bug", new: "defect", dryRun: true, store: "a b" }),
+    ).toBe('hh schema migrate kind bug defect --dry-run --store "a b"');
+    expect(cliSchemaMigrate({ target: "prop", old: "area", new: "team" })).toBe(
+      "hh schema migrate prop area team",
+    );
+    expect(cliSchemaMigrate({ target: "value", prop: "priority", old: "mid", new: "normal" })).toBe(
+      "hh schema migrate value priority mid normal",
+    );
+  });
+
+  it("puts a placeholder where the new name goes while it is not typed, and guards a leading -", () => {
+    const next = new Placeholder("新しい名前");
+    expect(cliSchemaMigrate({ target: "status", old: "triage", new: next })).toBe(
+      "hh schema migrate status triage <新しい名前>",
+    );
+    expect(cliSchemaMigrate({ target: "status", old: "triage", new: "-x", dryRun: true })).toBe(
+      "hh schema migrate status --dry-run -- triage -x",
     );
   });
 });

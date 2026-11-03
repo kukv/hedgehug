@@ -5,6 +5,7 @@
   import { useSubscribe } from "../svelte-store";
   import SettingsGeneral from "./SettingsGeneral.svelte";
   import SettingsLayout from "./SettingsLayout.svelte";
+  import SettingsSchema from "./SettingsSchema.svelte";
   import SettingsWorkspaces from "./SettingsWorkspaces.svelte";
 
   let { page }: { page: SettingsPage } = $props();
@@ -18,7 +19,7 @@
   const missingProps = { scope: "store" as const };
   // The name of a Store that is not mounted (said so, like a workspace that is not there), or null.
   const missing = $derived(
-    page.page === "workspaces" && dir.current.loaded && !dir.current.names.includes(page.store)
+    "store" in page && dir.current.loaded && !dir.current.names.includes(page.store)
       ? page.store
       : null,
   );
@@ -42,6 +43,8 @@
   <SettingsLayout {page}>
     {#if page.page === "general"}
       <SettingsGeneral />
+    {:else if page.page === "schema"}
+      <SettingsSchema store={page.store} />
     {:else}
       <SettingsWorkspaces store={page.store} />
     {/if}

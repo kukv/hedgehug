@@ -15,6 +15,15 @@ vi.mock("./SettingsWorkspaces.svelte", () => ({
   },
 }));
 
+// SettingsSchema too.
+vi.mock("./SettingsSchema.svelte", () => ({
+  default: (anchor: Comment, props: { store: string }) => {
+    const p = document.createElement("p");
+    p.textContent = `schema of ${props.store}`;
+    anchor.before(p);
+  },
+}));
+
 // SettingsGeneral has its own test too.
 vi.mock("./SettingsGeneral.svelte", () => ({
   default: (anchor: Comment) => {
@@ -42,6 +51,7 @@ function core(names: string[], get = vi.fn(async () => health("0.9.0")), loaded 
 
 const page = { page: "workspaces", store: "shared" } as const;
 const general = { page: "general" } as const;
+const schemaPage = { page: "schema", store: "shared" } as const;
 
 beforeEach(() => history.replaceState(null, "", "/settings/workspaces/shared"));
 afterEach(() => {
@@ -59,11 +69,67 @@ describe("SettingsNav", () => {
     expect(getByRole("heading", { name: "設定" })).toBeTruthy();
   });
 
-  it("まだない画面の項目（スキーマ・アカウントなど）は出さない", () => {
+  it("まだない画面の項目（アカウントなど）は出さない", () => {
     const { queryByText } = renderWithCore(SettingsNav, { page }, core(["shared"]));
-    for (const t of ["スキーマ", "アカウント", "自動化", "マウント中の Store"]) {
+    for (const t of ["アカウント", "自動化", "マウント中の Store", "テンプレート"]) {
       expect(queryByText(new RegExp(t))).toBeNull();
     }
+  });
+
+  it("スキーマの項目は Store ごとの設定の段にあり、今のページならそれを示す", () => {
+    const { getByRole } = renderWithCore(SettingsNav, { page: schemaPage }, core(["shared"]));
+    const perStore = getByRole("region", { name: "Store ごとの設定" });
+    const item = within(perStore).getByRole("link", { name: /スキーマ/ });
+    expect(item.getAttribute("href")).toBe("/settings/schema/shared");
+    expect(item.getAttribute("aria-current")).toBe("page");
+    const ws = within(perStore).getByRole("link", { name: /ワークスペース/ });
+    expect(ws.getAttribute("aria-current")).toBeNull();
+    expect(ws.getAttribute("href")).toBe("/settings/workspaces/shared");
+  });
+
+  it("ワークスペースを開いているときは、スキーマの項目は同じ Store を向く", () => {
+    const { getByRole } = renderWithCore(SettingsNav, { page }, core(["me", "shared"]));
+    const item = getByRole("link", { name: /スキーマ/ });
+    expect(item.getAttribute("href")).toBe("/settings/schema/shared");
+    expect(item.getAttribute("aria-current")).toBeNull();
+  });
+
+  it("同期と保守では、スキーマの項目は選んだ Store（まだなら最初）を向く", async () => {
+    history.replaceState(null, "", "/settings/general");
+    const { getByRole, getByLabelText } = renderWithCore(
+      SettingsNav,
+      { page: general },
+      core(["me", "shared"]),
+    );
+    expect(getByRole("link", { name: /スキーマ/ }).getAttribute("href")).toBe(
+      "/settings/schema/me",
+    );
+    await fireEvent.change(getByLabelText("設定する Store"), { target: { value: "shared" } });
+    expect(getByRole("link", { name: /スキーマ/ }).getAttribute("href")).toBe(
+      "/settings/schema/shared",
+    );
+  });
+
+  it("スキーマの Store の選択欄は、移ってもスキーマのページのまま", async () => {
+    history.replaceState(null, "", "/settings/schema/shared");
+    const { getByLabelText } = renderWithCore(
+      SettingsNav,
+      { page: schemaPage },
+      core(["me", "shared"]),
+    );
+    await fireEvent.change(getByLabelText("設定する Store"), { target: { value: "me" } });
+    expect(location.pathname).toBe("/settings/schema/me");
+  });
+
+  it("スキーマから同期と保守へ移っても、選んだ Store を覚えている", async () => {
+    const view = renderWithCore(SettingsNav, { page: schemaPage }, core(["me", "shared"]));
+    await view.rerender({ page: general });
+    expect((view.getByLabelText("設定する Store") as HTMLSelectElement).value).toBe("shared");
+  });
+
+  it("Store がなければスキーマの項目も出さない", () => {
+    const { queryByRole } = renderWithCore(SettingsNav, { page: general }, core([]));
+    expect(queryByRole("link", { name: /スキーマ/ })).toBeNull();
   });
 
   it("2段: 「このマシン」に同期と保守、「Store ごとの設定」にワークスペース", () => {
@@ -209,6 +275,38 @@ describe("SettingsRoute", () => {
     expect(getByRole("region", { name: "設定の本文" })).toContainElement(
       getByText("workspaces of shared"),
     );
+  });
+
+  it("/settings/schema/<store> は、その Store のスキーマを本文に出す", () => {
+    history.replaceState(null, "", "/settings/schema/shared");
+    const { getByRole, getByText } = renderWithCore(
+      SettingsRoute,
+      { page: schemaPage },
+      core(["shared", "me"]),
+    );
+    expect(getByRole("region", { name: "設定の本文" })).toContainElement(
+      getByText("schema of shared"),
+    );
+    expect(location.pathname).toBe("/settings/schema/shared");
+  });
+
+  it("存在しない Store のスキーマの URL は見つからない旨を出す", () => {
+    history.replaceState(null, "", "/settings/schema/nope");
+    const { getByText, queryByRole } = renderWithCore(
+      SettingsRoute,
+      { page: { page: "schema", store: "nope" } },
+      core(["shared"]),
+    );
+    expect(getByText("Store「nope」が見つかりません")).toBeTruthy();
+    expect(queryByRole("navigation", { name: "設定のナビゲーション" })).toBeNull();
+  });
+
+  it("ワークスペースからスキーマへ移ってもナビは作り直さない", async () => {
+    const view = renderWithCore(SettingsRoute, { page }, core(["me", "shared"]));
+    const nav = view.getByRole("navigation", { name: "設定のナビゲーション" });
+    await view.rerender({ page: schemaPage });
+    expect(view.getByRole("navigation", { name: "設定のナビゲーション" })).toBe(nav);
+    expect(view.getByText("schema of shared")).toBeTruthy();
   });
 
   it("同期と保守は Store を持たずに、レイアウトと本文を出す", () => {
