@@ -1,3 +1,4 @@
+import { CATEGORIES } from "../../core/categories";
 import type { SchemaView } from "../../core/schema";
 import { splitTerms } from "../tree/filter";
 
@@ -5,7 +6,6 @@ import { splitTerms } from "../tree/filter";
 // closest to. The server tells the cause only in English in the detail of query.invalid
 // ("term 1 (status:progres): unknown status or category "progres""), so that is what is read.
 
-const CATEGORIES = ["todo", "doing", "done", "canceled"];
 // The keys the query reads on its own (internal/query/eval.go, sort.go, mount/query.go).
 const QUERY_KEYS = [
   "status",

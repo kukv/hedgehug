@@ -1,8 +1,8 @@
 import type { TaskView } from "../../core/api/client";
+import { CATEGORIES, CATEGORY_LABEL, type Category, categoryOf } from "../../core/categories";
 import type { SchemaView } from "../../core/schema";
 import { compareStatusPlace, type StatusPlace, statusPlace } from "../../core/status-order";
 import type { KanbanSettings } from "../../core/views";
-import { CATEGORIES, CATEGORY_LABEL, type Category, categoryOf } from "../workspace/counts";
 
 // The key of the row that holds the tasks without an assignee (or outside every project).
 export const NO_LANE = "#none";
@@ -41,18 +41,13 @@ export type BoardOptions = {
   store?: string;
 };
 
-// categoryIn is the category of a status in a schema; todo when the schema is not read.
-export function categoryIn(schema: SchemaView | undefined, status: string): Category {
-  return schema ? categoryOf(schema, status) : "todo";
-}
-
 // columnKeyOf is the key of the column a task is in.
 export function columnKeyOf(
   task: TaskView,
   mode: KanbanSettings["columns"],
   schema: SchemaView | undefined,
 ): string {
-  return mode === "category" ? categoryIn(schema, task.status) : task.status;
+  return mode === "category" ? categoryOf(schema, task.status) : task.status;
 }
 
 type Def = { name: string; label: string; category: Category; place: StatusPlace };
@@ -104,7 +99,7 @@ function statusColumns(tasks: readonly TaskView[], o: BoardOptions): Column[] {
 }
 
 function categoryColumns(tasks: readonly TaskView[], o: BoardOptions): Column[] {
-  const canceled = tasks.some((t) => categoryIn(o.schemas.get(t.store), t.status) === "canceled");
+  const canceled = tasks.some((t) => categoryOf(o.schemas.get(t.store), t.status) === "canceled");
   return CATEGORIES.filter((c) => c !== "canceled" || canceled).map((c) => ({
     key: c,
     label: CATEGORY_LABEL[c],

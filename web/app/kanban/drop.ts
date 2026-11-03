@@ -1,7 +1,7 @@
 import type { ShowView, TaskView } from "../../core/api/client";
+import { CATEGORY_LABEL } from "../../core/categories";
 import { defaultStatusIn, propEditorOf, type SchemaView } from "../../core/schema";
 import type { KanbanSettings } from "../../core/views";
-import { CATEGORY_LABEL } from "../workspace/counts";
 import { type Column, columnKeyOf } from "./board";
 
 type Scoped = NonNullable<SchemaView["scoped"]>[number];

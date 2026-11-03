@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { schema, task } from "../tree/fixtures";
-import { categoryOf, countByCategory, projectsOf, rootsOf } from "./counts";
+import { countByCategory, projectsOf, rootsOf } from "./counts";
 
 describe("countByCategory", () => {
   it("counts every task by the category of its status, projects included", () => {
@@ -22,7 +22,6 @@ describe("countByCategory", () => {
   it("counts a status the schema does not list as todo, so that the categories add up", () => {
     const c = countByCategory([task("T1", "task", null, { status: "gone" })], schema);
     expect(c.byCategory).toEqual({ todo: 1, doing: 0, done: 0, canceled: 0 });
-    expect(categoryOf(schema, "gone")).toBe("todo");
   });
 
   it("counts nothing for no tasks", () => {

@@ -1,7 +1,5 @@
+import { CATEGORIES, type Category } from "./categories";
 import type { SchemaView } from "./schema";
-
-// The categories in the order sort:status puts them (internal/schema Categories).
-export const STATUS_CATEGORIES = ["todo", "doing", "done", "canceled"] as const;
 
 // Where a status stands in sort:status: the place of its category, then its place in the schema
 // (the index in the whole list of statuses), then the place of its store.
@@ -19,11 +17,9 @@ export function statusPlace(
 ): StatusPlace {
   const statuses = schema?.statuses ?? [];
   const pos = statuses.findIndex((s) => s.name === status);
-  const category = STATUS_CATEGORIES.indexOf(
-    (pos >= 0 ? statuses[pos]?.category : "") as (typeof STATUS_CATEGORIES)[number],
-  );
+  const category = CATEGORIES.indexOf((pos >= 0 ? statuses[pos]?.category : "") as Category);
   return {
-    category: category < 0 ? STATUS_CATEGORIES.length : category,
+    category: category < 0 ? CATEGORIES.length : category,
     pos: pos < 0 ? UNKNOWN : pos,
     store: storeAt < 0 ? UNKNOWN : storeAt,
   };
