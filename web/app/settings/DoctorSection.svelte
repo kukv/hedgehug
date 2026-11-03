@@ -84,7 +84,7 @@
       failure = null;
       // The buttons do not wait for the IDs: they fill in when they come.
       loading = false;
-      await resolveIds(r, s, mine);
+      void resolveIds(r, s, mine);
     } catch (e) {
       // The result that was read stays; the failure is shown above it.
       if (mine === seq) failure = errorMessage(e);

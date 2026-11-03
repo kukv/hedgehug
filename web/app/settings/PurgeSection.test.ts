@@ -92,7 +92,7 @@ describe("PurgeSection: the plan", () => {
       expect.stringContaining("DM-2"),
     ]);
     expect(rows[0]?.textContent).toContain("old one");
-    expect(screen.getByText("転送ファイル 3 件")).toBeTruthy();
+    expect(screen.getByText("2 件のタスクと 3 件の転送ファイル")).toBeTruthy();
     expect(screen.getByRole("button", { name: "完全に削除…" })).toBeTruthy();
   });
 
@@ -106,7 +106,7 @@ describe("PurgeSection: the plan", () => {
   it("forward files alone are something to remove", async () => {
     setup(["a"], [plan({ tasks: [] })]);
     await fireEvent.click(check());
-    await screen.findByText("転送ファイル 3 件");
+    await screen.findByText("0 件のタスクと 3 件の転送ファイル");
     expect(screen.getByRole("button", { name: "完全に削除…" })).toBeTruthy();
     expect(screen.queryByRole("list", { name: "完全に削除されるタスク" })).toBeNull();
   });
@@ -128,6 +128,16 @@ describe("PurgeSection: the plan", () => {
     await fireEvent.click(check());
     const t = await screen.findByText("消すものはありません");
     expect(t.closest("[aria-live]")?.getAttribute("aria-live")).toBe("polite");
+  });
+
+  it("only the summary line is a live region, not the list", async () => {
+    setup();
+    await fireEvent.click(check());
+    const list = await screen.findByRole("list", { name: "完全に削除されるタスク" });
+    expect(list.closest("[aria-live]")).toBeNull();
+    expect(screen.getByText("2 件のタスクと 3 件の転送ファイル").getAttribute("aria-live")).toBe(
+      "polite",
+    );
   });
 
   it("a change of the days takes the plan away: only what was checked is deleted", async () => {

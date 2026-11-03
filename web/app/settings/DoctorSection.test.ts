@@ -181,9 +181,11 @@ describe("DoctorSection: the diagnosis", () => {
     const again = within(region()).getByRole("button", {
       name: "もう一度実行",
     }) as HTMLButtonElement;
+    again.focus();
     await fireEvent.click(again);
     await waitFor(() => expect(again.disabled).toBe(false));
-    // the task is still being asked for: the buttons are not blocked by it
+    // the task is still being asked for: neither the buttons nor the focus wait for it
+    await waitFor(() => expect(document.activeElement).toBe(again));
     resolveTask({
       data: { id: "DM-5", ulid: "U2" },
       response: new Response(null, { status: 200 }),

@@ -127,6 +127,13 @@
   }
 
   const cli = $derived(plan && days !== null ? cliPurge(days, many ? store : undefined) : "");
+  const planLine = $derived(
+    !plan
+      ? ""
+      : empty
+        ? "消すものはありません"
+        : `${plan.tasks.length} 件のタスクと ${plan.forwards.length} 件の転送ファイル`,
+  );
   const invalid = $derived(days === null);
   const summary = $derived(
     `${many ? `Store ${store} の` : ""}${plan?.tasks.length ?? 0} 件の削除済みタスクと ${plan?.forwards.length ?? 0} 件の転送ファイルを、完全に削除します。`,
@@ -203,11 +210,12 @@
     <FormError message={failure} />
   {/if}
 
-  <div class="plan" aria-live="polite">
+  <!-- only this short line is announced, not the list -->
+  <p class="msg" aria-live="polite">{planLine}</p>
+
+  <div class="plan">
     {#if plan}
-      {#if empty}
-        <p class="msg">消すものはありません</p>
-      {:else}
+      {#if !empty}
         {#if plan.tasks.length > 0}
           <ul class="tasks" aria-label="完全に削除されるタスク">
             {#each plan.tasks as t (t.ulid)}
@@ -217,9 +225,6 @@
               </li>
             {/each}
           </ul>
-        {/if}
-        {#if plan.forwards.length > 0}
-          <p class="msg">転送ファイル {plan.forwards.length} 件</p>
         {/if}
         <div>
           <Button variant="danger" data-delete disabled={busy} onclick={() => (dialogOpen = true)}>

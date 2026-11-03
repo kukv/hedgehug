@@ -6,7 +6,7 @@ import { test as base, expect, type Page } from "@playwright/test";
 
 // The binary under test. `make e2e` builds it into bin/hedgehug; HEDGEHUG_BIN
 // points at another one.
-const BIN = process.env.HEDGEHUG_BIN ?? resolve(import.meta.dirname, "../../bin/hedgehug");
+const BIN = resolve(process.env.HEDGEHUG_BIN ?? resolve(import.meta.dirname, "../../bin/hedgehug"));
 
 /** remote: the store gets a bare repository of its own as its remote, for a test with a second user. */
 export type StoreSpec = { name: string; prefix: string; workspace?: string; remote?: boolean };
