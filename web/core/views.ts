@@ -151,6 +151,12 @@ export class ViewDirectory {
     return () => this.subs.delete(fn);
   }
 
+  // refresh reads the views of a store again: for a change the server does not tell (an undo of a
+  // write that its poll did not see leaves the store as it was).
+  refresh(store: string): void {
+    if (this.names.includes(store)) void this.fetch(store);
+  }
+
   // save creates the view, or changes the settings body holds (PUT: what is not sent stays).
   async save(store: string, name: string, body: ViewSaveBody): Promise<SavedView> {
     const r = await unwrap(

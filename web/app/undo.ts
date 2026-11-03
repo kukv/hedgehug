@@ -41,11 +41,17 @@ export function routeStore(
 // went. It does not ask first: the spec holds that an undo is not hard to take back. The store is
 // the one the screen is about; without it the server picks one as the CLI does, which asks the
 // user to choose when there are several.
-export async function runUndo(c: Pick<AppCore, "api" | "cache">, store?: string): Promise<void> {
+export async function runUndo(
+  c: Pick<AppCore, "api" | "cache" | "views">,
+  store?: string,
+): Promise<void> {
   try {
     const r = await unwrap(c.api.POST("/api/undo", { params: { query: { store } } }));
     // The commit is this tab's own: its tasks.changed is not shown as a change from outside.
     c.cache.noteOwnCommit(r.commit);
+    // The server tells views.changed from its poll, which misses a write taken back before it
+    // looked (the store is as it was): the list of views would keep what this tab wrote.
+    if (r.undone.op === "view") c.views.refresh(r.undone.store);
     toast({ message: undoMessage(r) });
   } catch (e) {
     toast({ message: errorMessage(e) });

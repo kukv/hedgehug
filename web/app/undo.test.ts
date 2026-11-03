@@ -98,8 +98,12 @@ describe("runUndo", () => {
   function setup(route: Parameters<typeof fakeApi>[0]) {
     const { api, calls } = fakeApi(route);
     const noteOwnCommit = vi.fn();
-    const c = { api, cache: { noteOwnCommit } } as unknown as Pick<AppCore, "api" | "cache">;
-    return { c, calls, noteOwnCommit };
+    const refresh = vi.fn();
+    const c = { api, cache: { noteOwnCommit }, views: { refresh } } as unknown as Pick<
+      AppCore,
+      "api" | "cache" | "views"
+    >;
+    return { c, calls, noteOwnCommit, refresh };
   }
 
   it("posts to /api/undo with the store, remembers the commit and says what it did", async () => {
@@ -110,6 +114,22 @@ describe("runUndo", () => {
     expect(calls[0]?.query.get("store")).toBe("shared");
     expect(noteOwnCommit).toHaveBeenCalledWith("c2");
     expect(toasts.list.map((t) => t.message)).toEqual(["REL-6 の変更を取り消しました"]);
+  });
+
+  it("reads the views of the store again after it takes back a change of a view", async () => {
+    // The server tells views.changed from its poll: a delete taken back before the poll saw it
+    // leaves the tree as it was, so nothing is told, and the list would keep the view out.
+    const { c, refresh } = setup(() =>
+      result({ undone: { ...result().undone, op: "view", task: null, id: null, store: "work" } }),
+    );
+    await runUndo(c, "work");
+    expect(refresh).toHaveBeenCalledWith("work");
+  });
+
+  it("does not read the views again after it takes back another operation", async () => {
+    const { c, refresh } = setup(() => result());
+    await runUndo(c, "shared");
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("sends no store when there is none", async () => {

@@ -297,6 +297,20 @@ describe("ViewDirectory", () => {
     expect(dir.get("shared", "weekly")?.view.query).toBe("status:done");
   });
 
+  it("refresh fetches the store again, and not one it does not know", async () => {
+    // An undo that the poll of the server missed (a delete taken back within one poll) leaves no
+    // views.changed: the screen asks for the views itself.
+    const { dir, w, views } = setup({ shared: [], personal: [] });
+    await vi.waitFor(() => expect(dir.loaded()).toBe(true));
+    w.shared = [view("weekly")];
+    dir.refresh("shared");
+    await vi.waitFor(() => expect(names(dir)).toEqual(["shared/weekly"]));
+    expect(views("personal")).toHaveLength(1);
+    dir.refresh("nobody");
+    await settle();
+    expect(views("nobody")).toHaveLength(0);
+  });
+
   it("encodes the name in the path, and rename and remove change the list", async () => {
     const { dir, calls, noteOwnCommit } = setup({ shared: [view("今週 の作業"), view("b")] });
     await vi.waitFor(() => expect(dir.loaded()).toBe(true));
