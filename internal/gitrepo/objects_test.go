@@ -2,11 +2,13 @@ package gitrepo
 
 import (
 	"bytes"
+	"compress/zlib"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -156,7 +158,13 @@ func content(t *testing.T, o plumbing.EncodedObject) []byte {
 // it with what go-git reads.
 func checkAll(t *testing.T, dir string, rd *objectReader) {
 	t.Helper()
-	for h, want := range goGitObjects(t, dir) {
+	checkObjects(t, goGitObjects(t, dir), rd)
+}
+
+// checkObjects compares what rd reads with objs.
+func checkObjects(t *testing.T, objs map[plumbing.Hash]plumbing.EncodedObject, rd *objectReader) {
+	t.Helper()
+	for h, want := range objs {
 		got, err := rd.object(h)
 		if err != nil {
 			t.Errorf("object(%s): %v", h, err)
@@ -202,7 +210,11 @@ func TestObjectReaderOFSDeltas(t *testing.T) {
 	if ofs, _ := deltas(t, packAll(t, r, false)); ofs == 0 {
 		t.Fatal("the pack has no OFS delta")
 	}
-	checkAll(t, dir, newReader(t, dir))
+	rd := newReader(t, dir)
+	checkAll(t, dir, rd)
+	if rd.bases.ll.Len() == 0 {
+		t.Error("the base cache is empty after reading deltas")
+	}
 }
 
 func TestObjectReaderREFDeltas(t *testing.T) {
@@ -298,5 +310,70 @@ func TestBaseCacheEvicts(t *testing.T) {
 	c.put(p, 4, plumbing.BlobObject, make([]byte, 11)) // larger than the whole cache
 	if _, _, ok := c.get(p, 4); ok {
 		t.Error("an object larger than the cache is kept")
+	}
+}
+
+// A pack that vanished from the directory (a consolidation) is retired, and
+// its objects are read from the pack that holds them now.
+func TestObjectReaderPackVanishes(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("an open file cannot be removed")
+	}
+	r, dir := historyRepo(t)
+	a := strings.TrimSuffix(packAll(t, r, false), ".pack")
+	objs := goGitObjects(t, dir)
+	rd := newReader(t, dir)
+	if _, err := rd.object(mustHead(t, r)); err != nil {
+		t.Fatal(err)
+	}
+	// The same pack under another name, as a consolidation leaves it.
+	b := filepath.Join(filepath.Dir(a), "pack-copy")
+	for _, ext := range []string{".pack", ".idx"} {
+		data, err := os.ReadFile(a + ext) //nolint:gosec // G304: a pack the test wrote
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(b+ext, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(a + ext); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rd.stale()
+	checkObjects(t, objs, rd) // go-git would refuse the copy: its name is not its checksum
+	if len(rd.retired) != 1 {
+		t.Errorf("retired = %d packs, want 1", len(rd.retired))
+	}
+}
+
+// Deltas that point at each other end in an error, not in endless recursion.
+func TestObjectReaderDeltaCycle(t *testing.T) {
+	t.Parallel()
+	hA := plumbing.NewHash("1000000000000000000000000000000000000001")
+	hB := plumbing.NewHash("2000000000000000000000000000000000000002")
+	entry := func(base plumbing.Hash) []byte {
+		var z bytes.Buffer
+		zw := zlib.NewWriter(&z)
+		_, _ = zw.Write([]byte("x"))
+		_ = zw.Close()
+		return append(append([]byte{0x71}, base[:]...), z.Bytes()...) // a REF delta of size 1
+	}
+	a, b := entry(hB), entry(hA)
+	gitDir := t.TempDir()
+	packDir := filepath.Join(gitDir, "objects", "pack")
+	if err := os.MkdirAll(packDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	base := filepath.Join(packDir, "pack-cycle")
+	writeIdx(t, base, map[plumbing.Hash]int64{hA: 0, hB: int64(len(a))})
+	if err := os.WriteFile(base+".pack", append(a, b...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rd := newObjectReader(gitDir)
+	defer func() { _ = rd.close() }()
+	if _, err := rd.object(hA); err == nil || errors.Is(err, plumbing.ErrObjectNotFound) {
+		t.Errorf("object = %v, want a depth error", err)
 	}
 }

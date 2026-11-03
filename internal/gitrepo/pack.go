@@ -196,9 +196,13 @@ func (p *pack) inflate(e packEntry) ([]byte, error) {
 		return nil, fmt.Errorf("read %s.pack at %d: %w", p.base, e.data, err)
 	}
 	defer func() { _ = zr.Close() }()
-	out := make([]byte, e.size)
-	if _, err := io.ReadFull(zr, out); err != nil {
+	// e.size is not trusted to size a buffer: read at most size+1 bytes.
+	out, err := io.ReadAll(io.LimitReader(zr, e.size+1))
+	if err != nil {
 		return nil, fmt.Errorf("read %s.pack at %d: %w", p.base, e.data, err)
+	}
+	if int64(len(out)) != e.size {
+		return nil, fmt.Errorf("read %s.pack at %d: size %d, header says %d", p.base, e.data, len(out), e.size)
 	}
 	return out, nil
 }

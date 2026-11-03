@@ -22,6 +22,10 @@ import (
 // kept in memory.
 const baseCacheBytes = 16 << 20
 
+// maxDeltaDepth bounds a chain of deltas, so that a corrupt pack whose deltas
+// point at each other ends in an error. git's own limit is 50.
+const maxDeltaDepth = 64
+
 // objectReader reads the objects of a git directory, loose and packed. It
 // opens a pack's index without reading all of it and never needs the map
 // from offsets to hashes that go-git builds on its first read (spec
@@ -42,7 +46,7 @@ func newObjectReader(gitDir string) *objectReader {
 
 // object returns the object h, or plumbing.ErrObjectNotFound.
 func (o *objectReader) object(h plumbing.Hash) (plumbing.EncodedObject, error) {
-	typ, data, err := o.raw(h)
+	typ, data, err := o.raw(h, false, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -58,14 +62,17 @@ func (o *objectReader) object(h plumbing.Hash) (plumbing.EncodedObject, error) {
 // raw returns the type and the content of h. It looks in the packs, then in
 // the loose objects, then in the packs again after listing them anew: a
 // fetch or a consolidation may have written a pack since they were listed.
-func (o *objectReader) raw(h plumbing.Hash) (plumbing.ObjectType, []byte, error) {
+// The returned slice may be shared with the base cache; do not modify it.
+// With asBase an object found in a pack is kept in the base cache; depth is
+// the length of the chain of deltas so far.
+func (o *objectReader) raw(h plumbing.Hash, asBase bool, depth int) (plumbing.ObjectType, []byte, error) {
 	for _, again := range []bool{false, true} {
 		p, off, err := o.find(h, again)
 		if err != nil {
 			return plumbing.InvalidObject, nil, err
 		}
 		if p != nil {
-			return o.at(p, off, false)
+			return o.at(p, off, asBase, depth)
 		}
 		if !again {
 			typ, data, err := readLoose(o.dir, h)
@@ -182,8 +189,12 @@ func (o *objectReader) close() error {
 }
 
 // at returns the object at off in p, its delta applied. An object read as
-// the base of a delta is kept in the base cache.
-func (o *objectReader) at(p *pack, off int64, asBase bool) (plumbing.ObjectType, []byte, error) {
+// the base of a delta is kept in the base cache. The returned slice may be
+// shared with the base cache; do not modify it.
+func (o *objectReader) at(p *pack, off int64, asBase bool, depth int) (plumbing.ObjectType, []byte, error) {
+	if depth > maxDeltaDepth {
+		return plumbing.InvalidObject, nil, fmt.Errorf("%s.pack at %d: deltas nested deeper than %d", p.base, off, maxDeltaDepth)
+	}
 	if typ, data, ok := o.bases.get(p, off); ok {
 		return typ, data, nil
 	}
@@ -201,9 +212,12 @@ func (o *objectReader) at(p *pack, off int64, asBase bool) (plumbing.ObjectType,
 	case plumbing.OFSDeltaObject, plumbing.REFDeltaObject:
 		var base []byte
 		if e.typ == plumbing.OFSDeltaObject {
-			typ, base, err = o.at(p, e.baseOff, true)
+			typ, base, err = o.at(p, e.baseOff, true, depth+1)
 		} else {
-			typ, base, err = o.raw(e.baseRef)
+			typ, base, err = o.raw(e.baseRef, true, depth+1)
+			if err != nil {
+				err = fmt.Errorf("%s.pack at %d: delta base %s: %w", p.base, off, e.baseRef, err)
+			}
 		}
 		if err != nil {
 			return plumbing.InvalidObject, nil, err
@@ -252,9 +266,13 @@ func readLoose(dir string, h plumbing.Hash) (plumbing.ObjectType, []byte, error)
 	if err != nil || n < 0 {
 		return plumbing.InvalidObject, nil, fmt.Errorf("loose object %s: bad size %q", h, size)
 	}
-	data := make([]byte, n)
-	if _, err := io.ReadFull(br, data); err != nil {
+	// n is not trusted to size a buffer: read at most n+1 bytes.
+	data, err := io.ReadAll(io.LimitReader(br, n+1))
+	if err != nil {
 		return plumbing.InvalidObject, nil, fmt.Errorf("loose object %s: %w", h, err)
+	}
+	if int64(len(data)) != n {
+		return plumbing.InvalidObject, nil, fmt.Errorf("loose object %s: size %d, header says %d", h, len(data), n)
 	}
 	return typ, data, nil
 }
