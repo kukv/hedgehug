@@ -68,6 +68,17 @@ func openPack(base string) (*pack, error) {
 	for i := range p.fanout {
 		p.fanout[i] = binary.BigEndian.Uint32(head[idxFanout+4*i:])
 	}
+	// A fanout that goes down, or counts more objects than the index has
+	// room for, would make bucket allocate past the file.
+	fi, err := idx.Stat()
+	ok := err == nil && idxHashes+int64(p.fanout[255])*28 <= fi.Size()
+	for i := 1; ok && i < len(p.fanout); i++ {
+		ok = p.fanout[i-1] <= p.fanout[i]
+	}
+	if !ok {
+		_ = p.close()
+		return nil, errors.Join(fmt.Errorf("%s.idx: bad fanout", base), err)
+	}
 	return p, nil
 }
 
@@ -118,10 +129,7 @@ func (p *pack) bucket(first byte) (*idxBucket, error) {
 	if first > 0 {
 		lo = p.fanout[first-1]
 	}
-	hi := p.fanout[first]
-	if hi < lo || hi > p.fanout[255] {
-		return nil, fmt.Errorf("%s.idx: bad fanout", p.base)
-	}
+	hi := p.fanout[first] // openPack checked that the fanout goes up
 	if lo == hi {
 		return nil, nil
 	}
@@ -259,7 +267,10 @@ func readSized(r io.Reader, size int64) ([]byte, error) {
 	if size <= 1<<20 {
 		out = make([]byte, size)
 		if _, err := io.ReadFull(r, out); err != nil {
-			return nil, err
+			if errors.Is(err, io.EOF) { // nothing at all
+				err = io.ErrUnexpectedEOF
+			}
+			return nil, fmt.Errorf("shorter than the %d bytes its header says: %w", size, err)
 		}
 	} else {
 		var err error

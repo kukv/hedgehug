@@ -151,12 +151,13 @@ func TestOpenPackSkipsOtherVersions(t *testing.T) {
 
 // A fanout that decreases, or that exceeds the object count, is an error and
 // not a huge read.
-func TestPackFindBadFanout(t *testing.T) {
+func TestOpenPackBadFanout(t *testing.T) {
 	t.Parallel()
-	h := plumbing.NewHash("7f00000000000000000000000000000000000001")
+	h := plumbing.NewHash("7f00000000000000000000000000000000000001") // in bucket 0x7f
 	for name, set := range map[string][2]uint32{
-		"decreasing": {0x7e, 5}, // fanout[0x7e] = 5 > fanout[0x7f] = 1
-		"too large":  {0x7f, 1000},
+		"decreasing":    {0x7e, 5}, // fanout[0x7e] = 5 > fanout[0x7f] = 1
+		"too large":     {0x7f, 1000},
+		"past the file": {0xff, 1 << 30}, // more objects than the index has room for
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -170,13 +171,9 @@ func TestPackFindBadFanout(t *testing.T) {
 			if err := os.WriteFile(base+".idx", b, 0o600); err != nil {
 				t.Fatal(err)
 			}
-			p, err := openPack(base)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer func() { _ = p.close() }()
-			if _, _, err := p.find(h); err == nil {
-				t.Error("find of a bad fanout succeeded")
+			if p, err := openPack(base); err == nil {
+				_ = p.close()
+				t.Error("openPack of a bad fanout succeeded")
 			}
 		})
 	}
