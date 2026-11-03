@@ -516,6 +516,20 @@ describe("ProjectSettings", () => {
     expect(screen.queryByText(/ほかで変更されました/)).toBeNull();
   });
 
+  it("keeps the saved values, and says nothing changed elsewhere, when the schema cannot be read again", async () => {
+    const { reload } = setup();
+    // the read fails: the cache holds the old schema and tells nobody
+    reload.mockImplementation(async () => {});
+    const group = await screen.findByRole("group", { name: "表示するステータス" });
+    await fireEvent.click(within(group).getByRole("checkbox", { name: /待機中/ }));
+    await fireEvent.click(save());
+    await waitFor(() => expect(toasts.list).toHaveLength(1));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(within(group).getByRole("checkbox", { name: /待機中/ })).not.toBeChecked();
+    expect(screen.queryByText(/ほかで変更されました/)).toBeNull();
+    expect(save()).toBeDisabled();
+  });
+
   it("says the project is not found", async () => {
     setup({ notFound: true });
     expect(await screen.findByText(/見つかりません/)).toBeTruthy();

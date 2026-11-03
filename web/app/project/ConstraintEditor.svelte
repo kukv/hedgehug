@@ -109,7 +109,8 @@
     value={pick}
     onchange={(e) => {
       pick = e.currentTarget.value;
-      chosen = chosen.filter((v) => v !== pick);
+      // A status cannot be its own target; a field of the same name is another thing.
+      if (transition) chosen = chosen.filter((v) => v !== pick);
     }}
   >
     <option value="">{placeholder}</option>

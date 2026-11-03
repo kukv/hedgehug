@@ -105,6 +105,18 @@ describe("ConstraintEditor: required fields", () => {
     expect(onchange).toHaveBeenCalledWith({ done: ["area", "points"] });
   });
 
+  it("keeps a field ticked when the status chosen has the same name", async () => {
+    const { onchange } = mount({ mode: "required", fields: ["todo", "points"] });
+    const form = screen.getByRole("group", { name: "必須の項目を足す" });
+    await fireEvent.click(within(form).getByRole("checkbox", { name: "todo" }));
+    await fireEvent.change(within(form).getByRole("combobox", { name: "必須にするステータス" }), {
+      target: { value: "todo" },
+    });
+    expect(within(form).getByRole("checkbox", { name: "todo" })).toBeChecked();
+    await fireEvent.click(within(form).getByRole("button", { name: "必須の項目を足す" }));
+    expect(onchange).toHaveBeenCalledWith({ todo: ["todo"] });
+  });
+
   it("shows the Store's fields without a way to take them off", () => {
     mount({ mode: "required", fromStore: { done: ["points"] } });
     const row = within(screen.getByRole("list", { name: "必須の項目" })).getByRole("listitem");
