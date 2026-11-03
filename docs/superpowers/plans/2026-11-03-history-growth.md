@@ -976,4 +976,29 @@ Task 1〜9 の実装で plan と違うことになった点。判断の根拠は
     - `restore --at`・`show --at` の時刻の解決を索引で引く: 索引にコミットごとの first parent を持たせ（ファイルの版は 2）、`History.AtOrBefore` で HEAD から first-parent の線をたどる。索引が開けないときは今までの歩きに戻る。`commitAt` は `Session` のメソッドになった。歩きと同じ答えになることは、マージを含むプロパティテストで確かめる。
     - go-git の `KeepDescriptors` を有効にする（`gitrepo.newRepo`）: 1 つのオブジェクトを読むたびに pack を開き直さない。`Repo.Close` が手放す。`Consolidate` は古い pack を消す前に手放し、`store remove` は消す前にハンドルを閉じる。
     - 索引の保存を追記にする: HEAD が進んだとき、新しいコミットと変わったパスを CRC 付きの塊としてファイルの終わりに足す（版は 3、`Store.AppendLocal` を足した）。塊が欠けている・合わない・前の tip につながらないときは、そこまでを読んで残りは git から足し、次の保存でファイルを書き直す。塊が 100 を超えるか、元の半分に近づいたら書き直す。
-  - なお `show`（1 つ進んだ直後）と `undo` は、go-git の固定費（pack の索引の読み込み約 150ms、書き込みの tree の組み立て約 200ms）のため目標に届かない。これは別のブレストで扱う（spec の決定 9）。
+  - なお `show`（1 つ進んだ直後）と `undo` は、WSL では go-git の固定費（pack の索引の読み込み約 150ms、書き込み 1 回 200ms 前後）のため目標に届かない。mac では届く。固定費は別のブレストで扱う（spec の決定 9）。
+- **Task 9 のレビューの後**（作業場所を WSL から mac に移して続けた）:
+  - 索引のファイルの版を 4 にした。追記の塊に、前のコミットと文字列の数を持たせる。同じ tip でも一から書き直したファイルは文字列の番号が違い、別のハンドルが前のファイルに対して作った塊を読むと、番号が別の文字列を指していた。
+  - `KeepDescriptors` により、開いて捨てるハンドルが pack を GC まで開いたまま持つようになった。`ops.Session.Close` と `mount.Set.Close` を足し、Session が開いた Store と Set を覚えてまとめて閉じる。サーバーは request・poll・同期の 1 回ごとに閉じる。`dropMount` は捨てる Set を閉じる。mount の reopen・`SharedPrefixes`、doctor、poll の差し替え、`StoreInit`・`StoreAdd`・`store.Create`・`CloneWith` の失敗時の片付けでも閉じる。確かめるために `gitrepo.Live`（閉じていない Repo の数）を足した。
+  - `BenchmarkFixedCost`（開いて最初のコミットを読む、書き込み 1 回）を足し、決定 9 の根拠を `make bench-history` で取り直せるようにした。mac での計測を spec の 8 節に足した。
+  - golangci-lint を CI と同じ 2.15.0 に `mise.toml` で固定した。手元の 2.13.2 は Go 1.27.3 を型検査できない。2.15.0 で出る main からの指摘 2 件（`Hub.Subscribe`・`Poller.Snapshot` の unexported-return）は、パッケージの中だけで使うので小文字にした。
+  - 細かい指摘: `diffTrees` が submodule もファイルとして数えることを書いた（`git log -- path` と同じ）。`Index.lc` に、1 つのゴルーチンからしか使わない前提を書いた。統合のテストは、まとめた pack の大きさに頼らず pack のファイルの数で確かめる。
+
+### 実装中に決めたこと
+
+| Task | 決めたこと | 理由 | 誤っていたときの影響 |
+| --- | --- | --- | --- |
+| 2 | plan にコメントだけあった 4 つのテストは、実装者が書き切る | 補助の形がパッケージの中で決まるため | Task 3 のプロパティテストが拾う |
+| 9 | 「`store.Init` 相当」は `store.Create` | 公開されている作成関数がそれだけ | なし |
+| 4 | ブリーフの「マージコミットを出さない」は、2 クローンが同じタスクの別のフィールドを変えた場合には誤り。spec 2.3 どおりマージも出す | spec が上位 | `log <id>` にマージ行が 1 行多く出るだけ |
+| 4 | `logWorkspace` は `logViewOf` が使うので残し、判定は `workspaceOf` に一本化 | 重複を避けられる | なし |
+| 4 | 進みの表示の 1 秒は作り始めから数える（`progress(0,total)` を最初に呼ぶ） | spec 2.5 | 表示が早く／遅く出るだけ |
+| 5 | `history.Open` 自体が失敗したら、`headAuthor`・`lastChanger` は従来の歩きに戻る | 索引はキャッシュ（spec 2.1） | 壊れた索引に気づきにくいだけ（次の Open で作り直す） |
+| 8 | 1 回の統合は、選んだ pack の合計が `packCap` を超えないよう大きい方から外す | spec 5.1「1 回に 64 MiB 程度まで」 | pack が数個多く残るだけ |
+| 9 | 開いて捨てるハンドルは、`KeepDescriptors` を外さずに閉じる側で直す | 利用者の決定で ② はこのブランチで直す。外すと索引の最初の作成などが 2 倍以上遅くなる | 閉じ忘れが残れば、サーバーで記述子が GC まで残る |
+
+利用者の決定（2026-11-03）:
+
+- Task 9 の 3 つの未達のうち、restore --at を索引で引くこと、`KeepDescriptors`、書き込み後の保存を軽くすることは、このブランチで直す。go-git の固定費は別に扱う（spec の決定 9）。
+- 取り消すものがないときの `undo` は記録だけにする（spec の決定の 2）。
+- mac でも計測し直す。コミットの `Co-Authored-By` に実装したモデルの名前（Haiku 5.5・Sonnet 5.5）が入っているものは、そのままにする。
