@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  checkName,
-  type Finding,
-  fixedText,
-  groupFindings,
-  parsePurgeDays,
-  severityOf,
-} from "./doctor";
+import { type DoctorReport, fixedText, groupFindings, parsePurgeDays, severityOf } from "./doctor";
+
+type Finding = NonNullable<DoctorReport["findings"]>[number];
 
 const f = (over: Partial<Finding> & { check: string }): Finding => ({
   msg: "m",
@@ -15,7 +10,7 @@ const f = (over: Partial<Finding> & { check: string }): Finding => ({
   ...over,
 });
 
-describe("checkName", () => {
+describe("the name of a check", () => {
   it.each([
     ["schema", "スキーマ"],
     ["template", "テンプレート"],
@@ -34,11 +29,11 @@ describe("checkName", () => {
     ["unexpected_force_push", "想定外の force push"],
     ["workspace", "ワークスペース"],
   ])("%s", (check, name) => {
-    expect(checkName(check)).toBe(name);
+    expect(groupFindings([f({ check })])[0]?.name).toBe(name);
   });
 
   it("an unknown check is written as it is", () => {
-    expect(checkName("brand_new")).toBe("brand_new");
+    expect(groupFindings([f({ check: "brand_new" })])[0]?.name).toBe("brand_new");
   });
 });
 

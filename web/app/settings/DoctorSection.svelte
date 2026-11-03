@@ -15,6 +15,7 @@
   import { onLinkClick, router } from "../router";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
+  import CliLine from "../ui/CliLine.svelte";
   import Dialog from "../ui/Dialog.svelte";
   import FormError from "../ui/FormError.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
@@ -255,6 +256,7 @@
       </ul>
     </div>
   {/each}
+  <div><CliLine command={cliDoctor({ store: many ? store : undefined })} /></div>
 </section>
 
 <Dialog open={dialogOpen} title="doctor で修復する" width={560} {cli} onclose={closeDialog}>

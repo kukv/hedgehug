@@ -1,11 +1,13 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DoctorReport, Finding } from "../../core/doctor";
+import type { DoctorReport } from "../../core/doctor";
 import { FakeConn } from "../../core/testing";
 import { fail, ok } from "../detail/testkit";
 import { renderWithCore } from "../test-utils";
 import { resetToasts, toasts } from "../toast.svelte";
 import DoctorSection from "./DoctorSection.svelte";
+
+type Finding = NonNullable<DoctorReport["findings"]>[number];
 
 const finding = (over: Partial<Finding> & { check: string }): Finding => ({
   msg: "a problem",
@@ -271,6 +273,22 @@ describe("DoctorSection: the diagnosis", () => {
     await within(region()).findByText("does not decode");
     const text = region().textContent ?? "";
     for (const t of ["作り直", "repack", "登録する", "--moved"]) expect(text).not.toContain(t);
+  });
+});
+
+describe("DoctorSection: the command", () => {
+  it("shows hh doctor in the foot, with --store for two stores or more", async () => {
+    setup();
+    await within(region()).findByText("問題は見つかりませんでした");
+    expect(
+      within(region()).getByRole("button", { name: "コマンドをコピー: hh doctor" }),
+    ).toBeTruthy();
+    cleanup();
+    setup({}, { many: true });
+    await within(region()).findByText("問題は見つかりませんでした");
+    expect(
+      within(region()).getByRole("button", { name: "コマンドをコピー: hh doctor --store a" }),
+    ).toBeTruthy();
   });
 });
 

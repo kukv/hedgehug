@@ -1,7 +1,7 @@
 import type { Schemas } from "./api/client";
 import { repairedText } from "./notifications";
 
-export type Finding = Schemas["Finding"];
+type Finding = Schemas["Finding"];
 export type DoctorReport = Schemas["DoctorReport"];
 export type PurgePlan = Schemas["PurgePlan"];
 
@@ -26,11 +26,11 @@ const CHECKS: Record<string, string> = {
 };
 
 /** The name of a check; a check that is not known is written as it is. */
-export function checkName(check: string): string {
+function checkName(check: string): string {
   return CHECKS[check] ?? check;
 }
 
-export type FindingGroup = { check: string; name: string; items: Finding[] };
+type FindingGroup = { check: string; name: string; items: Finding[] };
 
 /** The findings by check, in the order their checks first come (the server sorts them by check). */
 export function groupFindings(findings: readonly Finding[]): FindingGroup[] {
