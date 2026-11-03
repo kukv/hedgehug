@@ -16,3 +16,11 @@ export function useSubscribe<T>(
     },
   };
 }
+
+/** Whether there are two Stores or more: the screens show the Store of a row only then. */
+export function useManyStores(stores: {
+  subscribe(fn: () => void): () => void;
+  stores(): readonly unknown[];
+}): { readonly current: boolean } {
+  return useSubscribe(stores, () => stores.stores().length >= 2);
+}

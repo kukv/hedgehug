@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from "svelte";
+  import { tick, untrack } from "svelte";
   import { authorLabel, groupByDay, type Log, opLabel, trailerLine } from "../../core/activity";
   import { unwrap } from "../../core/api/client";
   import { cliLog } from "../../core/cli";
@@ -7,8 +7,9 @@
   import { errorMessage } from "../../core/messages";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
+  import { focusLost } from "../focus";
   import { type ActivitySync, onLinkClick, router } from "../router";
-  import { useSubscribe } from "../svelte-store";
+  import { useManyStores, useSubscribe } from "../svelte-store";
   import Avatar from "../ui/Avatar.svelte";
   import Button from "../ui/Button.svelte";
   import CliLine from "../ui/CliLine.svelte";
@@ -32,7 +33,7 @@
 
   const c = core();
   const spaces = useSubscribe(c.stores, () => c.stores.workspaces());
-  const storesRev = useSubscribe(c.stores, () => ({}));
+  const manyStores = useManyStores(c.stores);
 
   let items = $state.raw<Log[] | null>(null);
   let failure = $state<string | null>(null);
@@ -41,6 +42,11 @@
   let shown = $state(PAGE);
   let loading = $state(false);
   let seq = 0;
+  let heading: HTMLElement | undefined = $state();
+  let feed: HTMLElement | undefined = $state();
+  let moreEl: HTMLElement | undefined = $state();
+  // How many commits were shown when 「さらに読み込む」 was pressed; null when it was not.
+  let askedFrom: number | null = null;
 
   async function load(): Promise<void> {
     const mine = ++seq;
@@ -60,6 +66,22 @@
     } finally {
       if (mine === seq) loading = false;
     }
+    if (mine === seq && askedFrom !== null) await settleFocus(askedFrom);
+  }
+
+  // The button is disabled while it loads and is gone at the end of the commits, which drops the
+  // focus: it goes back to the button, else to the first commit that came, else to the heading.
+  async function settleFocus(from: number): Promise<void> {
+    askedFrom = null;
+    await tick();
+    if (!focusLost()) return;
+    const rows = feed?.querySelectorAll<HTMLElement>("li.item");
+    (moreEl?.querySelector("button") ?? rows?.[from] ?? heading)?.focus();
+  }
+
+  function loadMore(): void {
+    askedFrom = items?.length ?? 0;
+    limit = Math.min(limit + PAGE, MAX);
   }
 
   // A new request for each change of the filters and of the number asked for; the commits change
@@ -78,13 +100,12 @@
     ];
     return () => {
       for (const off of offs) off();
+      // an answer that comes after the page is gone is dropped
+      seq++;
     };
   });
 
-  const many = $derived.by(() => {
-    storesRev.current;
-    return c.stores.stores().length > 1;
-  });
+  const many = $derived(manyStores.current);
   const days = $derived(groupByDay(items ?? [], new Date()));
   // A full page may have more behind it, up to what the server gives.
   const more = $derived(items !== null && items.length >= shown && shown < MAX);
@@ -115,7 +136,7 @@
 
 <div class="activity">
   <header class="head">
-    <h1>アクティビティ</h1>
+    <h1 bind:this={heading} tabindex="-1">アクティビティ</h1>
     <span class="sub">各 Store の git log · 誰がいつ何を変えたか</span>
   </header>
 
@@ -151,14 +172,14 @@
     {:else if items.length === 0}
       <p class="msg">アクティビティはありません</p>
     {:else}
-      <section class="feed" aria-label="変更の一覧">
+      <section class="feed" aria-label="変更の一覧" bind:this={feed}>
         {#each days as day (day.key)}
           <section aria-labelledby="day-{day.key}">
             <h2 id="day-{day.key}">{day.name}</h2>
             <ol class="list">
               {#each day.logs as l (`${l.store}/${l.hash}`)}
                 {@const who = authorLabel(l)}
-                <li class="item">
+                <li class="item" tabindex="-1">
                   <time class="time" datetime={l.date}>{formatTime(l.date)}</time>
                   <Avatar name={l.author.name} />
                   <div class="main">
@@ -192,10 +213,8 @@
         {/each}
       </section>
       {#if more}
-        <div class="more">
-          <Button disabled={loading} onclick={() => (limit = Math.min(limit + PAGE, MAX))}
-            >さらに読み込む</Button
-          >
+        <div class="more" bind:this={moreEl}>
+          <Button disabled={loading} onclick={loadMore}>さらに読み込む</Button>
         </div>
       {/if}
     {/if}

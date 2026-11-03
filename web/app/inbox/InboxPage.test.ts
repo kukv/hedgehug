@@ -303,6 +303,69 @@ describe("InboxPage", () => {
     await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(2));
   });
 
+  describe("focus", () => {
+    // A browser may drop the focus of a button that is disabled or gone; jsdom keeps it, so the test does.
+    const drop = () => (document.activeElement as HTMLElement | null)?.blur();
+
+    it("goes to the row when the buttons of the row are gone", async () => {
+      const { api, set } = setup([assigned]);
+      const button = await screen.findByRole("button", { name: "既読にする" });
+      button.focus();
+      set([{ ...assigned, read: true }]);
+      api.PATCH.mockImplementation(() => {
+        drop();
+        return Promise.resolve({ data: undefined, response: new Response(null, { status: 204 }) });
+      });
+      await fireEvent.click(button);
+      await waitFor(() => expect(rowOf("REL-27")).toHaveFocus());
+      expect(within(rowOf("REL-27")).queryAllByRole("button")).toHaveLength(0);
+    });
+
+    it("goes to the row after the revert too", async () => {
+      const { set } = setup([overwritten]);
+      const button = await screen.findByRole("button", { name: "自分の値に戻す" });
+      button.focus();
+      set([{ ...overwritten, read: true }]);
+      await fireEvent.click(button);
+      drop();
+      await waitFor(() => expect(rowOf("REL-11")).toHaveFocus());
+    });
+
+    it("goes to the heading when 'mark all' is disabled by it", async () => {
+      const { api, set } = setup([mention, assigned]);
+      const button = await screen.findByRole("button", { name: "すべて既読にする" });
+      button.focus();
+      set([
+        { ...mention, read: true },
+        { ...assigned, read: true },
+      ]);
+      api.POST.mockImplementation(() => {
+        drop();
+        return ok({ read: [] });
+      });
+      await fireEvent.click(button);
+      await waitFor(() =>
+        expect(screen.getByRole("heading", { level: 1, name: "通知" })).toHaveFocus(),
+      );
+      expect(button).toBeDisabled();
+    });
+
+    it("stays where the user moved it meanwhile", async () => {
+      const { api, set } = setup([assigned]);
+      const button = await screen.findByRole("button", { name: "既読にする" });
+      set([{ ...assigned, read: true }]);
+      const tab = screen.getAllByRole("link", { name: /すべて/ })[0] as HTMLElement;
+      api.PATCH.mockImplementation(() => {
+        tab.focus();
+        return Promise.resolve({ data: undefined, response: new Response(null, { status: 204 }) });
+      });
+      await fireEvent.click(button);
+      await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(2));
+      await new Promise((r) => setTimeout(r, 10));
+      expect(tab).toHaveFocus();
+    });
+  });
+
   it("disables 'mark all' when nothing is unread", async () => {
     setup([watched]);
     await screen.findByText(/変更しました/);

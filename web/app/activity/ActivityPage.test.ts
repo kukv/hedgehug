@@ -242,6 +242,57 @@ describe("ActivityPage", () => {
     );
   });
 
+  describe("focus of the button to load more", () => {
+    const many = (n: number) =>
+      Array.from({ length: n }, (_, i) => log({ hash: `h${String(i).padStart(6, "0")}` }));
+    // A browser may drop the focus of a button that is disabled; jsdom keeps it, so the test does.
+    const drop = () => (document.activeElement as HTMLElement | null)?.blur();
+
+    it("comes back to the button when it is still there", async () => {
+      const { api, set } = setup(many(100));
+      const more = await screen.findByRole("button", { name: "さらに読み込む" });
+      more.focus();
+      set(many(200));
+      api.GET.mockImplementation(() => {
+        drop();
+        return ok(many(200)) as never;
+      });
+      await fireEvent.click(more);
+      await waitFor(() => expect(screen.getAllByRole("listitem")).toHaveLength(200));
+      expect(screen.getByRole("button", { name: "さらに読み込む" })).toHaveFocus();
+    });
+
+    it("goes to the first row that came when the button is gone", async () => {
+      const { api } = setup(many(100));
+      const more = await screen.findByRole("button", { name: "さらに読み込む" });
+      more.focus();
+      api.GET.mockImplementation(() => {
+        drop();
+        return ok(many(150)) as never;
+      });
+      await fireEvent.click(more);
+      await waitFor(() =>
+        expect(screen.queryByRole("button", { name: "さらに読み込む" })).toBeNull(),
+      );
+      expect(screen.getAllByRole("listitem")[100]).toHaveFocus();
+    });
+
+    it("goes to the heading when nothing new came and the button is gone", async () => {
+      const { api } = setup(many(100));
+      const more = await screen.findByRole("button", { name: "さらに読み込む" });
+      more.focus();
+      api.GET.mockImplementation(() => {
+        drop();
+        return ok(many(100).slice(0, 99)) as never;
+      });
+      await fireEvent.click(more);
+      await waitFor(() =>
+        expect(screen.queryByRole("button", { name: "さらに読み込む" })).toBeNull(),
+      );
+      expect(screen.getByRole("heading", { level: 1, name: "アクティビティ" })).toHaveFocus();
+    });
+  });
+
   it("shows two commits of one day that arrive apart, and one with a date that is none", async () => {
     setup([
       log({ hash: "a000000", date: "2026-11-04T11:00:00" }),

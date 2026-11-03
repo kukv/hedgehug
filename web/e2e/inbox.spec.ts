@@ -23,7 +23,8 @@ async function conflict(hh: Hedgehug, peer: Peer, mine: string, theirs: string) 
   hh.hh("sync");
   peer.hh("sync");
   hh.hh("set", task.id, `title=${mine}`);
-  // the clock of a commit is in seconds: bob's write has to be later
+  // Commit times are in seconds, and the later write wins (LWW) by that time: bob's write has to
+  // fall in a later second than ours, or the two tie. There is no way to move the clock, so wait.
   await new Promise((r) => setTimeout(r, 1100));
   peer.hh("set", task.id, `title=${theirs}`);
   peer.hh("sync");

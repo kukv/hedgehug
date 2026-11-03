@@ -18,7 +18,7 @@
   import { useListScope } from "../list/scope.svelte";
   import { router } from "../router";
   import Empty from "../states/Empty.svelte";
-  import { useSubscribe } from "../svelte-store";
+  import { useManyStores, useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import CliLine from "../ui/CliLine.svelte";
@@ -34,7 +34,7 @@
   const c = core();
   const scope = useListScope(() => ({ kind: "project", ulid }));
   const schemaRev = useSubscribe(c.schema, () => ({}));
-  const storesRev = useSubscribe(c.stores, () => ({}));
+  const manyStores = useManyStores(c.stores);
   const uid = $props.id();
 
   const store = $derived(scope.store);
@@ -43,14 +43,19 @@
     schemaRev.current;
     return store ? c.schema.get(store) : undefined;
   });
-  const manyStores = $derived.by(() => {
-    storesRev.current;
-    return c.stores.stores().length >= 2;
-  });
 
   // The schema of the Store is what the screen is made from: say so when it cannot be read.
+  // It is read again on request and at resync (the cache itself only reads again what it holds).
   let schemaError = $state.raw<unknown>(null);
+  let schemaTry = $state(0);
+  // The button goes with the error while the schema is read, so the focus goes to the heading of the
+  // page (the one of ProjectHeader).
+  function retry(): void {
+    document.querySelector<HTMLElement>("h1")?.focus();
+    schemaTry++;
+  }
   $effect(() => {
+    schemaTry;
     schemaError = null;
     const s = store;
     if (!s) return;
@@ -58,6 +63,11 @@
       if (s === store) schemaError = e;
     });
   });
+  $effect(() =>
+    c.conn.on("resync", () => {
+      if (store && c.schema.get(store) === undefined) schemaTry++;
+    }),
+  );
 
   // The override the Store's schema holds for this project (the schema cache reads it again at
   // schema.changed), what the draft started from (base), and the draft.
@@ -159,7 +169,7 @@
     }
   }
 
-  const cliStore = $derived(manyStores ? store : undefined);
+  const cliStore = $derived(manyStores.current ? store : undefined);
   const setCli = $derived(project ? cliScopeSet({ id: project.id, ...body, store: cliStore }) : "");
   const rmCli = $derived(project ? cliScopeRm(project.id, cliStore) : "");
   const hasOverride = $derived(held !== undefined);
@@ -175,7 +185,8 @@
   <p class="note" role="alert">{errorMessage(scope.error)}</p>
 {:else if !project || !store || !schema || seenSig === null}
   {#if schemaError}
-    <p class="note" role="alert">スキーマを読めません · {errorMessage(schemaError)}</p>
+    <FormError message="スキーマを読めません · {errorMessage(schemaError)}" />
+    <div><Button onclick={retry}>もう一度読み込む</Button></div>
   {:else}
     <p class="note">読み込み中…</p>
   {/if}

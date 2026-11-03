@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   avatarTone,
+  daysAgo,
   formatDate,
   formatDateTime,
   formatDuration,
@@ -88,5 +89,19 @@ describe("formatDuration", () => {
     expect(formatDuration(29.6)).toBe("30 秒");
     expect(formatDuration(0)).toBe("0 秒");
     expect(formatDuration(-5)).toBe("0 秒");
+  });
+});
+
+describe("daysAgo", () => {
+  const now = new Date(2026, 10, 4, 0, 5);
+  it("counts the calendar days, not the hours", () => {
+    expect(daysAgo(new Date(2026, 10, 4, 23, 59), now)).toBe(0);
+    expect(daysAgo(new Date(2026, 10, 3, 23, 59), now)).toBe(1);
+    expect(daysAgo(new Date(2026, 10, 1, 8, 0), now)).toBe(3);
+    expect(daysAgo(new Date(2026, 10, 5, 8, 0), now)).toBe(-1);
+  });
+  it("is not moved by the change of summer time", () => {
+    expect(daysAgo(new Date(2026, 2, 7, 12), new Date(2026, 2, 9, 12))).toBe(2);
+    expect(daysAgo(new Date(2026, 9, 31, 12), new Date(2026, 10, 2, 12))).toBe(2);
   });
 });

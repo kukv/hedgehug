@@ -2,7 +2,7 @@
 // days the commits are grouped by, and the line of trailers under a commit (the server sends no
 // text; the words are the screen's).
 import type { Schemas } from "./api/client";
-import { formatDate } from "./format";
+import { daysAgo, formatDate, pad } from "./format";
 
 export type Log = Schemas["LogView"];
 
@@ -48,21 +48,16 @@ export function authorLabel(l: Log): string {
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
-const dayStart = (d: Date): number =>
-  new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-
 /** The head of a day: 今日 · 11/04（水）, 昨日 · 11/03（火）, 11/02（月）, 2025/11/02（日）. */
 function dayName(d: Date, now: Date): string {
   const date = `${formatDate(d.toISOString(), now)}（${WEEKDAYS[d.getDay()]}）`;
-  const diff = Math.round((dayStart(now) - dayStart(d)) / 86_400_000);
+  const diff = daysAgo(d, now);
   if (diff === 0) return `今日 · ${date}`;
   if (diff === 1) return `昨日 · ${date}`;
   return date;
 }
 
 export type Day = { key: string; name: string; logs: Log[] };
-
-const pad = (n: number): string => String(n).padStart(2, "0");
 
 /** The commits in a group for each day of the local time, the days in the order they first come. A date that is none goes in the day 日時不明. */
 export function groupByDay(logs: Log[], now: Date): Day[] {

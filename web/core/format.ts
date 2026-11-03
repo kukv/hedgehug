@@ -3,7 +3,13 @@
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-const pad = (n: number): string => String(n).padStart(2, "0");
+export const pad = (n: number): string => String(n).padStart(2, "0");
+
+// daysAgo: how many calendar days (of the local time) d is before now; 0 is today, 1 is yesterday.
+export function daysAgo(d: Date, now: Date): number {
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  return Math.round((day(now) - day(d)) / 86_400_000);
+}
 
 // parse reads an ISO date (2026-11-07, a date property) as that day in the
 // local time zone, and an ISO time as the moment it is.

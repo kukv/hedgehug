@@ -146,6 +146,16 @@ describe("SettingsSchema", () => {
     expect(screen.getByText(/YAML を編集してください/)).toBeVisible();
   });
 
+  it("shows the Store badge in the heading only with two Stores or more", async () => {
+    const one = setup();
+    await screen.findByRole("heading", { level: 1, name: "スキーマ" });
+    expect(screen.queryByTitle("Store: shared")).toBeNull();
+    one.unmount();
+    setup({ stores: ["shared", "backend"] });
+    await screen.findByRole("heading", { level: 1, name: "スキーマ" });
+    expect(screen.getByTitle("Store: shared")).toBeVisible();
+  });
+
   it("asks for the tasks and the check of the Store", async () => {
     const { get } = setup({ store: "shared" });
     await waitFor(() => expect(calls(get, "/api/tasks")).toHaveLength(1));

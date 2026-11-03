@@ -82,10 +82,13 @@ describe("routeStore", () => {
     expect(routeStore({ name: "home" }, taskOf)).toBeUndefined();
   });
 
-  it("takes the store of the settings page, none for /settings that names no store", () => {
+  it("takes the store of the settings pages of a Store (workspaces, schema), none for /settings that names no store", () => {
     expect(routeStore({ name: "settings", page: "workspaces", store: "org-b/ops" }, taskOf)).toBe(
       "org-b/ops",
     );
+    expect(
+      routeStore({ name: "settings", page: "schema", store: "org-b/ops", tab: "statuses" }, taskOf),
+    ).toBe("org-b/ops");
     expect(routeStore({ name: "settings", page: "general" }, taskOf)).toBeUndefined();
   });
 

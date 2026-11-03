@@ -42,6 +42,8 @@ function deleteByHand(hh: Hedgehug, id: string) {
       "user.name=Alice",
       "-c",
       "user.email=a@example.com",
+      "-c",
+      "commit.gpgsign=false",
       ...args,
     ]);
   git("add", rel);

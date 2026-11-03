@@ -40,10 +40,19 @@ type Opts = {
 };
 
 function setup(opts: Opts = {}) {
-  const state: { scoped?: Scoped; violations: TaskView[] } = {
+  const state: { scoped?: Scoped; violations: TaskView[]; failLoad: boolean; held: boolean } = {
     scoped: opts.scoped,
     violations: opts.violations ?? [],
+    failLoad: opts.loadError !== undefined,
+    // the cache holds the schema once it has read it
+    held: opts.loadError === undefined,
   };
+  const load = vi.fn(async () => {
+    if (state.failLoad) throw opts.loadError;
+    state.held = true;
+    cache.emit();
+    return sch;
+  });
   const conn = new FakeConn();
   const view = () => ({
     commit: null,
@@ -112,14 +121,14 @@ function setup(opts: Opts = {}) {
       },
       schema: {
         get: () =>
-          opts.loadError ? undefined : { ...sch, scoped: state.scoped ? [state.scoped] : [] },
-        load: async () => (opts.loadError ? Promise.reject(opts.loadError) : sch),
+          !state.held ? undefined : { ...sch, scoped: state.scoped ? [state.scoped] : [] },
+        load,
         reload,
         subscribe: cache.subscribe,
       },
     },
   );
-  return { ...r, api, conn, state, reload, schemaChanged: cache.emit };
+  return { ...r, api, conn, state, load, reload, schemaChanged: cache.emit };
 }
 
 const save = () => screen.getByRole("button", { name: "保存" });
@@ -448,6 +457,36 @@ describe("ProjectSettings", () => {
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("スキーマを読めません");
     expect(screen.queryByText("読み込み中…")).toBeNull();
+  });
+
+  it("reads the schema again on request, and puts the focus on the heading of the page", async () => {
+    const h1 = document.body.appendChild(document.createElement("h1"));
+    h1.tabIndex = -1;
+    const k = setup({ loadError: new Error("読めません") });
+    await screen.findByRole("alert");
+    k.state.failLoad = false;
+    const retry = screen.getByRole("button", { name: "もう一度読み込む" });
+    retry.focus();
+    await fireEvent.click(retry);
+    // the button goes with the error: the focus is not lost with it
+    await waitFor(() => expect(h1).toHaveFocus());
+    expect(await screen.findByRole("group", { name: "表示するステータス" })).toBeVisible();
+    expect(screen.queryByRole("alert")).toBeNull();
+    h1.remove();
+  });
+
+  it("reads the schema again at resync while it is not in, and not when it is", async () => {
+    const k = setup({ loadError: new Error("読めません") });
+    await screen.findByRole("alert");
+    expect(k.load).toHaveBeenCalledTimes(1);
+    k.conn.emit("resync");
+    await waitFor(() => expect(k.load).toHaveBeenCalledTimes(2));
+    k.state.failLoad = false;
+    k.conn.emit("resync");
+    await screen.findByRole("group", { name: "表示するステータス" });
+    const n = k.load.mock.calls.length;
+    k.conn.emit("resync");
+    expect(k.load).toHaveBeenCalledTimes(n);
   });
 
   it("explains the checkboxes that cannot be taken off", async () => {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from "svelte";
+  import { tick, untrack } from "svelte";
   import { unwrap } from "../../core/api/client";
   import { cliInbox } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
@@ -16,8 +16,9 @@
     taskOf,
   } from "../../core/notifications";
   import { core } from "../context";
+  import { focusLost } from "../focus";
   import { onLinkClick, router } from "../router";
-  import { useSubscribe } from "../svelte-store";
+  import { useManyStores, useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import CliLine from "../ui/CliLine.svelte";
@@ -31,7 +32,7 @@
 
   const c = core();
   const unread = useSubscribe(c.conn, () => c.conn.unread);
-  const storesRev = useSubscribe(c.stores, () => ({}));
+  const manyStores = useManyStores(c.stores);
 
   // Every store at once: the server reads each inbox when no store is named.
   let items = $state.raw<Notification[] | null>(null);
@@ -39,6 +40,8 @@
   // The items (by ULID) and "all" that have a request on their way.
   let busy = $state<string[]>([]);
   let seq = 0;
+  let heading: HTMLElement | undefined = $state();
+  let list: HTMLElement | undefined = $state();
 
   async function load(): Promise<void> {
     const mine = ++seq;
@@ -67,16 +70,15 @@
     ];
     return () => {
       for (const off of offs) off();
+      // an answer that comes after the page is gone is dropped
+      seq++;
     };
   });
 
   const sorted = $derived(sortNotifications(items ?? []));
   const counts = $derived(tabCounts(items ?? []));
   const shown = $derived(filterByTab(sorted, tab));
-  const many = $derived.by(() => {
-    storesRev.current;
-    return c.stores.stores().length > 1;
-  });
+  const many = $derived(manyStores.current);
   const now = $derived.by(() => {
     items;
     return new Date();
@@ -99,7 +101,9 @@
   }
 
   // run sends a request for the item (or for "all"), shows what it said when it fails, and reads
-  // the list again.
+  // the list again. The button the user pressed is disabled meanwhile, and may be gone after: when
+  // that drops the focus, it goes to the row of the item, and to the heading when it is "all" (or
+  // the row is gone).
   async function run(key: string, fn: () => Promise<void>): Promise<void> {
     busy = [...busy, key];
     try {
@@ -110,6 +114,11 @@
       busy = busy.filter((k) => k !== key);
     }
     await load();
+    await tick();
+    if (!focusLost()) return;
+    const row =
+      key === "all" ? undefined : list?.querySelector<HTMLElement>(`[data-ulid="${key}"]`);
+    (row ?? heading)?.focus();
   }
 
   const read = (n: Notification) =>
@@ -152,7 +161,7 @@
 
 <div class="inbox">
   <header class="head">
-    <h1>通知</h1>
+    <h1 bind:this={heading} tabindex="-1">通知</h1>
     <span class="sub"
       >同期で届いた変更から · 自分の書き込みは通知しません · 既読はこのマシンに保存</span
     >
@@ -180,12 +189,12 @@
     {:else if shown.length === 0}
       <p class="msg">{tab === "all" ? "通知はありません" : `${tabLabel}の通知はありません`}</p>
     {:else}
-      <ul class="list">
+      <ul class="list" bind:this={list}>
         {#each shown as n (n.ulid)}
           {@const task = taskOf(n)}
           {@const href = task ? router.href({ name: "task", ulid: task.ulid }) : ""}
           {@const t = text(n)}
-          <li class="item" class:unread={!n.read}>
+          <li class="item" class:unread={!n.read} data-ulid={n.ulid} tabindex="-1">
             {#if n.read}
               <span class="dot"></span>
             {:else}

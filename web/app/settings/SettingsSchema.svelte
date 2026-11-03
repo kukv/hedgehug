@@ -8,7 +8,7 @@
   import KindIcon from "../icons/KindIcon.svelte";
   import StatusIcon from "../icons/StatusIcon.svelte";
   import { onLinkClick, router, type SchemaTab } from "../router";
-  import { useSubscribe } from "../svelte-store";
+  import { useManyStores, useSubscribe } from "../svelte-store";
   import Button from "../ui/Button.svelte";
   import FormError from "../ui/FormError.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
@@ -24,16 +24,13 @@
   const c = core();
   const uid = $props.id();
   const schemaRev = useSubscribe(c.schema, () => ({}));
-  const storesRev = useSubscribe(c.stores, () => ({}));
+  const manyStores = useManyStores(c.stores);
 
   const schema = $derived.by(() => {
     schemaRev.current;
     return c.schema.get(store);
   });
-  const many = $derived.by(() => {
-    storesRev.current;
-    return c.stores.stores().length >= 2;
-  });
+  const many = $derived(manyStores.current);
 
   // The schema is what the page is made from: say so when it cannot be read, and read it again on
   // request and at resync (the cache itself only reads again what it holds).
@@ -177,7 +174,9 @@
 <div class="page">
   <header class="head">
     <h1 bind:this={heading} tabindex="-1">スキーマ</h1>
-    <StoreBadge {store} tone={c.stores.tone(store)} />
+    {#if many}
+      <StoreBadge {store} tone={c.stores.tone(store)} />
+    {/if}
   </header>
   <p class="lead">
     {store}

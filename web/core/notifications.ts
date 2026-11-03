@@ -1,7 +1,7 @@
 // The inbox as the screen shows it: which tab an item is in, the order, and the sentence for an
 // item, made from its kind and detail (the server sends no text; the words are the screen's).
 import type { Schemas } from "./api/client";
-import { formatDateTime } from "./format";
+import { daysAgo, formatDateTime, pad } from "./format";
 
 export type Notification = Schemas["Notification"];
 export type InboxTab = "all" | "overwritten" | "mention" | "repair";
@@ -206,14 +206,11 @@ export function notificationText(
   return { label: n.kind, text: `種類: ${n.kind}` };
 }
 
-const pad = (n: number): string => String(n).padStart(2, "0");
-
 /** When an item came, in the local time: 11:41 today, 昨日 18:20, then 11/02 10:12. */
 export function formatWhen(iso: string, now: Date): string {
   const d = new Date(iso);
   const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-  const diff = Math.round((day(now) - day(d)) / 86_400_000);
+  const diff = daysAgo(d, now);
   if (diff === 0) return hm;
   if (diff === 1) return `昨日 ${hm}`;
   return formatDateTime(iso, now);

@@ -1,6 +1,6 @@
 import { flushSync } from "svelte";
 import { describe, expect, it, vi } from "vitest";
-import { useSubscribe } from "./svelte-store";
+import { useManyStores, useSubscribe } from "./svelte-store";
 import { emitter } from "./test-utils";
 
 describe("useSubscribe", () => {
@@ -22,5 +22,31 @@ describe("useSubscribe", () => {
     expect(e.size()).toBe(1);
     stop();
     await vi.waitFor(() => expect(e.size()).toBe(0));
+  });
+});
+
+describe("useManyStores", () => {
+  it("is true from two Stores, and follows the Stores", () => {
+    const e = emitter();
+    let names = ["a"];
+    const many = useManyStores({
+      subscribe: e.subscribe,
+      stores: () => names.map((name) => ({ name })),
+    });
+    const seen: boolean[] = [];
+    const stop = $effect.root(() => {
+      $effect(() => {
+        seen.push(many.current);
+      });
+    });
+    flushSync();
+    names = ["a", "b"];
+    e.emit();
+    flushSync();
+    names = ["a"];
+    e.emit();
+    flushSync();
+    expect(seen).toEqual([false, true, false]);
+    stop();
   });
 });

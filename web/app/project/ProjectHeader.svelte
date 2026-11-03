@@ -48,7 +48,7 @@
       <span class="sep" aria-hidden="true">›</span>
     {/if}
     <KindIcon kind="project" />
-    <h1>{project?.title ?? ""}</h1>
+    <h1 tabindex="-1">{project?.title ?? ""}</h1>
     {#if project}
       <span class="id">{project.id}</span>
     {/if}
