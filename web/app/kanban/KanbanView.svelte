@@ -355,13 +355,15 @@
         scope.kind === "workspace" ? ls.store : undefined,
       ),
   );
-  // The settings of this screen as the command that saves them in a view.
+  // The settings of this screen as the command that saves them in a view. A saved view keeps its
+  // own query (hh view save without --query), so only a new one names it.
   const saveLine = $derived(
     cliViewSave({
       name: saved?.name ?? new Placeholder("名前"),
       store: saved?.store,
       body: {
         layout: "kanban",
+        query: saved ? undefined : combine(ls.saveBase, query).trim(),
         kanban_columns: settings.columns,
         swimlane: settings.swimlane,
       },
@@ -370,18 +372,6 @@
   const noTasks = $derived(
     withoutTerm(query, NO_CANCELED).trim() === "" && !(canceledCount && canceledCount > 0),
   );
-  const crumbTitle = $derived(
-    scope.kind === "project" ? (ls.project?.title ?? "") : (ls.workspace?.name ?? ""),
-  );
-  const emptyScope = $derived<"project" | "workspace">(
-    scope.kind === "project" ? "project" : "workspace",
-  );
-  // Spread, because Biome reads a prop called scope as the HTML attribute.
-  const emptyProps = $derived({ scope: emptyScope, name: crumbTitle });
-  const notFoundProps = $derived({
-    scope: emptyScope,
-    name: scope.kind === "workspace" ? scope.ulid : "",
-  });
   const showBoard = $derived(!loading && tasks.length > 0 && !schemaWaiting);
 </script>
 
@@ -425,7 +415,7 @@
     {#if ls.notFound}
       <Empty
         variant="notfound"
-        {...notFoundProps}
+        {...ls.notFoundProps}
         onHome={() => router.go(router.href({ name: "home" }))}
       />
     {:else if loading || (tasks.length > 0 && schemaWaiting)}
@@ -435,7 +425,7 @@
         {#if scope.kind !== "all" && noTasks}
           <Empty
             variant="empty"
-            {...emptyProps}
+            {...ls.emptyProps}
             onCreate={() =>
               openCreate({
                 kind: "task",
@@ -550,7 +540,8 @@
 
   <footer class="keys">
     <span>ドラッグでステータスを変更（遷移の制約に合わない列は赤枠）</span>
-    <span class="save"><CliLine command={saveLine} /></span>
+    <!-- The name is not given yet, so the line is not complete to copy. -->
+    <span class="save"><CliLine command={saveLine} disabled={!saved} /></span>
   </footer>
 </section>
 

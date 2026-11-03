@@ -215,6 +215,9 @@ function setup(over: Over = {}) {
     workspace: { name: "release", store: "shared", ulid: "W1" },
     project: undefined,
     saveBase: "workspace:release",
+    crumbTitle: "release",
+    emptyProps: { scope: "workspace", name: "release" },
+    notFoundProps: { scope: "workspace", name: "W1" },
     schemas: (stores: string[]) =>
       stores.map((s) => schemas[s]).filter((s): s is SchemaView => s !== undefined),
     ...over.scope,
@@ -328,7 +331,7 @@ describe("TableView", () => {
       saved: { name: "今週", store: "shared" },
     });
     const line = screen.getByLabelText(
-      /^コマンドをコピー: hh view save 今週 --layout table --query .* --columns id,due --group-by status --store shared$/,
+      "コマンドをコピー: hh view save 今週 --layout table --columns id,due --group-by status --store shared",
     );
     expect(line).toBeEnabled();
   });
@@ -711,6 +714,13 @@ describe("TableView", () => {
       expect(screen.getByText("一致するタスクはありません")).toBeInTheDocument();
       await fireEvent.click(screen.getByRole("button", { name: "フィルタを解除" }));
       expect(onquery).toHaveBeenCalledWith("");
+    });
+
+    it("has no clear action when the filter is already empty", () => {
+      setup({ ulids: [], scope: { apiBase: "", cliBase: "", store: undefined } });
+      mount({ view: { kind: "all" }, query: "" });
+      expect(screen.getByText("一致するタスクはありません")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "フィルタを解除" })).toBeNull();
     });
 
     it("says nothing matches, not that there is no task, when only the canceled are left out", () => {

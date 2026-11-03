@@ -49,8 +49,9 @@
   } from "./group";
   import TableCell from "./TableCell.svelte";
 
+  // The prop is not called scope: Biome reads that name as the HTML attribute.
   let {
-    view,
+    view: scope,
     query,
     onquery,
     settings,
@@ -71,7 +72,7 @@
   } = $props();
 
   const c = core();
-  const scope = useListScope(() => view);
+  const ls = useListScope(() => scope);
   const cacheRev = useSubscribe(c.cache, () => ({}));
   const storesRev = useSubscribe(c.stores, () => ({}));
   const schemaRev = useSubscribe(c.schema, () => ({}));
@@ -98,26 +99,26 @@
   let list = $state<ListHandle | null>(null);
   let canceledList = $state<ListHandle | null>(null);
   $effect(() => {
-    if (!scope.ready) {
+    if (!ls.ready) {
       list = null;
       return;
     }
     const h = c.cache.watchList({
-      q: joinQuery(scope.apiBase, query),
+      q: joinQuery(ls.apiBase, query),
       tree: false,
-      store: scope.store,
+      store: ls.store,
     });
     list = h;
     return () => h.dispose();
   });
   // The tasks the default filter leaves out, to say how many.
   $effect(() => {
-    if (!scope.ready || !hasTerm(query, NO_CANCELED)) {
+    if (!ls.ready || !hasTerm(query, NO_CANCELED)) {
       canceledList = null;
       return;
     }
-    const q = joinQuery(scope.apiBase, `${withoutTerm(query, NO_CANCELED)} status:canceled`);
-    const h = c.cache.watchList({ q, tree: false, store: scope.store });
+    const q = joinQuery(ls.apiBase, `${withoutTerm(query, NO_CANCELED)} status:canceled`);
+    const h = c.cache.watchList({ q, tree: false, store: ls.store });
     canceledList = h;
     return () => h.dispose();
   });
@@ -130,7 +131,7 @@
   });
   const loading = $derived.by(() => {
     cacheRev.current;
-    return !scope.ready || (list?.loading() ?? true);
+    return !ls.ready || (list?.loading() ?? true);
   });
   const listError = $derived.by(() => {
     cacheRev.current;
@@ -147,12 +148,12 @@
     return c.stores.stores().map((s) => s.name);
   });
   // The tasks of more than one store are told apart by their store.
-  const showStore = $derived(view.kind === "all" && storeNames.length >= 2);
+  const showStore = $derived(scope.kind === "all" && storeNames.length >= 2);
   const taskStores = $derived([...new Set(tasks.map((t) => t.store))]);
   // The columns on offer are the properties of the stores the screen shows; with no task to tell,
   // every store.
   const shownStores = $derived(
-    scope.store ? [scope.store] : taskStores.length > 0 ? taskStores : storeNames,
+    ls.store ? [ls.store] : taskStores.length > 0 ? taskStores : storeNames,
   );
   const storeKey = $derived([...new Set([...taskStores, ...shownStores])].join("\n"));
   let schemaFailed = $state<string[]>([]);
@@ -168,7 +169,7 @@
   });
   const schemas = $derived.by(() => {
     schemaRev.current;
-    return scope.schemas(shownStores);
+    return ls.schemas(shownStores);
   });
   // A store whose schema could not be read and has been read since is not a failure any more.
   const unreadStores = $derived.by(() => {
@@ -189,15 +190,15 @@
   type TreeHandle = ReturnType<typeof c.cache.watchTree>;
   let tree = $state.raw<TreeHandle | null>(null);
   $effect(() => {
-    if (!scope.ready || !needsParents) {
+    if (!ls.ready || !needsParents) {
       tree = null;
       return;
     }
     // The tree is in the order of the ranks: it does not take sort: or group:.
     const h = c.cache.watchTree({
-      q: joinQuery(scope.apiBase, withoutOrder(query)),
+      q: joinQuery(ls.apiBase, withoutOrder(query)),
       tree: true,
-      store: scope.store,
+      store: ls.store,
     });
     tree = h;
     return () => h.dispose();
@@ -454,19 +455,20 @@
   // --- reading the screen -----------------------------------------------------------------------
   const lsCli = $derived(
     cliLs(
-      joinQuery(scope.cliBase, query),
+      joinQuery(ls.cliBase, query),
       false,
-      view.kind === "workspace" ? view.store : undefined,
+      scope.kind === "workspace" ? scope.store : undefined,
     ),
   );
-  // Where the settings of the table would be saved as a view; the name is the user's to give.
+  // Where the settings of the table would be saved as a view; the name is the user's to give. A
+  // saved view keeps its own query (hh view save without --query), so only a new one names it.
   const saveCli = $derived(
     cliViewSave({
       name: saved?.name ?? new Placeholder("名前"),
       store: saved?.store,
       body: {
         layout: "table",
-        query: joinQuery(scope.saveBase, query),
+        query: saved ? undefined : joinQuery(ls.saveBase, query),
         columns: settings.columns,
         group_by: settings.groupBy,
       },
@@ -475,18 +477,6 @@
   const noTasks = $derived(
     withoutTerm(query, NO_CANCELED).trim() === "" && !(canceledCount && canceledCount > 0),
   );
-  const crumbTitle = $derived(
-    view.kind === "project" ? (scope.project?.title ?? "") : (scope.workspace?.name ?? ""),
-  );
-  // Spread, because Biome reads a prop called scope as the HTML attribute.
-  const emptyProps = $derived({
-    scope: view.kind === "workspace" ? ("workspace" as const) : ("project" as const),
-    name: crumbTitle,
-  });
-  const notFoundProps = $derived({
-    scope: view.kind === "workspace" ? ("workspace" as const) : ("project" as const),
-    name: view.kind === "workspace" ? view.ulid : "",
-  });
   const labelOf = (id: string) => specs.find((s) => s.id === id)?.label ?? id;
   const groupMeta = (g: Extract<TableItem, { type: "group" }>) =>
     g.progress ? `${g.progress.done}/${g.progress.total} 完了` : "";
@@ -594,7 +584,7 @@
 
 <section class="table" aria-label="テーブル">
   <ListBar
-    base={scope.cliBase}
+    base={ls.cliBase}
     applied={query}
     count={countLabel(tasks.length, canceledCount)}
     cli={cli ?? lsCli}
@@ -652,30 +642,30 @@
           {/if}
         </table>
 
-        {#if scope.notFound}
+        {#if ls.notFound}
           <Empty
             variant="notfound"
-            {...notFoundProps}
+            {...ls.notFoundProps}
             onHome={() => router.go(router.href({ name: "home" }))}
           />
         {:else if loading && items.length === 0}
           <p class="note">読み込み中…</p>
         {:else if tasks.length === 0 && !listError}
-          {#if view.kind !== "all" && noTasks}
+          {#if scope.kind !== "all" && noTasks}
             <Empty
               variant="empty"
-              {...emptyProps}
+              {...ls.emptyProps}
               onCreate={() =>
                 openCreate({
                   kind: "task",
-                  parent: view.kind === "project" ? view.ulid : undefined,
+                  parent: scope.kind === "project" ? scope.ulid : undefined,
                 })}
             />
           {:else}
             <Empty
               variant="nomatch"
               note={hasTerm(query, NO_CANCELED) ? "中止を除外しています" : undefined}
-              onClear={() => onquery("")}
+              onClear={query.trim() === "" ? undefined : () => onquery("")}
             />
           {/if}
         {/if}

@@ -144,6 +144,9 @@ function setup(o: Setup = {}) {
     workspace: { name: "release" },
     project: undefined,
     saveBase: "workspace:release",
+    crumbTitle: "release",
+    emptyProps: { scope: "workspace", name: "release" },
+    notFoundProps: { scope: "workspace", name: "W1" },
     schemas: () => [],
   };
   return {
@@ -429,11 +432,11 @@ describe("KanbanView: the settings", () => {
     expect(
       await screen.findByText(/\$ hh ls --store shared "workspace:release -status:canceled"/),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /hh view save <名前> --layout kanban --kanban-columns category --swimlane assignee/,
-      ),
-    ).toBeInTheDocument();
+    // Not a saved view: the query goes in the command, and it is not to copy until it has a name.
+    const line = screen.getByLabelText(
+      /^コマンドをコピー: hh view save <名前> --layout kanban --query .*workspace:release.* --kanban-columns category --swimlane assignee$/,
+    );
+    expect(line).toBeDisabled();
     cleanup();
     setup();
     mountView({ cli: "hh view show 今週 --store shared" });
