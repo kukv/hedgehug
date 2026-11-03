@@ -5,7 +5,10 @@
 //     and a row (a listitem) for each commit with the author, the op ("作成"), the subject and the ID as
 //     a link; "アクティビティはありません" when there is none
 //   - the filters are in the address: ?workspace=<ULID>[,<ULID>] and ?sync=exclude|only
-import { expect, test } from "./harness";
+import type { Page } from "@playwright/test";
+import { expect, LOGIN, test } from "./harness";
+
+const feed = (page: Page) => page.getByRole("region", { name: "変更の一覧" });
 
 test.use({ store: { name: "demo", prefix: "AL", workspace: "alpha" } });
 
@@ -23,10 +26,14 @@ test("the feed lists the commits of the workspaces, and a workspace picked narro
 
   await hh.open(page, "/activity");
   await expect(page.getByRole("heading", { level: 1, name: "アクティビティ" })).toBeVisible();
-  const rowA = page.getByRole("listitem").filter({ has: page.getByRole("link", { name: a.id }) });
-  const rowB = page.getByRole("listitem").filter({ has: page.getByRole("link", { name: b.id }) });
+  const rowA = feed(page)
+    .getByRole("listitem")
+    .filter({ has: page.getByRole("link", { name: a.id }) });
+  const rowB = feed(page)
+    .getByRole("listitem")
+    .filter({ has: page.getByRole("link", { name: b.id }) });
   await expect(rowA).toContainText("作成");
-  await expect(rowA).toContainText("e2e");
+  await expect(rowA).toContainText(LOGIN);
   await expect(rowB).toBeVisible();
 
   await page.getByRole("button", { name: /ワークスペース$/ }).click();
@@ -50,7 +57,7 @@ test("the feed lists the commits of the workspaces, and a workspace picked narro
 test("syncs only has no commit when nothing has been synced", async ({ page, hh }) => {
   hh.add("Alone");
   await hh.open(page, "/activity");
-  await expect(page.getByRole("listitem").first()).toBeVisible();
+  await expect(feed(page).getByRole("listitem").first()).toBeVisible();
 
   await page
     .getByRole("group", { name: "変更の種類" })
@@ -58,9 +65,9 @@ test("syncs only has no commit when nothing has been synced", async ({ page, hh 
     .click();
   await expect(page).toHaveURL(/\/activity\?sync=only$/);
   await expect(page.getByText("アクティビティはありません")).toBeVisible();
-  await expect(page.getByRole("listitem")).toHaveCount(0);
+  await expect(feed(page).getByRole("listitem")).toHaveCount(0);
 
   await page.getByRole("group", { name: "変更の種類" }).getByRole("button", { name: "人" }).click();
   await expect(page).toHaveURL(/\/activity\?sync=exclude$/);
-  await expect(page.getByRole("listitem").first()).toBeVisible();
+  await expect(feed(page).getByRole("listitem").first()).toBeVisible();
 });

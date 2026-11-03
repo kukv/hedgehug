@@ -7,7 +7,7 @@ import { formatDate } from "./format";
 export type Log = Schemas["LogView"];
 
 /** The words for every Hedgehug-Op that internal/ops, internal/store and internal/sync write. */
-export const OP_LABELS: Readonly<Record<string, string>> = {
+const OP_LABELS: Readonly<Record<string, string>> = {
   add: "作成",
   set: "変更",
   edit: "本文の編集",
@@ -60,22 +60,27 @@ function dayName(d: Date, now: Date): string {
   return date;
 }
 
-export type Day = { name: string; logs: Log[] };
+export type Day = { key: string; name: string; logs: Log[] };
 
-/** The commits (newest first) in a run for each day of the local time. */
+const pad = (n: number): string => String(n).padStart(2, "0");
+
+/** The commits in a group for each day of the local time, the days in the order they first come. A date that is none goes in the day 日時不明. */
 export function groupByDay(logs: Log[], now: Date): Day[] {
-  const days: Day[] = [];
-  let last = -1;
+  const days = new Map<string, Day>();
   for (const l of logs) {
     const d = new Date(l.date);
-    const start = dayStart(d);
-    if (start !== last || days.length === 0) {
-      days.push({ name: dayName(d, now), logs: [] });
-      last = start;
+    const valid = !Number.isNaN(d.getTime());
+    const key = valid
+      ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+      : "unknown";
+    let day = days.get(key);
+    if (!day) {
+      day = { key, name: valid ? dayName(d, now) : "日時不明", logs: [] };
+      days.set(key, day);
     }
-    days[days.length - 1]?.logs.push(l);
+    day.logs.push(l);
   }
-  return days;
+  return [...days.values()];
 }
 
 /** `0123456 · Hedgehug-Op: merge · …`: the short sha and the trailers as they are written. */

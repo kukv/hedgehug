@@ -19,6 +19,8 @@
   let find: HTMLInputElement | undefined = $state();
 
   const total = $derived(workspaces.length);
+  // The chosen ones that are workspaces still: a ULID of the address that is none is not counted.
+  const chosen = $derived(selected.filter((u) => workspaces.some((w) => w.ulid === u)).length);
 
   // The workspaces whose name or prefix has the word, in the order of the stores.
   const groups = $derived.by(() => {
@@ -41,9 +43,13 @@
     find?.focus();
   }
 
-  function close() {
+  function reset() {
     open = false;
     word = "";
+  }
+
+  function close() {
+    reset();
     button?.focus();
   }
 
@@ -52,10 +58,13 @@
   }
 
   function outside(e: PointerEvent) {
-    if (open && root && !root.contains(e.target as Node)) {
-      open = false;
-      word = "";
-    }
+    if (open && root && !root.contains(e.target as Node)) reset();
+  }
+
+  // The focus went to something outside (Tab out of the popover): it is not wanted any more.
+  function onfocusout(e: FocusEvent) {
+    const to = e.relatedTarget as Node | null;
+    if (open && to && root && !root.contains(to)) reset();
   }
 
   function onkeydown(e: KeyboardEvent) {
@@ -68,7 +77,7 @@
 
 <svelte:window onpointerdown={outside} />
 
-<div class="picker" bind:this={root}>
+<div class="picker" role="presentation" bind:this={root} {onkeydown} {onfocusout}>
   <button
     type="button"
     class="trigger"
@@ -78,12 +87,12 @@
     onclick={() => (open ? close() : void show())}
   >
     <Icon name="workspace" size={13} />
-    {selected.length === 0 ? total : selected.length}
+    {chosen === 0 ? total : chosen}
     / {total} ワークスペース
     <Icon name="chevron-down" size={12} />
   </button>
   {#if open}
-    <div class="pop" role="dialog" aria-label="ワークスペースで絞り込む" tabindex="-1" {onkeydown}>
+    <div class="pop" role="dialog" aria-label="ワークスペースで絞り込む">
       <input
         class="find"
         type="text"
@@ -109,7 +118,7 @@
         </div>
       {/each}
       <div class="foot">
-        <span class="hint">{selected.length} 件を選択中 · 未選択のときはすべて</span>
+        <span class="hint">{chosen} 件を選択中 · 未選択のときはすべて</span>
         <button type="button" class="clear" onclick={() => onchange([])}>選択を解除</button>
       </div>
     </div>

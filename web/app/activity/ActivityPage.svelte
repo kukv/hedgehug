@@ -3,6 +3,7 @@
   import { authorLabel, groupByDay, type Log, opLabel, trailerLine } from "../../core/activity";
   import { unwrap } from "../../core/api/client";
   import { cliLog } from "../../core/cli";
+  import { formatTime } from "../../core/format";
   import { errorMessage } from "../../core/messages";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
@@ -21,6 +22,8 @@
   let { workspaces, sync }: Props = $props();
 
   const PAGE = 100;
+  // The most the server gives (the maximum of its limit).
+  const MAX = 1000;
   const SYNCS: { value: ActivitySync; label: string }[] = [
     { value: "", label: "すべて" },
     { value: "exclude", label: "人" },
@@ -34,10 +37,15 @@
   let items = $state.raw<Log[] | null>(null);
   let failure = $state<string | null>(null);
   let limit = $state(PAGE);
+  // The limit that the commits shown were asked with.
+  let shown = $state(PAGE);
+  let loading = $state(false);
   let seq = 0;
 
   async function load(): Promise<void> {
     const mine = ++seq;
+    const asked = limit;
+    loading = true;
     const query: { limit: number; workspace?: string; sync?: "exclude" | "only" } = { limit };
     if (workspaces.length > 0) query.workspace = workspaces.join(",");
     if (sync !== "") query.sync = sync;
@@ -45,14 +53,18 @@
       const list = await unwrap(c.api.GET("/api/activity", { params: { query } }));
       if (mine !== seq) return;
       items = list ?? [];
+      shown = asked;
       failure = null;
     } catch (e) {
       if (mine === seq) failure = errorMessage(e);
+    } finally {
+      if (mine === seq) loading = false;
     }
   }
 
   // A new request for each change of the filters and of the number asked for; the commits change
   // with a sync (tasks.changed) too.
+  // The bare expressions are the reads that make the effect depend on them.
   $effect(() => {
     workspaces.join(",");
     sync;
@@ -73,13 +85,9 @@
     storesRev.current;
     return c.stores.stores().length > 1;
   });
-  const now = $derived.by(() => {
-    items;
-    return new Date();
-  });
-  const days = $derived(groupByDay(items ?? [], now));
-  // A full page may have more behind it.
-  const more = $derived(items !== null && items.length >= limit);
+  const days = $derived(groupByDay(items ?? [], new Date()));
+  // A full page may have more behind it, up to what the server gives.
+  const more = $derived(items !== null && items.length >= shown && shown < MAX);
 
   // The name of a workspace in the command; its ULID when another workspace (of another Store)
   // that is not chosen has the same name, as the name would take that one in too.
@@ -103,13 +111,6 @@
       }),
     );
   }
-
-  const hm = (iso: string): string =>
-    new Date(iso).toLocaleTimeString("ja-JP", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
 </script>
 
 <div class="activity">
@@ -147,51 +148,54 @@
       {#if !failure}
         <p class="msg">読み込み中…</p>
       {/if}
-    {:else if days.length === 0}
+    {:else if items.length === 0}
       <p class="msg">アクティビティはありません</p>
     {:else}
-      {#each days as day (day.name)}
-        <section aria-labelledby="day-{day.name}">
-          <h2 id="day-{day.name}">{day.name}</h2>
-          <ol class="list">
-            {#each day.logs as l (`${l.store}/${l.hash}`)}
-              {@const who = authorLabel(l)}
-              {@const key = l.id ?? l.task}
-              {@const href = l.task ? router.href({ name: "task", ulid: l.task }) : ""}
-              <li class="item">
-                <time class="time" datetime={l.date}>{hm(l.date)}</time>
-                <Avatar name={l.author.name} />
-                <div class="main">
-                  <div class="line">
-                    <b>{who}</b>
-                    <span class="op">{opLabel(l.op)}</span>
-                    <span class="subject">{l.subject}</span>
-                    {#if l.task && key}
-                      {#if l.id}
-                        <IdLabel
-                          id={l.id}
-                          ulid={l.task}
-                          {href}
-                          onopen={(e) => onLinkClick(e, href)}
-                        />
-                      {:else}
-                        <a class="gone" {href} onclick={(e) => onLinkClick(e, href)}>{key}</a>
+      <section class="feed" aria-label="変更の一覧">
+        {#each days as day (day.key)}
+          <section aria-labelledby="day-{day.key}">
+            <h2 id="day-{day.key}">{day.name}</h2>
+            <ol class="list">
+              {#each day.logs as l (`${l.store}/${l.hash}`)}
+                {@const who = authorLabel(l)}
+                <li class="item">
+                  <time class="time" datetime={l.date}>{formatTime(l.date)}</time>
+                  <Avatar name={l.author.name} />
+                  <div class="main">
+                    <div class="line">
+                      <b>{who}</b>
+                      <span class="op">{opLabel(l.op)}</span>
+                      <span class="subject">{l.subject}</span>
+                      {#if l.task}
+                        {@const href = router.href({ name: "task", ulid: l.task })}
+                        {#if l.id}
+                          <IdLabel
+                            id={l.id}
+                            ulid={l.task}
+                            {href}
+                            onopen={(e) => onLinkClick(e, href)}
+                          />
+                        {:else}
+                          <a class="gone" {href} onclick={(e) => onLinkClick(e, href)}>{l.task}</a>
+                        {/if}
                       {/if}
-                    {/if}
+                    </div>
+                    <code class="trailer">{trailerLine(l)}</code>
                   </div>
-                  <code class="trailer">{trailerLine(l)}</code>
-                </div>
-                {#if many}
-                  <StoreBadge store={l.store} tone={c.stores.tone(l.store)} compact />
-                {/if}
-              </li>
-            {/each}
-          </ol>
-        </section>
-      {/each}
+                  {#if many}
+                    <StoreBadge store={l.store} tone={c.stores.tone(l.store)} compact />
+                  {/if}
+                </li>
+              {/each}
+            </ol>
+          </section>
+        {/each}
+      </section>
       {#if more}
         <div class="more">
-          <Button onclick={() => (limit += PAGE)}>さらに読み込む</Button>
+          <Button disabled={loading} onclick={() => (limit = Math.min(limit + PAGE, MAX))}
+            >さらに読み込む</Button
+          >
         </div>
       {/if}
     {/if}
@@ -274,6 +278,11 @@
     color: var(--muted);
     font-size: var(--fs-12);
     font-weight: 600;
+  }
+  .feed {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
   }
   .list {
     display: flex;

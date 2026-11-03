@@ -206,6 +206,58 @@ describe("ActivityPage", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(101);
   });
 
+  it("stops offering more at 1000, the most the server gives", async () => {
+    const many = (n: number) =>
+      Array.from({ length: n }, (_, i) => log({ hash: `h${String(i).padStart(6, "0")}` }));
+    const { api, set } = setup(many(100));
+    for (let limit = 200; limit <= 1000; limit += 100) {
+      set(many(limit));
+      await fireEvent.click(await screen.findByRole("button", { name: "さらに読み込む" }));
+      await waitFor(() => expect(lastQuery(api).limit).toBe(limit));
+      await waitFor(() => expect(screen.getAllByRole("listitem")).toHaveLength(limit));
+    }
+    expect(screen.queryByRole("button", { name: "さらに読み込む" })).toBeNull();
+  });
+
+  it("disables the button while a request is on its way", async () => {
+    const full = Array.from({ length: 100 }, (_, i) =>
+      log({ hash: `h${String(i).padStart(6, "0")}` }),
+    );
+    const { api } = setup(full);
+    const more = await screen.findByRole("button", { name: "さらに読み込む" });
+    expect(more).toBeEnabled();
+    let release: (v: unknown) => void = () => {};
+    api.GET.mockImplementation(() => new Promise((r) => (release = r)) as never);
+    await fireEvent.click(more);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "さらに読み込む" })).toBeDisabled(),
+    );
+    release(
+      await ok(
+        Array.from({ length: 200 }, (_, i) => log({ hash: `g${String(i).padStart(6, "0")}` })),
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "さらに読み込む" })).toBeEnabled(),
+    );
+  });
+
+  it("shows two commits of one day that arrive apart, and one with a date that is none", async () => {
+    setup([
+      log({ hash: "a000000", date: "2026-11-04T11:00:00" }),
+      log({ hash: "b000000", date: "2026-11-03T11:00:00" }),
+      log({ hash: "c000000", date: "2026-11-04T09:00:00" }),
+      log({ hash: "d000000", date: "nope" }),
+    ]);
+    await screen.findAllByRole("listitem");
+    expect(screen.getAllByRole("listitem")).toHaveLength(4);
+    expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(3);
+    expect(screen.getByRole("heading", { level: 2, name: "日時不明" })).toBeTruthy();
+    expect(screen.getByText("--:--")).toBeTruthy();
+    // the id of a head has no space
+    expect(document.querySelector('[id^="day-"][id*=" "]')).toBeNull();
+  });
+
   it("goes back to 100 when a filter changes", async () => {
     const full = Array.from({ length: 100 }, (_, i) =>
       log({ hash: `h${String(i).padStart(6, "0")}` }),

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { avatarTone, formatDate, formatDateTime, formatRelative, initials } from "./format";
+import {
+  avatarTone,
+  formatDate,
+  formatDateTime,
+  formatRelative,
+  formatTime,
+  initials,
+} from "./format";
 
 const now = new Date(2026, 10, 4, 12, 0, 0); // 2026-11-04 12:00 local
 const at = (y: number, mo: number, d: number, h = 0, mi = 0, s = 0) =>
@@ -21,6 +28,18 @@ describe("formatDateTime", () => {
   it("shows the time too", () => {
     expect(formatDateTime(at(2026, 11, 4, 10, 12), now)).toBe("11/04 10:12");
     expect(formatDateTime(at(2025, 3, 2, 9, 5), now)).toBe("2025/03/02 09:05");
+  });
+});
+
+describe("formatTime", () => {
+  it("pads the hour and the minute, and never writes 24", () => {
+    expect(formatTime(at(2026, 11, 4, 9, 5))).toBe("09:05");
+    expect(formatTime(at(2026, 11, 4, 0, 5))).toBe("00:05");
+    expect(formatTime(at(2026, 11, 4, 23, 59))).toBe("23:59");
+  });
+
+  it("is --:-- for a time that is none", () => {
+    expect(formatTime("not a time")).toBe("--:--");
   });
 });
 

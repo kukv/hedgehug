@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { authorLabel, groupByDay, type Log, OP_LABELS, opLabel, trailerLine } from "./activity";
+import { authorLabel, groupByDay, type Log, opLabel, trailerLine } from "./activity";
 
 function log(over: Partial<Log> = {}): Log {
   return {
@@ -18,7 +18,28 @@ function log(over: Partial<Log> = {}): Log {
 
 describe("opLabel", () => {
   it("names every op the server writes", () => {
-    expect(OP_LABELS).toMatchObject({
+    const table = Object.fromEntries(
+      [
+        "add",
+        "set",
+        "status",
+        "mv",
+        "move-in",
+        "move-out",
+        "rm",
+        "restore",
+        "comment",
+        "merge",
+        "repair",
+        "schema",
+        "view",
+        "workspace",
+        "purge",
+        "revert-overwritten",
+        "undo",
+      ].map((o) => [o, opLabel(o)]),
+    );
+    expect(table).toEqual({
       add: "作成",
       set: "変更",
       status: "ステータスの変更",
@@ -81,6 +102,30 @@ describe("groupByDay", () => {
       "2025/11/02（日）",
     ]);
     expect(days.map((d) => d.logs.map((l) => l.hash))).toEqual([["a", "b"], ["c"], ["d"], ["e"]]);
+  });
+
+  it("puts the commits of a day together when the dates come out of order", () => {
+    const days = groupByDay(
+      [
+        log({ hash: "a", date: "2026-11-04T11:00:00" }),
+        log({ hash: "b", date: "2026-11-03T11:00:00" }),
+        log({ hash: "c", date: "2026-11-04T09:00:00" }),
+      ],
+      now,
+    );
+    expect(days.map((d) => d.key)).toEqual(["2026-11-04", "2026-11-03"]);
+    expect(days.map((d) => d.logs.map((l) => l.hash))).toEqual([["a", "c"], ["b"]]);
+  });
+
+  it("puts the commits with a date that is none in one day, 日時不明", () => {
+    const days = groupByDay(
+      [log({ hash: "a", date: "nope" }), log({ hash: "b", date: "" }), log({ hash: "c" })],
+      now,
+    );
+    expect(days.map((d) => [d.key, d.name, d.logs.length])).toEqual([
+      ["unknown", "日時不明", 2],
+      ["2026-11-04", "今日 · 11/04（水）", 1],
+    ]);
   });
 
   it("is empty for no logs", () => {

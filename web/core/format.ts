@@ -25,6 +25,13 @@ export function formatDateTime(iso: string, now: Date): string {
   return `${formatDate(iso, now)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// formatTime: 09:05, in the local time; --:-- for a time that is none.
+export function formatTime(iso: string): string {
+  const d = parse(iso);
+  if (Number.isNaN(d.getTime())) return "--:--";
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 // formatRelative: 今, 3 分前, 2 時間前, and the date from a day on.
 export function formatRelative(iso: string, now: Date): string {
   const ms = now.getTime() - parse(iso).getTime();

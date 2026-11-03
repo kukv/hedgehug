@@ -76,6 +76,25 @@ describe("WorkspacePicker", () => {
     expect(screen.queryByTitle("Store: shared")).toBeNull();
   });
 
+  it("counts only the selected ULIDs that are workspaces", async () => {
+    setup(["W1", "GONE"]);
+    expect(screen.getByRole("button", { name: "1 / 3 ワークスペース" })).toBeTruthy();
+    await open();
+    expect(screen.getByText("1 件を選択中 · 未選択のときはすべて")).toBeTruthy();
+  });
+
+  it("closes when the focus leaves for something outside, not for something inside", async () => {
+    setup();
+    await open();
+    const find = screen.getByRole("textbox", { name: "ワークスペースを探す" });
+    await fireEvent.focusOut(find, {
+      relatedTarget: screen.getByRole("checkbox", { name: /release/ }),
+    });
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    await fireEvent.focusOut(find, { relatedTarget: document.body });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("clears the selection", async () => {
     const { onchange } = setup(["W1", "W2"]);
     await open();

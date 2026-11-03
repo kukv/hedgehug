@@ -12,6 +12,9 @@ const BIN = process.env.HEDGEHUG_BIN ?? resolve(import.meta.dirname, "../../bin/
 export type StoreSpec = { name: string; prefix: string; workspace?: string; remote?: boolean };
 
 /** The store every test starts with, unless it says store: null. */
+/** The login of the account of the page; the author of the commits the page sees. */
+export const LOGIN = "e2e";
+
 export const DEFAULT_STORE: StoreSpec = { name: "demo", prefix: "DM" };
 
 export type TaskJson = {
@@ -186,7 +189,7 @@ export async function startHedgehug(store: StoreSpec | null): Promise<Hedgehug> 
   mkdirSync(join(home, "hh"));
   writeFileSync(
     join(home, "hh", "config.yaml"),
-    "accounts:\n  - name: e2e\n    host: github.com\n    login: e2e\n",
+    `accounts:\n  - name: ${LOGIN}\n    host: github.com\n    login: ${LOGIN}\n`,
   );
   const env = Hedgehug.env(home);
   let remote: string | null = null;
