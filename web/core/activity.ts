@@ -6,7 +6,7 @@ import { daysAgo, formatDate, pad } from "./format";
 
 export type Log = Schemas["LogView"];
 
-/** The words for every Hedgehug-Op that internal/ops, internal/store and internal/sync write. */
+/** The words for every Hedgehug-Op that internal/app/usecase, internal/app/storage/store and internal/app/remote/replicate write. */
 const OP_LABELS: Readonly<Record<string, string>> = {
   add: "作成",
   set: "変更",

@@ -11,9 +11,9 @@ import (
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 func TestLsTree(t *testing.T) {
@@ -51,7 +51,7 @@ func TestLsTree(t *testing.T) {
 		t.Errorf("tasks that neither match nor connect are shown:\n%s", out)
 	}
 
-	var roots []ops.TaskView
+	var roots []usecase.TaskView
 	if err := json.Unmarshal([]byte(te.ok("ls", "--tree", "--json", "status:done")), &roots); err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestLsTreeCycleNested(t *testing.T) {
 
 	// JSON: the same nesting; in_cycle only on X and Y.
 	raw := te.ok("ls", "--tree", "--json")
-	var roots []ops.TaskView
+	var roots []usecase.TaskView
 	if err := json.Unmarshal([]byte(raw), &roots); err != nil {
 		t.Fatal(err)
 	}

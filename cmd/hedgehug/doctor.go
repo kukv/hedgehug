@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/doctor"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/plural"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
+	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
 func (a *app) doctorCmd() *cobra.Command {
@@ -40,13 +40,13 @@ func (a *app) doctor(fix bool) error {
 	}
 	failing := false
 	for i, r := range rs {
-		failing = failing || doctor.Failing(r.Findings)
+		failing = failing || maintenance.Failing(r.Findings)
 		if a.jsonOut {
 			if r.Repaired == nil {
-				rs[i].Repaired = []ops.Fixed{}
+				rs[i].Repaired = []usecase.Fixed{}
 			}
 			if r.Findings == nil {
-				rs[i].Findings = []doctor.Finding{}
+				rs[i].Findings = []maintenance.Finding{}
 			}
 			continue
 		}
@@ -68,7 +68,7 @@ func (a *app) doctor(fix bool) error {
 // writeDoctor writes the text of one store's report: under a heading with
 // the store's name when there are several stores (a blank line apart), the
 // repairs when --fix asked for them, and the findings.
-func (a *app) writeDoctor(r ops.DoctorReport, fix, heading, first bool) error {
+func (a *app) writeDoctor(r usecase.DoctorReport, fix, heading, first bool) error {
 	if heading {
 		if !first {
 			if _, err := fmt.Fprintln(a.stdout); err != nil {
@@ -102,7 +102,7 @@ func (a *app) writeDoctor(r ops.DoctorReport, fix, heading, first bool) error {
 // writeRebuilt tells of a store that was cloned again from origin after a
 // force push, on lines of their own: what was put back, then, when some
 // changes could not be, where the old store is.
-func (a *app) writeRebuilt(store string, b *ops.Rebuilt) error {
+func (a *app) writeRebuilt(store string, b *usecase.Rebuilt) error {
 	if _, err := fmt.Fprintf(a.stdout, "Cloned %s again from origin; put back %s\n", store, plural.Count(b.Replayed, "unpushed commit")); err != nil {
 		return err
 	}

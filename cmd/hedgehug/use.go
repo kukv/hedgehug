@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 func (a *app) useCmd() *cobra.Command {
@@ -65,7 +65,7 @@ func (a *app) useClear() error {
 		return err
 	}
 	if a.jsonOut {
-		return a.printJSON(useJSON(ops.UseResult{}))
+		return a.printJSON(useJSON(usecase.UseResult{}))
 	}
 	msg := "No changes"
 	if res.Changed {
@@ -83,7 +83,7 @@ type useProject struct {
 }
 
 // useJSON is the JSON of hh use: {store, project}, or {} when there is none.
-func useJSON(res ops.UseResult) any {
+func useJSON(res usecase.UseResult) any {
 	if res.Project == nil {
 		return struct{}{}
 	}

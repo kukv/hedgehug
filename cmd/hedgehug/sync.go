@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/plural"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
 func (a *app) syncCmd() *cobra.Command {
@@ -47,7 +47,7 @@ func (a *app) sync() error {
 			return err
 		}
 		if a.jsonOut {
-			return a.printJSON([]ops.SyncReport{})
+			return a.printJSON([]usecase.SyncReport{})
 		}
 		_, err := fmt.Fprintln(a.stdout, "Nothing to sync: no store has a remote")
 		return err
@@ -73,7 +73,7 @@ func (a *app) sync() error {
 }
 
 // printSync writes what a sync did as text.
-func (a *app) printSync(r ops.SyncReport) error {
+func (a *app) printSync(r usecase.SyncReport) error {
 	var b strings.Builder
 	if r.NoRemote {
 		fmt.Fprintf(&b, "Nothing to sync: %s has no remote\n", r.Store)
@@ -122,7 +122,7 @@ func (a *app) printSync(r ops.SyncReport) error {
 
 // repairedLine is the line of one repair: a new id as "ORG-2 (ULID) → ORG-3",
 // the others as "repaired: ORG-4 (ULID) kind".
-func repairedLine(x ops.Repaired) string {
+func repairedLine(x usecase.Repaired) string {
 	if x.Line != "" {
 		return x.Line
 	}

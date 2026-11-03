@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/store"
-	hhsync "github.com/kukv/hedgehug/internal/sync"
+	"github.com/kukv/hedgehug/internal/app/remote/replicate"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 // addTask adds a task with args and returns it.
@@ -117,12 +117,12 @@ func TestE2EPhase3c(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	acc, err := hhsync.ReadAccess(s)
+	acc, err := replicate.ReadAccess(s)
 	if err != nil {
 		t.Fatal(err)
 	}
 	acc.Checked = time.Now().Add(-10 * time.Minute)
-	if err := hhsync.WriteAccess(s, acc); err != nil {
+	if err := replicate.WriteAccess(s, acc); err != nil {
 		t.Fatal(err)
 	}
 	bob.ok("sync")

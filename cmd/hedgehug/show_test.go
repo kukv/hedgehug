@@ -11,10 +11,10 @@ import (
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 func TestShow(t *testing.T) {
@@ -72,17 +72,17 @@ func TestShow(t *testing.T) {
 	}
 
 	var got struct {
-		ops.TaskView
+		usecase.TaskView
 		Body     string `json:"body"`
 		Comments []struct {
 			Author, Body string
 		} `json:"comments"`
-		Reverse map[string][]ops.Ref `json:"reverse"`
+		Reverse map[string][]usecase.Ref `json:"reverse"`
 	}
 	if err := json.Unmarshal([]byte(te.ok("show", a.ID, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Title != "Write the spec" || got.Body != "The body.\n" || len(got.Comments) != 1 || len(got.Reverse["blocks"]) != 1 || got.Reverse["blocks"][0] != (ops.Ref{ULID: waiting.ULID, ID: waiting.ID, Title: "Waiting"}) {
+	if got.Title != "Write the spec" || got.Body != "The body.\n" || len(got.Comments) != 1 || len(got.Reverse["blocks"]) != 1 || got.Reverse["blocks"][0] != (usecase.Ref{ULID: waiting.ULID, ID: waiting.ID, Title: "Waiting"}) {
 		t.Errorf("show --json = %+v", got)
 	}
 }

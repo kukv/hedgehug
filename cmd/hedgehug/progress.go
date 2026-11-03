@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/plural"
+	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
 // progressInterval is how long the work runs before the first line, and the

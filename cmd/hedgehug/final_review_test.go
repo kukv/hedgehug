@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/schema"
-	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 // breakStore makes the store name stop opening: its repository goes away.

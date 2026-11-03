@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
 )
 
 // watchersOf returns the watchers of the task id in the store of te.

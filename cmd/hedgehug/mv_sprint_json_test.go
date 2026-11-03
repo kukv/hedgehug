@@ -5,10 +5,10 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 func TestMvJSONShowsWhatItTookOff(t *testing.T) {
@@ -39,8 +39,8 @@ func TestMvJSONShowsWhatItTookOff(t *testing.T) {
 	}
 
 	var got struct {
-		ops.TaskView
-		Detached []ops.Detached `json:"detached"`
+		usecase.TaskView
+		Detached []usecase.Detached `json:"detached"`
 	}
 	if err := json.Unmarshal([]byte(te.ok("mv", p.ID, "--workspace", "api", "--json")), &got); err != nil {
 		t.Fatal(err)

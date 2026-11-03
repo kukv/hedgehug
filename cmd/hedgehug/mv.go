@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/plural"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
 func (a *app) mvCmd() *cobra.Command {
@@ -20,7 +20,7 @@ func (a *app) mvCmd() *cobra.Command {
 		Short: "Move a task under another parent or among its siblings, or to another store",
 		Args:  exactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if err := ops.CheckPosition(before, after); err != nil {
+			if err := usecase.CheckPosition(before, after); err != nil {
 				return err
 			}
 			if to != "" {
@@ -28,7 +28,7 @@ func (a *app) mvCmd() *cobra.Command {
 				if root || before != "" || after != "" {
 					return usageErrorf("--store cannot be used with --root, --before or --after")
 				}
-				return a.mvStore(ops.MoveStoreInput{Arg: args[0], To: to, Workspace: workspace, Parent: parent, Scoped: scoped, Yes: yes})
+				return a.mvStore(usecase.MoveStoreInput{Arg: args[0], To: to, Workspace: workspace, Parent: parent, Scoped: scoped, Yes: yes})
 			}
 			if scoped != "" || yes {
 				return usageErrorf("--scoped and --yes are for --store")
@@ -55,7 +55,7 @@ func (a *app) mvCmd() *cobra.Command {
 }
 
 func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after string) error {
-	res, err := a.ss.Move(ops.MoveInput{Arg: arg, Workspace: workspaceArg, Parent: parentArg, Root: root, Before: before, After: after})
+	res, err := a.ss.Move(usecase.MoveInput{Arg: arg, Workspace: workspaceArg, Parent: parentArg, Root: root, Before: before, After: after})
 	if err != nil {
 		return err
 	}
@@ -70,9 +70,9 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 			return fmt.Errorf("task %s is not in the index after the write", res.ULID)
 		}
 		return a.printJSON(struct {
-			*ops.TaskView
-			Detached []ops.Detached `json:"detached"`
-		}{ops.TaskViewOf(res.Index, e), res.Detached})
+			*usecase.TaskView
+			Detached []usecase.Detached `json:"detached"`
+		}{usecase.TaskViewOf(res.Index, e), res.Detached})
 	}
 	if err := a.printTask(res.Index, res.ULID, verb(res.Committed, "Moved")); err != nil || a.jsonOut || !res.Moved {
 		return err
@@ -96,15 +96,15 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 
 // mvStore moves a task to another store. On a terminal it asks what the
 // operation lacks: the workspace, --scoped, and the confirmation.
-func (a *app) mvStore(in ops.MoveStoreInput) error {
-	var res ops.MoveStoreResult
+func (a *app) mvStore(in usecase.MoveStoreInput) error {
+	var res usecase.MoveStoreResult
 	var err error
 	shown := false // the plan was shown, with the scoped lines
 	for range 4 {
 		if res, err = a.ss.MoveStore(in); err == nil {
 			return a.printMoveStore(res, shown)
 		}
-		e := ops.AsError(err)
+		e := usecase.AsError(err)
 		if e == nil || !a.isTerminal(a.stdin) {
 			return err
 		}
@@ -120,7 +120,7 @@ func (a *app) mvStore(in ops.MoveStoreInput) error {
 				return err
 			}
 		case e.Code == "confirm.required":
-			var ce *ops.MoveConfirmError
+			var ce *usecase.MoveConfirmError
 			if !errors.As(err, &ce) {
 				return err
 			}
@@ -155,7 +155,7 @@ func (a *app) askScoped(projects []string) (string, error) {
 
 // confirmMove shows what a move cuts and says about the history (D8), and
 // asks.
-func (a *app) confirmMove(p ops.MovePlan) error {
+func (a *app) confirmMove(p usecase.MovePlan) error {
 	v := p.View()
 	var b strings.Builder
 	for _, l := range v.Unlinked {
@@ -184,7 +184,7 @@ func (a *app) confirmMove(p ops.MovePlan) error {
 
 // printMoveStore prints a move: a line for each task, or JSON. The scoped
 // lines come with them unless the confirmation showed them.
-func (a *app) printMoveStore(res ops.MoveStoreResult, shown bool) error {
+func (a *app) printMoveStore(res usecase.MoveStoreResult, shown bool) error {
 	p := res.Plan
 	if a.jsonOut {
 		type taskJSON struct {

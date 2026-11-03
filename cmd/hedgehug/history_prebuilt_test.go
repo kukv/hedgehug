@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/gitrepo/gitrepotest"
-	"github.com/kukv/hedgehug/internal/history"
-	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/app/storage/history"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 // requireHistoryAtHead fails unless the saved history index of the store is

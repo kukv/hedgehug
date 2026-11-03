@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/fakegh"
+	"github.com/kukv/hedgehug/internal/lib/fakegh"
 )
 
 const (

@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/plural"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
 func (a *app) purgeCmd() *cobra.Command {
@@ -28,14 +28,14 @@ func (a *app) purgeCmd() *cobra.Command {
 			return nil
 		},
 		RunE: func(_ *cobra.Command, _ []string) error {
-			days, err := ops.ParseOlderThan(olderThan)
+			days, err := usecase.ParseOlderThan(olderThan)
 			if err != nil {
 				return err
 			}
 			return a.purge(days, yes)
 		},
 	}
-	cmd.Flags().StringVar(&olderThan, "older-than", fmt.Sprintf("%dd", ops.DefaultPurgeDays), "remove what is older than this many days, such as 90d (0d for everything)")
+	cmd.Flags().StringVar(&olderThan, "older-than", fmt.Sprintf("%dd", usecase.DefaultPurgeDays), "remove what is older than this many days, such as 90d (0d for everything)")
 	cmd.Flags().BoolVar(&yes, "yes", false, "do not ask")
 	return cmd
 }
@@ -48,9 +48,9 @@ func (a *app) purge(days int, yes bool) error {
 		return err
 	}
 	if plan.Empty() {
-		return a.printPurged(ops.PurgeResult{PurgePlan: plan})
+		return a.printPurged(usecase.PurgeResult{PurgePlan: plan})
 	}
-	var res ops.PurgeResult
+	var res usecase.PurgeResult
 	switch {
 	case yes:
 		res, err = a.ss.Purge(days, true)
@@ -68,7 +68,7 @@ func (a *app) purge(days int, yes bool) error {
 }
 
 // confirmPurge shows what is to go and asks.
-func (a *app) confirmPurge(p ops.PurgePlan) error {
+func (a *app) confirmPurge(p usecase.PurgePlan) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s:\n", p.Store)
 	for _, t := range p.Tasks {
@@ -92,7 +92,7 @@ func (a *app) confirmPurge(p ops.PurgePlan) error {
 }
 
 // printPurged prints what purge removed: a line, or JSON.
-func (a *app) printPurged(r ops.PurgeResult) error {
+func (a *app) printPurged(r usecase.PurgeResult) error {
 	if a.jsonOut {
 		return a.printJSON(r)
 	}

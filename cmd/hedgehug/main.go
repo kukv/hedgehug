@@ -15,11 +15,11 @@ import (
 	"github.com/pkg/browser"
 	"golang.org/x/term"
 
-	"github.com/kukv/hedgehug/internal/auth"
-	"github.com/kukv/hedgehug/internal/config"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/store"
-	"github.com/kukv/hedgehug/internal/sync"
+	"github.com/kukv/hedgehug/internal/app/remote/auth"
+	"github.com/kukv/hedgehug/internal/app/remote/replicate"
+	"github.com/kukv/hedgehug/internal/app/storage/config"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 // version is what --version prints. GoReleaser sets it with -ldflags at
@@ -67,7 +67,7 @@ func isTerminal(f any) bool {
 // mistake in flags or arguments, 1 for any other error.
 func run(args []string, e *env) int {
 	a := &app{env: e}
-	a.ss = &ops.Session{
+	a.ss = &usecase.Session{
 		Getenv:       e.getenv,
 		Now:          e.now,
 		BeforeUpdate: e.beforeUpdate,
@@ -77,10 +77,10 @@ func run(args []string, e *env) int {
 		Progress:     newProgress(e.stderr, time.Now),
 		Warn:         func(m string) { _, _ = fmt.Fprintln(e.stderr, "warning: "+m) },
 		AfterWrite: func(s *store.Store, en config.StoreEntry) {
-			if !ops.SyncsInBackground(en) {
+			if !usecase.SyncsInBackground(en) {
 				return
 			}
-			if err := sync.Start(s, en.Name, e.getenv); err != nil {
+			if err := replicate.Start(s, en.Name, e.getenv); err != nil {
 				_, _ = fmt.Fprintln(e.stderr, "warning: the background sync did not start:", err)
 			}
 		},
@@ -99,7 +99,7 @@ func run(args []string, e *env) int {
 	}
 	writeErr(e.stderr, err)
 	var ue usageError
-	if errors.As(err, &ue) || ops.KindOf(err) == ops.KindUsage || ops.KindOf(err) == ops.KindAmbiguous || strings.HasPrefix(err.Error(), "unknown command") {
+	if errors.As(err, &ue) || usecase.KindOf(err) == usecase.KindUsage || usecase.KindOf(err) == usecase.KindAmbiguous || strings.HasPrefix(err.Error(), "unknown command") {
 		return 2
 	}
 	return 1

@@ -7,11 +7,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/index"
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/schema"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 func (a *app) showCmd() *cobra.Command {
@@ -29,13 +29,13 @@ func (a *app) show(arg string) error {
 		return err
 	}
 	if a.jsonOut {
-		return a.printJSON(ops.ShowViewOf(r))
+		return a.printJSON(usecase.ShowViewOf(r))
 	}
 	_, err = fmt.Fprint(a.stdout, a.showText(r.Store, r.Index, r.Entry, r.Task, r.Comments, r.Relations, r.Back, r.History))
 	return err
 }
 
-func (a *app) showText(storeName string, ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []ops.Relation, back []*index.Entry, history []gitrepo.LogEntry) string {
+func (a *app) showText(storeName string, ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []usecase.Relation, back []*index.Entry, history []gitrepo.LogEntry) string {
 	st := a.style()
 	var b strings.Builder
 	field := func(k string, vs ...string) {
@@ -48,7 +48,7 @@ func (a *app) showText(storeName string, ix *index.Index, e *index.Entry, t *mod
 	refs := func(ulids []model.ULID) []string {
 		out := make([]string, len(ulids))
 		for i, ulid := range ulids {
-			out[i] = ops.RefName(ix, ulid)
+			out[i] = usecase.RefName(ix, ulid)
 		}
 		return out
 	}
@@ -72,14 +72,14 @@ func (a *app) showText(storeName string, ix *index.Index, e *index.Entry, t *mod
 	}
 	field("kind", e.Kind)
 	field("status", e.Status)
-	if c := ops.ChecklistText(ops.ChecklistOf(e)); c != "" {
+	if c := usecase.ChecklistText(usecase.ChecklistOf(e)); c != "" {
 		field("checklist", c)
 	}
-	if p := ops.ProgressFractionText(ops.ProgressOf(ix, e)); p != "" {
+	if p := usecase.ProgressFractionText(usecase.ProgressOf(ix, e)); p != "" {
 		field("progress", p)
 	}
 	if e.Parent != nil {
-		field("parent", ops.RefName(ix, *e.Parent))
+		field("parent", usecase.RefName(ix, *e.Parent))
 	} else {
 		field("parent")
 	}
@@ -120,7 +120,7 @@ func (a *app) showText(storeName string, ix *index.Index, e *index.Entry, t *mod
 		for _, r := range rels {
 			names := make([]string, len(r.Tasks))
 			for i, x := range r.Tasks {
-				names[i] = ops.RefName(ix, x.ULID)
+				names[i] = usecase.RefName(ix, x.ULID)
 			}
 			field(r.Label, names...)
 		}
@@ -128,7 +128,7 @@ func (a *app) showText(storeName string, ix *index.Index, e *index.Entry, t *mod
 	if len(back) > 0 {
 		b.WriteString("\nReferenced by:\n")
 		for _, x := range back {
-			b.WriteString("  " + ops.RefName(ix, x.ULID) + "\n")
+			b.WriteString("  " + usecase.RefName(ix, x.ULID) + "\n")
 		}
 	}
 	if e.Broken != "" {

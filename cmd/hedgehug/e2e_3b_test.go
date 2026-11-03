@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/store"
-	hhsync "github.com/kukv/hedgehug/internal/sync"
+	"github.com/kukv/hedgehug/internal/app/remote/replicate"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 // run runs hedgehug in dir with its stdin not a terminal and returns the exit
@@ -259,24 +259,24 @@ func TestE2EPhase3b(t *testing.T) {
 		t.Fatal(err)
 	}
 	old := time.Now().Add(-10 * time.Minute) // the interval between two checks has passed
-	acc, err := hhsync.ReadAccess(orgA)
+	acc, err := replicate.ReadAccess(orgA)
 	if err != nil {
 		t.Fatal(err)
 	}
 	acc.Checked = old
-	if err := hhsync.WriteAccess(orgA, acc); err != nil {
+	if err := replicate.WriteAccess(orgA, acc); err != nil {
 		t.Fatal(err)
 	}
-	mem, err := hhsync.ReadMembers(orgA)
+	mem, err := replicate.ReadMembers(orgA)
 	if err != nil {
 		t.Fatal(err)
 	}
 	mem.Checked = old
-	if err := hhsync.WriteMembers(orgA, mem); err != nil {
+	if err := replicate.WriteMembers(orgA, mem); err != nil {
 		t.Fatal(err)
 	}
 	alice.ok("sync")
-	if mem, err := hhsync.ReadMembers(orgA); err != nil || mem.Collaborators == nil || slices.ContainsFunc(mem.Collaborators, func(c hhsync.Collaborator) bool { return strings.HasSuffix(c.ID, "/bob") }) {
+	if mem, err := replicate.ReadMembers(orgA); err != nil || mem.Collaborators == nil || slices.ContainsFunc(mem.Collaborators, func(c replicate.Collaborator) bool { return strings.HasSuffix(c.ID, "/bob") }) {
 		t.Errorf("members.json after the sync: %+v (%v), want collaborators without bob", mem, err)
 	}
 	if _, errs := alice.okIn("", "comment", "add", "WEB-1", "again @bob"); !strings.Contains(errs, "warning: bob cannot read org-a") {

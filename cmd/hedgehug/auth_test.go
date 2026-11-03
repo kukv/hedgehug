@@ -14,8 +14,8 @@ import (
 
 	"github.com/zalando/go-keyring"
 
-	"github.com/kukv/hedgehug/internal/fakegh"
-	"github.com/kukv/hedgehug/internal/testenv"
+	"github.com/kukv/hedgehug/internal/lib/fakegh"
+	"github.com/kukv/hedgehug/internal/lib/testenv"
 )
 
 // withFake starts a fakegh with alice and bob, and points github.com of the

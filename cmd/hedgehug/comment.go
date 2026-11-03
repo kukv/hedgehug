@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 func (a *app) commentCmd() *cobra.Command {
@@ -75,10 +75,10 @@ func (a *app) commentAdd(arg string, text []string) error {
 		body = strings.Join(text, " ")
 	} else {
 		var edited []byte
-		if path, edited, err = a.editFile(ops.TaskFileName(cs.Entry), nil); err != nil {
+		if path, edited, err = a.editFile(usecase.TaskFileName(cs.Entry), nil); err != nil {
 			return err
 		}
-		if body = ops.CommentBody(string(edited)); body == "" {
+		if body = usecase.CommentBody(string(edited)); body == "" {
 			_ = os.Remove(path)
 		}
 	}
@@ -115,7 +115,7 @@ func (a *app) commentEdit(arg string) error {
 	if err != nil {
 		return err
 	}
-	body := ops.CommentBody(string(edited))
+	body := usecase.CommentBody(string(edited))
 	p, err := a.ss.PrepareCommentEdit(ces, body)
 	if body == "" || body == c.Body {
 		if rerr := os.Remove(path); rerr != nil {
@@ -152,7 +152,7 @@ func (a *app) commentRm(arg string) error {
 func (a *app) printComment(s *store.Store, ref store.CommentRef, verb string) error {
 	var err error
 	if a.jsonOut {
-		c, err := ops.FindComment(s, ref)
+		c, err := usecase.FindComment(s, ref)
 		if err != nil {
 			return err
 		}

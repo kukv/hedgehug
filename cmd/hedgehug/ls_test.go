@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/index"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 func TestLs(t *testing.T) {
@@ -42,7 +42,7 @@ func TestLs(t *testing.T) {
 	if out := te.ok("ls", "--format", "{{.title}}|{{.status}}", "sort:title"); out != "Alpha|todo\nBeta|done\n" {
 		t.Errorf("--format = %q", out)
 	}
-	var got []ops.TaskView
+	var got []usecase.TaskView
 	if err := json.Unmarshal([]byte(te.ok("ls", "--json", "sort:title")), &got); err != nil {
 		t.Fatal(err)
 	}
@@ -198,15 +198,15 @@ func TestDescribe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = (&ops.Session{}).Resolve(ix, a.ID)
-	if ops.KindOf(err) != ops.KindAmbiguous {
+	_, err = (&usecase.Session{}).Resolve(ix, a.ID)
+	if usecase.KindOf(err) != usecase.KindAmbiguous {
 		t.Fatalf("Resolve(%s) = %v; want an ambiguous error", a.ID, err)
 	}
 	got := describe(err)
 	if got != err.Error() || !strings.HasPrefix(got, "\""+a.ID+"\" matches 2 tasks:\n  ") {
 		t.Errorf("describe = %q", got)
 	}
-	for _, j := range []ops.TaskView{a, b} {
+	for _, j := range []usecase.TaskView{a, b} {
 		if !strings.Contains(got, "\n  "+a.ID+" ("+j.ULID+") ") {
 			t.Errorf("describe lacks the candidate %s:\n%s", j.ULID, got)
 		}

@@ -6,10 +6,10 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/kukv/hedgehug/internal/index"
-	"github.com/kukv/hedgehug/internal/mount"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/query"
+	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/storage/query"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 )
 
 func (a *app) lsTree(q *query.Query, ulidsOnly bool, tmpl *template.Template) error {
@@ -19,8 +19,8 @@ func (a *app) lsTree(q *query.Query, ulidsOnly bool, tmpl *template.Template) er
 	}
 	// every store's trees, roots then the cycle, in the order they are drawn
 	type drawnNode struct {
-		store ops.TreeStore
-		node  *ops.TreeNode
+		store usecase.TreeStore
+		node  *usecase.TreeNode
 	}
 	var tops, drawn []drawnNode
 	for _, ts := range res.Stores {
@@ -28,7 +28,7 @@ func (a *app) lsTree(q *query.Query, ulidsOnly bool, tmpl *template.Template) er
 		for _, n := range own {
 			tops = append(tops, drawnNode{ts, n})
 		}
-		for _, n := range ops.Flatten(own) {
+		for _, n := range usecase.Flatten(own) {
 			drawn = append(drawn, drawnNode{ts, n})
 		}
 	}
@@ -44,7 +44,7 @@ func (a *app) lsTree(q *query.Query, ulidsOnly bool, tmpl *template.Template) er
 		}
 		return a.printULIDs(hit)
 	case tmpl != nil:
-		node := map[*index.Entry]*ops.TreeNode{}
+		node := map[*index.Entry]*usecase.TreeNode{}
 		es := make([]mount.Entry, len(drawn))
 		for i, d := range drawn {
 			node[d.node.Entry], es[i] = d.node, mount.Entry{Store: d.store.Store, Entry: d.node.Entry}
@@ -53,9 +53,9 @@ func (a *app) lsTree(q *query.Query, ulidsOnly bool, tmpl *template.Template) er
 			m["context"], m["in_cycle"] = node[e.Entry].Context, node[e.Entry].InCycle
 		})
 	case a.jsonOut:
-		out := make([]*ops.TaskView, len(tops))
+		out := make([]*usecase.TaskView, len(tops))
 		for i, d := range tops {
-			out[i] = ops.TreeViewOf(d.store.Index, d.node)
+			out[i] = usecase.TreeViewOf(d.store.Index, d.node)
 		}
 		return a.printJSON(out)
 	}
@@ -83,8 +83,8 @@ func (a *app) lsTree(q *query.Query, ulidsOnly bool, tmpl *template.Template) er
 // writeStoreTree writes the trees of one store of several: a heading with
 // its name, and the tasks in a parent cycle under their own heading that
 // names the store. A store with nothing to show has no heading.
-func writeStoreTree(b *strings.Builder, st style, ts ops.TreeStore) {
-	section := func(heading string, nodes []*ops.TreeNode) {
+func writeStoreTree(b *strings.Builder, st style, ts usecase.TreeStore) {
+	section := func(heading string, nodes []*usecase.TreeNode) {
 		if len(nodes) == 0 {
 			return
 		}
@@ -100,7 +100,7 @@ func writeStoreTree(b *strings.Builder, st style, ts ops.TreeStore) {
 	section(ts.Store.Name+" (in a parent cycle)", ts.Cycle)
 }
 
-func writeNode(b *strings.Builder, st style, ix *index.Index, n *ops.TreeNode, lead, childLead string) {
+func writeNode(b *strings.Builder, st style, ix *index.Index, n *usecase.TreeNode, lead, childLead string) {
 	b.WriteString(lead + treeLine(st, ix, n.Entry, n.Context) + "\n")
 	for i, c := range n.Children {
 		if i == len(n.Children)-1 {
@@ -117,7 +117,7 @@ func treeLine(st style, ix *index.Index, e *index.Entry, context bool) string {
 	r := taskRow(ix, e)
 	name := r[0] + " " + r[1]
 	line := name + "  " + r[2] + "  " + r[3] + "  " + r[6]
-	if p := ops.ProgressText(ops.ChecklistOf(e), ops.ProgressOf(ix, e)); p != "" {
+	if p := usecase.ProgressText(usecase.ChecklistOf(e), usecase.ProgressOf(ix, e)); p != "" {
 		line += "  " + p
 	}
 	if context {

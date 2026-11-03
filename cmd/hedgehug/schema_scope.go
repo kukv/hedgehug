@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/schema"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 func (a *app) scopeCmd() *cobra.Command {
@@ -137,7 +137,7 @@ func listsFlag(flag string, vals []string) (*schema.Lists, error) {
 // printScoped prints the override r is about. A write starts with a line
 // that says what it did, done, or that it changed nothing, none; both are
 // empty for show. With body the override as it is now follows.
-func (a *app) printScoped(r ops.ScopedResult, done, none string, body bool) error {
+func (a *app) printScoped(r usecase.ScopedResult, done, none string, body bool) error {
 	if a.jsonOut {
 		return a.printJSON(r.View())
 	}

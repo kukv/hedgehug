@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/fakegh"
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/gitrepo/gitrepotest"
+	"github.com/kukv/hedgehug/internal/lib/fakegh"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 const twoAccounts = "accounts:\n" +

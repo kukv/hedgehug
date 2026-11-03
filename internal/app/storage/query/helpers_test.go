@@ -1,0 +1,120 @@
+package query
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"go.yaml.in/yaml/v4"
+
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+)
+
+var testAuthor = gitrepo.Signature{Name: "Test", Email: "test@example.com"}
+
+func newStore(t *testing.T) *store.Store {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "store")
+	s, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: "test"}, nil, &model.Workspace{ULID: model.NewULID(), Name: "test", IDPrefix: "TST"}, testAuthor, "", time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// writeRaw writes a file as given and commits it past the store's checks,
+// as a sync or a hand edit could.
+func writeRaw(t *testing.T, s *store.Store, rel, content string) {
+	t.Helper()
+	p := filepath.Join(s.Dir(), filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: testAuthor, When: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func newTask(title string) *model.Task {
+	return &model.Task{ULID: model.NewULID(), Kind: "task", Title: title, Status: "todo"}
+}
+
+func setProp(task *model.Task, key, value string) {
+	task.Props.Set(key, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value})
+}
+
+func setRefs(task *model.Task, key string, ulids ...model.ULID) {
+	n := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+	for _, ulid := range ulids {
+		n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: ulid.String()})
+	}
+	task.Props.Set(key, n)
+}
+
+func put(t *testing.T, s *store.Store, tasks ...*model.Task) {
+	t.Helper()
+	ws := firstWorkspace(t, s)
+	if _, err := s.Update(store.Op{Name: "update", Author: testAuthor}, func(tx *store.Tx) error {
+		for _, task := range tasks {
+			if task.Workspace.IsZero() {
+				task.Workspace = ws
+			}
+			if err := tx.PutTask(task); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// firstWorkspace returns the ULID of the first workspace of s.
+func firstWorkspace(t *testing.T, s *store.Store) model.ULID {
+	t.Helper()
+	for w, err := range s.Workspaces() {
+		if err != nil {
+			t.Fatal(err)
+		}
+		return w.ULID
+	}
+	t.Fatal("the store has no workspace")
+	return model.ULID{}
+}
+
+func mustOpen(t *testing.T, s *store.Store) *index.Index {
+	t.Helper()
+	ix, err := index.Open(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ix
+}
+
+// run parses and runs q, and returns the titles of each group.
+func run(t *testing.T, ix *index.Index, q string, opt Options) [][]string {
+	t.Helper()
+	parsed, err := Parse(q)
+	if err != nil {
+		t.Fatalf("Parse(%q): %v", q, err)
+	}
+	res, err := Run(ix, parsed, opt)
+	if err != nil {
+		t.Fatalf("Run(%q): %v", q, err)
+	}
+	out := make([][]string, len(res.Groups))
+	for i, g := range res.Groups {
+		out[i] = []string{}
+		for _, e := range g.Tasks {
+			out[i] = append(out[i], e.Title)
+		}
+	}
+	return out
+}

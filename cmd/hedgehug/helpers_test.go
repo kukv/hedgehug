@@ -19,9 +19,9 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/zalando/go-keyring"
 
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	hhsync "github.com/kukv/hedgehug/internal/sync"
-	"github.com/kukv/hedgehug/internal/testenv"
+	"github.com/kukv/hedgehug/internal/app/remote/replicate"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/testenv"
 )
 
 // testEnv runs the command with HEDGEHUG_HOME and HOME in temporary
@@ -428,7 +428,7 @@ func (te *testEnv) setSyncError(name, msg string) {
 // stubSpawn replaces the start of the background sync with f, which gets the
 // arguments of the child.
 func stubSpawn(f func(args []string)) (restore func()) {
-	return hhsync.SetSpawn(func(_ string, args []string, _ string) error { f(args); return nil })
+	return replicate.SetSpawn(func(_ string, args []string, _ string) error { f(args); return nil })
 }
 
 // runBinary runs the built command with the variables of the test, and

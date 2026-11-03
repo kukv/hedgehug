@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/fakegh"
+	"github.com/kukv/hedgehug/internal/lib/fakegh"
 )
 
 // whoami calls GET /user of the fake at base with the token tok.

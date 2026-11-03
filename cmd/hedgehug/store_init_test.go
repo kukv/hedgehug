@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
 
 func TestStoreInit(t *testing.T) {

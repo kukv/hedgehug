@@ -7,16 +7,16 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/config"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/store"
-	"github.com/kukv/hedgehug/internal/sync"
+	"github.com/kukv/hedgehug/internal/app/remote/replicate"
+	"github.com/kukv/hedgehug/internal/app/storage/config"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 // app holds the global flags and what the commands share.
 type app struct {
 	*env
-	ss      *ops.Session
+	ss      *usecase.Session
 	jsonOut bool
 	noColor bool
 	in      *bufio.Reader // the one buffered reader over stdin; see readLine
@@ -118,7 +118,7 @@ func (a *app) beforeRun(cmd *cobra.Command, _ []string) error {
 
 // beforeCommand reports the failure of a background sync that the user has
 // not been told of, and starts one for each store with a remote that is due
-// (ops.BeforeCommand), except in the sync itself and in a merge driver.
+// (usecase.BeforeCommand), except in the sync itself and in a merge driver.
 func (a *app) beforeCommand(cmd *cobra.Command, cfg *config.Config) {
 	for c := cmd; c != nil; c = c.Parent() {
 		if c.Parent() != nil && c.Parent().Parent() == nil && (c.Name() == "sync" || c.Name() == "merge-driver" || c.Name() == "ui") {
@@ -126,7 +126,7 @@ func (a *app) beforeCommand(cmd *cobra.Command, cfg *config.Config) {
 		}
 	}
 	a.ss.BeforeCommand(cfg,
-		func(s *store.Store, name string) error { return sync.Start(s, name, a.getenv) },
+		func(s *store.Store, name string) error { return replicate.Start(s, name, a.getenv) },
 		func(name, msg string) {
 			_, _ = fmt.Fprintf(a.stderr, "hedgehug: background sync of %s failed: %s (run hedgehug sync)\n", name, msg)
 		})
@@ -146,7 +146,7 @@ func verb(committed bool, heading string) string {
 func describe(err error) string {
 	var ve *store.ValidationError
 	if errors.As(err, &ve) {
-		return ops.ViolationsText(ve)
+		return usecase.ViolationsText(ve)
 	}
 	if errors.Is(err, store.ErrLocked) {
 		return "another hedgehug is writing to the store; try again"

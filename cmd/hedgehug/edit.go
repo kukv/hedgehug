@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 func (a *app) editCmd() *cobra.Command {
@@ -26,7 +26,7 @@ func (a *app) edit(arg string) error {
 	if err != nil {
 		return err
 	}
-	path, edited, err := a.editFile(ops.TaskFileName(es.Entry), es.Bytes)
+	path, edited, err := a.editFile(usecase.TaskFileName(es.Entry), es.Bytes)
 	if err != nil {
 		return err
 	}
@@ -37,12 +37,12 @@ func (a *app) edit(arg string) error {
 			}
 			return a.printTask(es.Index, es.Entry.ULID, verb(false, ""))
 		}
-		t, err := ops.CheckEdit(es.Index, es.Entry.ULID, es.Old, edited)
+		t, err := usecase.CheckEdit(es.Index, es.Entry.ULID, es.Old, edited)
 		if err == nil {
 			if err := a.ss.PrepareEdit(es, t); err != nil {
 				return err
 			}
-			var r ops.TaskResult
+			var r usecase.TaskResult
 			r, err = a.ss.WriteEdit(es, t)
 			if err == nil {
 				if err := os.Remove(path); err != nil {

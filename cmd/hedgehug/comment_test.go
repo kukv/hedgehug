@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/store"
-	"github.com/kukv/hedgehug/internal/sync"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/remote/replicate"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 func (te *testEnv) commentJSON(args ...string) commentOut {
@@ -438,7 +438,7 @@ func TestCommentMentionWarning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := sync.WriteMembers(s, sync.Members{Collaborators: []sync.Collaborator{{ID: "github.com/bob", Permission: "write"}}}); err != nil {
+	if err := replicate.WriteMembers(s, replicate.Members{Collaborators: []replicate.Collaborator{{ID: "github.com/bob", Permission: "write"}}}); err != nil {
 		t.Fatal(err)
 	}
 	code, _, errs := te.run("comment", "add", x.ID, "hi @bob and @carol")

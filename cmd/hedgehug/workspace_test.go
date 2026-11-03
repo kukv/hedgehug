@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 func TestWorkspaceCommands(t *testing.T) {
@@ -266,11 +266,11 @@ func TestTaskInAMissingWorkspace(t *testing.T) {
 	x := te.addJSON("x")
 	gone := model.NewULID().String()
 	te.commitFile(x.ULID, setLine(te.raw(x.ULID), "workspace", gone))
-	var got ops.TaskView
+	var got usecase.TaskView
 	if err := json.Unmarshal([]byte(te.ok("show", x.ID, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Workspace == nil || *got.Workspace != (ops.WorkspaceRef{ULID: gone}) {
+	if got.Workspace == nil || *got.Workspace != (usecase.WorkspaceRef{ULID: gone}) {
 		t.Errorf("workspace = %+v", got.Workspace)
 	}
 	if out := te.ok("show", x.ID); !strings.Contains(out, "  workspace   "+gone+"\n") {

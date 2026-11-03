@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 // storeTaskFile is the path and content of the file of the task id in the store

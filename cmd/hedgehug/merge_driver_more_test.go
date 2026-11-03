@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 // task1 reads the task ORG-1 of the store org as the driver sees a file.

@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/plural"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
 func (a *app) inboxCmd() *cobra.Command {
@@ -77,7 +77,7 @@ func (a *app) inboxList(all bool) error {
 }
 
 func (a *app) inboxRead(args []string, all bool) error {
-	ulids, err := ops.ParseInboxItems(args)
+	ulids, err := usecase.ParseInboxItems(args)
 	if err != nil {
 		return err
 	}
@@ -97,7 +97,7 @@ func (a *app) inboxRead(args []string, all bool) error {
 }
 
 func (a *app) inboxRevert(arg string) error {
-	u, err := ops.ParseInboxItem(arg)
+	u, err := usecase.ParseInboxItem(arg)
 	if err != nil {
 		return err
 	}

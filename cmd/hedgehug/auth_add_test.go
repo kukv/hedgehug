@@ -10,7 +10,7 @@ import (
 
 	"github.com/zalando/go-keyring"
 
-	"github.com/kukv/hedgehug/internal/fakegh"
+	"github.com/kukv/hedgehug/internal/lib/fakegh"
 )
 
 // replaceConfigYAML replaces config.yaml with s.

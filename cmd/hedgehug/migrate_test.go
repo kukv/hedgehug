@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/schema"
-	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 // putSchema writes the schema of the store me after edit changes the
@@ -39,8 +39,8 @@ func (te *testEnv) schemaFile() string {
 }
 
 type migrateOut struct {
-	Changed []ops.TaskView `json:"changed"`
-	Skipped []string       `json:"skipped"`
+	Changed []usecase.TaskView `json:"changed"`
+	Skipped []string           `json:"skipped"`
 }
 
 func TestSchemaMigrateStatus(t *testing.T) {

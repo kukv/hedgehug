@@ -9,9 +9,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/mount"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/query"
+	"github.com/kukv/hedgehug/internal/app/storage/query"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 )
 
 func (a *app) lsCmd() *cobra.Command {
@@ -40,7 +40,7 @@ func (a *app) lsCmd() *cobra.Command {
 					return usageErrorf("--format: %w", err)
 				}
 			}
-			q, err := ops.ParseQuery(strings.Join(args, " "))
+			q, err := usecase.ParseQuery(strings.Join(args, " "))
 			if err != nil {
 				return err
 			}
@@ -68,7 +68,7 @@ func (a *app) ls(q *query.Query, ulidsOnly bool, tmpl *template.Template) error 
 		return a.printULIDs(all)
 	case tmpl != nil:
 		return a.printFormat(all, tmpl, nil)
-	case a.jsonOut || !ops.HasTerm(q, "group"):
+	case a.jsonOut || !usecase.HasTerm(q, "group"):
 		return a.printTasks(all, res.Many)
 	}
 	for i, g := range res.Groups {
@@ -111,7 +111,7 @@ func (a *app) printFormat(es []mount.Entry, tmpl *template.Template, extra func(
 		if err != nil {
 			return err
 		}
-		b, err := json.Marshal(ops.TaskViewOf(ix, e.Entry))
+		b, err := json.Marshal(usecase.TaskViewOf(ix, e.Entry))
 		if err != nil {
 			return err
 		}

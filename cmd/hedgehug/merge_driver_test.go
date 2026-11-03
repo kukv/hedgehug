@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/model"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
 )
 
 // gitPull runs a real `git pull` in the store of te, with the binary on PATH

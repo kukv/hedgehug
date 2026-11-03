@@ -5,14 +5,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/doctor"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/plural"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
+	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
 // errFindings is what a command that found problems returns: the problems
 // are printed, so run exits 1 without a message of its own.
-var errFindings = ops.ErrFindings
+var errFindings = usecase.ErrFindings
 
 func (a *app) schemaCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -46,10 +46,10 @@ func (a *app) checkCmd() *cobra.Command {
 
 // printFindings prints what a check found. It returns errFindings when there
 // is an error or a warning to report.
-func (a *app) printFindings(fs []doctor.Finding) error {
+func (a *app) printFindings(fs []maintenance.Finding) error {
 	if a.jsonOut {
 		if fs == nil {
-			fs = []doctor.Finding{}
+			fs = []maintenance.Finding{}
 		}
 		if err := a.printJSON(fs); err != nil {
 			return err
@@ -57,7 +57,7 @@ func (a *app) printFindings(fs []doctor.Finding) error {
 	} else if err := a.writeFindings(fs); err != nil {
 		return err
 	}
-	if doctor.Failing(fs) {
+	if maintenance.Failing(fs) {
 		return errFindings
 	}
 	return nil
@@ -65,14 +65,14 @@ func (a *app) printFindings(fs []doctor.Finding) error {
 
 // writeFindings writes fs as text. A warning or an info line ends with its
 // severity in parentheses; an error line has nothing added.
-func (a *app) writeFindings(fs []doctor.Finding) error {
+func (a *app) writeFindings(fs []maintenance.Finding) error {
 	if len(fs) == 0 {
 		_, err := fmt.Fprintln(a.stdout, "No problems")
 		return err
 	}
 	for _, f := range fs {
 		tag := ""
-		if f.Severity != "" && f.Severity != doctor.Error {
+		if f.Severity != "" && f.Severity != maintenance.Error {
 			tag = " (" + string(f.Severity) + ")"
 		}
 		_, _ = fmt.Fprintf(a.stdout, "%s: %s%s\n", f.Where, f.Msg, tag)

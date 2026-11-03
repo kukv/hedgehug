@@ -18,9 +18,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/atomicfile"
-	"github.com/kukv/hedgehug/internal/config"
-	"github.com/kukv/hedgehug/internal/server"
+	"github.com/kukv/hedgehug/internal/app/server"
+	"github.com/kukv/hedgehug/internal/app/storage/config"
+	"github.com/kukv/hedgehug/internal/lib/atomicfile"
 	"github.com/kukv/hedgehug/web"
 )
 

@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/testenv"
+	"github.com/kukv/hedgehug/internal/lib/testenv"
 )
 
 // syncBuffer is a bytes.Buffer safe to read while the command writes.

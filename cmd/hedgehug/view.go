@@ -5,8 +5,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/view"
+	"github.com/kukv/hedgehug/internal/app/storage/view"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 func (a *app) viewCmd() *cobra.Command {
@@ -27,7 +27,7 @@ func (a *app) viewCmd() *cobra.Command {
 		Short: "Save a view, or change the settings given of a saved one",
 		Args:  exactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
-			var ch ops.ViewChange
+			var ch usecase.ViewChange
 			str := func(flag string, v *string) *string {
 				if c.Flags().Changed(flag) {
 					return v
@@ -81,7 +81,7 @@ func (a *app) viewCmd() *cobra.Command {
 	return cmd
 }
 
-func (a *app) viewSave(name string, ch ops.ViewChange) error {
+func (a *app) viewSave(name string, ch usecase.ViewChange) error {
 	r, err := a.ss.ViewSave(name, ch)
 	if err != nil {
 		return err
@@ -133,7 +133,7 @@ func (a *app) viewShow(name string) error {
 	if err != nil {
 		return err
 	}
-	q, err := ops.ParseQuery(v.Query)
+	q, err := usecase.ParseQuery(v.Query)
 	if err != nil {
 		return err
 	}
@@ -151,7 +151,7 @@ func (a *app) viewShow(name string) error {
 // printView prints v as JSON, or line as text.
 func (a *app) printView(v *view.View, line string) error {
 	if a.jsonOut {
-		return a.printJSON(ops.SavedViewOf(v))
+		return a.printJSON(usecase.SavedViewOf(v))
 	}
 	_, err := fmt.Fprintln(a.stdout, line)
 	return err

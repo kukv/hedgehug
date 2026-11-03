@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/fakegh"
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/gitrepo/gitrepotest"
-	"github.com/kukv/hedgehug/internal/store"
-	"github.com/kukv/hedgehug/internal/sync"
+	"github.com/kukv/hedgehug/internal/app/remote/replicate"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/lib/fakegh"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 func TestReadOnlyRefusesWrites(t *testing.T) {
@@ -23,7 +23,7 @@ func TestReadOnlyRefusesWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := sync.WriteAccess(s, sync.Access{ReadOnly: true, Reason: sync.ReasonGitHub, Checked: te.now}); err != nil {
+	if err := replicate.WriteAccess(s, replicate.Access{ReadOnly: true, Reason: replicate.ReasonGitHub, Checked: te.now}); err != nil {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{
@@ -127,7 +127,7 @@ func TestSyncStatusShowsGitHubReadOnlyAndUnpushed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := sync.WriteAccess(s, sync.Access{ReadOnly: true, Reason: sync.ReasonGitHub, Checked: te.now}); err != nil {
+	if err := replicate.WriteAccess(s, replicate.Access{ReadOnly: true, Reason: replicate.ReasonGitHub, Checked: te.now}); err != nil {
 		t.Fatal(err)
 	}
 	out := te.ok("sync", "--status")
@@ -152,7 +152,7 @@ func TestSyncPrintsUnpushable(t *testing.T) {
 	// An explicit sync judges a read-only store again, so the bare is
 	// really not writable.
 	gitrepotest.LockObjects(t, bare)
-	if err := sync.WriteAccess(s, sync.Access{ReadOnly: true, Reason: sync.ReasonNotWritable, Checked: te.now}); err != nil {
+	if err := replicate.WriteAccess(s, replicate.Access{ReadOnly: true, Reason: replicate.ReasonNotWritable, Checked: te.now}); err != nil {
 		t.Fatal(err)
 	}
 	out := te.ok("sync")

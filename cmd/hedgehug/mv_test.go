@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 // progressSuffixRE is the progress that ls --tree writes after the title of a project.
@@ -120,7 +120,7 @@ func TestMvNextToSiblingsWithTheSameRank(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			te := newStoreEnv(t)
-			var m ops.TaskView
+			var m usecase.TaskView
 			if tc.moverFirst {
 				m = te.addJSON("M")
 			}

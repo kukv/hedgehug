@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 // newTwoStoreEnv is an environment with two stores, alpha (AA) and
@@ -42,14 +42,14 @@ func TestLsAcrossStores(t *testing.T) {
 	te.goldenOK("tree-format", "ls", "--tree", "--format", "{{.store}} {{.id}} {{.context}}")
 	te.goldenRun("unknown-store", 2, "ls", "store:nope")
 
-	var all []ops.TaskView
+	var all []usecase.TaskView
 	if err := json.Unmarshal([]byte(te.ok("ls", "--json")), &all); err != nil {
 		t.Fatal(err)
 	}
 	if len(all) != 4 || all[0].Store != "alpha" || all[3].Store != "bravo-long" {
 		t.Errorf("ls --json = %+v", all)
 	}
-	var tree []ops.TaskView
+	var tree []usecase.TaskView
 	if err := json.Unmarshal([]byte(te.ok("ls", "--tree", "--json")), &tree); err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestShowTellsItsStore(t *testing.T) {
 	t.Parallel()
 	te := newTwoStoreEnv(t)
 	te.goldenOK("show", "show", "BB-1")
-	var got ops.ShowView
+	var got usecase.ShowView
 	if err := json.Unmarshal([]byte(te.ok("show", "--json", "BB-2")), &got); err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestLogAcrossStores(t *testing.T) {
 	if out := te.ok("log", "BB-1"); strings.Contains(out, "bravo-long") || strings.Count(out, "\n") != 1 {
 		t.Errorf("log BB-1 =\n%s", out)
 	}
-	var views []ops.LogView
+	var views []usecase.LogView
 	if err := json.Unmarshal([]byte(te.ok("log", "--json")), &views); err != nil {
 		t.Fatal(err)
 	}

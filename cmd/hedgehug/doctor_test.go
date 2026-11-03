@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/store"
-	"github.com/kukv/hedgehug/internal/sync"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/remote/replicate"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
 
 func TestDoctorNoProblems(t *testing.T) {
@@ -272,7 +272,7 @@ func TestDoctorFixOfAReadOnlyStoreWarns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := sync.WriteAccess(s, sync.Access{ReadOnly: true, Reason: sync.ReasonGitHub, Checked: te.now}); err != nil {
+	if err := replicate.WriteAccess(s, replicate.Access{ReadOnly: true, Reason: replicate.ReasonGitHub, Checked: te.now}); err != nil {
 		t.Fatal(err)
 	}
 	code, out, stderr := te.run("doctor", "--fix")

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 func TestSchemaScopeGolden(t *testing.T) {
@@ -54,7 +54,7 @@ func TestSchemaScopeIsOneCommit(t *testing.T) {
 		t.Fatalf("log = %d commits (was %d), newest %q", len(log), before, log[0].Message)
 	}
 
-	var v ops.ScopedView
+	var v usecase.ScopedView
 	if err := json.Unmarshal([]byte(te.ok("schema", "scope", "show", p.ID, "--json")), &v); err != nil {
 		t.Fatal(err)
 	}

@@ -5,9 +5,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/index"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/plural"
+	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
 func (a *app) rmCmd() *cobra.Command {
@@ -59,14 +59,14 @@ func (a *app) printAffected(ix *index.Index, e *index.Entry, targets []*index.En
 		if err := ix.Refresh(); err != nil {
 			return err
 		}
-		out := make([]*ops.TaskView, 0, len(targets))
+		out := make([]*usecase.TaskView, 0, len(targets))
 		for _, x := range targets {
 			cur, _ := ix.Task(x.ULID)
-			out = append(out, ops.TaskViewOf(ix, cur))
+			out = append(out, usecase.TaskViewOf(ix, cur))
 		}
 		return a.printJSON(out)
 	}
-	line := fmt.Sprintf("%s %s %s", verb, a.style().id(ops.TaskLabel(ix, e)), e.Title)
+	line := fmt.Sprintf("%s %s %s", verb, a.style().id(usecase.TaskLabel(ix, e)), e.Title)
 	if n := len(targets) - 1; n > 0 {
 		line += " and " + plural.Count(n, "task") + " under it"
 	}

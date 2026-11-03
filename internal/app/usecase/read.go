@@ -1,0 +1,681 @@
+package usecase
+
+import (
+	"cmp"
+	"errors"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/storage/history"
+	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/storage/query"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase/mount"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+)
+
+// ParseQuery parses the words of a query. A query that does not parse is a
+// usage error.
+func ParseQuery(s string) (*query.Query, error) {
+	q, err := query.Parse(s)
+	if err != nil {
+		return nil, newErr(KindUsage, "query.invalid", err)
+	}
+	return q, nil
+}
+
+// listSet opens the stores a listing runs on: every store of config.yaml, or
+// the one --store names. The set is the caller's own, not the one Mount
+// caches: what a listing returns belongs to the indexes of its stores, which
+// another operation of the session must not refresh under it. A store that
+// does not open is warned of; the one --store names, and the only one
+// config.yaml lists, are an error.
+func (ss *Session) listSet() (*mount.Set, error) {
+	c, _, err := ss.Config()
+	if err != nil {
+		return nil, err
+	}
+	if ss.StoreName != "" || len(c.Stores) == 0 {
+		// not found, or none at all, as the other operations say
+		if _, _, err := ss.Entry(); err != nil {
+			return nil, err
+		}
+	}
+	set, toWarn, err := ss.openSet(c, true)
+	if err != nil {
+		return nil, err
+	}
+	ss.keep(set.Close)
+	for _, sk := range toWarn {
+		ss.warnSkipped(sk)
+	}
+	return set, nil
+}
+
+// MountedCount is how many of the stores of config.yaml open, which is what
+// "two or more stores are mounted" counts. Nothing is warned of.
+func (ss *Session) MountedCount() (int, error) {
+	c, _, err := ss.Config()
+	if err != nil {
+		return 0, err
+	}
+	set := mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }})
+	defer set.Close()
+	return len(set.Stores), nil
+}
+
+// queryMounted runs q on the stores of set that store: and --store leave. A
+// query that does not run is a usage error.
+func (ss *Session) queryMounted(set *mount.Set, q *query.Query) (*mount.Result, error) {
+	res, err := mount.Query(set, q, ss.StoreName, func(m *mount.Mounted) (query.Options, error) {
+		return ss.QueryOptions(m.Store)
+	})
+	if err != nil {
+		var qe *query.Error
+		if errors.As(err, &qe) {
+			return nil, newErr(KindUsage, "query.invalid", err)
+		}
+		return nil, classify(err)
+	}
+	return res, nil
+}
+
+// ListResult is what a query found: Entries in the order of the groups, and
+// the Groups themselves. Stores are the stores it ran on; Many says two or
+// more stores are mounted, so that a reader tells which store a task is in.
+// What Entries hold is read through their Store's Index.
+type ListResult struct {
+	Stores  []*mount.Mounted
+	Entries []mount.Entry
+	Groups  []mount.Group
+	Many    bool
+}
+
+// List runs q on every store (or --store, or the store: of q).
+func (ss *Session) List(q *query.Query) (ListResult, error) {
+	set, err := ss.listSet()
+	if err != nil {
+		return ListResult{}, err
+	}
+	res, err := ss.queryMounted(set, q)
+	if err != nil {
+		return ListResult{}, err
+	}
+	return ListResult{Stores: res.Stores, Entries: res.Entries, Groups: res.Groups, Many: len(set.Stores) > 1}, nil
+}
+
+// HasTerm reports whether q has a term with the key.
+func HasTerm(q *query.Query, key string) bool {
+	for _, t := range q.Terms {
+		if t.Key == key {
+			return true
+		}
+	}
+	return false
+}
+
+// TreeNode is one task in ls --tree.
+type TreeNode struct {
+	Entry    *index.Entry
+	Context  bool // shown only to connect the tasks found
+	InCycle  bool // in a parent cycle, out of reach of the roots
+	Children []*TreeNode
+}
+
+// TreeStore is the tree of the tasks a query found in one store. Cycle holds
+// the tasks in a parent cycle, which no root reaches.
+type TreeStore struct {
+	Store        *mount.Mounted
+	Index        *index.Index
+	Roots, Cycle []*TreeNode
+}
+
+// TreeResult is the trees of the tasks a query found, one per store it ran
+// on, in config order (a store with no match has empty ones). Many says there
+// are two or more stores.
+type TreeResult struct {
+	Stores []TreeStore
+	Many   bool
+}
+
+// Tree runs q and arranges what it found under its ancestors, in each store.
+// A query that groups or sorts is a usage error: the tree is in the order of
+// the ranks.
+func (ss *Session) Tree(q *query.Query) (TreeResult, error) {
+	if HasTerm(q, "group") || HasTerm(q, "sort") {
+		//nolint:revive,staticcheck // the message is printed as it always was
+		return TreeResult{}, newErr(KindUsage, "query.tree_order", errors.New("--tree orders tasks by rank; it takes neither group: nor sort:"))
+	}
+	set, err := ss.listSet()
+	if err != nil {
+		return TreeResult{}, err
+	}
+	res, err := ss.queryMounted(set, q)
+	if err != nil {
+		return TreeResult{}, err
+	}
+	out := TreeResult{Many: len(set.Stores) > 1}
+	for _, m := range res.Stores {
+		ix, err := m.Index()
+		if err != nil {
+			return TreeResult{}, classify(err)
+		}
+		var found []*index.Entry
+		for _, e := range res.Entries {
+			if e.Store == m {
+				found = append(found, e.Entry)
+			}
+		}
+		roots, cycle := treeOf(ix, found)
+		out.Stores = append(out.Stores, TreeStore{Store: m, Index: ix, Roots: roots, Cycle: cycle})
+	}
+	return out, nil
+}
+
+// treeOf builds the tree of the tasks found and of the ancestors that
+// connect them to a root. Tasks in a parent cycle never reach a root; they
+// are returned apart, by ULID, each as the root of the tasks under it that
+// are not in the cycle.
+func treeOf(ix *index.Index, found []*index.Entry) (roots, cycle []*TreeNode) {
+	match := map[model.ULID]bool{}
+	show := map[model.ULID]bool{}
+	for _, e := range found {
+		match[e.ULID] = true
+		for cur := e; cur != nil && !show[cur.ULID]; {
+			show[cur.ULID] = true
+			if cur.Parent == nil {
+				break
+			}
+			cur, _ = ix.Task(*cur.Parent)
+		}
+	}
+	seen := map[model.ULID]bool{}
+	var build func(e *index.Entry) *TreeNode
+	build = func(e *index.Entry) *TreeNode {
+		seen[e.ULID] = true
+		n := &TreeNode{Entry: e, Context: !match[e.ULID]}
+		for _, c := range ix.Children(e.ULID) {
+			if show[c.ULID] && !seen[c.ULID] {
+				n.Children = append(n.Children, build(c))
+			}
+		}
+		return n
+	}
+	for _, r := range ix.Roots() {
+		if show[r.ULID] {
+			roots = append(roots, build(r))
+		}
+	}
+	// What the roots do not reach lies in a cycle or under one. Mark the
+	// tasks in the cycle seen first, so that none is drawn under another.
+	var members []*index.Entry
+	for ulid := range show {
+		if !seen[ulid] && inParentCycle(ix, ulid) {
+			e, _ := ix.Task(ulid)
+			members = append(members, e)
+		}
+	}
+	slices.SortFunc(members, func(x, y *index.Entry) int { return cmp.Compare(x.ULID.String(), y.ULID.String()) })
+	for _, e := range members {
+		seen[e.ULID] = true
+	}
+	for _, e := range members {
+		n := build(e)
+		n.InCycle = true
+		cycle = append(cycle, n)
+	}
+	return roots, cycle
+}
+
+// inParentCycle reports whether the parents of ulid lead back to it.
+func inParentCycle(ix *index.Index, ulid model.ULID) bool {
+	for _, p := range ix.Problems(ulid) {
+		if p.Code == schema.CodeCycle && p.Field == "parent" {
+			return true
+		}
+	}
+	return false
+}
+
+// TreeViewOf is the task of n with its children, as --json prints it.
+func TreeViewOf(ix *index.Index, n *TreeNode) *TaskView {
+	j := TaskViewOf(ix, n.Entry)
+	j.Context, j.InCycle = n.Context, n.InCycle
+	j.Checklist, j.Progress = ChecklistOf(n.Entry), ProgressOf(ix, n.Entry)
+	for _, c := range n.Children {
+		j.Children = append(j.Children, TreeViewOf(ix, c))
+	}
+	return j
+}
+
+// Flatten lists the trees under roots in the order they are drawn.
+func Flatten(roots []*TreeNode) []*TreeNode {
+	var out []*TreeNode
+	var walk func(n *TreeNode)
+	walk = func(n *TreeNode) {
+		out = append(out, n)
+		for _, c := range n.Children {
+			walk(c)
+		}
+	}
+	for _, n := range roots {
+		walk(n)
+	}
+	return out
+}
+
+// ShowHistory is how many commits show lists under History.
+const ShowHistory = 5
+
+// Relation is one kind of task pointing at the task shown.
+type Relation struct {
+	Key   string // the name in JSON: blocks, or the property
+	Label string // the name in the text
+	Tasks []*index.Entry
+}
+
+// ShowResult is a task with what points at it. Task and Comments are empty
+// when the file of the task does not decode.
+type ShowResult struct {
+	Store     string // the name of the store the task is in
+	Index     *index.Index
+	Entry     *index.Entry
+	Task      *model.Task
+	Comments  []*model.Comment
+	Relations []Relation
+	Back      []*index.Entry
+	History   []gitrepo.LogEntry
+}
+
+// Show reads the task arg names.
+func (ss *Session) Show(arg string) (ShowResult, error) {
+	ts, arg, err := ss.forTask(arg)
+	if err != nil {
+		return ShowResult{}, err
+	}
+	if ts != ss {
+		return ts.Show(arg)
+	}
+	s, ix, err := ss.Open()
+	if err != nil {
+		return ShowResult{}, err
+	}
+	e, err := ss.Resolve(ix, arg)
+	if err != nil {
+		return ShowResult{}, err
+	}
+	r := ShowResult{Store: ix.StoreName(), Index: ix, Entry: e}
+	if e.Broken == "" {
+		if r.Task, err = s.Task(e.ULID); err != nil {
+			return ShowResult{}, err
+		}
+		if r.Comments, err = liveComments(s, e.ULID); err != nil {
+			return ShowResult{}, err
+		}
+	}
+	r.Relations = reverse(ix, e.ULID)
+	r.Back = ix.Backlinks(e.ULID)
+	if r.History, err = ss.TaskLog(s, ix.StoreName(), e.ULID, ShowHistory); err != nil {
+		return ShowResult{}, err
+	}
+	return r, nil
+}
+
+func liveComments(s *store.Store, ulid model.ULID) ([]*model.Comment, error) {
+	var out []*model.Comment
+	for c, err := range s.Comments(ulid) {
+		if err != nil {
+			return nil, err
+		}
+		if c.DeletedAt == nil {
+			out = append(out, c)
+		}
+	}
+	return out, nil
+}
+
+// reverse finds the tasks that point at ulid, by relation.
+func reverse(ix *index.Index, ulid model.ULID) []Relation {
+	var out []Relation
+	if es := ix.Reverse(ulid, "blocked_by"); len(es) > 0 {
+		out = append(out, Relation{"blocks", "blocks", es})
+	}
+	for _, p := range ix.Schema().Props {
+		if p.Type != schema.TypeTaskRef {
+			continue
+		}
+		es := ix.Reverse(ulid, p.Name)
+		if len(es) == 0 {
+			continue
+		}
+		label := p.Name + " (from)"
+		switch {
+		case p.Inverse != "":
+			label = p.Inverse
+		case p.Symmetric && p.Label != "":
+			label = p.Label
+		case p.Symmetric:
+			label = p.Name
+		}
+		out = append(out, Relation{p.Name, label, es})
+	}
+	return out
+}
+
+// CommentView is a comment as --json prints it.
+type CommentView struct {
+	ULID    string    `json:"ulid"`
+	Author  string    `json:"author"`
+	Created time.Time `json:"created"`
+	Body    string    `json:"body"`
+}
+
+// ShowView is a task as show --json prints it.
+type ShowView struct {
+	*TaskView
+	Body     string           `json:"body"`
+	Watchers []string         `json:"watchers"`
+	Repos    []string         `json:"repos"`
+	Comments []CommentView    `json:"comments"`
+	Reverse  map[string][]Ref `json:"reverse"`
+	// ReferencedBy are the tasks whose body or comments write this one as #<ID>.
+	ReferencedBy []Ref     `json:"referenced_by"`
+	History      []LogView `json:"history"`
+}
+
+// ShowViewOf is r as show --json prints it.
+func ShowViewOf(r ShowResult) *ShowView {
+	j := &ShowView{TaskView: TaskViewOf(r.Index, r.Entry), Watchers: []string{}, Repos: []string{}, Comments: []CommentView{}, Reverse: map[string][]Ref{}, ReferencedBy: []Ref{}, History: LogViewsOf(r.Index, r.History)}
+	j.Checklist, j.Progress = ChecklistOf(r.Entry), ProgressOf(r.Index, r.Entry)
+	for _, x := range r.Back {
+		j.ReferencedBy = append(j.ReferencedBy, Ref{ULID: x.ULID.String(), ID: x.ID, Title: x.Title})
+	}
+	if r.Task != nil {
+		j.Body, j.Watchers, j.Repos = r.Task.Body, OrEmpty(r.Task.Watchers), OrEmpty(r.Task.Repos)
+	}
+	for _, c := range r.Comments {
+		j.Comments = append(j.Comments, CommentView{c.ULID.String(), c.Author, c.Created, c.Body})
+	}
+	for _, rel := range r.Relations {
+		for _, x := range rel.Tasks {
+			j.Reverse[rel.Key] = append(j.Reverse[rel.Key], Ref{ULID: x.ULID.String(), ID: x.ID, Title: x.Title})
+		}
+	}
+	return j
+}
+
+// LogTrailer is a trailer of a commit message: "Key: Value".
+type LogTrailer struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// LogView is a commit as --json prints it.
+type LogView struct {
+	Hash   string    `json:"hash"`
+	Date   time.Time `json:"date"`
+	Author struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	} `json:"author"`
+	Store string `json:"store"`
+	// Workspace is left out for a commit of no workspace (logWorkspace),
+	// rather than null: the OpenAPI generator cannot make an object nullable.
+	Workspace *WorkspaceRef `json:"workspace,omitempty"`
+	Op        *string       `json:"op"`
+	Task      *string       `json:"task"`
+	ID        *string       `json:"id"` // the current id of the task
+	Subject   string        `json:"subject"`
+	// Trailers are all the trailers of the commit, in the order they are
+	// written (Hedgehug-Overwritten, Hedgehug-Moved-From...); [] with none.
+	Trailers []LogTrailer `json:"trailers" nullable:"false"`
+}
+
+func logViewOf(ix *index.Index, e gitrepo.LogEntry) LogView {
+	j := LogView{Hash: e.Hash.String(), Date: e.When, Subject: e.Subject, Store: ix.StoreName()}
+	j.Author.Name, j.Author.Email = e.Author.Name, e.Author.Email
+	j.Trailers = make([]LogTrailer, len(e.Trailers))
+	for i, t := range e.Trailers {
+		j.Trailers[i] = LogTrailer{Key: t.Key, Value: t.Value}
+	}
+	if v, ok := e.Trailer("Hedgehug-Op"); ok {
+		j.Op = &v
+	}
+	if v, ok := e.Trailer("Hedgehug-Task"); ok {
+		j.Task = &v
+		if ulid, err := model.ParseULID(v); err == nil {
+			if t, ok := ix.Task(ulid); ok && t.ID != "" {
+				j.ID = &t.ID
+			}
+		}
+	}
+	if ws, ok := logWorkspace(ix, e); ok {
+		j.Workspace = &WorkspaceRef{ULID: ws.String()}
+		if w, ok := ix.Workspace(ws); ok {
+			j.Workspace.Name, j.Workspace.IDPrefix = w.Name, w.IDPrefix
+		}
+	}
+	return j
+}
+
+// logWorkspace is the workspace of a commit: the one its Hedgehug-Workspace
+// trailer names, or else the one the task of its Hedgehug-Task is in now.
+// A commit with neither, or of a task the index does not have, has none.
+func logWorkspace(ix *index.Index, e gitrepo.LogEntry) (model.ULID, bool) {
+	ws, _ := e.Trailer("Hedgehug-Workspace")
+	task, _ := e.Trailer("Hedgehug-Task")
+	return workspaceOf(ix, ws, task)
+}
+
+// commitWorkspace is logWorkspace for a commit of the history index.
+func commitWorkspace(ix *index.Index, c history.Commit) (model.ULID, bool) {
+	return workspaceOf(ix, c.Workspace, c.Task)
+}
+
+func workspaceOf(ix *index.Index, ws, task string) (model.ULID, bool) {
+	if ws != "" {
+		ulid, err := model.ParseULID(ws)
+		return ulid, err == nil
+	}
+	if task != "" {
+		if ulid, err := model.ParseULID(task); err == nil {
+			if t, ok := ix.Task(ulid); ok && !t.Workspace.IsZero() {
+				return t.Workspace, true
+			}
+		}
+	}
+	return model.ULID{}, false
+}
+
+// LogViewsOf is the commits as --json prints them.
+func LogViewsOf(ix *index.Index, entries []gitrepo.LogEntry) []LogView {
+	out := make([]LogView, len(entries))
+	for i, e := range entries {
+		out[i] = logViewOf(ix, e)
+	}
+	return out
+}
+
+// SubjectNow gives the subject of a Hedgehug commit with the task's current
+// id and ULID in place of the label it was written with: the subject is
+// "hedgehug: <op> <label> <title>". Other subjects, and tasks the index does
+// not have, keep the subject as it is.
+func SubjectNow(ix *index.Index, le gitrepo.LogEntry) string {
+	op, ok1 := le.Trailer("Hedgehug-Op")
+	taskULID, ok2 := le.Trailer("Hedgehug-Task")
+	head := "hedgehug: " + op + " "
+	rest, ok3 := strings.CutPrefix(le.Subject, head)
+	if !ok1 || !ok2 || !ok3 {
+		return le.Subject
+	}
+	ulid, err := model.ParseULID(taskULID)
+	if err != nil {
+		return le.Subject
+	}
+	e, ok := ix.Task(ulid)
+	if !ok {
+		return le.Subject
+	}
+	_, title, _ := strings.Cut(rest, " ")
+	return strings.TrimRight(head+TaskLabel(ix, e)+" "+title, " ")
+}
+
+// StoreLog is a commit with the store it is in. Index is that store's.
+type StoreLog struct {
+	Store string
+	Index *index.Index
+	Entry gitrepo.LogEntry
+}
+
+// LogResult is the commits Log found. Many says they were taken from two or
+// more stores, so that a reader tells which store a commit is in.
+type LogResult struct {
+	Logs []StoreLog
+	Many bool
+}
+
+// StoreLogViews is the commits as --json prints them, each with its store.
+func StoreLogViews(logs []StoreLog) []LogView {
+	out := make([]LogView, len(logs))
+	for i, l := range logs {
+		out[i] = logViewOf(l.Index, l.Entry)
+		out[i].Store = l.Store
+	}
+	return out
+}
+
+// Log lists the commits of every store, newest first (a commit of the same
+// time comes in the order of the stores), or of the task args[0] names, in
+// its store; limit 0 lists all, and limit counts the commits of all the
+// stores together.
+func (ss *Session) Log(args []string, limit int) (LogResult, error) {
+	return ss.LogIn(args, nil, limit)
+}
+
+// LogIn is Log with only the commits of the workspaces named (by name, id
+// prefix or ULID, as elsewhere); none named takes every commit. A name is
+// looked up in each store, as workspace: in a query is: it is an error only
+// when no store has it. limit counts the commits that are kept. Naming
+// workspaces with a task is a usage error.
+func (ss *Session) LogIn(args, workspaces []string, limit int) (LogResult, error) {
+	if len(args) > 0 && len(workspaces) > 0 {
+		return LogResult{}, newErr(KindUsage, "log.workspace_with_task", errors.New("a task's log takes no --workspace"))
+	}
+	if len(args) > 0 {
+		ts, arg, err := ss.forTask(args[0])
+		if err != nil {
+			return LogResult{}, err
+		}
+		if ts != ss {
+			return ts.Log(append([]string{arg}, args[1:]...), limit)
+		}
+		s, ix, err := ss.Open()
+		if err != nil {
+			return LogResult{}, err
+		}
+		e, err := ss.Resolve(ix, arg)
+		if err != nil {
+			return LogResult{}, err
+		}
+		entries, err := ss.TaskLog(s, ix.StoreName(), e.ULID, limit)
+		if err != nil {
+			return LogResult{}, err
+		}
+		return LogResult{Logs: storeLogs(ix.StoreName(), ix, entries)}, nil
+	}
+	set, err := ss.listSet()
+	if err != nil {
+		return LogResult{}, err
+	}
+	stores := set.Stores
+	if ss.StoreName != "" {
+		m, _ := set.Get(ss.StoreName)
+		stores = []*mount.Mounted{m}
+	}
+	found := make([]bool, len(workspaces))
+	notFound := make([]error, len(workspaces))
+	var all []StoreLog
+	for _, m := range stores {
+		var entries []gitrepo.LogEntry
+		var logErr error
+		if err := m.With(func(ix *index.Index) {
+			var h *history.History
+			if h, logErr = ss.openHistory(m.Store, m.Name); logErr != nil {
+				return
+			}
+			cs := h.All()
+			if len(workspaces) > 0 {
+				keep := map[model.ULID]bool{}
+				for i, arg := range workspaces {
+					w, err := ResolveWorkspace(ix, arg)
+					if errors.Is(err, store.ErrNotFound) {
+						notFound[i] = err // another store may have it
+						continue
+					}
+					if err != nil {
+						logErr = err
+						return
+					}
+					keep[w.ULID], found[i] = true, true
+				}
+				cs = slices.DeleteFunc(cs, func(c history.Commit) bool {
+					ws, ok := commitWorkspace(ix, c)
+					return !ok || !keep[ws]
+				})
+			}
+			entries, logErr = h.Entries(cs, limit)
+		}); err != nil {
+			return LogResult{}, classify(err)
+		}
+		if logErr != nil {
+			return LogResult{}, logErr
+		}
+		ix, err := m.Index()
+		if err != nil {
+			return LogResult{}, classify(err)
+		}
+		all = append(all, storeLogs(m.Name, ix, entries)...)
+	}
+	for i, ok := range found {
+		if !ok {
+			return LogResult{}, notFound[i]
+		}
+	}
+	slices.SortStableFunc(all, func(a, b StoreLog) int { return b.Entry.When.Compare(a.Entry.When) })
+	if limit > 0 && len(all) > limit {
+		all = all[:limit]
+	}
+	return LogResult{Logs: all, Many: len(set.Stores) > 1}, nil
+}
+
+func storeLogs(name string, ix *index.Index, entries []gitrepo.LogEntry) []StoreLog {
+	out := make([]StoreLog, len(entries))
+	for i, e := range entries {
+		out[i] = StoreLog{Store: name, Index: ix, Entry: e}
+	}
+	return out
+}
+
+// TaskLog returns the commits that touched the task, its comments or its
+// work logs, newest first. name is the name of the store s, for the progress
+// of building its history index.
+func (ss *Session) TaskLog(s *store.Store, name string, ulid model.ULID, limit int) ([]gitrepo.LogEntry, error) {
+	h, err := ss.openHistory(s, name)
+	if err != nil {
+		return nil, err
+	}
+	return h.Entries(h.Task(ulid), limit)
+}
+
+// openHistory opens the history index of s, telling ss.Progress how far the
+// work of bringing it up to HEAD has come.
+func (ss *Session) openHistory(s *store.Store, name string) (*history.History, error) {
+	var opt history.Options
+	if ss.Progress != nil {
+		opt.Progress = func(done, total int) { ss.Progress(name, done, total) }
+	}
+	return history.Open(s, opt)
+}

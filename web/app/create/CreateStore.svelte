@@ -14,7 +14,7 @@
   const { api, stores } = core();
   const uid = $props.id();
 
-  // The same rule as ValidIDPrefix in internal/model: 2 to 10 upper-case letters and digits, starting with a letter.
+  // The same rule as ValidIDPrefix in internal/app/domain/model: 2 to 10 upper-case letters and digits, starting with a letter.
   const PREFIX = /^[A-Z][A-Z0-9]{1,9}$/;
 
   let name = $state("");

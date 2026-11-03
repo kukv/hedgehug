@@ -3,7 +3,7 @@ package main
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 func (a *app) setCmd() *cobra.Command {
@@ -22,7 +22,7 @@ Any other key is a property of the schema. Use hedgehug mv for the parent
 and the order.`,
 		Args: minArgs(2),
 		RunE: func(_ *cobra.Command, args []string) error {
-			assigns, err := ops.ParseAssigns(args[1:])
+			assigns, err := usecase.ParseAssigns(args[1:])
 			if err != nil {
 				return err
 			}
@@ -31,7 +31,7 @@ and the order.`,
 	}
 }
 
-func (a *app) set(arg string, assigns []ops.Assign) error {
+func (a *app) set(arg string, assigns []usecase.Assign) error {
 	r, err := a.ss.Set(arg, assigns)
 	if err != nil {
 		return err

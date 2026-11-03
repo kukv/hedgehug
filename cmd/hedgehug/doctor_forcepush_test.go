@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/gitrepo/gitrepotest"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 // The whole round: origin is force pushed, hh sync stops and says why, hh

@@ -6,10 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/index"
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/plural"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
 func (a *app) workspaceCmd() *cobra.Command {
@@ -132,7 +132,7 @@ func (a *app) workspaceLs() error {
 // before the write; only its task counts are read.
 func (a *app) printWorkspace(ix *index.Index, w *model.Workspace, line string) error {
 	if a.jsonOut {
-		return a.printJSON(ops.WorkspaceViewOf(ix, w))
+		return a.printJSON(usecase.WorkspaceViewOf(ix, w))
 	}
 	_, err := fmt.Fprintln(a.stdout, line)
 	return err

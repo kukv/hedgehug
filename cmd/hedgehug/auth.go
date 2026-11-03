@@ -9,9 +9,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/github"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/plural"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/lib/github"
+	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
 func (a *app) authCmd() *cobra.Command {
@@ -92,7 +92,7 @@ When this is the second account, the stores that had no account: are given the f
 }
 
 func (a *app) authAdd(name, login, host, token string) error {
-	res, err := a.ss.AuthAdd(ops.AuthAddInput{Name: name, Login: login, Host: host, Token: token})
+	res, err := a.ss.AuthAdd(usecase.AuthAddInput{Name: name, Login: login, Host: host, Token: token})
 	if err != nil {
 		return err
 	}
@@ -113,7 +113,7 @@ func (a *app) authAdd(name, login, host, token string) error {
 
 // printPinned tells which stores were given an account when a second account
 // was added; nothing when none was.
-func (a *app) printPinned(p ops.Pinned) error {
+func (a *app) printPinned(p usecase.Pinned) error {
 	if len(p.Stores) == 0 {
 		return nil
 	}
@@ -122,7 +122,7 @@ func (a *app) printPinned(p ops.Pinned) error {
 }
 
 func (a *app) authLogin(name, host string, hostGiven, withToken bool) error {
-	in := ops.AuthLoginInput{Name: name, Host: host, HostGiven: hostGiven, WithToken: withToken, ShowCode: a.showDeviceCode}
+	in := usecase.AuthLoginInput{Name: name, Host: host, HostGiven: hostGiven, WithToken: withToken, ShowCode: a.showDeviceCode}
 	if withToken {
 		tok, err := a.readToken()
 		if err != nil {
@@ -163,7 +163,7 @@ func (a *app) showDeviceCode(dc *github.DeviceCode) {
 
 func (a *app) authStatus() error {
 	out, err := a.ss.AuthStatus()
-	if err != nil && !errors.Is(err, ops.ErrFindings) {
+	if err != nil && !errors.Is(err, usecase.ErrFindings) {
 		return err
 	}
 	if a.jsonOut {

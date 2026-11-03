@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/store"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 // meanwhile makes fn write to the store once the next command has read its
@@ -226,7 +226,7 @@ func TestPurgeSeesATaskRestoredMeanwhile(t *testing.T) {
 func TestMvSeesAWorkspaceMoveMeanwhile(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
-	var api ops.WorkspaceView
+	var api usecase.WorkspaceView
 	te.wsJSON(&api, "add", "api", "--prefix", "API")
 	apiULID := mustULID(t, api.ULID)
 	p := te.addJSON("p", "--workspace", "me")
@@ -264,7 +264,7 @@ func TestWorkspaceSubjectsSeeARenameMeanwhile(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	me := mustULID(t, te.addJSON("a").Workspace.ULID)
-	var tmp ops.WorkspaceView
+	var tmp usecase.WorkspaceView
 	te.wsJSON(&tmp, "add", "tmp", "--prefix", "TMP")
 	rename := func(ulid model.ULID, name string) func(*store.Tx) error {
 		return func(tx *store.Tx) error {

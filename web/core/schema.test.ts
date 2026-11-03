@@ -10,7 +10,7 @@ import {
 } from "./schema";
 import { FakeConn, fakeApi, settle } from "./testing";
 
-// The schema of a new store (internal/schema Default), as GET /api/schema
+// The schema of a new store (internal/app/domain/schema Default), as GET /api/schema
 // tells it.
 const kinds = [
   { name: "project", label: "プロジェクト", role: "container", parents: ["root"] },

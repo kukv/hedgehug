@@ -8,10 +8,10 @@ import (
 
 	"golang.org/x/text/width"
 
-	"github.com/kukv/hedgehug/internal/index"
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/mount"
-	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 )
 
 // style colors text when the output is a terminal.
@@ -95,13 +95,13 @@ func taskRow(ix *index.Index, e *index.Entry) []string {
 // store of each task in a STORE column ahead of the others.
 func (a *app) printTasks(es []mount.Entry, withStore bool) error {
 	if a.jsonOut {
-		out := make([]*ops.TaskView, len(es))
+		out := make([]*usecase.TaskView, len(es))
 		for i, e := range es {
 			ix, err := e.Store.Index()
 			if err != nil {
 				return err
 			}
-			out[i] = ops.TaskViewOf(ix, e.Entry)
+			out[i] = usecase.TaskViewOf(ix, e.Entry)
 		}
 		return a.printJSON(out)
 	}
@@ -143,9 +143,9 @@ func (a *app) printTask(ix *index.Index, ulid model.ULID, verb string) error {
 		return fmt.Errorf("task %s is not in the index after the write", ulid)
 	}
 	if a.jsonOut {
-		return a.printJSON(ops.TaskViewOf(ix, e))
+		return a.printJSON(usecase.TaskViewOf(ix, e))
 	}
-	_, err := fmt.Fprintf(a.stdout, "%s %s %s\n", verb, a.style().id(ops.TaskLabel(ix, e)), e.Title)
+	_, err := fmt.Fprintf(a.stdout, "%s %s %s\n", verb, a.style().id(usecase.TaskLabel(ix, e)), e.Title)
 	return err
 }
 

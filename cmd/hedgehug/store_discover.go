@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 func (a *app) storeDiscoverCmd() *cobra.Command {
@@ -21,7 +21,7 @@ func (a *app) storeDiscoverCmd() *cobra.Command {
 		Long:  "Discover lists the GitHub repositories with the hedgehug-store topic that the accounts can read, or with --from the bare repositories under a directory that hold a store, leaving out the stores set up already. On a terminal it asks which to add; elsewhere it only lists them, and --all adds every one.",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return a.storeDiscover(ops.DiscoverInput{Account: account, From: from}, all)
+			return a.storeDiscover(usecase.DiscoverInput{Account: account, From: from}, all)
 		},
 	}
 	cmd.Flags().StringVar(&account, "account", "", "look with this account only (with --from: the account of the stores found)")
@@ -30,10 +30,10 @@ func (a *app) storeDiscoverCmd() *cobra.Command {
 	return cmd
 }
 
-func (a *app) storeDiscover(in ops.DiscoverInput, all bool) error {
+func (a *app) storeDiscover(in usecase.DiscoverInput, all bool) error {
 	cands, err := a.ss.StoreDiscover(in)
 	// --from with several accounts and none named: on a terminal, ask which.
-	if e := ops.AsError(err); e != nil && e.Code == "choice.required" && e.Args["what"] == "--account" && a.isTerminal(a.stdin) {
+	if e := usecase.AsError(err); e != nil && e.Code == "choice.required" && e.Args["what"] == "--account" && a.isTerminal(a.stdin) {
 		names, _ := e.Args["candidates"].([]string)
 		var picked string
 		if picked, err = a.askChoice(names, choice{question: "Which account do the stores belong to?"}); err != nil {
@@ -51,7 +51,7 @@ func (a *app) storeDiscover(in ops.DiscoverInput, all bool) error {
 	if a.jsonOut {
 		list = a.stderr
 	}
-	var picked []ops.Candidate
+	var picked []usecase.Candidate
 	listed := false
 	switch {
 	case all:
@@ -65,7 +65,7 @@ func (a *app) storeDiscover(in ops.DiscoverInput, all bool) error {
 			return err
 		}
 	}
-	var res ops.MountResult
+	var res usecase.MountResult
 	var mountErr error
 	if len(picked) > 0 {
 		res, mountErr = a.ss.StoreMount(picked)
@@ -99,18 +99,18 @@ func (a *app) storeDiscover(in ops.DiscoverInput, all bool) error {
 	return mountErr
 }
 
-func (a *app) printDiscoverJSON(cands []ops.Candidate, res ops.MountResult) error {
+func (a *app) printDiscoverJSON(cands []usecase.Candidate, res usecase.MountResult) error {
 	type failure struct {
 		Name  string `json:"name"`
 		Error string `json:"error"`
 	}
 	out := struct {
-		Candidates []ops.Candidate `json:"candidates"`
-		Mounted    []string        `json:"mounted"`
-		Failed     []failure       `json:"failed,omitempty"`
+		Candidates []usecase.Candidate `json:"candidates"`
+		Mounted    []string            `json:"mounted"`
+		Failed     []failure           `json:"failed,omitempty"`
 	}{Candidates: cands, Mounted: res.Mounted}
 	if out.Candidates == nil {
-		out.Candidates = []ops.Candidate{}
+		out.Candidates = []usecase.Candidate{}
 	}
 	if out.Mounted == nil {
 		out.Mounted = []string{}
@@ -121,7 +121,7 @@ func (a *app) printDiscoverJSON(cands []ops.Candidate, res ops.MountResult) erro
 	return a.printJSON(out)
 }
 
-func (a *app) printCandidates(w io.Writer, cands []ops.Candidate) error {
+func (a *app) printCandidates(w io.Writer, cands []usecase.Candidate) error {
 	rows := make([][]string, len(cands))
 	for i, x := range cands {
 		acct := x.Account
@@ -139,7 +139,7 @@ func (a *app) printCandidates(w io.Writer, cands []ops.Candidate) error {
 
 // pickCandidates asks which candidates to add: numbers with commas, all, or
 // nothing to stop.
-func (a *app) pickCandidates(cands []ops.Candidate) ([]ops.Candidate, error) {
+func (a *app) pickCandidates(cands []usecase.Candidate) ([]usecase.Candidate, error) {
 	if _, err := fmt.Fprint(a.stderr, "Add which? (e.g. 1,3 / all / empty to stop) "); err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (a *app) pickCandidates(cands []ops.Candidate) ([]ops.Candidate, error) {
 	case "all":
 		return cands, nil
 	}
-	var out []ops.Candidate
+	var out []usecase.Candidate
 	var chosen []int // a number given twice is added once
 	for _, f := range strings.Split(line, ",") {
 		n, err := strconv.Atoi(strings.TrimSpace(f))

@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/index"
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/schema"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 func (a *app) migrateCmd() *cobra.Command {
@@ -65,7 +65,7 @@ func (a *app) migrate(m schema.Migration, dryRun bool) error {
 
 // printMigrated prints the tasks p changes. Their JSON is read from the
 // index after a write, and from the migrated tasks in a dry run.
-func (a *app) printMigrated(ix *index.Index, p *ops.MigrationPlan, dryRun bool) error {
+func (a *app) printMigrated(ix *index.Index, p *usecase.MigrationPlan, dryRun bool) error {
 	changed := p.Changed
 	skipped := make([]string, len(p.Skipped))
 	for i, ulid := range p.Skipped {
@@ -78,15 +78,15 @@ func (a *app) printMigrated(ix *index.Index, p *ops.MigrationPlan, dryRun bool) 
 	}
 	if a.jsonOut {
 		out := struct {
-			Changed []*ops.TaskView `json:"changed"`
-			Skipped []string        `json:"skipped"`
-		}{Changed: []*ops.TaskView{}, Skipped: skipped}
+			Changed []*usecase.TaskView `json:"changed"`
+			Skipped []string            `json:"skipped"`
+		}{Changed: []*usecase.TaskView{}, Skipped: skipped}
 		for _, t := range changed {
 			e, ok := ix.Task(t.ULID)
 			if dryRun || !ok {
 				e = index.EntryOf(t)
 			}
-			out.Changed = append(out.Changed, ops.TaskViewOf(ix, e))
+			out.Changed = append(out.Changed, usecase.TaskViewOf(ix, e))
 		}
 		return a.printJSON(out)
 	}
@@ -95,10 +95,10 @@ func (a *app) printMigrated(ix *index.Index, p *ops.MigrationPlan, dryRun bool) 
 		heading = "Would migrate"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s %s\n", heading, ops.TaskCount(len(changed)))
+	fmt.Fprintf(&b, "%s %s\n", heading, usecase.TaskCount(len(changed)))
 	st := a.style()
 	for _, t := range changed {
-		fmt.Fprintf(&b, "  %s  %s\n", st.id(ops.TaskLabel(ix, index.EntryOf(t))), t.Title)
+		fmt.Fprintf(&b, "  %s  %s\n", st.id(usecase.TaskLabel(ix, index.EntryOf(t))), t.Title)
 	}
 	_, err := fmt.Fprint(a.stdout, b.String())
 	return err

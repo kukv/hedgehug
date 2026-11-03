@@ -11,13 +11,13 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/inbox"
-	"github.com/kukv/hedgehug/internal/merge"
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/schema"
-	"github.com/kukv/hedgehug/internal/store"
-	"github.com/kukv/hedgehug/internal/sync"
+	"github.com/kukv/hedgehug/internal/app/domain/merge"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/remote/replicate"
+	"github.com/kukv/hedgehug/internal/app/storage/inbox"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 // mergeDriverCmd is the command .git/config names for the files
@@ -86,7 +86,7 @@ func (a *app) mergeDriver(basePath, oursPath, theirsPath, rel string) error {
 		if sc, err = mergedSchema(r, base, head, theirs, sc, rel); err != nil {
 			return err
 		}
-		if _, ours, other, err = sync.Sides(r, base, head, theirs, rel); err != nil {
+		if _, ours, other, err = replicate.Sides(r, base, head, theirs, rel); err != nil {
 			return err
 		}
 	}
@@ -128,7 +128,7 @@ func mergedSchema(r *gitrepo.Repo, base, head, theirs plumbing.Hash, headSchema 
 	if rel == schema.Path {
 		return headSchema, nil
 	}
-	b, o, t, err := sync.Sides(r, base, head, theirs, schema.Path)
+	b, o, t, err := replicate.Sides(r, base, head, theirs, schema.Path)
 	if err != nil {
 		return nil, err
 	}

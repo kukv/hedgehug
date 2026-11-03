@@ -60,7 +60,7 @@ describe("opLabel", () => {
     });
   });
 
-  it("names the other ops of internal/ops and the sync, and shows an unknown one as it is", () => {
+  it("names the other ops of internal/app/usecase and the sync, and shows an unknown one as it is", () => {
     expect(opLabel("edit")).toBe("本文の編集");
     expect(opLabel("dep")).toBe("依存の変更");
     expect(opLabel("watch")).toBe("ウォッチ");

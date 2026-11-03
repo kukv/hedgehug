@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/store"
-	"github.com/kukv/hedgehug/internal/testenv"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/lib/testenv"
 )
 
 // waitChildDone waits until the detached child of te has cleared

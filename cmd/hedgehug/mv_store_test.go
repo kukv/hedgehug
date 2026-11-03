@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/schema"
-	"github.com/kukv/hedgehug/internal/store"
-	hhsync "github.com/kukv/hedgehug/internal/sync"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/remote/replicate"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 // newMoveStoreEnv is newTwoStoreEnv (alpha AA-1 project and AA-2 under it;
@@ -155,11 +155,11 @@ func TestMvStoreTellsWhoCannotSeeItAnymore(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		cs := []hhsync.Collaborator{}
+		cs := []replicate.Collaborator{}
 		for _, id := range ids {
-			cs = append(cs, hhsync.Collaborator{ID: id, Permission: "write"})
+			cs = append(cs, replicate.Collaborator{ID: id, Permission: "write"})
 		}
-		if err := hhsync.WriteMembers(s, hhsync.Members{Collaborators: cs}); err != nil {
+		if err := replicate.WriteMembers(s, replicate.Members{Collaborators: cs}); err != nil {
 			t.Fatal(err)
 		}
 	}

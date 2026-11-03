@@ -12,10 +12,10 @@ import (
 
 	"github.com/zalando/go-keyring"
 
-	"github.com/kukv/hedgehug/internal/fakegh"
-	"github.com/kukv/hedgehug/internal/gitrepo"
-	"github.com/kukv/hedgehug/internal/store"
-	hhsync "github.com/kukv/hedgehug/internal/sync"
+	"github.com/kukv/hedgehug/internal/app/remote/replicate"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/lib/fakegh"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 // initDevenv runs devenv init with the fake GitHub of this test as the one the
@@ -138,7 +138,7 @@ func TestE2EPhase3a(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n, err := hhsync.Unpushed(s.Repo()); err != nil || n != 0 {
+	if n, err := replicate.Unpushed(s.Repo()); err != nil || n != 0 {
 		t.Errorf("bob has %d commits of org-b that origin lacks (%v), want none", n, err)
 	}
 
@@ -146,16 +146,16 @@ func TestE2EPhase3a(t *testing.T) {
 	if err := fake.SetPerm("org-b/hh-ops", "bob", "write"); err != nil {
 		t.Fatal(err)
 	}
-	acc, err := hhsync.ReadAccess(s)
+	acc, err := replicate.ReadAccess(s)
 	if err != nil {
 		t.Fatal(err)
 	}
 	acc.Checked = time.Now().Add(-10 * time.Minute) // the 5 minutes have passed
-	if err := hhsync.WriteAccess(s, acc); err != nil {
+	if err := replicate.WriteAccess(s, acc); err != nil {
 		t.Fatal(err)
 	}
 	bob.ok("sync")
-	acc, err = hhsync.ReadAccess(s)
+	acc, err = replicate.ReadAccess(s)
 	if err != nil {
 		t.Fatal(err)
 	}

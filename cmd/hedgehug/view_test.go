@@ -11,7 +11,7 @@ import (
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 
-	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 func TestViewCommands(t *testing.T) {
@@ -47,7 +47,7 @@ func TestViewCommands(t *testing.T) {
 	te.goldenRun("case", 1, "view", "save", "release")
 	te.goldenRun("no-sub", 2, "view")
 
-	var v ops.SavedView
+	var v usecase.SavedView
 	if err := json.Unmarshal([]byte(te.ok("view", "save", "k", "--layout", "kanban", "--kanban-columns", "category", "--swimlane", "assignee", "--json")), &v); err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestViewShowAcrossStores(t *testing.T) {
 	te.goldenOK("narrowed", "--store", "alpha", "view", "show", "only-bravo")
 	te.goldenOK("saved-in-bravo", "--store", "bravo-long", "view", "show", "from-bravo")
 
-	var got []ops.TaskView
+	var got []usecase.TaskView
 	if err := json.Unmarshal([]byte(te.ok("--store", "alpha", "view", "show", "open", "--json")), &got); err != nil {
 		t.Fatal(err)
 	}

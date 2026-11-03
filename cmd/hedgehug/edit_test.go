@@ -12,8 +12,8 @@ import (
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 
-	"github.com/kukv/hedgehug/internal/model"
-	"github.com/kukv/hedgehug/internal/ops"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 // taskFile returns the path of the task file of ulid in the store me.
@@ -95,7 +95,7 @@ func TestEdit(t *testing.T) {
 
 	// --json prints the task as written.
 	te.editWith(setLine(te.raw(x.ULID), "title", "Again"))
-	var got ops.TaskView
+	var got usecase.TaskView
 	if err := json.Unmarshal([]byte(te.ok("edit", x.ID, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}

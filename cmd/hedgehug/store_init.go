@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/ops"
-	"github.com/kukv/hedgehug/internal/schema"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 func (a *app) storeCmd() *cobra.Command {
@@ -47,7 +47,7 @@ func (a *app) storeInitCmd() *cobra.Command {
 			default:
 				return usageErrorf("--template: %q is not a template; the one there is is dev", template)
 			}
-			return a.storeInit(ops.StoreInitInput{Name: args[0], Prefix: prefix, Workspace: wsName, Schema: sc, Remotes: remotes, Account: account, Path: path})
+			return a.storeInit(usecase.StoreInitInput{Name: args[0], Prefix: prefix, Workspace: wsName, Schema: sc, Remotes: remotes, Account: account, Path: path})
 		},
 	}
 	cmd.Flags().StringVar(&prefix, "prefix", "", "the id prefix of the first workspace, such as WEB")
@@ -59,10 +59,10 @@ func (a *app) storeInitCmd() *cobra.Command {
 	return cmd
 }
 
-func (a *app) storeInit(in ops.StoreInitInput) error {
+func (a *app) storeInit(in usecase.StoreInitInput) error {
 	r, err := a.ss.StoreInit(in)
 	// A remote on GitHub with no account to make it: on a terminal, ask which.
-	if e := ops.AsError(err); e != nil && e.Code == "choice.required" && e.Args["what"] == "--account" && a.isTerminal(a.stdin) {
+	if e := usecase.AsError(err); e != nil && e.Code == "choice.required" && e.Args["what"] == "--account" && a.isTerminal(a.stdin) {
 		candidates, _ := e.Args["candidates"].([]string)
 		var picked string
 		if picked, err = a.askChoice(candidates, choice{question: "Which account makes the repository?"}); err != nil {
