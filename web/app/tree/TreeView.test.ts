@@ -666,21 +666,29 @@ describe("TreeView", () => {
   });
 
   it("lets a late wait for a row give way to a newer one", async () => {
-    setup({ many: 250 });
-    render(TreeView, { view: { kind: "project", ulid: "P" } });
-    const first = screen.getAllByRole("treeitem")[0] as HTMLElement;
-    await fireEvent.click(first);
-    selection.set("M100");
-    h.vdelay = 80;
-    await fireEvent.keyDown(first, { key: "ArrowDown" }); // M101, drawn after 80ms
-    selection.set("M200");
-    h.vdelay = 10;
-    await fireEvent.keyDown(first, { key: "ArrowUp" }); // M199, drawn after 10ms
-    await waitFor(() => expect(document.activeElement?.getAttribute("data-ulid")).toBe("M199"));
-    // The first request draws its window late (and moves the mock window back): it must not
-    // then take the focus for M101.
-    await new Promise((r) => setTimeout(r, 200));
-    expect(document.activeElement?.getAttribute("data-ulid")).not.toBe("M101");
+    // The clock is a fake one: with real timers, a busy machine (the suites of other workers)
+    // held the 10ms draw past the 1s of waitFor, and the test failed with the focus on nothing.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "requestAnimationFrame"] });
+    try {
+      setup({ many: 250 });
+      render(TreeView, { view: { kind: "project", ulid: "P" } });
+      const first = screen.getAllByRole("treeitem")[0] as HTMLElement;
+      await fireEvent.click(first);
+      selection.set("M100");
+      h.vdelay = 80;
+      await fireEvent.keyDown(first, { key: "ArrowDown" }); // M101, drawn after 80ms
+      selection.set("M200");
+      h.vdelay = 10;
+      await fireEvent.keyDown(first, { key: "ArrowUp" }); // M199, drawn after 10ms
+      await vi.advanceTimersByTimeAsync(40);
+      expect(document.activeElement?.getAttribute("data-ulid")).toBe("M199");
+      // The first request draws its window late (and moves the mock window back): it must not
+      // then take the focus for M101.
+      await vi.advanceTimersByTimeAsync(200);
+      expect(document.activeElement?.getAttribute("data-ulid")).not.toBe("M101");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("says so, with a way home, when the project is not there", async () => {
