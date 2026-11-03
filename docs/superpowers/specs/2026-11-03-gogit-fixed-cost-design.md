@@ -69,7 +69,7 @@ WSL の `undo` は、最初の読み込み（約 150ms）と書き込み（200ms
 
 ### 2.5 見つからないとき
 
-1. pack の一覧を読み直す（fetch で pack が増えた、統合で入れ替わった）。消えた pack は閉じ、増えた pack を開いて、もう一度引く。
+1. pack の一覧を読み直す（fetch で pack が増えた、統合で入れ替わった）。増えた pack を開いて、もう一度引く。消えた pack はその場では閉じず、`Repo.Close` で閉じる。ほかの goroutine がまだその pack から読んでいるかもしれないためである。
 2. それでもなければ、go-git の `filesystem.Storage` に任せる。alternates や版 2 でない `.idx` も、ここで go-git が扱う。go-git は `.idx` を全部読むが、存在しない hash を引くのは fetch の交渉くらいで、ネットワークを待つ処理である。
 
 ### 2.6 閉じる
