@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -80,6 +81,56 @@ func TestPollTasksChanged(t *testing.T) {
 	e := waitEvent[tasksChanged](t, ch, nil)
 	if e.Store != "me" || !slices.Contains(e.ULIDs, res.ULID.String()) || e.Commit != res.Commit || e.Op != "add" {
 		t.Errorf("event = %+v", e)
+	}
+}
+
+// Two commits that one look finds are told one by one, each with its own
+// commit and tasks: a page that made one of them knows it as its own, and the
+// other is not shown as its change (or the reverse).
+func TestPollTellsEachCommitOfALook(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	ch, cancel := ts.srv.hub.subscribe()
+	t.Cleanup(cancel)
+	ts.srv.poller.settle()
+	one, err := ts.session().Add(ops.AddInput{Title: "one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	two, err := ts.session().Add(ops.AddInput{Title: "two"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts.srv.poller.poll(true)
+	first := waitEvent[tasksChanged](t, ch, nil)
+	second := waitEvent[tasksChanged](t, ch, nil)
+	if first.Commit != one.Commit || !slices.Equal(first.ULIDs, []string{one.ULID.String()}) || first.Op != "add" {
+		t.Errorf("first event = %+v; want the commit and the task of one", first)
+	}
+	if second.Commit != two.Commit || !slices.Equal(second.ULIDs, []string{two.ULID.String()}) || second.Op != "add" {
+		t.Errorf("second event = %+v; want the commit and the task of two", second)
+	}
+}
+
+// More commits than splitMax in one look are told as one change, of HEAD.
+func TestPollTellsManyCommitsAsOne(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	ch, cancel := ts.srv.hub.subscribe()
+	t.Cleanup(cancel)
+	ts.srv.poller.settle()
+	var last ops.TaskResult
+	for i := range splitMax + 1 {
+		res, err := ts.session().Add(ops.AddInput{Title: fmt.Sprintf("task %d", i)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		last = res
+	}
+	ts.srv.poller.poll(true)
+	e := waitEvent[tasksChanged](t, ch, nil)
+	if e.Commit != last.Commit || len(e.ULIDs) != splitMax+1 {
+		t.Errorf("event = commit %s, %d tasks; want HEAD %s and %d tasks", e.Commit, len(e.ULIDs), last.Commit, splitMax+1)
 	}
 }
 
