@@ -4,7 +4,7 @@
 
 **Goal:** カンバンの移動、テーブルのセル編集、保存済みビューの保存・開く・改名・削除とレイアウトの切り替え、保存していないクエリの画面、マイタスクを GUI で動かす。
 
-**Architecture:** フェーズ 4e の4回のうちの3回目。決定事項と spec にない細部は概要 `docs/superpowers/plans/2026-11-03-phase4e-screens.md` にあり（この回は細部 36〜58 と、細部 16・17・34 のうち 4e-3 に送った部分）、各 Task はそこを前提にする（細部の番号はそこを指す）。この回で決めたことは末尾の「決めたこと」（D1〜D10）にある。Go は Task 1 の `hh view show` の評価範囲の直しだけで、ほかは web。フロントとバックは REST で分け（`web/core` はフレームワークに依存しない）、画面は Svelte 5 の runes。Task 2 で骨組み（ルート、ビューの一覧の `ViewDirectory`、CLI の文字列、画面の範囲 `ListScope`、フィルタの段 `ListBar`、TanStack Table の追加）を作り、Task 3 でツリーを `ListScope` と外から渡すクエリに対応させ、Task 4・5 でカンバン・テーブルの部品、Task 6 でそれを入れるビューの画面・クエリの画面・ワークスペースとプロジェクトのタブの入れ物とビューのダイアログを作り、Task 7 でマイタスクと「もしかして」を作って入口（タブ・サイドバー・パレット・App の振り分け）を結線する。
+**Architecture:** フェーズ 4e の4回のうちの3回目。決定事項と spec にない細部は概要 `docs/superpowers/plans/2026-11-03-phase4e-screens.md` にあり（この回は細部 36〜58 と、細部 16・17・34 のうち 4e-3 に送った部分）、各 Task はそこを前提にする（細部の番号はそこを指す）。この回で決めたことは末尾の「決めたこと」（D1〜D10 と 11〜21）にある。Go は Task 1 の `hh view show` の評価範囲の直しだけで、ほかは web。フロントとバックは REST で分け（`web/core` はフレームワークに依存しない）、画面は Svelte 5 の runes。Task 2 で骨組み（ルート、ビューの一覧の `ViewDirectory`、CLI の文字列、画面の範囲 `ListScope`、フィルタの段 `ListBar`、TanStack Table の追加）を作り、Task 3 でツリーを `ListScope` と外から渡すクエリに対応させ、Task 4・5 でカンバン・テーブルの部品、Task 6 でそれを入れるビューの画面・クエリの画面・ワークスペースとプロジェクトのタブの入れ物とビューのダイアログを作り、Task 7 でマイタスクと「もしかして」を作って入口（タブ・サイドバー・パレット・App の振り分け）を結線する。
 
 **Tech Stack:** Go（cobra、ゴールデンテスト）、TypeScript、Svelte 5（runes）、Vite、TanStack Table 9（`@tanstack/svelte-table` 9.3.1、exact）・TanStack Virtual、Pragmatic drag and drop、Vitest と @testing-library/svelte、Playwright（`web/e2e`、`harness.ts`）、Biome、svelte-check。
 
@@ -12,7 +12,7 @@
 
 **この回の Task:** Task 1（Go: `hh view show` を全 Store で評価）、Task 2（骨組み）、Task 3（ツリーを `ListScope` に対応）、Task 4（カンバン）、Task 5（テーブル）、Task 6（ビューの画面・クエリの画面・タブの入れ物・ビューのダイアログ）、Task 7（マイタスク・もしかして・結線・E2E）。番号の順に実行する。Task 2〜6 の画面は Task 7 の結線まで入口が出ないので、E2E の全件は Task 7 で流す。
 
-**着手の前に:** main を取り込み、各 Task の Files にある関数・型がまだその場所と名前であることを確かめる（動いていれば、コードをその時点の形に合わせ直す。API の形と画面の言葉は変えない）。各 Task のコードは、main（79a5277）の `web/` の写しに Step の差分を当てて、`pnpm fix`・`svelte-check`・`biome ci`・`vitest run` を通したもの。ほかの Task のものは、境目の名前と型のスタブを置いて確かめた。E2E は Task 7 で初めて流す。
+**着手の前に:** main を取り込み、各 Task の Files にある関数・型がまだその場所と名前であることを確かめる（動いていれば、コードをその時点の形に合わせ直す。API の形と画面の言葉は変えない）。この plan は組み上げで確かめてある: main（79a5277）の写し1つ（ブランチ `integ-4e3`）に Task 1→7 の Step を順にそのまま当て、各 Task の終わりに検査（Go: `go test -race`・`go vet`・`gofmt`、web: `pnpm fix`・`pnpm check`（警告 0）・`biome ci`（指摘 0）・`vitest run` 全件）を流した。最後に `go test -race ./...`（全パッケージ ok）、`vitest` 全件（120 ファイル・1238 件）、`pnpm build`、`make e2e` の全件を 3 回（1 回目は 4e-3 と関係のない既存の `live.spec.ts` の1件が負荷で落ち、2・3 回目は 83 件すべて PASS）。食い違って plan を直した点は末尾の「組み上げで直した点」にある（後の Task を前の Task の実物に合わせた）。
 
 ## Global Constraints
 
@@ -8130,7 +8130,7 @@ describe("TableView", () => {
       mount();
       expect(order()).toHaveLength(10);
       expect(order()[0]).toBe("REL-100");
-      const row = document.querySelector<HTMLElement>(".row");
+      const row = document.querySelector<HTMLElement>("tr.row");
       expect(row).toHaveStyle({ transform: "translateY(0px)" });
     });
   });
@@ -11910,7 +11910,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 
 Task 2〜6 で作った画面に入口を付ける最後の Task。マイタスクの画面（細部 55〜57）と、クエリの誤りの「もしかして」（細部 58）を作り、ワークスペースとプロジェクトのカンバン・テーブルのタブ、ツリーのタブの「ビューを保存」、サイドバーのマイタスクと保存済みビュー（細部 16・17）、パレットのマイタスク・保存済みビュー・「このクエリで」（細部 34）、App の振り分けをつなぎ、E2E（細部 80 の 4e-3 分）を足す。
 
-**この Task は単独で通る**（`pnpm check`・`pnpm test` が通り、Step 21 で `make e2e` が通る）。コミットは 4 つ（Step 9・15・19・22）。
+**この Task は単独で通る**（`pnpm check`・`pnpm test` が通り、Step 21 で `make e2e` が通る）。コミットは 6 つ（Step 9・15・19・20b・20c・22）。
 
 **Files:**
 - Create: `web/app/my/groups.ts`、`groups.test.ts`、`MyTasks.svelte`、`MyTasks.test.ts`（マイタスク）
@@ -13234,11 +13234,28 @@ Expected: PASS
 
 - [ ] **Step 9: 通して、コミットする**
 
+`FilterBar` は誤りがあるとき `c.stores.stores()` と `c.schema.load` を呼ぶ。`web/app/tree/TreeView.test.ts` の `setup()` が作る core の `stores` に `stores` を足す（誤りのあるクエリを描く「shows the message of query.invalid under the filter」などが `c.stores.stores is not a function` で落ちるため。`loaded` の次の行。Task 3 がこの `setup()` を変えていたら、同じ場所に）:
+
+変更前:
+```ts
+    stores: {
+      loaded: () => true,
+      workspace: () =>
+```
+
+変更後:
+```ts
+    stores: {
+      loaded: () => true,
+      stores: () => [{ name: "shared" }],
+      workspace: () =>
+```
+
 Run: `cd web && pnpm fix && pnpm check && pnpm exec biome ci --vcs-enabled=false . && pnpm vitest run app/my app/list app/tree`
 Expected: 警告 0、指摘 0、すべて PASS
 
 ```bash
-git add web/app/my web/app/list/suggest.ts web/app/list/suggest.test.ts web/app/tree/FilterBar.svelte web/app/tree/FilterBar.test.ts web/app/test-utils.ts
+git add web/app/my web/app/list/suggest.ts web/app/list/suggest.test.ts web/app/tree/FilterBar.svelte web/app/tree/FilterBar.test.ts web/app/tree/TreeView.test.ts web/app/test-utils.ts
 git commit -m "feat(web): マイタスクの画面と、クエリの誤りの「もしかして」を足す
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
@@ -13810,23 +13827,6 @@ Expected: PASS
 ```
 
 `within` が使われなくなるので、import から外す（`import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";`）。
-
-`FilterBar` は誤りがあるとき `c.stores.stores()` と `c.schema.load` を呼ぶ。このテストの `setup()` が作る core の `stores` に `stores` を足す（`loaded` の次の行。Task 3 がこの `setup()` を変えていたら、同じ場所に）:
-
-変更前:
-```ts
-    stores: {
-      loaded: () => true,
-      workspace: () =>
-```
-
-変更後:
-```ts
-    stores: {
-      loaded: () => true,
-      stores: () => [{ name: "shared" }],
-      workspace: () =>
-```
 
 Run: `cd web && pnpm fix && pnpm vitest run app/tree`
 Expected: PASS。ほかのテスト（Task 3〜6 のテスト）が、`core` を差し替えていて誤りのあるクエリを描くとき `c.stores.stores is not a function` で落ちたら、そのテストの core の `stores` に `stores: () => []` を足す
@@ -15172,43 +15172,43 @@ test("a status that needs a field asks for it, and sets both in one commit", asy
 }) => {
   const project = hh.add("Release", "--kind", "project");
   const ship = hh.add("Ship it", "--parent", project.id);
-  hh.hh("schema", "scope", "set", project.id, "--required", "done=points");
+  hh.hh("schema", "scope", "set", project.id, "--required", "in_progress=points");
   await hh.open(page, `/projects/${project.ulid}/kanban`);
   await expect(card(page, ship.ulid)).toBeVisible();
 
   const before = commits(hh);
-  await dragCard(page, card(page, ship.ulid), cell(page, "done"));
+  await dragCard(page, card(page, ship.ulid), cell(page, "in_progress"));
   const dialog = page.getByRole("dialog", {
-    name: `${ship.id} を完了にするには points が必要です`,
+    name: `${ship.id} を進行中にするには points が必要です`,
   });
   await expect(dialog).toBeVisible();
   // nothing is written until the field is given
   expect(hh.show(ship.id).status).toBe("todo");
-  const go = dialog.getByRole("button", { name: "完了にする" });
+  const go = dialog.getByRole("button", { name: "進行中にする" });
   await expect(go).toBeDisabled();
 
   await dialog.getByLabel("points", { exact: true }).fill("5");
   await expect(go).toBeEnabled();
   await go.click();
   await expect(dialog).toBeHidden();
-  await expect(cell(page, "done").locator(`li[data-ulid="${ship.ulid}"]`)).toBeVisible();
+  await expect(cell(page, "in_progress").locator(`li[data-ulid="${ship.ulid}"]`)).toBeVisible();
 
   const after = hh.show(ship.id);
-  expect(after.status).toBe("done");
-  expect(after.props.points).toBe(5);
+  expect(after.status).toBe("in_progress");
+  expect(after.props.points).toBe("5");
   expect(commits(hh)).toBe(before + 1);
 });
 
 test("closing the dialog of a missing field leaves the task where it was", async ({ page, hh }) => {
   const project = hh.add("Release", "--kind", "project");
   const ship = hh.add("Ship it", "--parent", project.id);
-  hh.hh("schema", "scope", "set", project.id, "--required", "done=points");
+  hh.hh("schema", "scope", "set", project.id, "--required", "in_progress=points");
   await hh.open(page, `/projects/${project.ulid}/kanban`);
 
   const before = commits(hh);
-  await dragCard(page, card(page, ship.ulid), cell(page, "done"));
+  await dragCard(page, card(page, ship.ulid), cell(page, "in_progress"));
   const dialog = page.getByRole("dialog", {
-    name: `${ship.id} を完了にするには points が必要です`,
+    name: `${ship.id} を進行中にするには points が必要です`,
   });
   await dialog.getByRole("button", { name: "やめる" }).click();
   await expect(dialog).toBeHidden();
@@ -15502,7 +15502,8 @@ test("a tree saved as a view opens, changes its layout, is updated, renamed and 
   expect(views().map((v) => v.name)).toEqual(["busy"]);
   await expect(saved(page).getByRole("link", { name: "busy" })).toBeVisible();
 
-  // delete, and take it back
+  // delete, and take it back (at once: the undo comes before the poll of the server has seen the
+  // delete, so no views.changed comes, and the tab reads the views again after the undo itself)
   await page.getByRole("button", { name: "ビューの操作（改名・削除）" }).click();
   await page.getByRole("menuitem", { name: "削除…" }).click();
   const remove = page.getByRole("dialog", { name: "ビュー busy を削除" });
@@ -15604,12 +15605,270 @@ test("the palette saves the query it was given as a view", async ({ page, hh }) 
 });
 ```
 
+- [ ] **Step 20b: `useListScope` の `apiBase`・`cliBase` を文字列の `$derived` にする（Step 21 の E2E で見つかった）**
+
+`apiBase`・`cliBase` は `base`（`workspace` から作る新しいオブジェクト）を読んで文字列を返すだけの getter だったので、これを読む `$effect`（ツリーの `watchTree`）は、タスクを作って Store が読み直され `workspace` が同じ内容の新しいオブジェクトになるたびに走り直し、ツリーを読み込み直して行を作り直していた（`tree.spec.ts` の「Esc closes the input even when the task is still being made」「a click on a row closes the input, also while the task is being made」が、行のフォーカスを失って落ちた。main の 79a5277 では通る）。文字列の `$derived` にすれば、中身が同じなら効果は走り直さない。
+
+`web/app/list/scope.svelte.test.ts` の差分（先に足して、失敗を確かめる）:
+
+```diff
+--- a/web/app/list/scope.svelte.test.ts
++++ b/web/app/list/scope.svelte.test.ts
+@@ -150,6 +150,27 @@ describe("useListScope: a workspace", () => {
+     stop();
+   });
+ 
++  it("tells an effect that reads the query only when the query changes, not when the workspace is read again", () => {
++    const { w, stores } = setup();
++    let runs = 0;
++    const stop = $effect.root(() => {
++      const s = useListScope(() => ({ kind: "workspace", store: "shared", ulid: "W1" }));
++      $effect(() => {
++        // What the tree reads to start its query: reading it again would reload the tree.
++        const read = [s.ready, s.apiBase, s.cliBase, s.store];
++        if (read.length > 0) runs++;
++      });
++    });
++    flushSync();
++    const before = runs;
++    // The stores are read again (a task was made): an equal workspace, a new object.
++    w.workspaces = [entry()];
++    stores.emit();
++    flushSync();
++    expect(runs).toBe(before);
++    stop();
++  });
++
+   it("follows the scope it is given", () => {
+     setup({ workspaces: [entry(), entry({ ulid: "W2", name: "web" })] });
+     let current = $state<ListScope>({ kind: "workspace", store: "shared", ulid: "W1" });
+```
+
+Run: `cd web && pnpm vitest run app/list/scope.svelte.test.ts`
+Expected: FAIL（`expected 2 to be 1`）
+
+`web/app/list/scope.svelte.ts` の差分:
+
+```diff
+--- a/web/app/list/scope.svelte.ts
++++ b/web/app/list/scope.svelte.ts
+@@ -68,6 +68,10 @@ export function useListScope(get: () => ListScope) {
+     return null;
+   });
+   const ready = $derived(get().kind === "all" || base !== null);
++  // Strings, so an effect that reads them runs again when the query changes, not each time the
++  // workspace is read again (a new object with the same name).
++  const apiBase = $derived(base ? baseQuery(base, "api") : "");
++  const cliBase = $derived(base ? baseQuery(base, "cli") : "");
+   const manyStores = $derived.by(() => {
+     storesRev.current;
+     return c.stores.stores().length >= 2;
+@@ -88,11 +92,11 @@ export function useListScope(get: () => ListScope) {
+     },
+     /** The fixed part of the query for the API (the project by ULID); "" for every store or while not ready. */
+     get apiBase(): string {
+-      return base ? baseQuery(base, "api") : "";
++      return apiBase;
+     },
+     /** The fixed part as the user would type it in hh (the project by ID); "" for every store or while not ready. */
+     get cliBase(): string {
+-      return base ? baseQuery(base, "cli") : "";
++      return cliBase;
+     },
+     /** The store of the workspace or project; undefined for every store. */
+     get store(): string | undefined {
+```
+
+Run: `cd web && pnpm fix && pnpm check && pnpm vitest run app/list app/tree app/kanban app/table`
+Expected: PASS
+
+```bash
+git add web/app/list/scope.svelte.ts web/app/list/scope.svelte.test.ts
+git commit -m "fix(web): ツリーが、同じ内容のワークスペースを読み直しただけで読み込み直さないようにする
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
+```
+
+- [ ] **Step 20c: ビューの書き込みを取り消したら、ビューの一覧を読み直す（Step 21 の E2E で見つかった）**
+
+サーバーはビューの変更を 300ms ごとのポーリングで `views.changed` として知らせる。ビューを削除してすぐ（ポーリングが削除を見る前に）取り消すと、2 回のポーリングのあいだで木が同じに戻るので何も知らせない。タブの `ViewDirectory` は削除の応答で一覧から消しているので、取り消したビューがサイドバーに戻らない（`views.spec.ts` の「a tree saved as a view …」の末尾が `--repeat-each=12` で 12 回中 8 回落ちた）。`runUndo` が取り消した操作がビュー（`op` が `view`）なら、その Store のビューを読み直す。E2E は取り消しの前に待たない（待つとこの不具合を隠す）。
+
+テストを先に足して、失敗を確かめる（`dir.refresh is not a function` と、`refresh` が呼ばれない）:
+
+```diff
+diff --git a/web/app/undo.test.ts b/web/app/undo.test.ts
+index b710945..8bd5f9b 100644
+--- a/web/app/undo.test.ts
++++ b/web/app/undo.test.ts
+@@ -98,8 +98,12 @@ describe("runUndo", () => {
+   function setup(route: Parameters<typeof fakeApi>[0]) {
+     const { api, calls } = fakeApi(route);
+     const noteOwnCommit = vi.fn();
+-    const c = { api, cache: { noteOwnCommit } } as unknown as Pick<AppCore, "api" | "cache">;
+-    return { c, calls, noteOwnCommit };
++    const refresh = vi.fn();
++    const c = { api, cache: { noteOwnCommit }, views: { refresh } } as unknown as Pick<
++      AppCore,
++      "api" | "cache" | "views"
++    >;
++    return { c, calls, noteOwnCommit, refresh };
+   }
+ 
+   it("posts to /api/undo with the store, remembers the commit and says what it did", async () => {
+@@ -112,6 +116,22 @@ describe("runUndo", () => {
+     expect(toasts.list.map((t) => t.message)).toEqual(["REL-6 の変更を取り消しました"]);
+   });
+ 
++  it("reads the views of the store again after it takes back a change of a view", async () => {
++    // The server tells views.changed from its poll: a delete taken back before the poll saw it
++    // leaves the tree as it was, so nothing is told, and the list would keep the view out.
++    const { c, refresh } = setup(() =>
++      result({ undone: { ...result().undone, op: "view", task: null, id: null, store: "work" } }),
++    );
++    await runUndo(c, "work");
++    expect(refresh).toHaveBeenCalledWith("work");
++  });
++
++  it("does not read the views again after it takes back another operation", async () => {
++    const { c, refresh } = setup(() => result());
++    await runUndo(c, "shared");
++    expect(refresh).not.toHaveBeenCalled();
++  });
++
+   it("sends no store when there is none", async () => {
+     const { c, calls } = setup(() => result());
+     await runUndo(c);
+diff --git a/web/core/views.test.ts b/web/core/views.test.ts
+index 5378aa3..dc88f45 100644
+--- a/web/core/views.test.ts
++++ b/web/core/views.test.ts
+@@ -213,6 +213,20 @@ describe("ViewDirectory", () => {
+     expect(views("nobody")).toHaveLength(0);
+   });
+ 
++  it("refresh fetches the store again, and not one it does not know", async () => {
++    // An undo that the poll of the server missed (a delete taken back within one poll) leaves no
++    // views.changed: the screen asks for the views itself.
++    const { dir, w, views } = setup({ shared: [], personal: [] });
++    await vi.waitFor(() => expect(dir.loaded()).toBe(true));
++    w.shared = [view("weekly")];
++    dir.refresh("shared");
++    await vi.waitFor(() => expect(names(dir)).toEqual(["shared/weekly"]));
++    expect(views("personal")).toHaveLength(1);
++    dir.refresh("nobody");
++    await settle();
++    expect(views("nobody")).toHaveLength(0);
++  });
++
+   it("fetches every store again at resync, and keeps the entries that did not change", async () => {
+     const { dir, conn, views } = setup({ shared: [view("weekly")], personal: [view("mine")] });
+     await vi.waitFor(() => expect(dir.loaded()).toBe(true));
+```
+
+Run: `cd web && pnpm vitest run core/views.test.ts app/undo.test.ts`
+Expected: 2 件が FAIL
+
+実装:
+
+```diff
+diff --git a/web/app/undo.ts b/web/app/undo.ts
+index 6cf39a7..7a8fc89 100644
+--- a/web/app/undo.ts
++++ b/web/app/undo.ts
+@@ -41,11 +41,17 @@ export function routeStore(
+ // went. It does not ask first: the spec holds that an undo is not hard to take back. The store is
+ // the one the screen is about; without it the server picks one as the CLI does, which asks the
+ // user to choose when there are several.
+-export async function runUndo(c: Pick<AppCore, "api" | "cache">, store?: string): Promise<void> {
++export async function runUndo(
++  c: Pick<AppCore, "api" | "cache" | "views">,
++  store?: string,
++): Promise<void> {
+   try {
+     const r = await unwrap(c.api.POST("/api/undo", { params: { query: { store } } }));
+     // The commit is this tab's own: its tasks.changed is not shown as a change from outside.
+     c.cache.noteOwnCommit(r.commit);
++    // The server tells views.changed from its poll, which misses a write taken back before it
++    // looked (the store is as it was): the list of views would keep what this tab wrote.
++    if (r.undone.op === "view") c.views.refresh(r.undone.store);
+     toast({ message: undoMessage(r) });
+   } catch (e) {
+     toast({ message: errorMessage(e) });
+diff --git a/web/core/views.ts b/web/core/views.ts
+index a624886..06693d9 100644
+--- a/web/core/views.ts
++++ b/web/core/views.ts
+@@ -143,6 +143,12 @@ export class ViewDirectory {
+     return () => this.subs.delete(fn);
+   }
+ 
++  // refresh reads the views of a store again: for a change the server does not tell (an undo of a
++  // write that its poll did not see leaves the store as it was).
++  refresh(store: string): void {
++    if (this.names.includes(store)) void this.fetch(store);
++  }
++
+   // save creates the view, or changes the settings body holds (PUT: what is not sent stays).
+   async save(store: string, name: string, body: ViewSaveBody): Promise<SavedView> {
+     const r = await unwrap(
+```
+
+Run: `cd web && pnpm fix && pnpm check && pnpm vitest run core/views.test.ts app/undo.test.ts`
+Expected: PASS（`pnpm check` は警告 0）
+
+```bash
+git add web/core/views.ts web/core/views.test.ts web/app/undo.ts web/app/undo.test.ts
+git commit -m "fix(web): ビューの書き込みを取り消したら、ビューの一覧を読み直す
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
+```
+
 - [ ] **Step 21: E2E を流す**
 
 Run（前面で、Bash の timeout は 600000）: `make e2e`
 Expected: 既存の spec の全件と、新しい 4 つの spec（`kanban`・`table`・`my`・`views`）と `routes.spec.ts` の追加分が PASS
 
 落ちたら、失敗の出力（エラーとスクリーンショットかトレース）と実行条件（並列数、`CI` の有無）を残してから直す。実物の言葉と spec の言葉が違うだけなら spec を直す。ドラッグが動かないときは、`dragCard`（`screens.ts`）の移動の刻みを `tree.spec.ts` の `dragRow` と同じにしてあるので、カンバンの `dnd.ts` が受け取るイベントを確かめる。
+
+`web/e2e/create.spec.ts` の「C on a task detail makes a child of that task」は、詳細が読み込まれる前に `c` を押すと親のないダイアログが開く（全件の流しで負荷がかかると落ちる）。`c` の前に待つ:
+
+変更前:
+```ts
+  await hh.open(page, `/tasks/${parent.ulid}`);
+  await page.keyboard.press("c");
+  const dialog = createDialog(page);
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText(parent.id, { exact: true })).toBeVisible();
+```
+
+変更後:
+```ts
+  await hh.open(page, `/tasks/${parent.ulid}`);
+  // C makes a child of the task the screen holds: wait until the detail has read it
+  await expect(page.getByRole("textbox", { name: "タイトル" })).toHaveValue("Parent task");
+  await page.keyboard.press("c");
+  const dialog = createDialog(page);
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText(parent.id, { exact: true })).toBeVisible();
+```
+
+`web/e2e/newtab.spec.ts` の「Ctrl+click on a sidebar link opens a tab that keeps the token」は、macOS の Chromium では Ctrl+クリックが右クリック（contextmenu）になって新しいタブが開かず落ちる（main の 79a5277 でも同じ）。アプリは ⌘ でも Ctrl でも新しいタブで開く（`router.ts` の `metaKey || ctrlKey`）ので、OS に合わせて押す:
+
+変更前:
+```ts
+test("Ctrl+click on a sidebar link opens a tab that keeps the token", async ({
+```
+```ts
+    link.click({ modifiers: ["Control"] }),
+```
+
+変更後:
+```ts
+test("Ctrl+click (Cmd+click on macOS) on a sidebar link opens a tab that keeps the token", async ({
+```
+```ts
+    link.click({ modifiers: ["ControlOrMeta"] }),
+```
 
 - [ ] **Step 22: 全体を確かめて、コミットする**
 
@@ -15650,3 +15909,14 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 19. `router.replace` は購読者に通知する。`useListScope` は router を import しない（テストのモックのため）。`ListBar`・`FilterBar` は固定の部分が空なら札を出さない。`tree/filter.ts` の `combine("", q)` は先頭に空白を付けない（Task 3 で直す）
 20. `hh view show` の直しは、`viewShow` の中で `a.ss` を `--store` なしのセッションに差し替えてクエリを評価する（ops に全 Store 版を足して二重にしない）
 21. **既存テストの負荷下の時間切れ**（Task 3 の最初の Step）: 全件を同時に何本も流すと、実時間に頼るテスト（TreeView の「lets a late wait for a row give way to a newer one」、BodyEditor の「offers the people for @ from GET /api/people」）が `waitFor` の1秒で切れ、重いテスト（TaskDetail 系・CreateTask の各ファイルの最初のテスト。単独で約 0.5 秒）が既定の 5 秒で切れた。前の2つは偽のタイマーで時間を進める形に直し、`vitest.config.ts` の `testTimeout` を 20 秒にする。全件 3 本を同時に 3 回で、直す前は 9 本中 7 本が落ち、直したあとは 9 本とも通る。製品のコードの不具合ではない
+
+## 組み上げで直した点
+
+- Task 5 Step 9: `TableView.test.ts` の「a long list」が `document.querySelector<HTMLElement>(".row")` で最初の `.row` を取ると、`ListBar`（Task 2 の実物）の中の `<div class="row">`（フィルタ欄）に当たり、`toHaveStyle({ transform: "translateY(0px)" })` が落ちた（`expect(element).toHaveStyle()`、受け取った側の transform が空。`pnpm vitest run app/table` で単独実行）。`tr.row` に直した（Step 9 のテストと、このときの本文）。直したあとは `app/table` 52 件（columns 14・group 6・TableView 32）と全件 105 ファイル 1083 件が通る。他の差分はなし（`@tanstack/svelte-table` 9.3.1 の API は plan のコードのまま `svelte-check` 0 エラー 0 警告）
+- Task 7 Step 9: Step 9 の `pnpm vitest run app/my app/list app/tree` で `app/tree/TreeView.test.ts` の「shows the message of query.invalid under the filter」「shows no empty state when the query is wrong」の 2 件が落ちた（`TypeError: c.stores.stores is not a function`、`FilterBar.svelte` の `$effect`。`pnpm vitest run app/tree/TreeView.test.ts -t "query.invalid|wrong"` で単独でも）。`TreeView.test.ts` の `setup()` の core の `stores` に `stores: () => [{ name: "shared" }]` を足す直しは Step 13 にあったので、Step 9 に移し（コミットにも `TreeView.test.ts` を足した）、Step 13 からは消した。直したあとは `app/my app/list app/tree` 20 ファイル 234 件が通る
+- Task 7 Step 21: `kanban.spec.ts` の「a status that needs a field …」「closing the dialog of a missing field …」が、`done` の列がページの外（x=1714、幅 1440）にあるためドロップが届かず、ダイアログが出ないまま落ちた（`getByRole('dialog', { name: 'DM-2 を完了にするには points が必要です' })` が見つからない、`pnpm exec playwright test e2e/kanban.spec.ts` で単独でも、1440x900）。必須の項目を `done` ではなく、ページ内に収まる `in_progress` に付けるように直した（`--required in_progress=points`、`cell(page, "in_progress")`、ダイアログの名前「進行中にするには」、ボタン「進行中にする」、`status` は `in_progress`）
+- Task 7 Step 21: 同じ spec で、`points`（number のプロパティ）が `hh show` の JSON では文字列 `"5"` で返る（CLI の `hh set DM-2 points=5` でも同じ）ため、`expect(after.props.points).toBe(5)` が `Received: "5"` で落ちた。`toBe("5")` に直した
+- Task 7 Step 21: `views.spec.ts` の「a tree saved as a view …」が、末尾の削除の取り消しのあとサイドバーに `busy` が戻らず落ちた（`getByRole('link', { name: 'busy' })` が見つからない。`--repeat-each=12` で 12 回中 8 回、単独の 1 回は通る）。サーバーはビューの変更をポーリング（300ms ごと）で知らせるので、削除を見る前に取り消すと、2 回のポーリングのあいだに差がなくなり何も知らせない（取り消しの前に `waitForResponse` で 1 秒待つと 12 回とも通った）。製品の不具合なので、E2E で待たずに、取り消したあとにタブがビューを読み直すように直した（Step 20c を新設。E2E は取り消しの前に待たない）。直したあとは `views.spec.ts` を `--repeat-each=15` で 60 件すべて通り、直しを外すと `--repeat-each=10` で 1 回落ちる
+- Task 7 Step 20b（新設）: `tree.spec.ts` の「Esc closes the input even when the task is still being made, and the row keys work」「a click on a row closes the input, also while the task is being made」が `expect(row "Alpha").toBeFocused()` で落ちた（`Received: inactive`、`pnpm exec playwright test e2e/tree.spec.ts --workers=1`。main の 79a5277 では通る）。原因は Task 2 の `useListScope` の `apiBase`・`cliBase` が `$derived` でない getter で、`base`（`workspace` から作る新しいオブジェクト）を読んでいたため、タスクを作って Store が読み直され `workspace` が同じ内容の新しいオブジェクトになるたびに、これを読む `TreeView` の `watchTree` の `$effect` が走り直し、ツリーが「読み込み中…」を挟んで行を作り直していたこと。`scope.svelte.ts` に文字列の `$derived` の `apiBase`・`cliBase` を足し、`scope.svelte.test.ts` に「ワークスペースを読み直しても効果が走り直さない」テストを足した（直す前は `expected 2 to be 1` で落ちる）。直したあと `tree.spec.ts` は全件通る
+- Task 7 Step 21: `make e2e` の 2 回の結果は、`newtab.spec.ts` の「Ctrl+click on a sidebar link …」だけが落ちる（ほかは 82 件 PASS）。macOS の Chromium では Ctrl+クリックが右クリック（contextmenu）になり新しいタブが開かないため（`modifiers: ["Meta"]` に替えると通る）で、plan の変更とは無関係（main の 79a5277 でも同じに落ちる）。`modifiers: ["ControlOrMeta"]` にして macOS でも通るようにした（Step 21 に差分を足した）。`create.spec.ts` の「C on a task detail makes a child of that task」が全件の 1 回目に 1 度だけ落ちた（`dialog.getByText("DM-1")` が見つからない。詳細が読み込まれる前に `c` を押す既存のテストの競合で、単独の `--repeat-each=6` は 36 件通り、全件の 2 回目も通った）。`c` を押す前に、詳細のタイトル欄が `Parent task` になるのを待つように `create.spec.ts` を直した（Step 21 の最後に差分を足した）
+- 全体の `make e2e`（3 回）: 1 回目に `live.spec.ts` の「a task added in the page does not get the mark」が1度だけ落ちた（`expect(row "Made here").not.toContainText("CLI で更新 · 今")`、`Received string: "   DM-2  Made here   CLI で更新 · 今 …"`。単独の `--repeat-each=30` は 30 件通り、2・3 回目の全件も通る）。原因はコードから読んだもので、4e-3 の変更とは関係がない: サーバーの `headMoved`（`internal/server/poll.go`）は 300ms ごとのポーリングで、前の HEAD から今の HEAD までの差を1つの `tasks.changed`（`commit` は今の HEAD）にまとめて知らせる。負荷でページの作成と CLI の `hh set` が同じポーリングの間に入ると、ページの作成したタスクも CLI のコミットの変更として届き、`TaskCache` が「CLI で更新」の印を付ける。`poll.go`・`cache.ts` は 4e-3 で触らず、main でも同じ作り。直し方（コミットごとにイベントを分けるか、イベントにコミットごとの ULID を持たせるか）はイベントの形に関わるので、この plan では直さず利用者に判断を仰ぐ。テストは待ちを足して隠さない
