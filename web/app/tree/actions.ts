@@ -1,4 +1,4 @@
-import { type TaskView, unwrap } from "../../core/api/client";
+import { type Schemas, type TaskView, unwrap } from "../../core/api/client";
 import type { AppCore } from "../context";
 import type { MoveArgs } from "./placement";
 
@@ -23,7 +23,7 @@ export async function moveTask(
 export async function patchTask(
   d: Deps,
   task: TaskView,
-  body: { status?: string; kind?: string },
+  body: Schemas["PatchInputBody"],
 ): Promise<TaskView> {
   const r = await unwrap(
     d.api.PATCH("/api/tasks/{id}", {

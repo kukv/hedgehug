@@ -3,7 +3,7 @@
   import { type TaskView, unwrap } from "../../core/api/client";
   import { cliAdd, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
-  import { canParent, defaultStatus, parentRule } from "../../core/schema";
+  import { canParent, defaultStatus, defaultStatusIn, parentRule } from "../../core/schema";
   import { core } from "../context";
   import type { CreateRequest } from "../create-state.svelte";
   import BodyEditor from "../detail/BodyEditor.svelte";
@@ -64,7 +64,7 @@
   let title = $state("");
   let body = $state("");
   let kind = $state("");
-  let status = $state("");
+  let status = $state(untrack(() => request.status ?? ""));
   let assignees = $state<string[]>([]);
   let propValues = $state<Record<string, unknown>>({});
   let busy = $state(false);
@@ -95,7 +95,10 @@
     const s = sc.current;
     if (!s) return;
     if (!s.statuses?.some((x) => x.name === untrack(() => status))) {
-      status = defaultStatus(s, "todo");
+      // A status that the request names but this workspace's schema lacks falls back to the
+      // default of the category the request names (a column of the category board), else todo.
+      const cat = untrack(() => request.category);
+      status = (cat ? defaultStatusIn(s, cat) : "") || defaultStatus(s, "todo");
     }
   });
 

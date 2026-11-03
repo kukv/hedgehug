@@ -1,5 +1,15 @@
-/** What the create dialog is asked for. `parent` is the ULID of the task the new one goes under. */
-export type CreateRequest = { kind: "task" | "project"; parent?: string };
+/**
+ * What the create dialog is asked for. `parent` is the ULID of the task the new one goes under.
+ * `status` is the status it starts with (the column of a kanban); `category` is the category whose
+ * default status it starts with (the column of a kanban by category), used when `status` is not one
+ * of the workspace's.
+ */
+export type CreateRequest = {
+  kind: "task" | "project";
+  parent?: string;
+  status?: string;
+  category?: string;
+};
 
 let request = $state<CreateRequest | null>(null);
 
