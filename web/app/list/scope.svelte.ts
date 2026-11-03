@@ -77,6 +77,19 @@ export function useListScope(get: () => ListScope) {
     return c.stores.stores().length >= 2;
   });
 
+  // What the screens tell the empty and the not-found screens. A view over every store is neither:
+  // it is never empty with a create button, and never not found.
+  const crumbTitle = $derived(
+    get().kind === "project" ? (project?.title ?? "") : (workspace?.name ?? ""),
+  );
+  const emptyScope = $derived<"project" | "workspace">(
+    get().kind === "project" ? "project" : "workspace",
+  );
+  const notFoundName = $derived.by(() => {
+    const s = get();
+    return s.kind === "workspace" ? s.ulid : "";
+  });
+
   return {
     /** The workspace or project is known (always true for every store). */
     get ready(): boolean {
@@ -107,6 +120,18 @@ export function useListScope(get: () => ListScope) {
     },
     get project(): TaskView | undefined {
       return project;
+    },
+    /** The title of the project, or the name of the workspace; "" while it is not read. */
+    get crumbTitle(): string {
+      return crumbTitle;
+    },
+    /** Props for Empty. A spread in the screen, because Biome reads a prop called scope as the HTML attribute. */
+    get emptyProps(): { scope: "project" | "workspace"; name: string } {
+      return { scope: emptyScope, name: crumbTitle };
+    },
+    /** Props for NotFound: the ULID of a workspace is what the address named. */
+    get notFoundProps(): { scope: "project" | "workspace"; name: string } {
+      return { scope: emptyScope, name: notFoundName };
     },
     /**
      * The fixed part of the query of a view saved from this screen: the cliBase, with the store in

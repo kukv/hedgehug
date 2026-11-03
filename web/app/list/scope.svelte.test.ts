@@ -89,6 +89,9 @@ type Snapshot = {
     | "workspace"
     | "project"
     | "saveBase"
+    | "crumbTitle"
+    | "emptyProps"
+    | "notFoundProps"
     | "schemas"]: Scope[K];
 };
 
@@ -107,6 +110,9 @@ function use(get: () => ListScope) {
       scope.workspace = s.workspace;
       scope.project = s.project;
       scope.saveBase = s.saveBase;
+      scope.crumbTitle = s.crumbTitle;
+      scope.emptyProps = s.emptyProps;
+      scope.notFoundProps = s.notFoundProps;
     });
   });
   flushSync();
@@ -285,6 +291,33 @@ describe("useListScope: schemas", () => {
     flushSync();
     expect(seen).toEqual([0, 1]);
     stopRead();
+    stop();
+  });
+});
+
+describe("useListScope: what the empty and not-found screens are told", () => {
+  it("names the workspace for a workspace, and the ULID in the not-found screen", () => {
+    setup();
+    const { scope, stop } = use(() => ({ kind: "workspace", store: "shared", ulid: "W1" }));
+    expect(scope.crumbTitle).toBe("release");
+    expect(scope.emptyProps).toEqual({ scope: "workspace", name: "release" });
+    expect(scope.notFoundProps).toEqual({ scope: "workspace", name: "W1" });
+    stop();
+  });
+
+  it("names the project for a project, and nothing in the not-found screen", () => {
+    setup({ tasks: { P1: task() } });
+    const { scope, stop } = use(() => ({ kind: "project", ulid: "P1" }));
+    expect(scope.crumbTitle).toBe("リリース準備");
+    expect(scope.emptyProps).toEqual({ scope: "project", name: "リリース準備" });
+    expect(scope.notFoundProps).toEqual({ scope: "project", name: "" });
+    stop();
+  });
+
+  it("has no name before the workspace is read", () => {
+    setup({ workspaces: [], loaded: false });
+    const { scope, stop } = use(() => ({ kind: "workspace", store: "shared", ulid: "W9" }));
+    expect(scope.crumbTitle).toBe("");
     stop();
   });
 });

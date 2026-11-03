@@ -708,19 +708,6 @@
   const noTasks = $derived(
     withoutTerm(applied, NO_CANCELED).trim() === "" && !(canceledCount && canceledCount > 0),
   );
-  const crumbTitle = $derived(
-    scope.kind === "project" ? (ls.project?.title ?? "") : (ls.workspace?.name ?? ""),
-  );
-  // Spread, because Biome reads a prop called scope as the HTML attribute. A view over every store
-  // is neither: it is never empty with a create button, and never not found.
-  const emptyScope = $derived<"project" | "workspace">(
-    scope.kind === "project" ? "project" : "workspace",
-  );
-  const emptyProps = $derived({ scope: emptyScope, name: crumbTitle });
-  const notFoundProps = $derived({
-    scope: emptyScope,
-    name: scope.kind === "workspace" ? scope.ulid : "",
-  });
 </script>
 
 <section class="tree" aria-label="ツリー">
@@ -743,7 +730,7 @@
       class:refusing={roomForRefusal}
       style:--refusal-h={refusalHeight > 0 ? `${refusalHeight}px` : undefined}
       role="tree"
-      aria-label={all ? "タスク" : `${crumbTitle} のタスク`}
+      aria-label={all ? "タスク" : `${ls.crumbTitle} のタスク`}
       tabindex="-1"
       bind:this={scroller}
       {onkeydown}
@@ -807,7 +794,7 @@
       {#if ls.notFound}
         <Empty
           variant="notfound"
-          {...notFoundProps}
+          {...ls.notFoundProps}
           onHome={() => router.go(router.href({ name: "home" }))}
         />
       {:else if ls.error}
@@ -818,7 +805,7 @@
         {#if noTasks && !all}
           <Empty
             variant="empty"
-            {...emptyProps}
+            {...ls.emptyProps}
             onCreate={() => openCreate({ kind: "task", parent: viewRoot ?? undefined })}
           />
         {:else}
