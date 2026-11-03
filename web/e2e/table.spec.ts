@@ -46,3 +46,24 @@ test("the filter field narrows the rows", async ({ page, hh }) => {
   await expect(page.getByRole("textbox", { name: `タイトル: ${bravo.id}` })).toBeVisible();
   await expect(page.getByRole("textbox", { name: `タイトル: ${alpha.id}` })).toHaveCount(0);
 });
+
+test("the filter stays when the tab changes between the tree, the kanban and the table", async ({
+  page,
+  hh,
+}) => {
+  const alpha = hh.add("Alpha");
+  const bravo = hh.add("Bravo", "--status", "in_progress");
+  await hh.open(page, await tab(hh, "table"));
+  const filter = page.getByRole("textbox", { name: "フィルタ（hh ls と同じクエリ）" });
+  await expect(filter).toHaveValue("-status:canceled");
+  await filter.fill("status:in_progress");
+  await filter.press("Enter");
+
+  const tabs = page.getByRole("navigation", { name: "ビューの切り替え" });
+  for (const name of ["ツリー", "カンバン", "テーブル"]) {
+    await tabs.getByRole("link", { name }).click();
+    await expect(filter).toHaveValue("status:in_progress");
+  }
+  await expect(page.getByRole("textbox", { name: `タイトル: ${bravo.id}` })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: `タイトル: ${alpha.id}` })).toHaveCount(0);
+});
