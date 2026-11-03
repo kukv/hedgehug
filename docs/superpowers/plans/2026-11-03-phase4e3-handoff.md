@@ -26,11 +26,11 @@ plan 末尾の「決めたこと」と概要 plan の細部 81〜90 に記録済
 - 食い違いと見つけた不具合は plan の「組み上げで直した点」に記録し、plan の本文を直した。主なもの: Task 2 の `useListScope` の `apiBase`・`cliBase` を `$derived` にする（Task 7 Step 20b）、ビューの書き込みを取り消したらビューの一覧を読み直す（Task 7 Step 20c）、E2E の目印と待ち方、macOS の newtab
 - plan 冒頭の「着手の前に」を、通しの確認でやったことに書き換えた
 
-## 承認を待っていること
+## 利用者の承認（2026-11-03）
 
-- 親設計（Claude Docs の Hedgehug 設計ドキュメント、https://claude.ai/artifact/8d4dcVbePAxR2BxhMtkqnc）の「保存済みビュー」の箇条書きに1行足す: 「`hh view show` の `--store` はビューを読む場所としてだけ使い、クエリは常にマウント中の全 Store で評価する（絞るのはクエリの `store:`）。GUI のビューも同じ」（利用者の決定 2）
-- `live.spec.ts` の既存の競合（「組み上げで直した点」の最後の行）をどこで直すか
-- plan の承認
+- plan を承認した
+- 親設計の「保存済みビュー」に「`hh view show` の `--store` はビューを読む場所としてだけ使い、クエリは常にマウント中の全 Store で評価する（絞るのはクエリの `store:`）。GUI のビューも同じ」を足した
+- `live.spec.ts` の既存の競合は、main への別の直しにした（PR #42 `fix-poll-per-commit`）
 
 ## 承認のあと
 
