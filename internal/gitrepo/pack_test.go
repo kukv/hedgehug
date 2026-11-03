@@ -58,6 +58,43 @@ func writeIdx(t *testing.T, base string, offsets map[plumbing.Hash]int64) {
 	}
 }
 
+// Every hash of a bucket of many is found, from the bucket read once.
+func TestPackFindInALargeBucket(t *testing.T) {
+	t.Parallel()
+	offsets := map[plumbing.Hash]int64{}
+	var hs []plumbing.Hash
+	for i := range 1000 {
+		var h plumbing.Hash
+		h[0] = 0x42
+		binary.BigEndian.PutUint32(h[1:], uint32(i*7)) //nolint:gosec // G115: small
+		offsets[h] = int64(12 + i)
+		hs = append(hs, h)
+	}
+	base := filepath.Join(t.TempDir(), "pack-x")
+	writeIdx(t, base, offsets)
+	p, err := openPack(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = p.close() }()
+	for _, h := range hs {
+		got, ok, err := p.find(h)
+		if err != nil || !ok || got != offsets[h] {
+			t.Fatalf("find(%s) = %d, %v, %v; want %d", h, got, ok, err, offsets[h])
+		}
+		missing := h
+		missing[19] = 1 // between two hashes of the bucket
+		if _, ok, err := p.find(missing); err != nil || ok {
+			t.Fatalf("find(%s) = %v, %v; want not found", missing, ok, err)
+		}
+	}
+	var past plumbing.Hash
+	past[0], past[1] = 0x42, 0xff // after every hash of the bucket
+	if _, ok, err := p.find(past); err != nil || ok {
+		t.Errorf("find(%s) = %v, %v; want not found", past, ok, err)
+	}
+}
+
 func TestPackFind(t *testing.T) {
 	t.Parallel()
 	offsets := map[plumbing.Hash]int64{
@@ -159,7 +196,7 @@ func TestPackEntryAtBadSize(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = p.close() }()
-	if _, err := p.entryAt(0); err == nil {
+	if _, _, err := p.entryAt(0, make([]byte, readAhead)); err == nil {
 		t.Error("entryAt of an overflowing size succeeded")
 	}
 }

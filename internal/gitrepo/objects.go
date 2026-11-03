@@ -6,7 +6,6 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -198,11 +197,13 @@ func (o *objectReader) at(p *pack, off int64, asBase bool, depth int) (plumbing.
 	if typ, data, ok := o.bases.get(p, off); ok {
 		return typ, data, nil
 	}
-	e, err := p.entryAt(off)
-	if err != nil {
-		return plumbing.InvalidObject, nil, err
+	ob := objectBufs.Get().(*objectBuf)
+	e, rest, err := p.entryAt(off, ob.ahead[:])
+	var data []byte
+	if err == nil {
+		data, err = p.inflate(e, rest, ob)
 	}
-	data, err := p.inflate(e)
+	objectBufs.Put(ob)
 	if err != nil {
 		return plumbing.InvalidObject, nil, err
 	}
@@ -266,13 +267,9 @@ func readLoose(dir string, h plumbing.Hash) (plumbing.ObjectType, []byte, error)
 	if err != nil || n < 0 {
 		return plumbing.InvalidObject, nil, fmt.Errorf("loose object %s: bad size %q", h, size)
 	}
-	// n is not trusted to size a buffer: read at most n+1 bytes.
-	data, err := io.ReadAll(io.LimitReader(br, n+1))
+	data, err := readSized(br, n)
 	if err != nil {
 		return plumbing.InvalidObject, nil, fmt.Errorf("loose object %s: %w", h, err)
-	}
-	if int64(len(data)) != n {
-		return plumbing.InvalidObject, nil, fmt.Errorf("loose object %s: size %d, header says %d", h, len(data), n)
 	}
 	return typ, data, nil
 }

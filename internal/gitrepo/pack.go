@@ -10,6 +10,8 @@ import (
 	"io"
 	"os"
 	"sort"
+	"sync"
+	"sync/atomic"
 
 	"github.com/go-git/go-git/v5/plumbing"
 )
@@ -37,6 +39,7 @@ type pack struct {
 	base      string // the path without .idx or .pack
 	idx, data *os.File
 	fanout    [256]uint32
+	buckets   [256]atomic.Pointer[idxBucket]
 }
 
 func openPack(base string) (*pack, error) {
@@ -72,45 +75,67 @@ func (p *pack) close() error {
 	return errors.Join(p.idx.Close(), p.data.Close())
 }
 
-// find returns the offset of h in the pack. It reads the hashes that share
-// the first byte of h (about 2,300 of 600,000) and searches them.
+// find returns the offset of h in the pack. It searches the hashes that
+// share the first byte of h (about 2,300 of 600,000).
 func (p *pack) find(h plumbing.Hash) (int64, bool, error) {
-	var lo uint32
-	if h[0] > 0 {
-		lo = p.fanout[h[0]-1]
+	b, err := p.bucket(h[0])
+	if err != nil || b == nil {
+		return 0, false, err
 	}
-	hi := p.fanout[h[0]]
-	if hi < lo || hi > p.fanout[255] {
-		return 0, false, fmt.Errorf("%s.idx: bad fanout", p.base)
-	}
-	if lo == hi {
+	n := len(b.offsets) / 4
+	k := sort.Search(n, func(i int) bool { return bytes.Compare(b.hashes[i*20:i*20+20], h[:]) >= 0 })
+	if k == n || !bytes.Equal(b.hashes[k*20:k*20+20], h[:]) {
 		return 0, false, nil
 	}
-	n := int(hi - lo)
-	hashes := make([]byte, n*20)
-	if _, err := p.idx.ReadAt(hashes, idxHashes+int64(lo)*20); err != nil {
-		return 0, false, fmt.Errorf("read %s.idx: %w", p.base, err)
-	}
-	k := sort.Search(n, func(i int) bool { return bytes.Compare(hashes[i*20:i*20+20], h[:]) >= 0 })
-	if k == n || !bytes.Equal(hashes[k*20:k*20+20], h[:]) {
-		return 0, false, nil
-	}
-	count := int64(p.fanout[255])
-	i := int64(lo) + int64(k)
-	var b [8]byte
-	// After the hashes come count CRCs, count 4-byte offsets, then the
-	// 8-byte offsets that do not fit in 31 bits.
-	if _, err := p.idx.ReadAt(b[:4], idxHashes+count*24+i*4); err != nil {
-		return 0, false, fmt.Errorf("read %s.idx: %w", p.base, err)
-	}
-	off := binary.BigEndian.Uint32(b[:4])
+	off := binary.BigEndian.Uint32(b.offsets[k*4:])
 	if off&0x80000000 == 0 {
 		return int64(off), true, nil
 	}
-	if _, err := p.idx.ReadAt(b[:], idxHashes+count*28+int64(off&0x7fffffff)*8); err != nil {
+	// The 8-byte offsets that do not fit in 31 bits come after the 4-byte ones.
+	var large [8]byte
+	if _, err := p.idx.ReadAt(large[:], idxHashes+int64(p.fanout[255])*28+int64(off&0x7fffffff)*8); err != nil {
 		return 0, false, fmt.Errorf("read %s.idx: %w", p.base, err)
 	}
-	return int64(binary.BigEndian.Uint64(b[:])), true, nil //nolint:gosec // G115: git writes offsets below 2^63
+	return int64(binary.BigEndian.Uint64(large[:])), true, nil //nolint:gosec // G115: git writes offsets below 2^63
+}
+
+// idxBucket is the hashes that share a first byte and their 4-byte offsets,
+// as the index stores them.
+type idxBucket struct {
+	hashes, offsets []byte
+}
+
+// bucket returns the hashes of the index that start with first, read on
+// first use and kept: a walk over 100,000 commits looks in every bucket many
+// times. Kept whole, the buckets take as much memory as the index's hashes
+// and offsets (about 14 MB for 600,000 objects), much less than go-git's map.
+// It returns nil for an empty bucket.
+func (p *pack) bucket(first byte) (*idxBucket, error) {
+	if b := p.buckets[first].Load(); b != nil {
+		return b, nil
+	}
+	var lo uint32
+	if first > 0 {
+		lo = p.fanout[first-1]
+	}
+	hi := p.fanout[first]
+	if hi < lo || hi > p.fanout[255] {
+		return nil, fmt.Errorf("%s.idx: bad fanout", p.base)
+	}
+	if lo == hi {
+		return nil, nil
+	}
+	n := int64(hi - lo)
+	b := &idxBucket{hashes: make([]byte, n*20), offsets: make([]byte, n*4)}
+	if _, err := p.idx.ReadAt(b.hashes, idxHashes+int64(lo)*20); err != nil {
+		return nil, fmt.Errorf("read %s.idx: %w", p.base, err)
+	}
+	// After the hashes come a CRC for each object, then the offsets.
+	if _, err := p.idx.ReadAt(b.offsets, idxHashes+int64(p.fanout[255])*24+int64(lo)*4); err != nil {
+		return nil, fmt.Errorf("read %s.idx: %w", p.base, err)
+	}
+	p.buckets[first].Store(b) // two readers may both read it; either copy is right
+	return b, nil
 }
 
 // packEntry is the head of an object in a pack.
@@ -122,16 +147,33 @@ type packEntry struct {
 	baseRef plumbing.Hash // a REF delta's base
 }
 
-// entryAt reads the head of the object at off.
-func (p *pack) entryAt(off int64) (packEntry, error) {
+// readAhead is how much of an object one read takes: its head and, for most
+// objects of a store, all of its compressed data. A walk over 100,000
+// commits makes one read per object instead of two.
+const readAhead = 4096
+
+// objectBuf is what reading one object needs, kept for the next.
+type objectBuf struct {
+	ahead [readAhead]byte
+	rest  bytes.Reader
+	br    *bufio.Reader
+	zr    io.ReadCloser // a zlib reader, Reset for each object
+}
+
+var objectBufs = sync.Pool{New: func() any {
+	return &objectBuf{br: bufio.NewReaderSize(nil, readAhead)}
+}}
+
+// entryAt reads the head of the object at off into buf, which is long enough
+// for any head (32 bytes), and returns it with the bytes of buf after it.
+func (p *pack) entryAt(off int64, buf []byte) (packEntry, []byte, error) {
+	n, err := p.data.ReadAt(buf, off)
+	if err != nil && (!errors.Is(err, io.EOF) || n == 0) {
+		return packEntry{}, nil, fmt.Errorf("read %s.pack at %d: %w", p.base, off, err)
+	}
 	// The type and size take at most 10 bytes, and an OFS delta's offset
 	// at most 10 or a REF delta's hash 20 more.
-	var b [32]byte
-	n, err := p.data.ReadAt(b[:], off)
-	if err != nil && (!errors.Is(err, io.EOF) || n == 0) {
-		return packEntry{}, fmt.Errorf("read %s.pack at %d: %w", p.base, off, err)
-	}
-	r := headReader{buf: b[:n]}
+	r := headReader{buf: buf[:min(n, 32)]}
 	c := r.next()
 	e := packEntry{typ: plumbing.ObjectType((c >> 4) & 7), size: int64(c & 15)}
 	for shift := 4; c&0x80 != 0; shift += 7 {
@@ -139,7 +181,7 @@ func (p *pack) entryAt(off int64) (packEntry, error) {
 		e.size |= int64(c&0x7f) << shift
 	}
 	if e.size < 0 { // a varint that overflowed
-		return packEntry{}, fmt.Errorf("%s.pack at %d: bad object size", p.base, off)
+		return packEntry{}, nil, fmt.Errorf("%s.pack at %d: bad object size", p.base, off)
 	}
 	switch e.typ {
 	case plumbing.OFSDeltaObject:
@@ -151,16 +193,16 @@ func (p *pack) entryAt(off int64) (packEntry, error) {
 		}
 		e.baseOff = off - rel
 		if rel <= 0 || e.baseOff < 0 {
-			return packEntry{}, fmt.Errorf("%s.pack at %d: bad delta base offset", p.base, off)
+			return packEntry{}, nil, fmt.Errorf("%s.pack at %d: bad delta base offset", p.base, off)
 		}
 	case plumbing.REFDeltaObject:
 		copy(e.baseRef[:], r.take(20))
 	}
 	if r.short {
-		return packEntry{}, fmt.Errorf("%s.pack at %d: %w", p.base, off, io.ErrUnexpectedEOF)
+		return packEntry{}, nil, fmt.Errorf("%s.pack at %d: %w", p.base, off, io.ErrUnexpectedEOF)
 	}
 	e.data = off + int64(r.i)
-	return e, nil
+	return e, buf[r.i:n], nil
 }
 
 // headReader reads the bytes of an object's head; past the end it gives
@@ -189,20 +231,52 @@ func (r *headReader) take(n int) []byte {
 	return r.buf[r.i-n : r.i]
 }
 
-// inflate reads the zlib data of e.
-func (p *pack) inflate(e packEntry) ([]byte, error) {
-	zr, err := zlib.NewReader(bufio.NewReader(io.NewSectionReader(p.data, e.data, 1<<62)))
+// inflate reads the zlib data of e, whose first bytes, already read, are
+// rest; ob holds the readers it reuses.
+func (p *pack) inflate(e packEntry, rest []byte, ob *objectBuf) ([]byte, error) {
+	ob.rest.Reset(rest)
+	ob.br.Reset(io.MultiReader(&ob.rest, io.NewSectionReader(p.data, e.data+int64(len(rest)), 1<<62)))
+	var err error
+	if ob.zr == nil {
+		ob.zr, err = zlib.NewReader(ob.br)
+	} else {
+		err = ob.zr.(zlib.Resetter).Reset(ob.br, nil)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("read %s.pack at %d: %w", p.base, e.data, err)
 	}
-	defer func() { _ = zr.Close() }()
-	// e.size is not trusted to size a buffer: read at most size+1 bytes.
-	out, err := io.ReadAll(io.LimitReader(zr, e.size+1))
+	out, err := readSized(ob.zr, e.size)
 	if err != nil {
 		return nil, fmt.Errorf("read %s.pack at %d: %w", p.base, e.data, err)
 	}
-	if int64(len(out)) != e.size {
-		return nil, fmt.Errorf("read %s.pack at %d: size %d, header says %d", p.base, e.data, len(out), e.size)
+	return out, nil
+}
+
+// readSized reads r to its end, which must come after exactly size bytes.
+// size comes from the file, so it sizes a buffer only up to 1 MiB.
+func readSized(r io.Reader, size int64) ([]byte, error) {
+	var out []byte
+	if size <= 1<<20 {
+		out = make([]byte, size)
+		if _, err := io.ReadFull(r, out); err != nil {
+			return nil, err
+		}
+	} else {
+		var err error
+		if out, err = io.ReadAll(io.LimitReader(r, size)); err != nil {
+			return nil, err
+		}
+		if int64(len(out)) != size {
+			return nil, fmt.Errorf("%d bytes, header says %d: %w", len(out), size, io.ErrUnexpectedEOF)
+		}
+	}
+	// Reading to the end makes zlib check its checksum.
+	var extra [1]byte
+	switch n, err := io.ReadFull(r, extra[:]); {
+	case n > 0:
+		return nil, fmt.Errorf("longer than the %d bytes its header says", size)
+	case !errors.Is(err, io.EOF):
+		return nil, err
 	}
 	return out, nil
 }
