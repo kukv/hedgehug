@@ -180,7 +180,8 @@
   // so the table opens it, only while something shows the parent: the parent column, the kind column
   // (the kinds a parent allows) or the group of parents.
   const needsParents = $derived(
-    settings.groupBy === "parent" || shown.some((s) => s.id === "parent" || s.id === "kind"),
+    settings.groupBy === "parent" ||
+      settings.columns.some((id) => id === "parent" || id === "kind"),
   );
   type TreeHandle = ReturnType<typeof c.cache.watchTree>;
   let tree = $state.raw<TreeHandle | null>(null);
