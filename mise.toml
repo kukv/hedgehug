@@ -1,5 +1,6 @@
 [tools]
 "github:gotestyourself/gotestsum" = "1.13.0"
+golangci-lint = "2.15.0"
 node = "26.13.0"
 pnpm = "12.16.1"
 
