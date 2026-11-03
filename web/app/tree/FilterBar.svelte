@@ -1,6 +1,9 @@
 <script lang="ts">
   import { errorMessage } from "../../core/messages";
+  import type { SchemaView } from "../../core/schema";
+  import { type AppCore, core } from "../context";
   import Icon from "../icons/Icon.svelte";
+  import { replaceTerm, suggestTerm } from "../list/suggest";
   import CliLine from "../ui/CliLine.svelte";
 
   type Props = {
@@ -37,6 +40,39 @@
   }
 
   const message = $derived(error ? errorMessage(error) : null);
+
+  // "もしかして": the term the server refused, written with the name it is closest to. The names
+  // are in the schemas of the stores, which are read when there is an error to explain. A bar
+  // drawn without the core (it holds the schemas) shows the error and cannot suggest.
+  function appCore(): AppCore | null {
+    try {
+      return core();
+    } catch {
+      return null;
+    }
+  }
+  const c = appCore();
+  let schemas = $state.raw<SchemaView[]>([]);
+  $effect(() => {
+    if (!c || !error) {
+      schemas = [];
+      return;
+    }
+    let live = true;
+    void Promise.all(c.stores.stores().map((s) => c.schema.load(s.name).catch(() => null))).then(
+      (all) => {
+        if (live) schemas = all.filter((s) => s !== null);
+      },
+    );
+    return () => {
+      live = false;
+    };
+  });
+  const fix = $derived.by(() => {
+    const to = error ? suggestTerm(error, schemas) : null;
+    const q = to ? replaceTerm(applied, error, to) : null;
+    return to && q !== null ? { to, q } : null;
+  });
 </script>
 
 <div class="bar">
@@ -63,6 +99,12 @@
     <p class="error" role="alert">
       {message}
     </p>
+    {#if fix}
+      <p class="hint">
+        <button type="button" class="fix" onclick={() => onchange(fix.q)}>{fix.to}</button>
+        のことですか？
+      </p>
+    {/if}
   {/if}
 </div>
 
@@ -116,6 +158,24 @@
     margin: 0.375rem 0 0;
     color: var(--danger);
     font-size: 0.78rem;
+  }
+  .hint {
+    margin: var(--space-4) 0 0;
+    color: var(--ink-2);
+    font-size: 0.78rem;
+  }
+  .fix {
+    padding: 0.1rem 0.4rem;
+    border: 0;
+    border-radius: var(--radius-4);
+    background: var(--accent-weak);
+    color: var(--accent-ink);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  .fix:hover {
+    background: var(--accent-on);
   }
   .sr {
     position: absolute;

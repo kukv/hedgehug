@@ -36,7 +36,11 @@ export function fakeCore(over: Partial<Record<keyof AppCore, unknown>> = {}): Ap
       start() {},
       stop() {},
     },
-    cache: { subscribe: e.subscribe },
+    cache: {
+      subscribe: e.subscribe,
+      // a query that finds nothing
+      watchList: () => ({ ulids: () => [], error: () => null, loading: () => false, dispose() {} }),
+    },
     save: { subscribe: e.subscribe },
     stores: {
       stores: () => [],

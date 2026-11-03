@@ -143,6 +143,7 @@ function setup(
     },
     stores: {
       loaded: () => true,
+      stores: () => [{ name: "shared" }],
       workspace: () =>
         over.noWorkspace
           ? undefined
