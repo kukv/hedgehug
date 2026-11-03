@@ -36,9 +36,11 @@ export function baseQuery(b: QueryBase, form: "api" | "cli"): string {
 }
 
 // combine puts the base before the user's input. Every term of a query is
-// ANDed, so joining them narrows the base and never leaves it.
+// ANDed, so joining them narrows the base and never leaves it. A view over
+// every store has no base: its query is the user's input alone.
 export function combine(base: string, user: string): string {
   const u = user.trim();
+  if (base === "") return u;
   return u ? `${base} ${u}` : base;
 }
 

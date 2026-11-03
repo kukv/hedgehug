@@ -33,6 +33,10 @@ describe("combine", () => {
     expect(combine("project:X", "assignee:@me")).toBe("project:X assignee:@me");
     expect(combine("project:X", "   ")).toBe("project:X");
   });
+  it("has no space to lead with when there is no base", () => {
+    expect(combine("", " assignee:@me ")).toBe("assignee:@me");
+    expect(combine("", "")).toBe("");
+  });
 });
 
 describe("terms", () => {

@@ -3,11 +3,13 @@
   import type { LiveMark } from "../../core/cache";
   import { formatDate } from "../../core/format";
   import type { SchemaView } from "../../core/schema";
+  import type { StoreTone } from "../../core/stores";
   import Icon from "../icons/Icon.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
   import StatusIcon from "../icons/StatusIcon.svelte";
   import Avatar from "../ui/Avatar.svelte";
   import IdLabel from "../ui/IdLabel.svelte";
+  import StoreBadge from "../ui/StoreBadge.svelte";
   import type { FlatRow } from "./flatten";
   import { problemLabel, propText } from "./marks";
 
@@ -25,6 +27,7 @@
     dnd?: Attachment<HTMLElement>; // makes the row draggable and a drop target
     dragging?: boolean; // this row is being dragged
     dropMark?: "before" | "after" | "child" | "reject" | null; // what a drop on this row would do
+    storeTone?: StoreTone; // set when the view lists the tasks of several stores: the row shows its store
   };
   let {
     row,
@@ -40,6 +43,7 @@
     dnd,
     dragging = false,
     dropMark = null,
+    storeTone,
   }: Props = $props();
 
   const task = $derived(row.task);
@@ -135,6 +139,9 @@
   </span>
 
   <span class="tail">
+    {#if storeTone}
+      <StoreBadge store={task.store} tone={storeTone} compact />
+    {/if}
     {#if blockedBy}
       <span class="blocked"><Icon name="forbid" size={12} />{blockedBy} 待ち</span>
     {/if}

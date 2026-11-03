@@ -4,7 +4,7 @@
   type Props = {
     editing: boolean;
     depth?: number;
-    where: string; // "release / リリース準備 v2.4"
+    where: string; // "release / リリース準備 v2.4"; "" for a button that opens the create dialog
     kindLabel: string; // "タスク"
     ready?: boolean; // false while the schema of the store is not read: the title waits
     onstart: () => void;
@@ -75,7 +75,9 @@
   <button class="add" type="button" onclick={onstart}>
     <Icon name="plus" size={14} />
     <span>タスクを追加</span>
-    <span class="where">→ {where} · 種類: {kindLabel}</span>
+    {#if where !== ""}
+      <span class="where">→ {where} · 種類: {kindLabel}</span>
+    {/if}
   </button>
 {/if}
 
