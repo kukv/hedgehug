@@ -22,4 +22,4 @@ plan の「決めたこと」と「組み上げで直した点」、spec に記�
 
 ## 次
 
-PR を作る（`live.spec.ts` の既存の競合は PR #42 `fix-poll-per-commit` で別に直している。`a task added in the page does not get the mark` が `make e2e` で1度落ちることがあるのは、その競合）。
+PR を出してマージする。`live.spec.ts` の既存の競合を直した PR #42 は main に入り、このブランチに取り込んである（取り込んだあと `make e2e` を3回流し、84 件すべて PASS）。`go test -race ./...` の全件でまれに落ちていた `TestDrainSyncsAgainAfterARunningSync`（main にもある、テストの偽の時計の問題）は、このブランチで直した（90d28af）。
