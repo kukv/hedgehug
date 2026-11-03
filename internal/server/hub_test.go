@@ -5,8 +5,8 @@ import "testing"
 func TestHub(t *testing.T) {
 	t.Parallel()
 	h := newHub()
-	a, cancelA := h.Subscribe()
-	b, cancelB := h.Subscribe()
+	a, cancelA := h.subscribe()
+	b, cancelB := h.subscribe()
 	h.Publish(viewsChanged{Store: "me"})
 	for _, ch := range []<-chan sseEvent{a, b} {
 		if e := <-ch; e.(viewsChanged).Store != "me" {
@@ -27,7 +27,7 @@ func TestHub(t *testing.T) {
 	}
 	cancelB() // after the drop: does nothing
 	h.Close()
-	c, _ := h.Subscribe()
+	c, _ := h.subscribe()
 	if _, ok := <-c; ok {
 		t.Error("a subscription after Close is closed")
 	}

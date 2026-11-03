@@ -173,9 +173,9 @@ func (p *Poller) Run(ctx context.Context) {
 }
 
 // poll reads every store once. With publish false it only records (for
-// Snapshot before Run has looked). The first sight of a store only records,
+// snapshot before Run has looked). The first sight of a store only records,
 // as the HEAD does. The reads that take long (the sync state, the inbox)
-// are made without p.mu, so Snapshot does not wait for them.
+// are made without p.mu, so snapshot does not wait for them.
 func (p *Poller) poll(publish bool) {
 	p.pollMu.Lock()
 	defer p.pollMu.Unlock()
@@ -210,7 +210,7 @@ func (p *Poller) pollLocked(publish bool) {
 		}
 	}
 	// Only poll writes p.stores and the fields of a polled, and polls run
-	// one at a time (pollMu), so it reads them without p.mu; what Snapshot
+	// one at a time (pollMu), so it reads them without p.mu; what snapshot
 	// reads is written under p.mu, all together at the end of the loop, so
 	// that the loop (index, diffs) does not make hello wait.
 	type update struct {
@@ -452,9 +452,9 @@ func addOnce(list *[]string, u model.ULID) {
 	}
 }
 
-// Snapshot is the HEAD and the sync state of each store, and the items not
+// snapshot is the HEAD and the sync state of each store, and the items not
 // read, for hello.
-func (p *Poller) Snapshot() ([]storeState, int) {
+func (p *Poller) snapshot() ([]storeState, int) {
 	// Once a poll has run, hello does not wait for pollMu. Before that it
 	// looks again under pollMu: Run's first poll may have run meanwhile, and
 	// a second poll that records only would swallow a HEAD move.
