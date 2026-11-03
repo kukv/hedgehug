@@ -363,3 +363,4 @@ plan の誤りで、組み上げの途中で実物に合わせたもの。
 - Task 1・3: plan が挙げた `cliInboxRead`・`cliInboxRevert`・`cliScopeShow` は呼ぶ画面がなく、使われないので作らずに外した（d174483、fddc3ec）
 - Task 6: 概要 plan の細部 74 と plan の足元の「`hh migrate …`」は、実際のコマンドでは `hh schema migrate …`。足元の文字列を直し、`cliSchemaMigrate` の使われない `dryRun` も外した（f039062）
 - Task 6: 通知とスキーマのタブはアドレスに持たず状態だけだったため、戻る・再読み込みで失われた。アドレスに持たせ、タブの一覧の出どころを1つにした（d5993e7、98dd30d）
+- 最終レビューの直し: (1) 通知の操作のあと、アクティビティの「さらに読み込む」のあとにフォーカスが body に落ちていたので、行（なければ見出し）かボタンに戻す。(2) undo の `routeStore` がスキーマ画面の Store を見ていなかったので、`general` 以外の設定画面は Store を返す。(3) プロジェクトの設定にスキーマ読み込み失敗の「もう一度読み込む」と resync での再読み込みを足した。(4) スキーマの見出しの Store バッジは 2 つ以上の Store のときだけ出す。(5) 「2 つ以上の Store」を `useManyStores()`、日の差と `pad` を `core/format.ts` の `daysAgo`・`pad` に1つにした。(6) 通知とアクティビティも unmount で `seq` を進める。(7) e2e の手編集のコミットが `commit.gpgsign=false` を持っていなかったのを直し、待ちの理由をコメントにした。(8) 細部 74・128 の `hh migrate` の表記と、引き継ぎの起点（e525019）を直した

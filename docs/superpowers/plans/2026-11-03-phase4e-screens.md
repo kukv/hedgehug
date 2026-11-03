@@ -118,7 +118,7 @@
 71. キャンバスのテンプレート（6）・自動化（5）・「最終更新 11/03 koki」は作らない
 72. **SettingsSchema**: Store ごとに、ステータス・種類・プロパティ・ワークフローの閲覧と、各定義を使っているタスクの件数（全タスクをフロントで数える）。上書きのあるプロジェクトの一覧（親設計の「Store の設定画面には、上書きのあるプロジェクトの一覧を出す」）
 73. `schema check` の結果（`GET /api/schema/check`）と、migrate（各行の「名前を変える…」「併合する…」。`dry_run` の結果で変わる件数を確認ダイアログに出してから実行）。キャンバスの追加・削除・色・並び替え・未保存の変更の帯・「YAML を開く」は作らない（spec の範囲は閲覧・check・migrate）
-74. 足元に `hh schema check`・`hh migrate …`
+74. 足元に `hh schema check`・`hh schema migrate …`
 75. **SettingsGeneral**: 同期の状態（4d の同期のカードと同じ値を Store ごと）と間隔（決定 2）
 76. doctor は `GET /api/doctor` の findings を `check` ごとにまとめて出し、なければ「問題は見つかりませんでした」。「もう一度実行」、各 finding のタスクは「<ID> を開く」（細部 6）
 77. 修復は確認ダイアログを挟んで `POST /api/doctor/fix`、結果の `repaired` と残りを出す
@@ -185,5 +185,5 @@
 125. 「併合する…」は、同じ種類の定義が1つしかないときは出さない（併合先がないため）
 126. ワークフローは、遷移の制約と必須の項目を「X から移せるのは A、B だけ」「X にするには P、Q が必要」の文の一覧で見せる
 127. schema check の欄は `SchemaCheck.svelte` に分ける
-128. CLI の表記: 概要の細部 74 の「`hh migrate …`」は実際には `hh schema migrate …`。使わない `cliInboxRead`・`cliInboxRevert`・`cliScopeShow` は作らずに外した
+128. CLI の表記: 概要の細部 74 は当初「`hh migrate …`」と書いたが、実際は `hh schema migrate …`（細部 74 は直した）。使わない `cliInboxRead`・`cliInboxRevert`・`cliScopeShow` は作らずに外した
 129. `schema.changed` が届いたら、スキーマの画面は schema check だけを取り直す（定義と件数は自分の操作のあとに取り直しているため）

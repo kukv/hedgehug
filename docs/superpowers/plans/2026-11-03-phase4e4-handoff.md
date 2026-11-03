@@ -4,7 +4,7 @@
 
 ## いまの状態
 
-- ブランチ `phase4e4-settings`（main の 029657f から）。PR はまだ開いていない
+- ブランチ `phase4e4-settings`（main の e525019 から）。PR はまだ開いていない
 - plan: `docs/superpowers/plans/2026-11-03-phase4e4-settings.md`（Task 1〜7。末尾に「画面と範囲の確かめ」「決めたこと」「組み上げで直した点」）
 - 概要 plan `2026-11-03-phase4e-screens.md` に「4e-4 の plan で足した細部」（細部 91〜129）を足した。spec `docs/superpowers/specs/2026-11-01-phase4-gui-design.md` に 4e-4 の決定の段落がある
 
@@ -12,7 +12,8 @@
 
 - Task 1 通知、Task 2 アクティビティ、Task 3 プロジェクトの設定、Task 4 同期と保守の骨組みと設定のナビ、Task 5 doctor と修復・purge、Task 6 スキーマ、Task 7 仕上げ。Go は触っていない（web だけ）
 - Task 7 で、`grep -rn "4e-4" web/app web/core web/e2e` が 0 件であること、spec の「画面と範囲」の全行と E2E の一覧（作成、編集と自動保存、ツリーのドラッグ、カンバンの移動、CLI の変更が SSE で反映、通知の既読と revert、保存済みビュー、undo、削除と復元）がコードにあることを確かめ、plan の末尾に表で残した。足りないものはなかった
-- 検査: `go vet`・`gofmt -l .`（出力なし）・`go test -race ./...`（28 パッケージ ok）、`pnpm fix`・`pnpm check`・`biome ci`、`vitest`（138 ファイル・1694 件 PASS）、`pnpm build`、`make e2e` を3回（3回とも 101 件 PASS）
+- 最終レビューの直し（plan 末尾の「組み上げで直した点」に項目）: 通知とアクティビティのフォーカス、undo の Store、プロジェクトの設定の再読み込み、スキーマの Store 表示、「2 つ以上の Store」と日付の共通化、e2e の署名
+- 検査: `go vet`・`gofmt -l .`（出力なし）・`go test -race ./...`（28 パッケージ ok）、`pnpm fix`・`pnpm check`・`biome ci`、`vitest`（138 ファイル・1707 件 PASS）、`pnpm build`、`make e2e` を3回（3回とも 101 件 PASS）
 
 ## 実装中の決定
 
