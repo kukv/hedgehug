@@ -542,7 +542,7 @@ export interface paths {
         delete: operations["remove-view"];
         options?: never;
         head?: never;
-        /** Rename a saved view, as hh view rename */
+        /** Rename a saved view (as hh view rename), or change the settings that are given of a view that exists (404 if it does not, unlike PUT; a rename cannot come with settings) */
         patch: operations["rename-view"];
         trace?: never;
     };
@@ -1194,9 +1194,17 @@ export interface components {
              */
             count: number;
         };
-        ViewRenameInputBody: {
-            /** @description The new name */
-            name: string;
+        ViewPatchInputBody: {
+            /** @description The columns of the table */
+            columns?: string[];
+            group_by?: string;
+            kanban_columns?: string;
+            /** @enum {string} */
+            layout?: "tree" | "table" | "kanban";
+            /** @description The new name; a rename cannot come with settings */
+            name?: string;
+            query?: string;
+            swimlane?: string;
         };
         ViewSaveInputBody: {
             /** @description The columns of the table */
@@ -2803,7 +2811,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ViewRenameInputBody"];
+                "application/json": components["schemas"]["ViewPatchInputBody"];
             };
         };
         responses: {

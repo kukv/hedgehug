@@ -319,3 +319,56 @@ func TestViewUndoCreateRemoveRename(t *testing.T) {
 		t.Errorf("undo of rename: a = %v, b = %v", exists("a"), exists("b"))
 	}
 }
+
+func TestViewUpdateChangesOnlyWhatIsGiven(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	if _, err := ts.ViewSave("w", ViewChange{Layout: ptr("table"), Query: ptr("status:todo"), Columns: ptr([]string{"id", "title"})}); err != nil {
+		t.Fatal(err)
+	}
+	r, err := ts.ViewUpdate("w", ViewChange{Layout: ptr("kanban")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.Committed || r.View.Layout != "kanban" || r.View.Query != "status:todo" {
+		t.Errorf("update = %+v %+v", r, r.View)
+	}
+	if got := ts.headSubject(); got != "hedgehug: view update w" {
+		t.Errorf("subject = %q", got)
+	}
+	if got := SavedViewOf(r.View).Table.Columns; !slices.Equal(got, []string{"id", "title"}) {
+		t.Errorf("columns = %v", got)
+	}
+}
+
+func TestViewUpdateNeverCreates(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	_, err := ts.ViewUpdate("gone", ViewChange{Layout: ptr("table")})
+	wantErr(t, err, KindNotFound, "view.not_found")
+	if _, err := ts.ViewGet("gone"); err == nil {
+		t.Error("the view was created")
+	}
+	if _, err := ts.ViewSave("Release", ViewChange{}); err != nil {
+		t.Fatal(err)
+	}
+	// A name that differs only in case is another name here: the view is not found.
+	_, err = ts.ViewUpdate("release", ViewChange{Layout: ptr("table")})
+	wantErr(t, err, KindNotFound, "view.not_found")
+}
+
+func TestViewUpdateChecksTheViewThatResults(t *testing.T) {
+	t.Parallel()
+	ts := newTestSession(t)
+	if _, err := ts.ViewSave("t", ViewChange{Layout: ptr("table"), Query: ptr("sort:due")}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := ts.ViewUpdate("t", ViewChange{Layout: ptr("tree")})
+	wantErr(t, err, KindUsage, "view.tree_order")
+	_, err = ts.ViewUpdate("t", ViewChange{Layout: ptr("gantt")})
+	wantErr(t, err, KindUsage, "view.bad_value")
+	_, err = ts.ViewUpdate("t", ViewChange{Query: ptr(`"abc`)})
+	wantErr(t, err, KindUsage, "query.invalid")
+	_, err = ts.ViewUpdate("t", ViewChange{Columns: ptr([]string{"id", "nope"})})
+	wantErr(t, err, KindInvalid, "view.bad_column")
+}

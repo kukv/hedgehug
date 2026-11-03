@@ -33,10 +33,16 @@ type viewSaveInput struct {
 	}
 }
 
-type viewRenameInput struct {
+type viewPatchInput struct {
 	ViewParam
 	Body struct {
-		Name string `json:"name" doc:"The new name"`
+		Name          *string   `json:"name,omitempty" doc:"The new name; a rename cannot come with settings"`
+		Layout        *string   `json:"layout,omitempty" enum:"tree,table,kanban"`
+		Query         *string   `json:"query,omitempty"`
+		GroupBy       *string   `json:"group_by,omitempty"`
+		KanbanColumns *string   `json:"kanban_columns,omitempty"`
+		Swimlane      *string   `json:"swimlane,omitempty"`
+		Columns       *[]string `json:"columns,omitempty" doc:"The columns of the table"`
 	}
 }
 
@@ -93,11 +99,15 @@ func (s *Server) registerViews() {
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "rename-view", Method: http.MethodPatch, Path: "/api/views/{name}",
-		Summary: "Rename a saved view, as hh view rename", Tags: []string{"views"},
-	}, func(_ context.Context, in *viewRenameInput) (*viewOutput, error) {
+		Summary: "Rename a saved view (as hh view rename), or change the settings that are given of a view that exists (404 if it does not, unlike PUT; a rename cannot come with settings)",
+		Tags:    []string{"views"},
+	}, func(_ context.Context, in *viewPatchInput) (*viewOutput, error) {
+		b := in.Body
 		ss := s.session(in.Store)
 		defer ss.Close()
-		r, err := ss.ViewRename(in.Name, in.Body.Name)
+		r, err := ss.ViewPatch(in.Name, b.Name, ops.ViewChange{
+			Layout: b.Layout, Query: b.Query, GroupBy: b.GroupBy, KanbanColumns: b.KanbanColumns, Swimlane: b.Swimlane, Columns: b.Columns,
+		})
 		if err != nil {
 			return nil, problemOf(err)
 		}
