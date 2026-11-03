@@ -68,7 +68,7 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    if (e.key !== "Escape") return;
+    if (!open || e.key !== "Escape") return;
     e.preventDefault();
     e.stopPropagation();
     close();

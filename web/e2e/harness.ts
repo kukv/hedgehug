@@ -11,10 +11,10 @@ const BIN = process.env.HEDGEHUG_BIN ?? resolve(import.meta.dirname, "../../bin/
 /** remote: the store gets a bare repository of its own as its remote, for a test with a second user. */
 export type StoreSpec = { name: string; prefix: string; workspace?: string; remote?: boolean };
 
-/** The store every test starts with, unless it says store: null. */
 /** The login of the account of the page; the author of the commits the page sees. */
 export const LOGIN = "e2e";
 
+/** The store every test starts with, unless it says store: null. */
 export const DEFAULT_STORE: StoreSpec = { name: "demo", prefix: "DM" };
 
 export type TaskJson = {

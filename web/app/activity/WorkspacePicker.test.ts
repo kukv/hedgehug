@@ -95,6 +95,15 @@ describe("WorkspacePicker", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("leaves Escape alone while it is closed", async () => {
+    setup();
+    const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    const stop = vi.spyOn(event, "stopPropagation");
+    screen.getByRole("button", { name: /ワークスペース$/ }).dispatchEvent(event);
+    expect(stop).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
+  });
+
   it("clears the selection", async () => {
     const { onchange } = setup(["W1", "W2"]);
     await open();
