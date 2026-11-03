@@ -210,6 +210,7 @@ func (s *Server) registerActivity() {
 			return nil, newProblem(http.StatusBadRequest, "notification.read_args", "give either all: true or ids, not both and not neither")
 		}
 		ss := s.session(in.Store)
+		defer ss.Close()
 		ulids, err := ops.ParseInboxItems(in.Body.IDs)
 		if err != nil {
 			return nil, problemOf(err)
