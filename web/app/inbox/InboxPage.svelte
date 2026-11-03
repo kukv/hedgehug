@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from "svelte";
+  import { untrack } from "svelte";
   import { unwrap } from "../../core/api/client";
   import { cliInbox } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
@@ -58,7 +58,7 @@
     unread.current;
     untrack(() => void load());
   });
-  onMount(() => {
+  $effect(() => {
     const offs = [
       c.conn.on("resync", () => void load()),
       c.conn.on("tasks.changed", () => void load()),
@@ -69,7 +69,7 @@
   });
 
   const sorted = $derived(sortNotifications(items ?? []));
-  const counts = $derived(tabCounts(sorted));
+  const counts = $derived(tabCounts(items ?? []));
   const shown = $derived(filterByTab(sorted, tab));
   const many = $derived.by(() => {
     storesRev.current;
@@ -111,15 +111,15 @@
     await load();
   }
 
-  const markRead = (n: Notification) =>
-    unwrap(
-      c.api.PATCH("/api/notifications/{id}", {
-        params: { path: { id: n.ulid } },
-        body: { read: true },
-      }),
-    );
-
-  const read = (n: Notification) => run(n.ulid, async () => void (await markRead(n)));
+  const read = (n: Notification) =>
+    run(n.ulid, async () => {
+      await unwrap(
+        c.api.PATCH("/api/notifications/{id}", {
+          params: { path: { id: n.ulid } },
+          body: { read: true },
+        }),
+      );
+    });
 
   const readAll = () =>
     run("all", async () => {
@@ -137,13 +137,13 @@
 
   // Opening the task reads the item first (⌘/Ctrl-click and the middle button too).
   function open(e: MouseEvent, n: Notification, href: string): void {
-    if (!n.read) void read(n);
+    if (!n.read && !isBusy(n)) void read(n);
     onLinkClick(e, href);
   }
 
   // The middle button opens the task in a new tab by itself, and reads the item too.
   function openAux(e: MouseEvent, n: Notification): void {
-    if (e.button === 1 && !n.read) void read(n);
+    if (e.button === 1 && !n.read && !isBusy(n)) void read(n);
   }
 
   const isBusy = (n: Notification) => busy.includes(n.ulid);
@@ -171,8 +171,11 @@
   <div class="body">
     {#if failure}
       <FormError message={failure} />
-    {:else if items === null}
-      <p class="msg">読み込み中…</p>
+    {/if}
+    {#if items === null}
+      {#if !failure}
+        <p class="msg">読み込み中…</p>
+      {/if}
     {:else if shown.length === 0}
       <p class="msg">{tab === "all" ? "通知はありません" : `${tabLabel}の通知はありません`}</p>
     {:else}

@@ -156,7 +156,12 @@ export class Peer {
       "accounts:\n  - name: bob\n    host: github.com\n    login: bob\n",
     );
     const peer = new Peer(home);
-    peer.hh("store", "add", name, "--remote", owner.remote);
+    try {
+      peer.hh("store", "add", name, "--remote", owner.remote);
+    } catch (e) {
+      peer.stop();
+      throw e;
+    }
     return peer;
   }
 

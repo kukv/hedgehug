@@ -6,7 +6,7 @@ import {
   notificationText,
   sortNotifications,
   tabCounts,
-  tabOf,
+  tabsOf,
 } from "./notifications";
 
 function n(over: Partial<Notification> & { ulid: string }): Notification {
@@ -23,7 +23,7 @@ function n(over: Partial<Notification> & { ulid: string }): Notification {
   };
 }
 
-describe("tabOf", () => {
+describe("tabsOf", () => {
   it.each([
     ["overwritten", ["all", "overwritten"]],
     ["mention", ["all", "mention"]],
@@ -37,7 +37,7 @@ describe("tabOf", () => {
     ["watch", ["all"]],
     ["something_new", ["all"]],
   ])("%s", (kind, tabs) => {
-    expect(tabOf(kind)).toEqual(tabs);
+    expect(tabsOf(kind)).toEqual(tabs);
   });
 });
 
@@ -154,7 +154,7 @@ describe("notificationText", () => {
     expect(t({ kind: "parent_cycle", value: { from: "A", to: null } })).toBe(
       "親の循環を検出したため、ルートに戻しました",
     );
-    expect(t({ kind: "parent_cycle", value: { From: "A", To: "B" } })).toBe(
+    expect(t({ kind: "parent_cycle", value: { from: "A", to: "B" } })).toBe(
       "親の循環を検出したため、元の親に戻しました",
     );
     expect(t({ kind: "parent_deleted", value: { from: "A", to: null } })).toBe(

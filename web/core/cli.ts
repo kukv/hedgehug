@@ -120,16 +120,6 @@ export function cliInbox(i: { all?: boolean; store?: string } = {}): string {
   return cliLine(a);
 }
 
-// cliInboxRead is hh inbox read <ULID>... or, with "all", hh inbox read --all.
-export function cliInboxRead(ulids: string[] | "all", store?: string): string {
-  const a: string[] = ["inbox", "read", ...(ulids === "all" ? ["--all"] : ulids)];
-  if (store) a.push("--store", store);
-  return cliLine(a);
-}
-
-export const cliInboxRevert = (ulid: string, store?: string): string =>
-  cliLine(store ? ["inbox", "revert", ulid, "--store", store] : ["inbox", "revert", ulid]);
-
 export function cliSync(store?: string): string {
   return cliLine(store ? ["sync", "--store", store] : ["sync"]);
 }

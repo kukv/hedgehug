@@ -23,7 +23,7 @@ const REPAIR_KINDS: readonly string[] = [
 ];
 
 /** The tabs an item of the kind is in. Every item is in "all"; assigned and watch only there. */
-export function tabOf(kind: string): InboxTab[] {
+export function tabsOf(kind: string): InboxTab[] {
   if (kind === "overwritten") return ["all", "overwritten"];
   if (kind === "mention") return ["all", "mention"];
   if (REPAIR_KINDS.includes(kind)) return ["all", "repair"];
@@ -31,7 +31,7 @@ export function tabOf(kind: string): InboxTab[] {
 }
 
 export function filterByTab(items: Notification[], tab: InboxTab): Notification[] {
-  return items.filter((n) => tabOf(n.kind).includes(tab));
+  return items.filter((n) => tabsOf(n.kind).includes(tab));
 }
 
 /** The number of unread items in each tab. */
@@ -39,7 +39,7 @@ export function tabCounts(items: Notification[]): Record<InboxTab, number> {
   const counts: Record<InboxTab, number> = { all: 0, overwritten: 0, mention: 0, repair: 0 };
   for (const n of items) {
     if (n.read) continue;
-    for (const t of tabOf(n.kind)) counts[t]++;
+    for (const t of tabsOf(n.kind)) counts[t]++;
   }
   return counts;
 }
@@ -105,9 +105,8 @@ function repairedText(detail: Obj): string {
     }
     case "parent_cycle": {
       const m = obj(value);
-      if ("to" in m || "To" in m) {
-        const to = m.to ?? m.To;
-        return `親の循環を検出したため、${to ? "元の親" : "ルート"}に戻しました`;
+      if ("to" in m) {
+        return `親の循環を検出したため、${m.to ? "元の親" : "ルート"}に戻しました`;
       }
       break;
     }

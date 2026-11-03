@@ -303,6 +303,58 @@ describe("InboxPage", () => {
     await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(4));
   });
 
+  it("shows the answer of the latest request when an older one arrives last", async () => {
+    const { api, conn } = setup([]);
+    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(1));
+    const pending: ((v: unknown) => void)[] = [];
+    api.GET.mockImplementation(() => new Promise((r) => pending.push(r)) as never);
+    conn.emit("resync");
+    conn.emit("resync");
+    await waitFor(() => expect(pending).toHaveLength(2));
+    const answer = (x: Notification) => ok([x]);
+    pending[1]?.(await answer(n({ ulid: "NB", task: task("REL-2") })));
+    await screen.findByText("title of REL-2");
+    pending[0]?.(await answer(n({ ulid: "NA", task: task("REL-1") })));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(screen.getByText("title of REL-2")).toBeTruthy();
+    expect(screen.queryByText("title of REL-1")).toBeNull();
+  });
+
+  it("stops listening to the connection when it is gone", async () => {
+    const { api, conn, view } = setup([mention]);
+    await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(1));
+    view.unmount();
+    conn.emit("resync");
+    conn.emit("tasks.changed", { store: "shared", ulids: [], removed: [] });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(api.GET).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the items it has when a reload fails, with the error above them", async () => {
+    const { api, conn } = setup([mention]);
+    await screen.findByText("title of REL-4");
+    api.GET.mockImplementation(() => Promise.reject(new Error("boom")) as never);
+    conn.emit("resync");
+    expect(await screen.findByRole("alert")).toHaveTextContent("boom");
+    expect(screen.getByText("title of REL-4")).toBeTruthy();
+  });
+
+  it("does not read an item again while its request is on the way", async () => {
+    const { api } = setup([mention]);
+    let release: () => void = () => {};
+    api.PATCH.mockImplementation(
+      () =>
+        new Promise((r) => {
+          release = () => r({ data: undefined, response: new Response(null, { status: 204 }) });
+        }) as never,
+    );
+    const link = await screen.findByRole("link", { name: "REL-4" });
+    await fireEvent.click(link);
+    await fireEvent.click(link);
+    expect(api.PATCH).toHaveBeenCalledTimes(1);
+    release();
+  });
+
   it("shows the words of the server when the list cannot be read", async () => {
     setup([], { getError: new Error("boom") });
     expect(await screen.findByRole("alert")).toHaveTextContent("boom");
