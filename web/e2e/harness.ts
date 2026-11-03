@@ -1,7 +1,7 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { test as base, expect, type Page } from "@playwright/test";
 
 // The binary under test. `make e2e` builds it into bin/hedgehug; HEDGEHUG_BIN
@@ -52,9 +52,24 @@ export class Hedgehug {
   static env(home: string): NodeJS.ProcessEnv {
     return {
       ...process.env,
+      PATH: `${Hedgehug.binDir(home)}${delimiter}${process.env.PATH ?? ""}`,
       HEDGEHUG_HOME: join(home, "hh"),
       HEDGEHUG_AUTO_SYNC: "0",
     };
+  }
+
+  /**
+   * A directory with the binary under test as `hedgehug`: the merge driver of a Store runs it from PATH,
+   * and hh doctor reports a Store whose PATH has none.
+   */
+  private static binDir(home: string): string {
+    if (basename(BIN) === "hedgehug") return dirname(BIN);
+    const dir = join(home, "bin");
+    if (!existsSync(join(dir, "hedgehug"))) {
+      mkdirSync(dir, { recursive: true });
+      symlinkSync(BIN, join(dir, "hedgehug"));
+    }
+    return dir;
   }
 
   /** Runs hh and returns its standard output. A non-zero exit throws. */

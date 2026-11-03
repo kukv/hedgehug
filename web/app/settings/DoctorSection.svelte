@@ -43,6 +43,7 @@
   // What the last repair did (the findings that are left are the report's).
   let fixed = $state.raw<DoctorReport | null>(null);
   let resultEl: HTMLElement | undefined = $state();
+  let root: HTMLElement | undefined = $state();
   // The latest request wins: an answer of an older one, or one that comes after the section is gone, is dropped.
   let seq = 0;
 
@@ -81,6 +82,8 @@
       if (!r) throw new Error(`${s} の診断の結果が返りませんでした`);
       report = r;
       failure = null;
+      // The buttons do not wait for the IDs: they fill in when they come.
+      loading = false;
       await resolveIds(r, s, mine);
     } catch (e) {
       // The result that was read stays; the failure is shown above it.
@@ -92,13 +95,6 @@
 
   $effect(() => {
     const s = store;
-    // What was read of another Store is not this one's.
-    report = null;
-    ids = {};
-    fixed = null;
-    failure = null;
-    fixing = false;
-    dialogOpen = false;
     untrack(() => void load(s));
     return () => {
       seq++;
@@ -132,6 +128,7 @@
       // 「修復…」 may be gone now: the focus goes to the result.
       await tick();
       resultEl?.focus();
+      fixing = false;
       await resolveIds(r, s, mine);
     } catch (e) {
       if (mine === seq) toast({ message: errorMessage(e) });
@@ -144,10 +141,13 @@
     if (!fixing) dialogOpen = false;
   }
 
-  function again(): void {
+  async function again(): Promise<void> {
     if (loading || fixing) return;
     fixed = null;
-    void load(store);
+    await load(store);
+    // The button was disabled while it asked: the focus comes back to it.
+    await tick();
+    root?.querySelector<HTMLElement>("[data-again]")?.focus();
   }
 
   const groups = $derived(groupFindings(report?.findings ?? []));
@@ -163,13 +163,13 @@
   const cli = $derived(cliDoctor({ fix: true, store: many ? store : undefined }));
 </script>
 
-<section class="store" aria-labelledby="{uid}-h">
+<section class="store" aria-labelledby="{uid}-h" bind:this={root}>
   <h3 id="{uid}-h" class="sr">診断: {store}</h3>
   <div class="bar">
     {#if many}
       <StoreBadge {store} tone={c.stores.tone(store)} />
     {/if}
-    <span class="sum">
+    <span class="sum" aria-live="polite">
       {#if report === null}
         {loading ? "診断しています…" : ""}
       {:else if findingsCount === 0}
@@ -179,7 +179,9 @@
       {/if}
     </span>
     <span class="end">
-      <Button size="sm" disabled={loading || fixing} onclick={again}>もう一度実行</Button>
+      <Button size="sm" data-again disabled={loading || fixing} onclick={() => void again()}>
+        もう一度実行
+      </Button>
       {#if findingsCount > 0}
         <Button size="sm" disabled={loading || fixing} onclick={() => (dialogOpen = true)}>
           修復…

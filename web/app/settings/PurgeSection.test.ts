@@ -111,6 +111,25 @@ describe("PurgeSection: the plan", () => {
     expect(screen.queryByRole("list", { name: "完全に削除されるタスク" })).toBeNull();
   });
 
+  it("the focus comes back to the button that checked, or to the field when Enter did", async () => {
+    setup();
+    check().focus();
+    await fireEvent.click(check());
+    await screen.findByRole("button", { name: "完全に削除…" });
+    await waitFor(() => expect(document.activeElement).toBe(check()));
+    days().focus();
+    await fireEvent.keyDown(days(), { key: "Enter" });
+    await waitFor(() => expect(days().disabled).toBe(false));
+    await waitFor(() => expect(document.activeElement).toBe(days()));
+  });
+
+  it("the plan is in a live region", async () => {
+    setup(["a"], [empty]);
+    await fireEvent.click(check());
+    const t = await screen.findByText("消すものはありません");
+    expect(t.closest("[aria-live]")?.getAttribute("aria-live")).toBe("polite");
+  });
+
   it("a change of the days takes the plan away: only what was checked is deleted", async () => {
     setup();
     await fireEvent.click(check());
@@ -242,6 +261,10 @@ describe("PurgeSection: the deletion", () => {
     const list = await screen.findByRole("list", { name: "完全に削除されるタスク" });
     expect(list.textContent).toContain("DM-9");
     expect(list.textContent).not.toContain("DM-1");
+    // the dialog is closed and the check is over: the focus is on the button that began the deletion
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "完全に削除…" })),
+    );
   });
 
   it("another failure is a toast, and the dialog stays", async () => {

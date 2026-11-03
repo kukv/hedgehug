@@ -154,14 +154,47 @@ describe("DoctorSection: the diagnosis", () => {
     expect(within(region()).queryByRole("link")).toBeNull();
   });
 
-  it("asks again with 「もう一度実行」, which waits while it asks", async () => {
+  it("asks again with 「もう一度実行」, which waits while it asks and gets the focus back", async () => {
     const { api } = setup();
     await within(region()).findByText("問題は見つかりませんでした");
-    const again = within(region()).getByRole("button", { name: "もう一度実行" });
+    let resolve: (v: unknown) => void = () => {};
+    api.GET.mockImplementation((() => new Promise((r) => (resolve = r))) as never);
+    const again = within(region()).getByRole("button", {
+      name: "もう一度実行",
+    }) as HTMLButtonElement;
+    again.focus();
     await fireEvent.click(again);
-    expect((again as HTMLButtonElement).disabled).toBe(true);
-    await waitFor(() => expect((again as HTMLButtonElement).disabled).toBe(false));
+    expect(again.disabled).toBe(true);
+    resolve({ data: [report()], response: new Response(null, { status: 200 }) });
+    await waitFor(() => expect(again.disabled).toBe(false));
+    await waitFor(() => expect(document.activeElement).toBe(again));
     expect(api.GET).toHaveBeenCalledTimes(2);
+  });
+
+  it("the buttons do not wait for the IDs of the tasks to come", async () => {
+    const reports = { a: report({ findings: [taskFinding] }) };
+    const { api } = setup({ reports });
+    await within(region()).findByRole("link", { name: "DM-2 を開く" });
+    let resolveTask: (v: unknown) => void = () => {};
+    api.GET.mockImplementation(((path: string) =>
+      path === "/api/doctor" ? ok([reports.a]) : new Promise((r) => (resolveTask = r))) as never);
+    const again = within(region()).getByRole("button", {
+      name: "もう一度実行",
+    }) as HTMLButtonElement;
+    await fireEvent.click(again);
+    await waitFor(() => expect(again.disabled).toBe(false));
+    // the task is still being asked for: the buttons are not blocked by it
+    resolveTask({
+      data: { id: "DM-5", ulid: "U2" },
+      response: new Response(null, { status: 200 }),
+    });
+    await within(region()).findByRole("link", { name: "DM-5 を開く" });
+  });
+
+  it("the summary is a live region", async () => {
+    setup();
+    const t = await within(region()).findByText("問題は見つかりませんでした");
+    expect(t.closest("[aria-live]")?.getAttribute("aria-live")).toBe("polite");
   });
 
   it("a failure to read is said, and a failure of the second read keeps the first result", async () => {
@@ -209,36 +242,33 @@ describe("DoctorSection: the diagnosis", () => {
     expect(two.view.container.querySelector(".badge")).toBeTruthy();
   });
 
-  it("an answer that a newer store overtook is dropped", async () => {
-    const late: { resolve: (v: unknown) => void }[] = [];
+  it("a section drawn again for another store shows that store's result, not an old answer", async () => {
+    const late: ((v: unknown) => void)[] = [];
     const api = {
       GET: vi.fn((_p: string, o: { params: { query: { store: string } } }) =>
         o.params.query.store === "a"
-          ? new Promise((resolve) => late.push({ resolve }))
+          ? new Promise((resolve) => late.push(resolve))
           : ok([report({ store: "b", findings: [fileFinding] })]),
       ),
       POST: vi.fn(),
     };
-    const view = renderWithCore(
-      DoctorSection,
-      { store: "a", many: false },
-      {
-        api,
-        conn: new FakeConn(),
-        cache: { task: () => undefined, subscribe: () => () => {} },
-        stores: { tone: () => "teal", subscribe: () => () => {} },
-      },
-    );
-    await view.rerender({ store: "b", many: false });
+    const over = {
+      api,
+      conn: new FakeConn(),
+      cache: { task: () => undefined, subscribe: () => () => {} },
+      stores: { tone: () => "teal", subscribe: () => () => {} },
+    };
+    renderWithCore(DoctorSection, { store: "a", many: false }, over).unmount();
+    renderWithCore(DoctorSection, { store: "b", many: false }, over);
     await within(region("診断: b")).findByText("does not decode");
-    late[0]?.resolve({
+    late[0]?.({
       data: [report({ store: "a", findings: [taskFinding] })],
       response: new Response(null, { status: 200 }),
     });
     await Promise.resolve();
     await Promise.resolve();
     expect(within(region("診断: b")).queryByText("parent: the parent is deleted")).toBeNull();
-    expect(within(region("診断: b")).getByText("does not decode")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "診断: a" })).toBeNull();
   });
 
   it("an answer that comes after it is gone changes nothing", async () => {

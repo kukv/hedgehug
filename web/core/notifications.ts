@@ -82,7 +82,8 @@ export type NotificationText = { label: string; text: string; mine?: string };
 
 const MOVED_AWAY = "移った先のワークスペースにはありません";
 
-export function repairedText(detail: Obj): string {
+/** The sentence of a repair kind this knows, or null. */
+export function repairedKnownText(detail: Obj): string | null {
   const kind = str(detail.kind);
   const value = detail.value;
   switch (kind) {
@@ -113,6 +114,14 @@ export function repairedText(detail: Obj): string {
     case "parent_deleted":
       return "親が削除されたため、ルートに移しました";
   }
+  return null;
+}
+
+function repairedText(detail: Obj): string {
+  const known = repairedKnownText(detail);
+  if (known !== null) return known;
+  const kind = str(detail.kind);
+  const value = detail.value;
   if (kind === "") return "同期の修復";
   return value === undefined || value === null
     ? `同期の修復: ${kind}`

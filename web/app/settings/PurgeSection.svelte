@@ -23,10 +23,9 @@
   let input = $state("90");
   const days = $derived(parsePurgeDays(input));
 
-  // The plan that was checked, and the days and the Store it was checked for.
+  // The plan that was checked, for the days and the Store that are in the fields now: a change of
+  // either takes it away, and the fields do not change while a request is on its way.
   let plan = $state.raw<PurgePlan | null>(null);
-  let planDays = $state(0);
-  let planStore = $state("");
   let failure = $state<string | null>(null);
   let checking = $state(false);
   let purging = $state(false);
@@ -44,10 +43,19 @@
   });
 
   function forget(): void {
-    seq++;
     plan = null;
     failure = null;
-    checking = false;
+  }
+
+  // The controls are disabled while a request is on its way, which drops the focus: it comes back
+  // to the one that began the action.
+  // The first of the selectors that is there takes it.
+  async function refocus(...selectors: string[]): Promise<void> {
+    await tick();
+    for (const sel of selectors) {
+      const el = root?.querySelector<HTMLElement>(sel);
+      if (el) return el.focus();
+    }
   }
 
   async function run(s: string, d: number): Promise<void> {
@@ -60,8 +68,6 @@
       );
       if (mine !== seq) return;
       plan = p;
-      planDays = d;
-      planStore = s;
     } catch (e) {
       if (mine === seq) {
         plan = null;
@@ -72,14 +78,15 @@
     }
   }
 
-  function checkNow(): void {
+  async function checkNow(from: "[data-days]" | "[data-check]"): Promise<void> {
     if (busy || days === null || !store) return;
-    void run(store, days);
+    await run(store, days);
+    await refocus(from);
   }
 
   async function purge(): Promise<void> {
-    if (busy || !plan) return;
-    const [s, d, confirmed] = [planStore, planDays, plan];
+    if (busy || !plan || days === null) return;
+    const [s, d, confirmed] = [store, days, plan];
     const mine = ++seq;
     purging = true;
     try {
@@ -99,8 +106,7 @@
         message: `${n} 件のタスクを完全に削除しました${r.commit ? `（${r.commit.slice(0, 7)}）` : ""}`,
       });
       // 「完全に削除…」 is gone: the focus goes back to the check.
-      await tick();
-      root?.querySelector<HTMLElement>("[data-check]")?.focus();
+      await refocus("[data-check]");
     } catch (e) {
       if (mine !== seq) return;
       toast({ message: errorMessage(e) });
@@ -109,6 +115,7 @@
         dialogOpen = false;
         purging = false;
         await run(s, d);
+        await refocus("[data-delete]", "[data-check]");
       }
     } finally {
       if (mine === seq) purging = false;
@@ -119,10 +126,10 @@
     if (!purging) dialogOpen = false;
   }
 
-  const cli = $derived(plan ? cliPurge(planDays, many ? planStore : undefined) : "");
+  const cli = $derived(plan && days !== null ? cliPurge(days, many ? store : undefined) : "");
   const invalid = $derived(days === null);
   const summary = $derived(
-    `${many ? `Store ${planStore} の` : ""}${plan?.tasks.length ?? 0} 件の削除済みタスクと ${plan?.forwards.length ?? 0} 件の転送ファイルを、完全に削除します。`,
+    `${many ? `Store ${store} の` : ""}${plan?.tasks.length ?? 0} 件の削除済みタスクと ${plan?.forwards.length ?? 0} 件の転送ファイルを、完全に削除します。`,
   );
 </script>
 
@@ -163,6 +170,7 @@
           autocomplete="off"
           value={input}
           disabled={busy}
+          data-days
           aria-invalid={invalid ? "true" : undefined}
           aria-describedby="{uid}-hint"
           oninput={(e) => {
@@ -170,13 +178,20 @@
             forget();
           }}
           onkeydown={(e) => {
-            if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) checkNow();
+            if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229)
+              void checkNow("[data-days]");
           }}
         >
         <span class="unit">日</span>
       </span>
     </div>
-    <Button data-check disabled={busy || invalid || !store} onclick={checkNow}>確かめる</Button>
+    <Button
+      data-check
+      disabled={busy || invalid || !store}
+      onclick={() => void checkNow("[data-check]")}
+    >
+      確かめる
+    </Button>
   </div>
   <p id="{uid}-hint" class="hint" class:bad={invalid}>
     {invalid
@@ -188,30 +203,32 @@
     <FormError message={failure} />
   {/if}
 
-  {#if plan}
-    {#if empty}
-      <p class="msg">消すものはありません</p>
-    {:else}
-      {#if plan.tasks.length > 0}
-        <ul class="tasks" aria-label="完全に削除されるタスク">
-          {#each plan.tasks as t (t.ulid)}
-            <li>
-              <IdLabel id={t.id} ulid={t.ulid} />
-              <span>{t.title}</span>
-            </li>
-          {/each}
-        </ul>
+  <div class="plan" aria-live="polite">
+    {#if plan}
+      {#if empty}
+        <p class="msg">消すものはありません</p>
+      {:else}
+        {#if plan.tasks.length > 0}
+          <ul class="tasks" aria-label="完全に削除されるタスク">
+            {#each plan.tasks as t (t.ulid)}
+              <li>
+                <IdLabel id={t.id} ulid={t.ulid} />
+                <span>{t.title}</span>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+        {#if plan.forwards.length > 0}
+          <p class="msg">転送ファイル {plan.forwards.length} 件</p>
+        {/if}
+        <div>
+          <Button variant="danger" data-delete disabled={busy} onclick={() => (dialogOpen = true)}>
+            完全に削除…
+          </Button>
+        </div>
       {/if}
-      {#if plan.forwards.length > 0}
-        <p class="msg">転送ファイル {plan.forwards.length} 件</p>
-      {/if}
-      <div>
-        <Button variant="danger" disabled={busy} onclick={() => (dialogOpen = true)}>
-          完全に削除…
-        </Button>
-      </div>
     {/if}
-  {/if}
+  </div>
 </div>
 
 <Dialog open={dialogOpen} title="完全に削除する" width={560} {cli} onclose={closeDialog}>
@@ -240,6 +257,12 @@
   }
   .hint.bad {
     color: var(--danger);
+  }
+  .plan {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-8);
   }
   .row {
     display: flex;

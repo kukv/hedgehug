@@ -1,5 +1,5 @@
 import type { Schemas } from "./api/client";
-import { repairedText } from "./notifications";
+import { repairedKnownText } from "./notifications";
 
 type Finding = Schemas["Finding"];
 export type DoctorReport = Schemas["DoctorReport"];
@@ -79,8 +79,7 @@ export function fixedText(kind: string, value: unknown): string {
       return "削除されていたワークスペースを復活させました";
   }
   // The kinds a sync repairs too are told as the inbox tells them.
-  const text = repairedText({ kind, value });
-  return text.startsWith("同期の修復") ? kind : text;
+  return repairedKnownText({ kind, value }) ?? kind;
 }
 
 // hh purge takes at most this many days (internal/ops/purge.go).
@@ -88,7 +87,7 @@ const MAX_PURGE_DAYS = 36500;
 
 /** The days of "N 日より古いもの": a whole number from 0, or null when the input is not one. */
 export function parsePurgeDays(input: string): number | null {
-  const s = input.trim();
+  const s = input.trim().normalize("NFKC");
   if (!/^[0-9]+$/.test(s)) return null;
   const n = Number(s);
   return n <= MAX_PURGE_DAYS ? n : null;

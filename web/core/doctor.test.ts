@@ -109,13 +109,11 @@ describe("parsePurgeDays", () => {
   it("reads a whole number of days, 0 included", () => {
     expect(parsePurgeDays("90")).toBe(90);
     expect(parsePurgeDays(" 0 ")).toBe(0);
+    expect(parsePurgeDays("９０")).toBe(90); // full-width digits, as an IME writes them
     expect(parsePurgeDays("36500")).toBe(36500);
   });
 
-  it.each(["", " ", "-1", "1.5", "1e2", "９０", "abc", "36501", "+3"])(
-    "%j is not a period",
-    (s) => {
-      expect(parsePurgeDays(s)).toBeNull();
-    },
-  );
+  it.each(["", " ", "-1", "1.5", "1e2", "abc", "36501", "+3"])("%j is not a period", (s) => {
+    expect(parsePurgeDays(s)).toBeNull();
+  });
 });

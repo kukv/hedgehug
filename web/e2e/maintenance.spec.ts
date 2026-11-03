@@ -8,13 +8,9 @@
 //     has "完全に削除する")
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { expect, type Hedgehug, test } from "./harness";
-
-// The merge driver of a Store runs `hedgehug` from PATH, and doctor reports a Store whose PATH has none:
-// the binary under test (harness.ts) is put on PATH, so that a Store with no problem has no finding.
-process.env.PATH = `${dirname(process.env.HEDGEHUG_BIN ?? resolve(import.meta.dirname, "../../bin/hedgehug"))}${delimiter}${process.env.PATH ?? ""}`;
 
 const doctor = (page: Page) =>
   page.getByRole("region", { name: "診断と修復" }).getByRole("region", { name: "診断: demo" });
@@ -35,10 +31,9 @@ function deleteByHand(hh: Hedgehug, id: string) {
     });
   if (!rel) throw new Error(`no file of ${id}`);
   const text = readFileSync(join(dir, rel), "utf8");
-  writeFileSync(
-    join(dir, rel),
-    text.replace("\nkind: ", "\ndeleted_at: 2026-10-30T12:00:00Z\nkind: "),
-  );
+  const edited = text.replace("\nkind: ", "\ndeleted_at: 2026-10-30T12:00:00Z\nkind: ");
+  if (edited === text) throw new Error(`${rel} has no kind line to put deleted_at before`);
+  writeFileSync(join(dir, rel), edited);
   const git = (...args: string[]) =>
     execFileSync("git", [
       "-C",
