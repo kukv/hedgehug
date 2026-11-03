@@ -1,12 +1,14 @@
 import { createSubscriber } from "svelte/reactivity";
-import type { InboxTab } from "../core/notifications";
+import { INBOX_TABS } from "../core/notifications";
 import type { Layout } from "../core/views";
 
 export type { Layout };
 export type WorkspaceTab = "overview" | "tree" | "kanban" | "table" | "settings";
 export type ProjectTab = "tree" | "kanban" | "table" | "settings";
 // "general" is of this machine and names no Store; the pages of a Store carry it.
-export type SchemaTab = "statuses" | "kinds" | "props" | "workflow";
+// The first tab of each is the one without ?tab=.
+export const SCHEMA_TABS = ["statuses", "kinds", "props", "workflow"] as const;
+export type SchemaTab = (typeof SCHEMA_TABS)[number];
 export type SettingsPage =
   | { page: "general" }
   | { page: "workspaces"; store: string }
@@ -23,14 +25,12 @@ export type Route =
   | { name: "view"; store: string; view: string }
   | { name: "query"; layout: Layout; q: string }
   | { name: "my" }
-  | { name: "inbox"; tab: InboxTab }
+  | { name: "inbox"; tab: (typeof INBOX_TABS)[number]["tab"] }
   | { name: "activity"; workspaces: string[]; sync: ActivitySync }
   | ({ name: "settings" } & SettingsPage);
 
 const WORKSPACE_TABS: readonly string[] = ["tree", "kanban", "table", "settings"];
 const PROJECT_TABS: readonly string[] = ["tree", "kanban", "table", "settings"];
-const INBOX_TABS: readonly string[] = ["overwritten", "mention", "repair"];
-const SCHEMA_TABS: readonly string[] = ["kinds", "props", "workflow"];
 const LAYOUTS: readonly string[] = ["tree", "kanban", "table"];
 
 function decode(s: string): string {
@@ -68,7 +68,7 @@ function matchRoute(pathname: string, search: string): Route | null {
   if (head === "my" && seg.length === 1) return { name: "my" };
   if (head === "inbox" && seg.length === 1) {
     const tab = new URLSearchParams(search).get("tab") ?? "";
-    return { name: "inbox", tab: INBOX_TABS.includes(tab) ? (tab as InboxTab) : "all" };
+    return { name: "inbox", tab: INBOX_TABS.find((t) => t.tab === tab)?.tab ?? "all" };
   }
   if (head === "activity" && seg.length === 1) {
     const p = new URLSearchParams(search);
@@ -85,8 +85,12 @@ function matchRoute(pathname: string, search: string): Route | null {
   if (head === "settings" && seg.length === 3 && (a === "workspaces" || a === "schema") && b) {
     if (a === "workspaces") return { name: "settings", page: a, store: b };
     const tab = new URLSearchParams(search).get("tab") ?? "";
-    const known = SCHEMA_TABS.includes(tab);
-    return { name: "settings", page: a, store: b, tab: known ? (tab as SchemaTab) : "statuses" };
+    return {
+      name: "settings",
+      page: a,
+      store: b,
+      tab: SCHEMA_TABS.find((t) => t === tab) ?? "statuses",
+    };
   }
   return null;
 }
@@ -160,7 +164,7 @@ export const router = {
 
   /**
    * Moves to a path of ours; anything else goes to "/". The query and the hash are dropped,
-   * except for the ?q= of /query/<layout> the filters of /activity and the tab of /inbox and of the schema.
+   * except for the ?q= of /query/<layout>, the filters of /activity, and the tab of /inbox and of the schema.
    */
   go(path: string, opts: { replace?: boolean } = {}): void {
     const url = new URL(path, location.origin);

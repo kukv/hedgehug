@@ -399,7 +399,11 @@ describe("SettingsSchema", () => {
       const k = setup({ loadError: new Error("読めません") });
       await screen.findByRole("alert");
       k.state.failLoad = false;
-      await fireEvent.click(screen.getByRole("button", { name: "もう一度読み込む" }));
+      const retry = screen.getByRole("button", { name: "もう一度読み込む" });
+      retry.focus();
+      await fireEvent.click(retry);
+      // the button goes with the error: the focus is not lost with it
+      expect(screen.getByRole("heading", { level: 1, name: "スキーマ" })).toHaveFocus();
       expect(await screen.findByRole("table", { name: "ステータス" })).toBeVisible();
       expect(screen.queryByRole("alert")).toBeNull();
     });

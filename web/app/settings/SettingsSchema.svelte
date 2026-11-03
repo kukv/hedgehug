@@ -37,8 +37,14 @@
 
   // The schema is what the page is made from: say so when it cannot be read, and read it again on
   // request and at resync (the cache itself only reads again what it holds).
+  let heading: HTMLElement | undefined = $state();
   let schemaError = $state.raw<unknown>(null);
   let schemaTry = $state(0);
+  // The button goes with the error while the schema is read, so the focus goes to the heading.
+  function retry(): void {
+    heading?.focus();
+    schemaTry++;
+  }
   $effect(() => {
     schemaTry;
     schemaError = null;
@@ -155,7 +161,6 @@
     names: string[];
   };
   let ask = $state.raw<Ask | null>(null);
-  let heading: HTMLElement | undefined = $state();
 
   // The row that opened the dialog may be gone (the name changed): the focus then goes to the heading.
   async function migrated(): Promise<void> {
@@ -183,7 +188,7 @@
   {#if schema === undefined}
     {#if schemaError}
       <FormError message="スキーマを読めません · {errorMessage(schemaError)}" />
-      <div><Button onclick={() => schemaTry++}>もう一度読み込む</Button></div>
+      <div><Button onclick={retry}>もう一度読み込む</Button></div>
     {:else}
       <p class="note">読み込み中…</p>
     {/if}
