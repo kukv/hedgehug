@@ -79,18 +79,14 @@ type Over = {
   canceled?: string[];
   // The stores whose schema cannot be read (until it is put in the schemas).
   unreadable?: string[];
+  // What becomes of the parent the list does not hold, once the table asks for it: it is read
+  // (the default), it is read when the test says (hold), or it cannot be read (fail).
+  parent?: "read" | "hold" | "fail";
 };
 
 function setup(over: Over = {}) {
+  const ev = emitter();
   const tasks = new Map<string, TaskView>([
-    [
-      "E1",
-      task("E1", "epic", null, {
-        id: "REL-1",
-        title: "API v2 への移行",
-        progress: { done: 1, total: 5 },
-      }),
-    ],
     [
       "T1",
       task("T1", "task", "E1", {
@@ -122,6 +118,22 @@ function setup(over: Over = {}) {
       }),
     ],
   ]);
+  // The parent is not in the list of the query: the cache has it only once the table asks for it.
+  const parents = new Map<string, TaskView>([
+    [
+      "E1",
+      task("E1", "epic", null, {
+        id: "REL-1",
+        title: "API v2 への移行",
+        progress: { done: 1, total: 5 },
+      }),
+    ],
+  ]);
+  const readParent = (u: string) => {
+    const p = parents.get(u);
+    if (p) tasks.set(u, p);
+    ev.emit();
+  };
   let ulids = over.ulids ?? ["T1", "T2", "T3"];
   if (over.many) {
     ulids = Array.from({ length: over.many }, (_, i) => {
@@ -129,7 +141,15 @@ function setup(over: Over = {}) {
       return `N${i}`;
     });
   }
-  const ev = emitter();
+  const watchDetail = vi.fn((u: string) => {
+    const mode = over.parent ?? "read";
+    if (mode === "read") queueMicrotask(() => readParent(u));
+    return {
+      ulid: () => (tasks.has(u) ? u : null),
+      error: () => (mode === "fail" ? new Error("404") : null),
+      dispose: vi.fn(),
+    };
+  });
   const watchList = vi.fn((q: { q: string }) => ({
     ulids: () => (/(^| )status:canceled/.test(q.q) ? (over.canceled ?? []) : ulids),
     error: () => over.error ?? null,
@@ -154,7 +174,12 @@ function setup(over: Over = {}) {
   const schemas: Record<string, SchemaView> = { shared, me };
   for (const s of over.unreadable ?? []) delete schemas[s];
   h.core = {
-    cache: { task: (u: string) => tasks.get(u), watchList, subscribe: ev.subscribe },
+    cache: {
+      task: (u: string) => tasks.get(u),
+      watchList,
+      watchDetail,
+      subscribe: ev.subscribe,
+    },
     stores: {
       stores: () => (over.stores ?? ["shared"]).map((name) => ({ name })),
       tone: (s: string) => (s === "me" ? "orange" : "purple"),
@@ -189,7 +214,7 @@ function setup(over: Over = {}) {
     tasks.set(ulid, { ...(tasks.get(ulid) as TaskView), ...patch });
     ev.emit();
   };
-  return { save, watchList, ev, schemas, tasks, pending, refused, write };
+  return { save, watchList, watchDetail, ev, schemas, tasks, pending, refused, write, readParent };
 }
 
 function mount(props: Record<string, unknown> = {}) {
@@ -321,17 +346,19 @@ describe("TableView", () => {
       expect(save.edit).toHaveBeenCalledWith("T3", "shared", "assignees", ["sato"]);
     });
 
-    it("only shows the columns that are not edited", () => {
+    it("only shows the columns that are not edited", async () => {
       setup();
       mount({ settings: { ...SETTINGS, columns: ["id", "parent", "created"] } });
       // The parent of REL-4 and REL-2 is REL-1; REL-9 has none.
-      expect(screen.getAllByRole("link").map((a) => a.textContent)).toEqual([
-        "REL-4",
-        "REL-1",
-        "REL-2",
-        "REL-1",
-        "REL-9",
-      ]);
+      await waitFor(() =>
+        expect(screen.getAllByRole("link").map((a) => a.textContent)).toEqual([
+          "REL-4",
+          "REL-1",
+          "REL-2",
+          "REL-1",
+          "REL-9",
+        ]),
+      );
       expect(screen.getAllByText("11/01")).toHaveLength(3);
       expect(within(screen.getByRole("table")).queryByRole("textbox")).toBeNull();
     });
@@ -362,6 +389,39 @@ describe("TableView", () => {
       ev.emit();
       await tick();
       expect(toasts.list).toHaveLength(1);
+    });
+  });
+
+  describe("parents the query does not list", () => {
+    it("reads each missing parent once, and lets go of them with the screen", async () => {
+      const { watchDetail } = setup();
+      const { unmount } = mount({ settings: { ...SETTINGS, columns: ["id", "parent"] } });
+      await waitFor(() => expect(screen.getAllByRole("link", { name: "REL-1" })).toHaveLength(2));
+      expect(watchDetail.mock.calls).toEqual([["E1"]]);
+      const handle = watchDetail.mock.results[0]?.value as { dispose: ReturnType<typeof vi.fn> };
+      expect(handle.dispose).not.toHaveBeenCalled();
+      unmount();
+      expect(handle.dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows a parent on its way apart from no parent, and sorts by it once it is read", async () => {
+      const { readParent } = setup({ parent: "hold", ulids: ["T3", "T1", "T2"] });
+      mount({ settings: { ...SETTINGS, columns: ["id", "parent"] } });
+      // Waiting for the parent of REL-4 and REL-2; REL-9 has none.
+      expect(screen.getAllByLabelText("親を読み込み中")).toHaveLength(2);
+      expect(screen.getAllByText("—")).toHaveLength(1);
+      await fireEvent.click(
+        within(screen.getByRole("columnheader", { name: /^親/ })).getByRole("button"),
+      );
+      readParent("E1");
+      await waitFor(() => expect(screen.queryByLabelText("親を読み込み中")).toBeNull());
+      expect(order().filter((id) => id !== "REL-1")).toEqual(["REL-4", "REL-2", "REL-9"]);
+    });
+
+    it("says a parent that cannot be read is unknown, not that there is none", () => {
+      setup({ parent: "fail" });
+      mount({ settings: { ...SETTINGS, columns: ["id", "parent"] } });
+      expect(screen.getAllByLabelText("親を読み込めません")).toHaveLength(2);
     });
   });
 
@@ -498,15 +558,34 @@ describe("TableView", () => {
   });
 
   describe("groups", () => {
-    it("draws a heading before the rows of each parent, with the progress of the parent", () => {
+    const heads = () =>
+      [...document.querySelectorAll(".group")].map((e) =>
+        e.textContent?.replace(/\s+/g, " ").trim(),
+      );
+
+    it("draws a heading before the rows of each parent, with the progress of the parent", async () => {
       setup();
       mount({ settings: { ...SETTINGS, groupBy: "parent" } });
-      const heads = document.querySelectorAll(".group");
-      expect([...heads].map((e) => e.textContent?.replace(/\s+/g, " ").trim())).toEqual([
-        "API v2 への移行 REL-1 1/5 完了 2 件",
-        "親なし 1 件",
-      ]);
+      await waitFor(() =>
+        expect(heads()).toEqual(["API v2 への移行 REL-1 1/5 完了 2 件", "親なし 1 件"]),
+      );
       expect(order()).toEqual(["REL-4", "REL-2", "REL-9"]);
+    });
+
+    it("does not call a parent that is not read yet unknown or missing", async () => {
+      const { readParent } = setup({ parent: "hold" });
+      mount({ settings: { ...SETTINGS, groupBy: "parent" } });
+      expect(heads()).toEqual(["読み込み中… 2 件", "親なし 1 件"]);
+      readParent("E1");
+      await waitFor(() =>
+        expect(heads()).toEqual(["API v2 への移行 REL-1 1/5 完了 2 件", "親なし 1 件"]),
+      );
+    });
+
+    it("says a parent that cannot be read is unknown", () => {
+      setup({ parent: "fail" });
+      mount({ settings: { ...SETTINGS, groupBy: "parent" } });
+      expect(heads()).toEqual(["不明な親 2 件", "親なし 1 件"]);
     });
 
     it("chooses the group from a menu", async () => {

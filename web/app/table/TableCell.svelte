@@ -23,6 +23,7 @@
     tone,
     pending,
     taskOf,
+    parentLoading = false,
     onedit,
     oncommit,
   }: {
@@ -32,6 +33,8 @@
     tone: StoreTone;
     pending: boolean;
     taskOf: (ulid: string) => TaskView | undefined;
+    // The parent of the task is not in the cache yet (it is being read), as against not found.
+    parentLoading?: boolean;
     onedit: (field: PatchField, value: unknown) => void;
     oncommit: () => void;
   } = $props();
@@ -150,8 +153,12 @@
       href={taskHref(parent.ulid)}
       onopen={(e) => onLinkClick(e, taskHref(parent.ulid))}
     />
-  {:else}
+  {:else if !task.parent}
     <span class="plain">—</span>
+  {:else if parentLoading}
+    <span class="plain" role="img" aria-label="親を読み込み中">…</span>
+  {:else}
+    <span class="plain" role="img" aria-label="親を読み込めません" title={task.parent}>?</span>
   {/if}
 {:else if col.id === "created" || col.id === "updated"}
   <span class="plain mono"

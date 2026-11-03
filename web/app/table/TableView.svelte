@@ -173,6 +173,34 @@
     return schemaFailed.filter((s) => !c.schema.get(s));
   });
 
+  // --- the parents the query does not list ---------------------------------------------------
+  // The list holds the tasks the query found, so a parent that the query does not find is not in the
+  // cache unless something else read it. The table reads it through the cache (watchDetail, which
+  // the detail and the breadcrumb use), and lets go of it when no task shown has it as a parent.
+  type DetailHandle = ReturnType<typeof c.cache.watchDetail>;
+  const parentWatches = new Map<string, DetailHandle>();
+  $effect(() => {
+    cacheRev.current;
+    const wanted = new Set(tasks.flatMap((t) => (t.parent ? [t.parent] : [])));
+    for (const u of wanted) {
+      if (!parentWatches.has(u) && !c.cache.task(u)) parentWatches.set(u, c.cache.watchDetail(u));
+    }
+    for (const [u, h] of parentWatches) {
+      if (wanted.has(u)) continue;
+      h.dispose();
+      parentWatches.delete(u);
+    }
+  });
+  $effect(() => () => {
+    for (const h of parentWatches.values()) h.dispose();
+    parentWatches.clear();
+  });
+  // A parent that is not in the cache is on its way, until the read says it cannot be had.
+  const parentLoading = (ulid: string): boolean => {
+    cacheRev.current;
+    return !c.cache.task(ulid) && !parentWatches.get(ulid)?.error();
+  };
+
   // --- a row being edited keeps its place -------------------------------------------------
   // A save changes the task, and the sort or the group of the table would move its row: the cell
   // that has the focus would be drawn again and lose it, and the keys typed after that would go to
@@ -194,6 +222,7 @@
     return {
       schemaOf: (store) => c.schema.get(store),
       taskOf: (ulid) => c.cache.task(ulid),
+      loading: (ulid) => !c.cache.task(ulid) && !parentWatches.get(ulid)?.error(),
       storeOrder: storeNames,
     };
   });
@@ -511,6 +540,7 @@
             tone={c.stores.tone(t.store)}
             pending={field ? saves.current.editing(t.ulid, field) : false}
             {taskOf}
+            parentLoading={t.parent ? parentLoading(t.parent) : false}
             onedit={(f, v) => edit(t, f, v)}
             oncommit={() => commit(t)}
           />

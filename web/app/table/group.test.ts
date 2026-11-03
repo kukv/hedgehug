@@ -57,6 +57,14 @@ describe("groupTasks", () => {
     expect(shape(items)).toEqual(["# 不明な親 (1)", "T9"]);
   });
 
+  it("tells a parent on its way from one that is not found", () => {
+    const wait = { ...ctx, loading: () => true };
+    expect(shape(groupTasks([task("T9", "task", "GONE")], "parent", wait))).toEqual([
+      "# 読み込み中… (1)",
+      "T9",
+    ]);
+  });
+
   it("groups by status in the order of sort:status, with the label of the schema", () => {
     expect(shape(groupTasks(tasks, "status", ctx))).toEqual([
       "# todo (2)",
