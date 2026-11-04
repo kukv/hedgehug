@@ -17,6 +17,22 @@ components:
       required:
         - commit
       type: object
+    Candidate:
+      additionalProperties: false
+      properties:
+        account:
+          type: string
+        name:
+          type: string
+        permission:
+          type: string
+        url:
+          type: string
+      required:
+        - name
+        - url
+        - permission
+      type: object
     CommentEditInputBody:
       additionalProperties: false
       properties:
@@ -521,6 +537,59 @@ components:
         - changed
         - skipped
         - commit
+      type: object
+    MountCandidate:
+      additionalProperties: false
+      properties:
+        account:
+          type: string
+        name:
+          description: The name to mount the store under
+          minLength: 1
+          type: string
+        url:
+          minLength: 1
+          type: string
+      required:
+        - name
+        - url
+      type: object
+    MountFailed:
+      additionalProperties: false
+      properties:
+        code:
+          description: What went wrong, as the type of a problem
+          type: string
+        message:
+          description: The message in English, as the CLI prints it
+          type: string
+        name:
+          type: string
+      required:
+        - name
+        - code
+        - message
+      type: object
+    MountOutputBody:
+      additionalProperties: false
+      properties:
+        failed:
+          description: The candidates that could not be added; the others were
+          items:
+            $ref: "#/components/schemas/MountFailed"
+          type:
+            - array
+            - "null"
+        mounted:
+          description: The names of the stores that were added
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - mounted
+        - failed
       type: object
     MoveInputBody:
       additionalProperties: false
@@ -1198,6 +1267,44 @@ components:
         - name
         - category
       type: object
+    StoreAddInputBody:
+      additionalProperties: false
+      properties:
+        account:
+          description: The name of the account that clones and writes; the only account without it
+          type: string
+        name:
+          minLength: 1
+          type: string
+        remotes:
+          description: Where to clone from; the first one, and the others are mirrors
+          items:
+            type: string
+          minItems: 1
+          type:
+            - array
+            - "null"
+      required:
+        - name
+        - remotes
+      type: object
+    StoreDefaultInputBody:
+      additionalProperties: false
+      properties:
+        name:
+          minLength: 1
+          type: string
+      required:
+        - name
+      type: object
+    StoreDefaultOutputBody:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+      required:
+        - name
+      type: object
     StoreInitInputBody:
       additionalProperties: false
       properties:
@@ -1282,6 +1389,30 @@ components:
         - remotes
         - hidden
       type: object
+    StorePatchInputBody:
+      additionalProperties: false
+      properties:
+        color:
+          description: One of the colors of the palette; an empty one puts it back to automatic
+          type: string
+        hidden:
+          description: Whether the GUI leaves the store out of what it shows
+          type: boolean
+      type: object
+    StoreRemoveResult:
+      additionalProperties: false
+      properties:
+        deleted:
+          type: boolean
+        name:
+          type: string
+        path:
+          type: string
+      required:
+        - name
+        - path
+        - deleted
+      type: object
     StoreState:
       additionalProperties: false
       properties:
@@ -1295,6 +1426,36 @@ components:
         - store
         - head
         - sync
+      type: object
+    StoreView:
+      additionalProperties: false
+      properties:
+        account:
+          type: string
+        color:
+          type: string
+        hidden:
+          type: boolean
+        last_success:
+          format: date-time
+          type: string
+        name:
+          type: string
+        path:
+          type: string
+        read_only:
+          type: string
+        remotes:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - name
+        - path
+        - remotes
+        - hidden
       type: object
     StoresChanged:
       additionalProperties: false
@@ -2596,6 +2757,190 @@ paths:
                 $ref: "#/components/schemas/Problem"
           description: Error
       summary: Make a store, as hh store init
+      tags:
+        - stores
+  /api/stores/add:
+    post:
+      operationId: add-store
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreAddInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreView"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Set up a store that others made by cloning it, as hh store add
+      tags:
+        - stores
+  /api/stores/default:
+    put:
+      operationId: set-default-store
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreDefaultInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreDefaultOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Make a store the one hedgehug picks without --store, as hh store default
+      tags:
+        - stores
+  /api/stores/discover:
+    get:
+      operationId: discover-stores
+      parameters:
+        - description: Look with this account only; with from, the account of the candidates
+          explode: false
+          in: query
+          name: account
+          schema:
+            description: Look with this account only; with from, the account of the candidates
+            type: string
+        - description: A directory to look for bare repositories that hold a store under; without it, GitHub
+          explode: false
+          in: query
+          name: from
+          schema:
+            description: A directory to look for bare repositories that hold a store under; without it, GitHub
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/Candidate"
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: List the stores that can be set up, as hh store discover
+      tags:
+        - stores
+  /api/stores/mount:
+    post:
+      operationId: mount-stores
+      requestBody:
+        content:
+          application/json:
+            schema:
+              items:
+                $ref: "#/components/schemas/MountCandidate"
+              type:
+                - array
+                - "null"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MountOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Set up the stores discover listed, each as hh store add does
+      tags:
+        - stores
+  /api/stores/{name}:
+    delete:
+      operationId: remove-store
+      parameters:
+        - description: The store
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The store
+            type: string
+        - description: Take the store out of the config and leave the clone; without it the clone is deleted, unless commits are not pushed (409 store.unpushed)
+          explode: false
+          in: query
+          name: keep
+          schema:
+            default: false
+            description: Take the store out of the config and leave the clone; without it the clone is deleted, unless commits are not pushed (409 store.unpushed)
+            type: boolean
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreRemoveResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Take a store out of the config and delete its clone, as hh store remove
+      tags:
+        - stores
+    patch:
+      operationId: update-store
+      parameters:
+        - description: The store
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The store
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StorePatchInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreView"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Set the color or the visibility of a store on this machine, as hh store set
       tags:
         - stores
   /api/sync:

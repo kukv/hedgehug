@@ -296,6 +296,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stores/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set up a store that others made by cloning it, as hh store add */
+        post: operations["add-store"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stores/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Make a store the one hedgehug picks without --store, as hh store default */
+        put: operations["set-default-store"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stores/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the stores that can be set up, as hh store discover */
+        get: operations["discover-stores"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stores/mount": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set up the stores discover listed, each as hh store add does */
+        post: operations["mount-stores"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stores/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Take a store out of the config and delete its clone, as hh store remove */
+        delete: operations["remove-store"];
+        options?: never;
+        head?: never;
+        /** Set the color or the visibility of a store on this machine, as hh store set */
+        patch: operations["update-store"];
+        trace?: never;
+    };
     "/api/sync": {
         parameters: {
             query?: never;
@@ -591,6 +677,12 @@ export interface components {
             /** @description The task and the tasks under it, as they are now */
             tasks?: components["schemas"]["TaskView"][] | null;
         };
+        Candidate: {
+            account?: string;
+            name: string;
+            permission: string;
+            url: string;
+        };
         CommentEditInputBody: {
             /** @description The comment in Markdown */
             body: string;
@@ -781,6 +873,25 @@ export interface components {
             changed: components["schemas"]["TaskView"][] | null;
             commit: string | null;
             skipped: string[] | null;
+        };
+        MountCandidate: {
+            account?: string;
+            /** @description The name to mount the store under */
+            name: string;
+            url: string;
+        };
+        MountFailed: {
+            /** @description What went wrong, as the type of a problem */
+            code: string;
+            /** @description The message in English, as the CLI prints it */
+            message: string;
+            name: string;
+        };
+        MountOutputBody: {
+            /** @description The candidates that could not be added; the others were */
+            failed: components["schemas"]["MountFailed"][] | null;
+            /** @description The names of the stores that were added */
+            mounted: string[] | null;
         };
         MoveInputBody: {
             /** @description Put it after this sibling */
@@ -1032,6 +1143,19 @@ export interface components {
             label?: string;
             name: string;
         };
+        StoreAddInputBody: {
+            /** @description The name of the account that clones and writes; the only account without it */
+            account?: string;
+            name: string;
+            /** @description Where to clone from; the first one, and the others are mirrors */
+            remotes: string[] | null;
+        };
+        StoreDefaultInputBody: {
+            name: string;
+        };
+        StoreDefaultOutputBody: {
+            name: string;
+        };
         StoreInitInputBody: {
             account?: string;
             name: string;
@@ -1060,10 +1184,32 @@ export interface components {
             read_only?: string;
             remotes: string[] | null;
         };
+        StorePatchInputBody: {
+            /** @description One of the colors of the palette; an empty one puts it back to automatic */
+            color?: string;
+            /** @description Whether the GUI leaves the store out of what it shows */
+            hidden?: boolean;
+        };
+        StoreRemoveResult: {
+            deleted: boolean;
+            name: string;
+            path: string;
+        };
         StoreState: {
             head: string;
             store: string;
             sync: components["schemas"]["SyncStatus"];
+        };
+        StoreView: {
+            account?: string;
+            color?: string;
+            hidden: boolean;
+            /** Format: date-time */
+            last_success?: string;
+            name: string;
+            path: string;
+            read_only?: string;
+            remotes: string[] | null;
         };
         StoresChanged: Record<string, never>;
         SyncReport: {
@@ -2012,6 +2158,210 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StoreInitOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "add-store": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreAddInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "set-default-store": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreDefaultInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreDefaultOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "discover-stores": {
+        parameters: {
+            query?: {
+                /** @description Look with this account only; with from, the account of the candidates */
+                account?: string;
+                /** @description A directory to look for bare repositories that hold a store under; without it, GitHub */
+                from?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Candidate"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "mount-stores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MountCandidate"][] | null;
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MountOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "remove-store": {
+        parameters: {
+            query?: {
+                /** @description Take the store out of the config and leave the clone; without it the clone is deleted, unless commits are not pushed (409 store.unpushed) */
+                keep?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description The store */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreRemoveResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "update-store": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The store */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StorePatchInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreView"];
                 };
             };
             /** @description Error */

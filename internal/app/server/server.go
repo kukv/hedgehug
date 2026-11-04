@@ -122,6 +122,7 @@ func (s *Server) register() {
 	s.registerActivity()
 	s.registerPurge()
 	s.registerAdmin()
+	s.registerStores()
 	s.registerScoped()
 	s.registerViews()
 	s.registerSync()
