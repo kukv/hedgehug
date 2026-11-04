@@ -7,8 +7,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 )
 
 // A failure to reach the host names the request once ("GET url: cause"), and
@@ -18,7 +16,7 @@ func TestNetworkErrorTextHasTheURLOnce(t *testing.T) {
 	srv := httptest.NewServer(http.NotFoundHandler())
 	api := srv.URL
 	srv.Close()
-	_, err := New(config.Host{API: api}, "t", nil).User()
+	_, err := New(Options{API: api}, "t", nil).User()
 	if err == nil {
 		t.Fatal("want an error from a closed server")
 	}

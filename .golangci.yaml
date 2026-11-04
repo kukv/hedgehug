@@ -10,8 +10,20 @@ linters:
     - bodyclose
     - unconvert
     - unparam
+    - forbidigo
     # depguard は層を分けるパッケージができたときに、そのルールと一緒に有効にする。
     # ルール無しで有効にすると、標準ライブラリ以外の import をすべて拒否する。
+  settings:
+    forbidigo:
+      analyze-types: true
+      forbid:
+        # OS に触る呼び出しは internal/lib/osfs を通す（spec: OS の境界）。
+        - pattern: ^os\.(Rename|Remove|RemoveAll|ReadFile|WriteFile|OpenFile|MkdirAll)$
+          msg: use the function of the same name in internal/lib/osfs
+        - pattern: ^exec\.Command$
+          msg: use osfs.Command
+        - pattern: ^(syscall|unix)\.
+          msg: keep syscall and golang.org/x/sys/unix in internal/lib/osfs
   exclusions:
     rules:
       - linters:
@@ -20,6 +32,10 @@ linters:
       - path: _test\.go
         linters:
           - gosec
+      # osfs と、テストのファイルとテスト用のパッケージは OS を直接呼んでよい。
+      - path: (_test\.go|internal/lib/(osfs|testenv|fakegh)/|internal/lib/gitrepo/gitrepotest/|internal/app/storage/history/historytest/)
+        linters:
+          - forbidigo
 
 issues:
   max-issues-per-linter: 0

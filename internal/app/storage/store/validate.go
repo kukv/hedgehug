@@ -8,7 +8,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/lib/atomicfile"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
@@ -223,7 +223,7 @@ func (tx *Tx) validateWorkspaces() error {
 			// would leave it pointing nowhere once it is fixed, so a file
 			// that holds the ULID anywhere, in any case, is taken to be in
 			// that workspace: refusing too often is the safe side.
-			b, err := atomicfile.ReadFile(tx.s.path(fe.Path))
+			b, err := osfs.ReadFile(tx.s.path(fe.Path))
 			if err != nil {
 				return err
 			}

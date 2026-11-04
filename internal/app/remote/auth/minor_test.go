@@ -9,7 +9,7 @@ import (
 
 	"github.com/zalando/go-keyring"
 
-	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 func TestDeleteNotFoundIsNoError(t *testing.T) {
@@ -104,13 +104,13 @@ func TestWithLock(t *testing.T) {
 	lockWait = 5 * time.Millisecond
 	t.Cleanup(func() { lockWait = old })
 	var busy error
-	if err := store.WithFileLock(lock, time.Second, func() error {
+	if err := osfs.WithFileLock(lock, time.Second, func() error {
 		busy = WithLock(Options{LockFile: lock}, func() error { return nil })
 		return nil
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if !errors.Is(busy, store.ErrLocked) || !strings.Contains(busy.Error(), "another hedgehug") {
+	if !errors.Is(busy, osfs.ErrLocked) || !strings.Contains(busy.Error(), "another hedgehug") {
 		t.Errorf("busy = %v", busy)
 	}
 }

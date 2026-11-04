@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 const (
@@ -141,13 +142,13 @@ func TakeError(s *store.Store) (string, error) {
 // openLog opens the log of the child for appending. A log over logMax first
 // loses its first half.
 func openLog(path string) (*os.File, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil { //nolint:gosec // G703: the path is built from the store root
+	if err := osfs.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return nil, err
 	}
 	if err := trimLog(path); err != nil {
 		return nil, err
 	}
-	return os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // G304: the path is built from the store root
+	return osfs.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 }
 
 // BoundLog returns w, which is the stderr of the child that Start started,
@@ -184,9 +185,9 @@ func trimLog(path string) error {
 	if err != nil {
 		return err
 	}
-	b, err := os.ReadFile(path) //nolint:gosec // G304: the path is built from the store root
+	b, err := osfs.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, b[len(b)/2:], 0o600) //nolint:gosec // G703: the path is built from the store root
+	return osfs.WriteFile(path, b[len(b)/2:], 0o600)
 }

@@ -1,6 +1,6 @@
 //go:build unix
 
-package store
+package osfs
 
 import (
 	"errors"

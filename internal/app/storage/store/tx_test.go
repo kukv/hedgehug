@@ -245,7 +245,7 @@ func TestUpdateLockedElsewhere(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = l.release() }()
+	defer func() { _ = l.Release() }()
 	_, err = s.Update(Op{Name: "add", Author: testAuthor}, func(tx *Tx) error { return tx.PutTask(newTask("x")) })
 	if !errors.Is(err, ErrLocked) {
 		t.Errorf("err = %v, want ErrLocked", err)

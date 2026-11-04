@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/storage/config"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 	"github.com/kukv/hedgehug/internal/lib/github"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 func fakeHost(t *testing.T, st fakegh.State) (*fakegh.Server, config.Host, *atomic.Int32) {
@@ -417,7 +417,7 @@ func TestDeviceRefreshLockBusy(t *testing.T) {
 	lock := filepath.Join(t.TempDir(), "auth.lock")
 	opt := Options{Keyring: k, Host: config.Host{Web: "http://127.0.0.1:1", ClientID: "Iv23x"}, Now: func() time.Time { return now }, LockFile: lock}
 	var err error
-	if lerr := store.WithFileLock(lock, time.Second, func() error {
+	if lerr := osfs.WithFileLock(lock, time.Second, func() error {
 		_, err = Token(a, opt)
 		return nil
 	}); lerr != nil {

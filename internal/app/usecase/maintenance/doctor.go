@@ -21,6 +21,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/storage/view"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
@@ -65,7 +66,7 @@ func Run(dir string) ([]Finding, error) {
 	}
 	schemaOK := false
 	var sch *schema.Schema
-	if data, err := os.ReadFile(filepath.Join(dir, schema.Path)); err != nil { //nolint:gosec // G304: the path is built from the store root and a fixed or walked name
+	if data, err := osfs.ReadFile(filepath.Join(dir, schema.Path)); err != nil {
 		out = append(out, Finding{Check: "schema", Where: schema.Path, Msg: err.Error(), Hint: brokenHint})
 	} else {
 		sc, fs := SchemaFile(data)
@@ -138,7 +139,7 @@ func Run(dir string) ([]Finding, error) {
 // hedgehug merge driver while .git/config does not register it, or while
 // hedgehug cannot be found on PATH for git to run it.
 func checkMergeDriver(dir string, repo *gitrepo.Repo) []Finding {
-	data, err := os.ReadFile(filepath.Join(dir, store.AttributesPath)) //nolint:gosec // G304: the path is built from the store root and a fixed name
+	data, err := osfs.ReadFile(filepath.Join(dir, store.AttributesPath))
 	if err != nil || !slices.ContainsFunc(strings.Split(string(data), "\n"), func(l string) bool {
 		return !strings.HasPrefix(strings.TrimSpace(l), "#") && slices.Contains(strings.Fields(l), "merge=hedgehug")
 	}) {
@@ -185,7 +186,7 @@ func checkInbox(dir string) []Finding {
 			continue
 		}
 		rel := inbox.RecordsPath + "/" + e.Name()
-		data, err := os.ReadFile(filepath.Join(root, e.Name())) //nolint:gosec // G304: the path is built from the store root and a walked name
+		data, err := osfs.ReadFile(filepath.Join(root, e.Name()))
 		if err == nil {
 			err = inbox.CheckRecord(data)
 		}
@@ -223,7 +224,7 @@ func Fix(s *store.Store, opt replicate.Options) ([]merge.Repaired, error) {
 
 // readCheck reads the file at rel and decodes it.
 func readCheck[T any](dir, rel string, decode func([]byte) (T, error)) error {
-	data, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel))) //nolint:gosec // G304: the path is built from the store root and a fixed or walked name
+	data, err := osfs.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
 	if err != nil {
 		return err
 	}
@@ -237,7 +238,7 @@ func readCheck[T any](dir, rel string, decode func([]byte) (T, error)) error {
 // is: that it does not decode, or an entry that is not an id prefix with a
 // number of 1 or more. The error is for a file that cannot be read.
 func checkNumbers(dir string) (string, error) {
-	data, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(model.NumbersPath))) //nolint:gosec // G304: the path is built from the store root and a fixed name
+	data, err := osfs.ReadFile(filepath.Join(dir, filepath.FromSlash(model.NumbersPath)))
 	if err != nil {
 		return "", err
 	}
@@ -380,7 +381,7 @@ func checkFiles(dir string) ([]Finding, error) {
 // checkFile returns what is wrong with the file at rel, or "" if nothing is.
 func checkFile(dir, root, rel string) (string, error) {
 	bad := func(format string, a ...any) (string, error) { return fmt.Sprintf(format, a...), nil }
-	data, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel))) //nolint:gosec // G304: the path is built from the store root and a fixed or walked name
+	data, err := osfs.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
 	if err != nil {
 		return "", err
 	}

@@ -587,7 +587,7 @@ func TestLockInOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = other.release() }()
+	defer func() { _ = other.Release() }()
 	if _, err := a.Update(Op{Name: "stale", Author: testAuthor, Locked: l}, func(tx *Tx) error { return tx.PutFile("s.txt", []byte("s")) }); !errors.Is(err, ErrLocked) {
 		t.Errorf("an Update with a released Locked: err = %v, want ErrLocked", err)
 	}
@@ -605,7 +605,7 @@ func TestLockInOrderFailureReleasesWhatItTook(t *testing.T) {
 	if _, err := LockInOrder(a, b); !errors.Is(err, ErrLocked) {
 		t.Fatalf("err = %v, want ErrLocked", err)
 	}
-	if err := other.release(); err != nil {
+	if err := other.Release(); err != nil {
 		t.Fatal(err)
 	}
 	l, err := LockInOrder(a, b) // a was let go, and b is free now

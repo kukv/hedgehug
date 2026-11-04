@@ -6,8 +6,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 )
 
 // brokenBody answers 200 with a Content-Length it does not deliver, so that
@@ -24,7 +22,7 @@ func TestReadFailure(t *testing.T) {
 	t.Parallel()
 	srv := brokenBody()
 	defer srv.Close()
-	c := New(config.Host{API: srv.URL}, "t", nil)
+	c := New(Options{API: srv.URL}, "t", nil)
 	if _, err := c.User(); err == nil {
 		t.Error("User with a truncated body is an error")
 	}
@@ -49,7 +47,7 @@ func TestNextPageOtherHost(t *testing.T) {
 		_, _ = w.Write([]byte(`[]`))
 	}))
 	defer srv.Close()
-	_, err := New(config.Host{API: srv.URL}, "secret", nil).UserRepos()
+	_, err := New(Options{API: srv.URL}, "secret", nil).UserRepos()
 	if err == nil || !strings.Contains(err.Error(), "not on the API host") ||
 		!strings.Contains(err.Error(), "GET "+srv.URL) || !strings.Contains(err.Error(), other.URL+"/user/repos?page=2") {
 		t.Errorf("err = %v, want it to name the page asked and the next page", err)

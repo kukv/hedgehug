@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/lib/atomicfile"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // LocalDir holds what belongs to this machine only, like the lock and the
@@ -30,7 +30,7 @@ func (s *Store) ReadLocal(name string) ([]byte, error) {
 		return nil, err
 	}
 	rel := LocalDir + "/" + name
-	b, err := atomicfile.ReadFile(s.path(rel))
+	b, err := osfs.ReadFile(s.path(rel))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("%s: %w: %w", rel, ErrNotFound, fs.ErrNotExist)
 	}
@@ -54,7 +54,7 @@ func (s *Store) AppendLocal(name string, data []byte) error {
 	if err := validLocalName(name); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(s.path(LocalDir+"/"+name), os.O_WRONLY|os.O_APPEND, 0) //nolint:gosec // inside the store
+	f, err := osfs.OpenFile(s.path(LocalDir+"/"+name), os.O_WRONLY|os.O_APPEND, 0)
 	if err != nil {
 		return err
 	}
@@ -70,7 +70,7 @@ func writeLocalAt(dir, name string, data []byte) error {
 	if err := mkdirInStore(dir, path); err != nil {
 		return err
 	}
-	err := atomicfile.WriteFileInDir(path, data)
+	err := osfs.WriteAtomicInDir(path, data)
 	if errors.Is(err, fs.ErrNotExist) {
 		return ErrStoreGone
 	}
@@ -100,7 +100,7 @@ func (s *Store) WithLocalLock(name string, wait time.Duration, fn func() error) 
 	}
 	// As in Update, a release error only matters when fn failed.
 	defer func() {
-		if rerr := l.release(); rerr != nil && err != nil {
+		if rerr := l.Release(); rerr != nil && err != nil {
 			err = errors.Join(err, rerr)
 		}
 	}()
@@ -137,7 +137,7 @@ func (s *Store) RemoveLocal(name string) error {
 	if err := validLocalName(name); err != nil {
 		return err
 	}
-	err := os.Remove(s.path(LocalDir + "/" + name))
+	err := osfs.Remove(s.path(LocalDir + "/" + name))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}

@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 )
 
 // DeviceCode is the start of the device flow.
@@ -32,7 +30,7 @@ type TokenResponse struct {
 }
 
 func postForm(ctx context.Context, hc *http.Client, u string, form url.Values, out any) error {
-	if config.PlainHTTP(u) {
+	if PlainHTTP(u) {
 		return fmt.Errorf("POST %s: plain http, so nothing secret is sent; use https", redact(u))
 	}
 	req, err := http.NewRequestWithContext(ctx, "POST", u, strings.NewReader(form.Encode()))

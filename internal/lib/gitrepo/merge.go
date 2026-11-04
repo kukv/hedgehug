@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -14,7 +13,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 
-	"github.com/kukv/hedgehug/internal/lib/atomicfile"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // ErrWorkTreeChanged means the repository is not what the caller expected
@@ -350,8 +349,8 @@ func (r *Repo) FastForward(h plumbing.Hash, paths []string) (err error) {
 	for i, p := range paths {
 		abs := filepath.Join(r.dir, filepath.FromSlash(p))
 		if inTree[i] {
-			err = atomicfile.WriteFile(abs, data[i])
-		} else if err = os.Remove(abs); errors.Is(err, fs.ErrNotExist) {
+			err = osfs.WriteAtomic(abs, data[i])
+		} else if err = osfs.Remove(abs); errors.Is(err, fs.ErrNotExist) {
 			err = nil
 		}
 		if err != nil {
@@ -397,7 +396,7 @@ func (r *Repo) checkFastForward(h plumbing.Hash, paths []string, data [][]byte, 
 		return inA == inB && bytes.Equal(a, b)
 	}
 	for i, p := range paths {
-		got, err := atomicfile.ReadFile(filepath.Join(r.dir, filepath.FromSlash(p)))
+		got, err := osfs.ReadFile(filepath.Join(r.dir, filepath.FromSlash(p)))
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return err
 		}

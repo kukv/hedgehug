@@ -15,6 +15,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // Unlink is a reference a move cuts: from Task's Field to Target. Field is
@@ -153,7 +154,7 @@ func cloneSchema(sc *schema.Schema) (*schema.Schema, error) {
 // lock itself and fails with ErrLocked after lockWait.
 type Locked struct {
 	stores   []*Store
-	locks    []*fileLock
+	locks    []*osfs.Lock
 	once     sync.Once
 	released atomic.Bool // set by Release; a Locked that was let go holds nothing
 }
@@ -202,7 +203,7 @@ func (l *Locked) Release() {
 		l.released.Store(true)
 		for i := len(l.stores) - 1; i >= 0; i-- {
 			// The OS drops the lock with the file whatever release says.
-			_ = l.locks[i].release()
+			_ = l.locks[i].Release()
 		}
 	})
 }

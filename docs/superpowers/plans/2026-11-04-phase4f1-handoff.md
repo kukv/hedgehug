@@ -4,7 +4,7 @@
 
 ## いまの状態
 
-- ブランチ `phase4f1-go`。構成見直しの回 1 のあとの main（6d6ce10）から切った。PR は未作成
+- ブランチ `phase4f1-go`。構成見直しの回 1 のあとの main（6d6ce10）から切った。作業中に入った構成見直しの回 2（PR #52、9c73096）を取り込んだ（衝突は `internal/lib/github/device.go` の `postForm` の1か所で、context と `github.PlainHTTP` の両方を残した）。取り込み後に `go vet`・`gofmt -l`・`golangci-lint`（forbidigo を含む）・`go test -race ./...`・生成物の差分なしを確かめた。PR は未作成
 - plan: `docs/superpowers/plans/2026-11-04-phase4f1-go.md`（Task 1〜5。末尾に「検査の結果」「実装で plan から変えた点」「概要の細部 1〜16 の実装とテスト」の表）
 - 概要 plan `2026-11-04-phase4f-screens.md` に「4f-1 の plan で足した細部」（細部 52〜70）を足した。spec `docs/superpowers/specs/2026-11-01-phase4-gui-design.md` の「親設計の修正」に `hh store set` の1行がある（e98cec3）
 

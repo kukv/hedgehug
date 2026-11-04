@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 	"github.com/kukv/hedgehug/internal/lib/github"
 )
@@ -29,7 +28,7 @@ func TestExplicitSyncRechecksAReadOnlyStore(t *testing.T) {
 	opt.Now = func() time.Time { return now }
 	opt.GitHub = &GitHubRepo{
 		Host: "github.com", Owner: "org-a", Name: "x", AccountID: "github.com/alice", AccountName: "me",
-		Client: func() (*github.Client, error) { return github.New(config.Host{API: srv.URL}, "t", nil), nil },
+		Client: func() (*github.Client, error) { return github.New(github.Options{API: srv.URL}, "t", nil), nil },
 	}
 	if a, _, err := CheckAccess(c.stores[0], opt, now); err != nil || !a.ReadOnly || a.Reason != ReasonGitHub {
 		t.Fatalf("setup access = %+v %v", a, err)

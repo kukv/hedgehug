@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/lib/atomicfile"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // fileName is the state file in the data directory.
@@ -29,7 +29,7 @@ type State struct {
 // file that does not read, or does not decode, is the empty state too, and
 // warn is told why (D11).
 func Load(dataDir string, warn func(string)) State {
-	b, err := os.ReadFile(filepath.Join(dataDir, fileName)) //nolint:gosec // G304: the data directory is Hedgehug's own
+	b, err := osfs.ReadFile(filepath.Join(dataDir, fileName))
 	if err != nil {
 		if !os.IsNotExist(err) && warn != nil {
 			warn("context.json cannot be read, so it is read as empty: " + err.Error())
@@ -56,7 +56,7 @@ func Save(dataDir string, st State) error {
 	if err != nil {
 		return err
 	}
-	if err := atomicfile.WriteFile(filepath.Join(dataDir, fileName), append(b, '\n')); err != nil {
+	if err := osfs.WriteAtomic(filepath.Join(dataDir, fileName), append(b, '\n')); err != nil {
 		return fmt.Errorf("write %s: %w", fileName, err)
 	}
 	return nil

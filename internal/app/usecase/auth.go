@@ -121,7 +121,7 @@ func (ss *Session) AuthLogin(in AuthLoginInput) (AuthLoginResult, error) {
 		}
 		tok = strings.TrimSpace(dt.AccessToken)
 	}
-	login, err := github.New(h, tok, ss.HTTPClient).User()
+	login, err := github.New(h.GitHub(), tok, ss.HTTPClient).User()
 	if err != nil {
 		if errors.Is(err, github.ErrUnauthorized) {
 			// No "run hedgehug auth login" hint: that is what is being run.
@@ -367,7 +367,7 @@ func (ss *Session) AuthStatus() ([]AuthStatus, error) {
 		x.Token, x.State = acct.Token.String(), "ok"
 		tok, err := ss.Token(c, acct)
 		if err == nil {
-			x.Login, err = github.New(c.Host(acct.Host), tok, ss.HTTPClient).User()
+			x.Login, err = github.New(c.Host(acct.Host).GitHub(), tok, ss.HTTPClient).User()
 			err = github.Describe(err, acct.ID(), acct.Name, "check the token")
 		}
 		switch {

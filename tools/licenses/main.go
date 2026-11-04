@@ -14,11 +14,12 @@ import (
 	"io"
 	"maps"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // platforms are the GOOS/GOARCH pairs in .goreleaser.yaml. The modules linked
@@ -81,7 +82,7 @@ func run(w io.Writer, extra []string) error {
 		}
 	}
 	for _, f := range extra {
-		text, err := os.ReadFile(f) //nolint:gosec // a path the Makefile names
+		text, err := osfs.ReadFile(f)
 		if err != nil {
 			return err
 		}
@@ -108,7 +109,7 @@ func section(b *strings.Builder, title, dir string) error {
 	}
 	b.WriteString("\n==== " + title + " ====\n")
 	for _, f := range files {
-		text, err := os.ReadFile(filepath.Join(dir, f)) //nolint:gosec // a file in the module cache
+		text, err := osfs.ReadFile(filepath.Join(dir, f))
 		if err != nil {
 			return err
 		}
@@ -118,7 +119,7 @@ func section(b *strings.Builder, title, dir string) error {
 }
 
 func goCmd(p [2]string, args ...string) ([]byte, error) {
-	cmd := exec.Command("go", args...) //nolint:gosec // the go command, with the arguments in this file
+	cmd := osfs.Command("go", args...)
 	cmd.Env = append(os.Environ(), "GOOS="+p[0], "GOARCH="+p[1], "CGO_ENABLED=0")
 	cmd.Stderr = os.Stderr
 	out, err := cmd.Output()

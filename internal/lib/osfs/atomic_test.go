@@ -1,4 +1,4 @@
-package atomicfile
+package osfs
 
 import (
 	"errors"
@@ -8,14 +8,14 @@ import (
 	"testing"
 )
 
-func TestWriteFile(t *testing.T) {
+func TestWriteAtomic(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	p := filepath.Join(dir, "tasks", "A", "B", "x.md")
-	if err := WriteFile(p, []byte("one")); err != nil {
+	if err := WriteAtomic(p, []byte("one")); err != nil {
 		t.Fatal(err)
 	}
-	if err := WriteFile(p, []byte("two")); err != nil {
+	if err := WriteAtomic(p, []byte("two")); err != nil {
 		t.Fatal(err)
 	}
 	got, err := ReadFile(p)

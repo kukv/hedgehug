@@ -6,7 +6,7 @@ import (
 	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/lib/atomicfile"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // IDNumbers returns, for each id prefix, the largest number used by the
@@ -35,7 +35,7 @@ func (tx *Tx) usedNumbers() (map[string]int, error) {
 			if errors.As(err, &fe) {
 				// Its ids cannot be read, but a number it holds must not
 				// be given again.
-				b, err := atomicfile.ReadFile(tx.s.path(fe.Path))
+				b, err := osfs.ReadFile(tx.s.path(fe.Path))
 				if err != nil {
 					return nil, err
 				}

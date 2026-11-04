@@ -142,7 +142,7 @@ api/openapi.yaml            今のまま
 
 - `lib/osfs` にこれらの薄い関数を置き、OS ごとの差は osfs の `_unix.go` の中だけに置く。atomicfile は osfs に統合する。
 - `store.WithFileLock` を osfs に移す。auth と config から store への依存がなくなる。
-- forbidigo で、osfs 以外が `os.Rename`・`os.Remove`・`os.RemoveAll`・`os.ReadFile`・`os.WriteFile`・`os.OpenFile`・`os.MkdirAll`・`exec.Command`・`syscall` を呼ぶことを禁止する。テストのファイルと、テスト用のパッケージ（gitrepotest・historytest・testenv・fakegh）は対象外にする。
+- forbidigo で、osfs 以外が `os.Rename`・`os.Remove`・`os.RemoveAll`・`os.ReadFile`・`os.WriteFile`・`os.OpenFile`・`os.MkdirAll`・`exec.Command`・`syscall`（`golang.org/x/sys/unix` を含む）を呼ぶことを禁止する。テストのファイルと、テスト用のパッケージ（gitrepotest・historytest・testenv・fakegh）は対象外にする。
 - 呼び方は今と同じにする（関数の置き換えだけ）。Windows 版は書かない。
 
 ## 4. 入口の境界（提案 A・F・G・H）
@@ -192,7 +192,7 @@ CLI の本体を `internal/app/cli` に移し、`cmd/hedgehug/main.go` は `cli.
 | PR | 中身 | 挙動 |
 | --- | --- | --- |
 | 1. 移動と改名 | 2.2 の行き先へ移す（mount と context は解体まで `usecase/mount`・`usecase/current` に仮置きする。doctor はこの時点で `usecase/maintenance` に置く）。名前の変更、F、CI の shard のパスの書き換え | 変わらない |
-| 2. OS の境界 | 3 節。github を `github.Options`（ホストと平文 HTTP の可否）で受け取る形にする。forbidigo を有効にする | 変わらない |
+| 2. OS の境界 | 3 節。github を `github.Options`（API と web の URL）で受け取る形にし、平文 HTTP の判定（IsLoopback・PlainHTTP）を config から github に移す（2026-11-04 利用者が決定）。forbidigo を有効にする | 変わらない |
 | 3. usecase の再編 | mount と context の解体（2.2）、途中残りの検出を storage/store へ、2.3 の領域分け | 変わらない |
 | 4. 入口の境界 | 4.2〜4.4。cli・server のテストの書き直し（決定 11）。cli・server の depguard のルール（4.2、テストを含む）を有効にする | 4.3 の 2 か所だけ変わる |
 | 5. テストと仕上げ | 5 節、depguard の残りのルール（2 節の層の向き）を有効にする、shard の見直し、親設計の書き直し（8 節） | 変わらない |

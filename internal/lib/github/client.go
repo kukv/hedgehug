@@ -14,8 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 )
 
 // The errors of a call, by the status of the answer.
@@ -87,10 +85,17 @@ func defaultHTTP(hc *http.Client) *http.Client {
 	return &c
 }
 
-// New makes a client of the host h with token. hc nil is a client with a
+// Options is what a client needs of a GitHub host: the base of its REST API,
+// and the base of its web pages, where the device flow runs.
+type Options struct {
+	API string // the REST API base, without a trailing slash
+	Web string // the web base, for the device flow
+}
+
+// New makes a client of the host o with token. hc nil is a client with a
 // 30-second timeout.
-func New(h config.Host, token string, hc *http.Client) *Client {
-	return &Client{api: h.API, token: token, hc: defaultHTTP(hc)}
+func New(o Options, token string, hc *http.Client) *Client {
+	return &Client{api: o.API, token: token, hc: defaultHTTP(hc)}
 }
 
 // do calls method on the API path with the JSON of in (nil for none), and
@@ -105,7 +110,7 @@ func (c *Client) do(method, url string, in, out any) (http.Header, error) {
 		}
 		body = bytes.NewReader(b)
 	}
-	if config.PlainHTTP(url) {
+	if PlainHTTP(url) {
 		return nil, fmt.Errorf("%s %s: plain http, so the token is not sent; use https", method, url)
 	}
 	req, err := http.NewRequest(method, url, body)

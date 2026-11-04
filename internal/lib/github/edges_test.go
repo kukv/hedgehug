@@ -7,8 +7,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 )
 
 func answer(t *testing.T, code int, body string) *Client {
@@ -18,7 +16,7 @@ func answer(t *testing.T, code int, body string) *Client {
 		_, _ = w.Write([]byte(body))
 	}))
 	t.Cleanup(srv.Close)
-	return New(config.Host{API: srv.URL}, "t", nil)
+	return New(Options{API: srv.URL}, "t", nil)
 }
 
 func TestStatusEdges(t *testing.T) {
@@ -54,7 +52,7 @@ func TestCreateRepoForUser(t *testing.T) {
 		_, _ = w.Write([]byte(`{"full_name":"alice/x"}`))
 	}))
 	defer srv.Close()
-	if _, err := New(config.Host{API: srv.URL}, "t", nil).CreateRepo("alice", "x", true); err != nil || path != "/user/repos" {
+	if _, err := New(Options{API: srv.URL}, "t", nil).CreateRepo("alice", "x", true); err != nil || path != "/user/repos" {
 		t.Errorf("path %q, err %v", path, err)
 	}
 }

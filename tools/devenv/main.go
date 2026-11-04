@@ -25,6 +25,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 const (
@@ -210,10 +211,10 @@ func initEnv(dir, fakeghURL string, stdout io.Writer) error {
 	if _, err := os.Lstat(dir); err == nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return fmt.Errorf("%s already exists; run `devenv reset` to recreate it", dir)
 	}
-	if err := os.MkdirAll(dir, 0o750); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+	if err := osfs.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(dir, markerFile), nil, 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+	if err := osfs.WriteFile(filepath.Join(dir, markerFile), nil, 0o600); err != nil {
 		return err
 	}
 	for _, r := range bareRemotes {
@@ -272,7 +273,7 @@ func writeSeed(path string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(b, '\n'), 0o600) //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+	return osfs.WriteFile(path, append(b, '\n'), 0o600)
 }
 
 // configHead is the start of the config.yaml of user u, written before the
@@ -292,7 +293,7 @@ func configHead(dir, u, fakeghURL string) string {
 // initUser makes the home of the user u: config.yaml and the stores.
 func initUser(dir, u, fakeghURL string) error {
 	home := filepath.Join(dir, "users", u)
-	if err := os.MkdirAll(home, 0o750); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+	if err := osfs.MkdirAll(home, 0o750); err != nil {
 		return err
 	}
 	getenv := func(k string) string {
@@ -308,7 +309,7 @@ func initUser(dir, u, fakeghURL string) error {
 	}
 	// The accounts, hosts and url_rewrites are written before the config is
 	// loaded, so that AddStore keeps them.
-	if err := os.WriteFile(p.ConfigFile, []byte(configHead(dir, u, fakeghURL)), 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+	if err := osfs.WriteFile(p.ConfigFile, []byte(configHead(dir, u, fakeghURL)), 0o600); err != nil {
 		return err
 	}
 	for _, ds := range stores[u] {
@@ -330,12 +331,12 @@ func seedWeb(dir string) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.RemoveAll(work) }() //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+	defer func() { _ = osfs.RemoveAll(work) }()
 	r, err := gitrepo.Init(work)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(work, "README.md"), []byte("# web\n"), 0o600); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+	if err := osfs.WriteFile(filepath.Join(work, "README.md"), []byte("# web\n"), 0o600); err != nil {
 		return err
 	}
 	if _, err := r.Commit(gitrepo.Commit{
@@ -445,7 +446,7 @@ func reset(dir, fakeghURL string, stdout io.Writer) error {
 		if _, err := os.Stat(filepath.Join(dir, markerFile)); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 			return fmt.Errorf("%s was not made by devenv (no %s in it); not removing it", dir, markerFile)
 		}
-		if err := os.RemoveAll(dir); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+		if err := osfs.RemoveAll(dir); err != nil {
 			return err
 		}
 	}

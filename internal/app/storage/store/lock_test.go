@@ -22,14 +22,14 @@ func TestLockExcludes(t *testing.T) {
 	if _, err := acquire(path, 20*time.Millisecond); !errors.Is(err, ErrLocked) {
 		t.Fatalf("second acquire: err = %v, want ErrLocked", err)
 	}
-	if err := l.release(); err != nil {
+	if err := l.Release(); err != nil {
 		t.Fatal(err)
 	}
 	l2, err := acquire(path, time.Second)
 	if err != nil {
 		t.Fatalf("acquire after release: %v", err)
 	}
-	if err := l2.release(); err != nil {
+	if err := l2.Release(); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -79,30 +79,7 @@ func TestLockReleasedOnKill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("acquire after the helper was killed: %v", err)
 	}
-	if err := l.release(); err != nil {
+	if err := l.Release(); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestWithFileLock(t *testing.T) {
-	t.Parallel()
-	p := filepath.Join(t.TempDir(), "sub", "auth.lock")
-	inside := make(chan struct{})
-	release := make(chan struct{})
-	go func() {
-		_ = WithFileLock(p, time.Second, func() error {
-			close(inside)
-			<-release
-			return nil
-		})
-	}()
-	<-inside
-	if err := WithFileLock(p, 20*time.Millisecond, func() error { return nil }); !errors.Is(err, ErrLocked) {
-		t.Errorf("second lock = %v, want ErrLocked", err)
-	}
-	close(release)
-	want := errors.New("from fn")
-	if err := WithFileLock(p, time.Second, func() error { return want }); !errors.Is(err, want) {
-		t.Errorf("err = %v, want fn's", err)
 	}
 }

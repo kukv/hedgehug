@@ -8,8 +8,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 )
 
 // A next page on the same host but another port is another origin: the token
@@ -32,7 +30,7 @@ func TestNextPageOtherPort(t *testing.T) {
 	if srvURL.Hostname() != otherURL.Hostname() || srvURL.Port() == otherURL.Port() {
 		t.Fatalf("the servers should differ only by port: %s %s", srv.URL, other.URL)
 	}
-	_, err := New(config.Host{API: srv.URL}, "secret", nil).UserRepos()
+	_, err := New(Options{API: srv.URL}, "secret", nil).UserRepos()
 	if err == nil || !strings.Contains(err.Error(), "not sending the token") {
 		t.Errorf("err = %v", err)
 	}
@@ -87,7 +85,7 @@ func TestRedirectToAnotherOriginIsRefused(t *testing.T) {
 
 	injected := &http.Client{}
 	for name, hc := range map[string]*http.Client{"default": nil, "injected": injected} {
-		_, err := New(config.Host{API: srv.URL}, "secret", hc).User()
+		_, err := New(Options{API: srv.URL}, "secret", hc).User()
 		if err == nil || !strings.Contains(err.Error(), "redirect") {
 			t.Errorf("%s: err = %v; want a refused redirect", name, err)
 		}
@@ -117,7 +115,7 @@ func TestRedirectToTheSameOriginIsFollowed(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	for _, hc := range []*http.Client{nil, {}} {
-		login, err := New(config.Host{API: srv.URL}, "secret", hc).User()
+		login, err := New(Options{API: srv.URL}, "secret", hc).User()
 		if err != nil || login != "alice" {
 			t.Errorf("User = %q, %v", login, err)
 		}
@@ -141,7 +139,7 @@ func TestRedirectKeepsTheCallersPolicy(t *testing.T) {
 	}))
 	defer srv.Close()
 	hc := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("no redirects") }}
-	if _, err := New(config.Host{API: srv.URL}, "t", hc).User(); err == nil || !strings.Contains(err.Error(), "no redirects") {
+	if _, err := New(Options{API: srv.URL}, "t", hc).User(); err == nil || !strings.Contains(err.Error(), "no redirects") {
 		t.Errorf("the caller's policy was not kept: %v", err)
 	}
 }

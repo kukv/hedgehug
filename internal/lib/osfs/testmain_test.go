@@ -1,4 +1,4 @@
-package atomicfile
+package osfs
 
 import (
 	"testing"

@@ -19,6 +19,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/query"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase/mount"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // syncLockWait is how long a sync waits for another one of the store, such
@@ -282,7 +283,7 @@ func (ss *Session) closeMounted(dir string) {
 		return
 	}
 	for _, m := range mc.set.Stores {
-		if m.Entry.Path != dir {
+		if !osfs.SamePath(m.Entry.Path, dir) {
 			continue
 		}
 		_ = m.CloseRepo()

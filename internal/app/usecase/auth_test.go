@@ -16,6 +16,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 	"github.com/kukv/hedgehug/internal/lib/github"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // kr is a keychain in memory. onSet and onDelete run before the call, and
@@ -120,7 +121,7 @@ func (ts *testSession) accounts() []config.Account {
 
 // heldElsewhere reports whether another holder has the lock.
 func heldElsewhere(lock string) bool {
-	err := store.WithFileLock(lock, 20*time.Millisecond, func() error { return nil })
+	err := osfs.WithFileLock(lock, 20*time.Millisecond, func() error { return nil })
 	return errors.Is(err, store.ErrLocked)
 }
 

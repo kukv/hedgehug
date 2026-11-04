@@ -18,6 +18,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // mergeDriverCmd is the command .git/config names for the files
@@ -54,7 +55,7 @@ func (a *app) mergeDriver(basePath, oursPath, theirsPath, rel string) error {
 	}
 	var data [3][]byte
 	for i, p := range []string{basePath, oursPath, theirsPath} {
-		if data[i], err = os.ReadFile(p); err != nil { //nolint:gosec // the files git gives the driver
+		if data[i], err = osfs.ReadFile(p); err != nil {
 			return err
 		}
 	}
@@ -98,7 +99,7 @@ func (a *app) mergeDriver(basePath, oursPath, theirsPath, rel string) error {
 	if m.Data == nil {
 		return fmt.Errorf("merge %s: the merge removes the file; left to git", rel)
 	}
-	if err := os.WriteFile(oursPath, m.Data, 0o600); err != nil {
+	if err := osfs.WriteFile(oursPath, m.Data, 0o600); err != nil {
 		return err
 	}
 	return a.recordLosses(dir, commit, m)

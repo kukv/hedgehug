@@ -17,8 +17,8 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/lib/atomicfile"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 const (
@@ -154,7 +154,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 	}
 	paths := make([]string, 0, len(files))
 	for _, f := range files {
-		if err := atomicfile.WriteFile(s.path(f.rel), f.data); err != nil {
+		if err := osfs.WriteAtomic(s.path(f.rel), f.data); err != nil {
 			return nil, err
 		}
 		paths = append(paths, f.rel)
@@ -180,7 +180,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 func ensureEmpty(dir string) (made bool, err error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
-		return true, os.MkdirAll(dir, 0o750)
+		return true, osfs.MkdirAll(dir, 0o750)
 	}
 	if err != nil {
 		return false, err
@@ -195,7 +195,7 @@ func ensureEmpty(dir string) (made bool, err error) {
 // Create made it, its contents otherwise.
 func undoCreate(dir string, made bool) error {
 	if made {
-		return os.RemoveAll(dir)
+		return osfs.RemoveAll(dir)
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -203,7 +203,7 @@ func undoCreate(dir string, made bool) error {
 	}
 	var errs []error
 	for _, e := range entries {
-		errs = append(errs, os.RemoveAll(filepath.Join(dir, e.Name())))
+		errs = append(errs, osfs.RemoveAll(filepath.Join(dir, e.Name())))
 	}
 	return errors.Join(errs...)
 }

@@ -54,7 +54,7 @@ func TestAcquireStoreWaitingWhileTheLockFileIsRemoved(t *testing.T) {
 	go func() {
 		l, err := acquireStore(dir, lock, 5*time.Second)
 		if err == nil {
-			_ = l.release()
+			_ = l.Release()
 		}
 		errc <- err
 	}()
@@ -62,7 +62,7 @@ func TestAcquireStoreWaitingWhileTheLockFileIsRemoved(t *testing.T) {
 	if err := os.Remove(lock); err != nil {
 		t.Fatal(err)
 	}
-	if err := held.release(); err != nil {
+	if err := held.Release(); err != nil {
 		t.Fatal(err)
 	}
 	if err := <-errc; !errors.Is(err, ErrStoreGone) {
@@ -112,7 +112,7 @@ func TestAcquireStoreHappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := l.release(); err != nil {
+	if err := l.Release(); err != nil {
 		t.Fatal(err)
 	}
 }

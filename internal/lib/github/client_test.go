@@ -10,11 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 )
 
-func fake(t *testing.T) (*fakegh.Server, config.Host) {
+func fake(t *testing.T) (*fakegh.Server, Options) {
 	t.Helper()
 	zero := 0
 	s := fakegh.New(fakegh.State{
@@ -28,7 +27,7 @@ func fake(t *testing.T) (*fakegh.Server, config.Host) {
 	})
 	srv := httptest.NewServer(s)
 	t.Cleanup(srv.Close)
-	return s, config.Host{Host: "github.com", API: srv.URL, Web: srv.URL}
+	return s, Options{API: srv.URL, Web: srv.URL}
 }
 
 func TestClient(t *testing.T) {
@@ -101,7 +100,7 @@ func TestRateLimit(t *testing.T) {
 		_, _ = w.Write([]byte(`{"message":"API rate limit exceeded"}`))
 	}))
 	defer srv.Close()
-	_, err := New(config.Host{API: srv.URL}, "t", nil).User()
+	_, err := New(Options{API: srv.URL}, "t", nil).User()
 	var rl *RateLimitError
 	if !errors.As(err, &rl) || !rl.Reset.Equal(time.Unix(1793500000, 0)) {
 		t.Errorf("err = %v", err)
@@ -111,7 +110,7 @@ func TestRateLimit(t *testing.T) {
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
 	defer srv2.Close()
-	if _, err := New(config.Host{API: srv2.URL}, "t", nil).User(); !errors.As(err, &rl) {
+	if _, err := New(Options{API: srv2.URL}, "t", nil).User(); !errors.As(err, &rl) {
 		t.Errorf("429 = %v", err)
 	}
 }

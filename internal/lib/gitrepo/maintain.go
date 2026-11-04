@@ -14,7 +14,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/format/packfile"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 
-	"github.com/kukv/hedgehug/internal/lib/atomicfile"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // LooseObjects counts the objects stored one per file under .git/objects.
@@ -227,7 +227,7 @@ func (r *Repo) writePack(objs []plumbing.Hash) (base string, err error) {
 		return "", err
 	}
 	dir := filepath.Join(r.dir, ".git", "objects", "pack")
-	if err := os.MkdirAll(dir, 0o750); err != nil {
+	if err := osfs.MkdirAll(dir, 0o750); err != nil {
 		return "", err
 	}
 	var tmps []string
@@ -279,7 +279,7 @@ func (r *Repo) writePack(objs []plumbing.Hash) (base string, err error) {
 	if _, serr := os.Stat(base + ".idx"); serr == nil {
 		// The same pack is already there; packs are named by their content.
 		for _, t := range tmps {
-			_ = os.Remove(t)
+			_ = osfs.Remove(t)
 		}
 		return base, nil
 	} else if !errors.Is(serr, fs.ErrNotExist) {
@@ -292,10 +292,10 @@ func (r *Repo) writePack(objs []plumbing.Hash) (base string, err error) {
 			return "", err
 		}
 	}
-	if err := atomicfile.Rename(pack.Name(), base+".pack"); err != nil {
+	if err := osfs.Rename(pack.Name(), base+".pack"); err != nil {
 		return "", err
 	}
-	if err := atomicfile.Rename(ix.Name(), base+".idx"); err != nil {
+	if err := osfs.Rename(ix.Name(), base+".idx"); err != nil {
 		// A .pack without its .idx is never read; it is ours, so remove it.
 		removeReadOnly(base + ".pack")
 		return "", err
@@ -309,7 +309,7 @@ const packMode = 0o444
 // then; Windows does not remove a read-only file.
 func removeReadOnly(p string) {
 	_ = os.Chmod(p, 0o600)
-	_ = os.Remove(p)
+	_ = osfs.Remove(p)
 }
 
 // indexPack reads the pack at path and returns its index.
