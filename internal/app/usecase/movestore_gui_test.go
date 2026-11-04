@@ -96,8 +96,10 @@ func TestMovePlanGUIViewParentAndProps(t *testing.T) {
 
 	// a property reference keeps "props." so a property named sprint or releases stays apart
 	a, b := model.NewULID(), model.NewULID()
-	p := MovePlan{From: "x", To: "y", Labels: map[model.ULID]string{a: "API-1"},
-		Unlinked: []store.Unlink{{Task: a, Field: "props.reviewer", Target: b}}}
+	p := MovePlan{
+		From: "x", To: "y", Labels: map[model.ULID]string{a: "API-1"},
+		Unlinked: []store.Unlink{{Task: a, Field: "props.reviewer", Target: b}},
+	}
 	got := p.GUIView().Unlinked
 	want := []MoveUnlinkView{{Task: MoveRefView{ULID: a, ID: "API-1"}, Field: "props.reviewer", Target: MoveTargetView{ULID: b, Label: b.String()}}}
 	if !slices.Equal(got, want) {
