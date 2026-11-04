@@ -110,7 +110,7 @@ describe("WorkspaceAdd", () => {
   });
 
   it("does not offer a hidden Store", () => {
-    const k = makeCore({ workspaces: spaces });
+    const k = makeCore({ workspaces: spaces, hidden: ["backend"] });
     k.stores.stores.mockReturnValue([
       storeItem("shared", true),
       { ...storeItem("backend"), hidden: true },

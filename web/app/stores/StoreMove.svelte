@@ -215,7 +215,9 @@
           id: `移動先の ${plan.workspace.name} で振り直します`,
           parent: parentSentence({
             from,
-            parent: plan.parent ? `${plan.parent.id} ${plan.parent.title}` : null,
+            parent: plan.parent
+              ? `${did.current(plan.to, plan.parent.id)} ${plan.parent.title}`
+              : null,
             workspace: plan.workspace.name,
           }),
           hidden: hiddenSentences(plan.hidden, plan.from),

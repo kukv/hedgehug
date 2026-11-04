@@ -4,6 +4,7 @@
   import { errorMessage } from "../../core/messages";
   import { nameProblem, prefixProblem } from "../../core/workspace";
   import { core } from "../context";
+  import { storeShown } from "../hidden";
   import { useReadOnlyOf } from "../read-only";
   import { router } from "../router";
   import { useSubscribe } from "../svelte-store";
@@ -26,7 +27,7 @@
   const roOf = useReadOnlyOf(stores);
 
   // A hidden Store is not offered (細部 93).
-  const items = $derived(dir.current.items.filter((s) => !s.hidden));
+  const items = $derived(dir.current.items.filter((s) => storeShown(stores, s.name)));
   // Only a Store that can be written is a place to add to (細部 99).
   const writable = $derived(items.filter((s) => roOf.current(s.name) === null));
   // The Store picked here, else the one asked for, else the default one, else the first (of those

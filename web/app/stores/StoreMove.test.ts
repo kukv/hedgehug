@@ -330,6 +330,26 @@ describe("StoreMove", () => {
     });
   });
 
+  it("writes the IDs of the plan with their Store where the prefix is shared", async () => {
+    setup({
+      qualify: true,
+      plan: planOf({
+        parent: { id: "SC-4", title: "新しい親", ulid: "UQ" },
+        unlinked: [
+          {
+            task: { id: "REL-3", ulid: "U3" },
+            field: "blocked_by",
+            target: { label: "REL-1", ulid: "U1" },
+          },
+        ],
+      }),
+    });
+    await pick("second");
+    expect(await screen.findByText(/から外れて、second:SC-4 新しい親 の下に/)).toBeVisible();
+    const region = await screen.findByRole("region", { name: /^外す参照/ });
+    expect(within(region).getByRole("listitem")).toHaveTextContent("shared:REL-3");
+  });
+
   it("leaves out the first half of the parent when the task has none", async () => {
     const k = makeCore({ workspaces: spaces, storeItems: stores, tasks: [] });
     k.api.POST.mockImplementation(() => ok(planOf()));

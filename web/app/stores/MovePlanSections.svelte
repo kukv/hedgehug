@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Schemas } from "../../core/api/client";
+  import { core } from "../context";
   import Icon from "../icons/Icon.svelte";
+  import { useDisplayId } from "../svelte-store";
   import { unlinkedRows } from "./move-plan";
 
   // What the plan says will change: the ID, the parent, the references it cuts, the choice of the
@@ -17,6 +19,7 @@
     onscoped: (v: "carry" | "drop") => void;
   } = $props();
   const uid = $props.id();
+  const did = useDisplayId(core().stores);
 </script>
 
 <section class="part" aria-labelledby="{uid}-changes">
@@ -39,7 +42,7 @@
         <li>
           <span class="kind">{r.kind}</span>
           <span class="mono">{r.target}</span>
-          <span class="mono on-task">{r.id}</span>
+          <span class="mono on-task">{did.current(plan.from, r.id)}</span>
         </li>
       {/each}
     </ul>
