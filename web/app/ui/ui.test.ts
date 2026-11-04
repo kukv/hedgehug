@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import { createRawSnippet } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { renderWithCore } from "../test-utils";
 import { resetToasts, toast, toasts } from "../toast.svelte";
 import Avatar from "./Avatar.svelte";
 import Button from "./Button.svelte";
@@ -41,16 +42,26 @@ describe("Button", () => {
 
 describe("StoreBadge / Avatar", () => {
   it("StoreBadge は Store 名と tone を出す", () => {
-    const { container, getByTitle } = render(StoreBadge, {
-      props: { store: "shared", tone: "purple" },
+    const { container, getByTitle } = renderWithCore(StoreBadge, {
+      store: "shared",
+      tone: "purple",
     });
     expect(getByTitle("Store: shared").textContent).toContain("shared");
     expect(container.querySelector("[data-tone='purple']")).toBeTruthy();
   });
 
-  it("StoreBadge は閲覧のみ（灰色）なら title と読み上げに「閲覧のみ」を足す", () => {
-    const { getByTitle } = render(StoreBadge, { props: { store: "ro", tone: "readonly" } });
+  it("StoreBadge は閲覧のみの Store なら title と読み上げに「閲覧のみ」を足す", () => {
+    const { getByTitle } = renderWithCore(
+      StoreBadge,
+      { store: "ro", tone: "readonly" },
+      { stores: { readOnly: () => "the remote cannot be written", subscribe: () => () => {} } },
+    );
     expect(getByTitle("ro（閲覧のみ）").textContent).toContain("（閲覧のみ）");
+  });
+
+  it("StoreBadge は tone が灰色でも Store が書けるなら「閲覧のみ」を足さない", () => {
+    const { getByTitle } = renderWithCore(StoreBadge, { store: "x", tone: "readonly" });
+    expect(getByTitle("Store: x").textContent).not.toContain("閲覧のみ");
   });
 
   it("Avatar は名前の先頭2文字を大文字で出す", () => {

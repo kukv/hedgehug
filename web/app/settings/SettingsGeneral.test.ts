@@ -41,6 +41,7 @@ function mount(statuses: SyncStatus[], names = statuses.map((s) => s.store)) {
   };
   const stores = {
     stores: () => names.map((name) => ({ name })),
+    readOnly: () => null,
     tone: () => "teal",
     subscribe: () => () => {},
   };

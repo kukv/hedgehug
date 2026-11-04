@@ -79,6 +79,7 @@ function setup(
       conn,
       stores: {
         stores: () => names.map((name) => ({ name })),
+        readOnly: () => null,
         tone: () => "purple",
         workspaces: () => [],
         workspace: (_s: string, u: string) => (u === "W1" ? { name: "release" } : undefined),

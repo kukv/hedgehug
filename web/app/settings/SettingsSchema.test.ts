@@ -113,6 +113,7 @@ function setup(opts: Opts = {}) {
       conn,
       stores: {
         stores: () => names.map((name) => ({ name })),
+        readOnly: () => null,
         tone: () => "purple",
         subscribe: () => () => {},
       },
@@ -369,7 +370,12 @@ describe("SettingsSchema", () => {
         {
           api: { GET: vi.fn(() => ok({ tasks: [], findings: [] })) },
           conn,
-          stores: { stores: () => [], tone: () => "purple", subscribe: () => () => {} },
+          stores: {
+            stores: () => [],
+            readOnly: () => null,
+            tone: () => "purple",
+            subscribe: () => () => {},
+          },
           schema: { get: () => sch, load: async () => sch, subscribe: () => () => {} },
         },
       );

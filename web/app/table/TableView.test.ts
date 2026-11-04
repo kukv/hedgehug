@@ -192,6 +192,7 @@ function setup(over: Over = {}) {
     },
     stores: {
       stores: () => (over.stores ?? ["shared"]).map((name) => ({ name })),
+      readOnly: () => null,
       tone: (s: string) => (s === "me" ? "orange" : "purple"),
       subscribe: ev.subscribe,
     },

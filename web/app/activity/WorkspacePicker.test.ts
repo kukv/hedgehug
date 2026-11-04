@@ -1,6 +1,7 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/svelte";
+import { cleanup, fireEvent, screen, within } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceEntry } from "../../core/stores";
+import { renderWithCore } from "../test-utils";
 import WorkspacePicker from "./WorkspacePicker.svelte";
 
 const ws = (store: string, ulid: string, name: string, prefix: string): WorkspaceEntry => ({
@@ -23,7 +24,7 @@ const all = [
 
 function setup(selected: string[] = []) {
   const onchange = vi.fn();
-  const view = render(WorkspacePicker, { workspaces: all, selected, onchange });
+  const view = renderWithCore(WorkspacePicker, { workspaces: all, selected, onchange });
   return { onchange, view };
 }
 

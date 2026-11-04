@@ -123,6 +123,7 @@ function setup(o: Setup = {}) {
     },
     stores: {
       stores: () => stores.map((name) => ({ name })),
+      readOnly: () => null,
       tone: () => "purple",
       workspace: () => undefined,
       workspaces: () => [],

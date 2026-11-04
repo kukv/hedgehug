@@ -1,7 +1,8 @@
-import { cleanup, render, within } from "@testing-library/svelte";
+import { cleanup, within } from "@testing-library/svelte";
 import { createRawSnippet } from "svelte";
 import { afterEach, describe, expect, it } from "vitest";
 import type { WorkspaceEntry } from "../../core/stores";
+import { renderWithCore } from "../test-utils";
 import WorkspaceHeader from "./WorkspaceHeader.svelte";
 
 afterEach(cleanup);
@@ -20,7 +21,7 @@ const entry: WorkspaceEntry = {
 
 describe("WorkspaceHeader", () => {
   it("Store のバッジ・名前・接頭辞・見出しを出す", () => {
-    const { getByRole, getByText } = render(WorkspaceHeader, { entry, tab: "overview" });
+    const { getByRole, getByText } = renderWithCore(WorkspaceHeader, { entry, tab: "overview" });
     expect(getByRole("heading", { level: 1, name: "release" })).toBeTruthy();
     expect(getByText("REL")).toBeTruthy();
     expect(getByText("ワークスペース")).toBeTruthy();
@@ -28,7 +29,7 @@ describe("WorkspaceHeader", () => {
   });
 
   it("タブは概要・ツリー・カンバン・テーブルと右端の設定。今のタブだけ aria-current", () => {
-    const { getByRole } = render(WorkspaceHeader, { entry, tab: "tree" });
+    const { getByRole } = renderWithCore(WorkspaceHeader, { entry, tab: "tree" });
     const nav = getByRole("navigation", { name: "ビューの切り替え" });
     const links = within(nav).getAllByRole("link");
     expect(links.map((a) => a.textContent?.trim())).toEqual([
@@ -58,25 +59,25 @@ describe("WorkspaceHeader", () => {
     ["kanban", "カンバン"],
     ["table", "テーブル"],
   ] as const)("%s のタブのとき「%s」が今のタブ", (tab, label) => {
-    const { getByRole } = render(WorkspaceHeader, { entry, tab });
+    const { getByRole } = renderWithCore(WorkspaceHeader, { entry, tab });
     expect(getByRole("link", { name: label }).getAttribute("aria-current")).toBe("page");
   });
 
   it("ガント・バックログなど後のフェーズのタブは出さない", () => {
-    const { queryByRole } = render(WorkspaceHeader, { entry, tab: "overview" });
+    const { queryByRole } = renderWithCore(WorkspaceHeader, { entry, tab: "overview" });
     for (const name of ["ガント", "バックログ", "スプリント", "リリース", "レポート"]) {
       expect(queryByRole("link", { name })).toBeNull();
     }
   });
 
   it("設定のタブのとき設定が今のタブ", () => {
-    const { getByRole } = render(WorkspaceHeader, { entry, tab: "settings" });
+    const { getByRole } = renderWithCore(WorkspaceHeader, { entry, tab: "settings" });
     expect(getByRole("link", { name: "設定" }).getAttribute("aria-current")).toBe("page");
   });
 
   it("actions を見出しの右に出す", () => {
     const actions = createRawSnippet(() => ({ render: () => "<button>タスク</button>" }));
-    const { getByRole } = render(WorkspaceHeader, { entry, tab: "overview", actions });
+    const { getByRole } = renderWithCore(WorkspaceHeader, { entry, tab: "overview", actions });
     expect(getByRole("button", { name: "タスク" })).toBeTruthy();
   });
 });

@@ -134,6 +134,7 @@ function setup(found: unknown[] = []) {
     stores: {
       stores: () => [{ name: "shared" }, { name: "backend" }],
       workspaces: () => [ws, { ...ws, ulid: "W2", name: "ops", prefix: "OPS" }],
+      readOnly: () => null,
       tone: () => "purple",
       subscribe: none,
     },

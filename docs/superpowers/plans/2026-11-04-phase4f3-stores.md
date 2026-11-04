@@ -92,7 +92,7 @@
 **Files:**
 - Create: `web/app/read-only.ts`・`read-only.test.ts`（`useReadOnly(store)`: `StoreDirectory` を購読して理由の文（`readOnlyReason` 済み）か null を返す。`readOnlyToast(reason)`: キーボードの操作で出すトースト「この Store は閲覧のみです（理由）」）
 - Create: `web/app/states/StoreBands.svelte`・`StoreBands.test.ts`（閲覧のみの帯。非表示の帯は Task 3 で足す）
-- Modify: `web/app/ui/StoreBadge.svelte`・テスト（閲覧のみなら `title` と読み上げを「<名前>（閲覧のみ）」。`tone === "readonly"` で判断する）
+- Modify: `web/app/ui/StoreBadge.svelte`・テスト（閲覧のみなら `title` と読み上げを「<名前>（閲覧のみ）」。`useReadOnly` で判断する。`tone` は色だけ: 知らない Store も灰色で返るため）
 - Modify: `web/app/detail/TaskDetail.svelte`・`TaskDetail.test.ts`、`DeleteDialogs.svelte`、`web/app/workspace/move-menu.ts`・テスト（`moveWorkspaceItem` に閲覧のみの無効と理由）
 - Modify: `web/app/workspace/WorkspacePage.svelte`・`web/app/project/ProjectPage.svelte`・`web/app/views/ViewPage.svelte`（`StoreBands` を上に置く）
 - Modify: `web/e2e/harness.ts`（細部 100 の `readOnlyStore`）

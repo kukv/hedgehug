@@ -126,6 +126,7 @@ function setup(
       workspace: (s: "alpha" | "beta", u: string) =>
         wsReady && wsOf[s]?.ulid === u ? entry(s) : undefined,
       workspaces: () => (wsReady ? [entry("alpha"), entry("beta")] : []),
+      readOnly: () => null,
       tone: (s: string) => (s === "alpha" ? "teal" : "orange"),
       subscribe: ev.subscribe,
     },

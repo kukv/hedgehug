@@ -43,6 +43,7 @@ function mount(over: { list?: () => string[]; error?: ApiError | null; loading?:
           { name: "shared", account: "github.com/alice" },
           { name: "me", account: "ghe.example.com/alice-corp" },
         ],
+        readOnly: () => null,
         tone: (s: string) => (s === "shared" ? "purple" : "teal"),
         loaded: () => true,
         subscribe: none,

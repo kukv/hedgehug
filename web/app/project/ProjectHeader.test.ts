@@ -24,7 +24,7 @@ function mount(props: {
       workspace: props.withWorkspace === false ? undefined : entry(),
       tab: props.tab,
     },
-    { stores: { tone: () => "purple", subscribe: () => () => {} } },
+    { stores: { readOnly: () => null, tone: () => "purple", subscribe: () => () => {} } },
   );
 }
 

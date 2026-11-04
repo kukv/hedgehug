@@ -115,6 +115,8 @@ export class Hedgehug {
     for (const d of [objects, ...allDirs(objects)]) chmodSync(d, 0o500);
     this.hh("store", "add", name, "--remote", remote);
     this.hh("sync");
+    // The read_only check below is what shows the lock took effect (the peer's sync is skipped
+    // when there are no titles, so nothing else would).
     const item = this.json<{ name: string; read_only?: string }[]>("store", "list").find(
       (s) => s.name === name,
     );
@@ -124,6 +126,17 @@ export class Hedgehug {
       );
     }
     return peer;
+  }
+
+  /** Gives the write permission back to the bare repositories readOnlyStore locked (best effort). */
+  private unlock(): void {
+    for (const remote of this.locked) {
+      try {
+        for (const d of [remote, ...allDirs(remote)]) chmodSync(d, 0o700);
+      } catch {
+        // Best effort (a repository that is gone has nothing to unlock): the removal that follows says if it matters.
+      }
+    }
   }
 
   /** Runs hh and returns its standard output. A non-zero exit throws. */
@@ -225,20 +238,24 @@ export class Hedgehug {
   }
 
   async stop(): Promise<void> {
-    if (this.proc.exitCode === null && this.proc.signalCode === null) {
-      const exited = new Promise<void>((done) => this.proc.once("exit", () => done()));
-      this.proc.kill("SIGINT");
-      const timer = setTimeout(() => this.proc.kill("SIGKILL"), 5000);
-      await exited;
-      clearTimeout(timer);
+    try {
+      if (this.proc.exitCode === null && this.proc.signalCode === null) {
+        const exited = new Promise<void>((done) => this.proc.once("exit", () => done()));
+        this.proc.kill("SIGINT");
+        const timer = setTimeout(() => this.proc.kill("SIGKILL"), 5000);
+        try {
+          await exited;
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+      await this.gh?.stop();
+    } finally {
+      // A bare repository that was made read-only is unlocked first, or the removal fails.
+      this.unlock();
+      for (const p of this.peers) p.stop();
+      rmSync(this.home, { recursive: true, force: true });
     }
-    await this.gh?.stop();
-    // A bare repository that was made read-only is unlocked first, or the removal fails.
-    for (const remote of this.locked) {
-      for (const d of [remote, ...allDirs(remote)]) chmodSync(d, 0o700);
-    }
-    for (const p of this.peers) p.stop();
-    rmSync(this.home, { recursive: true, force: true });
   }
 }
 

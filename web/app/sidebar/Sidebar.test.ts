@@ -38,7 +38,10 @@ function mount(over: Record<string, unknown> = {}) {
   return renderWithCore(
     Sidebar,
     {},
-    { stores: { workspaces: () => workspaces, subscribe: () => () => {} }, ...over },
+    {
+      stores: { workspaces: () => workspaces, readOnly: () => null, subscribe: () => () => {} },
+      ...over,
+    },
   );
 }
 

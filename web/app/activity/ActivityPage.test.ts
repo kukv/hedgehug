@@ -68,6 +68,7 @@ function setup(items: Log[], opts: Opts = {}) {
       conn,
       stores: {
         stores: () => names.map((name) => ({ name })),
+        readOnly: () => null,
         tone: () => "purple",
         workspaces: () => spaces,
         workspace: () => undefined,
