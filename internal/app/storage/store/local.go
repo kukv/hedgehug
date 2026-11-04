@@ -100,7 +100,7 @@ func (s *Store) WithLocalLock(name string, wait time.Duration, fn func() error) 
 	}
 	// As in Update, a release error only matters when fn failed.
 	defer func() {
-		if rerr := l.release(); rerr != nil && err != nil {
+		if rerr := l.Release(); rerr != nil && err != nil {
 			err = errors.Join(err, rerr)
 		}
 	}()

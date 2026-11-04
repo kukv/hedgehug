@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/lib/osfs"
+
 	"github.com/kukv/hedgehug/internal/app/storage/config"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/github"
 )
 
@@ -72,8 +73,8 @@ func WithLock(opt Options, fn func() error) error {
 	if opt.LockFile == "" {
 		return errors.New("auth: LockFile is not set")
 	}
-	err := store.WithFileLock(opt.LockFile, lockWait, fn)
-	if errors.Is(err, store.ErrLocked) {
+	err := osfs.WithFileLock(opt.LockFile, lockWait, fn)
+	if errors.Is(err, osfs.ErrLocked) {
 		return fmt.Errorf("another hedgehug is refreshing or changing the token; wait a little and try again: %w", err)
 	}
 	return err

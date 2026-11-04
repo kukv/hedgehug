@@ -30,7 +30,7 @@ func (s *Store) lockedAtHead(head plumbing.Hash, fn func() error) (err error) {
 	defer s.mu.Unlock()
 	// As in Update, a release error only matters when the operation failed.
 	defer func() {
-		if rerr := l.release(); rerr != nil && err != nil {
+		if rerr := l.Release(); rerr != nil && err != nil {
 			err = errors.Join(err, rerr)
 		}
 	}()

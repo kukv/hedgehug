@@ -10,10 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/lib/osfs"
+
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
 
 // ErrNoStores means config.yaml lists no store.
@@ -544,7 +545,7 @@ const updateWait = 30 * time.Second
 // write at once keep each other's changes.
 func (c *Config) Update(fn func(*Config) error) error {
 	lock := filepath.Join(filepath.Dir(c.file), "config.lock")
-	return store.WithFileLock(lock, updateWait, func() error {
+	return osfs.WithFileLock(lock, updateWait, func() error {
 		fresh, err := Load(Paths{Home: c.home, ConfigFile: c.file})
 		if err != nil {
 			return err

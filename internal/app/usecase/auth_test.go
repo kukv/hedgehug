@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/lib/osfs"
+
 	"github.com/kukv/hedgehug/internal/app/remote/auth"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
@@ -120,7 +122,7 @@ func (ts *testSession) accounts() []config.Account {
 
 // heldElsewhere reports whether another holder has the lock.
 func heldElsewhere(lock string) bool {
-	err := store.WithFileLock(lock, 20*time.Millisecond, func() error { return nil })
+	err := osfs.WithFileLock(lock, 20*time.Millisecond, func() error { return nil })
 	return errors.Is(err, store.ErrLocked)
 }
 

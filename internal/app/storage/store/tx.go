@@ -432,7 +432,7 @@ func (s *Store) UpdateCommit(op Op, fn func(*Tx) error) (hash plumbing.Hash, err
 		// and the caller must not think a committed operation failed. When the
 		// operation failed, the release error is joined to its error.
 		defer func() {
-			if rerr := l.release(); rerr != nil && err != nil {
+			if rerr := l.Release(); rerr != nil && err != nil {
 				err = errors.Join(err, rerr)
 			}
 		}()
@@ -513,7 +513,7 @@ var onLockWait = func() {}
 // lockStore takes s.mu and the file lock, and returns with both held. While
 // the file is held by someone else it waits without s.mu, so that a holder
 // of a Locked in this process, which needs s.mu, is not kept out by it.
-func (s *Store) lockStore() (*fileLock, error) {
+func (s *Store) lockStore() (*osfs.Lock, error) {
 	deadline := time.Now().Add(s.lockWait)
 	for {
 		s.mu.Lock()

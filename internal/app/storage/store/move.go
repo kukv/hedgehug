@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/lib/osfs"
+
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
@@ -153,7 +155,7 @@ func cloneSchema(sc *schema.Schema) (*schema.Schema, error) {
 // lock itself and fails with ErrLocked after lockWait.
 type Locked struct {
 	stores   []*Store
-	locks    []*fileLock
+	locks    []*osfs.Lock
 	once     sync.Once
 	released atomic.Bool // set by Release; a Locked that was let go holds nothing
 }
@@ -202,7 +204,7 @@ func (l *Locked) Release() {
 		l.released.Store(true)
 		for i := len(l.stores) - 1; i >= 0; i-- {
 			// The OS drops the lock with the file whatever release says.
-			_ = l.locks[i].release()
+			_ = l.locks[i].Release()
 		}
 	})
 }
