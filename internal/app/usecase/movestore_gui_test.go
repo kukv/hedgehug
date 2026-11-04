@@ -2,6 +2,8 @@ package usecase
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -250,5 +252,72 @@ func TestMoveStoreResultView(t *testing.T) {
 		if _, ok := u[k].(string); !ok {
 			t.Errorf("unlinked[0] = %v; want a string %q", u, k)
 		}
+	}
+}
+
+// After a move that stopped in the source, the plan the user agreed to is no
+// longer the plan (the destination holds the tasks, so nothing is dropped any
+// more), and the plan made again is the one that finishes the move.
+func TestMoveStoreConfirmedViewAfterAResumedMove(t *testing.T) {
+	t.Parallel()
+	f := newMoveFx(t)
+	f.setSchema(t, func(sc *schema.Schema) {
+		sc.Statuses = append(sc.Statuses, schema.Status{Name: "review", Category: schema.CategoryDoing})
+		sc.Scoped = []schema.Scoped{{
+			Where:    "project:" + f.p.String(),
+			Statuses: []string{"backlog", "todo", "review", "in_progress", "done", "canceled"},
+		}}
+	})
+	in := f.in()
+	in.Scoped = "carry"
+	plan, err := f.ts.PrepareMovePlan(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Scoped == nil || !slices.Contains(plan.Scoped.Dropped, "status review") {
+		t.Fatalf("scoped = %+v; want status review dropped", plan.Scoped)
+	}
+
+	// the write into the source fails: the destination is written, the source is not
+	as, _ := f.ts.ForStore("org-a").OpenStore()
+	gPath := filepath.Join(as.Dir(), filepath.FromSlash(model.TaskPath(f.g)))
+	gBytes, err := os.ReadFile(gPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	f.ts.BeforeUpdate = func() {
+		if calls++; calls == 2 {
+			_ = os.Remove(gPath)
+		}
+	}
+	in.ConfirmedView = &plan
+	_, err = f.ts.MoveStore(in)
+	mustCode(t, err, KindNotFound, "move.unfinished")
+	f.ts.BeforeUpdate = nil
+	if err := os.WriteFile(gPath, gBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// the view agreed to no longer holds
+	_, err = f.ts.MoveStore(in)
+	mustCode(t, err, KindConflict, "move.changed")
+
+	// the plan made again says nothing is dropped, and finishing it works
+	in.ConfirmedView = nil
+	again, err := f.ts.PrepareMovePlan(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Scoped == nil || again.Scoped.Dropped == nil || len(again.Scoped.Dropped) != 0 {
+		t.Errorf("scoped on the rerun = %+v; want dropped []", again.Scoped)
+	}
+	in.ConfirmedView = &again
+	res, err := f.ts.MoveStore(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Resumed {
+		t.Errorf("res = %+v; want resumed", res)
 	}
 }

@@ -226,11 +226,8 @@ func (ss *Session) MoveStore(in MoveStoreInput) (MoveStoreResult, error) {
 	if w, err = j.load(); err != nil {
 		return MoveStoreResult{}, err
 	}
-	if in.Confirmed != nil && !samePlan(*in.Confirmed, w.plan) {
-		return MoveStoreResult{}, newErr(KindConflict, "move.changed",
-			errors.New("the tasks changed after the confirmation; run the command again"))
-	}
-	if in.ConfirmedView != nil && !samePlanView(*in.ConfirmedView, w.plan.GUIView()) {
+	if (in.Confirmed != nil && !samePlan(*in.Confirmed, w.plan)) ||
+		(in.ConfirmedView != nil && !samePlanView(*in.ConfirmedView, w.plan.GUIView())) {
 		return MoveStoreResult{}, newErr(KindConflict, "move.changed",
 			errors.New("the tasks changed after the confirmation; run the command again"))
 	}

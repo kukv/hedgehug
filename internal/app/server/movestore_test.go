@@ -121,6 +121,28 @@ func TestMoveStorePlanAPI(t *testing.T) {
 	}
 }
 
+// A destination with two workspaces needs the one to go into named.
+func TestMoveStorePlanAPIWorkspaceChoice(t *testing.T) {
+	t.Parallel()
+	ts := twoStores(t)
+	ts.call("POST", "/api/workspaces?store=team", map[string]any{"name": "api", "prefix": "API"}, 201, nil)
+
+	p := ts.problem("POST", "/api/tasks/ME-1/move-store/plan", map[string]any{"to": "team"}, 400)
+	if p.Type != "choice.required" || p.Args["what"] != "--workspace" {
+		t.Fatalf("without workspace: %+v", p)
+	}
+	names, _ := p.Args["candidates"].([]any)
+	if len(names) != 2 || !slices.Contains(names, any("api")) {
+		t.Errorf("candidates = %v; want the two workspaces of team, api among them", p.Args["candidates"])
+	}
+
+	var v usecase.MovePlanView
+	ts.call("POST", "/api/tasks/ME-1/move-store/plan", map[string]any{"to": "team", "workspace": "API"}, 200, &v)
+	if v.Workspace.Prefix != "API" {
+		t.Errorf("workspace = %+v", v.Workspace)
+	}
+}
+
 func TestMoveStorePlanAPIReadOnly(t *testing.T) {
 	t.Parallel()
 	ts := twoStores(t)

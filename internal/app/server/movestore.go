@@ -64,10 +64,12 @@ func (s *Server) registerMoveStore() {
 		ss := s.session(in.Store)
 		defer ss.Close()
 		res, err := ss.MoveStore(mi)
+		// A move that stopped after the destination was written
+		// (move.unfinished) changed it too, so the poller looks on any error.
+		s.poller.Kick()
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		s.poller.Kick()
 		return &moveStoreOutput{Body: res.View()}, nil
 	})
 }
