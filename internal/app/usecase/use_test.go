@@ -10,34 +10,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/current"
 )
 
-const useGoneWarning = "the project of hedgehug use is not found (hedgehug use --clear removes it)"
-
-// addProjectIn adds a project to the store name and returns its id.
-func addProjectIn(t *testing.T, ts *testSession, name, title string) string {
-	t.Helper()
-	r, err := ts.ForStore(name).Add(AddInput{Title: title, Kind: "project"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Index.Refresh(); err != nil {
-		t.Fatal(err)
-	}
-	e, ok := r.Index.Task(r.ULID)
-	if !ok {
-		t.Fatalf("the project %s is not in the index", r.ULID)
-	}
-	return e.ID
-}
-
-func loadContext(t *testing.T, ts *testSession) current.State {
-	t.Helper()
-	_, p, err := ts.Config()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return current.Load(p.DataDir, func(m string) { t.Errorf("context.json warned: %s", m) })
-}
-
 func TestUseSetsTheProjectOfAnyStore(t *testing.T) {
 	t.Parallel()
 	ts := newTwoStoreSession(t)
@@ -185,7 +157,7 @@ func TestUseShowWarnsOfAProjectThatIsGone(t *testing.T) {
 				t.Fatal(err)
 			}
 			gone(t, ts, id)
-			ts.mounts = nil // the stores are opened again, as a new run does
+			ts.ForgetMounts() // the stores are opened again, as a new run does
 			r, err := ts.UseShow()
 			if err != nil || r.Project != nil || r.Store != "" {
 				t.Errorf("UseShow = %+v, %v; want none", r, err)

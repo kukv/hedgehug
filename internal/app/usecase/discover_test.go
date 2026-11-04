@@ -69,7 +69,7 @@ func TestDiscoverFrom(t *testing.T) {
 	}
 	for i := range want {
 		got := cands[i]
-		got.key = ""
+		ClearCandidateKey(&got)
 		if got != want[i] {
 			t.Errorf("candidate %d = %+v, want %+v", i, got, want[i])
 		}

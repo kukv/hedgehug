@@ -30,3 +30,4 @@ internal/app/usecase/moved_test.go helpers_test.go movedAuthor
 internal/app/usecase/readonly_test.go helpers_test.go makeReadOnly
 internal/app/usecase/purge_broken_test.go helpers_test.go moveFx.brokenForward moveFx.oldForward
 internal/app/usecase/helpers_test.go session.go Session.resetWriter
+internal/app/usecase/movestore_gui_test.go helpers_test.go moveFx.addSprint

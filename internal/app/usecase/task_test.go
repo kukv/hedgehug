@@ -11,66 +11,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
 
-// addWorkspace adds a workspace to the test store.
-func (ts *testSession) addWorkspace(name, prefix string) {
-	ts.t.Helper()
-	s, _, err := ts.Open()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	w := &model.Workspace{ULID: model.NewULID(), Name: name, IDPrefix: prefix}
-	if _, err := ts.Update(s, store.Op{Name: "workspace", Workspace: w.ULID}, func(tx *store.Tx) error { return tx.PutWorkspace(w) }); err != nil {
-		ts.t.Fatal(err)
-	}
-}
-
-// deleteTask sets DeletedAt of the task id.
-func (ts *testSession) deleteTask(id string) {
-	ts.t.Helper()
-	s, ix, err := ts.Open()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	e, err := ts.Resolve(ix, id)
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	now := ts.Now()
-	if _, err := ts.Update(s, store.Op{Name: "rm", Task: e.ULID}, func(tx *store.Tx) error {
-		t2, err := tx.Task(e.ULID)
-		if err != nil {
-			return err
-		}
-		t2.DeletedAt = &now
-		return tx.PutTask(t2)
-	}); err != nil {
-		ts.t.Fatal(err)
-	}
-}
-
-// useAccount makes github.com/alice the account of config.yaml.
-func (ts *testSession) useAccount() {
-	ts.t.Helper()
-	ts.appendConfig("accounts:\n  - name: alice\n    host: github.com\n    login: alice\n")
-}
-
-// wantErr checks that err has the kind and the code.
-func wantErr(t *testing.T, err error, kind Kind, code string) {
-	t.Helper()
-	e := AsError(err)
-	if err == nil {
-		t.Fatalf("no error; want %v %q", kind, code)
-	}
-	if KindOf(err) != kind {
-		t.Errorf("KindOf(%v) = %v; want %v", err, KindOf(err), kind)
-	}
-	if code != "" && e.Code != code {
-		t.Errorf("Code of %v = %+v; want %q", err, e, code)
-	}
-}
-
-func asError(err error, target **Error) bool { return errors.As(err, target) }
-
 func TestAddSetStatusDep(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)

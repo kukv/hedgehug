@@ -3,7 +3,6 @@ package usecase
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -15,56 +14,6 @@ import (
 )
 
 const workAccount = "accounts:\n  - {name: work, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n"
-
-// fakeSession is a session whose github.com is a fakegh; accounts is added to
-// config.yaml. HH_TOKEN is the token of alice.
-func fakeSession(t *testing.T, st fakegh.State, accounts string) (*testSession, *fakegh.Server) {
-	t.Helper()
-	zero := 0
-	st.DeviceInterval = &zero
-	if st.Users == nil {
-		st.Users = []string{"alice", "bob"}
-	}
-	fake := fakegh.New(st)
-	srv := httptest.NewServer(fake)
-	t.Cleanup(srv.Close)
-	ts := newTestSession(t)
-	ts.env["HH_TOKEN"] = "t-alice"
-	if accounts == "" {
-		ts.dropDefaultAccount()
-	}
-	ts.appendConfig("hosts:\n  - {host: github.com, api: \"" + srv.URL + "\", web: \"" + srv.URL + "\"}\n" + accounts)
-	return ts, fake
-}
-
-func configText(t *testing.T, ts *testSession) string {
-	t.Helper()
-	_, p, err := ts.Config()
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := os.ReadFile(p.ConfigFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
-}
-
-func notExist(t *testing.T, path, what string) {
-	t.Helper()
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Errorf("%s is left: %v", what, err)
-	}
-}
-
-func storeDirOf(t *testing.T, ts *testSession, name string) string {
-	t.Helper()
-	_, p, err := ts.Config()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return filepath.Join(p.StoresDir, name)
-}
 
 func TestStoreInitMakesLocalBare(t *testing.T) {
 	t.Parallel()

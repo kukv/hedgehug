@@ -9,7 +9,6 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/domain/schema"
 )
 
 func TestParseAssign(t *testing.T) {
@@ -39,18 +38,6 @@ func TestParseAssign(t *testing.T) {
 			t.Errorf("ParseAssign(%q) err = %v, want KindUsage", bad, err)
 		}
 	}
-}
-
-// testSchema is the default schema with a property of each other type.
-func testSchema() *schema.Schema {
-	sc := schema.Default()
-	sc.Props = append(sc.Props,
-		schema.Prop{Name: "flag", Type: schema.TypeBool},
-		schema.Prop{Name: "at", Type: schema.TypeDatetime},
-		schema.Prop{Name: "note", Type: schema.TypeText},
-		schema.Prop{Name: "tags", Type: schema.TypeMultiEnum, Values: []string{"a", "b"}},
-	)
-	return sc
 }
 
 func TestApplyAssign(t *testing.T) {

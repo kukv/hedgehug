@@ -12,7 +12,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 )
 
 // lastAuthor is who made the latest commit of the store name.
@@ -27,38 +26,6 @@ func lastAuthor(t *testing.T, ts *testSession, name string) string {
 		t.Fatalf("log of %s: %v %v", name, log, err)
 	}
 	return log[0].Author.Name
-}
-
-// ulidOf is the ULID of the task arg names.
-func ulidOf(t *testing.T, ts *testSession, arg string) model.ULID {
-	t.Helper()
-	r, err := ts.Show(arg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return r.Entry.ULID
-}
-
-func wantCode(t *testing.T, what string, err error, kind Kind, code string) {
-	t.Helper()
-	if err == nil {
-		t.Errorf("%s: no error; want %v %s", what, kind, code)
-		return
-	}
-	if e := AsError(err); e.Kind != kind || e.Code != code {
-		t.Errorf("%s: %v is %v %q; want %v %q", what, err, e.Kind, e.Code, kind, code)
-	}
-}
-
-func makeStoreReadOnly(t *testing.T, ts *testSession, name string) {
-	t.Helper()
-	s, err := ts.ForStore(name).OpenStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := replicate.WriteAccess(s, replicate.Access{ReadOnly: true, Reason: "test", Checked: ts.Now()}); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func TestSetFindsTheTaskInItsStoreAndWritesAsItsAccount(t *testing.T) {

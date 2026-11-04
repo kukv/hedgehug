@@ -1,9 +1,7 @@
 package usecase
 
 import (
-	"os"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -11,41 +9,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
-
-// asAccount makes login the only account of config.yaml, which has its
-// accounts as the last key.
-func (ts *testSession) asAccount(login string) {
-	ts.t.Helper()
-	_, p, err := ts.Config()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	b, err := os.ReadFile(p.ConfigFile)
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	text, _, _ := strings.Cut("\n"+string(b), "\naccounts:")
-	text = strings.TrimPrefix(text, "\n")
-	if text != "" {
-		text += "\n"
-	}
-	text += "accounts:\n  - {name: " + login + ", host: github.com, login: " + login + "}\n"
-	if err := os.WriteFile(p.ConfigFile, []byte(text), 0o600); err != nil {
-		ts.t.Fatal(err)
-	}
-	ts.resetWriter()
-}
-
-func (ts *testSession) setMembers(m replicate.Members) {
-	ts.t.Helper()
-	s, _, err := ts.Open()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	if err := replicate.WriteMembers(s, m); err != nil {
-		ts.t.Fatal(err)
-	}
-}
 
 func TestCheckCommentEditable(t *testing.T) {
 	t.Parallel()

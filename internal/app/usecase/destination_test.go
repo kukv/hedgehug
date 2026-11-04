@@ -71,12 +71,6 @@ func project(repos ...string) func(*model.Task) {
 	return func(t *model.Task) { t.Kind, t.Repos = "project", repos }
 }
 
-func openSet(t *testing.T, es ...config.StoreEntry) *mount.Set {
-	t.Helper()
-	set := mount.Open(&config.Config{Stores: es}, mount.Options{})
-	return set
-}
-
 // world is org-a (workspace api, API) and org-b (workspace web, WEB): API-1 is a
 // project and API-2 a task in org-a, WEB-1 a task in org-b.
 type world struct {

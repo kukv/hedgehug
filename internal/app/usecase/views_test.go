@@ -12,45 +12,6 @@ import (
 
 func ptr[T any](v T) *T { return &v }
 
-func (ts *testSession) viewFile(name string) string {
-	ts.t.Helper()
-	s, err := ts.OpenStore()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	b, err := os.ReadFile(filepath.Join(s.Dir(), "views", name+".yaml"))
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	return string(b)
-}
-
-func (ts *testSession) headSubject() string {
-	ts.t.Helper()
-	s, err := ts.OpenStore()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	es, err := logOf(s.Repo(), 1)
-	if err != nil || len(es) == 0 {
-		ts.t.Fatalf("log: %v", err)
-	}
-	return es[0].Subject
-}
-
-func (ts *testSession) headTrailer(key string) (string, bool) {
-	ts.t.Helper()
-	s, err := ts.OpenStore()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	es, err := logOf(s.Repo(), 1)
-	if err != nil || len(es) == 0 {
-		ts.t.Fatalf("log: %v", err)
-	}
-	return es[0].Trailer(key)
-}
-
 func TestViewSaveCreateAndOverwrite(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)

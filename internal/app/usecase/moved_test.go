@@ -6,52 +6,8 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
-
-var movedAuthor = gitrepo.Signature{Name: "Alice", Email: "alice@example.com"}
-
-// movedFixture moves org-a's API-1 to org-b: org-b gets the task as WEB-2
-// (API-1 as a former id), and org-a's file becomes a forward.
-// It returns the ULID of the task.
-func movedFixture(t *testing.T, ts *testSession) model.ULID {
-	t.Helper()
-	sa, err := ts.ForStore("org-a").OpenStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	sb, ix, err := ts.ForStore("org-b").Open()
-	if err != nil {
-		t.Fatal(err)
-	}
-	ea, err := ts.ForStore("org-a").Resolve(mustIndex(t, ts, "org-a"), "API-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ulid := ea.ULID
-	nt := &model.Task{ULID: ulid, Title: "moved", Kind: "task", Status: "todo", Workspace: ix.Workspaces()[0].ULID, FormerIDs: []string{"API-1"}}
-	if _, err := ts.ForStore("org-b").UpdateCommit(sb, store.Op{Name: "move-in", Task: ulid}, func(tx *store.Tx) error { return tx.PutTask(nt) }); err != nil {
-		t.Fatal(err)
-	}
-	fwd := "---\nulid: " + ulid.String() + "\nmoved_to: " + sb.Meta().ULID.String() + "\nmoved_at: 2026-10-31T10:00:00Z\n---\n"
-	if _, err := sa.Update(store.Op{Name: "move-out", Author: movedAuthor, Detail: "API-1 org-a task"}, func(tx *store.Tx) error {
-		return tx.PutFile(model.TaskPath(ulid), []byte(fwd))
-	}); err != nil {
-		t.Fatal(err)
-	}
-	return ulid
-}
-
-func mustIndex(t *testing.T, ts *testSession, name string) *index.Index {
-	t.Helper()
-	_, ix, err := ts.ForStore(name).Open()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return ix
-}
 
 func wantMoved(t *testing.T, ts *testSession, err error, args map[string]any) {
 	t.Helper()
@@ -187,15 +143,6 @@ func TestUndoOfATaskThatMovedSince(t *testing.T) {
 	if after := headOf(t, s); after != before {
 		t.Errorf("HEAD moved from %s to %s", before, after)
 	}
-}
-
-func headOf(t *testing.T, s *store.Store) string {
-	t.Helper()
-	h, err := s.Repo().Head()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return h.String()
 }
 
 // hh use names where a project went, as the other commands do.

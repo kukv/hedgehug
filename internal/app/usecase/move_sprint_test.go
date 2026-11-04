@@ -1,47 +1,11 @@
 package usecase
 
 import (
-	"errors"
 	"slices"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
-
-// putSprintRelease writes a sprint and a release into the workspace ws of the
-// test store and returns their ULIDs.
-func (ts *testSession) putSprintRelease(ws model.ULID, sprint, release string) (model.ULID, model.ULID) {
-	ts.t.Helper()
-	s, _, err := ts.Open()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	sp := &model.Sprint{ULID: model.NewULID(), Workspace: ws, Name: sprint}
-	r := &model.Release{ULID: model.NewULID(), Workspace: ws, Name: release}
-	if _, err := ts.Update(s, store.Op{Name: "sprint"}, func(tx *store.Tx) error {
-		return errors.Join(tx.PutSprint(sp), tx.PutRelease(r))
-	}); err != nil {
-		ts.t.Fatal(err)
-	}
-	return sp.ULID, r.ULID
-}
-
-// workspaceULID returns the ULID of the workspace name.
-func (ts *testSession) workspaceULID(name string) model.ULID {
-	ts.t.Helper()
-	_, ix, err := ts.Open()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	for _, w := range ix.Workspaces() {
-		if w.Name == name {
-			return w.ULID
-		}
-	}
-	ts.t.Fatalf("no workspace %s", name)
-	return model.ULID{}
-}
 
 func TestMoveToWorkspaceDetachesSprintAndReleases(t *testing.T) {
 	t.Parallel()

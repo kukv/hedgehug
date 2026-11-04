@@ -12,34 +12,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
 
-// addProject adds a task of kind project and returns its ULID.
-func (ts *testSession) addProject(title string) model.ULID {
-	ts.t.Helper()
-	r, err := ts.Add(AddInput{Title: title, Kind: "project"})
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	return r.ULID
-}
-
-// storeSchema is schema.yaml of the test store, read from the file.
-func (ts *testSession) storeSchema() (*schema.Schema, string) {
-	ts.t.Helper()
-	_, e, err := ts.Entry()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	b, err := os.ReadFile(filepath.Join(e.Path, "schema.yaml")) //nolint:gosec // a file of the test's own store
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	sc, err := schema.Decode(b)
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	return sc, string(b)
-}
-
 var fourStatuses = []string{"todo", "in_progress", "done", "canceled"}
 
 func TestScopedSetReplacesOnlyWhatIsGiven(t *testing.T) {

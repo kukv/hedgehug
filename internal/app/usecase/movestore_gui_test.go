@@ -12,35 +12,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
 
-// addSprint puts the sprint "Sprint 1" on C (API-3) of org-a and returns its
-// ULID, as TestMoveStoreUnlinksSprintAndReleases does.
-func (f *moveFx) addSprint(t *testing.T) model.ULID {
-	t.Helper()
-	a := f.ts.ForStore("org-a")
-	as, err := a.OpenStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	var sprint model.ULID
-	_, err = a.Update(as, store.Op{Name: "sprint"}, func(tx *store.Tx) error {
-		c, err := tx.Task(f.c)
-		if err != nil {
-			return err
-		}
-		sp := &model.Sprint{ULID: model.NewULID(), Workspace: c.Workspace, Name: "Sprint 1"}
-		if err := tx.PutSprint(sp); err != nil {
-			return err
-		}
-		sprint = sp.ULID
-		c.Sprint = &sp.ULID
-		return tx.PutTask(c)
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return sprint
-}
-
 func TestMovePlanGUIView(t *testing.T) {
 	t.Parallel()
 	f := newMoveFx(t)

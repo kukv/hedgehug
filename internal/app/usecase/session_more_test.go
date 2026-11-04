@@ -12,8 +12,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
 
-const aliceAccount = "\naccounts:\n  - name: alice\n    host: github.com\n    login: alice\n"
-
 func TestResolveAmbiguousIsKindAmbiguous(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)

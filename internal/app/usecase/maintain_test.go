@@ -1,61 +1,18 @@
 package usecase
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
-
-// commitRawFile writes body to the file rel of the test store and commits it
-// past the store's checks, as a hand edit or a sync could.
-func (ts *testSession) commitRawFile(rel, body string) {
-	ts.t.Helper()
-	_, e, err := ts.Entry()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	s, err := ts.OpenStore()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	p := filepath.Join(e.Path, filepath.FromSlash(rel))
-	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
-		ts.t.Fatal(err)
-	}
-	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
-		ts.t.Fatal(err)
-	}
-	author := config.CommitAuthor(testAccount)
-	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: author, When: time.Now()}); err != nil {
-		ts.t.Fatal(err)
-	}
-}
-
-// editRawFile replaces old by repl in the file rel of the test store and
-// commits it.
-func (ts *testSession) editRawFile(rel, old, repl string) {
-	ts.t.Helper()
-	_, e, _ := ts.Entry()
-	b, err := os.ReadFile(filepath.Join(e.Path, filepath.FromSlash(rel))) //nolint:gosec // a file of the test's own store
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	if !strings.Contains(string(b), old) {
-		ts.t.Fatalf("%s has no %q", rel, old)
-	}
-	ts.commitRawFile(rel, strings.Replace(string(b), old, repl, 1))
-}
 
 // newCheckedSession is newTestSession with the merge driver registered, as
 // store init does, and a hedgehug on PATH, so that doctor has no finding
@@ -77,28 +34,6 @@ func newCheckedSession(t *testing.T) *testSession {
 		t.Fatal(err)
 	}
 	return ts
-}
-
-func (ts *testSession) head() string {
-	ts.t.Helper()
-	s, err := ts.OpenStore()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	h, err := s.Repo().Head()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	return h.String()
-}
-
-// doctorOne is Doctor of a session with one store: its only report.
-func (ts *testSession) doctorOne(fix bool) (DoctorReport, error) {
-	rs, err := ts.Doctor(fix)
-	if err != nil || len(rs) != 1 {
-		return DoctorReport{}, fmt.Errorf("%d reports, %w", len(rs), err)
-	}
-	return rs[0], nil
 }
 
 func TestDoctorAndSchemaCheckOnACleanStore(t *testing.T) {

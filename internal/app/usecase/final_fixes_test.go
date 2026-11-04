@@ -115,7 +115,7 @@ func TestForStoreCopiesEveryExportedField(t *testing.T) {
 		}
 	}
 	// The tokens are shared: they are of the accounts, not of a store.
-	if sub := src.ForStore("other"); sub.tokens == nil || sub.tokens != src.tokens {
+	if sub := src.ForStore("other"); !sub.SharesTokensWith(src) {
 		t.Error("ForStore does not share the token cache")
 	}
 	// The cache of the writer is not carried over.
@@ -124,7 +124,7 @@ func TestForStoreCopiesEveryExportedField(t *testing.T) {
 	if _, ok, err := ts.Writer(); err != nil || !ok {
 		t.Fatalf("Writer = %v, %v", ok, err)
 	}
-	if sub := ts.ForStore("me"); sub.writerDone {
+	if sub := ts.ForStore("me"); sub.WriterCached() {
 		t.Error("ForStore copied the cached writer")
 	}
 }

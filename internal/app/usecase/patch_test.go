@@ -2,8 +2,6 @@ package usecase
 
 import (
 	"testing"
-
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 // headOp is the Hedgehug-Op of the commit at HEAD of the test store.
@@ -112,14 +110,4 @@ func TestPatchUnknownKeyIsInvalid(t *testing.T) {
 	}
 	_, err := ts.Patch("ME-1", PatchInput{Assigns: []Assign{{Key: "nope", Op: "=", Value: "x"}}})
 	wantErr(t, err, KindInvalid, "assign.unknown_key")
-}
-
-// logOf is the first-parent log of HEAD of r, newest first, capped at limit
-// when it is above zero.
-func logOf(r *gitrepo.Repo, limit int) ([]gitrepo.LogEntry, error) {
-	head, err := r.Head()
-	if err != nil {
-		return nil, err
-	}
-	return r.LogFrom(head, limit)
 }

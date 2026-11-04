@@ -116,6 +116,10 @@ func (ss *Session) ForStore(name string) *Session {
 	}
 }
 
+// ForgetMounts lets go of the stores the session mounted, as a new run of
+// the command starts without them.
+func (ss *Session) ForgetMounts() { ss.mounts = nil }
+
 // mountCache is the cache of ss, made on first use.
 func (ss *Session) mountCache() *mountCache {
 	ss.mountMu.Lock()
@@ -691,4 +695,12 @@ func (ss *Session) RunSync(s *store.Store, opt replicate.Options, reported bool)
 // fetch or push. A store that never pushed has all of them.
 func Unpushed(s *store.Store) (int, error) {
 	return replicate.Unpushed(s.Repo())
+}
+
+// resetWriter forgets the writer the session cached, so that it is read from
+// config.yaml again after a test changed the accounts.
+func (ss *Session) resetWriter() {
+	ss.writerMu.Lock()
+	defer ss.writerMu.Unlock()
+	ss.writerDone = false
 }

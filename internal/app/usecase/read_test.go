@@ -492,15 +492,6 @@ func mustTrailer(t *testing.T, e gitrepo.LogEntry, key string) string {
 	return v
 }
 
-func mustULID(t *testing.T, s string) model.ULID {
-	t.Helper()
-	u, err := model.ParseULID(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return u
-}
-
 func TestLogViewsOfAndSubjectNow(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)

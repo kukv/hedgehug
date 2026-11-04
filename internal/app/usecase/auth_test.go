@@ -3,127 +3,16 @@ package usecase
 import (
 	"encoding/json"
 	"errors"
-	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/remote/auth"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 	"github.com/kukv/hedgehug/internal/lib/github"
-	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
-
-// kr is a keychain in memory. onSet and onDelete run before the call, and
-// failSet makes Set fail.
-type kr struct {
-	mu         sync.Mutex
-	m          map[string]string
-	onSet      func()
-	onDelete   func()
-	failSet    error
-	failDelete error
-}
-
-func newKR() *kr { return &kr{m: map[string]string{}} }
-
-func (k *kr) Get(_, user string) (string, error) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	v, ok := k.m[user]
-	if !ok {
-		return "", auth.ErrNotFound
-	}
-	return v, nil
-}
-
-func (k *kr) Set(_, user, secret string) error {
-	if k.onSet != nil {
-		k.onSet()
-	}
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	if k.failSet != nil {
-		return k.failSet
-	}
-	k.m[user] = secret
-	return nil
-}
-
-func (k *kr) Delete(_, user string) error {
-	if k.onDelete != nil {
-		k.onDelete()
-	}
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	if k.failDelete != nil {
-		return k.failDelete
-	}
-	if _, ok := k.m[user]; !ok {
-		return auth.ErrNotFound
-	}
-	delete(k.m, user)
-	return nil
-}
-
-func (k *kr) has(user string) (string, bool) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	v, ok := k.m[user]
-	return v, ok
-}
-
-// authSession is a session whose github.com is a fakegh, with a keychain in
-// memory; accounts is added to config.yaml.
-func authSession(t *testing.T, st fakegh.State, accounts string) (*testSession, *kr) {
-	t.Helper()
-	zero := 0
-	if st.DeviceInterval == nil {
-		st.DeviceInterval = &zero
-	}
-	if st.Users == nil {
-		st.Users = []string{"alice", "bob"}
-	}
-	srv := httptest.NewServer(fakegh.New(st))
-	t.Cleanup(srv.Close)
-	ts := newTestSession(t)
-	k := newKR()
-	ts.Keyring = k
-	if accounts == "" {
-		ts.dropDefaultAccount()
-	}
-	ts.appendConfig("hosts:\n  - {host: github.com, api: \"" + srv.URL + "\", web: \"" + srv.URL + "\", client_id: Iv23test}\n" + accounts)
-	return ts, k
-}
-
-func (ts *testSession) lockFile() string {
-	ts.t.Helper()
-	_, p, err := ts.Config()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	return filepath.Join(filepath.Dir(p.ConfigFile), "auth.lock")
-}
-
-func (ts *testSession) accounts() []config.Account {
-	ts.t.Helper()
-	c, _, err := ts.Config()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	return c.Accounts
-}
-
-// heldElsewhere reports whether another holder has the lock.
-func heldElsewhere(lock string) bool {
-	err := osfs.WithFileLock(lock, 20*time.Millisecond, func() error { return nil })
-	return errors.Is(err, store.ErrLocked)
-}
 
 func TestAuthLoginNewAccountByDevice(t *testing.T) {
 	t.Parallel()

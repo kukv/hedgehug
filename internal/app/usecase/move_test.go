@@ -13,20 +13,6 @@ import (
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
-// order returns the ids of the live tasks under parent in the workspace ws.
-func (ts *testSession) order(ws model.ULID, parent *model.ULID) []string {
-	ts.t.Helper()
-	_, ix, err := ts.Open()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	got := []string{}
-	for _, e := range Siblings(ix, parent, ws, model.ULID{}) {
-		got = append(got, e.ID)
-	}
-	return got
-}
-
 func TestMoveParentAndOrder(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)
@@ -314,24 +300,6 @@ func TestAddNextToSiblingsWithTheSameRank(t *testing.T) {
 	if got, want := strings.Join(ts.order(me, nil), " "), "ME-5 ME-1 ME-2 ME-4 ME-3"; got != want {
 		t.Errorf("order = %s; want %s", got, want)
 	}
-}
-
-// addedTask is the task id names, as the store has it.
-func (ts *testSession) addedTask(id string) *model.Task {
-	ts.t.Helper()
-	s, err := ts.OpenStore()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	r, err := ts.Show(id)
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	tk, err := s.Task(r.Entry.ULID)
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	return tk
 }
 
 // A move to where the task already is keeps its rank, so nothing is committed;

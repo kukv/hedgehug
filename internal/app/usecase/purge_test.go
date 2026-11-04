@@ -9,17 +9,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 )
 
-// addDeleted writes a task that was deleted at.
-func (ts *testSession) addDeleted(title string, at time.Time, edit func(*model.Task)) *model.Task {
-	ts.t.Helper()
-	return ts.addTask(title, func(t *model.Task) {
-		t.DeletedAt = &at
-		if edit != nil {
-			edit(t)
-		}
-	})
-}
-
 func daysAgo(ts *testSession, n int) time.Time { return ts.Now().AddDate(0, 0, -n) }
 
 func purgedULIDs(p PurgePlan) []model.ULID {
@@ -28,24 +17,6 @@ func purgedULIDs(p PurgePlan) []model.ULID {
 		out = append(out, t.ULID)
 	}
 	return out
-}
-
-func lastOp(t *testing.T, ts *testSession) string {
-	t.Helper()
-	s, err := ts.OpenStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	head, err := s.Repo().Head()
-	if err != nil {
-		t.Fatal(err)
-	}
-	log, err := s.Repo().LogFrom(head, 1)
-	if err != nil || len(log) == 0 {
-		t.Fatalf("log = %v, %v", log, err)
-	}
-	op, _ := log[0].Trailer("Hedgehug-Op")
-	return op
 }
 
 func TestParseOlderThan(t *testing.T) {

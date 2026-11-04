@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"errors"
-	"os"
 	"strings"
 	"testing"
 
@@ -12,26 +11,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
-
-const bobAccount = "\naccounts:\n  - name: bob\n    host: github.com\n    login: bob\n"
-
-// asWriter makes the accounts of config.yaml those of from's replacement to,
-// and returns a session of its own, which has not read the writer yet.
-func (ts *testSession) asWriter(from, to string) *Session {
-	ts.t.Helper()
-	_, p, err := ts.Config()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	b, err := os.ReadFile(p.ConfigFile)
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	if err := os.WriteFile(p.ConfigFile, []byte(strings.Replace(string(b), from, to, 1)), 0o600); err != nil {
-		ts.t.Fatal(err)
-	}
-	return &Session{Getenv: ts.Getenv, Now: ts.Now, Warn: ts.Warn}
-}
 
 func TestUndoTakesBackMyLastWrite(t *testing.T) {
 	t.Parallel()

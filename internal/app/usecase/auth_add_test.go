@@ -3,11 +3,8 @@ package usecase
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"maps"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -15,70 +12,6 @@ import (
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 	"github.com/kukv/hedgehug/internal/lib/github"
 )
-
-// cfgStore is a store that setConfig writes into config.yaml; account is
-// empty for a store with no account: of its own.
-type cfgStore struct{ name, account string }
-
-// setConfig replaces config.yaml with head (accounts:, hosts:, ...) and the
-// stores. The store "me" is the one of the test session; any other is only an
-// entry, with a directory that does not exist.
-func (ts *testSession) setConfig(head string, stores ...cfgStore) {
-	ts.t.Helper()
-	c, p, err := ts.Config()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	me, err := c.Select("me")
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	var b strings.Builder
-	b.WriteString(head)
-	b.WriteString("stores:\n")
-	for _, s := range stores {
-		path := me.Path
-		if s.name != "me" {
-			path = filepath.Join(ts.t.TempDir(), s.name)
-		}
-		fmt.Fprintf(&b, "  - {name: %s, path: %q", s.name, path)
-		if s.account != "" {
-			fmt.Fprintf(&b, ", account: %s", s.account)
-		}
-		b.WriteString("}\n")
-	}
-	if err := os.WriteFile(p.ConfigFile, []byte(b.String()), 0o600); err != nil {
-		ts.t.Fatal(err)
-	}
-}
-
-// storeAccounts is the account: of each store in config.yaml, by store name.
-func (ts *testSession) storeAccounts() map[string]string {
-	ts.t.Helper()
-	c, _, err := ts.Config()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	m := map[string]string{}
-	for _, e := range c.Stores {
-		m[e.Name] = e.Account
-	}
-	return m
-}
-
-// configBytes is config.yaml as it is on disk.
-func (ts *testSession) configBytes() []byte {
-	ts.t.Helper()
-	_, p, err := ts.Config()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	b, err := os.ReadFile(p.ConfigFile)
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	return b
-}
 
 // authFixture is authSession with config.yaml written whole: github.com on a
 // fakegh, accounts, and the stores. The keychain is in memory.

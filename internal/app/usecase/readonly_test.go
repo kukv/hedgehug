@@ -19,18 +19,6 @@ import (
 	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
-// makeReadOnly writes access.json of the test store as a read-only store.
-func makeReadOnly(t *testing.T, ts *testSession, reason string) {
-	t.Helper()
-	s, err := ts.OpenStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := replicate.WriteAccess(s, replicate.Access{ReadOnly: true, Reason: reason, Checked: ts.Now()}); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // wantReadOnly checks err is the refusal of a write to the store me.
 func wantReadOnly(t *testing.T, what string, err error) {
 	t.Helper()

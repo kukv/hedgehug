@@ -7,23 +7,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 )
 
-// hookConfigWrite makes ts write config.yaml through another Config, right
-// before the operation updates it, as another process could.
-func hookConfigWrite(t *testing.T, ts *testSession, fn func(*config.Config) error) {
-	t.Helper()
-	ts.BeforeUpdate = func() {
-		c, _, err := ts.Config()
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		if err := c.Update(fn); err != nil {
-			t.Error(err)
-		}
-		ts.BeforeUpdate = nil
-	}
-}
-
 func namedStores(t *testing.T, ts *testSession, name string) []config.StoreEntry {
 	t.Helper()
 	c, _, err := ts.Config()

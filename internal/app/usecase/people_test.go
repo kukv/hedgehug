@@ -8,15 +8,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 )
 
-func mustAssigns(t *testing.T, args ...string) []Assign {
-	t.Helper()
-	as, err := ParseAssigns(args)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return as
-}
-
 func TestPeople(t *testing.T) {
 	t.Parallel()
 	ts := newTestSession(t)

@@ -9,45 +9,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
 
-// brokenForward puts a forward file with a key it must not have in org-a.
-func (f *moveFx) brokenForward(t *testing.T) model.ULID {
-	t.Helper()
-	u := model.NewULID()
-	a := f.ts.ForStore("org-a")
-	s, err := a.OpenStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	data := "---\nulid: " + u.String() + "\nmoved_to: " + model.NewULID().String() + "\nmoved_at: 2026-10-31T10:00:00Z\ntitle: keep me\n---\n"
-	if _, err := a.Update(s, store.Op{Name: "raw"}, func(tx *store.Tx) error {
-		return tx.PutFile(model.TaskPath(u), []byte(data))
-	}); err != nil {
-		t.Fatal(err)
-	}
-	return u
-}
-
-// oldForward puts a forward file that moved at in org-a.
-func (f *moveFx) oldForward(t *testing.T, at time.Time) model.ULID {
-	t.Helper()
-	u := model.NewULID()
-	a := f.ts.ForStore("org-a")
-	s, err := a.OpenStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := (&model.Forward{ULID: u, MovedTo: model.NewULID(), MovedAt: at}).Encode()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := a.Update(s, store.Op{Name: "raw"}, func(tx *store.Tx) error {
-		return tx.PutFile(model.TaskPath(u), data)
-	}); err != nil {
-		t.Fatal(err)
-	}
-	return u
-}
-
 func TestPurgeForwardsByTheirMovedAt(t *testing.T) {
 	t.Parallel()
 	f := newMoveFx(t)
