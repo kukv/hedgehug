@@ -237,12 +237,12 @@
 - 解除: `team` をクローンも消して解除 → カードが消え、ディレクトリがない。push していない変更がある Store（`hh add` してから sync しない）の解除は文言が出て、「クローンを残して解除」で解除できる（ディレクトリは残る）
 - 最後の Store を解除すると Onboarding が出る
 
-- [ ] Step 1: `StoreCard.test.ts` → `StoreCard.svelte`・`StoreColorPicker.svelte`
-- [ ] Step 2: `StoreRemoveDialog.test.ts` → `StoreRemoveDialog.svelte`
-- [ ] Step 3: `StoreAddDialog.test.ts` → `StoreAddDialog.svelte`
-- [ ] Step 4: `SettingsStores.test.ts` → `SettingsStores.svelte`
-- [ ] Step 5: `stores.spec.ts`（と harness の部品）を書いて通す
-- [ ] Step 6: 検査を流してコミット `feat(web): マウント中の Store の画面（色・表示・既定・解除・URL で追加）`
+- [x] Step 1: `StoreCard.test.ts` → `StoreCard.svelte`・`StoreColorPicker.svelte`
+- [x] Step 2: `StoreRemoveDialog.test.ts` → `StoreRemoveDialog.svelte`
+- [x] Step 3: `StoreAddDialog.test.ts` → `StoreAddDialog.svelte`
+- [x] Step 4: `SettingsStores.test.ts` → `SettingsStores.svelte`
+- [x] Step 5: `stores.spec.ts`（と harness の部品）を書いて通す
+- [x] Step 6: 検査を流してコミット `feat(web): マウント中の Store の画面（色・表示・既定・解除・URL で追加）`
 
 ---
 

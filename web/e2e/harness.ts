@@ -254,7 +254,35 @@ class FakeGitHub {
  * their own (login "bob"), with the same store added from the remote.
  */
 export class Peer {
-  private constructor(readonly home: string) {}
+  private constructor(
+    readonly home: string,
+    /** The bare repository a published Store (Peer.publish) was pushed to. */
+    readonly remote: string | null = null,
+  ) {}
+
+  /**
+   * A Store made and pushed from a home of its own (login "bob") to a bare repository, which
+   * `remote` is the path of: what a person sends the URL of, for a test that adds a Store by URL.
+   */
+  static publish(name: string, prefix: string): Peer {
+    const home = mkdtempSync(join(tmpdir(), "hh-e2e-peer-"));
+    mkdirSync(join(home, "hh"));
+    writeFileSync(
+      join(home, "hh", "config.yaml"),
+      "accounts:\n  - name: bob\n    host: github.com\n    login: bob\n",
+    );
+    const remote = join(home, "remote.git");
+    const peer = new Peer(home, remote);
+    try {
+      execFileSync("git", ["init", "--bare", "--quiet", remote], { encoding: "utf8" });
+      peer.hh("store", "init", name, "--prefix", prefix, "--remote", remote);
+      peer.hh("sync");
+    } catch (e) {
+      peer.stop();
+      throw e;
+    }
+    return peer;
+  }
 
   static start(owner: Hedgehug, name: string): Peer {
     if (!owner.remote) throw new Error("the store has no remote: use store: { remote: true }");
