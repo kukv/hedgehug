@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
 func TestRestoreAt(t *testing.T) {
@@ -76,7 +76,7 @@ func TestParseAt(t *testing.T) {
 		{"abc1234", time.Time{}, false},
 		{"2026-13-45", time.Time{}, false},
 	} {
-		got, ok := usecase.ParseAtTime(c.in, loc)
+		got, ok := tasks.ParseAtTime(c.in, loc)
 		if ok != c.ok || !got.Equal(c.want) {
 			t.Errorf("usecase.ParseAtTime(%q) = %v %v, want %v %v", c.in, got, ok, c.want, c.ok)
 		}

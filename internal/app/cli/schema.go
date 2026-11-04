@@ -7,6 +7,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
+	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
@@ -35,7 +36,7 @@ func (a *app) checkCmd() *cobra.Command {
 		Short: "Find where the schema does not fit the store and its tasks",
 		Args:  exactArgs(0),
 		RunE: func(*cobra.Command, []string) error {
-			fs, err := a.ss.SchemaCheck()
+			fs, err := schemas.SchemaCheck(a.ss)
 			if err != nil {
 				return err
 			}

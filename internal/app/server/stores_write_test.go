@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 )
 
 // remoteStore makes the store name, as someone else would, in a bare
@@ -28,7 +29,7 @@ func remoteStore(t *testing.T, name, prefix string) (root, bare string) {
 	maker := &usecase.Session{Getenv: func(k string) string { return env[k] }, Now: time.Now, Warn: func(string) {}}
 	root = filepath.Join(d, "remotes")
 	bare = filepath.Join(root, name+".git")
-	if _, err := maker.StoreInit(usecase.StoreInitInput{Name: name, Prefix: prefix, Remotes: []string{bare}}); err != nil {
+	if _, err := stores.StoreInit(maker, stores.StoreInitInput{Name: name, Prefix: prefix, Remotes: []string{bare}}); err != nil {
 		t.Fatal(err)
 	}
 	return root, bare
@@ -60,7 +61,7 @@ func TestStoreAddAPI(t *testing.T) {
 	t.Cleanup(cancel)
 	_, bare := remoteStore(t, "shared", "SH")
 
-	var v usecase.StoreView
+	var v stores.StoreView
 	ts.call("POST", "/api/stores/add", map[string]any{"name": "shared", "remotes": []string{bare}}, 201, &v)
 	if v.Name != "shared" || len(v.Remotes) != 1 || v.Remotes[0] != bare || v.Path == "" {
 		t.Fatalf("added = %+v", v)
@@ -93,7 +94,7 @@ func TestStoreDeleteAPI(t *testing.T) {
 	ts, ch := pollServer(t)
 	bare := filepath.Join(t.TempDir(), "team.git")
 	// A store with a remote it pushed to can be removed with its clone.
-	if _, err := ts.session().StoreInit(usecase.StoreInitInput{Name: "team", Prefix: "TM", Remotes: []string{bare}}); err != nil {
+	if _, err := stores.StoreInit(ts.session(), stores.StoreInitInput{Name: "team", Prefix: "TM", Remotes: []string{bare}}); err != nil {
 		t.Fatal(err)
 	}
 	// And one with no remote cannot, unless the clone is kept.
@@ -127,7 +128,7 @@ func TestStoreDeleteAPI(t *testing.T) {
 	ts.problem("DELETE", "/api/stores/nope", nil, 404)
 
 	// keep=true takes the store out of the config and leaves the clone.
-	var res usecase.StoreRemoveResult
+	var res stores.StoreRemoveResult
 	ts.call("DELETE", "/api/stores/local?keep=true", nil, 200, &res)
 	if res.Name != "local" || res.Path != localPath || res.Deleted {
 		t.Errorf("keep = %+v", res)

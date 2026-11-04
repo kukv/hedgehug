@@ -1,4 +1,4 @@
-package usecase
+package usecase_test
 
 import (
 	"os"
@@ -10,13 +10,15 @@ import (
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func TestResolveAmbiguousIsKindAmbiguous(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	a := ts.addTask("first", nil)
-	b := ts.addTask("second", func(x *model.Task) { x.ID = "ME-1" })
+	ts := usecasetest.New(t)
+	a := ts.AddTask("first", nil)
+	b := ts.AddTask("second", func(x *model.Task) { x.ID = "ME-1" })
 	if a.ID != "ME-1" || b.ID != "ME-1" {
 		t.Fatalf("ids = %q, %q; want both ME-1", a.ID, b.ID)
 	}
@@ -25,8 +27,8 @@ func TestResolveAmbiguousIsKindAmbiguous(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = ts.Resolve(ix, "ME-1")
-	if KindOf(err) != KindAmbiguous {
-		t.Fatalf("KindOf(%v) = %v; want KindAmbiguous", err, KindOf(err))
+	if usecase.KindOf(err) != usecase.KindAmbiguous {
+		t.Fatalf("KindOf(%v) = %v; want KindAmbiguous", err, usecase.KindOf(err))
 	}
 	want := `"ME-1" matches 2 tasks:` +
 		"\n  ME-1 (" + a.ULID.String() + ") first" +
@@ -38,8 +40,8 @@ func TestResolveAmbiguousIsKindAmbiguous(t *testing.T) {
 
 func TestResolveULID(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	a := ts.addTask("first", nil)
+	ts := usecasetest.New(t)
+	a := ts.AddTask("first", nil)
 	_, ix, err := ts.Open()
 	if err != nil {
 		t.Fatal(err)
@@ -48,15 +50,15 @@ func TestResolveULID(t *testing.T) {
 	if err != nil || got != a.ULID {
 		t.Errorf("ResolveULID(%s) = %v, %v; want %v", a.ID, got, err, a.ULID)
 	}
-	if _, err := ts.ResolveULID(ix)("ME-99"); KindOf(err) != KindNotFound {
+	if _, err := ts.ResolveULID(ix)("ME-99"); usecase.KindOf(err) != usecase.KindNotFound {
 		t.Errorf("ResolveULID(ME-99) error %v; want KindNotFound", err)
 	}
 }
 
 func TestWriterIsReadOnce(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.appendConfig(aliceAccount)
+	ts := usecasetest.New(t)
+	ts.AppendConfig(usecasetest.AliceAccount)
 	acct, ok, err := ts.Writer()
 	if err != nil || !ok || acct.ID() != "github.com/alice" {
 		t.Fatalf("Writer = %v, %v, %v; want github.com/alice", acct, ok, err)
@@ -69,7 +71,7 @@ func TestWriterIsReadOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(p.ConfigFile, []byte(strings.Replace(string(b), aliceAccount, "\n", 1)), 0o600); err != nil {
+	if err := os.WriteFile(p.ConfigFile, []byte(strings.Replace(string(b), usecasetest.AliceAccount, "\n", 1)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if c, _, err := ts.Config(); err != nil || len(c.Accounts) != 0 {
@@ -86,8 +88,8 @@ func TestWriterIsReadOnce(t *testing.T) {
 
 func TestAccountIDWithoutAccountIsEmpty(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.dropDefaultAccount()
+	ts := usecasetest.New(t)
+	ts.DropDefaultAccount()
 	if id, err := ts.AccountID(); err != nil || id != "" {
 		t.Errorf("AccountID = %q, %v; want empty, nil", id, err)
 	}
@@ -95,7 +97,7 @@ func TestAccountIDWithoutAccountIsEmpty(t *testing.T) {
 
 func TestMarkWrittenWarnsWhenPendingFails(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
+	ts := usecasetest.New(t)
 	s, _, err := ts.Open()
 	if err != nil {
 		t.Fatal(err)
@@ -107,8 +109,8 @@ func TestMarkWrittenWarnsWhenPendingFails(t *testing.T) {
 	var after int
 	ts.AfterWrite = func(*store.Store, config.StoreEntry) { after++ }
 	ts.MarkWritten(s)
-	if len(ts.warns) != 1 || !strings.HasPrefix(ts.warns[0], "the write is not marked for sync: ") {
-		t.Errorf("warns = %q", ts.warns)
+	if len(ts.Warns) != 1 || !strings.HasPrefix(ts.Warns[0], "the write is not marked for sync: ") {
+		t.Errorf("warns = %q", ts.Warns)
 	}
 	if after != 0 {
 		t.Errorf("AfterWrite called %d times after a failed mark; want 0", after)
@@ -117,7 +119,7 @@ func TestMarkWrittenWarnsWhenPendingFails(t *testing.T) {
 
 func TestMarkWrittenWithoutAfterWriteMarksOnly(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
+	ts := usecasetest.New(t)
 	s, _, err := ts.Open()
 	if err != nil {
 		t.Fatal(err)
@@ -127,20 +129,20 @@ func TestMarkWrittenWithoutAfterWriteMarksOnly(t *testing.T) {
 	if err != nil || st.PendingSince.IsZero() {
 		t.Errorf("state = %+v, %v; want pending", st, err)
 	}
-	if len(ts.warns) != 0 {
-		t.Errorf("warns = %q", ts.warns)
+	if len(ts.Warns) != 0 {
+		t.Errorf("warns = %q", ts.Warns)
 	}
 }
 
 func TestWarnNilIsNoop(t *testing.T) {
 	t.Parallel()
-	(&Session{}).AddWarning("x")
+	(&usecase.Session{}).AddWarning("x")
 }
 
 func TestQueryOptions(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.appendConfig(aliceAccount)
+	ts := usecasetest.New(t)
+	ts.AppendConfig(usecasetest.AliceAccount)
 	s, _, err := ts.Open()
 	if err != nil {
 		t.Fatal(err)
@@ -159,8 +161,8 @@ func TestQueryOptions(t *testing.T) {
 
 func TestSyncOptions(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.appendConfig(aliceAccount)
+	ts := usecasetest.New(t)
+	ts.AppendConfig(usecasetest.AliceAccount)
 	c, p, err := ts.Config()
 	if err != nil {
 		t.Fatal(err)
@@ -204,15 +206,15 @@ func TestSyncOptions(t *testing.T) {
 
 func TestEntryErrors(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
+	ts := usecasetest.New(t)
 	ts.StoreName = "nope"
 	_, _, err := ts.Entry()
-	wantErr(t, err, KindNotFound, "store.not_found")
+	usecasetest.WantErr(t, err, usecase.KindNotFound, "store.not_found")
 	if err != nil && !strings.HasPrefix(err.Error(), `no store is named "nope"`) {
 		t.Errorf("message = %q", err)
 	}
 	_, err = ts.OpenStore()
-	wantErr(t, err, KindNotFound, "store.not_found")
+	usecasetest.WantErr(t, err, usecase.KindNotFound, "store.not_found")
 
 	// Several stores and none named: KindInvalid, not KindUsage (exit 1).
 	ts.StoreName = ""
@@ -227,7 +229,7 @@ func TestEntryErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, err = ts.Entry()
-	wantErr(t, err, KindInvalid, "store.choose")
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "store.choose")
 	if err != nil && !strings.HasPrefix(err.Error(), "several stores are set up; pick one with --store") {
 		t.Errorf("message = %q", err)
 	}
@@ -235,12 +237,12 @@ func TestEntryErrors(t *testing.T) {
 
 func TestUnpushedWithoutRemote(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
+	ts := usecasetest.New(t)
 	s, _, err := ts.Open()
 	if err != nil {
 		t.Fatal(err)
 	}
-	n, err := Unpushed(s)
+	n, err := usecase.Unpushed(s)
 	if err != nil || n != 1 {
 		t.Errorf("Unpushed = %d, %v; want 1 (the first commit), nil", n, err)
 	}
@@ -248,7 +250,7 @@ func TestUnpushedWithoutRemote(t *testing.T) {
 
 func TestRunSyncWithoutRemotes(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
+	ts := usecasetest.New(t)
 	s, _, err := ts.Open()
 	if err != nil {
 		t.Fatal(err)

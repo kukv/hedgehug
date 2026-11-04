@@ -1,4 +1,4 @@
-package usecase
+package usecase_test
 
 import (
 	"bytes"
@@ -11,33 +11,40 @@ import (
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/browse"
+	"github.com/kukv/hedgehug/internal/app/usecase/comments"
+	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
+	"github.com/kukv/hedgehug/internal/app/usecase/workspaces"
 )
 
 func TestSessionConcurrentOperations(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.useAccount()
-	if _, err := ts.Add(AddInput{Title: "seed"}); err != nil {
+	ts := usecasetest.New(t)
+	ts.UseAccount()
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "seed"}); err != nil {
 		t.Fatal(err)
 	}
-	ts.resetWriter() // the first of the goroutines reads the writer again
+	ts.ForgetWriter() // the first of the goroutines reads the writer again
 	ops := []func() error{
-		func() error { _, err := ts.Add(AddInput{Title: "a"}); return err },
-		func() error { _, err := ts.Add(AddInput{Title: "b"}); return err },
+		func() error { _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); return err },
+		func() error { _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "b"}); return err },
 		func() error {
-			_, err := ts.Set("ME-1", []Assign{{Key: "title", Op: "=", Value: "seed2"}})
+			_, err := tasks.Set(ts.Session, "ME-1", []usecase.Assign{{Key: "title", Op: "=", Value: "seed2"}})
 			return err
 		},
-		func() error { _, err := ts.CommentAdd("ME-1", "hello"); return err },
+		func() error { _, err := comments.CommentAdd(ts.Session, "ME-1", "hello"); return err },
 		func() error {
-			q, err := ParseQuery("")
+			q, err := usecase.ParseQuery("")
 			if err != nil {
 				return err
 			}
-			_, err = ts.List(q)
+			_, err = browse.List(ts.Session, q)
 			return err
 		},
-		func() error { _, _, err := ts.InboxList(false); return err },
+		func() error { _, _, err := notifications.InboxList(ts.Session, false); return err },
 		func() error { _, _, err := ts.Writer(); return err },
 		func() error { _, err := ts.AccountID(); return err },
 	}
@@ -69,7 +76,7 @@ func TestSessionConcurrentOperations(t *testing.T) {
 // Session and ForStore does not carry it to the session of another store.
 func TestForStoreCopiesEveryExportedField(t *testing.T) {
 	t.Parallel()
-	src := &Session{}
+	src := &usecase.Session{}
 	v := reflect.ValueOf(src).Elem()
 	for i := range v.NumField() {
 		f, sf := v.Field(i), v.Type().Field(i)
@@ -119,8 +126,8 @@ func TestForStoreCopiesEveryExportedField(t *testing.T) {
 		t.Error("ForStore does not share the token cache")
 	}
 	// The cache of the writer is not carried over.
-	ts := newTestSession(t)
-	ts.useAccount()
+	ts := usecasetest.New(t)
+	ts.UseAccount()
 	if _, ok, err := ts.Writer(); err != nil || !ok {
 		t.Fatalf("Writer = %v, %v", ok, err)
 	}
@@ -131,37 +138,37 @@ func TestForStoreCopiesEveryExportedField(t *testing.T) {
 
 func TestAsError(t *testing.T) {
 	t.Parallel()
-	if AsError(nil) != nil {
+	if usecase.AsError(nil) != nil {
 		t.Error("AsError(nil) is not nil")
 	}
 	// The outermost *Error of the chain.
-	inner := NewErr(KindNotFound, "task.not_found", errors.New("x"), "input", "ME-9")
-	if got := AsError(fmt.Errorf("wrapped: %w", inner)); got != inner {
+	inner := usecase.NewErr(usecase.KindNotFound, "task.not_found", errors.New("x"), "input", "ME-9")
+	if got := usecase.AsError(fmt.Errorf("wrapped: %w", inner)); got != inner {
 		t.Errorf("AsError(wrapped) = %+v; want the inner *Error", got)
 	}
 	// A lower-layer error is classified: Kind and Code from the chain.
 	cases := []struct {
 		err  error
-		kind Kind
+		kind usecase.Kind
 		code string
 	}{
-		{fmt.Errorf("x: %w", store.ErrNotFound), KindNotFound, "not_found"},
-		{&store.ValidationError{}, KindInvalid, "schema.violation"},
-		{store.ErrLocked, KindConflict, "store.locked"},
-		{store.ErrStoreGone, KindConflict, "store.gone"},
-		{fmt.Errorf("a: %w", replicate.ErrDirty), KindConflict, "sync.dirty"},
-		{fmt.Errorf("a: %w", replicate.ErrUnrelated), KindConflict, "sync.unrelated"},
-		{fmt.Errorf("a: %w", replicate.ErrForcePush), KindConflict, "sync.force_push"},
-		{config.ErrNoStores, KindConflict, "store.none"},
-		{errors.New("other"), KindUnknown, ""},
+		{fmt.Errorf("x: %w", store.ErrNotFound), usecase.KindNotFound, "not_found"},
+		{&store.ValidationError{}, usecase.KindInvalid, "schema.violation"},
+		{store.ErrLocked, usecase.KindConflict, "store.locked"},
+		{store.ErrStoreGone, usecase.KindConflict, "store.gone"},
+		{fmt.Errorf("a: %w", replicate.ErrDirty), usecase.KindConflict, "sync.dirty"},
+		{fmt.Errorf("a: %w", replicate.ErrUnrelated), usecase.KindConflict, "sync.unrelated"},
+		{fmt.Errorf("a: %w", replicate.ErrForcePush), usecase.KindConflict, "sync.force_push"},
+		{config.ErrNoStores, usecase.KindConflict, "store.none"},
+		{errors.New("other"), usecase.KindUnknown, ""},
 	}
 	for _, c := range cases {
-		got := AsError(c.err)
+		got := usecase.AsError(c.err)
 		if got == nil || got.Kind != c.kind || got.Code != c.code || got.Error() != c.err.Error() {
 			t.Errorf("AsError(%v) = %+v; want %v %q with the same message", c.err, got, c.kind, c.code)
 		}
-		if KindOf(c.err) != c.kind {
-			t.Errorf("KindOf(%v) = %v; want %v", c.err, KindOf(c.err), c.kind)
+		if usecase.KindOf(c.err) != c.kind {
+			t.Errorf("KindOf(%v) = %v; want %v", c.err, usecase.KindOf(c.err), c.kind)
 		}
 	}
 }
@@ -170,14 +177,14 @@ func TestAsError(t *testing.T) {
 // else does not.
 func TestNotFoundCodes(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
+	ts := usecasetest.New(t)
 	_, ix, err := ts.Open()
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = ts.Resolve(ix, "ME-9")
-	wantErr(t, err, KindNotFound, "task.not_found")
-	if e := AsError(err); e.Args["input"] != "ME-9" {
+	usecasetest.WantErr(t, err, usecase.KindNotFound, "task.not_found")
+	if e := usecase.AsError(err); e.Args["input"] != "ME-9" {
 		t.Errorf("Args = %v; want input ME-9", e.Args)
 	}
 	s, err := ts.OpenStore()
@@ -185,26 +192,26 @@ func TestNotFoundCodes(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = s.TaskBytes(ix.Workspaces()[0].ULID) // no task has this ULID
-	wantErr(t, err, KindNotFound, "not_found")
-	_, err = ts.OpenComment("01JZZZZZZZZZZZZZZZZZZZZZZZ")
-	wantErr(t, err, KindNotFound, "comment.not_found")
-	_, err = ResolveWorkspace(ix, "nope")
-	wantErr(t, err, KindNotFound, "workspace.not_found")
-	_, err = ts.InboxRead([]string{"01JZZZZZZZZZZZZZZZZZZZZZZZ"}, false)
-	wantErr(t, err, KindNotFound, "inbox.not_found")
+	usecasetest.WantErr(t, err, usecase.KindNotFound, "not_found")
+	_, err = comments.OpenComment(ts.Session, "01JZZZZZZZZZZZZZZZZZZZZZZZ")
+	usecasetest.WantErr(t, err, usecase.KindNotFound, "comment.not_found")
+	_, err = usecase.ResolveWorkspace(ix, "nope")
+	usecasetest.WantErr(t, err, usecase.KindNotFound, "workspace.not_found")
+	_, err = notifications.InboxRead(ts.Session, []string{"01JZZZZZZZZZZZZZZZZZZZZZZZ"}, false)
+	usecasetest.WantErr(t, err, usecase.KindNotFound, "inbox.not_found")
 }
 
 func TestEditIsOneCall(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
+	ts := usecasetest.New(t)
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
-	es, err := ts.BeginEdit("ME-1")
+	es, err := tasks.BeginEdit(ts.Session, "ME-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := ts.Edit("ME-1", bytes.Replace(es.Bytes, []byte("title: a"), []byte("title: b"), 1))
+	r, err := tasks.Edit(ts.Session, "ME-1", bytes.Replace(es.Bytes, []byte("title: a"), []byte("title: b"), 1))
 	if err != nil || !r.Committed || len(r.Commit) != 40 {
 		t.Fatalf("Edit = %+v, %v", r, err)
 	}
@@ -213,42 +220,42 @@ func TestEditIsOneCall(t *testing.T) {
 		t.Errorf("View after Edit = %+v, %v; want title b", v, err)
 	}
 	// The same bytes again change nothing.
-	es, err = ts.BeginEdit("ME-1")
+	es, err = tasks.BeginEdit(ts.Session, "ME-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err = ts.Edit("ME-1", es.Bytes)
+	r, err = tasks.Edit(ts.Session, "ME-1", es.Bytes)
 	if err != nil || r.Committed || r.Commit != "" {
 		t.Errorf("Edit of the same bytes = %+v, %v; want no commit", r, err)
 	}
 	// What CheckEdit refuses, Edit refuses, before anything is written.
-	_, err = ts.Edit("ME-1", bytes.Replace(es.Bytes, []byte("id: ME-1"), []byte("id: ME-7"), 1))
-	wantErr(t, err, KindInvalid, "edit.invalid")
-	_, err = ts.Edit("ME-1", []byte("not a task"))
-	wantErr(t, err, KindInvalid, "edit.invalid")
-	_, err = ts.Edit("ME-9", es.Bytes)
-	wantErr(t, err, KindNotFound, "task.not_found")
+	_, err = tasks.Edit(ts.Session, "ME-1", bytes.Replace(es.Bytes, []byte("id: ME-1"), []byte("id: ME-7"), 1))
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "edit.invalid")
+	_, err = tasks.Edit(ts.Session, "ME-1", []byte("not a task"))
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "edit.invalid")
+	_, err = tasks.Edit(ts.Session, "ME-9", es.Bytes)
+	usecasetest.WantErr(t, err, usecase.KindNotFound, "task.not_found")
 }
 
 func TestCommentAddCleansTheBody(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.asAccount("alice")
-	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
+	ts := usecasetest.New(t)
+	ts.AsAccount("alice")
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
-	_, err := ts.CommentAdd("ME-1", " \t\r\n")
-	wantErr(t, err, KindInvalid, "comment.empty")
-	r, err := ts.CommentAdd("ME-1", "raw  \n\n")
+	_, err := comments.CommentAdd(ts.Session, "ME-1", " \t\r\n")
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "comment.empty")
+	r, err := comments.CommentAdd(ts.Session, "ME-1", "raw  \n\n")
 	if err != nil || r.Comment.Body != "raw\n" || len(r.Commit) != 40 {
 		t.Errorf("CommentAdd = %+v, %v; want the body cleaned and a commit hash", r, err)
 	}
 	// An edit takes a raw body too, and stores it cleaned.
-	e, err := ts.CommentEdit(r.Ref.Comment.String(), "again \n\n")
+	e, err := comments.CommentEdit(ts.Session, r.Ref.Comment.String(), "again \n\n")
 	if err != nil || e.Comment.Body != "again\n" || len(e.Commit) != 40 {
 		t.Errorf("CommentEdit = %+v, %v", e, err)
 	}
-	same, err := ts.CommentEdit(r.Ref.Comment.String(), "again")
+	same, err := comments.CommentEdit(ts.Session, r.Ref.Comment.String(), "again")
 	if err != nil || same.Committed || same.Commit != "" {
 		t.Errorf("CommentEdit of the same body = %+v, %v; want no commit", same, err)
 	}
@@ -256,8 +263,8 @@ func TestCommentAddCleansTheBody(t *testing.T) {
 
 func TestResultsCarryTheCommitAndAFreshView(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.asAccount("alice")
+	ts := usecasetest.New(t)
+	ts.AsAccount("alice")
 	head := func() string {
 		t.Helper()
 		s, err := ts.OpenStore()
@@ -270,7 +277,7 @@ func TestResultsCarryTheCommitAndAFreshView(t *testing.T) {
 		}
 		return h.String()
 	}
-	add, err := ts.Add(AddInput{Title: "a"})
+	add, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"})
 	if err != nil || add.Commit == "" || add.Commit != head() {
 		t.Fatalf("Add = %+v, %v; want Commit = HEAD %s", add, err, head())
 	}
@@ -281,7 +288,7 @@ func TestResultsCarryTheCommitAndAFreshView(t *testing.T) {
 	if v, err := add.View(); err != nil || v.ID != "ME-1" || v.Title != "a" {
 		t.Errorf("Add View = %+v, %v", v, err)
 	}
-	set, err := ts.Set("ME-1", []Assign{{Key: "title", Op: "=", Value: "b"}})
+	set, err := tasks.Set(ts.Session, "ME-1", []usecase.Assign{{Key: "title", Op: "=", Value: "b"}})
 	if err != nil || set.Commit != head() || set.Commit == add.Commit {
 		t.Fatalf("Set = %+v, %v; want a new Commit = HEAD", set, err)
 	}
@@ -290,7 +297,7 @@ func TestResultsCarryTheCommitAndAFreshView(t *testing.T) {
 	}
 	// Nothing changed: no commit, and HEAD stays.
 	before := head()
-	noop, err := ts.Set("ME-1", []Assign{{Key: "title", Op: "=", Value: "b"}})
+	noop, err := tasks.Set(ts.Session, "ME-1", []usecase.Assign{{Key: "title", Op: "=", Value: "b"}})
 	if err != nil || noop.Committed || noop.Commit != "" || head() != before {
 		t.Errorf("no-op Set = %+v, %v", noop, err)
 	}
@@ -298,10 +305,10 @@ func TestResultsCarryTheCommitAndAFreshView(t *testing.T) {
 		t.Errorf("no-op View = %+v, %v", v, err)
 	}
 
-	if _, err := ts.Add(AddInput{Title: "c", Parent: "ME-1"}); err != nil {
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "c", Parent: "ME-1"}); err != nil {
 		t.Fatal(err)
 	}
-	rm, err := ts.Remove("ME-1")
+	rm, err := tasks.Remove(ts.Session, "ME-1")
 	if err != nil || rm.Commit != head() {
 		t.Fatalf("Remove = %+v, %v", rm, err)
 	}
@@ -314,7 +321,7 @@ func TestResultsCarryTheCommitAndAFreshView(t *testing.T) {
 			t.Errorf("Views of Remove: %s is not deleted", v.ID)
 		}
 	}
-	rs, err := ts.Restore("ME-1")
+	rs, err := tasks.Restore(ts.Session, "ME-1")
 	if err != nil || rs.Commit != head() {
 		t.Fatalf("Restore = %+v, %v", rs, err)
 	}
@@ -322,28 +329,28 @@ func TestResultsCarryTheCommitAndAFreshView(t *testing.T) {
 		t.Errorf("Restore Views = %+v, %v; want both live", vs, err)
 	}
 
-	cm, err := ts.CommentAdd("ME-1", "x")
+	cm, err := comments.CommentAdd(ts.Session, "ME-1", "x")
 	if err != nil || cm.Commit != head() {
 		t.Errorf("CommentAdd = %+v, %v; want Commit = HEAD", cm, err)
 	}
-	rc, err := ts.CommentRemove(cm.Ref.Comment.String())
+	rc, err := comments.CommentRemove(ts.Session, cm.Ref.Comment.String())
 	if err != nil || rc.Commit != head() {
 		t.Errorf("CommentRemove = %+v, %v; want Commit = HEAD", rc, err)
 	}
-	mv, err := ts.Move(MoveInput{Arg: "ME-2", Root: true})
+	mv, err := tasks.Move(ts.Session, tasks.MoveInput{Arg: "ME-2", Root: true})
 	if err != nil || !mv.Committed || mv.Commit != head() {
 		t.Errorf("Move = %+v, %v; want Commit = HEAD", mv, err)
 	}
-	ws, err := ts.WorkspaceAdd("other", "OT")
+	ws, err := workspaces.WorkspaceAdd(ts.Session, "other", "OT")
 	if err != nil || ws.Commit != head() {
 		t.Errorf("WorkspaceAdd = %+v, %v; want Commit = HEAD", ws, err)
 	}
-	ts.useAccount()
-	ts.resetWriter()
-	if _, err := ts.Set("ME-1", []Assign{{Key: "title", Op: "=", Value: "z"}}); err != nil {
+	ts.UseAccount()
+	ts.ForgetWriter()
+	if _, err := tasks.Set(ts.Session, "ME-1", []usecase.Assign{{Key: "title", Op: "=", Value: "z"}}); err != nil {
 		t.Fatal(err)
 	}
-	un, err := ts.Undo()
+	un, err := tasks.Undo(ts.Session)
 	if err != nil || un.NewCommit != head() {
 		t.Errorf("Undo = %+v, %v; want NewCommit = HEAD", un, err)
 	}
@@ -351,7 +358,7 @@ func TestResultsCarryTheCommitAndAFreshView(t *testing.T) {
 
 func TestSessionUpdateCommitAndBeforeUpdate(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
+	ts := usecasetest.New(t)
 	s, _, err := ts.Open()
 	if err != nil {
 		t.Fatal(err)
@@ -366,7 +373,7 @@ func TestSessionUpdateCommitAndBeforeUpdate(t *testing.T) {
 		t.Errorf("BeforeUpdate called %d times; want 1", before)
 	}
 	ts.BeforeUpdate = nil
-	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
 	if before != 1 {

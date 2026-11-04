@@ -1,4 +1,4 @@
-package usecase
+package usecase_test
 
 import (
 	"os"
@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/storage/current"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 // worktreeDir makes a repository with origin url and one empty commit, adds a
@@ -43,19 +45,19 @@ func TestWorktreeFindsTheRepoAndItsOwnBranch(t *testing.T) {
 	t.Parallel()
 	w, _ := newWorld(t)
 	p := put(t, w.a, "Web release", project("github.com/org-a/web"))
-	set := openSet(t, w.a, w.b)
+	set := usecasetest.OpenSet(t, w.a, w.b)
 	dir := worktreeDir(t, "hh/WEB-1-login", "https://github.com/Org-A/Web.git")
 	if fi, err := os.Stat(filepath.Join(dir, ".git")); err != nil || fi.IsDir() {
 		t.Fatalf(".git of the worktree = %v, %v; want a file", fi, err)
 	}
 
 	// stage 3: the branch of the worktree names WEB-1
-	_, cf, _, _, err := resolve(t, set, current.State{}, Input{Dir: dir, Interactive: true})
+	_, cf, _, _, err := resolve(t, set, current.State{}, usecase.Input{Dir: dir, Interactive: true})
 	if err != nil || cf == nil || cf.Parent.ULID != w.web1.ULID {
 		t.Fatalf("Confirm = %+v, %v; want the task WEB-1 of the branch", cf, err)
 	}
 	// stage 4 (the branch is declined): the repo ID of origin finds the project
-	d := mustDest(t, set, current.State{}, Input{Dir: dir, Interactive: true, BranchParent: No})
+	d := mustDest(t, set, current.State{}, usecase.Input{Dir: dir, Interactive: true, BranchParent: usecase.No})
 	if d.Stage != 4 || d.Parent == nil || d.Parent.ULID != p.ULID || d.RepoID != "github.com/org-a/web" {
 		t.Errorf("destination = stage %d parent %v repo %q; want stage 4, the project, github.com/org-a/web", d.Stage, d.Parent, d.RepoID)
 	}

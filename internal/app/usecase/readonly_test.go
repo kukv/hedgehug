@@ -1,4 +1,4 @@
-package usecase
+package usecase_test
 
 import (
 	"errors"
@@ -15,6 +15,17 @@ import (
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/comments"
+	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
+	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
+	"github.com/kukv/hedgehug/internal/app/usecase/replication"
+	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
+	"github.com/kukv/hedgehug/internal/app/usecase/views"
+	"github.com/kukv/hedgehug/internal/app/usecase/workspaces"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
@@ -26,8 +37,8 @@ func wantReadOnly(t *testing.T, what string, err error) {
 		t.Errorf("%s: no error; want store.read_only", what)
 		return
 	}
-	e := AsError(err)
-	if e.Kind != KindConflict || e.Code != "store.read_only" {
+	e := usecase.AsError(err)
+	if e.Kind != usecase.KindConflict || e.Code != "store.read_only" {
 		t.Errorf("%s: %v is %v %q; want KindConflict store.read_only", what, err, e.Kind, e.Code)
 		return
 	}
@@ -37,7 +48,7 @@ func wantReadOnly(t *testing.T, what string, err error) {
 	if err.Error() != "me is read-only (the GitHub permission is read)" {
 		t.Errorf("%s: message = %q", what, err)
 	}
-	var ro *ReadOnlyError
+	var ro *usecase.ReadOnlyError
 	if !errors.As(err, &ro) || ro.Store != "me" || !ro.Access.ReadOnly {
 		t.Errorf("%s: %v is not a *ReadOnlyError of me", what, err)
 	}
@@ -48,47 +59,47 @@ func wantReadOnly(t *testing.T, what string, err error) {
 // "not found".
 func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	makeReadOnly(t, ts, replicate.ReasonGitHub)
+	ts := usecasetest.New(t)
+	usecasetest.MakeReadOnly(t, ts, replicate.ReasonGitHub)
 	ops := []struct {
 		name string
 		do   func() error
 	}{
-		{"Add", func() error { _, err := ts.Add(AddInput{Title: "two"}); return err }},
-		{"Set", func() error { _, err := ts.Set("ME-99", nil); return err }},
-		{"SetStatus", func() error { _, err := ts.SetStatus("ME-99", "done"); return err }},
-		{"Dep", func() error { _, err := ts.Dep("ME-99", "ME-98", true); return err }},
-		{"Watch", func() error { _, err := ts.Watch("ME-99", true); return err }},
-		{"BeginEdit", func() error { _, err := ts.BeginEdit("ME-99"); return err }},
-		{"Edit", func() error { _, err := ts.Edit("ME-99", []byte("x")); return err }},
-		{"BeginComment", func() error { _, err := ts.BeginComment("ME-99"); return err }},
-		{"CommentAdd", func() error { _, err := ts.CommentAdd("ME-99", "hi"); return err }},
-		{"OpenComment", func() error { _, err := ts.OpenComment("nope"); return err }},
-		{"CommentEdit", func() error { _, err := ts.CommentEdit("nope", "hi"); return err }},
-		{"CommentRemove", func() error { _, err := ts.CommentRemove("nope"); return err }},
-		{"Move", func() error { _, err := ts.Move(MoveInput{Arg: "ME-99", Root: true}); return err }},
-		{"WorkspaceAdd", func() error { _, err := ts.WorkspaceAdd("w", "WW"); return err }},
-		{"WorkspaceRename", func() error { _, err := ts.WorkspaceRename("nope", "x"); return err }},
-		{"WorkspacePrefix", func() error { _, err := ts.WorkspacePrefix("nope", "XX"); return err }},
-		{"WorkspaceRemove", func() error { _, err := ts.WorkspaceRemove("nope"); return err }},
-		{"Undo", func() error { _, err := ts.Undo(); return err }},
-		{"Remove", func() error { _, err := ts.Remove("ME-99"); return err }},
-		{"Restore", func() error { _, err := ts.Restore("ME-99"); return err }},
-		{"RestoreAt", func() error { _, err := ts.RestoreAt("ME-99", "2026-10-01"); return err }},
-		{"PurgeList", func() error { _, err := ts.PurgeList(0); return err }},
-		{"Purge", func() error { _, err := ts.Purge(0, true); return err }},
+		{"Add", func() error { _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "two"}); return err }},
+		{"Set", func() error { _, err := tasks.Set(ts.Session, "ME-99", nil); return err }},
+		{"SetStatus", func() error { _, err := tasks.SetStatus(ts.Session, "ME-99", "done"); return err }},
+		{"Dep", func() error { _, err := tasks.Dep(ts.Session, "ME-99", "ME-98", true); return err }},
+		{"Watch", func() error { _, err := tasks.Watch(ts.Session, "ME-99", true); return err }},
+		{"BeginEdit", func() error { _, err := tasks.BeginEdit(ts.Session, "ME-99"); return err }},
+		{"Edit", func() error { _, err := tasks.Edit(ts.Session, "ME-99", []byte("x")); return err }},
+		{"BeginComment", func() error { _, err := comments.BeginComment(ts.Session, "ME-99"); return err }},
+		{"CommentAdd", func() error { _, err := comments.CommentAdd(ts.Session, "ME-99", "hi"); return err }},
+		{"OpenComment", func() error { _, err := comments.OpenComment(ts.Session, "nope"); return err }},
+		{"CommentEdit", func() error { _, err := comments.CommentEdit(ts.Session, "nope", "hi"); return err }},
+		{"CommentRemove", func() error { _, err := comments.CommentRemove(ts.Session, "nope"); return err }},
+		{"Move", func() error { _, err := tasks.Move(ts.Session, tasks.MoveInput{Arg: "ME-99", Root: true}); return err }},
+		{"WorkspaceAdd", func() error { _, err := workspaces.WorkspaceAdd(ts.Session, "w", "WW"); return err }},
+		{"WorkspaceRename", func() error { _, err := workspaces.WorkspaceRename(ts.Session, "nope", "x"); return err }},
+		{"WorkspacePrefix", func() error { _, err := workspaces.WorkspacePrefix(ts.Session, "nope", "XX"); return err }},
+		{"WorkspaceRemove", func() error { _, err := workspaces.WorkspaceRemove(ts.Session, "nope"); return err }},
+		{"Undo", func() error { _, err := tasks.Undo(ts.Session); return err }},
+		{"Remove", func() error { _, err := tasks.Remove(ts.Session, "ME-99"); return err }},
+		{"Restore", func() error { _, err := tasks.Restore(ts.Session, "ME-99"); return err }},
+		{"RestoreAt", func() error { _, err := tasks.RestoreAt(ts.Session, "ME-99", "2026-10-01"); return err }},
+		{"PurgeList", func() error { _, err := maintenance.PurgeList(ts.Session, 0); return err }},
+		{"Purge", func() error { _, err := maintenance.Purge(ts.Session, 0, true); return err }},
 		{"PurgeConfirmed", func() error {
-			_, err := ts.PurgeConfirmed(0, PurgePlan{Tasks: []PurgeTask{{ULID: model.NewULID()}}})
+			_, err := maintenance.PurgeConfirmed(ts.Session, 0, maintenance.PurgePlan{Tasks: []maintenance.PurgeTask{{ULID: model.NewULID()}}})
 			return err
 		}},
 		{"Migrate", func() error {
-			_, _, err := ts.Migrate(schema.Migration{Target: schema.TargetStatus, Old: "todo", New: "ready"}, false)
+			_, _, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetStatus, Old: "todo", New: "ready"}, false)
 			return err
 		}},
-		{"ViewSave", func() error { _, err := ts.ViewSave("mine", ViewChange{}); return err }},
+		{"ViewSave", func() error { _, err := views.ViewSave(ts.Session, "mine", views.ViewChange{}); return err }},
 		// Views that do not exist: the refusal comes before "not found".
-		{"ViewRemove", func() error { _, err := ts.ViewRemove("nope"); return err }},
-		{"ViewRename", func() error { _, err := ts.ViewRename("nope", "other"); return err }},
+		{"ViewRemove", func() error { _, err := views.ViewRemove(ts.Session, "nope"); return err }},
+		{"ViewRename", func() error { _, err := views.ViewRename(ts.Session, "nope", "other"); return err }},
 		{"UpdateCommit", func() error {
 			s, err := ts.OpenStore()
 			if err != nil {
@@ -117,22 +128,22 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 
 func TestReadOnlyAllowsReading(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.addTask("one", nil)
-	makeReadOnly(t, ts, replicate.ReasonGitHub)
+	ts := usecasetest.New(t)
+	ts.AddTask("one", nil)
+	usecasetest.MakeReadOnly(t, ts, replicate.ReasonGitHub)
 	if _, _, err := ts.Open(); err != nil {
 		t.Errorf("Open: %v", err)
 	}
-	if _, _, err := ts.WorkspaceList(); err != nil {
+	if _, _, err := workspaces.WorkspaceList(ts.Session); err != nil {
 		t.Errorf("WorkspaceList: %v", err)
 	}
-	if _, _, err := ts.Migrate(schema.Migration{Target: schema.TargetStatus, Old: "todo", New: "ready"}, true); err != nil {
+	if _, _, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetStatus, Old: "todo", New: "ready"}, true); err != nil {
 		t.Errorf("Migrate --dry-run: %v", err)
 	}
-	if _, err := ts.Doctor(false); err != nil {
+	if _, err := maintenance.Doctor(ts.Session, false); err != nil {
 		t.Errorf("Doctor: %v", err)
 	}
-	if _, err := ts.ViewList(); err != nil {
+	if _, err := views.ViewList(ts.Session); err != nil {
 		t.Errorf("ViewList: %v", err)
 	}
 }
@@ -144,13 +155,13 @@ func TestReadOnlyReasonsInTheMessage(t *testing.T) {
 		replicate.ReasonNotWritable: "me is read-only (the remote cannot be written)",
 		replicate.ReasonPushDenied:  "me is read-only (the remote denied the push)",
 	} {
-		ts := newTestSession(t)
-		makeReadOnly(t, ts, reason)
-		_, err := ts.Add(AddInput{Title: "x"})
+		ts := usecasetest.New(t)
+		usecasetest.MakeReadOnly(t, ts, reason)
+		_, err := tasks.Add(ts.Session, tasks.AddInput{Title: "x"})
 		if err == nil || err.Error() != want {
 			t.Errorf("%s: err = %v; want %q", reason, err, want)
 		}
-		if got := AsError(err).Args["reason"]; got != reason {
+		if got := usecase.AsError(err).Args["reason"]; got != reason {
 			t.Errorf("%s: Args reason = %v", reason, got)
 		}
 	}
@@ -159,7 +170,7 @@ func TestReadOnlyReasonsInTheMessage(t *testing.T) {
 // The store is named as config.yaml names it, not as its store.yaml does.
 func TestReadOnlyNamesTheStoreOfTheConfig(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
+	ts := usecasetest.New(t)
 	c, _, err := ts.Config()
 	if err != nil {
 		t.Fatal(err)
@@ -177,8 +188,8 @@ func TestReadOnlyNamesTheStoreOfTheConfig(t *testing.T) {
 	if err := c.Save(); err != nil {
 		t.Fatal(err)
 	}
-	makeReadOnly(t, ts, replicate.ReasonGitHub)
-	_, err = ts.Add(AddInput{Title: "x"})
+	usecasetest.MakeReadOnly(t, ts, replicate.ReasonGitHub)
+	_, err = tasks.Add(ts.Session, tasks.AddInput{Title: "x"})
 	if err == nil || !strings.HasPrefix(err.Error(), "renamed is read-only") {
 		t.Errorf("err = %v; want the name of the config", err)
 	}
@@ -188,8 +199,8 @@ func TestReadOnlyNamesTheStoreOfTheConfig(t *testing.T) {
 // lets writes through again.
 func TestWritableAgain(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	makeReadOnly(t, ts, replicate.ReasonGitHub)
+	ts := usecasetest.New(t)
+	usecasetest.MakeReadOnly(t, ts, replicate.ReasonGitHub)
 	s, err := ts.OpenStore()
 	if err != nil {
 		t.Fatal(err)
@@ -197,7 +208,7 @@ func TestWritableAgain(t *testing.T) {
 	if err := replicate.WriteAccess(s, replicate.Access{Checked: ts.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.Add(AddInput{Title: "x"}); err != nil {
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "x"}); err != nil {
 		t.Errorf("Add after the permission came back: %v", err)
 	}
 }
@@ -206,23 +217,23 @@ func TestWritableAgain(t *testing.T) {
 // user asks for does, and pushes.
 func TestSyncExplicitClearsPushDeniedBackgroundDoesNot(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	remote := addBareRemote(t, ts)
-	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
+	ts := usecasetest.New(t)
+	remote := usecasetest.AddBareRemote(t, ts)
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
 	unlock := gitrepotest.LockObjects(t, remote) // skips where there are no read-only directories
-	reps, err := ts.Sync(false, true)
+	reps, err := replication.Sync(ts.Session, false, true)
 	if err == nil || !strings.Contains(err.Error(), "me is read-only (the remote denied the push)") || len(reps) != 1 {
 		t.Fatalf("Sync = %+v, %v; want the push to be denied", reps, err)
 	}
-	st, err := ts.SyncStatus()
+	st, err := replication.SyncStatus(ts.Session)
 	if err != nil || len(st) != 1 || st[0].ReadOnly != "the remote denied the push" {
 		t.Fatalf("SyncStatus = %+v, %v; want ReadOnly set", st, err)
 	}
 	unlock()
 	// The directory is writable again, but a background sync leaves the denial.
-	reps, err = ts.Sync(false, false)
+	reps, err = replication.Sync(ts.Session, false, false)
 	if err != nil || len(reps) != 1 || reps[0].Unpushable != 2 || len(reps[0].Pushed) != 0 {
 		t.Fatalf("background Sync = %+v, %v; want 2 unpushable, nothing pushed", reps, err)
 	}
@@ -233,14 +244,14 @@ func TestSyncExplicitClearsPushDeniedBackgroundDoesNot(t *testing.T) {
 	if a, _ := replicate.ReadAccess(s); !a.ReadOnly || a.Reason != replicate.ReasonPushDenied {
 		t.Errorf("access after a background sync = %+v; want push_denied kept", a)
 	}
-	reps, err = ts.Sync(false, true)
+	reps, err = replication.Sync(ts.Session, false, true)
 	if err != nil || len(reps) != 1 || reps[0].Unpushable != 0 || len(reps[0].Pushed) == 0 {
 		t.Fatalf("explicit Sync = %+v, %v; want a push", reps, err)
 	}
 	if a, _ := replicate.ReadAccess(s); a.ReadOnly {
 		t.Errorf("access after an explicit sync = %+v; want writable", a)
 	}
-	st, _ = ts.SyncStatus()
+	st, _ = replication.SyncStatus(ts.Session)
 	if st[0].ReadOnly != "" {
 		t.Errorf("SyncStatus ReadOnly = %q; want none", st[0].ReadOnly)
 	}
@@ -250,20 +261,20 @@ func TestSyncExplicitClearsPushDeniedBackgroundDoesNot(t *testing.T) {
 // cannot be pushed.
 func TestSyncReportsUnpushable(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	bare := addBareRemote(t, ts)
-	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
+	ts := usecasetest.New(t)
+	bare := usecasetest.AddBareRemote(t, ts)
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
 	// An explicit sync judges a read-only store again, so the bare is
 	// really not writable.
 	gitrepotest.LockObjects(t, bare)
-	makeReadOnly(t, ts, replicate.ReasonNotWritable)
-	reps, err := ts.Sync(false, true)
+	usecasetest.MakeReadOnly(t, ts, replicate.ReasonNotWritable)
+	reps, err := replication.Sync(ts.Session, false, true)
 	if err != nil || len(reps) != 1 || reps[0].Unpushable != 2 || len(reps[0].Pushed) != 0 { // the first commit of the store, and the task
 		t.Fatalf("Sync = %+v, %v", reps, err)
 	}
-	st, err := ts.SyncStatus()
+	st, err := replication.SyncStatus(ts.Session)
 	if err != nil || st[0].ReadOnly != "the remote cannot be written" || st[0].Unpushed == nil || *st[0].Unpushed != 2 {
 		t.Errorf("SyncStatus = %+v, %v", st, err)
 	}
@@ -274,17 +285,17 @@ func TestSyncReportsUnpushable(t *testing.T) {
 // it again), reports the commits it cannot push and the GitHub reason.
 func TestBackgroundSyncReportsUnpushableByGitHubPermission(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	addBareRemote(t, ts)
-	if _, err := ts.Add(AddInput{Title: "a"}); err != nil {
+	ts := usecasetest.New(t)
+	usecasetest.AddBareRemote(t, ts)
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
-	makeReadOnly(t, ts, replicate.ReasonGitHub)
-	reps, err := ts.Sync(false, false)
+	usecasetest.MakeReadOnly(t, ts, replicate.ReasonGitHub)
+	reps, err := replication.Sync(ts.Session, false, false)
 	if err != nil || len(reps) != 1 || reps[0].Unpushable != 2 || len(reps[0].Pushed) != 0 {
 		t.Fatalf("Sync = %+v, %v", reps, err)
 	}
-	st, err := ts.SyncStatus()
+	st, err := replication.SyncStatus(ts.Session)
 	if err != nil || st[0].ReadOnly != "the GitHub permission is read" || st[0].Unpushed == nil || *st[0].Unpushed != 2 {
 		t.Errorf("SyncStatus = %+v, %v", st, err)
 	}
@@ -292,8 +303,8 @@ func TestBackgroundSyncReportsUnpushableByGitHubPermission(t *testing.T) {
 
 func TestGitHubRepoOf(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.appendConfig("hosts:\n  - {host: ghe.example.com}\n" +
+	ts := usecasetest.New(t)
+	ts.AppendConfig("hosts:\n  - {host: ghe.example.com}\n" +
 		"url_rewrites:\n  - {from: \"https://github.com/\", to: \"/srv/remotes/\"}\n" +
 		"accounts:\n  - {name: me, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
 	c, _, err := ts.Config()
@@ -311,7 +322,7 @@ func TestGitHubRepoOf(t *testing.T) {
 		{"https://gitlab.com/o/r.git", "", ""},
 		{"/srv/remotes/org-a/x.git", "", ""},
 	} {
-		g := ts.githubRepoOf(c, withRemotes(c.Stores[0], tc.remote))
+		g := ts.GithubRepoOf(c, withRemotes(c.Stores[0], tc.remote))
 		if tc.owner == "" {
 			if g != nil {
 				t.Errorf("%s: %+v; want nil", tc.remote, g)
@@ -324,11 +335,11 @@ func TestGitHubRepoOf(t *testing.T) {
 	}
 	// No remote, and no account.
 	e := c.Stores[0]
-	if g := ts.githubRepoOf(c, e); g != nil {
+	if g := ts.GithubRepoOf(c, e); g != nil {
 		t.Errorf("no remote: %+v", g)
 	}
 	c.Accounts = nil
-	if g := ts.githubRepoOf(c, withRemotes(e, "https://github.com/o/r.git")); g != nil {
+	if g := ts.GithubRepoOf(c, withRemotes(e, "https://github.com/o/r.git")); g != nil {
 		t.Errorf("no account: %+v", g)
 	}
 }
@@ -336,19 +347,19 @@ func TestGitHubRepoOf(t *testing.T) {
 // The token of an account goes to its own host only.
 func TestGitHubRepoOfAnotherHostOfTheAccount(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.env["HH_TOKEN"] = "t"
-	ts.appendConfig("hosts:\n  - {host: ghe.example.com}\n" +
+	ts := usecasetest.New(t)
+	ts.Env["HH_TOKEN"] = "t"
+	ts.AppendConfig("hosts:\n  - {host: ghe.example.com}\n" +
 		"accounts:\n  - {name: me, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
 	c, _, err := ts.Config()
 	if err != nil {
 		t.Fatal(err)
 	}
-	g := ts.githubRepoOf(c, withRemotes(c.Stores[0], "https://ghe.example.com/o/r.git"))
+	g := ts.GithubRepoOf(c, withRemotes(c.Stores[0], "https://ghe.example.com/o/r.git"))
 	if g == nil {
 		t.Fatal("nil")
 	}
-	if _, err := g.Client(); err == nil || AsError(err).Code != "account.host_mismatch" {
+	if _, err := g.Client(); err == nil || usecase.AsError(err).Code != "account.host_mismatch" {
 		t.Errorf("Client err = %v; want account.host_mismatch", err)
 	}
 }
@@ -358,8 +369,8 @@ func TestGitHubRepoOfAnotherHostOfTheAccount(t *testing.T) {
 // without .gitattributes in HEAD.
 func aliceStore(t *testing.T, d string, old bool) {
 	t.Helper()
-	alice := newTestSession(t)
-	if _, err := alice.StoreInit(StoreInitInput{Name: "org", Prefix: "ORG", Remotes: []string{filepath.Join(d, "org-a", "x.git")}}); err != nil {
+	alice := usecasetest.New(t)
+	if _, err := stores.StoreInit(alice.Session, stores.StoreInitInput{Name: "org", Prefix: "ORG", Remotes: []string{filepath.Join(d, "org-a", "x.git")}}); err != nil {
 		t.Fatal(err)
 	}
 	if !old {
@@ -381,26 +392,26 @@ func aliceStore(t *testing.T, d string, old bool) {
 // bobSession is a session of bob, who may only read org-a/x on GitHub, and
 // the directory that serves https://github.com/ with alice's store "org" in
 // org-a/x.
-func bobSession(t *testing.T, token string, old bool) *testSession {
+func bobSession(t *testing.T, token string, old bool) *usecasetest.Session {
 	t.Helper()
 	d := t.TempDir()
 	aliceStore(t, d, old)
 	gitrepotest.InstallHTTPS(t, gitrepotest.Under("https://github.com/", d), nil, nil)
-	bob, _ := fakeSession(t, fakegh.State{
+	bob, _ := usecasetest.FakeSession(t, fakegh.State{
 		Tokens: map[string]string{"t-bob": "bob"},
 		Repos:  []*fakegh.Repo{{Owner: "org-a", Name: "x", Perms: map[string]string{"bob": "read"}}},
 	}, "accounts:\n  - {name: me, host: github.com, login: bob, token: \"env:HH_TOKEN\"}\n")
-	bob.env["HH_TOKEN"] = token
+	bob.Env["HH_TOKEN"] = token
 	return bob
 }
 
 func TestStoreAddChecksAccessOnGitHub(t *testing.T) {
 	bob := bobSession(t, "t-bob", false)
-	res, err := bob.StoreAdd("org", []string{"https://github.com/org-a/x.git"}, "", "me")
+	res, err := stores.StoreAdd(bob.Session, "org", []string{"https://github.com/org-a/x.git"}, "", "me")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if b := configText(t, bob); !strings.Contains(b, "account: me") {
+	if b := usecasetest.ConfigText(t, bob); !strings.Contains(b, "account: me") {
 		t.Errorf("config.yaml = %s", b)
 	}
 	s, err := store.Open(res.Path)
@@ -411,56 +422,56 @@ func TestStoreAddChecksAccessOnGitHub(t *testing.T) {
 		t.Errorf("access = %+v, %v; want read-only by the GitHub permission", a, err)
 	}
 	bob.StoreName = "org"
-	_, err = bob.Add(AddInput{Title: "x"})
+	_, err = tasks.Add(bob.Session, tasks.AddInput{Title: "x"})
 	if err == nil || err.Error() != "org is read-only (the GitHub permission is read)" {
 		t.Errorf("Add = %v", err)
 	}
-	wantErr(t, err, KindConflict, "store.read_only")
+	usecasetest.WantErr(t, err, usecase.KindConflict, "store.read_only")
 }
 
 // A check that fails is a warning: the store is added.
 func TestStoreAddAccessCheckFailureIsAWarning(t *testing.T) {
 	bob := bobSession(t, "t-wrong", false)
-	if _, err := bob.StoreAdd("org", []string{"https://github.com/org-a/x.git"}, "", "me"); err != nil {
+	if _, err := stores.StoreAdd(bob.Session, "org", []string{"https://github.com/org-a/x.git"}, "", "me"); err != nil {
 		t.Fatalf("StoreAdd: %v; want the failed check to be a warning", err)
 	}
-	if !strings.Contains(strings.Join(bob.warns, "\n"), "org") {
-		t.Errorf("warnings = %q; want one about org", bob.warns)
+	if !strings.Contains(strings.Join(bob.Warns, "\n"), "org") {
+		t.Errorf("warnings = %q; want one about org", bob.Warns)
 	}
-	if !strings.Contains(configText(t, bob), "name: org") {
-		t.Errorf("config.yaml lacks the store: %s", configText(t, bob))
+	if !strings.Contains(usecasetest.ConfigText(t, bob), "name: org") {
+		t.Errorf("config.yaml lacks the store: %s", usecasetest.ConfigText(t, bob))
 	}
 }
 
 func TestStoreAddUnknownAccount(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	remote := addBareRemote(t, ts)
-	if _, err := ts.Sync(false, true); err != nil {
+	ts := usecasetest.New(t)
+	remote := usecasetest.AddBareRemote(t, ts)
+	if _, err := replication.Sync(ts.Session, false, true); err != nil {
 		t.Fatal(err)
 	}
-	ts.appendConfig("accounts:\n  - {name: a, host: github.com, login: alice}\n")
-	_, err := ts.StoreAdd("copy", []string{remote}, "", "nope")
-	wantErr(t, err, KindNotFound, "account.not_found")
+	ts.AppendConfig("accounts:\n  - {name: a, host: github.com, login: alice}\n")
+	_, err := stores.StoreAdd(ts.Session, "copy", []string{remote}, "", "nope")
+	usecasetest.WantErr(t, err, usecase.KindNotFound, "account.not_found")
 	if !strings.Contains(err.Error(), "(accounts: a)") {
 		t.Errorf("err = %v; want the accounts", err)
 	}
-	notExist(t, storeDirOf(t, ts, "copy"), "the clone")
+	usecasetest.NotExist(t, usecasetest.StoreDirOf(t, ts, "copy"), "the clone")
 }
 
 // The check of a local remote is of whether it can be written, with or
 // without an account.
 func TestStoreAddChecksALocalRemote(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	remote := addBareRemote(t, ts)
-	if _, err := ts.Sync(false, true); err != nil {
+	ts := usecasetest.New(t)
+	remote := usecasetest.AddBareRemote(t, ts)
+	if _, err := replication.Sync(ts.Session, false, true); err != nil {
 		t.Fatal(err)
 	}
 	unlock := gitrepotest.LockObjects(t, remote)
 	defer unlock()
-	other := otherSession(t, ts, ts.Now())
-	res, err := other.StoreAdd("copy", []string{remote}, "", "")
+	other := usecasetest.Other(t, ts, ts.Now())
+	res, err := stores.StoreAdd(other.Session, "copy", []string{remote}, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -482,7 +493,7 @@ func TestStoreAddCheckTakesSyncLock(t *testing.T) {
 	bob.HTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		if !asked && strings.Contains(r.URL.Path, "/repos/org-a/x") {
 			asked = true
-			s, err := store.Open(storeDirOf(t, bob, "org"))
+			s, err := store.Open(usecasetest.StoreDirOf(t, bob, "org"))
 			if err != nil {
 				t.Error(err)
 			} else {
@@ -491,7 +502,7 @@ func TestStoreAddCheckTakesSyncLock(t *testing.T) {
 		}
 		return http.DefaultTransport.RoundTrip(r)
 	})}
-	if _, err := bob.StoreAdd("org", []string{"https://github.com/org-a/x.git"}, "", "me"); err != nil {
+	if _, err := stores.StoreAdd(bob.Session, "org", []string{"https://github.com/org-a/x.git"}, "", "me"); err != nil {
 		t.Fatal(err)
 	}
 	if !asked {
@@ -510,7 +521,7 @@ func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { retu
 // cannot write to: it is read-only, and the setup commit stays here.
 func TestStoreAddOldStoreReadOnlyOnGitHub(t *testing.T) {
 	bob := bobSession(t, "t-bob", true)
-	res, err := bob.StoreAdd("org", []string{"https://github.com/org-a/x.git"}, "", "me")
+	res, err := stores.StoreAdd(bob.Session, "org", []string{"https://github.com/org-a/x.git"}, "", "me")
 	if err != nil {
 		t.Fatalf("StoreAdd: %v; want the read-only store to be added", err)
 	}
@@ -521,7 +532,7 @@ func TestStoreAddOldStoreReadOnlyOnGitHub(t *testing.T) {
 	if a, _ := replicate.ReadAccess(s); !a.ReadOnly || a.Reason != replicate.ReasonGitHub {
 		t.Errorf("access = %+v; want read-only by the GitHub permission", a)
 	}
-	if n, err := Unpushed(s); err != nil || n != 1 {
+	if n, err := usecase.Unpushed(s); err != nil || n != 1 {
 		t.Errorf("Unpushed = %d, %v; want the setup commit", n, err)
 	}
 	if need, err := replicate.NeedsSetup(s); err != nil || need {
@@ -535,8 +546,8 @@ func TestStoreAddOldStoreReadOnlyLocalBare(t *testing.T) {
 	aliceStore(t, d, true)
 	unlock := gitrepotest.LockObjects(t, filepath.Join(d, "org-a", "x.git")) // skips where there are no read-only directories
 	defer unlock()
-	ts := newTestSession(t)
-	res, err := ts.StoreAdd("org", []string{filepath.Join(d, "org-a", "x.git")}, "", "")
+	ts := usecasetest.New(t)
+	res, err := stores.StoreAdd(ts.Session, "org", []string{filepath.Join(d, "org-a", "x.git")}, "", "")
 	if err != nil {
 		t.Fatalf("StoreAdd: %v; want the read-only store to be added", err)
 	}
@@ -547,7 +558,7 @@ func TestStoreAddOldStoreReadOnlyLocalBare(t *testing.T) {
 	if a, _ := replicate.ReadAccess(s); !a.ReadOnly || a.Reason != replicate.ReasonNotWritable {
 		t.Errorf("access = %+v; want not_writable", a)
 	}
-	if n, err := Unpushed(s); err != nil || n != 1 {
+	if n, err := usecase.Unpushed(s); err != nil || n != 1 {
 		t.Errorf("Unpushed = %d, %v; want the setup commit", n, err)
 	}
 }
@@ -558,8 +569,8 @@ func TestStoreAddOldStorePushDeniedInTheSetup(t *testing.T) {
 	d := t.TempDir()
 	aliceStore(t, d, true)
 	gitrepotest.InstallHTTPS(t, gitrepotest.Under("https://other.example.com/", d), nil, func(string) bool { return true })
-	ts := newTestSession(t)
-	res, err := ts.StoreAdd("org", []string{"https://other.example.com/org-a/x.git"}, "", "")
+	ts := usecasetest.New(t)
+	res, err := stores.StoreAdd(ts.Session, "org", []string{"https://other.example.com/org-a/x.git"}, "", "")
 	if err != nil {
 		t.Fatalf("StoreAdd: %v; want the add to stand", err)
 	}
@@ -570,21 +581,21 @@ func TestStoreAddOldStorePushDeniedInTheSetup(t *testing.T) {
 	if a, _ := replicate.ReadAccess(s); !a.ReadOnly || a.Reason != replicate.ReasonPushDenied {
 		t.Errorf("access = %+v; want push_denied", a)
 	}
-	if n, err := Unpushed(s); err != nil || n != 1 {
+	if n, err := usecase.Unpushed(s); err != nil || n != 1 {
 		t.Errorf("Unpushed = %d, %v; want the setup commit", n, err)
 	}
-	if !strings.Contains(strings.Join(ts.warns, "\n"), "org is read-only (the remote denied the push)") {
-		t.Errorf("warnings = %q; want one that the push was denied", ts.warns)
+	if !strings.Contains(strings.Join(ts.Warns, "\n"), "org is read-only (the remote denied the push)") {
+		t.Errorf("warnings = %q; want one that the push was denied", ts.Warns)
 	}
-	if !strings.Contains(configText(t, ts), "name: org") {
-		t.Errorf("the store is not in config.yaml: %s", configText(t, ts))
+	if !strings.Contains(usecasetest.ConfigText(t, ts), "name: org") {
+		t.Errorf("the store is not in config.yaml: %s", usecasetest.ConfigText(t, ts))
 	}
 }
 
 // access.json that cannot be read refuses writes, and says what to do.
 func TestBrokenAccessFileRefusesWrites(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
+	ts := usecasetest.New(t)
 	s, err := ts.OpenStore()
 	if err != nil {
 		t.Fatal(err)
@@ -593,14 +604,14 @@ func TestBrokenAccessFileRefusesWrites(t *testing.T) {
 	if err := s.WriteLocal("access.json", []byte("{not json")); err != nil {
 		t.Fatal(err)
 	}
-	_, err = ts.Add(AddInput{Title: "x"})
+	_, err = tasks.Add(ts.Session, tasks.AddInput{Title: "x"})
 	if err == nil || !strings.Contains(err.Error(), "delete "+p) {
 		t.Errorf("Add = %v; want it to name %s", err, p)
 	}
 	if err := os.Remove(p); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.Add(AddInput{Title: "x"}); err != nil {
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "x"}); err != nil {
 		t.Errorf("Add after the file was deleted: %v", err)
 	}
 }
@@ -609,8 +620,8 @@ func TestBrokenAccessFileRefusesWrites(t *testing.T) {
 // not the only way out; until then writes are refused with the path.
 func TestSyncRepairsBrokenAccessFile(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	addBareRemote(t, ts)
+	ts := usecasetest.New(t)
+	usecasetest.AddBareRemote(t, ts)
 	s, err := ts.OpenStore()
 	if err != nil {
 		t.Fatal(err)
@@ -619,11 +630,11 @@ func TestSyncRepairsBrokenAccessFile(t *testing.T) {
 	if err := s.WriteLocal("access.json", []byte("{not json")); err != nil {
 		t.Fatal(err)
 	}
-	_, err = ts.Add(AddInput{Title: "x"})
+	_, err = tasks.Add(ts.Session, tasks.AddInput{Title: "x"})
 	if err == nil || !strings.Contains(err.Error(), p) || !strings.Contains(err.Error(), "hedgehug sync") {
 		t.Fatalf("Add before the sync = %v; want a refusal that names %s and the sync", err, p)
 	}
-	reps, err := ts.Sync(false, true)
+	reps, err := replication.Sync(ts.Session, false, true)
 	if err != nil || len(reps) != 1 {
 		t.Fatalf("Sync = %+v, %v", reps, err)
 	}
@@ -633,7 +644,7 @@ func TestSyncRepairsBrokenAccessFile(t *testing.T) {
 	if a, err := replicate.ReadAccess(s); err != nil || a.ReadOnly {
 		t.Errorf("access after the sync = %+v, %v", a, err)
 	}
-	if _, err := ts.Add(AddInput{Title: "x"}); err != nil {
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "x"}); err != nil {
 		t.Errorf("Add after the sync: %v", err)
 	}
 }
@@ -642,10 +653,10 @@ func TestSyncRepairsBrokenAccessFile(t *testing.T) {
 // store of the item.
 func TestReadOnlyRefusesInboxRevert(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	item, _ := overwriteME1(t, ts)
-	makeReadOnly(t, ts, replicate.ReasonGitHub)
-	_, err := ts.InboxRevert(item.ULID.String())
+	ts := usecasetest.New(t)
+	item, _ := usecasetest.OverwriteME1(t, ts)
+	usecasetest.MakeReadOnly(t, ts, replicate.ReasonGitHub)
+	_, err := notifications.InboxRevert(ts.Session, item.ULID.String())
 	wantReadOnly(t, "InboxRevert", err)
 }
 

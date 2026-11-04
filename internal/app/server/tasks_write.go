@@ -12,6 +12,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
 // commitPtr is the commit of a write: nil when nothing was committed.
@@ -174,7 +175,7 @@ func (s *Server) writeOut(ss *usecase.Session, u model.ULID, commit string) (*ta
 
 // affectedOut is the output of rm and restore: the task, then the tasks
 // under it.
-func (s *Server) affectedOut(ss *usecase.Session, r usecase.AffectedResult) (*affectedOutput, error) {
+func (s *Server) affectedOut(ss *usecase.Session, r tasks.AffectedResult) (*affectedOutput, error) {
 	ulids := []model.ULID{r.Entry.ULID}
 	for _, e := range r.Targets {
 		if e.ULID != r.Entry.ULID {
@@ -252,7 +253,7 @@ func (s *Server) registerTaskWrites() {
 		}
 		ss := s.session(in.Store)
 		defer ss.Close()
-		res, err := ss.Add(usecase.AddInput{Title: b.Title, Parent: b.Parent, Workspace: b.Workspace, Kind: b.Kind, Status: b.Status, Body: b.Body, Assigns: assigns, Before: b.Before, After: b.After})
+		res, err := tasks.Add(ss, tasks.AddInput{Title: b.Title, Parent: b.Parent, Workspace: b.Workspace, Kind: b.Kind, Status: b.Status, Body: b.Body, Assigns: assigns, Before: b.Before, After: b.After})
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -269,7 +270,7 @@ func (s *Server) registerTaskWrites() {
 		}
 		ss := s.session(in.Store)
 		defer ss.Close()
-		res, err := ss.Patch(in.ID, usecase.PatchInput{Assigns: assigns, Body: in.Body.Body})
+		res, err := tasks.Patch(ss, in.ID, tasks.PatchInput{Assigns: assigns, Body: in.Body.Body})
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -286,7 +287,7 @@ func (s *Server) registerTaskWrites() {
 		}
 		ss := s.session(in.Store)
 		defer ss.Close()
-		res, err := ss.Move(usecase.MoveInput{Arg: in.ID, Workspace: b.Workspace, Parent: b.Parent, Root: b.Root, Before: b.Before, After: b.After})
+		res, err := tasks.Move(ss, tasks.MoveInput{Arg: in.ID, Workspace: b.Workspace, Parent: b.Parent, Root: b.Root, Before: b.Before, After: b.After})
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -304,7 +305,7 @@ func (s *Server) registerTaskWrites() {
 	}, func(_ context.Context, in *TaskParam) (*affectedOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		res, err := ss.Restore(in.ID)
+		res, err := tasks.Restore(ss, in.ID)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -317,7 +318,7 @@ func (s *Server) registerTaskWrites() {
 	}, func(_ context.Context, in *TaskParam) (*affectedOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		res, err := ss.Remove(in.ID)
+		res, err := tasks.Remove(ss, in.ID)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -330,7 +331,7 @@ func (s *Server) registerTaskWrites() {
 	}, func(_ context.Context, in *restoreAtInput) (*taskWriteOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		res, err := ss.RestoreAt(in.ID, in.Commit)
+		res, err := tasks.RestoreAt(ss, in.ID, in.Commit)
 		if err != nil {
 			return nil, problemOf(err)
 		}

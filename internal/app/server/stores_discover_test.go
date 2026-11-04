@@ -5,7 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/accounts"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 )
 
 func TestStoreDiscoverAndMountAPI(t *testing.T) {
@@ -22,12 +23,12 @@ func TestStoreDiscoverAndMountAPI(t *testing.T) {
 		t.Errorf("no token: %+v", p)
 	}
 
-	var cands []usecase.Candidate
+	var cands []stores.Candidate
 	ts.call("GET", from, nil, 200, &cands)
 	if len(cands) != 1 || cands[0].Name != "shared" || cands[0].URL != bare || cands[0].Account != "alice" || cands[0].Permission != "write" {
 		t.Fatalf("candidates = %+v", cands)
 	}
-	var none []usecase.Candidate
+	var none []stores.Candidate
 	ts.call("GET", "/api/stores/discover?from="+url.QueryEscape(t.TempDir()), nil, 200, &none)
 	if none == nil || len(none) != 0 {
 		t.Errorf("an empty directory = %#v; want []", none)
@@ -78,7 +79,7 @@ func TestStoreDiscoverNeedsAnAccount(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
 	root, _ := remoteStore(t, "shared", "SH")
-	if _, err := ts.session().AuthAdd(usecase.AuthAddInput{Name: "bob", Login: "bob"}); err != nil {
+	if _, err := accounts.AuthAdd(ts.session(), accounts.AuthAddInput{Name: "bob", Login: "bob"}); err != nil {
 		t.Fatal(err)
 	}
 	from := "/api/stores/discover?from=" + url.QueryEscape(root)
@@ -87,7 +88,7 @@ func TestStoreDiscoverNeedsAnAccount(t *testing.T) {
 	if p.Type != "choice.required" || p.Args["what"] != "--account" || len(cands) != 2 || cands[0] != "alice" || cands[1] != "bob" {
 		t.Errorf("problem = %+v", p)
 	}
-	var out []usecase.Candidate
+	var out []stores.Candidate
 	ts.call("GET", from+"&account=bob", nil, 200, &out)
 	if len(out) != 1 || out[0].Account != "bob" {
 		t.Errorf("with the account named = %+v", out)

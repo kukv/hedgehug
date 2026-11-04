@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +28,7 @@ func (a *app) storeSetCmd() *cobra.Command {
 			if c == nil && h == nil {
 				return usageErrorf("--color or --hidden is required")
 			}
-			v, err := a.ss.StoreSet(args[0], c, h)
+			v, err := stores.StoreSet(a.ss, args[0], c, h)
 			if err != nil {
 				return err
 			}

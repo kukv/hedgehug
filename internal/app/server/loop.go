@@ -10,6 +10,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 )
 
 // hiddenInterval is the shortest time between fetches while no tab shows
@@ -158,7 +159,7 @@ func (l *Loop) targets() (*config.Config, []config.StoreEntry) {
 	l.configFailed(nil)
 	var out []config.StoreEntry
 	for _, e := range all {
-		if usecase.SyncsInBackground(e) {
+		if replication.SyncsInBackground(e) {
 			out = append(out, e)
 		}
 	}
@@ -272,7 +273,7 @@ func (l *Loop) syncStore(name string) {
 		l.s.logf("sync %s: %v", name, err)
 		return
 	}
-	rep, err := ss.SyncStore(c, e, false)
+	rep, err := replication.SyncStore(ss, c, e, false)
 	if err == nil {
 		err = rep.Err
 	}

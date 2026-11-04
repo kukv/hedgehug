@@ -4,7 +4,7 @@
 set -euo pipefail
 U=internal/app/usecase
 perl -pi -e 's/usecase\.CommentView\{c\.ULID\.String\(\), c\.Author, c\.Created, c\.Body\}/usecase.CommentView{ULID: c.ULID.String(), Author: c.Author, Created: c.Created, Body: c.Body}/' -- $U/browse/read.go
-perl -0pi -e 's/usecasetest\.CfgStore\{\s*("[^"]*"|\w+),\s*("[^"]*"|\w+)\s*\}/usecasetest.CfgStore{Name: $1, Account: $2}/g' -- $U/accounts/auth_add_test.go
+perl -0pi -e 's/usecasetest\.CfgStore\{\s*("[^"]*"|\w+),\s*("[^"]*"|\w+)\s*\}/usecasetest.CfgStore{Name: $1, Account: $2}/g' -- $U/accounts/auth_add_test.go $U/accounts/auth_device_test.go
 for area in tasks comments browse views schemas workspaces stores replication notifications accounts; do
   cat > $U/$area/testmain_test.go <<EOF
 package ${area}_test

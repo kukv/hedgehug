@@ -1,14 +1,18 @@
-package usecase
+package usecase_test
 
 import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/browse"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 // addMissingStore sets up org-b in config.yaml at a path where there is no
 // store.
-func addMissingStore(t *testing.T, ts *testSession) {
+func addMissingStore(t *testing.T, ts *usecasetest.Session) {
 	t.Helper()
 	c, _, err := ts.Config()
 	if err != nil {
@@ -24,29 +28,29 @@ func addMissingStore(t *testing.T, ts *testSession) {
 
 func TestStoreThatDoesNotOpenIsAnErrorOnlyWhenNamed(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	task := ts.addTask("a", nil)
+	ts := usecasetest.New(t)
+	task := ts.AddTask("a", nil)
 	addMissingStore(t, ts)
 
 	ts.StoreName = "org-b"
-	_, err := ts.Show(task.ULID.String())
+	_, err := browse.Show(ts.Session, task.ULID.String())
 	if err == nil {
 		t.Fatal("Show on a store that does not open succeeded")
 	}
-	e := AsError(err)
-	if e.Kind != KindInvalid || e.Code != "store.open" || !strings.HasPrefix(err.Error(), "cannot open org-b: ") {
+	e := usecase.AsError(err)
+	if e.Kind != usecase.KindInvalid || e.Code != "store.open" || !strings.HasPrefix(err.Error(), "cannot open org-b: ") {
 		t.Errorf("err = %v (%v %s)", err, e.Kind, e.Code)
 	}
 
 	ts.StoreName = "me"
-	if _, err := ts.Show(task.ULID.String()); err != nil {
+	if _, err := browse.Show(ts.Session, task.ULID.String()); err != nil {
 		t.Errorf("Show on me: %v", err)
 	}
 }
 
 func TestMountWarnsOnceAndOpensOnce(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
+	ts := usecasetest.New(t)
 	addMissingStore(t, ts)
 	a, err := ts.Mount()
 	if err != nil {
@@ -62,25 +66,25 @@ func TestMountWarnsOnceAndOpensOnce(t *testing.T) {
 	if len(a.Stores) != 1 || a.Stores[0].Name != "me" || len(a.Skipped) != 1 || a.Skipped[0].Name != "org-b" {
 		t.Errorf("stores %v, skipped %v", a.Stores, a.Skipped)
 	}
-	if len(ts.warns) != 1 || !strings.HasPrefix(ts.warns[0], "cannot open org-b: ") {
-		t.Errorf("warnings = %q", ts.warns)
+	if len(ts.Warns) != 1 || !strings.HasPrefix(ts.Warns[0], "cannot open org-b: ") {
+		t.Errorf("warnings = %q", ts.Warns)
 	}
 	c, err := ts.ForStore("me").Mount()
 	if err != nil || c != a {
 		t.Errorf("ForStore session has another set: %v %v", c == a, err)
 	}
-	if len(ts.warns) != 1 {
-		t.Errorf("warnings = %q", ts.warns)
+	if len(ts.Warns) != 1 {
+		t.Errorf("warnings = %q", ts.Warns)
 	}
 }
 
 func TestNoStoreNameWarnsOnceAndUsesTheOthers(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	task := ts.addTask("a", nil)
+	ts := usecasetest.New(t)
+	task := ts.AddTask("a", nil)
 	addMissingStore(t, ts)
 	ts.DropMount() // addTask mounted the stores before org-b was added
-	ts.warns = nil
+	ts.Warns = nil
 	ts.StoreName = ""
 	set, err := ts.Mount()
 	if err != nil {
@@ -89,10 +93,10 @@ func TestNoStoreNameWarnsOnceAndUsesTheOthers(t *testing.T) {
 	if _, err := ts.Mount(); err != nil {
 		t.Fatal(err)
 	}
-	if len(ts.warns) != 1 || !strings.HasPrefix(ts.warns[0], "cannot open org-b: ") {
-		t.Errorf("warnings = %q", ts.warns)
+	if len(ts.Warns) != 1 || !strings.HasPrefix(ts.Warns[0], "cannot open org-b: ") {
+		t.Errorf("warnings = %q", ts.Warns)
 	}
-	hit, err := ResolveIn(set, task.ID)
+	hit, err := usecase.ResolveIn(set, task.ID)
 	if err != nil || hit.Store.Name != "me" {
 		t.Errorf("Resolve(%s) = %v %v", task.ID, hit, err)
 	}

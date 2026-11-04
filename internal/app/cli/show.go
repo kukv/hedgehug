@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/browse"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
@@ -24,18 +25,18 @@ func (a *app) showCmd() *cobra.Command {
 }
 
 func (a *app) show(arg string) error {
-	r, err := a.ss.Show(arg)
+	r, err := browse.Show(a.ss, arg)
 	if err != nil {
 		return err
 	}
 	if a.jsonOut {
-		return a.printJSON(usecase.ShowViewOf(r))
+		return a.printJSON(browse.ShowViewOf(r))
 	}
 	_, err = fmt.Fprint(a.stdout, a.showText(r.Store, r.Index, r.Entry, r.Task, r.Comments, r.Relations, r.Back, r.History))
 	return err
 }
 
-func (a *app) showText(storeName string, ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []usecase.Relation, back []*index.Entry, history []gitrepo.LogEntry) string {
+func (a *app) showText(storeName string, ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []browse.Relation, back []*index.Entry, history []gitrepo.LogEntry) string {
 	st := a.style()
 	var b strings.Builder
 	field := func(k string, vs ...string) {

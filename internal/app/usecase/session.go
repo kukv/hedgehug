@@ -697,9 +697,9 @@ func Unpushed(s *store.Store) (int, error) {
 	return replicate.Unpushed(s.Repo())
 }
 
-// resetWriter forgets the writer the session cached, so that it is read from
+// ForgetWriter forgets the writer the session cached, so that it is read from
 // config.yaml again after a test changed the accounts.
-func (ss *Session) resetWriter() {
+func (ss *Session) ForgetWriter() {
 	ss.writerMu.Lock()
 	defer ss.writerMu.Unlock()
 	ss.writerDone = false

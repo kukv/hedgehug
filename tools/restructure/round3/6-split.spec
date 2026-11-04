@@ -110,6 +110,7 @@ rename movedAuthor MovedAuthor
 rename makeReadOnly MakeReadOnly
 rename moveFx.brokenForward BrokenForward
 rename moveFx.oldForward OldForward
+rename moveFx.addSprint AddSprint
 rename cloneSchemaOf CloneSchemaOf
 alias revertField RevertField
 alias Session.githubRepoOf GithubRepoOf
@@ -223,6 +224,12 @@ file purge_test.go
 file rebuild_failure_test.go 
 file rebuild_test.go 
 file crossrefs_test.go 
+to internal/app/usecase/stores stores
+file movestore_view.go 
+file movestore_gui_test.go 
+file storeset_test.go 
+to internal/app/usecase/accounts accounts
+file auth_device_test.go 
 external assign_test.go
 external conn_insecure2_test.go
 external conn_insecure_test.go

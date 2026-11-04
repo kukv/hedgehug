@@ -127,14 +127,14 @@ func RepairedContent(ix *index.Index, it inbox.Item) string {
 		if json.Unmarshal(d.Value, &m) == nil {
 			from := "the root"
 			if m.From != nil {
-				from = taskName(ix, *m.From)
+				from = TaskName(ix, *m.From)
 			}
 			if d.Kind == "parent_deleted" {
 				return fmt.Sprintf("parent_deleted: moved to the root (its parent %s was deleted)", from)
 			}
 			to := "root"
 			if m.To != nil {
-				to = taskName(ix, *m.To)
+				to = TaskName(ix, *m.To)
 			}
 			return fmt.Sprintf("parent_cycle: moved back to %s (was under %s)", to, from)
 		}
@@ -202,8 +202,8 @@ func movedRefContent(ix *index.Index, value json.RawMessage) string {
 	return fmt.Sprintf("%s to %s was removed because it moved to another store", v.Field, name)
 }
 
-// taskName is the task u as "ID (ULID) title", or its ULID when ix lacks it.
-func taskName(ix *index.Index, u model.ULID) string {
+// TaskName is the task u as "ID (ULID) title", or its ULID when ix lacks it.
+func TaskName(ix *index.Index, u model.ULID) string {
 	if ix != nil {
 		if _, ok := ix.Task(u); ok {
 			return RefName(ix, u)

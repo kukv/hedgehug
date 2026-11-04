@@ -10,6 +10,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/mount"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
 func (a *app) addCmd() *cobra.Command {
@@ -28,10 +29,10 @@ func (a *app) addCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return a.add(usecase.AddHereInput{
+			return a.add(tasks.AddHereInput{
 				Context: usecase.Input{Parent: parent, Project: project, Workspace: workspace},
 				Repo:    withRepo,
-				Task:    usecase.AddInput{Title: strings.Join(args, " "), Kind: kind, Status: status, Body: body, Assigns: assigns, Before: before, After: after},
+				Task:    tasks.AddInput{Title: strings.Join(args, " "), Kind: kind, Status: status, Body: body, Assigns: assigns, Before: before, After: after},
 			})
 		},
 	}
@@ -53,7 +54,7 @@ func (a *app) addCmd() *cobra.Command {
 // store and the workspace.
 const maxAsks = 4
 
-func (a *app) add(in usecase.AddHereInput) error {
+func (a *app) add(in tasks.AddHereInput) error {
 	in.Context.Interactive = a.isTerminal(a.stdin)
 	if a.getwd != nil {
 		dir, err := a.getwd()
@@ -63,7 +64,7 @@ func (a *app) add(in usecase.AddHereInput) error {
 		in.Context.Dir = dir
 	}
 	for range maxAsks + 1 {
-		r, confirm, choice, err := a.ss.AddHere(in)
+		r, confirm, choice, err := tasks.AddHere(a.ss, in)
 		if err != nil {
 			return err
 		}

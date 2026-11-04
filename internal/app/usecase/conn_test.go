@@ -1,4 +1,4 @@
-package usecase
+package usecase_test
 
 import (
 	"errors"
@@ -10,13 +10,15 @@ import (
 	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 
 	"github.com/kukv/hedgehug/internal/app/storage/config"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func TestConn(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.env["HH_TOKEN"] = "tok-1"
-	ts.appendConfig("accounts:\n" +
+	ts := usecasetest.New(t)
+	ts.Env["HH_TOKEN"] = "tok-1"
+	ts.AppendConfig("accounts:\n" +
 		"  - {name: a, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n" +
 		"  - {name: b, host: github.com, login: bob}\n" +
 		"url_rewrites:\n  - {from: \"https://github.com/\", to: \"/srv/remotes/\"}\n")
@@ -38,7 +40,7 @@ func TestConn(t *testing.T) {
 		t.Errorf("Auth(https) = %#v, %v", au, err)
 	}
 	// The token is got once a run: it stays when the variable goes.
-	ts.env["HH_TOKEN"] = ""
+	ts.Env["HH_TOKEN"] = ""
 	au, err = conn.Auth("https://github.com/org/y.git")
 	if b, ok := au.(*githttp.BasicAuth); err != nil || !ok || b.Password != "tok-1" {
 		t.Errorf("second Auth = %#v, %v", au, err)
@@ -67,8 +69,8 @@ func TestConn(t *testing.T) {
 // A token that cannot be got is an error, and is asked for again.
 func TestConnMissingTokenIsAskedAgain(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.appendConfig("accounts:\n  - {name: a, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
+	ts := usecasetest.New(t)
+	ts.AppendConfig("accounts:\n  - {name: a, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
 	c, _, err := ts.Config()
 	if err != nil {
 		t.Fatal(err)
@@ -89,8 +91,8 @@ func (*fakeKeyring) Delete(string, string) error        { return nil }
 // The session hands what it was given to the token code.
 func TestAuthOptions(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.appendConfig("hosts:\n  - {host: ghe.example.com, api: \"https://ghe.example.com/api\"}\n")
+	ts := usecasetest.New(t)
+	ts.AppendConfig("hosts:\n  - {host: ghe.example.com, api: \"https://ghe.example.com/api\"}\n")
 	c, _, err := ts.Config()
 	if err != nil {
 		t.Fatal(err)
@@ -111,16 +113,16 @@ func TestAuthOptions(t *testing.T) {
 // ForStore makes, even when they ask at once.
 func TestTokenIsGotOnceAcrossForStore(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
+	ts := usecasetest.New(t)
 	var calls atomic.Int32
 	ts.Getenv = func(k string) string {
 		if k == "HH_TOKEN" {
 			calls.Add(1)
 			return " tok-1 "
 		}
-		return ts.env[k]
+		return ts.Env[k]
 	}
-	ts.appendConfig("accounts:\n  - {name: a, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
+	ts.AppendConfig("accounts:\n  - {name: a, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
 	c, _, err := ts.Config()
 	if err != nil {
 		t.Fatal(err)
@@ -154,15 +156,15 @@ func TestTokenIsGotOnceAcrossForStore(t *testing.T) {
 // A slow fetch of one account does not hold up the others.
 func TestTokenFetchOfOneAccountDoesNotBlockAnother(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
+	ts := usecasetest.New(t)
 	started, release := make(chan struct{}), make(chan struct{})
 	ts.Run = func(string, ...string) ([]byte, []byte, error) {
 		close(started)
 		<-release
 		return []byte("gh-tok"), nil, nil
 	}
-	ts.env["HH_TOKEN"] = "env-tok"
-	ts.appendConfig("accounts:\n" +
+	ts.Env["HH_TOKEN"] = "env-tok"
+	ts.AppendConfig("accounts:\n" +
 		"  - {name: slow, host: github.com, login: alice, token: gh}\n" +
 		"  - {name: fast, host: github.com, login: bob, token: \"env:HH_TOKEN\"}\n")
 	c, _, err := ts.Config()
@@ -194,8 +196,8 @@ func TestTokenFetchOfOneAccountDoesNotBlockAnother(t *testing.T) {
 // that outlives a config change does not hand out the old account's token.
 func TestTokenCacheKeyIncludesTheAccountID(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.env["A"], ts.env["B"] = "tok-a", "tok-b"
+	ts := usecasetest.New(t)
+	ts.Env["A"], ts.Env["B"] = "tok-a", "tok-b"
 	c, _, err := ts.Config()
 	if err != nil {
 		t.Fatal(err)
@@ -211,7 +213,7 @@ func TestTokenCacheKeyIncludesTheAccountID(t *testing.T) {
 	// The ID is compared without case, as everywhere.
 	a2 := a
 	a2.Login = "ALICE"
-	ts.env["A"] = "changed"
+	ts.Env["A"] = "changed"
 	if tok, _ := ts.Token(c, a2); tok != "tok-a" {
 		t.Errorf("alice and ALICE are one account; token = %q", tok)
 	}
@@ -219,7 +221,7 @@ func TestTokenCacheKeyIncludesTheAccountID(t *testing.T) {
 
 func TestForStoreCopiesTheOutsideWorld(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
+	ts := usecasetest.New(t)
 	k := &fakeKeyring{}
 	ts.Keyring = k
 	ts.Run = func(string, ...string) ([]byte, []byte, error) { return nil, nil, nil }
@@ -231,9 +233,9 @@ func TestForStoreCopiesTheOutsideWorld(t *testing.T) {
 
 func TestGitHub(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.env["HH_TOKEN"] = "tok-1"
-	ts.appendConfig("accounts:\n" +
+	ts := usecasetest.New(t)
+	ts.Env["HH_TOKEN"] = "tok-1"
+	ts.AppendConfig("accounts:\n" +
 		"  - {name: a, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n" +
 		"  - {name: b, host: github.com, login: bob}\n" +
 		"  - {name: c, host: github.com, login: carol, token: \"env:NOPE\"}\n")
@@ -247,10 +249,10 @@ func TestGitHub(t *testing.T) {
 	}
 	b, _ := c.Account("b")
 	_, err = ts.GitHub(c, b, "github.com")
-	if err == nil || AsError(err).Code != "auth.token" || !strings.Contains(err.Error(), "hedgehug auth login b") {
+	if err == nil || usecase.AsError(err).Code != "auth.token" || !strings.Contains(err.Error(), "hedgehug auth login b") {
 		t.Errorf("an account with no token: %v", err)
 	}
-	if k := KindOf(err); k != KindInvalid {
+	if k := usecase.KindOf(err); k != usecase.KindInvalid {
 		t.Errorf("kind = %v; want KindInvalid", k)
 	}
 	cc, _ := c.Account("c")
@@ -261,8 +263,8 @@ func TestGitHub(t *testing.T) {
 
 func TestPickAccount(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.dropDefaultAccount()
+	ts := usecasetest.New(t)
+	ts.DropDefaultAccount()
 	c, _, err := ts.Config()
 	if err != nil {
 		t.Fatal(err)
@@ -270,13 +272,13 @@ func TestPickAccount(t *testing.T) {
 	if _, ok, err := ts.PickAccount(c, ""); ok || err != nil {
 		t.Errorf("no accounts: ok=%v err=%v", ok, err)
 	}
-	ts.appendConfig("accounts:\n  - {name: a, host: github.com, login: alice}\n")
+	ts.AppendConfig("accounts:\n  - {name: a, host: github.com, login: alice}\n")
 	c, _, _ = ts.Config()
 	if acct, ok, err := ts.PickAccount(c, ""); !ok || err != nil || acct.Name != "a" {
 		t.Errorf("the only account: %v %v %v", acct, ok, err)
 	}
-	ts.dropAccounts()
-	ts.appendConfig("accounts:\n  - {name: a, host: github.com, login: alice}\n  - {name: b, host: github.com, login: bob}\n")
+	ts.DropAccounts()
+	ts.AppendConfig("accounts:\n  - {name: a, host: github.com, login: alice}\n  - {name: b, host: github.com, login: bob}\n")
 	c, _, _ = ts.Config()
 	if _, ok, err := ts.PickAccount(c, ""); ok || err != nil {
 		t.Errorf("two accounts, no name: ok=%v err=%v", ok, err)
@@ -285,8 +287,8 @@ func TestPickAccount(t *testing.T) {
 		t.Errorf("b: %v %v %v", acct, ok, err)
 	}
 	_, ok, err := ts.PickAccount(c, "nobody")
-	ae := AsError(err)
-	if ok || ae == nil || ae.Kind != KindNotFound || ae.Code != "account.not_found" || ae.Args["name"] != "nobody" {
+	ae := usecase.AsError(err)
+	if ok || ae == nil || ae.Kind != usecase.KindNotFound || ae.Code != "account.not_found" || ae.Args["name"] != "nobody" {
 		t.Fatalf("nobody: ok=%v err=%v", ok, err)
 	}
 	if got, _ := ae.Args["candidates"].([]string); strings.Join(got, ",") != "a,b" {

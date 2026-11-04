@@ -9,6 +9,9 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/browse"
+	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
@@ -44,7 +47,7 @@ type notificationsInput struct {
 }
 
 type notification struct {
-	usecase.InboxItemView
+	notifications.InboxItemView
 	Read bool `json:"read"`
 }
 
@@ -88,7 +91,7 @@ func (s *Server) registerActivity() {
 	}, func(_ context.Context, in *StoreParam) (*undoOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		r, err := ss.Undo()
+		r, err := tasks.Undo(ss)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -97,7 +100,7 @@ func (s *Server) registerActivity() {
 			return nil, problemOf(err)
 		}
 		out := &undoOutput{}
-		out.Body.Undone = usecase.LogViewsOf(ix, []gitrepo.LogEntry{r.Commit})[0]
+		out.Body.Undone = browse.LogViewsOf(ix, []gitrepo.LogEntry{r.Commit})[0]
 		out.Body.Commit = commitPtr(r.NewCommit)
 		out.Body.Kept = []undoKept{}
 		for _, k := range r.Kept {
@@ -121,11 +124,11 @@ func (s *Server) registerActivity() {
 		}
 		ss := s.session(in.Store)
 		defer ss.Close()
-		r, err := ss.LogIn(nil, workspaces, limit)
+		r, err := browse.LogIn(ss, nil, workspaces, limit)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		kept := []usecase.StoreLog{}
+		kept := []browse.StoreLog{}
 		for _, l := range r.Logs {
 			e := l.Entry
 			op, _ := e.Trailer("Hedgehug-Op")
@@ -142,7 +145,7 @@ func (s *Server) registerActivity() {
 				break
 			}
 		}
-		return &activityOutput{Body: usecase.StoreLogViews(kept)}, nil
+		return &activityOutput{Body: browse.StoreLogViews(kept)}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -161,17 +164,17 @@ func (s *Server) registerActivity() {
 				warn(m)
 			}
 		}
-		stores, err := ss.InboxStores()
+		stores, err := notifications.InboxStores(ss)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		unread, err := ss.InboxListOf(stores, false)
+		unread, err := notifications.InboxListOf(ss, stores, false)
 		if err != nil {
 			return nil, problemOf(err)
 		}
 		items := unread
 		if in.All {
-			if items, err = ss.InboxListOf(stores, true); err != nil {
+			if items, err = notifications.InboxListOf(ss, stores, true); err != nil {
 				return nil, problemOf(err)
 			}
 		}
@@ -195,7 +198,7 @@ func (s *Server) registerActivity() {
 		}
 		ss := s.session(in.Store)
 		defer ss.Close()
-		if _, err := ss.InboxRead([]string{in.ID}, false); err != nil {
+		if _, err := notifications.InboxRead(ss, []string{in.ID}, false); err != nil {
 			return nil, problemOf(err)
 		}
 		s.poller.Kick()
@@ -211,15 +214,15 @@ func (s *Server) registerActivity() {
 		}
 		ss := s.session(in.Store)
 		defer ss.Close()
-		ulids, err := usecase.ParseInboxItems(in.Body.IDs)
+		ulids, err := notifications.ParseInboxItems(in.Body.IDs)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		stores, err := ss.InboxStores()
+		stores, err := notifications.InboxStores(ss)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		read, err := ss.InboxReadOf(stores, ulids, in.Body.All)
+		read, err := notifications.InboxReadOf(ss, stores, ulids, in.Body.All)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -235,7 +238,7 @@ func (s *Server) registerActivity() {
 	}, func(_ context.Context, in *NotificationParam) (*taskWriteOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		r, err := ss.InboxRevert(in.ID)
+		r, err := notifications.InboxRevert(ss, in.ID)
 		if err != nil {
 			return nil, problemOf(err)
 		}

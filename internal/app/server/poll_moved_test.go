@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
 // A task that became a forward is no longer in the store's list: the poller
@@ -16,7 +17,7 @@ func TestPollMovedTaskIsRemoved(t *testing.T) {
 	ts := twoStores(t)
 	ss := ts.session()
 	ss.StoreName = "me"
-	moved, err := ss.Add(usecase.AddInput{Title: "moves"})
+	moved, err := tasks.Add(ss, tasks.AddInput{Title: "moves"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +37,7 @@ func TestPollMovedTaskIsRemoved(t *testing.T) {
 	})
 	ts.srv.poller.settle()
 
-	if _, err := ts.session().MoveStore(usecase.MoveStoreInput{Arg: moved.ULID.String(), To: "team", Yes: true}); err != nil {
+	if _, err := stores.MoveStore(ts.session(), stores.MoveStoreInput{Arg: moved.ULID.String(), To: "team", Yes: true}); err != nil {
 		t.Fatal(err)
 	}
 	// The poller reads the two stores in no fixed order, so the two events

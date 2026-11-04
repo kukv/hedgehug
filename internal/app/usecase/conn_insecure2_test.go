@@ -1,4 +1,4 @@
-package usecase
+package usecase_test
 
 import (
 	"errors"
@@ -6,20 +6,22 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/storage/config"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 // The userinfo of a URL is not echoed by the error.
 func TestConnPlainHTTPHidesUserinfo(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.env["HH_TOKEN"] = "tok-1"
-	ts.appendConfig("accounts:\n  - {name: a, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
+	ts := usecasetest.New(t)
+	ts.Env["HH_TOKEN"] = "tok-1"
+	ts.AppendConfig("accounts:\n  - {name: a, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
 	c, _, err := ts.Config()
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = ts.Conn(c, config.StoreEntry{Account: "a"}).Auth("http://user:pw@github.com/org/x.git")
-	var oe *Error
+	var oe *usecase.Error
 	if !errors.As(err, &oe) || oe.Code != "auth.insecure" {
 		t.Fatalf("err = %v", err)
 	}
@@ -35,9 +37,9 @@ func TestConnPlainHTTPHidesUserinfo(t *testing.T) {
 func TestConnLoopbackLiterals(t *testing.T) {
 	t.Parallel()
 	for _, host := range []string{"127.0.0.1", "::1"} {
-		ts := newTestSession(t)
-		ts.env["HH_TOKEN"] = "tok-1"
-		ts.appendConfig("accounts:\n  - {name: a, host: \"" + host + "\", login: alice, token: \"env:HH_TOKEN\"}\n")
+		ts := usecasetest.New(t)
+		ts.Env["HH_TOKEN"] = "tok-1"
+		ts.AppendConfig("accounts:\n  - {name: a, host: \"" + host + "\", login: alice, token: \"env:HH_TOKEN\"}\n")
 		c, _, err := ts.Config()
 		if err != nil {
 			t.Fatal(err)
@@ -56,9 +58,9 @@ func TestConnLoopbackLiterals(t *testing.T) {
 // a plain http one on another host is refused.
 func TestConnRewriteToPlainHTTP(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	ts.env["HH_TOKEN"] = "tok-1"
-	ts.appendConfig("accounts:\n  - {name: a, host: mirror.example.com, login: alice, token: \"env:HH_TOKEN\"}\n" +
+	ts := usecasetest.New(t)
+	ts.Env["HH_TOKEN"] = "tok-1"
+	ts.AppendConfig("accounts:\n  - {name: a, host: mirror.example.com, login: alice, token: \"env:HH_TOKEN\"}\n" +
 		"url_rewrites:\n  - {from: \"https://github.com/\", to: \"http://mirror.example.com/\"}\n")
 	c, _, err := ts.Config()
 	if err != nil {
@@ -67,7 +69,7 @@ func TestConnRewriteToPlainHTTP(t *testing.T) {
 	conn := ts.Conn(c, config.StoreEntry{Account: "a"})
 	u := conn.Rewrite("https://github.com/org/x.git")
 	_, err = conn.Auth(u)
-	var oe *Error
+	var oe *usecase.Error
 	if !errors.As(err, &oe) || oe.Code != "auth.insecure" {
 		t.Errorf("Auth(%q) = %v", u, err)
 	}

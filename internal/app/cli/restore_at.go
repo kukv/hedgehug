@@ -2,12 +2,14 @@ package cli
 
 import (
 	"fmt"
+
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
 // restoreAt puts the task back as it was at the point at names; see
 // usecase.Session.RestoreAt.
 func (a *app) restoreAt(arg, at string) error {
-	res, err := a.ss.RestoreAt(arg, at)
+	res, err := tasks.RestoreAt(a.ss, arg, at)
 	if err != nil {
 		return err
 	}

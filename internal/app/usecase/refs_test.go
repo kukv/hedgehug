@@ -1,4 +1,4 @@
-package usecase
+package usecase_test
 
 import (
 	"os"
@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/storage/mount/mounttest"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 
 	"go.yaml.in/yaml/v4"
 
@@ -65,9 +67,9 @@ func TestCrossRefsFindsParentBlockedByAndTaskRef(t *testing.T) {
 	for _, x := range from {
 		commitTask(t, a, x)
 	}
-	set := openSet(t, a, b)
+	set := usecasetest.OpenSet(t, a, b)
 	for _, name := range []string{"", "org-a"} {
-		got, err := CrossRefs(set, name)
+		got, err := usecase.CrossRefs(set, name)
 		if err != nil || len(got) != 3 {
 			t.Fatalf("CrossRefs(%q) = %+v, %v; want 3", name, got, err)
 		}
@@ -79,7 +81,7 @@ func TestCrossRefsFindsParentBlockedByAndTaskRef(t *testing.T) {
 			}
 		}
 	}
-	if got, err := CrossRefs(set, "org-b"); err != nil || len(got) != 0 {
+	if got, err := usecase.CrossRefs(set, "org-b"); err != nil || len(got) != 0 {
 		t.Errorf("CrossRefs(org-b) = %+v, %v; want none: org-b refers to nothing", got, err)
 	}
 }
@@ -103,7 +105,7 @@ func TestCrossRefsIgnoresWhatIsNotAReferenceAcrossStores(t *testing.T) {
 	for _, x := range tasks {
 		commitTask(t, a, x)
 	}
-	got, err := CrossRefs(openSet(t, a, b), "")
+	got, err := usecase.CrossRefs(usecasetest.OpenSet(t, a, b), "")
 	if err != nil || len(got) != 0 {
 		t.Errorf("CrossRefs = %+v, %v; want none", got, err)
 	}
@@ -114,20 +116,20 @@ func TestCrossRefsSeesAWriteAfterTheIndexWasOpened(t *testing.T) {
 	a, b := newRefStoreAt(t, "org-a", "API"), newRefStoreAt(t, "org-b", "WEB")
 	target := mounttest.PutTasks(t, b, 1, nil)[0]
 	from := mounttest.PutTasks(t, a, 1, nil)[0]
-	set := openSet(t, a, b)
-	if got, err := CrossRefs(set, ""); err != nil || len(got) != 0 {
+	set := usecasetest.OpenSet(t, a, b)
+	if got, err := usecase.CrossRefs(set, ""); err != nil || len(got) != 0 {
 		t.Fatalf("before = %+v, %v", got, err)
 	}
 	from.Parent = &target.ULID
 	commitTask(t, a, from)
-	if got, err := CrossRefs(set, ""); err != nil || len(got) != 1 {
+	if got, err := usecase.CrossRefs(set, ""); err != nil || len(got) != 1 {
 		t.Errorf("after = %+v, %v; want 1", got, err)
 	}
 }
 
 func TestCrossRefsUnknownStore(t *testing.T) {
 	t.Parallel()
-	if got, err := CrossRefs(openSet(t, mounttest.NewStoreAt(t, "org-a", "API")), "nope"); err != nil || len(got) != 0 {
+	if got, err := usecase.CrossRefs(usecasetest.OpenSet(t, mounttest.NewStoreAt(t, "org-a", "API")), "nope"); err != nil || len(got) != 0 {
 		t.Errorf("CrossRefs(nope) = %+v, %v; want none", got, err)
 	}
 }

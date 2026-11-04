@@ -9,6 +9,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 )
 
 func (a *app) migrateCmd() *cobra.Command {
@@ -56,7 +57,7 @@ func (a *app) migrateCmd() *cobra.Command {
 }
 
 func (a *app) migrate(m schema.Migration, dryRun bool) error {
-	ix, p, err := a.ss.Migrate(m, dryRun)
+	ix, p, err := schemas.Migrate(a.ss, m, dryRun)
 	if err != nil {
 		return err
 	}
@@ -65,7 +66,7 @@ func (a *app) migrate(m schema.Migration, dryRun bool) error {
 
 // printMigrated prints the tasks p changes. Their JSON is read from the
 // index after a write, and from the migrated tasks in a dry run.
-func (a *app) printMigrated(ix *index.Index, p *usecase.MigrationPlan, dryRun bool) error {
+func (a *app) printMigrated(ix *index.Index, p *schemas.MigrationPlan, dryRun bool) error {
 	changed := p.Changed
 	skipped := make([]string, len(p.Skipped))
 	for i, ulid := range p.Skipped {
@@ -95,7 +96,7 @@ func (a *app) printMigrated(ix *index.Index, p *usecase.MigrationPlan, dryRun bo
 		heading = "Would migrate"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s %s\n", heading, usecase.TaskCount(len(changed)))
+	fmt.Fprintf(&b, "%s %s\n", heading, schemas.TaskCount(len(changed)))
 	st := a.style()
 	for _, t := range changed {
 		fmt.Fprintf(&b, "  %s  %s\n", st.id(usecase.TaskLabel(ix, index.EntryOf(t))), t.Title)

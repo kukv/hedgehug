@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +29,7 @@ func (a *app) storeAddCmd() *cobra.Command {
 }
 
 func (a *app) storeAdd(name string, remotes []string, path, account string) error {
-	r, err := a.ss.StoreAdd(name, remotes, path, account)
+	r, err := stores.StoreAdd(a.ss, name, remotes, path, account)
 	if err != nil {
 		return err
 	}
@@ -49,7 +50,7 @@ func (a *app) storeListCmd() *cobra.Command {
 }
 
 func (a *app) storeList() error {
-	out, err := a.ss.StoreList()
+	out, err := stores.StoreList(a.ss)
 	if err != nil {
 		return err
 	}
@@ -90,7 +91,7 @@ It refuses when the store has commits that are not pushed, changes that are not 
 }
 
 func (a *app) storeRemove(name string, keep bool) error {
-	r, err := a.ss.StoreRemove(name, keep)
+	r, err := stores.StoreRemove(a.ss, name, keep)
 	if err != nil {
 		return err
 	}

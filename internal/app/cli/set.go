@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
 func (a *app) setCmd() *cobra.Command {
@@ -32,7 +33,7 @@ and the order.`,
 }
 
 func (a *app) set(arg string, assigns []usecase.Assign) error {
-	r, err := a.ss.Set(arg, assigns)
+	r, err := tasks.Set(a.ss, arg, assigns)
 	if err != nil {
 		return err
 	}

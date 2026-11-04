@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/spf13/cobra"
 )
 
@@ -39,7 +40,7 @@ func (a *app) depCmd() *cobra.Command {
 }
 
 func (a *app) dep(arg, blockerArg string, add bool) error {
-	r, err := a.ss.Dep(arg, blockerArg, add)
+	r, err := tasks.Dep(a.ss, arg, blockerArg, add)
 	if err != nil {
 		return err
 	}

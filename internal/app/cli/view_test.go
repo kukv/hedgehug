@@ -12,6 +12,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/views"
 )
 
 func TestViewCommands(t *testing.T) {
@@ -47,7 +48,7 @@ func TestViewCommands(t *testing.T) {
 	te.goldenRun("case", 1, "view", "save", "release")
 	te.goldenRun("no-sub", 2, "view")
 
-	var v usecase.SavedView
+	var v views.SavedView
 	if err := json.Unmarshal([]byte(te.ok("view", "save", "k", "--layout", "kanban", "--kanban-columns", "category", "--swimlane", "assignee", "--json")), &v); err != nil {
 		t.Fatal(err)
 	}

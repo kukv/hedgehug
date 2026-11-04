@@ -6,7 +6,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/views"
 )
 
 type ViewParam struct {
@@ -15,8 +15,8 @@ type ViewParam struct {
 }
 
 type viewWrite struct {
-	View   usecase.SavedView `json:"view"`
-	Commit *string           `json:"commit"`
+	View   views.SavedView `json:"view"`
+	Commit *string         `json:"commit"`
 }
 
 type viewOutput struct{ Body viewWrite }
@@ -46,10 +46,10 @@ type viewPatchInput struct {
 	}
 }
 
-func viewOut(r usecase.ViewResult) *viewOutput {
+func viewOut(r views.ViewResult) *viewOutput {
 	out := &viewOutput{Body: viewWrite{Commit: commitPtr(r.Commit)}}
 	if r.View != nil {
-		out.Body.View = usecase.SavedViewOf(r.View)
+		out.Body.View = views.SavedViewOf(r.View)
 	}
 	return out
 }
@@ -58,27 +58,27 @@ func (s *Server) registerViews() {
 	huma.Register(s.api, huma.Operation{
 		OperationID: "list-views", Method: http.MethodGet, Path: "/api/views",
 		Summary: "List the saved views, as hh view list", Tags: []string{"views"},
-	}, func(_ context.Context, in *StoreParam) (*struct{ Body []usecase.SavedView }, error) {
+	}, func(_ context.Context, in *StoreParam) (*struct{ Body []views.SavedView }, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		vs, err := ss.ViewList()
+		vs, err := views.ViewList(ss)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return &struct{ Body []usecase.SavedView }{vs}, nil
+		return &struct{ Body []views.SavedView }{vs}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
 		OperationID: "get-view", Method: http.MethodGet, Path: "/api/views/{name}",
 		Summary: "Show a saved view, as hh view show", Tags: []string{"views"},
-	}, func(_ context.Context, in *ViewParam) (*struct{ Body usecase.SavedView }, error) {
+	}, func(_ context.Context, in *ViewParam) (*struct{ Body views.SavedView }, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		v, err := ss.ViewGet(in.Name)
+		v, err := views.ViewGet(ss, in.Name)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return &struct{ Body usecase.SavedView }{usecase.SavedViewOf(v)}, nil
+		return &struct{ Body views.SavedView }{views.SavedViewOf(v)}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -88,7 +88,7 @@ func (s *Server) registerViews() {
 		b := in.Body
 		ss := s.session(in.Store)
 		defer ss.Close()
-		r, err := ss.ViewSave(in.Name, usecase.ViewChange{
+		r, err := views.ViewSave(ss, in.Name, views.ViewChange{
 			Layout: b.Layout, Query: b.Query, GroupBy: b.GroupBy, KanbanColumns: b.KanbanColumns, Swimlane: b.Swimlane, Columns: b.Columns,
 		})
 		if err != nil {
@@ -105,7 +105,7 @@ func (s *Server) registerViews() {
 		b := in.Body
 		ss := s.session(in.Store)
 		defer ss.Close()
-		r, err := ss.ViewPatch(in.Name, b.Name, usecase.ViewChange{
+		r, err := views.ViewPatch(ss, in.Name, b.Name, views.ViewChange{
 			Layout: b.Layout, Query: b.Query, GroupBy: b.GroupBy, KanbanColumns: b.KanbanColumns, Swimlane: b.Swimlane, Columns: b.Columns,
 		})
 		if err != nil {
@@ -120,7 +120,7 @@ func (s *Server) registerViews() {
 	}, func(_ context.Context, in *ViewParam) (*viewOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		r, err := ss.ViewRemove(in.Name)
+		r, err := views.ViewRemove(ss, in.Name)
 		if err != nil {
 			return nil, problemOf(err)
 		}

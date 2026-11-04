@@ -1,4 +1,4 @@
-package usecase
+package usecase_test
 
 import (
 	"errors"
@@ -9,21 +9,23 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func TestParseAssign(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		in   string
-		want Assign
+		want usecase.Assign
 	}{
-		{"title=Hello", Assign{"title", "=", "Hello"}},
-		{"title=", Assign{"title", "=", ""}},
-		{"labels+=ui", Assign{"labels", "+=", "ui"}},
-		{"labels-=ui", Assign{"labels", "-=", "ui"}},
-		{"title=a=b", Assign{"title", "=", "a=b"}},
+		{"title=Hello", usecase.Assign{"title", "=", "Hello"}},
+		{"title=", usecase.Assign{"title", "=", ""}},
+		{"labels+=ui", usecase.Assign{"labels", "+=", "ui"}},
+		{"labels-=ui", usecase.Assign{"labels", "-=", "ui"}},
+		{"title=a=b", usecase.Assign{"title", "=", "a=b"}},
 	} {
-		got, err := ParseAssign(tc.in)
+		got, err := usecase.ParseAssign(tc.in)
 		if err != nil {
 			t.Errorf("ParseAssign(%q): %v", tc.in, err)
 			continue
@@ -33,8 +35,8 @@ func TestParseAssign(t *testing.T) {
 		}
 	}
 	for _, bad := range []string{"title", "=x", "+=x", "-=x"} {
-		_, err := ParseAssign(bad)
-		if KindOf(err) != KindUsage {
+		_, err := usecase.ParseAssign(bad)
+		if usecase.KindOf(err) != usecase.KindUsage {
 			t.Errorf("ParseAssign(%q) err = %v, want KindUsage", bad, err)
 		}
 	}
@@ -52,11 +54,11 @@ func TestApplyAssign(t *testing.T) {
 	apply := func(t *testing.T, task *model.Task, ss ...string) error {
 		t.Helper()
 		for _, s := range ss {
-			a, err := ParseAssign(s)
+			a, err := usecase.ParseAssign(s)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := ApplyAssign(task, a, testSchema(), resolve); err != nil {
+			if err := usecase.ApplyAssign(task, a, usecasetest.TestSchema(), resolve); err != nil {
 				return err
 			}
 		}

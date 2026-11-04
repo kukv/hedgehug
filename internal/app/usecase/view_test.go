@@ -1,4 +1,4 @@
-package usecase
+package usecase_test
 
 import (
 	"encoding/json"
@@ -9,6 +9,8 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func scalar(v string) *yaml.Node {
@@ -17,9 +19,9 @@ func scalar(v string) *yaml.Node {
 
 func TestTaskViewOf(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	blocker := ts.addTask("blocker", nil)
-	task := ts.addTask("the task", func(x *model.Task) {
+	ts := usecasetest.New(t)
+	blocker := ts.AddTask("blocker", nil)
+	task := ts.AddTask("the task", func(x *model.Task) {
 		x.Assignees = []string{"alice"}
 		x.BlockedBy = []model.ULID{blocker.ULID}
 		x.Props.Set("priority", scalar("high"))
@@ -33,14 +35,14 @@ func TestTaskViewOf(t *testing.T) {
 	if !ok {
 		t.Fatal("task is not in the index")
 	}
-	v := TaskViewOf(ix, e)
+	v := usecase.TaskViewOf(ix, e)
 	if v.ULID != task.ULID.String() || v.ID != task.ID || v.Title != "the task" || v.Kind != "task" || v.Status != "todo" {
 		t.Errorf("view = %+v", v)
 	}
-	if v.Workspace == nil || *v.Workspace != (WorkspaceRef{ULID: task.Workspace.String(), Name: "me", IDPrefix: "ME"}) {
+	if v.Workspace == nil || *v.Workspace != (usecase.WorkspaceRef{ULID: task.Workspace.String(), Name: "me", IDPrefix: "ME"}) {
 		t.Errorf("Workspace = %+v", v.Workspace)
 	}
-	if !reflect.DeepEqual(v.BlockedBy, []Ref{{ULID: blocker.ULID.String(), ID: blocker.ID, Title: "blocker"}}) {
+	if !reflect.DeepEqual(v.BlockedBy, []usecase.Ref{{ULID: blocker.ULID.String(), ID: blocker.ID, Title: "blocker"}}) {
 		t.Errorf("BlockedBy = %+v", v.BlockedBy)
 	}
 	if v.Props["priority"] != "high" {
@@ -68,15 +70,15 @@ func TestTaskViewOf(t *testing.T) {
 
 func TestTaskViewOfProblems(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	a := ts.addTask("first", nil)
-	ts.addTask("second", func(x *model.Task) { x.ID = a.ID })
+	ts := usecasetest.New(t)
+	a := ts.AddTask("first", nil)
+	ts.AddTask("second", func(x *model.Task) { x.ID = a.ID })
 	_, ix, err := ts.Open()
 	if err != nil {
 		t.Fatal(err)
 	}
 	e, _ := ix.Task(a.ULID)
-	v := TaskViewOf(ix, e)
+	v := usecase.TaskViewOf(ix, e)
 	if len(v.Problems) != 1 || v.Problems[0].Code != "duplicate_id" || v.Problems[0].Field != "id" || !strings.Contains(v.Problems[0].Message, a.ID) {
 		t.Errorf("Problems = %+v", v.Problems)
 	}
@@ -84,56 +86,56 @@ func TestTaskViewOfProblems(t *testing.T) {
 
 func TestRefOfUnknownTask(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
+	ts := usecasetest.New(t)
 	_, ix, err := ts.Open()
 	if err != nil {
 		t.Fatal(err)
 	}
 	u := model.NewULID()
-	if got := RefOf(ix, u); got != (Ref{ULID: u.String()}) {
+	if got := usecase.RefOf(ix, u); got != (usecase.Ref{ULID: u.String()}) {
 		t.Errorf("RefOf = %+v; want only the ULID", got)
 	}
-	if got, want := RefName(ix, u), u.String()+" (not found)"; got != want {
+	if got, want := usecase.RefName(ix, u), u.String()+" (not found)"; got != want {
 		t.Errorf("RefName = %q; want %q", got, want)
 	}
 }
 
 func TestNames(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	task := ts.addTask("Write", nil)
+	ts := usecasetest.New(t)
+	task := ts.AddTask("Write", nil)
 	_, ix, err := ts.Open()
 	if err != nil {
 		t.Fatal(err)
 	}
 	e, _ := ix.Task(task.ULID)
 	u := task.ULID.String()
-	if got, want := TaskLabel(ix, e), task.ID+" ("+u+")"; got != want {
+	if got, want := usecase.TaskLabel(ix, e), task.ID+" ("+u+")"; got != want {
 		t.Errorf("TaskLabel = %q; want %q", got, want)
 	}
-	if got := TaskFileName(e); got != task.ID {
+	if got := usecase.TaskFileName(e); got != task.ID {
 		t.Errorf("TaskFileName = %q; want %q", got, task.ID)
 	}
-	if got, want := RefName(ix, task.ULID), task.ID+" ("+u+") Write"; got != want {
+	if got, want := usecase.RefName(ix, task.ULID), task.ID+" ("+u+") Write"; got != want {
 		t.Errorf("RefName = %q; want %q", got, want)
 	}
 	noID := *e
 	noID.ID = ""
-	if got := TaskLabel(ix, &noID); got != u {
+	if got := usecase.TaskLabel(ix, &noID); got != u {
 		t.Errorf("TaskLabel without id = %q; want the ULID", got)
 	}
-	if got := TaskFileName(&noID); got != u {
+	if got := usecase.TaskFileName(&noID); got != u {
 		t.Errorf("TaskFileName without id = %q; want the ULID", got)
 	}
 }
 
 func TestOrEmpty(t *testing.T) {
 	t.Parallel()
-	if got := OrEmpty(nil); got == nil || len(got) != 0 {
+	if got := usecase.OrEmpty(nil); got == nil || len(got) != 0 {
 		t.Errorf("OrEmpty(nil) = %#v", got)
 	}
 	in := []string{"a"}
-	if got := OrEmpty(in); !reflect.DeepEqual(got, in) {
+	if got := usecase.OrEmpty(in); !reflect.DeepEqual(got, in) {
 		t.Errorf("OrEmpty = %v", got)
 	}
 }

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/spf13/cobra"
 )
 
@@ -25,7 +26,7 @@ func (a *app) doneCmd() *cobra.Command {
 // setStatus sets the status of the task arg names; an empty name means the
 // default status of the done category.
 func (a *app) setStatus(arg, name string) error {
-	r, err := a.ss.SetStatus(arg, name)
+	r, err := tasks.SetStatus(a.ss, arg, name)
 	if err != nil {
 		return err
 	}

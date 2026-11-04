@@ -1,4 +1,4 @@
-package usecase
+package usecase_test
 
 import (
 	"errors"
@@ -10,6 +10,8 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/storage/mount"
 	"github.com/kukv/hedgehug/internal/app/storage/mount/mounttest"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
@@ -29,9 +31,9 @@ func TestResolveOneStore(t *testing.T) {
 	a, b := mounttest.NewStoreAt(t, "org-a", "API"), mounttest.NewStoreAt(t, "org-b", "WEB")
 	task := twelve(t, a)
 	mounttest.PutTasks(t, b, 1, nil)
-	set := openSet(t, mounttest.NewStoreAt(t, "me", "ME"), a, b)
+	set := usecasetest.OpenSet(t, mounttest.NewStoreAt(t, "me", "ME"), a, b)
 	for _, in := range []string{"API-12", "api-12", task.ULID.String(), "org-a:API-12"} {
-		hit, err := ResolveIn(set, in)
+		hit, err := usecase.ResolveIn(set, in)
 		if err != nil {
 			t.Fatalf("Resolve(%q): %v", in, err)
 		}
@@ -44,12 +46,12 @@ func TestResolveOneStore(t *testing.T) {
 func TestResolveSeesATaskWrittenAfterTheIndexWasOpened(t *testing.T) {
 	t.Parallel()
 	a := mounttest.NewStoreAt(t, "org-a", "API")
-	set := openSet(t, a)
-	if _, err := ResolveIn(set, "API-1"); !errors.Is(err, store.ErrNotFound) {
+	set := usecasetest.OpenSet(t, a)
+	if _, err := usecase.ResolveIn(set, "API-1"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("Resolve before the write = %v; want not found", err)
 	}
 	mounttest.PutTasks(t, a, 1, nil)
-	if hit, err := ResolveIn(set, "API-1"); err != nil || hit.Entry.ID != "API-1" {
+	if hit, err := usecase.ResolveIn(set, "API-1"); err != nil || hit.Entry.ID != "API-1" {
 		t.Errorf("Resolve after the write = %v, %v", hit, err)
 	}
 }
@@ -58,9 +60,9 @@ func TestResolveNotFound(t *testing.T) {
 	t.Parallel()
 	a := mounttest.NewStoreAt(t, "org-a", "API")
 	twelve(t, a)
-	set := openSet(t, a, mounttest.NewStoreAt(t, "org-b", "WEB"))
+	set := usecasetest.OpenSet(t, a, mounttest.NewStoreAt(t, "org-b", "WEB"))
 	for _, in := range []string{"API-99", "org-b:API-12", "nope:API-12", ""} {
-		if _, err := ResolveIn(set, in); !errors.Is(err, store.ErrNotFound) {
+		if _, err := usecase.ResolveIn(set, in); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("Resolve(%q) err = %v, want ErrNotFound", in, err)
 		}
 	}
@@ -70,10 +72,10 @@ func TestResolveAcrossStoresIsAmbiguous(t *testing.T) {
 	t.Parallel()
 	a, b := mounttest.NewStoreAt(t, "org-a", "API"), mounttest.NewStoreAt(t, "org-b", "API")
 	ta, tb := twelve(t, a), twelve(t, b)
-	set := openSet(t, a, b)
+	set := usecasetest.OpenSet(t, a, b)
 	for _, in := range []string{"API-12", "api-12"} {
-		_, err := ResolveIn(set, in)
-		var ae *AmbiguousError
+		_, err := usecase.ResolveIn(set, in)
+		var ae *usecase.AmbiguousError
 		if !errors.As(err, &ae) {
 			t.Fatalf("Resolve(%q) err = %v, want AmbiguousError", in, err)
 		}
@@ -85,7 +87,7 @@ func TestResolveAcrossStoresIsAmbiguous(t *testing.T) {
 			t.Errorf("message = %q", err)
 		}
 	}
-	hit, err := ResolveIn(set, "org-b:API-12")
+	hit, err := usecase.ResolveIn(set, "org-b:API-12")
 	if err != nil || hit.Store.Name != "org-b" || hit.Entry.ULID != tb.ULID {
 		t.Errorf("org-b:API-12 = %v %v", hit, err)
 	}
@@ -96,11 +98,11 @@ func TestResolveULIDAcrossStores(t *testing.T) {
 	a, b := mounttest.NewStoreAt(t, "org-a", "API"), mounttest.NewStoreAt(t, "org-b", "WEB")
 	ta := mounttest.PutTasks(t, a, 1, nil)[0]
 	tb := mounttest.PutTasks(t, b, 1, nil)[0]
-	set := openSet(t, a, b)
-	if hit, err := ResolveIn(set, tb.ULID.String()); err != nil || hit.Store.Name != "org-b" {
+	set := usecasetest.OpenSet(t, a, b)
+	if hit, err := usecase.ResolveIn(set, tb.ULID.String()); err != nil || hit.Store.Name != "org-b" {
 		t.Errorf("ULID of org-b = %v %v", hit, err)
 	}
-	if hit, err := ResolveIn(set, "org-a:"+ta.ULID.String()); err != nil || hit.Store.Name != "org-a" {
+	if hit, err := usecase.ResolveIn(set, "org-a:"+ta.ULID.String()); err != nil || hit.Store.Name != "org-a" {
 		t.Errorf("org-a:ULID = %v %v", hit, err)
 	}
 }
@@ -108,7 +110,7 @@ func TestResolveULIDAcrossStores(t *testing.T) {
 func TestAmbiguousCandidateWithoutIDUsesULID(t *testing.T) {
 	t.Parallel()
 	task := model.NewULID()
-	ae := &AmbiguousError{Input: "x", Candidates: []Hit{{Store: &mount.Mounted{Name: "s"}, Entry: &index.Entry{ULID: task}}}}
+	ae := &usecase.AmbiguousError{Input: "x", Candidates: []usecase.Hit{{Store: &mount.Mounted{Name: "s"}, Entry: &index.Entry{ULID: task}}}}
 	if !strings.Contains(ae.Error(), "s:"+task.String()) {
 		t.Errorf("message = %q", ae)
 	}
@@ -119,17 +121,17 @@ func TestResolveAmbiguousInsideOneStore(t *testing.T) {
 	a := mounttest.NewStoreAt(t, "org-a", "API")
 	mounttest.PutTasks(t, a, 2, func(_ int, task *model.Task) { task.FormerIDs = []string{"OLD-3"} })
 	// one store alone: the index says it
-	alone := openSet(t, a)
-	_, err := ResolveIn(alone, "OLD-3")
+	alone := usecasetest.OpenSet(t, a)
+	_, err := usecase.ResolveIn(alone, "OLD-3")
 	var ie *index.AmbiguousError
 	if !errors.As(err, &ie) || len(ie.Candidates) != 2 {
 		t.Errorf("one store: err = %v, want index.AmbiguousError", err)
 	}
 	// with two stores the candidates carry the name of the store
-	set := openSet(t, a, mounttest.NewStoreAt(t, "org-b", "WEB"))
+	set := usecasetest.OpenSet(t, a, mounttest.NewStoreAt(t, "org-b", "WEB"))
 	for _, in := range []string{"OLD-3", "org-a:OLD-3"} {
-		_, err := ResolveIn(set, in)
-		var ae *AmbiguousError
+		_, err := usecase.ResolveIn(set, in)
+		var ae *usecase.AmbiguousError
 		if !errors.As(err, &ae) || len(ae.Candidates) != 2 {
 			t.Fatalf("Resolve(%q) err = %v, want AmbiguousError", in, err)
 		}
@@ -149,9 +151,9 @@ func TestResolveAmbiguousInOneStoreAndFoundInAnother(t *testing.T) {
 		mounttest.PutTasks(t, two, 2, func(_ int, task *model.Task) { task.FormerIDs = []string{"OLD-3"} })
 		mounttest.PutTasks(t, one, 1, func(_ int, task *model.Task) { task.FormerIDs = []string{"OLD-3"} })
 		entries := map[string]config.StoreEntry{"org-a": two, "org-b": one}
-		set := openSet(t, entries[order[0]], entries[order[1]])
-		_, err := ResolveIn(set, "OLD-3")
-		var ae *AmbiguousError
+		set := usecasetest.OpenSet(t, entries[order[0]], entries[order[1]])
+		_, err := usecase.ResolveIn(set, "OLD-3")
+		var ae *usecase.AmbiguousError
 		if !errors.As(err, &ae) || len(ae.Candidates) != 3 {
 			t.Fatalf("order %v: err = %v, want AmbiguousError of 3", order, err)
 		}
@@ -183,7 +185,7 @@ func TestResolveSkipsAStoreWhoseIndexDoesNotOpen(t *testing.T) {
 	set := mount.Open(&config.Config{Stores: []config.StoreEntry{a, b}}, mount.Options{Unopened: func(sk mount.Skipped) { told = append(told, sk) }})
 	breakIndex(t, set.Stores[0])
 	for range 2 {
-		hit, err := ResolveIn(set, tb.ULID.String())
+		hit, err := usecase.ResolveIn(set, tb.ULID.String())
 		if err != nil || hit.Store.Name != "org-b" {
 			t.Fatalf("Resolve = %v %v", hit, err)
 		}
@@ -201,7 +203,7 @@ func TestResolveNamedStoreWhoseIndexDoesNotOpenIsAnError(t *testing.T) {
 	var told []mount.Skipped
 	set := mount.Open(&config.Config{Stores: []config.StoreEntry{a, b}}, mount.Options{Unopened: func(sk mount.Skipped) { told = append(told, sk) }})
 	breakIndex(t, set.Stores[0])
-	_, err := ResolveIn(set, "org-a:API-1")
+	_, err := usecase.ResolveIn(set, "org-a:API-1")
 	if err == nil || !strings.HasPrefix(err.Error(), "cannot open org-a: ") || errors.Is(err, store.ErrNotFound) {
 		t.Errorf("err = %v", err)
 	}
@@ -214,8 +216,8 @@ func TestResolveAfterAnotherHandleRepackedTheStore(t *testing.T) {
 	t.Parallel()
 	a := mounttest.NewStoreAt(t, "org-a", "API")
 	mounttest.PutTasks(t, a, 1, nil)
-	set := openSet(t, a)
-	if _, err := ResolveIn(set, "API-1"); err != nil {
+	set := usecasetest.OpenSet(t, a)
+	if _, err := usecase.ResolveIn(set, "API-1"); err != nil {
 		t.Fatal(err)
 	}
 	// another handle writes, consolidates (the loose objects the first handle
@@ -254,7 +256,7 @@ func TestResolveAfterAnotherHandleRepackedTheStore(t *testing.T) {
 	mounttest.PutTasks(t, a, 1, nil)
 	n++
 	want := "API-" + strconv.Itoa(n)
-	if hit, err := ResolveIn(set, want); err != nil || hit.Entry.ID != want {
+	if hit, err := usecase.ResolveIn(set, want); err != nil || hit.Entry.ID != want {
 		t.Errorf("Resolve(%s) = %v, %v", want, hit, err)
 	}
 }

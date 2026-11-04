@@ -11,7 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
 )
 
 // inboxItems returns the items of the inbox of te as --json prints them.
@@ -274,15 +274,15 @@ func TestInboxRepairedContent(t *testing.T) {
 		{"parent_deleted", `{"from":"` + j.ULID + `","to":null}`, "parent_deleted: moved to the root (its parent " + name + " was deleted)"},
 	} {
 		// The destination is the one the value names, whatever the index has now.
-		if got := usecase.InboxContent(ix, item(c.kind, c.value), "org", false); got != c.want {
+		if got := notifications.InboxContent(ix, item(c.kind, c.value), "org", false); got != c.want {
 			t.Errorf("%s: content = %q, want %q", c.kind, got, c.want)
 		}
 	}
 	gone := model.NewULID().String()
-	if got := usecase.InboxContent(nil, item("parent_deleted", `{"from":"`+gone+`","to":null}`), "org", false); got != "parent_deleted: moved to the root (its parent "+gone+" was deleted)" {
+	if got := notifications.InboxContent(nil, item("parent_deleted", `{"from":"`+gone+`","to":null}`), "org", false); got != "parent_deleted: moved to the root (its parent "+gone+" was deleted)" {
 		t.Errorf("without an index: %q", got)
 	}
-	if got := usecase.InboxContent(ix, item("id_prefix", `"web"`), "org", false); got != `id_prefix (was "web")` {
+	if got := notifications.InboxContent(ix, item("id_prefix", `"web"`), "org", false); got != `id_prefix (was "web")` {
 		t.Errorf("other kinds: %q", got)
 	}
 }
@@ -389,13 +389,13 @@ func TestInboxDuplicateNameMatchesTheName(t *testing.T) {
 	}
 	// The workspace of the first store has a prefix and a name of its own: a name
 	// nobody else has, and an empty value, name no other workspace.
-	if got := usecase.InboxContent(ix, item("name_duplicate", `"Web"`), "org", false); got != "Web is also the name of another workspace; change it with hedgehug workspace rename web <new name>" {
+	if got := notifications.InboxContent(ix, item("name_duplicate", `"Web"`), "org", false); got != "Web is also the name of another workspace; change it with hedgehug workspace rename web <new name>" {
 		t.Errorf("name: %q", got)
 	}
-	if got := usecase.InboxContent(ix, item("prefix_duplicate", `"WEB"`), "org", false); got != "WEB is also used by another workspace; change it with hedgehug workspace set-prefix web <new prefix>" {
+	if got := notifications.InboxContent(ix, item("prefix_duplicate", `"WEB"`), "org", false); got != "WEB is also used by another workspace; change it with hedgehug workspace set-prefix web <new prefix>" {
 		t.Errorf("prefix: %q", got)
 	}
-	if got := usecase.InboxContent(ix, item("name_duplicate", `""`), "org", false); !strings.Contains(got, "another workspace") {
+	if got := notifications.InboxContent(ix, item("name_duplicate", `""`), "org", false); !strings.Contains(got, "another workspace") {
 		t.Errorf("empty name: %q", got)
 	}
 }

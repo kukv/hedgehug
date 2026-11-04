@@ -3,13 +3,15 @@ package server
 import (
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
 func TestPurgeBadPeriodOnPost(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	empty := usecase.PurgePlan{Store: "me", Tasks: []usecase.PurgeTask{}, Forwards: []usecase.PurgeForward{}}
+	empty := maintenance.PurgePlan{Store: "me", Tasks: []maintenance.PurgeTask{}, Forwards: []maintenance.PurgeForward{}}
 	if p := ts.problem("POST", "/api/purge", map[string]any{"older_than": "abc", "confirmed": empty}, 400); p.Type != "purge.bad_period" || p.Args["value"] != "abc" {
 		t.Errorf("bad period: %+v", p)
 	}
@@ -22,13 +24,13 @@ func TestPurgeStoreParam(t *testing.T) {
 	for _, name := range []string{"me", "team"} {
 		ss := ts.session()
 		ss.StoreName = name
-		v, err := ss.Add(usecase.AddInput{Title: "gone in " + name})
+		v, err := tasks.Add(ss, tasks.AddInput{Title: "gone in " + name})
 		if err != nil {
 			t.Fatal(err)
 		}
 		ts.call("DELETE", "/api/tasks/"+v.ULID.String()+"?store="+name, nil, 200, nil)
 	}
-	var plan usecase.PurgePlan
+	var plan maintenance.PurgePlan
 	ts.call("GET", "/api/purge?older_than=0d&store=team", nil, 200, &plan)
 	if plan.Store != "team" || len(plan.Tasks) != 1 || plan.Tasks[0].Title != "gone in team" {
 		t.Fatalf("team plan = %+v", plan)
@@ -51,19 +53,19 @@ func TestPurgeForwards(t *testing.T) {
 	ts := twoStores(t)
 	ss := ts.session()
 	ss.StoreName = "me"
-	moved, err := ss.Add(usecase.AddInput{Title: "moves"})
+	moved, err := tasks.Add(ss, tasks.AddInput{Title: "moves"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.session().MoveStore(usecase.MoveStoreInput{Arg: moved.ULID.String(), To: "team", Yes: true}); err != nil {
+	if _, err := stores.MoveStore(ts.session(), stores.MoveStoreInput{Arg: moved.ULID.String(), To: "team", Yes: true}); err != nil {
 		t.Fatal(err)
 	}
-	var plan usecase.PurgePlan
+	var plan maintenance.PurgePlan
 	ts.call("GET", "/api/purge?older_than=0d&store=me", nil, 200, &plan)
 	if len(plan.Forwards) != 1 || plan.Forwards[0].ULID != moved.ULID || plan.Forwards[0].MovedAt.IsZero() {
 		t.Fatalf("plan = %+v", plan)
 	}
-	var res usecase.PurgePlan
+	var res maintenance.PurgePlan
 	ts.call("POST", "/api/purge?store=me", map[string]any{"older_than": "0d", "confirmed": plan}, 200, &res)
 	if len(res.Forwards) != 1 {
 		t.Errorf("purged = %+v", res)

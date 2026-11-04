@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 )
 
 func (a *app) useCmd() *cobra.Command {
@@ -32,7 +32,7 @@ func (a *app) useCmd() *cobra.Command {
 }
 
 func (a *app) useSet(arg string) error {
-	res, err := a.ss.Use(arg)
+	res, err := stores.Use(a.ss, arg)
 	if err != nil {
 		return err
 	}
@@ -44,7 +44,7 @@ func (a *app) useSet(arg string) error {
 }
 
 func (a *app) useShow() error {
-	res, err := a.ss.UseShow()
+	res, err := stores.UseShow(a.ss)
 	if err != nil {
 		return err
 	}
@@ -60,12 +60,12 @@ func (a *app) useShow() error {
 }
 
 func (a *app) useClear() error {
-	res, err := a.ss.UseClear()
+	res, err := stores.UseClear(a.ss)
 	if err != nil {
 		return err
 	}
 	if a.jsonOut {
-		return a.printJSON(useJSON(usecase.UseResult{}))
+		return a.printJSON(useJSON(stores.UseResult{}))
 	}
 	msg := "No changes"
 	if res.Changed {
@@ -83,7 +83,7 @@ type useProject struct {
 }
 
 // useJSON is the JSON of hh use: {store, project}, or {} when there is none.
-func useJSON(res usecase.UseResult) any {
+func useJSON(res stores.UseResult) any {
 	if res.Project == nil {
 		return struct{}{}
 	}

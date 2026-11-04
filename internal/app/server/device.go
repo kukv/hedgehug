@@ -11,6 +11,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/accounts"
 )
 
 // deviceRun is the device flow that is running.
@@ -22,7 +23,7 @@ type deviceRun struct {
 
 	// The code, once it was shown (under deviceFlow.mu); a client that lost
 	// the answer of the start reads it from the 409.
-	code    usecase.DeviceCode
+	code    accounts.DeviceCode
 	expires time.Time
 }
 
@@ -50,7 +51,7 @@ func (d *deviceFlow) begin(parent context.Context) (*deviceRun, context.Context,
 }
 
 // setCode records the code r showed, and when it ends.
-func (d *deviceFlow) setCode(r *deviceRun, c usecase.DeviceCode, expires time.Time) {
+func (d *deviceFlow) setCode(r *deviceRun, c accounts.DeviceCode, expires time.Time) {
 	d.mu.Lock()
 	r.code, r.expires = c, expires
 	d.mu.Unlock()
@@ -143,7 +144,7 @@ type authDeviceEvent struct {
 // deviceStart is what the goroutine of a flow tells the request that started
 // it: the code, or the problem that stopped the flow before there was one.
 type deviceStart struct {
-	code usecase.DeviceCode
+	code accounts.DeviceCode
 	prob *Problem
 }
 
@@ -201,9 +202,9 @@ func (s *Server) runDevice(ctx context.Context, run *deviceRun, name, host strin
 	ss := s.session("")
 	defer ss.Close()
 	shown := false
-	res, err := ss.AuthLogin(usecase.AuthLoginInput{
+	res, err := accounts.AuthLogin(ss, accounts.AuthLoginInput{
 		Name: name, Host: host, HostGiven: host != "", Context: ctx,
-		OnCode: func(c usecase.DeviceCode) {
+		OnCode: func(c accounts.DeviceCode) {
 			shown = true
 			s.device.setCode(run, c, s.opt.Now().Add(time.Duration(c.ExpiresIn)*time.Second))
 			started <- deviceStart{code: c}
