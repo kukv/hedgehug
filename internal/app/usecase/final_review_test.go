@@ -10,7 +10,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/query"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase/current"
 )
 
 // addGoneStore sets up a store called gone in config.yaml at a path where
@@ -205,7 +204,7 @@ func TestWarnMayCallBackIntoTheSession(t *testing.T) {
 func TestAddHereUnknownStoreIsStoreNotFound(t *testing.T) {
 	t.Parallel()
 	ts := newTwoStoreSession(t)
-	_, _, _, err := ts.AddHere(AddHereInput{Context: current.Input{Store: "nope"}, Task: AddInput{Title: "x"}})
+	_, _, _, err := ts.AddHere(AddHereInput{Context: Input{Store: "nope"}, Task: AddInput{Title: "x"}})
 	wantCode(t, "AddHere in nope", err, KindNotFound, "store.not_found")
 }
 

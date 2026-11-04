@@ -15,9 +15,9 @@ import (
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase/current"
 	"github.com/kukv/hedgehug/internal/lib/github"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/giturl"
 	"github.com/kukv/hedgehug/internal/lib/osfs"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
@@ -239,7 +239,7 @@ func (ss *Session) prepareRemotes(c *config.Config, e config.StoreEntry, acct co
 			}
 			continue
 		}
-		host, owner, repo, ok := current.Split(to)
+		host, owner, repo, ok := giturl.Split(to)
 		if !ok || !c.IsGitHubHost(host) {
 			continue
 		}

@@ -1,3 +1,5 @@
+// Package current keeps context.json: the project hh use set, and the
+// project last used for each repository.
 package current
 
 import (

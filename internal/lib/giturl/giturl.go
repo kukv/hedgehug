@@ -1,7 +1,6 @@
-// Package current decides where a new task goes when the command does not
-// say: it reads remote URLs, and keeps context.json (the project hh use set,
-// and the project last used for each repository).
-package current
+// Package giturl reads the remote URLs of git repositories: their host,
+// owner and repository, and the repo ID Hedgehug knows a repository by.
+package giturl
 
 import (
 	"net/url"

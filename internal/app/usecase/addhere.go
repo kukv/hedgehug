@@ -3,16 +3,15 @@ package usecase
 import (
 	"cmp"
 	"errors"
-	"fmt"
 
+	"github.com/kukv/hedgehug/internal/app/storage/current"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
-	"github.com/kukv/hedgehug/internal/app/usecase/current"
 	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 )
 
 // AddHereInput is hh add with the context: what Resolve takes, and the task.
 type AddHereInput struct {
-	Context current.Input
+	Context Input
 	Repo    bool     // put the repo ID of the current repository on the task
 	Task    AddInput // Store, Parent and Workspace are set from the destination
 }
@@ -20,7 +19,7 @@ type AddHereInput struct {
 // AddHereResult is the task added and where it went.
 type AddHereResult struct {
 	TaskResult
-	Destination *current.Destination
+	Destination *Destination
 }
 
 // AddHere resolves the destination (its Confirm and Choice are returned for
@@ -30,7 +29,7 @@ type AddHereResult struct {
 //
 // The session's own --store is the Store of the context when that has none,
 // and the config's default_store is its DefaultStore.
-func (ss *Session) AddHere(in AddHereInput) (AddHereResult, *current.Confirm, *current.Choice, error) {
+func (ss *Session) AddHere(in AddHereInput) (AddHereResult, *Confirm, *Choice, error) {
 	c, p, err := ss.Config()
 	if err != nil {
 		return AddHereResult{}, nil, nil, err
@@ -61,11 +60,11 @@ func (ss *Session) AddHere(in AddHereInput) (AddHereResult, *current.Confirm, *c
 	// (This is for what is wrong with context.json. A store that does not open
 	// is told of once by warnSkipped.)
 	warn := ss.warn
-	if ctx.BranchParent != current.Unasked || ctx.PickProject != "" || ctx.PickStore != "" || ctx.PickWorkspace != "" {
+	if ctx.BranchParent != Unasked || ctx.PickProject != "" || ctx.PickStore != "" || ctx.PickWorkspace != "" {
 		warn = nil
 	}
 	st := current.Load(p.DataDir, warn)
-	dest, confirm, choice, err := current.Resolve(set, st, ctx, warn)
+	dest, confirm, choice, err := ResolveDestination(set, st, ctx, warn)
 	if err != nil {
 		return AddHereResult{}, nil, nil, ss.contextError(set, err)
 	}
@@ -107,44 +106,25 @@ func (ss *Session) AddHere(in AddHereInput) (AddHereResult, *current.Confirm, *c
 	return AddHereResult{TaskResult: res, Destination: dest}, nil, nil, nil
 }
 
-// contextError gives the error of current.Resolve its Kind and Code.
+// contextError spells out what ResolveDestination could not find (LookupError).
 func (ss *Session) contextError(set *mount.Set, err error) error {
-	var le *current.LookupError
-	var ce *current.Error
-	switch {
-	case errors.As(err, &le):
-		if le.What == "task" {
-			return ss.mountResolveError(set, le.Input, le.Err)
-		}
-		if le.Store != nil {
-			// let ResolveWorkspace spell it out
-			var werr error
-			if err := le.Store.With(func(ix *index.Index) { _, werr = ResolveWorkspace(ix, le.Input) }); err != nil {
-				return err
-			}
-			if werr != nil {
-				return werr
-			}
-			return le.Err
-		}
-		return newErr(KindNotFound, "workspace.not_found", le.Err, "input", le.Input)
-	case errors.As(err, &ce):
-		var k Kind
-		switch ce.Kind {
-		case current.KindUsage:
-			k = KindUsage
-		case current.KindInvalid:
-			k = KindInvalid
-		case current.KindAmbiguous:
-			k = KindAmbiguous
-		case current.KindConflict:
-			k = KindConflict
-		default:
-			return fmt.Errorf("context: unknown kind %d: %w", ce.Kind, err)
-		}
-		e := newErr(k, ce.Code, ce.Err)
-		e.Args = ce.Args
-		return e
+	var le *LookupError
+	if !errors.As(err, &le) {
+		return err
 	}
-	return err
+	if le.What == "task" {
+		return ss.mountResolveError(set, le.Input, le.Err)
+	}
+	if le.Store != nil {
+		// let ResolveWorkspace spell it out
+		var werr error
+		if err := le.Store.With(func(ix *index.Index) { _, werr = ResolveWorkspace(ix, le.Input) }); err != nil {
+			return err
+		}
+		if werr != nil {
+			return werr
+		}
+		return le.Err
+	}
+	return newErr(KindNotFound, "workspace.not_found", le.Err, "input", le.Input)
 }

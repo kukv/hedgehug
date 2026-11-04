@@ -6,7 +6,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
-	"github.com/kukv/hedgehug/internal/app/usecase/current"
 )
 
 // TaskView is a task as --json prints it.
@@ -138,7 +137,7 @@ func projectOf(ix *index.Index, e *index.Entry) *Ref {
 		if !ok {
 			return nil
 		}
-		if a.Kind == current.ProjectKind {
+		if a.Kind == ProjectKind {
 			r := RefOf(ix, a.ULID)
 			return &r
 		}

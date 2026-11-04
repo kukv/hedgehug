@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/usecase/current"
+	"github.com/kukv/hedgehug/internal/app/storage/current"
 )
 
 const useGoneWarning = "the project of hedgehug use is not found (hedgehug use --clear removes it)"

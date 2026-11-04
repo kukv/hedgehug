@@ -1,4 +1,4 @@
-package current
+package usecase
 
 import (
 	"cmp"
@@ -14,9 +14,11 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
+	"github.com/kukv/hedgehug/internal/app/storage/current"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase/mount"
+	"github.com/kukv/hedgehug/internal/lib/giturl"
 )
 
 // ProjectKind is the kind of a task that hh use and the repo stage take.
@@ -75,39 +77,6 @@ type Choice struct {
 	Default string
 }
 
-// Kind is what an Error means; usecase turns it into its own Kind.
-type Kind int
-
-const (
-	KindUsage Kind = iota + 1
-	KindInvalid
-	KindAmbiguous
-	KindConflict
-)
-
-// Error is a refusal of Resolve. Code and Args are those of the usecase.Error it
-// becomes.
-type Error struct {
-	Kind Kind
-	Code string
-	Err  error
-	Args map[string]any
-}
-
-func (e *Error) Error() string { return e.Err.Error() }
-func (e *Error) Unwrap() error { return e.Err }
-
-func newError(k Kind, code string, err error, args ...any) *Error {
-	e := &Error{Kind: k, Code: code, Err: err}
-	if len(args) > 0 {
-		e.Args = map[string]any{}
-		for i := 0; i+1 < len(args); i += 2 {
-			e.Args[args[i].(string)] = args[i+1]
-		}
-	}
-	return e
-}
-
 // LookupError is a task or a workspace the user named that was not found, or
 // matched more than one: Err is what mount.Set.Resolve or the index said, for
 // the caller to spell out. For a task, Input is what was given to Set.Resolve.
@@ -134,17 +103,17 @@ func (r result) decided() bool { return r.dest != nil || r.confirm != nil || r.c
 
 type resolver struct {
 	set  *mount.Set
-	st   State
+	st   current.State
 	in   Input
 	warn func(string)
 }
 
-// Resolve decides the destination by the five stages of the spec. When a
+// ResolveDestination decides the destination by the five stages of the spec. When a
 // stage needs an answer it returns (nil, *Confirm, nil) or
 // (nil, nil, *Choice) when Interactive; the caller asks and calls again with
 // the answer. Not Interactive: stage 3 is skipped, stage 4 uses recent or is
 // an error, stage 5 is an error, as the spec says.
-func Resolve(set *mount.Set, st State, in Input, warn func(string)) (*Destination, *Confirm, *Choice, error) {
+func ResolveDestination(set *mount.Set, st current.State, in Input, warn func(string)) (*Destination, *Confirm, *Choice, error) {
 	r := &resolver{set: set, st: st, in: in, warn: warn}
 	if warn == nil {
 		r.warn = func(string) {}
@@ -155,7 +124,7 @@ func Resolve(set *mount.Set, st State, in Input, warn func(string)) (*Destinatio
 	}
 	ids := repoIDsOf(repo)
 	if in.NeedRepo && len(ids) == 0 {
-		return nil, nil, nil, newError(KindUsage, "add.repo_unavailable",
+		return nil, nil, nil, newErr(KindUsage, "add.repo_unavailable",
 			errors.New("--repo needs the current directory to be in a git repository with a remote that gives a repo ID"))
 	}
 	stages := []func(*git.Repository, []string) (result, error){r.explicit, r.use, r.branch, r.repo, r.defaults}
@@ -214,7 +183,7 @@ func repoIDsOf(repo *git.Repository) []string {
 	var ids []string
 	for _, n := range names {
 		for _, u := range urls[n] {
-			if id, ok := RepoID(u); ok && !slices.Contains(ids, id) {
+			if id, ok := giturl.RepoID(u); ok && !slices.Contains(ids, id) {
 				ids = append(ids, id)
 			}
 		}
@@ -229,7 +198,7 @@ func (r *resolver) explicit(*git.Repository, []string) (result, error) {
 		return result{}, nil
 	}
 	if in.Parent != "" && in.Project != "" {
-		return result{}, newError(KindUsage, "add.parent_and_project", errors.New("--parent and --project cannot be given together"))
+		return result{}, newErr(KindUsage, "add.parent_and_project", errors.New("--parent and --project cannot be given together"))
 	}
 	if arg := cmp.Or(in.Parent, in.Project); arg != "" {
 		m, e, err := r.findTask(arg)
@@ -238,7 +207,7 @@ func (r *resolver) explicit(*git.Repository, []string) (result, error) {
 		}
 		if in.Project != "" && e.Kind != ProjectKind {
 			label := m.Name + ":" + idOrULID(e)
-			return result{}, newError(KindInvalid, "add.not_project",
+			return result{}, newErr(KindInvalid, "add.not_project",
 				fmt.Errorf("%s is a %s, not a project", label, e.Kind), "id", label, "kind", e.Kind)
 		}
 		d, err := parentDest(m, e, 1)
@@ -258,13 +227,6 @@ func (r *resolver) explicit(*git.Repository, []string) (result, error) {
 	}
 	d, ch, err := r.root(m, in.Workspace, 1)
 	return result{dest: d, choice: ch}, err
-}
-
-func idOrULID(e *index.Entry) string {
-	if e.ID != "" {
-		return e.ID
-	}
-	return e.ULID.String()
 }
 
 // mounted is the store name; one that is set up but did not open says why.
@@ -287,7 +249,7 @@ func (r *resolver) findTask(arg string) (*mount.Mounted, *index.Entry, error) {
 	if s := r.in.Store; s != "" {
 		if name, rest, ok := strings.Cut(arg, ":"); ok && r.hasStore(name) {
 			if name != s {
-				return nil, nil, newError(KindUsage, "store.conflict",
+				return nil, nil, newErr(KindUsage, "store.conflict",
 					fmt.Errorf("%q is in %s, but --store is %s", arg, name, s), "store", s, "named", name)
 			}
 			q = rest
@@ -411,7 +373,7 @@ func (r *resolver) workspaceAnywhere(arg string) (*Destination, error) {
 	for i, h := range hits {
 		lines[i] = fmt.Sprintf("%s:%s (%s, %s)", h.m.Name, h.w.Name, h.w.IDPrefix, h.w.ULID)
 	}
-	return nil, newError(KindAmbiguous, "workspace.ambiguous",
+	return nil, newErr(KindAmbiguous, "workspace.ambiguous",
 		fmt.Errorf("%q matches %d workspaces:\n  %s", arg, len(hits), strings.Join(lines, "\n  ")), "input", arg)
 }
 
@@ -437,7 +399,7 @@ func (r *resolver) root(m *mount.Mounted, wsArg string, stage int) (*Destination
 		wss := ix.Workspaces()
 		switch len(wss) {
 		case 0:
-			err = newError(KindConflict, "workspace.none",
+			err = newErr(KindConflict, "workspace.none",
 				errors.New("the store has no workspace; add one with hedgehug workspace add <name> --prefix <PREFIX>"))
 		case 1:
 			cp := *wss[0]
@@ -451,7 +413,7 @@ func (r *resolver) root(m *mount.Mounted, wsArg string, stage int) (*Destination
 				ch = &Choice{What: "workspace", Options: names}
 				return
 			}
-			err = newError(KindUsage, "choice.required",
+			err = newErr(KindUsage, "choice.required",
 				fmt.Errorf("workspace is needed; give one with --workspace: %s", strings.Join(names, ", ")),
 				"what", "workspace", "candidates", names)
 		}
@@ -469,7 +431,7 @@ func (r *resolver) use(*git.Repository, []string) (result, error) {
 	if r.st.Use == nil {
 		return result{}, nil
 	}
-	m, e, _, ok, err := r.st.Use.Find(r.set)
+	m, e, _, ok, err := FindProject(*r.st.Use, r.set)
 	if err != nil {
 		return result{}, err
 	}
@@ -481,10 +443,10 @@ func (r *resolver) use(*git.Repository, []string) (result, error) {
 	return result{dest: d}, err
 }
 
-// Find is the project ref names, if it is there: its store's name must be
+// FindProject is the project ref names, if it is there: its store's name must be
 // mounted, and the task live and of kind project. id is the project's id as
 // its store shows it. ok is false for one that is gone.
-func (ref Ref) Find(set *mount.Set) (m *mount.Mounted, e index.Entry, id string, ok bool, err error) {
+func FindProject(ref current.Ref, set *mount.Set) (m *mount.Mounted, e index.Entry, id string, ok bool, err error) {
 	for _, c := range set.Stores {
 		if c.ULID == ref.Store {
 			m = c
@@ -593,7 +555,7 @@ func (r *resolver) repo(_ *git.Repository, ids []string) (result, error) {
 				return pick(c)
 			}
 		}
-		return result{}, newError(KindUsage, "choice.invalid",
+		return result{}, newErr(KindUsage, "choice.invalid",
 			fmt.Errorf("%q is not one of: %s", r.in.PickProject, strings.Join(options, ", ")), "what", "project", "candidates", options)
 	}
 	if r.in.Interactive {
@@ -606,7 +568,7 @@ func (r *resolver) repo(_ *git.Repository, ids []string) (result, error) {
 			}
 		}
 	}
-	return result{}, newError(KindUsage, "choice.required",
+	return result{}, newErr(KindUsage, "choice.required",
 		fmt.Errorf("project is needed; give one with --project: %s", strings.Join(options, ", ")),
 		"what", "project", "candidates", options)
 }
@@ -669,7 +631,7 @@ func (r *resolver) defaults(*git.Repository, []string) (result, error) {
 		if r.in.Interactive {
 			return result{choice: &Choice{What: "store", Options: names}}, nil
 		}
-		err = newError(KindUsage, "choice.required",
+		err = newErr(KindUsage, "choice.required",
 			fmt.Errorf("store is needed; give one with --store or set one with hedgehug store default: %s", strings.Join(names, ", ")),
 			"what", "store", "candidates", names)
 	}

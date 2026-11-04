@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/storage/current"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase/current"
 )
 
 func TestAddHereWithoutRepoStillSetsRecent(t *testing.T) {
@@ -17,7 +17,7 @@ func TestAddHereWithoutRepoStillSetsRecent(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := repoDir(t, "", "https://github.com/org-a/web")
-	r, _, _, err := ts.AddHere(AddHereInput{Context: current.Input{Dir: dir}, Task: AddInput{Title: "x"}})
+	r, _, _, err := ts.AddHere(AddHereInput{Context: Input{Dir: dir}, Task: AddInput{Title: "x"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestAddHereWithoutRepoStillSetsRecent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := ts.AddHere(AddHereInput{Context: current.Input{Dir: dir, Parent: q.ULID.String()}, Task: AddInput{Title: "y"}}); err != nil {
+	if _, _, _, err := ts.AddHere(AddHereInput{Context: Input{Dir: dir, Parent: q.ULID.String()}, Task: AddInput{Title: "y"}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := loadContext(t, ts).Recent["github.com/org-a/web"]; got.Project != p.ULID {
@@ -48,11 +48,11 @@ func TestAddHereWarnsOnceAcrossQuestions(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := repoDir(t, "hh/WEB-1-login", "")
-	in := AddHereInput{Context: current.Input{Dir: dir, Interactive: true}, Task: AddInput{Title: "x"}}
+	in := AddHereInput{Context: Input{Dir: dir, Interactive: true}, Task: AddInput{Title: "x"}}
 	if _, cf, _, err := ts.AddHere(in); err != nil || cf == nil {
 		t.Fatalf("first call = %v, %v", cf, err)
 	}
-	in.Context.BranchParent = current.Yes
+	in.Context.BranchParent = Yes
 	if _, _, _, err := ts.AddHere(in); err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestAddHereExplainsAnAmbiguityWithinTheNamedStore(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, in := range []current.Input{{Store: "org-a", Parent: "OLD-1"}, {Parent: "org-a:OLD-1"}} {
+	for _, in := range []Input{{Store: "org-a", Parent: "OLD-1"}, {Parent: "org-a:OLD-1"}} {
 		_, _, _, err = ts.AddHere(AddHereInput{Context: in, Task: AddInput{Title: "x"}})
 		wantCode(t, "ambiguous former id", err, KindAmbiguous, "task.ambiguous")
 		if err == nil || !strings.Contains(err.Error(), "one") || !strings.Contains(err.Error(), "two") {

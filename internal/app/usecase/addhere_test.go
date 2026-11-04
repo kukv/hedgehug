@@ -8,7 +8,6 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/usecase/current"
 )
 
 // repoDir makes a git repository on the branch ("" keeps master) whose
@@ -68,7 +67,7 @@ func TestAddWithStoreAndRepos(t *testing.T) {
 func TestAddHereExplicitParentInAnotherStore(t *testing.T) {
 	t.Parallel()
 	ts := newTwoStoreSession(t)
-	r, cf, ch, err := ts.AddHere(AddHereInput{Context: current.Input{Parent: "WEB-1"}, Task: AddInput{Title: "child"}})
+	r, cf, ch, err := ts.AddHere(AddHereInput{Context: Input{Parent: "WEB-1"}, Task: AddInput{Title: "child"}})
 	if err != nil || cf != nil || ch != nil {
 		t.Fatalf("AddHere = %v %v %v", cf, ch, err)
 	}
@@ -87,9 +86,9 @@ func TestAddHereRefusesAReadOnlyStore(t *testing.T) {
 	ts := newTwoStoreSession(t)
 	makeStoreReadOnly(t, ts, "org-a")
 	makeStoreReadOnly(t, ts, "org-b")
-	_, _, _, err := ts.AddHere(AddHereInput{Context: current.Input{Store: "org-a"}, Task: AddInput{Title: "x"}})
+	_, _, _, err := ts.AddHere(AddHereInput{Context: Input{Store: "org-a"}, Task: AddInput{Title: "x"}})
 	wantCode(t, "AddHere(read-only)", err, KindConflict, "store.read_only")
-	_, _, _, err = ts.AddHere(AddHereInput{Context: current.Input{Parent: "WEB-1"}, Task: AddInput{Title: "x"}})
+	_, _, _, err = ts.AddHere(AddHereInput{Context: Input{Parent: "WEB-1"}, Task: AddInput{Title: "x"}})
 	wantCode(t, "AddHere(read-only, by parent)", err, KindConflict, "store.read_only")
 }
 
@@ -98,14 +97,14 @@ func TestAddHereRepoPutsTheRepoOnTheTask(t *testing.T) {
 	ts := newTwoStoreSession(t)
 	dir := repoDir(t, "", "https://github.com/Org-A/Web.git")
 	// without Repo the repository is not put on the task
-	r, _, _, err := ts.AddHere(AddHereInput{Context: current.Input{Dir: dir, Store: "org-a"}, Task: AddInput{Title: "unlinked"}})
+	r, _, _, err := ts.AddHere(AddHereInput{Context: Input{Dir: dir, Store: "org-a"}, Task: AddInput{Title: "unlinked"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := reposOf(t, ts, "org-a", r.ULID); len(got) != 0 {
 		t.Errorf("without Repo: repos = %q", got)
 	}
-	r, _, _, err = ts.AddHere(AddHereInput{Context: current.Input{Dir: dir, Store: "org-a"}, Repo: true, Task: AddInput{Title: "linked"}})
+	r, _, _, err = ts.AddHere(AddHereInput{Context: Input{Dir: dir, Store: "org-a"}, Repo: true, Task: AddInput{Title: "linked"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +113,7 @@ func TestAddHereRepoPutsTheRepoOnTheTask(t *testing.T) {
 	}
 	// the repo ID goes first, and is not repeated when the task has it
 	r, _, _, err = ts.AddHere(AddHereInput{
-		Context: current.Input{Dir: dir, Store: "org-a"}, Repo: true,
+		Context: Input{Dir: dir, Store: "org-a"}, Repo: true,
 		Task: AddInput{Title: "both", Repos: []string{"github.com/o/other", "github.com/org-a/web"}},
 	})
 	if err != nil {
@@ -124,7 +123,7 @@ func TestAddHereRepoPutsTheRepoOnTheTask(t *testing.T) {
 		t.Errorf("Repo with repos given: repos = %q", got)
 	}
 	// Repo in a repository without a remote is a usage error
-	_, _, _, err = ts.AddHere(AddHereInput{Context: current.Input{Dir: repoDir(t, "", ""), Store: "org-a"}, Repo: true, Task: AddInput{Title: "bare"}})
+	_, _, _, err = ts.AddHere(AddHereInput{Context: Input{Dir: repoDir(t, "", ""), Store: "org-a"}, Repo: true, Task: AddInput{Title: "bare"}})
 	wantCode(t, "Repo in a repository without a remote", err, KindUsage, "add.repo_unavailable")
 }
 
@@ -136,7 +135,7 @@ func TestAddHereStage4SetsRecent(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := repoDir(t, "", "https://github.com/org-a/web")
-	r, _, _, err := ts.AddHere(AddHereInput{Context: current.Input{Dir: dir}, Repo: true, Task: AddInput{Title: "in the project"}})
+	r, _, _, err := ts.AddHere(AddHereInput{Context: Input{Dir: dir}, Repo: true, Task: AddInput{Title: "in the project"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +152,7 @@ func TestAddHereStage4SetsRecent(t *testing.T) {
 		t.Errorf("the task has no repo")
 	}
 	// recent is not set by a stage that is not 4
-	_, _, _, err = ts.AddHere(AddHereInput{Context: current.Input{Dir: dir, Store: "org-a"}, Task: AddInput{Title: "x"}})
+	_, _, _, err = ts.AddHere(AddHereInput{Context: Input{Dir: dir, Store: "org-a"}, Task: AddInput{Title: "x"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,19 +163,19 @@ func TestAddHereReturnsWhatToAsk(t *testing.T) {
 	ts := newTwoStoreSession(t)
 	setDefaultStore(t, ts, "")
 	dir := repoDir(t, "hh/WEB-1-login", "")
-	_, cf, _, err := ts.AddHere(AddHereInput{Context: current.Input{Dir: dir, Interactive: true}, Task: AddInput{Title: "x"}})
+	_, cf, _, err := ts.AddHere(AddHereInput{Context: Input{Dir: dir, Interactive: true}, Task: AddInput{Title: "x"}})
 	if err != nil || cf == nil || cf.Parent.ID != "WEB-1" {
 		t.Fatalf("Confirm = %+v, %v", cf, err)
 	}
-	r, _, _, err := ts.AddHere(AddHereInput{Context: current.Input{Dir: dir, Interactive: true, BranchParent: current.Yes}, Task: AddInput{Title: "x"}})
+	r, _, _, err := ts.AddHere(AddHereInput{Context: Input{Dir: dir, Interactive: true, BranchParent: Yes}, Task: AddInput{Title: "x"}})
 	if err != nil || r.Destination.Stage != 3 || r.Destination.Store.Name != "org-b" {
 		t.Fatalf("Yes = %+v, %v", r.Destination, err)
 	}
-	_, _, ch, err := ts.AddHere(AddHereInput{Context: current.Input{Interactive: true}, Task: AddInput{Title: "x"}})
+	_, _, ch, err := ts.AddHere(AddHereInput{Context: Input{Interactive: true}, Task: AddInput{Title: "x"}})
 	if err != nil || ch == nil || ch.What != "store" {
 		t.Fatalf("Choice = %+v, %v", ch, err)
 	}
-	r, _, _, err = ts.AddHere(AddHereInput{Context: current.Input{Interactive: true, PickStore: "org-a"}, Task: AddInput{Title: "x"}})
+	r, _, _, err = ts.AddHere(AddHereInput{Context: Input{Interactive: true, PickStore: "org-a"}, Task: AddInput{Title: "x"}})
 	if err != nil || r.Destination.Stage != 5 || r.Destination.Store.Name != "org-a" {
 		t.Fatalf("PickStore = %+v, %v", r.Destination, err)
 	}
@@ -194,7 +193,7 @@ func TestAddHereUsesDefaultStoreAndTheGlobalStore(t *testing.T) {
 	if err != nil || r.Destination.Store.Name != "org-a" || r.Destination.Stage != 1 {
 		t.Fatalf("--store org-a: %+v, %v", r.Destination, err)
 	}
-	_, _, _, err = ts.AddHere(AddHereInput{Context: current.Input{Store: "nosuch"}, Task: AddInput{Title: "x"}})
+	_, _, _, err = ts.AddHere(AddHereInput{Context: Input{Store: "nosuch"}, Task: AddInput{Title: "x"}})
 	if err == nil {
 		t.Error("--store nosuch: no error")
 	}
@@ -207,15 +206,15 @@ func TestAddHereErrors(t *testing.T) {
 	pid := addProjectIn(t, ts, "org-a", "Release")
 	cases := []struct {
 		name string
-		in   current.Input
+		in   Input
 		kind Kind
 		code string
 	}{
-		{"parent and project", current.Input{Parent: "API-1", Project: pid}, KindUsage, "add.parent_and_project"},
-		{"not a project", current.Input{Project: "API-1"}, KindInvalid, "add.not_project"},
-		{"no such parent", current.Input{Parent: "API-99"}, KindNotFound, "task.not_found"},
-		{"no such workspace", current.Input{Workspace: "nosuch"}, KindNotFound, "workspace.not_found"},
-		{"no store chosen", current.Input{}, KindUsage, "choice.required"},
+		{"parent and project", Input{Parent: "API-1", Project: pid}, KindUsage, "add.parent_and_project"},
+		{"not a project", Input{Project: "API-1"}, KindInvalid, "add.not_project"},
+		{"no such parent", Input{Parent: "API-99"}, KindNotFound, "task.not_found"},
+		{"no such workspace", Input{Workspace: "nosuch"}, KindNotFound, "workspace.not_found"},
+		{"no store chosen", Input{}, KindUsage, "choice.required"},
 	}
 	for _, c := range cases {
 		_, _, _, err := ts.AddHere(AddHereInput{Context: c.in, Task: AddInput{Title: "x"}})

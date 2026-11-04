@@ -1,10 +1,12 @@
-package current
+package usecase
 
 import (
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/kukv/hedgehug/internal/app/storage/current"
 )
 
 // worktreeDir makes a repository with origin url and one empty commit, adds a
@@ -48,12 +50,12 @@ func TestWorktreeFindsTheRepoAndItsOwnBranch(t *testing.T) {
 	}
 
 	// stage 3: the branch of the worktree names WEB-1
-	_, cf, _, _, err := resolve(t, set, State{}, Input{Dir: dir, Interactive: true})
+	_, cf, _, _, err := resolve(t, set, current.State{}, Input{Dir: dir, Interactive: true})
 	if err != nil || cf == nil || cf.Parent.ULID != w.web1.ULID {
 		t.Fatalf("Confirm = %+v, %v; want the task WEB-1 of the branch", cf, err)
 	}
 	// stage 4 (the branch is declined): the repo ID of origin finds the project
-	d := mustDest(t, set, State{}, Input{Dir: dir, Interactive: true, BranchParent: No})
+	d := mustDest(t, set, current.State{}, Input{Dir: dir, Interactive: true, BranchParent: No})
 	if d.Stage != 4 || d.Parent == nil || d.Parent.ULID != p.ULID || d.RepoID != "github.com/org-a/web" {
 		t.Errorf("destination = stage %d parent %v repo %q; want stage 4, the project, github.com/org-a/web", d.Stage, d.Parent, d.RepoID)
 	}

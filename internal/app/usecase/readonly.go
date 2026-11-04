@@ -8,8 +8,8 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase/current"
 	"github.com/kukv/hedgehug/internal/lib/github"
+	"github.com/kukv/hedgehug/internal/lib/giturl"
 	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
@@ -87,7 +87,7 @@ func (ss *Session) githubRepoOf(c *config.Config, e config.StoreEntry) *replicat
 		return nil
 	}
 	// The host decides, in any form of a URL (https, ssh://, user@host:path).
-	host, owner, name, ok := current.Split(e.Remotes[0])
+	host, owner, name, ok := giturl.Split(e.Remotes[0])
 	if !ok || !c.IsGitHubHost(host) {
 		return nil
 	}

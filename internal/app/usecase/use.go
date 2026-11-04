@@ -6,14 +6,14 @@ import (
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/storage/config"
+	"github.com/kukv/hedgehug/internal/app/storage/current"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase/current"
 	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 )
 
 // useKind is the kind of a task that hh use takes.
-const useKind = current.ProjectKind
+const useKind = ProjectKind
 
 // UseResult is the project hh use set or shows; Project is nil when there is none.
 type UseResult struct {
@@ -151,14 +151,14 @@ func (ss *Session) UseShow() (UseResult, error) {
 	if err != nil {
 		return UseResult{}, err
 	}
-	m, e, id, ok, err := st.Use.Find(set)
+	m, e, id, ok, err := FindProject(*st.Use, set)
 	if err != nil {
 		return UseResult{}, err
 	}
 	if ok {
 		return UseResult{Store: m.Name, Project: &e, ID: id}, nil
 	}
-	ss.warn(current.UseGoneWarning)
+	ss.warn(UseGoneWarning)
 	return UseResult{}, nil
 }
 

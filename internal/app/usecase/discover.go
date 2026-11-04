@@ -13,8 +13,8 @@ import (
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/storage/config"
-	"github.com/kukv/hedgehug/internal/app/usecase/current"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/giturl"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
@@ -141,7 +141,7 @@ func (ss *Session) discoverGitHub(c *config.Config, only string) ([]Candidate, e
 			if r.Permissions.Push {
 				perm = "write"
 			}
-			key, _ := current.RepoID(r.CloneURL)
+			key, _ := giturl.RepoID(r.CloneURL)
 			x := Candidate{URL: r.CloneURL, Account: acct.Name, Permission: perm, key: key}
 			if i := slices.IndexFunc(out, func(y Candidate) bool { return y.key == key }); i >= 0 {
 				if out[i].Permission == "read" && perm == "write" {
@@ -225,7 +225,7 @@ func dropMounted(c *config.Config, cands []Candidate) []Candidate {
 	have := map[string]bool{}
 	for _, e := range c.Stores {
 		for _, r := range e.Remotes {
-			if id, ok := current.RepoID(r); ok {
+			if id, ok := giturl.RepoID(r); ok {
 				have[id] = true
 			}
 			if p, ok := gitrepo.LocalPath(c.Rewrite(r)); ok {
@@ -234,7 +234,7 @@ func dropMounted(c *config.Config, cands []Candidate) []Candidate {
 		}
 	}
 	return slices.DeleteFunc(cands, func(x Candidate) bool {
-		if id, ok := current.RepoID(x.URL); ok && have[id] {
+		if id, ok := giturl.RepoID(x.URL); ok && have[id] {
 			return true
 		}
 		if p, ok := gitrepo.LocalPath(c.Rewrite(x.URL)); ok && have[filepath.Clean(p)] {
