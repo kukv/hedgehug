@@ -88,7 +88,7 @@ func TestE2EPhase3a(t *testing.T) {
 	// path, so the command makes the bare there and pushes, and does not call
 	// GitHub.
 	alice.ok("store", "init", "extra", "--prefix", "EXT", "--account", "personal", "--remote", "https://github.com/kukv/hh-extra.git")
-	if ok, err := gitrepotest.HeadHasFile(filepath.Join(dev, "remotes", "kukv", "hh-extra.git"), ".hedgehug/store.yaml"); err != nil || !ok {
+	if ok, err := gitrepotest.MainHasFile(filepath.Join(dev, "remotes", "kukv", "hh-extra.git"), ".hedgehug/store.yaml"); err != nil || !ok {
 		t.Errorf("the bare of the local branch was not made and pushed: %v %v", ok, err)
 	}
 	if _, ok := fake.Repo("kukv/hh-extra"); ok {

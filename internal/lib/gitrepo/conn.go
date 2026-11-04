@@ -124,14 +124,16 @@ func RemoteEmpty(u string, c Conn) (bool, error) {
 	return len(refs) == 0, nil
 }
 
-// HeadHasFile reports whether the tree of HEAD of the repository at dir,
-// bare or not, has the file p. A repository with no commit has none.
-func HeadHasFile(dir, p string) (bool, error) {
+// MainHasFile reports whether the tree of refs/heads/main of the repository at
+// dir, bare or not, has the file p. A repository without main has none. It
+// does not depend on HEAD, which a bare made by a plain git init --bare leaves
+// on master while a store is pushed to main.
+func MainHasFile(dir, p string) (bool, error) {
 	r, err := git.PlainOpen(dir)
 	if err != nil {
 		return false, fmt.Errorf("open %s: %w", dir, err)
 	}
-	ref, err := r.Head()
+	ref, err := r.Reference(mainRef, true)
 	if errors.Is(err, plumbing.ErrReferenceNotFound) {
 		return false, nil
 	}

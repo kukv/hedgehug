@@ -48,7 +48,12 @@
   // stays mounted, because the keys of the app (⌘K, ⇧⌘S) are registered by it.
   const inSettings = $derived(route.name === "settings");
   const noToken = $derived(token === null || lost);
-  const onboarding = $derived(dir.current.loaded && dir.current.count === 0);
+  // The Onboarding comes when there is no Store, and stays until the person starts or makes a Store:
+  // mounting the first one does not close it, so that its last step is seen.
+  let onboarding = $state(false);
+  $effect(() => {
+    if (dir.current.loaded && dir.current.count === 0) onboarding = true;
+  });
   const down = $derived(!noToken && conn.current.state === "down");
   // The gates cover the screen; nothing behind them may take focus or keys.
   const blocked = $derived(noToken || onboarding || down);
@@ -128,7 +133,7 @@
 {#if noToken}
   <NoToken />
 {:else if onboarding}
-  <Onboarding />
+  <Onboarding ondone={() => (onboarding = false)} />
 {/if}
 {#if down}
   <Disconnected lastOpenAt={conn.current.lastOpenAt} />

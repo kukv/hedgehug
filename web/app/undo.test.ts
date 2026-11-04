@@ -92,6 +92,8 @@ describe("routeStore", () => {
       routeStore({ name: "settings", page: "schema", store: "org-b/ops", tab: "statuses" }, taskOf),
     ).toBe("org-b/ops");
     expect(routeStore({ name: "settings", page: "general" }, taskOf)).toBeUndefined();
+    expect(routeStore({ name: "settings", page: "accounts" }, taskOf)).toBeUndefined();
+    expect(routeStore({ name: "settings", page: "stores" }, taskOf)).toBeUndefined();
   });
 
   it("has none for a task the cache does not hold", () => {

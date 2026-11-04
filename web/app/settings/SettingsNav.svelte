@@ -10,6 +10,10 @@
 
   const { api, stores } = core();
   const names = useSubscribe(stores, () => stores.stores().map((s) => s.name));
+  // Every Store is listed, the hidden ones too; one that cannot be written says so.
+  const options = useSubscribe(stores, () =>
+    stores.stores().map((s) => ({ name: s.name, readOnly: stores.readOnly(s.name) !== null })),
+  );
   let version = $state<string | null>(null);
 
   // The version is a footnote: when it cannot be read, the footnote is not shown.
@@ -37,6 +41,8 @@
     pageStore ??
       (picked !== null && names.current.includes(picked) ? picked : (names.current[0] ?? "")),
   );
+  const accountsHref = hrefOf({ name: "settings", page: "accounts" });
+  const storesHref = hrefOf({ name: "settings", page: "stores" });
   const generalHref = hrefOf({ name: "settings", page: "general" });
   const workspacesHref = $derived(hrefOf({ name: "settings", page: "workspaces", store }));
   const schemaHref = $derived(hrefOf({ name: "settings", page: "schema", store, tab: "statuses" }));
@@ -59,6 +65,24 @@
     <span class="cap">このマシン</span>
     <a
       class="item"
+      class:on={page.page === "accounts"}
+      href={accountsHref}
+      aria-current={page.page === "accounts" ? "page" : undefined}
+      onclick={(e) => onLinkClick(e, accountsHref)}
+    >
+      <Icon name="people" size={14} />アカウントと認証
+    </a>
+    <a
+      class="item"
+      class:on={page.page === "stores"}
+      href={storesHref}
+      aria-current={page.page === "stores" ? "page" : undefined}
+      onclick={(e) => onLinkClick(e, storesHref)}
+    >
+      <Icon name="database" size={14} />マウント中の Store
+    </a>
+    <a
+      class="item"
       class:on={page.page === "general"}
       href={generalHref}
       aria-current={page.page === "general" ? "page" : undefined}
@@ -74,8 +98,8 @@
       <label class="store">
         <span class="label">設定する Store</span>
         <select value={store} onchange={(e) => pick(e.currentTarget.value)}>
-          {#each names.current as n (n)}
-            <option value={n}>{n}</option>
+          {#each options.current as o (o.name)}
+            <option value={o.name}>{o.readOnly ? `${o.name}（閲覧のみ）` : o.name}</option>
           {/each}
         </select>
       </label>

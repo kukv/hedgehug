@@ -38,8 +38,8 @@ vi.mock("../router", () => ({
         : r.name === "project"
           ? `/projects/${r.ulid}${r.tab && r.tab !== "tree" ? `/${r.tab}` : ""}`
           : r.name === "settings"
-            ? r.page === "general"
-              ? "/settings/general"
+            ? r.page === "general" || r.page === "accounts" || r.page === "stores"
+              ? `/settings/${r.page}`
               : `/settings/workspaces/${r.store}`
             : r.name === "view"
               ? `/views/${r.store}/${r.view}`
@@ -260,6 +260,19 @@ describe("CommandPalette", () => {
     });
     await fireEvent.click(await screen.findByRole("option", { name: /設定の同期と保守を開く/ }));
     expect(h.go).toHaveBeenCalledWith("/settings/general");
+    expect(palette.open).toBe(false);
+  });
+
+  it.each([
+    ["アカウント", /設定のアカウントと認証を開く/, "/settings/accounts"],
+    ["マウント中", /設定のマウント中の Store を開く/, "/settings/stores"],
+  ] as const)("opens the settings of %s", async (word, name, path) => {
+    setup();
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: `>${word}` } });
+    await fireEvent.click(await screen.findByRole("option", { name }));
+    expect(h.go).toHaveBeenCalledWith(path);
     expect(palette.open).toBe(false);
   });
 

@@ -159,7 +159,7 @@
     font-weight: 600;
   }
   input {
-    min-height: 40px;
+    min-height: var(--control-h-lg);
     padding: 0 var(--space-12);
     border: 1px solid var(--line-input);
     border-radius: var(--radius-8);

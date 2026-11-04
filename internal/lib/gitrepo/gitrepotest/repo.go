@@ -24,14 +24,17 @@ func Bare(t testing.TB, dir string) {
 	}
 }
 
-// HeadHasFile reports whether the tree of HEAD of the repository at dir,
-// bare or not, has the file rel. A repository with no commit has none.
-func HeadHasFile(dir, rel string) (bool, error) {
+// MainHasFile reports whether the tree of the branch main of the repository
+// at dir, bare or not, has the file rel, as gitrepo.MainHasFile does, for the
+// tests of the layers that do not import gitrepo. A repository without main
+// has none. It does not depend on HEAD, which a plain git init --bare leaves
+// on master while a store is pushed to main.
+func MainHasFile(dir, rel string) (bool, error) {
 	r, err := git.PlainOpen(dir)
 	if err != nil {
 		return false, err
 	}
-	ref, err := r.Head()
+	ref, err := r.Reference(plumbing.NewBranchReferenceName("main"), true)
 	if errors.Is(err, plumbing.ErrReferenceNotFound) {
 		return false, nil
 	}

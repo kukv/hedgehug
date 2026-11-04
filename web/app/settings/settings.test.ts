@@ -38,11 +38,19 @@ const health = (version: string) => ({
   response: new Response(null, { status: 200 }),
 });
 
-function core(names: string[], get = vi.fn(async () => health("0.9.0")), loaded = true) {
+function core(
+  names: string[],
+  get = vi.fn(async () => health("0.9.0")),
+  loaded = true,
+  readOnly: Record<string, string> = {},
+) {
   return {
     api: { GET: get },
     stores: {
-      stores: () => names.map((name) => ({ name })),
+      stores: () => names.map((name) => ({ name, hidden: name === "hidden" })),
+      readOnly: (name: string) => readOnly[name] ?? null,
+      tone: () => "teal",
+      error: () => null,
       loaded: () => loaded,
       subscribe: () => () => {},
     },
@@ -69,11 +77,68 @@ describe("SettingsNav", () => {
     expect(getByRole("heading", { name: "設定" })).toBeTruthy();
   });
 
-  it("まだない画面の項目（アカウントなど）は出さない", () => {
-    const { queryByText } = renderWithCore(SettingsNav, { page }, core(["shared"]));
-    for (const t of ["アカウント", "自動化", "マウント中の Store", "テンプレート"]) {
+  it("まだない画面の項目（自動化・テンプレート）は出さず、アカウントとマウント中の Store は出す", () => {
+    const { queryByText, getByRole } = renderWithCore(SettingsNav, { page }, core(["shared"]));
+    for (const t of ["自動化", "テンプレート"]) {
       expect(queryByText(new RegExp(t))).toBeNull();
     }
+    expect(getByRole("link", { name: /アカウントと認証/ })).toBeTruthy();
+    expect(getByRole("link", { name: /マウント中の Store/ })).toBeTruthy();
+  });
+
+  it("「このマシン」の段はアカウントと認証・マウント中の Store・同期と保守の順で、バッジを付けない", () => {
+    const { getByRole } = renderWithCore(SettingsNav, { page }, core(["shared"]));
+    const links = within(getByRole("region", { name: "このマシン" })).getAllByRole("link");
+    expect(links.map((l) => l.textContent?.trim())).toEqual([
+      "アカウントと認証",
+      "マウント中の Store",
+      "同期と保守",
+    ]);
+    expect(links.map((l) => l.getAttribute("href"))).toEqual([
+      "/settings/accounts",
+      "/settings/stores",
+      "/settings/general",
+    ]);
+  });
+
+  it.each([
+    ["accounts", "アカウントと認証"],
+    ["stores", "マウント中の Store"],
+  ] as const)("%s のページでは、その項目だけが今のページ", (name, label) => {
+    const { getByRole } = renderWithCore(SettingsNav, { page: { page: name } }, core(["shared"]));
+    const machine = within(getByRole("region", { name: "このマシン" }));
+    for (const l of machine.getAllByRole("link")) {
+      const on = l.textContent?.trim() === label;
+      expect(l.getAttribute("aria-current")).toBe(on ? "page" : null);
+    }
+  });
+
+  it("アカウントとマウント中の Store でも、選んだ Store を覚えている", async () => {
+    const view = renderWithCore(SettingsNav, { page }, core(["me", "shared"]));
+    await view.rerender({ page: { page: "accounts" } });
+    expect((view.getByLabelText("設定する Store") as HTMLSelectElement).value).toBe("shared");
+    expect(view.getByRole("link", { name: /スキーマ/ }).getAttribute("href")).toBe(
+      "/settings/schema/shared",
+    );
+    await view.rerender({ page: { page: "stores" } });
+    expect((view.getByLabelText("設定する Store") as HTMLSelectElement).value).toBe("shared");
+  });
+
+  it("stores.readOnly() が理由を返す Store に「（閲覧のみ）」を添える。非表示の Store も並ぶ", () => {
+    const { getByLabelText } = renderWithCore(
+      SettingsNav,
+      { page },
+      core(["shared", "ro", "hidden"], undefined, true, {
+        ro: "the remote cannot be written",
+      }),
+    );
+    const select = getByLabelText("設定する Store") as HTMLSelectElement;
+    expect([...select.options].map((o) => o.value)).toEqual(["shared", "ro", "hidden"]);
+    expect([...select.options].map((o) => o.textContent?.trim())).toEqual([
+      "shared",
+      "ro（閲覧のみ）",
+      "hidden",
+    ]);
   });
 
   it("スキーマの項目は Store ごとの設定の段にあり、今のページならそれを示す", () => {
@@ -328,6 +393,47 @@ describe("SettingsRoute", () => {
     );
     expect(getByRole("region", { name: "設定の本文" })).toContainElement(getByText("general"));
     expect(location.pathname).toBe("/settings/general");
+  });
+
+  it.each([
+    ["accounts", "アカウントと認証"],
+    ["stores", "マウント中の Store"],
+  ] as const)("/settings/%s は Store を持たずにレイアウトと見出しを出す", (name, heading) => {
+    history.replaceState(null, "", `/settings/${name}`);
+    const { getByRole } = renderWithCore(
+      SettingsRoute,
+      { page: { page: name } },
+      core(["me", "shared"]),
+    );
+    expect(getByRole("region", { name: "設定の本文" })).toContainElement(
+      getByRole("heading", { level: 1, name: heading }),
+    );
+    expect(getByRole("navigation", { name: "設定のナビゲーション" })).toBeTruthy();
+    expect(location.pathname).toBe(`/settings/${name}`);
+  });
+
+  it("アカウントの見出しの説明は、トークンの置き場所を言う", () => {
+    history.replaceState(null, "", "/settings/accounts");
+    const { getByText } = renderWithCore(
+      SettingsRoute,
+      { page: { page: "accounts" } },
+      core(["me"]),
+    );
+    const lead = getByText(/ここに登録した全アカウントを「自分」として扱います/);
+    expect(lead.textContent?.replace(/\s+/g, " ").trim()).toBe(
+      "ここに登録した全アカウントを「自分」として扱います（assignee:@me）。トークンはこのマシンにだけ保存し、Store には書きません。",
+    );
+    expect(lead.querySelector("code")?.textContent).toBe("assignee:@me");
+  });
+
+  it("マウント中の Store の見出しの説明は、表示を外した Store の扱いを言う", () => {
+    history.replaceState(null, "", "/settings/stores");
+    const { getByText } = renderWithCore(SettingsRoute, { page: { page: "stores" } }, core(["me"]));
+    expect(
+      getByText(
+        "このマシンで扱う Store です。見える範囲は各リポジトリのアクセス権で決まります。「表示」を外した Store のワークスペースは、サイドバーにもビューにも出しません。",
+      ),
+    ).toBeTruthy();
   });
 
   it("同期と保守は Store がまだ読めていなくても出す", () => {

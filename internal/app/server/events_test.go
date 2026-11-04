@@ -21,10 +21,23 @@ import (
 type eventStream struct {
 	cancel context.CancelFunc
 	resp   *http.Response
-	events chan [2]string // name, data
+	events chan [2]string  // name, data
+	hello  json.RawMessage // until next takes it
 }
 
+// events opens /api/events and returns once hello has come. The headers come
+// before the server subscribes to the events (huma sends them first), so an
+// event published right after they came could be missed; hello is sent after
+// the subscription.
 func (ts *testServer) events() *eventStream {
+	ts.t.Helper()
+	es := ts.openEvents()
+	es.hello = es.next(ts.t, "hello")
+	return es
+}
+
+// openEvents opens /api/events and returns once the headers have come.
+func (ts *testServer) openEvents() *eventStream {
 	ts.t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	req, _ := http.NewRequestWithContext(ctx, "GET", ts.hs.URL+"/api/events", nil)
@@ -65,9 +78,15 @@ func (ts *testServer) events() *eventStream {
 
 func (es *eventStream) Close() { es.cancel(); _ = es.resp.Body.Close() }
 
-// next returns the data of the first event named name, skipping others.
+// next returns the data of the first event named name, skipping others. The
+// first hello is the one events waited for.
 func (es *eventStream) next(t *testing.T, name string) json.RawMessage {
 	t.Helper()
+	if name == "hello" && es.hello != nil {
+		h := es.hello
+		es.hello = nil
+		return h
+	}
 	timeout := time.After(10 * time.Second)
 	for {
 		select {
@@ -233,7 +252,7 @@ func TestEventsAfterShutdownSendNoHello(t *testing.T) {
 	t.Parallel()
 	ts := startedServer(t)
 	_ = ts.srv.Shutdown(context.Background())
-	es := ts.events()
+	es := ts.openEvents()
 	select {
 	case e, ok := <-es.events:
 		if ok {

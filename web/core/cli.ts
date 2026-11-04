@@ -211,11 +211,63 @@ export function cliStoreInit(i: {
   prefix: Arg;
   workspace?: string;
   remotes?: string[];
+  account?: string;
 }): string {
   const a: Arg[] = ["--prefix", i.prefix];
   if (i.workspace) a.push("--workspace", i.workspace);
   for (const r of i.remotes ?? []) a.push("--remote", r);
+  if (i.account) a.push("--account", i.account);
   return withPositionals(["store", "init"], [i.name], a, true);
+}
+
+// The host is written only when it is not github.com, as hh does.
+const hostFlag = (host?: string): string[] =>
+  host && host !== "github.com" ? ["--host", host] : [];
+
+// cliAuthLogin is hh auth login [<name>]: the Device Flow, or with withToken the token on the
+// standard input (never part of the line).
+export function cliAuthLogin(i: { name?: Arg; host?: string; withToken?: boolean }): string {
+  const a: Arg[] = [];
+  if (i.withToken) a.push("--with-token");
+  a.push(...hostFlag(i.host));
+  return withPositionals(["auth", "login"], i.name ? [i.name] : [], a, true);
+}
+
+// cliAuthAdd is hh auth add <name> --login <login>: an account whose token is gh, env:VAR or none.
+export function cliAuthAdd(i: { name: Arg; login: Arg; host?: string; token?: string }): string {
+  const a: Arg[] = ["--login", i.login, ...hostFlag(i.host)];
+  if (i.token) a.push("--token", i.token);
+  return withPositionals(["auth", "add"], [i.name], a, true);
+}
+
+export const cliAuthLogout = (name: Arg): string =>
+  withPositionals(["auth", "logout"], [name], [], true);
+
+export function cliStoreDiscover(i: { account?: string; from?: string }): string {
+  const a: string[] = [];
+  if (i.account) a.push("--account", i.account);
+  if (i.from) a.push("--from", i.from);
+  return cliLine(["store", "discover", ...a]);
+}
+
+export function cliStoreAdd(i: { name: Arg; remotes: Arg[]; account?: string }): string {
+  const a: Arg[] = i.remotes.flatMap((r) => ["--remote", r]);
+  if (i.account) a.push("--account", i.account);
+  return withPositionals(["store", "add"], [i.name], a, true);
+}
+
+export const cliStoreRemove = (name: string, keep: boolean): string =>
+  withPositionals(["store", "remove"], [name], keep ? ["--keep"] : [], true);
+
+export const cliStoreDefault = (name: string): string =>
+  withPositionals(["store", "default"], [name], [], true);
+
+// cliStoreSet is hh store set; --color "" puts the colour back to automatic.
+export function cliStoreSet(i: { name: string; color?: string; hidden?: boolean }): string {
+  const a: string[] = [];
+  if (i.color !== undefined) a.push("--color", i.color);
+  if (i.hidden !== undefined) a.push(`--hidden=${i.hidden}`);
+  return withPositionals(["store", "set"], [i.name], a, true);
 }
 
 export function cliScopeRm(id: string, store?: string): string {

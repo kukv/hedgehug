@@ -203,6 +203,8 @@ function env(over: Partial<CommandEnv> = {}): CommandEnv {
       settingsWorkspaces: (s) => `/settings/workspaces/${s}`,
       settingsSchema: (s) => `/settings/schema/${s}`,
       settingsGeneral: () => "/settings/general",
+      settingsAccounts: () => "/settings/accounts",
+      settingsStores: () => "/settings/stores",
       project: (u) => `/projects/${u}`,
       projectSettings: (u) => `/projects/${u}/settings`,
       task: (u) => `/tasks/${u}`,
@@ -247,6 +249,8 @@ describe("buildCommands", () => {
       "リリース準備 v2.4 を開く",
       "設定のワークスペース一覧を開く",
       "設定のスキーマを開く",
+      "設定のアカウントと認証を開く",
+      "設定のマウント中の Store を開く",
       "設定の同期と保守を開く",
       "マイタスクを開く",
       "通知を開く",
@@ -354,6 +358,20 @@ describe("buildCommands", () => {
     expect(e.go).toHaveBeenCalledWith("/settings/general");
   });
 
+  it("opens the accounts and the mounted Stores settings, once each whatever the number of stores", () => {
+    const e = env({ storeNames: ["shared", "ops"] });
+    for (const [word, label, href] of [
+      ["アカウント", "設定のアカウントと認証を開く", "/settings/accounts"],
+      ["マウント中", "設定のマウント中の Store を開く", "/settings/stores"],
+    ] as const) {
+      const items = buildCommands(e, `>${word}`).flatMap((g) => g.items);
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({ label, icon: "settings", href });
+      if (items[0]?.type === "command") items[0].run();
+      expect(e.go).toHaveBeenLastCalledWith(href);
+    }
+  });
+
   it("runs the diagnosis by opening the sync and maintenance settings, which asks for it", () => {
     const e = env({ storeNames: ["shared", "ops"] });
     const items = buildCommands(e, ">doctor").flatMap((g) => g.items);
@@ -377,6 +395,8 @@ describe("buildCommands", () => {
       "ワークスペースの設定を開く|ops",
       "設定のワークスペース一覧を開く|",
       "設定のスキーマを開く|",
+      "設定のアカウントと認証を開く|",
+      "設定のマウント中の Store を開く|",
       "設定の同期と保守を開く|",
     ]);
   });
@@ -405,6 +425,8 @@ describe("buildCommands", () => {
       "設定のワークスペース一覧を開く|empty",
       "設定のスキーマを開く|shared",
       "設定のスキーマを開く|empty",
+      "設定のアカウントと認証を開く|",
+      "設定のマウント中の Store を開く|",
       "設定の同期と保守を開く|",
     ]);
   });

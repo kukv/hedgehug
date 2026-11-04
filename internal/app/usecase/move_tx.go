@@ -121,17 +121,17 @@ func detachFromOtherWorkspaces(tx *store.Tx, t *model.Task) (Detached, error) {
 // MoveTargetOf works out where Move puts e, as ix has the tasks: at the top
 // level when root, or under the new parent p (nil to keep the parent), in
 // the workspace w (nil to follow the parent), before or after a sibling.
-func (ss *Session) MoveTargetOf(ix *index.Index, e, p *index.Entry, w *model.Workspace, root bool, before, after string) (moveTarget, error) {
+func (ss *Session) MoveTargetOf(ix *index.Index, e, p *index.Entry, w *model.Workspace, root bool, before, after string) (MoveTarget, error) {
 	if err := NotDeleted(ix, e); err != nil {
-		return moveTarget{}, err
+		return MoveTarget{}, err
 	}
-	to := moveTarget{parent: e.Parent, workspace: e.Workspace}
+	to := MoveTarget{parent: e.Parent, workspace: e.Workspace}
 	switch {
 	case root:
 		to.parent = nil
 	case p != nil:
 		if err := LiveParent(ix, p); err != nil {
-			return moveTarget{}, err
+			return MoveTarget{}, err
 		}
 		to.parent, to.workspace = &p.ULID, p.Workspace
 	}
@@ -140,9 +140,9 @@ func (ss *Session) MoveTargetOf(ix *index.Index, e, p *index.Entry, w *model.Wor
 		case p != nil && w.ULID != to.workspace:
 			pw, ok := ix.Workspace(to.workspace)
 			if !ok {
-				return moveTarget{}, NewErr(KindInvalid, "move.invalid", fmt.Errorf("the parent's workspace %s is not in this store", to.workspace))
+				return MoveTarget{}, NewErr(KindInvalid, "move.invalid", fmt.Errorf("the parent's workspace %s is not in this store", to.workspace))
 			}
-			return moveTarget{}, NewErr(KindInvalid, "move.invalid", fmt.Errorf("the parent is in workspace %s", pw.Name))
+			return MoveTarget{}, NewErr(KindInvalid, "move.invalid", fmt.Errorf("the parent is in workspace %s", pw.Name))
 		case p == nil && w.ULID != e.Workspace:
 			// The old parent stays behind, so the task goes to the top level.
 			to.parent = nil
@@ -188,8 +188,8 @@ func unreadable(err error) bool {
 	return errors.Is(err, store.ErrNotFound) || errors.As(err, new(*model.DecodeError))
 }
 
-// moveTarget is where Move puts a task.
-type moveTarget struct {
+// MoveTarget is where Move puts a task.
+type MoveTarget struct {
 	parent    *model.ULID
 	workspace model.ULID
 	rank      model.Rank
@@ -200,7 +200,7 @@ type moveTarget struct {
 // sibling is named, or right after (before) the sibling named with a rank of
 // its own. Tasks of one rank are ordered by id and the new rank lies past the
 // whole group, so e next to a task of the same rank may still move.
-func (ss *Session) alreadyThere(ix *index.Index, e *index.Entry, to moveTarget, before, after string) bool {
+func (ss *Session) alreadyThere(ix *index.Index, e *index.Entry, to MoveTarget, before, after string) bool {
 	if to.workspace != e.Workspace || !sameParent(to.parent, e.Parent) {
 		return false
 	}

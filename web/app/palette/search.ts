@@ -165,6 +165,8 @@ export type CommandEnv = {
     settingsWorkspaces: (store: string) => string;
     settingsSchema: (store: string) => string;
     settingsGeneral: () => string;
+    settingsAccounts: () => string;
+    settingsStores: () => string;
     project: (ulid: string) => string;
     projectSettings: (ulid: string) => string;
     task: (ulid: string) => string;
@@ -433,6 +435,26 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
     run: () => env.go(generalHref),
   };
 
+  // The accounts and the mounted Stores of this machine: no Store either.
+  const accountsHref = env.hrefs.settingsAccounts();
+  const accounts: CommandItem = {
+    type: "command",
+    key: "open:settings-accounts",
+    label: "設定のアカウントと認証を開く",
+    icon: "settings",
+    href: accountsHref,
+    run: () => env.go(accountsHref),
+  };
+  const storesHref = env.hrefs.settingsStores();
+  const mounted: CommandItem = {
+    type: "command",
+    key: "open:settings-stores",
+    label: "設定のマウント中の Store を開く",
+    icon: "settings",
+    href: storesHref,
+    run: () => env.go(storesHref),
+  };
+
   const inProject = env.project;
   const projectSettingsHref = inProject ? env.hrefs.projectSettings(inProject.ulid) : "";
   const projectSettings: CommandItem[] = inProject
@@ -462,6 +484,8 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
         ...places,
         ...lists,
         ...schemas,
+        accounts,
+        mounted,
         general,
         ...projectSettings,
         my,

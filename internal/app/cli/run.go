@@ -46,6 +46,11 @@ type env struct {
 // exit code. v is the version --version prints.
 func Main(v string) int {
 	version = v
+	kr, err := mainKeyring(os.Getenv)
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "hedgehug:", err)
+		return 1
+	}
 	return run(os.Args[1:], &env{
 		stdin:      os.Stdin,
 		stdout:     os.Stdout,
@@ -55,6 +60,7 @@ func Main(v string) int {
 		now:        time.Now,
 		getwd:      os.Getwd,
 		openURL:    openURL,
+		keyring:    kr,
 	})
 }
 
