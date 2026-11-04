@@ -152,6 +152,42 @@ func TestStoreDeleteAPI(t *testing.T) {
 	}
 }
 
+// A removal that is refused (409) lets go of the store only for a moment: the
+// poller opens it again, and the clients are not told that anything changed.
+func TestStoreDeleteRefusedIsQuiet(t *testing.T) {
+	t.Parallel()
+	ts, ch := pollServer(t)
+	ts.call("POST", "/api/stores", map[string]any{"name": "local", "prefix": "LC"}, 201, nil)
+	p := ts.srv.poller
+	current := func() *polled {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		return p.stores["local"]
+	}
+	eventually(t, "the poller holds local", func() bool { return current() != nil })
+	old := current()
+	drainEvents(ch)
+
+	if pr := ts.problem("DELETE", "/api/stores/local", nil, 409); pr.Type != "store.unpushed" {
+		t.Fatalf("problem = %+v", pr)
+	}
+	// The look that opens it again publishes before it keeps the store, so
+	// once the store is held again, what it told is in ch.
+	eventually(t, "the poller to open local again", func() bool {
+		now := current()
+		return now != nil && now != old
+	})
+	p.poll(true)
+	for _, e := range drainEvents(ch) {
+		if tc, ok := e.(tasksChanged); ok && tc.Store == "local" {
+			t.Errorf("a refused removal announced %+v", tc)
+		}
+		if _, ok := e.(storesChanged); ok {
+			t.Error("a refused removal announced stores.changed")
+		}
+	}
+}
+
 func TestStoreDefaultAPI(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)

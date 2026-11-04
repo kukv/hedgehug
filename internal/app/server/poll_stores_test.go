@@ -1,6 +1,8 @@
 package server
 
 import (
+	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -90,12 +92,10 @@ func TestPollerReleaseForKeepsPollsOut(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	started, done := make(chan struct{}), make(chan struct{})
-	go func() {
-		<-started
-		p.poll(false)
-		close(done)
-	}()
+	// The poll starts inside fn, so it can only get in after fn returns. It
+	// records whether fn had returned when its poll ended.
+	var fnReturned atomic.Bool
+	polling, done := make(chan struct{}), make(chan bool, 1)
 	err = p.ReleaseFor(e.Path, func() error {
 		p.mu.Lock()
 		_, held := p.stores[e.Name]
@@ -103,18 +103,35 @@ func TestPollerReleaseForKeepsPollsOut(t *testing.T) {
 		if held {
 			t.Error("the store is still held inside fn")
 		}
-		close(started)
-		select {
-		case <-done:
-			t.Error("a poll ran while fn ran")
-		case <-time.After(150 * time.Millisecond):
+		go func() {
+			close(polling)
+			p.poll(false)
+			done <- fnReturned.Load()
+		}()
+		<-polling
+		for range 1000 { // give the poll every chance to run before fn ends
+			runtime.Gosched()
 		}
+		fnReturned.Store(true)
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	<-done
+	select {
+	case after := <-done:
+		if !after {
+			t.Error("a poll ran while fn ran")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the poll never ended")
+	}
+	p.mu.Lock()
+	_, opened := p.stores[e.Name]
+	p.mu.Unlock()
+	if !opened {
+		t.Error("the poll after ReleaseFor did not open the store again")
+	}
 	p.mu.Lock()
 	swapped := p.released[e.Name]
 	p.mu.Unlock()

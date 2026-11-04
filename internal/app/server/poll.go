@@ -116,6 +116,7 @@ type Poller struct {
 	mu       sync.Mutex // the state below
 	stores   map[string]*polled
 	released map[string]bool // stores swapped for a rebuild, to tell the clients once
+	restored map[string]bool // stores let go for a removal that failed; opened again without a word
 	unread   int
 	looked   bool   // a poll has run
 	scanned  bool   // a poll has read the stores to the end (set under mu)
@@ -155,6 +156,7 @@ func (p *Poller) releaseLocked(path string) []string {
 			p.released = map[string]bool{}
 		}
 		p.released[name] = true
+		delete(p.restored, name)
 	}
 	p.mu.Unlock()
 	// The build of the history index reads the files under the directory
@@ -173,19 +175,25 @@ func (p *Poller) releaseLocked(path string) []string {
 // so that no poll opens the store again while its config entry is still
 // there. When fn succeeds the store is gone for good, so it is no longer
 // marked as swapped for a rebuild (a store of that name that comes later is
-// new). fn must not wait for a poll.
+// new). When fn fails the store is still there: the next poll opens it again
+// without telling the clients anything (it is the same store, not a rebuilt
+// one). fn must not wait for a poll.
 func (p *Poller) ReleaseFor(path string, fn func() error) error {
 	p.pollMu.Lock()
 	defer p.pollMu.Unlock()
 	names := p.releaseLocked(path)
 	err := fn()
-	if err == nil {
-		p.mu.Lock()
-		for _, n := range names {
-			delete(p.released, n)
+	p.mu.Lock()
+	for _, n := range names {
+		delete(p.released, n)
+		if err != nil {
+			if p.restored == nil {
+				p.restored = map[string]bool{}
+			}
+			p.restored[n] = true
 		}
-		p.mu.Unlock()
 	}
+	p.mu.Unlock()
 	return err
 }
 
@@ -299,9 +307,11 @@ func (p *Poller) pollLocked(publish bool) {
 			p.mu.Lock()
 			swapped := p.released[e.Name]
 			delete(p.released, e.Name)
+			restored := p.restored[e.Name]
+			delete(p.restored, e.Name)
 			scanned := p.scanned
 			p.mu.Unlock()
-			if (swapped || scanned) && publish {
+			if (swapped || scanned) && !restored && publish {
 				// The store was made again, or it appeared after the first look: the
 				// commits made before this look are not known (a page that made a
 				// task in a store just created would never be told), so the clients
