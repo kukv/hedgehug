@@ -79,13 +79,13 @@ gh:
 
 `hh unlink` はリンクを消さず、`sync: off` にする。`off` のリンクは、表示と取得から外す。自動リンクは `off` の ref を飛ばす。消してしまうと、本文に `hedgehug:<ULID>` が残っている PR が次の走査でまた紐付く。
 
-`model.Task.GH` は `*yaml.Node` から型付きに変える。知らないキーは保持する。今の形（`number`・`state` など）を含め、`prs`・`issues` 以外のキーは読めて、そのまま書き戻せるようにする。`merge/task_test.go`・`model` のテストは変えずに通す。
+`model.Task.GH` は `*yaml.Node` のまま持ち、`GitHub()`・`SetGitHub()` で型付きの値を読み書きする。知らないキーは保持する。今の形（`number`・`state` など）を含め、`prs`・`issues` 以外のキーは読めて、そのまま書き戻せるようにする。`merge/task_test.go`・`model` のテストは変えずに通す。
 
 ### マージ
 
 `gh.prs`・`gh.issues` は `ref` で要素を見分け、要素ごとにキー単位でマージする。値が衝突したら新しい時刻の側を採る。`gh` の衝突は inbox に出さない。次の取得で GitHub の値に戻るためである。
 
-`links` のマージは今のまま（`ref` を見分ける集合）。同じ `ref` で `sync`・`fields` が両側で違うときの扱いを 5a のテストで確かめ、タスクの `updated` が新しい側を採る形になっていなければ足す。`unlink` と別のメンバーのモード変更が同時に起きても、どちらかの値に収束する。
+`links` のマージは今のまま（`ref` を見分ける集合）。同じ `ref` で `sync`・`fields` が両側で違うときは、タスクの `updated` が新しい側を採り、負けた値は上書きの記録に入る。`unlink` と別のメンバーのモード変更が同時に起きても、どちらかの値に収束する。5a のテストでこの動きを固定する。
 
 ### `automations.yaml`
 
@@ -160,7 +160,7 @@ issue_fields:
 | アカウント | `repo_accounts` を上から当てはめる。一致しなければ Store の `account`。読めなければ repo 名を付けて警告する |
 | 失敗 | 警告だけを出し、同期は成功のままにする |
 | author | `hedgehug-automation（実行したメンバー）` |
-| コミット | 1回の取得につき1つ。op は `gh-fetch` |
+| コミット | 1回の取得につき1つ。op は `gh-fetch`。`hh undo` の対象にしない |
 
 GitHub Enterprise Server の GraphQL の場所は、`Host` の API の URL から求める（`/api/v3` を `/api/graphql` に置き換える。github.com は `/graphql`）。
 
