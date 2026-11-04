@@ -200,3 +200,27 @@ func TestCommentEditCases(t *testing.T) {
 	_, err = comments.CommentRemove(ts.Session, "abc")
 	usecasetest.WantErr(t, err, usecase.KindNotFound, "comment.not_found")
 }
+
+func TestCommentAddCleansTheBody(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.AsAccount("alice")
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := comments.CommentAdd(ts.Session, "ME-1", " \t\r\n")
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "comment.empty")
+	r, err := comments.CommentAdd(ts.Session, "ME-1", "raw  \n\n")
+	if err != nil || r.Comment.Body != "raw\n" || len(r.Commit) != 40 {
+		t.Errorf("CommentAdd = %+v, %v; want the body cleaned and a commit hash", r, err)
+	}
+	// An edit takes a raw body too, and stores it cleaned.
+	e, err := comments.CommentEdit(ts.Session, r.Ref.Comment.String(), "again \n\n")
+	if err != nil || e.Comment.Body != "again\n" || len(e.Commit) != 40 {
+		t.Errorf("CommentEdit = %+v, %v", e, err)
+	}
+	same, err := comments.CommentEdit(ts.Session, r.Ref.Comment.String(), "again")
+	if err != nil || same.Committed || same.Commit != "" {
+		t.Errorf("CommentEdit of the same body = %+v, %v; want no commit", same, err)
+	}
+}

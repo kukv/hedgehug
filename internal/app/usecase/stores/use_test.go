@@ -8,6 +8,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/current"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
@@ -203,5 +204,67 @@ func TestUseClear(t *testing.T) {
 	}
 	if r, err = stores.UseClear(ts.Session); err != nil || r.Changed {
 		t.Errorf("UseClear again = %+v, %v; want Changed false", r, err)
+	}
+}
+
+// hh use --store looks in that store only.
+func TestUseWithStoreLooksInThatStoreOnly(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.NewTwoStoreWith(t, "API", "API")
+	idA := usecasetest.AddProjectIn(t, ts, "org-a", "Release A")
+	idB := usecasetest.AddProjectIn(t, ts, "org-b", "Release B")
+	if idA != idB {
+		t.Fatalf("ids %s and %s; want the same id in both stores", idA, idB)
+	}
+	// without --store the id is in both
+	if _, err := stores.Use(ts.Session, idA); usecase.KindOf(err) != usecase.KindAmbiguous {
+		t.Fatalf("Use(%s) err = %v; want ambiguous", idA, err)
+	}
+	ts.StoreName = "org-b"
+	r, err := stores.Use(ts.Session, idA)
+	if err != nil || r.Store != "org-b" || r.Project.Title != "Release B" {
+		t.Fatalf("Use(%s) --store org-b = %+v, %v; want org-b's project", idA, r, err)
+	}
+	// the same store spelled in the id is fine
+	if r, err = stores.Use(ts.Session, "org-b:"+idA); err != nil || r.Store != "org-b" {
+		t.Errorf("Use(org-b:%s) --store org-b = %+v, %v", idA, r, err)
+	}
+	// another store's name is a usage error
+	_, err = stores.Use(ts.Session, "org-a:"+idA)
+	usecasetest.WantCode(t, "Use(org-a:...) --store org-b", err, usecase.KindUsage, "store.conflict")
+	// a project that is only in the other store is not found
+	ts.StoreName = "org-a"
+	other := usecasetest.AddProjectIn(t, ts, "org-b", "Only B")
+	_, err = stores.Use(ts.Session, other)
+	usecasetest.WantCode(t, "Use(project of org-b) --store org-a", err, usecase.KindNotFound, "task.not_found")
+	ts.StoreName = "nope"
+	_, err = stores.Use(ts.Session, idA)
+	usecasetest.WantCode(t, "Use --store nope", err, usecase.KindNotFound, "store.not_found")
+}
+
+// An ambiguity found by hh use --store names the input as the user typed it.
+func TestUseWithStoreAmbiguityKeepsTheInput(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.NewTwoStore(t)
+	s, err := ts.ForStore("org-a").OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, ix, err := ts.ForStore("org-a").Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws := ix.Workspaces()[0].ULID
+	for _, title := range []string{"one", "two"} {
+		task := &model.Task{ULID: model.NewULID(), Title: title, Kind: "project", Status: "todo", Workspace: ws, FormerIDs: []string{"OLD-1"}}
+		if _, err := ts.ForStore("org-a").Update(s, store.Op{Name: "add", Task: task.ULID}, func(tx *store.Tx) error { return tx.PutTask(task) }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ts.StoreName = "org-a"
+	_, err = stores.Use(ts.Session, "OLD-1")
+	usecasetest.WantCode(t, "Use(OLD-1) --store org-a", err, usecase.KindAmbiguous, "task.ambiguous")
+	if e := usecase.AsError(err); e == nil || e.Args["input"] != "OLD-1" || strings.Contains(err.Error(), "org-a:OLD-1") {
+		t.Errorf("err = %v; want the input OLD-1 as typed", err)
 	}
 }
