@@ -47,7 +47,7 @@ function core(
   return {
     api: { GET: get },
     stores: {
-      stores: () => names.map((name) => ({ name })),
+      stores: () => names.map((name) => ({ name, hidden: name === "hidden" })),
       readOnly: (name: string) => readOnly[name] ?? null,
       loaded: () => loaded,
       subscribe: () => () => {},
@@ -122,7 +122,7 @@ describe("SettingsNav", () => {
     expect((view.getByLabelText("設定する Store") as HTMLSelectElement).value).toBe("shared");
   });
 
-  it("閲覧のみの Store は「（閲覧のみ）」を添える（一覧の read_only も同期の read_only も）。非表示の Store も並ぶ", () => {
+  it("stores.readOnly() が理由を返す Store に「（閲覧のみ）」を添える。非表示の Store も並ぶ", () => {
     const { getByLabelText } = renderWithCore(
       SettingsNav,
       { page },
