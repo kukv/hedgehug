@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/lib/atomicfile"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 func TestLocalFiles(t *testing.T) {
@@ -23,7 +23,7 @@ func TestLocalFiles(t *testing.T) {
 		t.Errorf("ReadLocal = %q, %v", b, err)
 	}
 	// The file is under .hedgehug/local, which git ignores.
-	if _, err := atomicfile.ReadFile(s.path(".hedgehug/local/index")); err != nil {
+	if _, err := osfs.ReadFile(s.path(".hedgehug/local/index")); err != nil {
 		t.Errorf("file not in .hedgehug/local: %v", err)
 	}
 	for _, bad := range []string{"", ".", "..", "a/..", "../a", "a/./b", "/a", "a/", "a//b", `a\b`} {

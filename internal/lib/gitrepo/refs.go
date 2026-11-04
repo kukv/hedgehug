@@ -9,7 +9,7 @@ import (
 	"github.com/go-git/go-git/v5/storage"
 	"github.com/go-git/go-git/v5/storage/filesystem/dotgit"
 
-	"github.com/kukv/hedgehug/internal/lib/atomicfile"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // SetReference replaces the reference file in one rename, so that a reader
@@ -54,7 +54,7 @@ func (s *cachedStorage) SetReference(ref *plumbing.Reference) error {
 		err = cerr
 	}
 	if err == nil {
-		err = atomicfile.Rename(tmp, path)
+		err = osfs.Rename(tmp, path)
 	}
 	if err != nil {
 		_ = os.Remove(tmp)

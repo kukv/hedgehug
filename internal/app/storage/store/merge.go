@@ -11,8 +11,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/lib/atomicfile"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // ErrHeadMoved means HEAD was not the commit a merge was computed from, so
@@ -65,7 +65,7 @@ func (s *Store) CommitMerge(head plumbing.Hash, parents []plumbing.Hash, files m
 		slices.Sort(rels)
 		changes := make([]change, 0, len(rels))
 		for _, rel := range rels {
-			old, err := atomicfile.ReadFile(s.path(rel))
+			old, err := osfs.ReadFile(s.path(rel))
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}

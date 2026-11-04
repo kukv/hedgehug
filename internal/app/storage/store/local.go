@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/lib/atomicfile"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // LocalDir holds what belongs to this machine only, like the lock and the
@@ -30,7 +30,7 @@ func (s *Store) ReadLocal(name string) ([]byte, error) {
 		return nil, err
 	}
 	rel := LocalDir + "/" + name
-	b, err := atomicfile.ReadFile(s.path(rel))
+	b, err := osfs.ReadFile(s.path(rel))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("%s: %w: %w", rel, ErrNotFound, fs.ErrNotExist)
 	}
@@ -70,7 +70,7 @@ func writeLocalAt(dir, name string, data []byte) error {
 	if err := mkdirInStore(dir, path); err != nil {
 		return err
 	}
-	err := atomicfile.WriteFileInDir(path, data)
+	err := osfs.WriteAtomicInDir(path, data)
 	if errors.Is(err, fs.ErrNotExist) {
 		return ErrStoreGone
 	}

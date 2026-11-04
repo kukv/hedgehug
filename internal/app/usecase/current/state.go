@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/lib/atomicfile"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // fileName is the state file in the data directory.
@@ -56,7 +56,7 @@ func Save(dataDir string, st State) error {
 	if err != nil {
 		return err
 	}
-	if err := atomicfile.WriteFile(filepath.Join(dataDir, fileName), append(b, '\n')); err != nil {
+	if err := osfs.WriteAtomic(filepath.Join(dataDir, fileName), append(b, '\n')); err != nil {
 		return fmt.Errorf("write %s: %w", fileName, err)
 	}
 	return nil

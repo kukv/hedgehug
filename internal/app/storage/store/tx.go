@@ -15,8 +15,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/lib/atomicfile"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 var errTxDone = errors.New("the transaction is used after Update returned")
@@ -537,7 +537,7 @@ func (tx *Tx) changes(now time.Time) ([]change, error) {
 	var out []change
 	for _, rel := range tx.order {
 		p := tx.pending[rel]
-		old, err := atomicfile.ReadFile(tx.s.path(rel))
+		old, err := osfs.ReadFile(tx.s.path(rel))
 		existed := err == nil
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return nil, err
@@ -621,7 +621,7 @@ func (s *Store) apply(cs []change) error {
 		if c.data == nil {
 			err = os.Remove(s.path(c.rel))
 		} else {
-			err = atomicfile.WriteFile(s.path(c.rel), c.data)
+			err = osfs.WriteAtomic(s.path(c.rel), c.data)
 		}
 		if err != nil {
 			return errors.Join(err, s.rollback(cs[:i]))
@@ -635,7 +635,7 @@ func (s *Store) rollback(cs []change) error {
 	var errs []error
 	for _, c := range slices.Backward(cs) {
 		if c.existed {
-			errs = append(errs, atomicfile.WriteFile(s.path(c.rel), c.old))
+			errs = append(errs, osfs.WriteAtomic(s.path(c.rel), c.old))
 		} else if err := os.Remove(s.path(c.rel)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			errs = append(errs, err)
 		}

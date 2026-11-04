@@ -1,25 +1,28 @@
-// Package atomicfile replaces files whole, so that a reader never sees a
-// part of a write.
-package atomicfile
+// Package osfs is where Hedgehug touches the OS: it renames, removes, reads
+// and writes files, makes directories, locks files, starts processes and
+// compares paths (spec: OS の境界). The rest of the code calls these instead
+// of os, os/exec and syscall, which forbidigo enforces, so that what differs
+// between OSes stays in the _unix.go files here.
+package osfs
 
 import (
 	"os"
 	"path/filepath"
 )
 
-// WriteFile replaces the file at path with data. It writes a temporary file
+// WriteAtomic replaces the file at path with data. It writes a temporary file
 // in the same directory, syncs it and renames it over path, so a reader sees
 // either the old or the new content, never a part.
-func WriteFile(path string, data []byte) error {
+func WriteAtomic(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
-	return WriteFileInDir(path, data)
+	return WriteAtomicInDir(path, data)
 }
 
-// WriteFileInDir is WriteFile for a directory that exists: it creates none,
+// WriteAtomicInDir is WriteAtomic for a directory that exists: it creates none,
 // and fails with fs.ErrNotExist when the directory is missing.
-func WriteFileInDir(path string, data []byte) error {
+func WriteAtomicInDir(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	f, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
 	if err != nil {

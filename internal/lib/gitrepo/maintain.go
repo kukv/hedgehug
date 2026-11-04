@@ -14,7 +14,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/format/packfile"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 
-	"github.com/kukv/hedgehug/internal/lib/atomicfile"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // LooseObjects counts the objects stored one per file under .git/objects.
@@ -292,10 +292,10 @@ func (r *Repo) writePack(objs []plumbing.Hash) (base string, err error) {
 			return "", err
 		}
 	}
-	if err := atomicfile.Rename(pack.Name(), base+".pack"); err != nil {
+	if err := osfs.Rename(pack.Name(), base+".pack"); err != nil {
 		return "", err
 	}
-	if err := atomicfile.Rename(ix.Name(), base+".idx"); err != nil {
+	if err := osfs.Rename(ix.Name(), base+".idx"); err != nil {
 		// A .pack without its .idx is never read; it is ours, so remove it.
 		removeReadOnly(base + ".pack")
 		return "", err

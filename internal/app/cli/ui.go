@@ -20,7 +20,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/server"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
-	"github.com/kukv/hedgehug/internal/lib/atomicfile"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 	"github.com/kukv/hedgehug/web"
 )
 
@@ -83,7 +83,7 @@ func (a *app) ui(port int, noOpen bool) error {
 	srv.SetPort(info.Port)
 	data, err := json.Marshal(info)
 	if err == nil {
-		err = atomicfile.WriteFile(file, append(data, '\n'))
+		err = osfs.WriteAtomic(file, append(data, '\n'))
 	}
 	if err != nil {
 		_ = ln.Close()

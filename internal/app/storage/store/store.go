@@ -17,8 +17,8 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/lib/atomicfile"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 const (
@@ -154,7 +154,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 	}
 	paths := make([]string, 0, len(files))
 	for _, f := range files {
-		if err := atomicfile.WriteFile(s.path(f.rel), f.data); err != nil {
+		if err := osfs.WriteAtomic(s.path(f.rel), f.data); err != nil {
 			return nil, err
 		}
 		paths = append(paths, f.rel)
