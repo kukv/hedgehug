@@ -428,12 +428,6 @@ func (te *testEnv) setSyncError(name, msg string) {
 	}
 }
 
-// stubSpawn replaces the start of the background sync with f, which gets the
-// arguments of the child.
-func stubSpawn(f func(args []string)) (restore func()) {
-	return usecasetest.StubSpawn(f)
-}
-
 // runBinary runs the built command with the variables of the test, and
 // HEDGEHUG_AUTO_SYNC as te.env sets it.
 func (te *testEnv) runBinary(bin string, args ...string) {

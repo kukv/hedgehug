@@ -229,6 +229,24 @@ func TestPollNewStoreTellsTheClients(t *testing.T) {
 	waitEvent(t, f.ch, func(e usecase.SyncStatusView) bool { return e.Store == "later" })
 }
 
+// The server makes tasks.changed's JSON from the event: a nil list would be
+// null there, so a change that names no task still carries empty lists.
+func TestPollChangeWithoutTasksHasEmptyLists(t *testing.T) {
+	t.Parallel()
+	f := pollFixture(t)
+	f.settle()
+	if _, err := stores.StoreInit(f.session(), stores.StoreInitInput{Name: "later", Prefix: "LT", Workspace: "later"}); err != nil {
+		t.Fatal(err)
+	}
+	e := waitEvent(t, f.ch, func(e watch.Change) bool { return e.Store == "later" })
+	if len(e.ULIDs) != 0 || len(e.Removed) != 0 {
+		t.Fatalf("event = %+v; want no task named", e)
+	}
+	if e.ULIDs == nil || e.Removed == nil {
+		t.Errorf("ULIDs nil = %v, Removed nil = %v; want both empty and not nil", e.ULIDs == nil, e.Removed == nil)
+	}
+}
+
 func TestPollStoreThatComesBackTellsTheClients(t *testing.T) {
 	t.Parallel()
 	f := pollFixture(t)

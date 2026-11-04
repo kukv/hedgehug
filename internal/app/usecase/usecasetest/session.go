@@ -319,6 +319,12 @@ func AddBareRemote(t *testing.T, ts *Session) string {
 // a data directory of its own and no store. Its clock is at now.
 func Other(t *testing.T, ts *Session, now time.Time) *Session {
 	t.Helper()
+	return OtherClock(t, ts, func() time.Time { return now })
+}
+
+// OtherClock is Other whose clock is now, read at each use.
+func OtherClock(t *testing.T, ts *Session, now func() time.Time) *Session {
+	t.Helper()
 	env := map[string]string{}
 	for k, v := range ts.Env {
 		env[k] = v
@@ -327,7 +333,7 @@ func Other(t *testing.T, ts *Session, now time.Time) *Session {
 	c := &Session{T: t, Env: env}
 	c.Session = &usecase.Session{
 		Getenv: func(k string) string { return c.Env[k] },
-		Now:    func() time.Time { return now },
+		Now:    now,
 		Warn:   func(m string) { c.Warns = append(c.Warns, m) },
 	}
 	c.AppendDefaultAccount()

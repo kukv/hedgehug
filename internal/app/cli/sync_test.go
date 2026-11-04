@@ -147,7 +147,8 @@ func TestSyncKeepsPendingForAWriteAfterThePush(t *testing.T) {
 	// The clock is read after the push too; the first such read writes,
 	// as another command would.
 	now := func() time.Time {
-		if !wrote && alice.uc().Unpushed("org") == 0 {
+		// a store that does not read is not a push yet; wait for the next read
+		if n, err := alice.uc().UnpushedErr("org"); err == nil && !wrote && n == 0 {
 			wrote = true
 			alice.uc().MustEdit("org", "update", usecasetest.Author{Name: "alice", Email: "alice@x"}, func(tx *usecasetest.Tx) error {
 				return tx.PutFile("late.txt", []byte("late\n"))

@@ -152,6 +152,15 @@ func TestChooseByWord(t *testing.T) {
 	}
 }
 
+// An empty option cannot be told by its first letter: it is an error, not a
+// panic.
+func TestChooseByWordRejectsAnEmptyOption(t *testing.T) {
+	a, _ := asker("c\n", true)
+	if _, err := a.Choose(prompt.Choose{Question: "Q ", Options: []string{"carry", ""}, ByWord: true, Canceled: "Canceled"}); err == nil {
+		t.Fatal("err = nil; want an error for the empty option")
+	}
+}
+
 // askChoice in store_init.go and askPick in add.go.
 func TestChooseByNumber(t *testing.T) {
 	opts := []string{"x", "y", "z"}

@@ -47,11 +47,12 @@ func PendingSince(ss *usecase.Session) time.Time {
 	return st.PendingSince
 }
 
-// SyncOne is the sync of the session's store, as the background sync of the
-// CLI does it. err is the failure of Config, Select or SyncStore; a sync that
-// failed is in rep.Err. When Config or Select failed no sync ran, and rep is
-// empty: rep.Store is "" (it is the store's name otherwise). The duplicates across stores are added to the
-// warnings, as a sync of all the stores adds them, also when the sync failed.
+// SyncOne is the sync of the session's store, as the background sync of
+// the CLI does it. err is the failure of Config, Select or SyncStore; a sync
+// that failed is in rep.Err. When Config or Select failed no sync ran, and
+// rep is empty: rep.Store is "" (it is the store's name otherwise). The
+// duplicates across stores are added to the warnings, as a sync of all the
+// stores adds them, also when the sync failed.
 func SyncOne(ss *usecase.Session) (rep usecase.SyncReport, err error) {
 	c, _, err := ss.Config()
 	if err != nil {

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -265,6 +266,9 @@ func TestShowAMovedTask(t *testing.T) {
 		wss, err := tx.Workspaces()
 		if err != nil {
 			return err
+		}
+		if len(wss) == 0 {
+			return errors.New("the store has no workspace")
 		}
 		return tx.PutTask(&model.Task{ULID: ulid, Title: "Moving", Kind: "task", Status: "todo", Workspace: wss[0].ULID, FormerIDs: []string{moved.ID}})
 	}); err != nil {

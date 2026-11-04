@@ -94,6 +94,9 @@ func (a Asker) Choose(c Choose) (string, error) {
 func (a Asker) chooseByWord(c Choose) (string, error) {
 	hints := make([]string, len(c.Options))
 	for i, o := range c.Options {
+		if o == "" {
+			return "", errors.New("prompt: an option is empty")
+		}
 		hints[i] = "[" + o[:1] + "]" + o[1:]
 	}
 	if _, err := fmt.Fprint(a.Out, c.Question+strings.Join(hints, " / ")+": "); err != nil {

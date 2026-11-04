@@ -200,7 +200,7 @@ func TestTaskHistoryAcrossAMerge(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	other := usecasetest.Other(t, ts.uc, time.Now())
+	other := usecasetest.OtherClock(t, ts.uc, time.Now)
 	if _, err := stores.StoreAdd(other.Session, "me", []string{remote}, "", ""); err != nil {
 		t.Fatal(err)
 	}

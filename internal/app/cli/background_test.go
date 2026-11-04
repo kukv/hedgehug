@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 	"github.com/kukv/hedgehug/internal/lib/testenv"
 )
 
@@ -40,7 +41,7 @@ func settled(t *testing.T) *testEnv {
 func TestWriteStartsBackgroundSync(t *testing.T) {
 	alice := settled(t)
 	var started []string
-	defer stubSpawn(func(args []string) { started = append(started, strings.Join(args, " ")) })()
+	defer usecasetest.StubSpawn(func(args []string) { started = append(started, strings.Join(args, " ")) })()
 	alice.env["HEDGEHUG_AUTO_SYNC"] = "1"
 	alice.ok("add", "x")
 	if len(started) != 1 || !strings.Contains(started[0], "sync --background --store org") {
@@ -56,7 +57,7 @@ func TestWriteWithoutRemoteStartsNothing(t *testing.T) {
 	te := newTestEnv(t)
 	te.ok("store", "init", "solo", "--prefix", "SOL")
 	started := 0
-	defer stubSpawn(func([]string) { started++ })()
+	defer usecasetest.StubSpawn(func([]string) { started++ })()
 	te.env["HEDGEHUG_AUTO_SYNC"] = "1"
 	te.ok("add", "x")
 	if started != 0 {
@@ -68,7 +69,7 @@ func TestStoreFlagOnAStoreWithoutRemoteStartsNothing(t *testing.T) {
 	te := newTestEnv(t)
 	te.ok("store", "init", "solo", "--prefix", "SOL")
 	started := 0
-	defer stubSpawn(func([]string) { started++ })()
+	defer usecasetest.StubSpawn(func([]string) { started++ })()
 	te.env["HEDGEHUG_AUTO_SYNC"] = "1"
 	te.ok("--store", "solo", "ls")
 	if started != 0 {
@@ -79,7 +80,7 @@ func TestStoreFlagOnAStoreWithoutRemoteStartsNothing(t *testing.T) {
 func TestReadStartsBackgroundSyncOnlyWhenDue(t *testing.T) {
 	alice := settled(t)
 	var started int
-	defer stubSpawn(func([]string) { started++ })()
+	defer usecasetest.StubSpawn(func([]string) { started++ })()
 	alice.env["HEDGEHUG_AUTO_SYNC"] = "1"
 	alice.ok("ls")
 	if started != 0 {
@@ -95,7 +96,7 @@ func TestReadStartsBackgroundSyncOnlyWhenDue(t *testing.T) {
 func TestSyncStartsNothing(t *testing.T) {
 	alice, _, _ := twoUsers(t)
 	var started int
-	defer stubSpawn(func([]string) { started++ })()
+	defer usecasetest.StubSpawn(func([]string) { started++ })()
 	alice.env["HEDGEHUG_AUTO_SYNC"] = "1"
 	alice.now = alice.now.Add(time.Hour)
 	alice.ok("sync", "--status")

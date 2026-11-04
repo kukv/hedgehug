@@ -90,6 +90,29 @@ func TestLsHelpExplainsATermThatStartsWithADash(t *testing.T) {
 	}
 }
 
+// The keys --format can use are those of a row of ls --json: checklist and
+// progress are among them. A tree row has context and in_cycle but no
+// children, so a template that asks for children is an error.
+//
+// 直列: editWith が t.Setenv（EDITOR と HH_TEST_EDITOR_SCRIPT）を使う
+func TestLsFormatKeys(t *testing.T) {
+	te := newStoreEnv(t)
+	p := te.addJSON("Project", "--kind", "project")
+	a := te.addJSON("Alpha", "--parent", p.ID, "--status", "done")
+	te.editWith(te.raw(a.ULID) + "- [x] one\n- [ ] two\n- [ ] three\n")
+	te.ok("edit", a.ID)
+	if out := te.ok("ls", "--format", "{{.title}} {{.checklist.done}}/{{.checklist.total}}", "status:done"); out != "Alpha 1/3\n" {
+		t.Errorf("--format over checklist = %q", out)
+	}
+	if out := te.ok("ls", "--format", "{{.title}} {{.progress.done}}/{{.progress.total}}", "kind:project"); out != "Project 1/1\n" {
+		t.Errorf("--format over progress = %q", out)
+	}
+	code, out, stderr := te.run("ls", "--tree", "--format", "{{.children}}")
+	if code == 0 || out != "" || !strings.Contains(stderr, "children") {
+		t.Errorf("ls --tree --format {{.children}}: exit %d, stdout %q, stderr %q; want an error that names the key", code, out, stderr)
+	}
+}
+
 // broken is in every task for --format, empty when the task is not broken,
 // so that {{if .broken}} works on a key that must be there.
 func TestLsFormatBroken(t *testing.T) {

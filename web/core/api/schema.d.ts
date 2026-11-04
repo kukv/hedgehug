@@ -1633,7 +1633,7 @@ export interface components {
             kept: components["schemas"]["UndoKept"][] | null;
             /** @description The subject of the commit taken back, without the hedgehug: prefix */
             subject: string;
-            /** @description The commit taken back; null when there was nothing to undo */
+            /** @description The commit taken back; null only in the CLI when there was nothing to undo (the server answers an undo.nothing problem) */
             undone: components["schemas"]["LogView"];
         };
         UnreadEvent: {

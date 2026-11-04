@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 const noAccountMessage = "hedgehug: no account is set up; add one with hedgehug auth add <name> --login <login> (or hedgehug auth login)\n"
@@ -45,7 +47,7 @@ func TestNoAccountStartsNoBackgroundSync(t *testing.T) {
 	alice.now = alice.now.Add(time.Hour) // the store is due
 	alice.dropDefaultAccount()
 	started := 0
-	defer stubSpawn(func([]string) { started++ })()
+	defer usecasetest.StubSpawn(func([]string) { started++ })()
 	alice.env["HEDGEHUG_AUTO_SYNC"] = "1"
 	for _, args := range [][]string{{"auth", "status"}, {"help"}, {"ls", "--help"}} {
 		alice.run(args...)

@@ -43,11 +43,11 @@ func TestDeviceFlowDone(t *testing.T) {
 	// the account is in config.yaml with the device flow, and the tokens are in the keychain.
 	kind, id, ok := ts.uc.AccountTokenKind("bob")
 	if !ok || kind != "device" || id != "github.com/bob" {
-		t.Fatalf("account = %+v, %v", [2]string{kind, id}, ok)
+		t.Fatalf("account = %q %q, %v", kind, id, ok)
 	}
 	access, refresh, err := ts.uc.DeviceTokens(k, "bob")
 	if err != nil || access == "" || refresh == "" {
-		t.Fatalf("keychain = %+v, %v", [2]string{access, refresh}, err)
+		t.Fatalf("keychain = %q %q, %v", access, refresh, err)
 	}
 	// 細部 12: the tokens are in no response, no event and no line of the log.
 	for _, s := range []string{access, refresh} {

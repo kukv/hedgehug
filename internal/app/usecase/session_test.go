@@ -59,7 +59,7 @@ func TestBackgroundSyncStartsOnlyWhenAsked(t *testing.T) {
 		ts.Env["HEDGEHUG_AUTO_SYNC"] = "1"
 		ts.BackgroundSync = tc.background
 		var started int
-		defer replicate.SetSpawn(func(string, []string, string) error { started++; return nil })()
+		restore := replicate.SetSpawn(func(string, []string, string) error { started++; return nil })
 		s, ix, err := ts.Open()
 		if err != nil {
 			t.Fatal(err)
@@ -68,6 +68,7 @@ func TestBackgroundSyncStartsOnlyWhenAsked(t *testing.T) {
 		if _, err := ts.Update(s, store.Op{Name: "add", Task: task.ULID}, func(tx *store.Tx) error { return tx.PutTask(task) }); err != nil {
 			t.Fatal(err)
 		}
+		restore()
 		if started != tc.want {
 			t.Errorf("BackgroundSync=%v: the background sync started %d times; want %d", tc.background, started, tc.want)
 		}

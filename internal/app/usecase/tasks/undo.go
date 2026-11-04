@@ -120,7 +120,7 @@ type UndoKept struct {
 // UndoWrite is what undo answers, in the CLI's --json and in the server's
 // response.
 type UndoWrite struct {
-	Undone  *usecase.LogView `json:"undone" doc:"The commit taken back; null when there was nothing to undo"`
+	Undone  *usecase.LogView `json:"undone" doc:"The commit taken back; null only in the CLI when there was nothing to undo (the server answers an undo.nothing problem)"`
 	Subject string           `json:"subject" doc:"The subject of the commit taken back, without the hedgehug: prefix"`
 	Changed bool             `json:"changed" doc:"false when every field was changed later by others, so nothing was written"`
 	Commit  *string          `json:"commit"`

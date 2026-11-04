@@ -230,7 +230,8 @@ func TestLoopFollowsAddedStores(t *testing.T) {
 	}
 	ts.srv.loop.Wake()
 	eventually(t, "the sync of the new store", func() bool {
-		return !ts.uc.LastSuccess("two").IsZero()
+		at, err := ts.uc.LastSuccessErr("two")
+		return err == nil && !at.IsZero()
 	})
 }
 

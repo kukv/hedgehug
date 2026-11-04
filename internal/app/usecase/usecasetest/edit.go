@@ -3,6 +3,7 @@ package usecasetest
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -126,12 +127,21 @@ func (ts *Session) StoreDir(storeName string) string {
 // the store beside the command does.
 func (ts *Session) openAt(storeName string) *store.Store {
 	ts.T.Helper()
-	s, err := store.Open(ts.StoreDir(storeName))
+	s, err := ts.openAtErr(storeName)
 	if err != nil {
 		ts.T.Fatal(err)
 	}
-	ts.T.Cleanup(func() { _ = s.Repo().Close() })
 	return s
+}
+
+// openAtErr is openAt that returns the failure instead of failing the test.
+func (ts *Session) openAtErr(storeName string) (*store.Store, error) {
+	s, err := store.Open(ts.StoreDir(storeName))
+	if err != nil {
+		return nil, err
+	}
+	ts.T.Cleanup(func() { _ = s.Repo().Close() })
+	return s, nil
 }
 
 // Edit opens the store storeName and calls its Update with Op{Name: op,
@@ -320,7 +330,7 @@ func (ts *Session) NoLeftover(dir string) error {
 
 type leftoverError struct{ left store.Leftover }
 
-func (e *leftoverError) Error() string { return "left beside the store: " + e.left.New }
+func (e *leftoverError) Error() string { return fmt.Sprintf("leftover = %+v", e.left) }
 
 // HistoryAtHead fails the test unless the saved history index of the store
 // storeName is there and already at the newest commit: opening it again
@@ -439,6 +449,16 @@ func (ts *Session) Unpushed(storeName string) int {
 		ts.T.Fatal(err)
 	}
 	return n
+}
+
+// UnpushedErr is Unpushed that returns the failure instead of failing the
+// test.
+func (ts *Session) UnpushedErr(storeName string) (int, error) {
+	s, err := ts.openAtErr(storeName)
+	if err != nil {
+		return 0, err
+	}
+	return replicate.Unpushed(s.Repo())
 }
 
 // InboxItem is a notice to put into the inbox of a store.
@@ -564,6 +584,17 @@ func (ts *Session) syncState(storeName string) replicate.State {
 // LastSuccess is when the store storeName was last synced; zero before the first.
 func (ts *Session) LastSuccess(storeName string) time.Time {
 	return ts.syncState(storeName).LastSuccess
+}
+
+// LastSuccessErr is LastSuccess that returns the failure instead of failing
+// the test, for a poll that waits for sync.json to read.
+func (ts *Session) LastSuccessErr(storeName string) (time.Time, error) {
+	s, err := ts.openAtErr(storeName)
+	if err != nil {
+		return time.Time{}, err
+	}
+	st, err := replicate.ReadState(s)
+	return st.LastSuccess, err
 }
 
 // LastAttempt is when a sync of the store storeName last started.
