@@ -1253,8 +1253,12 @@ components:
       properties:
         account:
           type: string
+        color:
+          type: string
         default:
           description: The store hedgehug picks without --store
+          type: boolean
+        hidden:
           type: boolean
         last_success:
           format: date-time
@@ -1262,6 +1266,8 @@ components:
         name:
           type: string
         path:
+          type: string
+        read_only:
           type: string
         remotes:
           items:
@@ -1274,6 +1280,7 @@ components:
         - name
         - path
         - remotes
+        - hidden
       type: object
     StoreState:
       additionalProperties: false

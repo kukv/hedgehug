@@ -565,6 +565,9 @@ type StoreView struct {
 	Path        string     `json:"path"`
 	Remotes     []string   `json:"remotes"`
 	Account     string     `json:"account,omitempty"`
+	Color       string     `json:"color,omitempty"`        // from config.yaml; empty: the GUI picks one by order
+	Hidden      bool       `json:"hidden"`                 // from config.yaml; only the GUI leaves the store out
+	ReadOnly    string     `json:"read_only,omitempty"`    // why this machine cannot write the store, in words; absent when it can
 	LastSuccess *time.Time `json:"last_success,omitempty"` // of the last sync
 }
 
@@ -576,19 +579,26 @@ func (ss *Session) StoreList() ([]StoreView, error) {
 	}
 	out := make([]StoreView, len(c.Stores))
 	for i, e := range c.Stores {
-		out[i] = StoreView{Name: e.Name, Path: e.Path, Remotes: append([]string{}, e.Remotes...)}
-		if acct, ok := c.Writer(e); ok {
-			out[i].Account = acct.ID()
-		}
-		// A store that does not open or has no state is listed without its last sync.
-		if s, err := ss.openStoreAt(e.Path); err == nil {
-			if st, err := replicate.ReadState(s); err == nil {
-				out[i].LastSuccess = timePtr(st.LastSuccess)
-			}
-			_ = s.Repo().Close()
-		}
+		out[i] = ss.storeView(c, e)
 	}
 	return out, nil
+}
+
+// storeView is the view of the store e of c. A store that does not open or
+// has no state is listed without its last sync and its read-only reason.
+func (ss *Session) storeView(c *config.Config, e config.StoreEntry) StoreView {
+	v := StoreView{Name: e.Name, Path: e.Path, Remotes: append([]string{}, e.Remotes...), Color: e.Color, Hidden: e.Hidden}
+	if acct, ok := c.Writer(e); ok {
+		v.Account = acct.ID()
+	}
+	if s, err := ss.openStoreAt(e.Path); err == nil {
+		if st, err := replicate.ReadState(s); err == nil {
+			v.LastSuccess = timePtr(st.LastSuccess)
+		}
+		v.ReadOnly = readOnlyWhy(s)
+		_ = s.Repo().Close()
+	}
+	return v
 }
 
 // StoreRemoveResult is the store StoreRemove took out of the config, as
@@ -665,21 +675,62 @@ func (ss *Session) StoreDefault(name string) (string, error) {
 	}
 	if err := ss.updateConfig(c, func(c *config.Config) error {
 		if !storeExists(c, name) { // also when another writer removed it since the read
-			names := make([]string, len(c.Stores))
-			for i, s := range c.Stores {
-				names[i] = s.Name
-			}
-			msg := fmt.Sprintf("no store is named %q", name)
-			if len(names) > 0 {
-				msg += " (stores: " + strings.Join(names, ", ") + ")"
-			}
-			return newErr(KindNotFound, "store.not_found", errors.New(msg), "name", name, "candidates", names)
+			return noSuchStore(c, name)
 		}
 		return c.SetDefaultStore(name)
 	}); err != nil {
 		return "", err
 	}
 	return c.DefaultStore, nil
+}
+
+// noSuchStore is the error for a name that is no store of c: KindNotFound,
+// "store.not_found", with the names as candidates.
+func noSuchStore(c *config.Config, name string) error {
+	names := make([]string, len(c.Stores))
+	for i, s := range c.Stores {
+		names[i] = s.Name
+	}
+	msg := fmt.Sprintf("no store is named %q", name)
+	if len(names) > 0 {
+		msg += " (stores: " + strings.Join(names, ", ") + ")"
+	}
+	return newErr(KindNotFound, "store.not_found", errors.New(msg), "name", name, "candidates", names)
+}
+
+// StoreSet changes how the GUI shows the store name, as hh store set: its
+// color (one of config.StoreColors; "" gives it back to the GUI to pick) and
+// whether it is hidden. A nil argument is left as it is. config.yaml is not
+// written when nothing changes. A color that is not one is KindInvalid,
+// "store.bad_color"; a name that is no store is "store.not_found" as for
+// StoreDefault. It returns the store as it is now.
+func (ss *Session) StoreSet(name string, color *string, hidden *bool) (StoreView, error) {
+	if color != nil && *color != "" && !slices.Contains(config.StoreColors, *color) {
+		return StoreView{}, newErr(KindInvalid, "store.bad_color",
+			fmt.Errorf("%q is not a store color (colors: %s)", *color, strings.Join(config.StoreColors, ", ")),
+			"value", *color, "candidates", slices.Clone(config.StoreColors))
+	}
+	c, _, err := ss.Config()
+	if err != nil {
+		return StoreView{}, err
+	}
+	i := slices.IndexFunc(c.Stores, func(e config.StoreEntry) bool { return e.Name == name })
+	if i < 0 {
+		return StoreView{}, noSuchStore(c, name)
+	}
+	cur := c.Stores[i]
+	if (color != nil && *color != cur.Color) || (hidden != nil && *hidden != cur.Hidden) {
+		if err := ss.updateConfig(c, func(c *config.Config) error {
+			if !storeExists(c, name) { // another writer may have removed it since the read
+				return noSuchStore(c, name)
+			}
+			return c.SetStoreLook(name, color, hidden)
+		}); err != nil {
+			return StoreView{}, err
+		}
+	}
+	i = slices.IndexFunc(c.Stores, func(e config.StoreEntry) bool { return e.Name == name })
+	return ss.storeView(c, c.Stores[i]), nil
 }
 
 // lockToDelete checks that deleting the directory of e loses nothing, and
