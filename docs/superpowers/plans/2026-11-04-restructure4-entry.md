@@ -62,7 +62,7 @@
 
 ## 調べてわかっていること（main 6e2b895）
 
-- cli・server が触っている禁止対象の名前は、`tools/restructure/uses` で数える（フィールドとメソッドを含む。テストのファイルも含む）。回 4 の初めは 457 行（本体: cli 22 ファイル・server 12 ファイル。テスト: cli 34 ファイル・server 21 ファイル。テスト用の部品の名前を含む）。リポジトリのルートで:
+- cli・server が触っている禁止対象の名前は、`tools/restructure/uses` で数える（フィールドとメソッドを含む。テストのファイルも含む）。回 4 の初めは、テスト用の部品の名前を除いて 489 行（本体: cli 22 ファイル・server 11 ファイル。テスト: cli 34 ファイル・server 20 ファイル）。`r.Entry.Title` のような連鎖のフィールドも数えるリポジトリのルートで:
 
   ```bash
   go -C tools/restructure run ./uses "$PWD" app/storage/,app/remote/,lib/gitrepo,lib/github ./internal/app/cli/... ./internal/app/server/... \
@@ -89,7 +89,7 @@
 - Modify: `internal/app/usecase/sync_shared.go`（replication から `StoreStatus`・`SyncStatus` を下ろす。`SyncIntervals`・`SyncSchedule`・`SyncStatusView`・`NewSyncStatusView`）
 - Modify: `internal/app/domain/model/`（`TaskOfPath` を `ParseCommentPath` の隣へ。`usecase/replication/sync.go:150` から移す）
 - Modify: `internal/app/usecase/schemas/schemacheck.go`（`ViolationsText` を消して土台を呼ぶ）
-- Modify（呼び出し側）: `internal/app/cli/app.go`・`run.go`・`ui.go`・`edit.go`、`internal/app/server/server.go`・`problem.go`・`stores.go`・`comments.go`・`syncapi.go`・`admin.go`（list-stores の既定は Task 5 まで今のまま）、`internal/app/usecase/replication/*.go`（`SyncStatus` の呼び出し）、usecase のテスト 3 か所の `AfterWrite`（session_test.go:17、session_more_test.go:110、maintenance/maintain_test.go:112）と `TestViolationsText`
+- Modify（呼び出し側）: `internal/app/cli/app.go`・`run.go`・`ui.go`・`edit.go`・`sync.go`（`sync --status` の `replication.StoreStatus`・`SyncStatus`）、`internal/app/server/server.go`・`problem.go`・`stores.go`・`comments.go`・`syncapi.go`・`admin.go`（list-stores の既定は Task 5 まで今のまま）、`internal/app/usecase/replication/*.go`（`SyncStatus` の呼び出し）、usecase のテスト 3 か所の `AfterWrite`（session_test.go:17、session_more_test.go:110、maintenance/maintain_test.go:112）と `TestViolationsText`
 - Test: `internal/app/usecase/errors_test.go`（Describe・ViolationsOf・ProblemCode）、`session_test.go`（BackgroundSync）
 
 **Interfaces（Produces）:**
@@ -653,7 +653,7 @@ usage エラーは cli の `usageErrorf` と同じ扱い（終了コード 2）�
 ### Task 8: 本体の残り — cli と server の本体から禁止対象をなくす
 
 **Files:**
-- Modify: Task 1〜7 の後に uses で残る本体のファイル（予想: cli の `use.go`（`stores.UseResult` の `*index.Entry`）、`mv.go`（`stores.MovePlan.Tasks`・`store.Field`・`store.Target`）、`comment.go`（`store.Comment`・`CommentRef`）、`inbox.go`（`inbox.Kind`・`ULID`）、`migrate.go`・`workspace.go` の残り、server の `admin.go`・`tasks_write.go`・`activity.go`・`comments.go` の残り）と、それを直すための usecase の型
+- Modify: Task 1〜7 の後に uses で残る本体のファイル（予想: cli の `use.go`（`stores.UseResult` の `*index.Entry`）、`schema_scope.go`（`schemas.ScopedResult` の `*index.Entry` の `DisplayID`・`Title`）、`mv.go`（`stores.MovePlan.Tasks`・`store.Field`・`store.Target`）、`comment.go`（`store.Comment`・`CommentRef`）、`inbox.go`（`inbox.Kind`・`ULID`）、`migrate.go`・`workspace.go` の残り、server の `admin.go`・`tasks_write.go`・`activity.go`・`comments.go` の残り）と、それを直すための usecase の型
 - Test: なし（既存のテストが通ることで確かめる）
 
 - [ ] **Step 1:** uses を走らせ、`_test.go` 以外の行を一覧にする（Global の「調べてわかっていること」のコマンドに `| grep -v '_test.go'`）

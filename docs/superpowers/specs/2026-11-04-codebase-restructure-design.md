@@ -22,7 +22,7 @@
 | 2 | 層 | lib → domain → storage → remote → usecase → cli / server。各グループは自分・下の層・lib だけを import する |
 | 3 | view | domain ではなく storage に置く（Store の中のファイルの形式と読み書きなので） |
 | 4 | mount と current | 責務ごとに解体して既存の層に配る。新しい層は作らない |
-| 5 | usecase の分け方 | 直下を土台にし、領域ごとのサブパッケージ 11 個に分ける（2.3） |
+| 5 | usecase の分け方 | 直下を土台にし、領域ごとのサブパッケージ 11 個に分ける（2.3）。回 4 で watch を足して 12 個（決定 15） |
 | 6 | 名前 | ops → usecase、sync → replicate、context → current。usecase の領域名は下の層と同じ名前にしない |
 | 7 | JSON の形 | CLI の `--json` を server と同じ usecase の型に一本化する。CLI にしかない項目は足す。server の書き込み応答の包み（`{task, commit}` など）も usecase に移し、CLI もその形で出す（2026-11-04 利用者が決定。4.3） |
 | 8 | Windows | 実装は含めない。osfs の `_unix.go` に閉じ込めるところまで |
