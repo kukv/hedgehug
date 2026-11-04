@@ -1,11 +1,11 @@
 # フェーズ 4f-3 の引き継ぎ（2026-11-05 時点）
 
-4f-3（サイドバー・マイタスク・閲覧のみの表示・Store 間の移動）の実装は終わった。PR はまだ出していない。
+4f-3（サイドバー・マイタスク・閲覧のみの表示・Store 間の移動）は PR #59 で main に入り、完了した。
 
 ## いまの状態
 
 - ブランチ `phase4f3-stores`。4f-2 のマージ後の main（1775b2e）から切った。4f-2 の引き継ぎを完了にした docs（d56b47c）も、このブランチに入っている（文書だけの PR は出さない、という利用者の決定による）
-- PR は未作成。main の取り込みもまだしていない
+- PR #59 で main にマージ済み（464c3cb）
 - plan: `docs/superpowers/plans/2026-11-04-phase4f3-stores.md`（Task 1〜7。末尾に「検査の結果」「Task 7 の Step 1・2 の結果」「実装で plan から変えた点」「細部 34〜51 と 92〜106 の実装とテスト」の表）
 - 概要 plan `2026-11-04-phase4f-screens.md` に「4f-3 の plan で足した細部」（細部 92〜117）を足した
 
@@ -27,6 +27,6 @@ plan の細部 92〜106、概要 plan の細部 107〜117、plan 末尾に記録
 
 ## 次
 
-- この回の作業と引き継ぎを1つにまとめて PR を出す。出す前に main を取り込み、`make e2e` を流して通ることを確かめる
-- マージのあと、4f は完了する。phase4 の spec（`docs/superpowers/specs/2026-11-01-phase4-gui-design.md`）の小フェーズは 4a〜4f で、4f が最後。次はフェーズ4の完了の確認（spec の「フェーズ4全体の完了条件」と「画面と範囲」の各画面が GUI で動くことの確認）。spec は 4f のあとに続く小フェーズを書いていない。SettingsAutomations などフェーズ5の画面は、そのフェーズの完了条件に含まれる
+- 4f は完了した。phase4 の spec（`docs/superpowers/specs/2026-11-01-phase4-gui-design.md`）の小フェーズは 4a〜4f で、4f が最後
+- 次はフェーズ5。設計は `docs/superpowers/specs/2026-11-05-phase5-github-design.md`
 - 4f-3 で残っている作業はない
