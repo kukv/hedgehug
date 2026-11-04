@@ -219,7 +219,7 @@ func (c *Config) loadStores(seq *yaml.Node) error {
 		if col := valueOf(it, "color"); col != nil {
 			v, ok := text(col)
 			if !ok || v != "" && !slices.Contains(StoreColors, v) {
-				return c.errAt(col, fmt.Sprintf("stores: color %q: want one of %s", col.Value, strings.Join(StoreColors, ", ")))
+				return c.errAt(col, fmt.Sprintf("stores: color %q: want one of %s", v, strings.Join(StoreColors, ", ")))
 			}
 			e.Color = v
 		}
@@ -426,6 +426,18 @@ func (c *Config) root() *yaml.Node {
 	return c.doc.Content[0]
 }
 
+// setValueInPlace is setKey that keeps the comments of the value when the key
+// is there already, as a line comment such as "color: teal # mine".
+func setValueInPlace(m *yaml.Node, key string, v *yaml.Node) {
+	if old := valueOf(m, key); old != nil && old.Kind == yaml.ScalarNode {
+		head, line, foot := old.HeadComment, old.LineComment, old.FootComment
+		*old = *v
+		old.HeadComment, old.LineComment, old.FootComment = head, line, foot
+		return
+	}
+	setKey(m, key, v)
+}
+
 // setKey sets key of the mapping m to v, adding it at the end when missing.
 func setKey(m *yaml.Node, key string, v *yaml.Node) {
 	for i := 0; i+1 < len(m.Content); i += 2 {
@@ -554,12 +566,12 @@ func (c *Config) SetStoreLook(name string, color *string, hidden *bool) error {
 			if *color == "" {
 				deleteKey(it, "color")
 			} else {
-				setKey(it, "color", scalar(*color))
+				setValueInPlace(it, "color", scalar(*color))
 			}
 		}
 		if hidden != nil {
 			if *hidden {
-				setKey(it, "hidden", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "true"})
+				setValueInPlace(it, "hidden", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "true"})
 			} else {
 				deleteKey(it, "hidden")
 			}

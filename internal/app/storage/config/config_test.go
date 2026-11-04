@@ -938,3 +938,29 @@ func TestSetStoreLookRefusals(t *testing.T) {
 		t.Errorf("a refused call changed the store: %+v", c.Stores[0])
 	}
 }
+
+func TestSetStoreLookKeepsLineComments(t *testing.T) {
+	t.Parallel()
+	p := testPaths(t)
+	writeConfig(t, p, "stores:\n  - name: a\n    path: ~/a\n    color: teal # mine\n    hidden: true # also mine\n")
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	orange, yes := "orange", true
+	if err := c.SetStoreLook("a", &orange, &yes); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(p.ConfigFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"color: orange # mine", "hidden: true # also mine"} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("%q is gone from:\n%s", want, b)
+		}
+	}
+}
