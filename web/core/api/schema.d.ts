@@ -613,6 +613,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/{id}/move-store": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move the task and the tasks under it to another store, as hh mv --store after its question */
+        post: operations["move-store"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{id}/move-store/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Show what moving the task and the tasks under it to another store would do; writes nothing */
+        post: operations["plan-move-store"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/{id}/restore": {
         parameters: {
             query?: never;
@@ -1049,6 +1083,104 @@ export interface components {
             root?: boolean;
             /** @description Move to another workspace */
             workspace?: string;
+        };
+        MovePlanView: {
+            from: string;
+            /** @description Accounts that can read the source and not the destination; empty when either list is unknown */
+            hidden: string[];
+            /** @description The parent in the destination, when one was given; id is as the destination shows it */
+            parent?: components["schemas"]["MoveTaskView"];
+            /** @description Present when a project moved has a scoped schema */
+            scoped?: components["schemas"]["MoveScopedView"];
+            /** @description The root first, every parent before its children; id is as the source shows it */
+            tasks: components["schemas"]["MoveTaskView"][];
+            to: string;
+            /** @description The references the move cuts */
+            unlinked: components["schemas"]["MoveUnlinkView"][];
+            /** @description The workspace of the destination that the root task goes into */
+            workspace: components["schemas"]["MoveWorkspaceView"];
+        };
+        MoveRefView: {
+            id: string;
+            ulid: string;
+        };
+        MoveScopedResult: {
+            carried: boolean;
+            dropped?: string[];
+        };
+        MoveScopedView: {
+            /**
+             * @description The choice that was given
+             * @enum {string}
+             */
+            choice?: "carry" | "drop";
+            /** @description What carrying leaves out, as "<what> <name>" (status, transitions, required, prop, template, kind); empty unless carried */
+            dropped: string[];
+            /** @description A choice is still needed: scoped was not given */
+            required: boolean;
+        };
+        MoveStoreFields: {
+            /** @description A task of that store to put the task under: an ID or a ULID */
+            parent?: string;
+            /** @description carry or drop (anything else is 400 usage): whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required */
+            scoped?: string;
+            /** @description The store to move to, by name */
+            to: string;
+            /** @description The workspace of that store, by name or prefix; needed when it has more than one (otherwise 400 choice.required) */
+            workspace?: string;
+        };
+        MoveStoreInputBody: {
+            /** @description The plan POST /move-store/plan showed and the user agreed to; without it the answer is 400 confirm.required, and if the tasks are no longer what it lists, 409 move.changed */
+            confirmed?: components["schemas"]["MovePlanView"];
+            /** @description A task of that store to put the task under: an ID or a ULID */
+            parent?: string;
+            /** @description carry or drop (anything else is 400 usage): whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required */
+            scoped?: string;
+            /** @description The store to move to, by name */
+            to: string;
+            /** @description The workspace of that store, by name or prefix; needed when it has more than one (otherwise 400 choice.required) */
+            workspace?: string;
+        };
+        MoveStoreResultView: {
+            from: string;
+            /** @description The destination was written by an earlier run that stopped; this one only finished the source */
+            resumed?: boolean;
+            scoped?: components["schemas"]["MoveScopedResult"];
+            tasks: components["schemas"]["MovedTask"][];
+            to: string;
+            /** @description The references that were cut, by ULID */
+            unlinked?: components["schemas"]["MoveUnlinkResult"][];
+        };
+        MoveTargetView: {
+            /** @description The ID of a task, the name of a sprint or a release; the ULID when there is none */
+            label: string;
+            ulid: string;
+        };
+        MoveTaskView: {
+            id: string;
+            title: string;
+            ulid: string;
+        };
+        MoveUnlinkResult: {
+            field: string;
+            target: string;
+            task: string;
+        };
+        MoveUnlinkView: {
+            /** @description blocked_by, props.<name of a property>, sprint or releases */
+            field: string;
+            target: components["schemas"]["MoveTargetView"];
+            task: components["schemas"]["MoveRefView"];
+        };
+        MoveWorkspaceView: {
+            name: string;
+            prefix: string;
+            ulid: string;
+        };
+        MovedTask: {
+            new_id: string;
+            old_id: string;
+            ulid: string;
         };
         Notification: {
             author: string;
@@ -3221,6 +3353,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskWrite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "move-store": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ID, a former ID, or the ULID of the task */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveStoreInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoveStoreResultView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "plan-move-store": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ID, a former ID, or the ULID of the task */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveStoreFields"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MovePlanView"];
                 };
             };
             /** @description Error */

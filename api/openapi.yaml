@@ -766,6 +766,237 @@ components:
           description: Move to another workspace
           type: string
       type: object
+    MovePlanView:
+      additionalProperties: false
+      properties:
+        from:
+          type: string
+        hidden:
+          description: Accounts that can read the source and not the destination; empty when either list is unknown
+          items:
+            type: string
+          type: array
+        parent:
+          $ref: "#/components/schemas/MoveTaskView"
+          description: The parent in the destination, when one was given; id is as the destination shows it
+        scoped:
+          $ref: "#/components/schemas/MoveScopedView"
+          description: Present when a project moved has a scoped schema
+        tasks:
+          description: The root first, every parent before its children; id is as the source shows it
+          items:
+            $ref: "#/components/schemas/MoveTaskView"
+          type: array
+        to:
+          type: string
+        unlinked:
+          description: The references the move cuts
+          items:
+            $ref: "#/components/schemas/MoveUnlinkView"
+          type: array
+        workspace:
+          $ref: "#/components/schemas/MoveWorkspaceView"
+          description: The workspace of the destination that the root task goes into
+      required:
+        - from
+        - to
+        - workspace
+        - tasks
+        - unlinked
+        - hidden
+      type: object
+    MoveRefView:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        ulid:
+          type: string
+      required:
+        - ulid
+        - id
+      type: object
+    MoveScopedResult:
+      additionalProperties: false
+      properties:
+        carried:
+          type: boolean
+        dropped:
+          items:
+            type: string
+          type: array
+      required:
+        - carried
+      type: object
+    MoveScopedView:
+      additionalProperties: false
+      properties:
+        choice:
+          description: The choice that was given
+          enum:
+            - carry
+            - drop
+          type: string
+        dropped:
+          description: What carrying leaves out, as "<what> <name>" (status, transitions, required, prop, template, kind); empty unless carried
+          items:
+            type: string
+          type: array
+        required:
+          description: "A choice is still needed: scoped was not given"
+          type: boolean
+      required:
+        - required
+        - dropped
+      type: object
+    MoveStoreFields:
+      additionalProperties: false
+      properties:
+        parent:
+          description: "A task of that store to put the task under: an ID or a ULID"
+          type: string
+        scoped:
+          description: "carry or drop (anything else is 400 usage): whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required"
+          type: string
+        to:
+          description: The store to move to, by name
+          type: string
+        workspace:
+          description: The workspace of that store, by name or prefix; needed when it has more than one (otherwise 400 choice.required)
+          type: string
+      required:
+        - to
+      type: object
+    MoveStoreInputBody:
+      additionalProperties: false
+      properties:
+        confirmed:
+          $ref: "#/components/schemas/MovePlanView"
+          description: The plan POST /move-store/plan showed and the user agreed to; without it the answer is 400 confirm.required, and if the tasks are no longer what it lists, 409 move.changed
+        parent:
+          description: "A task of that store to put the task under: an ID or a ULID"
+          type: string
+        scoped:
+          description: "carry or drop (anything else is 400 usage): whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required"
+          type: string
+        to:
+          description: The store to move to, by name
+          type: string
+        workspace:
+          description: The workspace of that store, by name or prefix; needed when it has more than one (otherwise 400 choice.required)
+          type: string
+      required:
+        - to
+      type: object
+    MoveStoreResultView:
+      additionalProperties: false
+      properties:
+        from:
+          type: string
+        resumed:
+          description: The destination was written by an earlier run that stopped; this one only finished the source
+          type: boolean
+        scoped:
+          $ref: "#/components/schemas/MoveScopedResult"
+        tasks:
+          items:
+            $ref: "#/components/schemas/MovedTask"
+          type: array
+        to:
+          type: string
+        unlinked:
+          description: The references that were cut, by ULID
+          items:
+            $ref: "#/components/schemas/MoveUnlinkResult"
+          type: array
+      required:
+        - from
+        - to
+        - tasks
+      type: object
+    MoveTargetView:
+      additionalProperties: false
+      properties:
+        label:
+          description: The ID of a task, the name of a sprint or a release; the ULID when there is none
+          type: string
+        ulid:
+          type: string
+      required:
+        - ulid
+        - label
+      type: object
+    MoveTaskView:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        ulid:
+          type: string
+      required:
+        - ulid
+        - id
+        - title
+      type: object
+    MoveUnlinkResult:
+      additionalProperties: false
+      properties:
+        field:
+          type: string
+        target:
+          type: string
+        task:
+          type: string
+      required:
+        - task
+        - field
+        - target
+      type: object
+    MoveUnlinkView:
+      additionalProperties: false
+      properties:
+        field:
+          description: blocked_by, props.<name of a property>, sprint or releases
+          type: string
+        target:
+          $ref: "#/components/schemas/MoveTargetView"
+        task:
+          $ref: "#/components/schemas/MoveRefView"
+      required:
+        - task
+        - field
+        - target
+      type: object
+    MoveWorkspaceView:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        prefix:
+          type: string
+        ulid:
+          type: string
+      required:
+        - ulid
+        - name
+        - prefix
+      type: object
+    MovedTask:
+      additionalProperties: false
+      properties:
+        new_id:
+          type: string
+        old_id:
+          type: string
+        ulid:
+          type: string
+      required:
+        - ulid
+        - old_id
+        - new_id
+      type: object
     Notification:
       additionalProperties: false
       properties:
@@ -3806,6 +4037,86 @@ paths:
                 $ref: "#/components/schemas/Problem"
           description: Error
       summary: Move a task, as hh mv
+      tags:
+        - tasks
+  /api/tasks/{id}/move-store:
+    post:
+      operationId: move-store
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveStoreInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoveStoreResultView"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Move the task and the tasks under it to another store, as hh mv --store after its question
+      tags:
+        - tasks
+  /api/tasks/{id}/move-store/plan:
+    post:
+      operationId: plan-move-store
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveStoreFields"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovePlanView"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Show what moving the task and the tasks under it to another store would do; writes nothing
       tags:
         - tasks
   /api/tasks/{id}/restore:
