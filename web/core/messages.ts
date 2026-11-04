@@ -150,6 +150,9 @@ const messages: Record<string, Make> = {
   "store.read_only": (a) =>
     `${str(a, "store")} は読み取り専用です${a.reason ? `（${str(a, "reason")}）` : ""}`,
   "store.bad_name": (a) => `「${str(a, "value")}」は Store の名前に使えません`,
+  "store.bad_color": (a) =>
+    `「${str(a, "value")}」は Store の色に使えません` +
+    (list(a, "candidates") ? `（${list(a, "candidates")}）` : ""),
   "store.exists": (a) => `${str(a, "name")} という Store はすでにあります`,
   "store.not_found": (a) =>
     `${str(a, "name")} という Store はありません` +

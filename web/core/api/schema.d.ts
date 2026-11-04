@@ -1049,12 +1049,15 @@ export interface components {
         };
         StoreItem: {
             account?: string;
+            color?: string;
             /** @description The store hedgehug picks without --store */
             default: boolean;
+            hidden: boolean;
             /** Format: date-time */
             last_success?: string;
             name: string;
             path: string;
+            read_only?: string;
             remotes: string[] | null;
         };
         StoreState: {

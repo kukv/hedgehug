@@ -23,6 +23,9 @@ describe("errorMessage", () => {
     expect(errorMessage(err("store.not_found", { name: "foo", candidates: ["a", "b"] }))).toBe(
       "foo という Store はありません（登録済み: a、b）",
     );
+    expect(
+      errorMessage(err("store.bad_color", { value: "red", candidates: ["teal", "orange"] })),
+    ).toBe("「red」は Store の色に使えません（teal、orange）");
   });
 
   it("words restore_at.not_found for a restore and for reading a point in time", () => {
