@@ -35,7 +35,7 @@ func (s *cachedStorage) SetReference(ref *plumbing.Reference) error {
 		return fmt.Errorf("reference %s has an unknown type", ref.Name())
 	}
 	path := filepath.Join(s.gitDir, filepath.FromSlash(ref.Name().String()))
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { // #nosec G301 -- matches go-git (osfs), which git itself reads
+	if err := osfs.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	// The temporary file is outside refs/, where go-git lists references.
@@ -57,7 +57,7 @@ func (s *cachedStorage) SetReference(ref *plumbing.Reference) error {
 		err = osfs.Rename(tmp, path)
 	}
 	if err != nil {
-		_ = os.Remove(tmp)
+		_ = osfs.Remove(tmp)
 	}
 	return err
 }

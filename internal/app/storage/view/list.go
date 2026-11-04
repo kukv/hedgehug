@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // ErrNotFound means no view has the name.
@@ -56,7 +57,7 @@ func read(storeDir, name, rel string) Entry {
 		e.Err = err
 		return e
 	}
-	data, err := os.ReadFile(filepath.Join(storeDir, filepath.FromSlash(rel))) //nolint:gosec // G304: the path is built from the store root and a listed name
+	data, err := osfs.ReadFile(filepath.Join(storeDir, filepath.FromSlash(rel)))
 	if err != nil {
 		e.Err = err
 		return e

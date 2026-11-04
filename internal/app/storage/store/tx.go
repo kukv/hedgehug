@@ -619,7 +619,7 @@ func (s *Store) apply(cs []change) error {
 	for i, c := range cs {
 		var err error
 		if c.data == nil {
-			err = os.Remove(s.path(c.rel))
+			err = osfs.Remove(s.path(c.rel))
 		} else {
 			err = osfs.WriteAtomic(s.path(c.rel), c.data)
 		}
@@ -636,7 +636,7 @@ func (s *Store) rollback(cs []change) error {
 	for _, c := range slices.Backward(cs) {
 		if c.existed {
 			errs = append(errs, osfs.WriteAtomic(s.path(c.rel), c.old))
-		} else if err := os.Remove(s.path(c.rel)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		} else if err := osfs.Remove(s.path(c.rel)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			errs = append(errs, err)
 		}
 	}

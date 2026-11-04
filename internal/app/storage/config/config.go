@@ -106,7 +106,7 @@ func (c *Config) File() string { return c.file }
 // Load reads config.yaml. A missing file is a config with no stores.
 func Load(p Paths) (*Config, error) {
 	c := &Config{file: p.ConfigFile, home: p.Home, Sync: SyncConfig{Interval: defaultSyncInterval, PushInterval: defaultPushInterval}}
-	b, err := os.ReadFile(p.ConfigFile) //nolint:gosec // the path is the user's own config file
+	b, err := osfs.ReadFile(p.ConfigFile)
 	if errors.Is(err, fs.ErrNotExist) {
 		return c, nil
 	}
@@ -575,7 +575,7 @@ func (c *Config) Save() error {
 		file = r // write the link's target and keep the link
 	}
 	dir := filepath.Dir(file)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
+	if err := osfs.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
 	f, err := os.CreateTemp(dir, ".config.yaml.tmp-*")
@@ -588,10 +588,10 @@ func (c *Config) Save() error {
 		err = cerr
 	}
 	if err == nil {
-		err = os.Rename(tmp, file)
+		err = osfs.Rename(tmp, file)
 	}
 	if err != nil {
-		_ = os.Remove(tmp)
+		_ = osfs.Remove(tmp)
 	}
 	return err
 }

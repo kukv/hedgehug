@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -351,7 +350,7 @@ func (r *Repo) FastForward(h plumbing.Hash, paths []string) (err error) {
 		abs := filepath.Join(r.dir, filepath.FromSlash(p))
 		if inTree[i] {
 			err = osfs.WriteAtomic(abs, data[i])
-		} else if err = os.Remove(abs); errors.Is(err, fs.ErrNotExist) {
+		} else if err = osfs.Remove(abs); errors.Is(err, fs.ErrNotExist) {
 			err = nil
 		}
 		if err != nil {

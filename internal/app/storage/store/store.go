@@ -180,7 +180,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 func ensureEmpty(dir string) (made bool, err error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
-		return true, os.MkdirAll(dir, 0o750)
+		return true, osfs.MkdirAll(dir, 0o750)
 	}
 	if err != nil {
 		return false, err
@@ -195,7 +195,7 @@ func ensureEmpty(dir string) (made bool, err error) {
 // Create made it, its contents otherwise.
 func undoCreate(dir string, made bool) error {
 	if made {
-		return os.RemoveAll(dir)
+		return osfs.RemoveAll(dir)
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -203,7 +203,7 @@ func undoCreate(dir string, made bool) error {
 	}
 	var errs []error
 	for _, e := range entries {
-		errs = append(errs, os.RemoveAll(filepath.Join(dir, e.Name())))
+		errs = append(errs, osfs.RemoveAll(filepath.Join(dir, e.Name())))
 	}
 	return errors.Join(errs...)
 }

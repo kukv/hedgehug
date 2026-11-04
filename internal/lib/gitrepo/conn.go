@@ -15,6 +15,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/storage/memory"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // ErrPushDenied means the remote refused the push for want of the right to
@@ -98,7 +99,7 @@ func Writable(dir string) bool {
 	}
 	name := f.Name()
 	_ = f.Close()
-	return os.Remove(name) == nil //nolint:gosec // G703: the file made just above
+	return osfs.Remove(name) == nil
 }
 
 // RemoteEmpty reports whether the remote at u, the URL as .git/config has

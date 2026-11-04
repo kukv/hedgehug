@@ -14,6 +14,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	format "github.com/go-git/go-git/v5/plumbing/format/config"
 	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // ErrRejected means the remote has commits this clone does not.
@@ -289,7 +290,7 @@ func checkCloneTarget(dir string) (created string, err error) {
 // removeCreated removes created, or the contents of dir when created is "".
 func removeCreated(dir, created string) {
 	if created != "" {
-		_ = os.RemoveAll(created)
+		_ = osfs.RemoveAll(created)
 		return
 	}
 	entries, err := os.ReadDir(dir)
@@ -297,7 +298,7 @@ func removeCreated(dir, created string) {
 		return
 	}
 	for _, e := range entries {
-		_ = os.RemoveAll(filepath.Join(dir, e.Name()))
+		_ = osfs.RemoveAll(filepath.Join(dir, e.Name()))
 	}
 }
 

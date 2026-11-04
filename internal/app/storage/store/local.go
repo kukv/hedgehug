@@ -54,7 +54,7 @@ func (s *Store) AppendLocal(name string, data []byte) error {
 	if err := validLocalName(name); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(s.path(LocalDir+"/"+name), os.O_WRONLY|os.O_APPEND, 0) //nolint:gosec // inside the store
+	f, err := osfs.OpenFile(s.path(LocalDir+"/"+name), os.O_WRONLY|os.O_APPEND, 0)
 	if err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func (s *Store) RemoveLocal(name string) error {
 	if err := validLocalName(name); err != nil {
 		return err
 	}
-	err := os.Remove(s.path(LocalDir + "/" + name))
+	err := osfs.Remove(s.path(LocalDir + "/" + name))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
