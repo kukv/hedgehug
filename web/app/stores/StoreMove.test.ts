@@ -394,6 +394,29 @@ describe("StoreMove", () => {
     expect(screen.getByRole("button", { name: "移動" })).toBeDisabled();
   });
 
+  it("clears a Store that became read-only during the move once the move is over", async () => {
+    const { k, routes, onclose } = setup();
+    await pick("second");
+    await screen.findByText("移動先で変わること");
+    let done: (v: unknown) => void = () => {};
+    routes.move.mockImplementationOnce(() => new Promise((res) => (done = res)));
+    await fireEvent.click(screen.getByRole("button", { name: "移動" }));
+    await waitFor(() => expect(routes.move).toHaveBeenCalled());
+    k.stores.readOnly.mockImplementation((s?: string) =>
+      s === "second" ? "the remote cannot be written" : null,
+    );
+    k.notify();
+    // nothing is dropped while it runs
+    expect(radio(/^second/)).toBeChecked();
+    expect(screen.queryByRole("alert")).toBeNull();
+    done(await fail(500, "internal"));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "second は移動先に選べなくなりました",
+    );
+    expect(radio(/^second/)).not.toBeChecked();
+    expect(onclose).not.toHaveBeenCalled();
+  });
+
   it("stops the controls while the move runs", async () => {
     const { routes, onclose } = setup();
     await pick("multi");

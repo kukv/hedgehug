@@ -127,9 +127,10 @@
   }
 
   // The Store picked can be written no more, or is gone: it is not a choice any longer.
+  // While the move runs nothing is dropped; busy is read here, so this runs again when it ends.
   $effect(() => {
     const gone = to !== "" && (!targets.some((s) => s.name === to) || dir.current.why(to) !== null);
-    if (!gone || untrack(() => busy)) return;
+    if (!gone || busy) return;
     untrack(() => {
       const name = to;
       to = "";
