@@ -280,6 +280,9 @@ func TestResultsCarryTheCommitAndAFreshView(t *testing.T) {
 		t.Fatalf("Add = %+v, %v; want Commit = HEAD %s", add, err, head())
 	}
 	// The index of the result was read before the write; View reads again.
+	if usecase.ResultIndexHas(add, add.ULID) {
+		t.Fatal("the index of Add already holds the task")
+	}
 	if v, err := add.View(); err != nil || v.ID != "ME-1" || v.Title != "a" {
 		t.Errorf("Add View = %+v, %v", v, err)
 	}
@@ -373,5 +376,22 @@ func TestSessionUpdateCommitAndBeforeUpdate(t *testing.T) {
 	}
 	if before != 1 {
 		t.Errorf("BeforeUpdate called after it was cleared: %d", before)
+	}
+}
+
+// The index a result holds was read before the write: the task added is not
+// in it until View refreshes it.
+func TestResultIndexIsFromBeforeTheWrite(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	if a, err := tasks.Add(ts.Session, tasks.AddInput{Title: "parent"}); err != nil || !a.Committed {
+		t.Fatalf("Add = %+v, %v", a, err)
+	}
+	b, err := tasks.Add(ts.Session, tasks.AddInput{Title: "child", Parent: "ME-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if usecase.ResultIndexHas(b, b.ULID) {
+		t.Error("the index before the write has the new task")
 	}
 }
