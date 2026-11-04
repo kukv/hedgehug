@@ -80,10 +80,10 @@
 
 **テストの観点:** `tone` の `color`・並び順・閲覧のみの灰色（色があっても）・色が重なる・知らない Store、`hidden`・`visibleWorkspaces` の順、`sharedPrefixes`（大文字小文字・1つの Store に同じ接頭辞が2つは数えない・非表示の Store も数える）、`displayId`（重なる・重ならない・ID の形でない文字列はそのまま）、`cliMvStore` の各フラグと省略、`store.read_only` の3つの理由が日本語になること、`detectMode` の `org-b:API-12`（ID）・`status:todo`（クエリ）・知らない名前の `x:API-1`（クエリ）
 
-- [ ] Step 1: `stores.test.ts` → `stores.ts`
-- [ ] Step 2: `cli.test.ts` → `cli.ts`、`messages.test.ts` → `messages.ts`
-- [ ] Step 3: `search.test.ts` → `search.ts`
-- [ ] Step 4: 検査を流してコミット `feat(web): Store の色と非表示、Store 名付きの ID、Store 間の移動の CLI の行`
+- [x] Step 1: `stores.test.ts` → `stores.ts`
+- [x] Step 2: `cli.test.ts` → `cli.ts`、`messages.test.ts` → `messages.ts`
+- [x] Step 3: `search.test.ts` → `search.ts`
+- [x] Step 4: 検査を流してコミット `feat(web): Store の色と非表示、Store 名付きの ID、Store 間の移動の CLI の行`
 
 ---
 

@@ -47,6 +47,9 @@ export type WorkspaceEntry = {
 // read-only.
 const TONES: StoreTone[] = ["teal", "orange", "purple", "sky", "pink", "olive", "brown"];
 
+// The form of a task ID: <prefix>-<number>.
+const ID = /^([A-Za-z][A-Za-z0-9]*)-\d+$/;
+
 const byRank = (a: TaskView, b: TaskView): number =>
   a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : a.ulid < b.ulid ? -1 : a.ulid > b.ulid ? 1 : 0;
 
@@ -81,6 +84,7 @@ export class StoreDirectory {
   private seq = 0;
   private reloadQueued = false;
   private result: WorkspaceEntry[] = [];
+  private shared = new Set<string>();
   private readOnlySig = "";
   private readonly projects: { ulids: () => string[] };
   private readonly subs = new Set<() => void>();
@@ -120,7 +124,15 @@ export class StoreDirectory {
   tone(store: string): StoreTone {
     const i = this.items.findIndex((s) => s.name === store);
     if (i < 0 || this.readOnly(store)) return "readonly";
-    return TONES[i % TONES.length] ?? "readonly";
+    const color = this.items[i]?.color;
+    const given = TONES.find((t) => t === color);
+    return given ?? TONES[i % TONES.length] ?? "readonly";
+  }
+
+  // hidden is whether the GUI leaves a store out of what it shows (a store
+  // that is not known is not hidden).
+  hidden(store: string): boolean {
+    return this.items.find((s) => s.name === store)?.hidden ?? false;
   }
 
   // readOnly is why a store cannot be written (the English sentence of the
@@ -134,6 +146,24 @@ export class StoreDirectory {
   // stores, then by name.
   workspaces(): WorkspaceEntry[] {
     return this.result;
+  }
+
+  // visibleWorkspaces is workspaces() without the ones of hidden stores.
+  visibleWorkspaces(): WorkspaceEntry[] {
+    return this.result.filter((w) => !this.hidden(w.store));
+  }
+
+  // sharedPrefixes is the upper-cased id prefixes that workspaces of two or
+  // more stores have, hidden stores counted (mount.SharedPrefixes in Go).
+  sharedPrefixes(): Set<string> {
+    return this.shared;
+  }
+
+  // displayId is the id with the store name before it when its prefix is
+  // shared (index.DisplayID in Go); any other text is returned as it is.
+  displayId(store: string, id: string): string {
+    const m = ID.exec(id);
+    return m?.[1] && this.shared.has(m[1].toUpperCase()) ? `${store}:${id}` : id;
   }
 
   workspace(store: string, ulid: string): WorkspaceEntry | undefined {
@@ -245,7 +275,22 @@ export class StoreDirectory {
       }
     }
     const same = next.length === this.result.length && next.every((e, i) => e === this.result[i]);
-    if (!same) this.result = next;
+    if (!same) {
+      this.result = next;
+      this.shared = sharedOf(next);
+    }
     if (!same || force) callAll(this.subs);
   }
+}
+
+// sharedOf is the prefixes (upper-cased) that are in two or more stores.
+function sharedOf(entries: WorkspaceEntry[]): Set<string> {
+  const stores = new Map<string, Set<string>>();
+  for (const w of entries) {
+    const p = w.prefix.toUpperCase();
+    const set = stores.get(p) ?? new Set<string>();
+    set.add(w.store);
+    stores.set(p, set);
+  }
+  return new Set([...stores].filter(([, set]) => set.size >= 2).map(([p]) => p));
 }

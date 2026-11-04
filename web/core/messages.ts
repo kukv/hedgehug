@@ -1,4 +1,5 @@
 import { ApiError } from "./api/client";
+import { readOnlyReason } from "./stores";
 
 type Args = Record<string, unknown>;
 type Make = (a: Args, e: ApiError) => string;
@@ -163,7 +164,7 @@ const messages: Record<string, Make> = {
 
   // stores and sync
   "store.read_only": (a) =>
-    `${str(a, "store")} は読み取り専用です${a.reason ? `（${str(a, "reason")}）` : ""}`,
+    `${str(a, "store")} は読み取り専用です${a.reason ? `（${readOnlyReason(str(a, "reason"))}）` : ""}`,
   "store.bad_name": (a) => `「${str(a, "value")}」は Store の名前に使えません`,
   "store.bad_color": (a) =>
     `「${str(a, "value")}」は Store の色に使えません` +

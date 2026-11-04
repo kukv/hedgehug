@@ -6,6 +6,7 @@ import {
   buildCommands,
   type CommandEnv,
   detectMode,
+  isStoreQualifiedId,
   queryCommands,
   type SearchDeps,
   searchTasks,
@@ -30,6 +31,31 @@ describe("detectMode", () => {
     ["   ", "id"],
   ])("%j is %s", (input, mode) => {
     expect(detectMode(input)).toBe(mode);
+  });
+});
+
+describe("detectMode with store names", () => {
+  const names = ["org-b", "personal"];
+  it.each([
+    ["org-b:API-12", "id"],
+    ["  personal:web-3 ", "id"],
+    ["status:todo", "query"],
+    ["x:API-1", "query"],
+    ["org-b:status", "query"],
+    ["org-b:API-12 more", "query"],
+  ])("%j is %s", (input, mode) => {
+    expect(detectMode(input, names)).toBe(mode);
+  });
+
+  it("keeps a colon word as a query without the names", () => {
+    expect(detectMode("org-b:API-12")).toBe("query");
+  });
+
+  it("tells a store-qualified id", () => {
+    expect(isStoreQualifiedId("org-b:API-12", names)).toBe(true);
+    expect(isStoreQualifiedId("org-b:API", names)).toBe(false);
+    expect(isStoreQualifiedId("API-12", names)).toBe(false);
+    expect(isStoreQualifiedId("zzz:API-12", names)).toBe(false);
   });
 });
 

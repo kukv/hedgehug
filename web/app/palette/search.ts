@@ -13,11 +13,19 @@ const ID = /^[A-Za-z][A-Za-z0-9]*-\d+$/;
 const ULID = /^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$/;
 const MAX = 20;
 
+// isStoreQualifiedId tells "<store>:<ID>" whose store is one of storeNames.
+export function isStoreQualifiedId(input: string, storeNames: string[]): boolean {
+  const i = input.indexOf(":");
+  return i > 0 && storeNames.includes(input.slice(0, i)) && ID.test(input.slice(i + 1));
+}
+
 // detectMode tells which of the three the input is. IDs, former IDs, ULIDs and
 // titles are one mode: the same input is looked up as all of them.
-export function detectMode(input: string): PaletteMode {
+// With storeNames, "<store>:<ID>" for a store of the names is an ID too.
+export function detectMode(input: string, storeNames?: string[]): PaletteMode {
   const s = input.trimStart();
   if (s.startsWith(">")) return "command";
+  if (storeNames && isStoreQualifiedId(s.trim(), storeNames)) return "id";
   const words = s.trim().split(/\s+/).filter(Boolean);
   if (words.some((w) => w.includes(":") || COMPARISON.test(w))) return "query";
   return "id";

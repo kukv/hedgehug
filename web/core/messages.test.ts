@@ -254,3 +254,20 @@ describe("errorMessage", () => {
     ).toBe("サーバーに接続できません");
   });
 });
+
+describe("store.read_only", () => {
+  it("words the three reasons in Japanese and leaves out the brackets without one", () => {
+    const m = (reason?: string) =>
+      errorMessage(err("store.read_only", { store: "shared", reason }));
+    expect(m("the GitHub permission is read")).toBe(
+      "shared は読み取り専用です（GitHub の権限が読み取りです）",
+    );
+    expect(m("the remote cannot be written")).toBe(
+      "shared は読み取り専用です（remote に書き込めません）",
+    );
+    expect(m("the remote denied the push")).toBe(
+      "shared は読み取り専用です（remote が push を拒みました）",
+    );
+    expect(m()).toBe("shared は読み取り専用です");
+  });
+});
