@@ -29,9 +29,9 @@
 | 9 | spec の単位 | 構成（本 spec）と E を分ける |
 | 10 | PR | 6 つに分け、機械的な移動を最初に行う。最後の PR 6 は、完了後のパッケージ構成を見て利用者が最終判断をする回（6 節。PR 6 は 2026-11-04 利用者が追加） |
 | 11 | cli・server のテスト | テストも usecase を通す。データの準備と書き込み結果の確認を usecase の操作で書き直し、4.2 のルールをテストにもかける。回 4 で本体と一緒に行う（2026-11-04 利用者が決定） |
-| 12 | テスト用の部品 | `lib/testenv`・`lib/fakegh`・`lib/gitrepo/gitrepotest`・`storage/history/historytest` は、どの層のテストからも import してよい（2026-11-04 利用者が決定） |
+| 12 | テスト用の部品 | `lib/testenv`・`lib/fakegh`・`lib/gitrepo/gitrepotest`・`storage/history/historytest`・`storage/mount/mounttest`（回 3 の plan で追加）は、どの層のテストからも import してよい（2026-11-04 利用者が決定） |
 | 13 | 領域の操作の呼び方 | Go では別パッケージに `Session` のメソッドを置けないため、領域の操作は `tasks.Assign(ss, in)` のように `*usecase.Session` を引数に取る関数にする（2026-11-04 利用者が決定。領域ごとに Session を包む型を作る案は採らない） |
-| 14 | usecase のテスト | 共通のテストの補助を `usecase/usecasetest` に切り出し、決定 12 の部品に加える。usecase のテストは、コードと一緒に PR 3 で領域へ移す（2026-11-04 利用者が決定） |
+| 14 | usecase のテスト | 共通のテストの補助を `usecase/usecasetest` に切り出し、決定 12 の部品に加える。usecase のテストは、コードと一緒に PR 3 で領域へ移す（2026-11-04 利用者が決定）。移したテストは外部テストパッケージ（`package tasks_test` など）にし、非公開の名前は `export_test.go` の別名で使う（回 3 の plan で決定。usecasetest が領域を import するため） |
 
 ## 1. 今の状態（main f965465）
 
