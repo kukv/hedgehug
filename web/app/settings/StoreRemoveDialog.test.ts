@@ -5,14 +5,20 @@ import { renderWithCore } from "../test-utils";
 import { resetToasts, toasts } from "../toast.svelte";
 import StoreRemoveDialog from "./StoreRemoveDialog.svelte";
 
-function mount(del: () => unknown = () => ok({ name: "team", path: "/p", deleted: true })) {
+function mount(
+  del: () => unknown = () => ok({ name: "team", path: "/p", deleted: true }),
+  remotes: string[] | null = ["ssh://example/r.repo"],
+) {
   const api = { DELETE: vi.fn(del) };
   const reload = vi.fn(async () => {});
   const onclose = vi.fn();
   renderWithCore(
     StoreRemoveDialog,
     { name: "team", onclose },
-    { api, stores: { reload, subscribe: () => () => {} } },
+    {
+      api,
+      stores: { reload, stores: () => [{ name: "team", remotes }], subscribe: () => () => {} },
+    },
   );
   return { api, reload, onclose };
 }
@@ -104,11 +110,41 @@ describe("StoreRemoveDialog", () => {
     expect(onclose).not.toHaveBeenCalled();
   });
 
+  it("starts with the clone kept for a Store with no remote, and says why when it is turned on", async () => {
+    const { api, onclose } = mount(undefined, null);
+    const box = screen.getByRole("checkbox", {
+      name: "ローカルのクローンも消す",
+    }) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    expect(screen.queryByText(/クローンごとは解除できません/)).toBeNull();
+    expect(screen.getByRole("button", { name: /^コマンドをコピー/ }).textContent).toContain(
+      "--keep",
+    );
+    await fireEvent.click(box);
+    expect(screen.getByText(/タスクが失われるため/)).toBeTruthy();
+    await fireEvent.click(box);
+    await fireEvent.click(submit());
+    await waitFor(() => expect(onclose).toHaveBeenCalledTimes(1));
+    expect(api.DELETE).toHaveBeenCalledWith("/api/stores/{name}", {
+      params: { path: { name: "team" }, query: { keep: true } },
+    });
+  });
+
+  it("says a Store with no remote cannot delete its clone on 409, not to sync", async () => {
+    mount(() => fail(409, "store.unpushed", { name: "team" }), []);
+    await fireEvent.click(screen.getByRole("checkbox", { name: "ローカルのクローンも消す" }));
+    await fireEvent.click(submit());
+    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    expect(screen.getByRole("alert").textContent).toContain("タスクが失われるため");
+    expect(screen.getByRole("alert").textContent).not.toContain("先に同期してください");
+    expect(screen.getByRole("button", { name: "クローンを残して解除" })).toBeTruthy();
+  });
+
   it("is closed while no Store is asked about", () => {
     renderWithCore(
       StoreRemoveDialog,
       { name: null, onclose: vi.fn() },
-      { api: {}, stores: { reload: async () => {}, subscribe: () => () => {} } },
+      { api: {}, stores: { reload: async () => {}, stores: () => [], subscribe: () => () => {} } },
     );
     expect(screen.queryByRole("dialog")).toBeNull();
   });

@@ -266,6 +266,39 @@ describe("StoreCard: shown", () => {
     });
   });
 
+  it("shows the server's value before the reload, and after a PATCH that is refused", async () => {
+    let release: (v: unknown) => void = () => {};
+    const pending = new Promise((r) => {
+      release = r;
+    });
+    const { api, stores } = mount({ patch: () => pending });
+    const box = within(card()).getByRole("checkbox", { name: "表示" }) as HTMLInputElement;
+    await fireEvent.click(box);
+    // not read again yet: the box still shows what the server has
+    expect(box.checked).toBe(true);
+    expect(stores.reload).not.toHaveBeenCalled();
+    release(fail(400, "store.set_args"));
+    await waitFor(() => expect(toasts.list).toHaveLength(1));
+    expect(api.PATCH).toHaveBeenCalledTimes(1);
+    expect(box.checked).toBe(true);
+    expect(stores.reload).not.toHaveBeenCalled();
+  });
+
+  it("sends a single PATCH for a second click while the first is running", async () => {
+    let release: (v: unknown) => void = () => {};
+    const pending = new Promise((r) => {
+      release = r;
+    });
+    const { api, stores } = mount({ patch: () => pending });
+    const box = within(card()).getByRole("checkbox", { name: "表示" });
+    await fireEvent.click(box);
+    await fireEvent.click(box);
+    expect(api.PATCH).toHaveBeenCalledTimes(1);
+    release(ok({}));
+    await waitFor(() => expect(stores.reload).toHaveBeenCalledTimes(1));
+    expect(api.PATCH).toHaveBeenCalledTimes(1);
+  });
+
   it("disables the check of the last shown Store, with the reason", async () => {
     const { api } = mount({ lastVisible: true });
     const box = within(card()).getByRole("checkbox", { name: "表示" }) as HTMLInputElement;

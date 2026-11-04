@@ -111,6 +111,7 @@
   /* Heights and layout */
   --control-h: 36px;
   --control-h-sm: 28px;
+  --control-h-lg: 40px;
   --row-h: 40px;
   --sidebar-w: 248px;
   --gutter: 28px;

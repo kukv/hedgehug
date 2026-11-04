@@ -22,6 +22,12 @@ type StoreJson = {
   default_store: boolean;
 };
 
+/** The bare repository a published Store was pushed to; a Store without one is a mistake of the test. */
+function remoteOf(peer: Peer): string {
+  if (!peer.remote) throw new Error("the published Store has no remote");
+  return peer.remote;
+}
+
 const card = (page: Page, name: string): Locator => page.getByRole("article", { name });
 const toast = (page: Page, text: string): Locator =>
   page.getByRole("status").filter({ hasText: text });
@@ -108,7 +114,7 @@ test("a Store is added by the URL of a remote that another home pushed", async (
     await hh.open(page, "/settings/stores");
     await page.getByRole("button", { name: "URL で追加" }).click();
     const dialog = page.getByRole("dialog", { name: "URL で追加" });
-    await dialog.getByLabel("URL（1行に1つ）").fill(other.remote ?? "");
+    await dialog.getByLabel("URL（1行に1つ）").fill(remoteOf(other));
     // the name is proposed from the URL (remote.git), and replaced by the one that is typed
     await expect(dialog.getByLabel("名前")).toHaveValue("remote");
     await dialog.getByLabel("名前").fill("team");
@@ -131,8 +137,8 @@ test("unmounting deletes the clone, and a Store with unpushed changes asks first
   const other = Peer.publish("team", "TM");
   const another = Peer.publish("kept", "KP");
   try {
-    hh.hh("store", "add", "team", "--remote", other.remote ?? "");
-    hh.hh("store", "add", "kept", "--remote", another.remote ?? "");
+    hh.hh("store", "add", "team", "--remote", remoteOf(other));
+    hh.hh("store", "add", "kept", "--remote", remoteOf(another));
 
     await hh.open(page, "/settings/stores");
     const dir = store(hh, "team")?.path ?? "";
@@ -179,4 +185,22 @@ test.describe("the last Store", () => {
     await expect(page.getByText("Hedgehug へようこそ")).toBeVisible();
     expect(stores(hh)).toEqual([]);
   });
+});
+
+test("a Store with no remote starts with its clone kept, since the server never deletes it", async ({
+  page,
+  hh,
+}) => {
+  await hh.open(page, "/settings/stores");
+  const dir = store(hh, "demo")?.path ?? "";
+  const dialog = await unmount(page, "demo");
+  const box = dialog.getByRole("checkbox", { name: "ローカルのクローンも消す" });
+  await expect(box).not.toBeChecked();
+  await expect(dialog.getByRole("button", { name: /hh store remove demo --keep$/ })).toBeVisible();
+  await box.check();
+  await expect(dialog).toContainText("タスクが失われるため");
+  await box.uncheck();
+  await dialog.getByRole("button", { name: "解除する" }).click();
+  await expect(page.getByText("Hedgehug へようこそ")).toBeVisible();
+  expect(existsSync(dir)).toBe(true);
 });
