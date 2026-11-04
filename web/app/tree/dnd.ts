@@ -26,6 +26,8 @@ export type DropInput = {
   // The Store that cannot be written (the one of the place or of the dragged task) and why (in
   // Japanese), or null/absent when both can.
   readOnly?: { store: string; why: string } | null;
+  // The ID of a task as the screen writes it (with its Store where the prefix is shared).
+  idOf?: (t: TaskView) => string;
 };
 
 // silent: nothing to do and nothing to say (a drop on itself). A move to where
@@ -41,8 +43,8 @@ function refuse(title: string, reason: string): DropDecision {
   return { ok: false, silent: false, title, reason };
 }
 
-function name(t: TaskView): string {
-  return `「${t.id} ${t.title}」`;
+function name(t: TaskView, idOf: (t: TaskView) => string): string {
+  return `「${idOf(t)} ${t.title}」`;
 }
 
 // dropDecision says whether dragged may go to the place next to target, and
@@ -50,6 +52,7 @@ function name(t: TaskView): string {
 // the reasons are worth giving in.
 export function dropDecision(i: DropInput): DropDecision {
   const { dragged, target, place } = i;
+  const idOf = i.idOf ?? ((t: TaskView) => t.id);
   if (dragged.ulid === target.ulid) return silent;
 
   if (i.readOnly) {
@@ -64,13 +67,13 @@ export function dropDecision(i: DropInput): DropDecision {
       place === "child"
         ? "別の Store のタスクの下には置けません"
         : "別の Store の並びには置けません",
-      `${name(dragged)}は ${dragged.store}、${name(target)}は ${target.store} にあります。Store をまたぐ移動はドラッグではできません。`,
+      `${name(dragged, idOf)}は ${dragged.store}、${name(target, idOf)}は ${target.store} にあります。Store をまたぐ移動はドラッグではできません。`,
     );
   }
   if (dragged.workspace.ulid !== target.workspace.ulid) {
     return refuse(
       "別のワークスペースには置けません",
-      `${name(dragged)}は ${dragged.workspace.name}、${name(target)}は ${target.workspace.name} にあります。ワークスペースをまたぐ移動はドラッグではできません（スプリントやリリースが外れるため）。`,
+      `${name(dragged, idOf)}は ${dragged.workspace.name}、${name(target, idOf)}は ${target.workspace.name} にあります。ワークスペースをまたぐ移動はドラッグではできません（スプリントやリリースが外れるため）。`,
     );
   }
 
@@ -80,7 +83,7 @@ export function dropDecision(i: DropInput): DropDecision {
     if (up === dragged.ulid) {
       return refuse(
         "自分の子孫の下には置けません",
-        `${name(dragged)}の下の階層に置くことになり、親子が循環します。`,
+        `${name(dragged, idOf)}の下の階層に置くことになり、親子が循環します。`,
       );
     }
     up = i.taskOf(up)?.parent ?? null;
@@ -96,7 +99,7 @@ export function dropDecision(i: DropInput): DropDecision {
       `${dragged.store} の schema.yaml を読み込んでいます。`,
     );
   }
-  const rejection = checkParent(i.schema, dragged, parent ?? null);
+  const rejection = checkParent(i.schema, dragged, parent ?? null, idOf);
   if (rejection) return refuse(rejection.title, rejection.reason);
 
   if (place === "child") return { ok: true, to: { parent: target.ulid } };

@@ -44,6 +44,20 @@ describe("a Store that cannot be written", () => {
   });
 });
 
+describe("the IDs in a reason", () => {
+  it("are written as the screen is told to", () => {
+    const d = dropDecision({
+      dragged: { ...at("T7"), store: "a" },
+      target: { ...at("T1"), store: "b" },
+      place: "after",
+      schema,
+      taskOf,
+      idOf: (t) => `${t.store}:${t.id}`,
+    });
+    expect(d.ok ? "" : d.reason).toMatch(/「a:REL-7 .*」は a、「b:REL-1 .*」は b/);
+  });
+});
+
 describe("placeOf", () => {
   it("maps the hitbox instruction to a place", () => {
     expect(placeOf({ type: "reorder-above" } as never)).toBe("before");

@@ -405,7 +405,14 @@
   }
 
   function actionOf(k: KeyInput): KeyAction {
-    return keyAction(k, { rows, selected: selection.ulid, schema: keySchema, viewRoot, taskOf });
+    return keyAction(k, {
+      rows,
+      selected: selection.ulid,
+      schema: keySchema,
+      viewRoot,
+      taskOf,
+      idOf: (t) => c.stores.displayId(t.store, t.id),
+    });
   }
 
   function onkeydown(e: KeyboardEvent) {
@@ -553,7 +560,9 @@
     }
     const parent = menuTask.parent ? taskOf(menuTask.parent) : undefined;
     return (menuSchema.kinds ?? []).map((k) => {
-      const why = checkParent(menuSchema, { ...menuTask, kind: k.name }, parent ?? null);
+      const why = checkParent(menuSchema, { ...menuTask, kind: k.name }, parent ?? null, (t) =>
+        c.stores.displayId(t.store, t.id),
+      );
       return { value: k.name, label: k.label || k.name, disabled: why !== null, hint: why?.title };
     });
   });
@@ -678,6 +687,7 @@
       schema: schemaOf(dragged.store),
       taskOf,
       readOnly: refusingStore(target.store, dragged.store),
+      idOf: (t) => c.stores.displayId(t.store, t.id),
     });
   }
 

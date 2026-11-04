@@ -208,6 +208,16 @@ describe("decideDrop", () => {
     expect(d.ok ? "" : d.reason).toContain("REL-1 仕事");
   });
 
+  it("writes the ID of the task as the screen is told to", () => {
+    const d = decideDrop({
+      ...base,
+      task: task("A", "task", null, { id: "REL-1", title: "仕事", status: "done", store: "work" }),
+      column: col("doing"),
+      idOf: (t) => `${t.store}:${t.id}`,
+    });
+    expect(d.ok ? "" : d.reason).toContain("work:REL-1 仕事");
+  });
+
   it("uses the workflow of the scope the server names for the task", () => {
     const t = task("A", "task", null, {
       status: "todo",

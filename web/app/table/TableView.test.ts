@@ -329,6 +329,7 @@ describe("TableView", () => {
     setup({ ulids: ["T1"], qualify: true });
     mount();
     expect(order()[0]).toMatch(/^shared:REL-/);
+    expect(screen.getByRole("textbox", { name: /^タイトル: shared:REL-/ })).toBeInTheDocument();
   });
 
   it("keeps the rows of a hidden store on the table of its own workspace", () => {

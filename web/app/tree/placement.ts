@@ -20,11 +20,12 @@ export function checkParent(
   s: SchemaView,
   child: TaskView,
   parent: TaskView | null,
+  idOf: (t: TaskView) => string = (t) => t.id,
 ): Rejection | null {
   if (parent && parent.store !== child.store) {
     return {
       title: "別の Store のタスクの下には置けません",
-      reason: `「${child.id} ${child.title}」は ${child.store}、「${parent.id} ${parent.title}」は ${parent.store} にあります。Store をまたぐ移動はドラッグではできません。`,
+      reason: `「${idOf(child)} ${child.title}」は ${child.store}、「${idOf(parent)} ${parent.title}」は ${parent.store} にあります。Store をまたぐ移動はドラッグではできません。`,
     };
   }
   if (canParent(s, child.kind, parent ? parent.kind : null)) return null;
@@ -33,7 +34,7 @@ export function checkParent(
     title: parent
       ? `${mine}は${kindLabel(s, parent.kind)}の下に置けません`
       : `${mine}はルートに置けません`,
-    reason: `「${child.id} ${child.title}」は${mine}です。${parentRule(s, child.kind)}（${child.store} の schema.yaml の kinds）。`,
+    reason: `「${idOf(child)} ${child.title}」は${mine}です。${parentRule(s, child.kind)}（${child.store} の schema.yaml の kinds）。`,
   };
 }
 

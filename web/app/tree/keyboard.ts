@@ -12,6 +12,7 @@ export type KeyContext = {
   schema: SchemaView | undefined;
   viewRoot: string | null; // the project the view shows, or null for a workspace
   taskOf: (ulid: string) => TaskView | undefined;
+  idOf?: (t: TaskView) => string; // the ID as the screen writes it (with its Store where shared)
 };
 
 // What the tree should do for a key. The caller runs it: this function only
@@ -143,7 +144,7 @@ function indent(row: FlatRow, c: KeyContext): KeyAction {
   const sib = siblingsOf(row, c);
   const prev = sib[sib.findIndex((r) => r.ulid === row.ulid) - 1];
   if (!prev || !c.schema) return NONE;
-  const rejection = checkParent(c.schema, row.task, prev.task);
+  const rejection = checkParent(c.schema, row.task, prev.task, c.idOf);
   if (rejection) return { type: "reject", rejection };
   return { type: "move", ulid: row.ulid, to: { parent: prev.ulid } };
 }
@@ -154,7 +155,7 @@ function outdent(row: FlatRow, c: KeyContext): KeyAction {
   if (!p) return NONE;
   const grand = p.parent ? (c.taskOf(p.parent) ?? null) : null;
   if (p.parent && !grand) return NONE;
-  const rejection = checkParent(c.schema, row.task, grand);
+  const rejection = checkParent(c.schema, row.task, grand, c.idOf);
   if (rejection) return { type: "reject", rejection };
   return {
     type: "move",

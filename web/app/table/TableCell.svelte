@@ -4,12 +4,14 @@
   import type { PatchField } from "../../core/save";
   import { canParent, parentRule, propEditorOf, type SchemaView } from "../../core/schema";
   import type { StoreTone } from "../../core/stores";
+  import { core } from "../context";
   import FieldInput from "../detail/FieldInput.svelte";
   import type { Option } from "../detail/field-types";
   import PropField from "../detail/PropField.svelte";
   import { type PropRow, statusOptions } from "../detail/prop-rows";
   import StatusIcon from "../icons/StatusIcon.svelte";
   import { onLinkClick, router } from "../router";
+  import { useDisplayId } from "../svelte-store";
   import IdLabel from "../ui/IdLabel.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
   import { type ColumnSpec, isBuiltinColumn, patchFieldOf } from "./columns";
@@ -68,6 +70,8 @@
     }),
   );
   const parent = $derived(task.parent ? taskOf(task.parent) : undefined);
+  const did = useDisplayId(core().stores);
+  const taskId = $derived(did.current(task.store, task.id));
   const taskHref = (ulid: string) => router.href({ name: "task", ulid });
 
   // A property of the schema: its definition in the store of the task, or none (the store does not
@@ -78,7 +82,7 @@
     schema && def
       ? {
           name: col.id,
-          label: `${def.label || col.id}: ${task.id}`,
+          label: `${def.label || col.id}: ${taskId}`,
           editor: propEditorOf(schema, col.id),
           multi: def.multi === true,
           options: def.values ?? [],
@@ -106,7 +110,7 @@
 {:else if col.id === "title"}
   <FieldInput
     editor="text"
-    label="タイトル: {task.id}"
+    label="タイトル: {taskId}"
     value={task.title}
     nullable={false}
     {pending}
@@ -118,7 +122,7 @@
 {:else if col.id === "kind"}
   <FieldInput
     editor="select"
-    label="種類: {task.id}"
+    label="種類: {taskId}"
     value={task.kind}
     options={kindOptions}
     nullable={false}
@@ -132,7 +136,7 @@
     <StatusIcon status={task.status} {category} />
     <FieldInput
       editor="select"
-      label="ステータス: {task.id}"
+      label="ステータス: {taskId}"
       value={task.status}
       options={statusOptions(schema)}
       nullable={false}
@@ -145,7 +149,7 @@
 {:else if col.id === "assignee"}
   <FieldInput
     editor="chips"
-    label="担当: {task.id}"
+    label="担当: {taskId}"
     value={task.assignees ?? []}
     {readonly}
     {describedby}
@@ -155,7 +159,7 @@
 {:else if col.id === "label"}
   <FieldInput
     editor="chips"
-    label="ラベル: {task.id}"
+    label="ラベル: {taskId}"
     value={task.labels ?? []}
     {readonly}
     {describedby}

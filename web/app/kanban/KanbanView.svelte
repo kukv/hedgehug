@@ -241,6 +241,7 @@
       schema: schemas.get(t.store),
       detail,
       readOnly: readOnlyOf(t.store),
+      idOf: (x) => c.stores.displayId(x.store, x.id),
     });
   }
 
