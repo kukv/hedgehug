@@ -63,13 +63,13 @@ test("moves a task and its descendants to another Store, cutting the references 
   await expect(d).not.toContainText("消すには");
 
   await d.getByRole("button", { name: "1 件の参照を外して移動" }).click();
-  await expect(
-    toast(page, new RegExp(`${parent.id} を second に移動しました（SC-\\d+）`)),
-  ).toBeVisible();
+  const said = toast(page, new RegExp(`${parent.id} を second に移動しました（SC-\\d+）`));
+  await expect(said).toBeVisible();
   await expect(dialog(page)).toHaveCount(0);
+  const newId = /（(SC-\d+)）/.exec((await said.textContent()) ?? "")?.[1] ?? "";
 
   // It is in second, under the same ULID, and the old ID still finds it.
-  const moved = hh.show("SC-1");
+  const moved = hh.show(newId);
   expect(moved.ulid).toBe(parent.ulid);
   expect(hh.show(parent.id).ulid).toBe(parent.ulid);
   expect((await hh.get<{ store: string }>(`/api/tasks/${parent.ulid}`)).store).toBe("second");
@@ -86,7 +86,7 @@ test("takes the plan again when a task is added under the ones to move", async (
   await expect(d).toContainText("子孫 1");
 
   hh.hh("add", "Late task", "--parent", child.id);
-  await d.getByRole("button", { name: /移動/ }).last().click();
+  await d.getByRole("button", { name: /^(移動|\d+ 件の参照を外して移動)$/ }).click();
   await expect(d.getByRole("alert")).toContainText(
     "内容が変わりました。確かめてから移動してください",
   );
@@ -94,9 +94,11 @@ test("takes the plan again when a task is added under the ones to move", async (
   await expect(dialog(page)).toBeVisible();
 
   // The plan as it is now goes through.
-  await d.getByRole("button", { name: /移動/ }).last().click();
-  await expect(toast(page, "second に移動しました")).toBeVisible();
-  expect(hh.show("SC-1").ulid).toBe(parent.ulid);
+  await d.getByRole("button", { name: /^(移動|\d+ 件の参照を外して移動)$/ }).click();
+  const said = toast(page, /second に移動しました（SC-\d+）/);
+  await expect(said).toBeVisible();
+  const newId = /（(SC-\d+)）/.exec((await said.textContent()) ?? "")?.[1] ?? "";
+  expect(hh.show(newId).ulid).toBe(parent.ulid);
 });
 
 test("puts the task under a parent of the destination", async ({ page, hh }) => {

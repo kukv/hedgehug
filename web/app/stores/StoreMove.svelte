@@ -1,10 +1,10 @@
 <script lang="ts">
+  import { tick, untrack } from "svelte";
   import { ApiError, type Schemas, type TaskView, unwrap } from "../../core/api/client";
   import { cliMvStore, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import TaskPicker from "../detail/TaskPicker.svelte";
-  import Icon from "../icons/Icon.svelte";
   import { readOnlyNow } from "../read-only";
   import { router } from "../router";
   import { useDisplayId, useSubscribe } from "../svelte-store";
@@ -14,13 +14,8 @@
   import FormError from "../ui/FormError.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
   import type { MoveStoreTask } from "../workspace/dialogs-state.svelte";
-  import {
-    hiddenSentences,
-    moveButton,
-    parentSentence,
-    unlinkedRows,
-    violationView,
-  } from "./move-plan";
+  import MovePlanSections from "./MovePlanSections.svelte";
+  import { hiddenSentences, moveButton, parentSentence, violationView } from "./move-plan";
 
   let { task, onclose }: { task: MoveStoreTask; onclose: () => void } = $props();
 
@@ -51,6 +46,9 @@
   let planning = $state(false);
   let busy = $state(false);
   let failure = $state<{ message: string; lines: string[] } | null>(null);
+  // What the status region reads out while the plan is asked for and when it comes.
+  let announce = $state("");
+  let failBox = $state<HTMLElement | null>(null);
   let seq = 0;
 
   const fields = $derived({
@@ -86,15 +84,18 @@
   }
 
   // Asks for the plan of what is picked now. An answer that is not for the latest ask is dropped.
-  async function refresh(): Promise<void> {
+  // notice is what the dialog says meanwhile; a refusal of the plan replaces it.
+  async function refresh(notice?: string): Promise<void> {
     const n = ++seq;
     plan = null;
-    failure = null;
+    failure = notice ? { message: notice, lines: [] } : null;
     if (to === "" || (spaces.length >= 2 && workspace === "" && parent === null)) {
       planning = false;
+      announce = "";
       return;
     }
     planning = true;
+    announce = "移動の予定を取得しています…";
     try {
       const p = await unwrap(
         api.POST("/api/tasks/{id}/move-store/plan", {
@@ -102,15 +103,22 @@
           body: fields,
         }),
       );
-      if (n === seq) plan = p;
+      if (n === seq) {
+        plan = p;
+        announce = "移動の予定を更新しました";
+      }
     } catch (e) {
-      if (n === seq) show(e);
+      if (n === seq) {
+        announce = "";
+        show(e);
+      }
     } finally {
       if (n === seq) planning = false;
     }
   }
 
   function pickStore(name: string) {
+    if (busy) return;
     to = name;
     picked = "";
     parent = null;
@@ -118,7 +126,24 @@
     void refresh();
   }
 
+  // The Store picked can be written no more, or is gone: it is not a choice any longer.
+  $effect(() => {
+    const gone = to !== "" && (!targets.some((s) => s.name === to) || dir.current.why(to) !== null);
+    if (!gone || untrack(() => busy)) return;
+    untrack(() => {
+      const name = to;
+      to = "";
+      picked = "";
+      parent = null;
+      scoped = undefined;
+      void refresh(
+        `${name} は移動先に選べなくなりました（閲覧のみになったか、なくなりました）。選び直してください`,
+      );
+    });
+  });
+
   function pickWorkspace(name: string) {
+    if (busy) return;
     picked = name;
     // The parent decides the workspace (the server takes it from the parent), so another one drops it.
     if (parent && parent.workspace.name !== name) parent = null;
@@ -126,18 +151,19 @@
   }
 
   function pickParent(t: TaskView | null) {
+    if (busy) return;
     parent = t;
     if (t) picked = t.workspace.name;
     void refresh();
   }
 
   function pickScoped(v: "carry" | "drop") {
+    if (busy) return;
     scoped = v;
     void refresh();
   }
 
   const cut = $derived(plan?.unlinked.length ?? 0);
-  const choosing = $derived(plan?.scoped !== undefined);
   const lacking = $derived(plan?.scoped?.required === true);
   const ready = $derived(plan !== null && !planning && !busy && !lacking);
 
@@ -172,8 +198,10 @@
     } catch (e) {
       busy = false;
       if (e instanceof ApiError && e.type === "move.changed") {
-        await refresh();
-        failure = { message: "内容が変わりました。確かめてから移動してください", lines: [] };
+        await refresh("内容が変わりました。確かめてから移動してください");
+        // Where the new plan or the notice is: it is read before the button is pressed again.
+        await tick();
+        failBox?.focus();
       } else {
         show(e);
       }
@@ -196,7 +224,8 @@
 </script>
 
 <Dialog open title="別の Store へ移動" width={620} {cli} cliDisabled={!ready} onclose={close}>
-  <div class="form">
+  <p class="sr" role="status">{announce}</p>
+  <fieldset class="form" disabled={busy}>
     <p class="what">
       <span class="mono">{did.current(task.store, task.id)}</span>
       {task.title}
@@ -205,8 +234,8 @@
       {/if}
     </p>
 
-    <div class="field" role="radiogroup" aria-label="移動先の Store">
-      <span class="lbl">移動先</span>
+    <div class="field" role="radiogroup" aria-labelledby="{uid}-to-lbl">
+      <span class="lbl" id="{uid}-to-lbl">移動先の Store</span>
       {#each targets as s (s.name)}
         {@const why = dir.current.why(s.name)}
         <!-- biome-ignore lint/a11y/noLabelWithoutControl: the badge and the remote are the text of the label -->
@@ -270,95 +299,24 @@
     {/if}
 
     {#if plan && names}
-      <section class="part" aria-labelledby="{uid}-changes">
-        <h3 id="{uid}-changes">移動先で変わること</h3>
-        <dl>
-          <dt>ID</dt>
-          <dd>{names.id}</dd>
-          <dt>親</dt>
-          <dd>{names.parent}</dd>
-          <dt>移動元</dt>
-          <dd>転送ファイルを残し、古い ID からも辿れます</dd>
-        </dl>
-      </section>
+      <MovePlanSections {plan} {names} {scoped} onscoped={pickScoped} />
+    {/if}
 
-      {#if cut > 0}
-        <section class="part" aria-labelledby="{uid}-cut">
-          <h3 id="{uid}-cut">外す参照 <span class="note">— 参照は Store の中に閉じるため</span></h3>
-          <ul class="refs">
-            {#each unlinkedRows(plan.unlinked) as r (r.key)}
-              <li>
-                <span class="kind">{r.kind}</span>
-                <span class="mono">{r.target}</span>
-                <span class="mono on-task">{r.id}</span>
-              </li>
+    <div class="failbox" tabindex="-1" bind:this={failBox}>
+      {#if failure && failure.lines.length > 0}
+        <div class="violations" role="alert">
+          <p>{failure.message}</p>
+          <ul>
+            {#each failure.lines as line, i (i)}
+              <li>{line}</li>
             {/each}
           </ul>
-        </section>
-      {/if}
-
-      {#if choosing && plan.scoped}
-        <div class="part">
-          <div class="field" role="radiogroup" aria-label="プロジェクトの表示の設定">
-            <span class="lbl">プロジェクトの表示の設定</span>
-            <label class="plain">
-              <input
-                type="radio"
-                name="{uid}-scoped"
-                checked={scoped === "carry"}
-                onchange={() => pickScoped("carry")}
-              >
-              持っていく
-            </label>
-            <label class="plain">
-              <input
-                type="radio"
-                name="{uid}-scoped"
-                checked={scoped === "drop"}
-                onchange={() => pickScoped("drop")}
-              >
-              持っていかない
-            </label>
-          </div>
-          {#if plan.scoped.dropped.length > 0}
-            <div class="dropped">
-              <span class="lbl">持っていくと外れるもの</span>
-              <ul>
-                {#each plan.scoped.dropped as d (d)}
-                  <li>{d}</li>
-                {/each}
-              </ul>
-            </div>
-          {/if}
         </div>
+      {:else if failure}
+        <FormError message={failure.message} />
       {/if}
-
-      {#if plan.hidden.length > 0}
-        <div class="warn" role="note">
-          <Icon name="warning" size={16} />
-          <div>
-            <b>見える範囲が狭くなります</b>
-            {#each names.hidden as line (line)}
-              <p>{line}</p>
-            {/each}
-          </div>
-        </div>
-      {/if}
-    {/if}
-
-    {#if failure && failure.lines.length > 0}
-      <div class="violations" role="alert">
-        <p>{failure.message}</p>
-        <ul>
-          {#each failure.lines as line, i (i)}
-            <li>{line}</li>
-          {/each}
-        </ul>
-      </div>
-    {:else if failure}
-      <FormError message={failure.message} />
-    {/if}
-  </div>
+    </div>
+  </fieldset>
 
   {#snippet footer()}
     <Button disabled={busy} onclick={close}>キャンセル</Button>
@@ -369,7 +327,23 @@
 </Dialog>
 
 <style>
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .failbox:focus {
+    outline: none;
+  }
   .form {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
     display: flex;
     flex-direction: column;
     gap: var(--space-16);
@@ -415,12 +389,6 @@
     color: var(--muted);
     cursor: default;
   }
-  .plain {
-    display: flex;
-    gap: var(--space-8);
-    align-items: center;
-    font-size: var(--fs-13);
-  }
   .row {
     display: flex;
     flex-wrap: wrap;
@@ -439,62 +407,6 @@
     background: var(--surface);
     font: inherit;
   }
-  .part {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-8);
-    padding-top: var(--space-12);
-    border-top: 1px solid var(--line);
-  }
-  h3 {
-    margin: 0;
-    color: var(--ink-2);
-    font-size: var(--fs-12);
-    font-weight: 600;
-  }
-  dl {
-    display: grid;
-    grid-template-columns: 110px minmax(0, 1fr);
-    gap: var(--space-8) var(--space-12);
-    margin: 0;
-    line-height: 1.55;
-  }
-  dt {
-    color: var(--muted);
-  }
-  dd {
-    margin: 0;
-  }
-  .refs {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-  .refs li {
-    display: flex;
-    gap: var(--space-10);
-    align-items: center;
-    min-height: 34px;
-    padding: 0 var(--space-10);
-    border-radius: var(--radius-6);
-    background: var(--sunken);
-  }
-  .kind {
-    min-width: 130px;
-    color: var(--ink-2);
-    font-size: var(--fs-12);
-  }
-  .on-task {
-    color: var(--muted);
-  }
-  .dropped ul {
-    margin: var(--space-4) 0 0;
-    padding-left: var(--space-20);
-    font-size: var(--fs-13);
-  }
   .violations {
     padding: var(--space-10) var(--space-12);
     border-radius: var(--radius-10);
@@ -508,17 +420,5 @@
   .violations ul {
     margin: var(--space-4) 0 0;
     padding-left: var(--space-20);
-  }
-  .warn {
-    display: flex;
-    gap: var(--space-10);
-    padding: var(--space-12) var(--space-12);
-    border-radius: var(--radius-10);
-    background: var(--warning-weak);
-    color: var(--warning);
-    line-height: 1.6;
-  }
-  .warn p {
-    margin: var(--space-6) 0 0;
   }
 </style>

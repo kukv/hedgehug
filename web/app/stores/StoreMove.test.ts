@@ -349,9 +349,71 @@ describe("StoreMove", () => {
     await pick("hid");
     expect(await screen.findByText("移動先の h で振り直します")).toBeVisible();
     first({ data: planOf(), response: new Response(null, { status: 200 }) });
-    await new Promise((r) => setTimeout(r, 10));
+    // let the answer of the first ask run its course
+    for (let i = 0; i < 10; i++) await Promise.resolve();
     expect(screen.getByText("移動先の h で振り直します")).toBeVisible();
     expect(screen.queryByText("移動先の a で振り直します")).toBeNull();
+  });
+
+  it("announces the plan being asked for and arriving", async () => {
+    const { routes } = setup();
+    let answer: (v: unknown) => void = () => {};
+    routes.plan.mockImplementationOnce(() => new Promise((res) => (answer = res)));
+    await pick("second");
+    expect(screen.getByRole("status")).toHaveTextContent("移動の予定を取得しています…");
+    answer({ data: planOf(), response: new Response(null, { status: 200 }) });
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("移動の予定を更新しました"),
+    );
+  });
+
+  it("leaves its Store radio group named by the visible label, once", async () => {
+    setup();
+    const group = screen.getByRole("radiogroup", { name: "移動先の Store" });
+    expect(group).not.toHaveAttribute("aria-label");
+    expect(group).toHaveAttribute("aria-labelledby");
+  });
+
+  it("clears the Store picked when it becomes read-only while the dialog is open", async () => {
+    const { k } = setup();
+    await pick("second");
+    await screen.findByText("移動先で変わること");
+    k.stores.readOnly.mockImplementation((s?: string) =>
+      s === "second" ? "the remote cannot be written" : null,
+    );
+    k.notify();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "second は移動先に選べなくなりました",
+    );
+    expect(radio(/^second/)).toBeDisabled();
+    expect(radio(/^second/)).not.toBeChecked();
+    expect(radio(/^second/)).toHaveAccessibleDescription(
+      "閲覧のみのため移動できません（remote に書き込めません）",
+    );
+    expect(screen.queryByText("移動先で変わること")).toBeNull();
+    expect(screen.getByRole("button", { name: "移動" })).toBeDisabled();
+  });
+
+  it("stops the controls while the move runs", async () => {
+    const { routes, onclose } = setup();
+    await pick("multi");
+    await fireEvent.change(screen.getByRole("combobox", { name: "multi のワークスペース" }), {
+      target: { value: "web" },
+    });
+    await screen.findByText("移動先で変わること");
+    let done: (v: unknown) => void = () => {};
+    routes.move.mockImplementationOnce(() => new Promise((res) => (done = res)));
+    await fireEvent.click(screen.getByRole("button", { name: "移動" }));
+    await waitFor(() => expect(routes.move).toHaveBeenCalled());
+    expect(radio(/^second/)).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "multi のワークスペース" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "親を選ぶ" })).toBeDisabled();
+    // a change that gets through anyway asks for nothing
+    const asked = routes.plan.mock.calls.length;
+    await fireEvent.click(radio(/^second/));
+    expect(routes.plan.mock.calls.length).toBe(asked);
+    done({ data: result, response: new Response(null, { status: 200 }) });
+    await waitFor(() => expect(onclose).toHaveBeenCalled());
   });
 
   describe("scoped", () => {
@@ -450,8 +512,27 @@ describe("StoreMove", () => {
       );
       await waitFor(() => expect(routes.plan).toHaveBeenCalledTimes(2));
       expect(await screen.findByText(/子孫 2/)).toBeVisible();
+      // the notice is where the focus goes, so that it is read before the button is pressed again
+      expect(document.activeElement).toContainElement(screen.getByRole("alert"));
       expect(onclose).not.toHaveBeenCalled();
       expect(screen.getByRole("button", { name: "移動" })).toBeEnabled();
+    });
+
+    it("keeps the refusal of the new plan, not the notice, when the plan cannot be taken again", async () => {
+      const { routes } = setup();
+      await pick("second");
+      await screen.findByText("移動先で変わること");
+      routes.move.mockImplementationOnce(() => fail(409, "move.changed"));
+      routes.plan.mockImplementation(() =>
+        fail(400, "choice.required", { what: "--workspace", candidates: ["api", "web"] }),
+      );
+      await fireEvent.click(screen.getByRole("button", { name: "移動" }));
+      const alert = await screen.findByRole("alert");
+      await waitFor(() =>
+        expect(alert).toHaveTextContent("移動先のワークスペースを選んでください"),
+      );
+      expect(screen.queryByText(/内容が変わりました/)).toBeNull();
+      expect(screen.getByRole("button", { name: "移動" })).toBeDisabled();
     });
 
     it("lists the violations of the destination for each task", async () => {
