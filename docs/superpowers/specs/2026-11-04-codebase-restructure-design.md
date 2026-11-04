@@ -175,13 +175,14 @@ CLI の本体を `internal/app/cli` に移し、`cmd/hedgehug/main.go` は `cli.
 - CLI の `--json` を server と同じ usecase の型で出す。server の書き込み応答の包み（`{task, commit}`・`{tasks, commit}`・`{comment, commit}`・`{view, commit}`・`{workspace, commit, ids}`・`{findings}`・ls の `{tasks, groups}`・tree の `{roots, cycle}` など）も usecase に移し、CLI もその形で出す。CLI にしかない項目はその型に足す（server の応答にも出る）。
 - 回 4 の調査（2026-11-04、main 6e2b895）で、当初の「変わるのは undo と mv --store の 2 つだけ」は合わないことがわかった。mv --store は既に server と同じ形だった。変わるのは、包みが付く書き込みのコマンド（add・edit・set・done・dep・watch・unwatch・inbox revert・mv・restore・restore --at・rm・comment・view save/rm/rename・workspace add/rename/prefix/rm・migrate）、配列が包みになる ls・ls --tree・schema check、項目や名前が変わる undo・auth login・auth logout・store add・store list・store init・store default・store discover・inbox ls・sync --status。
 - 変わるものは、新しい形を期待するテストを先に書いてから変える。それ以外のコマンドの `--json` は、今の出力と同じになることをテスト（既存の golden を含む）で確かめる。
+- `ls --format` のテンプレートに渡すキーは `ls --json` の tasks の 1 行と同じになる（checklist・progress が増える。今通るテンプレートの出力は変わらない。2026-11-04 利用者が了承）。
 - テキストの表示にだけ使う項目（表示用の ID、参照の名前など）は usecase の型に `json:"-"` で持たせる。JSON の項目ではないので、server の応答は変えない。
 
 ### 4.4 確認とプロンプト（H）
 
 - 今は `askBranchParent`・`askPick`（add）、`askRetry`（editor）、`askScoped`・`confirmMove`（mv）、`confirmPurge`（purge）、`askChoice`（store init）の 7 つが、それぞれ入力の読み取りと再入力を持っている。
 - `cli/prompt` に、はい・いいえの確認と一覧からの選択の 2 つを置き、7 つをそれで書き直す。非対話のときの扱い（`--yes`、端末でないときのエラー）も部品の中で一度だけ書く。
-- 文言と挙動は変えない。server は確認の形（`Confirm`・`Choice`）を API で返すまま。
+- 文言と挙動は変えない。server は確認の形（`Confirm`・`Choice`）を API で返すまま。例外は 1 つ: 「Open the editor again? [Y/n]」は `yes`・`YES` もはいにする（今は `y`・`Y`・空だけ。ほかの確認と揃う。2026-11-04 利用者が了承）
 
 ## 5. テストの整理（提案 I）
 
@@ -205,6 +206,7 @@ CLI の本体を `internal/app/cli` に移し、`cmd/hedgehug/main.go` は `cli.
 | 6. 最終確認 | PR 5 のマージ後の main で `go list` から層別のパッケージ構成と依存を作り直し、層別構成の Artifact（https://claude.ai/artifact/WFTVztg3Wvhgj4UnCwzsiH）を更新する。2.1 の配置・2 節の層の向き・4.2 の禁止と突き合わせ、ずれと層の向きに反する依存の一覧を添えて利用者に見せる。利用者が最終判断をする。直すものが出たら、この PR で直す | 変わらない |
 
 - 途中残りの検出を storage へ移すのは PR 3 で行い、E には依存させない。
+- PR 4 で Poller の中身を watch へ移すとき、server のテスト 2 つは確かめ方が変わる（決定 11 の例外。2026-11-04 利用者が了承）: `TestTestServerWaitsForTheHistoryBuild` は watch の `Wait` のテストになり server からなくなる。`TestSessionBeforeSwapReleasesTheStore` は開き直した look の tasks.changed が来ることで確かめる。
 - CI の shard は、PR 1 でパスだけを書き換える（`ops` → `internal/app/usecase`、`cli` → `internal/app/cli`、`sync` → `internal/app/remote/replicate`）。ここで作るのは `internal/app/usecase` と `internal/app/cli` の単一パッケージで、サブパッケージ（仮置きの mount・current、maintenance、のちの 11 の usecase 領域）は PR 5 で shard を作り直すまで `others` に入る。PR 5 で、CI の要約に出るパッケージごとの時間を見て shard の分け方を決め直す。必須チェックの名前（`test`）は変えない。
 
 ## 7. 確かめ方

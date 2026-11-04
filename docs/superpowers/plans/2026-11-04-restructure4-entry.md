@@ -48,7 +48,7 @@
 
 同じまま（テストと golden で確かめる）: doctor・show・auth add・auth status・log・store remove・store set・sync・view ls・schema scope・workspace ls・purge・inbox read・mv --store・use。
 
-## この回で決めたこと（plan を書くときに決めた。spec にない細部。利用者の承認を取る）
+## この回で決めたこと（plan を書くときに決めた。spec にない細部。2026-11-04 利用者が承認。6・7・8 は spec にも書き足した）
 
 1. **`usecase/watch` は状態を持つ型 `watch.Watcher` にする。** 決定 13（領域の操作は `*usecase.Session` を引数に取る関数）は「Session を包む型を作らない」という決まりで、Watcher は Session を包まない（Poll のたびに Session を作って閉じる）。Store を開いたまま次の Poll まで持つ部品なので、関数にすると状態を呼び手に渡すことになり、非公開のフィールドが漏れる
 2. **領域どうしの import は作らない（spec 2.3）。** watch が使う同期の状態（`StoreStatus`・`SyncStatus`）と同期の間隔は土台に、`TaskOfPath` は `model` に下ろす。未読の数は watch に関数で渡す。undo（tasks）と log（browse）が使う `LogViewOf` は土台に下ろす。`stores.StoreInitView` は `workspaces.WorkspaceView` を使うので、stores → workspaces の import を 1 本だけ足す（循環しない）
