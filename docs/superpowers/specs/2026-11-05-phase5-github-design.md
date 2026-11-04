@@ -67,7 +67,7 @@ gh:
 | `gh.prs[].ref`・`gh.issues[].ref` | リンクと同じ ref。配列の要素を見分ける（親設計に追加） |
 | `gh.prs[].state` | `open`・`draft`・`merged`・`closed` |
 | `gh.prs[].review` | `none`・`pending`・`approved`・`changes_requested`（`none` は親設計に追加） |
-| `gh.prs[].checks` | `success`・`failure`・`pending` |
+| `gh.prs[].checks` | `success`・`failure`・`pending`。CI がない PR では書かない |
 | `gh.prs[].merged_at` | マージ日時 |
 | `gh.issues[].state` | `open`・`closed` |
 | `gh.issues[].state_reason` | `completed`・`not_planned`（親設計に追加） |
@@ -132,7 +132,7 @@ issue_fields:
 | コマンド | 動き |
 |---|---|
 | `hh link <id> --pr org/repo#123` | `links` に足す |
-| `hh link <id> --issue org/repo#45 [--sync mirror\|push\|link]` | `links` に足す。既定は `issue_fields.default_sync`。リンク済みならモードを変える |
+| `hh link <id> --issue org/repo#45 [--sync mirror\|push\|link]` | `links` に足す。既定は 5a では `link`、5b から `issue_fields.default_sync`。リンク済みならモードを変える |
 | `hh unlink <id> --pr ...`・`--issue ...` | `sync: off` にする |
 | `hh show`・`--json` | リンクと `gh` を出す |
 
@@ -154,13 +154,14 @@ issue_fields:
 | 項目 | 決まり |
 |---|---|
 | 対象の repo | タスクの `repos` と、`off` でないリンク先の repo |
-| 間隔 | repo ごとに5分。明示の `hh sync` でも守る |
+| 間隔 | repo ごとに5分。明示の `hh sync` でも守る。初回の走査は更新の新しい 100 件まで |
 | レート制限 | 取得の応答の `rateLimit` を `ghstate` に残す。残量が 10% を切ったら間隔を3倍にし、回復の時刻まで延ばす |
 | 閲覧のみの Store | 取り込まない |
 | アカウント | `repo_accounts` を上から当てはめる。一致しなければ Store の `account`。読めなければ repo 名を付けて警告する |
 | 失敗 | 警告だけを出し、同期は成功のままにする |
 | author | `hedgehug-automation（実行したメンバー）` |
 | コミット | 1回の取得につき1つ。op は `gh-fetch`。`hh undo` の対象にしない |
+| アクティビティ | 5a〜5c の間は「同期」に入れる。5d-1 で「自動化」の絞り込みを作るときに移す |
 
 GitHub Enterprise Server の GraphQL の場所は、`Host` の API の URL から求める（`/api/v3` を `/api/graphql` に置き換える。github.com は `/graphql`）。
 
@@ -343,7 +344,7 @@ inbox に種類 `automation`（結果）と `automation_rejected`（拒否）を
 - **usecase**: fakegh を相手に、取り込み、自動リンク、`repo_accounts`、レート制限、失敗の警告、`hh unlink` の後に自動リンクが戻らないこと、別のメンバーが書いた遷移で発火しないことを確かめる
 - **CLI**: 新しいコマンドのゴールデンテスト。`cli/scenario` に、`hh start` から PR のマージまでの通しのテストを足す。PATH から git を外した CI ジョブでも通す
 - **Issue 同期**: モードとフィールドの組み合わせを表形式で確かめ、手編集の上書きと inbox を確かめる
-- **実 API**: 親設計の検証用 Org に対する定期実行のワークフローを 5a で足す。GraphQL のクエリが実際の GitHub の応答と合うことを、Device Flow、GitHub App の権限、レート制限と一緒に確かめる
+- **実 API**: 親設計の検証用 Org に対する定期実行のワークフローを 5a で足し、GraphQL のクエリが実際の GitHub の応答と合うことと、レート制限の値を確かめる。固定のリポジトリ `hh-live` に PR を1件以上置き、secret は `HH_LIVE_ORG`・`HH_LIVE_TOKEN` とする。Device Flow と GitHub App の権限は人の操作が要るので、5a の仕上げで検証用 Org を使って手で確かめ、結果を引き継ぎに書く
 - **web**: vitest と Playwright の E2E。fakegh で状態を動かし、チップ・タスク詳細・通知が変わることを確かめる
 
 ## 親設計の修正

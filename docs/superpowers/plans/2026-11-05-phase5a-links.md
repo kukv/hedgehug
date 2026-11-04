@@ -44,7 +44,7 @@ spec に書いていない細部を、コードを読んで次のとおり決め
 | 10 | リンク先を持たない `gh` の要素 | 取り込みのときに外す | `hh unlink` と `hh undo` のどちらでも、古い要素が残らない |
 | 11 | remote のない Store | `hh sync --store` で取り込む（push はしない） | 個人の Store でも PR の状態は要る |
 | 12 | 取り込みの多重実行 | `github.lock` で1つにする。`sync.lock` とは別 | 取り込みの後の push が `sync.lock` を取るため |
-| 13 | 活動の分類 | `gh-fetch` は `syncOps` と web の `SYNC_OPS` に入れる | 人の変更に混ざらないようにする。自動化の分離は 5d-1 で行う |
+| 13 | 活動の分類 | `gh-fetch` は `syncOps` と web の `SYNC_OPS` に入れる | 人の変更に混ざらないようにする。「自動化」の絞り込みができる 5d-1 で、そちらへ移す（spec の 5a の表） |
 
 ## File Structure
 
@@ -648,48 +648,32 @@ git commit -m "test(replicate): リンクと gh の同時更新をプロパテ�
 
 - [ ] **Step 1: 失敗するテストを書く**
 
-`eval_test.go` に足す。`store` と `index` の使い方は `helpers_test.go` の `newStore` に合わせる。
+`eval_test.go` に足す。補助は `helpers_test.go` の `newStore`・`newTask`・`put`・`mustOpen`・`run` を使う。
 
 ```go
 func TestRunHasPR(t *testing.T) {
 	t.Parallel()
 	s := newStore(t)
-	ws := s.Workspaces()[0].ULID
-	add := func(title string, links ...model.Link) {
-		u := model.NewULID()
-		if _, err := s.Update(store.Op{Name: "add", Task: u, Author: testAuthor}, func(tx *store.Tx) error {
-			return tx.PutTask(&model.Task{ULID: u, Title: title, Kind: "task", Status: "todo", Workspace: ws, Rank: "a", Links: links})
-		}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	add("linked", model.Link{Type: model.LinkPR, Ref: "github.com/o/r/pull/1", Sync: model.SyncMirror})
-	add("unlinked", model.Link{Type: model.LinkPR, Ref: "github.com/o/r/pull/2", Sync: model.SyncOff})
-	add("issue", model.Link{Type: model.LinkIssue, Ref: "github.com/o/r/issues/1", Sync: model.SyncLink})
-	add("none")
-	ix, err := index.Open(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	q, err := Parse("has:pr")
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := Run(ix, q, Options{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := titles(r); !slices.Equal(got, []string{"linked"}) {
+	linked, unlinked, issue, none := newTask("linked"), newTask("unlinked"), newTask("issue"), newTask("none")
+	linked.Links = []model.Link{{Type: model.LinkPR, Ref: "github.com/o/r/pull/1", Sync: model.SyncMirror}}
+	unlinked.Links = []model.Link{{Type: model.LinkPR, Ref: "github.com/o/r/pull/2", Sync: model.SyncOff}}
+	issue.Links = []model.Link{{Type: model.LinkIssue, Ref: "github.com/o/r/issues/1", Sync: model.SyncLink}}
+	put(t, s, linked, unlinked, issue, none)
+	ix := mustOpen(t, s)
+	if got := run(t, ix, "has:pr", Options{}); !reflect.DeepEqual(got, [][]string{{"linked"}}) {
 		t.Errorf("has:pr = %v", got)
 	}
-	q, _ = Parse("has:wiki")
+	q, err := Parse("has:wiki")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := Run(ix, q, Options{}); err == nil {
 		t.Error("has:wiki is accepted")
 	}
 }
 ```
 
-`titles` が `helpers_test.go` になければ、`r` のタスクのタイトルを並べる補助を同じファイルに足す。`s.Workspaces`・`s.Update`・`index.Open`・`Parse`・`r` の形は、同じファイルの既存のテストの呼び方に合わせる。
+`reflect` が import になければ足す。
 
 - [ ] **Step 2: 失敗を確かめる**
 
@@ -4032,7 +4016,8 @@ func TestSyncBringsGitHubIntoTheTask(t *testing.T) {
 	})
 	te.writeConfigYAML("accounts:\n  - {name: me, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
 	te.env["HH_TOKEN"] = "t-alice"
-	te.ok("add", "a", "--prop", "repos=github.com/org-a/web")
+	te.ok("add", "a")
+	te.ok("set", "ME-1", "repos=github.com/org-a/web")
 	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
 		t.Fatal(err)
 	}
@@ -4049,8 +4034,6 @@ func TestSyncBringsGitHubIntoTheTask(t *testing.T) {
 	}
 }
 ```
-
-`repos` を `--prop` で渡せなければ、`te.ok("set", "ME-1", "repos=github.com/org-a/web")` にする。`writeConfigYAML` が `hosts:` を消す形なら、`withFake` の後で `te.uc().AppendConfig` を使う。
 
 - [ ] **Step 2: 通ることを確かめる**
 
@@ -4078,11 +4061,19 @@ git status --short
 
 Expected: `gofmt -l` の出力なし、lint は 0 issues、テストはすべて PASS、`git status --short` に生成物の差分なし
 
-- [ ] **Step 5: 引き継ぎを書く**
+- [ ] **Step 5: 検証用 Org で Device Flow と GitHub App を手で確かめる**
+
+自動にできないので、利用者が席にいるときに1回行い、結果を引き継ぎに書く。
+
+1. `hh auth login <name>` の Device Flow でログインし、8 時間の期限の前にトークンが更新されることを、`hh auth status` の残り時間で確かめる
+2. Hedgehug の GitHub App を検証用 Org に入れた状態で、`hh sync` が `hh-live` の PR を取り込むことを確かめる
+3. App を外した Org の repo では、repo 名付きの警告が出て、同期が成功のままであることを確かめる
+
+- [ ] **Step 6: 引き継ぎを書く**
 
 `2026-11-05-phase5a-handoff.md` に、4f-3 の引き継ぎと同じ形で「いまの状態」「やったこと」「実装中の決定」「次」を書く。「次」は 5b の plan を main から切って書くこととし、この回で 5b が使うもの（`Fetch` の差分の取り方、`Automated`、`defaultIssueSync` の置き換え）を挙げる。5a の spec の項目で残っているものがないことを確かめて書く。
 
-- [ ] **Step 6: コミットする**
+- [ ] **Step 7: コミットする**
 
 ```bash
 git add internal/app/cli docs/superpowers
