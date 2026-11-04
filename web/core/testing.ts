@@ -100,6 +100,15 @@ export class FakeConn {
     for (const fn of [...this.subs]) fn();
   }
 
+  // retainSync drops the sync state of the stores that are not in names.
+  retainSync(names: string[]): void {
+    const keep = new Set(names);
+    const next = new Map([...this.sync].filter(([store]) => keep.has(store)));
+    if (next.size === this.sync.size) return;
+    this.sync = next;
+    for (const fn of [...this.subs]) fn();
+  }
+
   asConnection(): Connection {
     return this as unknown as Connection;
   }

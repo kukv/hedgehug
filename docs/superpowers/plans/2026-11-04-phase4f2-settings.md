@@ -129,11 +129,11 @@
 
 **テストの観点:** `stores.changed` で `GET /api/stores` が呼ばれる・2回で1回・消えた Store の `sync` が捨てられ購読者に届く・残る Store の `sync` は同じオブジェクト・`readOnly` の2つの元と null・`readOnlyReason` の3つと未知の文・`tone` が `StoreItem.read_only` で灰色・`AccountsCache` の `load` の1回だけ・`reload` の古い結果の破棄・読めないときの `error`・`stores.changed` と `resync` で読み込み済みのときだけ取り直す・`source` の5つ・`cli.ts` の各関数（ホストの省略、`--with-token` にトークンが入らないこと、`--color ""`、`--keep`、`--account`）
 
-- [ ] Step 1: `connection.test.ts` → `connection.ts`
-- [ ] Step 2: `stores.test.ts` → `stores.ts`
-- [ ] Step 3: `accounts.test.ts` → `accounts.ts`、core への組み込み
-- [ ] Step 4: `cli.test.ts` → `cli.ts`
-- [ ] Step 5: 検査を流してコミット `feat(web): stores.changed の受け取り、閲覧のみの判定、アカウントのキャッシュと CLI の行`
+- [x] Step 1: `connection.test.ts` → `connection.ts`
+- [x] Step 2: `stores.test.ts` → `stores.ts`
+- [x] Step 3: `accounts.test.ts` → `accounts.ts`、core への組み込み
+- [x] Step 4: `cli.test.ts` → `cli.ts`
+- [x] Step 5: 検査を流してコミット `feat(web): stores.changed の受け取り、閲覧のみの判定、アカウントのキャッシュと CLI の行`
 
 ---
 

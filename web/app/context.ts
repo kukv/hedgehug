@@ -1,4 +1,5 @@
 import { getContext, setContext } from "svelte";
+import type { AccountsCache } from "../core/accounts";
 import type { Api } from "../core/api/client";
 import type { TaskCache } from "../core/cache";
 import type { Connection } from "../core/connection";
@@ -15,6 +16,7 @@ export type AppCore = {
   stores: StoreDirectory;
   schema: SchemaCache;
   views: ViewDirectory;
+  accounts: AccountsCache;
 };
 
 /** The key of the context; tests pass it to render to replace the core. */

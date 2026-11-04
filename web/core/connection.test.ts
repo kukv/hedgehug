@@ -154,6 +154,41 @@ describe("Connection", () => {
     t.conn.stop();
   });
 
+  it("passes stores.changed to the listeners", async () => {
+    const s1 = sseStream();
+    const t = setup([s1]);
+    const changed = vi.fn();
+    t.conn.on("stores.changed", changed);
+    t.conn.start();
+    s1.send(hello("c1", { shared: "h1" }));
+    s1.send(ev("stores.changed", {}));
+    await t.until(() => changed.mock.calls.length === 1);
+    t.conn.stop();
+  });
+
+  it("retainSync drops the sync of a store that is gone, and tells the subscribers only then", async () => {
+    const s1 = sseStream();
+    const t = setup([s1]);
+    t.conn.start();
+    s1.send(hello("c1", { shared: "h1", gone: "h2" }));
+    await t.until(() => t.conn.sync.size === 2);
+    const kept = t.conn.sync.get("shared");
+    const notified = vi.fn();
+    t.conn.subscribe(notified);
+
+    t.conn.retainSync(["shared", "gone"]);
+    expect(notified).not.toHaveBeenCalled();
+
+    t.conn.retainSync(["shared"]);
+    expect([...t.conn.sync.keys()]).toEqual(["shared"]);
+    expect(t.conn.sync.get("shared")).toBe(kept);
+    expect(notified).toHaveBeenCalledTimes(1);
+
+    t.conn.retainSync(["shared"]);
+    expect(notified).toHaveBeenCalledTimes(1);
+    t.conn.stop();
+  });
+
   it("passes auth.device to the listeners", async () => {
     const s1 = sseStream();
     const t = setup([s1]);

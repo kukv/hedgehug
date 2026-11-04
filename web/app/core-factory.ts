@@ -1,3 +1,4 @@
+import { AccountsCache } from "../core/accounts";
 import { createApi } from "../core/api/client";
 import { TaskCache } from "../core/cache";
 import { Connection } from "../core/connection";
@@ -25,5 +26,6 @@ export function createCore(opts: {
   const stores = new StoreDirectory({ api, conn, cache });
   const schema = new SchemaCache({ api, conn });
   const views = new ViewDirectory({ api, conn, stores, cache });
-  return { api, conn, cache, save, stores, schema, views };
+  const accounts = new AccountsCache({ api, conn });
+  return { api, conn, cache, save, stores, schema, views, accounts };
 }
