@@ -256,6 +256,71 @@ describe("StoreMove", () => {
       });
     });
 
+    it("sets the workspace to its own, and another workspace or another Store drops it", async () => {
+      const { k, routes } = setup({
+        plan: planOf({ to: "multi", workspace: { name: "web", prefix: "WEB", ulid: "WM2" } }),
+      });
+      await pick("multi");
+      const select = screen.getByRole("combobox", { name: "multi のワークスペース" });
+      k.api.GET.mockImplementation(() =>
+        ok({
+          tasks: [
+            taskView({
+              ulid: "UQ",
+              id: "WEB-4",
+              title: "親",
+              store: "multi",
+              workspace: { ulid: "WM2", name: "web", id_prefix: "WEB" },
+            }),
+          ],
+        }),
+      );
+      // no workspace is picked yet: the parent is enough for a plan
+      await fireEvent.input(screen.getByRole("combobox", { name: "親を選ぶ" }), {
+        target: { value: "親" },
+      });
+      await fireEvent.click(
+        await screen.findByRole("option", { name: /WEB-4/ }, { timeout: 2000 }),
+      );
+      await waitFor(() => expect(routes.plan).toHaveBeenCalledTimes(1));
+      expect(routes.plan).toHaveBeenCalledWith({
+        params: { path: { id: "U1" } },
+        body: { to: "multi", workspace: "web", parent: "UQ" },
+      });
+      expect(select).toHaveValue("web");
+
+      // the same workspace keeps the parent; another one drops it
+      await fireEvent.change(select, { target: { value: "web" } });
+      expect(screen.getByRole("dialog")).toHaveTextContent("WEB-4 親");
+      await fireEvent.change(select, { target: { value: "api" } });
+      expect(screen.queryByRole("button", { name: "外す" })).toBeNull();
+      expect(routes.plan).toHaveBeenLastCalledWith({
+        params: { path: { id: "U1" } },
+        body: { to: "multi", workspace: "api" },
+      });
+    });
+
+    it("is dropped, with the workspace, when another Store is picked", async () => {
+      const { k, routes } = setup();
+      await pick("second");
+      await screen.findByText("移動先で変わること");
+      k.api.GET.mockImplementation(() =>
+        ok({ tasks: [taskView({ ulid: "UQ", id: "SC-4", title: "親", store: "second" })] }),
+      );
+      await fireEvent.input(screen.getByRole("combobox", { name: "親を選ぶ" }), {
+        target: { value: "親" },
+      });
+      await fireEvent.click(await screen.findByRole("option", { name: /SC-4/ }, { timeout: 2000 }));
+      await pick("hid");
+      await waitFor(() =>
+        expect(routes.plan).toHaveBeenLastCalledWith({
+          params: { path: { id: "U1" } },
+          body: { to: "hid" },
+        }),
+      );
+      expect(screen.queryByRole("button", { name: "外す" })).toBeNull();
+    });
+
     it("is said in the plan, from the one it leaves to the one it goes under", async () => {
       setup({ plan: planOf({ parent: { id: "SC-4", title: "新しい親", ulid: "UQ" } }) });
       await pick("second");

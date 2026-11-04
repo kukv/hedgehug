@@ -112,12 +112,13 @@ test("puts the task under a parent of the destination", async ({ page, hh }) => 
   await openFromDetail(page, hh, child.ulid);
   const d = dialog(page);
   await d.getByRole("radio", { name: /^second/ }).check();
-  await d.getByRole("combobox", { name: "second のワークスペース" }).selectOption("a");
   await d.getByRole("combobox", { name: "親を選ぶ" }).fill("Target");
   await d.getByRole("option", { name: new RegExp(target.id) }).click();
   await expect(d.getByRole("region", { name: "移動先で変わること" })).toContainText(
     `${target.id} Target parent の下に置きます`,
   );
+  // the parent chose the workspace
+  await expect(d.getByRole("combobox", { name: "second のワークスペース" })).toHaveValue("a");
   await d.getByRole("button", { name: "移動", exact: true }).click();
   await expect(toast(page, "second に移動しました")).toBeVisible();
   expect((await hh.get<{ parent: string | null }>(`/api/tasks/${child.ulid}`)).parent).toBe(

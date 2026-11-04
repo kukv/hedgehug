@@ -90,7 +90,7 @@
     const n = ++seq;
     plan = null;
     failure = null;
-    if (to === "" || (spaces.length >= 2 && workspace === "")) {
+    if (to === "" || (spaces.length >= 2 && workspace === "" && parent === null)) {
       planning = false;
       return;
     }
@@ -120,11 +120,14 @@
 
   function pickWorkspace(name: string) {
     picked = name;
+    // The parent decides the workspace (the server takes it from the parent), so another one drops it.
+    if (parent && parent.workspace.name !== name) parent = null;
     void refresh();
   }
 
   function pickParent(t: TaskView | null) {
     parent = t;
+    if (t) picked = t.workspace.name;
     void refresh();
   }
 
