@@ -1938,14 +1938,14 @@ components:
           format: date-time
           type: string
         next_fetch:
-          description: When the loop fetches next; absent before its first sync
+          description: When the loop fetches next; absent before its first sync; absent when no server runs the loop
           format: date-time
           type: string
         pending_since:
           format: date-time
           type: string
         push_at:
-          description: "When the background sync pushes the writes not pushed yet: sync.push_interval after pending_since, but not before sync.push_interval after the last sync and not after next_fetch, which syncs too; absent when nothing waits, before the first sync and while a sync runs"
+          description: "When the background sync pushes the writes not pushed yet: sync.push_interval after pending_since, but not before sync.push_interval after the last sync and not after next_fetch, which syncs too; absent when nothing waits, before the first sync and while a sync runs; absent when no server runs the loop"
           format: date-time
           type: string
         push_interval:

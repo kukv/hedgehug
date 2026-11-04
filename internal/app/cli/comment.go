@@ -90,7 +90,7 @@ func (a *app) commentAdd(arg string, text []string) error {
 	r, err := comments.WriteComment(a.ss, p)
 	if err != nil {
 		if path != "" {
-			return fmt.Errorf("%s; the comment is kept at %s", describe(err), path)
+			return fmt.Errorf("%s; the comment is kept at %s", usecase.Describe(err), path)
 		}
 		return err
 	}
@@ -132,7 +132,7 @@ func (a *app) commentEdit(arg string) error {
 	}
 	r, err := comments.WriteCommentEdit(a.ss, p)
 	if err != nil {
-		return fmt.Errorf("%s; the edited comment is kept at %s", describe(err), path)
+		return fmt.Errorf("%s; the edited comment is kept at %s", usecase.Describe(err), path)
 	}
 	if err := osfs.Remove(path); err != nil {
 		return err

@@ -202,7 +202,7 @@ func TestDescribe(t *testing.T) {
 	if usecase.KindOf(err) != usecase.KindAmbiguous {
 		t.Fatalf("Resolve(%s) = %v; want an ambiguous error", a.ID, err)
 	}
-	got := describe(err)
+	got := usecase.Describe(err)
 	if got != err.Error() || !strings.HasPrefix(got, "\""+a.ID+"\" matches 2 tasks:\n  ") {
 		t.Errorf("describe = %q", got)
 	}

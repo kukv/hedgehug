@@ -146,7 +146,7 @@ func (s *Server) registerStores() {
 		// first, and no poll opens it again until the removal is over. With
 		// keep the clone stays, and the poller lets go when the store is gone
 		// from the config. A name that is no store is StoreRemove's to refuse.
-		if _, e, eerr := ss.Entry(); eerr == nil && !in.Keep {
+		if e, eerr := ss.CurrentStore(); eerr == nil && !in.Keep {
 			err = s.poller.ReleaseFor(e.Path, remove)
 		} else {
 			err = remove()

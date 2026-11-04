@@ -16,17 +16,6 @@ import (
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
-// ViolationsText is the text of a refused write: what it breaks, and the
-// violations on the lines after it.
-func ViolationsText(ve *store.ValidationError) string {
-	var b strings.Builder
-	b.WriteString("the change breaks the schema:")
-	for _, v := range ve.Violations {
-		b.WriteString("\n  " + v.String())
-	}
-	return b.String()
-}
-
 // SchemaCheck opens the store and checks its schema. A schema.yaml that does
 // not decode keeps the store from opening; that is then the one finding.
 func SchemaCheck(ss *usecase.Session) ([]usecase.Finding, error) {
@@ -102,7 +91,7 @@ func Migrate(ss *usecase.Session, m schema.Migration, dryRun bool) (*index.Index
 		// Name the task: the migration writes many.
 		var ve *store.ValidationError
 		if errors.As(err, &ve) {
-			return nil, nil, usecase.NewErr(usecase.KindInvalid, "migrate.invalid", fmt.Errorf("%s: %v", usecase.RefName(ix, ve.Task), ViolationsText(ve)))
+			return nil, nil, usecase.NewErr(usecase.KindInvalid, "migrate.invalid", fmt.Errorf("%s: %v", usecase.RefName(ix, ve.Task), usecase.ViolationsText(ve.Violations)))
 		}
 		return nil, nil, err
 	}

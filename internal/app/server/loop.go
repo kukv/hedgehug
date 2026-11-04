@@ -88,7 +88,7 @@ func (l *Loop) step() time.Duration {
 		return time.Minute // config.yaml does not read; look again later
 	}
 	now := l.clock.Now()
-	interval := l.fetchInterval(c)
+	interval := l.FetchInterval(c.Sync.Interval)
 	wait := interval
 	for _, e := range targets {
 		due := l.due(e, now, interval, c.Sync.PushInterval)
@@ -101,13 +101,13 @@ func (l *Loop) step() time.Duration {
 	return wait
 }
 
-// fetchInterval is the time between fetches: sync.interval while the GUI is
-// on screen, hiddenInterval at least while it is not.
-func (l *Loop) fetchInterval(c *config.Config) time.Duration {
+// FetchInterval is the time between fetches: interval (sync.interval) while
+// the GUI is on screen, hiddenInterval at least while it is not.
+func (l *Loop) FetchInterval(interval time.Duration) time.Duration {
 	if !l.visible() {
-		return max(c.Sync.Interval, hiddenInterval)
+		return max(interval, hiddenInterval)
 	}
-	return c.Sync.Interval
+	return interval
 }
 
 // noteNext records when name is fetched next, from its last sync.
@@ -122,7 +122,7 @@ func (l *Loop) noteNext(name string) {
 	l.configFailed(nil)
 	l.mu.Lock()
 	if last, ok := l.last[name]; ok {
-		l.next[name] = last.Add(l.fetchInterval(c))
+		l.next[name] = last.Add(l.FetchInterval(c.Sync.Interval))
 	}
 	l.mu.Unlock()
 }
@@ -278,7 +278,7 @@ func (l *Loop) syncStore(name string) {
 		err = rep.Err
 	}
 	if err != nil {
-		l.s.logf("sync %s: %s", name, detailOf(err))
+		l.s.logf("sync %s: %s", name, usecase.Describe(err))
 	}
 	// The duplicates across stores are told as a sync of hh tells them:
 	// each once, not at every sync.

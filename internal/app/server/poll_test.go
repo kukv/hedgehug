@@ -210,7 +210,7 @@ func TestPollSyncState(t *testing.T) {
 	if err := replicate.MarkPending(s, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	e := waitEvent[syncStatus](t, ch, func(e syncStatus) bool { return e.PendingSince != nil })
+	e := waitEvent[usecase.SyncStatusView](t, ch, func(e usecase.SyncStatusView) bool { return e.PendingSince != nil })
 	if e.Store != "me" {
 		t.Errorf("event = %+v", e)
 	}
@@ -324,7 +324,7 @@ func TestPollNewStoreTellsTheClients(t *testing.T) {
 	if e.Commit == "" {
 		t.Error("the event of a new store has no commit; it says HEAD now")
 	}
-	waitEvent(t, ch, func(e syncStatus) bool { return e.Store == "later" })
+	waitEvent(t, ch, func(e usecase.SyncStatusView) bool { return e.Store == "later" })
 }
 
 func TestPollStoreThatComesBackTellsTheClients(t *testing.T) {

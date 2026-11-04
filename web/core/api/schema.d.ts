@@ -1526,14 +1526,14 @@ export interface components {
             last_success?: string;
             /**
              * Format: date-time
-             * @description When the loop fetches next; absent before its first sync
+             * @description When the loop fetches next; absent before its first sync; absent when no server runs the loop
              */
             next_fetch?: string;
             /** Format: date-time */
             pending_since?: string;
             /**
              * Format: date-time
-             * @description When the background sync pushes the writes not pushed yet: sync.push_interval after pending_since, but not before sync.push_interval after the last sync and not after next_fetch, which syncs too; absent when nothing waits, before the first sync and while a sync runs
+             * @description When the background sync pushes the writes not pushed yet: sync.push_interval after pending_since, but not before sync.push_interval after the last sync and not after next_fetch, which syncs too; absent when nothing waits, before the first sync and while a sync runs; absent when no server runs the loop
              */
             push_at?: string;
             /**

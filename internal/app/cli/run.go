@@ -15,12 +15,7 @@ import (
 	"github.com/pkg/browser"
 	"golang.org/x/term"
 
-	"github.com/kukv/hedgehug/internal/app/remote/auth"
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
-	"github.com/kukv/hedgehug/internal/app/storage/config"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
-	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 )
 
 // version is what --version prints. Main sets it from the version that
@@ -36,7 +31,7 @@ type env struct {
 	now            func() time.Time
 	getwd          func() (string, error) // the current directory; nil means none, which skips the stages of hedgehug add that read it
 	beforeUpdate   func()                 // for tests: runs before each write; nil in the binary
-	keyring        auth.Keyring           // nil is the OS keychain
+	keyring        usecase.Keyring        // nil is the OS keychain
 	httpClient     *http.Client           // nil is a client with a 30-second timeout
 	// run runs a command (gh) and gives its output; nil runs the command.
 	run func(name string, args ...string) (stdout, stderr []byte, err error)
@@ -72,22 +67,15 @@ func isTerminal(f any) bool {
 func run(args []string, e *env) int {
 	a := &app{env: e}
 	a.ss = &usecase.Session{
-		Getenv:       e.getenv,
-		Now:          e.now,
-		BeforeUpdate: e.beforeUpdate,
-		Keyring:      e.keyring,
-		HTTPClient:   e.httpClient,
-		Run:          e.run,
-		Progress:     newProgress(e.stderr, time.Now),
-		Warn:         func(m string) { _, _ = fmt.Fprintln(e.stderr, "warning: "+m) },
-		AfterWrite: func(s *store.Store, en config.StoreEntry) {
-			if !replication.SyncsInBackground(en) {
-				return
-			}
-			if err := replicate.Start(s, en.Name, e.getenv); err != nil {
-				_, _ = fmt.Fprintln(e.stderr, "warning: the background sync did not start:", err)
-			}
-		},
+		Getenv:         e.getenv,
+		Now:            e.now,
+		BeforeUpdate:   e.beforeUpdate,
+		Keyring:        e.keyring,
+		HTTPClient:     e.httpClient,
+		Run:            e.run,
+		Progress:       newProgress(e.stderr, time.Now),
+		Warn:           func(m string) { _, _ = fmt.Fprintln(e.stderr, "warning: "+m) },
+		BackgroundSync: true,
 	}
 	root := a.rootCmd()
 	root.SetArgs(args)
@@ -112,7 +100,7 @@ func run(args []string, e *env) int {
 // writeErr prints err as hedgehug: <reason>, with the details of the errors
 // that carry a list on the lines after it.
 func writeErr(w io.Writer, err error) {
-	_, _ = fmt.Fprintln(w, "hedgehug: "+describe(err))
+	_, _ = fmt.Fprintln(w, "hedgehug: "+usecase.Describe(err))
 }
 
 // openURL opens u in the browser of the OS and returns when the command that

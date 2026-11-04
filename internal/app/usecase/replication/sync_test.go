@@ -33,7 +33,7 @@ func TestSyncWithoutRemoteAndStatus(t *testing.T) {
 	if len(reps) != 0 {
 		t.Fatalf("Sync reported %d stores; want none, as no store has a remote", len(reps))
 	}
-	st, err := replication.SyncStatus(ts.Session)
+	st, err := usecase.SyncStatus(ts.Session)
 	if err != nil || len(st) != 1 {
 		t.Fatalf("SyncStatus = %v, %v", st, err)
 	}
@@ -71,7 +71,7 @@ func TestSyncStorePushesAndStatusReportsIt(t *testing.T) {
 	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
-	st, err := replication.SyncStatus(ts.Session)
+	st, err := usecase.SyncStatus(ts.Session)
 	if err != nil || len(st) != 1 || len(st[0].Remotes) != 1 || st[0].Remotes[0] != remote {
 		t.Fatalf("SyncStatus = %+v, %v; want the remote %s", st, err, remote)
 	}
@@ -90,7 +90,7 @@ func TestSyncStorePushesAndStatusReportsIt(t *testing.T) {
 	if r.Store != "me" || r.NoRemote || len(r.Pushed) == 0 {
 		t.Fatalf("SyncStore = %+v; want a push", r)
 	}
-	st, err = replication.SyncStatus(ts.Session)
+	st, err = usecase.SyncStatus(ts.Session)
 	if err != nil || len(st) != 1 {
 		t.Fatal(st, err)
 	}
@@ -227,11 +227,11 @@ func TestNoticeFieldAndTaskOfPath(t *testing.T) {
 		t.Errorf("NoticeField of bad detail = %q; want empty", got)
 	}
 	u := model.NewULID()
-	if got, ok := replication.TaskOfPath("tasks/ab/" + u.String() + ".md"); !ok || got != u {
+	if got, ok := model.TaskOfPath("tasks/ab/" + u.String() + ".md"); !ok || got != u {
 		t.Errorf("TaskOfPath = %v, %v; want %v", got, ok, u)
 	}
 	for _, p := range []string{"schema.yaml", "tasks/ab/zzz.md"} {
-		if _, ok := replication.TaskOfPath(p); ok {
+		if _, ok := model.TaskOfPath(p); ok {
 			t.Errorf("TaskOfPath(%q) ok; want not", p)
 		}
 	}

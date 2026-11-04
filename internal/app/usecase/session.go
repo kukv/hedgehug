@@ -11,7 +11,6 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/remote/auth"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
@@ -36,10 +35,14 @@ const SyncLockWait = 5 * time.Minute
 type Session struct {
 	Getenv     func(string) string
 	Now        func() time.Time
-	Loc        *time.Location                            // where a date without a zone is read; nil is time.Local
-	StoreName  string                                    // --store; "" selects as config.Select does
-	Warn       func(msg string)                          // warnings; the CLI prints "warning: "+msg to stderr
-	AfterWrite func(s *store.Store, e config.StoreEntry) // after a commit; nil does nothing more
+	Loc        *time.Location         // where a date without a zone is read; nil is time.Local
+	StoreName  string                 // --store; "" selects as config.Select does
+	Warn       func(msg string)       // warnings; the CLI prints "warning: "+msg to stderr
+	AfterWrite func(storeName string) // after a commit; nil does nothing more
+	// BackgroundSync starts a background sync after a write to a store with a
+	// remote (the CLI); the GUI server syncs through its own loop.
+	// ForStore copies it.
+	BackgroundSync bool
 	// BeforeUpdate lets a test write to the store after an operation read its
 	// index and before it writes, or write config.yaml after an operation
 	// read it and before it updates it, as another process could.
@@ -49,7 +52,7 @@ type Session struct {
 	// that store open, such as the GUI server's index, lets go of it.
 	// ForStore copies it. nil does nothing.
 	BeforeSwap func(path string)
-	Keyring    auth.Keyring // nil is the OS keychain
+	Keyring    Keyring      // nil is the OS keychain
 	HTTPClient *http.Client // nil is a client with a 30-second timeout
 	// Progress is told how far the history index of a store has come while it
 	// is built on the spot: done of total commits. ForStore copies it; nil
@@ -99,20 +102,21 @@ type mountCache struct {
 // cached for another store.
 func (ss *Session) ForStore(name string) *Session {
 	return &Session{
-		Getenv:       ss.Getenv,
-		Now:          ss.Now,
-		Loc:          ss.Loc,
-		StoreName:    name,
-		Warn:         ss.Warn,
-		AfterWrite:   ss.AfterWrite,
-		BeforeUpdate: ss.BeforeUpdate,
-		BeforeSwap:   ss.BeforeSwap,
-		Keyring:      ss.Keyring,
-		HTTPClient:   ss.HTTPClient,
-		Run:          ss.Run,
-		Progress:     ss.Progress,
-		tokens:       ss.tokenCache(),
-		mounts:       ss.mountCache(),
+		Getenv:         ss.Getenv,
+		Now:            ss.Now,
+		Loc:            ss.Loc,
+		StoreName:      name,
+		Warn:           ss.Warn,
+		AfterWrite:     ss.AfterWrite,
+		BackgroundSync: ss.BackgroundSync,
+		BeforeUpdate:   ss.BeforeUpdate,
+		BeforeSwap:     ss.BeforeSwap,
+		Keyring:        ss.Keyring,
+		HTTPClient:     ss.HTTPClient,
+		Run:            ss.Run,
+		Progress:       ss.Progress,
+		tokens:         ss.tokenCache(),
+		mounts:         ss.mountCache(),
 	}
 }
 
@@ -548,21 +552,78 @@ func CommitHex(h plumbing.Hash) string {
 	return h.String()
 }
 
-// MarkWritten notes that s has a commit to push and hands the write to
-// AfterWrite. The commit is made, so a failure here is only a warning.
+// MarkWritten notes that s has a commit to push, starts the background sync
+// when the session does that and the store has a remote, and hands the write
+// to AfterWrite. The commit is made, so a failure here is only a warning.
 func (ss *Session) MarkWritten(s *store.Store) {
 	if err := replicate.MarkPending(s, ss.Now()); err != nil {
 		ss.AddWarning("the write is not marked for sync: " + err.Error())
-		return
-	}
-	if ss.AfterWrite == nil {
 		return
 	}
 	_, e, err := ss.Entry()
 	if err != nil {
 		return
 	}
-	ss.AfterWrite(s, e)
+	if ss.BackgroundSync && len(e.Remotes) > 0 {
+		if err := replicate.Start(s, e.Name, ss.Getenv); err != nil {
+			ss.AddWarning("the background sync did not start: " + err.Error())
+		}
+	}
+	if ss.AfterWrite != nil {
+		ss.AfterWrite(e.Name)
+	}
+}
+
+// AccountCount is the number of accounts config.yaml lists.
+func (ss *Session) AccountCount() (int, error) {
+	c, _, err := ss.Config()
+	if err != nil {
+		return 0, err
+	}
+	return len(c.Accounts), nil
+}
+
+// DataDir is the directory hedgehug keeps its data in.
+func (ss *Session) DataDir() (string, error) {
+	p, err := config.Resolve(ss.Getenv)
+	if err != nil {
+		return "", err
+	}
+	return p.DataDir, nil
+}
+
+// StoreRef is the name and path of a store.
+type StoreRef struct{ Name, Path string }
+
+// CurrentStore is the store the session works on.
+func (ss *Session) CurrentStore() (StoreRef, error) {
+	_, e, err := ss.Entry()
+	if err != nil {
+		return StoreRef{}, err
+	}
+	return StoreRef{Name: e.Name, Path: e.Path}, nil
+}
+
+// TaskULID is the ULID of the task that id names.
+func (ss *Session) TaskULID(id string) (model.ULID, error) {
+	_, ix, err := ss.Open()
+	if err != nil {
+		return model.ULID{}, err
+	}
+	e, err := ss.Resolve(ix, id)
+	if err != nil {
+		return model.ULID{}, err
+	}
+	return e.ULID, nil
+}
+
+// SyncIntervals is sync.interval and sync.push_interval of config.yaml.
+func (ss *Session) SyncIntervals() (SyncIntervals, error) {
+	c, _, err := ss.Config()
+	if err != nil {
+		return SyncIntervals{}, err
+	}
+	return SyncIntervals{Interval: c.Sync.Interval, PushInterval: c.Sync.PushInterval}, nil
 }
 
 // SyncOptions is what replicate.Run needs for the store e, which need not be in c

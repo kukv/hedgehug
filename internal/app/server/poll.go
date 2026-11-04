@@ -18,8 +18,8 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
-	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
@@ -64,9 +64,9 @@ type configSnapshot struct {
 }
 
 type storeState struct {
-	Store string     `json:"store"`
-	Head  string     `json:"head"`
-	Sync  syncStatus `json:"sync"`
+	Store string                 `json:"store"`
+	Head  string                 `json:"head"`
+	Sync  usecase.SyncStatusView `json:"sync"`
 }
 
 // polled is what the poller knows of a store.
@@ -75,7 +75,7 @@ type polled struct {
 	s     *store.Store
 	ix    *index.Index
 	head  plumbing.Hash
-	sync  syncStatus
+	sync  usecase.SyncStatusView
 	stamp string
 
 	// histBusy is true while a goroutine brings the history index of the
@@ -263,10 +263,10 @@ func (p *Poller) pollLocked(publish bool) {
 	if err != nil {
 		return
 	}
-	statuses := map[string]syncStatus{}
-	if sts, err := replication.SyncStatus(ss); err == nil {
+	statuses := map[string]usecase.SyncStatusView{}
+	if sts, err := usecase.SyncStatus(ss); err == nil {
 		for _, st := range sts {
-			statuses[st.Store] = newSyncStatus(st, p.s.loop, c)
+			statuses[st.Store] = usecase.NewSyncStatusView(st, p.s.loop, usecase.SyncIntervals{Interval: c.Sync.Interval, PushInterval: c.Sync.PushInterval})
 		}
 	}
 	// Only poll writes p.stores and the fields of a polled, and polls run
@@ -277,7 +277,7 @@ func (p *Poller) pollLocked(publish bool) {
 		name  string
 		st    *polled
 		head  plumbing.Hash
-		sync  syncStatus
+		sync  usecase.SyncStatusView
 		fresh bool
 	}
 	var updates []update
@@ -455,7 +455,7 @@ func (p *Poller) publishDiff(name string, st *polled, fromCommit plumbing.Hash, 
 		case strings.HasPrefix(c.Path, model.ViewsDir+"/"):
 			viewsCh = true
 		}
-		if u, ok := replication.TaskOfPath(c.Path); ok {
+		if u, ok := model.TaskOfPath(c.Path); ok {
 			// A task that became a forward is gone from the list of the
 			// store: the file is still there, but not as a task.
 			if b, err := r.ReadFile(to, c.Path); c.Deleted || (err == nil && model.IsForward(b)) {

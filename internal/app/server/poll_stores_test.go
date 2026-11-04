@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/accounts"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 )
@@ -68,7 +69,7 @@ func TestPollStoresChanged(t *testing.T) {
 	evs := look()
 	want("a store went", 1, evs)
 	for _, e := range evs {
-		if st, ok := e.(syncStatus); ok && st.Store == "team" {
+		if st, ok := e.(usecase.SyncStatusView); ok && st.Store == "team" {
 			t.Errorf("sync.state of the store that went: %+v", st)
 		}
 	}

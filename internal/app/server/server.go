@@ -16,9 +16,6 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 
-	"github.com/kukv/hedgehug/internal/app/remote/auth"
-	"github.com/kukv/hedgehug/internal/app/storage/config"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
@@ -31,7 +28,7 @@ type Options struct {
 	// The fields of each request's usecase.Session.
 	Getenv     func(string) string
 	Now        func() time.Time
-	Keyring    auth.Keyring
+	Keyring    usecase.Keyring
 	HTTPClient *http.Client
 	Run        func(name string, args ...string) (stdout, stderr []byte, err error)
 
@@ -107,13 +104,16 @@ func apiConfig() huma.Config {
 
 // schemaName names the schemas of the OpenAPI document as huma does, except
 // that usecase.Problem (a finding of the index about a task) is IndexProblem, as
-// Problem is the body of every error.
+// Problem is the body of every error, and usecase.SyncStatusView is SyncStatus.
 func schemaName(t reflect.Type, hint string) string {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t.PkgPath() == reflect.TypeFor[usecase.Problem]().PkgPath() && t.Name() == "Problem" {
 		return "IndexProblem"
+	}
+	if t == reflect.TypeFor[usecase.SyncStatusView]() {
+		return "SyncStatus"
 	}
 	return huma.DefaultSchemaNamer(t, hint)
 }
@@ -160,7 +160,7 @@ func (s *Server) session(storeName string) *usecase.Session {
 		Run:        s.opt.Run,
 		StoreName:  storeName,
 		Warn:       func(m string) { s.logf("warning: %s", m) },
-		AfterWrite: func(*store.Store, config.StoreEntry) { s.loop.Wake() },
+		AfterWrite: func(string) { s.loop.Wake() },
 		// doctor --fix swaps a rebuilt store in (after a force push) and
 		// needs the files of the old one closed.
 		BeforeSwap: func(path string) { s.poller.Release(path) },

@@ -93,7 +93,7 @@ func (a *app) storeDiscover(in stores.DiscoverInput, all bool) error {
 		}
 	}
 	for _, f := range res.Failed {
-		if _, err := fmt.Fprintf(a.stderr, "Could not add store %s: %s\n", f.Name, describe(f.Err)); err != nil {
+		if _, err := fmt.Fprintf(a.stderr, "Could not add store %s: %s\n", f.Name, usecase.Describe(f.Err)); err != nil {
 			return err
 		}
 	}
@@ -117,7 +117,7 @@ func (a *app) printDiscoverJSON(cands []stores.Candidate, res stores.MountResult
 		out.Mounted = []string{}
 	}
 	for _, f := range res.Failed {
-		out.Failed = append(out.Failed, failure{f.Name, describe(f.Err)})
+		out.Failed = append(out.Failed, failure{f.Name, usecase.Describe(f.Err)})
 	}
 	return a.printJSON(out)
 }

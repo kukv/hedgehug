@@ -2,12 +2,10 @@ package cli
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/lib/osfs"
@@ -51,9 +49,8 @@ func (a *app) edit(arg string) error {
 				}
 				return a.printTask(r.Index, r.ULID, verb(r.Committed, "Updated"))
 			}
-			var ve *store.ValidationError
-			if !errors.As(err, &ve) {
-				return fmt.Errorf("%s; the edited file is kept at %s", describe(err), path)
+			if _, ok := usecase.ViolationsOf(err); !ok {
+				return fmt.Errorf("%s; the edited file is kept at %s", usecase.Describe(err), path)
 			}
 		}
 		writeErr(a.stderr, err)

@@ -6,7 +6,6 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/comments"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
@@ -49,22 +48,9 @@ func commentOut(r comments.CommentResult) *commentOutput {
 	return out
 }
 
-// taskULID resolves the task of a request.
-func taskULID(ss *usecase.Session, id string) (model.ULID, error) {
-	_, ix, err := ss.Open()
-	if err != nil {
-		return model.ULID{}, err
-	}
-	e, err := ss.Resolve(ix, id)
-	if err != nil {
-		return model.ULID{}, err
-	}
-	return e.ULID, nil
-}
-
 // commentOf refuses a comment that is not of the task of the path.
 func commentOf(ss *usecase.Session, id, cid string) error {
-	u, err := taskULID(ss, id)
+	u, err := ss.TaskULID(id)
 	if err != nil {
 		return problemOf(err)
 	}

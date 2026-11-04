@@ -18,7 +18,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/app/server"
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/lib/osfs"
 	"github.com/kukv/hedgehug/web"
 )
@@ -53,11 +52,11 @@ func (a *app) uiCmd() *cobra.Command {
 }
 
 func (a *app) ui(port int, noOpen bool) error {
-	paths, err := config.Resolve(a.getenv)
+	dataDir, err := a.ss.DataDir()
 	if err != nil {
 		return err
 	}
-	file := filepath.Join(paths.DataDir, "ui.json")
+	file := filepath.Join(dataDir, "ui.json")
 	if info, ok := readRunningUI(file); ok {
 		_, _ = fmt.Fprintln(a.stdout, "Hedgehug UI is running: "+info.url())
 		if !noOpen && a.openURL != nil {

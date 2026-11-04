@@ -8,7 +8,6 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
@@ -107,7 +106,7 @@ func TestMarkWrittenWarnsWhenPendingFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	var after int
-	ts.AfterWrite = func(*store.Store, config.StoreEntry) { after++ }
+	ts.AfterWrite = func(string) { after++ }
 	ts.MarkWritten(s)
 	if len(ts.Warns) != 1 || !strings.HasPrefix(ts.Warns[0], "the write is not marked for sync: ") {
 		t.Errorf("warns = %q", ts.Warns)

@@ -12,7 +12,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/replication"
-	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 )
 
 // app holds the global flags and what the commands share.
@@ -101,19 +100,21 @@ var errNoAccountSetUp = errors.New("no account is set up; add one with hedgehug 
 // beforeRun is the hook of every command: it stops a command that needs an
 // account when none is set up, then runs beforeCommand.
 func (a *app) beforeRun(cmd *cobra.Command, _ []string) error {
-	c, _, err := a.ss.Config()
+	n, err := a.ss.AccountCount()
 	if !noAccountCommands[cmd.CommandPath()] {
 		if err != nil {
 			return err
 		}
-		if len(c.Accounts) == 0 {
+		if n == 0 {
 			return errNoAccountSetUp
 		}
 	}
 	// With no account (or no readable config) there is no store to sync in
 	// the background, and a child process would only stop at its own entry.
-	if err == nil && len(c.Accounts) > 0 {
-		a.beforeCommand(cmd, c)
+	if err == nil && n > 0 {
+		if c, _, cerr := a.ss.Config(); cerr == nil {
+			a.beforeCommand(cmd, c)
+		}
 	}
 	return nil
 }
@@ -141,17 +142,4 @@ func verb(committed bool, heading string) string {
 		return "No changes"
 	}
 	return heading
-}
-
-// describe turns err into the text after "hedgehug: ", with the violations
-// of a refused write on the lines after it.
-func describe(err error) string {
-	var ve *store.ValidationError
-	if errors.As(err, &ve) {
-		return schemas.ViolationsText(ve)
-	}
-	if errors.Is(err, store.ErrLocked) {
-		return "another hedgehug is writing to the store; try again"
-	}
-	return err.Error()
 }

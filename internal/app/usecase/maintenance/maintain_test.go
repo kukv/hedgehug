@@ -10,7 +10,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
@@ -109,7 +108,7 @@ func TestDoctorFindsABrokenTaskFile(t *testing.T) {
 func TestDoctorFixRepairsAnIDClash(t *testing.T) {
 	ts := newCheckedSession(t)
 	var written int
-	ts.AfterWrite = func(*store.Store, config.StoreEntry) { written++ }
+	ts.AfterWrite = func(string) { written++ }
 	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +305,7 @@ func TestViolationsText(t *testing.T) {
 	t.Parallel()
 	ve := &store.ValidationError{Violations: []schema.Violation{{Field: "kind", Msg: "bug is not a kind"}, {Field: "title", Msg: "is empty"}}}
 	want := "the change breaks the schema:\n  kind: bug is not a kind\n  title: is empty"
-	if got := schemas.ViolationsText(ve); got != want {
+	if got := usecase.ViolationsText(ve.Violations); got != want {
 		t.Errorf("ViolationsText = %q; want %q", got, want)
 	}
 }
