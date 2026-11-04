@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   cliAdd,
+  cliAuthAdd,
+  cliAuthLogin,
+  cliAuthLogout,
   cliComment,
   cliDoctor,
   cliInbox,
@@ -16,7 +19,12 @@ import {
   cliScopeRm,
   cliScopeSet,
   cliSet,
+  cliStoreAdd,
+  cliStoreDefault,
+  cliStoreDiscover,
   cliStoreInit,
+  cliStoreRemove,
+  cliStoreSet,
   cliSync,
   cliViewRename,
   cliViewRm,
@@ -230,6 +238,80 @@ describe("commands", () => {
     expect(
       cliStoreInit({ name: "shared", prefix: "WEB", workspace: "web", remotes: ["git@x:a/b.git"] }),
     ).toBe("hh store init shared --prefix WEB --workspace web --remote git@x:a/b.git");
+  });
+
+  it("writes hh store init with the account when it is chosen", () => {
+    expect(cliStoreInit({ name: "shared", prefix: "WEB", account: "work" })).toBe(
+      "hh store init shared --prefix WEB --account work",
+    );
+    expect(
+      cliStoreInit({ name: "shared", prefix: "WEB", remotes: ["git@x:a/b.git"], account: "work" }),
+    ).toBe("hh store init shared --prefix WEB --remote git@x:a/b.git --account work");
+  });
+
+  it("writes hh auth login; the host only when it is not github.com, and never a token", () => {
+    expect(cliAuthLogin({})).toBe("hh auth login");
+    expect(cliAuthLogin({ name: "work" })).toBe("hh auth login work");
+    expect(cliAuthLogin({ name: "work", host: "github.com" })).toBe("hh auth login work");
+    expect(cliAuthLogin({ name: "work", host: "ghe.example.com" })).toBe(
+      "hh auth login work --host ghe.example.com",
+    );
+    expect(cliAuthLogin({ host: "ghe.example.com" })).toBe("hh auth login --host ghe.example.com");
+    expect(cliAuthLogin({ name: "work", withToken: true })).toBe("hh auth login work --with-token");
+    expect(cliAuthLogin({ name: new Placeholder("名前"), withToken: true, host: "h.io" })).toBe(
+      "hh auth login <名前> --with-token --host h.io",
+    );
+    expect(cliAuthLogin({ name: "-x" })).toBe("hh auth login -- -x");
+  });
+
+  it("writes hh auth add and hh auth logout", () => {
+    expect(cliAuthAdd({ name: "work", login: "alice" })).toBe("hh auth add work --login alice");
+    expect(cliAuthAdd({ name: "work", login: "alice", token: "gh" })).toBe(
+      "hh auth add work --login alice --token gh",
+    );
+    expect(
+      cliAuthAdd({ name: "work", login: "alice", host: "ghe.io", token: "env:GH_TOKEN" }),
+    ).toBe("hh auth add work --login alice --host ghe.io --token env:GH_TOKEN");
+    expect(cliAuthAdd({ name: "work", login: "alice", host: "github.com" })).toBe(
+      "hh auth add work --login alice",
+    );
+    expect(cliAuthAdd({ name: new Placeholder("名前"), login: new Placeholder("login") })).toBe(
+      "hh auth add <名前> --login <login>",
+    );
+    expect(cliAuthLogout("work")).toBe("hh auth logout work");
+  });
+
+  it("writes hh store discover, add, remove, default and set", () => {
+    expect(cliStoreDiscover({})).toBe("hh store discover");
+    expect(cliStoreDiscover({ account: "work" })).toBe("hh store discover --account work");
+    expect(cliStoreDiscover({ from: "~/dev dir" })).toBe('hh store discover --from "~/dev dir"');
+    expect(cliStoreDiscover({ account: "work", from: "/src" })).toBe(
+      "hh store discover --account work --from /src",
+    );
+
+    expect(cliStoreAdd({ name: "shared", remotes: ["git@x:a/b.git"] })).toBe(
+      "hh store add shared --remote git@x:a/b.git",
+    );
+    expect(cliStoreAdd({ name: "shared", remotes: ["u1", "u2"], account: "work" })).toBe(
+      "hh store add shared --remote u1 --remote u2 --account work",
+    );
+    expect(cliStoreAdd({ name: new Placeholder("名前"), remotes: [new Placeholder("URL")] })).toBe(
+      "hh store add <名前> --remote <URL>",
+    );
+
+    expect(cliStoreRemove("shared", false)).toBe("hh store remove shared");
+    expect(cliStoreRemove("shared", true)).toBe("hh store remove shared --keep");
+    expect(cliStoreDefault("shared")).toBe("hh store default shared");
+
+    expect(cliStoreSet({ name: "shared", color: "teal" })).toBe("hh store set shared --color teal");
+    expect(cliStoreSet({ name: "shared", color: "" })).toBe('hh store set shared --color ""');
+    expect(cliStoreSet({ name: "shared", hidden: true })).toBe("hh store set shared --hidden=true");
+    expect(cliStoreSet({ name: "shared", hidden: false })).toBe(
+      "hh store set shared --hidden=false",
+    );
+    expect(cliStoreSet({ name: "shared", color: "pink", hidden: true })).toBe(
+      "hh store set shared --color pink --hidden=true",
+    );
   });
 
   it("writes hh schema scope rm; --store only when it is given", () => {

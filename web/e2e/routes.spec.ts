@@ -9,7 +9,7 @@
 //     the menu "ワークスペースの操作" with 設定を開く and 削除…
 //   - the settings take the window: the navigation "設定のナビゲーション" (with the link
 //     "Hedgehug に戻る" and the version) is shown in place of the sidebar; it has the groups "このマシン"
-//     (the link 同期と保守) and "Store ごとの設定" (the link ワークスペース)
+//     (the links アカウントと認証, マウント中の Store and 同期と保守) and "Store ごとの設定" (the link ワークスペース)
 //   - /settings/general has the heading 同期と保守, the region "同期のタイミング" and, for each Store,
 //     the region "<Store>" under 同期の状態 with the button 今すぐ同期
 import type { Page } from "@playwright/test";
@@ -115,6 +115,39 @@ test("/settings is the sync and upkeep page, with its own nav in place of the si
   await nav.getByRole("link", { name: /Hedgehug に戻る/ }).click();
   await expect(sidebar(page)).toBeVisible();
   await expect(heading(page)).toBeVisible();
+});
+
+test("the settings of this machine have the accounts and the mounted Stores", async ({
+  page,
+  hh,
+}) => {
+  await hh.open(page, "/settings/accounts");
+  const nav = page.getByRole("navigation", { name: "設定のナビゲーション" });
+  const machine = nav.getByRole("region", { name: "このマシン" });
+  await expect(machine.getByRole("link")).toHaveText([
+    "アカウントと認証",
+    "マウント中の Store",
+    "同期と保守",
+  ]);
+  await expect(machine.getByRole("link", { name: "アカウントと認証" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  const body = page.getByRole("region", { name: "設定の本文" });
+  await expect(body.getByRole("heading", { level: 1, name: "アカウントと認証" })).toBeVisible();
+  await expect(body).toContainText("トークンはこのマシンにだけ保存し、Store には書きません");
+
+  await machine.getByRole("link", { name: "マウント中の Store" }).click();
+  await expect(page).toHaveURL(/\/settings\/stores$/);
+  await expect(machine.getByRole("link", { name: "マウント中の Store" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(body.getByRole("heading", { level: 1, name: "マウント中の Store" })).toBeVisible();
+  await expect(body).toContainText("「表示」を外した Store のワークスペースは");
+
+  await machine.getByRole("link", { name: "同期と保守" }).click();
+  await expect(page).toHaveURL(/\/settings\/general$/);
 });
 
 test("the gear of the sidebar opens the sync and upkeep settings", async ({ page, hh }) => {

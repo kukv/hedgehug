@@ -32,7 +32,8 @@ HEDGEHUG_UI='http://127.0.0.1:<port>/#token=<token>' pnpm dev
 
 ```bash
 make web-check      # Biome, svelte-check, the API types and Vitest (also part of make check)
-make e2e            # Playwright against bin/hedgehug (installs Chromium if it is missing)
+make e2e            # Playwright against bin/hedgehug-e2e (built with -tags e2e: a file keyring, not the OS keychain) and bin/fakegh (installs Chromium if it is missing)
+make e2e-bin        # only the GUI and those two binaries
 ```
 
 A binary built without `make web` (`go build`, `go install`) has no GUI: `hh ui` serves a

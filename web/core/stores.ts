@@ -13,6 +13,21 @@ export type StoreTone =
   | "brown"
   | "readonly";
 
+// readOnlyReason writes the reason a store is read-only (the sentences of
+// Access.Why in the server) in Japanese; any other text is shown as it is.
+export function readOnlyReason(why: string): string {
+  switch (why) {
+    case "the GitHub permission is read":
+      return "GitHub の権限が読み取りです";
+    case "the remote cannot be written":
+      return "remote に書き込めません";
+    case "the remote denied the push":
+      return "remote が push を拒みました";
+    default:
+      return why;
+  }
+}
+
 export type WorkspaceEntry = {
   store: string;
   tone: StoreTone;
@@ -81,6 +96,7 @@ export class StoreDirectory {
       if (sig !== this.readOnlySig) this.update();
     });
     opts.conn.on("resync", () => this.queueReload());
+    opts.conn.on("stores.changed", () => this.queueReload());
     opts.conn.on("tasks.changed", () => this.queueReload());
     void this.reload().catch(() => undefined);
   }
@@ -99,12 +115,19 @@ export class StoreDirectory {
     return this.items;
   }
 
-  // tone is the colour of a store; a store that is read-only (its sync state
-  // says why) and one that is not known are grey.
+  // tone is the colour of a store; a store that is read-only (its list item
+  // or its sync state says why) and one that is not known are grey.
   tone(store: string): StoreTone {
     const i = this.items.findIndex((s) => s.name === store);
-    if (i < 0 || this.conn.sync.get(store)?.read_only) return "readonly";
+    if (i < 0 || this.readOnly(store)) return "readonly";
     return TONES[i % TONES.length] ?? "readonly";
+  }
+
+  // readOnly is why a store cannot be written (the English sentence of the
+  // server; readOnlyReason writes it in Japanese), or null when it can.
+  readOnly(store: string): string | null {
+    const item = this.items.find((s) => s.name === store);
+    return item?.read_only || this.conn.sync.get(store)?.read_only || null;
   }
 
   // workspaces lists the workspaces of every store: in the order of the
@@ -178,6 +201,7 @@ export class StoreDirectory {
       JSON.stringify([...spaces]) !== JSON.stringify([...this.spaces]);
     if (!same) this.items = items;
     this.spaces = spaces;
+    this.conn.retainSync(items.map((s) => s.name));
     this.isLoaded = true;
     this.err = null;
     this.update(changed);

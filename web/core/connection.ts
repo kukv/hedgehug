@@ -17,6 +17,7 @@ type Handlers = {
   "schema.changed": (e: { store: string }) => void;
   "views.changed": (e: { store: string }) => void;
   "auth.device": (e: AuthDeviceEvent) => void;
+  "stores.changed": () => void;
   resync: () => void;
 };
 
@@ -49,6 +50,7 @@ export class Connection {
     "schema.changed": new Set(),
     "views.changed": new Set(),
     "auth.device": new Set(),
+    "stores.changed": new Set(),
     resync: new Set(),
   };
 
@@ -93,11 +95,22 @@ export class Connection {
   on(event: "tasks.changed", fn: (e: TasksChanged) => void): () => void;
   on(event: "schema.changed" | "views.changed", fn: (e: { store: string }) => void): () => void;
   on(event: "auth.device", fn: (e: AuthDeviceEvent) => void): () => void;
+  on(event: "stores.changed", fn: () => void): () => void;
   on(event: "resync", fn: () => void): () => void;
   on(event: keyof Handlers, fn: (e: never) => void): () => void {
     const set = this.handlers[event] as Set<(e: never) => void>;
     set.add(fn);
     return () => set.delete(fn);
+  }
+
+  // retainSync drops the sync state of the stores that are not in names (a
+  // store that was unmounted) and tells the subscribers when it dropped any.
+  retainSync(names: string[]): void {
+    const keep = new Set(names);
+    const next = new Map([...this._sync].filter(([store]) => keep.has(store)));
+    if (next.size === this._sync.size) return;
+    this._sync = next;
+    this.notify();
   }
 
   start(): void {
@@ -237,6 +250,9 @@ export class Connection {
         break;
       case "auth.device":
         this.emit("auth.device", body as AuthDeviceEvent);
+        break;
+      case "stores.changed":
+        this.emit("stores.changed");
         break;
     }
   }

@@ -1,11 +1,10 @@
-import { cleanup, fireEvent } from "@testing-library/svelte";
+import { cleanup } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SyncStatus } from "../../core/connection";
 import { renderWithCore } from "../test-utils";
 import Banners from "./Banners.svelte";
 import Disconnected from "./Disconnected.svelte";
 import NoToken from "./NoToken.svelte";
-import Onboarding from "./Onboarding.svelte";
 
 beforeEach(() => {
   Object.defineProperty(navigator, "clipboard", {
@@ -100,16 +99,5 @@ describe("Banners", () => {
     expect(bands[0]?.textContent).toContain("org-a/hh-shared を push できません");
     expect(bands[0]?.textContent).toContain("push rejected");
     expect(bands[0]?.textContent).toContain("変更はこのマシンに残っています");
-  });
-});
-
-describe("Onboarding", () => {
-  it("ようこそと、Store を作るボタンを出し、押すと CreateStore が開く", async () => {
-    const { getByText, getByRole, queryByRole } = renderWithCore(Onboarding, {});
-    expect(getByText("Hedgehug へようこそ")).toBeTruthy();
-    expect(getByRole("button", { name: /hh store init/ })).toBeTruthy();
-    expect(queryByRole("dialog")).toBeNull();
-    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
-    expect(getByRole("dialog", { name: "Store を作成" })).toBeTruthy();
   });
 });

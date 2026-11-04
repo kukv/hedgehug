@@ -156,8 +156,9 @@ func discoverGitHub(ss *usecase.Session, c *config.Config, only string) ([]Candi
 	return out, nil
 }
 
-// discoverFrom lists the bare repositories under dir whose HEAD holds a
-// store. The URL goes back through url_rewrites to the form before them.
+// discoverFrom lists the bare repositories under dir whose main holds a
+// store (not HEAD: a bare made by a plain git init --bare keeps HEAD on
+// master). The URL goes back through url_rewrites to the form before them.
 func discoverFrom(ss *usecase.Session, c *config.Config, dir, account string) ([]Candidate, error) {
 	acct, ok, err := ss.PickAccount(c, account)
 	if err != nil {
@@ -190,7 +191,7 @@ func discoverFrom(ss *usecase.Session, c *config.Config, dir, account string) ([
 		if !d.IsDir() || !isBare(p) {
 			return nil
 		}
-		if has, err := gitrepo.HeadHasFile(p, ".hedgehug/store.yaml"); err == nil && has {
+		if has, err := gitrepo.MainHasFile(p, ".hedgehug/store.yaml"); err == nil && has {
 			perm := "read"
 			if gitrepo.Writable(p) {
 				perm = "write"

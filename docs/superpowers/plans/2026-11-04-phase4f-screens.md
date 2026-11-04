@@ -137,3 +137,29 @@
 68. **（API の決まり d）書き込みの応答の `default`**: Store の追加と `PATCH` の応答は `default` を持たない `StoreView`。GUI は `default_store` を使い、書き込みのあとは `GET /api/stores` を取り直す
 69. **Device Flow の 409**: `auth.device_running` の `args` に走っているフローの `{id, user_code, verification_uri, expires_at}`（コードがまだ出ていなければ `id` だけ）。GUI は引き継ぐか、`DELETE /api/auth/device/{id}` でやめる
 70. **トークンの書き込み**: `PUT /api/accounts/{name}/token` と Device Flow の完了は、sync のループと poller をすぐ動かす（トークンがなくて閲覧のみだった Store が書けるようになるため）。GUI は応答のあと `GET /api/stores` を取り直す
+
+## 4f-2 の plan で足した細部（71〜）
+
+4f-2 の plan（`2026-11-04-phase4f2-settings.md`）で足したもの。71〜87 は plan の番号のまま、88〜 は実装で決まったもの。実装とテストの場所は plan の末尾の表にある。
+
+71. **E2E の keyring**（2026-11-04 に利用者が決定）: Device Flow の完了・トークンの貼り付け・ログアウトは OS の keychain に書くが、CI の E2E（ubuntu）には Secret Service がなく、手元の macOS では本物の Keychain に書いてしまう。Go に `auth.FileKeyring(path)`（JSON のファイルに持つ `auth.Keyring`）を足し、ビルドタグ `e2e` のときだけ CLI が `$HEDGEHUG_HOME/e2e-keyring.json` のそれを使う。`make e2e` はタグ付きで `bin/hedgehug-e2e` を作り、harness はそれを使う。リリースのバイナリ（タグなし）は今のまま OS の keychain を使う
+72. **E2E の GitHub**: harness は Device Flow とトークンの貼り付けを使う spec だけ `cmd/fakegh` を起動し（`fakegh serve --addr 127.0.0.1:0 --seed <json>`。`device_interval: 0`、利用者 `e2e`）、config.yaml に `hosts: [{host: github.com, api: <fakegh>, web: <fakegh>, client_id: e2e}]` を書く。承認は `fakegh device approve <コード> --user e2e --server <fakegh>`、貼るトークンは `fakegh token add <トークン> --user e2e`
+73. **閲覧のみの判定を前倒し**: 細部 34 の `StoreDirectory.readOnly(store)` と理由の日本語を、設定の画面（細部 17・23）が使うのでこの回で作る。`read_only` の値は usecase の `Access.Why()` の英文（`the GitHub permission is read`・`the remote cannot be written`・`the remote denied the push`）なので、その3つを「GitHub の権限が読み取りです」「remote に書き込めません」「remote が push を拒みました」に直し、ほかの文はそのまま出す（`web/core/stores.ts` の `readOnlyReason`）。4f-3 はこれを使う
+74. **`AccountsCache` の取り直し**: `GET /api/accounts` は `GET /user` を呼ぶので、自分からは読み込まない。アカウントと認証・Onboarding・CreateStore・URL で追加の画面が開いたときに `load()`（読み込み済みなら何もしない）、操作のあとに `reload()`。`stores.changed` では、読み込み済みのときだけ取り直す（細部 44 の「`stores.changed` と操作のあと」を、読み込んでいないときは呼ばない形にした）
+75. **`stores.changed` で捨てる同期の状態**: `Connection` に `retainSync(names)` を足し、`StoreDirectory` が Store の一覧を取り直したあとに今の Store の名前で呼ぶ（細部 33 の「消えた Store の `conn.sync` の項目を捨てる」）。変わったときだけ購読者に知らせる
+76. **設定のルート**: `/settings/accounts`（`{ page: "accounts" }`）と `/settings/stores`（`{ page: "stores" }`）。Store の名前を持たない（このマシンの設定）。キャンバスの順に「アカウントと認証」「マウント中の Store」「同期と保守」。ナビのバッジ（キャンバスの数）は出さない（何の数かを決める元がない）
+77. **パレット**: 「設定のアカウントと認証を開く」「設定のマウント中の Store を開く」を足す（細部 105 と同じく、画面を作った Task で足す）
+78. **Onboarding の閉じ方**: Onboarding は Store が0件になったときに出て、「始める」を押すか、CreateStore で作り終えるまで出し続ける（マウントで Store が1件以上になっても、はじめるの段を見せるため閉じない）。`App.svelte` が「Onboarding の途中」を持つ。最後の Store を解除して0件になれば、また出る（細部 27）
+79. **Onboarding のアカウントの段**: アカウントが0件なら「次へ」を無効にし、理由（「アカウントを1つ追加してください」）を出す（Store を書くにも作るにもアカウントが要る）。トークンなしのアカウントでも次へ進める（細部 29）。アカウントの追加は細部 19 の部品をそのまま使う
+80. **発見の段のアカウントなし**: トークンを持つアカウントがないときは自動では探さず、「GitHub で探すにはトークンのあるアカウントが要ります」と「フォルダから探す」だけを出す（usecase は `account.none` で断るので、先に呼ばない）
+81. **発見の候補の名前**: 候補の `name`（usecase が提案した名前）を呼び名の欄の初期値にする。マウントの本文は選んだ候補の `{name, url, account}` を、呼び名を欄の値に変えて送る（`MountCandidate` に `permission` はなく、余分なフィールドは受け付けない。権限は画面に残して「はじめる」の段に出す）。空の呼び名の候補は送らず、その行に「名前を入れてください」を出す
+82. **Device Flow の引き継ぎ**: 開始が 409 `auth.device_running` なら、`args` にコードがあればそのフローを引き継いで同じ画面を出し（「別の画面で始めたログインを続けます」）、`id` だけなら「やめてやり直す」（`DELETE` してから開始し直す）を出す（細部 69）。期限（`expires_at`）を過ぎたら「コードの期限が切れました」と「やり直す」を出す。`auth.device` の `error` は `new ApiError({status: 0, type: code, detail: message})` を作って `errorMessage` に渡して出す（`errorMessage` は `ApiError` だけを文言にする）
+83. **`gh`・環境変数のカード**: 取得元が `gh`・`env:VAR` のアカウントの「…」には「Hedgehug が持っているものはありません」だけを出す（細部 20）。カードの状態が `error` のとき、その文（`AuthStatus.error`）は英文のまま出す（GitHub やコマンドの文で、Code がない）
+84. **URL で追加の名前**: 名前は必須で、URL の最後の部分（`.git` を除く）を、名前が空のあいだだけ提案する。URL は1行に1つ（空行は捨てる）
+85. **CreateStore のアカウント**: アカウントの一覧は `AccountsCache` から取る（細部 32）。読み込み中・読めないときは選択欄を出さず、`account` を送らない
+86. **remote のない Store の解除**（細部 27 の「既定でオン」を、remote のない Store について直す）: サーバー（`lockToDelete`）は remote のない Store のクローンを、タスクが失われるため常に消さない（409 `store.unpushed`）。「先に同期してください」は remote がないので実行できない。解除のダイアログは、`remotes` が空の Store では「ローカルのクローンも消す」を既定でオフにし、オンにすると「remote のない Store は、クローンを消すとタスクが失われるため、クローンごとは解除できません。「クローンを残して解除」を使ってください」と出す。この Store の 409 `store.unpushed` は、同期の案内ではなくこの文を出す
+87. **discover --from は HEAD ではなく refs/heads/main を見る**: 素の `git init --bare` の HEAD は master のままで、push は main にしか書かないので、HEAD を見ていた `discover --from` は Store を黙って見落としていた（`gitrepo.MainHasFile`）。2026-11-04 に利用者がこの回で直すと決定。E2E の harness は `--initial-branch=main` を付けずに bare を作る
+88. **E2E の補足**（実装で決まった）: `fakegh serve --seed` は JSON ではなくファイルのパスを取る（harness が `<home>/fakegh-seed.json` を書く）。E2E のビルドは `HEDGEHUG_HOME` がなければ panic せず、終了コード 1 のエラーで止まる（手元の macOS で本物の Keychain に書かないため）。`make e2e-bin` は `web` に依存する（`MAKEFLAGS=-j` で `make web e2e-bin` が並行に走り、バイナリが一つ前のバンドルを埋め込んだため）
+89. **Device Flow の E2E と、ログアウトのあとの表示**: E2E の承認は `worker` として行う（`e2e` で承認すると既にある `e2e` のアカウントに合流する）。ログアウトしたあとの keychain のアカウントは、usecase が取得元を `keychain` のまま持つので「トークンなし」ではなく `error` で出る。カードはこのとき「ログインし直す」を出す
+90. **トークンの足し分**: `--fs-15`（15px）、`--control-h-lg`（40px。入力欄の高さ。生の 40px があった7ファイルを置き換えた）、Onboarding の `--logo-size`・`--step-size`・`--onboarding-w`・`--onboarding-pad-x`
+91. **色の名前**: パレットの7色の日本語（ティール・オレンジ・パープル・スカイ・ピンク・オリーブ・ブラウン）はキャンバスにないので実装者が付けた（`StoreColorPicker.svelte` の `STORE_COLORS`）

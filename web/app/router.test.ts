@@ -77,6 +77,10 @@ describe("parseRoute", () => {
       "/settings/schema/org-b%2Fops",
       { name: "settings", page: "schema", store: "org-b/ops", tab: "statuses" },
     ],
+    ["/settings/accounts", { name: "settings", page: "accounts" }],
+    ["/settings/stores", { name: "settings", page: "stores" }],
+    ["/settings/accounts/extra", { name: "home" }],
+    ["/settings/stores/extra", { name: "home" }],
     ["/settings/schema", { name: "home" }],
     ["/settings/schema/shared/extra", { name: "home" }],
     ["/nothing/here", { name: "home" }],
@@ -205,6 +209,8 @@ describe("hrefOf", () => {
       "/settings/workspaces/org-b%2Fops",
     );
     expect(hrefOf({ name: "settings", page: "general" })).toBe("/settings/general");
+    expect(hrefOf({ name: "settings", page: "accounts" })).toBe("/settings/accounts");
+    expect(hrefOf({ name: "settings", page: "stores" })).toBe("/settings/stores");
     expect(hrefOf({ name: "settings", page: "schema", store: "org-b/ops", tab: "statuses" })).toBe(
       "/settings/schema/org-b%2Fops",
     );

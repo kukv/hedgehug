@@ -9,6 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
+
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
@@ -85,6 +88,37 @@ func TestDiscoverFrom(t *testing.T) {
 	again, err := stores.StoreDiscover(ts.Session, stores.DiscoverInput{From: remotes})
 	if err != nil || len(again) != 0 {
 		t.Errorf("again = %+v, %v", again, err)
+	}
+}
+
+// A bare that a plain git init --bare made keeps HEAD on master; the store is
+// pushed to main, and is found there.
+func TestDiscoverFromBareWithHeadOnMaster(t *testing.T) {
+	t.Parallel()
+	remotes := filepath.Join(t.TempDir(), "remotes")
+	bare := filepath.Join(remotes, "org-a", "hh-shared.git")
+	if _, err := git.PlainInitWithOptions(bare, &git.PlainInitOptions{
+		Bare:        true,
+		InitOptions: git.InitOptions{DefaultBranch: plumbing.NewBranchReferenceName("master")},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	storesUnder(t, remotes, "https://github.com/org-a/hh-shared.git")
+	br, err := git.PlainOpen(bare)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if head, err := br.Reference(plumbing.HEAD, false); err != nil || head.Target() != "refs/heads/master" {
+		t.Fatalf("the premise: HEAD = %v, %v, want a link to refs/heads/master", head, err)
+	}
+	ts := usecasetest.New(t)
+	ts.AppendConfig(rewriteTo(remotes))
+	cands, err := stores.StoreDiscover(ts.Session, stores.DiscoverInput{From: remotes})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := candidateNames(cands); !reflect.DeepEqual(got, []string{"hh-shared"}) {
+		t.Errorf("candidates = %v", got)
 	}
 }
 

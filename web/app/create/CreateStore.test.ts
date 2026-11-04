@@ -1,5 +1,6 @@
 import { cleanup, fireEvent } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Account } from "../../core/accounts";
 import { renderWithCore } from "../test-utils";
 import { resetToasts, toasts } from "../toast.svelte";
 import CreateStore from "./CreateStore.svelte";
@@ -18,15 +19,35 @@ const created = {
   pushed: [],
 };
 
-function mount(post = vi.fn().mockResolvedValue({ data: created, response: new Response() })) {
+const acct = (name: string): Account => ({
+  name,
+  id: `github.com/${name}`,
+  state: "ok",
+  login: name,
+  token: "keychain",
+});
+
+function mount(
+  post = vi.fn().mockResolvedValue({ data: created, response: new Response() }),
+  accts: { list?: Account[]; loaded?: boolean } = {},
+) {
   const reload = vi.fn().mockResolvedValue(undefined);
   const onclose = vi.fn();
+  const oncreated = vi.fn();
+  const accounts = {
+    accounts: () => accts.list ?? [],
+    loaded: () => accts.loaded ?? true,
+    error: () => null,
+    load: vi.fn(async () => {}),
+    reload: vi.fn(async () => {}),
+    subscribe: () => () => {},
+  };
   const r = renderWithCore(
     CreateStore,
-    { open: true, onclose },
-    { api: { POST: post }, stores: { reload, subscribe: () => () => {} } },
+    { open: true, onclose, oncreated },
+    { api: { POST: post }, stores: { reload, subscribe: () => () => {} }, accounts },
   );
-  return { post, reload, onclose, ...r };
+  return { post, reload, onclose, oncreated, accounts, ...r };
 }
 
 const type = (el: HTMLElement, value: string) => fireEvent.input(el, { target: { value } });
@@ -189,5 +210,82 @@ describe("CreateStore", () => {
     expect(onclose).not.toHaveBeenCalled();
     finish({ data: created, response: new Response() });
     await vi.waitFor(() => expect(onclose).toHaveBeenCalledTimes(1));
+  });
+
+  it("作成できたら oncreated を呼ぶ", async () => {
+    const { getByLabelText, getByRole, oncreated } = mount();
+    await type(getByLabelText("名前"), "me");
+    await type(getByLabelText("ID の接頭辞"), "me");
+    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
+    await vi.waitFor(() => expect(oncreated).toHaveBeenCalledTimes(1));
+  });
+
+  it("失敗したら oncreated を呼ばない", async () => {
+    const post = vi.fn().mockRejectedValue(new Error("boom"));
+    const { getByLabelText, getByRole, oncreated } = mount(post);
+    await type(getByLabelText("名前"), "me");
+    await type(getByLabelText("ID の接頭辞"), "ME");
+    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
+    await vi.waitFor(() => getByRole("alert"));
+    expect(oncreated).not.toHaveBeenCalled();
+  });
+});
+
+describe("CreateStore のアカウント", () => {
+  const fill = async (r: ReturnType<typeof mount>) => {
+    await type(r.getByLabelText("名前"), "me");
+    await type(r.getByLabelText("ID の接頭辞"), "me");
+  };
+
+  it("開いたときにアカウントを読む", () => {
+    const { accounts } = mount();
+    expect(accounts.load).toHaveBeenCalled();
+  });
+
+  it("アカウントが 0 件か 1 件なら選択欄を出さず、account を送らない", async () => {
+    for (const list of [[], [acct("a")]]) {
+      const r = mount(undefined, { list });
+      expect(r.queryByLabelText("アカウント")).toBeNull();
+      await fill(r);
+      await fireEvent.click(r.getByRole("button", { name: "Store を作る" }));
+      await vi.waitFor(() => expect(r.post).toHaveBeenCalledTimes(1));
+      expect(r.post.mock.calls[0]?.[1].body.account).toBeUndefined();
+      expect(r.getByRole("button", { name: /hh store init/ }).textContent).not.toContain(
+        "--account",
+      );
+      cleanup();
+    }
+  });
+
+  it("読み込み中は選択欄を出さず、account を送らない", async () => {
+    const r = mount(undefined, { list: [acct("a"), acct("b")], loaded: false });
+    expect(r.queryByLabelText("アカウント")).toBeNull();
+    await fill(r);
+    await fireEvent.click(r.getByRole("button", { name: "Store を作る" }));
+    await vi.waitFor(() => expect(r.post).toHaveBeenCalledTimes(1));
+    expect(r.post.mock.calls[0]?.[1].body.account).toBeUndefined();
+  });
+
+  it("2 つ以上なら選択欄を出し、選ばないと送らない", async () => {
+    const r = mount(undefined, { list: [acct("a"), acct("b")] });
+    const pick = r.getByLabelText("アカウント") as HTMLSelectElement;
+    expect(Array.from(pick.options).map((o) => o.value)).toEqual(["", "a", "b"]);
+    expect(pick.value).toBe("");
+    await fill(r);
+    await fireEvent.click(r.getByRole("button", { name: "Store を作る" }));
+    expect(r.getByText("アカウントを選んでください")).toBeTruthy();
+    expect(r.post).not.toHaveBeenCalled();
+  });
+
+  it("選んだアカウントを送り、足元に --account を出す", async () => {
+    const r = mount(undefined, { list: [acct("a"), acct("b")] });
+    await fill(r);
+    await fireEvent.change(r.getByLabelText("アカウント"), { target: { value: "b" } });
+    expect(r.getByRole("button", { name: /hh store init/ }).textContent).toContain("--account b");
+    await fireEvent.click(r.getByRole("button", { name: "Store を作る" }));
+    await vi.waitFor(() => expect(r.post).toHaveBeenCalledTimes(1));
+    expect(r.post).toHaveBeenCalledWith("/api/stores", {
+      body: { name: "me", prefix: "ME", workspace: undefined, remotes: undefined, account: "b" },
+    });
   });
 });

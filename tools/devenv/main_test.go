@@ -305,7 +305,7 @@ func TestInitPhase3a(t *testing.T) {
 		}
 	}
 	for _, r := range []string{"kukv/hh-tasks.git", "org-a/hh-shared.git", "org-b/hh-ops.git"} {
-		if ok, err := gitrepo.HeadHasFile(filepath.Join(dir, "remotes", r), ".hedgehug/store.yaml"); err != nil || !ok {
+		if ok, err := gitrepo.MainHasFile(filepath.Join(dir, "remotes", r), ".hedgehug/store.yaml"); err != nil || !ok {
 			t.Errorf("%s has no store: %v %v", r, ok, err)
 		}
 	}

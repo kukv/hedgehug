@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { TaskCache } from "./cache";
-import { StoreDirectory } from "./stores";
+import { readOnlyReason, StoreDirectory } from "./stores";
 import { changed, FakeConn, fakeApi, problem, settle, tv } from "./testing";
 
-const store = (name: string, def = false) => ({
+const store = (name: string, def = false, extra: { read_only?: string } = {}) => ({
   name,
   default: def,
   path: `/data/${name}`,
   remotes: [],
+  ...extra,
 });
 const ws = (ulid: string, name: string, prefix: string) => ({
   ulid,
@@ -110,6 +111,49 @@ describe("StoreDirectory", () => {
     expect(dir.workspace("s1", "W1")?.tone).toBe("readonly");
   });
 
+  it("greys a store whose list item says it is read-only", async () => {
+    const w = baseWorld();
+    w.stores = [
+      store("shared", true),
+      store("personal", false, { read_only: "the remote cannot be written" }),
+    ];
+    const { dir } = setup(w);
+    await vi.waitFor(() => expect(dir.loaded()).toBe(true));
+    expect(dir.tone("shared")).toBe("teal");
+    expect(dir.tone("personal")).toBe("readonly");
+  });
+
+  it("says why a store is read-only: the list item, then the sync state, else null", async () => {
+    const w = baseWorld();
+    w.stores = [
+      store("shared", true),
+      store("personal", false, { read_only: "the GitHub permission is read" }),
+    ];
+    const { dir, conn } = setup(w);
+    await vi.waitFor(() => expect(dir.loaded()).toBe(true));
+    expect(dir.readOnly("shared")).toBeNull();
+    expect(dir.readOnly("nobody")).toBeNull();
+    expect(dir.readOnly("personal")).toBe("the GitHub permission is read");
+
+    conn.changeSync({
+      store: "shared",
+      remotes: [],
+      interval: 120,
+      push_interval: 30,
+      read_only: "the remote denied the push",
+    });
+    expect(dir.readOnly("shared")).toBe("the remote denied the push");
+    // the list item wins when both say something
+    conn.changeSync({
+      store: "personal",
+      remotes: [],
+      interval: 120,
+      push_interval: 30,
+      read_only: "other",
+    });
+    expect(dir.readOnly("personal")).toBe("the GitHub permission is read");
+  });
+
   it("fetches the stores and workspaces again at tasks.changed and resync", async () => {
     const { dir, conn, world } = setup(baseWorld());
     await vi.waitFor(() => expect(dir.workspaces().length).toBe(3));
@@ -201,6 +245,81 @@ describe("StoreDirectory requests", () => {
     expect(storeCalls(calls)).toHaveLength(before + 1);
   });
 
+  it("reloads once for two stores.changed of one turn", async () => {
+    const { dir, conn, calls } = setup(baseWorld());
+    await vi.waitFor(() => expect(dir.loaded()).toBe(true));
+    await settle();
+    const before = storeCalls(calls).length;
+    conn.emit("stores.changed");
+    conn.emit("stores.changed");
+    await settle();
+    await settle();
+    expect(storeCalls(calls)).toHaveLength(before + 1);
+  });
+
+  it("drops the sync state of a store that is gone after the reload, and keeps the others", async () => {
+    const world = baseWorld();
+    const { dir, conn } = setup(world);
+    await vi.waitFor(() => expect(dir.loaded()).toBe(true));
+    const sync = (store: string) => ({
+      store,
+      remotes: [],
+      interval: 120,
+      push_interval: 30,
+    });
+    conn.changeSync(sync("shared"));
+    conn.changeSync(sync("personal"));
+    const kept = conn.sync.get("shared");
+
+    world.stores = [store("shared", true)];
+    const fn = vi.fn();
+    conn.subscribe(fn);
+    conn.emit("stores.changed");
+    await vi.waitFor(() => expect([...conn.sync.keys()]).toEqual(["shared"]));
+    expect(conn.sync.get("shared")).toBe(kept);
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retain the sync state when a reload fails or is superseded", async () => {
+    const world = baseWorld();
+    let mode: "ok" | "fail" | "slow" = "ok";
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const { api } = fakeApi(async (r) => {
+      if (r.path === "/api/stores")
+        return mode === "fail" ? problem(500, "internal") : world.stores;
+      if (r.path === "/api/workspaces") {
+        if (mode === "slow") {
+          mode = "ok"; // only the first call of the older reload waits
+          await gate;
+        }
+        return world.spaces[r.query.get("store") ?? ""] ?? [];
+      }
+      return { tasks: world.projects };
+    });
+    const conn = new FakeConn();
+    const retain = vi.spyOn(conn, "retainSync");
+    const cache = new TaskCache({ api, conn: conn.asConnection() });
+    const dir = new StoreDirectory({ api, conn: conn.asConnection(), cache });
+    await vi.waitFor(() => expect(dir.loaded()).toBe(true));
+    retain.mockClear();
+
+    mode = "fail";
+    await expect(dir.reload()).rejects.toBeDefined();
+    expect(retain).not.toHaveBeenCalled();
+
+    mode = "slow";
+    const older = dir.reload();
+    await settle();
+    await dir.reload(); // the newer one ends first
+    expect(retain).toHaveBeenCalledTimes(1);
+    release();
+    await older;
+    expect(retain).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps the workspaces of a store whose workspaces could not be fetched", async () => {
     const world = baseWorld();
     let fail = false;
@@ -219,5 +338,14 @@ describe("StoreDirectory requests", () => {
     fail = true;
     await dir.reload();
     expect(dir.workspaces().map((w) => w.name)).toEqual(["api", "web", "home"]);
+  });
+});
+
+describe("readOnlyReason", () => {
+  it("writes the three reasons of the server in Japanese and leaves other text as it is", () => {
+    expect(readOnlyReason("the GitHub permission is read")).toBe("GitHub の権限が読み取りです");
+    expect(readOnlyReason("the remote cannot be written")).toBe("remote に書き込めません");
+    expect(readOnlyReason("the remote denied the push")).toBe("remote が push を拒みました");
+    expect(readOnlyReason("something else")).toBe("something else");
   });
 });
