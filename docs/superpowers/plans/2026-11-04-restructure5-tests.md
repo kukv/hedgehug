@@ -1860,7 +1860,7 @@ sed -i 's/"FinishLeftover = %v/"FinishLeftoverKept = %v/' internal/app/remote/re
 
 - [ ] **Step 4: テストを回す**
 
-Run: `grep -rn 'FinishLeftover\b' internal` （Expected: テスト関数の名前 `TestFinishLeftover…` 以外は出ない。`\b` の都合で `FinishLeftoverKept` は一致しない）
+Run: `grep -rn 'FinishLeftover\b' internal` （Expected: 出力なし。`\b` の都合で `FinishLeftoverKept` と `TestFinishLeftover…` は一致しない）
 Run: `go vet ./internal/app/remote/... ./internal/app/usecase && go test -count=1 ./internal/app/remote/replicate`
 Expected: PASS
 
@@ -2661,7 +2661,7 @@ Expected: PASS
 
 - [ ] **Step 4: 検出できることを確かめる**
 
-回数の確認は捨てたので、残した 2 つの性質を確かめる。`prefix.go` の一致を `strings.EqualFold(w.IDPrefix, p)` から `w.IDPrefix == p` に壊すと、prefix `tst`（小文字）で 0 件になり `uses = []` で FAIL することを見て戻す。`skipped(e.Name, err)` の行を消すと `skipped = []` で FAIL することを見て戻す。（実測: 前者は `uses = []`、後者は `skipped = []` で FAIL。どちらも元からある確認で、このタスクでは変えていない。）
+回数の確認は捨てたので、残した 2 つの性質を確かめる。`prefix.go` の一致を `strings.EqualFold(w.IDPrefix, p)` から `strings.EqualFold(w.IDPrefix, p) && w.IDPrefix == p` に壊すと（`w.IDPrefix == p` だけにすると `strings` が使われなくなりビルドが落ちる）、prefix `tst`（小文字）で 0 件になり `uses = []` で FAIL することを見て戻す。`skipped(e.Name, err)` の行を消すと `skipped = []` で FAIL することを見て戻す。（実測: 前者は `uses = []`、後者は `skipped = []` で FAIL。どちらも元からある確認で、このタスクでは変えていない。）
 
 - [ ] **Step 5: コミット**
 
@@ -2870,6 +2870,28 @@ git commit -m "refactor(index): 読みの失敗と一覧の確認を object の�
 ---
 
 ### Task B1: store のロックを普通の引数・オプションにする（`afterLockMiss`・`Store.lockWait`）
+
+**この Task の差分は C2・C3 の前の main で取った。C2・C3 の後のファイルに当てるときの違い（5b の順の空実行で確かめた）:**
+- `store.go` の構造体の差分: C2 の後は `commit` のフィールドがない。当てた後の形は次のとおり（`lockWait` の後に空行と `// Replaced by tests.` の `now`）:
+  ```go
+  	lockWait time.Duration // how long a write waits for the file lock
+
+  	// Replaced by tests.
+  	now func() time.Time
+  }
+  ```
+- `store.go` の `Create` の差分: C2 の後は `newStoreHook(s)` の行がないので、その行を文脈から外して当てる。
+- `move_test.go` の差分: C3 の後は `afterLock`・`order`・`// 直列` の行がない。`TestLockInOrder` には、(1) `a` を `newMoveStore(…, WithLockWait(20*time.Millisecond))` で作る、(2) 前半の待つ側を、既定の待ち時間で開いた別のハンドル `waiter` にする、(3) `a.lockWait = 20 * time.Millisecond` の行を消す、の 3 つを当てる。`newMoveStore` に `opts ...Option` を足す差分はそのまま当たる。
+- C3 で足した `TestLockInOrderDoesNotDeadlock` の、ストアごとに `s.lockWait = 2 * time.Second` を代入するループは消し、オプションで渡す:
+  ```go
+  	wait := WithLockWait(2 * time.Second)
+  	a, _ := newMoveStore(t, "a", "AAA", nil, wait)
+  	b, _ := newMoveStore(t, "b", "BBB", nil, wait)
+  	a2, err := Open(a.dir, wait)
+  	// …
+  	b2, err := Open(b.dir, wait)
+  ```
+- `local.go` の行番号は 94 → 97、`move.go` の `acquireStore` の位置も C3 の後でずれる。
 
 外す差し込み口:
 1. `store/lock.go` の `afterLockMiss`（パッケージ変数）→ `acquireStore`・`lockFile` の引数 `onMiss func()`。`osfs.LockFile` が既に `onMiss` を持つので、そこへ通すだけ。本番の 3 か所（`local.go` の `WithLocalLock`、`move.go` の `LockInOrder`、`tx.go` の `lockStore`）は `nil` を渡す。
@@ -3313,7 +3335,7 @@ Expected: PASS
 - [ ] **Step 5: 差し込み口が消えたことを確かめる**
 
 Run: `grep -rn 'afterLockMiss\|\.lockWait = \|lockWait, other' internal --include='*.go'`
-Expected: 出力なし（`s.lockWait` を読む行は残る）
+Expected: `store.go` の `WithLockWait` の中の `s.lockWait = d` の 1 行だけ（`s.lockWait` を読む行は残る）
 
 - [ ] **Step 6: コミット**
 
@@ -5923,10 +5945,10 @@ git commit -m "test(replicate): onFullRepair をやめ、読めない blob で�
 Run:
 
 ```bash
-grep -rn -e 'afterLockMiss' -e 'afterLock\b' -e 'newStoreHook' -e 'openStore\b' -e 'readHook' -e 'listHook' -e 'lockPoll =' -e 'indexLockPoll =' -e 'indexLockWait =' -e '\bgoos\b' -e 'packCap =' -e 'retryWait =' -e 'repackAt =' -e 'packsAt =' -e 'lookPath =' -e 'SetSpawn' -e 'StubSpawn' -e 'beforePush' -e 'onFullRepair' -e 'ForgetMounts' -e 'ForgetWriter' -e 'FinishLeftover(' -e 'PrepareMoveStore' -e 'func (b \*Box) Import' -e 'uiContext' internal | grep -v _test.go
+grep -rn -e 'afterLockMiss' -e 'afterLock\b' -e 'newStoreHook' -e 'openStore\b' -e 'readHook' -e 'listHook' -e 'var lockPoll' -e 'var indexLock' -e 'var goos' -e 'packCap =' -e 'retryWait =' -e 'repackAt =' -e 'packsAt =' -e 'lookPath =' -e 'SetSpawn' -e 'StubSpawn' -e 'beforePush' -e 'onFullRepair' -e 'ForgetMounts' -e 'ForgetWriter' -e 'FinishLeftover(' -e 'PrepareMoveStore' -e 'func (b \*Box) Import' -e 'uiContext == nil' internal | grep -v _test.go
 ```
 
-Expected: 0 行（上の表の A・B・C がすべて消えている。名前を変えて残したもの（`store.WithLockWait`・`Session.Spawn` など）は引っかからない）。D の名前（`beforeRename`・`beforeCommit`・`BeforePush`・`afterClone`・`afterPackWrite`・`onLockWait`・`syncFn`・`openHistory`・`Live`・`IndexOpened`・`BeforeUpdate`）は残っている。
+Expected: 0 行（上の表の A・B・C がすべて消えている。const に戻した `lockPoll`・`indexLockPoll`・`indexLockWait`、引数になった `goos`、Main が `signalContext` を入れる形に変えた `uiContext`（フィールドは残り、ui.go の nil の分岐が消える）は、パターンを `var` と `== nil` に絞ってあるので引っかからない。名前を変えて残したもの（`store.WithLockWait`・`Session.Spawn` など）も引っかからない。0 行でなければ、出た行が「差し込み口のまま残ったもの」か「パターンが広すぎるだけ」かを読んで分ける）。D の名前（`beforeRename`・`beforeCommit`・`BeforePush`・`afterClone`・`afterPackWrite`・`onLockWait`・`syncFn`・`openHistory`・`Live`・`IndexOpened`・`BeforeUpdate`）は残っている。
 
 - [ ] **Step 2: 全体を確かめる（5b で 1 回だけ）**
 
