@@ -10,13 +10,17 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/replication"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
+	"github.com/kukv/hedgehug/internal/app/usecase/workspaces"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 // add adds a task through usecase, as the CLI would, and returns its ID.
 func (ts *testServer) add(title, parent string) string {
 	ts.t.Helper()
-	res, err := ts.session().Add(usecase.AddInput{Title: title, Parent: parent})
+	res, err := tasks.Add(ts.session(), tasks.AddInput{Title: title, Parent: parent})
 	if err != nil {
 		ts.t.Fatal(err)
 	}
@@ -77,7 +81,7 @@ func TestListTasksGroups(t *testing.T) {
 func TestTreeHasProgress(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	res, err := ts.session().Add(usecase.AddInput{Title: "p", Kind: "project"})
+	res, err := tasks.Add(ts.session(), tasks.AddInput{Title: "p", Kind: "project"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,14 +100,14 @@ func TestTreeHasProgress(t *testing.T) {
 func TestListHasChecklistAndProgress(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	res, err := ts.session().Add(usecase.AddInput{Title: "p", Kind: "project"})
+	res, err := tasks.Add(ts.session(), tasks.AddInput{Title: "p", Kind: "project"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	pv, _ := res.View()
 	id := ts.add("c", pv.ID)
 	body := "- [x] a\n- [ ] b\n"
-	if _, err := ts.session().Patch(id, usecase.PatchInput{Body: &body}); err != nil {
+	if _, err := tasks.Patch(ts.session(), id, tasks.PatchInput{Body: &body}); err != nil {
 		t.Fatal(err)
 	}
 	var out listBody
@@ -170,7 +174,7 @@ func TestTaskHistory(t *testing.T) {
 	ts := newTestServer(t)
 	id := ts.add("one", "")
 	title := "two"
-	if _, err := ts.session().Patch(id, usecase.PatchInput{Assigns: []usecase.Assign{{Key: "title", Op: "=", Value: title}}}); err != nil {
+	if _, err := tasks.Patch(ts.session(), id, tasks.PatchInput{Assigns: []usecase.Assign{{Key: "title", Op: "=", Value: title}}}); err != nil {
 		t.Fatal(err)
 	}
 	var out []usecase.LogView
@@ -195,7 +199,7 @@ func TestTaskHistoryAcrossAMerge(t *testing.T) {
 	ts := newTestServer(t)
 	remote := ts.addRemote()
 	id := ts.add("one", "")
-	if _, err := ts.session().Sync(false, true); err != nil {
+	if _, err := replication.Sync(ts.session(), false, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -212,20 +216,20 @@ func TestTaskHistoryAcrossAMerge(t *testing.T) {
 	}
 	env["HEDGEHUG_HOME"] = hh
 	other := &usecase.Session{Getenv: func(k string) string { return env[k] }, Now: time.Now, Warn: func(string) {}}
-	if _, err := other.StoreAdd("me", []string{remote}, "", ""); err != nil {
+	if _, err := stores.StoreAdd(other, "me", []string{remote}, "", ""); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := ts.session().Patch(id, usecase.PatchInput{Assigns: []usecase.Assign{{Key: "title", Op: "=", Value: "from me"}}}); err != nil {
+	if _, err := tasks.Patch(ts.session(), id, tasks.PatchInput{Assigns: []usecase.Assign{{Key: "title", Op: "=", Value: "from me"}}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := other.Patch(id, usecase.PatchInput{Assigns: []usecase.Assign{{Key: "status", Op: "=", Value: "in_progress"}}}); err != nil {
+	if _, err := tasks.Patch(other, id, tasks.PatchInput{Assigns: []usecase.Assign{{Key: "status", Op: "=", Value: "in_progress"}}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := other.Sync(false, true); err != nil {
+	if _, err := replication.Sync(other, false, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.session().Sync(false, true); err != nil {
+	if _, err := replication.Sync(ts.session(), false, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -317,7 +321,7 @@ func TestShowByFormerID(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
 	old := ts.add("one", "")
-	if _, err := ts.session().WorkspacePrefix("me", "XX"); err != nil {
+	if _, err := workspaces.WorkspacePrefix(ts.session(), "me", "XX"); err != nil {
 		t.Fatal(err)
 	}
 	var out usecase.ShowView

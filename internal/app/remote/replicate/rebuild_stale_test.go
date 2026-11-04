@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
 
 // A marker with no old store to keep is not left inside the store the
@@ -21,7 +23,7 @@ func TestFinishLeftoverRemovesAMarkerWithoutAnOldStore(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(fresh, staleMarker), []byte("stale\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	l, err := FindLeftover(dir)
+	l, err := store.FindLeftover(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +57,7 @@ func TestFinishLeftoverKeepsTheOldStoreOfAStaleRebuild(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(fresh, staleMarker), []byte("stale\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	l, err := FindLeftover(dir)
+	l, err := store.FindLeftover(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +68,7 @@ func TestFinishLeftoverKeepsTheOldStoreOfAStaleRebuild(t *testing.T) {
 	if err != nil || string(b) != "s.before-rewrite-1" {
 		t.Errorf("the store = %q, %v; want the old store", b, err)
 	}
-	if left, _ := FindLeftover(dir); !left.None() {
+	if left, _ := store.FindLeftover(dir); !left.None() {
 		t.Errorf("leftover = %+v", left)
 	}
 }

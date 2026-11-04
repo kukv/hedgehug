@@ -8,9 +8,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/storage/mount"
 	"github.com/kukv/hedgehug/internal/app/usecase"
-	"github.com/kukv/hedgehug/internal/app/usecase/current"
-	"github.com/kukv/hedgehug/internal/app/usecase/mount"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
 func (a *app) addCmd() *cobra.Command {
@@ -29,10 +29,10 @@ func (a *app) addCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return a.add(usecase.AddHereInput{
-				Context: current.Input{Parent: parent, Project: project, Workspace: workspace},
+			return a.add(tasks.AddHereInput{
+				Context: usecase.Input{Parent: parent, Project: project, Workspace: workspace},
 				Repo:    withRepo,
-				Task:    usecase.AddInput{Title: strings.Join(args, " "), Kind: kind, Status: status, Body: body, Assigns: assigns, Before: before, After: after},
+				Task:    tasks.AddInput{Title: strings.Join(args, " "), Kind: kind, Status: status, Body: body, Assigns: assigns, Before: before, After: after},
 			})
 		},
 	}
@@ -54,7 +54,7 @@ func (a *app) addCmd() *cobra.Command {
 // store and the workspace.
 const maxAsks = 4
 
-func (a *app) add(in usecase.AddHereInput) error {
+func (a *app) add(in tasks.AddHereInput) error {
 	in.Context.Interactive = a.isTerminal(a.stdin)
 	if a.getwd != nil {
 		dir, err := a.getwd()
@@ -64,7 +64,7 @@ func (a *app) add(in usecase.AddHereInput) error {
 		in.Context.Dir = dir
 	}
 	for range maxAsks + 1 {
-		r, confirm, choice, err := a.ss.AddHere(in)
+		r, confirm, choice, err := tasks.AddHere(a.ss, in)
 		if err != nil {
 			return err
 		}
@@ -74,9 +74,9 @@ func (a *app) add(in usecase.AddHereInput) error {
 			if err != nil {
 				return err
 			}
-			in.Context.BranchParent = current.No
+			in.Context.BranchParent = usecase.No
 			if yes {
-				in.Context.BranchParent = current.Yes
+				in.Context.BranchParent = usecase.Yes
 			}
 		case choice != nil:
 			picked, err := a.askPick(choice)
@@ -107,7 +107,7 @@ func (a *app) add(in usecase.AddHereInput) error {
 
 // destinationLabel is "<store> / <parent's title>", or the workspace's name
 // for the root.
-func destinationLabel(d *current.Destination) string {
+func destinationLabel(d *usecase.Destination) string {
 	if d.Parent != nil {
 		return d.Store.Name + " / " + d.Parent.Title
 	}
@@ -126,7 +126,7 @@ func shownID(m *mount.Mounted, e *index.Entry) (string, error) {
 }
 
 // askBranchParent asks whether to add under the task the branch names.
-func (a *app) askBranchParent(c *current.Confirm) (bool, error) {
+func (a *app) askBranchParent(c *usecase.Confirm) (bool, error) {
 	id, err := shownID(c.Store, c.Parent)
 	if err != nil {
 		return false, err
@@ -149,7 +149,7 @@ func (a *app) askBranchParent(c *current.Confirm) (bool, error) {
 
 // askPick lists the options of c on stderr and reads the number of the one to
 // pick; Enter takes the default, if there is one.
-func (a *app) askPick(c *current.Choice) (string, error) {
+func (a *app) askPick(c *usecase.Choice) (string, error) {
 	prompt := map[string]string{"project": "Project", "store": "Store", "workspace": "Workspace"}[c.What]
 	return a.askChoice(c.Options, choice{labels: c.Labels, prompt: prompt, def: c.Default})
 }

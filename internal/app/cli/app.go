@@ -11,6 +11,8 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/replication"
+	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 )
 
 // app holds the global flags and what the commands share.
@@ -125,7 +127,7 @@ func (a *app) beforeCommand(cmd *cobra.Command, cfg *config.Config) {
 			return // the sync itself, a merge in the middle of one, and hh ui, whose server syncs
 		}
 	}
-	a.ss.BeforeCommand(cfg,
+	replication.BeforeCommand(a.ss, cfg,
 		func(s *store.Store, name string) error { return replicate.Start(s, name, a.getenv) },
 		func(name, msg string) {
 			_, _ = fmt.Fprintf(a.stderr, "hedgehug: background sync of %s failed: %s (run hedgehug sync)\n", name, msg)
@@ -146,7 +148,7 @@ func verb(committed bool, heading string) string {
 func describe(err error) string {
 	var ve *store.ValidationError
 	if errors.As(err, &ve) {
-		return usecase.ViolationsText(ve)
+		return schemas.ViolationsText(ve)
 	}
 	if errors.Is(err, store.ErrLocked) {
 		return "another hedgehug is writing to the store; try again"

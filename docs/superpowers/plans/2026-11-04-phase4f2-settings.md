@@ -363,4 +363,4 @@
 | 84 URL で追加の名前 | `StoreAddDialog.svelte` | `StoreAddDialog.test.ts` |
 | 85 CreateStore のアカウント | `CreateStore.svelte` | `CreateStore.test.ts` |
 | 86 remote のない Store の解除 | `StoreRemoveDialog.svelte` | `StoreRemoveDialog.test.ts`、`e2e/stores.spec.ts` |
-| 87 discover の main | `internal/lib/gitrepo/conn.go` の `MainHasFile`、`internal/app/usecase/discover.go` | `conn_test.go` の `TestMainHasFile`、`discover_test.go` の `TestDiscoverFromBareWithHeadOnMaster`、`e2e/discover.spec.ts` |
+| 87 discover の main | `internal/lib/gitrepo/conn.go` の `MainHasFile`、`internal/app/usecase/stores/discover.go` | `conn_test.go` の `TestMainHasFile`、`discover_test.go` の `TestDiscoverFromBareWithHeadOnMaster`、`e2e/discover.spec.ts` |

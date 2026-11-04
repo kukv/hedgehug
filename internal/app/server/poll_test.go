@@ -14,6 +14,13 @@ import (
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/comments"
+	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
+	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
+	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
+	"github.com/kukv/hedgehug/internal/app/usecase/views"
 )
 
 // pollServer runs the poller of a test server (real clock) and returns the
@@ -74,7 +81,7 @@ func TestPollTasksChanged(t *testing.T) {
 	t.Parallel()
 	ts, ch := pollServer(t)
 	ts.srv.poller.settle() // the first look sets the HEADs; it sends nothing
-	res, err := ts.session().Add(usecase.AddInput{Title: "one"})
+	res, err := tasks.Add(ts.session(), tasks.AddInput{Title: "one"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,11 +100,11 @@ func TestPollTellsEachCommitOfALook(t *testing.T) {
 	ch, cancel := ts.srv.hub.subscribe()
 	t.Cleanup(cancel)
 	ts.srv.poller.settle()
-	one, err := ts.session().Add(usecase.AddInput{Title: "one"})
+	one, err := tasks.Add(ts.session(), tasks.AddInput{Title: "one"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	two, err := ts.session().Add(usecase.AddInput{Title: "two"})
+	two, err := tasks.Add(ts.session(), tasks.AddInput{Title: "two"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +128,7 @@ func TestPollTellsManyCommitsAsOne(t *testing.T) {
 	ts.srv.poller.settle()
 	var last usecase.TaskResult
 	for i := range splitMax + 1 {
-		res, err := ts.session().Add(usecase.AddInput{Title: fmt.Sprintf("task %d", i)})
+		res, err := tasks.Add(ts.session(), tasks.AddInput{Title: fmt.Sprintf("task %d", i)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -137,12 +144,12 @@ func TestPollTellsManyCommitsAsOne(t *testing.T) {
 func TestPollCommentChangesItsTask(t *testing.T) {
 	t.Parallel()
 	ts, ch := pollServer(t)
-	res, err := ts.session().Add(usecase.AddInput{Title: "one"})
+	res, err := tasks.Add(ts.session(), tasks.AddInput{Title: "one"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	ts.srv.poller.settle()
-	if _, err := ts.session().CommentAdd(res.ULID.String(), "hi"); err != nil {
+	if _, err := comments.CommentAdd(ts.session(), res.ULID.String(), "hi"); err != nil {
 		t.Fatal(err)
 	}
 	e := waitEvent[tasksChanged](t, ch, func(e tasksChanged) bool { return e.Op == "comment" })
@@ -154,15 +161,15 @@ func TestPollCommentChangesItsTask(t *testing.T) {
 func TestPollRemoved(t *testing.T) {
 	t.Parallel()
 	ts, ch := pollServer(t)
-	res, err := ts.session().Add(usecase.AddInput{Title: "one"})
+	res, err := tasks.Add(ts.session(), tasks.AddInput{Title: "one"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.session().Remove(res.ULID.String()); err != nil {
+	if _, err := tasks.Remove(ts.session(), res.ULID.String()); err != nil {
 		t.Fatal(err)
 	}
 	ts.srv.poller.settle()
-	if _, err := ts.session().Purge(0, true); err != nil {
+	if _, err := maintenance.Purge(ts.session(), 0, true); err != nil {
 		t.Fatal(err)
 	}
 	e := waitEvent[tasksChanged](t, ch, func(e tasksChanged) bool { return e.Op == "purge" })
@@ -174,17 +181,17 @@ func TestPollRemoved(t *testing.T) {
 func TestPollSchemaAndViews(t *testing.T) {
 	t.Parallel()
 	ts, ch := pollServer(t)
-	if _, err := ts.session().Add(usecase.AddInput{Title: "one"}); err != nil {
+	if _, err := tasks.Add(ts.session(), tasks.AddInput{Title: "one"}); err != nil {
 		t.Fatal(err)
 	}
 	ts.srv.poller.settle()
 	sc := schema.Default()
-	if _, _, err := ts.session().Migrate(schema.Migration{Target: schema.TargetStatus, Old: sc.Statuses[0].Name, New: "renamed"}, false); err != nil {
+	if _, _, err := schemas.Migrate(ts.session(), schema.Migration{Target: schema.TargetStatus, Old: sc.Statuses[0].Name, New: "renamed"}, false); err != nil {
 		t.Fatal(err)
 	}
 	waitEvent[schemaChanged](t, ch, nil)
 	layout := "table"
-	if _, err := ts.session().ViewSave("v", usecase.ViewChange{Layout: &layout}); err != nil {
+	if _, err := views.ViewSave(ts.session(), "v", views.ViewChange{Layout: &layout}); err != nil {
 		t.Fatal(err)
 	}
 	waitEvent[viewsChanged](t, ch, nil)
@@ -221,7 +228,7 @@ func TestPollSyncState(t *testing.T) {
 func TestPollUnread(t *testing.T) {
 	t.Parallel()
 	ts, ch := pollServer(t)
-	res, err := ts.session().Add(usecase.AddInput{Title: "mine"})
+	res, err := tasks.Add(ts.session(), tasks.AddInput{Title: "mine"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +241,7 @@ func TestPollUnread(t *testing.T) {
 	waitEvent[unreadEvent](t, ch, func(e unreadEvent) bool { return e.Count == 1 })
 	// hh inbox read in another process: no HEAD moves, the files of the
 	// inbox do.
-	if _, err := ts.session().InboxRead([]string{nid}, false); err != nil {
+	if _, err := notifications.InboxRead(ts.session(), []string{nid}, false); err != nil {
 		t.Fatal(err)
 	}
 	waitEvent[unreadEvent](t, ch, func(e unreadEvent) bool { return e.Count == 0 })
@@ -270,7 +277,7 @@ func TestPollFirstLookSendsNothing(t *testing.T) {
 func TestPollInboxStampIsStable(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	res, err := ts.session().Add(usecase.AddInput{Title: "mine"})
+	res, err := tasks.Add(ts.session(), tasks.AddInput{Title: "mine"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +293,7 @@ func TestPollInboxStampIsStable(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := inbox.Open(s).Stamp()
-	if _, _, err := ts.session().InboxList(false); err != nil {
+	if _, _, err := notifications.InboxList(ts.session(), false); err != nil {
 		t.Fatal(err)
 	}
 	if after := inbox.Open(s).Stamp(); after != before {
@@ -310,7 +317,7 @@ func TestPollNewStoreTellsTheClients(t *testing.T) {
 	ts, ch := pollServer(t)
 	ts.srv.poller.settle()
 	// A store made after the first look: its first commits may come before the poller sees it.
-	if _, err := ts.session().StoreInit(usecase.StoreInitInput{Name: "later", Prefix: "LT", Workspace: "later"}); err != nil {
+	if _, err := stores.StoreInit(ts.session(), stores.StoreInitInput{Name: "later", Prefix: "LT", Workspace: "later"}); err != nil {
 		t.Fatal(err)
 	}
 	e := waitEvent(t, ch, func(e tasksChanged) bool { return e.Store == "later" })
@@ -324,7 +331,7 @@ func TestPollStoreThatComesBackTellsTheClients(t *testing.T) {
 	t.Parallel()
 	ts, ch := pollServer(t)
 	ts.srv.poller.settle()
-	if _, err := ts.session().StoreInit(usecase.StoreInitInput{Name: "later", Prefix: "LT", Workspace: "later"}); err != nil {
+	if _, err := stores.StoreInit(ts.session(), stores.StoreInitInput{Name: "later", Prefix: "LT", Workspace: "later"}); err != nil {
 		t.Fatal(err)
 	}
 	waitEvent(t, ch, func(e tasksChanged) bool { return e.Store == "later" })
@@ -338,7 +345,7 @@ func TestPollStoreThatComesBackTellsTheClients(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.session().StoreRemove("later", true); err != nil {
+	if _, err := stores.StoreRemove(ts.session(), "later", true); err != nil {
 		t.Fatal(err)
 	}
 	ts.srv.poller.settle() // the poller forgets the store
@@ -365,7 +372,7 @@ func TestPollStoreThatComesBackTellsTheClients(t *testing.T) {
 func TestPollFirstStoreAfterNoStoreTellsTheClients(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	if _, err := ts.session().StoreRemove("me", true); err != nil {
+	if _, err := stores.StoreRemove(ts.session(), "me", true); err != nil {
 		t.Fatal(err)
 	}
 	ts.srv.poller = newPoller(ts.srv, ts.srv.hub)
@@ -383,7 +390,7 @@ func TestPollFirstStoreAfterNoStoreTellsTheClients(t *testing.T) {
 		defer ts.srv.poller.mu.Unlock()
 		return ts.srv.poller.scanned
 	})
-	if _, err := ts.session().StoreInit(usecase.StoreInitInput{Name: "first", Prefix: "FT", Workspace: "first"}); err != nil {
+	if _, err := stores.StoreInit(ts.session(), stores.StoreInitInput{Name: "first", Prefix: "FT", Workspace: "first"}); err != nil {
 		t.Fatal(err)
 	}
 	e := waitEvent(t, ch, func(e tasksChanged) bool { return e.Store == "first" })

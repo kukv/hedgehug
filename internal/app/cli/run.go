@@ -20,6 +20,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 )
 
 // version is what --version prints. Main sets it from the version that
@@ -86,7 +87,7 @@ func run(args []string, e *env) int {
 		Progress:     newProgress(e.stderr, time.Now),
 		Warn:         func(m string) { _, _ = fmt.Fprintln(e.stderr, "warning: "+m) },
 		AfterWrite: func(s *store.Store, en config.StoreEntry) {
-			if !usecase.SyncsInBackground(en) {
+			if !replication.SyncsInBackground(en) {
 				return
 			}
 			if err := replicate.Start(s, en.Name, e.getenv); err != nil {

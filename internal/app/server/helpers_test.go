@@ -27,6 +27,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
@@ -100,7 +101,7 @@ func newTestServerWith(t *testing.T, edit func(*Options)) *testServer {
 	if err := os.WriteFile(filepath.Join(d, "hh", "config.yaml"), []byte(defaultAccountYAML), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.session().StoreInit(usecase.StoreInitInput{Name: "me", Prefix: "ME", Workspace: "me"}); err != nil {
+	if _, err := stores.StoreInit(ts.session(), stores.StoreInitInput{Name: "me", Prefix: "ME", Workspace: "me"}); err != nil {
 		t.Fatal(err)
 	}
 	opt := Options{Getenv: ts.getenv, Now: time.Now, Token: testToken, Version: "test", Log: ts.log}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
@@ -37,7 +38,7 @@ func (a *app) restoreCmd() *cobra.Command {
 }
 
 func (a *app) rm(arg string) error {
-	res, err := a.ss.Remove(arg)
+	res, err := tasks.Remove(a.ss, arg)
 	if err != nil {
 		return err
 	}
@@ -45,7 +46,7 @@ func (a *app) rm(arg string) error {
 }
 
 func (a *app) restore(arg string) error {
-	res, err := a.ss.Restore(arg)
+	res, err := tasks.Restore(a.ss, arg)
 	if err != nil {
 		return err
 	}

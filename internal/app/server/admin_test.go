@@ -4,11 +4,14 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
+	"github.com/kukv/hedgehug/internal/app/usecase/workspaces"
 )
 
 type workspaceBody struct {
-	Workspace usecase.WorkspaceView `json:"workspace"`
-	Commit    *string               `json:"commit"`
+	Workspace workspaces.WorkspaceView `json:"workspace"`
+	Commit    *string                  `json:"commit"`
 	IDs       []struct {
 		Old string `json:"old"`
 		New string `json:"new"`
@@ -19,7 +22,7 @@ func TestWorkspaces(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
 	ts.add("one", "")
-	var list []usecase.WorkspaceView
+	var list []workspaces.WorkspaceView
 	ts.call("GET", "/api/workspaces", nil, 200, &list)
 	if len(list) != 1 || list[0].IDPrefix != "ME" || list[0].Tasks != 1 {
 		t.Fatalf("workspaces = %+v", list)
@@ -54,7 +57,7 @@ func TestWorkspaces(t *testing.T) {
 func TestSchema(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	var sc usecase.SchemaView
+	var sc schemas.SchemaView
 	ts.call("GET", "/api/schema", nil, 200, &sc)
 	if len(sc.Statuses) == 0 {
 		t.Fatalf("schema = %+v", sc)
@@ -91,7 +94,7 @@ func TestStores(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
 	var list []struct {
-		usecase.StoreView
+		stores.StoreView
 		Default bool `json:"default"`
 	}
 	ts.call("GET", "/api/stores", nil, 200, &list)

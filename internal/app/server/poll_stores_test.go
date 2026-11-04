@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/accounts"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 )
 
 // A look that finds config.yaml different from the one before (a store came
@@ -35,33 +36,33 @@ func TestPollStoresChanged(t *testing.T) {
 	want("a look that finds the same", 0, look())
 
 	ss := ts.session()
-	if _, err := ss.StoreInit(usecase.StoreInitInput{Name: "team", Prefix: "TM"}); err != nil {
+	if _, err := stores.StoreInit(ss, stores.StoreInitInput{Name: "team", Prefix: "TM"}); err != nil {
 		t.Fatal(err)
 	}
 	want("a store came", 1, look())
 	want("nothing changed after it", 0, look())
 
-	if _, err := ss.StoreSet("team", new("teal"), nil); err != nil {
+	if _, err := stores.StoreSet(ss, "team", new("teal"), nil); err != nil {
 		t.Fatal(err)
 	}
 	want("a color was set", 1, look())
 
-	if _, err := ss.StoreSet("team", nil, new(true)); err != nil {
+	if _, err := stores.StoreSet(ss, "team", nil, new(true)); err != nil {
 		t.Fatal(err)
 	}
 	want("a store was hidden", 1, look())
 
-	if _, err := ss.StoreDefault("team"); err != nil {
+	if _, err := stores.StoreDefault(ss, "team"); err != nil {
 		t.Fatal(err)
 	}
 	want("the default store changed", 1, look())
 
-	if _, err := ss.AuthAdd(usecase.AuthAddInput{Name: "bob", Login: "bob"}); err != nil {
+	if _, err := accounts.AuthAdd(ss, accounts.AuthAddInput{Name: "bob", Login: "bob"}); err != nil {
 		t.Fatal(err)
 	}
 	want("an account came", 1, look())
 
-	if _, err := ss.StoreRemove("team", true); err != nil {
+	if _, err := stores.StoreRemove(ss, "team", true); err != nil {
 		t.Fatal(err)
 	}
 	evs := look()

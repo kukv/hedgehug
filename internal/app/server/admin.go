@@ -11,6 +11,9 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
+	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
+	"github.com/kukv/hedgehug/internal/app/usecase/workspaces"
 )
 
 type WorkspaceParam struct {
@@ -19,9 +22,9 @@ type WorkspaceParam struct {
 }
 
 type workspaceWrite struct {
-	Workspace usecase.WorkspaceView `json:"workspace"`
-	Commit    *string               `json:"commit"`
-	IDs       []idChange            `json:"ids,omitempty" doc:"With a new prefix: the IDs the tasks had and have now"`
+	Workspace workspaces.WorkspaceView `json:"workspace"`
+	Commit    *string                  `json:"commit"`
+	IDs       []idChange               `json:"ids,omitempty" doc:"With a new prefix: the IDs the tasks had and have now"`
 }
 
 type idChange struct {
@@ -49,7 +52,7 @@ type workspacePatchInput struct {
 
 type findingsOutput struct {
 	Body struct {
-		Findings []maintenance.Finding `json:"findings"`
+		Findings []usecase.Finding `json:"findings"`
 	}
 }
 
@@ -73,7 +76,7 @@ type migrateOutput struct {
 }
 
 type storeItem struct {
-	usecase.StoreView
+	stores.StoreView
 	Default bool `json:"default" doc:"The store hedgehug picks without --store"`
 }
 
@@ -91,21 +94,21 @@ type storeInitInput struct {
 
 type storeInitOutput struct {
 	Body struct {
-		Name      string                `json:"name"`
-		Path      string                `json:"path"`
-		Workspace usecase.WorkspaceView `json:"workspace"`
-		Remotes   []string              `json:"remotes"`
-		Pushed    []string              `json:"pushed"`
+		Name      string                   `json:"name"`
+		Path      string                   `json:"path"`
+		Workspace workspaces.WorkspaceView `json:"workspace"`
+		Remotes   []string                 `json:"remotes"`
+		Pushed    []string                 `json:"pushed"`
 	}
 }
 
-type doctorOutput struct{ Body []usecase.DoctorReport }
+type doctorOutput struct{ Body []maintenance.DoctorReport }
 
 // workspaceOut is the output of a write to a workspace. The view counts the
 // tasks from the index the operation read (refreshed after a renumbering), so
 // that a write that is committed is never answered with an error.
-func workspaceOut(r usecase.WorkspaceResult) *workspaceOutput {
-	out := &workspaceOutput{Body: workspaceWrite{Workspace: usecase.WorkspaceViewOf(r.Index, r.Workspace), Commit: commitPtr(r.Commit)}}
+func workspaceOut(r workspaces.WorkspaceResult) *workspaceOutput {
+	out := &workspaceOutput{Body: workspaceWrite{Workspace: workspaces.WorkspaceViewOf(r.Index, r.Workspace), Commit: commitPtr(r.Commit)}}
 	for _, c := range r.IDs {
 		out.Body.IDs = append(out.Body.IDs, idChange{c.Old, c.New})
 	}
@@ -116,17 +119,17 @@ func (s *Server) registerAdmin() {
 	huma.Register(s.api, huma.Operation{
 		OperationID: "list-workspaces", Method: http.MethodGet, Path: "/api/workspaces",
 		Summary: "List the workspaces, as hh workspace ls", Tags: []string{"workspaces"},
-	}, func(_ context.Context, in *StoreParam) (*struct{ Body []usecase.WorkspaceView }, error) {
+	}, func(_ context.Context, in *StoreParam) (*struct{ Body []workspaces.WorkspaceView }, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		_, ws, err := ss.WorkspaceList()
+		_, ws, err := workspaces.WorkspaceList(ss)
 		if err != nil {
 			return nil, problemOf(err)
 		}
 		if ws == nil {
-			ws = []usecase.WorkspaceView{}
+			ws = []workspaces.WorkspaceView{}
 		}
-		return &struct{ Body []usecase.WorkspaceView }{ws}, nil
+		return &struct{ Body []workspaces.WorkspaceView }{ws}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -135,7 +138,7 @@ func (s *Server) registerAdmin() {
 	}, func(_ context.Context, in *workspaceAddInput) (*workspaceOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		r, err := ss.WorkspaceAdd(in.Body.Name, in.Body.Prefix)
+		r, err := workspaces.WorkspaceAdd(ss, in.Body.Name, in.Body.Prefix)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -149,15 +152,15 @@ func (s *Server) registerAdmin() {
 		b := in.Body
 		ss := s.session(in.Store)
 		defer ss.Close()
-		var r usecase.WorkspaceResult
+		var r workspaces.WorkspaceResult
 		var err error
 		switch {
 		case b.Name != nil && b.Prefix != nil:
 			return nil, newProblem(http.StatusBadRequest, "workspace.one_change", "give name or prefix, not both")
 		case b.Name != nil:
-			r, err = ss.WorkspaceRename(in.ID, *b.Name)
+			r, err = workspaces.WorkspaceRename(ss, in.ID, *b.Name)
 		case b.Prefix != nil:
-			r, err = ss.WorkspacePrefix(in.ID, *b.Prefix)
+			r, err = workspaces.WorkspacePrefix(ss, in.ID, *b.Prefix)
 		default:
 			return nil, badRequest(errors.New("give name or prefix"))
 		}
@@ -173,7 +176,7 @@ func (s *Server) registerAdmin() {
 	}, func(_ context.Context, in *WorkspaceParam) (*workspaceOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		r, err := ss.WorkspaceRemove(in.ID)
+		r, err := workspaces.WorkspaceRemove(ss, in.ID)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -183,14 +186,14 @@ func (s *Server) registerAdmin() {
 	huma.Register(s.api, huma.Operation{
 		OperationID: "get-schema", Method: http.MethodGet, Path: "/api/schema",
 		Summary: "Show schema.yaml", Tags: []string{"schema"},
-	}, func(_ context.Context, in *StoreParam) (*struct{ Body usecase.SchemaView }, error) {
+	}, func(_ context.Context, in *StoreParam) (*struct{ Body schemas.SchemaView }, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
 		_, ix, err := ss.Open()
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return &struct{ Body usecase.SchemaView }{usecase.SchemaViewOf(ix.Schema())}, nil
+		return &struct{ Body schemas.SchemaView }{schemas.SchemaViewOf(ix.Schema())}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -199,12 +202,12 @@ func (s *Server) registerAdmin() {
 	}, func(_ context.Context, in *StoreParam) (*findingsOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		fs, err := ss.SchemaCheck()
+		fs, err := schemas.SchemaCheck(ss)
 		if err != nil {
 			return nil, problemOf(err)
 		}
 		out := &findingsOutput{}
-		out.Body.Findings = append([]maintenance.Finding{}, fs...)
+		out.Body.Findings = append([]usecase.Finding{}, fs...)
 		return out, nil
 	})
 
@@ -219,7 +222,7 @@ func (s *Server) registerAdmin() {
 		}
 		ss := s.session(in.Store)
 		defer ss.Close()
-		ix, plan, err := ss.Migrate(m, b.DryRun)
+		ix, plan, err := schemas.Migrate(ss, m, b.DryRun)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -245,7 +248,7 @@ func (s *Server) registerAdmin() {
 	}, func(context.Context, *struct{}) (*storesOutput, error) {
 		ss := s.session("")
 		defer ss.Close()
-		list, err := ss.StoreList()
+		list, err := stores.StoreList(ss)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -267,18 +270,18 @@ func (s *Server) registerAdmin() {
 		b := in.Body
 		ss := s.session("")
 		defer ss.Close()
-		r, err := ss.StoreInit(usecase.StoreInitInput{Name: b.Name, Prefix: b.Prefix, Workspace: b.Workspace, Remotes: b.Remotes, Account: b.Account})
+		r, err := stores.StoreInit(ss, stores.StoreInitInput{Name: b.Name, Prefix: b.Prefix, Workspace: b.Workspace, Remotes: b.Remotes, Account: b.Account})
 		if err != nil {
 			return nil, problemOf(err)
 		}
 		out := &storeInitOutput{}
 		out.Body.Name, out.Body.Path = r.Name, r.Path
 		out.Body.Remotes, out.Body.Pushed = append([]string{}, r.Remotes...), append([]string{}, r.Pushed...)
-		out.Body.Workspace = usecase.WorkspaceView{ULID: r.Workspace.ULID.String(), Name: r.Workspace.Name, IDPrefix: r.Workspace.IDPrefix, PrefixSet: r.Workspace.PrefixSet}
+		out.Body.Workspace = workspaces.WorkspaceView{ULID: r.Workspace.ULID.String(), Name: r.Workspace.Name, IDPrefix: r.Workspace.IDPrefix, PrefixSet: r.Workspace.PrefixSet}
 		// StoreInit leaves the time of the prefix out of its workspace; the store has it.
 		made := s.session(r.Name)
 		defer made.Close()
-		if _, ws, err := made.WorkspaceList(); err == nil && len(ws) == 1 {
+		if _, ws, err := workspaces.WorkspaceList(made); err == nil && len(ws) == 1 {
 			out.Body.Workspace = ws[0]
 		}
 		return out, nil
@@ -302,16 +305,16 @@ func (s *Server) registerAdmin() {
 func (s *Server) doctor(store string, fix bool) (*doctorOutput, error) {
 	ss := s.session(store)
 	defer ss.Close()
-	r, err := ss.Doctor(fix)
+	r, err := maintenance.Doctor(ss, fix)
 	if err != nil {
 		return nil, problemOf(err)
 	}
 	for i := range r {
 		if r[i].Findings == nil {
-			r[i].Findings = []maintenance.Finding{}
+			r[i].Findings = []usecase.Finding{}
 		}
 		if r[i].Repaired == nil {
-			r[i].Repaired = []usecase.Fixed{}
+			r[i].Repaired = []maintenance.Fixed{}
 		}
 	}
 	return &doctorOutput{Body: r}, nil

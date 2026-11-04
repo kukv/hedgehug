@@ -11,7 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/usecase"
-	"github.com/kukv/hedgehug/internal/app/usecase/mount"
+	"github.com/kukv/hedgehug/internal/app/usecase/browse"
 )
 
 // style colors text when the output is a terminal.
@@ -93,7 +93,7 @@ func taskRow(ix *index.Index, e *index.Entry) []string {
 
 // printTasks prints es as JSON or as a table; withStore puts the name of the
 // store of each task in a STORE column ahead of the others.
-func (a *app) printTasks(es []mount.Entry, withStore bool) error {
+func (a *app) printTasks(es []browse.Entry, withStore bool) error {
 	if a.jsonOut {
 		out := make([]*usecase.TaskView, len(es))
 		for i, e := range es {

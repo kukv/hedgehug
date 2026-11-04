@@ -9,7 +9,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 )
 
 // ScopedParam names the project of an override. It is exported because huma
@@ -28,7 +28,7 @@ type scopedPutInput struct {
 	}
 }
 
-type scopedOutput struct{ Body usecase.ScopedView }
+type scopedOutput struct{ Body schemas.ScopedView }
 
 // listsOf is m as schema.Lists, in the order of the keys.
 func listsOf(m *map[string][]string) *schema.Lists {
@@ -62,7 +62,7 @@ func (s *Server) registerScoped() {
 		}
 		ss := s.session(in.Store)
 		defer ss.Close()
-		r, err := ss.ScopedSet(in.Project, schema.ScopedChange{
+		r, err := schemas.ScopedSet(ss, in.Project, schema.ScopedChange{
 			Statuses: b.Statuses, Transitions: listsOf(b.Transitions), Required: listsOf(b.Required),
 		})
 		if err != nil {
@@ -77,7 +77,7 @@ func (s *Server) registerScoped() {
 	}, func(_ context.Context, in *ScopedParam) (*scopedOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		r, err := ss.ScopedRemove(in.Project)
+		r, err := schemas.ScopedRemove(ss, in.Project)
 		if err != nil {
 			return nil, problemOf(err)
 		}

@@ -6,7 +6,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 )
 
 // MoveStoreFields are what a move to another store takes, as hh mv --store.
@@ -18,8 +18,8 @@ type MoveStoreFields struct {
 	Scoped    string `json:"scoped,omitempty" enum:"carry,drop" doc:"Whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required"`
 }
 
-func (f MoveStoreFields) input(arg string) usecase.MoveStoreInput {
-	return usecase.MoveStoreInput{Arg: arg, To: f.To, Workspace: f.Workspace, Parent: f.Parent, Scoped: f.Scoped}
+func (f MoveStoreFields) input(arg string) stores.MoveStoreInput {
+	return stores.MoveStoreInput{Arg: arg, To: f.To, Workspace: f.Workspace, Parent: f.Parent, Scoped: f.Scoped}
 }
 
 type moveStorePlanInput struct {
@@ -27,17 +27,17 @@ type moveStorePlanInput struct {
 	Body MoveStoreFields
 }
 
-type moveStorePlanOutput struct{ Body usecase.MovePlanView }
+type moveStorePlanOutput struct{ Body stores.MovePlanView }
 
 type moveStoreInput struct {
 	TaskParam
 	Body struct {
 		MoveStoreFields
-		Confirmed *usecase.MovePlanView `json:"confirmed,omitempty" doc:"The plan POST /move-store/plan showed and the user agreed to; without it the answer is 400 confirm.required, and if the tasks are no longer what it lists, 409 move.changed"`
+		Confirmed *stores.MovePlanView `json:"confirmed,omitempty" doc:"The plan POST /move-store/plan showed and the user agreed to; without it the answer is 400 confirm.required, and if the tasks are no longer what it lists, 409 move.changed"`
 	}
 }
 
-type moveStoreOutput struct{ Body usecase.MoveStoreResultView }
+type moveStoreOutput struct{ Body stores.MoveStoreResultView }
 
 func (s *Server) registerMoveStore() {
 	huma.Register(s.api, huma.Operation{
@@ -46,7 +46,7 @@ func (s *Server) registerMoveStore() {
 	}, func(_ context.Context, in *moveStorePlanInput) (*moveStorePlanOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		v, err := ss.PrepareMovePlan(in.Body.input(in.ID))
+		v, err := stores.PrepareMovePlan(ss, in.Body.input(in.ID))
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -63,7 +63,7 @@ func (s *Server) registerMoveStore() {
 		mi.Yes, mi.ConfirmedView = in.Body.Confirmed != nil, in.Body.Confirmed
 		ss := s.session(in.Store)
 		defer ss.Close()
-		res, err := ss.MoveStore(mi)
+		res, err := stores.MoveStore(ss, mi)
 		// A move that stopped after the destination was written
 		// (move.unfinished) changed it too, so the poller looks on any error.
 		s.poller.Kick()

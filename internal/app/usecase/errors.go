@@ -39,8 +39,8 @@ type Error struct {
 func (e *Error) Error() string { return e.Err.Error() }
 func (e *Error) Unwrap() error { return e.Err }
 
-// newErr wraps err; args are key, value pairs.
-func newErr(k Kind, code string, err error, args ...any) *Error {
+// NewErr wraps err; args are key, value pairs.
+func NewErr(k Kind, code string, err error, args ...any) *Error {
 	e := &Error{Kind: k, Code: code, Err: err}
 	if len(args) > 0 {
 		e.Args = map[string]any{}
@@ -63,7 +63,7 @@ func AsError(err error) *Error {
 	if errors.As(err, &e) {
 		return e
 	}
-	return classify(err)
+	return Classify(err)
 }
 
 // KindOf is the Kind of err: that of its AsError.
@@ -74,8 +74,8 @@ func KindOf(err error) Kind {
 	return KindUnknown
 }
 
-// classify gives the errors of the lower layers a Kind and a Code.
-func classify(err error) *Error {
+// Classify gives the errors of the lower layers a Kind and a Code.
+func Classify(err error) *Error {
 	var ae *index.AmbiguousError
 	var ve *store.ValidationError
 	var wt *store.WorkspaceTakenError
@@ -83,25 +83,25 @@ func classify(err error) *Error {
 	case err == nil:
 		return nil
 	case errors.As(err, &ae):
-		return newErr(KindAmbiguous, "task.ambiguous", err, "input", ae.Input)
+		return NewErr(KindAmbiguous, "task.ambiguous", err, "input", ae.Input)
 	case errors.Is(err, store.ErrNotFound):
-		return newErr(KindNotFound, "not_found", err)
+		return NewErr(KindNotFound, "not_found", err)
 	case errors.As(err, &ve):
-		return newErr(KindInvalid, "schema.violation", err)
+		return NewErr(KindInvalid, "schema.violation", err)
 	case errors.As(err, &wt):
-		return newErr(KindConflict, "workspace.taken", err)
+		return NewErr(KindConflict, "workspace.taken", err)
 	case errors.Is(err, store.ErrLocked):
-		return newErr(KindConflict, "store.locked", err)
+		return NewErr(KindConflict, "store.locked", err)
 	case errors.Is(err, store.ErrStoreGone):
-		return newErr(KindConflict, "store.gone", err)
+		return NewErr(KindConflict, "store.gone", err)
 	case errors.Is(err, replicate.ErrDirty):
-		return newErr(KindConflict, "sync.dirty", err)
+		return NewErr(KindConflict, "sync.dirty", err)
 	case errors.Is(err, replicate.ErrUnrelated):
-		return newErr(KindConflict, "sync.unrelated", err)
+		return NewErr(KindConflict, "sync.unrelated", err)
 	case errors.Is(err, replicate.ErrForcePush):
-		return newErr(KindConflict, "sync.force_push", err)
+		return NewErr(KindConflict, "sync.force_push", err)
 	case errors.Is(err, config.ErrNoStores):
-		return newErr(KindConflict, "store.none", err)
+		return NewErr(KindConflict, "store.none", err)
 	}
 	return &Error{Kind: KindUnknown, Err: err}
 }
@@ -110,16 +110,16 @@ func classify(err error) *Error {
 // the result is complete, and the CLI exits 1 once it has printed it.
 var ErrFindings = errors.New("problems found")
 
-// choiceRequired is what an operation returns when it needs the caller to
+// ChoiceRequired is what an operation returns when it needs the caller to
 // pick one of candidates and none was given.
-func choiceRequired(what string, candidates []string) *Error {
-	return newErr(KindUsage, "choice.required",
+func ChoiceRequired(what string, candidates []string) *Error {
+	return NewErr(KindUsage, "choice.required",
 		fmt.Errorf("%s is needed; pick one of: %s", what, strings.Join(candidates, ", ")),
 		"what", what, "candidates", candidates)
 }
 
-// confirmRequired is what an operation returns when it needs a confirmation
+// ConfirmRequired is what an operation returns when it needs a confirmation
 // and the caller gave none (--yes).
-func confirmRequired(what string) *Error {
-	return newErr(KindUsage, "confirm.required", fmt.Errorf("%s: confirm with --yes", what), "what", what)
+func ConfirmRequired(what string) *Error {
+	return NewErr(KindUsage, "confirm.required", fmt.Errorf("%s: confirm with --yes", what), "what", what)
 }

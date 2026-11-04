@@ -9,6 +9,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 )
 
 // storesChanged is the event that the stores of config.yaml changed: one came
@@ -36,14 +37,14 @@ type storeAddInput struct {
 	}
 }
 
-type storeViewOutput struct{ Body usecase.StoreView }
+type storeViewOutput struct{ Body stores.StoreView }
 
 type storeRemoveInput struct {
 	Name string `path:"name" doc:"The store"`
 	Keep bool   `query:"keep" default:"false" doc:"Take the store out of the config and leave the clone; without it the clone is deleted, unless commits are not pushed (409 store.unpushed)"`
 }
 
-type storeRemoveOutput struct{ Body usecase.StoreRemoveResult }
+type storeRemoveOutput struct{ Body stores.StoreRemoveResult }
 
 type storeDefaultInput struct {
 	Body struct {
@@ -70,7 +71,7 @@ type storeDiscoverInput struct {
 	From    string `query:"from" doc:"A directory to look for bare repositories that hold a store under; without it, GitHub"`
 }
 
-type candidatesOutput struct{ Body []usecase.Candidate }
+type candidatesOutput struct{ Body []stores.Candidate }
 
 // mountCandidate is a candidate as the page sends it back: with the name it
 // changed. The permission is the page's to show and is not needed here.
@@ -96,17 +97,17 @@ type mountOutput struct {
 }
 
 // storeViewOf is the row of the store name of StoreList.
-func storeViewOf(ss *usecase.Session, name string) (usecase.StoreView, error) {
-	list, err := ss.StoreList()
+func storeViewOf(ss *usecase.Session, name string) (stores.StoreView, error) {
+	list, err := stores.StoreList(ss)
 	if err != nil {
-		return usecase.StoreView{}, err
+		return stores.StoreView{}, err
 	}
 	for _, v := range list {
 		if v.Name == name {
 			return v, nil
 		}
 	}
-	return usecase.StoreView{}, fmt.Errorf("store %s is not listed after it was added", name)
+	return stores.StoreView{}, fmt.Errorf("store %s is not listed after it was added", name)
 }
 
 func (s *Server) registerStores() {
@@ -117,7 +118,7 @@ func (s *Server) registerStores() {
 		b := in.Body
 		ss := s.session("")
 		defer ss.Close()
-		r, err := ss.StoreAdd(b.Name, b.Remotes, "", b.Account)
+		r, err := stores.StoreAdd(ss, b.Name, b.Remotes, "", b.Account)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -135,9 +136,9 @@ func (s *Server) registerStores() {
 	}, func(_ context.Context, in *storeRemoveInput) (*storeRemoveOutput, error) {
 		ss := s.session(in.Name)
 		defer ss.Close()
-		var res usecase.StoreRemoveResult
+		var res stores.StoreRemoveResult
 		remove := func() (err error) {
-			res, err = ss.StoreRemove(in.Name, in.Keep)
+			res, err = stores.StoreRemove(ss, in.Name, in.Keep)
 			return err
 		}
 		var err error
@@ -163,7 +164,7 @@ func (s *Server) registerStores() {
 	}, func(_ context.Context, in *storeDefaultInput) (*storeDefaultOutput, error) {
 		ss := s.session("")
 		defer ss.Close()
-		name, err := ss.StoreDefault(in.Body.Name)
+		name, err := stores.StoreDefault(ss, in.Body.Name)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -183,7 +184,7 @@ func (s *Server) registerStores() {
 		}
 		ss := s.session("")
 		defer ss.Close()
-		v, err := ss.StoreSet(in.Name, b.Color, b.Hidden)
+		v, err := stores.StoreSet(ss, in.Name, b.Color, b.Hidden)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -197,7 +198,7 @@ func (s *Server) registerStores() {
 	}, func(_ context.Context, in *storeDiscoverInput) (*candidatesOutput, error) {
 		ss := s.session("")
 		defer ss.Close()
-		cands, err := ss.StoreDiscover(usecase.DiscoverInput{Account: in.Account, From: in.From})
+		cands, err := stores.StoreDiscover(ss, stores.DiscoverInput{Account: in.Account, From: in.From})
 		if err != nil {
 			p := problemOf(err)
 			if p.Type == "choice.required" {
@@ -208,7 +209,7 @@ func (s *Server) registerStores() {
 			return nil, p
 		}
 		if cands == nil {
-			cands = []usecase.Candidate{}
+			cands = []stores.Candidate{}
 		}
 		return &candidatesOutput{Body: cands}, nil
 	})
@@ -220,13 +221,13 @@ func (s *Server) registerStores() {
 		if len(in.Body) == 0 {
 			return nil, badRequest(errors.New("give at least one store"))
 		}
-		cands := make([]usecase.Candidate, len(in.Body))
+		cands := make([]stores.Candidate, len(in.Body))
 		for i, c := range in.Body {
-			cands[i] = usecase.Candidate{Name: c.Name, URL: c.URL, Account: c.Account}
+			cands[i] = stores.Candidate{Name: c.Name, URL: c.URL, Account: c.Account}
 		}
 		ss := s.session("")
 		defer ss.Close()
-		res, err := ss.StoreMount(cands)
+		res, err := stores.StoreMount(ss, cands)
 		if err != nil && len(res.Failed) == 0 {
 			return nil, problemOf(err) // StoreMount's own error is the failures, which are in res
 		}

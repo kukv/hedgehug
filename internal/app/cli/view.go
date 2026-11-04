@@ -7,6 +7,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/storage/view"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/views"
 )
 
 func (a *app) viewCmd() *cobra.Command {
@@ -27,7 +28,7 @@ func (a *app) viewCmd() *cobra.Command {
 		Short: "Save a view, or change the settings given of a saved one",
 		Args:  exactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
-			var ch usecase.ViewChange
+			var ch views.ViewChange
 			str := func(flag string, v *string) *string {
 				if c.Flags().Changed(flag) {
 					return v
@@ -81,8 +82,8 @@ func (a *app) viewCmd() *cobra.Command {
 	return cmd
 }
 
-func (a *app) viewSave(name string, ch usecase.ViewChange) error {
-	r, err := a.ss.ViewSave(name, ch)
+func (a *app) viewSave(name string, ch views.ViewChange) error {
+	r, err := views.ViewSave(a.ss, name, ch)
 	if err != nil {
 		return err
 	}
@@ -94,7 +95,7 @@ func (a *app) viewSave(name string, ch usecase.ViewChange) error {
 }
 
 func (a *app) viewRm(name string) error {
-	r, err := a.ss.ViewRemove(name)
+	r, err := views.ViewRemove(a.ss, name)
 	if err != nil {
 		return err
 	}
@@ -102,7 +103,7 @@ func (a *app) viewRm(name string) error {
 }
 
 func (a *app) viewRename(oldName, newName string) error {
-	r, err := a.ss.ViewRename(oldName, newName)
+	r, err := views.ViewRename(a.ss, oldName, newName)
 	if err != nil {
 		return err
 	}
@@ -110,7 +111,7 @@ func (a *app) viewRename(oldName, newName string) error {
 }
 
 func (a *app) viewList() error {
-	vs, err := a.ss.ViewList()
+	vs, err := views.ViewList(a.ss)
 	if err != nil {
 		return err
 	}
@@ -129,7 +130,7 @@ func (a *app) viewList() error {
 }
 
 func (a *app) viewShow(name string) error {
-	v, err := a.ss.ViewGet(name)
+	v, err := views.ViewGet(a.ss, name)
 	if err != nil {
 		return err
 	}
@@ -151,7 +152,7 @@ func (a *app) viewShow(name string) error {
 // printView prints v as JSON, or line as text.
 func (a *app) printView(v *view.View, line string) error {
 	if a.jsonOut {
-		return a.printJSON(usecase.SavedViewOf(v))
+		return a.printJSON(views.SavedViewOf(v))
 	}
 	_, err := fmt.Fprintln(a.stdout, line)
 	return err

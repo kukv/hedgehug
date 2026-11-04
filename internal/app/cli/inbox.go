@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
@@ -48,11 +48,11 @@ func (a *app) inboxCmd() *cobra.Command {
 }
 
 func (a *app) inboxList(all bool) error {
-	stores, err := a.ss.InboxStores()
+	stores, err := notifications.InboxStores(a.ss)
 	if err != nil {
 		return err
 	}
-	rows, err := a.ss.InboxListOf(stores, all)
+	rows, err := notifications.InboxListOf(a.ss, stores, all)
 	if err != nil {
 		return err
 	}
@@ -77,15 +77,15 @@ func (a *app) inboxList(all bool) error {
 }
 
 func (a *app) inboxRead(args []string, all bool) error {
-	ulids, err := usecase.ParseInboxItems(args)
+	ulids, err := notifications.ParseInboxItems(args)
 	if err != nil {
 		return err
 	}
-	stores, err := a.ss.InboxStores()
+	stores, err := notifications.InboxStores(a.ss)
 	if err != nil {
 		return err
 	}
-	read, err := a.ss.InboxReadOf(stores, ulids, all)
+	read, err := notifications.InboxReadOf(a.ss, stores, ulids, all)
 	if err != nil {
 		return err
 	}
@@ -97,15 +97,15 @@ func (a *app) inboxRead(args []string, all bool) error {
 }
 
 func (a *app) inboxRevert(arg string) error {
-	u, err := usecase.ParseInboxItem(arg)
+	u, err := notifications.ParseInboxItem(arg)
 	if err != nil {
 		return err
 	}
-	stores, err := a.ss.InboxStores()
+	stores, err := notifications.InboxStores(a.ss)
 	if err != nil {
 		return err
 	}
-	res, err := a.ss.InboxRevertOf(stores, u)
+	res, err := notifications.InboxRevertOf(a.ss, stores, u)
 	if err != nil {
 		return err
 	}

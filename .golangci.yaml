@@ -29,11 +29,11 @@ linters:
       - linters:
           - revive
         text: "^(exported|unused-parameter):"
-      - path: _test\.go
+      - path: (_test\.go|internal/app/usecase/usecasetest/)
         linters:
           - gosec
       # osfs と、テストのファイルとテスト用のパッケージは OS を直接呼んでよい。
-      - path: (_test\.go|internal/lib/(osfs|testenv|fakegh)/|internal/lib/gitrepo/gitrepotest/|internal/app/storage/history/historytest/)
+      - path: (_test\.go|internal/lib/(osfs|testenv|fakegh)/|internal/lib/gitrepo/gitrepotest/|internal/app/storage/history/historytest/|internal/app/usecase/usecasetest/)
         linters:
           - forbidigo
 

@@ -23,6 +23,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 	"github.com/kukv/hedgehug/internal/lib/osfs"
@@ -359,7 +360,7 @@ func seedWeb(dir string) error {
 func addWebProject(home string, p config.Paths, getenv func(string) string) error {
 	var warnings []string
 	ss := &usecase.Session{Getenv: getenv, Now: time.Now, StoreName: "org-a", Warn: func(m string) { warnings = append(warnings, m) }}
-	if _, err := ss.Add(usecase.AddInput{Title: "Web release", Kind: "project", Repos: []string{webRepoID}}); err != nil {
+	if _, err := tasks.Add(ss, tasks.AddInput{Title: "Web release", Kind: "project", Repos: []string{webRepoID}}); err != nil {
 		return fmt.Errorf("add project: %w", err)
 	}
 	if len(warnings) > 0 {

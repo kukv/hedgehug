@@ -1,4 +1,4 @@
-package usecase
+package usecase_test
 
 import (
 	"errors"
@@ -7,16 +7,18 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/storage/config"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 // A token goes over https, and over http only to the loopback. Over plain
 // http to another host it is not even looked for.
 func TestConnPlainHTTP(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
+	ts := usecasetest.New(t)
 	var calls atomic.Int32
-	ts.env["HH_TOKEN"] = "tok-1"
-	ts.appendConfig("accounts:\n" +
+	ts.Env["HH_TOKEN"] = "tok-1"
+	ts.AppendConfig("accounts:\n" +
 		"  - {name: a, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n" +
 		"  - {name: l, host: localhost, login: bob, token: \"env:HH_TOKEN\"}\n" +
 		"  - {name: n, host: github.com, login: carol}\n")
@@ -26,12 +28,12 @@ func TestConnPlainHTTP(t *testing.T) {
 	}
 	ts.Getenv = func(k string) string {
 		calls.Add(1)
-		return ts.env[k]
+		return ts.Env[k]
 	}
 	conn := ts.Conn(c, config.StoreEntry{Account: "a"})
 	au, err := conn.Auth("http://github.com/org/x.git")
-	var oe *Error
-	if au != nil || !errors.As(err, &oe) || oe.Code != "auth.insecure" || oe.Kind != KindInvalid {
+	var oe *usecase.Error
+	if au != nil || !errors.As(err, &oe) || oe.Code != "auth.insecure" || oe.Kind != usecase.KindInvalid {
 		t.Fatalf("Auth(http) = %v, %v", au, err)
 	}
 	if !strings.Contains(err.Error(), "http://github.com/org/x.git uses plain http, so the token is not sent; use https") {

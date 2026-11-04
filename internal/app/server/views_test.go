@@ -4,20 +4,20 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/views"
 )
 
 func TestViews(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	var list []usecase.SavedView
+	var list []views.SavedView
 	ts.call("GET", "/api/views", nil, 200, &list)
 	if list == nil || len(list) != 0 {
 		t.Fatalf("views = %+v", list)
 	}
 	var out struct {
-		View   usecase.SavedView `json:"view"`
-		Commit *string           `json:"commit"`
+		View   views.SavedView `json:"view"`
+		Commit *string         `json:"commit"`
 	}
 	name := url.PathEscape("今週")
 	ts.call("PUT", "/api/views/"+name, map[string]any{"layout": "table", "query": "status:todo", "columns": []string{"id", "title"}}, 200, &out)
@@ -28,7 +28,7 @@ func TestViews(t *testing.T) {
 	if out.View.Layout != "table" || out.View.Query != "status:done" {
 		t.Errorf("partial save = %+v", out)
 	}
-	var v usecase.SavedView
+	var v views.SavedView
 	ts.call("GET", "/api/views/"+name, nil, 200, &v)
 	if v.Query != "status:done" {
 		t.Errorf("get = %+v", v)
@@ -62,8 +62,8 @@ func TestViewPatchUpdatesOnlyAnExistingView(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
 	var out struct {
-		View   usecase.SavedView `json:"view"`
-		Commit *string           `json:"commit"`
+		View   views.SavedView `json:"view"`
+		Commit *string         `json:"commit"`
 	}
 	ts.call("PUT", "/api/views/w", map[string]any{"layout": "table", "query": "status:todo", "columns": []string{"id", "title"}}, 200, nil)
 	ts.call("PATCH", "/api/views/w", map[string]any{"layout": "kanban"}, 200, &out)

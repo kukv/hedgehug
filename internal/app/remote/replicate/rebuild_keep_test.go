@@ -36,7 +36,7 @@ func TestFinishLeftoverRenamesAMarkedOldStoreToKept(t *testing.T) {
 	}
 	before := dir + beforePrefix + "20260101T000000.000000000"
 	oldStoreWithMarker(t, before)
-	l, err := FindLeftover(dir)
+	l, err := store.FindLeftover(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestFinishLeftoverRenamesAMarkedOldStoreToKept(t *testing.T) {
 	if _, err := os.Stat(before); !os.IsNotExist(err) {
 		t.Errorf("the old directory is still there: %v", err)
 	}
-	if l, err := FindLeftover(dir); err != nil || !l.None() {
+	if l, err := store.FindLeftover(dir); err != nil || !l.None() {
 		t.Errorf("leftover = %+v, %v", l, err)
 	}
 }
@@ -71,7 +71,7 @@ func TestFinishLeftoverNeverRemovesAMarkedOldStore(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(blocked, "x"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	l, err := FindLeftover(dir)
+	l, err := store.FindLeftover(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestFinishLeftoverPutsBackAMarkedOldStoreOfAStaleRebuild(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(fresh, staleMarker), []byte("stale\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	l, err := FindLeftover(dir)
+	l, err := store.FindLeftover(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func TestSwapIgnoresAStaleKeepMarker(t *testing.T) {
 	if sc.rb.Kept != "" {
 		t.Errorf("Kept = %q; the old store was kept because of a stale marker", sc.rb.Kept)
 	}
-	l, err := FindLeftover(dir)
+	l, err := store.FindLeftover(dir)
 	if err != nil || l.None() {
 		t.Fatalf("setup: leftover = %+v, %v; the removal of the old store should have failed", l, err)
 	}

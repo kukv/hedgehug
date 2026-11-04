@@ -107,7 +107,7 @@ func TestRebuildReplaysUnpushedChanges(t *testing.T) {
 		t.Fatal("setup: the clone had no unpushed work")
 	}
 	c.swap(sc.rb)
-	if left, err := FindLeftover(c.stores[1].Dir()); err != nil || !left.None() {
+	if left, err := store.FindLeftover(c.stores[1].Dir()); err != nil || !left.None() {
 		t.Errorf("leftover = %+v, %v", left, err)
 	}
 	if sc.rb.Kept == "" || !exists(t, sc.rb.Kept) {
@@ -350,7 +350,7 @@ func TestRebuildRefusesUncommittedChanges(t *testing.T) {
 	if _, err := MakeRebuild(c.stores[1], c.opts[1]); !errors.Is(err, ErrDirty) || !errors.Is(err, ErrDirtyRebuild) {
 		t.Fatalf("MakeRebuild = %v, want ErrDirtyRebuild", err)
 	}
-	if left, err := FindLeftover(c.stores[1].Dir()); err != nil || !left.None() {
+	if left, err := store.FindLeftover(c.stores[1].Dir()); err != nil || !left.None() {
 		t.Errorf("leftover = %+v, %v", left, err)
 	}
 }
@@ -377,7 +377,7 @@ func TestFinishLeftoverNoStore(t *testing.T) {
 	if err := os.Rename(dir, before); err != nil {
 		t.Fatal(err)
 	}
-	l, err := FindLeftover(dir)
+	l, err := store.FindLeftover(dir)
 	if err != nil || l.New != sc.rb.Dir || !slices.Equal(l.Before, []string{before}) {
 		t.Fatalf("leftover = %+v, %v", l, err)
 	}
@@ -412,21 +412,21 @@ func TestFinishLeftoverOtherStates(t *testing.T) {
 	mk(dir)
 	mk(dir + ".before-rewrite-1")
 	mk(dir + ".rewrite-new")
-	l, err := FindLeftover(dir)
+	l, err := store.FindLeftover(dir)
 	if err != nil || l.None() {
 		t.Fatalf("leftover = %+v, %v", l, err)
 	}
 	if err := FinishLeftover(dir, l); err != nil {
 		t.Fatal(err)
 	}
-	if l, err := FindLeftover(dir); err != nil || !l.None() || !exists(t, dir) {
+	if l, err := store.FindLeftover(dir); err != nil || !l.None() || !exists(t, dir) {
 		t.Errorf("leftover = %+v, %v", l, err)
 	}
 	// only the old one: put back
 	if err := os.Rename(dir, dir+".before-rewrite-2"); err != nil {
 		t.Fatal(err)
 	}
-	l, _ = FindLeftover(dir)
+	l, _ = store.FindLeftover(dir)
 	if err := FinishLeftover(dir, l); err != nil {
 		t.Fatal(err)
 	}
@@ -434,7 +434,7 @@ func TestFinishLeftoverOtherStates(t *testing.T) {
 	if err != nil || string(b) != "s" {
 		t.Errorf("the store = %q, %v", b, err)
 	}
-	if l, _ := FindLeftover(dir); !l.None() {
+	if l, _ := store.FindLeftover(dir); !l.None() {
 		t.Errorf("leftover = %+v", l)
 	}
 }
@@ -460,7 +460,7 @@ func TestFinishLeftoverCarriesLocalFiles(t *testing.T) {
 	write(before, "sync.json", "old")
 	write(before, "late.json", "late")
 	write(dir, "sync.json", "new")
-	l, err := FindLeftover(dir)
+	l, err := store.FindLeftover(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -487,7 +487,7 @@ func TestFinishLeftoverCarriesLocalFiles(t *testing.T) {
 	if err := os.Chmod(filepath.Join(local(before), "secret.json"), 0); err != nil {
 		t.Fatal(err)
 	}
-	l, _ = FindLeftover(dir)
+	l, _ = store.FindLeftover(dir)
 	if err := FinishLeftover(dir, l); err == nil {
 		t.Error("an unreadable local file did not fail")
 	}
@@ -506,10 +506,10 @@ func TestFindLeftoverIgnoresOtherNames(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if l, err := FindLeftover(dir); err != nil || !l.None() {
+	if l, err := store.FindLeftover(dir); err != nil || !l.None() {
 		t.Errorf("leftover = %+v, %v", l, err)
 	}
-	if l, err := FindLeftover(filepath.Join(root, "missing", "s")); err != nil || !l.None() {
+	if l, err := store.FindLeftover(filepath.Join(root, "missing", "s")); err != nil || !l.None() {
 		t.Errorf("leftover of a missing parent = %+v, %v", l, err)
 	}
 }

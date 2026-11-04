@@ -1,9 +1,12 @@
-package usecase
+package usecase_test
 
 import (
 	"strings"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/accounts"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 )
 
@@ -11,7 +14,7 @@ import (
 // and Conn.Auth.
 func TestTokenFailureIsAuthToken(t *testing.T) {
 	t.Parallel()
-	ts, _ := authSession(t, fakegh.State{},
+	ts, _ := usecasetest.AuthSession(t, fakegh.State{},
 		"accounts:\n  - {name: e, host: github.com, login: alice, token: \"env:HH_UNSET_TOKEN\"}\n")
 	c, _, err := ts.Config()
 	if err != nil {
@@ -22,27 +25,27 @@ func TestTokenFailureIsAuthToken(t *testing.T) {
 		t.Fatal("no account e")
 	}
 	_, err = ts.Token(c, acct)
-	wantErr(t, err, KindInvalid, "auth.token")
-	if got := AsError(err).Args["account"]; got != "e" {
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "auth.token")
+	if got := usecase.AsError(err).Args["account"]; got != "e" {
 		t.Errorf("Args[account] = %v", got)
 	}
 	_, err = ts.GitHub(c, acct, "github.com")
-	wantErr(t, err, KindInvalid, "auth.token")
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "auth.token")
 
 	auth := ts.Conn(c, c.Stores[0]).Auth
 	if auth == nil {
 		t.Fatal("no Conn.Auth")
 	}
 	_, err = auth("https://github.com/alice/x.git")
-	wantErr(t, err, KindInvalid, "auth.token")
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "auth.token")
 }
 
 // A token GitHub refuses (401) when AuthLogin checks it is auth.unauthorized.
 func TestAuthLoginBadTokenIsUnauthorized(t *testing.T) {
 	t.Parallel()
-	ts, k := authSession(t, fakegh.State{}, "")
-	_, err := ts.AuthLogin(AuthLoginInput{Host: "github.com", WithToken: true, Token: "bad"})
-	wantErr(t, err, KindInvalid, "auth.unauthorized")
+	ts, k := usecasetest.AuthSession(t, fakegh.State{}, "")
+	_, err := accounts.AuthLogin(ts.Session, accounts.AuthLoginInput{Host: "github.com", WithToken: true, Token: "bad"})
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "auth.unauthorized")
 	for _, want := range []string{"github.com refused the token", "has not expired"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("text = %v; want %q", err, want)
@@ -53,8 +56,8 @@ func TestAuthLoginBadTokenIsUnauthorized(t *testing.T) {
 			t.Errorf("text = %v; must not contain %q", err, not)
 		}
 	}
-	if len(k.m) != 0 || len(ts.accounts()) != 0 {
-		t.Errorf("keychain %v, accounts %v", k.m, ts.accounts())
+	if len(k.M) != 0 || len(ts.Accounts()) != 0 {
+		t.Errorf("keychain %v, accounts %v", k.M, ts.Accounts())
 	}
 }
 
@@ -62,9 +65,9 @@ func TestAuthLoginBadTokenIsUnauthorized(t *testing.T) {
 // can be revoked on GitHub.
 func TestAuthLoginOtherLoginSaysHowToRevoke(t *testing.T) {
 	t.Parallel()
-	ts, _ := authSession(t, fakegh.State{Tokens: map[string]string{"t-bob": "bob"}},
+	ts, _ := usecasetest.AuthSession(t, fakegh.State{Tokens: map[string]string{"t-bob": "bob"}},
 		"accounts:\n  - {name: work, host: github.com, login: alice}\n")
-	_, err := ts.AuthLogin(AuthLoginInput{Name: "work", Host: "github.com", WithToken: true, Token: "t-bob"})
+	_, err := accounts.AuthLogin(ts.Session, accounts.AuthLoginInput{Name: "work", Host: "github.com", WithToken: true, Token: "t-bob"})
 	if err == nil || !strings.Contains(err.Error(), "Authorized GitHub Apps") {
 		t.Errorf("err = %v", err)
 	}
@@ -73,13 +76,13 @@ func TestAuthLoginOtherLoginSaysHowToRevoke(t *testing.T) {
 // For a known account too: the same text, with no hint to run the command.
 func TestAuthLoginBadTokenKnownAccount(t *testing.T) {
 	t.Parallel()
-	ts, _ := authSession(t, fakegh.State{}, "accounts:\n  - {name: work, host: github.com, login: alice, token: keychain}\n")
-	_, err := ts.AuthLogin(AuthLoginInput{Name: "work", Host: "github.com", WithToken: true, Token: "bad"})
-	wantErr(t, err, KindInvalid, "auth.unauthorized")
+	ts, _ := usecasetest.AuthSession(t, fakegh.State{}, "accounts:\n  - {name: work, host: github.com, login: alice, token: keychain}\n")
+	_, err := accounts.AuthLogin(ts.Session, accounts.AuthLoginInput{Name: "work", Host: "github.com", WithToken: true, Token: "bad"})
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "auth.unauthorized")
 	if !strings.Contains(err.Error(), "github.com refused the token") || strings.Contains(err.Error(), "auth login") {
 		t.Errorf("text = %v", err)
 	}
-	if got := AsError(err).Args["account"]; got != "work" {
+	if got := usecase.AsError(err).Args["account"]; got != "work" {
 		t.Errorf("Args[account] = %v", got)
 	}
 }

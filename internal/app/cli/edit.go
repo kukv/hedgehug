@@ -9,6 +9,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
@@ -22,7 +23,7 @@ func (a *app) editCmd() *cobra.Command {
 }
 
 func (a *app) edit(arg string) error {
-	es, err := a.ss.BeginEdit(arg)
+	es, err := tasks.BeginEdit(a.ss, arg)
 	if err != nil {
 		return err
 	}
@@ -37,13 +38,13 @@ func (a *app) edit(arg string) error {
 			}
 			return a.printTask(es.Index, es.Entry.ULID, verb(false, ""))
 		}
-		t, err := usecase.CheckEdit(es.Index, es.Entry.ULID, es.Old, edited)
+		t, err := tasks.CheckEdit(es.Index, es.Entry.ULID, es.Old, edited)
 		if err == nil {
-			if err := a.ss.PrepareEdit(es, t); err != nil {
+			if err := tasks.PrepareEdit(a.ss, es, t); err != nil {
 				return err
 			}
 			var r usecase.TaskResult
-			r, err = a.ss.WriteEdit(es, t)
+			r, err = tasks.WriteEdit(a.ss, es, t)
 			if err == nil {
 				if err := osfs.Remove(path); err != nil {
 					return err

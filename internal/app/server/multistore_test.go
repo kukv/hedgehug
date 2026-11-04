@@ -7,6 +7,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
 // twoStores is a test server with the stores "me" (prefix ME) and "team"
@@ -18,7 +19,7 @@ func twoStores(t *testing.T) *testServer {
 	for store, title := range map[string]string{"me": "one", "team": "two"} {
 		ss := ts.session()
 		ss.StoreName = store
-		if _, err := ss.Add(usecase.AddInput{Title: title}); err != nil {
+		if _, err := tasks.Add(ss, tasks.AddInput{Title: title}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -182,17 +183,17 @@ func TestChecklistAndProgressPerStore(t *testing.T) {
 	for store, body := range bodies {
 		ss := ts.session()
 		ss.StoreName = store
-		res, err := ss.Add(usecase.AddInput{Title: "p-" + store, Kind: "project"})
+		res, err := tasks.Add(ss, tasks.AddInput{Title: "p-" + store, Kind: "project"})
 		if err != nil {
 			t.Fatal(err)
 		}
 		pv, _ := res.View()
-		res, err = ss.Add(usecase.AddInput{Title: "c-" + store, Parent: pv.ID})
+		res, err = tasks.Add(ss, tasks.AddInput{Title: "c-" + store, Parent: pv.ID})
 		if err != nil {
 			t.Fatal(err)
 		}
 		cv, _ := res.View()
-		if _, err := ss.Patch(cv.ID, usecase.PatchInput{Body: &body}); err != nil {
+		if _, err := tasks.Patch(ss, cv.ID, tasks.PatchInput{Body: &body}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -235,7 +236,7 @@ func TestActivityFiltersMergedList(t *testing.T) {
 	for _, store := range []string{"me", "team", "me", "team"} {
 		ss := ts.session()
 		ss.StoreName = store
-		if _, err := ss.Add(usecase.AddInput{Title: "later"}); err != nil {
+		if _, err := tasks.Add(ss, tasks.AddInput{Title: "later"}); err != nil {
 			t.Fatal(err)
 		}
 	}

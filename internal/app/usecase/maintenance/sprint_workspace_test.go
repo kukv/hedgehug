@@ -7,6 +7,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 // commitSprint and commitRelease commit a sprint or a release past the checks
@@ -117,7 +118,7 @@ func TestDoctorTaskSprintAndReleasesOfOtherWorkspace(t *testing.T) {
 	putRaw(t, s, dir, good)
 	putRaw(t, s, dir, bad)
 
-	var got []Finding
+	var got []usecase.Finding
 	for _, f := range run(t, dir) {
 		if f.Check == "task" {
 			got = append(got, f)

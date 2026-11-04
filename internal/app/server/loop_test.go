@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
@@ -228,7 +228,7 @@ func TestLoopFollowsAddedStores(t *testing.T) {
 	if err := gitrepo.InitBare(remote); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ts.session().StoreInit(usecase.StoreInitInput{Name: "two", Prefix: "TW", Workspace: "two", Remotes: []string{remote}}); err != nil {
+	if _, err := stores.StoreInit(ts.session(), stores.StoreInitInput{Name: "two", Prefix: "TW", Workspace: "two", Remotes: []string{remote}}); err != nil {
 		t.Fatal(err)
 	}
 	ts.srv.loop.Wake()

@@ -1,10 +1,13 @@
 # フェーズ 4f-2 の引き継ぎ（2026-11-04 時点）
 
-4f-2（アカウント・Store の設定と Onboarding）の実装が終わった。PR はまだ開いていない。
+4f-2（アカウント・Store の設定と Onboarding）の実装が終わった。PR #56 で出した。
 
 ## いまの状態
 
-- ブランチ `phase4f2-settings`。4f-1 のマージ（PR #53、5543ba8）のあとの main から切った。作業中に入った main の変更は 4f-1 の引き継ぎの docs（PR #54、dd69505）だけで、取り込んだ（衝突なし。4f-2 の変更と重なるファイルはない）。PR は未作成
+- ブランチ `phase4f2-settings`。4f-1 のマージ（PR #53、5543ba8）のあとの main から切った。作業中に入った main の変更を2回取り込んだ
+  - 4f-1 の引き継ぎの docs（PR #54、dd69505）。衝突なし
+  - 構成見直しの回 3（PR #55、6e2b895。usecase を領域ごとのサブパッケージに分けた）。衝突は `internal/app/usecase/stores/discover.go` の `discoverFrom` の1か所で、回 3 の形（`Session` を受け取る関数）に細部 87 の `MainHasFile` を載せた。細部 87 のテストは `stores_test` の部品（`usecasetest.New`、`stores.StoreDiscover`）に書き直した。E2E の keyring は、cli が remote を新しく import しないように、usecase の `Keyring`（`auth.Keyring` の別名）と `FileKeyring` を通すようにした（`internal/app/usecase/keyring.go`）
+- PR #56
 - plan: `docs/superpowers/plans/2026-11-04-phase4f2-settings.md`（Task 1〜7。末尾に「検査の結果」「Task 7 の Step 1・2 の結果」「実装で plan から変えた点」「細部 17〜33 と 71〜87 の実装とテスト」の表）
 - 概要 plan `2026-11-04-phase4f-screens.md` に「4f-2 の plan で足した細部」（細部 71〜91）を足した。spec `docs/superpowers/specs/2026-11-01-phase4-gui-design.md` の「4f の細部」に、E2E の keyring（細部 71）と discover の main（細部 87）を利用者の決定として1文足した
 

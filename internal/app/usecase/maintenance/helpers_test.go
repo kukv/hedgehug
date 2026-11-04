@@ -12,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
@@ -144,7 +145,7 @@ func mustOpen(t *testing.T, s *store.Store) *index.Index {
 	return ix
 }
 
-func checks(fs []Finding) []string {
+func checks(fs []usecase.Finding) []string {
 	out := make([]string, len(fs))
 	for i, f := range fs {
 		out[i] = f.Check
