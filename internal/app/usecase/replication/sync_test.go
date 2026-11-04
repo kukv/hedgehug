@@ -13,7 +13,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
@@ -123,30 +122,33 @@ func TestSyncAllReportsFailedStore(t *testing.T) {
 	}
 }
 
+// The tests of BeforeCommand do not run in parallel: StubSpawn replaces what
+// replicate.Start does for all.
 func TestBeforeCommandStartsNothingWithoutRemote(t *testing.T) {
-	t.Parallel()
 	ts := usecasetest.New(t)
+	ts.Env["HEDGEHUG_AUTO_SYNC"] = "1"
 	var started int
-	ts.BeforeCommand(func(*store.Store, string) error { started++; return nil }, func(string, string) { t.Error("reported") })
+	defer usecasetest.StubSpawn(func([]string) { started++ })()
+	ts.BeforeCommand(func(string, string) { t.Error("reported") })
 	if started != 0 {
 		t.Errorf("started %d syncs for a store without a remote", started)
 	}
 }
 
 func TestBeforeCommandStartsDueStoreAndReportsFailureOnce(t *testing.T) {
-	t.Parallel()
 	ts := usecasetest.New(t)
+	ts.Env["HEDGEHUG_AUTO_SYNC"] = "1"
 	usecasetest.AddBareRemote(t, ts)
 	s, err := ts.OpenStore()
 	if err != nil {
 		t.Fatal(err)
 	}
 	var started []string
-	start := func(_ *store.Store, name string) error { started = append(started, name); return nil }
+	defer usecasetest.StubSpawn(func(args []string) { started = append(started, args[len(args)-1]) })()
 	var reports []string
 	report := func(st, msg string) { reports = append(reports, st+"|"+msg) }
 
-	ts.BeforeCommand(start, report) // never synced: due
+	ts.BeforeCommand(report) // never synced: due
 	if len(started) != 1 || started[0] != "me" || len(reports) != 0 {
 		t.Fatalf("started %v, reports %v; want a start of me and no report", started, reports)
 	}
@@ -157,14 +159,14 @@ func TestBeforeCommandStartsDueStoreAndReportsFailureOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	started = nil
-	ts.BeforeCommand(start, report)
+	ts.BeforeCommand(report)
 	if len(reports) != 1 || reports[0] != "me|remote is down" {
 		t.Fatalf("reports = %v; want the failure once", reports)
 	}
 	if len(started) != 0 {
 		t.Errorf("started %v; a sync that failed just now is not tried again yet", started)
 	}
-	ts.BeforeCommand(start, report)
+	ts.BeforeCommand(report)
 	if len(reports) != 1 {
 		t.Errorf("reports = %v; want the failure told once", reports)
 	}

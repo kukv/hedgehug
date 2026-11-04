@@ -13,7 +13,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase/accounts"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
-	"github.com/kukv/hedgehug/internal/lib/github"
 )
 
 // authFixture is AuthSession with config.yaml written whole: github.com on a
@@ -181,7 +180,7 @@ func TestAuthLoginDeviceNeedsClientID(t *testing.T) {
 	ts.Keyring = k
 	ts.SetConfig("", usecasetest.CfgStore{Name: "me", Account: ""})
 	before := ts.ConfigBytes()
-	_, err := accounts.AuthLogin(ts.Session, accounts.AuthLoginInput{Host: "github.com", ShowCode: func(*github.DeviceCode) { t.Error("the code was shown") }})
+	_, err := accounts.AuthLogin(ts.Session, accounts.AuthLoginInput{Host: "github.com", OnCode: func(accounts.DeviceCode) { t.Error("the code was shown") }})
 	if err == nil || !strings.Contains(err.Error(), "the device flow needs hosts[].client_id for github.com in config.yaml") {
 		t.Fatalf("err = %v", err)
 	}

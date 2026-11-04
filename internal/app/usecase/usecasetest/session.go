@@ -191,14 +191,17 @@ func (ts *Session) DropAccounts() {
 	ts.ForgetWriter()
 }
 
-// BeforeCommand is Session.BeforeCommand for the config as it is now.
-func (ts *Session) BeforeCommand(start func(s *store.Store, name string) error, report func(store, msg string)) {
+// BeforeCommand is replication.BeforeCommand for the session.
+func (ts *Session) BeforeCommand(report func(store, msg string)) {
 	ts.T.Helper()
-	c, _, err := ts.Config()
-	if err != nil {
-		ts.T.Fatal(err)
-	}
-	replication.BeforeCommand(ts.Session, c, start, report)
+	replication.BeforeCommand(ts.Session, report)
+}
+
+// StubSpawn replaces the start of the background sync with f, which gets the
+// arguments of the child, and returns the function that puts the old one
+// back. It is global: a test that uses it does not run in parallel.
+func StubSpawn(f func(args []string)) (restore func()) {
+	return replicate.SetSpawn(func(_ string, args []string, _ string) error { f(args); return nil })
 }
 
 // HasDefaultAccount reports whether config.yaml still has DefaultAccountYAML.

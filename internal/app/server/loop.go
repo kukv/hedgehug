@@ -7,8 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 )
@@ -83,17 +81,17 @@ func (l *Loop) Run(ctx context.Context) {
 // step starts the syncs that are due and returns how long to wait for the
 // next one.
 func (l *Loop) step() time.Duration {
-	c, targets := l.targets()
-	if c == nil {
+	sch, ok := l.targets()
+	if !ok {
 		return time.Minute // config.yaml does not read; look again later
 	}
 	now := l.clock.Now()
-	interval := l.FetchInterval(c.Sync.Interval)
+	interval := l.FetchInterval(sch.Interval)
 	wait := interval
-	for _, e := range targets {
-		due := l.due(e, now, interval, c.Sync.PushInterval)
+	for _, name := range sch.Stores {
+		due := l.due(name, now, interval, sch.PushInterval)
 		if !due.After(now) {
-			l.start(e.Name)
+			l.start(name)
 			continue
 		}
 		wait = min(wait, due.Sub(now))
@@ -114,7 +112,7 @@ func (l *Loop) FetchInterval(interval time.Duration) time.Duration {
 func (l *Loop) noteNext(name string) {
 	ss := l.s.session("")
 	defer ss.Close()
-	c, _, err := ss.Config()
+	iv, err := ss.SyncIntervals()
 	if err != nil {
 		l.configFailed(err)
 		return
@@ -122,7 +120,7 @@ func (l *Loop) noteNext(name string) {
 	l.configFailed(nil)
 	l.mu.Lock()
 	if last, ok := l.last[name]; ok {
-		l.next[name] = last.Add(l.FetchInterval(c.Sync.Interval))
+		l.next[name] = last.Add(l.FetchInterval(iv.Interval))
 	}
 	l.mu.Unlock()
 }
@@ -142,35 +140,25 @@ func (l *Loop) configFailed(err error) {
 	}
 }
 
-// targets are the stores with a remote, as config.yaml has them now.
-func (l *Loop) targets() (*config.Config, []config.StoreEntry) {
+// targets are the intervals and the stores with a remote, as config.yaml has
+// them now; false when it does not read.
+func (l *Loop) targets() (replication.Schedule, bool) {
 	ss := l.s.session("")
 	defer ss.Close()
-	c, _, err := ss.Config()
+	sch, err := replication.LoadSchedule(ss)
 	if err != nil {
 		l.configFailed(err)
-		return nil, nil
-	}
-	all, err := ss.SyncTargets(c, true)
-	if err != nil {
-		l.configFailed(err)
-		return nil, nil
+		return replication.Schedule{}, false
 	}
 	l.configFailed(nil)
-	var out []config.StoreEntry
-	for _, e := range all {
-		if replication.SyncsInBackground(e) {
-			out = append(out, e)
-		}
-	}
-	return c, out
+	return sch, true
 }
 
 // due is when e is to be synced next: now for one never synced, the fetch
 // interval after its last sync, or push after its first write that is not
 // pushed, but not sooner than push after its last sync.
-func (l *Loop) due(e config.StoreEntry, now time.Time, interval, push time.Duration) time.Time {
-	due, synced, running := l.schedule(e.Name, l.pendingSince(e), interval, push)
+func (l *Loop) due(name string, now time.Time, interval, push time.Duration) time.Time {
+	due, synced, running := l.schedule(name, l.pendingSince(name), interval, push)
 	switch {
 	case running:
 		return now.Add(interval) // looked at again when it ends
@@ -178,7 +166,7 @@ func (l *Loop) due(e config.StoreEntry, now time.Time, interval, push time.Durat
 		return now
 	}
 	l.mu.Lock()
-	l.next[e.Name] = l.last[e.Name].Add(interval)
+	l.next[name] = l.last[name].Add(interval)
 	l.mu.Unlock()
 	return due
 }
@@ -210,20 +198,12 @@ func (l *Loop) PushAt(name string, pending time.Time, interval, push time.Durati
 	return due, synced && !running
 }
 
-// pendingSince is the first write of e not pushed; zero when there is none
-// or sync.json does not read.
-func (l *Loop) pendingSince(e config.StoreEntry) time.Time {
-	ss := l.s.session(e.Name)
+// pendingSince is the first write of the store name not pushed; zero when
+// there is none or sync.json does not read.
+func (l *Loop) pendingSince(name string) time.Time {
+	ss := l.s.session(name)
 	defer ss.Close()
-	s, err := ss.OpenStore()
-	if err != nil {
-		return time.Time{}
-	}
-	st, err := replicate.ReadState(s)
-	if err != nil {
-		return time.Time{}
-	}
-	return st.PendingSince
+	return replication.PendingSince(ss)
 }
 
 // start runs the sync of name in its own goroutine, unless one runs.
@@ -263,28 +243,15 @@ func (l *Loop) start(name string) {
 func (l *Loop) syncStore(name string) {
 	ss := l.s.session(name)
 	defer ss.Close()
-	c, _, err := ss.Config()
-	if err != nil {
-		l.s.logf("sync %s: %v", name, err)
-		return
-	}
-	e, err := c.Select(name)
-	if err != nil {
-		l.s.logf("sync %s: %v", name, err)
-		return
-	}
-	rep, err := replication.SyncStore(ss, c, e, false)
+	rep, err := replication.SyncOne(ss)
 	if err == nil {
 		err = rep.Err
 	}
 	if err != nil {
 		l.s.logf("sync %s: %s", name, usecase.Describe(err))
 	}
-	// The duplicates across stores are told as a sync of hh tells them:
-	// each once, not at every sync.
-	reps := []usecase.SyncReport{rep}
-	ss.AddDuplicateWarnings(reps)
-	l.logWarnings(name, reps[0].Warnings)
+	// A failure of Config or Select has no report, and no warnings to log.
+	l.logWarnings(name, rep.Warnings)
 }
 
 // logWarnings logs the warnings of a sync of the store name that the sync
@@ -347,11 +314,11 @@ func (l *Loop) Drain(timeout time.Duration) {
 	deadline := time.Now().Add(timeout)
 	for range 2 {
 		pending := false
-		if _, targets := l.targets(); targets != nil {
-			for _, e := range targets {
-				if !l.pendingSince(e).IsZero() {
+		if sch, ok := l.targets(); ok {
+			for _, name := range sch.Stores {
+				if !l.pendingSince(name).IsZero() {
 					pending = true
-					l.start(e.Name) // nothing new when one runs; it is waited for below
+					l.start(name) // nothing new when one runs; it is waited for below
 				}
 			}
 		}

@@ -15,22 +15,21 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
-	"github.com/kukv/hedgehug/internal/lib/github"
 )
 
 func TestAuthLoginNewAccountByDevice(t *testing.T) {
 	t.Parallel()
 	ts, k := usecasetest.AuthSession(t, fakegh.State{AutoApprove: "alice"}, "")
-	var shown *github.DeviceCode
-	res, err := accounts.AuthLogin(ts.Session, accounts.AuthLoginInput{Host: "github.com", ShowCode: func(dc *github.DeviceCode) { shown = dc }})
+	var shown accounts.DeviceCode
+	res, err := accounts.AuthLogin(ts.Session, accounts.AuthLoginInput{Host: "github.com", OnCode: func(dc accounts.DeviceCode) { shown = dc }})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if res.Account != "alice" || res.ID != "github.com/alice" || !res.Added {
 		t.Errorf("result = %+v", res)
 	}
-	if shown == nil || shown.UserCode == "" {
-		t.Errorf("ShowCode got %+v", shown)
+	if shown.UserCode == "" {
+		t.Errorf("OnCode got %+v", shown)
 	}
 	if as := ts.Accounts(); len(as) != 1 || as[0].Token.Kind != "device" {
 		t.Errorf("accounts = %+v", as)
@@ -230,7 +229,7 @@ func TestAuthLoginLocksTheSave(t *testing.T) {
 	lock := ts.LockFile()
 	var heldDuringShow, heldDuringSet []bool
 	k.OnSet = func() { heldDuringSet = append(heldDuringSet, usecasetest.HeldElsewhere(lock)) }
-	_, err := accounts.AuthLogin(ts.Session, accounts.AuthLoginInput{Host: "github.com", ShowCode: func(*github.DeviceCode) {
+	_, err := accounts.AuthLogin(ts.Session, accounts.AuthLoginInput{Host: "github.com", OnCode: func(accounts.DeviceCode) {
 		heldDuringShow = append(heldDuringShow, usecasetest.HeldElsewhere(lock))
 	}})
 	if err != nil {

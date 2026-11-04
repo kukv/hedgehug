@@ -12,7 +12,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
@@ -214,12 +213,16 @@ func backgroundFailed(ss *usecase.Session, log io.Writer, name string, err error
 // a store with a remote is.
 func SyncsInBackground(e config.StoreEntry) bool { return len(e.Remotes) > 0 }
 
-// BeforeCommand, for the config cfg the command has read, reports the
-// failure of a background sync that the user has not been told of (through
-// report), and starts one for each store with a remote that is due (through
-// start; replicate.Start for the CLI). What goes wrong here is left to the
-// command itself to tell: it fails on the same store or config.
-func BeforeCommand(ss *usecase.Session, cfg *config.Config, start func(s *store.Store, name string) error, report func(store, msg string)) {
+// BeforeCommand reports the failure of a background sync that the user has
+// not been told of (through report), and starts one for each store with a
+// remote that is due (replicate.Start). It reads config.yaml itself. What
+// goes wrong here is left to the command itself to tell: it fails on the same
+// store or config.
+func BeforeCommand(ss *usecase.Session, report func(store, msg string)) {
+	cfg, _, err := ss.Config()
+	if err != nil {
+		return
+	}
 	targets, err := ss.SyncTargets(cfg, false)
 	if err != nil {
 		return
@@ -236,7 +239,7 @@ func BeforeCommand(ss *usecase.Session, cfg *config.Config, start func(s *store.
 			report(e.Name, msg)
 		}
 		if st, err := replicate.ReadState(s); err == nil && replicate.Due(st, ss.Now(), cfg.Sync.Interval) {
-			_ = start(s, e.Name) // starts a process of its own; it does not keep s
+			_ = replicate.Start(s, e.Name, ss.Getenv) // starts a process of its own; it does not keep s
 		}
 		_ = s.Repo().Close()
 	}

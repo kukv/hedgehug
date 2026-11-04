@@ -7,9 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
-	"github.com/kukv/hedgehug/internal/app/storage/config"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 )
@@ -112,9 +109,7 @@ func (a *app) beforeRun(cmd *cobra.Command, _ []string) error {
 	// With no account (or no readable config) there is no store to sync in
 	// the background, and a child process would only stop at its own entry.
 	if err == nil && n > 0 {
-		if c, _, cerr := a.ss.Config(); cerr == nil {
-			a.beforeCommand(cmd, c)
-		}
+		a.beforeCommand(cmd)
 	}
 	return nil
 }
@@ -122,17 +117,15 @@ func (a *app) beforeRun(cmd *cobra.Command, _ []string) error {
 // beforeCommand reports the failure of a background sync that the user has
 // not been told of, and starts one for each store with a remote that is due
 // (usecase.BeforeCommand), except in the sync itself and in a merge driver.
-func (a *app) beforeCommand(cmd *cobra.Command, cfg *config.Config) {
+func (a *app) beforeCommand(cmd *cobra.Command) {
 	for c := cmd; c != nil; c = c.Parent() {
 		if c.Parent() != nil && c.Parent().Parent() == nil && (c.Name() == "sync" || c.Name() == "merge-driver" || c.Name() == "ui") {
 			return // the sync itself, a merge in the middle of one, and hh ui, whose server syncs
 		}
 	}
-	replication.BeforeCommand(a.ss, cfg,
-		func(s *store.Store, name string) error { return replicate.Start(s, name, a.getenv) },
-		func(name, msg string) {
-			_, _ = fmt.Fprintf(a.stderr, "hedgehug: background sync of %s failed: %s (run hedgehug sync)\n", name, msg)
-		})
+	replication.BeforeCommand(a.ss, func(name, msg string) {
+		_, _ = fmt.Fprintf(a.stderr, "hedgehug: background sync of %s failed: %s (run hedgehug sync)\n", name, msg)
+	})
 }
 
 // verb is the heading of a command that printed what it wrote: heading, or
