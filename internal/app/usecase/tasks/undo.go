@@ -58,6 +58,12 @@ func Undo(ss *usecase.Session) (UndoResult, error) {
 		return UndoResult{}, err
 	}
 	res.NewCommit = usecase.CommitHex(hash)
+	// The commit taken back, named as the index is after the undo.
+	if err := ix.Refresh(); err != nil {
+		return UndoResult{}, err
+	}
+	lv := usecase.LogViewOf(ix, res.commit)
+	res.Undone = &lv
 	return res, nil
 }
 
@@ -102,30 +108,57 @@ func (e *forwardHitError) Error() string { return e.ulid.String() + " moved to a
 // UndoKept is a value undo left as it is, because another writer changed it
 // after the commit that is taken back.
 type UndoKept struct {
-	Path string
-	Task string // the id of the task; empty for other files
+	Path string `json:"path"`
+	Task string `json:"task,omitempty" doc:"The ID of the task; empty for other files"`
 	// Label is the id as a reader sees it (the ULID when the task has none),
 	// which --json leaves out
-	Label  string
-	Field  string
-	Author string
+	Label  string `json:"-"`
+	Field  string `json:"field"`
+	Author string `json:"author"`
+}
+
+// UndoWrite is what undo answers, in the CLI's --json and in the server's
+// response.
+type UndoWrite struct {
+	Undone  *usecase.LogView `json:"undone" doc:"The commit taken back; null when there was nothing to undo"`
+	Subject string           `json:"subject" doc:"The subject of the commit taken back, without the hedgehug: prefix"`
+	Changed bool             `json:"changed" doc:"false when every field was changed later by others, so nothing was written"`
+	Commit  *string          `json:"commit"`
+	Kept    []UndoKept       `json:"kept" doc:"What others changed after it, which undo kept"`
 }
 
 // UndoResult is what Undo did. Found is false when there was nothing to
 // undo (Undo then returns an error too).
 type UndoResult struct {
-	Commit  gitrepo.LogEntry
+	// Undone is the commit taken back; nil when Found is false.
+	Undone  *usecase.LogView
 	Found   bool
 	Changed bool // a file differs from what HEAD had
 	Kept    []UndoKept
 	// NewCommit is the hex hash of the commit Undo made; "" when nothing was
 	// committed.
 	NewCommit string
+
+	commit gitrepo.LogEntry // the commit taken back, which Undone is made of
 }
 
-// UndoSubject is the subject of c without the "hedgehug: " every commit of
-// the store starts with.
-func UndoSubject(c gitrepo.LogEntry) string { return strings.TrimPrefix(c.Subject, "hedgehug: ") }
+// Write is the answer to the undo. Of the result of an undo that found
+// nothing it is {undone: null, subject: "", changed: false, commit: null,
+// kept: []}.
+func (r UndoResult) Write() UndoWrite {
+	w := UndoWrite{Undone: r.Undone, Changed: r.Changed, Commit: usecase.CommitPtr(r.NewCommit), Kept: r.Kept}
+	if r.Undone != nil {
+		w.Subject = UndoSubject(r.Undone.Subject)
+	}
+	if w.Kept == nil {
+		w.Kept = []UndoKept{}
+	}
+	return w
+}
+
+// UndoSubject is subject without the "hedgehug: " every commit of the store
+// starts with.
+func UndoSubject(subject string) string { return strings.TrimPrefix(subject, "hedgehug: ") }
 
 // undoInTx takes back the last operation of the writer me, as Store.Update
 // holds the lock: for each file the operation changed, the fields nobody
@@ -161,8 +194,8 @@ func undoInTx(tx *store.Tx, s *store.Store, ix *index.Index, me string) (UndoRes
 	if why, blocked := undoBlocked[op]; blocked {
 		return res, usecase.NewErr(usecase.KindConflict, "undo.blocked", errors.New(why), "op", op)
 	}
-	res.Commit, res.Found = c, true
-	tx.SetDetail(UndoSubject(c))
+	res.commit, res.Found = c, true
+	tx.SetDetail(UndoSubject(c.Subject))
 	tx.AddTrailer("Hedgehug-Undo", c.Hash.String())
 	// A commit that took back nothing would be picked again by the next undo.
 	tx.AllowEmpty()

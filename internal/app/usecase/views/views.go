@@ -53,10 +53,22 @@ type ViewChange struct {
 
 // ViewResult is what a view operation did.
 type ViewResult struct {
-	View      *view.View // as saved; for ViewRemove and ViewRename, as it was (just the name for a file that did not decode)
-	OldName   string     // ViewRename
+	View      SavedView // as saved; for ViewRemove and ViewRename, as it was (just the name for a file that did not decode)
+	OldName   string    // ViewRename
 	Committed bool
 	Commit    string // hex hash; "" when nothing was committed
+}
+
+// ViewWrite is what a write to a view answers, in the CLI's --json and in
+// the server's response.
+type ViewWrite struct {
+	View   SavedView `json:"view"`
+	Commit *string   `json:"commit"`
+}
+
+// Write is the answer to the write: the view, and the commit.
+func (r ViewResult) Write() ViewWrite {
+	return ViewWrite{View: r.View, Commit: usecase.CommitPtr(r.Commit)}
 }
 
 func viewOp(detail string) store.Op { return store.Op{Name: "view", Detail: detail} }
@@ -170,7 +182,7 @@ func writeView(ss *usecase.Session, name string, ch ViewChange, create bool) (Vi
 	if err != nil {
 		return ViewResult{}, err
 	}
-	return ViewResult{View: v, Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash)}, nil
+	return ViewResult{View: SavedViewOf(v), Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash)}, nil
 }
 
 // applyViewChange sets what ch gives and checks the view that results.
@@ -242,22 +254,22 @@ func ViewList(ss *usecase.Session) ([]SavedView, error) {
 }
 
 // ViewGet reads the view called exactly name.
-func ViewGet(ss *usecase.Session, name string) (*view.View, error) {
+func ViewGet(ss *usecase.Session, name string) (SavedView, error) {
 	s, err := ss.OpenStore()
 	if err != nil {
-		return nil, err
+		return SavedView{}, err
 	}
 	e, ok, err := view.Find(s.Dir(), name)
 	if err != nil {
-		return nil, err
+		return SavedView{}, err
 	}
 	if !ok {
-		return nil, viewNotFound(name)
+		return SavedView{}, viewNotFound(name)
 	}
 	if e.Err != nil {
-		return nil, usecase.NewErr(usecase.KindInvalid, "view.broken", fmt.Errorf("%s: %w; fix it by hand or remove it with hedgehug view rm", e.Rel, e.Err), "name", name)
+		return SavedView{}, usecase.NewErr(usecase.KindInvalid, "view.broken", fmt.Errorf("%s: %w; fix it by hand or remove it with hedgehug view rm", e.Rel, e.Err), "name", name)
 	}
-	return e.View, nil
+	return SavedViewOf(e.View), nil
 }
 
 // ViewRemove removes the view called exactly name, readable or not.
@@ -287,7 +299,7 @@ func ViewRemove(ss *usecase.Session, name string) (ViewResult, error) {
 	if v == nil {
 		v = view.New(name)
 	}
-	return ViewResult{View: v, Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash)}, nil
+	return ViewResult{View: SavedViewOf(v), Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash)}, nil
 }
 
 // ViewRename moves the view oldName to newName, as its bytes are. A name
@@ -336,5 +348,5 @@ func ViewRename(ss *usecase.Session, oldName, newName string) (ViewResult, error
 	if err != nil {
 		return ViewResult{}, err
 	}
-	return ViewResult{View: v, OldName: oldName, Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash)}, nil
+	return ViewResult{View: SavedViewOf(v), OldName: oldName, Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash)}, nil
 }

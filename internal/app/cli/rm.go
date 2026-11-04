@@ -5,8 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/app/storage/index"
-	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
@@ -42,7 +40,7 @@ func (a *app) rm(arg string) error {
 	if err != nil {
 		return err
 	}
-	return a.printAffected(res.Index, res.Entry, res.Targets, "Deleted")
+	return a.printAffected(res, "Deleted")
 }
 
 func (a *app) restore(arg string) error {
@@ -50,27 +48,23 @@ func (a *app) restore(arg string) error {
 	if err != nil {
 		return err
 	}
-	return a.printAffected(res.Index, res.Entry, res.Targets, "Restored")
+	return a.printAffected(res, "Restored")
 }
 
 // printAffected prints the tasks a write changed, read again after the
 // write: as JSON, or as one line about the task named.
-func (a *app) printAffected(ix *index.Index, e *index.Entry, targets []*index.Entry, verb string) error {
-	if a.jsonOut {
-		if err := ix.Refresh(); err != nil {
-			return err
-		}
-		out := make([]*usecase.TaskView, 0, len(targets))
-		for _, x := range targets {
-			cur, _ := ix.Task(x.ULID)
-			out = append(out, usecase.TaskViewOf(ix, cur))
-		}
-		return a.printJSON(out)
+func (a *app) printAffected(r tasks.AffectedResult, verb string) error {
+	w, err := r.Write()
+	if err != nil {
+		return err
 	}
-	line := fmt.Sprintf("%s %s %s", verb, a.style().id(usecase.TaskLabel(ix, e)), e.Title)
-	if n := len(targets) - 1; n > 0 {
+	if a.jsonOut {
+		return a.printJSON(w)
+	}
+	line := fmt.Sprintf("%s %s %s", verb, a.style().id(w.Tasks[0].Label()), w.Tasks[0].Title)
+	if n := len(w.Tasks) - 1; n > 0 {
 		line += " and " + plural.Count(n, "task") + " under it"
 	}
-	_, err := fmt.Fprintln(a.stdout, line)
+	_, err = fmt.Fprintln(a.stdout, line)
 	return err
 }

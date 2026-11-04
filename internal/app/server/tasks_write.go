@@ -15,35 +15,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
-// commitPtr is the commit of a write: nil when nothing was committed.
-func commitPtr(hex string) *string {
-	if hex == "" {
-		return nil
-	}
-	return &hex
-}
-
-// viewsOf opens the index again, after a write, and returns the tasks as
-// rows of a list.
-func (s *Server) viewsOf(ss *usecase.Session, ulids ...model.ULID) ([]*usecase.TaskView, error) {
-	_, ix, err := ss.Open()
-	if err != nil {
-		return nil, problemOf(err)
-	}
-	out := make([]*usecase.TaskView, 0, len(ulids))
-	for _, u := range ulids {
-		e, ok := ix.Task(u)
-		if !ok {
-			// Another process purged it after the write.
-			p := newProblem(http.StatusNotFound, "task.gone", fmt.Sprintf("%s is no longer in the store", u))
-			p.Args = map[string]any{"id": u.String()}
-			return nil, p
-		}
-		out = append(out, usecase.ListViewOf(ix, e))
-	}
-	return out, nil
-}
-
 // assignsOf turns the JSON value v of key into what hedgehug set takes: a
 // scalar is key=value, null is key= (clear), a list is clear then key+=item
 // for each.
@@ -147,46 +118,29 @@ func (f *Fields) assigns() ([]usecase.Assign, error) {
 	return out, nil
 }
 
-type taskWrite struct {
-	Task   *usecase.TaskView `json:"task"`
-	Commit *string           `json:"commit" doc:"The commit made; null when nothing changed"`
-	Note   string            `json:"note,omitempty" doc:"What restore at a commit has to say, as hh restore --at prints it"`
-	// Detached is for a move to another workspace.
-	Detached []usecase.Detached `json:"detached,omitempty" doc:"What a move to another workspace took off the tasks: the sprint and the releases that are not of the new workspace, as hh mv tells it"`
-}
+type taskWriteOutput struct{ Body usecase.TaskWrite }
 
-type taskWriteOutput struct{ Body taskWrite }
-
-type affectedWrite struct {
-	Tasks  []*usecase.TaskView `json:"tasks,omitempty" doc:"The task and the tasks under it, as they are now"`
-	Commit *string             `json:"commit"`
-}
-
-type affectedOutput struct{ Body affectedWrite }
+type affectedOutput struct{ Body usecase.AffectedWrite }
 
 // writeOut is the output of a write to one task.
-func (s *Server) writeOut(ss *usecase.Session, u model.ULID, commit string) (*taskWriteOutput, error) {
-	vs, err := s.viewsOf(ss, u)
+func writeOut(r interface {
+	Write() (usecase.TaskWrite, error)
+}) (*taskWriteOutput, error) {
+	w, err := r.Write()
 	if err != nil {
-		return nil, err
+		return nil, problemOf(err)
 	}
-	return &taskWriteOutput{Body: taskWrite{Task: vs[0], Commit: commitPtr(commit)}}, nil
+	return &taskWriteOutput{Body: w}, nil
 }
 
 // affectedOut is the output of rm and restore: the task, then the tasks
 // under it.
-func (s *Server) affectedOut(ss *usecase.Session, r tasks.AffectedResult) (*affectedOutput, error) {
-	ulids := []model.ULID{r.Entry.ULID}
-	for _, e := range r.Targets {
-		if e.ULID != r.Entry.ULID {
-			ulids = append(ulids, e.ULID)
-		}
-	}
-	vs, err := s.viewsOf(ss, ulids...)
+func affectedOut(r tasks.AffectedResult) (*affectedOutput, error) {
+	w, err := r.Write()
 	if err != nil {
-		return nil, err
+		return nil, problemOf(err)
 	}
-	return &affectedOutput{Body: affectedWrite{Tasks: vs, Commit: commitPtr(r.Commit)}}, nil
+	return &affectedOutput{Body: w}, nil
 }
 
 type createInput struct {
@@ -257,7 +211,7 @@ func (s *Server) registerTaskWrites() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return s.writeOut(ss, res.ULID, res.Commit)
+		return writeOut(res)
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -274,7 +228,7 @@ func (s *Server) registerTaskWrites() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return s.writeOut(ss, res.ULID, res.Commit)
+		return writeOut(res)
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -291,12 +245,7 @@ func (s *Server) registerTaskWrites() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		out, err := s.writeOut(ss, res.ULID, res.Commit)
-		if err != nil {
-			return nil, err
-		}
-		out.Body.Detached = res.Detached
-		return out, nil
+		return writeOut(res)
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -309,7 +258,7 @@ func (s *Server) registerTaskWrites() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return s.affectedOut(ss, res)
+		return affectedOut(res)
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -322,7 +271,7 @@ func (s *Server) registerTaskWrites() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return s.affectedOut(ss, res)
+		return affectedOut(res)
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -335,11 +284,6 @@ func (s *Server) registerTaskWrites() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		out, err := s.writeOut(ss, res.ULID, res.Commit)
-		if err != nil {
-			return nil, err
-		}
-		out.Body.Note = res.Note
-		return out, nil
+		return writeOut(res)
 	})
 }

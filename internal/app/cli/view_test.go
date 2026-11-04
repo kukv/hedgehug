@@ -48,11 +48,12 @@ func TestViewCommands(t *testing.T) {
 	te.goldenRun("case", 1, "view", "save", "release")
 	te.goldenRun("no-sub", 2, "view")
 
-	var v views.SavedView
-	if err := json.Unmarshal([]byte(te.ok("view", "save", "k", "--layout", "kanban", "--kanban-columns", "category", "--swimlane", "assignee", "--json")), &v); err != nil {
+	var w views.ViewWrite
+	if err := json.Unmarshal([]byte(te.ok("view", "save", "k", "--layout", "kanban", "--kanban-columns", "category", "--swimlane", "assignee", "--json")), &w); err != nil {
 		t.Fatal(err)
 	}
-	if v.Name != "k" || v.Kanban.Columns != "category" || v.Kanban.Swimlane != "assignee" || v.Table.GroupBy != "none" {
+	v := w.View
+	if w.Commit == nil || v.Name != "k" || v.Kanban.Columns != "category" || v.Kanban.Swimlane != "assignee" || v.Table.GroupBy != "none" {
 		t.Errorf("save --json = %+v", v)
 	}
 	if c := te.headCommit("me"); !strings.HasPrefix(c.Message, "hedgehug: view save k\n") || !strings.Contains(c.Message, "Hedgehug-Op: view") {

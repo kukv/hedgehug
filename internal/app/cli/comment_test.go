@@ -11,17 +11,19 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/comments"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
-func (te *testEnv) commentJSON(args ...string) commentOut {
+func (te *testEnv) commentJSON(args ...string) usecase.CommentView {
 	te.t.Helper()
-	var got commentOut
+	var got comments.CommentWrite
 	out := te.ok(append(args, "--json")...)
-	if err := json.Unmarshal([]byte(out), &got); err != nil {
+	if err := json.Unmarshal([]byte(out), &got); err != nil || got.Commit == nil && !strings.Contains(out, `"commit": null`) {
 		te.t.Fatalf("%v: %s", err, out)
 	}
-	return got
+	return got.Comment
 }
 
 // comments returns every comment of task ulid, deleted ones included.

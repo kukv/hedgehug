@@ -21,12 +21,9 @@ func TestAddSetStatusDep(t *testing.T) {
 	if err != nil || !a.Committed {
 		t.Fatalf("Add = %+v, %v", a, err)
 	}
-	b, err := tasks.Add(ts.Session, tasks.AddInput{Title: "child", Parent: "ME-1"})
+	_, err = tasks.Add(ts.Session, tasks.AddInput{Title: "child", Parent: "ME-1"})
 	if err != nil {
 		t.Fatal(err)
-	}
-	if e, ok := b.Index.Task(b.ULID); ok && e.ID != "" {
-		t.Errorf("the index before the write has the new task: %+v", e)
 	}
 	as, err := usecase.ParseAssigns([]string{"title=renamed", "labels+=x"})
 	if err != nil {

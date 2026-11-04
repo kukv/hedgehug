@@ -38,24 +38,21 @@ func TestMvJSONShowsWhatItTookOff(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var got struct {
-		usecase.TaskView
-		Detached []usecase.Detached `json:"detached"`
-	}
-	if err := json.Unmarshal([]byte(te.ok("mv", p.ID, "--workspace", "api", "--json")), &got); err != nil {
+	var got usecase.TaskWrite
+	if err := json.Unmarshal([]byte(te.ok("mv", p.ID, "--workspace", "api", "--json")), &got); err != nil || got.Task == nil {
 		t.Fatal(err)
 	}
-	if got.ID != "API-1" || len(got.Detached) != 1 || got.Detached[0].ID != "API-1" || got.Detached[0].Sprint != "S3" ||
+	if got.Task.ID != "API-1" || len(got.Detached) != 1 || got.Detached[0].ID != "API-1" || got.Detached[0].Sprint != "S3" ||
 		!slices.Equal(got.Detached[0].Releases, []string{"v1"}) {
 		t.Errorf("mv --json = %+v", got)
 	}
 
-	// Nothing taken off: the task alone, with no detached key.
+	// Nothing taken off: no detached key.
 	var plain map[string]any
 	if err := json.Unmarshal([]byte(te.ok("mv", q.ID, "--workspace", "api", "--json")), &plain); err != nil {
 		t.Fatal(err)
 	}
-	if _, has := plain["detached"]; has || plain["id"] != "API-2" {
+	if task, _ := plain["task"].(map[string]any); task == nil || task["id"] != "API-2" || plain["detached"] != nil {
 		t.Errorf("mv --json = %v", plain)
 	}
 }

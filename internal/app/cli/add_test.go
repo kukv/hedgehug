@@ -22,12 +22,12 @@ func newStoreEnv(t *testing.T) *testEnv {
 // addJSON runs add with --json and returns the task it printed.
 func (te *testEnv) addJSON(args ...string) usecase.TaskView {
 	te.t.Helper()
-	var got usecase.TaskView
+	var got usecase.TaskWrite
 	out := te.ok(append(append([]string{"add"}, args...), "--json")...)
-	if err := json.Unmarshal([]byte(out), &got); err != nil {
+	if err := json.Unmarshal([]byte(out), &got); err != nil || got.Task == nil {
 		te.t.Fatalf("%v: %s", err, out)
 	}
-	return got
+	return *got.Task
 }
 
 // label is how the CLI names task j: its id and full ULID.

@@ -14,20 +14,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
-type undoKept struct {
-	Path   string `json:"path"`
-	Task   string `json:"task,omitempty" doc:"The ID of the task; empty for other files"`
-	Field  string `json:"field"`
-	Author string `json:"author"`
-}
-
-type undoWrite struct {
-	Undone usecase.LogView `json:"undone" doc:"The commit taken back"`
-	Commit *string         `json:"commit"`
-	Kept   []undoKept      `json:"kept" doc:"What others changed after it, which undo kept"`
-}
-
-type undoOutput struct{ Body undoWrite }
+type undoOutput struct{ Body tasks.UndoWrite }
 
 type activityInput struct {
 	Store  string `query:"store" doc:"The store; without it, the commits of every store"`
@@ -94,18 +81,7 @@ func (s *Server) registerActivity() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		_, ix, err := ss.Open()
-		if err != nil {
-			return nil, problemOf(err)
-		}
-		out := &undoOutput{}
-		out.Body.Undone = usecase.LogViewOf(ix, r.Commit)
-		out.Body.Commit = commitPtr(r.NewCommit)
-		out.Body.Kept = []undoKept{}
-		for _, k := range r.Kept {
-			out.Body.Kept = append(out.Body.Kept, undoKept{k.Path, k.Task, k.Field, k.Author})
-		}
-		return out, nil
+		return &undoOutput{Body: r.Write()}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -240,12 +216,8 @@ func (s *Server) registerActivity() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		// The item may be of any store; r.Index is the index of the store
+		// The item may be of any store; the result is read from the store
 		// InboxRevert wrote to.
-		v, err := r.View()
-		if err != nil {
-			return nil, problemOf(err)
-		}
-		return &taskWriteOutput{Body: taskWrite{Task: v, Commit: commitPtr(r.Commit)}}, nil
+		return writeOut(r)
 	})
 }

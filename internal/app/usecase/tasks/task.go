@@ -154,7 +154,7 @@ func Add(ss *usecase.Session, in AddInput) (usecase.TaskResult, error) {
 	if err != nil {
 		return usecase.TaskResult{}, err
 	}
-	return usecase.TaskResult{Index: ix, ULID: t.ULID, Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash)}, nil
+	return usecase.NewTaskResult(ix, t.ULID, hash), nil
 }
 
 // Set applies assigns to the task arg names.
@@ -194,7 +194,7 @@ func Set(ss *usecase.Session, arg string, assigns []usecase.Assign) (usecase.Tas
 	if err != nil {
 		return usecase.TaskResult{}, err
 	}
-	return usecase.TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash)}, nil
+	return usecase.NewTaskResult(ix, e.ULID, hash), nil
 }
 
 // SetStatus sets the status of the task arg names; an empty status means the
@@ -243,7 +243,7 @@ func SetStatus(ss *usecase.Session, arg, name string) (usecase.TaskResult, error
 	if err != nil {
 		return usecase.TaskResult{}, err
 	}
-	return usecase.TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash)}, nil
+	return usecase.NewTaskResult(ix, e.ULID, hash), nil
 }
 
 // Dep makes the task arg names blocked by the task blockerArg names, or, with
@@ -292,7 +292,7 @@ func Dep(ss *usecase.Session, arg, blockerArg string, add bool) (usecase.TaskRes
 	if err != nil {
 		return usecase.TaskResult{}, err
 	}
-	return usecase.TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash)}, nil
+	return usecase.NewTaskResult(ix, e.ULID, hash), nil
 }
 
 // Watch adds the writer of the store to the watchers of the task arg
@@ -342,7 +342,7 @@ func Watch(ss *usecase.Session, arg string, on bool) (usecase.TaskResult, error)
 	if err != nil {
 		return usecase.TaskResult{}, err
 	}
-	return usecase.TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash)}, nil
+	return usecase.NewTaskResult(ix, e.ULID, hash), nil
 }
 
 // watchNewAssignees adds to the watchers of t the assignees it has now and

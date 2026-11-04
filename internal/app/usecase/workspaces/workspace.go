@@ -39,8 +39,13 @@ func WorkspaceViewOf(ix *index.Index, w *model.Workspace) WorkspaceView {
 	return WorkspaceView{ULID: w.ULID.String(), Name: w.Name, IDPrefix: w.IDPrefix, PrefixSet: w.PrefixSet, Tasks: live, Deleted: deleted}
 }
 
-// IDChange is a task id that a change of the id prefix replaced.
-type IDChange struct{ Old, New string }
+// WorkspaceWrite is what a write to a workspace answers, in the CLI's --json
+// and in the server's response.
+type WorkspaceWrite struct {
+	Workspace WorkspaceView      `json:"workspace"`
+	Commit    *string            `json:"commit"`
+	IDs       []usecase.IDChange `json:"ids,omitempty" doc:"With a new prefix: the IDs the tasks had and have now"`
+}
 
 // WorkspaceResult is what a workspace operation did. Index is the index the
 // operation read, which WorkspacePrefix refreshes: only its task counts are
@@ -49,11 +54,32 @@ type WorkspaceResult struct {
 	Index     *index.Index
 	Workspace *model.Workspace
 	Committed bool
-	Commit    string     // hex hash of the commit made; "" when nothing was committed
-	OldName   string     // WorkspaceRename: the name before
-	IDs       []IDChange // WorkspacePrefix: the ids of the renumbered tasks
+	Commit    string             // hex hash of the commit made; "" when nothing was committed
+	OldName   string             // WorkspaceRename: the name before
+	IDs       []usecase.IDChange // WorkspacePrefix: the ids of the renumbered tasks
 	// Renumbered is len(IDs).
 	Renumbered int
+}
+
+// View is the workspace as the write left it. It counts the tasks from the
+// index the operation read (refreshed after a renumbering), so that a write
+// that is committed is never answered with an error.
+func (r WorkspaceResult) View() WorkspaceView { return WorkspaceViewOf(r.Index, r.Workspace) }
+
+// Write is the answer to the write: the workspace, the commit and the ids
+// renumbered.
+func (r WorkspaceResult) Write() WorkspaceWrite {
+	return WorkspaceWrite{Workspace: r.View(), Commit: usecase.CommitPtr(r.Commit), IDs: r.IDs}
+}
+
+// Renumbering is the ids the tasks had and have now, as the index shows
+// them (qualified when another store has the prefix).
+func (r WorkspaceResult) Renumbering() []usecase.IDChange {
+	out := make([]usecase.IDChange, len(r.IDs))
+	for i, c := range r.IDs {
+		out[i] = usecase.IDChange{Old: r.Index.QualifyID(c.Old), New: r.Index.QualifyID(c.New)}
+	}
+	return out
 }
 
 // selectedStoreName returns the name of the store the session works on.
@@ -211,7 +237,7 @@ func WorkspacePrefix(ss *usecase.Session, arg, prefix string) (WorkspaceResult, 
 	}
 	r := WorkspaceResult{Index: ix, Workspace: w, Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash), Renumbered: len(tasks)}
 	for i, t := range tasks {
-		r.IDs = append(r.IDs, IDChange{Old: oldIDs[i], New: t.ID})
+		r.IDs = append(r.IDs, usecase.IDChange{Old: oldIDs[i], New: t.ID})
 	}
 	return r, nil
 }
@@ -247,15 +273,15 @@ func WorkspaceRemove(ss *usecase.Session, arg string) (WorkspaceResult, error) {
 
 // WorkspaceList lists the workspaces of the store, by name, with the number
 // of their tasks that are not deleted.
-func WorkspaceList(ss *usecase.Session) (*index.Index, []WorkspaceView, error) {
+func WorkspaceList(ss *usecase.Session) ([]WorkspaceView, error) {
 	_, ix, err := ss.Open()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	wss := ix.Workspaces()
 	out := make([]WorkspaceView, len(wss))
 	for i, w := range wss {
 		out[i] = WorkspaceViewOf(ix, w)
 	}
-	return ix, out, nil
+	return out, nil
 }

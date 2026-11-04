@@ -14,12 +14,7 @@ type ViewParam struct {
 	Name string `path:"name" doc:"The name of the view"`
 }
 
-type viewWrite struct {
-	View   views.SavedView `json:"view"`
-	Commit *string         `json:"commit"`
-}
-
-type viewOutput struct{ Body viewWrite }
+type viewOutput struct{ Body views.ViewWrite }
 
 type viewSaveInput struct {
 	ViewParam
@@ -46,13 +41,7 @@ type viewPatchInput struct {
 	}
 }
 
-func viewOut(r views.ViewResult) *viewOutput {
-	out := &viewOutput{Body: viewWrite{Commit: commitPtr(r.Commit)}}
-	if r.View != nil {
-		out.Body.View = views.SavedViewOf(r.View)
-	}
-	return out
-}
+func viewOut(r views.ViewResult) *viewOutput { return &viewOutput{Body: r.Write()} }
 
 func (s *Server) registerViews() {
 	huma.Register(s.api, huma.Operation{
@@ -78,7 +67,7 @@ func (s *Server) registerViews() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return &struct{ Body views.SavedView }{views.SavedViewOf(v)}, nil
+		return &struct{ Body views.SavedView }{v}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{

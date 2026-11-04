@@ -109,5 +109,5 @@ func (a *app) inboxRevert(arg string) error {
 	if err != nil {
 		return err
 	}
-	return a.printTask(res.Index, res.ULID, verb(res.Committed, "Reverted"))
+	return a.printTask(res, verb(res.Committed, "Reverted"))
 }

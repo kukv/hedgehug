@@ -8,8 +8,6 @@ import (
 
 	"golang.org/x/text/width"
 
-	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
@@ -116,20 +114,23 @@ func (a *app) printTasks(vs []*usecase.TaskView, withStore bool) error {
 	})
 }
 
-// printTask prints the task ulid after a write: as JSON, or as one line that
+// printTask prints the task after a write: as JSON, or as one line that
 // starts with verb.
-func (a *app) printTask(ix *index.Index, ulid model.ULID, verb string) error {
-	if err := ix.Refresh(); err != nil {
+func (a *app) printTask(r usecase.TaskResult, verb string) error {
+	w, err := r.Write()
+	if err != nil {
 		return err
 	}
-	e, ok := ix.Task(ulid)
-	if !ok {
-		return fmt.Errorf("task %s is not in the index after the write", ulid)
-	}
+	return a.printWrite(w, verb)
+}
+
+// printWrite prints w, the answer to a write to one task: as JSON, or as one
+// line that starts with verb.
+func (a *app) printWrite(w usecase.TaskWrite, verb string) error {
 	if a.jsonOut {
-		return a.printJSON(usecase.TaskViewOf(ix, e))
+		return a.printJSON(w)
 	}
-	_, err := fmt.Fprintf(a.stdout, "%s %s %s\n", verb, a.style().id(usecase.TaskLabel(ix, e)), e.Title)
+	_, err := fmt.Fprintf(a.stdout, "%s %s %s\n", verb, a.style().id(w.Task.Label()), w.Task.Title)
 	return err
 }
 

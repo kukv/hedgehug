@@ -178,6 +178,8 @@ type Detached struct {
 	ID       string     `json:"id" doc:"The id of the task after the move"`
 	Sprint   string     `json:"sprint,omitempty" doc:"The name of the sprint taken off"`
 	Releases []string   `json:"releases,omitempty" doc:"The names of the releases taken off"`
+	// DisplayID is ID as the index shows it (Write fills it); for the text.
+	DisplayID string `json:"-"`
 }
 
 // unreadable reports whether err says a sprint or release file is missing or

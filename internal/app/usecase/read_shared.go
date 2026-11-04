@@ -34,10 +34,15 @@ func HasTerm(q *query.Query, key string) bool {
 
 // CommentView is a comment as --json prints it.
 type CommentView struct {
-	ULID    string    `json:"ulid"`
-	Author  string    `json:"author"`
-	Created time.Time `json:"created"`
-	Body    string    `json:"body"`
+	ULID string `json:"ulid"`
+	// Task, Updated and DeletedAt are only in the answer to a write to a
+	// comment (show leaves them out).
+	Task      string     `json:"task,omitempty" doc:"The ULID of the task the comment is on"`
+	Author    string     `json:"author"`
+	Created   time.Time  `json:"created"`
+	Updated   *time.Time `json:"updated,omitempty"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty" doc:"When the comment was removed"`
+	Body      string     `json:"body"`
 }
 
 // ShowView is a task as show --json prints it.

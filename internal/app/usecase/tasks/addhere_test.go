@@ -1,6 +1,7 @@
 package tasks_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/go-git/go-git/v5"
@@ -74,13 +75,12 @@ func TestAddHereExplicitParentInAnotherStore(t *testing.T) {
 	if err != nil || cf != nil || ch != nil {
 		t.Fatalf("AddHere = %v %v %v", cf, ch, err)
 	}
-	d := r.Destination
-	if d.Stage != 1 || d.Store.Name != "org-b" || d.Parent == nil || d.Parent.ID != "WEB-1" {
-		t.Errorf("destination = %+v", d)
-	}
 	v, err := r.View()
-	if err != nil || v.Store != "org-b" || v.Parent == nil || v.Title != "child" {
-		t.Errorf("view = %+v, %v", v, err)
+	if err != nil || v.Store != "org-b" || v.Parent == nil || v.Title != "child" || v.ParentRef == nil || v.ParentRef.ID != "WEB-1" {
+		t.Fatalf("view = %+v, %v", v, err)
+	}
+	if want := "org-b / " + v.ParentRef.Title; r.Destination != want {
+		t.Errorf("destination = %q, want %q", r.Destination, want)
 	}
 }
 
@@ -142,8 +142,8 @@ func TestAddHereStage4SetsRecent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Destination.Stage != 4 || r.Destination.Parent.ULID != p.ULID {
-		t.Fatalf("destination = %+v", r.Destination)
+	if v, err := r.View(); err != nil || v.Store != "org-a" || v.Parent == nil || *v.Parent != p.ULID.String() || r.Destination != "org-a / Web release" {
+		t.Fatalf("destination = %q, view %+v, %v", r.Destination, v, err)
 	}
 	m, _ := ts.Mount()
 	a, _ := m.Get("org-a")
@@ -167,20 +167,20 @@ func TestAddHereReturnsWhatToAsk(t *testing.T) {
 	setDefaultStore(t, ts, "")
 	dir := repoDir(t, "hh/WEB-1-login", "")
 	_, cf, _, err := tasks.AddHere(ts.Session, tasks.AddHereInput{Context: usecase.Input{Dir: dir, Interactive: true}, Task: tasks.AddInput{Title: "x"}})
-	if err != nil || cf == nil || cf.Parent.ID != "WEB-1" {
-		t.Fatalf("Confirm = %+v, %v", cf, err)
+	if err != nil || cf == nil || cf.ParentID != "WEB-1" || cf.ParentTitle == "" {
+		t.Fatalf("BranchQuestion = %+v, %v", cf, err)
 	}
 	r, _, _, err := tasks.AddHere(ts.Session, tasks.AddHereInput{Context: usecase.Input{Dir: dir, Interactive: true, BranchParent: usecase.Yes}, Task: tasks.AddInput{Title: "x"}})
-	if err != nil || r.Destination.Stage != 3 || r.Destination.Store.Name != "org-b" {
-		t.Fatalf("Yes = %+v, %v", r.Destination, err)
+	if v, verr := r.View(); err != nil || verr != nil || v.Store != "org-b" || v.ParentRef == nil || v.ParentRef.ID != "WEB-1" || r.Destination != "org-b / "+v.ParentRef.Title {
+		t.Fatalf("Yes = %q, %v", r.Destination, err)
 	}
 	_, _, ch, err := tasks.AddHere(ts.Session, tasks.AddHereInput{Context: usecase.Input{Interactive: true}, Task: tasks.AddInput{Title: "x"}})
 	if err != nil || ch == nil || ch.What != "store" {
 		t.Fatalf("Choice = %+v, %v", ch, err)
 	}
 	r, _, _, err = tasks.AddHere(ts.Session, tasks.AddHereInput{Context: usecase.Input{Interactive: true, PickStore: "org-a"}, Task: tasks.AddInput{Title: "x"}})
-	if err != nil || r.Destination.Stage != 5 || r.Destination.Store.Name != "org-a" {
-		t.Fatalf("PickStore = %+v, %v", r.Destination, err)
+	if v, verr := r.View(); err != nil || verr != nil || v.Store != "org-a" || v.Parent != nil || !strings.HasPrefix(r.Destination, "org-a / ") {
+		t.Fatalf("PickStore = %q, %v", r.Destination, err)
 	}
 }
 
@@ -189,12 +189,12 @@ func TestAddHereUsesDefaultStoreAndTheGlobalStore(t *testing.T) {
 	ts := usecasetest.NewTwoStore(t)
 	setDefaultStore(t, ts, "org-b")
 	r, _, _, err := tasks.AddHere(ts.Session, tasks.AddHereInput{Task: tasks.AddInput{Title: "x"}})
-	if err != nil || r.Destination.Store.Name != "org-b" || r.Destination.Stage != 5 {
-		t.Fatalf("default_store: %+v, %v", r.Destination, err)
+	if v, verr := r.View(); err != nil || verr != nil || v.Store != "org-b" || v.Parent != nil {
+		t.Fatalf("default_store: %q, %v", r.Destination, err)
 	}
 	r, _, _, err = tasks.AddHere(ts.ForStore("org-a"), tasks.AddHereInput{Task: tasks.AddInput{Title: "x"}})
-	if err != nil || r.Destination.Store.Name != "org-a" || r.Destination.Stage != 1 {
-		t.Fatalf("--store org-a: %+v, %v", r.Destination, err)
+	if v, verr := r.View(); err != nil || verr != nil || v.Store != "org-a" {
+		t.Fatalf("--store org-a: %q, %v", r.Destination, err)
 	}
 	_, _, _, err = tasks.AddHere(ts.Session, tasks.AddHereInput{Context: usecase.Input{Store: "nosuch"}, Task: tasks.AddInput{Title: "x"}})
 	if err == nil {

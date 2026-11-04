@@ -30,8 +30,8 @@ func TestUndoTakesBackMyLastWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !res.Found || !res.Changed || len(res.Kept) != 0 || tasks.UndoSubject(res.Commit) != "set ME-1 b" {
-		t.Errorf("Undo = found %v, changed %v, kept %v, subject %q; want true, true, none, \"set ME-1 b\"", res.Found, res.Changed, res.Kept, tasks.UndoSubject(res.Commit))
+	if !res.Found || !res.Changed || len(res.Kept) != 0 || tasks.UndoSubject(res.Undone.Subject) != "set ME-1 b" {
+		t.Errorf("Undo = found %v, changed %v, kept %v, subject %q; want true, true, none, \"set ME-1 b\"", res.Found, res.Changed, res.Kept, tasks.UndoSubject(res.Undone.Subject))
 	}
 	_, ix, _ := ts.Open()
 	e, err := ts.Resolve(ix, "ME-1")
@@ -160,7 +160,7 @@ func TestUndoRestoresARemovedWorkspace(t *testing.T) {
 	if _, err := workspaces.WorkspaceRemove(ts.Session, "w2"); err != nil {
 		t.Fatal(err)
 	}
-	if _, wss, err := workspaces.WorkspaceList(ts.Session); err != nil || listsWorkspace(wss, "w2") {
+	if wss, err := workspaces.WorkspaceList(ts.Session); err != nil || listsWorkspace(wss, "w2") {
 		t.Fatalf("workspaces after rm = %v, %v; want w2 gone", wss, err)
 	}
 	res, err := tasks.Undo(ts.Session)
@@ -170,7 +170,7 @@ func TestUndoRestoresARemovedWorkspace(t *testing.T) {
 	if !res.Found || !res.Changed || len(res.Kept) != 0 {
 		t.Errorf("Undo = found %v, changed %v, kept %v; want true, true, none", res.Found, res.Changed, res.Kept)
 	}
-	_, wss, err := workspaces.WorkspaceList(ts.Session)
+	wss, err := workspaces.WorkspaceList(ts.Session)
 	if err != nil {
 		t.Fatal(err)
 	}

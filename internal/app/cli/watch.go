@@ -30,5 +30,5 @@ func (a *app) watch(arg string, on bool) error {
 	if err != nil {
 		return err
 	}
-	return a.printTask(r.Index, r.ULID, verb(r.Committed, "Updated"))
+	return a.printTask(r, verb(r.Committed, "Updated"))
 }

@@ -44,7 +44,7 @@ func TestSchemaCheckNoProblems(t *testing.T) {
 		t.Errorf("exit %d, stdout %q, stderr %q", code, out, stderr)
 	}
 	code, out, _ = te.run("schema", "check", "--json")
-	if code != 0 || strings.TrimSpace(out) != "[]" {
+	if code != 0 || strings.Join(strings.Fields(out), "") != `{"findings":[]}` {
 		t.Errorf("--json: exit %d, stdout %q", code, out)
 	}
 }
@@ -79,10 +79,13 @@ func TestSchemaCheckProblems(t *testing.T) {
 	if code != 1 || stderr != "" {
 		t.Fatalf("--json: exit %d, stderr %q", code, stderr)
 	}
-	var fs []map[string]string
-	if err := json.Unmarshal([]byte(out), &fs); err != nil {
+	var res struct {
+		Findings []map[string]string `json:"findings"`
+	}
+	if err := json.Unmarshal([]byte(out), &res); err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
+	fs := res.Findings
 	if len(fs) != 2 || fs[0]["check"] != "template" || fs[0]["hint"] == "" || fs[1]["check"] != "task" {
 		t.Errorf("findings = %v", fs)
 	}

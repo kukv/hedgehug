@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
 func TestUndoKeepsLaterChangesOfOthers(t *testing.T) {
@@ -66,26 +68,16 @@ func TestUndoJSON(t *testing.T) {
 	te := newTestEnv(t)
 	te.writeAccounts("github.com", "alice")
 	te.ok("store", "init", "me", "--prefix", "ME")
-	var none struct {
-		Undone *string `json:"undone"`
-	}
-	if err := json.Unmarshal([]byte(te.goldenOK("none", "undo", "--json")), &none); err != nil || none.Undone != nil {
+	var none tasks.UndoWrite
+	if err := json.Unmarshal([]byte(te.goldenOK("none", "undo", "--json")), &none); err != nil || none.Undone != nil || none.Subject != "" || none.Changed || none.Commit != nil || none.Kept == nil || len(none.Kept) != 0 {
 		t.Errorf("nothing to undo: %+v %v", none, err)
 	}
 	te.ok("add", "x")
-	var done struct {
-		Undone  string `json:"undone"`
-		Subject string `json:"subject"`
-		Changed bool   `json:"changed"`
-		Kept    []struct {
-			Field  string `json:"field"`
-			Author string `json:"author"`
-		} `json:"kept"`
-	}
+	var done tasks.UndoWrite
 	if err := json.Unmarshal([]byte(te.goldenOK("done", "undo", "--json")), &done); err != nil {
 		t.Fatal(err)
 	}
-	if done.Undone == "" || !strings.HasPrefix(done.Subject, "add ME-1") || !done.Changed || len(done.Kept) != 0 {
+	if done.Undone == nil || done.Undone.Hash == "" || done.Commit == nil || !strings.HasPrefix(done.Subject, "add ME-1") || !done.Changed || len(done.Kept) != 0 {
 		t.Errorf("undo = %+v", done)
 	}
 }

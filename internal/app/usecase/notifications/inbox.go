@@ -384,7 +384,7 @@ func InboxRevertOf(ss *usecase.Session, stores []InboxStore, u model.ULID) (usec
 	if err := st.Box.MarkRead([]model.ULID{u}); err != nil {
 		return usecase.TaskResult{}, err
 	}
-	return usecase.TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash)}, nil
+	return usecase.NewTaskResult(ix, e.ULID, hash), nil
 }
 
 // movedRevertErr is task.moved for an inbox revert of a task that moved:

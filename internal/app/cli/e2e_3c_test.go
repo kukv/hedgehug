@@ -20,7 +20,7 @@ func addTask(t *testing.T, u *devUser, title string, args ...string) taskInfo {
 	t.Helper()
 	var x taskInfo
 	out := u.ok(append([]string{"add", title, "--json"}, args...)...)
-	if err := json.Unmarshal([]byte(out), &x); err != nil {
+	if err := unmarshalWritten([]byte(out), &x); err != nil {
 		t.Fatalf("add %s: %v\n%s", title, err, out)
 	}
 	return x

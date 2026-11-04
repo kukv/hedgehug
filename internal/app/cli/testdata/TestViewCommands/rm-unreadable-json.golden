@@ -1,19 +1,22 @@
 {
-  "name": "broken",
-  "layout": "",
-  "query": "",
-  "table": {
-    "columns": [
-      "id",
-      "title",
-      "status",
-      "assignee",
-      "due"
-    ],
-    "group_by": "none"
+  "view": {
+    "name": "broken",
+    "layout": "",
+    "query": "",
+    "table": {
+      "columns": [
+        "id",
+        "title",
+        "status",
+        "assignee",
+        "due"
+      ],
+      "group_by": "none"
+    },
+    "kanban": {
+      "columns": "status",
+      "swimlane": "none"
+    }
   },
-  "kanban": {
-    "columns": "status",
-    "swimlane": "none"
-  }
+  "commit": "<HASH>"
 }

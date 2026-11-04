@@ -242,7 +242,7 @@ func TestRestoreAtByTimeAndCommit(t *testing.T) {
 		if err != nil {
 			t.Fatalf("RestoreAt(%q): %v", point, err)
 		}
-		if !res.Committed || res.Note != "" || res.Index == nil || res.Commit == "" {
+		if !res.Committed || res.Note != "" || res.Commit == "" {
 			t.Errorf("RestoreAt(%q) = committed %v commit %q note %q", point, res.Committed, res.Commit, res.Note)
 		}
 		_, ix, _ := ts.Open()

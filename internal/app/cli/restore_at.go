@@ -13,14 +13,14 @@ func (a *app) restoreAt(arg, at string) error {
 	if err != nil {
 		return err
 	}
-	if err := a.printTask(res.Index, res.ULID, verb(res.Committed, "Restored")); err != nil || res.Note == "" {
+	w, err := res.Write()
+	if err != nil {
 		return err
 	}
-	// JSON on stdout stays one document.
-	out := a.stdout
-	if a.jsonOut {
-		out = a.stderr
+	if err := a.printWrite(w, verb(res.Committed, "Restored")); err != nil || a.jsonOut || w.Note == "" {
+		// In JSON the note is in the document.
+		return err
 	}
-	_, err = fmt.Fprintln(out, "  "+res.Note)
+	_, err = fmt.Fprintln(a.stdout, "  "+w.Note)
 	return err
 }

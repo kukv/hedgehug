@@ -844,6 +844,9 @@ export interface components {
             permission: string;
             url: string;
         };
+        CheckResult: {
+            findings: components["schemas"]["Finding"][] | null;
+        };
         CommentEditInputBody: {
             /** @description The comment in Markdown */
             body: string;
@@ -857,7 +860,16 @@ export interface components {
             body: string;
             /** Format: date-time */
             created: string;
+            /**
+             * Format: date-time
+             * @description When the comment was removed
+             */
+            deleted_at?: string;
+            /** @description The ULID of the task the comment is on */
+            task?: string;
             ulid: string;
+            /** Format: date-time */
+            updated?: string;
         };
         CommentWrite: {
             /** @description The comment as written; for a removal, as it was */
@@ -944,9 +956,6 @@ export interface components {
             task?: string;
             where: string;
         };
-        FindingsOutputBody: {
-            findings: components["schemas"]["Finding"][] | null;
-        };
         Fixed: {
             author?: string;
             id?: string;
@@ -977,7 +986,7 @@ export interface components {
             /** Format: int64 */
             unread: number;
         };
-        IdChange: {
+        IDChange: {
             new: string;
             old: string;
         };
@@ -1038,7 +1047,7 @@ export interface components {
             /** @enum {string} */
             target: "status" | "kind" | "prop" | "value";
         };
-        MigrateOutputBody: {
+        MigrateWrite: {
             changed: components["schemas"]["TaskView"][] | null;
             commit: string | null;
             skipped: string[] | null;
@@ -1616,10 +1625,14 @@ export interface components {
             task?: string;
         };
         UndoWrite: {
+            /** @description false when every field was changed later by others, so nothing was written */
+            changed: boolean;
             commit: string | null;
             /** @description What others changed after it, which undo kept */
             kept: components["schemas"]["UndoKept"][] | null;
-            /** @description The commit taken back */
+            /** @description The subject of the commit taken back, without the hedgehug: prefix */
+            subject: string;
+            /** @description The commit taken back; null when there was nothing to undo */
             undone: components["schemas"]["LogView"];
         };
         UnreadEvent: {
@@ -1695,7 +1708,7 @@ export interface components {
         WorkspaceWrite: {
             commit: string | null;
             /** @description With a new prefix: the IDs the tasks had and have now */
-            ids?: components["schemas"]["IdChange"][] | null;
+            ids?: components["schemas"]["IDChange"][] | null;
             workspace: components["schemas"]["WorkspaceView"];
         };
     };
@@ -2474,7 +2487,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FindingsOutputBody"];
+                    "application/json": components["schemas"]["CheckResult"];
                 };
             };
             /** @description Error */
@@ -2510,7 +2523,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MigrateOutputBody"];
+                    "application/json": components["schemas"]["MigrateWrite"];
                 };
             };
             /** @description Error */

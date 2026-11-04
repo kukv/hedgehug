@@ -7,6 +7,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing"
+
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
@@ -60,6 +62,21 @@ func BeginEdit(ss *usecase.Session, arg string) (*EditSession, error) {
 		old = nil
 	}
 	return &EditSession{Store: s, Index: ix, Entry: e, Old: old, Bytes: orig, ss: ss}, nil
+}
+
+// FileName names the temporary file that edits the task: its id, or its ULID
+// when it has no id.
+func (es *EditSession) FileName() string { return usecase.TaskFileName(es.Entry) }
+
+// Check decodes the edited file of the task and refuses the changes edit does
+// not make, as CheckEdit does.
+func (es *EditSession) Check(edited []byte) (*model.Task, error) {
+	return CheckEdit(es.Index, es.Entry.ULID, es.Old, edited)
+}
+
+// Unchanged is the result of an edit that changed nothing: no commit.
+func (es *EditSession) Unchanged() usecase.TaskResult {
+	return usecase.NewTaskResult(es.Index, es.Entry.ULID, plumbing.ZeroHash)
 }
 
 // session is the session that began es, or ss for one made by hand.
@@ -163,7 +180,7 @@ func WriteEdit(ss *usecase.Session, es *EditSession, t *model.Task) (usecase.Tas
 	if !hash.IsZero() && es.Old != nil {
 		ss.WarnMentions(s, es.Old.Body, t.Body)
 	}
-	return usecase.TaskResult{Index: es.Index, ULID: e.ULID, Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash)}, nil
+	return usecase.NewTaskResult(es.Index, e.ULID, hash), nil
 }
 
 // Edit replaces the file of the task arg names with edited, checked as

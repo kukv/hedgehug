@@ -287,14 +287,11 @@ func TestInboxRevertWritesTheValueBack(t *testing.T) {
 	e, _ := ts.Resolve(ix, "ME-1")
 	u := ts.AddItem(overwritten(&model.Task{ULID: e.ULID, ID: "ME-1"}, "c1", "title", `"before"`))
 	res, err := notifications.InboxRevert(ts.Session, u.String())
-	if err != nil || !res.Committed || res.ULID != e.ULID || res.Index == nil {
+	if err != nil || !res.Committed || res.ULID != e.ULID {
 		t.Fatalf("InboxRevert = %+v, %v; want a committed revert of ME-1", res, err)
 	}
-	if err := res.Index.Refresh(); err != nil {
-		t.Fatal(err)
-	}
-	if got, ok := res.Index.Task(e.ULID); !ok || got.Title != "before" {
-		t.Errorf("task after revert = %+v, %v; want the title before", got, ok)
+	if got, err := res.View(); err != nil || got.Title != "before" {
+		t.Errorf("task after revert = %+v, %v; want the title before", got, err)
 	}
 	s, _ := ts.OpenStore()
 	head, err := s.Repo().Head()

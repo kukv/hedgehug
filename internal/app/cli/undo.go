@@ -22,20 +22,6 @@ func (a *app) undoCmd() *cobra.Command {
 	}
 }
 
-type undoJSON struct {
-	Undone  *string    `json:"undone"`
-	Subject string     `json:"subject,omitempty"`
-	Changed bool       `json:"changed"`
-	Kept    []keptJSON `json:"kept"`
-}
-
-type keptJSON struct {
-	Path   string `json:"path"`
-	Task   string `json:"task,omitempty"`
-	Field  string `json:"field"`
-	Author string `json:"author"`
-}
-
 func (a *app) undo() error {
 	res, err := tasks.Undo(a.ss)
 	var oe *usecase.Error
@@ -50,22 +36,14 @@ func (a *app) undo() error {
 
 func (a *app) printUndo(res tasks.UndoResult) error {
 	if a.jsonOut {
-		out := undoJSON{Kept: []keptJSON{}}
-		if res.Found {
-			h := res.Commit.Hash.String()
-			out.Undone, out.Subject, out.Changed = &h, tasks.UndoSubject(res.Commit), res.Changed
-		}
-		for _, k := range res.Kept {
-			out.Kept = append(out.Kept, keptJSON{Path: k.Path, Task: k.Task, Field: k.Field, Author: k.Author})
-		}
-		return a.printJSON(out)
+		return a.printJSON(res.Write())
 	}
 	if !res.Found {
 		_, err := fmt.Fprintln(a.stdout, "Nothing to undo")
 		return err
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Undid %s %s\n", res.Commit.Hash.String()[:7], tasks.UndoSubject(res.Commit))
+	fmt.Fprintf(&b, "Undid %s %s\n", res.Undone.Hash[:7], tasks.UndoSubject(res.Undone.Subject))
 	// Name the file only when the lines are about more than one.
 	several := slices.ContainsFunc(res.Kept, func(k tasks.UndoKept) bool { return k.Path != res.Kept[0].Path })
 	for _, k := range res.Kept {

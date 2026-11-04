@@ -103,11 +103,11 @@ func TestRmJSON(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	p, _, _ := tree3(te)
-	var got []usecase.TaskView
+	var got usecase.AffectedWrite
 	if err := json.Unmarshal([]byte(te.ok("rm", p.ID, "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 3 || got[0].ULID != p.ULID || got[0].DeletedAt == nil {
+	if len(got.Tasks) != 3 || got.Tasks[0].ULID != p.ULID || got.Tasks[0].DeletedAt == nil || got.Commit == nil {
 		t.Errorf("rm --json = %+v", got)
 	}
 }

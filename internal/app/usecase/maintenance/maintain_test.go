@@ -181,16 +181,17 @@ func TestMigrateDryRunWritesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := ts.Head()
-	ix, p, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetStatus, Old: "todo", New: "ready"}, true)
+	w, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetStatus, Old: "todo", New: "ready"}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if ts.Head() != before {
 		t.Error("a dry run committed")
 	}
-	if ix == nil || len(p.Changed) != 1 || p.Changed[0].Title != "Alpha" || p.Changed[0].Status != "ready" || len(p.Skipped) != 0 || p.Schema == nil {
-		t.Errorf("plan = %+v", p)
+	if len(w.Changed) != 1 || w.Changed[0].Title != "Alpha" || w.Changed[0].Status != "ready" || len(w.Skipped) != 0 || w.Skipped == nil || w.Commit != nil {
+		t.Errorf("plan = %+v", w)
 	}
+	_, ix, _ := ts.Open()
 	if e, _ := ts.Resolve(ix, "ME-1"); e.Status != "todo" {
 		t.Errorf("the index shows status %q after a dry run; want todo", e.Status)
 	}
@@ -209,22 +210,22 @@ func TestMigrateWritesTasksAndSchemaInOneCommit(t *testing.T) {
 	d, _ := tasks.Add(ts.Session, tasks.AddInput{Title: "Broken"})
 	ts.CommitRawFile(model.TaskPath(d.ULID), "not a task\n")
 	before := ts.Head()
-	ix, p, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetStatus, Old: "todo", New: "ready"}, false)
+	w, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetStatus, Old: "todo", New: "ready"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if ts.Head() == before {
 		t.Fatal("nothing was committed")
 	}
-	if len(p.Changed) != 2 || p.Changed[0].ULID.String() > p.Changed[1].ULID.String() {
-		t.Fatalf("Changed = %v; want Alpha and Beta by ULID", p.Changed)
+	if len(w.Changed) != 2 || w.Changed[0].ULID > w.Changed[1].ULID || w.Commit == nil || *w.Commit != ts.Head() {
+		t.Fatalf("Changed = %v, commit %v; want Alpha and Beta by ULID, and HEAD", w.Changed, w.Commit)
 	}
-	if len(p.Skipped) != 1 || p.Skipped[0] != d.ULID {
-		t.Errorf("Skipped = %v; want %s", p.Skipped, d.ULID)
+	if len(w.Skipped) != 1 || w.Skipped[0] != d.ULID.String() {
+		t.Errorf("Skipped = %v; want %s", w.Skipped, d.ULID)
 	}
-	for _, u := range []model.ULID{a.ULID, b.ULID} {
-		if e, ok := ix.Task(u); !ok || e.Status != "ready" {
-			t.Errorf("task %s after the migration: %+v, %v; want ready, from the refreshed index", u, e, ok)
+	for _, v := range w.Changed {
+		if v.Status != "ready" || (v.ULID != a.ULID.String() && v.ULID != b.ULID.String()) {
+			t.Errorf("task %s after the migration: status %q; want ready, read from the refreshed index", v.ULID, v.Status)
 		}
 	}
 	s, _ := ts.OpenStore()
@@ -250,14 +251,14 @@ func TestMigrateRefusals(t *testing.T) {
 		}
 	}
 	before := ts.Head()
-	_, _, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetProp, Old: "start", New: "due"}, false)
+	_, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetProp, Old: "start", New: "due"}, false)
 	usecasetest.WantErr(t, err, usecase.KindInvalid, "migrate.invalid")
 	for _, want := range []string{"cannot migrate 2 tasks:\n  ", "ME-1 (" + a.ULID.String() + ")", "ME-2 (" + b.ULID.String() + ")", "both start and due"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("message lacks %q:\n%s", want, err)
 		}
 	}
-	if _, _, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetProp, Old: "start", New: "due"}, true); usecase.KindOf(err) != usecase.KindInvalid {
+	if _, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetProp, Old: "start", New: "due"}, true); usecase.KindOf(err) != usecase.KindInvalid {
 		t.Errorf("the dry run is refused with kind %v (%v); want KindInvalid", usecase.KindOf(err), err)
 	}
 	if ts.Head() != before {
@@ -272,7 +273,7 @@ func TestMigrateNamesTheTaskOfAViolation(t *testing.T) {
 	c, _ := tasks.Add(ts.Session, tasks.AddInput{Title: "Child", Parent: "ME-1"})
 	before := ts.Head()
 	// A bug may not sit under a bug.
-	_, _, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetKind, Old: "task", New: "bug"}, false)
+	_, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetKind, Old: "task", New: "bug"}, false)
 	usecasetest.WantErr(t, err, usecase.KindInvalid, "migrate.invalid")
 	msg := err.Error()
 	if !strings.Contains(msg, "breaks the schema") || !strings.Contains(msg, "cannot be placed") || !strings.HasPrefix(msg, "ME-2 ("+c.ULID.String()+") Child: ") {
@@ -287,7 +288,7 @@ func TestMigrateNamesTheTaskOfAViolation(t *testing.T) {
 func TestMigrateUnknownDefinition(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
-	if _, _, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetStatus, Old: "nope", New: "x"}, true); err == nil {
+	if _, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetStatus, Old: "nope", New: "x"}, true); err == nil {
 		t.Error("a status the schema lacks was migrated")
 	}
 }

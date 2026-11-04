@@ -95,12 +95,12 @@ func TestEdit(t *testing.T) {
 
 	// --json prints the task as written.
 	te.editWith(setLine(te.raw(x.ULID), "title", "Again"))
-	var got usecase.TaskView
-	if err := json.Unmarshal([]byte(te.ok("edit", x.ID, "--json")), &got); err != nil {
+	var got usecase.TaskWrite
+	if err := json.Unmarshal([]byte(te.ok("edit", x.ID, "--json")), &got); err != nil || got.Task == nil {
 		t.Fatal(err)
 	}
-	if got.Title != "Again" {
-		t.Errorf("edit --json title = %q, want Again", got.Title)
+	if got.Task.Title != "Again" || got.Commit == nil {
+		t.Errorf("edit --json = %+v, want the title Again and a commit", got)
 	}
 }
 

@@ -10,7 +10,7 @@ type UndoWrite = Schemas["UndoWrite"];
 // undoMessage says what POST /api/undo did: the operation taken back, and what it kept because
 // others changed it after. commit is null when every field it changed had been changed since.
 export function undoMessage(r: UndoWrite): string {
-  const what = `${r.undone.id ? `${r.undone.id} の` : ""}${opLabel(r.undone.op)}`;
+  const what = `${r.undone?.id ? `${r.undone.id} の` : ""}${opLabel(r.undone?.op ?? null)}`;
   const kept = r.kept?.length ?? 0;
   if (r.commit === null) {
     return `${what}は、変えた値がすべてあとで別の人に変えられていたため、何も戻しませんでした`;

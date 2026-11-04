@@ -5,6 +5,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/go-git/go-git/v5/plumbing"
+
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
@@ -260,13 +262,19 @@ func TestAssignsOf(t *testing.T) {
 	}
 }
 
-func TestViewsOfGone(t *testing.T) {
+func TestWriteOutGone(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	_, err := ts.srv.viewsOf(ts.srv.session(""), model.NewULID())
+	ss := ts.srv.session("")
+	defer ss.Close()
+	_, ix, err := ss.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = writeOut(usecase.NewTaskResult(ix, model.NewULID(), plumbing.ZeroHash))
 	var p *Problem
 	if !errors.As(err, &p) || p.Status != 404 || p.Type != "task.gone" {
-		t.Errorf("viewsOf of a task not in the index = %v", err)
+		t.Errorf("the answer to a write to a task not in the index = %v", err)
 	}
 }
 

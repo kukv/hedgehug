@@ -1170,14 +1170,11 @@ func AddProjectIn(t *testing.T, ts *Session, name, title string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := r.Index.Refresh(); err != nil {
+	v, err := r.View()
+	if err != nil {
 		t.Fatal(err)
 	}
-	e, ok := r.Index.Task(r.ULID)
-	if !ok {
-		t.Fatalf("the project %s is not in the index", r.ULID)
-	}
-	return e.ID
+	return v.ID
 }
 
 func LoadContext(t *testing.T, ts *Session) current.State {

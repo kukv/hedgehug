@@ -25,7 +25,7 @@ func (a *app) edit(arg string) error {
 	if err != nil {
 		return err
 	}
-	path, edited, err := a.editFile(usecase.TaskFileName(es.Entry), es.Bytes)
+	path, edited, err := a.editFile(es.FileName(), es.Bytes)
 	if err != nil {
 		return err
 	}
@@ -34,9 +34,9 @@ func (a *app) edit(arg string) error {
 			if err := osfs.Remove(path); err != nil {
 				return err
 			}
-			return a.printTask(es.Index, es.Entry.ULID, verb(false, ""))
+			return a.printTask(es.Unchanged(), verb(false, ""))
 		}
-		t, err := tasks.CheckEdit(es.Index, es.Entry.ULID, es.Old, edited)
+		t, err := es.Check(edited)
 		if err == nil {
 			if err := tasks.PrepareEdit(a.ss, es, t); err != nil {
 				return err
@@ -47,7 +47,7 @@ func (a *app) edit(arg string) error {
 				if err := osfs.Remove(path); err != nil {
 					return err
 				}
-				return a.printTask(r.Index, r.ULID, verb(r.Committed, "Updated"))
+				return a.printTask(r, verb(r.Committed, "Updated"))
 			}
 			if _, ok := usecase.ViolationsOf(err); !ok {
 				return fmt.Errorf("%s; the edited file is kept at %s", usecase.Describe(err), path)

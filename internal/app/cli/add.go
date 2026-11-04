@@ -7,8 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/app/storage/index"
-	"github.com/kukv/hedgehug/internal/app/storage/mount"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
@@ -92,46 +90,22 @@ func (a *app) add(in tasks.AddHereInput) error {
 				in.Context.PickWorkspace = picked
 			}
 		default:
-			if err := a.printTask(r.Index, r.ULID, verb(r.Committed, "Added")); err != nil {
+			if err := a.printTask(r.TaskResult, verb(r.Committed, "Added")); err != nil {
 				return err
 			}
 			if a.jsonOut {
 				return nil
 			}
-			_, err := fmt.Fprintln(a.stdout, "→ added to "+destinationLabel(r.Destination))
+			_, err := fmt.Fprintln(a.stdout, "→ added to "+r.Destination)
 			return err
 		}
 	}
 	return errors.New("add asked too many questions")
 }
 
-// destinationLabel is "<store> / <parent's title>", or the workspace's name
-// for the root.
-func destinationLabel(d *usecase.Destination) string {
-	if d.Parent != nil {
-		return d.Store.Name + " / " + d.Parent.Title
-	}
-	return d.Store.Name + " / " + d.Workspace.Name
-}
-
-// shownID is the id of e as its store shows it.
-func shownID(m *mount.Mounted, e *index.Entry) (string, error) {
-	id := e.ULID.String()
-	err := m.With(func(ix *index.Index) {
-		if e.ID != "" {
-			id = ix.DisplayID(e)
-		}
-	})
-	return id, err
-}
-
 // askBranchParent asks whether to add under the task the branch names.
-func (a *app) askBranchParent(c *usecase.Confirm) (bool, error) {
-	id, err := shownID(c.Store, c.Parent)
-	if err != nil {
-		return false, err
-	}
-	if _, err := fmt.Fprintf(a.stderr, "Add as a child of %s %s? [Y/n] ", id, c.Parent.Title); err != nil {
+func (a *app) askBranchParent(q *tasks.BranchQuestion) (bool, error) {
+	if _, err := fmt.Fprintf(a.stderr, "Add as a child of %s %s? [Y/n] ", q.ParentID, q.ParentTitle); err != nil {
 		return false, err
 	}
 	line, err := a.readLine()

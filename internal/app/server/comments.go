@@ -32,20 +32,11 @@ type commentEditInput struct {
 	}
 }
 
-type commentWrite struct {
-	Comment usecase.CommentView `json:"comment" doc:"The comment as written; for a removal, as it was"`
-	Commit  *string             `json:"commit" doc:"The commit made; null when nothing changed"`
-}
-
-type commentOutput struct{ Body commentWrite }
+type commentOutput struct{ Body comments.CommentWrite }
 
 // commentOut is the output of a write to a comment.
 func commentOut(r comments.CommentResult) *commentOutput {
-	out := &commentOutput{Body: commentWrite{Commit: commitPtr(r.Commit)}}
-	if c := r.Comment; c != nil {
-		out.Body.Comment = usecase.CommentView{ULID: c.ULID.String(), Author: c.Author, Created: c.Created, Body: c.Body}
-	}
-	return out
+	return &commentOutput{Body: r.Write()}
 }
 
 // commentOf refuses a comment that is not of the task of the path.
@@ -127,7 +118,7 @@ func (s *Server) registerComments() {
 			if err != nil {
 				return nil, problemOf(err)
 			}
-			return s.writeOut(ss, r.ULID, r.Commit)
+			return writeOut(r)
 		})
 	}
 }

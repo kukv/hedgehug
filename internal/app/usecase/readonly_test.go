@@ -93,7 +93,7 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 			return err
 		}},
 		{"Migrate", func() error {
-			_, _, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetStatus, Old: "todo", New: "ready"}, false)
+			_, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetStatus, Old: "todo", New: "ready"}, false)
 			return err
 		}},
 		{"ViewSave", func() error { _, err := views.ViewSave(ts.Session, "mine", views.ViewChange{}); return err }},
@@ -134,10 +134,10 @@ func TestReadOnlyAllowsReading(t *testing.T) {
 	if _, _, err := ts.Open(); err != nil {
 		t.Errorf("Open: %v", err)
 	}
-	if _, _, err := workspaces.WorkspaceList(ts.Session); err != nil {
+	if _, err := workspaces.WorkspaceList(ts.Session); err != nil {
 		t.Errorf("WorkspaceList: %v", err)
 	}
-	if _, _, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetStatus, Old: "todo", New: "ready"}, true); err != nil {
+	if _, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetStatus, Old: "todo", New: "ready"}, true); err != nil {
 		t.Errorf("Migrate --dry-run: %v", err)
 	}
 	if _, err := maintenance.Doctor(ts.Session, false); err != nil {

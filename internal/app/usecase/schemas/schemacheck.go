@@ -41,6 +41,25 @@ func SchemaCheck(ss *usecase.Session) ([]usecase.Finding, error) {
 	return usecase.CheckSchema(s, ix)
 }
 
+// CheckResult is what schema check answers, in the CLI's --json and in the
+// server's response.
+type CheckResult struct {
+	Findings []usecase.Finding `json:"findings"`
+}
+
+// CheckResultOf is fs as the answer; no findings are [], not null.
+func CheckResultOf(fs []usecase.Finding) CheckResult {
+	return CheckResult{Findings: append([]usecase.Finding{}, fs...)}
+}
+
+// MigrateWrite is what migrate answers, in the CLI's --json and in the
+// server's response.
+type MigrateWrite struct {
+	Changed []*usecase.TaskView `json:"changed"`
+	Skipped []string            `json:"skipped"`
+	Commit  *string             `json:"commit"`
+}
+
 // MigrationPlan is what a migration writes: the new schema and the tasks
 // it changes, and the task files it leaves since they do not decode.
 type MigrationPlan struct {
@@ -53,9 +72,30 @@ type MigrationPlan struct {
 }
 
 // Migrate applies m to the schema of the store and to its tasks. With dryRun
-// it writes nothing. The index is the one from before the write in a dry
-// run, and refreshed after a write.
-func Migrate(ss *usecase.Session, m schema.Migration, dryRun bool) (*index.Index, *MigrationPlan, error) {
+// it writes nothing. The tasks changed are read from the store after a
+// write, and are the migrated tasks in a dry run.
+func Migrate(ss *usecase.Session, m schema.Migration, dryRun bool) (MigrateWrite, error) {
+	ix, p, err := migrate(ss, m, dryRun)
+	if err != nil {
+		return MigrateWrite{}, err
+	}
+	out := MigrateWrite{Changed: []*usecase.TaskView{}, Skipped: []string{}, Commit: usecase.CommitPtr(p.Commit)}
+	for _, t := range p.Changed {
+		e, ok := ix.Task(t.ULID)
+		if dryRun || !ok {
+			e = index.EntryOf(t) // the task as migrated
+		}
+		out.Changed = append(out.Changed, usecase.ListViewOf(ix, e))
+	}
+	for _, u := range p.Skipped {
+		out.Skipped = append(out.Skipped, u.String())
+	}
+	return out, nil
+}
+
+// migrate is Migrate before the answer is made. The index is the one from
+// before the write in a dry run, and refreshed after a write.
+func migrate(ss *usecase.Session, m schema.Migration, dryRun bool) (*index.Index, *MigrationPlan, error) {
 	// A dry run writes nothing, so a read-only store may be planned.
 	open := ss.OpenForWrite
 	if dryRun {

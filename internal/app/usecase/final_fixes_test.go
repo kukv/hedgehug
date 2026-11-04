@@ -280,9 +280,6 @@ func TestResultsCarryTheCommitAndAFreshView(t *testing.T) {
 		t.Fatalf("Add = %+v, %v; want Commit = HEAD %s", add, err, head())
 	}
 	// The index of the result was read before the write; View reads again.
-	if e, ok := add.Index.Task(add.ULID); ok {
-		t.Fatalf("the index of Add already holds the task: %+v", e)
-	}
 	if v, err := add.View(); err != nil || v.ID != "ME-1" || v.Title != "a" {
 		t.Errorf("Add View = %+v, %v", v, err)
 	}

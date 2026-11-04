@@ -186,7 +186,7 @@ func TestPollSchemaAndViews(t *testing.T) {
 	}
 	ts.srv.poller.settle()
 	sc := schema.Default()
-	if _, _, err := schemas.Migrate(ts.session(), schema.Migration{Target: schema.TargetStatus, Old: sc.Statuses[0].Name, New: "renamed"}, false); err != nil {
+	if _, err := schemas.Migrate(ts.session(), schema.Migration{Target: schema.TargetStatus, Old: sc.Statuses[0].Name, New: "renamed"}, false); err != nil {
 		t.Fatal(err)
 	}
 	waitEvent[schemaChanged](t, ch, nil)

@@ -158,6 +158,18 @@ components:
         - url
         - permission
       type: object
+    CheckResult:
+      additionalProperties: false
+      properties:
+        findings:
+          items:
+            $ref: "#/components/schemas/Finding"
+          type:
+            - array
+            - "null"
+      required:
+        - findings
+      type: object
     CommentEditInputBody:
       additionalProperties: false
       properties:
@@ -188,7 +200,17 @@ components:
         created:
           format: date-time
           type: string
+        deleted_at:
+          description: When the comment was removed
+          format: date-time
+          type: string
+        task:
+          description: The ULID of the task the comment is on
+          type: string
         ulid:
+          type: string
+        updated:
+          format: date-time
           type: string
       required:
         - ulid
@@ -386,18 +408,6 @@ components:
         - msg
         - severity
       type: object
-    FindingsOutputBody:
-      additionalProperties: false
-      properties:
-        findings:
-          items:
-            $ref: "#/components/schemas/Finding"
-          type:
-            - array
-            - "null"
-      required:
-        - findings
-      type: object
     Fixed:
       additionalProperties: false
       properties:
@@ -469,7 +479,7 @@ components:
         - stores
         - unread
       type: object
-    IdChange:
+    IDChange:
       additionalProperties: false
       properties:
         new:
@@ -642,7 +652,7 @@ components:
         - old
         - new
       type: object
-    MigrateOutputBody:
+    MigrateWrite:
       additionalProperties: false
       properties:
         changed:
@@ -2171,6 +2181,9 @@ components:
     UndoWrite:
       additionalProperties: false
       properties:
+        changed:
+          description: false when every field was changed later by others, so nothing was written
+          type: boolean
         commit:
           type:
             - string
@@ -2182,11 +2195,16 @@ components:
           type:
             - array
             - "null"
+        subject:
+          description: "The subject of the commit taken back, without the hedgehug: prefix"
+          type: string
         undone:
           $ref: "#/components/schemas/LogView"
-          description: The commit taken back
+          description: The commit taken back; null when there was nothing to undo
       required:
         - undone
+        - subject
+        - changed
         - commit
         - kept
       type: object
@@ -2364,7 +2382,7 @@ components:
         ids:
           description: "With a new prefix: the IDs the tasks had and have now"
           items:
-            $ref: "#/components/schemas/IdChange"
+            $ref: "#/components/schemas/IDChange"
           type:
             - array
             - "null"
@@ -3168,7 +3186,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/FindingsOutputBody"
+                $ref: "#/components/schemas/CheckResult"
           description: OK
         default:
           content:
@@ -3201,7 +3219,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MigrateOutputBody"
+                $ref: "#/components/schemas/MigrateWrite"
           description: OK
         default:
           content:
