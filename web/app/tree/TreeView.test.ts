@@ -905,6 +905,28 @@ describe("TreeView", () => {
     closeWorkspaceDialog();
   });
 
+  it("opens the move-to-another-Store dialog from the … menu of a row, with two Stores", async () => {
+    const { core } = setup();
+    core.stores.stores = () => [{ name: "shared" }, { name: "second" }] as never;
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "メニュー: Web のクライアントを更新" }),
+    );
+    await fireEvent.click(await screen.findByRole("menuitem", { name: "別の Store へ移動…" }));
+    expect(workspaceDialog.current).toMatchObject({ kind: "move-store", task: { ulid: "T3" } });
+    closeWorkspaceDialog();
+  });
+
+  it("has no move to another Store with one Store", async () => {
+    setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "メニュー: Web のクライアントを更新" }),
+    );
+    await screen.findByRole("menuitem", { name: /別のワークスペースへ移動/ });
+    expect(screen.queryByRole("menuitem", { name: /別の Store へ移動/ })).toBeNull();
+  });
+
   it("turns the move item off when the store has no other workspace", async () => {
     setup(); // one workspace only
     render(TreeView, { view: { kind: "project", ulid: "P" } });

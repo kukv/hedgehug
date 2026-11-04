@@ -20,7 +20,11 @@
   import { routeStore, runUndo } from "../undo";
   import { openViewSave } from "../views/dialogs-state.svelte";
   import { newDraft } from "../views/draft";
-  import { openWorkspaceAdd, openWorkspaceMove } from "../workspace/dialogs-state.svelte";
+  import {
+    openStoreMove,
+    openWorkspaceAdd,
+    openWorkspaceMove,
+  } from "../workspace/dialogs-state.svelte";
   import { fetchMissing, readRecent, rememberTask } from "./recent";
   import {
     buildCommands,
@@ -212,6 +216,7 @@
       }),
       pickStatus,
       moveTask: (t) => openWorkspaceMove(t),
+      moveStoreTask: (t) => openStoreMove(t),
       readOnly: (store) => readOnlyNow(c.stores, store),
       displayId: (store, id) => c.stores.displayId(store, id),
     };

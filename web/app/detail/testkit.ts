@@ -127,6 +127,8 @@ export type FakeCoreOptions = {
   readOnly?: string;
   /** Why the named Stores are read-only (the others follow `readOnly`). */
   readOnlyBy?: Record<string, string>;
+  /** The Stores GET /api/stores lists (the Store of the task, `shared`, by default). */
+  storeItems?: { name: string; remotes?: string[]; default?: boolean }[];
   /** The names of the Stores that are hidden. */
   hidden?: string[];
   /** The Stores share a prefix: IDs are shown as <store>:<ID>. */
@@ -161,6 +163,7 @@ export function makeCore(opts: FakeCoreOptions = {}) {
     prime: vi.fn(),
     epochNow: vi.fn(() => 0),
     noteOwnCommit: vi.fn(),
+    refreshTrees: vi.fn(async () => {}),
     subscribe,
   };
   const save = {
@@ -173,15 +176,15 @@ export function makeCore(opts: FakeCoreOptions = {}) {
     subscribe,
   };
   const stores = {
-    stores: vi.fn(() => [
-      {
-        name: "shared",
-        default: true,
-        path: "/s",
+    stores: vi.fn(() =>
+      (opts.storeItems ?? [{ name: "shared", default: true }]).map((s) => ({
+        default: false,
+        path: `/${s.name}`,
         remotes: [],
         account: opts.account ?? "github.com/koki",
-      },
-    ]),
+        ...s,
+      })),
+    ),
     tone: vi.fn(() => "purple"),
     readOnly: vi.fn(
       (s?: string) => (s ? opts.readOnlyBy?.[s] : undefined) ?? opts.readOnly ?? null,

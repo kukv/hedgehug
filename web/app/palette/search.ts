@@ -60,7 +60,8 @@ export type CommandItem = {
     | "checklist"
     | "bell"
     | "activity"
-    | "filter";
+    | "filter"
+    | "database";
   kbd?: string;
   note?: string;
   store?: string;
@@ -207,6 +208,7 @@ export type CommandEnv = {
   recent: TaskView[]; // the tasks opened last, the latest first
   pickStatus: (t: TaskView) => void;
   moveTask: (t: TaskView) => void;
+  moveStoreTask: (t: TaskView) => void;
   readOnly: (store: string) => string | null; // why a store cannot be written, or null
   displayId: (store: string, id: string) => string; // the ID with its Store where the prefix is shared
 };
@@ -258,6 +260,18 @@ export function taskCommands(env: CommandEnv, t: TaskView): PaletteGroup {
               label: "別のワークスペースへ移動…",
               icon: "workspace" as const,
               run: () => env.moveTask(t),
+            },
+          ]
+        : []),
+      // Another Store is a place to go when two Stores or more are mounted (細部 45, 103).
+      ...(writable && env.storeNames.length >= 2
+        ? [
+            {
+              type: "command" as const,
+              key: `task-move-store:${t.ulid}`,
+              label: "別の Store へ移動…",
+              icon: "database" as const,
+              run: () => env.moveStoreTask(t),
             },
           ]
         : []),

@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
   runUndo: vi.fn(async () => {}),
   addWorkspace: vi.fn(),
   moveWorkspace: vi.fn(),
+  moveStore: vi.fn(),
   saveView: vi.fn(),
   qualify: false, // the Stores share a prefix: IDs are shown as <store>:<ID>
 }));
@@ -64,6 +65,7 @@ vi.mock("../undo", async (orig) => ({
 vi.mock("../workspace/dialogs-state.svelte", () => ({
   openWorkspaceAdd: h.addWorkspace,
   openWorkspaceMove: h.moveWorkspace,
+  openStoreMove: h.moveStore,
 }));
 
 import CommandPalette from "./CommandPalette.svelte";
@@ -166,6 +168,7 @@ beforeEach(() => {
   h.runUndo.mockClear();
   h.addWorkspace.mockClear();
   h.moveWorkspace.mockClear();
+  h.moveStore.mockClear();
   h.saveView.mockClear();
   h.qualify = false;
   localStorage.clear();
@@ -582,6 +585,7 @@ describe("CommandPalette", () => {
       /ステータスを変更/,
       /子タスクを作る/,
       /別のワークスペースへ移動/,
+      /別の Store へ移動/,
       /タスクを作成/,
       /プロジェクトを作成/,
       /ワークスペースを追加/,
@@ -600,6 +604,17 @@ describe("CommandPalette", () => {
     await fireEvent.click(await screen.findByRole("option", { name: /別のワークスペースへ移動/ }));
     expect(h.moveWorkspace).toHaveBeenCalledTimes(1);
     expect(h.moveWorkspace).toHaveBeenCalledWith(expect.objectContaining({ ulid: "U6" }));
+    expect(palette.open).toBe(false);
+  });
+
+  it("opens the move-to-another-Store dialog for the selected task from the command", async () => {
+    setup();
+    selection.set("U6");
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">Store" } });
+    await fireEvent.click(await screen.findByRole("option", { name: /別の Store へ移動/ }));
+    expect(h.moveStore).toHaveBeenCalledWith(expect.objectContaining({ ulid: "U6" }));
     expect(palette.open).toBe(false);
   });
 

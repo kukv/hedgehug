@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MOVE_VALUE, moveWorkspaceItem } from "./move-menu";
+import { MOVE_STORE_VALUE, MOVE_VALUE, moveStoreItem, moveWorkspaceItem } from "./move-menu";
 import { entry } from "./testkit";
 
 const task = { store: "shared", workspace: { ulid: "W1", name: "release", id_prefix: "REL" } };
@@ -29,5 +29,21 @@ describe("moveWorkspaceItem", () => {
     );
     expect(item.disabled).toBe(true);
     expect(item.hint).toBe("この Store は閲覧のみです（remote に書き込めません）");
+  });
+});
+
+describe("moveStoreItem", () => {
+  const two = [{ name: "shared" }, { name: "second" }];
+
+  it("is there when two Stores are mounted and the Store of the task can be written", () => {
+    expect(moveStoreItem(two, null)).toEqual({
+      value: MOVE_STORE_VALUE,
+      label: "別の Store へ移動…",
+    });
+  });
+
+  it("is not there with one Store, or when the Store of the task is read-only", () => {
+    expect(moveStoreItem([{ name: "shared" }], null)).toBeNull();
+    expect(moveStoreItem(two, "remote に書き込めません")).toBeNull();
   });
 });

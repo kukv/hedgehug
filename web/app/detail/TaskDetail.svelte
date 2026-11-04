@@ -16,8 +16,13 @@
   import { copyText } from "../ui/clipboard";
   import Menu from "../ui/Menu.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
-  import { openWorkspaceMove } from "../workspace/dialogs-state.svelte";
-  import { MOVE_VALUE, moveWorkspaceItem } from "../workspace/move-menu";
+  import { openStoreMove, openWorkspaceMove } from "../workspace/dialogs-state.svelte";
+  import {
+    MOVE_STORE_VALUE,
+    MOVE_VALUE,
+    moveStoreItem,
+    moveWorkspaceItem,
+  } from "../workspace/move-menu";
   import BodyEditor from "./BodyEditor.svelte";
   import Checklist from "./Checklist.svelte";
   import Comments from "./Comments.svelte";
@@ -65,11 +70,21 @@
   // The "…" menu of the header: the button it hangs from while it is open.
   const spaces = useSubscribe(stores, () => stores.workspaces());
   let more = $state<HTMLElement | null>(null);
-  const moreItems = $derived(s ? [moveWorkspaceItem(s, spaces.current, roReason.current)] : []);
+  const storeItems = useSubscribe(stores, () => stores.stores());
+  const moreItems = $derived(
+    s
+      ? [
+          moveWorkspaceItem(s, spaces.current, roReason.current),
+          moveStoreItem(storeItems.current, roReason.current),
+        ].filter((i) => i !== null)
+      : [],
+  );
   function pickMore(value: string) {
     const task = s;
     more = null;
-    if (task && value === MOVE_VALUE) openWorkspaceMove(task);
+    if (!task) return;
+    if (value === MOVE_VALUE) openWorkspaceMove(task);
+    else if (value === MOVE_STORE_VALUE) openStoreMove(task);
   }
 
   $effect(() => {

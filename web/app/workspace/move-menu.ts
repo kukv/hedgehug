@@ -29,3 +29,19 @@ export function moveWorkspaceItem(
           : undefined,
   };
 }
+
+/** The value of the menu item that moves a task to another Store. */
+export const MOVE_STORE_VALUE = "move-store";
+
+/**
+ * The menu item "別の Store へ移動…": there only when two Stores or more are mounted and the Store
+ * of the task can be written (readOnly is why it cannot, or null). It is left out, not disabled
+ * (細部 45).
+ */
+export function moveStoreItem(
+  stores: { name: string }[],
+  readOnly: string | null,
+): MenuItem | null {
+  if (stores.length < 2 || readOnly !== null) return null;
+  return { value: MOVE_STORE_VALUE, label: "別の Store へ移動…" };
+}

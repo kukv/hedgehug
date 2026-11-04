@@ -304,6 +304,7 @@ function env(over: Partial<CommandEnv> = {}): CommandEnv {
     recent: [],
     pickStatus: vi.fn(),
     moveTask: vi.fn(),
+    moveStoreTask: vi.fn(),
     readOnly: () => null,
     displayId: (_store, id) => id,
     ...over,
@@ -622,6 +623,19 @@ describe("taskCommands", () => {
     // a task of another Store is still offered everything
     const other = taskCommands(e, { ...t, store: "backend" });
     expect(other.items.map((i) => i.key)).toContain("task-status:T1");
+  });
+
+  it("offers the move to another Store with two Stores mounted, and not with one or when read-only", () => {
+    const t = task("T1", "task", null, { id: "REL-6" });
+    const e = env({ storeNames: ["shared", "second"] });
+    const item = taskCommands(e, t).items.find((i) => i.key === "task-move-store:T1");
+    expect(item).toMatchObject({ label: "別の Store へ移動…", icon: "database" });
+    if (item?.type === "command") item.run();
+    expect(e.moveStoreTask).toHaveBeenCalledWith(t);
+
+    expect(taskCommands(env(), t).items.map((i) => i.key)).not.toContain("task-move-store:T1");
+    const ro = env({ storeNames: ["shared", "second"], readOnly: () => "remote に書き込めません" });
+    expect(taskCommands(ro, t).items.map((i) => i.key)).toEqual(["task-open:T1"]);
   });
 
   it("offers no move when the store has no other workspace, and none in another store", () => {

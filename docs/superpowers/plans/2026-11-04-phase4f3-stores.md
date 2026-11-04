@@ -301,11 +301,11 @@
 - 閲覧のみの Store（Task 2a の `readOnlyStore`）は移動先で無効
 - ツリーの「…」とパレットからも開ける
 
-- [ ] Step 1: `move-plan.test.ts` → `move-plan.ts`
-- [ ] Step 2: `StoreMove.test.ts` → `StoreMove.svelte`、ダイアログの状態
-- [ ] Step 3: 入口（TaskDetail・ツリー・パレット）のテスト → 実装
-- [ ] Step 4: `store-move.spec.ts` を書いて通す
-- [ ] Step 5: 検査を流してコミット `feat(web): 別の Store へ移動するダイアログ`
+- [x] Step 1: `move-plan.test.ts` → `move-plan.ts`
+- [x] Step 2: `StoreMove.test.ts` → `StoreMove.svelte`、ダイアログの状態
+- [x] Step 3: 入口（TaskDetail・ツリー・パレット）のテスト → 実装
+- [x] Step 4: `store-move.spec.ts` を書いて通す
+- [x] Step 5: 検査を流してコミット `feat(web): 別の Store へ移動するダイアログ`
 
 ---
 

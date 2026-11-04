@@ -19,8 +19,13 @@
   import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Menu from "../ui/Menu.svelte";
-  import { openWorkspaceMove } from "../workspace/dialogs-state.svelte";
-  import { MOVE_VALUE, moveWorkspaceItem } from "../workspace/move-menu";
+  import { openStoreMove, openWorkspaceMove } from "../workspace/dialogs-state.svelte";
+  import {
+    MOVE_STORE_VALUE,
+    MOVE_VALUE,
+    moveStoreItem,
+    moveWorkspaceItem,
+  } from "../workspace/move-menu";
   import AddRow from "./AddRow.svelte";
   import { createBelow, moveTask, patchTask } from "./actions";
   import {
@@ -553,7 +558,10 @@
     if (!menu || !menuTask || !menuSchema) return [];
     if (menu.which === "row") {
       storesRev.current;
-      return [moveWorkspaceItem(menuTask, c.stores.workspaces(), readOnlyOf(menuTask.store))];
+      return [
+        moveWorkspaceItem(menuTask, c.stores.workspaces(), readOnlyOf(menuTask.store)),
+        moveStoreItem(c.stores.stores(), readOnlyOf(menuTask.store)),
+      ].filter((i) => i !== null);
     }
     if (menu.which === "status") {
       return (menuSchema.statuses ?? []).map((s) => ({ value: s.name, label: s.label || s.name }));
@@ -573,6 +581,7 @@
     if (!t || !which) return;
     if (which === "row") {
       if (value === MOVE_VALUE) openWorkspaceMove(t);
+      else if (value === MOVE_STORE_VALUE) openStoreMove(t);
       return;
     }
     try {

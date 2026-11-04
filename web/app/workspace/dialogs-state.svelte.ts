@@ -6,12 +6,16 @@ import { router } from "../router";
 /** What a move needs of a task: a TaskView has all of it. */
 export type MoveTask = Pick<TaskView, "ulid" | "id" | "title" | "store" | "workspace">;
 
+/** What a move to another Store needs of a task: the parent it leaves too. */
+export type MoveStoreTask = MoveTask & Pick<TaskView, "parent">;
+
 /** The workspace dialog that is asked for; WorkspaceDialogs draws it. */
 export type WorkspaceDialog =
   | { kind: "add"; store?: string }
   | { kind: "delete"; entry: WorkspaceEntry }
   | { kind: "prefix"; entry: WorkspaceEntry }
-  | { kind: "move"; task: MoveTask };
+  | { kind: "move"; task: MoveTask }
+  | { kind: "move-store"; task: MoveStoreTask };
 
 // raw: the entries and tasks are the ones the directory and the cache hold, not copies of them.
 let current = $state.raw<WorkspaceDialog | null>(null);
@@ -47,6 +51,10 @@ export function openPrefixChange(entry: WorkspaceEntry): void {
 
 export function openWorkspaceMove(task: MoveTask): void {
   current = { kind: "move", task };
+}
+
+export function openStoreMove(task: MoveStoreTask): void {
+  current = { kind: "move-store", task };
 }
 
 export function closeWorkspaceDialog(): void {
