@@ -125,11 +125,6 @@ func webURL(s string) bool {
 	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
-// IsLoopback reports whether host (a name or an IP, with or without the
-// brackets of an IPv6 literal) is the local machine: 127.0.0.0/8, ::1 or
-// localhost. A token is sent over plain http only there.
-func IsLoopback(host string) bool { return github.IsLoopback(host) }
-
 // PlainHTTP reports whether s is an http URL (not https) whose host is not
 // loopback.
 func PlainHTTP(s string) bool { return github.PlainHTTP(s) }
