@@ -280,6 +280,46 @@ describe("StoreDirectory requests", () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
+  it("does not retain the sync state when a reload fails or is superseded", async () => {
+    const world = baseWorld();
+    let mode: "ok" | "fail" | "slow" = "ok";
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const { api } = fakeApi(async (r) => {
+      if (r.path === "/api/stores")
+        return mode === "fail" ? problem(500, "internal") : world.stores;
+      if (r.path === "/api/workspaces") {
+        if (mode === "slow") {
+          mode = "ok"; // only the first call of the older reload waits
+          await gate;
+        }
+        return world.spaces[r.query.get("store") ?? ""] ?? [];
+      }
+      return { tasks: world.projects };
+    });
+    const conn = new FakeConn();
+    const retain = vi.spyOn(conn, "retainSync");
+    const cache = new TaskCache({ api, conn: conn.asConnection() });
+    const dir = new StoreDirectory({ api, conn: conn.asConnection(), cache });
+    await vi.waitFor(() => expect(dir.loaded()).toBe(true));
+    retain.mockClear();
+
+    mode = "fail";
+    await expect(dir.reload()).rejects.toBeDefined();
+    expect(retain).not.toHaveBeenCalled();
+
+    mode = "slow";
+    const older = dir.reload();
+    await settle();
+    await dir.reload(); // the newer one ends first
+    expect(retain).toHaveBeenCalledTimes(1);
+    release();
+    await older;
+    expect(retain).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps the workspaces of a store whose workspaces could not be fetched", async () => {
     const world = baseWorld();
     let fail = false;

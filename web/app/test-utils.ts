@@ -45,6 +45,8 @@ export function fakeCore(over: Partial<Record<keyof AppCore, unknown>> = {}): Ap
     stores: {
       stores: () => [],
       tone: () => "teal",
+      readOnly: () => null,
+      error: () => null,
       workspaces: () => [],
       workspace: () => undefined,
       loaded: () => true,

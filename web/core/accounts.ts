@@ -105,7 +105,8 @@ export class AccountsCache {
   }
 
   private queueReload(): void {
-    if (!this.isLoaded || this.reloadQueued) return;
+    // a reload is wanted once the accounts are read or are being read for the first time
+    if ((!this.isLoaded && !this.loading) || this.reloadQueued) return;
     this.reloadQueued = true;
     queueMicrotask(() => {
       this.reloadQueued = false;

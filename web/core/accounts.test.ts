@@ -104,6 +104,54 @@ describe("AccountsCache", () => {
     expect(t.asked()).toBe(3);
   });
 
+  it("reads again at stores.changed that comes while the first load is in flight", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    let n = 0;
+    const { api } = fakeApi(async (r) => {
+      if (r.path !== "/api/accounts") return {};
+      n++;
+      if (n === 1) {
+        await gate;
+        return [acct("old")];
+      }
+      return [acct("new")];
+    });
+    const conn = new FakeConn();
+    const cache = new AccountsCache({ api, conn: conn.asConnection() });
+    const first = cache.load();
+    await settle();
+    conn.emit("stores.changed");
+    await settle();
+    release();
+    await first;
+    await settle();
+    expect(n).toBe(2);
+    expect(cache.accounts().map((a) => a.name)).toEqual(["new"]);
+  });
+
+  it("keeps the list when a reload fails, tells the subscribers once, and a success clears the error", async () => {
+    const t = setup();
+    await t.cache.load();
+    const fn = vi.fn();
+    t.cache.subscribe(fn);
+
+    t.answer(() => problem(502, "github.unavailable"));
+    await t.cache.reload();
+    await t.cache.reload();
+    expect(t.cache.accounts().map((a) => a.name)).toEqual(["alice"]);
+    expect(t.cache.loaded()).toBe(true);
+    expect(t.cache.error()?.type).toBe("github.unavailable");
+    expect(fn).toHaveBeenCalledTimes(1);
+
+    t.answer(() => [acct("alice")]);
+    await t.cache.reload();
+    expect(t.cache.error()).toBeNull();
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
   it("reads once for the events of one turn", async () => {
     const t = setup();
     await t.cache.load();
