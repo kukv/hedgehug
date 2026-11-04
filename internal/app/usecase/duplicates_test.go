@@ -38,7 +38,7 @@ func duplicateFx(t *testing.T) *moveFx {
 	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{model.TaskPath(f.p)}, Subject: "raw", Author: author, When: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	f.ts.dropMount()
+	f.ts.DropMount()
 	return f
 }
 
@@ -102,7 +102,7 @@ func TestDuplicateIgnoresADeletedTask(t *testing.T) {
 	if _, err := f.ts.ForStore("org-b").Remove(idIn(t, f, "org-b")); err != nil {
 		t.Fatal(err)
 	}
-	f.ts.dropMount()
+	f.ts.DropMount()
 	if got := findingsOf(t, f.ts, "org-a", "duplicate_across_stores"); len(got) != 0 {
 		t.Errorf("findings = %+v; want none for a deleted task", got)
 	}
@@ -110,8 +110,8 @@ func TestDuplicateIgnoresADeletedTask(t *testing.T) {
 
 func TestDuplicateTextOfThree(t *testing.T) {
 	t.Parallel()
-	d := duplicate{Places: []dupPlace{{"org-a", "API-1"}, {"org-b", "WEB-2"}, {"org-c", "OPS-3"}}}
-	if got, want := d.text(), "in org-a (API-1), org-b (WEB-2) and org-c (OPS-3); remove"; !strings.HasPrefix(got, want) {
+	d := Duplicate{Places: []dupPlace{{"org-a", "API-1"}, {"org-b", "WEB-2"}, {"org-c", "OPS-3"}}}
+	if got, want := d.Text(), "in org-a (API-1), org-b (WEB-2) and org-c (OPS-3); remove"; !strings.HasPrefix(got, want) {
 		t.Errorf("text = %q; want it to start %q", got, want)
 	}
 }
@@ -132,7 +132,7 @@ func TestDoctorForwardTarget(t *testing.T) {
 	if _, err := f.ts.StoreRemove("org-b", true); err != nil {
 		t.Fatal(err)
 	}
-	f.ts.dropMount()
+	f.ts.DropMount()
 	got := findingsOf(t, f.ts, "org-a", "forward_target")
 	if len(got) != 3 {
 		t.Fatalf("findings = %+v; want one for each forward", got)

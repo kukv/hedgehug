@@ -66,7 +66,7 @@ func TestInboxListSaysTheStoreOfAMovedTaskNotMounted(t *testing.T) {
 	if err := c.Save(); err != nil {
 		t.Fatal(err)
 	}
-	ts.dropMount()
+	ts.DropMount()
 	_, items, err := ts.ForStore("org-a").InboxList(false)
 	if err != nil || len(items) != 1 {
 		t.Fatalf("InboxList = %v, %v", items, err)

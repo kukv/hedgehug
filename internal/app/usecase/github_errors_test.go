@@ -23,13 +23,13 @@ func TestGitHubErrKindsAndCodes(t *testing.T) {
 		{github.ErrNotFound, KindInvalid, "github.not_found"},
 		{&github.RateLimitError{Reset: time.Now().Add(time.Minute)}, KindInvalid, "github.rate_limit"},
 	} {
-		err := githubErr(c.err, acct, "list the repositories")
+		err := GithubErr(c.err, acct, "list the repositories")
 		wantErr(t, err, c.kind, c.code)
 		if e := AsError(err); e.Args["account"] != "work" {
 			t.Errorf("%s: account arg = %v", c.code, e.Args["account"])
 		}
 	}
-	if err := githubErr(errors.New("boom"), acct, "x"); KindOf(err) != KindUnknown {
+	if err := GithubErr(errors.New("boom"), acct, "x"); KindOf(err) != KindUnknown {
 		t.Errorf("an unclassified error got a code: %v", err)
 	}
 }

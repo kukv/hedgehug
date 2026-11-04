@@ -150,7 +150,7 @@ func TestCurrentOfPurgedTaskIsGone(t *testing.T) {
 	if _, err := ts.Purge(0, true); err != nil {
 		t.Fatal(err)
 	}
-	_, err = refreshed(ix, e)
+	_, err = Refreshed(ix, e)
 	wantErr(t, err, KindNotFound, "task.gone")
 	if err != nil && (!strings.HasPrefix(err.Error(), "ME-1 (") || !strings.HasSuffix(err.Error(), ") is no longer in the store")) {
 		t.Errorf("message = %q", err)
@@ -180,7 +180,7 @@ func TestDescendants(t *testing.T) {
 		}
 		return strings.Join(out, " ")
 	}
-	if got, want := ids(Descendants(ix, p.ULID, every)), "ME-2 ME-4 ME-3"; got != want {
+	if got, want := ids(Descendants(ix, p.ULID, Every)), "ME-2 ME-4 ME-3"; got != want {
 		t.Errorf("all = %s; want %s (depth first)", got, want)
 	}
 	if got, want := ids(Descendants(ix, p.ULID, func(e *index.Entry) bool { return e.Title != "a" })), "ME-3"; got != want {
@@ -190,7 +190,7 @@ func TestDescendants(t *testing.T) {
 		t.Errorf("follow false = %v; want none", got)
 	}
 	leaf, _ := ts.Resolve(ix, "ME-5")
-	if got := Descendants(ix, leaf.ULID, every); len(got) != 0 {
+	if got := Descendants(ix, leaf.ULID, Every); len(got) != 0 {
 		t.Errorf("leaf = %v; want none", got)
 	}
 }

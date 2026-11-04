@@ -43,33 +43,10 @@ func (r AffectedResult) Views() ([]*TaskView, error) {
 	return out, nil
 }
 
-// Descendants returns the tasks under ulid for which follow is true, going
-// down only through those, depth first in rank order. A parent cycle stops
-// the walk.
-func Descendants(ix *index.Index, ulid model.ULID, follow func(*index.Entry) bool) []*index.Entry {
-	seen := map[model.ULID]bool{ulid: true}
-	var out []*index.Entry
-	var walk func(model.ULID)
-	walk = func(p model.ULID) {
-		for _, c := range ix.Children(p) {
-			if seen[c.ULID] || !follow(c) {
-				continue
-			}
-			seen[c.ULID] = true
-			out = append(out, c)
-			walk(c.ULID)
-		}
-	}
-	walk(ulid)
-	return out
-}
-
-func every(*index.Entry) bool { return true }
-
 // Remove deletes the task arg names and the tasks under it; they can be
 // restored.
 func (ss *Session) Remove(arg string) (AffectedResult, error) {
-	ts, arg, err := ss.forTask(arg)
+	ts, arg, err := ss.ForTask(arg)
 	if err != nil {
 		return AffectedResult{}, err
 	}
@@ -93,14 +70,14 @@ func (ss *Session) Remove(arg string) (AffectedResult, error) {
 		// Read under the lock, so a child added since is deleted too, and
 		// a task deleted since is not deleted again.
 		var err error
-		if e, err = refreshed(ix, e); err != nil {
+		if e, err = Refreshed(ix, e); err != nil {
 			return err
 		}
 		if err := notDeletedYet(ix, e); err != nil {
 			return err
 		}
 		targets = []*index.Entry{e}
-		for _, d := range Descendants(ix, e.ULID, every) {
+		for _, d := range Descendants(ix, e.ULID, Every) {
 			if d.DeletedAt == nil {
 				targets = append(targets, d)
 			}
@@ -120,13 +97,13 @@ func (ss *Session) Remove(arg string) (AffectedResult, error) {
 	if err != nil {
 		return AffectedResult{}, err
 	}
-	return AffectedResult{Index: ix, Entry: e, Targets: targets, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
+	return AffectedResult{Index: ix, Entry: e, Targets: targets, Committed: !hash.IsZero(), Commit: CommitHex(hash)}, nil
 }
 
 // Restore restores the deleted task arg names and what the same Remove
 // deleted under it.
 func (ss *Session) Restore(arg string) (AffectedResult, error) {
-	ts, arg, err := ss.forTask(arg)
+	ts, arg, err := ss.ForTask(arg)
 	if err != nil {
 		return AffectedResult{}, err
 	}
@@ -150,7 +127,7 @@ func (ss *Session) Restore(arg string) (AffectedResult, error) {
 		// even when it came in after the index was read, and a task
 		// restored since is refused.
 		var err error
-		if e, err = refreshed(ix, e); err != nil {
+		if e, err = Refreshed(ix, e); err != nil {
 			return err
 		}
 		if err := restorable(ix, e); err != nil {
@@ -175,26 +152,13 @@ func (ss *Session) Restore(arg string) (AffectedResult, error) {
 	if err != nil {
 		return AffectedResult{}, err
 	}
-	return AffectedResult{Index: ix, Entry: e, Targets: targets, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
-}
-
-// refreshed refreshes ix, as an operation does under the lock, and returns e as
-// it is now.
-func refreshed(ix *index.Index, e *index.Entry) (*index.Entry, error) {
-	if err := ix.Refresh(); err != nil {
-		return nil, err
-	}
-	cur, ok := ix.Task(e.ULID)
-	if !ok {
-		return nil, newErr(KindNotFound, "task.gone", fmt.Errorf("%s is no longer in the store", TaskLabel(ix, e)), "id", TaskFileName(e))
-	}
-	return cur, nil
+	return AffectedResult{Index: ix, Entry: e, Targets: targets, Committed: !hash.IsZero(), Commit: CommitHex(hash)}, nil
 }
 
 // notDeletedYet refuses to delete the task e again.
 func notDeletedYet(ix *index.Index, e *index.Entry) error {
 	if e.DeletedAt != nil {
-		return newErr(KindConflict, "task.already_deleted", fmt.Errorf("%s is already deleted", RefName(ix, e.ULID)), "id", TaskFileName(e))
+		return NewErr(KindConflict, "task.already_deleted", fmt.Errorf("%s is already deleted", RefName(ix, e.ULID)), "id", TaskFileName(e))
 	}
 	return nil
 }
@@ -202,7 +166,7 @@ func notDeletedYet(ix *index.Index, e *index.Entry) error {
 // isDeleted refuses to restore the task e when it is not deleted.
 func isDeleted(ix *index.Index, e *index.Entry) error {
 	if e.DeletedAt == nil {
-		return newErr(KindConflict, "task.not_deleted", fmt.Errorf("%s is not deleted", RefName(ix, e.ULID)), "id", TaskFileName(e))
+		return NewErr(KindConflict, "task.not_deleted", fmt.Errorf("%s is not deleted", RefName(ix, e.ULID)), "id", TaskFileName(e))
 	}
 	return nil
 }
@@ -237,12 +201,12 @@ func ParseAtTime(at string, loc *time.Location) (time.Time, bool) {
 // zero hash when there is none); for anything else, the commit it names, an
 // abbreviated hash included.
 func (ss *Session) commitAt(s *store.Store, name, at string) (plumbing.Hash, error) {
-	r, loc := s.Repo(), ss.location()
+	r, loc := s.Repo(), ss.Location()
 	t, ok := ParseAtTime(at, loc)
 	if !ok {
 		h, err := r.ResolveCommit(at)
 		if err != nil {
-			return plumbing.ZeroHash, newErr(KindInvalid, "restore_at.bad_time", fmt.Errorf("%q is neither a time nor a commit", at), "at", at)
+			return plumbing.ZeroHash, NewErr(KindInvalid, "restore_at.bad_time", fmt.Errorf("%q is neither a time nor a commit", at), "at", at)
 		}
 		return h, nil
 	}
@@ -251,7 +215,7 @@ func (ss *Session) commitAt(s *store.Store, name, at string) (plumbing.Hash, err
 		return plumbing.ZeroHash, err
 	}
 	// The history index is a cache: when it cannot be had, walk.
-	if h, err := ss.openHistory(s, name); err == nil {
+	if h, err := ss.OpenHistory(s, name); err == nil {
 		if found, _, err := h.AtOrBefore(head, t); err == nil {
 			return found, nil
 		}
@@ -292,7 +256,7 @@ type RestoreAtResult struct {
 // be given twice, and moving to another workspace is the job of Move with a
 // workspace, which moves the tasks under it too.
 func (ss *Session) RestoreAt(arg, at string) (RestoreAtResult, error) {
-	ts, arg, err := ss.forTask(arg)
+	ts, arg, err := ss.ForTask(arg)
 	if err != nil {
 		return RestoreAtResult{}, err
 	}
@@ -315,19 +279,19 @@ func (ss *Session) RestoreAt(arg, at string) (RestoreAtResult, error) {
 	hash, err := ss.UpdateCommit(s, store.Op{Name: "restore", Task: e.ULID}, func(tx *store.Tx) error {
 		// Read under the lock, as the other writes do.
 		var err error
-		if e, err = refreshed(ix, e); err != nil {
+		if e, err = Refreshed(ix, e); err != nil {
 			return err
 		}
 		data, err := s.Repo().ReadAt(commit, model.TaskPath(e.ULID))
 		if errors.Is(err, fs.ErrNotExist) {
-			return newErr(KindNotFound, "restore_at.not_found", fmt.Errorf("%s did not exist at %s", cmp.Or(ix.DisplayID(e), e.ULID.String()), at), "at", at)
+			return NewErr(KindNotFound, "restore_at.not_found", fmt.Errorf("%s did not exist at %s", cmp.Or(ix.DisplayID(e), e.ULID.String()), at), "at", at)
 		}
 		if err != nil {
 			return err
 		}
 		old, err := model.DecodeTask(data)
 		if errors.Is(err, model.ErrForward) {
-			return newErr(KindConflict, "restore.forward", fmt.Errorf("%s was moved to another store at that time", cmp.Or(ix.DisplayID(e), e.ULID.String())), "at", at)
+			return NewErr(KindConflict, "restore.forward", fmt.Errorf("%s was moved to another store at that time", cmp.Or(ix.DisplayID(e), e.ULID.String())), "at", at)
 		}
 		if err != nil {
 			return err
@@ -354,5 +318,5 @@ func (ss *Session) RestoreAt(arg, at string) (RestoreAtResult, error) {
 	if err != nil {
 		return RestoreAtResult{}, err
 	}
-	return RestoreAtResult{TaskResult: TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: commitHex(hash)}, Note: note}, nil
+	return RestoreAtResult{TaskResult: TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: CommitHex(hash)}, Note: note}, nil
 }

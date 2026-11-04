@@ -135,7 +135,7 @@ func TestAsError(t *testing.T) {
 		t.Error("AsError(nil) is not nil")
 	}
 	// The outermost *Error of the chain.
-	inner := newErr(KindNotFound, "task.not_found", errors.New("x"), "input", "ME-9")
+	inner := NewErr(KindNotFound, "task.not_found", errors.New("x"), "input", "ME-9")
 	if got := AsError(fmt.Errorf("wrapped: %w", inner)); got != inner {
 		t.Errorf("AsError(wrapped) = %+v; want the inner *Error", got)
 	}

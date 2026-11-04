@@ -126,7 +126,7 @@ func TestWorkspaceNameAndPrefixTakenInTheStore(t *testing.T) {
 	}
 	_, err := ts.WorkspaceAdd("web2", "WEB")
 	wantErr(t, err, KindConflict, "")
-	if c := classify(err); c == nil || c.Code != "workspace.taken" {
+	if c := Classify(err); c == nil || c.Code != "workspace.taken" {
 		t.Errorf("classify(%v) = %+v; want workspace.taken", err, c)
 	}
 	if want := "the id prefix WEB is already used by workspace web"; err.Error() != want {

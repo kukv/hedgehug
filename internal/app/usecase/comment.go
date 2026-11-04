@@ -14,7 +14,7 @@ import (
 
 var (
 	errEmptyComment   = errors.New("the comment is empty")
-	errCommentChanged = newErr(KindConflict, "comment.changed", errors.New("the comment changed while editing"))
+	errCommentChanged = NewErr(KindConflict, "comment.changed", errors.New("the comment changed while editing"))
 )
 
 // CommentRef names one comment file.
@@ -30,25 +30,6 @@ type CommentResult struct {
 	Commit    string // hex hash of the commit made; "" when nothing was committed
 }
 
-func commentNotFound(arg string, err error) error {
-	return newErr(KindNotFound, "comment.not_found", err, "input", arg)
-}
-
-// resolveComment finds the comment arg names among refs: a full ULID, in any
-// case.
-func resolveComment(refs []store.CommentRef, arg string) (store.CommentRef, error) {
-	if len(arg) != 26 {
-		return store.CommentRef{}, commentNotFound(arg, fmt.Errorf("comment %q: give the full ULID of the comment: %w", arg, store.ErrNotFound))
-	}
-	u := strings.ToUpper(arg)
-	for _, r := range refs {
-		if r.Comment.String() == u {
-			return r, nil
-		}
-	}
-	return store.CommentRef{}, commentNotFound(arg, fmt.Errorf("comment %q: %w", arg, store.ErrNotFound))
-}
-
 // CommentEditSession is a comment found and read from its file, before it is
 // edited or removed.
 type CommentEditSession struct {
@@ -62,7 +43,7 @@ type CommentEditSession struct {
 // OpenComment opens the store and resolves arg to a comment that is read
 // from its file.
 func (ss *Session) OpenComment(arg string) (*CommentEditSession, error) {
-	ts, err := ss.forComment(arg)
+	ts, err := ss.ForComment(arg)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +58,7 @@ func (ss *Session) OpenComment(arg string) (*CommentEditSession, error) {
 	if err != nil {
 		return nil, err
 	}
-	ref, err := resolveComment(refs, arg)
+	ref, err := ResolveComment(refs, arg)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +79,7 @@ func FindComment(s *store.Store, ref store.CommentRef) (*model.Comment, error) {
 			return c, nil
 		}
 	}
-	return nil, commentNotFound(ref.Comment.String(), fmt.Errorf("comment %s: %w", ref.Comment, store.ErrNotFound))
+	return nil, CommentNotFound(ref.Comment.String(), fmt.Errorf("comment %s: %w", ref.Comment, store.ErrNotFound))
 }
 
 // CommentBody trims the end of a comment body and ends it with a newline.
@@ -112,7 +93,7 @@ func CommentBody(b string) string {
 }
 
 func commentDeleted(msg string) error {
-	return newErr(KindConflict, "comment.deleted", errors.New(msg))
+	return NewErr(KindConflict, "comment.deleted", errors.New(msg))
 }
 
 // CheckCommentEditable refuses to edit a deleted comment, and one that none
@@ -122,11 +103,11 @@ func CheckCommentEditable(ref store.CommentRef, c *model.Comment, me []string, v
 		return commentDeleted(fmt.Sprintf("comment %s is deleted and cannot be edited", ref.Comment.String()))
 	}
 	if c.Author == "" {
-		return newErr(KindConflict, "comment.no_author",
+		return NewErr(KindConflict, "comment.no_author",
 			fmt.Errorf("a comment whose author is unknown cannot be %s", verb))
 	}
 	if !slices.ContainsFunc(me, func(a string) bool { return config.SameAccount(a, c.Author) }) {
-		return newErr(KindConflict, "comment.not_author",
+		return NewErr(KindConflict, "comment.not_author",
 			fmt.Errorf("%s's comment cannot be %s", c.Author, verb), "author", c.Author)
 	}
 	return nil
@@ -154,7 +135,7 @@ type CommentSession struct {
 // BeginComment resolves arg to a live task; it is done before the body is
 // taken from the user.
 func (ss *Session) BeginComment(arg string) (*CommentSession, error) {
-	ts, arg, err := ss.forTask(arg)
+	ts, arg, err := ss.ForTask(arg)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +172,7 @@ func (ss *Session) PrepareComment(cs *CommentSession, body string) (*PendingComm
 		ss = cs.ss
 	}
 	if body = CommentBody(body); body == "" {
-		return nil, newErr(KindInvalid, "comment.empty", errEmptyComment)
+		return nil, NewErr(KindInvalid, "comment.empty", errEmptyComment)
 	}
 	c := &model.Comment{ULID: model.NewULID(), Body: body}
 	var err error
@@ -229,9 +210,9 @@ func (ss *Session) WriteComment(p *PendingComment) (CommentResult, error) {
 		return CommentResult{}, err
 	}
 	if !hash.IsZero() {
-		ss.warnMentions(s, "", c.Body)
+		ss.WarnMentions(s, "", c.Body)
 	}
-	return CommentResult{Store: s, Ref: store.CommentRef{Task: e.ULID, Comment: c.ULID}, Comment: c, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
+	return CommentResult{Store: s, Ref: store.CommentRef{Task: e.ULID, Comment: c.ULID}, Comment: c, Committed: !hash.IsZero(), Commit: CommitHex(hash)}, nil
 }
 
 // CommentAdd adds a comment to the live task arg. It is the one call for the
@@ -288,7 +269,7 @@ func (ss *Session) PrepareCommentEdit(ces *CommentEditSession, body string) (*Pe
 	}
 	s, ref, c := ces.Store, ces.Ref, ces.Comment
 	if body = CommentBody(body); body == "" {
-		return nil, newErr(KindInvalid, "comment.empty",
+		return nil, NewErr(KindInvalid, "comment.empty",
 			fmt.Errorf("the comment is empty; delete it with hedgehug comment rm %s", ref.Comment.String()))
 	}
 	p := &PendingCommentEdit{ss: ss, s: s, ref: ref, c: c, body: body}
@@ -342,9 +323,9 @@ func (ss *Session) WriteCommentEdit(p *PendingCommentEdit) (CommentResult, error
 		return CommentResult{}, err
 	}
 	if !hash.IsZero() {
-		ss.warnMentions(p.s, p.c.Body, p.body)
+		ss.WarnMentions(p.s, p.c.Body, p.body)
 	}
-	return CommentResult{Store: p.s, Ref: p.ref, Comment: written, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
+	return CommentResult{Store: p.s, Ref: p.ref, Comment: written, Committed: !hash.IsZero(), Commit: CommitHex(hash)}, nil
 }
 
 // CommentRemove deletes the comment arg.
@@ -383,5 +364,5 @@ func (ss *Session) CommentRemove(arg string) (CommentResult, error) {
 	if err != nil {
 		return CommentResult{}, err
 	}
-	return CommentResult{Store: s, Ref: ref, Comment: written, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
+	return CommentResult{Store: s, Ref: ref, Comment: written, Committed: !hash.IsZero(), Commit: CommitHex(hash)}, nil
 }

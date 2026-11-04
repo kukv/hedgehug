@@ -15,50 +15,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
 
-// SyncReport is what a sync of one store did, as --json prints it.
-type SyncReport struct {
-	Store       string        `json:"store"`
-	NoRemote    bool          `json:"no_remote,omitempty"`
-	Error       string        `json:"error,omitempty"` // Sync sets it to Err's message; the CLI puts its own words
-	Merges      int           `json:"merges"`
-	Pushed      []string      `json:"pushed"`
-	Overwritten []Overwritten `json:"overwritten"`
-	Repaired    []Repaired    `json:"repaired"`
-	Invalid     []string      `json:"invalid"` // ULIDs of the tasks with problems now
-	Notices     []inbox.Item  `json:"notices"` // what the sync added to the inbox
-	Warnings    []string      `json:"warnings"`
-	// Unpushable is the number of commits not pushed because the store is
-	// read-only.
-	Unpushable int   `json:"unpushable,omitempty"`
-	Err        error `json:"-"` // why the sync failed; the report holds what is known
-}
-
-// Overwritten is a value that lost in a merge of the sync.
-type Overwritten struct {
-	Task string `json:"task,omitempty"` // the ULID, for a task's file
-	ID   string `json:"id,omitempty"`
-	Path string `json:"path"`
-	// Label is the id as a reader sees it, which --json leaves out
-	Label  string          `json:"-"`
-	Field  string          `json:"field"`
-	Value  json.RawMessage `json:"value"`
-	Author string          `json:"author,omitempty"`
-	Notice string          `json:"notice,omitempty"` // the inbox item, when it is told to me
-}
-
-// Repaired is something the repair of the sync fixed or told of.
-type Repaired struct {
-	ULID   string          `json:"ulid"`
-	ID     string          `json:"id,omitempty"` // the task's id now
-	Kind   string          `json:"kind"`
-	Value  json.RawMessage `json:"value"`
-	Author string          `json:"author,omitempty"`
-	// Label is the id as a reader sees it, and Line the text of a new id
-	// ("ORG-2 → ORG-3"; "" for the other kinds); --json leaves them out
-	Label string `json:"-"`
-	Line  string `json:"-"`
-}
-
 // Sync syncs the stores SyncTargets names and describes what each did. A
 // store that failed is in the list with Err set, and the error joins the
 // failures as "sync <store>: <err>". With no target the list is empty.
@@ -80,17 +36,17 @@ func (ss *Session) Sync(all, explicit bool) ([]SyncReport, error) {
 		if len(e.Remotes) == 0 {
 			continue
 		}
-		if err := ss.finishRebuild(e); err != nil {
+		if err := ss.FinishRebuild(e); err != nil {
 			broken = append(broken, e.Name)
 			continue
 		}
-		if s, err := ss.openStoreAt(e.Path); err != nil {
+		if s, err := ss.OpenStoreAt(e.Path); err != nil {
 			broken = append(broken, e.Name)
 		} else {
 			_ = s.Repo().Close()
 		}
 	}
-	defer ss.muteOpenWarnings(broken)()
+	defer ss.MuteOpenWarnings(broken)()
 	out := make([]SyncReport, 0, len(targets))
 	var errs []error
 	for _, e := range targets {
@@ -114,10 +70,10 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 		return r, nil
 	}
 	// A swap that stopped is finished first.
-	if err := ss.finishRebuild(e); err != nil {
+	if err := ss.FinishRebuild(e); err != nil {
 		return r, err
 	}
-	s, err := ss.openStoreAt(e.Path)
+	s, err := ss.OpenStoreAt(e.Path)
 	if err != nil {
 		return r, err
 	}
@@ -132,7 +88,7 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 		return r, err
 	}
 	// The push is done: what fails from here is a warning, as in replicate.Run.
-	ix, err := ss.indexOf(e.Name, s)
+	ix, err := ss.IndexOf(e.Name, s)
 	if err != nil {
 		r.Warnings = append(r.Warnings, "read the index, so ids are not shown: "+err.Error())
 	}
@@ -157,7 +113,7 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 	r.Warnings = append(r.Warnings, res.Warnings...)
 	r.Notices = append(r.Notices, res.Notices...)
 	for _, o := range res.Overwritten {
-		x := Overwritten{Path: o.Path, Field: o.Field, Value: jsonValue(o.Value), Author: o.Author}
+		x := Overwritten{Path: o.Path, Field: o.Field, Value: JSONValue(o.Value), Author: o.Author}
 		if u, ok := TaskOfPath(o.Path); ok {
 			x.Task = u.String()
 			x.ID = taskID(u)
@@ -171,7 +127,7 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 		r.Overwritten = append(r.Overwritten, x)
 	}
 	for _, x := range res.Repaired {
-		rep := Repaired{ULID: x.ULID.String(), ID: taskID(x.ULID), Kind: x.Kind, Value: jsonValue(x.Value), Author: x.Author}
+		rep := Repaired{ULID: x.ULID.String(), ID: taskID(x.ULID), Kind: x.Kind, Value: JSONValue(x.Value), Author: x.Author}
 		rep.Label = qualify(rep.ID)
 		if x.Kind == "id_collision" {
 			var v struct{ Old, New string }
@@ -184,18 +140,8 @@ func (ss *Session) SyncStore(c *config.Config, e config.StoreEntry, explicit boo
 	for _, u := range res.Invalid {
 		r.Invalid = append(r.Invalid, u.String())
 	}
-	r.Warnings = append(r.Warnings, ss.crossStoreWarnings(e.Name)...)
+	r.Warnings = append(r.Warnings, ss.CrossStoreWarnings(e.Name)...)
 	return r, nil
-}
-
-// jsonValue is v as JSON when it is, else as a string: the values of the
-// sync are one line of JSON, or "-" for none.
-func jsonValue(v string) json.RawMessage {
-	if json.Valid([]byte(v)) {
-		return json.RawMessage(v)
-	}
-	b, _ := json.Marshal(v) // a string always encodes
-	return b
 }
 
 // TaskOfPath is the ULID of the task whose file p is.
@@ -252,7 +198,7 @@ func (ss *Session) SyncStatus() ([]StoreStatus, error) {
 
 func (ss *Session) storeStatus(e config.StoreEntry) StoreStatus {
 	x := StoreStatus{Store: e.Name, Remotes: append([]string{}, e.Remotes...)}
-	s, err := ss.openStoreAt(e.Path)
+	s, err := ss.OpenStoreAt(e.Path)
 	if err != nil {
 		x.Error = err.Error()
 		return x
@@ -264,8 +210,8 @@ func (ss *Session) storeStatus(e config.StoreEntry) StoreStatus {
 		return x
 	}
 	x.LastError = st.LastError
-	x.ReadOnly = readOnlyWhy(s) // a reason in ReadOnly, not an error that hides the rest
-	x.PendingSince, x.LastAttempt, x.LastSuccess = timePtr(st.PendingSince), timePtr(st.LastAttempt), timePtr(st.LastSuccess)
+	x.ReadOnly = ReadOnlyWhy(s) // a reason in ReadOnly, not an error that hides the rest
+	x.PendingSince, x.LastAttempt, x.LastSuccess = TimePtr(st.PendingSince), TimePtr(st.LastAttempt), TimePtr(st.LastSuccess)
 	if len(e.Remotes) > 0 {
 		n, err := Unpushed(s)
 		if err != nil {
@@ -275,14 +221,6 @@ func (ss *Session) storeStatus(e config.StoreEntry) StoreStatus {
 		x.Unpushed = &n
 	}
 	return x
-}
-
-// timePtr is &t, or nil for the zero time.
-func timePtr(t time.Time) *time.Time {
-	if t.IsZero() {
-		return nil
-	}
-	return &t
 }
 
 // SyncBackground is what the detached child of a write runs (sync
@@ -295,16 +233,16 @@ func (ss *Session) SyncBackground(log io.Writer) error {
 		return backgroundFailed(ss, log, "", err)
 	}
 	if ss.StoreName == "" {
-		return newErr(KindUsage, "sync.background_needs_store", errors.New("--background needs --store"))
+		return NewErr(KindUsage, "sync.background_needs_store", errors.New("--background needs --store"))
 	}
 	e, err := c.Select(ss.StoreName)
 	if err != nil {
 		return backgroundFailed(ss, log, "", err)
 	}
-	if err := ss.finishRebuild(e); err != nil {
+	if err := ss.FinishRebuild(e); err != nil {
 		return backgroundFailed(ss, log, e.Name, err)
 	}
-	s, err := ss.openStoreAt(e.Path)
+	s, err := ss.OpenStoreAt(e.Path)
 	if err != nil {
 		return backgroundFailed(ss, log, e.Name, err)
 	}
@@ -359,7 +297,7 @@ func (ss *Session) BeforeCommand(cfg *config.Config, start func(s *store.Store, 
 		if !SyncsInBackground(e) {
 			continue
 		}
-		s, err := ss.openStoreAt(e.Path)
+		s, err := ss.OpenStoreAt(e.Path)
 		if err != nil {
 			continue
 		}
@@ -371,18 +309,4 @@ func (ss *Session) BeforeCommand(cfg *config.Config, start func(s *store.Store, 
 		}
 		_ = s.Repo().Close()
 	}
-}
-
-// readOnlyWhy is why the store s is read-only, in words, or "" when it is
-// writable. A broken access.json is a reason, not an error: the next sync
-// judges the access again.
-func readOnlyWhy(s *store.Store) string {
-	acc, err := replicate.ReadAccess(s)
-	switch {
-	case err != nil:
-		return "access.json is broken; run hedgehug sync"
-	case acc.ReadOnly:
-		return acc.Why()
-	}
-	return ""
 }

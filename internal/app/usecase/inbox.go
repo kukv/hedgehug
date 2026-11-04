@@ -48,7 +48,7 @@ func (ss *Session) InboxStores() ([]InboxStore, error) {
 		return nil, err
 	}
 	if len(c.Accounts) == 0 {
-		ss.warn(NoAccountsWarning)
+		ss.AddWarning(NoAccountsWarning)
 	}
 	strict := ss.StoreName != "" || len(c.Stores) == 1
 	var out []InboxStore
@@ -64,9 +64,9 @@ func (ss *Session) InboxStores() ([]InboxStore, error) {
 			}
 			return nil, fmt.Errorf("store %s: %w", e.Name, err)
 		case openErr != nil:
-			ss.warnSkipped(mount.Skipped{Name: e.Name, Err: openErr})
+			ss.WarnSkipped(mount.Skipped{Name: e.Name, Err: openErr})
 		default:
-			ss.warnOnce("inbox:"+e.Name, fmt.Sprintf("cannot read the inbox of %s: %v", e.Name, readErr))
+			ss.WarnOnce("inbox:"+e.Name, fmt.Sprintf("cannot read the inbox of %s: %v", e.Name, readErr))
 		}
 	}
 	return out, nil
@@ -76,7 +76,7 @@ func (ss *Session) InboxStores() ([]InboxStore, error) {
 // openErr is why the store does not open, readErr why its inbox cannot be
 // taken in.
 func (ss *Session) openInboxStore(c *config.Config, e config.StoreEntry) (st InboxStore, openErr, readErr error) {
-	s, err := ss.openStoreAt(e.Path)
+	s, err := ss.OpenStoreAt(e.Path)
 	if err != nil {
 		return InboxStore{}, err, nil
 	}
@@ -99,31 +99,9 @@ func (ss *Session) openInboxStore(c *config.Config, e config.StoreEntry) (st Inb
 func (ss *Session) WarnInbox(stores []InboxStore) {
 	for _, st := range stores {
 		for _, w := range st.Box.Warnings() {
-			ss.warn(st.Name + ": " + w)
+			ss.AddWarning(st.Name + ": " + w)
 		}
 	}
-}
-
-// SyncTargets are the stores an operation works on: the one StoreName
-// names, or all that have a remote, or with all every store.
-func (ss *Session) SyncTargets(c *config.Config, all bool) ([]config.StoreEntry, error) {
-	if ss.StoreName != "" {
-		e, err := c.Select(ss.StoreName)
-		if err != nil && !errors.Is(err, config.ErrNoStores) {
-			return nil, newErr(KindNotFound, "store.not_found", err, "name", ss.StoreName)
-		}
-		return []config.StoreEntry{e}, err
-	}
-	if len(c.Stores) == 0 {
-		return nil, config.ErrNoStores
-	}
-	var out []config.StoreEntry
-	for _, e := range c.Stores {
-		if all || len(e.Remotes) > 0 {
-			out = append(out, e)
-		}
-	}
-	return out, nil
 }
 
 // InboxItemView is an item as --json prints it: the task as a reference to
@@ -167,7 +145,7 @@ func (ss *Session) InboxListOf(stores []InboxStore, all bool) ([]InboxItemView, 
 		}
 		ix, err := ss.inboxIndex(st)
 		if err != nil {
-			ss.warn(fmt.Sprintf("%s: read the index, so titles are not shown: %v", st.Name, err))
+			ss.AddWarning(fmt.Sprintf("%s: read the index, so titles are not shown: %v", st.Name, err))
 			ix = nil
 		}
 		for _, it := range items {
@@ -183,9 +161,9 @@ func (ss *Session) InboxListOf(stores []InboxStore, all bool) ([]InboxItemView, 
 	out := make([]InboxItemView, len(rows))
 	for i, r := range rows {
 		named := r.item
-		var d repairDetail
+		var d RepairDetail
 		if named.Kind == inbox.Repaired && json.Unmarshal(named.Detail, &d) == nil {
-			d.Value = json.RawMessage(detachedName(r.s, d.Kind, string(d.Value)))
+			d.Value = json.RawMessage(DetachedName(r.s, d.Kind, string(d.Value)))
 			named.Detail, _ = json.Marshal(d) // always encodes
 		}
 		out[i] = InboxItemView{
@@ -222,7 +200,7 @@ func (ss *Session) movedTo(storeName, input string, f *index.ForwardEntry) *Move
 	set, err := ss.Mount()
 	if err != nil {
 		// without the mounts, the store is only named by its ULID
-		ss.warnOnce("mount: moved", fmt.Sprintf("cannot look for the store the task moved to: %v", err))
+		ss.WarnOnce("mount: moved", fmt.Sprintf("cannot look for the store the task moved to: %v", err))
 	}
 	var from *mount.Mounted
 	if set != nil {
@@ -233,7 +211,7 @@ func (ss *Session) movedTo(storeName, input string, f *index.ForwardEntry) *Move
 
 // inboxIndex opens the index of st, as the other operations do.
 func (ss *Session) inboxIndex(st InboxStore) (*index.Index, error) {
-	return ss.indexOf(st.Name, st.Store)
+	return ss.IndexOf(st.Name, st.Store)
 }
 
 // ParseInboxItem reads the full ULID of an item; a short one is a mistake of
@@ -241,7 +219,7 @@ func (ss *Session) inboxIndex(st InboxStore) (*index.Index, error) {
 func ParseInboxItem(arg string) (model.ULID, error) {
 	u, err := model.ParseULID(arg)
 	if err != nil {
-		return model.ULID{}, newErr(KindUsage, "inbox.ulid", fmt.Errorf("%q: give the full ULID of the item", arg), "input", arg)
+		return model.ULID{}, NewErr(KindUsage, "inbox.ulid", fmt.Errorf("%q: give the full ULID of the item", arg), "input", arg)
 	}
 	return u, nil
 }
@@ -272,7 +250,7 @@ func findItem(stores []InboxStore, u model.ULID) (InboxStore, inbox.Item, error)
 			return st, it, nil
 		}
 	}
-	return InboxStore{}, inbox.Item{}, newErr(KindNotFound, "inbox.not_found", fmt.Errorf("inbox item %s: %w", u, store.ErrNotFound), "input", u.String())
+	return InboxStore{}, inbox.Item{}, NewErr(KindNotFound, "inbox.not_found", fmt.Errorf("inbox item %s: %w", u, store.ErrNotFound), "input", u.String())
 }
 
 // InboxRead marks items read, by their full ULIDs, or every unread item with
@@ -379,7 +357,7 @@ func (ss *Session) InboxRevertOf(stores []InboxStore, u model.ULID) (TaskResult,
 	}
 	e, ok := ix.Task(it.Task)
 	if !ok {
-		return TaskResult{}, newErr(KindNotFound, "task.gone", fmt.Errorf("the task of inbox item %s (%s) is gone: %w", u, it.Task, store.ErrNotFound), "id", it.Task.String())
+		return TaskResult{}, NewErr(KindNotFound, "task.gone", fmt.Errorf("the task of inbox item %s (%s) is gone: %w", u, it.Task, store.ErrNotFound), "id", it.Task.String())
 	}
 	if err := NotDeleted(ix, e); err != nil {
 		return TaskResult{}, err
@@ -403,7 +381,7 @@ func (ss *Session) InboxRevertOf(stores []InboxStore, u model.ULID) (TaskResult,
 	if err := st.Box.MarkRead([]model.ULID{u}); err != nil {
 		return TaskResult{}, err
 	}
-	return TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
+	return TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: CommitHex(hash)}, nil
 }
 
 // movedRevertErr is task.moved for an inbox revert of a task that moved:
@@ -426,7 +404,7 @@ func movedRevertErr(mv *MovedError) error {
 	if id := mv.NowID(); id != "" {
 		args = append(args, "id", id)
 	}
-	return newErr(KindNotFound, "task.moved", errors.New(text), args...)
+	return NewErr(KindNotFound, "task.moved", errors.New(text), args...)
 }
 
 // inboxTaskRef names the task of the item as it is now, or as the item has
@@ -459,7 +437,7 @@ func inboxTarget(ix *index.Index, it inbox.Item) string {
 		}
 	}
 	id := it.ID
-	if f, ok := forwardOf(ix, it.Task); ok && id == "" {
+	if f, ok := ForwardOf(ix, it.Task); ok && id == "" {
 		id = f.ID // the task moved to another store
 	}
 	if id != "" {
@@ -471,15 +449,8 @@ func inboxTarget(ix *index.Index, it inbox.Item) string {
 	return it.Task.String()
 }
 
-// repairDetail is the Detail of repaired, revived and prefix_duplicate.
-type repairDetail struct {
-	Kind      string          `json:"kind"`
-	Workspace model.ULID      `json:"workspace"`
-	Value     json.RawMessage `json:"value"`
-}
-
 func detailWorkspace(ix *index.Index, it inbox.Item) (*model.Workspace, bool) {
-	var d repairDetail
+	var d RepairDetail
 	if ix == nil || json.Unmarshal(it.Detail, &d) != nil {
 		return nil, false
 	}
@@ -501,7 +472,7 @@ func InboxContent(ix *index.Index, it inbox.Item, storeName string, manyStores b
 			Value json.RawMessage `json:"value"`
 		}
 		_ = json.Unmarshal(it.Detail, &d) // an item that does not decode tells no field
-		return fmt.Sprintf("%s: %s was replaced%s", d.Field, compactJSON(d.Value), by)
+		return fmt.Sprintf("%s: %s was replaced%s", d.Field, CompactJSON(d.Value), by)
 	case inbox.Renumbered:
 		var d struct{ Old, New string }
 		_ = json.Unmarshal(it.Detail, &d)
@@ -562,87 +533,10 @@ func hasComment(it inbox.Item) bool {
 	return json.Unmarshal(it.Detail, &d) == nil && d.Comment != ""
 }
 
-// RepairedContent describes a repair after a merge by its kind.
-func RepairedContent(ix *index.Index, it inbox.Item) string {
-	var d repairDetail
-	_ = json.Unmarshal(it.Detail, &d) // an item that does not decode tells no kind
-	switch d.Kind {
-	case "parent_moved":
-		return "moved to the root because its parent moved to another store"
-	case "ref_moved":
-		return movedRefContent(ix, d.Value)
-	case "sprint_detached", "release_detached":
-		// The value is the name of the sprint or release (its ULID when it
-		// cannot be read).
-		var name string
-		if json.Unmarshal(d.Value, &name) == nil && name != "" {
-			what := strings.TrimSuffix(d.Kind, "_detached")
-			return fmt.Sprintf("%s: removed from %s %s (it is not in the workspace the task moved to)", d.Kind, what, name)
-		}
-	case "parent_cycle", "parent_deleted":
-		// The value tells where the repair took the task from and put it
-		// (null is the root); the index only gives names to the ULIDs.
-		var m struct{ From, To *model.ULID }
-		if json.Unmarshal(d.Value, &m) == nil {
-			from := "the root"
-			if m.From != nil {
-				from = taskName(ix, *m.From)
-			}
-			if d.Kind == "parent_deleted" {
-				return fmt.Sprintf("parent_deleted: moved to the root (its parent %s was deleted)", from)
-			}
-			to := "root"
-			if m.To != nil {
-				to = taskName(ix, *m.To)
-			}
-			return fmt.Sprintf("parent_cycle: moved back to %s (was under %s)", to, from)
-		}
-	}
-	if v := compactJSON(d.Value); v != "" && v != "null" {
-		return fmt.Sprintf("%s (was %s)", d.Kind, v)
-	}
-	return d.Kind
-}
-
-// forwardOf is the forward of u in ix, which may be nil.
-func forwardOf(ix *index.Index, u model.ULID) (*index.ForwardEntry, bool) {
-	if ix == nil {
-		return nil, false
-	}
-	return ix.Forward(u)
-}
-
-// movedRefContent says what a ref_moved repair removed: the field and the
-// task it named, by the id the task had when it moved.
-func movedRefContent(ix *index.Index, value json.RawMessage) string {
-	var v struct {
-		Field  string
-		Target model.ULID
-	}
-	if json.Unmarshal(value, &v) != nil || v.Field == "" {
-		return "ref_moved"
-	}
-	name := v.Target.String()
-	if f, ok := forwardOf(ix, v.Target); ok && f.ID != "" {
-		name = f.ID
-	}
-	return fmt.Sprintf("%s to %s was removed because it moved to another store", v.Field, name)
-}
-
-// taskName is the task u as "ID (ULID) title", or its ULID when ix lacks it.
-func taskName(ix *index.Index, u model.ULID) string {
-	if ix != nil {
-		if _, ok := ix.Task(u); ok {
-			return RefName(ix, u)
-		}
-	}
-	return u.String()
-}
-
 // duplicateContent tells of a prefix or a name two workspaces share, and how
 // to change it.
 func duplicateContent(ix *index.Index, it inbox.Item, storeName string, manyStores bool) string {
-	var d repairDetail
+	var d RepairDetail
 	_ = json.Unmarshal(it.Detail, &d)
 	ws, prefix := d.Workspace.String(), ""
 	if w, ok := detailWorkspace(ix, it); ok {
@@ -690,19 +584,10 @@ func duplicateContent(ix *index.Index, it inbox.Item, storeName string, manyStor
 	return fmt.Sprintf("%s is also used by %s; change it with hedgehug%s workspace set-prefix %s <new prefix>", prefix, text, where, ws)
 }
 
-// compactJSON is v on one line without spaces between tokens.
-func compactJSON(v json.RawMessage) string {
-	var b bytes.Buffer
-	if json.Compact(&b, v) != nil {
-		return string(v)
-	}
-	return b.String()
-}
-
 var errNotRevertible = errors.New("cannot be reverted")
 
 // notRevertible marks err as a value that no write can put back.
-func notRevertible(err error) error { return newErr(KindInvalid, "inbox.not_revertable", err) }
+func notRevertible(err error) error { return NewErr(KindInvalid, "inbox.not_revertable", err) }
 
 // refused says why the fields that no write of a value can restore are
 // refused, and what to use.
@@ -800,14 +685,14 @@ func (ss *Session) revertMove(tx *store.Tx, ix *index.Index, e *index.Entry, fie
 	case field == "parent":
 		var ok bool
 		if p, ok = ix.Task(*u); !ok {
-			return newErr(KindNotFound, "task.not_found", fmt.Errorf("parent: %s is not in this store: %w", u, store.ErrNotFound), "input", u.String())
+			return NewErr(KindNotFound, "task.not_found", fmt.Errorf("parent: %s is not in this store: %w", u, store.ErrNotFound), "input", u.String())
 		}
 	case u == nil:
 		return notRevertible(errors.New("workspace: the value is empty"))
 	default:
 		var ok bool
 		if w, ok = ix.Workspace(*u); !ok {
-			return newErr(KindNotFound, "workspace.not_found", fmt.Errorf("workspace: %s is not in this store: %w", u, store.ErrNotFound), "input", u.String())
+			return NewErr(KindNotFound, "workspace.not_found", fmt.Errorf("workspace: %s is not in this store: %w", u, store.ErrNotFound), "input", u.String())
 		}
 	}
 	_, err := ss.MoveInTx(tx, ix, e, p, w, root, "", "")
@@ -880,28 +765,4 @@ func propText(sc *schema.Schema, key string, x any) (string, error) {
 		return strconv.FormatBool(v), nil
 	}
 	return "", notRevertible(fmt.Errorf("props.%s: %v is not a value hedgehug set reads; %w", key, x, errNotRevertible))
-}
-
-// detachedName replaces the ULID that value (JSON) holds, for the kinds
-// sprint_detached and release_detached, with the name of the sprint or
-// release in s; the ULID stays when the file cannot be read. Other kinds
-// keep their value.
-func detachedName(s *store.Store, kind, value string) string {
-	var u model.ULID
-	if (kind != "sprint_detached" && kind != "release_detached") || s == nil || json.Unmarshal([]byte(value), &u) != nil {
-		return value
-	}
-	var name string
-	if kind == "sprint_detached" {
-		if sp, err := s.Sprint(u); err == nil {
-			name = sp.Name
-		}
-	} else if r, err := s.Release(u); err == nil {
-		name = r.Name
-	}
-	if name == "" {
-		return value
-	}
-	b, _ := json.Marshal(name) // a string always encodes
-	return string(b)
 }

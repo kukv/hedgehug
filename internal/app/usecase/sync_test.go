@@ -235,17 +235,17 @@ func TestNoticeFieldAndTaskOfPath(t *testing.T) {
 
 func TestJSONValueAndTimePtr(t *testing.T) {
 	t.Parallel()
-	if got := string(jsonValue(`{"a":1}`)); got != `{"a":1}` {
+	if got := string(JSONValue(`{"a":1}`)); got != `{"a":1}` {
 		t.Errorf("jsonValue(json) = %s", got)
 	}
-	if got := string(jsonValue("-")); got != `"-"` {
+	if got := string(JSONValue("-")); got != `"-"` {
 		t.Errorf("jsonValue(-) = %s; want a JSON string", got)
 	}
-	if timePtr(time.Time{}) != nil {
+	if TimePtr(time.Time{}) != nil {
 		t.Error("timePtr(zero) is not nil")
 	}
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	if p := timePtr(now); p == nil || !p.Equal(now) {
+	if p := TimePtr(now); p == nil || !p.Equal(now) {
 		t.Errorf("timePtr = %v", p)
 	}
 }

@@ -16,7 +16,7 @@ import (
 // referenced_by), the comments and the history are left empty, and the
 // progress is not filled.
 func (ss *Session) ShowAt(arg, at string) (ShowView, error) {
-	ts, arg, err := ss.forTask(arg)
+	ts, arg, err := ss.ForTask(arg)
 	if err != nil {
 		return ShowView{}, err
 	}
@@ -37,7 +37,7 @@ func (ss *Session) ShowAt(arg, at string) (ShowView, error) {
 	}
 	data, err := s.Repo().ReadAt(commit, model.TaskPath(e.ULID))
 	if errors.Is(err, fs.ErrNotExist) {
-		return ShowView{}, newErr(KindNotFound, "restore_at.not_found", fmt.Errorf("%s did not exist at %s", cmp.Or(ix.DisplayID(e), e.ULID.String()), at), "at", at)
+		return ShowView{}, NewErr(KindNotFound, "restore_at.not_found", fmt.Errorf("%s did not exist at %s", cmp.Or(ix.DisplayID(e), e.ULID.String()), at), "at", at)
 	}
 	if err != nil {
 		return ShowView{}, err

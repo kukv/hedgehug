@@ -129,13 +129,13 @@ func scopedGuard(id string, ulid model.ULID) func(*store.Tx, *schema.Schema) err
 	return func(tx *store.Tx, cur *schema.Schema) error {
 		t, err := tx.Task(ulid)
 		if errors.Is(err, store.ErrNotFound) {
-			return newErr(KindNotFound, "task.not_found", fmt.Errorf("%s: %w", id, err), "input", id)
+			return NewErr(KindNotFound, "task.not_found", fmt.Errorf("%s: %w", id, err), "input", id)
 		}
 		if err != nil {
 			return err
 		}
 		if t.DeletedAt != nil {
-			return newErr(KindConflict, "task.deleted", fmt.Errorf("%s is deleted; restore %s first", id, id), "id", id)
+			return NewErr(KindConflict, "task.deleted", fmt.Errorf("%s is deleted; restore %s first", id, id), "id", id)
 		}
 		return scopedContainer(cur, id, t.Kind)
 	}
@@ -181,7 +181,7 @@ func (ss *Session) scopedWrite(s *store.Store, ix *index.Index, ulid model.ULID,
 	if err != nil {
 		return ScopedResult{}, err
 	}
-	r := ScopedResult{Index: ix, Project: ulid, Entry: e, Committed: !hash.IsZero(), Commit: commitHex(hash)}
+	r := ScopedResult{Index: ix, Project: ulid, Entry: e, Committed: !hash.IsZero(), Commit: CommitHex(hash)}
 	if sc, ok := after.ScopedFor(ulid); ok {
 		r.Scoped = &sc
 	}
@@ -193,13 +193,13 @@ func scopedInvalid(ps []schema.Problem) error {
 	for i, p := range ps {
 		msgs[i] = p.String()
 	}
-	return newErr(KindInvalid, "scoped.invalid", fmt.Errorf("the override breaks the schema: %s", strings.Join(msgs, "; ")), "problems", msgs)
+	return NewErr(KindInvalid, "scoped.invalid", fmt.Errorf("the override breaks the schema: %s", strings.Join(msgs, "; ")), "problems", msgs)
 }
 
 // scopedContainer refuses a kind of sc whose role is not container.
 func scopedContainer(sc *schema.Schema, id, kind string) error {
 	if k, ok := sc.Kind(kind); !ok || k.Role != schema.RoleContainer {
-		return newErr(KindInvalid, "scoped.not_container",
+		return NewErr(KindInvalid, "scoped.not_container",
 			fmt.Errorf("%s is a %s, which is not a container", id, kind), "id", id, "kind", kind)
 	}
 	return nil

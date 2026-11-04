@@ -275,7 +275,7 @@ func TestMuteOpenWarningsIsCountedPerCaller(t *testing.T) {
 	}
 	var mu gosync.Mutex
 	ts.Warn = func(m string) { mu.Lock(); ts.warns = append(ts.warns, m); mu.Unlock() }
-	first, second := ts.muteOpenWarnings([]string{"gone"}), ts.muteOpenWarnings([]string{"gone"})
+	first, second := ts.MuteOpenWarnings([]string{"gone"}), ts.MuteOpenWarnings([]string{"gone"})
 	first()
 	if _, err := ts.Mount(); err != nil {
 		t.Fatal(err)
@@ -338,7 +338,7 @@ func TestCrossStoreCheckFailureIsAWarning(t *testing.T) {
 	if fs := ts.crossStoreFindings("org-a"); len(fs) != 0 {
 		t.Errorf("findings = %+v; want none", fs)
 	}
-	ws := ts.crossStoreWarnings("org-a")
+	ws := ts.CrossStoreWarnings("org-a")
 	if len(ts.warns) != 1 || !strings.HasPrefix(ts.warns[0], "could not check cross-store references: ") {
 		t.Errorf("doctor warned %q; want the could-not-check warning", ts.warns)
 	}

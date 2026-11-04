@@ -110,7 +110,7 @@ func TestShowAMovedTaskOfAStoreNotMounted(t *testing.T) {
 	if err := c.Save(); err != nil {
 		t.Fatal(err)
 	}
-	ts.dropMount()
+	ts.DropMount()
 	_, err = ts.ForStore("org-a").Show("API-1")
 	var oe *Error
 	if !errors.As(err, &oe) || oe.Code != "task.moved" || hasKey(oe.Args, "store") || hasKey(oe.Args, "id") || oe.Args["store_ulid"] == nil {
@@ -214,7 +214,7 @@ func hasKey(m map[string]any, k string) bool { _, ok := m[k]; return ok }
 func TestMovedUnknownErr(t *testing.T) {
 	t.Parallel()
 	ulid := model.NewULID()
-	err := movedUnknownErr(ulid)
+	err := MovedUnknownErr(ulid)
 	var oe *Error
 	if !errors.As(err, &oe) || oe.Kind != KindNotFound || oe.Code != "task.moved" {
 		t.Fatalf("err = %v; want KindNotFound task.moved", err)

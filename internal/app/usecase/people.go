@@ -36,7 +36,7 @@ func (ss *Session) People() ([]string, error) {
 	for _, m := range stores {
 		ix, err := m.Index()
 		if err != nil {
-			return nil, classify(err)
+			return nil, Classify(err)
 		}
 		for _, e := range ix.Tasks() {
 			for _, n := range e.Assignees {
@@ -53,11 +53,11 @@ func (ss *Session) People() ([]string, error) {
 		var histErr error
 		if err := m.With(func(*index.Index) {
 			var h *history.History
-			if h, histErr = ss.openHistory(m.Store, m.Name); histErr == nil {
+			if h, histErr = ss.OpenHistory(m.Store, m.Name); histErr == nil {
 				authors = h.Authors()
 			}
 		}); err != nil {
-			return nil, classify(err)
+			return nil, Classify(err)
 		}
 		if histErr != nil {
 			return nil, histErr

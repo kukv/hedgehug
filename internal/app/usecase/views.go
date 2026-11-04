@@ -61,13 +61,13 @@ func viewOp(detail string) store.Op { return store.Op{Name: "view", Detail: deta
 
 func badViewName(name string) error {
 	if err := view.ValidName(name); err != nil {
-		return newErr(KindUsage, "view.bad_name", err, "value", name)
+		return NewErr(KindUsage, "view.bad_name", err, "value", name)
 	}
 	return nil
 }
 
 func viewNotFound(name string) error {
-	return newErr(KindNotFound, "view.not_found", fmt.Errorf("no view named %q: %w", name, view.ErrNotFound), "name", name)
+	return NewErr(KindNotFound, "view.not_found", fmt.Errorf("no view named %q: %w", name, view.ErrNotFound), "name", name)
 }
 
 // sameNameOf finds a view other than name whose name is the same but for
@@ -83,9 +83,9 @@ func sameNameOf(es []view.Entry, name string) (string, bool) {
 
 func nameTaken(name, existing string) error {
 	if existing == name {
-		return newErr(KindConflict, "view.name_taken", fmt.Errorf("view %q already exists", name), "name", name, "existing", existing)
+		return NewErr(KindConflict, "view.name_taken", fmt.Errorf("view %q already exists", name), "name", name, "existing", existing)
 	}
-	return newErr(KindConflict, "view.name_taken",
+	return NewErr(KindConflict, "view.name_taken",
 		fmt.Errorf("view %q already exists as %q; names that differ only in case are the same name", name, existing), "name", name, "existing", existing)
 }
 
@@ -102,7 +102,7 @@ func (ss *Session) ViewPatch(name string, to *string, ch ViewChange) (ViewResult
 		return ss.ViewUpdate(name, ch)
 	}
 	if ch != (ViewChange{}) {
-		return ViewResult{}, newErr(KindUsage, "view.rename_with_settings",
+		return ViewResult{}, NewErr(KindUsage, "view.rename_with_settings",
 			errors.New("a view is renamed or has its settings changed, not both in one request"))
 	}
 	return ss.ViewRename(name, *to)
@@ -127,7 +127,7 @@ func (ss *Session) writeView(name string, ch ViewChange, create bool) (ViewResul
 	if err != nil {
 		return ViewResult{}, err
 	}
-	if err := ss.checkWritable(s); err != nil {
+	if err := ss.CheckWritable(s); err != nil {
 		return ViewResult{}, err
 	}
 	verb := "save"
@@ -151,7 +151,7 @@ func (ss *Session) writeView(name string, ch ViewChange, create bool) (ViewResul
 			v = view.New(name)
 			v.Layout = "tree"
 		case es[i].Err != nil:
-			return newErr(KindInvalid, "view.broken",
+			return NewErr(KindInvalid, "view.broken",
 				fmt.Errorf("%s: %w; fix it by hand or remove it with hedgehug view rm", es[i].Rel, es[i].Err), "name", name)
 		default:
 			v = es[i].View
@@ -168,7 +168,7 @@ func (ss *Session) writeView(name string, ch ViewChange, create bool) (ViewResul
 	if err != nil {
 		return ViewResult{}, err
 	}
-	return ViewResult{View: v, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
+	return ViewResult{View: v, Committed: !hash.IsZero(), Commit: CommitHex(hash)}, nil
 }
 
 // applyViewChange sets what ch gives and checks the view that results.
@@ -197,11 +197,11 @@ func applyViewChange(v *view.View, ch ViewChange, s *store.Store) error {
 		set(&v.Kanban.Swimlane, ch.Swimlane)
 	}
 	if ps := v.Problems(); len(ps) > 0 {
-		return newErr(KindUsage, "view.bad_value", errors.New(strings.Join(ps, "; ")))
+		return NewErr(KindUsage, "view.bad_value", errors.New(strings.Join(ps, "; ")))
 	}
 	if ch.Columns != nil {
 		if miss := v.MissingColumns(s.Schema()); len(miss) > 0 {
-			return newErr(KindInvalid, "view.bad_column", fmt.Errorf("column %q is neither a field (%s) nor a property of the schema", miss[0], strings.Join(view.Builtins, ", ")), "column", miss[0])
+			return NewErr(KindInvalid, "view.bad_column", fmt.Errorf("column %q is neither a field (%s) nor a property of the schema", miss[0], strings.Join(view.Builtins, ", ")), "column", miss[0])
 		}
 	}
 	if v.Layout == "tree" {
@@ -211,7 +211,7 @@ func applyViewChange(v *view.View, ch ViewChange, s *store.Store) error {
 		}
 		if HasTerm(q, "sort") || HasTerm(q, "group") {
 			//nolint:revive,staticcheck // the message is a sentence, as the CLI prints it
-			return newErr(KindUsage, "view.tree_order", errors.New("a tree view orders tasks by rank; its query takes neither group: nor sort:"))
+			return NewErr(KindUsage, "view.tree_order", errors.New("a tree view orders tasks by rank; its query takes neither group: nor sort:"))
 		}
 	}
 	return nil
@@ -231,7 +231,7 @@ func (ss *Session) ViewList() ([]SavedView, error) {
 	out := []SavedView{}
 	for _, e := range es {
 		if e.Err != nil {
-			ss.warn(fmt.Sprintf("%s: %v; run hedgehug doctor", e.Rel, e.Err))
+			ss.AddWarning(fmt.Sprintf("%s: %v; run hedgehug doctor", e.Rel, e.Err))
 			continue
 		}
 		out = append(out, SavedViewOf(e.View))
@@ -253,7 +253,7 @@ func (ss *Session) ViewGet(name string) (*view.View, error) {
 		return nil, viewNotFound(name)
 	}
 	if e.Err != nil {
-		return nil, newErr(KindInvalid, "view.broken", fmt.Errorf("%s: %w; fix it by hand or remove it with hedgehug view rm", e.Rel, e.Err), "name", name)
+		return nil, NewErr(KindInvalid, "view.broken", fmt.Errorf("%s: %w; fix it by hand or remove it with hedgehug view rm", e.Rel, e.Err), "name", name)
 	}
 	return e.View, nil
 }
@@ -264,7 +264,7 @@ func (ss *Session) ViewRemove(name string) (ViewResult, error) {
 	if err != nil {
 		return ViewResult{}, err
 	}
-	if err := ss.checkWritable(s); err != nil {
+	if err := ss.CheckWritable(s); err != nil {
 		return ViewResult{}, err
 	}
 	var v *view.View
@@ -285,7 +285,7 @@ func (ss *Session) ViewRemove(name string) (ViewResult, error) {
 	if v == nil {
 		v = view.New(name)
 	}
-	return ViewResult{View: v, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
+	return ViewResult{View: v, Committed: !hash.IsZero(), Commit: CommitHex(hash)}, nil
 }
 
 // ViewRename moves the view oldName to newName, as its bytes are. A name
@@ -299,7 +299,7 @@ func (ss *Session) ViewRename(oldName, newName string) (ViewResult, error) {
 	if err != nil {
 		return ViewResult{}, err
 	}
-	if err := ss.checkWritable(s); err != nil {
+	if err := ss.CheckWritable(s); err != nil {
 		return ViewResult{}, err
 	}
 	v := view.New(newName)
@@ -334,5 +334,5 @@ func (ss *Session) ViewRename(oldName, newName string) (ViewResult, error) {
 	if err != nil {
 		return ViewResult{}, err
 	}
-	return ViewResult{View: v, OldName: oldName, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
+	return ViewResult{View: v, OldName: oldName, Committed: !hash.IsZero(), Commit: CommitHex(hash)}, nil
 }

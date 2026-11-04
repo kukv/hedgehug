@@ -124,7 +124,7 @@ func ResolveDestination(set *mount.Set, st current.State, in Input, warn func(st
 	}
 	ids := repoIDsOf(repo)
 	if in.NeedRepo && len(ids) == 0 {
-		return nil, nil, nil, newErr(KindUsage, "add.repo_unavailable",
+		return nil, nil, nil, NewErr(KindUsage, "add.repo_unavailable",
 			errors.New("--repo needs the current directory to be in a git repository with a remote that gives a repo ID"))
 	}
 	stages := []func(*git.Repository, []string) (result, error){r.explicit, r.use, r.branch, r.repo, r.defaults}
@@ -198,7 +198,7 @@ func (r *resolver) explicit(*git.Repository, []string) (result, error) {
 		return result{}, nil
 	}
 	if in.Parent != "" && in.Project != "" {
-		return result{}, newErr(KindUsage, "add.parent_and_project", errors.New("--parent and --project cannot be given together"))
+		return result{}, NewErr(KindUsage, "add.parent_and_project", errors.New("--parent and --project cannot be given together"))
 	}
 	if arg := cmp.Or(in.Parent, in.Project); arg != "" {
 		m, e, err := r.findTask(arg)
@@ -207,7 +207,7 @@ func (r *resolver) explicit(*git.Repository, []string) (result, error) {
 		}
 		if in.Project != "" && e.Kind != ProjectKind {
 			label := m.Name + ":" + idOrULID(e)
-			return result{}, newErr(KindInvalid, "add.not_project",
+			return result{}, NewErr(KindInvalid, "add.not_project",
 				fmt.Errorf("%s is a %s, not a project", label, e.Kind), "id", label, "kind", e.Kind)
 		}
 		d, err := parentDest(m, e, 1)
@@ -249,7 +249,7 @@ func (r *resolver) findTask(arg string) (*mount.Mounted, *index.Entry, error) {
 	if s := r.in.Store; s != "" {
 		if name, rest, ok := strings.Cut(arg, ":"); ok && r.hasStore(name) {
 			if name != s {
-				return nil, nil, newErr(KindUsage, "store.conflict",
+				return nil, nil, NewErr(KindUsage, "store.conflict",
 					fmt.Errorf("%q is in %s, but --store is %s", arg, name, s), "store", s, "named", name)
 			}
 			q = rest
@@ -373,7 +373,7 @@ func (r *resolver) workspaceAnywhere(arg string) (*Destination, error) {
 	for i, h := range hits {
 		lines[i] = fmt.Sprintf("%s:%s (%s, %s)", h.m.Name, h.w.Name, h.w.IDPrefix, h.w.ULID)
 	}
-	return nil, newErr(KindAmbiguous, "workspace.ambiguous",
+	return nil, NewErr(KindAmbiguous, "workspace.ambiguous",
 		fmt.Errorf("%q matches %d workspaces:\n  %s", arg, len(hits), strings.Join(lines, "\n  ")), "input", arg)
 }
 
@@ -399,7 +399,7 @@ func (r *resolver) root(m *mount.Mounted, wsArg string, stage int) (*Destination
 		wss := ix.Workspaces()
 		switch len(wss) {
 		case 0:
-			err = newErr(KindConflict, "workspace.none",
+			err = NewErr(KindConflict, "workspace.none",
 				errors.New("the store has no workspace; add one with hedgehug workspace add <name> --prefix <PREFIX>"))
 		case 1:
 			cp := *wss[0]
@@ -413,7 +413,7 @@ func (r *resolver) root(m *mount.Mounted, wsArg string, stage int) (*Destination
 				ch = &Choice{What: "workspace", Options: names}
 				return
 			}
-			err = newErr(KindUsage, "choice.required",
+			err = NewErr(KindUsage, "choice.required",
 				fmt.Errorf("workspace is needed; give one with --workspace: %s", strings.Join(names, ", ")),
 				"what", "workspace", "candidates", names)
 		}
@@ -555,7 +555,7 @@ func (r *resolver) repo(_ *git.Repository, ids []string) (result, error) {
 				return pick(c)
 			}
 		}
-		return result{}, newErr(KindUsage, "choice.invalid",
+		return result{}, NewErr(KindUsage, "choice.invalid",
 			fmt.Errorf("%q is not one of: %s", r.in.PickProject, strings.Join(options, ", ")), "what", "project", "candidates", options)
 	}
 	if r.in.Interactive {
@@ -568,7 +568,7 @@ func (r *resolver) repo(_ *git.Repository, ids []string) (result, error) {
 			}
 		}
 	}
-	return result{}, newErr(KindUsage, "choice.required",
+	return result{}, NewErr(KindUsage, "choice.required",
 		fmt.Errorf("project is needed; give one with --project: %s", strings.Join(options, ", ")),
 		"what", "project", "candidates", options)
 }
@@ -631,7 +631,7 @@ func (r *resolver) defaults(*git.Repository, []string) (result, error) {
 		if r.in.Interactive {
 			return result{choice: &Choice{What: "store", Options: names}}, nil
 		}
-		err = newErr(KindUsage, "choice.required",
+		err = NewErr(KindUsage, "choice.required",
 			fmt.Errorf("store is needed; give one with --store or set one with hedgehug store default: %s", strings.Join(names, ", ")),
 			"what", "store", "candidates", names)
 	}

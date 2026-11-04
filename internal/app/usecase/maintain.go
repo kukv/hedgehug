@@ -4,174 +4,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/kukv/hedgehug/internal/app/domain/merge"
-	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/storage/mount"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
-	"github.com/kukv/hedgehug/internal/lib/osfs"
-	"github.com/kukv/hedgehug/internal/lib/plural"
 )
-
-// ViolationsText is the text of a refused write: what it breaks, and the
-// violations on the lines after it.
-func ViolationsText(ve *store.ValidationError) string {
-	var b strings.Builder
-	b.WriteString("the change breaks the schema:")
-	for _, v := range ve.Violations {
-		b.WriteString("\n  " + v.String())
-	}
-	return b.String()
-}
-
-// SchemaCheck opens the store and checks its schema. A schema.yaml that does
-// not decode keeps the store from opening; that is then the one finding.
-func (ss *Session) SchemaCheck() ([]maintenance.Finding, error) {
-	_, e, err := ss.Entry()
-	if err != nil {
-		return nil, err
-	}
-	s, err := ss.openStoreAt(e.Path)
-	if err != nil {
-		if data, rerr := osfs.ReadFile(filepath.Join(e.Path, schema.Path)); rerr == nil {
-			if sc, fs := maintenance.SchemaFile(data); sc == nil {
-				return fs, nil
-			}
-		}
-		return nil, err
-	}
-	defer func() { _ = s.Repo().Close() }()
-	// plain ids: the report is the store's own, under its heading
-	ix, err := index.Open(s)
-	if err != nil {
-		return nil, err
-	}
-	return maintenance.Schema(s, ix)
-}
-
-// MigrationPlan is what a migration writes: the new schema and the tasks
-// it changes, and the task files it leaves since they do not decode.
-type MigrationPlan struct {
-	Schema  *schema.Schema
-	Changed []*model.Task
-	Skipped []model.ULID
-	// Commit is the hex hash of the commit a migration made; "" for a dry
-	// run and when nothing changed.
-	Commit string
-}
-
-// Migrate applies m to the schema of the store and to its tasks. With dryRun
-// it writes nothing. The index is the one from before the write in a dry
-// run, and refreshed after a write.
-func (ss *Session) Migrate(m schema.Migration, dryRun bool) (*index.Index, *MigrationPlan, error) {
-	// A dry run writes nothing, so a read-only store may be planned.
-	open := ss.OpenForWrite
-	if dryRun {
-		open = ss.Open
-	}
-	s, ix, err := open()
-	if err != nil {
-		return nil, nil, err
-	}
-	if dryRun {
-		p, err := planMigration(s, ix, m)
-		if err != nil {
-			return nil, nil, err
-		}
-		return ix, p, nil
-	}
-	// The plan is made under the store lock, from the schema Update has
-	// just read, so that no write in between is lost.
-	var p *MigrationPlan
-	hash, err := ss.UpdateCommit(s, store.Op{Name: "migrate", SkipTransitions: true}, func(tx *store.Tx) error {
-		var err error
-		if p, err = planMigration(s, ix, m); err != nil {
-			return err
-		}
-		for _, t := range p.Changed {
-			if err := tx.PutTask(t); err != nil {
-				return err
-			}
-		}
-		return tx.PutSchema(p.Schema)
-	})
-	if err != nil {
-		// Name the task: the migration writes many.
-		var ve *store.ValidationError
-		if errors.As(err, &ve) {
-			return nil, nil, newErr(KindInvalid, "migrate.invalid", fmt.Errorf("%s: %v", RefName(ix, ve.Task), ViolationsText(ve)))
-		}
-		return nil, nil, err
-	}
-	p.Commit = commitHex(hash)
-	if err := ix.Refresh(); err != nil {
-		return nil, nil, err
-	}
-	return ix, p, nil
-}
-
-// planMigration applies m to the schema of s and to its tasks, without
-// writing anything. ix only names the tasks it refuses.
-func planMigration(s *store.Store, ix *index.Index, m schema.Migration) (*MigrationPlan, error) {
-	sc := s.Schema()
-	next, err := sc.Migrate(m)
-	if err != nil {
-		return nil, err
-	}
-	if ps := next.Check(); len(ps) > 0 {
-		return nil, &store.SchemaError{Problems: ps}
-	}
-	p := &MigrationPlan{Schema: next}
-	var refused []string
-	for t, err := range s.Tasks() {
-		if err != nil {
-			ulid, ok := brokenTask(err)
-			if !ok {
-				return nil, err
-			}
-			p.Skipped = append(p.Skipped, ulid)
-			continue
-		}
-		ok, err := m.ApplyTask(t, sc)
-		switch {
-		case err != nil:
-			refused = append(refused, RefName(ix, t.ULID)+": "+err.Error())
-		case ok:
-			p.Changed = append(p.Changed, t)
-		}
-	}
-	if len(refused) > 0 {
-		slices.Sort(refused)
-		return nil, newErr(KindInvalid, "migrate.invalid", fmt.Errorf("cannot migrate %s:\n  %s", TaskCount(len(refused)), strings.Join(refused, "\n  ")))
-	}
-	slices.SortFunc(p.Changed, func(x, y *model.Task) int { return strings.Compare(x.ULID.String(), y.ULID.String()) })
-	slices.SortFunc(p.Skipped, func(x, y model.ULID) int { return strings.Compare(x.String(), y.String()) })
-	return p, nil
-}
-
-// brokenTask returns the ULID of the task file that err, from Store.Tasks,
-// says does not decode or holds another task.
-func brokenTask(err error) (model.ULID, bool) {
-	var fe *store.FileError
-	if !errors.As(err, &fe) || !errors.As(err, new(*model.DecodeError)) && !errors.Is(err, store.ErrULIDMismatch) {
-		return model.ULID{}, false
-	}
-	ulid, perr := model.ParseTaskPath(fe.Path)
-	return ulid, perr == nil
-}
-
-// TaskCount is n tasks in words: "1 task", "3 tasks".
-func TaskCount(n int) string {
-	return plural.Count(n, "task")
-}
 
 // Fixed is something doctor --fix repaired. Line is the text line, made when
 // the repair is read, with the names the store has after it.
@@ -209,7 +52,7 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 	if ss.StoreName != "" || len(entries) == 0 {
 		e, err := c.Select(ss.StoreName)
 		if err != nil {
-			return nil, selectError(ss.StoreName, err)
+			return nil, SelectError(ss.StoreName, err)
 		}
 		entries = []config.StoreEntry{e}
 	}
@@ -222,7 +65,7 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 	rebuilt := make([]*Rebuilt, len(entries))
 	if fix {
 		for i, e := range entries {
-			if err := ss.finishRebuild(e); err != nil {
+			if err := ss.FinishRebuild(e); err != nil {
 				finishErr[e.Name] = err
 				continue
 			}
@@ -235,22 +78,22 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 	// The reports tell of a store that does not open; the mount need not.
 	var broken []string
 	for _, e := range entries {
-		if s, err := ss.openStoreAt(e.Path); err != nil {
+		if s, err := ss.OpenStoreAt(e.Path); err != nil {
 			broken = append(broken, e.Name)
 		} else {
 			_ = s.Repo().Close()
 		}
 	}
-	defer ss.muteOpenWarnings(broken)()
+	defer ss.MuteOpenWarnings(broken)()
 	// the duplicates are the same for every store: found once, when first needed
-	var dups []duplicate
+	var dups []Duplicate
 	var dupsDone bool
-	duplicatesOnce := func() []duplicate {
+	duplicatesOnce := func() []Duplicate {
 		if !dupsDone {
 			dupsDone = true
 			var err error
-			if dups, err = ss.duplicates(); err != nil {
-				ss.warn("could not check duplicates across stores: " + err.Error())
+			if dups, err = ss.Duplicates(); err != nil {
+				ss.AddWarning("could not check duplicates across stores: " + err.Error())
 			}
 		}
 		return dups
@@ -295,7 +138,7 @@ func (ss *Session) Doctor(fix bool) ([]DoctorReport, error) {
 // that does not open is not repaired (the findings tell of it), nor is a
 // read-only one (a warning says so).
 func (ss *Session) doctorFix(c *config.Config, e config.StoreEntry) ([]Fixed, error) {
-	s, err := ss.openStoreAt(e.Path)
+	s, err := ss.OpenStoreAt(e.Path)
 	if err != nil {
 		return nil, nil
 	}
@@ -304,12 +147,12 @@ func (ss *Session) doctorFix(c *config.Config, e config.StoreEntry) ([]Fixed, er
 	var ro *ReadOnlyError
 	switch {
 	case errors.As(err, &ro):
-		ss.warn(fmt.Sprintf("%s is read-only, so it is not fixed (%s)", e.Name, ro.Access.Why()))
+		ss.AddWarning(fmt.Sprintf("%s is read-only, so it is not fixed (%s)", e.Name, ro.Access.Why()))
 		return nil, nil
 	case err != nil:
 		return nil, err
 	case len(repaired) > 0:
-		ss.dropMount() // the repair went in through a handle of its own
+		ss.DropMount() // the repair went in through a handle of its own
 	}
 	return repaired, nil
 }
@@ -317,11 +160,11 @@ func (ss *Session) doctorFix(c *config.Config, e config.StoreEntry) ([]Fixed, er
 // doctorStore is Doctor for the store e, after the repairs. A store that does
 // not open and has no finding is the error when it is the only one asked for,
 // else a finding of its own, so that the reports of the others stand.
-func (ss *Session) doctorStore(e config.StoreEntry, only bool, repaired []Fixed, duplicates func() []duplicate) (DoctorReport, error) {
+func (ss *Session) doctorStore(e config.StoreEntry, only bool, repaired []Fixed, duplicates func() []Duplicate) (DoctorReport, error) {
 	r := DoctorReport{Store: e.Name, Repaired: repaired}
 	// A store that does not open is told of by the findings, which say why;
 	// its references are not looked at.
-	opened, openErr := ss.openStoreAt(e.Path)
+	opened, openErr := ss.OpenStoreAt(e.Path)
 	if openErr == nil {
 		defer func() { _ = opened.Repo().Close() }()
 	}
@@ -378,7 +221,7 @@ func withRebuildFailure(fs []maintenance.Finding, name string, rerr error) []mai
 // fixStore repairs the files of HEAD of the store e, opened as s, as a sync
 // does, under the lock of a sync, and describes what it fixed.
 func (ss *Session) fixStore(c *config.Config, e config.StoreEntry, s *store.Store) ([]Fixed, error) {
-	if err := ss.checkWritable(s); err != nil {
+	if err := ss.CheckWritable(s); err != nil {
 		return nil, err
 	}
 	opt, err := ss.SyncOptions(c, e)
@@ -386,7 +229,7 @@ func (ss *Session) fixStore(c *config.Config, e config.StoreEntry, s *store.Stor
 		return nil, err
 	}
 	var repaired []merge.Repaired
-	err = s.WithLocalLock("sync.lock", syncLockWait, func() error {
+	err = s.WithLocalLock("sync.lock", SyncLockWait, func() error {
 		var err error
 		repaired, err = maintenance.Fix(s, opt)
 		return err
@@ -394,14 +237,14 @@ func (ss *Session) fixStore(c *config.Config, e config.StoreEntry, s *store.Stor
 	if err != nil || len(repaired) == 0 {
 		return nil, err
 	}
-	ss.markWritten(s)
-	ix, err := ss.indexOf(e.Name, s)
+	ss.MarkWritten(s)
+	ix, err := ss.IndexOf(e.Name, s)
 	if err != nil {
 		ix = nil // the ULIDs name what was repaired
 	}
 	out := make([]Fixed, 0, len(repaired))
 	for _, x := range repaired {
-		f := Fixed{ULID: x.ULID.String(), Kind: x.Kind, Value: jsonValue(x.Value), Author: x.Author}
+		f := Fixed{ULID: x.ULID.String(), Kind: x.Kind, Value: JSONValue(x.Value), Author: x.Author}
 		name := x.ULID.String()
 		if ix != nil {
 			if t, ok := ix.Task(x.ULID); ok {
@@ -410,7 +253,7 @@ func (ss *Session) fixStore(c *config.Config, e config.StoreEntry, s *store.Stor
 				f.Title, name = w.Name, w.Name+" ("+x.ULID.String()+")"
 			}
 		}
-		x.Value = detachedName(s, x.Kind, x.Value)
+		x.Value = DetachedName(s, x.Kind, x.Value)
 		f.Line = fmt.Sprintf("repaired: %s: %s", name, fixedContent(ix, x))
 		out = append(out, f)
 	}
@@ -432,6 +275,69 @@ func fixedContent(ix *index.Index, x merge.Repaired) string {
 	detail, _ := json.Marshal(struct {
 		Kind  string          `json:"kind"`
 		Value json.RawMessage `json:"value"`
-	}{x.Kind, jsonValue(x.Value)}) // a string and JSON always encode
+	}{x.Kind, JSONValue(x.Value)}) // a string and JSON always encode
 	return RepairedContent(ix, inbox.Item{Detail: detail})
+}
+
+// crossStoreFindings are the references of the store name to another mounted
+// store, as warnings of doctor. A store whose references cannot be read is a
+// warning of the session, not a finding: the other checks stand without it.
+func (ss *Session) crossStoreFindings(name string) []maintenance.Finding {
+	refs, err := ss.CrossRefs(name)
+	if err != nil {
+		ss.AddWarning("could not check cross-store references: " + err.Error())
+		return nil
+	}
+	var out []maintenance.Finding
+	for _, r := range refs {
+		// the same words as the Where of a check of the store's own tasks
+		where := FormatTaskLabel(r.From.ID, r.From.ID, r.From.ULID) + " " + r.From.Title
+		out = append(out, maintenance.Finding{Check: "cross_store_ref", Where: where, Task: r.From.ULID.String(), Msg: CrossRefMsg(r), Severity: maintenance.Warning})
+	}
+	maintenance.Sort(out)
+	return out
+}
+
+// duplicateFindings are the tasks of the store name that live in another
+// mounted store too, as warnings of doctor. ds is what duplicates found.
+func duplicateFindings(name string, ds []Duplicate) []maintenance.Finding {
+	var out []maintenance.Finding
+	for _, d := range ds {
+		if d.In(name) {
+			out = append(out, maintenance.Finding{Check: "duplicate_across_stores", Where: d.ULID.String(), Task: d.ULID.String(), Msg: d.Text(), Severity: maintenance.Warning})
+		}
+	}
+	return out
+}
+
+// forwardTargetFindings are the forwards of the store name whose moved_to is
+// no mounted store, as infos of doctor: the store may just not be mounted.
+func (ss *Session) forwardTargetFindings(name string) []maintenance.Finding {
+	set, err := ss.Mount()
+	if err != nil {
+		ss.AddWarning("could not check the forwards: " + err.Error())
+		return nil
+	}
+	m, ok := set.Get(name)
+	if !ok {
+		return nil
+	}
+	var out []maintenance.Finding
+	err = m.With(func(ix *index.Index) {
+		for _, f := range ix.Forwards() {
+			if f.Broken != "" || slices.ContainsFunc(set.Stores, func(o *mount.Mounted) bool { return o.ULID == f.MovedTo }) {
+				continue
+			}
+			where := f.ULID.String()
+			if f.ID != "" {
+				where = fmt.Sprintf("%s (%s)", f.ID, f.ULID)
+			}
+			out = append(out, maintenance.Finding{Check: "forward_target", Where: where, Msg: fmt.Sprintf("moved to a store that is not mounted (ULID %s)", f.MovedTo), Severity: maintenance.Info})
+		}
+	})
+	if err != nil {
+		ss.WarnOnce("forward_target:"+name, fmt.Sprintf("could not read the index of %s, so its forwards are not checked: %v", name, err))
+	}
+	maintenance.Sort(out)
+	return out
 }

@@ -66,7 +66,7 @@ func TestMoveParentAndOrder(t *testing.T) {
 	// refuses it.
 	_, err = ts.Move(MoveInput{Arg: "ME-2", Parent: "ME-1"})
 	// The store's error is not wrapped in an *Error; classify gives it its Code.
-	if c := classify(err); c == nil || c.Kind != KindInvalid || c.Code != "schema.violation" {
+	if c := Classify(err); c == nil || c.Kind != KindInvalid || c.Code != "schema.violation" {
 		t.Errorf("classify(%v) = %+v; want KindInvalid schema.violation", err, c)
 	}
 	if KindOf(err) != KindInvalid {

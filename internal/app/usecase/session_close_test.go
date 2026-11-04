@@ -89,7 +89,7 @@ func TestDropMountClosesTheSet(t *testing.T) {
 	if got := gitrepo.Live(root); got != before+2 {
 		t.Fatalf("live repos after Mount = %d, want %d", got, before+2)
 	}
-	reader.dropMount()
+	reader.DropMount()
 	if got := gitrepo.Live(root); got != before {
 		t.Errorf("live repos after dropMount = %d, want %d", got, before)
 	}

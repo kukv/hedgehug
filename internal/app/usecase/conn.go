@@ -82,7 +82,7 @@ func (ss *Session) Token(c *config.Config, acct config.Account) (string, error) 
 		if errors.As(err, &oe) {
 			return "", err
 		}
-		return "", newErr(KindInvalid, "auth.token", err, "account", acct.Name)
+		return "", NewErr(KindInvalid, "auth.token", err, "account", acct.Name)
 	}
 	e.tok, e.ok = tok, true
 	return tok, nil
@@ -122,7 +122,7 @@ func (ss *Session) Conn(c *config.Config, e config.StoreEntry) gitrepo.Conn {
 					p.User = nil
 					shown = p.String()
 				}
-				return nil, newErr(KindInvalid, "auth.insecure",
+				return nil, NewErr(KindInvalid, "auth.insecure",
 					fmt.Errorf("%s uses plain http, so the token is not sent; use https", shown), "url", shown)
 			}
 			tok, err := ss.Token(c, acct)
@@ -138,7 +138,7 @@ func (ss *Session) Conn(c *config.Config, e config.StoreEntry) gitrepo.Conn {
 // is KindInvalid, "auth.token".
 func (ss *Session) GitHub(c *config.Config, acct config.Account, host string) (*github.Client, error) {
 	if acct.Token.Kind == "" {
-		return nil, newErr(KindInvalid, "auth.token",
+		return nil, NewErr(KindInvalid, "auth.token",
 			fmt.Errorf("account %s has no token: to set; run hedgehug auth login %s, or set token: in config.yaml", acct.Name, acct.Name),
 			"account", acct.Name)
 	}
@@ -160,7 +160,7 @@ func (ss *Session) PickAccount(c *config.Config, name string) (config.Account, b
 			for i, x := range c.Accounts {
 				names[i] = x.Name
 			}
-			return config.Account{}, false, newErr(KindNotFound, "account.not_found",
+			return config.Account{}, false, NewErr(KindNotFound, "account.not_found",
 				fmt.Errorf("no account is named %q (accounts: %s)", name, strings.Join(names, ", ")),
 				"name", name, "candidates", names)
 		}

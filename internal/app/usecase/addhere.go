@@ -45,7 +45,7 @@ func (ss *Session) AddHere(in AddHereInput) (AddHereResult, *Confirm, *Choice, e
 	if ctx.Store != "" {
 		// an unknown store is said as the other commands say it
 		if _, err := c.Select(ctx.Store); err != nil {
-			return AddHereResult{}, nil, nil, selectError(ctx.Store, err)
+			return AddHereResult{}, nil, nil, SelectError(ctx.Store, err)
 		}
 	}
 	if ctx.DefaultStore == "" {
@@ -59,7 +59,7 @@ func (ss *Session) AddHere(in AddHereInput) (AddHereResult, *Confirm, *Choice, e
 	// one, which gave the warnings (context.json, hedgehug use): say them once.
 	// (This is for what is wrong with context.json. A store that does not open
 	// is told of once by warnSkipped.)
-	warn := ss.warn
+	warn := ss.AddWarning
 	if ctx.BranchParent != Unasked || ctx.PickProject != "" || ctx.PickStore != "" || ctx.PickWorkspace != "" {
 		warn = nil
 	}
@@ -100,7 +100,7 @@ func (ss *Session) AddHere(in AddHereInput) (AddHereResult, *Confirm, *Choice, e
 		st.Recent[dest.RepoID] = current.Ref{Store: dest.Store.ULID, Project: dest.Parent.ULID}
 		if err := current.Save(p.DataDir, st); err != nil {
 			// the task is added; only the memory of the project is lost
-			ss.warn("the project was not recorded for this repository: " + err.Error())
+			ss.AddWarning("the project was not recorded for this repository: " + err.Error())
 		}
 	}
 	return AddHereResult{TaskResult: res, Destination: dest}, nil, nil, nil
@@ -113,7 +113,7 @@ func (ss *Session) contextError(set *mount.Set, err error) error {
 		return err
 	}
 	if le.What == "task" {
-		return ss.mountResolveError(set, le.Input, le.Err)
+		return ss.MountResolveError(set, le.Input, le.Err)
 	}
 	if le.Store != nil {
 		// let ResolveWorkspace spell it out
@@ -126,5 +126,5 @@ func (ss *Session) contextError(set *mount.Set, err error) error {
 		}
 		return le.Err
 	}
-	return newErr(KindNotFound, "workspace.not_found", le.Err, "input", le.Input)
+	return NewErr(KindNotFound, "workspace.not_found", le.Err, "input", le.Input)
 }

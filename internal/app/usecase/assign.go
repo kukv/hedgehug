@@ -26,7 +26,7 @@ type Assign struct {
 func ParseAssign(s string) (Assign, error) {
 	i := strings.IndexByte(s, '=')
 	if i < 0 {
-		return Assign{}, newErr(KindUsage, "assign.form", fmt.Errorf("%q: want key=value, key+=value or key-=value", s), "input", s)
+		return Assign{}, NewErr(KindUsage, "assign.form", fmt.Errorf("%q: want key=value, key+=value or key-=value", s), "input", s)
 	}
 	a := Assign{Key: s[:i], Op: "=", Value: s[i+1:]}
 	if k, ok := strings.CutSuffix(a.Key, "+"); ok {
@@ -35,7 +35,7 @@ func ParseAssign(s string) (Assign, error) {
 		a.Key, a.Op = k, "-="
 	}
 	if a.Key == "" {
-		return Assign{}, newErr(KindUsage, "assign.form", fmt.Errorf("%q: the key is missing", s), "input", s)
+		return Assign{}, NewErr(KindUsage, "assign.form", fmt.Errorf("%q: the key is missing", s), "input", s)
 	}
 	return a, nil
 }
@@ -76,21 +76,21 @@ func ApplyAssign(t *model.Task, a Assign, sc *schema.Schema, resolve func(string
 	case "blocked_by":
 		return setULIDs(&t.BlockedBy, a, resolve)
 	case "parent", "rank":
-		return newErr(KindInvalid, "assign.readonly", fmt.Errorf("%s cannot be set; use hedgehug mv", a.Key), "key", a.Key)
+		return NewErr(KindInvalid, "assign.readonly", fmt.Errorf("%s cannot be set; use hedgehug mv", a.Key), "key", a.Key)
 	}
 	if slices.Contains(model.TaskKeys(), a.Key) {
-		return newErr(KindInvalid, "assign.readonly", fmt.Errorf("%s cannot be set", a.Key), "key", a.Key)
+		return NewErr(KindInvalid, "assign.readonly", fmt.Errorf("%s cannot be set", a.Key), "key", a.Key)
 	}
 	p, ok := sc.Prop(a.Key)
 	if !ok {
-		return newErr(KindInvalid, "assign.unknown_key", fmt.Errorf("%s is not a field or a property of the schema", a.Key), "key", a.Key)
+		return NewErr(KindInvalid, "assign.unknown_key", fmt.Errorf("%s is not a field or a property of the schema", a.Key), "key", a.Key)
 	}
 	return setProp(t, p, a, resolve)
 }
 
 func setScalar(dst *string, a Assign) error {
 	if a.Op != "=" {
-		return newErr(KindInvalid, "assign.single", fmt.Errorf("%s holds one value; use %s=<value>", a.Key, a.Key), "key", a.Key)
+		return NewErr(KindInvalid, "assign.single", fmt.Errorf("%s holds one value; use %s=<value>", a.Key, a.Key), "key", a.Key)
 	}
 	*dst = a.Value
 	return nil
@@ -101,7 +101,7 @@ func setList(dst *[]string, a Assign) error {
 	case a.Op == "=" && a.Value == "":
 		*dst = nil
 	case a.Value == "":
-		return newErr(KindInvalid, "assign.missing_value", fmt.Errorf("%s%s: the value is missing", a.Key, a.Op), "key", a.Key)
+		return NewErr(KindInvalid, "assign.missing_value", fmt.Errorf("%s%s: the value is missing", a.Key, a.Op), "key", a.Key)
 	case a.Op == "=":
 		*dst = []string{a.Value}
 	case a.Op == "+=":
@@ -143,10 +143,10 @@ func setProp(t *model.Task, p schema.Prop, a Assign, resolve func(string) (model
 		return nil
 	}
 	if !multi && a.Op != "=" {
-		return newErr(KindInvalid, "assign.single", fmt.Errorf("%s holds one value; use %s=<value>", a.Key, a.Key), "key", a.Key)
+		return NewErr(KindInvalid, "assign.single", fmt.Errorf("%s holds one value; use %s=<value>", a.Key, a.Key), "key", a.Key)
 	}
 	if multi && a.Op != "=" && a.Value == "" {
-		return newErr(KindInvalid, "assign.missing_value", fmt.Errorf("%s%s: the value is missing", a.Key, a.Op), "key", a.Key)
+		return NewErr(KindInvalid, "assign.missing_value", fmt.Errorf("%s%s: the value is missing", a.Key, a.Op), "key", a.Key)
 	}
 	n, err := propValue(p, a.Value, resolve)
 	if err != nil {
@@ -184,7 +184,7 @@ func setProp(t *model.Task, p schema.Prop, a Assign, resolve func(string) (model
 func propValue(p schema.Prop, v string, resolve func(string) (model.ULID, error)) (*yaml.Node, error) {
 	tag := "!!str"
 	bad := func(what string) error {
-		return newErr(KindInvalid, "assign.bad_value", fmt.Errorf("%s: %q is not %s", p.Name, v, what), "key", p.Name, "value", v)
+		return NewErr(KindInvalid, "assign.bad_value", fmt.Errorf("%s: %q is not %s", p.Name, v, what), "key", p.Name, "value", v)
 	}
 	switch p.Type {
 	case schema.TypeNumber:

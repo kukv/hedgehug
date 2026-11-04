@@ -30,7 +30,7 @@ func ParseOlderThan(s string) (days int, err error) {
 			return days, nil
 		}
 	}
-	return 0, newErr(KindUsage, "purge.bad_period",
+	return 0, NewErr(KindUsage, "purge.bad_period",
 		fmt.Errorf("%q is not a period; write it in days, such as 90d (0d is everything)", s), "value", s)
 }
 
@@ -99,7 +99,7 @@ func (ss *Session) purgePlan(name string, ix *index.Index, days int) (plan Purge
 		if !old[e.ULID] {
 			continue
 		}
-		under := Descendants(ix, e.ULID, every)
+		under := Descendants(ix, e.ULID, Every)
 		if slices.ContainsFunc(under, func(d *index.Entry) bool { return d.DeletedAt == nil }) {
 			notDeleted = append(notDeleted, cmp.Or(ix.DisplayID(e), e.ULID.String()))
 			continue
@@ -123,10 +123,10 @@ func (ss *Session) purgePlan(name string, ix *index.Index, days int) (plan Purge
 // warnPurgeLeft tells of what purge leaves although it is old enough.
 func (ss *Session) warnPurgeLeft(notDeleted []string, broken int) {
 	if len(notDeleted) > 0 {
-		ss.warn("kept (a task under each is not deleted): " + strings.Join(notDeleted, ", "))
+		ss.AddWarning("kept (a task under each is not deleted): " + strings.Join(notDeleted, ", "))
 	}
 	if broken > 0 {
-		ss.warn(plural.Count(broken, "broken forward file") + " left; see hedgehug doctor")
+		ss.AddWarning(plural.Count(broken, "broken forward file") + " left; see hedgehug doctor")
 	}
 }
 
@@ -159,7 +159,7 @@ func (ss *Session) Purge(days int, yes bool) (PurgeResult, error) {
 // be removed under the lock is no longer that.
 func (ss *Session) PurgeConfirmed(days int, confirmed PurgePlan) (PurgeResult, error) {
 	if confirmed.Empty() {
-		return PurgeResult{}, confirmRequired("purge")
+		return PurgeResult{}, ConfirmRequired("purge")
 	}
 	return ss.purge(days, &confirmed, true)
 }
@@ -179,7 +179,7 @@ func (ss *Session) purge(days int, confirmed *PurgePlan, yes bool) (PurgeResult,
 		return PurgeResult{PurgePlan: plan}, nil
 	}
 	if !yes {
-		return PurgeResult{}, confirmRequired("purge")
+		return PurgeResult{}, ConfirmRequired("purge")
 	}
 	op := store.Op{Name: "purge", Detail: fmt.Sprintf("older than %dd", days)}
 	var lockedNotDeleted []string
@@ -193,7 +193,7 @@ func (ss *Session) purge(days int, confirmed *PurgePlan, yes bool) (PurgeResult,
 		}
 		plan, lockedNotDeleted, lockedBroken = ss.purgePlan(e.Name, ix, days)
 		if confirmed != nil && !slices.Equal(plan.keys(), confirmed.keys()) {
-			return newErr(KindConflict, "purge.changed", errors.New("what is to be purged changed after the confirmation; run purge again"))
+			return NewErr(KindConflict, "purge.changed", errors.New("what is to be purged changed after the confirmation; run purge again"))
 		}
 		for _, t := range plan.Tasks {
 			if err := tx.RemoveTask(t.ULID); err != nil {
@@ -215,5 +215,5 @@ func (ss *Session) purge(days int, confirmed *PurgePlan, yes bool) (PurgeResult,
 	ss.warnPurgeLeft(
 		slices.DeleteFunc(lockedNotDeleted, func(id string) bool { return slices.Contains(notDeleted, id) }),
 		max(0, lockedBroken-broken))
-	return PurgeResult{PurgePlan: plan, Commit: commitHex(hash)}, nil
+	return PurgeResult{PurgePlan: plan, Commit: CommitHex(hash)}, nil
 }

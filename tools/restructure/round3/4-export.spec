@@ -56,3 +56,4 @@ rename storeExists StoreExists
 rename syncLockWait SyncLockWait
 rename taskLabel FormatTaskLabel
 rename timePtr TimePtr
+rename readOnlyWhy ReadOnlyWhy

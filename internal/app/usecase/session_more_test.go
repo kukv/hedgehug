@@ -108,7 +108,7 @@ func TestMarkWrittenWarnsWhenPendingFails(t *testing.T) {
 	}
 	var after int
 	ts.AfterWrite = func(*store.Store, config.StoreEntry) { after++ }
-	ts.markWritten(s)
+	ts.MarkWritten(s)
 	if len(ts.warns) != 1 || !strings.HasPrefix(ts.warns[0], "the write is not marked for sync: ") {
 		t.Errorf("warns = %q", ts.warns)
 	}
@@ -124,7 +124,7 @@ func TestMarkWrittenWithoutAfterWriteMarksOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ts.markWritten(s)
+	ts.MarkWritten(s)
 	st, err := replicate.ReadState(s)
 	if err != nil || st.PendingSince.IsZero() {
 		t.Errorf("state = %+v, %v; want pending", st, err)
@@ -136,7 +136,7 @@ func TestMarkWrittenWithoutAfterWriteMarksOnly(t *testing.T) {
 
 func TestWarnNilIsNoop(t *testing.T) {
 	t.Parallel()
-	(&Session{}).warn("x")
+	(&Session{}).AddWarning("x")
 }
 
 func TestQueryOptions(t *testing.T) {

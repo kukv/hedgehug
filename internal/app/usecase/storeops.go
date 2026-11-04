@@ -52,22 +52,22 @@ type StoreInitResult struct {
 func (ss *Session) StoreInit(in StoreInitInput) (StoreInitResult, error) {
 	name, prefix, wsName := in.Name, in.Prefix, in.Workspace
 	if err := config.ValidStoreName(name); err != nil {
-		return StoreInitResult{}, newErr(KindUsage, "store.bad_name", err, "value", name)
+		return StoreInitResult{}, NewErr(KindUsage, "store.bad_name", err, "value", name)
 	}
-	if err := badIDPrefix(prefix); err != nil {
+	if err := BadIDPrefix(prefix); err != nil {
 		return StoreInitResult{}, err
 	}
 	if wsName == "" {
 		wsName = name
 	}
-	if err := badWorkspaceName(wsName); err != nil {
+	if err := BadWorkspaceName(wsName); err != nil {
 		return StoreInitResult{}, err
 	}
 	c, p, err := ss.Config()
 	if err != nil {
 		return StoreInitResult{}, err
 	}
-	if storeExists(c, name) {
+	if StoreExists(c, name) {
 		return StoreInitResult{}, storeExistsErr(name)
 	}
 	if err := ss.CheckPrefixElsewhere(prefix, name); err != nil {
@@ -120,7 +120,7 @@ func (ss *Session) StoreInit(in StoreInitInput) (StoreInitResult, error) {
 		}
 		res, err := ss.RunSync(s, opt, true)
 		if errors.Is(err, gitrepo.ErrRejected) || errors.Is(err, replicate.ErrUnrelated) {
-			err = newErr(KindConflict, "store.remote_not_empty",
+			err = NewErr(KindConflict, "store.remote_not_empty",
 				fmt.Errorf("the remote is not empty; to use the store there, run %s", addCommand(name, in.Remotes)))
 		}
 		if err != nil {
@@ -128,11 +128,11 @@ func (ss *Session) StoreInit(in StoreInitInput) (StoreInitResult, error) {
 		}
 		pushed = res.Pushed
 		for _, w := range res.Warnings {
-			ss.warn(fmt.Sprintf("%s: %s", name, w))
+			ss.AddWarning(fmt.Sprintf("%s: %s", name, w))
 		}
 	}
-	if err := ss.updateConfig(c, func(c *config.Config) error {
-		if storeExists(c, name) {
+	if err := ss.UpdateConfig(c, func(c *config.Config) error {
+		if StoreExists(c, name) {
 			return storeExistsErr(name)
 		}
 		if err := c.AddStore(name, dir, in.Remotes); err != nil {
@@ -203,23 +203,6 @@ func (m madeRemotes) note(err error) error {
 		err, strings.Join(m.github, ", "), addCommand(m.name, m.github))
 }
 
-// githubErr describes err of doing, as acct, and gives it its Kind and Code.
-func githubErr(err error, acct config.Account, doing string) error {
-	d := github.Describe(err, acct.ID(), acct.Name, doing)
-	var rl *github.RateLimitError
-	switch {
-	case errors.Is(err, github.ErrUnauthorized):
-		return newErr(KindInvalid, "auth.unauthorized", d, "account", acct.Name)
-	case errors.Is(err, github.ErrForbidden):
-		return newErr(KindInvalid, "github.forbidden", d, "account", acct.Name)
-	case errors.Is(err, github.ErrNotFound):
-		return newErr(KindInvalid, "github.not_found", d, "account", acct.Name)
-	case errors.As(err, &rl):
-		return newErr(KindInvalid, "github.rate_limit", d, "account", acct.Name)
-	}
-	return d
-}
-
 // prepareRemotes makes what the remotes of e need before the first push: a
 // bare repository for a local path that is missing, a private repository with
 // the hedgehug-store topic on a GitHub host. Other remotes must exist
@@ -248,7 +231,7 @@ func (ss *Session) prepareRemotes(c *config.Config, e config.StoreEntry, acct co
 		}
 		if !config.SameHost(host, acct.Host) {
 			// The token of the account must not go to another host.
-			return m, errors.Join(newErr(KindInvalid, "account.host_mismatch",
+			return m, errors.Join(NewErr(KindInvalid, "account.host_mismatch",
 				fmt.Errorf("%s is on %s, but account %s is on %s", u, host, acct.Name, acct.Host), "account", acct.Name), m.undo())
 		}
 		gh, err := ss.GitHub(c, acct, host)
@@ -266,20 +249,20 @@ func (ss *Session) prepareRemotes(c *config.Config, e config.StoreEntry, acct co
 				return m, errors.Join(fmt.Errorf("%s exists on GitHub, and whether it is empty could not be checked: %w", u, lerr), m.undo())
 			}
 			if !empty {
-				return m, errors.Join(newErr(KindConflict, "store.remote_not_empty",
+				return m, errors.Join(NewErr(KindConflict, "store.remote_not_empty",
 					fmt.Errorf("%s exists on GitHub and is not empty; to use the store there, run %s", u, addCommand(e.Name, e.Remotes))), m.undo())
 			}
 		case errors.Is(err, github.ErrForbidden):
-			return m, errors.Join(newErr(KindInvalid, "github.forbidden",
-				fmt.Errorf("%w\nmake an empty repository on GitHub and give its URL to hedgehug store init --remote; the creation is skipped", githubErr(err, acct, doing)),
+			return m, errors.Join(NewErr(KindInvalid, "github.forbidden",
+				fmt.Errorf("%w\nmake an empty repository on GitHub and give its URL to hedgehug store init --remote; the creation is skipped", GithubErr(err, acct, doing)),
 				"account", acct.Name), m.undo())
 		case err != nil:
-			return m, errors.Join(githubErr(err, acct, doing), m.undo())
+			return m, errors.Join(GithubErr(err, acct, doing), m.undo())
 		default:
 			m.github = append(m.github, u)
 		}
 		if err := gh.SetTopics(owner, repo, []string{"hedgehug-store"}); err != nil {
-			return m, errors.Join(githubErr(err, acct, "set the topic of "+owner+"/"+repo), m.undo())
+			return m, errors.Join(GithubErr(err, acct, "set the topic of "+owner+"/"+repo), m.undo())
 		}
 	}
 	return m, nil
@@ -290,13 +273,13 @@ func (ss *Session) prepareRemotes(c *config.Config, e config.StoreEntry, acct co
 // errNoAccounts.
 func noAccountChoice(c *config.Config) error {
 	if len(c.Accounts) == 0 {
-		return errNoAccounts
+		return ErrNoAccounts
 	}
 	names := make([]string, len(c.Accounts))
 	for i, a := range c.Accounts {
 		names[i] = a.Name
 	}
-	return choiceRequired("--account", names)
+	return ChoiceRequired("--account", names)
 }
 
 // noAccountFor is the error for the remote u on the GitHub host host when no
@@ -310,38 +293,14 @@ func noAccountFor(c *config.Config, host, u string) error {
 		}
 	}
 	if len(names) == 0 {
-		return newErr(KindConflict, "account.none",
+		return NewErr(KindConflict, "account.none",
 			fmt.Errorf("%s is on GitHub, so an account of %s makes it; run hedgehug auth login", u, host))
 	}
-	return choiceRequired("--account", names)
-}
-
-// updateConfig is c.Update, after the BeforeUpdate hook of the session (a
-// test writes config.yaml there, as another process could). A change makes
-// the session forget the stores it mounted.
-func (ss *Session) updateConfig(c *config.Config, fn func(*config.Config) error) error {
-	if ss.BeforeUpdate != nil {
-		ss.BeforeUpdate()
-	}
-	if err := c.Update(fn); err != nil {
-		return err
-	}
-	// the stores and the prefixes they share may have changed
-	ss.dropMount()
-	return nil
-}
-
-func storeExists(c *config.Config, name string) bool {
-	for _, e := range c.Stores {
-		if e.Name == name {
-			return true
-		}
-	}
-	return false
+	return ChoiceRequired("--account", names)
 }
 
 func storeExistsErr(name string) error {
-	return newErr(KindConflict, "store.exists", fmt.Errorf("a store named %q is already set up", name), "name", name)
+	return NewErr(KindConflict, "store.exists", fmt.Errorf("a store named %q is already set up", name), "name", name)
 }
 
 // addCommand is the hedgehug store add that takes the store of the remotes.
@@ -370,16 +329,16 @@ type StoreAddResult struct {
 // warning.
 func (ss *Session) StoreAdd(name string, remotes []string, path, account string) (StoreAddResult, error) {
 	if len(remotes) == 0 {
-		return StoreAddResult{}, newErr(KindUsage, "store.remote_required", errors.New("a remote is needed"))
+		return StoreAddResult{}, NewErr(KindUsage, "store.remote_required", errors.New("a remote is needed"))
 	}
 	if err := config.ValidStoreName(name); err != nil {
-		return StoreAddResult{}, newErr(KindUsage, "store.bad_name", err, "value", name)
+		return StoreAddResult{}, NewErr(KindUsage, "store.bad_name", err, "value", name)
 	}
 	c, p, err := ss.Config()
 	if err != nil {
 		return StoreAddResult{}, err
 	}
-	if storeExists(c, name) {
+	if StoreExists(c, name) {
 		return StoreAddResult{}, storeExistsErr(name)
 	}
 	// An account that is named must be there, before anything is cloned.
@@ -407,7 +366,7 @@ func (ss *Session) StoreAdd(name string, remotes []string, path, account string)
 	cloned, err := gitrepo.CloneWith(remotes[0], dir, ss.Conn(c, e))
 	if err != nil {
 		// KindInvalid, not KindUsage: the CLI exits 1.
-		return StoreAddResult{}, newErr(KindInvalid, "store.clone_failed", err, "remote", remotes[0])
+		return StoreAddResult{}, NewErr(KindInvalid, "store.clone_failed", err, "remote", remotes[0])
 	}
 	_ = cloned.Close() // the store is opened below
 	// The handle is closed before the directory goes: Windows cannot remove
@@ -419,9 +378,9 @@ func (ss *Session) StoreAdd(name string, remotes []string, path, account string)
 		}
 		return errors.Join(err, clearDir(dir, existed))
 	}
-	s, err = ss.openStoreAt(dir)
+	s, err = ss.OpenStoreAt(dir)
 	if err != nil {
-		return StoreAddResult{}, undo(newErr(KindInvalid, "store.not_hedgehug", fmt.Errorf("%s is not a hedgehug store: %w", remotes[0], err), "name", name))
+		return StoreAddResult{}, undo(NewErr(KindInvalid, "store.not_hedgehug", fmt.Errorf("%s is not a hedgehug store: %w", remotes[0], err), "name", name))
 	}
 	defer func() { _ = s.Repo().Close() }()
 	if err := s.Repo().RegisterMergeDriver(); err != nil {
@@ -451,11 +410,11 @@ func (ss *Session) StoreAdd(name string, remotes []string, path, account string)
 			if acc, aerr := replicate.ReadAccess(s); aerr != nil || !acc.ReadOnly || acc.Reason != replicate.ReasonPushDenied {
 				return StoreAddResult{}, undo(fmt.Errorf("set up %s: %w", name, err))
 			}
-			ss.warn(fmt.Sprintf("%s: %v; the setup commit stays here", name, err))
+			ss.AddWarning(fmt.Sprintf("%s: %v; the setup commit stays here", name, err))
 		}
 	}
-	if err := ss.updateConfig(c, func(c *config.Config) error {
-		if storeExists(c, name) {
+	if err := ss.UpdateConfig(c, func(c *config.Config) error {
+		if StoreExists(c, name) {
 			return storeExistsErr(name)
 		}
 		if err := c.AddStore(name, dir, remotes); err != nil {
@@ -470,8 +429,8 @@ func (ss *Session) StoreAdd(name string, remotes []string, path, account string)
 	}
 	// The index is a cache: a store it cannot be built for is added all the
 	// same, and the next command that needs it builds it again.
-	if _, err := ss.openHistory(s, name); err != nil {
-		ss.warn(fmt.Sprintf("%s: could not index its history: %v", name, err))
+	if _, err := ss.OpenHistory(s, name); err != nil {
+		ss.AddWarning(fmt.Sprintf("%s: could not index its history: %v", name, err))
 	}
 	ss.warnPrefixDuplicates(c, name, s)
 	return StoreAddResult{Name: name, Path: dir, Remotes: remotes}, nil
@@ -484,17 +443,17 @@ func (ss *Session) checkAccessOfNew(c *config.Config, e config.StoreEntry, s *st
 	opt, err := ss.SyncOptions(c, e)
 	if err == nil {
 		var warns []string
-		err = s.WithLocalLock("sync.lock", syncLockWait, func() error {
+		err = s.WithLocalLock("sync.lock", SyncLockWait, func() error {
 			var err error
 			_, warns, err = replicate.CheckAccess(s, opt, ss.Now())
 			return err
 		})
 		for _, w := range warns {
-			ss.warn(fmt.Sprintf("%s: %s", e.Name, w))
+			ss.AddWarning(fmt.Sprintf("%s: %s", e.Name, w))
 		}
 	}
 	if err != nil {
-		ss.warn(fmt.Sprintf("%s: the access is not checked: %v", e.Name, err))
+		ss.AddWarning(fmt.Sprintf("%s: the access is not checked: %v", e.Name, err))
 	}
 }
 
@@ -535,7 +494,7 @@ func (ss *Session) warnPrefixDuplicates(c *config.Config, name string, s *store.
 		}
 	}
 	uses := store.PrefixUses(others, prefixes, func(n string, err error) {
-		ss.warn(fmt.Sprintf("store %s is not checked for id prefixes: %v", n, err))
+		ss.AddWarning(fmt.Sprintf("store %s is not checked for id prefixes: %v", n, err))
 	})
 	for _, m := range mine {
 		for _, u := range uses {
@@ -547,7 +506,7 @@ func (ss *Session) warnPrefixDuplicates(c *config.Config, name string, s *store.
 			if !setLater(m, w) {
 				later = fmt.Sprintf("workspace %s in store %s", w.Name, u.Store)
 			}
-			ss.warn(fmt.Sprintf("%s is also the id prefix of workspace %s in store %s; the one set later (%s) should change it with hedgehug workspace set-prefix",
+			ss.AddWarning(fmt.Sprintf("%s is also the id prefix of workspace %s in store %s; the one set later (%s) should change it with hedgehug workspace set-prefix",
 				m.IDPrefix, w.Name, u.Store, later))
 		}
 	}
@@ -593,11 +552,11 @@ func (ss *Session) storeView(c *config.Config, e config.StoreEntry) StoreView {
 	if acct, ok := c.Writer(e); ok {
 		v.Account = acct.ID()
 	}
-	if s, err := ss.openStoreAt(e.Path); err == nil {
+	if s, err := ss.OpenStoreAt(e.Path); err == nil {
 		if st, err := replicate.ReadState(s); err == nil {
-			v.LastSuccess = timePtr(st.LastSuccess)
+			v.LastSuccess = TimePtr(st.LastSuccess)
 		}
-		v.ReadOnly = readOnlyWhy(s)
+		v.ReadOnly = ReadOnlyWhy(s)
 		_ = s.Repo().Close()
 	}
 	return v
@@ -628,7 +587,7 @@ func (ss *Session) StoreRemove(name string, keep bool) (StoreRemoveResult, error
 		if errors.Is(err, config.ErrNoStores) {
 			return StoreRemoveResult{}, err
 		}
-		return StoreRemoveResult{}, newErr(KindNotFound, "store.not_found", err, "name", name)
+		return StoreRemoveResult{}, NewErr(KindNotFound, "store.not_found", err, "name", name)
 	}
 	deleting := false
 	var closeRepo func()
@@ -643,9 +602,9 @@ func (ss *Session) StoreRemove(name string, keep bool) (StoreRemoveResult, error
 			deleting = true
 		}
 	}
-	if err := ss.updateConfig(c, func(c *config.Config) error {
-		if !storeExists(c, name) { // another writer may have removed it since the lookup
-			return newErr(KindNotFound, "store.not_found", fmt.Errorf("no store is named %q", name), "name", name)
+	if err := ss.UpdateConfig(c, func(c *config.Config) error {
+		if !StoreExists(c, name) { // another writer may have removed it since the lookup
+			return NewErr(KindNotFound, "store.not_found", fmt.Errorf("no store is named %q", name), "name", name)
 		}
 		return c.RemoveStore(name)
 	}); err != nil {
@@ -654,7 +613,7 @@ func (ss *Session) StoreRemove(name string, keep bool) (StoreRemoveResult, error
 	if deleting {
 		// No git file of the directory may be open when it goes (Windows).
 		closeRepo()
-		ss.closeMounted(e.Path)
+		ss.CloseMounted(e.Path)
 		if err := osfs.RemoveAll(e.Path); err != nil {
 			return StoreRemoveResult{}, err
 		}
@@ -675,8 +634,8 @@ func (ss *Session) StoreDefault(name string) (string, error) {
 	if name == "" || name == c.DefaultStore {
 		return c.DefaultStore, nil
 	}
-	if err := ss.updateConfig(c, func(c *config.Config) error {
-		if !storeExists(c, name) { // also when another writer removed it since the read
+	if err := ss.UpdateConfig(c, func(c *config.Config) error {
+		if !StoreExists(c, name) { // also when another writer removed it since the read
 			return noSuchStore(c, name)
 		}
 		return c.SetDefaultStore(name)
@@ -697,7 +656,7 @@ func noSuchStore(c *config.Config, name string) error {
 	if len(names) > 0 {
 		msg += " (stores: " + strings.Join(names, ", ") + ")"
 	}
-	return newErr(KindNotFound, "store.not_found", errors.New(msg), "name", name, "candidates", names)
+	return NewErr(KindNotFound, "store.not_found", errors.New(msg), "name", name, "candidates", names)
 }
 
 // StoreSet changes how the GUI shows the store name, as hh store set: its
@@ -708,7 +667,7 @@ func noSuchStore(c *config.Config, name string) error {
 // StoreDefault. It returns the store as it is now.
 func (ss *Session) StoreSet(name string, color *string, hidden *bool) (StoreView, error) {
 	if color != nil && *color != "" && !slices.Contains(config.StoreColors, *color) {
-		return StoreView{}, newErr(KindInvalid, "store.bad_color",
+		return StoreView{}, NewErr(KindInvalid, "store.bad_color",
 			fmt.Errorf("%q is not a store color (colors: %s)", *color, strings.Join(config.StoreColors, ", ")),
 			"value", *color, "candidates", slices.Clone(config.StoreColors))
 	}
@@ -722,8 +681,8 @@ func (ss *Session) StoreSet(name string, color *string, hidden *bool) (StoreView
 	}
 	cur := c.Stores[i]
 	if (color != nil && *color != cur.Color) || (hidden != nil && *hidden != cur.Hidden) {
-		if err := ss.updateConfig(c, func(c *config.Config) error {
-			if !storeExists(c, name) { // another writer may have removed it since the read
+		if err := ss.UpdateConfig(c, func(c *config.Config) error {
+			if !StoreExists(c, name) { // another writer may have removed it since the read
 				return noSuchStore(c, name)
 			}
 			return c.SetStoreLook(name, color, hidden)
@@ -739,18 +698,18 @@ func (ss *Session) StoreSet(name string, color *string, hidden *bool) (StoreView
 // returns the function that lets go of the lock and the handle of the store,
 // which the caller calls once the directory is gone.
 func (ss *Session) lockToDelete(e config.StoreEntry) (release, closeRepo func(), err error) {
-	unpushed := func(err error) error { return newErr(KindConflict, "store.unpushed", err, "name", e.Name) }
+	unpushed := func(err error) error { return NewErr(KindConflict, "store.unpushed", err, "name", e.Name) }
 	if len(e.Remotes) == 0 {
 		return nil, nil, unpushed(fmt.Errorf("store %s has no remote, so removing %s would lose its tasks for good; use --keep to take the store out of the config and leave the directory, or delete the directory yourself if you do not need it", e.Name, e.Path))
 	}
-	s, err := ss.openStoreAt(e.Path)
+	s, err := ss.OpenStoreAt(e.Path)
 	if err != nil {
 		return nil, nil, unpushed(fmt.Errorf("store %s: %w; delete the directory by hand if you mean to, or use --keep to take the store out of the config and leave it", e.Name, err))
 	}
 	l, err := store.LockInOrder(s)
 	if err != nil {
 		_ = s.Repo().Close()
-		return nil, nil, classify(err)
+		return nil, nil, Classify(err)
 	}
 	release = func() {
 		l.Release()
@@ -767,7 +726,7 @@ func (ss *Session) lockToDelete(e config.StoreEntry) (release, closeRepo func(),
 // checkPushed refuses a store whose commits are not all on its origin, or
 // that has changes that are not committed.
 func checkPushed(e config.StoreEntry, s *store.Store) error {
-	unpushed := func(err error) error { return newErr(KindConflict, "store.unpushed", err, "name", e.Name) }
+	unpushed := func(err error) error { return NewErr(KindConflict, "store.unpushed", err, "name", e.Name) }
 	n, err := Unpushed(s)
 	if err != nil {
 		return err

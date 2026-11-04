@@ -96,7 +96,7 @@ func (ss *Session) StoreMount(cands []Candidate) (MountResult, error) {
 	for i, f := range res.Failed {
 		names[i] = f.Name
 	}
-	return res, newErr(KindInvalid, "store.mount_failed",
+	return res, NewErr(KindInvalid, "store.mount_failed",
 		fmt.Errorf("%d of %s could not be added: %s", len(res.Failed), plural.Count(len(cands), "store"), strings.Join(names, ", ")),
 		"failed", names)
 }
@@ -119,7 +119,7 @@ func (ss *Session) discoverGitHub(c *config.Config, only string) ([]Candidate, e
 		}
 	}
 	if len(accts) == 0 {
-		return nil, newErr(KindConflict, "account.none",
+		return nil, NewErr(KindConflict, "account.none",
 			errors.New("no account has a token to look on GitHub with; run hedgehug auth login, or use --from"))
 	}
 	var out []Candidate
@@ -131,7 +131,7 @@ func (ss *Session) discoverGitHub(c *config.Config, only string) ([]Candidate, e
 		}
 		repos, err := gh.UserRepos()
 		if err != nil {
-			return nil, githubErr(err, acct, "list the repositories")
+			return nil, GithubErr(err, acct, "list the repositories")
 		}
 		for _, r := range repos {
 			if !slices.Contains(r.Topics, "hedgehug-store") {
@@ -167,7 +167,7 @@ func (ss *Session) discoverFrom(c *config.Config, dir, account string) ([]Candid
 		for i, x := range c.Accounts {
 			names[i] = x.Name
 		}
-		return nil, choiceRequired("--account", names)
+		return nil, ChoiceRequired("--account", names)
 	}
 	root, err := filepath.Abs(dir)
 	if err != nil {
@@ -180,7 +180,7 @@ func (ss *Session) discoverFrom(c *config.Config, dir, account string) ([]Candid
 				return err
 			}
 			// One directory that cannot be read does not stop the rest.
-			ss.warn(fmt.Sprintf("cannot read %s: %v", p, err))
+			ss.AddWarning(fmt.Sprintf("cannot read %s: %v", p, err))
 			if d != nil && !d.IsDir() {
 				return nil
 			}

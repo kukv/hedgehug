@@ -64,7 +64,7 @@ func (ss *Session) AuthLogin(in AuthLoginInput) (AuthLoginResult, error) {
 	acct, known := c.Account(name)
 	if name != "" && known {
 		if in.HostGiven && !config.SameHost(host, acct.Host) {
-			return AuthLoginResult{}, newErr(KindUsage, "auth.host", fmt.Errorf("account %s is of %s, not of %s", name, acct.Host, host),
+			return AuthLoginResult{}, NewErr(KindUsage, "auth.host", fmt.Errorf("account %s is of %s, not of %s", name, acct.Host, host),
 				"account", name, "host", acct.Host)
 		}
 		// An account with no token: falls through to the device flow, or
@@ -74,12 +74,12 @@ func (ss *Session) AuthLogin(in AuthLoginInput) (AuthLoginResult, error) {
 			return AuthLoginResult{Account: acct.Name, ID: acct.ID(), Uses: acct.Token.String()}, nil
 		case "keychain":
 			if !in.WithToken {
-				return AuthLoginResult{}, newErr(KindUsage, "auth.need_token",
+				return AuthLoginResult{}, NewErr(KindUsage, "auth.need_token",
 					fmt.Errorf("account %s keeps a token in the keychain; give it on stdin with --with-token", name), "account", name)
 			}
 		case "device":
 			if in.WithToken {
-				return AuthLoginResult{}, newErr(KindUsage, "auth.device_only",
+				return AuthLoginResult{}, NewErr(KindUsage, "auth.device_only",
 					fmt.Errorf("account %s logs in with the device flow; leave out --with-token", name), "account", name)
 			}
 		}
@@ -94,11 +94,11 @@ func (ss *Session) AuthLogin(in AuthLoginInput) (AuthLoginResult, error) {
 	if in.WithToken {
 		kind = "keychain"
 		if tok = strings.TrimSpace(in.Token); tok == "" {
-			return AuthLoginResult{}, newErr(KindInvalid, "auth.token_empty", errors.New("no token on stdin"))
+			return AuthLoginResult{}, NewErr(KindInvalid, "auth.token_empty", errors.New("no token on stdin"))
 		}
 	} else {
 		if auth.ClientID(h) == "" {
-			return AuthLoginResult{}, newErr(KindInvalid, "auth.client_id",
+			return AuthLoginResult{}, NewErr(KindInvalid, "auth.client_id",
 				fmt.Errorf("the device flow needs hosts[].client_id for %s in config.yaml; or use token: gh, token: env:<VAR>, or hedgehug auth login <name> --with-token", host),
 				"host", host)
 		}
@@ -115,9 +115,9 @@ func (ss *Session) AuthLogin(in AuthLoginInput) (AuthLoginResult, error) {
 		opt.Context = in.Context
 		if dt, err = auth.DeviceLogin(h, opt, show); err != nil {
 			if errors.Is(err, auth.ErrCanceled) {
-				return AuthLoginResult{}, newErr(KindInvalid, "auth.canceled", err)
+				return AuthLoginResult{}, NewErr(KindInvalid, "auth.canceled", err)
 			}
-			return AuthLoginResult{}, newErr(KindInvalid, "auth.device_failed", err)
+			return AuthLoginResult{}, NewErr(KindInvalid, "auth.device_failed", err)
 		}
 		tok = strings.TrimSpace(dt.AccessToken)
 	}
@@ -125,7 +125,7 @@ func (ss *Session) AuthLogin(in AuthLoginInput) (AuthLoginResult, error) {
 	if err != nil {
 		if errors.Is(err, github.ErrUnauthorized) {
 			// No "run hedgehug auth login" hint: that is what is being run.
-			return AuthLoginResult{}, newErr(KindInvalid, "auth.unauthorized",
+			return AuthLoginResult{}, NewErr(KindInvalid, "auth.unauthorized",
 				fmt.Errorf("%s refused the token: %w; check that it is valid and has not expired", host, err), "account", name)
 		}
 		who := acct
@@ -135,7 +135,7 @@ func (ss *Session) AuthLogin(in AuthLoginInput) (AuthLoginResult, error) {
 				who.Name = name
 			}
 		}
-		return AuthLoginResult{}, githubErr(err, who, "check the token")
+		return AuthLoginResult{}, GithubErr(err, who, "check the token")
 	}
 	if login = strings.TrimSpace(login); login == "" {
 		return AuthLoginResult{}, errors.New("check the token: GitHub gave no login")
@@ -152,7 +152,7 @@ func (ss *Session) AuthLogin(in AuthLoginInput) (AuthLoginResult, error) {
 	added := false
 	if known {
 		if !strings.EqualFold(acct.Login, login) {
-			return AuthLoginResult{}, newErr(KindInvalid, "auth.mismatch",
+			return AuthLoginResult{}, NewErr(KindInvalid, "auth.mismatch",
 				fmt.Errorf("the token is of %s/%s, not of account %s (%s); it stays valid on GitHub, so revoke it in GitHub's settings (Settings → Applications → Authorized GitHub Apps) if it is not wanted", host, login, acct.Name, acct.ID()),
 				"account", acct.Name, "host", host, "login", login)
 		}
@@ -189,11 +189,11 @@ func (ss *Session) AuthLogin(in AuthLoginInput) (AuthLoginResult, error) {
 		return AuthLoginResult{}, err
 	}
 	var pinned Pinned
-	err = ss.updateConfig(c, func(c *config.Config) error {
+	err = ss.UpdateConfig(c, func(c *config.Config) error {
 		if added {
 			for _, x := range c.Accounts { // another writer may have added it since the read
 				if config.SameAccount(x.ID(), acct.ID()) {
-					return newErr(KindConflict, "account.exists", fmt.Errorf("account %s (%s) is set up already; run hedgehug auth login %s", x.Name, x.ID(), x.Name),
+					return NewErr(KindConflict, "account.exists", fmt.Errorf("account %s (%s) is set up already; run hedgehug auth login %s", x.Name, x.ID(), x.Name),
 						"account", x.Name)
 				}
 			}
@@ -202,7 +202,7 @@ func (ss *Session) AuthLogin(in AuthLoginInput) (AuthLoginResult, error) {
 			return err
 		}
 		if _, ok := c.Account(acct.Name); !ok {
-			return newErr(KindNotFound, "account.not_found", fmt.Errorf("no account is named %q", acct.Name), "name", acct.Name)
+			return NewErr(KindNotFound, "account.not_found", fmt.Errorf("no account is named %q", acct.Name), "name", acct.Name)
 		}
 		return c.SetAccountToken(acct.Name, acct.Token)
 	})
@@ -288,10 +288,10 @@ type AuthAddResult struct {
 func (ss *Session) AuthAdd(in AuthAddInput) (AuthAddResult, error) {
 	name, login, host := strings.TrimSpace(in.Name), strings.TrimSpace(in.Login), strings.TrimSpace(in.Host)
 	if name == "" {
-		return AuthAddResult{}, newErr(KindUsage, "auth.name", errors.New("an account name is needed"))
+		return AuthAddResult{}, NewErr(KindUsage, "auth.name", errors.New("an account name is needed"))
 	}
 	if login == "" {
-		return AuthAddResult{}, newErr(KindUsage, "auth.login", errors.New("the login of the account is needed"))
+		return AuthAddResult{}, NewErr(KindUsage, "auth.login", errors.New("the login of the account is needed"))
 	}
 	if host == "" {
 		host = "github.com"
@@ -306,7 +306,7 @@ func (ss *Session) AuthAdd(in AuthAddInput) (AuthAddResult, error) {
 		return AuthAddResult{}, err
 	}
 	var pinned Pinned
-	if err := ss.updateConfig(c, func(c *config.Config) error {
+	if err := ss.UpdateConfig(c, func(c *config.Config) error {
 		if err := checkNewAccount(c, acct); err != nil {
 			return err
 		}
@@ -331,7 +331,7 @@ func parseAddToken(s string) (config.TokenSource, error) {
 	if v, ok := strings.CutPrefix(s, "env:"); ok && v != "" {
 		return config.TokenSource{Kind: "env", Env: v}, nil
 	}
-	return config.TokenSource{}, newErr(KindUsage, "auth.token_source", fmt.Errorf("--token %q: want gh, env:<VAR> or keychain", s), "token", s)
+	return config.TokenSource{}, NewErr(KindUsage, "auth.token_source", fmt.Errorf("--token %q: want gh, env:<VAR> or keychain", s), "token", s)
 }
 
 // checkNewAccount refuses an account whose name, or whose host and login
@@ -341,9 +341,9 @@ func checkNewAccount(c *config.Config, acct config.Account) error {
 	for _, x := range c.Accounts {
 		switch {
 		case x.Name == acct.Name:
-			return newErr(KindConflict, "account.exists", fmt.Errorf("an account named %q is set up already (%s)", x.Name, x.ID()), "name", x.Name)
+			return NewErr(KindConflict, "account.exists", fmt.Errorf("an account named %q is set up already (%s)", x.Name, x.ID()), "name", x.Name)
 		case config.SameAccount(x.ID(), acct.ID()):
-			return newErr(KindConflict, "account.exists", fmt.Errorf("account %s (%s) is set up already", x.Name, x.ID()), "name", x.Name)
+			return NewErr(KindConflict, "account.exists", fmt.Errorf("account %s (%s) is set up already", x.Name, x.ID()), "name", x.Name)
 		}
 	}
 	return nil
@@ -406,7 +406,7 @@ type AuthLogoutResult struct {
 // account whose token Hedgehug does not keep (gh, env, none).
 func (ss *Session) AuthLogout(name string) (AuthLogoutResult, error) {
 	if name == "" {
-		return AuthLogoutResult{}, newErr(KindUsage, "auth.name", errors.New("an account name is needed"))
+		return AuthLogoutResult{}, NewErr(KindUsage, "auth.name", errors.New("an account name is needed"))
 	}
 	c, _, err := ss.Config()
 	if err != nil {

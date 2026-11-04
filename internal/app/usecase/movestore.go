@@ -207,7 +207,7 @@ func (ss *Session) MoveStore(in MoveStoreInput) (MoveStoreResult, error) {
 		return MoveStoreResult{}, err
 	}
 	if !in.Yes {
-		ce := confirmRequired(fmt.Sprintf("move %s to %s", plural.Count(len(w.tasks), "task"), j.toName))
+		ce := ConfirmRequired(fmt.Sprintf("move %s to %s", plural.Count(len(w.tasks), "task"), j.toName))
 		ce.Args["plan"] = w.plan.View()
 		return MoveStoreResult{}, &MoveConfirmError{Confirm: ce, Plan: w.plan}
 	}
@@ -216,7 +216,7 @@ func (ss *Session) MoveStore(in MoveStoreInput) (MoveStoreResult, error) {
 	// out again from what they hold now and written.
 	l, err := store.LockInOrder(j.src, j.dst)
 	if err != nil {
-		return MoveStoreResult{}, classify(err)
+		return MoveStoreResult{}, Classify(err)
 	}
 	defer l.Release()
 	if err := errors.Join(j.srcIx.Refresh(), j.dstIx.Refresh()); err != nil {
@@ -227,7 +227,7 @@ func (ss *Session) MoveStore(in MoveStoreInput) (MoveStoreResult, error) {
 	}
 	if (in.Confirmed != nil && !samePlan(*in.Confirmed, w.plan)) ||
 		(in.ConfirmedView != nil && !samePlanView(*in.ConfirmedView, w.plan.GUIView())) {
-		return MoveStoreResult{}, newErr(KindConflict, "move.changed",
+		return MoveStoreResult{}, NewErr(KindConflict, "move.changed",
 			errors.New("the tasks changed after the confirmation; run the command again"))
 	}
 
@@ -326,7 +326,7 @@ type moveWork struct {
 // that session reads it. A task that a move into in.To began has copies in
 // both stores, so an input that names it in the two is the one in the source.
 func (ss *Session) moveSource(in MoveStoreInput) (*Session, string, error) {
-	from, arg, err := ss.forTask(in.Arg)
+	from, arg, err := ss.ForTask(in.Arg)
 	if err == nil {
 		return from, arg, nil
 	}
@@ -350,12 +350,12 @@ func (ss *Session) moveSource(in MoveStoreInput) (*Session, string, error) {
 // store and a read-only store before any lock is taken.
 func (ss *Session) openMove(in MoveStoreInput) (*moveJob, error) {
 	if in.To == "" {
-		return nil, newErr(KindUsage, "move.store_required", errors.New("the store to move to is needed (--store)"))
+		return nil, NewErr(KindUsage, "move.store_required", errors.New("the store to move to is needed (--store)"))
 	}
 	switch in.Scoped {
 	case "", "carry", "drop":
 	default:
-		return nil, newErr(KindUsage, "usage", fmt.Errorf("--scoped is carry or drop, not %q", in.Scoped))
+		return nil, NewErr(KindUsage, "usage", fmt.Errorf("--scoped is carry or drop, not %q", in.Scoped))
 	}
 	from, arg, err := ss.moveSource(in)
 	if err != nil {
@@ -371,7 +371,7 @@ func (ss *Session) openMove(in MoveStoreInput) (*moveJob, error) {
 		return nil, err
 	}
 	if fe.Name == te.Name {
-		return nil, newErr(KindUsage, "move.same_store",
+		return nil, NewErr(KindUsage, "move.same_store",
 			fmt.Errorf("the task is in %s already; use hedgehug mv --workspace to move it to another workspace", fe.Name), "store", fe.Name)
 	}
 	j := &moveJob{warned: map[string]bool{}, in: in, from: from, to: to, arg: arg, fromName: fe.Name, toName: te.Name}
@@ -399,11 +399,11 @@ func (j *moveJob) load() (*moveWork, error) {
 	// Step 1: the task and everything under it, deleted tasks too. Descendants
 	// walks depth first from the root, so every parent comes before its
 	// children whatever their ULIDs are (MoveIn needs that).
-	entries := append([]*index.Entry{root}, Descendants(j.srcIx, root.ULID, every)...)
+	entries := append([]*index.Entry{root}, Descendants(j.srcIx, root.ULID, Every)...)
 	inM := make(map[model.ULID]bool, len(entries))
 	for _, x := range entries {
 		if x.Broken != "" {
-			return nil, newErr(KindInvalid, "move.invalid", fmt.Errorf("%s does not decode, so it cannot be moved: %s", x.ULID, x.Broken))
+			return nil, NewErr(KindInvalid, "move.invalid", fmt.Errorf("%s does not decode, so it cannot be moved: %s", x.ULID, x.Broken))
 		}
 		inM[x.ULID] = true
 		t, err := j.src.Task(x.ULID)
@@ -420,7 +420,7 @@ func (j *moveJob) load() (*moveWork, error) {
 			// load runs twice; each file is told of once.
 			if !j.warned[fe.Path] {
 				j.warned[fe.Path] = true
-				j.from.warn(fmt.Sprintf("%s does not decode; references in it are not cut: %v", fe.Path, fe.Err))
+				j.from.AddWarning(fmt.Sprintf("%s does not decode; references in it are not cut: %v", fe.Path, fe.Err))
 			}
 			continue
 		}
@@ -494,7 +494,7 @@ func (j *moveJob) load() (*moveWork, error) {
 			if j.in.planOnly {
 				break // asked for in the plan: scoped.required
 			}
-			ce := choiceRequired("--scoped", []string{"carry", "drop"})
+			ce := ChoiceRequired("--scoped", []string{"carry", "drop"})
 			names := make([]string, len(projects))
 			for i, p := range projects {
 				names[i] = j.nameOf(p)
@@ -612,7 +612,7 @@ func (j *moveJob) resumeCheck(tasks []*model.Task) (bool, error) {
 			return true, nil
 		}
 	}
-	return false, newErr(KindConflict, "move.exists", fmt.Errorf("%s is already in %s", first, j.toName), "store", j.toName, "ulid", first.String())
+	return false, NewErr(KindConflict, "move.exists", fmt.Errorf("%s is already in %s", first, j.toName), "store", j.toName, "ulid", first.String())
 }
 
 // moveInRecorded reports whether the history of the destination has the
@@ -623,7 +623,7 @@ func (j *moveJob) moveInRecorded(tasks []*model.Task) (bool, error) {
 		want[i] = t.ULID.String()
 	}
 	slices.Sort(want)
-	h, err := j.to.openHistory(j.dst, j.toName)
+	h, err := j.to.OpenHistory(j.dst, j.toName)
 	if err != nil {
 		return false, err
 	}
@@ -675,7 +675,7 @@ func (j *moveJob) place(w *moveWork) error {
 			if pw != nil {
 				name = pw.Name
 			}
-			return newErr(KindInvalid, "move.invalid", fmt.Errorf("the parent is in workspace %s", name))
+			return NewErr(KindInvalid, "move.invalid", fmt.Errorf("the parent is in workspace %s", name))
 		}
 		w.parent, w.workspace = &p.ULID, p.Workspace
 		return nil
@@ -684,7 +684,7 @@ func (j *moveJob) place(w *moveWork) error {
 		all := j.dstIx.Workspaces()
 		switch len(all) {
 		case 0:
-			return newErr(KindInvalid, "move.invalid", fmt.Errorf("%s has no workspace", j.toName))
+			return NewErr(KindInvalid, "move.invalid", fmt.Errorf("%s has no workspace", j.toName))
 		case 1:
 			ws = all[0]
 		default:
@@ -692,7 +692,7 @@ func (j *moveJob) place(w *moveWork) error {
 			for i, x := range all {
 				names[i] = x.Name
 			}
-			return choiceRequired("--workspace", names)
+			return ChoiceRequired("--workspace", names)
 		}
 	}
 	w.workspace = ws.ULID
@@ -732,7 +732,7 @@ func (j *moveJob) carry(dest *schema.Schema, scoped []schema.Scoped) (carried []
 		}
 	}
 	if len(lines) > 0 {
-		return nil, nil, newErr(KindInvalid, "move.invalid",
+		return nil, nil, NewErr(KindInvalid, "move.invalid",
 			fmt.Errorf("the scoped schema does not fit %s even after cutting it down; use --scoped drop:\n%s", j.toName, strings.Join(lines, "\n")),
 			"store", j.toName, "violations", lines)
 	}
@@ -805,7 +805,7 @@ func (j *moveJob) nameOf(e *index.Entry) string {
 
 // invalidMove is the error of a move the schema of the destination refuses.
 func invalidMove(to string, lines []string) error {
-	return newErr(KindInvalid, "move.invalid",
+	return NewErr(KindInvalid, "move.invalid",
 		fmt.Errorf("%s refuses the tasks:\n%s", to, strings.Join(lines, "\n")), "store", to, "violations", lines)
 }
 

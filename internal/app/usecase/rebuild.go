@@ -3,49 +3,11 @@ package usecase
 import (
 	"errors"
 	"fmt"
-	"io/fs"
-	"os"
 
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
-
-// finishRebuild completes a swap that stopped, or removes what a rebuild
-// left, for the store e, before it is opened. Nothing left is nothing done.
-// While the store is there, the leftover is touched only under sync.lock: a
-// rebuild holds it, so a rebuild in the making is not taken for a leftover.
-func (ss *Session) finishRebuild(e config.StoreEntry) error {
-	l, err := store.FindLeftover(e.Path)
-	if err != nil || l.None() {
-		return err
-	}
-	s, err := store.Open(e.Path)
-	if err != nil {
-		// No store (or a broken one) to lock: the swap is finished as it is.
-		if _, serr := os.Lstat(e.Path); errors.Is(serr, fs.ErrNotExist) {
-			return ss.finishLeftover(e, l)
-		}
-		return nil // the store's own problem; the sync tells of it
-	}
-	defer func() { _ = s.Repo().Close() }()
-	return s.WithLocalLock("sync.lock", syncLockWait, func() error {
-		l, err := store.FindLeftover(e.Path)
-		if err != nil || l.None() {
-			return err
-		}
-		return ss.finishLeftover(e, l)
-	})
-}
-
-// finishLeftover is replicate.FinishLeftover, telling where an old store was kept.
-func (ss *Session) finishLeftover(e config.StoreEntry, l store.Leftover) error {
-	kept, err := replicate.FinishLeftoverKept(e.Path, l)
-	for _, p := range kept {
-		ss.warn(fmt.Sprintf("the old store of %s, with changes that were not put back, is kept at %s", e.Name, p))
-	}
-	return err
-}
 
 // Rebuilt is what doctor --fix did to a store a sync found force pushed: it
 // cloned the store again from origin.
@@ -62,7 +24,7 @@ type Rebuilt struct {
 // does not open, origin follows it again, or the store changed while it was
 // made again (a warning says to run doctor --fix again).
 func (ss *Session) rebuildStore(c *config.Config, e config.StoreEntry) (*Rebuilt, error) {
-	s, err := ss.openStoreAt(e.Path)
+	s, err := ss.OpenStoreAt(e.Path)
 	if err != nil {
 		return nil, nil // the findings tell of a store that does not open
 	}
@@ -75,7 +37,7 @@ func (ss *Session) rebuildStore(c *config.Config, e config.StoreEntry) (*Rebuilt
 		return nil, err
 	}
 	var b *replicate.Rebuild
-	err = s.WithLocalLock("sync.lock", syncLockWait, func() error {
+	err = s.WithLocalLock("sync.lock", SyncLockWait, func() error {
 		var err error
 		b, err = replicate.MakeRebuild(s, opt)
 		return err
@@ -87,32 +49,32 @@ func (ss *Session) rebuildStore(c *config.Config, e config.StoreEntry) (*Rebuilt
 	if ss.BeforeSwap != nil {
 		ss.BeforeSwap(dir)
 	}
-	ss.closeMounted(dir)
-	ss.dropMount()
+	ss.CloseMounted(dir)
+	ss.DropMount()
 	if err := s.Repo().Close(); err != nil {
 		replicate.Discard(b)
 		return nil, err
 	}
 	err = replicate.Swap(dir, b)
 	if errors.Is(err, replicate.ErrRebuildStale) {
-		ss.warn(fmt.Sprintf("%s changed while it was cloned again, so it was not replaced; run hedgehug doctor --fix again", e.Name))
+		ss.AddWarning(fmt.Sprintf("%s changed while it was cloned again, so it was not replaced; run hedgehug doctor --fix again", e.Name))
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
 	for _, w := range b.Warnings {
-		ss.warn(e.Name + ": " + w)
+		ss.AddWarning(e.Name + ": " + w)
 	}
 	// The index is a cache: the swapped-in store works without it.
-	if ns, err := ss.openStoreAt(dir); err == nil {
-		if _, err := ss.openHistory(ns, e.Name); err != nil {
-			ss.warn(fmt.Sprintf("%s: could not index its history: %v", e.Name, err))
+	if ns, err := ss.OpenStoreAt(dir); err == nil {
+		if _, err := ss.OpenHistory(ns, e.Name); err != nil {
+			ss.AddWarning(fmt.Sprintf("%s: could not index its history: %v", e.Name, err))
 		}
 		_ = ns.Repo().Close()
 	}
 	if left, lerr := store.FindLeftover(dir); lerr == nil && !left.None() {
-		ss.warn(store.LeftoverMessage(e.Name))
+		ss.AddWarning(store.LeftoverMessage(e.Name))
 	}
 	return &Rebuilt{Replayed: b.Replayed, Dropped: append([]string{}, b.Purged...), Kept: b.Kept}, nil
 }

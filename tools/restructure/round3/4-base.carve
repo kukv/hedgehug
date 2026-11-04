@@ -28,3 +28,4 @@ internal/app/usecase/inbox.go sync_shared.go forwardOf
 internal/app/usecase/move.go move_tx.go Detached Session.alreadyThere Session.rankAt moveTarget unreadable
 internal/app/usecase/move.go move_tx.go CheckPosition sameParent
 internal/app/usecase/task.go move_tx.go EndRank Siblings
+internal/app/usecase/sync.go sync_shared.go readOnlyWhy

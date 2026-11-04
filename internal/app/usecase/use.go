@@ -29,7 +29,7 @@ func (ss *Session) loadContext() (current.State, config.Paths, error) {
 	if err != nil {
 		return current.State{}, p, err
 	}
-	return current.Load(p.DataDir, ss.warn), p, nil
+	return current.Load(p.DataDir, ss.AddWarning), p, nil
 }
 
 // Use makes the project arg names (any store, "<store>:" allowed) the
@@ -66,7 +66,7 @@ func (ss *Session) Use(arg string) (UseResult, error) {
 	}
 	if e.Kind != useKind {
 		label := hit.Ref()
-		return UseResult{}, newErr(KindInvalid, "use.not_project",
+		return UseResult{}, NewErr(KindInvalid, "use.not_project",
 			fmt.Errorf("%s is a %s, not a project", label, e.Kind), "id", label, "kind", e.Kind)
 	}
 	st, p, err := ss.loadContext()
@@ -90,7 +90,7 @@ func (ss *Session) useResolve(set *mount.Set, arg string) (Hit, error) {
 	if ss.StoreName == "" {
 		hit, err := ResolveIn(set, arg)
 		if err != nil {
-			return Hit{}, ss.mountResolveError(set, arg, err)
+			return Hit{}, ss.MountResolveError(set, arg, err)
 		}
 		return hit, nil
 	}
@@ -99,9 +99,9 @@ func (ss *Session) useResolve(set *mount.Set, arg string) (Hit, error) {
 		return Hit{}, err
 	}
 	scoped := ss.StoreName + ":" + arg
-	if name, _, ok := strings.Cut(arg, ":"); ok && storeExists(c, name) {
+	if name, _, ok := strings.Cut(arg, ":"); ok && StoreExists(c, name) {
 		if name != ss.StoreName {
-			return Hit{}, storeConflict(arg, name, ss.StoreName)
+			return Hit{}, StoreConflict(arg, name, ss.StoreName)
 		}
 		scoped = arg
 	}
@@ -112,7 +112,7 @@ func (ss *Session) useResolve(set *mount.Set, arg string) (Hit, error) {
 		}
 		for _, sk := range set.Skipped {
 			if sk.Name == ss.StoreName {
-				return Hit{}, openError(sk.Name, sk.Err)
+				return Hit{}, OpenError(sk.Name, sk.Err)
 			}
 		}
 	}
@@ -120,7 +120,7 @@ func (ss *Session) useResolve(set *mount.Set, arg string) (Hit, error) {
 	var moved *MovedError
 	if errors.Is(err, store.ErrNotFound) && !errors.As(err, &moved) {
 		// say what the user typed, not the store-qualified form made here
-		return Hit{}, newErr(KindNotFound, "task.not_found", fmt.Errorf("%q: %w", arg, store.ErrNotFound), "input", arg)
+		return Hit{}, NewErr(KindNotFound, "task.not_found", fmt.Errorf("%q: %w", arg, store.ErrNotFound), "input", arg)
 	}
 	if err != nil {
 		// the input as the user typed it, not the form made here
@@ -131,7 +131,7 @@ func (ss *Session) useResolve(set *mount.Set, arg string) (Hit, error) {
 		if moved != nil {
 			moved.Input = arg
 		}
-		return Hit{}, ss.mountResolveError(set, arg, err)
+		return Hit{}, ss.MountResolveError(set, arg, err)
 	}
 	return hit, nil
 }
@@ -158,7 +158,7 @@ func (ss *Session) UseShow() (UseResult, error) {
 	if ok {
 		return UseResult{Store: m.Name, Project: &e, ID: id}, nil
 	}
-	ss.warn(UseGoneWarning)
+	ss.AddWarning(UseGoneWarning)
 	return UseResult{}, nil
 }
 

@@ -7,23 +7,21 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
-	"github.com/kukv/hedgehug/internal/app/storage/mount"
-	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
 )
 
 // dupPlace is where a duplicated task lives: a mounted store and its id there.
 type dupPlace struct{ Store, ID string }
 
-// duplicate is a ULID that live tasks of two or more mounted stores have.
-type duplicate struct {
+// Duplicate is a ULID that live tasks of two or more mounted stores have.
+type Duplicate struct {
 	ULID   model.ULID
 	Places []dupPlace // in the order of the stores
 }
 
-// duplicates finds the ULIDs of live tasks that are in more than one of the
+// Duplicates finds the ULIDs of live tasks that are in more than one of the
 // mounted stores, in ULID order. A store whose index cannot be read is left
 // out.
-func (ss *Session) duplicates() ([]duplicate, error) {
+func (ss *Session) Duplicates() ([]Duplicate, error) {
 	set, err := ss.Mount()
 	if err != nil {
 		return nil, err
@@ -38,22 +36,22 @@ func (ss *Session) duplicates() ([]duplicate, error) {
 			}
 		})
 		if err != nil {
-			ss.warnOnce("duplicates:"+m.Name, fmt.Sprintf("could not read the index of %s, so its duplicates are not checked: %v", m.Name, err))
+			ss.WarnOnce("duplicates:"+m.Name, fmt.Sprintf("could not read the index of %s, so its duplicates are not checked: %v", m.Name, err))
 		}
 	}
-	var out []duplicate
+	var out []Duplicate
 	for u, ps := range seen {
 		if len(ps) > 1 {
-			out = append(out, duplicate{u, ps})
+			out = append(out, Duplicate{u, ps})
 		}
 	}
-	slices.SortFunc(out, func(a, b duplicate) int { return strings.Compare(a.ULID.String(), b.ULID.String()) })
+	slices.SortFunc(out, func(a, b Duplicate) int { return strings.Compare(a.ULID.String(), b.ULID.String()) })
 	return out, nil
 }
 
-// text is "in org-b (WEB-45) and org-c (OPS-3); remove the one not needed with
+// Text is "in org-b (WEB-45) and org-c (OPS-3); remove the one not needed with
 // hedgehug rm and hedgehug purge --older-than 0d --store <store>" (D19).
-func (d duplicate) text() string {
+func (d Duplicate) Text() string {
 	parts := make([]string, len(d.Places))
 	for i, p := range d.Places {
 		parts[i] = fmt.Sprintf("%s (%s)", p.Store, p.ID)
@@ -65,21 +63,9 @@ func (d duplicate) text() string {
 	return "in " + list + "; remove the one not needed with hedgehug rm and hedgehug purge --older-than 0d --store <store>"
 }
 
-// in tells whether the store name has the task.
-func (d duplicate) in(name string) bool {
+// In tells whether the store name has the task.
+func (d Duplicate) In(name string) bool {
 	return slices.ContainsFunc(d.Places, func(p dupPlace) bool { return p.Store == name })
-}
-
-// duplicateFindings are the tasks of the store name that live in another
-// mounted store too, as warnings of doctor. ds is what duplicates found.
-func duplicateFindings(name string, ds []duplicate) []maintenance.Finding {
-	var out []maintenance.Finding
-	for _, d := range ds {
-		if d.in(name) {
-			out = append(out, maintenance.Finding{Check: "duplicate_across_stores", Where: d.ULID.String(), Task: d.ULID.String(), Msg: d.text(), Severity: maintenance.Warning})
-		}
-	}
-	return out
 }
 
 // AddDuplicateWarnings puts the warning of each duplicate, "01JBZ… is in org-b
@@ -97,7 +83,7 @@ func (ss *Session) AddDuplicateWarnings(reports []SyncReport) {
 	if len(told) == 0 {
 		return
 	}
-	ds, err := ss.duplicates()
+	ds, err := ss.Duplicates()
 	if err != nil {
 		r := &reports[told[0]]
 		r.Warnings = append(r.Warnings, "could not check duplicates across stores: "+err.Error())
@@ -105,42 +91,10 @@ func (ss *Session) AddDuplicateWarnings(reports []SyncReport) {
 	}
 	for _, d := range ds {
 		for _, i := range told {
-			if d.in(reports[i].Store) {
-				reports[i].Warnings = append(reports[i].Warnings, fmt.Sprintf("%s is %s", d.ULID, d.text()))
+			if d.In(reports[i].Store) {
+				reports[i].Warnings = append(reports[i].Warnings, fmt.Sprintf("%s is %s", d.ULID, d.Text()))
 				break
 			}
 		}
 	}
-}
-
-// forwardTargetFindings are the forwards of the store name whose moved_to is
-// no mounted store, as infos of doctor: the store may just not be mounted.
-func (ss *Session) forwardTargetFindings(name string) []maintenance.Finding {
-	set, err := ss.Mount()
-	if err != nil {
-		ss.warn("could not check the forwards: " + err.Error())
-		return nil
-	}
-	m, ok := set.Get(name)
-	if !ok {
-		return nil
-	}
-	var out []maintenance.Finding
-	err = m.With(func(ix *index.Index) {
-		for _, f := range ix.Forwards() {
-			if f.Broken != "" || slices.ContainsFunc(set.Stores, func(o *mount.Mounted) bool { return o.ULID == f.MovedTo }) {
-				continue
-			}
-			where := f.ULID.String()
-			if f.ID != "" {
-				where = fmt.Sprintf("%s (%s)", f.ID, f.ULID)
-			}
-			out = append(out, maintenance.Finding{Check: "forward_target", Where: where, Msg: fmt.Sprintf("moved to a store that is not mounted (ULID %s)", f.MovedTo), Severity: maintenance.Info})
-		}
-	})
-	if err != nil {
-		ss.warnOnce("forward_target:"+name, fmt.Sprintf("could not read the index of %s, so its forwards are not checked: %v", name, err))
-	}
-	maintenance.Sort(out)
-	return out
 }

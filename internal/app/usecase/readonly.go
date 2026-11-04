@@ -25,14 +25,14 @@ func (e *ReadOnlyError) Error() string {
 	return fmt.Sprintf("%s is read-only (%s)", e.Store, e.Access.Why())
 }
 
-// checkWritable refuses when s is read-only. The store is named as
+// CheckWritable refuses when s is read-only. The store is named as
 // config.yaml names it, or as its store.yaml does when config.yaml has no
 // store in that directory.
 //
 // An access.json that cannot be read refuses every write on purpose: a
 // store whose state is unknown is not written to. The error says which file
 // to delete, or a sync, which judges again.
-func (ss *Session) checkWritable(s *store.Store) error {
+func (ss *Session) CheckWritable(s *store.Store) error {
 	acc, err := replicate.ReadAccess(s)
 	if err != nil {
 		return fmt.Errorf("%w; writes are refused until it is fixed: delete %s, or run hedgehug sync, which judges again",
@@ -42,7 +42,7 @@ func (ss *Session) checkWritable(s *store.Store) error {
 		return nil
 	}
 	name := ss.storeNameOf(s)
-	return newErr(KindConflict, "store.read_only", &ReadOnlyError{Store: name, Access: acc},
+	return NewErr(KindConflict, "store.read_only", &ReadOnlyError{Store: name, Access: acc},
 		"store", name, "reason", acc.Reason)
 }
 
@@ -68,7 +68,7 @@ func (ss *Session) OpenForWrite() (*store.Store, *index.Index, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := ss.checkWritable(s); err != nil {
+	if err := ss.CheckWritable(s); err != nil {
 		return nil, nil, err
 	}
 	ix, err := ss.openIndex(s)
@@ -100,7 +100,7 @@ func (ss *Session) githubRepoOf(c *config.Config, e config.StoreEntry) *replicat
 		Client: func() (*github.Client, error) {
 			if !config.SameHost(host, acct.Host) {
 				// The token of the account must not go to another host.
-				return nil, newErr(KindInvalid, "account.host_mismatch",
+				return nil, NewErr(KindInvalid, "account.host_mismatch",
 					fmt.Errorf("%s is on %s, but account %s is on %s", e.Remotes[0], host, acct.Name, acct.Host), "account", acct.Name)
 			}
 			return ss.GitHub(c, acct, host)

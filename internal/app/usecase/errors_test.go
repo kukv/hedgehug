@@ -11,7 +11,7 @@ import (
 func TestErrorKeepsMessage(t *testing.T) {
 	t.Parallel()
 	base := errors.New("ME-1 is already deleted")
-	e := newErr(KindConflict, "task.deleted", base, "id", "ME-1")
+	e := NewErr(KindConflict, "task.deleted", base, "id", "ME-1")
 	if e.Error() != base.Error() {
 		t.Errorf("Error() = %q; want %q", e.Error(), base.Error())
 	}
@@ -28,7 +28,7 @@ func TestKindOfNil(t *testing.T) {
 	if got := KindOf(nil); got != KindUnknown {
 		t.Errorf("KindOf(nil) = %v; want KindUnknown", got)
 	}
-	if classify(nil) != nil {
+	if Classify(nil) != nil {
 		t.Error("classify(nil) is not nil")
 	}
 }
@@ -43,7 +43,7 @@ func TestKindOfClassifiesLowerLayers(t *testing.T) {
 		{store.ErrLocked, KindConflict},
 		{&store.ValidationError{}, KindInvalid},
 		{errors.New("other"), KindUnknown},
-		{newErr(KindUsage, "args.bad", errors.New("u")), KindUsage},
+		{NewErr(KindUsage, "args.bad", errors.New("u")), KindUsage},
 	}
 	for _, c := range cases {
 		if got := KindOf(c.err); got != c.want {

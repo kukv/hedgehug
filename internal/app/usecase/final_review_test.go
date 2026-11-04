@@ -33,7 +33,7 @@ func addGoneStore(t *testing.T, ts *testSession, withRemote bool) {
 	if err := c.Save(); err != nil {
 		t.Fatal(err)
 	}
-	ts.dropMount()
+	ts.DropMount()
 	ts.warns = nil
 }
 

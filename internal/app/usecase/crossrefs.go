@@ -2,12 +2,10 @@ package usecase
 
 import (
 	"fmt"
-
-	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
 )
 
-// crossRefs finds the references of the store name to another mounted store.
-func (ss *Session) crossRefs(name string) ([]CrossRef, error) {
+// CrossRefs finds the references of the store name to another mounted store.
+func (ss *Session) CrossRefs(name string) ([]CrossRef, error) {
 	set, err := ss.Mount()
 	if err != nil {
 		return nil, err
@@ -15,43 +13,24 @@ func (ss *Session) crossRefs(name string) ([]CrossRef, error) {
 	return CrossRefs(set, name)
 }
 
-// crossRefMsg says what r is: "parent points at org-b's WEB-4; references
+// CrossRefMsg says what r is: "parent points at org-b's WEB-4; references
 // stay inside a store".
-func crossRefMsg(r CrossRef) string {
+func CrossRefMsg(r CrossRef) string {
 	return fmt.Sprintf("%s points at %s's %s; references stay inside a store", r.Field, r.Target.Store.Name, r.Target.RawID())
 }
 
-// crossStoreFindings are the references of the store name to another mounted
-// store, as warnings of doctor. A store whose references cannot be read is a
-// warning of the session, not a finding: the other checks stand without it.
-func (ss *Session) crossStoreFindings(name string) []maintenance.Finding {
-	refs, err := ss.crossRefs(name)
-	if err != nil {
-		ss.warn("could not check cross-store references: " + err.Error())
-		return nil
-	}
-	var out []maintenance.Finding
-	for _, r := range refs {
-		// the same words as the Where of a check of the store's own tasks
-		where := taskLabel(r.From.ID, r.From.ID, r.From.ULID) + " " + r.From.Title
-		out = append(out, maintenance.Finding{Check: "cross_store_ref", Where: where, Task: r.From.ULID.String(), Msg: crossRefMsg(r), Severity: maintenance.Warning})
-	}
-	maintenance.Sort(out)
-	return out
-}
-
-// crossStoreWarnings are the references of the store name to another
+// CrossStoreWarnings are the references of the store name to another
 // mounted store, as the warnings of a sync: "WEB-1 parent points at
 // org-b's WEB-4; references stay inside a store". The store is not named:
 // the sync names it where it shows a warning (and --json has it as store).
-func (ss *Session) crossStoreWarnings(name string) []string {
-	refs, err := ss.crossRefs(name)
+func (ss *Session) CrossStoreWarnings(name string) []string {
+	refs, err := ss.CrossRefs(name)
 	if err != nil {
 		return []string{"could not check cross-store references: " + err.Error()}
 	}
 	var out []string
 	for _, r := range refs {
-		out = append(out, fmt.Sprintf("%s %s", r.From.RawID(), crossRefMsg(r)))
+		out = append(out, fmt.Sprintf("%s %s", r.From.RawID(), CrossRefMsg(r)))
 	}
 	return out
 }

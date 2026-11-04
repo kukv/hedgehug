@@ -54,48 +54,10 @@ type WorkspaceResult struct {
 	Renumbered int
 }
 
-// CheckPrefixElsewhere refuses an id prefix that a workspace of another store
-// of the config has; self is the store that is not looked at. A store that
-// cannot be opened is skipped with a warning.
-func (ss *Session) CheckPrefixElsewhere(prefix, self string) error {
-	c, _, err := ss.Config()
-	if err != nil {
-		return err
-	}
-	var others []store.NamedStore
-	for _, e := range c.Stores {
-		if e.Name != self {
-			others = append(others, store.NamedStore{Name: e.Name, Path: e.Path})
-		}
-	}
-	uses := store.PrefixUses(others, []string{prefix}, func(name string, err error) {
-		ss.warn(fmt.Sprintf("store %s is not checked for id prefixes: %v", name, err))
-	})
-	if len(uses) > 0 {
-		return newErr(KindConflict, "workspace.prefix_taken",
-			fmt.Errorf("id prefix %s is used by workspace %s of store %s", prefix, uses[0].Workspace.Name, uses[0].Store), "prefix", prefix)
-	}
-	return nil
-}
-
 // selectedStoreName returns the name of the store the session works on.
 func (ss *Session) selectedStoreName() (string, error) {
 	_, e, err := ss.Entry()
 	return e.Name, err
-}
-
-func badWorkspaceName(name string) error {
-	if err := model.ValidWorkspaceName(name); err != nil {
-		return newErr(KindUsage, "workspace.bad_name", err, "value", name)
-	}
-	return nil
-}
-
-func badIDPrefix(prefix string) error {
-	if err := model.ValidIDPrefix(prefix); err != nil {
-		return newErr(KindUsage, "workspace.bad_prefix", err, "value", prefix)
-	}
-	return nil
 }
 
 // workspaceOp is the operation of a workspace command on the workspace ulid.
@@ -107,10 +69,10 @@ func workspaceOp(ulid model.ULID) store.Op {
 
 // WorkspaceAdd adds a workspace to the store.
 func (ss *Session) WorkspaceAdd(name, prefix string) (WorkspaceResult, error) {
-	if err := badWorkspaceName(name); err != nil {
+	if err := BadWorkspaceName(name); err != nil {
 		return WorkspaceResult{}, err
 	}
-	if err := badIDPrefix(prefix); err != nil {
+	if err := BadIDPrefix(prefix); err != nil {
 		return WorkspaceResult{}, err
 	}
 	s, ix, err := ss.OpenForWrite()
@@ -132,12 +94,12 @@ func (ss *Session) WorkspaceAdd(name, prefix string) (WorkspaceResult, error) {
 	if err != nil {
 		return WorkspaceResult{}, err
 	}
-	return WorkspaceResult{Index: ix, Workspace: w, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
+	return WorkspaceResult{Index: ix, Workspace: w, Committed: !hash.IsZero(), Commit: CommitHex(hash)}, nil
 }
 
 // WorkspaceRename renames the workspace arg names.
 func (ss *Session) WorkspaceRename(arg, name string) (WorkspaceResult, error) {
-	if err := badWorkspaceName(name); err != nil {
+	if err := BadWorkspaceName(name); err != nil {
 		return WorkspaceResult{}, err
 	}
 	s, ix, err := ss.OpenForWrite()
@@ -163,14 +125,14 @@ func (ss *Session) WorkspaceRename(arg, name string) (WorkspaceResult, error) {
 	if err != nil {
 		return WorkspaceResult{}, err
 	}
-	return WorkspaceResult{Index: ix, Workspace: w, Committed: !hash.IsZero(), Commit: commitHex(hash), OldName: old}, nil
+	return WorkspaceResult{Index: ix, Workspace: w, Committed: !hash.IsZero(), Commit: CommitHex(hash), OldName: old}, nil
 }
 
 // WorkspacePrefix changes the id prefix of the workspace arg names and
 // renumbers its tasks. When the workspace has the prefix already, nothing is
 // written and Committed is false.
 func (ss *Session) WorkspacePrefix(arg, prefix string) (WorkspaceResult, error) {
-	if err := badIDPrefix(prefix); err != nil {
+	if err := BadIDPrefix(prefix); err != nil {
 		return WorkspaceResult{}, err
 	}
 	s, ix, err := ss.OpenForWrite()
@@ -245,7 +207,7 @@ func (ss *Session) WorkspacePrefix(arg, prefix string) (WorkspaceResult, error) 
 	if err != nil {
 		return WorkspaceResult{}, err
 	}
-	r := WorkspaceResult{Index: ix, Workspace: w, Committed: !hash.IsZero(), Commit: commitHex(hash), Renumbered: len(tasks)}
+	r := WorkspaceResult{Index: ix, Workspace: w, Committed: !hash.IsZero(), Commit: CommitHex(hash), Renumbered: len(tasks)}
 	for i, t := range tasks {
 		r.IDs = append(r.IDs, IDChange{Old: oldIDs[i], New: t.ID})
 	}
@@ -263,7 +225,7 @@ func (ss *Session) WorkspaceRemove(arg string) (WorkspaceResult, error) {
 		return WorkspaceResult{}, err
 	}
 	if n := CountTasks(ix, ws.ULID, true); n > 0 {
-		return WorkspaceResult{}, newErr(KindConflict, "workspace.not_empty",
+		return WorkspaceResult{}, NewErr(KindConflict, "workspace.not_empty",
 			fmt.Errorf("workspace %[1]s still has %[2]s; move %[3]s with hedgehug mv --workspace, or delete %[3]s with hedgehug rm and remove %[3]s with hedgehug purge --older-than 0d --store <store>", ws.Name, plural.Count(n, "task"), plural.Pick(n, "it", "them")), "tasks", n)
 	}
 	w := ws
@@ -278,7 +240,7 @@ func (ss *Session) WorkspaceRemove(arg string) (WorkspaceResult, error) {
 	if err != nil {
 		return WorkspaceResult{}, err
 	}
-	return WorkspaceResult{Index: ix, Workspace: w, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
+	return WorkspaceResult{Index: ix, Workspace: w, Committed: !hash.IsZero(), Commit: CommitHex(hash)}, nil
 }
 
 // WorkspaceList lists the workspaces of the store, by name, with the number

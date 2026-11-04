@@ -17,16 +17,6 @@ import (
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
-// ParseQuery parses the words of a query. A query that does not parse is a
-// usage error.
-func ParseQuery(s string) (*query.Query, error) {
-	q, err := query.Parse(s)
-	if err != nil {
-		return nil, newErr(KindUsage, "query.invalid", err)
-	}
-	return q, nil
-}
-
 // listSet opens the stores a listing runs on: every store of config.yaml, or
 // the one --store names. The set is the caller's own, not the one Mount
 // caches: what a listing returns belongs to the indexes of its stores, which
@@ -44,13 +34,13 @@ func (ss *Session) listSet() (*mount.Set, error) {
 			return nil, err
 		}
 	}
-	set, toWarn, err := ss.openSet(c, true)
+	set, toWarn, err := ss.OpenSet(c, true)
 	if err != nil {
 		return nil, err
 	}
-	ss.keep(set.Close)
+	ss.Keep(set.Close)
 	for _, sk := range toWarn {
-		ss.warnSkipped(sk)
+		ss.WarnSkipped(sk)
 	}
 	return set, nil
 }
@@ -76,9 +66,9 @@ func (ss *Session) queryMounted(set *mount.Set, q *query.Query) (*Result, error)
 	if err != nil {
 		var qe *query.Error
 		if errors.As(err, &qe) {
-			return nil, newErr(KindUsage, "query.invalid", err)
+			return nil, NewErr(KindUsage, "query.invalid", err)
 		}
-		return nil, classify(err)
+		return nil, Classify(err)
 	}
 	return res, nil
 }
@@ -105,16 +95,6 @@ func (ss *Session) List(q *query.Query) (ListResult, error) {
 		return ListResult{}, err
 	}
 	return ListResult{Stores: res.Stores, Entries: res.Entries, Groups: res.Groups, Many: len(set.Stores) > 1}, nil
-}
-
-// HasTerm reports whether q has a term with the key.
-func HasTerm(q *query.Query, key string) bool {
-	for _, t := range q.Terms {
-		if t.Key == key {
-			return true
-		}
-	}
-	return false
 }
 
 // TreeNode is one task in ls --tree.
@@ -147,7 +127,7 @@ type TreeResult struct {
 func (ss *Session) Tree(q *query.Query) (TreeResult, error) {
 	if HasTerm(q, "group") || HasTerm(q, "sort") {
 		//nolint:revive,staticcheck // the message is printed as it always was
-		return TreeResult{}, newErr(KindUsage, "query.tree_order", errors.New("--tree orders tasks by rank; it takes neither group: nor sort:"))
+		return TreeResult{}, NewErr(KindUsage, "query.tree_order", errors.New("--tree orders tasks by rank; it takes neither group: nor sort:"))
 	}
 	set, err := ss.listSet()
 	if err != nil {
@@ -161,7 +141,7 @@ func (ss *Session) Tree(q *query.Query) (TreeResult, error) {
 	for _, m := range res.Stores {
 		ix, err := m.Index()
 		if err != nil {
-			return TreeResult{}, classify(err)
+			return TreeResult{}, Classify(err)
 		}
 		var found []*index.Entry
 		for _, e := range res.Entries {
@@ -292,7 +272,7 @@ type ShowResult struct {
 
 // Show reads the task arg names.
 func (ss *Session) Show(arg string) (ShowResult, error) {
-	ts, arg, err := ss.forTask(arg)
+	ts, arg, err := ss.ForTask(arg)
 	if err != nil {
 		return ShowResult{}, err
 	}
@@ -365,27 +345,6 @@ func reverse(ix *index.Index, ulid model.ULID) []Relation {
 	return out
 }
 
-// CommentView is a comment as --json prints it.
-type CommentView struct {
-	ULID    string    `json:"ulid"`
-	Author  string    `json:"author"`
-	Created time.Time `json:"created"`
-	Body    string    `json:"body"`
-}
-
-// ShowView is a task as show --json prints it.
-type ShowView struct {
-	*TaskView
-	Body     string           `json:"body"`
-	Watchers []string         `json:"watchers"`
-	Repos    []string         `json:"repos"`
-	Comments []CommentView    `json:"comments"`
-	Reverse  map[string][]Ref `json:"reverse"`
-	// ReferencedBy are the tasks whose body or comments write this one as #<ID>.
-	ReferencedBy []Ref     `json:"referenced_by"`
-	History      []LogView `json:"history"`
-}
-
 // ShowViewOf is r as show --json prints it.
 func ShowViewOf(r ShowResult) *ShowView {
 	j := &ShowView{TaskView: TaskViewOf(r.Index, r.Entry), Watchers: []string{}, Repos: []string{}, Comments: []CommentView{}, Reverse: map[string][]Ref{}, ReferencedBy: []Ref{}, History: LogViewsOf(r.Index, r.History)}
@@ -405,33 +364,6 @@ func ShowViewOf(r ShowResult) *ShowView {
 		}
 	}
 	return j
-}
-
-// LogTrailer is a trailer of a commit message: "Key: Value".
-type LogTrailer struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
-// LogView is a commit as --json prints it.
-type LogView struct {
-	Hash   string    `json:"hash"`
-	Date   time.Time `json:"date"`
-	Author struct {
-		Name  string `json:"name"`
-		Email string `json:"email"`
-	} `json:"author"`
-	Store string `json:"store"`
-	// Workspace is left out for a commit of no workspace (logWorkspace),
-	// rather than null: the OpenAPI generator cannot make an object nullable.
-	Workspace *WorkspaceRef `json:"workspace,omitempty"`
-	Op        *string       `json:"op"`
-	Task      *string       `json:"task"`
-	ID        *string       `json:"id"` // the current id of the task
-	Subject   string        `json:"subject"`
-	// Trailers are all the trailers of the commit, in the order they are
-	// written (Hedgehug-Overwritten, Hedgehug-Moved-From...); [] with none.
-	Trailers []LogTrailer `json:"trailers" nullable:"false"`
 }
 
 func logViewOf(ix *index.Index, e gitrepo.LogEntry) LogView {
@@ -562,10 +494,10 @@ func (ss *Session) Log(args []string, limit int) (LogResult, error) {
 // workspaces with a task is a usage error.
 func (ss *Session) LogIn(args, workspaces []string, limit int) (LogResult, error) {
 	if len(args) > 0 && len(workspaces) > 0 {
-		return LogResult{}, newErr(KindUsage, "log.workspace_with_task", errors.New("a task's log takes no --workspace"))
+		return LogResult{}, NewErr(KindUsage, "log.workspace_with_task", errors.New("a task's log takes no --workspace"))
 	}
 	if len(args) > 0 {
-		ts, arg, err := ss.forTask(args[0])
+		ts, arg, err := ss.ForTask(args[0])
 		if err != nil {
 			return LogResult{}, err
 		}
@@ -603,7 +535,7 @@ func (ss *Session) LogIn(args, workspaces []string, limit int) (LogResult, error
 		var logErr error
 		if err := m.With(func(ix *index.Index) {
 			var h *history.History
-			if h, logErr = ss.openHistory(m.Store, m.Name); logErr != nil {
+			if h, logErr = ss.OpenHistory(m.Store, m.Name); logErr != nil {
 				return
 			}
 			cs := h.All()
@@ -628,14 +560,14 @@ func (ss *Session) LogIn(args, workspaces []string, limit int) (LogResult, error
 			}
 			entries, logErr = h.Entries(cs, limit)
 		}); err != nil {
-			return LogResult{}, classify(err)
+			return LogResult{}, Classify(err)
 		}
 		if logErr != nil {
 			return LogResult{}, logErr
 		}
 		ix, err := m.Index()
 		if err != nil {
-			return LogResult{}, classify(err)
+			return LogResult{}, Classify(err)
 		}
 		all = append(all, storeLogs(m.Name, ix, entries)...)
 	}
@@ -663,19 +595,9 @@ func storeLogs(name string, ix *index.Index, entries []gitrepo.LogEntry) []Store
 // work logs, newest first. name is the name of the store s, for the progress
 // of building its history index.
 func (ss *Session) TaskLog(s *store.Store, name string, ulid model.ULID, limit int) ([]gitrepo.LogEntry, error) {
-	h, err := ss.openHistory(s, name)
+	h, err := ss.OpenHistory(s, name)
 	if err != nil {
 		return nil, err
 	}
 	return h.Entries(h.Task(ulid), limit)
-}
-
-// openHistory opens the history index of s, telling ss.Progress how far the
-// work of bringing it up to HEAD has come.
-func (ss *Session) openHistory(s *store.Store, name string) (*history.History, error) {
-	var opt history.Options
-	if ss.Progress != nil {
-		opt.Progress = func(done, total int) { ss.Progress(name, done, total) }
-	}
-	return history.Open(s, opt)
 }

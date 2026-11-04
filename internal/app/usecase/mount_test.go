@@ -79,7 +79,7 @@ func TestNoStoreNameWarnsOnceAndUsesTheOthers(t *testing.T) {
 	ts := newTestSession(t)
 	task := ts.addTask("a", nil)
 	addMissingStore(t, ts)
-	ts.dropMount() // addTask mounted the stores before org-b was added
+	ts.DropMount() // addTask mounted the stores before org-b was added
 	ts.warns = nil
 	ts.StoreName = ""
 	set, err := ts.Mount()

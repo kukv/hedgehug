@@ -12,7 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
 
-var errChangedWhileEditing = newErr(KindConflict, "edit.changed", errors.New("the task changed while editing"))
+var errChangedWhileEditing = NewErr(KindConflict, "edit.changed", errors.New("the task changed while editing"))
 
 // EditSession is what edit needs between reading the file and writing the
 // edited bytes back: the CLI opens $EDITOR in between, the server takes
@@ -32,7 +32,7 @@ type EditSession struct {
 
 // BeginEdit resolves arg to a live task and reads its file.
 func (ss *Session) BeginEdit(arg string) (*EditSession, error) {
-	ts, arg, err := ss.forTask(arg)
+	ts, arg, err := ss.ForTask(arg)
 	if err != nil {
 		return nil, err
 	}
@@ -73,9 +73,9 @@ func (es *EditSession) session(ss *Session) *Session {
 // key that was changed, "" when there is none.
 func editInvalid(err error, field string) error {
 	if field == "" {
-		return newErr(KindInvalid, "edit.invalid", err)
+		return NewErr(KindInvalid, "edit.invalid", err)
 	}
-	return newErr(KindInvalid, "edit.invalid", err, "field", field)
+	return NewErr(KindInvalid, "edit.invalid", err, "field", field)
 }
 
 // CheckEdit decodes the edited file of task ulid and refuses the changes
@@ -127,7 +127,7 @@ func CheckEdit(ix *index.Index, ulid model.ULID, old *model.Task, edited []byte)
 // es. Its error comes before anything is written.
 func (ss *Session) PrepareEdit(es *EditSession, t *model.Task) error {
 	ss = es.session(ss)
-	if err := ss.checkEditRefs(es.Index, es.Old, t); err != nil {
+	if err := ss.CheckEditRefs(es.Index, es.Old, t); err != nil {
 		return err
 	}
 	if es.Old == nil {
@@ -160,9 +160,9 @@ func (ss *Session) WriteEdit(es *EditSession, t *model.Task) (TaskResult, error)
 		return TaskResult{}, err
 	}
 	if !hash.IsZero() && es.Old != nil {
-		ss.warnMentions(s, es.Old.Body, t.Body)
+		ss.WarnMentions(s, es.Old.Body, t.Body)
 	}
-	return TaskResult{Index: es.Index, ULID: e.ULID, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
+	return TaskResult{Index: es.Index, ULID: e.ULID, Committed: !hash.IsZero(), Commit: CommitHex(hash)}, nil
 }
 
 // Edit replaces the file of the task arg names with edited, checked as

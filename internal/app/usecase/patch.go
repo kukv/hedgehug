@@ -19,7 +19,7 @@ type PatchInput struct {
 // hedgehug set name theirs.
 func (ss *Session) Patch(arg string, in PatchInput) (TaskResult, error) {
 	if len(in.Assigns) == 0 && in.Body == nil {
-		return TaskResult{}, newErr(KindUsage, "patch.empty", errors.New("nothing to change"))
+		return TaskResult{}, NewErr(KindUsage, "patch.empty", errors.New("nothing to change"))
 	}
 	s, ix, err := ss.OpenForWrite()
 	if err != nil {
@@ -64,5 +64,5 @@ func (ss *Session) Patch(arg string, in PatchInput) (TaskResult, error) {
 	if err != nil {
 		return TaskResult{}, err
 	}
-	return TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: commitHex(hash)}, nil
+	return TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: CommitHex(hash)}, nil
 }

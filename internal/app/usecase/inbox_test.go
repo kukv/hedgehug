@@ -636,10 +636,10 @@ func TestInboxRevertLeavesTheSessionAlone(t *testing.T) {
 
 func TestCompactJSON(t *testing.T) {
 	t.Parallel()
-	if got := compactJSON(json.RawMessage("{ \"a\": [1, 2] }")); got != `{"a":[1,2]}` {
+	if got := CompactJSON(json.RawMessage("{ \"a\": [1, 2] }")); got != `{"a":[1,2]}` {
 		t.Errorf("compactJSON = %q", got)
 	}
-	if got := compactJSON(json.RawMessage("{ nope")); got != "{ nope" {
+	if got := CompactJSON(json.RawMessage("{ nope")); got != "{ nope" {
 		t.Errorf("compactJSON of invalid JSON = %q; want it unchanged", got)
 	}
 }
