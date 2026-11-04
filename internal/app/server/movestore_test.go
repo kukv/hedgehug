@@ -113,7 +113,7 @@ func TestMoveStorePlanAPI(t *testing.T) {
 	if p := ts.problem("POST", "/api/tasks/ME-2/move-store/plan", map[string]any{"to": "nowhere"}, 404); p.Type != "store.not_found" {
 		t.Errorf("no such store: %+v", p)
 	}
-	if p := ts.problem("POST", "/api/tasks/ME-2/move-store/plan", map[string]any{"to": "team", "scoped": "sideways"}, 400); p.Type != "usage" {
+	if p := ts.problem("POST", "/api/tasks/ME-2/move-store/plan", map[string]any{"to": "team", "scoped": "sideways"}, 400); p.Type != "request.invalid" {
 		t.Errorf("bad scoped: %+v", p)
 	}
 	if p := ts.problem("POST", "/api/tasks/ME-99/move-store/plan", map[string]any{"to": "team"}, 404); p.Type != "task.not_found" {

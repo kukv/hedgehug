@@ -15,7 +15,7 @@ type MoveStoreFields struct {
 	To        string `json:"to" doc:"The store to move to, by name"`
 	Workspace string `json:"workspace,omitempty" doc:"The workspace of that store, by name or prefix; needed when it has more than one (otherwise 400 choice.required)"`
 	Parent    string `json:"parent,omitempty" doc:"A task of that store to put the task under: an ID or a ULID"`
-	Scoped    string `json:"scoped,omitempty" doc:"carry or drop (anything else is 400 usage): whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required"`
+	Scoped    string `json:"scoped,omitempty" enum:"carry,drop" doc:"Whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required"`
 }
 
 func (f MoveStoreFields) input(arg string) usecase.MoveStoreInput {

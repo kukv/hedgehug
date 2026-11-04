@@ -856,7 +856,10 @@ components:
           description: "A task of that store to put the task under: an ID or a ULID"
           type: string
         scoped:
-          description: "carry or drop (anything else is 400 usage): whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required"
+          description: Whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required
+          enum:
+            - carry
+            - drop
           type: string
         to:
           description: The store to move to, by name
@@ -877,7 +880,10 @@ components:
           description: "A task of that store to put the task under: an ID or a ULID"
           type: string
         scoped:
-          description: "carry or drop (anything else is 400 usage): whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required"
+          description: Whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required
+          enum:
+            - carry
+            - drop
           type: string
         to:
           description: The store to move to, by name

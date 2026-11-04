@@ -1122,8 +1122,11 @@ export interface components {
         MoveStoreFields: {
             /** @description A task of that store to put the task under: an ID or a ULID */
             parent?: string;
-            /** @description carry or drop (anything else is 400 usage): whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required */
-            scoped?: string;
+            /**
+             * @description Whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required
+             * @enum {string}
+             */
+            scoped?: "carry" | "drop";
             /** @description The store to move to, by name */
             to: string;
             /** @description The workspace of that store, by name or prefix; needed when it has more than one (otherwise 400 choice.required) */
@@ -1134,8 +1137,11 @@ export interface components {
             confirmed?: components["schemas"]["MovePlanView"];
             /** @description A task of that store to put the task under: an ID or a ULID */
             parent?: string;
-            /** @description carry or drop (anything else is 400 usage): whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required */
-            scoped?: string;
+            /**
+             * @description Whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required
+             * @enum {string}
+             */
+            scoped?: "carry" | "drop";
             /** @description The store to move to, by name */
             to: string;
             /** @description The workspace of that store, by name or prefix; needed when it has more than one (otherwise 400 choice.required) */
