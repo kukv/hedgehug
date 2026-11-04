@@ -59,6 +59,7 @@
 104. **非表示の Store も移動先に出す**: 移動先のラジオは非表示の Store も並べる（非表示は表示の設定で、書き込みの先として選べなくする理由がないため。細部 46 の「移動元は出さない」以外は全 Store）
 105. **正確な参照は非表示の Store で外さない**（2026-11-04）: パレットに打った ID・旧 ID・ULID・`<store>:<ID>` は、URL と同じようにそのタスクを開く（非表示の Store のタスクでも。タスクのページに「非表示」の帯が出る）。非表示で外すのは、語の検索・クエリ・「最近開いたもの」だけ（細部 93 の「パレットのタスクの検索」はこの意味）。`detectMode` と `<store>:<ID>` の判定に渡す Store 名は、非表示を含むマウント中の全 Store
 106. **移動先の親がワークスペースを決める**（2026-11-04）: Go の `place` は親があればその親のワークスペースを使うので、親を選んだら移動先のワークスペースの選択をその親のものにする（ワークスペースが未選択でも予定は取る）。別のワークスペースを選んだら親を外し、移動先の Store を変えたらワークスペースと親の両方を外す
+117. **パレットの undo は閲覧のみで止めない**（実装で決まった。概要 plan の細部 117）: undo は利用者が自分でした操作を戻すので、Store が閲覧のみになっていても出す。書けなければサーバーが断り、トーストで知らせる
 
 ---
 
@@ -323,7 +324,7 @@
 - `go vet ./...`・`go vet -tags e2e ./internal/app/cli`: 指摘なし。`gofmt -l .`: 出力なし。`golangci-lint run ./...`: 0 issues
 - `go test -race -count=1 ./...`: 39 パッケージがすべて ok（テストのないパッケージは除く）。Go のファイルは変えていない（main の 1775b2e からの差分に `.go` がない）
 - `pnpm gen` のあとの `web/core/api/schema.d.ts`、`go generate ./internal/app/server` のあとの `api/openapi.yaml`: `git status` に差分なし
-- `pnpm fix`: 修正なし（383 ファイル）。`pnpm check`: 845 ファイル、エラー 0・警告 0。`biome ci .`: 指摘 0。`vitest run`: 154 ファイル・2132 件 PASS。`pnpm build`: 通った
+- `pnpm fix`: 修正なし（383 ファイル）。`pnpm check`: 845 ファイル、エラー 0・警告 0。`biome ci .`: 指摘 0。`vitest run`: 154 ファイル・2133 件 PASS。`pnpm build`: 通った
 - `make e2e` を3回: 3回とも 134 件 PASS（Playwright が出した時間は 33.9 秒・35.5 秒・36.5 秒）。失敗・skipped・flaky（再試行で通ったもの）は 0
 
 ## Task 7 の Step 1・2 の結果
@@ -355,12 +356,13 @@
 - **非表示の判定を1か所に（Task 3。3d84d7c）**: `web/app/hidden.ts` の `storeShown`・`hiddenStores` に、各画面の判定をまとめた
 - **パレットの語の検索・クエリは `-store:<名前>` で非表示の Store を外す（Task 3 のレビュー）**: クライアントで結果を外さず、問い合わせに `-store:<名前>` を足してサーバーで外す。正確な参照（細部 105）は外さない
 - **マイタスクの非表示の案内は一覧の下に置き、件数は1回で数える（Task 4。8181268・25de6a1）**
-- **ID の出し漏れを直し、渡し忘れを型で見つける（Task 5。8bf05ee・153160d・f8cfbce）**: plan の表の外にも、ドラッグの理由（`kanban/drop.ts`・`tree/dnd.ts`・`tree/keyboard.ts`・`tree/placement.ts`）、表のセルの名前、`relation-groups.ts`・`core/workspace.ts`・`undo.ts` などに ID が出ていたので、`displayId` を通した。`IdLabel` の `store` は省略できない props にし、渡し忘れを `pnpm check` が見つけるようにした
+- **ID の出し漏れを直し、渡し忘れを型で見つける（Task 5。8bf05ee・153160d・f8cfbce）**: plan の表の外にも、ドラッグの理由（`kanban/drop.ts`・`tree/dnd.ts`・`tree/keyboard.ts`・`tree/placement.ts`）、表のセルの名前、`detail/Relations.svelte`（と `relation-groups.ts`）・`core/workspace.ts`・`undo.ts` などに ID が出ていたので、`displayId` を通した。`IdLabel` の `store` は省略できない props にし、渡し忘れを `pnpm check` が見つけるようにした
 - **本文の参照とメンションは Store 名なしのまま（Task 5。4dee4a3）**: 本文の `#<ID>` とメンションの挿入は、Go の本文の参照の正規表現が Store 名を受けないので、Store 名なしの ID のまま。関連の画面の本文の参照の注記も、本文の書き方のまま出す。`task.moved` のメッセージはサーバーが持つ ID のまま
 - **移動のダイアログの移動元の親の文は task のキャッシュから（Task 6）**: `MovePlanView` に移動元の親がないので、「<移動元の親> から外れて」の文は `cache.task(...)` の親から作る。外から移されて変わっても追従する
 - **細部 106 はレビューで足した（Task 6。edd97e1）**: 親を選ぶと移動先のワークスペースがその親のものになり、ワークスペースが未選択でも予定を取る
-- **移動の送信中は選択を止め、取り直しの失敗を上書きしない（Task 6。1542f99）**: 送信中は選択の変更を受けない。`move.changed` のあとの予定の取り直しが失敗したら、その失敗の文を「内容が変わりました」の案内で上書きしない
+- **移動の送信中は選択を止め、取り直しの失敗を上書きしない（Task 6。1542f99）**: 予定の表示を `MovePlanSections.svelte` に分けた。送信中は選択の変更を受けない。`move.changed` のあとの予定の取り直しが失敗したら、その失敗の文を「内容が変わりました」の案内で上書きしない
 - **移動のあとにも、選べなくなった移動先を外す（Task 7。7ef6e95）**: 移動の最中に移動先が閲覧のみになった（または消えた）とき、送信中は外さないが、終わったあとにも外れなかった。外す `$effect` が `busy` を追跡していなかったためで、`busy` を追跡し、送信が終わったときにもう一度判定する。テストは `StoreMove.test.ts` の「clears a Store that became read-only during the move once the move is over」
+- **移動の予定の ID も Store 名付き（最終レビュー。8f27171）**: 移動先の親の文（`displayId(plan.to, …)`）と外す参照のタスクの ID（`displayId(plan.from, …)`）を `displayId` に通した。`WorkspaceAdd` の非表示の判定は `storeShown` を使う（`SettingsStores` の「最後の1つ」の数え方はそのまま）
 - **パレットの「別の Store へ移動…」のアイコンは `database`（Task 6）**: 細部 103 の `store` は足さず、`icons` にある `database`（円柱）を使う
 - **E2E の接頭辞が重なる Store は `Peer.publish` と `hh store add` で作る**: `hh store init` は使われている接頭辞を断るので、`ids.spec.ts` は別の home で同じ接頭辞の Store を作って publish し、`hh store add` でマウントする
 
@@ -386,7 +388,7 @@
 | 47 予定の表示 | `stores/MovePlanSections.svelte`・`move-plan.ts` | `stores/move-plan.test.ts`・`StoreMove.test.ts`、`e2e/store-move.spec.ts` |
 | 48 実行 | `stores/StoreMove.svelte`、`core/cli.ts`（`cliMvStore`） | `StoreMove.test.ts`・`core/cli.test.ts`、`e2e/store-move.spec.ts` |
 | 49 スキーマの違反 | `stores/move-plan.ts`（`violationView`）、`core/messages.ts` | `StoreMove.test.ts`（`move.invalid`・`schema.violation`）・`move-plan.test.ts` |
-| 50 undo の `undo.blocked` | 変えていない（`core/messages.ts`・`undo.ts`） | `core/messages.test.ts`（「words undo.blocked by the operation」。`move-in`・`move-out`）・`undo.test.ts` |
+| 50 undo の `undo.blocked` | 変えていない（`core/messages.ts`・`undo.ts`）。パレットの undo は閲覧のみで止めない（細部 117） | `core/messages.test.ts`（「words undo.blocked by the operation」。`move-in`・`move-out`）・`undo.test.ts` |
 | 51 E2E | `e2e/harness.ts`（`readOnlyStore`・`Peer.publish`） | `e2e/readonly.spec.ts`・`hidden.spec.ts`・`my.spec.ts`・`ids.spec.ts`・`store-move.spec.ts`（4f-2 の `accounts`・`stores`・`discover`・`onboarding`・`keyring`） |
 | 92 「Store が2つ以上」は全 Store で数える | `svelte-store.ts` の `useManyStores`・`TreeView` の `multi`・`KanbanView` の `manyStores` を変えていない | `tree/TreeView.stores.test.ts`（「keeps the badges of both stores in the count of stores while one is hidden」） |
 | 93 非表示を外す場所 | `app/hidden.ts`（`storeShown`・`hiddenStores`）と細部 38 の場所 | 細部 38 と同じ |
