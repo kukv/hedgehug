@@ -152,16 +152,6 @@
   </ListBar>
 
   <div class="body">
-    {#if !error && !loading && hiddenTotal > 0}
-      <p class="hidden-note">
-        非表示の Store に {hiddenTotal} 件（{hiddenCounts.map((h) => h.store).join("、")}）
-        <a
-          href={router.href({ name: "settings", page: "stores" })}
-          onclick={(e) => onLinkClick(e, router.href({ name: "settings", page: "stores" }))}
-          >マウント中の Store を開く</a
-        >
-      </p>
-    {/if}
     {#if error}
       <!-- the bar above tells why -->
     {:else if loading}
@@ -210,6 +200,19 @@
           </table>
         </section>
       {/each}
+    {/if}
+    {#if !error && !loading && hiddenTotal > 0}
+      <p class="hidden-note">
+        <Icon name="eye-off" size={14} />
+        <span class="text">
+          非表示の Store に {hiddenTotal} 件（{hiddenCounts.map((h) => h.store).join("、")}）
+        </span>
+        <a
+          href={router.href({ name: "settings", page: "stores" })}
+          onclick={(e) => onLinkClick(e, router.href({ name: "settings", page: "stores" }))}
+          >マウント中の Store を開く</a
+        >
+      </p>
     {/if}
   </div>
 </div>
@@ -277,12 +280,20 @@
     padding: var(--space-8) var(--gutter) var(--space-20);
   }
   .hidden-note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
     margin: 0;
+    padding: var(--space-8) var(--space-12);
+    border: 1px dashed var(--line-input);
+    border-radius: var(--radius-8);
     color: var(--muted);
     font-size: var(--fs-12);
   }
+  .hidden-note .text {
+    flex: 1;
+  }
   .hidden-note a {
-    margin-left: var(--space-8);
     color: var(--ink-2);
   }
   .msg {
