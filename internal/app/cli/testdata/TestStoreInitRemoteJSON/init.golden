@@ -4,7 +4,10 @@
   "workspace": {
     "ulid": "<ULID-1>",
     "name": "org",
-    "id_prefix": "ORG"
+    "id_prefix": "ORG",
+    "prefix_set": "<TIME>",
+    "tasks": 0,
+    "deleted": 0
   },
   "remotes": [
     "<TMP>/001/one.git",

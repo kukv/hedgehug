@@ -656,7 +656,7 @@ func TestReadOnlyRefusesInboxRevert(t *testing.T) {
 	ts := usecasetest.New(t)
 	item, _ := usecasetest.OverwriteME1(t, ts)
 	usecasetest.MakeReadOnly(t, ts, replicate.ReasonGitHub)
-	_, err := notifications.InboxRevert(ts.Session, item.ULID.String())
+	_, err := notifications.InboxRevert(ts.Session, item.ULID)
 	wantReadOnly(t, "InboxRevert", err)
 }
 

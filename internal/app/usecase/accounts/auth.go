@@ -43,8 +43,8 @@ type AuthLoginInput struct {
 type AuthLoginResult struct {
 	Account string `json:"account"`
 	ID      string `json:"id"`
-	Added   bool   `json:"added"`
-	Uses    string `json:"-"`
+	Added   bool   `json:"added" doc:"The account was added to config.yaml: the name was no account's"`
+	Uses    string `json:"uses,omitempty" doc:"gh or env:VAR: the account takes its token from there, so Hedgehug has nothing to log in and kept nothing"`
 	Pinned  Pinned `json:"-"` // when an account was added: the stores that were given the account they used
 }
 

@@ -72,7 +72,7 @@ func (a *app) storeDiscover(in stores.DiscoverInput, all bool) error {
 		res, mountErr = stores.StoreMount(a.ss, picked)
 	}
 	if a.jsonOut {
-		if err := a.printDiscoverJSON(cands, res); err != nil {
+		if err := a.printDiscoverJSON(cands, res.View()); err != nil {
 			return err
 		}
 		return mountErr
@@ -100,26 +100,14 @@ func (a *app) storeDiscover(in stores.DiscoverInput, all bool) error {
 	return mountErr
 }
 
-func (a *app) printDiscoverJSON(cands []stores.Candidate, res stores.MountResult) error {
-	type failure struct {
-		Name  string `json:"name"`
-		Error string `json:"error"`
+func (a *app) printDiscoverJSON(cands []stores.Candidate, res stores.MountView) error {
+	if cands == nil {
+		cands = []stores.Candidate{}
 	}
-	out := struct {
+	return a.printJSON(struct {
 		Candidates []stores.Candidate `json:"candidates"`
-		Mounted    []string           `json:"mounted"`
-		Failed     []failure          `json:"failed,omitempty"`
-	}{Candidates: cands, Mounted: res.Mounted}
-	if out.Candidates == nil {
-		out.Candidates = []stores.Candidate{}
-	}
-	if out.Mounted == nil {
-		out.Mounted = []string{}
-	}
-	for _, f := range res.Failed {
-		out.Failed = append(out.Failed, failure{f.Name, usecase.Describe(f.Err)})
-	}
-	return a.printJSON(out)
+		stores.MountView
+	}{cands, res})
 }
 
 func (a *app) printCandidates(w io.Writer, cands []stores.Candidate) error {

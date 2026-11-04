@@ -34,7 +34,11 @@ func (a *app) storeAdd(name string, remotes []string, path, account string) erro
 		return err
 	}
 	if a.jsonOut {
-		return a.printJSON(r)
+		v, err := stores.ViewOf(a.ss, r.Name)
+		if err != nil {
+			return err
+		}
+		return a.printJSON(v)
 	}
 	_, err = fmt.Fprintf(a.stdout, "Added store %s at %s from %s\n", r.Name, r.Path, r.Remotes[0])
 	return err
@@ -50,7 +54,7 @@ func (a *app) storeListCmd() *cobra.Command {
 }
 
 func (a *app) storeList() error {
-	out, err := stores.StoreList(a.ss)
+	out, err := stores.StoreItems(a.ss)
 	if err != nil {
 		return err
 	}

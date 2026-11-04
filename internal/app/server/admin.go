@@ -53,12 +53,7 @@ type migrateInput struct {
 
 type migrateOutput struct{ Body schemas.MigrateWrite }
 
-type storeItem struct {
-	stores.StoreView
-	Default bool `json:"default" doc:"The store hedgehug picks without --store"`
-}
-
-type storesOutput struct{ Body []storeItem }
+type storesOutput struct{ Body []stores.StoreItem }
 
 type storeInitInput struct {
 	Body struct {
@@ -70,15 +65,7 @@ type storeInitInput struct {
 	}
 }
 
-type storeInitOutput struct {
-	Body struct {
-		Name      string                   `json:"name"`
-		Path      string                   `json:"path"`
-		Workspace workspaces.WorkspaceView `json:"workspace"`
-		Remotes   []string                 `json:"remotes"`
-		Pushed    []string                 `json:"pushed"`
-	}
-}
+type storeInitOutput struct{ Body stores.StoreInitView }
 
 type doctorOutput struct{ Body []maintenance.DoctorReport }
 
@@ -202,19 +189,11 @@ func (s *Server) registerAdmin() {
 	}, func(context.Context, *struct{}) (*storesOutput, error) {
 		ss := s.session("")
 		defer ss.Close()
-		list, err := stores.StoreList(ss)
+		items, err := stores.StoreItems(ss)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		def := ""
-		if _, e, err := ss.Entry(); err == nil { // the store the CLI picks without --store
-			def = e.Name
-		}
-		out := &storesOutput{Body: []storeItem{}}
-		for _, v := range list {
-			out.Body = append(out.Body, storeItem{StoreView: v, Default: v.Name == def})
-		}
-		return out, nil
+		return &storesOutput{Body: items}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -228,17 +207,9 @@ func (s *Server) registerAdmin() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		out := &storeInitOutput{}
-		out.Body.Name, out.Body.Path = r.Name, r.Path
-		out.Body.Remotes, out.Body.Pushed = append([]string{}, r.Remotes...), append([]string{}, r.Pushed...)
-		out.Body.Workspace = workspaces.WorkspaceView{ULID: r.Workspace.ULID.String(), Name: r.Workspace.Name, IDPrefix: r.Workspace.IDPrefix, PrefixSet: r.Workspace.PrefixSet}
-		// StoreInit leaves the time of the prefix out of its workspace; the store has it.
 		made := s.session(r.Name)
 		defer made.Close()
-		if ws, err := workspaces.WorkspaceList(made); err == nil && len(ws) == 1 {
-			out.Body.Workspace = ws[0]
-		}
-		return out, nil
+		return &storeInitOutput{Body: stores.StoreInitViewOf(made, r)}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{

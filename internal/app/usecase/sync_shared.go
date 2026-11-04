@@ -349,6 +349,25 @@ type SyncStatusView struct {
 	PushInterval float64    `json:"push_interval" doc:"sync.push_interval of config.yaml, in seconds (fractions allowed)"`
 }
 
+// SyncStatusViews reads how the syncs of every store went, with the
+// intervals of config.yaml and without a loop that schedules them: as the
+// CLI prints it.
+func SyncStatusViews(ss *Session) ([]SyncStatusView, error) {
+	iv, err := ss.SyncIntervals()
+	if err != nil {
+		return nil, err
+	}
+	sts, err := SyncStatus(ss)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SyncStatusView, len(sts))
+	for i, st := range sts {
+		out[i] = NewSyncStatusView(st, nil, iv)
+	}
+	return out, nil
+}
+
 // NewSyncStatusView is st with when sch fetches next and when the writes
 // waiting are pushed, as it schedules them with the intervals iv. With a nil
 // sch, NextFetch and PushAt are nil.

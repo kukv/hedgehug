@@ -32,17 +32,7 @@ type accountTokenInput struct {
 	}
 }
 
-// accountLoginBody is an AuthLoginResult as the API answers it. Uses is not
-// in the CLI's JSON (AuthLoginResult.Uses is json:"-"), but a GUI that sent a
-// token to an account of gh has to be told that nothing was kept.
-type accountLoginBody struct {
-	Account string `json:"account"`
-	ID      string `json:"id"`
-	Added   bool   `json:"added" doc:"The account was added to config.yaml: the name was no account's"`
-	Uses    string `json:"uses,omitempty" doc:"gh or env:VAR: the account takes its token from there, so Hedgehug has nothing to log in and kept nothing"`
-}
-
-type accountLoginOutput struct{ Body accountLoginBody }
+type accountLoginOutput struct{ Body accounts.AuthLoginResult }
 
 type accountParam struct {
 	Name string `path:"name" doc:"The name of the account in config.yaml"`
@@ -100,7 +90,7 @@ func (s *Server) registerAccounts() {
 			return nil, problemOf(err)
 		}
 		s.tokenWritten(res.Pinned)
-		return &accountLoginOutput{Body: loginBody(res)}, nil
+		return &accountLoginOutput{Body: res}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -115,10 +105,6 @@ func (s *Server) registerAccounts() {
 		}
 		return &struct{ Body accounts.AuthLogoutResult }{res}, nil
 	})
-}
-
-func loginBody(r accounts.AuthLoginResult) accountLoginBody {
-	return accountLoginBody{Account: r.Account, ID: r.ID, Added: r.Added, Uses: r.Uses}
 }
 
 // pinnedStores tells the GUI when a write of an account also wrote the

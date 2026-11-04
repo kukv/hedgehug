@@ -59,8 +59,9 @@ func TestStoreListAccountIsID(t *testing.T) {
 	alice, _, _ := twoUsers(t)
 	var list []struct {
 		Account string `json:"account"`
+		Default bool   `json:"default"`
 	}
-	if err := json.Unmarshal([]byte(alice.ok("store", "list", "--json")), &list); err != nil || len(list) != 1 || list[0].Account != "github.com/alice" {
+	if err := json.Unmarshal([]byte(alice.ok("store", "list", "--json")), &list); err != nil || len(list) != 1 || list[0].Account != "github.com/alice" || !list[0].Default {
 		t.Errorf("list = %+v, %v", list, err)
 	}
 }
@@ -108,10 +109,11 @@ func TestSyncStatusSkipsBrokenStore(t *testing.T) {
 	}
 	alice.goldenOK("status", "sync", "--status")
 	var rows []struct {
-		Store string `json:"store"`
-		Error string `json:"error"`
+		Store    string  `json:"store"`
+		Error    string  `json:"error"`
+		Interval float64 `json:"interval"`
 	}
-	if err := json.Unmarshal([]byte(alice.goldenOK("status-json", "sync", "--status", "--json")), &rows); err != nil || len(rows) != 2 || rows[0].Error != "" || rows[1].Error == "" {
+	if err := json.Unmarshal([]byte(alice.goldenOK("status-json", "sync", "--status", "--json")), &rows); err != nil || len(rows) != 2 || rows[0].Error != "" || rows[1].Error == "" || rows[1].Interval <= 0 {
 		t.Errorf("rows = %+v, %v", rows, err)
 	}
 }

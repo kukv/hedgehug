@@ -786,14 +786,6 @@ export interface components {
             /** @description Where the token comes from: gh or env:<VAR>; with none the account has no token. keychain and device are answered with 400 auth.token_source: a pasted token goes through PUT /api/accounts/{name}/token, and the device flow through POST /api/auth/device */
             token?: string;
         };
-        AccountLoginBody: {
-            account: string;
-            /** @description The account was added to config.yaml: the name was no account's */
-            added: boolean;
-            id: string;
-            /** @description gh or env:VAR: the account takes its token from there, so Hedgehug has nothing to log in and kept nothing */
-            uses?: string;
-        };
         AccountTokenInputBody: {
             /** @description The host of a new account (github.com without it); for an account that exists it must be its host */
             host?: string;
@@ -821,6 +813,14 @@ export interface components {
             message?: string;
             /** @enum {string} */
             state: "done" | "error";
+        };
+        AuthLoginResult: {
+            account: string;
+            /** @description The account was added to config.yaml: the name was no account's */
+            added: boolean;
+            id: string;
+            /** @description gh or env:VAR: the account takes its token from there, so Hedgehug has nothing to log in and kept nothing */
+            uses?: string;
         };
         AuthLogoutResult: {
             account: string;
@@ -906,6 +906,10 @@ export interface components {
             title: string;
             /** @description The workspace, by name or prefix */
             workspace?: string;
+        };
+        DefaultView: {
+            /** @description The default store; null when there is none */
+            name: string | null;
         };
         Detached: {
             /** @description The id of the task after the move */
@@ -1065,7 +1069,7 @@ export interface components {
             message: string;
             name: string;
         };
-        MountOutputBody: {
+        MountView: {
             /** @description The candidates that could not be added; the others were */
             failed: components["schemas"]["MountFailed"][] | null;
             /** @description The names of the stores that were added */
@@ -1212,10 +1216,6 @@ export interface components {
             /** @description The ULIDs of the items to mark read; not with all */
             ids?: string[];
         };
-        NotificationReadOutputBody: {
-            /** @description The ULIDs of the items marked read, as hh inbox read --json */
-            read: string[];
-        };
         Overwritten: {
             author?: string;
             field: string;
@@ -1302,6 +1302,10 @@ export interface components {
             id: string;
             title: string;
             ulid: string;
+        };
+        ReadResult: {
+            /** @description The ULIDs of the items marked read, as hh inbox read --json */
+            read: string[];
         };
         Rebuilt: {
             dropped: string[] | null;
@@ -1435,9 +1439,6 @@ export interface components {
         StoreDefaultInputBody: {
             name: string;
         };
-        StoreDefaultOutputBody: {
-            name: string;
-        };
         StoreInitInputBody: {
             account?: string;
             name: string;
@@ -1446,7 +1447,7 @@ export interface components {
             /** @description The name of the first workspace; the name of the store without it */
             workspace?: string;
         };
-        StoreInitOutputBody: {
+        StoreInitView: {
             name: string;
             path: string;
             pushed: string[] | null;
@@ -1804,7 +1805,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AccountLoginBody"];
+                    "application/json": components["schemas"]["AuthLoginResult"];
                 };
             };
             /** @description Error */
@@ -2218,7 +2219,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NotificationReadOutputBody"];
+                    "application/json": components["schemas"]["ReadResult"];
                 };
             };
             /** @description Error */
@@ -2659,7 +2660,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StoreInitOutputBody"];
+                    "application/json": components["schemas"]["StoreInitView"];
                 };
             };
             /** @description Error */
@@ -2725,7 +2726,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StoreDefaultOutputBody"];
+                    "application/json": components["schemas"]["DefaultView"];
                 };
             };
             /** @description Error */
@@ -2792,7 +2793,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MountOutputBody"];
+                    "application/json": components["schemas"]["MountView"];
                 };
             };
             /** @description Error */

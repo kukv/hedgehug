@@ -77,18 +77,7 @@ func (a *app) storeInit(in stores.StoreInitInput) error {
 	}
 	ws := r.Workspace
 	if a.jsonOut {
-		type wsJSON struct {
-			ULID     string `json:"ulid"`
-			Name     string `json:"name"`
-			IDPrefix string `json:"id_prefix"`
-		}
-		return a.printJSON(struct {
-			Name      string   `json:"name"`
-			Path      string   `json:"path"`
-			Workspace wsJSON   `json:"workspace"`
-			Remotes   []string `json:"remotes,omitempty"`
-			Pushed    []string `json:"pushed,omitempty"`
-		}{r.Name, r.Path, wsJSON{ws.ULID.String(), ws.Name, ws.IDPrefix}, r.Remotes, r.Pushed})
+		return a.printJSON(stores.StoreInitViewOf(a.ss.ForStore(r.Name), r))
 	}
 	_, err = fmt.Fprintf(a.stdout, "Created store %s at %s with workspace %s (%s)\n", r.Name, r.Path, ws.Name, ws.IDPrefix)
 	if err == nil && len(r.Pushed) > 0 {

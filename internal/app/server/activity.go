@@ -32,12 +32,7 @@ type notificationsInput struct {
 	All bool `query:"all" doc:"Include the items read"`
 }
 
-type notification struct {
-	notifications.InboxItemView
-	Read bool `json:"read"`
-}
-
-type notificationsOutput struct{ Body []notification }
+type notificationsOutput struct{ Body []notifications.Notification }
 
 // NotificationParam is the item a request is on. It is exported because huma
 // skips an embedded struct whose type is not.
@@ -61,11 +56,7 @@ type notificationReadInput struct {
 	}
 }
 
-type notificationReadOutput struct {
-	Body struct {
-		Read []string `json:"read" nullable:"false" doc:"The ULIDs of the items marked read, as hh inbox read --json"`
-	}
-}
+type notificationReadOutput struct{ Body notifications.ReadResult }
 
 // syncOps are the ops of the commits a sync makes.
 var syncOps = []string{"merge", "repair"}
@@ -128,39 +119,11 @@ func (s *Server) registerActivity() {
 	}, func(_ context.Context, in *notificationsInput) (*notificationsOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		// Ops warns once per read of the boxes, and the unread and the all
-		// lists below read them twice: the warnings reach the log once.
-		seen := map[string]bool{}
-		warn := ss.Warn
-		ss.Warn = func(m string) {
-			if !seen[m] {
-				seen[m] = true
-				warn(m)
-			}
-		}
-		stores, err := notifications.InboxStores(ss)
+		items, err := notifications.InboxNotifications(ss, in.All)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		unread, err := notifications.InboxListOf(ss, stores, false)
-		if err != nil {
-			return nil, problemOf(err)
-		}
-		items := unread
-		if in.All {
-			if items, err = notifications.InboxListOf(ss, stores, true); err != nil {
-				return nil, problemOf(err)
-			}
-		}
-		isUnread := map[string]bool{}
-		for _, it := range unread {
-			isUnread[it.ULID.String()] = true
-		}
-		out := &notificationsOutput{Body: make([]notification, len(items))}
-		for i, it := range items {
-			out.Body[i] = notification{InboxItemView: it, Read: !isUnread[it.ULID.String()]}
-		}
-		return out, nil
+		return &notificationsOutput{Body: items}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -201,9 +164,7 @@ func (s *Server) registerActivity() {
 			return nil, problemOf(err)
 		}
 		s.poller.Kick()
-		out := &notificationReadOutput{}
-		out.Body.Read = read
-		return out, nil
+		return &notificationReadOutput{Body: notifications.ReadResult{Read: read}}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{

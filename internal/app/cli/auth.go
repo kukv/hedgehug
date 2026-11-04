@@ -134,12 +134,12 @@ func (a *app) authLogin(name, host string, hostGiven, withToken bool) error {
 	if err != nil {
 		return err
 	}
+	if a.jsonOut {
+		return a.printJSON(res)
+	}
 	if res.Uses != "" {
 		_, err := fmt.Fprintf(a.stdout, "Nothing to log in for %s: it uses %s\n", res.Account, res.Uses)
 		return err
-	}
-	if a.jsonOut {
-		return a.printJSON(res)
 	}
 	if _, err := fmt.Fprintf(a.stdout, "Logged in as %s (account %s)\n", res.ID, res.Account); err != nil {
 		return err
@@ -207,10 +207,7 @@ func (a *app) authLogout(name string) error {
 		return err
 	}
 	if a.jsonOut {
-		return a.printJSON(struct {
-			Account string `json:"account"`
-			Removed bool   `json:"removed"`
-		}{res.Account, res.Removed})
+		return a.printJSON(res)
 	}
 	if !res.Removed {
 		uses := "it has no token"

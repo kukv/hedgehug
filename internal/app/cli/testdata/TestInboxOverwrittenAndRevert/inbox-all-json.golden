@@ -17,6 +17,7 @@
       "ulid": "<ULID-2>",
       "id": "ORG-1",
       "title": "bob"
-    }
+    },
+    "read": true
   }
 ]

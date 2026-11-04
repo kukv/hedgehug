@@ -212,9 +212,9 @@ func TestDiscoverOneFails(t *testing.T) {
 	te.terminal, te.stdin = false, ""
 	code, out, _ = te.run("store", "discover", "--from", remotes, "--all", "--json")
 	var got struct {
-		Failed []struct{ Name, Error string } `json:"failed"`
+		Failed []struct{ Name, Code, Message string } `json:"failed"`
 	}
-	if code != 1 || json.Unmarshal([]byte(out), &got) != nil || len(got.Failed) != 1 || got.Failed[0].Name != "aa" || got.Failed[0].Error == "" {
+	if code != 1 || json.Unmarshal([]byte(out), &got) != nil || len(got.Failed) != 1 || got.Failed[0].Name != "aa" || got.Failed[0].Code == "" || got.Failed[0].Message == "" {
 		t.Errorf("--json: exit %d, %q", code, out)
 	}
 }

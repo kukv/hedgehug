@@ -58,11 +58,15 @@ func TestStoreInitDev(t *testing.T) {
 func TestStoreInitJSON(t *testing.T) {
 	t.Parallel()
 	te := newTestEnv(t)
-	var got struct{ Name, Path string }
+	var got struct {
+		Name, Path string
+		Remotes    []string
+		Pushed     []string
+	}
 	if err := json.Unmarshal([]byte(te.ok("store", "init", "me", "--prefix", "ME", "--json")), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Name != "me" || got.Path != te.storeDir("me") {
+	if got.Name != "me" || got.Path != te.storeDir("me") || got.Remotes == nil || got.Pushed == nil {
 		t.Errorf("json = %+v", got)
 	}
 }

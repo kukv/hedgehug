@@ -19,24 +19,6 @@ components:
         - name
         - login
       type: object
-    AccountLoginBody:
-      additionalProperties: false
-      properties:
-        account:
-          type: string
-        added:
-          description: "The account was added to config.yaml: the name was no account's"
-          type: boolean
-        id:
-          type: string
-        uses:
-          description: "gh or env:VAR: the account takes its token from there, so Hedgehug has nothing to log in and kept nothing"
-          type: string
-      required:
-        - account
-        - id
-        - added
-      type: object
     AccountTokenInputBody:
       additionalProperties: false
       properties:
@@ -102,6 +84,24 @@ components:
       required:
         - id
         - state
+      type: object
+    AuthLoginResult:
+      additionalProperties: false
+      properties:
+        account:
+          type: string
+        added:
+          description: "The account was added to config.yaml: the name was no account's"
+          type: boolean
+        id:
+          type: string
+        uses:
+          description: "gh or env:VAR: the account takes its token from there, so Hedgehug has nothing to log in and kept nothing"
+          type: string
+      required:
+        - account
+        - id
+        - added
       type: object
     AuthLogoutResult:
       additionalProperties: false
@@ -297,6 +297,17 @@ components:
           type: string
       required:
         - title
+      type: object
+    DefaultView:
+      additionalProperties: false
+      properties:
+        name:
+          description: The default store; null when there is none
+          type:
+            - string
+            - "null"
+      required:
+        - name
       type: object
     Detached:
       additionalProperties: false
@@ -708,7 +719,7 @@ components:
         - code
         - message
       type: object
-    MountOutputBody:
+    MountView:
       additionalProperties: false
       properties:
         failed:
@@ -1014,14 +1025,14 @@ components:
           type: string
       required:
         - read
-        - store
-        - task
         - ulid
         - kind
         - commit
         - author
         - to
         - time
+        - store
+        - task
       type: object
     NotificationPatchInputBody:
       additionalProperties: false
@@ -1043,17 +1054,6 @@ components:
           items:
             type: string
           type: array
-      type: object
-    NotificationReadOutputBody:
-      additionalProperties: false
-      properties:
-        read:
-          description: The ULIDs of the items marked read, as hh inbox read --json
-          items:
-            type: string
-          type: array
-      required:
-        - read
       type: object
     Overwritten:
       additionalProperties: false
@@ -1262,6 +1262,17 @@ components:
         - ulid
         - id
         - title
+      type: object
+    ReadResult:
+      additionalProperties: false
+      properties:
+        read:
+          description: The ULIDs of the items marked read, as hh inbox read --json
+          items:
+            type: string
+          type: array
+      required:
+        - read
       type: object
     Rebuilt:
       additionalProperties: false
@@ -1672,14 +1683,6 @@ components:
       required:
         - name
       type: object
-    StoreDefaultOutputBody:
-      additionalProperties: false
-      properties:
-        name:
-          type: string
-      required:
-        - name
-      type: object
     StoreInitInputBody:
       additionalProperties: false
       properties:
@@ -1702,7 +1705,7 @@ components:
         - name
         - prefix
       type: object
-    StoreInitOutputBody:
+    StoreInitView:
       additionalProperties: false
       properties:
         name:
@@ -2496,7 +2499,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AccountLoginBody"
+                $ref: "#/components/schemas/AuthLoginResult"
           description: OK
         default:
           content:
@@ -2943,7 +2946,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/NotificationReadOutputBody"
+                $ref: "#/components/schemas/ReadResult"
           description: OK
         default:
           content:
@@ -3339,7 +3342,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/StoreInitOutputBody"
+                $ref: "#/components/schemas/StoreInitView"
           description: Created
         default:
           content:
@@ -3389,7 +3392,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/StoreDefaultOutputBody"
+                $ref: "#/components/schemas/DefaultView"
           description: OK
         default:
           content:
@@ -3456,7 +3459,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MountOutputBody"
+                $ref: "#/components/schemas/MountView"
           description: OK
         default:
           content:

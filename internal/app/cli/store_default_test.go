@@ -17,12 +17,13 @@ func TestStoreDefault(t *testing.T) {
 		t.Errorf("the first store is the default: %q", out)
 	}
 	te.ok("store", "default", "org")
-	if out := te.ok("store", "default", "--json"); !strings.Contains(out, `"default": "org"`) {
+	if out := te.ok("store", "default", "--json"); !strings.Contains(out, `"name": "org"`) {
 		t.Errorf("json = %q", out)
 	}
 	if code, _, errs := te.run("store", "default", "nope"); code != 1 || !strings.Contains(errs, "me, org") {
 		t.Errorf("unknown name: exit %d, %q", code, errs)
 	}
+	te.ok("store", "default", "--json") // still the one
 	te.ok("store", "remove", "org", "--keep")
 	if out := te.ok("store", "default"); strings.TrimSpace(out) != "-" {
 		t.Errorf("after removing the default: %q", out)

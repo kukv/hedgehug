@@ -225,7 +225,7 @@ func TestStoreInitJSONHasTheWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	w := got.Workspace
-	if !slices.Equal(fieldNames(w), []string{"id_prefix", "name", "ulid"}) || w["name"] != "main" || w["id_prefix"] != "ME" {
+	if !slices.Equal(fieldNames(w), []string{"deleted", "id_prefix", "name", "prefix_set", "tasks", "ulid"}) || w["name"] != "main" || w["id_prefix"] != "ME" {
 		t.Fatalf("workspace = %v", w)
 	}
 	if _, err := model.ParseULID(w["ulid"].(string)); err != nil {

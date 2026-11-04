@@ -135,7 +135,7 @@ func repairedLine(x usecase.Repaired) string {
 }
 
 func (a *app) syncStatus() error {
-	out, err := usecase.SyncStatus(a.ss)
+	out, err := usecase.SyncStatusViews(a.ss)
 	if err != nil {
 		return err
 	}
