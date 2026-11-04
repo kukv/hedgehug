@@ -250,7 +250,9 @@ func (l *Loop) syncStore(name string) {
 	if err != nil {
 		l.s.logf("sync %s: %s", name, usecase.Describe(err))
 	}
-	// A failure of Config or Select has no report, and no warnings to log.
+	if rep.Store == "" {
+		return // Config or Select failed: no sync ran, and the warnings told stay told
+	}
 	l.logWarnings(name, rep.Warnings)
 }
 

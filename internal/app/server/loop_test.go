@@ -327,3 +327,24 @@ func TestLoopLogsNoTargetsOnce(t *testing.T) {
 		t.Fatalf("after recovery and a new failure: %d lines\n%s", n, ts.log.String())
 	}
 }
+
+// A sync that cannot read config.yaml has no warnings to compare with, so it
+// leaves the warnings already told as they are: they are not told again once
+// config.yaml reads.
+func TestSyncStoreKeepsToldWarningsWhenConfigDoesNotRead(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	l := ts.srv.loop
+	key := "me\x00a warning"
+	l.told[key] = true
+	if err := os.WriteFile(filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml"), []byte("stores: [\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l.syncStore("me")
+	if !strings.Contains(ts.log.String(), "sync me: ") {
+		t.Errorf("the failure is not logged\n%s", ts.log.String())
+	}
+	if !l.told[key] {
+		t.Error("the warning told before was forgotten")
+	}
+}
