@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
-	"github.com/kukv/hedgehug/internal/app/usecase/workspaces"
 )
 
 // StoreItem is a row of store list: the store as StoreView has it, and
@@ -51,11 +50,11 @@ func ViewOf(ss *usecase.Session, name string) (StoreView, error) {
 // StoreInitView is the store StoreInit made, as store init --json prints it
 // and as the server answers.
 type StoreInitView struct {
-	Name      string                   `json:"name"`
-	Path      string                   `json:"path"`
-	Workspace workspaces.WorkspaceView `json:"workspace"`
-	Remotes   []string                 `json:"remotes"`
-	Pushed    []string                 `json:"pushed"`
+	Name      string                `json:"name"`
+	Path      string                `json:"path"`
+	Workspace usecase.WorkspaceView `json:"workspace"`
+	Remotes   []string              `json:"remotes"`
+	Pushed    []string              `json:"pushed"`
 }
 
 // StoreInitViewOf is r as a view. ss is a session on the store r made: its
@@ -64,11 +63,13 @@ type StoreInitView struct {
 func StoreInitViewOf(ss *usecase.Session, r StoreInitResult) StoreInitView {
 	v := StoreInitView{
 		Name: r.Name, Path: r.Path,
-		Workspace: workspaces.WorkspaceView{ULID: r.Workspace.ULID.String(), Name: r.Workspace.Name, IDPrefix: r.Workspace.IDPrefix, PrefixSet: r.Workspace.PrefixSet},
+		Workspace: usecase.WorkspaceView{ULID: r.Workspace.ULID.String(), Name: r.Workspace.Name, IDPrefix: r.Workspace.IDPrefix, PrefixSet: r.Workspace.PrefixSet},
 		Remotes:   append([]string{}, r.Remotes...), Pushed: append([]string{}, r.Pushed...),
 	}
-	if ws, err := workspaces.WorkspaceList(ss); err == nil && len(ws) == 1 {
-		v.Workspace = ws[0]
+	if _, ix, err := ss.Open(); err == nil {
+		if wss := ix.Workspaces(); len(wss) == 1 {
+			v.Workspace = usecase.WorkspaceViewOf(ix, wss[0])
+		}
 	}
 	return v
 }

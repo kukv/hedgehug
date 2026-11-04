@@ -78,14 +78,14 @@ func (s *Server) registerAdmin() {
 	huma.Register(s.api, huma.Operation{
 		OperationID: "list-workspaces", Method: http.MethodGet, Path: "/api/workspaces",
 		Summary: "List the workspaces, as hh workspace ls", Tags: []string{"workspaces"},
-	}, func(_ context.Context, in *StoreParam) (*struct{ Body []workspaces.WorkspaceView }, error) {
+	}, func(_ context.Context, in *StoreParam) (*struct{ Body []usecase.WorkspaceView }, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
 		ws, err := workspaces.WorkspaceList(ss)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return &struct{ Body []workspaces.WorkspaceView }{ws}, nil
+		return &struct{ Body []usecase.WorkspaceView }{ws}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
