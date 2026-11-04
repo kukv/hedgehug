@@ -37,7 +37,7 @@ func TestSwapCarriesLocalWritesOfTheGap(t *testing.T) {
 	if err != nil || strings.Count(string(b), line) != 1 || !strings.Contains(string(b), `"rewrite_applied"`) {
 		t.Errorf("inbox.jsonl = %q, %v", b, err)
 	}
-	if left, err := FindLeftover(s.Dir()); err != nil || !left.None() {
+	if left, err := store.FindLeftover(s.Dir()); err != nil || !left.None() {
 		t.Errorf("leftover = %+v, %v", left, err)
 	}
 }
@@ -84,7 +84,7 @@ func TestSwapFindsACommitOfTheGap(t *testing.T) {
 	if x := c.task(1, sc.keep.ULID); x == nil || x.Title != "edited in the gap" {
 		t.Errorf("the commit of the gap is lost: %+v", x)
 	}
-	if left, err := FindLeftover(dir); err != nil || !left.None() {
+	if left, err := store.FindLeftover(dir); err != nil || !left.None() {
 		t.Errorf("leftover = %+v, %v", left, err)
 	}
 }

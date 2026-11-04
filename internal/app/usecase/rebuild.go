@@ -16,7 +16,7 @@ import (
 // While the store is there, the leftover is touched only under sync.lock: a
 // rebuild holds it, so a rebuild in the making is not taken for a leftover.
 func (ss *Session) finishRebuild(e config.StoreEntry) error {
-	l, err := replicate.FindLeftover(e.Path)
+	l, err := store.FindLeftover(e.Path)
 	if err != nil || l.None() {
 		return err
 	}
@@ -30,7 +30,7 @@ func (ss *Session) finishRebuild(e config.StoreEntry) error {
 	}
 	defer func() { _ = s.Repo().Close() }()
 	return s.WithLocalLock("sync.lock", syncLockWait, func() error {
-		l, err := replicate.FindLeftover(e.Path)
+		l, err := store.FindLeftover(e.Path)
 		if err != nil || l.None() {
 			return err
 		}
@@ -39,7 +39,7 @@ func (ss *Session) finishRebuild(e config.StoreEntry) error {
 }
 
 // finishLeftover is replicate.FinishLeftover, telling where an old store was kept.
-func (ss *Session) finishLeftover(e config.StoreEntry, l replicate.Leftover) error {
+func (ss *Session) finishLeftover(e config.StoreEntry, l store.Leftover) error {
 	kept, err := replicate.FinishLeftoverKept(e.Path, l)
 	for _, p := range kept {
 		ss.warn(fmt.Sprintf("the old store of %s, with changes that were not put back, is kept at %s", e.Name, p))
@@ -111,8 +111,8 @@ func (ss *Session) rebuildStore(c *config.Config, e config.StoreEntry) (*Rebuilt
 		}
 		_ = ns.Repo().Close()
 	}
-	if left, lerr := replicate.FindLeftover(dir); lerr == nil && !left.None() {
-		ss.warn(replicate.LeftoverMessage(e.Name))
+	if left, lerr := store.FindLeftover(dir); lerr == nil && !left.None() {
+		ss.warn(store.LeftoverMessage(e.Name))
 	}
 	return &Rebuilt{Replayed: b.Replayed, Dropped: append([]string{}, b.Purged...), Kept: b.Kept}, nil
 }

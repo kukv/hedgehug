@@ -183,7 +183,7 @@ func TestDoctorFixClonesTheStoreAgain(t *testing.T) {
 	if fs := forcePushFindings(rs[0]); len(fs) != 0 {
 		t.Errorf("findings after --fix: %+v", fs)
 	}
-	if left, err := replicate.FindLeftover(dir); err != nil || !left.None() {
+	if left, err := store.FindLeftover(dir); err != nil || !left.None() {
 		t.Errorf("leftover = %+v, %v", left, err)
 	}
 	s, err := f.clone.OpenStore()
@@ -273,7 +273,7 @@ func TestDoctorFixRebuildStaleIsAWarning(t *testing.T) {
 	if fs := forcePushFindings(rs[0]); len(fs) != 1 || fs[0].Check != "unexpected_force_push" {
 		t.Errorf("findings = %+v, want the force push still", fs)
 	}
-	if left, _ := replicate.FindLeftover(f.path(t)); !left.None() {
+	if left, _ := store.FindLeftover(f.path(t)); !left.None() {
 		t.Errorf("leftover = %+v", left)
 	}
 	f.clone.BeforeSwap = nil
@@ -303,14 +303,14 @@ func TestSyncFinishesAStoppedSwap(t *testing.T) {
 	}
 	f.clone.warns = nil
 	_, err := f.clone.OpenStore()
-	var le *replicate.LeftoverError
-	if err == nil || !strings.Contains(err.Error(), replicate.LeftoverMessage("me")) || !errors.As(err, &le) {
+	var le *store.LeftoverError
+	if err == nil || !strings.Contains(err.Error(), store.LeftoverMessage("me")) || !errors.As(err, &le) {
 		t.Errorf("OpenStore = %v", err)
 	}
 	if _, err := f.clone.Sync(false, true); !errors.Is(err, replicate.ErrForcePush) {
 		t.Fatalf("Sync = %v, want ErrForcePush after the swap is finished", err)
 	}
-	if left, _ := replicate.FindLeftover(dir); !left.None() {
+	if left, _ := store.FindLeftover(dir); !left.None() {
 		t.Errorf("leftover = %+v", left)
 	}
 	s, err := f.clone.OpenStore()
@@ -336,7 +336,7 @@ func TestOpenStoreWarnsOfALeftover(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if got := f.clone.warns; len(got) != 1 || got[0] != replicate.LeftoverMessage("me") {
+	if got := f.clone.warns; len(got) != 1 || got[0] != store.LeftoverMessage("me") {
 		t.Errorf("warnings = %q", got)
 	}
 	// the mount tells of it too, and the store is in it
@@ -369,7 +369,7 @@ func TestDoctorFixFinishesAStoppedSwap(t *testing.T) {
 	if _, err := store.Open(dir); err != nil {
 		t.Errorf("the store does not open: %v", err)
 	}
-	if left, _ := replicate.FindLeftover(dir); !left.None() {
+	if left, _ := store.FindLeftover(dir); !left.None() {
 		t.Errorf("leftover = %+v", left)
 	}
 }
@@ -388,7 +388,7 @@ func TestDoctorFixRemovesTheOldStore(t *testing.T) {
 	if _, err := f.clone.Doctor(true); err != nil {
 		t.Fatal(err)
 	}
-	if left, _ := replicate.FindLeftover(dir); !left.None() {
+	if left, _ := store.FindLeftover(dir); !left.None() {
 		t.Errorf("leftover = %+v", left)
 	}
 }

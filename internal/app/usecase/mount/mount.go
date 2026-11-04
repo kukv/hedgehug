@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
@@ -129,7 +128,7 @@ type Set struct {
 	Stores  []*Mounted
 	Skipped []Skipped
 	// Unfinished are the stores that opened but have a rebuild after a
-	// history rewrite left beside them (replicate.LeftoverError). A store that
+	// history rewrite left beside them (store.LeftoverError). A store that
 	// did not open for want of its directory is in Skipped with the same
 	// error.
 	Unfinished []Skipped
@@ -160,18 +159,18 @@ func Open(c *config.Config, opt Options) *Set {
 		s, err := store.Open(e.Path)
 		parent := filepath.Dir(filepath.Clean(e.Path))
 		if _, ok := parents[parent]; !ok {
-			parents[parent], perr[parent] = replicate.ReadParent(e.Path)
+			parents[parent], perr[parent] = store.ReadParent(e.Path)
 		}
-		unfinished := perr[parent] == nil && !replicate.LeftoverIn(e.Path, parents[parent]).None()
+		unfinished := perr[parent] == nil && !store.LeftoverIn(e.Path, parents[parent]).None()
 		if err != nil {
 			if unfinished {
-				err = &replicate.LeftoverError{Name: e.Name}
+				err = &store.LeftoverError{Name: e.Name}
 			}
 			set.Skipped = append(set.Skipped, Skipped{Name: e.Name, Err: err})
 			continue
 		}
 		if unfinished {
-			set.Unfinished = append(set.Unfinished, Skipped{Name: e.Name, Err: &replicate.LeftoverError{Name: e.Name}})
+			set.Unfinished = append(set.Unfinished, Skipped{Name: e.Name, Err: &store.LeftoverError{Name: e.Name}})
 		}
 		if opt.Now != nil {
 			s.SetNow(opt.Now)

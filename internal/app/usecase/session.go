@@ -192,7 +192,7 @@ func (ss *Session) openSet(c *config.Config, strict bool) (set *mount.Set, toWar
 // leaves out for a call that carries an answer; that is about a file, not
 // a store.)
 func (ss *Session) warnSkipped(sk mount.Skipped) {
-	var left *replicate.LeftoverError
+	var left *store.LeftoverError
 	if errors.As(sk.Err, &left) {
 		ss.warnOnce(sk.Name, left.Error())
 		return
@@ -366,16 +366,16 @@ func (ss *Session) OpenStore() (*store.Store, error) {
 		return nil, err
 	}
 	s, err := ss.openStoreAt(e.Path)
-	left, lerr := replicate.FindLeftover(e.Path)
+	left, lerr := store.FindLeftover(e.Path)
 	unfinished := lerr == nil && !left.None()
 	if err != nil {
 		if unfinished {
-			err = &replicate.LeftoverError{Name: e.Name}
+			err = &store.LeftoverError{Name: e.Name}
 		}
 		return nil, openError(e.Name, err)
 	}
 	if unfinished {
-		ss.warnOnce(e.Name, replicate.LeftoverMessage(e.Name))
+		ss.warnOnce(e.Name, store.LeftoverMessage(e.Name))
 	}
 	return s, nil
 }

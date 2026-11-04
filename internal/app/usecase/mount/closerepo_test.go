@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
@@ -48,7 +47,7 @@ func TestOpenStoresInOneDirectoryEachGetsItsOwnLeftover(t *testing.T) {
 	}
 	var left []string
 	for _, u := range set.Unfinished {
-		var le *replicate.LeftoverError
+		var le *store.LeftoverError
 		if !errors.As(u.Err, &le) || le.Name != u.Name {
 			t.Errorf("unfinished %+v", u)
 		}

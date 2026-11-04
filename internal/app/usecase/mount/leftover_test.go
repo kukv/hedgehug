@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
+	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
 
 // A rebuild left beside a store is told of: the store that opens is in
@@ -25,7 +25,7 @@ func TestOpenTellsOfALeftoverRebuild(t *testing.T) {
 	if len(set.Stores) != 2 || set.Stores[0].Name != "here" || set.Stores[1].Name != "plain" {
 		t.Errorf("stores = %v", set.Stores)
 	}
-	var le *replicate.LeftoverError
+	var le *store.LeftoverError
 	if len(set.Unfinished) != 1 || set.Unfinished[0].Name != "here" || !errors.As(set.Unfinished[0].Err, &le) || le.Name != "here" {
 		t.Errorf("Unfinished = %+v", set.Unfinished)
 	}
