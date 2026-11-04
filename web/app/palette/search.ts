@@ -517,7 +517,7 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
     .filter(
       (t) =>
         word === "" ||
-        `${t.id} ${env.displayId(t.store, t.id)} ${t.title}`.toLowerCase().includes(word),
+        [t.id, env.displayId(t.store, t.id), t.title].join(" ").toLowerCase().includes(word),
     )
     .map((t) => taskItem(t, env.hrefs.task));
 

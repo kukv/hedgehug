@@ -70,6 +70,7 @@ function bucketsOf(t: TaskView, by: Exclude<GroupBy, "none">, ctx: SortCtx): Buc
           key: t.project.ulid,
           label: t.project.title,
           id: t.project.id,
+          // a project is always in the Store of its task
           store: t.store,
           ulid: t.project.ulid,
           none: false,

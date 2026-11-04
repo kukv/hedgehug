@@ -45,7 +45,7 @@ export function routeStore(
 // the one the screen is about; without it the server picks one as the CLI does, which asks the
 // user to choose when there are several.
 export async function runUndo(
-  c: Pick<AppCore, "api" | "cache" | "views"> & Partial<Pick<AppCore, "stores">>,
+  c: Pick<AppCore, "api" | "cache" | "views" | "stores">,
   store?: string,
 ): Promise<void> {
   try {
@@ -55,7 +55,7 @@ export async function runUndo(
     // The server tells views.changed from its poll, which misses a write taken back before it
     // looked (the store is as it was): the list of views would keep what this tab wrote.
     if (r.undone.op === "view") c.views.refresh(r.undone.store);
-    toast({ message: undoMessage(r, c.stores?.displayId.bind(c.stores)) });
+    toast({ message: undoMessage(r, c.stores.displayId.bind(c.stores)) });
   } catch (e) {
     toast({ message: errorMessage(e) });
   }

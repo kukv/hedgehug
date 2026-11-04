@@ -6,7 +6,7 @@
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import { kbdLabel } from "../keys";
-  import { useDisplayId, useSubscribe } from "../svelte-store";
+  import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Avatar from "../ui/Avatar.svelte";
   import Button from "../ui/Button.svelte";
@@ -17,8 +17,7 @@
 
   let { show, readonly = false }: { show: ShowView; readonly?: boolean } = $props();
 
-  const { api, cache, stores, accounts } = core();
-  const did = useDisplayId(stores);
+  const { api, cache, accounts } = core();
 
   // Only the author may edit or delete a comment (the server refuses the others). The accounts are
   // read from GitHub, so they are asked for here; until they are read (or when they cannot be) nobody
@@ -265,7 +264,7 @@
     open
     title="コメントを削除"
     width={560}
-    cli={cliComment(did.current(show.store, show.id), "rm", target.ulid)}
+    cli={cliComment(show.id, "rm", target.ulid)}
     onclose={() => {
       if (!deleteBusy) deleting = null;
     }}

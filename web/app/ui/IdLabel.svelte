@@ -10,7 +10,7 @@
     id: string;
     ulid: string;
     // the Store of the task: the ID is shown with the Store name when its prefix is in two Stores
-    store?: string;
+    store: string;
     alwaysUlid?: boolean;
     reveal?: boolean;
     href?: string;
@@ -30,9 +30,7 @@
   }: Props = $props();
 
   const { stores } = core();
-  const shown = useSubscribe(stores, () =>
-    store === undefined ? id : stores.displayId(store, id),
-  );
+  const shown = useSubscribe(stores, () => stores.displayId(store, id));
 
   let hover = $state(false);
   let focus = $state(false);

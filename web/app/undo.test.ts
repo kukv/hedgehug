@@ -107,9 +107,10 @@ describe("runUndo", () => {
     const { api, calls } = fakeApi(route);
     const noteOwnCommit = vi.fn();
     const refresh = vi.fn();
-    const c = { api, cache: { noteOwnCommit }, views: { refresh } } as unknown as Pick<
+    const stores = { displayId: (_store: string, id: string) => id };
+    const c = { api, cache: { noteOwnCommit }, views: { refresh }, stores } as unknown as Pick<
       AppCore,
-      "api" | "cache" | "views"
+      "api" | "cache" | "views" | "stores"
     >;
     return { c, calls, noteOwnCommit, refresh };
   }

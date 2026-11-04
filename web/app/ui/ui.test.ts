@@ -103,19 +103,11 @@ describe("IdLabel", () => {
     expect(getByText("REL-6")).toBeTruthy();
   });
 
-  it("store を渡さなければ ID のまま出す", () => {
-    const { getByText } = renderWithCore(
-      IdLabel,
-      { id: "DM-1", ulid: "01HXYZULID" },
-      { stores: { ...fakeStores(), displayId: shared } },
-    );
-    expect(getByText("DM-1")).toBeTruthy();
-  });
-
   it("ID を出し、フォーカスで ULID とコピーのボタンを出す", async () => {
     const { getByRole, queryByText, getByText } = renderWithCore(IdLabel, {
       id: "REL-6",
       ulid: "01HXYZULID",
+      store: "shared",
     });
     expect(getByText("REL-6")).toBeTruthy();
     expect(queryByText("01HXYZULID")).toBeNull();
@@ -129,6 +121,7 @@ describe("IdLabel", () => {
     const { getByRole, queryByText, getByText } = renderWithCore(IdLabel, {
       id: "REL-6",
       ulid: "01HXYZULID",
+      store: "shared",
     });
     const wrap = getByText("REL-6").parentElement as HTMLElement;
     await fireEvent.mouseEnter(wrap);
@@ -143,6 +136,7 @@ describe("IdLabel", () => {
     const { getByRole, getByText } = renderWithCore(IdLabel, {
       id: "REL-6",
       ulid: "01HXYZULID",
+      store: "shared",
       reveal: true,
     });
     expect(getByRole("button", { name: /REL-6/ })).toHaveAttribute("tabindex", "-1");
@@ -156,6 +150,7 @@ describe("IdLabel", () => {
     const { getByRole } = renderWithCore(IdLabel, {
       id: "REL-6",
       ulid: "01HXYZULID",
+      store: "shared",
       href: "/tasks/01HXYZULID",
     });
     await fireEvent.keyDown(getByRole("link", { name: "REL-6" }), { key: "c" });
@@ -167,6 +162,7 @@ describe("IdLabel", () => {
     const { getByText } = renderWithCore(IdLabel, {
       id: "REL-6",
       ulid: "01HXYZULID",
+      store: "shared",
       alwaysUlid: true,
     });
     expect(getByText("01HXYZULID")).toBeTruthy();
