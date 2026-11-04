@@ -14,11 +14,16 @@ func TestSessionBeforeSwapReleasesTheStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var old *polled
-	ts.srv.poller.mu.Lock()
-	old = ts.srv.poller.stores[e.Name]
-	ts.srv.poller.mu.Unlock()
-	if old == nil {
+	held := func() bool {
+		stores, _ := ts.srv.poller.snapshot()
+		for _, st := range stores {
+			if st.Store == e.Name {
+				return true
+			}
+		}
+		return false
+	}
+	if !held() {
 		t.Fatal("the poller does not hold the store")
 	}
 
@@ -32,10 +37,5 @@ func TestSessionBeforeSwapReleasesTheStore(t *testing.T) {
 	if len(ev.ULIDs) != 0 || len(ev.Removed) != 0 {
 		t.Errorf("event = %+v", ev)
 	}
-	eventually(t, "the poller holds the store opened again", func() bool {
-		ts.srv.poller.mu.Lock()
-		defer ts.srv.poller.mu.Unlock()
-		now := ts.srv.poller.stores[e.Name]
-		return now != nil && now != old
-	})
+	eventually(t, "the poller holds the store opened again", held)
 }

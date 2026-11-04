@@ -100,9 +100,7 @@ func TestStoreDeleteAPI(t *testing.T) {
 	// And one with no remote cannot, unless the clone is kept.
 	ts.call("POST", "/api/stores", map[string]any{"name": "local", "prefix": "LC"}, 201, nil)
 	held := func(name string) bool {
-		ts.srv.poller.mu.Lock()
-		defer ts.srv.poller.mu.Unlock()
-		return ts.srv.poller.stores[name] != nil
+		return holds(ts.srv.poller, name)
 	}
 	eventually(t, "the poller holds team and local", func() bool { return held("team") && held("local") })
 	drainEvents(ch) // what the poller told of the two stores that came
@@ -160,13 +158,7 @@ func TestStoreDeleteRefusedIsQuiet(t *testing.T) {
 	ts, ch := pollServer(t)
 	ts.call("POST", "/api/stores", map[string]any{"name": "local", "prefix": "LC"}, 201, nil)
 	p := ts.srv.poller
-	current := func() *polled {
-		p.mu.Lock()
-		defer p.mu.Unlock()
-		return p.stores["local"]
-	}
-	eventually(t, "the poller holds local", func() bool { return current() != nil })
-	old := current()
+	eventually(t, "the poller holds local", func() bool { return holds(p, "local") })
 	drainEvents(ch)
 
 	if pr := ts.problem("DELETE", "/api/stores/local", nil, 409); pr.Type != "store.unpushed" {
@@ -174,10 +166,7 @@ func TestStoreDeleteRefusedIsQuiet(t *testing.T) {
 	}
 	// The look that opens it again publishes before it keeps the store, so
 	// once the store is held again, what it told is in ch.
-	eventually(t, "the poller to open local again", func() bool {
-		now := current()
-		return now != nil && now != old
-	})
+	eventually(t, "the poller to open local again", func() bool { return holds(p, "local") })
 	p.poll(true)
 	for _, e := range drainEvents(ch) {
 		if tc, ok := e.(tasksChanged); ok && tc.Store == "local" {
