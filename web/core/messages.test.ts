@@ -126,6 +126,38 @@ describe("errorMessage", () => {
     );
   });
 
+  it("words the codes of the accounts and the device flow", () => {
+    expect(errorMessage(err("auth.device_running"))).toBe(
+      "デバイスフローがすでに進んでいます。終わるか、やめてから、もう一度始めてください",
+    );
+    expect(errorMessage(err("auth.device_not_found"))).toBe(
+      "そのデバイスフローはすでに終わっているか、ありません",
+    );
+    expect(errorMessage(err("auth.canceled"))).toBe("ログインをやめました");
+    expect(errorMessage(err("auth.device_failed", {}, "the login was denied"))).toBe(
+      "デバイスフローでログインできませんでした: the login was denied",
+    );
+    expect(errorMessage(err("auth.client_id", { host: "ghe.example.com" }))).toBe(
+      "ghe.example.com のデバイスフローには、config.yaml の hosts[].client_id が要ります。トークンを貼るか、gh か環境変数を使ってください",
+    );
+    expect(
+      errorMessage(err("auth.no_device_flow", { account: "work", uses: "env:GH_TOKEN" })),
+    ).toBe(
+      "アカウント work は env:GH_TOKEN からトークンを得るため、Hedgehug がログインするものはありません",
+    );
+    expect(
+      errorMessage(err("auth.mismatch", { account: "work", host: "github.com", login: "bob" })),
+    ).toBe("トークンは github.com/bob のもので、アカウント work のものではありません");
+    expect(errorMessage(err("auth.token_empty"))).toBe("トークンが空です");
+    expect(errorMessage(err("auth.login"))).toBe("アカウントの login が必要です");
+  });
+
+  it("says which sources of a token the account call takes", () => {
+    expect(errorMessage(err("auth.token_source", { token: "keychain" }))).toBe(
+      "トークンの取得元「keychain」はここでは指定できません。gh か env:<VAR> を指定してください（トークンを貼る、デバイスフローは別の操作です）",
+    );
+  });
+
   it("lists what a schema violation broke", () => {
     const m = errorMessage(
       err("schema.violation", {

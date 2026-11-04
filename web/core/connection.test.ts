@@ -154,6 +154,26 @@ describe("Connection", () => {
     t.conn.stop();
   });
 
+  it("passes auth.device to the listeners", async () => {
+    const s1 = sseStream();
+    const t = setup([s1]);
+    const device = vi.fn();
+    t.conn.on("auth.device", device);
+    t.conn.start();
+    s1.send(hello("c1", { shared: "h1" }));
+    s1.send(ev("auth.device", { id: "d1", state: "done", account: "bob" }));
+    s1.send(ev("auth.device", { id: "d2", state: "error", code: "auth.canceled", message: "x" }));
+    await t.until(() => device.mock.calls.length === 2);
+    expect(device).toHaveBeenNthCalledWith(1, { id: "d1", state: "done", account: "bob" });
+    expect(device).toHaveBeenNthCalledWith(2, {
+      id: "d2",
+      state: "error",
+      code: "auth.canceled",
+      message: "x",
+    });
+    t.conn.stop();
+  });
+
   it("keeps the connection when a listener throws, and still calls the others", async () => {
     const s1 = sseStream();
     const t = setup([s1]);

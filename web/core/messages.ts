@@ -210,6 +210,21 @@ const messages: Record<string, Make> = {
   "auth.device_only": (a) =>
     `アカウント ${str(a, "account")} はデバイスフローでログインします。標準入力のトークンは使えません`,
   "auth.name": () => "アカウントの名前が必要です",
+  "auth.login": () => "アカウントの login が必要です",
+  "auth.token_empty": () => "トークンが空です",
+  "auth.token_source": (a) =>
+    `トークンの取得元「${str(a, "token")}」はここでは指定できません。gh か env:<VAR> を指定してください（トークンを貼る、デバイスフローは別の操作です）`,
+  "auth.mismatch": (a) =>
+    `トークンは ${str(a, "host")}/${str(a, "login")} のもので、アカウント ${str(a, "account")} のものではありません`,
+  "auth.client_id": (a) =>
+    `${str(a, "host")} のデバイスフローには、config.yaml の hosts[].client_id が要ります。トークンを貼るか、gh か環境変数を使ってください`,
+  "auth.device_running": () =>
+    "デバイスフローがすでに進んでいます。終わるか、やめてから、もう一度始めてください",
+  "auth.device_not_found": () => "そのデバイスフローはすでに終わっているか、ありません",
+  "auth.device_failed": (_, e) => withDetail("デバイスフローでログインできませんでした", e),
+  "auth.canceled": () => "ログインをやめました",
+  "auth.no_device_flow": (a) =>
+    `アカウント ${str(a, "account")} は ${str(a, "uses")} からトークンを得るため、Hedgehug がログインするものはありません`,
   "github.forbidden": (a) =>
     `GitHub がアカウント ${str(a, "account")} の操作を許可しませんでした。権限を確かめてください`,
   "github.not_found": (a) =>
