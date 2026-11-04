@@ -169,6 +169,7 @@ function setup(
       ],
       readOnly: () => over.readOnly ?? null,
       tone: () => "purple",
+      displayId: (_s: string, id: string) => id,
       subscribe: (fn: () => void) => ev.subscribe(fn),
     },
     schema: {

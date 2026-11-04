@@ -104,6 +104,7 @@ function setup(readOnly: string | null = null) {
       workspaces: () => [ws],
       readOnly: () => readOnly,
       tone: () => "purple",
+      displayId: (_s: string, id: string) => id,
       subscribe: none,
     },
     schema: { get: () => schema, load: async () => schema, subscribe: none },

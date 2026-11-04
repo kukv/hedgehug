@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import { createRawSnippet } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { renderWithCore } from "../test-utils";
+import { fakeCore, renderWithCore } from "../test-utils";
 import { resetToasts, toast, toasts } from "../toast.svelte";
 import Avatar from "./Avatar.svelte";
 import Button from "./Button.svelte";
@@ -11,6 +11,7 @@ import StoreBadge from "./StoreBadge.svelte";
 import Toasts from "./Toasts.svelte";
 
 const label = (text: string) => createRawSnippet(() => ({ render: () => `<span>${text}</span>` }));
+const fakeStores = () => fakeCore().stores;
 const writeText = vi.fn().mockResolvedValue(undefined);
 
 beforeEach(() => {
@@ -82,9 +83,39 @@ describe("CliLine", () => {
 });
 
 describe("IdLabel", () => {
+  const shared = (store: string, id: string) => (id.startsWith("DM-") ? `${store}:${id}` : id);
+
+  it("store を渡すと、接頭辞が重なる ID に Store 名を付ける", () => {
+    const { getByText } = renderWithCore(
+      IdLabel,
+      { id: "DM-1", ulid: "01HXYZULID", store: "second" },
+      { stores: { ...fakeStores(), displayId: shared } },
+    );
+    expect(getByText("second:DM-1")).toBeTruthy();
+  });
+
+  it("接頭辞が重ならなければ Store 名を付けない", () => {
+    const { getByText } = renderWithCore(
+      IdLabel,
+      { id: "REL-6", ulid: "01HXYZULID", store: "second" },
+      { stores: { ...fakeStores(), displayId: shared } },
+    );
+    expect(getByText("REL-6")).toBeTruthy();
+  });
+
+  it("store を渡さなければ ID のまま出す", () => {
+    const { getByText } = renderWithCore(
+      IdLabel,
+      { id: "DM-1", ulid: "01HXYZULID" },
+      { stores: { ...fakeStores(), displayId: shared } },
+    );
+    expect(getByText("DM-1")).toBeTruthy();
+  });
+
   it("ID を出し、フォーカスで ULID とコピーのボタンを出す", async () => {
-    const { getByRole, queryByText, getByText } = render(IdLabel, {
-      props: { id: "REL-6", ulid: "01HXYZULID" },
+    const { getByRole, queryByText, getByText } = renderWithCore(IdLabel, {
+      id: "REL-6",
+      ulid: "01HXYZULID",
     });
     expect(getByText("REL-6")).toBeTruthy();
     expect(queryByText("01HXYZULID")).toBeNull();
@@ -95,8 +126,9 @@ describe("IdLabel", () => {
   });
 
   it("ホバーで ULID とコピーのボタンを出し、外れると消す", async () => {
-    const { getByRole, queryByText, getByText } = render(IdLabel, {
-      props: { id: "REL-6", ulid: "01HXYZULID" },
+    const { getByRole, queryByText, getByText } = renderWithCore(IdLabel, {
+      id: "REL-6",
+      ulid: "01HXYZULID",
     });
     const wrap = getByText("REL-6").parentElement as HTMLElement;
     await fireEvent.mouseEnter(wrap);
@@ -108,8 +140,10 @@ describe("IdLabel", () => {
   });
 
   it("ID のボタンは Tab の止まり先にならず、reveal なら ULID とコピーのボタンを出す", () => {
-    const { getByRole, getByText } = render(IdLabel, {
-      props: { id: "REL-6", ulid: "01HXYZULID", reveal: true },
+    const { getByRole, getByText } = renderWithCore(IdLabel, {
+      id: "REL-6",
+      ulid: "01HXYZULID",
+      reveal: true,
     });
     expect(getByRole("button", { name: /REL-6/ })).toHaveAttribute("tabindex", "-1");
     expect(getByText("01HXYZULID")).toBeTruthy();
@@ -119,8 +153,10 @@ describe("IdLabel", () => {
   it("href の ID にフォーカスがあっても keydown は window に届く（C・⌘K のため）", async () => {
     const seen = vi.fn();
     window.addEventListener("keydown", seen);
-    const { getByRole } = render(IdLabel, {
-      props: { id: "REL-6", ulid: "01HXYZULID", href: "/tasks/01HXYZULID" },
+    const { getByRole } = renderWithCore(IdLabel, {
+      id: "REL-6",
+      ulid: "01HXYZULID",
+      href: "/tasks/01HXYZULID",
     });
     await fireEvent.keyDown(getByRole("link", { name: "REL-6" }), { key: "c" });
     window.removeEventListener("keydown", seen);
@@ -128,8 +164,10 @@ describe("IdLabel", () => {
   });
 
   it("alwaysUlid なら常に ULID を出す", () => {
-    const { getByText } = render(IdLabel, {
-      props: { id: "REL-6", ulid: "01HXYZULID", alwaysUlid: true },
+    const { getByText } = renderWithCore(IdLabel, {
+      id: "REL-6",
+      ulid: "01HXYZULID",
+      alwaysUlid: true,
     });
     expect(getByText("01HXYZULID")).toBeTruthy();
   });

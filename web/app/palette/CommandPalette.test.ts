@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
   addWorkspace: vi.fn(),
   moveWorkspace: vi.fn(),
   saveView: vi.fn(),
+  qualify: false, // the Stores share a prefix: IDs are shown as <store>:<ID>
 }));
 
 vi.mock("../context", () => ({ core: () => h.core }));
@@ -94,7 +95,7 @@ function setup(
         opts: { params: { path?: { id: string }; query?: { store?: string; q?: string } } },
       ) => {
         if (path === "/api/tasks/{id}") {
-          const hit = opts.params.path?.id.toLowerCase() === "sh-17";
+          const hit = ["sh-17", "shared:rel-6"].includes(opts.params.path?.id.toLowerCase() ?? "");
           return hit
             ? ok({ ...rel6, former_ids: ["SH-17"] })
             : {
@@ -145,6 +146,7 @@ function setup(
       hidden: (s: string) => hidden.includes(s),
       readOnly: () => readOnly,
       tone: () => "purple",
+      displayId: (s: string, id: string) => (h.qualify ? `${s}:${id}` : id),
       subscribe: none,
     },
     schema: { get: () => schema, load: async () => schema, subscribe: none },
@@ -165,6 +167,7 @@ beforeEach(() => {
   h.addWorkspace.mockClear();
   h.moveWorkspace.mockClear();
   h.saveView.mockClear();
+  h.qualify = false;
   localStorage.clear();
   closePalette();
   closeCreate();
@@ -188,6 +191,15 @@ describe("CommandPalette", () => {
     openPalette();
     expect(await screen.findByText("最近開いたもの")).toBeInTheDocument();
     expect(screen.getByText("Web の API クライアントを v2 に更新")).toBeInTheDocument();
+  });
+
+  it("writes the ID of a task with its Store where the prefix is shared", async () => {
+    h.qualify = true;
+    setup();
+    localStorage.setItem("hedgehug.recent", JSON.stringify(["U6"]));
+    render(CommandPalette);
+    openPalette();
+    expect(await screen.findByText("shared:REL-6")).toBeInTheDocument();
   });
 
   it("closes with Escape", async () => {
@@ -317,6 +329,30 @@ describe("CommandPalette", () => {
           params: { query: { q: '-store:backend "backend"', store: undefined } },
         }),
       );
+    });
+
+    it("still opens a task of a hidden Store by its ID, like a URL does", async () => {
+      setup([], null, ["shared"]);
+      render(CommandPalette);
+      openPalette();
+      await fireEvent.input(await screen.findByRole("combobox"), { target: { value: "SH-17" } });
+      expect(await screen.findByText("Web の API クライアントを v2 に更新")).toBeInTheDocument();
+    });
+
+    it("opens a task of a hidden Store by <store>:<ID>, asking the server with it as typed", async () => {
+      const { api } = setup([], null, ["shared"]);
+      render(CommandPalette);
+      openPalette();
+      await fireEvent.input(await screen.findByRole("combobox"), {
+        target: { value: "shared:REL-6" },
+      });
+      expect(await screen.findByText("Web の API クライアントを v2 に更新")).toBeInTheDocument();
+      expect(api.GET).toHaveBeenCalledWith("/api/tasks/{id}", {
+        params: { path: { id: "shared:REL-6" } },
+      });
+      expect(screen.getByRole("combobox")).toBeInTheDocument();
+      // the input is an ID, not a query
+      expect(screen.getByText("ID", { selector: "*" })).toBeInTheDocument();
     });
 
     it("finds the same task when its Store is not hidden", async () => {

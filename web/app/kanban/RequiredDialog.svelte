@@ -3,10 +3,12 @@
   import { cliSet } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import type { SchemaView } from "../../core/schema";
+  import { core } from "../context";
   import FieldInput from "../detail/FieldInput.svelte";
   import PropField from "../detail/PropField.svelte";
   import { propRows } from "../detail/prop-rows";
   import { onLinkClick, router } from "../router";
+  import { useDisplayId } from "../svelte-store";
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
 
@@ -20,6 +22,7 @@
     onsubmit: (body: Schemas["PatchInputBody"]) => Promise<void>;
     onclose: () => void;
   };
+  const did = useDisplayId(core().stores);
   let { task, status, fields, elsewhere, schema, onsubmit, onclose }: Props = $props();
 
   const statusLabel = $derived(schema.statuses?.find((s) => s.name === status)?.label || status);
@@ -53,10 +56,10 @@
   const complete = $derived(fields.every((f) => !empty(currentOf(f))));
 
   const title = $derived(
-    `${task.id} を${statusLabel}にするには ${[...fields, ...elsewhere].map(labelOf).join("・")} が必要です`,
+    `${did.current(task.store, task.id)} を${statusLabel}にするには ${[...fields, ...elsewhere].map(labelOf).join("・")} が必要です`,
   );
   const cli = $derived(
-    cliSet(task.id, {
+    cliSet(did.current(task.store, task.id), {
       status,
       ...Object.fromEntries(
         fields

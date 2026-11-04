@@ -2,11 +2,21 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetToasts, toasts } from "../toast.svelte";
 import Comments from "./Comments.svelte";
-import { fail, makeCore, mount, ok, showView, stubLayout, typeInto, viewOf } from "./testkit";
+import {
+  type FakeCoreOptions,
+  fail,
+  makeCore,
+  mount,
+  ok,
+  showView,
+  stubLayout,
+  typeInto,
+  viewOf,
+} from "./testkit";
 
 const c1 = {
   ulid: "C1",
-  author: "tanaka",
+  author: "github.com/tanaka",
   created: "2026-11-04T10:12:00Z",
   body: "ガイドでは「カーソル」で統一します。",
 };
@@ -18,8 +28,8 @@ const show = showView({
   updated: "2026-11-04T10:12:00Z",
 });
 
-const setup = (readonly = false) => {
-  const k = makeCore({ show });
+const setup = (readonly = false, opts: FakeCoreOptions = {}) => {
+  const k = makeCore({ show, accounts: ["github.com/tanaka", "github.com/koki"], ...opts });
   return { k, ...mount(Comments, { show, readonly }, k) };
 };
 
@@ -31,14 +41,19 @@ describe("Comments", () => {
     setup();
     expect(screen.getByRole("heading", { name: /コメント/ })).toHaveTextContent("1");
     expect(screen.getByText("ガイドでは「カーソル」で統一します。")).toBeInTheDocument();
-    expect(screen.getByText("tanaka")).toBeInTheDocument();
+    expect(screen.getByText("github.com/tanaka")).toBeInTheDocument();
   });
 
   it("posts a comment, shows it at once and tells the cache the commit is its own", async () => {
     const { k, container } = setup();
     k.api.POST.mockImplementation(() =>
       ok({
-        comment: { ulid: "C2", author: "koki", created: "2026-11-04T11:00:00Z", body: "了解です" },
+        comment: {
+          ulid: "C2",
+          author: "github.com/koki",
+          created: "2026-11-04T11:00:00Z",
+          body: "了解です",
+        },
         commit: "c1",
       }),
     );
@@ -191,7 +206,12 @@ describe("Comments", () => {
 
   it("keeps a comment posted here until the read has it", async () => {
     const { k, container, rerender } = setup();
-    const mine = { ulid: "C9", author: "koki", created: "2026-11-04T12:00:00Z", body: "自分の" };
+    const mine = {
+      ulid: "C9",
+      author: "github.com/koki",
+      created: "2026-11-04T12:00:00Z",
+      body: "自分の",
+    };
     k.api.POST.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
     typeInto(container, "自分の", 0);
     await fireEvent.click(await screen.findByRole("button", { name: "コメント" }));
@@ -204,7 +224,12 @@ describe("Comments", () => {
 
   it("shows an edit of a comment posted here, and keeps it when a read brings it as it was posted", async () => {
     const { k, container, rerender } = setup();
-    const mine = { ulid: "C9", author: "koki", created: "2026-11-04T12:00:00Z", body: "自分の" };
+    const mine = {
+      ulid: "C9",
+      author: "github.com/koki",
+      created: "2026-11-04T12:00:00Z",
+      body: "自分の",
+    };
     k.api.POST.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
     k.api.PATCH.mockImplementation(() =>
       ok({ comment: { ...mine, body: "直した自分の" }, commit: "c5" }),
@@ -224,7 +249,12 @@ describe("Comments", () => {
 
   it("keeps the second edit of a comment posted here when a read brings it as it was posted", async () => {
     const { k, container, rerender } = setup();
-    const mine = { ulid: "C9", author: "koki", created: "2026-11-04T12:00:00Z", body: "自分の" };
+    const mine = {
+      ulid: "C9",
+      author: "github.com/koki",
+      created: "2026-11-04T12:00:00Z",
+      body: "自分の",
+    };
     k.api.POST.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
     let n = 0;
     k.api.PATCH.mockImplementation(() =>
@@ -248,7 +278,12 @@ describe("Comments", () => {
   for (const texts of [["直した1"], ["直した1", "直した2"]]) {
     it(`keeps the edit of a comment posted here through a read that lacks it (${texts.length} edits)`, async () => {
       const { k, container, rerender } = setup();
-      const mine = { ulid: "C9", author: "koki", created: "2026-11-04T12:00:00Z", body: "自分の" };
+      const mine = {
+        ulid: "C9",
+        author: "github.com/koki",
+        created: "2026-11-04T12:00:00Z",
+        body: "自分の",
+      };
       const other = { ulid: "C2", author: "sato", created: "2026-11-04T11:00:00Z", body: "他の人" };
       k.api.POST.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
       let n = 0;
@@ -280,7 +315,12 @@ describe("Comments", () => {
   for (const edited of [false, true]) {
     it(`deletes a comment posted here before a read has it${edited ? ", after an edit" : ""}`, async () => {
       const { k, container, rerender } = setup();
-      const mine = { ulid: "C9", author: "koki", created: "2026-11-04T12:00:00Z", body: "自分の" };
+      const mine = {
+        ulid: "C9",
+        author: "github.com/koki",
+        created: "2026-11-04T12:00:00Z",
+        body: "自分の",
+      };
       const other = { ulid: "C2", author: "sato", created: "2026-11-04T11:00:00Z", body: "他の人" };
       k.api.POST.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
       k.api.PATCH.mockImplementation(() =>
@@ -315,7 +355,12 @@ describe("Comments", () => {
 
   it("keeps a comment posted and deleted here hidden from a read sent before the deletion", async () => {
     const { k, container, rerender } = setup();
-    const mine = { ulid: "C9", author: "koki", created: "2026-11-04T12:00:00Z", body: "自分の" };
+    const mine = {
+      ulid: "C9",
+      author: "github.com/koki",
+      created: "2026-11-04T12:00:00Z",
+      body: "自分の",
+    };
     const other = { ulid: "C2", author: "sato", created: "2026-11-04T11:00:00Z", body: "他の人" };
     k.api.POST.mockImplementation(() => ok({ comment: mine, commit: "c4" }));
     k.api.DELETE.mockImplementation(() => ok({ comment: mine, commit: "c6" }));
@@ -366,6 +411,54 @@ describe("Comments", () => {
     expect(screen.getByRole("dialog", { name: "コメントを削除" })).toBeInTheDocument();
     release();
     expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+  });
+
+  describe("who may edit or delete", () => {
+    const buttons = () => [
+      screen.queryAllByRole("button", { name: "編集" }).length,
+      screen.queryAllByRole("button", { name: "削除" }).length,
+    ];
+    const by = (author: string) => ({
+      ulid: "C2",
+      author,
+      created: "2026-11-04T11:00:00Z",
+      body: "x",
+    });
+    const withComment = (author: string, opts: FakeCoreOptions = {}) => {
+      const s = { ...show, comments: [by(author)] };
+      const k = makeCore({ show: s, accounts: ["github.com/koki"], ...opts });
+      return { k, ...mount(Comments, { show: s, readonly: false }, k) };
+    };
+
+    it("loads the accounts when the comments are shown", () => {
+      const { k } = withComment("github.com/koki");
+      expect(k.accounts.load).toHaveBeenCalled();
+    });
+
+    it("offers them on the comment of an account of this machine, whatever the case", () => {
+      withComment("GitHub.com/Koki");
+      expect(buttons()).toEqual([1, 1]);
+    });
+
+    it("does not offer them on the comment of someone else", () => {
+      withComment("github.com/bob");
+      expect(buttons()).toEqual([0, 0]);
+    });
+
+    it("does not offer them on a comment with no author", () => {
+      withComment("");
+      expect(buttons()).toEqual([0, 0]);
+    });
+
+    it("does not offer them before the accounts are read", () => {
+      withComment("github.com/koki", { accountsLoaded: false });
+      expect(buttons()).toEqual([0, 0]);
+    });
+
+    it("does not offer them when the accounts could not be read", () => {
+      withComment("github.com/koki", { accountsError: "boom" });
+      expect(buttons()).toEqual([0, 0]);
+    });
   });
 
   it("has no form when read-only", () => {

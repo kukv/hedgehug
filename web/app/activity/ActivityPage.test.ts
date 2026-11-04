@@ -77,6 +77,7 @@ function setup(items: Log[], opts: Opts = {}) {
         readOnly: () => null,
         hidden: () => opts.hidden ?? false,
         tone: () => "purple",
+        displayId: (_s: string, id: string) => id,
         workspaces: () => spaces,
         workspace: () => undefined,
         loaded: () => true,

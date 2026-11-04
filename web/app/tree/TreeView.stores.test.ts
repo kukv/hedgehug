@@ -70,6 +70,7 @@ function setup(
     roots?: unknown;
     wsLate?: boolean; // GET /api/stores has not answered yet
     hidden?: string[]; // the stores the GUI leaves out
+    qualify?: boolean; // the stores share a prefix: IDs are shown as <store>:<ID>
   } = {},
 ) {
   let wsReady = !over.wsLate;
@@ -135,6 +136,7 @@ function setup(
       readOnly: () => null,
       hidden: (s: string) => over.hidden?.includes(s) ?? false,
       tone: (s: string) => (s === "alpha" ? "teal" : "orange"),
+      displayId: (s: string, id: string) => (over.qualify ? `${s}:${id}` : id),
       subscribe: ev.subscribe,
     },
     schema: {
@@ -182,6 +184,13 @@ describe("TreeView over every store", () => {
     ]);
     expect(screen.getAllByTitle("Store: alpha")).toHaveLength(2);
     expect(screen.getAllByTitle("Store: beta")).toHaveLength(2);
+  });
+
+  it("writes the ID of a row with its store where the prefix is shared", () => {
+    setup({ qualify: true });
+    render(TreeView, { view: all, query: "" });
+    expect(screen.getAllByText("alpha:REL-1")).toHaveLength(1);
+    expect(screen.getAllByText("beta:REL-1")).toHaveLength(1);
   });
 
   it("leaves out the tasks of a hidden store, and does not count its canceled ones", () => {

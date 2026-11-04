@@ -16,7 +16,7 @@
   import { readOnlyNow, useReadOnlyOf } from "../read-only";
   import { router } from "../router";
   import { selection } from "../selection.svelte";
-  import { useSubscribe } from "../svelte-store";
+  import { useDisplayId, useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
@@ -27,6 +27,7 @@
   let { request, onclose }: { request: CreateRequest; onclose: () => void } = $props();
 
   const { api, cache, stores, schema } = core();
+  const did = useDisplayId(stores);
   const all = useSubscribe(stores, () => stores.workspaces());
   const roOf = useReadOnlyOf(stores);
 
@@ -124,7 +125,7 @@
     if (!parent) return "";
     const usable = kinds.filter((k) => allowed(k.name)).map((k) => k.label || k.name);
     return usable.length < kinds.length
-      ? `${parent.id} の下に置けるのは${usable.join("・")}です`
+      ? `${did.current(parent.store, parent.id)} の下に置けるのは${usable.join("・")}です`
       : "";
   });
   const canSubmit = $derived(
@@ -183,7 +184,7 @@
       );
       cache.applyWrite({ task: r.task, commit: r.commit });
       toast({
-        message: `${r.task.id} を作成しました · ${ws.name}`,
+        message: `${did.current(ws.store, r.task.id)} を作成しました · ${ws.name}`,
         link: { label: "開く", href: router.href({ name: "task", ulid: r.task.ulid }) },
       });
       if (more) {
@@ -236,7 +237,7 @@
       <span class="lbl">親</span>
       {#if parent}
         <span class="parent">
-          <span class="mono">{parent.id}</span>
+          <span class="mono">{did.current(parent.store, parent.id)}</span>
           {parent.title}
           <button type="button" aria-label="親を外す" onclick={removeParent}>×</button>
         </span>

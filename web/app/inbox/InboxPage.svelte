@@ -219,6 +219,7 @@
                   <IdLabel
                     id={task.id}
                     ulid={task.ulid}
+                    store={n.store}
                     {href}
                     onopen={(e) => open(e, n, href)}
                     onaux={(e) => openAux(e, n)}

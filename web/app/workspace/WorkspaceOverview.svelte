@@ -188,7 +188,13 @@
                 {@const href = projectHref(p.ulid)}
                 <tr>
                   <td>
-                    <IdLabel id={p.id} ulid={p.ulid} {href} onopen={(e) => onLinkClick(e, href)} />
+                    <IdLabel
+                      id={p.id}
+                      ulid={p.ulid}
+                      store={entry.store}
+                      {href}
+                      onopen={(e) => onLinkClick(e, href)}
+                    />
                   </td>
                   <td>
                     <div class="title">
@@ -248,7 +254,13 @@
                   <td><StatusIcon status={t.status} category={statusCategory(t.status)} /></td>
                   <td><KindIcon kind={t.kind} /></td>
                   <td>
-                    <IdLabel id={t.id} ulid={t.ulid} {href} onopen={(e) => onLinkClick(e, href)} />
+                    <IdLabel
+                      id={t.id}
+                      ulid={t.ulid}
+                      store={entry.store}
+                      {href}
+                      onopen={(e) => onLinkClick(e, href)}
+                    />
                   </td>
                   <td>
                     <div class="title">

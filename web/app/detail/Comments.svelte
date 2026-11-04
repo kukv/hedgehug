@@ -6,6 +6,7 @@
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import { kbdLabel } from "../keys";
+  import { useDisplayId, useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Avatar from "../ui/Avatar.svelte";
   import Button from "../ui/Button.svelte";
@@ -16,7 +17,19 @@
 
   let { show, readonly = false }: { show: ShowView; readonly?: boolean } = $props();
 
-  const { api, cache } = core();
+  const { api, cache, stores, accounts } = core();
+  const did = useDisplayId(stores);
+
+  // Only the author may edit or delete a comment (the server refuses the others). The accounts are
+  // read from GitHub, so they are asked for here; until they are read (or when they cannot be) nobody
+  // is offered the buttons. An account ID is compared without case, as config.SameAccount does.
+  void accounts.load();
+  const mine = useSubscribe(accounts, () =>
+    accounts.loaded() && accounts.error() === null
+      ? new Set(accounts.accounts().map((a) => a.id.toLowerCase()))
+      : new Set<string>(),
+  );
+  const isMine = (c: CommentView) => c.author !== "" && mine.current.has(c.author.toLowerCase());
 
   // What was written here, each until the task is read again and says it (or says something newer). from is the
   // text the comment had in the task when it was edited.
@@ -206,7 +219,7 @@
             </div>
           {:else}
             <p class="body">{c.body}</p>
-            {#if !readonly}
+            {#if !readonly && isMine(c)}
               <div class="row">
                 <Button size="sm" variant="ghost" onclick={() => startEdit(c)}>編集</Button>
                 <Button size="sm" variant="ghost" onclick={() => askRemove(c)}>削除</Button>
@@ -252,7 +265,7 @@
     open
     title="コメントを削除"
     width={560}
-    cli={cliComment(show.id, "rm", target.ulid)}
+    cli={cliComment(did.current(show.store, show.id), "rm", target.ulid)}
     onclose={() => {
       if (!deleteBusy) deleting = null;
     }}

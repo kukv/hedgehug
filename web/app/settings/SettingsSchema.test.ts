@@ -116,6 +116,7 @@ function setup(opts: Opts = {}) {
         stores: () => names.map((name) => ({ name })),
         readOnly: () => opts.readOnly ?? null,
         tone: () => "purple",
+        displayId: (_s: string, id: string) => id,
         subscribe: () => () => {},
       },
       schema: {
@@ -387,6 +388,7 @@ describe("SettingsSchema", () => {
             stores: () => [],
             readOnly: () => null,
             tone: () => "purple",
+            displayId: (_s: string, id: string) => id,
             subscribe: () => () => {},
           },
           schema: { get: () => sch, load: async () => sch, subscribe: () => () => {} },

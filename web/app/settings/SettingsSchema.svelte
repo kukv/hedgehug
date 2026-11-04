@@ -9,7 +9,7 @@
   import StatusIcon from "../icons/StatusIcon.svelte";
   import { useReadOnlySentence } from "../read-only";
   import { onLinkClick, router, type SchemaTab } from "../router";
-  import { useManyStores, useSubscribe } from "../svelte-store";
+  import { useDisplayId, useManyStores, useSubscribe } from "../svelte-store";
   import Button from "../ui/Button.svelte";
   import FormError from "../ui/FormError.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
@@ -23,6 +23,7 @@
   let { store, tab }: { store: string; tab: SchemaTab } = $props();
 
   const c = core();
+  const did = useDisplayId(c.stores);
   const uid = $props.id();
   const schemaRev = useSubscribe(c.schema, () => ({}));
   const manyStores = useManyStores(c.stores);
@@ -412,7 +413,7 @@
             <li>
               <a {href} onclick={(e) => onLinkClick(e, href)}>
                 {#if project}
-                  <span class="mono">{project.id}</span> {project.title}
+                  <span class="mono">{did.current(store, project.id)}</span> {project.title}
                 {:else}
                   プロジェクトを開く
                 {/if}
@@ -424,7 +425,15 @@
       {/if}
     </section>
 
-    <SchemaCheck {store} {many} idOf={(ulid) => taskByUlid.get(ulid)?.id} bind:this={check} />
+    <SchemaCheck
+      {store}
+      {many}
+      idOf={(ulid) => {
+        const id = taskByUlid.get(ulid)?.id;
+        return id === undefined ? undefined : did.current(store, id);
+      }}
+      bind:this={check}
+    />
   {/if}
 </div>
 

@@ -14,6 +14,7 @@
   import Icon, { type IconName } from "../icons/Icon.svelte";
   import { useReadOnlySentence } from "../read-only";
   import { onLinkClick, router } from "../router";
+  import { useDisplayId } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import CliLine from "../ui/CliLine.svelte";
@@ -26,6 +27,7 @@
   let { store, many }: { store: string; many: boolean } = $props();
 
   const c = core();
+  const did = useDisplayId(c.stores);
   const uid = $props.id();
   // The repair writes; the diagnosis only reads (細部 35).
   const offSentence = useReadOnlySentence(c.stores, () => store);
@@ -223,7 +225,7 @@
           {#each fixed.repaired ?? [] as x (`${x.ulid}:${x.kind}`)}
             <li>
               {#if x.id}
-                <span class="mono">{x.id}</span>
+                <span class="mono">{did.current(store, x.id)}</span>
               {/if}
               {#if x.title}
                 <span>{x.title}</span>

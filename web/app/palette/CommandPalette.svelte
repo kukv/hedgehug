@@ -13,7 +13,7 @@
   import { router } from "../router";
   import { selection } from "../selection.svelte";
   import { runSync } from "../sidebar/sync-run.svelte";
-  import { useSubscribe } from "../svelte-store";
+  import { useDisplayId, useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import { patchTask } from "../tree/actions";
   import StoreBadge from "../ui/StoreBadge.svelte";
@@ -34,6 +34,7 @@
   } from "./search";
 
   const c = core();
+  const did = useDisplayId(c.stores);
   const cacheRev = useSubscribe(c.cache, () => ({}));
   const storesRev = useSubscribe(c.stores, () => ({}));
   const schemaRev = useSubscribe(c.schema, () => ({}));
@@ -90,7 +91,12 @@
     void tick().then(() => inputEl?.focus());
   });
 
-  const mode = $derived(detectMode(input));
+  // Every mounted Store, hidden or not: a "<store>:<ID>" of a hidden Store opens like a URL does.
+  const mountedNames = () => c.stores.stores().map((s) => s.name);
+  const mode = $derived.by(() => {
+    storesRev.current;
+    return detectMode(input, mountedNames());
+  });
   const modeLabel = $derived(
     picking ? "ステータス" : { id: "ID", query: "クエリ", command: "コマンド" }[mode],
   );
@@ -101,6 +107,7 @@
     epoch: () => c.cache.epochNow(),
     prime: (tasks: (TaskView | ShowView)[], since: number) => c.cache.prime(tasks, since),
     hidden: () => hiddenStores(c.stores),
+    storeNames: mountedNames,
   };
 
   $effect(() => {
@@ -206,6 +213,7 @@
       pickStatus,
       moveTask: (t) => openWorkspaceMove(t),
       readOnly: (store) => readOnlyNow(c.stores, store),
+      displayId: (store, id) => c.stores.displayId(store, id),
     };
   });
 
@@ -226,7 +234,7 @@
         note: s.name === t.status ? "今のステータス" : undefined,
         run: () => void setStatus(t, s.name),
       }));
-    return items.length ? [{ name: `${t.id} のステータス`, items }] : [];
+    return items.length ? [{ name: `${did.current(t.store, t.id)} のステータス`, items }] : [];
   }
 
   const groups = $derived.by<PaletteGroup[]>(() => {
@@ -380,7 +388,7 @@
               >
                 {#if item.type === "task"}
                   <KindIcon kind={item.kind} />
-                  <span class="key">{item.id}</span>
+                  <span class="key">{did.current(item.store, item.id)}</span>
                   <span class="text">{item.title}</span>
                   {#if item.note}
                     <span class="note">{item.note}</span>

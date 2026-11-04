@@ -31,6 +31,9 @@ beforeEach(() => resetToasts());
 describe("undoMessage", () => {
   it("names the task and the operation", () => {
     expect(undoMessage(result())).toBe("REL-6 の変更を取り消しました");
+    expect(undoMessage(result(), (store, id) => `${store}:${id}`)).toBe(
+      "shared:REL-6 の変更を取り消しました",
+    );
   });
 
   it("leaves out the task when the operation is not about one", () => {

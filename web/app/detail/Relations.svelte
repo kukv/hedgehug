@@ -4,7 +4,7 @@
   import { core } from "../context";
   import StatusIcon from "../icons/StatusIcon.svelte";
   import { onLinkClick, router } from "../router";
-  import { useSubscribe } from "../svelte-store";
+  import { useDisplayId, useSubscribe } from "../svelte-store";
   import Button from "../ui/Button.svelte";
   import IdLabel from "../ui/IdLabel.svelte";
   import FieldInput from "./FieldInput.svelte";
@@ -22,7 +22,8 @@
 
   let { show, readonly = false }: { show: ShowView; readonly?: boolean } = $props();
 
-  const { api, cache, schema } = core();
+  const { api, cache, schema, stores } = core();
+  const did = useDisplayId(stores);
   const sc = useSubscribe(schema, () => schema.get(show.store));
 
   let groups = $state<RelGroup[]>([]);
@@ -140,6 +141,7 @@
             <IdLabel
               id={it.id}
               ulid={it.ulid}
+              store={show.store}
               href={router.href({ name: "task", ulid: it.ulid })}
               onopen={(e) => onLinkClick(e, router.href({ name: "task", ulid: it.ulid }))}
             />
@@ -148,7 +150,7 @@
               <button
                 type="button"
                 class="remove"
-                aria-label="{it.id} を外す"
+                aria-label="{did.current(show.store, it.id)} を外す"
                 disabled={busy}
                 onclick={() => remove(g, it)}
               >

@@ -60,6 +60,7 @@ function mount(
         ],
         readOnly: () => null,
         tone: (s: string) => (s === "shared" ? "purple" : "teal"),
+        displayId: (_s: string, id: string) => id,
         loaded: () => true,
         subscribe: none,
       },

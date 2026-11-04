@@ -65,6 +65,7 @@ function mount(tab: "tree" | "kanban" | "table" | "settings", read = true, readO
         workspace: () => entry(),
         loaded: () => true,
         tone: () => "purple",
+        displayId: (_s: string, id: string) => id,
         readOnly: () => readOnly ?? null,
         hidden: () => false,
         subscribe: none,

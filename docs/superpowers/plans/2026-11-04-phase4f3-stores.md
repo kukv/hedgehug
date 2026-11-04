@@ -57,6 +57,7 @@
 102. **移動のダイアログの見出しの子孫の数**: 予定（`MovePlanView.tasks`）の件数から1を引いた数を「子孫 n」で出す（最初の予定を取るまでは出さない）。キャンバスのコメント・作業時間の数は、数える API がないので出さない
 103. **パレットの「別の Store へ移動…」**: `CommandItem.icon` に `store` を足す（`icons` に Store の形がなければ、キャンバスの SettingsNav の円柱を足す）
 104. **非表示の Store も移動先に出す**: 移動先のラジオは非表示の Store も並べる（非表示は表示の設定で、書き込みの先として選べなくする理由がないため。細部 46 の「移動元は出さない」以外は全 Store）
+105. **正確な参照は非表示の Store で外さない**（2026-11-04）: パレットに打った ID・旧 ID・ULID・`<store>:<ID>` は、URL と同じようにそのタスクを開く（非表示の Store のタスクでも。タスクのページに「非表示」の帯が出る）。非表示で外すのは、語の検索・クエリ・「最近開いたもの」だけ（細部 93 の「パレットのタスクの検索」はこの意味）。`detectMode` と `<store>:<ID>` の判定に渡す Store 名は、非表示を含むマウント中の全 Store
 
 ---
 
@@ -254,7 +255,7 @@
 
 **ふるまい:**
 - ID（細部 43）: 接頭辞が2つ以上の Store にあるときだけ `<store>:<ID>`。ULID のホバーは今のまま。CLI の行（`cliMv` など）の ID も同じ値を使う（`hh` は `store:ID` を受ける）
-- パレット（細部 96）: `org-b:API-12` で `GET /api/tasks/org-b:API-12` を引いて開く
+- パレット（細部 96・105）: `org-b:API-12` で `GET /api/tasks/org-b:API-12` を引いて開く。ID・旧 ID・ULID・`<store>:<ID>` の正確な参照は、非表示の Store のタスクも外さない（URL と同じ。外すのは語の検索・クエリ・最近開いたもの）
 - コメント（細部 44）: TaskDetail を開いたら `AccountsCache.load()`。コメントの編集・削除は `author` が `accounts()` のどれかの `id` と大文字小文字を無視して一致するときだけ出す（サーバーの `config.SameAccount` は `strings.EqualFold`）。`author` が空なら誰にも出さない。読み込み中・読めないときは出さない（サーバーが断るので、出して失敗させない）。閲覧のみの Store では Task 2a のとおり出さない
 
 **テストの観点:** `IdLabel` の `store` あり・なし・重ならない接頭辞、各呼び出し元の1つ以上で `<store>:<ID>` が出ること（ツリー・テーブル・カンバン・TaskDetail の見出し・パレット）、パレットの `store:ID` の検索、コメントの自分・他人・大文字小文字の違い・空の author・アカウントの読み込み前
@@ -263,11 +264,11 @@
 - ツリーで両方の `DM-1` が `demo:DM-1`・`second:DM-1` で出る。パレットに `second:DM-1` を入れると `second` の方が開く
 - コメント: `peer`（bob）がコメントしたタスクで、自分のコメントには「編集」「削除」があり、bob のコメントにはない（`inbox.spec.ts` の `peer` の使い方）
 
-- [ ] Step 1: `IdLabel` のテスト → 実装、呼び出し元と `displayId` の場所
-- [ ] Step 2: パレットのテスト → 実装
-- [ ] Step 3: `Comments.test.ts` → `Comments.svelte`
-- [ ] Step 4: E2E を書いて通す
-- [ ] Step 5: 検査を流してコミット `feat(web): 接頭辞が重なる Store の ID に Store 名を付け、コメントの編集を本人だけにする`
+- [x] Step 1: `IdLabel` のテスト → 実装、呼び出し元と `displayId` の場所
+- [x] Step 2: パレットのテスト → 実装
+- [x] Step 3: `Comments.test.ts` → `Comments.svelte`
+- [x] Step 4: E2E を書いて通す
+- [x] Step 5: 検査を流してコミット `feat(web): 接頭辞が重なる Store の ID に Store 名を付け、コメントの編集を本人だけにする`
 
 ---
 
@@ -310,8 +311,8 @@
 
 ### Task 7: 仕上げ
 
-- [ ] Step 1: 細部 34〜51 と 92〜104 の全行について、実装とテストの場所を plan の末尾に表で残す。足りないものがあればこの回で入れる
+- [ ] Step 1: 細部 34〜51 と 92〜105 の全行について、実装とテストの場所を plan の末尾に表で残す。足りないものがあればこの回で入れる
 - [ ] Step 2: 「作らないもの」を出していないことを grep とテストで確かめる（`rewrite-history`・`purge --rewrite`・`消すには`）。spec の 4f の完了条件（フェーズ3の機能が GUI でもできる）を、概要 plan の Goal の項目ごとに、どの回のどの E2E で確かめたかを表にする
-- [ ] Step 3: 概要 plan に「4f-3 の plan で足した細部」（92〜104 と、実装で決まった 105〜）を写す
+- [ ] Step 3: 概要 plan に「4f-3 の plan で足した細部」（92〜105 と、実装で決まった 106〜）を写す
 - [ ] Step 4: 全体の検査（`go vet ./...`・`gofmt -l .`・`golangci-lint run ./...`・`go test -race ./...`（Go は変えないが、生成物と合わせて確かめる）、`pnpm gen` と `go generate ./internal/app/server` のあとの生成物の差分なし、`pnpm fix`・`pnpm check`・`biome ci`・`vitest`・`pnpm build`、`make e2e` を3回）を流し、結果を plan の末尾に残す
 - [ ] Step 5: 引き継ぎ `docs/superpowers/plans/2026-11-04-phase4f3-handoff.md`（4f-2 と同じ形。4f の完了と、フェーズ4の次）を書いてコミット `docs(plan): 4f-3 の実装で決めた点と引き継ぎを書く`。PR はこの回の作業と引き継ぎを1つにまとめて出す（引き継ぎだけの PR は出さない）

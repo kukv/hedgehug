@@ -187,7 +187,13 @@
                   </td>
                   <td class="w-kind"><KindIcon kind={t.kind} /></td>
                   <td class="w-id">
-                    <IdLabel id={t.id} ulid={t.ulid} {href} onopen={(e) => onLinkClick(e, href)} />
+                    <IdLabel
+                      id={t.id}
+                      ulid={t.ulid}
+                      store={t.store}
+                      {href}
+                      onopen={(e) => onLinkClick(e, href)}
+                    />
                   </td>
                   <td class="t-title">
                     <a {href} onclick={(e) => onLinkClick(e, href)}>{t.title}</a>

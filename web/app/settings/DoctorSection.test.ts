@@ -69,6 +69,7 @@ function setup(over: Over = {}, props: { store?: string; many?: boolean } = {}) 
       stores: {
         readOnly: () => over.readOnly ?? null,
         tone: () => "teal",
+        displayId: (_s: string, id: string) => id,
         subscribe: () => () => {},
       },
     },
@@ -228,7 +229,12 @@ describe("DoctorSection: the diagnosis", () => {
         api,
         conn: new FakeConn(),
         cache: { task: () => undefined, subscribe: () => () => {} },
-        stores: { readOnly: () => null, tone: () => "teal", subscribe: () => () => {} },
+        stores: {
+          readOnly: () => null,
+          tone: () => "teal",
+          displayId: (_s: string, id: string) => id,
+          subscribe: () => () => {},
+        },
       },
     );
     await waitFor(() =>
@@ -263,7 +269,12 @@ describe("DoctorSection: the diagnosis", () => {
       api,
       conn: new FakeConn(),
       cache: { task: () => undefined, subscribe: () => () => {} },
-      stores: { readOnly: () => null, tone: () => "teal", subscribe: () => () => {} },
+      stores: {
+        readOnly: () => null,
+        tone: () => "teal",
+        displayId: (_s: string, id: string) => id,
+        subscribe: () => () => {},
+      },
     };
     renderWithCore(DoctorSection, { store: "a", many: false }, over).unmount();
     renderWithCore(DoctorSection, { store: "b", many: false }, over);
@@ -291,7 +302,12 @@ describe("DoctorSection: the diagnosis", () => {
         api,
         conn: new FakeConn(),
         cache: { task: () => undefined, subscribe: () => () => {} },
-        stores: { readOnly: () => null, tone: () => "teal", subscribe: () => () => {} },
+        stores: {
+          readOnly: () => null,
+          tone: () => "teal",
+          displayId: (_s: string, id: string) => id,
+          subscribe: () => () => {},
+        },
       },
     );
     view.unmount();

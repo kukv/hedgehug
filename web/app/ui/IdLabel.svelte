@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { core } from "../context";
+  import { useSubscribe } from "../svelte-store";
   import { copyText } from "./clipboard";
 
   // reveal: the owner shows the ULID (a row of the tree does while the keyboard is on it), to
@@ -7,6 +9,8 @@
   type Props = {
     id: string;
     ulid: string;
+    // the Store of the task: the ID is shown with the Store name when its prefix is in two Stores
+    store?: string;
     alwaysUlid?: boolean;
     reveal?: boolean;
     href?: string;
@@ -14,7 +18,21 @@
     // the middle button: the browser opens the link in a new tab by itself
     onaux?: (e: MouseEvent) => void;
   };
-  let { id, ulid, alwaysUlid = false, reveal = false, href, onopen, onaux }: Props = $props();
+  let {
+    id,
+    ulid,
+    store,
+    alwaysUlid = false,
+    reveal = false,
+    href,
+    onopen,
+    onaux,
+  }: Props = $props();
+
+  const { stores } = core();
+  const shown = useSubscribe(stores, () =>
+    store === undefined ? id : stores.displayId(store, id),
+  );
 
   let hover = $state(false);
   let focus = $state(false);
@@ -49,9 +67,9 @@
   }}
 >
   {#if href}
-    <a class="id link" {href} onclick={onopen} onauxclick={onaux}>{id}</a>
+    <a class="id link" {href} onclick={onopen} onauxclick={onaux}>{shown.current}</a>
   {:else}
-    <button type="button" class="id" tabindex="-1">{id}</button>
+    <button type="button" class="id" tabindex="-1">{shown.current}</button>
   {/if}
   {#if alwaysUlid}
     <span class="ulid">{ulid}</span>

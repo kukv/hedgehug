@@ -87,6 +87,7 @@ function setup(
         stores: () => names.map((name) => ({ name })),
         readOnly: (s: string) => opts.readOnly?.[s] ?? null,
         tone: () => "purple",
+        displayId: (_s: string, id: string) => id,
         workspaces: () => [],
         workspace: (_s: string, u: string) => (u === "W1" ? { name: "release" } : undefined),
         loaded: () => true,

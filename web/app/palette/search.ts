@@ -98,6 +98,8 @@ export type SearchDeps = {
   // The names of the stores that are hidden, read for each search: what they hold is not found. The
   // query leaves them out (-store:<name>), so they take none of the places of the list.
   hidden?: () => string[];
+  // every mounted Store, also a hidden one: a "<store>:<ID>" is looked up for any of them
+  storeNames?: () => string[];
 };
 
 export type SearchResult = { groups: PaletteGroup[]; error: unknown };
@@ -128,8 +130,6 @@ export async function searchTasks(
   if (text === "") return { groups: [], error: null };
   const since = d.epoch();
   const hidden = d.hidden?.() ?? [];
-  // The exact lookup of one task is asked by the ID, so it is filtered after the answer.
-  const shown = (t: { store: string }) => !hidden.includes(t.store);
   const without = hidden.map((s) => `-store:${quoteArg(s)}`).join(" ");
   try {
     if (mode === "query") {
@@ -147,13 +147,20 @@ export async function searchTasks(
       };
     }
     const found = new Map<string, TaskItem>();
-    if (ID.test(text) || ULID.test(text)) {
+    // An exact lookup (an ID, a ULID, "<store>:<ID>") opens the task like a URL does, so a hidden
+    // Store does not filter it; only the words below do.
+    const qualified = isStoreQualifiedId(text, d.storeNames?.() ?? []);
+    if (qualified || ID.test(text) || ULID.test(text)) {
       try {
         const s = await unwrap(d.api.GET("/api/tasks/{id}", { params: { path: { id: text } } }));
-        if (shown(s)) found.set(s.ulid, taskItem(s, d.hrefOf, matchNote(s, text)));
+        found.set(s.ulid, taskItem(s, d.hrefOf, matchNote(s, text)));
       } catch (e) {
         if (!isNotFound(e)) throw e;
       }
+    }
+    if (qualified) {
+      const items = [...found.values()];
+      return { groups: items.length ? [{ name: "タスク", items }] : [], error: null };
     }
     const tasks = await findTasks(d.api, text, { extra: without, limit: MAX });
     d.prime(tasks, since);
@@ -201,6 +208,7 @@ export type CommandEnv = {
   pickStatus: (t: TaskView) => void;
   moveTask: (t: TaskView) => void;
   readOnly: (store: string) => string | null; // why a store cannot be written, or null
+  displayId: (store: string, id: string) => string; // the ID with its Store where the prefix is shared
 };
 
 // taskCommands are the commands about one task.
@@ -211,7 +219,7 @@ export function taskCommands(env: CommandEnv, t: TaskView): PaletteGroup {
   const writable = env.readOnly(t.store) === null;
   const canMove = env.workspaces.some((w) => w.store === t.store && w.ulid !== t.workspace.ulid);
   return {
-    name: `${t.id} に対して`,
+    name: `${env.displayId(t.store, t.id)} に対して`,
     items: [
       ...(writable
         ? [

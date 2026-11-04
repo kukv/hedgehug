@@ -82,7 +82,7 @@ function deps(over: { tasks?: TaskView[]; listError?: unknown } = {}) {
     ) => {
       if (path === "/api/tasks/{id}") {
         const id = opts.params.path?.id.toLowerCase();
-        const hit = id === "sh-17" || id === "rel-6" || id === "u6";
+        const hit = ["sh-17", "rel-6", "u6", "shared:rel-6"].includes(id ?? "");
         return hit ? ok(rel6) : notFound;
       }
       if (over.listError) return over.listError;
@@ -125,9 +125,35 @@ describe("searchTasks: hidden Stores", () => {
     expect(queries(GET)).toEqual(['"表示"', "kind:task"]);
   });
 
-  it("leaves out the exact lookup of an ID of a hidden Store", async () => {
+  it("still opens the exact lookup of an ID, a former ID or a ULID of a hidden Store, like a URL", async () => {
     const { d } = deps();
-    const r = await searchTasks({ ...d, hidden: () => ["shared"] }, "rel-6", "id");
+    const hidden = { ...d, hidden: () => ["shared"] };
+    for (const text of ["rel-6", "SH-17"]) {
+      const r = await searchTasks(hidden, text, "id");
+      expect(r.groups[0]?.items[0]).toMatchObject({ ulid: "U6" });
+    }
+  });
+});
+
+describe("searchTasks: <store>:<ID>", () => {
+  it("looks the qualified ID up as it is, once, and does not search it as words", async () => {
+    const { d, GET } = deps();
+    const r = await searchTasks(
+      { ...d, storeNames: () => ["shared", "second"], hidden: () => ["shared"] },
+      "shared:REL-6",
+      "id",
+    );
+    expect(GET).toHaveBeenCalledTimes(1);
+    expect(GET).toHaveBeenCalledWith("/api/tasks/{id}", {
+      params: { path: { id: "shared:REL-6" } },
+    });
+    expect(r.groups[0]?.items[0]).toMatchObject({ ulid: "U6" });
+  });
+
+  it("finds nothing for a qualified ID nobody has", async () => {
+    const { d } = deps();
+    const r = await searchTasks({ ...d, storeNames: () => ["shared"] }, "shared:REL-99", "id");
+    expect(r.error).toBeNull();
     expect(r.groups).toEqual([]);
   });
 });
@@ -279,6 +305,7 @@ function env(over: Partial<CommandEnv> = {}): CommandEnv {
     pickStatus: vi.fn(),
     moveTask: vi.fn(),
     readOnly: () => null,
+    displayId: (_store, id) => id,
     ...over,
   };
 }
@@ -570,6 +597,12 @@ describe("buildCommands", () => {
 });
 
 describe("taskCommands", () => {
+  it("names the group with the ID and its Store where the prefix is shared", () => {
+    const t = task("U1", "task", null, { id: "REL-1", store: "shared" });
+    const group = taskCommands(env({ displayId: (s, id) => `${s}:${id}` }), t);
+    expect(group.name).toBe("shared:REL-1 に対して");
+  });
+
   it("offers a task of a read-only Store only its detail: no status, no child, no move", () => {
     const t = task("T1", "task", null, { id: "REL-6" });
     const e = env({

@@ -43,6 +43,7 @@ function setup(
       api,
       stores: {
         tone: () => "teal",
+        displayId: (_s: string, id: string) => id,
         readOnly: (s: string) => readOnly[s] ?? null,
         subscribe: () => () => {},
       },
@@ -178,7 +179,15 @@ describe("PurgeSection: the plan", () => {
     renderWithCore(
       PurgeSection,
       { stores: ["a"] },
-      { api, stores: { tone: () => "teal", readOnly: () => null, subscribe: () => () => {} } },
+      {
+        api,
+        stores: {
+          tone: () => "teal",
+          displayId: (_s: string, id: string) => id,
+          readOnly: () => null,
+          subscribe: () => () => {},
+        },
+      },
     );
     await fireEvent.click(check());
     expect(check().disabled).toBe(true);
@@ -194,7 +203,15 @@ describe("PurgeSection: the plan", () => {
     const view = renderWithCore(
       PurgeSection,
       { stores: ["a"] },
-      { api, stores: { tone: () => "teal", readOnly: () => null, subscribe: () => () => {} } },
+      {
+        api,
+        stores: {
+          tone: () => "teal",
+          displayId: (_s: string, id: string) => id,
+          readOnly: () => null,
+          subscribe: () => () => {},
+        },
+      },
     );
     await fireEvent.click(check());
     view.unmount();

@@ -225,7 +225,7 @@
           <ul class="tasks" aria-label="完全に削除されるタスク">
             {#each plan.tasks as t (t.ulid)}
               <li>
-                <IdLabel id={t.id} ulid={t.ulid} />
+                <IdLabel id={t.id} ulid={t.ulid} {store} />
                 <span>{t.title}</span>
               </li>
             {/each}

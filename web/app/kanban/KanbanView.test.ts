@@ -85,6 +85,8 @@ type Setup = {
   readOnly?: Record<string, string>;
   // The Stores the GUI leaves out.
   hidden?: string[];
+  // The Stores share a prefix: IDs are shown as <store>:<ID>.
+  qualify?: boolean;
 };
 
 function setup(o: Setup = {}) {
@@ -134,6 +136,7 @@ function setup(o: Setup = {}) {
       readOnly: (s: string) => o.readOnly?.[s] ?? null,
       hidden: (s: string) => o.hidden?.includes(s) ?? false,
       tone: () => "purple",
+      displayId: (s: string, id: string) => (o.qualify ? `${s}:${id}` : id),
       workspace: () => undefined,
       workspaces: () => [],
       loaded: () => true,
@@ -294,6 +297,17 @@ describe("KanbanView: the board", () => {
     const one = mountView();
     await waitFor(() => expect(headNames(one.container).length).toBeGreaterThan(0));
     expect(one.container.querySelectorAll(".badge").length).toBe(0);
+  });
+
+  it("writes the ID of a card with its store where the prefix is shared", async () => {
+    setup({
+      stores: ["shared", "work"],
+      schemas: { shared: schema, work: schema },
+      tasks: [task("A", "task", null, { store: "shared", status: "todo" })],
+      qualify: true,
+    });
+    mountView();
+    expect(await screen.findByText("shared:REL-0")).toBeInTheDocument();
   });
 
   it("joins the columns of the stores of the cards on a screen of many stores", async () => {

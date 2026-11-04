@@ -129,6 +129,13 @@ export type FakeCoreOptions = {
   readOnlyBy?: Record<string, string>;
   /** The names of the Stores that are hidden. */
   hidden?: string[];
+  /** The Stores share a prefix: IDs are shown as <store>:<ID>. */
+  qualify?: boolean;
+  /** The IDs (host/login) of the accounts GET /api/accounts gives; none by default. */
+  accounts?: string[];
+  /** Whether the accounts are read (true by default) and why they could not be. */
+  accountsLoaded?: boolean;
+  accountsError?: string | null;
 };
 
 /** Fakes of the core objects; every method the screens call is a vi.fn. */
@@ -185,6 +192,16 @@ export function makeCore(opts: FakeCoreOptions = {}) {
     workspace: vi.fn((s: string, u: string) => ws.find((w) => w.store === s && w.ulid === u)),
     loaded: vi.fn(() => true),
     reload: vi.fn(async () => {}),
+    sharedPrefixes: vi.fn((): ReadonlySet<string> => new Set<string>()),
+    displayId: vi.fn((store: string, id: string) => (opts.qualify ? `${store}:${id}` : id)),
+    subscribe,
+  };
+  const accounts = {
+    accounts: vi.fn(() => (opts.accounts ?? []).map((id) => ({ id }))),
+    loaded: vi.fn(() => opts.accountsLoaded ?? true),
+    error: vi.fn(() => opts.accountsError ?? null),
+    load: vi.fn(async () => {}),
+    reload: vi.fn(async () => {}),
     subscribe,
   };
   const schema = { get: vi.fn(() => schemaView), load: vi.fn(async () => schemaView), subscribe };
@@ -194,6 +211,7 @@ export function makeCore(opts: FakeCoreOptions = {}) {
     cache,
     save,
     stores,
+    accounts,
     schema,
     conn,
     notify: () => {
@@ -206,8 +224,8 @@ export type FakeCore = ReturnType<typeof makeCore>;
 
 /** Renders a screen with the fakes as its core and runs its effects. */
 export function mount<P extends Record<string, unknown>>(C: Component<P>, props: P, k: FakeCore) {
-  const { api, cache, save, stores, schema, conn } = k;
-  const r = renderWithCore(C, props, { api, cache, save, stores, schema, conn });
+  const { api, cache, save, stores, accounts, schema, conn } = k;
+  const r = renderWithCore(C, props, { api, cache, save, stores, accounts, schema, conn });
   flushSync();
   return r;
 }

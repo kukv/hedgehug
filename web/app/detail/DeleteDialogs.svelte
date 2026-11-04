@@ -4,6 +4,7 @@
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import { readOnlySentence } from "../read-only";
+  import { useDisplayId } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
@@ -16,7 +17,8 @@
     readOnly = null,
   }: { show: ShowView; variant: "delete" | "deleted"; readOnly?: string | null } = $props();
 
-  const { api, cache } = core();
+  const { api, cache, stores } = core();
+  const did = useDisplayId(stores);
   const deps = { api, cache };
   const ref = $derived({ ulid: show.ulid, store: show.store });
 
@@ -105,9 +107,9 @@
 {#if open === "delete"}
   <Dialog
     open
-    title="{show.id} {show.title} を削除"
+    title="{did.current(show.store, show.id)} {show.title} を削除"
     width={560}
-    cli={cliRm(show.id)}
+    cli={cliRm(did.current(show.store, show.id))}
     onclose={close}
   >
     {#if descendants === null}
@@ -118,7 +120,7 @@
       </p>
       <ul>
         {#each shown as t (t.ulid)}
-          <li><span class="mono">{t.id}</span> {t.title}</li>
+          <li><span class="mono">{did.current(show.store, t.id)}</span> {t.title}</li>
         {/each}
         {#if more > 0}
           <li class="muted">ほか {more} 件</li>

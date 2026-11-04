@@ -81,6 +81,8 @@ type Over = {
   canceled?: string[];
   // The Stores the GUI leaves out.
   hidden?: string[];
+  // The Stores share a prefix: IDs are shown as <store>:<ID>.
+  qualify?: boolean;
   // The stores whose schema cannot be read (until it is put in the schemas).
   unreadable?: string[];
   // What becomes of the parent the list does not hold, once the table asks for it: it is read
@@ -199,6 +201,7 @@ function setup(over: Over = {}) {
       readOnly: (s: string) => over.readOnly?.[s] ?? null,
       hidden: (s: string) => over.hidden?.includes(s) ?? false,
       tone: (s: string) => (s === "me" ? "orange" : "purple"),
+      displayId: (s: string, id: string) => (over.qualify ? `${s}:${id}` : id),
       subscribe: ev.subscribe,
     },
     schema: {
@@ -320,6 +323,12 @@ describe("TableView", () => {
     expect(order()).toEqual(["REL-4"]);
     expect(screen.queryByRole("textbox", { name: "タイトル: ME-1" })).toBeNull();
     expect(screen.getByText("1 件 · 中止 1 件を除外")).toBeInTheDocument();
+  });
+
+  it("writes the ID of a row with its store where the prefix is shared", () => {
+    setup({ ulids: ["T1"], qualify: true });
+    mount();
+    expect(order()[0]).toMatch(/^shared:REL-/);
   });
 
   it("keeps the rows of a hidden store on the table of its own workspace", () => {

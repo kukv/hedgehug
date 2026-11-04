@@ -23,7 +23,7 @@
   import { readOnlyNow, readOnlySentence } from "../read-only";
   import { router } from "../router";
   import Empty from "../states/Empty.svelte";
-  import { useSubscribe } from "../svelte-store";
+  import { useDisplayId, useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import { combine, hasTerm, NO_CANCELED, withoutOrder, withoutTerm } from "../tree/filter";
   import { countLabel, VIRTUALIZE_AT } from "../tree/flatten";
@@ -74,6 +74,7 @@
   } = $props();
 
   const c = core();
+  const did = useDisplayId(c.stores);
   const uid = $props.id();
   const ls = useListScope(() => scope);
   const cacheRev = useSubscribe(c.cache, () => ({}));
@@ -546,7 +547,7 @@
       <td class="ghead" colspan={specs.length + 1}>
         <span class="gname">{item.label}</span>
         {#if item.id}
-          <span class="gid">{item.id}</span>
+          <span class="gid">{item.store ? did.current(item.store, item.id) : item.id}</span>
         {/if}
         {#if groupMeta(item)}
           <span class="gmeta">{groupMeta(item)}</span>

@@ -99,6 +99,7 @@
   <IdLabel
     id={task.id}
     ulid={task.ulid}
+    store={task.store}
     href={taskHref(task.ulid)}
     onopen={(e) => onLinkClick(e, taskHref(task.ulid))}
   />
@@ -166,6 +167,7 @@
     <IdLabel
       id={parent.id}
       ulid={parent.ulid}
+      store={parent.store}
       href={taskHref(parent.ulid)}
       onopen={(e) => onLinkClick(e, taskHref(parent.ulid))}
     />

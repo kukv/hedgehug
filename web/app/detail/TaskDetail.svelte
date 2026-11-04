@@ -9,7 +9,7 @@
   import { readOnlySentence, useReadOnly } from "../read-only";
   import { onLinkClick, router } from "../router";
   import StoreBands from "../states/StoreBands.svelte";
-  import { useSubscribe } from "../svelte-store";
+  import { useDisplayId, useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import CliLine from "../ui/CliLine.svelte";
@@ -54,6 +54,7 @@
   const s = $derived<ShowView | undefined>(shown.current);
   // Why the Store cannot be written (細部 34), or null: every write is off then (細部 35).
   const roReason = useReadOnly(stores, () => s?.store);
+  const did = useDisplayId(stores);
   const roTitle = $derived(
     roReason.current !== null ? readOnlySentence(roReason.current) : undefined,
   );
@@ -223,14 +224,14 @@
             <a
               href={router.href({ name: "task", ulid: c.ulid })}
               onclick={(e) => onLinkClick(e, router.href({ name: "task", ulid: c.ulid }))}
-              ><span class="mono">{c.id}</span> {c.title}</a
+              ><span class="mono">{did.current(s.store, c.id)}</span> {c.title}</a
             >
           {:else}
             <span>…</span>
           {/if}
         {/each}
         <span class="sep">›</span>
-        <span class="mono current" aria-current="page">{s.id}</span>
+        <span class="mono current" aria-current="page">{did.current(s.store, s.id)}</span>
       </nav>
       <div class="actions">
         <span class="save" role="status" aria-label="保存の状態" data-kind={saveState.current.kind}
@@ -272,7 +273,7 @@
 
     <div class="heading">
       <p class="eyebrow">
-        <span>{kindLabel} · <span class="mono">{s.id}</span></span>
+        <span>{kindLabel} · <span class="mono">{did.current(s.store, s.id)}</span></span>
         {#if (s.former_ids ?? []).length > 0}
           <span class="muted">旧 <span class="mono">{(s.former_ids ?? []).join("、")}</span></span>
         {/if}
@@ -295,7 +296,7 @@
           oncommit={() => void save.flush(ulid)}
         />
       {:else}
-        <h1 class="broken-title">{s.title || s.id}</h1>
+        <h1 class="broken-title">{s.title || did.current(s.store, s.id)}</h1>
       {/if}
     </div>
 
@@ -312,11 +313,11 @@
       <div class="band blocked" role="status" aria-label="ブロック">
         <span>
           {#each blockers as b, i (b.ulid)}
-            {i > 0 ? "、" : ""}<span class="mono">{b.id}</span>
+            {i > 0 ? "、" : ""}<span class="mono">{did.current(s.store, b.id)}</span>
             {b.title}（{statusLabel(b.status)}）
           {/each}
           にブロックされています。{blockers.length === 1
-            ? blockers[0]?.id
+            ? did.current(s.store, blockers[0]?.id ?? "")
             : "すべて"}が完了か中止になれば自動で解除されます。
         </span>
       </div>

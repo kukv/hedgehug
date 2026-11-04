@@ -195,6 +195,7 @@
                           <IdLabel
                             id={l.id}
                             ulid={l.task}
+                            store={l.store}
                             {href}
                             onopen={(e) => onLinkClick(e, href)}
                           />

@@ -4,6 +4,7 @@
   import { errorMessage } from "../../core/messages";
   import { searchTasks } from "../../core/search";
   import { core } from "../context";
+  import { useDisplayId } from "../svelte-store";
 
   let {
     store,
@@ -22,7 +23,8 @@
     onpick: (t: TaskView) => void;
   } = $props();
 
-  const { api } = core();
+  const { api, stores } = core();
+  const did = useDisplayId(stores);
   const listId = $props.id();
   let text = $state("");
   let results = $state<TaskView[]>([]);
@@ -104,7 +106,7 @@
           class:active={i === active}
           onclick={() => pick(t)}
         >
-          <span class="id">{t.id}</span>
+          <span class="id">{did.current(store, t.id)}</span>
           <span class="title">{t.title}</span>
         </button>
       {/each}

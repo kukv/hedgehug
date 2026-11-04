@@ -78,6 +78,7 @@ function setup(
             stores: {
               stores: () => [],
               tone: () => "readonly",
+              displayId: (_s: string, id: string) => id,
               readOnly: () => readOnly,
               hidden: () => false,
               workspaces: () => [entry],

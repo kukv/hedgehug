@@ -39,6 +39,14 @@ describe("TaskDetail", () => {
     history.replaceState(null, "", "/");
   });
 
+  it("writes the ID with its Store where the prefix is shared: the heading and the trail", () => {
+    const show = { ...base };
+    const k = makeCore({ show, account: "github.com/koki", tasks: [parent], qualify: true });
+    mount(TaskDetail, { ulid: U }, k);
+    expect(screen.getByText(/^タスク ·/)).toHaveTextContent("タスク · shared:REL-6");
+    expect(screen.getByRole("navigation", { name: /./ })).toHaveTextContent("shared:REL-6");
+  });
+
   it("shows the kind and ID, the former ID, the ULID and the title", () => {
     setup();
     expect(screen.getByText(/^タスク ·/)).toHaveTextContent("タスク · REL-6");
