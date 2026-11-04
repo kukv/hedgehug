@@ -141,10 +141,7 @@ func (a *app) printScoped(r schemas.ScopedResult, done, none string, body bool) 
 	if a.jsonOut {
 		return a.printJSON(r.View())
 	}
-	name := r.Project.String()
-	if r.Entry != nil {
-		name = r.Index.DisplayID(r.Entry) + "  " + r.Entry.Title
-	}
+	name := r.Name()
 	var b strings.Builder
 	if done != "" {
 		if !r.Committed {

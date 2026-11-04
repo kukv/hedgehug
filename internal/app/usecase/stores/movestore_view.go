@@ -119,6 +119,9 @@ type MoveStoreResultView struct {
 	Unlinked []MoveUnlinkResult `json:"unlinked,omitempty" nullable:"false" doc:"The references that were cut, by ULID"`
 	Scoped   *MoveScopedResult  `json:"scoped,omitempty"`
 	Resumed  bool               `json:"resumed,omitempty" doc:"The destination was written by an earlier run that stopped; this one only finished the source"`
+
+	// ScopedLines are what the move leaves out of the scoped schema, for the text.
+	ScopedLines []string `json:"-"`
 }
 
 // MoveUnlinkResult is a reference that was cut, by ULID. Field is blocked_by,
@@ -137,7 +140,7 @@ type MoveScopedResult struct {
 
 // View is the result as the JSON of the command and of the API.
 func (r MoveStoreResult) View() MoveStoreResultView {
-	v := MoveStoreResultView{From: r.Plan.From, To: r.Plan.To, Tasks: r.Moved, Resumed: r.Resumed}
+	v := MoveStoreResultView{From: r.Plan.From, To: r.Plan.To, Tasks: r.Moved, Resumed: r.Resumed, ScopedLines: r.Plan.Scoped.Lines(r.Plan.To)}
 	if v.Tasks == nil {
 		v.Tasks = []MovedTask{}
 	}

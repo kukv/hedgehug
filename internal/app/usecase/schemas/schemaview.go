@@ -2,7 +2,10 @@
 // scoped schemas of projects.
 package schemas
 
-import "github.com/kukv/hedgehug/internal/app/domain/schema"
+import (
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+)
 
 // SchemaView is schema.yaml as GET /api/schema returns it: the keys of the
 // file, with props as a mapping of name to definition.
@@ -64,6 +67,15 @@ type ScopedDef struct {
 	Statuses  []string      `json:"statuses,omitempty"`
 	Workflow  *WorkflowDef  `json:"workflow,omitempty"`
 	Templates *TemplatesDef `json:"templates,omitempty"`
+}
+
+// SchemaGet is the schema of the store ss opens, as GET /api/schema returns it.
+func SchemaGet(ss *usecase.Session) (SchemaView, error) {
+	_, ix, err := ss.Open()
+	if err != nil {
+		return SchemaView{}, err
+	}
+	return SchemaViewOf(ix.Schema()), nil
 }
 
 // SchemaViewOf is sc as SchemaView.

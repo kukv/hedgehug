@@ -43,6 +43,15 @@ type ScopedResult struct {
 	Commit    string // hex hash of the commit made; "" when nothing was committed
 }
 
+// Name is how the text names the project: its id and title, or its ULID when
+// the project is no longer in the store.
+func (r ScopedResult) Name() string {
+	if r.Entry == nil {
+		return r.Project.String()
+	}
+	return r.Index.DisplayID(r.Entry) + "  " + r.Entry.Title
+}
+
 // View is r as ScopedView.
 func (r ScopedResult) View() ScopedView {
 	v := ScopedView{Project: ScopedProject{ULID: r.Project.String()}}

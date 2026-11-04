@@ -157,52 +157,21 @@ func (a *app) confirmMove(p stores.MovePlan) error {
 // printMoveStore prints a move: a line for each task, or JSON. The scoped
 // lines come with them unless the confirmation showed them.
 func (a *app) printMoveStore(res stores.MoveStoreResult, shown bool) error {
-	p := res.Plan
+	v := res.View()
 	if a.jsonOut {
-		type taskJSON struct {
-			ULID  string `json:"ulid"`
-			OldID string `json:"old_id"`
-			NewID string `json:"new_id"`
-		}
-		type unlinkJSON struct {
-			Task   string `json:"task"`
-			Field  string `json:"field"`
-			Target string `json:"target"`
-		}
-		type scopedJSON struct {
-			Carried bool     `json:"carried"`
-			Dropped []string `json:"dropped,omitempty"`
-		}
-		out := struct {
-			From     string       `json:"from"`
-			To       string       `json:"to"`
-			Tasks    []taskJSON   `json:"tasks"`
-			Unlinked []unlinkJSON `json:"unlinked,omitempty"`
-			Scoped   *scopedJSON  `json:"scoped,omitempty"`
-			Resumed  bool         `json:"resumed,omitempty"`
-		}{From: p.From, To: p.To, Resumed: res.Resumed}
-		for _, m := range res.Moved {
-			out.Tasks = append(out.Tasks, taskJSON{m.ULID.String(), m.OldID, m.NewID})
-		}
-		for _, u := range p.Unlinked {
-			out.Unlinked = append(out.Unlinked, unlinkJSON{u.Task.String(), u.Field, u.Target.String()})
-		}
-		if p.Scoped != nil {
-			out.Scoped = &scopedJSON{Carried: res.Carried, Dropped: p.Scoped.Dropped}
-		}
-		return a.printJSON(out)
+		return a.printJSON(v)
 	}
 	var b strings.Builder
 	if res.Resumed {
 		// The destination was written by an earlier run that stopped; this
 		// one only finished the source.
-		fmt.Fprintf(&b, "Finished the move: %s was left unfinished last time\n", p.From)
+		fmt.Fprintf(&b, "Finished the move: %s was left unfinished last time\n", v.From)
 	}
-	for _, m := range res.Moved {
-		fmt.Fprintf(&b, "Moved %s (%s) → %s %s\n", m.OldID, m.ULID, p.To, m.NewID)
+	for _, m := range v.Tasks {
+		fmt.Fprintf(&b, "Moved %s (%s) → %s %s\n", m.OldID, m.ULID, v.To, m.NewID)
 	}
 	if !shown {
-		for _, l := range p.Scoped.Lines(p.To) {
+		for _, l := range v.ScopedLines {
 			b.WriteString(l + "\n")
 		}
 	}

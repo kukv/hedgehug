@@ -49,7 +49,7 @@ func commentOf(ss *usecase.Session, id, cid string) error {
 	if err != nil {
 		return problemOf(err)
 	}
-	if ces.Ref.Task != u {
+	if !ces.OfTask(u) {
 		return newProblem(http.StatusNotFound, "comment.not_found", "comment "+cid+" is not a comment of "+id)
 	}
 	return nil

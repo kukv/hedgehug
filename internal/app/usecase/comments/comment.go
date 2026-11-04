@@ -65,6 +65,9 @@ type CommentEditSession struct {
 	ss *usecase.Session // the session that opened it, which writes
 }
 
+// OfTask reports whether the comment is a comment of the task.
+func (ces *CommentEditSession) OfTask(task model.ULID) bool { return ces.Ref.Task == task }
+
 // CommentULID is the ULID of the comment.
 func (ces *CommentEditSession) CommentULID() string { return ces.Ref.Comment.String() }
 

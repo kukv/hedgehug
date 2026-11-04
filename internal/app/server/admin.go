@@ -145,11 +145,11 @@ func (s *Server) registerAdmin() {
 	}, func(_ context.Context, in *StoreParam) (*struct{ Body schemas.SchemaView }, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		_, ix, err := ss.Open()
+		v, err := schemas.SchemaGet(ss)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return &struct{ Body schemas.SchemaView }{schemas.SchemaViewOf(ix.Schema())}, nil
+		return &struct{ Body schemas.SchemaView }{v}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{

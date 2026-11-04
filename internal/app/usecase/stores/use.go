@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/current"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
@@ -18,10 +19,41 @@ const useKind = usecase.ProjectKind
 
 // UseResult is the project hh use set or shows; Project is nil when there is none.
 type UseResult struct {
-	Store   string       // the store's name
-	Project *index.Entry // a copy of the entry as it was read
-	ID      string       // the project's id as its store shows it (store-qualified when prefixes are shared)
+	Store   string // the store's name
+	Project *UseProject
+	ID      string // the project's id as its store shows it (store-qualified when prefixes are shared)
 	Changed bool
+}
+
+// UseProject is the project in the JSON of hh use. ID is as the file has it,
+// not as the text shows it with the store's name: the store is a field of its
+// own.
+type UseProject struct {
+	ID    string     `json:"id"`
+	ULID  model.ULID `json:"ulid"`
+	Title string     `json:"title"`
+}
+
+// UseView is the JSON of hh use when there is a project.
+type UseView struct {
+	Store   string     `json:"store"`
+	Project UseProject `json:"project"`
+}
+
+func useProjectOf(e index.Entry) *UseProject {
+	id := e.ID
+	if id == "" {
+		id = e.ULID.String()
+	}
+	return &UseProject{ID: id, ULID: e.ULID, Title: e.Title}
+}
+
+// View is r as the JSON of hh use: {store, project}, or {} when there is none.
+func (r UseResult) View() any {
+	if r.Project == nil {
+		return struct{}{}
+	}
+	return UseView{Store: r.Store, Project: *r.Project}
 }
 
 // loadContext reads context.json, warning of a broken one.
@@ -82,7 +114,7 @@ func Use(ss *usecase.Session, arg string) (UseResult, error) {
 			return UseResult{}, err
 		}
 	}
-	return UseResult{Store: hit.Store.Name, Project: &e, ID: id, Changed: changed}, nil
+	return UseResult{Store: hit.Store.Name, Project: useProjectOf(e), ID: id, Changed: changed}, nil
 }
 
 // useResolve finds the project arg names, in the store --store names when
@@ -157,7 +189,7 @@ func UseShow(ss *usecase.Session) (UseResult, error) {
 		return UseResult{}, err
 	}
 	if ok {
-		return UseResult{Store: m.Name, Project: &e, ID: id}, nil
+		return UseResult{Store: m.Name, Project: useProjectOf(e), ID: id}, nil
 	}
 	ss.AddWarning(usecase.UseGoneWarning)
 	return UseResult{}, nil
