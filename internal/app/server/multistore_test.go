@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 // twoStores is a test server with the stores "me" (prefix ME) and "team"
@@ -140,7 +140,7 @@ func TestNotificationsSpanStores(t *testing.T) {
 	for store, id := range map[string]string{"me": "ME-1", "team": "TM-1"} {
 		var show usecase.ShowView
 		ts.call("GET", "/api/tasks/"+id+"?store="+store, nil, 200, &show)
-		ts.notifyIn(store, inbox.Item{Kind: inbox.Mention, Task: mustULID(t, show.ULID), ID: id, Commit: "c1", Time: now})
+		ts.uc.AddInboxItem(store, usecasetest.InboxItem{Kind: "mention", Task: mustULID(t, show.ULID), ID: id, Commit: "c1", Time: now})
 	}
 	type item struct {
 		ULID  string `json:"ulid"`
@@ -241,7 +241,7 @@ func TestActivityFiltersMergedList(t *testing.T) {
 		}
 	}
 	var out []usecase.LogView
-	author := "?author=" + ts.accountID()
+	author := "?author=" + ts.uc.AccountIDs()[0]
 	ts.call("GET", "/api/activity"+author, nil, 200, &out)
 	if len(out) != 8 {
 		t.Fatalf("author = %d commits; want 8: the 2 inits, the 2 adds of twoStores and the 4 adds", len(out))

@@ -9,11 +9,14 @@ import (
 	"time"
 
 	git "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/remote/auth"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
+	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/history"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
@@ -22,6 +25,29 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
+
+// Empty is a Session over a fresh HOME and HEDGEHUG_HOME whose config.yaml
+// has the default account only. It makes no store.
+func Empty(t *testing.T, now func() time.Time) *Session {
+	t.Helper()
+	d := t.TempDir()
+	home := filepath.Join(d, "home")
+	if err := os.MkdirAll(home, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	ts := &Session{T: t, Env: map[string]string{
+		"HOME":               home,
+		"HEDGEHUG_HOME":      filepath.Join(d, "hh"),
+		"HEDGEHUG_AUTO_SYNC": "0",
+	}}
+	ts.Session = &usecase.Session{
+		Getenv: func(k string) string { return ts.Env[k] },
+		Now:    now,
+		Warn:   func(m string) { ts.Warns = append(ts.Warns, m) },
+	}
+	ts.AppendDefaultAccount()
+	return ts
+}
 
 // Attach is a Session over the data directory getenv points at, as the
 // command sees it. It makes neither a store nor a config: the caller has them
@@ -46,6 +72,8 @@ type Author struct{ Name, Email string }
 var (
 	TAuthor     = Author{"T", "t@example.com"}
 	AliceAuthor = Author{"Alice", "alice@example.com"}
+	// AccountAuthor is who the commits of TestAccount are by.
+	AccountAuthor = Author{config.CommitAuthor(TestAccount).Name, config.CommitAuthor(TestAccount).Email}
 )
 
 // Tx is the transaction of an Edit, written in the types of the domain.
@@ -473,4 +501,98 @@ func NewOldStoreWithAttributes(t *testing.T, remote string) {
 	if err := s.Repo().Push("origin"); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// AccountIDs are the IDs (host/login) of the accounts of config.yaml, in order.
+func (ts *Session) AccountIDs() []string {
+	ts.T.Helper()
+	var ids []string
+	for _, a := range ts.Accounts() {
+		ids = append(ids, a.ID())
+	}
+	return ids
+}
+
+// AccountTokenKind is the kind of the token and the ID of the account name in
+// config.yaml; ok is false when there is none.
+func (ts *Session) AccountTokenKind(name string) (kind, id string, ok bool) {
+	ts.T.Helper()
+	c, _, err := ts.Config()
+	if err != nil {
+		ts.T.Fatal(err)
+	}
+	a, ok := c.Account(name)
+	if !ok {
+		return "", "", false
+	}
+	return a.Token.Kind, a.ID(), true
+}
+
+// DeviceTokens are the access and the refresh token of the account name, as
+// the keychain k holds them.
+func (ts *Session) DeviceTokens(k *Keyring, name string) (access, refresh string, err error) {
+	ts.T.Helper()
+	c, _, err := ts.Config()
+	if err != nil {
+		return "", "", err
+	}
+	a, ok := c.Account(name)
+	if !ok {
+		return "", "", auth.ErrNotFound
+	}
+	dt, err := auth.LoadDeviceToken(a, k)
+	return dt.AccessToken, dt.RefreshToken, err
+}
+
+// MarkPending notes in the store storeName that it has a commit to push, since at.
+func (ts *Session) MarkPending(storeName string, at time.Time) {
+	ts.T.Helper()
+	if err := replicate.MarkPending(ts.openAt(storeName), at); err != nil {
+		ts.T.Fatal(err)
+	}
+}
+
+func (ts *Session) syncState(storeName string) replicate.State {
+	ts.T.Helper()
+	st, err := replicate.ReadState(ts.openAt(storeName))
+	if err != nil {
+		ts.T.Fatal(err)
+	}
+	return st
+}
+
+// LastSuccess is when the store storeName was last synced; zero before the first.
+func (ts *Session) LastSuccess(storeName string) time.Time {
+	return ts.syncState(storeName).LastSuccess
+}
+
+// LastAttempt is when a sync of the store storeName last started.
+func (ts *Session) LastAttempt(storeName string) time.Time {
+	return ts.syncState(storeName).LastAttempt
+}
+
+// PendingSince is when the store storeName got the first commit that waits to be pushed.
+func (ts *Session) PendingSince(storeName string) time.Time {
+	return ts.syncState(storeName).PendingSince
+}
+
+// GoneTaskResult is the result of a write to a task that the index of the
+// test store does not have.
+func (ts *Session) GoneTaskResult() usecase.TaskResult {
+	ts.T.Helper()
+	_, ix, err := ts.Open()
+	if err != nil {
+		ts.T.Fatal(err)
+	}
+	return usecase.NewTaskResult(ix, model.NewULID(), plumbing.ZeroHash)
+}
+
+// SyncIntervals are sync.interval and sync.push_interval of config.yaml.
+func (ts *Session) SyncIntervals() (interval, pushInterval time.Duration) {
+	ts.T.Helper()
+	c, _, err := ts.Config()
+	if err != nil {
+		ts.T.Fatal(err)
+	}
+	return c.Sync.Interval, c.Sync.PushInterval
 }

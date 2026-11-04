@@ -10,14 +10,10 @@ import (
 func TestSessionBeforeSwapReleasesTheStore(t *testing.T) {
 	t.Parallel()
 	ts, ch := pollServer(t)
-	_, e, err := ts.session().Entry()
-	if err != nil {
-		t.Fatal(err)
-	}
 	held := func() bool {
 		stores, _ := ts.srv.poller.snapshot()
 		for _, st := range stores {
-			if st.Store == e.Name {
+			if st.Store == "me" {
 				return true
 			}
 		}
@@ -31,9 +27,9 @@ func TestSessionBeforeSwapReleasesTheStore(t *testing.T) {
 	if before == nil {
 		t.Fatal("the server's session has no BeforeSwap")
 	}
-	before(e.Path)
+	before(ts.uc.StoreDir("me"))
 
-	ev := waitEvent[tasksChanged](t, ch, func(x tasksChanged) bool { return x.Store == e.Name })
+	ev := waitEvent[tasksChanged](t, ch, func(x tasksChanged) bool { return x.Store == "me" })
 	if len(ev.ULIDs) != 0 || len(ev.Removed) != 0 {
 		t.Errorf("event = %+v", ev)
 	}

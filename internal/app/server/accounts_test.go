@@ -6,56 +6,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
-	"sync"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/app/remote/auth"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 )
-
-// memKeyring is a keychain in memory.
-type memKeyring struct {
-	mu sync.Mutex
-	m  map[string]string
-}
-
-func newMemKeyring() *memKeyring { return &memKeyring{m: map[string]string{}} }
-
-func (k *memKeyring) Get(_, user string) (string, error) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	v, ok := k.m[user]
-	if !ok {
-		return "", auth.ErrNotFound
-	}
-	return v, nil
-}
-
-func (k *memKeyring) Set(_, user, secret string) error {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	k.m[user] = secret
-	return nil
-}
-
-func (k *memKeyring) Delete(_, user string) error {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	if _, ok := k.m[user]; !ok {
-		return auth.ErrNotFound
-	}
-	delete(k.m, user)
-	return nil
-}
-
-func (k *memKeyring) has(user string) (string, bool) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	v, ok := k.m[user]
-	return v, ok
-}
 
 // accountsSetup is what newAccountsServer sets up before the server starts.
 type accountsSetup struct {
@@ -68,12 +23,12 @@ type accountsSetup struct {
 
 // newAccountsServer is a started test server whose keychain is in memory and
 // whose github.com is a fakegh (in this process, over httptest).
-func newAccountsServer(t *testing.T, su accountsSetup) (*testServer, *memKeyring, *fakegh.Server) {
+func newAccountsServer(t *testing.T, su accountsSetup) (*testServer, *usecasetest.Keyring, *fakegh.Server) {
 	t.Helper()
-	k := newMemKeyring()
+	k := usecasetest.NewKeyring()
 	ts := newTestServerWith(t, func(o *Options) { o.Keyring = k })
 	if su.dropDefault {
-		ts.dropDefaultAccount()
+		ts.uc.DropDefaultAccount()
 	}
 	if su.gh.Users == nil {
 		su.gh.Users = []string{"alice", "bob", "carol"}
@@ -90,16 +45,7 @@ func newAccountsServer(t *testing.T, su accountsSetup) (*testServer, *memKeyring
 		hosts += ", client_id: Iv23test"
 	}
 	hosts += "}\n"
-	f, err := os.OpenFile(filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml"), os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.WriteString(hosts); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
+	ts.uc.AppendConfig(hosts)
 	for k, v := range su.env {
 		ts.env[k] = v
 	}
@@ -273,15 +219,11 @@ func TestAccountTokenPut(t *testing.T) {
 	if got.Account != "bobby" || got.ID != "github.com/bob" || !got.Added || got.Uses != "" {
 		t.Errorf("result = %+v", got)
 	}
-	if v, ok := k.has("github.com/bob"); !ok || v != bob {
+	if v, ok := k.Has("github.com/bob"); !ok || v != bob {
 		t.Errorf("keychain = %q, %v", v, ok)
 	}
-	c, _, err := ts.session().Config()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a, ok := c.Account("bobby"); !ok || a.Token.Kind != "keychain" {
-		t.Errorf("config account = %+v, %v", a, ok)
+	if kind, id, ok := ts.uc.AccountTokenKind("bobby"); !ok || kind != "keychain" {
+		t.Errorf("config account = %+v, %v", [2]string{kind, id}, ok)
 	}
 
 	// the token of another login, a token GitHub refuses, and no token.
@@ -294,7 +236,7 @@ func TestAccountTokenPut(t *testing.T) {
 	if _, p := put("alice", map[string]any{"token": "  "}, 422); p.Type != "auth.token_empty" {
 		t.Errorf("empty: %+v", p)
 	}
-	if _, ok := k.has("github.com/alice"); ok {
+	if _, ok := k.Has("github.com/alice"); ok {
 		t.Error("alice has a token in the keychain after the refused ones")
 	}
 	// the host of an account that exists must be its host.
@@ -307,7 +249,7 @@ func TestAccountTokenPut(t *testing.T) {
 	if err := json.Unmarshal(r.Body, &got); err != nil || got.Added || got.Account != "alice" {
 		t.Errorf("alice: %s, %v", r.Body, err)
 	}
-	if v, _ := k.has("github.com/alice"); v != alice {
+	if v, _ := k.Has("github.com/alice"); v != alice {
 		t.Errorf("keychain = %q", v)
 	}
 
@@ -317,7 +259,7 @@ func TestAccountTokenPut(t *testing.T) {
 	if err := json.Unmarshal(r.Body, &got); err != nil || got.Uses != "gh" || got.Added {
 		t.Errorf("gh: %s, %v", r.Body, err)
 	}
-	if _, ok := k.has("github.com/gee"); ok {
+	if _, ok := k.Has("github.com/gee"); ok {
 		t.Error("an account of gh has a token in the keychain")
 	}
 
@@ -331,7 +273,7 @@ func TestAccountTokenDelete(t *testing.T) {
 	const alice = "t-alice-secret"
 	ts, k, _ := newAccountsServer(t, accountsSetup{gh: fakegh.State{Tokens: map[string]string{alice: "alice"}}})
 	ts.call("PUT", "/api/accounts/alice/token", map[string]any{"token": alice}, 200, nil)
-	if _, ok := k.has("github.com/alice"); !ok {
+	if _, ok := k.Has("github.com/alice"); !ok {
 		t.Fatal("no token to remove")
 	}
 	var res struct {
@@ -344,7 +286,7 @@ func TestAccountTokenDelete(t *testing.T) {
 	if res.Account != "alice" || res.ID != "github.com/alice" || res.Token != "keychain" || !res.Removed {
 		t.Errorf("result = %+v", res)
 	}
-	if _, ok := k.has("github.com/alice"); ok {
+	if _, ok := k.Has("github.com/alice"); ok {
 		t.Error("the token is in the keychain still")
 	}
 	noSecret(t, alice, r.Body, ts.logText())

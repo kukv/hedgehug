@@ -9,10 +9,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -23,12 +21,9 @@ import (
 	validator "github.com/pb33f/libopenapi-validator"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
-	"github.com/kukv/hedgehug/internal/app/storage/config"
-	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 const testToken = "test-token"
@@ -70,6 +65,7 @@ func specValidator(t *testing.T) validator.Validator {
 // httptest server.
 type testServer struct {
 	t    *testing.T
+	uc   *usecasetest.Session
 	srv  *Server
 	hs   *httptest.Server
 	env  map[string]string
@@ -85,22 +81,8 @@ func newTestServer(t *testing.T) *testServer { return newTestServerWith(t, nil) 
 // Options made first.
 func newTestServerWith(t *testing.T, edit func(*Options)) *testServer {
 	t.Helper()
-	d := t.TempDir()
-	home := filepath.Join(d, "home")
-	if err := os.MkdirAll(home, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	ts := &testServer{t: t, log: &bytes.Buffer{}, env: map[string]string{
-		"HOME":               home,
-		"HEDGEHUG_HOME":      filepath.Join(d, "hh"),
-		"HEDGEHUG_AUTO_SYNC": "0",
-	}}
-	if err := os.MkdirAll(filepath.Join(d, "hh"), 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(d, "hh", "config.yaml"), []byte(defaultAccountYAML), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	uc := usecasetest.Empty(t, time.Now)
+	ts := &testServer{t: t, uc: uc, log: &bytes.Buffer{}, env: uc.Env}
 	if _, err := stores.StoreInit(ts.session(), stores.StoreInitInput{Name: "me", Prefix: "ME", Workspace: "me"}); err != nil {
 		t.Fatal(err)
 	}
@@ -129,42 +111,7 @@ func newTestServerWith(t *testing.T, edit func(*Options)) *testServer {
 // returns its path.
 func (ts *testServer) addRemote() string {
 	ts.t.Helper()
-	remote := filepath.Join(ts.t.TempDir(), "r.git")
-	if err := gitrepo.InitBare(remote); err != nil {
-		ts.t.Fatal(err)
-	}
-	c, _, err := ts.session().Config()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	e, err := c.Select("me")
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	if err := c.RemoveStore("me"); err != nil {
-		ts.t.Fatal(err)
-	}
-	if err := c.AddStore("me", e.Path, []string{remote}); err != nil {
-		ts.t.Fatal(err)
-	}
-	if err := c.Save(); err != nil {
-		ts.t.Fatal(err)
-	}
-	return remote
-}
-
-// state is sync.json of the store "me".
-func (ts *testServer) state() replicate.State {
-	ts.t.Helper()
-	s, err := ts.session().OpenStore()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	st, err := replicate.ReadState(s)
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	return st
+	return usecasetest.AddBareRemote(ts.t, ts.uc)
 }
 
 // remoteHead is the commit main points at in the bare repository remote;
@@ -185,7 +132,7 @@ func remoteHead(t *testing.T, remote string) string {
 // waitFirstSync waits for the sync the loop makes at its start to end.
 func waitFirstSync(t *testing.T, ts *testServer) {
 	t.Helper()
-	eventually(t, "the sync at start", func() bool { return !ts.state().LastSuccess.IsZero() })
+	eventually(t, "the sync at start", func() bool { return !ts.uc.LastSuccess("me").IsZero() })
 }
 
 func (ts *testServer) getenv(k string) string { return ts.env[k] }
@@ -280,74 +227,11 @@ func mustULID(t *testing.T, s string) model.ULID {
 
 func slicesEqual[T comparable](a, b []T) bool { return slices.Equal(a, b) }
 
-// testAccount is the account of defaultAccountYAML.
-var testAccount = config.Account{Name: "alice", Host: "github.com", Login: "alice"}
-
-// defaultAccountYAML is the account every test server starts with.
-const defaultAccountYAML = "accounts:\n  - name: alice\n    host: github.com\n    login: alice\n"
-
-// storeAccountRE matches the account: alice line of a store in config.yaml,
-// which store init writes.
-var storeAccountRE = regexp.MustCompile(`(?m)^[ \t]+account: alice\n`)
-
-// dropDefaultAccount removes it, and the stores' reference to it, for the
-// tests that have no account or set up their own.
-func (ts *testServer) dropDefaultAccount() {
-	ts.t.Helper()
-	p := filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml")
-	b, err := os.ReadFile(p) //nolint:gosec // the config of the test
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	if !strings.Contains(string(b), defaultAccountYAML) {
-		ts.t.Fatalf("config.yaml has no default account to drop:\n%s", b)
-	}
-	text := storeAccountRE.ReplaceAllString(strings.Replace(string(b), defaultAccountYAML, "", 1), "")
-	if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
-		ts.t.Fatal(err)
-	}
-}
-
-// accountID is the ID of the default account, as the commits
-// carry it in Hedgehug-Author.
-func (ts *testServer) accountID() string {
-	ts.t.Helper()
-	c, _, err := ts.session().Config()
-	if err != nil || len(c.Accounts) == 0 {
-		ts.t.Fatalf("no account: %v", err)
-	}
-	return c.Accounts[0].ID()
-}
-
-// notifyMe puts it into the inbox of the store "me", as a sync would, and
-// returns its ULID.
-func (ts *testServer) notifyMe(it inbox.Item) string {
-	ts.t.Helper()
-	return ts.notifyIn("me", it)
-}
-
-// notifyIn puts it into the inbox of the named store, as a sync would, and
-// returns its ULID.
-func (ts *testServer) notifyIn(storeName string, it inbox.Item) string {
-	ts.t.Helper()
-	ss := ts.session()
-	ss.StoreName = storeName
-	s, err := ss.OpenStore()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	added, err := inbox.Open(s).Add([]inbox.Item{it})
-	if err != nil || len(added) != 1 {
-		ts.t.Fatalf("Add item = %v, %v", added, err)
-	}
-	return added[0].ULID.String()
-}
-
 // overwrittenItem is the item a sync makes when it overwrote the title of the
 // task (ulid, id) of mine; value is the JSON of my value.
-func overwrittenItem(ulid model.ULID, id, value string) inbox.Item {
-	return inbox.Item{
-		Kind: inbox.Overwritten, Task: ulid, ID: id, Path: model.TaskPath(ulid), Commit: "c1",
+func overwrittenItem(ulid model.ULID, id, value string) usecasetest.InboxItem {
+	return usecasetest.InboxItem{
+		Kind: "overwritten", Task: ulid, ID: id, Path: model.TaskPath(ulid), Commit: "c1",
 		Time:   time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC),
 		Detail: json.RawMessage(`{"field":"title","value":` + value + `}`),
 	}

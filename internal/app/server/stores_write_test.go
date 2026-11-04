@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 // remoteStore makes the store name, as someone else would, in a bare
@@ -15,21 +15,10 @@ import (
 // under) and the repository.
 func remoteStore(t *testing.T, name, prefix string) (root, bare string) {
 	t.Helper()
-	d := t.TempDir()
-	home, hh := filepath.Join(d, "home"), filepath.Join(d, "hh")
-	for _, dir := range []string{home, hh} {
-		if err := os.MkdirAll(dir, 0o750); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.WriteFile(filepath.Join(hh, "config.yaml"), []byte(defaultAccountYAML), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	env := map[string]string{"HOME": home, "HEDGEHUG_HOME": hh, "HEDGEHUG_AUTO_SYNC": "0"}
-	maker := &usecase.Session{Getenv: func(k string) string { return env[k] }, Now: time.Now, Warn: func(string) {}}
-	root = filepath.Join(d, "remotes")
+	maker := usecasetest.Empty(t, time.Now)
+	root = filepath.Join(t.TempDir(), "remotes")
 	bare = filepath.Join(root, name+".git")
-	if _, err := stores.StoreInit(maker, stores.StoreInitInput{Name: name, Prefix: prefix, Remotes: []string{bare}}); err != nil {
+	if _, err := stores.StoreInit(maker.Session, stores.StoreInitInput{Name: name, Prefix: prefix, Remotes: []string{bare}}); err != nil {
 		t.Fatal(err)
 	}
 	return root, bare

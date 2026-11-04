@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
@@ -68,13 +67,7 @@ func TestPollSyncState(t *testing.T) {
 	ts.srv.poller.settle()
 	// push_at is told for a store the loop has synced.
 	ts.srv.loop.Synced("me")
-	s, err := ts.session().OpenStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := replicate.MarkPending(s, time.Now()); err != nil {
-		t.Fatal(err)
-	}
+	ts.uc.MarkPending("me", time.Now())
 	e := waitEvent[usecase.SyncStatusView](t, ch, func(e usecase.SyncStatusView) bool { return e.PendingSince != nil })
 	if e.Store != "me" {
 		t.Errorf("event = %+v", e)

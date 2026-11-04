@@ -2,19 +2,16 @@ package server
 
 import (
 	"net/url"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 	"github.com/kukv/hedgehug/internal/app/usecase/workspaces"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 // add adds a task through usecase, as the CLI would, and returns its ID.
@@ -203,30 +200,18 @@ func TestTaskHistoryAcrossAMerge(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	env := map[string]string{}
-	for k, v := range ts.env {
-		env[k] = v
-	}
-	hh := filepath.Join(t.TempDir(), "hh2")
-	if err := os.MkdirAll(hh, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(hh, "config.yaml"), []byte(defaultAccountYAML), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	env["HEDGEHUG_HOME"] = hh
-	other := &usecase.Session{Getenv: func(k string) string { return env[k] }, Now: time.Now, Warn: func(string) {}}
-	if _, err := stores.StoreAdd(other, "me", []string{remote}, "", ""); err != nil {
+	other := usecasetest.Other(t, ts.uc, time.Now())
+	if _, err := stores.StoreAdd(other.Session, "me", []string{remote}, "", ""); err != nil {
 		t.Fatal(err)
 	}
 
 	if _, err := tasks.Patch(ts.session(), id, tasks.PatchInput{Assigns: []usecase.Assign{{Key: "title", Op: "=", Value: "from me"}}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tasks.Patch(other, id, tasks.PatchInput{Assigns: []usecase.Assign{{Key: "status", Op: "=", Value: "in_progress"}}}); err != nil {
+	if _, err := tasks.Patch(other.Session, id, tasks.PatchInput{Assigns: []usecase.Assign{{Key: "status", Op: "=", Value: "in_progress"}}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := replication.Sync(other, false, true); err != nil {
+	if _, err := replication.Sync(other.Session, false, true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := replication.Sync(ts.session(), false, true); err != nil {
@@ -246,38 +231,6 @@ func TestTaskHistoryAcrossAMerge(t *testing.T) {
 	}
 }
 
-// rawTask commits a task file past the store's checks, as a sync or a hand
-// edit could.
-func (ts *testServer) rawTask(id string, ulid model.ULID, front string) {
-	ts.t.Helper()
-	ss := ts.session()
-	_, e, err := ss.Entry()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	s, err := ss.OpenStore()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	_, ix, err := ss.Open()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	rel := model.TaskPath(ulid)
-	p := filepath.Join(e.Path, filepath.FromSlash(rel))
-	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
-		ts.t.Fatal(err)
-	}
-	body := "---\nulid: " + ulid.String() + "\nid: " + id + "\nworkspace: " + ix.Workspaces()[0].ULID.String() + "\nkind: task\nstatus: todo\n" + front + "---\n"
-	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
-		ts.t.Fatal(err)
-	}
-	author := config.CommitAuthor(testAccount)
-	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: author, When: time.Now()}); err != nil {
-		ts.t.Fatal(err)
-	}
-}
-
 func TestEmptyTreeIsArray(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
@@ -291,8 +244,13 @@ func TestTreeParentCycle(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
 	x, y := model.NewULID(), model.NewULID()
-	ts.rawTask("ME-1", x, "title: X\nparent: "+y.String()+"\n")
-	ts.rawTask("ME-2", y, "title: Y\nparent: "+x.String()+"\n")
+	// a task file committed past the store's checks, as a sync or a hand edit could
+	ws := ts.uc.WorkspaceNamed("me", "me")
+	rawTask := func(id string, ulid model.ULID, front string) {
+		ts.uc.CommitRawFile(model.TaskPath(ulid), "---\nulid: "+ulid.String()+"\nid: "+id+"\nworkspace: "+ws.String()+"\nkind: task\nstatus: todo\n"+front+"---\n")
+	}
+	rawTask("ME-1", x, "title: X\nparent: "+y.String()+"\n")
+	rawTask("ME-2", y, "title: Y\nparent: "+x.String()+"\n")
 	var out listBody
 	ts.call("GET", "/api/tasks?tree=true", nil, 200, &out)
 	if len(out.Roots) != 0 || len(out.Cycle) != 2 || !out.Cycle[0].InCycle {

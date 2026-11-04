@@ -129,6 +129,9 @@ func ConfirmRequired(what string) *Error {
 // hedgehug.
 var ErrLocked = store.ErrLocked
 
+// ErrForcePush is the error of a sync that found the remote rewritten.
+var ErrForcePush = replicate.ErrForcePush
+
 // ViolationsOf is the violations of a write the schema refused, or ok=false
 // when err is not that.
 func ViolationsOf(err error) (vs []schema.Violation, ok bool) {

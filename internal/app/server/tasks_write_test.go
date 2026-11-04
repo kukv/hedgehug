@@ -5,8 +5,6 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/go-git/go-git/v5/plumbing"
-
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
@@ -125,8 +123,7 @@ func TestCreateTaskWithBodyAndRepos(t *testing.T) {
 	if out.Task == nil || out.Commit == nil {
 		t.Fatalf("created = %+v", out)
 	}
-	s, _ := ts.session().OpenStore()
-	got, _ := s.Task(mustULID(t, out.Task.ULID))
+	got := ts.uc.TaskByULID("me", mustULID(t, out.Task.ULID))
 	if got.Body != "line one\n\nline two\n" || len(got.Repos) != 1 || got.Repos[0] != "github.com/o/r" {
 		t.Errorf("body = %q, repos = %q", got.Body, got.Repos)
 	}
@@ -144,8 +141,7 @@ func TestPatchTask(t *testing.T) {
 	if out.Task.Title != "two" || len(out.Task.Labels) != 1 || len(out.Task.BlockedBy) != 1 || out.Commit == nil {
 		t.Fatalf("patched = %+v", out)
 	}
-	s, _ := ts.session().OpenStore()
-	got, _ := s.Task(mustULID(t, out.Task.ULID))
+	got := ts.uc.TaskByULID("me", mustULID(t, out.Task.ULID))
 	if got.Body != "hello\n" {
 		t.Errorf("body = %q", got.Body)
 	}
@@ -265,13 +261,7 @@ func TestAssignsOf(t *testing.T) {
 func TestWriteOutGone(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	ss := ts.srv.session("")
-	defer ss.Close()
-	_, ix, err := ss.Open()
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = writeOut(usecase.NewTaskResult(ix, model.NewULID(), plumbing.ZeroHash))
+	_, err := writeOut(ts.uc.GoneTaskResult())
 	var p *Problem
 	if !errors.As(err, &p) || p.Status != 404 || p.Type != "task.gone" {
 		t.Errorf("the answer to a write to a task not in the index = %v", err)
@@ -297,8 +287,7 @@ func TestCreateTaskReposAsPatchReadsThem(t *testing.T) {
 	ts := newTestServer(t)
 	var out taskWriteBody
 	ts.call("POST", "/api/tasks", map[string]any{"title": "a", "repos": []string{"github.com/o/r", "github.com/o/r", "github.com/o/s"}}, 201, &out)
-	s, _ := ts.session().OpenStore()
-	got, _ := s.Task(mustULID(t, out.Task.ULID))
+	got := ts.uc.TaskByULID("me", mustULID(t, out.Task.ULID))
 	if want := []string{"github.com/o/r", "github.com/o/s"}; !slices.Equal(got.Repos, want) {
 		t.Errorf("repos = %q; want %q", got.Repos, want)
 	}

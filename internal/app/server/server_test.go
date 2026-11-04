@@ -17,9 +17,9 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func TestHealth(t *testing.T) {
@@ -225,7 +225,7 @@ func TestProblemOf(t *testing.T) {
 		{&usecase.Error{Kind: usecase.KindInvalid, Code: "status.unknown", Err: errors.New("x")}, 422, "status.unknown"},
 		{&usecase.Error{Kind: usecase.KindConflict, Code: "task.deleted", Err: errors.New("x")}, 409, "task.deleted"},
 		{&usecase.Error{Kind: usecase.KindUsage, Code: "patch.empty", Err: errors.New("x")}, 400, "patch.empty"},
-		{store.ErrLocked, 409, "store.locked"},
+		{usecase.ErrLocked, 409, "store.locked"},
 		{errors.New("boom"), 500, "internal"},
 	}
 	for _, c := range cases {
@@ -234,10 +234,16 @@ func TestProblemOf(t *testing.T) {
 			t.Errorf("%v: %+v, want %d %s", c.err, p, c.status, c.typ)
 		}
 	}
-	if p := problemOf(store.ErrLocked); p.Detail != "another hedgehug is writing to the store; try again" {
+	if p := problemOf(usecase.ErrLocked); p.Detail != "another hedgehug is writing to the store; try again" {
 		t.Errorf("locked detail = %q", p.Detail)
 	}
-	ve := &store.ValidationError{Violations: []schema.Violation{{Code: "required", Field: "title", Msg: "is required"}}}
+	ts := newTestServer(t)
+	ve := ts.uc.Edit("me", "add", usecasetest.AccountAuthor, func(tx *usecasetest.Tx) error {
+		return tx.PutTask(&model.Task{ULID: model.NewULID(), Kind: "task", Status: "todo", Workspace: ts.uc.WorkspaceNamed("me", "me")})
+	})
+	if _, ok := usecase.ViolationsOf(ve); !ok {
+		t.Fatalf("a task with no title was not refused by the schema: %v", ve)
+	}
 	p := problemOf(ve)
 	vs, _ := p.Args["violations"].([]map[string]string)
 	if p.Status != 422 || p.Type != "schema.violation" || len(vs) != 1 || vs[0]["field"] != "title" {

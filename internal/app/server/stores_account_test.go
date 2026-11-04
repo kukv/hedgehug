@@ -1,7 +1,6 @@
 package server
 
 import (
-	"os"
 	"testing"
 )
 
@@ -11,19 +10,8 @@ import (
 func TestStoresAccountIsHostSlashLogin(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	ts.dropDefaultAccount()
-	_, p, err := ts.session().Config()
-	if err != nil {
-		t.Fatal(err)
-	}
-	f, err := os.OpenFile(p.ConfigFile, os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = f.Close() }()
-	if _, err := f.WriteString("accounts:\n  - name: work\n    host: github.com\n    login: alice-login\n"); err != nil {
-		t.Fatal(err)
-	}
+	ts.uc.DropDefaultAccount()
+	ts.uc.AppendConfig("accounts:\n  - name: work\n    host: github.com\n    login: alice-login\n")
 
 	var list []struct {
 		Name    string `json:"name"`

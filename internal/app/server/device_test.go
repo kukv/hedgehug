@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/remote/auth"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 )
 
@@ -42,25 +41,21 @@ func TestDeviceFlowDone(t *testing.T) {
 	}
 
 	// the account is in config.yaml with the device flow, and the tokens are in the keychain.
-	c, _, err := ts.session().Config()
-	if err != nil {
-		t.Fatal(err)
+	kind, id, ok := ts.uc.AccountTokenKind("bob")
+	if !ok || kind != "device" || id != "github.com/bob" {
+		t.Fatalf("account = %+v, %v", [2]string{kind, id}, ok)
 	}
-	acct, ok := c.Account("bob")
-	if !ok || acct.Token.Kind != "device" || acct.ID() != "github.com/bob" {
-		t.Fatalf("account = %+v, %v", acct, ok)
-	}
-	dt, err := auth.LoadDeviceToken(acct, k)
-	if err != nil || dt.AccessToken == "" || dt.RefreshToken == "" {
-		t.Fatalf("keychain = %+v, %v", dt, err)
+	access, refresh, err := ts.uc.DeviceTokens(k, "bob")
+	if err != nil || access == "" || refresh == "" {
+		t.Fatalf("keychain = %+v, %v", [2]string{access, refresh}, err)
 	}
 	// 細部 12: the tokens are in no response, no event and no line of the log.
-	for _, s := range []string{dt.AccessToken, dt.RefreshToken} {
+	for _, s := range []string{access, refresh} {
 		noSecret(t, s, r.Body, payload, ts.logText())
 	}
 	var list []accountRow
 	g := ts.call("GET", "/api/accounts", nil, 200, &list)
-	noSecret(t, dt.AccessToken, g.Body)
+	noSecret(t, access, g.Body)
 	if len(list) != 2 || list[1].Name != "bob" || list[1].State != "ok" || list[1].Token != "device" {
 		t.Errorf("accounts = %+v", list)
 	}
@@ -97,8 +92,8 @@ func TestDeviceFlowOneAtATimeAndCancel(t *testing.T) {
 	if ev.ID != first.ID || ev.State != "error" || ev.Code != "auth.canceled" || ev.Message == "" || ev.Account != "" {
 		t.Errorf("event = %+v", ev)
 	}
-	if c, _, err := ts.session().Config(); err != nil || len(c.Accounts) != 1 {
-		t.Errorf("accounts after the cancel = %+v, %v", c.Accounts, err)
+	if ids := ts.uc.AccountIDs(); len(ids) != 1 {
+		t.Errorf("accounts after the cancel = %+v", ids)
 	}
 	// the cancel is answered after the flow ended: the next one starts.
 	var second deviceStarted
