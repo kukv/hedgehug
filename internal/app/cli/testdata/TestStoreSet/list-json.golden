@@ -1,0 +1,17 @@
+[
+  {
+    "name": "me",
+    "path": "<TMP>/001/hh/stores/me",
+    "remotes": [],
+    "account": "github.com/alice",
+    "hidden": false
+  },
+  {
+    "name": "org",
+    "path": "<TMP>/001/hh/stores/org",
+    "remotes": [],
+    "account": "github.com/alice",
+    "color": "sky",
+    "hidden": true
+  }
+]
