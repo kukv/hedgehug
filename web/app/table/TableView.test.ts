@@ -401,6 +401,11 @@ describe("TableView", () => {
       const title = screen.getByRole("textbox", { name: "タイトル: ME-1" });
       expect(title).toHaveAttribute("readonly");
       expect(screen.getByRole("button", { name: "ステータス: ME-1" })).toBeDisabled();
+      // The reason is read out with the cell, not only shown as the tooltip of the row.
+      expect(title).toHaveAccessibleDescription(/^この Store は閲覧のみです（.+）$/);
+      expect(screen.getByRole("button", { name: "ステータス: ME-1" })).toHaveAccessibleDescription(
+        /^この Store は閲覧のみです/,
+      );
       expect(screen.queryByRole("textbox", { name: "担当: ME-1" })).toBeNull();
       expect(screen.getByRole("textbox", { name: "チーム: ME-1" })).toHaveAttribute("readonly");
       const row = screen.getByRole("textbox", { name: "タイトル: ME-1" }).closest("tr");

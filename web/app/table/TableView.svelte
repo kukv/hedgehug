@@ -73,6 +73,7 @@
   } = $props();
 
   const c = core();
+  const uid = $props.id();
   const ls = useListScope(() => scope);
   const cacheRev = useSubscribe(c.cache, () => ({}));
   const storesRev = useSubscribe(c.stores, () => ({}));
@@ -556,6 +557,9 @@
       onfocusout={(e) => focusOut(e, t)}
     >
       <td class="mark">
+        {#if locked}
+          <span id="{uid}-ro-{t.ulid}" class="sr">{readOnlySentence(locked)}</span>
+        {/if}
         {#if st.kind === "saving"}
           <span role="img" aria-label="保存中" title="保存中…">…</span>
         {:else if st.kind === "error"}
@@ -579,6 +583,7 @@
             schema={schemaOf(t.store)}
             tone={c.stores.tone(t.store)}
             readonly={locked !== null}
+            describedby={locked ? `${uid}-ro-${t.ulid}` : undefined}
             pending={field ? saves.current.editing(t.ulid, field) : false}
             {taskOf}
             parentLoading={parentLoading(t)}

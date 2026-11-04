@@ -11,6 +11,7 @@
     value,
     pending = false,
     readonly = false,
+    describedby,
     onedit,
     oncommit,
   }: {
@@ -18,6 +19,7 @@
     value: unknown;
     pending?: boolean;
     readonly?: boolean;
+    describedby?: string;
     onedit: (v: unknown) => void;
     oncommit: () => void;
   } = $props();
@@ -32,25 +34,70 @@
 </script>
 
 {#if row.editor === "enum" && !row.multi}
-  <FieldInput editor="select" label={row.label} {value} {readonly} {options} {onedit} {oncommit} />
+  <FieldInput
+    editor="select"
+    label={row.label}
+    {value}
+    {readonly}
+    {describedby}
+    {options}
+    {onedit}
+    {oncommit}
+  />
 {:else if row.editor === "enum" ||
   row.editor === "multi_enum" ||
   (row.editor === "user" && row.multi)}
-  <FieldInput editor="chips" label={row.label} {value} {readonly} {options} {onedit} {oncommit} />
+  <FieldInput
+    editor="chips"
+    label={row.label}
+    {value}
+    {readonly}
+    {describedby}
+    {options}
+    {onedit}
+    {oncommit}
+  />
 {:else if row.editor === "bool"}
   <FieldInput
     editor="select"
     label={row.label}
     value={boolValue}
     {readonly}
+    {describedby}
     options={boolOptions}
     onedit={(v) => onedit(v === null ? null : v === "true")}
     {oncommit}
   />
 {:else if row.editor === "date"}
-  <FieldInput editor="date" label={row.label} {value} {readonly} {onedit} {oncommit} />
+  <FieldInput
+    editor="date"
+    label={row.label}
+    {value}
+    {readonly}
+    {describedby}
+    {onedit}
+    {oncommit}
+  />
 {:else if row.editor === "number"}
-  <FieldInput editor="number" label={row.label} {value} {readonly} {pending} {onedit} {oncommit} />
+  <FieldInput
+    editor="number"
+    label={row.label}
+    {value}
+    {readonly}
+    {describedby}
+    {pending}
+    {onedit}
+    {oncommit}
+  />
 {:else}
-  <FieldInput editor="text" label={row.label} {value} {readonly} {pending} {onedit} {oncommit} />
+  <FieldInput
+    editor="text"
+    label={row.label}
+    {value}
+    {readonly}
+    {describedby}
+    {pending}
+    {onedit}
+    {oncommit}
+  />
 {/if}

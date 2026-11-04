@@ -23,6 +23,7 @@
     tone,
     pending,
     readonly = false,
+    describedby,
     taskOf,
     parentLoading = false,
     onedit,
@@ -35,6 +36,8 @@
     pending: boolean;
     // The Store of the task cannot be written: the cells only read.
     readonly?: boolean;
+    // The id of the text that says why the cells only read.
+    describedby?: string;
     taskOf: (ulid: string) => TaskView | undefined;
     // The parent of the task is not in the cache yet (it is being read), as against not found.
     parentLoading?: boolean;
@@ -107,6 +110,7 @@
     nullable={false}
     {pending}
     {readonly}
+    {describedby}
     onedit={edit}
     {oncommit}
   />
@@ -118,6 +122,7 @@
     options={kindOptions}
     nullable={false}
     {readonly}
+    {describedby}
     onedit={edit}
     {oncommit}
   />
@@ -131,6 +136,7 @@
       options={statusOptions(schema)}
       nullable={false}
       {readonly}
+      {describedby}
       onedit={edit}
       {oncommit}
     />
@@ -141,6 +147,7 @@
     label="担当: {task.id}"
     value={task.assignees ?? []}
     {readonly}
+    {describedby}
     onedit={edit}
     {oncommit}
   />
@@ -150,6 +157,7 @@
     label="ラベル: {task.id}"
     value={task.labels ?? []}
     {readonly}
+    {describedby}
     onedit={edit}
     {oncommit}
   />
@@ -179,7 +187,7 @@
 {:else if row.editor === "taskref"}
   <span class="plain mono">{refs.join(", ")}</span>
 {:else}
-  <PropField {row} value={row.value} {pending} {readonly} onedit={edit} {oncommit} />
+  <PropField {row} value={row.value} {pending} {readonly} {describedby} onedit={edit} {oncommit} />
 {/if}
 
 <style>
