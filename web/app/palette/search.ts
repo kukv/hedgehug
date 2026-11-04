@@ -190,32 +190,39 @@ export type CommandEnv = {
   recent: TaskView[]; // the tasks opened last, the latest first
   pickStatus: (t: TaskView) => void;
   moveTask: (t: TaskView) => void;
+  readOnly: (store: string) => string | null; // why a store cannot be written, or null
 };
 
 // taskCommands are the commands about one task.
 export function taskCommands(env: CommandEnv, t: TaskView): PaletteGroup {
   const href = env.hrefs.task(t.ulid);
   // A task goes to another workspace of its own store: with none, there is nothing to offer.
+  // Every one of them writes to the store of the task (細部 35): a read-only store is only read.
+  const writable = env.readOnly(t.store) === null;
   const canMove = env.workspaces.some((w) => w.store === t.store && w.ulid !== t.workspace.ulid);
   return {
     name: `${t.id} に対して`,
     items: [
-      {
-        type: "command",
-        key: `task-status:${t.ulid}`,
-        label: "ステータスを変更…",
-        icon: "status",
-        keepOpen: true,
-        run: () => env.pickStatus(t),
-      },
-      {
-        type: "command",
-        key: `task-child:${t.ulid}`,
-        label: "子タスクを作る",
-        icon: "plus",
-        kbd: "C",
-        run: () => env.createTask(t.ulid),
-      },
+      ...(writable
+        ? [
+            {
+              type: "command" as const,
+              key: `task-status:${t.ulid}`,
+              label: "ステータスを変更…",
+              icon: "status" as const,
+              keepOpen: true,
+              run: () => env.pickStatus(t),
+            },
+            {
+              type: "command" as const,
+              key: `task-child:${t.ulid}`,
+              label: "子タスクを作る",
+              icon: "plus" as const,
+              kbd: "C",
+              run: () => env.createTask(t.ulid),
+            },
+          ]
+        : []),
       {
         type: "command",
         key: `task-open:${t.ulid}`,
@@ -225,7 +232,7 @@ export function taskCommands(env: CommandEnv, t: TaskView): PaletteGroup {
         href,
         run: () => env.go(href),
       },
-      ...(canMove
+      ...(canMove && writable
         ? [
             {
               type: "command" as const,
@@ -274,6 +281,9 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
   const word = text.replace(/^\s*>/, "").trim().toLowerCase();
   const keep = (i: CommandItem) =>
     word === "" || `${i.label} ${i.note ?? ""}`.toLowerCase().includes(word);
+  // A create needs a workspace of a store that can be written, a workspace add a store (細部 99).
+  const canCreate = env.workspaces.some((w) => env.readOnly(w.store) === null);
+  const canAddWorkspace = env.storeNames.some((s) => env.readOnly(s) === null);
 
   const commands: CommandItem[] = [
     {
@@ -314,6 +324,11 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
       run: env.undo,
     },
   ];
+  const writes: Record<string, boolean> = {
+    "cmd:create-task": canCreate,
+    "cmd:create-project": canCreate,
+    "cmd:workspace-add": canAddWorkspace,
+  };
 
   // The page asks for the diagnosis when it is opened.
   const doctorHref = env.hrefs.settingsGeneral();
@@ -485,7 +500,7 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
     .map((t) => taskItem(t, env.hrefs.task));
 
   const groups: PaletteGroup[] = [
-    { name: "コマンド", items: commands.filter(keep) },
+    { name: "コマンド", items: commands.filter((i) => writes[i.key] !== false && keep(i)) },
     { name: "最近開いたもの", items: recent },
     {
       name: "開く",

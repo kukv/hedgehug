@@ -109,6 +109,33 @@ describe("WorkspaceAdd", () => {
     expect(k.api.POST.mock.calls[0]?.[1]).toMatchObject({ params: { query: { store: "shared" } } });
   });
 
+  it("shows a read-only Store but does not let it be chosen, and starts from one that can be written", async () => {
+    const k = makeCore({
+      workspaces: spaces,
+      readOnlyBy: { backend: "the remote cannot be written" },
+    });
+    k.stores.stores.mockReturnValue([storeItem("shared", true), storeItem("backend")] as never);
+    k.api.POST.mockImplementation(() => ok(written({ ulid: "W9", name: "ops", id_prefix: "OPS" })));
+    mount(WorkspaceAdd, { store: "backend", onclose: vi.fn() }, k);
+    const ro = screen.getByRole("radio", { name: /backend/ });
+    expect(ro).toBeDisabled();
+    expect(ro.closest("label")).toHaveTextContent("閲覧のみ");
+    expect(ro.closest("label")).toHaveAttribute("title", "remote に書き込めません");
+    expect(screen.getByRole("radio", { name: "shared" })).toBeChecked();
+    expect(screen.getByRole("dialog", { name: "shared にワークスペースを追加" })).toBeVisible();
+  });
+
+  it("cannot add when every Store is read-only, and says so", async () => {
+    const k = makeCore({ workspaces: spaces, readOnly: "the remote cannot be written" });
+    k.stores.stores.mockReturnValue([storeItem("shared", true)] as never);
+    mount(WorkspaceAdd, { onclose: vi.fn() }, k);
+    await fillIn("ops", "OPS");
+    expect(screen.getByText("書き込める Store がありません（すべて閲覧のみです）")).toBeVisible();
+    expect(screen.getByRole("button", { name: "追加" })).toBeDisabled();
+    await fireEvent.keyDown(screen.getByRole("textbox", { name: "名前" }), { key: "Enter" });
+    expect(k.api.POST).not.toHaveBeenCalled();
+  });
+
   it("starts with the default Store when none is asked for", () => {
     setup({ two: true });
     expect(screen.getByRole("radio", { name: "shared" })).toBeChecked();

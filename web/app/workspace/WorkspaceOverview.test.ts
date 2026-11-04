@@ -52,7 +52,12 @@ const done = tv("D1", "終わったもの", { id: "REL-3", rank: "d", status: "d
 const canceled = tv("X1", "やめたもの", { id: "REL-4", rank: "e", status: "canceled" });
 const all = [project, child, rootLate, rootEarly, done, canceled];
 
-function setup(initial: TaskView[], route?: (path: string) => unknown, schemaFails = false) {
+function setup(
+  initial: TaskView[],
+  route?: (path: string) => unknown,
+  schemaFails = false,
+  readOnly: string | null = null,
+) {
   const rows = { current: initial };
   const { api, calls } = fakeApi((r) => {
     const own = route?.(r.path);
@@ -67,6 +72,20 @@ function setup(initial: TaskView[], route?: (path: string) => unknown, schemaFai
     WorkspaceOverview,
     { entry },
     {
+      ...(readOnly === null
+        ? {}
+        : {
+            stores: {
+              stores: () => [],
+              tone: () => "readonly",
+              readOnly: () => readOnly,
+              hidden: () => false,
+              workspaces: () => [entry],
+              workspace: () => entry,
+              loaded: () => true,
+              subscribe: sch.subscribe,
+            },
+          }),
       cache,
       schema: {
         get: () => (schemaReady ? schema : undefined),
@@ -209,6 +228,27 @@ describe("WorkspaceOverview", () => {
     expect(createState.request).toEqual({ kind: "task" });
     screen.getByRole("button", { name: "プロジェクトを作成" }).click();
     expect(createState.request).toEqual({ kind: "project" });
+  });
+
+  it("disables the create buttons of a read-only Store, with the reason", async () => {
+    const sentence = "この Store は閲覧のみです（remote に書き込めません）";
+    setup(all, undefined, false, "the remote cannot be written");
+    await screen.findByText("6 件 · プロジェクト 1");
+    for (const name of ["タスクを作成", "プロジェクトを作成"]) {
+      const b = screen.getByRole("button", { name });
+      expect(b).toBeDisabled();
+      expect(b).toHaveAttribute("title", sentence);
+    }
+    screen.getByRole("button", { name: "タスクを作成" }).click();
+    expect(createState.request).toBeNull();
+  });
+
+  it("disables the create button of the empty workspace of a read-only Store", async () => {
+    setup([], undefined, false, "the remote cannot be written");
+    await screen.findByText("release にはまだタスクがありません");
+    const b = screen.getByRole("button", { name: /^タスクを作成 / });
+    expect(b).toBeDisabled();
+    expect(b).toHaveAttribute("title", "この Store は閲覧のみです（remote に書き込めません）");
   });
 
   it("shows the hh ls line for the workspace", async () => {

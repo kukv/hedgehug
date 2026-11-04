@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { readOnlySentence, readOnlyToast, useReadOnly } from "./read-only";
+import { readOnlySentence, readOnlyToast, useReadOnly, useReadOnlyOf } from "./read-only";
 import { resetToasts, toasts } from "./toast.svelte";
 
 function fakeStores() {
@@ -28,6 +28,16 @@ describe("useReadOnly", () => {
     const s = fakeStores();
     s.set("the GitHub permission is read");
     expect(useReadOnly(s, () => undefined).current).toBeNull();
+  });
+});
+
+describe("useReadOnlyOf", () => {
+  it("answers for any Store, in Japanese, from the live directory", () => {
+    const why: Record<string, string> = { ro: "the remote cannot be written" };
+    const s = { readOnly: (n: string) => why[n] ?? null, subscribe: () => () => {} };
+    const of = useReadOnlyOf(s);
+    expect(of.current("ro")).toBe("remote に書き込めません");
+    expect(of.current("rw")).toBeNull();
   });
 });
 

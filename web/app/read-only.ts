@@ -25,6 +25,13 @@ export function useReadOnly(
   });
 }
 
+/** Why any Store cannot be written (a lookup that follows the directory), for lists of Stores. */
+export function useReadOnlyOf(stores: Pick<StoreDirectory, "readOnly" | "subscribe">): {
+  readonly current: (store: string) => string | null;
+} {
+  return useSubscribe(stores, () => (store: string) => readOnlyNow(stores, store));
+}
+
 /** The sentence a read-only Store is explained with (the band and the toast). */
 export function readOnlySentence(reason: string): string {
   return `この Store は閲覧のみです（${reason}）`;

@@ -8,8 +8,12 @@
 //   - the tree of such a Store (/workspaces/<store>/<ulid>/tree) answers Space, Enter, Tab and the
 //     like with the toast of the same sentence and writes nothing, and has no add row; its table
 //     (/table) has the cell "タイトル: <ID>" as a readonly textbox
+//   - the create dialog (C) lists the workspaces as the radio group "ワークスペース"; the radio of a
+//     read-only Store is disabled and its label is titled "<Store>（閲覧のみ）: <理由>"
+//   - the workspace add dialog lists the Stores as the radio group "Store"; a read-only Store is
+//     disabled and its label says "閲覧のみ"
 import { expect, type Hedgehug, test } from "./harness";
-import { row, toast } from "./screens";
+import { createDialog, createReady, row, toast } from "./screens";
 
 /** The path of a tab ("tree", "table") of the first workspace of a Store. */
 async function tab(hh: Hedgehug, store: string, name: string): Promise<string> {
@@ -101,4 +105,46 @@ test("the tree of a Store that can be written still takes Space", async ({ page,
   await row(page, "Writable").click();
   await page.keyboard.press("Space");
   await expect.poll(() => hh.show(t.id).status).toBe("done");
+});
+
+test("the create dialog shows the workspace of a read-only Store disabled, and starts from one that can be written", async ({
+  page,
+  hh,
+}) => {
+  hh.add("Writable");
+  hh.readOnlyStore("ro", "RO", ["Read only"]);
+  await hh.openTree(page);
+  await page.keyboard.press("c");
+  const dialog = createDialog(page);
+  await expect(dialog).toBeVisible();
+
+  const group = dialog.getByRole("radiogroup", { name: "ワークスペース" });
+  const ro = group.getByRole("radio", { name: /（RO）/ });
+  await expect(ro).toBeDisabled();
+  await expect(group.locator("label", { hasText: "（RO）" })).toHaveAttribute(
+    "title",
+    "ro（閲覧のみ）: remote に書き込めません",
+  );
+  const writable = group.getByRole("radio", { name: /（DM）/ });
+  await expect(writable).toBeEnabled();
+  await expect(writable).toBeChecked();
+
+  await dialog.getByRole("textbox", { name: "タイトル" }).fill("Made in demo");
+  await createReady(dialog);
+  await dialog.getByRole("button", { name: /^作成/ }).click();
+  await expect(toast(page, "を作成しました")).toBeVisible();
+  expect(hh.show("DM-2").title).toBe("Made in demo");
+});
+
+test("the workspace add dialog does not let a read-only Store be chosen", async ({ page, hh }) => {
+  hh.readOnlyStore("ro", "RO");
+  await hh.open(page, "/settings/workspaces/demo");
+  await page.getByRole("button", { name: "ワークスペースを追加" }).click();
+  const dialog = page.getByRole("dialog", { name: "demo にワークスペースを追加" });
+  const stores = dialog.getByRole("radiogroup", { name: "Store" });
+  const ro = stores.locator("label", { hasText: "ro" });
+  await expect(ro.getByRole("radio")).toBeDisabled();
+  await expect(ro).toContainText("閲覧のみ");
+  await expect(stores.getByRole("radio", { checked: true })).toHaveCount(1);
+  await expect(dialog.getByRole("button", { name: "追加", exact: true })).toBeDisabled();
 });

@@ -13,6 +13,7 @@
   import Icon from "../icons/Icon.svelte";
   import KanbanView from "../kanban/KanbanView.svelte";
   import type { ListScope } from "../list/scope";
+  import { readOnlySentence, useReadOnly } from "../read-only";
   import { type Layout, router } from "../router";
   import Empty from "../states/Empty.svelte";
   import StoreBands from "../states/StoreBands.svelte";
@@ -33,12 +34,15 @@
   type Props = { store: string; name: string };
   let { store, name }: Props = $props();
 
-  const { views } = core();
+  const { views, stores } = core();
   const found = useSubscribe(views, () => ({
     entry: views.get(store, name),
     loaded: views.loaded(),
   }));
   const entry = $derived(found.current.entry);
+  // What is saved is a commit in the Store: a Store that cannot be written takes none of it (細部 99).
+  const ro = useReadOnly(stores, () => store);
+  const off = $derived(ro.current === null ? null : readOnlySentence(ro.current));
   // Spread, because Biome reads a prop called scope as the HTML attribute.
   const notFoundProps = $derived({ scope: "view" as const, name });
 
@@ -77,12 +81,12 @@
   }
 
   async function switchLayout(layout: Layout) {
-    if (busy || !saved || layout === saved.layout) return;
+    if (busy || off !== null || !saved || layout === saved.layout) return;
     await write({ layout });
   }
 
   async function update() {
-    if (busy || !dirty || !draft || problem !== null) return;
+    if (busy || off !== null || !dirty || !draft || problem !== null) return;
     const sent = local;
     if (await write(saveBodyOf(draft))) {
       // An edit made while the write ran is not lost.
@@ -103,15 +107,20 @@
       href: router.href({ name: "view", store, view: name }),
       current: t.layout === saved?.layout,
       onselect: () => void switchLayout(t.layout),
-      disabled: t.layout === "tree" ? (treeBlock ?? undefined) : undefined,
+      disabled:
+        t.layout === saved?.layout
+          ? undefined
+          : (off ?? (t.layout === "tree" ? (treeBlock ?? undefined) : undefined)),
     })),
   );
 
   let more = $state<HTMLElement | null>(null);
-  const moreItems = [
-    { value: "rename", label: "改名…" },
-    { value: "delete", label: "削除…" },
-  ];
+  const moreItems = $derived(
+    [
+      { value: "rename", label: "改名…" },
+      { value: "delete", label: "削除…" },
+    ].map((i) => (off === null ? i : { ...i, disabled: true, hint: off })),
+  );
   function pickMore(value: string) {
     more = null;
     if (!entry) return;
@@ -143,7 +152,8 @@
           <Button
             variant="primary"
             size="sm"
-            disabled={busy || problem !== null}
+            disabled={busy || problem !== null || off !== null}
+            title={off ?? undefined}
             onclick={() => void update()}
             >ビューを更新</Button
           >

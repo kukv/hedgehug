@@ -17,6 +17,7 @@
   } from "../../core/notifications";
   import { core } from "../context";
   import { focusLost } from "../focus";
+  import { readOnlySentence, useReadOnlyOf } from "../read-only";
   import { onLinkClick, router } from "../router";
   import { useManyStores, useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
@@ -33,6 +34,12 @@
   const c = core();
   const unread = useSubscribe(c.conn, () => c.conn.unread);
   const manyStores = useManyStores(c.stores);
+  // Reverting writes to the Store of the item (細部 99).
+  const roOf = useReadOnlyOf(c.stores);
+  const offOf = (n: Notification) => {
+    const why = roOf.current(n.store);
+    return why === null ? null : readOnlySentence(why);
+  };
 
   // Every store at once: the server reads each inbox when no store is named.
   let items = $state.raw<Notification[] | null>(null);
@@ -137,13 +144,15 @@
     });
 
   const revert = (n: Notification) =>
-    run(n.ulid, async () => {
-      const r = await unwrap(
-        c.api.POST("/api/notifications/{id}/revert", { params: { path: { id: n.ulid } } }),
-      );
-      const id = taskOf(n)?.id || r.task.id;
-      toast({ message: `${id} の ${overwrittenField(n)} を自分の値に戻しました` });
-    });
+    offOf(n) !== null
+      ? undefined
+      : run(n.ulid, async () => {
+          const r = await unwrap(
+            c.api.POST("/api/notifications/{id}/revert", { params: { path: { id: n.ulid } } }),
+          );
+          const id = taskOf(n)?.id || r.task.id;
+          toast({ message: `${id} の ${overwrittenField(n)} を自分の値に戻しました` });
+        });
 
   // Opening the task reads the item first (⌘/Ctrl-click and the middle button too).
   function open(e: MouseEvent, n: Notification, href: string): void {
@@ -234,7 +243,8 @@
                     <Button
                       size="sm"
                       variant="confirm"
-                      disabled={isBusy(n)}
+                      disabled={isBusy(n) || offOf(n) !== null}
+                      title={offOf(n) ?? undefined}
                       onclick={() => void revert(n)}
                     >
                       自分の値に戻す

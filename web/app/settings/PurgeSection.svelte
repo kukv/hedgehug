@@ -5,6 +5,7 @@
   import { type PurgePlan, parsePurgeDays } from "../../core/doctor";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
+  import { readOnlySentence, useReadOnlyOf } from "../read-only";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
@@ -20,6 +21,10 @@
 
   let selected = $state("");
   const store = $derived(stores.includes(selected) ? selected : (stores[0] ?? ""));
+  // Looking at what would go is a read; deleting it is not (細部 35).
+  const roOf = useReadOnlyOf(c.stores);
+  const why = $derived(roOf.current(store));
+  const off = $derived(why === null ? null : readOnlySentence(why));
   let input = $state("90");
   const days = $derived(parsePurgeDays(input));
 
@@ -85,7 +90,7 @@
   }
 
   async function purge(): Promise<void> {
-    if (busy || !plan || days === null) return;
+    if (busy || off !== null || !plan || days === null) return;
     const [s, d, confirmed] = [store, days, plan];
     const mine = ++seq;
     purging = true;
@@ -161,7 +166,7 @@
           }}
         >
           {#each stores as s (s)}
-            <option value={s}>{s}</option>
+            <option value={s}>{s}{roOf.current(s) === null ? "" : "（閲覧のみ）"}</option>
           {/each}
         </select>
       </div>
@@ -227,7 +232,13 @@
           </ul>
         {/if}
         <div>
-          <Button variant="danger" data-delete disabled={busy} onclick={() => (dialogOpen = true)}>
+          <Button
+            variant="danger"
+            data-delete
+            disabled={busy || off !== null}
+            title={off ?? undefined}
+            onclick={() => (dialogOpen = true)}
+          >
             完全に削除…
           </Button>
         </div>

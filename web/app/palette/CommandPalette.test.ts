@@ -73,7 +73,7 @@ const rel6 = task("U6", "task", null, {
   title: "Web の API クライアントを v2 に更新",
 });
 
-function setup(found: unknown[] = []) {
+function setup(found: unknown[] = [], readOnly: string | null = null) {
   const none = () => () => {};
   const ws = {
     store: "shared",
@@ -134,7 +134,7 @@ function setup(found: unknown[] = []) {
     stores: {
       stores: () => [{ name: "shared" }, { name: "backend" }],
       workspaces: () => [ws, { ...ws, ulid: "W2", name: "ops", prefix: "OPS" }],
-      readOnly: () => null,
+      readOnly: () => readOnly,
       tone: () => "purple",
       subscribe: none,
     },
@@ -471,6 +471,27 @@ describe("CommandPalette", () => {
     expect(await screen.findByText("REL-6 に対して")).toBeInTheDocument();
     await fireEvent.click(screen.getByRole("option", { name: /子タスクを作る/ }));
     expect(createState.request).toEqual({ kind: "task", parent: "U6" });
+  });
+
+  it("offers nothing that writes when every Store is read-only: only the detail of the task", async () => {
+    setup([], "the remote cannot be written");
+    selection.set("U6");
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">" } });
+    expect(await screen.findByText("REL-6 に対して")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /詳細を開く/ })).toBeInTheDocument();
+    for (const name of [
+      /ステータスを変更/,
+      /子タスクを作る/,
+      /別のワークスペースへ移動/,
+      /タスクを作成/,
+      /プロジェクトを作成/,
+      /ワークスペースを追加/,
+    ]) {
+      expect(screen.queryByRole("option", { name })).toBeNull();
+    }
+    expect(screen.getByRole("option", { name: /今すぐ同期する/ })).toBeInTheDocument();
   });
 
   it("opens the move dialog for the selected task from the command", async () => {

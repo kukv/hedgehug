@@ -57,7 +57,13 @@ const repair = n({
 
 function setup(
   items: Notification[],
-  opts: { stores?: string[]; unreadStores?: boolean; getError?: Error; tab?: InboxTab } = {},
+  opts: {
+    stores?: string[];
+    unreadStores?: boolean;
+    getError?: Error;
+    tab?: InboxTab;
+    readOnly?: Record<string, string>;
+  } = {},
 ) {
   let current = items;
   const conn = new FakeConn();
@@ -79,7 +85,7 @@ function setup(
       conn,
       stores: {
         stores: () => names.map((name) => ({ name })),
-        readOnly: () => null,
+        readOnly: (s: string) => opts.readOnly?.[s] ?? null,
         tone: () => "purple",
         workspaces: () => [],
         workspace: (_s: string, u: string) => (u === "W1" ? { name: "release" } : undefined),
@@ -285,6 +291,18 @@ describe("InboxPage", () => {
     );
     expect(toasts.list[0]?.undo).toBeUndefined();
     await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(2));
+  });
+
+  it("cannot revert an overwrite in a read-only Store, and says why; the other items are not touched", async () => {
+    const { api } = setup([overwritten, mention], {
+      readOnly: { shared: "the remote cannot be written" },
+    });
+    const b = await screen.findByRole("button", { name: "自分の値に戻す" });
+    expect(b).toBeDisabled();
+    expect(b).toHaveAttribute("title", "この Store は閲覧のみです（remote に書き込めません）");
+    b.click();
+    expect(api.POST).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "このままにする" })).toBeEnabled();
   });
 
   it("shows the words of the server when the revert is refused", async () => {

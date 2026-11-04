@@ -26,7 +26,11 @@
 
 <div class="choice" role="radiogroup" aria-label={label}>
   {#each entries as w (workspaceKey(w))}
-    <label class:on={workspaceKey(w) === value} class:off={isDisabled?.(w)}>
+    <label
+      class:on={workspaceKey(w) === value}
+      class:off={isDisabled?.(w)}
+      title={isDisabled?.(w) ? note?.(w) : undefined}
+    >
       <input
         type="radio"
         {name}

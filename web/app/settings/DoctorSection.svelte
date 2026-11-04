@@ -12,6 +12,7 @@
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import Icon, { type IconName } from "../icons/Icon.svelte";
+  import { readOnlySentence, useReadOnly } from "../read-only";
   import { onLinkClick, router } from "../router";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
@@ -26,6 +27,9 @@
 
   const c = core();
   const uid = $props.id();
+  // The repair writes; the diagnosis only reads (細部 35).
+  const ro = useReadOnly(c.stores, () => store);
+  const off = $derived(ro.current === null ? null : readOnlySentence(ro.current));
 
   const SEVERITY: Record<Severity, { label: string; icon: IconName }> = {
     error: { label: "エラー", icon: "forbid" },
@@ -102,7 +106,7 @@
   });
 
   async function fix(): Promise<void> {
-    if (fixing || loading) return;
+    if (fixing || loading || off !== null) return;
     const s = store;
     const mine = ++seq;
     fixing = true;
@@ -183,7 +187,12 @@
         もう一度実行
       </Button>
       {#if findingsCount > 0}
-        <Button size="sm" disabled={loading || fixing} onclick={() => (dialogOpen = true)}>
+        <Button
+          size="sm"
+          disabled={loading || fixing || off !== null}
+          title={off ?? undefined}
+          onclick={() => (dialogOpen = true)}
+        >
           修復…
         </Button>
       {/if}

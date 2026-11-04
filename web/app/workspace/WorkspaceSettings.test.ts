@@ -56,6 +56,27 @@ describe("WorkspaceSettings", () => {
     );
   });
 
+  it("only reads the settings of a read-only Store: no rename, no prefix change, no delete", async () => {
+    const sentence = "この Store は閲覧のみです（remote に書き込めません）";
+    const k = makeCore({
+      workspaces: [shared],
+      readOnly: "the remote cannot be written",
+    });
+    mount(WorkspaceSettings, { entry: shared }, k);
+    expect(nameField()).toHaveAttribute("readonly");
+    for (const b of [
+      saveButton(),
+      screen.getByRole("button", { name: "接頭辞を変更…" }),
+      screen.getByRole("button", { name: "削除" }),
+    ]) {
+      expect(b).toBeDisabled();
+      expect(b).toHaveAttribute("title", sentence);
+    }
+    await fireEvent.keyDown(nameField(), { key: "Enter" });
+    expect(k.api.PATCH).not.toHaveBeenCalled();
+    expect(workspaceDialog.current).toBeNull();
+  });
+
   it("saves with Enter, but not while an IME composes", async () => {
     const { k } = setup();
     await fireEvent.input(nameField(), { target: { value: "releases" } });

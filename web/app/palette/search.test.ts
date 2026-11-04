@@ -245,6 +245,7 @@ function env(over: Partial<CommandEnv> = {}): CommandEnv {
     recent: [],
     pickStatus: vi.fn(),
     moveTask: vi.fn(),
+    readOnly: () => null,
     ...over,
   };
 }
@@ -503,6 +504,31 @@ describe("buildCommands", () => {
     ).toEqual(["マイタスクを開く"]);
   });
 
+  it("leaves out the creates and the workspace add when no Store can be written", () => {
+    const keys = (e: CommandEnv) =>
+      buildCommands(e, ">")[0]?.items.map((i) => (i.type === "command" ? i.key : "")) ?? [];
+    const all = keys(env());
+    expect(all).toEqual(
+      expect.arrayContaining(["cmd:create-task", "cmd:create-project", "cmd:workspace-add"]),
+    );
+    const ro = keys(env({ readOnly: () => "remote に書き込めません" }));
+    for (const k of ["cmd:create-task", "cmd:create-project", "cmd:workspace-add"]) {
+      expect(ro).not.toContain(k);
+    }
+    expect(ro).toContain("cmd:sync");
+    // one Store that can be written is enough
+    const some = keys(
+      env({
+        workspaces: [ws, { ...ws, store: "backend", ulid: "W2", name: "ops", prefix: "OPS" }],
+        storeNames: ["shared", "backend"],
+        readOnly: (s) => (s === "shared" ? "x" : null),
+      }),
+    );
+    expect(some).toEqual(
+      expect.arrayContaining(["cmd:create-task", "cmd:create-project", "cmd:workspace-add"]),
+    );
+  });
+
   it("adds the commands for the selected task", () => {
     const t = task("T1", "task", null, { id: "REL-6" });
     const gs = buildCommands(env({ selected: t }), ">");
@@ -511,6 +537,18 @@ describe("buildCommands", () => {
 });
 
 describe("taskCommands", () => {
+  it("offers a task of a read-only Store only its detail: no status, no child, no move", () => {
+    const t = task("T1", "task", null, { id: "REL-6" });
+    const e = env({
+      workspaces: [ws, { ...ws, ulid: "W2", name: "ops", prefix: "OPS" }],
+      readOnly: (s) => (s === "shared" ? "remote に書き込めません" : null),
+    });
+    expect(taskCommands(e, t).items.map((i) => i.key)).toEqual(["task-open:T1"]);
+    // a task of another Store is still offered everything
+    const other = taskCommands(e, { ...t, store: "backend" });
+    expect(other.items.map((i) => i.key)).toContain("task-status:T1");
+  });
+
   it("offers no move when the store has no other workspace, and none in another store", () => {
     const t = task("T1", "task", null, { id: "REL-6" });
     const none = taskCommands(env(), t);

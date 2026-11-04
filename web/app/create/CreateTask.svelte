@@ -4,6 +4,7 @@
   import { cliAdd, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { canParent, defaultStatusIn, parentRule } from "../../core/schema";
+  import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import type { CreateRequest } from "../create-state.svelte";
   import BodyEditor from "../detail/BodyEditor.svelte";
@@ -13,6 +14,7 @@
   import TaskPicker from "../detail/TaskPicker.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
   import { kbdLabel, modKey } from "../keys";
+  import { readOnlyNow, readOnlySentence, useReadOnlyOf } from "../read-only";
   import { router } from "../router";
   import { selection } from "../selection.svelte";
   import { useSubscribe } from "../svelte-store";
@@ -27,6 +29,7 @@
 
   const { api, cache, stores, schema } = core();
   const entries = useSubscribe(stores, () => stores.workspaces());
+  const roOf = useReadOnlyOf(stores);
 
   // Where it goes is decided when the dialog opens.
   const contextOf = (workspaces: ReturnType<typeof stores.workspaces>) =>
@@ -36,6 +39,7 @@
       route: router.route,
       task: (u) => cache.task(u),
       workspaces,
+      readOnly: (s) => readOnlyNow(stores, s),
     });
   const ctx = untrack(() => contextOf(stores.workspaces()));
   let parent = $state<TaskView | null>(ctx.parent);
@@ -55,6 +59,18 @@
     return entries.current.find((w) => workspaceKey(w) === wsKey);
   });
   const showChoice = $derived(!parent && entries.current.length >= 2);
+  // A workspace of a Store that cannot be written is shown but cannot be chosen (細部 35).
+  const wsReason = $derived(ws ? roOf.current(ws.store) : null);
+  const noWritable = $derived(
+    entries.current.length > 0 && entries.current.every((w) => roOf.current(w.store) !== null),
+  );
+  const choiceNote = (w: WorkspaceEntry) => {
+    const r = roOf.current(w.store);
+    return r === null ? "" : `${w.store}（閲覧のみ）: ${r}`;
+  };
+  const blocked = $derived(
+    noWritable ? "書き込める Store がありません" : wsReason ? readOnlySentence(wsReason) : "",
+  );
 
   const sc = useSubscribe(schema, () => (ws ? schema.get(ws.store) : undefined));
   $effect(() => {
@@ -115,7 +131,9 @@
       ? `${parent.id} の下に置けるのは${usable.join("・")}です`
       : "";
   });
-  const canSubmit = $derived(!busy && title.trim() !== "" && !!ws && !!sc.current && kind !== "");
+  const canSubmit = $derived(
+    !busy && title.trim() !== "" && !!ws && !!sc.current && kind !== "" && blocked === "",
+  );
   const submitKey = kbdLabel("mod+enter");
 
   function cleanProps(): Record<string, unknown> {
@@ -244,6 +262,8 @@
           value={wsKey}
           name="create-ws"
           onchange={(k) => (wsKey = k)}
+          isDisabled={(w) => roOf.current(w.store) !== null}
+          note={choiceNote}
         />
         <span class="hint">全 Store にワークスペースが {entries.current.length} つあります</span>
       </div>
@@ -354,15 +374,29 @@
     {#if ws}
       <p class="dest">入れ先 <strong>{ws.name}（{ws.prefix}）</strong> · ID は作成時に振ります</p>
     {/if}
+    {#if blocked}
+      <p id="create-blocked" class="hint">{blocked}</p>
+    {/if}
     {#if error}
       <p class="error" role="alert">{error}</p>
     {/if}
   </div>
 
   {#snippet footer()}
-    <Button disabled={!canSubmit} onclick={() => void submit(true)}>続けて作成</Button>
+    <Button
+      disabled={!canSubmit}
+      title={blocked || undefined}
+      aria-describedby={blocked ? "create-blocked" : undefined}
+      onclick={() => void submit(true)}
+      >続けて作成</Button
+    >
     <Button onclick={onclose}>キャンセル</Button>
-    <Button variant="primary" disabled={!canSubmit} onclick={() => void submit(false)}
+    <Button
+      variant="primary"
+      disabled={!canSubmit}
+      title={blocked || undefined}
+      aria-describedby={blocked ? "create-blocked" : undefined}
+      onclick={() => void submit(false)}
       >作成 {submitKey}</Button
     >
   {/snippet}

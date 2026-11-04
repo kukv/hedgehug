@@ -7,6 +7,7 @@
   import { core } from "../context";
   import KindIcon from "../icons/KindIcon.svelte";
   import StatusIcon from "../icons/StatusIcon.svelte";
+  import { readOnlySentence, useReadOnly } from "../read-only";
   import { onLinkClick, router, type SchemaTab } from "../router";
   import { useManyStores, useSubscribe } from "../svelte-store";
   import Button from "../ui/Button.svelte";
@@ -31,6 +32,9 @@
     return c.schema.get(store);
   });
   const many = $derived(manyStores.current);
+  // A name cannot be changed or merged in a Store that cannot be written (細部 35).
+  const ro = useReadOnly(c.stores, () => store);
+  const off = $derived(ro.current === null ? null : readOnlySentence(ro.current));
 
   // The schema is what the page is made from: say so when it cannot be read, and read it again on
   // request and at resync (the cache itself only reads again what it holds).
@@ -201,6 +205,8 @@
       <Button
         size="sm"
         aria-label="名前を変える…（{subject}）"
+        disabled={off !== null}
+        title={off ?? undefined}
         onclick={() => (ask = { target, prop, old, mode: "rename", names })}
       >
         名前を変える…
@@ -209,6 +215,8 @@
         <Button
           size="sm"
           aria-label="併合する…（{subject}）"
+          disabled={off !== null}
+          title={off ?? undefined}
           onclick={() => (ask = { target, prop, old, mode: "merge", names })}
         >
           併合する…

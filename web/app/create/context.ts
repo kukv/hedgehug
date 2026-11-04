@@ -15,6 +15,8 @@ export function resolveCreateContext(i: {
   route: Route;
   task: (ulid: string) => TaskView | undefined;
   workspaces: WorkspaceEntry[];
+  /** Why a Store cannot be written, or null; a workspace of such a Store is passed over as the start. */
+  readOnly?: (store: string) => string | null;
 }): CreateContext {
   const live = (u: string | null | undefined): TaskView | undefined => {
     if (!u) return undefined;
@@ -31,9 +33,13 @@ export function resolveCreateContext(i: {
     (r.name === "project" ? live(r.ulid) : undefined);
   if (parent) return { parent, workspace: workspaceOf(parent) };
 
-  if (r.name === "workspace") {
-    const w = i.workspaces.find((x) => x.store === r.store && x.ulid === r.ulid);
-    return { parent: null, workspace: w ?? i.workspaces[0] ?? null };
-  }
-  return { parent: null, workspace: i.workspaces[0] ?? null };
+  // A read-only Store is passed over for the first writable one (when nothing can be written the
+  // start stays, and the dialog says so).
+  const start =
+    r.name === "workspace"
+      ? (i.workspaces.find((x) => x.store === r.store && x.ulid === r.ulid) ?? i.workspaces[0])
+      : i.workspaces[0];
+  const writable = (w: WorkspaceEntry) => !i.readOnly?.(w.store);
+  const workspace = start && !writable(start) ? (i.workspaces.find(writable) ?? start) : start;
+  return { parent: null, workspace: workspace ?? null };
 }

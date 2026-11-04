@@ -284,3 +284,82 @@ describe("CreateTask", () => {
     });
   });
 });
+
+describe("CreateTask in a Store that cannot be written", () => {
+  beforeAll(stubLayout);
+  beforeEach(() => {
+    selection.set(null);
+    resetToasts();
+    history.replaceState(null, "", "/");
+  });
+
+  const vault = {
+    ...(workspaces[0] as (typeof workspaces)[number]),
+    store: "vault",
+    ulid: "WV",
+    name: "vault",
+    prefix: "VT",
+  };
+  const why = { vault: "the remote cannot be written" };
+
+  function open(list: typeof workspaces, readOnlyBy: Record<string, string>, request = {}) {
+    const k = makeCore({ tasks: [parent], workspaces: list, readOnlyBy });
+    k.api.POST.mockImplementation(() => ok({ task: created, commit: "c1" }));
+    return {
+      k,
+      ...mount(CreateTask, { request: { kind: "task", ...request }, onclose: vi.fn() }, k),
+    };
+  }
+
+  it("disables the workspace of a read-only Store with the reason, and starts from a writable one", async () => {
+    const { k } = open([vault, ...workspaces], why);
+    const ro = screen.getByRole("radio", { name: /vault（VT）/ });
+    expect(ro).toBeDisabled();
+    expect(ro.closest("label")).toHaveTextContent("vault（閲覧のみ）: remote に書き込めません");
+    expect(ro.closest("label")).toHaveAttribute(
+      "title",
+      "vault（閲覧のみ）: remote に書き込めません",
+    );
+    expect(screen.getByRole("radio", { name: /release（REL）/ })).toBeChecked();
+    await typeTitle("x");
+    await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
+    await fireEvent.click(screen.getByRole("button", { name: /^作成/ }));
+    await waitFor(() => expect(k.api.POST).toHaveBeenCalled());
+    expect(k.api.POST.mock.calls[0]?.[1]).toMatchObject({ params: { query: { store: "shared" } } });
+  });
+
+  it("cannot be sent when every Store is read-only, and says so", async () => {
+    const { k } = open([vault], why);
+    await typeTitle("x");
+    const send = screen.getByRole("button", { name: /^作成/ });
+    await waitFor(() => expect(send).toBeDisabled());
+    expect(screen.getByText("書き込める Store がありません")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "続けて作成" })).toBeDisabled();
+    await fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+    expect(k.api.POST).not.toHaveBeenCalled();
+  });
+
+  it("cannot put a task under a parent of a read-only Store", async () => {
+    const { k } = open(
+      [vault, ...workspaces],
+      { shared: "the remote cannot be written" },
+      { parent: "UP" },
+    );
+    await typeTitle("x");
+    expect(screen.getByRole("button", { name: /^作成/ })).toBeDisabled();
+    expect(
+      screen.getByText("この Store は閲覧のみです（remote に書き込めません）"),
+    ).toBeInTheDocument();
+    await fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+    expect(k.api.POST).not.toHaveBeenCalled();
+  });
+
+  it("follows a Store that turns read-only after the dialog opened", async () => {
+    const { k } = open(workspaces, {});
+    await typeTitle("x");
+    await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
+    k.stores.readOnly.mockReturnValue("the remote cannot be written");
+    k.notify();
+    await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeDisabled());
+  });
+});

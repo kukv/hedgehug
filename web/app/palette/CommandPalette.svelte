@@ -8,6 +8,7 @@
   import KindIcon from "../icons/KindIcon.svelte";
   import { kbdLabel, modKey } from "../keys";
   import { closePalette, palette } from "../palette-state.svelte";
+  import { readOnlyNow } from "../read-only";
   import { router } from "../router";
   import { selection } from "../selection.svelte";
   import { runSync } from "../sidebar/sync-run.svelte";
@@ -196,6 +197,7 @@
       recent: recentUlids.flatMap((u) => c.cache.task(u) ?? []),
       pickStatus,
       moveTask: (t) => openWorkspaceMove(t),
+      readOnly: (store) => readOnlyNow(c.stores, store),
     };
   });
 

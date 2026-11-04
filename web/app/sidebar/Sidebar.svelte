@@ -8,6 +8,7 @@
   import { kbdLabel, registerShortcut } from "../keys";
   import { MY_QUERY } from "../my/groups";
   import { openPalette } from "../palette-state.svelte";
+  import { readOnlySentence, useReadOnlyOf } from "../read-only";
   import { hrefOf, onLinkClick, router } from "../router";
   import { useSubscribe } from "../svelte-store";
   import Menu from "../ui/Menu.svelte";
@@ -50,10 +51,19 @@
 
   // The menu of the "…" of a workspace row: the workspace, and the button it opens from.
   let menu = $state<{ entry: WorkspaceEntry; anchor: HTMLElement } | null>(null);
-  const menuItems = [
-    { value: "settings", label: "設定を開く" },
-    { value: "delete", label: "削除…" },
-  ];
+  const roOf = useReadOnlyOf(stores);
+  // The settings can be read in a read-only Store; deleting is a write.
+  const menuItems = $derived.by(() => {
+    const why = menu ? roOf.current(menu.entry.store) : null;
+    return [
+      { value: "settings", label: "設定を開く" },
+      {
+        value: "delete",
+        label: "削除…",
+        ...(why === null ? {} : { disabled: true, hint: readOnlySentence(why) }),
+      },
+    ];
+  });
 
   function pickMenu(value: string) {
     const m = menu;

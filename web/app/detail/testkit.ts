@@ -125,6 +125,8 @@ export type FakeCoreOptions = {
   loadError?: Error | null;
   /** Why the Store of the task is read-only (the English sentence of the server). */
   readOnly?: string;
+  /** Why the named Stores are read-only (the others follow `readOnly`). */
+  readOnlyBy?: Record<string, string>;
 };
 
 /** Fakes of the core objects; every method the screens call is a vi.fn. */
@@ -172,7 +174,9 @@ export function makeCore(opts: FakeCoreOptions = {}) {
       },
     ]),
     tone: vi.fn(() => "purple"),
-    readOnly: vi.fn(() => opts.readOnly ?? null),
+    readOnly: vi.fn(
+      (s?: string) => (s ? opts.readOnlyBy?.[s] : undefined) ?? opts.readOnly ?? null,
+    ),
     workspaces: vi.fn(() => ws),
     workspace: vi.fn((s: string, u: string) => ws.find((w) => w.store === s && w.ulid === u)),
     loaded: vi.fn(() => true),

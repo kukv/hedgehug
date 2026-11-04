@@ -22,7 +22,11 @@ const plan = (over: Partial<PurgePlan> = {}): PurgePlan => ({
 
 const empty = plan({ tasks: [], forwards: [] });
 
-function setup(stores: string[] = ["a"], plans: PurgePlan[] = [plan()]) {
+function setup(
+  stores: string[] = ["a"],
+  plans: PurgePlan[] = [plan()],
+  readOnly: Record<string, string> = {},
+) {
   let n = 0;
   const api = {
     GET: vi.fn((_p: string, o: { params: { query: { store?: string } } }) =>
@@ -35,7 +39,14 @@ function setup(stores: string[] = ["a"], plans: PurgePlan[] = [plan()]) {
   const view = renderWithCore(
     PurgeSection,
     { stores },
-    { api, stores: { tone: () => "teal", subscribe: () => () => {} } },
+    {
+      api,
+      stores: {
+        tone: () => "teal",
+        readOnly: (s: string) => readOnly[s] ?? null,
+        subscribe: () => () => {},
+      },
+    },
   );
   return { api, view };
 }
@@ -167,7 +178,7 @@ describe("PurgeSection: the plan", () => {
     renderWithCore(
       PurgeSection,
       { stores: ["a"] },
-      { api, stores: { tone: () => "teal", subscribe: () => () => {} } },
+      { api, stores: { tone: () => "teal", readOnly: () => null, subscribe: () => () => {} } },
     );
     await fireEvent.click(check());
     expect(check().disabled).toBe(true);
@@ -183,7 +194,7 @@ describe("PurgeSection: the plan", () => {
     const view = renderWithCore(
       PurgeSection,
       { stores: ["a"] },
-      { api, stores: { tone: () => "teal", subscribe: () => () => {} } },
+      { api, stores: { tone: () => "teal", readOnly: () => null, subscribe: () => () => {} } },
     );
     await fireEvent.click(check());
     view.unmount();
@@ -213,6 +224,24 @@ describe("PurgeSection: the stores", () => {
     expect(api.GET).toHaveBeenLastCalledWith("/api/purge", {
       params: { query: { older_than: "90d", store: "b" } },
     });
+  });
+});
+
+describe("PurgeSection: a read-only Store", () => {
+  it("still checks what would go, but cannot delete it, and says why", async () => {
+    const { api } = setup(["a", "b"], [plan()], { a: "the remote cannot be written" });
+    const pick = screen.getByRole("combobox", { name: "Store" }) as HTMLSelectElement;
+    expect([...pick.options].map((o) => o.textContent)).toEqual(["a（閲覧のみ）", "b"]);
+    await fireEvent.click(check());
+    const del = await screen.findByRole("button", { name: "完全に削除…" });
+    expect(del).toBeDisabled();
+    expect(del).toHaveAttribute("title", "この Store は閲覧のみです（remote に書き込めません）");
+    del.click();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(api.POST).not.toHaveBeenCalled();
+    await fireEvent.change(pick, { target: { value: "b" } });
+    await fireEvent.click(check());
+    expect(await screen.findByRole("button", { name: "完全に削除…" })).toBeEnabled();
   });
 });
 

@@ -9,6 +9,7 @@
   import Icon from "../icons/Icon.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
   import StatusIcon from "../icons/StatusIcon.svelte";
+  import { readOnlySentence, useReadOnly } from "../read-only";
   import { onLinkClick, router } from "../router";
   import Empty from "../states/Empty.svelte";
   import { useSubscribe } from "../svelte-store";
@@ -31,6 +32,10 @@
   // that must not drop the query and start it again (the screen would flash "loading").
   const store = $derived(entry.store);
   const ulid = $derived(entry.ulid);
+
+  // The create buttons are disabled in a Store that cannot be written (細部 35).
+  const ro = useReadOnly(c.stores, () => store);
+  const off = $derived(ro.current === null ? null : readOnlySentence(ro.current));
 
   // The tasks of the workspace, deleted ones not included. The cache fetches the query again at
   // every tasks.changed and resync, so the counts and both lists follow the store. The ULID names
@@ -93,12 +98,20 @@
 
 <WorkspaceHeader {entry} tab="overview">
   {#snippet actions()}
-    <Button size="sm" aria-label="タスクを作成" onclick={() => openCreate({ kind: "task" })}>
+    <Button
+      size="sm"
+      aria-label="タスクを作成"
+      disabled={off !== null}
+      title={off ?? undefined}
+      onclick={() => openCreate({ kind: "task" })}
+    >
       <Icon name="plus" size={14} />タスク
     </Button>
     <Button
       size="sm"
       aria-label="プロジェクトを作成"
+      disabled={off !== null}
+      title={off ?? undefined}
       onclick={() => openCreate({ kind: "project" })}
     >
       <Icon name="folder-plus" size={14} />プロジェクト
@@ -110,7 +123,12 @@
   {#if error}
     <p class="msg error" role="alert">{errorMessage(error)}</p>
   {:else if !loading && tasks.length === 0}
-    <Empty variant="empty" {...emptyProps} onCreate={() => openCreate({ kind: "task" })} />
+    <Empty
+      variant="empty"
+      {...emptyProps}
+      createOff={off ?? undefined}
+      onCreate={() => openCreate({ kind: "task" })}
+    />
   {:else}
     <section class="counts" aria-label="件数">
       <p class="total">{total} 件{loading ? "" : ` · プロジェクト ${projects.length}`}</p>

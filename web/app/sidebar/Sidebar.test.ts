@@ -331,6 +331,23 @@ describe("Sidebar", () => {
     ]);
   });
 
+  it("閲覧のみの Store のワークスペースは、設定は開けるが削除…は理由つきで無効にする", async () => {
+    const { getByRole } = mount({
+      stores: {
+        workspaces: () => workspaces,
+        readOnly: (s: string) => (s === "org-b/ops" ? "the remote cannot be written" : null),
+        subscribe: () => () => {},
+      },
+    });
+    await fireEvent.click(getByRole("button", { name: "ops の操作（設定を開く・削除）" }));
+    expect(getByRole("menuitem", { name: "設定を開く" })).toBeEnabled();
+    const del = getByRole("menuitem", { name: /削除…/ });
+    expect(del).toBeDisabled();
+    expect(del).toHaveTextContent("この Store は閲覧のみです（remote に書き込めません）");
+    await fireEvent.click(del);
+    expect(openWorkspaceDelete).not.toHaveBeenCalled();
+  });
+
   it("「設定を開く」はそのワークスペースの設定のタブへ移る", async () => {
     const { getByRole, queryByRole } = mount();
     await fireEvent.click(getByRole("button", { name: "release の操作（設定を開く・削除）" }));

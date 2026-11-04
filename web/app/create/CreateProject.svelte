@@ -4,10 +4,12 @@
   import { cliAdd, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { canParent } from "../../core/schema";
+  import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import type { CreateRequest } from "../create-state.svelte";
   import FieldInput from "../detail/FieldInput.svelte";
   import { modKey } from "../keys";
+  import { readOnlyNow, readOnlySentence, useReadOnlyOf } from "../read-only";
   import { router } from "../router";
   import { selection } from "../selection.svelte";
   import { useSubscribe } from "../svelte-store";
@@ -23,6 +25,7 @@
 
   const { api, cache, stores, schema } = core();
   const entries = useSubscribe(stores, () => stores.workspaces());
+  const roOf = useReadOnlyOf(stores);
 
   const ctx = untrack(() =>
     resolveCreateContext({
@@ -30,11 +33,24 @@
       route: router.route,
       task: (u) => cache.task(u),
       workspaces: stores.workspaces(),
+      readOnly: (s) => readOnlyNow(stores, s),
     }),
   );
   let wsKey = $state(ctx.workspace ? workspaceKey(ctx.workspace) : "");
   const ws = $derived(entries.current.find((w) => workspaceKey(w) === wsKey));
   const showChoice = $derived(entries.current.length >= 2);
+  // A workspace of a Store that cannot be written is shown but cannot be chosen (細部 35).
+  const wsReason = $derived(ws ? roOf.current(ws.store) : null);
+  const noWritable = $derived(
+    entries.current.length > 0 && entries.current.every((w) => roOf.current(w.store) !== null),
+  );
+  const choiceNote = (w: WorkspaceEntry) => {
+    const r = roOf.current(w.store);
+    return r === null ? "" : `${w.store}（閲覧のみ）: ${r}`;
+  };
+  const blocked = $derived(
+    noWritable ? "書き込める Store がありません" : wsReason ? readOnlySentence(wsReason) : "",
+  );
 
   // Opened while the stores are still loading: decide again when they have loaded.
   $effect(() => {
@@ -46,6 +62,7 @@
         route: router.route,
         task: (u) => cache.task(u),
         workspaces: list,
+        readOnly: (s) => readOnlyNow(stores, s),
       }),
     );
     if (again.workspace) wsKey = workspaceKey(again.workspace);
@@ -76,7 +93,9 @@
   });
   const hasStart = $derived(!!sc.current && "start" in sc.current.props);
   const hasDue = $derived(!!sc.current && "due" in sc.current.props);
-  const canSubmit = $derived(!busy && title.trim() !== "" && !!ws && projectKind !== "");
+  const canSubmit = $derived(
+    !busy && title.trim() !== "" && !!ws && projectKind !== "" && blocked === "",
+  );
 
   const cli = $derived.by(() => {
     const props: Record<string, string> = {};
@@ -186,6 +205,8 @@
           value={wsKey}
           name="create-project-ws"
           onchange={(k) => (wsKey = k)}
+          isDisabled={(w) => roOf.current(w.store) !== null}
+          note={choiceNote}
         />
       </div>
     {:else if ws}
@@ -257,6 +278,9 @@
         {/if}
       </div>
     {/if}
+    {#if blocked}
+      <p id="create-blocked" class="hint">{blocked}</p>
+    {/if}
     {#if error}
       <p class="error" role="alert">{error}</p>
     {/if}
@@ -264,7 +288,14 @@
 
   {#snippet footer()}
     <Button onclick={onclose}>キャンセル</Button>
-    <Button variant="primary" disabled={!canSubmit} onclick={() => void submit()}>作成</Button>
+    <Button
+      variant="primary"
+      disabled={!canSubmit}
+      title={blocked || undefined}
+      aria-describedby={blocked ? "create-blocked" : undefined}
+      onclick={() => void submit()}
+      >作成</Button
+    >
   {/snippet}
 </Dialog>
 

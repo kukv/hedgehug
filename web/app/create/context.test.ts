@@ -93,6 +93,28 @@ describe("resolveCreateContext", () => {
     });
   });
 
+  it("starts from the first writable workspace when the place it would start from is read-only", () => {
+    const readOnly = (store: string) => (store === "shared" ? "x" : null);
+    const other = { ...(workspaces[0] as (typeof workspaces)[number]), store: "demo", ulid: "W9" };
+    const list = [...workspaces, other];
+    expect(resolveCreateContext({ ...base, workspaces: list, readOnly }).workspace).toBe(other);
+    expect(
+      resolveCreateContext({
+        ...base,
+        workspaces: list,
+        readOnly,
+        route: { name: "workspace", store: "shared", ulid: "W2", tab: "tree" },
+      }).workspace,
+    ).toBe(other);
+    // Nothing can be written: it stays where it would have started, and the dialog says so.
+    expect(resolveCreateContext({ ...base, readOnly: () => "x" }).workspace).toBe(workspaces[0]);
+    // The workspace of a parent is the parent's, written or not.
+    expect(
+      resolveCreateContext({ ...base, workspaces: list, readOnly, requestParent: "US" }).workspace
+        ?.name,
+    ).toBe("shared");
+  });
+
   it("keys a workspace by store and ULID", () => {
     expect(workspaceKey(workspaces[0] as (typeof workspaces)[number])).toBe("shared/W1");
   });
