@@ -417,7 +417,11 @@ describe("SettingsRoute", () => {
       { page: { page: "accounts" } },
       core(["me"]),
     );
-    expect(getByText(/トークンはこのマシンにだけ保存し、Store には書きません/)).toBeTruthy();
+    const lead = getByText(/ここに登録した全アカウントを「自分」として扱います/);
+    expect(lead.textContent?.replace(/\s+/g, " ").trim()).toBe(
+      "ここに登録した全アカウントを「自分」として扱います（assignee:@me）。トークンはこのマシンにだけ保存し、Store には書きません。",
+    );
+    expect(lead.querySelector("code")?.textContent).toBe("assignee:@me");
   });
 
   it("マウント中の Store の見出しの説明は、表示を外した Store の扱いを言う", () => {

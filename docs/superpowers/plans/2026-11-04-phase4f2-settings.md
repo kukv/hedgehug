@@ -29,7 +29,7 @@
 - 取り消しにくい操作（ログアウト、マウントの解除）だけ確認ダイアログ（`ui/Dialog.svelte`）
 - 4f-3 に回したもの（閲覧のみの編集の無効 34〜37、非表示の Store を一覧から外す 38〜40、マイタスク 41〜42、Store 名付きの ID 43、コメントの本人確認 44 の画面側、StoreMove 45〜50）は作らない。この回の「色・表示が GUI で動く」は、`PATCH` で保存され、SettingsStores のカードがそれを映し、`hh store list --json` に出ること（サイドバーの色と非表示は 4f-3 の細部 38〜40）
 - まだない画面への入口は出さない。概要 plan の「作らないもの」は出さず、出さないことをテストで確かめる
-- `svelte-check` は警告ゼロ、`biome ci` は指摘ゼロ。各 Task の終わりに `cd web && pnpm fix && pnpm check && pnpm exec biome ci . && pnpm exec vitest run`（全件）。E2E は `make e2e`（その Task の spec だけを先に `cd web && pnpm exec playwright test e2e/<file>` で流してよい。そのときは `make e2e-bin` で作ったバイナリを使う）
+- `svelte-check` は警告ゼロ、`biome ci` は指摘ゼロ。各 Task の終わりに `cd web && pnpm fix && pnpm check && pnpm exec biome ci . && pnpm exec vitest run`（全件）。E2E は `make e2e`（その Task の spec だけを先に `cd web && pnpm exec playwright test e2e/<file>` で流してよい。そのときは `make web e2e-bin` で作ったバイナリを使う。バイナリは web/dist を埋め込むので、`e2e-bin` だけでは古いバンドルで動く）
 - Go を変える Task は `go vet ./...`・`gofmt -l .`・`golangci-lint run ./...`・`go test -race ./...` も流す。Go の新しいテストには `t.Parallel()`
 - spec・設計と違う挙動にしたくなったら、実装を止めて報告する（自分で決めない）
 - テストは前面で実行し、Bash の timeout は 600000。落ちたテストは失敗の出力と実行条件を残す

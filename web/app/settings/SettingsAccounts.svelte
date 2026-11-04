@@ -3,9 +3,8 @@
     <h1>アカウントと認証</h1>
   </header>
   <p class="lead">
-    <span class="mono">assignee:@me</span>
-    や Store の読み書きに使う GitHub のアカウントです。トークンはこのマシンにだけ保存し、Store
-    には書きません。
+    ここに登録した全アカウントを「自分」として扱います（<code>assignee:@me</code
+    >）。トークンはこのマシンにだけ保存し、Store には書きません。
   </p>
 </div>
 
@@ -26,7 +25,7 @@
     font-size: var(--fs-19);
     font-weight: 600;
   }
-  .mono {
+  code {
     font-family: var(--font-mono);
   }
   .lead {
