@@ -71,6 +71,7 @@ describe("WorkspaceSettings", () => {
     ]) {
       expect(b).toBeDisabled();
       expect(b).toHaveAttribute("title", sentence);
+      expect(b).toHaveAccessibleDescription(sentence);
     }
     await fireEvent.keyDown(nameField(), { key: "Enter" });
     expect(k.api.PATCH).not.toHaveBeenCalled();

@@ -48,7 +48,7 @@
       しても、ここに入ります。
     </span>
     {#if onCreate}
-      <Button variant="primary" disabled={!!createOff} title={createOff} onclick={onCreate}>
+      <Button variant="primary" disabled={!!createOff} why={createOff} onclick={onCreate}>
         タスクを作成 <kbd>{kbdLabel("c")}</kbd>
       </Button>
     {/if}

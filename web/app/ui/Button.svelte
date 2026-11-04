@@ -6,15 +6,44 @@
     variant?: "primary" | "default" | "confirm" | "danger" | "ghost";
     size?: "md" | "sm";
     children: Snippet;
+    /** Why the button cannot be used: its tooltip, and read out as its description. */
+    why?: string;
   };
-  let { variant = "default", size = "md", type = "button", children, ...rest }: Props = $props();
+  let {
+    variant = "default",
+    size = "md",
+    type = "button",
+    why,
+    children,
+    ...rest
+  }: Props = $props();
+  const uid = $props.id();
 </script>
 
-<button {type} class="btn" data-variant={variant} data-size={size} {...rest}>
+<button
+  {type}
+  class="btn"
+  data-variant={variant}
+  data-size={size}
+  title={why}
+  aria-describedby={why ? `${uid}-why` : undefined}
+  {...rest}
+>
   {@render children()}
 </button>
+{#if why}
+  <span id="{uid}-why" class="sr">{why}</span>
+{/if}
 
 <style>
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
   .btn {
     display: inline-flex;
     align-items: center;

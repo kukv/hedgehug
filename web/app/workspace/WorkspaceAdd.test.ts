@@ -121,6 +121,7 @@ describe("WorkspaceAdd", () => {
     expect(ro).toBeDisabled();
     expect(ro.closest("label")).toHaveTextContent("閲覧のみ");
     expect(ro.closest("label")).toHaveAttribute("title", "remote に書き込めません");
+    expect(ro).toHaveAccessibleDescription("閲覧のみ（remote に書き込めません）");
     expect(screen.getByRole("radio", { name: "shared" })).toBeChecked();
     expect(screen.getByRole("dialog", { name: "shared にワークスペースを追加" })).toBeVisible();
   });

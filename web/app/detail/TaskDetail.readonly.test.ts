@@ -40,9 +40,11 @@ describe("TaskDetail of a read-only Store", () => {
     const watch = screen.getByRole("button", { name: "ウォッチ" });
     expect(watch).toBeDisabled();
     expect(watch).toHaveAttribute("title", SENTENCE);
+    expect(watch).toHaveAccessibleDescription(SENTENCE);
     const del = screen.getByRole("button", { name: "削除" });
     expect(del).toBeDisabled();
     expect(del).toHaveAttribute("title", SENTENCE);
+    expect(del).toHaveAccessibleDescription(SENTENCE);
     await fireEvent.click(screen.getByRole("button", { name: "その他の操作" }));
     const item = await screen.findByRole("menuitem", { name: /別のワークスペースへ移動/ });
     expect(item).toBeDisabled();

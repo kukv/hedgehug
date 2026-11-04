@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { taskView, workspaces } from "../detail/testkit";
-import { resolveCreateContext, workspaceKey } from "./context";
+import { createGuard, resolveCreateContext, workspaceKey } from "./context";
 
 const tasks = [
   taskView({ ulid: "UE", id: "REL-8", title: "リリース作業", kind: "epic" }),
@@ -113,6 +113,32 @@ describe("resolveCreateContext", () => {
       resolveCreateContext({ ...base, workspaces: list, readOnly, requestParent: "US" }).workspace
         ?.name,
     ).toBe("shared");
+  });
+
+  describe("createGuard", () => {
+    const [a, b] = workspaces as [(typeof workspaces)[number], (typeof workspaces)[number]];
+    const vault = { ...a, store: "vault", ulid: "WV" };
+    const why = (s: string) => (s === "vault" ? "remote に書き込めません" : null);
+
+    it("blocks nothing while the workspace can be written", () => {
+      expect(createGuard([vault, a], a, why).blocked).toBe("");
+    });
+
+    it("blocks with the sentence when the workspace is read-only, and with 'none writable' when all are", () => {
+      expect(createGuard([vault, a], vault, why).blocked).toBe(
+        "この Store は閲覧のみです（remote に書き込めません）",
+      );
+      expect(createGuard([vault], vault, why).blocked).toBe("書き込める Store がありません");
+      expect(createGuard([], undefined, why).blocked).toBe("");
+    });
+
+    it("tells which workspaces are off, and why", () => {
+      const g = createGuard([vault, a, b], a, why);
+      expect(g.isOff(vault)).toBe(true);
+      expect(g.isOff(a)).toBe(false);
+      expect(g.note(vault)).toBe("vault（閲覧のみ）: remote に書き込めません");
+      expect(g.note(a)).toBe("");
+    });
   });
 
   it("keys a workspace by store and ULID", () => {

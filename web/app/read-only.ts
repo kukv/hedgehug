@@ -25,6 +25,20 @@ export function useReadOnly(
   });
 }
 
+/** The sentence for a Store that cannot be written (the one a disabled control explains itself with), or null. */
+export function useReadOnlySentence(
+  stores: Pick<StoreDirectory, "readOnly" | "subscribe">,
+  store: () => string | undefined,
+): { readonly current: string | null } {
+  const why = useReadOnly(stores, store);
+  return {
+    get current(): string | null {
+      const r = why.current;
+      return r === null ? null : readOnlySentence(r);
+    },
+  };
+}
+
 /** Why any Store cannot be written (a lookup that follows the directory), for lists of Stores. */
 export function useReadOnlyOf(stores: Pick<StoreDirectory, "readOnly" | "subscribe">): {
   readonly current: (store: string) => string | null;

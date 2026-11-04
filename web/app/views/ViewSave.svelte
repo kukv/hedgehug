@@ -3,6 +3,7 @@
   import { errorMessage } from "../../core/messages";
   import { saveBodyOf, type ViewDraft } from "../../core/views";
   import { core } from "../context";
+  import { useReadOnlyOf } from "../read-only";
   import { router } from "../router";
   import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
@@ -25,7 +26,8 @@
   const all = useSubscribe(views, () => views.list());
 
   // Only a Store that can be written is a place to save to.
-  const writable = $derived(dir.current.filter((s) => stores.tone(s.name) !== "readonly"));
+  const roOf = useReadOnlyOf(stores);
+  const writable = $derived(dir.current.filter((s) => roOf.current(s.name) === null));
   // The Store picked here, else the one asked for, else the default one, else the first (of those
   // that can be written).
   let picked = $state("");
@@ -142,20 +144,26 @@
         <span class="lbl">保存先</span>
         <div class="stores">
           {#each dir.current as s (s.name)}
-            {@const ro = stores.tone(s.name) === "readonly"}
+            {@const why = roOf.current(s.name)}
             <!-- biome-ignore lint/a11y/noLabelWithoutControl: the badge is the text of the label -->
-            <label class="choice" class:on={s.name === store} class:off={ro}>
+            <label
+              class="choice"
+              class:on={s.name === store}
+              class:off={why !== null}
+              title={why ?? undefined}
+            >
               <input
                 type="radio"
                 name="{uid}-store"
                 value={s.name}
                 checked={s.name === store}
-                disabled={ro}
+                disabled={why !== null}
+                aria-describedby={why !== null ? `${uid}-${s.name}-off` : undefined}
                 onchange={() => (picked = s.name)}
               >
               <StoreBadge store={s.name} tone={stores.tone(s.name)} />
-              {#if ro}
-                <span class="note">閲覧のみ</span>
+              {#if why !== null}
+                <span id="{uid}-{s.name}-off" class="note">閲覧のみ（{why}）</span>
               {/if}
             </label>
           {/each}

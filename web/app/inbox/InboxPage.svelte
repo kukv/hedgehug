@@ -244,7 +244,7 @@
                       size="sm"
                       variant="confirm"
                       disabled={isBusy(n) || offOf(n) !== null}
-                      title={offOf(n) ?? undefined}
+                      why={offOf(n) ?? undefined}
                       onclick={() => void revert(n)}
                     >
                       自分の値に戻す

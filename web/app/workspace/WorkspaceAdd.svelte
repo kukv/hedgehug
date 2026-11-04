@@ -133,11 +133,12 @@
                 value={s.name}
                 checked={s.name === store}
                 disabled={why !== null}
+                aria-describedby={why !== null ? `${uid}-${s.name}-off` : undefined}
                 onchange={() => (picked = s.name)}
               >
               <StoreBadge store={s.name} tone={stores.tone(s.name)} />
               {#if why !== null}
-                <span class="note">閲覧のみ</span>
+                <span id="{uid}-{s.name}-off" class="note">閲覧のみ（{why}）</span>
               {/if}
             </label>
           {/each}

@@ -4,12 +4,11 @@
   import { cliAdd, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { canParent } from "../../core/schema";
-  import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import type { CreateRequest } from "../create-state.svelte";
   import FieldInput from "../detail/FieldInput.svelte";
   import { modKey } from "../keys";
-  import { readOnlyNow, readOnlySentence, useReadOnlyOf } from "../read-only";
+  import { readOnlyNow, useReadOnlyOf } from "../read-only";
   import { router } from "../router";
   import { selection } from "../selection.svelte";
   import { useSubscribe } from "../svelte-store";
@@ -17,7 +16,7 @@
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
-  import { resolveCreateContext, workspaceKey } from "./context";
+  import { createGuard, resolveCreateContext, workspaceKey } from "./context";
   import { repoIdOf } from "./repos";
   import WorkspaceChoice from "./WorkspaceChoice.svelte";
 
@@ -40,17 +39,8 @@
   const ws = $derived(entries.current.find((w) => workspaceKey(w) === wsKey));
   const showChoice = $derived(entries.current.length >= 2);
   // A workspace of a Store that cannot be written is shown but cannot be chosen (細部 35).
-  const wsReason = $derived(ws ? roOf.current(ws.store) : null);
-  const noWritable = $derived(
-    entries.current.length > 0 && entries.current.every((w) => roOf.current(w.store) !== null),
-  );
-  const choiceNote = (w: WorkspaceEntry) => {
-    const r = roOf.current(w.store);
-    return r === null ? "" : `${w.store}（閲覧のみ）: ${r}`;
-  };
-  const blocked = $derived(
-    noWritable ? "書き込める Store がありません" : wsReason ? readOnlySentence(wsReason) : "",
-  );
+  const guard = $derived(createGuard(entries.current, ws, roOf.current));
+  const blocked = $derived(guard.blocked);
 
   // Opened while the stores are still loading: decide again when they have loaded.
   $effect(() => {
@@ -205,8 +195,8 @@
           value={wsKey}
           name="create-project-ws"
           onchange={(k) => (wsKey = k)}
-          isDisabled={(w) => roOf.current(w.store) !== null}
-          note={choiceNote}
+          isDisabled={guard.isOff}
+          note={guard.note}
         />
       </div>
     {:else if ws}

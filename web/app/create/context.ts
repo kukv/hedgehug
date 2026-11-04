@@ -1,10 +1,43 @@
 import type { TaskView } from "../../core/api/client";
 import type { WorkspaceEntry } from "../../core/stores";
+import { readOnlySentence } from "../read-only";
 import type { Route } from "../router";
 
 export type CreateContext = { parent: TaskView | null; workspace: WorkspaceEntry | null };
 
 export const workspaceKey = (w: Pick<WorkspaceEntry, "store" | "ulid">) => `${w.store}/${w.ulid}`;
+
+export type CreateGuard = {
+  /** Why nothing can be created now ("" when it can): no Store to write to, or the workspace chosen is read-only. */
+  blocked: string;
+  /** Whether the workspace is of a Store that cannot be written (shown, but not to be chosen). */
+  isOff: (w: WorkspaceEntry) => boolean;
+  /** The words after a workspace that is off: "<Store>（閲覧のみ）: <reason>", else "". */
+  note: (w: WorkspaceEntry) => string;
+};
+
+// createGuard is what the create dialogs share (細部 35): reasonOf gives why a Store cannot be written
+// (in Japanese), or null; ws is the workspace the task or project would go to.
+export function createGuard(
+  entries: WorkspaceEntry[],
+  ws: WorkspaceEntry | undefined,
+  reasonOf: (store: string) => string | null,
+): CreateGuard {
+  const noWritable = entries.length > 0 && entries.every((w) => reasonOf(w.store) !== null);
+  const reason = ws ? reasonOf(ws.store) : null;
+  return {
+    blocked: noWritable
+      ? "書き込める Store がありません"
+      : reason !== null
+        ? readOnlySentence(reason)
+        : "",
+    isOff: (w) => reasonOf(w.store) !== null,
+    note: (w) => {
+      const r = reasonOf(w.store);
+      return r === null ? "" : `${w.store}（閲覧のみ）: ${r}`;
+    },
+  };
+}
 
 // resolveCreateContext decides where a new task goes from the screen the user is on (細部 29): the parent a request
 // names, the task of a task detail (when it cannot be read, no parent: a row selected in a tree left earlier is not meant), the selected row of the tree, the project of a project screen; on a workspace

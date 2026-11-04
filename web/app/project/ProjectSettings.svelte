@@ -16,7 +16,7 @@
   import { core } from "../context";
   import StatusIcon from "../icons/StatusIcon.svelte";
   import { useListScope } from "../list/scope.svelte";
-  import { readOnlySentence, useReadOnly } from "../read-only";
+  import { useReadOnlySentence } from "../read-only";
   import { router } from "../router";
   import Empty from "../states/Empty.svelte";
   import { useManyStores, useSubscribe } from "../svelte-store";
@@ -40,8 +40,8 @@
 
   const store = $derived(scope.store);
   // A Store that cannot be written is read, not edited (細部 35).
-  const ro = useReadOnly(c.stores, () => store);
-  const off = $derived(ro.current === null ? null : readOnlySentence(ro.current));
+  const offSentence = useReadOnlySentence(c.stores, () => store);
+  const off = $derived(offSentence.current);
   const project = $derived(scope.project);
   const schema = $derived.by(() => {
     schemaRev.current;
@@ -241,7 +241,7 @@
           <Button
             size="sm"
             disabled={frozen}
-            title={off ?? undefined}
+            why={off ?? undefined}
             onclick={() => (draft = { ...draft, statuses: [] })}
           >
             Store と同じに戻す
@@ -283,14 +283,14 @@
         <Button
           variant="primary"
           disabled={frozen || !dirty}
-          title={off ?? undefined}
+          why={off ?? undefined}
           onclick={() => void save()}
           >保存</Button
         >
         <Button
           variant="danger"
           disabled={frozen || !hasOverride}
-          title={off ?? undefined}
+          why={off ?? undefined}
           onclick={() => {
             resetFailure = null;
             resetOpen = true;

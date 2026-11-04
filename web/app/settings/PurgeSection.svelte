@@ -236,7 +236,7 @@
             variant="danger"
             data-delete
             disabled={busy || off !== null}
-            title={off ?? undefined}
+            why={off ?? undefined}
             onclick={() => (dialogOpen = true)}
           >
             完全に削除…

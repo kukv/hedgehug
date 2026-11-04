@@ -13,7 +13,7 @@
   import Icon from "../icons/Icon.svelte";
   import KanbanView from "../kanban/KanbanView.svelte";
   import type { ListScope } from "../list/scope";
-  import { readOnlySentence, useReadOnly } from "../read-only";
+  import { useReadOnlySentence } from "../read-only";
   import { type Layout, router } from "../router";
   import Empty from "../states/Empty.svelte";
   import StoreBands from "../states/StoreBands.svelte";
@@ -41,8 +41,8 @@
   }));
   const entry = $derived(found.current.entry);
   // What is saved is a commit in the Store: a Store that cannot be written takes none of it (細部 99).
-  const ro = useReadOnly(stores, () => store);
-  const off = $derived(ro.current === null ? null : readOnlySentence(ro.current));
+  const offSentence = useReadOnlySentence(stores, () => store);
+  const off = $derived(offSentence.current);
   // Spread, because Biome reads a prop called scope as the HTML attribute.
   const notFoundProps = $derived({ scope: "view" as const, name });
 
@@ -123,7 +123,7 @@
   );
   function pickMore(value: string) {
     more = null;
-    if (!entry) return;
+    if (!entry || off !== null) return;
     if (value === "rename") openViewRename(entry, dirty ? local : null);
     else openViewDelete(entry);
   }
@@ -153,7 +153,7 @@
             variant="primary"
             size="sm"
             disabled={busy || problem !== null || off !== null}
-            title={off ?? undefined}
+            why={off ?? undefined}
             onclick={() => void update()}
             >ビューを更新</Button
           >

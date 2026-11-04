@@ -69,6 +69,7 @@
     const m = menu;
     menu = null;
     if (!m) return;
+    if (value === "delete" && roOf.current(m.entry.store) !== null) return;
     if (value === "settings") {
       router.go(
         hrefOf({ name: "workspace", store: m.entry.store, ulid: m.entry.ulid, tab: "settings" }),

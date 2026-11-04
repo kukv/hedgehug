@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { readOnlySentence, readOnlyToast, useReadOnly, useReadOnlyOf } from "./read-only";
+import {
+  readOnlySentence,
+  readOnlyToast,
+  useReadOnly,
+  useReadOnlyOf,
+  useReadOnlySentence,
+} from "./read-only";
 import { resetToasts, toasts } from "./toast.svelte";
 
 function fakeStores() {
@@ -28,6 +34,16 @@ describe("useReadOnly", () => {
     const s = fakeStores();
     s.set("the GitHub permission is read");
     expect(useReadOnly(s, () => undefined).current).toBeNull();
+  });
+});
+
+describe("useReadOnlySentence", () => {
+  it("is the sentence of the reason, or null", () => {
+    const s = fakeStores();
+    const r = useReadOnlySentence(s, () => "ro");
+    expect(r.current).toBeNull();
+    s.set("the remote cannot be written");
+    expect(r.current).toBe("この Store は閲覧のみです（remote に書き込めません）");
   });
 });
 

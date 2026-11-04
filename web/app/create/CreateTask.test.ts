@@ -320,6 +320,7 @@ describe("CreateTask in a Store that cannot be written", () => {
       "title",
       "vault（閲覧のみ）: remote に書き込めません",
     );
+    expect(ro).toHaveAccessibleDescription("— vault（閲覧のみ）: remote に書き込めません");
     expect(screen.getByRole("radio", { name: /release（REL）/ })).toBeChecked();
     await typeTitle("x");
     await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());

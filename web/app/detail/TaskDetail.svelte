@@ -243,7 +243,7 @@
           size="sm"
           onclick={toggleWatch}
           disabled={s.deleted_at != null || roReason.current !== null}
-          title={roTitle}
+          why={roTitle}
           >{watching ? "ウォッチ中" : "ウォッチ"}</Button
         >
         {#if s.deleted_at == null && !s.broken}

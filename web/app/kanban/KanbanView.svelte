@@ -46,6 +46,7 @@
   let { view: scope, query, onquery, settings, onsettings, cli, saved, actions }: Props = $props();
 
   const c = core();
+  const uid = $props.id();
   const ls = useListScope(() => scope);
   // The selection is one for the whole app: a row of another screen is not a card of this.
   selection.set(null);
@@ -489,10 +490,14 @@
                     aria-label="{col.label} にタスクを追加"
                     disabled={addLocked !== null}
                     title={addLocked !== null ? readOnlySentence(addLocked) : undefined}
+                    aria-describedby={addLocked !== null ? `${uid}-add-off-${i}` : undefined}
                     onclick={() => addTo(col)}
                   >
                     <Icon name="plus" size={14} />
                   </button>
+                  {#if addLocked !== null}
+                    <span id="{uid}-add-off-{i}" class="sr">{readOnlySentence(addLocked)}</span>
+                  {/if}
                 {/if}
               </div>
             {/each}
@@ -599,6 +604,14 @@
 {/if}
 
 <style>
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
   .kanban {
     box-sizing: border-box;
     display: flex;

@@ -4,7 +4,6 @@
   import { cliAdd, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { canParent, defaultStatusIn, parentRule } from "../../core/schema";
-  import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import type { CreateRequest } from "../create-state.svelte";
   import BodyEditor from "../detail/BodyEditor.svelte";
@@ -14,7 +13,7 @@
   import TaskPicker from "../detail/TaskPicker.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
   import { kbdLabel, modKey } from "../keys";
-  import { readOnlyNow, readOnlySentence, useReadOnlyOf } from "../read-only";
+  import { readOnlyNow, useReadOnlyOf } from "../read-only";
   import { router } from "../router";
   import { selection } from "../selection.svelte";
   import { useSubscribe } from "../svelte-store";
@@ -22,7 +21,7 @@
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
-  import { resolveCreateContext, workspaceKey } from "./context";
+  import { createGuard, resolveCreateContext, workspaceKey } from "./context";
   import WorkspaceChoice from "./WorkspaceChoice.svelte";
 
   let { request, onclose }: { request: CreateRequest; onclose: () => void } = $props();
@@ -60,17 +59,8 @@
   });
   const showChoice = $derived(!parent && entries.current.length >= 2);
   // A workspace of a Store that cannot be written is shown but cannot be chosen (細部 35).
-  const wsReason = $derived(ws ? roOf.current(ws.store) : null);
-  const noWritable = $derived(
-    entries.current.length > 0 && entries.current.every((w) => roOf.current(w.store) !== null),
-  );
-  const choiceNote = (w: WorkspaceEntry) => {
-    const r = roOf.current(w.store);
-    return r === null ? "" : `${w.store}（閲覧のみ）: ${r}`;
-  };
-  const blocked = $derived(
-    noWritable ? "書き込める Store がありません" : wsReason ? readOnlySentence(wsReason) : "",
-  );
+  const guard = $derived(createGuard(entries.current, ws, roOf.current));
+  const blocked = $derived(guard.blocked);
 
   const sc = useSubscribe(schema, () => (ws ? schema.get(ws.store) : undefined));
   $effect(() => {
@@ -262,8 +252,8 @@
           value={wsKey}
           name="create-ws"
           onchange={(k) => (wsKey = k)}
-          isDisabled={(w) => roOf.current(w.store) !== null}
-          note={choiceNote}
+          isDisabled={guard.isOff}
+          note={guard.note}
         />
         <span class="hint">全 Store にワークスペースが {entries.current.length} つあります</span>
       </div>

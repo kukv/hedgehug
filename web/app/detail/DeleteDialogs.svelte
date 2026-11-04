@@ -95,9 +95,9 @@
 </script>
 
 {#if variant === "delete"}
-  <Button size="sm" disabled={off} title={offTitle} onclick={() => void openDelete()}>削除</Button>
+  <Button size="sm" disabled={off} why={offTitle} onclick={() => void openDelete()}>削除</Button>
 {:else}
-  <Button size="sm" disabled={busy || off} title={offTitle} onclick={() => void restore()}
+  <Button size="sm" disabled={busy || off} why={offTitle} onclick={() => void restore()}
     >復元</Button
   >
 {/if}
