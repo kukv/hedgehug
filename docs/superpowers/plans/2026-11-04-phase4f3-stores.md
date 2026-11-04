@@ -312,8 +312,94 @@
 
 ### Task 7: 仕上げ
 
-- [ ] Step 1: 細部 34〜51 と 92〜106 の全行について、実装とテストの場所を plan の末尾に表で残す。足りないものがあればこの回で入れる
-- [ ] Step 2: 「作らないもの」を出していないことを grep とテストで確かめる（`rewrite-history`・`purge --rewrite`・`消すには`）。spec の 4f の完了条件（フェーズ3の機能が GUI でもできる）を、概要 plan の Goal の項目ごとに、どの回のどの E2E で確かめたかを表にする
-- [ ] Step 3: 概要 plan に「4f-3 の plan で足した細部」（92〜106 と、実装で決まった 107〜）を写す
-- [ ] Step 4: 全体の検査（`go vet ./...`・`gofmt -l .`・`golangci-lint run ./...`・`go test -race ./...`（Go は変えないが、生成物と合わせて確かめる）、`pnpm gen` と `go generate ./internal/app/server` のあとの生成物の差分なし、`pnpm fix`・`pnpm check`・`biome ci`・`vitest`・`pnpm build`、`make e2e` を3回）を流し、結果を plan の末尾に残す
-- [ ] Step 5: 引き継ぎ `docs/superpowers/plans/2026-11-04-phase4f3-handoff.md`（4f-2 と同じ形。4f の完了と、フェーズ4の次）を書いてコミット `docs(plan): 4f-3 の実装で決めた点と引き継ぎを書く`。PR はこの回の作業と引き継ぎを1つにまとめて出す（引き継ぎだけの PR は出さない）
+- [x] Step 1: 細部 34〜51 と 92〜106 の全行について、実装とテストの場所を plan の末尾に表で残す。足りないものがあればこの回で入れる
+- [x] Step 2: 「作らないもの」を出していないことを grep とテストで確かめる（`rewrite-history`・`purge --rewrite`・`消すには`）。spec の 4f の完了条件（フェーズ3の機能が GUI でもできる）を、概要 plan の Goal の項目ごとに、どの回のどの E2E で確かめたかを表にする
+- [x] Step 3: 概要 plan に「4f-3 の plan で足した細部」（92〜106 と、実装で決まった 107〜）を写す
+- [x] Step 4: 全体の検査（`go vet ./...`・`gofmt -l .`・`golangci-lint run ./...`・`go test -race ./...`（Go は変えないが、生成物と合わせて確かめる）、`pnpm gen` と `go generate ./internal/app/server` のあとの生成物の差分なし、`pnpm fix`・`pnpm check`・`biome ci`・`vitest`・`pnpm build`、`make e2e` を3回）を流し、結果を plan の末尾に残す
+- [x] Step 5: 引き継ぎ `docs/superpowers/plans/2026-11-04-phase4f3-handoff.md`（4f-2 と同じ形。4f の完了と、フェーズ4の次）を書いてコミット `docs(plan): 4f-3 の実装で決めた点と引き継ぎを書く`。PR はこの回の作業と引き継ぎを1つにまとめて出す（引き継ぎだけの PR は出さない）
+
+## 検査の結果（Task 7 の Step 4）
+
+- `go vet ./...`・`go vet -tags e2e ./internal/app/cli`: 指摘なし。`gofmt -l .`: 出力なし。`golangci-lint run ./...`: 0 issues
+- `go test -race -count=1 ./...`: 39 パッケージがすべて ok（テストのないパッケージは除く）。Go のファイルは変えていない（main の 1775b2e からの差分に `.go` がない）
+- `pnpm gen` のあとの `web/core/api/schema.d.ts`、`go generate ./internal/app/server` のあとの `api/openapi.yaml`: `git status` に差分なし
+- `pnpm fix`: 修正なし（383 ファイル）。`pnpm check`: 845 ファイル、エラー 0・警告 0。`biome ci .`: 指摘 0。`vitest run`: 154 ファイル・2132 件 PASS。`pnpm build`: 通った
+- `make e2e` を3回: 3回とも 134 件 PASS（Playwright が出した時間は 33.9 秒・35.5 秒・36.5 秒）。失敗・skipped・flaky（再試行で通ったもの）は 0
+
+## Task 7 の Step 1・2 の結果
+
+- 細部 34〜51 と 92〜106 の全行に、実装とテストの場所がある（下の表）。足りないものはなかった。細部 94 は「表示中が0件の状態を作らない」という約束で、コードは足していない（4f-2 の細部 25 で、最後の1つは非表示にできない）。細部 92 は今のコードを変えないという決めで、変えていないことを `TreeView.stores.test.ts`（「keeps the badges of both stores in the count of stores while one is hidden」）が確かめている
+- 「作らないもの」: `grep -rn "rewrite-history\|purge --rewrite\|消すには" web/app web/core web/e2e` の結果は、`StoreMove.test.ts` と `e2e/store-move.spec.ts` の否定の検査（出ないことを確かめる）と、4e の `detail/history-labels.ts`・`history-labels.test.ts` の履歴の操作名の表（過去のコミットの操作 `rewrite-history` に付ける日本語。移動のダイアログとは関係ない）だけ。`StoreMove.test.ts` は `purge`・`rewrite-history`・`消すには`・リンクがないことを、`e2e/store-move.spec.ts` は `rewrite-history`・`消すには` が出ないことを確かめている
+- spec の 4f の完了条件（概要 plan の Goal の項目）を、どの回のどの E2E で確かめたか
+
+| Goal の項目 | 回 | E2E |
+|---|---|---|
+| 複数 Store | 4f-2 | `stores.spec.ts`（一覧・既定・色・表示）、`discover.spec.ts`（発見とマウント） |
+| 閲覧のみの Store | 4f-3 | `readonly.spec.ts`（印・帯・詳細・ツリー・テーブル・作成・ワークスペースの追加） |
+| アカウントと認証 | 4f-2 | `accounts.spec.ts`（Device Flow・トークン・ログアウト）、`keyring.spec.ts`（E2E の keyring） |
+| Store の発見・マウント・追加・解除・既定 | 4f-2 | `discover.spec.ts`・`stores.spec.ts`・`onboarding.spec.ts` |
+| Store 間の移動 | 4f-3 | `store-move.spec.ts`（移動・取り直し・親・閲覧のみは移動先にならない・入口） |
+| 接頭辞が重なる Store の Store 名付きの表示 | 4f-3 | `ids.spec.ts`（ツリーの `demo:DM-1`・`second:DM-1`、パレットの `<store>:<ID>`） |
+| コメントの本人確認 | 4f-3 | `ids.spec.ts`（「comments」。自分のコメントだけ編集・削除が出る） |
+| Store の色を選ぶ画面と保存場所 | 4f-2 | `stores.spec.ts`。非表示のあとも同じ色であることは 4f-3 の `hidden.spec.ts` |
+| 非表示の Store（細部 38〜40）・マイタスクのワークスペース別（細部 41・42） | 4f-3 | `hidden.spec.ts`・`my.spec.ts` |
+
+## 実装で plan から変えた点
+
+- **`sharedPrefixes()` は読み取り専用の集合で返す（Task 1。c99f217）**: plan は `Set<string>` だったが、呼び出し元が書き換えないよう `ReadonlySet<string>` にした
+- **`StoreBadge` は `useReadOnly` で閲覧のみを決める（Task 2a。42e9305）**: `tone` は知らない Store も `"readonly"`（灰色）で返すので、`tone` を閲覧のみの判定に使うと、知らない Store を「閲覧のみ」と読み上げてしまう。`tone` は色だけにした
+- **閲覧のみの拒否に Store の名前を出す（Task 2b。8691a4e）**: ツリーのキーとドラッグが断るとき、断った Store の名前を文に入れた（Store をまたぐ一覧で、どの Store が閲覧のみか分かるようにするため）
+- **カンバンの列の「+」の無効の条件（Task 2b）**: 細部 99 の「全 Store が閲覧のみのときだけ」を、「その「+」が作る先がすべて閲覧のみのとき」にした。ワークスペース・プロジェクトのページでは、ボードの Store だけ。それ以外は、マウント中の全 Store
+- **パレットのタスクのコマンドと作成の親（Task 2c。bf23956）**: 閲覧のみの Store のタスクは「詳細を開く」だけにした（状態の変更・移動・子タスクを作るは出さない）。作成・ワークスペースの追加は、書ける Store がなければ出さない。作成のダイアログで、親のワークスペースが閲覧のみなら、送信を無効にして閲覧のみの文を出す
+- **無効の理由は `ui/Button` の `why` で読み上げにも出す（Task 2c のレビュー。b907b26・1bc533c）**: `title` だけでは読み上げに出ないので、`Button` に `why`（`title` と `aria-describedby`）を足し、ラジオの注記は `aria-describedby`、閲覧のみのテーブルの行は先頭のセルの隠した `span` で読ませる。閲覧のみの判定の重複もまとめた
+- **非表示の判定を1か所に（Task 3。3d84d7c）**: `web/app/hidden.ts` の `storeShown`・`hiddenStores` に、各画面の判定をまとめた
+- **パレットの語の検索・クエリは `-store:<名前>` で非表示の Store を外す（Task 3 のレビュー）**: クライアントで結果を外さず、問い合わせに `-store:<名前>` を足してサーバーで外す。正確な参照（細部 105）は外さない
+- **マイタスクの非表示の案内は一覧の下に置き、件数は1回で数える（Task 4。8181268・25de6a1）**
+- **ID の出し漏れを直し、渡し忘れを型で見つける（Task 5。8bf05ee・153160d・f8cfbce）**: plan の表の外にも、ドラッグの理由（`kanban/drop.ts`・`tree/dnd.ts`・`tree/keyboard.ts`・`tree/placement.ts`）、表のセルの名前、`relation-groups.ts`・`core/workspace.ts`・`undo.ts` などに ID が出ていたので、`displayId` を通した。`IdLabel` の `store` は省略できない props にし、渡し忘れを `pnpm check` が見つけるようにした
+- **本文の参照とメンションは Store 名なしのまま（Task 5。4dee4a3）**: 本文の `#<ID>` とメンションの挿入は、Go の本文の参照の正規表現が Store 名を受けないので、Store 名なしの ID のまま。関連の画面の本文の参照の注記も、本文の書き方のまま出す。`task.moved` のメッセージはサーバーが持つ ID のまま
+- **移動のダイアログの移動元の親の文は task のキャッシュから（Task 6）**: `MovePlanView` に移動元の親がないので、「<移動元の親> から外れて」の文は `cache.task(...)` の親から作る。外から移されて変わっても追従する
+- **細部 106 はレビューで足した（Task 6。edd97e1）**: 親を選ぶと移動先のワークスペースがその親のものになり、ワークスペースが未選択でも予定を取る
+- **移動の送信中は選択を止め、取り直しの失敗を上書きしない（Task 6。1542f99）**: 送信中は選択の変更を受けない。`move.changed` のあとの予定の取り直しが失敗したら、その失敗の文を「内容が変わりました」の案内で上書きしない
+- **移動のあとにも、選べなくなった移動先を外す（Task 7。7ef6e95）**: 移動の最中に移動先が閲覧のみになった（または消えた）とき、送信中は外さないが、終わったあとにも外れなかった。外す `$effect` が `busy` を追跡していなかったためで、`busy` を追跡し、送信が終わったときにもう一度判定する。テストは `StoreMove.test.ts` の「clears a Store that became read-only during the move once the move is over」
+- **パレットの「別の Store へ移動…」のアイコンは `database`（Task 6）**: 細部 103 の `store` は足さず、`icons` にある `database`（円柱）を使う
+- **E2E の接頭辞が重なる Store は `Peer.publish` と `hh store add` で作る**: `hh store init` は使われている接頭辞を断るので、`ids.spec.ts` は別の home で同じ接頭辞の Store を作って publish し、`hh store add` でマウントする
+
+## 細部 34〜51 と 92〜106 の実装とテスト
+
+パスは `web/app/`・`web/core/`・`web/e2e/` の下（`web/` は省く）。
+
+| 細部 | 実装した場所 | テスト |
+|---|---|---|
+| 34 閲覧のみの判定 | `app/read-only.ts`（`useReadOnly`・`readOnlyNow`）、`core/stores.ts`（`readOnly`・`readOnlyReason`。4f-2） | `app/read-only.test.ts`・`core/stores.test.ts` |
+| 35 編集の無効 | `detail/TaskDetail.svelte`・`DeleteDialogs.svelte`、`workspace/move-menu.ts`・`WorkspaceAdd`・`WorkspaceSettings`・`WorkspaceOverview`、`kanban/KanbanView.svelte`・`drop.ts`・`dnd.ts`、`table/TableCell.svelte`・`TableView.svelte`、`tree/TreeView.svelte`・`keyboard.ts`・`dnd.ts`、`create/CreateTask`・`CreateProject`・`WorkspaceChoice`・`context.ts`、`sidebar/Sidebar.svelte`、`project/ProjectSettings.svelte`、`settings/SettingsSchema`・`DoctorSection`・`PurgeSection`、`views/ViewPage`・`ViewSave`、`inbox/InboxPage.svelte`、`palette/search.ts` | `detail/TaskDetail.readonly.test.ts`、各画面のテスト（`KanbanView.test.ts`・`kanban/drop.test.ts`・`TableView.test.ts`・`tree/keyboard.test.ts`・`TreeView.test.ts`・`CreateTask.test.ts`・`CreateProject.test.ts`・`WorkspaceAdd.test.ts`・`WorkspaceSettings.test.ts`・`WorkspaceOverview.test.ts`・`Sidebar.test.ts`・`ProjectSettings.test.ts`・`settings/*.test.ts`・`ViewPage.test.ts`・`InboxPage.test.ts`・`search.test.ts`）、`e2e/readonly.spec.ts` |
+| 36 閲覧のみの印 | `ui/StoreBadge.svelte`、`states/StoreBands.svelte`、`WorkspacePage`・`ProjectPage`・`ViewPage`・`TaskDetail` の帯 | `ui/ui.test.ts`・`states/StoreBands.test.ts`・`TaskDetail.readonly.test.ts`・`WorkspacePage.test.ts`・`ProjectPage.test.ts`・`ViewPage.test.ts`、`e2e/readonly.spec.ts` |
+| 37 理由の出し方 | `ui/Button.svelte`（`why`）、`read-only.ts`（`readOnlyToast`）、`tree/keyboard.ts` | `read-only.test.ts`・`ui/ui.test.ts`・`tree/keyboard.test.ts`・`TreeView.test.ts`、`e2e/readonly.spec.ts`（ツリーのキー） |
+| 38 非表示の Store | `app/hidden.ts`、`sidebar/Sidebar.svelte`、`App.svelte`、`tree/TreeView.svelte`・`kanban/KanbanView.svelte`・`table/TableView.svelte`、`palette/search.ts`・`CommandPalette.svelte`、`create/*`・`workspace/WorkspaceAdd.svelte`、`states/StoreBands.svelte` | `Sidebar.test.ts`・`tree/TreeView.stores.test.ts`・`KanbanView.test.ts`・`TableView.test.ts`・`CommandPalette.test.ts`・`search.test.ts`・`context.test.ts`・`StoreBands.test.ts`、`e2e/hidden.spec.ts` |
+| 39 非表示の色 | `core/stores.ts`（`tone`） | `core/stores.test.ts`、`e2e/hidden.spec.ts`（「the colour of a Store is the same…」） |
+| 40 色の割り当て | `core/stores.ts`（`tone`） | `core/stores.test.ts` |
+| 41 マイタスクのワークスペース別 | `my/groups.ts`・`my/MyTasks.svelte` | `my/groups.test.ts`・`my/MyTasks.test.ts`、`e2e/my.spec.ts` |
+| 42 非表示の Store の案内 | `my/MyTasks.svelte` | `my/MyTasks.test.ts`、`e2e/my.spec.ts` |
+| 43 Store 名付きの ID | `core/stores.ts`（`sharedPrefixes`・`displayId`）、`ui/IdLabel.svelte` と呼び出し元（`tree/TreeRow`・`table/TableCell`・`kanban/KanbanCard`・`my/MyTasks`・`detail/*`・`inbox`・`activity`・`workspace`・`project`・`settings`）、`undo.ts`・`table/group.ts` | `core/stores.test.ts`・`ui/ui.test.ts`・`tree/TreeView.stores.test.ts`・`TableView.test.ts`・`KanbanView.test.ts`・`TaskDetail.test.ts`・`undo.test.ts` ほか、`e2e/ids.spec.ts` |
+| 44 コメントの本人確認 | `detail/Comments.svelte`（`AccountsCache`。4f-2） | `detail/Comments.test.ts`、`e2e/ids.spec.ts`（「comments」） |
+| 45 StoreMove の入口 | `workspace/move-menu.ts`（`moveStoreItem`）、`detail/TaskDetail.svelte`・`tree/TreeView.svelte`・`palette/search.ts`・`CommandPalette.svelte`、`workspace/dialogs-state.svelte.ts`・`WorkspaceDialogs.svelte` | `move-menu.test.ts`・`TaskDetail.more.test.ts`・`TreeView.test.ts`・`search.test.ts`・`CommandPalette.test.ts`、`e2e/store-move.spec.ts`（「opens from the menu…」「has no entry with one Store」） |
+| 46 ダイアログ | `stores/StoreMove.svelte` | `stores/StoreMove.test.ts`、`e2e/store-move.spec.ts` |
+| 47 予定の表示 | `stores/MovePlanSections.svelte`・`move-plan.ts` | `stores/move-plan.test.ts`・`StoreMove.test.ts`、`e2e/store-move.spec.ts` |
+| 48 実行 | `stores/StoreMove.svelte`、`core/cli.ts`（`cliMvStore`） | `StoreMove.test.ts`・`core/cli.test.ts`、`e2e/store-move.spec.ts` |
+| 49 スキーマの違反 | `stores/move-plan.ts`（`violationView`）、`core/messages.ts` | `StoreMove.test.ts`（`move.invalid`・`schema.violation`）・`move-plan.test.ts` |
+| 50 undo の `undo.blocked` | 変えていない（`core/messages.ts`・`undo.ts`） | `core/messages.test.ts`（「words undo.blocked by the operation」。`move-in`・`move-out`）・`undo.test.ts` |
+| 51 E2E | `e2e/harness.ts`（`readOnlyStore`・`Peer.publish`） | `e2e/readonly.spec.ts`・`hidden.spec.ts`・`my.spec.ts`・`ids.spec.ts`・`store-move.spec.ts`（4f-2 の `accounts`・`stores`・`discover`・`onboarding`・`keyring`） |
+| 92 「Store が2つ以上」は全 Store で数える | `svelte-store.ts` の `useManyStores`・`TreeView` の `multi`・`KanbanView` の `manyStores` を変えていない | `tree/TreeView.stores.test.ts`（「keeps the badges of both stores in the count of stores while one is hidden」） |
+| 93 非表示を外す場所 | `app/hidden.ts`（`storeShown`・`hiddenStores`）と細部 38 の場所 | 細部 38 と同じ |
+| 94 表示中が0件にはならない | コードなし（4f-2 の細部 25） | `settings/StoreCard.test.ts`（「disables the check of the last shown Store, with the reason」。4f-2） |
+| 95 Store 名付きの ID の計算 | `core/stores.ts`（`sharedPrefixes`・`displayId`）、`ui/IdLabel.svelte` | `core/stores.test.ts`（「counts the prefixes of two or more stores, case aside, hidden ones too」「puts the store name before an id of a shared prefix only」）・`ui/ui.test.ts` |
+| 96 パレットの `<store>:<ID>` | `palette/search.ts`（`isStoreQualifiedId`・`detectMode`）・`CommandPalette.svelte` | `palette/search.test.ts`・`CommandPalette.test.ts`、`e2e/ids.spec.ts` |
+| 97 `store.read_only` の文言 | `core/messages.ts` | `core/messages.test.ts` |
+| 98 閲覧のみの帯 | `states/StoreBands.svelte` | `states/StoreBands.test.ts`・各ページのテスト、`e2e/readonly.spec.ts`・`hidden.spec.ts` |
+| 99 閲覧のみで無効にするものの足し分 | 細部 35 と同じ（`move-menu.ts`・`tree/*`・`kanban/*`・`views/*`・`inbox/InboxPage.svelte`・`workspace/WorkspaceAdd.svelte`） | 細部 35 と同じ |
+| 100 E2E の閲覧のみの Store | `e2e/harness.ts`（`readOnlyStore`・`Peer.publish`） | `e2e/readonly.spec.ts`・`store-move.spec.ts` |
+| 101 移動のあとのキャッシュ | `stores/StoreMove.svelte`（`cache.refreshTrees()`・`router.go`） | `StoreMove.test.ts`（「sends the plan that was shown, opens the task and says it in a toast」）、`e2e/store-move.spec.ts` |
+| 102 見出しの子孫の数 | `stores/StoreMove.svelte` | `StoreMove.test.ts` |
+| 103 パレットの「別の Store へ移動…」 | `palette/search.ts`（アイコンは `database`。上の「変えた点」） | `palette/search.test.ts`・`CommandPalette.test.ts`、`e2e/store-move.spec.ts` |
+| 104 非表示の Store も移動先に出す | `stores/StoreMove.svelte`（`targets`） | `StoreMove.test.ts`（「lists the other Stores… and a hidden one too」） |
+| 105 正確な参照は非表示で外さない | `palette/search.ts`・`CommandPalette.svelte` | `search.test.ts`・`CommandPalette.test.ts`（「still opens a task of a hidden Store by its ID」）、`e2e/ids.spec.ts` |
+| 106 移動先の親がワークスペースを決める | `stores/StoreMove.svelte`（`pickParent`・`pickWorkspace`・`pickStore`） | `StoreMove.test.ts`、`e2e/store-move.spec.ts`（「puts the task under a parent of the destination」） |

@@ -163,3 +163,33 @@
 89. **Device Flow の E2E と、ログアウトのあとの表示**: E2E の承認は `worker` として行う（`e2e` で承認すると既にある `e2e` のアカウントに合流する）。ログアウトしたあとの keychain のアカウントは、usecase が取得元を `keychain` のまま持つので「トークンなし」ではなく `error` で出る。カードはこのとき「ログインし直す」を出す
 90. **トークンの足し分**: `--fs-15`（15px）、`--control-h-lg`（40px。入力欄の高さ。生の 40px があった7ファイルを置き換えた）、Onboarding の `--logo-size`・`--step-size`・`--onboarding-w`・`--onboarding-pad-x`
 91. **色の名前**: パレットの7色の日本語（ティール・オレンジ・パープル・スカイ・ピンク・オリーブ・ブラウン）はキャンバスにないので実装者が付けた（`StoreColorPicker.svelte` の `STORE_COLORS`）
+
+## 4f-3 の plan で足した細部（92〜）
+
+4f-3 の plan（`2026-11-04-phase4f3-stores.md`）で足したもの。92〜106 は plan の番号のまま、107〜 は実装で決まったもの。実装とテストの場所は plan の末尾の表にある。
+
+92. **「Store が2つ以上」の判定は、表示中か否かを問わない**: `useManyStores`（`web/app/svelte-store.ts`）・`TreeView` の `multi`・`KanbanView` の `manyStores`・`useListScope` の `saveBase` は今のまま、マウント中の全 Store で数える（非表示を外すと、Store のバッジが出たり消えたりして、同じタスクの見た目が設定で変わるため。細部 43・45 も全 Store で数える）
+93. **非表示の Store を外す場所**（細部 38 を、今のコードの場所に当てた）: サイドバーのワークスペース（`Sidebar.svelte` の `workspaces`。ホームで強調する「最初のワークスペース」も表示中の最初）、サイドバーの保存済みビュー（`ViewEntry.store`）、サイドバーのマイタスクの件数（`myCount`）、ツリー・カンバン・テーブル（`TreeView` の `roots`、`KanbanView`・`TableView` の `tasks`、ブロック中・中止の件数と一覧）、マイタスク、パレットのワークスペース・ビュー・Store の一覧・タスクの検索・「最近開いたもの」、作成のワークスペースの選択（`CreateTask`・`CreateProject`。`resolveCreateContext` の既定も表示中の最初）、ワークスペースの追加の Store の選択（`WorkspaceAdd`）。外すのはクライアント（`task.store`・`entry.store` を見る）。通知・アクティビティ・設定（Store ごとの設定の選択欄・同期と保守・purge）は外さない。ワークスペースやプロジェクトのページの中（URL で開いたもの）は、その Store のものなので外さない
+94. **表示中が0件にはならない**: 4f-2 の細部 25 で最後の1つは非表示にできないので、「表示中の Store がない」状態は作らない（config.yaml を手で書いた場合は、今の「ワークスペースがない」表示のまま）
+95. **Store 名付きの ID の計算**: API は Store 名付きの ID を返さない（`TaskView` は `id` と `store` だけ）。`StoreDirectory` に `sharedPrefixes(): Set<string>`（マウント中の全 Store の `workspaces()` の接頭辞を大文字にして、2つ以上の Store にあるもの。Go の `mount.SharedPrefixes`（`internal/app/storage/mount/mount.go`）と同じ規則。Go が削除済みのワークスペースの接頭辞も数えるかを読んで合わせ、`workspaces()` に出ないものを数える必要があれば止めて報告する）と `displayId(store, id): string`（`id` が `<接頭辞>-<番号>` の形で、接頭辞が `sharedPrefixes` にあれば `<store>:<id>`、ほかは `id`）を足す。`IdLabel` に `store?: string` を足し、渡されたら `displayId` で出す。`IdLabel` を使わず ID を出している場所（下の Task 5 の表）も `displayId` を通す。トースト・ダイアログの見出しの ID も同じ
+96. **パレットの `<store>:<ID>`**: `detectMode`（`web/app/palette/search.ts`）は `:` を含む語をクエリとして扱うので、入力全体が `<マウント中の Store 名>:<ID>` の形なら ID として扱い、`GET /api/tasks/{id}` に `<store>:<ID>` をそのまま渡す（サーバーの `ForTask` が `store:ID` を解決する。`internal/app/usecase/mount_ops.go`）。Store 名でない語の `:`（`status:todo` など）は今のままクエリ
+97. **`store.read_only` の文言の理由**: `messages.ts` の `store.read_only` は `args.reason`（英文）をそのまま出していたので、`readOnlyReason` を通す（理由の言い方を画面のどこでも揃える）
+98. **閲覧のみの帯**: `web/app/states/StoreBands.svelte`（props `store`）を作り、閲覧のみなら「この Store は閲覧のみです（理由）」、非表示なら「この Store は非表示です」と「表示する」（細部 38）を出す。TaskDetail（今の削除済み・壊れた帯と同じ並び）、ワークスペースのページ、プロジェクトのページ、ビューのページ（その Store に保存されたビュー）の上に置く。見た目は `Banners.svelte` の `band` と同じトークン
+99. **閲覧のみで無効にするものの足し分**（細部 35 を、今のコードの場所に当てた）: 同じ Store の中の移動（「別のワークスペースへ移動…」と、ツリーの字下げ・並べ替え）、カンバンの列の「+」とツリーの追加（作成）、保存済みビューのレイアウトの切り替えと列・まとめ方の保存（`views.update`。コミットを作るため）、通知の「元に戻す」（`revert`）。閲覧のみの Store のワークスペースへの作成は、作成のダイアログでそのワークスペースを無効にして理由を出す（細部 35）。プロジェクトの作成も同じ。ワークスペースの追加は、閲覧のみの Store を選択欄で無効にする（`ViewSave` と同じ形）
+100. **E2E の閲覧のみの Store**: harness に `Hedgehug.readOnlyStore(name, prefix)` を足す。`Peer.publish(name, prefix)` で別の home に Store を作って push し、その bare の `objects` の下のディレクトリをすべて 0o500 にしてから（Go の `gitrepotest.LockObjects` と同じ）`hh store add <name> --remote <bare>` する。マウントの同期の `CheckAccess` が `gitrepo.Writable` で書けないことを見つけ、`not_writable`（「remote に書き込めません」）の閲覧のみになる。片付けの前に 0o700 に戻す。root で走っているときは `test.skip`（root は権限を無視するため）。E2E は `HEDGEHUG_AUTO_SYNC=0` なので、`store add` のあとに `hh sync` を流し、画面を見る前に `hh store list --json` の `read_only` が入ったことを確かめる（入らなければ harness の問題として止めて報告する）
+101. **Store 間の移動のあとのキャッシュ**: `MoveStoreResultView` に `commit` がないので、`applyWrite`・`noteOwnCommit` は使わない。成功したら `cache.refreshTrees()`（画面のツリーだけを取り直す）を呼び、移動したタスクを ULID で開く（ULID は移動で変わらない）。ツリーでない一覧（マイタスク・カンバン・テーブル）は poll の `tasks.changed` で取り直る。`commit` がないので、この `tasks.changed` は外からの変更（ライブの印）として出る。これは受け入れる（2026-11-04。API の形を変えないため）
+102. **移動のダイアログの見出しの子孫の数**: 予定（`MovePlanView.tasks`）の件数から1を引いた数を「子孫 n」で出す（最初の予定を取るまでは出さない）。キャンバスのコメント・作業時間の数は、数える API がないので出さない
+103. **パレットの「別の Store へ移動…」**: `CommandItem.icon` に `store` を足す（`icons` に Store の形がなければ、キャンバスの SettingsNav の円柱を足す）
+104. **非表示の Store も移動先に出す**: 移動先のラジオは非表示の Store も並べる（非表示は表示の設定で、書き込みの先として選べなくする理由がないため。細部 46 の「移動元は出さない」以外は全 Store）
+105. **正確な参照は非表示の Store で外さない**（2026-11-04）: パレットに打った ID・旧 ID・ULID・`<store>:<ID>` は、URL と同じようにそのタスクを開く（非表示の Store のタスクでも。タスクのページに「非表示」の帯が出る）。非表示で外すのは、語の検索・クエリ・「最近開いたもの」だけ（細部 93 の「パレットのタスクの検索」はこの意味）。`detectMode` と `<store>:<ID>` の判定に渡す Store 名は、非表示を含むマウント中の全 Store
+106. **移動先の親がワークスペースを決める**（2026-11-04）: Go の `place` は親があればその親のワークスペースを使うので、親を選んだら移動先のワークスペースの選択をその親のものにする（ワークスペースが未選択でも予定は取る）。別のワークスペースを選んだら親を外し、移動先の Store を変えたらワークスペースと親の両方を外す
+107. **カンバンの列の「+」の無効**（実装で決まった）: その「+」が作る先の Store がすべて閲覧のみのときだけ無効にする。ワークスペース・プロジェクトのページではボードの Store だけ、それ以外ではマウント中の全 Store（細部 99 の「全 Store が閲覧のみのとき」を、作る先で決めた）
+108. **パレットの閲覧のみ**: 閲覧のみの Store のタスクには「詳細を開く」だけを出す（状態の変更・移動・子タスクを作るは出さない）。作成・ワークスペースの追加のコマンドは、書ける Store がなければ出さない
+109. **作成の親が閲覧のみ**: 親のタスクのワークスペースが閲覧のみなら、作成のダイアログは送信を無効にして閲覧のみの文を出す
+110. **無効の理由の出し方**: 理由は `ui/Button` の `why`（`title` と `aria-describedby`）で出す。ラジオの注記は `aria-describedby`、閲覧のみのテーブルの行は先頭のセルの隠した `span` で読ませる
+111. **`StoreBadge` の「閲覧のみ」**: `useReadOnly` で決める。`tone` は色だけで、知らない Store にも `"readonly"` を返す
+112. **パレットの語の検索・クエリ**: 非表示の Store は、問い合わせに `-store:<名前>` を足してサーバーで外す（正確な参照は細部 105 のとおり外さない）
+113. **パレットの「別の Store へ移動…」のアイコン**: 既存の `database`（円柱）を使う（細部 103 の `store` は足さない）
+114. **本文の参照とメンション**: 本文の `#<ID>` とメンションの挿入は Store 名なしの ID のまま（Go の本文の参照の正規表現に Store 名がない）。`task.moved` のメッセージはサーバーが持つ ID のまま
+115. **移動のダイアログの移動元の親**: 「<移動元の親> から外れて」の文は、`MovePlanView` に移動元の親がないので、task のキャッシュから作る
+116. **E2E の接頭辞が重なる Store**: `hh store init` は使われている接頭辞を断るので、`Peer.publish` で別の home に作って push し、`hh store add` でマウントする
