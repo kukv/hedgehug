@@ -1296,6 +1296,9 @@ components:
         - head
         - sync
       type: object
+    StoresChanged:
+      additionalProperties: false
+      type: object
     SyncReport:
       additionalProperties: false
       properties:
@@ -2016,6 +2019,26 @@ paths:
                         - data
                         - event
                       title: Event schema.changed
+                      type: object
+                    - properties:
+                        data:
+                          $ref: "#/components/schemas/StoresChanged"
+                        event:
+                          const: stores.changed
+                          description: The event name.
+                          type: string
+                        id:
+                          description: The event ID.
+                          oneOf:
+                            - type: integer
+                            - type: string
+                        retry:
+                          description: The retry time in milliseconds.
+                          type: integer
+                      required:
+                        - data
+                        - event
+                      title: Event stores.changed
                       type: object
                     - properties:
                         data:

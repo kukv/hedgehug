@@ -1065,6 +1065,7 @@ export interface components {
             store: string;
             sync: components["schemas"]["SyncStatus"];
         };
+        StoresChanged: Record<string, never>;
         SyncReport: {
             error?: string;
             invalid: string[] | null;
@@ -1422,6 +1423,17 @@ export interface operations {
                          * @constant
                          */
                         event: "schema.changed";
+                        /** @description The event ID. */
+                        id?: number | string;
+                        /** @description The retry time in milliseconds. */
+                        retry?: number;
+                    } | {
+                        data: components["schemas"]["StoresChanged"];
+                        /**
+                         * @description The event name.
+                         * @constant
+                         */
+                        event: "stores.changed";
                         /** @description The event ID. */
                         id?: number | string;
                         /** @description The retry time in milliseconds. */

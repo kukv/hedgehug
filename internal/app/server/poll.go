@@ -51,6 +51,16 @@ type viewsChanged struct {
 	Store string `json:"store"`
 }
 
+// configSnapshot is what of config.yaml decides what the GUI shows of the
+// stores: each store (name, path, remotes, account, color, visibility), the
+// accounts and the default store. A look that finds it different tells the
+// clients with stores.changed.
+type configSnapshot struct {
+	Stores   []config.StoreEntry
+	Accounts []config.Account
+	Default  string
+}
+
 type storeState struct {
 	Store string     `json:"store"`
 	Head  string     `json:"head"`
@@ -100,7 +110,8 @@ type Poller struct {
 	// for the tests.
 	openHistory func(*store.Store, history.Options) (*history.History, error)
 
-	pollMu sync.Mutex // one poll at a time; held while reading, not p.mu
+	pollMu sync.Mutex      // one poll at a time; held while reading, not p.mu
+	cfg    *configSnapshot // config.yaml as the last look read it; nil before the first look (pollMu)
 
 	mu       sync.Mutex // the state below
 	stores   map[string]*polled
@@ -124,13 +135,21 @@ func newPoller(s *Server, hub *Hub) *Poller {
 func (p *Poller) Release(path string) {
 	p.pollMu.Lock()
 	defer p.pollMu.Unlock()
+	p.releaseLocked(path)
+}
+
+// releaseLocked is Release with pollMu held. It returns the names of the
+// stores it let go of.
+func (p *Poller) releaseLocked(path string) []string {
 	var gone []*polled
+	var names []string
 	p.mu.Lock()
 	for name, st := range p.stores {
 		if st.path != path {
 			continue
 		}
 		gone = append(gone, st)
+		names = append(names, name)
 		delete(p.stores, name)
 		if p.released == nil {
 			p.released = map[string]bool{}
@@ -146,6 +165,28 @@ func (p *Poller) Release(path string) {
 		st.stopHistory()
 		_ = st.s.Repo().Close()
 	}
+	return names
+}
+
+// ReleaseFor lets go of the store at path as Release does, and runs fn (the
+// removal of the store: its directory goes) before any poll can look again,
+// so that no poll opens the store again while its config entry is still
+// there. When fn succeeds the store is gone for good, so it is no longer
+// marked as swapped for a rebuild (a store of that name that comes later is
+// new). fn must not wait for a poll.
+func (p *Poller) ReleaseFor(path string, fn func() error) error {
+	p.pollMu.Lock()
+	defer p.pollMu.Unlock()
+	names := p.releaseLocked(path)
+	err := fn()
+	if err == nil {
+		p.mu.Lock()
+		for _, n := range names {
+			delete(p.released, n)
+		}
+		p.mu.Unlock()
+	}
+	return err
 }
 
 // Kick makes the poller look now (after the server marked items read, or a
@@ -198,6 +239,11 @@ func (p *Poller) pollLocked(publish bool) {
 	if err != nil {
 		return
 	}
+	snap := &configSnapshot{Stores: c.Stores, Accounts: c.Accounts, Default: c.DefaultStore}
+	if publish && p.cfg != nil && !reflect.DeepEqual(p.cfg, snap) {
+		p.hub.Publish(storesChanged{})
+	}
+	p.cfg = snap
 	targets, err := ss.SyncTargets(c, true)
 	if errors.Is(err, config.ErrNoStores) {
 		// No store is a look to the end too: the one that comes after it (the first one,
