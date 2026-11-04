@@ -290,8 +290,75 @@
 
 ### Task 7: 仕上げ
 
-- [ ] Step 1: 細部 17〜33 と 71〜85 の全行について、実装とテストの場所を plan の末尾に表で残す。足りないものがあればこの回で入れる
-- [ ] Step 2: 「作らないもの」を出していないことを grep とテストで確かめる（`GitHub 連携で使うアカウント`・`merge driver`・`remote を追加`・`フォルダを開く`・`メンバー`・`新しく見つかった`・`gh にログイン済み`）
-- [ ] Step 3: 概要 plan に「4f-2 の plan で足した細部」（71〜85 と、実装で決まったもの）を写す。spec の「4f の細部」に、E2E の keyring（細部 71）の1文を足す
-- [ ] Step 4: 全体の検査（`go vet`・`gofmt -l .`・`golangci-lint run ./...`・`go test -race ./...`、`pnpm fix`・`pnpm check`・`biome ci`・`vitest`・`pnpm build`、`make e2e` を3回）を流し、結果を plan の末尾に残す
-- [ ] Step 5: 引き継ぎ `docs/superpowers/plans/2026-11-04-phase4f2-handoff.md` を書いてコミット `docs(plan): 4f-2 の実装で決めた点と引き継ぎを書く`
+- [x] Step 1: 細部 17〜33 と 71〜85 の全行について、実装とテストの場所を plan の末尾に表で残す。足りないものがあればこの回で入れる
+- [x] Step 2: 「作らないもの」を出していないことを grep とテストで確かめる（`GitHub 連携で使うアカウント`・`merge driver`・`remote を追加`・`フォルダを開く`・`メンバー`・`新しく見つかった`・`gh にログイン済み`）
+- [x] Step 3: 概要 plan に「4f-2 の plan で足した細部」（71〜85 と、実装で決まったもの）を写す。spec の「4f の細部」に、E2E の keyring（細部 71）の1文を足す
+- [x] Step 4: 全体の検査（`go vet`・`gofmt -l .`・`golangci-lint run ./...`・`go test -race ./...`、`pnpm fix`・`pnpm check`・`biome ci`・`vitest`・`pnpm build`、`make e2e` を3回）を流し、結果を plan の末尾に残す
+- [x] Step 5: 引き継ぎ `docs/superpowers/plans/2026-11-04-phase4f2-handoff.md` を書いてコミット `docs(plan): 4f-2 の実装で決めた点と引き継ぎを書く`
+
+## 検査の結果（Task 7 の Step 4）
+
+- `go vet ./...`・`go vet -tags e2e ./internal/app/cli`: 指摘なし。`gofmt -l .`: 出力なし。`golangci-lint run ./...`: 0 issues
+- `go test -race -count=1 ./...`: 28 パッケージがすべて ok（テストのないパッケージは「no test files」）
+- `pnpm gen` のあとの `web/core/api/schema.d.ts`、`go generate ./internal/app/server` のあとの `api/openapi.yaml`: どちらも差分なし
+- `pnpm fix`: 修正なし（368 ファイル）。`pnpm check`: 830 ファイル、エラー 0・警告 0。`biome ci .`: 指摘 0。`vitest run`: 149 ファイル・1917 件 PASS。`pnpm build`: 通った
+- `make e2e` を3回: 3回とも 115 件 PASS（1.1 分・27.4 秒・26.8 秒。1 回目は `web` と `e2e-bin` のビルドを含む）。失敗も flaky（再試行で通ったもの）も 0
+
+## Task 7 の Step 1・2 の結果
+
+- 細部 17〜33 と 71〜87 の全行に、実装とテストの場所がある（下の表）。足りないものはなかった。細部 31 の「読み込み中の状態」は、4d の `web/app/states/` に読み込み中の部品はなく、設定の画面（`SettingsAccounts`・`SettingsStores`）の「読み込み中…」と同じ `note` の行で出している（発見は探している間「探しています…」）
+- 「作らないもの」: `merge driver`・`remote を追加`・`フォルダを開く`・`メンバー`・`新しく見つかった` は `StoreCard.test.ts`・`SettingsStores.test.ts` が、`GitHub 連携` は `SettingsAccounts.test.ts` が、`ログイン済み`（gh の自動検出）は `Onboarding.test.ts` が、画面に出ないことを確かめている。`web/app`・`web/core`・`web/e2e` を grep しても、これらの語が出てくるのはテストの否定の検査と、`web/core/doctor.ts` の名前表（`merge_driver`。同期と保守の画面のもの）だけ
+
+## 実装で plan から変えた点
+
+- **`fakegh --seed` はファイルのパスを取る（Task 1）**: `fakegh serve --seed` は JSON ではなくファイルのパスを取るので、harness が `<home>/fakegh-seed.json` を書いて渡す
+- **E2E のバイナリは `HEDGEHUG_HOME` がなければ起動の誤りにする（Task 1。6afc991）**: `keyring_e2e.go` は `HEDGEHUG_HOME` が空のとき panic にせず、`mainKeyring` がエラーを返して `Main` が `hedgehug: <文>` を出し終了コード 1 で終わる。harness は fakegh を起動したあとの失敗で fakegh を止めて一時ディレクトリを消し、シグナルで死んだプロセスの停止で待ち続けない。fakegh がないときは `make e2e-bin` を案内する。`FileKeyring` の書き込み・ロックのエラーにも `the file keyring:` を付けた。README・CONTRIBUTING の `make e2e` の説明も直した
+- **`e2e-bin` は `web` に依存する（6a5b2e5）**: `MAKEFLAGS=-j10` だと `make web e2e-bin` が並行に走り、`go build` が vite の書き終える前の `web/dist`（一つ前のバンドル）を埋め込んだ。`e2e-bin: web` にした
+- **Device Flow の E2E は `worker` として承認する（Task 4）**: harness のアカウント `e2e` として承認すると、既にある `e2e` のアカウントに合流して、新しいアカウントが増えたことを見られない。`fakegh device approve <コード> --user worker` にした（`accounts.spec.ts`）
+- **ログアウトのあとの keychain のアカウントは `error` で出る（Task 4）**: usecase は取得元を `keychain` のまま持ってトークンだけが消えるので、状態は「トークンなし」ではなく `error` になる。カードはこのとき「ログインし直す」を出す。E2E はこの状態を確かめる
+- **`restart()` の seq と `--fs-15`（Task 4。0f2f348）**: 「やめてやり直す」の最中にフォームを離れたとき、古い `restart()` が始め直さないよう seq を比べる。15px のトークン `--fs-15` を足した
+- **細部 86 を足した（Task 5。4ca26bf）**: remote のない Store は、サーバーがクローンの削除を常に断る（409 `store.unpushed`）ので、解除のダイアログは「ローカルのクローンも消す」を既定でオフにし、409 の文言も同期の案内ではなく専用の文にした。入力欄の高さ `--control-h-lg`（40px）をトークンにし、生の 40px があった7ファイルを置き換えた
+- **マウントの本文に `permission` を入れない（Task 6。細部 81）**: `MountCandidate` に項目がなく余分な項目を受け付けないので、選んだ候補の `{name, url, account}` だけを送る。権限は画面に残す。検索し直しで見えなくなった候補はマウントさせない（5dc1d1e）
+- **エラーは `ApiError` に包んで `errorMessage` に渡す（Task 6。細部 82）**: SSE の `auth.device` の `error` は `new ApiError({status: 0, type: code, detail: message})` にして渡す
+- **Onboarding の寸法をトークンにした（Task 6）**: `--logo-size`・`--step-size`・`--onboarding-w`・`--onboarding-pad-x` を `tokens.css` に足した。Onboarding の再表示と、作成完了の検査は 5dc1d1e
+- **細部 87（discover の main）を直した（4c29eee・be278d4）**: `discover --from` が bare の HEAD を見ていたため、素の `git init --bare`（HEAD は master のまま）に main へ push した Store を黙って見落としていた。`gitrepo.MainHasFile` が `refs/heads/main` を見るようにし、使われなくなった `HeadHasFile` を消した。テストは `TestMainHasFile`・`TestDiscoverFromBareWithHeadOnMaster`。2026-11-04 に利用者が、この回で直すと決めた
+- **色の名前**: パレットの7色の日本語（ティール・オレンジ・パープル・スカイ・ピンク・オリーブ・ブラウン）はキャンバスにないので、実装者が付けた。変えるなら `StoreColorPicker.svelte` の `STORE_COLORS` の1か所
+
+## 細部 17〜33 と 71〜87 の実装とテスト
+
+| 細部 | 実装した場所 | テスト |
+|---|---|---|
+| 17 SettingsNav | `web/app/settings/SettingsNav.svelte`・`SettingsRoute.svelte` | `settings.test.ts`（「このマシン」の順・バッジなし・「（閲覧のみ）」と非表示の Store）、`e2e/routes.spec.ts` |
+| 18 アカウントの一覧 | `SettingsAccounts.svelte`・`AccountCard.svelte` | `SettingsAccounts.test.ts`（名前・`login@host`・状態・取得元・使っている Store） |
+| 19 アカウントの追加 | `web/app/accounts/AccountAdd.svelte`・`DeviceFlow.svelte`、`web/core/cli.ts` | `AccountAdd.test.ts`・`DeviceFlow.test.ts`・`cli.test.ts`、`e2e/accounts.spec.ts` |
+| 20 アカウントの操作 | `AccountCard.svelte`・`SettingsAccounts.svelte` | `SettingsAccounts.test.ts`（ログインし直す・ログアウトの確認・gh と環境変数）、`e2e/accounts.spec.ts` |
+| 21 削除は作らない | 出さない | `SettingsAccounts.test.ts`「has no delete and no account of the GitHub App」 |
+| 22 操作のあとの取り直し | `AccountAdd.svelte`・`SettingsAccounts.svelte` が `accounts.reload()` と `stores.reload()` | `AccountAdd.test.ts`「on done」、`SettingsAccounts.test.ts`「deletes the token…」 |
+| 23 一覧 | `SettingsStores.svelte`・`StoreCard.svelte` | `SettingsStores.test.ts`・`StoreCard.test.ts` |
+| 24 色 | `StoreColorPicker.svelte`・`StoreDot.svelte`・`StoreCard.svelte` | `StoreCard.test.ts`（パレット・自動・閲覧のみの灰色・キーボード）、`e2e/stores.spec.ts` |
+| 25 表示 | `StoreCard.svelte`・`SettingsStores.svelte` | `StoreCard.test.ts`・`SettingsStores.test.ts`（最後の1つは無効）、`e2e/stores.spec.ts` |
+| 26 詳細 | `StoreCard.svelte` | `StoreCard.test.ts`（remotes のミラー・アカウント・パス・既定にする） |
+| 27 解除 | `StoreRemoveDialog.svelte` | `StoreRemoveDialog.test.ts`、`e2e/stores.spec.ts`（解除・未 push・最後の Store で Onboarding） |
+| 28 見出しの操作 | `SettingsStores.svelte`・`StoreAddDialog.svelte`・`StoreDiscoverDialog.svelte` | `SettingsStores.test.ts`・`StoreAddDialog.test.ts`・`StoreDiscoverDialog.test.ts`、`e2e/stores.spec.ts`・`e2e/discover.spec.ts` |
+| 29 Onboarding | `web/app/states/Onboarding.svelte` | `Onboarding.test.ts`、`e2e/onboarding.spec.ts`・`e2e/discover.spec.ts` |
+| 30 発見 | `web/app/stores/StoreDiscover.svelte` | `StoreDiscover.test.ts`、`e2e/discover.spec.ts` |
+| 31 読み込み中 | `StoreDiscover.svelte` の「読み込み中…」「探しています…」 | `StoreDiscover.test.ts` |
+| 32 CreateStore のアカウント | `web/app/create/CreateStore.svelte` | `CreateStore.test.ts`（アカウントの出し分け・送信・`--account`） |
+| 33 `stores.changed` | `web/core/connection.ts`・`stores.ts` | `connection.test.ts`・`stores.test.ts` |
+| 71 E2E の keyring | `internal/app/remote/auth/filekeyring.go`、`internal/app/cli/keyring.go`・`keyring_e2e.go`・`run.go`、`Makefile`、`.github/workflows/ci-backend.yaml` | `filekeyring_test.go`、`e2e/keyring.spec.ts` |
+| 72 E2E の GitHub | `web/e2e/harness.ts`（`github` フィクスチャ・`fakegh()`・`hhIn()`） | `e2e/keyring.spec.ts`・`e2e/accounts.spec.ts` |
+| 73 閲覧のみの判定 | `web/core/stores.ts` の `readOnly`・`readOnlyReason` | `stores.test.ts` |
+| 74 `AccountsCache` | `web/core/accounts.ts` | `accounts.test.ts` |
+| 75 `retainSync` | `web/core/connection.ts`・`stores.ts` | `connection.test.ts`・`stores.test.ts` |
+| 76 設定のルート | `web/app/router.ts` | `router.test.ts` |
+| 77 パレット | `web/app/palette/search.ts`・`CommandPalette.svelte` | `search.test.ts`・`CommandPalette.test.ts` |
+| 78 Onboarding の閉じ方 | `web/app/App.svelte` | `gates.test.ts`（増えても出し続ける・0件で再表示・作成完了で閉じる） |
+| 79 アカウントの段 | `Onboarding.svelte` | `Onboarding.test.ts`（0件で次へが無効・理由・トークンなしでも進む） |
+| 80 発見の段のアカウントなし | `StoreDiscover.svelte` | `StoreDiscover.test.ts`「does not look when no account has a token」 |
+| 81 候補の名前 | `StoreDiscover.svelte` | `StoreDiscover.test.ts`（呼び名の初期値・空の名前・`permission` を送らない） |
+| 82 Device Flow の引き継ぎ | `AccountAdd.svelte`・`DeviceFlow.svelte` | `AccountAdd.test.ts`（409 の引き継ぎ・やめてやり直す）、`DeviceFlow.test.ts`（期限・error） |
+| 83 `gh`・環境変数のカード | `AccountCard.svelte` | `SettingsAccounts.test.ts`（「Hedgehug が持っているものはありません」・error の英文） |
+| 84 URL で追加の名前 | `StoreAddDialog.svelte` | `StoreAddDialog.test.ts` |
+| 85 CreateStore のアカウント | `CreateStore.svelte` | `CreateStore.test.ts` |
+| 86 remote のない Store の解除 | `StoreRemoveDialog.svelte` | `StoreRemoveDialog.test.ts`、`e2e/stores.spec.ts` |
+| 87 discover の main | `internal/lib/gitrepo/conn.go` の `MainHasFile`、`internal/app/usecase/discover.go` | `conn_test.go` の `TestMainHasFile`、`discover_test.go` の `TestDiscoverFromBareWithHeadOnMaster`、`e2e/discover.spec.ts` |
