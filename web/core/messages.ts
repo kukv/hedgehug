@@ -226,8 +226,8 @@ const messages: Record<string, Make> = {
     `トークンは ${str(a, "host")}/${str(a, "login")} のもので、アカウント ${str(a, "account")} のものではありません`,
   "auth.client_id": (a) =>
     `${str(a, "host")} のデバイスフローには、config.yaml の hosts[].client_id が要ります。トークンを貼るか、gh か環境変数を使ってください`,
-  "auth.device_running": () =>
-    "デバイスフローがすでに進んでいます。終わるか、やめてから、もう一度始めてください",
+  "auth.device_running": () => "デバイスフローがすでに進んでいます",
+  "request.canceled": () => "要求が途中で切れました。もう一度試してください",
   "auth.device_not_found": () => "そのデバイスフローはすでに終わっているか、ありません",
   "auth.device_failed": (_, e) => withDetail("デバイスフローでログインできませんでした", e),
   "auth.canceled": () => "ログインをやめました",

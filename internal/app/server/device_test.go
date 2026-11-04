@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -75,8 +76,15 @@ func TestDeviceFlowOneAtATimeAndCancel(t *testing.T) {
 
 	var first deviceStarted
 	ts.call("POST", "/api/auth/device", map[string]any{}, 201, &first)
-	if p := ts.problem("POST", "/api/auth/device", map[string]any{}, 409); p.Type != "auth.device_running" {
-		t.Errorf("second: %+v", p)
+	// The 409 says which flow runs, so a screen that lost the answer of the
+	// start (a reload, another tab) can show the code or cancel it.
+	p := ts.problem("POST", "/api/auth/device", map[string]any{}, 409)
+	if p.Type != "auth.device_running" || p.Args["id"] != first.ID ||
+		p.Args["user_code"] != first.UserCode || p.Args["verification_uri"] != first.VerificationURI {
+		t.Errorf("second: %+v; first %+v", p, first)
+	}
+	if at, err := time.Parse(time.RFC3339, fmt.Sprint(p.Args["expires_at"])); err != nil || at.Unix() != first.ExpiresAt.Unix() {
+		t.Errorf("expires_at = %v (%v); want %v", p.Args["expires_at"], err, first.ExpiresAt)
 	}
 	if p := ts.problem("DELETE", "/api/auth/device/not-"+first.ID, nil, 404); p.Type != "auth.device_not_found" {
 		t.Errorf("other id: %+v", p)

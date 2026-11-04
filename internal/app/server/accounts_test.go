@@ -250,6 +250,15 @@ func TestAccountTokenPut(t *testing.T) {
 		return r, p
 	}
 
+	// a new token wakes the sync loop: a store that was read-only for lack of
+	// a token is synced now, not at the next tick.
+	wakes := ts.srv.loop.wakes.Load()
+	defer func() {
+		if ts.srv.loop.wakes.Load() <= wakes {
+			t.Error("the sync loop was not woken by the tokens")
+		}
+	}()
+
 	// a name that is no account's: the account of the token's login is added.
 	r, _ := put("bobby", map[string]any{"token": bob}, 200)
 	var got struct {

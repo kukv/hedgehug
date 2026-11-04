@@ -19,6 +19,11 @@ type deviceRun struct {
 	cancel context.CancelFunc
 	done   chan struct{} // closed by end
 	once   sync.Once     // end runs once: runDevice calls it early and defers it
+
+	// The code, once it was shown (under deviceFlow.mu); a client that lost
+	// the answer of the start reads it from the 409.
+	code    usecase.DeviceCode
+	expires time.Time
 }
 
 // deviceFlow holds the one device flow the server runs at a time.
@@ -42,6 +47,31 @@ func (d *deviceFlow) begin(parent context.Context) (*deviceRun, context.Context,
 	r := &deviceRun{id: hex.EncodeToString(b), cancel: cancel, done: make(chan struct{})}
 	d.current = r
 	return r, ctx, true
+}
+
+// setCode records the code r showed, and when it ends.
+func (d *deviceFlow) setCode(r *deviceRun, c usecase.DeviceCode, expires time.Time) {
+	d.mu.Lock()
+	r.code, r.expires = c, expires
+	d.mu.Unlock()
+}
+
+// runningArgs is the args of the 409: the flow that is running, in the
+// shape of deviceStartBody (without the code while it is not yet shown).
+func (d *deviceFlow) runningArgs() map[string]any {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	r := d.current
+	if r == nil {
+		return nil
+	}
+	a := map[string]any{"id": r.id}
+	if r.code.UserCode != "" {
+		a["user_code"] = r.code.UserCode
+		a["verification_uri"] = r.code.VerificationURI
+		a["expires_at"] = r.expires.UTC().Format(time.RFC3339)
+	}
+	return a
 }
 
 // end clears r, before its event is published: a screen that starts the next
@@ -124,8 +154,10 @@ func (s *Server) registerDevice() {
 	}, func(ctx context.Context, in *deviceStartInput) (*deviceStartOutput, error) {
 		run, rctx, ok := s.device.begin(s.base)
 		if !ok {
-			return nil, newProblem(http.StatusConflict, "auth.device_running",
-				"a device flow is running; wait for it, or cancel it with DELETE /api/auth/device/{id}")
+			p := newProblem(http.StatusConflict, "auth.device_running",
+				"a device flow is running; cancel it with DELETE /api/auth/device/{id} (args.id), or wait for it")
+			p.Args = s.device.runningArgs()
+			return nil, p
 		}
 		started := make(chan deviceStart, 1)
 		go s.runDevice(rctx, run, in.Body.Name, in.Body.Host, started)
@@ -173,6 +205,7 @@ func (s *Server) runDevice(ctx context.Context, run *deviceRun, name, host strin
 		Name: name, Host: host, HostGiven: host != "", Context: ctx,
 		OnCode: func(c usecase.DeviceCode) {
 			shown = true
+			s.device.setCode(run, c, s.opt.Now().Add(time.Duration(c.ExpiresIn)*time.Second))
 			started <- deviceStart{code: c}
 		},
 	})
@@ -193,7 +226,7 @@ func (s *Server) runDevice(ctx context.Context, run *deviceRun, name, host strin
 		p.Args = map[string]any{"account": res.Account, "uses": res.Uses}
 		started <- deviceStart{prob: p}
 	default:
-		s.pinnedStores(res.Pinned)
+		s.tokenWritten(res.Pinned)
 		s.hub.Publish(authDeviceEvent{ID: run.id, State: "done", Account: res.Account})
 	}
 }

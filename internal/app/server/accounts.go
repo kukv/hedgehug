@@ -98,7 +98,7 @@ func (s *Server) registerAccounts() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		s.pinnedStores(res.Pinned)
+		s.tokenWritten(res.Pinned)
 		return &accountLoginOutput{Body: loginBody(res)}, nil
 	})
 
@@ -127,4 +127,17 @@ func (s *Server) pinnedStores(p usecase.Pinned) {
 	if len(p.Stores) > 0 {
 		s.storesWritten()
 	}
+}
+
+// tokenWritten is what a new token does afterwards: a store that was read-only
+// for lack of a token can write now, so the sync loop and the poller look at
+// once instead of at the next tick. When the write also pinned accounts to
+// stores, that is storesWritten, which does the same and tells the clients.
+func (s *Server) tokenWritten(p usecase.Pinned) {
+	if len(p.Stores) > 0 {
+		s.storesWritten()
+		return
+	}
+	s.poller.Kick()
+	s.loop.Wake()
 }

@@ -158,13 +158,14 @@ describe("errorMessage", () => {
   });
 
   it("words the codes of the accounts and the device flow", () => {
-    expect(errorMessage(err("auth.device_running"))).toBe(
-      "デバイスフローがすでに進んでいます。終わるか、やめてから、もう一度始めてください",
-    );
+    expect(errorMessage(err("auth.device_running"))).toBe("デバイスフローがすでに進んでいます");
     expect(errorMessage(err("auth.device_not_found"))).toBe(
       "そのデバイスフローはすでに終わっているか、ありません",
     );
     expect(errorMessage(err("auth.canceled"))).toBe("ログインをやめました");
+    expect(errorMessage(err("request.canceled"))).toBe(
+      "要求が途中で切れました。もう一度試してください",
+    );
     expect(errorMessage(err("auth.device_failed", {}, "the login was denied"))).toBe(
       "デバイスフローでログインできませんでした: the login was denied",
     );
