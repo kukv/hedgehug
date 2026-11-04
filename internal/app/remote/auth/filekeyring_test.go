@@ -2,8 +2,10 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -61,6 +63,33 @@ func TestFileKeyringSharedBetweenValues(t *testing.T) {
 	}
 	if _, err := k.Get("svc", "u"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("Get after another value's Delete: err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestFileKeyringConcurrentSets(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "keyring.json")
+	const n = 16
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs[i] = FileKeyring(path).Set("svc", fmt.Sprintf("u%d", i), fmt.Sprintf("v%d", i))
+		}()
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("Set u%d: %v", i, err)
+		}
+	}
+	k := FileKeyring(path)
+	for i := range n {
+		if got, err := k.Get("svc", fmt.Sprintf("u%d", i)); err != nil || got != fmt.Sprintf("v%d", i) {
+			t.Errorf("u%d = %q, %v; want v%d", i, got, err, i)
+		}
 	}
 }
 

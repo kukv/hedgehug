@@ -180,7 +180,7 @@ export class Hedgehug {
   }
 
   async stop(): Promise<void> {
-    if (this.proc.exitCode === null) {
+    if (this.proc.exitCode === null && this.proc.signalCode === null) {
       const exited = new Promise<void>((done) => this.proc.once("exit", () => done()));
       this.proc.kill("SIGINT");
       const timer = setTimeout(() => this.proc.kill("SIGKILL"), 5000);
@@ -216,6 +216,10 @@ class FakeGitHub {
         () => reject(new Error(`fakegh printed no URL in 15s\n${err}`)),
         15000,
       );
+      proc.once("error", (e) => {
+        clearTimeout(timer);
+        reject(new Error(`cannot run ${FAKEGH}: ${e.message} (run make e2e-bin to build it)`));
+      });
       proc.once("exit", (code) => {
         clearTimeout(timer);
         reject(new Error(`fakegh exited with ${code} before it printed its URL\n${err}`));
@@ -236,7 +240,7 @@ class FakeGitHub {
   }
 
   async stop(): Promise<void> {
-    if (this.proc.exitCode !== null) return;
+    if (this.proc.exitCode !== null || this.proc.signalCode !== null) return;
     const exited = new Promise<void>((done) => this.proc.once("exit", () => done()));
     this.proc.kill("SIGINT");
     const timer = setTimeout(() => this.proc.kill("SIGKILL"), 5000);
@@ -297,28 +301,34 @@ export async function startHedgehug(store: StoreSpec | null, github = false): Pr
       throw e;
     }
   }
-  // hh needs an account; the author of the commits is its login.
-  mkdirSync(join(home, "hh"));
-  const hosts = gh
-    ? `hosts:\n  - host: github.com\n    api: ${gh.url}\n    web: ${gh.url}\n    client_id: e2e\n`
-    : "";
-  writeFileSync(
-    join(home, "hh", "config.yaml"),
-    `accounts:\n  - name: ${LOGIN}\n    host: github.com\n    login: ${LOGIN}\n${hosts}`,
-  );
   const env = Hedgehug.env(home);
   let remote: string | null = null;
-  if (store) {
-    const args = ["store", "init", store.name, "--prefix", store.prefix];
-    if (store.workspace) args.push("--workspace", store.workspace);
-    if (store.remote) {
-      remote = join(home, "remote.git");
-      execFileSync("git", ["init", "--bare", "--quiet", remote], { encoding: "utf8" });
-      args.push("--remote", remote);
+  try {
+    // hh needs an account; the author of the commits is its login.
+    mkdirSync(join(home, "hh"));
+    const hosts = gh
+      ? `hosts:\n  - host: github.com\n    api: ${gh.url}\n    web: ${gh.url}\n    client_id: e2e\n`
+      : "";
+    writeFileSync(
+      join(home, "hh", "config.yaml"),
+      `accounts:\n  - name: ${LOGIN}\n    host: github.com\n    login: ${LOGIN}\n${hosts}`,
+    );
+    if (store) {
+      const args = ["store", "init", store.name, "--prefix", store.prefix];
+      if (store.workspace) args.push("--workspace", store.workspace);
+      if (store.remote) {
+        remote = join(home, "remote.git");
+        execFileSync("git", ["init", "--bare", "--quiet", remote], { encoding: "utf8" });
+        args.push("--remote", remote);
+      }
+      execFileSync(BIN, args, { cwd: home, env, encoding: "utf8" });
+      // The remote gets the first commits, so that a second user can add the store from it.
+      if (remote) execFileSync(BIN, ["sync"], { cwd: home, env, encoding: "utf8" });
     }
-    execFileSync(BIN, args, { cwd: home, env, encoding: "utf8" });
-    // The remote gets the first commits, so that a second user can add the store from it.
-    if (remote) execFileSync(BIN, ["sync"], { cwd: home, env, encoding: "utf8" });
+  } catch (e) {
+    await gh?.stop();
+    rmSync(home, { recursive: true, force: true });
+    throw e;
   }
 
   const proc = spawn(BIN, ["ui", "--no-open"], { cwd: home, env });

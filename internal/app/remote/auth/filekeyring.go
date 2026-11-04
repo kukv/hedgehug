@@ -73,7 +73,9 @@ func (k fileKeyring) Delete(service, user string) error {
 // update runs fn on the entries under a lock and writes them back when fn
 // succeeds. The file is written through a temporary file, which is 0600.
 func (k fileKeyring) update(fn func(map[string]string) error) error {
-	return osfs.WithFileLock(k.path+".lock", fileKeyringWait, func() error {
+	locked := false
+	err := osfs.WithFileLock(k.path+".lock", fileKeyringWait, func() error {
+		locked = true
 		m, err := k.load()
 		if err != nil {
 			return err
@@ -83,8 +85,15 @@ func (k fileKeyring) update(fn func(map[string]string) error) error {
 		}
 		b, err := json.Marshal(m)
 		if err != nil {
-			return err
+			return fmt.Errorf("the file keyring: %w", err)
 		}
-		return osfs.WriteAtomic(k.path, b)
+		if err := osfs.WriteAtomic(k.path, b); err != nil {
+			return fmt.Errorf("the file keyring: %w", err)
+		}
+		return nil
 	})
+	if err != nil && !locked { // the lock itself failed
+		return fmt.Errorf("the file keyring: %w", err)
+	}
+	return err
 }

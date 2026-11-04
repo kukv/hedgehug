@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"errors"
 	"path/filepath"
 
 	"github.com/kukv/hedgehug/internal/app/remote/auth"
@@ -11,10 +12,10 @@ import (
 // mainKeyring is the keyring of the E2E binary (go build -tags e2e): a file
 // in HEDGEHUG_HOME, so that the browser tests neither need an OS keychain (CI
 // has none) nor write the Keychain of the developer.
-func mainKeyring(getenv func(string) string) auth.Keyring {
+func mainKeyring(getenv func(string) string) (auth.Keyring, error) {
 	home := getenv("HEDGEHUG_HOME")
 	if home == "" {
-		panic("the e2e build of hedgehug needs HEDGEHUG_HOME for its file keyring")
+		return nil, errors.New("the e2e build needs HEDGEHUG_HOME for its file keyring")
 	}
-	return auth.FileKeyring(filepath.Join(home, "e2e-keyring.json"))
+	return auth.FileKeyring(filepath.Join(home, "e2e-keyring.json")), nil
 }
