@@ -89,7 +89,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        shard: [ops, cli, sync-property, sync-property-stores, sync-server, others]
+        shard: [usecase, cli, storage, sync-property, sync-property-stores, others]
         # -race はテストを数倍遅くする。検出するデータ競合は OS によらないので、
         # ubuntu だけで付ける。カバレッジとテストの結果も ubuntu の分をまとめる。
         include:
@@ -138,9 +138,10 @@ jobs:
         run: go mod verify
 
       # 何を回すかは、パッケージごとの時間（下の Package times）で均した分け方:
-      # ops = internal/app/usecase、cli = internal/app/cli、sync-property・sync-property-stores = replicate の
-      # 2つの property テスト（seed が多く重い）、sync-server = replicate の残りと server、
-      # others = 残りのパッケージすべて（新しいパッケージは何もしなくても others に入る）。
+      # usecase = internal/app/usecase/...、cli = internal/app/cli/...、storage = internal/app/storage/...、
+      # sync-property・sync-property-stores = replicate の 2 つの property テスト（seed が多く重い）、
+      # others = 残りのパッケージすべて（replicate の残りと server を含む。新しいパッケージは何もしなくても
+      # usecase・cli・storage の下か others に入る）。
       # 復元したキャッシュには main のテスト結果も入っているので、-count=1 で毎回テストを実行する。
       - name: Test
         shell: bash
@@ -153,12 +154,12 @@ jobs:
           prop='^TestPropertyConverges(Stores)?$'
           # shellcheck disable=SC2207 # package paths have no spaces
           case "$SHARD" in
-            ops) args=("$mod/internal/app/usecase") ;;
-            cli) args=("$mod/internal/app/cli") ;;
+            usecase) args=("$mod/internal/app/usecase/...") ;;
+            cli) args=("$mod/internal/app/cli/...") ;;
+            storage) args=("$mod/internal/app/storage/...") ;;
             sync-property) args=(-run '^TestPropertyConverges$' "$mod/internal/app/remote/replicate") ;;
             sync-property-stores) args=(-run '^TestPropertyConvergesStores$' "$mod/internal/app/remote/replicate") ;;
-            sync-server) args=(-skip "$prop" "$mod/internal/app/remote/replicate" "$mod/internal/app/server") ;;
-            others) args=($(go list ./... | grep -vxF -e "$mod/internal/app/usecase" -e "$mod/internal/app/cli" -e "$mod/internal/app/remote/replicate" -e "$mod/internal/app/server")) ;;
+            others) args=(-skip "$prop" $(go list ./... | grep -vE -e "^$mod/internal/app/(usecase|cli)(/|\$)" -e "^$mod/internal/app/storage/")) ;;
             *) echo "unknown shard $SHARD"; exit 1 ;;
           esac
           cover=()
