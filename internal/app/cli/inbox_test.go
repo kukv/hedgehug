@@ -375,3 +375,19 @@ func TestInboxDuplicateNameMatchesTheName(t *testing.T) {
 		t.Errorf("empty name: %q", got)
 	}
 }
+
+// inbox leaves out a store that does not open, with a warning, and the
+// store --store names is the error.
+func TestInboxLeavesOutAStoreThatDoesNotOpen(t *testing.T) {
+	t.Parallel()
+	te := newTwoStoreEnv(t)
+	te.breakStore("bravo-long")
+	code, out, stderr := te.run("inbox")
+	if code != 0 || out != "No unread items\n" || strings.Count(stderr, "warning: cannot open bravo-long: ") != 1 {
+		t.Errorf("inbox: exit %d\nstdout %q\nstderr %q", code, out, stderr)
+	}
+	code, _, stderr = te.run("inbox", "--store", "bravo-long")
+	if code == 0 || !strings.Contains(stderr, "bravo-long") {
+		t.Errorf("inbox --store bravo-long: exit %d\nstderr %q", code, stderr)
+	}
+}

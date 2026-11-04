@@ -529,3 +529,11 @@ func (te *testEnv) tempFiles() []string {
 	}
 	return out
 }
+
+// breakStore makes the store name stop opening: its repository goes away.
+func (te *testEnv) breakStore(name string) {
+	te.t.Helper()
+	if err := os.RemoveAll(filepath.Join(te.storeDir(name), ".git")); err != nil {
+		te.t.Fatal(err)
+	}
+}

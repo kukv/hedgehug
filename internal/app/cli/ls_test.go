@@ -5,7 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func TestLs(t *testing.T) {
@@ -238,4 +240,32 @@ func TestDescribe(t *testing.T) {
 			t.Errorf("describe lacks the candidate %s:\n%s", j.ULID, got)
 		}
 	}
+}
+
+// A command about one store does not warn of the others.
+func TestStoreFlagKeepsOtherBrokenStoresQuiet(t *testing.T) {
+	t.Parallel()
+	te := newTwoStoreEnv(t)
+	te.breakStore("bravo-long")
+	code, _, stderr := te.run("ls", "--store", "alpha")
+	if code != 0 || stderr != "" {
+		t.Errorf("ls --store alpha: exit %d\nstderr %q", code, stderr)
+	}
+	code, _, stderr = te.run("ls")
+	if code != 0 || !strings.HasPrefix(stderr, "warning: cannot open bravo-long: ") {
+		t.Errorf("ls: exit %d\nstderr %q", code, stderr)
+	}
+}
+
+// A status that only one store's schema has is looked for in that store.
+func TestLsStatusOfAnotherSchema(t *testing.T) {
+	t.Parallel()
+	te := newTwoStoreEnv(t)
+	sc := schema.Default()
+	sc.Statuses = append(sc.Statuses, schema.Status{Name: "review", Category: schema.CategoryDoing})
+	te.uc().MustEdit("alpha", "update", usecasetest.AliceAuthor, func(tx *usecasetest.Tx) error { return tx.PutSchema(sc) })
+	te.addJSON("--store", "alpha", "Alpha reviewed", "--status", "review")
+	te.goldenOK("status", "ls", "status:review")
+	te.goldenOK("not-status", "ls", "--", "-status:review")
+	te.goldenRun("unknown", 2, "ls", "status:zzz")
 }
