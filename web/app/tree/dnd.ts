@@ -23,8 +23,9 @@ export type DropInput = {
   place: DropPlace;
   schema: SchemaView | undefined;
   taskOf: (ulid: string) => TaskView | undefined;
-  // Why the Store of the place cannot be written (in Japanese), or null/absent when it can.
-  readOnly?: string | null;
+  // The Store that cannot be written (the one of the place or of the dragged task) and why (in
+  // Japanese), or null/absent when both can.
+  readOnly?: { store: string; why: string } | null;
 };
 
 // silent: nothing to do and nothing to say (a drop on itself). A move to where
@@ -54,7 +55,7 @@ export function dropDecision(i: DropInput): DropDecision {
   if (i.readOnly) {
     return refuse(
       "閲覧のみの Store には置けません",
-      `${target.store} は閲覧のみです（${i.readOnly}）。`,
+      `${i.readOnly.store} は閲覧のみです（${i.readOnly.why}）。`,
     );
   }
 

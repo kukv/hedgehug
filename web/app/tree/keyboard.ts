@@ -27,6 +27,23 @@ export type KeyAction =
   | { type: "menu"; which: "status" | "kind"; ulid: string }
   | { type: "reject"; rejection: Rejection };
 
+// The task a write action acts on (selected is the row a refusal belongs to), or null for an action
+// that only moves the view.
+export function writeTargetOf(a: KeyAction, selected: string | null): string | null {
+  switch (a.type) {
+    case "add-below":
+      return a.after;
+    case "move":
+    case "set-status":
+    case "menu":
+      return a.ulid;
+    case "reject":
+      return selected;
+    default:
+      return null;
+  }
+}
+
 const NONE: KeyAction = { type: "none" };
 
 // The keys that act through the kinds and the statuses of the schema. Pressed before the schema is

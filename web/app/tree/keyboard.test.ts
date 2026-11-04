@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { TaskView } from "../../core/api/client";
 import { schema, task } from "./fixtures";
 import { flatten } from "./flatten";
-import { type KeyContext, type KeyInput, keyAction, needsSchema } from "./keyboard";
+import { type KeyContext, type KeyInput, keyAction, needsSchema, writeTargetOf } from "./keyboard";
 
 // P (view root)
 //  ├ E1 (epic)
@@ -304,5 +304,24 @@ describe("a view over several stores", () => {
   it("does not indent the first top row of a store under the last one of another", () => {
     expect(keyAction(key("Tab"), multi("B1"))).toEqual({ type: "none" });
     expect(keyAction(key("Tab"), multi("B2"))).toMatchObject({ type: "reject" });
+  });
+});
+
+describe("the task a write action acts on", () => {
+  it("is the task of the actions that write, and the selection for a refusal", () => {
+    expect(writeTargetOf({ type: "add-below", after: "A", parent: null }, "S")).toBe("A");
+    expect(writeTargetOf({ type: "move", ulid: "M", to: { root: true } }, "S")).toBe("M");
+    expect(writeTargetOf({ type: "set-status", ulid: "X", status: "done" }, "S")).toBe("X");
+    expect(writeTargetOf({ type: "menu", which: "kind", ulid: "K" }, "S")).toBe("K");
+    expect(writeTargetOf({ type: "reject", rejection: { title: "t", reason: "r" } }, "S")).toBe(
+      "S",
+    );
+  });
+
+  it("is null for the actions that only move the view", () => {
+    expect(writeTargetOf({ type: "none" }, "S")).toBeNull();
+    expect(writeTargetOf({ type: "select", ulid: "A" }, "S")).toBeNull();
+    expect(writeTargetOf({ type: "toggle", ulid: "A", open: true }, "S")).toBeNull();
+    expect(writeTargetOf({ type: "open-detail", ulid: "A" }, "S")).toBeNull();
   });
 });

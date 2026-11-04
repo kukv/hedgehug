@@ -414,6 +414,25 @@ describe("TableView", () => {
       ).not.toHaveAttribute("title");
     });
 
+    it("follows the Store when it becomes writable again", async () => {
+      const readOnly: Record<string, string> = { me: "the remote cannot be written" };
+      const { ev } = setup({
+        ulids: ["M1"],
+        stores: ["shared", "me"],
+        readOnly,
+        scope: { apiBase: "", cliBase: "", store: undefined, saveBase: "" },
+      });
+      mount({ view: { kind: "all" } });
+      const title = () => screen.getByRole("textbox", { name: "タイトル: ME-1" });
+      expect(title()).toHaveAttribute("readonly");
+      delete readOnly.me;
+      ev.emit();
+      await waitFor(() => expect(title()).not.toHaveAttribute("readonly"));
+      readOnly.me = "the remote denied the push";
+      ev.emit();
+      await waitFor(() => expect(title()).toHaveAttribute("readonly"));
+    });
+
     it("only shows the columns that are not edited", async () => {
       setup();
       mount({ settings: { ...SETTINGS, columns: ["id", "parent", "created"] } });

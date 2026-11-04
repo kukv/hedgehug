@@ -39,7 +39,7 @@
     ROW_HEIGHT,
     VIRTUALIZE_AT,
   } from "./flatten";
-  import { type KeyAction, type KeyInput, keyAction, needsSchema } from "./keyboard";
+  import { type KeyAction, type KeyInput, keyAction, needsSchema, writeTargetOf } from "./keyboard";
   import { openBlocker } from "./marks";
   import { checkParent, kindLabel, pickKind } from "./placement";
   import { orderRootsByStore, storesOf } from "./stores-order";
@@ -386,22 +386,6 @@
     return store === undefined ? null : readOnlyNow(c.stores, store);
   }
 
-  // The task a write action acts on, or null for an action that only moves the view.
-  function writeTargetOf(a: KeyAction): string | null {
-    switch (a.type) {
-      case "add-below":
-        return a.after;
-      case "move":
-      case "set-status":
-      case "menu":
-        return a.ulid;
-      case "reject":
-        return selection.ulid;
-      default:
-        return null;
-    }
-  }
-
   function actionOf(k: KeyInput): KeyAction {
     return keyAction(k, { rows, selected: selection.ulid, schema: keySchema, viewRoot, taskOf });
   }
@@ -478,7 +462,7 @@
   // run says whether the action went through: false for a refusal or a failed write.
   async function run(a: KeyAction): Promise<boolean> {
     // A Store that cannot be written refuses before anything else, even the refusals of the schema.
-    const target = writeTargetOf(a);
+    const target = writeTargetOf(a, selection.ulid);
     const why = target === null ? null : readOnlyOf(taskOf(target)?.store);
     if (why !== null) {
       readOnlyToast(why);
@@ -675,8 +659,17 @@
       place,
       schema: schemaOf(dragged.store),
       taskOf,
-      readOnly: readOnlyOf(target.store) ?? readOnlyOf(dragged.store),
+      readOnly: refusingStore(target.store, dragged.store),
     });
+  }
+
+  // The first of the Stores that cannot be written, with the reason.
+  function refusingStore(...stores: string[]): { store: string; why: string } | null {
+    for (const store of stores) {
+      const why = readOnlyOf(store);
+      if (why !== null) return { store, why };
+    }
+    return null;
   }
 
   function setOver(targetUlid: string, place: DropPlace | null, sourceUlid: string | null) {

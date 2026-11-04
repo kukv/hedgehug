@@ -510,8 +510,8 @@ describe("KanbanView: a read-only Store", () => {
 
   it("keeps the plus while a Store can be written", async () => {
     setup(two);
-    mountView({ view: { kind: "all" } });
     h.ls = { ...h.ls, store: undefined };
+    mountView({ view: { kind: "all" } });
     expect(await screen.findByRole("button", { name: "進行中 にタスクを追加" })).toBeEnabled();
   });
 

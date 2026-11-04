@@ -29,6 +29,21 @@ function decide(dragged: string, target: string, place: "before" | "after" | "ch
   });
 }
 
+describe("a Store that cannot be written", () => {
+  it("names the Store that refuses, whichever side it is", () => {
+    const d = dropDecision({
+      dragged: at("T7"),
+      target: at("T1"),
+      place: "after",
+      schema,
+      taskOf,
+      readOnly: { store: "dragged-store", why: "remote に書き込めません" },
+    });
+    expect(d).toMatchObject({ ok: false, silent: false });
+    if (!d.ok) expect(d.reason).toBe("dragged-store は閲覧のみです（remote に書き込めません）。");
+  });
+});
+
 describe("placeOf", () => {
   it("maps the hitbox instruction to a place", () => {
     expect(placeOf({ type: "reorder-above" } as never)).toBe("before");

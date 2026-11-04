@@ -70,6 +70,8 @@ test("the tree of a read-only Store says why a key does nothing, and writes noth
   hh.readOnlyStore("ro", "RO", ["Read only"]);
   await hh.open(page, await tab(hh, "ro", "tree"));
 
+  // Space waits for the schema of the Store by itself (the add row that treeReady waits for is not
+  // shown in a read-only Store).
   await row(page, "Read only").click();
   await page.keyboard.press("Space");
   // The band of the page says the same sentence, so the toast is the one in the live region.
