@@ -205,7 +205,7 @@
     flex-direction: column;
     align-items: center;
     gap: var(--space-10);
-    padding: 32px var(--space-20);
+    padding: var(--space-28) var(--space-20);
     color: var(--ink-2);
   }
   .confirm {

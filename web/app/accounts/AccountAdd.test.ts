@@ -276,6 +276,27 @@ describe("AccountAdd: Device Flow", () => {
     expect(api.POST).toHaveBeenCalledTimes(2);
   });
 
+  it("does not start again when the form goes while the old flow is being stopped", async () => {
+    let release: () => void = () => {};
+    const pending = new Promise<void>((r) => {
+      release = r;
+    });
+    let n = 0;
+    const { api, view } = mount(
+      {},
+      {
+        post: () => (n++ === 0 ? fail(409, "auth.device_running", { id: "OLD" }) : ok(started)),
+        del: () => pending.then(() => ok(undefined)) as ReturnType<typeof ok>,
+      },
+    );
+    await fireEvent.click(button("GitHub でログイン"));
+    await fireEvent.click(await screen.findByRole("button", { name: "やめてやり直す" }));
+    view.unmount();
+    release();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(api.POST).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the words of a refusal to start", async () => {
     mount({}, { post: () => fail(422, "auth.client_id", { host: "github.com" }) });
     await fireEvent.click(button("GitHub でログイン"));

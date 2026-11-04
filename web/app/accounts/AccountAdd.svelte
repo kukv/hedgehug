@@ -178,6 +178,7 @@
 
   // The flow that is running elsewhere is stopped, and ours begins.
   async function restart(): Promise<void> {
+    const mine = ++seq;
     const old = flow?.id ?? stale;
     flow = null;
     stale = null;
@@ -186,11 +187,14 @@
       try {
         await remove(old);
       } catch (e) {
+        if (mine !== seq) return;
         if (!(e instanceof ApiError && e.type === "auth.device_not_found")) {
           failure = errorMessage(e);
           return;
         }
       }
+      // the source was changed or the form went while the old flow was being stopped
+      if (mine !== seq) return;
     }
     await start();
   }

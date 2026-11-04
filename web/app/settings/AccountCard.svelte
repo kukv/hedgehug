@@ -184,8 +184,8 @@
     display: inline-flex;
     align-items: center;
     gap: var(--space-4);
-    padding: 2px var(--space-8);
-    border-radius: 999px;
+    padding: var(--space-4) var(--space-8);
+    border-radius: var(--radius-pill);
     font-size: var(--fs-12);
   }
   .state[data-state="ok"] {
@@ -204,8 +204,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: var(--space-28);
+    height: var(--space-28);
     border: 0;
     border-radius: var(--radius-6);
     background: transparent;
