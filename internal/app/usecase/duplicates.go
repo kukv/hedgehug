@@ -7,8 +7,8 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/storage/mount"
 	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
-	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 )
 
 // dupPlace is where a duplicated task lives: a mounted store and its id there.

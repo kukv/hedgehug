@@ -11,9 +11,9 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/history"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/storage/mount"
 	"github.com/kukv/hedgehug/internal/app/storage/query"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
@@ -69,8 +69,8 @@ func (ss *Session) MountedCount() (int, error) {
 
 // queryMounted runs q on the stores of set that store: and --store leave. A
 // query that does not run is a usage error.
-func (ss *Session) queryMounted(set *mount.Set, q *query.Query) (*mount.Result, error) {
-	res, err := mount.Query(set, q, ss.StoreName, func(m *mount.Mounted) (query.Options, error) {
+func (ss *Session) queryMounted(set *mount.Set, q *query.Query) (*Result, error) {
+	res, err := Query(set, q, ss.StoreName, func(m *mount.Mounted) (query.Options, error) {
 		return ss.QueryOptions(m.Store)
 	})
 	if err != nil {
@@ -89,8 +89,8 @@ func (ss *Session) queryMounted(set *mount.Set, q *query.Query) (*mount.Result, 
 // What Entries hold is read through their Store's Index.
 type ListResult struct {
 	Stores  []*mount.Mounted
-	Entries []mount.Entry
-	Groups  []mount.Group
+	Entries []Entry
+	Groups  []Group
 	Many    bool
 }
 

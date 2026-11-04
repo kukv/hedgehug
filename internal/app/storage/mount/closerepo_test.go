@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/app/storage/mount/mounttest"
+
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
@@ -20,7 +22,7 @@ func newStoresIn(t *testing.T, root string, names ...string) []config.StoreEntry
 	for i, name := range names {
 		dir := filepath.Join(root, name)
 		ws := &model.Workspace{ULID: model.NewULID(), Name: name, IDPrefix: string(rune('A'+i)) + "XX"}
-		if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, nil, ws, testAuthor, "", time.Now); err != nil {
+		if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, nil, ws, mounttest.Author, "", time.Now); err != nil {
 			t.Fatal(err)
 		}
 		out = append(out, config.StoreEntry{Name: name, Path: dir})
@@ -62,8 +64,8 @@ func TestOpenStoresInOneDirectoryEachGetsItsOwnLeftover(t *testing.T) {
 // works; the closed one reopens its store when it is used (With).
 func TestCloseRepoThenTheSetIsOpenedAgain(t *testing.T) {
 	t.Parallel()
-	e := newStoreAt(t, "here", "HRE")
-	tasks := putTasks(t, e, 2, nil)
+	e := mounttest.NewStoreAt(t, "here", "HRE")
+	tasks := mounttest.PutTasks(t, e, 2, nil)
 	c := &config.Config{Stores: []config.StoreEntry{e}}
 	set := Open(c, Options{})
 	m, ok := set.Get("here")

@@ -4,21 +4,20 @@ import (
 	"fmt"
 
 	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
-	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 )
 
 // crossRefs finds the references of the store name to another mounted store.
-func (ss *Session) crossRefs(name string) ([]mount.CrossRef, error) {
+func (ss *Session) crossRefs(name string) ([]CrossRef, error) {
 	set, err := ss.Mount()
 	if err != nil {
 		return nil, err
 	}
-	return mount.CrossRefs(set, name)
+	return CrossRefs(set, name)
 }
 
 // crossRefMsg says what r is: "parent points at org-b's WEB-4; references
 // stay inside a store".
-func crossRefMsg(r mount.CrossRef) string {
+func crossRefMsg(r CrossRef) string {
 	return fmt.Sprintf("%s points at %s's %s; references stay inside a store", r.Field, r.Target.Store.Name, r.Target.RawID())
 }
 

@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/app/storage/mount/mounttest"
+
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 )
 
@@ -25,11 +27,11 @@ func displayIDs(t *testing.T, set *Set) map[string]string {
 
 func TestSharedPrefixesShowWithTheStoreName(t *testing.T) {
 	t.Parallel()
-	a := newStoreAt(t, "org-a", "API")
-	b := newStoreAt(t, "org-b", "API")
-	c := newStoreAt(t, "org-c", "WEB")
+	a := mounttest.NewStoreAt(t, "org-a", "API")
+	b := mounttest.NewStoreAt(t, "org-b", "API")
+	c := mounttest.NewStoreAt(t, "org-c", "WEB")
 	for _, e := range []config.StoreEntry{a, b, c} {
-		putTasks(t, e, 1, nil)
+		mounttest.PutTasks(t, e, 1, nil)
 	}
 	got := displayIDs(t, openSet(t, a, b, c))
 	want := map[string]string{"org-a": "org-a:API-1", "org-b": "org-b:API-1", "org-c": "WEB-1"}
@@ -42,9 +44,9 @@ func TestSharedPrefixesShowWithTheStoreName(t *testing.T) {
 
 func TestSharedPrefixesDoNotCountAStoreThatDoesNotOpen(t *testing.T) {
 	t.Parallel()
-	a := newStoreAt(t, "org-a", "API")
+	a := mounttest.NewStoreAt(t, "org-a", "API")
 	gone := config.StoreEntry{Name: "gone", Path: filepath.Join(t.TempDir(), "nope")}
-	putTasks(t, a, 1, nil)
+	mounttest.PutTasks(t, a, 1, nil)
 	if got := displayIDs(t, openSet(t, a, gone))["org-a"]; got != "API-1" {
 		t.Errorf("DisplayID = %q; want API-1", got)
 	}
@@ -52,15 +54,15 @@ func TestSharedPrefixesDoNotCountAStoreThatDoesNotOpen(t *testing.T) {
 
 func TestSharedPrefixesOfAConfigIsTheOneOpenGives(t *testing.T) {
 	t.Parallel()
-	a := newStoreAt(t, "org-a", "API")
-	b := newStoreAt(t, "org-b", "API")
+	a := mounttest.NewStoreAt(t, "org-a", "API")
+	b := mounttest.NewStoreAt(t, "org-b", "API")
 	c := &config.Config{Stores: []config.StoreEntry{a, b}}
 	shared := SharedPrefixes(c)
 	if !shared("API") || !shared("api") || shared("WEB") {
 		t.Errorf("SharedPrefixes: API %v, api %v, WEB %v", shared("API"), shared("api"), shared("WEB"))
 	}
 	set := Open(c, Options{Qualified: func(string) bool { return false }})
-	putTasks(t, a, 1, nil)
+	mounttest.PutTasks(t, a, 1, nil)
 	if got := displayIDs(t, set)["org-a"]; got != "API-1" {
 		t.Errorf("with Options.Qualified saying no, DisplayID = %q; want API-1", got)
 	}
@@ -68,15 +70,15 @@ func TestSharedPrefixesOfAConfigIsTheOneOpenGives(t *testing.T) {
 
 func TestQualifiedIsKeptAcrossRefreshAndReopen(t *testing.T) {
 	t.Parallel()
-	a := newStoreAt(t, "org-a", "API")
-	b := newStoreAt(t, "org-b", "API")
+	a := mounttest.NewStoreAt(t, "org-a", "API")
+	b := mounttest.NewStoreAt(t, "org-b", "API")
 	set := openSet(t, a, b)
 	m := set.Stores[0]
 	ix, err := m.Index()
 	if err != nil {
 		t.Fatal(err)
 	}
-	putTasks(t, a, 1, nil)
+	mounttest.PutTasks(t, a, 1, nil)
 	if err := ix.Refresh(); err != nil {
 		t.Fatal(err)
 	}

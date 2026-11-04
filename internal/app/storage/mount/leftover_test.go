@@ -5,6 +5,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/app/storage/mount/mounttest"
+
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
 
@@ -13,15 +15,15 @@ import (
 // reason.
 func TestOpenTellsOfALeftoverRebuild(t *testing.T) {
 	t.Parallel()
-	here := newStoreAt(t, "here", "HRE")
-	away := newStoreAt(t, "away", "AWY")
+	here := mounttest.NewStoreAt(t, "here", "HRE")
+	away := mounttest.NewStoreAt(t, "away", "AWY")
 	if err := os.MkdirAll(here.Path+".rewrite-new", 0o750); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Rename(away.Path, away.Path+".before-rewrite-1"); err != nil {
 		t.Fatal(err)
 	}
-	set := openSet(t, here, away, newStoreAt(t, "plain", "PLN"))
+	set := openSet(t, here, away, mounttest.NewStoreAt(t, "plain", "PLN"))
 	if len(set.Stores) != 2 || set.Stores[0].Name != "here" || set.Stores[1].Name != "plain" {
 		t.Errorf("stores = %v", set.Stores)
 	}

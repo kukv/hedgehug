@@ -10,8 +10,8 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/storage/mount"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 )
 
 // forTask is the session that works on the task arg names, and arg as that
@@ -46,7 +46,7 @@ func (ss *Session) forTask(arg string) (*Session, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	hit, err := set.Resolve(arg)
+	hit, err := ResolveIn(set, arg)
 	if err != nil {
 		return nil, "", ss.mountResolveError(set, arg, err)
 	}
@@ -62,8 +62,8 @@ func storeConflict(arg, named, storeName string) error {
 
 // mountResolveError gives the error of mount.Set.Resolve its Kind and Code.
 func (ss *Session) mountResolveError(set *mount.Set, arg string, err error) error {
-	var me *mount.AmbiguousError
-	var mv *mount.MovedError
+	var me *AmbiguousError
+	var mv *MovedError
 	var ie *index.AmbiguousError
 	switch {
 	case errors.As(err, &mv):
@@ -100,7 +100,7 @@ func (ss *Session) mountResolveError(set *mount.Set, arg string, err error) erro
 
 // movedErr is the error of an input that names a task that moved to another
 // store.
-func movedErr(mv *mount.MovedError) error {
+func movedErr(mv *MovedError) error {
 	args := []any{"input", mv.Input, "store_ulid", mv.Forward.MovedTo.String()}
 	if mv.To != nil {
 		args = append(args, "store", mv.To.Name)
@@ -129,7 +129,7 @@ func (ss *Session) movedFor(ix *index.Index, arg string) error {
 	if set != nil {
 		from, _ = set.Get(ix.StoreName())
 	}
-	return movedErr(set.Moved(from, arg, f))
+	return movedErr(MovedIn(set, from, arg, f))
 }
 
 // forComment is the session that works on the comment arg names: ss itself

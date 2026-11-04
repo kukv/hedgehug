@@ -1,4 +1,4 @@
-package mount
+package usecase
 
 import (
 	"errors"
@@ -6,16 +6,17 @@ import (
 	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/storage/mount"
 	"github.com/kukv/hedgehug/internal/app/storage/query"
 )
 
 // QueryOptions gives the options of the query of one store (its inbox
 // tells is:overwritten).
-type QueryOptions func(m *Mounted) (query.Options, error)
+type QueryOptions func(m *mount.Mounted) (query.Options, error)
 
 // Entry is a task found, with its store.
 type Entry struct {
-	Store *Mounted
+	Store *mount.Mounted
 	Entry *index.Entry
 }
 
@@ -28,8 +29,8 @@ type Group struct {
 
 // Result is what Query found.
 type Result struct {
-	Stores  []*Mounted // the stores the query ran on, in config order
-	Entries []Entry    // in the order of the groups
+	Stores  []*mount.Mounted // the stores the query ran on, in config order
+	Entries []Entry          // in the order of the groups
 	Groups  []Group
 }
 
@@ -53,7 +54,7 @@ type Result struct {
 // Mounted.With; what Query returns belongs to the index of the store, so a
 // caller that shares the Set with others reads it only while nothing else
 // refreshes that index.
-func Query(set *Set, q *query.Query, only string, opt QueryOptions) (*Result, error) {
+func Query(set *mount.Set, q *query.Query, only string, opt QueryOptions) (*Result, error) {
 	keep, rest, err := storeFilter(set, q, only)
 	if err != nil {
 		return nil, err
@@ -183,7 +184,7 @@ type keyedGroup struct {
 
 // storeFilter reads the store: terms of q and gives the stores to run on, in
 // config order, and q without them.
-func storeFilter(set *Set, q *query.Query, only string) ([]*Mounted, *query.Query, error) {
+func storeFilter(set *mount.Set, q *query.Query, only string) ([]*mount.Mounted, *query.Query, error) {
 	rest := &query.Query{}
 	keep := slices.Clone(set.Stores)
 	if only != "" {
@@ -191,7 +192,7 @@ func storeFilter(set *Set, q *query.Query, only string) ([]*Mounted, *query.Quer
 		if !ok {
 			return nil, nil, fmt.Errorf("unknown store %q", only)
 		}
-		keep = []*Mounted{m}
+		keep = []*mount.Mounted{m}
 	}
 	for _, t := range q.Terms {
 		if t.Key != "store" {
@@ -206,7 +207,7 @@ func storeFilter(set *Set, q *query.Query, only string) ([]*Mounted, *query.Quer
 				return nil, nil, &query.Error{Pos: t.Pos, Term: t.Raw, Msg: fmt.Sprintf("unknown store %q", v)}
 			}
 		}
-		keep = slices.DeleteFunc(keep, func(m *Mounted) bool {
+		keep = slices.DeleteFunc(keep, func(m *mount.Mounted) bool {
 			return slices.Contains(t.Values, m.Name) == t.Neg
 		})
 	}

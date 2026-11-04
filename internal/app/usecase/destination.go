@@ -16,8 +16,8 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/current"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/storage/mount"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 	"github.com/kukv/hedgehug/internal/lib/giturl"
 )
 
@@ -256,7 +256,7 @@ func (r *resolver) findTask(arg string) (*mount.Mounted, *index.Entry, error) {
 		}
 		q = s + ":" + q
 	}
-	hit, err := r.set.Resolve(q)
+	hit, err := ResolveIn(r.set, q)
 	if err != nil {
 		return nil, nil, &LookupError{What: "task", Input: q, Err: err}
 	}
@@ -481,7 +481,7 @@ func (r *resolver) branch(repo *git.Repository, _ []string) (result, error) {
 	if mm == nil {
 		return result{}, nil
 	}
-	hit, err := r.set.Resolve(mm[1])
+	hit, err := ResolveIn(r.set, mm[1])
 	if err != nil {
 		return result{}, nil // not a task of ours: the stage is skipped
 	}
@@ -498,7 +498,7 @@ func (r *resolver) branch(repo *git.Repository, _ []string) (result, error) {
 
 // live is the entry of hit as its store has it now, or nil when it is
 // deleted.
-func (r *resolver) live(hit mount.Hit) (*mount.Mounted, *index.Entry, error) {
+func (r *resolver) live(hit Hit) (*mount.Mounted, *index.Entry, error) {
 	var cp *index.Entry
 	if err := hit.Store.With(func(ix *index.Index) {
 		if e, ok := ix.Task(hit.Entry.ULID); ok && e.DeletedAt == nil {

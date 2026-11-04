@@ -6,7 +6,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/storage/current"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
-	"github.com/kukv/hedgehug/internal/app/usecase/mount"
+	"github.com/kukv/hedgehug/internal/app/storage/mount"
 )
 
 // AddHereInput is hh add with the context: what Resolve takes, and the task.

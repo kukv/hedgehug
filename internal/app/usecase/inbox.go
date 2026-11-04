@@ -16,8 +16,8 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/storage/mount"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
@@ -218,7 +218,7 @@ func (ss *Session) movedHint(ix *index.Index, storeName string, it inbox.Item) s
 }
 
 // movedTo looks for the task a forward of the store storeName points at.
-func (ss *Session) movedTo(storeName, input string, f *index.ForwardEntry) *mount.MovedError {
+func (ss *Session) movedTo(storeName, input string, f *index.ForwardEntry) *MovedError {
 	set, err := ss.Mount()
 	if err != nil {
 		// without the mounts, the store is only named by its ULID
@@ -228,7 +228,7 @@ func (ss *Session) movedTo(storeName, input string, f *index.ForwardEntry) *moun
 	if set != nil {
 		from, _ = set.Get(storeName)
 	}
-	return set.Moved(from, input, f)
+	return MovedIn(set, from, input, f)
 }
 
 // inboxIndex opens the index of st, as the other operations do.
@@ -408,7 +408,7 @@ func (ss *Session) InboxRevertOf(stores []InboxStore, u model.ULID) (TaskResult,
 
 // movedRevertErr is task.moved for an inbox revert of a task that moved:
 // nothing is written; the value is to be applied where the task is now.
-func movedRevertErr(mv *mount.MovedError) error {
+func movedRevertErr(mv *MovedError) error {
 	label := mv.Label()
 	var text string
 	switch {
@@ -417,7 +417,7 @@ func movedRevertErr(mv *mount.MovedError) error {
 	case mv.Entry == nil:
 		text = fmt.Sprintf("%s moved to %s; fix it there", label, mv.To.Name)
 	default:
-		text = fmt.Sprintf("%s moved to %s; fix it there (%s)", label, mv.To.Name, mount.Hit{Store: mv.To, Entry: mv.Entry}.Ref())
+		text = fmt.Sprintf("%s moved to %s; fix it there (%s)", label, mv.To.Name, Hit{Store: mv.To, Entry: mv.Entry}.Ref())
 	}
 	args := []any{"input", mv.Input, "store_ulid", mv.Forward.MovedTo.String()}
 	if mv.To != nil {

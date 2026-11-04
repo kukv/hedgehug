@@ -1,4 +1,4 @@
-package mount
+package usecase
 
 import (
 	"errors"
@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/app/storage/mount"
+	"github.com/kukv/hedgehug/internal/app/storage/mount/mounttest"
 
 	"go.yaml.in/yaml/v4"
 
@@ -22,7 +25,7 @@ func newStoreWith(t *testing.T, name, prefix string, sc *schema.Schema) config.S
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), name)
 	ws := &model.Workspace{ULID: model.NewULID(), Name: name, IDPrefix: prefix}
-	if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, sc, ws, testAuthor, "", time.Now); err != nil {
+	if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, sc, ws, mounttest.Author, "", time.Now); err != nil {
 		t.Fatal(err)
 	}
 	return config.StoreEntry{Name: name, Path: dir}
@@ -73,7 +76,7 @@ type spec struct{ title, kind, status, size, tier string }
 
 func putSpecs(t *testing.T, e config.StoreEntry, specs ...spec) {
 	t.Helper()
-	putTasks(t, e, len(specs), func(i int, task *model.Task) {
+	mounttest.PutTasks(t, e, len(specs), func(i int, task *model.Task) {
 		sp := specs[i]
 		task.Title, task.Kind, task.Status = sp.title, sp.kind, sp.status
 		for k, v := range map[string]string{"size": sp.size, "tier": sp.tier} {
@@ -84,7 +87,7 @@ func putSpecs(t *testing.T, e config.StoreEntry, specs ...spec) {
 	})
 }
 
-func twoStoreSet(t *testing.T) *Set {
+func twoStoreSet(t *testing.T) *mount.Set {
 	t.Helper()
 	a, b := twoSchemas(t)
 	putSpecs(t, a,
@@ -100,9 +103,9 @@ func twoStoreSet(t *testing.T) *Set {
 	return openSet(t, a, b)
 }
 
-func noOptions(*Mounted) (query.Options, error) { return query.Options{}, nil }
+func noOptions(*mount.Mounted) (query.Options, error) { return query.Options{}, nil }
 
-func queryTitles(t *testing.T, set *Set, q, only string) []string {
+func queryTitles(t *testing.T, set *mount.Set, q, only string) []string {
 	t.Helper()
 	parsed, err := query.Parse(q)
 	if err != nil {
@@ -389,7 +392,7 @@ func TestQueryOpensOnlyTheStoresItNeeds(t *testing.T) {
 	if _, err := Query(set, parsed, "org-b", noOptions); err != nil {
 		t.Fatal(err)
 	}
-	if set.Stores[0].ix != nil {
+	if set.Stores[0].IndexOpened() {
 		t.Error("org-a's index was opened for --store org-b")
 	}
 	parsed, _ = query.Parse("store:org-b")
@@ -397,7 +400,7 @@ func TestQueryOpensOnlyTheStoresItNeeds(t *testing.T) {
 	if _, err := Query(set2, parsed, "", noOptions); err != nil {
 		t.Fatal(err)
 	}
-	if set2.Stores[0].ix != nil || set2.Stores[1].ix == nil {
+	if set2.Stores[0].IndexOpened() || !set2.Stores[1].IndexOpened() {
 		t.Error("store:org-b did not open org-b only")
 	}
 }
@@ -407,7 +410,7 @@ func TestQueryOptionsErrorAndUnknownStoreOnly(t *testing.T) {
 	set := twoStoreSet(t)
 	parsed, _ := query.Parse("")
 	boom := errors.New("boom")
-	if _, err := Query(set, parsed, "", func(*Mounted) (query.Options, error) { return query.Options{}, boom }); !errors.Is(err, boom) {
+	if _, err := Query(set, parsed, "", func(*mount.Mounted) (query.Options, error) { return query.Options{}, boom }); !errors.Is(err, boom) {
 		t.Errorf("err = %v; want boom", err)
 	}
 	if _, err := Query(set, parsed, "nope", noOptions); err == nil {
@@ -418,9 +421,9 @@ func TestQueryOptionsErrorAndUnknownStoreOnly(t *testing.T) {
 func TestQueryTaskNotInAStoreFindsNothingThere(t *testing.T) {
 	t.Parallel()
 	a, b := twoSchemas(t)
-	parents := putTasks(t, a, 1, func(_ int, task *model.Task) { task.Title, task.Kind = "a-parent", "project" })
-	putTasks(t, a, 1, func(_ int, task *model.Task) { task.Title, task.Parent = "a-child", &parents[0].ULID })
-	putTasks(t, b, 1, func(_ int, task *model.Task) { task.Title = "b-task" })
+	parents := mounttest.PutTasks(t, a, 1, func(_ int, task *model.Task) { task.Title, task.Kind = "a-parent", "project" })
+	mounttest.PutTasks(t, a, 1, func(_ int, task *model.Task) { task.Title, task.Parent = "a-child", &parents[0].ULID })
+	mounttest.PutTasks(t, b, 1, func(_ int, task *model.Task) { task.Title = "b-task" })
 	set := openSet(t, a, b)
 	// API-1 is in org-a only; org-b finds nothing and that is no error
 	if got := queryTitles(t, set, "parent:API-1", ""); !reflect.DeepEqual(got, []string{"a-child"}) {
@@ -524,10 +527,10 @@ func TestQueryGroupWithoutValueComesLast(t *testing.T) {
 func TestQueryMissingIDMatchesNothingInTheStore(t *testing.T) {
 	t.Parallel()
 	a, b := twoSchemas(t)
-	parents := putTasks(t, a, 2, func(i int, task *model.Task) { task.Title, task.Kind = []string{"a-p1", "a-p2"}[i], "project" })
-	putTasks(t, a, 2, func(i int, task *model.Task) { task.Title, task.Parent = []string{"a-c1", "a-c2"}[i], &parents[i].ULID })
-	bp := putTasks(t, b, 1, func(_ int, task *model.Task) { task.Title, task.Kind = "b-p", "epic" })
-	putTasks(t, b, 1, func(_ int, task *model.Task) { task.Title, task.Parent = "b-c", &bp[0].ULID })
+	parents := mounttest.PutTasks(t, a, 2, func(i int, task *model.Task) { task.Title, task.Kind = []string{"a-p1", "a-p2"}[i], "project" })
+	mounttest.PutTasks(t, a, 2, func(i int, task *model.Task) { task.Title, task.Parent = []string{"a-c1", "a-c2"}[i], &parents[i].ULID })
+	bp := mounttest.PutTasks(t, b, 1, func(_ int, task *model.Task) { task.Title, task.Kind = "b-p", "epic" })
+	mounttest.PutTasks(t, b, 1, func(_ int, task *model.Task) { task.Title, task.Parent = "b-c", &bp[0].ULID })
 	set := openSet(t, a, b)
 	// the negation in org-b, which lacks API-1, matches all its tasks
 	got := queryTitles(t, set, "-parent:API-1", "")

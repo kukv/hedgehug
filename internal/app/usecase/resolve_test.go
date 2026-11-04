@@ -1,4 +1,4 @@
-package mount
+package usecase
 
 import (
 	"errors"
@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/kukv/hedgehug/internal/app/storage/mount"
+	"github.com/kukv/hedgehug/internal/app/storage/mount/mounttest"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
@@ -17,18 +20,18 @@ import (
 // twelve is the 12th task of a store with the prefix API: API-12.
 func twelve(t *testing.T, e config.StoreEntry) *model.Task {
 	t.Helper()
-	tasks := putTasks(t, e, 12, nil)
+	tasks := mounttest.PutTasks(t, e, 12, nil)
 	return tasks[11]
 }
 
 func TestResolveOneStore(t *testing.T) {
 	t.Parallel()
-	a, b := newStoreAt(t, "org-a", "API"), newStoreAt(t, "org-b", "WEB")
+	a, b := mounttest.NewStoreAt(t, "org-a", "API"), mounttest.NewStoreAt(t, "org-b", "WEB")
 	task := twelve(t, a)
-	putTasks(t, b, 1, nil)
-	set := openSet(t, newStoreAt(t, "me", "ME"), a, b)
+	mounttest.PutTasks(t, b, 1, nil)
+	set := openSet(t, mounttest.NewStoreAt(t, "me", "ME"), a, b)
 	for _, in := range []string{"API-12", "api-12", task.ULID.String(), "org-a:API-12"} {
-		hit, err := set.Resolve(in)
+		hit, err := ResolveIn(set, in)
 		if err != nil {
 			t.Fatalf("Resolve(%q): %v", in, err)
 		}
@@ -40,24 +43,24 @@ func TestResolveOneStore(t *testing.T) {
 
 func TestResolveSeesATaskWrittenAfterTheIndexWasOpened(t *testing.T) {
 	t.Parallel()
-	a := newStoreAt(t, "org-a", "API")
+	a := mounttest.NewStoreAt(t, "org-a", "API")
 	set := openSet(t, a)
-	if _, err := set.Resolve("API-1"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := ResolveIn(set, "API-1"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("Resolve before the write = %v; want not found", err)
 	}
-	putTasks(t, a, 1, nil)
-	if hit, err := set.Resolve("API-1"); err != nil || hit.Entry.ID != "API-1" {
+	mounttest.PutTasks(t, a, 1, nil)
+	if hit, err := ResolveIn(set, "API-1"); err != nil || hit.Entry.ID != "API-1" {
 		t.Errorf("Resolve after the write = %v, %v", hit, err)
 	}
 }
 
 func TestResolveNotFound(t *testing.T) {
 	t.Parallel()
-	a := newStoreAt(t, "org-a", "API")
+	a := mounttest.NewStoreAt(t, "org-a", "API")
 	twelve(t, a)
-	set := openSet(t, a, newStoreAt(t, "org-b", "WEB"))
+	set := openSet(t, a, mounttest.NewStoreAt(t, "org-b", "WEB"))
 	for _, in := range []string{"API-99", "org-b:API-12", "nope:API-12", ""} {
-		if _, err := set.Resolve(in); !errors.Is(err, store.ErrNotFound) {
+		if _, err := ResolveIn(set, in); !errors.Is(err, store.ErrNotFound) {
 			t.Errorf("Resolve(%q) err = %v, want ErrNotFound", in, err)
 		}
 	}
@@ -65,11 +68,11 @@ func TestResolveNotFound(t *testing.T) {
 
 func TestResolveAcrossStoresIsAmbiguous(t *testing.T) {
 	t.Parallel()
-	a, b := newStoreAt(t, "org-a", "API"), newStoreAt(t, "org-b", "API")
+	a, b := mounttest.NewStoreAt(t, "org-a", "API"), mounttest.NewStoreAt(t, "org-b", "API")
 	ta, tb := twelve(t, a), twelve(t, b)
 	set := openSet(t, a, b)
 	for _, in := range []string{"API-12", "api-12"} {
-		_, err := set.Resolve(in)
+		_, err := ResolveIn(set, in)
 		var ae *AmbiguousError
 		if !errors.As(err, &ae) {
 			t.Fatalf("Resolve(%q) err = %v, want AmbiguousError", in, err)
@@ -82,7 +85,7 @@ func TestResolveAcrossStoresIsAmbiguous(t *testing.T) {
 			t.Errorf("message = %q", err)
 		}
 	}
-	hit, err := set.Resolve("org-b:API-12")
+	hit, err := ResolveIn(set, "org-b:API-12")
 	if err != nil || hit.Store.Name != "org-b" || hit.Entry.ULID != tb.ULID {
 		t.Errorf("org-b:API-12 = %v %v", hit, err)
 	}
@@ -90,14 +93,14 @@ func TestResolveAcrossStoresIsAmbiguous(t *testing.T) {
 
 func TestResolveULIDAcrossStores(t *testing.T) {
 	t.Parallel()
-	a, b := newStoreAt(t, "org-a", "API"), newStoreAt(t, "org-b", "WEB")
-	ta := putTasks(t, a, 1, nil)[0]
-	tb := putTasks(t, b, 1, nil)[0]
+	a, b := mounttest.NewStoreAt(t, "org-a", "API"), mounttest.NewStoreAt(t, "org-b", "WEB")
+	ta := mounttest.PutTasks(t, a, 1, nil)[0]
+	tb := mounttest.PutTasks(t, b, 1, nil)[0]
 	set := openSet(t, a, b)
-	if hit, err := set.Resolve(tb.ULID.String()); err != nil || hit.Store.Name != "org-b" {
+	if hit, err := ResolveIn(set, tb.ULID.String()); err != nil || hit.Store.Name != "org-b" {
 		t.Errorf("ULID of org-b = %v %v", hit, err)
 	}
-	if hit, err := set.Resolve("org-a:" + ta.ULID.String()); err != nil || hit.Store.Name != "org-a" {
+	if hit, err := ResolveIn(set, "org-a:"+ta.ULID.String()); err != nil || hit.Store.Name != "org-a" {
 		t.Errorf("org-a:ULID = %v %v", hit, err)
 	}
 }
@@ -105,7 +108,7 @@ func TestResolveULIDAcrossStores(t *testing.T) {
 func TestAmbiguousCandidateWithoutIDUsesULID(t *testing.T) {
 	t.Parallel()
 	task := model.NewULID()
-	ae := &AmbiguousError{Input: "x", Candidates: []Hit{{Store: &Mounted{Name: "s"}, Entry: &index.Entry{ULID: task}}}}
+	ae := &AmbiguousError{Input: "x", Candidates: []Hit{{Store: &mount.Mounted{Name: "s"}, Entry: &index.Entry{ULID: task}}}}
 	if !strings.Contains(ae.Error(), "s:"+task.String()) {
 		t.Errorf("message = %q", ae)
 	}
@@ -113,19 +116,19 @@ func TestAmbiguousCandidateWithoutIDUsesULID(t *testing.T) {
 
 func TestResolveAmbiguousInsideOneStore(t *testing.T) {
 	t.Parallel()
-	a := newStoreAt(t, "org-a", "API")
-	putTasks(t, a, 2, func(_ int, task *model.Task) { task.FormerIDs = []string{"OLD-3"} })
+	a := mounttest.NewStoreAt(t, "org-a", "API")
+	mounttest.PutTasks(t, a, 2, func(_ int, task *model.Task) { task.FormerIDs = []string{"OLD-3"} })
 	// one store alone: the index says it
 	alone := openSet(t, a)
-	_, err := alone.Resolve("OLD-3")
+	_, err := ResolveIn(alone, "OLD-3")
 	var ie *index.AmbiguousError
 	if !errors.As(err, &ie) || len(ie.Candidates) != 2 {
 		t.Errorf("one store: err = %v, want index.AmbiguousError", err)
 	}
 	// with two stores the candidates carry the name of the store
-	set := openSet(t, a, newStoreAt(t, "org-b", "WEB"))
+	set := openSet(t, a, mounttest.NewStoreAt(t, "org-b", "WEB"))
 	for _, in := range []string{"OLD-3", "org-a:OLD-3"} {
-		_, err := set.Resolve(in)
+		_, err := ResolveIn(set, in)
 		var ae *AmbiguousError
 		if !errors.As(err, &ae) || len(ae.Candidates) != 2 {
 			t.Fatalf("Resolve(%q) err = %v, want AmbiguousError", in, err)
@@ -141,13 +144,13 @@ func TestResolveAmbiguousInsideOneStore(t *testing.T) {
 func TestResolveAmbiguousInOneStoreAndFoundInAnother(t *testing.T) {
 	t.Parallel()
 	for _, order := range [][2]string{{"org-a", "org-b"}, {"org-b", "org-a"}} {
-		two := newStoreAt(t, "org-a", "API")
-		one := newStoreAt(t, "org-b", "WEB")
-		putTasks(t, two, 2, func(_ int, task *model.Task) { task.FormerIDs = []string{"OLD-3"} })
-		putTasks(t, one, 1, func(_ int, task *model.Task) { task.FormerIDs = []string{"OLD-3"} })
+		two := mounttest.NewStoreAt(t, "org-a", "API")
+		one := mounttest.NewStoreAt(t, "org-b", "WEB")
+		mounttest.PutTasks(t, two, 2, func(_ int, task *model.Task) { task.FormerIDs = []string{"OLD-3"} })
+		mounttest.PutTasks(t, one, 1, func(_ int, task *model.Task) { task.FormerIDs = []string{"OLD-3"} })
 		entries := map[string]config.StoreEntry{"org-a": two, "org-b": one}
 		set := openSet(t, entries[order[0]], entries[order[1]])
-		_, err := set.Resolve("OLD-3")
+		_, err := ResolveIn(set, "OLD-3")
 		var ae *AmbiguousError
 		if !errors.As(err, &ae) || len(ae.Candidates) != 3 {
 			t.Fatalf("order %v: err = %v, want AmbiguousError of 3", order, err)
@@ -162,7 +165,7 @@ func TestResolveAmbiguousInOneStoreAndFoundInAnother(t *testing.T) {
 
 // breakIndex makes the index of m fail to open: the repository goes away
 // after the store was opened.
-func breakIndex(t *testing.T, m *Mounted) {
+func breakIndex(t *testing.T, m *mount.Mounted) {
 	t.Helper()
 	if err := os.RemoveAll(filepath.Join(m.Entry.Path, ".git")); err != nil {
 		t.Fatal(err)
@@ -174,13 +177,13 @@ func breakIndex(t *testing.T, m *Mounted) {
 
 func TestResolveSkipsAStoreWhoseIndexDoesNotOpen(t *testing.T) {
 	t.Parallel()
-	a, b := newStoreAt(t, "org-a", "API"), newStoreAt(t, "org-b", "WEB")
-	tb := putTasks(t, b, 1, nil)[0]
-	var told []Skipped
-	set := Open(&config.Config{Stores: []config.StoreEntry{a, b}}, Options{Unopened: func(sk Skipped) { told = append(told, sk) }})
+	a, b := mounttest.NewStoreAt(t, "org-a", "API"), mounttest.NewStoreAt(t, "org-b", "WEB")
+	tb := mounttest.PutTasks(t, b, 1, nil)[0]
+	var told []mount.Skipped
+	set := mount.Open(&config.Config{Stores: []config.StoreEntry{a, b}}, mount.Options{Unopened: func(sk mount.Skipped) { told = append(told, sk) }})
 	breakIndex(t, set.Stores[0])
 	for range 2 {
-		hit, err := set.Resolve(tb.ULID.String())
+		hit, err := ResolveIn(set, tb.ULID.String())
 		if err != nil || hit.Store.Name != "org-b" {
 			t.Fatalf("Resolve = %v %v", hit, err)
 		}
@@ -193,12 +196,12 @@ func TestResolveSkipsAStoreWhoseIndexDoesNotOpen(t *testing.T) {
 
 func TestResolveNamedStoreWhoseIndexDoesNotOpenIsAnError(t *testing.T) {
 	t.Parallel()
-	a, b := newStoreAt(t, "org-a", "API"), newStoreAt(t, "org-b", "WEB")
-	putTasks(t, a, 1, nil)
-	var told []Skipped
-	set := Open(&config.Config{Stores: []config.StoreEntry{a, b}}, Options{Unopened: func(sk Skipped) { told = append(told, sk) }})
+	a, b := mounttest.NewStoreAt(t, "org-a", "API"), mounttest.NewStoreAt(t, "org-b", "WEB")
+	mounttest.PutTasks(t, a, 1, nil)
+	var told []mount.Skipped
+	set := mount.Open(&config.Config{Stores: []config.StoreEntry{a, b}}, mount.Options{Unopened: func(sk mount.Skipped) { told = append(told, sk) }})
 	breakIndex(t, set.Stores[0])
-	_, err := set.Resolve("org-a:API-1")
+	_, err := ResolveIn(set, "org-a:API-1")
 	if err == nil || !strings.HasPrefix(err.Error(), "cannot open org-a: ") || errors.Is(err, store.ErrNotFound) {
 		t.Errorf("err = %v", err)
 	}
@@ -209,15 +212,15 @@ func TestResolveNamedStoreWhoseIndexDoesNotOpenIsAnError(t *testing.T) {
 
 func TestResolveAfterAnotherHandleRepackedTheStore(t *testing.T) {
 	t.Parallel()
-	a := newStoreAt(t, "org-a", "API")
-	putTasks(t, a, 1, nil)
+	a := mounttest.NewStoreAt(t, "org-a", "API")
+	mounttest.PutTasks(t, a, 1, nil)
 	set := openSet(t, a)
-	if _, err := set.Resolve("API-1"); err != nil {
+	if _, err := ResolveIn(set, "API-1"); err != nil {
 		t.Fatal(err)
 	}
 	// another handle writes, consolidates (the loose objects the first handle
 	// knew are gone) and writes again
-	putTasks(t, a, 1, nil)
+	mounttest.PutTasks(t, a, 1, nil)
 	s, err := store.Open(a.Path)
 	if err != nil {
 		t.Fatal(err)
@@ -245,27 +248,27 @@ func TestResolveAfterAnotherHandleRepackedTheStore(t *testing.T) {
 		for _, p := range packs() {
 			seen[p] = true
 		}
-		putTasks(t, a, 1, nil)
+		mounttest.PutTasks(t, a, 1, nil)
 		n++
 	}
-	putTasks(t, a, 1, nil)
+	mounttest.PutTasks(t, a, 1, nil)
 	n++
 	want := "API-" + strconv.Itoa(n)
-	if hit, err := set.Resolve(want); err != nil || hit.Entry.ID != want {
+	if hit, err := ResolveIn(set, want); err != nil || hit.Entry.ID != want {
 		t.Errorf("Resolve(%s) = %v, %v", want, hit, err)
 	}
 }
 
 // brokenMounted is a Mounted on the store a whose store and index are those
 // of another store b, which is then removed: its Refresh fails.
-func brokenMounted(t *testing.T, a config.StoreEntry) *Mounted {
+func brokenMounted(t *testing.T, a config.StoreEntry) *mount.Mounted {
 	t.Helper()
-	b := newStoreAt(t, "org-b", "WEB")
+	b := mounttest.NewStoreAt(t, "org-b", "WEB")
 	sb, err := store.Open(b.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := &Mounted{Name: a.Name, Entry: a, Store: sb}
+	m := &mount.Mounted{Name: a.Name, Entry: a, Store: sb}
 	if _, err := m.Index(); err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +280,7 @@ func brokenMounted(t *testing.T, a config.StoreEntry) *Mounted {
 
 func TestWithOpensTheStoreAgainWhenTheIndexCannotRefresh(t *testing.T) {
 	t.Parallel()
-	a := newStoreAt(t, "org-a", "API")
+	a := mounttest.NewStoreAt(t, "org-a", "API")
 	m := brokenMounted(t, a)
 	old := m.Store
 	ran := false
@@ -296,7 +299,7 @@ func TestWithOpensTheStoreAgainWhenTheIndexCannotRefresh(t *testing.T) {
 
 func TestWithFailsWhenTheStoreCannotBeOpenedAgain(t *testing.T) {
 	t.Parallel()
-	a := newStoreAt(t, "org-a", "API")
+	a := mounttest.NewStoreAt(t, "org-a", "API")
 	m := brokenMounted(t, a)
 	if err := os.RemoveAll(a.Path); err != nil {
 		t.Fatal(err)

@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/app/storage/mount/mounttest"
+
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
@@ -13,7 +15,7 @@ import (
 
 func TestOpenKeepsConfigOrderAndULIDs(t *testing.T) {
 	t.Parallel()
-	es := []config.StoreEntry{newStoreAt(t, "me", "ME"), newStoreAt(t, "org-a", "API"), newStoreAt(t, "org-b", "WEB")}
+	es := []config.StoreEntry{mounttest.NewStoreAt(t, "me", "ME"), mounttest.NewStoreAt(t, "org-a", "API"), mounttest.NewStoreAt(t, "org-b", "WEB")}
 	set := openSet(t, es...)
 	if len(set.Stores) != 3 || len(set.Skipped) != 0 {
 		t.Fatalf("stores %d, skipped %v", len(set.Stores), set.Skipped)
@@ -40,13 +42,13 @@ func TestOpenKeepsConfigOrderAndULIDs(t *testing.T) {
 
 func TestOpenSkipsWhatDoesNotOpen(t *testing.T) {
 	t.Parallel()
-	good := newStoreAt(t, "me", "ME")
+	good := mounttest.NewStoreAt(t, "me", "ME")
 	missing := config.StoreEntry{Name: "gone", Path: filepath.Join(t.TempDir(), "nope")}
-	broken := newStoreAt(t, "broken", "BRK")
+	broken := mounttest.NewStoreAt(t, "broken", "BRK")
 	if err := os.WriteFile(filepath.Join(broken.Path, ".hedgehug", "store.yaml"), []byte(": : not yaml ["), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	last := newStoreAt(t, "org-b", "WEB")
+	last := mounttest.NewStoreAt(t, "org-b", "WEB")
 	set := openSet(t, good, missing, broken, last)
 	if len(set.Stores) != 2 || set.Stores[0].Name != "me" || set.Stores[1].Name != "org-b" {
 		t.Errorf("stores = %v", set.Stores)
@@ -66,7 +68,7 @@ func TestOpenSkipsWhatDoesNotOpen(t *testing.T) {
 
 func TestOpenGivesTheClockToTheStore(t *testing.T) {
 	t.Parallel()
-	e := newStoreAt(t, "me", "ME")
+	e := mounttest.NewStoreAt(t, "me", "ME")
 	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	set := Open(&config.Config{Stores: []config.StoreEntry{e}}, Options{Now: func() time.Time { return at }})
 	m := set.Stores[0]
@@ -75,7 +77,7 @@ func TestOpenGivesTheClockToTheStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	task := &model.Task{ULID: model.NewULID(), Title: "t", Kind: "task", Status: "todo", Workspace: ix.Workspaces()[0].ULID}
-	if _, err := m.Store.Update(store.Op{Name: "add", Author: testAuthor}, func(tx *store.Tx) error { return tx.PutTask(task) }); err != nil {
+	if _, err := m.Store.Update(store.Op{Name: "add", Author: mounttest.Author}, func(tx *store.Tx) error { return tx.PutTask(task) }); err != nil {
 		t.Fatal(err)
 	}
 	if !task.Created.Equal(at) {
@@ -85,7 +87,7 @@ func TestOpenGivesTheClockToTheStore(t *testing.T) {
 
 func TestIndexIsOpenedOnceAndKnowsTheStoreName(t *testing.T) {
 	t.Parallel()
-	m := openSet(t, newStoreAt(t, "org-a", "API")).Stores[0]
+	m := openSet(t, mounttest.NewStoreAt(t, "org-a", "API")).Stores[0]
 	a, err := m.Index()
 	if err != nil {
 		t.Fatal(err)
@@ -100,7 +102,7 @@ func TestIndexIsOpenedOnceAndKnowsTheStoreName(t *testing.T) {
 	if a.StoreName() != "org-a" {
 		t.Errorf("StoreName = %q", a.StoreName())
 	}
-	putTasks(t, m.Entry, 1, nil)
+	mounttest.PutTasks(t, m.Entry, 1, nil)
 	if err := a.Refresh(); err != nil || a.StoreName() != "org-a" {
 		t.Errorf("after Refresh: %q %v", a.StoreName(), err)
 	}
@@ -108,7 +110,7 @@ func TestIndexIsOpenedOnceAndKnowsTheStoreName(t *testing.T) {
 
 func TestSplitStore(t *testing.T) {
 	t.Parallel()
-	set := openSet(t, newStoreAt(t, "org-a", "API"))
+	set := openSet(t, mounttest.NewStoreAt(t, "org-a", "API"))
 	m, rest, ok := set.SplitStore("org-a:API-12")
 	if !ok || m.Name != "org-a" || rest != "API-12" {
 		t.Errorf("SplitStore = %v %q %v", m, rest, ok)
@@ -122,7 +124,7 @@ func TestSplitStore(t *testing.T) {
 
 func TestBrokenAccessIsNotSkipped(t *testing.T) {
 	t.Parallel()
-	e := newStoreAt(t, "me", "ME")
+	e := mounttest.NewStoreAt(t, "me", "ME")
 	dir := filepath.Join(e.Path, filepath.FromSlash(store.LocalDir))
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatal(err)

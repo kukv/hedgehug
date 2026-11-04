@@ -1,4 +1,4 @@
-package mount
+package usecase
 
 import (
 	"fmt"
@@ -8,19 +8,20 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/storage/mount"
 )
 
 // TaskRef is a task named by what was read of it inside Mounted.With, so
 // that it is safe to keep: nothing in it belongs to an index.
 type TaskRef struct {
-	Store   *Mounted
+	Store   *mount.Mounted
 	ULID    model.ULID
 	ID      string // as the file has it, "" when it has none
 	Display string // the id as the index of its store shows it (store name when the prefix is shared)
 	Title   string
 }
 
-func taskRef(m *Mounted, ix *index.Index, e *index.Entry) TaskRef {
+func taskRef(m *mount.Mounted, ix *index.Index, e *index.Entry) TaskRef {
 	return TaskRef{Store: m, ULID: e.ULID, ID: e.ID, Display: ix.DisplayID(e), Title: e.Title}
 }
 
@@ -57,14 +58,14 @@ type pending struct {
 // blocked_by and the task_ref properties as the file has them. The data is
 // not changed. What it returns is copied out of the indexes of the stores
 // inside Mounted.With, so it can be kept.
-func CrossRefs(set *Set, name string) ([]CrossRef, error) {
+func CrossRefs(set *mount.Set, name string) ([]CrossRef, error) {
 	sources := set.Stores
 	if name != "" {
 		m, ok := set.Get(name)
 		if !ok {
 			return nil, nil // a store that did not open has no index to read
 		}
-		sources = []*Mounted{m}
+		sources = []*mount.Mounted{m}
 	}
 	var out []CrossRef
 	for _, m := range sources {
@@ -75,7 +76,7 @@ func CrossRefs(set *Set, name string) ([]CrossRef, error) {
 			return nil, fmt.Errorf("cannot open %s: %w", m.Name, err)
 		}
 		for _, p := range open {
-			t, err := set.liveElsewhere(m, p.ulid)
+			t, err := liveElsewhere(set, m, p.ulid)
 			if err != nil {
 				return nil, err
 			}
@@ -89,7 +90,7 @@ func CrossRefs(set *Set, name string) ([]CrossRef, error) {
 
 // unresolved lists the references of the live tasks of ix that point at no
 // task of ix.
-func unresolved(m *Mounted, ix *index.Index) []pending {
+func unresolved(m *mount.Mounted, ix *index.Index) []pending {
 	tasks := ix.Tasks()
 	slices.SortFunc(tasks, func(a, b *index.Entry) int { return strings.Compare(a.ULID.String(), b.ULID.String()) })
 	var out []pending
@@ -122,7 +123,7 @@ func unresolved(m *Mounted, ix *index.Index) []pending {
 
 // liveElsewhere finds the task ulid, not deleted, in the first mounted store
 // other than not; nil when there is none.
-func (s *Set) liveElsewhere(not *Mounted, ulid model.ULID) (*TaskRef, error) {
+func liveElsewhere(s *mount.Set, not *mount.Mounted, ulid model.ULID) (*TaskRef, error) {
 	for _, m := range s.Stores {
 		if m == not {
 			continue

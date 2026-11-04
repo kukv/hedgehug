@@ -1,10 +1,12 @@
-package mount
+package usecase
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/app/storage/mount/mounttest"
 
 	"go.yaml.in/yaml/v4"
 
@@ -22,7 +24,7 @@ func newRefStoreAt(t *testing.T, name, prefix string) config.StoreEntry {
 	sc.Props = append(sc.Props, schema.Prop{Name: "rel", Type: schema.TypeTaskRef})
 	dir := filepath.Join(t.TempDir(), name)
 	ws := &model.Workspace{ULID: model.NewULID(), Name: name, IDPrefix: prefix}
-	if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, sc, ws, testAuthor, "", time.Now); err != nil {
+	if _, err := store.Create(dir, &model.StoreMeta{ULID: model.NewULID(), Name: name}, sc, ws, mounttest.Author, "", time.Now); err != nil {
 		t.Fatal(err)
 	}
 	return config.StoreEntry{Name: name, Path: dir}
@@ -45,21 +47,21 @@ func commitTask(t *testing.T, e config.StoreEntry, task *model.Task) {
 	if err := os.WriteFile(filepath.Join(e.Path, filepath.FromSlash(rel)), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: testAuthor, When: time.Now()}); err != nil {
+	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: mounttest.Author, When: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func scalar(v string) *yaml.Node { return &yaml.Node{Kind: yaml.ScalarNode, Value: v} }
+func refScalar(v string) *yaml.Node { return &yaml.Node{Kind: yaml.ScalarNode, Value: v} }
 
 func TestCrossRefsFindsParentBlockedByAndTaskRef(t *testing.T) {
 	t.Parallel()
 	a, b := newRefStoreAt(t, "org-a", "API"), newRefStoreAt(t, "org-b", "WEB")
-	target := putTasks(t, b, 1, nil)[0]
-	from := putTasks(t, a, 3, nil)
+	target := mounttest.PutTasks(t, b, 1, nil)[0]
+	from := mounttest.PutTasks(t, a, 3, nil)
 	from[0].Parent = &target.ULID
 	from[1].BlockedBy = []model.ULID{target.ULID}
-	from[2].Props = model.Fields{{Key: "rel", Value: scalar(target.ULID.String())}}
+	from[2].Props = model.Fields{{Key: "rel", Value: refScalar(target.ULID.String())}}
 	for _, x := range from {
 		commitTask(t, a, x)
 	}
@@ -86,12 +88,12 @@ func TestCrossRefsIgnoresWhatIsNotAReferenceAcrossStores(t *testing.T) {
 	t.Parallel()
 	a, b := newRefStoreAt(t, "org-a", "API"), newRefStoreAt(t, "org-b", "WEB")
 	gone := model.NewULID()
-	deleted := putTasks(t, b, 1, nil)[0]
+	deleted := mounttest.PutTasks(t, b, 1, nil)[0]
 	now := time.Now()
 	deleted.DeletedAt = &now
 	commitTask(t, b, deleted)
-	own := putTasks(t, a, 1, nil)[0]
-	tasks := putTasks(t, a, 4, nil)
+	own := mounttest.PutTasks(t, a, 1, nil)[0]
+	tasks := mounttest.PutTasks(t, a, 4, nil)
 	tasks[0].Parent = &gone                         // no store holds it
 	tasks[1].BlockedBy = []model.ULID{deleted.ULID} // deleted in the other store
 	tasks[2].Parent = &own.ULID                     // in its own store
@@ -110,8 +112,8 @@ func TestCrossRefsIgnoresWhatIsNotAReferenceAcrossStores(t *testing.T) {
 func TestCrossRefsSeesAWriteAfterTheIndexWasOpened(t *testing.T) {
 	t.Parallel()
 	a, b := newRefStoreAt(t, "org-a", "API"), newRefStoreAt(t, "org-b", "WEB")
-	target := putTasks(t, b, 1, nil)[0]
-	from := putTasks(t, a, 1, nil)[0]
+	target := mounttest.PutTasks(t, b, 1, nil)[0]
+	from := mounttest.PutTasks(t, a, 1, nil)[0]
 	set := openSet(t, a, b)
 	if got, err := CrossRefs(set, ""); err != nil || len(got) != 0 {
 		t.Fatalf("before = %+v, %v", got, err)
@@ -125,7 +127,7 @@ func TestCrossRefsSeesAWriteAfterTheIndexWasOpened(t *testing.T) {
 
 func TestCrossRefsUnknownStore(t *testing.T) {
 	t.Parallel()
-	if got, err := CrossRefs(openSet(t, newStoreAt(t, "org-a", "API")), "nope"); err != nil || len(got) != 0 {
+	if got, err := CrossRefs(openSet(t, mounttest.NewStoreAt(t, "org-a", "API")), "nope"); err != nil || len(got) != 0 {
 		t.Errorf("CrossRefs(nope) = %+v, %v; want none", got, err)
 	}
 }

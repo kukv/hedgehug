@@ -7,7 +7,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/storage/history"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
-	"github.com/kukv/hedgehug/internal/app/usecase/mount"
+	"github.com/kukv/hedgehug/internal/app/storage/mount"
 )
 
 // People are the names the GUI offers after an @: the assignees, watchers and

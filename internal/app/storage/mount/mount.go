@@ -83,6 +83,13 @@ func (m *Mounted) With(fn func(ix *index.Index)) error {
 	return nil
 }
 
+// IndexOpened reports whether Index has opened the index and keeps it.
+func (m *Mounted) IndexOpened() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.ix != nil
+}
+
 // reopen opens the store and its index again; With holds m.use.
 func (m *Mounted) reopen() (*index.Index, error) {
 	s, err := store.Open(m.Entry.Path)
@@ -147,6 +154,13 @@ type Options struct {
 	// Open take SharedPrefixes of the config; a caller that opens indexes of
 	// its own as well gives the same function to both.
 	Qualified func(prefix string) bool
+}
+
+// Unopened tells Options.Unopened of a store whose index did not open.
+func (s *Set) Unopened(sk Skipped) {
+	if s.unopened != nil {
+		s.unopened(sk)
+	}
 }
 
 // Open opens every store of c.Stores in order. A store that does not open

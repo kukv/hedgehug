@@ -11,7 +11,6 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/storage/query"
 	"github.com/kukv/hedgehug/internal/app/usecase"
-	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 )
 
 func (a *app) lsCmd() *cobra.Command {
@@ -91,7 +90,7 @@ func (a *app) ls(q *query.Query, ulidsOnly bool, tmpl *template.Template) error 
 	return nil
 }
 
-func (a *app) printULIDs(es []mount.Entry) error {
+func (a *app) printULIDs(es []usecase.Entry) error {
 	var b strings.Builder
 	for _, e := range es {
 		b.WriteString(e.Entry.ULID.String() + "\n")
@@ -104,7 +103,7 @@ func (a *app) printULIDs(es []mount.Entry) error {
 // of the JSON field names. extra, when not nil, adds keys to each map. A
 // template that fails, as on a key that is not there, is a usage error; the
 // output is held until every task is done, so none of it is printed then.
-func (a *app) printFormat(es []mount.Entry, tmpl *template.Template, extra func(m map[string]any, e mount.Entry)) error {
+func (a *app) printFormat(es []usecase.Entry, tmpl *template.Template, extra func(m map[string]any, e usecase.Entry)) error {
 	var out bytes.Buffer
 	for _, e := range es {
 		ix, err := e.Store.Index()

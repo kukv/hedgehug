@@ -13,7 +13,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/history"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
@@ -331,11 +330,11 @@ func (ss *Session) moveSource(in MoveStoreInput) (*Session, string, error) {
 	if err == nil {
 		return from, arg, nil
 	}
-	var me *mount.AmbiguousError
+	var me *AmbiguousError
 	if !errors.As(err, &me) {
 		return nil, "", err
 	}
-	var elsewhere []mount.Hit
+	var elsewhere []Hit
 	for _, h := range me.Candidates {
 		if h.Store.Name != in.To {
 			elsewhere = append(elsewhere, h)

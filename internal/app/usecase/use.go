@@ -8,8 +8,8 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/current"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/storage/mount"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 )
 
 // useKind is the kind of a task that hh use takes.
@@ -86,52 +86,52 @@ func (ss *Session) Use(arg string) (UseResult, error) {
 
 // useResolve finds the project arg names, in the store --store names when
 // there is one.
-func (ss *Session) useResolve(set *mount.Set, arg string) (mount.Hit, error) {
+func (ss *Session) useResolve(set *mount.Set, arg string) (Hit, error) {
 	if ss.StoreName == "" {
-		hit, err := set.Resolve(arg)
+		hit, err := ResolveIn(set, arg)
 		if err != nil {
-			return mount.Hit{}, ss.mountResolveError(set, arg, err)
+			return Hit{}, ss.mountResolveError(set, arg, err)
 		}
 		return hit, nil
 	}
 	c, _, err := ss.Config()
 	if err != nil {
-		return mount.Hit{}, err
+		return Hit{}, err
 	}
 	scoped := ss.StoreName + ":" + arg
 	if name, _, ok := strings.Cut(arg, ":"); ok && storeExists(c, name) {
 		if name != ss.StoreName {
-			return mount.Hit{}, storeConflict(arg, name, ss.StoreName)
+			return Hit{}, storeConflict(arg, name, ss.StoreName)
 		}
 		scoped = arg
 	}
 	if _, ok := set.Get(ss.StoreName); !ok {
 		// not found, or one that does not open, as the other commands say it
 		if _, _, err := ss.Entry(); err != nil {
-			return mount.Hit{}, err
+			return Hit{}, err
 		}
 		for _, sk := range set.Skipped {
 			if sk.Name == ss.StoreName {
-				return mount.Hit{}, openError(sk.Name, sk.Err)
+				return Hit{}, openError(sk.Name, sk.Err)
 			}
 		}
 	}
-	hit, err := set.Resolve(scoped)
-	var moved *mount.MovedError
+	hit, err := ResolveIn(set, scoped)
+	var moved *MovedError
 	if errors.Is(err, store.ErrNotFound) && !errors.As(err, &moved) {
 		// say what the user typed, not the store-qualified form made here
-		return mount.Hit{}, newErr(KindNotFound, "task.not_found", fmt.Errorf("%q: %w", arg, store.ErrNotFound), "input", arg)
+		return Hit{}, newErr(KindNotFound, "task.not_found", fmt.Errorf("%q: %w", arg, store.ErrNotFound), "input", arg)
 	}
 	if err != nil {
 		// the input as the user typed it, not the form made here
-		var me *mount.AmbiguousError
+		var me *AmbiguousError
 		if errors.As(err, &me) {
 			me.Input = arg
 		}
 		if moved != nil {
 			moved.Input = arg
 		}
-		return mount.Hit{}, ss.mountResolveError(set, arg, err)
+		return Hit{}, ss.mountResolveError(set, arg, err)
 	}
 	return hit, nil
 }

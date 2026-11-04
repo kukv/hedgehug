@@ -3,6 +3,8 @@ package mount
 import (
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/app/storage/mount/mounttest"
+
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
@@ -14,7 +16,7 @@ func TestSetCloseClosesEveryRepo(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	stores := newStoresIn(t, root, "one", "two")
-	tasks := putTasks(t, stores[0], 1, nil)
+	tasks := mounttest.PutTasks(t, stores[0], 1, nil)
 	c := &config.Config{Stores: stores}
 	before := gitrepo.Live(root)
 	set := Open(c, Options{})

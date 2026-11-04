@@ -8,8 +8,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/storage/mount"
 	"github.com/kukv/hedgehug/internal/app/usecase"
-	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 )
 
 func (a *app) addCmd() *cobra.Command {

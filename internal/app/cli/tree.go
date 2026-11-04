@@ -9,7 +9,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/query"
 	"github.com/kukv/hedgehug/internal/app/usecase"
-	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 )
 
 func (a *app) lsTree(q *query.Query, ulidsOnly bool, tmpl *template.Template) error {
@@ -36,20 +35,20 @@ func (a *app) lsTree(q *query.Query, ulidsOnly bool, tmpl *template.Template) er
 	case ulidsOnly:
 		// Only the tasks found: the ancestors drawn for them must not
 		// reach a command such as done.
-		var hit []mount.Entry
+		var hit []usecase.Entry
 		for _, d := range drawn {
 			if !d.node.Context {
-				hit = append(hit, mount.Entry{Store: d.store.Store, Entry: d.node.Entry})
+				hit = append(hit, usecase.Entry{Store: d.store.Store, Entry: d.node.Entry})
 			}
 		}
 		return a.printULIDs(hit)
 	case tmpl != nil:
 		node := map[*index.Entry]*usecase.TreeNode{}
-		es := make([]mount.Entry, len(drawn))
+		es := make([]usecase.Entry, len(drawn))
 		for i, d := range drawn {
-			node[d.node.Entry], es[i] = d.node, mount.Entry{Store: d.store.Store, Entry: d.node.Entry}
+			node[d.node.Entry], es[i] = d.node, usecase.Entry{Store: d.store.Store, Entry: d.node.Entry}
 		}
-		return a.printFormat(es, tmpl, func(m map[string]any, e mount.Entry) {
+		return a.printFormat(es, tmpl, func(m map[string]any, e usecase.Entry) {
 			m["context"], m["in_cycle"] = node[e.Entry].Context, node[e.Entry].InCycle
 		})
 	case a.jsonOut:
