@@ -4,6 +4,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,6 +37,7 @@ type Options struct {
 	HTTP     *http.Client // nil is a client with a 30-second timeout
 	LockFile string       // auth.lock; a refresh holds it
 	Sleep    func(time.Duration)
+	Context  context.Context // nil is never canceled; the device flow's wait ends with ErrCanceled when it ends
 }
 
 // Keychain is the keyring to use: Keyring, or the OS keychain when it is nil.
@@ -52,6 +54,23 @@ func (o Options) now() time.Time {
 		return o.Now()
 	}
 	return time.Now()
+}
+
+// wait waits d, and reports false when ctx ended first. Sleep (the tests'
+// clock) is used as it is; the cancel is looked at once it returns.
+func (o Options) wait(ctx context.Context, d time.Duration) bool {
+	if o.Sleep != nil {
+		o.Sleep(d)
+		return ctx.Err() == nil
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
 }
 
 func (o Options) run(name string, args ...string) ([]byte, []byte, error) {

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -90,6 +91,44 @@ func TestDeviceLoginExpires(t *testing.T) {
 	_, err := DeviceLogin(h, opt, func(*github.DeviceCode) {})
 	if err == nil || !strings.Contains(err.Error(), "expired") {
 		t.Errorf("never approved = %v", err)
+	}
+}
+
+func TestDeviceLoginCancel(t *testing.T) {
+	t.Parallel()
+	five := 5 // seconds: the wait the cancel has to cut short
+	_, h, _ := fakeHost(t, fakegh.State{Users: []string{"alice"}, DeviceInterval: &five})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	shown := make(chan struct{})
+	type result struct {
+		dt  DeviceToken
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		dt, err := DeviceLogin(h, Options{Context: ctx}, func(*github.DeviceCode) { close(shown) })
+		done <- result{dt, err}
+	}()
+	<-shown
+	cancel()
+	select {
+	case r := <-done:
+		if !errors.Is(r.err, ErrCanceled) || r.dt.AccessToken != "" {
+			t.Errorf("DeviceLogin = %+v, %v; want ErrCanceled", r.dt, r.err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("DeviceLogin did not stop within 3 seconds of the cancel")
+	}
+
+	// A context that has ended already: the code is asked for and shown, and
+	// the token endpoint is not asked.
+	ended, stop := context.WithCancel(context.Background())
+	stop()
+	var shownAgain bool
+	_, err := DeviceLogin(h, Options{Context: ended}, func(*github.DeviceCode) { shownAgain = true })
+	if !errors.Is(err, ErrCanceled) || !shownAgain {
+		t.Errorf("ended context: err = %v, shown = %v", err, shownAgain)
 	}
 }
 

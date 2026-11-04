@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -10,6 +11,15 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/lib/github"
 )
+
+// DeviceCode is what a person needs to finish the device flow: where to go
+// and the code to enter. The device code that only the polling uses is left
+// out, so that a caller that shows it (the GUI's server) does not hold it.
+type DeviceCode struct {
+	UserCode        string
+	VerificationURI string
+	ExpiresIn       int // seconds
+}
 
 // AuthLoginInput is what hh auth login is given. The CLI reads Token from
 // stdin for --with-token and shows the code of the device flow in ShowCode;
@@ -21,6 +31,8 @@ type AuthLoginInput struct {
 	WithToken bool   // keep Token in the keychain, instead of the device flow
 	Token     string
 	ShowCode  func(*github.DeviceCode) // the device flow's code; nil shows nothing
+	OnCode    func(DeviceCode)         // the same code, in a type of this package; nil shows nothing
+	Context   context.Context          // ends the device flow's wait with auth.canceled; nil never ends it
 }
 
 // AuthLoginResult is the account a login set the token of. Uses is set
@@ -82,16 +94,30 @@ func (ss *Session) AuthLogin(in AuthLoginInput) (AuthLoginResult, error) {
 	if in.WithToken {
 		kind = "keychain"
 		if tok = strings.TrimSpace(in.Token); tok == "" {
-			return AuthLoginResult{}, newErr(KindInvalid, "auth.token", errors.New("no token on stdin"))
+			return AuthLoginResult{}, newErr(KindInvalid, "auth.token_empty", errors.New("no token on stdin"))
 		}
 	} else {
-		show := in.ShowCode
-		if show == nil {
-			show = func(*github.DeviceCode) {}
+		if auth.ClientID(h) == "" {
+			return AuthLoginResult{}, newErr(KindInvalid, "auth.client_id",
+				fmt.Errorf("the device flow needs hosts[].client_id for %s in config.yaml; or use token: gh, token: env:<VAR>, or hedgehug auth login <name> --with-token", host),
+				"host", host)
+		}
+		show := func(dc *github.DeviceCode) {
+			if in.ShowCode != nil {
+				in.ShowCode(dc)
+			}
+			if in.OnCode != nil {
+				in.OnCode(DeviceCode{UserCode: dc.UserCode, VerificationURI: dc.VerificationURI, ExpiresIn: dc.ExpiresIn})
+			}
 		}
 		// The polling holds no lock: auth.lock is taken to save, below.
-		if dt, err = auth.DeviceLogin(h, ss.AuthOptions(c, config.Account{Host: host}), show); err != nil {
-			return AuthLoginResult{}, err
+		opt := ss.AuthOptions(c, config.Account{Host: host})
+		opt.Context = in.Context
+		if dt, err = auth.DeviceLogin(h, opt, show); err != nil {
+			if errors.Is(err, auth.ErrCanceled) {
+				return AuthLoginResult{}, newErr(KindInvalid, "auth.canceled", err)
+			}
+			return AuthLoginResult{}, newErr(KindInvalid, "auth.device_failed", err)
 		}
 		tok = strings.TrimSpace(dt.AccessToken)
 	}
@@ -126,7 +152,9 @@ func (ss *Session) AuthLogin(in AuthLoginInput) (AuthLoginResult, error) {
 	added := false
 	if known {
 		if !strings.EqualFold(acct.Login, login) {
-			return AuthLoginResult{}, fmt.Errorf("the token is of %s/%s, not of account %s (%s); it stays valid on GitHub, so revoke it in GitHub's settings (Settings → Applications → Authorized GitHub Apps) if it is not wanted", host, login, acct.Name, acct.ID())
+			return AuthLoginResult{}, newErr(KindInvalid, "auth.mismatch",
+				fmt.Errorf("the token is of %s/%s, not of account %s (%s); it stays valid on GitHub, so revoke it in GitHub's settings (Settings → Applications → Authorized GitHub Apps) if it is not wanted", host, login, acct.Name, acct.ID()),
+				"account", acct.Name, "host", host, "login", login)
 		}
 		acct.Token = config.TokenSource{Kind: kind}
 	} else {

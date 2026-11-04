@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -22,6 +23,9 @@ type Prompt func(dc *github.DeviceCode)
 
 var errCodeExpired = errors.New("the code expired before it was entered; run hedgehug auth login again")
 
+// ErrCanceled: the device flow was stopped by Options.Context.
+var ErrCanceled = errors.New("the login was canceled")
+
 // DeviceLogin runs the device flow of the Hedgehug GitHub App on the host h
 // and returns the tokens it got.
 func DeviceLogin(h config.Host, opt Options, show Prompt) (DeviceToken, error) {
@@ -34,13 +38,16 @@ func DeviceLogin(h config.Host, opt Options, show Prompt) (DeviceToken, error) {
 		return DeviceToken{}, err
 	}
 	show(dc)
-	sleep := opt.Sleep
-	if sleep == nil {
-		sleep = time.Sleep
+	ctx := opt.Context
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	interval := time.Duration(dc.Interval) * time.Second
 	deadline := opt.now().Add(time.Duration(dc.ExpiresIn) * time.Second)
 	for {
+		if ctx.Err() != nil {
+			return DeviceToken{}, ErrCanceled
+		}
 		tr, err := github.PollToken(opt.HTTP, h.Web, id, dc.DeviceCode)
 		if err != nil {
 			return DeviceToken{}, err
@@ -61,7 +68,9 @@ func DeviceLogin(h config.Host, opt Options, show Prompt) (DeviceToken, error) {
 		if opt.now().After(deadline) {
 			return DeviceToken{}, errCodeExpired
 		}
-		sleep(interval)
+		if !opt.wait(ctx, interval) {
+			return DeviceToken{}, ErrCanceled
+		}
 	}
 }
 
