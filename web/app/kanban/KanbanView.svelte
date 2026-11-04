@@ -12,6 +12,7 @@
   import ListBar from "../list/ListBar.svelte";
   import type { ListScope } from "../list/scope";
   import { useListScope } from "../list/scope.svelte";
+  import { readOnlyNow, readOnlySentence } from "../read-only";
   import { router } from "../router";
   import { selection } from "../selection.svelte";
   import Empty from "../states/Empty.svelte";
@@ -149,6 +150,20 @@
     storesRev.current;
     return c.stores.stores().map((s) => s.name);
   });
+  // Why the Store of a task cannot be written (in Japanese), or null.
+  function readOnlyOf(store: string): string | null {
+    storesRev.current;
+    return readOnlyNow(c.stores, store);
+  }
+  // The "+" of a column creates in the Store of the board, or in any Store on a board of several: it
+  // is disabled only when none of those can be written.
+  const addLocked = $derived.by(() => {
+    storesRev.current;
+    const names = ls.store ? [ls.store] : c.stores.stores().map((s) => s.name);
+    if (names.length === 0) return null;
+    const reasons = names.map(readOnlyOf);
+    return reasons.every((r) => r !== null) ? (reasons[0] ?? null) : null;
+  });
   // With two stores or more, each card says which store it is of.
   const manyStores = $derived(storeOrder.length >= 2);
 
@@ -212,6 +227,7 @@
       mode: settings.columns,
       schema: schemas.get(t.store),
       detail,
+      readOnly: readOnlyOf(t.store),
     });
   }
 
@@ -471,6 +487,8 @@
                     type="button"
                     class="add"
                     aria-label="{col.label} にタスクを追加"
+                    disabled={addLocked !== null}
+                    title={addLocked !== null ? readOnlySentence(addLocked) : undefined}
                     onclick={() => addTo(col)}
                   >
                     <Icon name="plus" size={14} />
@@ -518,6 +536,7 @@
                           ulid: t.ulid,
                           lane: lane.key,
                           onDragStart: () => (dragging = { ulid: t.ulid, lane: lane.key }),
+                          locked: readOnlyOf(t.store) !== null,
                         }))}
                       />
                     {/each}
@@ -674,9 +693,13 @@
     color: var(--muted);
     cursor: pointer;
   }
-  .add:hover {
+  .add:hover:not(:disabled) {
     background: var(--hover);
     color: var(--ink);
+  }
+  .add:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
   }
   .lane {
     display: flex;

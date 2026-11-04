@@ -5,7 +5,19 @@
 //     です（remote に書き込めません）"); the title is a textbox that is readonly, the body a textbox
 //     "本文" that is not editable, "ウォッチ" and "削除" are disabled with the sentence as their
 //     title, and there is no button "コメント"
-import { expect, test } from "./harness";
+//   - the tree of such a Store (/workspaces/<store>/<ulid>/tree) answers Space, Enter, Tab and the
+//     like with the toast of the same sentence and writes nothing, and has no add row; its table
+//     (/table) has the cell "タイトル: <ID>" as a readonly textbox
+import { expect, type Hedgehug, test } from "./harness";
+import { row, toast } from "./screens";
+
+/** The path of a tab ("tree", "table") of the first workspace of a Store. */
+async function tab(hh: Hedgehug, store: string, name: string): Promise<string> {
+  const spaces = await hh.get<{ ulid: string }[]>(`/api/workspaces?store=${store}`);
+  const space = spaces[0];
+  if (!space) throw new Error(`the store ${store} has no workspace`);
+  return `/workspaces/${store}/${space.ulid}/${name}`;
+}
 
 const SENTENCE = "この Store は閲覧のみです（remote に書き込めません）";
 
@@ -48,4 +60,43 @@ test("a Store that can be written is edited as before", async ({ page, hh }) => 
   await expect(page.getByRole("textbox", { name: "タイトル" })).not.toHaveAttribute("readonly", "");
   await expect(page.getByRole("button", { name: "ウォッチ", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "削除", exact: true })).toBeEnabled();
+});
+
+test("the tree of a read-only Store says why a key does nothing, and writes nothing", async ({
+  page,
+  hh,
+}) => {
+  hh.add("Writable");
+  hh.readOnlyStore("ro", "RO", ["Read only"]);
+  await hh.open(page, await tab(hh, "ro", "tree"));
+
+  await row(page, "Read only").click();
+  await page.keyboard.press("Space");
+  // The band of the page says the same sentence, so the toast is the one in the live region.
+  await expect(toast(page, SENTENCE).and(page.locator("[aria-live]"))).toBeVisible();
+  expect(hh.show("RO-1").status).toBe("todo");
+  // No add row, and Enter opens no input.
+  await expect(page.getByRole("button", { name: /タスクを追加/ })).toHaveCount(0);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("textbox", { name: "新しいタスクのタイトル" })).toHaveCount(0);
+});
+
+test("the table of a read-only Store cannot be edited", async ({ page, hh }) => {
+  hh.add("Writable");
+  hh.readOnlyStore("ro", "RO", ["Read only"]);
+  await hh.open(page, await tab(hh, "ro", "table"));
+
+  await expect(page.getByRole("textbox", { name: "タイトル: RO-1" })).toHaveAttribute(
+    "readonly",
+    "",
+  );
+});
+
+test("the tree of a Store that can be written still takes Space", async ({ page, hh }) => {
+  const t = hh.add("Writable");
+  hh.readOnlyStore("ro", "RO");
+  await hh.openTree(page);
+  await row(page, "Writable").click();
+  await page.keyboard.press("Space");
+  await expect.poll(() => hh.show(t.id).status).toBe("done");
 });

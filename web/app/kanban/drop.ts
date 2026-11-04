@@ -130,6 +130,8 @@ export type DropInput = {
   schema: SchemaView | undefined;
   // The full task, for the required fields the list does not carry (watchers, repos).
   detail?: ShowView;
+  // Why the Store of the task cannot be written (in Japanese), or null/absent when it can.
+  readOnly?: string | null;
 };
 
 // decideDrop says whether the card may go to the column, and the status it then gets. It reads no
@@ -138,6 +140,12 @@ export function decideDrop(i: DropInput): DropDecision {
   const { task, column, schema } = i;
   const name = `「${task.id} ${task.title}」`;
 
+  if (i.readOnly) {
+    return refuse(
+      "閲覧のみの Store のタスクは動かせません",
+      `${task.store} は閲覧のみです（${i.readOnly}）。`,
+    );
+  }
   if (!i.sameLane) {
     return i.swimlane === "project"
       ? refuse(

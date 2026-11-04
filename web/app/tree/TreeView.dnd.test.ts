@@ -5,6 +5,7 @@ import { schema, task } from "./fixtures";
 
 type Opts = {
   ulid: string;
+  locked?: boolean;
   openChildren: boolean;
   onDragStart: () => void;
   onOver: (place: string | null, source: string | null) => void;
@@ -53,7 +54,7 @@ import TreeView from "./TreeView.svelte";
 
 const ok = (data: unknown) => ({ data, response: new Response(null, { status: 200 }) });
 
-function setup() {
+function setup(readOnly: string | null = null) {
   const tasks = new Map([
     ["P", task("P", "project", null, { context: true, id: "REL-15", title: "リリース準備 v2.4" })],
     ["E8", task("E8", "epic", "P", { id: "REL-8", title: "リリース作業" })],
@@ -98,7 +99,13 @@ function setup() {
       refreshTrees: vi.fn(async () => {}),
       subscribe: none,
     },
-    stores: { workspace: () => ws, workspaces: () => [ws], tone: () => "purple", subscribe: none },
+    stores: {
+      workspace: () => ws,
+      workspaces: () => [ws],
+      readOnly: () => readOnly,
+      tone: () => "purple",
+      subscribe: none,
+    },
     schema: { get: () => schema, load: async () => schema, subscribe: none },
   };
   return {
@@ -121,6 +128,23 @@ describe("TreeView drag and drop", () => {
     setup();
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     expect([...h.rows.keys()].sort()).toEqual(["E8", "T1", "T7", "T9"]);
+  });
+
+  it("does not let a row of a read-only Store be dragged, and turns a drop on it down", async () => {
+    const { api } = setup("the remote cannot be written");
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    expect(row("T7").locked).toBe(true);
+    row("T7").onDrop("T9", "after");
+    await waitFor(() => expect(h.toast).toHaveBeenCalled());
+    expect(h.toast.mock.calls[0]?.[0].message).toContain("閲覧のみ");
+    expect(h.toast.mock.calls[0]?.[0].message).toContain("remote に書き込めません");
+    expect(api.POST).not.toHaveBeenCalled();
+  });
+
+  it("lets a row of a Store that can be written be dragged", () => {
+    setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    expect(row("T7").locked).toBe(false);
   });
 
   it("tells the row whether it is open with children", () => {

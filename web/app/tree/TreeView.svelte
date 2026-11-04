@@ -11,6 +11,7 @@
   import ListBar from "../list/ListBar.svelte";
   import type { ListScope } from "../list/scope";
   import { useListScope } from "../list/scope.svelte";
+  import { readOnlyNow, readOnlyToast } from "../read-only";
   import { router } from "../router";
   import { selection } from "../selection.svelte";
   import Empty from "../states/Empty.svelte";
@@ -379,6 +380,28 @@
   // "row" is the "…" button of a row; S and K open the other two.
   let menu = $state<{ which: "status" | "kind" | "row"; ulid: string } | null>(null);
 
+  // Why the Store of a task cannot be written (in Japanese), or null.
+  function readOnlyOf(store: string | undefined): string | null {
+    storesRev.current;
+    return store === undefined ? null : readOnlyNow(c.stores, store);
+  }
+
+  // The task a write action acts on, or null for an action that only moves the view.
+  function writeTargetOf(a: KeyAction): string | null {
+    switch (a.type) {
+      case "add-below":
+        return a.after;
+      case "move":
+      case "set-status":
+      case "menu":
+        return a.ulid;
+      case "reject":
+        return selection.ulid;
+      default:
+        return null;
+    }
+  }
+
   function actionOf(k: KeyInput): KeyAction {
     return keyAction(k, { rows, selected: selection.ulid, schema: keySchema, viewRoot, taskOf });
   }
@@ -454,6 +477,13 @@
 
   // run says whether the action went through: false for a refusal or a failed write.
   async function run(a: KeyAction): Promise<boolean> {
+    // A Store that cannot be written refuses before anything else, even the refusals of the schema.
+    const target = writeTargetOf(a);
+    const why = target === null ? null : readOnlyOf(taskOf(target)?.store);
+    if (why !== null) {
+      readOnlyToast(why);
+      return false;
+    }
     try {
       switch (a.type) {
         case "select":
@@ -514,7 +544,7 @@
     if (!menu || !menuTask || !menuSchema) return [];
     if (menu.which === "row") {
       storesRev.current;
-      return [moveWorkspaceItem(menuTask, c.stores.workspaces())];
+      return [moveWorkspaceItem(menuTask, c.stores.workspaces(), readOnlyOf(menuTask.store))];
     }
     if (menu.which === "status") {
       return (menuSchema.statuses ?? []).map((s) => ({ value: s.name, label: s.label || s.name }));
@@ -561,6 +591,11 @@
     return scope.kind === "project" && ls.project
       ? `${ls.project.workspace.name} / ${ls.project.title}`
       : (ls.workspace?.name ?? "");
+  });
+
+  // The place a task would be added to cannot be written: the input is not shown (and goes if it was).
+  $effect(() => {
+    if (adding && readOnlyOf(addStore) !== null) adding = null;
   });
 
   function startAdd(a: Adding) {
@@ -634,7 +669,14 @@
     const dragged = taskOf(sourceUlid);
     const target = taskOf(targetUlid);
     if (!dragged || !target) return null;
-    return dropDecision({ dragged, target, place, schema: schemaOf(dragged.store), taskOf });
+    return dropDecision({
+      dragged,
+      target,
+      place,
+      schema: schemaOf(dragged.store),
+      taskOf,
+      readOnly: readOnlyOf(target.store) ?? readOnlyOf(dragged.store),
+    });
   }
 
   function setOver(targetUlid: string, place: DropPlace | null, sourceUlid: string | null) {
@@ -769,6 +811,7 @@
               depth: item.row.depth,
               openChildren: item.row.hasChildren && item.row.expanded,
               onDragStart: () => (dragging = item.row.ulid),
+              locked: readOnlyOf(item.row.task.store) !== null,
               onOver: (place, source) => setOver(item.row.ulid, place, source),
               onDrop: (source, place) => void dropOn(source, item.row.ulid, place),
             }))}
@@ -836,7 +879,7 @@
         </div>
       {/if}
 
-      {#if !adding}
+      {#if !adding && readOnlyOf(ls.store) === null}
         <div class="foot-add">
           <AddRow
             editing={false}

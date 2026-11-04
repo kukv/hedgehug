@@ -23,6 +23,8 @@ export type DropInput = {
   place: DropPlace;
   schema: SchemaView | undefined;
   taskOf: (ulid: string) => TaskView | undefined;
+  // Why the Store of the place cannot be written (in Japanese), or null/absent when it can.
+  readOnly?: string | null;
 };
 
 // silent: nothing to do and nothing to say (a drop on itself). A move to where
@@ -48,6 +50,13 @@ function name(t: TaskView): string {
 export function dropDecision(i: DropInput): DropDecision {
   const { dragged, target, place } = i;
   if (dragged.ulid === target.ulid) return silent;
+
+  if (i.readOnly) {
+    return refuse(
+      "閲覧のみの Store には置けません",
+      `${target.store} は閲覧のみです（${i.readOnly}）。`,
+    );
+  }
 
   if (dragged.store !== target.store) {
     return refuse(
@@ -124,6 +133,9 @@ export type RowDndOptions = {
   // middle does (a task put after it would land below its children).
   openChildren: boolean;
   onDragStart: () => void;
+  // The row cannot be moved (its Store is read-only): it is not draggable, but it still takes drops
+  // (which are turned down).
+  locked?: boolean;
   // The place a drop on this row would mean and the task being dragged; both
   // null when the pointer leaves.
   onOver: (place: DropPlace | null, sourceUlid: string | null) => void;
@@ -136,11 +148,15 @@ export type RowDndOptions = {
 export function rowDnd(get: () => RowDndOptions): Attachment<HTMLElement> {
   return (el) =>
     combine(
-      draggable({
-        element: el,
-        getInitialData: () => ({ type: ROW, ulid: get().ulid }),
-        onDragStart: () => get().onDragStart(),
-      }),
+      ...(get().locked
+        ? []
+        : [
+            draggable({
+              element: el,
+              getInitialData: () => ({ type: ROW, ulid: get().ulid }),
+              onDragStart: () => get().onDragStart(),
+            }),
+          ]),
       dropTargetForElements({
         element: el,
         canDrop: ({ source }) => source.data.type === ROW,

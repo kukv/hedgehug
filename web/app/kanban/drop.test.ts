@@ -49,6 +49,23 @@ const base = {
   schema,
 };
 
+describe("a task of a read-only Store", () => {
+  it("is not moved, and the reason is the one of the Store", () => {
+    const d = decideDrop({ ...base, column: col("doing"), readOnly: "remote に書き込めません" });
+    expect(d).toMatchObject({ ok: false, silent: false });
+    if (!d.ok) expect(d.reason).toContain("remote に書き込めません");
+  });
+
+  it("is refused even on the column it is in", () => {
+    const d = decideDrop({ ...base, column: col("todo"), readOnly: "x" });
+    expect(d).toMatchObject({ ok: false, silent: false });
+  });
+
+  it("is moved as before with no reason", () => {
+    expect(decideDrop({ ...base, column: col("doing"), readOnly: null }).ok).toBe(true);
+  });
+});
+
 describe("workflow of a task", () => {
   it("allows a move the store lists, and any move from a status it does not list", () => {
     expect(canTransition(schema, undefined, "done", "todo")).toBe(true);

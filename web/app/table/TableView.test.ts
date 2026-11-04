@@ -76,6 +76,8 @@ type Over = {
   loading?: boolean;
   saveState?: { kind: string; message?: string };
   many?: number;
+  // The Stores that cannot be written, with the raw reason of the directory.
+  readOnly?: Record<string, string>;
   canceled?: string[];
   // The stores whose schema cannot be read (until it is put in the schemas).
   unreadable?: string[];
@@ -192,7 +194,7 @@ function setup(over: Over = {}) {
     },
     stores: {
       stores: () => (over.stores ?? ["shared"]).map((name) => ({ name })),
-      readOnly: () => null,
+      readOnly: (s: string) => over.readOnly?.[s] ?? null,
       tone: (s: string) => (s === "me" ? "orange" : "purple"),
       subscribe: ev.subscribe,
     },
@@ -383,6 +385,33 @@ describe("TableView", () => {
       await fireEvent.input(input, { target: { value: "sato" } });
       await fireEvent.keyDown(input, { key: "Enter" });
       expect(save.edit).toHaveBeenCalledWith("T3", "shared", "assignees", ["sato"]);
+    });
+
+    it("only reads the cells of a row of a read-only Store, and says why on the row", async () => {
+      setup({
+        ulids: ["T1", "M1"],
+        stores: ["shared", "me"],
+        readOnly: { me: "the remote cannot be written" },
+        scope: { apiBase: "", cliBase: "", store: undefined, saveBase: "" },
+      });
+      mount({
+        view: { kind: "all" },
+        settings: { ...SETTINGS, columns: ["id", "title", "status", "assignee", "team"] },
+      });
+      const title = screen.getByRole("textbox", { name: "タイトル: ME-1" });
+      expect(title).toHaveAttribute("readonly");
+      expect(screen.getByRole("button", { name: "ステータス: ME-1" })).toBeDisabled();
+      expect(screen.queryByRole("textbox", { name: "担当: ME-1" })).toBeNull();
+      expect(screen.getByRole("textbox", { name: "チーム: ME-1" })).toHaveAttribute("readonly");
+      const row = screen.getByRole("textbox", { name: "タイトル: ME-1" }).closest("tr");
+      expect(row?.getAttribute("title")).toMatch(/^この Store は閲覧のみです（.+）$/);
+      // The row of a Store that can be written is as before.
+      expect(screen.getByRole("textbox", { name: "タイトル: REL-4" })).not.toHaveAttribute(
+        "readonly",
+      );
+      expect(
+        screen.getByRole("textbox", { name: "タイトル: REL-4" }).closest("tr"),
+      ).not.toHaveAttribute("title");
     });
 
     it("only shows the columns that are not edited", async () => {

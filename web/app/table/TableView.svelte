@@ -19,6 +19,7 @@
   import ListBar from "../list/ListBar.svelte";
   import type { ListScope } from "../list/scope";
   import { useListScope } from "../list/scope.svelte";
+  import { readOnlyNow, readOnlySentence } from "../read-only";
   import { router } from "../router";
   import Empty from "../states/Empty.svelte";
   import { useSubscribe } from "../svelte-store";
@@ -324,6 +325,11 @@
   const minWidth = $derived(GUTTER + specs.reduce((sum, s) => sum + s.width, 0));
 
   // --- editing a cell --------------------------------------------------------------------------
+  // Why the Store of a task cannot be written (Japanese), or null. The cells of such a row only read.
+  function readOnlyOf(store: string): string | null {
+    storesRev.current;
+    return readOnlyNow(c.stores, store);
+  }
   function edit(t: TaskView, field: PatchField, value: unknown) {
     freeze(t);
     c.save.edit(t.ulid, t.store, field, value);
@@ -538,8 +544,10 @@
   {:else}
     {@const t = taskOf(item.task.ulid) ?? item.task}
     {@const st = saves.current.state(t.ulid)}
+    {@const locked = readOnlyOf(t.store)}
     <tr
       class="row"
+      title={locked ? readOnlySentence(locked) : undefined}
       aria-rowindex={index + 2}
       class:placed={start !== undefined}
       style:transform={start === undefined ? undefined : `translateY(${start}px)`}
@@ -570,6 +578,7 @@
             col={spec}
             schema={schemaOf(t.store)}
             tone={c.stores.tone(t.store)}
+            readonly={locked !== null}
             pending={field ? saves.current.editing(t.ulid, field) : false}
             {taskOf}
             parentLoading={parentLoading(t)}
