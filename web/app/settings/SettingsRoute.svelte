@@ -3,9 +3,11 @@
   import { hrefOf, router, type SettingsPage } from "../router";
   import Empty from "../states/Empty.svelte";
   import { useSubscribe } from "../svelte-store";
+  import SettingsAccounts from "./SettingsAccounts.svelte";
   import SettingsGeneral from "./SettingsGeneral.svelte";
   import SettingsLayout from "./SettingsLayout.svelte";
   import SettingsSchema from "./SettingsSchema.svelte";
+  import SettingsStores from "./SettingsStores.svelte";
   import SettingsWorkspaces from "./SettingsWorkspaces.svelte";
 
   let { page }: { page: SettingsPage } = $props();
@@ -43,6 +45,10 @@
   <SettingsLayout {page}>
     {#if page.page === "general"}
       <SettingsGeneral />
+    {:else if page.page === "accounts"}
+      <SettingsAccounts />
+    {:else if page.page === "stores"}
+      <SettingsStores />
     {:else if page.page === "schema"}
       <SettingsSchema store={page.store} tab={page.tab} />
     {:else}

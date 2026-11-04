@@ -180,6 +180,8 @@
         settingsSchema: (store) =>
           router.href({ name: "settings", page: "schema", store, tab: "statuses" }),
         settingsGeneral: () => router.href({ name: "settings", page: "general" }),
+        settingsAccounts: () => router.href({ name: "settings", page: "accounts" }),
+        settingsStores: () => router.href({ name: "settings", page: "stores" }),
         project: (ulid) => router.href({ name: "project", ulid, tab: "tree" }),
         projectSettings: (ulid) => router.href({ name: "project", ulid, tab: "settings" }),
         task: (ulid) => router.href({ name: "task", ulid }),

@@ -157,11 +157,11 @@
 
 **テストの観点:** 2つのルートの読み書き・ナビの順と強調・閲覧のみの「（閲覧のみ）」（`StoreItem.read_only` と `sync.read_only` の両方）・非表示の Store も選択欄に出る・`settings.test.ts` の「まだない画面の項目（アカウントなど）は出さない」を「自動化・テンプレートは出さない」に直し、アカウント・マウント中の Store が出ることを確かめる・パレットの2つのコマンド・`routes.spec.ts`
 
-- [ ] Step 1: router のテスト → 実装
-- [ ] Step 2: `settings.test.ts` を直して落ちることを確かめる → ナビ・骨組み・振り分け
-- [ ] Step 3: パレットのテスト → 実装
-- [ ] Step 4: `routes.spec.ts` を通す
-- [ ] Step 5: 検査を流してコミット `feat(web): 設定のナビにアカウントと認証・マウント中の Store を足す`
+- [x] Step 1: router のテスト → 実装
+- [x] Step 2: `settings.test.ts` を直して落ちることを確かめる → ナビ・骨組み・振り分け
+- [x] Step 3: パレットのテスト → 実装
+- [x] Step 4: `routes.spec.ts` を通す
+- [x] Step 5: 検査を流してコミット `feat(web): 設定のナビにアカウントと認証・マウント中の Store を足す`
 
 ---
 
