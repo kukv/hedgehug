@@ -22,7 +22,7 @@ func TestLogViewTrailers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	views := browse.StoreLogViews(lr.Logs)
+	views := lr.Logs
 	if len(views) != 1 {
 		t.Fatalf("log = %d commits", len(views))
 	}
@@ -32,7 +32,8 @@ func TestLogViewTrailers(t *testing.T) {
 		t.Errorf("trailers = %+v; want Hedgehug-Op: add and Hedgehug-Task", v.Trailers)
 	}
 	// every trailer of the commit, in the order it is written
-	want := lr.Logs[0].Entry.Trailers
+	_, commits := commitsOf(t, ts)
+	want := commits[0].Trailers
 	if len(v.Trailers) != len(want) {
 		t.Fatalf("trailers = %+v; want the %d of the commit", v.Trailers, len(want))
 	}
@@ -47,7 +48,7 @@ func TestLogViewTrailers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := browse.LogViewOf(ix, gitrepo.LogEntry{}).Trailers; got == nil || len(got) != 0 {
+	if got := usecase.LogViewOf(ix, gitrepo.LogEntry{}).Trailers; got == nil || len(got) != 0 {
 		t.Errorf("trailers of a bare commit = %#v; want []", got)
 	}
 }

@@ -11,7 +11,6 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
-	"github.com/kukv/hedgehug/internal/app/storage/query"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/browse"
 	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
@@ -31,7 +30,11 @@ func refTo(t *testing.T, ts *usecasetest.Session, line string) (from model.ULID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return r.Entry.ULID
+		u, err := model.ParseULID(r.ULID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u
 	}
 	bID := "WEB-1"
 	if _, err := browse.Show(ts.ForStore("org-b"), bID); err != nil {
@@ -142,7 +145,11 @@ func TestDoctorFixSkipsAReadOnlyStoreAndWarns(t *testing.T) {
 		}
 		first := map[string]string{"org-a": "API-1", "org-b": "WEB-1"}[name]
 		second := map[string]string{"org-a": "API-2", "org-b": "WEB-2"}[name]
-		editRaw(t, ts, name, r.Entry.ULID, "id: "+second, "id: "+first)
+		u, err := model.ParseULID(r.ULID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		editRaw(t, ts, name, u, "id: "+second, "id: "+first)
 	}
 	usecasetest.MakeStoreReadOnly(t, ts, "org-b")
 	rs, err := maintenance.Doctor(ts.Session, true)
@@ -229,7 +236,7 @@ func TestDoctorKeepsTheOtherStoresWhenOneDoesNotOpen(t *testing.T) {
 	}
 	// the silence was for Doctor only: a later operation warns, once
 	ts.Warns = nil
-	if _, err := browse.List(ts.Session, &query.Query{}); err != nil {
+	if _, err := browse.List(ts.Session, ""); err != nil {
 		t.Fatal(err)
 	}
 	var n int

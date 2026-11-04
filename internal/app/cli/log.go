@@ -7,9 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/browse"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 func (a *app) logCmd() *cobra.Command {
@@ -31,21 +30,21 @@ func (a *app) logCmd() *cobra.Command {
 	return cmd
 }
 
-func logLine(ix *index.Index, e gitrepo.LogEntry) string {
-	return fmt.Sprintf("%s  %s  %s  %s\n", e.Hash.String()[:7], e.When.In(time.Local).Format("2006-01-02 15:04"), e.Author.Name, browse.SubjectNow(ix, e))
+func logLine(l usecase.LogView) string {
+	return fmt.Sprintf("%s  %s  %s  %s\n", l.Hash[:7], l.Date.In(time.Local).Format("2006-01-02 15:04"), l.Author.Name, l.CurrentSubject)
 }
 
-func logText(ix *index.Index, entries []gitrepo.LogEntry) string {
+func logText(logs []usecase.LogView) string {
 	var b strings.Builder
-	for _, e := range entries {
-		b.WriteString(logLine(ix, e))
+	for _, l := range logs {
+		b.WriteString(logLine(l))
 	}
 	return b.String()
 }
 
 // storeLogText is the commits of logs, each led by the name of its store when
 // many says there is more than one, padded to the longest.
-func storeLogText(logs []browse.StoreLog, many bool) string {
+func storeLogText(logs []usecase.LogView, many bool) string {
 	width := 0
 	if many {
 		for _, l := range logs {
@@ -57,7 +56,7 @@ func storeLogText(logs []browse.StoreLog, many bool) string {
 		if many {
 			b.WriteString(l.Store + strings.Repeat(" ", width-displayWidth(l.Store)) + "  ")
 		}
-		b.WriteString(logLine(l.Index, l.Entry))
+		b.WriteString(logLine(l))
 	}
 	return b.String()
 }
@@ -68,7 +67,7 @@ func (a *app) log(args, workspaces []string, limit int) error {
 		return err
 	}
 	if a.jsonOut {
-		return a.printJSON(browse.StoreLogViews(res.Logs))
+		return a.printJSON(res.Logs)
 	}
 	_, err = fmt.Fprint(a.stdout, storeLogText(res.Logs, res.Many))
 	return err

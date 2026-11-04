@@ -33,8 +33,8 @@
 | workspace add・rename・prefix・rm | 裸の WorkspaceView | `workspaces.WorkspaceWrite` `{workspace, commit, ids?}` |
 | schema migrate | `{changed, skipped}`（changed は checklist・progress なし） | `schemas.MigrateWrite` `{changed, skipped, commit}` |
 | schema check | Finding の配列 | `schemas.CheckResult` `{findings}` |
-| ls | TaskView の配列 | `browse.TaskList` `{tasks, groups?}`（tasks は checklist・progress 付き） |
-| ls --tree | roots と cycle を混ぜた配列 | `browse.TaskList` `{roots, cycle?}` |
+| ls（view show も同じ） | TaskView の配列 | `browse.TaskList` `{tasks, groups?}`（tasks は checklist・progress 付き） |
+| ls --tree（view show も同じ） | roots と cycle を混ぜた配列 | `browse.TaskList` `{roots, cycle?}` |
 | undo | `{undone: "<hash>", subject, changed, kept}` | `tasks.UndoWrite` `{undone: LogView\|null, subject, changed, commit, kept}` |
 | auth login | uses のときはテキスト | `accounts.AuthLoginResult` に `uses?`。uses のときも JSON |
 | auth logout | `{account, removed}` | `accounts.AuthLogoutResult` `{account, id, token?, removed}` |

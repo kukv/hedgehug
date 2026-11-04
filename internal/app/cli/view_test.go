@@ -133,10 +133,11 @@ func TestViewShowAcrossStores(t *testing.T) {
 	te.goldenOK("narrowed", "--store", "alpha", "view", "show", "only-bravo")
 	te.goldenOK("saved-in-bravo", "--store", "bravo-long", "view", "show", "from-bravo")
 
-	var got []usecase.TaskView
-	if err := json.Unmarshal([]byte(te.ok("--store", "alpha", "view", "show", "open", "--json")), &got); err != nil {
+	var list struct{ Tasks []usecase.TaskView }
+	if err := json.Unmarshal([]byte(te.ok("--store", "alpha", "view", "show", "open", "--json")), &list); err != nil {
 		t.Fatal(err)
 	}
+	got := list.Tasks
 	if len(got) != 3 || got[0].Store != "alpha" || got[2].Store != "bravo-long" {
 		t.Errorf("view show --json = %+v; want the 3 todo tasks of both stores", got)
 	}

@@ -173,7 +173,7 @@ CLI の本体を `internal/app/cli` に移し、`cmd/hedgehug/main.go` は `cli.
 ### 4.3 JSON の形（G）
 
 - CLI の `--json` を server と同じ usecase の型で出す。server の書き込み応答の包み（`{task, commit}`・`{tasks, commit}`・`{comment, commit}`・`{view, commit}`・`{workspace, commit, ids}`・`{findings}`・ls の `{tasks, groups}`・tree の `{roots, cycle}` など）も usecase に移し、CLI もその形で出す。CLI にしかない項目はその型に足す（server の応答にも出る）。
-- 回 4 の調査（2026-11-04、main 6e2b895）で、当初の「変わるのは undo と mv --store の 2 つだけ」は合わないことがわかった。mv --store は既に server と同じ形だった。変わるのは、包みが付く書き込みのコマンド（add・edit・set・done・dep・watch・unwatch・inbox revert・mv・restore・restore --at・rm・comment・view save/rm/rename・workspace add/rename/prefix/rm・migrate）、配列が包みになる ls・ls --tree・schema check、項目や名前が変わる undo・auth login・auth logout・store add・store list・store init・store default・store discover・inbox ls・sync --status。
+- 回 4 の調査（2026-11-04、main 6e2b895）で、当初の「変わるのは undo と mv --store の 2 つだけ」は合わないことがわかった。mv --store は既に server と同じ形だった。変わるのは、包みが付く書き込みのコマンド（add・edit・set・done・dep・watch・unwatch・inbox revert・mv・restore・restore --at・rm・comment・view save/rm/rename・workspace add/rename/prefix/rm・migrate）、配列が包みになる ls・ls --tree・view show・schema check、項目や名前が変わる undo・auth login・auth logout・store add・store list・store init・store default・store discover・inbox ls・sync --status。
 - 変わるものは、新しい形を期待するテストを先に書いてから変える。それ以外のコマンドの `--json` は、今の出力と同じになることをテスト（既存の golden を含む）で確かめる。
 - `ls --format` のテンプレートに渡すキーは `ls --json` の tasks の 1 行と同じになる（checklist・progress が増える。今通るテンプレートの出力は変わらない。2026-11-04 利用者が了承）。
 - テキストの表示にだけ使う項目（表示用の ID、参照の名前など）は usecase の型に `json:"-"` で持たせる。JSON の項目ではないので、server の応答は変えない。

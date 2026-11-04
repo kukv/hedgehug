@@ -26,36 +26,36 @@ func storeNames(es []string) string { return strings.Join(es, ",") }
 func TestListAcrossStores(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.NewTwoStore(t)
-	l, err := browse.List(ts.Session, mustParse(t, ""))
+	l, err := browse.List(ts.Session, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !l.Many || len(l.Stores) != 2 || len(l.Entries) != 2 {
-		t.Fatalf("List = %d stores, many %v, %d entries", len(l.Stores), l.Many, len(l.Entries))
+	if !l.Many || len(l.Tasks) != 2 {
+		t.Fatalf("List = many %v, %d tasks", l.Many, len(l.Tasks))
 	}
-	if l.Entries[0].Store.Name != "org-a" || l.Entries[1].Store.Name != "org-b" || l.Entries[1].Entry.Title != "org-b task" {
-		t.Errorf("entries = %v %v", l.Entries[0].Store.Name, l.Entries[1].Store.Name)
+	if l.Tasks[0].Store != "org-a" || l.Tasks[1].Store != "org-b" || l.Tasks[1].Title != "org-b task" {
+		t.Errorf("tasks = %v %v", l.Tasks[0].Store, l.Tasks[1].Store)
 	}
-	one, err := browse.List(ts.Session, mustParse(t, "store:org-b"))
-	if err != nil || !one.Many || len(one.Entries) != 1 || one.Entries[0].Store.Name != "org-b" {
+	one, err := browse.List(ts.Session, "store:org-b")
+	if err != nil || !one.Many || len(one.Tasks) != 1 || one.Tasks[0].Store != "org-b" {
 		t.Errorf("store:org-b = %+v, %v", one, err)
 	}
-	_, err = browse.List(ts.Session, mustParse(t, "store:nope"))
+	_, err = browse.List(ts.Session, "store:nope")
 	usecasetest.WantErr(t, err, usecase.KindUsage, "query.invalid")
 	if err != nil && !strings.Contains(err.Error(), `unknown store "nope"`) {
 		t.Errorf("err = %v", err)
 	}
 	// --store takes one store, and store: can only narrow it
 	b := ts.ForStore("org-b")
-	only, err := browse.List(b, mustParse(t, ""))
-	if err != nil || !only.Many || len(only.Entries) != 1 {
+	only, err := browse.List(b, "")
+	if err != nil || !only.Many || len(only.Tasks) != 1 {
 		t.Errorf("--store org-b = %+v, %v", only, err)
 	}
-	none, err := browse.List(b, mustParse(t, "store:org-a"))
-	if err != nil || len(none.Entries) != 0 {
+	none, err := browse.List(b, "store:org-a")
+	if err != nil || len(none.Tasks) != 0 {
 		t.Errorf("--store org-b with store:org-a = %+v, %v", none, err)
 	}
-	_, err = browse.List(ts.ForStore("nope"), mustParse(t, ""))
+	_, err = browse.List(ts.ForStore("nope"), "")
 	usecasetest.WantErr(t, err, usecase.KindNotFound, "store.not_found")
 }
 
@@ -69,19 +69,19 @@ func TestListWarnsOfAStoreThatDoesNotOpen(t *testing.T) {
 	if err := os.RemoveAll(e.Path); err != nil {
 		t.Fatal(err)
 	}
-	l, err := browse.List(ts.Session, mustParse(t, ""))
-	if err != nil || l.Many || len(l.Entries) != 1 || l.Entries[0].Store.Name != "org-a" {
+	l, err := browse.List(ts.Session, "")
+	if err != nil || l.Many || len(l.Tasks) != 1 || l.Tasks[0].Store != "org-a" {
 		t.Fatalf("List = %+v, %v; want org-a's only", l, err)
 	}
 	if len(ts.Warns) != 1 || !strings.Contains(ts.Warns[0], "org-b") {
 		t.Errorf("warnings = %q; want one about org-b", ts.Warns)
 	}
 	// asking again does not warn again
-	if _, err := browse.List(ts.Session, mustParse(t, "")); err != nil || len(ts.Warns) != 1 {
+	if _, err := browse.List(ts.Session, ""); err != nil || len(ts.Warns) != 1 {
 		t.Errorf("second List: %v, warnings %q; want still one", err, ts.Warns)
 	}
 	// the one --store names is an error
-	_, err = browse.List(ts.ForStore("org-b"), mustParse(t, ""))
+	_, err = browse.List(ts.ForStore("org-b"), "")
 	usecasetest.WantErr(t, err, usecase.KindInvalid, "store.open")
 }
 
@@ -91,7 +91,7 @@ func TestTreePerStore(t *testing.T) {
 	if _, err := tasks.Add(ts.ForStore("org-a"), tasks.AddInput{Title: "child", Parent: "API-1"}); err != nil {
 		t.Fatal(err)
 	}
-	tr, err := browse.Tree(ts.Session, mustParse(t, ""))
+	tr, err := browse.Tree(ts.Session, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,26 +99,26 @@ func TestTreePerStore(t *testing.T) {
 		t.Fatalf("Tree = %d stores, many %v", len(tr.Stores), tr.Many)
 	}
 	a, b := tr.Stores[0], tr.Stores[1]
-	if a.Store.Name != "org-a" || b.Store.Name != "org-b" || a.Index.StoreName() != "org-a" {
-		t.Errorf("stores = %s %s", a.Store.Name, b.Store.Name)
+	if a.Store != "org-a" || b.Store != "org-b" {
+		t.Errorf("stores = %s %s", a.Store, b.Store)
 	}
-	if got := ids(browse.Flatten(a.Roots)); !slices.Equal(got, []string{"API-1", "API-2"}) {
+	if got := ids(a.Drawn()); !slices.Equal(got, []string{"API-1", "API-2"}) {
 		t.Errorf("org-a tree = %v", got)
 	}
-	if got := ids(browse.Flatten(b.Roots)); !slices.Equal(got, []string{"WEB-1"}) {
+	if got := ids(b.Drawn()); !slices.Equal(got, []string{"WEB-1"}) {
 		t.Errorf("org-b tree = %v", got)
 	}
 	// a store with no match stays, with nothing in it
-	tr, err = browse.Tree(ts.Session, mustParse(t, "child"))
+	tr, err = browse.Tree(ts.Session, "child")
 	if err != nil || len(tr.Stores) != 2 || len(tr.Stores[1].Roots) != 0 || len(tr.Stores[0].Roots) != 1 {
 		t.Errorf("Tree(child) = %+v, %v", tr, err)
 	}
 	// store: leaves one, though two are mounted
-	tr, err = browse.Tree(ts.Session, mustParse(t, "store:org-b"))
+	tr, err = browse.Tree(ts.Session, "store:org-b")
 	if err != nil || !tr.Many || len(tr.Stores) != 1 {
 		t.Errorf("Tree(store:org-b) = %+v, %v", tr, err)
 	}
-	_, err = browse.Tree(ts.Session, mustParse(t, "sort:title"))
+	_, err = browse.Tree(ts.Session, "sort:title")
 	usecasetest.WantErr(t, err, usecase.KindUsage, "query.tree_order")
 }
 
@@ -147,16 +147,13 @@ func TestLogMixesStoresByTime(t *testing.T) {
 	var got []string
 	for _, l := range lr.Logs {
 		got = append(got, l.Store)
-		if l.Index == nil || l.Index.StoreName() != l.Store {
-			t.Errorf("commit of %s has the index of %v", l.Store, l.Index)
-		}
 	}
 	// newest first; the same time in the order of the stores (org-a's first)
 	if prefix := "org-b,org-a,org-b"; !strings.HasPrefix(storeNames(got), prefix) {
 		t.Errorf("stores = %s; want %s first", storeNames(got), prefix)
 	}
 	for i := 1; i < len(lr.Logs); i++ {
-		if lr.Logs[i].Entry.When.After(lr.Logs[i-1].Entry.When) {
+		if lr.Logs[i].Date.After(lr.Logs[i-1].Date) {
 			t.Fatalf("commit %d is newer than %d", i, i-1)
 		}
 	}
@@ -170,11 +167,6 @@ func TestLogMixesStoresByTime(t *testing.T) {
 	two, err := browse.Log(ts.Session, nil, 2)
 	if err != nil || len(two.Logs) != 2 || two.Logs[0].Store != "org-b" || two.Logs[1].Store != "org-a" {
 		t.Errorf("Log(nil, 2) = %+v, %v", two.Logs, err)
-	}
-	// a commit tells its store in --json
-	views := browse.StoreLogViews(two.Logs)
-	if views[0].Store != "org-b" || views[1].Store != "org-a" {
-		t.Errorf("views = %+v", views)
 	}
 	// one task: in its store, and the log is not "many"
 	one, err := browse.Log(ts.Session, []string{"WEB-1"}, 0)
@@ -200,11 +192,8 @@ func TestViewsTellTheirStore(t *testing.T) {
 	if err != nil || r.Store != "org-b" {
 		t.Fatalf("Show(WEB-1).Store = %q, %v", r.Store, err)
 	}
-	if v := usecase.TaskViewOf(r.Index, r.Entry); v.Store != "org-b" {
-		t.Errorf("TaskViewOf.Store = %q", v.Store)
-	}
-	if v := browse.ShowViewOf(r); v.Store != "org-b" || len(v.History) == 0 || v.History[0].Store != "org-b" {
-		t.Errorf("ShowViewOf = %q, history %+v", v.Store, v.History)
+	if len(r.History) == 0 || r.History[0].Store != "org-b" {
+		t.Errorf("Show history = %+v", r.History)
 	}
 	one := usecasetest.New(t)
 	if _, err := tasks.Add(one.Session, tasks.AddInput{Title: "x"}); err != nil {
@@ -222,18 +211,18 @@ func TestListByAnIDOfOneStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, q := range []string{"parent:API-1", "parent:org-a:API-1"} {
-		l, err := browse.List(ts.Session, mustParse(t, q))
-		if err != nil || len(l.Entries) != 1 || l.Entries[0].Entry.Title != "child" {
-			t.Errorf("%s = %+v, %v", q, l.Entries, err)
+		l, err := browse.List(ts.Session, q)
+		if err != nil || len(l.Tasks) != 1 || l.Tasks[0].Title != "child" {
+			t.Errorf("%s = %+v, %v", q, l.Tasks, err)
 		}
 	}
 	// org-b's WEB-1 is not in org-a, and written for org-a it is nowhere
-	l, err := browse.List(ts.Session, mustParse(t, "parent:org-b:WEB-1"))
-	if err != nil || len(l.Entries) != 0 {
-		t.Errorf("parent:org-b:WEB-1 = %+v, %v; want nothing, from org-b", l.Entries, err)
+	l, err := browse.List(ts.Session, "parent:org-b:WEB-1")
+	if err != nil || len(l.Tasks) != 0 {
+		t.Errorf("parent:org-b:WEB-1 = %+v, %v; want nothing, from org-b", l.Tasks, err)
 	}
 	for _, q := range []string{"parent:ZZ-9", "parent:org-a:WEB-1", "parent:org-c:API-1"} {
-		_, err := browse.List(ts.Session, mustParse(t, q))
+		_, err := browse.List(ts.Session, q)
 		usecasetest.WantErr(t, err, usecase.KindUsage, "query.invalid")
 	}
 }
@@ -242,16 +231,16 @@ func TestWorkspaceQueryAcrossStores(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.NewTwoStore(t)
 	// org-a has no workspace org-b: it matches nothing there, not an error
-	r, err := browse.List(ts.Session, mustParse(t, "workspace:org-b"))
-	if err != nil || len(r.Entries) != 1 || r.Entries[0].Store.Name != "org-b" {
-		t.Fatalf("List(workspace:org-b) = %+v, %v", r.Entries, err)
+	r, err := browse.List(ts.Session, "workspace:org-b")
+	if err != nil || len(r.Tasks) != 1 || r.Tasks[0].Store != "org-b" {
+		t.Fatalf("List(workspace:org-b) = %+v, %v", r.Tasks, err)
 	}
-	r, err = browse.List(ts.Session, mustParse(t, "workspace:org-a,org-b"))
-	if err != nil || len(r.Entries) != 2 {
-		t.Errorf("List(workspace:org-a,org-b) = %d entries, %v", len(r.Entries), err)
+	r, err = browse.List(ts.Session, "workspace:org-a,org-b")
+	if err != nil || len(r.Tasks) != 2 {
+		t.Errorf("List(workspace:org-a,org-b) = %d tasks, %v", len(r.Tasks), err)
 	}
 	// a workspace no store has is still an error
-	_, err = browse.List(ts.Session, mustParse(t, "workspace:nope"))
+	_, err = browse.List(ts.Session, "workspace:nope")
 	usecasetest.WantErr(t, err, usecase.KindUsage, "query.invalid")
 }
 
@@ -267,12 +256,11 @@ func TestLogInWorkspaces(t *testing.T) {
 	if _, err := tasks.Add(a, tasks.AddInput{Title: "guide", Workspace: "docs"}); err != nil {
 		t.Fatal(err)
 	}
-	wsOf := func(l browse.StoreLog) string {
-		v := browse.StoreLogViews([]browse.StoreLog{l})[0]
-		if v.Workspace == nil {
+	wsOf := func(l usecase.LogView) string {
+		if l.Workspace == nil {
 			return ""
 		}
-		return v.Workspace.Name
+		return l.Workspace.Name
 	}
 	// the workspace's commit by its trailer, the task's by where it is
 	lr, err := browse.LogIn(ts.Session, nil, []string{"DOC"}, 0)
@@ -284,7 +272,7 @@ func TestLogInWorkspaces(t *testing.T) {
 		if wsOf(l) != "docs" {
 			t.Errorf("a commit of %q in the log of docs", wsOf(l))
 		}
-		op, _ := l.Entry.Trailer("Hedgehug-Op")
+		op, _ := l.Trailer("Hedgehug-Op")
 		names = append(names, op)
 	}
 	if strings.Join(names, ",") != "add,workspace" {
@@ -312,7 +300,7 @@ func TestLogInWorkspaces(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, v := range browse.StoreLogViews(all.Logs) {
+	for _, v := range all.Logs {
 		if v.Task != nil && (v.Workspace == nil || v.Workspace.ULID == "" || v.Workspace.IDPrefix == "") {
 			t.Errorf("commit %s of task %s has workspace %+v", v.Hash[:7], *v.Task, v.Workspace)
 		}

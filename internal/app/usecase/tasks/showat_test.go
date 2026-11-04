@@ -106,7 +106,7 @@ func TestShowAtKeepsTheIDAndWorkspaceOfNow(t *testing.T) {
 		t.Fatal(err)
 	}
 	if v.ID != "API-1" || v.Workspace == nil || v.Workspace.Name != "api" || len(v.FormerIDs) != 1 || v.FormerIDs[0] != "ME-1" {
-		t.Errorf("ShowAt = id %q workspace %q former %q; want API-1, api, [ME-1]", v.ID, v.Workspace, v.FormerIDs)
+		t.Errorf("ShowAt = id %q workspace %+v former %q; want API-1, api, [ME-1]", v.ID, v.Workspace, v.FormerIDs)
 	}
 }
 

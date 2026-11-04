@@ -11,6 +11,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
+	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/query"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/browse"
@@ -29,12 +30,30 @@ func mustParse(t *testing.T, s string) *query.Query {
 	return q
 }
 
-func ids(es []*browse.TreeNode) []string {
+func ids(vs []*usecase.TaskView) []string {
 	var out []string
-	for _, n := range es {
-		out = append(out, n.Entry.ID)
+	for _, v := range vs {
+		out = append(out, v.ID)
 	}
 	return out
+}
+
+// commitsOf is the commits of the store of ts, newest first, and its index.
+func commitsOf(t *testing.T, ts *usecasetest.Session) (*index.Index, []gitrepo.LogEntry) {
+	t.Helper()
+	s, ix, err := ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := ts.OpenHistory(s, "me")
+	if err != nil {
+		t.Fatal(err)
+	}
+	es, err := h.Entries(h.All(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ix, es
 }
 
 func TestListTreeShowLog(t *testing.T) {
@@ -45,15 +64,14 @@ func TestListTreeShowLog(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	q := mustParse(t, "c")
-	l, err := browse.List(ts.Session, q)
+	l, err := browse.List(ts.Session, "c")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(l.Entries) != 1 || l.Entries[0].Entry.ID != "ME-2" || l.Entries[0].Store.Name != "me" || l.Many || len(l.Stores) != 1 {
+	if len(l.Tasks) != 1 || l.Tasks[0].ID != "ME-2" || l.Tasks[0].Store != "me" || l.Many {
 		t.Fatalf("List = %+v", l)
 	}
-	tr, err := browse.Tree(ts.Session, q)
+	tr, err := browse.Tree(ts.Session, "c")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,18 +79,18 @@ func TestListTreeShowLog(t *testing.T) {
 		t.Fatalf("Tree has %d stores, many %v; want one", len(tr.Stores), tr.Many)
 	}
 	roots := tr.Stores[0].Roots
-	if len(roots) != 1 || roots[0].Entry.ID != "ME-1" || !roots[0].Context {
+	if len(roots) != 1 || roots[0].ID != "ME-1" || !roots[0].Context {
 		t.Fatalf("Tree roots = %+v; want ME-1 as context", roots)
 	}
-	if c := roots[0].Children; len(c) != 1 || c[0].Entry.ID != "ME-2" || c[0].Context {
+	if c := roots[0].Children; len(c) != 1 || c[0].ID != "ME-2" || c[0].Context {
 		t.Fatalf("Tree children = %+v", c)
 	}
 	sh, err := browse.Show(ts.Session, "ME-2")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sh.Task.Title != "c" || len(sh.History) != 1 {
-		t.Errorf("Show = %q with %d commits; want c with 1", sh.Task.Title, len(sh.History))
+	if sh.Title != "c" || len(sh.History) != 1 {
+		t.Errorf("Show = %q with %d commits; want c with 1", sh.Title, len(sh.History))
 	}
 	lr, err := browse.Log(ts.Session, nil, 0)
 	if err != nil {
@@ -101,19 +119,24 @@ func TestListGroupsAndErrors(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	q := mustParse(t, "group:status sort:title")
-	l, err := browse.List(ts.Session, q)
+	l, err := browse.List(ts.Session, "group:status sort:title")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(l.Groups) != 2 || len(l.Entries) != 2 {
-		t.Fatalf("List = %d groups, %d entries", len(l.Groups), len(l.Entries))
+	if len(l.Groups) != 2 || len(l.Tasks) != 2 {
+		t.Fatalf("List = %d groups, %d tasks", len(l.Groups), len(l.Tasks))
 	}
-	if l.Entries[0].Entry.Title != l.Groups[0].Entries[0].Entry.Title || l.Entries[1].Entry.Title != l.Groups[1].Entries[0].Entry.Title {
-		t.Errorf("Entries are not the groups' tasks in order: %v", l.Entries)
+	if l.Tasks[0].Title != l.Groups[0].Tasks[0].Title || l.Tasks[1].Title != l.Groups[1].Tasks[0].Title {
+		t.Errorf("Tasks are not the groups' tasks in order: %v", l.Tasks)
+	}
+	if l.Groups[0].ULIDs[0] != l.Groups[0].Tasks[0].ULID {
+		t.Errorf("group ULIDs = %v; want those of its tasks", l.Groups[0].ULIDs)
+	}
+	if j := l.JSON(); j.Tasks == nil || len(*j.Tasks) != 2 || len(j.Groups) != 2 || j.Roots != nil {
+		t.Errorf("List JSON = %+v", j)
 	}
 	// A key the schema does not have parses, and fails when it runs.
-	_, err = browse.List(ts.Session, mustParse(t, "nope:x"))
+	_, err = browse.List(ts.Session, "nope:x")
 	usecasetest.WantErr(t, err, usecase.KindUsage, "query.invalid")
 }
 
@@ -132,7 +155,7 @@ func TestTreeRefusesGroupAndSort(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
 	for _, s := range []string{"group:status", "sort:title"} {
-		_, err := browse.Tree(ts.Session, mustParse(t, s))
+		_, err := browse.Tree(ts.Session, s)
 		usecasetest.WantErr(t, err, usecase.KindUsage, "query.tree_order")
 		if want := "--tree orders tasks by rank; it takes neither group: nor sort:"; err != nil && err.Error() != want {
 			t.Errorf("%s: message = %q; want %q", s, err, want)
@@ -140,7 +163,7 @@ func TestTreeRefusesGroupAndSort(t *testing.T) {
 	}
 }
 
-func TestTreeViewOfAndFlatten(t *testing.T) {
+func TestTreeViewsAndDrawn(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
 	for _, in := range []tasks.AddInput{{Title: "p"}, {Title: "c1", Parent: "ME-1"}, {Title: "g", Parent: "ME-2"}, {Title: "c2", Parent: "ME-1"}, {Title: "q"}} {
@@ -148,38 +171,41 @@ func TestTreeViewOfAndFlatten(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	tr, err := browse.Tree(ts.Session, mustParse(t, "g"))
+	tr, err := browse.Tree(ts.Session, "g")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Only the ancestors of g are drawn, c2 and q are not.
-	if got := ids(browse.Flatten(tr.Stores[0].Roots)); !slices.Equal(got, []string{"ME-1", "ME-2", "ME-3"}) {
-		t.Fatalf("Flatten = %v; want ME-1 ME-2 ME-3", got)
+	if got := ids(tr.Stores[0].Drawn()); !slices.Equal(got, []string{"ME-1", "ME-2", "ME-3"}) {
+		t.Fatalf("Drawn = %v; want ME-1 ME-2 ME-3", got)
 	}
 	if len(tr.Stores[0].Cycle) != 0 {
 		t.Errorf("Cycle = %v; want none", ids(tr.Stores[0].Cycle))
 	}
-	v := browse.TreeViewOf(tr.Stores[0].Index, tr.Stores[0].Roots[0])
+	v := tr.Stores[0].Roots[0]
 	if v.ID != "ME-1" || !v.Context || v.InCycle || len(v.Children) != 1 {
-		t.Fatalf("TreeViewOf root = %+v", v)
+		t.Fatalf("tree root = %+v", v)
 	}
 	mid := v.Children[0]
 	if mid.ID != "ME-2" || !mid.Context || len(mid.Children) != 1 {
-		t.Fatalf("TreeViewOf middle = %+v", mid)
+		t.Fatalf("tree middle = %+v", mid)
 	}
 	if leaf := mid.Children[0]; leaf.ID != "ME-3" || leaf.Context || len(leaf.Children) != 0 {
-		t.Errorf("TreeViewOf leaf = %+v", leaf)
+		t.Errorf("tree leaf = %+v", leaf)
 	}
 	// The whole forest: two roots, in rank order, depth first.
-	all, err := browse.Tree(ts.Session, mustParse(t, ""))
+	all, err := browse.Tree(ts.Session, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := ids(browse.Flatten(all.Stores[0].Roots)); !slices.Equal(got, []string{"ME-1", "ME-2", "ME-3", "ME-4", "ME-5"}) {
-		t.Errorf("Flatten(all) = %v", got)
+	if got := ids(all.Stores[0].Drawn()); !slices.Equal(got, []string{"ME-1", "ME-2", "ME-3", "ME-4", "ME-5"}) {
+		t.Errorf("Drawn(all) = %v", got)
 	}
-	if browse.Flatten(nil) != nil {
-		t.Error("Flatten(nil) is not nil")
+	if (browse.TreeStoreView{}).Drawn() != nil {
+		t.Error("Drawn of an empty store is not nil")
+	}
+	if j := all.JSON(); j.Roots == nil || len(*j.Roots) != 2 || j.Cycle != nil || j.Tasks != nil {
+		t.Errorf("Tree JSON = %+v; want two roots and no cycle", j)
 	}
 }
 
@@ -221,7 +247,7 @@ func TestTreeParentCycle(t *testing.T) {
 	rawTask(t, ts, "ME-1", x, "title: X\nparent: "+y.String()+"\n")
 	rawTask(t, ts, "ME-2", y, "title: Y\nparent: "+x.String()+"\n")
 	rawTask(t, ts, "ME-3", c, "title: C\nparent: "+x.String()+"\n")
-	tr, err := browse.Tree(ts.Session, mustParse(t, ""))
+	tr, err := browse.Tree(ts.Session, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,14 +257,14 @@ func TestTreeParentCycle(t *testing.T) {
 	}
 	for _, n := range ts0.Cycle {
 		if !n.InCycle {
-			t.Errorf("%s is not marked InCycle", n.Entry.ID)
+			t.Errorf("%s is not marked InCycle", n.ID)
 		}
 	}
 	// C hangs under exactly one member and is not itself in the cycle.
-	var under *browse.TreeNode
+	var under *usecase.TaskView
 	for _, n := range ts0.Cycle {
 		for _, ch := range n.Children {
-			if ch.Entry.ID == "ME-3" {
+			if ch.ID == "ME-3" {
 				under = ch
 			}
 		}
@@ -246,9 +272,8 @@ func TestTreeParentCycle(t *testing.T) {
 	if under == nil || under.InCycle {
 		t.Fatalf("C is not drawn under a cycle member, or is marked InCycle: %+v", under)
 	}
-	v := browse.TreeViewOf(ts0.Index, ts0.Cycle[0])
-	if !v.InCycle {
-		t.Errorf("TreeViewOf(cycle[0]).InCycle = false")
+	if j := tr.JSON(); j.Roots == nil || len(*j.Roots) != 0 || len(j.Cycle) != 2 {
+		t.Errorf("Tree JSON = %+v; want no roots and the two members of the cycle", j)
 	}
 }
 
@@ -289,8 +314,8 @@ func TestShowFullTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Entry.ULID != a.ULID || r.Task.Body != "the body\n" {
-		t.Fatalf("Show = %v with body %q", r.Entry.ID, r.Task.Body)
+	if r.ULID != a.ULID.String() || r.Body != "the body\n" {
+		t.Fatalf("Show = %v with body %q", r.ID, r.Body)
 	}
 	var cs []string
 	for _, cm := range r.Comments {
@@ -299,24 +324,24 @@ func TestShowFullTask(t *testing.T) {
 	if !slices.Equal(cs, []string{"first\n", "third\n"}) {
 		t.Errorf("Comments = %q; want first and third (the removed one is left out)", cs)
 	}
-	if len(r.Relations) != 2 || r.Relations[0].Key != "blocks" || r.Relations[0].Label != "blocks" || r.Relations[0].Tasks[0].ULID != b.ULID {
+	if len(r.Relations) != 2 || r.Relations[0].Key != "blocks" || r.Relations[0].Label != "blocks" || r.Relations[0].Tasks[0].ULID != b.ULID.String() {
 		t.Fatalf("Relations = %+v", r.Relations)
 	}
-	if rel := r.Relations[1]; rel.Key != "duplicates" || rel.Label != "重複されている" || len(rel.Tasks) != 1 || rel.Tasks[0].ULID != c.ULID {
+	if rel := r.Relations[1]; rel.Key != "duplicates" || rel.Label != "重複されている" || len(rel.Tasks) != 1 || rel.Tasks[0].ULID != c.ULID.String() {
 		t.Errorf("Relations[1] = %+v; want duplicates / 重複されている / c", rel)
 	}
-	if len(r.Back) != 1 || r.Back[0].Title != "d" {
-		t.Errorf("Back = %v; want d", r.Back)
+	if len(r.ReferencedBy) != 1 || r.ReferencedBy[0].Title != "d" || r.ReferencedBy[0].Name() == "" {
+		t.Errorf("ReferencedBy = %v; want d", r.ReferencedBy)
 	}
 	if len(r.History) == 0 || len(r.History) > browse.ShowHistory {
 		t.Errorf("History has %d commits; want 1 to %d", len(r.History), browse.ShowHistory)
 	}
 
-	v := browse.ShowViewOf(r)
+	v := r
 	if v.ID != "ME-1" || v.Body != "the body\n" || !slices.Equal(v.Watchers, []string{"bob", "github.com/alice"}) || !slices.Equal(v.Repos, []string{"r1"}) {
-		t.Errorf("ShowViewOf = %+v", v)
+		t.Errorf("Show = %+v", v)
 	}
-	if len(v.Comments) != 2 || v.Comments[0].Body != "first\n" || v.Comments[0].ULID != r.Comments[0].ULID.String() {
+	if len(v.Comments) != 2 || v.Comments[0].Body != "first\n" || v.Comments[0].ULID == "" {
 		t.Errorf("Comments view = %+v", v.Comments)
 	}
 	if got := v.Reverse["blocks"]; len(got) != 1 || got[0].ID != "ME-2" || got[0].Title != "b" || got[0].ULID != b.ULID.String() {
@@ -328,7 +353,7 @@ func TestShowFullTask(t *testing.T) {
 	if len(v.ReferencedBy) != 1 || v.ReferencedBy[0].ID != "ME-4" {
 		t.Errorf("ReferencedBy = %+v", v.ReferencedBy)
 	}
-	if len(v.History) != len(r.History) || v.History[0].ID == nil || *v.History[0].ID != "ME-1" {
+	if len(v.History) == 0 || v.History[0].ID == nil || *v.History[0].ID != "ME-1" {
 		t.Errorf("History view = %+v", v.History)
 	}
 	out, err := json.Marshal(v)
@@ -342,7 +367,7 @@ func TestShowFullTask(t *testing.T) {
 	}
 }
 
-func TestShowViewOfEmpty(t *testing.T) {
+func TestShowEmpty(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
 	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "bare"}); err != nil {
@@ -356,10 +381,10 @@ func TestShowViewOfEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(r.Comments) != 0 || len(r.Relations) != 0 || len(r.Back) != 0 {
-		t.Errorf("Show = %d comments, %d relations, %d back; want none", len(r.Comments), len(r.Relations), len(r.Back))
+	if len(r.Comments) != 0 || len(r.Relations) != 0 || len(r.ReferencedBy) != 0 {
+		t.Errorf("Show = %d comments, %d relations, %d back; want none", len(r.Comments), len(r.Relations), len(r.ReferencedBy))
 	}
-	v := browse.ShowViewOf(r)
+	v := r
 	if v.Watchers == nil || v.Repos == nil || v.Comments == nil || v.Reverse == nil || v.ReferencedBy == nil {
 		t.Errorf("empty fields must be empty, not nil: %+v", v)
 	}
@@ -380,12 +405,11 @@ func TestShowBrokenTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Entry.Broken == "" || r.Task != nil || r.Comments != nil {
-		t.Fatalf("Show = broken %q, task %v, comments %v; want a broken entry with no task", r.Entry.Broken, r.Task, r.Comments)
+	if r.Broken == "" || len(r.Comments) != 0 {
+		t.Fatalf("Show = broken %q, comments %v; want a broken task with no comments", r.Broken, r.Comments)
 	}
-	v := browse.ShowViewOf(r)
-	if v.Body != "" || len(v.Watchers) != 0 || v.Watchers == nil {
-		t.Errorf("ShowViewOf of a broken task = %+v", v)
+	if r.Body != "" || len(r.Watchers) != 0 || r.Watchers == nil || r.CreatedBy != "" {
+		t.Errorf("Show of a broken task = %+v", r)
 	}
 }
 
@@ -411,28 +435,28 @@ func TestLogAndTaskLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	all := entriesOf(allLog)
-	ix := allLog.Logs[0].Index
-	if ix == nil || allLog.Logs[0].Store != "me" {
-		t.Fatalf("Log returned %+v", allLog.Logs[0])
+	ix, all := commitsOf(t, ts)
+	if len(allLog.Logs) != len(all) || allLog.Logs[0].Store != "me" || allLog.Logs[0].Hash != all[0].Hash.String() {
+		t.Fatalf("Log returned %d commits, the first %+v", len(allLog.Logs), allLog.Logs[0])
 	}
 	twoLog, err := browse.Log(ts.Session, nil, 2)
-	if err != nil || len(twoLog.Logs) != 2 || twoLog.Logs[0].Entry.Hash != all[0].Hash {
+	if err != nil || len(twoLog.Logs) != 2 || twoLog.Logs[0].Hash != all[0].Hash.String() {
 		t.Fatalf("Log(nil, 2) = %d commits, %v", len(twoLog.Logs), err)
 	}
 	oneLog, err := browse.Log(ts.Session, []string{"ME-1"}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	one := entriesOf(oneLog)
-	if oneLog.Logs[0].Store != "me" || oneLog.Logs[0].Index == nil {
-		t.Errorf("Log(ME-1) = %+v", oneLog.Logs[0])
+	one := oneLog.Logs
+	if one[0].Store != "me" {
+		t.Errorf("Log(ME-1) = %+v", one[0])
 	}
 	// ME-1: its add and its comment; not the add of ME-2.
 	if len(one) != 2 {
 		t.Fatalf("Log(ME-1) has %d commits; want 2", len(one))
 	}
-	e, _ := ix.Task(usecasetest.MustULID(t, mustTrailer(t, one[0], "Hedgehug-Task")))
+	taskOf, _ := one[0].Trailer("Hedgehug-Task")
+	e, _ := ix.Task(usecasetest.MustULID(t, taskOf))
 	if e.ID != "ME-1" {
 		t.Errorf("newest commit of ME-1 is about %s", e.ID)
 	}
@@ -441,7 +465,7 @@ func TestLogAndTaskLog(t *testing.T) {
 		t.Fatal(err)
 	}
 	tl, err := browse.TaskLog(ts.Session, s, "me", e.ULID, 1)
-	if err != nil || len(tl) != 1 || tl[0].Hash != one[0].Hash {
+	if err != nil || len(tl) != 1 || tl[0].Hash.String() != one[0].Hash {
 		t.Errorf("TaskLog(limit 1) = %d commits, %v; want the newest", len(tl), err)
 	}
 	_, err = browse.Log(ts.Session, []string{"ME-9"}, 0)
@@ -479,15 +503,6 @@ func TestTaskLogReportsProgressOfBuildingTheIndex(t *testing.T) {
 	}
 }
 
-// entriesOf is the commits of lr.
-func entriesOf(lr browse.LogResult) []gitrepo.LogEntry {
-	var out []gitrepo.LogEntry
-	for _, l := range lr.Logs {
-		out = append(out, l.Entry)
-	}
-	return out
-}
-
 func mustTrailer(t *testing.T, e gitrepo.LogEntry, key string) string {
 	t.Helper()
 	v, ok := e.Trailer(key)
@@ -497,66 +512,58 @@ func mustTrailer(t *testing.T, e gitrepo.LogEntry, key string) string {
 	return v
 }
 
-func TestLogViewsOfAndSubjectNow(t *testing.T) {
+func TestLogViewOfAndCurrentSubject(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
 	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "Alpha"}); err != nil {
 		t.Fatal(err)
 	}
-	lr, err := browse.Log(ts.Session, nil, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ix, entries := lr.Logs[0].Index, entriesOf(lr)
+	ix, entries := commitsOf(t, ts)
 	e, _ := ix.Task(usecasetest.MustULID(t, mustTrailer(t, entries[0], "Hedgehug-Task")))
-	views := browse.LogViewsOf(ix, entries)
-	if len(views) != len(entries) {
-		t.Fatalf("%d views for %d commits", len(views), len(entries))
-	}
-	v := views[0]
+	v := usecase.LogViewOf(ix, entries[0])
 	if v.Hash != entries[0].Hash.String() || v.Subject != entries[0].Subject || v.Author.Name != "alice" || v.Author.Email != "alice@users.noreply.github.com" {
 		t.Errorf("view = %+v", v)
 	}
 	if v.Op == nil || *v.Op != "add" || v.Task == nil || *v.Task != e.ULID.String() || v.ID == nil || *v.ID != "ME-1" {
 		t.Errorf("view trailers = op %v task %v id %v", v.Op, v.Task, v.ID)
 	}
-	if got, want := browse.SubjectNow(ix, entries[0]), "hedgehug: add "+usecase.TaskLabel(ix, e)+" Alpha"; got != want {
-		t.Errorf("SubjectNow = %q; want %q", got, want)
+	if got, want := usecase.LogViewOf(ix, entries[0]).CurrentSubject, "hedgehug: add "+usecase.TaskLabel(ix, e)+" Alpha"; got != want {
+		t.Errorf("CurrentSubject = %q; want %q", got, want)
 	}
 
 	// A subject written with an old label shows the label now.
 	old := entries[0]
 	old.Subject = "hedgehug: add OLD-7 Alpha"
-	if got, want := browse.SubjectNow(ix, old), "hedgehug: add "+usecase.TaskLabel(ix, e)+" Alpha"; got != want {
-		t.Errorf("SubjectNow(old label) = %q; want %q", got, want)
+	if got, want := usecase.LogViewOf(ix, old).CurrentSubject, "hedgehug: add "+usecase.TaskLabel(ix, e)+" Alpha"; got != want {
+		t.Errorf("CurrentSubject(old label) = %q; want %q", got, want)
 	}
 	// No title: no trailing space.
 	old.Subject = "hedgehug: add OLD-7"
-	if got, want := browse.SubjectNow(ix, old), "hedgehug: add "+usecase.TaskLabel(ix, e); got != want {
-		t.Errorf("SubjectNow(no title) = %q; want %q", got, want)
+	if got, want := usecase.LogViewOf(ix, old).CurrentSubject, "hedgehug: add "+usecase.TaskLabel(ix, e); got != want {
+		t.Errorf("CurrentSubject(no title) = %q; want %q", got, want)
 	}
 	// Left as they are: no trailers, another op, a task the index lacks, a bad ULID.
 	plain := gitrepo.LogEntry{Subject: "init"}
-	if got := browse.SubjectNow(ix, plain); got != "init" {
-		t.Errorf("SubjectNow(plain) = %q", got)
+	if got := usecase.LogViewOf(ix, plain).CurrentSubject; got != "init" {
+		t.Errorf("CurrentSubject(plain) = %q", got)
 	}
 	other := entries[0]
 	other.Subject = "hedgehug: edit X Alpha"
-	if got := browse.SubjectNow(ix, other); got != other.Subject {
-		t.Errorf("SubjectNow(other op) = %q", got)
+	if got := usecase.LogViewOf(ix, other).CurrentSubject; got != other.Subject {
+		t.Errorf("CurrentSubject(other op) = %q", got)
 	}
 	missing := entries[0]
 	missing.Trailers = []gitrepo.Trailer{{Key: "Hedgehug-Op", Value: "add"}, {Key: "Hedgehug-Task", Value: model.NewULID().String()}}
-	if got := browse.SubjectNow(ix, missing); got != missing.Subject {
-		t.Errorf("SubjectNow(missing task) = %q", got)
+	if got := usecase.LogViewOf(ix, missing).CurrentSubject; got != missing.Subject {
+		t.Errorf("CurrentSubject(missing task) = %q", got)
 	}
 	bad := entries[0]
 	bad.Trailers = []gitrepo.Trailer{{Key: "Hedgehug-Op", Value: "add"}, {Key: "Hedgehug-Task", Value: "nope"}}
-	if got := browse.SubjectNow(ix, bad); got != bad.Subject {
-		t.Errorf("SubjectNow(bad ULID) = %q", got)
+	if got := usecase.LogViewOf(ix, bad).CurrentSubject; got != bad.Subject {
+		t.Errorf("CurrentSubject(bad ULID) = %q", got)
 	}
 	// A commit without trailers has null op, task and id.
-	pv := browse.LogViewsOf(ix, []gitrepo.LogEntry{plain})[0]
+	pv := usecase.LogViewOf(ix, plain)
 	if pv.Op != nil || pv.Task != nil || pv.ID != nil {
 		t.Errorf("view of a plain commit = %+v", pv)
 	}

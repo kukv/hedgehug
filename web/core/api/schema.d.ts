@@ -1008,16 +1008,6 @@ export interface components {
             role: string;
             template?: string;
         };
-        ListOutputBody: {
-            /** @description The tasks in a parent cycle, with tree */
-            cycle?: components["schemas"]["TaskView"][] | null;
-            /** @description The groups, when the query has group: */
-            groups?: components["schemas"]["GroupView"][] | null;
-            /** @description The roots of the tree, with tree */
-            roots?: components["schemas"]["TaskView"][];
-            /** @description The tasks found, without tree */
-            tasks?: components["schemas"]["TaskView"][];
-        };
         LogTrailer: {
             key: string;
             value: string;
@@ -1546,6 +1536,16 @@ export interface components {
             store: string;
             /** Format: int64 */
             unpushed?: number;
+        };
+        TaskList: {
+            /** @description The tasks in a parent cycle, with tree */
+            cycle?: components["schemas"]["TaskView"][] | null;
+            /** @description The groups, when the query has group: */
+            groups?: components["schemas"]["GroupView"][] | null;
+            /** @description The roots of the tree, with tree */
+            roots?: components["schemas"]["TaskView"][];
+            /** @description The tasks found, without tree */
+            tasks?: components["schemas"]["TaskView"][];
         };
         TaskView: {
             assignees: string[] | null;
@@ -2947,7 +2947,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ListOutputBody"];
+                    "application/json": components["schemas"]["TaskList"];
                 };
             };
             /** @description Error */

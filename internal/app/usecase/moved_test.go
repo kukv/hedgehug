@@ -49,8 +49,8 @@ func TestShowAMovedTaskSaysWhereItWent(t *testing.T) {
 	_, err = browse.Show(ts.Session, "org-a:"+ulid.String())
 	wantMoved(t, ts, err, nil)
 	// without --store the task is found where it is now
-	if res, err := browse.Show(ts.Session, "API-1"); err != nil || res.Entry.ID != "WEB-2" {
-		t.Errorf("Show(API-1) = %+v, %v; want org-b WEB-2", res.Entry, err)
+	if res, err := browse.Show(ts.Session, "API-1"); err != nil || res.ID != "WEB-2" {
+		t.Errorf("Show(API-1) = %+v, %v; want org-b WEB-2", res, err)
 	}
 	// a session of one store sees the forward too
 	_, err = browse.Show(ts.ForStore("org-a"), "API-1")

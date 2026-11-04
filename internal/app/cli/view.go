@@ -6,7 +6,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/app/storage/view"
-	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/views"
 )
 
@@ -134,19 +133,15 @@ func (a *app) viewShow(name string) error {
 	if err != nil {
 		return err
 	}
-	q, err := usecase.ParseQuery(v.Query)
-	if err != nil {
-		return err
-	}
 	// --store says where the view is read from. The tasks are the query's, on
 	// every store, as the GUI shows a view; store: in the query narrows it.
 	own := a.ss
 	a.ss = own.ForStore("")
 	defer func() { a.ss = own }()
 	if v.Layout == "tree" {
-		return a.lsTree(q, false, nil)
+		return a.lsTree(v.Query, false, nil)
 	}
-	return a.ls(q, false, nil)
+	return a.ls(v.Query, false, nil)
 }
 
 // printView prints v as JSON, or line as text.

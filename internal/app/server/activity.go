@@ -12,7 +12,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase/browse"
 	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 type undoKept struct {
@@ -100,7 +99,7 @@ func (s *Server) registerActivity() {
 			return nil, problemOf(err)
 		}
 		out := &undoOutput{}
-		out.Body.Undone = browse.LogViewsOf(ix, []gitrepo.LogEntry{r.Commit})[0]
+		out.Body.Undone = usecase.LogViewOf(ix, r.Commit)
 		out.Body.Commit = commitPtr(r.NewCommit)
 		out.Body.Kept = []undoKept{}
 		for _, k := range r.Kept {
@@ -128,11 +127,10 @@ func (s *Server) registerActivity() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		kept := []browse.StoreLog{}
+		kept := []usecase.LogView{}
 		for _, l := range r.Logs {
-			e := l.Entry
-			op, _ := e.Trailer("Hedgehug-Op")
-			author, _ := e.Trailer("Hedgehug-Author")
+			op, _ := l.Trailer("Hedgehug-Op")
+			author, _ := l.Trailer("Hedgehug-Author")
 			isSync := slices.Contains(syncOps, op)
 			switch {
 			case in.Sync == "only" && !isSync, in.Sync == "exclude" && isSync:
@@ -145,7 +143,7 @@ func (s *Server) registerActivity() {
 				break
 			}
 		}
-		return &activityOutput{Body: browse.StoreLogViews(kept)}, nil
+		return &activityOutput{Body: kept}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{

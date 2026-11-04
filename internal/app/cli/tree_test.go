@@ -51,10 +51,11 @@ func TestLsTree(t *testing.T) {
 		t.Errorf("tasks that neither match nor connect are shown:\n%s", out)
 	}
 
-	var roots []usecase.TaskView
-	if err := json.Unmarshal([]byte(te.ok("ls", "--tree", "--json", "status:done")), &roots); err != nil {
+	var found struct{ Roots []usecase.TaskView }
+	if err := json.Unmarshal([]byte(te.ok("ls", "--tree", "--json", "status:done")), &found); err != nil {
 		t.Fatal(err)
 	}
+	roots := found.Roots
 	if len(roots) != 1 || !roots[0].Context || len(roots[0].Children) != 1 || len(roots[0].Children[0].Children) != 1 || roots[0].Children[0].Children[0].Context {
 		t.Errorf("tree JSON = %+v", roots)
 	}
@@ -177,14 +178,14 @@ func TestLsTreeCycleNested(t *testing.T) {
 
 	// JSON: the same nesting; in_cycle only on X and Y.
 	raw := te.ok("ls", "--tree", "--json")
-	var roots []usecase.TaskView
-	if err := json.Unmarshal([]byte(raw), &roots); err != nil {
+	var tree struct{ Roots, Cycle []usecase.TaskView }
+	if err := json.Unmarshal([]byte(raw), &tree); err != nil {
 		t.Fatal(err)
 	}
-	if len(roots) != 2 {
-		t.Fatalf("tree JSON has %d roots, want 2: %+v", len(roots), roots)
+	if len(tree.Roots) != 0 || len(tree.Cycle) != 2 {
+		t.Fatalf("tree JSON has %d roots and %d in the cycle, want none and 2: %+v", len(tree.Roots), len(tree.Cycle), tree)
 	}
-	for _, r := range roots {
+	for _, r := range tree.Cycle {
 		if !r.InCycle {
 			t.Errorf("%s: in_cycle = false, want true", r.Title)
 		}

@@ -37,11 +37,7 @@ func TestSessionConcurrentOperations(t *testing.T) {
 		},
 		func() error { _, err := comments.CommentAdd(ts.Session, "ME-1", "hello"); return err },
 		func() error {
-			q, err := usecase.ParseQuery("")
-			if err != nil {
-				return err
-			}
-			_, err = browse.List(ts.Session, q)
+			_, err := browse.List(ts.Session, "")
 			return err
 		},
 		func() error { _, _, err := notifications.InboxList(ts.Session, false); return err },
@@ -94,6 +90,8 @@ func TestForStoreCopiesEveryExportedField(t *testing.T) {
 			}))
 		case reflect.String:
 			f.SetString("x")
+		case reflect.Bool:
+			f.SetBool(true)
 		case reflect.Pointer:
 			f.Set(reflect.New(f.Type().Elem()))
 		case reflect.Interface:

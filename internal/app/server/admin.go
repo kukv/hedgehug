@@ -234,7 +234,7 @@ func (s *Server) registerAdmin() {
 			if b.DryRun || !ok {
 				e = index.EntryOf(t) // the task as migrated, as the CLI prints it
 			}
-			out.Body.Changed = append(out.Body.Changed, listView(ix, e))
+			out.Body.Changed = append(out.Body.Changed, usecase.ListViewOf(ix, e))
 		}
 		for _, u := range plan.Skipped {
 			out.Body.Skipped = append(out.Body.Skipped, u.String())

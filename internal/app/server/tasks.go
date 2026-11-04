@@ -6,7 +6,6 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/browse"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
@@ -19,33 +18,13 @@ type TaskParam struct {
 	ID string `path:"id" doc:"The ID, a former ID, or the ULID of the task"`
 }
 
-// listView is a row of a list: the task with its checklist and progress.
-func listView(ix *index.Index, e *index.Entry) *usecase.TaskView {
-	v := usecase.TaskViewOf(ix, e)
-	v.Checklist = usecase.ChecklistOf(e)
-	v.Progress = usecase.ProgressOf(ix, e)
-	return v
-}
-
-type groupView struct {
-	Key   string   `json:"key" doc:"The value of the group; empty for the tasks with none"`
-	ULIDs []string `json:"ulids"`
-}
-
 type listInput struct {
 	StoreParam
 	Q    string `query:"q" doc:"The query, as hh ls takes it; empty for every task"`
 	Tree bool   `query:"tree" doc:"Return the tasks as a tree, as hh ls --tree"`
 }
 
-type listOutput struct {
-	Body struct {
-		Tasks  *[]*usecase.TaskView `json:"tasks,omitempty" doc:"The tasks found, without tree"`
-		Groups []groupView          `json:"groups,omitempty" doc:"The groups, when the query has group:"`
-		Roots  *[]*usecase.TaskView `json:"roots,omitempty" doc:"The roots of the tree, with tree"`
-		Cycle  []*usecase.TaskView  `json:"cycle,omitempty" doc:"The tasks in a parent cycle, with tree"`
-	}
-}
+type listOutput struct{ Body browse.TaskList }
 
 type showOutput struct{ Body *usecase.ShowView }
 
@@ -70,53 +49,20 @@ func (s *Server) registerTaskReads() {
 		OperationID: "list-tasks", Method: http.MethodGet, Path: "/api/tasks",
 		Summary: "List the tasks a query finds", Tags: []string{"tasks"},
 	}, func(_ context.Context, in *listInput) (*listOutput, error) {
-		q, err := usecase.ParseQuery(in.Q)
-		if err != nil {
-			return nil, problemOf(err)
-		}
 		ss := s.session(in.Store)
 		defer ss.Close()
-		out := &listOutput{}
 		if in.Tree {
-			r, err := browse.Tree(ss, q)
+			t, err := browse.Tree(ss, in.Q)
 			if err != nil {
 				return nil, problemOf(err)
 			}
-			roots := []*usecase.TaskView{}
-			for _, ts := range r.Stores {
-				for _, n := range ts.Roots {
-					roots = append(roots, browse.TreeViewOf(ts.Index, n))
-				}
-				for _, n := range ts.Cycle {
-					out.Body.Cycle = append(out.Body.Cycle, browse.TreeViewOf(ts.Index, n))
-				}
-			}
-			out.Body.Roots = &roots
-			return out, nil
+			return &listOutput{Body: t.JSON()}, nil
 		}
-		r, err := browse.List(ss, q)
+		l, err := browse.List(ss, in.Q)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		tasks := make([]*usecase.TaskView, 0, len(r.Entries))
-		for _, e := range r.Entries {
-			ix, err := e.Store.Index()
-			if err != nil {
-				return nil, problemOf(err)
-			}
-			tasks = append(tasks, listView(ix, e.Entry))
-		}
-		out.Body.Tasks = &tasks
-		if usecase.HasTerm(q, "group") {
-			for _, g := range r.Groups {
-				gv := groupView{Key: g.Key, ULIDs: make([]string, len(g.Entries))}
-				for i, e := range g.Entries {
-					gv.ULIDs[i] = e.Entry.ULID.String()
-				}
-				out.Body.Groups = append(out.Body.Groups, gv)
-			}
-		}
-		return out, nil
+		return &listOutput{Body: l.JSON()}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -125,11 +71,11 @@ func (s *Server) registerTaskReads() {
 	}, func(_ context.Context, in *TaskParam) (*showOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		r, err := browse.Show(ss, in.ID)
+		v, err := browse.Show(ss, in.ID)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return &showOutput{Body: browse.ShowViewOf(r)}, nil
+		return &showOutput{Body: v}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -142,7 +88,7 @@ func (s *Server) registerTaskReads() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return &historyOutput{Body: browse.StoreLogViews(r.Logs)}, nil
+		return &historyOutput{Body: r.Logs}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{

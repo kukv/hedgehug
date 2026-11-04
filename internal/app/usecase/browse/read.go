@@ -5,7 +5,6 @@ import (
 	"cmp"
 	"errors"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
@@ -75,75 +74,140 @@ func queryMounted(ss *usecase.Session, set *mount.Set, q *query.Query) (*Result,
 	return res, nil
 }
 
-// ListResult is what a query found: Entries in the order of the groups, and
-// the Groups themselves. Stores are the stores it ran on; Many says two or
-// more stores are mounted, so that a reader tells which store a task is in.
-// What Entries hold is read through their Store's Index.
-type ListResult struct {
-	Stores  []*mount.Mounted
-	Entries []Entry
-	Groups  []Group
-	Many    bool
+// GroupView is a group of a list: the tasks of every store with the value Key.
+type GroupView struct {
+	Key   string              `json:"key" doc:"The value of the group; empty for the tasks with none"`
+	ULIDs []string            `json:"ulids"`
+	Tasks []*usecase.TaskView `json:"-"`
 }
 
-// List runs q on every store (or --store, or the store: of q).
-func List(ss *usecase.Session, q *query.Query) (ListResult, error) {
-	set, err := listSet(ss)
-	if err != nil {
-		return ListResult{}, err
-	}
-	res, err := queryMounted(ss, set, q)
-	if err != nil {
-		return ListResult{}, err
-	}
-	return ListResult{Stores: res.Stores, Entries: res.Entries, Groups: res.Groups, Many: len(set.Stores) > 1}, nil
+// TaskList is what GET /api/tasks and hh ls --json give.
+type TaskList struct {
+	Tasks  *[]*usecase.TaskView `json:"tasks,omitempty" doc:"The tasks found, without tree"`
+	Groups []GroupView          `json:"groups,omitempty" doc:"The groups, when the query has group:"`
+	Roots  *[]*usecase.TaskView `json:"roots,omitempty" doc:"The roots of the tree, with tree"`
+	Cycle  []*usecase.TaskView  `json:"cycle,omitempty" doc:"The tasks in a parent cycle, with tree"`
 }
 
-// TreeNode is one task in ls --tree.
-type TreeNode struct {
-	Entry    *index.Entry
-	Context  bool // shown only to connect the tasks found
-	InCycle  bool // in a parent cycle, out of reach of the roots
-	Children []*TreeNode
-}
-
-// TreeStore is the tree of the tasks a query found in one store. Cycle holds
-// the tasks in a parent cycle, which no root reaches.
-type TreeStore struct {
-	Store        *mount.Mounted
-	Index        *index.Index
-	Roots, Cycle []*TreeNode
-}
-
-// TreeResult is the trees of the tasks a query found, one per store it ran
-// on, in config order (a store with no match has empty ones). Many says there
-// are two or more stores.
-type TreeResult struct {
-	Stores []TreeStore
+// ListView is what a query found: Tasks in the order of the groups, and the
+// Groups themselves (only when the query has group:). Many says two or more
+// stores are mounted, so that a reader tells which store a task is in.
+type ListView struct {
+	Tasks  []*usecase.TaskView
+	Groups []GroupView
 	Many   bool
 }
 
-// Tree runs q and arranges what it found under its ancestors, in each store.
-// A query that groups or sorts is a usage error: the tree is in the order of
-// the ranks.
-func Tree(ss *usecase.Session, q *query.Query) (TreeResult, error) {
-	if usecase.HasTerm(q, "group") || usecase.HasTerm(q, "sort") {
-		//nolint:revive,staticcheck // the message is printed as it always was
-		return TreeResult{}, usecase.NewErr(usecase.KindUsage, "query.tree_order", errors.New("--tree orders tasks by rank; it takes neither group: nor sort:"))
+// List runs the query on every store (or --store, or the store: of it). A
+// query that does not parse is a usage error.
+func List(ss *usecase.Session, queryText string) (ListView, error) {
+	q, err := usecase.ParseQuery(queryText)
+	if err != nil {
+		return ListView{}, err
 	}
 	set, err := listSet(ss)
 	if err != nil {
-		return TreeResult{}, err
+		return ListView{}, err
 	}
 	res, err := queryMounted(ss, set, q)
 	if err != nil {
-		return TreeResult{}, err
+		return ListView{}, err
 	}
-	out := TreeResult{Many: len(set.Stores) > 1}
+	views := map[*index.Entry]*usecase.TaskView{}
+	view := func(e Entry) (*usecase.TaskView, error) {
+		if v, ok := views[e.Entry]; ok {
+			return v, nil
+		}
+		ix, err := e.Store.Index()
+		if err != nil {
+			return nil, usecase.Classify(err)
+		}
+		v := usecase.ListViewOf(ix, e.Entry)
+		views[e.Entry] = v
+		return v, nil
+	}
+	out := ListView{Tasks: make([]*usecase.TaskView, 0, len(res.Entries)), Many: len(set.Stores) > 1}
+	for _, e := range res.Entries {
+		v, err := view(e)
+		if err != nil {
+			return ListView{}, err
+		}
+		out.Tasks = append(out.Tasks, v)
+	}
+	if usecase.HasTerm(q, "group") {
+		for _, g := range res.Groups {
+			gv := GroupView{Key: g.Key, ULIDs: make([]string, len(g.Entries)), Tasks: make([]*usecase.TaskView, len(g.Entries))}
+			for i, e := range g.Entries {
+				v, err := view(e)
+				if err != nil {
+					return ListView{}, err
+				}
+				gv.ULIDs[i], gv.Tasks[i] = v.ULID, v
+			}
+			out.Groups = append(out.Groups, gv)
+		}
+	}
+	return out, nil
+}
+
+// JSON is v as GET /api/tasks and hh ls --json give it.
+func (v ListView) JSON() TaskList {
+	tasks := v.Tasks
+	if tasks == nil {
+		tasks = []*usecase.TaskView{}
+	}
+	return TaskList{Tasks: &tasks, Groups: v.Groups}
+}
+
+// treeNode is one task in ls --tree.
+type treeNode struct {
+	Entry    *index.Entry
+	Context  bool // shown only to connect the tasks found
+	InCycle  bool // in a parent cycle, out of reach of the roots
+	Children []*treeNode
+}
+
+// TreeStoreView is the tree of the tasks a query found in one store. Cycle
+// holds the tasks in a parent cycle, which no root reaches. The children of a
+// task are in Children.
+type TreeStoreView struct {
+	Store        string
+	Roots, Cycle []*usecase.TaskView
+}
+
+// TreeView is the trees of the tasks a query found, one per store it ran on,
+// in config order (a store with no match has empty ones). Many says there are
+// two or more stores.
+type TreeView struct {
+	Stores []TreeStoreView
+	Many   bool
+}
+
+// Tree runs the query and arranges what it found under its ancestors, in each
+// store. A query that groups or sorts is a usage error: the tree is in the
+// order of the ranks.
+func Tree(ss *usecase.Session, queryText string) (TreeView, error) {
+	q, err := usecase.ParseQuery(queryText)
+	if err != nil {
+		return TreeView{}, err
+	}
+	if usecase.HasTerm(q, "group") || usecase.HasTerm(q, "sort") {
+		//nolint:revive,staticcheck // the message is printed as it always was
+		return TreeView{}, usecase.NewErr(usecase.KindUsage, "query.tree_order", errors.New("--tree orders tasks by rank; it takes neither group: nor sort:"))
+	}
+	set, err := listSet(ss)
+	if err != nil {
+		return TreeView{}, err
+	}
+	res, err := queryMounted(ss, set, q)
+	if err != nil {
+		return TreeView{}, err
+	}
+	out := TreeView{Many: len(set.Stores) > 1}
 	for _, m := range res.Stores {
 		ix, err := m.Index()
 		if err != nil {
-			return TreeResult{}, usecase.Classify(err)
+			return TreeView{}, usecase.Classify(err)
 		}
 		var found []*index.Entry
 		for _, e := range res.Entries {
@@ -152,16 +216,53 @@ func Tree(ss *usecase.Session, q *query.Query) (TreeResult, error) {
 			}
 		}
 		roots, cycle := treeOf(ix, found)
-		out.Stores = append(out.Stores, TreeStore{Store: m, Index: ix, Roots: roots, Cycle: cycle})
+		out.Stores = append(out.Stores, TreeStoreView{Store: m.Name, Roots: treeViews(ix, roots), Cycle: treeViews(ix, cycle)})
 	}
 	return out, nil
+}
+
+func treeViews(ix *index.Index, nodes []*treeNode) []*usecase.TaskView {
+	var out []*usecase.TaskView
+	for _, n := range nodes {
+		out = append(out, treeViewOf(ix, n))
+	}
+	return out
+}
+
+// Drawn lists the tasks of the roots and then of the cycle, with the tasks
+// under each, in the order they are drawn.
+func (s TreeStoreView) Drawn() []*usecase.TaskView {
+	var out []*usecase.TaskView
+	var walk func(v *usecase.TaskView)
+	walk = func(v *usecase.TaskView) {
+		out = append(out, v)
+		for _, c := range v.Children {
+			walk(c)
+		}
+	}
+	for _, v := range slices.Concat(s.Roots, s.Cycle) {
+		walk(v)
+	}
+	return out
+}
+
+// JSON is t as GET /api/tasks?tree and hh ls --tree --json give it: the roots
+// of every store, and the tasks in a parent cycle of every store.
+func (t TreeView) JSON() TaskList {
+	roots := []*usecase.TaskView{}
+	var cycle []*usecase.TaskView
+	for _, s := range t.Stores {
+		roots = append(roots, s.Roots...)
+		cycle = append(cycle, s.Cycle...)
+	}
+	return TaskList{Roots: &roots, Cycle: cycle}
 }
 
 // treeOf builds the tree of the tasks found and of the ancestors that
 // connect them to a root. Tasks in a parent cycle never reach a root; they
 // are returned apart, by ULID, each as the root of the tasks under it that
 // are not in the cycle.
-func treeOf(ix *index.Index, found []*index.Entry) (roots, cycle []*TreeNode) {
+func treeOf(ix *index.Index, found []*index.Entry) (roots, cycle []*treeNode) {
 	match := map[model.ULID]bool{}
 	show := map[model.ULID]bool{}
 	for _, e := range found {
@@ -175,10 +276,10 @@ func treeOf(ix *index.Index, found []*index.Entry) (roots, cycle []*TreeNode) {
 		}
 	}
 	seen := map[model.ULID]bool{}
-	var build func(e *index.Entry) *TreeNode
-	build = func(e *index.Entry) *TreeNode {
+	var build func(e *index.Entry) *treeNode
+	build = func(e *index.Entry) *treeNode {
 		seen[e.ULID] = true
-		n := &TreeNode{Entry: e, Context: !match[e.ULID]}
+		n := &treeNode{Entry: e, Context: !match[e.ULID]}
 		for _, c := range ix.Children(e.ULID) {
 			if show[c.ULID] && !seen[c.ULID] {
 				n.Children = append(n.Children, build(c))
@@ -222,88 +323,69 @@ func inParentCycle(ix *index.Index, ulid model.ULID) bool {
 	return false
 }
 
-// TreeViewOf is the task of n with its children, as --json prints it.
-func TreeViewOf(ix *index.Index, n *TreeNode) *usecase.TaskView {
-	j := usecase.TaskViewOf(ix, n.Entry)
+// treeViewOf is the task of n with its children, as --json prints it.
+func treeViewOf(ix *index.Index, n *treeNode) *usecase.TaskView {
+	j := usecase.ListViewOf(ix, n.Entry)
 	j.Context, j.InCycle = n.Context, n.InCycle
-	j.Checklist, j.Progress = usecase.ChecklistOf(n.Entry), usecase.ProgressOf(ix, n.Entry)
 	for _, c := range n.Children {
-		j.Children = append(j.Children, TreeViewOf(ix, c))
+		j.Children = append(j.Children, treeViewOf(ix, c))
 	}
 	return j
-}
-
-// Flatten lists the trees under roots in the order they are drawn.
-func Flatten(roots []*TreeNode) []*TreeNode {
-	var out []*TreeNode
-	var walk func(n *TreeNode)
-	walk = func(n *TreeNode) {
-		out = append(out, n)
-		for _, c := range n.Children {
-			walk(c)
-		}
-	}
-	for _, n := range roots {
-		walk(n)
-	}
-	return out
 }
 
 // ShowHistory is how many commits show lists under History.
 const ShowHistory = 5
 
-// Relation is one kind of task pointing at the task shown.
-type Relation struct {
-	Key   string // the name in JSON: blocks, or the property
-	Label string // the name in the text
-	Tasks []*index.Entry
-}
-
-// ShowResult is a task with what points at it. Task and Comments are empty
-// when the file of the task does not decode.
-type ShowResult struct {
-	Store     string // the name of the store the task is in
-	Index     *index.Index
-	Entry     *index.Entry
-	Task      *model.Task
-	Comments  []*model.Comment
-	Relations []Relation
-	Back      []*index.Entry
-	History   []gitrepo.LogEntry
-}
-
-// Show reads the task arg names.
-func Show(ss *usecase.Session, arg string) (ShowResult, error) {
+// Show reads the task arg names. The Body, Watchers, Repos and Comments of a
+// task whose file does not decode are empty.
+func Show(ss *usecase.Session, arg string) (*usecase.ShowView, error) {
 	ts, arg, err := ss.ForTask(arg)
 	if err != nil {
-		return ShowResult{}, err
+		return nil, err
 	}
 	if ts != ss {
 		return Show(ts, arg)
 	}
 	s, ix, err := ss.Open()
 	if err != nil {
-		return ShowResult{}, err
+		return nil, err
 	}
 	e, err := ss.Resolve(ix, arg)
 	if err != nil {
-		return ShowResult{}, err
+		return nil, err
 	}
-	r := ShowResult{Store: ix.StoreName(), Index: ix, Entry: e}
+	j := &usecase.ShowView{TaskView: usecase.TaskViewOf(ix, e), Watchers: []string{}, Repos: []string{}, Comments: []usecase.CommentView{}, Reverse: map[string][]usecase.Ref{}, ReferencedBy: []usecase.Ref{}}
+	j.Checklist, j.Progress = usecase.ChecklistOf(e), usecase.ProgressOf(ix, e)
 	if e.Broken == "" {
-		if r.Task, err = s.Task(e.ULID); err != nil {
-			return ShowResult{}, err
+		t, err := s.Task(e.ULID)
+		if err != nil {
+			return nil, err
 		}
-		if r.Comments, err = liveComments(s, e.ULID); err != nil {
-			return ShowResult{}, err
+		j.Body, j.Watchers, j.Repos, j.CreatedBy = t.Body, usecase.OrEmpty(t.Watchers), usecase.OrEmpty(t.Repos), t.CreatedBy
+		cs, err := liveComments(s, e.ULID)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range cs {
+			j.Comments = append(j.Comments, usecase.CommentView{ULID: c.ULID.String(), Author: c.Author, Created: c.Created, Body: c.Body})
 		}
 	}
-	r.Relations = reverse(ix, e.ULID)
-	r.Back = ix.Backlinks(e.ULID)
-	if r.History, err = TaskLog(ss, s, ix.StoreName(), e.ULID, ShowHistory); err != nil {
-		return ShowResult{}, err
+	j.Relations = reverse(ix, e.ULID)
+	for _, rel := range j.Relations {
+		j.Reverse[rel.Key] = append(j.Reverse[rel.Key], rel.Tasks...)
 	}
-	return r, nil
+	for _, x := range ix.Backlinks(e.ULID) {
+		j.ReferencedBy = append(j.ReferencedBy, usecase.RefOf(ix, x.ULID))
+	}
+	entries, err := TaskLog(ss, s, ix.StoreName(), e.ULID, ShowHistory)
+	if err != nil {
+		return nil, err
+	}
+	j.History = make([]usecase.LogView, len(entries))
+	for i, le := range entries {
+		j.History[i] = usecase.LogViewOf(ix, le)
+	}
+	return j, nil
 }
 
 func liveComments(s *store.Store, ulid model.ULID) ([]*model.Comment, error) {
@@ -320,10 +402,17 @@ func liveComments(s *store.Store, ulid model.ULID) ([]*model.Comment, error) {
 }
 
 // reverse finds the tasks that point at ulid, by relation.
-func reverse(ix *index.Index, ulid model.ULID) []Relation {
-	var out []Relation
+func reverse(ix *index.Index, ulid model.ULID) []usecase.RelationView {
+	var out []usecase.RelationView
+	refs := func(es []*index.Entry) []usecase.Ref {
+		rs := make([]usecase.Ref, len(es))
+		for i, x := range es {
+			rs[i] = usecase.RefOf(ix, x.ULID)
+		}
+		return rs
+	}
 	if es := ix.Reverse(ulid, "blocked_by"); len(es) > 0 {
-		out = append(out, Relation{"blocks", "blocks", es})
+		out = append(out, usecase.RelationView{Key: "blocks", Label: "blocks", Tasks: refs(es)})
 	}
 	for _, p := range ix.Schema().Props {
 		if p.Type != schema.TypeTaskRef {
@@ -342,143 +431,21 @@ func reverse(ix *index.Index, ulid model.ULID) []Relation {
 		case p.Symmetric:
 			label = p.Name
 		}
-		out = append(out, Relation{p.Name, label, es})
+		out = append(out, usecase.RelationView{Key: p.Name, Label: label, Tasks: refs(es)})
 	}
 	return out
 }
 
-// ShowViewOf is r as show --json prints it.
-func ShowViewOf(r ShowResult) *usecase.ShowView {
-	j := &usecase.ShowView{TaskView: usecase.TaskViewOf(r.Index, r.Entry), Watchers: []string{}, Repos: []string{}, Comments: []usecase.CommentView{}, Reverse: map[string][]usecase.Ref{}, ReferencedBy: []usecase.Ref{}, History: LogViewsOf(r.Index, r.History)}
-	j.Checklist, j.Progress = usecase.ChecklistOf(r.Entry), usecase.ProgressOf(r.Index, r.Entry)
-	for _, x := range r.Back {
-		j.ReferencedBy = append(j.ReferencedBy, usecase.Ref{ULID: x.ULID.String(), ID: x.ID, Title: x.Title})
-	}
-	if r.Task != nil {
-		j.Body, j.Watchers, j.Repos = r.Task.Body, usecase.OrEmpty(r.Task.Watchers), usecase.OrEmpty(r.Task.Repos)
-	}
-	for _, c := range r.Comments {
-		j.Comments = append(j.Comments, usecase.CommentView{ULID: c.ULID.String(), Author: c.Author, Created: c.Created, Body: c.Body})
-	}
-	for _, rel := range r.Relations {
-		for _, x := range rel.Tasks {
-			j.Reverse[rel.Key] = append(j.Reverse[rel.Key], usecase.Ref{ULID: x.ULID.String(), ID: x.ID, Title: x.Title})
-		}
-	}
-	return j
-}
-
-func logViewOf(ix *index.Index, e gitrepo.LogEntry) usecase.LogView {
-	j := usecase.LogView{Hash: e.Hash.String(), Date: e.When, Subject: e.Subject, Store: ix.StoreName()}
-	j.Author.Name, j.Author.Email = e.Author.Name, e.Author.Email
-	j.Trailers = make([]usecase.LogTrailer, len(e.Trailers))
-	for i, t := range e.Trailers {
-		j.Trailers[i] = usecase.LogTrailer{Key: t.Key, Value: t.Value}
-	}
-	if v, ok := e.Trailer("Hedgehug-Op"); ok {
-		j.Op = &v
-	}
-	if v, ok := e.Trailer("Hedgehug-Task"); ok {
-		j.Task = &v
-		if ulid, err := model.ParseULID(v); err == nil {
-			if t, ok := ix.Task(ulid); ok && t.ID != "" {
-				j.ID = &t.ID
-			}
-		}
-	}
-	if ws, ok := logWorkspace(ix, e); ok {
-		j.Workspace = &usecase.WorkspaceRef{ULID: ws.String()}
-		if w, ok := ix.Workspace(ws); ok {
-			j.Workspace.Name, j.Workspace.IDPrefix = w.Name, w.IDPrefix
-		}
-	}
-	return j
-}
-
-// logWorkspace is the workspace of a commit: the one its Hedgehug-Workspace
-// trailer names, or else the one the task of its Hedgehug-Task is in now.
-// A commit with neither, or of a task the index does not have, has none.
-func logWorkspace(ix *index.Index, e gitrepo.LogEntry) (model.ULID, bool) {
-	ws, _ := e.Trailer("Hedgehug-Workspace")
-	task, _ := e.Trailer("Hedgehug-Task")
-	return workspaceOf(ix, ws, task)
-}
-
-// commitWorkspace is logWorkspace for a commit of the history index.
+// commitWorkspace is the workspace of a commit of the history index.
 func commitWorkspace(ix *index.Index, c history.Commit) (model.ULID, bool) {
-	return workspaceOf(ix, c.Workspace, c.Task)
-}
-
-func workspaceOf(ix *index.Index, ws, task string) (model.ULID, bool) {
-	if ws != "" {
-		ulid, err := model.ParseULID(ws)
-		return ulid, err == nil
-	}
-	if task != "" {
-		if ulid, err := model.ParseULID(task); err == nil {
-			if t, ok := ix.Task(ulid); ok && !t.Workspace.IsZero() {
-				return t.Workspace, true
-			}
-		}
-	}
-	return model.ULID{}, false
-}
-
-// LogViewsOf is the commits as --json prints them.
-func LogViewsOf(ix *index.Index, entries []gitrepo.LogEntry) []usecase.LogView {
-	out := make([]usecase.LogView, len(entries))
-	for i, e := range entries {
-		out[i] = logViewOf(ix, e)
-	}
-	return out
-}
-
-// SubjectNow gives the subject of a Hedgehug commit with the task's current
-// id and ULID in place of the label it was written with: the subject is
-// "hedgehug: <op> <label> <title>". Other subjects, and tasks the index does
-// not have, keep the subject as it is.
-func SubjectNow(ix *index.Index, le gitrepo.LogEntry) string {
-	op, ok1 := le.Trailer("Hedgehug-Op")
-	taskULID, ok2 := le.Trailer("Hedgehug-Task")
-	head := "hedgehug: " + op + " "
-	rest, ok3 := strings.CutPrefix(le.Subject, head)
-	if !ok1 || !ok2 || !ok3 {
-		return le.Subject
-	}
-	ulid, err := model.ParseULID(taskULID)
-	if err != nil {
-		return le.Subject
-	}
-	e, ok := ix.Task(ulid)
-	if !ok {
-		return le.Subject
-	}
-	_, title, _ := strings.Cut(rest, " ")
-	return strings.TrimRight(head+usecase.TaskLabel(ix, e)+" "+title, " ")
-}
-
-// StoreLog is a commit with the store it is in. Index is that store's.
-type StoreLog struct {
-	Store string
-	Index *index.Index
-	Entry gitrepo.LogEntry
+	return usecase.CommitWorkspace(ix, c.Workspace, c.Task)
 }
 
 // LogResult is the commits Log found. Many says they were taken from two or
 // more stores, so that a reader tells which store a commit is in.
 type LogResult struct {
-	Logs []StoreLog
+	Logs []usecase.LogView
 	Many bool
-}
-
-// StoreLogViews is the commits as --json prints them, each with its store.
-func StoreLogViews(logs []StoreLog) []usecase.LogView {
-	out := make([]usecase.LogView, len(logs))
-	for i, l := range logs {
-		out[i] = logViewOf(l.Index, l.Entry)
-		out[i].Store = l.Store
-	}
-	return out
 }
 
 // Log lists the commits of every store, newest first (a commit of the same
@@ -531,7 +498,7 @@ func LogIn(ss *usecase.Session, args, workspaces []string, limit int) (LogResult
 	}
 	found := make([]bool, len(workspaces))
 	notFound := make([]error, len(workspaces))
-	var all []StoreLog
+	all := []usecase.LogView{}
 	for _, m := range stores {
 		var entries []gitrepo.LogEntry
 		var logErr error
@@ -578,17 +545,19 @@ func LogIn(ss *usecase.Session, args, workspaces []string, limit int) (LogResult
 			return LogResult{}, notFound[i]
 		}
 	}
-	slices.SortStableFunc(all, func(a, b StoreLog) int { return b.Entry.When.Compare(a.Entry.When) })
+	slices.SortStableFunc(all, func(a, b usecase.LogView) int { return b.Date.Compare(a.Date) })
 	if limit > 0 && len(all) > limit {
 		all = all[:limit]
 	}
 	return LogResult{Logs: all, Many: len(set.Stores) > 1}, nil
 }
 
-func storeLogs(name string, ix *index.Index, entries []gitrepo.LogEntry) []StoreLog {
-	out := make([]StoreLog, len(entries))
+// storeLogs is the commits entries of the store name, whose index is ix.
+func storeLogs(name string, ix *index.Index, entries []gitrepo.LogEntry) []usecase.LogView {
+	out := make([]usecase.LogView, len(entries))
 	for i, e := range entries {
-		out[i] = StoreLog{Store: name, Index: ix, Entry: e}
+		out[i] = usecase.LogViewOf(ix, e)
+		out[i].Store = name
 	}
 	return out
 }

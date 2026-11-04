@@ -39,7 +39,7 @@ func (s *Server) viewsOf(ss *usecase.Session, ulids ...model.ULID) ([]*usecase.T
 			p.Args = map[string]any{"id": u.String()}
 			return nil, p
 		}
-		out = append(out, listView(ix, e))
+		out = append(out, usecase.ListViewOf(ix, e))
 	}
 	return out, nil
 }

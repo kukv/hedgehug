@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/query"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/browse"
@@ -95,7 +94,7 @@ func TestStoreNameKeepsTheWarningsOfOtherStoresQuiet(t *testing.T) {
 	ts := usecasetest.NewTwoStore(t)
 	addGoneStore(t, ts, false)
 	ts.StoreName = "org-a"
-	if _, err := browse.List(ts.Session, &query.Query{}); err != nil {
+	if _, err := browse.List(ts.Session, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := ts.Mount(); err != nil {
@@ -106,7 +105,7 @@ func TestStoreNameKeepsTheWarningsOfOtherStoresQuiet(t *testing.T) {
 	}
 	// without --store it still does, once
 	ts.StoreName = ""
-	if _, err := browse.List(ts.Session, &query.Query{}); err != nil {
+	if _, err := browse.List(ts.Session, ""); err != nil {
 		t.Fatal(err)
 	}
 	if n := countContaining(ts.Warns, "cannot open gone"); n != 1 {
@@ -138,7 +137,7 @@ func TestSyncDoesNotWarnTwiceOfAStoreItReports(t *testing.T) {
 	}
 	// the silence was for the sync only
 	ts.Warns = nil
-	if _, err := browse.List(ts.Session, &query.Query{}); err != nil {
+	if _, err := browse.List(ts.Session, ""); err != nil {
 		t.Fatal(err)
 	}
 	if n := countContaining(ts.Warns, "cannot open gone"); n != 1 {

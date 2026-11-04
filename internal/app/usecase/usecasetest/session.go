@@ -744,7 +744,11 @@ func (ts *Session) AddedTask(id string) *model.Task {
 	if err != nil {
 		ts.T.Fatal(err)
 	}
-	tk, err := s.Task(r.Entry.ULID)
+	u, err := model.ParseULID(r.ULID)
+	if err != nil {
+		ts.T.Fatal(err)
+	}
+	tk, err := s.Task(u)
 	if err != nil {
 		ts.T.Fatal(err)
 	}
@@ -1092,7 +1096,11 @@ func UlidOf(t *testing.T, ts *Session, arg string) model.ULID {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return r.Entry.ULID
+	u, err := model.ParseULID(r.ULID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u
 }
 
 func WantCode(t *testing.T, what string, err error, kind usecase.Kind, code string) {

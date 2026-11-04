@@ -42,18 +42,18 @@ func TestLsAcrossStores(t *testing.T) {
 	te.goldenOK("tree-format", "ls", "--tree", "--format", "{{.store}} {{.id}} {{.context}}")
 	te.goldenRun("unknown-store", 2, "ls", "store:nope")
 
-	var all []usecase.TaskView
+	var all struct{ Tasks []usecase.TaskView }
 	if err := json.Unmarshal([]byte(te.ok("ls", "--json")), &all); err != nil {
 		t.Fatal(err)
 	}
-	if len(all) != 4 || all[0].Store != "alpha" || all[3].Store != "bravo-long" {
+	if len(all.Tasks) != 4 || all.Tasks[0].Store != "alpha" || all.Tasks[3].Store != "bravo-long" {
 		t.Errorf("ls --json = %+v", all)
 	}
-	var tree []usecase.TaskView
+	var tree struct{ Roots, Cycle []usecase.TaskView }
 	if err := json.Unmarshal([]byte(te.ok("ls", "--tree", "--json")), &tree); err != nil {
 		t.Fatal(err)
 	}
-	if len(tree) != 3 || tree[0].Store != "alpha" || tree[1].Store != "bravo-long" || len(tree[0].Children) != 1 || tree[0].Children[0].Store != "alpha" {
+	if len(tree.Roots) != 3 || tree.Roots[0].Store != "alpha" || tree.Roots[1].Store != "bravo-long" || len(tree.Roots[0].Children) != 1 || tree.Roots[0].Children[0].Store != "alpha" || len(tree.Cycle) != 0 {
 		t.Errorf("ls --tree --json = %+v", tree)
 	}
 	if n := len(strings.Fields(te.ok("ls", "--ulids-only"))); n != 4 {

@@ -88,11 +88,11 @@ func TestPrefixAcrossStores(t *testing.T) {
 	te.goldenOK("restore", "restore", "org-a:API-1")
 
 	// --json keeps the id as it is, and says the store
-	var got []struct{ ID, Store string }
+	var got struct{ Tasks []struct{ ID, Store string } }
 	if err := json.Unmarshal([]byte(te.ok("ls", "--json", "store:org-a")), &got); err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].ID != "API-1" || got[0].Store != "org-a" {
+	if len(got.Tasks) != 1 || got.Tasks[0].ID != "API-1" || got.Tasks[0].Store != "org-a" {
 		t.Errorf("ls --json = %+v; want id API-1 of org-a", got)
 	}
 	if out := te.ok("show", "--json", "org-b:API-1"); !strings.Contains(out, `"id": "API-1"`) || strings.Contains(out, `"id": "org-b:`) {

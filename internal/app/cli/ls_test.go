@@ -42,15 +42,29 @@ func TestLs(t *testing.T) {
 	if out := te.ok("ls", "--format", "{{.title}}|{{.status}}", "sort:title"); out != "Alpha|todo\nBeta|done\n" {
 		t.Errorf("--format = %q", out)
 	}
-	var got []usecase.TaskView
-	if err := json.Unmarshal([]byte(te.ok("ls", "--json", "sort:title")), &got); err != nil {
+	var list struct {
+		Tasks  []usecase.TaskView
+		Groups []struct {
+			Key   string
+			ULIDs []string
+		}
+	}
+	if err := json.Unmarshal([]byte(te.ok("ls", "--json", "sort:title")), &list); err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 || got[0].Title != "Alpha" || got[1].Title != "Beta" || got[0].Labels[0] != "ui" {
-		t.Errorf("--json = %+v", got)
+	got := list.Tasks
+	if len(got) != 2 || got[0].Title != "Alpha" || got[1].Title != "Beta" || got[0].Labels[0] != "ui" || list.Groups != nil {
+		t.Errorf("--json = %+v", list)
 	}
 	if got[1].Assignees == nil || got[1].Problems == nil || got[1].Props == nil || got[1].BlockedBy == nil {
 		t.Error("empty lists in JSON must be [] or {}, not null")
+	}
+	// group: adds the groups, which name their tasks by ULID
+	if err := json.Unmarshal([]byte(te.ok("ls", "--json", "group:status", "sort:title")), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Tasks) != 2 || len(list.Groups) != 2 || list.Groups[0].Key != "todo" || len(list.Groups[0].ULIDs) != 1 || list.Groups[0].ULIDs[0] != a.ULID {
+		t.Errorf("--json group:status = %+v", list)
 	}
 
 	// blocked_by names each task by its ULID, id and title.

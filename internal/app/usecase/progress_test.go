@@ -117,11 +117,14 @@ func TestViewHasChecklistAndProgress(t *testing.T) {
 		t.Fatal(err)
 	}
 	e, _ := ix.Task(p.ULID)
-	j := browse.TreeViewOf(ix, &browse.TreeNode{Entry: e})
+	j := usecase.ListViewOf(ix, e)
 	if j.Checklist == nil || *j.Checklist != (usecase.Count{Done: 1, Total: 3}) || j.Progress == nil || *j.Progress != (usecase.Count{Done: 1, Total: 1}) {
 		t.Errorf("checklist = %+v, progress = %+v; want 1/3 and 1/1", j.Checklist, j.Progress)
 	}
-	sv := browse.ShowViewOf(browse.ShowResult{Index: ix, Entry: e})
+	sv, err := browse.Show(ts.Session, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if sv.Checklist == nil || sv.Progress == nil {
 		t.Errorf("show view: checklist = %+v, progress = %+v; want both", sv.Checklist, sv.Progress)
 	}

@@ -551,34 +551,6 @@ components:
         - role
         - parents
       type: object
-    ListOutputBody:
-      additionalProperties: false
-      properties:
-        cycle:
-          description: The tasks in a parent cycle, with tree
-          items:
-            $ref: "#/components/schemas/TaskView"
-          type:
-            - array
-            - "null"
-        groups:
-          description: "The groups, when the query has group:"
-          items:
-            $ref: "#/components/schemas/GroupView"
-          type:
-            - array
-            - "null"
-        roots:
-          description: The roots of the tree, with tree
-          items:
-            $ref: "#/components/schemas/TaskView"
-          type: array
-        tasks:
-          description: The tasks found, without tree
-          items:
-            $ref: "#/components/schemas/TaskView"
-          type: array
-      type: object
     LogTrailer:
       additionalProperties: false
       properties:
@@ -1970,6 +1942,34 @@ components:
         - push_interval
         - store
         - remotes
+      type: object
+    TaskList:
+      additionalProperties: false
+      properties:
+        cycle:
+          description: The tasks in a parent cycle, with tree
+          items:
+            $ref: "#/components/schemas/TaskView"
+          type:
+            - array
+            - "null"
+        groups:
+          description: "The groups, when the query has group:"
+          items:
+            $ref: "#/components/schemas/GroupView"
+          type:
+            - array
+            - "null"
+        roots:
+          description: The roots of the tree, with tree
+          items:
+            $ref: "#/components/schemas/TaskView"
+          type: array
+        tasks:
+          description: The tasks found, without tree
+          items:
+            $ref: "#/components/schemas/TaskView"
+          type: array
       type: object
     TaskView:
       additionalProperties: false
@@ -3599,7 +3599,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListOutputBody"
+                $ref: "#/components/schemas/TaskList"
           description: OK
         default:
           content:
