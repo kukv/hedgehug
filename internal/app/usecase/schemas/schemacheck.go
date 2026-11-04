@@ -12,7 +12,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
-	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
 	"github.com/kukv/hedgehug/internal/lib/osfs"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
@@ -30,7 +29,7 @@ func ViolationsText(ve *store.ValidationError) string {
 
 // SchemaCheck opens the store and checks its schema. A schema.yaml that does
 // not decode keeps the store from opening; that is then the one finding.
-func SchemaCheck(ss *usecase.Session) ([]maintenance.Finding, error) {
+func SchemaCheck(ss *usecase.Session) ([]usecase.Finding, error) {
 	_, e, err := ss.Entry()
 	if err != nil {
 		return nil, err
@@ -38,7 +37,7 @@ func SchemaCheck(ss *usecase.Session) ([]maintenance.Finding, error) {
 	s, err := ss.OpenStoreAt(e.Path)
 	if err != nil {
 		if data, rerr := osfs.ReadFile(filepath.Join(e.Path, schema.Path)); rerr == nil {
-			if sc, fs := maintenance.SchemaFile(data); sc == nil {
+			if sc, fs := usecase.CheckSchemaFile(data); sc == nil {
 				return fs, nil
 			}
 		}
@@ -50,7 +49,7 @@ func SchemaCheck(ss *usecase.Session) ([]maintenance.Finding, error) {
 	if err != nil {
 		return nil, err
 	}
-	return maintenance.Schema(s, ix)
+	return usecase.CheckSchema(s, ix)
 }
 
 // MigrationPlan is what a migration writes: the new schema and the tasks

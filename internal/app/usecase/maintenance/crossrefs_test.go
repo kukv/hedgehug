@@ -70,15 +70,15 @@ func TestDoctorCoversEveryStoreAndFindsCrossStoreRefs(t *testing.T) {
 	if err != nil || len(rs) != 2 || rs[0].Store != "org-a" || rs[1].Store != "org-b" {
 		t.Fatalf("Doctor = %+v, %v; want a report each for org-a and org-b", rs, err)
 	}
-	var cross []maintenance.Finding
+	var cross []usecase.Finding
 	for _, f := range rs[0].Findings {
 		if f.Check == "cross_store_ref" {
 			cross = append(cross, f)
 		}
 	}
-	want := maintenance.Finding{
+	want := usecase.Finding{
 		Check: "cross_store_ref", Where: "API-1 (" + from.String() + ") org-a task",
-		Task: from.String(), Msg: "parent points at org-b's WEB-1; references stay inside a store", Severity: maintenance.Warning,
+		Task: from.String(), Msg: "parent points at org-b's WEB-1; references stay inside a store", Severity: usecase.SeverityWarning,
 	}
 	if len(cross) != 1 || cross[0] != want {
 		t.Errorf("org-a cross_store_ref findings = %+v; want [%+v]", cross, want)
@@ -94,7 +94,7 @@ func TestDoctorCoversEveryStoreAndFindsCrossStoreRefs(t *testing.T) {
 		t.Errorf("Doctor of org-b = %+v, %v; want org-b only", one, err)
 	}
 	one, err = maintenance.Doctor(ts.ForStore("org-a"), false)
-	if err != nil || len(one) != 1 || one[0].Store != "org-a" || !slices.ContainsFunc(one[0].Findings, func(f maintenance.Finding) bool { return f.Check == "cross_store_ref" }) {
+	if err != nil || len(one) != 1 || one[0].Store != "org-a" || !slices.ContainsFunc(one[0].Findings, func(f usecase.Finding) bool { return f.Check == "cross_store_ref" }) {
 		t.Errorf("Doctor of org-a = %+v, %v; want org-a with the cross-store reference", one, err)
 	}
 	if _, err := maintenance.Doctor(ts.ForStore("nope"), false); usecase.KindOf(err) != usecase.KindNotFound {
@@ -112,15 +112,15 @@ func TestDoctorCrossStoreRefWhereIsThePlainIDWhenThePrefixIsShared(t *testing.T)
 	if err != nil || len(rs) != 2 {
 		t.Fatalf("Doctor = %+v, %v", rs, err)
 	}
-	var cross []maintenance.Finding
+	var cross []usecase.Finding
 	for _, f := range rs[0].Findings {
 		if f.Check == "cross_store_ref" {
 			cross = append(cross, f)
 		}
 	}
-	want := maintenance.Finding{
+	want := usecase.Finding{
 		Check: "cross_store_ref", Where: "API-1 (" + from.String() + ") org-a task",
-		Task: from.String(), Msg: "parent points at org-b's API-1; references stay inside a store", Severity: maintenance.Warning,
+		Task: from.String(), Msg: "parent points at org-b's API-1; references stay inside a store", Severity: usecase.SeverityWarning,
 	}
 	if len(cross) != 1 || cross[0] != want {
 		t.Errorf("findings = %+v; want [%+v]", cross, want)
@@ -152,7 +152,7 @@ func TestDoctorFixSkipsAReadOnlyStoreAndWarns(t *testing.T) {
 	if len(rs[0].Repaired) != 1 {
 		t.Errorf("org-a repaired %+v; want the clash repaired", rs[0].Repaired)
 	}
-	if len(rs[1].Repaired) != 0 || !slices.ContainsFunc(rs[1].Findings, func(f maintenance.Finding) bool { return f.Check == "task" }) {
+	if len(rs[1].Repaired) != 0 || !slices.ContainsFunc(rs[1].Findings, func(f usecase.Finding) bool { return f.Check == "task" }) {
 		t.Errorf("org-b = %+v; want nothing repaired and the clash still found", rs[1])
 	}
 	if want := "org-b is read-only, so it is not fixed (test)"; !slices.Contains(ts.Warns, want) {
@@ -219,7 +219,7 @@ func TestDoctorKeepsTheOtherStoresWhenOneDoesNotOpen(t *testing.T) {
 	if err != nil || len(rs) != 3 || rs[2].Store != "gone" || len(rs[2].Findings) == 0 {
 		t.Fatalf("Doctor = %+v, %v; want three reports, the third with findings about gone", rs, err)
 	}
-	if !slices.ContainsFunc(rs[0].Findings, func(f maintenance.Finding) bool { return f.Check == "cross_store_ref" }) {
+	if !slices.ContainsFunc(rs[0].Findings, func(f usecase.Finding) bool { return f.Check == "cross_store_ref" }) {
 		t.Errorf("org-a = %+v; want its cross-store reference still found", rs[0])
 	}
 	for _, w := range ts.Warns {
@@ -244,7 +244,7 @@ func TestDoctorKeepsTheOtherStoresWhenOneDoesNotOpen(t *testing.T) {
 	// named alone, it stays what it was: no error, the findings maintenance.Run
 	// gives for a directory that is no store
 	one, err := maintenance.Doctor(ts.ForStore("gone"), false)
-	if err != nil || len(one) != 1 || one[0].Store != "gone" || !slices.ContainsFunc(one[0].Findings, func(f maintenance.Finding) bool { return f.Check == "git" }) {
+	if err != nil || len(one) != 1 || one[0].Store != "gone" || !slices.ContainsFunc(one[0].Findings, func(f usecase.Finding) bool { return f.Check == "git" }) {
 		t.Errorf("Doctor of gone = %+v, %v; want its findings and no error", one, err)
 	}
 }

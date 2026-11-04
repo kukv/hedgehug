@@ -6,7 +6,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
-	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
 	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
@@ -47,10 +46,10 @@ func (a *app) checkCmd() *cobra.Command {
 
 // printFindings prints what a check found. It returns errFindings when there
 // is an error or a warning to report.
-func (a *app) printFindings(fs []maintenance.Finding) error {
+func (a *app) printFindings(fs []usecase.Finding) error {
 	if a.jsonOut {
 		if fs == nil {
-			fs = []maintenance.Finding{}
+			fs = []usecase.Finding{}
 		}
 		if err := a.printJSON(fs); err != nil {
 			return err
@@ -58,7 +57,7 @@ func (a *app) printFindings(fs []maintenance.Finding) error {
 	} else if err := a.writeFindings(fs); err != nil {
 		return err
 	}
-	if maintenance.Failing(fs) {
+	if usecase.FindingsFail(fs) {
 		return errFindings
 	}
 	return nil
@@ -66,14 +65,14 @@ func (a *app) printFindings(fs []maintenance.Finding) error {
 
 // writeFindings writes fs as text. A warning or an info line ends with its
 // severity in parentheses; an error line has nothing added.
-func (a *app) writeFindings(fs []maintenance.Finding) error {
+func (a *app) writeFindings(fs []usecase.Finding) error {
 	if len(fs) == 0 {
 		_, err := fmt.Fprintln(a.stdout, "No problems")
 		return err
 	}
 	for _, f := range fs {
 		tag := ""
-		if f.Severity != "" && f.Severity != maintenance.Error {
+		if f.Severity != "" && f.Severity != usecase.SeverityError {
 			tag = " (" + string(f.Severity) + ")"
 		}
 		_, _ = fmt.Fprintf(a.stdout, "%s: %s%s\n", f.Where, f.Msg, tag)

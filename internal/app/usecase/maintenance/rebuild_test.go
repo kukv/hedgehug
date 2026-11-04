@@ -17,6 +17,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
 	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
@@ -90,8 +91,8 @@ func (f *forcePushFx) stoppedSwap(t *testing.T) (dir string) {
 
 // forcePushFindings are the findings of r that tell of anything but the merge
 // driver, which a test without hedgehug on PATH always has.
-func forcePushFindings(r maintenance.DoctorReport) []maintenance.Finding {
-	var out []maintenance.Finding
+func forcePushFindings(r maintenance.DoctorReport) []usecase.Finding {
+	var out []usecase.Finding
 	for _, x := range r.Findings {
 		if x.Check != "merge_driver" {
 			out = append(out, x)
@@ -362,7 +363,7 @@ func TestDoctorFixFinishesAStoppedSwap(t *testing.T) {
 	f := newForcePushFx(t, true)
 	dir := f.stoppedSwap(t)
 	rs, err := maintenance.Doctor(f.clone.Session, false)
-	if err != nil || len(rs) != 1 || !maintenance.Failing(rs[0].Findings) {
+	if err != nil || len(rs) != 1 || !usecase.FindingsFail(rs[0].Findings) {
 		t.Fatalf("Doctor of a store that is not there = %+v, %v; want findings", rs, err)
 	}
 	if _, err := maintenance.Doctor(f.clone.Session, true); err != nil {

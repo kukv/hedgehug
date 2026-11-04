@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/browse"
 	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
 	"github.com/kukv/hedgehug/internal/lib/plural"
@@ -40,13 +41,13 @@ func (a *app) doctor(fix bool) error {
 	}
 	failing := false
 	for i, r := range rs {
-		failing = failing || maintenance.Failing(r.Findings)
+		failing = failing || usecase.FindingsFail(r.Findings)
 		if a.jsonOut {
 			if r.Repaired == nil {
 				rs[i].Repaired = []maintenance.Fixed{}
 			}
 			if r.Findings == nil {
-				rs[i].Findings = []maintenance.Finding{}
+				rs[i].Findings = []usecase.Finding{}
 			}
 			continue
 		}

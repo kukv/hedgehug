@@ -52,7 +52,7 @@ type workspacePatchInput struct {
 
 type findingsOutput struct {
 	Body struct {
-		Findings []maintenance.Finding `json:"findings"`
+		Findings []usecase.Finding `json:"findings"`
 	}
 }
 
@@ -207,7 +207,7 @@ func (s *Server) registerAdmin() {
 			return nil, problemOf(err)
 		}
 		out := &findingsOutput{}
-		out.Body.Findings = append([]maintenance.Finding{}, fs...)
+		out.Body.Findings = append([]usecase.Finding{}, fs...)
 		return out, nil
 	})
 
@@ -311,7 +311,7 @@ func (s *Server) doctor(store string, fix bool) (*doctorOutput, error) {
 	}
 	for i := range r {
 		if r[i].Findings == nil {
-			r[i].Findings = []maintenance.Finding{}
+			r[i].Findings = []usecase.Finding{}
 		}
 		if r[i].Repaired == nil {
 			r[i].Repaired = []maintenance.Fixed{}

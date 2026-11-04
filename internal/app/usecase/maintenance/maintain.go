@@ -32,10 +32,10 @@ type Fixed struct {
 // the findings that are left, as doctor --fix --json prints them. Without
 // --fix, Repaired is empty and only Findings is of interest.
 type DoctorReport struct {
-	Store    string    `json:"store"`
-	Rebuilt  *Rebuilt  `json:"rebuilt,omitempty"`
-	Repaired []Fixed   `json:"repaired"`
-	Findings []Finding `json:"findings"`
+	Store    string            `json:"store"`
+	Rebuilt  *Rebuilt          `json:"rebuilt,omitempty"`
+	Repaired []Fixed           `json:"repaired"`
+	Findings []usecase.Finding `json:"findings"`
 }
 
 // Doctor finds what is wrong with the files, the work tree and git of the
@@ -117,7 +117,7 @@ func Doctor(ss *usecase.Session, fix bool) ([]DoctorReport, error) {
 				// the store did not open for want of the finish: say that
 				r, err = DoctorReport{Store: e.Name, Repaired: repaired[i]}, nil
 			}
-			r.Findings = append(r.Findings, Finding{Check: "git", Where: e.Path, Msg: "cannot finish the rebuild after a history rewrite: " + ferr.Error(), Hint: "fix the cause and run hedgehug doctor --fix again"})
+			r.Findings = append(r.Findings, usecase.Finding{Check: "git", Where: e.Path, Msg: "cannot finish the rebuild after a history rewrite: " + ferr.Error(), Hint: "fix the cause and run hedgehug doctor --fix again"})
 		}
 		if rerr := rebuildErr[e.Name]; rerr != nil {
 			if err != nil {
@@ -176,7 +176,7 @@ func doctorStore(ss *usecase.Session, e config.StoreEntry, only bool, repaired [
 		if only {
 			return DoctorReport{}, openErr
 		}
-		fs = []Finding{{Check: "git", Where: e.Path, Msg: "cannot open the store: " + openErr.Error()}}
+		fs = []usecase.Finding{{Check: "git", Where: e.Path, Msg: "cannot open the store: " + openErr.Error()}}
 	}
 	if openErr == nil {
 		fs = append(fs, crossStoreFindings(ss, e.Name)...)
@@ -195,18 +195,18 @@ func doctorStore(ss *usecase.Session, e config.StoreEntry, only bool, repaired [
 // forcePushFinding is unexpected_force_push (D23): the last sync found the
 // history of origin differing from the store's, and the file it left is
 // still there.
-func forcePushFinding(name string, s *store.Store) ([]Finding, error) {
+func forcePushFinding(name string, s *store.Store) ([]usecase.Finding, error) {
 	_, ok, err := replicate.ReadForcePush(s)
 	if err != nil || !ok {
 		return nil, err
 	}
-	return []Finding{{Check: "unexpected_force_push", Where: name, Msg: replicate.ErrForcePush.Error(), Hint: "hedgehug doctor --fix clones the store again from origin and puts the unpushed changes back; the old store is kept when some could not be put back"}}, nil
+	return []usecase.Finding{{Check: "unexpected_force_push", Where: name, Msg: replicate.ErrForcePush.Error(), Hint: "hedgehug doctor --fix clones the store again from origin and puts the unpushed changes back; the old store is kept when some could not be put back"}}, nil
 }
 
 // withRebuildFailure tells, in the unexpected_force_push finding the store
 // already has, that cloning it again failed; a store without one gets a
 // finding of its own. There is one finding of the force push either way.
-func withRebuildFailure(fs []Finding, name string, rerr error) []Finding {
+func withRebuildFailure(fs []usecase.Finding, name string, rerr error) []usecase.Finding {
 	const hint = "fix the cause and run hedgehug doctor --fix again"
 	for i := range fs {
 		if fs[i].Check == "unexpected_force_push" {
@@ -215,7 +215,7 @@ func withRebuildFailure(fs []Finding, name string, rerr error) []Finding {
 			return fs
 		}
 	}
-	return append(fs, Finding{Check: "unexpected_force_push", Where: name, Msg: "cannot clone the store again: " + rerr.Error(), Hint: hint})
+	return append(fs, usecase.Finding{Check: "unexpected_force_push", Where: name, Msg: "cannot clone the store again: " + rerr.Error(), Hint: hint})
 }
 
 // fixStore repairs the files of HEAD of the store e, opened as s, as a sync
@@ -282,29 +282,29 @@ func fixedContent(ix *index.Index, x merge.Repaired) string {
 // crossStoreFindings are the references of the store name to another mounted
 // store, as warnings of doctor. A store whose references cannot be read is a
 // warning of the session, not a finding: the other checks stand without it.
-func crossStoreFindings(ss *usecase.Session, name string) []Finding {
+func crossStoreFindings(ss *usecase.Session, name string) []usecase.Finding {
 	refs, err := ss.CrossRefs(name)
 	if err != nil {
 		ss.AddWarning("could not check cross-store references: " + err.Error())
 		return nil
 	}
-	var out []Finding
+	var out []usecase.Finding
 	for _, r := range refs {
 		// the same words as the Where of a check of the store's own tasks
 		where := usecase.FormatTaskLabel(r.From.ID, r.From.ID, r.From.ULID) + " " + r.From.Title
-		out = append(out, Finding{Check: "cross_store_ref", Where: where, Task: r.From.ULID.String(), Msg: usecase.CrossRefMsg(r), Severity: Warning})
+		out = append(out, usecase.Finding{Check: "cross_store_ref", Where: where, Task: r.From.ULID.String(), Msg: usecase.CrossRefMsg(r), Severity: usecase.SeverityWarning})
 	}
-	Sort(out)
+	usecase.SortFindings(out)
 	return out
 }
 
 // duplicateStoreFindings are the tasks of the store name that live in another
 // mounted store too, as warnings of doctor. ds is what duplicates found.
-func duplicateStoreFindings(name string, ds []usecase.Duplicate) []Finding {
-	var out []Finding
+func duplicateStoreFindings(name string, ds []usecase.Duplicate) []usecase.Finding {
+	var out []usecase.Finding
 	for _, d := range ds {
 		if d.In(name) {
-			out = append(out, Finding{Check: "duplicate_across_stores", Where: d.ULID.String(), Task: d.ULID.String(), Msg: d.Text(), Severity: Warning})
+			out = append(out, usecase.Finding{Check: "duplicate_across_stores", Where: d.ULID.String(), Task: d.ULID.String(), Msg: d.Text(), Severity: usecase.SeverityWarning})
 		}
 	}
 	return out
@@ -312,7 +312,7 @@ func duplicateStoreFindings(name string, ds []usecase.Duplicate) []Finding {
 
 // forwardTargetFindings are the forwards of the store name whose moved_to is
 // no mounted store, as infos of doctor: the store may just not be mounted.
-func forwardTargetFindings(ss *usecase.Session, name string) []Finding {
+func forwardTargetFindings(ss *usecase.Session, name string) []usecase.Finding {
 	set, err := ss.Mount()
 	if err != nil {
 		ss.AddWarning("could not check the forwards: " + err.Error())
@@ -322,7 +322,7 @@ func forwardTargetFindings(ss *usecase.Session, name string) []Finding {
 	if !ok {
 		return nil
 	}
-	var out []Finding
+	var out []usecase.Finding
 	err = m.With(func(ix *index.Index) {
 		for _, f := range ix.Forwards() {
 			if f.Broken != "" || slices.ContainsFunc(set.Stores, func(o *mount.Mounted) bool { return o.ULID == f.MovedTo }) {
@@ -332,12 +332,12 @@ func forwardTargetFindings(ss *usecase.Session, name string) []Finding {
 			if f.ID != "" {
 				where = fmt.Sprintf("%s (%s)", f.ID, f.ULID)
 			}
-			out = append(out, Finding{Check: "forward_target", Where: where, Msg: fmt.Sprintf("moved to a store that is not mounted (ULID %s)", f.MovedTo), Severity: Info})
+			out = append(out, usecase.Finding{Check: "forward_target", Where: where, Msg: fmt.Sprintf("moved to a store that is not mounted (ULID %s)", f.MovedTo), Severity: usecase.SeverityInfo})
 		}
 	})
 	if err != nil {
 		ss.WarnOnce("forward_target:"+name, fmt.Sprintf("could not read the index of %s, so its forwards are not checked: %v", name, err))
 	}
-	Sort(out)
+	usecase.SortFindings(out)
 	return out
 }

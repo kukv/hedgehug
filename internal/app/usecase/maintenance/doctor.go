@@ -1,3 +1,7 @@
+// Package maintenance is hh doctor, hh purge and the rebuild of a store after
+// a history rewrite. Doctor finds what is wrong with a store: a schema that
+// does not fit its tasks, files that do not decode, changes that are not
+// committed.
 package maintenance
 
 import (
@@ -20,6 +24,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/storage/view"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 	"github.com/kukv/hedgehug/internal/lib/osfs"
 	"github.com/kukv/hedgehug/internal/lib/plural"
@@ -41,14 +46,14 @@ var indexCodes = []string{
 // Run checks the store in dir without opening it with store.Open, which
 // refuses a store whose schema.yaml is broken. The findings are sorted. The
 // error is for files that cannot be read at all.
-func Run(dir string) ([]Finding, error) {
-	var out []Finding
+func Run(dir string) ([]usecase.Finding, error) {
+	var out []usecase.Finding
 
 	// 1. store.yaml and schema.yaml.
 	metaOK := true
 	if err := readCheck(dir, model.StoreMetaPath, model.DecodeStoreMeta); err != nil {
 		metaOK = false
-		out = append(out, Finding{
+		out = append(out, usecase.Finding{
 			Check: "file", Where: model.StoreMetaPath,
 			Msg:  err.Error() + "; the tasks are not checked against the schema",
 			Hint: "restore it with `git restore " + model.StoreMetaPath + "`, or fix it by hand and commit",
@@ -59,7 +64,7 @@ func Run(dir string) ([]Finding, error) {
 		msg = err.Error()
 	}
 	if msg != "" {
-		out = append(out, Finding{
+		out = append(out, usecase.Finding{
 			Check: "file", Where: model.NumbersPath, Msg: msg,
 			Hint: "fix the file by hand and commit, or restore it with `git restore " + model.NumbersPath + "`",
 		})
@@ -67,15 +72,15 @@ func Run(dir string) ([]Finding, error) {
 	schemaOK := false
 	var sch *schema.Schema
 	if data, err := osfs.ReadFile(filepath.Join(dir, schema.Path)); err != nil {
-		out = append(out, Finding{Check: "schema", Where: schema.Path, Msg: err.Error(), Hint: brokenHint})
+		out = append(out, usecase.Finding{Check: "schema", Where: schema.Path, Msg: err.Error(), Hint: usecase.BrokenSchemaHint})
 	} else {
-		sc, fs := SchemaFile(data)
+		sc, fs := usecase.CheckSchemaFile(data)
 		out = append(out, fs...)
 		schemaOK = sc != nil
 		sch = sc
 	}
 	if !schemaOK {
-		out = append(out, Finding{
+		out = append(out, usecase.Finding{
 			Check: "schema", Where: schema.Path,
 			Msg: "the tasks are not checked against the schema, because schema.yaml is not readable; that check is skipped",
 		})
@@ -96,25 +101,25 @@ func Run(dir string) ([]Finding, error) {
 	// 3 and 4. the work tree and the git objects.
 	repo, err := gitrepo.Open(dir)
 	if err != nil {
-		out = append(out, Finding{Check: "git", Where: ".git", Msg: err.Error()})
-		Sort(out)
+		out = append(out, usecase.Finding{Check: "git", Where: ".git", Msg: err.Error()})
+		usecase.SortFindings(out)
 		return out, nil
 	}
 	defer func() { _ = repo.Close() }()
 	st, err := repo.Status()
 	if err != nil {
-		out = append(out, Finding{Check: "git", Where: ".git", Msg: "cannot read the status: " + err.Error()})
+		out = append(out, usecase.Finding{Check: "git", Where: ".git", Msg: "cannot read the status: " + err.Error()})
 	}
 	for _, f := range st {
 		if f.Staged {
-			out = append(out, Finding{
+			out = append(out, usecase.Finding{
 				Check: "worktree", Where: f.Path,
 				Msg:  "has a staged change; it would go into the commit of the next operation",
 				Hint: "git restore --staged " + f.Path,
 			})
 		}
 		if f.Unstaged {
-			out = append(out, Finding{
+			out = append(out, usecase.Finding{
 				Check: "worktree", Where: f.Path,
 				Msg:  "has a change that is not committed",
 				Hint: "git restore " + f.Path + ", or remove the file if it is new",
@@ -124,21 +129,21 @@ func Run(dir string) ([]Finding, error) {
 	out = append(out, checkMergeDriver(dir, repo)...)
 	out = append(out, checkInbox(dir)...)
 	if err := repo.Verify(); err != nil {
-		out = append(out, Finding{Check: "git", Where: ".git", Msg: "a git object cannot be read: " + err.Error()})
+		out = append(out, usecase.Finding{Check: "git", Where: ".git", Msg: "a git object cannot be read: " + err.Error()})
 	}
 
 	// 5. the schema against the tasks.
 	if metaOK && schemaOK {
 		out = append(out, checkStore(dir)...)
 	}
-	Sort(out)
+	usecase.SortFindings(out)
 	return out, nil
 }
 
 // checkMergeDriver finds a store whose .gitattributes send files to the
 // hedgehug merge driver while .git/config does not register it, or while
 // hedgehug cannot be found on PATH for git to run it.
-func checkMergeDriver(dir string, repo *gitrepo.Repo) []Finding {
+func checkMergeDriver(dir string, repo *gitrepo.Repo) []usecase.Finding {
 	data, err := osfs.ReadFile(filepath.Join(dir, store.AttributesPath))
 	if err != nil || !slices.ContainsFunc(strings.Split(string(data), "\n"), func(l string) bool {
 		return !strings.HasPrefix(strings.TrimSpace(l), "#") && slices.Contains(strings.Fields(l), "merge=hedgehug")
@@ -148,17 +153,17 @@ func checkMergeDriver(dir string, repo *gitrepo.Repo) []Finding {
 	where := store.AttributesPath
 	registered, err := repo.MergeDriverRegistered()
 	if err != nil {
-		return []Finding{{Check: "merge_driver", Where: where, Msg: "cannot read .git/config: " + err.Error()}}
+		return []usecase.Finding{{Check: "merge_driver", Where: where, Msg: "cannot read .git/config: " + err.Error()}}
 	}
 	if !registered {
-		return []Finding{{
+		return []usecase.Finding{{
 			Check: "merge_driver", Where: where,
 			Msg:  "marks files merge=hedgehug, but the merge driver is not registered in .git/config (expected name = Hedgehug field merge and driver = " + gitrepo.MergeDriver + ")",
 			Hint: "run hedgehug sync once",
 		}}
 	}
 	if _, err := lookPath("hedgehug"); err != nil {
-		return []Finding{{
+		return []usecase.Finding{{
 			Check: "merge_driver", Where: where,
 			Msg:  "hedgehug is not on PATH, so git cannot run the merge driver",
 			Hint: "put hedgehug on PATH",
@@ -170,16 +175,16 @@ func checkMergeDriver(dir string, repo *gitrepo.Repo) []Finding {
 // checkInbox finds the records of the merge driver that the inbox has not
 // taken in. A record that does not decode is never taken in, so it is told
 // apart: the advice for it is to remove the file.
-func checkInbox(dir string) []Finding {
+func checkInbox(dir string) []usecase.Finding {
 	root := filepath.Join(dir, filepath.FromSlash(inbox.RecordsPath))
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil
 		}
-		return []Finding{{Check: "inbox", Where: inbox.RecordsPath, Msg: err.Error()}}
+		return []usecase.Finding{{Check: "inbox", Where: inbox.RecordsPath, Msg: err.Error()}}
 	}
-	var out []Finding
+	var out []usecase.Finding
 	waiting := 0
 	for _, e := range entries { // the inbox leaves other names alone
 		if !e.Type().IsRegular() || !strings.HasSuffix(e.Name(), ".json") || strings.HasPrefix(e.Name(), ".") {
@@ -191,7 +196,7 @@ func checkInbox(dir string) []Finding {
 			err = inbox.CheckRecord(data)
 		}
 		if err != nil {
-			out = append(out, Finding{
+			out = append(out, usecase.Finding{
 				Check: "inbox", Where: rel, Msg: "does not decode: " + err.Error() + "; the inbox leaves it where it is",
 				Hint: "remove the file",
 			})
@@ -200,7 +205,7 @@ func checkInbox(dir string) []Finding {
 		waiting++
 	}
 	if waiting > 0 {
-		out = append(out, Finding{
+		out = append(out, usecase.Finding{
 			Check: "inbox", Where: inbox.RecordsPath,
 			Msg:  fmt.Sprintf("%s %s not in the inbox yet", plural.Count(waiting, "merge driver record"), plural.Pick(waiting, "is", "are")),
 			Hint: "run hedgehug inbox",
@@ -259,22 +264,22 @@ func checkNumbers(dir string) (string, error) {
 
 // checkStore opens the store and the index and finds what step 5 of Run
 // finds. A failure to open becomes a finding.
-func checkStore(dir string) []Finding {
+func checkStore(dir string) []usecase.Finding {
 	s, err := store.Open(dir)
 	if err != nil {
-		return []Finding{{Check: "git", Where: dir, Msg: "cannot open the store: " + err.Error()}}
+		return []usecase.Finding{{Check: "git", Where: dir, Msg: "cannot open the store: " + err.Error()}}
 	}
 	defer func() { _ = s.Repo().Close() }()
 	ix, err := index.Open(s)
 	if err != nil {
-		return []Finding{{
+		return []usecase.Finding{{
 			Check: "git", Where: "HEAD", Msg: "cannot build the index: " + err.Error(),
 			Hint: "the schema.yaml that is committed may be broken; restore a good one and commit it",
 		}}
 	}
-	fs, _ := Schema(s, ix) // the error is for checks that read files; it is nil
+	fs, _ := usecase.CheckSchema(s, ix) // the error is for checks that read files; it is nil
 	// schema.yaml was checked in step 1.
-	fs = slices.DeleteFunc(fs, func(f Finding) bool { return f.Check == "schema" })
+	fs = slices.DeleteFunc(fs, func(f usecase.Finding) bool { return f.Check == "schema" })
 	fs = append(fs, checkWorkspaces(ix)...)
 	fs = append(fs, checkSprintsAndReleases(s, ix)...)
 	for _, e := range ix.Tasks() {
@@ -286,7 +291,7 @@ func checkStore(dir string) []Finding {
 			if p.Field != "" {
 				msg = p.Field + ": " + msg
 			}
-			fs = append(fs, Finding{Check: "task", Where: taskWhere(e), Task: e.ULID.String(), Msg: msg, Hint: fixHint(p)})
+			fs = append(fs, usecase.Finding{Check: "task", Where: usecase.TaskWhere(e), Task: e.ULID.String(), Msg: msg, Hint: fixHint(p)})
 		}
 	}
 	return fs
@@ -308,8 +313,8 @@ func fixHint(p index.Problem) string {
 
 // checkWorkspaces finds workspaces that share an id prefix or a name. Each
 // of them gets a finding that names the other.
-func checkWorkspaces(ix *index.Index) []Finding {
-	var out []Finding
+func checkWorkspaces(ix *index.Index) []usecase.Finding {
+	var out []usecase.Finding
 	ws := ix.Workspaces()
 	for i, a := range ws {
 		for _, b := range ws[:i] {
@@ -323,7 +328,7 @@ func checkWorkspaces(ix *index.Index) []Finding {
 				continue
 			}
 			for _, pair := range [][2]*model.Workspace{{a, b}, {b, a}} {
-				out = append(out, Finding{
+				out = append(out, usecase.Finding{
 					Check: "workspace", Where: model.WorkspacePath(pair[0].ULID),
 					Msg:  fmt.Sprintf("has the same %s as workspace %s (%s)", what, pair[1].Name, pair[1].ULID),
 					Hint: "change one with hedgehug workspace set-prefix (or rename)",
@@ -334,18 +339,9 @@ func checkWorkspaces(ix *index.Index) []Finding {
 	return out
 }
 
-// taskWhere names the task e in a finding: its id, ULID and title, or the
-// ULID and title when it has no id (a file that does not decode).
-func taskWhere(e *index.Entry) string {
-	if e.ID == "" {
-		return strings.TrimSpace(e.ULID.String() + " " + e.Title)
-	}
-	return strings.TrimSpace(e.ID + " (" + e.ULID.String() + ") " + e.Title)
-}
-
 // checkFiles reads every file under the directories of fileRoots.
-func checkFiles(dir string) ([]Finding, error) {
-	var out []Finding
+func checkFiles(dir string) ([]usecase.Finding, error) {
+	var out []usecase.Finding
 	for _, root := range fileRoots {
 		err := filepath.WalkDir(filepath.Join(dir, root), func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
@@ -367,7 +363,7 @@ func checkFiles(dir string) ([]Finding, error) {
 				return err
 			}
 			if msg != "" {
-				out = append(out, Finding{Check: "file", Where: rel, Msg: msg, Hint: "fix the file by hand and commit, or restore it with `git restore " + rel + "`"})
+				out = append(out, usecase.Finding{Check: "file", Where: rel, Msg: msg, Hint: "fix the file by hand and commit, or restore it with `git restore " + rel + "`"})
 			}
 			return nil
 		})
@@ -522,15 +518,15 @@ func checkFile(dir, root, rel string) (string, error) {
 // checkViewNames finds two views whose names differ only in case, which a
 // file system that folds case cannot hold apart, and the second and later
 // problems of a view (checkFile reports the first).
-func checkViewNames(es []view.Entry) []Finding {
-	var out []Finding
+func checkViewNames(es []view.Entry) []usecase.Finding {
+	var out []usecase.Finding
 	hint := func(rel string) string {
 		return "fix the file by hand and commit, or restore it with `git restore " + rel + "`"
 	}
 	for i, e := range es {
 		for j, o := range es {
 			if i != j && e.Name != o.Name && view.SameName(e.Name, o.Name) {
-				out = append(out, Finding{
+				out = append(out, usecase.Finding{
 					Check: "file", Where: e.Rel,
 					Msg: "has the same name as " + o.Rel + " but for case; rename one of them with hedgehug view rename", Hint: hint(e.Rel),
 				})
@@ -538,7 +534,7 @@ func checkViewNames(es []view.Entry) []Finding {
 		}
 		if e.View != nil {
 			for _, p := range e.View.Problems()[min(1, len(e.View.Problems())):] {
-				out = append(out, Finding{Check: "file", Where: e.Rel, Msg: p, Hint: hint(e.Rel)})
+				out = append(out, usecase.Finding{Check: "file", Where: e.Rel, Msg: p, Hint: hint(e.Rel)})
 			}
 		}
 	}
@@ -546,14 +542,14 @@ func checkViewNames(es []view.Entry) []Finding {
 }
 
 // checkViewColumns finds the columns of views that the schema does not have.
-func checkViewColumns(es []view.Entry, sc *schema.Schema) []Finding {
-	var out []Finding
+func checkViewColumns(es []view.Entry, sc *schema.Schema) []usecase.Finding {
+	var out []usecase.Finding
 	for _, e := range es {
 		if e.View == nil {
 			continue
 		}
 		for _, c := range e.View.MissingColumns(sc) {
-			out = append(out, Finding{
+			out = append(out, usecase.Finding{
 				Check: "view", Where: e.Rel,
 				Msg:  fmt.Sprintf("column %q is not a field or a property of the schema; the GUI skips it", c),
 				Hint: "change the columns with hedgehug view save " + e.Name + " --columns ...",

@@ -1,4 +1,4 @@
-package maintenance
+package usecase
 
 import (
 	"errors"
@@ -22,14 +22,14 @@ var schemaCodes = []string{
 	schema.CodeBadValue, schema.CodePlacement, schema.CodeRequired,
 }
 
-const brokenHint = "restore schema.yaml with `git restore schema.yaml`, or fix it by hand and commit"
+const BrokenSchemaHint = "restore schema.yaml with `git restore schema.yaml`, or fix it by hand and commit"
 
-// SchemaFile decodes schema.yaml and checks it. The schema is nil when data
+// CheckSchemaFile decodes schema.yaml and checks it. The schema is nil when data
 // does not decode; the findings are then that alone.
-func SchemaFile(data []byte) (*schema.Schema, []Finding) {
+func CheckSchemaFile(data []byte) (*schema.Schema, []Finding) {
 	sc, err := schema.Decode(data)
 	if err != nil {
-		return nil, []Finding{{Check: "schema", Where: schema.Path, Msg: err.Error(), Hint: brokenHint}}
+		return nil, []Finding{{Check: "schema", Where: schema.Path, Msg: err.Error(), Hint: BrokenSchemaHint}}
 	}
 	var fs []Finding
 	for _, p := range sc.Check() {
@@ -38,12 +38,12 @@ func SchemaFile(data []byte) (*schema.Schema, []Finding) {
 	return sc, fs
 }
 
-// Schema finds where the schema of s does not fit the store: the problems of
+// CheckSchema finds where the schema of s does not fit the store: the problems of
 // schema.yaml, templates it names that are missing, properties that queries
 // cannot select by, tasks that break the schema, and overrides of projects
 // that are gone. The findings are sorted. The error is for the checks of
 // doctor that read files; these checks read nothing that can fail.
-func Schema(s *store.Store, ix *index.Index) ([]Finding, error) {
+func CheckSchema(s *store.Store, ix *index.Index) ([]Finding, error) {
 	sc := s.Schema()
 	var fs []Finding
 	for _, p := range sc.Check() {
@@ -62,7 +62,7 @@ func Schema(s *store.Store, ix *index.Index) ([]Finding, error) {
 	for _, e := range ix.Tasks() {
 		for _, p := range ix.Problems(e.ULID) {
 			if slices.Contains(schemaCodes, p.Code) {
-				fs = append(fs, Finding{Check: "task", Where: taskWhere(e), Task: e.ULID.String(), Msg: p.Field + ": " + p.Msg})
+				fs = append(fs, Finding{Check: "task", Where: TaskWhere(e), Task: e.ULID.String(), Msg: p.Field + ": " + p.Msg})
 			}
 		}
 	}
@@ -83,7 +83,7 @@ func Schema(s *store.Store, ix *index.Index) ([]Finding, error) {
 			})
 		}
 	}
-	Sort(fs)
+	SortFindings(fs)
 	return fs, nil
 }
 
@@ -125,4 +125,13 @@ func missingTemplates(s *store.Store, sc *schema.Schema) []Finding {
 		}
 	}
 	return fs
+}
+
+// TaskWhere names the task e in a finding: its id, ULID and title, or the
+// ULID and title when it has no id (a file that does not decode).
+func TaskWhere(e *index.Entry) string {
+	if e.ID == "" {
+		return strings.TrimSpace(e.ULID.String() + " " + e.Title)
+	}
+	return strings.TrimSpace(e.ID + " (" + e.ULID.String() + ") " + e.Title)
 }

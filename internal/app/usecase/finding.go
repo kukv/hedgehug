@@ -1,6 +1,4 @@
-// Package maintenance finds what is wrong with a store: a schema that does not
-// fit its tasks, files that do not decode, changes that are not committed.
-package maintenance
+package usecase
 
 import (
 	"encoding/json"
@@ -14,15 +12,15 @@ type Severity string
 
 // The severities. Error and Warning make hh doctor exit 1; Info alone does not.
 const (
-	Error   Severity = "error"
-	Warning Severity = "warning"
-	Info    Severity = "info"
+	SeverityError   Severity = "error"
+	SeverityWarning Severity = "warning"
+	SeverityInfo    Severity = "info"
 )
 
 // MarshalJSON writes the zero value as "error".
 func (v Severity) MarshalJSON() ([]byte, error) {
 	if v == "" {
-		v = Error
+		v = SeverityError
 	}
 	return json.Marshal(string(v))
 }
@@ -38,16 +36,16 @@ type Finding struct {
 }
 
 // Fails tells whether f makes hh doctor exit 1: it is an error or a warning.
-func (f Finding) Fails() bool { return f.Severity != Info }
+func (f Finding) Fails() bool { return f.Severity != SeverityInfo }
 
-// Failing tells whether any of fs Fails.
-func Failing(fs []Finding) bool { return slices.ContainsFunc(fs, Finding.Fails) }
+// FindingsFail tells whether any of fs Fails.
+func FindingsFail(fs []Finding) bool { return slices.ContainsFunc(fs, Finding.Fails) }
 
 // checkOrder is the order the findings come in.
 var checkOrder = []string{"schema", "template", "prop_name", "override", "task", "file", "view", "worktree", "merge_driver", "inbox", "git", "cross_store_ref", "duplicate_across_stores", "forward_target", "unexpected_force_push"}
 
-// Sort orders fs by the kind of check, then by where.
-func Sort(fs []Finding) {
+// SortFindings orders fs by the kind of check, then by where.
+func SortFindings(fs []Finding) {
 	slices.SortStableFunc(fs, func(a, b Finding) int {
 		if c := slices.Index(checkOrder, a.Check) - slices.Index(checkOrder, b.Check); c != 0 {
 			return c

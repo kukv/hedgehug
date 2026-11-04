@@ -56,13 +56,13 @@ func idIn(t *testing.T, f *usecasetest.MoveFx, name string) string {
 	return e.ID
 }
 
-func findingsOf(t *testing.T, ts *usecasetest.Session, store, check string) []maintenance.Finding {
+func findingsOf(t *testing.T, ts *usecasetest.Session, store, check string) []usecase.Finding {
 	t.Helper()
 	rs, err := maintenance.Doctor(ts.ForStore(store), false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var out []maintenance.Finding
+	var out []usecase.Finding
 	for _, f := range rs[0].Findings {
 		if f.Check == check {
 			out = append(out, f)
@@ -78,7 +78,7 @@ func TestDoctorDuplicateAcrossStores(t *testing.T) {
 	want := "in org-a (API-2) and org-b (" + bID + "); remove the one not needed with hedgehug rm and hedgehug purge --older-than 0d --store <store>"
 	for _, store := range []string{"org-a", "org-b"} {
 		got := findingsOf(t, f.TS, store, "duplicate_across_stores")
-		if len(got) != 1 || got[0].Where != f.P.String() || got[0].Task != f.P.String() || got[0].Msg != want || got[0].Severity != maintenance.Warning {
+		if len(got) != 1 || got[0].Where != f.P.String() || got[0].Task != f.P.String() || got[0].Msg != want || got[0].Severity != usecase.SeverityWarning {
 			t.Errorf("%s: findings = %+v; want one warning for %s: %s", store, got, f.P, want)
 		}
 	}
@@ -142,11 +142,11 @@ func TestDoctorForwardTarget(t *testing.T) {
 		t.Fatalf("findings = %+v; want one for each forward", got)
 	}
 	for _, x := range got {
-		if x.Severity != maintenance.Info || x.Msg != "moved to a store that is not mounted (ULID "+bs.Meta().ULID.String()+")" || !strings.HasPrefix(x.Where, "API-") {
+		if x.Severity != usecase.SeverityInfo || x.Msg != "moved to a store that is not mounted (ULID "+bs.Meta().ULID.String()+")" || !strings.HasPrefix(x.Where, "API-") {
 			t.Errorf("finding = %+v", x)
 		}
 	}
-	if maintenance.Failing(got) {
+	if usecase.FindingsFail(got) {
 		t.Error("an info finding fails doctor")
 	}
 }
