@@ -1,5 +1,54 @@
 components:
   schemas:
+    AccountAddInputBody:
+      additionalProperties: false
+      properties:
+        host:
+          description: github.com without it
+          type: string
+        login:
+          description: The GitHub login of the account
+          type: string
+        name:
+          description: The name of the account in config.yaml
+          type: string
+        token:
+          description: "Where the token comes from: gh or env:<VAR>; with none the account has no token. keychain and device are answered with 400 auth.token_source: a pasted token goes through PUT /api/accounts/{name}/token, and the device flow through POST /api/auth/device"
+          type: string
+      required:
+        - name
+        - login
+      type: object
+    AccountLoginBody:
+      additionalProperties: false
+      properties:
+        account:
+          type: string
+        added:
+          description: "The account was added to config.yaml: the name was no account's"
+          type: boolean
+        id:
+          type: string
+        uses:
+          description: "gh or env:VAR: the account takes its token from there, so Hedgehug has nothing to log in and kept nothing"
+          type: string
+      required:
+        - account
+        - id
+        - added
+      type: object
+    AccountTokenInputBody:
+      additionalProperties: false
+      properties:
+        host:
+          description: The host of a new account (github.com without it); for an account that exists it must be its host
+          type: string
+        token:
+          description: The token to keep in the keychain, as hh auth login --with-token reads it. It is in no response, no event and no line of the log
+          type: string
+      required:
+        - token
+      type: object
     AffectedWrite:
       additionalProperties: false
       properties:
@@ -16,6 +65,82 @@ components:
             - "null"
       required:
         - commit
+      type: object
+    AuthAddResult:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        token:
+          type: string
+      required:
+        - name
+        - id
+      type: object
+    AuthDeviceEvent:
+      additionalProperties: false
+      properties:
+        account:
+          description: "For done: the name of the account that got the token"
+          type: string
+        code:
+          description: "For error: the Code of the error, such as auth.canceled"
+          type: string
+        id:
+          description: The id POST /api/auth/device answered
+          type: string
+        message:
+          description: "For error: the message in English"
+          type: string
+        state:
+          enum:
+            - done
+            - error
+          type: string
+      required:
+        - id
+        - state
+      type: object
+    AuthLogoutResult:
+      additionalProperties: false
+      properties:
+        account:
+          type: string
+        id:
+          type: string
+        removed:
+          type: boolean
+        token:
+          type: string
+      required:
+        - account
+        - id
+        - removed
+      type: object
+    AuthStatus:
+      additionalProperties: false
+      properties:
+        error:
+          type: string
+        expires:
+          format: date-time
+          type: string
+        id:
+          type: string
+        login:
+          type: string
+        name:
+          type: string
+        state:
+          type: string
+        token:
+          type: string
+      required:
+        - name
+        - id
+        - state
       type: object
     Candidate:
       additionalProperties: false
@@ -172,6 +297,37 @@ components:
       required:
         - task
         - id
+      type: object
+    DeviceStartBody:
+      additionalProperties: false
+      properties:
+        expires_at:
+          description: When the code ends; the flow ends with an error event then
+          format: date-time
+          type: string
+        id:
+          description: For DELETE /api/auth/device/{id} and the event auth.device
+          type: string
+        user_code:
+          description: The code to enter at verification_uri
+          type: string
+        verification_uri:
+          type: string
+      required:
+        - id
+        - user_code
+        - verification_uri
+        - expires_at
+      type: object
+    DeviceStartInputBody:
+      additionalProperties: false
+      properties:
+        host:
+          description: "As hh auth login --host: the host of a new account (github.com without it); for an account that exists it must be its host"
+          type: string
+        name:
+          description: The account to log in (again), as hh auth login <name>; without it the account of the login that approves the code is added
+          type: string
       type: object
     DoctorReport:
       additionalProperties: false
@@ -1990,6 +2146,112 @@ info:
   version: "1"
 openapi: 3.1.0
 paths:
+  /api/accounts:
+    get:
+      operationId: list-accounts
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/AuthStatus"
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Check the token of each account against GitHub, as hh auth status --json; an account in error is in the array with its state
+      tags:
+        - accounts
+    post:
+      operationId: add-account
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountAddInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthAddResult"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Add an account to config.yaml, as hh auth add
+      tags:
+        - accounts
+  /api/accounts/{name}/token:
+    delete:
+      operationId: remove-account-token
+      parameters:
+        - description: The name of the account in config.yaml
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the account in config.yaml
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthLogoutResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Remove the token of an account from the keychain, as hh auth logout; the account stays in config.yaml
+      tags:
+        - accounts
+    put:
+      operationId: set-account-token
+      parameters:
+        - description: The name of the account; a name that is no account's adds the account of the login the token is of
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the account; a name that is no account's adds the account of the login the token is of
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountTokenInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountLoginBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Keep a token in the keychain after GitHub says it is of the account's login, as hh auth login <name> --with-token
+      tags:
+        - accounts
   /api/activity:
     get:
       operationId: list-activity
@@ -2054,6 +2316,54 @@ paths:
       summary: List the commits of the store, newest first, as hh log
       tags:
         - activity
+  /api/auth/device:
+    post:
+      operationId: start-device-login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceStartInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceStartBody"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Start the device flow, as hh auth login [<name>] [--host]; the server polls, and the event auth.device says how it ended
+      tags:
+        - accounts
+  /api/auth/device/{id}:
+    delete:
+      operationId: cancel-device-login
+      parameters:
+        - description: The id POST /api/auth/device answered
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The id POST /api/auth/device answered
+            type: string
+      responses:
+        "204":
+          description: No Content
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Stop the device flow; it ends with the event auth.device (error, auth.canceled)
+      tags:
+        - accounts
   /api/doctor:
     get:
       operationId: doctor
@@ -2127,6 +2437,26 @@ paths:
                 description: Each oneOf object in the array represents one possible Server Sent Events (SSE) message, serialized as UTF-8 text according to the SSE specification.
                 items:
                   oneOf:
+                    - properties:
+                        data:
+                          $ref: "#/components/schemas/AuthDeviceEvent"
+                        event:
+                          const: auth.device
+                          description: The event name.
+                          type: string
+                        id:
+                          description: The event ID.
+                          oneOf:
+                            - type: integer
+                            - type: string
+                        retry:
+                          description: The retry time in milliseconds.
+                          type: integer
+                      required:
+                        - data
+                        - event
+                      title: Event auth.device
+                      type: object
                     - properties:
                         data:
                           $ref: "#/components/schemas/HelloEvent"

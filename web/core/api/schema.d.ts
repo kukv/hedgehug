@@ -4,6 +4,42 @@
  */
 
 export interface paths {
+    "/api/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check the token of each account against GitHub, as hh auth status --json; an account in error is in the array with its state */
+        get: operations["list-accounts"];
+        put?: never;
+        /** Add an account to config.yaml, as hh auth add */
+        post: operations["add-account"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/accounts/{name}/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Keep a token in the keychain after GitHub says it is of the account's login, as hh auth login <name> --with-token */
+        put: operations["set-account-token"];
+        post?: never;
+        /** Remove the token of an account from the keychain, as hh auth logout; the account stays in config.yaml */
+        delete: operations["remove-account-token"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/activity": {
         parameters: {
             query?: never;
@@ -16,6 +52,40 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/device": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start the device flow, as hh auth login [<name>] [--host]; the server polls, and the event auth.device says how it ended */
+        post: operations["start-device-login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/device/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Stop the device flow; it ends with the event auth.device (error, auth.canceled) */
+        delete: operations["cancel-device-login"];
         options?: never;
         head?: never;
         patch?: never;
@@ -672,10 +742,67 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AccountAddInputBody: {
+            /** @description github.com without it */
+            host?: string;
+            /** @description The GitHub login of the account */
+            login: string;
+            /** @description The name of the account in config.yaml */
+            name: string;
+            /** @description Where the token comes from: gh or env:<VAR>; with none the account has no token. keychain and device are answered with 400 auth.token_source: a pasted token goes through PUT /api/accounts/{name}/token, and the device flow through POST /api/auth/device */
+            token?: string;
+        };
+        AccountLoginBody: {
+            account: string;
+            /** @description The account was added to config.yaml: the name was no account's */
+            added: boolean;
+            id: string;
+            /** @description gh or env:VAR: the account takes its token from there, so Hedgehug has nothing to log in and kept nothing */
+            uses?: string;
+        };
+        AccountTokenInputBody: {
+            /** @description The host of a new account (github.com without it); for an account that exists it must be its host */
+            host?: string;
+            /** @description The token to keep in the keychain, as hh auth login --with-token reads it. It is in no response, no event and no line of the log */
+            token: string;
+        };
         AffectedWrite: {
             commit: string | null;
             /** @description The task and the tasks under it, as they are now */
             tasks?: components["schemas"]["TaskView"][] | null;
+        };
+        AuthAddResult: {
+            id: string;
+            name: string;
+            token?: string;
+        };
+        AuthDeviceEvent: {
+            /** @description For done: the name of the account that got the token */
+            account?: string;
+            /** @description For error: the Code of the error, such as auth.canceled */
+            code?: string;
+            /** @description The id POST /api/auth/device answered */
+            id: string;
+            /** @description For error: the message in English */
+            message?: string;
+            /** @enum {string} */
+            state: "done" | "error";
+        };
+        AuthLogoutResult: {
+            account: string;
+            id: string;
+            removed: boolean;
+            token?: string;
+        };
+        AuthStatus: {
+            error?: string;
+            /** Format: date-time */
+            expires?: string;
+            id: string;
+            login?: string;
+            name: string;
+            state: string;
+            token?: string;
         };
         Candidate: {
             account?: string;
@@ -742,6 +869,24 @@ export interface components {
             /** @description The name of the sprint taken off */
             sprint?: string;
             task: string;
+        };
+        DeviceStartBody: {
+            /**
+             * Format: date-time
+             * @description When the code ends; the flow ends with an error event then
+             */
+            expires_at: string;
+            /** @description For DELETE /api/auth/device/{id} and the event auth.device */
+            id: string;
+            /** @description The code to enter at verification_uri */
+            user_code: string;
+            verification_uri: string;
+        };
+        DeviceStartInputBody: {
+            /** @description As hh auth login --host: the host of a new account (github.com without it); for an account that exists it must be its host */
+            host?: string;
+            /** @description The account to log in (again), as hh auth login <name>; without it the account of the login that approves the code is added */
+            name?: string;
         };
         DoctorReport: {
             findings: components["schemas"]["Finding"][] | null;
@@ -1424,6 +1569,136 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "list-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthStatus"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "add-account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountAddInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthAddResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "set-account-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The name of the account; a name that is no account's adds the account of the login the token is of */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountTokenInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountLoginBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "remove-account-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The name of the account in config.yaml */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthLogoutResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     "list-activity": {
         parameters: {
             query?: {
@@ -1451,6 +1726,69 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LogView"][] | null;
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "start-device-login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceStartInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceStartBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "cancel-device-login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The id POST /api/auth/device answered */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -1543,6 +1881,17 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": ({
+                        data: components["schemas"]["AuthDeviceEvent"];
+                        /**
+                         * @description The event name.
+                         * @constant
+                         */
+                        event: "auth.device";
+                        /** @description The event ID. */
+                        id?: number | string;
+                        /** @description The retry time in milliseconds. */
+                        retry?: number;
+                    } | {
                         data: components["schemas"]["HelloEvent"];
                         /**
                          * @description The event name.

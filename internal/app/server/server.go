@@ -55,6 +55,11 @@ type Server struct {
 	loop     *Loop
 	hub      *Hub
 	poller   *Poller
+
+	device     deviceFlow
+	base       context.Context // the device flows run on it; Shutdown ends it
+	baseCancel context.CancelFunc
+
 	stopOnce sync.Once
 	cancel   context.CancelFunc
 	runDone  chan struct{} // closed when the loop and the poller have returned; nil before Start
@@ -73,6 +78,7 @@ func New(opt Options) *Server {
 		opt.Clock = realClock{}
 	}
 	s := &Server{opt: opt, mux: http.NewServeMux()}
+	s.base, s.baseCancel = context.WithCancel(context.Background())
 	s.presence = newPresence(func() { s.loop.Wake() })
 	s.loop = newLoop(s, opt.Clock, s.presence.Visible)
 	s.hub = newHub()
@@ -122,6 +128,8 @@ func (s *Server) register() {
 	s.registerActivity()
 	s.registerPurge()
 	s.registerAdmin()
+	s.registerAccounts()
+	s.registerDevice()
 	s.registerStores()
 	s.registerScoped()
 	s.registerViews()
@@ -200,6 +208,8 @@ func (s *Server) CloseEvents() { s.hub.Close() }
 // does nothing.
 func (s *Server) Shutdown(context.Context) error {
 	s.stopOnce.Do(func() {
+		s.baseCancel() // the device flow that waits for the user
+		s.device.wait()
 		if s.cancel != nil {
 			s.cancel()
 		}
