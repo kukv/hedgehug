@@ -100,23 +100,34 @@ function deps(over: { tasks?: TaskView[]; listError?: unknown } = {}) {
 }
 
 describe("searchTasks: hidden Stores", () => {
-  const mine = task("U1", "task", null, { id: "REL-1", title: "表示中", store: "shared" });
-  const theirs = task("U2", "task", null, { id: "BE-2", title: "非表示", store: "backend" });
+  const queries = (GET: ReturnType<typeof deps>["GET"]) =>
+    GET.mock.calls.flatMap((c) => {
+      const q = (c[1] as { params: { query?: { q?: string } } }).params.query?.q;
+      return q === undefined ? [] : [q];
+    });
 
-  it("leaves their tasks out of a text search and out of a query, still priming the cache", async () => {
-    const { d, prime } = deps({ tasks: [theirs, mine] });
-    const hidden = { ...d, hidden: (s: string) => s === "backend" };
-    const text = await searchTasks(hidden, "表示", "id");
-    expect(text.groups[0]?.items.map((i) => i.key)).toEqual(["task:U1"]);
-    expect(prime).toHaveBeenCalledWith([theirs, mine], 42);
-    const query = await searchTasks(hidden, "kind:task", "query");
-    expect(query.groups[0]?.name).toBe("クエリに一致 · 1 件");
-    expect(query.groups[0]?.items.map((i) => i.key)).toEqual(["task:U1"]);
+  it("asks without them, for a text search and for a query, and still primes what came", async () => {
+    const theirs = task("U2", "task", null, { id: "BE-2", title: "非表示", store: "backend" });
+    const { d, GET, prime } = deps({ tasks: [theirs] });
+    const hidden = { ...d, hidden: () => ["backend", "org b/ops"] };
+    await searchTasks(hidden, "表示", "id");
+    expect(queries(GET)).toEqual(['-store:backend -store:"org b/ops" "表示"']);
+    expect(prime).toHaveBeenCalledWith([theirs], 42);
+    GET.mockClear();
+    await searchTasks(hidden, "kind:task", "query");
+    expect(queries(GET)).toEqual(['-store:backend -store:"org b/ops" kind:task']);
+  });
+
+  it("adds nothing to the query when no store is hidden", async () => {
+    const { d, GET } = deps();
+    await searchTasks({ ...d, hidden: () => [] }, "表示", "id");
+    await searchTasks(d, "kind:task", "query");
+    expect(queries(GET)).toEqual(['"表示"', "kind:task"]);
   });
 
   it("leaves out the exact lookup of an ID of a hidden Store", async () => {
     const { d } = deps();
-    const r = await searchTasks({ ...d, hidden: (s) => s === "shared" }, "rel-6", "id");
+    const r = await searchTasks({ ...d, hidden: () => ["shared"] }, "rel-6", "id");
     expect(r.groups).toEqual([]);
   });
 });

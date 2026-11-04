@@ -307,18 +307,16 @@ describe("CommandPalette", () => {
       expect(screen.getAllByText("Web の API クライアントを v2 に更新")).toHaveLength(1);
     });
 
-    it("leaves their tasks out of what a search finds", async () => {
-      setup(
-        [{ ...rel6, ulid: "U9", id: "BE-1", title: "backend のタスク", store: "backend" }],
-        null,
-        ["backend"],
-      );
+    it("asks for what a search finds without them", async () => {
+      const { api } = setup([], null, ["backend"]);
       render(CommandPalette);
       openPalette();
       await fireEvent.input(await screen.findByRole("combobox"), { target: { value: "backend" } });
-      await waitFor(() => expect(screen.queryByText("検索中…")).toBeNull());
-      await new Promise((r) => setTimeout(r, 300));
-      expect(screen.queryByText("backend のタスク")).toBeNull();
+      await waitFor(() =>
+        expect(api.GET).toHaveBeenCalledWith("/api/tasks", {
+          params: { query: { q: '-store:backend "backend"', store: undefined } },
+        }),
+      );
     });
 
     it("finds the same task when its Store is not hidden", async () => {

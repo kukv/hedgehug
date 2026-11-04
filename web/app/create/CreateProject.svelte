@@ -16,7 +16,7 @@
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
-  import { createGuard, resolveCreateContext, workspaceKey } from "./context";
+  import { choosableWorkspaces, createGuard, resolveCreateContext, workspaceKey } from "./context";
   import { repoIdOf } from "./repos";
   import WorkspaceChoice from "./WorkspaceChoice.svelte";
 
@@ -37,18 +37,13 @@
     }),
   );
   let wsKey = $state(ctx.workspace ? workspaceKey(ctx.workspace) : "");
-  // The workspaces to choose from leave out a hidden Store's, except the one the dialog opened on
-  // (the page of a hidden workspace is a place to create in).
-  let opened = ctx.workspace ? workspaceKey(ctx.workspace) : "";
-  const entries = {
-    get current() {
-      return all.current.filter((w) => !stores.hidden(w.store) || workspaceKey(w) === opened);
-    },
-  };
-  const ws = $derived(entries.current.find((w) => workspaceKey(w) === wsKey));
-  const showChoice = $derived(entries.current.length >= 2);
+  // Hidden Stores are left out of the choice, except the workspace the dialog opened on.
+  let opened = $state(ctx.workspace ? workspaceKey(ctx.workspace) : "");
+  const entries = $derived(choosableWorkspaces(all.current, (s) => stores.hidden(s), opened));
+  const ws = $derived(entries.find((w) => workspaceKey(w) === wsKey));
+  const showChoice = $derived(entries.length >= 2);
   // A workspace of a Store that cannot be written is shown but cannot be chosen (細部 35).
-  const guard = $derived(createGuard(entries.current, ws, roOf.current));
+  const guard = $derived(createGuard(entries, ws, roOf.current));
   const blocked = $derived(guard.blocked);
 
   // Opened while the stores are still loading: decide again when they have loaded.
@@ -201,7 +196,7 @@
     {#if showChoice}
       <div class="field">
         <WorkspaceChoice
-          entries={entries.current}
+          {entries}
           value={wsKey}
           name="create-project-ws"
           onchange={(k) => (wsKey = k)}

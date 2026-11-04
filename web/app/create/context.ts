@@ -39,6 +39,17 @@ export function createGuard(
   };
 }
 
+// choosableWorkspaces are the workspaces a create dialog offers: those of Stores that are not hidden,
+// and the one the dialog opened on (key), whose Store may be hidden: the page of a hidden workspace
+// is a place to create in.
+export function choosableWorkspaces(
+  all: WorkspaceEntry[],
+  hidden: (store: string) => boolean,
+  opened: string,
+): WorkspaceEntry[] {
+  return all.filter((w) => !hidden(w.store) || workspaceKey(w) === opened);
+}
+
 // resolveCreateContext decides where a new task goes from the screen the user is on (細部 29): the parent a request
 // names, the task of a task detail (when it cannot be read, no parent: a row selected in a tree left earlier is not meant), the selected row of the tree, the project of a project screen; on a workspace
 // screen the root of that workspace; elsewhere the root of the first workspace. A deleted or unknown task is skipped.

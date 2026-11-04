@@ -15,6 +15,7 @@
   import type { TableSettings } from "../../core/views";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
+  import { storeShown } from "../hidden";
   import Icon from "../icons/Icon.svelte";
   import ListBar from "../list/ListBar.svelte";
   import type { ListScope } from "../list/scope";
@@ -127,8 +128,9 @@
 
   // A table over every store leaves out the tasks of a hidden store (the table of a workspace or a
   // project is of its own store, so it is not left out).
+  // (Read storesRev where this is used, so the result follows the directory.)
   function inScope(store: string | undefined): boolean {
-    return scope.kind !== "all" || store === undefined || !c.stores.hidden(store);
+    return scope.kind !== "all" || storeShown(c.stores, store);
   }
 
   const tasks = $derived.by(() => {

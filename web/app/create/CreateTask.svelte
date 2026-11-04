@@ -21,7 +21,7 @@
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
-  import { createGuard, resolveCreateContext, workspaceKey } from "./context";
+  import { choosableWorkspaces, createGuard, resolveCreateContext, workspaceKey } from "./context";
   import WorkspaceChoice from "./WorkspaceChoice.svelte";
 
   let { request, onclose }: { request: CreateRequest; onclose: () => void } = $props();
@@ -44,14 +44,9 @@
   const ctx = untrack(() => contextOf(stores.workspaces()));
   let parent = $state<TaskView | null>(ctx.parent);
   let wsKey = $state(ctx.workspace ? workspaceKey(ctx.workspace) : "");
-  // The workspaces to choose from leave out a hidden Store's, except the one the dialog opened on
-  // (the page of a hidden workspace is a place to create in).
-  let opened = ctx.workspace ? workspaceKey(ctx.workspace) : "";
-  const entries = {
-    get current() {
-      return all.current.filter((w) => !stores.hidden(w.store) || workspaceKey(w) === opened);
-    },
-  };
+  // Hidden Stores are left out of the choice, except the workspace the dialog opened on.
+  let opened = $state(ctx.workspace ? workspaceKey(ctx.workspace) : "");
+  const entries = $derived(choosableWorkspaces(all.current, (s) => stores.hidden(s), opened));
   // C pressed while the stores are still loading opens the dialog with no workspace to choose
   // from: decide again when they have loaded.
   $effect(() => {
@@ -63,12 +58,14 @@
   });
   const ws = $derived.by(() => {
     const p = parent;
+    // The workspace of a parent is looked up among all workspaces on purpose: the parent may be in a
+    // hidden Store (opened by its address), and it is created in its own workspace.
     if (p) return all.current.find((w) => w.store === p.store && w.ulid === p.workspace.ulid);
-    return entries.current.find((w) => workspaceKey(w) === wsKey);
+    return entries.find((w) => workspaceKey(w) === wsKey);
   });
-  const showChoice = $derived(!parent && entries.current.length >= 2);
+  const showChoice = $derived(!parent && entries.length >= 2);
   // A workspace of a Store that cannot be written is shown but cannot be chosen (細部 35).
-  const guard = $derived(createGuard(entries.current, ws, roOf.current));
+  const guard = $derived(createGuard(entries, ws, roOf.current));
   const blocked = $derived(guard.blocked);
 
   const sc = useSubscribe(schema, () => (ws ? schema.get(ws.store) : undefined));
@@ -257,14 +254,14 @@
     {#if showChoice}
       <div class="field">
         <WorkspaceChoice
-          entries={entries.current}
+          {entries}
           value={wsKey}
           name="create-ws"
           onchange={(k) => (wsKey = k)}
           isDisabled={guard.isOff}
           note={guard.note}
         />
-        <span class="hint">全 Store にワークスペースが {entries.current.length} つあります</span>
+        <span class="hint">全 Store にワークスペースが {entries.length} つあります</span>
       </div>
     {:else if ws}
       <div class="field">

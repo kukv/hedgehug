@@ -1,4 +1,5 @@
 import { type Api, type TaskView, unwrap } from "../../core/api/client";
+import { quoteArg } from "../../core/cli";
 import { searchTasks as findTasks } from "../../core/search";
 import type { WorkspaceEntry } from "../../core/stores";
 import type { ViewEntry } from "../../core/views";
@@ -94,8 +95,9 @@ export type SearchDeps = {
   // cache, as a read of that point.
   epoch: () => number;
   prime: (tasks: TaskView[], since: number) => void;
-  // Whether a store is hidden: what it holds is not found (it is still primed, as any read).
-  hidden?: (store: string) => boolean;
+  // The names of the stores that are hidden, read for each search: what they hold is not found. The
+  // query leaves them out (-store:<name>), so they take none of the places of the list.
+  hidden?: () => string[];
 };
 
 export type SearchResult = { groups: PaletteGroup[]; error: unknown };
@@ -125,15 +127,19 @@ export async function searchTasks(
   const text = input.trim();
   if (text === "") return { groups: [], error: null };
   const since = d.epoch();
-  const shown = (t: { store: string }) => !d.hidden?.(t.store);
+  const hidden = d.hidden?.() ?? [];
+  // The exact lookup of one task is asked by the ID, so it is filtered after the answer.
+  const shown = (t: { store: string }) => !hidden.includes(t.store);
+  const without = hidden.map((s) => `-store:${quoteArg(s)}`).join(" ");
   try {
     if (mode === "query") {
       const list = await unwrap(
-        d.api.GET("/api/tasks", { params: { query: { q: text, tree: false } } }),
+        d.api.GET("/api/tasks", {
+          params: { query: { q: [without, text].filter((t) => t !== "").join(" "), tree: false } },
+        }),
       );
-      const all = list.tasks ?? [];
-      d.prime(all, since);
-      const tasks = all.filter(shown);
+      const tasks = list.tasks ?? [];
+      d.prime(tasks, since);
       const items = tasks.slice(0, MAX).map((t) => taskItem(t, d.hrefOf));
       return {
         groups: items.length ? [{ name: `クエリに一致 · ${tasks.length} 件`, items }] : [],
@@ -149,10 +155,9 @@ export async function searchTasks(
         if (!isNotFound(e)) throw e;
       }
     }
-    // Hidden stores are left out after the read, so they do not use up the places of the list.
-    const tasks = await findTasks(d.api, text, { limit: d.hidden ? MAX * 10 : MAX });
+    const tasks = await findTasks(d.api, text, { extra: without, limit: MAX });
     d.prime(tasks, since);
-    for (const t of tasks.filter(shown)) {
+    for (const t of tasks) {
       if (!found.has(t.ulid)) found.set(t.ulid, taskItem(t, d.hrefOf));
     }
     const items = [...found.values()].slice(0, MAX);

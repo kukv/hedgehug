@@ -79,6 +79,10 @@ describe("StoreBands", () => {
         "この Store は非表示です",
       );
       expect(screen.getByRole("button", { name: "表示する" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "表示する" })).toHaveAttribute(
+        "aria-busy",
+        "false",
+      );
     });
 
     it("shows nothing for a Store that is shown", () => {

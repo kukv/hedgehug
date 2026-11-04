@@ -7,6 +7,7 @@
   import type { KanbanSettings } from "../../core/views";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
+  import { storeShown } from "../hidden";
   import Icon from "../icons/Icon.svelte";
   import StatusIcon from "../icons/StatusIcon.svelte";
   import ListBar from "../list/ListBar.svelte";
@@ -101,8 +102,9 @@
 
   // A board over every store leaves out the tasks of a hidden store (the board of a workspace or a
   // project is of its own store, so it is not left out).
-  function shown(store: string | undefined): boolean {
-    return scope.kind !== "all" || store === undefined || !c.stores.hidden(store);
+  // (Read storesRev where this is used, so the result follows the directory.)
+  function inScope(store: string | undefined): boolean {
+    return scope.kind !== "all" || storeShown(c.stores, store);
   }
 
   const tasks = $derived.by(() => {
@@ -110,7 +112,7 @@
     storesRev.current;
     return (list?.ulids() ?? []).flatMap((u) => {
       const t = c.cache.task(u);
-      return t && shown(t.store) ? [t] : [];
+      return t && inScope(t.store) ? [t] : [];
     });
   });
   const loading = $derived.by(() => {
@@ -129,7 +131,7 @@
     cacheRev.current;
     storesRev.current;
     return canceledList
-      ? canceledList.ulids().filter((u) => shown(c.cache.task(u)?.store)).length
+      ? canceledList.ulids().filter((u) => inScope(c.cache.task(u)?.store)).length
       : null;
   });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { taskView, workspaces } from "../detail/testkit";
-import { createGuard, resolveCreateContext, workspaceKey } from "./context";
+import { choosableWorkspaces, createGuard, resolveCreateContext, workspaceKey } from "./context";
 
 const tasks = [
   taskView({ ulid: "UE", id: "REL-8", title: "リリース作業", kind: "epic" }),
@@ -134,6 +134,18 @@ describe("resolveCreateContext", () => {
       resolveCreateContext({ ...base, workspaces: list, hidden, requestParent: "US" }).workspace
         ?.ulid,
     ).toBe("W2");
+  });
+
+  it("offers the workspaces of Stores that are not hidden, and the one the dialog opened on", () => {
+    const other = { ...(workspaces[0] as (typeof workspaces)[number]), store: "demo", ulid: "W9" };
+    const list = [...workspaces, other];
+    const hidden = (store: string) => store === "shared";
+    expect(choosableWorkspaces(list, hidden, "").map(workspaceKey)).toEqual(["demo/W9"]);
+    expect(choosableWorkspaces(list, hidden, "shared/W2").map(workspaceKey)).toEqual([
+      "shared/W2",
+      "demo/W9",
+    ]);
+    expect(choosableWorkspaces(list, () => false, "")).toEqual(list);
   });
 
   describe("createGuard", () => {

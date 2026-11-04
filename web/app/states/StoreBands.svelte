@@ -50,7 +50,9 @@
       <div class="band" role="status" aria-label="非表示">
         <Icon name="eye-off" size={16} />
         <span>この Store は非表示です</span>
-        <button type="button" class="show" disabled={busy} onclick={show}>表示する</button>
+        <button type="button" class="show" disabled={busy} aria-busy={busy} onclick={show}>
+          表示する
+        </button>
       </div>
     {/if}
   </div>
@@ -85,13 +87,18 @@
   }
   .show {
     flex: none;
-    padding: var(--space-4) var(--space-10);
+    min-height: var(--space-28);
+    padding: var(--space-4) var(--space-12);
     border: 0;
     border-radius: var(--radius-8);
     background: var(--surface);
     color: var(--ink);
     font: inherit;
     cursor: pointer;
+  }
+  .show:focus-visible {
+    outline: calc(var(--hairline) * 2) solid var(--surface);
+    outline-offset: var(--space-4);
   }
   .show:disabled {
     opacity: 0.6;

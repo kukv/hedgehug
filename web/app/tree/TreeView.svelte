@@ -7,6 +7,7 @@
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
+  import { storeShown } from "../hidden";
   import { kbdLabel, modKey } from "../keys";
   import ListBar from "../list/ListBar.svelte";
   import type { ListScope } from "../list/scope";
@@ -195,10 +196,11 @@
   // any of them changes later, the order is made again, so no moment of arrival can leave it wrong.
   const roots = $derived.by(() => {
     cacheRev.current;
+    storesRev.current;
     const r = tree?.roots() ?? [];
     return all
       ? orderRootsByStore(
-          r.filter((n) => shown(n.ulid)),
+          r.filter((n) => inScope(taskOf(n.ulid)?.store)),
           storeOrder,
           taskOf,
         )
@@ -218,7 +220,10 @@
   });
   const canceledCount = $derived.by(() => {
     cacheRev.current;
-    return canceledList ? canceledList.ulids().filter((u) => shown(u)).length : null;
+    storesRev.current;
+    return canceledList
+      ? canceledList.ulids().filter((u) => inScope(taskOf(u)?.store)).length
+      : null;
   });
 
   function isClosed(t: TaskView): boolean {
@@ -232,10 +237,9 @@
 
   // A view over every store leaves out the tasks of a hidden store (the page of a workspace or a
   // project is of its own store, so it is not left out).
-  function shown(ulid: string): boolean {
-    storesRev.current;
-    const store = taskOf(ulid)?.store;
-    return !all || store === undefined || !c.stores.hidden(store);
+  // (Read storesRev where this is used, so the result follows the directory.)
+  function inScope(store: string | undefined): boolean {
+    return !all || storeShown(c.stores, store);
   }
 
   // --- the rows --------------------------------------------------------------

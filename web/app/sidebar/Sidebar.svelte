@@ -3,6 +3,7 @@
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
+  import { storeShown } from "../hidden";
   import Icon from "../icons/Icon.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
   import { kbdLabel, registerShortcut } from "../keys";
@@ -19,9 +20,12 @@
   const { stores, cache, views, conn } = core();
   // What is hidden is left out here; the first workspace that is left is the home (細部 93).
   const workspaces = useSubscribe(stores, () => stores.visibleWorkspaces());
-  const hiddenOf = useSubscribe(stores, () => (store: string) => stores.hidden(store));
+  const storesRev = useSubscribe(stores, () => ({}));
   const savedViews = useSubscribe(views, () => views.list());
-  const shownViews = $derived(savedViews.current.filter((v) => !hiddenOf.current(v.store)));
+  const shownViews = $derived.by(() => {
+    storesRev.current;
+    return savedViews.current.filter((v) => storeShown(stores, v.store));
+  });
   const cacheRev = useSubscribe(cache, () => ({}));
   const unread = useSubscribe(conn, () => conn.unread);
   const route = $derived(router.route);
@@ -40,11 +44,9 @@
   });
   const myCount = $derived.by(() => {
     cacheRev.current;
+    storesRev.current;
     if (!myList || myList.loading() || myList.error()) return null;
-    return myList.ulids().filter((u) => {
-      const store = cache.task(u)?.store;
-      return store === undefined || !hiddenOf.current(store);
-    }).length;
+    return myList.ulids().filter((u) => storeShown(stores, cache.task(u)?.store)).length;
   });
 
   onMount(() =>
