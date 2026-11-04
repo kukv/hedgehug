@@ -35,6 +35,110 @@ linters:
               desc: cli と server は usecase を通す（spec 4.2）
             - pkg: github.com/kukv/hedgehug/internal/lib/github
               desc: cli と server は usecase を通す（spec 4.2）
+        # 層の向き（spec 決定 2）: lib → domain → storage → remote → usecase → cli・server。
+        # 各層は自分・下の層・lib だけを import する。テストも同じ（spec 5 節）。
+        # テスト用の部品（決定 12）は、どの層のテストからも import してよい。
+        lib:
+          list-mode: lax
+          files:
+            - "**/internal/lib/**"
+          allow:
+            - github.com/kukv/hedgehug/internal/app/storage/history/historytest
+            - github.com/kukv/hedgehug/internal/app/storage/mount/mounttest
+            - github.com/kukv/hedgehug/internal/app/usecase/usecasetest
+          deny:
+            - pkg: github.com/kukv/hedgehug/internal/app
+              desc: lib は hedgehug を知らない（spec 決定 1）
+        domain:
+          list-mode: lax
+          files:
+            - "**/internal/app/domain/**"
+          allow:
+            - github.com/kukv/hedgehug/internal/app/storage/history/historytest
+            - github.com/kukv/hedgehug/internal/app/storage/mount/mounttest
+            - github.com/kukv/hedgehug/internal/app/usecase/usecasetest
+          deny:
+            - pkg: github.com/kukv/hedgehug/internal/app/storage
+              desc: domain は storage より下の層（spec 決定 2）
+            - pkg: github.com/kukv/hedgehug/internal/app/remote
+              desc: domain は remote より下の層（spec 決定 2）
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase
+              desc: domain は usecase より下の層（spec 決定 2）
+            - pkg: github.com/kukv/hedgehug/internal/app/cli
+              desc: domain は cli より下の層（spec 決定 2）
+            - pkg: github.com/kukv/hedgehug/internal/app/server
+              desc: domain は server より下の層（spec 決定 2）
+        storage:
+          list-mode: lax
+          files:
+            - "**/internal/app/storage/**"
+          allow:
+            - github.com/kukv/hedgehug/internal/app/usecase/usecasetest
+          deny:
+            - pkg: github.com/kukv/hedgehug/internal/app/remote
+              desc: storage は remote より下の層（spec 決定 2）
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase
+              desc: storage は usecase より下の層（spec 決定 2）
+            - pkg: github.com/kukv/hedgehug/internal/app/cli
+              desc: storage は cli より下の層（spec 決定 2）
+            - pkg: github.com/kukv/hedgehug/internal/app/server
+              desc: storage は server より下の層（spec 決定 2）
+        remote:
+          list-mode: lax
+          files:
+            - "**/internal/app/remote/**"
+          allow:
+            - github.com/kukv/hedgehug/internal/app/usecase/usecasetest
+          deny:
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase
+              desc: remote は usecase より下の層（spec 決定 2）
+            - pkg: github.com/kukv/hedgehug/internal/app/cli
+              desc: remote は cli より下の層（spec 決定 2）
+            - pkg: github.com/kukv/hedgehug/internal/app/server
+              desc: remote は server より下の層（spec 決定 2）
+        usecase:
+          list-mode: lax
+          files:
+            - "**/internal/app/usecase/**"
+          deny:
+            - pkg: github.com/kukv/hedgehug/internal/app/cli
+              desc: usecase は cli より下の層（spec 決定 2）
+            - pkg: github.com/kukv/hedgehug/internal/app/server
+              desc: usecase は server より下の層（spec 決定 2）
+        # usecase の領域どうしは import しない。共有するものは土台（usecase 直下）に置く（spec 2.3）。
+        # テストは準備に別の領域の操作を使ってよいので、本番のファイルだけにかける（決定 17）。
+        # usecasetest はテスト用の部品なので対象外。
+        usecase-domains:
+          list-mode: lax
+          files:
+            - "**/internal/app/usecase/*/**"
+            - "!$test"
+            - "!**/internal/app/usecase/usecasetest/**"
+          deny:
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase/accounts
+              desc: 領域どうしは土台を通す（spec 2.3）
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase/browse
+              desc: 領域どうしは土台を通す（spec 2.3）
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase/comments
+              desc: 領域どうしは土台を通す（spec 2.3）
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase/maintenance
+              desc: 領域どうしは土台を通す（spec 2.3）
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase/notifications
+              desc: 領域どうしは土台を通す（spec 2.3）
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase/replication
+              desc: 領域どうしは土台を通す（spec 2.3）
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase/schemas
+              desc: 領域どうしは土台を通す（spec 2.3）
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase/stores
+              desc: 領域どうしは土台を通す（spec 2.3）
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase/tasks
+              desc: 領域どうしは土台を通す（spec 2.3）
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase/views
+              desc: 領域どうしは土台を通す（spec 2.3）
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase/watch
+              desc: 領域どうしは土台を通す（spec 2.3）
+            - pkg: github.com/kukv/hedgehug/internal/app/usecase/workspaces
+              desc: 領域どうしは土台を通す（spec 2.3）
     forbidigo:
       analyze-types: true
       forbid:
