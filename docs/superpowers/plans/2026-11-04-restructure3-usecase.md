@@ -47,6 +47,7 @@
 - Go では別パッケージに `Session` のメソッドを置けない（決定 13）。道具 `hoist` は `func (ss *Session) X(a)` を `func X(ss *usecase.Session, a)` に、呼び出しの `ss.X(a)` を `tasks.X(ss, a)` に書き換える。テストの `ts.X(a)`（`ts` は `*usecasetest.Session` で Session を埋め込む）は `tasks.X(ts.Session, a)` になる
 - 書き換わる呼び出し側は usecase の外にもある: cli・server・`tools/devenv`。run.sh は最後に `git add -A` する
 - current の `resolve.go` は mount の `Set.Resolve` を使うので、current を先に解体する（Task 2 → 3 の順）。旧 doctor の `Finding` を土台に下ろすのは、schemas と maintenance に分けた後（Task 7）。先に下ろすと usecase と maintenance が循環する
+- PR #55 を出した後に main へフェーズ 4f-1（#53）が入ったので、新しい main（dd69505）の上で手順を流し直した。4f-1 で増えたものに合わせて指示ファイルを 4 か所足した: `4-base.carve` と `4-export.spec` に `readOnlyWhy`（sync.go のものを stores が使う）、`5-helpers.carve` に `moveFx.addSprint`、`6-split.spec` に `movestore_view.go`・`movestore_gui_test.go`・`storeset_test.go`（stores）と `auth_device_test.go`（accounts）、`6-post.sh` のキーを補う対象に `auth_device_test.go`。そのため Task 6 の `hoist: wrote` は 194 files になる
 - `tools/restructure/deps` は usecase のファイルどうしの参照を、ファイルの割り当て表で数える道具。回 3 の手順では使わないが、割り当てを決めるのに使った（回 4・5 で使う）
 
 ---
