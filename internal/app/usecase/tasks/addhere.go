@@ -23,6 +23,8 @@ type AddHereResult struct {
 	// Destination is "<store> / <the title of the parent>", or the name of
 	// the workspace for the root.
 	Destination string
+
+	stage int // the stage of the spec that decided the destination
 }
 
 // BranchQuestion is the question whether to add under the task the branch
@@ -140,7 +142,7 @@ func AddHere(ss *usecase.Session, in AddHereInput) (AddHereResult, *BranchQuesti
 			ss.AddWarning("the project was not recorded for this repository: " + err.Error())
 		}
 	}
-	return AddHereResult{TaskResult: res, Destination: destinationLabel(dest)}, nil, nil, nil
+	return AddHereResult{TaskResult: res, Destination: destinationLabel(dest), stage: dest.Stage}, nil, nil, nil
 }
 
 // contextError spells out what ResolveDestination could not find (LookupError).

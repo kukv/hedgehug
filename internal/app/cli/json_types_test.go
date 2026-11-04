@@ -88,3 +88,15 @@ func TestJSONIsTheUsecaseTypes(t *testing.T) {
 		t.Errorf("undo = %+v", uw)
 	}
 }
+
+// inbox revert prints a TaskWrite too.
+func TestInboxRevertJSONIsTaskWrite(t *testing.T) {
+	t.Parallel()
+	alice, bob, _ := twoUsers(t)
+	conflict(t, alice, bob, "title", "bob", "alice")
+	var tw usecase.TaskWrite
+	strictly(t, bob.ok("inbox", "revert", itemOfKind(t, bob, "overwritten"), "--json"), &tw)
+	if tw.Task == nil || tw.Task.Title != "bob" || tw.Commit == nil {
+		t.Errorf("inbox revert = %+v", tw)
+	}
+}

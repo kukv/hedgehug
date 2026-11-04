@@ -79,8 +79,8 @@ func TestAddHereExplicitParentInAnotherStore(t *testing.T) {
 	if err != nil || v.Store != "org-b" || v.Parent == nil || v.Title != "child" || v.ParentRef == nil || v.ParentRef.ID != "WEB-1" {
 		t.Fatalf("view = %+v, %v", v, err)
 	}
-	if want := "org-b / " + v.ParentRef.Title; r.Destination != want {
-		t.Errorf("destination = %q, want %q", r.Destination, want)
+	if want := "org-b / " + v.ParentRef.Title; r.Destination != want || tasks.StageOf(r) != 1 {
+		t.Errorf("destination = %q (stage %d), want %q (stage 1)", r.Destination, tasks.StageOf(r), want)
 	}
 }
 
@@ -142,7 +142,7 @@ func TestAddHereStage4SetsRecent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v, err := r.View(); err != nil || v.Store != "org-a" || v.Parent == nil || *v.Parent != p.ULID.String() || r.Destination != "org-a / Web release" {
+	if v, err := r.View(); err != nil || v.Store != "org-a" || v.Parent == nil || *v.Parent != p.ULID.String() || r.Destination != "org-a / Web release" || tasks.StageOf(r) != 4 {
 		t.Fatalf("destination = %q, view %+v, %v", r.Destination, v, err)
 	}
 	m, _ := ts.Mount()
@@ -171,16 +171,16 @@ func TestAddHereReturnsWhatToAsk(t *testing.T) {
 		t.Fatalf("BranchQuestion = %+v, %v", cf, err)
 	}
 	r, _, _, err := tasks.AddHere(ts.Session, tasks.AddHereInput{Context: usecase.Input{Dir: dir, Interactive: true, BranchParent: usecase.Yes}, Task: tasks.AddInput{Title: "x"}})
-	if v, verr := r.View(); err != nil || verr != nil || v.Store != "org-b" || v.ParentRef == nil || v.ParentRef.ID != "WEB-1" || r.Destination != "org-b / "+v.ParentRef.Title {
-		t.Fatalf("Yes = %q, %v", r.Destination, err)
+	if v, verr := r.View(); err != nil || verr != nil || v.Store != "org-b" || v.ParentRef == nil || v.ParentRef.ID != "WEB-1" || r.Destination != "org-b / "+v.ParentRef.Title || tasks.StageOf(r) != 3 {
+		t.Fatalf("Yes = %q (stage %d), %v", r.Destination, tasks.StageOf(r), err)
 	}
 	_, _, ch, err := tasks.AddHere(ts.Session, tasks.AddHereInput{Context: usecase.Input{Interactive: true}, Task: tasks.AddInput{Title: "x"}})
 	if err != nil || ch == nil || ch.What != "store" {
 		t.Fatalf("Choice = %+v, %v", ch, err)
 	}
 	r, _, _, err = tasks.AddHere(ts.Session, tasks.AddHereInput{Context: usecase.Input{Interactive: true, PickStore: "org-a"}, Task: tasks.AddInput{Title: "x"}})
-	if v, verr := r.View(); err != nil || verr != nil || v.Store != "org-a" || v.Parent != nil || !strings.HasPrefix(r.Destination, "org-a / ") {
-		t.Fatalf("PickStore = %q, %v", r.Destination, err)
+	if v, verr := r.View(); err != nil || verr != nil || v.Store != "org-a" || v.Parent != nil || !strings.HasPrefix(r.Destination, "org-a / ") || tasks.StageOf(r) != 5 {
+		t.Fatalf("PickStore = %q (stage %d), %v", r.Destination, tasks.StageOf(r), err)
 	}
 }
 
@@ -189,12 +189,12 @@ func TestAddHereUsesDefaultStoreAndTheGlobalStore(t *testing.T) {
 	ts := usecasetest.NewTwoStore(t)
 	setDefaultStore(t, ts, "org-b")
 	r, _, _, err := tasks.AddHere(ts.Session, tasks.AddHereInput{Task: tasks.AddInput{Title: "x"}})
-	if v, verr := r.View(); err != nil || verr != nil || v.Store != "org-b" || v.Parent != nil {
-		t.Fatalf("default_store: %q, %v", r.Destination, err)
+	if v, verr := r.View(); err != nil || verr != nil || v.Store != "org-b" || v.Parent != nil || tasks.StageOf(r) != 5 {
+		t.Fatalf("default_store: %q (stage %d), %v", r.Destination, tasks.StageOf(r), err)
 	}
 	r, _, _, err = tasks.AddHere(ts.ForStore("org-a"), tasks.AddHereInput{Task: tasks.AddInput{Title: "x"}})
-	if v, verr := r.View(); err != nil || verr != nil || v.Store != "org-a" {
-		t.Fatalf("--store org-a: %q, %v", r.Destination, err)
+	if v, verr := r.View(); err != nil || verr != nil || v.Store != "org-a" || tasks.StageOf(r) != 1 {
+		t.Fatalf("--store org-a: %q (stage %d), %v", r.Destination, tasks.StageOf(r), err)
 	}
 	_, _, _, err = tasks.AddHere(ts.Session, tasks.AddHereInput{Context: usecase.Input{Store: "nosuch"}, Task: tasks.AddInput{Title: "x"}})
 	if err == nil {
