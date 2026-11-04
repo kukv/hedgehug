@@ -147,7 +147,8 @@ export class Hedgehug {
   }
 
   add(title: string, ...args: string[]): TaskJson {
-    return this.json<TaskJson>("add", title, ...args);
+    // hh add --json is {task, commit} (usecase.TaskWrite).
+    return this.json<{ task: TaskJson }>("add", title, ...args).task;
   }
 
   show(id: string): TaskJson {

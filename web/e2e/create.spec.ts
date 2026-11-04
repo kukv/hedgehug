@@ -121,5 +121,5 @@ test("Escape closes the dialog without creating", async ({ page, hh }) => {
   await dialog.getByRole("textbox", { name: "タイトル" }).fill("Never made");
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  expect(hh.json<unknown[]>("ls")).toHaveLength(0);
+  expect(hh.json<{ tasks: unknown[] }>("ls").tasks).toHaveLength(0);
 });
