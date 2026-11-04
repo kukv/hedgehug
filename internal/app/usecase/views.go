@@ -3,7 +3,6 @@ package usecase
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/storage/view"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // SavedTable and SavedKanban are the sections of a view, with defaults.
@@ -317,7 +317,7 @@ func (ss *Session) ViewRename(oldName, newName string) (ViewResult, error) {
 				return nameTaken(newName, e.Name)
 			}
 		}
-		data, err := os.ReadFile(filepath.Join(s.Dir(), filepath.FromSlash(es[i].Rel))) //nolint:gosec // G304: the path is built from the store root and a listed name
+		data, err := osfs.ReadFile(filepath.Join(s.Dir(), filepath.FromSlash(es[i].Rel)))
 		if err != nil {
 			return err
 		}

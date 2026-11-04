@@ -4,15 +4,13 @@ import (
 	"net/http"
 	"testing"
 	"time"
-
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 )
 
 // A request takes at most 30 seconds (spec: GitHub API), for the client
 // New makes and for the copy it makes of one that is handed in.
 func TestClientTimeout(t *testing.T) {
 	t.Parallel()
-	h := config.Host{API: "http://127.0.0.1:1"}
+	h := Options{API: "http://127.0.0.1:1"}
 	if got := New(h, "t", nil).hc.Timeout; got != 30*time.Second {
 		t.Errorf("default client timeout = %v", got)
 	}

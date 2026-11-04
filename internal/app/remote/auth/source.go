@@ -8,12 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os/exec"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/storage/config"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // Service is the keychain service the tokens are kept under.
@@ -59,7 +59,7 @@ func (o Options) run(name string, args ...string) ([]byte, []byte, error) {
 		return o.Run(name, args...)
 	}
 	var out, errb bytes.Buffer
-	cmd := exec.Command(name, args...) //nolint:gosec // G204: name is gh, and args are the host and login of an account in config.yaml
+	cmd := osfs.Command(name, args...)
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	err := cmd.Run()
 	return out.Bytes(), errb.Bytes(), err

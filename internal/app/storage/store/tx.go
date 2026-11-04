@@ -13,10 +13,11 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
+
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/lib/atomicfile"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 var errTxDone = errors.New("the transaction is used after Update returned")
@@ -432,7 +433,7 @@ func (s *Store) UpdateCommit(op Op, fn func(*Tx) error) (hash plumbing.Hash, err
 		// and the caller must not think a committed operation failed. When the
 		// operation failed, the release error is joined to its error.
 		defer func() {
-			if rerr := l.release(); rerr != nil && err != nil {
+			if rerr := l.Release(); rerr != nil && err != nil {
 				err = errors.Join(err, rerr)
 			}
 		}()
@@ -513,7 +514,7 @@ var onLockWait = func() {}
 // lockStore takes s.mu and the file lock, and returns with both held. While
 // the file is held by someone else it waits without s.mu, so that a holder
 // of a Locked in this process, which needs s.mu, is not kept out by it.
-func (s *Store) lockStore() (*fileLock, error) {
+func (s *Store) lockStore() (*osfs.Lock, error) {
 	deadline := time.Now().Add(s.lockWait)
 	for {
 		s.mu.Lock()
@@ -537,7 +538,7 @@ func (tx *Tx) changes(now time.Time) ([]change, error) {
 	var out []change
 	for _, rel := range tx.order {
 		p := tx.pending[rel]
-		old, err := atomicfile.ReadFile(tx.s.path(rel))
+		old, err := osfs.ReadFile(tx.s.path(rel))
 		existed := err == nil
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return nil, err
@@ -619,9 +620,9 @@ func (s *Store) apply(cs []change) error {
 	for i, c := range cs {
 		var err error
 		if c.data == nil {
-			err = os.Remove(s.path(c.rel))
+			err = osfs.Remove(s.path(c.rel))
 		} else {
-			err = atomicfile.WriteFile(s.path(c.rel), c.data)
+			err = osfs.WriteAtomic(s.path(c.rel), c.data)
 		}
 		if err != nil {
 			return errors.Join(err, s.rollback(cs[:i]))
@@ -635,8 +636,8 @@ func (s *Store) rollback(cs []change) error {
 	var errs []error
 	for _, c := range slices.Backward(cs) {
 		if c.existed {
-			errs = append(errs, atomicfile.WriteFile(s.path(c.rel), c.old))
-		} else if err := os.Remove(s.path(c.rel)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			errs = append(errs, osfs.WriteAtomic(s.path(c.rel), c.old))
+		} else if err := osfs.Remove(s.path(c.rel)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			errs = append(errs, err)
 		}
 	}

@@ -7,11 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // ErrLocked means another process kept the store locked for longer than a
-// write waits.
-var ErrLocked = errors.New("the store is locked by another process")
+// write waits. It is osfs.ErrLocked, which osfs.WithFileLock also returns.
+var ErrLocked = osfs.ErrLocked
 
 // lockWait is how long a write waits for the lock, trying every lockPoll.
 const lockWait = 10 * time.Second
@@ -22,14 +24,9 @@ var lockPoll = 50 * time.Millisecond
 // lock file open; tests use it to know a waiter is blocked.
 var afterLockMiss = func() {}
 
-// fileLock is an exclusive OS lock on a file. The lock belongs to the file
-// handle, so two handles in one process exclude each other, and the OS drops
-// it when the process exits.
-type fileLock struct{ f *os.File }
-
-func acquire(path string, wait time.Duration) (*fileLock, error) {
+func acquire(path string, wait time.Duration) (*osfs.Lock, error) {
 	path = filepath.Clean(path)
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil { //nolint:gosec // G703: paths are built from the store root
+	if err := osfs.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return nil, err
 	}
 	return lockFile(path, wait)
@@ -37,45 +34,8 @@ func acquire(path string, wait time.Duration) (*fileLock, error) {
 
 // lockFile takes the lock on the file at path, made when missing, in a
 // directory that exists.
-func lockFile(path string, wait time.Duration) (*fileLock, error) {
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600) //nolint:gosec // G703: paths are built from the store root
-	if err != nil {
-		return nil, err
-	}
-	deadline := time.Now().Add(wait)
-	for {
-		ok, err := tryLock(f)
-		if err != nil {
-			_ = f.Close()
-			return nil, err
-		}
-		if ok {
-			return &fileLock{f}, nil
-		}
-		afterLockMiss()
-		if time.Now().After(deadline) {
-			_ = f.Close()
-			return nil, ErrLocked
-		}
-		time.Sleep(min(lockPoll, time.Until(deadline)))
-	}
-}
-
-// WithFileLock runs fn holding the OS lock on the file path, made with its
-// directory when missing, waiting up to wait for another holder. It is for
-// locks outside a store, such as the one that keeps two processes from
-// refreshing a token at once.
-func WithFileLock(path string, wait time.Duration, fn func() error) (err error) {
-	l, err := acquire(path, wait)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if rerr := l.release(); err == nil {
-			err = rerr
-		}
-	}()
-	return fn()
+func lockFile(path string, wait time.Duration) (*osfs.Lock, error) {
+	return osfs.LockFile(path, wait, lockPoll, func() { afterLockMiss() })
 }
 
 // ErrStoreGone means the directory of the store was removed or replaced (by
@@ -88,7 +48,7 @@ var ErrStoreGone = errors.New("the store directory was removed or replaced; run 
 // again, and fails with ErrStoreGone when the store is removed while the lock
 // is waited for: the lock file is then not the file at path any more, and a
 // write would land in a deleted store.
-func acquireStore(dir, path string, wait time.Duration) (*fileLock, error) {
+func acquireStore(dir, path string, wait time.Duration) (*osfs.Lock, error) {
 	if !storeHere(dir) {
 		return nil, ErrStoreGone
 	}
@@ -102,8 +62,8 @@ func acquireStore(dir, path string, wait time.Duration) (*fileLock, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !storeHere(dir) || !sameFile(l.f, path) {
-		_ = l.release()
+	if !storeHere(dir) || !l.Holds(path) {
+		_ = l.Release()
 		return nil, ErrStoreGone
 	}
 	return l, nil
@@ -137,21 +97,4 @@ func mkdirInStore(dir, path string) error {
 func storeHere(dir string) bool {
 	_, err := os.Stat(filepath.Join(dir, ".git"))
 	return err == nil
-}
-
-func sameFile(f *os.File, path string) bool {
-	a, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	b, err := os.Stat(path)
-	return err == nil && os.SameFile(a, b)
-}
-
-func (l *fileLock) release() error {
-	err := unlock(l.f)
-	if cerr := l.f.Close(); err == nil {
-		err = cerr
-	}
-	return err
 }

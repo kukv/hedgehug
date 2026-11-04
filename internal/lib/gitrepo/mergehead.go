@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/go-git/go-git/v5/plumbing"
+
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // gitDir is the directory that holds the repository's own files: .git, or
@@ -22,7 +24,7 @@ func (r *Repo) gitDir() (string, error) {
 	if fi.IsDir() {
 		return dot, nil
 	}
-	b, err := os.ReadFile(dot) //nolint:gosec // the repository's own .git file
+	b, err := osfs.ReadFile(dot)
 	if err != nil {
 		return "", err
 	}
@@ -45,7 +47,7 @@ func (r *Repo) MergeHead() (h plumbing.Hash, ok bool, err error) {
 	if err != nil {
 		return plumbing.ZeroHash, false, err
 	}
-	b, err := os.ReadFile(filepath.Join(dir, "MERGE_HEAD")) //nolint:gosec // the repository's own file
+	b, err := osfs.ReadFile(filepath.Join(dir, "MERGE_HEAD"))
 	if errors.Is(err, fs.ErrNotExist) {
 		return plumbing.ZeroHash, false, nil
 	}

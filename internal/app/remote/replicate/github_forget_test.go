@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 	"github.com/kukv/hedgehug/internal/lib/github"
 )
@@ -23,7 +22,7 @@ func TestCheckAccessFailureForgetsCollaborators(t *testing.T) {
 	})
 	srv := httptest.NewServer(fake)
 	defer srv.Close()
-	good := func() (*github.Client, error) { return github.New(config.Host{API: srv.URL}, "t-alice", nil), nil }
+	good := func() (*github.Client, error) { return github.New(github.Options{API: srv.URL}, "t-alice", nil), nil }
 	s := newLoneStore(t)
 	opt := Options{
 		Remotes: []string{"https://github.com/org-a/x.git"},
@@ -44,7 +43,7 @@ func TestCheckAccessFailureForgetsCollaborators(t *testing.T) {
 		t.Fatalf("members = %+v", seeded)
 	}
 	failing := map[string]func() (*github.Client, error){
-		"401":       func() (*github.Client, error) { return github.New(config.Host{API: srv.URL}, "bad", nil), nil },
+		"401":       func() (*github.Client, error) { return github.New(github.Options{API: srv.URL}, "bad", nil), nil },
 		"no client": func() (*github.Client, error) { return nil, errors.New("no token") },
 	}
 	for name, client := range failing {

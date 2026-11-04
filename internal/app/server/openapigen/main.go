@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/kukv/hedgehug/internal/app/server"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 func main() {
@@ -14,7 +15,7 @@ func main() {
 	flag.Parse()
 	b, err := server.OpenAPIYAML()
 	if err == nil {
-		err = os.WriteFile(*out, b, 0o644) //nolint:gosec // a file of the repository
+		err = osfs.WriteFile(*out, b, 0o644)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "openapigen:", err)

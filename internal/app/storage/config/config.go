@@ -13,7 +13,7 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // ErrNoStores means config.yaml lists no store.
@@ -105,7 +105,7 @@ func (c *Config) File() string { return c.file }
 // Load reads config.yaml. A missing file is a config with no stores.
 func Load(p Paths) (*Config, error) {
 	c := &Config{file: p.ConfigFile, home: p.Home, Sync: SyncConfig{Interval: defaultSyncInterval, PushInterval: defaultPushInterval}}
-	b, err := os.ReadFile(p.ConfigFile) //nolint:gosec // the path is the user's own config file
+	b, err := osfs.ReadFile(p.ConfigFile)
 	if errors.Is(err, fs.ErrNotExist) {
 		return c, nil
 	}
@@ -544,7 +544,7 @@ const updateWait = 30 * time.Second
 // write at once keep each other's changes.
 func (c *Config) Update(fn func(*Config) error) error {
 	lock := filepath.Join(filepath.Dir(c.file), "config.lock")
-	return store.WithFileLock(lock, updateWait, func() error {
+	return osfs.WithFileLock(lock, updateWait, func() error {
 		fresh, err := Load(Paths{Home: c.home, ConfigFile: c.file})
 		if err != nil {
 			return err
@@ -574,7 +574,7 @@ func (c *Config) Save() error {
 		file = r // write the link's target and keep the link
 	}
 	dir := filepath.Dir(file)
-	if err := os.MkdirAll(dir, 0o750); err != nil {
+	if err := osfs.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
 	f, err := os.CreateTemp(dir, ".config.yaml.tmp-*")
@@ -587,10 +587,10 @@ func (c *Config) Save() error {
 		err = cerr
 	}
 	if err == nil {
-		err = os.Rename(tmp, file)
+		err = osfs.Rename(tmp, file)
 	}
 	if err != nil {
-		_ = os.Remove(tmp)
+		_ = osfs.Remove(tmp)
 	}
 	return err
 }

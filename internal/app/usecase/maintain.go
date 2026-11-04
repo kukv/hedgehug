@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -18,6 +17,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
@@ -41,7 +41,7 @@ func (ss *Session) SchemaCheck() ([]maintenance.Finding, error) {
 	}
 	s, err := ss.openStoreAt(e.Path)
 	if err != nil {
-		if data, rerr := os.ReadFile(filepath.Join(e.Path, schema.Path)); rerr == nil {
+		if data, rerr := osfs.ReadFile(filepath.Join(e.Path, schema.Path)); rerr == nil {
 			if sc, fs := maintenance.SchemaFile(data); sc == nil {
 				return fs, nil
 			}

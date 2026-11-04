@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -10,6 +9,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 func (a *app) commentCmd() *cobra.Command {
@@ -79,7 +79,7 @@ func (a *app) commentAdd(arg string, text []string) error {
 			return err
 		}
 		if body = usecase.CommentBody(string(edited)); body == "" {
-			_ = os.Remove(path)
+			_ = osfs.Remove(path)
 		}
 	}
 	p, err := a.ss.PrepareComment(cs, body)
@@ -94,7 +94,7 @@ func (a *app) commentAdd(arg string, text []string) error {
 		return err
 	}
 	if path != "" {
-		if err := os.Remove(path); err != nil {
+		if err := osfs.Remove(path); err != nil {
 			return err
 		}
 	}
@@ -118,7 +118,7 @@ func (a *app) commentEdit(arg string) error {
 	body := usecase.CommentBody(string(edited))
 	p, err := a.ss.PrepareCommentEdit(ces, body)
 	if body == "" || body == c.Body {
-		if rerr := os.Remove(path); rerr != nil {
+		if rerr := osfs.Remove(path); rerr != nil {
 			return rerr
 		}
 		if err != nil {
@@ -133,7 +133,7 @@ func (a *app) commentEdit(arg string) error {
 	if err != nil {
 		return fmt.Errorf("%s; the edited comment is kept at %s", describe(err), path)
 	}
-	if err := os.Remove(path); err != nil {
+	if err := osfs.Remove(path); err != nil {
 		return err
 	}
 	return a.printComment(r.Store, r.Ref, verb(r.Committed, "Updated"))

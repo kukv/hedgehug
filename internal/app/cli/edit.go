@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 func (a *app) editCmd() *cobra.Command {
@@ -32,7 +32,7 @@ func (a *app) edit(arg string) error {
 	}
 	for {
 		if bytes.Equal(edited, es.Bytes) {
-			if err := os.Remove(path); err != nil {
+			if err := osfs.Remove(path); err != nil {
 				return err
 			}
 			return a.printTask(es.Index, es.Entry.ULID, verb(false, ""))
@@ -45,7 +45,7 @@ func (a *app) edit(arg string) error {
 			var r usecase.TaskResult
 			r, err = a.ss.WriteEdit(es, t)
 			if err == nil {
-				if err := os.Remove(path); err != nil {
+				if err := osfs.Remove(path); err != nil {
 					return err
 				}
 				return a.printTask(r.Index, r.ULID, verb(r.Committed, "Updated"))

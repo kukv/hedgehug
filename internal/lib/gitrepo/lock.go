@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // ErrGitBusy means another process holds .git/index.lock.
@@ -26,11 +28,11 @@ func (r *Repo) lockIndex() (unlock func(), err error) {
 	p := filepath.Join(r.dir, ".git", "index.lock")
 	deadline := time.Now().Add(indexLockWait)
 	for {
-		f, err := os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600) //nolint:gosec // G304: the path is built from the repository root and a fixed name
+		f, err := osfs.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err == nil {
 			return func() {
 				_ = f.Close()
-				_ = os.Remove(p)
+				_ = osfs.Remove(p)
 			}, nil
 		}
 		if !errors.Is(err, fs.ErrExist) {

@@ -18,6 +18,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase/current"
 	"github.com/kukv/hedgehug/internal/lib/github"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
@@ -105,8 +106,8 @@ func (ss *Session) StoreInit(in StoreInitInput) (StoreInitResult, error) {
 	}
 	defer func() { _ = s.Repo().Close() }()
 	undo := func(err error) error {
-		_ = s.Repo().Close()                                               // before the files go (Windows)
-		return made.note(errors.Join(err, os.RemoveAll(dir), made.undo())) //nolint:gosec // G703: dir is the store this command just made
+		_ = s.Repo().Close() // before the files go (Windows)
+		return made.note(errors.Join(err, osfs.RemoveAll(dir), made.undo()))
 	}
 	if err := s.Repo().RegisterMergeDriver(); err != nil {
 		return StoreInitResult{}, undo(err)
@@ -166,7 +167,7 @@ type madeRemotes struct {
 func (m madeRemotes) undo() error {
 	var errs []error
 	for _, b := range m.bares {
-		errs = append(errs, os.RemoveAll(b)) //nolint:gosec // G703: a bare repository this command just made
+		errs = append(errs, osfs.RemoveAll(b))
 	}
 	return errors.Join(errs...)
 }
@@ -501,7 +502,7 @@ func (ss *Session) checkAccessOfNew(c *config.Config, e config.StoreEntry, s *st
 // what is in it when it existed before.
 func clearDir(dir string, existed bool) error {
 	if !existed {
-		return os.RemoveAll(dir)
+		return osfs.RemoveAll(dir)
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -509,7 +510,7 @@ func clearDir(dir string, existed bool) error {
 	}
 	var errs []error
 	for _, e := range entries {
-		errs = append(errs, os.RemoveAll(filepath.Join(dir, e.Name())))
+		errs = append(errs, osfs.RemoveAll(filepath.Join(dir, e.Name())))
 	}
 	return errors.Join(errs...)
 }
@@ -643,7 +644,7 @@ func (ss *Session) StoreRemove(name string, keep bool) (StoreRemoveResult, error
 		// No git file of the directory may be open when it goes (Windows).
 		closeRepo()
 		ss.closeMounted(e.Path)
-		if err := os.RemoveAll(e.Path); err != nil {
+		if err := osfs.RemoveAll(e.Path); err != nil {
 			return StoreRemoveResult{}, err
 		}
 	}

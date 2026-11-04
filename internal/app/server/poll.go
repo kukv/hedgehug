@@ -20,6 +20,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // pollInterval is how often the poller reads the HEAD and the sync state of
@@ -127,7 +128,7 @@ func (p *Poller) Release(path string) {
 	var gone []*polled
 	p.mu.Lock()
 	for name, st := range p.stores {
-		if st.path != path {
+		if !osfs.SamePath(st.path, path) {
 			continue
 		}
 		gone = append(gone, st)
@@ -232,7 +233,7 @@ func (p *Poller) pollLocked(publish bool) {
 		st := p.stores[e.Name]
 		fresh := false
 		announced := false // the clients were told to read the store again
-		if st == nil || st.path != e.Path {
+		if st == nil || !osfs.SamePath(st.path, e.Path) {
 			// This session is not closed: the store it opens is kept in
 			// p.stores, and closed when it is dropped.
 			s, err := p.s.session(e.Name).OpenStore()
