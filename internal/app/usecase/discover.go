@@ -156,7 +156,8 @@ func (ss *Session) discoverGitHub(c *config.Config, only string) ([]Candidate, e
 }
 
 // discoverFrom lists the bare repositories under dir whose main holds a
-// store (not HEAD: a bare made by a plain git init --bare keeps HEAD on master). The URL goes back through url_rewrites to the form before them.
+// store (not HEAD: a bare made by a plain git init --bare keeps HEAD on
+// master). The URL goes back through url_rewrites to the form before them.
 func (ss *Session) discoverFrom(c *config.Config, dir, account string) ([]Candidate, error) {
 	acct, ok, err := ss.PickAccount(c, account)
 	if err != nil {

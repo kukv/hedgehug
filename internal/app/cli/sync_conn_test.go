@@ -24,7 +24,7 @@ func TestSyncThroughRewrite(t *testing.T) {
 	te.ok("store", "init", "me", "--prefix", "ME", "--remote", "https://github.com/org-a/x.git")
 	te.ok("add", "one")
 	te.ok("sync")
-	if ok, err := gitrepo.HeadHasFile(filepath.Join(remotes, "org-a", "x.git"), ".hedgehug/store.yaml"); err != nil || !ok {
+	if ok, err := gitrepo.MainHasFile(filepath.Join(remotes, "org-a", "x.git"), ".hedgehug/store.yaml"); err != nil || !ok {
 		t.Errorf("the remote has no store: %v %v", ok, err)
 	}
 	b, _ := os.ReadFile(filepath.Join(te.storeDir("me"), ".git", "config"))

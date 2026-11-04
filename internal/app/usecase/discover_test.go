@@ -101,8 +101,12 @@ func TestDiscoverFromBareWithHeadOnMaster(t *testing.T) {
 		t.Fatal(err)
 	}
 	storesUnder(t, remotes, "https://github.com/org-a/hh-shared.git")
-	if ok, err := gitrepo.HeadHasFile(bare, ".hedgehug/store.yaml"); err != nil || ok {
-		t.Fatalf("the premise: HEAD (master) has no commit: %v, %v", ok, err)
+	br, err := git.PlainOpen(bare)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if head, err := br.Reference(plumbing.HEAD, false); err != nil || head.Target() != "refs/heads/master" {
+		t.Fatalf("the premise: HEAD = %v, %v, want a link to refs/heads/master", head, err)
 	}
 	ts := newTestSession(t)
 	ts.appendConfig(rewriteTo(remotes))

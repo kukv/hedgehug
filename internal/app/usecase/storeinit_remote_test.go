@@ -74,7 +74,7 @@ func TestStoreInitMakesLocalBare(t *testing.T) {
 	if _, err := ts.StoreInit(StoreInitInput{Name: "t", Prefix: "TT", Remotes: []string{"https://github.com/kukv/hh-tasks.git"}}); err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := gitrepo.HeadHasFile(filepath.Join(remotes, "kukv", "hh-tasks.git"), ".hedgehug/store.yaml"); err != nil || !ok {
+	if ok, err := gitrepo.MainHasFile(filepath.Join(remotes, "kukv", "hh-tasks.git"), ".hedgehug/store.yaml"); err != nil || !ok {
 		t.Errorf("the bare was not made and pushed: %v %v", ok, err)
 	}
 }
@@ -176,7 +176,7 @@ func TestStoreInitOnAnExistingRepo(t *testing.T) {
 	if r, _ := fake.Repo("org-a/hh-empty"); len(r.Topics) != 1 || r.Topics[0] != "hedgehug-store" {
 		t.Errorf("the topic of the empty repository = %v", r.Topics)
 	}
-	if ok, err := gitrepo.HeadHasFile(empty, ".hedgehug/store.yaml"); err != nil || !ok {
+	if ok, err := gitrepo.MainHasFile(empty, ".hedgehug/store.yaml"); err != nil || !ok {
 		t.Errorf("the store was not pushed to the empty repository: %v %v", ok, err)
 	}
 	if b := configText(t, ts); !strings.Contains(b, "account: work") {
@@ -361,7 +361,7 @@ func TestStoreInitConfigFailureAfterPushTellsOfTheRemote(t *testing.T) {
 	if !strings.Contains(err.Error(), "stay there") || !strings.Contains(err.Error(), "hedgehug store add race --remote "+bare) {
 		t.Errorf("err = %v", err)
 	}
-	if ok, herr := gitrepo.HeadHasFile(bare, ".hedgehug/store.yaml"); herr != nil || !ok {
+	if ok, herr := gitrepo.MainHasFile(bare, ".hedgehug/store.yaml"); herr != nil || !ok {
 		t.Errorf("the bare lost the commits: %v %v", ok, herr)
 	}
 	notExist(t, storeDirOf(t, ts, "race"), "the store directory")

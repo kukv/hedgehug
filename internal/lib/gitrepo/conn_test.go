@@ -272,51 +272,17 @@ func TestRemoteEmpty(t *testing.T) {
 	}
 }
 
-func TestHeadHasFile(t *testing.T) {
-	t.Parallel()
-	d := t.TempDir()
-	r := initWithCommit(t, filepath.Join(d, "work"))
-	bare := filepath.Join(d, "x.git")
-	if err := InitBare(bare); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.SetRemotes([]string{bare}); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Push("origin"); err != nil {
-		t.Fatal(err)
-	}
-	if ok, err := HeadHasFile(bare, "a.txt"); err != nil || !ok {
-		t.Errorf("a.txt = %v, %v", ok, err)
-	}
-	if ok, err := HeadHasFile(filepath.Join(d, "work"), "a.txt"); err != nil || !ok {
-		t.Errorf("a.txt in the work tree's repository = %v, %v", ok, err)
-	}
-	if ok, err := HeadHasFile(bare, "nope"); err != nil || ok {
-		t.Errorf("nope = %v, %v", ok, err)
-	}
-	empty := filepath.Join(d, "empty.git")
-	if err := InitBare(empty); err != nil {
-		t.Fatal(err)
-	}
-	if ok, err := HeadHasFile(empty, "a.txt"); err != nil || ok {
-		t.Errorf("empty = %v, %v", ok, err)
-	}
-	if _, err := HeadHasFile(filepath.Join(d, "missing.git"), "a.txt"); err == nil {
-		t.Error("a directory that is no repository gave no error")
-	}
-}
-
 func TestMainHasFile(t *testing.T) {
 	t.Parallel()
 	d := t.TempDir()
 	r := initWithCommit(t, filepath.Join(d, "work"))
 	// A bare that a plain git init --bare made: HEAD stays on master, which a push to main does not move.
 	bare := filepath.Join(d, "x.git")
-	if _, err := git.PlainInitWithOptions(bare, &git.PlainInitOptions{
+	br, err := git.PlainInitWithOptions(bare, &git.PlainInitOptions{
 		Bare:        true,
 		InitOptions: git.InitOptions{DefaultBranch: plumbing.NewBranchReferenceName("master")},
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatal(err)
 	}
 	if err := r.SetRemotes([]string{bare}); err != nil {
@@ -325,8 +291,8 @@ func TestMainHasFile(t *testing.T) {
 	if err := r.Push("origin"); err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := HeadHasFile(bare, "a.txt"); err != nil || ok {
-		t.Fatalf("the premise: HEAD (master) has no commit: %v, %v", ok, err)
+	if head, err := br.Reference(plumbing.HEAD, false); err != nil || head.Target() != "refs/heads/master" {
+		t.Fatalf("the premise: HEAD = %v, %v, want a link to refs/heads/master", head, err)
 	}
 	if ok, err := MainHasFile(bare, "a.txt"); err != nil || !ok {
 		t.Errorf("a.txt = %v, %v", ok, err)
