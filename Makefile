@@ -1,4 +1,4 @@
-.PHONY: generate build web licenses web-check e2e fmt fmt-check lint tidy-check test cover clean-cache bench-history check release-check
+.PHONY: generate build web licenses web-check e2e-bin e2e fmt fmt-check lint tidy-check test cover clean-cache bench-history check release-check
 
 # Write the generated files (api/openapi.yaml).
 generate:
@@ -26,8 +26,15 @@ web-check:
 	git diff --exit-code -- web/core/api/schema.d.ts
 	cd web && pnpm lint && pnpm check && pnpm test
 
-# Run the browser tests against bin/hedgehug.
-e2e: build
+# Build the binaries the browser tests run: hedgehug with the e2e tag (its keyring
+# is a file in HEDGEHUG_HOME, not the OS keychain; it embeds web/dist, so make web
+# first) and the fake of GitHub.
+e2e-bin:
+	go build -tags e2e -o bin/hedgehug-e2e ./cmd/hedgehug
+	go build -o bin/fakegh ./cmd/fakegh
+
+# Run the browser tests against bin/hedgehug-e2e and bin/fakegh.
+e2e: web e2e-bin
 	cd web && pnpm exec playwright install chromium
 	cd web && pnpm e2e
 

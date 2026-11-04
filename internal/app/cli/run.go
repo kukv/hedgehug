@@ -58,6 +58,7 @@ func Main(v string) int {
 		now:        time.Now,
 		getwd:      os.Getwd,
 		openURL:    openURL,
+		keyring:    mainKeyring(os.Getenv),
 	})
 }
 

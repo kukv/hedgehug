@@ -98,11 +98,11 @@
 - Go: `FileKeyring` の Set → Get、上書き、Delete、ない キーの `ErrNotFound`、ファイルがないときの Get、別の `FileKeyring` 値（別のプロセスの代わり）で書いたものが読めること、権限 0600
 - E2E（`keyring.spec.ts`、`github: true`）: `hh.fakegh("token", "add", "t1", "--user", "e2e")` → `hh auth login e2e --with-token`（標準入力に t1）→ `hh auth status --json` が e2e を `ok` で出し、OS の keychain に触っていない（`e2e-keyring.json` がある）こと。harness に標準入力を渡す `hhIn(input, ...args)` を足す
 
-- [ ] Step 1: `filekeyring_test.go` を書いて落ちることを確かめる → `filekeyring.go` を書いて通す
-- [ ] Step 2: `keyring.go`・`keyring_e2e.go`・`run.go` を書き、`go build ./cmd/hedgehug` と `go build -tags e2e ./cmd/hedgehug` が通ることを確かめる
-- [ ] Step 3: Makefile と CI の段を足し、`make e2e-bin` で2つのバイナリができることを確かめる
-- [ ] Step 4: harness の `github` フィクスチャ・`fakegh`・`hhIn` と `keyring.spec.ts` を書いて通す。既存の E2E が `bin/hedgehug-e2e` で通ることを `make e2e` で確かめる
-- [ ] Step 5: 検査（Global Constraints の Go と web）を流してコミット `test(e2e): E2E のバイナリにファイルの keyring を入れ、fakegh を起動できるようにする`
+- [x] Step 1: `filekeyring_test.go` を書いて落ちることを確かめる → `filekeyring.go` を書いて通す
+- [x] Step 2: `keyring.go`・`keyring_e2e.go`・`run.go` を書き、`go build ./cmd/hedgehug` と `go build -tags e2e ./cmd/hedgehug` が通ることを確かめる
+- [x] Step 3: Makefile と CI の段を足し、`make e2e-bin` で2つのバイナリができることを確かめる
+- [x] Step 4: harness の `github` フィクスチャ・`fakegh`・`hhIn` と `keyring.spec.ts` を書いて通す。既存の E2E が `bin/hedgehug-e2e` で通ることを `make e2e` で確かめる
+- [x] Step 5: 検査（Global Constraints の Go と web）を流してコミット `test(e2e): E2E のバイナリにファイルの keyring を入れ、fakegh を起動できるようにする`
 
 ---
 

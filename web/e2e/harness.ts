@@ -4,9 +4,16 @@ import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { test as base, expect, type Page } from "@playwright/test";
 
-// The binary under test. `make e2e` builds it into bin/hedgehug; HEDGEHUG_BIN
-// points at another one.
-const BIN = resolve(process.env.HEDGEHUG_BIN ?? resolve(import.meta.dirname, "../../bin/hedgehug"));
+// The binary under test. `make e2e` builds it into bin/hedgehug-e2e (the build with the e2e tag,
+// whose keyring is a file in HEDGEHUG_HOME, not the OS keychain); HEDGEHUG_BIN points at another one.
+const BIN = resolve(
+  process.env.HEDGEHUG_BIN ?? resolve(import.meta.dirname, "../../bin/hedgehug-e2e"),
+);
+
+// The fake of GitHub, which a test with github: true starts. `make e2e` builds it into bin/fakegh.
+const FAKEGH = resolve(
+  process.env.HEDGEHUG_FAKEGH ?? resolve(import.meta.dirname, "../../bin/fakegh"),
+);
 
 /** remote: the store gets a bare repository of its own as its remote, for a test with a second user. */
 export type StoreSpec = { name: string; prefix: string; workspace?: string; remote?: boolean };
@@ -46,6 +53,8 @@ export class Hedgehug {
     readonly stderr: () => string,
     /** The path of the bare repository the store pushes to, when the store has one. */
     readonly remote: string | null = null,
+    /** The fake of GitHub started for this test (github: true), or null. */
+    private readonly gh: FakeGitHub | null = null,
   ) {}
 
   /** The environment of every hh process of this test. */
@@ -77,6 +86,30 @@ export class Hedgehug {
     return execFileSync(BIN, args, {
       cwd: this.home, // not inside a repository, so hh add does not pick a project from it
       env: Hedgehug.env(this.home),
+      encoding: "utf8",
+    });
+  }
+
+  /** Runs hh with the text on its standard input and returns its standard output. A non-zero exit throws. */
+  hhIn(input: string, ...args: string[]): string {
+    return execFileSync(BIN, args, {
+      cwd: this.home,
+      env: Hedgehug.env(this.home),
+      encoding: "utf8",
+      input,
+    });
+  }
+
+  /** The URL of the fake of GitHub (github: true). */
+  get fakeGitHubURL(): string {
+    if (!this.gh) throw new Error("the fake of GitHub is not running: use github: true");
+    return this.gh.url;
+  }
+
+  /** Runs fakegh against the fake of this test (github: true) and returns its standard output. */
+  fakegh(...args: string[]): string {
+    return execFileSync(FAKEGH, [...args, "--server", this.fakeGitHubURL], {
+      cwd: this.home,
       encoding: "utf8",
     });
   }
@@ -154,7 +187,61 @@ export class Hedgehug {
       await exited;
       clearTimeout(timer);
     }
+    await this.gh?.stop();
     rmSync(this.home, { recursive: true, force: true });
+  }
+}
+
+/** One fakegh process. */
+class FakeGitHub {
+  private constructor(
+    readonly url: string,
+    private readonly proc: ChildProcess,
+  ) {}
+
+  /** Starts fakegh on a free port with the seed and waits for its URL. */
+  static async start(home: string): Promise<FakeGitHub> {
+    // One user, e2e (LOGIN); device_interval 0 so that the login does not wait between polls.
+    // auto_approve stays off: the test approves the code, to see the screen that waits for it.
+    const seed = join(home, "fakegh-seed.json");
+    writeFileSync(seed, JSON.stringify({ users: [LOGIN], device_interval: 0 }));
+    const proc = spawn(FAKEGH, ["serve", "--addr", "127.0.0.1:0", "--seed", seed], { cwd: home });
+    let out = "";
+    let err = "";
+    proc.stderr.on("data", (c: Buffer) => {
+      err += c.toString();
+    });
+    const url = await new Promise<string>((resolveURL, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error(`fakegh printed no URL in 15s\n${err}`)),
+        15000,
+      );
+      proc.once("exit", (code) => {
+        clearTimeout(timer);
+        reject(new Error(`fakegh exited with ${code} before it printed its URL\n${err}`));
+      });
+      proc.stdout.on("data", (c: Buffer) => {
+        out += c.toString();
+        const m = /^fakegh listening on (\S+)$/m.exec(out);
+        if (m?.[1]) {
+          clearTimeout(timer);
+          resolveURL(m[1]);
+        }
+      });
+    }).catch((e) => {
+      proc.kill("SIGKILL");
+      throw e;
+    });
+    return new FakeGitHub(url, proc);
+  }
+
+  async stop(): Promise<void> {
+    if (this.proc.exitCode !== null) return;
+    const exited = new Promise<void>((done) => this.proc.once("exit", () => done()));
+    this.proc.kill("SIGINT");
+    const timer = setTimeout(() => this.proc.kill("SIGKILL"), 5000);
+    await exited;
+    clearTimeout(timer);
   }
 }
 
@@ -198,13 +285,26 @@ export class Peer {
 }
 
 /** Starts hh ui on a new home with the store, or with no store when it is null. */
-export async function startHedgehug(store: StoreSpec | null): Promise<Hedgehug> {
+export async function startHedgehug(store: StoreSpec | null, github = false): Promise<Hedgehug> {
   const home = mkdtempSync(join(tmpdir(), "hh-e2e-"));
+  // github: the fake of GitHub is the github.com of this home, before hh ui reads the config.
+  let gh: FakeGitHub | null = null;
+  if (github) {
+    try {
+      gh = await FakeGitHub.start(home);
+    } catch (e) {
+      rmSync(home, { recursive: true, force: true });
+      throw e;
+    }
+  }
   // hh needs an account; the author of the commits is its login.
   mkdirSync(join(home, "hh"));
+  const hosts = gh
+    ? `hosts:\n  - host: github.com\n    api: ${gh.url}\n    web: ${gh.url}\n    client_id: e2e\n`
+    : "";
   writeFileSync(
     join(home, "hh", "config.yaml"),
-    `accounts:\n  - name: ${LOGIN}\n    host: github.com\n    login: ${LOGIN}\n`,
+    `accounts:\n  - name: ${LOGIN}\n    host: github.com\n    login: ${LOGIN}\n${hosts}`,
   );
   const env = Hedgehug.env(home);
   let remote: string | null = null;
@@ -243,6 +343,7 @@ export async function startHedgehug(store: StoreSpec | null): Promise<Hedgehug> 
     });
   }).catch(async (e) => {
     proc.kill("SIGKILL");
+    await gh?.stop();
     rmSync(home, { recursive: true, force: true });
     throw e;
   });
@@ -251,15 +352,18 @@ export async function startHedgehug(store: StoreSpec | null): Promise<Hedgehug> 
   const token = new URLSearchParams(u.hash.slice(1)).get("token");
   if (!token) {
     proc.kill("SIGKILL");
+    await gh?.stop();
     rmSync(home, { recursive: true, force: true });
     throw new Error(`no token in ${url}`);
   }
-  return new Hedgehug(home, u.origin, token, proc, () => err, remote);
+  return new Hedgehug(home, u.origin, token, proc, () => err, remote, gh);
 }
 
 type Fixtures = {
   /** The store hh starts with; null starts hh with no store at all. */
   store: StoreSpec | null;
+  /** true starts the fake of GitHub (bin/fakegh) as github.com for this test: Device Flow and pasted tokens. */
+  github: boolean;
   hh: Hedgehug;
   /** A second user of the store, which needs store: { ...DEFAULT_STORE, remote: true }. */
   peer: Peer;
@@ -267,8 +371,9 @@ type Fixtures = {
 
 export const test = base.extend<Fixtures>({
   store: [DEFAULT_STORE, { option: true }],
-  hh: async ({ store }, use) => {
-    const h = await startHedgehug(store);
+  github: [false, { option: true }],
+  hh: async ({ store, github }, use) => {
+    const h = await startHedgehug(store, github);
     try {
       await use(h);
     } finally {
