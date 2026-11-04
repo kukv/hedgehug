@@ -57,7 +57,7 @@ const entry: WorkspaceEntry = {
 
 function mount(
   tab: "overview" | "tree" | "kanban" | "table" | "settings",
-  over: { loaded?: boolean; found?: boolean } = {},
+  over: { loaded?: boolean; found?: boolean; readOnly?: string } = {},
 ) {
   const loaded = over.loaded ?? true;
   const found = over.found ?? true;
@@ -70,6 +70,7 @@ function mount(
           found && s === "shared" && u === "W1" ? entry : undefined,
         loaded: () => loaded,
         tone: () => "purple",
+        readOnly: () => over.readOnly ?? null,
         subscribe: () => () => {},
       },
     },
@@ -80,6 +81,18 @@ beforeEach(() => history.replaceState(null, "", "/"));
 afterEach(cleanup);
 
 describe("WorkspacePage", () => {
+  it.each(["overview", "tree"] as const)("閲覧のみの Store なら %s のタブの上に帯を出す", (tab) => {
+    const { getByRole } = mount(tab, { readOnly: "the remote cannot be written" });
+    expect(getByRole("status", { name: "閲覧のみ" }).textContent).toContain(
+      "この Store は閲覧のみです（remote に書き込めません）",
+    );
+  });
+
+  it("書ける Store なら帯を出さない", () => {
+    const { queryByRole } = mount("tree");
+    expect(queryByRole("status", { name: "閲覧のみ" })).toBeNull();
+  });
+
   it("設定のタブは見出しとタブの下に設定を出す", () => {
     const { getByRole, getByText } = mount("settings");
     expect(getByRole("heading", { level: 1, name: "release" })).toBeTruthy();

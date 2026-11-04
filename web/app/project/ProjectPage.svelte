@@ -3,6 +3,7 @@
   import { useListScope } from "../list/scope.svelte";
   import TreeTab from "../list/TreeTab.svelte";
   import type { ProjectTab } from "../router";
+  import StoreBands from "../states/StoreBands.svelte";
   import { NO_CANCELED } from "../tree/filter";
   import ProjectHeader from "./ProjectHeader.svelte";
   import ProjectSettings from "./ProjectSettings.svelte";
@@ -20,6 +21,9 @@
 </script>
 
 <div class="page">
+  {#if scope.project}
+    <StoreBands store={scope.project.store} spaced />
+  {/if}
   <ProjectHeader {ulid} project={scope.project} workspace={scope.workspace} {tab} />
   <div class="body">
     {#if tab === "tree"}

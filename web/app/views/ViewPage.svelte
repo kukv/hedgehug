@@ -15,6 +15,7 @@
   import type { ListScope } from "../list/scope";
   import { type Layout, router } from "../router";
   import Empty from "../states/Empty.svelte";
+  import StoreBands from "../states/StoreBands.svelte";
   import { useSubscribe } from "../svelte-store";
   import TableView from "../table/TableView.svelte";
   import { toast } from "../toast.svelte";
@@ -128,6 +129,7 @@
 
 {#if entry && draft && saved}
   <div class="page">
+    <StoreBands store={entry.store} spaced />
     <header class="head">
       <div class="title">
         <h1>{entry.view.name}</h1>

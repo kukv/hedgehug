@@ -4,6 +4,7 @@
   import TreeTab from "../list/TreeTab.svelte";
   import { router, type WorkspaceTab } from "../router";
   import Empty from "../states/Empty.svelte";
+  import StoreBands from "../states/StoreBands.svelte";
   import { useSubscribe } from "../svelte-store";
   import { NO_CANCELED } from "../tree/filter";
   import WorkspaceHeader from "./WorkspaceHeader.svelte";
@@ -28,6 +29,7 @@
 
 {#if entry}
   <div class="page">
+    <StoreBands {store} spaced />
     {#if tab === "overview"}
       <!-- The overview draws its own heading, which has the buttons that make a task or a project. -->
       <WorkspaceOverview {entry} />

@@ -3,12 +3,18 @@
   import { cliRm } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
+  import { readOnlySentence } from "../read-only";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
   import { collectDescendants, deleteTask, restoreTask } from "./delete-actions";
 
-  let { show, variant }: { show: ShowView; variant: "delete" | "deleted" } = $props();
+  // readOnly is why the Store cannot be written (in Japanese), or null: the buttons are off then.
+  let {
+    show,
+    variant,
+    readOnly = null,
+  }: { show: ShowView; variant: "delete" | "deleted"; readOnly?: string | null } = $props();
 
   const { api, cache } = core();
   const deps = { api, cache };
@@ -87,9 +93,21 @@
 </script>
 
 {#if variant === "delete"}
-  <Button size="sm" onclick={() => void openDelete()}>削除</Button>
+  <Button
+    size="sm"
+    disabled={readOnly !== null}
+    title={readOnly !== null ? readOnlySentence(readOnly) : undefined}
+    onclick={() => void openDelete()}
+    >削除</Button
+  >
 {:else}
-  <Button size="sm" disabled={busy} onclick={() => void restore()}>復元</Button>
+  <Button
+    size="sm"
+    disabled={busy || readOnly !== null}
+    title={readOnly !== null ? readOnlySentence(readOnly) : undefined}
+    onclick={() => void restore()}
+    >復元</Button
+  >
 {/if}
 
 {#if open === "delete"}

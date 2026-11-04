@@ -48,6 +48,11 @@ describe("StoreBadge / Avatar", () => {
     expect(container.querySelector("[data-tone='purple']")).toBeTruthy();
   });
 
+  it("StoreBadge は閲覧のみ（灰色）なら title と読み上げに「閲覧のみ」を足す", () => {
+    const { getByTitle } = render(StoreBadge, { props: { store: "ro", tone: "readonly" } });
+    expect(getByTitle("ro（閲覧のみ）").textContent).toContain("（閲覧のみ）");
+  });
+
   it("Avatar は名前の先頭2文字を大文字で出す", () => {
     const { getByRole } = render(Avatar, { props: { name: "koki" } });
     expect(getByRole("img", { name: "koki" }).textContent).toBe("KO");

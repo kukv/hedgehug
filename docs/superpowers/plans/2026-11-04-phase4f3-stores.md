@@ -113,10 +113,10 @@
 - `RO-1` を開くと帯「この Store は閲覧のみです（remote に書き込めません）」、タイトル・本文が編集できない、ウォッチ・削除が無効、コメントの欄がない
 - 書ける Store（`demo`）のタスクは今のまま編集できる
 
-- [ ] Step 1: `read-only.ts`・`StoreBadge`・`StoreBands` のテスト → 実装
-- [ ] Step 2: TaskDetail・`move-menu.ts`・各ページの帯のテスト → 実装
-- [ ] Step 3: harness の `readOnlyStore`（先に `hh store list --json` の `read_only` を確かめる）と `readonly.spec.ts` を書いて通す
-- [ ] Step 4: 検査を流してコミット `feat(web): 閲覧のみの Store の印と帯を出し、タスクの詳細を読むだけにする`
+- [x] Step 1: `read-only.ts`・`StoreBadge`・`StoreBands` のテスト → 実装
+- [x] Step 2: TaskDetail・`move-menu.ts`・各ページの帯のテスト → 実装
+- [x] Step 3: harness の `readOnlyStore`（先に `hh store list --json` の `read_only` を確かめる）と `readonly.spec.ts` を書いて通す
+- [x] Step 4: 検査を流してコミット `feat(web): 閲覧のみの Store の印と帯を出し、タスクの詳細を読むだけにする`
 
 ---
 

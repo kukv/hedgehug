@@ -5,8 +5,17 @@
   let { store, tone, compact = false }: Props = $props();
 </script>
 
-<span class="badge" class:compact data-tone={tone} title="Store: {store}">
-  <span class="dot"></span>{store}
+<span
+  class="badge"
+  class:compact
+  data-tone={tone}
+  title={tone === "readonly" ? `${store}（閲覧のみ）` : `Store: ${store}`}
+>
+  <span class="dot"></span>
+  {store}
+  {#if tone === "readonly"}
+    <span class="sr">（閲覧のみ）</span>
+  {/if}
 </span>
 
 <style>
@@ -25,6 +34,15 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    position: relative;
+  }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
   .compact {
     height: 16px;

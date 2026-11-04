@@ -6,7 +6,9 @@
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import Icon from "../icons/Icon.svelte";
+  import { readOnlySentence, useReadOnly } from "../read-only";
   import { onLinkClick, router } from "../router";
+  import StoreBands from "../states/StoreBands.svelte";
   import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
@@ -50,12 +52,19 @@
     return d ? schema.get(d.store) : undefined;
   });
   const s = $derived<ShowView | undefined>(shown.current);
-  const locked = $derived(s ? s.deleted_at != null || !!s.broken : false);
+  // Why the Store cannot be written (細部 34), or null: every write is off then (細部 35).
+  const roReason = useReadOnly(stores, () => s?.store);
+  const roTitle = $derived(
+    roReason.current !== null ? readOnlySentence(roReason.current) : undefined,
+  );
+  const locked = $derived(
+    s ? s.deleted_at != null || !!s.broken || roReason.current !== null : false,
+  );
 
   // The "…" menu of the header: the button it hangs from while it is open.
   const spaces = useSubscribe(stores, () => stores.workspaces());
   let more = $state<HTMLElement | null>(null);
-  const moreItems = $derived(s ? [moveWorkspaceItem(s, spaces.current)] : []);
+  const moreItems = $derived(s ? [moveWorkspaceItem(s, spaces.current, roReason.current)] : []);
   function pickMore(value: string) {
     const task = s;
     more = null;
@@ -230,7 +239,11 @@
         {#if saveState.current.kind === "error"}
           <Button size="sm" onclick={() => void save.flush(ulid)}>やり直す</Button>
         {/if}
-        <Button size="sm" onclick={toggleWatch} disabled={s.deleted_at != null}
+        <Button
+          size="sm"
+          onclick={toggleWatch}
+          disabled={s.deleted_at != null || roReason.current !== null}
+          title={roTitle}
           >{watching ? "ウォッチ中" : "ウォッチ"}</Button
         >
         {#if s.deleted_at == null && !s.broken}
@@ -243,7 +256,7 @@
           >
             <Icon name="more" size={14} />
           </Button>
-          <DeleteDialogs show={s} variant="delete" />
+          <DeleteDialogs show={s} variant="delete" readOnly={roReason.current} />
           {#if more}
             <Menu
               anchor={more}
@@ -289,9 +302,11 @@
     {#if s.deleted_at != null}
       <div class="band deleted" role="status" aria-label="削除済み">
         <span>削除済み（{formatDateTime(s.deleted_at, new Date())}）。編集はできません。</span>
-        <DeleteDialogs show={s} variant="deleted" />
+        <DeleteDialogs show={s} variant="deleted" readOnly={roReason.current} />
       </div>
     {/if}
+
+    <StoreBands store={s.store} />
 
     {#if blockers.length > 0}
       <div class="band blocked" role="status" aria-label="ブロック">

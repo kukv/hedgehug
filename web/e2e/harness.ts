@@ -1,5 +1,14 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { test as base, expect, type Page } from "@playwright/test";
@@ -57,6 +66,10 @@ export class Hedgehug {
     private readonly gh: FakeGitHub | null = null,
   ) {}
 
+  /** The Stores readOnlyStore made: the bare repositories to unlock, and the peers to remove, when this stops. */
+  private readonly locked: string[] = [];
+  private readonly peers: Peer[] = [];
+
   /** The environment of every hh process of this test. */
   static env(home: string): NodeJS.ProcessEnv {
     return {
@@ -79,6 +92,38 @@ export class Hedgehug {
       symlinkSync(BIN, join(dir, "hedgehug"));
     }
     return dir;
+  }
+
+  /**
+   * Adds a Store that is read-only here: it is published from a home of its own (Peer.publish) with
+   * the tasks of `titles`, and the objects directories of its bare repository are made read-only
+   * (what gitrepotest.LockObjects does in Go), so that the sync finds the remote cannot be written
+   * (gitrepo.Writable) and the Store is read-only with "not_writable". The directories are unlocked
+   * when this stops. A test that runs as root skips itself: root ignores the permission.
+   * It returns the peer, whose home made the Store.
+   */
+  readOnlyStore(name: string, prefix: string, titles: string[] = []): Peer {
+    base.skip(process.getuid?.() === 0, "root ignores the permission of a directory");
+    const peer = Peer.publish(name, prefix);
+    this.peers.push(peer);
+    for (const t of titles) peer.hh("add", t);
+    if (titles.length > 0) peer.hh("sync");
+    const remote = peer.remote;
+    if (!remote) throw new Error("the published Store has no remote");
+    this.locked.push(remote);
+    const objects = join(remote, "objects");
+    for (const d of [objects, ...allDirs(objects)]) chmodSync(d, 0o500);
+    this.hh("store", "add", name, "--remote", remote);
+    this.hh("sync");
+    const item = this.json<{ name: string; read_only?: string }[]>("store", "list").find(
+      (s) => s.name === name,
+    );
+    if (!item?.read_only) {
+      throw new Error(
+        `harness: hh store list does not show ${name} as read-only after hh sync (${JSON.stringify(item)})`,
+      );
+    }
+    return peer;
   }
 
   /** Runs hh and returns its standard output. A non-zero exit throws. */
@@ -188,8 +233,20 @@ export class Hedgehug {
       clearTimeout(timer);
     }
     await this.gh?.stop();
+    // A bare repository that was made read-only is unlocked first, or the removal fails.
+    for (const remote of this.locked) {
+      for (const d of [remote, ...allDirs(remote)]) chmodSync(d, 0o700);
+    }
+    for (const p of this.peers) p.stop();
     rmSync(this.home, { recursive: true, force: true });
   }
+}
+
+/** Every directory under dir. */
+function allDirs(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .flatMap((e) => [join(dir, e.name), ...allDirs(join(dir, e.name))]);
 }
 
 /** One fakegh process. */

@@ -20,4 +20,14 @@ describe("moveWorkspaceItem", () => {
     expect(item.disabled).toBe(true);
     expect(item.hint).toBe("この Store にはほかのワークスペースがありません");
   });
+
+  it("is off, and says why, when the store is read-only", () => {
+    const item = moveWorkspaceItem(
+      task,
+      [entry(), entry({ ulid: "W2", name: "shared" })],
+      "remote に書き込めません",
+    );
+    expect(item.disabled).toBe(true);
+    expect(item.hint).toBe("この Store は閲覧のみです（remote に書き込めません）");
+  });
 });

@@ -37,6 +37,22 @@ describe("ViewPage", () => {
   });
   afterEach(() => closeViewDialog());
 
+  it("保存先の Store が閲覧のみなら、上に帯を出す", () => {
+    mountWithViews(
+      ViewPage,
+      { store: "shared", name: "weekly" },
+      { views: makeViews([weekly]), readOnly: ["shared"] },
+    );
+    expect(screen.getByRole("status", { name: "閲覧のみ" })).toHaveTextContent(
+      "この Store は閲覧のみです（remote に書き込めません）",
+    );
+  });
+
+  it("保存先の Store が書けるなら、帯を出さない", () => {
+    setup();
+    expect(screen.queryByRole("status", { name: "閲覧のみ" })).toBeNull();
+  });
+
   it("見出しに名前・保存先の Store・ファイルの場所を出し、保存した layout で開く", () => {
     setup();
     expect(screen.getByRole("heading", { level: 1, name: "weekly" })).toBeVisible();

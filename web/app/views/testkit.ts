@@ -130,6 +130,7 @@ export function mountWithViews<P extends Record<string, unknown>>(
     ...k.stores,
     stores: vi.fn(() => items),
     tone: vi.fn((s: string) => (readOnly.includes(s) ? "readonly" : "purple")),
+    readOnly: vi.fn((s: string) => (readOnly.includes(s) ? "the remote cannot be written" : null)),
     hidden: vi.fn(() => false),
     visibleWorkspaces: vi.fn(() => []),
     sharedPrefixes: vi.fn((): ReadonlySet<string> => new Set<string>()),
