@@ -731,6 +731,8 @@ Expected: テストが通る。最後の行は `0`（github が app に依存し
 | 2. OS の境界 | 3 節。github を `github.Options`（API と web の URL）で受け取る形にし、平文 HTTP の判定（IsLoopback・PlainHTTP）を config から github に移す（2026-11-04 利用者が決定）。forbidigo を有効にする | 変わらない |
 ```
 
+spec 3 節の forbidigo の行の `` `syscall` を呼ぶことを禁止する`` の `` `syscall` `` を `` `syscall`（`golang.org/x/sys/unix` を含む）`` にする（「調べてわかっていること」の `unix.*` の決定に合わせる）。
+
 - [ ] **Step 7: コミット**
 
 ```bash
@@ -963,4 +965,4 @@ Expected: PASS。落ちたら、失敗の出力と実行条件（コマンド、
 
 - [ ] **Step 3: push して PR を作る**
 
-利用者に確かめてから push し、PR を作る。PR の説明には、forbidigo の禁止の一覧、`github.Options` の決定（2026-11-04 利用者が決定）、`unix.*` も禁止に含めたこと、挙動を変えていないことを書く。
+利用者に確かめてから `git push -u origin restructure2-os-boundary` で push し（ブランチの upstream は外してある。素の `git push` はしない）、PR を作る。PR の説明には、forbidigo の禁止の一覧、`github.Options` の決定（2026-11-04 利用者が決定）、`unix.*` も禁止に含めたこと、挙動を変えていないことを書く。
