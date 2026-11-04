@@ -9,6 +9,7 @@ export type PaletteMode = "id" | "query" | "command";
 
 // A word of a query that has no colon: a comparison such as due<2026-11-10.
 const COMPARISON = /^-?[A-Za-z_][\w-]*(<=|>=|<|>)\S/;
+// Keep in sync with ID in core/stores.ts and Go model.ParseTaskID.
 const ID = /^[A-Za-z][A-Za-z0-9]*-\d+$/;
 const ULID = /^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$/;
 const MAX = 20;
@@ -25,8 +26,8 @@ export function isStoreQualifiedId(input: string, storeNames: string[]): boolean
 export function detectMode(input: string, storeNames?: string[]): PaletteMode {
   const s = input.trimStart();
   if (s.startsWith(">")) return "command";
-  if (storeNames && isStoreQualifiedId(s.trim(), storeNames)) return "id";
-  const words = s.trim().split(/\s+/).filter(Boolean);
+  if (storeNames && isStoreQualifiedId(s.trimEnd(), storeNames)) return "id";
+  const words = s.trimEnd().split(/\s+/).filter(Boolean);
   if (words.some((w) => w.includes(":") || COMPARISON.test(w))) return "query";
   return "id";
 }

@@ -48,6 +48,7 @@ export type WorkspaceEntry = {
 const TONES: StoreTone[] = ["teal", "orange", "purple", "sky", "pink", "olive", "brown"];
 
 // The form of a task ID: <prefix>-<number>.
+// Keep in sync with ID in app/palette/search.ts and Go model.ParseTaskID.
 const ID = /^([A-Za-z][A-Za-z0-9]*)-\d+$/;
 
 const byRank = (a: TaskView, b: TaskView): number =>
@@ -155,7 +156,7 @@ export class StoreDirectory {
 
   // sharedPrefixes is the upper-cased id prefixes that workspaces of two or
   // more stores have, hidden stores counted (mount.SharedPrefixes in Go).
-  sharedPrefixes(): Set<string> {
+  sharedPrefixes(): ReadonlySet<string> {
     return this.shared;
   }
 
