@@ -193,15 +193,15 @@
 
 **E2E（`accounts.spec.ts`、`github: true`）:**
 - トークンなしのアカウントを追加（呼び名 `bot`・login `bot`）→ カードが「トークンなし」で出る、`hh auth status --json` に `bot`
-- Device Flow: 呼び名 `work` で開始 → コードが出る → `hh.fakegh("device", "approve", <コード>, "--user", "e2e")` → `work` が「有効」で出る（トースト）。Device Flow を開始して欄を閉じると `hh` 側でフローが止まる（もう一度開始して 409 にならない）
+- Device Flow: 呼び名 `work` で開始 → コードが出る → `hh.fakegh("device", "approve", <コード>, "--user", "worker")`（`e2e` で承認すると同じ host と login の既存アカウント `e2e` のトークンが置き換わり、`work` は足されない） → `work` が「有効」で出る（トースト）。Device Flow を開始して欄を閉じると `hh` 側でフローが止まる（もう一度開始して 409 にならない）
 - トークンを貼る: `fakegh token add t9 --user e2e` → 呼び名 `e2e` に t9 を貼る → 「有効」で取得元 keychain
-- ログアウト: keychain の `e2e` をログアウト → 「トークンなし」。`hh auth status --json` でも消えている
+- ログアウト: keychain の `e2e` をログアウト → カードは「エラー」（config.yaml に `token: keychain` が残り、keychain に何もないため。「トークンなし」にはならない）。`hh auth status --json` も `state: error`（終了コード1）
 
-- [ ] Step 1: `DeviceFlow.test.ts` → `DeviceFlow.svelte`
-- [ ] Step 2: `AccountAdd.test.ts` → `AccountAdd.svelte`
-- [ ] Step 3: `SettingsAccounts.test.ts` → `SettingsAccounts.svelte`・`AccountCard.svelte`
-- [ ] Step 4: `accounts.spec.ts` を書いて通す
-- [ ] Step 5: 検査を流してコミット `feat(web): アカウントと認証の画面（Device Flow・トークン・gh・環境変数・トークンなし、ログアウト）`
+- [x] Step 1: `DeviceFlow.test.ts` → `DeviceFlow.svelte`
+- [x] Step 2: `AccountAdd.test.ts` → `AccountAdd.svelte`
+- [x] Step 3: `SettingsAccounts.test.ts` → `SettingsAccounts.svelte`・`AccountCard.svelte`
+- [x] Step 4: `accounts.spec.ts` を書いて通す
+- [x] Step 5: 検査を流してコミット `feat(web): アカウントと認証の画面（Device Flow・トークン・gh・環境変数・トークンなし、ログアウト）`
 
 ---
 
