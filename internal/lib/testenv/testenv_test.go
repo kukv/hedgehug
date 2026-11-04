@@ -104,3 +104,17 @@ func TestWaitFor(t *testing.T) {
 		t.Errorf("cond was called %d times", n)
 	}
 }
+
+func TestBuild(t *testing.T) {
+	bin := Build(t, "./testdata/hello", "hello")
+	if filepath.Base(bin) != "hello" {
+		t.Errorf("Build = %s, want a binary called hello", bin)
+	}
+	out, err := exec.Command(bin).Output() //nolint:gosec // the binary the test built
+	if err != nil || string(out) != "hello\n" {
+		t.Fatalf("%s: %q, %v", bin, out, err)
+	}
+	if again := Build(t, "./testdata/hello", "hello"); again != bin {
+		t.Errorf("the second Build = %s, want the first one, %s", again, bin)
+	}
+}
