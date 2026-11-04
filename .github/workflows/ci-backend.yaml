@@ -81,7 +81,9 @@ jobs:
 
   # hedgehug は Linux と macOS 向けに配る（Windows では WSL で Linux 版を使う）。
   # データの置き場所やファイルシステムが OS ごとに違うので、テストは2つの OS で回す。
-  # 1つのジョブでは4コアで CPU 律速になるので、テストを6つの shard に分けて同時に回す。
+  # 1つのジョブでは CPU 律速で4分を超えるので、テストを2つの shard に分けて同時に回す。
+  # shard を増やすと macOS のジョブが増え、アカウントの macOS の同時実行数（5）を超えると
+  # ランナーを待ったまま timeout-minutes で取り消される（2026-11-04 の PR #59）。
   test-shard:
     name: test (${{ matrix.os }}, ${{ matrix.shard }})
     strategy:
@@ -89,7 +91,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        shard: [ops, cli, sync-property, sync-property-stores, sync-server, others]
+        shard: [sync, others]
         # -race はテストを数倍遅くする。検出するデータ競合は OS によらないので、
         # ubuntu だけで付ける。カバレッジとテストの結果も ubuntu の分をまとめる。
         include:
@@ -138,9 +140,9 @@ jobs:
         run: go mod verify
 
       # 何を回すかは、パッケージごとの時間（下の Package times）で均した分け方:
-      # ops = internal/app/usecase、cli = internal/app/cli、sync-property・sync-property-stores = replicate の
-      # 2つの property テスト（seed が多く重い）、sync-server = replicate の残りと server、
+      # sync = internal/app/remote/replicate（2つの property テストは seed が多く重い）と internal/app/server、
       # others = 残りのパッケージすべて（新しいパッケージは何もしなくても others に入る）。
+      # ubuntu（-race）でそれぞれ2分半〜3分ほど。
       # 復元したキャッシュには main のテスト結果も入っているので、-count=1 で毎回テストを実行する。
       - name: Test
         shell: bash
@@ -150,15 +152,10 @@ jobs:
           SHARD: ${{ matrix.shard }}
         run: |
           mod=$(go list -m)
-          prop='^TestPropertyConverges(Stores)?$'
           # shellcheck disable=SC2207 # package paths have no spaces
           case "$SHARD" in
-            ops) args=("$mod/internal/app/usecase") ;;
-            cli) args=("$mod/internal/app/cli") ;;
-            sync-property) args=(-run '^TestPropertyConverges$' "$mod/internal/app/remote/replicate") ;;
-            sync-property-stores) args=(-run '^TestPropertyConvergesStores$' "$mod/internal/app/remote/replicate") ;;
-            sync-server) args=(-skip "$prop" "$mod/internal/app/remote/replicate" "$mod/internal/app/server") ;;
-            others) args=($(go list ./... | grep -vxF -e "$mod/internal/app/usecase" -e "$mod/internal/app/cli" -e "$mod/internal/app/remote/replicate" -e "$mod/internal/app/server")) ;;
+            sync) args=("$mod/internal/app/remote/replicate" "$mod/internal/app/server") ;;
+            others) args=($(go list ./... | grep -vxF -e "$mod/internal/app/remote/replicate" -e "$mod/internal/app/server")) ;;
             *) echo "unknown shard $SHARD"; exit 1 ;;
           esac
           cover=()
