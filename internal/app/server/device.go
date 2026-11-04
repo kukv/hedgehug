@@ -18,6 +18,7 @@ type deviceRun struct {
 	id     string
 	cancel context.CancelFunc
 	done   chan struct{} // closed by end
+	once   sync.Once     // end runs once: runDevice calls it early and defers it
 }
 
 // deviceFlow holds the one device flow the server runs at a time.
@@ -46,13 +47,15 @@ func (d *deviceFlow) begin(parent context.Context) (*deviceRun, context.Context,
 // end clears r, before its event is published: a screen that starts the next
 // flow on the event is not told 409.
 func (d *deviceFlow) end(r *deviceRun) {
-	d.mu.Lock()
-	if d.current == r {
-		d.current = nil
-	}
-	d.mu.Unlock()
-	r.cancel()
-	close(r.done)
+	r.once.Do(func() {
+		d.mu.Lock()
+		if d.current == r {
+			d.current = nil
+		}
+		d.mu.Unlock()
+		r.cancel()
+		close(r.done)
+	})
 }
 
 // get is the run with the id, or nil.
@@ -162,6 +165,7 @@ func (s *Server) registerDevice() {
 // request that started it before the code was shown, the event after.
 func (s *Server) runDevice(ctx context.Context, run *deviceRun, name, host string, started chan<- deviceStart) {
 	defer s.device.wg.Done()
+	defer s.device.end(run) // whatever happens, the flow is not left running
 	ss := s.session("")
 	defer ss.Close()
 	shown := false

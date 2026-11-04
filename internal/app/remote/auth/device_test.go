@@ -121,14 +121,51 @@ func TestDeviceLoginCancel(t *testing.T) {
 		t.Fatal("DeviceLogin did not stop within 3 seconds of the cancel")
 	}
 
-	// A context that has ended already: the code is asked for and shown, and
-	// the token endpoint is not asked.
+	// A context that has ended already: nothing is asked and nothing is shown.
 	ended, stop := context.WithCancel(context.Background())
 	stop()
 	var shownAgain bool
 	_, err := DeviceLogin(h, Options{Context: ended}, func(*github.DeviceCode) { shownAgain = true })
-	if !errors.Is(err, ErrCanceled) || !shownAgain {
+	if !errors.Is(err, ErrCanceled) || shownAgain {
 		t.Errorf("ended context: err = %v, shown = %v", err, shownAgain)
+	}
+}
+
+// hangHost is a web host whose endpoints do not answer until the test ends.
+// entered is closed when the first request arrives.
+func hangHost(t *testing.T, entered chan<- struct{}) config.Host {
+	t.Helper()
+	release := make(chan struct{})
+	var once sync.Once
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		once.Do(func() { close(entered) })
+		<-release
+	}))
+	t.Cleanup(func() { close(release); srv.Close() })
+	return config.Host{Host: "github.com", Web: srv.URL, ClientID: "Iv23test"}
+}
+
+// A cancel ends the request that hangs, at once, as ErrCanceled.
+func TestDeviceLoginCancelsHangingCodeRequest(t *testing.T) {
+	t.Parallel()
+	entered := make(chan struct{})
+	h := hangHost(t, entered)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := DeviceLogin(h, Options{Context: ctx}, func(*github.DeviceCode) { t.Error("the code was shown") })
+		done <- err
+	}()
+	<-entered
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrCanceled) {
+			t.Errorf("err = %v; want ErrCanceled", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("DeviceLogin did not stop while the code request hung")
 	}
 }
 

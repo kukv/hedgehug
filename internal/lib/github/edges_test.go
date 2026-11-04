@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -64,10 +65,10 @@ func TestDeviceErrors(t *testing.T) {
 		w.WriteHeader(http.StatusBadGateway)
 	}))
 	defer bad.Close()
-	if _, err := RequestDeviceCode(nil, bad.URL, "c"); err == nil {
+	if _, err := RequestDeviceCode(context.Background(), nil, bad.URL, "c"); err == nil {
 		t.Error("RequestDeviceCode on a 502 is an error")
 	}
-	if _, err := PollToken(nil, bad.URL, "c", "d"); err == nil {
+	if _, err := PollToken(context.Background(), nil, bad.URL, "c", "d"); err == nil {
 		t.Error("PollToken on a 502 is an error")
 	}
 	if _, err := RefreshToken(nil, bad.URL, "c", "r"); err == nil {
@@ -77,7 +78,7 @@ func TestDeviceErrors(t *testing.T) {
 		_, _ = w.Write([]byte(`{"error":"incorrect_client_credentials"}`))
 	}))
 	defer refused.Close()
-	if _, err := RequestDeviceCode(nil, refused.URL, "c"); err == nil || !strings.Contains(err.Error(), "incorrect_client_credentials") {
+	if _, err := RequestDeviceCode(context.Background(), nil, refused.URL, "c"); err == nil || !strings.Contains(err.Error(), "incorrect_client_credentials") {
 		t.Errorf("RequestDeviceCode refused = %v", err)
 	}
 	tr, err := RefreshToken(nil, refused.URL, "c", "r")

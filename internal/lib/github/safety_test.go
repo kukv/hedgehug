@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -30,7 +31,7 @@ func TestReadFailure(t *testing.T) {
 	if err := c.SetTopics("o", "n", nil); err == nil {
 		t.Error("SetTopics (no out) with a truncated body is an error")
 	}
-	if _, err := RequestDeviceCode(nil, srv.URL, "c"); err == nil {
+	if _, err := RequestDeviceCode(context.Background(), nil, srv.URL, "c"); err == nil {
 		t.Error("RequestDeviceCode with a truncated body is an error")
 	}
 }

@@ -26,6 +26,15 @@ var errCodeExpired = errors.New("the code expired before it was entered; run hed
 // ErrCanceled: the device flow was stopped by Options.Context.
 var ErrCanceled = errors.New("the login was canceled")
 
+// canceledOr is ErrCanceled when ctx ended (the request failed because of it),
+// and err otherwise.
+func canceledOr(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return ErrCanceled
+	}
+	return err
+}
+
 // DeviceLogin runs the device flow of the Hedgehug GitHub App on the host h
 // and returns the tokens it got.
 func DeviceLogin(h config.Host, opt Options, show Prompt) (DeviceToken, error) {
@@ -33,24 +42,27 @@ func DeviceLogin(h config.Host, opt Options, show Prompt) (DeviceToken, error) {
 	if id == "" {
 		return DeviceToken{}, fmt.Errorf("the device flow needs hosts[].client_id for %s in config.yaml; or use token: gh, token: env:<VAR>, or hedgehug auth login <name> --with-token", h.Host)
 	}
-	dc, err := github.RequestDeviceCode(opt.HTTP, h.Web, id)
-	if err != nil {
-		return DeviceToken{}, err
-	}
-	show(dc)
 	ctx := opt.Context
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	dc, err := github.RequestDeviceCode(ctx, opt.HTTP, h.Web, id)
+	if err != nil {
+		return DeviceToken{}, canceledOr(ctx, err)
+	}
+	if ctx.Err() != nil { // ended while the code was asked for: nobody is shown it
+		return DeviceToken{}, ErrCanceled
+	}
+	show(dc)
 	interval := time.Duration(dc.Interval) * time.Second
 	deadline := opt.now().Add(time.Duration(dc.ExpiresIn) * time.Second)
 	for {
 		if ctx.Err() != nil {
 			return DeviceToken{}, ErrCanceled
 		}
-		tr, err := github.PollToken(opt.HTTP, h.Web, id, dc.DeviceCode)
+		tr, err := github.PollToken(ctx, opt.HTTP, h.Web, id, dc.DeviceCode)
 		if err != nil {
-			return DeviceToken{}, err
+			return DeviceToken{}, canceledOr(ctx, err)
 		}
 		switch tr.Error {
 		case "":

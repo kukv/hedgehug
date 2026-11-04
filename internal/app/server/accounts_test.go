@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -62,6 +63,7 @@ type accountsSetup struct {
 	noClientID  bool              // hosts[] with no client_id: the device flow cannot start
 	env         map[string]string // the environment of the server (tokens of env:VAR)
 	dropDefault bool              // no account at the start (dropDefaultAccount)
+	web         http.Handler      // answers as github.com instead of the fakegh
 }
 
 // newAccountsServer is a started test server whose keychain is in memory and
@@ -77,7 +79,11 @@ func newAccountsServer(t *testing.T, su accountsSetup) (*testServer, *memKeyring
 		su.gh.Users = []string{"alice", "bob", "carol"}
 	}
 	fg := fakegh.New(su.gh)
-	srv := httptest.NewServer(fg)
+	var h http.Handler = fg
+	if su.web != nil {
+		h = su.web
+	}
+	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 	hosts := "\nhosts:\n  - {host: github.com, api: \"" + srv.URL + "\", web: \"" + srv.URL + "\""
 	if !su.noClientID {

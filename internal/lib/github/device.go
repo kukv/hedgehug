@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -30,11 +31,11 @@ type TokenResponse struct {
 	Error                 string `json:"error"`
 }
 
-func postForm(hc *http.Client, u string, form url.Values, out any) error {
+func postForm(ctx context.Context, hc *http.Client, u string, form url.Values, out any) error {
 	if config.PlainHTTP(u) {
 		return fmt.Errorf("POST %s: plain http, so nothing secret is sent; use https", redact(u))
 	}
-	req, err := http.NewRequest("POST", u, strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", u, strings.NewReader(form.Encode()))
 	if err != nil {
 		return err
 	}
@@ -55,13 +56,13 @@ func postForm(hc *http.Client, u string, form url.Values, out any) error {
 	return json.Unmarshal(data, out)
 }
 
-// RequestDeviceCode starts the device flow of the App clientID at web.
-func RequestDeviceCode(hc *http.Client, web, clientID string) (*DeviceCode, error) {
+// RequestDeviceCode starts (ctx ends the request, as it does for PollToken) the device flow of the App clientID at web.
+func RequestDeviceCode(ctx context.Context, hc *http.Client, web, clientID string) (*DeviceCode, error) {
 	var raw struct {
 		DeviceCode
 		Error string `json:"error"`
 	}
-	if err := postForm(hc, web+"/login/device/code", url.Values{"client_id": {clientID}}, &raw); err != nil {
+	if err := postForm(ctx, hc, web+"/login/device/code", url.Values{"client_id": {clientID}}, &raw); err != nil {
 		return nil, err
 	}
 	if raw.Error != "" || raw.DeviceCode.DeviceCode == "" {
@@ -71,9 +72,9 @@ func RequestDeviceCode(hc *http.Client, web, clientID string) (*DeviceCode, erro
 }
 
 // PollToken asks once whether the device code was approved.
-func PollToken(hc *http.Client, web, clientID, deviceCode string) (*TokenResponse, error) {
+func PollToken(ctx context.Context, hc *http.Client, web, clientID, deviceCode string) (*TokenResponse, error) {
 	var tr TokenResponse
-	err := postForm(hc, web+"/login/oauth/access_token", url.Values{
+	err := postForm(ctx, hc, web+"/login/oauth/access_token", url.Values{
 		"client_id": {clientID}, "device_code": {deviceCode},
 		"grant_type": {"urn:ietf:params:oauth:grant-type:device_code"},
 	}, &tr)
@@ -83,7 +84,7 @@ func PollToken(hc *http.Client, web, clientID, deviceCode string) (*TokenRespons
 // RefreshToken trades a refresh token for a new pair of tokens.
 func RefreshToken(hc *http.Client, web, clientID, refresh string) (*TokenResponse, error) {
 	var tr TokenResponse
-	err := postForm(hc, web+"/login/oauth/access_token", url.Values{
+	err := postForm(context.Background(), hc, web+"/login/oauth/access_token", url.Values{
 		"client_id": {clientID}, "refresh_token": {refresh}, "grant_type": {"refresh_token"},
 	}, &tr)
 	return &tr, err

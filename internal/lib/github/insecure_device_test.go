@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -17,8 +18,8 @@ func TestDeviceFlowPlainHTTPGetsNoRequest(t *testing.T) {
 	})}
 	web := "http://user:pw@ghe.example.com"
 	for name, f := range map[string]func() error{
-		"code":    func() error { _, err := RequestDeviceCode(hc, web, "cid"); return err },
-		"poll":    func() error { _, err := PollToken(hc, web, "cid", "dc"); return err },
+		"code":    func() error { _, err := RequestDeviceCode(context.Background(), hc, web, "cid"); return err },
+		"poll":    func() error { _, err := PollToken(context.Background(), hc, web, "cid", "dc"); return err },
 		"refresh": func() error { _, err := RefreshToken(hc, web, "cid", "rt"); return err },
 	} {
 		err := f()

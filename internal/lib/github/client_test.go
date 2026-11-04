@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -138,18 +139,18 @@ func TestDescribe(t *testing.T) {
 func TestDevice(t *testing.T) {
 	t.Parallel()
 	s, h := fake(t)
-	dc, err := RequestDeviceCode(nil, h.Web, "Iv23x")
+	dc, err := RequestDeviceCode(context.Background(), nil, h.Web, "Iv23x")
 	if err != nil || dc.UserCode == "" {
 		t.Fatalf("RequestDeviceCode = %+v, %v", dc, err)
 	}
-	tr, err := PollToken(nil, h.Web, "Iv23x", dc.DeviceCode)
+	tr, err := PollToken(context.Background(), nil, h.Web, "Iv23x", dc.DeviceCode)
 	if err != nil || tr.Error != "authorization_pending" {
 		t.Errorf("before approval = %+v, %v", tr, err)
 	}
 	if err := s.ApproveDevice(dc.UserCode, "alice"); err != nil {
 		t.Fatal(err)
 	}
-	tr, err = PollToken(nil, h.Web, "Iv23x", dc.DeviceCode)
+	tr, err = PollToken(context.Background(), nil, h.Web, "Iv23x", dc.DeviceCode)
 	if err != nil || tr.AccessToken == "" || tr.RefreshToken == "" || tr.ExpiresIn == 0 {
 		t.Fatalf("token = %+v, %v", tr, err)
 	}

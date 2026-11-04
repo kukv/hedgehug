@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -177,5 +179,60 @@ func TestDeviceFlowStopsWithShutdown(t *testing.T) {
 	}
 	if ts.srv.device.get(st.ID) != nil {
 		t.Error("the device flow is registered after Shutdown")
+	}
+}
+
+// A cancel and Shutdown end the flow at once while the poll to GitHub hangs:
+// the request is made with the context of the flow.
+func TestDeviceFlowStopsWhileThePollHangs(t *testing.T) {
+	t.Parallel()
+	release := make(chan struct{})
+	polling := make(chan struct{})
+	var once sync.Once
+	web := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/login/device/code") {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"device_code":"dc","user_code":"ABCD-1234","verification_uri":"https://example.test/device","expires_in":900,"interval":0}`))
+			return
+		}
+		once.Do(func() { close(polling) })
+		<-release
+	})
+	ts, _, _ := newAccountsServer(t, accountsSetup{web: web})
+	t.Cleanup(func() { close(release) }) // runs before the server's own cleanup
+	es := ts.events()
+	var st deviceStarted
+	ts.call("POST", "/api/auth/device", map[string]any{}, 201, &st)
+	<-polling
+
+	done := make(chan struct{})
+	go func() {
+		ts.call("DELETE", "/api/auth/device/"+st.ID, nil, 204, nil)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("the cancel waited for the poll that hangs")
+	}
+	var ev authDeviceEvent
+	if err := json.Unmarshal(es.next(t, "auth.device"), &ev); err != nil {
+		t.Fatal(err)
+	}
+	if ev.State != "error" || ev.Code != "auth.canceled" {
+		t.Errorf("event = %+v", ev)
+	}
+
+	// Shutdown too, with a new flow whose poll hangs.
+	ts.call("POST", "/api/auth/device", map[string]any{}, 201, &st)
+	sd := make(chan struct{})
+	go func() {
+		_ = ts.srv.Shutdown(context.Background())
+		close(sd)
+	}()
+	select {
+	case <-sd:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Shutdown waited for the poll that hangs")
 	}
 }

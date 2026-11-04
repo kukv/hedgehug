@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -94,7 +95,7 @@ func TestRedirectToAnotherOriginIsRefused(t *testing.T) {
 	if injected.CheckRedirect != nil {
 		t.Error("the injected client was changed")
 	}
-	if _, err := RequestDeviceCode(nil, srv.URL, "c"); err == nil || !strings.Contains(err.Error(), "redirect") {
+	if _, err := RequestDeviceCode(context.Background(), nil, srv.URL, "c"); err == nil || !strings.Contains(err.Error(), "redirect") {
 		t.Errorf("device flow: err = %v", err)
 	}
 	if len(seen) != 0 {
