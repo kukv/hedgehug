@@ -34,10 +34,17 @@
     readOnly ? "readonly" : ((store.color || view.current.tone) as StoreTone),
   );
   const remotes = $derived(store.remotes ?? []);
-  const lastSuccess = $derived(c.conn.sync.get(store.name)?.last_success ?? store.last_success);
+  // The connection's sync state changes while the page is open; a coarse clock moves the relative time on.
+  const sync = useSubscribe(c.conn, () => c.conn.sync.get(store.name)?.last_success);
+  let now = $state(new Date());
+  $effect(() => {
+    const t = setInterval(() => (now = new Date()), 30_000);
+    return () => clearInterval(t);
+  });
+  const lastSuccess = $derived(sync.current ?? store.last_success);
   const synced = $derived.by(() => {
     if (!lastSuccess) return "未同期";
-    const when = formatRelative(lastSuccess, new Date());
+    const when = formatRelative(lastSuccess, now);
     return when === "今" ? "たった今同期" : `${when}に同期`;
   });
   const cannotHide = $derived(lastVisible && !store.hidden);

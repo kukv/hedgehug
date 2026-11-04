@@ -2,6 +2,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/sv
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Account } from "../../core/accounts";
 import { ok } from "../detail/testkit";
+import { router } from "../router";
 import { renderWithCore } from "../test-utils";
 import Onboarding from "./Onboarding.svelte";
 
@@ -139,8 +140,11 @@ describe("Onboarding: choosing and starting", () => {
     const list = screen.getByRole("list", { name: "マウントした Store" });
     expect(within(list).getByText("hh-a")).toBeTruthy();
     expect(within(list).getByText("閲覧のみ")).toBeTruthy();
+    const go = vi.spyOn(router, "go").mockImplementation(() => {});
     await tick(screen.getByRole("button", { name: "始める" }));
     expect(ondone).toHaveBeenCalledTimes(1);
+    expect(go).toHaveBeenCalledWith("/");
+    go.mockRestore();
   });
 
   it("stays on a row that failed, and goes on by the button", async () => {

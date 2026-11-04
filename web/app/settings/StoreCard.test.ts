@@ -44,13 +44,25 @@ function mount(m: Mount = {}) {
     subscribe: () => () => {},
   };
   const onremove = vi.fn();
-  const conn = { sync: m.sync ?? new Map(), subscribe: () => () => {}, on: () => () => {} };
+  const subs = new Set<() => void>();
+  const conn = {
+    sync: m.sync ?? new Map<string, { last_success?: string }>(),
+    subscribe: (fn: () => void) => {
+      subs.add(fn);
+      return () => subs.delete(fn);
+    },
+    on: () => () => {},
+  };
+  const changeSync = (name: string, last_success: string) => {
+    conn.sync = new Map(conn.sync).set(name, { last_success });
+    for (const fn of [...subs]) fn();
+  };
   renderWithCore(
     StoreCard,
     { store, lastVisible: m.lastVisible ?? false, onremove },
     { api, stores, conn },
   );
-  return { api, stores, onremove };
+  return { api, stores, onremove, changeSync };
 }
 
 const card = (name = "demo") => screen.getByRole("article", { name });
@@ -126,6 +138,36 @@ describe("StoreCard: the summary", () => {
         sync: new Map([["demo", { last_success: "2026-11-04T09:55:00Z" }]]),
       });
       expect(within(card()).getByText("5 分前に同期")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("StoreCard: the last sync moves while the page is open", () => {
+  it("shows a sync that arrives after it was mounted", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-04T10:00:00Z"));
+    try {
+      const { changeSync } = mount({ store: item({ last_success: undefined }) });
+      expect(within(card()).getByText("未同期")).toBeTruthy();
+      changeSync("demo", "2026-11-04T09:58:00Z");
+      await waitFor(() => expect(within(card()).getByText("2 分前に同期")).toBeTruthy());
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("advances the relative time with a timer, and stops it when the card goes", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    vi.setSystemTime(new Date("2026-11-04T10:00:00Z"));
+    try {
+      mount({ store: item({ last_success: "2026-11-04T09:58:00Z" }) });
+      expect(within(card()).getByText("2 分前に同期")).toBeTruthy();
+      await vi.advanceTimersByTimeAsync(3 * 60_000);
+      expect(within(card()).getByText("5 分前に同期")).toBeTruthy();
+      cleanup();
+      expect(vi.getTimerCount()).toBe(0);
     } finally {
       vi.useRealTimers();
     }

@@ -79,7 +79,7 @@
 
 **Files:**
 - Create: `internal/app/remote/auth/filekeyring.go`、`internal/app/remote/auth/filekeyring_test.go`
-- Create: `internal/app/cli/keyring.go`（`//go:build !e2e`。`mainKeyring(getenv) auth.Keyring` は nil を返す＝OS の keychain）、`internal/app/cli/keyring_e2e.go`（`//go:build e2e`。`auth.FileKeyring(filepath.Join(<HEDGEHUG_HOME>, "e2e-keyring.json"))`。`HEDGEHUG_HOME` が空なら nil ではなく起動の誤りにする）
+- Create: `internal/app/cli/keyring.go`（`//go:build !e2e`。`mainKeyring(getenv) (auth.Keyring, error)` は nil, nil を返す＝OS の keychain）、`internal/app/cli/keyring_e2e.go`（`//go:build e2e`。`auth.FileKeyring(filepath.Join(<HEDGEHUG_HOME>, "e2e-keyring.json"))`。`HEDGEHUG_HOME` が空なら nil ではなく起動の誤りにする）
 - Modify: `internal/app/cli/run.go`（`Main` の `env` に `keyring: mainKeyring(os.Getenv)`）
 - Modify: `Makefile`（`e2e-bin`: `go build -tags e2e -o bin/hedgehug-e2e ./cmd/hedgehug` と `go build -o bin/fakegh ./cmd/fakegh`。`e2e-bin` は `web` に、`e2e` は `e2e-bin` に依存する。`.PHONY` に足す）
 - Modify: `.github/workflows/ci-backend.yaml`（vet か lint の段に `go vet -tags e2e ./internal/app/cli` を足す。タグ付きのファイルが壊れていても今の検査では気づかないため。置く段は今の構成を読んで決める）
@@ -290,9 +290,9 @@
 
 ### Task 7: 仕上げ
 
-- [x] Step 1: 細部 17〜33 と 71〜85 の全行について、実装とテストの場所を plan の末尾に表で残す。足りないものがあればこの回で入れる
+- [x] Step 1: 細部 17〜33 と 71〜87 の全行について、実装とテストの場所を plan の末尾に表で残す。足りないものがあればこの回で入れる
 - [x] Step 2: 「作らないもの」を出していないことを grep とテストで確かめる（`GitHub 連携で使うアカウント`・`merge driver`・`remote を追加`・`フォルダを開く`・`メンバー`・`新しく見つかった`・`gh にログイン済み`）
-- [x] Step 3: 概要 plan に「4f-2 の plan で足した細部」（71〜85 と、実装で決まったもの）を写す。spec の「4f の細部」に、E2E の keyring（細部 71）の1文を足す
+- [x] Step 3: 概要 plan に「4f-2 の plan で足した細部」（71〜87 と、実装で決まった 88〜91）を写す。spec の「4f の細部」に、E2E の keyring（細部 71）と discover の main（細部 87）の1文を足す
 - [x] Step 4: 全体の検査（`go vet`・`gofmt -l .`・`golangci-lint run ./...`・`go test -race ./...`、`pnpm fix`・`pnpm check`・`biome ci`・`vitest`・`pnpm build`、`make e2e` を3回）を流し、結果を plan の末尾に残す
 - [x] Step 5: 引き継ぎ `docs/superpowers/plans/2026-11-04-phase4f2-handoff.md` を書いてコミット `docs(plan): 4f-2 の実装で決めた点と引き継ぎを書く`
 
@@ -301,7 +301,7 @@
 - `go vet ./...`・`go vet -tags e2e ./internal/app/cli`: 指摘なし。`gofmt -l .`: 出力なし。`golangci-lint run ./...`: 0 issues
 - `go test -race -count=1 ./...`: 28 パッケージがすべて ok（テストのないパッケージは「no test files」）
 - `pnpm gen` のあとの `web/core/api/schema.d.ts`、`go generate ./internal/app/server` のあとの `api/openapi.yaml`: どちらも差分なし
-- `pnpm fix`: 修正なし（368 ファイル）。`pnpm check`: 830 ファイル、エラー 0・警告 0。`biome ci .`: 指摘 0。`vitest run`: 149 ファイル・1917 件 PASS。`pnpm build`: 通った
+- `pnpm fix`: 修正なし（368 ファイル）。`pnpm check`: 830 ファイル、エラー 0・警告 0。`biome ci .`: 指摘 0。`vitest run`: 149 ファイル・1919 件 PASS（レビューの指摘を直したあとの数。直す前は 1917 件）。`pnpm build`: 通った
 - `make e2e` を3回: 3回とも 115 件 PASS（1.1 分・27.4 秒・26.8 秒。1 回目は `web` と `e2e-bin` のビルドを含む）。失敗も flaky（再試行で通ったもの）も 0
 
 ## Task 7 の Step 1・2 の結果
@@ -322,6 +322,8 @@
 - **エラーは `ApiError` に包んで `errorMessage` に渡す（Task 6。細部 82）**: SSE の `auth.device` の `error` は `new ApiError({status: 0, type: code, detail: message})` にして渡す
 - **Onboarding の寸法をトークンにした（Task 6）**: `--logo-size`・`--step-size`・`--onboarding-w`・`--onboarding-pad-x` を `tokens.css` に足した。Onboarding の再表示と、作成完了の検査は 5dc1d1e
 - **細部 87（discover の main）を直した（4c29eee・be278d4）**: `discover --from` が bare の HEAD を見ていたため、素の `git init --bare`（HEAD は master のまま）に main へ push した Store を黙って見落としていた。`gitrepo.MainHasFile` が `refs/heads/main` を見るようにし、使われなくなった `HeadHasFile` を消した。テストは `TestMainHasFile`・`TestDiscoverFromBareWithHeadOnMaster`。2026-11-04 に利用者が、この回で直すと決めた
+- **最後の同期は接続の状態に追従する（最終レビュー）**: `StoreCard` が `conn.sync` を `useSubscribe(c.conn, …)` で読み、30 秒の時計で相対時間を進める（以前は読んだ時点で止まり、開いたまま同期しても「未同期」のままだった）。テストは `StoreCard.test.ts` の「the last sync moves while the page is open」
+- **「始める」はホームへ行く（最終レビュー）**: 設定で最後の Store を解除して Onboarding が戻ったとき、「始める」を押しても `/settings/stores` に残っていた。`Onboarding.svelte` の「始める」が `router.go("/")` と `ondone` を呼ぶ（CreateStore は自分で遷移するので `ondone` の中には入れない）。テストは `Onboarding.test.ts`
 - **色の名前**: パレットの7色の日本語（ティール・オレンジ・パープル・スカイ・ピンク・オリーブ・ブラウン）はキャンバスにないので、実装者が付けた。変えるなら `StoreColorPicker.svelte` の `STORE_COLORS` の1か所
 
 ## 細部 17〜33 と 71〜87 の実装とテスト

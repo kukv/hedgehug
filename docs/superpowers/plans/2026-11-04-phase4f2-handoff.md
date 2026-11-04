@@ -12,8 +12,8 @@
 
 - Task 1 E2E の keyring（`auth.FileKeyring`、ビルドタグ `e2e`、`bin/hedgehug-e2e`・`bin/fakegh`、harness の `github` フィクスチャ）、Task 2 core（`stores.changed`・`retainSync`・閲覧のみの判定・`AccountsCache`・CLI の行）、Task 3 設定のナビとルート、Task 4 アカウントと認証（Device Flow・トークン・gh・環境変数・トークンなし・ログアウト）、Task 5 マウント中の Store（色・表示・既定・解除・URL で追加）、Task 6 Store の発見・3段の Onboarding・CreateStore のアカウント、Task 7 仕上げ
 - Go の変更は、E2E の keyring と、細部 87 の `discover --from`（`refs/heads/main` を見る。`HeadHasFile` を `MainHasFile` に置き換えた）だけ。API の形は変えていない
-- 検査: `go vet ./...`・`go vet -tags e2e ./internal/app/cli`・`gofmt -l .`（出力なし）、`golangci-lint run ./...`（0 issues）、`go test -race -count=1 ./...`（28 パッケージ ok）、`pnpm gen`・`go generate ./internal/app/server` のあと生成物に差分なし、`pnpm check`（830 ファイル、エラー 0・警告 0）、`biome ci .`（指摘 0）、`vitest run`（149 ファイル・1917 件 PASS）、`pnpm build`、`make e2e` を3回（3回とも 115 件 PASS、flaky 0）
-- 実装中に直した点（plan 末尾に項目）: `fakegh --seed` のファイルのパス、E2E のバイナリの `HEDGEHUG_HOME` なしは終了コード 1、`e2e-bin` が `web` に依存すること、Device Flow の E2E は `worker` として承認すること、ログアウト後の keychain のアカウントは `error`、`restart()` の seq、`--fs-15`・`--control-h-lg`・Onboarding のトークン、細部 86（remote のない Store の解除）、マウントの本文に `permission` を入れないこと、`ApiError` に包んで `errorMessage` へ、細部 87
+- 検査: `go vet ./...`・`go vet -tags e2e ./internal/app/cli`・`gofmt -l .`（出力なし）、`golangci-lint run ./...`（0 issues）、`go test -race -count=1 ./...`（28 パッケージ ok）、`pnpm gen`・`go generate ./internal/app/server` のあと生成物に差分なし、`pnpm check`（830 ファイル、エラー 0・警告 0）、`biome ci .`（指摘 0）、`vitest run`（149 ファイル・1919 件 PASS）、`pnpm build`、`make e2e` を3回（3回とも 115 件 PASS、flaky 0）
+- 実装中に直した点（plan 末尾に項目）: `fakegh --seed` のファイルのパス、E2E のバイナリの `HEDGEHUG_HOME` なしは終了コード 1、`e2e-bin` が `web` に依存すること、Device Flow の E2E は `worker` として承認すること、ログアウト後の keychain のアカウントは `error`、`restart()` の seq、`--fs-15`・`--control-h-lg`・Onboarding のトークン、細部 86（remote のない Store の解除）、マウントの本文に `permission` を入れないこと、`ApiError` に包んで `errorMessage` へ、細部 87、最終レビューの指摘（`StoreCard` の最後の同期が接続の状態と時計に追従すること、Onboarding の「始める」がホームへ行くこと）
 
 ## 実装中の決定
 

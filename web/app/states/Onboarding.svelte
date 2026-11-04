@@ -4,6 +4,7 @@
   import AccountAdd from "../accounts/AccountAdd.svelte";
   import { core } from "../context";
   import CreateStore from "../create/CreateStore.svelte";
+  import { hrefOf, router } from "../router";
   import StoreDiscover, {
     type Mounted,
     type MountedEvent,
@@ -148,7 +149,15 @@
       </ul>
       <div class="nav">
         <span class="spacer"></span>
-        <Button variant="primary" onclick={ondone}>始める</Button>
+        <Button
+          variant="primary"
+          onclick={() => {
+            // Onboarding can come back over the settings (the last Store was unmounted there).
+            router.go(hrefOf({ name: "home" }));
+            ondone();
+          }}
+          >始める</Button
+        >
       </div>
     {/if}
 
