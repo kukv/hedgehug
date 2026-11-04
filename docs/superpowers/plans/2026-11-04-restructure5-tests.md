@@ -2906,7 +2906,7 @@ git commit -m "refactor(index): 読みの失敗と一覧の確認を object の�
 **Files:**
 - Modify: `internal/app/storage/store/lock.go`、`local.go`、`move.go`、`tx.go`、`store.go`
 - Modify: `internal/app/storage/store/prefix.go`（下の注）
-- Modify（テスト）: `lock_gone_test.go`、`helpers_test.go`、`move_test.go`、`tx_test.go`、`merge_locked_test.go`、`ids_test.go`、`lock_test.go`（A1 の `acquire` が `lockFile` の新しい引数を渡す）
+- Modify（テスト）: `lock_gone_test.go`、`helpers_test.go`、`move_test.go`、`tx_test.go`、`merge_locked_test.go`、`ids_test.go`、`lock_test.go`（A1 の `acquire` が `lockFile` の新しい引数を渡す）、`internal/app/storage/index/workspace_test.go`（Step 3b）
 
 **Interfaces:**
 - Produces: `type Option func(*Store)`、`func WithLockWait(d time.Duration) Option`、`func Open(dir string, opts ...Option) (*Store, error)`、`func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Workspace, author gitrepo.Signature, account string, now func() time.Time, opts ...Option) (*Store, error)`
@@ -3326,10 +3326,36 @@ git commit -m "refactor(index): 読みの失敗と一覧の確認を object の�
  		{Name: "gone", Path: filepath.Join(t.TempDir(), "gone")},
 ```
 
+- [ ] **Step 3b: index の TestConcurrentAddsThroughIndexes に待ち時間を渡す**（2026-11-05 追加。利用者の決定）
+
+5a の Task 9 の `go test -race ./...`（負荷が高いとき）で、このテストが落ちた: 16.40s、`workspace_test.go:117: the store is locked by another process` が 8 回、`workspace_test.go:134: 8 ids, want 16`。単独の `-race -count=20` では 20 回とも通る。2 つのハンドルから 16 本の書き込みがロックを奪い合い、`-race` で 1 回の commit が重いと、後ろの書き込みが既定の 10 秒（`lock.go` の `lockWait`）を超えて諦める。store の `ids_test.go` の TestConcurrentAddsGetDistinctIDs が 1 分を渡すのと同じ扱いにする（確かめる内容は変えない）。
+
+`internal/app/storage/index/workspace_test.go`:
+
+```diff
+ func TestConcurrentAddsThroughIndexes(t *testing.T) {
+ 	t.Parallel()
+-	s1, dir := newStore(t)
+-	s2, err := store.Open(dir)
++	_, dir := newStore(t)
++	wait := store.WithLockWait(time.Minute) // 16 writers queue on the lock; -race makes each commit slow
++	s1, err := store.Open(dir, wait)
++	if err != nil {
++		t.Fatal(err)
++	}
++	s2, err := store.Open(dir, wait)
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+```
+
+`time` の import がなければ足す。
+
 - [ ] **Step 4: ビルドとテストを回す**
 
 Run: `go build ./... && go vet ./...`
 Run: `go test -count=1 ./internal/app/storage/store`
+Run: `go test -race -count=3 -run TestConcurrentAddsThroughIndexes ./internal/app/storage/index`
 Expected: PASS
 
 - [ ] **Step 5: 差し込み口が消えたことを確かめる**
@@ -3340,7 +3366,7 @@ Expected: `store.go` の `WithLockWait` の中の `s.lockWait = d` の 1 行だ�
 - [ ] **Step 6: コミット**
 
 ```bash
-git add internal/app/storage/store
+git add internal/app/storage/store internal/app/storage/index/workspace_test.go
 git commit -m "refactor(store): ロックの待ち時間と待ちの通知を、オプションと引数で渡す"
 ```
 
