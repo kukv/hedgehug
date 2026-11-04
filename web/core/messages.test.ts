@@ -82,6 +82,25 @@ describe("errorMessage", () => {
     );
   });
 
+  it("words the writes of stores and the choice of an account", () => {
+    expect(errorMessage(err("store.set_args"))).toBe("色か表示のどちらかを指定してください");
+    expect(
+      errorMessage(err("choice.required", { what: "--account", candidates: ["personal", "work"] })),
+    ).toBe("アカウントを選んでください（personal、work）");
+    expect(
+      errorMessage(err("choice.required", { what: "--workspace", candidates: ["web", "api"] })),
+    ).toBe("ワークスペースを選んでください（web、api）");
+    expect(
+      errorMessage(err("choice.required", { what: "--scoped", candidates: ["carry", "drop"] })),
+    ).toBe("--scoped を選んでください（carry、drop）");
+    expect(errorMessage(err("store.unpushed", { name: "org-a" }))).toBe(
+      "org-a にはまだ push していない変更があります。先に同期してください",
+    );
+    expect(errorMessage(err("store.mount_failed", { failed: ["a", "b"] }))).toBe(
+      "追加できなかった Store があります（a、b）",
+    );
+  });
+
   it("words undo.blocked by the operation", () => {
     expect(errorMessage(err("undo.blocked", { op: "purge" }))).toBe(
       "完全に消したものは取り消せません",

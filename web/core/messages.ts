@@ -16,6 +16,13 @@ const list = (a: Args, k: string): string => {
 const withDetail = (text: string, e: ApiError): string =>
   e.detail ? `${text}: ${e.detail}` : text;
 
+// choiceNouns are the words for what the CLI asks to pick with a flag; the GUI
+// picks without the flag.
+const choiceNouns: Record<string, string> = {
+  "--account": "アカウント",
+  "--workspace": "ワークスペース",
+};
+
 const violationLabels: Record<string, string> = {
   unknown_kind: "未定義の種類です",
   unknown_status: "未定義のステータスです",
@@ -172,6 +179,7 @@ const messages: Record<string, Make> = {
   "store.clone_failed": (a, e) => withDetail(`${str(a, "remote")} を取り込めません`, e),
   "store.not_hedgehug": (a) => `${str(a, "name")} は Hedgehug の Store ではありません`,
   "store.mount_failed": (a) => `追加できなかった Store があります（${list(a, "failed")}）`,
+  "store.set_args": () => "色か表示のどちらかを指定してください",
   "sync.dirty": () => "コミットしていない変更があるため同期できません",
   "sync.unrelated": () => "リモートの履歴がこの Store の履歴と無関係です",
   "sync.force_push": () =>
@@ -243,7 +251,8 @@ const messages: Record<string, Make> = {
     "すべてを既読にするか、通知を指定してください（両方は指定できません）",
 
   // choices and confirmations (the CLI asks; the GUI picks first)
-  "choice.required": (a) => `${str(a, "what")} を選んでください（${list(a, "candidates")}）`,
+  "choice.required": (a) =>
+    `${choiceNouns[str(a, "what")] ?? `${str(a, "what")} `}を選んでください（${list(a, "candidates")}）`,
   "confirm.required": (a) => `${str(a, "what")} には確認が必要です`,
 
   // the server itself
