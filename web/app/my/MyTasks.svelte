@@ -61,18 +61,21 @@
   });
   const hiddenCounts = $derived.by(() => {
     storesRev.current;
-    const out: { store: string; n: number }[] = [];
-    for (const s of c.stores.stores()) {
-      const n = found.filter((t) => t.store === s.name && !storeShown(c.stores, t.store)).length;
-      if (n > 0) out.push({ store: s.name, n });
+    const per = new Map<string, number>();
+    for (const t of found) {
+      if (!storeShown(c.stores, t.store)) per.set(t.store, (per.get(t.store) ?? 0) + 1);
     }
-    return out;
+    // In the order of the directory.
+    return c.stores
+      .stores()
+      .flatMap((s) => (per.has(s.name) ? [{ store: s.name, n: per.get(s.name) ?? 0 }] : []));
   });
   const hiddenTotal = $derived(hiddenCounts.reduce((sum, h) => sum + h.n, 0));
+  const storesHref = router.href({ name: "settings", page: "stores" });
   // The order of the sidebar.
   const workspaceOrder = $derived.by(() => {
     storesRev.current;
-    return c.stores.workspaces().map((w) => `${w.store}/${w.ulid}`);
+    return c.stores.visibleWorkspaces().map((w) => `${w.store}/${w.ulid}`);
   });
   // The date is read again whenever the tasks or the grouping change, so a tab left open over
   // midnight catches up at the next change.
@@ -207,9 +210,7 @@
         <span class="text">
           非表示の Store に {hiddenTotal} 件（{hiddenCounts.map((h) => h.store).join("、")}）
         </span>
-        <a
-          href={router.href({ name: "settings", page: "stores" })}
-          onclick={(e) => onLinkClick(e, router.href({ name: "settings", page: "stores" }))}
+        <a href={storesHref} onclick={(e) => onLinkClick(e, storesHref)}
           >マウント中の Store を開く</a
         >
       </p>

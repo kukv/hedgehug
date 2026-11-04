@@ -54,7 +54,7 @@ function mount(
           ],
         hidden: (s: string) => over.hidden?.includes(s) ?? false,
         // the sidebar order: "me" before "shared"
-        workspaces: () => [
+        visibleWorkspaces: () => [
           { store: "me", ulid: "W9", name: "me" },
           { store: "shared", ulid: "W1", name: "release" },
         ],
