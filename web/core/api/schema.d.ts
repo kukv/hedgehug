@@ -1176,6 +1176,7 @@ export interface components {
             color?: string;
             /** @description The store hedgehug picks without --store */
             default: boolean;
+            default_store: boolean;
             hidden: boolean;
             /** Format: date-time */
             last_success?: string;
@@ -1203,6 +1204,7 @@ export interface components {
         StoreView: {
             account?: string;
             color?: string;
+            default_store: boolean;
             hidden: boolean;
             /** Format: date-time */
             last_success?: string;

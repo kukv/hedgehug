@@ -134,3 +134,26 @@ func TestStoreViewJSON(t *testing.T) {
 		t.Errorf("json = %s", b)
 	}
 }
+
+// default_store of config.yaml is on the store it names and on no other.
+func TestStoreListDefaultStore(t *testing.T) {
+	t.Parallel()
+	ts := newTwoStoreSession(t)
+	if _, err := ts.StoreDefault("org-b"); err != nil {
+		t.Fatal(err)
+	}
+	list, err := ts.StoreList()
+	if err != nil || len(list) != 2 {
+		t.Fatalf("list = %+v, %v", list, err)
+	}
+	for _, v := range list {
+		if v.DefaultStore != (v.Name == "org-b") {
+			t.Errorf("%s: default_store = %v", v.Name, v.DefaultStore)
+		}
+	}
+	// the store write responses carry it too
+	teal := "teal"
+	if v, err := ts.StoreSet("org-b", &teal, nil); err != nil || !v.DefaultStore {
+		t.Errorf("StoreSet(org-b) = %+v, %v", v, err)
+	}
+}

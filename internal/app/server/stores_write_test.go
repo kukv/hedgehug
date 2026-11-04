@@ -42,6 +42,8 @@ type storeRow struct {
 	Hidden   bool   `json:"hidden"`
 	ReadOnly string `json:"read_only"`
 	Default  bool   `json:"default"`
+
+	DefaultStore bool `json:"default_store"`
 }
 
 func (ts *testServer) storeRows() []storeRow {
@@ -165,11 +167,13 @@ func TestStoreDefaultAPI(t *testing.T) {
 	if out.Name != "team" {
 		t.Errorf("default = %+v", out)
 	}
-	// GET /api/stores `default` is the store the CLI picks without --store,
-	// and with two stores that is none whatever default_store says
-	// (TestStoreDefault); the default store itself is what the usecase reads.
-	if got, err := ts.session().StoreDefault(""); err != nil || got != "team" {
-		t.Errorf("default store = %q, %v; want team", got, err)
+	// default_store marks the store config.yaml names. (`default` is the store
+	// the CLI picks without --store, and with two stores that is none; see
+	// TestStoreDefault.)
+	for _, r := range ts.storeRows() {
+		if r.DefaultStore != (r.Name == "team") {
+			t.Errorf("row %+v; want only team to be default_store", r)
+		}
 	}
 	waitEvent[storesChanged](t, ch, nil)
 

@@ -561,14 +561,15 @@ func setLater(m, w *model.Workspace) bool {
 
 // StoreView is a store of config.yaml as store list --json prints it.
 type StoreView struct {
-	Name        string     `json:"name"`
-	Path        string     `json:"path"`
-	Remotes     []string   `json:"remotes"`
-	Account     string     `json:"account,omitempty"`
-	Color       string     `json:"color,omitempty"`        // from config.yaml; empty: the GUI picks one by order
-	Hidden      bool       `json:"hidden"`                 // from config.yaml; only the GUI leaves the store out
-	ReadOnly    string     `json:"read_only,omitempty"`    // why this machine cannot write the store, in words; absent when it can
-	LastSuccess *time.Time `json:"last_success,omitempty"` // of the last sync
+	Name         string     `json:"name"`
+	Path         string     `json:"path"`
+	Remotes      []string   `json:"remotes"`
+	Account      string     `json:"account,omitempty"`
+	Color        string     `json:"color,omitempty"`        // from config.yaml; empty: the GUI picks one by order
+	Hidden       bool       `json:"hidden"`                 // from config.yaml; only the GUI leaves the store out
+	ReadOnly     string     `json:"read_only,omitempty"`    // why this machine cannot write the store, in words; absent when it can
+	DefaultStore bool       `json:"default_store"`          // config.yaml's default_store names this store
+	LastSuccess  *time.Time `json:"last_success,omitempty"` // of the last sync
 }
 
 // StoreList lists the stores that are set up.
@@ -587,7 +588,7 @@ func (ss *Session) StoreList() ([]StoreView, error) {
 // storeView is the view of the store e of c. A store that does not open or
 // has no state is listed without its last sync and its read-only reason.
 func (ss *Session) storeView(c *config.Config, e config.StoreEntry) StoreView {
-	v := StoreView{Name: e.Name, Path: e.Path, Remotes: append([]string{}, e.Remotes...), Color: e.Color, Hidden: e.Hidden}
+	v := StoreView{Name: e.Name, Path: e.Path, Remotes: append([]string{}, e.Remotes...), Color: e.Color, Hidden: e.Hidden, DefaultStore: c.DefaultStore == e.Name}
 	if acct, ok := c.Writer(e); ok {
 		v.Account = acct.ID()
 	}

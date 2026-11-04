@@ -4,5 +4,6 @@
   "remotes": [],
   "account": "github.com/alice",
   "color": "sky",
-  "hidden": true
+  "hidden": true,
+  "default_store": false
 }

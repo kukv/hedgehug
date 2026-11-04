@@ -50,7 +50,7 @@
 
 1. **config.yaml の色と表示**: `config.StoreEntry` に `Color string`（`color`。`teal`・`orange`・`purple`・`sky`・`pink`・`olive`・`brown` のどれか。空は「並び順で割り当て」）と `Hidden bool`（`hidden`。省略は false）を足す。ほかの値は読み込みのエラー（既存の読み込みのエラーと同じ形、ファイルのパスと行）。書くときは知らないキーとコメントを残す（`Config.Update`）。灰色は閲覧のみ用なので選べない
 2. **`hh store set <名前> [--color <色>] [--hidden=true|false]`**: 渡したものだけ書き換える。`--color ""` は空に戻す。どちらも渡さなければ使い方の誤り（終了コード2）。ない名前はエラー（登録済みの名前を並べる。`hh store default` と同じ）。今と同じ値なら書かない。出力は `Set org-a: color=teal hidden=false`、`--json` は `StoreView`。親設計の「コマンド一覧」に足す
-3. **`StoreView` に足すもの**: `color`（config の値。空なら省く）、`hidden`（bool）、`read_only`（閲覧のみの理由の文。`SyncStatus.read_only` と同じ `acc.Why()`。書けるなら省く）。`hh store list --json` にも同じ項目が出る（ゴールデンを更新）。`hh store list` の表には列を足さない
+3. **`StoreView` に足すもの**: `color`（config の値。空なら省く）、`hidden`（bool）、`read_only`（閲覧のみの理由の文。`SyncStatus.read_only` と同じ `acc.Why()`。書けるなら省く）。`default_store`（bool。config.yaml の `default_store` が指す Store だけ true。GUI の既定の印はこれを使い、`GET /api/stores` の `default` は使わない）。`hh store list --json` にも同じ項目が出る（ゴールデンを更新）。`hh store list` の表には列を足さない
 4. **Store の書き込みの API**（どれも `Config.Update` の1回で、成功したら `stores.changed` を出す）:
    - `POST /api/stores/add`（本文 `{name, remotes, account?}`。`hh store add`。`path` は既定。応答は `StoreView`）
    - `DELETE /api/stores/{name}?keep=true|false`（`hh store remove [--keep]`。既定は `keep=false`＝ローカルのクローンも消す。未 push などで消せなければ 409 `store.unpushed` をそのまま返す。応答は `{name, path, deleted}`）
@@ -81,7 +81,7 @@
 20. **アカウントの操作**: カードの「…」に、`keychain`・`device` なら「ログインし直す」（同じ取得元で 19 を開く）と「ログアウト」（確認ダイアログ。`DELETE /api/accounts/{name}/token`）。`gh`・`env` には「Hedgehug が持っているものはありません」と出し、操作は出さない
 21. アカウントの削除は CLI にないので作らない（config.yaml を編集する案内も出さない）
 22. 操作のあとは `GET /api/accounts` と `GET /api/stores` を取り直す
-23. **SettingsStores の一覧**: `GET /api/stores` の各 Store を config の順にカードで出す: 色のボタン、名前、権限（「書き込み」または「閲覧のみ」と理由）、既定なら「既定の Store」、`remotes[0]` と `account`、最後の同期（キャンバスのタスク数は出さない。Store ごとの件数を返す API がなく、非表示の Store の件数をキャッシュから数えられないため）、表示のチェック
+23. **SettingsStores の一覧**: `GET /api/stores` の各 Store を config の順にカードで出す: 色のボタン、名前、権限（「書き込み」または「閲覧のみ」と理由）、`default_store` が true なら「既定の Store」（`default` ではなく `default_store`）、`remotes[0]` と `account`、最後の同期（キャンバスのタスク数は出さない。Store ごとの件数を返す API がなく、非表示の Store の件数をキャッシュから数えられないため）、表示のチェック
 24. **色**: 色のボタンで7色のパレットを開き、選ぶと `PATCH /api/stores/{name}` `{color}`。「自動」で空に戻す。閲覧のみの Store は灰色で出すが、選んだ色は保存できる（閲覧のみでなくなったら使う）。ボタンの名前は「<名前> の色を変える（このマシンだけ）」
 25. **表示**: チェックを外すと `PATCH {hidden: true}`。すべての Store を外すことはできない（最後の1つは無効にして理由を出す）
 26. **詳細**: 開くと remotes（2つ目以降に「ミラー」）、アカウント、ローカルのパス、操作（「既定にする」（既定でないとき）、「マウントを解除…」）を出す

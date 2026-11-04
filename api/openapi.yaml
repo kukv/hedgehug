@@ -1365,6 +1365,8 @@ components:
         default:
           description: The store hedgehug picks without --store
           type: boolean
+        default_store:
+          type: boolean
         hidden:
           type: boolean
         last_success:
@@ -1388,6 +1390,7 @@ components:
         - path
         - remotes
         - hidden
+        - default_store
       type: object
     StorePatchInputBody:
       additionalProperties: false
@@ -1434,6 +1437,8 @@ components:
           type: string
         color:
           type: string
+        default_store:
+          type: boolean
         hidden:
           type: boolean
         last_success:
@@ -1456,6 +1461,7 @@ components:
         - path
         - remotes
         - hidden
+        - default_store
       type: object
     StoresChanged:
       additionalProperties: false

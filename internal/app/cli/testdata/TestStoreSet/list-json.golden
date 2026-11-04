@@ -4,7 +4,8 @@
     "path": "<TMP>/001/hh/stores/me",
     "remotes": [],
     "account": "github.com/alice",
-    "hidden": false
+    "hidden": false,
+    "default_store": true
   },
   {
     "name": "org",
@@ -12,6 +13,7 @@
     "remotes": [],
     "account": "github.com/alice",
     "color": "sky",
-    "hidden": true
+    "hidden": true,
+    "default_store": false
   }
 ]
