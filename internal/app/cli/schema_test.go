@@ -8,8 +8,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 // writeSchemaFile replaces schema.yaml of the store me with the default
@@ -25,14 +24,7 @@ func (te *testEnv) writeSchemaFile(edit func(*schema.Schema)) {
 	if err := os.WriteFile(filepath.Join(te.storeDir("me"), "schema.yaml"), b, 0o600); err != nil {
 		te.t.Fatal(err)
 	}
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		te.t.Fatal(err)
-	}
-	author := gitrepo.Signature{Name: "Alice", Email: "alice@example.com"}
-	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{"schema.yaml"}, Subject: "raw", Author: author, When: te.now}); err != nil {
-		te.t.Fatal(err)
-	}
+	gitrepotest.CommitFiles(te.t, te.storeDir("me"), "raw", "Alice", "alice@example.com", te.now, "schema.yaml")
 }
 
 func TestSchemaCheckNoProblems(t *testing.T) {
@@ -44,7 +36,7 @@ func TestSchemaCheckNoProblems(t *testing.T) {
 		t.Errorf("exit %d, stdout %q, stderr %q", code, out, stderr)
 	}
 	code, out, _ = te.run("schema", "check", "--json")
-	if code != 0 || strings.TrimSpace(out) != "[]" {
+	if code != 0 || strings.Join(strings.Fields(out), "") != `{"findings":[]}` {
 		t.Errorf("--json: exit %d, stdout %q", code, out)
 	}
 }
@@ -79,10 +71,13 @@ func TestSchemaCheckProblems(t *testing.T) {
 	if code != 1 || stderr != "" {
 		t.Fatalf("--json: exit %d, stderr %q", code, stderr)
 	}
-	var fs []map[string]string
-	if err := json.Unmarshal([]byte(out), &fs); err != nil {
+	var res struct {
+		Findings []map[string]string `json:"findings"`
+	}
+	if err := json.Unmarshal([]byte(out), &res); err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
+	fs := res.Findings
 	if len(fs) != 2 || fs[0]["check"] != "template" || fs[0]["hint"] == "" || fs[1]["check"] != "task" {
 		t.Errorf("findings = %v", fs)
 	}

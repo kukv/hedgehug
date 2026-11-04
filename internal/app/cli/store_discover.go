@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kukv/hedgehug/internal/app/cli/prompt"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 )
@@ -34,10 +35,10 @@ func (a *app) storeDiscoverCmd() *cobra.Command {
 func (a *app) storeDiscover(in stores.DiscoverInput, all bool) error {
 	cands, err := stores.StoreDiscover(a.ss, in)
 	// --from with several accounts and none named: on a terminal, ask which.
-	if e := usecase.AsError(err); e != nil && e.Code == "choice.required" && e.Args["what"] == "--account" && a.isTerminal(a.stdin) {
+	if e := usecase.AsError(err); e != nil && e.Code == "choice.required" && e.Args["what"] == "--account" && a.ask().Interactive() {
 		names, _ := e.Args["candidates"].([]string)
 		var picked string
-		if picked, err = a.askChoice(names, choice{question: "Which account do the stores belong to?"}); err != nil {
+		if picked, err = a.ask().Choose(prompt.Choose{Question: "Which account do the stores belong to?", Options: names, Canceled: "canceled"}); err != nil {
 			return err
 		}
 		in.Account = picked
@@ -46,7 +47,7 @@ func (a *app) storeDiscover(in stores.DiscoverInput, all bool) error {
 	if err != nil {
 		return err
 	}
-	terminal := a.isTerminal(a.stdin)
+	terminal := a.ask().Interactive()
 	// With --json, stdout is the JSON alone: what a person reads goes to stderr.
 	list := a.stdout
 	if a.jsonOut {
@@ -72,7 +73,7 @@ func (a *app) storeDiscover(in stores.DiscoverInput, all bool) error {
 		res, mountErr = stores.StoreMount(a.ss, picked)
 	}
 	if a.jsonOut {
-		if err := a.printDiscoverJSON(cands, res); err != nil {
+		if err := a.printDiscoverJSON(cands, res.View()); err != nil {
 			return err
 		}
 		return mountErr
@@ -93,33 +94,21 @@ func (a *app) storeDiscover(in stores.DiscoverInput, all bool) error {
 		}
 	}
 	for _, f := range res.Failed {
-		if _, err := fmt.Fprintf(a.stderr, "Could not add store %s: %s\n", f.Name, describe(f.Err)); err != nil {
+		if _, err := fmt.Fprintf(a.stderr, "Could not add store %s: %s\n", f.Name, usecase.Describe(f.Err)); err != nil {
 			return err
 		}
 	}
 	return mountErr
 }
 
-func (a *app) printDiscoverJSON(cands []stores.Candidate, res stores.MountResult) error {
-	type failure struct {
-		Name  string `json:"name"`
-		Error string `json:"error"`
+func (a *app) printDiscoverJSON(cands []stores.Candidate, res stores.MountView) error {
+	if cands == nil {
+		cands = []stores.Candidate{}
 	}
-	out := struct {
+	return a.printJSON(struct {
 		Candidates []stores.Candidate `json:"candidates"`
-		Mounted    []string           `json:"mounted"`
-		Failed     []failure          `json:"failed,omitempty"`
-	}{Candidates: cands, Mounted: res.Mounted}
-	if out.Candidates == nil {
-		out.Candidates = []stores.Candidate{}
-	}
-	if out.Mounted == nil {
-		out.Mounted = []string{}
-	}
-	for _, f := range res.Failed {
-		out.Failed = append(out.Failed, failure{f.Name, describe(f.Err)})
-	}
-	return a.printJSON(out)
+		stores.MountView
+	}{cands, res})
 }
 
 func (a *app) printCandidates(w io.Writer, cands []stores.Candidate) error {

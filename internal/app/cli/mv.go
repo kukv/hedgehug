@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kukv/hedgehug/internal/app/cli/prompt"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
@@ -61,35 +62,23 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 	if err != nil {
 		return err
 	}
-	if a.jsonOut && len(res.Detached) > 0 {
-		// The task as the other commands print it, and what the move took off
-		// it, as the server tells it.
-		if err := res.Index.Refresh(); err != nil {
-			return err
-		}
-		e, ok := res.Index.Task(res.ULID)
-		if !ok {
-			return fmt.Errorf("task %s is not in the index after the write", res.ULID)
-		}
-		return a.printJSON(struct {
-			*usecase.TaskView
-			Detached []usecase.Detached `json:"detached"`
-		}{usecase.TaskViewOf(res.Index, e), res.Detached})
+	w, err := res.Write()
+	if err != nil {
+		return err
 	}
-	if err := a.printTask(res.Index, res.ULID, verb(res.Committed, "Moved")); err != nil || a.jsonOut || !res.Moved {
+	if err := a.printWrite(w, verb(res.Committed, "Moved")); err != nil || a.jsonOut || !res.Moved {
 		return err
 	}
 	var b strings.Builder
-	for i, t := range res.Tasks {
-		fmt.Fprintf(&b, "  %s → %s\n", res.Index.QualifyID(res.OldIDs[i]), res.Index.QualifyID(t.ID))
+	for _, c := range res.Renumbered() {
+		fmt.Fprintf(&b, "  %s → %s\n", c.Old, c.New)
 	}
-	for _, d := range res.Detached {
-		id := res.Index.QualifyID(d.ID)
+	for _, d := range w.Detached {
 		if d.Sprint != "" {
-			fmt.Fprintf(&b, "  %s: removed from sprint %s\n", id, d.Sprint)
+			fmt.Fprintf(&b, "  %s: removed from sprint %s\n", d.DisplayID, d.Sprint)
 		}
 		for _, r := range d.Releases {
-			fmt.Fprintf(&b, "  %s: removed from release %s\n", id, r)
+			fmt.Fprintf(&b, "  %s: removed from release %s\n", d.DisplayID, r)
 		}
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())
@@ -107,13 +96,13 @@ func (a *app) mvStore(in stores.MoveStoreInput) error {
 			return a.printMoveStore(res, shown)
 		}
 		e := usecase.AsError(err)
-		if e == nil || !a.isTerminal(a.stdin) {
+		if e == nil || !a.ask().Interactive() {
 			return err
 		}
 		switch {
 		case e.Code == "choice.required" && e.Args["what"] == "--workspace":
 			names, _ := e.Args["candidates"].([]string)
-			if in.Workspace, err = a.askChoice(names, choice{question: "Which workspace of " + in.To + "?"}); err != nil {
+			if in.Workspace, err = a.ask().Choose(prompt.Choose{Question: "Which workspace of " + in.To + "?", Options: names, Canceled: "canceled"}); err != nil {
 				return err
 			}
 		case e.Code == "choice.required" && e.Args["what"] == "--scoped":
@@ -139,20 +128,10 @@ func (a *app) mvStore(in stores.MoveStoreInput) error {
 
 // askScoped asks whether the scoped schema of the projects moved goes along.
 func (a *app) askScoped(projects []string) (string, error) {
-	if _, err := fmt.Fprintf(a.stderr, "The scoped schema of %s — [c]arry / [d]rop: ", strings.Join(projects, ", ")); err != nil {
-		return "", err
-	}
-	line, err := a.readLine()
-	if err != nil && line == "" {
-		return "", errors.New("Canceled")
-	}
-	switch strings.ToLower(strings.TrimSpace(line)) {
-	case "c", "carry":
-		return "carry", nil
-	case "d", "drop":
-		return "drop", nil
-	}
-	return "", usageErrorf("%q is not carry or drop", strings.TrimSpace(line))
+	return a.ask().Choose(prompt.Choose{
+		Question: "The scoped schema of " + strings.Join(projects, ", ") + " — ",
+		Options:  []string{"carry", "drop"}, ByWord: true, Canceled: "Canceled",
+	})
 }
 
 // confirmMove shows what a move cuts and says about the history (D8), and
@@ -171,68 +150,28 @@ func (a *app) confirmMove(p stores.MovePlan) error {
 		fmt.Fprintf(&b, "No longer visible to: %s\n", strings.Join(v.Hidden, ", "))
 	}
 	fmt.Fprintf(&b, "Move %s to %s? [y/N] ", plural.Count(len(v.Tasks), "task"), v.To)
-	if _, err := fmt.Fprint(a.stderr, b.String()); err != nil {
-		return err
-	}
-	line, err := a.readLine()
-	if err != nil && line == "" {
-		return errors.New("Canceled")
-	}
-	if ans := strings.ToLower(strings.TrimSpace(line)); ans != "y" && ans != "yes" {
-		return errors.New("Canceled")
-	}
-	return nil
+	_, err := a.ask().Confirm(prompt.YesNo{Question: b.String(), Canceled: "Canceled", Refuse: "Canceled"})
+	return err
 }
 
 // printMoveStore prints a move: a line for each task, or JSON. The scoped
 // lines come with them unless the confirmation showed them.
 func (a *app) printMoveStore(res stores.MoveStoreResult, shown bool) error {
-	p := res.Plan
+	v := res.View()
 	if a.jsonOut {
-		type taskJSON struct {
-			ULID  string `json:"ulid"`
-			OldID string `json:"old_id"`
-			NewID string `json:"new_id"`
-		}
-		type unlinkJSON struct {
-			Task   string `json:"task"`
-			Field  string `json:"field"`
-			Target string `json:"target"`
-		}
-		type scopedJSON struct {
-			Carried bool     `json:"carried"`
-			Dropped []string `json:"dropped,omitempty"`
-		}
-		out := struct {
-			From     string       `json:"from"`
-			To       string       `json:"to"`
-			Tasks    []taskJSON   `json:"tasks"`
-			Unlinked []unlinkJSON `json:"unlinked,omitempty"`
-			Scoped   *scopedJSON  `json:"scoped,omitempty"`
-			Resumed  bool         `json:"resumed,omitempty"`
-		}{From: p.From, To: p.To, Resumed: res.Resumed}
-		for _, m := range res.Moved {
-			out.Tasks = append(out.Tasks, taskJSON{m.ULID.String(), m.OldID, m.NewID})
-		}
-		for _, u := range p.Unlinked {
-			out.Unlinked = append(out.Unlinked, unlinkJSON{u.Task.String(), u.Field, u.Target.String()})
-		}
-		if p.Scoped != nil {
-			out.Scoped = &scopedJSON{Carried: res.Carried, Dropped: p.Scoped.Dropped}
-		}
-		return a.printJSON(out)
+		return a.printJSON(v)
 	}
 	var b strings.Builder
 	if res.Resumed {
 		// The destination was written by an earlier run that stopped; this
 		// one only finished the source.
-		fmt.Fprintf(&b, "Finished the move: %s was left unfinished last time\n", p.From)
+		fmt.Fprintf(&b, "Finished the move: %s was left unfinished last time\n", v.From)
 	}
-	for _, m := range res.Moved {
-		fmt.Fprintf(&b, "Moved %s (%s) → %s %s\n", m.OldID, m.ULID, p.To, m.NewID)
+	for _, m := range v.Tasks {
+		fmt.Fprintf(&b, "Moved %s (%s) → %s %s\n", m.OldID, m.ULID, v.To, m.NewID)
 	}
 	if !shown {
-		for _, l := range p.Scoped.Lines(p.To) {
+		for _, l := range v.ScopedLines {
 			b.WriteString(l + "\n")
 		}
 	}

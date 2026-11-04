@@ -93,7 +93,7 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 			return err
 		}},
 		{"Migrate", func() error {
-			_, _, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetStatus, Old: "todo", New: "ready"}, false)
+			_, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetStatus, Old: "todo", New: "ready"}, false)
 			return err
 		}},
 		{"ViewSave", func() error { _, err := views.ViewSave(ts.Session, "mine", views.ViewChange{}); return err }},
@@ -134,10 +134,10 @@ func TestReadOnlyAllowsReading(t *testing.T) {
 	if _, _, err := ts.Open(); err != nil {
 		t.Errorf("Open: %v", err)
 	}
-	if _, _, err := workspaces.WorkspaceList(ts.Session); err != nil {
+	if _, err := workspaces.WorkspaceList(ts.Session); err != nil {
 		t.Errorf("WorkspaceList: %v", err)
 	}
-	if _, _, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetStatus, Old: "todo", New: "ready"}, true); err != nil {
+	if _, err := schemas.Migrate(ts.Session, schema.Migration{Target: schema.TargetStatus, Old: "todo", New: "ready"}, true); err != nil {
 		t.Errorf("Migrate --dry-run: %v", err)
 	}
 	if _, err := maintenance.Doctor(ts.Session, false); err != nil {
@@ -227,7 +227,7 @@ func TestSyncExplicitClearsPushDeniedBackgroundDoesNot(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "me is read-only (the remote denied the push)") || len(reps) != 1 {
 		t.Fatalf("Sync = %+v, %v; want the push to be denied", reps, err)
 	}
-	st, err := replication.SyncStatus(ts.Session)
+	st, err := usecase.SyncStatus(ts.Session)
 	if err != nil || len(st) != 1 || st[0].ReadOnly != "the remote denied the push" {
 		t.Fatalf("SyncStatus = %+v, %v; want ReadOnly set", st, err)
 	}
@@ -251,7 +251,7 @@ func TestSyncExplicitClearsPushDeniedBackgroundDoesNot(t *testing.T) {
 	if a, _ := replicate.ReadAccess(s); a.ReadOnly {
 		t.Errorf("access after an explicit sync = %+v; want writable", a)
 	}
-	st, _ = replication.SyncStatus(ts.Session)
+	st, _ = usecase.SyncStatus(ts.Session)
 	if st[0].ReadOnly != "" {
 		t.Errorf("SyncStatus ReadOnly = %q; want none", st[0].ReadOnly)
 	}
@@ -274,7 +274,7 @@ func TestSyncReportsUnpushable(t *testing.T) {
 	if err != nil || len(reps) != 1 || reps[0].Unpushable != 2 || len(reps[0].Pushed) != 0 { // the first commit of the store, and the task
 		t.Fatalf("Sync = %+v, %v", reps, err)
 	}
-	st, err := replication.SyncStatus(ts.Session)
+	st, err := usecase.SyncStatus(ts.Session)
 	if err != nil || st[0].ReadOnly != "the remote cannot be written" || st[0].Unpushed == nil || *st[0].Unpushed != 2 {
 		t.Errorf("SyncStatus = %+v, %v", st, err)
 	}
@@ -295,7 +295,7 @@ func TestBackgroundSyncReportsUnpushableByGitHubPermission(t *testing.T) {
 	if err != nil || len(reps) != 1 || reps[0].Unpushable != 2 || len(reps[0].Pushed) != 0 {
 		t.Fatalf("Sync = %+v, %v", reps, err)
 	}
-	st, err := replication.SyncStatus(ts.Session)
+	st, err := usecase.SyncStatus(ts.Session)
 	if err != nil || st[0].ReadOnly != "the GitHub permission is read" || st[0].Unpushed == nil || *st[0].Unpushed != 2 {
 		t.Errorf("SyncStatus = %+v, %v", st, err)
 	}
@@ -656,7 +656,7 @@ func TestReadOnlyRefusesInboxRevert(t *testing.T) {
 	ts := usecasetest.New(t)
 	item, _ := usecasetest.OverwriteME1(t, ts)
 	usecasetest.MakeReadOnly(t, ts, replicate.ReasonGitHub)
-	_, err := notifications.InboxRevert(ts.Session, item.ULID.String())
+	_, err := notifications.InboxRevert(ts.Session, item.ULID)
 	wantReadOnly(t, "InboxRevert", err)
 }
 

@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 var (
@@ -60,6 +62,18 @@ type devUser struct {
 
 // exportLine is a line of `devenv env`: export NAME='value'.
 var exportLine = regexp.MustCompile(`^export ([A-Z_]+)='(.*)'$`)
+
+// uc is a session over the directories of the user, to prepare and check
+// what the command wrote.
+func (u *devUser) uc() *usecasetest.Session {
+	getenv := func(k string) string {
+		if k == "HOME" || k == "HEDGEHUG_HOME" {
+			return u.home
+		}
+		return ""
+	}
+	return usecasetest.Attach(u.t, getenv, time.Now)
+}
 
 func devUserOf(t *testing.T, bin, devenv, dir, user string) *devUser {
 	t.Helper()

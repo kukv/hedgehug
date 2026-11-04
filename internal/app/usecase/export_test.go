@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 )
@@ -20,3 +21,10 @@ func (ss *Session) GithubRepoOf(a0 *config.Config, a1 config.StoreEntry) *replic
 }
 
 var ProjectOf = projectOf
+
+// ResultIndexHas reports whether the index the result holds, as it is before
+// View refreshes it, has the task u.
+func ResultIndexHas(r TaskResult, u model.ULID) bool {
+	_, ok := r.index.Task(u)
+	return ok
+}

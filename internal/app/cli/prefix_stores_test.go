@@ -7,9 +7,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/inbox"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 // newSharedPrefixEnv is an environment where org-a and org-b both use the
@@ -21,24 +19,19 @@ func newSharedPrefixEnv(t *testing.T) *testEnv {
 	te.ok("store", "init", "org-a", "--prefix", "API")
 	te.ok("store", "init", "org-b", "--prefix", "TMP")
 	te.ok("store", "init", "org-c", "--prefix", "WEB")
-	s, err := store.Open(te.storeDir("org-b"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Update(store.Op{Name: "update", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
-		for w, err := range s.Workspaces() {
-			if err != nil {
-				return err
-			}
+	te.uc().MustEdit("org-b", "update", usecasetest.TAuthor, func(tx *usecasetest.Tx) error {
+		ws, err := tx.Workspaces()
+		if err != nil {
+			return err
+		}
+		for _, w := range ws {
 			w.IDPrefix = "API"
 			if err := tx.PutWorkspace(w); err != nil {
 				return err
 			}
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 	te.addJSON("--store", "org-a", "Alpha task")
 	te.addJSON("--store", "org-b", "Bravo task")
 	te.addJSON("--store", "org-c", "Charlie task")
@@ -63,24 +56,15 @@ func TestPrefixAcrossStores(t *testing.T) {
 	}
 
 	// an inbox item that names ids
-	s, err := store.Open(te.storeDir("org-a"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	var task model.ULID
-	for e, err := range s.Tasks() {
-		if err != nil {
-			t.Fatal(err)
-		}
-		task = e.ULID
+	for _, u := range te.uc().TaskULIDs("org-a") {
+		task = u
 	}
-	if _, err := inbox.Open(s).Add([]inbox.Item{{
-		Kind: inbox.Renumbered, Task: task, ID: "API-1", Path: model.TaskPath(task), Commit: "c",
+	te.uc().AddInboxItem("org-a", usecasetest.InboxItem{
+		Kind: "renumbered", Task: task, ID: "API-1", Path: model.TaskPath(task), Commit: "c",
 		Time:   time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC),
 		Detail: json.RawMessage(`{"Old":"API-1","New":"API-2"}`),
-	}}); err != nil {
-		t.Fatal(err)
-	}
+	})
 	te.goldenOK("inbox", "inbox")
 
 	te.goldenOK("rm", "rm", "org-a:API-1")
@@ -88,11 +72,11 @@ func TestPrefixAcrossStores(t *testing.T) {
 	te.goldenOK("restore", "restore", "org-a:API-1")
 
 	// --json keeps the id as it is, and says the store
-	var got []struct{ ID, Store string }
+	var got struct{ Tasks []struct{ ID, Store string } }
 	if err := json.Unmarshal([]byte(te.ok("ls", "--json", "store:org-a")), &got); err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 || got[0].ID != "API-1" || got[0].Store != "org-a" {
+	if len(got.Tasks) != 1 || got.Tasks[0].ID != "API-1" || got.Tasks[0].Store != "org-a" {
 		t.Errorf("ls --json = %+v; want id API-1 of org-a", got)
 	}
 	if out := te.ok("show", "--json", "org-b:API-1"); !strings.Contains(out, `"id": "API-1"`) || strings.Contains(out, `"id": "org-b:`) {

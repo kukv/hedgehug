@@ -45,11 +45,7 @@ func TestSessionCloseClosesEveryRepoItOpened(t *testing.T) {
 		if _, _, err := notifications.InboxList(reader, false); err != nil {
 			t.Fatal(err)
 		}
-		q, err := usecase.ParseQuery("")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := browse.List(reader, q); err != nil {
+		if _, err := browse.List(reader, ""); err != nil {
 			t.Fatal(err)
 		}
 		if n, err := browse.MountedCount(reader); err != nil || n != 2 {

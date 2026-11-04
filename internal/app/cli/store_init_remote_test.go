@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
@@ -50,9 +49,7 @@ func TestStoreInitAccountChoiceOnTerminal(t *testing.T) {
 	fake := te.withFake(fakegh.State{Tokens: map[string]string{"t-alice": "alice", "t-bob": "bob"}})
 	te.env["HH_TOKEN_A"], te.env["HH_TOKEN_B"] = "t-alice", "t-bob"
 	te.writeConfigYAML(twoAccounts)
-	if err := gitrepo.InitBare(filepath.Join(d, "bob", "hh.git")); err != nil {
-		t.Fatal(err)
-	}
+	gitrepotest.Bare(t, filepath.Join(d, "bob", "hh.git"))
 	gitrepotest.InstallHTTPS(t, gitrepotest.Under("https://github.com/", d), nil, nil)
 	te.terminal, te.stdin = true, "2\n"
 	code, _, errs := te.run("store", "init", "org", "--prefix", "ORG", "--remote", "https://github.com/bob/hh.git")

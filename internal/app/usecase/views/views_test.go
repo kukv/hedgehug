@@ -39,7 +39,7 @@ func TestViewSaveCreateAndOverwrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !r.Committed || r.View.Layout != "table" || !slices.Equal(r.View.TableColumns(), []string{"id", "title", "due"}) {
+	if !r.Committed || r.View.Layout != "table" || !slices.Equal(r.View.Table.Columns, []string{"id", "title", "due"}) {
 		t.Errorf("overwrite = %+v %+v", r, r.View)
 	}
 	// Only the flags given change; a save that changes nothing commits nothing.
@@ -301,7 +301,7 @@ func TestViewUpdateChangesOnlyWhatIsGiven(t *testing.T) {
 	if got := ts.HeadSubject(); got != "hedgehug: view update w" {
 		t.Errorf("subject = %q", got)
 	}
-	if got := views.SavedViewOf(r.View).Table.Columns; !slices.Equal(got, []string{"id", "title"}) {
+	if got := r.View.Table.Columns; !slices.Equal(got, []string{"id", "title"}) {
 		t.Errorf("columns = %v", got)
 	}
 }

@@ -12,23 +12,9 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase/browse"
 	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
-type undoKept struct {
-	Path   string `json:"path"`
-	Task   string `json:"task,omitempty" doc:"The ID of the task; empty for other files"`
-	Field  string `json:"field"`
-	Author string `json:"author"`
-}
-
-type undoWrite struct {
-	Undone usecase.LogView `json:"undone" doc:"The commit taken back"`
-	Commit *string         `json:"commit"`
-	Kept   []undoKept      `json:"kept" doc:"What others changed after it, which undo kept"`
-}
-
-type undoOutput struct{ Body undoWrite }
+type undoOutput struct{ Body tasks.UndoWrite }
 
 type activityInput struct {
 	Store  string `query:"store" doc:"The store; without it, the commits of every store"`
@@ -46,12 +32,7 @@ type notificationsInput struct {
 	All bool `query:"all" doc:"Include the items read"`
 }
 
-type notification struct {
-	notifications.InboxItemView
-	Read bool `json:"read"`
-}
-
-type notificationsOutput struct{ Body []notification }
+type notificationsOutput struct{ Body []notifications.Notification }
 
 // NotificationParam is the item a request is on. It is exported because huma
 // skips an embedded struct whose type is not.
@@ -75,11 +56,7 @@ type notificationReadInput struct {
 	}
 }
 
-type notificationReadOutput struct {
-	Body struct {
-		Read []string `json:"read" nullable:"false" doc:"The ULIDs of the items marked read, as hh inbox read --json"`
-	}
-}
+type notificationReadOutput struct{ Body notifications.ReadResult }
 
 // syncOps are the ops of the commits a sync makes.
 var syncOps = []string{"merge", "repair"}
@@ -95,18 +72,7 @@ func (s *Server) registerActivity() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		_, ix, err := ss.Open()
-		if err != nil {
-			return nil, problemOf(err)
-		}
-		out := &undoOutput{}
-		out.Body.Undone = browse.LogViewsOf(ix, []gitrepo.LogEntry{r.Commit})[0]
-		out.Body.Commit = commitPtr(r.NewCommit)
-		out.Body.Kept = []undoKept{}
-		for _, k := range r.Kept {
-			out.Body.Kept = append(out.Body.Kept, undoKept{k.Path, k.Task, k.Field, k.Author})
-		}
-		return out, nil
+		return &undoOutput{Body: r.Write()}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -128,11 +94,10 @@ func (s *Server) registerActivity() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		kept := []browse.StoreLog{}
+		kept := []usecase.LogView{}
 		for _, l := range r.Logs {
-			e := l.Entry
-			op, _ := e.Trailer("Hedgehug-Op")
-			author, _ := e.Trailer("Hedgehug-Author")
+			op, _ := l.Trailer("Hedgehug-Op")
+			author, _ := l.Trailer("Hedgehug-Author")
 			isSync := slices.Contains(syncOps, op)
 			switch {
 			case in.Sync == "only" && !isSync, in.Sync == "exclude" && isSync:
@@ -145,7 +110,7 @@ func (s *Server) registerActivity() {
 				break
 			}
 		}
-		return &activityOutput{Body: browse.StoreLogViews(kept)}, nil
+		return &activityOutput{Body: kept}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -154,39 +119,11 @@ func (s *Server) registerActivity() {
 	}, func(_ context.Context, in *notificationsInput) (*notificationsOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		// Ops warns once per read of the boxes, and the unread and the all
-		// lists below read them twice: the warnings reach the log once.
-		seen := map[string]bool{}
-		warn := ss.Warn
-		ss.Warn = func(m string) {
-			if !seen[m] {
-				seen[m] = true
-				warn(m)
-			}
-		}
-		stores, err := notifications.InboxStores(ss)
+		items, err := notifications.InboxNotifications(ss, in.All)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		unread, err := notifications.InboxListOf(ss, stores, false)
-		if err != nil {
-			return nil, problemOf(err)
-		}
-		items := unread
-		if in.All {
-			if items, err = notifications.InboxListOf(ss, stores, true); err != nil {
-				return nil, problemOf(err)
-			}
-		}
-		isUnread := map[string]bool{}
-		for _, it := range unread {
-			isUnread[it.ULID.String()] = true
-		}
-		out := &notificationsOutput{Body: make([]notification, len(items))}
-		for i, it := range items {
-			out.Body[i] = notification{InboxItemView: it, Read: !isUnread[it.ULID.String()]}
-		}
-		return out, nil
+		return &notificationsOutput{Body: items}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -227,9 +164,7 @@ func (s *Server) registerActivity() {
 			return nil, problemOf(err)
 		}
 		s.poller.Kick()
-		out := &notificationReadOutput{}
-		out.Body.Read = read
-		return out, nil
+		return &notificationReadOutput{Body: notifications.ReadResult{Read: read}}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -242,12 +177,8 @@ func (s *Server) registerActivity() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		// The item may be of any store; r.Index is the index of the store
+		// The item may be of any store; the result is read from the store
 		// InboxRevert wrote to.
-		v, err := r.View()
-		if err != nil {
-			return nil, problemOf(err)
-		}
-		return &taskWriteOutput{Body: taskWrite{Task: v, Commit: commitPtr(r.Commit)}}, nil
+		return writeOut(r)
 	})
 }

@@ -327,10 +327,10 @@ func TestAuthJSON(t *testing.T) {
 		t.Errorf("device = %+v", st[1])
 	}
 	var lo struct {
-		Account string
-		Removed bool
+		Account, ID string
+		Removed     bool
 	}
-	if err := json.Unmarshal([]byte(te.ok("auth", "logout", "alice", "--json")), &lo); err != nil || lo.Account != "alice" || !lo.Removed {
+	if err := json.Unmarshal([]byte(te.ok("auth", "logout", "alice", "--json")), &lo); err != nil || lo.Account != "alice" || lo.ID != "github.com/alice" || !lo.Removed {
 		t.Errorf("logout = %+v, %v", lo, err)
 	}
 	if err := json.Unmarshal([]byte(te.ok("auth", "logout", "nt", "--json")), &lo); err != nil || lo.Removed {

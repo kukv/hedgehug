@@ -3,12 +3,10 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 )
 
@@ -52,11 +50,7 @@ type storeDefaultInput struct {
 	}
 }
 
-type storeDefaultOutput struct {
-	Body struct {
-		Name string `json:"name"`
-	}
-}
+type storeDefaultOutput struct{ Body stores.DefaultView }
 
 type storePatchInput struct {
 	Name string `path:"name" doc:"The store"`
@@ -83,32 +77,7 @@ type mountCandidate struct {
 
 type mountInput struct{ Body []mountCandidate }
 
-type mountFailed struct {
-	Name    string `json:"name"`
-	Code    string `json:"code" doc:"What went wrong, as the type of a problem"`
-	Message string `json:"message" doc:"The message in English, as the CLI prints it"`
-}
-
-type mountOutput struct {
-	Body struct {
-		Mounted []string      `json:"mounted" doc:"The names of the stores that were added"`
-		Failed  []mountFailed `json:"failed" doc:"The candidates that could not be added; the others were"`
-	}
-}
-
-// storeViewOf is the row of the store name of StoreList.
-func storeViewOf(ss *usecase.Session, name string) (stores.StoreView, error) {
-	list, err := stores.StoreList(ss)
-	if err != nil {
-		return stores.StoreView{}, err
-	}
-	for _, v := range list {
-		if v.Name == name {
-			return v, nil
-		}
-	}
-	return stores.StoreView{}, fmt.Errorf("store %s is not listed after it was added", name)
-}
+type mountOutput struct{ Body stores.MountView }
 
 func (s *Server) registerStores() {
 	huma.Register(s.api, huma.Operation{
@@ -122,7 +91,7 @@ func (s *Server) registerStores() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		v, err := storeViewOf(ss, r.Name)
+		v, err := stores.ViewOf(ss, r.Name)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -146,7 +115,7 @@ func (s *Server) registerStores() {
 		// first, and no poll opens it again until the removal is over. With
 		// keep the clone stays, and the poller lets go when the store is gone
 		// from the config. A name that is no store is StoreRemove's to refuse.
-		if _, e, eerr := ss.Entry(); eerr == nil && !in.Keep {
+		if e, eerr := ss.CurrentStore(); eerr == nil && !in.Keep {
 			err = s.poller.ReleaseFor(e.Path, remove)
 		} else {
 			err = remove()
@@ -169,9 +138,7 @@ func (s *Server) registerStores() {
 			return nil, problemOf(err)
 		}
 		s.storesWritten()
-		out := &storeDefaultOutput{}
-		out.Body.Name = name
-		return out, nil
+		return &storeDefaultOutput{Body: stores.DefaultViewOf(name)}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -231,15 +198,9 @@ func (s *Server) registerStores() {
 		if err != nil && len(res.Failed) == 0 {
 			return nil, problemOf(err) // StoreMount's own error is the failures, which are in res
 		}
-		out := &mountOutput{}
-		out.Body.Mounted, out.Body.Failed = append([]string{}, res.Mounted...), []mountFailed{}
-		for _, f := range res.Failed {
-			p := problemOf(f.Err)
-			out.Body.Failed = append(out.Body.Failed, mountFailed{Name: f.Name, Code: p.Type, Message: p.Detail})
-		}
 		if len(res.Mounted) > 0 {
 			s.storesWritten()
 		}
-		return out, nil
+		return &mountOutput{Body: res.View()}, nil
 	})
 }

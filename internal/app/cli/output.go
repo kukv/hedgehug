@@ -8,10 +8,7 @@ import (
 
 	"golang.org/x/text/width"
 
-	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/usecase"
-	"github.com/kukv/hedgehug/internal/app/usecase/browse"
 )
 
 // style colors text when the output is a terminal.
@@ -80,47 +77,32 @@ var taskHeader = []string{"ID", "ULID", "STATUS", "KIND", "ASSIGNEES", "LABELS",
 
 // taskRow is one task in the table. The title is last, so wide characters
 // in it do not shift other columns.
-func taskRow(ix *index.Index, e *index.Entry) []string {
-	id, kind, status := ix.DisplayID(e), e.Kind, e.Status
+func taskRow(v *usecase.TaskView) []string {
+	id, kind, status := v.DisplayID, v.Kind, v.Status
 	if id == "" {
 		id = "?"
 	}
-	if e.Broken != "" {
+	if v.Broken != "" {
 		kind, status = "?", "?"
 	}
-	return []string{id, e.ULID.String(), status, kind, strings.Join(e.Assignees, ","), strings.Join(e.Labels, ","), e.Title}
+	return []string{id, v.ULID, status, kind, strings.Join(v.Assignees, ","), strings.Join(v.Labels, ","), v.Title}
 }
 
-// printTasks prints es as JSON or as a table; withStore puts the name of the
-// store of each task in a STORE column ahead of the others.
-func (a *app) printTasks(es []browse.Entry, withStore bool) error {
-	if a.jsonOut {
-		out := make([]*usecase.TaskView, len(es))
-		for i, e := range es {
-			ix, err := e.Store.Index()
-			if err != nil {
-				return err
-			}
-			out[i] = usecase.TaskViewOf(ix, e.Entry)
-		}
-		return a.printJSON(out)
-	}
-	if len(es) == 0 {
+// printTasks prints vs as a table; withStore puts the name of the store of
+// each task in a STORE column ahead of the others.
+func (a *app) printTasks(vs []*usecase.TaskView, withStore bool) error {
+	if len(vs) == 0 {
 		return nil
 	}
 	header, lead := taskHeader, 0
 	if withStore {
 		header, lead = append([]string{"STORE"}, taskHeader...), 1
 	}
-	rows := make([][]string, len(es))
-	for i, e := range es {
-		ix, err := e.Store.Index()
-		if err != nil {
-			return err
-		}
-		rows[i] = taskRow(ix, e.Entry)
+	rows := make([][]string, len(vs))
+	for i, v := range vs {
+		rows[i] = taskRow(v)
 		if withStore {
-			rows[i] = append([]string{e.Store.Name}, rows[i]...)
+			rows[i] = append([]string{v.Store}, rows[i]...)
 		}
 	}
 	st := a.style()
@@ -132,20 +114,23 @@ func (a *app) printTasks(es []browse.Entry, withStore bool) error {
 	})
 }
 
-// printTask prints the task ulid after a write: as JSON, or as one line that
+// printTask prints the task after a write: as JSON, or as one line that
 // starts with verb.
-func (a *app) printTask(ix *index.Index, ulid model.ULID, verb string) error {
-	if err := ix.Refresh(); err != nil {
+func (a *app) printTask(r usecase.TaskResult, verb string) error {
+	w, err := r.Write()
+	if err != nil {
 		return err
 	}
-	e, ok := ix.Task(ulid)
-	if !ok {
-		return fmt.Errorf("task %s is not in the index after the write", ulid)
-	}
+	return a.printWrite(w, verb)
+}
+
+// printWrite prints w, the answer to a write to one task: as JSON, or as one
+// line that starts with verb.
+func (a *app) printWrite(w usecase.TaskWrite, verb string) error {
 	if a.jsonOut {
-		return a.printJSON(usecase.TaskViewOf(ix, e))
+		return a.printJSON(w)
 	}
-	_, err := fmt.Fprintf(a.stdout, "%s %s %s\n", verb, a.style().id(usecase.TaskLabel(ix, e)), e.Title)
+	_, err := fmt.Fprintf(a.stdout, "%s %s %s\n", verb, a.style().id(w.Task.Label()), w.Task.Title)
 	return err
 }
 

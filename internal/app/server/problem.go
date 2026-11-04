@@ -8,9 +8,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
-	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 )
 
 // Problem is the problem+json body of every error. Type is the Code of the
@@ -62,7 +60,7 @@ func newHumaError(status int, msg string, errs ...error) huma.StatusError {
 // problemOf is the problem of an error an operation returned.
 func problemOf(err error) *Problem {
 	e := usecase.AsError(err)
-	p := &Problem{Type: e.Code, Detail: detailOf(err), Args: e.Args}
+	p := &Problem{Type: usecase.ProblemCode(err), Detail: usecase.Describe(err), Args: e.Args}
 	switch e.Kind {
 	case usecase.KindNotFound:
 		p.Status = http.StatusNotFound
@@ -78,10 +76,9 @@ func problemOf(err error) *Problem {
 	if p.Type == "" {
 		p.Type = "internal"
 	}
-	var ve *store.ValidationError
-	if errors.As(err, &ve) {
-		vs := make([]map[string]string, len(ve.Violations))
-		for i, v := range ve.Violations {
+	if viol, ok := usecase.ViolationsOf(err); ok {
+		vs := make([]map[string]string, len(viol))
+		for i, v := range viol {
 			vs[i] = map[string]string{"code": v.Code, "field": v.Field, "message": v.Msg}
 		}
 		if p.Args == nil {
@@ -91,19 +88,6 @@ func problemOf(err error) *Problem {
 	}
 	p.Title = http.StatusText(p.Status)
 	return p
-}
-
-// detailOf is the message of err as the CLI prints it after "hedgehug: "
-// (internal/app/cli describe).
-func detailOf(err error) string {
-	var ve *store.ValidationError
-	if errors.As(err, &ve) {
-		return schemas.ViolationsText(ve)
-	}
-	if errors.Is(err, store.ErrLocked) {
-		return "another hedgehug is writing to the store; try again"
-	}
-	return err.Error()
 }
 
 // writeProblem writes p outside of huma (the Host and token checks, static

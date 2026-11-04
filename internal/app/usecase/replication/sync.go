@@ -6,14 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
@@ -116,7 +114,7 @@ func SyncStore(ss *usecase.Session, c *config.Config, e config.StoreEntry, expli
 	r.Notices = append(r.Notices, res.Notices...)
 	for _, o := range res.Overwritten {
 		x := usecase.Overwritten{Path: o.Path, Field: o.Field, Value: usecase.JSONValue(o.Value), Author: o.Author}
-		if u, ok := TaskOfPath(o.Path); ok {
+		if u, ok := model.TaskOfPath(o.Path); ok {
 			x.Task = u.String()
 			x.ID = taskID(u)
 			x.Label = qualify(x.ID)
@@ -146,17 +144,6 @@ func SyncStore(ss *usecase.Session, c *config.Config, e config.StoreEntry, expli
 	return r, nil
 }
 
-// TaskOfPath is the ULID of the task whose file p is.
-func TaskOfPath(p string) (model.ULID, bool) {
-	rest, ok := strings.CutPrefix(p, "tasks/")
-	if !ok {
-		return model.ULID{}, false
-	}
-	name := rest[strings.LastIndex(rest, "/")+1:]
-	u, err := model.ParseULID(strings.TrimSuffix(name, ".md"))
-	return u, err == nil
-}
-
 // NoticeField is the field an overwritten item of the inbox is about.
 func NoticeField(it inbox.Item) string {
 	var d struct {
@@ -164,65 +151,6 @@ func NoticeField(it inbox.Item) string {
 	}
 	_ = json.Unmarshal(it.Detail, &d) // an item that does not decode has no field
 	return d.Field
-}
-
-// StoreStatus is how the syncs of one store went, as sync --status --json
-// prints it.
-type StoreStatus struct {
-	Store        string     `json:"store"`
-	Remotes      []string   `json:"remotes"`
-	PendingSince *time.Time `json:"pending_since,omitempty"`
-	LastAttempt  *time.Time `json:"last_attempt,omitempty"`
-	LastSuccess  *time.Time `json:"last_success,omitempty"`
-	LastError    string     `json:"last_error,omitempty"`
-	Error        string     `json:"error,omitempty"`     // the store could not be read
-	Unpushed     *int       `json:"unpushed,omitempty"`  // absent when the store has no remote
-	ReadOnly     string     `json:"read_only,omitempty"` // why the store is read-only, in words; absent when it is not
-}
-
-// SyncStatus reads how the syncs of every store went. A store that cannot be
-// read has its error in the row, so the status of the others is still shown.
-func SyncStatus(ss *usecase.Session) ([]StoreStatus, error) {
-	c, _, err := ss.Config()
-	if err != nil {
-		return nil, err
-	}
-	targets, err := ss.SyncTargets(c, true)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]StoreStatus, len(targets))
-	for i, e := range targets {
-		out[i] = storeStatus(ss, e)
-	}
-	return out, nil
-}
-
-func storeStatus(ss *usecase.Session, e config.StoreEntry) StoreStatus {
-	x := StoreStatus{Store: e.Name, Remotes: append([]string{}, e.Remotes...)}
-	s, err := ss.OpenStoreAt(e.Path)
-	if err != nil {
-		x.Error = err.Error()
-		return x
-	}
-	defer func() { _ = s.Repo().Close() }()
-	st, err := replicate.ReadState(s)
-	if err != nil {
-		x.Error = err.Error()
-		return x
-	}
-	x.LastError = st.LastError
-	x.ReadOnly = usecase.ReadOnlyWhy(s) // a reason in ReadOnly, not an error that hides the rest
-	x.PendingSince, x.LastAttempt, x.LastSuccess = usecase.TimePtr(st.PendingSince), usecase.TimePtr(st.LastAttempt), usecase.TimePtr(st.LastSuccess)
-	if len(e.Remotes) > 0 {
-		n, err := usecase.Unpushed(s)
-		if err != nil {
-			x.Error = err.Error()
-			return x
-		}
-		x.Unpushed = &n
-	}
-	return x
 }
 
 // SyncBackground is what the detached child of a write runs (sync
@@ -285,12 +213,16 @@ func backgroundFailed(ss *usecase.Session, log io.Writer, name string, err error
 // a store with a remote is.
 func SyncsInBackground(e config.StoreEntry) bool { return len(e.Remotes) > 0 }
 
-// BeforeCommand, for the config cfg the command has read, reports the
-// failure of a background sync that the user has not been told of (through
-// report), and starts one for each store with a remote that is due (through
-// start; replicate.Start for the CLI). What goes wrong here is left to the
-// command itself to tell: it fails on the same store or config.
-func BeforeCommand(ss *usecase.Session, cfg *config.Config, start func(s *store.Store, name string) error, report func(store, msg string)) {
+// BeforeCommand reports the failure of a background sync that the user has
+// not been told of (through report), and starts one for each store with a
+// remote that is due (replicate.Start). It reads config.yaml itself. What
+// goes wrong here is left to the command itself to tell: it fails on the same
+// store or config.
+func BeforeCommand(ss *usecase.Session, report func(store, msg string)) {
+	cfg, _, err := ss.Config()
+	if err != nil {
+		return
+	}
 	targets, err := ss.SyncTargets(cfg, false)
 	if err != nil {
 		return
@@ -307,7 +239,7 @@ func BeforeCommand(ss *usecase.Session, cfg *config.Config, start func(s *store.
 			report(e.Name, msg)
 		}
 		if st, err := replicate.ReadState(s); err == nil && replicate.Due(st, ss.Now(), cfg.Sync.Interval) {
-			_ = start(s, e.Name) // starts a process of its own; it does not keep s
+			_ = replicate.Start(s, e.Name, ss.Getenv) // starts a process of its own; it does not keep s
 		}
 		_ = s.Repo().Close()
 	}

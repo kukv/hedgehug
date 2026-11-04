@@ -8,7 +8,6 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
 	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
@@ -21,18 +20,7 @@ type WorkspaceParam struct {
 	ID string `path:"id" doc:"The workspace: its name, prefix or ULID"`
 }
 
-type workspaceWrite struct {
-	Workspace workspaces.WorkspaceView `json:"workspace"`
-	Commit    *string                  `json:"commit"`
-	IDs       []idChange               `json:"ids,omitempty" doc:"With a new prefix: the IDs the tasks had and have now"`
-}
-
-type idChange struct {
-	Old string `json:"old"`
-	New string `json:"new"`
-}
-
-type workspaceOutput struct{ Body workspaceWrite }
+type workspaceOutput struct{ Body workspaces.WorkspaceWrite }
 
 type workspaceAddInput struct {
 	StoreParam
@@ -50,11 +38,7 @@ type workspacePatchInput struct {
 	}
 }
 
-type findingsOutput struct {
-	Body struct {
-		Findings []usecase.Finding `json:"findings"`
-	}
-}
+type findingsOutput struct{ Body schemas.CheckResult }
 
 type migrateInput struct {
 	StoreParam
@@ -67,20 +51,9 @@ type migrateInput struct {
 	}
 }
 
-type migrateOutput struct {
-	Body struct {
-		Changed []*usecase.TaskView `json:"changed"`
-		Skipped []string            `json:"skipped"`
-		Commit  *string             `json:"commit"`
-	}
-}
+type migrateOutput struct{ Body schemas.MigrateWrite }
 
-type storeItem struct {
-	stores.StoreView
-	Default bool `json:"default" doc:"The store hedgehug picks without --store"`
-}
-
-type storesOutput struct{ Body []storeItem }
+type storesOutput struct{ Body []stores.StoreItem }
 
 type storeInitInput struct {
 	Body struct {
@@ -92,27 +65,13 @@ type storeInitInput struct {
 	}
 }
 
-type storeInitOutput struct {
-	Body struct {
-		Name      string                   `json:"name"`
-		Path      string                   `json:"path"`
-		Workspace workspaces.WorkspaceView `json:"workspace"`
-		Remotes   []string                 `json:"remotes"`
-		Pushed    []string                 `json:"pushed"`
-	}
-}
+type storeInitOutput struct{ Body stores.StoreInitView }
 
 type doctorOutput struct{ Body []maintenance.DoctorReport }
 
-// workspaceOut is the output of a write to a workspace. The view counts the
-// tasks from the index the operation read (refreshed after a renumbering), so
-// that a write that is committed is never answered with an error.
+// workspaceOut is the output of a write to a workspace.
 func workspaceOut(r workspaces.WorkspaceResult) *workspaceOutput {
-	out := &workspaceOutput{Body: workspaceWrite{Workspace: workspaces.WorkspaceViewOf(r.Index, r.Workspace), Commit: commitPtr(r.Commit)}}
-	for _, c := range r.IDs {
-		out.Body.IDs = append(out.Body.IDs, idChange{c.Old, c.New})
-	}
-	return out
+	return &workspaceOutput{Body: r.Write()}
 }
 
 func (s *Server) registerAdmin() {
@@ -122,12 +81,9 @@ func (s *Server) registerAdmin() {
 	}, func(_ context.Context, in *StoreParam) (*struct{ Body []workspaces.WorkspaceView }, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		_, ws, err := workspaces.WorkspaceList(ss)
+		ws, err := workspaces.WorkspaceList(ss)
 		if err != nil {
 			return nil, problemOf(err)
-		}
-		if ws == nil {
-			ws = []workspaces.WorkspaceView{}
 		}
 		return &struct{ Body []workspaces.WorkspaceView }{ws}, nil
 	})
@@ -189,11 +145,11 @@ func (s *Server) registerAdmin() {
 	}, func(_ context.Context, in *StoreParam) (*struct{ Body schemas.SchemaView }, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		_, ix, err := ss.Open()
+		v, err := schemas.SchemaGet(ss)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return &struct{ Body schemas.SchemaView }{schemas.SchemaViewOf(ix.Schema())}, nil
+		return &struct{ Body schemas.SchemaView }{v}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -206,9 +162,7 @@ func (s *Server) registerAdmin() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		out := &findingsOutput{}
-		out.Body.Findings = append([]usecase.Finding{}, fs...)
-		return out, nil
+		return &findingsOutput{Body: schemas.CheckResultOf(fs)}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -222,24 +176,11 @@ func (s *Server) registerAdmin() {
 		}
 		ss := s.session(in.Store)
 		defer ss.Close()
-		ix, plan, err := schemas.Migrate(ss, m, b.DryRun)
+		w, err := schemas.Migrate(ss, m, b.DryRun)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		out := &migrateOutput{}
-		out.Body.Changed, out.Body.Skipped = []*usecase.TaskView{}, []string{}
-		out.Body.Commit = commitPtr(plan.Commit)
-		for _, t := range plan.Changed {
-			e, ok := ix.Task(t.ULID)
-			if b.DryRun || !ok {
-				e = index.EntryOf(t) // the task as migrated, as the CLI prints it
-			}
-			out.Body.Changed = append(out.Body.Changed, listView(ix, e))
-		}
-		for _, u := range plan.Skipped {
-			out.Body.Skipped = append(out.Body.Skipped, u.String())
-		}
-		return out, nil
+		return &migrateOutput{Body: w}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -248,19 +189,11 @@ func (s *Server) registerAdmin() {
 	}, func(context.Context, *struct{}) (*storesOutput, error) {
 		ss := s.session("")
 		defer ss.Close()
-		list, err := stores.StoreList(ss)
+		items, err := stores.StoreItems(ss)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		def := ""
-		if _, e, err := ss.Entry(); err == nil { // the store the CLI picks without --store
-			def = e.Name
-		}
-		out := &storesOutput{Body: []storeItem{}}
-		for _, v := range list {
-			out.Body = append(out.Body, storeItem{StoreView: v, Default: v.Name == def})
-		}
-		return out, nil
+		return &storesOutput{Body: items}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -274,17 +207,9 @@ func (s *Server) registerAdmin() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		out := &storeInitOutput{}
-		out.Body.Name, out.Body.Path = r.Name, r.Path
-		out.Body.Remotes, out.Body.Pushed = append([]string{}, r.Remotes...), append([]string{}, r.Pushed...)
-		out.Body.Workspace = workspaces.WorkspaceView{ULID: r.Workspace.ULID.String(), Name: r.Workspace.Name, IDPrefix: r.Workspace.IDPrefix, PrefixSet: r.Workspace.PrefixSet}
-		// StoreInit leaves the time of the prefix out of its workspace; the store has it.
 		made := s.session(r.Name)
 		defer made.Close()
-		if _, ws, err := workspaces.WorkspaceList(made); err == nil && len(ws) == 1 {
-			out.Body.Workspace = ws[0]
-		}
-		return out, nil
+		return &storeInitOutput{Body: stores.StoreInitViewOf(made, r)}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{

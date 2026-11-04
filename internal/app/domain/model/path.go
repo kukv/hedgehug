@@ -93,6 +93,17 @@ func ParseCommentPath(p string) (task, comment ULID, err error) {
 	return parseChildPath(p, "comments", CommentPath)
 }
 
+// TaskOfPath is the ULID of the task whose file p is.
+func TaskOfPath(p string) (ULID, bool) {
+	rest, ok := strings.CutPrefix(p, "tasks/")
+	if !ok {
+		return ULID{}, false
+	}
+	name := rest[strings.LastIndex(rest, "/")+1:]
+	u, err := ParseULID(strings.TrimSuffix(name, ".md"))
+	return u, err == nil
+}
+
 // ParseWorklogPath returns the task and entry ULIDs of the worklog file at p.
 func ParseWorklogPath(p string) (task, log ULID, err error) {
 	return parseChildPath(p, "worklogs", WorklogPath)

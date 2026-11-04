@@ -56,7 +56,7 @@ func (a *app) sync() error {
 	for i := range reps {
 		r := &reps[i]
 		if r.Err != nil {
-			r.Error = describe(r.Err)
+			r.Error = usecase.Describe(r.Err)
 			continue
 		}
 		if !a.jsonOut {
@@ -135,7 +135,7 @@ func repairedLine(x usecase.Repaired) string {
 }
 
 func (a *app) syncStatus() error {
-	out, err := replication.SyncStatus(a.ss)
+	out, err := usecase.SyncStatusViews(a.ss)
 	if err != nil {
 		return err
 	}

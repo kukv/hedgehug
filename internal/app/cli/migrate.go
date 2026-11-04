@@ -7,8 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/app/storage/index"
-	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 )
 
@@ -57,49 +55,33 @@ func (a *app) migrateCmd() *cobra.Command {
 }
 
 func (a *app) migrate(m schema.Migration, dryRun bool) error {
-	ix, p, err := schemas.Migrate(a.ss, m, dryRun)
+	w, err := schemas.Migrate(a.ss, m, dryRun)
 	if err != nil {
 		return err
 	}
-	return a.printMigrated(ix, p, dryRun)
+	return a.printMigrated(w, dryRun)
 }
 
-// printMigrated prints the tasks p changes. Their JSON is read from the
-// index after a write, and from the migrated tasks in a dry run.
-func (a *app) printMigrated(ix *index.Index, p *schemas.MigrationPlan, dryRun bool) error {
-	changed := p.Changed
-	skipped := make([]string, len(p.Skipped))
-	for i, ulid := range p.Skipped {
-		skipped[i] = ulid.String()
-	}
-	if len(skipped) > 0 {
-		if _, err := fmt.Fprintf(a.stderr, "warning: not migrated, since they do not decode: %s\n", strings.Join(skipped, ", ")); err != nil {
+// printMigrated prints the tasks a migration changes. Their JSON is read
+// from the store after a write, and from the migrated tasks in a dry run.
+func (a *app) printMigrated(w schemas.MigrateWrite, dryRun bool) error {
+	if len(w.Skipped) > 0 {
+		if _, err := fmt.Fprintf(a.stderr, "warning: not migrated, since they do not decode: %s\n", strings.Join(w.Skipped, ", ")); err != nil {
 			return err
 		}
 	}
 	if a.jsonOut {
-		out := struct {
-			Changed []*usecase.TaskView `json:"changed"`
-			Skipped []string            `json:"skipped"`
-		}{Changed: []*usecase.TaskView{}, Skipped: skipped}
-		for _, t := range changed {
-			e, ok := ix.Task(t.ULID)
-			if dryRun || !ok {
-				e = index.EntryOf(t)
-			}
-			out.Changed = append(out.Changed, usecase.TaskViewOf(ix, e))
-		}
-		return a.printJSON(out)
+		return a.printJSON(w)
 	}
 	heading := "Migrated"
 	if dryRun {
 		heading = "Would migrate"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s %s\n", heading, schemas.TaskCount(len(changed)))
+	fmt.Fprintf(&b, "%s %s\n", heading, schemas.TaskCount(len(w.Changed)))
 	st := a.style()
-	for _, t := range changed {
-		fmt.Fprintf(&b, "  %s  %s\n", st.id(usecase.TaskLabel(ix, index.EntryOf(t))), t.Title)
+	for _, v := range w.Changed {
+		fmt.Fprintf(&b, "  %s  %s\n", st.id(v.Label()), v.Title)
 	}
 	_, err := fmt.Fprint(a.stdout, b.String())
 	return err

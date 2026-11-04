@@ -5,17 +5,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/app/usecase/views"
 	"github.com/kukv/hedgehug/internal/app/usecase/workspaces"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 type migrated struct {
@@ -56,28 +53,6 @@ func TestMigrateProps(t *testing.T) {
 	}
 }
 
-// commitRaw writes body to the file rel of the store "me" and commits it, as
-// a broken sync would leave it.
-func (ts *testServer) commitRaw(rel, body string) {
-	ts.t.Helper()
-	ss := ts.session()
-	_, e, err := ss.Entry()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	s, err := ss.OpenStore()
-	if err != nil {
-		ts.t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(e.Path, filepath.FromSlash(rel)), []byte(body), 0o600); err != nil {
-		ts.t.Fatal(err)
-	}
-	author := config.CommitAuthor(testAccount)
-	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{rel}, Subject: "raw", Author: author, When: time.Now()}); err != nil {
-		ts.t.Fatal(err)
-	}
-}
-
 func TestDoctorFindsAndRepairs(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
@@ -86,15 +61,11 @@ func TestDoctorFindsAndRepairs(t *testing.T) {
 	var show usecase.ShowView
 	ts.call("GET", "/api/tasks/"+idB, nil, 200, &show)
 	rel := model.TaskPath(mustULID(t, show.ULID))
-	_, e, err := ts.session().Entry()
+	b, err := os.ReadFile(filepath.Join(ts.uc.StoreDir("me"), filepath.FromSlash(rel))) //nolint:gosec // the test's own store
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := os.ReadFile(filepath.Join(e.Path, filepath.FromSlash(rel))) //nolint:gosec // the test's own store
-	if err != nil {
-		t.Fatal(err)
-	}
-	ts.commitRaw(rel, strings.Replace(string(b), "id: "+idB, "id: ME-1", 1))
+	ts.uc.CommitRawFile(rel, strings.Replace(string(b), "id: "+idB, "id: ME-1", 1))
 	var reps []doctorReport
 	ts.call("GET", "/api/doctor", nil, 200, &reps)
 	if len(reps) != 1 {
@@ -110,7 +81,7 @@ func TestDoctorFindsAndRepairs(t *testing.T) {
 		t.Fatalf("doctor fix = %+v; want one repair", rep)
 	}
 
-	ts.commitRaw(rel, "not a task\n")
+	ts.uc.CommitRawFile(rel, "not a task\n")
 	ts.call("GET", "/api/doctor", nil, 200, &reps)
 	rep = reps[0]
 	var named bool

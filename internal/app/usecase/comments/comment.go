@@ -32,6 +32,29 @@ type CommentResult struct {
 	Commit    string // hex hash of the commit made; "" when nothing was committed
 }
 
+// CommentWrite is what a write to a comment answers, in the CLI's --json and
+// in the server's response.
+type CommentWrite struct {
+	Comment usecase.CommentView `json:"comment" doc:"The comment as written; for a removal, as it was"`
+	Commit  *string             `json:"commit" doc:"The commit made; null when nothing changed"`
+}
+
+// Write is the answer to the write: the comment as written, and the commit.
+func (r CommentResult) Write() CommentWrite {
+	w := CommentWrite{Commit: usecase.CommitPtr(r.Commit)}
+	if c := r.Comment; c != nil {
+		w.Comment = usecase.CommentView{ULID: c.ULID.String(), Task: r.Ref.Task.String(), Author: c.Author, Created: c.Created, Body: c.Body}
+		if !c.Updated.IsZero() {
+			w.Comment.Updated = &c.Updated
+		}
+		w.Comment.DeletedAt = c.DeletedAt
+	}
+	return w
+}
+
+// CommentULID is the ULID of the comment written.
+func (r CommentResult) CommentULID() string { return r.Ref.Comment.String() }
+
 // CommentEditSession is a comment found and read from its file, before it is
 // edited or removed.
 type CommentEditSession struct {
@@ -40,6 +63,21 @@ type CommentEditSession struct {
 	Comment *model.Comment
 
 	ss *usecase.Session // the session that opened it, which writes
+}
+
+// OfTask reports whether the comment is a comment of the task.
+func (ces *CommentEditSession) OfTask(task model.ULID) bool { return ces.Ref.Task == task }
+
+// CommentULID is the ULID of the comment.
+func (ces *CommentEditSession) CommentULID() string { return ces.Ref.Comment.String() }
+
+// Body is the body of the comment as it is now.
+func (ces *CommentEditSession) Body() string { return ces.Comment.Body }
+
+// Result is the result of an edit that changed nothing: the comment as it
+// is, and no commit.
+func (ces *CommentEditSession) Result() CommentResult {
+	return CommentResult{Store: ces.Store, Ref: ces.Ref, Comment: ces.Comment}
 }
 
 // OpenComment opens the store and resolves arg to a comment that is read
@@ -133,6 +171,10 @@ type CommentSession struct {
 
 	ss *usecase.Session // the session that began it, which writes
 }
+
+// FileName names the temporary file that takes the body of the comment: the
+// id of the task, or its ULID when it has no id.
+func (cs *CommentSession) FileName() string { return usecase.TaskFileName(cs.Entry) }
 
 // BeginComment resolves arg to a live task; it is done before the body is
 // taken from the user.

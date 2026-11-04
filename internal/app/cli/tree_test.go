@@ -2,17 +2,10 @@ package cli
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
-	"time"
-
-	git "github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing/object"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
@@ -51,10 +44,11 @@ func TestLsTree(t *testing.T) {
 		t.Errorf("tasks that neither match nor connect are shown:\n%s", out)
 	}
 
-	var roots []usecase.TaskView
-	if err := json.Unmarshal([]byte(te.ok("ls", "--tree", "--json", "status:done")), &roots); err != nil {
+	var found struct{ Roots []usecase.TaskView }
+	if err := json.Unmarshal([]byte(te.ok("ls", "--tree", "--json", "status:done")), &found); err != nil {
 		t.Fatal(err)
 	}
+	roots := found.Roots
 	if len(roots) != 1 || !roots[0].Context || len(roots[0].Children) != 1 || len(roots[0].Children[0].Children) != 1 || roots[0].Children[0].Children[0].Context {
 		t.Errorf("tree JSON = %+v", roots)
 	}
@@ -99,13 +93,9 @@ func TestLsTreeULIDsInCycle(t *testing.T) {
 	te := newStoreEnv(t)
 	x := te.addJSON("X")
 	y := te.addJSON("Y", "--parent", x.ID, "--status", "done")
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	xULID, _ := model.ParseULID(x.ULID)
 	yULID, _ := model.ParseULID(y.ULID)
-	writeCycle(t, te, s, xULID, yULID)
+	te.uc().WriteCycle("me", xULID, yULID)
 
 	if got := te.ok("ls", "--tree", "--ulids-only", "status:done"); got != y.ULID+"\n" {
 		t.Errorf("--tree --ulids-only = %q, want only %s", got, y.ULID)
@@ -123,13 +113,9 @@ func TestLsTreeCycle(t *testing.T) {
 	y := te.addJSON("Y", "--parent", x.ID)
 	// A sync can leave a parent cycle that writes refuse; make one by
 	// writing the files behind the store's back and committing them.
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	xULID, _ := model.ParseULID(x.ULID)
 	yULID, _ := model.ParseULID(y.ULID)
-	writeCycle(t, te, s, xULID, yULID)
+	te.uc().WriteCycle("me", xULID, yULID)
 
 	out := te.ok("ls", "--tree")
 	i := strings.Index(out, "== in a parent cycle")
@@ -144,11 +130,7 @@ func TestLsTreeCycleNested(t *testing.T) {
 	x := te.addJSON("X")
 	y := te.addJSON("Y", "--parent", x.ID)
 	c := te.addJSON("C", "--parent", y.ID, "--status", "done")
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	writeCycle(t, te, s, mustULID(t, x.ULID), mustULID(t, y.ULID))
+	te.uc().WriteCycle("me", mustULID(t, x.ULID), mustULID(t, y.ULID))
 
 	// Text: X and Y at the left under the header, C as Y's child.
 	out := te.ok("ls", "--tree")
@@ -177,14 +159,14 @@ func TestLsTreeCycleNested(t *testing.T) {
 
 	// JSON: the same nesting; in_cycle only on X and Y.
 	raw := te.ok("ls", "--tree", "--json")
-	var roots []usecase.TaskView
-	if err := json.Unmarshal([]byte(raw), &roots); err != nil {
+	var tree struct{ Roots, Cycle []usecase.TaskView }
+	if err := json.Unmarshal([]byte(raw), &tree); err != nil {
 		t.Fatal(err)
 	}
-	if len(roots) != 2 {
-		t.Fatalf("tree JSON has %d roots, want 2: %+v", len(roots), roots)
+	if len(tree.Roots) != 0 || len(tree.Cycle) != 2 {
+		t.Fatalf("tree JSON has %d roots and %d in the cycle, want none and 2: %+v", len(tree.Roots), len(tree.Cycle), tree)
 	}
-	for _, r := range roots {
+	for _, r := range tree.Cycle {
 		if !r.InCycle {
 			t.Errorf("%s: in_cycle = false, want true", r.Title)
 		}
@@ -229,44 +211,5 @@ func TestLsTreeErrors(t *testing.T) {
 		if code != 2 || !strings.Contains(stderr, "--tree") {
 			t.Errorf("ls --tree %s: exit %d, stderr %q", q, code, stderr)
 		}
-	}
-}
-
-// writeCycle makes x the parent of y and y the parent of x, by writing the
-// files and committing them with go-git, past the store's checks.
-func writeCycle(t *testing.T, te *testEnv, s *store.Store, x, y model.ULID) {
-	t.Helper()
-	dir := te.storeDir("me")
-	for _, pair := range [][2]model.ULID{{x, y}, {y, x}} {
-		tk, err := s.Task(pair[0])
-		if err != nil {
-			t.Fatal(err)
-		}
-		parent := pair[1]
-		tk.Parent = &parent
-		b, err := tk.Encode()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(model.TaskPath(pair[0]))), b, 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	r, err := git.PlainOpen(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	w, err := r.Worktree()
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Add only the two files: .hedgehug/local/ holds the index cache.
-	for _, ulid := range []model.ULID{x, y} {
-		if _, err := w.Add(model.TaskPath(ulid)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := w.Commit("make a cycle", &git.CommitOptions{Author: &object.Signature{Name: "T", Email: "t@example.com", When: time.Now()}}); err != nil {
-		t.Fatal(err)
 	}
 }

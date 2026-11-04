@@ -73,6 +73,6 @@ func Move(ss *usecase.Session, in MoveInput) (usecase.MoveResult, error) {
 			}
 		}
 	}
-	res.TaskResult = usecase.TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash)}
+	res.TaskResult = usecase.NewTaskResult(ix, e.ULID, hash)
 	return res, nil
 }

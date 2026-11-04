@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/go-git/go-git/v5/plumbing"
+
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
@@ -14,26 +16,33 @@ import (
 )
 
 // TaskResult is what a write to one task returns: the index read before the
-// write (the CLI prints from it after refreshing), the task and whether a
+// write (the answer is made from it after refreshing), the task and whether a
 // commit was made.
 type TaskResult struct {
-	Index     *index.Index
+	index     *index.Index
 	ULID      model.ULID
 	Committed bool
 	Commit    string // hex hash of the commit made; "" when nothing was committed
 }
 
-// View is the task as the write left it. It refreshes the index, so a caller
-// that answers a request from it never returns what the task was before.
+// NewTaskResult is the result of a write to the task ulid, read through ix,
+// that made the commit hash (the zero hash for no commit).
+func NewTaskResult(ix *index.Index, ulid model.ULID, hash plumbing.Hash) TaskResult {
+	return TaskResult{index: ix, ULID: ulid, Committed: !hash.IsZero(), Commit: CommitHex(hash)}
+}
+
+// View is the task as the write left it, as a row of a list. It refreshes the
+// index, so a caller that answers a request from it never returns what the
+// task was before.
 func (r TaskResult) View() (*TaskView, error) {
-	if err := r.Index.Refresh(); err != nil {
+	if err := r.index.Refresh(); err != nil {
 		return nil, err
 	}
-	e, ok := r.Index.Task(r.ULID)
+	e, ok := r.index.Task(r.ULID)
 	if !ok {
 		return nil, NewErr(KindNotFound, "task.gone", fmt.Errorf("%s is no longer in the store", r.ULID), "id", r.ULID.String())
 	}
-	return TaskViewOf(r.Index, e), nil
+	return ListViewOf(r.index, e), nil
 }
 
 var ErrNoAccounts = NewErr(KindConflict, "account.none", errors.New("no account is set up; add one with hedgehug auth add <name> --login <login> (or hedgehug auth login)"))

@@ -19,24 +19,6 @@ components:
         - name
         - login
       type: object
-    AccountLoginBody:
-      additionalProperties: false
-      properties:
-        account:
-          type: string
-        added:
-          description: "The account was added to config.yaml: the name was no account's"
-          type: boolean
-        id:
-          type: string
-        uses:
-          description: "gh or env:VAR: the account takes its token from there, so Hedgehug has nothing to log in and kept nothing"
-          type: string
-      required:
-        - account
-        - id
-        - added
-      type: object
     AccountTokenInputBody:
       additionalProperties: false
       properties:
@@ -103,6 +85,24 @@ components:
         - id
         - state
       type: object
+    AuthLoginResult:
+      additionalProperties: false
+      properties:
+        account:
+          type: string
+        added:
+          description: "The account was added to config.yaml: the name was no account's"
+          type: boolean
+        id:
+          type: string
+        uses:
+          description: "gh or env:VAR: the account takes its token from there, so Hedgehug has nothing to log in and kept nothing"
+          type: string
+      required:
+        - account
+        - id
+        - added
+      type: object
     AuthLogoutResult:
       additionalProperties: false
       properties:
@@ -158,6 +158,18 @@ components:
         - url
         - permission
       type: object
+    CheckResult:
+      additionalProperties: false
+      properties:
+        findings:
+          items:
+            $ref: "#/components/schemas/Finding"
+          type:
+            - array
+            - "null"
+      required:
+        - findings
+      type: object
     CommentEditInputBody:
       additionalProperties: false
       properties:
@@ -188,7 +200,17 @@ components:
         created:
           format: date-time
           type: string
+        deleted_at:
+          description: When the comment was removed
+          format: date-time
+          type: string
+        task:
+          description: The ULID of the task the comment is on
+          type: string
         ulid:
+          type: string
+        updated:
+          format: date-time
           type: string
       required:
         - ulid
@@ -275,6 +297,17 @@ components:
           type: string
       required:
         - title
+      type: object
+    DefaultView:
+      additionalProperties: false
+      properties:
+        name:
+          description: The default store; null when there is none
+          type:
+            - string
+            - "null"
+      required:
+        - name
       type: object
     Detached:
       additionalProperties: false
@@ -386,18 +419,6 @@ components:
         - msg
         - severity
       type: object
-    FindingsOutputBody:
-      additionalProperties: false
-      properties:
-        findings:
-          items:
-            $ref: "#/components/schemas/Finding"
-          type:
-            - array
-            - "null"
-      required:
-        - findings
-      type: object
     Fixed:
       additionalProperties: false
       properties:
@@ -469,7 +490,7 @@ components:
         - stores
         - unread
       type: object
-    IdChange:
+    IDChange:
       additionalProperties: false
       properties:
         new:
@@ -550,34 +571,6 @@ components:
         - name
         - role
         - parents
-      type: object
-    ListOutputBody:
-      additionalProperties: false
-      properties:
-        cycle:
-          description: The tasks in a parent cycle, with tree
-          items:
-            $ref: "#/components/schemas/TaskView"
-          type:
-            - array
-            - "null"
-        groups:
-          description: "The groups, when the query has group:"
-          items:
-            $ref: "#/components/schemas/GroupView"
-          type:
-            - array
-            - "null"
-        roots:
-          description: The roots of the tree, with tree
-          items:
-            $ref: "#/components/schemas/TaskView"
-          type: array
-        tasks:
-          description: The tasks found, without tree
-          items:
-            $ref: "#/components/schemas/TaskView"
-          type: array
       type: object
     LogTrailer:
       additionalProperties: false
@@ -670,7 +663,7 @@ components:
         - old
         - new
       type: object
-    MigrateOutputBody:
+    MigrateWrite:
       additionalProperties: false
       properties:
         changed:
@@ -726,7 +719,7 @@ components:
         - code
         - message
       type: object
-    MountOutputBody:
+    MountView:
       additionalProperties: false
       properties:
         failed:
@@ -1032,14 +1025,14 @@ components:
           type: string
       required:
         - read
-        - store
-        - task
         - ulid
         - kind
         - commit
         - author
         - to
         - time
+        - store
+        - task
       type: object
     NotificationPatchInputBody:
       additionalProperties: false
@@ -1061,17 +1054,6 @@ components:
           items:
             type: string
           type: array
-      type: object
-    NotificationReadOutputBody:
-      additionalProperties: false
-      properties:
-        read:
-          description: The ULIDs of the items marked read, as hh inbox read --json
-          items:
-            type: string
-          type: array
-      required:
-        - read
       type: object
     Overwritten:
       additionalProperties: false
@@ -1280,6 +1262,17 @@ components:
         - ulid
         - id
         - title
+      type: object
+    ReadResult:
+      additionalProperties: false
+      properties:
+        read:
+          description: The ULIDs of the items marked read, as hh inbox read --json
+          items:
+            type: string
+          type: array
+      required:
+        - read
       type: object
     Rebuilt:
       additionalProperties: false
@@ -1690,14 +1683,6 @@ components:
       required:
         - name
       type: object
-    StoreDefaultOutputBody:
-      additionalProperties: false
-      properties:
-        name:
-          type: string
-      required:
-        - name
-      type: object
     StoreInitInputBody:
       additionalProperties: false
       properties:
@@ -1720,7 +1705,7 @@ components:
         - name
         - prefix
       type: object
-    StoreInitOutputBody:
+    StoreInitView:
       additionalProperties: false
       properties:
         name:
@@ -1938,14 +1923,14 @@ components:
           format: date-time
           type: string
         next_fetch:
-          description: When the loop fetches next; absent before its first sync
+          description: When the loop fetches next; absent before its first sync; absent when no server runs the loop
           format: date-time
           type: string
         pending_since:
           format: date-time
           type: string
         push_at:
-          description: "When the background sync pushes the writes not pushed yet: sync.push_interval after pending_since, but not before sync.push_interval after the last sync and not after next_fetch, which syncs too; absent when nothing waits, before the first sync and while a sync runs"
+          description: "When the background sync pushes the writes not pushed yet: sync.push_interval after pending_since, but not before sync.push_interval after the last sync and not after next_fetch, which syncs too; absent when nothing waits, before the first sync and while a sync runs; absent when no server runs the loop"
           format: date-time
           type: string
         push_interval:
@@ -1970,6 +1955,34 @@ components:
         - push_interval
         - store
         - remotes
+      type: object
+    TaskList:
+      additionalProperties: false
+      properties:
+        cycle:
+          description: The tasks in a parent cycle, with tree
+          items:
+            $ref: "#/components/schemas/TaskView"
+          type:
+            - array
+            - "null"
+        groups:
+          description: "The groups, when the query has group:"
+          items:
+            $ref: "#/components/schemas/GroupView"
+          type:
+            - array
+            - "null"
+        roots:
+          description: The roots of the tree, with tree
+          items:
+            $ref: "#/components/schemas/TaskView"
+          type: array
+        tasks:
+          description: The tasks found, without tree
+          items:
+            $ref: "#/components/schemas/TaskView"
+          type: array
       type: object
     TaskView:
       additionalProperties: false
@@ -2171,6 +2184,9 @@ components:
     UndoWrite:
       additionalProperties: false
       properties:
+        changed:
+          description: false when every field was changed later by others, so nothing was written
+          type: boolean
         commit:
           type:
             - string
@@ -2182,11 +2198,16 @@ components:
           type:
             - array
             - "null"
+        subject:
+          description: "The subject of the commit taken back, without the hedgehug: prefix"
+          type: string
         undone:
           $ref: "#/components/schemas/LogView"
-          description: The commit taken back
+          description: The commit taken back; null only in the CLI when there was nothing to undo (the server answers an undo.nothing problem)
       required:
         - undone
+        - subject
+        - changed
         - commit
         - kept
       type: object
@@ -2364,7 +2385,7 @@ components:
         ids:
           description: "With a new prefix: the IDs the tasks had and have now"
           items:
-            $ref: "#/components/schemas/IdChange"
+            $ref: "#/components/schemas/IDChange"
           type:
             - array
             - "null"
@@ -2478,7 +2499,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AccountLoginBody"
+                $ref: "#/components/schemas/AuthLoginResult"
           description: OK
         default:
           content:
@@ -2925,7 +2946,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/NotificationReadOutputBody"
+                $ref: "#/components/schemas/ReadResult"
           description: OK
         default:
           content:
@@ -3168,7 +3189,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/FindingsOutputBody"
+                $ref: "#/components/schemas/CheckResult"
           description: OK
         default:
           content:
@@ -3201,7 +3222,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MigrateOutputBody"
+                $ref: "#/components/schemas/MigrateWrite"
           description: OK
         default:
           content:
@@ -3321,7 +3342,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/StoreInitOutputBody"
+                $ref: "#/components/schemas/StoreInitView"
           description: Created
         default:
           content:
@@ -3371,7 +3392,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/StoreDefaultOutputBody"
+                $ref: "#/components/schemas/DefaultView"
           description: OK
         default:
           content:
@@ -3438,7 +3459,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MountOutputBody"
+                $ref: "#/components/schemas/MountView"
           description: OK
         default:
           content:
@@ -3599,7 +3620,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListOutputBody"
+                $ref: "#/components/schemas/TaskList"
           description: OK
         default:
           content:

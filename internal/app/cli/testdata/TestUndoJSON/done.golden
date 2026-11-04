@@ -1,6 +1,33 @@
 {
-  "undone": "<HASH>",
+  "undone": {
+    "hash": "<HASH>",
+    "date": "<TIME>",
+    "author": {
+      "name": "alice",
+      "email": "alice@users.noreply.github.com"
+    },
+    "store": "me",
+    "op": "add",
+    "task": "<ULID-1>",
+    "id": null,
+    "subject": "hedgehug: add ME-1 x",
+    "trailers": [
+      {
+        "key": "Hedgehug-Op",
+        "value": "add"
+      },
+      {
+        "key": "Hedgehug-Author",
+        "value": "github.com/alice"
+      },
+      {
+        "key": "Hedgehug-Task",
+        "value": "<ULID-1>"
+      }
+    ]
+  },
   "subject": "add ME-1 x",
   "changed": true,
+  "commit": "<HASH>",
   "kept": []
 }

@@ -30,7 +30,7 @@ func TestWorkspaceDeletedCount(t *testing.T) {
 	if _, err := tasks.Remove(ts.Session, last); err != nil {
 		t.Fatal(err)
 	}
-	_, wss, err := workspaces.WorkspaceList(ts.Session)
+	wss, err := workspaces.WorkspaceList(ts.Session)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestWorkspaceAddRenamePrefixRemove(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !r.Committed || r.Renumbered != 1 || !slices.Equal(r.IDs, []workspaces.IDChange{{Old: "WEB-1", New: "FE-1"}}) || r.Workspace.IDPrefix != "FE" {
+	if !r.Committed || r.Renumbered != 1 || !slices.Equal(r.IDs, []usecase.IDChange{{Old: "WEB-1", New: "FE-1"}}) || r.Workspace.IDPrefix != "FE" {
 		t.Errorf("WorkspacePrefix = %+v (%+v)", r, r.Workspace)
 	}
 	if workspaces.WorkspaceViewOf(r.Index, r.Workspace).Tasks != 1 {
@@ -99,7 +99,7 @@ func TestWorkspaceAddRenamePrefixRemove(t *testing.T) {
 	if err != nil || !r.Committed || r.Workspace.Name != "empty" {
 		t.Fatalf("WorkspaceRemove = %+v, %v", r, err)
 	}
-	if _, wss, _ := workspaces.WorkspaceList(ts.Session); len(wss) != 2 {
+	if wss, _ := workspaces.WorkspaceList(ts.Session); len(wss) != 2 {
 		t.Errorf("workspaces after the removal = %v; want me and front", wss)
 	}
 }
@@ -118,7 +118,7 @@ func TestWorkspaceBadNameAndPrefixAreUsageErrors(t *testing.T) {
 	usecasetest.WantErr(t, err, usecase.KindUsage, "workspace.bad_name")
 	_, err = workspaces.WorkspacePrefix(ts.Session, "me", "x y")
 	usecasetest.WantErr(t, err, usecase.KindUsage, "workspace.bad_prefix")
-	if _, wss, _ := workspaces.WorkspaceList(ts.Session); len(wss) != 1 {
+	if wss, _ := workspaces.WorkspaceList(ts.Session); len(wss) != 1 {
 		t.Errorf("a refused call wrote: %v", wss)
 	}
 }
@@ -195,7 +195,7 @@ func TestWorkspacePrefixRenumbersDeletedTasksToo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []workspaces.IDChange{{"ME-1", "NEW-1"}, {"ME-2", "NEW-2"}, {"ME-3", "NEW-3"}}
+	want := []usecase.IDChange{{Old: "ME-1", New: "NEW-1"}, {Old: "ME-2", New: "NEW-2"}, {Old: "ME-3", New: "NEW-3"}}
 	if r.Renumbered != 3 || !slices.Equal(r.IDs, want) {
 		t.Errorf("IDs = %v (%d); want %v", r.IDs, r.Renumbered, want)
 	}
@@ -212,8 +212,8 @@ func TestWorkspaceListCountsTasksNotDeleted(t *testing.T) {
 		t.Fatal(err)
 	}
 	ts.DeleteTask("ME-2")
-	ix, wss, err := workspaces.WorkspaceList(ts.Session)
-	if err != nil || ix == nil || len(wss) != 2 {
+	wss, err := workspaces.WorkspaceList(ts.Session)
+	if err != nil || len(wss) != 2 {
 		t.Fatalf("WorkspaceList = %v, %v", wss, err)
 	}
 	// by name: api, me
@@ -286,10 +286,10 @@ func TestWorkspaceOnANamedStoreDoesNotTouchTheSession(t *testing.T) {
 		t.Errorf("StoreName = %q; want it untouched", ts.StoreName)
 	}
 	me := &usecase.Session{Getenv: ts.Getenv, Now: ts.Now, Warn: ts.Warn, StoreName: "me"}
-	if _, wss, _ := workspaces.WorkspaceList(me); len(wss) != 1 {
+	if wss, _ := workspaces.WorkspaceList(me); len(wss) != 1 {
 		t.Errorf("the store me has %d workspaces; want 1", len(wss))
 	}
-	if _, wss, _ := workspaces.WorkspaceList(sub); len(wss) != 2 {
+	if wss, _ := workspaces.WorkspaceList(sub); len(wss) != 2 {
 		t.Errorf("the store team has %d workspaces; want 2", len(wss))
 	}
 }

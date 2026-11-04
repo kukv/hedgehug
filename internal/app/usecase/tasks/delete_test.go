@@ -117,6 +117,13 @@ func TestRestoreLeavesWhatAnotherRemoveDeleted(t *testing.T) {
 	}
 }
 
+// viewErr reports whether the result cannot be read back, which a result
+// that holds its index can.
+func viewErr(r usecase.TaskResult) bool {
+	_, err := r.View()
+	return err != nil
+}
+
 func TestRemoveTruncatesToSecond(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
@@ -242,7 +249,7 @@ func TestRestoreAtByTimeAndCommit(t *testing.T) {
 		if err != nil {
 			t.Fatalf("RestoreAt(%q): %v", point, err)
 		}
-		if !res.Committed || res.Note != "" || res.Index == nil || res.Commit == "" {
+		if !res.Committed || res.Note != "" || res.Commit == "" || viewErr(res.TaskResult) {
 			t.Errorf("RestoreAt(%q) = committed %v commit %q note %q", point, res.Committed, res.Commit, res.Note)
 		}
 		_, ix, _ := ts.Open()

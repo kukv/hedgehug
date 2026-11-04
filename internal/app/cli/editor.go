@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/kukv/hedgehug/internal/app/cli/prompt"
 	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
@@ -91,16 +92,9 @@ func (a *app) openEditor(path string) ([]byte, error) {
 // askRetry asks on the terminal whether to open the editor again. An empty
 // answer is yes. It is false when stdin is not a terminal.
 func (a *app) askRetry() bool {
-	if !a.isTerminal(a.stdin) {
+	if !a.ask().Interactive() {
 		return false
 	}
-	if _, err := fmt.Fprint(a.stderr, "Open the editor again? [Y/n] "); err != nil {
-		return false
-	}
-	line, err := a.readLine()
-	if err != nil && line == "" {
-		return false // the end of the input, not an empty answer
-	}
-	ans := strings.TrimSpace(line)
-	return ans == "" || ans == "y" || ans == "Y"
+	yes, err := a.ask().Confirm(prompt.YesNo{Question: "Open the editor again? [Y/n] ", Default: true})
+	return err == nil && yes
 }

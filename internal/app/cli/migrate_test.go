@@ -8,25 +8,17 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 // putSchema writes the schema of the store me after edit changes the
 // default one.
 func (te *testEnv) putSchema(edit func(*schema.Schema)) {
 	te.t.Helper()
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		te.t.Fatal(err)
-	}
 	sc := schema.Default()
 	edit(sc)
-	author := gitrepo.Signature{Name: "Alice", Email: "alice@example.com"}
-	if _, err := s.Update(store.Op{Name: "update", Author: author}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
-		te.t.Fatal(err)
-	}
+	te.uc().MustEdit("me", "update", usecasetest.AliceAuthor, func(tx *usecasetest.Tx) error { return tx.PutSchema(sc) })
 }
 
 func (te *testEnv) schemaFile() string {
@@ -41,6 +33,7 @@ func (te *testEnv) schemaFile() string {
 type migrateOut struct {
 	Changed []usecase.TaskView `json:"changed"`
 	Skipped []string           `json:"skipped"`
+	Commit  *string            `json:"commit"`
 }
 
 func TestSchemaMigrateStatus(t *testing.T) {
@@ -133,6 +126,9 @@ func TestSchemaMigrateJSON(t *testing.T) {
 	out := te.ok("schema", "migrate", "value", "priority", "mid", "medium", "--json")
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("%v: %s", err, out)
+	}
+	if got.Commit == nil {
+		t.Errorf("commit = nil, want the commit made")
 	}
 	if len(got.Changed) != 1 || got.Changed[0].ID != a.ID || got.Changed[0].Props["priority"] != "medium" {
 		t.Errorf("changed = %+v", got.Changed)
@@ -270,6 +266,9 @@ func TestSchemaMigrateDryRun(t *testing.T) {
 	out = te.ok("schema", "migrate", "status", "todo", "ready", "--dry-run", "--json")
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("%v: %s", err, out)
+	}
+	if got.Commit != nil {
+		t.Errorf("commit = %v, want null for a dry run", *got.Commit)
 	}
 	if len(got.Changed) != 1 || got.Changed[0].ID != a.ID || got.Changed[0].Status != "ready" {
 		t.Errorf("changed = %+v, want Alpha as migrated", got.Changed)

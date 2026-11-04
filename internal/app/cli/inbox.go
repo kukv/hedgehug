@@ -48,11 +48,7 @@ func (a *app) inboxCmd() *cobra.Command {
 }
 
 func (a *app) inboxList(all bool) error {
-	stores, err := notifications.InboxStores(a.ss)
-	if err != nil {
-		return err
-	}
-	rows, err := notifications.InboxListOf(a.ss, stores, all)
+	rows, err := notifications.InboxNotifications(a.ss, all)
 	if err != nil {
 		return err
 	}
@@ -70,7 +66,7 @@ func (a *app) inboxList(all bool) error {
 	st := a.style()
 	var b strings.Builder
 	for _, r := range rows {
-		fmt.Fprintf(&b, "%s  %-16s  %s  %s\n", st.id(r.ULID.String()), r.Kind, r.Target, r.Content)
+		fmt.Fprintf(&b, "%s  %-16s  %s  %s\n", st.id(r.ULID), r.Kind, r.Target, r.Content)
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())
 	return err
@@ -90,7 +86,7 @@ func (a *app) inboxRead(args []string, all bool) error {
 		return err
 	}
 	if a.jsonOut {
-		return a.printJSON(map[string][]string{"read": read})
+		return a.printJSON(notifications.ReadResult{Read: read})
 	}
 	_, err = fmt.Fprintf(a.stdout, "Marked %s read\n", plural.Count(len(read), "item"))
 	return err
@@ -109,5 +105,5 @@ func (a *app) inboxRevert(arg string) error {
 	if err != nil {
 		return err
 	}
-	return a.printTask(res.Index, res.ULID, verb(res.Committed, "Reverted"))
+	return a.printTask(res, verb(res.Committed, "Reverted"))
 }

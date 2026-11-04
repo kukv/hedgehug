@@ -5,8 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/app/storage/index"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
@@ -42,15 +40,29 @@ func TestLs(t *testing.T) {
 	if out := te.ok("ls", "--format", "{{.title}}|{{.status}}", "sort:title"); out != "Alpha|todo\nBeta|done\n" {
 		t.Errorf("--format = %q", out)
 	}
-	var got []usecase.TaskView
-	if err := json.Unmarshal([]byte(te.ok("ls", "--json", "sort:title")), &got); err != nil {
+	var list struct {
+		Tasks  []usecase.TaskView
+		Groups []struct {
+			Key   string
+			ULIDs []string
+		}
+	}
+	if err := json.Unmarshal([]byte(te.ok("ls", "--json", "sort:title")), &list); err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 || got[0].Title != "Alpha" || got[1].Title != "Beta" || got[0].Labels[0] != "ui" {
-		t.Errorf("--json = %+v", got)
+	got := list.Tasks
+	if len(got) != 2 || got[0].Title != "Alpha" || got[1].Title != "Beta" || got[0].Labels[0] != "ui" || list.Groups != nil {
+		t.Errorf("--json = %+v", list)
 	}
 	if got[1].Assignees == nil || got[1].Problems == nil || got[1].Props == nil || got[1].BlockedBy == nil {
 		t.Error("empty lists in JSON must be [] or {}, not null")
+	}
+	// group: adds the groups, which name their tasks by ULID
+	if err := json.Unmarshal([]byte(te.ok("ls", "--json", "group:status", "sort:title")), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Tasks) != 2 || len(list.Groups) != 2 || list.Groups[0].Key != "todo" || len(list.Groups[0].ULIDs) != 1 || list.Groups[0].ULIDs[0] != a.ULID {
+		t.Errorf("--json group:status = %+v", list)
 	}
 
 	// blocked_by names each task by its ULID, id and title.
@@ -75,6 +87,29 @@ func TestLsHelpExplainsATermThatStartsWithADash(t *testing.T) {
 	got := te.ok("ls", "--ulids-only", "--", "-status:done")
 	if !strings.Contains(got, todo.ULID) || strings.Contains(got, done.ULID) {
 		t.Errorf("ls -- -status:done = %q; want only %s", got, todo.ULID)
+	}
+}
+
+// The keys --format can use are those of a row of ls --json: checklist and
+// progress are among them. A tree row has context and in_cycle but no
+// children, so a template that asks for children is an error.
+//
+// 直列: editWith が t.Setenv（EDITOR と HH_TEST_EDITOR_SCRIPT）を使う
+func TestLsFormatKeys(t *testing.T) {
+	te := newStoreEnv(t)
+	p := te.addJSON("Project", "--kind", "project")
+	a := te.addJSON("Alpha", "--parent", p.ID, "--status", "done")
+	te.editWith(te.raw(a.ULID) + "- [x] one\n- [ ] two\n- [ ] three\n")
+	te.ok("edit", a.ID)
+	if out := te.ok("ls", "--format", "{{.title}} {{.checklist.done}}/{{.checklist.total}}", "status:done"); out != "Alpha 1/3\n" {
+		t.Errorf("--format over checklist = %q", out)
+	}
+	if out := te.ok("ls", "--format", "{{.title}} {{.progress.done}}/{{.progress.total}}", "kind:project"); out != "Project 1/1\n" {
+		t.Errorf("--format over progress = %q", out)
+	}
+	code, out, stderr := te.run("ls", "--tree", "--format", "{{.children}}")
+	if code == 0 || out != "" || !strings.Contains(stderr, "children") {
+		t.Errorf("ls --tree --format {{.children}}: exit %d, stdout %q, stderr %q; want an error that names the key", code, out, stderr)
 	}
 }
 
@@ -190,19 +225,11 @@ func TestDescribe(t *testing.T) {
 	a := te.addJSON("Alpha")
 	b := te.addJSON("Beta")
 	te.handEdit("me", b.ID, "id: "+b.ID, "id: "+a.ID) // two tasks with one id
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ix, err := index.Open(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = (&usecase.Session{}).Resolve(ix, a.ID)
+	err := te.uc().ResolveErr(a.ID)
 	if usecase.KindOf(err) != usecase.KindAmbiguous {
 		t.Fatalf("Resolve(%s) = %v; want an ambiguous error", a.ID, err)
 	}
-	got := describe(err)
+	got := usecase.Describe(err)
 	if got != err.Error() || !strings.HasPrefix(got, "\""+a.ID+"\" matches 2 tasks:\n  ") {
 		t.Errorf("describe = %q", got)
 	}

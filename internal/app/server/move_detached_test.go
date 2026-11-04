@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func TestMoveTaskToWorkspaceTellsWhatItTookOff(t *testing.T) {
@@ -15,23 +15,12 @@ func TestMoveTaskToWorkspaceTellsWhatItTookOff(t *testing.T) {
 	ts := newTestServer(t)
 	id := ts.add("one", "")
 	ts.call("POST", "/api/workspaces", map[string]any{"name": "web", "prefix": "WEB"}, 201, nil)
-	ss := ts.session()
-	s, err := ss.OpenStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, ix, err := ss.Open()
-	if err != nil {
-		t.Fatal(err)
-	}
-	e, err := ss.Resolve(ix, id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sp := &model.Sprint{ULID: model.NewULID(), Workspace: e.Workspace, Name: "S3"}
-	rel := &model.Release{ULID: model.NewULID(), Workspace: e.Workspace, Name: "v1"}
-	if _, err := ss.Update(s, store.Op{Name: "update", Task: e.ULID}, func(tx *store.Tx) error {
-		task, err := tx.Task(e.ULID)
+	u := usecasetest.UlidOf(t, ts.uc, id)
+	ws := ts.uc.TaskByULID("me", u).Workspace
+	sp := &model.Sprint{ULID: model.NewULID(), Workspace: ws, Name: "S3"}
+	rel := &model.Release{ULID: model.NewULID(), Workspace: ws, Name: "v1"}
+	if err := ts.uc.EditTask("me", "update", u, usecasetest.AccountAuthor, func(tx *usecasetest.Tx) error {
+		task, err := tx.Task(u)
 		if err != nil {
 			return err
 		}

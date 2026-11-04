@@ -786,14 +786,6 @@ export interface components {
             /** @description Where the token comes from: gh or env:<VAR>; with none the account has no token. keychain and device are answered with 400 auth.token_source: a pasted token goes through PUT /api/accounts/{name}/token, and the device flow through POST /api/auth/device */
             token?: string;
         };
-        AccountLoginBody: {
-            account: string;
-            /** @description The account was added to config.yaml: the name was no account's */
-            added: boolean;
-            id: string;
-            /** @description gh or env:VAR: the account takes its token from there, so Hedgehug has nothing to log in and kept nothing */
-            uses?: string;
-        };
         AccountTokenInputBody: {
             /** @description The host of a new account (github.com without it); for an account that exists it must be its host */
             host?: string;
@@ -822,6 +814,14 @@ export interface components {
             /** @enum {string} */
             state: "done" | "error";
         };
+        AuthLoginResult: {
+            account: string;
+            /** @description The account was added to config.yaml: the name was no account's */
+            added: boolean;
+            id: string;
+            /** @description gh or env:VAR: the account takes its token from there, so Hedgehug has nothing to log in and kept nothing */
+            uses?: string;
+        };
         AuthLogoutResult: {
             account: string;
             id: string;
@@ -844,6 +844,9 @@ export interface components {
             permission: string;
             url: string;
         };
+        CheckResult: {
+            findings: components["schemas"]["Finding"][] | null;
+        };
         CommentEditInputBody: {
             /** @description The comment in Markdown */
             body: string;
@@ -857,7 +860,16 @@ export interface components {
             body: string;
             /** Format: date-time */
             created: string;
+            /**
+             * Format: date-time
+             * @description When the comment was removed
+             */
+            deleted_at?: string;
+            /** @description The ULID of the task the comment is on */
+            task?: string;
             ulid: string;
+            /** Format: date-time */
+            updated?: string;
         };
         CommentWrite: {
             /** @description The comment as written; for a removal, as it was */
@@ -894,6 +906,10 @@ export interface components {
             title: string;
             /** @description The workspace, by name or prefix */
             workspace?: string;
+        };
+        DefaultView: {
+            /** @description The default store; null when there is none */
+            name: string | null;
         };
         Detached: {
             /** @description The id of the task after the move */
@@ -944,9 +960,6 @@ export interface components {
             task?: string;
             where: string;
         };
-        FindingsOutputBody: {
-            findings: components["schemas"]["Finding"][] | null;
-        };
         Fixed: {
             author?: string;
             id?: string;
@@ -977,7 +990,7 @@ export interface components {
             /** Format: int64 */
             unread: number;
         };
-        IdChange: {
+        IDChange: {
             new: string;
             old: string;
         };
@@ -1007,16 +1020,6 @@ export interface components {
             parents: string[] | null;
             role: string;
             template?: string;
-        };
-        ListOutputBody: {
-            /** @description The tasks in a parent cycle, with tree */
-            cycle?: components["schemas"]["TaskView"][] | null;
-            /** @description The groups, when the query has group: */
-            groups?: components["schemas"]["GroupView"][] | null;
-            /** @description The roots of the tree, with tree */
-            roots?: components["schemas"]["TaskView"][];
-            /** @description The tasks found, without tree */
-            tasks?: components["schemas"]["TaskView"][];
         };
         LogTrailer: {
             key: string;
@@ -1048,7 +1051,7 @@ export interface components {
             /** @enum {string} */
             target: "status" | "kind" | "prop" | "value";
         };
-        MigrateOutputBody: {
+        MigrateWrite: {
             changed: components["schemas"]["TaskView"][] | null;
             commit: string | null;
             skipped: string[] | null;
@@ -1066,7 +1069,7 @@ export interface components {
             message: string;
             name: string;
         };
-        MountOutputBody: {
+        MountView: {
             /** @description The candidates that could not be added; the others were */
             failed: components["schemas"]["MountFailed"][] | null;
             /** @description The names of the stores that were added */
@@ -1213,10 +1216,6 @@ export interface components {
             /** @description The ULIDs of the items to mark read; not with all */
             ids?: string[];
         };
-        NotificationReadOutputBody: {
-            /** @description The ULIDs of the items marked read, as hh inbox read --json */
-            read: string[];
-        };
         Overwritten: {
             author?: string;
             field: string;
@@ -1303,6 +1302,10 @@ export interface components {
             id: string;
             title: string;
             ulid: string;
+        };
+        ReadResult: {
+            /** @description The ULIDs of the items marked read, as hh inbox read --json */
+            read: string[];
         };
         Rebuilt: {
             dropped: string[] | null;
@@ -1436,9 +1439,6 @@ export interface components {
         StoreDefaultInputBody: {
             name: string;
         };
-        StoreDefaultOutputBody: {
-            name: string;
-        };
         StoreInitInputBody: {
             account?: string;
             name: string;
@@ -1447,7 +1447,7 @@ export interface components {
             /** @description The name of the first workspace; the name of the store without it */
             workspace?: string;
         };
-        StoreInitOutputBody: {
+        StoreInitView: {
             name: string;
             path: string;
             pushed: string[] | null;
@@ -1526,14 +1526,14 @@ export interface components {
             last_success?: string;
             /**
              * Format: date-time
-             * @description When the loop fetches next; absent before its first sync
+             * @description When the loop fetches next; absent before its first sync; absent when no server runs the loop
              */
             next_fetch?: string;
             /** Format: date-time */
             pending_since?: string;
             /**
              * Format: date-time
-             * @description When the background sync pushes the writes not pushed yet: sync.push_interval after pending_since, but not before sync.push_interval after the last sync and not after next_fetch, which syncs too; absent when nothing waits, before the first sync and while a sync runs
+             * @description When the background sync pushes the writes not pushed yet: sync.push_interval after pending_since, but not before sync.push_interval after the last sync and not after next_fetch, which syncs too; absent when nothing waits, before the first sync and while a sync runs; absent when no server runs the loop
              */
             push_at?: string;
             /**
@@ -1546,6 +1546,16 @@ export interface components {
             store: string;
             /** Format: int64 */
             unpushed?: number;
+        };
+        TaskList: {
+            /** @description The tasks in a parent cycle, with tree */
+            cycle?: components["schemas"]["TaskView"][] | null;
+            /** @description The groups, when the query has group: */
+            groups?: components["schemas"]["GroupView"][] | null;
+            /** @description The roots of the tree, with tree */
+            roots?: components["schemas"]["TaskView"][];
+            /** @description The tasks found, without tree */
+            tasks?: components["schemas"]["TaskView"][];
         };
         TaskView: {
             assignees: string[] | null;
@@ -1616,10 +1626,14 @@ export interface components {
             task?: string;
         };
         UndoWrite: {
+            /** @description false when every field was changed later by others, so nothing was written */
+            changed: boolean;
             commit: string | null;
             /** @description What others changed after it, which undo kept */
             kept: components["schemas"]["UndoKept"][] | null;
-            /** @description The commit taken back */
+            /** @description The subject of the commit taken back, without the hedgehug: prefix */
+            subject: string;
+            /** @description The commit taken back; null only in the CLI when there was nothing to undo (the server answers an undo.nothing problem) */
             undone: components["schemas"]["LogView"];
         };
         UnreadEvent: {
@@ -1695,7 +1709,7 @@ export interface components {
         WorkspaceWrite: {
             commit: string | null;
             /** @description With a new prefix: the IDs the tasks had and have now */
-            ids?: components["schemas"]["IdChange"][] | null;
+            ids?: components["schemas"]["IDChange"][] | null;
             workspace: components["schemas"]["WorkspaceView"];
         };
     };
@@ -1791,7 +1805,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AccountLoginBody"];
+                    "application/json": components["schemas"]["AuthLoginResult"];
                 };
             };
             /** @description Error */
@@ -2205,7 +2219,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NotificationReadOutputBody"];
+                    "application/json": components["schemas"]["ReadResult"];
                 };
             };
             /** @description Error */
@@ -2474,7 +2488,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FindingsOutputBody"];
+                    "application/json": components["schemas"]["CheckResult"];
                 };
             };
             /** @description Error */
@@ -2510,7 +2524,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MigrateOutputBody"];
+                    "application/json": components["schemas"]["MigrateWrite"];
                 };
             };
             /** @description Error */
@@ -2646,7 +2660,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StoreInitOutputBody"];
+                    "application/json": components["schemas"]["StoreInitView"];
                 };
             };
             /** @description Error */
@@ -2712,7 +2726,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StoreDefaultOutputBody"];
+                    "application/json": components["schemas"]["DefaultView"];
                 };
             };
             /** @description Error */
@@ -2779,7 +2793,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MountOutputBody"];
+                    "application/json": components["schemas"]["MountView"];
                 };
             };
             /** @description Error */
@@ -2947,7 +2961,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ListOutputBody"];
+                    "application/json": components["schemas"]["TaskList"];
                 };
             };
             /** @description Error */

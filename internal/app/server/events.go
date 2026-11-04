@@ -7,6 +7,8 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/sse"
+
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 // pingInterval keeps the connection open through proxies and browsers.
@@ -25,7 +27,7 @@ func (s *Server) registerEvents() {
 	}, map[string]any{
 		"hello":                helloEvent{},
 		"tasks.changed":        tasksChanged{},
-		"sync.state":           syncStatus{},
+		"sync.state":           usecase.SyncStatusView{},
 		"notifications.unread": unreadEvent{},
 		"schema.changed":       schemaChanged{},
 		"views.changed":        viewsChanged{},

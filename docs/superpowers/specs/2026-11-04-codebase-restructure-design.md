@@ -12,7 +12,7 @@
 - CLI と server が usecase だけを通して動くようにする
 - OS に触る処理を 1 か所に集め、いつか Windows 対応に戻るときに書く場所をそこだけにする
 
-挙動は変えない。例外は 4.3 の `--json` の 2 か所だけ。Windows 版の実装は含めない（CI が遅い問題の解き方が決まっていないため。2026-11-04 利用者が決定）。
+挙動は変えない。例外は 4.3 の `--json` の形だけ。Windows 版の実装は含めない（CI が遅い問題の解き方が決まっていないため。2026-11-04 利用者が決定）。
 
 ## 決定の一覧（2026-11-03〜04 に利用者が決定）
 
@@ -22,9 +22,9 @@
 | 2 | 層 | lib → domain → storage → remote → usecase → cli / server。各グループは自分・下の層・lib だけを import する |
 | 3 | view | domain ではなく storage に置く（Store の中のファイルの形式と読み書きなので） |
 | 4 | mount と current | 責務ごとに解体して既存の層に配る。新しい層は作らない |
-| 5 | usecase の分け方 | 直下を土台にし、領域ごとのサブパッケージ 11 個に分ける（2.3） |
+| 5 | usecase の分け方 | 直下を土台にし、領域ごとのサブパッケージ 11 個に分ける（2.3）。回 4 で watch を足して 12 個（決定 15） |
 | 6 | 名前 | ops → usecase、sync → replicate、context → current。usecase の領域名は下の層と同じ名前にしない |
-| 7 | JSON の形 | CLI の `--json` を server と同じ usecase の型に一本化する。CLI にしかない項目は足す |
+| 7 | JSON の形 | CLI の `--json` を server と同じ usecase の型に一本化する。CLI にしかない項目は足す。server の書き込み応答の包み（`{task, commit}` など）も usecase に移し、CLI もその形で出す（2026-11-04 利用者が決定。4.3） |
 | 8 | Windows | 実装は含めない。osfs の `_unix.go` に閉じ込めるところまで |
 | 9 | spec の単位 | 構成（本 spec）と E を分ける |
 | 10 | PR | 6 つに分け、機械的な移動を最初に行う。最後の PR 6 は、完了後のパッケージ構成を見て利用者が最終判断をする回（6 節。PR 6 は 2026-11-04 利用者が追加） |
@@ -32,6 +32,7 @@
 | 12 | テスト用の部品 | `lib/testenv`・`lib/fakegh`・`lib/gitrepo/gitrepotest`・`storage/history/historytest`・`storage/mount/mounttest`（回 3 の plan で追加）は、どの層のテストからも import してよい（2026-11-04 利用者が決定） |
 | 13 | 領域の操作の呼び方 | Go では別パッケージに `Session` のメソッドを置けないため、領域の操作は `tasks.Assign(ss, in)` のように `*usecase.Session` を引数に取る関数にする（2026-11-04 利用者が決定。領域ごとに Session を包む型を作る案は採らない） |
 | 14 | usecase のテスト | 共通のテストの補助を `usecase/usecasetest` に切り出し、決定 12 の部品に加える。usecase のテストは、コードと一緒に PR 3 で領域へ移す（2026-11-04 利用者が決定）。移したテストは外部テストパッケージ（`package tasks_test` など）にし、非公開の名前は `export_test.go` の別名で使う（回 3 の plan で決定。usecasetest が領域を import するため） |
+| 15 | 変化の監視 | server の Poller の中身（Store を開いて持つ、HEAD と差分の読み取り、inbox の変化、history の索引の構築）は、新しい領域 `usecase/watch` に移す。配信・間隔・イベントの JSON の形は server に残す（2026-11-04 利用者が決定） |
 
 ## 1. 今の状態（main f965465）
 
@@ -79,7 +80,7 @@ internal/app/
     auth/
   usecase/                  土台（2.3）
     tasks/ comments/ browse/ views/ schemas/ workspaces/
-    stores/ replication/ notifications/ accounts/ maintenance/
+    stores/ replication/ notifications/ accounts/ maintenance/ watch/
   cli/                      旧 cmd/hedgehug の本体
     prompt/                 確認と選択の部品（4.4）
     scenario/               コマンドをまたぐ通しのテスト（テストだけのパッケージ。5 節）
@@ -107,7 +108,7 @@ api/openapi.yaml            今のまま
 
 ### 2.3 usecase の分け方
 
-直下（パッケージ `usecase`）は、どの領域からも使う土台にする。
+直下（パッケージ `usecase`）は、どの領域からも使う土台にする。領域は 12 個（11 個に回 4 で watch を足した。決定 15）。
 
 - session（Store を開く、書き手、1 操作 1 コミット）、errors、TaskView などの返す型（旧 view.go）、readonly、conn（GitHub への接続とアカウントの選択）、ResolveRef（旧 mount_ops.go）
 - mount から移す ID の解決、context から移す行き先の判断
@@ -126,6 +127,7 @@ api/openapi.yaml            今のまま
 | notifications | inbox |
 | accounts | auth |
 | maintenance | maintain の Doctor, purge, rebuild ＋ 旧 doctor |
+| watch | server の poll（回 4 で移す。決定 15） |
 
 領域どうしの import は、土台を通すのを基本にする。領域から別の領域を呼ぶ必要が出たら、その関数を土台に下ろす。
 
@@ -170,17 +172,17 @@ CLI の本体を `internal/app/cli` に移し、`cmd/hedgehug/main.go` は `cli.
 
 ### 4.3 JSON の形（G）
 
-- CLI の `--json` を server と同じ usecase の型で出す。CLI にしかない項目はその型に足す。
-- 形が変わるのは次の 2 つ。どちらも、新しい形を期待するテストを先に書いてから変える。
-  - `hh undo --json`: `undone` が文字列から LogView になる
-  - `hh mv --store --json`: server の形に揃える
-- それ以外のコマンドの `--json` は、今の出力と同じになることをテスト（既存の golden を含む）で確かめる。
+- CLI の `--json` を server と同じ usecase の型で出す。server の書き込み応答の包み（`{task, commit}`・`{tasks, commit}`・`{comment, commit}`・`{view, commit}`・`{workspace, commit, ids}`・`{findings}`・ls の `{tasks, groups}`・tree の `{roots, cycle}` など）も usecase に移し、CLI もその形で出す。CLI にしかない項目はその型に足す（server の応答にも出る）。
+- 回 4 の調査（2026-11-04、main 6e2b895）で、当初の「変わるのは undo と mv --store の 2 つだけ」は合わないことがわかった。mv --store は既に server と同じ形だった。変わるのは、包みが付く書き込みのコマンド（add・edit・set・done・dep・watch・unwatch・inbox revert・mv・restore・restore --at・rm・comment・view save/rm/rename・workspace add/rename/prefix/rm・migrate）、配列が包みになる ls・ls --tree・view show・schema check、項目や名前が変わる undo・auth login・auth logout・store add・store list・store init・store default・store discover・inbox ls・sync --status。
+- 変わるものは、新しい形を期待するテストを先に書いてから変える。それ以外のコマンドの `--json` は、今の出力と同じになることをテスト（既存の golden を含む）で確かめる。
+- `ls --format` のテンプレートに渡すキーは `ls --json` の tasks の 1 行と同じになる（checklist・progress が増える。今通るテンプレートの出力は変わらない。2026-11-04 利用者が了承）。
+- テキストの表示にだけ使う項目（表示用の ID、参照の名前など）は usecase の型に `json:"-"` で持たせる。JSON の項目ではないので、server の応答は変えない。
 
 ### 4.4 確認とプロンプト（H）
 
 - 今は `askBranchParent`・`askPick`（add）、`askRetry`（editor）、`askScoped`・`confirmMove`（mv）、`confirmPurge`（purge）、`askChoice`（store init）の 7 つが、それぞれ入力の読み取りと再入力を持っている。
 - `cli/prompt` に、はい・いいえの確認と一覧からの選択の 2 つを置き、7 つをそれで書き直す。非対話のときの扱い（`--yes`、端末でないときのエラー）も部品の中で一度だけ書く。
-- 文言と挙動は変えない。server は確認の形（`Confirm`・`Choice`）を API で返すまま。
+- 文言と挙動は変えない。server は確認の形（`Confirm`・`Choice`）を API で返すまま。例外は 1 つ: 「Open the editor again? [Y/n]」は `yes`・`YES` もはいにする（今は `y`・`Y`・空だけ。ほかの確認と揃う。2026-11-04 利用者が了承）
 
 ## 5. テストの整理（提案 I）
 
@@ -199,18 +201,19 @@ CLI の本体を `internal/app/cli` に移し、`cmd/hedgehug/main.go` は `cli.
 | 1. 移動と改名 | 2.2 の行き先へ移す（mount と context は解体まで `usecase/mount`・`usecase/current` に仮置きする。doctor はこの時点で `usecase/maintenance` に置く）。名前の変更、F、CI の shard のパスの書き換え | 変わらない |
 | 2. OS の境界 | 3 節。github を `github.Options`（API と web の URL）で受け取る形にし、平文 HTTP の判定（IsLoopback・PlainHTTP）を config から github に移す（2026-11-04 利用者が決定）。forbidigo を有効にする | 変わらない |
 | 3. usecase の再編 | mount と context の解体（2.2）、途中残りの検出を storage/store へ、2.3 の領域分け、領域の操作を関数にする（決定 13）、usecase のテストを領域へ移す（決定 14） | 変わらない |
-| 4. 入口の境界 | 4.2〜4.4。cli・server のテストの書き直し（決定 11）。cli・server の depguard のルール（4.2、テストを含む）を有効にする | 4.3 の 2 か所だけ変わる |
+| 4. 入口の境界 | 4.2〜4.4、Poller の中身を usecase/watch へ（決定 15）。cli・server のテストの書き直し（決定 11）。cli・server の depguard のルール（4.2、テストを含む）を有効にする | 4.3 の `--json` の形だけ変わる |
 | 5. テストと仕上げ | 5 節、depguard の残りのルール（2 節の層の向き）を有効にする、shard の見直し、親設計の書き直し（8 節） | 変わらない |
 | 6. 最終確認 | PR 5 のマージ後の main で `go list` から層別のパッケージ構成と依存を作り直し、層別構成の Artifact（https://claude.ai/artifact/WFTVztg3Wvhgj4UnCwzsiH）を更新する。2.1 の配置・2 節の層の向き・4.2 の禁止と突き合わせ、ずれと層の向きに反する依存の一覧を添えて利用者に見せる。利用者が最終判断をする。直すものが出たら、この PR で直す | 変わらない |
 
 - 途中残りの検出を storage へ移すのは PR 3 で行い、E には依存させない。
+- PR 4 で Poller の中身を watch へ移すとき、server のテスト 2 つは確かめ方が変わる（決定 11 の例外。2026-11-04 利用者が了承）: `TestTestServerWaitsForTheHistoryBuild` は watch の `Wait` のテストになり server からなくなる。`TestSessionBeforeSwapReleasesTheStore` は開き直した look の tasks.changed が来ることで確かめる。
 - CI の shard は、PR 1 でパスだけを書き換える（`ops` → `internal/app/usecase`、`cli` → `internal/app/cli`、`sync` → `internal/app/remote/replicate`）。ここで作るのは `internal/app/usecase` と `internal/app/cli` の単一パッケージで、サブパッケージ（仮置きの mount・current、maintenance、のちの 11 の usecase 領域）は PR 5 で shard を作り直すまで `others` に入る。PR 5 で、CI の要約に出るパッケージごとの時間を見て shard の分け方を決め直す。必須チェックの名前（`test`）は変えない。
 
 ## 7. 確かめ方
 
 - 各 PR で `go build ./...`・`go vet ./...`・golangci-lint を通す。全テストは各 PR の仕上げに 1 回回す。
 - PR 1〜3・5・6 は挙動を変えないので、既存のテストがそのまま通ることで確かめる。テストの中身の変更は import と型の名前の書き換えだけにする。
-- PR 4 は 4.3 のとおり、変わる 2 か所は先にテストを書き、それ以外は今の出力と同じことをテストで確かめる。cli・server のテストの書き直し（決定 11）は、準備と確認の手段を usecase に替えるだけで、確かめる内容（期待する出力・ファイル・コミット）は変えない。PR 4 で cli・server の depguard を有効にした時点で、4.2 の禁止がテストを含めて lint で通ることを確かめる。
+- PR 4 は 4.3 のとおり、形が変わるコマンドは先にテストを書き、それ以外は今の出力と同じことをテストで確かめる。cli・server のテストの書き直し（決定 11）は、準備と確認の手段を usecase に替えるだけで、確かめる内容（期待する出力・ファイル・コミット）は変えない。PR 4 で cli・server の depguard を有効にした時点で、4.2 の禁止がテストを含めて lint で通ることを確かめる。
 - PR 5 で depguard の残りのルールを有効にした時点で、2 節の層の向きが lint で通ることを確かめる。
 
 ## 8. 親設計への反映

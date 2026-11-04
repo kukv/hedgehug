@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
@@ -122,4 +123,53 @@ func ChoiceRequired(what string, candidates []string) *Error {
 // and the caller gave none (--yes).
 func ConfirmRequired(what string) *Error {
 	return NewErr(KindUsage, "confirm.required", fmt.Errorf("%s: confirm with --yes", what), "what", what)
+}
+
+// ErrLocked is the error of a write that found the store locked by another
+// hedgehug.
+var ErrLocked = store.ErrLocked
+
+// ErrForcePush is the error of a sync that found the remote rewritten.
+var ErrForcePush = replicate.ErrForcePush
+
+// ViolationsOf is the violations of a write the schema refused, or ok=false
+// when err is not that.
+func ViolationsOf(err error) (vs []schema.Violation, ok bool) {
+	var ve *store.ValidationError
+	if errors.As(err, &ve) {
+		return ve.Violations, true
+	}
+	return nil, false
+}
+
+// ViolationsText is the text of a refused write: what it breaks, and the
+// violations on the lines after it.
+func ViolationsText(vs []schema.Violation) string {
+	var b strings.Builder
+	b.WriteString("the change breaks the schema:")
+	for _, v := range vs {
+		b.WriteString("\n  " + v.String())
+	}
+	return b.String()
+}
+
+// Describe is err as the CLI prints it after "hedgehug: " and the server
+// gives it as the detail of a problem.
+func Describe(err error) string {
+	if vs, ok := ViolationsOf(err); ok {
+		return ViolationsText(vs)
+	}
+	if errors.Is(err, ErrLocked) {
+		return "another hedgehug is writing to the store; try again"
+	}
+	return err.Error()
+}
+
+// ProblemCode is the type of the problem err makes: the Code of its AsError,
+// or "internal" when there is none.
+func ProblemCode(err error) string {
+	if e := AsError(err); e != nil && e.Code != "" {
+		return e.Code
+	}
+	return "internal"
 }

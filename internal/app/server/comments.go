@@ -6,7 +6,6 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/comments"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
@@ -33,38 +32,16 @@ type commentEditInput struct {
 	}
 }
 
-type commentWrite struct {
-	Comment usecase.CommentView `json:"comment" doc:"The comment as written; for a removal, as it was"`
-	Commit  *string             `json:"commit" doc:"The commit made; null when nothing changed"`
-}
-
-type commentOutput struct{ Body commentWrite }
+type commentOutput struct{ Body comments.CommentWrite }
 
 // commentOut is the output of a write to a comment.
 func commentOut(r comments.CommentResult) *commentOutput {
-	out := &commentOutput{Body: commentWrite{Commit: commitPtr(r.Commit)}}
-	if c := r.Comment; c != nil {
-		out.Body.Comment = usecase.CommentView{ULID: c.ULID.String(), Author: c.Author, Created: c.Created, Body: c.Body}
-	}
-	return out
-}
-
-// taskULID resolves the task of a request.
-func taskULID(ss *usecase.Session, id string) (model.ULID, error) {
-	_, ix, err := ss.Open()
-	if err != nil {
-		return model.ULID{}, err
-	}
-	e, err := ss.Resolve(ix, id)
-	if err != nil {
-		return model.ULID{}, err
-	}
-	return e.ULID, nil
+	return &commentOutput{Body: r.Write()}
 }
 
 // commentOf refuses a comment that is not of the task of the path.
 func commentOf(ss *usecase.Session, id, cid string) error {
-	u, err := taskULID(ss, id)
+	u, err := ss.TaskULID(id)
 	if err != nil {
 		return problemOf(err)
 	}
@@ -72,7 +49,7 @@ func commentOf(ss *usecase.Session, id, cid string) error {
 	if err != nil {
 		return problemOf(err)
 	}
-	if ces.Ref.Task != u {
+	if !ces.OfTask(u) {
 		return newProblem(http.StatusNotFound, "comment.not_found", "comment "+cid+" is not a comment of "+id)
 	}
 	return nil
@@ -141,7 +118,7 @@ func (s *Server) registerComments() {
 			if err != nil {
 				return nil, problemOf(err)
 			}
-			return s.writeOut(ss, r.ULID, r.Commit)
+			return writeOut(r)
 		})
 	}
 }

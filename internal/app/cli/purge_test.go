@@ -8,8 +8,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func TestPurgeOlderThan(t *testing.T) {
@@ -203,15 +202,9 @@ func TestPurgeKeepsATaskWithALiveChild(t *testing.T) {
 	g := te.addJSON("g")
 	te.ok("rm", p.ID)
 	te.ok("rm", g.ID)
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	// the child is alive again under a deleted parent (restore would refuse it)
-	if _, err := s.Update(store.Op{Name: "update", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}},
-		changeTask(c.ULID, func(t *model.Task) { t.DeletedAt = nil })); err != nil {
-		t.Fatal(err)
-	}
+	te.uc().MustEdit("me", "update", usecasetest.TAuthor,
+		changeTask(c.ULID, func(t *model.Task) { t.DeletedAt = nil }))
 	code, out, errs := te.run("purge", "--older-than", "0d", "--yes")
 	if code != 0 || out != "Purged 1 task and 0 forward files from me\n" || !strings.Contains(errs, "warning: kept (a task under each is not deleted): "+p.ID) {
 		t.Errorf("exit %d, stdout %q, stderr %q", code, out, errs)

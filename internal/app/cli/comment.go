@@ -3,11 +3,9 @@ package cli
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/comments"
 	"github.com/kukv/hedgehug/internal/lib/osfs"
@@ -55,17 +53,6 @@ func (a *app) commentCmd() *cobra.Command {
 	return cmd
 }
 
-// commentOut is a comment as --json prints it.
-type commentOut struct {
-	ULID      string     `json:"ulid"`
-	Task      string     `json:"task"`
-	Author    string     `json:"author"`
-	Created   time.Time  `json:"created"`
-	Updated   time.Time  `json:"updated"`
-	DeletedAt *time.Time `json:"deleted_at"`
-	Body      string     `json:"body"`
-}
-
 func (a *app) commentAdd(arg string, text []string) error {
 	cs, err := comments.BeginComment(a.ss, arg)
 	if err != nil {
@@ -76,7 +63,7 @@ func (a *app) commentAdd(arg string, text []string) error {
 		body = strings.Join(text, " ")
 	} else {
 		var edited []byte
-		if path, edited, err = a.editFile(usecase.TaskFileName(cs.Entry), nil); err != nil {
+		if path, edited, err = a.editFile(cs.FileName(), nil); err != nil {
 			return err
 		}
 		if body = comments.CommentBody(string(edited)); body == "" {
@@ -90,7 +77,7 @@ func (a *app) commentAdd(arg string, text []string) error {
 	r, err := comments.WriteComment(a.ss, p)
 	if err != nil {
 		if path != "" {
-			return fmt.Errorf("%s; the comment is kept at %s", describe(err), path)
+			return fmt.Errorf("%s; the comment is kept at %s", usecase.Describe(err), path)
 		}
 		return err
 	}
@@ -99,7 +86,7 @@ func (a *app) commentAdd(arg string, text []string) error {
 			return err
 		}
 	}
-	return a.printComment(r.Store, r.Ref, "Added")
+	return a.printComment(r, "Added")
 }
 
 func (a *app) commentEdit(arg string) error {
@@ -107,37 +94,35 @@ func (a *app) commentEdit(arg string) error {
 	if err != nil {
 		return err
 	}
-	s, ref, c := ces.Store, ces.Ref, ces.Comment
 	if err := comments.CheckMyComment(a.ss, ces, "edited"); err != nil {
 		return err
 	}
-	commentULID := ref.Comment.String()
-	path, edited, err := a.editFile("comment-"+commentULID, []byte(c.Body))
+	path, edited, err := a.editFile("comment-"+ces.CommentULID(), []byte(ces.Body()))
 	if err != nil {
 		return err
 	}
 	body := comments.CommentBody(string(edited))
 	p, err := comments.PrepareCommentEdit(a.ss, ces, body)
-	if body == "" || body == c.Body {
+	if body == "" || body == ces.Body() {
 		if rerr := osfs.Remove(path); rerr != nil {
 			return rerr
 		}
 		if err != nil {
 			return err
 		}
-		return a.printComment(s, ref, verb(false, ""))
+		return a.printComment(ces.Result(), verb(false, ""))
 	}
 	if err != nil {
 		return err
 	}
 	r, err := comments.WriteCommentEdit(a.ss, p)
 	if err != nil {
-		return fmt.Errorf("%s; the edited comment is kept at %s", describe(err), path)
+		return fmt.Errorf("%s; the edited comment is kept at %s", usecase.Describe(err), path)
 	}
 	if err := osfs.Remove(path); err != nil {
 		return err
 	}
-	return a.printComment(r.Store, r.Ref, verb(r.Committed, "Updated"))
+	return a.printComment(r, verb(r.Committed, "Updated"))
 }
 
 func (a *app) commentRm(arg string) error {
@@ -145,27 +130,20 @@ func (a *app) commentRm(arg string) error {
 	if err != nil {
 		return err
 	}
-	return a.printComment(r.Store, r.Ref, verb(r.Committed, "Deleted"))
+	return a.printComment(r, verb(r.Committed, "Deleted"))
 }
 
-// printComment prints the comment ref after a write: as JSON, or as one
+// printComment prints the comment r wrote after a write: as JSON, or as one
 // line of verb and its ULID.
-func (a *app) printComment(s *store.Store, ref store.CommentRef, verb string) error {
-	var err error
+func (a *app) printComment(r comments.CommentResult, verb string) error {
 	if a.jsonOut {
-		c, err := comments.FindComment(s, ref)
-		if err != nil {
-			return err
-		}
-		return a.printJSON(commentOut{
-			ULID: c.ULID.String(), Task: ref.Task.String(), Author: c.Author,
-			Created: c.Created, Updated: c.Updated, DeletedAt: c.DeletedAt, Body: c.Body,
-		})
+		return a.printJSON(r.Write())
 	}
+	var err error
 	if verb == "No changes" {
 		_, err = fmt.Fprintln(a.stdout, verb)
 	} else {
-		_, err = fmt.Fprintf(a.stdout, "%s %s\n", verb, a.style().id(ref.Comment.String()))
+		_, err = fmt.Fprintf(a.stdout, "%s %s\n", verb, a.style().id(r.CommentULID()))
 	}
 	return err
 }

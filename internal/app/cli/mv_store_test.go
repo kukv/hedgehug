@@ -6,9 +6,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 // newMoveStoreEnv is newTwoStoreEnv (alpha AA-1 project and AA-2 under it;
@@ -24,11 +22,7 @@ func newMoveStoreEnv(t *testing.T) *testEnv {
 // putSchema changes the schema of the store name.
 func (te *testEnv) putStoreSchema(name string, fn func(*schema.Schema)) {
 	te.t.Helper()
-	s, err := store.Open(te.storeDir(name))
-	if err != nil {
-		te.t.Fatal(err)
-	}
-	b, err := s.Schema().Encode()
+	b, err := te.uc().SchemaOf(name).Encode()
 	if err != nil {
 		te.t.Fatal(err)
 	}
@@ -37,9 +31,7 @@ func (te *testEnv) putStoreSchema(name string, fn func(*schema.Schema)) {
 		te.t.Fatal(err)
 	}
 	fn(sc)
-	if _, err := s.Update(store.Op{Name: "schema", Author: gitrepo.Signature{Name: "Alice", Email: "alice@example.com"}}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
-		te.t.Fatal(err)
-	}
+	te.uc().MustEdit(name, "schema", usecasetest.AliceAuthor, func(tx *usecasetest.Tx) error { return tx.PutSchema(sc) })
 }
 
 func TestMvStoreYes(t *testing.T) {
@@ -151,17 +143,11 @@ func TestMvStoreTellsWhoCannotSeeItAnymore(t *testing.T) {
 		"alpha":      {"github.com/alice", "github.com/bob", "github.com/carol"},
 		"bravo-long": {"github.com/alice"},
 	} {
-		s, err := store.Open(te.storeDir(name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		cs := []replicate.Collaborator{}
+		cs := []usecasetest.Member{}
 		for _, id := range ids {
-			cs = append(cs, replicate.Collaborator{ID: id, Permission: "write"})
+			cs = append(cs, usecasetest.Member{ID: id, Permission: "write"})
 		}
-		if err := replicate.WriteMembers(s, replicate.Members{Collaborators: cs}); err != nil {
-			t.Fatal(err)
-		}
+		te.uc().WriteMembers(name, cs)
 	}
 	te.terminal = true
 	te.stdin = "y\n"

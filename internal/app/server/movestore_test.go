@@ -7,12 +7,11 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 // moveFixture adds to the store "me" of twoStores: ME-2 with its child ME-3
@@ -32,21 +31,10 @@ func moveFixture(t *testing.T, ts *testServer) {
 	if _, err := tasks.Dep(ss, "ME-4", "ME-3", true); err != nil {
 		t.Fatal(err)
 	}
-	s, err := ss.OpenStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, ix, err := ss.Open()
-	if err != nil {
-		t.Fatal(err)
-	}
-	e, err := ss.Resolve(ix, "ME-3")
-	if err != nil {
-		t.Fatal(err)
-	}
-	sp := &model.Sprint{ULID: model.NewULID(), Workspace: e.Workspace, Name: "S1"}
-	if _, err := ss.Update(s, store.Op{Name: "update", Task: e.ULID}, func(tx *store.Tx) error {
-		task, err := tx.Task(e.ULID)
+	u := usecasetest.UlidOf(t, ts.uc, "ME-3")
+	sp := &model.Sprint{ULID: model.NewULID(), Workspace: ts.uc.TaskByULID("me", u).Workspace, Name: "S1"}
+	if err := ts.uc.EditTask("me", "update", u, usecasetest.AccountAuthor, func(tx *usecasetest.Tx) error {
+		task, err := tx.Task(u)
 		if err != nil {
 			return err
 		}
@@ -149,13 +137,7 @@ func TestMoveStorePlanAPIWorkspaceChoice(t *testing.T) {
 func TestMoveStorePlanAPIReadOnly(t *testing.T) {
 	t.Parallel()
 	ts := twoStores(t)
-	s, err := ts.session().ForStore("team").OpenStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := replicate.WriteAccess(s, replicate.Access{ReadOnly: true, Reason: replicate.ReasonNotWritable, Checked: time.Now()}); err != nil {
-		t.Fatal(err)
-	}
+	ts.uc.WriteAccess("team", usecasetest.Access{ReadOnly: true, Reason: usecasetest.ReasonNotWritable, Checked: time.Now()})
 	if p := ts.problem("POST", "/api/tasks/ME-1/move-store/plan", map[string]any{"to": "team"}, 409); p.Type != "store.read_only" {
 		t.Errorf("plan: %+v", p)
 	}

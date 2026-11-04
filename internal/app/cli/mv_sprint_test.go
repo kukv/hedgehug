@@ -5,8 +5,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func TestMvWorkspaceTellsWhatItTookOff(t *testing.T) {
@@ -18,11 +17,7 @@ func TestMvWorkspaceTellsWhatItTookOff(t *testing.T) {
 	ws := mustULID(t, p.Workspace.ULID)
 	sp := &model.Sprint{ULID: model.NewULID(), Workspace: ws, Name: "S3"}
 	rel := &model.Release{ULID: model.NewULID(), Workspace: ws, Name: "v1"}
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Update(store.Op{Name: "update", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
+	te.uc().MustEdit("me", "update", usecasetest.TAuthor, func(tx *usecasetest.Tx) error {
 		for _, err := range []error{
 			tx.PutSprint(sp), tx.PutRelease(rel),
 			changeTask(p.ULID, func(t *model.Task) { t.Sprint, t.Releases = &sp.ULID, []model.ULID{rel.ULID} })(tx),
@@ -32,9 +27,7 @@ func TestMvWorkspaceTellsWhatItTookOff(t *testing.T) {
 			}
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 
 	out := te.ok("mv", p.ID, "--workspace", "api")
 	for _, want := range []string{"ME-1 → API-1", "API-1: removed from sprint S3", "API-1: removed from release v1"} {

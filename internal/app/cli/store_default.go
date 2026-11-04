@@ -22,13 +22,7 @@ func (a *app) storeDefaultCmd() *cobra.Command {
 				return err
 			}
 			if a.jsonOut {
-				var d *string
-				if def != "" {
-					d = &def
-				}
-				return a.printJSON(struct {
-					Default *string `json:"default"`
-				}{d})
+				return a.printJSON(stores.DefaultViewOf(def))
 			}
 			if def == "" {
 				def = "-"

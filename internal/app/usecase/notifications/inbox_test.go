@@ -117,7 +117,7 @@ func TestInboxListNewestFirstWithWordsAndJSON(t *testing.T) {
 	if err != nil || len(stores) != 1 || len(items) != 2 {
 		t.Fatalf("InboxList = %d stores, %d items, %v", len(stores), len(items), err)
 	}
-	if items[0].ULID != newULID || items[1].ULID != oldULID {
+	if items[0].ULID != newULID.String() || items[1].ULID != oldULID.String() {
 		t.Fatalf("order = %s, %s; want newest first", items[0].ULID, items[1].ULID)
 	}
 	first := items[0]
@@ -287,14 +287,11 @@ func TestInboxRevertWritesTheValueBack(t *testing.T) {
 	e, _ := ts.Resolve(ix, "ME-1")
 	u := ts.AddItem(overwritten(&model.Task{ULID: e.ULID, ID: "ME-1"}, "c1", "title", `"before"`))
 	res, err := notifications.InboxRevert(ts.Session, u.String())
-	if err != nil || !res.Committed || res.ULID != e.ULID || res.Index == nil {
+	if err != nil || !res.Committed || res.ULID != e.ULID {
 		t.Fatalf("InboxRevert = %+v, %v; want a committed revert of ME-1", res, err)
 	}
-	if err := res.Index.Refresh(); err != nil {
-		t.Fatal(err)
-	}
-	if got, ok := res.Index.Task(e.ULID); !ok || got.Title != "before" {
-		t.Errorf("task after revert = %+v, %v; want the title before", got, ok)
+	if got, err := res.View(); err != nil || got.Title != "before" {
+		t.Errorf("task after revert = %+v, %v; want the title before", got, err)
 	}
 	s, _ := ts.OpenStore()
 	head, err := s.Repo().Head()
@@ -691,17 +688,17 @@ func TestInboxRevertAfterARealSync(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
 	item, kept := usecasetest.OverwriteME1(t, ts)
-	if kept != "theirs" || item.Kind != inbox.Overwritten {
+	if kept != "theirs" || item.Kind != string(inbox.Overwritten) {
 		t.Fatalf("after the sync: title %q, item kind %v; want theirs and an overwritten item", kept, item.Kind)
 	}
-	if _, err := notifications.InboxRevert(ts.Session, item.ULID.String()); err != nil {
+	if _, err := notifications.InboxRevert(ts.Session, item.ULID); err != nil {
 		t.Fatal(err)
 	}
 	_, ix, _ := ts.Open()
 	if e, _ := ts.Resolve(ix, "ME-1"); e.Title != "mine" {
 		t.Errorf("title after revert = %q; want mine", e.Title)
 	}
-	n, err := notifications.InboxRead(ts.Session, []string{item.ULID.String()}, false)
+	n, err := notifications.InboxRead(ts.Session, []string{item.ULID}, false)
 	if err != nil || n != 1 {
 		t.Fatalf("InboxRead = %d, %v; want 1", n, err)
 	}
@@ -720,7 +717,7 @@ func TestQueryOptionsMarksOverwrittenTasks(t *testing.T) {
 		t.Fatal(err)
 	}
 	e, _ := ts.Resolve(ix, "ME-1")
-	if len(opt.Overwritten) != 1 || !opt.Overwritten[e.ULID] || e.ULID != item.Item.Task {
+	if len(opt.Overwritten) != 1 || !opt.Overwritten[e.ULID] || item.Task == nil || item.Task.ULID != e.ULID.String() {
 		t.Errorf("Overwritten = %v; want only ME-1 (%s)", opt.Overwritten, e.ULID)
 	}
 }

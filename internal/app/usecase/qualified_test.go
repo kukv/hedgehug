@@ -68,7 +68,7 @@ func TestAStoreAddedInTheSessionIsMountedAndQualifies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := r.Index.DisplayID(r.Entry); got != "copy:ME-1" {
+	if got := r.DisplayID; got != "copy:ME-1" {
 		t.Errorf("DisplayID = %q; want copy:ME-1", got)
 	}
 	if set, err = ts.Mount(); err != nil || len(set.Stores) != 2 {
@@ -121,15 +121,16 @@ func TestTaskLabelFollowsWhetherThePrefixIsShared(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		u := r.Entry.ULID.String()
-		if got, want := usecase.TaskLabel(r.Index, r.Entry), tc.want+" ("+u+")"; got != want {
-			t.Errorf("%s/%s: TaskLabel = %q; want %q", tc.a, tc.b, got, want)
+		u := r.ULID
+		if got, want := r.Label(), tc.want+" ("+u+")"; got != want {
+			t.Errorf("%s/%s: Label = %q; want %q", tc.a, tc.b, got, want)
 		}
-		if got, want := usecase.RefName(r.Index, r.Entry.ULID), tc.want+" ("+u+") org-a task"; got != want {
-			t.Errorf("%s/%s: RefName = %q; want %q", tc.a, tc.b, got, want)
+		ref := usecase.Ref{ULID: r.ULID, ID: r.ID, Title: r.Title, DisplayID: r.DisplayID}
+		if got, want := ref.Name(), tc.want+" ("+u+") org-a task"; got != want {
+			t.Errorf("%s/%s: Ref.Name = %q; want %q", tc.a, tc.b, got, want)
 		}
-		if got := r.Entry.ID; got != tc.a+"-1" {
-			t.Errorf("Entry.ID = %q; the id itself does not change", got)
+		if got := r.ID; got != tc.a+"-1" {
+			t.Errorf("ID = %q; the id itself does not change", got)
 		}
 	}
 }

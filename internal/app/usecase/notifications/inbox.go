@@ -110,11 +110,71 @@ func WarnInbox(ss *usecase.Session, stores []InboxStore) {
 // InboxItemView is an item as --json prints it: the task as a reference to
 // the task as it is now. Target and Content are the words for it in a list.
 type InboxItemView struct {
-	inbox.Item
-	Store   string       `json:"store"`
-	Task    *usecase.Ref `json:"task"`
-	Target  string       `json:"-"`
-	Content string       `json:"-"`
+	ULID   string          `json:"ulid"`
+	Kind   string          `json:"kind"`
+	ID     string          `json:"id,omitempty"`   // the task's id when the item was made
+	Path   string          `json:"path,omitempty"` // the file, for overwritten and revived
+	Commit string          `json:"commit"`
+	Author string          `json:"author"`
+	To     string          `json:"to"`
+	Time   time.Time       `json:"time"`
+	Detail json.RawMessage `json:"detail,omitempty"`
+	Store  string          `json:"store"`
+	Task   *usecase.Ref    `json:"task"`
+	// Target and Content are the words for the item in a list.
+	Target  string `json:"-"`
+	Content string `json:"-"`
+}
+
+// Notification is an item of the inbox with whether it was read, as inbox
+// --json prints it and as the server answers.
+type Notification struct {
+	InboxItemView
+	Read bool `json:"read"`
+}
+
+// InboxNotifications lists the items of the stores, the newest first: the
+// unread ones, or with all the read ones too. Ops warns once per read of the
+// boxes, and the unread and the all lists below read them twice: the
+// warnings reach Warn once.
+func InboxNotifications(ss *usecase.Session, all bool) ([]Notification, error) {
+	seen := map[string]bool{}
+	warn := ss.Warn
+	ss.Warn = func(m string) {
+		if !seen[m] && warn != nil {
+			seen[m] = true
+			warn(m)
+		}
+	}
+	defer func() { ss.Warn = warn }()
+	stores, err := InboxStores(ss)
+	if err != nil {
+		return nil, err
+	}
+	unread, err := InboxListOf(ss, stores, false)
+	if err != nil {
+		return nil, err
+	}
+	items := unread
+	if all {
+		if items, err = InboxListOf(ss, stores, true); err != nil {
+			return nil, err
+		}
+	}
+	isUnread := map[string]bool{}
+	for _, it := range unread {
+		isUnread[it.ULID] = true
+	}
+	out := make([]Notification, len(items))
+	for i, it := range items {
+		out[i] = Notification{InboxItemView: it, Read: !isUnread[it.ULID]}
+	}
+	return out, nil
+}
+
+// ReadResult is the items inbox read marked read.
+type ReadResult struct {
+	Read []string `json:"read" nullable:"false" doc:"The ULIDs of the items marked read, as hh inbox read --json"`
 }
 
 // InboxList lists the items of the stores, the newest first.
@@ -170,7 +230,9 @@ func InboxListOf(ss *usecase.Session, stores []InboxStore, all bool) ([]InboxIte
 			named.Detail, _ = json.Marshal(d) // always encodes
 		}
 		out[i] = InboxItemView{
-			Item: r.item, Store: r.store, Task: inboxTaskRef(r.ix, r.item),
+			ULID: r.item.ULID.String(), Kind: string(r.item.Kind), ID: r.item.ID, Path: r.item.Path, Commit: r.item.Commit,
+			Author: r.item.Author, To: r.item.To, Time: r.item.Time, Detail: r.item.Detail,
+			Store: r.store, Task: inboxTaskRef(r.ix, r.item),
 			Target: inboxTarget(r.ix, r.item), Content: InboxContent(r.ix, named, r.store, len(stores) > 1) + movedHint(ss, r.ix, r.store, r.item),
 		}
 	}
@@ -384,7 +446,7 @@ func InboxRevertOf(ss *usecase.Session, stores []InboxStore, u model.ULID) (usec
 	if err := st.Box.MarkRead([]model.ULID{u}); err != nil {
 		return usecase.TaskResult{}, err
 	}
-	return usecase.TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash)}, nil
+	return usecase.NewTaskResult(ix, e.ULID, hash), nil
 }
 
 // movedRevertErr is task.moved for an inbox revert of a task that moved:

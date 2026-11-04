@@ -268,3 +268,125 @@ func ReadOnlyWhy(s *store.Store) string {
 	}
 	return ""
 }
+
+// StoreStatus is how the syncs of one store went, as sync --status --json
+// prints it.
+type StoreStatus struct {
+	Store        string     `json:"store"`
+	Remotes      []string   `json:"remotes"`
+	PendingSince *time.Time `json:"pending_since,omitempty"`
+	LastAttempt  *time.Time `json:"last_attempt,omitempty"`
+	LastSuccess  *time.Time `json:"last_success,omitempty"`
+	LastError    string     `json:"last_error,omitempty"`
+	Error        string     `json:"error,omitempty"`     // the store could not be read
+	Unpushed     *int       `json:"unpushed,omitempty"`  // absent when the store has no remote
+	ReadOnly     string     `json:"read_only,omitempty"` // why the store is read-only, in words; absent when it is not
+}
+
+// SyncStatus reads how the syncs of every store went. A store that cannot be
+// read has its error in the row, so the status of the others is still shown.
+func SyncStatus(ss *Session) ([]StoreStatus, error) {
+	c, _, err := ss.Config()
+	if err != nil {
+		return nil, err
+	}
+	targets, err := ss.SyncTargets(c, true)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]StoreStatus, len(targets))
+	for i, e := range targets {
+		out[i] = storeStatus(ss, e)
+	}
+	return out, nil
+}
+
+func storeStatus(ss *Session, e config.StoreEntry) StoreStatus {
+	x := StoreStatus{Store: e.Name, Remotes: append([]string{}, e.Remotes...)}
+	s, err := ss.OpenStoreAt(e.Path)
+	if err != nil {
+		x.Error = err.Error()
+		return x
+	}
+	defer func() { _ = s.Repo().Close() }()
+	st, err := replicate.ReadState(s)
+	if err != nil {
+		x.Error = err.Error()
+		return x
+	}
+	x.LastError = st.LastError
+	x.ReadOnly = ReadOnlyWhy(s) // a reason in ReadOnly, not an error that hides the rest
+	x.PendingSince, x.LastAttempt, x.LastSuccess = TimePtr(st.PendingSince), TimePtr(st.LastAttempt), TimePtr(st.LastSuccess)
+	if len(e.Remotes) > 0 {
+		n, err := Unpushed(s)
+		if err != nil {
+			x.Error = err.Error()
+			return x
+		}
+		x.Unpushed = &n
+	}
+	return x
+}
+
+// SyncIntervals is sync.interval and sync.push_interval of config.yaml.
+type SyncIntervals struct{ Interval, PushInterval time.Duration }
+
+// SyncSchedule is the schedule of the loop that syncs: the GUI server's loop
+// satisfies it.
+type SyncSchedule interface {
+	NextFetch(store string) (time.Time, bool)
+	PushAt(store string, pending time.Time, interval, push time.Duration) (time.Time, bool)
+	FetchInterval(interval time.Duration) time.Duration
+}
+
+// SyncStatusView is a StoreStatus with when the loop fetches next and when
+// the writes waiting are pushed.
+type SyncStatusView struct {
+	StoreStatus
+	NextFetch    *time.Time `json:"next_fetch,omitempty" doc:"When the loop fetches next; absent before its first sync; absent when no server runs the loop"`
+	PushAt       *time.Time `json:"push_at,omitempty" doc:"When the background sync pushes the writes not pushed yet: sync.push_interval after pending_since, but not before sync.push_interval after the last sync and not after next_fetch, which syncs too; absent when nothing waits, before the first sync and while a sync runs; absent when no server runs the loop"`
+	Interval     float64    `json:"interval" doc:"sync.interval of config.yaml, in seconds (fractions allowed)"`
+	PushInterval float64    `json:"push_interval" doc:"sync.push_interval of config.yaml, in seconds (fractions allowed)"`
+}
+
+// SyncStatusViews reads how the syncs of every store went, with the
+// intervals of config.yaml and without a loop that schedules them: as the
+// CLI prints it.
+func SyncStatusViews(ss *Session) ([]SyncStatusView, error) {
+	iv, err := ss.SyncIntervals()
+	if err != nil {
+		return nil, err
+	}
+	sts, err := SyncStatus(ss)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SyncStatusView, len(sts))
+	for i, st := range sts {
+		out[i] = NewSyncStatusView(st, nil, iv)
+	}
+	return out, nil
+}
+
+// NewSyncStatusView is st with when sch fetches next and when the writes
+// waiting are pushed, as it schedules them with the intervals iv. With a nil
+// sch, NextFetch and PushAt are nil.
+func NewSyncStatusView(st StoreStatus, sch SyncSchedule, iv SyncIntervals) SyncStatusView {
+	v := SyncStatusView{
+		StoreStatus:  st,
+		Interval:     iv.Interval.Seconds(),
+		PushInterval: iv.PushInterval.Seconds(),
+	}
+	if sch == nil {
+		return v
+	}
+	if t, ok := sch.NextFetch(st.Store); ok {
+		v.NextFetch = &t
+	}
+	if st.PendingSince != nil {
+		if t, ok := sch.PushAt(st.Store, *st.PendingSince, sch.FetchInterval(iv.Interval), iv.PushInterval); ok {
+			v.PushAt = &t
+		}
+	}
+	return v
+}

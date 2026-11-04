@@ -65,5 +65,5 @@ func Patch(ss *usecase.Session, arg string, in PatchInput) (usecase.TaskResult, 
 	if err != nil {
 		return usecase.TaskResult{}, err
 	}
-	return usecase.TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash)}, nil
+	return usecase.NewTaskResult(ix, e.ULID, hash), nil
 }

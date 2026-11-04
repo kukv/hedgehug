@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
@@ -22,12 +21,12 @@ func newStoreEnv(t *testing.T) *testEnv {
 // addJSON runs add with --json and returns the task it printed.
 func (te *testEnv) addJSON(args ...string) usecase.TaskView {
 	te.t.Helper()
-	var got usecase.TaskView
+	var got usecase.TaskWrite
 	out := te.ok(append(append([]string{"add"}, args...), "--json")...)
-	if err := json.Unmarshal([]byte(out), &got); err != nil {
+	if err := json.Unmarshal([]byte(out), &got); err != nil || got.Task == nil {
 		te.t.Fatalf("%v: %s", err, out)
 	}
-	return got
+	return *got.Task
 }
 
 // label is how the CLI names task j: its id and full ULID.
@@ -36,19 +35,11 @@ func label(j usecase.TaskView) string { return j.ID + " (" + j.ULID + ")" }
 // task reads the task file of ulid from the store.
 func (te *testEnv) task(ulid string) *model.Task {
 	te.t.Helper()
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		te.t.Fatal(err)
-	}
 	taskULID, err := model.ParseULID(ulid)
 	if err != nil {
 		te.t.Fatal(err)
 	}
-	t, err := s.Task(taskULID)
-	if err != nil {
-		te.t.Fatal(err)
-	}
-	return t
+	return te.uc().TaskByULID("me", taskULID)
 }
 
 func TestAdd(t *testing.T) {

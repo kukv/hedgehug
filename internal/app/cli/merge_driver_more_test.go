@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 // task1 reads the task ORG-1 of the store org as the driver sees a file.
@@ -139,15 +139,8 @@ func TestMergeDriverAddAddWithMergedInCommit(t *testing.T) {
 	writeTaskFile(t, theirs, task, "theirs", task.Updated.Add(2*time.Hour))
 	dir := alice.storeDir("org")
 	t.Chdir(dir)
-	r, err := gitrepo.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	head, err := r.Head()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("GITHEAD_"+head.String(), "theirs")
+	head := gitrepotest.HeadHash(t, dir)
+	t.Setenv("GITHEAD_"+head, "theirs")
 	if code, _, errs := alice.run("merge-driver", base, ours, theirs, model.TaskPath(task.ULID)); code != 0 {
 		t.Fatalf("merge-driver: %d %s", code, errs)
 	}
@@ -163,7 +156,7 @@ func TestMergeDriverAddAddWithMergedInCommit(t *testing.T) {
 		t.Fatalf("records = %v, %v", recs, err)
 	}
 	b, err := os.ReadFile(filepath.Join(dir, ".hedgehug", "local", "overwritten", recs[0].Name())) //nolint:gosec // the record of the test
-	if err != nil || !strings.Contains(string(b), `"commit":"`+head.String()+`"`) {
+	if err != nil || !strings.Contains(string(b), `"commit":"`+head+`"`) {
 		t.Errorf("record = %s, %v", b, err)
 	}
 }

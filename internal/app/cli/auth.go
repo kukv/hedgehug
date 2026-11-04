@@ -11,7 +11,6 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/accounts"
-	"github.com/kukv/hedgehug/internal/lib/github"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
@@ -123,7 +122,7 @@ func (a *app) printPinned(p accounts.Pinned) error {
 }
 
 func (a *app) authLogin(name, host string, hostGiven, withToken bool) error {
-	in := accounts.AuthLoginInput{Name: name, Host: host, HostGiven: hostGiven, WithToken: withToken, ShowCode: a.showDeviceCode}
+	in := accounts.AuthLoginInput{Name: name, Host: host, HostGiven: hostGiven, WithToken: withToken, OnCode: a.showDeviceCode}
 	if withToken {
 		tok, err := a.readToken()
 		if err != nil {
@@ -135,12 +134,12 @@ func (a *app) authLogin(name, host string, hostGiven, withToken bool) error {
 	if err != nil {
 		return err
 	}
+	if a.jsonOut {
+		return a.printJSON(res)
+	}
 	if res.Uses != "" {
 		_, err := fmt.Fprintf(a.stdout, "Nothing to log in for %s: it uses %s\n", res.Account, res.Uses)
 		return err
-	}
-	if a.jsonOut {
-		return a.printJSON(res)
 	}
 	if _, err := fmt.Fprintf(a.stdout, "Logged in as %s (account %s)\n", res.ID, res.Account); err != nil {
 		return err
@@ -150,7 +149,7 @@ func (a *app) authLogin(name, host string, hostGiven, withToken bool) error {
 
 // showDeviceCode tells where to enter the code, and on a terminal offers to
 // open the browser there.
-func (a *app) showDeviceCode(dc *github.DeviceCode) {
+func (a *app) showDeviceCode(dc accounts.DeviceCode) {
 	_, _ = fmt.Fprintf(a.stderr, "Open %s and enter the code %s\n", dc.VerificationURI, dc.UserCode)
 	if a.openURL == nil || !a.isTerminal(a.stdin) {
 		return
@@ -208,10 +207,7 @@ func (a *app) authLogout(name string) error {
 		return err
 	}
 	if a.jsonOut {
-		return a.printJSON(struct {
-			Account string `json:"account"`
-			Removed bool   `json:"removed"`
-		}{res.Account, res.Removed})
+		return a.printJSON(res)
 	}
 	if !res.Removed {
 		uses := "it has no token"

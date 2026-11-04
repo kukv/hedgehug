@@ -6,11 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func TestStoreAddWarnsPrefixDuplicate(t *testing.T) {
@@ -65,22 +63,7 @@ func TestStoreAddSetsUp(t *testing.T) {
 	t.Parallel()
 	te := newTestEnv(t)
 	remote := te.bare("old")
-	s, err := store.Create(filepath.Join(t.TempDir(), "old"), &model.StoreMeta{ULID: model.NewULID(), Name: "old"}, nil,
-		&model.Workspace{ULID: model.NewULID(), Name: "old", IDPrefix: "OLD"}, gitrepo.Signature{Name: "A", Email: "a@example.com"}, "", time.Now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Update(store.Op{Name: "edit", Author: gitrepo.Signature{Name: "A", Email: "a@example.com"}}, func(tx *store.Tx) error {
-		return tx.PutFile(store.AttributesPath, []byte("*.yaml merge=hedgehug\n"))
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Repo().SetRemotes([]string{remote}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Repo().Push("origin"); err != nil {
-		t.Fatal(err)
-	}
+	usecasetest.NewOldStoreWithAttributes(t, remote)
 
 	te.ok("store", "add", "old", "--remote", remote)
 	head := te.headCommit("old")
@@ -185,11 +168,12 @@ func TestStoreListJSON(t *testing.T) {
 		Remotes     []string `json:"remotes"`
 		Account     string   `json:"account"`
 		LastSuccess string   `json:"last_success"`
+		Default     bool     `json:"default"`
 	}
 	if err := json.Unmarshal([]byte(alice.ok("store", "list", "--json")), &list); err != nil {
 		t.Fatal(err)
 	}
-	if len(list) != 1 || list[0].Name != "org" || len(list[0].Remotes) != 1 || list[0].Remotes[0] != remote || list[0].Account != "github.com/alice" || list[0].LastSuccess == "" {
+	if len(list) != 1 || list[0].Name != "org" || len(list[0].Remotes) != 1 || list[0].Remotes[0] != remote || list[0].Account != "github.com/alice" || list[0].LastSuccess == "" || !list[0].Default {
 		t.Errorf("list = %+v", list)
 	}
 }

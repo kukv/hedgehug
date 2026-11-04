@@ -13,7 +13,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
@@ -33,7 +32,7 @@ func TestSyncWithoutRemoteAndStatus(t *testing.T) {
 	if len(reps) != 0 {
 		t.Fatalf("Sync reported %d stores; want none, as no store has a remote", len(reps))
 	}
-	st, err := replication.SyncStatus(ts.Session)
+	st, err := usecase.SyncStatus(ts.Session)
 	if err != nil || len(st) != 1 {
 		t.Fatalf("SyncStatus = %v, %v", st, err)
 	}
@@ -71,7 +70,7 @@ func TestSyncStorePushesAndStatusReportsIt(t *testing.T) {
 	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
-	st, err := replication.SyncStatus(ts.Session)
+	st, err := usecase.SyncStatus(ts.Session)
 	if err != nil || len(st) != 1 || len(st[0].Remotes) != 1 || st[0].Remotes[0] != remote {
 		t.Fatalf("SyncStatus = %+v, %v; want the remote %s", st, err, remote)
 	}
@@ -90,7 +89,7 @@ func TestSyncStorePushesAndStatusReportsIt(t *testing.T) {
 	if r.Store != "me" || r.NoRemote || len(r.Pushed) == 0 {
 		t.Fatalf("SyncStore = %+v; want a push", r)
 	}
-	st, err = replication.SyncStatus(ts.Session)
+	st, err = usecase.SyncStatus(ts.Session)
 	if err != nil || len(st) != 1 {
 		t.Fatal(st, err)
 	}
@@ -123,30 +122,33 @@ func TestSyncAllReportsFailedStore(t *testing.T) {
 	}
 }
 
+// The tests of BeforeCommand do not run in parallel: StubSpawn replaces what
+// replicate.Start does for all.
 func TestBeforeCommandStartsNothingWithoutRemote(t *testing.T) {
-	t.Parallel()
 	ts := usecasetest.New(t)
+	ts.Env["HEDGEHUG_AUTO_SYNC"] = "1"
 	var started int
-	ts.BeforeCommand(func(*store.Store, string) error { started++; return nil }, func(string, string) { t.Error("reported") })
+	defer usecasetest.StubSpawn(func([]string) { started++ })()
+	ts.BeforeCommand(func(string, string) { t.Error("reported") })
 	if started != 0 {
 		t.Errorf("started %d syncs for a store without a remote", started)
 	}
 }
 
 func TestBeforeCommandStartsDueStoreAndReportsFailureOnce(t *testing.T) {
-	t.Parallel()
 	ts := usecasetest.New(t)
+	ts.Env["HEDGEHUG_AUTO_SYNC"] = "1"
 	usecasetest.AddBareRemote(t, ts)
 	s, err := ts.OpenStore()
 	if err != nil {
 		t.Fatal(err)
 	}
 	var started []string
-	start := func(_ *store.Store, name string) error { started = append(started, name); return nil }
+	defer usecasetest.StubSpawn(func(args []string) { started = append(started, args[len(args)-1]) })()
 	var reports []string
 	report := func(st, msg string) { reports = append(reports, st+"|"+msg) }
 
-	ts.BeforeCommand(start, report) // never synced: due
+	ts.BeforeCommand(report) // never synced: due
 	if len(started) != 1 || started[0] != "me" || len(reports) != 0 {
 		t.Fatalf("started %v, reports %v; want a start of me and no report", started, reports)
 	}
@@ -157,14 +159,14 @@ func TestBeforeCommandStartsDueStoreAndReportsFailureOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	started = nil
-	ts.BeforeCommand(start, report)
+	ts.BeforeCommand(report)
 	if len(reports) != 1 || reports[0] != "me|remote is down" {
 		t.Fatalf("reports = %v; want the failure once", reports)
 	}
 	if len(started) != 0 {
 		t.Errorf("started %v; a sync that failed just now is not tried again yet", started)
 	}
-	ts.BeforeCommand(start, report)
+	ts.BeforeCommand(report)
 	if len(reports) != 1 {
 		t.Errorf("reports = %v; want the failure told once", reports)
 	}
@@ -227,11 +229,11 @@ func TestNoticeFieldAndTaskOfPath(t *testing.T) {
 		t.Errorf("NoticeField of bad detail = %q; want empty", got)
 	}
 	u := model.NewULID()
-	if got, ok := replication.TaskOfPath("tasks/ab/" + u.String() + ".md"); !ok || got != u {
+	if got, ok := model.TaskOfPath("tasks/ab/" + u.String() + ".md"); !ok || got != u {
 		t.Errorf("TaskOfPath = %v, %v; want %v", got, ok, u)
 	}
 	for _, p := range []string{"schema.yaml", "tasks/ab/zzz.md"} {
-		if _, ok := replication.TaskOfPath(p); ok {
+		if _, ok := model.TaskOfPath(p); ok {
 			t.Errorf("TaskOfPath(%q) ok; want not", p)
 		}
 	}

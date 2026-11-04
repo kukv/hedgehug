@@ -5,8 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/app/storage/view"
-	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/views"
 )
 
@@ -91,7 +89,7 @@ func (a *app) viewSave(name string, ch views.ViewChange) error {
 	if !r.Committed {
 		line = fmt.Sprintf("No changes: view %s is already saved with these settings", name)
 	}
-	return a.printView(r.View, line)
+	return a.printView(r, line)
 }
 
 func (a *app) viewRm(name string) error {
@@ -99,7 +97,7 @@ func (a *app) viewRm(name string) error {
 	if err != nil {
 		return err
 	}
-	return a.printView(r.View, "Removed view "+name)
+	return a.printView(r, "Removed view "+name)
 }
 
 func (a *app) viewRename(oldName, newName string) error {
@@ -107,7 +105,7 @@ func (a *app) viewRename(oldName, newName string) error {
 	if err != nil {
 		return err
 	}
-	return a.printView(r.View, fmt.Sprintf("Renamed view %s to %s", oldName, newName))
+	return a.printView(r, fmt.Sprintf("Renamed view %s to %s", oldName, newName))
 }
 
 func (a *app) viewList() error {
@@ -134,25 +132,21 @@ func (a *app) viewShow(name string) error {
 	if err != nil {
 		return err
 	}
-	q, err := usecase.ParseQuery(v.Query)
-	if err != nil {
-		return err
-	}
 	// --store says where the view is read from. The tasks are the query's, on
 	// every store, as the GUI shows a view; store: in the query narrows it.
 	own := a.ss
 	a.ss = own.ForStore("")
 	defer func() { a.ss = own }()
 	if v.Layout == "tree" {
-		return a.lsTree(q, false, nil)
+		return a.lsTree(v.Query, false, nil)
 	}
-	return a.ls(q, false, nil)
+	return a.ls(v.Query, false, nil)
 }
 
-// printView prints v as JSON, or line as text.
-func (a *app) printView(v *view.View, line string) error {
+// printView prints the view r wrote as JSON, or line as text.
+func (a *app) printView(r views.ViewResult, line string) error {
 	if a.jsonOut {
-		return a.printJSON(views.SavedViewOf(v))
+		return a.printJSON(r.Write())
 	}
 	_, err := fmt.Fprintln(a.stdout, line)
 	return err

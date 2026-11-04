@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,9 +13,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func TestShow(t *testing.T) {
@@ -26,12 +26,8 @@ func TestShow(t *testing.T) {
 	waiting := te.addJSON("Waiting", "-p", "blocked_by+="+a.ID)
 
 	// Add a body and a comment through the store; the CLI for them is 1d-2.
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	aULID, _ := model.ParseULID(a.ULID)
-	if _, err := s.Update(store.Op{Name: "update", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
+	te.uc().MustEdit("me", "update", usecasetest.TAuthor, func(tx *usecasetest.Tx) error {
 		tk, err := tx.Task(aULID)
 		if err != nil {
 			return err
@@ -41,9 +37,7 @@ func TestShow(t *testing.T) {
 			return err
 		}
 		return tx.PutComment(aULID, &model.Comment{ULID: model.NewULID(), Author: "github.com/alice", Body: "Looks good.\nShip it.\n"})
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 
 	out := te.ok("show", a.ID)
 	// The title is the first field; the id, the ULID and the store follow.
@@ -190,12 +184,8 @@ func TestShowDeleted(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	x := te.addJSON("X")
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	ulid := mustULID(t, x.ULID)
-	if _, err := s.Update(store.Op{Name: "rm", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
+	te.uc().MustEdit("me", "rm", usecasetest.TAuthor, func(tx *usecasetest.Tx) error {
 		tk, err := tx.Task(ulid)
 		if err != nil {
 			return err
@@ -203,9 +193,7 @@ func TestShowDeleted(t *testing.T) {
 		now := time.Now()
 		tk.DeletedAt = &now
 		return tx.PutTask(tk)
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 	if out := te.ok("show", x.ID); !strings.Contains(out, "  deleted     ") {
 		t.Errorf("show of a deleted task has no deleted line:\n%s", out)
 	}
@@ -274,34 +262,22 @@ func TestShowAMovedTask(t *testing.T) {
 	te.ok("store", "init", "org-b", "--prefix", "WEB")
 	moved := te.addJSON("--store", "org-a", "Moving")
 	ulid, _ := model.ParseULID(moved.ULID)
-	sa, err := store.Open(te.storeDir("org-a"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	sb, err := store.Open(te.storeDir("org-b"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	author := gitrepo.Signature{Name: "T", Email: "t@example.com"}
-	var ws model.ULID
-	for w, err := range sb.Workspaces() {
+	if err := te.uc().EditTask("org-b", "move-in", ulid, usecasetest.TAuthor, func(tx *usecasetest.Tx) error {
+		wss, err := tx.Workspaces()
 		if err != nil {
-			t.Fatal(err)
+			return err
 		}
-		ws = w.ULID
-		break
-	}
-	if _, err := sb.Update(store.Op{Name: "move-in", Task: ulid, Author: author}, func(tx *store.Tx) error {
-		return tx.PutTask(&model.Task{ULID: ulid, Title: "Moving", Kind: "task", Status: "todo", Workspace: ws, FormerIDs: []string{moved.ID}})
+		if len(wss) == 0 {
+			return errors.New("the store has no workspace")
+		}
+		return tx.PutTask(&model.Task{ULID: ulid, Title: "Moving", Kind: "task", Status: "todo", Workspace: wss[0].ULID, FormerIDs: []string{moved.ID}})
 	}); err != nil {
 		t.Fatal(err)
 	}
-	fwd := "---\nulid: " + moved.ULID + "\nmoved_to: " + sb.Meta().ULID.String() + "\nmoved_at: 2026-10-31T10:00:00Z\n---\n"
-	if _, err := sa.Update(store.Op{Name: "move-out", Author: author}, func(tx *store.Tx) error {
+	fwd := "---\nulid: " + moved.ULID + "\nmoved_to: " + te.uc().StoreMeta("org-b").ULID.String() + "\nmoved_at: 2026-10-31T10:00:00Z\n---\n"
+	te.uc().MustEdit("org-a", "move-out", usecasetest.TAuthor, func(tx *usecasetest.Tx) error {
 		return tx.PutFile(model.TaskPath(ulid), []byte(fwd))
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 
 	code, out, stderr := te.run("show", "org-a:"+moved.ID)
 	if code != 1 || out != "" || !strings.Contains(stderr, moved.ID+" moved to org-b (org-b:WEB-1)") {

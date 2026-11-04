@@ -9,9 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func TestSyncTwoUsers(t *testing.T) {
@@ -145,21 +143,16 @@ func TestSyncKeepsPendingForAWriteAfterThePush(t *testing.T) {
 		t.Fatal(err)
 	}
 	alice.ok("add", "pushed")
-	s, err := store.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
 	wrote := false
 	// The clock is read after the push too; the first such read writes,
 	// as another command would.
 	now := func() time.Time {
-		if n, err := usecase.Unpushed(s); !wrote && err == nil && n == 0 {
+		// a store that does not read is not a push yet; wait for the next read
+		if n, err := alice.uc().UnpushedErr("org"); err == nil && !wrote && n == 0 {
 			wrote = true
-			if _, err := s.Update(store.Op{Name: "update", Author: gitrepo.Signature{Name: "alice", Email: "alice@x"}}, func(tx *store.Tx) error {
+			alice.uc().MustEdit("org", "update", usecasetest.Author{Name: "alice", Email: "alice@x"}, func(tx *usecasetest.Tx) error {
 				return tx.PutFile("late.txt", []byte("late\n"))
-			}); err != nil {
-				t.Fatal(err)
-			}
+			})
 		}
 		return alice.now
 	}

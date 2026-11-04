@@ -9,36 +9,25 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/comments"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
-func (te *testEnv) commentJSON(args ...string) commentOut {
+func (te *testEnv) commentJSON(args ...string) usecase.CommentView {
 	te.t.Helper()
-	var got commentOut
+	var got comments.CommentWrite
 	out := te.ok(append(args, "--json")...)
-	if err := json.Unmarshal([]byte(out), &got); err != nil {
+	if err := json.Unmarshal([]byte(out), &got); err != nil || got.Commit == nil && !strings.Contains(out, `"commit": null`) {
 		te.t.Fatalf("%v: %s", err, out)
 	}
-	return got
+	return got.Comment
 }
 
 // comments returns every comment of task ulid, deleted ones included.
 func (te *testEnv) comments(ulid string) []*model.Comment {
 	te.t.Helper()
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		te.t.Fatal(err)
-	}
-	var out []*model.Comment
-	for c, err := range s.Comments(mustULID(te.t, ulid)) {
-		if err != nil {
-			te.t.Fatal(err)
-		}
-		out = append(out, c)
-	}
-	return out
+	return te.uc().CommentsOf("me", mustULID(te.t, ulid))
 }
 
 func TestCommentNeedsASubcommand(t *testing.T) {
@@ -283,22 +272,19 @@ func TestCommentRmRereadsUnderLock(t *testing.T) {
 	te.writeAccounts("github.com", "alice")
 	x := te.addJSON("Alpha")
 	c := te.commentJSON("comment", "add", x.ID, "first")
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	task := mustULID(t, x.ULID)
 	locked, proceed := make(chan struct{}), make(chan struct{})
 	edited := make(chan error, 1)
 	go func() {
-		author := gitrepo.Signature{Name: "Bob", Email: "bob@example.com"}
-		_, err := s.Update(store.Op{Name: "comment", Author: author}, func(tx *store.Tx) error {
+		author := usecasetest.Author{Name: "Bob", Email: "bob@example.com"}
+		err := te.uc().Edit("me", "comment", author, func(tx *usecasetest.Tx) error {
 			close(locked)
 			<-proceed
-			for cur, err := range s.Comments(task) {
-				if err != nil {
-					return err
-				}
+			cs, err := tx.Comments(task)
+			if err != nil {
+				return err
+			}
+			for _, cur := range cs {
 				cur.Body = "second\n"
 				return tx.PutComment(task, cur)
 			}
@@ -350,20 +336,14 @@ func (te *testEnv) putComments(ulid string, commentULIDs ...string) {
 // putCommentsBy writes comments by author with the given ULIDs on task ulid.
 func (te *testEnv) putCommentsBy(ulid, author string, commentULIDs ...string) {
 	te.t.Helper()
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		te.t.Fatal(err)
-	}
-	if _, err := s.Update(store.Op{Name: "comment", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
+	te.uc().MustEdit("me", "comment", usecasetest.TAuthor, func(tx *usecasetest.Tx) error {
 		for _, commentULID := range commentULIDs {
 			if err := tx.PutComment(mustULID(te.t, ulid), &model.Comment{ULID: mustULID(te.t, commentULID), Author: author, Body: "body " + commentULID + "\n"}); err != nil {
 				return err
 			}
 		}
 		return nil
-	}); err != nil {
-		te.t.Fatal(err)
-	}
+	})
 }
 
 func TestCommentULIDMustBeFull(t *testing.T) {
@@ -434,13 +414,7 @@ func TestCommentMentionWarning(t *testing.T) {
 	te := newStoreEnv(t)
 	te.writeAccounts("github.com", "alice")
 	x := te.addJSON("Alpha")
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := replicate.WriteMembers(s, replicate.Members{Collaborators: []replicate.Collaborator{{ID: "github.com/bob", Permission: "write"}}}); err != nil {
-		t.Fatal(err)
-	}
+	te.uc().WriteMembers("me", []usecasetest.Member{{ID: "github.com/bob", Permission: "write"}})
 	code, _, errs := te.run("comment", "add", x.ID, "hi @bob and @carol")
 	if code != 0 || errs != "warning: carol cannot read me\n" {
 		t.Errorf("exit %d, stderr %q; want the warning for carol", code, errs)

@@ -20,17 +20,48 @@ type AddHereInput struct {
 // AddHereResult is the task added and where it went.
 type AddHereResult struct {
 	usecase.TaskResult
-	Destination *usecase.Destination
+	// Destination is "<store> / <the title of the parent>", or the name of
+	// the workspace for the root.
+	Destination string
+
+	stage int // the stage of the spec that decided the destination
 }
 
-// AddHere resolves the destination (its Confirm and Choice are returned for
+// BranchQuestion is the question whether to add under the task the branch
+// of the clone names.
+type BranchQuestion struct {
+	ParentID    string // as its store shows it; the ULID when the task has no id
+	ParentTitle string
+}
+
+// destinationLabel is "<store> / <parent's title>", or the workspace's name
+// for the root.
+func destinationLabel(d *usecase.Destination) string {
+	if d.Parent != nil {
+		return d.Store.Name + " / " + d.Parent.Title
+	}
+	return d.Store.Name + " / " + d.Workspace.Name
+}
+
+// shownID is the id of e as its store shows it.
+func shownID(m *mount.Mounted, e *index.Entry) (string, error) {
+	id := e.ULID.String()
+	err := m.With(func(ix *index.Index) {
+		if e.ID != "" {
+			id = ix.DisplayID(e)
+		}
+	})
+	return id, err
+}
+
+// AddHere resolves the destination (its question and Choice are returned for
 // the CLI to ask), refuses a read-only store there, adds the task with the
 // repo ID of the current repository when Repo, and sets recent when
 // stage 4 picked a project (after the commit).
 //
 // The session's own --store is the Store of the context when that has none,
 // and the config's default_store is its DefaultStore.
-func AddHere(ss *usecase.Session, in AddHereInput) (AddHereResult, *usecase.Confirm, *usecase.Choice, error) {
+func AddHere(ss *usecase.Session, in AddHereInput) (AddHereResult, *BranchQuestion, *usecase.Choice, error) {
 	c, p, err := ss.Config()
 	if err != nil {
 		return AddHereResult{}, nil, nil, err
@@ -69,8 +100,15 @@ func AddHere(ss *usecase.Session, in AddHereInput) (AddHereResult, *usecase.Conf
 	if err != nil {
 		return AddHereResult{}, nil, nil, contextError(ss, set, err)
 	}
-	if confirm != nil || choice != nil {
-		return AddHereResult{}, confirm, choice, nil
+	if confirm != nil {
+		id, err := shownID(confirm.Store, confirm.Parent)
+		if err != nil {
+			return AddHereResult{}, nil, nil, err
+		}
+		return AddHereResult{}, &BranchQuestion{ParentID: id, ParentTitle: confirm.Parent.Title}, nil, nil
+	}
+	if choice != nil {
+		return AddHereResult{}, nil, choice, nil
 	}
 	task := in.Task
 	task.Store = dest.Store.Name
@@ -104,7 +142,7 @@ func AddHere(ss *usecase.Session, in AddHereInput) (AddHereResult, *usecase.Conf
 			ss.AddWarning("the project was not recorded for this repository: " + err.Error())
 		}
 	}
-	return AddHereResult{TaskResult: res, Destination: dest}, nil, nil, nil
+	return AddHereResult{TaskResult: res, Destination: destinationLabel(dest), stage: dest.Stage}, nil, nil, nil
 }
 
 // contextError spells out what ResolveDestination could not find (LookupError).

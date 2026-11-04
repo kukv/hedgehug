@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
@@ -35,9 +34,7 @@ func TestDiscoverFrom(t *testing.T) {
 		"https://github.com/org-b/hh-ops.git":    "OPS",
 	})
 	// A bare that is not a store is not offered.
-	if err := gitrepo.InitBare(filepath.Join(remotes, "org-a", "web.git")); err != nil {
-		t.Fatal(err)
-	}
+	gitrepotest.Bare(t, filepath.Join(remotes, "org-a", "web.git"))
 	te := newTestEnv(t)
 	te.writeConfigYAML(rewriteTo(remotes))
 	out := te.ok("store", "discover", "--from", remotes)
@@ -212,9 +209,9 @@ func TestDiscoverOneFails(t *testing.T) {
 	te.terminal, te.stdin = false, ""
 	code, out, _ = te.run("store", "discover", "--from", remotes, "--all", "--json")
 	var got struct {
-		Failed []struct{ Name, Error string } `json:"failed"`
+		Failed []struct{ Name, Code, Message string } `json:"failed"`
 	}
-	if code != 1 || json.Unmarshal([]byte(out), &got) != nil || len(got.Failed) != 1 || got.Failed[0].Name != "aa" || got.Failed[0].Error == "" {
+	if code != 1 || json.Unmarshal([]byte(out), &got) != nil || len(got.Failed) != 1 || got.Failed[0].Name != "aa" || got.Failed[0].Code == "" || got.Failed[0].Message == "" {
 		t.Errorf("--json: exit %d, %q", code, out)
 	}
 }

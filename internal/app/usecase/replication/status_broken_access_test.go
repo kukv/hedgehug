@@ -3,7 +3,7 @@ package replication_test
 import (
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/app/usecase/replication"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
@@ -24,7 +24,7 @@ func TestSyncStatusBrokenAccessKeepsTheRow(t *testing.T) {
 	if err := s.WriteLocal("access.json", []byte("{not json")); err != nil {
 		t.Fatal(err)
 	}
-	st, err := replication.SyncStatus(ts.Session)
+	st, err := usecase.SyncStatus(ts.Session)
 	if err != nil || len(st) != 1 {
 		t.Fatalf("SyncStatus = %+v, %v", st, err)
 	}

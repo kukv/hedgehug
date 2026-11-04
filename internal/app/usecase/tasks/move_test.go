@@ -28,8 +28,8 @@ func TestMoveParentAndOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !res.Committed || res.Moved || res.Index == nil {
-		t.Errorf("result = committed %v moved %v index %v; want committed, not moved, an index", res.Committed, res.Moved, res.Index)
+	if _, verr := res.View(); !res.Committed || res.Moved || verr != nil {
+		t.Errorf("result = committed %v moved %v, view error %v; want committed, not moved, readable", res.Committed, res.Moved, verr)
 	}
 	if len(res.Tasks) != 1 || res.Tasks[0].ID != "ME-3" || !slices.Equal(res.OldIDs, []string{"ME-3"}) {
 		t.Errorf("tasks = %v old ids = %v; want just ME-3", res.Tasks, res.OldIDs)

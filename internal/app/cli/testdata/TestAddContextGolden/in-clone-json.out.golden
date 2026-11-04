@@ -1,28 +1,31 @@
 {
-  "ulid": "<ULID-1>",
-  "id": "ME-7",
-  "store": "me",
-  "workspace": {
-    "ulid": "<ULID-2>",
-    "name": "me",
-    "id_prefix": "ME"
+  "task": {
+    "ulid": "<ULID-1>",
+    "id": "ME-7",
+    "store": "me",
+    "workspace": {
+      "ulid": "<ULID-2>",
+      "name": "me",
+      "id_prefix": "ME"
+    },
+    "project": {
+      "ulid": "<ULID-3>",
+      "id": "ME-1",
+      "title": "Web A"
+    },
+    "kind": "task",
+    "title": "second",
+    "parent": "<ULID-3>",
+    "rank": "a3",
+    "status": "todo",
+    "assignees": [],
+    "labels": [],
+    "blocked_by": [],
+    "props": {},
+    "created": "<TIME>",
+    "updated": "<TIME>",
+    "deleted_at": null,
+    "problems": []
   },
-  "project": {
-    "ulid": "<ULID-3>",
-    "id": "ME-1",
-    "title": "Web A"
-  },
-  "kind": "task",
-  "title": "second",
-  "parent": "<ULID-3>",
-  "rank": "a3",
-  "status": "todo",
-  "assignees": [],
-  "labels": [],
-  "blocked_by": [],
-  "props": {},
-  "created": "<TIME>",
-  "updated": "<TIME>",
-  "deleted_at": null,
-  "problems": []
+  "commit": "<HASH>"
 }

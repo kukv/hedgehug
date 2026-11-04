@@ -48,10 +48,7 @@ func (a *app) checkCmd() *cobra.Command {
 // is an error or a warning to report.
 func (a *app) printFindings(fs []usecase.Finding) error {
 	if a.jsonOut {
-		if fs == nil {
-			fs = []usecase.Finding{}
-		}
-		if err := a.printJSON(fs); err != nil {
+		if err := a.printJSON(schemas.CheckResultOf(fs)); err != nil {
 			return err
 		}
 	} else if err := a.writeFindings(fs); err != nil {

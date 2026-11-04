@@ -5,7 +5,8 @@
     "remotes": [],
     "account": "github.com/alice",
     "hidden": false,
-    "default_store": true
+    "default_store": true,
+    "default": false
   },
   {
     "name": "org",
@@ -14,6 +15,7 @@
     "account": "github.com/alice",
     "color": "sky",
     "hidden": true,
-    "default_store": false
+    "default_store": false,
+    "default": false
   }
 ]

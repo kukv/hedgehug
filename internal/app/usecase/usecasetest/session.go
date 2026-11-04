@@ -191,14 +191,17 @@ func (ts *Session) DropAccounts() {
 	ts.ForgetWriter()
 }
 
-// BeforeCommand is Session.BeforeCommand for the config as it is now.
-func (ts *Session) BeforeCommand(start func(s *store.Store, name string) error, report func(store, msg string)) {
+// BeforeCommand is replication.BeforeCommand for the session.
+func (ts *Session) BeforeCommand(report func(store, msg string)) {
 	ts.T.Helper()
-	c, _, err := ts.Config()
-	if err != nil {
-		ts.T.Fatal(err)
-	}
-	replication.BeforeCommand(ts.Session, c, start, report)
+	replication.BeforeCommand(ts.Session, report)
+}
+
+// StubSpawn replaces the start of the background sync with f, which gets the
+// arguments of the child, and returns the function that puts the old one
+// back. It is global: a test that uses it does not run in parallel.
+func StubSpawn(f func(args []string)) (restore func()) {
+	return replicate.SetSpawn(func(_ string, args []string, _ string) error { f(args); return nil })
 }
 
 // HasDefaultAccount reports whether config.yaml still has DefaultAccountYAML.
@@ -316,6 +319,12 @@ func AddBareRemote(t *testing.T, ts *Session) string {
 // a data directory of its own and no store. Its clock is at now.
 func Other(t *testing.T, ts *Session, now time.Time) *Session {
 	t.Helper()
+	return OtherClock(t, ts, func() time.Time { return now })
+}
+
+// OtherClock is Other whose clock is now, read at each use.
+func OtherClock(t *testing.T, ts *Session, now func() time.Time) *Session {
+	t.Helper()
 	env := map[string]string{}
 	for k, v := range ts.Env {
 		env[k] = v
@@ -324,7 +333,7 @@ func Other(t *testing.T, ts *Session, now time.Time) *Session {
 	c := &Session{T: t, Env: env}
 	c.Session = &usecase.Session{
 		Getenv: func(k string) string { return c.Env[k] },
-		Now:    func() time.Time { return now },
+		Now:    now,
 		Warn:   func(m string) { c.Warns = append(c.Warns, m) },
 	}
 	c.AppendDefaultAccount()
@@ -741,7 +750,11 @@ func (ts *Session) AddedTask(id string) *model.Task {
 	if err != nil {
 		ts.T.Fatal(err)
 	}
-	tk, err := s.Task(r.Entry.ULID)
+	u, err := model.ParseULID(r.ULID)
+	if err != nil {
+		ts.T.Fatal(err)
+	}
+	tk, err := s.Task(u)
 	if err != nil {
 		ts.T.Fatal(err)
 	}
@@ -1089,7 +1102,11 @@ func UlidOf(t *testing.T, ts *Session, arg string) model.ULID {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return r.Entry.ULID
+	u, err := model.ParseULID(r.ULID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u
 }
 
 func WantCode(t *testing.T, what string, err error, kind usecase.Kind, code string) {
@@ -1159,14 +1176,11 @@ func AddProjectIn(t *testing.T, ts *Session, name, title string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := r.Index.Refresh(); err != nil {
+	v, err := r.View()
+	if err != nil {
 		t.Fatal(err)
 	}
-	e, ok := r.Index.Task(r.ULID)
-	if !ok {
-		t.Fatalf("the project %s is not in the index", r.ULID)
-	}
-	return e.ID
+	return v.ID
 }
 
 func LoadContext(t *testing.T, ts *Session) current.State {

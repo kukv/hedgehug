@@ -8,10 +8,10 @@ import (
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func TestUndo(t *testing.T) {
@@ -39,7 +39,7 @@ func TestUndo(t *testing.T) {
 func TestUndoWithoutAccountIsConflict(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	ts.dropDefaultAccount()
+	ts.uc.DropDefaultAccount()
 	if p := ts.problem("POST", "/api/undo", nil, 409); p.Type != "account.none" {
 		t.Errorf("problem = %+v", p)
 	}
@@ -63,7 +63,7 @@ func TestActivity(t *testing.T) {
 	if len(out) != 0 {
 		t.Errorf("sync=only: %d entries, want none", len(out))
 	}
-	ts.call("GET", "/api/activity?author="+ts.accountID(), nil, 200, &out)
+	ts.call("GET", "/api/activity?author="+ts.uc.AccountIDs()[0], nil, 200, &out)
 	if len(out) != 3 {
 		t.Errorf("author: %d entries, want the init and the two adds", len(out))
 	}
@@ -90,7 +90,7 @@ func TestNotifications(t *testing.T) {
 	ts.call("GET", "/api/tasks/"+id, nil, 200, &show)
 	u := mustULID(t, show.ULID)
 	// Another writer's title won over mine ("first"): the sync told me.
-	nid := ts.notifyMe(overwrittenItem(u, id, `"first"`))
+	nid := ts.uc.AddInboxItem("me", overwrittenItem(u, id, `"first"`)).String()
 	var items []struct {
 		ULID string `json:"ulid"`
 		Kind string `json:"kind"`
@@ -118,7 +118,7 @@ func TestNotifications(t *testing.T) {
 		t.Errorf("revert = %+v", w)
 	}
 	// A mention cannot be reverted.
-	mention := ts.notifyMe(inbox.Item{Kind: inbox.Mention, Task: u, ID: id, Commit: "c2", Time: time.Now()})
+	mention := ts.uc.AddInboxItem("me", usecasetest.InboxItem{Kind: "mention", Task: u, ID: id, Commit: "c2", Time: time.Now()}).String()
 	if p := ts.problem("POST", "/api/notifications/"+mention+"/revert", nil, 422); p.Type != "inbox.not_revertable" {
 		t.Errorf("revert of a mention: %+v", p)
 	}
@@ -137,9 +137,9 @@ func TestNotificationsReadMany(t *testing.T) {
 	var show usecase.ShowView
 	ts.call("GET", "/api/tasks/"+id, nil, 200, &show)
 	u := mustULID(t, show.ULID)
-	first := ts.notifyMe(overwrittenItem(u, id, `"first"`))
-	second := ts.notifyMe(inbox.Item{Kind: inbox.Mention, Task: u, ID: id, Commit: "c2", Time: time.Now()})
-	third := ts.notifyMe(inbox.Item{Kind: inbox.Mention, Task: u, ID: id, Commit: "c3", Time: time.Now()})
+	first := ts.uc.AddInboxItem("me", overwrittenItem(u, id, `"first"`)).String()
+	second := ts.uc.AddInboxItem("me", usecasetest.InboxItem{Kind: "mention", Task: u, ID: id, Commit: "c2", Time: time.Now()}).String()
+	third := ts.uc.AddInboxItem("me", usecasetest.InboxItem{Kind: "mention", Task: u, ID: id, Commit: "c3", Time: time.Now()}).String()
 	var items []struct {
 		ULID string `json:"ulid"`
 	}
@@ -196,8 +196,8 @@ func TestNotificationsReadStoreParam(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mine := ts.notifyIn("me", overwrittenItem(v.ULID, v.ULID.String(), `"x"`))
-	theirs := ts.notifyIn("team", overwrittenItem(v.ULID, v.ULID.String(), `"y"`))
+	mine := ts.uc.AddInboxItem("me", overwrittenItem(v.ULID, v.ULID.String(), `"x"`)).String()
+	theirs := ts.uc.AddInboxItem("team", overwrittenItem(v.ULID, v.ULID.String(), `"y"`)).String()
 	var res struct {
 		Read []string `json:"read"`
 	}
@@ -222,7 +222,7 @@ func TestUndoNothingIsConflict(t *testing.T) {
 func TestNotificationsWarnOnce(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t) // no account: NoAccountsWarning
-	ts.dropDefaultAccount()
+	ts.uc.DropDefaultAccount()
 	ts.call("GET", "/api/notifications?all=true", nil, 200, nil)
 	if n := strings.Count(ts.log.String(), notifications.NoAccountsWarning); n != 1 {
 		t.Errorf("warned %d times: %q", n, ts.log.String())

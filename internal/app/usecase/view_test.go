@@ -3,6 +3,7 @@ package usecase_test
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -39,14 +40,30 @@ func TestTaskViewOf(t *testing.T) {
 	if v.ULID != task.ULID.String() || v.ID != task.ID || v.Title != "the task" || v.Kind != "task" || v.Status != "todo" {
 		t.Errorf("view = %+v", v)
 	}
-	if v.Workspace == nil || *v.Workspace != (usecase.WorkspaceRef{ULID: task.Workspace.String(), Name: "me", IDPrefix: "ME"}) {
+	if v.Workspace == nil || *v.Workspace != (usecase.WorkspaceRef{ULID: task.Workspace.String(), Name: "me", IDPrefix: "ME", Known: true}) {
 		t.Errorf("Workspace = %+v", v.Workspace)
 	}
-	if !reflect.DeepEqual(v.BlockedBy, []usecase.Ref{{ULID: blocker.ULID.String(), ID: blocker.ID, Title: "blocker"}}) {
+	if !reflect.DeepEqual(v.BlockedBy, []usecase.Ref{{ULID: blocker.ULID.String(), ID: blocker.ID, Title: "blocker", DisplayID: blocker.ID}}) {
 		t.Errorf("BlockedBy = %+v", v.BlockedBy)
 	}
 	if v.Props["priority"] != "high" {
 		t.Errorf("priority = %v; want the scalar", v.Props["priority"])
+	}
+	// what the text writes
+	if v.DisplayID != task.ID || v.ParentRef != nil || len(v.FormerDisplayIDs) != 0 {
+		t.Errorf("DisplayID = %q, ParentRef = %+v, FormerDisplayIDs = %v", v.DisplayID, v.ParentRef, v.FormerDisplayIDs)
+	}
+	if len(v.PropList) != 2 || v.PropList[0].Key != "priority" || v.PropList[0].IsRef || !slices.Equal(v.PropList[0].Values, []string{"high"}) {
+		t.Errorf("PropList[0] = %+v", v.PropList)
+	}
+	if r := v.PropList[1]; r.Key != "relates" || !r.IsRef || len(r.Refs) != 1 || r.Refs[0].ID != blocker.ID {
+		t.Errorf("PropList[1] = %+v; want the relates taskref", r)
+	}
+	if got, want := v.Label(), usecase.TaskLabel(ix, e); got != want {
+		t.Errorf("Label = %q; want %q", got, want)
+	}
+	if got, want := v.BlockedBy[0].Name(), usecase.RefName(ix, blocker.ULID); got != want {
+		t.Errorf("Ref.Name = %q; want %q", got, want)
 	}
 	if !reflect.DeepEqual(v.Props["relates"], []string{blocker.ULID.String()}) {
 		t.Errorf("relates = %#v; want a list", v.Props["relates"])
@@ -92,8 +109,11 @@ func TestRefOfUnknownTask(t *testing.T) {
 		t.Fatal(err)
 	}
 	u := model.NewULID()
-	if got := usecase.RefOf(ix, u); got != (usecase.Ref{ULID: u.String()}) {
-		t.Errorf("RefOf = %+v; want only the ULID", got)
+	if got := usecase.RefOf(ix, u); got != (usecase.Ref{ULID: u.String(), Missing: true}) {
+		t.Errorf("RefOf = %+v; want only the ULID, and Missing", got)
+	}
+	if got, want := usecase.RefOf(ix, u).Name(), u.String()+" (not found)"; got != want {
+		t.Errorf("Ref.Name = %q; want %q", got, want)
 	}
 	if got, want := usecase.RefName(ix, u), u.String()+" (not found)"; got != want {
 		t.Errorf("RefName = %q; want %q", got, want)

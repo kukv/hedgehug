@@ -7,8 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/app/storage/index"
-	"github.com/kukv/hedgehug/internal/app/storage/mount"
+	"github.com/kukv/hedgehug/internal/app/cli/prompt"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
@@ -55,7 +54,7 @@ func (a *app) addCmd() *cobra.Command {
 const maxAsks = 4
 
 func (a *app) add(in tasks.AddHereInput) error {
-	in.Context.Interactive = a.isTerminal(a.stdin)
+	in.Context.Interactive = a.ask().Interactive()
 	if a.getwd != nil {
 		dir, err := a.getwd()
 		if err != nil {
@@ -92,64 +91,30 @@ func (a *app) add(in tasks.AddHereInput) error {
 				in.Context.PickWorkspace = picked
 			}
 		default:
-			if err := a.printTask(r.Index, r.ULID, verb(r.Committed, "Added")); err != nil {
+			if err := a.printTask(r.TaskResult, verb(r.Committed, "Added")); err != nil {
 				return err
 			}
 			if a.jsonOut {
 				return nil
 			}
-			_, err := fmt.Fprintln(a.stdout, "→ added to "+destinationLabel(r.Destination))
+			_, err := fmt.Fprintln(a.stdout, "→ added to "+r.Destination)
 			return err
 		}
 	}
 	return errors.New("add asked too many questions")
 }
 
-// destinationLabel is "<store> / <parent's title>", or the workspace's name
-// for the root.
-func destinationLabel(d *usecase.Destination) string {
-	if d.Parent != nil {
-		return d.Store.Name + " / " + d.Parent.Title
-	}
-	return d.Store.Name + " / " + d.Workspace.Name
-}
-
-// shownID is the id of e as its store shows it.
-func shownID(m *mount.Mounted, e *index.Entry) (string, error) {
-	id := e.ULID.String()
-	err := m.With(func(ix *index.Index) {
-		if e.ID != "" {
-			id = ix.DisplayID(e)
-		}
-	})
-	return id, err
-}
-
 // askBranchParent asks whether to add under the task the branch names.
-func (a *app) askBranchParent(c *usecase.Confirm) (bool, error) {
-	id, err := shownID(c.Store, c.Parent)
-	if err != nil {
-		return false, err
-	}
-	if _, err := fmt.Fprintf(a.stderr, "Add as a child of %s %s? [Y/n] ", id, c.Parent.Title); err != nil {
-		return false, err
-	}
-	line, err := a.readLine()
-	if err != nil && line == "" {
-		return false, errors.New("canceled")
-	}
-	switch strings.ToLower(strings.TrimSpace(line)) {
-	case "", "y", "yes":
-		return true, nil
-	case "n", "no":
-		return false, nil
-	}
-	return false, usageErrorf("%q is not y or n", strings.TrimSpace(line))
+func (a *app) askBranchParent(q *tasks.BranchQuestion) (bool, error) {
+	return a.ask().Confirm(prompt.YesNo{
+		Question: fmt.Sprintf("Add as a child of %s %s? [Y/n] ", q.ParentID, q.ParentTitle),
+		Default:  true, Canceled: "canceled", Strict: true,
+	})
 }
 
 // askPick lists the options of c on stderr and reads the number of the one to
 // pick; Enter takes the default, if there is one.
 func (a *app) askPick(c *usecase.Choice) (string, error) {
-	prompt := map[string]string{"project": "Project", "store": "Store", "workspace": "Workspace"}[c.What]
-	return a.askChoice(c.Options, choice{labels: c.Labels, prompt: prompt, def: c.Default})
+	promptWord := map[string]string{"project": "Project", "store": "Store", "workspace": "Workspace"}[c.What]
+	return a.ask().Choose(prompt.Choose{Options: c.Options, Labels: c.Labels, Prompt: promptWord, Default: c.Default, Canceled: "canceled"})
 }

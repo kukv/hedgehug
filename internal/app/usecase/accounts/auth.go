@@ -24,7 +24,7 @@ type DeviceCode struct {
 }
 
 // AuthLoginInput is what hh auth login is given. The CLI reads Token from
-// stdin for --with-token and shows the code of the device flow in ShowCode;
+// stdin for --with-token and shows the code of the device flow in OnCode;
 // the operation asks nothing.
 type AuthLoginInput struct {
 	Name      string
@@ -32,9 +32,8 @@ type AuthLoginInput struct {
 	HostGiven bool   // --host was given: it must be the host of an account of that name
 	WithToken bool   // keep Token in the keychain, instead of the device flow
 	Token     string
-	ShowCode  func(*github.DeviceCode) // the device flow's code; nil shows nothing
-	OnCode    func(DeviceCode)         // the same code, in a type of this package; nil shows nothing
-	Context   context.Context          // ends the device flow's wait with auth.canceled; nil never ends it
+	OnCode    func(DeviceCode) // the device flow's code; nil shows nothing
+	Context   context.Context  // ends the device flow's wait with auth.canceled; nil never ends it
 }
 
 // AuthLoginResult is the account a login set the token of. Uses is set
@@ -44,8 +43,8 @@ type AuthLoginInput struct {
 type AuthLoginResult struct {
 	Account string `json:"account"`
 	ID      string `json:"id"`
-	Added   bool   `json:"added"`
-	Uses    string `json:"-"`
+	Added   bool   `json:"added" doc:"The account was added to config.yaml: the name was no account's"`
+	Uses    string `json:"uses,omitempty" doc:"gh or env:VAR: the account takes its token from there, so Hedgehug has nothing to log in and kept nothing"`
 	Pinned  Pinned `json:"-"` // when an account was added: the stores that were given the account they used
 }
 
@@ -105,9 +104,6 @@ func AuthLogin(ss *usecase.Session, in AuthLoginInput) (AuthLoginResult, error) 
 				"host", host)
 		}
 		show := func(dc *github.DeviceCode) {
-			if in.ShowCode != nil {
-				in.ShowCode(dc)
-			}
 			if in.OnCode != nil {
 				in.OnCode(DeviceCode{UserCode: dc.UserCode, VerificationURI: dc.VerificationURI, ExpiresIn: dc.ExpiresIn})
 			}

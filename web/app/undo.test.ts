@@ -10,6 +10,8 @@ type UndoWrite = Schemas["UndoWrite"];
 function result(over: Partial<UndoWrite> = {}): UndoWrite {
   return {
     commit: "c2",
+    subject: "set REL-6",
+    changed: true,
     kept: [],
     undone: {
       hash: "c1",

@@ -27,21 +27,38 @@ type AffectedResult struct {
 	Commit    string // hex hash of the commit made; "" when nothing was committed
 }
 
-// Views are the tasks of Targets as the write left them, refreshed from the
-// store.
+// Views are the tasks of Targets as the write left them, as rows of a list:
+// the task first, then the tasks under it, each once. It refreshes the index.
 func (r AffectedResult) Views() ([]*usecase.TaskView, error) {
 	if err := r.Index.Refresh(); err != nil {
 		return nil, err
 	}
-	out := make([]*usecase.TaskView, 0, len(r.Targets))
+	ulids := []model.ULID{r.Entry.ULID}
 	for _, x := range r.Targets {
-		cur, ok := r.Index.Task(x.ULID)
-		if !ok {
-			cur = x
+		if x.ULID != r.Entry.ULID {
+			ulids = append(ulids, x.ULID)
 		}
-		out = append(out, usecase.TaskViewOf(r.Index, cur))
+	}
+	out := make([]*usecase.TaskView, 0, len(ulids))
+	for _, u := range ulids {
+		cur, ok := r.Index.Task(u)
+		if !ok {
+			// Another process purged it after the write.
+			return nil, usecase.NewErr(usecase.KindNotFound, "task.gone", fmt.Errorf("%s is no longer in the store", u), "id", u.String())
+		}
+		out = append(out, usecase.ListViewOf(r.Index, cur))
 	}
 	return out, nil
+}
+
+// Write is the answer to the write: the tasks as they are now, and the
+// commit.
+func (r AffectedResult) Write() (usecase.AffectedWrite, error) {
+	vs, err := r.Views()
+	if err != nil {
+		return usecase.AffectedWrite{}, err
+	}
+	return usecase.AffectedWrite{Tasks: vs, Commit: usecase.CommitPtr(r.Commit)}, nil
 }
 
 // Remove deletes the task arg names and the tasks under it; they can be
@@ -252,6 +269,17 @@ type RestoreAtResult struct {
 	Note string
 }
 
+// Write is the answer to the restore: the task as it is now, the commit and
+// the note.
+func (r RestoreAtResult) Write() (usecase.TaskWrite, error) {
+	w, err := r.TaskResult.Write()
+	if err != nil {
+		return usecase.TaskWrite{}, err
+	}
+	w.Note = r.Note
+	return w, nil
+}
+
 // RestoreAt puts the task back as it was at the point at names (a time or a
 // commit). Its id and workspace stay as they are now: an id given back could
 // be given twice, and moving to another workspace is the job of Move with a
@@ -319,5 +347,5 @@ func RestoreAt(ss *usecase.Session, arg, at string) (RestoreAtResult, error) {
 	if err != nil {
 		return RestoreAtResult{}, err
 	}
-	return RestoreAtResult{TaskResult: usecase.TaskResult{Index: ix, ULID: e.ULID, Committed: !hash.IsZero(), Commit: usecase.CommitHex(hash)}, Note: note}, nil
+	return RestoreAtResult{TaskResult: usecase.NewTaskResult(ix, e.ULID, hash), Note: note}, nil
 }

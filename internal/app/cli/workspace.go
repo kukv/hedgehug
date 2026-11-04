@@ -6,8 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/usecase/workspaces"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
@@ -70,8 +68,8 @@ func (a *app) workspaceAdd(name, prefix string) error {
 	if err != nil {
 		return err
 	}
-	w := r.Workspace
-	return a.printWorkspace(r.Index, w, fmt.Sprintf("Added workspace %s (%s, %s)", w.Name, w.IDPrefix, w.ULID))
+	w := r.View()
+	return a.printWorkspace(r, fmt.Sprintf("Added workspace %s (%s, %s)", w.Name, w.IDPrefix, w.ULID))
 }
 
 func (a *app) workspaceRename(arg, name string) error {
@@ -79,8 +77,8 @@ func (a *app) workspaceRename(arg, name string) error {
 	if err != nil {
 		return err
 	}
-	w := r.Workspace
-	return a.printWorkspace(r.Index, w, fmt.Sprintf("Renamed workspace %s to %s (%s, %s)", r.OldName, w.Name, w.IDPrefix, w.ULID))
+	w := r.View()
+	return a.printWorkspace(r, fmt.Sprintf("Renamed workspace %s to %s (%s, %s)", r.OldName, w.Name, w.IDPrefix, w.ULID))
 }
 
 func (a *app) workspacePrefix(arg, prefix string) error {
@@ -88,17 +86,17 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 	if err != nil {
 		return err
 	}
-	w := r.Workspace
+	w := r.View()
 	if !r.Committed {
-		return a.printWorkspace(r.Index, w, fmt.Sprintf("%s: %s already has the id prefix %s (%s)", verb(false, ""), w.Name, w.IDPrefix, w.ULID))
+		return a.printWorkspace(r, fmt.Sprintf("%s: %s already has the id prefix %s (%s)", verb(false, ""), w.Name, w.IDPrefix, w.ULID))
 	}
 	if a.jsonOut {
-		return a.printWorkspace(r.Index, w, "")
+		return a.printWorkspace(r, "")
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "Changed the id prefix of %s to %s (%s); renumbered %s\n", w.Name, w.IDPrefix, w.ULID, plural.Count(r.Renumbered, "task"))
-	for _, c := range r.IDs {
-		fmt.Fprintf(&b, "  %s → %s\n", r.Index.QualifyID(c.Old), r.Index.QualifyID(c.New))
+	for _, c := range r.Renumbering() {
+		fmt.Fprintf(&b, "  %s → %s\n", c.Old, c.New)
 	}
 	_, err = fmt.Fprint(a.stdout, b.String())
 	return err
@@ -109,12 +107,12 @@ func (a *app) workspaceRm(arg string) error {
 	if err != nil {
 		return err
 	}
-	w := r.Workspace
-	return a.printWorkspace(r.Index, w, fmt.Sprintf("Removed workspace %s (%s, %s)", w.Name, w.IDPrefix, w.ULID))
+	w := r.View()
+	return a.printWorkspace(r, fmt.Sprintf("Removed workspace %s (%s, %s)", w.Name, w.IDPrefix, w.ULID))
 }
 
 func (a *app) workspaceLs() error {
-	_, wss, err := workspaces.WorkspaceList(a.ss)
+	wss, err := workspaces.WorkspaceList(a.ss)
 	if err != nil {
 		return err
 	}
@@ -128,11 +126,10 @@ func (a *app) workspaceLs() error {
 	return writeTable(a.stdout, []string{"NAME", "PREFIX", "ULID", "TASKS"}, rows, nil)
 }
 
-// printWorkspace prints w as JSON, or line as text. ix is the index from
-// before the write; only its task counts are read.
-func (a *app) printWorkspace(ix *index.Index, w *model.Workspace, line string) error {
+// printWorkspace prints the workspace r wrote as JSON, or line as text.
+func (a *app) printWorkspace(r workspaces.WorkspaceResult, line string) error {
 	if a.jsonOut {
-		return a.printJSON(workspaces.WorkspaceViewOf(ix, w))
+		return a.printJSON(r.Write())
 	}
 	_, err := fmt.Fprintln(a.stdout, line)
 	return err

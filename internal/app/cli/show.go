@@ -7,12 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/browse"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 func (a *app) showCmd() *cobra.Command {
@@ -25,18 +21,18 @@ func (a *app) showCmd() *cobra.Command {
 }
 
 func (a *app) show(arg string) error {
-	r, err := browse.Show(a.ss, arg)
+	v, err := browse.Show(a.ss, arg)
 	if err != nil {
 		return err
 	}
 	if a.jsonOut {
-		return a.printJSON(browse.ShowViewOf(r))
+		return a.printJSON(v)
 	}
-	_, err = fmt.Fprint(a.stdout, a.showText(r.Store, r.Index, r.Entry, r.Task, r.Comments, r.Relations, r.Back, r.History))
+	_, err = fmt.Fprint(a.stdout, a.showText(v))
 	return err
 }
 
-func (a *app) showText(storeName string, ix *index.Index, e *index.Entry, t *model.Task, comments []*model.Comment, rels []browse.Relation, back []*index.Entry, history []gitrepo.LogEntry) string {
+func (a *app) showText(v *usecase.ShowView) string {
 	st := a.style()
 	var b strings.Builder
 	field := func(k string, vs ...string) {
@@ -46,113 +42,104 @@ func (a *app) showText(storeName string, ix *index.Index, e *index.Entry, t *mod
 		}
 		b.WriteString("  " + k + strings.Repeat(" ", max(0, 11-displayWidth(k))) + " " + v + "\n")
 	}
-	refs := func(ulids []model.ULID) []string {
-		out := make([]string, len(ulids))
-		for i, ulid := range ulids {
-			out[i] = usecase.RefName(ix, ulid)
+	names := func(refs []usecase.Ref) []string {
+		out := make([]string, len(refs))
+		for i, r := range refs {
+			out[i] = r.Name()
 		}
 		return out
 	}
-	field("title", e.Title) // "-" for a file that does not decode
-	field("id", ix.DisplayID(e))
-	field("ulid", e.ULID.String())
-	field("store", storeName)
-	if !e.Workspace.IsZero() {
-		ws := e.Workspace.String()
-		if w, ok := ix.Workspace(e.Workspace); ok {
+	field("title", v.Title) // "-" for a file that does not decode
+	field("id", v.DisplayID)
+	field("ulid", v.ULID)
+	field("store", v.Store)
+	if w := v.Workspace; w != nil {
+		ws := w.ULID
+		if w.Known {
 			ws = w.Name + " (" + w.IDPrefix + ", " + ws + ")"
 		}
 		field("workspace", ws)
 	}
-	if len(e.FormerIDs) > 0 {
-		former := make([]string, len(e.FormerIDs))
-		for i, id := range e.FormerIDs {
-			former[i] = ix.QualifyID(id)
-		}
-		field("former_ids", former...)
+	if len(v.FormerDisplayIDs) > 0 {
+		field("former_ids", v.FormerDisplayIDs...)
 	}
-	field("kind", e.Kind)
-	field("status", e.Status)
-	if c := usecase.ChecklistText(usecase.ChecklistOf(e)); c != "" {
+	field("kind", v.Kind)
+	field("status", v.Status)
+	if c := usecase.ChecklistText(v.Checklist); c != "" {
 		field("checklist", c)
 	}
-	if p := usecase.ProgressFractionText(usecase.ProgressOf(ix, e)); p != "" {
+	if p := usecase.ProgressFractionText(v.Progress); p != "" {
 		field("progress", p)
 	}
-	if e.Parent != nil {
-		field("parent", usecase.RefName(ix, *e.Parent))
+	if v.ParentRef != nil {
+		field("parent", v.ParentRef.Name())
 	} else {
 		field("parent")
 	}
-	field("assignees", e.Assignees...)
-	if t != nil {
-		field("watchers", t.Watchers...)
+	field("assignees", v.Assignees...)
+	if v.Broken == "" {
+		field("watchers", v.Watchers...)
 	}
-	field("labels", e.Labels...)
-	if t != nil {
-		field("repos", t.Repos...)
+	field("labels", v.Labels...)
+	if v.Broken == "" {
+		field("repos", v.Repos...)
 	}
-	field("blocked_by", refs(e.BlockedBy)...)
-	sc := ix.Schema()
-	for _, p := range e.Props {
-		if sp, ok := sc.Prop(p.Key); ok && sp.Type == schema.TypeTaskRef {
-			field(p.Key, refs(e.Targets(p.Key))...)
+	field("blocked_by", names(v.BlockedBy)...)
+	for _, p := range v.PropList {
+		if p.IsRef {
+			field(p.Key, names(p.Refs)...)
 			continue
 		}
 		field(p.Key, p.Values...)
 	}
 	by := "-"
-	if t != nil && t.CreatedBy != "" {
-		by = t.CreatedBy
+	if v.CreatedBy != "" {
+		by = v.CreatedBy
 	}
-	field("created", e.Created.Format(time.RFC3339)+" by "+by)
-	field("updated", e.Updated.Format(time.RFC3339))
-	if e.DeletedAt != nil {
-		field("deleted", e.DeletedAt.Format(time.RFC3339))
+	field("created", v.Created.Format(time.RFC3339)+" by "+by)
+	field("updated", v.Updated.Format(time.RFC3339))
+	if v.DeletedAt != nil {
+		field("deleted", v.DeletedAt.Format(time.RFC3339))
 	}
-	if ps := ix.Problems(e.ULID); len(ps) > 0 {
+	if len(v.Problems) > 0 {
 		b.WriteString("\nProblems:\n")
-		for _, p := range ps {
-			fmt.Fprintf(&b, "  %s %s: %s\n", p.Code, p.Field, p.Msg)
+		for _, p := range v.Problems {
+			fmt.Fprintf(&b, "  %s %s: %s\n", p.Code, p.Field, p.Message)
 		}
 	}
-	if len(rels) > 0 {
+	if len(v.Relations) > 0 {
 		b.WriteString("\nRelated:\n")
-		for _, r := range rels {
-			names := make([]string, len(r.Tasks))
-			for i, x := range r.Tasks {
-				names[i] = usecase.RefName(ix, x.ULID)
-			}
-			field(r.Label, names...)
+		for _, r := range v.Relations {
+			field(r.Label, names(r.Tasks)...)
 		}
 	}
-	if len(back) > 0 {
+	if len(v.ReferencedBy) > 0 {
 		b.WriteString("\nReferenced by:\n")
-		for _, x := range back {
-			b.WriteString("  " + usecase.RefName(ix, x.ULID) + "\n")
+		for _, x := range v.ReferencedBy {
+			b.WriteString("  " + x.Name() + "\n")
 		}
 	}
-	if e.Broken != "" {
-		b.WriteString("\nbroken: " + e.Broken + "\n")
+	if v.Broken != "" {
+		b.WriteString("\nbroken: " + v.Broken + "\n")
 	}
-	if t != nil && strings.TrimSpace(t.Body) != "" {
-		b.WriteString("\n" + strings.TrimRight(t.Body, "\n") + "\n")
+	if v.Broken == "" && strings.TrimSpace(v.Body) != "" {
+		b.WriteString("\n" + strings.TrimRight(v.Body, "\n") + "\n")
 	}
-	if len(comments) > 0 {
+	if len(v.Comments) > 0 {
 		b.WriteString("\nComments:\n")
-		for _, c := range comments {
+		for _, c := range v.Comments {
 			author := c.Author
 			if author == "" {
 				author = "-"
 			}
-			fmt.Fprintf(&b, "  %s  %s  %s\n", st.id(c.ULID.String()), author, c.Created.Format(time.RFC3339))
+			fmt.Fprintf(&b, "  %s  %s  %s\n", st.id(c.ULID), author, c.Created.Format(time.RFC3339))
 			for _, l := range strings.Split(strings.TrimRight(c.Body, "\n"), "\n") {
 				b.WriteString("    " + l + "\n")
 			}
 		}
 	}
-	if len(history) > 0 {
-		b.WriteString("\nHistory:\n" + logText(ix, history))
+	if len(v.History) > 0 {
+		b.WriteString("\nHistory:\n" + logText(v.History))
 	}
 	return b.String()
 }

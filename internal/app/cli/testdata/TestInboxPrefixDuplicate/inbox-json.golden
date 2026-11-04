@@ -12,6 +12,7 @@
       "value": "DUP"
     },
     "store": "org",
-    "task": null
+    "task": null,
+    "read": false
   }
 ]

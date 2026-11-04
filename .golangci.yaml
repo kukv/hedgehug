@@ -11,9 +11,30 @@ linters:
     - unconvert
     - unparam
     - forbidigo
-    # depguard は層を分けるパッケージができたときに、そのルールと一緒に有効にする。
-    # ルール無しで有効にすると、標準ライブラリ以外の import をすべて拒否する。
+    - depguard
   settings:
+    depguard:
+      rules:
+        # cli と server は usecase を通す（spec 4.2）。テストも同じ（決定 11）。
+        # テスト用の部品（決定 12）は許す。
+        entry:
+          list-mode: lax
+          files:
+            - "**/internal/app/cli/**"
+            - "**/internal/app/server/**"
+          allow:
+            - github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest
+            - github.com/kukv/hedgehug/internal/app/storage/history/historytest
+            - github.com/kukv/hedgehug/internal/app/storage/mount/mounttest
+          deny:
+            - pkg: github.com/kukv/hedgehug/internal/app/storage
+              desc: cli と server は usecase を通す（spec 4.2）
+            - pkg: github.com/kukv/hedgehug/internal/app/remote
+              desc: cli と server は usecase を通す（spec 4.2）
+            - pkg: github.com/kukv/hedgehug/internal/lib/gitrepo
+              desc: cli と server は usecase を通す（spec 4.2）
+            - pkg: github.com/kukv/hedgehug/internal/lib/github
+              desc: cli と server は usecase を通す（spec 4.2）
     forbidigo:
       analyze-types: true
       forbid:

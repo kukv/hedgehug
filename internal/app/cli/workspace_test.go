@@ -103,11 +103,23 @@ func (te *testEnv) lastCommit() (subject, msg string) {
 }
 
 // wsJSON runs a workspace command with --json and decodes what it prints
-// into v.
+// into v. A write prints {workspace, commit}; v gets the workspace.
 func (te *testEnv) wsJSON(v any, args ...string) {
 	te.t.Helper()
 	out := te.ok(append(append([]string{"workspace"}, args...), "--json")...)
-	if err := json.Unmarshal([]byte(out), v); err != nil {
+	if args[0] == "ls" {
+		if err := json.Unmarshal([]byte(out), v); err != nil {
+			te.t.Fatalf("%v: %s", err, out)
+		}
+		return
+	}
+	var w struct {
+		Workspace json.RawMessage `json:"workspace"`
+	}
+	if err := json.Unmarshal([]byte(out), &w); err != nil || len(w.Workspace) == 0 {
+		te.t.Fatalf("%v: %s", err, out)
+	}
+	if err := json.Unmarshal(w.Workspace, v); err != nil {
 		te.t.Fatalf("%v: %s", err, out)
 	}
 }
@@ -164,8 +176,20 @@ func TestWorkspaceJSON(t *testing.T) {
 	te := newStoreEnv(t)
 	te.addJSON("a")
 	want := []string{"deleted", "id_prefix", "name", "prefix_set", "tasks", "ulid"}
-	var added map[string]any
-	te.wsJSON(&added, "add", "web", "--prefix", "WEB")
+	// A write prints {workspace, commit, ids?}.
+	write := func(args ...string) (ws map[string]any, w map[string]any) {
+		te.t.Helper()
+		out := te.ok(append(append([]string{"workspace"}, args...), "--json")...)
+		if err := json.Unmarshal([]byte(out), &w); err != nil {
+			te.t.Fatalf("%v: %s", err, out)
+		}
+		ws, _ = w["workspace"].(map[string]any)
+		if _, ok := w["commit"].(string); !ok {
+			te.t.Errorf("%v: commit = %v, want the commit made", args, w["commit"])
+		}
+		return ws, w
+	}
+	added, _ := write("add", "web", "--prefix", "WEB")
 	if !slices.Equal(fieldNames(added), want) || added["name"] != "web" || added["id_prefix"] != "WEB" || added["tasks"] != 0.0 {
 		t.Errorf("add --json = %v", added)
 	}
@@ -174,18 +198,18 @@ func TestWorkspaceJSON(t *testing.T) {
 	if len(ls) != 2 || !slices.Equal(fieldNames(ls[0]), want) || ls[0]["name"] != "me" || ls[0]["tasks"] != 1.0 || ls[1]["name"] != "web" {
 		t.Errorf("ls --json = %v", ls)
 	}
-	var renamed map[string]any
-	te.wsJSON(&renamed, "rename", "web", "front")
+	renamed, _ := write("rename", "web", "front")
 	if !slices.Equal(fieldNames(renamed), want) || renamed["name"] != "front" || renamed["ulid"] != added["ulid"] {
 		t.Errorf("rename --json = %v", renamed)
 	}
-	var prefixed map[string]any
-	te.wsJSON(&prefixed, "set-prefix", "me", "BE")
+	prefixed, whole := write("set-prefix", "me", "BE")
 	if !slices.Equal(fieldNames(prefixed), want) || prefixed["id_prefix"] != "BE" || prefixed["name"] != "me" {
 		t.Errorf("prefix --json = %v", prefixed)
 	}
-	var removed map[string]any
-	te.wsJSON(&removed, "rm", "front")
+	if ids, _ := whole["ids"].([]any); len(ids) != 1 || !slices.Equal(fieldNames(ids[0].(map[string]any)), []string{"new", "old"}) { //nolint:forcetypeassert // --json prints an object
+		t.Errorf("prefix --json ids = %v, want the one task renumbered", whole["ids"])
+	}
+	removed, _ := write("rm", "front")
 	if !slices.Equal(fieldNames(removed), want) || removed["name"] != "front" || removed["id_prefix"] != "WEB" {
 		t.Errorf("rm --json = %v", removed)
 	}
@@ -201,7 +225,7 @@ func TestStoreInitJSONHasTheWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	w := got.Workspace
-	if !slices.Equal(fieldNames(w), []string{"id_prefix", "name", "ulid"}) || w["name"] != "main" || w["id_prefix"] != "ME" {
+	if !slices.Equal(fieldNames(w), []string{"deleted", "id_prefix", "name", "prefix_set", "tasks", "ulid"}) || w["name"] != "main" || w["id_prefix"] != "ME" {
 		t.Fatalf("workspace = %v", w)
 	}
 	if _, err := model.ParseULID(w["ulid"].(string)); err != nil {

@@ -10,27 +10,23 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase/accounts"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
-	"github.com/kukv/hedgehug/internal/lib/github"
 )
 
 // OnCode is the code in a type of usecase (the GUI's server does not import
-// lib/github), without the device code that only the polling uses; ShowCode
-// still gets the whole of it.
+// lib/github), without the device code that only the polling uses.
 func TestAuthLoginDeviceOnCode(t *testing.T) {
 	t.Parallel()
 	ts, _ := usecasetest.AuthSession(t, fakegh.State{AutoApprove: "alice"}, "")
-	var shown *github.DeviceCode
 	var got accounts.DeviceCode
 	res, err := accounts.AuthLogin(ts.Session, accounts.AuthLoginInput{
-		Host:     "github.com",
-		ShowCode: func(dc *github.DeviceCode) { shown = dc },
-		OnCode:   func(c accounts.DeviceCode) { got = c },
+		Host:   "github.com",
+		OnCode: func(c accounts.DeviceCode) { got = c },
 	})
 	if err != nil || !res.Added {
 		t.Fatalf("result = %+v, %v", res, err)
 	}
-	if shown == nil || got.UserCode != shown.UserCode || got.VerificationURI != shown.VerificationURI || got.ExpiresIn != 900 {
-		t.Errorf("OnCode got %+v; ShowCode got %+v", got, shown)
+	if got.UserCode == "" || got.VerificationURI == "" || got.ExpiresIn != 900 {
+		t.Errorf("OnCode got %+v", got)
 	}
 }
 

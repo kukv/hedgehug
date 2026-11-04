@@ -32,8 +32,8 @@ function commitCount(hh: Hedgehug): number {
 /** The titles of the tasks at the root, in the order of their ranks. */
 function rootOrder(hh: Hedgehug): string[] {
   return hh
-    .json<{ title: string; rank: string; parent: string | null }[]>("ls")
-    .filter((t) => t.parent === null)
+    .json<{ tasks: { title: string; rank: string; parent: string | null }[] }>("ls")
+    .tasks.filter((t) => t.parent === null)
     .sort((x, y) => (x.rank < y.rank ? -1 : 1))
     .map((t) => t.title);
 }

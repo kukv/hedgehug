@@ -9,8 +9,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func TestDoctorNoProblems(t *testing.T) {
@@ -268,13 +267,7 @@ func TestDoctorFixOfAReadOnlyStoreWarns(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	te.ok("add", "one")
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := replicate.WriteAccess(s, replicate.Access{ReadOnly: true, Reason: replicate.ReasonGitHub, Checked: te.now}); err != nil {
-		t.Fatal(err)
-	}
+	te.uc().WriteAccess("me", usecasetest.Access{ReadOnly: true, Reason: usecasetest.ReasonGitHub, Checked: te.now})
 	code, out, stderr := te.run("doctor", "--fix")
 	if code != 0 || !strings.Contains(stderr, "warning: me is read-only, so it is not fixed (the GitHub permission is read)") || !strings.Contains(out, "Nothing to repair") {
 		t.Errorf("exit %d\nstdout %s\nstderr %s", code, out, stderr)

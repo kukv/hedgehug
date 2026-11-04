@@ -8,10 +8,7 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/inbox"
-	"github.com/kukv/hedgehug/internal/app/storage/index"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 // inboxItems returns the items of the inbox of te as --json prints them.
@@ -256,16 +253,8 @@ func TestInboxRepairedContent(t *testing.T) {
 	if err := json.Unmarshal([]byte(alice.ok("show", "ORG-1", "--json")), &j); err != nil {
 		t.Fatal(err)
 	}
-	st, err := store.Open(alice.storeDir("org"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ix, err := index.Open(st)
-	if err != nil {
-		t.Fatal(err)
-	}
-	item := func(kind, value string) inbox.Item {
-		return inbox.Item{Kind: inbox.Repaired, Detail: json.RawMessage(`{"kind":"` + kind + `","value":` + value + `}`)}
+	item := func(kind, value string) usecasetest.InboxItem {
+		return usecasetest.InboxItem{Kind: "repaired", Detail: json.RawMessage(`{"kind":"` + kind + `","value":` + value + `}`)}
 	}
 	name := "ORG-1 (" + j.ULID + ") x"
 	for _, c := range []struct{ kind, value, want string }{
@@ -274,15 +263,15 @@ func TestInboxRepairedContent(t *testing.T) {
 		{"parent_deleted", `{"from":"` + j.ULID + `","to":null}`, "parent_deleted: moved to the root (its parent " + name + " was deleted)"},
 	} {
 		// The destination is the one the value names, whatever the index has now.
-		if got := notifications.InboxContent(ix, item(c.kind, c.value), "org", false); got != c.want {
+		if got := usecasetest.InboxContent(alice.uc(), "org", item(c.kind, c.value), true); got != c.want {
 			t.Errorf("%s: content = %q, want %q", c.kind, got, c.want)
 		}
 	}
 	gone := model.NewULID().String()
-	if got := notifications.InboxContent(nil, item("parent_deleted", `{"from":"`+gone+`","to":null}`), "org", false); got != "parent_deleted: moved to the root (its parent "+gone+" was deleted)" {
+	if got := usecasetest.InboxContent(alice.uc(), "org", item("parent_deleted", `{"from":"`+gone+`","to":null}`), false); got != "parent_deleted: moved to the root (its parent "+gone+" was deleted)" {
 		t.Errorf("without an index: %q", got)
 	}
-	if got := notifications.InboxContent(ix, item("id_prefix", `"web"`), "org", false); got != `id_prefix (was "web")` {
+	if got := usecasetest.InboxContent(alice.uc(), "org", item("id_prefix", `"web"`), true); got != `id_prefix (was "web")` {
 		t.Errorf("other kinds: %q", got)
 	}
 }
@@ -370,32 +359,19 @@ func TestInboxDuplicateNameMatchesTheName(t *testing.T) {
 	t.Parallel()
 	alice, _, _ := twoUsers(t)
 	alice.ok("workspace", "add", "web", "--prefix", "WEB")
-	st, err := store.Open(alice.storeDir("org"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ix, err := index.Open(st)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var web *model.Workspace
-	for _, w := range ix.Workspaces() {
-		if w.Name == "web" {
-			web = w
-		}
-	}
-	item := func(kind, value string) inbox.Item {
-		return inbox.Item{Kind: inbox.PrefixDuplicate, Detail: json.RawMessage(`{"kind":"` + kind + `","workspace":"` + web.ULID.String() + `","value":` + value + `}`)}
+	web := alice.uc().WorkspaceNamed("org", "web")
+	item := func(kind, value string) usecasetest.InboxItem {
+		return usecasetest.InboxItem{Kind: "prefix_duplicate", Detail: json.RawMessage(`{"kind":"` + kind + `","workspace":"` + web.String() + `","value":` + value + `}`)}
 	}
 	// The workspace of the first store has a prefix and a name of its own: a name
 	// nobody else has, and an empty value, name no other workspace.
-	if got := notifications.InboxContent(ix, item("name_duplicate", `"Web"`), "org", false); got != "Web is also the name of another workspace; change it with hedgehug workspace rename web <new name>" {
+	if got := usecasetest.InboxContent(alice.uc(), "org", item("name_duplicate", `"Web"`), true); got != "Web is also the name of another workspace; change it with hedgehug workspace rename web <new name>" {
 		t.Errorf("name: %q", got)
 	}
-	if got := notifications.InboxContent(ix, item("prefix_duplicate", `"WEB"`), "org", false); got != "WEB is also used by another workspace; change it with hedgehug workspace set-prefix web <new prefix>" {
+	if got := usecasetest.InboxContent(alice.uc(), "org", item("prefix_duplicate", `"WEB"`), true); got != "WEB is also used by another workspace; change it with hedgehug workspace set-prefix web <new prefix>" {
 		t.Errorf("prefix: %q", got)
 	}
-	if got := notifications.InboxContent(ix, item("name_duplicate", `""`), "org", false); !strings.Contains(got, "another workspace") {
+	if got := usecasetest.InboxContent(alice.uc(), "org", item("name_duplicate", `""`), true); !strings.Contains(got, "another workspace") {
 		t.Errorf("empty name: %q", got)
 	}
 }

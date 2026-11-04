@@ -40,8 +40,8 @@ func TestSetFindsTheTaskInItsStoreAndWritesAsItsAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := browse.Show(ts.Session, "WEB-1")
-	if err != nil || r.Entry.Title != "changed" {
-		t.Fatalf("WEB-1 = %v, %v", r.Entry, err)
+	if err != nil || r.Title != "changed" {
+		t.Fatalf("WEB-1 = %v, %v", r, err)
 	}
 	if got := lastAuthor(t, ts, "org-b"); got != "bob" {
 		t.Errorf("author in org-b = %q; want bob", got)
@@ -55,12 +55,12 @@ func TestShowByIDAndByStorePrefix(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.NewTwoStore(t)
 	r, err := browse.Show(ts.Session, "API-1")
-	if err != nil || r.Entry.Title != "org-a task" {
-		t.Errorf("Show(API-1) = %v, %v", r.Entry, err)
+	if err != nil || r.Title != "org-a task" {
+		t.Errorf("Show(API-1) = %v, %v", r, err)
 	}
 	r, err = browse.Show(ts.Session, "org-b:WEB-1")
-	if err != nil || r.Entry.Title != "org-b task" {
-		t.Errorf("Show(org-b:WEB-1) = %v, %v", r.Entry, err)
+	if err != nil || r.Title != "org-b task" {
+		t.Errorf("Show(org-b:WEB-1) = %v, %v", r, err)
 	}
 	if _, err := browse.Log(ts.Session, []string{"WEB-1"}, 0); err != nil {
 		t.Errorf("Log(WEB-1): %v", err)
@@ -82,8 +82,8 @@ func TestShowSameIDInTwoStoresIsAmbiguous(t *testing.T) {
 			t.Errorf("candidates = %v", usecase.AsError(err).Args["candidates"])
 		}
 	}
-	if r, err := browse.Show(ts.Session, "org-b:XX-1"); err != nil || r.Entry.Title != "org-b task" {
-		t.Errorf("Show(org-b:XX-1) = %v, %v", r.Entry, err)
+	if r, err := browse.Show(ts.Session, "org-b:XX-1"); err != nil || r.Title != "org-b task" {
+		t.Errorf("Show(org-b:XX-1) = %v, %v", r, err)
 	}
 }
 
@@ -95,8 +95,8 @@ func TestStoreNameKeepsTheLookupInTheStore(t *testing.T) {
 	usecasetest.WantCode(t, "Show(WEB-1) with --store org-a", err, usecase.KindNotFound, "task.not_found")
 	_, err = browse.Show(ts.Session, "org-b:WEB-1")
 	usecasetest.WantCode(t, "Show(org-b:WEB-1) with --store org-a", err, usecase.KindUsage, "store.conflict")
-	if r, err := browse.Show(ts.Session, "org-a:API-1"); err != nil || r.Entry.ID != "API-1" {
-		t.Errorf("Show(org-a:API-1) = %v, %v", r.Entry, err)
+	if r, err := browse.Show(ts.Session, "org-a:API-1"); err != nil || r.ID != "API-1" {
+		t.Errorf("Show(org-a:API-1) = %v, %v", r, err)
 	}
 }
 

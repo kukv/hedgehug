@@ -25,8 +25,9 @@ func TestAddSetStatusDep(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e, ok := b.Index.Task(b.ULID); ok && e.ID != "" {
-		t.Errorf("the index before the write has the new task: %+v", e)
+	// The result holds an index it reads the new task through.
+	if v, err := b.View(); err != nil || v.ID == "" || v.ParentRef == nil || v.ParentRef.ID != "ME-1" {
+		t.Errorf("View of the child = %+v, %v; want it, under ME-1", v, err)
 	}
 	as, err := usecase.ParseAssigns([]string{"title=renamed", "labels+=x"})
 	if err != nil {

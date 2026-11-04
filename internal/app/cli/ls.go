@@ -9,7 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/app/storage/query"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/browse"
 )
@@ -40,14 +39,11 @@ func (a *app) lsCmd() *cobra.Command {
 					return usageErrorf("--format: %w", err)
 				}
 			}
-			q, err := usecase.ParseQuery(strings.Join(args, " "))
-			if err != nil {
-				return err
-			}
+			query := strings.Join(args, " ")
 			if tree {
-				return a.lsTree(q, ulidsOnly, tmpl)
+				return a.lsTree(query, ulidsOnly, tmpl)
 			}
-			return a.ls(q, ulidsOnly, tmpl)
+			return a.ls(query, ulidsOnly, tmpl)
 		},
 	}
 	f := cmd.Flags()
@@ -57,19 +53,20 @@ func (a *app) lsCmd() *cobra.Command {
 	return cmd
 }
 
-func (a *app) ls(q *query.Query, ulidsOnly bool, tmpl *template.Template) error {
-	res, err := browse.List(a.ss, q)
+func (a *app) ls(query string, ulidsOnly bool, tmpl *template.Template) error {
+	res, err := browse.List(a.ss, query)
 	if err != nil {
 		return err
 	}
-	all := res.Entries
 	switch {
 	case ulidsOnly:
-		return a.printULIDs(all)
+		return a.printULIDs(res.Tasks)
 	case tmpl != nil:
-		return a.printFormat(all, tmpl, nil)
-	case a.jsonOut || !usecase.HasTerm(q, "group"):
-		return a.printTasks(all, res.Many)
+		return a.printFormat(res.Tasks, tmpl, nil)
+	case a.jsonOut:
+		return a.printJSON(res.JSON())
+	case len(res.Groups) == 0:
+		return a.printTasks(res.Tasks, res.Many)
 	}
 	for i, g := range res.Groups {
 		key := g.Key
@@ -81,20 +78,20 @@ func (a *app) ls(q *query.Query, ulidsOnly bool, tmpl *template.Template) error 
 				return err
 			}
 		}
-		if _, err := fmt.Fprintf(a.stdout, "== %s (%d)\n", key, len(g.Entries)); err != nil {
+		if _, err := fmt.Fprintf(a.stdout, "== %s (%d)\n", key, len(g.Tasks)); err != nil {
 			return err
 		}
-		if err := a.printTasks(g.Entries, res.Many); err != nil {
+		if err := a.printTasks(g.Tasks, res.Many); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (a *app) printULIDs(es []browse.Entry) error {
+func (a *app) printULIDs(vs []*usecase.TaskView) error {
 	var b strings.Builder
-	for _, e := range es {
-		b.WriteString(e.Entry.ULID.String() + "\n")
+	for _, v := range vs {
+		b.WriteString(v.ULID + "\n")
 	}
 	_, err := fmt.Fprint(a.stdout, b.String())
 	return err
@@ -104,14 +101,12 @@ func (a *app) printULIDs(es []browse.Entry) error {
 // of the JSON field names. extra, when not nil, adds keys to each map. A
 // template that fails, as on a key that is not there, is a usage error; the
 // output is held until every task is done, so none of it is printed then.
-func (a *app) printFormat(es []browse.Entry, tmpl *template.Template, extra func(m map[string]any, e browse.Entry)) error {
+func (a *app) printFormat(vs []*usecase.TaskView, tmpl *template.Template, extra func(m map[string]any, v *usecase.TaskView)) error {
 	var out bytes.Buffer
-	for _, e := range es {
-		ix, err := e.Store.Index()
-		if err != nil {
-			return err
-		}
-		b, err := json.Marshal(usecase.TaskViewOf(ix, e.Entry))
+	for _, v := range vs {
+		own := *v
+		own.Children = nil // a tree is flat here: every task has its own line
+		b, err := json.Marshal(&own)
 		if err != nil {
 			return err
 		}
@@ -125,7 +120,7 @@ func (a *app) printFormat(es []browse.Entry, tmpl *template.Template, extra func
 			m["broken"] = ""
 		}
 		if extra != nil {
-			extra(m, e)
+			extra(m, v)
 		}
 		if err := tmpl.Execute(&out, m); err != nil {
 			return usageErrorf("--format: %w", err)

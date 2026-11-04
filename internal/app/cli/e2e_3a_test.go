@@ -12,10 +12,8 @@ import (
 
 	"github.com/zalando/go-keyring"
 
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 // initDevenv runs devenv init with the fake GitHub of this test as the one the
@@ -90,7 +88,7 @@ func TestE2EPhase3a(t *testing.T) {
 	// path, so the command makes the bare there and pushes, and does not call
 	// GitHub.
 	alice.ok("store", "init", "extra", "--prefix", "EXT", "--account", "personal", "--remote", "https://github.com/kukv/hh-extra.git")
-	if ok, err := gitrepo.MainHasFile(filepath.Join(dev, "remotes", "kukv", "hh-extra.git"), ".hedgehug/store.yaml"); err != nil || !ok {
+	if ok, err := gitrepotest.MainHasFile(filepath.Join(dev, "remotes", "kukv", "hh-extra.git"), ".hedgehug/store.yaml"); err != nil || !ok {
 		t.Errorf("the bare of the local branch was not made and pushed: %v %v", ok, err)
 	}
 	if _, ok := fake.Repo("kukv/hh-extra"); ok {
@@ -134,31 +132,19 @@ func TestE2EPhase3a(t *testing.T) {
 	if out := bob.ok("ls", "--store", "org-b"); !strings.Contains(out, "from alice") {
 		t.Errorf("bob's sync did not fetch alice's task:\n%s", out)
 	}
-	s, err := store.Open(filepath.Join(bob.home, "stores", "org-b"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n, err := replicate.Unpushed(s.Repo()); err != nil || n != 0 {
-		t.Errorf("bob has %d commits of org-b that origin lacks (%v), want none", n, err)
+	if n := bob.uc().Unpushed("org-b"); n != 0 {
+		t.Errorf("bob has %d commits of org-b that origin lacks, want none", n)
 	}
 
 	// Given write, he may write after the next check.
 	if err := fake.SetPerm("org-b/hh-ops", "bob", "write"); err != nil {
 		t.Fatal(err)
 	}
-	acc, err := replicate.ReadAccess(s)
-	if err != nil {
-		t.Fatal(err)
-	}
+	acc := bob.uc().ReadAccess("org-b")
 	acc.Checked = time.Now().Add(-10 * time.Minute) // the 5 minutes have passed
-	if err := replicate.WriteAccess(s, acc); err != nil {
-		t.Fatal(err)
-	}
+	bob.uc().WriteAccess("org-b", acc)
 	bob.ok("sync")
-	acc, err = replicate.ReadAccess(s)
-	if err != nil {
-		t.Fatal(err)
-	}
+	acc = bob.uc().ReadAccess("org-b")
 	if acc.ReadOnly {
 		t.Errorf("org-b is still read-only: %+v", acc)
 	}

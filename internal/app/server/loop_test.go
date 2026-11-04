@@ -10,9 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 var t0 = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
@@ -43,7 +42,7 @@ func TestLoopIntervalVisibleAndHidden(t *testing.T) {
 	t.Parallel()
 	ts, clk, _ := loopServer(t)
 	waitFirstSync(t, ts)
-	first := ts.state().LastAttempt
+	first := ts.uc.LastAttempt("me")
 
 	// Hidden (no client): 2 minutes is not enough, 10 is.
 	settle(t, ts, clk, t0.Add(10*time.Minute))
@@ -52,19 +51,19 @@ func TestLoopIntervalVisibleAndHidden(t *testing.T) {
 	ts.srv.loop.Wake()
 	eventually(t, "the loop to look again", func() bool { return clk.afterCalls() > n })
 	eventually(t, "the loop to park", ts.srv.loop.parked)
-	if got := ts.state().LastAttempt; !got.Equal(first) {
+	if got := ts.uc.LastAttempt("me"); !got.Equal(first) {
 		t.Fatalf("hidden: synced after 2 minutes (%v)", got)
 	}
 	clk.Advance(8 * time.Minute)
-	eventually(t, "the hidden fetch", func() bool { return ts.state().LastAttempt.After(first) })
-	second := ts.state().LastAttempt
+	eventually(t, "the hidden fetch", func() bool { return ts.uc.LastAttempt("me").After(first) })
+	second := ts.uc.LastAttempt("me")
 
 	// Visible: every 2 minutes.
 	id := ts.srv.presence.Connect()
 	defer ts.srv.presence.Disconnect(id)
 	settle(t, ts, clk, t0.Add(12*time.Minute))
 	clk.Advance(2 * time.Minute)
-	eventually(t, "the visible fetch", func() bool { return ts.state().LastAttempt.After(second) })
+	eventually(t, "the visible fetch", func() bool { return ts.uc.LastAttempt("me").After(second) })
 }
 
 func TestLoopPushesAfterWrite(t *testing.T) {
@@ -73,7 +72,7 @@ func TestLoopPushesAfterWrite(t *testing.T) {
 	waitFirstSync(t, ts)
 	var out taskWriteBody
 	ts.call("POST", "/api/tasks", map[string]any{"title": "one"}, 201, &out)
-	if ts.state().PendingSince.IsZero() {
+	if ts.uc.PendingSince("me").IsZero() {
 		t.Fatal("the write is not pending")
 	}
 	settle(t, ts, clk, t0.Add(30*time.Second))
@@ -88,7 +87,7 @@ func TestLoopPushesAfterWrite(t *testing.T) {
 	clk.Advance(time.Second)
 	eventually(t, "the push", func() bool { return remoteHead(t, remote) == *out.Commit })
 	// sync.json is written after the push.
-	eventually(t, "the write to stop pending", func() bool { return ts.state().PendingSince.IsZero() })
+	eventually(t, "the write to stop pending", func() bool { return ts.uc.PendingSince("me").IsZero() })
 }
 
 func TestShutdownWaitsForPush(t *testing.T) {
@@ -225,22 +224,14 @@ func TestLoopFollowsAddedStores(t *testing.T) {
 	ts, _, _ := loopServer(t)
 	waitFirstSync(t, ts)
 	remote := filepath.Join(t.TempDir(), "two.git")
-	if err := gitrepo.InitBare(remote); err != nil {
-		t.Fatal(err)
-	}
+	gitrepotest.Bare(t, remote)
 	if _, err := stores.StoreInit(ts.session(), stores.StoreInitInput{Name: "two", Prefix: "TW", Workspace: "two", Remotes: []string{remote}}); err != nil {
 		t.Fatal(err)
 	}
 	ts.srv.loop.Wake()
 	eventually(t, "the sync of the new store", func() bool {
-		ss := ts.session()
-		ss.StoreName = "two"
-		s, err := ss.OpenStore()
-		if err != nil {
-			return false
-		}
-		st, err := replicate.ReadState(s)
-		return err == nil && !st.LastSuccess.IsZero()
+		at, err := ts.uc.LastSuccessErr("two")
+		return err == nil && !at.IsZero()
 	})
 }
 
@@ -325,5 +316,26 @@ func TestLoopLogsNoTargetsOnce(t *testing.T) {
 	l.step()
 	if n := lines(); n != 2 {
 		t.Fatalf("after recovery and a new failure: %d lines\n%s", n, ts.log.String())
+	}
+}
+
+// A sync that cannot read config.yaml has no warnings to compare with, so it
+// leaves the warnings already told as they are: they are not told again once
+// config.yaml reads.
+func TestSyncStoreKeepsToldWarningsWhenConfigDoesNotRead(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	l := ts.srv.loop
+	key := "me\x00a warning"
+	l.told[key] = true
+	if err := os.WriteFile(filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml"), []byte("stores: [\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l.syncStore("me")
+	if !strings.Contains(ts.log.String(), "sync me: ") {
+		t.Errorf("the failure is not logged\n%s", ts.log.String())
+	}
+	if !l.told[key] {
+		t.Error("the warning told before was forgotten")
 	}
 }

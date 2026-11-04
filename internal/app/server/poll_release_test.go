@@ -10,15 +10,16 @@ import (
 func TestSessionBeforeSwapReleasesTheStore(t *testing.T) {
 	t.Parallel()
 	ts, ch := pollServer(t)
-	_, e, err := ts.session().Entry()
-	if err != nil {
-		t.Fatal(err)
+	held := func() bool {
+		stores, _ := ts.srv.poller.snapshot()
+		for _, st := range stores {
+			if st.Store == "me" {
+				return true
+			}
+		}
+		return false
 	}
-	var old *polled
-	ts.srv.poller.mu.Lock()
-	old = ts.srv.poller.stores[e.Name]
-	ts.srv.poller.mu.Unlock()
-	if old == nil {
+	if !held() {
 		t.Fatal("the poller does not hold the store")
 	}
 
@@ -26,16 +27,11 @@ func TestSessionBeforeSwapReleasesTheStore(t *testing.T) {
 	if before == nil {
 		t.Fatal("the server's session has no BeforeSwap")
 	}
-	before(e.Path)
+	before(ts.uc.StoreDir("me"))
 
-	ev := waitEvent[tasksChanged](t, ch, func(x tasksChanged) bool { return x.Store == e.Name })
+	ev := waitEvent[tasksChanged](t, ch, func(x tasksChanged) bool { return x.Store == "me" })
 	if len(ev.ULIDs) != 0 || len(ev.Removed) != 0 {
 		t.Errorf("event = %+v", ev)
 	}
-	eventually(t, "the poller holds the store opened again", func() bool {
-		ts.srv.poller.mu.Lock()
-		defer ts.srv.poller.mu.Unlock()
-		now := ts.srv.poller.stores[e.Name]
-		return now != nil && now != old
-	})
+	eventually(t, "the poller holds the store opened again", held)
 }

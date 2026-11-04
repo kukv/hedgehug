@@ -1,12 +1,8 @@
 package server
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 )
 
 type pushAtBody struct {
@@ -51,24 +47,9 @@ func TestSyncAPIPushAt(t *testing.T) {
 			waitFirstSync(t, ts)
 			eventually(t, "the loop to end the sync", ts.srv.loop.parked)
 			if tc.config != "" {
-				f, err := os.OpenFile(filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml"), os.O_APPEND|os.O_WRONLY, 0o600)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if _, err := f.WriteString(tc.config); err != nil {
-					t.Fatal(err)
-				}
-				if err := f.Close(); err != nil {
-					t.Fatal(err)
-				}
+				ts.uc.AppendConfig(tc.config)
 			}
-			s, err := ts.session().OpenStore()
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := replicate.MarkPending(s, t0.Add(tc.pending)); err != nil {
-				t.Fatal(err)
-			}
+			ts.uc.MarkPending("me", t0.Add(tc.pending))
 			var st []pushAtBody
 			ts.call("GET", "/api/sync", nil, 200, &st)
 			if len(st) != 1 || st[0].PendingSince == nil || st[0].PushAt == nil {
@@ -89,13 +70,7 @@ func TestSyncAPIPushAt(t *testing.T) {
 func TestSyncAPIPushAtBeforeTheFirstSync(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	s, err := ts.session().OpenStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := replicate.MarkPending(s, time.Now()); err != nil {
-		t.Fatal(err)
-	}
+	ts.uc.MarkPending("me", time.Now())
 	var st []pushAtBody
 	ts.call("GET", "/api/sync", nil, 200, &st)
 	if len(st) != 1 || st[0].PendingSince == nil || st[0].PushAt != nil {
@@ -108,10 +83,7 @@ func TestSyncAPIIntervals(t *testing.T) {
 	ts, _, _ := loopServer(t)
 	waitFirstSync(t, ts)
 
-	c, _, err := ts.session().Config()
-	if err != nil {
-		t.Fatal(err)
-	}
+	interval, pushInterval := ts.uc.SyncIntervals()
 	var st []struct {
 		Store        string `json:"store"`
 		Interval     int    `json:"interval"`
@@ -121,10 +93,10 @@ func TestSyncAPIIntervals(t *testing.T) {
 	if len(st) != 1 {
 		t.Fatalf("status = %+v", st)
 	}
-	if want := int(c.Sync.Interval / time.Second); st[0].Interval != want || want <= 0 {
+	if want := int(interval / time.Second); st[0].Interval != want || want <= 0 {
 		t.Errorf("interval = %d; want sync.interval in seconds, %d", st[0].Interval, want)
 	}
-	if want := int(c.Sync.PushInterval / time.Second); st[0].PushInterval != want || want <= 0 {
+	if want := int(pushInterval / time.Second); st[0].PushInterval != want || want <= 0 {
 		t.Errorf("push_interval = %d; want sync.push_interval in seconds, %d", st[0].PushInterval, want)
 	}
 }
@@ -135,16 +107,7 @@ func TestSyncAPIIntervalsAreSecondsWithFractions(t *testing.T) {
 	ts, _, _ := loopServer(t)
 	waitFirstSync(t, ts)
 	eventually(t, "the loop to end the sync", ts.srv.loop.parked)
-	f, err := os.OpenFile(filepath.Join(ts.env["HEDGEHUG_HOME"], "config.yaml"), os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.WriteString("sync:\n  interval: 90s\n  push_interval: 500ms\n"); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
+	ts.uc.AppendConfig("sync:\n  interval: 90s\n  push_interval: 500ms\n")
 	var st []struct {
 		Interval     float64 `json:"interval"`
 		PushInterval float64 `json:"push_interval"`

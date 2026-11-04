@@ -6,14 +6,13 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 	"github.com/kukv/hedgehug/internal/app/usecase/workspaces"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 // meanwhile makes fn write to the store once the next command has read its
 // index and before it writes, as another process could.
-func (te *testEnv) meanwhile(fn func(tx *store.Tx) error) {
+func (te *testEnv) meanwhile(fn func(tx *usecasetest.Tx) error) {
 	te.t.Helper()
 	done := false
 	te.beforeUpdate = func() {
@@ -22,20 +21,14 @@ func (te *testEnv) meanwhile(fn func(tx *store.Tx) error) {
 		}
 		done = true
 		te.beforeUpdate = nil
-		s, err := store.Open(te.storeDir("me"))
-		if err != nil {
-			te.t.Fatal(err)
-		}
-		if _, err := s.Update(store.Op{Name: "update", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, fn); err != nil {
-			te.t.Fatal(err)
-		}
+		te.uc().MustEdit("me", "update", usecasetest.TAuthor, fn)
 	}
 }
 
 // putChild returns a write of a new task under parent, in its workspace and
 // deleted when it is, and points *ulid at the new task.
-func putChild(parent string, ulid *model.ULID) func(*store.Tx) error {
-	return func(tx *store.Tx) error {
+func putChild(parent string, ulid *model.ULID) func(*usecasetest.Tx) error {
+	return func(tx *usecasetest.Tx) error {
 		parentULID, err := model.ParseULID(parent)
 		if err != nil {
 			return err
@@ -116,18 +109,14 @@ func TestPurgeSeesChildrenAddedMeanwhile(t *testing.T) {
 	var c model.ULID
 	te.meanwhile(putChild(p.ULID, &c)) // deleted, so it goes with p
 	te.ok("purge", "--older-than", "0d", "--yes")
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Task(c); err == nil {
+	if te.uc().TaskExists("me", c) {
 		t.Error("the deleted child added meanwhile is not purged")
 	}
 
 	// A child added meanwhile that is not deleted keeps its deleted parent.
 	q := te.addJSON("q")
 	te.ok("rm", q.ID)
-	te.meanwhile(func(tx *store.Tx) error {
+	te.meanwhile(func(tx *usecasetest.Tx) error {
 		if err := putChild(q.ULID, &c)(tx); err != nil {
 			return err
 		}
@@ -159,14 +148,14 @@ func TestPurgeSeesChildrenAddedMeanwhile(t *testing.T) {
 	if code, _, stderr := te.run("purge", "--older-than", "0d"); code != 1 || !strings.Contains(stderr, "run purge again") {
 		t.Errorf("purge after a change: exit %d, stderr %q", code, stderr)
 	}
-	if _, err := s.Task(c); err != nil {
-		t.Errorf("a task that was not confirmed is purged: %v", err)
+	if !te.uc().TaskExists("me", c) {
+		t.Error("a task that was not confirmed is purged")
 	}
 }
 
 // changeTask returns a write that changes the task ulid with fn.
-func changeTask(ulid string, fn func(*model.Task)) func(*store.Tx) error {
-	return func(tx *store.Tx) error {
+func changeTask(ulid string, fn func(*model.Task)) func(*usecasetest.Tx) error {
+	return func(tx *usecasetest.Tx) error {
 		u, err := model.ParseULID(ulid)
 		if err != nil {
 			return err
@@ -232,7 +221,7 @@ func TestMvSeesAWorkspaceMoveMeanwhile(t *testing.T) {
 	p := te.addJSON("p", "--workspace", "me")
 	c := te.addJSON("c", "--parent", p.ID)
 	// Another process moves p and its child to api; mv then moves p back.
-	te.meanwhile(func(tx *store.Tx) error {
+	te.meanwhile(func(tx *usecasetest.Tx) error {
 		for _, u := range []string{p.ULID, c.ULID} {
 			if err := changeTask(u, func(t *model.Task) { t.Workspace = apiULID })(tx); err != nil {
 				return err
@@ -266,8 +255,8 @@ func TestWorkspaceSubjectsSeeARenameMeanwhile(t *testing.T) {
 	me := mustULID(t, te.addJSON("a").Workspace.ULID)
 	var tmp workspaces.WorkspaceView
 	te.wsJSON(&tmp, "add", "tmp", "--prefix", "TMP")
-	rename := func(ulid model.ULID, name string) func(*store.Tx) error {
-		return func(tx *store.Tx) error {
+	rename := func(ulid model.ULID, name string) func(*usecasetest.Tx) error {
+		return func(tx *usecasetest.Tx) error {
 			w, err := tx.Workspace(ulid)
 			if err != nil {
 				return err
@@ -304,7 +293,7 @@ func TestWorkspacePrefixToAPrefixSetMeanwhileChangesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	var set time.Time
-	te.meanwhile(func(tx *store.Tx) error {
+	te.meanwhile(func(tx *usecasetest.Tx) error {
 		w, err := tx.Workspace(ulid)
 		if err != nil {
 			return err
@@ -326,14 +315,7 @@ func TestWorkspacePrefixToAPrefixSetMeanwhileChangesNothing(t *testing.T) {
 	if subject, _ := te.lastCommit(); strings.Contains(subject, "workspace prefix") {
 		t.Errorf("last commit = %q, want the one made meanwhile", subject)
 	}
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	w, err := s.Workspace(ulid)
-	if err != nil {
-		t.Fatal(err)
-	}
+	w := te.uc().WorkspaceByULID("me", ulid)
 	if w.IDPrefix != "NEW" || !w.PrefixSet.Equal(set) {
 		t.Errorf("workspace = %s set %v, want NEW set %v", w.IDPrefix, w.PrefixSet, set)
 	}
