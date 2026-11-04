@@ -4,14 +4,20 @@
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import { hrefOf, router } from "../router";
+  import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
 
-  type Props = { open: boolean; onclose: () => void };
-  let { open, onclose }: Props = $props();
+  // oncreated is told when the Store was made (onclose is told too).
+  type Props = { open: boolean; onclose: () => void; oncreated?: () => void };
+  let { open, onclose, oncreated }: Props = $props();
 
-  const { api, stores } = core();
+  const { api, stores, accounts } = core();
+  const known = useSubscribe(accounts, () => ({
+    list: accounts.accounts(),
+    loaded: accounts.loaded(),
+  }));
   const uid = $props.id();
 
   // The same rule as ValidIDPrefix in internal/app/domain/model: 2 to 10 upper-case letters and digits, starting with a letter.
@@ -21,6 +27,7 @@
   let prefix = $state("");
   let workspace = $state("");
   let remote = $state("");
+  let account = $state("");
   let touched = $state(false);
   let busy = $state(false);
   let failure = $state<string | null>(null);
@@ -29,6 +36,18 @@
   const prefixError = $derived(
     PREFIX.test(prefix) ? null : "接頭辞は英大文字と数字の 2〜10 文字で、英字から始めてください",
   );
+  // The accounts are read when the dialog opens: the server asks GitHub for them, so nothing else does.
+  $effect(() => {
+    if (open) void accounts.load();
+  });
+
+  // With one account the usecase takes it; the person picks only when there are two or more.
+  const choices = $derived(
+    known.current.loaded && known.current.list.length >= 2
+      ? known.current.list.map((a) => a.name)
+      : null,
+  );
+  const accountError = $derived(choices && account === "" ? "アカウントを選んでください" : null);
   const remotes = $derived(remote.trim() ? [remote.trim()] : undefined);
   const cli = $derived(
     cliStoreInit({
@@ -36,6 +55,7 @@
       prefix: prefix || new Placeholder("接頭辞"),
       workspace: workspace.trim() || undefined,
       remotes,
+      account: choices && account ? account : undefined,
     }),
   );
 
@@ -44,6 +64,7 @@
     prefix = "";
     workspace = "";
     remote = "";
+    account = "";
     touched = false;
     failure = null;
   }
@@ -57,13 +78,19 @@
 
   async function submit() {
     touched = true;
-    if (busy || nameError || prefixError) return;
+    if (busy || nameError || prefixError || accountError) return;
     busy = true;
     failure = null;
     try {
       const r = await unwrap(
         api.POST("/api/stores", {
-          body: { name: name.trim(), prefix, workspace: workspace.trim() || undefined, remotes },
+          body: {
+            name: name.trim(),
+            prefix,
+            workspace: workspace.trim() || undefined,
+            remotes,
+            account: choices && account ? account : undefined,
+          },
         }),
       );
       // The store exists now; a failed reload must not read as a failed create (the SSE resync catches up).
@@ -71,6 +98,7 @@
       toast({ message: `Store「${r.name}」を作りました` });
       reset();
       onclose();
+      oncreated?.();
       // The tree, where the first task is added.
       router.go(hrefOf({ name: "workspace", store: r.name, ulid: r.workspace.ulid, tab: "tree" }));
     } catch (e) {
@@ -93,7 +121,7 @@
   title="Store を作成"
   width={620}
   {cli}
-  cliDisabled={!!(nameError || prefixError)}
+  cliDisabled={!!(nameError || prefixError || accountError)}
   onclose={close}
 >
   <div class="form" role="presentation" {onkeydown}>
@@ -155,6 +183,28 @@
       <span class="msg">あれば最初の push までします。なくてもこのマシンだけで使えます</span>
     </div>
 
+    {#if choices}
+      <div class="field">
+        <label for="{uid}-account">アカウント</label>
+        <select
+          id="{uid}-account"
+          bind:value={account}
+          aria-invalid={touched && accountError ? "true" : undefined}
+          aria-describedby="{uid}-account-msg"
+        >
+          <option value="">選ぶ</option>
+          {#each choices as a (a)}
+            <option value={a}>{a}</option>
+          {/each}
+        </select>
+        <span id="{uid}-account-msg" class="msg" class:bad={touched && accountError}>
+          {touched && accountError
+            ? accountError
+            : "この Store の作成と書き込みに使うアカウントです"}
+        </span>
+      </div>
+    {/if}
+
     {#if failure}
       <p class="failure" role="alert">{failure}</p>
     {/if}
@@ -184,14 +234,15 @@
     font-size: var(--fs-12);
     font-weight: 600;
   }
-  input {
+  input,
+  select {
     min-height: var(--control-h-lg);
     padding: 0 var(--space-12);
     border: 1px solid var(--line-input);
     border-radius: var(--radius-8);
     font-size: var(--fs-14);
   }
-  input[aria-invalid="true"] {
+  [aria-invalid="true"] {
     border: 1.5px solid var(--danger);
   }
   .mono {

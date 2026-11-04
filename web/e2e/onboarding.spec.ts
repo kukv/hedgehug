@@ -1,7 +1,9 @@
 // Screens this spec relies on (see screens.ts for the shared list):
-//   - with no store, the page shows Onboarding: the text "Hedgehug へようこそ" and the
-//     button "Store を作る", with no GitHub account to register first
-//   - the button opens the dialog "Store を作成" (CreateStore) with the textboxes
+//   - with no store, the page shows Onboarding: the text "Hedgehug へようこそ", the three steps
+//     (アカウント, Store を選ぶ, はじめる), and in the first one the accounts of the config ("e2e",
+//     with no token) and the button "次へ: Store を探す"
+//   - every step has the button "新しく Store を作る", which opens the dialog "Store を作成"
+//     (CreateStore) with the textboxes
 //     "名前", "ID の接頭辞" (typed letters become upper case) and "最初のワークスペース（任意）"
 //     (empty means the store's name), the line "hh store init <name> --prefix <PREFIX>"
 //     at the foot, and the buttons "キャンセル" and "Store を作る"
@@ -19,8 +21,17 @@ test.use({ store: null });
 test("a first store is made from Onboarding", async ({ page, hh }) => {
   await hh.open(page);
   await expect(page.getByText("Hedgehug へようこそ")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "GitHub のアカウントを登録します" }),
+  ).toBeVisible();
+  await expect(page.getByText("e2e@github.com")).toBeVisible();
 
-  await page.getByRole("button", { name: "Store を作る" }).click();
+  // An account with no token still goes on; the folder is the way to look.
+  await page.getByRole("button", { name: "次へ: Store を探す" }).click();
+  await expect(page.getByRole("heading", { name: "使う Store を選んでください" })).toBeVisible();
+  await expect(page.getByText("GitHub で探すにはトークンのあるアカウントが要ります")).toBeVisible();
+
+  await page.getByRole("button", { name: "新しく Store を作る" }).click();
   const dialog = page.getByRole("dialog", { name: "Store を作成" });
   await dialog.getByLabel("名前", { exact: true }).fill("team");
   await dialog.getByLabel("ID の接頭辞").fill("tm");
@@ -44,7 +55,7 @@ test("a first store is made from Onboarding", async ({ page, hh }) => {
 
 test("a prefix of the wrong shape is refused and nothing is made", async ({ page, hh }) => {
   await hh.open(page);
-  await page.getByRole("button", { name: "Store を作る" }).click();
+  await page.getByRole("button", { name: "新しく Store を作る" }).click();
   const dialog = page.getByRole("dialog", { name: "Store を作成" });
   await dialog.getByLabel("名前", { exact: true }).fill("team");
   await dialog.getByLabel("ID の接頭辞").fill("1A");

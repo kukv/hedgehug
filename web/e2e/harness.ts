@@ -263,18 +263,24 @@ export class Peer {
   /**
    * A Store made and pushed from a home of its own (login "bob") to a bare repository, which
    * `remote` is the path of: what a person sends the URL of, for a test that adds a Store by URL.
+   * bare is where the bare repository goes (its folder is made); by default it is in the home of
+   * the peer, and a test that looks for Stores in a folder puts several under one.
    */
-  static publish(name: string, prefix: string): Peer {
+  static publish(name: string, prefix: string, bare?: string): Peer {
     const home = mkdtempSync(join(tmpdir(), "hh-e2e-peer-"));
     mkdirSync(join(home, "hh"));
     writeFileSync(
       join(home, "hh", "config.yaml"),
       "accounts:\n  - name: bob\n    host: github.com\n    login: bob\n",
     );
-    const remote = join(home, "remote.git");
+    const remote = bare ?? join(home, "remote.git");
     const peer = new Peer(home, remote);
     try {
-      execFileSync("git", ["init", "--bare", "--quiet", remote], { encoding: "utf8" });
+      mkdirSync(dirname(remote), { recursive: true });
+      // HEAD names the branch the Store is pushed to: a search in a folder reads the Store there.
+      execFileSync("git", ["init", "--bare", "--quiet", "--initial-branch=main", remote], {
+        encoding: "utf8",
+      });
       peer.hh("store", "init", name, "--prefix", prefix, "--remote", remote);
       peer.hh("sync");
     } catch (e) {

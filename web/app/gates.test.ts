@@ -1,4 +1,4 @@
-import { cleanup, render } from "@testing-library/svelte";
+import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import { flushSync } from "svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.svelte";
@@ -151,6 +151,50 @@ describe("App のゲート", () => {
     expect(await findByText("ワークスペースがありません")).toBeTruthy();
     expect(getByRole("button", { name: /--store me/ })).toBeTruthy();
     expect(getByRole("button", { name: /--store team/ })).toBeTruthy();
+    expect(queryByText("Hedgehug へようこそ")).toBeNull();
+  });
+
+  it("Onboarding は Store が増えても、始めるまで出し続ける", async () => {
+    history.replaceState(null, "", "/#token=tkn");
+    let mounted = false;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("/api/events")) return new Promise(() => {});
+      if (url.includes("/api/accounts")) {
+        return json([
+          { name: "me", id: "github.com/me", state: "ok", login: "me", token: "keychain" },
+        ]);
+      }
+      if (url.includes("/api/stores/discover")) {
+        return json([
+          {
+            name: "hh-a",
+            url: "https://github.com/org/hh-a.git",
+            account: "me",
+            permission: "write",
+          },
+        ]);
+      }
+      if (url.includes("/api/stores/mount")) {
+        mounted = true;
+        return json({ mounted: ["hh-a"], failed: [] });
+      }
+      if (url.includes("/api/workspaces")) return json([]);
+      if (url.includes("/api/stores")) {
+        return json(mounted ? [{ name: "hh-a", path: "/p", remotes: ["u"] }] : []);
+      }
+      return new Promise(() => {});
+    });
+    const { findByText, findByLabelText, getByRole, queryByText } = render(App);
+    await findByText("Hedgehug へようこそ");
+    await fireEvent.click(await findByText("次へ: Store を探す"));
+    await fireEvent.click(await findByLabelText("org/hh-a を選ぶ"));
+    await fireEvent.click(getByRole("button", { name: "マウントして次へ" }));
+    expect(await findByText("Store を使い始めます")).toBeTruthy();
+    // the Store is mounted and listed, and the Onboarding is still here
+    await new Promise((r) => setTimeout(r, 50));
+    expect(queryByText("Store を使い始めます")).toBeTruthy();
+    await fireEvent.click(getByRole("button", { name: "始める" }));
     expect(queryByText("Hedgehug へようこそ")).toBeNull();
   });
 });

@@ -140,6 +140,13 @@ describe("SettingsStores: the heading buttons", () => {
     expect(screen.getByRole("dialog", { name: "URL で追加" })).toBeTruthy();
   });
 
+  it("opens the dialog that looks for Stores", async () => {
+    mount();
+    await fireEvent.click(screen.getByRole("button", { name: "Store を探す" }));
+    const dialog = screen.getByRole("dialog", { name: "Store を探す" });
+    expect(within(dialog).getByLabelText("フォルダ")).toBeTruthy();
+  });
+
   it("opens CreateStore", async () => {
     mount();
     await fireEvent.click(screen.getByRole("button", { name: "Store を作る" }));

@@ -2,6 +2,7 @@
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import CreateStore from "../create/CreateStore.svelte";
+  import StoreDiscoverDialog from "../stores/StoreDiscoverDialog.svelte";
   import { useSubscribe } from "../svelte-store";
   import Button from "../ui/Button.svelte";
   import FormError from "../ui/FormError.svelte";
@@ -16,6 +17,7 @@
     error: c.stores.error(),
   }));
 
+  let discovering = $state(false);
   let adding = $state(false);
   let creating = $state(false);
   let removing = $state<string | null>(null);
@@ -27,6 +29,7 @@
   <header class="head">
     <h1>マウント中の Store</h1>
     <span class="spacer"></span>
+    <Button onclick={() => (discovering = true)}>Store を探す</Button>
     <Button onclick={() => (adding = true)}>URL で追加</Button>
     <Button variant="primary" onclick={() => (creating = true)}>Store を作る</Button>
   </header>
@@ -59,6 +62,7 @@
   {/if}
 </div>
 
+<StoreDiscoverDialog open={discovering} onclose={() => (discovering = false)} />
 <StoreAddDialog open={adding} onclose={() => (adding = false)} />
 <CreateStore open={creating} onclose={() => (creating = false)} />
 <StoreRemoveDialog name={removing} onclose={() => (removing = null)} />

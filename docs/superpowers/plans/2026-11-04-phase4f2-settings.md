@@ -279,11 +279,11 @@
 - `onboarding.spec.ts`: harness のアカウント `e2e`（トークンなし）があるので、アカウントの段に `e2e` が出て「次へ」で進める。「新しく Store を作る」から今の作成の検査を通す（文言の変わったところだけ直す）
 - `discover.spec.ts`（`store: null`）: 別の home で Store を2つ作って `<home>/remotes/` の bare に push しておく → Onboarding でアカウントの段を進み、「フォルダから探す」にそのパスを入れて探す → 候補が2つ → 1つの呼び名を変えて両方マウント → はじめるの段に2つ → 「始める」でホーム、サイドバーに2つの Store のワークスペース。設定の「Store を探す」で同じフォルダを探すと、マウント済みのものは出ない（usecase がマウント済みを外す）
 
-- [ ] Step 1: `StoreDiscover.test.ts` → `StoreDiscover.svelte`・`StoreDiscoverDialog.svelte`、SettingsStores の「Store を探す」
-- [ ] Step 2: Onboarding と App のテスト → 実装
-- [ ] Step 3: `CreateStore.test.ts` → 実装
-- [ ] Step 4: `onboarding.spec.ts` を直し、`discover.spec.ts` を書いて通す
-- [ ] Step 5: 検査を流してコミット `feat(web): Store の発見とマウント、3段の Onboarding、CreateStore のアカウント`
+- [x] Step 1: `StoreDiscover.test.ts` → `StoreDiscover.svelte`・`StoreDiscoverDialog.svelte`、SettingsStores の「Store を探す」
+- [x] Step 2: Onboarding と App のテスト → 実装
+- [x] Step 3: `CreateStore.test.ts` → 実装
+- [x] Step 4: `onboarding.spec.ts` を直し、`discover.spec.ts` を書いて通す
+- [x] Step 5: 検査を流してコミット `feat(web): Store の発見とマウント、3段の Onboarding、CreateStore のアカウント`
 
 ---
 
