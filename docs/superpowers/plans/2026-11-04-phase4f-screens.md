@@ -4,7 +4,7 @@
 
 **Goal:** フェーズ3の機能（複数 Store、閲覧のみの Store、アカウントと認証、Store の発見・マウント・追加・解除・既定、Store 間の移動、接頭辞が重なる Store の Store 名付きの表示、コメントの本人確認）を GUI でもできるようにする（spec の 4f の完了条件）。あわせて、4d で 4f に回した Store の色を選ぶ画面と保存場所を作る。
 
-**Architecture:** 4e までの `web/core`・`web/app` の上に画面を足す。足りない API・ops・CLI は 4f-1 で先に Go に入れる（4e-1 と同じ形）。ops の関数（`AuthLogin`・`AuthAdd`・`AuthStatus`・`AuthLogout`・`StoreDiscover`・`StoreMount`・`StoreAdd`・`StoreRemove`・`StoreDefault`・`PrepareMoveStore`・`MoveStore`）はフェーズ3で作り済みで、4f-1 は API に出すことと、GUI に要る形の足し分だけを行う。
+**Architecture:** 4e までの `web/core`・`web/app` の上に画面を足す。足りない API・usecase・CLI は 4f-1 で先に Go に入れる（4e-1 と同じ形）。usecase（旧 ops。`internal/app/usecase`）の関数（`AuthLogin`・`AuthAdd`・`AuthStatus`・`AuthLogout`・`StoreDiscover`・`StoreMount`・`StoreAdd`・`StoreRemove`・`StoreDefault`・`PrepareMoveStore`・`MoveStore`）はフェーズ3で作り済みで、4f-1 は API に出すことと、GUI に要る形の足し分だけを行う。
 
 **Tech Stack:** 4e と同じ。新しい依存は足さない。
 
@@ -16,6 +16,9 @@
 
 - トークンはどの API の応答にも、ログにも、SSE にも出さない（貼り付けたトークンは要求の本文で受け取り、keychain に書くだけ）
 - GUI が出す `hh` の行は実在するコマンドとフラグだけにする
+- 構成見直し（`docs/superpowers/specs/2026-11-04-codebase-restructure-design.md`）の回 1 の後の配置で書く: usecase は `internal/app/usecase`、CLI は `internal/app/cli`、server は `internal/app/server`、config は `internal/app/storage/config`、fakegh は `internal/lib/fakegh`。構成見直しの回 2 以降は 4f-1 の後に、4f-1 で足したコードごと移す（2026-11-04 に利用者が決定）。回 4 の手戻りを減らすため、4f-1 で cli・server に足すコードは storage・remote・`lib/gitrepo`・`lib/github` を新しく直接 import しない（構成見直しの 4.2）。必要な読み書きは usecase の操作として足す
+- 構成見直しの回 4 は `hh mv --store --json` を server と同じ usecase の型に揃える。4f-1 の `move-store` の応答（細部 8）は usecase の `MoveStoreResult` をそのまま返し、回 4 はそれに CLI を揃える
+
 
 ## 利用者の決定（2026-11-04、spec に反映済み）
 
@@ -37,7 +40,7 @@
 
 | 回 | 中身 | 完了条件 |
 |---|---|---|
-| 4f-1 Go | 細部 1〜16 の API・ops・CLI の追加。`api/openapi.yaml` と `web/core/api/schema.d.ts` の再生成、`web/core/messages.ts` の文言 | Go のテスト（ops・server・CLI のゴールデン）と OpenAPI の照合が通る |
+| 4f-1 Go | 細部 1〜16 の API・usecase・CLI の追加。`api/openapi.yaml` と `web/core/api/schema.d.ts` の再生成、`web/core/messages.ts` の文言 | Go のテスト（usecase・server・CLI のゴールデン）と OpenAPI の照合が通る |
 | 4f-2 設定 | SettingsNav（17）、SettingsAccounts（18〜22）、SettingsStores（23〜28）、Onboarding（29〜31）、CreateStore のアカウント（32）、`stores.changed` の受け取り（33） | アカウントの追加（Device Flow を含む）・ログアウト、Store の発見とマウント・URL で追加・解除・既定・色・表示が GUI で動く（E2E） |
 | 4f-3 Store | 閲覧のみの表示と編集の無効（34〜37）、非表示の Store（38〜40）、マイタスク（41〜42）、Store 名付きの ID（43）、コメントの本人確認（44）、StoreMove（45〜50）、E2E（51） | 閲覧のみの Store で書き込みの操作が出ず、非表示の Store が外れ、Store 間の移動が GUI で動く（E2E）。spec の 4f の完了条件を満たす |
 
@@ -59,16 +62,16 @@
    - `POST /api/accounts`（本文 `{name, login, host?, token?}`。`hh auth add`。`token` は `gh`・`env:<VAR>`・空のどれか。`keychain`・`device` は 400 で、細部 7・8 を案内する）
    - `PUT /api/accounts/{name}/token`（本文 `{token}`。`hh auth login <name> --with-token` と同じで、`GET /user` の login が合うのを確かめてから keychain に書く。名前が config になければ `hh auth login --with-token` と同じく、login からアカウントを足す（本文の `host` は省略で github.com）。応答は `AuthLoginResult`）
    - `DELETE /api/accounts/{name}/token`（`hh auth logout <name>`）
-7. **Device Flow の API**: `POST /api/auth/device`（本文 `{name?, host?}`。`hh auth login [<name>] [--host]` と同じ判定。`ShowCode` で受けた `user_code`・`verification_uri`・`expires_in` を返すまで待ち、ポーリングは裏で続ける。応答は `{id, user_code, verification_uri, expires_at}`）。同時に走る Device Flow はサーバーに1つだけで、走っている間の2回目は 409 `auth.device_running`。`DELETE /api/auth/device/{id}` でやめる（裏のポーリングを止める）。終わったら SSE の `auth.device` を出す（`{id, state: "done"|"error", account?, code?, message?}`。`done` は `AuthLoginResult` の `account`。`error` は ops の `Code` と英文）。client ID が空のときの誤りは開始の応答で返す（ops のまま）
-8. **Store 間の移動の API**: `POST /api/tasks/{id}/move-store/plan`（本文 `{to, workspace?, parent?, scoped?}`。`PrepareMoveStore`。応答は細部 9 の `MovePlanView`。scoped の選択が要るのに `scoped` がなければ、誤りにせず `scoped.required: true` で返す）と `POST /api/tasks/{id}/move-store`（本文は同じものに `confirmed: MovePlanView` を足す。`confirmed` は必須（ないと 400 `confirm.required`）。ロックの中で作り直した予定の `MovePlanView` と一致しなければ 409 `move.changed`。応答は `MoveStoreResult` の JSON（`hh mv --store --json` と同じ））。移動元か移動先が閲覧のみなら ops のまま 409 `store.read_only`
-9. **`MovePlanView`**（GUI に見せる構造化した予定。`MoveView` は CLI の文の一覧のまま残す）: `{from, to, workspace: {ulid, name, prefix}, parent?: {ulid, id, title}, tasks: [{ulid, id, title}], unlinked: [{task: {ulid, id}, field, target: {ulid, label}}], hidden: [アカウント], scoped?: {required, choice?, dropped: [文]}}`。`field` は `blocked_by`・プロパティ名・`sprint`・`releases`。`label` は `MovePlan.Labels` の値（ID・スプリント名・リリース名、なければ ULID）。ops に `MovePlan.GUIView()` と、`MoveStoreInput.ConfirmedView *MovePlanView`（`Confirmed` と同じ照合を `GUIView()` の比較で行う）を足す
+7. **Device Flow の API**: `POST /api/auth/device`（本文 `{name?, host?}`。`hh auth login [<name>] [--host]` と同じ判定。`ShowCode` で受けた `user_code`・`verification_uri`・`expires_in` を返すまで待ち、ポーリングは裏で続ける。応答は `{id, user_code, verification_uri, expires_at}`）。同時に走る Device Flow はサーバーに1つだけで、走っている間の2回目は 409 `auth.device_running`。`DELETE /api/auth/device/{id}` でやめる（裏のポーリングを止める）。終わったら SSE の `auth.device` を出す（`{id, state: "done"|"error", account?, code?, message?}`。`done` は `AuthLoginResult` の `account`。`error` は usecase の `Code` と英文）。client ID が空のときの誤りは開始の応答で返す（usecase のまま）
+8. **Store 間の移動の API**: `POST /api/tasks/{id}/move-store/plan`（本文 `{to, workspace?, parent?, scoped?}`。`PrepareMoveStore`。応答は細部 9 の `MovePlanView`。scoped の選択が要るのに `scoped` がなければ、誤りにせず `scoped.required: true` で返す）と `POST /api/tasks/{id}/move-store`（本文は同じものに `confirmed: MovePlanView` を足す。`confirmed` は必須（ないと 400 `confirm.required`）。ロックの中で作り直した予定の `MovePlanView` と一致しなければ 409 `move.changed`。応答は `MoveStoreResult` の JSON（`hh mv --store --json` と同じ））。移動元か移動先が閲覧のみなら usecase のまま 409 `store.read_only`
+9. **`MovePlanView`**（GUI に見せる構造化した予定。`MoveView` は CLI の文の一覧のまま残す）: `{from, to, workspace: {ulid, name, prefix}, parent?: {ulid, id, title}, tasks: [{ulid, id, title}], unlinked: [{task: {ulid, id}, field, target: {ulid, label}}], hidden: [アカウント], scoped?: {required, choice?, dropped: [文]}}`。`field` は `blocked_by`・プロパティ名・`sprint`・`releases`。`label` は `MovePlan.Labels` の値（ID・スプリント名・リリース名、なければ ULID）。usecase に `MovePlan.GUIView()` と、`MoveStoreInput.ConfirmedView *MovePlanView`（`Confirmed` と同じ照合を `GUIView()` の比較で行う）を足す
 10. **SSE `stores.changed`**: 細部 4・5・7（アカウントを足して Store にアカウントを書いたとき）の書き込みのあとと、poll が Store の出入り（config の `stores[]` に現れた・消えた・パスが変わった）を見つけたときに出す（本文は空）。消えた Store は poll が持っている repo を閉じ、その Store の `sync.state` を出さなくなる。CLI で `hh store set` したときも poll が config の変化（色・表示・既定・アカウント）で出す
-11. **poll の Store の解除**: `DELETE /api/stores/{name}` は、ops の `StoreRemove` の前に poll のその Store の repo を手放す（`poller.Release`。ディレクトリを消すため）
+11. **poll の Store の解除**: `DELETE /api/stores/{name}` は、usecase の `StoreRemove` の前に poll のその Store の repo を手放す（`poller.Release`。ディレクトリを消すため）
 12. **トークンの扱い**: 細部 6・7 の応答とログにトークンを出さないことをテストで確かめる（応答の本文にトークンの文字列が含まれないこと）
 13. **`web/core/messages.ts`**: `move.changed`・`auth.device_running`・`choice.required`（アカウントの選択）・`store.unpushed`・`store.mount_failed`・`account.*` など、4f-1 で API に出る Code の日本語の文言を足す（すでにあるものは確かめるだけ）
 14. 1〜11 の OpenAPI を再生成し、`web/core/api/schema.d.ts` を作り直す（`pnpm gen`）。SSE の型（`web/core/sse.ts`）に `stores.changed`・`auth.device` を足す
 15. 親設計の「コマンド一覧」に `hh store set` を足す（決定 2）
-16. Device Flow の API のテストは fakegh（`internal/fakegh` を httptest で、`device_interval` 0・`auto_approve`）で通す
+16. Device Flow の API のテストは fakegh（`internal/lib/fakegh` を httptest で、`device_interval` 0・`auto_approve`）で通す
 
 ### 4f-2 アカウント・Store の設定と Onboarding
 
@@ -87,7 +90,7 @@
 29. **Onboarding**: Store が0件のとき。3段（アカウント・Store を選ぶ・はじめる）。アカウントの段は、アカウントがあれば並べて「次へ」、なければ 19 の追加を出す（トークンなしでも次へ進める）。Store を選ぶの段は細部 30、はじめるの段はマウントした Store を並べて「始める」でホームへ。どの段でも「新しく Store を作る」（CreateStore）を出す
 30. **発見**: トークンを持つアカウントがあれば `GET /api/stores/discover` を自動で呼び、候補をアカウント（owner）ごとに見出しを付けて並べる（キャンバスのとおり）。各候補は選択のチェック・repo・権限（write は「書き込み」、read は「閲覧のみ」）・呼び名の欄（提案された名前）。「フォルダから探す」でパスを入れて `from` で探す（アカウントが決まらなければ選択欄を出す）。0件は「見つかりませんでした」と、権限を管理者に依頼する案内。「マウントして始める」（設定ではマウント）で `POST /api/stores/mount`、失敗したものはその行に文言を出し、ほかは進む。足元は `hh store discover`
 31. 発見の待ち時間は、読み込み中の状態（4d の States）で出す
-32. **CreateStore のアカウント**: アカウントが2つ以上あれば選択欄を出し、`POST /api/stores` に `account` を送る（1つなら送らず ops に任せる）。足元の `hh store init` に `--account` を足す
+32. **CreateStore のアカウント**: アカウントが2つ以上あれば選択欄を出し、`POST /api/stores` に `account` を送る（1つなら送らず usecase に任せる）。足元の `hh store init` に `--account` を足す
 33. **`stores.changed`**: `StoreDirectory` が受けて Store とワークスペースを取り直す。設定の画面も取り直す。消えた Store の `conn.sync` の項目を捨てる
 
 ### 4f-3 サイドバー・マイタスク・閲覧のみ・移動
@@ -107,6 +110,6 @@
 46. **ダイアログ**: 見出しに ID・タイトル・子孫の数。移動先の Store をラジオで並べる（色の点、名前、`remotes[0]`。閲覧のみは無効にして理由。移動元は出さない）。移動先のワークスペースは選択欄（2つ以上のとき。1つなら名前だけ）。親は任意で、移動先の Store のタスクを検索して選ぶ（関連の追加の検索の部品を使う）。選ぶたびに `move-store/plan` を取り直す
 47. **予定の表示**: 「移動先で変わること」に、ID（「移動先の <ワークスペース> で振り直します」。番号は予告しない。作成と同じ）、親（移動元の親から外れて、移動先の親かワークスペースのルートへ）、移動元に転送ファイルを残すこと。「外す参照」に `unlinked` を種類（`blocked_by` は「ブロックされている」、プロパティは名前、`sprint`・`releases` は「スプリント」「リリース」）・相手の ID・名前で並べる。`hidden` があれば注意の帯「見えなくなる人: …」と「移動前の内容は <移動元> の git 履歴に残り、<移動元> を読める人は過去の内容を見られます」。scoped が要るときは「プロジェクトの表示の設定を持っていく / 持っていかない」のラジオと、持っていくときに外れるもの（`dropped`）
 48. **実行**: ボタンは「移動」（外す参照があれば「n 件の参照を外して移動」）。`confirmed` に見せた予定を添えて送り、409 `move.changed` なら予定を取り直して「内容が変わりました。確かめてから移動してください」と出す。成功したら移動先のタスクを開き、トースト「API-12 を org-b に移動しました（WEB-45）」。足元は `hh mv <ID> --store <名前> [--workspace] [--parent] [--scoped carry|drop] --yes`
-49. スキーマの違反（ops の `move.invalid`。タスクごとの違反を args に持つ）は、ダイアログの中にタスクごとの違反を並べる
+49. スキーマの違反（usecase の `move.invalid`。タスクごとの違反を args に持つ）は、ダイアログの中にタスクごとの違反を並べる
 50. undo の `undo.blocked`（`move-in`・`move-out`）は 4e のトーストのまま
 51. **E2E**: harness に複数 Store（2つ、接頭辞が重なる組を含む）と閲覧のみの Store（ローカルの bare を書けなくして `hh sync`）を作る設定を足す。4f-2 で Device Flow（harness が `cmd/fakegh` を起動）・トークンなしのアカウントの追加・発見（`--from`）とマウント・URL で追加・解除・既定・色・表示、4f-3 で閲覧のみの編集の無効・非表示の Store・マイタスクのワークスペース別・Store 名付きの ID・Store 間の移動を通す
