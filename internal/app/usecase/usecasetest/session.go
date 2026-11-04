@@ -63,14 +63,14 @@ func (ts *Session) AddTask(title string, edit func(*model.Task)) *model.Task {
 // commits are alice's.
 const DefaultAccountYAML = "accounts:\n  - name: alice\n    host: github.com\n    login: alice\n"
 
-// TestAccount is the account of defaultAccountYAML.
+// TestAccount is the account of DefaultAccountYAML.
 var TestAccount = config.Account{Name: "alice", Host: "github.com", Login: "alice"}
 
 // StoreAccountRE matches the account: alice line of a store in config.yaml,
 // which store init writes.
 var StoreAccountRE = regexp.MustCompile(`(?m)^[ \t]+account: alice\n`)
 
-// AppendDefaultAccount adds defaultAccountYAML to the end of config.yaml.
+// AppendDefaultAccount adds DefaultAccountYAML to the end of config.yaml.
 func (ts *Session) AppendDefaultAccount() {
 	ts.T.Helper()
 	if err := os.MkdirAll(ts.Env["HEDGEHUG_HOME"], 0o750); err != nil {
@@ -86,7 +86,7 @@ func (ts *Session) AppendDefaultAccount() {
 	}
 }
 
-// DropDefaultAccount removes defaultAccountYAML, and the stores' reference to
+// DropDefaultAccount removes DefaultAccountYAML, and the stores' reference to
 // it, for the tests that have no account or set up their own.
 func (ts *Session) DropDefaultAccount() {
 	ts.T.Helper()
@@ -201,7 +201,7 @@ func (ts *Session) BeforeCommand(start func(s *store.Store, name string) error, 
 	replication.BeforeCommand(ts.Session, c, start, report)
 }
 
-// HasDefaultAccount reports whether config.yaml still has defaultAccountYAML.
+// HasDefaultAccount reports whether config.yaml still has DefaultAccountYAML.
 func (ts *Session) HasDefaultAccount() bool {
 	ts.T.Helper()
 	b, err := os.ReadFile(filepath.Join(ts.Env["HEDGEHUG_HOME"], "config.yaml")) //nolint:gosec // the config of the test
@@ -312,7 +312,7 @@ func AddBareRemote(t *testing.T, ts *Session) string {
 	return remote
 }
 
-// Other is a second testSession of the same user (the same HOME) with
+// Other is a second Session of the same user (the same HOME) with
 // a data directory of its own and no store. Its clock is at now.
 func Other(t *testing.T, ts *Session, now time.Time) *Session {
 	t.Helper()
@@ -331,7 +331,7 @@ func Other(t *testing.T, ts *Session, now time.Time) *Session {
 	return c
 }
 
-// Clone is otherSession whose store "me" is cloned from remote with
+// Clone is Other whose store "me" is cloned from remote with
 // StoreAdd.
 func Clone(t *testing.T, ts *Session, remote string, now time.Time) *Session {
 	t.Helper()
@@ -363,7 +363,7 @@ func NewTwoStore(t *testing.T) *Session {
 	return NewTwoStoreWith(t, "API", "WEB")
 }
 
-// NewTwoStoreWith is newTwoStoreSession with the id prefixes of the
+// NewTwoStoreWith is NewTwoStore with the id prefixes of the
 // two stores given.
 func NewTwoStoreWith(t *testing.T, prefixA, prefixB string) *Session {
 	t.Helper()
@@ -1255,7 +1255,7 @@ func LogOf(r *gitrepo.Repo, limit int) ([]gitrepo.LogEntry, error) {
 	return r.LogFrom(head, limit)
 }
 
-// CfgStore is a store that setConfig writes into config.yaml; account is
+// CfgStore is a store that SetConfig writes into config.yaml; account is
 // empty for a store with no account: of its own.
 type CfgStore struct{ Name, Account string }
 

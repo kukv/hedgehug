@@ -34,7 +34,7 @@ func Move(ss *usecase.Session, in MoveInput) (usecase.MoveResult, error) {
 	if err != nil {
 		return usecase.MoveResult{}, err
 	}
-	// The checks come in the order of the arguments; moveTargetOf repeats
+	// The checks come in the order of the arguments; MoveTargetOf repeats
 	// them.
 	if err := usecase.NotDeleted(ix, e); err != nil {
 		return usecase.MoveResult{}, err

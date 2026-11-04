@@ -20,7 +20,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
-// newCheckedSession is newTestSession with the merge driver registered, as
+// newCheckedSession is usecasetest.New with the merge driver registered, as
 // store init does, and a hedgehug on PATH, so that doctor has no finding
 // about the driver.
 func newCheckedSession(t *testing.T) *usecasetest.Session {

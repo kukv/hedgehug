@@ -59,7 +59,7 @@ func AddHere(ss *usecase.Session, in AddHereInput) (AddHereResult, *usecase.Conf
 	// A call that carries the answer to a question is a repeat of an earlier
 	// one, which gave the warnings (context.json, hedgehug use): say them once.
 	// (This is for what is wrong with context.json. A store that does not open
-	// is told of once by warnSkipped.)
+	// is told of once by WarnSkipped.)
 	warn := ss.AddWarning
 	if ctx.BranchParent != usecase.Unasked || ctx.PickProject != "" || ctx.PickStore != "" || ctx.PickWorkspace != "" {
 		warn = nil

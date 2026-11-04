@@ -83,7 +83,7 @@ func TestNoStoreNameWarnsOnceAndUsesTheOthers(t *testing.T) {
 	ts := usecasetest.New(t)
 	task := ts.AddTask("a", nil)
 	addMissingStore(t, ts)
-	ts.DropMount() // addTask mounted the stores before org-b was added
+	ts.DropMount() // AddTask mounted the stores before org-b was added
 	ts.Warns = nil
 	ts.StoreName = ""
 	set, err := ts.Mount()

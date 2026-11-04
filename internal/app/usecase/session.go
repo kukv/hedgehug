@@ -80,7 +80,7 @@ type mountCache struct {
 	mu  gosync.Mutex
 	set *mount.Set
 	// what the session opened and has not let go of (Close): the stores
-	// openStoreAt made and the sets listSet made
+	// OpenStoreAt made and the sets listSet made
 	openedMu gosync.Mutex
 	opened   []func()
 	// the id prefixes that stores share, which qualified works out; sharedMu
@@ -162,8 +162,8 @@ func (ss *Session) mountOnce() (set *mount.Set, toWarn []mount.Skipped, err erro
 
 // OpenSet opens the stores of c as this session wants them: its clock, the
 // id prefixes it counts itself, and what Resolve finds not to open given to
-// warnSkipped. A store that does not open is left out of the set. toWarn are
-// those the caller is to tell of with warnSkipped, once it holds no lock: all
+// WarnSkipped. A store that does not open is left out of the set. toWarn are
+// those the caller is to tell of with WarnSkipped, once it holds no lock: all
 // of them, except that with --store naming a store the command is about
 // that store only. With strict the store --store names, and the only store
 // of c, are an error instead (what a listing does).
@@ -191,7 +191,7 @@ func (ss *Session) OpenSet(c *config.Config, strict bool) (set *mount.Set, toWar
 // WarnSkipped warns that a store did not open: the stores found not to open
 // when they are mounted, and an index that does not open while an id is
 // looked up in every store. It is said once per caller however many times
-// the stores are opened, and not while muteOpenWarnings holds the store. (The
+// the stores are opened, and not while MuteOpenWarnings holds the store. (The
 // other warn-once of the package is the context.json one, which AddHere
 // leaves out for a call that carries an answer; that is about a file, not
 // a store.)
@@ -205,7 +205,7 @@ func (ss *Session) WarnSkipped(sk mount.Skipped) {
 }
 
 // WarnOnce says msg about the store name, once per caller and not while
-// muteOpenWarnings holds the store.
+// MuteOpenWarnings holds the store.
 func (ss *Session) WarnOnce(name, msg string) {
 	mc := ss.mountCache()
 	mc.warnedMu.Lock()

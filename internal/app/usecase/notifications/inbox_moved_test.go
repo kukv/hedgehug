@@ -15,7 +15,7 @@ import (
 )
 
 // addMovedItem puts into org-a's inbox an overwritten value of the task that
-// movedFixture moved away.
+// MovedFixture moved away.
 func addMovedItem(t *testing.T, ts *usecasetest.Session, ulid model.ULID, path, field string) model.ULID {
 	t.Helper()
 	s, err := ts.ForStore("org-a").OpenStore()

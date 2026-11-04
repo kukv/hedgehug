@@ -273,7 +273,7 @@ func prepareRemotes(ss *usecase.Session, c *config.Config, e config.StoreEntry, 
 
 // noAccountChoice is the error for a store made with no account named while
 // c has two or more: the choice among them. With none at all it is
-// errNoAccounts.
+// ErrNoAccounts.
 func noAccountChoice(c *config.Config) error {
 	if len(c.Accounts) == 0 {
 		return usecase.ErrNoAccounts

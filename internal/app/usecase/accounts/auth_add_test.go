@@ -16,7 +16,7 @@ import (
 	"github.com/kukv/hedgehug/internal/lib/github"
 )
 
-// authFixture is authSession with config.yaml written whole: github.com on a
+// authFixture is AuthSession with config.yaml written whole: github.com on a
 // fakegh, accounts, and the stores. The keychain is in memory.
 func authFixture(t *testing.T, st fakegh.State, accounts string, stores ...usecasetest.CfgStore) (*usecasetest.Session, *usecasetest.Keyring) {
 	t.Helper()

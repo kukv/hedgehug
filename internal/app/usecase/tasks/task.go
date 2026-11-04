@@ -107,7 +107,7 @@ func Add(ss *usecase.Session, in AddInput) (usecase.TaskResult, error) {
 			return usecase.TaskResult{}, err
 		}
 		if fromSibling {
-			// not the sibling's: rankAt says the sibling is not one
+			// not the sibling's: RankAt says the sibling is not one
 			t.Workspace = w.ULID
 		} else if in.Parent != "" && w.ULID != t.Workspace {
 			pw, ok := ix.Workspace(t.Workspace)

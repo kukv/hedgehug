@@ -193,7 +193,7 @@ type moveTarget struct {
 	rank      model.Rank
 }
 
-// alreadyThere says whether e, which rankAt has found a place for, already
+// alreadyThere says whether e, which RankAt has found a place for, already
 // stands there: under the same parent in the same workspace, last when no
 // sibling is named, or right after (before) the sibling named with a rank of
 // its own. Tasks of one rank are ordered by id and the new rank lies past the
