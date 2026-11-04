@@ -30,7 +30,7 @@ func main() {
 				if !ok {
 					return true
 				}
-				o :=p.TypesInfo.Uses[sel.Sel]
+				o := p.TypesInfo.Uses[sel.Sel]
 				if o == nil || o.Pkg() == nil || o.Pkg() == p.Types {
 					return true
 				}

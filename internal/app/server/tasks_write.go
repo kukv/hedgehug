@@ -125,7 +125,8 @@ type affectedOutput struct{ Body usecase.AffectedWrite }
 // writeOut is the output of a write to one task.
 func writeOut(r interface {
 	Write() (usecase.TaskWrite, error)
-}) (*taskWriteOutput, error) {
+},
+) (*taskWriteOutput, error) {
 	w, err := r.Write()
 	if err != nil {
 		return nil, problemOf(err)

@@ -38,9 +38,16 @@ func TestJSONIsTheUsecaseTypes(t *testing.T) {
 
 	var tw usecase.TaskWrite
 	for _, args := range [][]string{
-		{"add", "a"}, {"add", "b"}, {"set", "ME-1", "title=A"}, {"status", "ME-1", "todo"}, {"done", "ME-1"},
-		{"dep", "add", "ME-2", "--blocked-by", "ME-1"}, {"dep", "rm", "ME-2", "--blocked-by", "ME-1"},
-		{"watch", "ME-1"}, {"unwatch", "ME-1"}, {"mv", "ME-2", "--parent", "ME-1"},
+		{"add", "a"},
+		{"add", "b"},
+		{"set", "ME-1", "title=A"},
+		{"status", "ME-1", "todo"},
+		{"done", "ME-1"},
+		{"dep", "add", "ME-2", "--blocked-by", "ME-1"},
+		{"dep", "rm", "ME-2", "--blocked-by", "ME-1"},
+		{"watch", "ME-1"},
+		{"unwatch", "ME-1"},
+		{"mv", "ME-2", "--parent", "ME-1"},
 		{"restore", "ME-1", "--at", "2999-01-01"},
 	} {
 		tw = usecase.TaskWrite{}
