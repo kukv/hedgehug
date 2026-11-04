@@ -367,7 +367,10 @@
     // (a retry would send the same again); the toast says why.
     for (const u of frozen.keys()) {
       const why = c.save.takeRefused(u);
-      if (why !== null) toast({ message: `${c.cache.task(u)?.id ?? u}: ${why}` });
+      if (why !== null) {
+        const t = c.cache.task(u);
+        toast({ message: `${t ? did.current(t.store, t.id) : u}: ${why}` });
+      }
     }
     const let_go = [...frozen.keys()].filter((u) => !holds(u));
     if (let_go.length > 0) {

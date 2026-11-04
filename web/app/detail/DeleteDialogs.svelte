@@ -76,7 +76,7 @@
   async function restore() {
     if (busy) return;
     busy = true;
-    const { id } = show;
+    const id = did.current(show.store, show.id);
     try {
       await restoreTask(deps, ref);
       toast({ message: `${id} を復元しました` });

@@ -55,6 +55,8 @@ const show = showView({
 describe("buildGroups", () => {
   it("makes a group for blocked_by, each task_ref property, the reverse side and the backlinks", async () => {
     const groups = await buildGroups(show, schemaView, lookup);
+    const named = await buildGroups(show, schemaView, lookup, (id) => `team:${id}`);
+    expect(named.at(-1)?.note).toBe("本文・コメントの #team:REL-6");
     expect(groups.map((g) => g.key)).toEqual([
       "blocked_by",
       "duplicates",

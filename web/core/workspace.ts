@@ -59,13 +59,16 @@ export function removeBlocker(w: Pick<WorkspaceEntry, "tasks" | "deleted">): str
 
 // detachedText says what a move took off the tasks (the sprint and the releases that are not of the
 // new workspace); "" when nothing.
-export function detachedText(ds: Schemas["Detached"][] | null | undefined): string {
+export function detachedText(
+  ds: Schemas["Detached"][] | null | undefined,
+  idOf: (id: string) => string = (id) => id,
+): string {
   return (ds ?? [])
     .map((d) => {
       const parts: string[] = [];
       if (d.sprint) parts.push(`スプリント ${d.sprint}`);
       if (d.releases && d.releases.length > 0) parts.push(`リリース ${d.releases.join("、")}`);
-      return parts.length > 0 ? `${d.id} は${parts.join(" と")} から外れました` : "";
+      return parts.length > 0 ? `${idOf(d.id)} は${parts.join(" と")} から外れました` : "";
     })
     .filter((t) => t !== "")
     .join("。");

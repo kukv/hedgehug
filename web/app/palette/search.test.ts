@@ -355,6 +355,15 @@ describe("buildCommands", () => {
     expect(buildCommands(e, ">ガイド").map((g) => g.name)).toEqual(["最近開いたもの"]);
   });
 
+  it("finds the tasks opened last by the ID with its Store as well as by the bare ID", () => {
+    const e = env({
+      recent: [task("R1", "task", null, { id: "REL-3", title: "x", store: "team" })],
+      displayId: (s, id) => `${s}:${id}`,
+    });
+    expect(buildCommands(e, ">team:rel").map((g) => g.name)).toContain("最近開いたもの");
+    expect(buildCommands(e, ">rel-3").map((g) => g.name)).toContain("最近開いたもの");
+  });
+
   it("filters by the words after >", () => {
     expect(labels(buildCommands(env(), ">同期"))).toEqual([
       "今すぐ同期する",

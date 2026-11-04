@@ -91,9 +91,10 @@
       : null,
   );
   const refs = $derived(
-    (Array.isArray(value) ? value : value ? [value] : []).map(
-      (v) => taskOf(String(v))?.id ?? String(v),
-    ),
+    (Array.isArray(value) ? value : value ? [value] : []).map((v) => {
+      const t = taskOf(String(v));
+      return t ? did.current(t.store, t.id) : String(v);
+    }),
   );
 </script>
 

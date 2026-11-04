@@ -30,6 +30,7 @@ export async function buildGroups(
   show: ShowView,
   sc: SchemaView,
   lookup: Lookup,
+  idOf: (id: string) => string = (id) => id,
 ): Promise<RelGroup[]> {
   const item = async (
     raw: string,
@@ -86,7 +87,7 @@ export async function buildGroups(
     groups.push({
       key: "referenced_by",
       label: "バックリンク",
-      note: `本文・コメントの #${show.id}`,
+      note: `本文・コメントの #${idOf(show.id)}`,
       removable: false,
       items: await Promise.all(back.map((r) => item(r.ulid, r))),
     });

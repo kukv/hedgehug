@@ -42,7 +42,7 @@
     if (!def) return;
     const lookup = createLookup({ api, cache, store: cur.store });
     let live = true;
-    void buildGroups(cur, def, lookup).then((g) => {
+    void buildGroups(cur, def, lookup, (id) => did.current(cur.store, id)).then((g) => {
       if (live) groups = g;
     });
     return () => {

@@ -260,7 +260,7 @@
                 {@const href = router.href({ name: "task", ulid: f.task })}
                 {@const id = ids[f.task]}
                 <a class="open" {href} onclick={(e) => onLinkClick(e, href)}>
-                  {id ? `${id} を開く` : "タスクを開く"}
+                  {id ? `${did.current(store, id)} を開く` : "タスクを開く"}
                 </a>
               {/if}
             </div>

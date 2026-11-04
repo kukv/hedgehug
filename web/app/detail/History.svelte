@@ -60,7 +60,10 @@
       const then = await showAt(api, show.ulid, l.hash, show.store);
       if (target !== l) return;
       changes = diffForRestore(show, then, {
-        idOf: (u) => cache.task(u)?.id ?? u,
+        idOf: (u) => {
+          const t = cache.task(u);
+          return t ? did.current(t.store, t.id) : u;
+        },
         propLabel: (n) => sc.current?.props[n]?.label || n,
       });
     } catch (e) {

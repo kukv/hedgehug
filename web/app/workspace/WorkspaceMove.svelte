@@ -61,7 +61,7 @@
         }),
       );
       cache.applyWrite({ task: r.task, commit: r.commit });
-      const lost = detachedText(r.detached);
+      const lost = detachedText(r.detached, (id) => did.current(task.store, id));
       toast({
         message: `${did.current(task.store, task.id)} を ${to.name} に移しました（今の ID は ${did.current(task.store, r.task.id)}）${lost ? `。${lost}` : ""}`,
         link: { label: "開く", href: router.href({ name: "task", ulid: task.ulid }) },

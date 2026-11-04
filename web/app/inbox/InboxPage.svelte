@@ -19,7 +19,7 @@
   import { focusLost } from "../focus";
   import { readOnlySentence, useReadOnlyOf } from "../read-only";
   import { onLinkClick, router } from "../router";
-  import { useManyStores, useSubscribe } from "../svelte-store";
+  import { useDisplayId, useManyStores, useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import CliLine from "../ui/CliLine.svelte";
@@ -32,6 +32,7 @@
   let { tab }: { tab: InboxTab } = $props();
 
   const c = core();
+  const did = useDisplayId(c.stores);
   const unread = useSubscribe(c.conn, () => c.conn.unread);
   const manyStores = useManyStores(c.stores);
   // Reverting writes to the Store of the item (細部 99).
@@ -150,7 +151,7 @@
           const r = await unwrap(
             c.api.POST("/api/notifications/{id}/revert", { params: { path: { id: n.ulid } } }),
           );
-          const id = taskOf(n)?.id || r.task.id;
+          const id = did.current(n.store, taskOf(n)?.id || r.task.id);
           toast({ message: `${id} の ${overwrittenField(n)} を自分の値に戻しました` });
         });
 

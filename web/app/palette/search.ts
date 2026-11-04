@@ -514,7 +514,11 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
     : [];
 
   const recent = env.recent
-    .filter((t) => word === "" || `${t.id} ${t.title}`.toLowerCase().includes(word))
+    .filter(
+      (t) =>
+        word === "" ||
+        `${t.id} ${env.displayId(t.store, t.id)} ${t.title}`.toLowerCase().includes(word),
+    )
     .map((t) => taskItem(t, env.hrefs.task));
 
   const groups: PaletteGroup[] = [
