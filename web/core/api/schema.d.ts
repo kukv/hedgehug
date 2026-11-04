@@ -4,6 +4,42 @@
  */
 
 export interface paths {
+    "/api/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check the token of each account against GitHub, as hh auth status --json; an account in error is in the array with its state */
+        get: operations["list-accounts"];
+        put?: never;
+        /** Add an account to config.yaml, as hh auth add */
+        post: operations["add-account"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/accounts/{name}/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Keep a token in the keychain after GitHub says it is of the account's login, as hh auth login <name> --with-token */
+        put: operations["set-account-token"];
+        post?: never;
+        /** Remove the token of an account from the keychain, as hh auth logout; the account stays in config.yaml */
+        delete: operations["remove-account-token"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/activity": {
         parameters: {
             query?: never;
@@ -16,6 +52,40 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/device": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start the device flow, as hh auth login [<name>] [--host]; the server polls, and the event auth.device says how it ended */
+        post: operations["start-device-login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/device/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Stop the device flow; it ends with the event auth.device (error, auth.canceled) */
+        delete: operations["cancel-device-login"];
         options?: never;
         head?: never;
         patch?: never;
@@ -296,6 +366,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stores/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set up a store that others made by cloning it, as hh store add */
+        post: operations["add-store"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stores/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Make a store the one hedgehug picks without --store, as hh store default */
+        put: operations["set-default-store"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stores/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the stores that can be set up, as hh store discover */
+        get: operations["discover-stores"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stores/mount": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set up the stores discover listed, each as hh store add does */
+        post: operations["mount-stores"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stores/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Take a store out of the config and delete its clone, as hh store remove */
+        delete: operations["remove-store"];
+        options?: never;
+        head?: never;
+        /** Set the color or the visibility of a store on this machine, as hh store set */
+        patch: operations["update-store"];
+        trace?: never;
+    };
     "/api/sync": {
         parameters: {
             query?: never;
@@ -457,6 +613,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/{id}/move-store": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move the task and the tasks under it to another store, as hh mv --store after its question */
+        post: operations["move-store"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{id}/move-store/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Show what moving the task and the tasks under it to another store would do; writes nothing */
+        post: operations["plan-move-store"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/{id}/restore": {
         parameters: {
             query?: never;
@@ -586,10 +776,73 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AccountAddInputBody: {
+            /** @description github.com without it */
+            host?: string;
+            /** @description The GitHub login of the account */
+            login: string;
+            /** @description The name of the account in config.yaml */
+            name: string;
+            /** @description Where the token comes from: gh or env:<VAR>; with none the account has no token. keychain and device are answered with 400 auth.token_source: a pasted token goes through PUT /api/accounts/{name}/token, and the device flow through POST /api/auth/device */
+            token?: string;
+        };
+        AccountLoginBody: {
+            account: string;
+            /** @description The account was added to config.yaml: the name was no account's */
+            added: boolean;
+            id: string;
+            /** @description gh or env:VAR: the account takes its token from there, so Hedgehug has nothing to log in and kept nothing */
+            uses?: string;
+        };
+        AccountTokenInputBody: {
+            /** @description The host of a new account (github.com without it); for an account that exists it must be its host */
+            host?: string;
+            /** @description The token to keep in the keychain, as hh auth login --with-token reads it. It is in no response, no event and no line of the log */
+            token: string;
+        };
         AffectedWrite: {
             commit: string | null;
             /** @description The task and the tasks under it, as they are now */
             tasks?: components["schemas"]["TaskView"][] | null;
+        };
+        AuthAddResult: {
+            id: string;
+            name: string;
+            token?: string;
+        };
+        AuthDeviceEvent: {
+            /** @description For done: the name of the account that got the token */
+            account?: string;
+            /** @description For error: the Code of the error, such as auth.canceled */
+            code?: string;
+            /** @description The id POST /api/auth/device answered */
+            id: string;
+            /** @description For error: the message in English */
+            message?: string;
+            /** @enum {string} */
+            state: "done" | "error";
+        };
+        AuthLogoutResult: {
+            account: string;
+            id: string;
+            removed: boolean;
+            token?: string;
+        };
+        AuthStatus: {
+            error?: string;
+            /** Format: date-time */
+            expires?: string;
+            id: string;
+            login?: string;
+            name: string;
+            state: string;
+            token?: string;
+        };
+        Candidate: {
+            account?: string;
+            name: string;
+            permission: string;
+            url: string;
         };
         CommentEditInputBody: {
             /** @description The comment in Markdown */
@@ -650,6 +903,24 @@ export interface components {
             /** @description The name of the sprint taken off */
             sprint?: string;
             task: string;
+        };
+        DeviceStartBody: {
+            /**
+             * Format: date-time
+             * @description When the code ends; the flow ends with an error event then
+             */
+            expires_at: string;
+            /** @description For DELETE /api/auth/device/{id} and the event auth.device */
+            id: string;
+            /** @description The code to enter at verification_uri */
+            user_code: string;
+            verification_uri: string;
+        };
+        DeviceStartInputBody: {
+            /** @description As hh auth login --host: the host of a new account (github.com without it); for an account that exists it must be its host */
+            host?: string;
+            /** @description The account to log in (again), as hh auth login <name>; without it the account of the login that approves the code is added */
+            name?: string;
         };
         DoctorReport: {
             findings: components["schemas"]["Finding"][] | null;
@@ -782,6 +1053,25 @@ export interface components {
             commit: string | null;
             skipped: string[] | null;
         };
+        MountCandidate: {
+            account?: string;
+            /** @description The name to mount the store under */
+            name: string;
+            url: string;
+        };
+        MountFailed: {
+            /** @description What went wrong, as the type of a problem */
+            code: string;
+            /** @description The message in English, as the CLI prints it */
+            message: string;
+            name: string;
+        };
+        MountOutputBody: {
+            /** @description The candidates that could not be added; the others were */
+            failed: components["schemas"]["MountFailed"][] | null;
+            /** @description The names of the stores that were added */
+            mounted: string[] | null;
+        };
         MoveInputBody: {
             /** @description Put it after this sibling */
             after?: string;
@@ -793,6 +1083,110 @@ export interface components {
             root?: boolean;
             /** @description Move to another workspace */
             workspace?: string;
+        };
+        MovePlanView: {
+            from: string;
+            /** @description Accounts that can read the source and not the destination; empty when either list is unknown */
+            hidden: string[];
+            /** @description The parent in the destination, when one was given; id is as the destination shows it */
+            parent?: components["schemas"]["MoveTaskView"];
+            /** @description Present when a project moved has a scoped schema */
+            scoped?: components["schemas"]["MoveScopedView"];
+            /** @description The root first, every parent before its children; id is as the source shows it */
+            tasks: components["schemas"]["MoveTaskView"][];
+            to: string;
+            /** @description The references the move cuts */
+            unlinked: components["schemas"]["MoveUnlinkView"][];
+            /** @description The workspace of the destination that the root task goes into */
+            workspace: components["schemas"]["MoveWorkspaceView"];
+        };
+        MoveRefView: {
+            id: string;
+            ulid: string;
+        };
+        MoveScopedResult: {
+            carried: boolean;
+            dropped?: string[];
+        };
+        MoveScopedView: {
+            /**
+             * @description The choice that was given
+             * @enum {string}
+             */
+            choice?: "carry" | "drop";
+            /** @description What carrying leaves out, as "<what> <name>" (status, transitions, required, prop, template, kind); empty unless carried */
+            dropped: string[];
+            /** @description A choice is still needed: scoped was not given */
+            required: boolean;
+        };
+        MoveStoreFields: {
+            /** @description A task of that store to put the task under: an ID or a ULID */
+            parent?: string;
+            /**
+             * @description Whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required
+             * @enum {string}
+             */
+            scoped?: "carry" | "drop";
+            /** @description The store to move to, by name */
+            to: string;
+            /** @description The workspace of that store, by name or prefix; needed when it has more than one (otherwise 400 choice.required) */
+            workspace?: string;
+        };
+        MoveStoreInputBody: {
+            /** @description The plan POST /move-store/plan showed and the user agreed to; without it the answer is 400 confirm.required, and if the tasks are no longer what it lists, 409 move.changed */
+            confirmed?: components["schemas"]["MovePlanView"];
+            /** @description A task of that store to put the task under: an ID or a ULID */
+            parent?: string;
+            /**
+             * @description Whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required
+             * @enum {string}
+             */
+            scoped?: "carry" | "drop";
+            /** @description The store to move to, by name */
+            to: string;
+            /** @description The workspace of that store, by name or prefix; needed when it has more than one (otherwise 400 choice.required) */
+            workspace?: string;
+        };
+        MoveStoreResultView: {
+            from: string;
+            /** @description The destination was written by an earlier run that stopped; this one only finished the source */
+            resumed?: boolean;
+            scoped?: components["schemas"]["MoveScopedResult"];
+            tasks: components["schemas"]["MovedTask"][];
+            to: string;
+            /** @description The references that were cut, by ULID */
+            unlinked?: components["schemas"]["MoveUnlinkResult"][];
+        };
+        MoveTargetView: {
+            /** @description The ID of a task, the name of a sprint or a release; the ULID when there is none */
+            label: string;
+            ulid: string;
+        };
+        MoveTaskView: {
+            id: string;
+            title: string;
+            ulid: string;
+        };
+        MoveUnlinkResult: {
+            field: string;
+            target: string;
+            task: string;
+        };
+        MoveUnlinkView: {
+            /** @description blocked_by, props.<name of a property>, sprint or releases */
+            field: string;
+            target: components["schemas"]["MoveTargetView"];
+            task: components["schemas"]["MoveRefView"];
+        };
+        MoveWorkspaceView: {
+            name: string;
+            prefix: string;
+            ulid: string;
+        };
+        MovedTask: {
+            new_id: string;
+            old_id: string;
+            ulid: string;
         };
         Notification: {
             author: string;
@@ -1032,6 +1426,19 @@ export interface components {
             label?: string;
             name: string;
         };
+        StoreAddInputBody: {
+            /** @description The name of the account that clones and writes; the only account without it */
+            account?: string;
+            name: string;
+            /** @description Where to clone from; the first one, and the others are mirrors */
+            remotes: string[] | null;
+        };
+        StoreDefaultInputBody: {
+            name: string;
+        };
+        StoreDefaultOutputBody: {
+            name: string;
+        };
         StoreInitInputBody: {
             account?: string;
             name: string;
@@ -1049,19 +1456,47 @@ export interface components {
         };
         StoreItem: {
             account?: string;
+            color?: string;
             /** @description The store hedgehug picks without --store */
             default: boolean;
+            default_store: boolean;
+            hidden: boolean;
             /** Format: date-time */
             last_success?: string;
             name: string;
             path: string;
+            read_only?: string;
             remotes: string[] | null;
+        };
+        StorePatchInputBody: {
+            /** @description One of the colors of the palette; an empty one puts it back to automatic */
+            color?: string;
+            /** @description Whether the GUI leaves the store out of what it shows */
+            hidden?: boolean;
+        };
+        StoreRemoveResult: {
+            deleted: boolean;
+            name: string;
+            path: string;
         };
         StoreState: {
             head: string;
             store: string;
             sync: components["schemas"]["SyncStatus"];
         };
+        StoreView: {
+            account?: string;
+            color?: string;
+            default_store: boolean;
+            hidden: boolean;
+            /** Format: date-time */
+            last_success?: string;
+            name: string;
+            path: string;
+            read_only?: string;
+            remotes: string[] | null;
+        };
+        StoresChanged: Record<string, never>;
         SyncReport: {
             error?: string;
             invalid: string[] | null;
@@ -1272,6 +1707,136 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    "list-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthStatus"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "add-account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountAddInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthAddResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "set-account-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The name of the account; a name that is no account's adds the account of the login the token is of */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountTokenInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountLoginBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "remove-account-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The name of the account in config.yaml */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthLogoutResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     "list-activity": {
         parameters: {
             query?: {
@@ -1299,6 +1864,69 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LogView"][] | null;
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "start-device-login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceStartInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceStartBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "cancel-device-login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The id POST /api/auth/device answered */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -1391,6 +2019,17 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": ({
+                        data: components["schemas"]["AuthDeviceEvent"];
+                        /**
+                         * @description The event name.
+                         * @constant
+                         */
+                        event: "auth.device";
+                        /** @description The event ID. */
+                        id?: number | string;
+                        /** @description The retry time in milliseconds. */
+                        retry?: number;
+                    } | {
                         data: components["schemas"]["HelloEvent"];
                         /**
                          * @description The event name.
@@ -1419,6 +2058,17 @@ export interface operations {
                          * @constant
                          */
                         event: "schema.changed";
+                        /** @description The event ID. */
+                        id?: number | string;
+                        /** @description The retry time in milliseconds. */
+                        retry?: number;
+                    } | {
+                        data: components["schemas"]["StoresChanged"];
+                        /**
+                         * @description The event name.
+                         * @constant
+                         */
+                        event: "stores.changed";
                         /** @description The event ID. */
                         id?: number | string;
                         /** @description The retry time in milliseconds. */
@@ -2010,6 +2660,210 @@ export interface operations {
             };
         };
     };
+    "add-store": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreAddInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "set-default-store": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreDefaultInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreDefaultOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "discover-stores": {
+        parameters: {
+            query?: {
+                /** @description Look with this account only; with from, the account of the candidates */
+                account?: string;
+                /** @description A directory to look for bare repositories that hold a store under; without it, GitHub */
+                from?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Candidate"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "mount-stores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MountCandidate"][] | null;
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MountOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "remove-store": {
+        parameters: {
+            query?: {
+                /** @description Take the store out of the config and leave the clone; without it the clone is deleted, unless commits are not pushed (409 store.unpushed) */
+                keep?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description The store */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreRemoveResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "update-store": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The store */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StorePatchInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     "get-sync": {
         parameters: {
             query?: never;
@@ -2505,6 +3359,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskWrite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "move-store": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ID, a former ID, or the ULID of the task */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveStoreInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MoveStoreResultView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "plan-move-store": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ID, a former ID, or the ULID of the task */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveStoreFields"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MovePlanView"];
                 };
             };
             /** @description Error */

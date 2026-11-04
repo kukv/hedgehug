@@ -6,6 +6,7 @@ export type ConnState = "connecting" | "open" | "reconnecting" | "down";
 export type HelloEvent = Schemas["HelloEvent"];
 export type TasksChanged = Schemas["TasksChanged"];
 export type SyncStatus = Schemas["SyncStatus"];
+export type AuthDeviceEvent = Schemas["AuthDeviceEvent"];
 
 // Seconds between the end of a connection (or a failed try) and the next
 // try: 1, 2, 4, then 5 for ever.
@@ -15,6 +16,7 @@ type Handlers = {
   "tasks.changed": (e: TasksChanged) => void;
   "schema.changed": (e: { store: string }) => void;
   "views.changed": (e: { store: string }) => void;
+  "auth.device": (e: AuthDeviceEvent) => void;
   resync: () => void;
 };
 
@@ -46,6 +48,7 @@ export class Connection {
     "tasks.changed": new Set(),
     "schema.changed": new Set(),
     "views.changed": new Set(),
+    "auth.device": new Set(),
     resync: new Set(),
   };
 
@@ -89,6 +92,7 @@ export class Connection {
 
   on(event: "tasks.changed", fn: (e: TasksChanged) => void): () => void;
   on(event: "schema.changed" | "views.changed", fn: (e: { store: string }) => void): () => void;
+  on(event: "auth.device", fn: (e: AuthDeviceEvent) => void): () => void;
   on(event: "resync", fn: () => void): () => void;
   on(event: keyof Handlers, fn: (e: never) => void): () => void {
     const set = this.handlers[event] as Set<(e: never) => void>;
@@ -230,6 +234,9 @@ export class Connection {
         break;
       case "views.changed":
         this.emit("views.changed", body as { store: string });
+        break;
+      case "auth.device":
+        this.emit("auth.device", body as AuthDeviceEvent);
         break;
     }
   }

@@ -19,12 +19,18 @@ import (
 // ErrNoStores means config.yaml lists no store.
 var ErrNoStores = errors.New("no store is set up; run hedgehug store init <name>")
 
+// StoreColors are the colors a store can be given in config.yaml. Grey is
+// not one of them: it is how a read-only store is drawn.
+var StoreColors = []string{"teal", "orange", "purple", "sky", "pink", "olive", "brown"}
+
 // StoreEntry is one store in config.yaml.
 type StoreEntry struct {
 	Name    string
 	Path    string   // absolute, with ~/ expanded
 	Remotes []string // as written: a path or a URL, so ~/ is not expanded
 	Account string   // the name of an entry of accounts, or empty
+	Color   string   // one of StoreColors, or empty: the GUI picks one by order
+	Hidden  bool     // the GUI leaves the store out of its lists; the CLI is not affected
 }
 
 // Account is a person on a host. Commits of a store that has an account
@@ -209,6 +215,20 @@ func (c *Config) loadStores(seq *yaml.Node) error {
 				return c.errAt(a, fmt.Sprintf("stores: account %q is not in accounts", a.Value))
 			}
 			e.Account = a.Value
+		}
+		if col := valueOf(it, "color"); col != nil {
+			v, ok := text(col)
+			if !ok || v != "" && !slices.Contains(StoreColors, v) {
+				return c.errAt(col, fmt.Sprintf("stores: color %q: want one of %s", v, strings.Join(StoreColors, ", ")))
+			}
+			e.Color = v
+		}
+		if h := valueOf(it, "hidden"); h != nil && h.Tag != "!!null" {
+			var b bool
+			if h.Kind != yaml.ScalarNode || h.Tag != "!!bool" || h.Decode(&b) != nil {
+				return c.errAt(h, "stores: hidden: want true or false")
+			}
+			e.Hidden = b
 		}
 		if e.Account == "" && len(c.Accounts) > 1 {
 			return c.errAt(it, fmt.Sprintf("stores: %q has no account; with %d accounts every store needs account: <name>", e.Name, len(c.Accounts)))
@@ -406,6 +426,18 @@ func (c *Config) root() *yaml.Node {
 	return c.doc.Content[0]
 }
 
+// setValueInPlace is setKey that keeps the comments of the value when the key
+// is there already, as a line comment such as "color: teal # mine".
+func setValueInPlace(m *yaml.Node, key string, v *yaml.Node) {
+	if old := valueOf(m, key); old != nil && old.Kind == yaml.ScalarNode {
+		head, line, foot := old.HeadComment, old.LineComment, old.FootComment
+		*old = *v
+		old.HeadComment, old.LineComment, old.FootComment = head, line, foot
+		return
+	}
+	setKey(m, key, v)
+}
+
 // setKey sets key of the mapping m to v, adding it at the end when missing.
 func setKey(m *yaml.Node, key string, v *yaml.Node) {
 	for i := 0; i+1 < len(m.Content); i += 2 {
@@ -511,6 +543,46 @@ func (c *Config) SetStoreAccount(name, account string) error {
 		}
 	}
 	c.Stores[i].Account = account
+	return nil
+}
+
+// SetStoreLook changes how the GUI shows the store name: its color and
+// whether it is hidden. A nil argument is left as it is; an empty color and
+// hidden=false remove their keys. The color must be one of StoreColors.
+// Save writes it.
+func (c *Config) SetStoreLook(name string, color *string, hidden *bool) error {
+	i := slices.IndexFunc(c.Stores, func(s StoreEntry) bool { return s.Name == name })
+	if i < 0 {
+		return fmt.Errorf("no store is named %q", name)
+	}
+	if color != nil && *color != "" && !slices.Contains(StoreColors, *color) {
+		return fmt.Errorf("%q is not a color (colors: %s)", *color, strings.Join(StoreColors, ", "))
+	}
+	for _, it := range valueOf(c.root(), "stores").Content {
+		if n := valueOf(it, "name"); n == nil || n.Value != name {
+			continue
+		}
+		if color != nil {
+			if *color == "" {
+				deleteKey(it, "color")
+			} else {
+				setValueInPlace(it, "color", scalar(*color))
+			}
+		}
+		if hidden != nil {
+			if *hidden {
+				setValueInPlace(it, "hidden", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "true"})
+			} else {
+				deleteKey(it, "hidden")
+			}
+		}
+	}
+	if color != nil {
+		c.Stores[i].Color = *color
+	}
+	if hidden != nil {
+		c.Stores[i].Hidden = *hidden
+	}
 	return nil
 }
 

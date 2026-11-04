@@ -264,15 +264,7 @@ func (ss *Session) storeStatus(e config.StoreEntry) StoreStatus {
 		return x
 	}
 	x.LastError = st.LastError
-	// A broken access.json is a reason in ReadOnly, not an error that hides
-	// the rest: the next sync judges the access again.
-	acc, err := replicate.ReadAccess(s)
-	switch {
-	case err != nil:
-		x.ReadOnly = "access.json is broken; run hedgehug sync"
-	case acc.ReadOnly:
-		x.ReadOnly = acc.Why()
-	}
+	x.ReadOnly = readOnlyWhy(s) // a reason in ReadOnly, not an error that hides the rest
 	x.PendingSince, x.LastAttempt, x.LastSuccess = timePtr(st.PendingSince), timePtr(st.LastAttempt), timePtr(st.LastSuccess)
 	if len(e.Remotes) > 0 {
 		n, err := Unpushed(s)
@@ -379,4 +371,18 @@ func (ss *Session) BeforeCommand(cfg *config.Config, start func(s *store.Store, 
 		}
 		_ = s.Repo().Close()
 	}
+}
+
+// readOnlyWhy is why the store s is read-only, in words, or "" when it is
+// writable. A broken access.json is a reason, not an error: the next sync
+// judges the access again.
+func readOnlyWhy(s *store.Store) string {
+	acc, err := replicate.ReadAccess(s)
+	switch {
+	case err != nil:
+		return "access.json is broken; run hedgehug sync"
+	case acc.ReadOnly:
+		return acc.Why()
+	}
+	return ""
 }

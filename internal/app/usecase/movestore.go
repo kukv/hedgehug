@@ -29,6 +29,13 @@ type MoveStoreInput struct {
 	// with move.changed when the tasks are not what it lists any more. nil
 	// when nothing was shown (--yes given up front).
 	Confirmed *MovePlan
+	// ConfirmedView is the plan the GUI showed and the user agreed to; it is
+	// compared as Confirmed is, by the view of the plan made again under
+	// the locks. nil when nothing was shown.
+	ConfirmedView *MovePlanView
+	// planOnly is set by PrepareMovePlan: a scoped choice that is not given
+	// is no error, for the plan that asks for it.
+	planOnly bool
 }
 
 // MovePlan is what a move will do, for the confirmation (spec step 5).
@@ -42,6 +49,13 @@ type MovePlan struct {
 	Labels map[model.ULID]string
 	Hidden []string    // accounts that can read From and not To; nil when either list is unknown
 	Scoped *ScopedPlan // nil when no scoped entry applies
+	// Workspace and Parent are where the root goes in the destination
+	// (step 2), for GUIView; Parent is nil unless one was given. On a rerun
+	// after step 7, they are where the root is now.
+	Workspace MoveWorkspaceView
+	Parent    *MoveTaskView
+	// ScopedChoice is MoveStoreInput.Scoped, for GUIView.
+	ScopedChoice string
 }
 
 // Label is how the plan names ulid.
@@ -136,9 +150,9 @@ func (e *MoveConfirmError) Unwrap() error { return e.Confirm }
 
 // MovedTask is one task of a move with its id before and after.
 type MovedTask struct {
-	ULID  model.ULID
-	OldID string
-	NewID string
+	ULID  model.ULID `json:"ulid"`
+	OldID string     `json:"old_id"`
+	NewID string     `json:"new_id"`
 }
 
 // MoveStoreResult is what a move did.
@@ -163,6 +177,22 @@ func (ss *Session) PrepareMoveStore(in MoveStoreInput) (MoveView, error) {
 		return MoveView{}, err
 	}
 	return w.plan.View(), nil
+}
+
+// PrepareMovePlan is PrepareMoveStore for the GUI: the plan as GUIView shows
+// it. A scoped entry that applies and no in.Scoped is no error: the plan says
+// scoped.required, and is made as if the entry were not carried.
+func (ss *Session) PrepareMovePlan(in MoveStoreInput) (MovePlanView, error) {
+	in.planOnly = true
+	j, err := ss.openMove(in)
+	if err != nil {
+		return MovePlanView{}, err
+	}
+	w, err := j.load()
+	if err != nil {
+		return MovePlanView{}, err
+	}
+	return w.plan.GUIView(), nil
 }
 
 // MoveStore does the move. Without in.Yes it is confirm.required with the
@@ -196,7 +226,8 @@ func (ss *Session) MoveStore(in MoveStoreInput) (MoveStoreResult, error) {
 	if w, err = j.load(); err != nil {
 		return MoveStoreResult{}, err
 	}
-	if in.Confirmed != nil && !samePlan(*in.Confirmed, w.plan) {
+	if (in.Confirmed != nil && !samePlan(*in.Confirmed, w.plan)) ||
+		(in.ConfirmedView != nil && !samePlanView(*in.ConfirmedView, w.plan.GUIView())) {
 		return MoveStoreResult{}, newErr(KindConflict, "move.changed",
 			errors.New("the tasks changed after the confirmation; run the command again"))
 	}
@@ -426,6 +457,7 @@ func (j *moveJob) load() (*moveWork, error) {
 	}
 	if len(scoped) > 0 {
 		w.plan.Scoped = &ScopedPlan{Projects: projects}
+		w.plan.ScopedChoice = j.in.Scoped
 	}
 
 	// A rerun after step 7: the tasks are in the destination already.
@@ -441,6 +473,9 @@ func (j *moveJob) load() (*moveWork, error) {
 				w.carriedBefore = true
 			}
 		}
+		if e, ok := j.dstIx.Task(w.tasks[0].ULID); ok {
+			w.plan.Workspace, w.plan.Parent = j.placement(e.Workspace, e.Parent)
+		}
 		return w, nil
 	}
 
@@ -448,6 +483,7 @@ func (j *moveJob) load() (*moveWork, error) {
 	if err := j.place(w); err != nil {
 		return nil, err
 	}
+	w.plan.Workspace, w.plan.Parent = j.placement(w.workspace, w.parent)
 	// Step 6: the scoped entries.
 	dest, err := cloneSchemaOf(j.dstIx.Schema())
 	if err != nil {
@@ -456,6 +492,9 @@ func (j *moveJob) load() (*moveWork, error) {
 	if len(scoped) > 0 {
 		switch j.in.Scoped {
 		case "":
+			if j.in.planOnly {
+				break // asked for in the plan: scoped.required
+			}
 			ce := choiceRequired("--scoped", []string{"carry", "drop"})
 			names := make([]string, len(projects))
 			for i, p := range projects {
@@ -490,6 +529,22 @@ func (j *moveJob) load() (*moveWork, error) {
 	}
 	w.plan.Hidden = j.hidden()
 	return w, nil
+}
+
+// placement names the workspace and the parent of the root in the destination.
+func (j *moveJob) placement(ws model.ULID, parent *model.ULID) (MoveWorkspaceView, *MoveTaskView) {
+	wv := MoveWorkspaceView{ULID: ws}
+	if w, ok := j.dstIx.Workspace(ws); ok {
+		wv.Name, wv.Prefix = w.Name, w.IDPrefix
+	}
+	if parent == nil {
+		return wv, nil
+	}
+	pv := &MoveTaskView{ULID: *parent}
+	if e, ok := j.dstIx.Task(*parent); ok {
+		pv.ID, pv.Title = j.dstIx.DisplayID(e), e.Title
+	}
+	return wv, pv
 }
 
 func mustEntry(ix *index.Index, ulid model.ULID) *index.Entry {

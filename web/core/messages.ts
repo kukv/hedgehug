@@ -16,6 +16,13 @@ const list = (a: Args, k: string): string => {
 const withDetail = (text: string, e: ApiError): string =>
   e.detail ? `${text}: ${e.detail}` : text;
 
+// choiceNouns are the words for what the CLI asks to pick with a flag; the GUI
+// picks without the flag.
+const choiceNouns: Record<string, string> = {
+  "--account": "アカウント",
+  "--workspace": "移動先のワークスペース",
+};
+
 const violationLabels: Record<string, string> = {
   unknown_kind: "未定義の種類です",
   unknown_status: "未定義のステータスです",
@@ -86,6 +93,14 @@ const messages: Record<string, Make> = {
   "edit.changed": () => "編集している間にタスクが変わりました。開き直してください",
   "edit.invalid": (a, e) => withDetail(`${str(a, "field") || "入力"} を変更できません`, e),
   "move.invalid": (_, e) => withDetail("ここには移せません", e),
+  "move.changed": () =>
+    "確認のあとに移すタスクが変わりました。予定を取り直して、確かめてから移動してください",
+  "move.same_store": (a) =>
+    `タスクはすでに ${str(a, "store")} にあります。同じ Store の中で移すには、別のワークスペースを選んでください`,
+  "move.store_required": () => "移動先の Store を選んでください",
+  "move.exists": (a) => `${str(a, "ulid")} はすでに ${str(a, "store")} にあります`,
+  "move.unfinished": (a) =>
+    `${str(a, "store")} へは移しましたが、移動元の片付けが終わっていません。もう一度同じ移動をすると完了します`,
   "add.position": (_, e) => withDetail("この位置には作れません", e),
   "position.both": () => "前に置くか後ろに置くか、どちらか一方を指定してください",
   "dep.invalid": (_, e) => withDetail("ブロックの指定を変えられません", e),
@@ -150,6 +165,9 @@ const messages: Record<string, Make> = {
   "store.read_only": (a) =>
     `${str(a, "store")} は読み取り専用です${a.reason ? `（${str(a, "reason")}）` : ""}`,
   "store.bad_name": (a) => `「${str(a, "value")}」は Store の名前に使えません`,
+  "store.bad_color": (a) =>
+    `「${str(a, "value")}」は Store の色に使えません` +
+    (list(a, "candidates") ? `（${list(a, "candidates")}）` : ""),
   "store.exists": (a) => `${str(a, "name")} という Store はすでにあります`,
   "store.not_found": (a) =>
     `${str(a, "name")} という Store はありません` +
@@ -169,6 +187,7 @@ const messages: Record<string, Make> = {
   "store.clone_failed": (a, e) => withDetail(`${str(a, "remote")} を取り込めません`, e),
   "store.not_hedgehug": (a) => `${str(a, "name")} は Hedgehug の Store ではありません`,
   "store.mount_failed": (a) => `追加できなかった Store があります（${list(a, "failed")}）`,
+  "store.set_args": () => "色か表示のどちらかを指定してください",
   "sync.dirty": () => "コミットしていない変更があるため同期できません",
   "sync.unrelated": () => "リモートの履歴がこの Store の履歴と無関係です",
   "sync.force_push": () =>
@@ -199,6 +218,21 @@ const messages: Record<string, Make> = {
   "auth.device_only": (a) =>
     `アカウント ${str(a, "account")} はデバイスフローでログインします。標準入力のトークンは使えません`,
   "auth.name": () => "アカウントの名前が必要です",
+  "auth.login": () => "アカウントの login が必要です",
+  "auth.token_empty": () => "トークンが空です",
+  "auth.token_source": (a) =>
+    `トークンの取得元「${str(a, "token")}」はここでは指定できません。gh か env:<VAR> を指定してください（トークンを貼る、デバイスフローは別の操作です）`,
+  "auth.mismatch": (a) =>
+    `トークンは ${str(a, "host")}/${str(a, "login")} のもので、アカウント ${str(a, "account")} のものではありません`,
+  "auth.client_id": (a) =>
+    `${str(a, "host")} のデバイスフローには、config.yaml の hosts[].client_id が要ります。トークンを貼るか、gh か環境変数を使ってください`,
+  "auth.device_running": () => "デバイスフローがすでに進んでいます",
+  "request.canceled": () => "要求が途中で切れました。もう一度試してください",
+  "auth.device_not_found": () => "そのデバイスフローはすでに終わっているか、ありません",
+  "auth.device_failed": (_, e) => withDetail("デバイスフローでログインできませんでした", e),
+  "auth.canceled": () => "ログインをやめました",
+  "auth.no_device_flow": (a) =>
+    `アカウント ${str(a, "account")} は ${str(a, "uses")} からトークンを得るため、Hedgehug がログインするものはありません`,
   "github.forbidden": (a) =>
     `GitHub がアカウント ${str(a, "account")} の操作を許可しませんでした。権限を確かめてください`,
   "github.not_found": (a) =>
@@ -240,7 +274,10 @@ const messages: Record<string, Make> = {
     "すべてを既読にするか、通知を指定してください（両方は指定できません）",
 
   // choices and confirmations (the CLI asks; the GUI picks first)
-  "choice.required": (a) => `${str(a, "what")} を選んでください（${list(a, "candidates")}）`,
+  "choice.required": (a) =>
+    str(a, "what") === "--scoped"
+      ? `プロジェクト（${list(a, "projects")}）の表示の設定を持っていくか、持っていかないかを選んでください`
+      : `${choiceNouns[str(a, "what")] ?? `${str(a, "what")} `}を選んでください（${list(a, "candidates")}）`,
   "confirm.required": (a) => `${str(a, "what")} には確認が必要です`,
 
   // the server itself

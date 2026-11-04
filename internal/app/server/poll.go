@@ -52,6 +52,16 @@ type viewsChanged struct {
 	Store string `json:"store"`
 }
 
+// configSnapshot is what of config.yaml decides what the GUI shows of the
+// stores: each store (name, path, remotes, account, color, visibility), the
+// accounts and the default store. A look that finds it different tells the
+// clients with stores.changed.
+type configSnapshot struct {
+	Stores   []config.StoreEntry
+	Accounts []config.Account
+	Default  string
+}
+
 type storeState struct {
 	Store string     `json:"store"`
 	Head  string     `json:"head"`
@@ -101,11 +111,13 @@ type Poller struct {
 	// for the tests.
 	openHistory func(*store.Store, history.Options) (*history.History, error)
 
-	pollMu sync.Mutex // one poll at a time; held while reading, not p.mu
+	pollMu sync.Mutex      // one poll at a time; held while reading, not p.mu
+	cfg    *configSnapshot // config.yaml as the last look read it; nil before the first look (pollMu)
 
 	mu       sync.Mutex // the state below
 	stores   map[string]*polled
 	released map[string]bool // stores swapped for a rebuild, to tell the clients once
+	restored map[string]bool // stores let go for a removal that failed; opened again without a word
 	unread   int
 	looked   bool   // a poll has run
 	scanned  bool   // a poll has read the stores to the end (set under mu)
@@ -125,18 +137,27 @@ func newPoller(s *Server, hub *Hub) *Poller {
 func (p *Poller) Release(path string) {
 	p.pollMu.Lock()
 	defer p.pollMu.Unlock()
+	p.releaseLocked(path)
+}
+
+// releaseLocked is Release with pollMu held. It returns the names of the
+// stores it let go of.
+func (p *Poller) releaseLocked(path string) []string {
 	var gone []*polled
+	var names []string
 	p.mu.Lock()
 	for name, st := range p.stores {
 		if !osfs.SamePath(st.path, path) {
 			continue
 		}
 		gone = append(gone, st)
+		names = append(names, name)
 		delete(p.stores, name)
 		if p.released == nil {
 			p.released = map[string]bool{}
 		}
 		p.released[name] = true
+		delete(p.restored, name)
 	}
 	p.mu.Unlock()
 	// The build of the history index reads the files under the directory
@@ -147,6 +168,34 @@ func (p *Poller) Release(path string) {
 		st.stopHistory()
 		_ = st.s.Repo().Close()
 	}
+	return names
+}
+
+// ReleaseFor lets go of the store at path as Release does, and runs fn (the
+// removal of the store: its directory goes) before any poll can look again,
+// so that no poll opens the store again while its config entry is still
+// there. When fn succeeds the store is gone for good, so it is no longer
+// marked as swapped for a rebuild (a store of that name that comes later is
+// new). When fn fails the store is still there: the next poll opens it again
+// without telling the clients anything (it is the same store, not a rebuilt
+// one). fn must not wait for a poll.
+func (p *Poller) ReleaseFor(path string, fn func() error) error {
+	p.pollMu.Lock()
+	defer p.pollMu.Unlock()
+	names := p.releaseLocked(path)
+	err := fn()
+	p.mu.Lock()
+	for _, n := range names {
+		delete(p.released, n)
+		if err != nil {
+			if p.restored == nil {
+				p.restored = map[string]bool{}
+			}
+			p.restored[n] = true
+		}
+	}
+	p.mu.Unlock()
+	return err
 }
 
 // Kick makes the poller look now (after the server marked items read, or a
@@ -199,6 +248,11 @@ func (p *Poller) pollLocked(publish bool) {
 	if err != nil {
 		return
 	}
+	snap := &configSnapshot{Stores: c.Stores, Accounts: c.Accounts, Default: c.DefaultStore}
+	if publish && p.cfg != nil && !reflect.DeepEqual(p.cfg, snap) {
+		p.hub.Publish(storesChanged{})
+	}
+	p.cfg = snap
 	targets, err := ss.SyncTargets(c, true)
 	if errors.Is(err, config.ErrNoStores) {
 		// No store is a look to the end too: the one that comes after it (the first one,
@@ -254,9 +308,11 @@ func (p *Poller) pollLocked(publish bool) {
 			p.mu.Lock()
 			swapped := p.released[e.Name]
 			delete(p.released, e.Name)
+			restored := p.restored[e.Name]
+			delete(p.restored, e.Name)
 			scanned := p.scanned
 			p.mu.Unlock()
-			if (swapped || scanned) && publish {
+			if (swapped || scanned) && !restored && publish {
 				// The store was made again, or it appeared after the first look: the
 				// commits made before this look are not known (a page that made a
 				// task in a store just created would never be told), so the clients

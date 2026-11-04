@@ -29,6 +29,8 @@ func (s *Server) registerEvents() {
 		"notifications.unread": unreadEvent{},
 		"schema.changed":       schemaChanged{},
 		"views.changed":        viewsChanged{},
+		"stores.changed":       storesChanged{},
+		"auth.device":          authDeviceEvent{},
 	}, func(ctx context.Context, _ *struct{}, send sse.Sender) {
 		events, stop := s.hub.subscribe() // before hello: nothing after it is missed
 		defer stop()
