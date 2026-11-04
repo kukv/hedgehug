@@ -29,7 +29,7 @@ HEDGEHUG_UI='http://127.0.0.1:<port>/#token=<token>' pnpm dev
 ```bash
 make web-check      # Biome、svelte-check、API の型、Vitest（make check にも含まれます）
 make e2e            # bin/hedgehug-e2e（-tags e2e でビルド。OS の keychain ではなくファイルの keyring を使う）と bin/fakegh に対する Playwright（Chromium が無ければ入れます）
-make e2e-bin        # その2つのバイナリだけを作る
+make e2e-bin        # GUI とその2つのバイナリだけを作る
 ```
 
 `make web` を通さずに作ったバイナリ（`go build`、`go install`）には GUI が入りません。`hh ui` は、GUI をビルドするよう伝えるページを返します。

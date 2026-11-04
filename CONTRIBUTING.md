@@ -24,7 +24,7 @@ make release-check  # goreleaser config and cross-compiling
 make web            # the GUI into web/dist (the binary embeds it)
 make build          # bin/hedgehug, with the GUI
 make e2e            # Playwright against bin/hedgehug-e2e (built with -tags e2e, file keyring) and bin/fakegh
-make e2e-bin        # build only those two binaries
+make e2e-bin        # build only the GUI and those two binaries
 make clean-cache    # empty the Go build cache when it grows too large
 
 go run ./cmd/hedgehug --version

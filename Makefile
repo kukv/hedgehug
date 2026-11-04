@@ -27,14 +27,15 @@ web-check:
 	cd web && pnpm lint && pnpm check && pnpm test
 
 # Build the binaries the browser tests run: hedgehug with the e2e tag (its keyring
-# is a file in HEDGEHUG_HOME, not the OS keychain; it embeds web/dist, so make web
-# first) and the fake of GitHub.
-e2e-bin:
+# is a file in HEDGEHUG_HOME, not the OS keychain) and the fake of GitHub. hedgehug
+# embeds web/dist, so web is a prerequisite: with make -j, a binary built beside
+# make web would embed the bundle of the build before.
+e2e-bin: web
 	go build -tags e2e -o bin/hedgehug-e2e ./cmd/hedgehug
 	go build -o bin/fakegh ./cmd/fakegh
 
 # Run the browser tests against bin/hedgehug-e2e and bin/fakegh.
-e2e: web e2e-bin
+e2e: e2e-bin
 	cd web && pnpm exec playwright install chromium
 	cd web && pnpm e2e
 

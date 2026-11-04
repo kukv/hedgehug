@@ -29,7 +29,7 @@
 - 取り消しにくい操作（ログアウト、マウントの解除）だけ確認ダイアログ（`ui/Dialog.svelte`）
 - 4f-3 に回したもの（閲覧のみの編集の無効 34〜37、非表示の Store を一覧から外す 38〜40、マイタスク 41〜42、Store 名付きの ID 43、コメントの本人確認 44 の画面側、StoreMove 45〜50）は作らない。この回の「色・表示が GUI で動く」は、`PATCH` で保存され、SettingsStores のカードがそれを映し、`hh store list --json` に出ること（サイドバーの色と非表示は 4f-3 の細部 38〜40）
 - まだない画面への入口は出さない。概要 plan の「作らないもの」は出さず、出さないことをテストで確かめる
-- `svelte-check` は警告ゼロ、`biome ci` は指摘ゼロ。各 Task の終わりに `cd web && pnpm fix && pnpm check && pnpm exec biome ci . && pnpm exec vitest run`（全件）。E2E は `make e2e`（その Task の spec だけを先に `cd web && pnpm exec playwright test e2e/<file>` で流してよい。そのときは `make web e2e-bin` で作ったバイナリを使う。バイナリは web/dist を埋め込むので、`e2e-bin` だけでは古いバンドルで動く）
+- `svelte-check` は警告ゼロ、`biome ci` は指摘ゼロ。各 Task の終わりに `cd web && pnpm fix && pnpm check && pnpm exec biome ci . && pnpm exec vitest run`（全件）。E2E は `make e2e`（その Task の spec だけを先に `cd web && pnpm exec playwright test e2e/<file>` で流してよい。そのときは `make e2e-bin` で作ったバイナリを使う。`e2e-bin` は `web` に依存する: `MAKEFLAGS=-j` の環境で `make web e2e-bin` とすると、2つが並んで走り、バイナリが一つ前のバンドルを埋め込んでいた）
 - Go を変える Task は `go vet ./...`・`gofmt -l .`・`golangci-lint run ./...`・`go test -race ./...` も流す。Go の新しいテストには `t.Parallel()`
 - spec・設計と違う挙動にしたくなったら、実装を止めて報告する（自分で決めない）
 - テストは前面で実行し、Bash の timeout は 600000。落ちたテストは失敗の出力と実行条件を残す
@@ -80,7 +80,7 @@
 - Create: `internal/app/remote/auth/filekeyring.go`、`internal/app/remote/auth/filekeyring_test.go`
 - Create: `internal/app/cli/keyring.go`（`//go:build !e2e`。`mainKeyring(getenv) auth.Keyring` は nil を返す＝OS の keychain）、`internal/app/cli/keyring_e2e.go`（`//go:build e2e`。`auth.FileKeyring(filepath.Join(<HEDGEHUG_HOME>, "e2e-keyring.json"))`。`HEDGEHUG_HOME` が空なら nil ではなく起動の誤りにする）
 - Modify: `internal/app/cli/run.go`（`Main` の `env` に `keyring: mainKeyring(os.Getenv)`）
-- Modify: `Makefile`（`e2e-bin`: `go build -tags e2e -o bin/hedgehug-e2e ./cmd/hedgehug` と `go build -o bin/fakegh ./cmd/fakegh`。`e2e` は `web` と `e2e-bin` に依存する。`.PHONY` に足す）
+- Modify: `Makefile`（`e2e-bin`: `go build -tags e2e -o bin/hedgehug-e2e ./cmd/hedgehug` と `go build -o bin/fakegh ./cmd/fakegh`。`e2e-bin` は `web` に、`e2e` は `e2e-bin` に依存する。`.PHONY` に足す）
 - Modify: `.github/workflows/ci-backend.yaml`（vet か lint の段に `go vet -tags e2e ./internal/app/cli` を足す。タグ付きのファイルが壊れていても今の検査では気づかないため。置く段は今の構成を読んで決める）
 - Modify: `web/e2e/harness.ts`（`BIN` の既定を `bin/hedgehug-e2e`、`FAKEGH` を `bin/fakegh`（`HEDGEHUG_FAKEGH` で上書き）。`binDir` は今のまま（名前が `hedgehug` でなければ symlink を作る）。フィクスチャ `github`（`test.use({ github: true })` の spec だけ fakegh を起動し、`hh` より先に用意して config.yaml に `hosts` を書く。止めるのは `hh` と一緒）。`Hedgehug` に `fakegh(...args)`（`--server` を付けて走らせる）
 - Create: `web/e2e/keyring.spec.ts`（この Task の煙の検査）
