@@ -154,6 +154,19 @@ func TestAddWithoutRecentAndNoTerminalNamesTheCandidates(t *testing.T) {
 	}
 }
 
+func TestAddBranchAnswerThatIsNeitherYesNorNoExitsTwo(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	p := te.addJSON("Login work")
+	te.cloneDir("hh/"+p.ID+"-login", "https://github.com/org-a/web")
+	te.terminal = true
+	te.stdin = "maybe\n"
+	code, _, errs := te.run("add", "child")
+	if code != 2 || !strings.Contains(errs, `"maybe" is not y or n`) {
+		t.Errorf("exit %d, stderr %q; want 2", code, errs)
+	}
+}
+
 func TestAddAsksAboutTheBranch(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kukv/hedgehug/internal/app/cli/prompt"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
@@ -53,7 +54,7 @@ func (a *app) addCmd() *cobra.Command {
 const maxAsks = 4
 
 func (a *app) add(in tasks.AddHereInput) error {
-	in.Context.Interactive = a.isTerminal(a.stdin)
+	in.Context.Interactive = a.ask().Interactive()
 	if a.getwd != nil {
 		dir, err := a.getwd()
 		if err != nil {
@@ -105,25 +106,15 @@ func (a *app) add(in tasks.AddHereInput) error {
 
 // askBranchParent asks whether to add under the task the branch names.
 func (a *app) askBranchParent(q *tasks.BranchQuestion) (bool, error) {
-	if _, err := fmt.Fprintf(a.stderr, "Add as a child of %s %s? [Y/n] ", q.ParentID, q.ParentTitle); err != nil {
-		return false, err
-	}
-	line, err := a.readLine()
-	if err != nil && line == "" {
-		return false, errors.New("canceled")
-	}
-	switch strings.ToLower(strings.TrimSpace(line)) {
-	case "", "y", "yes":
-		return true, nil
-	case "n", "no":
-		return false, nil
-	}
-	return false, usageErrorf("%q is not y or n", strings.TrimSpace(line))
+	return a.ask().Confirm(prompt.YesNo{
+		Question: fmt.Sprintf("Add as a child of %s %s? [Y/n] ", q.ParentID, q.ParentTitle),
+		Default:  true, Canceled: "canceled", Strict: true,
+	})
 }
 
 // askPick lists the options of c on stderr and reads the number of the one to
 // pick; Enter takes the default, if there is one.
 func (a *app) askPick(c *usecase.Choice) (string, error) {
-	prompt := map[string]string{"project": "Project", "store": "Store", "workspace": "Workspace"}[c.What]
-	return a.askChoice(c.Options, choice{labels: c.Labels, prompt: prompt, def: c.Default})
+	promptWord := map[string]string{"project": "Project", "store": "Store", "workspace": "Workspace"}[c.What]
+	return a.ask().Choose(prompt.Choose{Options: c.Options, Labels: c.Labels, Prompt: promptWord, Default: c.Default, Canceled: "canceled"})
 }

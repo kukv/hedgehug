@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kukv/hedgehug/internal/app/cli/prompt"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 )
@@ -27,6 +28,12 @@ func (a *app) readLine() (string, error) {
 		a.in = bufio.NewReader(a.stdin)
 	}
 	return a.in.ReadString('\n')
+}
+
+// ask is the one that asks a person on the terminal. It is made at each use,
+// so that the isTerminal of the env is the one in force.
+func (a *app) ask() prompt.Asker {
+	return prompt.Asker{Out: a.stderr, ReadLine: a.readLine, Terminal: a.isTerminal(a.stdin)}
 }
 
 // usageError is a mistake in the flags or arguments; it exits 2.

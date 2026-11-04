@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kukv/hedgehug/internal/app/cli/prompt"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 )
@@ -34,10 +35,10 @@ func (a *app) storeDiscoverCmd() *cobra.Command {
 func (a *app) storeDiscover(in stores.DiscoverInput, all bool) error {
 	cands, err := stores.StoreDiscover(a.ss, in)
 	// --from with several accounts and none named: on a terminal, ask which.
-	if e := usecase.AsError(err); e != nil && e.Code == "choice.required" && e.Args["what"] == "--account" && a.isTerminal(a.stdin) {
+	if e := usecase.AsError(err); e != nil && e.Code == "choice.required" && e.Args["what"] == "--account" && a.ask().Interactive() {
 		names, _ := e.Args["candidates"].([]string)
 		var picked string
-		if picked, err = a.askChoice(names, choice{question: "Which account do the stores belong to?"}); err != nil {
+		if picked, err = a.ask().Choose(prompt.Choose{Question: "Which account do the stores belong to?", Options: names, Canceled: "canceled"}); err != nil {
 			return err
 		}
 		in.Account = picked
@@ -46,7 +47,7 @@ func (a *app) storeDiscover(in stores.DiscoverInput, all bool) error {
 	if err != nil {
 		return err
 	}
-	terminal := a.isTerminal(a.stdin)
+	terminal := a.ask().Interactive()
 	// With --json, stdout is the JSON alone: what a person reads goes to stderr.
 	list := a.stdout
 	if a.jsonOut {

@@ -15,6 +15,7 @@ import (
 	"github.com/pkg/browser"
 	"golang.org/x/term"
 
+	"github.com/kukv/hedgehug/internal/app/cli/prompt"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
@@ -91,7 +92,8 @@ func run(args []string, e *env) int {
 	}
 	writeErr(e.stderr, err)
 	var ue usageError
-	if errors.As(err, &ue) || usecase.KindOf(err) == usecase.KindUsage || usecase.KindOf(err) == usecase.KindAmbiguous || strings.HasPrefix(err.Error(), "unknown command") {
+	var pe prompt.UsageError
+	if errors.As(err, &ue) || errors.As(err, &pe) || usecase.KindOf(err) == usecase.KindUsage || usecase.KindOf(err) == usecase.KindAmbiguous || strings.HasPrefix(err.Error(), "unknown command") {
 		return 2
 	}
 	return 1

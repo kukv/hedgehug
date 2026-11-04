@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kukv/hedgehug/internal/app/cli/prompt"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
@@ -95,13 +96,13 @@ func (a *app) mvStore(in stores.MoveStoreInput) error {
 			return a.printMoveStore(res, shown)
 		}
 		e := usecase.AsError(err)
-		if e == nil || !a.isTerminal(a.stdin) {
+		if e == nil || !a.ask().Interactive() {
 			return err
 		}
 		switch {
 		case e.Code == "choice.required" && e.Args["what"] == "--workspace":
 			names, _ := e.Args["candidates"].([]string)
-			if in.Workspace, err = a.askChoice(names, choice{question: "Which workspace of " + in.To + "?"}); err != nil {
+			if in.Workspace, err = a.ask().Choose(prompt.Choose{Question: "Which workspace of " + in.To + "?", Options: names, Canceled: "canceled"}); err != nil {
 				return err
 			}
 		case e.Code == "choice.required" && e.Args["what"] == "--scoped":
@@ -127,20 +128,10 @@ func (a *app) mvStore(in stores.MoveStoreInput) error {
 
 // askScoped asks whether the scoped schema of the projects moved goes along.
 func (a *app) askScoped(projects []string) (string, error) {
-	if _, err := fmt.Fprintf(a.stderr, "The scoped schema of %s — [c]arry / [d]rop: ", strings.Join(projects, ", ")); err != nil {
-		return "", err
-	}
-	line, err := a.readLine()
-	if err != nil && line == "" {
-		return "", errors.New("Canceled")
-	}
-	switch strings.ToLower(strings.TrimSpace(line)) {
-	case "c", "carry":
-		return "carry", nil
-	case "d", "drop":
-		return "drop", nil
-	}
-	return "", usageErrorf("%q is not carry or drop", strings.TrimSpace(line))
+	return a.ask().Choose(prompt.Choose{
+		Question: "The scoped schema of " + strings.Join(projects, ", ") + " — ",
+		Options:  []string{"carry", "drop"}, ByWord: true, Canceled: "Canceled",
+	})
 }
 
 // confirmMove shows what a move cuts and says about the history (D8), and
@@ -159,17 +150,8 @@ func (a *app) confirmMove(p stores.MovePlan) error {
 		fmt.Fprintf(&b, "No longer visible to: %s\n", strings.Join(v.Hidden, ", "))
 	}
 	fmt.Fprintf(&b, "Move %s to %s? [y/N] ", plural.Count(len(v.Tasks), "task"), v.To)
-	if _, err := fmt.Fprint(a.stderr, b.String()); err != nil {
-		return err
-	}
-	line, err := a.readLine()
-	if err != nil && line == "" {
-		return errors.New("Canceled")
-	}
-	if ans := strings.ToLower(strings.TrimSpace(line)); ans != "y" && ans != "yes" {
-		return errors.New("Canceled")
-	}
-	return nil
+	_, err := a.ask().Confirm(prompt.YesNo{Question: b.String(), Canceled: "Canceled", Refuse: "Canceled"})
+	return err
 }
 
 // printMoveStore prints a move: a line for each task, or JSON. The scoped

@@ -2,12 +2,12 @@ package cli
 
 import (
 	"cmp"
-	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/kukv/hedgehug/internal/app/cli/prompt"
 	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
@@ -54,7 +54,7 @@ func (a *app) purge(days int, yes bool) error {
 	switch {
 	case yes:
 		res, err = maintenance.Purge(a.ss, days, true)
-	case !a.isTerminal(a.stdin):
+	case !a.ask().Interactive():
 		res, err = maintenance.Purge(a.ss, days, false) // the refusal the operation gives
 	default:
 		if err = a.confirmPurge(plan); err == nil {
@@ -78,17 +78,8 @@ func (a *app) confirmPurge(p maintenance.PurgePlan) error {
 		fmt.Fprintf(&b, "  %s\n", plural.Count(len(p.Forwards), "forward file"))
 	}
 	fmt.Fprintf(&b, "Purge %s and %s from %s for good? [y/N] ", plural.Count(len(p.Tasks), "task"), plural.Count(len(p.Forwards), "forward file"), p.Store)
-	if _, err := fmt.Fprint(a.stderr, b.String()); err != nil {
-		return err
-	}
-	line, err := a.readLine()
-	if err != nil && line == "" {
-		return errors.New("Canceled")
-	}
-	if ans := strings.ToLower(strings.TrimSpace(line)); ans != "y" && ans != "yes" {
-		return errors.New("Canceled")
-	}
-	return nil
+	_, err := a.ask().Confirm(prompt.YesNo{Question: b.String(), Canceled: "Canceled", Refuse: "Canceled"})
+	return err
 }
 
 // printPurged prints what purge removed: a line, or JSON.
