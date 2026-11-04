@@ -233,10 +233,10 @@
 
 **E2E（`my.spec.ts` に足す）:** Store を2つにして両方に自分のタスク → 「ワークスペース」で2つの見出しとバッジ。片方を非表示 → その見出しが消え、「非表示の Store に 1 件（second）」とリンク
 
-- [ ] Step 1: `groups.test.ts` → `groups.ts`
-- [ ] Step 2: `MyTasks.test.ts` → `MyTasks.svelte`
-- [ ] Step 3: `my.spec.ts` を足して通す
-- [ ] Step 4: 検査を流してコミット `feat(web): マイタスクをワークスペース別にまとめ、非表示の Store の件数を出す`
+- [x] Step 1: `groups.test.ts` → `groups.ts`
+- [x] Step 2: `MyTasks.test.ts` → `MyTasks.svelte`
+- [x] Step 3: `my.spec.ts` を足して通す
+- [x] Step 4: 検査を流してコミット `feat(web): マイタスクをワークスペース別にまとめ、非表示の Store の件数を出す`
 
 ---
 

@@ -3,7 +3,10 @@
 //     field (its default is assignee:@me -status:done -status:canceled), the count "<n> ワークスペース ·
 //     <m> 件", and the regions named by their group: "期限切れ", "今日", "今週", "来週以降", "期限なし"
 //     (by due date) or the name of the project, "プロジェクトなし" (by project; the button "まとめ方: …"
-//     opens the menu 期限 / プロジェクト). A row shows the ID and the title as links, and the Store
+//     opens the menu 期限 / ワークスペース / プロジェクト; a workspace group has the badge of its Store
+//     by the name). A row shows the ID and the title as links, and the Store
+//   - a Store that is hidden has its tasks left out, and the text "非表示の Store に <n> 件（<名前>）"
+//     with the link "マウント中の Store を開く" (to /settings/stores) tells how many
 //   - the sidebar ("メインナビゲーション") has the link "マイタスク" with the count of the same query
 //   - a name of the query the server refuses ("status:in_progres") is explained, and the button named
 //     by the right term ("status:in_progress") puts it in the field
@@ -111,4 +114,30 @@ test("a query that names a status wrong offers the right one", async ({ page, hh
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(page.getByRole("link", { name: busy.title })).toBeVisible();
   await expect(page.getByRole("link", { name: "Waiting its turn" })).toHaveCount(0);
+});
+
+test("the tasks are grouped by workspace, and a hidden Store is left out with its count told", async ({
+  page,
+  hh,
+}) => {
+  hh.hh("store", "init", "second", "--prefix", "SC");
+  hh.add("In demo", "-p", `assignees=${ME}`);
+  hh.add("In second", "-p", `assignees=${ME}`, "--store", "second");
+  await hh.open(page, "/my");
+
+  await page.getByRole("button", { name: "まとめ方: 期限" }).click();
+  await page.getByRole("menuitem", { name: "ワークスペース" }).click();
+  const heads = page.getByRole("region").locator(".g-head");
+  await expect(heads).toHaveCount(2);
+  await expect(heads.filter({ hasText: "demo" })).toBeVisible();
+  await expect(heads.filter({ hasText: "second" })).toBeVisible();
+  await expect(page.getByText("非表示の Store に")).toHaveCount(0);
+
+  hh.hh("store", "set", "second", "--hidden=true");
+  await expect(page.getByRole("link", { name: "In second" })).toHaveCount(0);
+  await expect(heads).toHaveCount(1);
+  await expect(page.getByRole("link", { name: "In demo" })).toBeVisible();
+  await expect(page.getByText("非表示の Store に 1 件（second）")).toBeVisible();
+  await page.getByRole("link", { name: "マウント中の Store を開く" }).click();
+  await expect(page).toHaveURL(`${hh.origin}/settings/stores`);
 });

@@ -115,6 +115,48 @@ describe("groupMyTasks by project", () => {
   });
 });
 
+describe("groupMyTasks by workspace", () => {
+  const inWs = (ulid: string, store: string, wsUlid: string, name: string) =>
+    due(ulid, undefined, {
+      store,
+      workspace: { ulid: wsUlid, name, id_prefix: "X" },
+    });
+
+  it("groups by the key store/workspace, in the order given, and the unknown ones last by name", () => {
+    const tasks = [
+      inWs("1", "b", "W2", "Zeta"),
+      inWs("2", "a", "W1", "Beta"),
+      inWs("3", "b", "W9", "Alpha"),
+      inWs("4", "a", "W1", "Beta"),
+      inWs("5", "b", "W8", "Mu"),
+    ];
+    const groups = groupMyTasks(tasks, "workspace", wed, ["a/W1", "b/W2"]);
+    expect(groups.map((g) => [g.key, g.name, g.store, g.tasks.map((t) => t.ulid)])).toEqual([
+      ["a/W1", "Beta", "a", ["2", "4"]],
+      ["b/W2", "Zeta", "b", ["1"]],
+      ["b/W9", "Alpha", "b", ["3"]],
+      ["b/W8", "Mu", "b", ["5"]],
+    ]);
+    expect(groups.every((g) => g.tone === "plain")).toBe(true);
+  });
+
+  it("keeps workspaces of the same name in two stores apart", () => {
+    const tasks = [inWs("1", "a", "W1", "main"), inWs("2", "b", "W1", "main")];
+    expect(groupMyTasks(tasks, "workspace", wed, [])).toHaveLength(2);
+  });
+
+  it("puts the soonest first within a group", () => {
+    const tasks = [
+      { ...inWs("1", "a", "W1", "m"), props: { due: "2026-11-07" } },
+      { ...inWs("2", "a", "W1", "m"), props: { due: "2026-11-05" } },
+    ] as TaskView[];
+    expect(groupMyTasks(tasks, "workspace", wed, [])[0]?.tasks.map((t) => t.ulid)).toEqual([
+      "2",
+      "1",
+    ]);
+  });
+});
+
 describe("workspaceCount", () => {
   it("counts the workspaces the tasks are in, a workspace of another store apart", () => {
     const ws = (store: string, ulid: string) => ({ store, workspace: { ulid } }) as never;

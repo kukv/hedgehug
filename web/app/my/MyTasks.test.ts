@@ -21,7 +21,15 @@ const tasks = [
   t("4", { props: {}, project }),
 ] as TaskView[];
 
-function mount(over: { list?: () => string[]; error?: ApiError | null; loading?: boolean } = {}) {
+function mount(
+  over: {
+    list?: () => string[];
+    error?: ApiError | null;
+    loading?: boolean;
+    hidden?: string[];
+    stores?: { name: string; account?: string }[];
+  } = {},
+) {
   const watchList = vi.fn((_q: { q: string; tree: boolean }) => ({
     ulids: () => (over.list ? over.list() : tasks.map((x) => x.ulid)),
     error: () => over.error ?? null,
@@ -39,9 +47,16 @@ function mount(over: { list?: () => string[]; error?: ApiError | null; loading?:
         task: (u: string) => tasks.find((x) => x.ulid === u),
       },
       stores: {
-        stores: () => [
-          { name: "shared", account: "github.com/alice" },
-          { name: "me", account: "ghe.example.com/alice-corp" },
+        stores: () =>
+          over.stores ?? [
+            { name: "shared", account: "github.com/alice" },
+            { name: "me", account: "ghe.example.com/alice-corp" },
+          ],
+        hidden: (s: string) => over.hidden?.includes(s) ?? false,
+        // the sidebar order: "me" before "shared"
+        workspaces: () => [
+          { store: "me", ulid: "W9", name: "me" },
+          { store: "shared", ulid: "W1", name: "release" },
         ],
         readOnly: () => null,
         tone: (s: string) => (s === "shared" ? "purple" : "teal"),
@@ -154,5 +169,61 @@ describe("MyTasks", () => {
     expect(screen.getByRole("button", { name: /コマンドをコピー/ })).toHaveTextContent(
       `hh ls "${MY_QUERY}"`,
     );
+  });
+
+  it("offers the three groupings in the order of the canvas", async () => {
+    mount();
+    await fireEvent.click(screen.getByRole("button", { name: "まとめ方: 期限" }));
+    expect(screen.getAllByRole("menuitem").map((e) => e.textContent?.trim())).toEqual([
+      "期限",
+      "ワークスペース",
+      "プロジェクト",
+    ]);
+  });
+
+  it("groups by workspace in the order of the sidebar, with the badge of the Store", async () => {
+    mount();
+    await fireEvent.click(screen.getByRole("button", { name: "まとめ方: 期限" }));
+    await fireEvent.click(screen.getByRole("menuitem", { name: "ワークスペース" }));
+    const regions = screen.getAllByRole("region");
+    expect(regions).toHaveLength(2);
+    // "me" is before "shared" in the sidebar
+    expect(within(regions[0] as HTMLElement).getByRole("heading", { name: "me" })).toBeTruthy();
+    expect(within(regions[0] as HTMLElement).getAllByRole("row")).toHaveLength(1);
+    const release = screen.getByRole("region", { name: "release" });
+    expect(within(release).getAllByRole("row")).toHaveLength(3);
+    // the badge is by the name, outside the heading (so the region keeps the name alone)
+    expect(release.querySelector(".g-head")).toHaveTextContent("shared");
+    expect(screen.getByRole("button", { name: "まとめ方: ワークスペース" })).toBeTruthy();
+  });
+
+  describe("a hidden Store", () => {
+    it("leaves its tasks out of the groups and the count, and tells how many with a link", () => {
+      mount({ hidden: ["me"] });
+      expect(screen.queryByText("title 3")).toBeNull();
+      expect(screen.getByText("1 ワークスペース · 3 件")).toBeTruthy();
+      expect(screen.getByText("非表示の Store に 1 件（me）")).toBeTruthy();
+      expect(screen.getByRole("link", { name: "マウント中の Store を開く" })).toHaveAttribute(
+        "href",
+        "/settings/stores",
+      );
+    });
+
+    it("lists the Stores in the order of the directory when there are two", () => {
+      mount({ hidden: ["shared", "me"] });
+      expect(screen.getByText("非表示の Store に 4 件（shared、me）")).toBeTruthy();
+    });
+
+    it("says nothing when no task is of a hidden Store", () => {
+      mount({ hidden: ["other"] });
+      expect(screen.queryByText(/非表示の Store に/)).toBeNull();
+      expect(screen.queryByRole("link", { name: "マウント中の Store を開く" })).toBeNull();
+    });
+
+    it("keeps the notice when every task is of a hidden Store", () => {
+      mount({ hidden: ["shared", "me"] });
+      expect(screen.getByText("一致するタスクはありません")).toBeTruthy();
+      expect(screen.getByText("非表示の Store に 4 件（shared、me）")).toBeTruthy();
+    });
   });
 });

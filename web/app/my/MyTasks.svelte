@@ -2,6 +2,7 @@
   import { cliLs } from "../../core/cli";
   import { formatDate } from "../../core/format";
   import { core } from "../context";
+  import { storeShown } from "../hidden";
   import Icon from "../icons/Icon.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
   import StatusIcon from "../icons/StatusIcon.svelte";
@@ -48,15 +49,36 @@
     cacheRev.current;
     return list?.error() ?? null;
   });
-  const tasks = $derived.by(() => {
+  const found = $derived.by(() => {
     cacheRev.current;
     return (list?.ulids() ?? []).flatMap((u) => c.cache.task(u) ?? []);
+  });
+  // The tasks of a hidden Store are left out here (the query is not changed) and counted per Store
+  // for the notice.
+  const tasks = $derived.by(() => {
+    storesRev.current;
+    return found.filter((t) => storeShown(c.stores, t.store));
+  });
+  const hiddenCounts = $derived.by(() => {
+    storesRev.current;
+    const out: { store: string; n: number }[] = [];
+    for (const s of c.stores.stores()) {
+      const n = found.filter((t) => t.store === s.name && !storeShown(c.stores, t.store)).length;
+      if (n > 0) out.push({ store: s.name, n });
+    }
+    return out;
+  });
+  const hiddenTotal = $derived(hiddenCounts.reduce((sum, h) => sum + h.n, 0));
+  // The order of the sidebar.
+  const workspaceOrder = $derived.by(() => {
+    storesRev.current;
+    return c.stores.workspaces().map((w) => `${w.store}/${w.ulid}`);
   });
   // The date is read again whenever the tasks or the grouping change, so a tab left open over
   // midnight catches up at the next change.
   const grouped = $derived.by(() => {
     const now = new Date();
-    return { now, groups: groupMyTasks(tasks, by, now) };
+    return { now, groups: groupMyTasks(tasks, by, now, workspaceOrder) };
   });
 
   // The category of a status is in the schema of the store of the task.
@@ -92,6 +114,7 @@
   let groupAnchor = $state<HTMLElement | null>(null);
   const groupItems = [
     { value: "due", label: "期限" },
+    { value: "workspace", label: "ワークスペース" },
     { value: "project", label: "プロジェクト" },
   ];
   const groupLabel = $derived(groupItems.find((i) => i.value === by)?.label);
@@ -129,6 +152,16 @@
   </ListBar>
 
   <div class="body">
+    {#if !error && !loading && hiddenTotal > 0}
+      <p class="hidden-note">
+        非表示の Store に {hiddenTotal} 件（{hiddenCounts.map((h) => h.store).join("、")}）
+        <a
+          href={router.href({ name: "settings", page: "stores" })}
+          onclick={(e) => onLinkClick(e, router.href({ name: "settings", page: "stores" }))}
+          >マウント中の Store を開く</a
+        >
+      </p>
+    {/if}
     {#if error}
       <!-- the bar above tells why -->
     {:else if loading}
@@ -146,6 +179,9 @@
         <section class="group" aria-labelledby="my-{g.key}">
           <div class="g-head">
             <h2 id="my-{g.key}" class:alert={g.tone === "alert"}>{g.name}</h2>
+            {#if g.store}
+              <StoreBadge store={g.store} tone={c.stores.tone(g.store)} compact />
+            {/if}
             <span class="sub">{g.tasks.length}</span>
           </div>
           <table>
@@ -239,6 +275,15 @@
     flex-direction: column;
     gap: var(--space-20);
     padding: var(--space-8) var(--gutter) var(--space-20);
+  }
+  .hidden-note {
+    margin: 0;
+    color: var(--muted);
+    font-size: var(--fs-12);
+  }
+  .hidden-note a {
+    margin-left: var(--space-8);
+    color: var(--ink-2);
   }
   .msg {
     margin: 0;

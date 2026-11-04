@@ -5,13 +5,15 @@ import { propText } from "../tree/marks";
 // The filter field may change it; the count of the sidebar always asks this.
 export const MY_QUERY = "assignee:@me -status:done -status:canceled";
 
-export type MyGroupBy = "due" | "project";
+export type MyGroupBy = "due" | "project" | "workspace";
 export type DueBucket = "overdue" | "today" | "week" | "later" | "none";
 export type MyGroup = {
   key: string;
   name: string;
   // alert: the due dates that need the eye (overdue, today)
   tone: "alert" | "plain";
+  // store: the Store of a workspace group (for its badge)
+  store?: string;
   tasks: TaskView[];
 };
 
@@ -61,9 +63,37 @@ function byDue(a: TaskView, b: TaskView): number {
   return x - y;
 }
 
-/** The tasks in groups: by due date (overdue, today, this week, later, none) or by project. */
-export function groupMyTasks(tasks: TaskView[], by: MyGroupBy, today: Date): MyGroup[] {
+/**
+ * The tasks in groups: by due date (overdue, today, this week, later, none), by project, or by
+ * workspace. order is the keys ("store/workspace ulid") of the workspaces in the order of the
+ * sidebar; the ones not in it come last, by name.
+ */
+export function groupMyTasks(
+  tasks: TaskView[],
+  by: MyGroupBy,
+  today: Date,
+  order: readonly string[] = [],
+): MyGroup[] {
   const sorted = [...tasks].sort(byDue);
+  if (by === "workspace") {
+    const byWorkspace = new Map<string, MyGroup>();
+    for (const t of sorted) {
+      const key = `${t.store}/${t.workspace.ulid}`;
+      let g = byWorkspace.get(key);
+      if (!g) {
+        g = { key, name: t.workspace.name, tone: "plain", store: t.store, tasks: [] };
+        byWorkspace.set(key, g);
+      }
+      g.tasks.push(t);
+    }
+    const rank = (g: MyGroup) => {
+      const i = order.indexOf(g.key);
+      return i < 0 ? order.length : i;
+    };
+    return [...byWorkspace.values()].sort(
+      (a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, "ja"),
+    );
+  }
   if (by === "due") {
     return BUCKETS.map((b) => ({
       ...b,
