@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
 
 func TestStoreInit(t *testing.T) {
@@ -17,14 +15,11 @@ func TestStoreInit(t *testing.T) {
 	if !strings.Contains(out, "me") || !strings.Contains(out, te.storeDir("me")) {
 		t.Errorf("stdout = %q, want the name and the path", out)
 	}
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
+	meta := te.uc().StoreMeta("me")
+	if meta.Name != "me" || meta.ULID.IsZero() {
+		t.Errorf("meta = %+v", meta)
 	}
-	if s.Meta().Name != "me" || s.Meta().ULID.IsZero() {
-		t.Errorf("meta = %+v", s.Meta())
-	}
-	if _, ok := s.Schema().Status("review"); ok {
+	if _, ok := te.uc().SchemaOf("me").Status("review"); ok {
 		t.Error("the default store has the review status")
 	}
 	log := te.log("me")
@@ -46,11 +41,7 @@ func TestStoreInitDev(t *testing.T) {
 	t.Parallel()
 	te := newTestEnv(t)
 	te.ok("store", "init", "dev", "--prefix", "DV", "--template", "dev")
-	s, err := store.Open(te.storeDir("dev"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := s.Schema().Status("review"); !ok {
+	if _, ok := te.uc().SchemaOf("dev").Status("review"); !ok {
 		t.Error("a dev store has no review status")
 	}
 }

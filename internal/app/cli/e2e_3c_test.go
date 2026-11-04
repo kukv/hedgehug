@@ -10,9 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 // addTask adds a task with args and returns it.
@@ -27,17 +25,9 @@ func addTask(t *testing.T, u *devUser, title string, args ...string) taskInfo {
 }
 
 // storeLog is the commits of the store name of u, newest first.
-func storeLog(t *testing.T, u *devUser, name string) []gitrepo.LogEntry {
+func storeLog(t *testing.T, u *devUser, name string) []gitrepotest.Commit {
 	t.Helper()
-	s, err := store.Open(filepath.Join(u.home, "stores", name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	log, err := logOf(s.Repo(), 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return log
+	return gitrepotest.Log(t, filepath.Join(u.home, "stores", name), 0)
 }
 
 // taskFilePath is the path, in the work tree of the store name of u, of the
@@ -113,18 +103,9 @@ func TestE2EPhase3c(t *testing.T) {
 	if err := fake.SetPerm("org-b/hh-ops", "bob", "write"); err != nil {
 		t.Fatal(err)
 	}
-	s, err := store.Open(filepath.Join(bob.home, "stores", "org-b"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	acc, err := replicate.ReadAccess(s)
-	if err != nil {
-		t.Fatal(err)
-	}
+	acc := bob.uc().ReadAccess("org-b")
 	acc.Checked = time.Now().Add(-10 * time.Minute)
-	if err := replicate.WriteAccess(s, acc); err != nil {
-		t.Fatal(err)
-	}
+	bob.uc().WriteAccess("org-b", acc)
 	bob.ok("sync")
 
 	// bob edits and comments on the child before the move, and does not push.
@@ -235,14 +216,4 @@ func overwrittenNaming(t *testing.T, u *devUser, ulid string) []string {
 		}
 	}
 	return out
-}
-
-// logOf is the first-parent log of HEAD of r, newest first, capped at limit
-// when it is above zero.
-func logOf(r *gitrepo.Repo, limit int) ([]gitrepo.LogEntry, error) {
-	head, err := r.Head()
-	if err != nil {
-		return nil, err
-	}
-	return r.LogFrom(head, limit)
 }

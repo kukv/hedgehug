@@ -8,8 +8,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 // breakStore makes the store name stop opening: its repository goes away.
@@ -115,16 +114,9 @@ func TestStoreFlagKeepsOtherBrokenStoresQuiet(t *testing.T) {
 func TestLsStatusOfAnotherSchema(t *testing.T) {
 	t.Parallel()
 	te := newTwoStoreEnv(t)
-	s, err := store.Open(te.storeDir("alpha"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	sc := schema.Default()
 	sc.Statuses = append(sc.Statuses, schema.Status{Name: "review", Category: schema.CategoryDoing})
-	author := gitrepo.Signature{Name: "Alice", Email: "alice@example.com"}
-	if _, err := s.Update(store.Op{Name: "update", Author: author}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
-		t.Fatal(err)
-	}
+	te.uc().MustEdit("alpha", "update", usecasetest.AliceAuthor, func(tx *usecasetest.Tx) error { return tx.PutSchema(sc) })
 	te.addJSON("--store", "alpha", "Alpha reviewed", "--status", "review")
 	te.goldenOK("status", "ls", "status:review")
 	te.goldenOK("not-status", "ls", "--", "-status:review")

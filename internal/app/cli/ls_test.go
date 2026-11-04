@@ -5,8 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/app/storage/index"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
@@ -204,15 +202,7 @@ func TestDescribe(t *testing.T) {
 	a := te.addJSON("Alpha")
 	b := te.addJSON("Beta")
 	te.handEdit("me", b.ID, "id: "+b.ID, "id: "+a.ID) // two tasks with one id
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ix, err := index.Open(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = (&usecase.Session{}).Resolve(ix, a.ID)
+	err := te.uc().ResolveErr(a.ID)
 	if usecase.KindOf(err) != usecase.KindAmbiguous {
 		t.Fatalf("Resolve(%s) = %v; want an ambiguous error", a.ID, err)
 	}

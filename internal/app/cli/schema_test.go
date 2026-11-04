@@ -8,8 +8,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 // writeSchemaFile replaces schema.yaml of the store me with the default
@@ -25,14 +24,7 @@ func (te *testEnv) writeSchemaFile(edit func(*schema.Schema)) {
 	if err := os.WriteFile(filepath.Join(te.storeDir("me"), "schema.yaml"), b, 0o600); err != nil {
 		te.t.Fatal(err)
 	}
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		te.t.Fatal(err)
-	}
-	author := gitrepo.Signature{Name: "Alice", Email: "alice@example.com"}
-	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{"schema.yaml"}, Subject: "raw", Author: author, When: te.now}); err != nil {
-		te.t.Fatal(err)
-	}
+	gitrepotest.CommitFiles(te.t, te.storeDir("me"), "raw", "Alice", "alice@example.com", te.now, "schema.yaml")
 }
 
 func TestSchemaCheckNoProblems(t *testing.T) {

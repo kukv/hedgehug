@@ -8,25 +8,17 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 // putSchema writes the schema of the store me after edit changes the
 // default one.
 func (te *testEnv) putSchema(edit func(*schema.Schema)) {
 	te.t.Helper()
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		te.t.Fatal(err)
-	}
 	sc := schema.Default()
 	edit(sc)
-	author := gitrepo.Signature{Name: "Alice", Email: "alice@example.com"}
-	if _, err := s.Update(store.Op{Name: "update", Author: author}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
-		te.t.Fatal(err)
-	}
+	te.uc().MustEdit("me", "update", usecasetest.AliceAuthor, func(tx *usecasetest.Tx) error { return tx.PutSchema(sc) })
 }
 
 func (te *testEnv) schemaFile() string {

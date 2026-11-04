@@ -7,8 +7,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func TestStoreInitConfigWriteFailureLeavesNoStore(t *testing.T) {
@@ -38,16 +37,9 @@ func TestStatusRejectedByTransitionAddsNoCommit(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("Alpha")
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	sc := schema.Default()
 	sc.Workflow.Transitions = schema.Lists{{Key: "todo", Values: []string{"in_progress"}}}
-	author := gitrepo.Signature{Name: "Alice", Email: "alice@example.com"}
-	if _, err := s.Update(store.Op{Name: "update", Author: author}, func(tx *store.Tx) error { return tx.PutSchema(sc) }); err != nil {
-		t.Fatal(err)
-	}
+	te.uc().MustEdit("me", "update", usecasetest.AliceAuthor, func(tx *usecasetest.Tx) error { return tx.PutSchema(sc) })
 	before := len(te.log("me"))
 	code, _, stderr := te.run("status", a.ID, "done")
 	if code != 1 || !strings.HasPrefix(stderr, "hedgehug: ") {

@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/testenv"
 )
 
@@ -17,22 +16,12 @@ import (
 func waitChildDone(t *testing.T, te *testEnv) {
 	t.Helper()
 	state := filepath.Join(te.storeDir("org"), ".hedgehug", "local", "sync.json")
-	s, err := store.Open(te.storeDir("org"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	testenv.WaitFor(t, "the background child to finish", func() bool {
 		b, err := os.ReadFile(state) //nolint:gosec // the state of the test
 		if err != nil || strings.Contains(string(b), "pending_since") {
 			return false
 		}
-		free := true
-		for _, l := range []string{"bg.lock", "sync.lock"} {
-			if s.WithLocalLock(l, 0, func() error { return nil }) != nil {
-				free = false
-			}
-		}
-		return free
+		return te.uc().LocksFree("org", "bg.lock", "sync.lock")
 	})
 }
 

@@ -1,13 +1,9 @@
 package cli
 
 import (
-	"bytes"
-	"os"
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/app/storage/history"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
@@ -15,25 +11,7 @@ import (
 // there and already at HEAD: opening it again changes nothing on disk.
 func requireHistoryAtHead(t *testing.T, te *testEnv, name string) {
 	t.Helper()
-	s, err := store.Open(te.storeDir(name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = s.Repo().Close() }()
-	before, err := os.ReadFile(s.LocalPath("history"))
-	if err != nil {
-		t.Fatalf("the history index of %s was not built: %v", name, err)
-	}
-	if _, err := history.Open(s, history.Options{}); err != nil {
-		t.Fatal(err)
-	}
-	after, err := os.ReadFile(s.LocalPath("history"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(before, after) {
-		t.Errorf("the history index of %s was not at HEAD", name)
-	}
+	te.uc().HistoryAtHead(name)
 }
 
 // store add builds the history index of the store it cloned.

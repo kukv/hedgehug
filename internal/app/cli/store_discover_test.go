@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
@@ -35,9 +34,7 @@ func TestDiscoverFrom(t *testing.T) {
 		"https://github.com/org-b/hh-ops.git":    "OPS",
 	})
 	// A bare that is not a store is not offered.
-	if err := gitrepo.InitBare(filepath.Join(remotes, "org-a", "web.git")); err != nil {
-		t.Fatal(err)
-	}
+	gitrepotest.Bare(t, filepath.Join(remotes, "org-a", "web.git"))
 	te := newTestEnv(t)
 	te.writeConfigYAML(rewriteTo(remotes))
 	out := te.ok("store", "discover", "--from", remotes)

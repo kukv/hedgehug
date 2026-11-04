@@ -4,8 +4,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
 
 // A swap that stopped (the store moved away, the rebuilt one not yet in its
@@ -28,8 +26,8 @@ func TestDoctorFixFinishesAStoppedRewriteSwap(t *testing.T) {
 	if code, out, stderr := te.run("doctor", "--fix"); code != 0 || !strings.Contains(out, "No problems") {
 		t.Errorf("--fix: exit %d\nstdout %s\nstderr %s", code, out, stderr)
 	}
-	if left, err := store.FindLeftover(dir); err != nil || !left.None() {
-		t.Errorf("leftover = %+v, %v", left, err)
+	if err := te.uc().NoLeftover(dir); err != nil {
+		t.Errorf("leftover = %v", err)
 	}
 	if out := te.ok("ls"); !strings.Contains(out, "Alpha") {
 		t.Errorf("ls after the fix:\n%s", out)

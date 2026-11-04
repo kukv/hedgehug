@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
@@ -36,19 +35,11 @@ func label(j usecase.TaskView) string { return j.ID + " (" + j.ULID + ")" }
 // task reads the task file of ulid from the store.
 func (te *testEnv) task(ulid string) *model.Task {
 	te.t.Helper()
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		te.t.Fatal(err)
-	}
 	taskULID, err := model.ParseULID(ulid)
 	if err != nil {
 		te.t.Fatal(err)
 	}
-	t, err := s.Task(taskULID)
-	if err != nil {
-		te.t.Fatal(err)
-	}
-	return t
+	return te.uc().TaskByULID("me", taskULID)
 }
 
 func TestAdd(t *testing.T) {

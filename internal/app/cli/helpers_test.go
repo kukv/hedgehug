@@ -19,8 +19,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/zalando/go-keyring"
 
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 	"github.com/kukv/hedgehug/internal/lib/testenv"
 )
 
@@ -39,6 +39,18 @@ type testEnv struct {
 	dir      string            // the current directory of the runs; "" for none
 
 	beforeUpdate func() // Session.BeforeUpdate of the next runs; meanwhile sets it
+
+	ucOnce sync.Once
+	ucSess *usecasetest.Session
+}
+
+// uc is a session over the directories of the environment, to prepare and
+// check what the command wrote. It is made on first use.
+func (te *testEnv) uc() *usecasetest.Session {
+	te.ucOnce.Do(func() {
+		te.ucSess = usecasetest.Attach(te.t, te.getenv, func() time.Time { return te.now })
+	})
+	return te.ucSess
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -308,14 +320,7 @@ func (te *testEnv) handEdit(name, id, old, replacement string) { //nolint:unpara
 	if err := os.WriteFile(filepath.Join(dir, rel), []byte(strings.Replace(string(b), old, replacement, 1)), 0o600); err != nil {
 		te.t.Fatal(err)
 	}
-	r, err := gitrepo.Open(dir)
-	if err != nil {
-		te.t.Fatal(err)
-	}
-	c := gitrepo.Commit{Paths: []string{filepath.ToSlash(rel)}, Subject: "hand edit", Author: gitrepo.Signature{Name: "Alice", Email: "alice@example.com"}, When: te.now}
-	if _, err := r.Commit(c); err != nil {
-		te.t.Fatal(err)
-	}
+	gitrepotest.CommitFiles(te.t, dir, "hand edit", "Alice", "alice@example.com", te.now, filepath.ToSlash(rel))
 }
 
 var (
@@ -366,9 +371,7 @@ func goBuildArgs(out, pkg string) []string {
 func (te *testEnv) bare(name string) string {
 	te.t.Helper()
 	dir := filepath.Join(filepath.Dir(te.hhHome), name+".git")
-	if err := gitrepo.InitBare(dir); err != nil {
-		te.t.Fatal(err)
-	}
+	gitrepotest.Bare(te.t, dir)
 	return dir
 }
 
@@ -428,7 +431,7 @@ func (te *testEnv) setSyncError(name, msg string) {
 // stubSpawn replaces the start of the background sync with f, which gets the
 // arguments of the child.
 func stubSpawn(f func(args []string)) (restore func()) {
-	return replicate.SetSpawn(func(_ string, args []string, _ string) error { f(args); return nil })
+	return usecasetest.StubSpawn(f)
 }
 
 // runBinary runs the built command with the variables of the test, and

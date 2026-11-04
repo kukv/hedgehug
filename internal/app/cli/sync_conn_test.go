@@ -9,7 +9,6 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
 
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
@@ -17,14 +16,12 @@ func TestSyncThroughRewrite(t *testing.T) {
 	t.Parallel()
 	te := newTestEnv(t)
 	remotes := filepath.Join(t.TempDir(), "remotes")
-	if err := gitrepo.InitBare(filepath.Join(remotes, "org-a", "x.git")); err != nil {
-		t.Fatal(err)
-	}
+	gitrepotest.Bare(t, filepath.Join(remotes, "org-a", "x.git"))
 	te.writeConfigYAML("url_rewrites:\n  - {from: \"https://github.com/\", to: \"" + filepath.ToSlash(remotes) + "/\"}\n")
 	te.ok("store", "init", "me", "--prefix", "ME", "--remote", "https://github.com/org-a/x.git")
 	te.ok("add", "one")
 	te.ok("sync")
-	if ok, err := gitrepo.HeadHasFile(filepath.Join(remotes, "org-a", "x.git"), ".hedgehug/store.yaml"); err != nil || !ok {
+	if ok, err := gitrepotest.HeadHasFile(filepath.Join(remotes, "org-a", "x.git"), ".hedgehug/store.yaml"); err != nil || !ok {
 		t.Errorf("the remote has no store: %v %v", ok, err)
 	}
 	b, _ := os.ReadFile(filepath.Join(te.storeDir("me"), ".git", "config"))
@@ -36,9 +33,7 @@ func TestSyncThroughRewrite(t *testing.T) {
 func TestSyncSendsToken(t *testing.T) {
 	te := newTestEnv(t)
 	d := t.TempDir()
-	if err := gitrepo.InitBare(filepath.Join(d, "org-a", "x.git")); err != nil {
-		t.Fatal(err)
-	}
+	gitrepotest.Bare(t, filepath.Join(d, "org-a", "x.git"))
 	var sessions []gitrepotest.Session
 	// Not a GitHub host: store init (Task 9) makes no repository there.
 	gitrepotest.InstallHTTPSSessions(t, gitrepotest.Under("https://git.example.com/", d), &sessions, nil)
@@ -87,9 +82,7 @@ func TestTokenGoesToTheRewrittenHost(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			te := newTestEnv(t)
 			d := t.TempDir()
-			if err := gitrepo.InitBare(filepath.Join(d, "org-a", "x.git")); err != nil {
-				t.Fatal(err)
-			}
+			gitrepotest.Bare(t, filepath.Join(d, "org-a", "x.git"))
 			var auths []transport.AuthMethod
 			route := func(u string) (string, bool) {
 				for _, h := range []string{"git.example.com", "other.example.com"} {
@@ -124,9 +117,7 @@ func TestTokenGoesToTheRewrittenHost(t *testing.T) {
 func TestSyncWithoutTheTokenSaysWhy(t *testing.T) {
 	te := newTestEnv(t)
 	d := t.TempDir()
-	if err := gitrepo.InitBare(filepath.Join(d, "org-a", "x.git")); err != nil {
-		t.Fatal(err)
-	}
+	gitrepotest.Bare(t, filepath.Join(d, "org-a", "x.git"))
 	gitrepotest.InstallHTTPS(t, gitrepotest.Under("https://git.example.com/", d), nil, nil)
 	te.writeConfigYAML("accounts:\n  - {name: me, host: git.example.com, login: alice, token: \"env:HH_TOKEN\"}\n")
 	code, _, errs := te.run("store", "init", "me", "--prefix", "ME", "--remote", "https://git.example.com/org-a/x.git")

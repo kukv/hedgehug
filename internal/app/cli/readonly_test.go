@@ -7,10 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
@@ -19,13 +17,7 @@ func TestReadOnlyRefusesWrites(t *testing.T) {
 	te := newTestEnv(t)
 	te.ok("store", "init", "me", "--prefix", "ME")
 	te.ok("add", "one")
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := replicate.WriteAccess(s, replicate.Access{ReadOnly: true, Reason: replicate.ReasonGitHub, Checked: te.now}); err != nil {
-		t.Fatal(err)
-	}
+	te.uc().WriteAccess("me", usecasetest.Access{ReadOnly: true, Reason: usecasetest.ReasonGitHub, Checked: te.now})
 	for _, args := range [][]string{
 		{"add", "two"},
 		{"set", "ME-1", "title=x"},
@@ -94,9 +86,7 @@ func TestSyncShowsUnpushable(t *testing.T) {
 	t.Parallel()
 	te := newTestEnv(t)
 	bare := filepath.Join(t.TempDir(), "x.git")
-	if err := gitrepo.InitBare(bare); err != nil {
-		t.Fatal(err)
-	}
+	gitrepotest.Bare(t, bare)
 	te.ok("store", "init", "me", "--prefix", "ME", "--remote", bare)
 	te.ok("add", "one")
 	gitrepotest.LockObjects(t, bare) // skips the test where there are no read-only directories
@@ -118,18 +108,10 @@ func TestSyncStatusShowsGitHubReadOnlyAndUnpushed(t *testing.T) {
 	t.Parallel()
 	te := newTestEnv(t)
 	bare := filepath.Join(t.TempDir(), "x.git")
-	if err := gitrepo.InitBare(bare); err != nil {
-		t.Fatal(err)
-	}
+	gitrepotest.Bare(t, bare)
 	te.ok("store", "init", "me", "--prefix", "ME", "--remote", bare)
 	te.ok("add", "one")
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := replicate.WriteAccess(s, replicate.Access{ReadOnly: true, Reason: replicate.ReasonGitHub, Checked: te.now}); err != nil {
-		t.Fatal(err)
-	}
+	te.uc().WriteAccess("me", usecasetest.Access{ReadOnly: true, Reason: usecasetest.ReasonGitHub, Checked: te.now})
 	out := te.ok("sync", "--status")
 	if !strings.Contains(out, "read-only:     the GitHub permission is read") || !strings.Contains(out, "1 commit not pushed") {
 		t.Errorf("status = %q", out)
@@ -140,21 +122,13 @@ func TestSyncPrintsUnpushable(t *testing.T) {
 	t.Parallel()
 	te := newTestEnv(t)
 	bare := filepath.Join(t.TempDir(), "x.git")
-	if err := gitrepo.InitBare(bare); err != nil {
-		t.Fatal(err)
-	}
+	gitrepotest.Bare(t, bare)
 	te.ok("store", "init", "me", "--prefix", "ME", "--remote", bare)
 	te.ok("add", "one")
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	// An explicit sync judges a read-only store again, so the bare is
 	// really not writable.
 	gitrepotest.LockObjects(t, bare)
-	if err := replicate.WriteAccess(s, replicate.Access{ReadOnly: true, Reason: replicate.ReasonNotWritable, Checked: te.now}); err != nil {
-		t.Fatal(err)
-	}
+	te.uc().WriteAccess("me", usecasetest.Access{ReadOnly: true, Reason: usecasetest.ReasonNotWritable, Checked: te.now})
 	out := te.ok("sync")
 	if !strings.Contains(out, "read-only: 1 commit not pushed") {
 		t.Errorf("sync = %q", out)

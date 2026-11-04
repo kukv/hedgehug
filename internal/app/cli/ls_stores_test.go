@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
@@ -140,13 +139,9 @@ func TestLsTreeCycleAcrossStores(t *testing.T) {
 	x := te.addJSON("--store", "me", "X")
 	y := te.addJSON("--store", "me", "Y", "--parent", x.ID)
 	te.addJSON("--store", "bravo", "Plain")
-	s, err := store.Open(te.storeDir("me"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	xULID, _ := model.ParseULID(x.ULID)
 	yULID, _ := model.ParseULID(y.ULID)
-	writeCycle(t, te, s, xULID, yULID)
+	te.uc().WriteCycle("me", xULID, yULID)
 	te.goldenOK("tree", "ls", "--tree")
 	te.goldenOK("tree-one", "ls", "--tree", "store:me")
 	out := te.ok("ls", "--tree")

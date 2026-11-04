@@ -12,9 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/remote/replicate"
-	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 // run runs hedgehug in dir with its stdin not a terminal and returns the exit
@@ -88,15 +86,12 @@ func TestE2EPhase3b(t *testing.T) {
 	// sync can leave two stores with one prefix; store init refuses it.
 	alice.ok("workspace", "add", "web", "--prefix", "WEB", "--store", "org-a")
 	alice.ok("workspace", "add", "api", "--prefix", "API", "--store", "org-b")
-	orgB, err := store.Open(filepath.Join(alice.home, "stores", "org-b"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := orgB.Update(store.Op{Name: "update", Author: gitrepo.Signature{Name: "T", Email: "t@example.com"}}, func(tx *store.Tx) error {
-		for w, err := range orgB.Workspaces() {
-			if err != nil {
-				return err
-			}
+	alice.uc().MustEdit("org-b", "update", usecasetest.TAuthor, func(tx *usecasetest.Tx) error {
+		ws, err := tx.Workspaces()
+		if err != nil {
+			return err
+		}
+		for _, w := range ws {
 			if w.IDPrefix == "OPS" {
 				w.IDPrefix = "ORG"
 				if err := tx.PutWorkspace(w); err != nil {
@@ -105,9 +100,7 @@ func TestE2EPhase3b(t *testing.T) {
 			}
 		}
 		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 	alice.ok("add", "web task", "--store", "org-a", "--workspace", "web")                                        // WEB-1
 	alice.ok("add", "api task", "--store", "org-b", "--workspace", "api")                                        // API-1
 	alice.ok("add", "ops task", "--store", "org-b", "--workspace", "org-b")                                      // ORG-1 of org-b
@@ -274,30 +267,11 @@ func TestE2EPhase3b(t *testing.T) {
 	if err := fake.SetPerm("org-a/hh-shared", "bob", "none"); err != nil {
 		t.Fatal(err)
 	}
-	orgA, err := store.Open(filepath.Join(alice.home, "stores", "org-a"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	old := time.Now().Add(-10 * time.Minute) // the interval between two checks has passed
-	acc, err := replicate.ReadAccess(orgA)
-	if err != nil {
-		t.Fatal(err)
-	}
-	acc.Checked = old
-	if err := replicate.WriteAccess(orgA, acc); err != nil {
-		t.Fatal(err)
-	}
-	mem, err := replicate.ReadMembers(orgA)
-	if err != nil {
-		t.Fatal(err)
-	}
-	mem.Checked = old
-	if err := replicate.WriteMembers(orgA, mem); err != nil {
-		t.Fatal(err)
-	}
+	alice.uc().AgeChecks("org-a", old)
 	alice.ok("sync")
-	if mem, err := replicate.ReadMembers(orgA); err != nil || mem.Collaborators == nil || slices.ContainsFunc(mem.Collaborators, func(c replicate.Collaborator) bool { return strings.HasSuffix(c.ID, "/bob") }) {
-		t.Errorf("members.json after the sync: %+v (%v), want collaborators without bob", mem, err)
+	if mem, known := alice.uc().ReadMembers("org-a"); !known || slices.ContainsFunc(mem, func(c usecasetest.Member) bool { return strings.HasSuffix(c.ID, "/bob") }) {
+		t.Errorf("members.json after the sync: %+v (%v), want collaborators without bob", mem, known)
 	}
 	if _, errs := alice.okIn("", "comment", "add", "WEB-1", "again @bob"); !strings.Contains(errs, "warning: bob cannot read org-a") {
 		t.Errorf("a mention of someone who cannot read: %q", errs)

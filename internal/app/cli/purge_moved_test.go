@@ -7,8 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
 )
 
 // storeTaskFile is the path and content of the file of the task id in the store
@@ -68,13 +67,7 @@ func TestDuplicateAcrossStoresIsAWarning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := store.Open(te.storeDir("alpha"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{filepath.ToSlash(rel)}, Subject: "raw", Author: gitrepo.Signature{Name: "Alice", Email: "alice@example.com"}, When: te.now}); err != nil {
-		t.Fatal(err)
-	}
+	gitrepotest.CommitFiles(t, te.storeDir("alpha"), "raw", "Alice", "alice@example.com", te.now, filepath.ToSlash(rel))
 	te.goldenRun("doctor", 1, "doctor")
 	te.goldenRun("doctor-json", 1, "doctor", "--json")
 	code, _, stderr := te.run("sync", "--store", "alpha")
@@ -122,13 +115,7 @@ func TestDoctorFixShowsTheRenumberedIDOfADuplicate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := store.Open(te.storeDir("alpha"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Repo().Commit(gitrepo.Commit{Paths: []string{filepath.ToSlash(rel)}, Subject: "raw", Author: gitrepo.Signature{Name: "Alice", Email: "alice@example.com"}, When: te.now}); err != nil {
-		t.Fatal(err)
-	}
+	gitrepotest.CommitFiles(t, te.storeDir("alpha"), "raw", "Alice", "alice@example.com", te.now, filepath.ToSlash(rel))
 	// the moved task takes the id of an older one in bravo-long
 	te.handEdit("bravo-long", "BB-3", "id: BB-3", "id: BB-1")
 	_, out, _ := te.run("doctor", "--fix", "--json")
