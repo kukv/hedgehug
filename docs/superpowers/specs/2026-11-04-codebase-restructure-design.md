@@ -30,6 +30,8 @@
 | 10 | PR | 6 つに分け、機械的な移動を最初に行う。最後の PR 6 は、完了後のパッケージ構成を見て利用者が最終判断をする回（6 節。PR 6 は 2026-11-04 利用者が追加） |
 | 11 | cli・server のテスト | テストも usecase を通す。データの準備と書き込み結果の確認を usecase の操作で書き直し、4.2 のルールをテストにもかける。回 4 で本体と一緒に行う（2026-11-04 利用者が決定） |
 | 12 | テスト用の部品 | `lib/testenv`・`lib/fakegh`・`lib/gitrepo/gitrepotest`・`storage/history/historytest` は、どの層のテストからも import してよい（2026-11-04 利用者が決定） |
+| 13 | 領域の操作の呼び方 | Go では別パッケージに `Session` のメソッドを置けないため、領域の操作は `tasks.Assign(ss, in)` のように `*usecase.Session` を引数に取る関数にする（2026-11-04 利用者が決定。領域ごとに Session を包む型を作る案は採らない） |
+| 14 | usecase のテスト | 共通のテストの補助を `usecase/usecasetest` に切り出し、決定 12 の部品に加える。usecase のテストは、コードと一緒に PR 3 で領域へ移す（2026-11-04 利用者が決定） |
 
 ## 1. 今の状態（main f965465）
 
@@ -127,6 +129,9 @@ api/openapi.yaml            今のまま
 
 領域どうしの import は、土台を通すのを基本にする。領域から別の領域を呼ぶ必要が出たら、その関数を土台に下ろす。
 
+- 領域の操作は `*usecase.Session` を最初の引数に取る関数にする（決定 13）。cli・server・テストの `ss.Assign(in)` は `tasks.Assign(ss, in)` に書き換える。
+- 領域から使う土台の関数で、今は非公開のものは公開する。
+
 ## 3. OS の境界（提案 D）
 
 今、OS に触る呼び出しは次のとおり（テストを除く）。
@@ -183,7 +188,7 @@ CLI の本体を `internal/app/cli` に移し、`cmd/hedgehug/main.go` は `cli.
 - depguard の層のルールはテストのファイルにもかける。例外は決定 12 のテスト用の部品だけ。
 - `final_review_test.go`・`final_fixes_test.go`（ops）と `final_review_test.go`（cmd）は、中のテストを、試している操作のテストファイルに配り直す。
 - コマンドをまたぐ通しのテスト（`e2e_test`・`e2e_3a`・`e2e_3b`・`e2e_3c`・`scenario_test`・`golden_test`）を `cli/scenario` に移す。
-- ops のテストは 2.3 の領域ごとに分ける。
+- ops のテストは 2.3 の領域ごとに分ける。コードと一緒に PR 3 で移す（決定 14）。共通の補助は `usecase/usecasetest` に置く。
 
 ## 6. 入れる順番
 
@@ -193,7 +198,7 @@ CLI の本体を `internal/app/cli` に移し、`cmd/hedgehug/main.go` は `cli.
 | --- | --- | --- |
 | 1. 移動と改名 | 2.2 の行き先へ移す（mount と context は解体まで `usecase/mount`・`usecase/current` に仮置きする。doctor はこの時点で `usecase/maintenance` に置く）。名前の変更、F、CI の shard のパスの書き換え | 変わらない |
 | 2. OS の境界 | 3 節。github を `github.Options`（API と web の URL）で受け取る形にし、平文 HTTP の判定（IsLoopback・PlainHTTP）を config から github に移す（2026-11-04 利用者が決定）。forbidigo を有効にする | 変わらない |
-| 3. usecase の再編 | mount と context の解体（2.2）、途中残りの検出を storage/store へ、2.3 の領域分け | 変わらない |
+| 3. usecase の再編 | mount と context の解体（2.2）、途中残りの検出を storage/store へ、2.3 の領域分け、領域の操作を関数にする（決定 13）、usecase のテストを領域へ移す（決定 14） | 変わらない |
 | 4. 入口の境界 | 4.2〜4.4。cli・server のテストの書き直し（決定 11）。cli・server の depguard のルール（4.2、テストを含む）を有効にする | 4.3 の 2 か所だけ変わる |
 | 5. テストと仕上げ | 5 節、depguard の残りのルール（2 節の層の向き）を有効にする、shard の見直し、親設計の書き直し（8 節） | 変わらない |
 | 6. 最終確認 | PR 5 のマージ後の main で `go list` から層別のパッケージ構成と依存を作り直し、層別構成の Artifact（https://claude.ai/artifact/WFTVztg3Wvhgj4UnCwzsiH）を更新する。2.1 の配置・2 節の層の向き・4.2 の禁止と突き合わせ、ずれと層の向きに反する依存の一覧を添えて利用者に見せる。利用者が最終判断をする。直すものが出たら、この PR で直す | 変わらない |
