@@ -107,6 +107,8 @@
   async function search(from: string): Promise<void> {
     const mine = ++seq;
     phase = "loading";
+    // Rows of an older search are not on the screen, so they cannot be chosen or mounted.
+    rows = [];
     failure = null;
     mountFailure = null;
     const query: { account?: string; from?: string } = {};
@@ -144,7 +146,7 @@
   }
 
   async function mount(): Promise<void> {
-    if (busy) return;
+    if (busy || phase !== "done") return;
     const sent: Row[] = [];
     let unnamed = 0;
     for (const r of chosen) {
@@ -205,7 +207,7 @@
     <p class="note">探しています…</p>
   {:else if phase === "error"}
     <FormError message={failure ?? ""} />
-    <div><Button onclick={() => search(looked)}>もう一度探す</Button></div>
+    <div><Button disabled={busy} onclick={() => search(looked)}>もう一度探す</Button></div>
   {:else if phase === "done"}
     <p class="note">
       {#if looked}
@@ -292,9 +294,7 @@
           </select>
         </div>
       {/if}
-      <Button onclick={searchFolder} disabled={phase === "loading" || folder.trim() === ""}>
-        探す
-      </Button>
+      <Button onclick={searchFolder} disabled={busy || folder.trim() === ""}> 探す </Button>
     </div>
     {#if phase === "choose"}
       <p class="note">どのアカウントで探すかを選んでください。</p>
@@ -306,7 +306,11 @@
   {/if}
   <div class="foot">
     <CliLine command={cli} />
-    <Button variant="primary" disabled={busy || chosen.length === 0} onclick={mount}>
+    <Button
+      variant="primary"
+      disabled={busy || phase !== "done" || chosen.length === 0}
+      onclick={mount}
+    >
       {mountLabel}
     </Button>
   </div>

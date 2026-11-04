@@ -116,4 +116,8 @@
   --sidebar-w: 248px;
   --gutter: 28px;
   --dialog-top: 44px;
+  --logo-size: 32px;
+  --step-size: 20px;
+  --onboarding-w: 760px;
+  --onboarding-pad-x: 26px;
 }

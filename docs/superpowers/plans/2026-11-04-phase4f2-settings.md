@@ -65,8 +65,8 @@
 78. **Onboarding の閉じ方**: Onboarding は Store が0件になったときに出て、「始める」を押すか、CreateStore で作り終えるまで出し続ける（マウントで Store が1件以上になっても、はじめるの段を見せるため閉じない）。`App.svelte` が「Onboarding の途中」を持つ。最後の Store を解除して0件になれば、また出る（細部 27）
 79. **Onboarding のアカウントの段**: アカウントが0件なら「次へ」を無効にし、理由（「アカウントを1つ追加してください」）を出す（Store を書くにも作るにもアカウントが要る）。トークンなしのアカウントでも次へ進める（細部 29）。アカウントの追加は細部 19 の部品をそのまま使う
 80. **発見の段のアカウントなし**: トークンを持つアカウントがないときは自動では探さず、「GitHub で探すにはトークンのあるアカウントが要ります」と「フォルダから探す」だけを出す（usecase は `account.none` で断るので、先に呼ばない）
-81. **発見の候補の名前**: 候補の `name`（usecase が提案した名前）を呼び名の欄の初期値にする。マウントの本文は選んだ候補の `{name, url, account, permission}` を、呼び名を欄の値に変えて送る。空の呼び名の候補は送らず、その行に「名前を入れてください」を出す
-82. **Device Flow の引き継ぎ**: 開始が 409 `auth.device_running` なら、`args` にコードがあればそのフローを引き継いで同じ画面を出し（「別の画面で始めたログインを続けます」）、`id` だけなら「やめてやり直す」（`DELETE` してから開始し直す）を出す（細部 69）。期限（`expires_at`）を過ぎたら「コードの期限が切れました」と「やり直す」を出す。`auth.device` の `error` は `errorMessage({type: code, detail: message})` で出す
+81. **発見の候補の名前**: 候補の `name`（usecase が提案した名前）を呼び名の欄の初期値にする。マウントの本文は選んだ候補の `{name, url, account}` を、呼び名を欄の値に変えて送る（`MountCandidate` に `permission` はなく、余分なフィールドは受け付けない。権限は画面に残して「はじめる」の段に出す）。空の呼び名の候補は送らず、その行に「名前を入れてください」を出す
+82. **Device Flow の引き継ぎ**: 開始が 409 `auth.device_running` なら、`args` にコードがあればそのフローを引き継いで同じ画面を出し（「別の画面で始めたログインを続けます」）、`id` だけなら「やめてやり直す」（`DELETE` してから開始し直す）を出す（細部 69）。期限（`expires_at`）を過ぎたら「コードの期限が切れました」と「やり直す」を出す。`auth.device` の `error` は `new ApiError({status: 0, type: code, detail: message})` を作って `errorMessage` に渡して出す（`errorMessage` は `ApiError` だけを文言にする）
 83. **`gh`・環境変数のカード**: 取得元が `gh`・`env:VAR` のアカウントの「…」には「Hedgehug が持っているものはありません」だけを出す（細部 20）。カードの状態が `error` のとき、その文（`AuthStatus.error`）は英文のまま出す（GitHub やコマンドの文で、Code がない）
 84. **URL で追加の名前**: 名前は必須で、URL の最後の部分（`.git` を除く）を、名前が空のあいだだけ提案する。URL は1行に1つ（空行は捨てる）
 85. **CreateStore のアカウント**: アカウントの一覧は `AccountsCache` から取る（細部 32）。読み込み中・読めないときは選択欄を出さず、`account` を送らない
@@ -250,7 +250,7 @@
 ### Task 6: 発見・Onboarding・CreateStore のアカウント（細部 28 の「Store を探す」・29〜32・78〜81・85）
 
 **Files:**
-- Create: `web/app/stores/StoreDiscover.svelte`・`StoreDiscover.test.ts`（候補の一覧・フォルダから探す・マウント。Onboarding と設定のダイアログが使う）、`web/app/stores/StoreDiscoverDialog.svelte`（設定の「Store を探す」）
+- Create: `web/app/stores/StoreDiscover.svelte`・`StoreDiscover.test.ts`（候補の一覧・フォルダから探す・マウント。Onboarding と設定のダイアログが使う）、`web/app/stores/StoreDiscoverDialog.svelte`（設定の「Store を探す」）、`web/app/states/Onboarding.test.ts`（Onboarding の検査。`states.test.ts` ではなくここに置いた）
 - Modify: `web/app/states/Onboarding.svelte`、`web/app/states/states.test.ts`（Onboarding の検査）
 - Modify: `web/app/App.svelte`・`App.test.ts` か `gates.test.ts`（細部 78 の「Onboarding の途中」）
 - Modify: `web/app/settings/SettingsStores.svelte`・`SettingsStores.test.ts`（「Store を探す」）
@@ -263,7 +263,7 @@
 **ふるまい:**
 - 発見（細部 30・80・81）: トークンを持つアカウント（`source` が `none` 以外で状態が `ok`）があれば開いたときに `GET /api/stores/discover` を呼ぶ（読み込み中は States）。候補は `url` の owner（`github.com/<owner>/…` の `<owner>`。owner が取れない URL は「その他」）ごとに見出し（owner と、候補の `account`）。行は選択のチェック（既定はオフ）、repo（URL の `owner/name`、取れなければ URL）、権限（`write` は「書き込み」、`read` は「閲覧のみ」、ほかはその値）、呼び名の欄（`aria-label`「<repo> の呼び名」）。0件は「見つかりませんでした」と「探しているチームの Store が見つからないときは、そのリポジトリの権限をチームの管理者に依頼してください」。読めないときは文言と「もう一度探す」
 - 「フォルダから探す」: パスの欄と「探す」で `from` を付けて呼ぶ。422 `choice.required` ならアカウントの選択欄（`args.candidates`）を出し、選んで探し直す（`account` を付ける）
-- マウント: 「マウント」（Onboarding は「マウントして次へ」）で選んだ候補を `POST /api/stores/mount`。`failed` はその行に `errorMessage({type: code, detail: message})`、`mounted` の行は「マウントしました」にしてチェックを外す。1つ以上マウントしたら `StoreDirectory.reload()`。足元は `hh store discover [--account] [--from]`
+- マウント: 「マウント」（Onboarding は「マウントして次へ」）で選んだ候補を `POST /api/stores/mount`。`failed` はその行に `new ApiError({status: 400, type: code, detail: message, args: {name}})` を `errorMessage` に渡した文言（`errorMessage` は `ApiError` だけを文言にする。`args.name` は `store.exists` などの文言が使う）、`mounted` の行は「マウントしました」にしてチェックを外す。1つ以上マウントしたら `StoreDirectory.reload()`。足元は `hh store discover [--account] [--from]`
 - 設定の「Store を探す」（細部 28）: `StoreDiscoverDialog`（見出し「Store を探す」）で `StoreDiscover` を出す。マウントしたらトースト「n 個の Store をマウントしました」
 - Onboarding（細部 29・78・79）: 段の表示（アカウント・Store を選ぶ・はじめる。今の段に `aria-current="step"`）
   - アカウントの段: 見出し「GitHub のアカウントを登録します」と説明（キャンバスの文）。`AccountsCache.load()`。アカウントがあればカード風の一覧（呼び名・`login@host`・状態）、「アカウントを追加」で `AccountAdd`。なければ `AccountAdd` を開いた状態で出す。「次へ: Store を探す」（0件なら無効と理由）。「あとから 設定 › アカウントと認証 で変えられます」。キャンバスの gh の自動検出は作らない

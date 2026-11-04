@@ -197,4 +197,98 @@ describe("App のゲート", () => {
     await fireEvent.click(getByRole("button", { name: "始める" }));
     expect(queryByText("Hedgehug へようこそ")).toBeNull();
   });
+
+  // A fetch for the Onboarding: the Stores there are now, and an event stream the test writes to.
+  function onboardingApi() {
+    const state = { stores: [] as unknown[], created: false };
+    let events: ReadableStreamDefaultController<Uint8Array> | null = null;
+    const enc = new TextEncoder();
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const req = input as Request;
+      const url = typeof input === "string" ? input : req.url;
+      const method = (init?.method ?? req.method ?? "GET").toUpperCase();
+      if (url.includes("/api/events")) {
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            start(c) {
+              events = c;
+            },
+          }),
+          { headers: { "Content-Type": "text/event-stream" } },
+        );
+      }
+      if (url.includes("/api/accounts")) {
+        return json([
+          { name: "me", id: "github.com/me", state: "ok", login: "me", token: "keychain" },
+        ]);
+      }
+      if (url.includes("/api/stores/discover")) {
+        return json([
+          {
+            name: "hh-a",
+            url: "https://github.com/org/hh-a.git",
+            account: "me",
+            permission: "write",
+          },
+        ]);
+      }
+      if (url.includes("/api/stores/mount")) {
+        state.stores = [{ name: "hh-a", path: "/p", remotes: ["u"] }];
+        return json({ mounted: ["hh-a"], failed: [] });
+      }
+      if (url.includes("/api/workspaces")) return json([]);
+      if (url.includes("/api/stores") && method === "POST") {
+        state.stores = [{ name: "me", path: "/p", remotes: [] }];
+        return json(
+          {
+            name: "me",
+            path: "/p",
+            workspace: { ulid: "W1", name: "me", id_prefix: "ME", prefix_set: "", tasks: 0 },
+            remotes: [],
+            pushed: [],
+          },
+          201,
+        );
+      }
+      if (url.includes("/api/stores")) return json(state.stores);
+      return new Promise(() => {});
+    });
+    return {
+      state,
+      changed: () => events?.enqueue(enc.encode("event: stores.changed\ndata: {}\n\n")),
+    };
+  }
+
+  it("Store が 0 件に戻ったら、始めたあとでも Onboarding がまた出る", async () => {
+    history.replaceState(null, "", "/#token=tkn");
+    const api = onboardingApi();
+    const { findByText, findByLabelText, getByRole, queryByText } = render(App);
+    await findByText("Hedgehug へようこそ");
+    await fireEvent.click(await findByText("次へ: Store を探す"));
+    await fireEvent.click(await findByLabelText("org/hh-a を選ぶ"));
+    await fireEvent.click(getByRole("button", { name: "マウントして次へ" }));
+    await findByText("Store を使い始めます");
+    await fireEvent.click(getByRole("button", { name: "始める" }));
+    await vi.waitFor(() => expect(queryByText("Hedgehug へようこそ")).toBeNull());
+    // the last Store is unmounted somewhere else
+    api.state.stores = [];
+    api.changed();
+    expect(await findByText("Hedgehug へようこそ")).toBeTruthy();
+    // and it begins from the first step
+    expect(getByRole("heading", { name: "GitHub のアカウントを登録します" })).toBeTruthy();
+  });
+
+  it("CreateStore で作り終えたら Onboarding を閉じる", async () => {
+    history.replaceState(null, "", "/#token=tkn");
+    onboardingApi();
+    const { findByText, findByLabelText, getByRole, queryByText } = render(App);
+    await findByText("Hedgehug へようこそ");
+    await fireEvent.click(getByRole("button", { name: "新しく Store を作る" }));
+    await fireEvent.input(await findByLabelText("名前"), { target: { value: "me" } });
+    await fireEvent.input(getByRole("textbox", { name: "ID の接頭辞" }), {
+      target: { value: "me" },
+    });
+    await fireEvent.click(getByRole("button", { name: "Store を作る" }));
+    await vi.waitFor(() => expect(queryByText("Hedgehug へようこそ")).toBeNull());
+  });
 });

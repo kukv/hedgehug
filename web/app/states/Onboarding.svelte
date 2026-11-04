@@ -182,8 +182,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: var(--logo-size);
+    height: var(--logo-size);
     border-radius: var(--radius-8);
     background: var(--ink);
     color: var(--surface);
@@ -217,8 +217,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: var(--step-size);
+    height: var(--step-size);
     border-radius: var(--radius-pill);
     background: var(--sunken);
     font-size: var(--fs-12);
@@ -232,8 +232,8 @@
     flex-direction: column;
     gap: var(--space-16);
     width: 100%;
-    max-width: 760px;
-    padding: var(--space-20) 26px;
+    max-width: var(--onboarding-w);
+    padding: var(--space-20) var(--onboarding-pad-x);
     border-radius: var(--radius-14);
     background: var(--surface);
     box-shadow: var(--shadow-card);

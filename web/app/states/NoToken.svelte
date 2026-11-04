@@ -27,8 +27,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: var(--logo-size);
+    height: var(--logo-size);
     border-radius: var(--radius-8);
     background: var(--ink);
     color: var(--surface);

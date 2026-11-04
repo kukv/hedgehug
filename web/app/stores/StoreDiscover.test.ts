@@ -277,3 +277,42 @@ describe("StoreDiscover: mounting", () => {
     expect(stores.reload).not.toHaveBeenCalled();
   });
 });
+
+describe("StoreDiscover: rows that are not on the screen", () => {
+  it("cannot mount a row chosen before a search that asks for the account", async () => {
+    const { POST } = mount({
+      get: (q) =>
+        q.from
+          ? fail(422, "choice.required", { what: "--account", candidates: ["a", "b"] })
+          : ok([cand("hh-a", "org")]),
+    });
+    await fireEvent.click(await screen.findByLabelText("org/hh-a を選ぶ"));
+    await type(screen.getByLabelText("フォルダ"), "/srv/r");
+    await fireEvent.click(screen.getByRole("button", { name: "探す" }));
+    await screen.findByLabelText("アカウント");
+    expect(screen.queryByLabelText("org/hh-a を選ぶ")).toBeNull();
+    expect((screen.getByRole("button", { name: "マウント" }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    expect(POST).not.toHaveBeenCalled();
+  });
+
+  it("drops the answer of an older search that comes after a newer one", async () => {
+    const github: { resolve: (r: unknown) => void }[] = [];
+    mount({
+      get: (q) =>
+        q.from
+          ? ok([cand("newer", "org", { url: "/srv/r/newer.git" })])
+          : new Promise((resolve) => github.push({ resolve })),
+    });
+    // the search on GitHub is still waiting when the folder is searched
+    await type(await screen.findByLabelText("フォルダ"), "/srv/r");
+    await waitFor(() => expect(github).toHaveLength(1));
+    await fireEvent.click(screen.getByRole("button", { name: "探す" }));
+    await screen.findByText("/srv/r/newer.git");
+    github[0]?.resolve(await ok([cand("older", "org")]));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByText("/srv/r/newer.git")).toBeTruthy();
+    expect(screen.queryByText("org/older")).toBeNull();
+  });
+});
