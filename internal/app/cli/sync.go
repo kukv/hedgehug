@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
@@ -37,11 +38,11 @@ func (a *app) syncCmd() *cobra.Command {
 // syncBackground is what the detached child of a write runs: the failures
 // are in sync.json and the log, not in the exit code.
 func (a *app) syncBackground() error {
-	return a.ss.SyncBackground(a.stderr)
+	return replication.SyncBackground(a.ss, a.stderr)
 }
 
 func (a *app) sync() error {
-	reps, err := a.ss.Sync(false, true)
+	reps, err := replication.Sync(a.ss, false, true)
 	if len(reps) == 0 {
 		if err != nil {
 			return err
@@ -134,7 +135,7 @@ func repairedLine(x usecase.Repaired) string {
 }
 
 func (a *app) syncStatus() error {
-	out, err := a.ss.SyncStatus()
+	out, err := replication.SyncStatus(a.ss)
 	if err != nil {
 		return err
 	}

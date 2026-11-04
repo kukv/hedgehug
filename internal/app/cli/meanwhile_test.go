@@ -7,7 +7,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/workspaces"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
@@ -226,7 +226,7 @@ func TestPurgeSeesATaskRestoredMeanwhile(t *testing.T) {
 func TestMvSeesAWorkspaceMoveMeanwhile(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
-	var api usecase.WorkspaceView
+	var api workspaces.WorkspaceView
 	te.wsJSON(&api, "add", "api", "--prefix", "API")
 	apiULID := mustULID(t, api.ULID)
 	p := te.addJSON("p", "--workspace", "me")
@@ -264,7 +264,7 @@ func TestWorkspaceSubjectsSeeARenameMeanwhile(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	me := mustULID(t, te.addJSON("a").Workspace.ULID)
-	var tmp usecase.WorkspaceView
+	var tmp workspaces.WorkspaceView
 	te.wsJSON(&tmp, "add", "tmp", "--prefix", "TMP")
 	rename := func(ulid model.ULID, name string) func(*store.Tx) error {
 		return func(tx *store.Tx) error {

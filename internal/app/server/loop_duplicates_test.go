@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
@@ -40,7 +40,7 @@ func TestBackgroundSyncTellsOfADuplicateOnce(t *testing.T) {
 	ts.addRemote()
 	ss := ts.session()
 	ss.StoreName = "me"
-	r, err := ss.Add(usecase.AddInput{Title: "shared"})
+	r, err := tasks.Add(ss, tasks.AddInput{Title: "shared"})
 	if err != nil {
 		t.Fatal(err)
 	}

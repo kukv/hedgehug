@@ -18,7 +18,8 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
+	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
@@ -263,7 +264,7 @@ func (p *Poller) pollLocked(publish bool) {
 		return
 	}
 	statuses := map[string]syncStatus{}
-	if sts, err := ss.SyncStatus(); err == nil {
+	if sts, err := replication.SyncStatus(ss); err == nil {
 		for _, st := range sts {
 			statuses[st.Store] = newSyncStatus(st, p.s.loop, c)
 		}
@@ -371,7 +372,7 @@ func (p *Poller) pollLocked(publish bool) {
 	if len(stamps) == 0 {
 		return
 	}
-	_, items, err := ss.InboxList(false)
+	_, items, err := notifications.InboxList(ss, false)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	// The stamps are those from before InboxList, so a file another process
@@ -454,7 +455,7 @@ func (p *Poller) publishDiff(name string, st *polled, fromCommit plumbing.Hash, 
 		case strings.HasPrefix(c.Path, model.ViewsDir+"/"):
 			viewsCh = true
 		}
-		if u, ok := usecase.TaskOfPath(c.Path); ok {
+		if u, ok := replication.TaskOfPath(c.Path); ok {
 			// A task that became a forward is gone from the list of the
 			// store: the file is still there, but not as a task.
 			if b, err := r.ReadFile(to, c.Path); c.Deleted || (err == nil && model.IsForward(b)) {

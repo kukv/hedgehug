@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/spf13/cobra"
 )
 
@@ -25,7 +26,7 @@ func (a *app) unwatchCmd() *cobra.Command {
 // watch adds the writer of the store to the watchers of the task arg
 // names, or takes it out.
 func (a *app) watch(arg string, on bool) error {
-	r, err := a.ss.Watch(arg, on)
+	r, err := tasks.Watch(a.ss, arg, on)
 	if err != nil {
 		return err
 	}

@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 )
 
 func (a *app) scopeCmd() *cobra.Command {
@@ -53,7 +53,7 @@ func (a *app) scopeCmd() *cobra.Command {
 			if ch.Statuses == nil && ch.Transitions == nil && ch.Required == nil {
 				return usageErrorf("give --statuses, --transition or --required")
 			}
-			r, err := a.ss.ScopedSet(args[0], ch)
+			r, err := schemas.ScopedSet(a.ss, args[0], ch)
 			if err != nil {
 				return err
 			}
@@ -69,7 +69,7 @@ func (a *app) scopeCmd() *cobra.Command {
 			Short: "Show the override of one project",
 			Args:  exactArgs(1),
 			RunE: func(_ *cobra.Command, args []string) error {
-				r, err := a.ss.ScopedGet(args[0])
+				r, err := schemas.ScopedGet(a.ss, args[0])
 				if err != nil {
 					return err
 				}
@@ -82,7 +82,7 @@ func (a *app) scopeCmd() *cobra.Command {
 			Short: "Remove the override of one project, templates included",
 			Args:  exactArgs(1),
 			RunE: func(_ *cobra.Command, args []string) error {
-				r, err := a.ss.ScopedRemove(args[0])
+				r, err := schemas.ScopedRemove(a.ss, args[0])
 				if err != nil {
 					return err
 				}
@@ -137,7 +137,7 @@ func listsFlag(flag string, vals []string) (*schema.Lists, error) {
 // printScoped prints the override r is about. A write starts with a line
 // that says what it did, done, or that it changed nothing, none; both are
 // empty for show. With body the override as it is now follows.
-func (a *app) printScoped(r usecase.ScopedResult, done, none string, body bool) error {
+func (a *app) printScoped(r schemas.ScopedResult, done, none string, body bool) error {
 	if a.jsonOut {
 		return a.printJSON(r.View())
 	}

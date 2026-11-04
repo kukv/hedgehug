@@ -16,6 +16,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/storage/view"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
@@ -30,7 +31,7 @@ func writeFile(t *testing.T, dir, rel, content string) {
 	}
 }
 
-func run(t *testing.T, dir string) []Finding {
+func run(t *testing.T, dir string) []usecase.Finding {
 	t.Helper()
 	fs, err := Run(dir)
 	if err != nil {
@@ -40,7 +41,7 @@ func run(t *testing.T, dir string) []Finding {
 }
 
 // find returns the finding of check that is at where, or fails.
-func find(t *testing.T, fs []Finding, check, where string) Finding {
+func find(t *testing.T, fs []usecase.Finding, check, where string) usecase.Finding {
 	t.Helper()
 	for _, f := range fs {
 		if f.Check == check && f.Where == where {
@@ -48,7 +49,7 @@ func find(t *testing.T, fs []Finding, check, where string) Finding {
 		}
 	}
 	t.Fatalf("no %s finding at %q in %+v", check, where, fs)
-	return Finding{}
+	return usecase.Finding{}
 }
 
 func newComment(t *testing.T) (*model.Comment, string) {
@@ -84,7 +85,7 @@ func TestRunBrokenSchema(t *testing.T) {
 	put(t, s, newTask("A"))
 	writeFile(t, dir, "schema.yaml", "statuses: [\n")
 	fs := run(t, dir)
-	var schemaFs []Finding
+	var schemaFs []usecase.Finding
 	for _, f := range fs {
 		if f.Check == "schema" {
 			schemaFs = append(schemaFs, f)
@@ -200,7 +201,7 @@ func TestRunVerifyFails(t *testing.T) {
 	}
 	fs := run(t, dir)
 	// Status fails on the same objects, so there may be two git findings.
-	if !slices.ContainsFunc(fs, func(f Finding) bool {
+	if !slices.ContainsFunc(fs, func(f usecase.Finding) bool {
 		return f.Check == "git" && strings.HasPrefix(f.Msg, "a git object cannot be read")
 	}) {
 		t.Errorf("findings = %+v, want the Verify finding", fs)
@@ -256,7 +257,7 @@ func TestRunBrokenHead(t *testing.T) {
 	}
 	writeFile(t, dir, "schema.yaml", string(good))
 	fs := run(t, dir)
-	g := slices.IndexFunc(fs, func(f Finding) bool { return f.Check == "git" })
+	g := slices.IndexFunc(fs, func(f usecase.Finding) bool { return f.Check == "git" })
 	if g < 0 {
 		t.Fatalf("findings = %+v, want a git finding", fs)
 	}
@@ -318,9 +319,9 @@ func commitWorkspace(t *testing.T, s *store.Store, dir string, w *model.Workspac
 
 // duplicateFindings returns, by where they are, the workspace findings that
 // say what.
-func duplicateFindings(t *testing.T, dir, what string) map[string]Finding {
+func duplicateFindings(t *testing.T, dir, what string) map[string]usecase.Finding {
 	t.Helper()
-	out := map[string]Finding{}
+	out := map[string]usecase.Finding{}
 	for _, f := range run(t, dir) {
 		if f.Check == "workspace" && strings.Contains(f.Msg, what) {
 			out[f.Where] = f
@@ -423,8 +424,8 @@ func TestRunIDProblems(t *testing.T) {
 
 // hasFinding reports whether fs has a finding of check whose message or
 // hint contains text.
-func hasFinding(fs []Finding, check, text string) bool {
-	return slices.ContainsFunc(fs, func(f Finding) bool {
+func hasFinding(fs []usecase.Finding, check, text string) bool {
+	return slices.ContainsFunc(fs, func(f usecase.Finding) bool {
 		return f.Check == check && (strings.Contains(f.Msg, text) || strings.Contains(f.Hint, text))
 	})
 }

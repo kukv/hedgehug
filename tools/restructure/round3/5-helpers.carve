@@ -1,0 +1,33 @@
+# every method of testSession, and the test helpers two groups use, into
+# helpers_test.go, which becomes usecasetest
+internal/app/usecase/auth_add_test.go helpers_test.go testSession.setConfig testSession.storeAccounts testSession.configBytes
+internal/app/usecase/inbox_test.go helpers_test.go testSession.addItem overwriteME1
+internal/app/usecase/views_test.go helpers_test.go testSession.viewFile testSession.headSubject testSession.headTrailer
+internal/app/usecase/auth_test.go helpers_test.go testSession.lockFile testSession.accounts authSession heldElsewhere
+internal/app/usecase/maintain_test.go helpers_test.go testSession.commitRawFile testSession.editRawFile testSession.head testSession.doctorOne
+internal/app/usecase/move_sprint_test.go helpers_test.go testSession.putSprintRelease testSession.workspaceULID
+internal/app/usecase/move_test.go helpers_test.go testSession.order testSession.addedTask
+internal/app/usecase/mention_test.go helpers_test.go testSession.asAccount testSession.setMembers
+internal/app/usecase/scoped_test.go helpers_test.go testSession.addProject testSession.storeSchema
+internal/app/usecase/purge_test.go helpers_test.go testSession.addDeleted lastOp
+internal/app/usecase/task_test.go helpers_test.go testSession.addWorkspace testSession.deleteTask testSession.useAccount asError wantErr
+internal/app/usecase/undo_test.go helpers_test.go testSession.asWriter bobAccount
+internal/app/usecase/movestore_test.go helpers_test.go moveFx newMoveFx moveFx.in moveFx.head moveFx.log moveFx.setSchema mustCode
+internal/app/usecase/session_more_test.go helpers_test.go aliceAccount
+internal/app/usecase/moved_test.go helpers_test.go headOf movedFixture mustIndex
+internal/app/usecase/mount_ops_test.go helpers_test.go makeStoreReadOnly ulidOf wantCode
+internal/app/usecase/destination_test.go helpers_test.go openSet
+internal/app/usecase/assign_test.go helpers_test.go testSchema
+internal/app/usecase/people_test.go helpers_test.go mustAssigns
+internal/app/usecase/read_test.go helpers_test.go mustULID
+internal/app/usecase/use_test.go helpers_test.go addProjectIn loadContext useGoneWarning
+internal/app/usecase/storeinit_remote_test.go helpers_test.go configText fakeSession notExist storeDirOf
+internal/app/usecase/config_recheck_test.go helpers_test.go hookConfigWrite
+internal/app/usecase/patch_test.go helpers_test.go logOf
+internal/app/usecase/auth_add_test.go helpers_test.go cfgStore
+internal/app/usecase/auth_test.go helpers_test.go kr newKR kr.Get kr.Set kr.Delete kr.has
+internal/app/usecase/moved_test.go helpers_test.go movedAuthor
+internal/app/usecase/readonly_test.go helpers_test.go makeReadOnly
+internal/app/usecase/purge_broken_test.go helpers_test.go moveFx.brokenForward moveFx.oldForward
+internal/app/usecase/helpers_test.go session.go Session.resetWriter
+internal/app/usecase/movestore_gui_test.go helpers_test.go moveFx.addSprint

@@ -1,26 +1,30 @@
-package usecase
+package usecase_test
 
 import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/browse"
+	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
 // readerOf is a session of its own over the stores of ts, whose repositories
 // the test counts.
-func readerOf(ts *testSession, storeName string) *Session {
-	return &Session{Getenv: ts.Getenv, Now: ts.Now, StoreName: storeName, Warn: func(string) {}}
+func readerOf(ts *usecasetest.Session, storeName string) *usecase.Session {
+	return &usecase.Session{Getenv: ts.Getenv, Now: ts.Now, StoreName: storeName, Warn: func(string) {}}
 }
 
 // Close lets go of every repository the session opened: the stores of Open,
 // the mounted set, the inbox stores, and the set of a listing.
 func TestSessionCloseClosesEveryRepoItOpened(t *testing.T) {
 	t.Parallel()
-	ts := newTwoStoreSession(t)
+	ts := usecasetest.NewTwoStore(t)
 	ts.StoreName = "org-a"
-	task := ts.addTask("one", nil)
-	root := filepath.Dir(ts.env["HOME"])
+	task := ts.AddTask("one", nil)
+	root := filepath.Dir(ts.Env["HOME"])
 	before := gitrepo.Live(root)
 
 	reader := readerOf(ts, "")
@@ -38,17 +42,17 @@ func TestSessionCloseClosesEveryRepoItOpened(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		if _, _, err := reader.InboxList(false); err != nil {
+		if _, _, err := notifications.InboxList(reader, false); err != nil {
 			t.Fatal(err)
 		}
-		q, err := ParseQuery("")
+		q, err := usecase.ParseQuery("")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := reader.List(q); err != nil {
+		if _, err := browse.List(reader, q); err != nil {
 			t.Fatal(err)
 		}
-		if n, err := reader.MountedCount(); err != nil || n != 2 {
+		if n, err := browse.MountedCount(reader); err != nil || n != 2 {
 			t.Fatalf("MountedCount = %d, %v, want 2", n, err)
 		}
 	}
@@ -65,7 +69,7 @@ func TestSessionCloseClosesEveryRepoItOpened(t *testing.T) {
 	// Close may be called again, and the session works after it
 	reader.Close()
 	touch()
-	if _, err := byName.Show(task.ID); err != nil {
+	if _, err := browse.Show(byName, task.ID); err != nil {
 		t.Errorf("Show after Close: %v", err)
 	}
 	reader.Close()
@@ -79,8 +83,8 @@ func TestSessionCloseClosesEveryRepoItOpened(t *testing.T) {
 // StoreRemove does by updating config.yaml before it deletes a directory.
 func TestDropMountClosesTheSet(t *testing.T) {
 	t.Parallel()
-	ts := newTwoStoreSession(t)
-	root := filepath.Dir(ts.env["HOME"])
+	ts := usecasetest.NewTwoStore(t)
+	root := filepath.Dir(ts.Env["HOME"])
 	reader := readerOf(ts, "")
 	before := gitrepo.Live(root)
 	if _, err := reader.Mount(); err != nil {
@@ -89,7 +93,7 @@ func TestDropMountClosesTheSet(t *testing.T) {
 	if got := gitrepo.Live(root); got != before+2 {
 		t.Fatalf("live repos after Mount = %d, want %d", got, before+2)
 	}
-	reader.dropMount()
+	reader.DropMount()
 	if got := gitrepo.Live(root); got != before {
 		t.Errorf("live repos after dropMount = %d, want %d", got, before)
 	}

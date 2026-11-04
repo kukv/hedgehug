@@ -8,7 +8,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/workspaces"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
@@ -66,7 +66,7 @@ func (a *app) workspaceCmd() *cobra.Command {
 }
 
 func (a *app) workspaceAdd(name, prefix string) error {
-	r, err := a.ss.WorkspaceAdd(name, prefix)
+	r, err := workspaces.WorkspaceAdd(a.ss, name, prefix)
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func (a *app) workspaceAdd(name, prefix string) error {
 }
 
 func (a *app) workspaceRename(arg, name string) error {
-	r, err := a.ss.WorkspaceRename(arg, name)
+	r, err := workspaces.WorkspaceRename(a.ss, arg, name)
 	if err != nil {
 		return err
 	}
@@ -84,7 +84,7 @@ func (a *app) workspaceRename(arg, name string) error {
 }
 
 func (a *app) workspacePrefix(arg, prefix string) error {
-	r, err := a.ss.WorkspacePrefix(arg, prefix)
+	r, err := workspaces.WorkspacePrefix(a.ss, arg, prefix)
 	if err != nil {
 		return err
 	}
@@ -105,7 +105,7 @@ func (a *app) workspacePrefix(arg, prefix string) error {
 }
 
 func (a *app) workspaceRm(arg string) error {
-	r, err := a.ss.WorkspaceRemove(arg)
+	r, err := workspaces.WorkspaceRemove(a.ss, arg)
 	if err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func (a *app) workspaceRm(arg string) error {
 }
 
 func (a *app) workspaceLs() error {
-	_, wss, err := a.ss.WorkspaceList()
+	_, wss, err := workspaces.WorkspaceList(a.ss)
 	if err != nil {
 		return err
 	}
@@ -132,7 +132,7 @@ func (a *app) workspaceLs() error {
 // before the write; only its task counts are read.
 func (a *app) printWorkspace(ix *index.Index, w *model.Workspace, line string) error {
 	if a.jsonOut {
-		return a.printJSON(usecase.WorkspaceViewOf(ix, w))
+		return a.printJSON(workspaces.WorkspaceViewOf(ix, w))
 	}
 	_, err := fmt.Fprintln(a.stdout, line)
 	return err

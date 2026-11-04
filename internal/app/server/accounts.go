@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/accounts"
 )
 
 type accountAddInput struct {
@@ -21,7 +22,7 @@ type accountAddInput struct {
 	}
 }
 
-type accountAddOutput struct{ Body usecase.AuthAddResult }
+type accountAddOutput struct{ Body accounts.AuthAddResult }
 
 type accountTokenInput struct {
 	Name string `path:"name" doc:"The name of the account; a name that is no account's adds the account of the login the token is of"`
@@ -51,17 +52,17 @@ func (s *Server) registerAccounts() {
 	huma.Register(s.api, huma.Operation{
 		OperationID: "list-accounts", Method: http.MethodGet, Path: "/api/accounts",
 		Summary: "Check the token of each account against GitHub, as hh auth status --json; an account in error is in the array with its state", Tags: []string{"accounts"},
-	}, func(_ context.Context, _ *struct{}) (*struct{ Body []usecase.AuthStatus }, error) {
+	}, func(_ context.Context, _ *struct{}) (*struct{ Body []accounts.AuthStatus }, error) {
 		ss := s.session("")
 		defer ss.Close()
-		out, err := ss.AuthStatus()
+		out, err := accounts.AuthStatuses(ss)
 		if err != nil && !errors.Is(err, usecase.ErrFindings) {
 			return nil, problemOf(err)
 		}
 		if out == nil {
-			out = []usecase.AuthStatus{}
+			out = []accounts.AuthStatus{}
 		}
-		return &struct{ Body []usecase.AuthStatus }{out}, nil
+		return &struct{ Body []accounts.AuthStatus }{out}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -77,7 +78,7 @@ func (s *Server) registerAccounts() {
 		}
 		ss := s.session("")
 		defer ss.Close()
-		res, err := ss.AuthAdd(usecase.AuthAddInput{Name: in.Body.Name, Login: in.Body.Login, Host: in.Body.Host, Token: in.Body.Token})
+		res, err := accounts.AuthAdd(ss, accounts.AuthAddInput{Name: in.Body.Name, Login: in.Body.Login, Host: in.Body.Host, Token: in.Body.Token})
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -91,7 +92,7 @@ func (s *Server) registerAccounts() {
 	}, func(_ context.Context, in *accountTokenInput) (*accountLoginOutput, error) {
 		ss := s.session("")
 		defer ss.Close()
-		res, err := ss.AuthLogin(usecase.AuthLoginInput{
+		res, err := accounts.AuthLogin(ss, accounts.AuthLoginInput{
 			Name: in.Name, Host: in.Body.Host, HostGiven: in.Body.Host != "",
 			WithToken: true, Token: in.Body.Token,
 		})
@@ -105,25 +106,25 @@ func (s *Server) registerAccounts() {
 	huma.Register(s.api, huma.Operation{
 		OperationID: "remove-account-token", Method: http.MethodDelete, Path: "/api/accounts/{name}/token",
 		Summary: "Remove the token of an account from the keychain, as hh auth logout; the account stays in config.yaml", Tags: []string{"accounts"},
-	}, func(_ context.Context, in *accountParam) (*struct{ Body usecase.AuthLogoutResult }, error) {
+	}, func(_ context.Context, in *accountParam) (*struct{ Body accounts.AuthLogoutResult }, error) {
 		ss := s.session("")
 		defer ss.Close()
-		res, err := ss.AuthLogout(in.Name)
+		res, err := accounts.AuthLogout(ss, in.Name)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return &struct{ Body usecase.AuthLogoutResult }{res}, nil
+		return &struct{ Body accounts.AuthLogoutResult }{res}, nil
 	})
 }
 
-func loginBody(r usecase.AuthLoginResult) accountLoginBody {
+func loginBody(r accounts.AuthLoginResult) accountLoginBody {
 	return accountLoginBody{Account: r.Account, ID: r.ID, Added: r.Added, Uses: r.Uses}
 }
 
 // pinnedStores tells the GUI when a write of an account also wrote the
 // account of stores (the stores that had none were given the first account
 // before a second one was added).
-func (s *Server) pinnedStores(p usecase.Pinned) {
+func (s *Server) pinnedStores(p accounts.Pinned) {
 	if len(p.Stores) > 0 {
 		s.storesWritten()
 	}
@@ -133,7 +134,7 @@ func (s *Server) pinnedStores(p usecase.Pinned) {
 // for lack of a token can write now, so the sync loop and the poller look at
 // once instead of at the next tick. When the write also pinned accounts to
 // stores, that is storesWritten, which does the same and tells the clients.
-func (s *Server) tokenWritten(p usecase.Pinned) {
+func (s *Server) tokenWritten(p accounts.Pinned) {
 	if len(p.Stores) > 0 {
 		s.storesWritten()
 		return

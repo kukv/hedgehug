@@ -3,7 +3,7 @@ package server
 import (
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
 )
 
 // deleteTask deletes (not purges) the task with the ID id.
@@ -20,13 +20,13 @@ func TestPurgeAPI(t *testing.T) {
 	ts.deleteTask(gone)
 
 	// The plan lists the deleted task and not the live one.
-	var plan usecase.PurgePlan
+	var plan maintenance.PurgePlan
 	ts.call("GET", "/api/purge?older_than=0d", nil, 200, &plan)
 	if plan.Store != "me" || len(plan.Tasks) != 1 || plan.Tasks[0].ID != gone || plan.Tasks[0].Title != "gone" || len(plan.Forwards) != 0 {
 		t.Fatalf("plan = %+v", plan)
 	}
 	// Nothing is old enough for the default 90d.
-	var none usecase.PurgePlan
+	var none maintenance.PurgePlan
 	ts.call("GET", "/api/purge", nil, 200, &none)
 	if len(none.Tasks) != 0 || len(none.Forwards) != 0 {
 		t.Errorf("default plan = %+v; want empty", none)
@@ -40,7 +40,7 @@ func TestPurgeAPI(t *testing.T) {
 	if p := ts.problem("POST", "/api/purge", map[string]any{"older_than": "0d"}, 400); p.Type != "request.invalid" {
 		t.Errorf("no confirmed: %+v", p)
 	}
-	empty := usecase.PurgePlan{Store: "me", Tasks: []usecase.PurgeTask{}, Forwards: []usecase.PurgeForward{}}
+	empty := maintenance.PurgePlan{Store: "me", Tasks: []maintenance.PurgeTask{}, Forwards: []maintenance.PurgeForward{}}
 	if p := ts.problem("POST", "/api/purge", map[string]any{"older_than": "0d", "confirmed": empty}, 400); p.Type != "confirm.required" {
 		t.Errorf("empty confirmed: %+v", p)
 	}
@@ -58,7 +58,7 @@ func TestPurgeAPI(t *testing.T) {
 
 	// The plan as shown now goes through.
 	var res struct {
-		usecase.PurgePlan
+		maintenance.PurgePlan
 		Commit string `json:"commit"`
 	}
 	ts.call("POST", "/api/purge", map[string]any{"older_than": "0d", "confirmed": plan}, 200, &res)

@@ -6,7 +6,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
-	"github.com/kukv/hedgehug/internal/app/usecase/current"
 )
 
 // TaskView is a task as --json prints it.
@@ -138,7 +137,7 @@ func projectOf(ix *index.Index, e *index.Entry) *Ref {
 		if !ok {
 			return nil
 		}
-		if a.Kind == current.ProjectKind {
+		if a.Kind == ProjectKind {
 			r := RefOf(ix, a.ULID)
 			return &r
 		}
@@ -184,12 +183,12 @@ func OrEmpty(s []string) []string {
 // and full ULID, or the ULID alone when the task has no id (a file that does
 // not decode).
 func TaskLabel(ix *index.Index, e *index.Entry) string {
-	return taskLabel(e.ID, ix.DisplayID(e), e.ULID)
+	return FormatTaskLabel(e.ID, ix.DisplayID(e), e.ULID)
 }
 
-// taskLabel is TaskLabel for a task read out of its index: its id as the
+// FormatTaskLabel is TaskLabel for a task read out of its index: its id as the
 // file has it, as the index shows it, and its ULID.
-func taskLabel(id, shown string, ulid model.ULID) string {
+func FormatTaskLabel(id, shown string, ulid model.ULID) string {
 	if id == "" {
 		return ulid.String()
 	}

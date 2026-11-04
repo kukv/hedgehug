@@ -1,18 +1,22 @@
-package usecase
+package usecase_test
 
 import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func TestTaskViewScope(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	add := func(in AddInput) *TaskView {
+	ts := usecasetest.New(t)
+	add := func(in tasks.AddInput) *usecase.TaskView {
 		t.Helper()
-		r, err := ts.Add(in)
+		r, err := tasks.Add(ts.Session, in)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -22,18 +26,18 @@ func TestTaskViewScope(t *testing.T) {
 		}
 		return v
 	}
-	proj := add(AddInput{Title: "P", Kind: "project"})
-	epic := add(AddInput{Title: "E", Kind: "epic", Parent: proj.ULID})
-	underEpic := add(AddInput{Title: "under epic", Parent: epic.ULID})
-	underProj := add(AddInput{Title: "under project", Parent: proj.ULID})
-	epic2 := add(AddInput{Title: "E2", Kind: "epic", Parent: proj.ULID})
-	underEpic2 := add(AddInput{Title: "under epic2", Parent: epic2.ULID})
-	loose := add(AddInput{Title: "loose"})
+	proj := add(tasks.AddInput{Title: "P", Kind: "project"})
+	epic := add(tasks.AddInput{Title: "E", Kind: "epic", Parent: proj.ULID})
+	underEpic := add(tasks.AddInput{Title: "under epic", Parent: epic.ULID})
+	underProj := add(tasks.AddInput{Title: "under project", Parent: proj.ULID})
+	epic2 := add(tasks.AddInput{Title: "E2", Kind: "epic", Parent: proj.ULID})
+	underEpic2 := add(tasks.AddInput{Title: "under epic2", Parent: epic2.ULID})
+	loose := add(tasks.AddInput{Title: "loose"})
 
 	statuses := []string{"backlog", "todo", "in_progress", "done", "canceled"}
 	set := func(ulid string) {
 		t.Helper()
-		if _, err := ts.ScopedSet(ulid, schema.ScopedChange{Statuses: &statuses}); err != nil {
+		if _, err := schemas.ScopedSet(ts.Session, ulid, schema.ScopedChange{Statuses: &statuses}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -44,17 +48,17 @@ func TestTaskViewScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scopeOf := func(v *TaskView) string {
+	scopeOf := func(v *usecase.TaskView) string {
 		t.Helper()
-		e, ok := ix.Task(mustULID(t, v.ULID))
+		e, ok := ix.Task(usecasetest.MustULID(t, v.ULID))
 		if !ok {
 			t.Fatalf("%s: not in the index", v.Title)
 		}
-		return TaskViewOf(ix, e).Scope
+		return usecase.TaskViewOf(ix, e).Scope
 	}
 	for _, c := range []struct {
 		name string
-		v    *TaskView
+		v    *usecase.TaskView
 		want string
 	}{
 		{"a task under an epic with an override: the epic, nearer than the project", underEpic, epic.ULID},
@@ -73,10 +77,10 @@ func TestTaskViewScope(t *testing.T) {
 
 func TestTaskViewScopeStopsAtABrokenAncestor(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
-	add := func(in AddInput) *TaskView {
+	ts := usecasetest.New(t)
+	add := func(in tasks.AddInput) *usecase.TaskView {
 		t.Helper()
-		r, err := ts.Add(in)
+		r, err := tasks.Add(ts.Session, in)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -86,27 +90,27 @@ func TestTaskViewScopeStopsAtABrokenAncestor(t *testing.T) {
 		}
 		return v
 	}
-	proj := add(AddInput{Title: "P", Kind: "project"})
-	epic := add(AddInput{Title: "E", Kind: "epic", Parent: proj.ULID})
-	child := add(AddInput{Title: "under epic", Parent: epic.ULID})
+	proj := add(tasks.AddInput{Title: "P", Kind: "project"})
+	epic := add(tasks.AddInput{Title: "E", Kind: "epic", Parent: proj.ULID})
+	child := add(tasks.AddInput{Title: "under epic", Parent: epic.ULID})
 	statuses := []string{"backlog", "todo", "in_progress", "done", "canceled"}
 	for _, u := range []string{proj.ULID, epic.ULID} {
-		if _, err := ts.ScopedSet(u, schema.ScopedChange{Statuses: &statuses}); err != nil {
+		if _, err := schemas.ScopedSet(ts.Session, u, schema.ScopedChange{Statuses: &statuses}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	ts.commitRawFile(model.TaskPath(mustULID(t, epic.ULID)), "not a task\n")
+	ts.CommitRawFile(model.TaskPath(usecasetest.MustULID(t, epic.ULID)), "not a task\n")
 
 	_, ix, err := ts.Open()
 	if err != nil {
 		t.Fatal(err)
 	}
-	e, ok := ix.Task(mustULID(t, child.ULID))
+	e, ok := ix.Task(usecasetest.MustULID(t, child.ULID))
 	if !ok {
 		t.Fatal("the child is not in the index")
 	}
 	// A write walks no further than a task it cannot read, so no override applies.
-	if got := TaskViewOf(ix, e).Scope; got != "" {
+	if got := usecase.TaskViewOf(ix, e).Scope; got != "" {
 		t.Errorf("scope = %q; want none past a broken ancestor", got)
 	}
 }

@@ -10,6 +10,11 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
+	"github.com/kukv/hedgehug/internal/app/usecase/views"
+	"github.com/kukv/hedgehug/internal/app/usecase/workspaces"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
@@ -21,7 +26,7 @@ type migrated struct {
 func TestMigrateProps(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	if _, err := ts.session().Add(usecase.AddInput{Title: "p", Assigns: []usecase.Assign{{Key: "priority", Op: "=", Value: "high"}}}); err != nil {
+	if _, err := tasks.Add(ts.session(), tasks.AddInput{Title: "p", Assigns: []usecase.Assign{{Key: "priority", Op: "=", Value: "high"}}}); err != nil {
 		t.Fatal(err)
 	}
 	var m migrated
@@ -150,7 +155,7 @@ func TestWorkspaceErrors(t *testing.T) {
 		t.Errorf("removed without prefix_set: %+v", out)
 	}
 	var made struct {
-		Workspace usecase.WorkspaceView `json:"workspace"`
+		Workspace workspaces.WorkspaceView `json:"workspace"`
 	}
 	ts.call("POST", "/api/stores", map[string]any{"name": "team", "prefix": "TM"}, 201, &made)
 	if made.Workspace.PrefixSet.IsZero() {
@@ -163,7 +168,7 @@ func TestSecondStore(t *testing.T) {
 	ts := newTestServer(t)
 	ts.add("one", "")
 	ts.call("POST", "/api/stores", map[string]any{"name": "team", "prefix": "TM"}, 201, nil)
-	var list []usecase.WorkspaceView
+	var list []workspaces.WorkspaceView
 	ts.call("GET", "/api/workspaces?store=team", nil, 200, &list)
 	if len(list) != 1 || list[0].IDPrefix != "TM" || list[0].Tasks != 0 {
 		t.Errorf("workspaces of team = %+v", list)
@@ -172,10 +177,10 @@ func TestSecondStore(t *testing.T) {
 	if len(list) != 1 || list[0].IDPrefix != "ME" {
 		t.Errorf("workspaces of me = %+v", list)
 	}
-	var sc usecase.SchemaView
+	var sc schemas.SchemaView
 	ts.call("GET", "/api/schema?store=team", nil, 200, &sc)
 	ts.call("PUT", "/api/views/w?store=team", map[string]any{"layout": "kanban"}, 200, nil)
-	var views []usecase.SavedView
+	var views []views.SavedView
 	ts.call("GET", "/api/views?store=team", nil, 200, &views)
 	if len(views) != 1 {
 		t.Errorf("views of team = %+v", views)
@@ -202,7 +207,7 @@ func TestStoreDefault(t *testing.T) {
 	// With two stores the CLI picks none without --store, whatever
 	// default_store says, so none is the default.
 	ts.call("POST", "/api/stores", map[string]any{"name": "team", "prefix": "TM"}, 201, nil)
-	if _, err := ts.session().StoreDefault("team"); err != nil {
+	if _, err := stores.StoreDefault(ts.session(), "team"); err != nil {
 		t.Fatal(err)
 	}
 	list = nil

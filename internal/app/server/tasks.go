@@ -8,6 +8,8 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/browse"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
 // TaskParam is the task a request is on: an ID, a former ID or a ULID, as
@@ -76,23 +78,23 @@ func (s *Server) registerTaskReads() {
 		defer ss.Close()
 		out := &listOutput{}
 		if in.Tree {
-			r, err := ss.Tree(q)
+			r, err := browse.Tree(ss, q)
 			if err != nil {
 				return nil, problemOf(err)
 			}
 			roots := []*usecase.TaskView{}
 			for _, ts := range r.Stores {
 				for _, n := range ts.Roots {
-					roots = append(roots, usecase.TreeViewOf(ts.Index, n))
+					roots = append(roots, browse.TreeViewOf(ts.Index, n))
 				}
 				for _, n := range ts.Cycle {
-					out.Body.Cycle = append(out.Body.Cycle, usecase.TreeViewOf(ts.Index, n))
+					out.Body.Cycle = append(out.Body.Cycle, browse.TreeViewOf(ts.Index, n))
 				}
 			}
 			out.Body.Roots = &roots
 			return out, nil
 		}
-		r, err := ss.List(q)
+		r, err := browse.List(ss, q)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -123,11 +125,11 @@ func (s *Server) registerTaskReads() {
 	}, func(_ context.Context, in *TaskParam) (*showOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		r, err := ss.Show(in.ID)
+		r, err := browse.Show(ss, in.ID)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return &showOutput{Body: usecase.ShowViewOf(r)}, nil
+		return &showOutput{Body: browse.ShowViewOf(r)}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -136,11 +138,11 @@ func (s *Server) registerTaskReads() {
 	}, func(_ context.Context, in *historyInput) (*historyOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		r, err := ss.Log([]string{in.ID}, in.Limit)
+		r, err := browse.Log(ss, []string{in.ID}, in.Limit)
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		return &historyOutput{Body: usecase.StoreLogViews(r.Logs)}, nil
+		return &historyOutput{Body: browse.StoreLogViews(r.Logs)}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{
@@ -149,7 +151,7 @@ func (s *Server) registerTaskReads() {
 	}, func(_ context.Context, in *peopleInput) (*struct{ Body []string }, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		names, err := ss.People()
+		names, err := browse.People(ss)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -163,7 +165,7 @@ func (s *Server) registerTaskReads() {
 	}, func(_ context.Context, in *showAtInput) (*showOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		v, err := ss.ShowAt(in.ID, in.Commit)
+		v, err := tasks.ShowAt(ss, in.ID, in.Commit)
 		if err != nil {
 			return nil, problemOf(err)
 		}

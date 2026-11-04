@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/maintenance"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
@@ -28,14 +28,14 @@ func (a *app) purgeCmd() *cobra.Command {
 			return nil
 		},
 		RunE: func(_ *cobra.Command, _ []string) error {
-			days, err := usecase.ParseOlderThan(olderThan)
+			days, err := maintenance.ParseOlderThan(olderThan)
 			if err != nil {
 				return err
 			}
 			return a.purge(days, yes)
 		},
 	}
-	cmd.Flags().StringVar(&olderThan, "older-than", fmt.Sprintf("%dd", usecase.DefaultPurgeDays), "remove what is older than this many days, such as 90d (0d for everything)")
+	cmd.Flags().StringVar(&olderThan, "older-than", fmt.Sprintf("%dd", maintenance.DefaultPurgeDays), "remove what is older than this many days, such as 90d (0d for everything)")
 	cmd.Flags().BoolVar(&yes, "yes", false, "do not ask")
 	return cmd
 }
@@ -43,22 +43,22 @@ func (a *app) purgeCmd() *cobra.Command {
 // purge lists what is to go and, on a terminal, asks; off a terminal it goes
 // only with --yes.
 func (a *app) purge(days int, yes bool) error {
-	plan, err := a.ss.PurgeList(days)
+	plan, err := maintenance.PurgeList(a.ss, days)
 	if err != nil {
 		return err
 	}
 	if plan.Empty() {
-		return a.printPurged(usecase.PurgeResult{PurgePlan: plan})
+		return a.printPurged(maintenance.PurgeResult{PurgePlan: plan})
 	}
-	var res usecase.PurgeResult
+	var res maintenance.PurgeResult
 	switch {
 	case yes:
-		res, err = a.ss.Purge(days, true)
+		res, err = maintenance.Purge(a.ss, days, true)
 	case !a.isTerminal(a.stdin):
-		res, err = a.ss.Purge(days, false) // the refusal the operation gives
+		res, err = maintenance.Purge(a.ss, days, false) // the refusal the operation gives
 	default:
 		if err = a.confirmPurge(plan); err == nil {
-			res, err = a.ss.PurgeConfirmed(days, plan)
+			res, err = maintenance.PurgeConfirmed(a.ss, days, plan)
 		}
 	}
 	if err != nil {
@@ -68,7 +68,7 @@ func (a *app) purge(days int, yes bool) error {
 }
 
 // confirmPurge shows what is to go and asks.
-func (a *app) confirmPurge(p usecase.PurgePlan) error {
+func (a *app) confirmPurge(p maintenance.PurgePlan) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s:\n", p.Store)
 	for _, t := range p.Tasks {
@@ -92,7 +92,7 @@ func (a *app) confirmPurge(p usecase.PurgePlan) error {
 }
 
 // printPurged prints what purge removed: a line, or JSON.
-func (a *app) printPurged(r usecase.PurgeResult) error {
+func (a *app) printPurged(r maintenance.PurgeResult) error {
 	if a.jsonOut {
 		return a.printJSON(r)
 	}

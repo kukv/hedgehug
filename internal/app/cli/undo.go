@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
 func (a *app) undoCmd() *cobra.Command {
@@ -36,10 +37,10 @@ type keptJSON struct {
 }
 
 func (a *app) undo() error {
-	res, err := a.ss.Undo()
+	res, err := tasks.Undo(a.ss)
 	var oe *usecase.Error
 	if errors.As(err, &oe) && oe.Code == "undo.nothing" {
-		return a.printUndo(usecase.UndoResult{})
+		return a.printUndo(tasks.UndoResult{})
 	}
 	if err != nil {
 		return err
@@ -47,12 +48,12 @@ func (a *app) undo() error {
 	return a.printUndo(res)
 }
 
-func (a *app) printUndo(res usecase.UndoResult) error {
+func (a *app) printUndo(res tasks.UndoResult) error {
 	if a.jsonOut {
 		out := undoJSON{Kept: []keptJSON{}}
 		if res.Found {
 			h := res.Commit.Hash.String()
-			out.Undone, out.Subject, out.Changed = &h, usecase.UndoSubject(res.Commit), res.Changed
+			out.Undone, out.Subject, out.Changed = &h, tasks.UndoSubject(res.Commit), res.Changed
 		}
 		for _, k := range res.Kept {
 			out.Kept = append(out.Kept, keptJSON{Path: k.Path, Task: k.Task, Field: k.Field, Author: k.Author})
@@ -64,9 +65,9 @@ func (a *app) printUndo(res usecase.UndoResult) error {
 		return err
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Undid %s %s\n", res.Commit.Hash.String()[:7], usecase.UndoSubject(res.Commit))
+	fmt.Fprintf(&b, "Undid %s %s\n", res.Commit.Hash.String()[:7], tasks.UndoSubject(res.Commit))
 	// Name the file only when the lines are about more than one.
-	several := slices.ContainsFunc(res.Kept, func(k usecase.UndoKept) bool { return k.Path != res.Kept[0].Path })
+	several := slices.ContainsFunc(res.Kept, func(k tasks.UndoKept) bool { return k.Path != res.Kept[0].Path })
 	for _, k := range res.Kept {
 		fmt.Fprintf(&b, "  kept %s (changed later by %s)", k.Field, k.Author)
 		if several {

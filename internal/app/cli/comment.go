@@ -9,6 +9,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/comments"
 	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
@@ -66,7 +67,7 @@ type commentOut struct {
 }
 
 func (a *app) commentAdd(arg string, text []string) error {
-	cs, err := a.ss.BeginComment(arg)
+	cs, err := comments.BeginComment(a.ss, arg)
 	if err != nil {
 		return err
 	}
@@ -78,15 +79,15 @@ func (a *app) commentAdd(arg string, text []string) error {
 		if path, edited, err = a.editFile(usecase.TaskFileName(cs.Entry), nil); err != nil {
 			return err
 		}
-		if body = usecase.CommentBody(string(edited)); body == "" {
+		if body = comments.CommentBody(string(edited)); body == "" {
 			_ = osfs.Remove(path)
 		}
 	}
-	p, err := a.ss.PrepareComment(cs, body)
+	p, err := comments.PrepareComment(a.ss, cs, body)
 	if err != nil {
 		return err
 	}
-	r, err := a.ss.WriteComment(p)
+	r, err := comments.WriteComment(a.ss, p)
 	if err != nil {
 		if path != "" {
 			return fmt.Errorf("%s; the comment is kept at %s", describe(err), path)
@@ -102,12 +103,12 @@ func (a *app) commentAdd(arg string, text []string) error {
 }
 
 func (a *app) commentEdit(arg string) error {
-	ces, err := a.ss.OpenComment(arg)
+	ces, err := comments.OpenComment(a.ss, arg)
 	if err != nil {
 		return err
 	}
 	s, ref, c := ces.Store, ces.Ref, ces.Comment
-	if err := a.ss.CheckMyComment(ces, "edited"); err != nil {
+	if err := comments.CheckMyComment(a.ss, ces, "edited"); err != nil {
 		return err
 	}
 	commentULID := ref.Comment.String()
@@ -115,8 +116,8 @@ func (a *app) commentEdit(arg string) error {
 	if err != nil {
 		return err
 	}
-	body := usecase.CommentBody(string(edited))
-	p, err := a.ss.PrepareCommentEdit(ces, body)
+	body := comments.CommentBody(string(edited))
+	p, err := comments.PrepareCommentEdit(a.ss, ces, body)
 	if body == "" || body == c.Body {
 		if rerr := osfs.Remove(path); rerr != nil {
 			return rerr
@@ -129,7 +130,7 @@ func (a *app) commentEdit(arg string) error {
 	if err != nil {
 		return err
 	}
-	r, err := a.ss.WriteCommentEdit(p)
+	r, err := comments.WriteCommentEdit(a.ss, p)
 	if err != nil {
 		return fmt.Errorf("%s; the edited comment is kept at %s", describe(err), path)
 	}
@@ -140,7 +141,7 @@ func (a *app) commentEdit(arg string) error {
 }
 
 func (a *app) commentRm(arg string) error {
-	r, err := a.ss.CommentRemove(arg)
+	r, err := comments.CommentRemove(a.ss, arg)
 	if err != nil {
 		return err
 	}
@@ -152,7 +153,7 @@ func (a *app) commentRm(arg string) error {
 func (a *app) printComment(s *store.Store, ref store.CommentRef, verb string) error {
 	var err error
 	if a.jsonOut {
-		c, err := usecase.FindComment(s, ref)
+		c, err := comments.FindComment(s, ref)
 		if err != nil {
 			return err
 		}

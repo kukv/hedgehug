@@ -10,6 +10,8 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
 func TestUndo(t *testing.T) {
@@ -190,7 +192,7 @@ func TestNotificationsReadStoreParam(t *testing.T) {
 	ts := twoStores(t)
 	ss := ts.session()
 	ss.StoreName = "team"
-	v, err := ss.Add(usecase.AddInput{Title: "in team"})
+	v, err := tasks.Add(ss, tasks.AddInput{Title: "in team"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +224,7 @@ func TestNotificationsWarnOnce(t *testing.T) {
 	ts := newTestServer(t) // no account: NoAccountsWarning
 	ts.dropDefaultAccount()
 	ts.call("GET", "/api/notifications?all=true", nil, 200, nil)
-	if n := strings.Count(ts.log.String(), usecase.NoAccountsWarning); n != 1 {
+	if n := strings.Count(ts.log.String(), notifications.NoAccountsWarning); n != 1 {
 		t.Errorf("warned %d times: %q", n, ts.log.String())
 	}
 }
@@ -260,11 +262,11 @@ func TestActivityWithoutStoreReadsEveryStore(t *testing.T) {
 	ts := twoStores(t)
 	ss := ts.session()
 	ss.StoreName = "me"
-	if _, err := ss.Add(usecase.AddInput{Title: "in me"}); err != nil {
+	if _, err := tasks.Add(ss, tasks.AddInput{Title: "in me"}); err != nil {
 		t.Fatal(err)
 	}
 	ss.StoreName = "team"
-	if _, err := ss.Add(usecase.AddInput{Title: "in team"}); err != nil {
+	if _, err := tasks.Add(ss, tasks.AddInput{Title: "in team"}); err != nil {
 		t.Fatal(err)
 	}
 	var out []usecase.LogView

@@ -8,11 +8,12 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 )
 
 func TestSchemaFileBroken(t *testing.T) {
 	t.Parallel()
-	sc, fs := SchemaFile([]byte("statuses: [\n"))
+	sc, fs := usecase.CheckSchemaFile([]byte("statuses: [\n"))
 	if sc != nil {
 		t.Errorf("schema = %v, want nil", sc)
 	}
@@ -29,7 +30,7 @@ func TestSchemaFileProblems(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, fs := SchemaFile(data)
+	got, fs := usecase.CheckSchemaFile(data)
 	if got == nil || len(fs) == 0 {
 		t.Fatalf("schema = %v, findings = %+v", got, fs)
 	}
@@ -44,7 +45,7 @@ func TestSchemaClean(t *testing.T) {
 	t.Parallel()
 	s, _ := newStore(t)
 	put(t, s, newTask("A"))
-	fs, err := Schema(s, mustOpen(t, s))
+	fs, err := usecase.CheckSchema(s, mustOpen(t, s))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +65,7 @@ func TestSchemaEachCheck(t *testing.T) {
 		sc.Props = append(sc.Props, schema.Prop{Name: "label", Type: schema.TypeText})
 		sc.Scoped = []schema.Scoped{{Where: "project:" + model.NewULID().String()}}
 	})
-	fs, err := Schema(s, mustOpen(t, s))
+	fs, err := usecase.CheckSchema(s, mustOpen(t, s))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +99,7 @@ func TestSchemaScopedTemplates(t *testing.T) {
 			Templates: &schema.Templates{Only: []string{"a"}, Default: map[string]string{"task": "b"}},
 		}}
 	})
-	fs, err := Schema(s, mustOpen(t, s))
+	fs, err := usecase.CheckSchema(s, mustOpen(t, s))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +126,7 @@ func TestSchemaOverrideOfDeletedProject(t *testing.T) {
 	s = rewriteSchema(t, dir, func(sc *schema.Schema) {
 		sc.Scoped = []schema.Scoped{{Where: "project:" + gone.ULID.String()}, {Where: "project:" + live.ULID.String()}}
 	})
-	fs, err := Schema(s, mustOpen(t, s))
+	fs, err := usecase.CheckSchema(s, mustOpen(t, s))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,8 +137,8 @@ func TestSchemaOverrideOfDeletedProject(t *testing.T) {
 
 func TestSort(t *testing.T) {
 	t.Parallel()
-	fs := []Finding{{Check: "task", Where: "b"}, {Check: "template", Where: "z"}, {Check: "schema", Where: "y"}, {Check: "task", Where: "a"}, {Check: "override", Where: "q"}}
-	Sort(fs)
+	fs := []usecase.Finding{{Check: "task", Where: "b"}, {Check: "template", Where: "z"}, {Check: "schema", Where: "y"}, {Check: "task", Where: "a"}, {Check: "override", Where: "q"}}
+	usecase.SortFindings(fs)
 	want := []string{"schema", "template", "override", "task", "task"}
 	if got := checks(fs); !slices.Equal(got, want) {
 		t.Fatalf("checks = %v, want %v", got, want)

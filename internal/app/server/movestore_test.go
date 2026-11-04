@@ -10,6 +10,9 @@ import (
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
 // moveFixture adds to the store "me" of twoStores: ME-2 with its child ME-3
@@ -19,14 +22,14 @@ func moveFixture(t *testing.T, ts *testServer) {
 	ss := ts.session()
 	ss.StoreName = "me"
 	add := func(title, parent string) {
-		if _, err := ss.Add(usecase.AddInput{Title: title, Parent: parent}); err != nil {
+		if _, err := tasks.Add(ss, tasks.AddInput{Title: title, Parent: parent}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	add("P", "")
 	add("C", "ME-2")
 	add("O", "")
-	if _, err := ss.Dep("ME-4", "ME-3", true); err != nil {
+	if _, err := tasks.Dep(ss, "ME-4", "ME-3", true); err != nil {
 		t.Fatal(err)
 	}
 	s, err := ss.OpenStore()
@@ -72,7 +75,7 @@ func TestMoveStorePlanAPI(t *testing.T) {
 	ts := twoStores(t)
 	moveFixture(t, ts)
 
-	var v usecase.MovePlanView
+	var v stores.MovePlanView
 	ts.call("POST", "/api/tasks/ME-2/move-store/plan", map[string]any{"to": "team"}, 200, &v)
 	if v.From != "me" || v.To != "team" || v.Workspace.Prefix != "TM" || v.Workspace.ULID.IsZero() || v.Parent != nil {
 		t.Fatalf("plan = %+v", v)
@@ -136,7 +139,7 @@ func TestMoveStorePlanAPIWorkspaceChoice(t *testing.T) {
 		t.Errorf("candidates = %v; want the two workspaces of team, api among them", p.Args["candidates"])
 	}
 
-	var v usecase.MovePlanView
+	var v stores.MovePlanView
 	ts.call("POST", "/api/tasks/ME-1/move-store/plan", map[string]any{"to": "team", "workspace": "API"}, 200, &v)
 	if v.Workspace.Prefix != "API" {
 		t.Errorf("workspace = %+v", v.Workspace)
@@ -156,7 +159,7 @@ func TestMoveStorePlanAPIReadOnly(t *testing.T) {
 	if p := ts.problem("POST", "/api/tasks/ME-1/move-store/plan", map[string]any{"to": "team"}, 409); p.Type != "store.read_only" {
 		t.Errorf("plan: %+v", p)
 	}
-	plan := usecase.MovePlanView{From: "me", To: "team", Tasks: []usecase.MoveTaskView{}, Unlinked: []usecase.MoveUnlinkView{}, Hidden: []string{}}
+	plan := stores.MovePlanView{From: "me", To: "team", Tasks: []stores.MoveTaskView{}, Unlinked: []stores.MoveUnlinkView{}, Hidden: []string{}}
 	if p := ts.problem("POST", "/api/tasks/ME-1/move-store", map[string]any{"to": "team", "confirmed": plan}, 409); p.Type != "store.read_only" {
 		t.Errorf("move: %+v", p)
 	}
@@ -172,14 +175,14 @@ func TestMoveStoreAPI(t *testing.T) {
 		t.Errorf("without confirmed: %+v", p)
 	}
 
-	var plan usecase.MovePlanView
+	var plan stores.MovePlanView
 	ts.call("POST", "/api/tasks/ME-2/move-store/plan", map[string]any{"to": "team"}, 200, &plan)
 
 	// a task added under the moved ones after the plan was shown
 	if _, err := func() (usecase.TaskResult, error) {
 		ss := ts.session()
 		ss.StoreName = "me"
-		return ss.Add(usecase.AddInput{Title: "late", Parent: "ME-3"})
+		return tasks.Add(ss, tasks.AddInput{Title: "late", Parent: "ME-3"})
 	}(); err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +198,7 @@ func TestMoveStoreAPI(t *testing.T) {
 	if len(plan.Tasks) != 3 {
 		t.Fatalf("plan = %+v; want the three tasks", plan.Tasks)
 	}
-	var res usecase.MoveStoreResultView
+	var res stores.MoveStoreResultView
 	ts.call("POST", "/api/tasks/ME-2/move-store", map[string]any{"to": "team", "confirmed": plan}, 200, &res)
 	if res.From != "me" || res.To != "team" || len(res.Tasks) != 3 || res.Tasks[0].OldID != "ME-2" || res.Tasks[0].NewID != "TM-2" {
 		t.Fatalf("result = %+v", res)
@@ -227,7 +230,7 @@ func TestMoveStoreAPIScoped(t *testing.T) {
 	ts.call("PUT", "/api/schema/scoped/"+proj.Task.ID+"?store=me", map[string]any{"statuses": four}, 200, nil)
 	path := "/api/tasks/" + proj.Task.ID + "/move-store"
 
-	var v usecase.MovePlanView
+	var v stores.MovePlanView
 	ts.call("POST", path+"/plan", map[string]any{"to": "team"}, 200, &v)
 	if v.Scoped == nil || !v.Scoped.Required || v.Scoped.Choice != "" || v.Scoped.Dropped == nil {
 		t.Fatalf("scoped before the choice = %+v", v.Scoped)
@@ -242,18 +245,18 @@ func TestMoveStoreAPIScoped(t *testing.T) {
 		t.Fatalf("scoped carried = %+v", v.Scoped)
 	}
 	// a plan made for another choice is not the plan of this one
-	var other usecase.MovePlanView
+	var other stores.MovePlanView
 	ts.call("POST", path+"/plan", map[string]any{"to": "team", "scoped": "drop"}, 200, &other)
 	if p := ts.problem("POST", path, map[string]any{"to": "team", "scoped": "carry", "confirmed": other}, 409); p.Type != "move.changed" {
 		t.Errorf("plan of drop, move with carry: %+v", p)
 	}
 
-	var res usecase.MoveStoreResultView
+	var res stores.MoveStoreResultView
 	ts.call("POST", path, map[string]any{"to": "team", "scoped": "carry", "confirmed": v}, 200, &res)
 	if res.Scoped == nil || !res.Scoped.Carried {
 		t.Errorf("result = %+v", res)
 	}
-	var sc usecase.SchemaView
+	var sc schemas.SchemaView
 	ts.call("GET", "/api/schema?store=team", nil, 200, &sc)
 	if len(sc.Scoped) != 1 || sc.Scoped[0].Where != "project:"+proj.Task.ULID {
 		t.Errorf("scoped in team = %+v", sc.Scoped)

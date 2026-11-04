@@ -10,11 +10,11 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/storage/mount"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 )
 
-// forTask is the session that works on the task arg names, and arg as that
+// ForTask is the session that works on the task arg names, and arg as that
 // session reads it. With StoreName set it is ss itself; a "<store>:" naming
 // another store is a usage error (store.conflict). Otherwise the task is
 // looked up in every store (mount.Set.Resolve) and the session is
@@ -22,20 +22,20 @@ import (
 // several stores is KindAmbiguous, task.ambiguous, with the candidates as
 // "<store>:<id> (<ULID>) <title>" lines and Args "candidates".
 // Not found is task.not_found, as Resolve says now.
-func (ss *Session) forTask(arg string) (*Session, string, error) {
+func (ss *Session) ForTask(arg string) (*Session, string, error) {
 	c, _, err := ss.Config()
 	if err != nil {
 		return nil, "", err
 	}
 	// A "<store>:" names the store, which is not looked up.
-	if name, rest, ok := strings.Cut(arg, ":"); ok && storeExists(c, name) {
+	if name, rest, ok := strings.Cut(arg, ":"); ok && StoreExists(c, name) {
 		switch {
 		case ss.StoreName == "":
 			return ss.ForStore(name), rest, nil
 		case name == ss.StoreName:
 			return ss, rest, nil
 		}
-		return nil, "", storeConflict(arg, name, ss.StoreName)
+		return nil, "", StoreConflict(arg, name, ss.StoreName)
 	}
 	// With one store (or none: Select says so) there is nothing to look in:
 	// it is the store, decided as Select does, before the task is looked up.
@@ -46,24 +46,24 @@ func (ss *Session) forTask(arg string) (*Session, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	hit, err := set.Resolve(arg)
+	hit, err := ResolveIn(set, arg)
 	if err != nil {
-		return nil, "", ss.mountResolveError(set, arg, err)
+		return nil, "", ss.MountResolveError(set, arg, err)
 	}
 	return ss.ForStore(hit.Store.Name), arg, nil
 }
 
-// storeConflict is the usage error of an id written for the store named but
+// StoreConflict is the usage error of an id written for the store named but
 // asked in the store --store names.
-func storeConflict(arg, named, storeName string) error {
-	return newErr(KindUsage, "store.conflict",
+func StoreConflict(arg, named, storeName string) error {
+	return NewErr(KindUsage, "store.conflict",
 		fmt.Errorf("%q is in %s, but --store is %s", arg, named, storeName), "store", storeName, "named", named)
 }
 
-// mountResolveError gives the error of mount.Set.Resolve its Kind and Code.
-func (ss *Session) mountResolveError(set *mount.Set, arg string, err error) error {
-	var me *mount.AmbiguousError
-	var mv *mount.MovedError
+// MountResolveError gives the error of mount.Set.Resolve its Kind and Code.
+func (ss *Session) MountResolveError(set *mount.Set, arg string, err error) error {
+	var me *AmbiguousError
+	var mv *MovedError
 	var ie *index.AmbiguousError
 	switch {
 	case errors.As(err, &mv):
@@ -73,7 +73,7 @@ func (ss *Session) mountResolveError(set *mount.Set, arg string, err error) erro
 		for i, h := range me.Candidates {
 			lines[i] = fmt.Sprintf("%s (%s) %s", h.Ref(), h.Entry.ULID, h.Entry.Title)
 		}
-		return newErr(KindAmbiguous, "task.ambiguous", err, "input", arg, "candidates", lines)
+		return NewErr(KindAmbiguous, "task.ambiguous", err, "input", arg, "candidates", lines)
 	case errors.As(err, &ie):
 		// within one store: let that store spell the candidates out
 		var found error
@@ -93,14 +93,14 @@ func (ss *Session) mountResolveError(set *mount.Set, arg string, err error) erro
 		}
 		return fmt.Errorf("%q is ambiguous in a store, but no store says so: %w", arg, err)
 	case errors.Is(err, store.ErrNotFound):
-		return newErr(KindNotFound, "task.not_found", err, "input", arg)
+		return NewErr(KindNotFound, "task.not_found", err, "input", arg)
 	}
-	return classify(err)
+	return Classify(err)
 }
 
 // movedErr is the error of an input that names a task that moved to another
 // store.
-func movedErr(mv *mount.MovedError) error {
+func movedErr(mv *MovedError) error {
 	args := []any{"input", mv.Input, "store_ulid", mv.Forward.MovedTo.String()}
 	if mv.To != nil {
 		args = append(args, "store", mv.To.Name)
@@ -108,18 +108,18 @@ func movedErr(mv *mount.MovedError) error {
 	if id := mv.NowID(); id != "" {
 		args = append(args, "id", id)
 	}
-	return newErr(KindNotFound, "task.moved", mv, args...)
+	return NewErr(KindNotFound, "task.moved", mv, args...)
 }
 
-// movedUnknownErr is task.moved for a forward that the index cannot name:
+// MovedUnknownErr is task.moved for a forward that the index cannot name:
 // only the task is known, so the keys of the destination are left out.
-func movedUnknownErr(ulid model.ULID) error {
-	return newErr(KindNotFound, "task.moved", fmt.Errorf("%s moved to another store", ulid), "input", ulid.String())
+func MovedUnknownErr(ulid model.ULID) error {
+	return NewErr(KindNotFound, "task.moved", fmt.Errorf("%s moved to another store", ulid), "input", ulid.String())
 }
 
-// movedFor is the task.moved error of arg when a forward in the store of ix
+// MovedFor is the task.moved error of arg when a forward in the store of ix
 // names it, nil when none does.
-func (ss *Session) movedFor(ix *index.Index, arg string) error {
+func (ss *Session) MovedFor(ix *index.Index, arg string) error {
 	f, err := ix.ResolveForward(arg)
 	if err != nil {
 		return nil
@@ -129,14 +129,14 @@ func (ss *Session) movedFor(ix *index.Index, arg string) error {
 	if set != nil {
 		from, _ = set.Get(ix.StoreName())
 	}
-	return movedErr(set.Moved(from, arg, f))
+	return movedErr(MovedIn(set, from, arg, f))
 }
 
-// forComment is the session that works on the comment arg names: ss itself
+// ForComment is the session that works on the comment arg names: ss itself
 // with StoreName set, otherwise the session of the one store that has a
 // comment with that ULID. None is comment.not_found; a ULID in several stores
 // is KindAmbiguous, comment.ambiguous.
-func (ss *Session) forComment(arg string) (*Session, error) {
+func (ss *Session) ForComment(arg string) (*Session, error) {
 	c, _, err := ss.Config()
 	if err != nil {
 		return nil, err
@@ -150,7 +150,7 @@ func (ss *Session) forComment(arg string) (*Session, error) {
 		return nil, err
 	}
 	var in []*mount.Mounted
-	notFound := commentNotFound(arg, fmt.Errorf("comment %q: %w", arg, store.ErrNotFound))
+	notFound := CommentNotFound(arg, fmt.Errorf("comment %q: %w", arg, store.ErrNotFound))
 	for _, m := range set.Stores {
 		var refs []store.CommentRef
 		var refsErr error
@@ -165,7 +165,7 @@ func (ss *Session) forComment(arg string) (*Session, error) {
 		if refsErr != nil {
 			return nil, refsErr
 		}
-		if _, err := resolveComment(refs, arg); err != nil {
+		if _, err := ResolveComment(refs, arg); err != nil {
 			notFound = err
 			continue
 		}
@@ -181,13 +181,13 @@ func (ss *Session) forComment(arg string) (*Session, error) {
 	for i, m := range in {
 		lines[i] = m.Name + ":" + strings.ToUpper(arg)
 	}
-	return nil, newErr(KindAmbiguous, "comment.ambiguous", &ambiguousError{input: arg, noun: "comments", lines: lines}, "input", arg)
+	return nil, NewErr(KindAmbiguous, "comment.ambiguous", &ambiguousError{input: arg, noun: "comments", lines: lines}, "input", arg)
 }
 
 // crossStore is the refusal of a reference to a task of another store: id is
 // the task as the other store names it.
 func crossStore(storeName, id string) error {
-	return newErr(KindInvalid, "ref.cross_store",
+	return NewErr(KindInvalid, "ref.cross_store",
 		fmt.Errorf("%s's %s cannot be referred to (references stay inside a store)", storeName, id),
 		"store", storeName, "id", id)
 }
@@ -206,7 +206,7 @@ func (ss *Session) ResolveRef(ix *index.Index, arg string) (*index.Entry, error)
 	}
 	in := arg
 	if c, _, err := ss.Config(); err == nil {
-		if name, rest, ok := strings.Cut(arg, ":"); ok && storeExists(c, name) {
+		if name, rest, ok := strings.Cut(arg, ":"); ok && StoreExists(c, name) {
 			if name == self {
 				in = rest
 			} else {
@@ -243,7 +243,7 @@ func (ss *Session) otherStoreRef(name, rest, arg string) error {
 			}
 		}
 	}
-	return newErr(KindNotFound, "task.not_found", fmt.Errorf("%q: %w", arg, store.ErrNotFound), "input", arg)
+	return NewErr(KindNotFound, "task.not_found", fmt.Errorf("%q: %w", arg, store.ErrNotFound), "input", arg)
 }
 
 // findIn is the task arg names in the store m.
@@ -274,10 +274,10 @@ func idOrULID(e *index.Entry) string {
 	return e.ULID.String()
 }
 
-// checkEditRefs refuses a blocker or task_ref value the edit t adds over old
+// CheckEditRefs refuses a blocker or task_ref value the edit t adds over old
 // (nil: every reference counts) when the task is in another mounted store.
 // One that is nowhere is left to the store's own check.
-func (ss *Session) checkEditRefs(ix *index.Index, old, t *model.Task) error {
+func (ss *Session) CheckEditRefs(ix *index.Index, old, t *model.Task) error {
 	had := map[model.ULID]bool{}
 	sc := ix.Schema()
 	if old != nil {
@@ -322,4 +322,23 @@ func editRefs(t *model.Task, sc *schema.Schema) []model.ULID {
 		}
 	}
 	return out
+}
+
+func CommentNotFound(arg string, err error) error {
+	return NewErr(KindNotFound, "comment.not_found", err, "input", arg)
+}
+
+// ResolveComment finds the comment arg names among refs: a full ULID, in any
+// case.
+func ResolveComment(refs []store.CommentRef, arg string) (store.CommentRef, error) {
+	if len(arg) != 26 {
+		return store.CommentRef{}, CommentNotFound(arg, fmt.Errorf("comment %q: give the full ULID of the comment: %w", arg, store.ErrNotFound))
+	}
+	u := strings.ToUpper(arg)
+	for _, r := range refs {
+		if r.Comment.String() == u {
+			return r, nil
+		}
+	}
+	return store.CommentRef{}, CommentNotFound(arg, fmt.Errorf("comment %q: %w", arg, store.ErrNotFound))
 }

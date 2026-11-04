@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/accounts"
 	"github.com/kukv/hedgehug/internal/lib/github"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
@@ -92,7 +93,7 @@ When this is the second account, the stores that had no account: are given the f
 }
 
 func (a *app) authAdd(name, login, host, token string) error {
-	res, err := a.ss.AuthAdd(usecase.AuthAddInput{Name: name, Login: login, Host: host, Token: token})
+	res, err := accounts.AuthAdd(a.ss, accounts.AuthAddInput{Name: name, Login: login, Host: host, Token: token})
 	if err != nil {
 		return err
 	}
@@ -113,7 +114,7 @@ func (a *app) authAdd(name, login, host, token string) error {
 
 // printPinned tells which stores were given an account when a second account
 // was added; nothing when none was.
-func (a *app) printPinned(p usecase.Pinned) error {
+func (a *app) printPinned(p accounts.Pinned) error {
 	if len(p.Stores) == 0 {
 		return nil
 	}
@@ -122,7 +123,7 @@ func (a *app) printPinned(p usecase.Pinned) error {
 }
 
 func (a *app) authLogin(name, host string, hostGiven, withToken bool) error {
-	in := usecase.AuthLoginInput{Name: name, Host: host, HostGiven: hostGiven, WithToken: withToken, ShowCode: a.showDeviceCode}
+	in := accounts.AuthLoginInput{Name: name, Host: host, HostGiven: hostGiven, WithToken: withToken, ShowCode: a.showDeviceCode}
 	if withToken {
 		tok, err := a.readToken()
 		if err != nil {
@@ -130,7 +131,7 @@ func (a *app) authLogin(name, host string, hostGiven, withToken bool) error {
 		}
 		in.Token = tok
 	}
-	res, err := a.ss.AuthLogin(in)
+	res, err := accounts.AuthLogin(a.ss, in)
 	if err != nil {
 		return err
 	}
@@ -162,7 +163,7 @@ func (a *app) showDeviceCode(dc *github.DeviceCode) {
 }
 
 func (a *app) authStatus() error {
-	out, err := a.ss.AuthStatus()
+	out, err := accounts.AuthStatuses(a.ss)
 	if err != nil && !errors.Is(err, usecase.ErrFindings) {
 		return err
 	}
@@ -202,7 +203,7 @@ func expiryText(t *time.Time) string {
 }
 
 func (a *app) authLogout(name string) error {
-	res, err := a.ss.AuthLogout(name)
+	res, err := accounts.AuthLogout(a.ss, name)
 	if err != nil {
 		return err
 	}

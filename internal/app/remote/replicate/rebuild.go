@@ -22,9 +22,9 @@ import (
 )
 
 const (
-	newSuffix    = ".rewrite-new"
+	newSuffix    = store.RewriteNewSuffix
 	staleMarker  = ".rebuild-stale" // in the rebuild: the old store is the one to keep
-	beforePrefix = ".before-rewrite-"
+	beforePrefix = store.BeforeRewritePrefix
 	// keptPrefix names the old store that Swap leaves beside the new one
 	// when the rebuild could not put back all its unpushed changes. It is
 	// not a leftover (FindLeftover does not see it): nothing removes it.
@@ -598,69 +598,10 @@ func checkUnchanged(dir string, b *Rebuild) error {
 	return nil
 }
 
-// Leftover is what a rebuild left beside the store at dir.
-type Leftover struct {
-	New    string   // <dir>.rewrite-new, "" when none
-	Before []string // <dir>.before-rewrite-*, oldest first
-}
-
-// None reports whether nothing was left.
-func (l Leftover) None() bool { return l.New == "" && len(l.Before) == 0 }
-
-// FindLeftover looks beside dir for what a rebuild left.
-func FindLeftover(dir string) (Leftover, error) {
-	entries, err := ReadParent(dir)
-	if err != nil {
-		return Leftover{}, err
-	}
-	return LeftoverIn(dir, entries), nil
-}
-
-// ReadParent reads the directory dir is in, for LeftoverIn; a caller that
-// looks at several stores reads each directory once. A missing directory
-// has no entries.
-func ReadParent(dir string) ([]fs.DirEntry, error) {
-	entries, err := os.ReadDir(filepath.Dir(filepath.Clean(dir)))
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
-	return entries, err
-}
-
-// LeftoverIn is FindLeftover over the entries of the directory dir is in
-// (ReadParent).
-func LeftoverIn(dir string, entries []fs.DirEntry) Leftover {
-	var l Leftover
-	parent, base := filepath.Split(filepath.Clean(dir))
-	if parent == "" {
-		parent = "."
-	}
-	for _, e := range entries { // sorted by name, so the oldest before-rewrite first
-		switch name := e.Name(); {
-		case name == base+newSuffix:
-			l.New = filepath.Join(parent, name)
-		case strings.HasPrefix(name, base+beforePrefix):
-			l.Before = append(l.Before, filepath.Join(parent, name))
-		}
-	}
-	return l
-}
-
-// LeftoverMessage is what Hedgehug tells of an unfinished rebuild of the
-// store called name.
-func LeftoverMessage(name string) string {
-	return fmt.Sprintf("the rebuild of %s after a history rewrite is unfinished (hedgehug doctor --fix finishes it)", name)
-}
-
-// LeftoverError says a store has a rebuild left unfinished.
-type LeftoverError struct{ Name string }
-
-func (e *LeftoverError) Error() string { return LeftoverMessage(e.Name) }
-
 // FinishLeftover completes a swap that stopped, or removes what a rebuild
 // left. With no store at dir, the rebuilt one takes its place; with only an
 // old one left, it is put back. Then what remains beside the store goes.
-func FinishLeftover(dir string, l Leftover) error {
+func FinishLeftover(dir string, l store.Leftover) error {
 	_, err := FinishLeftoverKept(dir, l)
 	return err
 }
@@ -668,13 +609,13 @@ func FinishLeftover(dir string, l Leftover) error {
 // FinishLeftoverKept is FinishLeftover that also returns where it kept an
 // old store that carries keepMarker: that one is renamed to keptPrefix, not
 // removed; when it cannot be, it stays and the error names it.
-func FinishLeftoverKept(dir string, l Leftover) (kept []string, err error) {
+func FinishLeftoverKept(dir string, l store.Leftover) (kept []string, err error) {
 	keptPaths := &kept
 	err = finishLeftover(dir, l, keptPaths)
 	return kept, err
 }
 
-func finishLeftover(dir string, l Leftover, keptPaths *[]string) error {
+func finishLeftover(dir string, l store.Leftover, keptPaths *[]string) error {
 	if _, err := os.Lstat(dir); errors.Is(err, fs.ErrNotExist) {
 		stale := false
 		if l.New != "" {

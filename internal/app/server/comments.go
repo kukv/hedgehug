@@ -8,6 +8,8 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/comments"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
 // CommentParam is the comment a request is on. It is exported because huma
@@ -39,7 +41,7 @@ type commentWrite struct {
 type commentOutput struct{ Body commentWrite }
 
 // commentOut is the output of a write to a comment.
-func commentOut(r usecase.CommentResult) *commentOutput {
+func commentOut(r comments.CommentResult) *commentOutput {
 	out := &commentOutput{Body: commentWrite{Commit: commitPtr(r.Commit)}}
 	if c := r.Comment; c != nil {
 		out.Body.Comment = usecase.CommentView{ULID: c.ULID.String(), Author: c.Author, Created: c.Created, Body: c.Body}
@@ -66,7 +68,7 @@ func commentOf(ss *usecase.Session, id, cid string) error {
 	if err != nil {
 		return problemOf(err)
 	}
-	ces, err := ss.OpenComment(cid)
+	ces, err := comments.OpenComment(ss, cid)
 	if err != nil {
 		return problemOf(err)
 	}
@@ -83,7 +85,7 @@ func (s *Server) registerComments() {
 	}, func(_ context.Context, in *commentInput) (*commentOutput, error) {
 		ss := s.session(in.Store)
 		defer ss.Close()
-		r, err := ss.CommentAdd(in.ID, in.Body.Body)
+		r, err := comments.CommentAdd(ss, in.ID, in.Body.Body)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -99,7 +101,7 @@ func (s *Server) registerComments() {
 		if err := commentOf(ss, in.ID, in.CID); err != nil {
 			return nil, err
 		}
-		r, err := ss.CommentEdit(in.CID, in.Body.Body)
+		r, err := comments.CommentEdit(ss, in.CID, in.Body.Body)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -115,7 +117,7 @@ func (s *Server) registerComments() {
 		if err := commentOf(ss, in.ID, in.CID); err != nil {
 			return nil, err
 		}
-		r, err := ss.CommentRemove(in.CID)
+		r, err := comments.CommentRemove(ss, in.CID)
 		if err != nil {
 			return nil, problemOf(err)
 		}
@@ -135,7 +137,7 @@ func (s *Server) registerComments() {
 		}, func(_ context.Context, in *TaskParam) (*taskWriteOutput, error) {
 			ss := s.session(in.Store)
 			defer ss.Close()
-			r, err := ss.Watch(in.ID, w.on)
+			r, err := tasks.Watch(ss, in.ID, w.on)
 			if err != nil {
 				return nil, problemOf(err)
 			}

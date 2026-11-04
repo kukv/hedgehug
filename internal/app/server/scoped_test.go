@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 )
 
 // addProject adds a project and returns its ID.
@@ -25,46 +26,46 @@ func TestScopedPutAndDelete(t *testing.T) {
 	path := "/api/schema/scoped/" + p.ID
 	four := []string{"todo", "in_progress", "done", "canceled"}
 
-	var v usecase.ScopedView
+	var v schemas.ScopedView
 	ts.call("PUT", path, map[string]any{"statuses": four}, 200, &v)
 	if v.Commit == nil || v.Scoped == nil || !slices.Equal(v.Scoped.Statuses, four) || v.Project.ULID != p.ULID || v.Project.ID != p.ID {
 		t.Fatalf("statuses = %+v", v)
 	}
 
 	// what is left out stays
-	v = usecase.ScopedView{}
+	v = schemas.ScopedView{}
 	ts.call("PUT", path, map[string]any{"transitions": map[string][]string{"todo": {"in_progress"}}, "required": map[string][]string{"done": {"points"}}}, 200, &v)
 	if v.Scoped == nil || !slices.Equal(v.Scoped.Statuses, four) || !slices.Equal(v.Scoped.Workflow.Transitions["todo"], []string{"in_progress"}) || !slices.Equal(v.Scoped.Workflow.Required["done"], []string{"points"}) {
 		t.Fatalf("workflow = %+v", v.Scoped)
 	}
 
 	// the same again writes nothing
-	var same usecase.ScopedView
+	var same schemas.ScopedView
 	ts.call("PUT", path, map[string]any{"statuses": four}, 200, &same)
 	if same.Commit != nil {
 		t.Errorf("commit = %v, want null", *same.Commit)
 	}
 
 	// GET /api/schema shows it
-	var sc usecase.SchemaView
+	var sc schemas.SchemaView
 	ts.call("GET", "/api/schema", nil, 200, &sc)
 	if len(sc.Scoped) != 1 || sc.Scoped[0].Where != "project:"+p.ULID {
 		t.Errorf("schema.scoped = %+v", sc.Scoped)
 	}
 
 	// an empty list or object goes back to the store; the ULID names the project too
-	var cleared usecase.ScopedView
+	var cleared schemas.ScopedView
 	ts.call("PUT", "/api/schema/scoped/"+p.ULID, map[string]any{"statuses": []string{}, "transitions": map[string][]string{}}, 200, &cleared)
 	if cleared.Scoped == nil || cleared.Scoped.Statuses != nil || len(cleared.Scoped.Workflow.Transitions) != 0 || len(cleared.Scoped.Workflow.Required) != 1 {
 		t.Fatalf("after clearing = %+v", cleared.Scoped)
 	}
 
-	var del usecase.ScopedView
+	var del schemas.ScopedView
 	ts.call("DELETE", path, nil, 200, &del)
 	if del.Scoped != nil || del.Commit == nil {
 		t.Errorf("delete = %+v", del)
 	}
-	var again usecase.ScopedView
+	var again schemas.ScopedView
 	ts.call("DELETE", path, nil, 200, &again)
 	if again.Scoped != nil || again.Commit != nil {
 		t.Errorf("second delete = %+v", again)

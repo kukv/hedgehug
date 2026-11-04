@@ -10,6 +10,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 )
 
 // Problem is the problem+json body of every error. Type is the Code of the
@@ -97,7 +98,7 @@ func problemOf(err error) *Problem {
 func detailOf(err error) string {
 	var ve *store.ValidationError
 	if errors.As(err, &ve) {
-		return usecase.ViolationsText(ve)
+		return schemas.ViolationsText(ve)
 	}
 	if errors.Is(err, store.ErrLocked) {
 		return "another hedgehug is writing to the store; try again"

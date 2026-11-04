@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
 // eventStream reads /api/events.
@@ -186,7 +186,7 @@ func TestEventsReconnect(t *testing.T) {
 	var h1 helloEvent
 	_ = json.Unmarshal(es.next(t, "hello"), &h1)
 	es.Close()
-	if _, err := ts.session().Add(usecase.AddInput{Title: "while away"}); err != nil {
+	if _, err := tasks.Add(ts.session(), tasks.AddInput{Title: "while away"}); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "the poller to see HEAD", func() bool {

@@ -21,6 +21,8 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/browse"
+	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
 )
 
@@ -210,12 +212,12 @@ func BenchmarkShow(b *testing.B) {
 	for _, c := range []struct{ name, id string }{{"old", "ME-1"}, {"new", "ME-4999"}} {
 		b.Run(c.name, func(b *testing.B) {
 			warm := session(b, dir, "alice")
-			if _, err := warm.Show(c.id); err != nil { // makes the task index
+			if _, err := browse.Show(warm, c.id); err != nil { // makes the task index
 				b.Fatal(err)
 			}
 			for b.Loop() {
 				ss := session(b, dir, "alice")
-				r, err := ss.Show(c.id)
+				r, err := browse.Show(ss, c.id)
 				if err != nil || len(r.History) == 0 {
 					b.Fatalf("show: %d entries, %v", len(r.History), err)
 				}
@@ -258,7 +260,7 @@ func BenchmarkShowAfterOneCommit(b *testing.B) {
 		_ = s.Repo().Close()
 		fresh := session(b, dir, "alice") // a new process: nothing in memory
 		b.StartTimer()
-		r, err := fresh.Show(task.String())
+		r, err := browse.Show(fresh, task.String())
 		b.StopTimer()
 		if err != nil || len(r.History) == 0 {
 			b.Fatalf("show: %d entries, %v", len(r.History), err)
@@ -272,12 +274,12 @@ func BenchmarkLogTask(b *testing.B) {
 	dir := indexed(b, benchSource(b))
 	for _, c := range []struct{ name, id string }{{"old", "ME-1"}, {"new", "ME-4999"}} {
 		b.Run(c.name, func(b *testing.B) {
-			if _, err := session(b, dir, "alice").Log([]string{c.id}, 0); err != nil {
+			if _, err := browse.Log(session(b, dir, "alice"), []string{c.id}, 0); err != nil {
 				b.Fatal(err)
 			}
 			for b.Loop() {
 				ss := session(b, dir, "alice")
-				r, err := ss.Log([]string{c.id}, 0)
+				r, err := browse.Log(ss, []string{c.id}, 0)
 				if err != nil || len(r.Logs) == 0 {
 					b.Fatalf("log: %d entries, %v", len(r.Logs), err)
 				}
@@ -302,7 +304,7 @@ func BenchmarkUndo(b *testing.B) {
 				historytest.Clone(b, src, dir)
 				ss := session(b, dir, c.account)
 				b.StartTimer()
-				_, err := ss.Undo()
+				_, err := tasks.Undo(ss)
 				b.StopTimer()
 				if c.want && err != nil || !c.want && err == nil {
 					b.Fatalf("undo: %v", err)
@@ -324,7 +326,7 @@ func BenchmarkRestoreAt(b *testing.B) {
 		historytest.Clone(b, src, dir)
 		ss := session(b, dir, "alice")
 		b.StartTimer()
-		_, err := ss.RestoreAt("ME-1", at)
+		_, err := tasks.RestoreAt(ss, "ME-1", at)
 		b.StopTimer()
 		if err != nil {
 			b.Fatal(err)

@@ -16,15 +16,15 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
+	"github.com/kukv/hedgehug/internal/app/storage/mount"
 	"github.com/kukv/hedgehug/internal/app/storage/query"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
-	"github.com/kukv/hedgehug/internal/app/usecase/mount"
 	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
-// syncLockWait is how long a sync waits for another one of the store, such
+// SyncLockWait is how long a sync waits for another one of the store, such
 // as the one in the background, to end.
-const syncLockWait = 5 * time.Minute
+const SyncLockWait = 5 * time.Minute
 
 // Session is what one caller works through: the outside world it sees and
 // the store it works on. The CLI makes one per run and the GUI server one per
@@ -80,7 +80,7 @@ type mountCache struct {
 	mu  gosync.Mutex
 	set *mount.Set
 	// what the session opened and has not let go of (Close): the stores
-	// openStoreAt made and the sets listSet made
+	// OpenStoreAt made and the sets listSet made
 	openedMu gosync.Mutex
 	opened   []func()
 	// the id prefixes that stores share, which qualified works out; sharedMu
@@ -116,6 +116,10 @@ func (ss *Session) ForStore(name string) *Session {
 	}
 }
 
+// ForgetMounts lets go of the stores the session mounted, as a new run of
+// the command starts without them.
+func (ss *Session) ForgetMounts() { ss.mounts = nil }
+
 // mountCache is the cache of ss, made on first use.
 func (ss *Session) mountCache() *mountCache {
 	ss.mountMu.Lock()
@@ -133,7 +137,7 @@ func (ss *Session) Mount() (*mount.Set, error) {
 	set, toWarn, err := ss.mountOnce()
 	// not under mc.mu: Warn is the caller's and may call back
 	for _, sk := range toWarn {
-		ss.warnSkipped(sk)
+		ss.WarnSkipped(sk)
 	}
 	return set, err
 }
@@ -151,25 +155,25 @@ func (ss *Session) mountOnce() (set *mount.Set, toWarn []mount.Skipped, err erro
 	if err != nil {
 		return nil, nil, err
 	}
-	set, toWarn, _ = ss.openSet(c, false)
+	set, toWarn, _ = ss.OpenSet(c, false)
 	mc.set = set
 	return set, toWarn, nil
 }
 
-// openSet opens the stores of c as this session wants them: its clock, the
+// OpenSet opens the stores of c as this session wants them: its clock, the
 // id prefixes it counts itself, and what Resolve finds not to open given to
-// warnSkipped. A store that does not open is left out of the set. toWarn are
-// those the caller is to tell of with warnSkipped, once it holds no lock: all
+// WarnSkipped. A store that does not open is left out of the set. toWarn are
+// those the caller is to tell of with WarnSkipped, once it holds no lock: all
 // of them, except that with --store naming a store the command is about
 // that store only. With strict the store --store names, and the only store
 // of c, are an error instead (what a listing does).
-func (ss *Session) openSet(c *config.Config, strict bool) (set *mount.Set, toWarn []mount.Skipped, err error) {
-	set = mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Unopened: ss.warnSkipped, Qualified: ss.qualifiedNow()})
+func (ss *Session) OpenSet(c *config.Config, strict bool) (set *mount.Set, toWarn []mount.Skipped, err error) {
+	set = mount.Open(c, mount.Options{Now: func() time.Time { return ss.Now() }, Unopened: ss.WarnSkipped, Qualified: ss.qualifiedNow()})
 	for _, sk := range set.Skipped {
 		switch {
 		case strict && (ss.StoreName == sk.Name || len(c.Stores) == 1):
 			set.Close() // the caller gets no set to close
-			return nil, nil, openError(sk.Name, sk.Err)
+			return nil, nil, OpenError(sk.Name, sk.Err)
 		case ss.StoreName != "" && ss.StoreName != sk.Name:
 			// not what the command is about
 		default:
@@ -184,25 +188,25 @@ func (ss *Session) openSet(c *config.Config, strict bool) (set *mount.Set, toWar
 	return set, toWarn, nil
 }
 
-// warnSkipped warns that a store did not open: the stores found not to open
+// WarnSkipped warns that a store did not open: the stores found not to open
 // when they are mounted, and an index that does not open while an id is
 // looked up in every store. It is said once per caller however many times
-// the stores are opened, and not while muteOpenWarnings holds the store. (The
+// the stores are opened, and not while MuteOpenWarnings holds the store. (The
 // other warn-once of the package is the context.json one, which AddHere
 // leaves out for a call that carries an answer; that is about a file, not
 // a store.)
-func (ss *Session) warnSkipped(sk mount.Skipped) {
-	var left *replicate.LeftoverError
+func (ss *Session) WarnSkipped(sk mount.Skipped) {
+	var left *store.LeftoverError
 	if errors.As(sk.Err, &left) {
-		ss.warnOnce(sk.Name, left.Error())
+		ss.WarnOnce(sk.Name, left.Error())
 		return
 	}
-	ss.warnOnce(sk.Name, openError(sk.Name, sk.Err).Error())
+	ss.WarnOnce(sk.Name, OpenError(sk.Name, sk.Err).Error())
 }
 
-// warnOnce says msg about the store name, once per caller and not while
-// muteOpenWarnings holds the store.
-func (ss *Session) warnOnce(name, msg string) {
+// WarnOnce says msg about the store name, once per caller and not while
+// MuteOpenWarnings holds the store.
+func (ss *Session) WarnOnce(name, msg string) {
 	mc := ss.mountCache()
 	mc.warnedMu.Lock()
 	if mc.warned[name] || mc.muted[name] > 0 {
@@ -214,14 +218,14 @@ func (ss *Session) warnOnce(name, msg string) {
 	}
 	mc.warned[name] = true
 	mc.warnedMu.Unlock()
-	ss.warn(msg)
+	ss.AddWarning(msg)
 }
 
-// muteOpenWarnings makes the mount keep quiet about the stores names that do
+// MuteOpenWarnings makes the mount keep quiet about the stores names that do
 // not open, for a caller that tells of them in its own way. The returned
 // function ends it: once the last caller that muted a store has ended, the
 // next mount, opened again for that, warns of it. Callers may overlap.
-func (ss *Session) muteOpenWarnings(names []string) (unmute func()) {
+func (ss *Session) MuteOpenWarnings(names []string) (unmute func()) {
 	mc := ss.mountCache()
 	mc.warnedMu.Lock()
 	if mc.muted == nil {
@@ -242,12 +246,12 @@ func (ss *Session) muteOpenWarnings(names []string) (unmute func()) {
 			}
 		}
 		mc.warnedMu.Unlock()
-		ss.dropMount()
+		ss.DropMount()
 	}
 }
 
-// keep notes how to let go of something the session opened, for Close.
-func (ss *Session) keep(closeFn func()) {
+// Keep notes how to let go of something the session opened, for Close.
+func (ss *Session) Keep(closeFn func()) {
 	mc := ss.mountCache()
 	mc.openedMu.Lock()
 	defer mc.openedMu.Unlock()
@@ -269,13 +273,13 @@ func (ss *Session) Close() {
 	for _, closeFn := range opened {
 		closeFn()
 	}
-	ss.dropMount()
+	ss.DropMount()
 }
 
-// closeMounted lets go of the repository files of the mounted store whose
+// CloseMounted lets go of the repository files of the mounted store whose
 // directory is dir, so that a rename of the directory does not meet them
 // open (Windows).
-func (ss *Session) closeMounted(dir string) {
+func (ss *Session) CloseMounted(dir string) {
 	mc := ss.mountCache()
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
@@ -290,10 +294,10 @@ func (ss *Session) closeMounted(dir string) {
 	}
 }
 
-// dropMount forgets the stores mounted, for the next call to open them
+// DropMount forgets the stores mounted, for the next call to open them
 // again, after it lets go of their files. A write through a handle of its
 // own (a sync) adds objects that a store opened before it does not see.
-func (ss *Session) dropMount() {
+func (ss *Session) DropMount() {
 	mc := ss.mountCache()
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
@@ -304,20 +308,20 @@ func (ss *Session) dropMount() {
 	ss.forgetQualified()
 }
 
-// openError is the error of a store that does not open.
-func openError(name string, err error) *Error {
-	return newErr(KindInvalid, "store.open", fmt.Errorf("cannot open %s: %w", name, err), "name", name)
+// OpenError is the error of a store that does not open.
+func OpenError(name string, err error) *Error {
+	return NewErr(KindInvalid, "store.open", fmt.Errorf("cannot open %s: %w", name, err), "name", name)
 }
 
-// location is where a date without a zone is read.
-func (ss *Session) location() *time.Location {
+// Location is where a date without a zone is read.
+func (ss *Session) Location() *time.Location {
 	if ss.Loc != nil {
 		return ss.Loc
 	}
 	return time.Local
 }
 
-func (ss *Session) warn(msg string) {
+func (ss *Session) AddWarning(msg string) {
 	if ss.Warn != nil {
 		ss.Warn(msg)
 	}
@@ -341,22 +345,22 @@ func (ss *Session) Entry() (*config.Config, config.StoreEntry, error) {
 	}
 	e, err := c.Select(ss.StoreName)
 	if err != nil {
-		return nil, config.StoreEntry{}, selectError(ss.StoreName, err)
+		return nil, config.StoreEntry{}, SelectError(ss.StoreName, err)
 	}
 	return c, e, nil
 }
 
-// selectError classifies what config.Select refuses: a name that is no
+// SelectError classifies what config.Select refuses: a name that is no
 // store, or no name when there are several. KindInvalid, not KindUsage: the
 // CLI exits 1 for both.
-func selectError(name string, err error) error {
+func SelectError(name string, err error) error {
 	switch {
 	case errors.Is(err, config.ErrNoStores):
 		return err
 	case name != "":
-		return newErr(KindNotFound, "store.not_found", err, "name", name)
+		return NewErr(KindNotFound, "store.not_found", err, "name", name)
 	}
-	return newErr(KindInvalid, "store.choose", err)
+	return NewErr(KindInvalid, "store.choose", err)
 }
 
 // OpenStore opens the store the session works on.
@@ -365,30 +369,30 @@ func (ss *Session) OpenStore() (*store.Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	s, err := ss.openStoreAt(e.Path)
-	left, lerr := replicate.FindLeftover(e.Path)
+	s, err := ss.OpenStoreAt(e.Path)
+	left, lerr := store.FindLeftover(e.Path)
 	unfinished := lerr == nil && !left.None()
 	if err != nil {
 		if unfinished {
-			err = &replicate.LeftoverError{Name: e.Name}
+			err = &store.LeftoverError{Name: e.Name}
 		}
-		return nil, openError(e.Name, err)
+		return nil, OpenError(e.Name, err)
 	}
 	if unfinished {
-		ss.warnOnce(e.Name, replicate.LeftoverMessage(e.Name))
+		ss.WarnOnce(e.Name, store.LeftoverMessage(e.Name))
 	}
 	return s, nil
 }
 
-// openStoreAt opens the store in dir with the clock of the session, so that
+// OpenStoreAt opens the store in dir with the clock of the session, so that
 // what it writes has the time ss.Now tells.
-func (ss *Session) openStoreAt(dir string) (*store.Store, error) {
+func (ss *Session) OpenStoreAt(dir string) (*store.Store, error) {
 	s, err := store.Open(dir)
 	if err != nil {
 		return nil, err
 	}
 	s.SetNow(ss.Now)
-	ss.keep(func() { _ = s.Repo().Close() })
+	ss.Keep(func() { _ = s.Repo().Close() })
 	return s, nil
 }
 
@@ -414,12 +418,12 @@ func (ss *Session) openIndex(s *store.Store) (*index.Index, error) {
 	if err != nil {
 		return index.Open(s)
 	}
-	return ss.indexOf(e.Name, s)
+	return ss.IndexOf(e.Name, s)
 }
 
-// indexOf opens the index of s, the store called name, that knows its
+// IndexOf opens the index of s, the store called name, that knows its
 // name and shows ids as the other indexes do.
-func (ss *Session) indexOf(name string, s *store.Store) (*index.Index, error) {
+func (ss *Session) IndexOf(name string, s *store.Store) (*index.Index, error) {
 	ix, err := index.Open(s)
 	if err != nil {
 		return nil, err
@@ -513,7 +517,7 @@ func (ss *Session) Update(s *store.Store, op store.Op, fn func(*store.Tx) error)
 func (ss *Session) UpdateCommit(s *store.Store, op store.Op, fn func(*store.Tx) error) (plumbing.Hash, error) {
 	// Operations refuse a read-only store when they open it (OpenForWrite);
 	// this catches a write that did not come through there.
-	if err := ss.checkWritable(s); err != nil {
+	if err := ss.CheckWritable(s); err != nil {
 		return plumbing.ZeroHash, err
 	}
 	acct, ok, err := ss.Writer()
@@ -521,7 +525,7 @@ func (ss *Session) UpdateCommit(s *store.Store, op store.Op, fn func(*store.Tx) 
 		return plumbing.ZeroHash, err
 	}
 	if !ok {
-		return plumbing.ZeroHash, errNoAccounts
+		return plumbing.ZeroHash, ErrNoAccounts
 	}
 	op.Author = config.CommitAuthor(acct)
 	op.Account = acct.ID()
@@ -530,25 +534,25 @@ func (ss *Session) UpdateCommit(s *store.Store, op store.Op, fn func(*store.Tx) 
 	}
 	h, err := s.UpdateCommit(op, fn)
 	if err == nil && !h.IsZero() {
-		ss.markWritten(s)
+		ss.MarkWritten(s)
 		ss.forgetQualified()
 	}
 	return h, err
 }
 
-// commitHex is the hex form of a commit hash, "" for the zero hash.
-func commitHex(h plumbing.Hash) string {
+// CommitHex is the hex form of a commit hash, "" for the zero hash.
+func CommitHex(h plumbing.Hash) string {
 	if h.IsZero() {
 		return ""
 	}
 	return h.String()
 }
 
-// markWritten notes that s has a commit to push and hands the write to
+// MarkWritten notes that s has a commit to push and hands the write to
 // AfterWrite. The commit is made, so a failure here is only a warning.
-func (ss *Session) markWritten(s *store.Store) {
+func (ss *Session) MarkWritten(s *store.Store) {
 	if err := replicate.MarkPending(s, ss.Now()); err != nil {
-		ss.warn("the write is not marked for sync: " + err.Error())
+		ss.AddWarning("the write is not marked for sync: " + err.Error())
 		return
 	}
 	if ss.AfterWrite == nil {
@@ -567,7 +571,7 @@ func (ss *Session) markWritten(s *store.Store) {
 func (ss *Session) SyncOptions(c *config.Config, e config.StoreEntry) (replicate.Options, error) {
 	acct, ok := c.Writer(e)
 	if !ok {
-		return replicate.Options{}, errNoAccounts
+		return replicate.Options{}, ErrNoAccounts
 	}
 	opt := replicate.Options{Name: e.Name, Remotes: e.Remotes, Author: config.CommitAuthor(acct), Account: acct.ID(), Me: c.Me(), Now: ss.Now, Conn: ss.Conn(c, e), GitHub: ss.githubRepoOf(c, e)}
 	for _, o := range c.Stores {
@@ -623,16 +627,16 @@ func (ss *Session) Resolve(ix *index.Index, arg string) (*index.Entry, error) {
 		for i, c := range ae.Candidates {
 			lines[i] = RefName(ix, c)
 		}
-		return nil, newErr(KindAmbiguous, "task.ambiguous", &ambiguousError{input: arg, lines: lines}, "input", arg)
+		return nil, NewErr(KindAmbiguous, "task.ambiguous", &ambiguousError{input: arg, lines: lines}, "input", arg)
 	}
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			if moved := ss.movedFor(ix, arg); moved != nil {
+			if moved := ss.MovedFor(ix, arg); moved != nil {
 				return nil, moved
 			}
-			return nil, newErr(KindNotFound, "task.not_found", err, "input", arg)
+			return nil, NewErr(KindNotFound, "task.not_found", err, "input", arg)
 		}
-		return nil, classify(err)
+		return nil, Classify(err)
 	}
 	e, _ := ix.Task(ulid)
 	return e, nil
@@ -658,8 +662,8 @@ func (ss *Session) ResolveULID(ix *index.Index) func(string) (model.ULID, error)
 func (ss *Session) RunSync(s *store.Store, opt replicate.Options, reported bool) (res replicate.Result, err error) {
 	// The sync writes objects through the handle s; the stores mounted are
 	// opened again after it, so that they see them.
-	defer ss.dropMount()
-	err = s.WithLocalLock("sync.lock", syncLockWait, func() error {
+	defer ss.DropMount()
+	err = s.WithLocalLock("sync.lock", SyncLockWait, func() error {
 		started := ss.Now()
 		if _, err := replicate.UpdateState(s, func(st *replicate.State) { st.LastAttempt = started }); err != nil {
 			return err
@@ -691,4 +695,12 @@ func (ss *Session) RunSync(s *store.Store, opt replicate.Options, reported bool)
 // fetch or push. A store that never pushed has all of them.
 func Unpushed(s *store.Store) (int, error) {
 	return replicate.Unpushed(s.Repo())
+}
+
+// ForgetWriter forgets the writer the session cached, so that it is read from
+// config.yaml again after a test changed the accounts.
+func (ss *Session) ForgetWriter() {
+	ss.writerMu.Lock()
+	defer ss.writerMu.Unlock()
+	ss.writerDone = false
 }

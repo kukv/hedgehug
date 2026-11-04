@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +17,7 @@ func (a *app) storeDefaultCmd() *cobra.Command {
 			if len(args) == 1 {
 				name = args[0]
 			}
-			def, err := a.ss.StoreDefault(name)
+			def, err := stores.StoreDefault(a.ss, name)
 			if err != nil {
 				return err
 			}

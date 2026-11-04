@@ -1,4 +1,4 @@
-package usecase
+package usecase_test
 
 import (
 	"testing"
@@ -6,11 +6,13 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func TestUpdateCommitsAndCallsAfterWrite(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
+	ts := usecasetest.New(t)
 	var after int
 	ts.AfterWrite = func(*store.Store, config.StoreEntry) { after++ }
 	s, ix, err := ts.Open()
@@ -30,14 +32,14 @@ func TestUpdateCommitsAndCallsAfterWrite(t *testing.T) {
 
 func TestResolveNotFoundIsKindNotFound(t *testing.T) {
 	t.Parallel()
-	ts := newTestSession(t)
+	ts := usecasetest.New(t)
 	_, ix, err := ts.Open()
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = ts.Resolve(ix, "ME-99")
-	if KindOf(err) != KindNotFound {
-		t.Fatalf("KindOf(%v) = %v; want KindNotFound", err, KindOf(err))
+	if usecase.KindOf(err) != usecase.KindNotFound {
+		t.Fatalf("KindOf(%v) = %v; want KindNotFound", err, usecase.KindOf(err))
 	}
 	if got, want := err.Error(), `"ME-99": not found`; got != want {
 		t.Errorf("Error() = %q; want %q", got, want)

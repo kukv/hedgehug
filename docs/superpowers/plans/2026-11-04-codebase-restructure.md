@@ -14,7 +14,7 @@
 
 - 挙動を変えない。変えてよいのは `hh undo --json` の `undone`（文字列から LogView）と `hh mv --store --json`（server の形）の 2 つだけ（spec 4.3）
 - Windows 版の実装を書かない（spec 決定 8）
-- テストの中身の変更は、import・型の名前・パスの書き換えだけにする。例外は回 4 の 2 か所の JSON と cli・server のテストの書き直し（spec 決定 11。確かめる内容は変えない）と、回 5 のテストの配り直し（spec 5 節）
+- テストの中身の変更は、import・型の名前・パスの書き換えだけにする。例外は回 4 の 2 か所の JSON と cli・server のテストの書き直し（spec 決定 11。確かめる内容は変えない）と、回 3 の領域分け（呼び方の書き換え、外部テスト化、構造体の中を触る 4 か所。回 3 の plan「この回で決めたこと」）と、回 5 のテストの配り直し（spec 5 節）
 - 各回で `go build ./...`・`go vet ./...`・`make lint`・`make fmt-check` を通す。全テスト（`make test`）は各回の仕上げに 1 回だけ回し、細かい直しは `go vet` だけで push して CI に任せる
 - テストが落ちたら、失敗の出力と実行条件（コマンド、`-race` の有無、shard）を PR のコメントか作業記録に残す
 - spec と違う挙動が必要になったら、止めて利用者に聞く
@@ -27,7 +27,7 @@
 | --- | --- | --- |
 | 1 移動と改名 | 2.2 の行き先への移動（mount と context は `usecase/mount`・`usecase/current` に仮置き）、名前の変更、F（4.1）、CI の shard と Makefile のパス | `internal/` 直下が `lib/` と `app/` だけになる。`cmd/hedgehug` は main.go だけ。全テストと CI が通る |
 | 2 OS の境界 | 3 節、github の `Options` 化 | `lib/atomicfile` がなくなり `lib/osfs` に統合される。forbidigo が有効で通る。github が app を import しない |
-| 3 usecase の再編 | 2.2 の mount と context の解体、途中残りの検出を storage/store へ、2.3 の領域分け | `usecase/mount`・`usecase/current` がなくなる。ops の旧ファイルが 2.3 の 11 領域と土台に分かれる。storage/mount が replicate を import しない |
+| 3 usecase の再編 | 2.2 の mount と context の解体、途中残りの検出を storage/store へ、2.3 の領域分け、領域の操作を関数にする（決定 13）、usecase のテストを領域へ移す（決定 14） | `usecase/mount`・`usecase/current` がなくなる。ops の旧ファイルが 2.3 の 11 領域と土台に分かれる。storage/mount が replicate を import しない（2026-11-04 完了。領域の操作は関数、テストは外部テストパッケージ、補助は usecasetest と mounttest） |
 | 4 入口の境界 | 4.2〜4.4、cli・server のテストの書き直し（決定 11） | cli と server が、テストを含めて storage・remote・lib/gitrepo・lib/github を import しない（例外は決定 12 のテスト用の部品）。cli・server の depguard のルールが有効で通る。`cli/prompt` の 2 つの部品で 7 つの確認が書かれている。変わる 2 か所の JSON がテストで固定されている |
 | 5 テストと仕上げ | 5 節、depguard の残りのルール、shard の見直し、親設計（8 節） | depguard が全ルールで有効で通る。`final_*_test.go` がなくなる。`cli/scenario` ができる。親設計の「パッケージ構成」節が 2.1 と一致する |
 | 6 最終確認 | spec 6 節の PR 6。回 5 のマージ後の main で層別構成の Artifact を作り直し、spec と突き合わせる | Artifact が回 5 の後の `go list` の結果で更新されている。2.1 の配置とのずれ、層の向きに反する依存、4.2 の禁止に反する依存の一覧（どれも 0 件のはず）を添えて利用者に見せ、利用者が最終判断を出している。直すものが出たら、この回で直してマージしている |
