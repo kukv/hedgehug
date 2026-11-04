@@ -11,13 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/lib/osfs"
-
 	"github.com/kukv/hedgehug/internal/app/remote/auth"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 	"github.com/kukv/hedgehug/internal/lib/github"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // kr is a keychain in memory. onSet and onDelete run before the call, and

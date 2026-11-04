@@ -76,7 +76,7 @@ func (l *Lock) Release() error {
 // refreshing a token at once.
 func WithFileLock(path string, wait time.Duration, fn func() error) (err error) {
 	path = filepath.Clean(path)
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+	if err := MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
 	l, err := LockFile(path, wait, defaultPoll, nil)

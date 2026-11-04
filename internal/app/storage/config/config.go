@@ -10,11 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/lib/osfs"
-
 	"go.yaml.in/yaml/v4"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // ErrNoStores means config.yaml lists no store.

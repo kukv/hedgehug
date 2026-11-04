@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestWriteFile(t *testing.T) {
+func TestWriteAtomic(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	p := filepath.Join(dir, "tasks", "A", "B", "x.md")

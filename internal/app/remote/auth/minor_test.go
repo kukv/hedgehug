@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/lib/osfs"
-
 	"github.com/zalando/go-keyring"
+
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 func TestDeleteNotFoundIsNoError(t *testing.T) {

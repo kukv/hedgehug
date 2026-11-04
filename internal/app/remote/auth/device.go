@@ -6,10 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/lib/osfs"
-
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/lib/github"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // refreshBefore is how long before its end an access token is refreshed.

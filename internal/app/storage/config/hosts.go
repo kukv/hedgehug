@@ -7,8 +7,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/kukv/hedgehug/internal/lib/github"
 	"go.yaml.in/yaml/v4"
+
+	"github.com/kukv/hedgehug/internal/lib/github"
 )
 
 // Host is where a GitHub host serves its API and its web pages, and the

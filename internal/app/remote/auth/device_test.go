@@ -13,11 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/lib/osfs"
-
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 	"github.com/kukv/hedgehug/internal/lib/github"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 func fakeHost(t *testing.T, st fakegh.State) (*fakegh.Server, config.Host, *atomic.Int32) {
