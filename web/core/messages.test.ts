@@ -82,17 +82,48 @@ describe("errorMessage", () => {
     );
   });
 
+  it("words the codes of a move to another store", () => {
+    expect(errorMessage(err("move.changed"))).toBe(
+      "確認のあとに移すタスクが変わりました。予定を取り直して、確かめてから移動してください",
+    );
+    expect(errorMessage(err("move.same_store", { store: "org-a" }))).toBe(
+      "タスクはすでに org-a にあります。同じ Store の中で移すには、別のワークスペースを選んでください",
+    );
+    expect(errorMessage(err("move.store_required"))).toBe("移動先の Store を選んでください");
+    expect(errorMessage(err("move.exists", { store: "org-b", ulid: "01J" }))).toBe(
+      "01J はすでに org-b にあります",
+    );
+    expect(errorMessage(err("move.unfinished", { store: "org-b" }))).toBe(
+      "org-b へは移しましたが、移動元の片付けが終わっていません。もう一度同じ移動をすると完了します",
+    );
+    // the violations of move.invalid are for the dialog to list; the words
+    // keep the English detail
+    expect(
+      errorMessage(
+        err("move.invalid", { store: "org-b", violations: ["  API-1 x: bad"] }, "org-b refuses"),
+      ),
+    ).toBe("ここには移せません: org-b refuses");
+  });
+
+  it("asks for the choices of a move by what they are", () => {
+    expect(
+      errorMessage(err("choice.required", { what: "--workspace", candidates: ["a", "b"] })),
+    ).toBe("移動先のワークスペースを選んでください（a、b）");
+    expect(
+      errorMessage(err("choice.required", { what: "--scoped", projects: ["API-2 P", "API-9 Q"] })),
+    ).toBe(
+      "プロジェクト（API-2 P、API-9 Q）の表示の設定を持っていくか、持っていかないかを選んでください",
+    );
+    expect(
+      errorMessage(err("choice.required", { what: "--account", candidates: ["alice", "bob"] })),
+    ).toBe("アカウントを選んでください（alice、bob）");
+  });
+
   it("words the writes of stores and the choice of an account", () => {
     expect(errorMessage(err("store.set_args"))).toBe("色か表示のどちらかを指定してください");
     expect(
       errorMessage(err("choice.required", { what: "--account", candidates: ["personal", "work"] })),
     ).toBe("アカウントを選んでください（personal、work）");
-    expect(
-      errorMessage(err("choice.required", { what: "--workspace", candidates: ["web", "api"] })),
-    ).toBe("ワークスペースを選んでください（web、api）");
-    expect(
-      errorMessage(err("choice.required", { what: "--scoped", candidates: ["carry", "drop"] })),
-    ).toBe("--scoped を選んでください（carry、drop）");
     expect(errorMessage(err("store.unpushed", { name: "org-a" }))).toBe(
       "org-a にはまだ push していない変更があります。先に同期してください",
     );

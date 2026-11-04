@@ -20,7 +20,7 @@ const withDetail = (text: string, e: ApiError): string =>
 // picks without the flag.
 const choiceNouns: Record<string, string> = {
   "--account": "アカウント",
-  "--workspace": "ワークスペース",
+  "--workspace": "移動先のワークスペース",
 };
 
 const violationLabels: Record<string, string> = {
@@ -93,6 +93,14 @@ const messages: Record<string, Make> = {
   "edit.changed": () => "編集している間にタスクが変わりました。開き直してください",
   "edit.invalid": (a, e) => withDetail(`${str(a, "field") || "入力"} を変更できません`, e),
   "move.invalid": (_, e) => withDetail("ここには移せません", e),
+  "move.changed": () =>
+    "確認のあとに移すタスクが変わりました。予定を取り直して、確かめてから移動してください",
+  "move.same_store": (a) =>
+    `タスクはすでに ${str(a, "store")} にあります。同じ Store の中で移すには、別のワークスペースを選んでください`,
+  "move.store_required": () => "移動先の Store を選んでください",
+  "move.exists": (a) => `${str(a, "ulid")} はすでに ${str(a, "store")} にあります`,
+  "move.unfinished": (a) =>
+    `${str(a, "store")} へは移しましたが、移動元の片付けが終わっていません。もう一度同じ移動をすると完了します`,
   "add.position": (_, e) => withDetail("この位置には作れません", e),
   "position.both": () => "前に置くか後ろに置くか、どちらか一方を指定してください",
   "dep.invalid": (_, e) => withDetail("ブロックの指定を変えられません", e),
@@ -267,7 +275,9 @@ const messages: Record<string, Make> = {
 
   // choices and confirmations (the CLI asks; the GUI picks first)
   "choice.required": (a) =>
-    `${choiceNouns[str(a, "what")] ?? `${str(a, "what")} `}を選んでください（${list(a, "candidates")}）`,
+    str(a, "what") === "--scoped"
+      ? `プロジェクト（${list(a, "projects")}）の表示の設定を持っていくか、持っていかないかを選んでください`
+      : `${choiceNouns[str(a, "what")] ?? `${str(a, "what")} `}を選んでください（${list(a, "candidates")}）`,
   "confirm.required": (a) => `${str(a, "what")} には確認が必要です`,
 
   // the server itself
