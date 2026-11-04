@@ -326,6 +326,7 @@
 - `pnpm gen` のあとの `web/core/api/schema.d.ts`、`go generate ./internal/app/server` のあとの `api/openapi.yaml`: `git status` に差分なし
 - `pnpm fix`: 修正なし（383 ファイル）。`pnpm check`: 845 ファイル、エラー 0・警告 0。`biome ci .`: 指摘 0。`vitest run`: 154 ファイル・2133 件 PASS。`pnpm build`: 通った
 - `make e2e` を3回: 3回とも 134 件 PASS（Playwright が出した時間は 33.9 秒・35.5 秒・36.5 秒）。失敗・skipped・flaky（再試行で通ったもの）は 0
+- 最終レビューの修正（8f27171）のあとに `pnpm fix`・`pnpm check`・`biome ci .`・`vitest run`（2133 件）と `make e2e`（134 件 PASS、30.8 秒）をもう一度流して通った
 
 ## Task 7 の Step 1・2 の結果
 
