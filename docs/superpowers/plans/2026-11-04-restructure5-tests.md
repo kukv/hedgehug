@@ -4659,10 +4659,20 @@ git commit -m "refactor(maintenance): doctor が PATH を Getenv から読む"
  		alice.run(args...)
 ```
 
+- [ ] **Step 4b: `usecasetest.(*Session).Renew` に `Spawn` を足す**
+
+A2 の `Renew` は Session の公開のフィールドを 1 つずつ写すので、増えた `Spawn` を足す（A2 の `TestRenewCopiesEveryExportedField` が、足さないと `Renew does not copy Session.Spawn` で落ちる）。`Renew` の中の、`Run` を写している行の次に足す:
+
+```go
+		Spawn:          o.Spawn,
+```
+
+（フィールドの並びと桁は、その時点の `Renew` に合わせる）
+
 - [ ] **Step 5: テストを回す**
 
 Run: `go test -count=1 ./internal/app/remote/replicate -run 'TestStart|TestBackground'` → PASS
-Run: `go test -count=1 ./internal/app/usecase -run 'TestBackgroundSync'` → PASS
+Run: `go test -count=1 ./internal/app/usecase -run 'TestBackgroundSync|TestRenewCopiesEveryExportedField|TestForStoreCopiesEveryExportedField'` → PASS
 Run: `go test -count=1 ./internal/app/usecase/replication -run 'TestBeforeCommand'` → PASS
 Run: `go test -count=1 ./internal/app/cli -run 'Background|StartsNothing|NoAccountStarts|TestReadStarts|TestSyncStarts|TestWrite'` → PASS
 Run: `go vet ./internal/...` と `golangci-lint run ./internal/app/cli/... ./internal/app/remote/replicate/...`（depguard が cli の replicate import を止める）
