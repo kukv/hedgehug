@@ -10,6 +10,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase/current"
 	"github.com/kukv/hedgehug/internal/lib/github"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // ReadOnlyError refuses a write to a read-only store. Operations return it
@@ -51,7 +52,7 @@ func (ss *Session) storeNameOf(s *store.Store) string {
 	name := s.Meta().Name
 	if c, _, err := ss.Config(); err == nil {
 		for _, e := range c.Stores {
-			if e.Path == s.Dir() {
+			if osfs.SamePath(e.Path, s.Dir()) {
 				name = e.Name
 			}
 		}

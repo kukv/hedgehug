@@ -1,11 +1,6 @@
-//go:build !windows
-
 package replicate
 
-import (
-	"os/exec"
-	"syscall"
-)
+import "github.com/kukv/hedgehug/internal/lib/osfs"
 
 // spawnDetached starts name with args in a session of its own, with no
 // input and no output but its stderr, which goes to the log.
@@ -15,12 +10,5 @@ func spawnDetached(name string, args []string, logPath string) error {
 		return err
 	}
 	defer func() { _ = log.Close() }() // the child has its own copy
-
-	cmd := exec.Command(name, args...) //nolint:gosec // G204: name is this executable
-	cmd.Stderr = log
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	return cmd.Process.Release()
+	return osfs.StartDetached(name, args, log)
 }

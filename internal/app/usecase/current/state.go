@@ -29,7 +29,7 @@ type State struct {
 // file that does not read, or does not decode, is the empty state too, and
 // warn is told why (D11).
 func Load(dataDir string, warn func(string)) State {
-	b, err := os.ReadFile(filepath.Join(dataDir, fileName)) //nolint:gosec // G304: the data directory is Hedgehug's own
+	b, err := osfs.ReadFile(filepath.Join(dataDir, fileName))
 	if err != nil {
 		if !os.IsNotExist(err) && warn != nil {
 			warn("context.json cannot be read, so it is read as empty: " + err.Error())

@@ -17,6 +17,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
@@ -116,7 +117,7 @@ func MakeRebuild(s *store.Store, opt Options) (b *Rebuild, err error) {
 	newDir := dir + newSuffix
 	// The store is here, so a rebuild left beside it is of a swap that
 	// never began.
-	if err := os.RemoveAll(newDir); err != nil {
+	if err := osfs.RemoveAll(newDir); err != nil {
 		return nil, err
 	}
 	nr, err := gitrepo.CloneWith(opt.Remotes[0], newDir, opt.Conn)
@@ -126,7 +127,7 @@ func MakeRebuild(s *store.Store, opt Options) (b *Rebuild, err error) {
 	defer func() {
 		_ = nr.Close()
 		if err != nil || b == nil {
-			_ = os.RemoveAll(newDir)
+			_ = osfs.RemoveAll(newDir)
 		}
 	}()
 	if err = nr.SetRemotes(opt.Remotes); err != nil {
@@ -362,7 +363,7 @@ func localFiles(dir string) (map[string]stamp, error) {
 
 // copyFile copies the local file name of the store at from to the one at to.
 func copyFile(from, to, name string) error {
-	data, err := os.ReadFile(filepath.Join(from, filepath.FromSlash(store.LocalDir), filepath.FromSlash(name))) //nolint:gosec // a file of the store
+	data, err := osfs.ReadFile(filepath.Join(from, filepath.FromSlash(store.LocalDir), filepath.FromSlash(name)))
 	if err != nil {
 		return err
 	}
@@ -408,11 +409,11 @@ func syncLocal(from, to string, seen map[string]stamp) (map[string]stamp, error)
 			}
 			continue
 		}
-		old, err := os.ReadFile(filepath.Join(from, filepath.FromSlash(store.LocalDir), name)) //nolint:gosec // a file of the store
+		old, err := osfs.ReadFile(filepath.Join(from, filepath.FromSlash(store.LocalDir), name))
 		if err != nil {
 			return nil, err
 		}
-		cur, err := os.ReadFile(filepath.Join(to, filepath.FromSlash(store.LocalDir), name)) //nolint:gosec // a file of the store
+		cur, err := osfs.ReadFile(filepath.Join(to, filepath.FromSlash(store.LocalDir), name))
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return nil, err
 		}
@@ -485,7 +486,7 @@ func tellRewrite(ns *store.Store, head plumbing.Hash, opt Options, b *Rebuild) (
 func Swap(dir string, b *Rebuild) error {
 	if err := checkUnchanged(dir, b); err != nil {
 		if errors.Is(err, ErrRebuildStale) {
-			_ = os.RemoveAll(b.Dir)
+			_ = osfs.RemoveAll(b.Dir)
 		}
 		return err
 	}
@@ -506,12 +507,12 @@ func Swap(dir string, b *Rebuild) error {
 		// Written before the first rename, so that whoever finds the old
 		// store left behind knows it is not to be removed.
 		if err := store.WriteLocalIn(dir, keepMarker, []byte("the unpushed changes of this store were not all put back; keep it\n")); err != nil {
-			_ = os.RemoveAll(b.Dir)
+			_ = osfs.RemoveAll(b.Dir)
 			return fmt.Errorf("swap the rebuilt store in: %w", err)
 		}
 	}
-	if err := os.Rename(dir, before); err != nil {
-		_ = os.RemoveAll(b.Dir)
+	if err := osfs.Rename(dir, before); err != nil {
+		_ = osfs.RemoveAll(b.Dir)
 		removeKeepMarker(dir)
 		return fmt.Errorf("swap the rebuilt store in: %w", err)
 	}
@@ -524,25 +525,25 @@ func Swap(dir string, b *Rebuild) error {
 		if errors.Is(err, ErrRebuildStale) {
 			// If the old store cannot be put back, FinishLeftover must not
 			// put the rebuild in its place: it would drop that commit.
-			merr = os.WriteFile(filepath.Join(b.Dir, staleMarker), []byte("the old store has a commit this rebuild lacks\n"), 0o600)
+			merr = osfs.WriteFile(filepath.Join(b.Dir, staleMarker), []byte("the old store has a commit this rebuild lacks\n"), 0o600)
 		}
-		if rerr := os.Rename(before, dir); rerr != nil {
+		if rerr := osfs.Rename(before, dir); rerr != nil {
 			// merr says that FinishLeftover may not know the rebuild is stale.
 			return errors.Join(err, rerr, merr)
 		}
 		removeKeepMarker(dir)
 		if errors.Is(err, ErrRebuildStale) {
-			_ = os.RemoveAll(b.Dir)
+			_ = osfs.RemoveAll(b.Dir)
 		}
 		return err
 	}
-	if err := os.Rename(b.Dir, dir); err != nil {
+	if err := osfs.Rename(b.Dir, dir); err != nil {
 		err = fmt.Errorf("swap the rebuilt store in: %w", err)
-		if rerr := os.Rename(before, dir); rerr != nil {
+		if rerr := osfs.Rename(before, dir); rerr != nil {
 			return errors.Join(err, rerr)
 		}
 		removeKeepMarker(dir)
-		_ = os.RemoveAll(b.Dir)
+		_ = osfs.RemoveAll(b.Dir)
 		return err
 	}
 	// What was written to the old store in the gap since the look above is
@@ -556,11 +557,11 @@ func Swap(dir string, b *Rebuild) error {
 		return nil
 	}
 	if !keep {
-		_ = os.RemoveAll(before)
+		_ = osfs.RemoveAll(before)
 		return nil
 	}
 	kept := dir + keptPrefix + when
-	if err := os.Rename(before, kept); err != nil {
+	if err := osfs.Rename(before, kept); err != nil {
 		// It stays where it is, with the marker: nothing removes it.
 		b.Warnings = append(b.Warnings, fmt.Sprintf("rename the old store %s to %s: %v", before, kept, err))
 		b.Kept = before
@@ -572,7 +573,7 @@ func Swap(dir string, b *Rebuild) error {
 
 // removeKeepMarker removes the marker of a store that stays in its place.
 func removeKeepMarker(dir string) {
-	_ = os.Remove(filepath.Join(dir, filepath.FromSlash(store.LocalDir), keepMarker))
+	_ = osfs.Remove(filepath.Join(dir, filepath.FromSlash(store.LocalDir), keepMarker))
 }
 
 // checkUnchanged returns ErrRebuildStale unless the store at dir is as it
@@ -685,23 +686,23 @@ func finishLeftover(dir string, l Leftover, keptPaths *[]string) error {
 			// The rebuild was found stale and the old store could not be put
 			// back: it is put back now, and the rebuild goes with the rest.
 			last := l.Before[len(l.Before)-1]
-			if err := os.Rename(last, dir); err != nil {
+			if err := osfs.Rename(last, dir); err != nil {
 				return fmt.Errorf("finish the rebuild: %w", err)
 			}
 			removeKeepMarker(dir)
 			l.Before = l.Before[:len(l.Before)-1]
 		case l.New != "":
-			if err := os.Rename(l.New, dir); err != nil {
+			if err := osfs.Rename(l.New, dir); err != nil {
 				return fmt.Errorf("finish the rebuild: %w", err)
 			}
 			l.New = ""
 			// A marker with no old store to keep has nothing to say.
-			if err := os.Remove(filepath.Join(dir, staleMarker)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			if err := osfs.Remove(filepath.Join(dir, staleMarker)); err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return fmt.Errorf("finish the rebuild: %w", err)
 			}
 		case len(l.Before) > 0:
 			last := l.Before[len(l.Before)-1]
-			if err := os.Rename(last, dir); err != nil {
+			if err := osfs.Rename(last, dir); err != nil {
 				return fmt.Errorf("finish the rebuild: %w", err)
 			}
 			removeKeepMarker(dir)
@@ -712,7 +713,7 @@ func finishLeftover(dir string, l Leftover, keptPaths *[]string) error {
 	}
 	var errs []error
 	if l.New != "" {
-		errs = append(errs, os.RemoveAll(l.New))
+		errs = append(errs, osfs.RemoveAll(l.New))
 	}
 	for _, p := range l.Before {
 		// A swap that stopped may not have carried over the local files of
@@ -726,14 +727,14 @@ func finishLeftover(dir string, l Leftover, keptPaths *[]string) error {
 			// The old store holds changes the rebuild did not put back: it
 			// is kept, never removed.
 			kept := dir + keptPrefix + strings.TrimPrefix(filepath.Base(p), filepath.Base(dir)+beforePrefix)
-			if err := os.Rename(p, kept); err != nil {
+			if err := osfs.Rename(p, kept); err != nil {
 				errs = append(errs, fmt.Errorf("the old store %s must be kept, and could not be renamed to %s (it is left): %w", p, kept, err))
 				continue
 			}
 			*keptPaths = append(*keptPaths, kept)
 			continue
 		}
-		errs = append(errs, os.RemoveAll(p))
+		errs = append(errs, osfs.RemoveAll(p))
 	}
 	return errors.Join(errs...)
 }
@@ -750,11 +751,11 @@ func carryMissing(from, to string) error {
 			continue
 		}
 		if name == "inbox.jsonl" {
-			old, err := os.ReadFile(filepath.Join(from, filepath.FromSlash(store.LocalDir), name)) //nolint:gosec // a file of the store
+			old, err := osfs.ReadFile(filepath.Join(from, filepath.FromSlash(store.LocalDir), name))
 			if err != nil {
 				return err
 			}
-			cur, err := os.ReadFile(filepath.Join(to, filepath.FromSlash(store.LocalDir), name)) //nolint:gosec // a file of the store
+			cur, err := osfs.ReadFile(filepath.Join(to, filepath.FromSlash(store.LocalDir), name))
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
 				return err
 			}
@@ -778,4 +779,4 @@ func carryMissing(from, to string) error {
 }
 
 // Discard removes the clone of b, which will not be swapped in.
-func Discard(b *Rebuild) { _ = os.RemoveAll(b.Dir) }
+func Discard(b *Rebuild) { _ = osfs.RemoveAll(b.Dir) }

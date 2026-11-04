@@ -13,7 +13,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
-	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -132,13 +131,13 @@ func (a *app) uiContextOrSignals() (context.Context, context.CancelFunc) {
 	if a.uiContext != nil {
 		return a.uiContext()
 	}
-	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	return signal.NotifyContext(context.Background(), osfs.StopSignals()...)
 }
 
 // readRunningUI reads ui.json and reports whether the server it names answers.
 func readRunningUI(file string) (uiInfo, bool) {
 	var info uiInfo
-	b, err := os.ReadFile(file) //nolint:gosec // our own file in the data directory
+	b, err := osfs.ReadFile(file)
 	if err != nil || json.Unmarshal(b, &info) != nil || info.Port == 0 {
 		return info, false
 	}
@@ -161,9 +160,9 @@ func readRunningUI(file string) (uiInfo, bool) {
 // token): a later hh ui may have written its own.
 func removeOwnUIJSON(file, token string) {
 	var info uiInfo
-	b, err := os.ReadFile(file) //nolint:gosec // our own file in the data directory
+	b, err := osfs.ReadFile(file)
 	if err != nil || json.Unmarshal(b, &info) != nil || info.PID != os.Getpid() || info.Token != token {
 		return
 	}
-	_ = os.Remove(file)
+	_ = osfs.Remove(file)
 }

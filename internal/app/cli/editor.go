@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // defaultEditor is the editor when neither $VISUAL nor $EDITOR is set.
@@ -55,7 +57,7 @@ func (a *app) editFile(name string, content []byte) (path string, edited []byte,
 
 // reopen writes content to path again and opens it in the editor.
 func (a *app) reopen(path string, content []byte) ([]byte, error) {
-	if err := os.WriteFile(path, content, 0o600); err != nil {
+	if err := osfs.WriteFile(path, content, 0o600); err != nil {
 		return nil, err
 	}
 	return a.openEditor(path)
@@ -67,7 +69,7 @@ func (a *app) openEditor(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(ed[0], append(ed[1:], path)...) //nolint:gosec // the editor the user chose in $VISUAL or $EDITOR
+	cmd := osfs.Command(ed[0], append(ed[1:], path)...)
 	cmd.Env = os.Environ()
 	// The editor gets stdin only when it is a file such as the terminal:
 	// copying from any other reader would take the answers meant for
@@ -83,7 +85,7 @@ func (a *app) openEditor(path string) ([]byte, error) {
 		}
 		return nil, fmt.Errorf("cannot run the editor %s: %w; set $EDITOR to an editor (the file is kept at %s)", ed[0], err, path)
 	}
-	return os.ReadFile(path) //nolint:gosec // the temporary file made by editFile
+	return osfs.ReadFile(path)
 }
 
 // askRetry asks on the terminal whether to open the editor again. An empty
