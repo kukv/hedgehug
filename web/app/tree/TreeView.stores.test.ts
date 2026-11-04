@@ -69,6 +69,7 @@ function setup(
     betaSchema?: "none" | "ok" | "nodone";
     roots?: unknown;
     wsLate?: boolean; // GET /api/stores has not answered yet
+    hidden?: string[]; // the stores the GUI leaves out
   } = {},
 ) {
   let wsReady = !over.wsLate;
@@ -77,6 +78,11 @@ function setup(
     ["A2", task("A2", "task", "A1", { store: "alpha", workspace: wsOf.alpha, title: "alpha two" })],
     ["B1", task("B1", "task", null, { store: "beta", workspace: wsOf.beta, title: "beta one" })],
     ["B2", task("B2", "task", null, { store: "beta", workspace: wsOf.beta, title: "beta two" })],
+    [
+      "C1",
+      task("C1", "task", null, { store: "alpha", workspace: wsOf.alpha, title: "alpha gone" }),
+    ],
+    ["C2", task("C2", "task", null, { store: "beta", workspace: wsOf.beta, title: "beta gone" })],
   ]);
   const roots = over.roots ?? [
     { ulid: "B1", children: [] },
@@ -127,6 +133,7 @@ function setup(
         wsReady && wsOf[s]?.ulid === u ? entry(s) : undefined,
       workspaces: () => (wsReady ? [entry("alpha"), entry("beta")] : []),
       readOnly: () => null,
+      hidden: (s: string) => over.hidden?.includes(s) ?? false,
       tone: (s: string) => (s === "alpha" ? "teal" : "orange"),
       subscribe: ev.subscribe,
     },
@@ -175,6 +182,37 @@ describe("TreeView over every store", () => {
     ]);
     expect(screen.getAllByTitle("Store: alpha")).toHaveLength(2);
     expect(screen.getAllByTitle("Store: beta")).toHaveLength(2);
+  });
+
+  it("leaves out the tasks of a hidden store, and does not count its canceled ones", () => {
+    const { watchTree } = setup({ hidden: ["beta"] });
+    render(TreeView, { view: all, query: "kind:task -status:canceled" });
+    expect(screen.getAllByRole("treeitem").map((el) => el.getAttribute("data-ulid"))).toEqual([
+      "A1",
+      "A2",
+    ]);
+    expect(screen.getByText("2 件 · 中止 1 件を除外")).toBeInTheDocument();
+    // what is asked for does not change: the hiding is of the screen only
+    expect(watchTree).toHaveBeenCalledWith({
+      q: "kind:task -status:canceled",
+      tree: true,
+      store: undefined,
+    });
+  });
+
+  it("keeps the badges of both stores in the count of stores while one is hidden", () => {
+    setup({ hidden: ["beta"] });
+    render(TreeView, { view: all, query: "" });
+    expect(screen.getAllByTitle("Store: alpha")).toHaveLength(2);
+  });
+
+  it("does not leave out a hidden store in the page of its workspace", () => {
+    setup({ hidden: ["beta"] });
+    render(TreeView, { view: { kind: "workspace", store: "beta", ulid: "WB" }, query: "" });
+    // the fake answers with every root whatever the scope: the rows of beta are still there
+    const ulids = screen.getAllByRole("treeitem").map((el) => el.getAttribute("data-ulid"));
+    expect(ulids).toContain("B1");
+    expect(ulids).toContain("B2");
   });
 
   it("shows no badge when there is one store", () => {

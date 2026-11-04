@@ -398,6 +398,8 @@ describe("StoreDirectory colours and hiding", () => {
     expect(dir.hidden("personal")).toBe(true);
     expect(dir.hidden("shared")).toBe(false);
     expect(dir.hidden("unknown")).toBe(false);
+    // the colour stays while the store is hidden (細部 39)
+    expect(dir.tone("personal")).toBe("orange");
     expect(dir.visibleWorkspaces().map((w) => w.name)).toEqual(["api", "web"]);
     expect(dir.workspaces().map((w) => w.name)).toEqual(["api", "web", "home"]);
   });

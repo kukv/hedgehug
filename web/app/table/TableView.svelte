@@ -125,11 +125,18 @@
     return () => h.dispose();
   });
 
+  // A table over every store leaves out the tasks of a hidden store (the table of a workspace or a
+  // project is of its own store, so it is not left out).
+  function inScope(store: string | undefined): boolean {
+    return scope.kind !== "all" || store === undefined || !c.stores.hidden(store);
+  }
+
   const tasks = $derived.by(() => {
     cacheRev.current;
+    storesRev.current;
     return (list?.ulids() ?? [])
       .map((u) => c.cache.task(u))
-      .filter((t): t is TaskView => t !== undefined);
+      .filter((t): t is TaskView => t !== undefined && inScope(t.store));
   });
   const loading = $derived.by(() => {
     cacheRev.current;
@@ -141,7 +148,10 @@
   });
   const canceledCount = $derived.by(() => {
     cacheRev.current;
-    return canceledList ? canceledList.ulids().length : null;
+    storesRev.current;
+    return canceledList
+      ? canceledList.ulids().filter((u) => inScope(c.cache.task(u)?.store)).length
+      : null;
   });
 
   // --- the schemas -----------------------------------------------------------------------

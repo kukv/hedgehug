@@ -66,6 +66,30 @@ describe("CreateTask", () => {
     });
   });
 
+  it("does not offer the workspaces of a hidden Store", () => {
+    const vault = {
+      ...(workspaces[0] as (typeof workspaces)[number]),
+      store: "vault",
+      ulid: "WV",
+      name: "vault",
+      prefix: "VT",
+    };
+    const k = makeCore({ tasks: [parent], workspaces: [vault, ...workspaces], hidden: ["vault"] });
+    mount(CreateTask, { request: { kind: "task" }, onclose: vi.fn() }, k);
+    expect(screen.queryByRole("radio", { name: /vault/ })).toBeNull();
+    expect(screen.getByRole("radio", { name: /release/ })).toBeChecked();
+  });
+
+  it("creates under a task of a hidden Store, in the workspace of the parent", async () => {
+    selection.set("UP");
+    const k = makeCore({ tasks: [parent], hidden: ["shared"] });
+    k.api.POST.mockImplementation(() => ok({ task: created, commit: "c1" }));
+    mount(CreateTask, { request: { kind: "task" }, onclose: vi.fn() }, k);
+    expect(screen.getByText(/親と同じワークスペース/)).toBeInTheDocument();
+    await typeTitle("新しい作業");
+    await waitFor(() => expect(screen.getByRole("button", { name: /^作成/ })).toBeEnabled());
+  });
+
   it("decides the workspace when the stores finish loading after the dialog opened", async () => {
     const k = makeCore({ tasks: [parent] });
     k.stores.workspaces.mockReturnValue([]);

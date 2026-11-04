@@ -190,6 +190,14 @@ describe("CreateProject in a Store that cannot be written", () => {
     expect(k.api.POST.mock.calls[0]?.[1]).toMatchObject({ params: { query: { store: "shared" } } });
   });
 
+  it("does not offer the workspace of a hidden Store, and starts from one that is shown", async () => {
+    const k = makeCore({ workspaces: [vault, ...workspaces], hidden: ["vault"] });
+    k.api.POST.mockImplementation(() => ok({ task: created, commit: "c1" }));
+    mount(CreateProject, { request: { kind: "project" }, onclose: vi.fn() }, k);
+    expect(screen.queryByRole("radio", { name: /vault（VT）/ })).toBeNull();
+    expect(screen.getByRole("radio", { name: /release（REL）/ })).toBeChecked();
+  });
+
   it("cannot be sent when every Store is read-only, and says so", async () => {
     const { k } = open([vault], why);
     await fireEvent.input(screen.getByRole("textbox", { name: "名前" }), {

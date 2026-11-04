@@ -71,6 +71,7 @@ function mount(
         loaded: () => loaded,
         tone: () => "purple",
         readOnly: () => over.readOnly ?? null,
+        hidden: () => false,
         subscribe: () => () => {},
       },
     },

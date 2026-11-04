@@ -51,7 +51,13 @@ const merged = log({
   trailers: [{ key: "Hedgehug-Op", value: "merge" }],
 });
 
-type Opts = { stores?: string[]; workspaces?: string; sync?: ActivitySync; getError?: Error };
+type Opts = {
+  stores?: string[];
+  workspaces?: string;
+  sync?: ActivitySync;
+  getError?: Error;
+  hidden?: boolean; // every Store is hidden
+};
 
 function setup(items: Log[], opts: Opts = {}) {
   let current = items;
@@ -69,6 +75,7 @@ function setup(items: Log[], opts: Opts = {}) {
       stores: {
         stores: () => names.map((name) => ({ name })),
         readOnly: () => null,
+        hidden: () => opts.hidden ?? false,
         tone: () => "purple",
         workspaces: () => spaces,
         workspace: () => undefined,
@@ -183,6 +190,13 @@ describe("ActivityPage", () => {
     await fireEvent.click(screen.getByRole("button", { name: /ワークスペース$/ }));
     await fireEvent.click(screen.getByRole("checkbox", { name: /payments/ }));
     expect(location.pathname + location.search).toBe("/activity?workspace=W2");
+  });
+
+  it("does not leave out a hidden Store: its commits and its workspaces are there (細部 93)", async () => {
+    setup([added], { hidden: true });
+    await screen.findByRole("listitem");
+    await fireEvent.click(screen.getByRole("button", { name: /ワークスペース$/ }));
+    expect(screen.getByRole("checkbox", { name: /payments/ })).toBeTruthy();
   });
 
   it("says there is nothing when there is nothing", async () => {

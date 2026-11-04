@@ -94,6 +94,8 @@ export type SearchDeps = {
   // cache, as a read of that point.
   epoch: () => number;
   prime: (tasks: TaskView[], since: number) => void;
+  // Whether a store is hidden: what it holds is not found (it is still primed, as any read).
+  hidden?: (store: string) => boolean;
 };
 
 export type SearchResult = { groups: PaletteGroup[]; error: unknown };
@@ -123,13 +125,15 @@ export async function searchTasks(
   const text = input.trim();
   if (text === "") return { groups: [], error: null };
   const since = d.epoch();
+  const shown = (t: { store: string }) => !d.hidden?.(t.store);
   try {
     if (mode === "query") {
       const list = await unwrap(
         d.api.GET("/api/tasks", { params: { query: { q: text, tree: false } } }),
       );
-      const tasks = list.tasks ?? [];
-      d.prime(tasks, since);
+      const all = list.tasks ?? [];
+      d.prime(all, since);
+      const tasks = all.filter(shown);
       const items = tasks.slice(0, MAX).map((t) => taskItem(t, d.hrefOf));
       return {
         groups: items.length ? [{ name: `クエリに一致 · ${tasks.length} 件`, items }] : [],
@@ -140,14 +144,15 @@ export async function searchTasks(
     if (ID.test(text) || ULID.test(text)) {
       try {
         const s = await unwrap(d.api.GET("/api/tasks/{id}", { params: { path: { id: text } } }));
-        found.set(s.ulid, taskItem(s, d.hrefOf, matchNote(s, text)));
+        if (shown(s)) found.set(s.ulid, taskItem(s, d.hrefOf, matchNote(s, text)));
       } catch (e) {
         if (!isNotFound(e)) throw e;
       }
     }
-    const tasks = await findTasks(d.api, text, { limit: MAX });
+    // Hidden stores are left out after the read, so they do not use up the places of the list.
+    const tasks = await findTasks(d.api, text, { limit: d.hidden ? MAX * 10 : MAX });
     d.prime(tasks, since);
-    for (const t of tasks) {
+    for (const t of tasks.filter(shown)) {
       if (!found.has(t.ulid)) found.set(t.ulid, taskItem(t, d.hrefOf));
     }
     const items = [...found.values()].slice(0, MAX);

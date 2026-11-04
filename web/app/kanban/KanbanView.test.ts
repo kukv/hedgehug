@@ -83,6 +83,8 @@ type Setup = {
   watchers?: string[];
   // The Stores that cannot be written, with the raw reason of the directory.
   readOnly?: Record<string, string>;
+  // The Stores the GUI leaves out.
+  hidden?: string[];
 };
 
 function setup(o: Setup = {}) {
@@ -130,6 +132,7 @@ function setup(o: Setup = {}) {
     stores: {
       stores: () => stores.map((name) => ({ name })),
       readOnly: (s: string) => o.readOnly?.[s] ?? null,
+      hidden: (s: string) => o.hidden?.includes(s) ?? false,
       tone: () => "purple",
       workspace: () => undefined,
       workspaces: () => [],
@@ -317,6 +320,38 @@ describe("KanbanView: the board", () => {
     );
     // No fixed part: the command is the query alone (no space in front of it; a term that starts with - goes after --).
     expect(screen.getByText("$ hh ls -- -status:canceled")).toBeInTheDocument();
+  });
+
+  describe("hidden Stores", () => {
+    const two = () =>
+      setup({
+        stores: ["shared", "work"],
+        schemas: { shared: schema, work: schema },
+        canceled: ["X", "Y"],
+        tasks: [
+          task("A", "task", null, { title: "共有", store: "shared", status: "todo" }),
+          task("B", "task", null, { title: "仕事", store: "work", status: "todo" }),
+          task("X", "task", null, { title: "共有の中止", store: "shared", status: "canceled" }),
+          task("Y", "task", null, { title: "仕事の中止", store: "work", status: "canceled" }),
+        ],
+        hidden: ["work"],
+      });
+
+    it("leaves out the cards of a hidden Store on the board of every Store, and its canceled ones from the count", async () => {
+      two();
+      h.ls = { ...h.ls, store: undefined, apiBase: "", cliBase: "", workspace: undefined };
+      mountView({ view: { kind: "all" }, query: "-status:canceled assignee:@me" });
+      await waitFor(() => expect(screen.getByText("共有")).toBeInTheDocument());
+      expect(screen.queryByText("仕事")).toBeNull();
+      expect(screen.getByText(/中止 1 件を除外/)).toBeInTheDocument();
+    });
+
+    it("keeps the cards of a hidden Store on its own board", async () => {
+      two();
+      h.ls = { ...h.ls, store: "work" };
+      mountView({ view: { kind: "workspace", store: "work", ulid: "W" } });
+      await waitFor(() => expect(screen.getByText("仕事")).toBeInTheDocument());
+    });
   });
 
   it("keeps to the statuses of the project", async () => {

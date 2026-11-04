@@ -27,7 +27,7 @@
   let { request, onclose }: { request: CreateRequest; onclose: () => void } = $props();
 
   const { api, cache, stores, schema } = core();
-  const entries = useSubscribe(stores, () => stores.workspaces());
+  const all = useSubscribe(stores, () => stores.workspaces());
   const roOf = useReadOnlyOf(stores);
 
   // Where it goes is decided when the dialog opens.
@@ -39,22 +39,31 @@
       task: (u) => cache.task(u),
       workspaces,
       readOnly: (s) => readOnlyNow(stores, s),
+      hidden: (s) => stores.hidden(s),
     });
   const ctx = untrack(() => contextOf(stores.workspaces()));
   let parent = $state<TaskView | null>(ctx.parent);
   let wsKey = $state(ctx.workspace ? workspaceKey(ctx.workspace) : "");
+  // The workspaces to choose from leave out a hidden Store's, except the one the dialog opened on
+  // (the page of a hidden workspace is a place to create in).
+  let opened = ctx.workspace ? workspaceKey(ctx.workspace) : "";
+  const entries = {
+    get current() {
+      return all.current.filter((w) => !stores.hidden(w.store) || workspaceKey(w) === opened);
+    },
+  };
   // C pressed while the stores are still loading opens the dialog with no workspace to choose
   // from: decide again when they have loaded.
   $effect(() => {
-    const list = entries.current;
+    const list = all.current;
     if (wsKey !== "" || parent || list.length === 0) return;
     const again = untrack(() => contextOf(list));
     if (again.parent) parent = again.parent;
-    if (again.workspace) wsKey = workspaceKey(again.workspace);
+    if (again.workspace) wsKey = opened = workspaceKey(again.workspace);
   });
   const ws = $derived.by(() => {
     const p = parent;
-    if (p) return entries.current.find((w) => w.store === p.store && w.ulid === p.workspace.ulid);
+    if (p) return all.current.find((w) => w.store === p.store && w.ulid === p.workspace.ulid);
     return entries.current.find((w) => workspaceKey(w) === wsKey);
   });
   const showChoice = $derived(!parent && entries.current.length >= 2);

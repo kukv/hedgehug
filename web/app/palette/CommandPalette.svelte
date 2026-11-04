@@ -99,6 +99,7 @@
     hrefOf: (ulid: string) => router.href({ name: "task", ulid }),
     epoch: () => c.cache.epochNow(),
     prime: (tasks: (TaskView | ShowView)[], since: number) => c.cache.prime(tasks, since),
+    hidden: (store: string) => c.stores.hidden(store),
   };
 
   $effect(() => {
@@ -163,14 +164,17 @@
       addWorkspace: () => openWorkspaceAdd(),
       // A query typed in the palette is saved as a table, which holds any query (a tree cannot sort).
       saveQuery: (query) => openViewSave({ draft: newDraft({ layout: "table", query }) }),
-      views: c.views.list(),
+      views: c.views.list().filter((v) => !c.stores.hidden(v.store)),
       undo: () =>
         void runUndo(
           c,
-          routeStore(router.route, (u) => c.cache.task(u), c.stores.workspaces()[0]),
+          routeStore(router.route, (u) => c.cache.task(u), c.stores.visibleWorkspaces()[0]),
         ),
-      workspaces: c.stores.workspaces(),
-      storeNames: c.stores.stores().map((s) => s.name),
+      workspaces: c.stores.visibleWorkspaces(),
+      storeNames: c.stores
+        .stores()
+        .filter((s) => !c.stores.hidden(s.name))
+        .map((s) => s.name),
       go: (path) => router.go(path),
       hrefs: {
         workspace: (store, ulid) =>
@@ -194,7 +198,10 @@
       },
       selected: sel ? (c.cache.task(sel) ?? null) : null,
       project,
-      recent: recentUlids.flatMap((u) => c.cache.task(u) ?? []),
+      recent: recentUlids.flatMap((u) => {
+        const t = c.cache.task(u);
+        return t && !c.stores.hidden(t.store) ? [t] : [];
+      }),
       pickStatus,
       moveTask: (t) => openWorkspaceMove(t),
       readOnly: (store) => readOnlyNow(c.stores, store),

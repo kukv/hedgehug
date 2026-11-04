@@ -50,6 +50,8 @@ export function resolveCreateContext(i: {
   workspaces: WorkspaceEntry[];
   /** Why a Store cannot be written, or null; a workspace of such a Store is passed over as the start. */
   readOnly?: (store: string) => string | null;
+  /** Whether a Store is hidden; the default start is the first workspace of a Store that is not (the page a workspace names is its own start). */
+  hidden?: (store: string) => boolean;
 }): CreateContext {
   const live = (u: string | null | undefined): TaskView | undefined => {
     if (!u) return undefined;
@@ -68,11 +70,12 @@ export function resolveCreateContext(i: {
 
   // A read-only Store is passed over for the first writable one (when nothing can be written the
   // start stays, and the dialog says so).
+  const shown = i.hidden ? i.workspaces.filter((w) => !i.hidden?.(w.store)) : i.workspaces;
   const start =
     r.name === "workspace"
-      ? (i.workspaces.find((x) => x.store === r.store && x.ulid === r.ulid) ?? i.workspaces[0])
-      : i.workspaces[0];
+      ? (i.workspaces.find((x) => x.store === r.store && x.ulid === r.ulid) ?? shown[0])
+      : shown[0];
   const writable = (w: WorkspaceEntry) => !i.readOnly?.(w.store);
-  const workspace = start && !writable(start) ? (i.workspaces.find(writable) ?? start) : start;
+  const workspace = start && !writable(start) ? (shown.find(writable) ?? start) : start;
   return { parent: null, workspace: workspace ?? null };
 }

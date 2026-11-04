@@ -23,7 +23,7 @@
   let { onclose }: { request: CreateRequest; onclose: () => void } = $props();
 
   const { api, cache, stores, schema } = core();
-  const entries = useSubscribe(stores, () => stores.workspaces());
+  const all = useSubscribe(stores, () => stores.workspaces());
   const roOf = useReadOnlyOf(stores);
 
   const ctx = untrack(() =>
@@ -33,9 +33,18 @@
       task: (u) => cache.task(u),
       workspaces: stores.workspaces(),
       readOnly: (s) => readOnlyNow(stores, s),
+      hidden: (s) => stores.hidden(s),
     }),
   );
   let wsKey = $state(ctx.workspace ? workspaceKey(ctx.workspace) : "");
+  // The workspaces to choose from leave out a hidden Store's, except the one the dialog opened on
+  // (the page of a hidden workspace is a place to create in).
+  let opened = ctx.workspace ? workspaceKey(ctx.workspace) : "";
+  const entries = {
+    get current() {
+      return all.current.filter((w) => !stores.hidden(w.store) || workspaceKey(w) === opened);
+    },
+  };
   const ws = $derived(entries.current.find((w) => workspaceKey(w) === wsKey));
   const showChoice = $derived(entries.current.length >= 2);
   // A workspace of a Store that cannot be written is shown but cannot be chosen (細部 35).
@@ -44,7 +53,7 @@
 
   // Opened while the stores are still loading: decide again when they have loaded.
   $effect(() => {
-    const list = entries.current;
+    const list = all.current;
     if (wsKey !== "" || list.length === 0) return;
     const again = untrack(() =>
       resolveCreateContext({
@@ -53,9 +62,10 @@
         task: (u) => cache.task(u),
         workspaces: list,
         readOnly: (s) => readOnlyNow(stores, s),
+        hidden: (s) => stores.hidden(s),
       }),
     );
-    if (again.workspace) wsKey = workspaceKey(again.workspace);
+    if (again.workspace) wsKey = opened = workspaceKey(again.workspace);
   });
 
   const sc = useSubscribe(schema, () => (ws ? schema.get(ws.store) : undefined));

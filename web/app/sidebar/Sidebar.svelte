@@ -17,8 +17,11 @@
   import SyncCard from "./SyncCard.svelte";
 
   const { stores, cache, views, conn } = core();
-  const workspaces = useSubscribe(stores, () => stores.workspaces());
+  // What is hidden is left out here; the first workspace that is left is the home (細部 93).
+  const workspaces = useSubscribe(stores, () => stores.visibleWorkspaces());
+  const hiddenOf = useSubscribe(stores, () => (store: string) => stores.hidden(store));
   const savedViews = useSubscribe(views, () => views.list());
+  const shownViews = $derived(savedViews.current.filter((v) => !hiddenOf.current(v.store)));
   const cacheRev = useSubscribe(cache, () => ({}));
   const unread = useSubscribe(conn, () => conn.unread);
   const route = $derived(router.route);
@@ -38,7 +41,10 @@
   const myCount = $derived.by(() => {
     cacheRev.current;
     if (!myList || myList.loading() || myList.error()) return null;
-    return myList.ulids().length;
+    return myList.ulids().filter((u) => {
+      const store = cache.task(u)?.store;
+      return store === undefined || !hiddenOf.current(store);
+    }).length;
   });
 
   onMount(() =>
@@ -146,12 +152,12 @@
     </a>
   </div>
 
-  {#if savedViews.current.length > 0}
+  {#if shownViews.length > 0}
     <section class="views" aria-label="保存済みビュー">
       <div class="ws-head">
         <span class="ws-title">保存済みビュー</span>
       </div>
-      {#each savedViews.current as v (`${v.store}/${v.view.name}`)}
+      {#each shownViews as v (`${v.store}/${v.view.name}`)}
         {@const vhref = hrefOf({ name: "view", store: v.store, view: v.view.name })}
         {@const vhere =
           route.name === "view" && route.store === v.store && route.view === v.view.name}

@@ -25,8 +25,10 @@
 
   const roOf = useReadOnlyOf(stores);
 
+  // A hidden Store is not offered (細部 93).
+  const items = $derived(dir.current.items.filter((s) => !s.hidden));
   // Only a Store that can be written is a place to add to (細部 99).
-  const writable = $derived(dir.current.items.filter((s) => roOf.current(s.name) === null));
+  const writable = $derived(items.filter((s) => roOf.current(s.name) === null));
   // The Store picked here, else the one asked for, else the default one, else the first (of those
   // that can be written).
   let picked = $state("");
@@ -37,7 +39,7 @@
       writable[0]?.name ??
       "",
   );
-  const noWritable = $derived(dir.current.items.length > 0 && writable.length === 0);
+  const noWritable = $derived(items.length > 0 && writable.length === 0);
 
   let name = $state("");
   let prefix = $state("");
@@ -114,11 +116,11 @@
   onclose={close}
 >
   <div class="form" role="presentation" {onkeydown}>
-    {#if dir.current.items.length >= 2}
+    {#if items.length >= 2}
       <div class="field" role="radiogroup" aria-label="Store">
         <span class="lbl">Store</span>
         <div class="stores">
-          {#each dir.current.items as s (s.name)}
+          {#each items as s (s.name)}
             {@const why = roOf.current(s.name)}
             <!-- biome-ignore lint/a11y/noLabelWithoutControl: the badge is the text of the label -->
             <label

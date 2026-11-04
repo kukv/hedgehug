@@ -127,6 +127,8 @@ export type FakeCoreOptions = {
   readOnly?: string;
   /** Why the named Stores are read-only (the others follow `readOnly`). */
   readOnlyBy?: Record<string, string>;
+  /** The names of the Stores that are hidden. */
+  hidden?: string[];
 };
 
 /** Fakes of the core objects; every method the screens call is a vi.fn. */
@@ -177,7 +179,9 @@ export function makeCore(opts: FakeCoreOptions = {}) {
     readOnly: vi.fn(
       (s?: string) => (s ? opts.readOnlyBy?.[s] : undefined) ?? opts.readOnly ?? null,
     ),
+    hidden: vi.fn((s?: string) => (s ? (opts.hidden ?? []).includes(s) : false)),
     workspaces: vi.fn(() => ws),
+    visibleWorkspaces: vi.fn(() => ws.filter((w) => !(opts.hidden ?? []).includes(w.store))),
     workspace: vi.fn((s: string, u: string) => ws.find((w) => w.store === s && w.ulid === u)),
     loaded: vi.fn(() => true),
     reload: vi.fn(async () => {}),

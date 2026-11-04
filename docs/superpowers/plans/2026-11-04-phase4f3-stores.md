@@ -206,12 +206,12 @@
 - `SC-1` を URL で開くと帯が出て、「表示する」でサイドバーに戻る（`hh store list --json` の `hidden` が false）
 - 非表示にしても `second` のバッジの色が表示し直したあとと同じ
 
-- [ ] Step 1: Sidebar と App のテスト → 実装
-- [ ] Step 2: ツリー・カンバン・テーブルのテスト → 実装
-- [ ] Step 3: パレット・作成・ワークスペースの追加のテスト → 実装
-- [ ] Step 4: `StoreBands` の非表示の帯のテスト → 実装
-- [ ] Step 5: `hidden.spec.ts` を書いて通す
-- [ ] Step 6: 検査を流してコミット `feat(web): 非表示の Store をサイドバー・一覧・パレット・作成から外す`
+- [x] Step 1: Sidebar と App のテスト → 実装
+- [x] Step 2: ツリー・カンバン・テーブルのテスト → 実装
+- [x] Step 3: パレット・作成・ワークスペースの追加のテスト → 実装
+- [x] Step 4: `StoreBands` の非表示の帯のテスト → 実装
+- [x] Step 5: `hidden.spec.ts` を書いて通す
+- [x] Step 6: 検査を流してコミット `feat(web): 非表示の Store をサイドバー・一覧・パレット・作成から外す`
 
 ---
 

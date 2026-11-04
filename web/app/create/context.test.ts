@@ -115,6 +115,27 @@ describe("resolveCreateContext", () => {
     ).toBe("shared");
   });
 
+  it("starts from the first workspace of a Store that is not hidden, but keeps to the page it is on", () => {
+    const other = { ...(workspaces[0] as (typeof workspaces)[number]), store: "demo", ulid: "W9" };
+    const list = [...workspaces, other];
+    const hidden = (store: string) => store === "shared";
+    expect(resolveCreateContext({ ...base, workspaces: list, hidden }).workspace).toBe(other);
+    // the page of a hidden workspace is a place to create in
+    expect(
+      resolveCreateContext({
+        ...base,
+        workspaces: list,
+        hidden,
+        route: { name: "workspace", store: "shared", ulid: "W2", tab: "tree" },
+      }).workspace?.ulid,
+    ).toBe("W2");
+    // the workspace of a parent is the parent's, hidden or not
+    expect(
+      resolveCreateContext({ ...base, workspaces: list, hidden, requestParent: "US" }).workspace
+        ?.ulid,
+    ).toBe("W2");
+  });
+
   describe("createGuard", () => {
     const [a, b] = workspaces as [(typeof workspaces)[number], (typeof workspaces)[number]];
     const vault = { ...a, store: "vault", ulid: "WV" };

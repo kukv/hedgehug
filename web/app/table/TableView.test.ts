@@ -79,6 +79,8 @@ type Over = {
   // The Stores that cannot be written, with the raw reason of the directory.
   readOnly?: Record<string, string>;
   canceled?: string[];
+  // The Stores the GUI leaves out.
+  hidden?: string[];
   // The stores whose schema cannot be read (until it is put in the schemas).
   unreadable?: string[];
   // What becomes of the parent the list does not hold, once the table asks for it: it is read
@@ -195,6 +197,7 @@ function setup(over: Over = {}) {
     stores: {
       stores: () => (over.stores ?? ["shared"]).map((name) => ({ name })),
       readOnly: (s: string) => over.readOnly?.[s] ?? null,
+      hidden: (s: string) => over.hidden?.includes(s) ?? false,
       tone: (s: string) => (s === "me" ? "orange" : "purple"),
       subscribe: ev.subscribe,
     },
@@ -303,6 +306,31 @@ describe("TableView", () => {
     const { watchList } = setup({ scope: { apiBase: "", cliBase: "", store: undefined } });
     mount({ view: { kind: "all" }, query: "assignee:@me" });
     expect(watchList).toHaveBeenCalledWith({ q: "assignee:@me", tree: false, store: undefined });
+  });
+
+  it("leaves out the rows of a hidden store on the table of every store, and its canceled ones from the count", () => {
+    setup({
+      ulids: ["T1", "M1"],
+      canceled: ["T2", "M1"],
+      stores: ["shared", "me"],
+      hidden: ["me"],
+      scope: { apiBase: "", cliBase: "", store: undefined, saveBase: "" },
+    });
+    mount({ view: { kind: "all" } });
+    expect(order()).toEqual(["REL-4"]);
+    expect(screen.queryByRole("textbox", { name: "タイトル: ME-1" })).toBeNull();
+    expect(screen.getByText("1 件 · 中止 1 件を除外")).toBeInTheDocument();
+  });
+
+  it("keeps the rows of a hidden store on the table of its own workspace", () => {
+    setup({
+      ulids: ["M1"],
+      stores: ["shared", "me"],
+      hidden: ["me"],
+      scope: { apiBase: "workspace:me", cliBase: "", store: "me", saveBase: "" },
+    });
+    mount();
+    expect(screen.getByRole("textbox", { name: "タイトル: ME-1" })).toBeInTheDocument();
   });
 
   it("opens the detail from the ID", async () => {

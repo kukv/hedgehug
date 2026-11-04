@@ -109,6 +109,18 @@ describe("WorkspaceAdd", () => {
     expect(k.api.POST.mock.calls[0]?.[1]).toMatchObject({ params: { query: { store: "shared" } } });
   });
 
+  it("does not offer a hidden Store", () => {
+    const k = makeCore({ workspaces: spaces });
+    k.stores.stores.mockReturnValue([
+      storeItem("shared", true),
+      { ...storeItem("backend"), hidden: true },
+    ] as never);
+    mount(WorkspaceAdd, { store: "backend", onclose: vi.fn() }, k);
+    // only one Store is left to choose from: the dialog names it and asks for no choice
+    expect(screen.queryByRole("radio", { name: /backend/ })).toBeNull();
+    expect(screen.getByRole("dialog", { name: "shared にワークスペースを追加" })).toBeVisible();
+  });
+
   it("shows a read-only Store but does not let it be chosen, and starts from one that can be written", async () => {
     const k = makeCore({
       workspaces: spaces,

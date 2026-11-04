@@ -73,7 +73,11 @@ const rel6 = task("U6", "task", null, {
   title: "Web の API クライアントを v2 に更新",
 });
 
-function setup(found: unknown[] = [], readOnly: string | null = null) {
+function setup(
+  found: unknown[] = [],
+  readOnly: string | null = null,
+  hidden: string[] = [], // the Stores the GUI leaves out
+) {
   const none = () => () => {};
   const ws = {
     store: "shared",
@@ -134,6 +138,11 @@ function setup(found: unknown[] = [], readOnly: string | null = null) {
     stores: {
       stores: () => [{ name: "shared" }, { name: "backend" }],
       workspaces: () => [ws, { ...ws, ulid: "W2", name: "ops", prefix: "OPS" }],
+      visibleWorkspaces: () =>
+        [ws, { ...ws, ulid: "W2", name: "ops", prefix: "OPS" }].filter(
+          (w) => !hidden.includes(w.store),
+        ),
+      hidden: (s: string) => hidden.includes(s),
       readOnly: () => readOnly,
       tone: () => "purple",
       subscribe: none,
@@ -285,6 +294,60 @@ describe("CommandPalette", () => {
     await fireEvent.click(await screen.findByRole("option", { name: /doctor を実行/ }));
     expect(h.go).toHaveBeenCalledWith("/settings/general");
     expect(palette.open).toBe(false);
+  });
+
+  describe("hidden Stores", () => {
+    it("leaves their tasks out of the tasks opened last", async () => {
+      setup([], null, ["backend"]);
+      localStorage.setItem("hedgehug.recent", JSON.stringify(["U6", "U9"]));
+      render(CommandPalette);
+      openPalette();
+      await screen.findByText("最近開いたもの");
+      // U9 is of backend and has the same title as U6
+      expect(screen.getAllByText("Web の API クライアントを v2 に更新")).toHaveLength(1);
+    });
+
+    it("leaves their tasks out of what a search finds", async () => {
+      setup(
+        [{ ...rel6, ulid: "U9", id: "BE-1", title: "backend のタスク", store: "backend" }],
+        null,
+        ["backend"],
+      );
+      render(CommandPalette);
+      openPalette();
+      await fireEvent.input(await screen.findByRole("combobox"), { target: { value: "backend" } });
+      await waitFor(() => expect(screen.queryByText("検索中…")).toBeNull());
+      await new Promise((r) => setTimeout(r, 300));
+      expect(screen.queryByText("backend のタスク")).toBeNull();
+    });
+
+    it("finds the same task when its Store is not hidden", async () => {
+      setup([{ ...rel6, ulid: "U9", id: "BE-1", title: "backend のタスク", store: "backend" }]);
+      render(CommandPalette);
+      openPalette();
+      await fireEvent.input(await screen.findByRole("combobox"), { target: { value: "backend" } });
+      expect(await screen.findByText("backend のタスク")).toBeInTheDocument();
+    });
+
+    it("leaves out their saved views, their workspaces and their settings", async () => {
+      setup([], null, ["backend", "shared"]);
+      render(CommandPalette);
+      openPalette();
+      await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">" } });
+      await screen.findByText("今すぐ同期する");
+      expect(screen.queryByRole("option", { name: /ブロック中 を開く/ })).toBeNull();
+      expect(screen.queryByRole("option", { name: /release/ })).toBeNull();
+      expect(screen.queryByRole("option", { name: /設定のスキーマを開く/ })).toBeNull();
+    });
+
+    it("still lists them when they are not hidden", async () => {
+      setup();
+      render(CommandPalette);
+      openPalette();
+      await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">" } });
+      await screen.findByText("今すぐ同期する");
+      expect(screen.getByRole("option", { name: /ブロック中 を開く/ })).toBeInTheDocument();
+    });
   });
 
   it("opens the settings of the workspace", async () => {

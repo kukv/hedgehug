@@ -196,7 +196,13 @@
   const roots = $derived.by(() => {
     cacheRev.current;
     const r = tree?.roots() ?? [];
-    return all ? orderRootsByStore(r, storeOrder, taskOf) : r;
+    return all
+      ? orderRootsByStore(
+          r.filter((n) => shown(n.ulid)),
+          storeOrder,
+          taskOf,
+        )
+      : r;
   });
   const loading = $derived.by(() => {
     cacheRev.current;
@@ -212,7 +218,7 @@
   });
   const canceledCount = $derived.by(() => {
     cacheRev.current;
-    return canceledList ? canceledList.ulids().length : null;
+    return canceledList ? canceledList.ulids().filter((u) => shown(u)).length : null;
   });
 
   function isClosed(t: TaskView): boolean {
@@ -222,6 +228,14 @@
 
   function taskOf(ulid: string): TaskView | undefined {
     return c.cache.task(ulid);
+  }
+
+  // A view over every store leaves out the tasks of a hidden store (the page of a workspace or a
+  // project is of its own store, so it is not left out).
+  function shown(ulid: string): boolean {
+    storesRev.current;
+    const store = taskOf(ulid)?.store;
+    return !all || store === undefined || !c.stores.hidden(store);
   }
 
   // --- the rows --------------------------------------------------------------

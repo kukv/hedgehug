@@ -66,6 +66,7 @@ function mount(tab: "tree" | "kanban" | "table" | "settings", read = true, readO
         loaded: () => true,
         tone: () => "purple",
         readOnly: () => readOnly ?? null,
+        hidden: () => false,
         subscribe: none,
       },
       schema: { subscribe: none },

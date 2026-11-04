@@ -99,11 +99,18 @@
     return () => h.dispose();
   });
 
+  // A board over every store leaves out the tasks of a hidden store (the board of a workspace or a
+  // project is of its own store, so it is not left out).
+  function shown(store: string | undefined): boolean {
+    return scope.kind !== "all" || store === undefined || !c.stores.hidden(store);
+  }
+
   const tasks = $derived.by(() => {
     cacheRev.current;
+    storesRev.current;
     return (list?.ulids() ?? []).flatMap((u) => {
       const t = c.cache.task(u);
-      return t ? [t] : [];
+      return t && shown(t.store) ? [t] : [];
     });
   });
   const loading = $derived.by(() => {
@@ -120,7 +127,10 @@
   });
   const canceledCount = $derived.by(() => {
     cacheRev.current;
-    return canceledList ? canceledList.ulids().length : null;
+    storesRev.current;
+    return canceledList
+      ? canceledList.ulids().filter((u) => shown(c.cache.task(u)?.store)).length
+      : null;
   });
 
   // --- the schemas: the store of each task (and of the screen) -------------------
