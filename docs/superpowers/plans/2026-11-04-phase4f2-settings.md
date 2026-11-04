@@ -4,7 +4,7 @@
 
 **Goal:** アカウントの追加（Device Flow・トークンの貼り付け・gh・環境変数・トークンなし）とログアウト、Store の発見とマウント・URL で追加・解除・既定・色・表示を GUI で動かし、Store が0件のときの Onboarding を3段（アカウント・Store を選ぶ・はじめる）にする。
 
-**Architecture:** フェーズ 4f の3回のうちの2回目。決定事項と spec にない細部は概要 `docs/superpowers/plans/2026-11-04-phase4f-screens.md` にあり（この回は細部 17〜33、4f-1 で決めた API の決まり 52〜70、この回で足した 71〜）、各 Task はそこを前提にする（細部の番号はそこを指す）。API は 4f-1 で入っているので、画面は web だけで作る。Go に足すのは E2E のための keyring（Task 1。2026-11-04 に利用者が決定）だけで、API の形は変えない（足りないものが見つかったら止めて報告する）。画面ごとに 1 Task で、各 Task がルート・画面・入口・単体テスト・E2E をまとめて入れる。
+**Architecture:** フェーズ 4f の3回のうちの2回目。決定事項と spec にない細部は概要 `docs/superpowers/plans/2026-11-04-phase4f-screens.md` にあり（この回は細部 17〜33、4f-1 で決めた API の決まり 52〜70、この回で足した 71〜）、各 Task はそこを前提にする（細部の番号はそこを指す）。API は 4f-1 で入っているので、画面は web だけで作る。Go に足すのは E2E のための keyring（Task 1。2026-11-04 に利用者が決定）と、`discover --from` が bare の HEAD ではなく main を見る修正（細部 87。同日に利用者が決定）だけで、API の形は変えない（足りないものが見つかったら止めて報告する）。画面ごとに 1 Task で、各 Task がルート・画面・入口・単体テスト・E2E をまとめて入れる。
 
 **Tech Stack:** TypeScript、Svelte 5（runes）、Vite、Vitest と @testing-library/svelte、Playwright（`web/e2e`、`harness.ts`）、Biome、svelte-check。Task 1 は Go（go-keyring の `auth.Keyring`、ビルドタグ）と Makefile。依存は足さない。
 
@@ -71,6 +71,7 @@
 84. **URL で追加の名前**: 名前は必須で、URL の最後の部分（`.git` を除く）を、名前が空のあいだだけ提案する。URL は1行に1つ（空行は捨てる）
 85. **CreateStore のアカウント**: アカウントの一覧は `AccountsCache` から取る（細部 32）。読み込み中・読めないときは選択欄を出さず、`account` を送らない
 86. **remote のない Store の解除**（細部 27 の「既定でオン」を、remote のない Store について直す）: サーバー（`lockToDelete`）は remote のない Store のクローンを、タスクが失われるため常に消さない（409 `store.unpushed`）。「先に同期してください」は remote がないので実行できない。解除のダイアログは、`remotes` が空の Store では「ローカルのクローンも消す」を既定でオフにし、オンにすると「remote のない Store は、クローンを消すとタスクが失われるため、クローンごとは解除できません。「クローンを残して解除」を使ってください」と出す。この Store の 409 `store.unpushed` は、同期の案内ではなくこの文を出す
+87. **discover --from は HEAD ではなく refs/heads/main を見る**: 素の `git init --bare` の HEAD は master のままで、push は main にしか書かないので、HEAD を見ていた `discover --from` は Store を黙って見落としていた（`gitrepo.MainHasFile`）。2026-11-04 に利用者がこの回で直すと決定。E2E の harness は `--initial-branch=main` を付けずに bare を作る
 
 ---
 

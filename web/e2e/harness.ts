@@ -277,10 +277,7 @@ export class Peer {
     const peer = new Peer(home, remote);
     try {
       mkdirSync(dirname(remote), { recursive: true });
-      // HEAD names the branch the Store is pushed to: a search in a folder reads the Store there.
-      execFileSync("git", ["init", "--bare", "--quiet", "--initial-branch=main", remote], {
-        encoding: "utf8",
-      });
+      execFileSync("git", ["init", "--bare", "--quiet", remote], { encoding: "utf8" });
       peer.hh("store", "init", name, "--prefix", prefix, "--remote", remote);
       peer.hh("sync");
     } catch (e) {
