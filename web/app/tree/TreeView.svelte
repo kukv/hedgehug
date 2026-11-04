@@ -7,18 +7,25 @@
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
+  import { storeShown } from "../hidden";
   import { kbdLabel, modKey } from "../keys";
   import ListBar from "../list/ListBar.svelte";
   import type { ListScope } from "../list/scope";
   import { useListScope } from "../list/scope.svelte";
+  import { readOnlyNow, readOnlyToast } from "../read-only";
   import { router } from "../router";
   import { selection } from "../selection.svelte";
   import Empty from "../states/Empty.svelte";
   import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Menu from "../ui/Menu.svelte";
-  import { openWorkspaceMove } from "../workspace/dialogs-state.svelte";
-  import { MOVE_VALUE, moveWorkspaceItem } from "../workspace/move-menu";
+  import { openStoreMove, openWorkspaceMove } from "../workspace/dialogs-state.svelte";
+  import {
+    MOVE_STORE_VALUE,
+    MOVE_VALUE,
+    moveStoreItem,
+    moveWorkspaceItem,
+  } from "../workspace/move-menu";
   import AddRow from "./AddRow.svelte";
   import { createBelow, moveTask, patchTask } from "./actions";
   import {
@@ -38,7 +45,7 @@
     ROW_HEIGHT,
     VIRTUALIZE_AT,
   } from "./flatten";
-  import { type KeyAction, type KeyInput, keyAction, needsSchema } from "./keyboard";
+  import { type KeyAction, type KeyInput, keyAction, needsSchema, writeTargetOf } from "./keyboard";
   import { openBlocker } from "./marks";
   import { checkParent, kindLabel, pickKind } from "./placement";
   import { orderRootsByStore, storesOf } from "./stores-order";
@@ -194,8 +201,15 @@
   // any of them changes later, the order is made again, so no moment of arrival can leave it wrong.
   const roots = $derived.by(() => {
     cacheRev.current;
+    storesRev.current;
     const r = tree?.roots() ?? [];
-    return all ? orderRootsByStore(r, storeOrder, taskOf) : r;
+    return all
+      ? orderRootsByStore(
+          r.filter((n) => inScope(taskOf(n.ulid)?.store)),
+          storeOrder,
+          taskOf,
+        )
+      : r;
   });
   const loading = $derived.by(() => {
     cacheRev.current;
@@ -211,7 +225,10 @@
   });
   const canceledCount = $derived.by(() => {
     cacheRev.current;
-    return canceledList ? canceledList.ulids().length : null;
+    storesRev.current;
+    return canceledList
+      ? canceledList.ulids().filter((u) => inScope(taskOf(u)?.store)).length
+      : null;
   });
 
   function isClosed(t: TaskView): boolean {
@@ -221,6 +238,13 @@
 
   function taskOf(ulid: string): TaskView | undefined {
     return c.cache.task(ulid);
+  }
+
+  // A view over every store leaves out the tasks of a hidden store (the page of a workspace or a
+  // project is of its own store, so it is not left out).
+  // (Read storesRev where this is used, so the result follows the directory.)
+  function inScope(store: string | undefined): boolean {
+    return !all || storeShown(c.stores, store);
   }
 
   // --- the rows --------------------------------------------------------------
@@ -379,8 +403,21 @@
   // "row" is the "…" button of a row; S and K open the other two.
   let menu = $state<{ which: "status" | "kind" | "row"; ulid: string } | null>(null);
 
+  // Why the Store of a task cannot be written (in Japanese), or null.
+  function readOnlyOf(store: string | undefined): string | null {
+    storesRev.current;
+    return store === undefined ? null : readOnlyNow(c.stores, store);
+  }
+
   function actionOf(k: KeyInput): KeyAction {
-    return keyAction(k, { rows, selected: selection.ulid, schema: keySchema, viewRoot, taskOf });
+    return keyAction(k, {
+      rows,
+      selected: selection.ulid,
+      schema: keySchema,
+      viewRoot,
+      taskOf,
+      idOf: (t) => c.stores.displayId(t.store, t.id),
+    });
   }
 
   function onkeydown(e: KeyboardEvent) {
@@ -454,6 +491,13 @@
 
   // run says whether the action went through: false for a refusal or a failed write.
   async function run(a: KeyAction): Promise<boolean> {
+    // A Store that cannot be written refuses before anything else, even the refusals of the schema.
+    const target = writeTargetOf(a, selection.ulid);
+    const why = target === null ? null : readOnlyOf(taskOf(target)?.store);
+    if (why !== null) {
+      readOnlyToast(why);
+      return false;
+    }
     try {
       switch (a.type) {
         case "select":
@@ -514,14 +558,19 @@
     if (!menu || !menuTask || !menuSchema) return [];
     if (menu.which === "row") {
       storesRev.current;
-      return [moveWorkspaceItem(menuTask, c.stores.workspaces())];
+      return [
+        moveWorkspaceItem(menuTask, c.stores.workspaces(), readOnlyOf(menuTask.store)),
+        moveStoreItem(c.stores.stores(), readOnlyOf(menuTask.store)),
+      ].filter((i) => i !== null);
     }
     if (menu.which === "status") {
       return (menuSchema.statuses ?? []).map((s) => ({ value: s.name, label: s.label || s.name }));
     }
     const parent = menuTask.parent ? taskOf(menuTask.parent) : undefined;
     return (menuSchema.kinds ?? []).map((k) => {
-      const why = checkParent(menuSchema, { ...menuTask, kind: k.name }, parent ?? null);
+      const why = checkParent(menuSchema, { ...menuTask, kind: k.name }, parent ?? null, (t) =>
+        c.stores.displayId(t.store, t.id),
+      );
       return { value: k.name, label: k.label || k.name, disabled: why !== null, hint: why?.title };
     });
   });
@@ -532,6 +581,7 @@
     if (!t || !which) return;
     if (which === "row") {
       if (value === MOVE_VALUE) openWorkspaceMove(t);
+      else if (value === MOVE_STORE_VALUE) openStoreMove(t);
       return;
     }
     try {
@@ -561,6 +611,11 @@
     return scope.kind === "project" && ls.project
       ? `${ls.project.workspace.name} / ${ls.project.title}`
       : (ls.workspace?.name ?? "");
+  });
+
+  // The place a task would be added to cannot be written: the input is not shown (and goes if it was).
+  $effect(() => {
+    if (adding && readOnlyOf(addStore) !== null) adding = null;
   });
 
   function startAdd(a: Adding) {
@@ -634,7 +689,24 @@
     const dragged = taskOf(sourceUlid);
     const target = taskOf(targetUlid);
     if (!dragged || !target) return null;
-    return dropDecision({ dragged, target, place, schema: schemaOf(dragged.store), taskOf });
+    return dropDecision({
+      dragged,
+      target,
+      place,
+      schema: schemaOf(dragged.store),
+      taskOf,
+      readOnly: refusingStore(target.store, dragged.store),
+      idOf: (t) => c.stores.displayId(t.store, t.id),
+    });
+  }
+
+  // The first of the Stores that cannot be written, with the reason.
+  function refusingStore(...stores: string[]): { store: string; why: string } | null {
+    for (const store of stores) {
+      const why = readOnlyOf(store);
+      if (why !== null) return { store, why };
+    }
+    return null;
   }
 
   function setOver(targetUlid: string, place: DropPlace | null, sourceUlid: string | null) {
@@ -769,6 +841,7 @@
               depth: item.row.depth,
               openChildren: item.row.hasChildren && item.row.expanded,
               onDragStart: () => (dragging = item.row.ulid),
+              locked: readOnlyOf(item.row.task.store) !== null,
               onOver: (place, source) => setOver(item.row.ulid, place, source),
               onDrop: (source, place) => void dropOn(source, item.row.ulid, place),
             }))}
@@ -836,7 +909,7 @@
         </div>
       {/if}
 
-      {#if !adding}
+      {#if !adding && readOnlyOf(ls.store) === null}
         <div class="foot-add">
           <AddRow
             editing={false}

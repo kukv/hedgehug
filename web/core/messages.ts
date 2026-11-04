@@ -1,4 +1,5 @@
 import { ApiError } from "./api/client";
+import { readOnlyReason } from "./stores";
 
 type Args = Record<string, unknown>;
 type Make = (a: Args, e: ApiError) => string;
@@ -35,17 +36,22 @@ const violationLabels: Record<string, string> = {
   cycle: "循環しています",
 };
 
-function violations(a: Args): string {
+// violationLines writes the violations of an error one by one: the objects of schema.violation,
+// and the lines ("  <ID> <title>: <violation>") of move.invalid.
+export function violationLines(a: Args): string[] {
   const vs = a.violations;
-  if (!Array.isArray(vs) || vs.length === 0) return "";
-  return vs
-    .map((v) => {
-      const x = (v ?? {}) as Record<string, unknown>;
-      const label = violationLabels[String(x.code)] ?? String(x.code ?? "");
-      const field = x.field ? `（${String(x.field)}）` : "";
-      return `${label}${field}: ${String(x.message ?? "")}`;
-    })
-    .join(" / ");
+  if (!Array.isArray(vs)) return [];
+  return vs.map((v) => {
+    if (typeof v === "string") return v.trim();
+    const x = (v ?? {}) as Record<string, unknown>;
+    const label = violationLabels[String(x.code)] ?? String(x.code ?? "");
+    const field = x.field ? `（${String(x.field)}）` : "";
+    return `${label}${field}: ${String(x.message ?? "")}`;
+  });
+}
+
+function violations(a: Args): string {
+  return violationLines(a).join(" / ");
 }
 
 // messages has the words for every Code of the usecase errors and of the server.
@@ -163,7 +169,7 @@ const messages: Record<string, Make> = {
 
   // stores and sync
   "store.read_only": (a) =>
-    `${str(a, "store")} は読み取り専用です${a.reason ? `（${str(a, "reason")}）` : ""}`,
+    `${str(a, "store")} は読み取り専用です${a.reason ? `（${readOnlyReason(str(a, "reason"))}）` : ""}`,
   "store.bad_name": (a) => `「${str(a, "value")}」は Store の名前に使えません`,
   "store.bad_color": (a) =>
     `「${str(a, "value")}」は Store の色に使えません` +

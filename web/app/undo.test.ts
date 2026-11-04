@@ -31,6 +31,9 @@ beforeEach(() => resetToasts());
 describe("undoMessage", () => {
   it("names the task and the operation", () => {
     expect(undoMessage(result())).toBe("REL-6 の変更を取り消しました");
+    expect(undoMessage(result(), (store, id) => `${store}:${id}`)).toBe(
+      "shared:REL-6 の変更を取り消しました",
+    );
   });
 
   it("leaves out the task when the operation is not about one", () => {
@@ -104,9 +107,10 @@ describe("runUndo", () => {
     const { api, calls } = fakeApi(route);
     const noteOwnCommit = vi.fn();
     const refresh = vi.fn();
-    const c = { api, cache: { noteOwnCommit }, views: { refresh } } as unknown as Pick<
+    const stores = { displayId: (_store: string, id: string) => id };
+    const c = { api, cache: { noteOwnCommit }, views: { refresh }, stores } as unknown as Pick<
       AppCore,
-      "api" | "cache" | "views"
+      "api" | "cache" | "views" | "stores"
     >;
     return { c, calls, noteOwnCommit, refresh };
   }

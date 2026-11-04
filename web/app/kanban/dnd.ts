@@ -15,17 +15,20 @@ function sourceOf(data: Record<string | symbol, unknown>): DragSource {
   return { ulid: String(data.ulid), lane: String(data.lane) };
 }
 
-export type CardDndOptions = DragSource & { onDragStart: () => void };
+// locked: the card cannot be moved (its Store is read-only), so it is not made draggable at all.
+export type CardDndOptions = DragSource & { onDragStart: () => void; locked?: boolean };
 
 // cardDnd makes a card draggable. Use it as {@attach cardDnd(get)}. The options are read when
 // needed, so one attachment serves the card for as long as it lives.
 export function cardDnd(get: () => CardDndOptions): Attachment<HTMLElement> {
-  return (el) =>
-    draggable({
+  return (el) => {
+    if (get().locked) return;
+    return draggable({
       element: el,
       getInitialData: () => ({ type: CARD, ulid: get().ulid, lane: get().lane }),
       onDragStart: () => get().onDragStart(),
     });
+  };
 }
 
 export type CellDndOptions = {

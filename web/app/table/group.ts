@@ -17,6 +17,7 @@ export type GroupHead = {
   key: string;
   label: string;
   id?: string;
+  store?: string; // the Store of id
   ulid?: string;
   progress?: { done: number; total: number };
   count: number;
@@ -43,6 +44,7 @@ function bucketsOf(t: TaskView, by: Exclude<GroupBy, "none">, ctx: SortCtx): Buc
           key: t.parent,
           label: p ? p.title : ctx.loading?.(t) ? "読み込み中…" : "不明な親",
           id: p?.id,
+          store: p?.store,
           ulid: t.parent,
           progress: p?.progress && p.progress.total > 0 ? p.progress : undefined,
           none: false,
@@ -68,6 +70,8 @@ function bucketsOf(t: TaskView, by: Exclude<GroupBy, "none">, ctx: SortCtx): Buc
           key: t.project.ulid,
           label: t.project.title,
           id: t.project.id,
+          // a project is always in the Store of its task
+          store: t.store,
           ulid: t.project.ulid,
           none: false,
         },

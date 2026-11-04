@@ -7,11 +7,13 @@
   import type { KanbanSettings } from "../../core/views";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
+  import { storeShown } from "../hidden";
   import Icon from "../icons/Icon.svelte";
   import StatusIcon from "../icons/StatusIcon.svelte";
   import ListBar from "../list/ListBar.svelte";
   import type { ListScope } from "../list/scope";
   import { useListScope } from "../list/scope.svelte";
+  import { readOnlyNow, readOnlySentence } from "../read-only";
   import { router } from "../router";
   import { selection } from "../selection.svelte";
   import Empty from "../states/Empty.svelte";
@@ -45,6 +47,7 @@
   let { view: scope, query, onquery, settings, onsettings, cli, saved, actions }: Props = $props();
 
   const c = core();
+  const uid = $props.id();
   const ls = useListScope(() => scope);
   // The selection is one for the whole app: a row of another screen is not a card of this.
   selection.set(null);
@@ -97,11 +100,19 @@
     return () => h.dispose();
   });
 
+  // A board over every store leaves out the tasks of a hidden store (the board of a workspace or a
+  // project is of its own store, so it is not left out).
+  // (Read storesRev where this is used, so the result follows the directory.)
+  function inScope(store: string | undefined): boolean {
+    return scope.kind !== "all" || storeShown(c.stores, store);
+  }
+
   const tasks = $derived.by(() => {
     cacheRev.current;
+    storesRev.current;
     return (list?.ulids() ?? []).flatMap((u) => {
       const t = c.cache.task(u);
-      return t ? [t] : [];
+      return t && inScope(t.store) ? [t] : [];
     });
   });
   const loading = $derived.by(() => {
@@ -118,7 +129,10 @@
   });
   const canceledCount = $derived.by(() => {
     cacheRev.current;
-    return canceledList ? canceledList.ulids().length : null;
+    storesRev.current;
+    return canceledList
+      ? canceledList.ulids().filter((u) => inScope(c.cache.task(u)?.store)).length
+      : null;
   });
 
   // --- the schemas: the store of each task (and of the screen) -------------------
@@ -148,6 +162,20 @@
   const storeOrder = $derived.by(() => {
     storesRev.current;
     return c.stores.stores().map((s) => s.name);
+  });
+  // Why the Store of a task cannot be written (in Japanese), or null.
+  function readOnlyOf(store: string): string | null {
+    storesRev.current;
+    return readOnlyNow(c.stores, store);
+  }
+  // The "+" of a column creates in the Store of the board, or in any Store on a board of several: it
+  // is disabled only when none of those can be written.
+  const addLocked = $derived.by(() => {
+    storesRev.current;
+    const names = ls.store ? [ls.store] : c.stores.stores().map((s) => s.name);
+    if (names.length === 0) return null;
+    const reasons = names.map(readOnlyOf);
+    return reasons.every((r) => r !== null) ? (reasons[0] ?? null) : null;
   });
   // With two stores or more, each card says which store it is of.
   const manyStores = $derived(storeOrder.length >= 2);
@@ -212,6 +240,8 @@
       mode: settings.columns,
       schema: schemas.get(t.store),
       detail,
+      readOnly: readOnlyOf(t.store),
+      idOf: (x) => c.stores.displayId(x.store, x.id),
     });
   }
 
@@ -471,10 +501,16 @@
                     type="button"
                     class="add"
                     aria-label="{col.label} にタスクを追加"
+                    disabled={addLocked !== null}
+                    title={addLocked !== null ? readOnlySentence(addLocked) : undefined}
+                    aria-describedby={addLocked !== null ? `${uid}-add-off-${i}` : undefined}
                     onclick={() => addTo(col)}
                   >
                     <Icon name="plus" size={14} />
                   </button>
+                  {#if addLocked !== null}
+                    <span id="{uid}-add-off-{i}" class="sr">{readOnlySentence(addLocked)}</span>
+                  {/if}
                 {/if}
               </div>
             {/each}
@@ -518,6 +554,7 @@
                           ulid: t.ulid,
                           lane: lane.key,
                           onDragStart: () => (dragging = { ulid: t.ulid, lane: lane.key }),
+                          locked: readOnlyOf(t.store) !== null,
                         }))}
                       />
                     {/each}
@@ -580,6 +617,14 @@
 {/if}
 
 <style>
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
   .kanban {
     box-sizing: border-box;
     display: flex;
@@ -674,9 +719,13 @@
     color: var(--muted);
     cursor: pointer;
   }
-  .add:hover {
+  .add:hover:not(:disabled) {
     background: var(--hover);
     color: var(--ink);
+  }
+  .add:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
   }
   .lane {
     display: flex;

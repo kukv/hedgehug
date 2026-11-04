@@ -4,21 +4,27 @@
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
+  import { hiddenStores, storeShown } from "../hidden";
   import Icon from "../icons/Icon.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
   import { kbdLabel, modKey } from "../keys";
   import { closePalette, palette } from "../palette-state.svelte";
+  import { readOnlyNow } from "../read-only";
   import { router } from "../router";
   import { selection } from "../selection.svelte";
   import { runSync } from "../sidebar/sync-run.svelte";
-  import { useSubscribe } from "../svelte-store";
+  import { useDisplayId, useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import { patchTask } from "../tree/actions";
   import StoreBadge from "../ui/StoreBadge.svelte";
   import { routeStore, runUndo } from "../undo";
   import { openViewSave } from "../views/dialogs-state.svelte";
   import { newDraft } from "../views/draft";
-  import { openWorkspaceAdd, openWorkspaceMove } from "../workspace/dialogs-state.svelte";
+  import {
+    openStoreMove,
+    openWorkspaceAdd,
+    openWorkspaceMove,
+  } from "../workspace/dialogs-state.svelte";
   import { fetchMissing, readRecent, rememberTask } from "./recent";
   import {
     buildCommands,
@@ -32,6 +38,7 @@
   } from "./search";
 
   const c = core();
+  const did = useDisplayId(c.stores);
   const cacheRev = useSubscribe(c.cache, () => ({}));
   const storesRev = useSubscribe(c.stores, () => ({}));
   const schemaRev = useSubscribe(c.schema, () => ({}));
@@ -88,7 +95,12 @@
     void tick().then(() => inputEl?.focus());
   });
 
-  const mode = $derived(detectMode(input));
+  // Every mounted Store, hidden or not: a "<store>:<ID>" of a hidden Store opens like a URL does.
+  const mountedNames = () => c.stores.stores().map((s) => s.name);
+  const mode = $derived.by(() => {
+    storesRev.current;
+    return detectMode(input, mountedNames());
+  });
   const modeLabel = $derived(
     picking ? "ステータス" : { id: "ID", query: "クエリ", command: "コマンド" }[mode],
   );
@@ -98,6 +110,8 @@
     hrefOf: (ulid: string) => router.href({ name: "task", ulid }),
     epoch: () => c.cache.epochNow(),
     prime: (tasks: (TaskView | ShowView)[], since: number) => c.cache.prime(tasks, since),
+    hidden: () => hiddenStores(c.stores),
+    storeNames: mountedNames,
   };
 
   $effect(() => {
@@ -162,14 +176,17 @@
       addWorkspace: () => openWorkspaceAdd(),
       // A query typed in the palette is saved as a table, which holds any query (a tree cannot sort).
       saveQuery: (query) => openViewSave({ draft: newDraft({ layout: "table", query }) }),
-      views: c.views.list(),
+      views: c.views.list().filter((v) => storeShown(c.stores, v.store)),
       undo: () =>
         void runUndo(
           c,
-          routeStore(router.route, (u) => c.cache.task(u), c.stores.workspaces()[0]),
+          routeStore(router.route, (u) => c.cache.task(u), c.stores.visibleWorkspaces()[0]),
         ),
-      workspaces: c.stores.workspaces(),
-      storeNames: c.stores.stores().map((s) => s.name),
+      workspaces: c.stores.visibleWorkspaces(),
+      storeNames: c.stores
+        .stores()
+        .filter((s) => storeShown(c.stores, s.name))
+        .map((s) => s.name),
       go: (path) => router.go(path),
       hrefs: {
         workspace: (store, ulid) =>
@@ -193,9 +210,15 @@
       },
       selected: sel ? (c.cache.task(sel) ?? null) : null,
       project,
-      recent: recentUlids.flatMap((u) => c.cache.task(u) ?? []),
+      recent: recentUlids.flatMap((u) => {
+        const t = c.cache.task(u);
+        return t && storeShown(c.stores, t.store) ? [t] : [];
+      }),
       pickStatus,
       moveTask: (t) => openWorkspaceMove(t),
+      moveStoreTask: (t) => openStoreMove(t),
+      readOnly: (store) => readOnlyNow(c.stores, store),
+      displayId: (store, id) => c.stores.displayId(store, id),
     };
   });
 
@@ -216,7 +239,7 @@
         note: s.name === t.status ? "今のステータス" : undefined,
         run: () => void setStatus(t, s.name),
       }));
-    return items.length ? [{ name: `${t.id} のステータス`, items }] : [];
+    return items.length ? [{ name: `${did.current(t.store, t.id)} のステータス`, items }] : [];
   }
 
   const groups = $derived.by<PaletteGroup[]>(() => {
@@ -370,7 +393,7 @@
               >
                 {#if item.type === "task"}
                   <KindIcon kind={item.kind} />
-                  <span class="key">{item.id}</span>
+                  <span class="key">{did.current(item.store, item.id)}</span>
                   <span class="text">{item.title}</span>
                   {#if item.note}
                     <span class="note">{item.note}</span>

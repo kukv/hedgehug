@@ -68,6 +68,7 @@ type Opts = {
   pending?: boolean;
   store?: string;
   tab?: "statuses" | "kinds" | "props" | "workflow";
+  readOnly?: string;
 };
 
 function setup(opts: Opts = {}) {
@@ -113,7 +114,9 @@ function setup(opts: Opts = {}) {
       conn,
       stores: {
         stores: () => names.map((name) => ({ name })),
+        readOnly: () => opts.readOnly ?? null,
         tone: () => "purple",
+        displayId: (_s: string, id: string) => id,
         subscribe: () => () => {},
       },
       schema: {
@@ -266,6 +269,18 @@ describe("SettingsSchema", () => {
     expect(location.pathname + location.search).toBe("/settings/schema/org-b%2Fops?tab=workflow");
   });
 
+  it("disables the rename and the merge of a read-only Store, with the reason", async () => {
+    setup({ readOnly: "the remote cannot be written" });
+    const rename = await screen.findByRole("button", { name: "名前を変える…（triage）" });
+    expect(rename).toBeDisabled();
+    expect(rename).toHaveAttribute("title", "この Store は閲覧のみです（remote に書き込めません）");
+    for (const b of screen.getAllByRole("button", { name: /^(名前を変える|併合する)…/ })) {
+      expect(b).toBeDisabled();
+    }
+    rename.click(); // a disabled button takes no click
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("closes the dialog when the Store changes, so that it cannot write to the other Store", async () => {
     const k = setup();
     await fireEvent.click(await screen.findByRole("button", { name: "名前を変える…（triage）" }));
@@ -369,7 +384,13 @@ describe("SettingsSchema", () => {
         {
           api: { GET: vi.fn(() => ok({ tasks: [], findings: [] })) },
           conn,
-          stores: { stores: () => [], tone: () => "purple", subscribe: () => () => {} },
+          stores: {
+            stores: () => [],
+            readOnly: () => null,
+            tone: () => "purple",
+            displayId: (_s: string, id: string) => id,
+            subscribe: () => () => {},
+          },
           schema: { get: () => sch, load: async () => sch, subscribe: () => () => {} },
         },
       );

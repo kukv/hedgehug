@@ -10,6 +10,7 @@
     name?: string;
     note?: string;
     onCreate?: () => void;
+    createOff?: string; // why the create button cannot be used (it stays, disabled)
     onClear?: () => void;
     onHome?: () => void;
     commands?: string[];
@@ -20,6 +21,7 @@
     name = "",
     note,
     onCreate,
+    createOff,
     onClear,
     onHome,
     commands = [],
@@ -46,7 +48,7 @@
       しても、ここに入ります。
     </span>
     {#if onCreate}
-      <Button variant="primary" onclick={onCreate}>
+      <Button variant="primary" disabled={!!createOff} why={createOff} onclick={onCreate}>
         タスクを作成 <kbd>{kbdLabel("c")}</kbd>
       </Button>
     {/if}

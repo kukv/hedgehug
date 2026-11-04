@@ -3,14 +3,22 @@
   import { cliRm } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
+  import { readOnlySentence } from "../read-only";
+  import { useDisplayId } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
   import { collectDescendants, deleteTask, restoreTask } from "./delete-actions";
 
-  let { show, variant }: { show: ShowView; variant: "delete" | "deleted" } = $props();
+  // readOnly is why the Store cannot be written (in Japanese), or null: the buttons are off then.
+  let {
+    show,
+    variant,
+    readOnly = null,
+  }: { show: ShowView; variant: "delete" | "deleted"; readOnly?: string | null } = $props();
 
-  const { api, cache } = core();
+  const { api, cache, stores } = core();
+  const did = useDisplayId(stores);
   const deps = { api, cache };
   const ref = $derived({ ulid: show.ulid, store: show.store });
 
@@ -68,7 +76,7 @@
   async function restore() {
     if (busy) return;
     busy = true;
-    const { id } = show;
+    const id = did.current(show.store, show.id);
     try {
       await restoreTask(deps, ref);
       toast({ message: `${id} を復元しました` });
@@ -79,6 +87,8 @@
     }
   }
 
+  const off = $derived(readOnly !== null);
+  const offTitle = $derived(readOnly !== null ? readOnlySentence(readOnly) : undefined);
   const shown = $derived((descendants ?? []).slice(0, 5));
   const more = $derived(Math.max(0, (descendants ?? []).length - 5));
   const deleteLabel = $derived(
@@ -87,17 +97,19 @@
 </script>
 
 {#if variant === "delete"}
-  <Button size="sm" onclick={() => void openDelete()}>削除</Button>
+  <Button size="sm" disabled={off} why={offTitle} onclick={() => void openDelete()}>削除</Button>
 {:else}
-  <Button size="sm" disabled={busy} onclick={() => void restore()}>復元</Button>
+  <Button size="sm" disabled={busy || off} why={offTitle} onclick={() => void restore()}
+    >復元</Button
+  >
 {/if}
 
 {#if open === "delete"}
   <Dialog
     open
-    title="{show.id} {show.title} を削除"
+    title="{did.current(show.store, show.id)} {show.title} を削除"
     width={560}
-    cli={cliRm(show.id)}
+    cli={cliRm(did.current(show.store, show.id))}
     onclose={close}
   >
     {#if descendants === null}
@@ -108,7 +120,7 @@
       </p>
       <ul>
         {#each shown as t (t.ulid)}
-          <li><span class="mono">{t.id}</span> {t.title}</li>
+          <li><span class="mono">{did.current(show.store, t.id)}</span> {t.title}</li>
         {/each}
         {#if more > 0}
           <li class="muted">ほか {more} 件</li>

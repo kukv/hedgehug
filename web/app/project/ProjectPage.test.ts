@@ -49,7 +49,7 @@ const project = task("P1", "project", null, {
   workspace: { ulid: "W1", name: "release", id_prefix: "REL" },
 }) as TaskView;
 
-function mount(tab: "tree" | "kanban" | "table" | "settings", read = true) {
+function mount(tab: "tree" | "kanban" | "table" | "settings", read = true, readOnly?: string) {
   const none = () => () => {};
   return renderWithCore(
     ProjectPage,
@@ -65,6 +65,9 @@ function mount(tab: "tree" | "kanban" | "table" | "settings", read = true) {
         workspace: () => entry(),
         loaded: () => true,
         tone: () => "purple",
+        displayId: (_s: string, id: string) => id,
+        readOnly: () => readOnly ?? null,
+        hidden: () => false,
         subscribe: none,
       },
       schema: { subscribe: none },
@@ -75,6 +78,16 @@ function mount(tab: "tree" | "kanban" | "table" | "settings", read = true) {
 afterEach(cleanup);
 
 describe("ProjectPage", () => {
+  it("shows the band of a read-only Store above the heading, and none for a Store that can be written", () => {
+    const { unmount } = mount("tree", true, "the remote cannot be written");
+    expect(screen.getByRole("status", { name: "閲覧のみ" })).toHaveTextContent(
+      "この Store は閲覧のみです（remote に書き込めません）",
+    );
+    unmount();
+    mount("tree");
+    expect(screen.queryByRole("status", { name: "閲覧のみ" })).toBeNull();
+  });
+
   it("draws the heading with the tabs above the tree", () => {
     mount("tree");
     expect(screen.getByRole("heading", { level: 1, name: "リリース準備 v2.4" })).toBeTruthy();

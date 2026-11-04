@@ -37,6 +37,69 @@ describe("ViewPage", () => {
   });
   afterEach(() => closeViewDialog());
 
+  it("保存先の Store が閲覧のみなら、上に帯を出す", () => {
+    mountWithViews(
+      ViewPage,
+      { store: "shared", name: "weekly" },
+      { views: makeViews([weekly]), readOnly: ["shared"] },
+    );
+    expect(screen.getByRole("status", { name: "閲覧のみ" })).toHaveTextContent(
+      "この Store は閲覧のみです（remote に書き込めません）",
+    );
+  });
+
+  describe("保存先の Store が閲覧のみ", () => {
+    const sentence = "この Store は閲覧のみです（remote に書き込めません）";
+    const readOnlySetup = () => {
+      const views = makeViews([weekly]);
+      mountWithViews(
+        ViewPage,
+        { store: "shared", name: "weekly" },
+        { views, readOnly: ["shared"] },
+      );
+      return views;
+    };
+
+    it("ほかの layout のタブは理由つきで押せず、PUT しない", async () => {
+      const views = readOnlySetup();
+      const kanban = screen.getByRole("link", { name: "カンバン" });
+      expect(kanban).toHaveAttribute("aria-disabled", "true");
+      expect(kanban).toHaveAttribute("title", sentence);
+      await fireEvent.click(kanban);
+      expect(views.update).not.toHaveBeenCalled();
+      // the layout it was saved with is still the one shown
+      expect(tab("テーブル")).toHaveAttribute("aria-current", "page");
+    });
+
+    it("改名・削除は理由つきで無効、メニューは開ける", async () => {
+      readOnlySetup();
+      await fireEvent.click(screen.getByRole("button", { name: "ビューの操作（改名・削除）" }));
+      for (const label of [/改名/, /削除/]) {
+        const item = screen.getByRole("menuitem", { name: label });
+        expect(item).toBeDisabled();
+        expect(item).toHaveTextContent(sentence);
+      }
+      await fireEvent.click(screen.getByRole("menuitem", { name: /改名/ }));
+      expect(viewDialog.current).toBeNull();
+    });
+
+    it("列やまとめ方を変えると未保存になるが、「ビューを更新」は理由つきで押せない", async () => {
+      const views = readOnlySetup();
+      await fireEvent.click(screen.getByRole("button", { name: "table-set-group" }));
+      expect(screen.getByText("未保存の変更")).toBeVisible();
+      const update = screen.getByRole("button", { name: "ビューを更新" });
+      expect(update).toBeDisabled();
+      expect(update).toHaveAttribute("title", sentence);
+      update.click();
+      expect(views.update).not.toHaveBeenCalled();
+    });
+  });
+
+  it("保存先の Store が書けるなら、帯を出さない", () => {
+    setup();
+    expect(screen.queryByRole("status", { name: "閲覧のみ" })).toBeNull();
+  });
+
   it("見出しに名前・保存先の Store・ファイルの場所を出し、保存した layout で開く", () => {
     setup();
     expect(screen.getByRole("heading", { level: 1, name: "weekly" })).toBeVisible();

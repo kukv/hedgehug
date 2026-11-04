@@ -1,12 +1,27 @@
 <script lang="ts">
   import type { StoreTone } from "../../core/stores";
+  import { core } from "../context";
+  import { useReadOnly } from "../read-only";
 
   type Props = { store: string; tone: StoreTone; compact?: boolean };
   let { store, tone, compact = false }: Props = $props();
+
+  // tone is the colour only: a Store that is not known is grey too, so read-only is asked of the directory.
+  const readOnly = useReadOnly(core().stores, () => store);
+  const marked = $derived(readOnly.current !== null);
 </script>
 
-<span class="badge" class:compact data-tone={tone} title="Store: {store}">
-  <span class="dot"></span>{store}
+<span
+  class="badge"
+  class:compact
+  data-tone={tone}
+  title={marked ? `${store}（閲覧のみ）` : `Store: ${store}`}
+>
+  <span class="dot"></span>
+  {store}
+  {#if marked}
+    <span class="sr">（閲覧のみ）</span>
+  {/if}
 </span>
 
 <style>
@@ -25,6 +40,15 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    position: relative;
+  }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
   .compact {
     height: 16px;

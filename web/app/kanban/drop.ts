@@ -130,14 +130,24 @@ export type DropInput = {
   schema: SchemaView | undefined;
   // The full task, for the required fields the list does not carry (watchers, repos).
   detail?: ShowView;
+  // Why the Store of the task cannot be written (in Japanese), or null/absent when it can.
+  readOnly?: string | null;
+  // The ID of a task as the screen writes it (with its Store where the prefix is shared).
+  idOf?: (t: TaskView) => string;
 };
 
 // decideDrop says whether the card may go to the column, and the status it then gets. It reads no
 // DOM; the checks come in the order the reasons are worth giving in.
 export function decideDrop(i: DropInput): DropDecision {
   const { task, column, schema } = i;
-  const name = `「${task.id} ${task.title}」`;
+  const name = `「${i.idOf ? i.idOf(task) : task.id} ${task.title}」`;
 
+  if (i.readOnly) {
+    return refuse(
+      "閲覧のみの Store のタスクは動かせません",
+      `${task.store} は閲覧のみです（${i.readOnly}）。`,
+    );
+  }
   if (!i.sameLane) {
     return i.swimlane === "project"
       ? refuse(

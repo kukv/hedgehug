@@ -13,20 +13,23 @@
   import TaskPicker from "../detail/TaskPicker.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
   import { kbdLabel, modKey } from "../keys";
+  import { readOnlyNow, useReadOnlyOf } from "../read-only";
   import { router } from "../router";
   import { selection } from "../selection.svelte";
-  import { useSubscribe } from "../svelte-store";
+  import { useDisplayId, useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
-  import { resolveCreateContext, workspaceKey } from "./context";
+  import { choosableWorkspaces, createGuard, resolveCreateContext, workspaceKey } from "./context";
   import WorkspaceChoice from "./WorkspaceChoice.svelte";
 
   let { request, onclose }: { request: CreateRequest; onclose: () => void } = $props();
 
   const { api, cache, stores, schema } = core();
-  const entries = useSubscribe(stores, () => stores.workspaces());
+  const did = useDisplayId(stores);
+  const all = useSubscribe(stores, () => stores.workspaces());
+  const roOf = useReadOnlyOf(stores);
 
   // Where it goes is decided when the dialog opens.
   const contextOf = (workspaces: ReturnType<typeof stores.workspaces>) =>
@@ -36,25 +39,35 @@
       route: router.route,
       task: (u) => cache.task(u),
       workspaces,
+      readOnly: (s) => readOnlyNow(stores, s),
+      hidden: (s) => stores.hidden(s),
     });
   const ctx = untrack(() => contextOf(stores.workspaces()));
   let parent = $state<TaskView | null>(ctx.parent);
   let wsKey = $state(ctx.workspace ? workspaceKey(ctx.workspace) : "");
+  // Hidden Stores are left out of the choice, except the workspace the dialog opened on.
+  let opened = $state(ctx.workspace ? workspaceKey(ctx.workspace) : "");
+  const entries = $derived(choosableWorkspaces(all.current, (s) => stores.hidden(s), opened));
   // C pressed while the stores are still loading opens the dialog with no workspace to choose
   // from: decide again when they have loaded.
   $effect(() => {
-    const list = entries.current;
+    const list = all.current;
     if (wsKey !== "" || parent || list.length === 0) return;
     const again = untrack(() => contextOf(list));
     if (again.parent) parent = again.parent;
-    if (again.workspace) wsKey = workspaceKey(again.workspace);
+    if (again.workspace) wsKey = opened = workspaceKey(again.workspace);
   });
   const ws = $derived.by(() => {
     const p = parent;
-    if (p) return entries.current.find((w) => w.store === p.store && w.ulid === p.workspace.ulid);
-    return entries.current.find((w) => workspaceKey(w) === wsKey);
+    // The workspace of a parent is looked up among all workspaces on purpose: the parent may be in a
+    // hidden Store (opened by its address), and it is created in its own workspace.
+    if (p) return all.current.find((w) => w.store === p.store && w.ulid === p.workspace.ulid);
+    return entries.find((w) => workspaceKey(w) === wsKey);
   });
-  const showChoice = $derived(!parent && entries.current.length >= 2);
+  const showChoice = $derived(!parent && entries.length >= 2);
+  // A workspace of a Store that cannot be written is shown but cannot be chosen (細部 35).
+  const guard = $derived(createGuard(entries, ws, roOf.current));
+  const blocked = $derived(guard.blocked);
 
   const sc = useSubscribe(schema, () => (ws ? schema.get(ws.store) : undefined));
   $effect(() => {
@@ -112,10 +125,12 @@
     if (!parent) return "";
     const usable = kinds.filter((k) => allowed(k.name)).map((k) => k.label || k.name);
     return usable.length < kinds.length
-      ? `${parent.id} の下に置けるのは${usable.join("・")}です`
+      ? `${did.current(parent.store, parent.id)} の下に置けるのは${usable.join("・")}です`
       : "";
   });
-  const canSubmit = $derived(!busy && title.trim() !== "" && !!ws && !!sc.current && kind !== "");
+  const canSubmit = $derived(
+    !busy && title.trim() !== "" && !!ws && !!sc.current && kind !== "" && blocked === "",
+  );
   const submitKey = kbdLabel("mod+enter");
 
   function cleanProps(): Record<string, unknown> {
@@ -169,7 +184,7 @@
       );
       cache.applyWrite({ task: r.task, commit: r.commit });
       toast({
-        message: `${r.task.id} を作成しました · ${ws.name}`,
+        message: `${did.current(ws.store, r.task.id)} を作成しました · ${ws.name}`,
         link: { label: "開く", href: router.href({ name: "task", ulid: r.task.ulid }) },
       });
       if (more) {
@@ -222,7 +237,7 @@
       <span class="lbl">親</span>
       {#if parent}
         <span class="parent">
-          <span class="mono">{parent.id}</span>
+          <span class="mono">{did.current(parent.store, parent.id)}</span>
           {parent.title}
           <button type="button" aria-label="親を外す" onclick={removeParent}>×</button>
         </span>
@@ -240,12 +255,14 @@
     {#if showChoice}
       <div class="field">
         <WorkspaceChoice
-          entries={entries.current}
+          {entries}
           value={wsKey}
           name="create-ws"
           onchange={(k) => (wsKey = k)}
+          isDisabled={guard.isOff}
+          note={guard.note}
         />
-        <span class="hint">全 Store にワークスペースが {entries.current.length} つあります</span>
+        <span class="hint">全 Store にワークスペースが {entries.length} つあります</span>
       </div>
     {:else if ws}
       <div class="field">
@@ -354,15 +371,29 @@
     {#if ws}
       <p class="dest">入れ先 <strong>{ws.name}（{ws.prefix}）</strong> · ID は作成時に振ります</p>
     {/if}
+    {#if blocked}
+      <p id="create-blocked" class="hint">{blocked}</p>
+    {/if}
     {#if error}
       <p class="error" role="alert">{error}</p>
     {/if}
   </div>
 
   {#snippet footer()}
-    <Button disabled={!canSubmit} onclick={() => void submit(true)}>続けて作成</Button>
+    <Button
+      disabled={!canSubmit}
+      title={blocked || undefined}
+      aria-describedby={blocked ? "create-blocked" : undefined}
+      onclick={() => void submit(true)}
+      >続けて作成</Button
+    >
     <Button onclick={onclose}>キャンセル</Button>
-    <Button variant="primary" disabled={!canSubmit} onclick={() => void submit(false)}
+    <Button
+      variant="primary"
+      disabled={!canSubmit}
+      title={blocked || undefined}
+      aria-describedby={blocked ? "create-blocked" : undefined}
+      onclick={() => void submit(false)}
       >作成 {submitKey}</Button
     >
   {/snippet}

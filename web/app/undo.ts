@@ -9,8 +9,11 @@ type UndoWrite = Schemas["UndoWrite"];
 
 // undoMessage says what POST /api/undo did: the operation taken back, and what it kept because
 // others changed it after. commit is null when every field it changed had been changed since.
-export function undoMessage(r: UndoWrite): string {
-  const what = `${r.undone.id ? `${r.undone.id} の` : ""}${opLabel(r.undone.op)}`;
+export function undoMessage(
+  r: UndoWrite,
+  displayId: (store: string, id: string) => string = (_store, id) => id,
+): string {
+  const what = `${r.undone.id ? `${displayId(r.undone.store, r.undone.id)} の` : ""}${opLabel(r.undone.op)}`;
   const kept = r.kept?.length ?? 0;
   if (r.commit === null) {
     return `${what}は、変えた値がすべてあとで別の人に変えられていたため、何も戻しませんでした`;
@@ -42,7 +45,7 @@ export function routeStore(
 // the one the screen is about; without it the server picks one as the CLI does, which asks the
 // user to choose when there are several.
 export async function runUndo(
-  c: Pick<AppCore, "api" | "cache" | "views">,
+  c: Pick<AppCore, "api" | "cache" | "views" | "stores">,
   store?: string,
 ): Promise<void> {
   try {
@@ -52,7 +55,7 @@ export async function runUndo(
     // The server tells views.changed from its poll, which misses a write taken back before it
     // looked (the store is as it was): the list of views would keep what this tab wrote.
     if (r.undone.op === "view") c.views.refresh(r.undone.store);
-    toast({ message: undoMessage(r) });
+    toast({ message: undoMessage(r, c.stores.displayId.bind(c.stores)) });
   } catch (e) {
     toast({ message: errorMessage(e) });
   }

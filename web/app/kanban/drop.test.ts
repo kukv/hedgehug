@@ -49,6 +49,23 @@ const base = {
   schema,
 };
 
+describe("a task of a read-only Store", () => {
+  it("is not moved, and the reason is the one of the Store", () => {
+    const d = decideDrop({ ...base, column: col("doing"), readOnly: "remote に書き込めません" });
+    expect(d).toMatchObject({ ok: false, silent: false });
+    if (!d.ok) expect(d.reason).toContain("remote に書き込めません");
+  });
+
+  it("is refused even on the column it is in", () => {
+    const d = decideDrop({ ...base, column: col("todo"), readOnly: "x" });
+    expect(d).toMatchObject({ ok: false, silent: false });
+  });
+
+  it("is moved as before with no reason", () => {
+    expect(decideDrop({ ...base, column: col("doing"), readOnly: null }).ok).toBe(true);
+  });
+});
+
 describe("workflow of a task", () => {
   it("allows a move the store lists, and any move from a status it does not list", () => {
     expect(canTransition(schema, undefined, "done", "todo")).toBe(true);
@@ -189,6 +206,16 @@ describe("decideDrop", () => {
       title: "「完了」から「進行中」には移せません",
     });
     expect(d.ok ? "" : d.reason).toContain("REL-1 仕事");
+  });
+
+  it("writes the ID of the task as the screen is told to", () => {
+    const d = decideDrop({
+      ...base,
+      task: task("A", "task", null, { id: "REL-1", title: "仕事", status: "done", store: "work" }),
+      column: col("doing"),
+      idOf: (t) => `${t.store}:${t.id}`,
+    });
+    expect(d.ok ? "" : d.reason).toContain("work:REL-1 仕事");
   });
 
   it("uses the workflow of the scope the server names for the task", () => {

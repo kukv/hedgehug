@@ -18,6 +18,12 @@ describe("checkParent", () => {
     );
   });
 
+  it("writes the IDs as it is told to", () => {
+    const epic = task("E8", "epic", null, { id: "REL-8", title: "リリース作業", store: "a" });
+    const r = checkParent(schema, epic, task("T7", "task", null), (t) => `${t.store}:${t.id}`);
+    expect(r?.reason).toContain("「a:REL-8 リリース作業」");
+  });
+
   it("rejects a project under an epic and a story at the root where it cannot go", () => {
     expect(checkParent(schema, task("P1", "project", null), task("E1", "epic", null))?.title).toBe(
       "プロジェクトはエピックの下に置けません",

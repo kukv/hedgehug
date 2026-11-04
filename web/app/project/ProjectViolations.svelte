@@ -74,7 +74,7 @@
       {#each violations as t (t.ulid)}
         {@const href = router.href({ name: "task", ulid: t.ulid })}
         <li>
-          <IdLabel id={t.id} ulid={t.ulid} {href} onopen={(e) => onLinkClick(e, href)} />
+          <IdLabel id={t.id} ulid={t.ulid} {store} {href} onopen={(e) => onLinkClick(e, href)} />
           <span class="why">{(t.problems ?? []).map((p) => p.message).join(" / ")}</span>
         </li>
       {/each}

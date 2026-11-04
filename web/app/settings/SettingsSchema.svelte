@@ -7,8 +7,9 @@
   import { core } from "../context";
   import KindIcon from "../icons/KindIcon.svelte";
   import StatusIcon from "../icons/StatusIcon.svelte";
+  import { useReadOnlySentence } from "../read-only";
   import { onLinkClick, router, type SchemaTab } from "../router";
-  import { useManyStores, useSubscribe } from "../svelte-store";
+  import { useDisplayId, useManyStores, useSubscribe } from "../svelte-store";
   import Button from "../ui/Button.svelte";
   import FormError from "../ui/FormError.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
@@ -22,6 +23,7 @@
   let { store, tab }: { store: string; tab: SchemaTab } = $props();
 
   const c = core();
+  const did = useDisplayId(c.stores);
   const uid = $props.id();
   const schemaRev = useSubscribe(c.schema, () => ({}));
   const manyStores = useManyStores(c.stores);
@@ -31,6 +33,9 @@
     return c.schema.get(store);
   });
   const many = $derived(manyStores.current);
+  // A name cannot be changed or merged in a Store that cannot be written (細部 35).
+  const offSentence = useReadOnlySentence(c.stores, () => store);
+  const off = $derived(offSentence.current);
 
   // The schema is what the page is made from: say so when it cannot be read, and read it again on
   // request and at resync (the cache itself only reads again what it holds).
@@ -201,6 +206,8 @@
       <Button
         size="sm"
         aria-label="名前を変える…（{subject}）"
+        disabled={off !== null}
+        why={off ?? undefined}
         onclick={() => (ask = { target, prop, old, mode: "rename", names })}
       >
         名前を変える…
@@ -209,6 +216,8 @@
         <Button
           size="sm"
           aria-label="併合する…（{subject}）"
+          disabled={off !== null}
+          why={off ?? undefined}
           onclick={() => (ask = { target, prop, old, mode: "merge", names })}
         >
           併合する…
@@ -404,7 +413,7 @@
             <li>
               <a {href} onclick={(e) => onLinkClick(e, href)}>
                 {#if project}
-                  <span class="mono">{project.id}</span> {project.title}
+                  <span class="mono">{did.current(store, project.id)}</span> {project.title}
                 {:else}
                   プロジェクトを開く
                 {/if}
@@ -416,7 +425,15 @@
       {/if}
     </section>
 
-    <SchemaCheck {store} {many} idOf={(ulid) => taskByUlid.get(ulid)?.id} bind:this={check} />
+    <SchemaCheck
+      {store}
+      {many}
+      idOf={(ulid) => {
+        const id = taskByUlid.get(ulid)?.id;
+        return id === undefined ? undefined : did.current(store, id);
+      }}
+      bind:this={check}
+    />
   {/if}
 </div>
 

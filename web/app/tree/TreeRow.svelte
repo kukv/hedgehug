@@ -107,7 +107,7 @@
     {/if}
     <StatusIcon status={task.status} {category} />
     <KindIcon kind={task.kind} {role} />
-    <IdLabel id={task.id} ulid={task.ulid} reveal={keyboardOn} />
+    <IdLabel id={task.id} ulid={task.ulid} store={task.store} reveal={keyboardOn} />
     <span class="title" class:closed class:container={role === "container"}>{task.title}</span>
 
     {#if progress}

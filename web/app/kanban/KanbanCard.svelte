@@ -45,7 +45,7 @@
 <li class="card" class:dragging data-ulid={task.ulid} {@attach dnd}>
   <div class="top">
     <KindIcon kind={task.kind} {role} />
-    <span class="id"><IdLabel id={task.id} ulid={task.ulid} /></span>
+    <span class="id"><IdLabel id={task.id} ulid={task.ulid} store={task.store} /></span>
     {#if tone}
       <StoreBadge store={task.store} {tone} compact />
     {/if}

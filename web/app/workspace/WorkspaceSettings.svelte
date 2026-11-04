@@ -6,6 +6,7 @@
   import type { WorkspaceEntry } from "../../core/stores";
   import { nameProblem, prefixDay, removeBlocker } from "../../core/workspace";
   import { core } from "../context";
+  import { useReadOnlySentence } from "../read-only";
   import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
@@ -19,6 +20,9 @@
   const { api, stores } = core();
   const uid = $props.id();
   const all = useSubscribe(stores, () => stores.workspaces());
+  // The settings of a Store that cannot be written are read, not saved (細部 35).
+  const offSentence = useReadOnlySentence(stores, () => entry.store);
+  const off = $derived(offSentence.current);
 
   // The name in the field. It follows the saved name when that changes (a rename from the CLI, or the
   // save below), and is left alone while anything else about the workspace changes.
@@ -49,7 +53,7 @@
   );
 
   async function save() {
-    if (busy || unchanged || problem !== null) return;
+    if (busy || unchanged || problem !== null || off !== null) return;
     busy = true;
     failure = null;
     const from = saved;
@@ -92,6 +96,8 @@
         type="text"
         autocomplete="off"
         aria-label="名前"
+        readonly={off !== null}
+        title={off ?? undefined}
         value={draft}
         oninput={(e) => (draft = e.currentTarget.value)}
         {onkeydown}
@@ -100,14 +106,17 @@
       >
       <Button
         variant="primary"
-        disabled={busy || unchanged || problem !== null}
+        disabled={busy || unchanged || problem !== null || off !== null}
+        why={off ?? undefined}
         onclick={() => void save()}
       >
         保存
       </Button>
     </div>
     <p id="{uid}-name-msg" class="msg" class:bad={problem}>
-      {#if problem}
+      {#if off}
+        {off}
+      {:else if problem}
         {problem}
       {:else if unchanged}
         タスクの ID は変わりません
@@ -125,7 +134,9 @@
     <h2 id="{uid}-prefix-h">ID の接頭辞</h2>
     <div class="row">
       <span class="prefix mono">{entry.prefix}</span>
-      <Button onclick={() => openPrefixChange(entry)}>接頭辞を変更…</Button>
+      <Button disabled={off !== null} why={off ?? undefined} onclick={() => openPrefixChange(entry)}
+        >接頭辞を変更…</Button
+      >
     </div>
     <p class="msg">
       このワークスペースのタスクは {entry.prefix}-1, {entry.prefix}-2 … と振ります ·
@@ -160,7 +171,8 @@
     <div class="row">
       <Button
         variant="danger"
-        disabled={blocker !== null}
+        disabled={blocker !== null || off !== null}
+        why={off ?? undefined}
         onclick={() => openWorkspaceDelete(entry)}
       >
         削除

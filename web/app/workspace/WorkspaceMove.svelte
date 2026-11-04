@@ -7,7 +7,7 @@
   import { workspaceKey } from "../create/context";
   import WorkspaceChoice from "../create/WorkspaceChoice.svelte";
   import { router } from "../router";
-  import { useSubscribe } from "../svelte-store";
+  import { useDisplayId, useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
@@ -17,6 +17,7 @@
   let { task, onclose }: { task: MoveTask; onclose: () => void } = $props();
 
   const { api, cache, stores } = core();
+  const did = useDisplayId(stores);
   const uid = $props.id();
   const all = useSubscribe(stores, () => stores.workspaces());
 
@@ -38,7 +39,9 @@
   let failure = $state<string | null>(null);
 
   const cli = $derived(
-    cliMv(task.id, { workspace: target ? target.name : new Placeholder("ワークスペース") }),
+    cliMv(did.current(task.store, task.id), {
+      workspace: target ? target.name : new Placeholder("ワークスペース"),
+    }),
   );
 
   function close() {
@@ -58,9 +61,9 @@
         }),
       );
       cache.applyWrite({ task: r.task, commit: r.commit });
-      const lost = detachedText(r.detached);
+      const lost = detachedText(r.detached, (id) => did.current(task.store, id));
       toast({
-        message: `${task.id} を ${to.name} に移しました（今の ID は ${r.task.id}）${lost ? `。${lost}` : ""}`,
+        message: `${did.current(task.store, task.id)} を ${to.name} に移しました（今の ID は ${did.current(task.store, r.task.id)}）${lost ? `。${lost}` : ""}`,
         link: { label: "開く", href: router.href({ name: "task", ulid: task.ulid }) },
       });
       onclose();
@@ -74,7 +77,7 @@
 
 <Dialog
   open
-  title="{task.id} {task.title} を移動"
+  title="{did.current(task.store, task.id)} {task.title} を移動"
   width={620}
   {cli}
   cliDisabled={!target}
@@ -98,7 +101,10 @@
 
       <ul class="notes">
         <li>移り先のルートに置きます。配下のタスクも一緒に移ります</li>
-        <li>ID を {target.prefix} の番号に振り直します（{task.id} は former_ids に残ります）</li>
+        <li>
+          ID を {target.prefix} の番号に振り直します（{did.current(task.store, task.id)}
+          は former_ids に残ります）
+        </li>
         <li>スプリント・リリースが移り先のものでなければ外れます</li>
       </ul>
     {:else}

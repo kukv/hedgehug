@@ -38,19 +38,34 @@ function mount(over: Record<string, unknown> = {}) {
   return renderWithCore(
     Sidebar,
     {},
-    { stores: { workspaces: () => workspaces, subscribe: () => () => {} }, ...over },
+    {
+      stores: {
+        workspaces: () => workspaces,
+        visibleWorkspaces: () => workspaces,
+        hidden: () => false,
+        readOnly: () => null,
+        subscribe: () => () => {},
+      },
+      ...over,
+    },
   );
 }
 
 // A cache whose query for the tasks of the person finds these tasks, or does not run.
-function myCache(found: { ulids?: string[]; loading?: boolean; error?: unknown }) {
+function myCache(found: {
+  ulids?: string[];
+  loading?: boolean;
+  error?: unknown;
+  stores?: Record<string, string>;
+}) {
   const watchList = vi.fn((_q: { q: string; tree: boolean }) => ({
     ulids: () => found.ulids ?? [],
     loading: () => found.loading ?? false,
     error: () => found.error ?? null,
     dispose: vi.fn(),
   }));
-  return { watchList, cache: { subscribe: () => () => {}, watchList } };
+  const task = (u: string) => (found.stores?.[u] ? { store: found.stores[u] } : undefined);
+  return { watchList, cache: { subscribe: () => () => {}, watchList, task } };
 }
 
 const savedViews = (...entries: [store: string, tone: string, name: string][]) => ({
@@ -242,6 +257,55 @@ describe("Sidebar", () => {
     expect(getByRole("link", { name: "設定" }).getAttribute("aria-current")).toBe("page");
   });
 
+  describe("非表示の Store", () => {
+    const hiddenOps = {
+      workspaces: () => workspaces,
+      visibleWorkspaces: () => workspaces.filter((w) => w.store !== "org-b/ops"),
+      hidden: (s: string) => s === "org-b/ops",
+      readOnly: () => null,
+      subscribe: () => () => {},
+    };
+    const hiddenFirst = {
+      ...hiddenOps,
+      visibleWorkspaces: () => workspaces.filter((w) => w.store !== "shared"),
+      hidden: (s: string) => s === "shared",
+    };
+
+    it("ワークスペースを外す", () => {
+      const { queryByRole, getByRole } = mount({ stores: hiddenOps });
+      expect(getByRole("link", { name: /release/ })).toBeTruthy();
+      expect(queryByRole("link", { name: /ops/ })).toBeNull();
+    });
+
+    it("ホームで強調するのは、表示中の最初のワークスペース", () => {
+      const { getByRole } = mount({ stores: hiddenFirst });
+      expect(getByRole("link", { name: /ops/ }).getAttribute("aria-current")).toBe("page");
+    });
+
+    it("保存済みビューを外す。表示中のビューがなければ見出しも出さない", () => {
+      const views = savedViews(["shared", "purple", "見える"], ["org-b/ops", "teal", "隠れる"]);
+      const shown = mount({ stores: hiddenOps, views });
+      const region = shown.getByRole("region", { name: "保存済みビュー" });
+      expect(
+        within(region)
+          .getAllByRole("link")
+          .map((a) => a.textContent?.trim()),
+      ).toEqual(["見える"]);
+      cleanup();
+      const none = mount({ stores: hiddenOps, views: savedViews(["org-b/ops", "teal", "隠れる"]) });
+      expect(none.queryByRole("region", { name: "保存済みビュー" })).toBeNull();
+    });
+
+    it("マイタスクの件数は、非表示の Store のタスクを数えない", () => {
+      const { cache } = myCache({
+        ulids: ["A", "B", "C"],
+        stores: { A: "shared", B: "org-b/ops", C: "shared" },
+      });
+      const { getByRole } = mount({ stores: hiddenOps, cache });
+      expect(getByRole("link", { name: /マイタスク/ })).toHaveTextContent("マイタスク 2");
+    });
+  });
+
   it("ワークスペースはどのタブにいても今いる行にする", () => {
     history.replaceState(null, "", "/workspaces/shared/01WSREL/tree");
     const { getByRole } = mount();
@@ -326,6 +390,25 @@ describe("Sidebar", () => {
       "設定を開く",
       "削除…",
     ]);
+  });
+
+  it("閲覧のみの Store のワークスペースは、設定は開けるが削除…は理由つきで無効にする", async () => {
+    const { getByRole } = mount({
+      stores: {
+        workspaces: () => workspaces,
+        visibleWorkspaces: () => workspaces,
+        hidden: () => false,
+        readOnly: (s: string) => (s === "org-b/ops" ? "the remote cannot be written" : null),
+        subscribe: () => () => {},
+      },
+    });
+    await fireEvent.click(getByRole("button", { name: "ops の操作（設定を開く・削除）" }));
+    expect(getByRole("menuitem", { name: "設定を開く" })).toBeEnabled();
+    const del = getByRole("menuitem", { name: /削除…/ });
+    expect(del).toBeDisabled();
+    expect(del).toHaveTextContent("この Store は閲覧のみです（remote に書き込めません）");
+    await fireEvent.click(del);
+    expect(openWorkspaceDelete).not.toHaveBeenCalled();
   });
 
   it("「設定を開く」はそのワークスペースの設定のタブへ移る", async () => {

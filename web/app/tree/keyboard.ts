@@ -12,6 +12,7 @@ export type KeyContext = {
   schema: SchemaView | undefined;
   viewRoot: string | null; // the project the view shows, or null for a workspace
   taskOf: (ulid: string) => TaskView | undefined;
+  idOf?: (t: TaskView) => string; // the ID as the screen writes it (with its Store where shared)
 };
 
 // What the tree should do for a key. The caller runs it: this function only
@@ -26,6 +27,23 @@ export type KeyAction =
   | { type: "set-status"; ulid: string; status: string }
   | { type: "menu"; which: "status" | "kind"; ulid: string }
   | { type: "reject"; rejection: Rejection };
+
+// The task a write action acts on (selected is the row a refusal belongs to), or null for an action
+// that only moves the view.
+export function writeTargetOf(a: KeyAction, selected: string | null): string | null {
+  switch (a.type) {
+    case "add-below":
+      return a.after;
+    case "move":
+    case "set-status":
+    case "menu":
+      return a.ulid;
+    case "reject":
+      return selected;
+    default:
+      return null;
+  }
+}
 
 const NONE: KeyAction = { type: "none" };
 
@@ -126,7 +144,7 @@ function indent(row: FlatRow, c: KeyContext): KeyAction {
   const sib = siblingsOf(row, c);
   const prev = sib[sib.findIndex((r) => r.ulid === row.ulid) - 1];
   if (!prev || !c.schema) return NONE;
-  const rejection = checkParent(c.schema, row.task, prev.task);
+  const rejection = checkParent(c.schema, row.task, prev.task, c.idOf);
   if (rejection) return { type: "reject", rejection };
   return { type: "move", ulid: row.ulid, to: { parent: prev.ulid } };
 }
@@ -137,7 +155,7 @@ function outdent(row: FlatRow, c: KeyContext): KeyAction {
   if (!p) return NONE;
   const grand = p.parent ? (c.taskOf(p.parent) ?? null) : null;
   if (p.parent && !grand) return NONE;
-  const rejection = checkParent(c.schema, row.task, grand);
+  const rejection = checkParent(c.schema, row.task, grand, c.idOf);
   if (rejection) return { type: "reject", rejection };
   return {
     type: "move",

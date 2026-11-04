@@ -156,3 +156,56 @@ describe("CreateProject", () => {
     expect(screen.getByRole("button", { name: "作成" })).toBeDisabled();
   });
 });
+
+describe("CreateProject in a Store that cannot be written", () => {
+  beforeEach(() => {
+    resetToasts();
+    history.replaceState(null, "", "/");
+  });
+
+  const vault = {
+    ...(workspaces[0] as (typeof workspaces)[number]),
+    store: "vault",
+    ulid: "WV",
+    name: "vault",
+    prefix: "VT",
+  };
+  const why = { vault: "the remote cannot be written" };
+
+  function open(list: typeof workspaces, readOnlyBy: Record<string, string>) {
+    const k = makeCore({ workspaces: list, readOnlyBy });
+    k.api.POST.mockImplementation(() => ok({ task: created, commit: "c1" }));
+    return { k, ...mount(CreateProject, { request: { kind: "project" }, onclose: vi.fn() }, k) };
+  }
+
+  it("disables the workspace of a read-only Store with the reason, and starts from a writable one", async () => {
+    const { k } = open([vault, ...workspaces], why);
+    const ro = screen.getByRole("radio", { name: /vault（VT）/ });
+    expect(ro).toBeDisabled();
+    expect(ro.closest("label")).toHaveTextContent("vault（閲覧のみ）: remote に書き込めません");
+    expect(screen.getByRole("radio", { name: /release（REL）/ })).toBeChecked();
+    await name("p");
+    await fireEvent.click(screen.getByRole("button", { name: "作成" }));
+    await waitFor(() => expect(k.api.POST).toHaveBeenCalled());
+    expect(k.api.POST.mock.calls[0]?.[1]).toMatchObject({ params: { query: { store: "shared" } } });
+  });
+
+  it("does not offer the workspace of a hidden Store, and starts from one that is shown", async () => {
+    const k = makeCore({ workspaces: [vault, ...workspaces], hidden: ["vault"] });
+    k.api.POST.mockImplementation(() => ok({ task: created, commit: "c1" }));
+    mount(CreateProject, { request: { kind: "project" }, onclose: vi.fn() }, k);
+    expect(screen.queryByRole("radio", { name: /vault（VT）/ })).toBeNull();
+    expect(screen.getByRole("radio", { name: /release（REL）/ })).toBeChecked();
+  });
+
+  it("cannot be sent when every Store is read-only, and says so", async () => {
+    const { k } = open([vault], why);
+    await fireEvent.input(screen.getByRole("textbox", { name: "名前" }), {
+      target: { value: "p" },
+    });
+    expect(screen.getByRole("button", { name: "作成" })).toBeDisabled();
+    expect(screen.getByText("書き込める Store がありません")).toBeInTheDocument();
+    await fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+    expect(k.api.POST).not.toHaveBeenCalled();
+  });
+});

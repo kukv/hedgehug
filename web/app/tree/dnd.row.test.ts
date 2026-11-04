@@ -89,3 +89,29 @@ describe("rowDnd: the options are read when needed", () => {
     expect(drop).toHaveBeenCalledWith("S", "child");
   });
 });
+
+describe("rowDnd of a locked row", () => {
+  const opts = (locked: boolean): RowDndOptions => ({
+    ulid: "R",
+    depth: 0,
+    openChildren: false,
+    locked,
+    onDragStart() {},
+    onOver() {},
+    onDrop() {},
+  });
+
+  it("does not attach draggable, but still takes drops", () => {
+    h.drag = undefined;
+    h.target = undefined;
+    rowDnd(() => opts(true))(el);
+    expect(h.drag).toBeUndefined();
+    expect(h.target).toBeDefined();
+  });
+
+  it("attaches draggable for a row that is not locked", () => {
+    h.drag = undefined;
+    rowDnd(() => opts(false))(el);
+    expect(h.drag).toBeDefined();
+  });
+});

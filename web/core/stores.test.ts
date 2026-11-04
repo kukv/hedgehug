@@ -3,7 +3,11 @@ import { TaskCache } from "./cache";
 import { readOnlyReason, StoreDirectory } from "./stores";
 import { changed, FakeConn, fakeApi, problem, settle, tv } from "./testing";
 
-const store = (name: string, def = false, extra: { read_only?: string } = {}) => ({
+const store = (
+  name: string,
+  def = false,
+  extra: { read_only?: string; color?: string; hidden?: boolean } = {},
+) => ({
   name,
   default: def,
   path: `/data/${name}`,
@@ -347,5 +351,98 @@ describe("readOnlyReason", () => {
     expect(readOnlyReason("the remote cannot be written")).toBe("remote に書き込めません");
     expect(readOnlyReason("the remote denied the push")).toBe("remote が push を拒みました");
     expect(readOnlyReason("something else")).toBe("something else");
+  });
+});
+
+describe("StoreDirectory colours and hiding", () => {
+  async function dirOf(world: World) {
+    const t = setup(world);
+    await settle();
+    return t;
+  }
+
+  it("uses the colour of the store when it has one, and the order otherwise", async () => {
+    const { dir } = await dirOf({
+      stores: [store("a"), store("b", false, { color: "sky" }), store("c")],
+      spaces: {},
+      projects: [],
+    });
+    expect([dir.tone("a"), dir.tone("b"), dir.tone("c")]).toEqual(["teal", "sky", "purple"]);
+  });
+
+  it("lets colours repeat, and keeps grey for a read-only or unknown store", async () => {
+    const { dir } = await dirOf({
+      stores: [
+        store("a", false, { color: "pink" }),
+        store("b", false, { color: "pink", read_only: "the remote cannot be written" }),
+        store("c"),
+      ],
+      spaces: {},
+      projects: [],
+    });
+    expect(dir.tone("a")).toBe("pink");
+    expect(dir.tone("b")).toBe("readonly");
+    expect(dir.tone("c")).toBe("purple");
+    expect(dir.tone("nope")).toBe("readonly");
+  });
+
+  it("tells hidden stores and lists the workspaces of the others in the same order", async () => {
+    const { dir } = await dirOf({
+      stores: [store("shared", true), store("personal", false, { hidden: true })],
+      spaces: {
+        shared: [ws("W2", "web", "WEB"), ws("W1", "api", "API")],
+        personal: [ws("W3", "home", "HOME")],
+      },
+      projects: [],
+    });
+    expect(dir.hidden("personal")).toBe(true);
+    expect(dir.hidden("shared")).toBe(false);
+    expect(dir.hidden("unknown")).toBe(false);
+    // the colour stays while the store is hidden (細部 39)
+    expect(dir.tone("personal")).toBe("orange");
+    expect(dir.visibleWorkspaces().map((w) => w.name)).toEqual(["api", "web"]);
+    expect(dir.workspaces().map((w) => w.name)).toEqual(["api", "web", "home"]);
+  });
+});
+
+describe("StoreDirectory shared prefixes", () => {
+  const world = (): World => ({
+    stores: [store("a", true), store("b", false, { hidden: true }), store("c")],
+    spaces: {
+      a: [ws("W1", "one", "API"), ws("W2", "two", "api"), ws("W5", "web", "WEB")],
+      b: [ws("W3", "x", "Api")],
+      c: [ws("W4", "y", "OTHER")],
+    },
+    projects: [],
+  });
+
+  it("counts the prefixes of two or more stores, case aside, hidden ones too", async () => {
+    const { dir } = setup(world());
+    await settle();
+    expect([...dir.sharedPrefixes()]).toEqual(["API"]);
+  });
+
+  it("does not count two workspaces of one store", async () => {
+    const w = world();
+    w.spaces.b = [];
+    const { dir } = setup(w);
+    await settle();
+    expect(dir.sharedPrefixes().size).toBe(0);
+  });
+
+  it("puts the store name before an id of a shared prefix only", async () => {
+    const { dir } = setup(world());
+    await settle();
+    expect(dir.displayId("a", "API-12")).toBe("a:API-12");
+    expect(dir.displayId("b", "api-3")).toBe("b:api-3");
+    expect(dir.displayId("a", "WEB-1")).toBe("WEB-1");
+    expect(dir.displayId("a", "not an id")).toBe("not an id");
+    expect(dir.displayId("a", "01HZZZZZZZZZZZZZZZZZZZZZZZ")).toBe("01HZZZZZZZZZZZZZZZZZZZZZZZ");
+  });
+
+  it("keeps the same set until the workspaces change", async () => {
+    const { dir } = setup(world());
+    await settle();
+    expect(dir.sharedPrefixes()).toBe(dir.sharedPrefixes());
   });
 });

@@ -8,21 +8,24 @@
   import type { CreateRequest } from "../create-state.svelte";
   import FieldInput from "../detail/FieldInput.svelte";
   import { modKey } from "../keys";
+  import { readOnlyNow, useReadOnlyOf } from "../read-only";
   import { router } from "../router";
   import { selection } from "../selection.svelte";
-  import { useSubscribe } from "../svelte-store";
+  import { useDisplayId, useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
-  import { resolveCreateContext, workspaceKey } from "./context";
+  import { choosableWorkspaces, createGuard, resolveCreateContext, workspaceKey } from "./context";
   import { repoIdOf } from "./repos";
   import WorkspaceChoice from "./WorkspaceChoice.svelte";
 
   let { onclose }: { request: CreateRequest; onclose: () => void } = $props();
 
   const { api, cache, stores, schema } = core();
-  const entries = useSubscribe(stores, () => stores.workspaces());
+  const did = useDisplayId(stores);
+  const all = useSubscribe(stores, () => stores.workspaces());
+  const roOf = useReadOnlyOf(stores);
 
   const ctx = untrack(() =>
     resolveCreateContext({
@@ -30,15 +33,23 @@
       route: router.route,
       task: (u) => cache.task(u),
       workspaces: stores.workspaces(),
+      readOnly: (s) => readOnlyNow(stores, s),
+      hidden: (s) => stores.hidden(s),
     }),
   );
   let wsKey = $state(ctx.workspace ? workspaceKey(ctx.workspace) : "");
-  const ws = $derived(entries.current.find((w) => workspaceKey(w) === wsKey));
-  const showChoice = $derived(entries.current.length >= 2);
+  // Hidden Stores are left out of the choice, except the workspace the dialog opened on.
+  let opened = $state(ctx.workspace ? workspaceKey(ctx.workspace) : "");
+  const entries = $derived(choosableWorkspaces(all.current, (s) => stores.hidden(s), opened));
+  const ws = $derived(entries.find((w) => workspaceKey(w) === wsKey));
+  const showChoice = $derived(entries.length >= 2);
+  // A workspace of a Store that cannot be written is shown but cannot be chosen (細部 35).
+  const guard = $derived(createGuard(entries, ws, roOf.current));
+  const blocked = $derived(guard.blocked);
 
   // Opened while the stores are still loading: decide again when they have loaded.
   $effect(() => {
-    const list = entries.current;
+    const list = all.current;
     if (wsKey !== "" || list.length === 0) return;
     const again = untrack(() =>
       resolveCreateContext({
@@ -46,9 +57,11 @@
         route: router.route,
         task: (u) => cache.task(u),
         workspaces: list,
+        readOnly: (s) => readOnlyNow(stores, s),
+        hidden: (s) => stores.hidden(s),
       }),
     );
-    if (again.workspace) wsKey = workspaceKey(again.workspace);
+    if (again.workspace) wsKey = opened = workspaceKey(again.workspace);
   });
 
   const sc = useSubscribe(schema, () => (ws ? schema.get(ws.store) : undefined));
@@ -76,7 +89,9 @@
   });
   const hasStart = $derived(!!sc.current && "start" in sc.current.props);
   const hasDue = $derived(!!sc.current && "due" in sc.current.props);
-  const canSubmit = $derived(!busy && title.trim() !== "" && !!ws && projectKind !== "");
+  const canSubmit = $derived(
+    !busy && title.trim() !== "" && !!ws && projectKind !== "" && blocked === "",
+  );
 
   const cli = $derived.by(() => {
     const props: Record<string, string> = {};
@@ -121,7 +136,7 @@
       );
       cache.applyWrite({ task: r.task, commit: r.commit });
       toast({
-        message: `${r.task.id} を作成しました · ${ws.name}`,
+        message: `${did.current(ws.store, r.task.id)} を作成しました · ${ws.name}`,
         link: {
           label: "開く",
           href: router.href({ name: "project", ulid: r.task.ulid, tab: "tree" }),
@@ -182,10 +197,12 @@
     {#if showChoice}
       <div class="field">
         <WorkspaceChoice
-          entries={entries.current}
+          {entries}
           value={wsKey}
           name="create-project-ws"
           onchange={(k) => (wsKey = k)}
+          isDisabled={guard.isOff}
+          note={guard.note}
         />
       </div>
     {:else if ws}
@@ -257,6 +274,9 @@
         {/if}
       </div>
     {/if}
+    {#if blocked}
+      <p id="create-blocked" class="hint">{blocked}</p>
+    {/if}
     {#if error}
       <p class="error" role="alert">{error}</p>
     {/if}
@@ -264,7 +284,14 @@
 
   {#snippet footer()}
     <Button onclick={onclose}>キャンセル</Button>
-    <Button variant="primary" disabled={!canSubmit} onclick={() => void submit()}>作成</Button>
+    <Button
+      variant="primary"
+      disabled={!canSubmit}
+      title={blocked || undefined}
+      aria-describedby={blocked ? "create-blocked" : undefined}
+      onclick={() => void submit()}
+      >作成</Button
+    >
   {/snippet}
 </Dialog>
 

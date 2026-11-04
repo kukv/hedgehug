@@ -1,4 +1,5 @@
 import { type Api, type TaskView, unwrap } from "../../core/api/client";
+import { quoteArg } from "../../core/cli";
 import { searchTasks as findTasks } from "../../core/search";
 import type { WorkspaceEntry } from "../../core/stores";
 import type { ViewEntry } from "../../core/views";
@@ -9,16 +10,25 @@ export type PaletteMode = "id" | "query" | "command";
 
 // A word of a query that has no colon: a comparison such as due<2026-11-10.
 const COMPARISON = /^-?[A-Za-z_][\w-]*(<=|>=|<|>)\S/;
+// Keep in sync with ID in core/stores.ts and Go model.ParseTaskID.
 const ID = /^[A-Za-z][A-Za-z0-9]*-\d+$/;
 const ULID = /^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$/;
 const MAX = 20;
 
+// isStoreQualifiedId tells "<store>:<ID>" whose store is one of storeNames.
+export function isStoreQualifiedId(input: string, storeNames: string[]): boolean {
+  const i = input.indexOf(":");
+  return i > 0 && storeNames.includes(input.slice(0, i)) && ID.test(input.slice(i + 1));
+}
+
 // detectMode tells which of the three the input is. IDs, former IDs, ULIDs and
 // titles are one mode: the same input is looked up as all of them.
-export function detectMode(input: string): PaletteMode {
+// With storeNames, "<store>:<ID>" for a store of the names is an ID too.
+export function detectMode(input: string, storeNames?: string[]): PaletteMode {
   const s = input.trimStart();
   if (s.startsWith(">")) return "command";
-  const words = s.trim().split(/\s+/).filter(Boolean);
+  if (storeNames && isStoreQualifiedId(s.trimEnd(), storeNames)) return "id";
+  const words = s.trimEnd().split(/\s+/).filter(Boolean);
   if (words.some((w) => w.includes(":") || COMPARISON.test(w))) return "query";
   return "id";
 }
@@ -50,7 +60,8 @@ export type CommandItem = {
     | "checklist"
     | "bell"
     | "activity"
-    | "filter";
+    | "filter"
+    | "database";
   kbd?: string;
   note?: string;
   store?: string;
@@ -85,6 +96,11 @@ export type SearchDeps = {
   // cache, as a read of that point.
   epoch: () => number;
   prime: (tasks: TaskView[], since: number) => void;
+  // The names of the stores that are hidden, read for each search: what they hold is not found. The
+  // query leaves them out (-store:<name>), so they take none of the places of the list.
+  hidden?: () => string[];
+  // every mounted Store, also a hidden one: a "<store>:<ID>" is looked up for any of them
+  storeNames?: () => string[];
 };
 
 export type SearchResult = { groups: PaletteGroup[]; error: unknown };
@@ -114,10 +130,14 @@ export async function searchTasks(
   const text = input.trim();
   if (text === "") return { groups: [], error: null };
   const since = d.epoch();
+  const hidden = d.hidden?.() ?? [];
+  const without = hidden.map((s) => `-store:${quoteArg(s)}`).join(" ");
   try {
     if (mode === "query") {
       const list = await unwrap(
-        d.api.GET("/api/tasks", { params: { query: { q: text, tree: false } } }),
+        d.api.GET("/api/tasks", {
+          params: { query: { q: [without, text].filter((t) => t !== "").join(" "), tree: false } },
+        }),
       );
       const tasks = list.tasks ?? [];
       d.prime(tasks, since);
@@ -128,7 +148,10 @@ export async function searchTasks(
       };
     }
     const found = new Map<string, TaskItem>();
-    if (ID.test(text) || ULID.test(text)) {
+    // An exact lookup (an ID, a ULID, "<store>:<ID>") opens the task like a URL does, so a hidden
+    // Store does not filter it; only the words below do.
+    const qualified = isStoreQualifiedId(text, d.storeNames?.() ?? []);
+    if (qualified || ID.test(text) || ULID.test(text)) {
       try {
         const s = await unwrap(d.api.GET("/api/tasks/{id}", { params: { path: { id: text } } }));
         found.set(s.ulid, taskItem(s, d.hrefOf, matchNote(s, text)));
@@ -136,7 +159,11 @@ export async function searchTasks(
         if (!isNotFound(e)) throw e;
       }
     }
-    const tasks = await findTasks(d.api, text, { limit: MAX });
+    if (qualified) {
+      const items = [...found.values()];
+      return { groups: items.length ? [{ name: "タスク", items }] : [], error: null };
+    }
+    const tasks = await findTasks(d.api, text, { extra: without, limit: MAX });
     d.prime(tasks, since);
     for (const t of tasks) {
       if (!found.has(t.ulid)) found.set(t.ulid, taskItem(t, d.hrefOf));
@@ -181,32 +208,41 @@ export type CommandEnv = {
   recent: TaskView[]; // the tasks opened last, the latest first
   pickStatus: (t: TaskView) => void;
   moveTask: (t: TaskView) => void;
+  moveStoreTask: (t: TaskView) => void;
+  readOnly: (store: string) => string | null; // why a store cannot be written, or null
+  displayId: (store: string, id: string) => string; // the ID with its Store where the prefix is shared
 };
 
 // taskCommands are the commands about one task.
 export function taskCommands(env: CommandEnv, t: TaskView): PaletteGroup {
   const href = env.hrefs.task(t.ulid);
   // A task goes to another workspace of its own store: with none, there is nothing to offer.
+  // Every one of them writes to the store of the task (細部 35): a read-only store is only read.
+  const writable = env.readOnly(t.store) === null;
   const canMove = env.workspaces.some((w) => w.store === t.store && w.ulid !== t.workspace.ulid);
   return {
-    name: `${t.id} に対して`,
+    name: `${env.displayId(t.store, t.id)} に対して`,
     items: [
-      {
-        type: "command",
-        key: `task-status:${t.ulid}`,
-        label: "ステータスを変更…",
-        icon: "status",
-        keepOpen: true,
-        run: () => env.pickStatus(t),
-      },
-      {
-        type: "command",
-        key: `task-child:${t.ulid}`,
-        label: "子タスクを作る",
-        icon: "plus",
-        kbd: "C",
-        run: () => env.createTask(t.ulid),
-      },
+      ...(writable
+        ? [
+            {
+              type: "command" as const,
+              key: `task-status:${t.ulid}`,
+              label: "ステータスを変更…",
+              icon: "status" as const,
+              keepOpen: true,
+              run: () => env.pickStatus(t),
+            },
+            {
+              type: "command" as const,
+              key: `task-child:${t.ulid}`,
+              label: "子タスクを作る",
+              icon: "plus" as const,
+              kbd: "C",
+              run: () => env.createTask(t.ulid),
+            },
+          ]
+        : []),
       {
         type: "command",
         key: `task-open:${t.ulid}`,
@@ -216,7 +252,7 @@ export function taskCommands(env: CommandEnv, t: TaskView): PaletteGroup {
         href,
         run: () => env.go(href),
       },
-      ...(canMove
+      ...(canMove && writable
         ? [
             {
               type: "command" as const,
@@ -224,6 +260,18 @@ export function taskCommands(env: CommandEnv, t: TaskView): PaletteGroup {
               label: "別のワークスペースへ移動…",
               icon: "workspace" as const,
               run: () => env.moveTask(t),
+            },
+          ]
+        : []),
+      // Another Store is a place to go when two Stores or more are mounted (細部 45, 103).
+      ...(writable && env.storeNames.length >= 2
+        ? [
+            {
+              type: "command" as const,
+              key: `task-move-store:${t.ulid}`,
+              label: "別の Store へ移動…",
+              icon: "database" as const,
+              run: () => env.moveStoreTask(t),
             },
           ]
         : []),
@@ -265,6 +313,9 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
   const word = text.replace(/^\s*>/, "").trim().toLowerCase();
   const keep = (i: CommandItem) =>
     word === "" || `${i.label} ${i.note ?? ""}`.toLowerCase().includes(word);
+  // A create needs a workspace of a store that can be written, a workspace add a store (細部 99).
+  const canCreate = env.workspaces.some((w) => env.readOnly(w.store) === null);
+  const canAddWorkspace = env.storeNames.some((s) => env.readOnly(s) === null);
 
   const commands: CommandItem[] = [
     {
@@ -305,6 +356,11 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
       run: env.undo,
     },
   ];
+  const writes: Record<string, boolean> = {
+    "cmd:create-task": canCreate,
+    "cmd:create-project": canCreate,
+    "cmd:workspace-add": canAddWorkspace,
+  };
 
   // The page asks for the diagnosis when it is opened.
   const doctorHref = env.hrefs.settingsGeneral();
@@ -472,11 +528,15 @@ export function buildCommands(env: CommandEnv, text: string): PaletteGroup[] {
     : [];
 
   const recent = env.recent
-    .filter((t) => word === "" || `${t.id} ${t.title}`.toLowerCase().includes(word))
+    .filter(
+      (t) =>
+        word === "" ||
+        [t.id, env.displayId(t.store, t.id), t.title].join(" ").toLowerCase().includes(word),
+    )
     .map((t) => taskItem(t, env.hrefs.task));
 
   const groups: PaletteGroup[] = [
-    { name: "コマンド", items: commands.filter(keep) },
+    { name: "コマンド", items: commands.filter((i) => writes[i.key] !== false && keep(i)) },
     { name: "最近開いたもの", items: recent },
     {
       name: "開く",

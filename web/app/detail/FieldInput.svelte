@@ -13,6 +13,7 @@
     nullable = true,
     pending = false,
     readonly = false,
+    describedby,
     size = "normal",
     placeholder = "",
     transform,
@@ -28,6 +29,7 @@
     nullable?: boolean;
     pending?: boolean;
     readonly?: boolean;
+    describedby?: string; // the id of the text that explains the control (why it only reads)
     size?: "normal" | "title";
     placeholder?: string;
     transform?: (text: string) => string | null;
@@ -97,6 +99,7 @@
     class="pick"
     bind:this={trigger}
     aria-label={label}
+    aria-describedby={describedby}
     aria-haspopup="menu"
     aria-expanded={open}
     disabled={readonly}
@@ -133,12 +136,20 @@
     onchange={onchips}
   />
 {:else if editor === "date"}
-  <input type="date" aria-label={label} value={asText(value)} {readonly} onchange={ondate}>
+  <input
+    type="date"
+    aria-label={label}
+    aria-describedby={describedby}
+    value={asText(value)}
+    {readonly}
+    onchange={ondate}
+  >
 {:else}
   <input
     type={editor === "number" ? "number" : "text"}
     class:title={size === "title"}
     aria-label={label}
+    aria-describedby={describedby}
     {placeholder}
     {readonly}
     value={local}

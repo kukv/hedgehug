@@ -5,7 +5,7 @@
   import { diffForRestore, type RestoreChange, showAt } from "../../core/history";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
-  import { useSubscribe } from "../svelte-store";
+  import { useDisplayId, useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
@@ -15,7 +15,8 @@
 
   let { show, readonly = false }: { show: ShowView; readonly?: boolean } = $props();
 
-  const { api, cache, schema } = core();
+  const { api, cache, schema, stores } = core();
+  const did = useDisplayId(stores);
   const sc = useSubscribe(schema, () => schema.get(show.store));
 
   let logs = $state<Log[]>([]);
@@ -59,7 +60,10 @@
       const then = await showAt(api, show.ulid, l.hash, show.store);
       if (target !== l) return;
       changes = diffForRestore(show, then, {
-        idOf: (u) => cache.task(u)?.id ?? u,
+        idOf: (u) => {
+          const t = cache.task(u);
+          return t ? did.current(t.store, t.id) : u;
+        },
         propLabel: (n) => sc.current?.props[n]?.label || n,
       });
     } catch (e) {
@@ -86,7 +90,10 @@
         }),
       );
       cache.applyWrite({ task: r.task, commit: r.commit });
-      toast({ message: r.note || `${show.id} を ${when(target)} の状態に戻しました` });
+      toast({
+        message:
+          r.note || `${did.current(show.store, show.id)} を ${when(target)} の状態に戻しました`,
+      });
       target = null;
     } catch (e) {
       error = errorMessage(e);
@@ -123,9 +130,9 @@
 {#if target}
   <Dialog
     open
-    title="{show.id} を {when(target)} の状態に戻す"
+    title="{did.current(show.store, show.id)} を {when(target)} の状態に戻す"
     width={620}
-    cli={cliRestoreAt(show.id, target.hash)}
+    cli={cliRestoreAt(did.current(show.store, show.id), target.hash)}
     onclose={close}
   >
     {#if changes === null}

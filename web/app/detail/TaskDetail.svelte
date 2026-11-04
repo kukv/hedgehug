@@ -6,16 +6,23 @@
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import Icon from "../icons/Icon.svelte";
+  import { readOnlySentence, useReadOnly } from "../read-only";
   import { onLinkClick, router } from "../router";
-  import { useSubscribe } from "../svelte-store";
+  import StoreBands from "../states/StoreBands.svelte";
+  import { useDisplayId, useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import CliLine from "../ui/CliLine.svelte";
   import { copyText } from "../ui/clipboard";
   import Menu from "../ui/Menu.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
-  import { openWorkspaceMove } from "../workspace/dialogs-state.svelte";
-  import { MOVE_VALUE, moveWorkspaceItem } from "../workspace/move-menu";
+  import { openStoreMove, openWorkspaceMove } from "../workspace/dialogs-state.svelte";
+  import {
+    MOVE_STORE_VALUE,
+    MOVE_VALUE,
+    moveStoreItem,
+    moveWorkspaceItem,
+  } from "../workspace/move-menu";
   import BodyEditor from "./BodyEditor.svelte";
   import Checklist from "./Checklist.svelte";
   import Comments from "./Comments.svelte";
@@ -50,16 +57,34 @@
     return d ? schema.get(d.store) : undefined;
   });
   const s = $derived<ShowView | undefined>(shown.current);
-  const locked = $derived(s ? s.deleted_at != null || !!s.broken : false);
+  // Why the Store cannot be written (細部 34), or null: every write is off then (細部 35).
+  const roReason = useReadOnly(stores, () => s?.store);
+  const did = useDisplayId(stores);
+  const roTitle = $derived(
+    roReason.current !== null ? readOnlySentence(roReason.current) : undefined,
+  );
+  const locked = $derived(
+    s ? s.deleted_at != null || !!s.broken || roReason.current !== null : false,
+  );
 
   // The "…" menu of the header: the button it hangs from while it is open.
   const spaces = useSubscribe(stores, () => stores.workspaces());
   let more = $state<HTMLElement | null>(null);
-  const moreItems = $derived(s ? [moveWorkspaceItem(s, spaces.current)] : []);
+  const storeItems = useSubscribe(stores, () => stores.stores());
+  const moreItems = $derived(
+    s
+      ? [
+          moveWorkspaceItem(s, spaces.current, roReason.current),
+          moveStoreItem(storeItems.current, roReason.current),
+        ].filter((i) => i !== null)
+      : [],
+  );
   function pickMore(value: string) {
     const task = s;
     more = null;
-    if (task && value === MOVE_VALUE) openWorkspaceMove(task);
+    if (!task) return;
+    if (value === MOVE_VALUE) openWorkspaceMove(task);
+    else if (value === MOVE_STORE_VALUE) openStoreMove(task);
   }
 
   $effect(() => {
@@ -214,14 +239,14 @@
             <a
               href={router.href({ name: "task", ulid: c.ulid })}
               onclick={(e) => onLinkClick(e, router.href({ name: "task", ulid: c.ulid }))}
-              ><span class="mono">{c.id}</span> {c.title}</a
+              ><span class="mono">{did.current(s.store, c.id)}</span> {c.title}</a
             >
           {:else}
             <span>…</span>
           {/if}
         {/each}
         <span class="sep">›</span>
-        <span class="mono current" aria-current="page">{s.id}</span>
+        <span class="mono current" aria-current="page">{did.current(s.store, s.id)}</span>
       </nav>
       <div class="actions">
         <span class="save" role="status" aria-label="保存の状態" data-kind={saveState.current.kind}
@@ -230,7 +255,11 @@
         {#if saveState.current.kind === "error"}
           <Button size="sm" onclick={() => void save.flush(ulid)}>やり直す</Button>
         {/if}
-        <Button size="sm" onclick={toggleWatch} disabled={s.deleted_at != null}
+        <Button
+          size="sm"
+          onclick={toggleWatch}
+          disabled={s.deleted_at != null || roReason.current !== null}
+          why={roTitle}
           >{watching ? "ウォッチ中" : "ウォッチ"}</Button
         >
         {#if s.deleted_at == null && !s.broken}
@@ -243,7 +272,7 @@
           >
             <Icon name="more" size={14} />
           </Button>
-          <DeleteDialogs show={s} variant="delete" />
+          <DeleteDialogs show={s} variant="delete" readOnly={roReason.current} />
           {#if more}
             <Menu
               anchor={more}
@@ -259,7 +288,7 @@
 
     <div class="heading">
       <p class="eyebrow">
-        <span>{kindLabel} · <span class="mono">{s.id}</span></span>
+        <span>{kindLabel} · <span class="mono">{did.current(s.store, s.id)}</span></span>
         {#if (s.former_ids ?? []).length > 0}
           <span class="muted">旧 <span class="mono">{(s.former_ids ?? []).join("、")}</span></span>
         {/if}
@@ -282,26 +311,28 @@
           oncommit={() => void save.flush(ulid)}
         />
       {:else}
-        <h1 class="broken-title">{s.title || s.id}</h1>
+        <h1 class="broken-title">{s.title || did.current(s.store, s.id)}</h1>
       {/if}
     </div>
 
     {#if s.deleted_at != null}
       <div class="band deleted" role="status" aria-label="削除済み">
         <span>削除済み（{formatDateTime(s.deleted_at, new Date())}）。編集はできません。</span>
-        <DeleteDialogs show={s} variant="deleted" />
+        <DeleteDialogs show={s} variant="deleted" readOnly={roReason.current} />
       </div>
     {/if}
+
+    <StoreBands store={s.store} />
 
     {#if blockers.length > 0}
       <div class="band blocked" role="status" aria-label="ブロック">
         <span>
           {#each blockers as b, i (b.ulid)}
-            {i > 0 ? "、" : ""}<span class="mono">{b.id}</span>
+            {i > 0 ? "、" : ""}<span class="mono">{did.current(s.store, b.id)}</span>
             {b.title}（{statusLabel(b.status)}）
           {/each}
           にブロックされています。{blockers.length === 1
-            ? blockers[0]?.id
+            ? did.current(s.store, blockers[0]?.id ?? "")
             : "すべて"}が完了か中止になれば自動で解除されます。
         </span>
       </div>

@@ -97,6 +97,23 @@ export function cliMv(
   return cliLine(a);
 }
 
+// cliMvStore is hh mv to another store; --yes is there since the screen has
+// asked already.
+export function cliMvStore(i: {
+  id: string;
+  to: Arg;
+  workspace?: Arg;
+  parent?: string;
+  scoped?: "carry" | "drop";
+}): string {
+  const a: Arg[] = ["mv", i.id, "--store", i.to];
+  if (i.workspace) a.push("--workspace", i.workspace);
+  if (i.parent) a.push("--parent", i.parent);
+  if (i.scoped) a.push("--scoped", i.scoped);
+  a.push("--yes");
+  return cliLine(a);
+}
+
 export const cliRm = (id: string): string => cliLine(["rm", id]);
 export const cliRestore = (id: string): string => cliLine(["restore", id]);
 export const cliRestoreAt = (id: string, commit: string): string =>

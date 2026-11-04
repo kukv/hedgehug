@@ -41,6 +41,7 @@ type Over = {
   reports?: Record<string, DoctorReport>;
   task?: (ulid: string) => { id: string } | undefined;
   taskError?: boolean;
+  readOnly?: string;
 };
 
 function setup(over: Over = {}, props: { store?: string; many?: boolean } = {}) {
@@ -65,7 +66,12 @@ function setup(over: Over = {}, props: { store?: string; many?: boolean } = {}) 
       api,
       conn,
       cache: { task: over.task ?? (() => undefined), subscribe: () => () => {} },
-      stores: { tone: () => "teal", subscribe: () => () => {} },
+      stores: {
+        readOnly: () => over.readOnly ?? null,
+        tone: () => "teal",
+        displayId: (_s: string, id: string) => id,
+        subscribe: () => () => {},
+      },
     },
   );
   return { api, conn, view };
@@ -223,7 +229,12 @@ describe("DoctorSection: the diagnosis", () => {
         api,
         conn: new FakeConn(),
         cache: { task: () => undefined, subscribe: () => () => {} },
-        stores: { tone: () => "teal", subscribe: () => () => {} },
+        stores: {
+          readOnly: () => null,
+          tone: () => "teal",
+          displayId: (_s: string, id: string) => id,
+          subscribe: () => () => {},
+        },
       },
     );
     await waitFor(() =>
@@ -258,7 +269,12 @@ describe("DoctorSection: the diagnosis", () => {
       api,
       conn: new FakeConn(),
       cache: { task: () => undefined, subscribe: () => () => {} },
-      stores: { tone: () => "teal", subscribe: () => () => {} },
+      stores: {
+        readOnly: () => null,
+        tone: () => "teal",
+        displayId: (_s: string, id: string) => id,
+        subscribe: () => () => {},
+      },
     };
     renderWithCore(DoctorSection, { store: "a", many: false }, over).unmount();
     renderWithCore(DoctorSection, { store: "b", many: false }, over);
@@ -286,7 +302,12 @@ describe("DoctorSection: the diagnosis", () => {
         api,
         conn: new FakeConn(),
         cache: { task: () => undefined, subscribe: () => () => {} },
-        stores: { tone: () => "teal", subscribe: () => () => {} },
+        stores: {
+          readOnly: () => null,
+          tone: () => "teal",
+          displayId: (_s: string, id: string) => id,
+          subscribe: () => () => {},
+        },
       },
     );
     view.unmount();
@@ -325,6 +346,21 @@ describe("DoctorSection: the command", () => {
 });
 
 describe("DoctorSection: the repair", () => {
+  it("keeps 「修復…」 but disables it in a read-only Store, with the reason; the diagnosis still runs", async () => {
+    const { api } = setup({
+      reports: { a: report({ findings: [taskFinding] }) },
+      readOnly: "the remote cannot be written",
+    });
+    await within(region()).findByText("parent: the parent is deleted");
+    const b = within(region()).getByRole("button", { name: "修復…" });
+    expect(b).toBeDisabled();
+    expect(b).toHaveAttribute("title", "この Store は閲覧のみです（remote に書き込めません）");
+    expect(within(region()).getByRole("button", { name: "もう一度実行" })).toBeEnabled();
+    b.click();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(api.POST).not.toHaveBeenCalled();
+  });
+
   it("has no 「修復…」 when nothing was found", async () => {
     setup();
     await within(region()).findByText("問題は見つかりませんでした");

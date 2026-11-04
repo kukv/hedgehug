@@ -37,6 +37,7 @@ type Opts = {
   stores?: string[];
   notFound?: boolean;
   loadError?: Error;
+  readOnly?: string;
 };
 
 function setup(opts: Opts = {}) {
@@ -117,6 +118,7 @@ function setup(opts: Opts = {}) {
         workspace: () => entry(),
         loaded: () => true,
         tone: () => "purple",
+        readOnly: () => opts.readOnly ?? null,
         subscribe: none,
       },
       schema: {
@@ -191,6 +193,25 @@ describe("ProjectSettings", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Store と同じに戻す" }));
     expect(within(group).getByRole("checkbox", { name: /待機中/ })).toBeChecked();
     expect(screen.queryByRole("button", { name: "Store と同じに戻す" })).toBeNull();
+  });
+
+  it("only reads the settings of a project in a read-only Store, and says why", async () => {
+    const sentence = "この Store は閲覧のみです（remote に書き込めません）";
+    const { api } = setup({
+      readOnly: "the remote cannot be written",
+      scoped: { where: "project:P1", statuses: ["todo", "in_progress", "done", "canceled"] },
+    });
+    const group = await screen.findByRole("group", { name: "表示するステータス" });
+    await waitFor(() =>
+      expect(within(group).getByRole("checkbox", { name: /待機中/ })).toBeDisabled(),
+    );
+    for (const b of [save(), screen.getByRole("button", { name: "すべて Store の値に戻す…" })]) {
+      expect(b).toBeDisabled();
+      expect(b).toHaveAttribute("title", sentence);
+    }
+    expect(screen.getByRole("button", { name: "Store と同じに戻す" })).toBeDisabled();
+    expect(api.PUT).not.toHaveBeenCalled();
+    expect(api.DELETE).not.toHaveBeenCalled();
   });
 
   it("keeps save off while nothing changed", async () => {

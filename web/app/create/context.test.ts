@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { taskView, workspaces } from "../detail/testkit";
-import { resolveCreateContext, workspaceKey } from "./context";
+import { choosableWorkspaces, createGuard, resolveCreateContext, workspaceKey } from "./context";
 
 const tasks = [
   taskView({ ulid: "UE", id: "REL-8", title: "リリース作業", kind: "epic" }),
@@ -90,6 +90,87 @@ describe("resolveCreateContext", () => {
     expect(resolveCreateContext({ ...base, workspaces: [] })).toEqual({
       parent: null,
       workspace: null,
+    });
+  });
+
+  it("starts from the first writable workspace when the place it would start from is read-only", () => {
+    const readOnly = (store: string) => (store === "shared" ? "x" : null);
+    const other = { ...(workspaces[0] as (typeof workspaces)[number]), store: "demo", ulid: "W9" };
+    const list = [...workspaces, other];
+    expect(resolveCreateContext({ ...base, workspaces: list, readOnly }).workspace).toBe(other);
+    expect(
+      resolveCreateContext({
+        ...base,
+        workspaces: list,
+        readOnly,
+        route: { name: "workspace", store: "shared", ulid: "W2", tab: "tree" },
+      }).workspace,
+    ).toBe(other);
+    // Nothing can be written: it stays where it would have started, and the dialog says so.
+    expect(resolveCreateContext({ ...base, readOnly: () => "x" }).workspace).toBe(workspaces[0]);
+    // The workspace of a parent is the parent's, written or not.
+    expect(
+      resolveCreateContext({ ...base, workspaces: list, readOnly, requestParent: "US" }).workspace
+        ?.name,
+    ).toBe("shared");
+  });
+
+  it("starts from the first workspace of a Store that is not hidden, but keeps to the page it is on", () => {
+    const other = { ...(workspaces[0] as (typeof workspaces)[number]), store: "demo", ulid: "W9" };
+    const list = [...workspaces, other];
+    const hidden = (store: string) => store === "shared";
+    expect(resolveCreateContext({ ...base, workspaces: list, hidden }).workspace).toBe(other);
+    // the page of a hidden workspace is a place to create in
+    expect(
+      resolveCreateContext({
+        ...base,
+        workspaces: list,
+        hidden,
+        route: { name: "workspace", store: "shared", ulid: "W2", tab: "tree" },
+      }).workspace?.ulid,
+    ).toBe("W2");
+    // the workspace of a parent is the parent's, hidden or not
+    expect(
+      resolveCreateContext({ ...base, workspaces: list, hidden, requestParent: "US" }).workspace
+        ?.ulid,
+    ).toBe("W2");
+  });
+
+  it("offers the workspaces of Stores that are not hidden, and the one the dialog opened on", () => {
+    const other = { ...(workspaces[0] as (typeof workspaces)[number]), store: "demo", ulid: "W9" };
+    const list = [...workspaces, other];
+    const hidden = (store: string) => store === "shared";
+    expect(choosableWorkspaces(list, hidden, "").map(workspaceKey)).toEqual(["demo/W9"]);
+    expect(choosableWorkspaces(list, hidden, "shared/W2").map(workspaceKey)).toEqual([
+      "shared/W2",
+      "demo/W9",
+    ]);
+    expect(choosableWorkspaces(list, () => false, "")).toEqual(list);
+  });
+
+  describe("createGuard", () => {
+    const [a, b] = workspaces as [(typeof workspaces)[number], (typeof workspaces)[number]];
+    const vault = { ...a, store: "vault", ulid: "WV" };
+    const why = (s: string) => (s === "vault" ? "remote に書き込めません" : null);
+
+    it("blocks nothing while the workspace can be written", () => {
+      expect(createGuard([vault, a], a, why).blocked).toBe("");
+    });
+
+    it("blocks with the sentence when the workspace is read-only, and with 'none writable' when all are", () => {
+      expect(createGuard([vault, a], vault, why).blocked).toBe(
+        "この Store は閲覧のみです（remote に書き込めません）",
+      );
+      expect(createGuard([vault], vault, why).blocked).toBe("書き込める Store がありません");
+      expect(createGuard([], undefined, why).blocked).toBe("");
+    });
+
+    it("tells which workspaces are off, and why", () => {
+      const g = createGuard([vault, a, b], a, why);
+      expect(g.isOff(vault)).toBe(true);
+      expect(g.isOff(a)).toBe(false);
+      expect(g.note(vault)).toBe("vault（閲覧のみ）: remote に書き込めません");
+      expect(g.note(a)).toBe("");
     });
   });
 

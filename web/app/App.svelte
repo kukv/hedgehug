@@ -35,7 +35,7 @@
 
   const conn = useSubscribe(c.conn, () => ({ state: c.conn.state, lastOpenAt: c.conn.lastOpenAt }));
   const dir = useSubscribe(c.stores, () => {
-    const first = c.stores.workspaces()[0];
+    const first = c.stores.visibleWorkspaces()[0];
     return {
       loaded: c.stores.loaded(),
       count: c.stores.stores().length,

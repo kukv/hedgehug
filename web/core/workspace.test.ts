@@ -91,6 +91,12 @@ describe("detachedText", () => {
     expect(detachedText([{ task: "U1", id: "SH-1" }])).toBe("");
   });
 
+  it("writes the IDs as it is told to", () => {
+    expect(detachedText([{ task: "U1", id: "SH-12", sprint: "S1" }], (id) => `team:${id}`)).toBe(
+      "team:SH-12 はスプリント S1 から外れました",
+    );
+  });
+
   it("names the sprint and the releases of each task", () => {
     expect(
       detachedText([

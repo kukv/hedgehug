@@ -2,6 +2,7 @@
   import { cliLs } from "../../core/cli";
   import { formatDate } from "../../core/format";
   import { core } from "../context";
+  import { storeShown } from "../hidden";
   import Icon from "../icons/Icon.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
   import StatusIcon from "../icons/StatusIcon.svelte";
@@ -48,15 +49,39 @@
     cacheRev.current;
     return list?.error() ?? null;
   });
-  const tasks = $derived.by(() => {
+  const found = $derived.by(() => {
     cacheRev.current;
     return (list?.ulids() ?? []).flatMap((u) => c.cache.task(u) ?? []);
+  });
+  // The tasks of a hidden Store are left out here (the query is not changed) and counted per Store
+  // for the notice.
+  const tasks = $derived.by(() => {
+    storesRev.current;
+    return found.filter((t) => storeShown(c.stores, t.store));
+  });
+  const hiddenCounts = $derived.by(() => {
+    storesRev.current;
+    const per = new Map<string, number>();
+    for (const t of found) {
+      if (!storeShown(c.stores, t.store)) per.set(t.store, (per.get(t.store) ?? 0) + 1);
+    }
+    // In the order of the directory.
+    return c.stores
+      .stores()
+      .flatMap((s) => (per.has(s.name) ? [{ store: s.name, n: per.get(s.name) ?? 0 }] : []));
+  });
+  const hiddenTotal = $derived(hiddenCounts.reduce((sum, h) => sum + h.n, 0));
+  const storesHref = router.href({ name: "settings", page: "stores" });
+  // The order of the sidebar.
+  const workspaceOrder = $derived.by(() => {
+    storesRev.current;
+    return c.stores.visibleWorkspaces().map((w) => `${w.store}/${w.ulid}`);
   });
   // The date is read again whenever the tasks or the grouping change, so a tab left open over
   // midnight catches up at the next change.
   const grouped = $derived.by(() => {
     const now = new Date();
-    return { now, groups: groupMyTasks(tasks, by, now) };
+    return { now, groups: groupMyTasks(tasks, by, now, workspaceOrder) };
   });
 
   // The category of a status is in the schema of the store of the task.
@@ -92,6 +117,7 @@
   let groupAnchor = $state<HTMLElement | null>(null);
   const groupItems = [
     { value: "due", label: "期限" },
+    { value: "workspace", label: "ワークスペース" },
     { value: "project", label: "プロジェクト" },
   ];
   const groupLabel = $derived(groupItems.find((i) => i.value === by)?.label);
@@ -146,6 +172,9 @@
         <section class="group" aria-labelledby="my-{g.key}">
           <div class="g-head">
             <h2 id="my-{g.key}" class:alert={g.tone === "alert"}>{g.name}</h2>
+            {#if g.store}
+              <StoreBadge store={g.store} tone={c.stores.tone(g.store)} compact />
+            {/if}
             <span class="sub">{g.tasks.length}</span>
           </div>
           <table>
@@ -158,7 +187,13 @@
                   </td>
                   <td class="w-kind"><KindIcon kind={t.kind} /></td>
                   <td class="w-id">
-                    <IdLabel id={t.id} ulid={t.ulid} {href} onopen={(e) => onLinkClick(e, href)} />
+                    <IdLabel
+                      id={t.id}
+                      ulid={t.ulid}
+                      store={t.store}
+                      {href}
+                      onopen={(e) => onLinkClick(e, href)}
+                    />
                   </td>
                   <td class="t-title">
                     <a {href} onclick={(e) => onLinkClick(e, href)}>{t.title}</a>
@@ -174,6 +209,17 @@
           </table>
         </section>
       {/each}
+    {/if}
+    {#if !error && !loading && hiddenTotal > 0}
+      <p class="hidden-note">
+        <Icon name="eye-off" size={14} />
+        <span class="text">
+          非表示の Store に {hiddenTotal} 件（{hiddenCounts.map((h) => h.store).join("、")}）
+        </span>
+        <a href={storesHref} onclick={(e) => onLinkClick(e, storesHref)}
+          >マウント中の Store を開く</a
+        >
+      </p>
     {/if}
   </div>
 </div>
@@ -239,6 +285,23 @@
     flex-direction: column;
     gap: var(--space-20);
     padding: var(--space-8) var(--gutter) var(--space-20);
+  }
+  .hidden-note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    margin: 0;
+    padding: var(--space-8) var(--space-12);
+    border: 1px dashed var(--line-input);
+    border-radius: var(--radius-8);
+    color: var(--muted);
+    font-size: var(--fs-12);
+  }
+  .hidden-note .text {
+    flex: 1;
+  }
+  .hidden-note a {
+    color: var(--ink-2);
   }
   .msg {
     margin: 0;

@@ -36,6 +36,36 @@ describe("TaskDetail: the … menu", () => {
     expect(item).toHaveTextContent("この Store にはほかのワークスペースがありません");
   });
 
+  it("opens the move-to-another-Store dialog for this task when two Stores are mounted", async () => {
+    const k = makeCore({ show, storeItems: [{ name: "shared" }, { name: "second" }] });
+    mount(TaskDetail, { ulid: U }, k);
+    await fireEvent.click(screen.getByRole("button", { name: "その他の操作" }));
+    await fireEvent.click(await screen.findByRole("menuitem", { name: "別の Store へ移動…" }));
+    expect(workspaceDialog.current).toMatchObject({
+      kind: "move-store",
+      task: { ulid: U, id: "REL-6" },
+    });
+  });
+
+  it("does not offer the move to another Store with one Store, or in a read-only Store", async () => {
+    const one = makeCore({ show });
+    const { unmount } = mount(TaskDetail, { ulid: U }, one);
+    await fireEvent.click(screen.getByRole("button", { name: "その他の操作" }));
+    await screen.findByRole("menuitem", { name: /別のワークスペースへ移動/ });
+    expect(screen.queryByRole("menuitem", { name: /別の Store へ移動/ })).toBeNull();
+    unmount();
+
+    const ro = makeCore({
+      show,
+      storeItems: [{ name: "shared" }, { name: "second" }],
+      readOnly: "the remote cannot be written",
+    });
+    mount(TaskDetail, { ulid: U }, ro);
+    await fireEvent.click(screen.getByRole("button", { name: "その他の操作" }));
+    await screen.findByRole("menuitem", { name: /別のワークスペースへ移動/ });
+    expect(screen.queryByRole("menuitem", { name: /別の Store へ移動/ })).toBeNull();
+  });
+
   it("has no menu on a deleted task", () => {
     const k = makeCore({ show: { ...show, deleted_at: "2026-11-03T10:00:00Z" } });
     mount(TaskDetail, { ulid: U }, k);

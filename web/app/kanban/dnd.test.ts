@@ -41,6 +41,12 @@ describe("cardDnd", () => {
     d.onDragStart();
     expect(onDragStart).toHaveBeenCalled();
   });
+
+  it("does not make a locked card draggable", () => {
+    const opts: CardDndOptions = { ulid: "A", lane: "x", onDragStart: vi.fn(), locked: true };
+    expect(cardDnd(() => opts)(el)).toBeUndefined();
+    expect(h.drag).toBeUndefined();
+  });
 });
 
 describe("cellDnd", () => {

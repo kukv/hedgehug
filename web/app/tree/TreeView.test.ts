@@ -71,6 +71,8 @@ function setup(
     noProject?: boolean;
     noWorkspace?: boolean;
     detailError?: unknown;
+    // The raw reason the Store cannot be written.
+    readOnly?: string;
   } = {},
 ) {
   const tasks = new Map<string, ReturnType<typeof task>>([
@@ -165,7 +167,9 @@ function setup(
           projects: [],
         },
       ],
+      readOnly: () => over.readOnly ?? null,
       tone: () => "purple",
+      displayId: (_s: string, id: string) => id,
       subscribe: (fn: () => void) => ev.subscribe(fn),
     },
     schema: {
@@ -901,6 +905,28 @@ describe("TreeView", () => {
     closeWorkspaceDialog();
   });
 
+  it("opens the move-to-another-Store dialog from the … menu of a row, with two Stores", async () => {
+    const { core } = setup();
+    core.stores.stores = () => [{ name: "shared" }, { name: "second" }] as never;
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "メニュー: Web のクライアントを更新" }),
+    );
+    await fireEvent.click(await screen.findByRole("menuitem", { name: "別の Store へ移動…" }));
+    expect(workspaceDialog.current).toMatchObject({ kind: "move-store", task: { ulid: "T3" } });
+    closeWorkspaceDialog();
+  });
+
+  it("has no move to another Store with one Store", async () => {
+    setup();
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "メニュー: Web のクライアントを更新" }),
+    );
+    await screen.findByRole("menuitem", { name: /別のワークスペースへ移動/ });
+    expect(screen.queryByRole("menuitem", { name: /別の Store へ移動/ })).toBeNull();
+  });
+
   it("turns the move item off when the store has no other workspace", async () => {
     setup(); // one workspace only
     render(TreeView, { view: { kind: "project", ulid: "P" } });
@@ -943,6 +969,70 @@ describe("TreeView", () => {
     setup({ many: 250 });
     render(TreeView, { view: { kind: "project", ulid: "P" } });
     expect(screen.getAllByRole("treeitem")).toHaveLength(10);
+  });
+});
+
+describe("TreeView: a read-only Store", () => {
+  const WHY = "remote に書き込めません";
+  const RO = "the remote cannot be written";
+
+  // A key does something only where there is a place to go: T3 can go up and in, T1 can go out,
+  // E1 can go down.
+  async function select3(title = "Web のクライアントを更新") {
+    const row = screen.getByText(title).closest('[role="treeitem"]') as HTMLElement;
+    await fireEvent.click(row);
+    return row;
+  }
+
+  it.each([
+    ["Enter", { key: "Enter" }],
+    ["Tab", { key: "Tab" }],
+    ["Shift+Tab", { key: "Tab", shiftKey: true }, "移行ガイドを書く"],
+    ["Alt+ArrowUp", { key: "ArrowUp", altKey: true }],
+    ["Alt+ArrowDown", { key: "ArrowDown", altKey: true }, "API v2 への移行"],
+    ["Space", { key: " " }],
+    ["S", { key: "s" }],
+    ["K", { key: "k" }],
+  ] as [string, KeyboardEventInit, string?][])(
+    "says why %s does nothing, and writes nothing",
+    async (_name, key, title) => {
+      const { api } = setup({ readOnly: RO });
+      render(TreeView, { view: { kind: "project", ulid: "P" } });
+      const row = await select3(title);
+      await fireEvent.keyDown(row, key);
+      await waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
+      expect(h.toast.mock.calls[0]?.[0].message).toBe(`この Store は閲覧のみです（${WHY}）`);
+      expect(api.POST).not.toHaveBeenCalled();
+      expect(api.PATCH).not.toHaveBeenCalled();
+      expect(screen.queryByRole("textbox", { name: "新しいタスクのタイトル" })).toBeNull();
+      expect(screen.queryByRole("menu")).toBeNull();
+    },
+  );
+
+  it("still moves the selection and opens the detail", async () => {
+    setup({ readOnly: RO });
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    const row = await select3();
+    await fireEvent.keyDown(row, { key: "Enter", ctrlKey: true, metaKey: true });
+    expect(h.go).toHaveBeenCalledWith("/tasks/T3");
+    expect(h.toast).not.toHaveBeenCalled();
+  });
+
+  it("shows no input to add a task", () => {
+    setup({ readOnly: RO });
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    expect(screen.queryByRole("button", { name: /タスクを追加/ })).toBeNull();
+  });
+
+  it("turns the move item of the row menu off, with the reason", async () => {
+    setup({ readOnly: RO });
+    render(TreeView, { view: { kind: "project", ulid: "P" } });
+    await fireEvent.click(
+      await screen.findByRole("button", { name: "メニュー: Web のクライアントを更新" }),
+    );
+    const item = await screen.findByRole("menuitem", { name: /別のワークスペースへ移動/ });
+    expect(item).toBeDisabled();
+    expect(item).toHaveTextContent(`この Store は閲覧のみです（${WHY}）`);
   });
 });
 

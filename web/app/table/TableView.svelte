@@ -15,13 +15,15 @@
   import type { TableSettings } from "../../core/views";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
+  import { storeShown } from "../hidden";
   import Icon from "../icons/Icon.svelte";
   import ListBar from "../list/ListBar.svelte";
   import type { ListScope } from "../list/scope";
   import { useListScope } from "../list/scope.svelte";
+  import { readOnlyNow, readOnlySentence } from "../read-only";
   import { router } from "../router";
   import Empty from "../states/Empty.svelte";
-  import { useSubscribe } from "../svelte-store";
+  import { useDisplayId, useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import { combine, hasTerm, NO_CANCELED, withoutOrder, withoutTerm } from "../tree/filter";
   import { countLabel, VIRTUALIZE_AT } from "../tree/flatten";
@@ -72,6 +74,8 @@
   } = $props();
 
   const c = core();
+  const did = useDisplayId(c.stores);
+  const uid = $props.id();
   const ls = useListScope(() => scope);
   const cacheRev = useSubscribe(c.cache, () => ({}));
   const storesRev = useSubscribe(c.stores, () => ({}));
@@ -123,11 +127,19 @@
     return () => h.dispose();
   });
 
+  // A table over every store leaves out the tasks of a hidden store (the table of a workspace or a
+  // project is of its own store, so it is not left out).
+  // (Read storesRev where this is used, so the result follows the directory.)
+  function inScope(store: string | undefined): boolean {
+    return scope.kind !== "all" || storeShown(c.stores, store);
+  }
+
   const tasks = $derived.by(() => {
     cacheRev.current;
+    storesRev.current;
     return (list?.ulids() ?? [])
       .map((u) => c.cache.task(u))
-      .filter((t): t is TaskView => t !== undefined);
+      .filter((t): t is TaskView => t !== undefined && inScope(t.store));
   });
   const loading = $derived.by(() => {
     cacheRev.current;
@@ -139,7 +151,10 @@
   });
   const canceledCount = $derived.by(() => {
     cacheRev.current;
-    return canceledList ? canceledList.ulids().length : null;
+    storesRev.current;
+    return canceledList
+      ? canceledList.ulids().filter((u) => inScope(c.cache.task(u)?.store)).length
+      : null;
   });
 
   // --- the schemas -----------------------------------------------------------------------
@@ -324,6 +339,11 @@
   const minWidth = $derived(GUTTER + specs.reduce((sum, s) => sum + s.width, 0));
 
   // --- editing a cell --------------------------------------------------------------------------
+  // Why the Store of a task cannot be written (Japanese), or null. The cells of such a row only read.
+  function readOnlyOf(store: string): string | null {
+    storesRev.current;
+    return readOnlyNow(c.stores, store);
+  }
   function edit(t: TaskView, field: PatchField, value: unknown) {
     freeze(t);
     c.save.edit(t.ulid, t.store, field, value);
@@ -347,7 +367,10 @@
     // (a retry would send the same again); the toast says why.
     for (const u of frozen.keys()) {
       const why = c.save.takeRefused(u);
-      if (why !== null) toast({ message: `${c.cache.task(u)?.id ?? u}: ${why}` });
+      if (why !== null) {
+        const t = c.cache.task(u);
+        toast({ message: `${t ? did.current(t.store, t.id) : u}: ${why}` });
+      }
     }
     const let_go = [...frozen.keys()].filter((u) => !holds(u));
     if (let_go.length > 0) {
@@ -527,7 +550,7 @@
       <td class="ghead" colspan={specs.length + 1}>
         <span class="gname">{item.label}</span>
         {#if item.id}
-          <span class="gid">{item.id}</span>
+          <span class="gid">{item.store ? did.current(item.store, item.id) : item.id}</span>
         {/if}
         {#if groupMeta(item)}
           <span class="gmeta">{groupMeta(item)}</span>
@@ -538,8 +561,10 @@
   {:else}
     {@const t = taskOf(item.task.ulid) ?? item.task}
     {@const st = saves.current.state(t.ulid)}
+    {@const locked = readOnlyOf(t.store)}
     <tr
       class="row"
+      title={locked ? readOnlySentence(locked) : undefined}
       aria-rowindex={index + 2}
       class:placed={start !== undefined}
       style:transform={start === undefined ? undefined : `translateY(${start}px)`}
@@ -548,6 +573,9 @@
       onfocusout={(e) => focusOut(e, t)}
     >
       <td class="mark">
+        {#if locked}
+          <span id="{uid}-ro-{t.ulid}" class="sr">{readOnlySentence(locked)}</span>
+        {/if}
         {#if st.kind === "saving"}
           <span role="img" aria-label="保存中" title="保存中…">…</span>
         {:else if st.kind === "error"}
@@ -570,6 +598,8 @@
             col={spec}
             schema={schemaOf(t.store)}
             tone={c.stores.tone(t.store)}
+            readonly={locked !== null}
+            describedby={locked ? `${uid}-ro-${t.ulid}` : undefined}
             pending={field ? saves.current.editing(t.ulid, field) : false}
             {taskOf}
             parentLoading={parentLoading(t)}

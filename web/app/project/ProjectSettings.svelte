@@ -16,6 +16,7 @@
   import { core } from "../context";
   import StatusIcon from "../icons/StatusIcon.svelte";
   import { useListScope } from "../list/scope.svelte";
+  import { useReadOnlySentence } from "../read-only";
   import { router } from "../router";
   import Empty from "../states/Empty.svelte";
   import { useManyStores, useSubscribe } from "../svelte-store";
@@ -38,6 +39,9 @@
   const uid = $props.id();
 
   const store = $derived(scope.store);
+  // A Store that cannot be written is read, not edited (細部 35).
+  const offSentence = useReadOnlySentence(c.stores, () => store);
+  const off = $derived(offSentence.current);
   const project = $derived(scope.project);
   const schema = $derived.by(() => {
     schemaRev.current;
@@ -80,6 +84,8 @@
   let seenSig = $state<string | null>(null);
   // A request is on its way: the draft is not to change under it.
   let busy = $state(false);
+  // What the controls follow: a request on its way, or a Store that cannot be written.
+  const frozen = $derived(busy || off !== null);
   let failure = $state<string | null>(null);
   let resetOpen = $state(false);
   let resetFailure = $state<string | null>(null);
@@ -130,7 +136,7 @@
   }
 
   async function save() {
-    if (busy || !dirty || !store) return;
+    if (busy || off !== null || !dirty || !store) return;
     busy = true;
     failure = null;
     try {
@@ -150,7 +156,7 @@
   }
 
   async function resetAll() {
-    if (busy || !store) return;
+    if (busy || off !== null || !store) return;
     busy = true;
     resetFailure = null;
     try {
@@ -217,7 +223,7 @@
             <input
               type="checkbox"
               checked={shown.includes(s.name)}
-              disabled={busy || locked.has(s.name)}
+              disabled={frozen || locked.has(s.name)}
               aria-describedby={locked.has(s.name) ? `${uid}-locked` : undefined}
               onchange={(e) => (draft = setShown(schema, draft, s.name, e.currentTarget.checked))}
             >
@@ -232,7 +238,12 @@
       </p>
       {#if shown.length !== statuses.length}
         <div>
-          <Button size="sm" disabled={busy} onclick={() => (draft = { ...draft, statuses: [] })}>
+          <Button
+            size="sm"
+            disabled={frozen}
+            why={off ?? undefined}
+            onclick={() => (draft = { ...draft, statuses: [] })}
+          >
             Store と同じに戻す
           </Button>
         </div>
@@ -248,7 +259,7 @@
         {fields}
         mine={draft.transitions}
         fromStore={storeTransitions}
-        {busy}
+        busy={frozen}
         onchange={(transitions) => (draft = { ...draft, transitions })}
       />
       <ConstraintEditor
@@ -257,7 +268,7 @@
         {fields}
         mine={draft.required}
         fromStore={storeRequired}
-        {busy}
+        busy={frozen}
         onchange={(required) => (draft = { ...draft, required })}
       />
     </section>
@@ -269,12 +280,17 @@
         <FormError message={failure} />
       {/if}
       <div class="row-actions">
-        <Button variant="primary" disabled={busy || !dirty} onclick={() => void save()}
+        <Button
+          variant="primary"
+          disabled={frozen || !dirty}
+          why={off ?? undefined}
+          onclick={() => void save()}
           >保存</Button
         >
         <Button
           variant="danger"
-          disabled={busy || !hasOverride}
+          disabled={frozen || !hasOverride}
+          why={off ?? undefined}
           onclick={() => {
             resetFailure = null;
             resetOpen = true;

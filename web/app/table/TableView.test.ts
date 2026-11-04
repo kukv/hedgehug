@@ -76,7 +76,13 @@ type Over = {
   loading?: boolean;
   saveState?: { kind: string; message?: string };
   many?: number;
+  // The Stores that cannot be written, with the raw reason of the directory.
+  readOnly?: Record<string, string>;
   canceled?: string[];
+  // The Stores the GUI leaves out.
+  hidden?: string[];
+  // The Stores share a prefix: IDs are shown as <store>:<ID>.
+  qualify?: boolean;
   // The stores whose schema cannot be read (until it is put in the schemas).
   unreadable?: string[];
   // What becomes of the parent the list does not hold, once the table asks for it: it is read
@@ -192,7 +198,10 @@ function setup(over: Over = {}) {
     },
     stores: {
       stores: () => (over.stores ?? ["shared"]).map((name) => ({ name })),
+      readOnly: (s: string) => over.readOnly?.[s] ?? null,
+      hidden: (s: string) => over.hidden?.includes(s) ?? false,
       tone: (s: string) => (s === "me" ? "orange" : "purple"),
+      displayId: (s: string, id: string) => (over.qualify ? `${s}:${id}` : id),
       subscribe: ev.subscribe,
     },
     schema: {
@@ -302,6 +311,38 @@ describe("TableView", () => {
     expect(watchList).toHaveBeenCalledWith({ q: "assignee:@me", tree: false, store: undefined });
   });
 
+  it("leaves out the rows of a hidden store on the table of every store, and its canceled ones from the count", () => {
+    setup({
+      ulids: ["T1", "M1"],
+      canceled: ["T2", "M1"],
+      stores: ["shared", "me"],
+      hidden: ["me"],
+      scope: { apiBase: "", cliBase: "", store: undefined, saveBase: "" },
+    });
+    mount({ view: { kind: "all" } });
+    expect(order()).toEqual(["REL-4"]);
+    expect(screen.queryByRole("textbox", { name: "タイトル: ME-1" })).toBeNull();
+    expect(screen.getByText("1 件 · 中止 1 件を除外")).toBeInTheDocument();
+  });
+
+  it("writes the ID of a row with its store where the prefix is shared", () => {
+    setup({ ulids: ["T1"], qualify: true });
+    mount();
+    expect(order()[0]).toMatch(/^shared:REL-/);
+    expect(screen.getByRole("textbox", { name: /^タイトル: shared:REL-/ })).toBeInTheDocument();
+  });
+
+  it("keeps the rows of a hidden store on the table of its own workspace", () => {
+    setup({
+      ulids: ["M1"],
+      stores: ["shared", "me"],
+      hidden: ["me"],
+      scope: { apiBase: "workspace:me", cliBase: "", store: "me", saveBase: "" },
+    });
+    mount();
+    expect(screen.getByRole("textbox", { name: "タイトル: ME-1" })).toBeInTheDocument();
+  });
+
   it("opens the detail from the ID", async () => {
     setup();
     mount();
@@ -382,6 +423,57 @@ describe("TableView", () => {
       await fireEvent.input(input, { target: { value: "sato" } });
       await fireEvent.keyDown(input, { key: "Enter" });
       expect(save.edit).toHaveBeenCalledWith("T3", "shared", "assignees", ["sato"]);
+    });
+
+    it("only reads the cells of a row of a read-only Store, and says why on the row", async () => {
+      setup({
+        ulids: ["T1", "M1"],
+        stores: ["shared", "me"],
+        readOnly: { me: "the remote cannot be written" },
+        scope: { apiBase: "", cliBase: "", store: undefined, saveBase: "" },
+      });
+      mount({
+        view: { kind: "all" },
+        settings: { ...SETTINGS, columns: ["id", "title", "status", "assignee", "team"] },
+      });
+      const title = screen.getByRole("textbox", { name: "タイトル: ME-1" });
+      expect(title).toHaveAttribute("readonly");
+      expect(screen.getByRole("button", { name: "ステータス: ME-1" })).toBeDisabled();
+      // The reason is read out with the cell, not only shown as the tooltip of the row.
+      expect(title).toHaveAccessibleDescription(/^この Store は閲覧のみです（.+）$/);
+      expect(screen.getByRole("button", { name: "ステータス: ME-1" })).toHaveAccessibleDescription(
+        /^この Store は閲覧のみです/,
+      );
+      expect(screen.queryByRole("textbox", { name: "担当: ME-1" })).toBeNull();
+      expect(screen.getByRole("textbox", { name: "チーム: ME-1" })).toHaveAttribute("readonly");
+      const row = screen.getByRole("textbox", { name: "タイトル: ME-1" }).closest("tr");
+      expect(row?.getAttribute("title")).toMatch(/^この Store は閲覧のみです（.+）$/);
+      // The row of a Store that can be written is as before.
+      expect(screen.getByRole("textbox", { name: "タイトル: REL-4" })).not.toHaveAttribute(
+        "readonly",
+      );
+      expect(
+        screen.getByRole("textbox", { name: "タイトル: REL-4" }).closest("tr"),
+      ).not.toHaveAttribute("title");
+    });
+
+    it("follows the Store when it becomes writable again", async () => {
+      const readOnly: Record<string, string> = { me: "the remote cannot be written" };
+      const { ev } = setup({
+        ulids: ["M1"],
+        stores: ["shared", "me"],
+        readOnly,
+        scope: { apiBase: "", cliBase: "", store: undefined, saveBase: "" },
+      });
+      mount({ view: { kind: "all" } });
+      const title = () => screen.getByRole("textbox", { name: "タイトル: ME-1" });
+      expect(title()).toHaveAttribute("readonly");
+      delete readOnly.me;
+      ev.emit();
+      await waitFor(() => expect(title()).not.toHaveAttribute("readonly"));
+      readOnly.me = "the remote denied the push";
+      ev.emit();
+      await waitFor(() => expect(title()).toHaveAttribute("readonly"));
     });
 
     it("only shows the columns that are not edited", async () => {

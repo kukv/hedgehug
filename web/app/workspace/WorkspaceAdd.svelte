@@ -4,6 +4,8 @@
   import { errorMessage } from "../../core/messages";
   import { nameProblem, prefixProblem } from "../../core/workspace";
   import { core } from "../context";
+  import { storeShown } from "../hidden";
+  import { useReadOnlyOf } from "../read-only";
   import { router } from "../router";
   import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
@@ -22,15 +24,23 @@
     workspaces: stores.workspaces(),
   }));
 
-  // The Store picked here, else the one asked for, else the default one, else the first.
+  const roOf = useReadOnlyOf(stores);
+
+  // A hidden Store is not offered (細部 93).
+  const items = $derived(dir.current.items.filter((s) => storeShown(stores, s.name)));
+  // Only a Store that can be written is a place to add to (細部 99).
+  const writable = $derived(items.filter((s) => roOf.current(s.name) === null));
+  // The Store picked here, else the one asked for, else the default one, else the first (of those
+  // that can be written).
   let picked = $state("");
   const store = $derived(
-    dir.current.items.find((s) => s.name === picked)?.name ??
-      dir.current.items.find((s) => s.name === asked)?.name ??
-      dir.current.items.find((s) => s.default)?.name ??
-      dir.current.items[0]?.name ??
+    writable.find((s) => s.name === picked)?.name ??
+      writable.find((s) => s.name === asked)?.name ??
+      writable.find((s) => s.default)?.name ??
+      writable[0]?.name ??
       "",
   );
+  const noWritable = $derived(items.length > 0 && writable.length === 0);
 
   let name = $state("");
   let prefix = $state("");
@@ -107,21 +117,32 @@
   onclose={close}
 >
   <div class="form" role="presentation" {onkeydown}>
-    {#if dir.current.items.length >= 2}
+    {#if items.length >= 2}
       <div class="field" role="radiogroup" aria-label="Store">
         <span class="lbl">Store</span>
         <div class="stores">
-          {#each dir.current.items as s (s.name)}
+          {#each items as s (s.name)}
+            {@const why = roOf.current(s.name)}
             <!-- biome-ignore lint/a11y/noLabelWithoutControl: the badge is the text of the label -->
-            <label class="choice" class:on={s.name === store}>
+            <label
+              class="choice"
+              class:on={s.name === store}
+              class:off={why !== null}
+              title={why ?? undefined}
+            >
               <input
                 type="radio"
                 name="{uid}-store"
                 value={s.name}
                 checked={s.name === store}
+                disabled={why !== null}
+                aria-describedby={why !== null ? `${uid}-${s.name}-off` : undefined}
                 onchange={() => (picked = s.name)}
               >
               <StoreBadge store={s.name} tone={stores.tone(s.name)} />
+              {#if why !== null}
+                <span id="{uid}-{s.name}-off" class="note">閲覧のみ（{why}）</span>
+              {/if}
             </label>
           {/each}
         </div>
@@ -163,6 +184,9 @@
       </span>
     </div>
 
+    {#if noWritable}
+      <FormError message="書き込める Store がありません（すべて閲覧のみです）" />
+    {/if}
     {#if failure}
       <FormError message={failure} />
     {/if}
@@ -226,6 +250,14 @@
   .choice.on {
     border-color: var(--accent);
     background: var(--accent-weak);
+  }
+  .choice.off {
+    color: var(--muted);
+    cursor: default;
+  }
+  .note {
+    color: var(--muted);
+    font-size: var(--fs-12);
   }
   .msg {
     color: var(--muted);

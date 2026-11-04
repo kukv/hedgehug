@@ -10,6 +10,7 @@ import {
   cliLog,
   cliLs,
   cliMv,
+  cliMvStore,
   cliPurge,
   cliRestore,
   cliRestoreAt,
@@ -383,6 +384,33 @@ describe("commands", () => {
     );
     expect(cliSchemaMigrate({ target: "status", old: "triage", new: "-x" })).toBe(
       "hh schema migrate status -- triage -x",
+    );
+  });
+});
+
+describe("cliMvStore", () => {
+  it("writes hh mv --store with --yes", () => {
+    expect(cliMvStore({ id: "API-3", to: "personal" })).toBe("hh mv API-3 --store personal --yes");
+  });
+
+  it("adds --workspace, --parent and --scoped in that order when given", () => {
+    expect(
+      cliMvStore({
+        id: "API-3",
+        to: "personal",
+        workspace: "home",
+        parent: "HOME-1",
+        scoped: "carry",
+      }),
+    ).toBe("hh mv API-3 --store personal --workspace home --parent HOME-1 --scoped carry --yes");
+    expect(cliMvStore({ id: "API-3", to: "personal", scoped: "drop" })).toBe(
+      "hh mv API-3 --store personal --scoped drop --yes",
+    );
+  });
+
+  it("writes a placeholder while the destination is not chosen", () => {
+    expect(cliMvStore({ id: "API-3", to: new Placeholder("Store") })).toBe(
+      "hh mv API-3 --store <Store> --yes",
     );
   });
 });

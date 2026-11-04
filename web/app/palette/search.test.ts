@@ -6,6 +6,7 @@ import {
   buildCommands,
   type CommandEnv,
   detectMode,
+  isStoreQualifiedId,
   queryCommands,
   type SearchDeps,
   searchTasks,
@@ -33,6 +34,31 @@ describe("detectMode", () => {
   });
 });
 
+describe("detectMode with store names", () => {
+  const names = ["org-b", "personal"];
+  it.each([
+    ["org-b:API-12", "id"],
+    ["  personal:web-3 ", "id"],
+    ["status:todo", "query"],
+    ["x:API-1", "query"],
+    ["org-b:status", "query"],
+    ["org-b:API-12 more", "query"],
+  ])("%j is %s", (input, mode) => {
+    expect(detectMode(input, names)).toBe(mode);
+  });
+
+  it("keeps a colon word as a query without the names", () => {
+    expect(detectMode("org-b:API-12")).toBe("query");
+  });
+
+  it("tells a store-qualified id", () => {
+    expect(isStoreQualifiedId("org-b:API-12", names)).toBe(true);
+    expect(isStoreQualifiedId("org-b:API", names)).toBe(false);
+    expect(isStoreQualifiedId("API-12", names)).toBe(false);
+    expect(isStoreQualifiedId("zzz:API-12", names)).toBe(false);
+  });
+});
+
 const ok = (data: unknown) => ({ data, response: new Response(null, { status: 200 }) });
 const notFound = {
   error: { type: "task.not_found", title: "Not Found", status: 404, detail: "not found" },
@@ -56,7 +82,7 @@ function deps(over: { tasks?: TaskView[]; listError?: unknown } = {}) {
     ) => {
       if (path === "/api/tasks/{id}") {
         const id = opts.params.path?.id.toLowerCase();
-        const hit = id === "sh-17" || id === "rel-6" || id === "u6";
+        const hit = ["sh-17", "rel-6", "u6", "shared:rel-6"].includes(id ?? "");
         return hit ? ok(rel6) : notFound;
       }
       if (over.listError) return over.listError;
@@ -72,6 +98,65 @@ function deps(over: { tasks?: TaskView[]; listError?: unknown } = {}) {
   };
   return { d, GET, prime };
 }
+
+describe("searchTasks: hidden Stores", () => {
+  const queries = (GET: ReturnType<typeof deps>["GET"]) =>
+    GET.mock.calls.flatMap((c) => {
+      const q = (c[1] as { params: { query?: { q?: string } } }).params.query?.q;
+      return q === undefined ? [] : [q];
+    });
+
+  it("asks without them, for a text search and for a query, and still primes what came", async () => {
+    const theirs = task("U2", "task", null, { id: "BE-2", title: "非表示", store: "backend" });
+    const { d, GET, prime } = deps({ tasks: [theirs] });
+    const hidden = { ...d, hidden: () => ["backend", "org b/ops"] };
+    await searchTasks(hidden, "表示", "id");
+    expect(queries(GET)).toEqual(['-store:backend -store:"org b/ops" "表示"']);
+    expect(prime).toHaveBeenCalledWith([theirs], 42);
+    GET.mockClear();
+    await searchTasks(hidden, "kind:task", "query");
+    expect(queries(GET)).toEqual(['-store:backend -store:"org b/ops" kind:task']);
+  });
+
+  it("adds nothing to the query when no store is hidden", async () => {
+    const { d, GET } = deps();
+    await searchTasks({ ...d, hidden: () => [] }, "表示", "id");
+    await searchTasks(d, "kind:task", "query");
+    expect(queries(GET)).toEqual(['"表示"', "kind:task"]);
+  });
+
+  it("still opens the exact lookup of an ID, a former ID or a ULID of a hidden Store, like a URL", async () => {
+    const { d } = deps();
+    const hidden = { ...d, hidden: () => ["shared"] };
+    for (const text of ["rel-6", "SH-17"]) {
+      const r = await searchTasks(hidden, text, "id");
+      expect(r.groups[0]?.items[0]).toMatchObject({ ulid: "U6" });
+    }
+  });
+});
+
+describe("searchTasks: <store>:<ID>", () => {
+  it("looks the qualified ID up as it is, once, and does not search it as words", async () => {
+    const { d, GET } = deps();
+    const r = await searchTasks(
+      { ...d, storeNames: () => ["shared", "second"], hidden: () => ["shared"] },
+      "shared:REL-6",
+      "id",
+    );
+    expect(GET).toHaveBeenCalledTimes(1);
+    expect(GET).toHaveBeenCalledWith("/api/tasks/{id}", {
+      params: { path: { id: "shared:REL-6" } },
+    });
+    expect(r.groups[0]?.items[0]).toMatchObject({ ulid: "U6" });
+  });
+
+  it("finds nothing for a qualified ID nobody has", async () => {
+    const { d } = deps();
+    const r = await searchTasks({ ...d, storeNames: () => ["shared"] }, "shared:REL-99", "id");
+    expect(r.error).toBeNull();
+    expect(r.groups).toEqual([]);
+  });
+});
 
 describe("searchTasks: ID and text", () => {
   it("finds a task by a former ID and says so", async () => {
@@ -219,6 +304,9 @@ function env(over: Partial<CommandEnv> = {}): CommandEnv {
     recent: [],
     pickStatus: vi.fn(),
     moveTask: vi.fn(),
+    moveStoreTask: vi.fn(),
+    readOnly: () => null,
+    displayId: (_store, id) => id,
     ...over,
   };
 }
@@ -266,6 +354,15 @@ describe("buildCommands", () => {
     expect(gs.map((g) => g.name)).toEqual(["コマンド", "最近開いたもの", "開く"]);
     expect(gs[1]?.items[0]).toMatchObject({ type: "task", id: "REL-3", href: "/tasks/R1" });
     expect(buildCommands(e, ">ガイド").map((g) => g.name)).toEqual(["最近開いたもの"]);
+  });
+
+  it("finds the tasks opened last by the ID with its Store as well as by the bare ID", () => {
+    const e = env({
+      recent: [task("R1", "task", null, { id: "REL-3", title: "x", store: "team" })],
+      displayId: (s, id) => `${s}:${id}`,
+    });
+    expect(buildCommands(e, ">team:rel").map((g) => g.name)).toContain("最近開いたもの");
+    expect(buildCommands(e, ">rel-3").map((g) => g.name)).toContain("最近開いたもの");
   });
 
   it("filters by the words after >", () => {
@@ -477,6 +574,31 @@ describe("buildCommands", () => {
     ).toEqual(["マイタスクを開く"]);
   });
 
+  it("leaves out the creates and the workspace add when no Store can be written", () => {
+    const keys = (e: CommandEnv) =>
+      buildCommands(e, ">")[0]?.items.map((i) => (i.type === "command" ? i.key : "")) ?? [];
+    const all = keys(env());
+    expect(all).toEqual(
+      expect.arrayContaining(["cmd:create-task", "cmd:create-project", "cmd:workspace-add"]),
+    );
+    const ro = keys(env({ readOnly: () => "remote に書き込めません" }));
+    for (const k of ["cmd:create-task", "cmd:create-project", "cmd:workspace-add"]) {
+      expect(ro).not.toContain(k);
+    }
+    expect(ro).toContain("cmd:sync");
+    // one Store that can be written is enough
+    const some = keys(
+      env({
+        workspaces: [ws, { ...ws, store: "backend", ulid: "W2", name: "ops", prefix: "OPS" }],
+        storeNames: ["shared", "backend"],
+        readOnly: (s) => (s === "shared" ? "x" : null),
+      }),
+    );
+    expect(some).toEqual(
+      expect.arrayContaining(["cmd:create-task", "cmd:create-project", "cmd:workspace-add"]),
+    );
+  });
+
   it("adds the commands for the selected task", () => {
     const t = task("T1", "task", null, { id: "REL-6" });
     const gs = buildCommands(env({ selected: t }), ">");
@@ -485,6 +607,37 @@ describe("buildCommands", () => {
 });
 
 describe("taskCommands", () => {
+  it("names the group with the ID and its Store where the prefix is shared", () => {
+    const t = task("U1", "task", null, { id: "REL-1", store: "shared" });
+    const group = taskCommands(env({ displayId: (s, id) => `${s}:${id}` }), t);
+    expect(group.name).toBe("shared:REL-1 に対して");
+  });
+
+  it("offers a task of a read-only Store only its detail: no status, no child, no move", () => {
+    const t = task("T1", "task", null, { id: "REL-6" });
+    const e = env({
+      workspaces: [ws, { ...ws, ulid: "W2", name: "ops", prefix: "OPS" }],
+      readOnly: (s) => (s === "shared" ? "remote に書き込めません" : null),
+    });
+    expect(taskCommands(e, t).items.map((i) => i.key)).toEqual(["task-open:T1"]);
+    // a task of another Store is still offered everything
+    const other = taskCommands(e, { ...t, store: "backend" });
+    expect(other.items.map((i) => i.key)).toContain("task-status:T1");
+  });
+
+  it("offers the move to another Store with two Stores mounted, and not with one or when read-only", () => {
+    const t = task("T1", "task", null, { id: "REL-6" });
+    const e = env({ storeNames: ["shared", "second"] });
+    const item = taskCommands(e, t).items.find((i) => i.key === "task-move-store:T1");
+    expect(item).toMatchObject({ label: "別の Store へ移動…", icon: "database" });
+    if (item?.type === "command") item.run();
+    expect(e.moveStoreTask).toHaveBeenCalledWith(t);
+
+    expect(taskCommands(env(), t).items.map((i) => i.key)).not.toContain("task-move-store:T1");
+    const ro = env({ storeNames: ["shared", "second"], readOnly: () => "remote に書き込めません" });
+    expect(taskCommands(ro, t).items.map((i) => i.key)).toEqual(["task-open:T1"]);
+  });
+
   it("offers no move when the store has no other workspace, and none in another store", () => {
     const t = task("T1", "task", null, { id: "REL-6" });
     const none = taskCommands(env(), t);

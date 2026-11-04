@@ -3,11 +3,13 @@
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
+  import { storeShown } from "../hidden";
   import Icon from "../icons/Icon.svelte";
   import KindIcon from "../icons/KindIcon.svelte";
   import { kbdLabel, registerShortcut } from "../keys";
   import { MY_QUERY } from "../my/groups";
   import { openPalette } from "../palette-state.svelte";
+  import { readOnlySentence, useReadOnlyOf } from "../read-only";
   import { hrefOf, onLinkClick, router } from "../router";
   import { useSubscribe } from "../svelte-store";
   import Menu from "../ui/Menu.svelte";
@@ -16,8 +18,14 @@
   import SyncCard from "./SyncCard.svelte";
 
   const { stores, cache, views, conn } = core();
-  const workspaces = useSubscribe(stores, () => stores.workspaces());
+  // What is hidden is left out here; the first workspace that is left is the home (細部 93).
+  const workspaces = useSubscribe(stores, () => stores.visibleWorkspaces());
+  const storesRev = useSubscribe(stores, () => ({}));
   const savedViews = useSubscribe(views, () => views.list());
+  const shownViews = $derived.by(() => {
+    storesRev.current;
+    return savedViews.current.filter((v) => storeShown(stores, v.store));
+  });
   const cacheRev = useSubscribe(cache, () => ({}));
   const unread = useSubscribe(conn, () => conn.unread);
   const route = $derived(router.route);
@@ -36,8 +44,9 @@
   });
   const myCount = $derived.by(() => {
     cacheRev.current;
+    storesRev.current;
     if (!myList || myList.loading() || myList.error()) return null;
-    return myList.ulids().length;
+    return myList.ulids().filter((u) => storeShown(stores, cache.task(u)?.store)).length;
   });
 
   onMount(() =>
@@ -50,15 +59,25 @@
 
   // The menu of the "…" of a workspace row: the workspace, and the button it opens from.
   let menu = $state<{ entry: WorkspaceEntry; anchor: HTMLElement } | null>(null);
-  const menuItems = [
-    { value: "settings", label: "設定を開く" },
-    { value: "delete", label: "削除…" },
-  ];
+  const roOf = useReadOnlyOf(stores);
+  // The settings can be read in a read-only Store; deleting is a write.
+  const menuItems = $derived.by(() => {
+    const why = menu ? roOf.current(menu.entry.store) : null;
+    return [
+      { value: "settings", label: "設定を開く" },
+      {
+        value: "delete",
+        label: "削除…",
+        ...(why === null ? {} : { disabled: true, hint: readOnlySentence(why) }),
+      },
+    ];
+  });
 
   function pickMenu(value: string) {
     const m = menu;
     menu = null;
     if (!m) return;
+    if (value === "delete" && roOf.current(m.entry.store) !== null) return;
     if (value === "settings") {
       router.go(
         hrefOf({ name: "workspace", store: m.entry.store, ulid: m.entry.ulid, tab: "settings" }),
@@ -135,12 +154,12 @@
     </a>
   </div>
 
-  {#if savedViews.current.length > 0}
+  {#if shownViews.length > 0}
     <section class="views" aria-label="保存済みビュー">
       <div class="ws-head">
         <span class="ws-title">保存済みビュー</span>
       </div>
-      {#each savedViews.current as v (`${v.store}/${v.view.name}`)}
+      {#each shownViews as v (`${v.store}/${v.view.name}`)}
         {@const vhref = hrefOf({ name: "view", store: v.store, view: v.view.name })}
         {@const vhere =
           route.name === "view" && route.store === v.store && route.view === v.view.name}

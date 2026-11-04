@@ -24,3 +24,11 @@ export function useManyStores(stores: {
 }): { readonly current: boolean } {
   return useSubscribe(stores, () => stores.stores().length >= 2);
 }
+
+/** The ID of a task with its Store name where the prefix is in two Stores (follows the directory). */
+export function useDisplayId(stores: {
+  subscribe(fn: () => void): () => void;
+  displayId(store: string, id: string): string;
+}): { readonly current: (store: string, id: string) => string } {
+  return useSubscribe(stores, () => (store: string, id: string) => stores.displayId(store, id));
+}

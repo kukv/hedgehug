@@ -1,4 +1,5 @@
 <script lang="ts">
+  import StoreMove from "../stores/StoreMove.svelte";
   import { closeWorkspaceDialog, workspaceDialog } from "./dialogs-state.svelte";
   import PrefixChange from "./PrefixChange.svelte";
   import WorkspaceAdd from "./WorkspaceAdd.svelte";
@@ -23,5 +24,9 @@
 {:else if d?.kind === "move"}
   {#key d}
     <WorkspaceMove task={d.task} onclose={closeWorkspaceDialog} />
+  {/key}
+{:else if d?.kind === "move-store"}
+  {#key d}
+    <StoreMove task={d.task} onclose={closeWorkspaceDialog} />
   {/key}
 {/if}

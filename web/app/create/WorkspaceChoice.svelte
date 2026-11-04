@@ -22,20 +22,29 @@
     isDisabled?: (w: WorkspaceEntry) => boolean; // an entry that is shown but cannot be chosen
     note?: (w: WorkspaceEntry) => string; // a few words after the name
   } = $props();
+  const uid = $props.id();
 </script>
 
 <div class="choice" role="radiogroup" aria-label={label}>
   {#each entries as w (workspaceKey(w))}
-    <label class:on={workspaceKey(w) === value} class:off={isDisabled?.(w)}>
+    <label
+      class:on={workspaceKey(w) === value}
+      class:off={isDisabled?.(w)}
+      title={isDisabled?.(w) ? note?.(w) : undefined}
+    >
       <input
         type="radio"
         {name}
         value={workspaceKey(w)}
         checked={workspaceKey(w) === value}
         disabled={isDisabled?.(w)}
+        aria-describedby={isDisabled?.(w) && note?.(w) ? `${uid}-${workspaceKey(w)}` : undefined}
         onchange={() => onchange(workspaceKey(w))}
       >
-      <span>{w.name}（{w.prefix}）{note?.(w) ? ` — ${note(w)}` : ""}</span>
+      <span>{w.name}（{w.prefix}）</span>
+      {#if note?.(w)}
+        <span id="{uid}-{workspaceKey(w)}" class="note">— {note(w)}</span>
+      {/if}
       {#if showStore}
         <StoreBadge store={w.store} tone={w.tone} />
       {/if}
@@ -57,6 +66,9 @@
     border-radius: var(--radius-8);
     font-size: var(--fs-13);
     cursor: pointer;
+  }
+  .note {
+    color: var(--muted);
   }
   label.off {
     color: var(--muted);

@@ -13,7 +13,9 @@ const h = vi.hoisted(() => ({
   runUndo: vi.fn(async () => {}),
   addWorkspace: vi.fn(),
   moveWorkspace: vi.fn(),
+  moveStore: vi.fn(),
   saveView: vi.fn(),
+  qualify: false, // the Stores share a prefix: IDs are shown as <store>:<ID>
 }));
 
 vi.mock("../context", () => ({ core: () => h.core }));
@@ -63,6 +65,7 @@ vi.mock("../undo", async (orig) => ({
 vi.mock("../workspace/dialogs-state.svelte", () => ({
   openWorkspaceAdd: h.addWorkspace,
   openWorkspaceMove: h.moveWorkspace,
+  openStoreMove: h.moveStore,
 }));
 
 import CommandPalette from "./CommandPalette.svelte";
@@ -73,7 +76,11 @@ const rel6 = task("U6", "task", null, {
   title: "Web の API クライアントを v2 に更新",
 });
 
-function setup(found: unknown[] = []) {
+function setup(
+  found: unknown[] = [],
+  readOnly: string | null = null,
+  hidden: string[] = [], // the Stores the GUI leaves out
+) {
   const none = () => () => {};
   const ws = {
     store: "shared",
@@ -90,7 +97,7 @@ function setup(found: unknown[] = []) {
         opts: { params: { path?: { id: string }; query?: { store?: string; q?: string } } },
       ) => {
         if (path === "/api/tasks/{id}") {
-          const hit = opts.params.path?.id.toLowerCase() === "sh-17";
+          const hit = ["sh-17", "shared:rel-6"].includes(opts.params.path?.id.toLowerCase() ?? "");
           return hit
             ? ok({ ...rel6, former_ids: ["SH-17"] })
             : {
@@ -134,7 +141,14 @@ function setup(found: unknown[] = []) {
     stores: {
       stores: () => [{ name: "shared" }, { name: "backend" }],
       workspaces: () => [ws, { ...ws, ulid: "W2", name: "ops", prefix: "OPS" }],
+      visibleWorkspaces: () =>
+        [ws, { ...ws, ulid: "W2", name: "ops", prefix: "OPS" }].filter(
+          (w) => !hidden.includes(w.store),
+        ),
+      hidden: (s: string) => hidden.includes(s),
+      readOnly: () => readOnly,
       tone: () => "purple",
+      displayId: (s: string, id: string) => (h.qualify ? `${s}:${id}` : id),
       subscribe: none,
     },
     schema: { get: () => schema, load: async () => schema, subscribe: none },
@@ -154,7 +168,9 @@ beforeEach(() => {
   h.runUndo.mockClear();
   h.addWorkspace.mockClear();
   h.moveWorkspace.mockClear();
+  h.moveStore.mockClear();
   h.saveView.mockClear();
+  h.qualify = false;
   localStorage.clear();
   closePalette();
   closeCreate();
@@ -178,6 +194,15 @@ describe("CommandPalette", () => {
     openPalette();
     expect(await screen.findByText("最近開いたもの")).toBeInTheDocument();
     expect(screen.getByText("Web の API クライアントを v2 に更新")).toBeInTheDocument();
+  });
+
+  it("writes the ID of a task with its Store where the prefix is shared", async () => {
+    h.qualify = true;
+    setup();
+    localStorage.setItem("hedgehug.recent", JSON.stringify(["U6"]));
+    render(CommandPalette);
+    openPalette();
+    expect(await screen.findByText("shared:REL-6")).toBeInTheDocument();
   });
 
   it("closes with Escape", async () => {
@@ -284,6 +309,82 @@ describe("CommandPalette", () => {
     await fireEvent.click(await screen.findByRole("option", { name: /doctor を実行/ }));
     expect(h.go).toHaveBeenCalledWith("/settings/general");
     expect(palette.open).toBe(false);
+  });
+
+  describe("hidden Stores", () => {
+    it("leaves their tasks out of the tasks opened last", async () => {
+      setup([], null, ["backend"]);
+      localStorage.setItem("hedgehug.recent", JSON.stringify(["U6", "U9"]));
+      render(CommandPalette);
+      openPalette();
+      await screen.findByText("最近開いたもの");
+      // U9 is of backend and has the same title as U6
+      expect(screen.getAllByText("Web の API クライアントを v2 に更新")).toHaveLength(1);
+    });
+
+    it("asks for what a search finds without them", async () => {
+      const { api } = setup([], null, ["backend"]);
+      render(CommandPalette);
+      openPalette();
+      await fireEvent.input(await screen.findByRole("combobox"), { target: { value: "backend" } });
+      await waitFor(() =>
+        expect(api.GET).toHaveBeenCalledWith("/api/tasks", {
+          params: { query: { q: '-store:backend "backend"', store: undefined } },
+        }),
+      );
+    });
+
+    it("still opens a task of a hidden Store by its ID, like a URL does", async () => {
+      setup([], null, ["shared"]);
+      render(CommandPalette);
+      openPalette();
+      await fireEvent.input(await screen.findByRole("combobox"), { target: { value: "SH-17" } });
+      expect(await screen.findByText("Web の API クライアントを v2 に更新")).toBeInTheDocument();
+    });
+
+    it("opens a task of a hidden Store by <store>:<ID>, asking the server with it as typed", async () => {
+      const { api } = setup([], null, ["shared"]);
+      render(CommandPalette);
+      openPalette();
+      await fireEvent.input(await screen.findByRole("combobox"), {
+        target: { value: "shared:REL-6" },
+      });
+      expect(await screen.findByText("Web の API クライアントを v2 に更新")).toBeInTheDocument();
+      expect(api.GET).toHaveBeenCalledWith("/api/tasks/{id}", {
+        params: { path: { id: "shared:REL-6" } },
+      });
+      expect(screen.getByRole("combobox")).toBeInTheDocument();
+      // the input is an ID, not a query
+      expect(screen.getByText("ID", { selector: "*" })).toBeInTheDocument();
+    });
+
+    it("finds the same task when its Store is not hidden", async () => {
+      setup([{ ...rel6, ulid: "U9", id: "BE-1", title: "backend のタスク", store: "backend" }]);
+      render(CommandPalette);
+      openPalette();
+      await fireEvent.input(await screen.findByRole("combobox"), { target: { value: "backend" } });
+      expect(await screen.findByText("backend のタスク")).toBeInTheDocument();
+    });
+
+    it("leaves out their saved views, their workspaces and their settings", async () => {
+      setup([], null, ["backend", "shared"]);
+      render(CommandPalette);
+      openPalette();
+      await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">" } });
+      await screen.findByText("今すぐ同期する");
+      expect(screen.queryByRole("option", { name: /ブロック中 を開く/ })).toBeNull();
+      expect(screen.queryByRole("option", { name: /release/ })).toBeNull();
+      expect(screen.queryByRole("option", { name: /設定のスキーマを開く/ })).toBeNull();
+    });
+
+    it("still lists them when they are not hidden", async () => {
+      setup();
+      render(CommandPalette);
+      openPalette();
+      await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">" } });
+      await screen.findByText("今すぐ同期する");
+      expect(screen.getByRole("option", { name: /ブロック中 を開く/ })).toBeInTheDocument();
+    });
   });
 
   it("opens the settings of the workspace", async () => {
@@ -472,6 +573,28 @@ describe("CommandPalette", () => {
     expect(createState.request).toEqual({ kind: "task", parent: "U6" });
   });
 
+  it("offers nothing that writes when every Store is read-only: only the detail of the task", async () => {
+    setup([], "the remote cannot be written");
+    selection.set("U6");
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">" } });
+    expect(await screen.findByText("REL-6 に対して")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /詳細を開く/ })).toBeInTheDocument();
+    for (const name of [
+      /ステータスを変更/,
+      /子タスクを作る/,
+      /別のワークスペースへ移動/,
+      /別の Store へ移動/,
+      /タスクを作成/,
+      /プロジェクトを作成/,
+      /ワークスペースを追加/,
+    ]) {
+      expect(screen.queryByRole("option", { name })).toBeNull();
+    }
+    expect(screen.getByRole("option", { name: /今すぐ同期する/ })).toBeInTheDocument();
+  });
+
   it("opens the move dialog for the selected task from the command", async () => {
     setup();
     selection.set("U6");
@@ -481,6 +604,17 @@ describe("CommandPalette", () => {
     await fireEvent.click(await screen.findByRole("option", { name: /別のワークスペースへ移動/ }));
     expect(h.moveWorkspace).toHaveBeenCalledTimes(1);
     expect(h.moveWorkspace).toHaveBeenCalledWith(expect.objectContaining({ ulid: "U6" }));
+    expect(palette.open).toBe(false);
+  });
+
+  it("opens the move-to-another-Store dialog for the selected task from the command", async () => {
+    setup();
+    selection.set("U6");
+    render(CommandPalette);
+    openPalette();
+    await fireEvent.input(await screen.findByRole("combobox"), { target: { value: ">Store" } });
+    await fireEvent.click(await screen.findByRole("option", { name: /別の Store へ移動/ }));
+    expect(h.moveStore).toHaveBeenCalledWith(expect.objectContaining({ ulid: "U6" }));
     expect(palette.open).toBe(false);
   });
 

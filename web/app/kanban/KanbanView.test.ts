@@ -12,7 +12,10 @@ const h = vi.hoisted(() => ({
   core: undefined as unknown,
   toast: vi.fn(),
   go: vi.fn(),
-  cards: new Map<string, Get<{ ulid: string; lane: string; onDragStart: () => void }>>(),
+  cards: new Map<
+    string,
+    Get<{ ulid: string; lane: string; onDragStart: () => void; locked?: boolean }>
+  >(),
   cells: new Map<
     string,
     Get<{ onOver: (s: DragSource | null) => void; onDrop: (s: DragSource) => void }>
@@ -33,10 +36,11 @@ vi.mock("../toast.svelte", () => ({ toast: h.toast }));
 // Part A's useListScope is checked on its own; the board is given what it resolves.
 vi.mock("../list/scope.svelte", () => ({ useListScope: () => h.ls }));
 vi.mock("./dnd", () => ({
-  cardDnd: (get: Get<{ ulid: string; lane: string; onDragStart: () => void }>) => () => {
-    h.cards.set(`${get().ulid}@${get().lane}`, get);
-    return () => {};
-  },
+  cardDnd:
+    (get: Get<{ ulid: string; lane: string; onDragStart: () => void; locked?: boolean }>) => () => {
+      h.cards.set(`${get().ulid}@${get().lane}`, get);
+      return () => {};
+    },
   cellDnd:
     (get: Get<{ onOver: (s: DragSource | null) => void; onDrop: (s: DragSource) => void }>) =>
     (el: HTMLElement) => {
@@ -77,6 +81,12 @@ type Setup = {
   noSchema?: boolean;
   listError?: unknown;
   watchers?: string[];
+  // The Stores that cannot be written, with the raw reason of the directory.
+  readOnly?: Record<string, string>;
+  // The Stores the GUI leaves out.
+  hidden?: string[];
+  // The Stores share a prefix: IDs are shown as <store>:<ID>.
+  qualify?: boolean;
 };
 
 function setup(o: Setup = {}) {
@@ -123,7 +133,10 @@ function setup(o: Setup = {}) {
     },
     stores: {
       stores: () => stores.map((name) => ({ name })),
+      readOnly: (s: string) => o.readOnly?.[s] ?? null,
+      hidden: (s: string) => o.hidden?.includes(s) ?? false,
       tone: () => "purple",
+      displayId: (s: string, id: string) => (o.qualify ? `${s}:${id}` : id),
       workspace: () => undefined,
       workspaces: () => [],
       loaded: () => true,
@@ -286,6 +299,17 @@ describe("KanbanView: the board", () => {
     expect(one.container.querySelectorAll(".badge").length).toBe(0);
   });
 
+  it("writes the ID of a card with its store where the prefix is shared", async () => {
+    setup({
+      stores: ["shared", "work"],
+      schemas: { shared: schema, work: schema },
+      tasks: [task("A", "task", null, { store: "shared", status: "todo" })],
+      qualify: true,
+    });
+    mountView();
+    expect(await screen.findByText("shared:REL-0")).toBeInTheDocument();
+  });
+
   it("joins the columns of the stores of the cards on a screen of many stores", async () => {
     const work = {
       ...schema,
@@ -310,6 +334,38 @@ describe("KanbanView: the board", () => {
     );
     // No fixed part: the command is the query alone (no space in front of it; a term that starts with - goes after --).
     expect(screen.getByText("$ hh ls -- -status:canceled")).toBeInTheDocument();
+  });
+
+  describe("hidden Stores", () => {
+    const two = () =>
+      setup({
+        stores: ["shared", "work"],
+        schemas: { shared: schema, work: schema },
+        canceled: ["X", "Y"],
+        tasks: [
+          task("A", "task", null, { title: "共有", store: "shared", status: "todo" }),
+          task("B", "task", null, { title: "仕事", store: "work", status: "todo" }),
+          task("X", "task", null, { title: "共有の中止", store: "shared", status: "canceled" }),
+          task("Y", "task", null, { title: "仕事の中止", store: "work", status: "canceled" }),
+        ],
+        hidden: ["work"],
+      });
+
+    it("leaves out the cards of a hidden Store on the board of every Store, and its canceled ones from the count", async () => {
+      two();
+      h.ls = { ...h.ls, store: undefined, apiBase: "", cliBase: "", workspace: undefined };
+      mountView({ view: { kind: "all" }, query: "-status:canceled assignee:@me" });
+      await waitFor(() => expect(screen.getByText("共有")).toBeInTheDocument());
+      expect(screen.queryByText("仕事")).toBeNull();
+      expect(screen.getByText(/中止 1 件を除外/)).toBeInTheDocument();
+    });
+
+    it("keeps the cards of a hidden Store on its own board", async () => {
+      two();
+      h.ls = { ...h.ls, store: "work" };
+      mountView({ view: { kind: "workspace", store: "work", ulid: "W" } });
+      await waitFor(() => expect(screen.getByText("仕事")).toBeInTheDocument());
+    });
   });
 
   it("keeps to the statuses of the project", async () => {
@@ -468,6 +524,55 @@ describe("KanbanView: the plus of a column", () => {
     mountView({ settings: { columns: "category", swimlane: "none" } });
     await fireEvent.click(await screen.findByRole("button", { name: "進行中 にタスクを追加" }));
     expect(createState.request).toEqual({ kind: "task", category: "doing" });
+  });
+});
+
+describe("KanbanView: a read-only Store", () => {
+  const SENTENCE = "この Store は閲覧のみです（remote に書き込めません）";
+  const two = {
+    tasks: [
+      task("A", "task", null, { id: "REL-1", title: "調べる", status: "todo" }),
+      task("R", "task", null, { id: "RO-1", title: "読むだけ", status: "todo", store: "ro" }),
+    ],
+    stores: ["shared", "ro"],
+    schemas: { shared: schema, ro: schema },
+    readOnly: { ro: "the remote cannot be written" },
+  };
+
+  it("does not make its cards draggable, and the others are", async () => {
+    setup(two);
+    mountView();
+    await screen.findByText("読むだけ");
+    expect(h.cards.get("R@")?.().locked).toBe(true);
+    expect(h.cards.get("A@")?.().locked).toBe(false);
+  });
+
+  it("turns down a drop of its card, with the reason, and writes nothing", async () => {
+    const { api } = setup(two);
+    mountView();
+    await screen.findByText("読むだけ");
+    cellFor("doing")?.onDrop({ ulid: "R", lane: "" });
+    await waitFor(() => expect(h.toast).toHaveBeenCalled());
+    expect(h.toast.mock.calls[0]?.[0].message).toContain("remote に書き込めません");
+    expect(api.PATCH).not.toHaveBeenCalled();
+  });
+
+  it("keeps the plus while a Store can be written", async () => {
+    setup(two);
+    h.ls = { ...h.ls, store: undefined };
+    mountView({ view: { kind: "all" } });
+    expect(await screen.findByRole("button", { name: "進行中 にタスクを追加" })).toBeEnabled();
+  });
+
+  it("disables the plus, with the reason, when no Store can be written", async () => {
+    setup({
+      ...two,
+      readOnly: { shared: "the remote cannot be written", ro: "the remote cannot be written" },
+    });
+    mountView();
+    const plus = await screen.findByRole("button", { name: "進行中 にタスクを追加" });
+    expect(plus).toBeDisabled();
+    expect(plus).toHaveAttribute("title", SENTENCE);
   });
 });
 

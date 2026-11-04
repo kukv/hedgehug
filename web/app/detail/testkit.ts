@@ -123,6 +123,21 @@ export type FakeCoreOptions = {
   account?: string;
   workspaces?: WorkspaceEntry[];
   loadError?: Error | null;
+  /** Why the Store of the task is read-only (the English sentence of the server). */
+  readOnly?: string;
+  /** Why the named Stores are read-only (the others follow `readOnly`). */
+  readOnlyBy?: Record<string, string>;
+  /** The Stores GET /api/stores lists (the Store of the task, `shared`, by default). */
+  storeItems?: { name: string; remotes?: string[]; default?: boolean }[];
+  /** The names of the Stores that are hidden. */
+  hidden?: string[];
+  /** The Stores share a prefix: IDs are shown as <store>:<ID>. */
+  qualify?: boolean;
+  /** The IDs (host/login) of the accounts GET /api/accounts gives; none by default. */
+  accounts?: string[];
+  /** Whether the accounts are read (true by default) and why they could not be. */
+  accountsLoaded?: boolean;
+  accountsError?: string | null;
 };
 
 /** Fakes of the core objects; every method the screens call is a vi.fn. */
@@ -148,6 +163,7 @@ export function makeCore(opts: FakeCoreOptions = {}) {
     prime: vi.fn(),
     epochNow: vi.fn(() => 0),
     noteOwnCommit: vi.fn(),
+    refreshTrees: vi.fn(async () => {}),
     subscribe,
   };
   const save = {
@@ -160,19 +176,34 @@ export function makeCore(opts: FakeCoreOptions = {}) {
     subscribe,
   };
   const stores = {
-    stores: vi.fn(() => [
-      {
-        name: "shared",
-        default: true,
-        path: "/s",
+    stores: vi.fn(() =>
+      (opts.storeItems ?? [{ name: "shared", default: true }]).map((s) => ({
+        default: false,
+        path: `/${s.name}`,
         remotes: [],
         account: opts.account ?? "github.com/koki",
-      },
-    ]),
+        ...s,
+      })),
+    ),
     tone: vi.fn(() => "purple"),
+    readOnly: vi.fn(
+      (s?: string) => (s ? opts.readOnlyBy?.[s] : undefined) ?? opts.readOnly ?? null,
+    ),
+    hidden: vi.fn((s?: string) => (s ? (opts.hidden ?? []).includes(s) : false)),
     workspaces: vi.fn(() => ws),
+    visibleWorkspaces: vi.fn(() => ws.filter((w) => !(opts.hidden ?? []).includes(w.store))),
     workspace: vi.fn((s: string, u: string) => ws.find((w) => w.store === s && w.ulid === u)),
     loaded: vi.fn(() => true),
+    reload: vi.fn(async () => {}),
+    sharedPrefixes: vi.fn((): ReadonlySet<string> => new Set<string>()),
+    displayId: vi.fn((store: string, id: string) => (opts.qualify ? `${store}:${id}` : id)),
+    subscribe,
+  };
+  const accounts = {
+    accounts: vi.fn(() => (opts.accounts ?? []).map((id) => ({ id }))),
+    loaded: vi.fn(() => opts.accountsLoaded ?? true),
+    error: vi.fn(() => opts.accountsError ?? null),
+    load: vi.fn(async () => {}),
     reload: vi.fn(async () => {}),
     subscribe,
   };
@@ -183,6 +214,7 @@ export function makeCore(opts: FakeCoreOptions = {}) {
     cache,
     save,
     stores,
+    accounts,
     schema,
     conn,
     notify: () => {
@@ -195,8 +227,8 @@ export type FakeCore = ReturnType<typeof makeCore>;
 
 /** Renders a screen with the fakes as its core and runs its effects. */
 export function mount<P extends Record<string, unknown>>(C: Component<P>, props: P, k: FakeCore) {
-  const { api, cache, save, stores, schema, conn } = k;
-  const r = renderWithCore(C, props, { api, cache, save, stores, schema, conn });
+  const { api, cache, save, stores, accounts, schema, conn } = k;
+  const r = renderWithCore(C, props, { api, cache, save, stores, accounts, schema, conn });
   flushSync();
   return r;
 }

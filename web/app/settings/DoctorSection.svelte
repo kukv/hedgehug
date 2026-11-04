@@ -12,7 +12,9 @@
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
   import Icon, { type IconName } from "../icons/Icon.svelte";
+  import { useReadOnlySentence } from "../read-only";
   import { onLinkClick, router } from "../router";
+  import { useDisplayId } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import Button from "../ui/Button.svelte";
   import CliLine from "../ui/CliLine.svelte";
@@ -25,7 +27,11 @@
   let { store, many }: { store: string; many: boolean } = $props();
 
   const c = core();
+  const did = useDisplayId(c.stores);
   const uid = $props.id();
+  // The repair writes; the diagnosis only reads (細部 35).
+  const offSentence = useReadOnlySentence(c.stores, () => store);
+  const off = $derived(offSentence.current);
 
   const SEVERITY: Record<Severity, { label: string; icon: IconName }> = {
     error: { label: "エラー", icon: "forbid" },
@@ -102,7 +108,7 @@
   });
 
   async function fix(): Promise<void> {
-    if (fixing || loading) return;
+    if (fixing || loading || off !== null) return;
     const s = store;
     const mine = ++seq;
     fixing = true;
@@ -183,7 +189,12 @@
         もう一度実行
       </Button>
       {#if findingsCount > 0}
-        <Button size="sm" disabled={loading || fixing} onclick={() => (dialogOpen = true)}>
+        <Button
+          size="sm"
+          disabled={loading || fixing || off !== null}
+          why={off ?? undefined}
+          onclick={() => (dialogOpen = true)}
+        >
           修復…
         </Button>
       {/if}
@@ -214,7 +225,7 @@
           {#each fixed.repaired ?? [] as x (`${x.ulid}:${x.kind}`)}
             <li>
               {#if x.id}
-                <span class="mono">{x.id}</span>
+                <span class="mono">{did.current(store, x.id)}</span>
               {/if}
               {#if x.title}
                 <span>{x.title}</span>
@@ -249,7 +260,7 @@
                 {@const href = router.href({ name: "task", ulid: f.task })}
                 {@const id = ids[f.task]}
                 <a class="open" {href} onclick={(e) => onLinkClick(e, href)}>
-                  {id ? `${id} を開く` : "タスクを開く"}
+                  {id ? `${did.current(store, id)} を開く` : "タスクを開く"}
                 </a>
               {/if}
             </div>
