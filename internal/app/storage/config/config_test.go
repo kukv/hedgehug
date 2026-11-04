@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -797,5 +798,143 @@ func TestLoadStoreWithoutAccount(t *testing.T) {
 	_, err = Load(p)
 	if err == nil || !strings.Contains(err.Error(), p.ConfigFile) || !strings.Contains(err.Error(), `stores: "s" has no account`) {
 		t.Errorf("Load = %v; want the file and the store s", err)
+	}
+}
+
+func TestLoadStoreLook(t *testing.T) {
+	t.Parallel()
+	p := testPaths(t)
+	writeConfig(t, p, `stores:
+  - name: a
+    path: ~/a
+    color: teal
+    hidden: true
+  - name: b
+    path: ~/b
+  - name: c
+    path: ~/c
+    color: ""
+    hidden: false
+  - name: d
+    path: ~/d
+    color:
+    hidden:
+`)
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make([]string, len(c.Stores))
+	for i, s := range c.Stores {
+		got[i] = s.Name + ":" + s.Color + ":" + strconv.FormatBool(s.Hidden)
+	}
+	want := []string{"a:teal:true", "b::false", "c::false", "d::false"}
+	if !slices.Equal(got, want) {
+		t.Errorf("stores = %v, want %v", got, want)
+	}
+}
+
+func TestLoadStoreLookErrors(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ name, yaml, want string }{
+		{"unknown color", "stores:\n  - {name: a, path: /a, color: red}\n", "color"},
+		{"grey is for read-only stores", "stores:\n  - {name: a, path: /a, color: grey}\n", "color"},
+		{"color is a list", "stores:\n  - {name: a, path: /a, color: [teal]}\n", "color"},
+		{"hidden is a word", "stores:\n  - {name: a, path: /a, hidden: maybe}\n", "hidden"},
+		{"hidden is a number", "stores:\n  - {name: a, path: /a, hidden: 1}\n", "hidden"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := testPaths(t)
+			writeConfig(t, p, tc.yaml)
+			_, err := Load(p)
+			// the file and the line, as every error of a store item has them
+			if err == nil || !strings.Contains(err.Error(), p.ConfigFile+":2:") || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("err = %v, want one with %q at line 2 of the file", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestSetStoreLook(t *testing.T) {
+	t.Parallel()
+	p := testPaths(t)
+	writeConfig(t, p, `# my stores
+stores:
+  - name: a # first
+    path: ~/a
+    note: keep me
+    color: teal
+    hidden: true
+  - name: b
+    path: ~/b
+`)
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	orange, none, yes, no := "orange", "", true, false
+	// only what is given changes: hidden stays when only the color is given
+	if err := c.SetStoreLook("a", &orange, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetStoreLook("b", nil, &yes); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	c2, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a, b := c2.Stores[0], c2.Stores[1]; a.Color != "orange" || !a.Hidden || b.Color != "" || !b.Hidden {
+		t.Errorf("stores = %+v", c2.Stores)
+	}
+	// an empty color and hidden=false delete their keys
+	if err := c2.SetStoreLook("a", &none, &no); err != nil {
+		t.Fatal(err)
+	}
+	if err := c2.Save(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(p.ConfigFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(b)
+	for _, keep := range []string{"# my stores", "# first", "note: keep me", "hidden: true"} { // hidden: true is of store b
+		if !strings.Contains(text, keep) {
+			t.Errorf("%q is gone from:\n%s", keep, text)
+		}
+	}
+	if strings.Contains(text, "color") || strings.Count(text, "hidden") != 1 {
+		t.Errorf("the keys of a were not deleted:\n%s", text)
+	}
+	c3, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a := c3.Stores[0]; a.Color != "" || a.Hidden {
+		t.Errorf("a = %+v", a)
+	}
+}
+
+func TestSetStoreLookRefusals(t *testing.T) {
+	t.Parallel()
+	p := testPaths(t)
+	writeConfig(t, p, "stores:\n  - {name: a, path: ~/a}\n")
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	red, teal := "red", "teal"
+	if err := c.SetStoreLook("a", &red, nil); err == nil {
+		t.Error("an unknown color was accepted")
+	}
+	if err := c.SetStoreLook("nope", &teal, nil); err == nil {
+		t.Error("an unknown store was accepted")
+	}
+	if c.Stores[0].Color != "" {
+		t.Errorf("a refused call changed the store: %+v", c.Stores[0])
 	}
 }
