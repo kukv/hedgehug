@@ -1,10 +1,10 @@
 # フェーズ 4f-1 の引き継ぎ（2026-11-04 時点）
 
-4f-1（Go の不足）の実装が終わった。PR はまだ開いていない。
+4f-1（Go の不足）は PR #53 で main に入り、完了した。
 
 ## いまの状態
 
-- ブランチ `phase4f1-go`。構成見直しの回 1 のあとの main（6d6ce10）から切った。作業中に入った構成見直しの回 2（PR #52、9c73096）を取り込んだ（衝突は `internal/lib/github/device.go` の `postForm` の1か所で、context と `github.PlainHTTP` の両方を残した）。取り込み後に `go vet`・`gofmt -l`・`golangci-lint`（forbidigo を含む）・`go test -race ./...`・生成物の差分なしを確かめた。PR は未作成
+- ブランチ `phase4f1-go`。構成見直しの回 1 のあとの main（6d6ce10）から切った。作業中に入った構成見直しの回 2（PR #52、9c73096）を取り込んだ（衝突は `internal/lib/github/device.go` の `postForm` の1か所で、context と `github.PlainHTTP` の両方を残した）。取り込み後に `go vet`・`gofmt -l`・`golangci-lint`（forbidigo を含む）・`go test -race ./...`・生成物の差分なしを確かめた。PR #53 で main にマージ済み（5543ba8）
 - plan: `docs/superpowers/plans/2026-11-04-phase4f1-go.md`（Task 1〜5。末尾に「検査の結果」「実装で plan から変えた点」「概要の細部 1〜16 の実装とテスト」の表）
 - 概要 plan `2026-11-04-phase4f-screens.md` に「4f-1 の plan で足した細部」（細部 52〜70）を足した。spec `docs/superpowers/specs/2026-11-01-phase4-gui-design.md` の「親設計の修正」に `hh store set` の1行がある（e98cec3）
 
@@ -25,6 +25,6 @@ plan の「決めたこと」1〜13、概要 plan の細部 52〜70、plan 末�
 
 ## 次
 
-- PR を開く
-- マージのあと、4f-2 を main から切る
-- 構成見直しの回 2 以降は 4f-1 のあとに行い、4f-1 のコードも一緒に移す（2026-11-04 の利用者の決定）。4f-1 で残っている作業はない
+- 4f-2（アカウント・Store の設定と Onboarding。概要 plan の細部 17〜33）を main から切る。4f-2 の plan はまだない。概要 plan の細部と、細部 52〜70（4f-1 で決めた API の決まり）を前提に書く
+- 構成見直しの回 3 以降も 4f-1 のコードごと移す（2026-11-04 の利用者の決定）。4f-2 を書く前に main を取り込み、構成見直しで移った先に合わせる
+- 4f-1 で残っている作業はない
