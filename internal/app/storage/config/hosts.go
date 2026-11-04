@@ -2,12 +2,12 @@ package config
 
 import (
 	"fmt"
-	"net"
 	"net/url"
 	"path"
 	"slices"
 	"strings"
 
+	"github.com/kukv/hedgehug/internal/lib/github"
 	"go.yaml.in/yaml/v4"
 )
 
@@ -19,6 +19,9 @@ type Host struct {
 	Web      string // the web base, for the device flow
 	ClientID string // client_id of the GitHub App for the device flow; empty: the device flow is not available on the host
 }
+
+// GitHub is what the GitHub client needs of the host.
+func (h Host) GitHub() github.Options { return github.Options{API: h.API, Web: h.Web} }
 
 // URLRewrite points the URLs that start with From at To, right before a
 // fetch, push or clone.
@@ -124,21 +127,11 @@ func webURL(s string) bool {
 // IsLoopback reports whether host (a name or an IP, with or without the
 // brackets of an IPv6 literal) is the local machine: 127.0.0.0/8, ::1 or
 // localhost. A token is sent over plain http only there.
-func IsLoopback(host string) bool {
-	host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
-}
+func IsLoopback(host string) bool { return github.IsLoopback(host) }
 
 // PlainHTTP reports whether s is an http URL (not https) whose host is not
 // loopback.
-func PlainHTTP(s string) bool {
-	u, err := url.Parse(s)
-	return err == nil && strings.EqualFold(u.Scheme, "http") && !IsLoopback(u.Hostname())
-}
+func PlainHTTP(s string) bool { return github.PlainHTTP(s) }
 
 // loadHosts reads hosts: a host each, with an optional api, web and client_id.
 func (c *Config) loadHosts(seq *yaml.Node) error {

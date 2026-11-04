@@ -146,7 +146,7 @@ func (ss *Session) GitHub(c *config.Config, acct config.Account, host string) (*
 	if err != nil {
 		return nil, err
 	}
-	return github.New(c.Host(host), tok, ss.HTTPClient), nil
+	return github.New(c.Host(host).GitHub(), tok, ss.HTTPClient), nil
 }
 
 // PickAccount is the account name names, or the only one when name is empty;

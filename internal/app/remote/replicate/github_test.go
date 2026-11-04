@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 	"github.com/kukv/hedgehug/internal/lib/github"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
@@ -28,7 +27,7 @@ func TestCheckAccessGitHub(t *testing.T) {
 		Host: "github.com", Owner: "org-a", Name: "x",
 		AccountID: "github.com/bob", AccountName: "me",
 		Client: func() (*github.Client, error) {
-			return github.New(config.Host{API: srv.URL}, "t-bob", nil), nil
+			return github.New(github.Options{API: srv.URL}, "t-bob", nil), nil
 		},
 	}}
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
@@ -52,7 +51,7 @@ func TestCheckAccessGitHub(t *testing.T) {
 		t.Errorf("collaborators = %+v", m.Collaborators)
 	}
 	// An API that fails leaves the access as it was, with a warning.
-	opt.GitHub.Client = func() (*github.Client, error) { return github.New(config.Host{API: srv.URL}, "bad", nil), nil }
+	opt.GitHub.Client = func() (*github.Client, error) { return github.New(github.Options{API: srv.URL}, "bad", nil), nil }
 	a, warns, err = CheckAccess(s, opt, now.Add(2*time.Minute))
 	if err != nil || a.ReadOnly || len(warns) != 1 {
 		t.Fatalf("failing API = %+v %v %v", a, warns, err)
@@ -93,7 +92,7 @@ func TestCheckAccessCollaboratorsUnknownOnAnyFailure(t *testing.T) {
 		Host: "github.com", Owner: "org-a", Name: "x",
 		AccountID: "github.com/alice", AccountName: "me",
 		Client: func() (*github.Client, error) {
-			return github.New(config.Host{API: srv.URL}, "t-alice", nil), nil
+			return github.New(github.Options{API: srv.URL}, "t-alice", nil), nil
 		},
 	}}
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
@@ -139,7 +138,7 @@ func TestCheckAccessForbiddenCollaboratorsIsNoWarning(t *testing.T) {
 	opt := Options{Remotes: []string{"https://github.com/org-a/x.git"}, GitHub: &GitHubRepo{
 		Host: "github.com", Owner: "org-a", Name: "x",
 		AccountID: "github.com/bob", AccountName: "me",
-		Client: func() (*github.Client, error) { return github.New(config.Host{API: srv.URL}, "t-bob", nil), nil },
+		Client: func() (*github.Client, error) { return github.New(github.Options{API: srv.URL}, "t-bob", nil), nil },
 	}}
 	now := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	if _, _, err := CheckAccess(s, opt, now); err != nil {
@@ -186,7 +185,7 @@ func TestRefreshInfoFailureAdvancesChecked(t *testing.T) {
 		Host: "github.com", Owner: "org-a", Name: "x", AccountID: "github.com/u0", AccountName: "me",
 		Client: func() (*github.Client, error) {
 			calls.Add(1)
-			return github.New(config.Host{API: srv.URL}, "t", nil), nil
+			return github.New(github.Options{API: srv.URL}, "t", nil), nil
 		},
 	}
 	res, err := Run(c.stores[0], opt)

@@ -5,8 +5,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/kukv/hedgehug/internal/app/storage/config"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -21,7 +19,7 @@ func TestPlainHTTPAPIGetsNoRequest(t *testing.T) {
 		called = true
 		return nil, http.ErrNotSupported
 	})}
-	_, err := New(config.Host{API: "http://ghe.example.com/api/v3"}, "secret", hc).UserRepos()
+	_, err := New(Options{API: "http://ghe.example.com/api/v3"}, "secret", hc).UserRepos()
 	if err == nil || !strings.Contains(err.Error(), "plain http") {
 		t.Errorf("err = %v", err)
 	}
@@ -39,7 +37,7 @@ func TestLoopbackHTTPAPIWorks(t *testing.T) {
 		_, _ = w.Write([]byte(`[]`))
 	}))
 	defer srv.Close()
-	if _, err := New(config.Host{API: srv.URL}, "secret", nil).UserRepos(); err != nil {
+	if _, err := New(Options{API: srv.URL}, "secret", nil).UserRepos(); err != nil {
 		t.Fatal(err)
 	}
 	if got != "Bearer secret" {
