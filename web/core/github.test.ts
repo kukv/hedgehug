@@ -7,15 +7,19 @@ import {
   fetchTimes,
   fullRepo,
   type GitHubRepo,
+  installUrl,
   issueState,
   type Link,
   linkArg,
   linkUrl,
+  type MissingApp,
+  missingByOwner,
   parseApplied,
   parseRejected,
   prChip,
   prState,
   type Rule,
+  rateLine,
   repoLabel,
   repoOf,
   reviewLabel,
@@ -225,5 +229,40 @@ describe("the times of the reads", () => {
     expect(slowedText(undefined, now)).toBeNull();
     expect(slowedText(at(-1), now)).toBeNull();
     expect(slowedText(at(30), now)).toBe("取得を 15 分おきに延ばしています · 12:30 に回復");
+  });
+});
+
+describe("the reads as the settings show them", () => {
+  const repo = (over: Partial<GitHubRepo>): GitHubRepo => ({
+    store: "shared",
+    repo: "github.com/org-b/ops",
+    warnings: [],
+    limit: 0,
+    remaining: 0,
+    app_missing: false,
+    ...over,
+  });
+
+  it("gives the rate limit of the repository with the least left", () => {
+    expect(rateLine([repo({})])).toBeNull();
+    expect(
+      rateLine([repo({ limit: 5000, remaining: 4900 }), repo({ limit: 5000, remaining: 4812 })]),
+    ).toBe("レート制限 4,812 / 5,000");
+  });
+
+  it("groups what an account cannot read by owner", () => {
+    const all = [
+      repo({ account: "work", app_missing: true }),
+      repo({ store: "me", account: "work", app_missing: true }),
+      repo({ account: "work", app_missing: true, repo: "github.com/org-b/api" }),
+      repo({ account: "me", app_missing: true }),
+      repo({ account: "work", repo: "github.com/org-a/web" }),
+    ];
+    const [m, ...rest] = missingByOwner(all, "work");
+    expect(rest).toEqual([]);
+    expect(m).toEqual({ host: "github.com", owner: "org-b", repos: ["org-b/ops", "org-b/api"] });
+    expect(installUrl(m as MissingApp)).toBe(
+      "https://github.com/organizations/org-b/settings/installations",
+    );
   });
 });

@@ -26,6 +26,7 @@
   import Dialog from "../ui/Dialog.svelte";
   import FormError from "../ui/FormError.svelte";
   import ConstraintEditor from "./ConstraintEditor.svelte";
+  import ProjectAutomations from "./ProjectAutomations.svelte";
   import ProjectViolations from "./ProjectViolations.svelte";
 
   // The settings of a project: which statuses it shows and what its workflow adds to the Store's.
@@ -272,6 +273,8 @@
         onchange={(required) => (draft = { ...draft, required })}
       />
     </section>
+
+    <ProjectAutomations {store} {schema} {project} {off} />
 
     <ProjectViolations {ulid} {store} />
 

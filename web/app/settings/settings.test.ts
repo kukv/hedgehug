@@ -77,13 +77,32 @@ describe("SettingsNav", () => {
     expect(getByRole("heading", { name: "設定" })).toBeTruthy();
   });
 
-  it("まだない画面の項目（自動化・テンプレート）は出さず、アカウントとマウント中の Store は出す", () => {
+  it("まだない画面の項目（テンプレート）は出さず、アカウントとマウント中の Store は出す", () => {
     const { queryByText, getByRole } = renderWithCore(SettingsNav, { page }, core(["shared"]));
-    for (const t of ["自動化", "テンプレート"]) {
-      expect(queryByText(new RegExp(t))).toBeNull();
-    }
+    expect(queryByText(/テンプレート/)).toBeNull();
     expect(getByRole("link", { name: /アカウントと認証/ })).toBeTruthy();
     expect(getByRole("link", { name: /マウント中の Store/ })).toBeTruthy();
+  });
+
+  it("自動化と GitHub は Store の項目で、今のページを示す", () => {
+    const { getByRole } = renderWithCore(
+      SettingsNav,
+      { page: { page: "automations", store: "shared" } },
+      core(["shared"]),
+    );
+    const item = getByRole("link", { name: /自動化と GitHub/ });
+    expect(item.getAttribute("href")).toBe("/settings/automations/shared");
+    expect(item.getAttribute("aria-current")).toBe("page");
+  });
+
+  it("GitHub App が入っていない repo の数をアカウントの項目に出す", () => {
+    const sync = new Map([
+      ["shared", { github: { app_missing: 2 } }],
+      ["me", {}],
+    ]);
+    const conn = { sync, subscribe: () => () => {} };
+    const { getByTitle } = renderWithCore(SettingsNav, { page }, { ...core(["shared"]), conn });
+    expect(getByTitle("GitHub App の警告 2 件").textContent).toContain("2");
   });
 
   it("「このマシン」の段はアカウントと認証・マウント中の Store・同期と保守の順で、バッジを付けない", () => {

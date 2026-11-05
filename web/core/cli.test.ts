@@ -4,10 +4,14 @@ import {
   cliAuthAdd,
   cliAuthLogin,
   cliAuthLogout,
+  cliAutomationAdd,
+  cliAutomationFields,
+  cliAutomationRm,
   cliComment,
   cliDoctor,
   cliGhImport,
   cliInbox,
+  cliIssue,
   cliLink,
   cliLog,
   cliLs,
@@ -426,6 +430,38 @@ describe("cliMvStore", () => {
   it("writes a placeholder while the destination is not chosen", () => {
     expect(cliMvStore({ id: "API-3", to: new Placeholder("Store") })).toBe(
       "hh mv API-3 --store <Store> --yes",
+    );
+  });
+});
+
+describe("the commands of phase 5d-3", () => {
+  it("writes where issues are taken in", () => {
+    expect(cliGhImport({ repo: "org-a/web", label: "v2", workspace: "dev" })).toBe(
+      "hh gh import org-a/web --label v2 --workspace dev",
+    );
+  });
+
+  it("writes hh issue with and without a repository", () => {
+    expect(cliIssue("REL-1")).toBe("hh issue REL-1");
+    expect(cliIssue("REL-1", "org-a/web")).toBe("hh issue REL-1 --repo org-a/web");
+  });
+
+  it("writes hh automation add, rm and fields", () => {
+    expect(
+      cliAutomationAdd({
+        id: "r1",
+        on: "pr.merged",
+        category: "done",
+        when: "all_linked_prs_merged",
+        project: "REL-1",
+        store: "shared",
+      }),
+    ).toBe(
+      "hh automation add --id r1 --on pr.merged --category done --when all_linked_prs_merged --project REL-1 --store shared",
+    );
+    expect(cliAutomationRm("r1")).toBe("hh automation rm r1");
+    expect(cliAutomationFields({ push: ["title", "body"], prop: "milestone=target" })).toBe(
+      "hh automation fields --push title,body --prop milestone=target",
     );
   });
 });

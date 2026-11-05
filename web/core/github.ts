@@ -8,6 +8,7 @@ export type Link = Schemas["LinkView"];
 export type GitHubRepo = Schemas["GitHubRepoView"];
 export type Rule = Schemas["RuleView"];
 export type IssueFields = Schemas["FieldsView"];
+export type RuleStat = Schemas["RuleStat"];
 
 export type PrTone = "open" | "draft" | "merged" | "fail" | "changes" | "closed" | "unread";
 export type PrState = { text: string; tone: PrTone };
@@ -220,6 +221,36 @@ export function fetchLine(t: FetchTimes, now: Date): string {
 // The reads of a repository are every 5 minutes, and three times that while the rate limit is low
 // (internal/app/storage/ghstate); the API gives the time of the recovery, not the interval.
 const SLOWED_MINUTES = 15;
+
+/** レート制限 4,812 / 5,000 of the repository with the least left; null before the first read. */
+export function rateLine(all: readonly GitHubRepo[]): string | null {
+  const read = all.filter((r) => r.limit > 0);
+  if (read.length === 0) return null;
+  const least = read.reduce((a, b) => (b.remaining < a.remaining ? b : a));
+  const n = (v: number) => v.toLocaleString("en-US");
+  return `レート制限 ${n(least.remaining)} / ${n(least.limit)}`;
+}
+
+/** The repositories an account cannot read for want of the GitHub App, by their owner. */
+export type MissingApp = { host: string; owner: string; repos: string[] };
+
+export function missingByOwner(all: readonly GitHubRepo[], account: string): MissingApp[] {
+  const out = new Map<string, MissingApp>();
+  for (const r of all) {
+    if (!r.app_missing || r.account !== account) continue;
+    const [host = "", owner = ""] = r.repo.split("/");
+    const key = `${host}/${owner}`;
+    const m = out.get(key) ?? { host, owner, repos: [] };
+    const label = repoLabel(r.repo);
+    if (!m.repos.includes(label)) m.repos.push(label);
+    out.set(key, m);
+  }
+  return [...out.values()];
+}
+
+/** Where an administrator of an organization manages its GitHub Apps. The App's own page takes its slug, which nothing here knows. */
+export const installUrl = (m: MissingApp): string =>
+  `https://${m.host}/organizations/${m.owner}/settings/installations`;
 
 /** The band of a rate limit, or null when the reads are not held back. */
 export function slowedText(until: string | undefined, now: Date): string | null {

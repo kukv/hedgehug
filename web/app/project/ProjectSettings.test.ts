@@ -65,7 +65,9 @@ function setup(opts: Opts = {}) {
   // reading the schema again after a write of ours: the cache tells what the Store holds now
   const reload = vi.fn(async () => cache.emit());
   const api = {
-    GET: vi.fn(() => ok({ tasks: state.violations })),
+    GET: vi.fn((path: string) =>
+      ok(path === "/api/automations" ? [] : { tasks: state.violations }),
+    ),
     PUT: vi.fn((_path: string, init: { body: Record<string, unknown> }) => {
       const b = init.body as {
         statuses?: string[];
@@ -396,11 +398,10 @@ describe("ProjectSettings", () => {
     ).toBeTruthy();
   });
 
-  it("makes no templates, automations or last-changed date", async () => {
+  it("makes no templates or last-changed date", async () => {
     setup();
     await screen.findByRole("group", { name: "表示するステータス" });
     expect(screen.queryByText(/テンプレート/)).toBeNull();
-    expect(screen.queryByText(/自動化/)).toBeNull();
     expect(screen.queryByText(/最終更新/)).toBeNull();
   });
 

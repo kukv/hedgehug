@@ -1,5 +1,5 @@
 import { unwrap } from "../core/api/client";
-import type { GitHubRepo, IssueFields, Rule } from "../core/github";
+import type { GitHubRepo, IssueFields, Rule, RuleStat } from "../core/github";
 import { core } from "./context";
 import { useSubscribe } from "./svelte-store";
 
@@ -63,6 +63,24 @@ export function useGitHubRepos(store: () => string | undefined): {
   };
 }
 
+/** The reads of the repositories of every Store. */
+export function useAllGitHubRepos(): { readonly current: GitHubRepo[] } {
+  const c = core();
+  const sync = useSubscribe(c.conn, () => JSON.stringify([...c.conn.sync.values()]));
+  const r = useRead(
+    () => {
+      void sync.current;
+      return "all";
+    },
+    async () => (await unwrap(c.api.GET("/api/github"))) ?? [],
+  );
+  return {
+    get current() {
+      return r.current ?? [];
+    },
+  };
+}
+
 // Reads again when the file of the rules of the Store changes.
 function followRules(store: () => string | undefined, reload: () => void): void {
   const c = core();
@@ -111,4 +129,25 @@ export function useIssueFields(store: () => string | undefined): {
   );
   followRules(store, r.reload);
   return r;
+}
+
+/** What the rules of a Store did in the last 7 days. It is counted from the history, so a sync reads it again. */
+export function useRuleStats(store: () => string): { readonly current: RuleStat[] } {
+  const c = core();
+  const sync = useSubscribe(c.conn, () => c.conn.sync.get(store()));
+  const r = useRead(
+    () => {
+      void sync.current;
+      return store();
+    },
+    async (s) =>
+      (await unwrap(c.api.GET("/api/automations/stats", { params: { query: { store: s } } }))) ??
+      [],
+  );
+  followRules(store, r.reload);
+  return {
+    get current() {
+      return r.current ?? [];
+    },
+  };
 }
