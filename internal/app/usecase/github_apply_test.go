@@ -87,7 +87,10 @@ func TestApplyIssueKeepsSynced(t *testing.T) {
 
 func TestTasksOfPull(t *testing.T) {
 	t.Parallel()
-	const u = "01JBZ8K3QW7M2X9V4T6R5N8P0A"
+	const (
+		u = "01JBZ8K3QW7M2X9V4T6R5N8P0A"
+		v = "01JBZ8K3QW7M2X9V4T6R5N8P0B"
+	)
 	for name, c := range map[string]struct {
 		p    github.Pull
 		want []string
@@ -105,6 +108,14 @@ func TestTasksOfPull(t *testing.T) {
 		"id twice":   {github.Pull{Title: "WEB-7", Body: "WEB-7, (WEB-8)"}, []string{"WEB-7", "WEB-8"}},
 		"prefix":     {github.Pull{Head: "hh/WEB-42x"}, nil},
 		"id range":   {github.Pull{Body: "WEB-1-2 WEB-3"}, []string{"WEB-3"}},
+		// hh pr ends the body with the mark of its task: what the title and the
+		// body say above it is the text of the task.
+		"last line":         {github.Pull{Title: "WEB-1", Body: "WEB-2 hh:" + v + "\n\nhedgehug:" + u}, []string{u}},
+		"last line, spaces": {github.Pull{Title: "WEB-1", Body: "WEB-2\r\n\r\nhedgehug:" + u + " \r\n\n"}, []string{u}},
+		"last line, others": {github.Pull{Head: "hh/WEB-42-a", Body: "WEB-2\n\nhedgehug:" + u, Comments: []string{"WEB-3 hh:" + v}}, []string{"WEB-42", u, v, "WEB-3"}},
+		"last line is text": {github.Pull{Title: "WEB-1", Body: "hedgehug:" + u + "\n\nWEB-2"}, []string{"WEB-1", u, "WEB-2"}},
+		"mark in a line":    {github.Pull{Body: "WEB-2\nsee hedgehug:" + u}, []string{u, "WEB-2"}},
+		"short mark last":   {github.Pull{Body: "WEB-2\nhh:" + u}, []string{u, "WEB-2"}},
 	} {
 		got := mentioned(c.p, []string{"WEB"})
 		if len(got) != len(c.want) {

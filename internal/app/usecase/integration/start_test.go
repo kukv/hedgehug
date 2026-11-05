@@ -66,6 +66,34 @@ func addBranch(t *testing.T, dir, name string) {
 	}
 }
 
+// switchTo moves HEAD to the branch name, and leaves the files.
+func switchTo(t *testing.T, dir, name string) {
+	t.Helper()
+	r, err := git.PlainOpen(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Storer.SetReference(plumbing.NewSymbolicReference(plumbing.HEAD, plumbing.NewBranchReferenceName(name))); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// detach points HEAD at the commit it is on.
+func detach(t *testing.T, dir string) {
+	t.Helper()
+	r, err := git.PlainOpen(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err := r.Head()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Storer.SetReference(plumbing.NewHashReference(plumbing.HEAD, head.Hash())); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func hasBranch(t *testing.T, dir, name string) bool {
 	t.Helper()
 	r, err := git.PlainOpen(dir)
@@ -187,6 +215,50 @@ func TestStartFindsTheBranchOfAnEarlierTitle(t *testing.T) {
 	}
 	if hasBranch(t, dir, "hh/ME-1-new-title") {
 		t.Error("a second branch was made")
+	}
+}
+
+// A prefix that changed leaves the task with a branch of its former id; an id
+// in other letters is the same id, as the fetch reads a branch.
+func TestStartFindsTheBranchOfAFormerID(t *testing.T) {
+	t.Parallel()
+	for _, branch := range []string{"hh/OLD-1-a", "hh/old-1-a", "hh/me-1-a"} {
+		ts := usecasetest.New(t)
+		ts.AddTask("a", func(x *model.Task) { x.FormerIDs = []string{"OLD-1"} })
+		dir := codeRepo(t)
+		addBranch(t, dir, branch)
+		r, err := integration.Start(ts.Session, "ME-1", dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.Branch != branch || r.Created || !r.Switch {
+			t.Errorf("%s: result = %+v", branch, r)
+		}
+	}
+}
+
+func TestStartOnADetachedHead(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.AddTask("a", nil)
+	ts.AddTask("b", nil)
+	dir := codeRepo(t)
+	detach(t, dir)
+	r, err := integration.Start(ts.Session, "ME-1", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.Created || r.Switch || branchAt(t, dir) != "refs/heads/hh/ME-1-a" {
+		t.Errorf("no branch yet: result = %+v, HEAD = %s", r, branchAt(t, dir))
+	}
+	addBranch(t, dir, "hh/ME-2-b")
+	detach(t, dir)
+	r, err = integration.Start(ts.Session, "ME-2", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Created || !r.Switch || r.Branch != "hh/ME-2-b" {
+		t.Errorf("a branch there: result = %+v", r)
 	}
 }
 

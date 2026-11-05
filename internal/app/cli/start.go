@@ -8,13 +8,22 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase/integration"
 )
 
+// workdir is the current directory, for the commands that cannot do without
+// one.
+func (a *app) workdir() (string, error) {
+	if a.getwd == nil {
+		return "", usageErrorf("this command needs a current directory")
+	}
+	return a.getwd()
+}
+
 func (a *app) startCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "start <id>",
 		Short: "Start a task: make its branch, assign it to you and move it to doing",
 		Args:  exactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			dir, err := a.getwd()
+			dir, err := a.workdir()
 			if err != nil {
 				return err
 			}

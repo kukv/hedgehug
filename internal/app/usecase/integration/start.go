@@ -64,11 +64,22 @@ func branchOf(e *index.Entry) string {
 	return "hh/" + e.ID
 }
 
-// ofTask reports whether the branch name is of the task id: a title that
-// changed leaves the task with a branch of its old slug.
-func ofTask(id string) func(string) bool {
+// ofTask reports whether the branch name is of the task e. A title that
+// changed leaves the task with a branch of its old slug, and a prefix that
+// changed with one of a former id. Ids compare without case, as they do when
+// a task is resolved.
+func ofTask(e *index.Entry) func(string) bool {
+	ids := append([]string{e.ID}, e.FormerIDs...)
 	return func(name string) bool {
-		return name == "hh/"+id || strings.HasPrefix(name, "hh/"+id+"-")
+		rest, ok := strings.CutPrefix(name, "hh/")
+		if !ok {
+			return false
+		}
+		rest = strings.ToLower(rest)
+		return slices.ContainsFunc(ids, func(id string) bool {
+			id = strings.ToLower(id)
+			return rest == id || strings.HasPrefix(rest, id+"-")
+		})
 	}
 }
 
@@ -89,7 +100,7 @@ func startBranch(code *gitrepo.Code, e *index.Entry) (name string, created, sw b
 	if err != nil {
 		return "", false, false, err
 	}
-	have, err := code.Branches(ofTask(e.ID))
+	have, err := code.Branches(ofTask(e))
 	if err != nil {
 		return "", false, false, err
 	}

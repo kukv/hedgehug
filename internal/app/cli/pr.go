@@ -15,7 +15,7 @@ func (a *app) prCmd() *cobra.Command {
 		Short: "Push the branch of a task, open its pull request and link it",
 		Args:  exactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			dir, err := a.getwd()
+			dir, err := a.workdir()
 			if err != nil {
 				return err
 			}

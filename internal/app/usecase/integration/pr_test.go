@@ -23,9 +23,11 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/integration"
+	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 	"github.com/kukv/hedgehug/internal/lib/fakegh"
 	"github.com/kukv/hedgehug/internal/lib/gitrepo/gitrepotest"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 const originURL = "https://github.com/org-a/web.git"
@@ -219,6 +221,110 @@ func TestPullRequestLinksTheOneThatIsOpen(t *testing.T) {
 	}
 }
 
+// The text of the task goes into the pull request, and what it says of other
+// tasks does not link them, or fire a rule on them.
+func TestPullRequestLinksOnlyItsTask(t *testing.T) {
+	t.Parallel()
+	x := newPREnv(t, fakegh.Repo{})
+	x.devStore(t)
+	x.ts.AddTask("a", nil)
+	other := x.ts.AddTask("b", nil)
+	third := x.ts.AddTask("c", nil)
+	x.ts.MustEdit("me", "edit", usecasetest.TAuthor, func(tx *usecasetest.Tx) error {
+		y, err := tx.Task(taskOf(t, x.ts.Session).ULID)
+		if err != nil {
+			return err
+		}
+		y.Title = "After ME-3"
+		y.Body = "Needs ME-2.\n\nhedgehug:" + other.ULID.String() + "\n"
+		return tx.PutTask(y)
+	})
+	addBranch(t, x.dir, "hh/ME-1-after-me-3")
+	x.pr(t)
+	for _, u := range []model.ULID{other.ULID, third.ULID} {
+		y := x.ts.TaskByULID("me", u)
+		if len(y.Links) != 0 || y.Status != "todo" {
+			t.Errorf("%s: links %+v, status %s", y.Title, y.Links, y.Status)
+		}
+	}
+	if y := taskOf(t, x.ts.Session); len(y.Links) != 1 || y.Status != "in_progress" {
+		t.Errorf("links %+v, status %s", y.Links, y.Status)
+	}
+}
+
+// A pull request opened by hand has no mark at the end: its ids link.
+func TestPullRequestByHandLinksTheIdsOfItsBody(t *testing.T) {
+	t.Parallel()
+	x := newPREnv(t, fakegh.Repo{})
+	x.ts.AddTask("a", func(y *model.Task) { y.Repos = []string{"github.com/org-a/web"} })
+	if _, err := x.fake.OpenPull("org-a/web", "fix", "Fix", "Closes ME-1", false); err != nil {
+		t.Fatal(err)
+	}
+	c, e, err := x.ts.Entry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := usecase.Fetch(x.ts.Session, c, e); err != nil {
+		t.Fatal(err)
+	}
+	if l := taskOf(t, x.ts.Session).Links; len(l) != 1 {
+		t.Errorf("links = %+v", l)
+	}
+}
+
+// A prefix that changed leaves the task with branches of its former id.
+func TestPullRequestTakesTheBranchOfAFormerID(t *testing.T) {
+	t.Parallel()
+	for _, branch := range []string{"hh/OLD-1-a", "hh/old-1-a", "hh/me-1-a"} {
+		x := newPREnv(t, fakegh.Repo{})
+		x.ts.AddTask("a", func(y *model.Task) { y.FormerIDs = []string{"OLD-1"} })
+		addBranch(t, x.dir, branch)
+		if r := x.pr(t); r.Branch != branch {
+			t.Errorf("branch = %s, want %s", r.Branch, branch)
+		}
+	}
+}
+
+func TestPullRequestOnADetachedHead(t *testing.T) {
+	t.Parallel()
+	x := newPREnv(t, fakegh.Repo{})
+	x.ts.AddTask("a", nil)
+	addBranch(t, x.dir, "hh/ME-1-a")
+	detach(t, x.dir)
+	if r := x.pr(t); r.Branch != "hh/ME-1-a" {
+		t.Errorf("branch = %s", r.Branch)
+	}
+}
+
+func TestPullRequestOnTheBranchOfAnotherTask(t *testing.T) {
+	t.Parallel()
+	x := newPREnv(t, fakegh.Repo{})
+	x.ts.AddTask("a", nil)
+	addBranch(t, x.dir, "hh/ME-12-x")
+	switchTo(t, x.dir, "hh/ME-12-x")
+	_, err := integration.PullRequest(x.ts.Session, "ME-1", integration.PRInput{Dir: x.dir})
+	usecasetest.MustCode(t, err, usecase.KindInvalid, "pr.no_branch")
+	if onBareBranch(t, x.bare, "hh/ME-12-x") {
+		t.Error("the branch of another task was pushed")
+	}
+}
+
+func TestPullRequestWithNoAccount(t *testing.T) {
+	t.Parallel()
+	x := newPREnv(t, fakegh.Repo{})
+	x.ts.AddTask("a", nil)
+	addBranch(t, x.dir, "hh/ME-1-a")
+	x.ts.DropAccounts()
+	x.ts.ForgetWriter()
+	_, err := integration.PullRequest(x.ts.Session, "ME-1", integration.PRInput{Dir: x.dir})
+	if !errors.Is(err, usecase.ErrNoAccounts) {
+		t.Fatalf("err = %v", err)
+	}
+	if onBareBranch(t, x.bare, "hh/ME-1-a") {
+		t.Error("the branch was pushed")
+	}
+}
+
 // hideOpenPulls answers the first look for the open pull requests with none,
 // as if the pull request was opened right after it.
 type hideOpenPulls struct{ looked *atomic.Bool }
@@ -271,13 +377,7 @@ func TestPullRequestUsesTheBranchItIsOn(t *testing.T) {
 	x.ts.AddTask("a", nil)
 	addBranch(t, x.dir, "hh/ME-1-a")
 	addBranch(t, x.dir, "hh/ME-1-b")
-	r, err := git.PlainOpen(x.dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := r.Storer.SetReference(plumbing.NewSymbolicReference(plumbing.HEAD, plumbing.NewBranchReferenceName("hh/ME-1-a"))); err != nil {
-		t.Fatal(err)
-	}
+	switchTo(t, x.dir, "hh/ME-1-a")
 	if got := x.pr(t); got.Branch != "hh/ME-1-a" {
 		t.Errorf("branch = %s", got.Branch)
 	}
@@ -301,7 +401,7 @@ func TestPullRequestWithSeveralBranchesAsks(t *testing.T) {
 	addBranch(t, x.dir, "hh/ME-1-b")
 	_, err := integration.PullRequest(x.ts.Session, "ME-1", integration.PRInput{Dir: x.dir})
 	usecasetest.MustCode(t, err, usecase.KindUsage, "choice.required")
-	if !strings.Contains(err.Error(), "hh/ME-1-a, hh/ME-1-b") {
+	if !strings.Contains(err.Error(), "hh/ME-1-a, hh/ME-1-b") || !strings.Contains(err.Error(), "git switch") {
 		t.Errorf("err = %v", err)
 	}
 }
@@ -497,6 +597,90 @@ func TestPullRequestPushDenied(t *testing.T) {
 
 // What the fetch commits is marked for the background sync as well: the
 // session of the fetch does not start one. Serial: StubSpawn is global.
+// What another member fetched reaches the store before the fetch of hh pr
+// reads the repository: a rule does not fire on it again.
+func TestPullRequestSyncsBeforeItFetches(t *testing.T) {
+	t.Parallel()
+	x := newPREnv(t, fakegh.Repo{})
+	remote := usecasetest.AddBareRemote(t, x.ts)
+	x.devStore(t)
+	x.ts.AddTask("mine", nil)
+	theirs := x.ts.AddTask("theirs", func(t *model.Task) {
+		t.Links = []model.Link{{Type: model.LinkPR, Ref: "github.com/org-a/web/pull/1", Sync: model.SyncMirror}}
+	})
+	n, err := x.fake.OpenPull("org-a/web", "other", "Theirs", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, err := replication.SyncOne(x.ts.Session); err != nil || r.Err != nil {
+		t.Fatalf("sync: %+v, %v", r, err)
+	}
+	if err := x.fake.RequestReview("org-a/web", n); err != nil {
+		t.Fatal(err)
+	}
+	// The other member read the review request and took the task back to
+	// in_progress, by hand, after the rule moved it. Only its sync runs here:
+	// its session has no fake to fetch from.
+	other := usecasetest.Clone(t, x.ts, remote, x.ts.Now())
+	other.MustEdit("me", "gh-fetch", usecasetest.TAuthor, func(tx *usecasetest.Tx) error {
+		y, err := tx.Task(theirs.ULID)
+		if err != nil {
+			return err
+		}
+		if err := y.SetGitHub(model.GitHubState{PRs: []model.PRState{{Ref: "github.com/org-a/web/pull/1", State: "open", Review: "pending"}}}); err != nil {
+			return err
+		}
+		return tx.PutTask(y)
+	})
+	c, e, err := other.Entry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	opt, err := other.SyncOptions(c, e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := other.OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.RunSync(s, opt, true); err != nil {
+		t.Fatal(err)
+	}
+
+	addBranch(t, x.dir, "hh/ME-1-a")
+	if r := x.pr(t); !r.Created || len(r.Warnings) != 0 {
+		t.Fatalf("result = %+v", r)
+	}
+	mine, err := x.ts.OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := mine.Task(theirs.ULID); err != nil || got.Status != "in_progress" {
+		t.Fatalf("status = %+v, %v", got, err)
+	}
+}
+
+// With a sync that fails the fetch would read what it has not caught up with:
+// it is left out, and the pull request stays.
+func TestPullRequestSkipsTheFetchWhenTheSyncFails(t *testing.T) {
+	t.Parallel()
+	x := newPREnv(t, fakegh.Repo{})
+	x.ts.AddTask("a", nil)
+	addBranch(t, x.dir, "hh/ME-1-a")
+	remote := usecasetest.AddBareRemote(t, x.ts)
+	if err := osfs.RemoveAll(remote); err != nil {
+		t.Fatal(err)
+	}
+	r := x.pr(t)
+	if !r.Created || len(r.Warnings) == 0 || !strings.Contains(r.Warnings[0], "sync") {
+		t.Fatalf("result = %+v", r)
+	}
+	if st := taskOf(t, x.ts.Session).GH; st != nil {
+		t.Errorf("gh = %+v: the fetch ran", st)
+	}
+}
+
 func TestPullRequestStartsTheSyncOfTheFetch(t *testing.T) {
 	x := newPREnv(t, fakegh.Repo{})
 	x.ts.AddTask("a", nil)

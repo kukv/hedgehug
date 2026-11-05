@@ -14,6 +14,8 @@ var (
 	branchMark = regexp.MustCompile(`^(?:hh|hedgehug)/([A-Za-z][A-Za-z0-9]*-[0-9]+)(?:-|$)`)
 	ulidMark   = regexp.MustCompile(`\b(?:hedgehug|hh):([0-9A-Za-z]{26})\b`)
 	idMark     = regexp.MustCompile(`(\b[A-Z][A-Z0-9]*-[0-9]+\b)`)
+	// ownMark is the last line of a body hh pr wrote.
+	ownMark = regexp.MustCompile(`^hedgehug:([0-9A-Za-z]{26})$`)
 )
 
 // found returns the last group of the matches of re in text, leaving out a
@@ -31,9 +33,22 @@ func found(re *regexp.Regexp, text string) []string {
 	return out
 }
 
+// markOf is the ULID of the mark on the last line of body, "" when that line
+// is something else.
+func markOf(body string) string {
+	body = strings.TrimSpace(body)
+	line := strings.TrimSpace(body[strings.LastIndexByte(body, '\n')+1:])
+	if m := ownMark.FindStringSubmatch(line); m != nil {
+		return strings.ToUpper(m[1])
+	}
+	return ""
+}
+
 // mentioned returns the ids and ULIDs by which p points at a task: its
 // branch, and in its title, body and comments a mark or an id with one of
-// the prefixes. Each is there once.
+// the prefixes. A body that ends in hedgehug:<ULID> names its task there: the
+// rest of it and the title are the text of that task, which may speak of
+// others, and are not read. Each is there once.
 func mentioned(p github.Pull, prefixes []string) []string {
 	var out []string
 	add := func(s string) {
@@ -44,7 +59,12 @@ func mentioned(p github.Pull, prefixes []string) []string {
 	if m := branchMark.FindStringSubmatch(p.Head); m != nil {
 		add(m[1])
 	}
-	for _, text := range append([]string{p.Title, p.Body}, p.Comments...) {
+	texts := append([]string{p.Title, p.Body}, p.Comments...)
+	if u := markOf(p.Body); u != "" {
+		add(u)
+		texts = p.Comments
+	}
+	for _, text := range texts {
 		for _, u := range found(ulidMark, text) {
 			add(strings.ToUpper(u))
 		}

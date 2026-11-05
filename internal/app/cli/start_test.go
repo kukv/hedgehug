@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,6 +65,22 @@ func TestStartOutsideARepositoryExits1(t *testing.T) {
 	te.dir = t.TempDir()
 	if code, _, errs := te.run("start", "ME-1"); code != 1 || !strings.Contains(errs, "not in a git repository") {
 		t.Errorf("exit %d: %s", code, errs)
+	}
+}
+
+// A run with no current directory has no code repository to work in.
+func TestStartAndPRNeedADirectory(t *testing.T) {
+	t.Parallel()
+	te := newTestEnv(t)
+	te.writeAccounts("github.com", "alice")
+	te.ok("store", "init", "me", "--prefix", "ME")
+	te.ok("add", "a")
+	for _, args := range [][]string{{"start", "ME-1"}, {"pr", "ME-1"}} {
+		var out, errb bytes.Buffer
+		code := run(args, &env{stdin: strings.NewReader(""), stdout: &out, stderr: &errb, getenv: te.getenv, isTerminal: func(any) bool { return false }, now: func() time.Time { return te.now }})
+		if code != 2 || !strings.Contains(errb.String(), "current directory") {
+			t.Errorf("%v: exit %d: %s", args, code, errb.String())
+		}
 	}
 }
 

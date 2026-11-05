@@ -8,6 +8,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
+	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/lib/github"
@@ -78,10 +79,10 @@ func originOf(code *gitrepo.Code) (codeRepo, error) {
 	return codeRepo{id: id, owner: owner, name: name}, nil
 }
 
-// branchToPush is the branch of the task id: the one the developer is on, or
+// branchToPush is the branch of the task e: the one the developer is on, or
 // else the only one there is.
-func branchToPush(code *gitrepo.Code, id string) (string, error) {
-	match := ofTask(id)
+func branchToPush(code *gitrepo.Code, e *index.Entry) (string, error) {
+	match := ofTask(e)
 	cur, on, err := code.Branch()
 	if err != nil {
 		return "", err
@@ -96,11 +97,13 @@ func branchToPush(code *gitrepo.Code, id string) (string, error) {
 	switch len(have) {
 	case 0:
 		return "", usecase.NewErr(usecase.KindInvalid, "pr.no_branch",
-			fmt.Errorf("%s has no branch here; make it with hedgehug start %s", id, id), "id", id)
+			fmt.Errorf("%s has no branch here; make it with hedgehug start %s", e.ID, e.ID), "id", e.ID)
 	case 1:
 		return have[0], nil
 	}
-	return "", usecase.ChoiceRequired("a branch", have)
+	choice := usecase.ChoiceRequired("a branch", have)
+	choice.Err = fmt.Errorf("%s has several branches: %s; git switch to one and run this again", e.ID, strings.Join(have, ", "))
+	return "", choice
 }
 
 func push(code *gitrepo.Code, branch string, conn gitrepo.Conn) error {
@@ -177,12 +180,18 @@ func PullRequest(ss *usecase.Session, arg string, in PRInput) (PRResult, error) 
 	if err := usecase.NotDeleted(ix, e); err != nil {
 		return PRResult{}, err
 	}
+	// The link needs a writer: find out before anything goes to GitHub.
+	if _, ok, err := ss.Writer(); err != nil {
+		return PRResult{}, err
+	} else if !ok {
+		return PRResult{}, usecase.ErrNoAccounts
+	}
 	code, err := openCode(in.Dir)
 	if err != nil {
 		return PRResult{}, err
 	}
 	defer func() { _ = code.Close() }()
-	branch, err := branchToPush(code, e.ID)
+	branch, err := branchToPush(code, e)
 	if err != nil {
 		return PRResult{}, err
 	}
@@ -224,6 +233,18 @@ func PullRequest(ss *usecase.Session, arg string, in PRInput) (PRResult, error) 
 		return PRResult{}, err
 	}
 	out := PRResult{TaskResult: tr, Ref: ref, Branch: branch, Created: created}
+	// As in a sync, what another member fetched comes first: the fetch reads
+	// every task with a link to the repository, not only this one.
+	if len(se.Remotes) > 0 {
+		opt, err := ss.SyncOptions(c, se)
+		if err == nil {
+			_, err = ss.RunSync(s, opt, true)
+		}
+		if err != nil {
+			out.Warnings = append(out.Warnings, "the sync before reading GitHub failed, so it is not read: "+err.Error())
+			return out, nil
+		}
+	}
 	rep, err := usecase.FetchRepo(ss, c, se, repo.id)
 	if err != nil {
 		out.Warnings = append(out.Warnings, err.Error())
