@@ -584,7 +584,7 @@ func mergeTrees(r *gitrepo.Repo, open historyOpener, base, ours, theirs plumbing
 		Author:   keepError(&authorErr, mergeAuthor(r, open, base, ours, theirs)),
 		Now:      opt.Now().Truncate(time.Second),
 	})
-	if err = errors.Join(err, authorErr); err != nil {
+	if err = errors.Join(err, authorErr, snap.err, baseSnap.err); err != nil {
 		return nil, err
 	}
 	maps.Copy(files, fixed)
@@ -863,7 +863,7 @@ func repairHead(s *store.Store, ix *index.Index, opt Options, res *Result) error
 			Author:   keepError(&authorErr, headAuthor(s.Repo(), historyOf(s), head)),
 			Now:      opt.Now().Truncate(time.Second),
 		})
-		if err = errors.Join(err, authorErr); err != nil {
+		if err = errors.Join(err, authorErr, snap.err); err != nil {
 			return err
 		}
 		if len(fixed) == 0 {
@@ -1050,6 +1050,7 @@ type snapshot struct {
 	tree  plumbing.Hash
 	over  map[string][]byte
 	paths []string // sorted
+	err   error    // the first failure of Read other than a missing file
 }
 
 func newSnapshot(r *gitrepo.Repo, tree plumbing.Hash, prefix string, over map[string][]byte) (*snapshot, error) {
@@ -1081,12 +1082,18 @@ func (s *snapshot) Paths(prefix string) []string {
 	return out
 }
 
+// Read returns the file at p, nil when there is none. A file that exists but
+// cannot be read is nil too, and is kept in s.err: merge.Repair cannot take
+// the error, so its caller must look at s.err before it uses the result.
 func (s *snapshot) Read(p string) []byte {
 	if d, ok := s.over[p]; ok {
 		return d
 	}
 	b, err := s.r.ReadFile(s.tree, p)
 	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) && s.err == nil {
+			s.err = err
+		}
 		return nil
 	}
 	return b
