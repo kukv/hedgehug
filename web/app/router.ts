@@ -11,8 +11,10 @@ export type WorkspaceTab =
   | "backlog"
   | "sprints"
   | "releases"
+  | "gantt"
+  | "reports"
   | "settings";
-export type ProjectTab = "overview" | "tree" | "kanban" | "table" | "settings";
+export type ProjectTab = "overview" | "tree" | "kanban" | "table" | "gantt" | "settings";
 // "general", "accounts" and "stores" are of this machine and names no Store; the pages of a Store carry it.
 // The first tab of each is the one without ?tab=.
 export const SCHEMA_TABS = ["statuses", "kinds", "props", "workflow", "templates"] as const;
@@ -48,10 +50,19 @@ const WORKSPACE_TABS: readonly string[] = [
   "backlog",
   "sprints",
   "releases",
+  "gantt",
+  "reports",
   "settings",
 ];
-const PROJECT_TABS: readonly string[] = ["overview", "tree", "kanban", "table", "settings"];
-const LAYOUTS: readonly string[] = ["tree", "kanban", "table"];
+const PROJECT_TABS: readonly string[] = [
+  "overview",
+  "tree",
+  "kanban",
+  "table",
+  "gantt",
+  "settings",
+];
+const LAYOUTS: readonly string[] = ["tree", "kanban", "table", "gantt"];
 
 function decode(s: string): string {
   try {

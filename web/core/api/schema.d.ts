@@ -2236,6 +2236,11 @@ export interface components {
             status?: string;
             when?: string;
         };
+        SavedGantt: {
+            end: string;
+            roadmap: boolean;
+            start: string;
+        };
         SavedKanban: {
             columns: string;
             swimlane: string;
@@ -2248,6 +2253,7 @@ export interface components {
             group_by: string;
         };
         SavedView: {
+            gantt: components["schemas"]["SavedGantt"];
             kanban: components["schemas"]["SavedKanban"];
             layout: string;
             name: string;
@@ -2694,6 +2700,12 @@ export interface components {
         ViewPatchInputBody: {
             /** @description The columns of the table */
             columns?: string[];
+            /** @description The date property the bars end on */
+            gantt_end?: string;
+            /** @description Show the kinds of the container role only */
+            gantt_roadmap?: boolean;
+            /** @description The date property the bars start on */
+            gantt_start?: string;
             group_by?: string;
             kanban_columns?: string;
             /** @description The limit of each column, by its name; replaces the limits, and an empty object takes them off */
@@ -2701,7 +2713,7 @@ export interface components {
                 [key: string]: number;
             };
             /** @enum {string} */
-            layout?: "tree" | "table" | "kanban";
+            layout?: "tree" | "table" | "kanban" | "gantt";
             /** @description The new name; a rename cannot come with settings */
             name?: string;
             query?: string;
@@ -2710,6 +2722,12 @@ export interface components {
         ViewSaveInputBody: {
             /** @description The columns of the table */
             columns?: string[];
+            /** @description The date property the bars end on */
+            gantt_end?: string;
+            /** @description Show the kinds of the container role only */
+            gantt_roadmap?: boolean;
+            /** @description The date property the bars start on */
+            gantt_start?: string;
             group_by?: string;
             kanban_columns?: string;
             /** @description The limit of each column, by its name; replaces the limits, and an empty object takes them off */
@@ -2717,7 +2735,7 @@ export interface components {
                 [key: string]: number;
             };
             /** @enum {string} */
-            layout?: "tree" | "table" | "kanban";
+            layout?: "tree" | "table" | "kanban" | "gantt";
             query?: string;
             swimlane?: string;
         };

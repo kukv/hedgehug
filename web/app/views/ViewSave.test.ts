@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { cliViewSave } from "../../core/cli";
-import { DEFAULT_KANBAN, saveBodyOf, type ViewDraft } from "../../core/views";
+import { DEFAULT_GANTT, DEFAULT_KANBAN, saveBodyOf, type ViewDraft } from "../../core/views";
 import { resetToasts, toasts } from "../toast.svelte";
 import { makeViews, mountWithViews, viewEntry } from "./testkit";
 import ViewSave from "./ViewSave.svelte";
@@ -10,6 +10,7 @@ const table: ViewDraft = {
   layout: "table",
   query: "workspace:release -status:canceled",
   kanban: DEFAULT_KANBAN,
+  gantt: DEFAULT_GANTT,
   table: { columns: ["id", "title", "status"], groupBy: "parent" },
 };
 
@@ -164,7 +165,7 @@ describe("ViewSave", () => {
     setup({ draft: { ...table, layout: "tree", query: "kind:task sort:updated" } });
     await typeName("weekly");
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "ツリーのビューは rank の順に並ぶため、group: と sort: は使えません",
+      "ツリーとガントのビューは rank の順に並ぶため、group: と sort: は使えません",
     );
     expect(screen.getByRole("button", { name: "保存" })).toBeDisabled();
   });

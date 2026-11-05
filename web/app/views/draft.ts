@@ -1,8 +1,10 @@
 import { ApiError } from "../../core/api/client";
 import { errorMessage } from "../../core/messages";
 import {
+  DEFAULT_GANTT,
   DEFAULT_KANBAN,
   DEFAULT_TABLE,
+  type GanttSettings,
   type KanbanSettings,
   type TableSettings,
   type ViewDraft,
@@ -15,6 +17,7 @@ export const LAYOUTS: { layout: Layout; label: string }[] = [
   { layout: "tree", label: "ツリー" },
   { layout: "kanban", label: "カンバン" },
   { layout: "table", label: "テーブル" },
+  { layout: "gantt", label: "ガント" },
 ];
 
 const KANBAN_COLUMNS: Record<KanbanSettings["columns"], string> = {
@@ -42,6 +45,9 @@ export function summaryOf(d: ViewDraft): string {
   if (d.layout === "table") {
     return `テーブル · 列 ${d.table.columns.length} · グループ: ${GROUPS[d.table.groupBy]}`;
   }
+  if (d.layout === "gantt") {
+    return `ガント · バー: ${d.gantt.start} → ${d.gantt.end}${d.gantt.roadmap ? " · ロードマップ" : ""}`;
+  }
   return "ツリー";
 }
 
@@ -56,11 +62,11 @@ export function sameViewName(a: string, b: string): boolean {
 const TREE_ORDER = new ApiError({ status: 400, type: "view.tree_order" });
 
 /**
- * Why a tree view cannot keep this query (細部 54): the tree follows rank, so the server refuses a
+ * Why a tree or gantt view cannot keep this query (細部 54): both follow rank, so the server refuses a
  * sort: or a group: in it (view.tree_order). Null when nothing is wrong.
  */
 export function treeOrderProblem(d: Pick<ViewDraft, "layout" | "query">): string | null {
-  if (d.layout !== "tree") return null;
+  if (d.layout !== "tree" && d.layout !== "gantt") return null;
   return splitTerms(d.query).some((t) => /^(sort|group):/.test(t))
     ? errorMessage(TREE_ORDER)
     : null;
@@ -72,11 +78,13 @@ export function newDraft(i: {
   query: string;
   kanban?: KanbanSettings;
   table?: TableSettings;
+  gantt?: GanttSettings;
 }): ViewDraft {
   return {
     layout: i.layout,
     query: i.query,
     kanban: i.kanban ?? DEFAULT_KANBAN,
     table: i.table ?? DEFAULT_TABLE,
+    gantt: i.gantt ?? DEFAULT_GANTT,
   };
 }

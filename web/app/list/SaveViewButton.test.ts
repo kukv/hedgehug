@@ -1,6 +1,6 @@
 import { fireEvent, screen } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_KANBAN, DEFAULT_TABLE } from "../../core/views";
+import { DEFAULT_GANTT, DEFAULT_KANBAN, DEFAULT_TABLE } from "../../core/views";
 import { closeViewDialog, viewDialog } from "../views/dialogs-state.svelte";
 import { mountWithViews } from "../views/testkit";
 import SaveViewButton from "./SaveViewButton.svelte";
@@ -34,6 +34,7 @@ describe("SaveViewButton", () => {
         query: "workspace:release -status:canceled",
         kanban: DEFAULT_KANBAN,
         table: DEFAULT_TABLE,
+        gantt: DEFAULT_GANTT,
       },
       store: "shared",
     });

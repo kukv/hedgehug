@@ -19,6 +19,11 @@ import {
   cliMvStore,
   cliPr,
   cliPurge,
+  cliReportBurndown,
+  cliReportCfd,
+  cliReportCycle,
+  cliReportEstimate,
+  cliReportVelocity,
   cliRestore,
   cliRestoreAt,
   cliRm,
@@ -462,6 +467,43 @@ describe("the commands of phase 5d-3", () => {
     expect(cliAutomationRm("r1")).toBe("hh automation rm r1");
     expect(cliAutomationFields({ push: ["title", "body"], prop: "milestone=target" })).toBe(
       "hh automation fields --push title,body --prop milestone=target",
+    );
+  });
+});
+
+describe("the gantt of a view", () => {
+  it("writes its flags", () => {
+    expect(
+      cliViewSave({
+        name: "plan",
+        body: { layout: "gantt", gantt_start: "start", gantt_end: "due", gantt_roadmap: true },
+      }),
+    ).toBe("hh view save plan --layout gantt --gantt-start start --gantt-end due --roadmap");
+    expect(cliViewSave({ name: "plan", body: { gantt_roadmap: false } })).toBe(
+      "hh view save plan --roadmap=false",
+    );
+  });
+});
+
+describe("hh report", () => {
+  const where = { workspace: "main", store: "shared" };
+
+  it("names what the screen shows", () => {
+    expect(cliReportBurndown({ ...where, sprint: "Sprint 1", by: "count" })).toBe(
+      'hh report burndown "Sprint 1" --by count --workspace main --store shared',
+    );
+    expect(cliReportVelocity({ ...where, last: 5 })).toBe(
+      "hh report velocity --last 5 --workspace main --store shared",
+    );
+    expect(cliReportCfd({ ...where, since: "2026-10-01", until: "2026-10-31", by: "status" })).toBe(
+      "hh report cfd --since 2026-10-01 --until 2026-10-31 --by status --workspace main --store shared",
+    );
+    expect(cliReportCycle({ ...where, since: "2026-10-01", until: "2026-10-31" })).toBe(
+      "hh report cycle --since 2026-10-01 --until 2026-10-31 --workspace main --store shared",
+    );
+    expect(cliReportEstimate(where)).toBe("hh report estimate --workspace main --store shared");
+    expect(cliReportEstimate({ ...where, sprint: "S1" })).toBe(
+      "hh report estimate --sprint S1 --workspace main --store shared",
     );
   });
 });

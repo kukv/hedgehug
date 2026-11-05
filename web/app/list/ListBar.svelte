@@ -38,8 +38,10 @@
     flex-wrap: wrap;
     align-items: flex-start;
   }
+  /* Wide enough for the fixed part, the field, the count and some of the command; with less, the
+     switches go to the next line. */
   .filter {
-    flex: 1 1 20rem;
+    flex: 1 1 36rem;
     min-width: 0;
   }
   /* The bar has its own gutter at both ends; the side takes the right one. */
@@ -53,7 +55,7 @@
     align-items: center;
     gap: 0.75rem;
     min-height: 2.25rem;
-    margin: 0.75rem 1.75rem 0 0;
+    margin: 0.75rem 1.75rem 0;
   }
   .controls,
   .actions {

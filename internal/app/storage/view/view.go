@@ -12,7 +12,7 @@ import (
 
 // The values each setting takes.
 var (
-	Layouts             = []string{"tree", "kanban", "table"}
+	Layouts             = []string{"tree", "kanban", "table", "gantt"}
 	GroupBys            = []string{"none", "parent", "status", "assignee", "project"}
 	KanbanColumnsValues = []string{"status", "category"}
 	Swimlanes           = []string{"none", "assignee", "project"}
@@ -27,6 +27,8 @@ const (
 	DefaultGroupBy       = "none"
 	DefaultKanbanColumns = "status"
 	DefaultSwimlane      = "none"
+	DefaultGanttStart    = "start"
+	DefaultGanttEnd      = "due"
 )
 
 // Table is the table: section of a view.
@@ -44,6 +46,14 @@ type Kanban struct {
 	WIP map[string]int `yaml:"wip,omitempty"`
 }
 
+// Gantt is the gantt: section of a view.
+type Gantt struct {
+	Start string `yaml:"start,omitempty"`
+	End   string `yaml:"end,omitempty"`
+	// Roadmap narrows the chart to the kinds of the container role.
+	Roadmap bool `yaml:"roadmap,omitempty"`
+}
+
 // View is one saved view. A section that the file does not have is nil;
 // its settings take the defaults. Unknown keys, at the top and in the
 // sections, and comments are kept when the view is written back.
@@ -53,12 +63,13 @@ type View struct {
 	Query  string
 	Table  *Table
 	Kanban *Kanban
+	Gantt  *Gantt
 	Extra  model.Fields
 
 	doc *model.Doc
 }
 
-var keys = []string{"layout", "query", "table", "kanban"}
+var keys = []string{"layout", "query", "table", "kanban", "gantt"}
 
 // New is an empty view called name.
 func New(name string) *View { return &View{Name: name} }
@@ -75,7 +86,7 @@ func Decode(name string, data []byte) (*View, error) {
 	for _, f := range []struct {
 		key string
 		out any
-	}{{"layout", &v.Layout}, {"query", &v.Query}, {"table", &v.Table}, {"kanban", &v.Kanban}} {
+	}{{"layout", &v.Layout}, {"query", &v.Query}, {"table", &v.Table}, {"kanban", &v.Kanban}, {"gantt", &v.Gantt}} {
 		if err := d.Decode(f.key, f.out); err != nil {
 			return nil, err
 		}
@@ -97,6 +108,9 @@ func (v *View) Encode() ([]byte, error) {
 	}
 	if v.Kanban != nil {
 		e.Put("kanban", v.Kanban, false)
+	}
+	if v.Gantt != nil {
+		e.Put("gantt", v.Gantt, false)
 	}
 	return e.Bytes(v.Extra)
 }
@@ -140,6 +154,25 @@ func (v *View) Swimlane() string {
 	}
 	return v.Kanban.Swimlane
 }
+
+// GanttStart is the property the bars start on, or start.
+func (v *View) GanttStart() string {
+	if v.Gantt == nil || v.Gantt.Start == "" {
+		return DefaultGanttStart
+	}
+	return v.Gantt.Start
+}
+
+// GanttEnd is the property the bars end on, or due.
+func (v *View) GanttEnd() string {
+	if v.Gantt == nil || v.Gantt.End == "" {
+		return DefaultGanttEnd
+	}
+	return v.Gantt.End
+}
+
+// Roadmap says the gantt shows the kinds of the container role only.
+func (v *View) Roadmap() bool { return v.Gantt != nil && v.Gantt.Roadmap }
 
 // Problems lists the values of the view that are out of their range, in the
 // order of the file's keys. The columns are checked against the schema by
@@ -202,6 +235,23 @@ func (v *View) MissingColumns(sc *schema.Schema) []string {
 		}
 		if _, ok := sc.Prop(c); !ok {
 			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// BadGanttProps lists the properties the bars of a gantt view are drawn from
+// that are not dates of sc. A view of another layout with no gantt: section
+// has none. The GUI draws no bar from them.
+func (v *View) BadGanttProps(sc *schema.Schema) []string {
+	if v.Layout != "gantt" && v.Gantt == nil {
+		return nil
+	}
+	var out []string
+	for _, name := range []string{v.GanttStart(), v.GanttEnd()} {
+		p, ok := sc.Prop(name)
+		if (!ok || p.Type != schema.TypeDate) && !slices.Contains(out, name) {
+			out = append(out, name)
 		}
 	}
 	return out

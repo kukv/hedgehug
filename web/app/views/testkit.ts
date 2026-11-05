@@ -13,6 +13,7 @@ export function savedView(over: Partial<SavedView> = {}): SavedView {
     query: "workspace:release -status:canceled",
     table: { columns: ["id", "title", "status", "assignee", "due"], group_by: "none" },
     kanban: { columns: "status", swimlane: "none" },
+    gantt: { start: "start", end: "due", roadmap: false },
     ...over,
   };
 }

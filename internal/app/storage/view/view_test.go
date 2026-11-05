@@ -110,12 +110,12 @@ func TestDecodeErrors(t *testing.T) {
 
 func TestProblems(t *testing.T) {
 	t.Parallel()
-	v, err := Decode("x", []byte("layout: gantt\ntable:\n  columns: [id, id, \"\"]\n  group_by: owner\nkanban:\n  columns: kind\n  swimlane: label\n"))
+	v, err := Decode("x", []byte("layout: timeline\ntable:\n  columns: [id, id, \"\"]\n  group_by: owner\nkanban:\n  columns: kind\n  swimlane: label\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []string{
-		`layout "gantt" is not one of tree, kanban, table`,
+		`layout "timeline" is not one of tree, kanban, table, gantt`,
 		`table.columns lists "id" twice`,
 		`table.columns has an empty column`,
 		`table.group_by "owner" is not one of none, parent, status, assignee, project`,
@@ -144,5 +144,54 @@ func TestMissingColumns(t *testing.T) {
 	dup, _ := Decode("x", []byte("layout: table\ntable:\n  columns: [gone, gone, other, gone]\n"))
 	if got := dup.MissingColumns(schema.Default()); !slices.Equal(got, []string{"gone", "other"}) {
 		t.Errorf("MissingColumns with repeats = %q", got)
+	}
+}
+
+func TestGanttSection(t *testing.T) {
+	src := "layout: gantt\nquery: \"\"\ngantt:\n  start: begin\n  end: finish\n  roadmap: true\n  later: kept\n"
+	v, err := Decode("g", []byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.GanttStart() != "begin" || v.GanttEnd() != "finish" || !v.Roadmap() {
+		t.Errorf("gantt = %q %q %v", v.GanttStart(), v.GanttEnd(), v.Roadmap())
+	}
+	if ps := v.Problems(); len(ps) != 0 {
+		t.Errorf("Problems = %v", ps)
+	}
+	out, err := v.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, err := Decode("g", out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if back.GanttStart() != "begin" || back.GanttEnd() != "finish" || !back.Roadmap() {
+		t.Errorf("after a write: %s", out)
+	}
+	d := New("d")
+	if d.GanttStart() != "start" || d.GanttEnd() != "due" || d.Roadmap() {
+		t.Errorf("defaults = %q %q %v", d.GanttStart(), d.GanttEnd(), d.Roadmap())
+	}
+}
+
+func TestBadGanttProps(t *testing.T) {
+	sc := schema.Default()
+	cases := []struct {
+		name string
+		v    View
+		want []string
+	}{
+		{"not a gantt", View{Layout: "table"}, nil},
+		{"the defaults", View{Layout: "gantt"}, nil},
+		{"a section on another layout", View{Layout: "tree", Gantt: &Gantt{Start: "nope"}}, []string{"nope"}},
+		{"not a date", View{Layout: "gantt", Gantt: &Gantt{End: "points"}}, []string{"points"}},
+		{"once each", View{Layout: "gantt", Gantt: &Gantt{Start: "x", End: "x"}}, []string{"x"}},
+	}
+	for _, c := range cases {
+		if got := c.v.BadGanttProps(sc); !slices.Equal(got, c.want) {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
 	}
 }

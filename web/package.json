@@ -30,7 +30,8 @@
     "@tanstack/svelte-table": "9.3.1",
     "@tanstack/svelte-virtual": "3.13.48",
     "codemirror": "6.0.2",
-    "openapi-fetch": "0.17.0"
+    "openapi-fetch": "0.17.0",
+    "uplot": "1.6.32"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.3",

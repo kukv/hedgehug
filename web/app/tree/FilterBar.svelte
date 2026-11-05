@@ -138,8 +138,16 @@
     font-family: var(--font-mono);
     font-size: 0.75rem;
   }
+  /* The field for typing comes first: the command gives way to it, cut at its end. */
+  .field :global(svg) {
+    flex: none;
+  }
+  .field :global(.cli) {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
   input {
-    flex: 1;
+    flex: 1 0 10rem;
     min-width: 0;
     border: 0;
     outline: 0;

@@ -151,7 +151,7 @@ test("repo_accounts is edited and ordered, by the drag too", async ({ page, hh }
     await region.getByLabel("リポジトリ").fill(match);
     await region.getByLabel("アカウント").selectOption(LOGIN);
     await region.getByRole("button", { name: "追加", exact: true }).click();
-    await expect(region.locator("code", { hasText: match })).toBeVisible();
+    await expect(region.getByText(match, { exact: true })).toBeVisible();
   };
   await add("github.com/org-a/*");
   await add("*");

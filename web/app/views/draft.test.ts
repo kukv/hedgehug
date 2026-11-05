@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_KANBAN, DEFAULT_TABLE, type ViewDraft } from "../../core/views";
+import { DEFAULT_GANTT, DEFAULT_KANBAN, DEFAULT_TABLE, type ViewDraft } from "../../core/views";
 import { newDraft, sameViewName, summaryOf, treeOrderProblem } from "./draft";
 
 const draft = (over: Partial<ViewDraft> = {}): ViewDraft => ({
   layout: "tree",
   query: "",
   kanban: DEFAULT_KANBAN,
+  gantt: DEFAULT_GANTT,
   table: DEFAULT_TABLE,
   ...over,
 });
@@ -34,7 +35,7 @@ describe("summaryOf", () => {
 
 describe("treeOrderProblem", () => {
   it("ツリーで sort: か group: があれば、サーバーと同じ理由を返す", () => {
-    const why = "ツリーのビューは rank の順に並ぶため、group: と sort: は使えません";
+    const why = "ツリーとガントのビューは rank の順に並ぶため、group: と sort: は使えません";
     expect(treeOrderProblem({ layout: "tree", query: "kind:task sort:updated" })).toBe(why);
     expect(treeOrderProblem({ layout: "tree", query: "group:status" })).toBe(why);
   });
@@ -57,6 +58,7 @@ describe("newDraft", () => {
       query: "q",
       kanban: DEFAULT_KANBAN,
       table: DEFAULT_TABLE,
+      gantt: DEFAULT_GANTT,
     });
   });
 });

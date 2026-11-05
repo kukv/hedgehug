@@ -1,10 +1,13 @@
 <script lang="ts">
   import {
+    DEFAULT_GANTT,
     DEFAULT_KANBAN,
     DEFAULT_TABLE,
+    type GanttSettings,
     type KanbanSettings,
     type TableSettings,
   } from "../../core/views";
+  import GanttView from "../gantt/GanttView.svelte";
   import KanbanView from "../kanban/KanbanView.svelte";
   import type { ListScope } from "../list/scope";
   import { type Layout, router } from "../router";
@@ -26,6 +29,7 @@
   // The columns and the swimlane are for as long as the screen is open and not saved (D7).
   let kanban = $state.raw<KanbanSettings>(DEFAULT_KANBAN);
   let table = $state.raw<TableSettings>(DEFAULT_TABLE);
+  let gantt = $state.raw<GanttSettings>(DEFAULT_GANTT);
 
   // What the filter field holds until the address says the same: the route that comes back from
   // our own replace is the same text, so the field the user is typing in is not wound back.
@@ -49,7 +53,7 @@
     typed = next;
     router.replace(at(layout, next));
   }
-  const save = () => openViewSave({ draft: newDraft({ layout, query, kanban, table }) });
+  const save = () => openViewSave({ draft: newDraft({ layout, query, kanban, table, gantt }) });
 </script>
 
 {#snippet saveButton()}
@@ -66,6 +70,15 @@
   <div class="body">
     {#if layout === "tree"}
       <TreeView view={everywhere} {query} onquery={setQuery} actions={saveButton} />
+    {:else if layout === "gantt"}
+      <GanttView
+        view={everywhere}
+        {query}
+        onquery={setQuery}
+        settings={gantt}
+        onsettings={(s) => (gantt = s)}
+        actions={saveButton}
+      />
     {:else if layout === "kanban"}
       <KanbanView
         view={everywhere}

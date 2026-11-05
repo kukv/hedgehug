@@ -4,7 +4,7 @@ import type { Connection } from "./connection";
 import { callAll } from "./listeners";
 import type { StoreDirectory, StoreTone } from "./stores";
 
-export type Layout = "tree" | "kanban" | "table";
+export type Layout = "tree" | "kanban" | "table" | "gantt";
 export type SavedView = Schemas["SavedView"];
 export type ViewSaveBody = Schemas["ViewSaveInputBody"];
 
@@ -18,12 +18,20 @@ export type TableSettings = {
   columns: string[];
   groupBy: "none" | "parent" | "status" | "assignee" | "project";
 };
+export type GanttSettings = {
+  // The date properties the bars are drawn from.
+  start: string;
+  end: string;
+  // Only the kinds of the container role.
+  roadmap: boolean;
+};
 // What a screen of a view holds while it is open: the saved settings, and what was changed since.
 export type ViewDraft = {
   layout: Layout;
   query: string;
   kanban: KanbanSettings;
   table: TableSettings;
+  gantt: GanttSettings;
 };
 
 // The defaults of internal/app/storage/view: what a view that leaves a setting out has.
@@ -33,7 +41,9 @@ export const DEFAULT_TABLE: TableSettings = {
   groupBy: "none",
 };
 
-const LAYOUTS: readonly string[] = ["tree", "kanban", "table"];
+export const DEFAULT_GANTT: GanttSettings = { start: "start", end: "due", roadmap: false };
+
+const LAYOUTS: readonly string[] = ["tree", "kanban", "table", "gantt"];
 const KANBAN_COLUMNS: readonly string[] = ["status", "category"];
 const SWIMLANES: readonly string[] = ["none", "assignee", "project"];
 const GROUP_BYS: readonly string[] = ["none", "parent", "status", "assignee", "project"];
@@ -59,6 +69,7 @@ export function draftOf(v: SavedView): ViewDraft {
         ? (v.table.group_by as TableSettings["groupBy"])
         : DEFAULT_TABLE.groupBy,
     },
+    gantt: { ...DEFAULT_GANTT, ...v.gantt },
   };
 }
 
@@ -72,6 +83,14 @@ export function saveBodyOf(d: ViewDraft): ViewSaveBody {
     kanban_columns: d.kanban.columns,
     swimlane: d.kanban.swimlane,
     ...(d.kanban.wip ? { kanban_wip: d.kanban.wip } : {}),
+    // Only a gantt writes its section: the views of the other layouts stay without it.
+    ...(d.layout === "gantt"
+      ? {
+          gantt_start: d.gantt.start,
+          gantt_end: d.gantt.end,
+          gantt_roadmap: d.gantt.roadmap,
+        }
+      : {}),
   };
 }
 
@@ -88,6 +107,9 @@ export function sameDraft(a: ViewDraft, b: ViewDraft): boolean {
     a.kanban.columns === b.kanban.columns &&
     a.kanban.swimlane === b.kanban.swimlane &&
     sameWip(a.kanban.wip, b.kanban.wip) &&
+    a.gantt.start === b.gantt.start &&
+    a.gantt.end === b.gantt.end &&
+    a.gantt.roadmap === b.gantt.roadmap &&
     a.table.groupBy === b.table.groupBy &&
     a.table.columns.length === b.table.columns.length &&
     a.table.columns.every((c, i) => c === b.table.columns[i])

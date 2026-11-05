@@ -1,6 +1,7 @@
 <script lang="ts">
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
+  import GanttTab from "../gantt/GanttTab.svelte";
   import Icon from "../icons/Icon.svelte";
   import ListTab from "../list/ListTab.svelte";
   import TreeTab from "../list/TreeTab.svelte";
@@ -9,6 +10,7 @@
   import ReleasesPage from "../planning/ReleasesPage.svelte";
   import SprintsPage from "../planning/SprintsPage.svelte";
   import { useReadOnlySentence } from "../read-only";
+  import ReportsPage from "../reports/ReportsPage.svelte";
   import { router, type WorkspaceTab } from "../router";
   import Empty from "../states/Empty.svelte";
   import StoreBands from "../states/StoreBands.svelte";
@@ -88,12 +90,20 @@
             {query}
             onquery={(q) => (query = q)}
           />
+        {:else if tab === "gantt"}
+          <GanttTab
+            view={{ kind: "workspace", store, ulid }}
+            {query}
+            onquery={(q) => (query = q)}
+          />
         {:else if tab === "backlog"}
           <BacklogPage {entry} />
         {:else if tab === "sprints"}
           <SprintsPage {entry} />
         {:else if tab === "releases"}
           <ReleasesPage {entry} />
+        {:else if tab === "reports"}
+          <ReportsPage {entry} />
         {:else}
           <WorkspaceSettings {entry} />
         {/if}

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_KANBAN, DEFAULT_TABLE } from "../../core/views";
+import { DEFAULT_GANTT, DEFAULT_KANBAN, DEFAULT_TABLE } from "../../core/views";
 import { renderWithCore } from "../test-utils";
 import TreeTab from "./TreeTab.svelte";
 
@@ -72,6 +72,7 @@ describe("TreeTab", () => {
         query: "workspace:release kind:bug",
         kanban: DEFAULT_KANBAN,
         table: DEFAULT_TABLE,
+        gantt: DEFAULT_GANTT,
       },
       store: "shared",
     });

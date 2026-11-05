@@ -1,7 +1,9 @@
 <script lang="ts">
   import {
+    DEFAULT_GANTT,
     DEFAULT_KANBAN,
     DEFAULT_TABLE,
+    type GanttSettings,
     type KanbanSettings,
     type TableSettings,
   } from "../../core/views";
@@ -21,8 +23,16 @@
     filter: string;
     kanban?: KanbanSettings;
     table?: TableSettings;
+    gantt?: GanttSettings;
   };
-  let { view, layout, filter, kanban = DEFAULT_KANBAN, table = DEFAULT_TABLE }: Props = $props();
+  let {
+    view,
+    layout,
+    filter,
+    kanban = DEFAULT_KANBAN,
+    table = DEFAULT_TABLE,
+    gantt = DEFAULT_GANTT,
+  }: Props = $props();
 
   const scope = useListScope(() => view);
 
@@ -30,7 +40,7 @@
   // It is empty on the screens of every Store, which combine would leave a space in front of.
   function save() {
     const query = combine(scope.saveBase, filter).trim();
-    openViewSave({ draft: newDraft({ layout, query, kanban, table }), store: scope.store });
+    openViewSave({ draft: newDraft({ layout, query, kanban, table, gantt }), store: scope.store });
   }
 </script>
 

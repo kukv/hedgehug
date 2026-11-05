@@ -659,9 +659,10 @@ func TestDoctorViews(t *testing.T) {
 	files := map[string]string{
 		"views/ok.yaml":     "layout: table\ntable:\n  columns: [id, due]\n",
 		"views/cols.yaml":   "layout: table\ntable:\n  columns: [id, gone]\n",
-		"views/bad.yaml":    "layout: gantt\n",
+		"views/bad.yaml":    "layout: timeline\n",
+		"views/plan.yaml":   "layout: gantt\ngantt:\n  end: points\n",
 		"views/broken.yaml": "- x\n",
-		"views/multi.yaml":  "layout: gantt\ntable:\n  group_by: owner\n",
+		"views/multi.yaml":  "layout: timeline\ntable:\n  group_by: owner\n",
 		"views/trail .yaml": "layout: tree\n",
 		"views/Same.yaml":   "layout: tree\n",
 		"views/same.yaml":   "layout: tree\n",
@@ -670,7 +671,8 @@ func TestDoctorViews(t *testing.T) {
 	}
 	want := map[string][]string{
 		"view views/cols.yaml":   {`column "gone" is not a field or a property of the schema; the GUI skips it`},
-		"file views/bad.yaml":    {`layout "gantt" is not one of tree, kanban, table`},
+		"view views/plan.yaml":   {`gantt property "points" is not a date of the schema; the GUI draws no bar from it`},
+		"file views/bad.yaml":    {`layout "timeline" is not one of tree, kanban, table, gantt`},
 		"file views/broken.yaml": nil, // checked by prefix below
 		"file views/multi.yaml":  nil, // checked in order below
 		"file views/trail .yaml": nil,
