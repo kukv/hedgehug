@@ -106,6 +106,7 @@ func TestCreateLeavesMetaAlone(t *testing.T) {
 // once git init is done and before it writes a file, and the .git/index.lock
 // made then keeps its commit out, as a git run by hand would.
 func busyAfterInit(t *testing.T, dir string) func() time.Time {
+	t.Helper()
 	return func() time.Time {
 		gitrepotest.HoldIndexLock(t, dir)
 		return time.Now()

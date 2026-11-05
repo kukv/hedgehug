@@ -36,7 +36,7 @@ type Options struct {
 	Host     config.Host   // of the account, for the device flow
 	HTTP     *http.Client  // nil is a client with a 30-second timeout
 	LockFile string        // auth.lock; a refresh holds it
-	LockWait time.Duration // how long a refresh waits for the lock; zero is 30 seconds
+	LockWait time.Duration // how long a refresh waits for the lock; zero means the default, 30 seconds
 	Sleep    func(time.Duration)
 	Context  context.Context // nil is never canceled; the device flow's wait ends with ErrCanceled when it ends
 }
@@ -51,7 +51,7 @@ func (o Options) Keychain() Keyring {
 }
 
 func (o Options) lockWait() time.Duration {
-	if o.LockWait > 0 {
+	if o.LockWait != 0 {
 		return o.LockWait
 	}
 	return defaultLockWait

@@ -49,7 +49,7 @@ type Options struct {
 	GitHub     *GitHubRepo  // origin on GitHub; nil when it is not
 	Explicit   bool         // hh sync, not the background one: a push_denied is tried again
 
-	// The zero value of each is its default.
+	// Zero means the default for each of these.
 	RetryWait time.Duration // the first wait after a rejected push; it doubles (default 500ms)
 	RepackAt  int           // consolidate when there are more loose objects (default 6700)
 	PacksAt   int           // or more packs below gitrepo.PackCap (default 16)

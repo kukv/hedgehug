@@ -64,7 +64,8 @@ type Store struct {
 type Option func(*Store)
 
 // WithLockWait sets how long a write waits for the file lock held by another
-// process before it fails with ErrLocked; the default is 10 seconds.
+// process before it fails with ErrLocked; the default is 10 seconds. The
+// value is used as given: zero means not to wait.
 func WithLockWait(d time.Duration) Option {
 	return func(s *Store) { s.lockWait = d }
 }

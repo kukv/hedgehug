@@ -34,7 +34,7 @@ func HoldIndexLock(t testing.TB, dir string) (release func()) {
 // to the user who runs it: as root.
 func LockObjects(t testing.TB, dir string) (unlock func()) {
 	t.Helper()
-	if os.Getuid() == 0 {
+	if os.Geteuid() == 0 {
 		t.Skip("no read-only directories here")
 	}
 	var dirs []string

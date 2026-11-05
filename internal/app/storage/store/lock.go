@@ -32,12 +32,12 @@ func lockFile(path string, wait time.Duration, onMiss func()) (*osfs.Lock, error
 // waited for.
 var ErrStoreGone = errors.New("the store directory was removed or replaced; run the command again")
 
-// acquireStore takes the lock file at path in the store at dir; onMiss is
-// lockFile's. It creates no
-// directory above .hedgehug/local, so a store removed meanwhile is not made
-// again, and fails with ErrStoreGone when the store is removed while the lock
-// is waited for: the lock file is then not the file at path any more, and a
-// write would land in a deleted store.
+// acquireStore takes the lock file at path in the store at dir. onMiss, when
+// set, is called each time the lock is found taken. It creates no directory
+// above .hedgehug/local, so a store removed meanwhile is not made again, and
+// fails with ErrStoreGone when the store is removed while the lock is waited
+// for: the lock file is then not the file at path any more, and a write would
+// land in a deleted store.
 func acquireStore(dir, path string, wait time.Duration, onMiss func()) (*osfs.Lock, error) {
 	if !storeHere(dir) {
 		return nil, ErrStoreGone

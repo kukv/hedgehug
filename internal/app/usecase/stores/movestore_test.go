@@ -29,6 +29,9 @@ func argsOf(err error) map[string]any { return usecase.AsError(err).Args }
 func planViewOf(ss *usecase.Session, in stores.MoveStoreInput) (stores.MoveView, error) {
 	in.Yes = false
 	_, err := stores.MoveStore(ss, in)
+	if err == nil {
+		return stores.MoveView{}, errors.New("MoveStore without Yes must ask for confirmation, but succeeded")
+	}
 	if v, ok := argsOf(err)["plan"].(stores.MoveView); ok {
 		return v, nil
 	}
