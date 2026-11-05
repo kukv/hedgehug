@@ -86,7 +86,7 @@ func addPack(t *testing.T, r *Repo, i int) plumbing.Hash {
 // smallest first.
 func packSizes(t *testing.T, r *Repo) []int64 {
 	t.Helper()
-	ps, err := r.smallPacks()
+	ps, err := r.smallPacks(PackCap)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,22 +243,20 @@ func TestConsolidateKeepsObjectsNoReferenceReaches(t *testing.T) {
 	}
 }
 
-// The tests below replace package variables, so they are not parallel.
-
 func TestConsolidateLeavesPacksFromPackCap(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, _ := Init(dir)
 	for i := range 3 {
 		addPack(t, r, i)
 	}
 	before := packFiles(t, dir)
-	packCap = 1 // every pack is "large" now
-	t.Cleanup(func() { packCap = PackCap })
-	if n, _ := r.SmallPacks(); n != 0 {
+	const packCap = 1 // every pack is "large" now
+	if n, _ := r.SmallPacksBelow(packCap); n != 0 {
 		t.Fatalf("SmallPacks = %d, want 0", n)
 	}
 	commitFiles(t, r, dir, map[string]string{"loose.md": "x"})
-	if err := r.Consolidate(); err != nil {
+	if err := r.ConsolidateBelow(packCap); err != nil {
 		t.Fatal(err)
 	}
 	after := packFiles(t, dir)
@@ -427,8 +425,7 @@ func TestConsolidateKeepsThePackThatEqualsTheNewOne(t *testing.T) {
 }
 
 func TestConsolidateMergesAboutPackCapAtMost(t *testing.T) {
-	// replaces packCap: not parallel
-	t.Cleanup(func() { packCap = PackCap })
+	t.Parallel()
 	three := func() (*Repo, string) {
 		dir := t.TempDir()
 		r, _ := Init(dir)
@@ -441,11 +438,11 @@ func TestConsolidateMergesAboutPackCapAtMost(t *testing.T) {
 	// two fit under the cap, three do not: two are merged
 	r, dir := three()
 	sz := wantPick(t, r, 3)
-	packCap = sz[0] + sz[1] + 1
+	packCap := sz[0] + sz[1] + 1
 	if sz[2] >= packCap {
 		t.Fatalf("a pack is over the cap: %v, %d", sz, packCap)
 	}
-	if err := r.Consolidate(); err != nil {
+	if err := r.ConsolidateBelow(packCap); err != nil {
 		t.Fatal(err)
 	}
 	// counted by the files: the merged pack may come out at the cap or under it
@@ -457,7 +454,6 @@ func TestConsolidateMergesAboutPackCapAtMost(t *testing.T) {
 	}
 
 	// not even two fit under the cap: nothing is merged
-	packCap = PackCap
 	r, dir = three()
 	sz = wantPick(t, r, 3)
 	packCap = sz[2] + 1
@@ -465,7 +461,7 @@ func TestConsolidateMergesAboutPackCapAtMost(t *testing.T) {
 		t.Fatalf("two packs fit under the cap: %v, %d", sz, packCap)
 	}
 	before := packFiles(t, dir)
-	if err := r.Consolidate(); err != nil {
+	if err := r.ConsolidateBelow(packCap); err != nil {
 		t.Fatal(err)
 	}
 	if after := packFiles(t, dir); !slices.Equal(before, after) {
