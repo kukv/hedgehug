@@ -121,7 +121,7 @@ issue_fields:
   props: {milestone: target}
 ```
 
-`rules` は `id`、`scoped` は `where` で見分ける。今の `kindYAML` のマージをそのまま使い、`issue_fields` はキー単位でマージする。ファイルがないときは、ルールは空で、`issue_fields` は上の既定を使う。
+`rules` は `id`、`scoped` は `where` で見分ける。今の `kindYAML` のマージをそのまま使い、`issue_fields` はキー単位でマージする。ファイルがないときは、ルールは空で、`issue_fields` は上の `default_sync`・`push`・`mirror` を既定に使う。`props` の既定は空である（マイルストーンは既定で無効）。
 
 `set` は `status` か `category` のどちらか1つ。`when` は `all_linked_prs_merged` だけを持つ。`hh store init --template dev` は、`pr-opened`・`pr-review`・`pr-merged`・`issue-closed` の4つを有効にする。`pr-review` の行き先は `schema.Dev()` の `review` である。
 
