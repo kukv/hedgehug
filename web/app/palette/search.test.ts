@@ -266,6 +266,8 @@ const ws: WorkspaceEntry = {
   prefix: "REL",
   tasks: 24,
   deleted: 1,
+  sprints: 0,
+  releases: 0,
   prefixSet: "2026-10-29T12:00:00Z",
   projects: [task("P1", "project", null, { id: "REL-15", title: "リリース準備 v2.4" })],
 };
@@ -274,6 +276,9 @@ function env(over: Partial<CommandEnv> = {}): CommandEnv {
   return {
     syncNow: vi.fn(),
     createTask: vi.fn(),
+    bulkQuery: vi.fn(),
+    addSprint: vi.fn(),
+    addRelease: vi.fn(),
     createProject: vi.fn(),
     addWorkspace: vi.fn(),
     undo: vi.fn(),
@@ -330,6 +335,8 @@ describe("buildCommands", () => {
       "今すぐ同期する",
       "タスクを作成",
       "プロジェクトを作成",
+      "スプリントを作る",
+      "リリースを作る",
       "ワークスペースを追加",
       "直前の操作を取り消す",
       "doctor を実行",
@@ -371,7 +378,10 @@ describe("buildCommands", () => {
       "今すぐ同期する",
       "設定の同期と保守を開く",
     ]);
-    expect(labels(buildCommands(env(), "> リリース"))).toEqual(["リリース準備 v2.4 を開く"]);
+    expect(labels(buildCommands(env(), "> リリース"))).toEqual([
+      "リリースを作る",
+      "リリース準備 v2.4 を開く",
+    ]);
     expect(buildCommands(env(), ">zzz")).toEqual([]);
   });
 
@@ -682,13 +692,14 @@ describe("taskCommands", () => {
 describe("queryCommands", () => {
   it("opens the query as a table without saving, and saves it as a view", () => {
     const e = env();
-    const g = queryCommands(e, "status:doing assignee:@me");
+    const g = queryCommands(e, "status:doing assignee:@me", 4);
     expect(g.name).toBe("このクエリで");
     expect(g.items.map((i) => (i.type === "command" ? i.label : ""))).toEqual([
       "テーブルで開く",
       "ビューとして保存…",
+      "一致する 4 件をまとめて更新…",
     ]);
-    const [open, save] = g.items;
+    const [open, save, bulk] = g.items;
     expect(open).toMatchObject({
       href: "/query/table?q=status%3Adoing+assignee%3A%40me",
     });
@@ -696,7 +707,7 @@ describe("queryCommands", () => {
     expect(e.go).toHaveBeenCalledWith("/query/table?q=status%3Adoing+assignee%3A%40me");
     if (save?.type === "command") save.run();
     expect(e.saveQuery).toHaveBeenCalledWith("status:doing assignee:@me");
-    // a command of the query is not one of the bulk update, which is for phase 6
-    expect(g.items.some((i) => i.type === "command" && /まとめて更新/.test(i.label))).toBe(false);
+    if (bulk?.type === "command") bulk.run();
+    expect(e.bulkQuery).toHaveBeenCalledWith("status:doing assignee:@me");
   });
 });

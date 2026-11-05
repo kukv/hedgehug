@@ -27,6 +27,7 @@
   import FormError from "../ui/FormError.svelte";
   import ConstraintEditor from "./ConstraintEditor.svelte";
   import ProjectAutomations from "./ProjectAutomations.svelte";
+  import ProjectTemplates from "./ProjectTemplates.svelte";
   import ProjectViolations from "./ProjectViolations.svelte";
 
   // The settings of a project: which statuses it shows and what its workflow adds to the Store's.
@@ -177,7 +178,16 @@
   }
 
   const cliStore = $derived(manyStores.current ? store : undefined);
-  const setCli = $derived(project ? cliScopeSet({ id: project.id, ...body, store: cliStore }) : "");
+  const setCli = $derived(
+    project
+      ? cliScopeSet({
+          id: project.id,
+          ...body,
+          templateDefaults: body.template_defaults,
+          store: cliStore,
+        })
+      : "",
+  );
   const rmCli = $derived(project ? cliScopeRm(project.id, cliStore) : "");
   const hasOverride = $derived(held !== undefined);
 </script>
@@ -273,6 +283,8 @@
         onchange={(required) => (draft = { ...draft, required })}
       />
     </section>
+
+    <ProjectTemplates {store} {schema} {draft} busy={frozen} onchange={(d) => (draft = d)} />
 
     <ProjectAutomations {store} {schema} {project} {off} />
 

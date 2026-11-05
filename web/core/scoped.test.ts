@@ -26,9 +26,17 @@ const schema = {
   props: { points: { type: "number" }, area: { type: "text" } },
   scoped: [],
   workflow: { transitions: {}, required: {} },
+  templates: [],
+  templateDefaults: {},
 } as SchemaView;
 
-const none: ScopedDraft = { statuses: [], transitions: {}, required: {} };
+const none: ScopedDraft = {
+  statuses: [],
+  transitions: {},
+  required: {},
+  templates: [],
+  templateDefaults: {},
+};
 
 describe("draftOf", () => {
   it("is empty for a project with no override", () => {
@@ -49,6 +57,8 @@ describe("draftOf", () => {
       statuses: ["todo", "done"],
       transitions: { todo: ["done"], waiting: [] },
       required: { done: ["points"] },
+      templates: [],
+      templateDefaults: {},
     });
   });
 });
@@ -114,7 +124,13 @@ describe("requirableFields", () => {
 describe("putBody", () => {
   it("is empty while nothing changed", () => {
     expect(putBody(schema, none, none)).toEqual({});
-    const saved = { statuses: ["todo"], transitions: { todo: ["done"] }, required: {} };
+    const saved = {
+      statuses: ["todo"],
+      transitions: { todo: ["done"] },
+      required: {},
+      templates: [],
+      templateDefaults: {},
+    };
     expect(putBody(schema, saved, structuredClone(saved))).toEqual({});
   });
 
@@ -123,6 +139,8 @@ describe("putBody", () => {
       statuses: [],
       transitions: { todo: ["in_progress"] },
       required: { done: ["points"] },
+      templates: [],
+      templateDefaults: {},
     };
     const required = { done: ["points"], in_progress: ["area"] };
     expect(putBody(schema, saved, { ...saved, required })).toEqual({ required });
@@ -135,8 +153,14 @@ describe("putBody", () => {
       statuses: ["todo", "in_progress", "done", "canceled"],
       transitions: { todo: ["done"] },
       required: { done: ["points"] },
+      templates: [],
+      templateDefaults: {},
     };
-    expect(putBody(schema, saved, none)).toEqual({ statuses: [], transitions: {}, required: {} });
+    expect(putBody(schema, saved, none)).toEqual({
+      statuses: [],
+      transitions: {},
+      required: {},
+    });
   });
 
   it("does not take a list of every status for a change", () => {
@@ -145,8 +169,20 @@ describe("putBody", () => {
   });
 
   it("does not take the order of the values for a change", () => {
-    const saved: ScopedDraft = { ...none, required: { done: ["points", "area"] } };
-    expect(putBody(schema, saved, { ...none, required: { done: ["area", "points"] } })).toEqual({});
+    const saved: ScopedDraft = {
+      ...none,
+      required: { done: ["points", "area"] },
+      templates: [],
+      templateDefaults: {},
+    };
+    expect(
+      putBody(schema, saved, {
+        ...none,
+        required: { done: ["area", "points"] },
+        templates: [],
+        templateDefaults: {},
+      }),
+    ).toEqual({});
   });
 });
 

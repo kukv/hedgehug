@@ -11,6 +11,8 @@ export function entry(over: Partial<WorkspaceEntry> = {}): WorkspaceEntry {
     projects: [],
     tasks: 24,
     deleted: 1,
+    sprints: 0,
+    releases: 0,
     prefixSet: "2026-10-29T12:00:00Z",
     ...over,
   };
@@ -34,6 +36,8 @@ export function written(
       prefix_set: "2026-11-03T00:00:00Z",
       tasks: 0,
       deleted: 0,
+      sprints: 0,
+      releases: 0,
       ...w,
     },
     commit: "c1",

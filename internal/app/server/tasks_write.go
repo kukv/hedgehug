@@ -196,6 +196,13 @@ type moveInput struct {
 	}
 }
 
+type rankInput struct {
+	TaskParam
+	Body struct {
+		Order []string `json:"order" doc:"The list as it stands after the drop: ULIDs of live tasks of the workspace, the task among them. The list may cross parents"`
+	}
+}
+
 type restoreAtInput struct {
 	TaskParam
 	Commit string `path:"commit" doc:"The commit to bring the task back to"`
@@ -293,6 +300,19 @@ func (s *Server) registerTaskWrites() {
 		ss := s.session(in.Store)
 		defer ss.Close()
 		res, err := tasks.Move(ss, tasks.MoveInput{Arg: in.ID, Workspace: b.Workspace, Parent: b.Parent, Root: b.Root, Before: b.Before, After: b.After})
+		if err != nil {
+			return nil, problemOf(err)
+		}
+		return writeOut(res)
+	})
+
+	huma.Register(s.api, huma.Operation{
+		OperationID: "rank-task", Method: http.MethodPost, Path: "/api/tasks/{id}/rank",
+		Summary: "Put a task where a list that crosses parents has it; no parent changes", Tags: []string{"tasks"},
+	}, func(_ context.Context, in *rankInput) (*taskWriteOutput, error) {
+		ss := s.session(in.Store)
+		defer ss.Close()
+		res, err := tasks.Rerank(ss, in.ID, in.Body.Order)
 		if err != nil {
 			return nil, problemOf(err)
 		}

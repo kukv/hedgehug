@@ -1926,6 +1926,19 @@ components:
         - id
         - title
       type: object
+    RankInputBody:
+      additionalProperties: false
+      properties:
+        order:
+          description: "The list as it stands after the drop: ULIDs of live tasks of the workspace, the task among them. The list may cross parents"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - order
+      type: object
     ReadResult:
       additionalProperties: false
       properties:
@@ -2151,6 +2164,11 @@ components:
           type: string
         swimlane:
           type: string
+        wip:
+          additionalProperties:
+            format: int64
+            type: integer
+          type: object
       required:
         - columns
         - swimlane
@@ -3120,7 +3138,7 @@ components:
         store:
           type: string
         ulids:
-          description: The tasks whose file or comments changed
+          description: The tasks whose file, comments or worklogs changed
           items:
             type: string
           type:
@@ -3310,6 +3328,12 @@ components:
           type: string
         kanban_columns:
           type: string
+        kanban_wip:
+          additionalProperties:
+            format: int64
+            type: integer
+          description: The limit of each column, by its name; replaces the limits, and an empty object takes them off
+          type: object
         layout:
           enum:
             - tree
@@ -3336,6 +3360,12 @@ components:
           type: string
         kanban_columns:
           type: string
+        kanban_wip:
+          additionalProperties:
+            format: int64
+            type: integer
+          description: The limit of each column, by its name; replaces the limits, and an empty object takes them off
+          type: object
         layout:
           enum:
             - tree
@@ -6540,6 +6570,46 @@ paths:
                 $ref: "#/components/schemas/Problem"
           description: Error
       summary: Show what moving the task and the tasks under it to another store would do; writes nothing
+      tags:
+        - tasks
+  /api/tasks/{id}/rank:
+    post:
+      operationId: rank-task
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RankInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Put a task where a list that crosses parents has it; no parent changes
       tags:
         - tasks
   /api/tasks/{id}/restore:

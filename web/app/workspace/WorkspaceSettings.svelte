@@ -6,6 +6,7 @@
   import type { WorkspaceEntry } from "../../core/stores";
   import { nameProblem, prefixDay, removeBlocker } from "../../core/workspace";
   import { core } from "../context";
+  import { openPlanDialog } from "../planning/dialogs-state.svelte";
   import { useReadOnlySentence } from "../read-only";
   import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
@@ -128,6 +129,30 @@
       <FormError message={failure} />
     {/if}
     <CliLine command={renameCli} disabled={unchanged || problem !== null} />
+  </section>
+
+  <section class="block" aria-labelledby="{uid}-plan-h">
+    <h2 id="{uid}-plan-h">計画</h2>
+    <div class="row">
+      <Button
+        disabled={off !== null}
+        why={off ?? undefined}
+        onclick={() => openPlanDialog({ kind: "sprint-add", entry })}
+      >
+        スプリントを作る…
+      </Button>
+      <Button
+        disabled={off !== null}
+        why={off ?? undefined}
+        onclick={() => openPlanDialog({ kind: "release-add", entry })}
+      >
+        リリースを作る…
+      </Button>
+    </div>
+    <p class="msg">
+      スプリント {entry.sprints} 件 · リリース {entry.releases} 件。1
+      件以上あると、バックログ・スプリント・リリースのタブが出ます
+    </p>
   </section>
 
   <section class="block" aria-labelledby="{uid}-prefix-h">

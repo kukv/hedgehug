@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import { hasPlans } from "../../core/planning";
   import type { WorkspaceEntry } from "../../core/stores";
   import Icon from "../icons/Icon.svelte";
   import { router, type WorkspaceTab } from "../router";
@@ -16,6 +17,13 @@
     { label: "ツリー", href: at("tree"), current: tab === "tree" },
     { label: "カンバン", href: at("kanban"), current: tab === "kanban" },
     { label: "テーブル", href: at("table"), current: tab === "table" },
+    ...(hasPlans(entry)
+      ? [
+          { label: "バックログ", href: at("backlog"), current: tab === "backlog" },
+          { label: "スプリント", href: at("sprints"), current: tab === "sprints" },
+          { label: "リリース", href: at("releases"), current: tab === "releases" },
+        ]
+      : []),
   ]);
   const end = $derived({
     label: "設定",

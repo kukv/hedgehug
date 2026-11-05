@@ -1072,6 +1072,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/{id}/rank": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Put a task where a list that crosses parents has it; no parent changes */
+        post: operations["rank-task"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/{id}/restore": {
         parameters: {
             query?: never;
@@ -2123,6 +2140,10 @@ export interface components {
             title: string;
             ulid: string;
         };
+        RankInputBody: {
+            /** @description The list as it stands after the drop: ULIDs of live tasks of the workspace, the task among them. The list may cross parents */
+            order: string[] | null;
+        };
         ReadResult: {
             /** @description The ULIDs of the items marked read, as hh inbox read --json */
             read: string[];
@@ -2218,6 +2239,9 @@ export interface components {
         SavedKanban: {
             columns: string;
             swimlane: string;
+            wip?: {
+                [key: string]: number;
+            };
         };
         SavedTable: {
             columns: string[] | null;
@@ -2589,7 +2613,7 @@ export interface components {
             /** @description The tasks whose file is gone (purged) */
             removed: string[] | null;
             store: string;
-            /** @description The tasks whose file or comments changed */
+            /** @description The tasks whose file, comments or worklogs changed */
             ulids: string[] | null;
         };
         TemplateFile: {
@@ -2672,6 +2696,10 @@ export interface components {
             columns?: string[];
             group_by?: string;
             kanban_columns?: string;
+            /** @description The limit of each column, by its name; replaces the limits, and an empty object takes them off */
+            kanban_wip?: {
+                [key: string]: number;
+            };
             /** @enum {string} */
             layout?: "tree" | "table" | "kanban";
             /** @description The new name; a rename cannot come with settings */
@@ -2684,6 +2712,10 @@ export interface components {
             columns?: string[];
             group_by?: string;
             kanban_columns?: string;
+            /** @description The limit of each column, by its name; replaces the limits, and an empty object takes them off */
+            kanban_wip?: {
+                [key: string]: number;
+            };
             /** @enum {string} */
             layout?: "tree" | "table" | "kanban";
             query?: string;
@@ -5673,6 +5705,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MovePlanView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "rank-task": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ID, a former ID, or the ULID of the task */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RankInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskWrite"];
                 };
             };
             /** @description Error */

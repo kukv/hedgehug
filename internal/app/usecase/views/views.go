@@ -4,6 +4,7 @@ package views
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -22,8 +23,9 @@ type SavedTable struct {
 }
 
 type SavedKanban struct {
-	Columns  string `json:"columns"`
-	Swimlane string `json:"swimlane"`
+	Columns  string         `json:"columns"`
+	Swimlane string         `json:"swimlane"`
+	WIP      map[string]int `json:"wip,omitempty"`
 }
 
 // SavedView is a saved view as --json prints it: every setting, with the
@@ -40,7 +42,7 @@ func SavedViewOf(v *view.View) SavedView {
 	return SavedView{
 		Name: v.Name, Layout: v.Layout, Query: v.Query,
 		Table:  SavedTable{Columns: v.TableColumns(), GroupBy: v.GroupBy()},
-		Kanban: SavedKanban{Columns: v.KanbanColumns(), Swimlane: v.Swimlane()},
+		Kanban: SavedKanban{Columns: v.KanbanColumns(), Swimlane: v.Swimlane(), WIP: v.WIP()},
 	}
 }
 
@@ -49,6 +51,7 @@ func SavedViewOf(v *view.View) SavedView {
 type ViewChange struct {
 	Layout, Query, GroupBy, KanbanColumns, Swimlane *string
 	Columns                                         *[]string
+	WIP                                             *map[string]int // replaces the limits; empty takes them off
 }
 
 // ViewResult is what a view operation did.
@@ -203,12 +206,18 @@ func applyViewChange(v *view.View, ch ViewChange, s *store.Store) error {
 		}
 		set(&v.Table.GroupBy, ch.GroupBy)
 	}
-	if ch.KanbanColumns != nil || ch.Swimlane != nil {
+	if ch.KanbanColumns != nil || ch.Swimlane != nil || ch.WIP != nil {
 		if v.Kanban == nil {
 			v.Kanban = &view.Kanban{}
 		}
 		set(&v.Kanban.Columns, ch.KanbanColumns)
 		set(&v.Kanban.Swimlane, ch.Swimlane)
+		if ch.WIP != nil {
+			v.Kanban.WIP = maps.Clone(*ch.WIP)
+			if len(v.Kanban.WIP) == 0 {
+				v.Kanban.WIP = nil
+			}
+		}
 	}
 	if ps := v.Problems(); len(ps) > 0 {
 		return usecase.NewErr(usecase.KindUsage, "view.bad_value", errors.New(strings.Join(ps, "; ")))

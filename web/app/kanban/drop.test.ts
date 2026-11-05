@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ShowView } from "../../core/api/client";
 import type { SchemaView } from "../../core/schema";
+import { tv } from "../../core/testing";
 import { task } from "../tree/fixtures";
 import type { Column } from "./board";
 import { canTransition, decideDrop, requiredFields, requiredGap, scopedStatusesOf } from "./drop";
@@ -310,5 +311,19 @@ describe("decideDrop", () => {
       });
       expect(d).toMatchObject({ ok: false, silent: false, title: "「中止」には移せません" });
     });
+  });
+});
+
+describe("requiredGap of the fields of a plan", () => {
+  const schema = { props: {} } as unknown as SchemaView;
+  it("reads the sprint, the releases and the links from the task", () => {
+    const names = ["sprint", "releases", "links"];
+    expect(requiredGap(tv("A"), names, schema).elsewhere).toEqual(names);
+    const full = tv("A", "a", {
+      sprint: { ulid: "S" },
+      releases: [{ ulid: "R" }],
+      links: [{ kind: "pr", ref: "x" } as never],
+    });
+    expect(requiredGap(full, names, schema)).toEqual({ fill: [], elsewhere: [] });
   });
 });

@@ -26,6 +26,8 @@ const entry: WorkspaceEntry = {
   projects: [],
   tasks: 3,
   deleted: 0,
+  sprints: 0,
+  releases: 0,
   prefixSet: "2026-10-29T12:00:00Z",
 };
 

@@ -2,6 +2,7 @@ package view
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -38,6 +39,9 @@ type Table struct {
 type Kanban struct {
 	Columns  string `yaml:"columns,omitempty"`
 	Swimlane string `yaml:"swimlane,omitempty"`
+	// WIP is the limit of a column, by the name of the column: a status or a
+	// category, as Columns says. A column over it is shown so; nothing refuses.
+	WIP map[string]int `yaml:"wip,omitempty"`
 }
 
 // View is one saved view. A section that the file does not have is nil;
@@ -113,6 +117,14 @@ func (v *View) GroupBy() string {
 	return v.Table.GroupBy
 }
 
+// WIP is the limits of the columns; nil when the view sets none.
+func (v *View) WIP() map[string]int {
+	if v.Kanban == nil {
+		return nil
+	}
+	return v.Kanban.WIP
+}
+
 // KanbanColumns is what the columns of the kanban are, or status.
 func (v *View) KanbanColumns() string {
 	if v.Kanban == nil || v.Kanban.Columns == "" {
@@ -165,6 +177,13 @@ func (v *View) Problems() []string {
 		}
 		if v.Kanban.Swimlane != "" {
 			oneOf("kanban.swimlane", v.Kanban.Swimlane, Swimlanes)
+		}
+		for _, c := range slices.Sorted(maps.Keys(v.Kanban.WIP)) {
+			if c == "" {
+				out = append(out, "kanban.wip has an empty column")
+			} else if n := v.Kanban.WIP[c]; n < 1 {
+				out = append(out, fmt.Sprintf("kanban.wip of %q is %d; a limit is 1 or more", c, n))
+			}
 		}
 	}
 	return out

@@ -37,6 +37,8 @@ export type WorkspaceEntry = {
   // tasks counts the tasks that are not deleted; deleted, the ones that are.
   tasks: number;
   deleted: number;
+  sprints: number;
+  releases: number;
   // prefixSet is when the prefix was last set (an ISO time).
   prefixSet: string;
   projects: TaskView[];
@@ -63,6 +65,8 @@ function sameEntry(a: WorkspaceEntry, b: WorkspaceEntry): boolean {
     a.prefix === b.prefix &&
     a.tasks === b.tasks &&
     a.deleted === b.deleted &&
+    a.sprints === b.sprints &&
+    a.releases === b.releases &&
     a.prefixSet === b.prefixSet &&
     a.projects.length === b.projects.length &&
     a.projects.every((p, i) => p === b.projects[i])
@@ -268,6 +272,8 @@ export class StoreDirectory {
           prefix: w.id_prefix,
           tasks: w.tasks,
           deleted: w.deleted,
+          sprints: w.sprints,
+          releases: w.releases,
           prefixSet: w.prefix_set,
           projects: projects.filter((p) => p.store === s.name && p.workspace.ulid === w.ulid),
         };

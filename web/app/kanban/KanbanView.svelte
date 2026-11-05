@@ -32,6 +32,7 @@
   import { type DropDecision, decideDrop, scopedStatusesOf } from "./drop";
   import KanbanCard from "./KanbanCard.svelte";
   import RequiredDialog from "./RequiredDialog.svelte";
+  import WipDialog from "./WipDialog.svelte";
 
   type Props = {
     view: ListScope;
@@ -409,9 +410,17 @@
         query: saved ? undefined : combine(ls.saveBase, query).trim(),
         kanban_columns: settings.columns,
         swimlane: settings.swimlane,
+        ...(settings.wip ? { kanban_wip: settings.wip } : {}),
       },
     }),
   );
+  let wipOpen = $state(false);
+  const limitOf = (key: string): number | undefined => settings.wip?.[key];
+  const overLimit = (key: string, n: number): boolean => n > (limitOf(key) ?? Infinity);
+  const countLabelOf = (key: string, n: number): string => {
+    const limit = limitOf(key);
+    return limit === undefined ? String(n) : `${n} / ${limit}`;
+  };
   const noTasks = $derived(
     withoutTerm(query, NO_CANCELED).trim() === "" && !(canceledCount && canceledCount > 0),
   );
@@ -451,6 +460,7 @@
         スイムレーン: {labelIn(SWIMLANE_ITEMS, settings.swimlane)}
         <Icon name="chevron-down" size={12} />
       </button>
+      <button type="button" class="ctl" onclick={() => (wipOpen = true)}>WIP 上限</button>
     {/snippet}
   </ListBar>
 
@@ -508,7 +518,12 @@
               <div class="head" data-column={col.key}>
                 <StatusIcon status={col.key} category={col.category} />
                 <span class="name">{col.label}</span>
-                <span class="count">{counts[i]}</span>
+                <span class="count" class:over={overLimit(col.key, counts[i] ?? 0)}>
+                  {countLabelOf(col.key, counts[i] ?? 0)}
+                </span>
+                {#if overLimit(col.key, counts[i] ?? 0)}
+                  <span class="wip" role="status">WIP 上限 {limitOf(col.key)} を超えています</span>
+                {/if}
                 {#if !col.unknown}
                   <button
                     type="button"
@@ -632,7 +647,27 @@
   />
 {/if}
 
+{#if wipOpen}
+  <WipDialog
+    columns={board.columns}
+    wip={settings.wip}
+    onsave={(wip) => {
+      const { wip: _, ...rest } = settings;
+      onsettings(wip ? { ...rest, wip } : rest);
+    }}
+    onclose={() => (wipOpen = false)}
+  />
+{/if}
+
 <style>
+  .count.over,
+  .wip {
+    color: var(--warn-ink, var(--danger));
+    font-weight: 600;
+  }
+  .wip {
+    font-size: var(--fs-11);
+  }
   .sr {
     position: absolute;
     width: 1px;

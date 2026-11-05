@@ -550,7 +550,10 @@ func (w *Watcher) Wait() {
 
 // childTask is the task of the comment file at path.
 func childTask(path string) (model.ULID, bool) {
-	u, _, err := model.ParseCommentPath(path)
+	if u, _, err := model.ParseCommentPath(path); err == nil {
+		return u, true
+	}
+	u, _, err := model.ParseWorklogPath(path)
 	return u, err == nil
 }
 

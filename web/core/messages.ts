@@ -85,12 +85,16 @@ const messages: Record<string, Make> = {
   "workspace.bad_name": (a) => `「${str(a, "value")}」はワークスペースの名前に使えません`,
   "workspace.bad_prefix": (a) => `「${str(a, "value")}」は ID の接頭辞に使えません`,
   "workspace.prefix_taken": (a) => `ID の接頭辞 ${str(a, "prefix")} はすでに使われています`,
-  "workspace.not_empty": (a) =>
-    `${
+  "workspace.not_empty": (a) => {
+    if (Number(a.sprints) > 0 || Number(a.releases) > 0) {
+      return `ワークスペースにタスク ${str(a, "tasks") || 0} 件、スプリント ${str(a, "sprints") || 0} 件、リリース ${str(a, "releases") || 0} 件が残っています`;
+    }
+    return `${
       typeof a.tasks === "number"
         ? `ワークスペースにタスクが ${a.tasks} 件（削除済みを含む）残っています`
         : "ワークスペースにまだタスクがあります（削除済みを含む）"
-    }。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください`,
+    }。別のワークスペースへ移すか、削除したうえで hh purge --older-than 0d で消してください`;
+  },
   "workspace.one_change": () =>
     "名前と接頭辞は同時に変えられません。どちらか一方を指定してください",
 
@@ -259,6 +263,35 @@ const messages: Record<string, Make> = {
   "query.invalid": (_, e) => withDetail("クエリが正しくありません", e),
   "query.tree_order": () => "ツリーは rank の順に並ぶため、group: と sort: は使えません",
   "log.workspace_with_task": () => "タスクの履歴にはワークスペースを指定できません",
+  "sprint.not_found": (_, e) => withDetail("そのスプリントはありません", e),
+  "sprint.ambiguous": (_, e) => withDetail("同じ名前のスプリントが複数あります", e),
+  "sprint.bad_dates": () => "終了日は開始日より後にしてください",
+  "sprint.bad_name": () => "スプリントの名前を入れてください",
+  "sprint.bad_target": (_, e) => withDetail("そのスプリントへは移せません", e),
+  "sprint.close_to": () => "未完了のタスクの移し先を選んでください",
+  "sprint.name_taken": () => "同じ名前のスプリントがこのワークスペースにあります",
+  "sprint.no_dates": () => "開始するには開始日と終了日が必要です",
+  "sprint.no_next": () => "次のスプリントがありません。別の移し先を選んでください",
+  "sprint.not_active": () => "このスプリントは active ではありません",
+  "sprint.not_planned": () => "このスプリントは planned ではありません",
+  "sprint.nothing_to_set": () => "変更する項目がありません",
+  "release.not_found": (_, e) => withDetail("そのリリースはありません", e),
+  "release.bad_name": () => "リリースの名前を入れてください",
+  "release.name_taken": () => "同じ名前のリリースがこのワークスペースにあります",
+  "release.nothing_to_set": () => "変更する項目がありません",
+  "worklog.bad_date": () => "日付は YYYY-MM-DD で入れてください",
+  "worklog.bad_duration": () => "時間は 1h30m の形で入れてください",
+  "worklog.not_author": () => "自分の記録だけ削除できます",
+  "worklog.not_found": () => "その記録はありません",
+  "template.bad_name": (_, e) => withDetail("テンプレートの名前が正しくありません", e),
+  "template.in_use": (_, e) => withDetail("使われているため削除できません", e),
+  "template.invalid": (_, e) => withDetail("テンプレートに問題があります", e),
+  "template.no_title": () => "タイトルを入れてください",
+  "template.not_allowed": (_, e) => withDetail("このプロジェクトでは使えないテンプレートです", e),
+  "template.not_found": (_, e) => withDetail("そのテンプレートはありません", e),
+  "bulk.empty": () => "変更する項目がありません",
+  "bulk.invalid": (_, e) => withDetail("更新できないタスクがあります", e),
+  "rank.invalid": (_, e) => withDetail("ここには並べられません", e),
   "view.bad_name": (a) => `「${str(a, "value")}」はビューの名前に使えません`,
   "view.not_found": (a) => `${str(a, "name")} というビューはありません`,
   "view.name_taken": (a) =>

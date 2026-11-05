@@ -203,14 +203,18 @@ func TestPollInboxStampIsStable(t *testing.T) {
 	}
 }
 
-func TestChildTaskIsCommentsOnly(t *testing.T) {
+func TestChildTaskIsCommentsAndWorklogs(t *testing.T) {
 	t.Parallel()
 	task, other := model.NewULID(), model.NewULID()
 	if u, ok := watch.ChildTask(model.CommentPath(task, other)); !ok || u != task {
 		t.Errorf("comment path: %v %v", u, ok)
 	}
-	if _, ok := watch.ChildTask(model.WorklogPath(task, other)); ok {
-		t.Error("a worklog path changes no task")
+	// The detail of a task shows the time spent.
+	if u, ok := watch.ChildTask(model.WorklogPath(task, other)); !ok || u != task {
+		t.Errorf("worklog path: %v %v", u, ok)
+	}
+	if _, ok := watch.ChildTask(model.SprintPath(other)); ok {
+		t.Error("a sprint is of no task")
 	}
 }
 

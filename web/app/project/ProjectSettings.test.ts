@@ -398,10 +398,9 @@ describe("ProjectSettings", () => {
     ).toBeTruthy();
   });
 
-  it("makes no templates or last-changed date", async () => {
+  it("makes no last-changed date", async () => {
     setup();
     await screen.findByRole("group", { name: "表示するステータス" });
-    expect(screen.queryByText(/テンプレート/)).toBeNull();
     expect(screen.queryByText(/最終更新/)).toBeNull();
   });
 

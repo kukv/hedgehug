@@ -3,6 +3,7 @@
   import { type TaskView, unwrap } from "../../core/api/client";
   import { cliAdd, Placeholder } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
+  import { type Template, usableTemplates } from "../../core/planning";
   import { canParent, defaultStatusIn, parentRule } from "../../core/schema";
   import { core } from "../context";
   import type { CreateRequest } from "../create-state.svelte";
@@ -78,6 +79,8 @@
   let body = $state("");
   let kind = $state("");
   let status = $state(untrack(() => request.status ?? ""));
+  // null: what the kind says; "": none.
+  let pickedTemplate = $state<string | null>(null);
   let assignees = $state<string[]>([]);
   let propValues = $state<Record<string, unknown>>({});
   let busy = $state(false);
@@ -90,6 +93,35 @@
   });
 
   const parentKind = $derived(parent?.kind ?? null);
+  let templates = $state.raw<Template[]>([]);
+  $effect(() => {
+    const store = ws?.store;
+    if (!store) return;
+    let live = true;
+    unwrap(api.GET("/api/templates", { params: { query: { store } } }))
+      .then((r) => {
+        if (live) templates = r ?? [];
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  });
+  // The project the task goes under limits the templates and may have defaults of its own.
+  const scopedTemplates = $derived.by(() => {
+    const p = parent;
+    const project = p?.kind === "project" ? p.ulid : p?.project?.ulid;
+    return sc.current?.scoped?.find((s) => s.where === `project:${project}`)?.templates;
+  });
+  const usable = $derived(usableTemplates(templates, scopedTemplates?.only));
+  const kindDefault = $derived.by(() => {
+    const name =
+      scopedTemplates?.default?.[kind] ??
+      sc.current?.kinds?.find((k) => k.name === kind)?.template ??
+      "";
+    return usable.some((t) => t.name === name) ? name : "";
+  });
+  const template = $derived(pickedTemplate ?? kindDefault);
   const kinds = $derived(sc.current?.kinds ?? []);
   const allowed = (name: string) => !sc.current || canParent(sc.current, name, parentKind);
   $effect(() => {
@@ -157,6 +189,8 @@
       store: parent ? undefined : ws?.store,
       workspace: showChoice ? ws?.name : undefined,
       kind: kind && kind !== defaultKindName ? kind : undefined,
+      template: template && template !== kindDefault ? template : undefined,
+      noTemplate: template === "" && kindDefault !== "",
       body: body.trim() === "" ? undefined : body,
       props: Object.keys(props).length > 0 ? props : undefined,
     });
@@ -177,6 +211,7 @@
             ...(parent ? { parent: parent.ulid } : { workspace: ws.name }),
             kind,
             status,
+            ...(template ? { template } : kindDefault ? { no_template: true } : {}),
             ...(assignees.length > 0 ? { assignees } : {}),
             ...(Object.keys(props).length > 0 ? { props } : {}),
           },
@@ -184,7 +219,7 @@
       );
       cache.applyWrite({ task: r.task, commit: r.commit });
       toast({
-        message: `${did.current(ws.store, r.task.id)} を作成しました · ${ws.name}`,
+        message: `${did.current(ws.store, r.task.id)} を作成しました · ${ws.name}${r.children ? ` · 子タスク ${r.children} 件` : ""}`,
         link: { label: "開く", href: router.href({ name: "task", ulid: r.task.ulid }) },
       });
       if (more) {
@@ -316,6 +351,24 @@
         <span class="hint">{hold}</span>
       {/if}
     </div>
+
+    {#if usable.length > 0}
+      <div class="field">
+        <label class="lbl" for="create-template">テンプレート</label>
+        <select
+          id="create-template"
+          value={template}
+          onchange={(e) => (pickedTemplate = e.currentTarget.value)}
+        >
+          <option value="">なし</option>
+          {#each usable as t (t.name)}
+            <option value={t.name}>
+              {t.name}{t.children > 0 ? `（子タスク ${t.children}）` : ""}
+            </option>
+          {/each}
+        </select>
+      </div>
+    {/if}
 
     <div class="field">
       <span class="lbl">本文 <span class="hint">Markdown · @ で人、# でタスク</span></span>

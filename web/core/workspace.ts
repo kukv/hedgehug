@@ -49,12 +49,25 @@ export function prefixProblem(
 }
 
 // removeBlocker is why a workspace cannot be removed, or null when it can: a workspace goes only when
-// it has no task at all, deleted ones included (the server answers 409 workspace.not_empty otherwise).
-export function removeBlocker(w: Pick<WorkspaceEntry, "tasks" | "deleted">): string | null {
+// it has no task at all, deleted ones included, and no sprint or release (the server answers 409
+// workspace.not_empty otherwise).
+export function removeBlocker(
+  w: Pick<WorkspaceEntry, "tasks" | "deleted" | "sprints" | "releases">,
+): string | null {
   const n = w.tasks + w.deleted;
-  if (n === 0) return null;
-  const deleted = w.deleted > 0 ? `（削除済み ${w.deleted} 件を含む）` : "";
-  return `タスク ${n} 件${deleted}が残っているため削除できません。別のワークスペースへ移すか完全に削除すると消せます`;
+  const parts: string[] = [];
+  if (n > 0) {
+    parts.push(`タスク ${n} 件${w.deleted > 0 ? `（削除済み ${w.deleted} 件を含む）` : ""}`);
+  }
+  if (w.sprints > 0) parts.push(`スプリント ${w.sprints} 件`);
+  if (w.releases > 0) parts.push(`リリース ${w.releases} 件`);
+  if (parts.length === 0) return null;
+  const plans = [w.sprints > 0 && "スプリント", w.releases > 0 && "リリース"].filter(Boolean);
+  const how =
+    plans.length === 0
+      ? "別のワークスペースへ移すか完全に削除すると消せます"
+      : `${n > 0 ? "タスクを別のワークスペースへ移すか完全に削除し、" : ""}${plans.join("と")}を削除すると消せます`;
+  return `${parts.join("、")}が残っているため削除できません。${how}`;
 }
 
 // detachedText says what a move took off the tasks (the sprint and the releases that are not of the
