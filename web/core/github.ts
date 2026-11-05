@@ -61,6 +61,12 @@ export const repoOf = (ref: string): string => ref.split("/").slice(0, 3).join("
 /** The repository without github.com, as people write it. */
 export const repoLabel = (repo: string): string => repo.replace(/^github\.com\//, "");
 
+/** The ref of a link as people write it: github.com/org-a/web/issues/45 is org-a/web#45. */
+export function refLabel(ref: string): string {
+  const [, owner, repo, , number] = ref.split("/");
+  return `${owner}/${repo}#${number}`;
+}
+
 /** The link as POST and DELETE /api/tasks/{id}/links take it: [<host>/]owner/repo#n. */
 export function linkArg(l: Link): string {
   const number = l.ref.slice(l.ref.lastIndexOf("/") + 1);
@@ -121,11 +127,13 @@ const FIELDS: Readonly<Record<string, string>> = {
   milestone: "マイルストーン",
 };
 
+export const fieldLabel = (name: string): string => FIELDS[name] ?? name;
+
 /** The fields a link of an issue syncs: its own, else the ones of its mode. The mode link has none. */
 export function syncedFields(l: Link, fields: IssueFields | undefined): string {
   if (l.sync === "link") return "";
   const names = l.fields ?? (l.sync === "push" ? fields?.push : fields?.mirror) ?? [];
-  return names.map((n) => FIELDS[n] ?? n).join("・");
+  return names.map(fieldLabel).join("・");
 }
 
 const EVENTS: Readonly<Record<string, string>> = {

@@ -11,6 +11,7 @@
     type Notification,
     notificationText,
     overwrittenField,
+    ruleOf,
     sortNotifications,
     tabCounts,
     taskOf,
@@ -27,6 +28,7 @@
   import IdLabel from "../ui/IdLabel.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
   import Tabs from "../ui/Tabs.svelte";
+  import RejectedAction from "./RejectedAction.svelte";
 
   // The tab is in the address (?tab=), so a tab opened in a new browser tab is the same tab.
   let { tab }: { tab: InboxTab } = $props();
@@ -83,6 +85,13 @@
     };
   });
 
+  // The sentence of a rule names a status of the Store of the item.
+  const schemas = useSubscribe(c.schema, () => (store: string) => c.schema.get(store));
+  $effect(() => {
+    const automated = (items ?? []).filter((n) => n.kind === "automation").map((n) => n.store);
+    for (const store of new Set(automated)) void c.schema.load(store);
+  });
+
   const sorted = $derived(sortNotifications(items ?? []));
   const counts = $derived(tabCounts(items ?? []));
   const shown = $derived(filterByTab(sorted, tab));
@@ -105,6 +114,8 @@
   function text(n: Notification) {
     return notificationText(n, {
       workspaceName: (ulid) => c.stores.workspace(n.store, ulid)?.name,
+      statusLabel: (status) =>
+        schemas.current(n.store)?.statuses?.find((s) => s.name === status)?.label || status,
     });
   }
 
@@ -254,6 +265,15 @@
                     <Button size="sm" disabled={isBusy(n)} onclick={() => void read(n)}
                       >このままにする</Button
                     >
+                  {:else if n.kind === "automation_rejected" && task}
+                    <RejectedAction
+                      task={task.ulid}
+                      store={n.store}
+                      rule={ruleOf(n)}
+                      disabled={isBusy(n) || offOf(n) !== null}
+                      off={offOf(n) ?? undefined}
+                      onread={() => void read(n)}
+                    />
                   {:else}
                     <Button size="sm" disabled={isBusy(n)} onclick={() => void read(n)}
                       >既読にする</Button

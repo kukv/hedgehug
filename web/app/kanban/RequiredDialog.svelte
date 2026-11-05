@@ -11,6 +11,7 @@
   import { useDisplayId } from "../svelte-store";
   import Button from "../ui/Button.svelte";
   import Dialog from "../ui/Dialog.svelte";
+  import { requiredLabel } from "./drop";
 
   type Props = {
     task: TaskView;
@@ -28,19 +29,7 @@
   const statusLabel = $derived(schema.statuses?.find((s) => s.name === status)?.label || status);
   const rows = $derived(propRows(schema, {}));
   const rowOf = (name: string) => rows.find((r) => r.name === name);
-  const NAMES: Record<string, string> = {
-    assignees: "担当者",
-    labels: "ラベル",
-    parent: "親",
-    blocked_by: "ブロックしているタスク",
-    watchers: "ウォッチャー",
-    repos: "リポジトリ",
-    sprint: "スプリント",
-    releases: "リリース",
-    links: "リンク",
-  };
-  const labelOf = (name: string): string =>
-    NAMES[name] ?? schema.props[name]?.label ?? rowOf(name)?.label ?? name;
+  const labelOf = (name: string): string => requiredLabel(schema, name);
   const detailHref = $derived(router.href({ name: "task", ulid: task.ulid }));
 
   let assignees = $state<string[]>([]);

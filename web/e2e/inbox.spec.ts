@@ -1,6 +1,6 @@
 // Screens this spec relies on (see screens.ts for the shared list):
-//   - /inbox is the inbox of every store: the heading "通知", the tabs (links in the navigation "通知の種類": すべて, 上書き,
-//     メンション, 同期の修復; the number is the unread of the tab), and a row for each item (a
+//   - /inbox is the inbox of every store: the heading "通知", the tabs (links in the navigation "通知の種類": すべて, メンション,
+//     割り当て, ウォッチ, 上書き, 自動化, 同期の修復; the number is the unread of the tab), and a row for each item (a
 //     listitem) with the ID as a link, the sentence, and the buttons: an overwritten value has
 //     "自分の値に戻す" and "このままにする", any other unread item "既読にする"
 //   - the sidebar ("メインナビゲーション") has the link "通知" with the number of unread items

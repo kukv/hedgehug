@@ -2,7 +2,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/sv
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { InboxTab, Notification } from "../../core/notifications";
 import { FakeConn } from "../../core/testing";
-import { fail, ok } from "../detail/testkit";
+import { fail, ok, taskView } from "../detail/testkit";
 import { renderWithCore } from "../test-utils";
 import { resetToasts, toasts } from "../toast.svelte";
 import InboxPage from "./InboxPage.svelte";
@@ -148,15 +148,22 @@ describe("InboxPage", () => {
     expect(within(rowOf("REL-11")).getByText("points: 2（あなた）")).toBeTruthy();
   });
 
-  it("has the four tabs with the number of unread; zero shows no number", async () => {
+  it("has the tabs with the number of unread; zero shows no number", async () => {
     setup([overwritten, mention, assigned, watched]);
     await screen.findByText(/上書きされました/);
     const tabs = screen.getByRole("navigation", { name: "通知の種類" });
     const names = within(tabs)
       .getAllByRole("link")
       .map((t) => t.textContent?.replace(/\s+/g, ""));
-    // no tab for assigned, watch or automations; the repair tab has nothing unread
-    expect(names).toEqual(["すべて3", "上書き1", "メンション1", "同期の修復"]);
+    expect(names).toEqual([
+      "すべて3",
+      "メンション1",
+      "割り当て1",
+      "ウォッチ",
+      "上書き1",
+      "自動化",
+      "同期の修復",
+    ]);
   });
 
   it("each tab is a link to its own address, and the tab of the address is the current one", async () => {
@@ -167,13 +174,24 @@ describe("InboxPage", () => {
     );
     expect(links.map((l) => l.getAttribute("href"))).toEqual([
       "/inbox",
-      "/inbox?tab=overwritten",
       "/inbox?tab=mention",
+      "/inbox?tab=assigned",
+      "/inbox?tab=watch",
+      "/inbox?tab=overwritten",
+      "/inbox?tab=automation",
       "/inbox?tab=repair",
     ]);
-    expect(links.map((l) => l.getAttribute("aria-current"))).toEqual([null, null, "page", null]);
+    expect(links.map((l) => l.getAttribute("aria-current"))).toEqual([
+      null,
+      "page",
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
     // it opens in the same tab: the address changes, and App gives the page the tab
-    await fireEvent.click(links[1] as HTMLElement);
+    await fireEvent.click(links[4] as HTMLElement);
     expect(location.pathname + location.search).toBe("/inbox?tab=overwritten");
   });
 
@@ -461,14 +479,80 @@ describe("InboxPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("boom");
   });
 
-  it("shows the command under the list, and no tab of the later phases", async () => {
+  describe("a rule that was refused", () => {
+    const refused = n({
+      ulid: "N9",
+      kind: "automation_rejected",
+      author: "",
+      task: task("PAY-29"),
+      detail: { rule: "pr-merged", reason: "points: required" },
+    });
+    const schema = {
+      statuses: [
+        { name: "todo", label: "未着手", category: "todo", default: true },
+        { name: "done", label: "完了", category: "done", default: true },
+      ],
+      kinds: [{ name: "task", role: "work" }],
+      props: { points: { type: "number", label: "points" } },
+      workflow: { required: { done: ["points"] } },
+    };
+
+    function refusedSetup(rules: unknown[]) {
+      const patched = { task: { ulid: "U-PAY-29" }, commit: "c9" };
+      const api = {
+        GET: vi.fn((path: string) => {
+          if (path === "/api/automations") return ok(rules);
+          if (path === "/api/tasks/{id}") {
+            return ok(
+              taskView({ ulid: "U-PAY-29", id: "PAY-29", status: "todo", store: "shared" }),
+            );
+          }
+          return ok([refused]);
+        }),
+        PATCH: vi.fn(() => ok(patched)),
+        POST: vi.fn(),
+      };
+      renderWithCore(
+        InboxPage,
+        { tab: "all" },
+        {
+          api,
+          conn: new FakeConn(),
+          cache: { subscribe: () => () => {}, applyWrite: vi.fn() },
+          schema: { subscribe: () => () => {}, get: () => schema, load: async () => {} },
+        },
+      );
+      return api;
+    }
+
+    it("offers to fill what the status of the rule needs, and moves the task", async () => {
+      const api = refusedSetup([{ id: "pr-merged", on: "pr.merged", category: "done" }]);
+      await fireEvent.click(
+        await screen.findByRole("button", { name: "points を入力して完了にする" }),
+      );
+      const dialog = await screen.findByRole("dialog");
+      await fireEvent.input(within(dialog).getByRole("spinbutton"), { target: { value: "3" } });
+      await fireEvent.click(within(dialog).getByRole("button", { name: /完了にする/ }));
+      await waitFor(() =>
+        expect(api.PATCH).toHaveBeenCalledWith(
+          "/api/tasks/{id}",
+          expect.objectContaining({ body: { status: "done", props: { points: 3 } } }),
+        ),
+      );
+    });
+
+    it("has only 「このままにする」 when the rule is gone", async () => {
+      refusedSetup([]);
+      await screen.findByRole("button", { name: "このままにする" });
+      await waitFor(() => expect(screen.queryByRole("button", { name: /を入力して/ })).toBeNull());
+    });
+  });
+
+  it("shows the command under the list", async () => {
     setup([mention]);
     await screen.findByText(/メンション/);
     expect(screen.getByRole("button", { name: /コマンドをコピー/ })).toHaveTextContent(
       "hh inbox --all",
     );
-    for (const name of ["割り当て", "ウォッチ", "自動化"]) {
-      expect(screen.queryByRole("link", { name })).toBeNull();
-    }
   });
 });

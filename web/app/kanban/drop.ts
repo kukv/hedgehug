@@ -56,6 +56,22 @@ export function requiredFields(
   return out;
 }
 
+const REQUIRED_NAMES: Readonly<Record<string, string>> = {
+  assignees: "担当者",
+  labels: "ラベル",
+  parent: "親",
+  blocked_by: "ブロックしているタスク",
+  watchers: "ウォッチャー",
+  repos: "リポジトリ",
+  sprint: "スプリント",
+  releases: "リリース",
+  links: "リンク",
+};
+
+// requiredLabel is the name a required field is shown with.
+export const requiredLabel = (schema: SchemaView, name: string): string =>
+  REQUIRED_NAMES[name] ?? (schema.props[name]?.label || name);
+
 // What a required field of a task lacks: `fill` are the empty ones the dialog can take in (assignees,
 // labels, a property it has an editor for); `elsewhere` are the ones that can only be filled in the
 // task detail (the parent, blockers, watchers, repos, a task reference, and what the API does not
