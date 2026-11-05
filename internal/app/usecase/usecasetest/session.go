@@ -86,6 +86,30 @@ func (ts *Session) AppendDefaultAccount() {
 	}
 }
 
+// Renew replaces the session with a new one that has the same outside world
+// (Getenv, Now, the hooks and the rest of the exported fields), as a new run
+// of the command starts: the writer, the tokens and the stores mounted are
+// read again. The helpers that change config.yaml call it; call it after a
+// change made by hand, or for a session that has not cached anything.
+func (ts *Session) Renew() {
+	o := ts.Session
+	ts.Session = &usecase.Session{
+		Getenv:         o.Getenv,
+		Now:            o.Now,
+		Loc:            o.Loc,
+		StoreName:      o.StoreName,
+		Warn:           o.Warn,
+		AfterWrite:     o.AfterWrite,
+		BackgroundSync: o.BackgroundSync,
+		BeforeUpdate:   o.BeforeUpdate,
+		BeforeSwap:     o.BeforeSwap,
+		Keyring:        o.Keyring,
+		HTTPClient:     o.HTTPClient,
+		Run:            o.Run,
+		Progress:       o.Progress,
+	}
+}
+
 // DropDefaultAccount removes DefaultAccountYAML, and the stores' reference to
 // it, for the tests that have no account or set up their own.
 func (ts *Session) DropDefaultAccount() {
@@ -102,7 +126,7 @@ func (ts *Session) DropDefaultAccount() {
 	if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
 		ts.T.Fatal(err)
 	}
-	ts.ForgetWriter()
+	ts.Renew()
 }
 
 // NameAccountOfStores gives the stores that have no account the account name,
@@ -143,7 +167,7 @@ func (ts *Session) NameAccountOfStores(name string) {
 	if err := os.WriteFile(p, out, 0o600); err != nil {
 		ts.T.Fatal(err)
 	}
-	ts.ForgetWriter()
+	ts.Renew()
 }
 
 // FirstAccountName is the name: of the first account in the accounts: text.
@@ -188,7 +212,7 @@ func (ts *Session) DropAccounts() {
 	if err := os.WriteFile(p, out, 0o600); err != nil {
 		ts.T.Fatal(err)
 	}
-	ts.ForgetWriter()
+	ts.Renew()
 }
 
 // BeforeCommand is replication.BeforeCommand for the session.
@@ -782,7 +806,7 @@ func (ts *Session) AsAccount(login string) {
 	if err := os.WriteFile(p.ConfigFile, []byte(text), 0o600); err != nil {
 		ts.T.Fatal(err)
 	}
-	ts.ForgetWriter()
+	ts.Renew()
 }
 
 func (ts *Session) SetMembers(m replicate.Members) {
@@ -894,6 +918,7 @@ func (ts *Session) DeleteTask(id string) {
 func (ts *Session) UseAccount() {
 	ts.T.Helper()
 	ts.AppendConfig("accounts:\n  - name: alice\n    host: github.com\n    login: alice\n")
+	ts.Renew()
 }
 
 // WantErr checks that err has the kind and the code.

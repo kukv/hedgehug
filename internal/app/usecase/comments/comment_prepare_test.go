@@ -43,19 +43,22 @@ func TestPrepareErrorsAreReturnedBare(t *testing.T) {
 	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
 		t.Fatal(err)
 	}
-	cs, err := comments.BeginComment(ts.Session, "ME-1")
-	if err != nil {
-		t.Fatal(err)
-	}
 	c, err := comments.CommentAdd(ts.Session, "ME-1", "one")
 	if err != nil {
 		t.Fatal(err)
 	}
-	es, err := tasks.BeginEdit(ts.Session, "ME-1")
+	// ss has read no writer yet, as ts.Session has: the prepared sessions
+	// below keep it, and read the writer when they are asked to prepare.
+	ss := ts.ForStore(ts.StoreName)
+	cs, err := comments.BeginComment(ss, "ME-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	ces, err := comments.OpenComment(ts.Session, c.Ref.Comment.String())
+	es, err := tasks.BeginEdit(ss, "ME-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ces, err := comments.OpenComment(ss, c.Ref.Comment.String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,8 +75,7 @@ func TestPrepareErrorsAreReturnedBare(t *testing.T) {
 	if err := os.WriteFile(p.ConfigFile, []byte("stores: [\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	ts.ForgetWriter()
-	_, _, boom := ts.Writer()
+	_, _, boom := ss.Writer()
 	if boom == nil {
 		t.Fatal("Writer read a config that does not parse")
 	}
@@ -92,7 +94,7 @@ func TestPrepareErrorsAreReturnedBare(t *testing.T) {
 	if err := os.WriteFile(p.ConfigFile, good, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := ts.Writer(); err != nil {
+	if _, _, err := ss.Writer(); err != nil {
 		t.Errorf("Writer after the config is back = %v; want the error not to be cached", err)
 	}
 	// Nothing to read for an empty body, a body that stays, or a broken task.

@@ -88,7 +88,7 @@ func TestSessionConcurrentOperations(t *testing.T) {
 	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "seed"}); err != nil {
 		t.Fatal(err)
 	}
-	ts.ForgetWriter() // the first of the goroutines reads the writer again
+	ts.Renew() // the first of the goroutines reads the writer again
 	ops := []func() error{
 		func() error { _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); return err },
 		func() error { _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "b"}); return err },
@@ -217,5 +217,57 @@ func TestSessionUpdateCommitAndBeforeUpdate(t *testing.T) {
 	}
 	if before != 1 {
 		t.Errorf("BeforeUpdate called after it was cleared: %d", before)
+	}
+}
+
+// TestRenewCopiesEveryExportedField fails when a field is added to Session
+// and usecasetest's Renew does not carry it to the new session.
+func TestRenewCopiesEveryExportedField(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	v := reflect.ValueOf(ts.Session).Elem()
+	for i := range v.NumField() {
+		f, sf := v.Field(i), v.Type().Field(i)
+		if !sf.IsExported() || !f.IsZero() {
+			continue // what New set stays as it is
+		}
+		switch f.Kind() {
+		case reflect.Func:
+			f.Set(reflect.MakeFunc(f.Type(), func([]reflect.Value) []reflect.Value {
+				out := make([]reflect.Value, f.Type().NumOut())
+				for j := range out {
+					out[j] = reflect.Zero(f.Type().Out(j))
+				}
+				return out
+			}))
+		case reflect.String:
+			f.SetString("x")
+		case reflect.Bool:
+			f.SetBool(true)
+		case reflect.Pointer:
+			f.Set(reflect.New(f.Type().Elem()))
+		case reflect.Interface:
+			f.Set(reflect.ValueOf(&fakeKeyring{}))
+		default:
+			t.Fatalf("Session.%s is a %s; teach this test to set it", sf.Name, f.Kind())
+		}
+	}
+	old := ts.Session
+	ts.Renew()
+	if ts.Session == old {
+		t.Fatal("Renew kept the old session")
+	}
+	got := reflect.ValueOf(ts.Session).Elem()
+	for i := range got.NumField() {
+		sf := got.Type().Field(i)
+		if !sf.IsExported() {
+			continue
+		}
+		if got.Field(i).IsZero() {
+			t.Errorf("Renew does not copy Session.%s", sf.Name)
+		}
+		if got.Field(i).Kind() == reflect.Pointer && got.Field(i).Pointer() != v.Field(i).Pointer() {
+			t.Errorf("Renew does not share Session.%s", sf.Name)
+		}
 	}
 }
