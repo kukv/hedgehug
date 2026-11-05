@@ -230,6 +230,132 @@ components:
       required:
         - store
       type: object
+    BulkCommit:
+      additionalProperties: false
+      properties:
+        commit:
+          type: string
+        store:
+          type: string
+      required:
+        - store
+        - commit
+      type: object
+    BulkInputBody:
+      additionalProperties: false
+      properties:
+        assignees:
+          description: Replaces the assignees
+          items:
+            type: string
+          type: array
+        blocked_by:
+          description: "Replaces the blockers: IDs or ULIDs"
+          items:
+            type: string
+          type: array
+        dry_run:
+          description: Say what would change and what it would break, and write nothing
+          type: boolean
+        kind:
+          type: string
+        labels:
+          description: Replaces the labels
+          items:
+            type: string
+          type: array
+        props:
+          additionalProperties: {}
+          description: Property name to value; null clears it, a list replaces a multiple value
+          type: object
+        query:
+          description: Change the tasks this query finds; give this or ulids
+          type: string
+        releases:
+          description: "Replaces the releases: names in the workspace of the task, or ULIDs"
+          items:
+            type: string
+          type: array
+        repos:
+          description: Replaces the repos
+          items:
+            type: string
+          type: array
+        sprint:
+          description: "The sprint: a name in the workspace of the task, or a ULID; empty takes it off"
+          type: string
+        status:
+          type: string
+        title:
+          type: string
+        ulids:
+          description: The tasks to change; give this or query
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        watchers:
+          description: Replaces the watchers
+          items:
+            type: string
+          type: array
+      type: object
+    BulkResult:
+      additionalProperties: false
+      properties:
+        commits:
+          items:
+            $ref: "#/components/schemas/BulkCommit"
+          type:
+            - array
+            - "null"
+        tasks:
+          items:
+            $ref: "#/components/schemas/BulkTask"
+          type:
+            - array
+            - "null"
+        violations:
+          items:
+            $ref: "#/components/schemas/BulkViolation"
+          type:
+            - array
+            - "null"
+      required:
+        - tasks
+      type: object
+    BulkTask:
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        store:
+          type: string
+        title:
+          type: string
+        ulid:
+          type: string
+      required:
+        - ulid
+        - id
+        - store
+        - title
+      type: object
+    BulkViolation:
+      additionalProperties: false
+      properties:
+        field:
+          type: string
+        message:
+          type: string
+        task:
+          $ref: "#/components/schemas/BulkTask"
+      required:
+        - task
+        - field
+        - message
+      type: object
     Candidate:
       additionalProperties: false
       properties:
@@ -361,6 +487,9 @@ components:
           type:
             - array
             - "null"
+        no_template:
+          description: Do not expand the default template of the kind
+          type: boolean
         parent:
           description: "The parent: an ID or a ULID"
           type: string
@@ -377,14 +506,15 @@ components:
             - "null"
         status:
           type: string
+        template:
+          description: The template to expand
+          type: string
         title:
-          minLength: 1
+          description: May be left out when the template has one
           type: string
         workspace:
           description: The workspace, by name or prefix
           type: string
-      required:
-        - title
       type: object
     CreateIssueInputBody:
       additionalProperties: false
@@ -775,6 +905,10 @@ components:
     IssueWrite:
       additionalProperties: false
       properties:
+        children:
+          description: How many tasks a template added under the task
+          format: int64
+          type: integer
         commit:
           description: The commit made; null when nothing changed
           type:
@@ -1998,6 +2132,16 @@ components:
           items:
             type: string
           type: array
+        template_defaults:
+          additionalProperties:
+            type: string
+          description: Kind to its default template; empty takes them off
+          type: object
+        templates:
+          description: The templates the project uses; empty takes the limit off
+          items:
+            type: string
+          type: array
         transitions:
           additionalProperties:
             items:
@@ -2759,6 +2903,10 @@ components:
     TaskWrite:
       additionalProperties: false
       properties:
+        children:
+          description: How many tasks a template added under the task
+          format: int64
+          type: integer
         commit:
           description: The commit made; null when nothing changed
           type:
@@ -2819,6 +2967,61 @@ components:
         - op
         - author
         - automated
+      type: object
+    TemplateFile:
+      additionalProperties: false
+      properties:
+        content:
+          description: "The file: front matter and body"
+          type: string
+        exists:
+          description: "False for a name that has no file: Content is the skeleton"
+          type: boolean
+        name:
+          type: string
+      required:
+        - name
+        - content
+        - exists
+      type: object
+    TemplatePutInputBody:
+      additionalProperties: false
+      properties:
+        content:
+          description: "The file: front matter and body"
+          type: string
+      required:
+        - content
+      type: object
+    TemplateView:
+      additionalProperties: false
+      properties:
+        children:
+          description: The tasks it adds under the task, at every depth
+          format: int64
+          type: integer
+        kind:
+          type: string
+        name:
+          type: string
+        title:
+          type: string
+      required:
+        - name
+        - children
+      type: object
+    TemplateWrite:
+      additionalProperties: false
+      properties:
+        commit:
+          type:
+            - string
+            - "null"
+        template:
+          $ref: "#/components/schemas/TemplateView"
+      required:
+        - template
+        - commit
       type: object
     TemplatesDef:
       additionalProperties: false
@@ -5282,6 +5485,39 @@ paths:
       summary: Add a task, as hh add
       tags:
         - tasks
+  /api/tasks/bulk:
+    post:
+      operationId: bulk-update-tasks
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: "Change many tasks, as hh set --query: one commit in each store"
+      tags:
+        - tasks
   /api/tasks/{id}:
     delete:
       operationId: delete-task
@@ -6111,6 +6347,143 @@ paths:
       summary: Delete a worklog entry, as hh worklog rm
       tags:
         - planning
+  /api/templates:
+    get:
+      operationId: list-templates
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/TemplateView"
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: List the templates, as hh template ls
+      tags:
+        - templates
+  /api/templates/{name}:
+    delete:
+      operationId: remove-template
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The name of the template
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the template
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Delete a template, as hh template rm
+      tags:
+        - templates
+    get:
+      operationId: get-template
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The name of the template
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the template
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateFile"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Read the file of a template, or the skeleton of a new one
+      tags:
+        - templates
+    put:
+      operationId: put-template
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The name of the template
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the template
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplatePutInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TemplateWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Write a template, as hh template edit
+      tags:
+        - templates
   /api/undo:
     post:
       operationId: undo

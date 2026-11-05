@@ -22,9 +22,11 @@ type ScopedParam struct {
 type scopedPutInput struct {
 	ScopedParam
 	Body struct {
-		Statuses    *[]string            `json:"statuses,omitempty" doc:"The statuses to show; the default of each category has to be in it. Leave it out to keep what the override has; an empty list takes it off, so the store's statuses show"`
-		Transitions *map[string][]string `json:"transitions,omitempty" doc:"Status to the statuses it may move to, on top of the store's. Leave it out to keep what the override has; an empty object takes it off"`
-		Required    *map[string][]string `json:"required,omitempty" doc:"Status to the fields needed to enter it, on top of the store's. Leave it out to keep what the override has; an empty object takes it off"`
+		Statuses         *[]string            `json:"statuses,omitempty" doc:"The statuses to show; the default of each category has to be in it. Leave it out to keep what the override has; an empty list takes it off, so the store's statuses show"`
+		Transitions      *map[string][]string `json:"transitions,omitempty" doc:"Status to the statuses it may move to, on top of the store's. Leave it out to keep what the override has; an empty object takes it off"`
+		Templates        *[]string            `json:"templates,omitempty" doc:"The templates the project uses; empty takes the limit off"`
+		TemplateDefaults *map[string]string   `json:"template_defaults,omitempty" doc:"Kind to its default template; empty takes them off"`
+		Required         *map[string][]string `json:"required,omitempty" doc:"Status to the fields needed to enter it, on top of the store's. Leave it out to keep what the override has; an empty object takes it off"`
 	}
 }
 
@@ -57,13 +59,14 @@ func (s *Server) registerScoped() {
 		Summary: "Change the override of a project, as hh schema scope set", Tags: []string{"schema"},
 	}, func(_ context.Context, in *scopedPutInput) (*scopedOutput, error) {
 		b := in.Body
-		if b.Statuses == nil && b.Transitions == nil && b.Required == nil {
-			return nil, badRequest(errors.New("give statuses, transitions or required"))
+		if b.Statuses == nil && b.Transitions == nil && b.Required == nil && b.Templates == nil && b.TemplateDefaults == nil {
+			return nil, badRequest(errors.New("give statuses, transitions, required, templates or template_defaults"))
 		}
 		ss := s.session(in.Store)
 		defer ss.Close()
 		r, err := schemas.ScopedSet(ss, in.Project, schema.ScopedChange{
 			Statuses: b.Statuses, Transitions: listsOf(b.Transitions), Required: listsOf(b.Required),
+			TemplateOnly: b.Templates, TemplateDefault: b.TemplateDefaults,
 		})
 		if err != nil {
 			return nil, problemOf(err)

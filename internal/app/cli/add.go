@@ -10,16 +10,25 @@ import (
 	"github.com/kukv/hedgehug/internal/app/cli/prompt"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
+	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
 func (a *app) addCmd() *cobra.Command {
-	var parent, project, kind, status, workspace, body, before, after, sprint string
-	var withRepo bool
+	var parent, project, kind, status, workspace, body, before, after, sprint, template string
+	var withRepo, noTemplate bool
 	var props, releases []string
 	cmd := &cobra.Command{
 		Use:   "add <title>",
 		Short: "Add a task",
-		Args:  minArgs(1),
+		Long: `Add a task. --template expands a template with its child tasks, and the title
+may be left out when the template has one. Without it, the default template
+of the kind is expanded, unless --no-template.`,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if template != "" {
+				return nil
+			}
+			return minArgs(1)(cmd, args)
+		},
 		RunE: func(_ *cobra.Command, args []string) error {
 			if err := usecase.CheckPosition(before, after); err != nil {
 				return err
@@ -37,7 +46,7 @@ func (a *app) addCmd() *cobra.Command {
 			return a.add(tasks.AddHereInput{
 				Context: usecase.Input{Parent: parent, Project: project, Workspace: workspace},
 				Repo:    withRepo,
-				Task:    tasks.AddInput{Title: strings.Join(args, " "), Kind: kind, Status: status, Body: body, Assigns: assigns, Before: before, After: after},
+				Task:    tasks.AddInput{Title: strings.Join(args, " "), Kind: kind, Status: status, Body: body, Assigns: assigns, Before: before, After: after, Template: template, NoTemplate: noTemplate},
 			})
 		},
 	}
@@ -51,6 +60,8 @@ func (a *app) addCmd() *cobra.Command {
 	f.StringVar(&after, "after", "", "put it just after this sibling (without --parent, under the sibling's parent)")
 	f.StringVar(&body, "body", "", "the body, in Markdown")
 	f.BoolVar(&withRepo, "repo", false, "put the current repository on the task (the repo ID of its remote: origin, else another remote)")
+	f.StringVar(&template, "template", "", "expand this template")
+	f.BoolVar(&noTemplate, "no-template", false, "do not expand the default template of the kind")
 	f.StringVar(&sprint, "sprint", "", "put it in this sprint of its workspace")
 	f.StringArrayVar(&releases, "release", nil, "put it in this release of its workspace (repeatable)")
 	f.StringArrayVarP(&props, "prop", "p", nil, "set a field or a property, as in hedgehug set (repeatable)")
@@ -99,7 +110,7 @@ func (a *app) add(in tasks.AddHereInput) error {
 				in.Context.PickWorkspace = picked
 			}
 		default:
-			if err := a.printTask(r.TaskResult, verb(r.Committed, "Added")); err != nil {
+			if err := a.printAdded(r.TaskResult); err != nil {
 				return err
 			}
 			if a.jsonOut {
@@ -110,6 +121,24 @@ func (a *app) add(in tasks.AddHereInput) error {
 		}
 	}
 	return errors.New("add asked too many questions")
+}
+
+// printAdded prints the task added, with what its template did.
+func (a *app) printAdded(r usecase.TaskResult) error {
+	w, err := r.Write()
+	if err != nil {
+		return err
+	}
+	if err := a.printWrite(w, verb(r.Committed, "Added")); err != nil || a.jsonOut {
+		return err
+	}
+	var b strings.Builder
+	if w.Children > 0 {
+		fmt.Fprintf(&b, "  with %s under it\n", plural.Count(w.Children, "task"))
+	}
+	writeDetached(&b, w.Detached)
+	_, err = fmt.Fprint(a.stdout, b.String())
+	return err
 }
 
 // askBranchParent asks whether to add under the task the branch names.

@@ -128,9 +128,31 @@ func ScopedSet(ss *usecase.Session, arg string, ch schema.ScopedChange) (ScopedR
 	if err := scopedContainer(ix.Schema(), id, e.Kind); err != nil {
 		return ScopedResult{}, err
 	}
+	if err := templatesExist(s, ch); err != nil {
+		return ScopedResult{}, err
+	}
 	// the same check again under the lock, on the task and the schema the write sees
 	guard := scopedGuard(id, e.ULID)
 	return scopedWrite(ss, s, ix, e.ULID, e, guard, func(sc *schema.Schema) *schema.Schema { return sc.WithScoped(e.ULID, ch) })
+}
+
+// templatesExist refuses a template of ch that the store does not have.
+func templatesExist(s *store.Store, ch schema.ScopedChange) error {
+	var names []string
+	if ch.TemplateOnly != nil {
+		names = append(names, *ch.TemplateOnly...)
+	}
+	if ch.TemplateDefault != nil {
+		for _, n := range *ch.TemplateDefault {
+			names = append(names, n)
+		}
+	}
+	for _, n := range names {
+		if _, err := s.Template(n); errors.Is(err, store.ErrNotFound) {
+			return usecase.NewErr(usecase.KindNotFound, "template.not_found", fmt.Errorf("template %s is not in this store", n), "name", n)
+		}
+	}
+	return nil
 }
 
 // scopedGuard checks the project ulid, which id names, under the lock of the

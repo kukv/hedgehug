@@ -12,6 +12,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/browse"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 )
 
@@ -149,18 +150,20 @@ func affectedOut(r tasks.AffectedResult) (*affectedOutput, error) {
 type createInput struct {
 	StoreParam
 	Body struct {
-		Title     string         `json:"title" minLength:"1"`
-		Parent    string         `json:"parent,omitempty" doc:"The parent: an ID or a ULID"`
-		Workspace string         `json:"workspace,omitempty" doc:"The workspace, by name or prefix"`
-		Kind      string         `json:"kind,omitempty" doc:"project for hh add --kind project"`
-		Status    string         `json:"status,omitempty"`
-		Body      string         `json:"body,omitempty" doc:"The body in Markdown"`
-		Assignees []string       `json:"assignees,omitempty"`
-		Labels    []string       `json:"labels,omitempty"`
-		Repos     []string       `json:"repos,omitempty" doc:"The repo IDs to put on the task"`
-		Props     map[string]any `json:"props,omitempty" doc:"Property name to value"`
-		Before    string         `json:"before,omitempty" doc:"Put it before this sibling; without a parent, it goes under the sibling's parent and in its workspace"`
-		After     string         `json:"after,omitempty" doc:"Put it after this sibling; without a parent, it goes under the sibling's parent and in its workspace"`
+		Title      string         `json:"title,omitempty" doc:"May be left out when the template has one"`
+		Template   string         `json:"template,omitempty" doc:"The template to expand"`
+		NoTemplate bool           `json:"no_template,omitempty" doc:"Do not expand the default template of the kind"`
+		Parent     string         `json:"parent,omitempty" doc:"The parent: an ID or a ULID"`
+		Workspace  string         `json:"workspace,omitempty" doc:"The workspace, by name or prefix"`
+		Kind       string         `json:"kind,omitempty" doc:"project for hh add --kind project"`
+		Status     string         `json:"status,omitempty"`
+		Body       string         `json:"body,omitempty" doc:"The body in Markdown"`
+		Assignees  []string       `json:"assignees,omitempty"`
+		Labels     []string       `json:"labels,omitempty"`
+		Repos      []string       `json:"repos,omitempty" doc:"The repo IDs to put on the task"`
+		Props      map[string]any `json:"props,omitempty" doc:"Property name to value"`
+		Before     string         `json:"before,omitempty" doc:"Put it before this sibling; without a parent, it goes under the sibling's parent and in its workspace"`
+		After      string         `json:"after,omitempty" doc:"Put it after this sibling; without a parent, it goes under the sibling's parent and in its workspace"`
 	}
 }
 
@@ -169,6 +172,16 @@ type patchInput struct {
 	Body struct {
 		Fields
 		Body *string `json:"body,omitempty" doc:"The body in Markdown"`
+	}
+}
+
+type bulkInput struct {
+	StoreParam
+	Body struct {
+		Fields
+		ULIDs  []string `json:"ulids,omitempty" doc:"The tasks to change; give this or query"`
+		Query  string   `json:"query,omitempty" doc:"Change the tasks this query finds; give this or ulids"`
+		DryRun bool     `json:"dry_run,omitempty" doc:"Say what would change and what it would break, and write nothing"`
 	}
 }
 
@@ -194,6 +207,9 @@ func (s *Server) registerTaskWrites() {
 		Summary: "Add a task, as hh add", Tags: []string{"tasks"},
 	}, func(_ context.Context, in *createInput) (*taskWriteOutput, error) {
 		b := &in.Body
+		if b.Title == "" && b.Template == "" {
+			return nil, badRequest(errors.New("give title or template"))
+		}
 		f := Fields{Props: b.Props}
 		if b.Assignees != nil {
 			f.Assignees = &b.Assignees
@@ -210,11 +226,43 @@ func (s *Server) registerTaskWrites() {
 		}
 		ss := s.session(in.Store)
 		defer ss.Close()
-		res, err := tasks.Add(ss, tasks.AddInput{Title: b.Title, Parent: b.Parent, Workspace: b.Workspace, Kind: b.Kind, Status: b.Status, Body: b.Body, Assigns: assigns, Before: b.Before, After: b.After})
+		res, err := tasks.Add(ss, tasks.AddInput{Template: b.Template, NoTemplate: b.NoTemplate, Title: b.Title, Parent: b.Parent, Workspace: b.Workspace, Kind: b.Kind, Status: b.Status, Body: b.Body, Assigns: assigns, Before: b.Before, After: b.After})
 		if err != nil {
 			return nil, problemOf(err)
 		}
 		return writeOut(res)
+	})
+
+	huma.Register(s.api, huma.Operation{
+		OperationID: "bulk-update-tasks", Method: http.MethodPost, Path: "/api/tasks/bulk",
+		Summary: "Change many tasks, as hh set --query: one commit in each store", Tags: []string{"tasks"},
+	}, func(_ context.Context, in *bulkInput) (*struct{ Body tasks.BulkResult }, error) {
+		b := &in.Body
+		if (b.Query == "") == (len(b.ULIDs) == 0) {
+			return nil, badRequest(errors.New("give query or ulids"))
+		}
+		assigns, err := b.assigns()
+		if err != nil {
+			return nil, badRequest(err)
+		}
+		ss := s.session(in.Store)
+		defer ss.Close()
+		var targets []usecase.TaskTarget
+		if b.Query != "" {
+			targets, err = browse.Targets(ss, b.Query)
+		} else {
+			targets, err = browse.TargetsOf(ss, b.ULIDs)
+		}
+		if err != nil {
+			return nil, problemOf(err)
+		}
+		r := tasks.BulkResult{Tasks: []tasks.BulkTask{}}
+		if len(targets) > 0 {
+			if r, err = tasks.Bulk(ss, tasks.BulkInput{Targets: targets, Assigns: assigns, DryRun: b.DryRun}); err != nil {
+				return nil, problemOf(err)
+			}
+		}
+		return &struct{ Body tasks.BulkResult }{r}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{

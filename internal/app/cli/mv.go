@@ -73,16 +73,21 @@ func (a *app) mv(arg, workspaceArg, parentArg string, root bool, before, after s
 	for _, c := range res.Renumbered() {
 		fmt.Fprintf(&b, "  %s → %s\n", c.Old, c.New)
 	}
-	for _, d := range w.Detached {
-		if d.Sprint != "" {
-			fmt.Fprintf(&b, "  %s: removed from sprint %s\n", d.DisplayID, d.Sprint)
-		}
-		for _, r := range d.Releases {
-			fmt.Fprintf(&b, "  %s: removed from release %s\n", d.DisplayID, r)
-		}
-	}
+	writeDetached(&b, w.Detached)
 	_, err = fmt.Fprint(a.stdout, b.String())
 	return err
+}
+
+// writeDetached says what a move or a template took off the tasks.
+func writeDetached(b *strings.Builder, ds []usecase.Detached) {
+	for _, d := range ds {
+		if d.Sprint != "" {
+			fmt.Fprintf(b, "  %s: removed from sprint %s\n", d.DisplayID, d.Sprint)
+		}
+		for _, r := range d.Releases {
+			fmt.Fprintf(b, "  %s: removed from release %s\n", d.DisplayID, r)
+		}
+	}
 }
 
 // mvStore moves a task to another store. On a terminal it asks what the

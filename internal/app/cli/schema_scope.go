@@ -10,6 +10,23 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 )
 
+// templateDefaultsFlag reads the values of --template-default: kind=name. One
+// empty value is no defaults.
+func templateDefaultsFlag(vals []string) (map[string]string, error) {
+	m := map[string]string{}
+	for _, v := range vals {
+		if v == "" {
+			continue
+		}
+		kind, name, ok := strings.Cut(v, "=")
+		if !ok || kind == "" || name == "" {
+			return nil, usageErrorf("--template-default %q: want kind=name", v)
+		}
+		m[kind] = name
+	}
+	return m, nil
+}
+
 func (a *app) scopeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "scope",
@@ -22,7 +39,8 @@ func (a *app) scopeCmd() *cobra.Command {
 		},
 	}
 	var statuses string
-	var transitions, required []string
+	var transitions, required, templateDefaults []string
+	var templateOnly string
 	set := &cobra.Command{
 		Use:   "set <project>",
 		Short: "Change the statuses and the workflow of one project and its descendants",
@@ -50,8 +68,22 @@ func (a *app) scopeCmd() *cobra.Command {
 					return err
 				}
 			}
-			if ch.Statuses == nil && ch.Transitions == nil && ch.Required == nil {
-				return usageErrorf("give --statuses, --transition or --required")
+			if f.Changed("templates") {
+				v, err := splitNames("--templates", templateOnly)
+				if err != nil {
+					return err
+				}
+				ch.TemplateOnly = &v
+			}
+			if f.Changed("template-default") {
+				m, err := templateDefaultsFlag(templateDefaults)
+				if err != nil {
+					return err
+				}
+				ch.TemplateDefault = &m
+			}
+			if ch.Statuses == nil && ch.Transitions == nil && ch.Required == nil && ch.TemplateOnly == nil && ch.TemplateDefault == nil {
+				return usageErrorf("give --statuses, --transition, --required, --templates or --template-default")
 			}
 			r, err := schemas.ScopedSet(a.ss, args[0], ch)
 			if err != nil {
@@ -60,6 +92,8 @@ func (a *app) scopeCmd() *cobra.Command {
 			return a.printScoped(r, "Changed", "Nothing to change in", true)
 		},
 	}
+	set.Flags().StringVar(&templateOnly, "templates", "", "the templates the project uses, such as bug,feature")
+	set.Flags().StringArrayVar(&templateDefaults, "template-default", nil, "a kind and its default template, such as task=bug (repeatable)")
 	set.Flags().StringVar(&statuses, "statuses", "", "the statuses to show, such as todo,in_progress,done,canceled")
 	set.Flags().StringArrayVar(&transitions, "transition", nil, "a status and the statuses it may move to, such as todo=in_progress,done (repeatable)")
 	set.Flags().StringArrayVar(&required, "required", nil, "a status and the fields needed to enter it, such as done=points,due (repeatable)")

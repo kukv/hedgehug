@@ -776,6 +776,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tasks/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change many tasks, as hh set --query: one commit in each store */
+        post: operations["bulk-update-tasks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/{id}": {
         parameters: {
             query?: never;
@@ -1040,6 +1057,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the templates, as hh template ls */
+        get: operations["list-templates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/templates/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the file of a template, or the skeleton of a new one */
+        get: operations["get-template"];
+        /** Write a template, as hh template edit */
+        put: operations["put-template"];
+        post?: never;
+        /** Delete a template, as hh template rm */
+        delete: operations["remove-template"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/undo": {
         parameters: {
             query?: never;
@@ -1238,6 +1291,55 @@ export interface components {
         AutomationsChanged: {
             store: string;
         };
+        BulkCommit: {
+            commit: string;
+            store: string;
+        };
+        BulkInputBody: {
+            /** @description Replaces the assignees */
+            assignees?: string[];
+            /** @description Replaces the blockers: IDs or ULIDs */
+            blocked_by?: string[];
+            /** @description Say what would change and what it would break, and write nothing */
+            dry_run?: boolean;
+            kind?: string;
+            /** @description Replaces the labels */
+            labels?: string[];
+            /** @description Property name to value; null clears it, a list replaces a multiple value */
+            props?: {
+                [key: string]: unknown;
+            };
+            /** @description Change the tasks this query finds; give this or ulids */
+            query?: string;
+            /** @description Replaces the releases: names in the workspace of the task, or ULIDs */
+            releases?: string[];
+            /** @description Replaces the repos */
+            repos?: string[];
+            /** @description The sprint: a name in the workspace of the task, or a ULID; empty takes it off */
+            sprint?: string;
+            status?: string;
+            title?: string;
+            /** @description The tasks to change; give this or query */
+            ulids?: string[] | null;
+            /** @description Replaces the watchers */
+            watchers?: string[];
+        };
+        BulkResult: {
+            commits?: components["schemas"]["BulkCommit"][] | null;
+            tasks: components["schemas"]["BulkTask"][] | null;
+            violations?: components["schemas"]["BulkViolation"][] | null;
+        };
+        BulkTask: {
+            id: string;
+            store: string;
+            title: string;
+            ulid: string;
+        };
+        BulkViolation: {
+            field: string;
+            message: string;
+            task: components["schemas"]["BulkTask"];
+        };
         Candidate: {
             account?: string;
             name: string;
@@ -1294,6 +1396,8 @@ export interface components {
             /** @description project for hh add --kind project */
             kind?: string;
             labels?: string[] | null;
+            /** @description Do not expand the default template of the kind */
+            no_template?: boolean;
             /** @description The parent: an ID or a ULID */
             parent?: string;
             /** @description Property name to value */
@@ -1303,7 +1407,10 @@ export interface components {
             /** @description The repo IDs to put on the task */
             repos?: string[] | null;
             status?: string;
-            title: string;
+            /** @description The template to expand */
+            template?: string;
+            /** @description May be left out when the template has one */
+            title?: string;
             /** @description The workspace, by name or prefix */
             workspace?: string;
         };
@@ -1506,6 +1613,11 @@ export interface components {
             message: string;
         };
         IssueWrite: {
+            /**
+             * Format: int64
+             * @description How many tasks a template added under the task
+             */
+            children?: number;
             /** @description The commit made; null when nothing changed */
             commit: string | null;
             /** @description What a move to another workspace took off the tasks: the sprint and the releases that are not of the new workspace, as hh mv tells it */
@@ -2004,6 +2116,12 @@ export interface components {
             };
             /** @description The statuses to show; the default of each category has to be in it. Leave it out to keep what the override has; an empty list takes it off, so the store's statuses show */
             statuses?: string[];
+            /** @description Kind to its default template; empty takes them off */
+            template_defaults?: {
+                [key: string]: string;
+            };
+            /** @description The templates the project uses; empty takes the limit off */
+            templates?: string[];
             /** @description Status to the statuses it may move to, on top of the store's. Leave it out to keep what the override has; an empty object takes it off */
             transitions?: {
                 [key: string]: string[] | null;
@@ -2293,6 +2411,11 @@ export interface components {
             workspace: components["schemas"]["WorkspaceRef"];
         };
         TaskWrite: {
+            /**
+             * Format: int64
+             * @description How many tasks a template added under the task
+             */
+            children?: number;
             /** @description The commit made; null when nothing changed */
             commit: string | null;
             /** @description What a move to another workspace took off the tasks: the sprint and the releases that are not of the new workspace, as hh mv tells it */
@@ -2315,6 +2438,31 @@ export interface components {
             store: string;
             /** @description The tasks whose file or comments changed */
             ulids: string[] | null;
+        };
+        TemplateFile: {
+            /** @description The file: front matter and body */
+            content: string;
+            /** @description False for a name that has no file: Content is the skeleton */
+            exists: boolean;
+            name: string;
+        };
+        TemplatePutInputBody: {
+            /** @description The file: front matter and body */
+            content: string;
+        };
+        TemplateView: {
+            /**
+             * Format: int64
+             * @description The tasks it adds under the task, at every depth
+             */
+            children: number;
+            kind?: string;
+            name: string;
+            title?: string;
+        };
+        TemplateWrite: {
+            commit: string | null;
+            template: components["schemas"]["TemplateView"];
         };
         TemplatesDef: {
             default?: {
@@ -4584,6 +4732,42 @@ export interface operations {
             };
         };
     };
+    "bulk-update-tasks": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     "get-task": {
         parameters: {
             query?: {
@@ -5357,6 +5541,147 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorklogWrite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "list-templates": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateView"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "get-template": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The name of the template */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateFile"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "put-template": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The name of the template */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplatePutInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateWrite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "remove-template": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The name of the template */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateWrite"];
                 };
             };
             /** @description Error */

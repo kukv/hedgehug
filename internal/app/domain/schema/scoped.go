@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"maps"
 	"slices"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
@@ -13,6 +14,10 @@ type ScopedChange struct {
 	Statuses    *[]string
 	Transitions *Lists
 	Required    *Lists
+	// TemplateOnly and TemplateDefault replace the templates the project uses
+	// and its default of each kind; empty takes them off.
+	TemplateOnly    *[]string
+	TemplateDefault *map[string]string
 }
 
 // ScopedFor returns the override of project.
@@ -59,6 +64,28 @@ func (s *Schema) WithScoped(project model.ULID, ch ScopedChange) *Schema {
 		sc.Workflow = &w
 		if w.IsZero() {
 			sc.Workflow = nil
+		}
+	}
+	if ch.TemplateOnly != nil || ch.TemplateDefault != nil {
+		var tm Templates
+		if sc.Templates != nil {
+			tm = *sc.Templates
+		}
+		if ch.TemplateOnly != nil {
+			tm.Only = nil
+			if len(*ch.TemplateOnly) > 0 {
+				tm.Only = slices.Clone(*ch.TemplateOnly)
+			}
+		}
+		if ch.TemplateDefault != nil {
+			tm.Default = nil
+			if len(*ch.TemplateDefault) > 0 {
+				tm.Default = maps.Clone(*ch.TemplateDefault)
+			}
+		}
+		sc.Templates = &tm
+		if len(tm.Only) == 0 && len(tm.Default) == 0 {
+			sc.Templates = nil
 		}
 	}
 	switch empty := sc.Statuses == nil && sc.Workflow == nil && sc.Templates == nil; {

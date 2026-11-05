@@ -12,9 +12,10 @@ func CommitPtr(hex string) *string {
 // TaskWrite is what a write to one task answers, in the CLI's --json and in
 // the server's response.
 type TaskWrite struct {
-	Task   *TaskView `json:"task"`
-	Commit *string   `json:"commit" doc:"The commit made; null when nothing changed"`
-	Note   string    `json:"note,omitempty" doc:"What restore at a commit has to say, as hh restore --at prints it"`
+	Task     *TaskView `json:"task"`
+	Commit   *string   `json:"commit" doc:"The commit made; null when nothing changed"`
+	Children int       `json:"children,omitempty" doc:"How many tasks a template added under the task"`
+	Note     string    `json:"note,omitempty" doc:"What restore at a commit has to say, as hh restore --at prints it"`
 	// Detached is for a move to another workspace.
 	Detached []Detached `json:"detached,omitempty" doc:"What a move to another workspace took off the tasks: the sprint and the releases that are not of the new workspace, as hh mv tells it"`
 }
@@ -39,7 +40,12 @@ func (r TaskResult) Write() (TaskWrite, error) {
 	if err != nil {
 		return TaskWrite{}, err
 	}
-	return TaskWrite{Task: v, Commit: CommitPtr(r.Commit)}, nil
+	w := TaskWrite{Task: v, Commit: CommitPtr(r.Commit), Children: r.Children}
+	for _, d := range r.Detached {
+		d.DisplayID = r.index.QualifyID(d.ID)
+		w.Detached = append(w.Detached, d)
+	}
+	return w, nil
 }
 
 // Write is the answer to the move: the task as it is now, the commit and

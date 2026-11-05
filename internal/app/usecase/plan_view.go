@@ -7,6 +7,12 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 )
 
+// TaskTarget is a task a bulk update is on.
+type TaskTarget struct {
+	Store string
+	ULID  model.ULID
+}
+
 // PlanRef names the sprint or a release of a task.
 type PlanRef struct {
 	ULID  string `json:"ulid"`
