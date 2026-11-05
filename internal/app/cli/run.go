@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/cli/prompt"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // version is what --version prints. Main sets it from the version that
@@ -39,7 +41,8 @@ type env struct {
 	run func(name string, args ...string) (stdout, stderr []byte, err error)
 	// openURL opens a URL in the browser; nil means no browser can be opened.
 	openURL func(url string) error
-	// uiContext is for tests: what hh ui runs until; nil is Ctrl-C and SIGTERM.
+	// uiContext makes the context hh ui runs until. The binary's ends with
+	// Ctrl-C and SIGTERM, caught from the moment hh ui asks for it.
 	uiContext func() (context.Context, context.CancelFunc)
 }
 
@@ -62,7 +65,14 @@ func Main(v string) int {
 		getwd:      os.Getwd,
 		openURL:    openURL,
 		keyring:    kr,
+		uiContext:  signalContext,
 	})
+}
+
+// signalContext is a context that Ctrl-C (Ctrl-Break on Windows) and SIGTERM
+// end.
+func signalContext() (context.Context, context.CancelFunc) {
+	return signal.NotifyContext(context.Background(), osfs.StopSignals()...)
 }
 
 func isTerminal(f any) bool {
