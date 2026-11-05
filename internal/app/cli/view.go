@@ -21,6 +21,7 @@ func (a *app) viewCmd() *cobra.Command {
 	}
 	var layout, query, groupBy, kanbanColumns, swimlane string
 	var columns []string
+	var wip map[string]int
 	save := &cobra.Command{
 		Use:   "save <name>",
 		Short: "Save a view, or change the settings given of a saved one",
@@ -38,6 +39,9 @@ func (a *app) viewCmd() *cobra.Command {
 			if c.Flags().Changed("columns") {
 				ch.Columns = &columns
 			}
+			if c.Flags().Changed("wip") {
+				ch.WIP = &wip
+			}
 			return a.viewSave(args[0], ch)
 		},
 	}
@@ -48,6 +52,7 @@ func (a *app) viewCmd() *cobra.Command {
 	f.StringVar(&groupBy, "group-by", "", "what the table groups by: none, parent, status, assignee or project")
 	f.StringVar(&kanbanColumns, "kanban-columns", "", "the columns of the kanban: status or category")
 	f.StringVar(&swimlane, "swimlane", "", "the rows of the kanban: none, assignee or project")
+	f.StringToIntVar(&wip, "wip", nil, "the limits of the kanban columns, such as in_progress=3; replaces the ones saved, and an empty value takes them off")
 	cmd.AddCommand(save,
 		&cobra.Command{
 			Use:   "list",

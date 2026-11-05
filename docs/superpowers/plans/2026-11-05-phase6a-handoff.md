@@ -20,7 +20,7 @@
 
 ## 6d で直すもの
 
-`web/app/workspace/counts.ts` は `tasks + deleted == 0` で削除を有効にする。6a ではサーバーがスプリントとリリースの残りを拒否するので、今の画面はボタンが押せてサーバーの文言を出す。spec の 6d のとおり、`sprints`・`releases` の件数を無効の理由に足す。
+`web/core/workspace.ts` の `removeBlocker` は `tasks + deleted == 0` で削除を有効にする。6a ではサーバーがスプリントとリリースの残りを拒否するので、今の画面はボタンが押せてサーバーの文言を出す。spec の 6d のとおり、`sprints`・`releases` の件数を無効の理由に足す。
 
 ## 次の回
 

@@ -59,6 +59,10 @@ func TestViewCommands(t *testing.T) {
 	if c := te.headCommit("me"); !strings.HasPrefix(c.Message, "hedgehug: view save k\n") || !strings.Contains(c.Message, "Hedgehug-Op: view") {
 		t.Errorf("commit = %q", c.Message)
 	}
+	te.ok("view", "save", "k", "--wip", "doing=3")
+	if f := te.viewFile("k"); !strings.Contains(f, "wip:\n    doing: 3\n") {
+		t.Errorf("--wip wrote %q", f)
+	}
 }
 
 // viewFile returns the file of the view name in the store me.

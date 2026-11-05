@@ -3,6 +3,7 @@ package views_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -129,7 +130,7 @@ func TestViewListGetRemoveRename(t *testing.T) {
 		{Name: "a", Layout: "kanban", Query: "label:a", Table: views.SavedTable{Columns: view.DefaultColumns, GroupBy: "none"}, Kanban: views.SavedKanban{Columns: "status", Swimlane: "none"}},
 		{Name: "b", Layout: "kanban", Query: "label:b", Table: views.SavedTable{Columns: view.DefaultColumns, GroupBy: "none"}, Kanban: views.SavedKanban{Columns: "status", Swimlane: "none"}},
 	}
-	if len(vs) != 2 || vs[0].Name != want[0].Name || vs[1].Query != want[1].Query || !slices.Equal(vs[0].Table.Columns, want[0].Table.Columns) || vs[0].Kanban != want[0].Kanban {
+	if len(vs) != 2 || vs[0].Name != want[0].Name || vs[1].Query != want[1].Query || !slices.Equal(vs[0].Table.Columns, want[0].Table.Columns) || !reflect.DeepEqual(vs[0].Kanban, want[0].Kanban) {
 		t.Errorf("list = %+v", vs)
 	}
 	v, err := views.ViewGet(ts.Session, "a")
