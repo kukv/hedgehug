@@ -28,7 +28,7 @@ func TestDoctorFixBuildsTheHistoryIndex(t *testing.T) {
 	bob.ok("add", "bobs")
 	gitrepotest.RewriteRemote(t, remote)
 	bob.run("sync")
-	if out := bob.ok("doctor", "--fix"); !strings.Contains(out, "Cloned org again") {
+	if out := bob.ok("doctor", "--fix"); !strings.Contains(out, "Rebuilt org on the history of origin") {
 		t.Fatalf("doctor --fix:\n%s", out)
 	}
 	requireHistoryAtHead(t, bob, "org")

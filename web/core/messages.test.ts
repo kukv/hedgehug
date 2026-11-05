@@ -152,7 +152,7 @@ describe("errorMessage", () => {
 
   it("words sync.force_push", () => {
     expect(errorMessage(err("sync.force_push"))).toBe(
-      "リモートの履歴が手元と食い違っています。確かめてから、hh doctor --fix で clone し直してください",
+      "リモートの履歴が手元と食い違っています。確かめてから、hh doctor --fix で origin の新しい履歴に揃えてください",
     );
   });
 

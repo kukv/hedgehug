@@ -458,11 +458,11 @@ describe("DoctorSection: the repair", () => {
       within(screen.getByRole("dialog")).getByRole("button", { name: "修復する" }),
     );
     const result = await within(region()).findByRole("region", { name: "修復の結果" });
-    expect(result.textContent).toContain("origin から clone し直しました");
+    expect(result.textContent).toContain("origin の新しい履歴に揃えました");
     expect(result.textContent).toContain("送っていなかった 3 コミットを戻しました");
     expect(result.textContent).toContain("戻せなかったタスク: DM-7");
     expect(result.textContent).toContain("/old/store");
-    expect(toasts.list[0]?.message).toBe("Store を origin から clone し直しました");
+    expect(toasts.list[0]?.message).toBe("Store を origin の新しい履歴に揃えました");
     expect(within(region()).getByText("問題は見つかりませんでした")).toBeTruthy();
   });
 

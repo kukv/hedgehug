@@ -205,11 +205,11 @@ func forcePushFinding(name string, s *store.Store) ([]usecase.Finding, error) {
 	if err != nil || !ok {
 		return nil, err
 	}
-	return []usecase.Finding{{Check: "unexpected_force_push", Where: name, Msg: replicate.ErrForcePush.Error(), Hint: "hedgehug doctor --fix clones the store again from origin and puts the unpushed changes back; the old store is kept when some could not be put back"}}, nil
+	return []usecase.Finding{{Check: "unexpected_force_push", Where: name, Msg: replicate.ErrForcePush.Error(), Hint: "hedgehug doctor --fix rebuilds the store on the history of origin and puts the unpushed changes back; the old store is kept when some could not be put back"}}, nil
 }
 
 // withRebuildFailure tells, in the unexpected_force_push finding the store
-// already has, that cloning it again failed; a store without one gets a
+// already has, that rebuilding it failed; a store without one gets a
 // finding of its own. There is one finding of the force push either way.
 func withRebuildFailure(fs []usecase.Finding, name string, rerr error) []usecase.Finding {
 	const hint = "fix the cause and run hedgehug doctor --fix again"
