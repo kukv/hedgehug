@@ -28,6 +28,7 @@ func TestCheck(t *testing.T) {
 		{"clean", "rules:\n" + ok("a") + "scoped:\n- {where: '" + where + "', disable: [a]}\n", nil},
 		{"no file", "", nil},
 		{"empty id", "rules:\n- {on: pr.opened, set: {status: todo}}\n", []string{"rules[0].id: "}},
+		{"id with a space", "rules:\n- {id: \"a b\", on: pr.opened, set: {status: todo}}\n", []string{"rules[0].id: "}},
 		{"duplicate id", "rules:\n" + ok("a") + ok("a"), []string{"rules[1].id: "}},
 		{"unknown on", "rules:\n- {id: a, on: pr.closed, set: {status: todo}}\n", []string{"rules[0].on: "}},
 		{"no on", "rules:\n- {id: a, set: {status: todo}}\n", []string{"rules[0].on: "}},

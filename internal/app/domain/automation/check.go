@@ -42,6 +42,8 @@ func (f *File) Check(sc *schema.Schema, project func(model.ULID) bool) []schema.
 		switch {
 		case r.ID == "":
 			add(at+".id", "id is empty")
+		case strings.ContainsAny(r.ID, " \t\r\n"):
+			add(at+".id", "id %q has a space or a line break, which the trailer of a commit cannot hold", r.ID)
 		case ids[r.ID]:
 			add(at+".id", "id %q is used twice", r.ID)
 		}
