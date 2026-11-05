@@ -118,15 +118,17 @@ describe("Connection", () => {
     t.conn.stop();
   });
 
-  it("passes tasks.changed, schema.changed and views.changed to the listeners", async () => {
+  it("passes tasks.changed, schema.changed, views.changed and automations.changed to the listeners", async () => {
     const s1 = sseStream();
     const t = setup([s1]);
     const tasks = vi.fn();
     const schema = vi.fn();
     const views = vi.fn();
+    const automations = vi.fn();
     t.conn.on("tasks.changed", tasks);
     t.conn.on("schema.changed", schema);
     t.conn.on("views.changed", views);
+    t.conn.on("automations.changed", automations);
     t.conn.start();
     s1.send(hello("c1", { shared: "h1" }));
     s1.send(
@@ -141,7 +143,8 @@ describe("Connection", () => {
     );
     s1.send(ev("schema.changed", { store: "shared" }));
     s1.send(ev("views.changed", { store: "shared" }));
-    await t.until(() => views.mock.calls.length === 1);
+    s1.send(ev("automations.changed", { store: "shared" }));
+    await t.until(() => automations.mock.calls.length === 1);
     expect(tasks).toHaveBeenCalledWith({
       store: "shared",
       ulids: ["U1"],

@@ -18,6 +18,7 @@ const BUILTIN: ColumnSpec[] = [
   { id: "parent", label: "親", readonly: true, width: 6.5 },
   { id: "created", label: "作成", readonly: true, width: 6.5 },
   { id: "updated", label: "更新", readonly: true, width: 6.5 },
+  { id: "pr", label: "PR", readonly: true, width: 10 },
 ];
 
 // The first column of a table that lists the tasks of more than one store; it is not a column of a

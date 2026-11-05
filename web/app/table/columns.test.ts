@@ -41,6 +41,7 @@ describe("columnCandidates", () => {
       "parent",
       "created",
       "updated",
+      "pr",
       "area",
       "due",
       "points",
@@ -50,21 +51,21 @@ describe("columnCandidates", () => {
 
   it("takes the union of several stores and the label of the first store that has the property", () => {
     const list = columnCandidates([shared, me]);
-    expect(ids(list).slice(9)).toEqual(["area", "due", "points", "relates", "team"]);
+    expect(ids(list).slice(10)).toEqual(["area", "due", "points", "relates", "team"]);
     expect(list.find((c) => c.id === "area")?.label).toBe("area");
     expect(list.find((c) => c.id === "team")?.label).toBe("チーム");
     expect(list.find((c) => c.id === "due")?.label).toBe("期限");
   });
 
-  it("shows ID, parent, created, updated and task references only", () => {
+  it("shows ID, parent, created, updated, the pull requests and task references only", () => {
     const readonly = columnCandidates([shared])
       .filter((c) => c.readonly)
       .map((c) => c.id);
-    expect(readonly).toEqual(["id", "parent", "created", "updated", "relates"]);
+    expect(readonly).toEqual(["id", "parent", "created", "updated", "pr", "relates"]);
   });
 
   it("has no property column without a schema", () => {
-    expect(columnCandidates([])).toHaveLength(9);
+    expect(columnCandidates([])).toHaveLength(10);
   });
 });
 
@@ -115,7 +116,8 @@ describe("patchFieldOf", () => {
     expect(of("points")).toBe("props.points");
   });
   it("has none for what is only shown", () => {
-    for (const id of ["id", "parent", "created", "updated", "relates"]) expect(of(id)).toBeNull();
+    for (const id of ["id", "parent", "created", "updated", "pr", "relates"])
+      expect(of(id)).toBeNull();
   });
 });
 

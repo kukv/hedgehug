@@ -1,7 +1,8 @@
-<script lang="ts">
+|| prChip(task.links) !== null<script lang="ts">
   import type { Attachment } from "svelte/attachments";
   import type { TaskView } from "../../core/api/client";
   import { formatDate } from "../../core/format";
+  import { prChip } from "../../core/github";
   import type { SchemaView } from "../../core/schema";
   import type { StoreTone } from "../../core/stores";
   import Icon from "../icons/Icon.svelte";
@@ -9,6 +10,7 @@
   import { problemLabel, propText } from "../tree/marks";
   import Avatar from "../ui/Avatar.svelte";
   import IdLabel from "../ui/IdLabel.svelte";
+  import PrChip from "../ui/PrChip.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
 
   type Props = {
@@ -35,7 +37,8 @@
   const people = $derived((task.assignees ?? []).slice(0, 3));
   const hasMeta = $derived(
     !!(task.broken || problem || blockedBy || priority || due || kids > 0 || people.length > 0) ||
-      (task.checklist?.total ?? 0) > 0,
+      (task.checklist?.total ?? 0) > 0 ||
+      prChip(task.links) !== null,
   );
   const more = $derived(Math.max(0, (task.assignees ?? []).length - 3));
 </script>
@@ -66,6 +69,7 @@
       {#if blockedBy}
         <span class="blocked"><Icon name="forbid" size={12} />{blockedBy} 待ち</span>
       {/if}
+      <PrChip links={task.links} />
       {#if priority}
         <span class="priority {priority}">{priority}</span>
       {/if}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SchemaView } from "../../core/schema";
 import { task } from "../tree/fixtures";
-import { buildBoard, columnKeyOf, NO_LANE } from "./board";
+import { autoHints, buildBoard, columnKeyOf, NO_LANE } from "./board";
 
 const sc = (statuses: { name: string; category: string; label?: string }[]) =>
   ({
@@ -218,5 +218,55 @@ describe("columnKeyOf", () => {
     expect(columnKeyOf(t, "status", work)).toBe("wip");
     expect(columnKeyOf(t, "category", work)).toBe("doing");
     expect(columnKeyOf(t, "category", undefined)).toBe("todo");
+  });
+});
+
+describe("autoHints", () => {
+  const schema = sc([
+    { name: "todo", category: "todo" },
+    { name: "in_progress", category: "doing" },
+    { name: "done", category: "done" },
+  ]);
+  const opened = {
+    id: "a",
+    on: "pr.opened",
+    status: "in_progress",
+    enabled: true,
+    disabled_in: [],
+  };
+  const merged = {
+    id: "b",
+    on: "pr.merged",
+    category: "done",
+    when: "all_linked_prs_merged",
+    enabled: true,
+    disabled_in: [],
+  };
+
+  it("puts the words on the column of the status, or of the default of the category", () => {
+    expect([...autoHints([opened, merged], schema, "status", undefined)]).toEqual([
+      ["in_progress", "PR を開くと自動でここへ"],
+      ["done", "全 PR のマージで自動でここへ"],
+    ]);
+  });
+
+  it("uses the category for a board by category", () => {
+    expect([...autoHints([opened], schema, "category", undefined)]).toEqual([
+      ["doing", "PR を開くと自動でここへ"],
+    ]);
+  });
+
+  it("leaves out a rule that is off, an event with no words and another project's rule", () => {
+    const other = { ...opened, project: { ulid: "P2", id: "X-2", title: "x" } };
+    const rules = [{ ...opened, enabled: false }, { ...opened, on: "issue.closed" }, other];
+    expect(autoHints(rules, schema, "status", "P1").size).toBe(0);
+    expect(autoHints([other], schema, "status", "P2").get("in_progress")).toBeDefined();
+  });
+
+  it("joins two rules on one column", () => {
+    const both = [opened, { ...merged, status: "in_progress", when: undefined }];
+    expect(autoHints(both, schema, "status", undefined).get("in_progress")).toBe(
+      "PR を開くと自動でここへ · PR のマージで自動でここへ",
+    );
   });
 });

@@ -13,6 +13,7 @@
   import { propText } from "../tree/marks";
   import IdLabel from "../ui/IdLabel.svelte";
   import Menu from "../ui/Menu.svelte";
+  import PrChip from "../ui/PrChip.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
   import {
     bucketOf,
@@ -199,6 +200,7 @@
                     <a {href} onclick={(e) => onLinkClick(e, href)}>{t.title}</a>
                   </td>
                   <td class="t-project">{by === "due" ? (t.project?.title ?? "") : ""}</td>
+                  <td class="w-pr"><PrChip links={t.links} /></td>
                   <td class="w-due" class:alert={dueAlert(t)}>{dueText(t)}</td>
                   <td class="w-store">
                     <StoreBadge store={t.store} tone={c.stores.tone(t.store)} compact />
@@ -353,6 +355,10 @@
   .w-due.alert {
     color: var(--danger);
     font-weight: 500;
+  }
+  .w-pr {
+    width: 9rem;
+    white-space: nowrap;
   }
   .w-store {
     width: 9rem;

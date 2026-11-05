@@ -99,7 +99,9 @@ function setup(o: Setup = {}) {
   const none = () => () => {};
   const api = {
     PATCH: vi.fn(() => ok({ task: byUlid.get("A"), commit: "c1" })),
-    GET: vi.fn(() => ok({ watchers: o.watchers ?? [] })),
+    GET: vi.fn((path: string) =>
+      ok(path === "/api/automations" ? [] : { watchers: o.watchers ?? [] }),
+    ),
   };
   const schemas = o.schemas ?? { shared: schema };
   const stores = o.stores ?? ["shared"];
@@ -124,6 +126,7 @@ function setup(o: Setup = {}) {
   });
   h.core = {
     api,
+    conn: { on: () => () => {} },
     cache: {
       task: (u: string) => byUlid.get(u),
       detail: () => undefined,

@@ -32,6 +32,7 @@
   --success-ink: #14532d;
   --danger-ink: #991b1b;
   --pending: #b45309;
+  --merged: #7e22ce;
   --alert-on-dark: #fcd34d;
   --scrim: rgba(24, 24, 27, 0.42);
   --shadow-card: 0 1px 2px rgba(24, 24, 27, 0.06), 0 8px 24px rgba(24, 24, 27, 0.06);

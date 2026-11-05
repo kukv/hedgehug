@@ -16,6 +16,7 @@ type Handlers = {
   "tasks.changed": (e: TasksChanged) => void;
   "schema.changed": (e: { store: string }) => void;
   "views.changed": (e: { store: string }) => void;
+  "automations.changed": (e: { store: string }) => void;
   "auth.device": (e: AuthDeviceEvent) => void;
   "stores.changed": () => void;
   resync: () => void;
@@ -49,6 +50,7 @@ export class Connection {
     "tasks.changed": new Set(),
     "schema.changed": new Set(),
     "views.changed": new Set(),
+    "automations.changed": new Set(),
     "auth.device": new Set(),
     "stores.changed": new Set(),
     resync: new Set(),
@@ -93,7 +95,10 @@ export class Connection {
   }
 
   on(event: "tasks.changed", fn: (e: TasksChanged) => void): () => void;
-  on(event: "schema.changed" | "views.changed", fn: (e: { store: string }) => void): () => void;
+  on(
+    event: "schema.changed" | "views.changed" | "automations.changed",
+    fn: (e: { store: string }) => void,
+  ): () => void;
   on(event: "auth.device", fn: (e: AuthDeviceEvent) => void): () => void;
   on(event: "stores.changed", fn: () => void): () => void;
   on(event: "resync", fn: () => void): () => void;
@@ -247,6 +252,9 @@ export class Connection {
         break;
       case "views.changed":
         this.emit("views.changed", body as { store: string });
+        break;
+      case "automations.changed":
+        this.emit("automations.changed", body as { store: string });
         break;
       case "auth.device":
         this.emit("auth.device", body as AuthDeviceEvent);
