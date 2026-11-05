@@ -141,10 +141,22 @@ func TestPartialIssueFieldsStayPartial(t *testing.T) {
 		"issue_fields:\n  push: [title]\n",
 		"issue_fields:\n  push: []\n",
 		"issue_fields:\n  props: {milestone: target}\n",
+		"issue_fields:\n  props: {}\n",
 	} {
 		if out := mustEncode(t, mustDecode(t, src)); out != src {
 			t.Errorf("%q came back as %q", src, out)
 		}
+	}
+	if f := mustDecode(t, "issue_fields:\n  props: {}\n"); len(f.IssueFields.Props) != 0 {
+		t.Errorf("props = %v", f.IssueFields.Props)
+	}
+	// Taking the last prop off leaves the key, empty.
+	g := mustDecode(t, "issue_fields:\n  props: {milestone: target}\n")
+	if err := g.SetIssueFields(IssueFieldsChange{Props: map[string]string{"milestone": ""}}); err != nil {
+		t.Fatal(err)
+	}
+	if out, want := mustEncode(t, g), "issue_fields:\n  props: {}\n"; out != want {
+		t.Errorf("out = %q, want %q", out, want)
 	}
 	// An edit writes only what the file or the edit holds.
 	f := mustDecode(t, "issue_fields:\n  default_sync: mirror\n")

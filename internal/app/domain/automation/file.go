@@ -112,10 +112,10 @@ type IssueFields struct {
 // whose value is the default is left out, so that an edit of one key does not
 // write the others. A key that the file has stays, even when it is empty.
 type issueFieldsY struct {
-	DefaultSync *string           `yaml:"default_sync,omitempty"`
-	Push        *[]string         `yaml:"push,omitempty"`
-	Mirror      *[]string         `yaml:"mirror,omitempty"`
-	Props       map[string]string `yaml:"props,omitempty"`
+	DefaultSync *string            `yaml:"default_sync,omitempty"`
+	Push        *[]string          `yaml:"push,omitempty"`
+	Mirror      *[]string          `yaml:"mirror,omitempty"`
+	Props       *map[string]string `yaml:"props,omitempty"`
 }
 
 // wire returns i as the file holds it; old is the issue_fields node that was
@@ -143,7 +143,13 @@ func (i IssueFields) wire(old *yaml.Node) issueFieldsY {
 	if has("mirror") || !slices.Equal(i.Mirror, def.Mirror) {
 		w.Mirror = &i.Mirror
 	}
-	w.Props = i.Props
+	if has("props") || len(i.Props) > 0 {
+		props := i.Props
+		if props == nil {
+			props = map[string]string{}
+		}
+		w.Props = &props
+	}
 	return w
 }
 
