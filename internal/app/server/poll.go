@@ -20,6 +20,8 @@ type tasksChanged struct {
 	Commit  string   `json:"commit" doc:"The commit of the change: HEAD, or one of the commits since the last look"`
 	Op      string   `json:"op" doc:"The Hedgehug-Op of the commit; empty for a commit made by hand"`
 	Author  string   `json:"author" doc:"The Hedgehug-Author of the commit; empty when unknown"`
+
+	Automated bool `json:"automated" doc:"GitHub or a rule wrote it, not a person"`
 }
 
 type unreadEvent struct {
@@ -31,6 +33,10 @@ type schemaChanged struct {
 }
 
 type viewsChanged struct {
+	Store string `json:"store"`
+}
+
+type automationsChanged struct {
 	Store string `json:"store"`
 }
 
@@ -47,6 +53,7 @@ func (h hubSink) StoresChanged()                     { h.hub.Publish(storesChang
 func (h hubSink) TasksChanged(c watch.Change)        { h.hub.Publish(tasksChanged(c)) }
 func (h hubSink) SchemaChanged(store string)         { h.hub.Publish(schemaChanged{Store: store}) }
 func (h hubSink) ViewsChanged(store string)          { h.hub.Publish(viewsChanged{Store: store}) }
+func (h hubSink) AutomationsChanged(store string)    { h.hub.Publish(automationsChanged{Store: store}) }
 func (h hubSink) SyncState(v usecase.SyncStatusView) { h.hub.Publish(v) }
 func (h hubSink) Unread(count int)                   { h.hub.Publish(unreadEvent{Count: count}) }
 

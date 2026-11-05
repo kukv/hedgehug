@@ -6,9 +6,24 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/app/domain/automation"
 	"github.com/kukv/hedgehug/internal/app/storage/ghstate"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
+
+// AutomatedCommit reports whether GitHub or a rule wrote a commit, not a
+// person: by what its trailer says. A fetch that only notes a refused rule is
+// one, as is a commit of an op of GitHub.
+func AutomatedCommit(trailer func(string) (string, bool)) bool {
+	if op, _ := trailer("Hedgehug-Op"); slices.Contains([]string{"gh-fetch", OpGitHubMirror, OpGitHubPush}, op) {
+		return true
+	}
+	if _, ok := trailer(automation.TrailerApplied); ok {
+		return true
+	}
+	_, ok := trailer(automation.TrailerRejected)
+	return ok
+}
 
 // GitHubRepoView is how the reads of one repository of a store go.
 type GitHubRepoView struct {

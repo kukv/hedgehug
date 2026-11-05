@@ -52,9 +52,15 @@
     const mine = ++seq;
     const asked = limit;
     loading = true;
-    const query: { limit: number; workspace?: string; sync?: "exclude" | "only" } = { limit };
+    const query: {
+      limit: number;
+      workspace?: string;
+      sync?: "exclude" | "only";
+      automation?: "exclude";
+    } = { limit };
     if (workspaces.length > 0) query.workspace = workspaces.join(",");
     if (sync !== "") query.sync = sync;
+    if (sync === "exclude") query.automation = "exclude"; // the tab of what people did
     try {
       const list = await unwrap(c.api.GET("/api/activity", { params: { query } }));
       if (mine !== seq) return;

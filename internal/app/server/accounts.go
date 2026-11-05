@@ -34,6 +34,13 @@ type accountTokenInput struct {
 
 type accountLoginOutput struct{ Body accounts.AuthLoginResult }
 
+type accountSourceInput struct {
+	Name string `path:"name" doc:"The name of the account in config.yaml"`
+	Body struct {
+		Token string `json:"token" doc:"Where the token comes from now: gh or env:<VAR>"`
+	}
+}
+
 type accountParam struct {
 	Name string `path:"name" doc:"The name of the account in config.yaml"`
 }
@@ -91,6 +98,20 @@ func (s *Server) registerAccounts() {
 		}
 		s.tokenWritten(res.Pinned)
 		return &accountLoginOutput{Body: res}, nil
+	})
+
+	huma.Register(s.api, huma.Operation{
+		OperationID: "set-account-token-source", Method: http.MethodPut, Path: "/api/accounts/{name}/token-source",
+		Summary: "Change where the token of an account comes from, to gh or env:<VAR>", Tags: []string{"accounts"},
+	}, func(_ context.Context, in *accountSourceInput) (*struct{ Body accounts.AuthSourceResult }, error) {
+		ss := s.session("")
+		defer ss.Close()
+		res, err := accounts.AuthSource(ss, in.Name, in.Body.Token)
+		if err != nil {
+			return nil, problemOf(err)
+		}
+		s.tokenWritten(accounts.Pinned{})
+		return &struct{ Body accounts.AuthSourceResult }{res}, nil
 	})
 
 	huma.Register(s.api, huma.Operation{

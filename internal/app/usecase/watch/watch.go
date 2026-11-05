@@ -41,6 +41,8 @@ type Change struct {
 	Commit  string
 	Op      string
 	Author  string
+	// Automated says GitHub or a rule wrote the commit, not a person.
+	Automated bool
 }
 
 // StoreState is the HEAD and the sync state of one store.
@@ -58,6 +60,7 @@ type Sink interface {
 	TasksChanged(Change)
 	SchemaChanged(store string)
 	ViewsChanged(store string)
+	AutomationsChanged(store string)
 	SyncState(usecase.SyncStatusView)
 	Unread(count int)
 }
@@ -424,6 +427,7 @@ func (w *Watcher) publishDiff(name string, st *polled, fromCommit plumbing.Hash,
 	ev := Change{Store: name, ULIDs: []string{}, Removed: []string{}, Commit: e.Hash.String()}
 	ev.Op, _ = e.Trailer("Hedgehug-Op")
 	ev.Author, _ = e.Trailer("Hedgehug-Author")
+	ev.Automated = usecase.AutomatedCommit(e.Trailer)
 	from, err1 := r.TreeOf(fromCommit)
 	to, err2 := r.TreeOf(e.Hash)
 	if err1 != nil || err2 != nil {
@@ -435,11 +439,13 @@ func (w *Watcher) publishDiff(name string, st *polled, fromCommit plumbing.Hash,
 		w.sink.TasksChanged(ev)
 		return
 	}
-	var schemaCh, viewsCh bool
+	var schemaCh, viewsCh, automationsCh bool
 	for _, c := range changes {
 		switch {
 		case c.Path == "schema.yaml":
 			schemaCh = true
+		case c.Path == model.AutomationsPath:
+			automationsCh = true
 		case strings.HasPrefix(c.Path, model.ViewsDir+"/"):
 			viewsCh = true
 		}
@@ -457,7 +463,7 @@ func (w *Watcher) publishDiff(name string, st *polled, fromCommit plumbing.Hash,
 			addOnce(&ev.ULIDs, u)
 		}
 	}
-	if len(ev.ULIDs) > 0 || len(ev.Removed) > 0 || (!schemaCh && !viewsCh) {
+	if len(ev.ULIDs) > 0 || len(ev.Removed) > 0 || (!schemaCh && !viewsCh && !automationsCh) {
 		w.sink.TasksChanged(ev)
 	}
 	if schemaCh {
@@ -465,6 +471,9 @@ func (w *Watcher) publishDiff(name string, st *polled, fromCommit plumbing.Hash,
 	}
 	if viewsCh {
 		w.sink.ViewsChanged(name)
+	}
+	if automationsCh {
+		w.sink.AutomationsChanged(name)
 	}
 }
 

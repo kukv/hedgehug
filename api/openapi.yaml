@@ -19,6 +19,15 @@ components:
         - name
         - login
       type: object
+    AccountSourceInputBody:
+      additionalProperties: false
+      properties:
+        token:
+          description: "Where the token comes from now: gh or env:<VAR>"
+          type: string
+      required:
+        - token
+      type: object
     AccountTokenInputBody:
       additionalProperties: false
       properties:
@@ -119,6 +128,18 @@ components:
         - id
         - removed
       type: object
+    AuthSourceResult:
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        token:
+          description: Where the token comes from now
+          type: string
+      required:
+        - name
+        - token
+      type: object
     AuthStatus:
       additionalProperties: false
       properties:
@@ -141,6 +162,73 @@ components:
         - name
         - id
         - state
+      type: object
+    AutomationAddInputBody:
+      additionalProperties: false
+      properties:
+        category:
+          description: The category whose default to set; not with status
+          type: string
+        id:
+          minLength: 1
+          type: string
+        "on":
+          description: The event, such as pr.merged
+          minLength: 1
+          type: string
+        project:
+          description: The project the rule is of; without it, the store's
+          type: string
+        status:
+          description: The status to set; not with category
+          type: string
+        when:
+          description: The condition, such as all_linked_prs_merged
+          type: string
+      required:
+        - id
+        - "on"
+      type: object
+    AutomationEnabledInputBody:
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+        project:
+          description: Turn it on or off in this project only (scoped disable)
+          type: string
+      required:
+        - enabled
+      type: object
+    AutomationFieldsInputBody:
+      additionalProperties: false
+      properties:
+        default_sync:
+          description: The mode of a new issue link
+          type: string
+        mirror:
+          description: Replaces the fields mirror mode syncs
+          items:
+            type: string
+          type: array
+        props:
+          additionalProperties:
+            type: string
+          description: Field to property; an empty value takes it off
+          type: object
+        push:
+          description: Replaces the fields push mode syncs
+          items:
+            type: string
+          type: array
+      type: object
+    AutomationsChanged:
+      additionalProperties: false
+      properties:
+        store:
+          type: string
+      required:
+        - store
       type: object
     Candidate:
       additionalProperties: false
@@ -298,6 +386,13 @@ components:
       required:
         - title
       type: object
+    CreateIssueInputBody:
+      additionalProperties: false
+      properties:
+        repo:
+          description: The repository, as [<host>/]owner/repo; without it, the one the task names. A task with none or several needs it
+          type: string
+      type: object
     DefaultView:
       additionalProperties: false
       properties:
@@ -398,6 +493,29 @@ components:
         value:
           description: The value at the given location
       type: object
+    FieldsView:
+      additionalProperties: false
+      properties:
+        default_sync:
+          type: string
+        mirror:
+          items:
+            type: string
+          type: array
+        props:
+          additionalProperties:
+            type: string
+          type: object
+        push:
+          items:
+            type: string
+          type: array
+      required:
+        - default_sync
+        - push
+        - mirror
+        - props
+      type: object
     Finding:
       additionalProperties: false
       properties:
@@ -438,6 +556,114 @@ components:
         - title
         - kind
         - value
+      type: object
+    GitHubRepoView:
+      additionalProperties: false
+      properties:
+        account:
+          description: The name of the account that reads it; absent when none can
+          type: string
+        app_missing:
+          description: GitHub said the GitHub App is not installed where the repository is
+          type: boolean
+        last_fetch:
+          description: When it was last read, absent before the first read
+          format: date-time
+          type: string
+        limit:
+          description: The rate limit, 0 before the first read
+          format: int64
+          type: integer
+        next_fetch:
+          description: The first time it may be read again; absent or past means at the next sync
+          format: date-time
+          type: string
+        remaining:
+          format: int64
+          type: integer
+        repo:
+          description: <host>/<owner>/<repo>
+          type: string
+        reset_at:
+          format: date-time
+          type: string
+        slowed_until:
+          description: "While the reads are held back by the rate limit: when it recovers"
+          format: date-time
+          type: string
+        store:
+          type: string
+        warnings:
+          items:
+            type: string
+          type: array
+      required:
+        - store
+        - repo
+        - warnings
+        - limit
+        - remaining
+        - app_missing
+      type: object
+    GitHubSummary:
+      additionalProperties: false
+      properties:
+        app_missing:
+          description: The repositories the GitHub App is not installed for
+          format: int64
+          type: integer
+        last_fetch:
+          description: The latest read of its repositories
+          format: date-time
+          type: string
+        limit:
+          description: The rate limit of the repository with the least left
+          format: int64
+          type: integer
+        next_fetch:
+          description: The first read to come
+          format: date-time
+          type: string
+        remaining:
+          format: int64
+          type: integer
+        slowed_until:
+          description: "While a read is held back by the rate limit: the last time it recovers"
+          format: date-time
+          type: string
+        warnings:
+          description: The repositories with a warning
+          format: int64
+          type: integer
+      required:
+        - limit
+        - remaining
+        - warnings
+        - app_missing
+      type: object
+    GithubImportInputBody:
+      additionalProperties: false
+      properties:
+        dry_run:
+          description: Only count them
+          type: boolean
+        label:
+          description: The label of the issues to take in
+          minLength: 1
+          type: string
+        parent:
+          description: The task to put them under
+          type: string
+        repo:
+          description: The repository, as [<host>/]owner/repo
+          minLength: 1
+          type: string
+        workspace:
+          description: The workspace; needed without parent when the store has several
+          type: string
+      required:
+        - repo
+        - label
       type: object
     GroupView:
       additionalProperties: false
@@ -501,6 +727,37 @@ components:
         - old
         - new
       type: object
+    ImportResult:
+      additionalProperties: false
+      properties:
+        count:
+          format: int64
+          type: integer
+        created:
+          description: The ids of the tasks made
+          items:
+            type: string
+          type: array
+        dry_run:
+          type: boolean
+        repo:
+          type: string
+        skipped:
+          description: The issues that are linked already
+          format: int64
+          type: integer
+        warnings:
+          items:
+            type: string
+          type: array
+      required:
+        - repo
+        - count
+        - skipped
+        - created
+        - dry_run
+        - warnings
+      type: object
     IndexProblem:
       additionalProperties: false
       properties:
@@ -514,6 +771,38 @@ components:
         - code
         - field
         - message
+      type: object
+    IssueWrite:
+      additionalProperties: false
+      properties:
+        commit:
+          description: The commit made; null when nothing changed
+          type:
+            - string
+            - "null"
+        detached:
+          description: "What a move to another workspace took off the tasks: the sprint and the releases that are not of the new workspace, as hh mv tells it"
+          items:
+            $ref: "#/components/schemas/Detached"
+          type:
+            - array
+            - "null"
+        note:
+          description: What restore at a commit has to say, as hh restore --at prints it
+          type: string
+        ref:
+          type: string
+        task:
+          $ref: "#/components/schemas/TaskView"
+        warnings:
+          items:
+            type: string
+          type: array
+      required:
+        - ref
+        - warnings
+        - task
+        - commit
       type: object
     Item:
       additionalProperties: false
@@ -572,11 +861,35 @@ components:
         - role
         - parents
       type: object
+    LinkInputBody:
+      additionalProperties: false
+      properties:
+        issue:
+          description: The issue, as [<host>/]owner/repo#n; not with pr
+          type: string
+        pr:
+          description: The pull request, as [<host>/]owner/repo#n; not with issue
+          type: string
+        sync:
+          description: How an issue syncs; on an issue linked already it changes the mode. Without it, issue_fields.default_sync
+          enum:
+            - mirror
+            - push
+            - link
+          type: string
+      type: object
     LinkView:
       additionalProperties: false
       properties:
+        branch:
+          description: The branch of the pull request
+          type: string
         checks:
           type: string
+        fields:
+          items:
+            type: string
+          type: array
         label:
           description: "The ref as people write it: org-a/web#123"
           type: string
@@ -598,10 +911,21 @@ components:
             - push
             - link
           type: string
+        title:
+          description: The title on GitHub; empty until GitHub is read
+          type: string
         type:
           enum:
             - github_pr
             - github_issue
+          type: string
+        via:
+          description: What linked it automatically; absent for a link made by a person
+          enum:
+            - branch
+            - mark
+            - id
+            - comment
           type: string
       required:
         - type
@@ -1360,6 +1684,84 @@ components:
         - kind
         - value
       type: object
+    RepoAccountView:
+      additionalProperties: false
+      properties:
+        account:
+          description: The name of the account
+          minLength: 1
+          type: string
+        match:
+          description: A pattern of repo IDs, as path.Match reads it; * is every repository
+          minLength: 1
+          type: string
+      required:
+        - match
+        - account
+      type: object
+    RepoAccountsBody:
+      additionalProperties: false
+      properties:
+        rules:
+          description: "The rules in the order they apply: this list replaces the one there is"
+          items:
+            $ref: "#/components/schemas/RepoAccountView"
+          type: array
+      required:
+        - rules
+      type: object
+    RuleStat:
+      additionalProperties: false
+      properties:
+        applied:
+          format: int64
+          type: integer
+        last_reason:
+          description: Why it was last refused
+          type: string
+        rejected:
+          format: int64
+          type: integer
+        rejected_tasks:
+          description: The tasks it was refused on, the latest first, each once
+          items:
+            $ref: "#/components/schemas/Ref"
+          type: array
+        rule:
+          type: string
+      required:
+        - rule
+        - applied
+        - rejected
+        - rejected_tasks
+      type: object
+    RuleView:
+      additionalProperties: false
+      properties:
+        category:
+          type: string
+        disabled_in:
+          items:
+            $ref: "#/components/schemas/Ref"
+          type: array
+        enabled:
+          type: boolean
+        id:
+          type: string
+        "on":
+          type: string
+        project:
+          $ref: "#/components/schemas/Ref"
+        status:
+          type: string
+        when:
+          type: string
+      required:
+        - id
+        - "on"
+        - enabled
+        - disabled_in
+      type: object
     SavedKanban:
       additionalProperties: false
       properties:
@@ -1954,6 +2356,8 @@ components:
       properties:
         error:
           type: string
+        github:
+          $ref: "#/components/schemas/GitHubSummary"
         interval:
           description: sync.interval of config.yaml, in seconds (fractions allowed)
           format: double
@@ -2081,6 +2485,11 @@ components:
           type:
             - array
             - "null"
+        links:
+          description: The pull requests and issues linked, with what GitHub says of them
+          items:
+            $ref: "#/components/schemas/LinkView"
+          type: array
         parent:
           type:
             - string
@@ -2164,6 +2573,9 @@ components:
         author:
           description: The Hedgehug-Author of the commit; empty when unknown
           type: string
+        automated:
+          description: GitHub or a rule wrote it, not a person
+          type: boolean
         commit:
           description: "The commit of the change: HEAD, or one of the commits since the last look"
           type: string
@@ -2193,6 +2605,7 @@ components:
         - commit
         - op
         - author
+        - automated
       type: object
     TemplatesDef:
       additionalProperties: false
@@ -2554,6 +2967,39 @@ paths:
       summary: Keep a token in the keychain after GitHub says it is of the account's login, as hh auth login <name> --with-token
       tags:
         - accounts
+  /api/accounts/{name}/token-source:
+    put:
+      operationId: set-account-token-source
+      parameters:
+        - description: The name of the account in config.yaml
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The name of the account in config.yaml
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountSourceInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSourceResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Change where the token of an account comes from, to gh or env:<VAR>
+      tags:
+        - accounts
   /api/activity:
     get:
       operationId: list-activity
@@ -2587,6 +3033,16 @@ paths:
           name: sync
           schema:
             description: "only: the merges and repairs of syncs; exclude: all but them"
+            enum:
+              - only
+              - exclude
+            type: string
+        - description: "only: what GitHub and the rules wrote, and the fetches that note a refused rule; exclude: all but them"
+          explode: false
+          in: query
+          name: automation
+          schema:
+            description: "only: what GitHub and the rules wrote, and the fetches that note a refused rule; exclude: all but them"
             enum:
               - only
               - exclude
@@ -2666,6 +3122,255 @@ paths:
       summary: Stop the device flow; it ends with the event auth.device (error, auth.canceled)
       tags:
         - accounts
+  /api/automations:
+    get:
+      operationId: list-automations
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: Only what applies in this project, with its scoped disable in enabled
+          explode: false
+          in: query
+          name: project
+          schema:
+            description: Only what applies in this project, with its scoped disable in enabled
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/RuleView"
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: List the rules in the order they apply, as hh automation list
+      tags:
+        - automations
+    post:
+      description: The answer lists the rules of the store.
+      operationId: add-automation
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutomationAddInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/RuleView"
+                type:
+                  - array
+                  - "null"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Add a rule, as hh automation add
+      tags:
+        - automations
+  /api/automations/fields:
+    get:
+      operationId: get-automation-fields
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FieldsView"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Read issue_fields, as hh automation fields
+      tags:
+        - automations
+    patch:
+      operationId: update-automation-fields
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutomationFieldsInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FieldsView"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Change issue_fields, as hh automation fields with flags
+      tags:
+        - automations
+  /api/automations/stats:
+    get:
+      operationId: get-automation-stats
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/RuleStat"
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Count what each rule did in the last 7 days; a rule that did nothing is not listed
+      tags:
+        - automations
+  /api/automations/{id}:
+    delete:
+      description: The answer lists the rules of the store.
+      operationId: delete-automation
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The id of the rule
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The id of the rule
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/RuleView"
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Remove a rule, and its id from every scoped disable, as hh automation rm
+      tags:
+        - automations
+  /api/automations/{id}/enabled:
+    put:
+      description: The answer lists the rules of the store, or those of the project given.
+      operationId: set-automation-enabled
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The id of the rule
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The id of the rule
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutomationEnabledInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/RuleView"
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Turn a rule on or off, as hh automation enable and disable
+      tags:
+        - automations
   /api/doctor:
     get:
       operationId: doctor
@@ -2758,6 +3463,26 @@ paths:
                         - data
                         - event
                       title: Event auth.device
+                      type: object
+                    - properties:
+                        data:
+                          $ref: "#/components/schemas/AutomationsChanged"
+                        event:
+                          const: automations.changed
+                          description: The event name.
+                          type: string
+                        id:
+                          description: The event ID.
+                          oneOf:
+                            - type: integer
+                            - type: string
+                        retry:
+                          description: The retry time in milliseconds.
+                          type: integer
+                      required:
+                        - data
+                        - event
+                      title: Event automations.changed
                       type: object
                     - properties:
                         data:
@@ -2911,6 +3636,70 @@ paths:
       summary: The changes, as server-sent events; hello comes first
       tags:
         - events
+  /api/github:
+    get:
+      operationId: get-github
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/GitHubRepoView"
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: "How the reads of each repository go: of the store given, or of every store"
+      tags:
+        - github
+  /api/github/import:
+    post:
+      operationId: import-issues
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GithubImportInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResult"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Make a task in mirror mode for each open issue with a label, as hh gh import
+      tags:
+        - github
   /api/health:
     get:
       operationId: get-health
@@ -3190,6 +3979,49 @@ paths:
       summary: Remove, for good, what the confirmed plan lists, as hh purge after its question
       tags:
         - maintenance
+  /api/repo-accounts:
+    get:
+      operationId: get-repo-accounts
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepoAccountsBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: List repo_accounts of config.yaml, in the order they apply
+      tags:
+        - accounts
+    put:
+      operationId: put-repo-accounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RepoAccountsBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepoAccountsBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Replace repo_accounts of config.yaml
+      tags:
+        - accounts
   /api/schema:
     get:
       operationId: get-schema
@@ -4070,6 +4902,133 @@ paths:
       summary: Bring a task back to how it was at a commit, as hh restore --at
       tags:
         - tasks
+  /api/tasks/{id}/issue:
+    post:
+      operationId: create-issue
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIssueInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssueWrite"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Open an issue for a task and link it in push mode, as hh issue
+      tags:
+        - github
+  /api/tasks/{id}/links:
+    delete:
+      operationId: unlink-task
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+        - description: The pull request, as [<host>/]owner/repo#n; not with issue
+          explode: false
+          in: query
+          name: pr
+          schema:
+            description: The pull request, as [<host>/]owner/repo#n; not with issue
+            type: string
+        - description: The issue, as [<host>/]owner/repo#n; not with pr
+          explode: false
+          in: query
+          name: issue
+          schema:
+            description: The issue, as [<host>/]owner/repo#n; not with pr
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Stop using a link, as hh unlink
+      tags:
+        - github
+    post:
+      operationId: link-task
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Link a pull request or an issue, or change how an issue syncs, as hh link
+      tags:
+        - github
   /api/tasks/{id}/move:
     post:
       operationId: move-task
