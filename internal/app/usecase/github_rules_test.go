@@ -2,6 +2,7 @@ package usecase_test
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/integration"
+	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
 	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
@@ -121,6 +123,29 @@ func TestRulesFollowAPullRequest(t *testing.T) {
 	fetch(t, ts)
 	wantStatus(t, ts, "ME-1", "done")
 	wantApplied(t, ts, "pr-merged pr.merged")
+}
+
+// A store with no remote is never synced, so nothing else starts its inbox:
+// the first hh inbox still tells of what the rules did before it.
+func TestTheFirstInboxOfAStoreWithNoRemoteTellsOfTheRules(t *testing.T) {
+	t.Parallel()
+	ts, fake := withFake(t)
+	devStore(t, ts, nil)
+	ts.AddTask("a", func(x *model.Task) {
+		x.Repos = []string{web}
+		x.Assignees = []string{"github.com/alice"}
+	})
+	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
+		t.Fatal(err)
+	}
+	fetch(t, ts)
+	rows, err := notifications.InboxNotifications(ts.Session, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(rows, func(n notifications.Notification) bool { return n.Kind == "automation" }) {
+		t.Errorf("inbox: %+v", rows)
+	}
 }
 
 func TestRulesWaitForEveryLinkedPullRequest(t *testing.T) {

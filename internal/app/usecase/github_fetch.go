@@ -13,6 +13,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/ghstate"
+	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/lib/github"
@@ -193,6 +194,13 @@ func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.St
 	slices.SortFunc(ulids, func(a, b model.ULID) int { return cmp.Compare(a.String(), b.String()) })
 	failed := map[string][]string{} // repositories whose result a task could not take, with why
 	var changes []taskChange
+	// A store with no remote is never synced, so nothing else starts its
+	// inbox: the commits below must not fall before where it starts.
+	if head, err := s.Repo().Head(); err != nil {
+		return errors.Join(err, ghstate.Write(s, state))
+	} else if err := inbox.Open(s).Start(head); err != nil {
+		return errors.Join(err, ghstate.Write(s, state))
+	}
 	hash, err := ss.UpdateCommit(s, store.Op{Name: "gh-fetch", Automated: true, Locked: held}, func(tx *store.Tx) error {
 		for _, u := range ulids {
 			t, err := tx.Task(u)
