@@ -1,8 +1,10 @@
 package osfs
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -68,5 +70,20 @@ func TestLookPath(t *testing.T) {
 	}
 	if _, err := LookPath("tool", ""); err == nil {
 		t.Error("tool was found on an empty PATH")
+	}
+}
+
+// Serial: it changes the working directory.
+func TestLookPathRelativeEntry(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "tool"), []byte("#!/bin/sh\n"), 0o700); err != nil { //nolint:gosec // a stand-in for a program
+		t.Fatal(err)
+	}
+	t.Chdir(bin)
+	// A relative entry is refused, as exec.LookPath refuses it (ErrDot).
+	for _, rel := range []string{":", "."} {
+		if _, err := LookPath("tool", rel); !errors.Is(err, exec.ErrDot) {
+			t.Errorf("LookPath(tool, %q) error = %v; want ErrDot", rel, err)
+		}
 	}
 }
