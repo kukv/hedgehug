@@ -40,7 +40,7 @@ spec にない細部のうち、次のものをここで決めた。
 | 3 | `rebuild.json` が壊れているとき、`doctor --fix` はエラーのまま報告する（`git` の finding）。Store は開かない |
 | 4 | `origin` が空になっていたら `rebuild after a force push: origin is empty` で止める（今の clone の失敗に当たる） |
 | 5 | `.kept-<時刻>` のコピーからは `.hedgehug/local` のロック（`lock` と `*.lock`）を除く |
-| 6 | `doctor --fix` で `BeforeRebuild` は作り直しの前に 1 回呼ぶ。origin が子孫に戻っていた場合も呼ばれ、GUI には変更の通知が 1 回出る。実害はない |
+| 6 | `doctor --fix` で `BeforeRebuild` は作り直しの前に 1 回呼ぶ。origin が子孫に戻っていた場合も呼ばれ、GUI には変更の通知が 1 回出る。実害はない（最終レビュー後に変更: spec 決定 8） |
 | 7 | 文言: `ErrForcePush` は `... to rebuild the store on it`、失敗の finding は `cannot rebuild the store: ...` に変える |
 
 ---
