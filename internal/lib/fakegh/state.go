@@ -6,6 +6,7 @@ package fakegh
 import (
 	"encoding/json"
 	"os"
+	"time"
 )
 
 // State is what the fake knows: users, organizations, tokens and
@@ -27,8 +28,36 @@ type Repo struct {
 	Private bool              `json:"private"`
 	Topics  []string          `json:"topics"`
 	Perms   map[string]string `json:"perms"` // login → read, write, admin or none
+	Pulls   []*Pull           `json:"pulls,omitempty"`
+	Issues  []*Issue          `json:"issues,omitempty"`
 
 	id int // numbered once, when the server takes the repository in
+}
+
+// Pull is a pull request.
+type Pull struct {
+	Number    int        `json:"number"`
+	Title     string     `json:"title"`
+	Body      string     `json:"body"`
+	Head      string     `json:"head"`
+	State     string     `json:"state"` // open, closed, merged
+	Draft     bool       `json:"draft"`
+	Review    string     `json:"review"`    // "", approved, changes_requested
+	Requested bool       `json:"requested"` // a review is asked for
+	Checks    string     `json:"checks"`    // "", success, failure, pending
+	MergedAt  *time.Time `json:"merged_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	Comments  []string   `json:"comments"`
+}
+
+// Issue is an issue.
+type Issue struct {
+	Number      int       `json:"number"`
+	Title       string    `json:"title"`
+	Body        string    `json:"body"`
+	State       string    `json:"state"`        // open, closed
+	StateReason string    `json:"state_reason"` // completed, not_planned
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // Load reads a seed file.

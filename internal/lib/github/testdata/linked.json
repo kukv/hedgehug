@@ -1,0 +1,6 @@
+{"data":{"rateLimit":{"limit":5000,"remaining":90,"resetAt":"2026-11-05T12:00:00Z"},
+"repository":{
+"p12":{"number":12,"title":"Login","body":"","state":"CLOSED","isDraft":false,"mergedAt":null,"updatedAt":"2026-11-05T10:00:00Z","headRefName":"x","reviewDecision":"CHANGES_REQUESTED","reviewRequests":{"totalCount":0},"latestOpinionatedReviews":{"nodes":[]},"commits":{"nodes":[]},"comments":{"nodes":[]}},
+"p13":null,
+"i45":{"number":45,"state":"CLOSED","stateReason":"NOT_PLANNED","updatedAt":"2026-11-05T10:00:00Z"}}},
+"errors":[{"type":"NOT_FOUND","path":["repository","p13"],"message":"Could not resolve to a PullRequest with the number of 13."}]}
