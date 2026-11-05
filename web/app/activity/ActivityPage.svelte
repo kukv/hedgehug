@@ -1,9 +1,18 @@
 <script lang="ts">
   import { tick, untrack } from "svelte";
-  import { authorLabel, groupByDay, type Log, opLabel, trailerLine } from "../../core/activity";
+  import {
+    authorLabel,
+    automationOf,
+    groupByDay,
+    type Log,
+    opLabel,
+    rejectionsOf,
+    trailerLine,
+  } from "../../core/activity";
   import { unwrap } from "../../core/api/client";
   import { cliLog } from "../../core/cli";
   import { formatTime } from "../../core/format";
+  import { eventLabel } from "../../core/github";
   import { errorMessage } from "../../core/messages";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
@@ -16,6 +25,7 @@
   import FormError from "../ui/FormError.svelte";
   import IdLabel from "../ui/IdLabel.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
+  import RejectedLine from "./RejectedLine.svelte";
   import WorkspacePicker from "./WorkspacePicker.svelte";
 
   // The filters are the ones of the address (workspaces: ULIDs).
@@ -28,6 +38,7 @@
   const SYNCS: { value: ActivitySync; label: string }[] = [
     { value: "", label: "すべて" },
     { value: "exclude", label: "人" },
+    { value: "automation", label: "自動化" },
     { value: "only", label: "同期" },
   ];
 
@@ -56,11 +67,12 @@
       limit: number;
       workspace?: string;
       sync?: "exclude" | "only";
-      automation?: "exclude";
+      automation?: "exclude" | "only";
     } = { limit };
     if (workspaces.length > 0) query.workspace = workspaces.join(",");
-    if (sync !== "") query.sync = sync;
+    if (sync === "exclude" || sync === "only") query.sync = sync;
     if (sync === "exclude") query.automation = "exclude"; // the tab of what people did
+    if (sync === "automation") query.automation = "only";
     try {
       const list = await unwrap(c.api.GET("/api/activity", { params: { query } }));
       if (mine !== seq) return;
@@ -210,6 +222,13 @@
                         {/if}
                       {/if}
                     </div>
+                    {#if automationOf(l)}
+                      {@const a = automationOf(l)}
+                      <span class="auto">{eventLabel(a?.event ?? "")} · ルール {a?.rule}</span>
+                    {/if}
+                    {#each rejectionsOf(l) as r (r.task + r.rule)}
+                      <RejectedLine rejected={r} store={l.store} />
+                    {/each}
                     <code class="trailer">{trailerLine(l)}</code>
                   </div>
                   {#if many}
@@ -362,6 +381,10 @@
     font-family: var(--font-mono);
     font-size: var(--fs-mono);
     text-decoration: none;
+  }
+  .auto {
+    color: var(--ink-2);
+    font-size: var(--fs-12);
   }
   .trailer {
     color: var(--muted);

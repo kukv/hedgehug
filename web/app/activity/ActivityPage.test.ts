@@ -72,6 +72,7 @@ function setup(items: Log[], opts: Opts = {}) {
     {
       api,
       conn,
+      cache: { subscribe: () => () => {}, task: () => undefined, epochNow: () => 0, prime() {} },
       stores: {
         stores: () => names.map((name) => ({ name })),
         readOnly: () => null,
@@ -116,6 +117,34 @@ describe("ActivityPage", () => {
     const { api } = setup([], { workspaces: "W1,W2", sync: "only" });
     await waitFor(() => expect(api.GET).toHaveBeenCalledTimes(1));
     expect(lastQuery(api)).toEqual({ limit: 100, workspace: "W1,W2", sync: "only" });
+  });
+
+  it("the tab of automations asks for what GitHub and the rules wrote", async () => {
+    const { api } = setup([], { sync: "automation" });
+    await waitFor(() => expect(api.GET).toHaveBeenCalled());
+    expect(lastQuery(api)).toEqual({ limit: 100, automation: "only" });
+  });
+
+  it("shows the rule of a commit, and each rule a fetch says was refused", async () => {
+    setup([
+      log({
+        hash: "b1",
+        op: "gh-fetch",
+        task: null,
+        id: null,
+        trailers: [
+          { key: "Hedgehug-Op", value: "gh-fetch" },
+          { key: "Hedgehug-Automation-Rejected", value: "U-9 pr-merged points: required" },
+        ],
+      }),
+      log({
+        hash: "b2",
+        trailers: [{ key: "Hedgehug-Automation", value: "pr-opened pr.opened" }],
+      }),
+    ]);
+    await screen.findByText("PR が開かれた · ルール pr-opened");
+    screen.getByText(/自動化を拒否 · ルール pr-merged/);
+    screen.getByRole("link", { name: "U-9" });
   });
 
   it("the tab of people leaves out what GitHub and the rules wrote", async () => {
@@ -165,7 +194,7 @@ describe("ActivityPage", () => {
     expect(within(screen.getByRole("listitem")).getByTitle("Store: shared")).toBeTruthy();
   });
 
-  it("does not offer automations; it has all, people and syncs", async () => {
+  it("has all, people, automations and syncs", async () => {
     setup([added]);
     await screen.findByRole("listitem");
     const group = screen.getByRole("group", { name: "変更の種類" });
@@ -173,11 +202,10 @@ describe("ActivityPage", () => {
       within(group)
         .getAllByRole("button")
         .map((b) => b.textContent?.trim()),
-    ).toEqual(["すべて", "人", "同期"]);
+    ).toEqual(["すべて", "人", "自動化", "同期"]);
     expect(within(group).getByRole("button", { name: "すべて" }).getAttribute("aria-pressed")).toBe(
       "true",
     );
-    expect(screen.queryByText("自動化")).toBeNull();
   });
 
   it("people and syncs go to the address, and ask again", async () => {

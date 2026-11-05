@@ -16,8 +16,9 @@ export type SettingsPage =
   | { page: "workspaces"; store: string }
   | { page: "schema"; store: string; tab: SchemaTab };
 
-// "" is every commit; exclude is the ones of people, only the ones of syncs.
-export type ActivitySync = "" | "exclude" | "only";
+// "" is every commit; exclude is the ones of people, only the ones of syncs, automation the ones of
+// the automations (the fetches, the rules and the issues).
+export type ActivitySync = "" | "exclude" | "only" | "automation";
 
 export type Route =
   | { name: "home" }
@@ -78,7 +79,7 @@ function matchRoute(pathname: string, search: string): Route | null {
     return {
       name: "activity",
       workspaces: (p.get("workspace") ?? "").split(",").filter(Boolean),
-      sync: sync === "exclude" || sync === "only" ? sync : "",
+      sync: sync === "exclude" || sync === "only" || sync === "automation" ? sync : "",
     };
   }
   if (head === "settings" && (seg.length === 1 || (seg.length === 2 && a === "general"))) {

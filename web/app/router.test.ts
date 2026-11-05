@@ -132,6 +132,11 @@ describe("hrefOf", () => {
       sync: "exclude",
     });
     // a sync that is none of the two is "all", and empty items of the list are dropped
+    expect(parseRoute("/activity", "?sync=automation")).toEqual({
+      name: "activity",
+      workspaces: [],
+      sync: "automation",
+    });
     expect(parseRoute("/activity", "?workspace=A,,&sync=x")).toEqual({
       name: "activity",
       workspaces: ["A"],

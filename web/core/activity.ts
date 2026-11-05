@@ -3,6 +3,7 @@
 // text; the words are the screen's).
 import type { Schemas } from "./api/client";
 import { daysAgo, formatDate, pad } from "./format";
+import { type Applied, parseApplied, parseRejected, type Rejected } from "./github";
 
 export type Log = Schemas["LogView"];
 
@@ -83,6 +84,20 @@ export function groupByDay(logs: Log[], now: Date): Day[] {
     day.logs.push(l);
   }
   return [...days.values()];
+}
+
+/** The rule that made a commit, or null for a commit no rule made. */
+export function automationOf(l: Log): Applied | null {
+  const t = l.trailers.find((x) => x.key === "Hedgehug-Automation");
+  return t ? parseApplied(t.value) : null;
+}
+
+/** The rules a commit says were refused: a fetch tells them, for any task it read. */
+export function rejectionsOf(l: Log): Rejected[] {
+  return l.trailers.flatMap((t) => {
+    const r = t.key === "Hedgehug-Automation-Rejected" ? parseRejected(t.value) : null;
+    return r ? [r] : [];
+  });
 }
 
 /** `0123456 · Hedgehug-Op: merge · …`: the short sha and the trailers as they are written. */
