@@ -223,27 +223,34 @@ func PullRequest(ss *usecase.Session, arg string, in PRInput) (PRResult, error) 
 		return PRResult{}, err
 	}
 	out := PRResult{TaskResult: tr, Ref: ref, Branch: branch, Created: created}
-	// As in a sync, what another member fetched comes first: the fetch reads
-	// every task with a link to the repository, not only this one.
+	out.Warnings = fetchNow(ss, c, se, s, repo.id)
+	return out, nil
+}
+
+// fetchNow reads the repository right away and returns what went wrong, which
+// is no failure of the command that asked. As in a sync, what another member
+// fetched comes first: the fetch reads every task with a link to the
+// repository, not only one.
+func fetchNow(ss *usecase.Session, c *config.Config, se config.StoreEntry, s *store.Store, repo string) []string {
 	if len(se.Remotes) > 0 {
 		opt, err := ss.SyncOptions(c, se)
 		if err == nil {
 			_, err = ss.RunSync(s, opt, true)
 		}
 		if err != nil {
-			out.Warnings = append(out.Warnings, "the sync before reading GitHub failed, so it is not read: "+err.Error())
-			return out, nil
+			return []string{"the sync before reading GitHub failed, so it is not read: " + err.Error()}
 		}
 	}
-	rep, err := usecase.FetchGitHubRepo(ss, c, se, repo.id)
+	var warnings []string
+	rep, err := usecase.FetchGitHubRepo(ss, c, se, repo)
 	if err != nil {
-		out.Warnings = append(out.Warnings, err.Error())
+		warnings = append(warnings, err.Error())
 	}
-	out.Warnings = append(out.Warnings, rep.Warnings...)
+	warnings = append(warnings, rep.Warnings...)
 	if rep.Committed {
 		// The fetch does not start a background sync: its other caller, the
 		// sync, pushes what it writes.
 		ss.MarkWritten(s)
 	}
-	return out, nil
+	return warnings
 }

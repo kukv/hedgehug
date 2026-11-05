@@ -56,18 +56,14 @@ func Add(ss *usecase.Session, in AddInput) (usecase.TaskResult, error) {
 	sc := ix.Schema()
 	t := &model.Task{ULID: model.NewULID(), Title: in.Title, Kind: in.Kind, Status: in.Status, Body: in.Body, Repos: slices.Clone(in.Repos)}
 	if t.Kind == "" {
-		k, ok := sc.DefaultKind()
-		if !ok {
-			return usecase.TaskResult{}, usecase.NewErr(usecase.KindInvalid, "schema.no_default", errors.New("the schema has no default kind; give one with --kind"), "what", "kind")
+		if t.Kind, err = usecase.DefaultKind(sc); err != nil {
+			return usecase.TaskResult{}, err
 		}
-		t.Kind = k.Name
 	}
 	if t.Status == "" {
-		st, ok := sc.DefaultStatus(schema.CategoryTodo)
-		if !ok {
-			return usecase.TaskResult{}, usecase.NewErr(usecase.KindInvalid, "schema.no_default", errors.New("the schema has no default todo status; give one with --status"), "what", "status")
+		if t.Status, err = usecase.DefaultTodo(sc); err != nil {
+			return usecase.TaskResult{}, err
 		}
-		t.Status = st.Name
 	}
 	if err := usecase.CheckPosition(in.Before, in.After); err != nil {
 		return usecase.TaskResult{}, err
@@ -118,19 +114,9 @@ func Add(ss *usecase.Session, in AddInput) (usecase.TaskResult, error) {
 		}
 		t.Workspace = w.ULID
 	} else if in.Parent == "" && !fromSibling {
-		wss := ix.Workspaces()
-		if len(wss) == 0 {
-			return usecase.TaskResult{}, usecase.NewErr(usecase.KindConflict, "workspace.none", errors.New("the store has no workspace; add one with hedgehug workspace add <name> --prefix <PREFIX>"))
+		if t.Workspace, err = usecase.OnlyWorkspace(ix); err != nil {
+			return usecase.TaskResult{}, err
 		}
-		if len(wss) != 1 {
-			names := make([]string, len(wss))
-			for i, w := range wss {
-				names[i] = fmt.Sprintf("%s (%s)", w.Name, w.IDPrefix)
-			}
-			// KindInvalid, not KindUsage: the CLI exits 1 here.
-			return usecase.TaskResult{}, usecase.NewErr(usecase.KindInvalid, "workspace.choose", errors.New("there are several workspaces; give one with --workspace: "+strings.Join(names, ", ")), "names", names)
-		}
-		t.Workspace = wss[0].ULID
 	}
 	for _, as := range in.Assigns {
 		if err := usecase.ApplyAssign(t, as, sc, ss.ResolveULID(ix)); err != nil {

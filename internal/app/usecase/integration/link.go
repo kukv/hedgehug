@@ -120,9 +120,23 @@ func (in LinkInput) link(s *store.Store, t *model.Task, ref model.GitHubRef) err
 	t.Links = slices.Clone(t.Links)
 	t.Links[i].Sync = sync
 	if live {
-		return nil
+		return dropSynced(t, ref) // what the old mode compared is no base for the new one
 	}
 	return dropGH(t, ref)
+}
+
+// dropSynced takes the base of ref off t. What GitHub says of it stays.
+func dropSynced(t *model.Task, ref model.GitHubRef) error {
+	g, err := t.GitHub()
+	if err != nil {
+		return err
+	}
+	for i := range g.Issues {
+		if model.CanonRef(g.Issues[i].Ref) == ref.String() {
+			g.Issues[i].Synced = nil
+		}
+	}
+	return t.SetGitHub(g)
 }
 
 // Link links the task arg names.

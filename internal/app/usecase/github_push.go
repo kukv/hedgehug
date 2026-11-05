@@ -109,6 +109,9 @@ func (r *IssueResolver) Filter(vals model.IssueValues, fields []string, gh model
 			}
 			continue
 		}
+		if len(vals[f]) == 0 {
+			continue
+		}
 		names, err := r.names(f)
 		if err != nil {
 			return nil, err
@@ -124,6 +127,14 @@ func (r *IssueResolver) Filter(vals model.IssueValues, fields []string, gh model
 		vals[f] = kept
 	}
 	return warnings, nil
+}
+
+// ForeignAssignees warns of the assignees of t whose host is not that of repo.
+func ForeignAssignees(t *model.Task, repo string) []string {
+	if _, others := loginsOn(t.Assignees, repoHost(repo)); len(others) > 0 {
+		return []string{fmt.Sprintf("%s: %s cannot be assigned there: left out", repo, strings.Join(others, ", "))}
+	}
+	return nil
 }
 
 // spell gives the names of a field as GitHub spells them.
@@ -224,9 +235,7 @@ func pushLink(t *model.Task, l model.Link, x github.Issue, g model.GitHubState, 
 	}
 	rep.Warnings = append(rep.Warnings, found...)
 	if slices.Contains(fields, "assignees") {
-		if _, others := loginsOn(t.Assignees, repoHost(repoOf(ref))); len(others) > 0 {
-			rep.Warnings = append(rep.Warnings, fmt.Sprintf("%s: %s cannot be assigned there: left out", repoOf(ref), strings.Join(others, ", ")))
-		}
+		rep.Warnings = append(rep.Warnings, ForeignAssignees(t, repoOf(ref))...)
 	}
 	re := automation.Reflect(model.SyncPush, fields, vals, gh, base)
 	if slices.Contains(fields, "body") && !strings.Contains(x.Body, "hedgehug:"+t.ULID.String()) {
