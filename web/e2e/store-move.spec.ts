@@ -103,14 +103,7 @@ test("takes the plan again when a task is added under the ones to move", async (
 
 test("puts the task under a parent of the destination", async ({ page, hh }) => {
   const { child } = fixture(hh);
-  const target = hh.json<{ id: string; ulid: string }>(
-    "add",
-    "Target parent",
-    "--store",
-    "second",
-    "--workspace",
-    "a",
-  );
+  const target = hh.add("Target parent", "--store", "second", "--workspace", "a");
   await openFromDetail(page, hh, child.ulid);
   const d = dialog(page);
   await d.getByRole("radio", { name: /^second/ }).check();
