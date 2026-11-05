@@ -65,12 +65,18 @@ func fetchStore(ss *Session, c *config.Config, e config.StoreEntry, force string
 		if err != nil {
 			return err
 		}
-		return fetchLocked(ss, c, e, s, ix, force, &rep)
+		got := fetched{pulls: map[string]github.Pull{}, issues: map[string]github.Issue{}}
+		if err := fetchLocked(ss, c, e, s, ix, force, got, &rep); err != nil {
+			return err
+		}
+		return pushIssues(ss, c, e, s, ix, got, &rep)
 	})
 	return rep, err
 }
 
-func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.Store, ix *index.Index, force string, rep *GitHubFetchReport) error {
+// fetchLocked reads the repositories into got and writes what they say. The
+// store lock it takes is free again when it returns.
+func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.Store, ix *index.Index, force string, got fetched, rep *GitHubFetchReport) error {
 	state, err := ghstate.Read(s)
 	if err != nil {
 		return err
@@ -80,7 +86,6 @@ func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.St
 		return nil // no repository: nothing needs an account
 	}
 	now := ss.Now()
-	got := fetched{pulls: map[string]github.Pull{}, issues: map[string]github.Issue{}}
 	auto := map[model.ULID][]string{}
 	// read is what each repository that was read now knows. It goes into the
 	// state only when what was found is written: a repository whose result

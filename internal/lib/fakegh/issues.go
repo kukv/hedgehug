@@ -14,6 +14,18 @@ func (s *Server) ReopenIssue(repo string, number int) error {
 	return s.changeIssue(repo, number, func(i *Issue) { i.State, i.StateReason = "open", "" })
 }
 
+// DropIssue deletes an issue.
+func (s *Server) DropIssue(repo string, number int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r := s.find(repo)
+	if r == nil {
+		return fmt.Errorf("no repository %s", repo)
+	}
+	r.Issues = slices.DeleteFunc(r.Issues, func(i *Issue) bool { return i.Number == number })
+	return nil
+}
+
 // TagIssue sets the assignees, the labels and the milestone of an issue. A
 // nil list or an empty milestone stays; the milestone "-" goes.
 func (s *Server) TagIssue(repo string, number int, assignees, labels []string, milestone string) error {
