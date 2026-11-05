@@ -169,7 +169,7 @@ func DetachedName(s *store.Store, kind, value string) string {
 	return string(b)
 }
 
-// finishLeftover is replicate.FinishLeftover, telling where an old store was kept.
+// finishLeftover is replicate.FinishLeftoverKept, telling where an old store was kept.
 func (ss *Session) finishLeftover(e config.StoreEntry, l store.Leftover) error {
 	kept, err := replicate.FinishLeftoverKept(e.Path, l)
 	for _, p := range kept {
