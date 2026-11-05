@@ -39,23 +39,23 @@ func viewOf(task model.ULID, w *model.Worklog) WorklogView {
 }
 
 // open resolves arg to a live task, in the store it is in.
-func open(ss *usecase.Session, arg string) (*usecase.Session, *store.Store, *index.Index, *index.Entry, error) {
+func open(ss *usecase.Session, arg string) (*usecase.Session, *store.Store, *index.Entry, error) {
 	ts, arg, err := ss.ForTask(arg)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
 	s, ix, err := ts.OpenForWrite()
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
 	e, err := ts.Resolve(ix, arg)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
 	if err := usecase.NotDeleted(ix, e); err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, err
 	}
-	return ts, s, ix, e, nil
+	return ts, s, e, nil
 }
 
 // Add records time spent on the task arg names. An empty date is today.
@@ -64,7 +64,7 @@ func Add(ss *usecase.Session, arg, duration, date, note string) (WorklogWrite, e
 	if err != nil || time.Duration(d) <= 0 {
 		return WorklogWrite{}, usecase.NewErr(usecase.KindUsage, "worklog.bad_duration", fmt.Errorf("%q is not a time spent (like 1h30m)", duration), "value", duration)
 	}
-	ts, s, _, e, err := open(ss, arg)
+	ts, s, e, err := open(ss, arg)
 	if err != nil {
 		return WorklogWrite{}, err
 	}
@@ -144,7 +144,7 @@ func live(s *store.Store, task model.ULID) ([]*model.Worklog, error) {
 // Remove deletes the entry log of the task arg names. An entry can be deleted
 // only by who wrote it.
 func Remove(ss *usecase.Session, arg, log string) (WorklogWrite, error) {
-	ts, s, _, e, err := open(ss, arg)
+	ts, s, e, err := open(ss, arg)
 	if err != nil {
 		return WorklogWrite{}, err
 	}

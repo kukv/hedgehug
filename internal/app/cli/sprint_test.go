@@ -9,16 +9,17 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase/planning"
 )
 
-func addStartedSprint(te *testEnv, name string) {
-	te.ok("sprint", "add", name, "--start", "2026-11-02", "--end", "2026-11-13", "--goal", "ship")
-	te.ok("sprint", "start", name)
+// addStartedSprint adds the sprint s1 and starts it.
+func addStartedSprint(te *testEnv) {
+	te.ok("sprint", "add", "s1", "--start", "2026-11-02", "--end", "2026-11-13", "--goal", "ship")
+	te.ok("sprint", "start", "s1")
 }
 
 func TestSprintCommands(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("a")
-	addStartedSprint(te, "s1")
+	addStartedSprint(te)
 	te.ok("sprint", "add", "s2", "--start", "2026-11-16", "--end", "2026-11-27")
 	te.ok("set", a.ID, "sprint=s1", "points=3")
 
@@ -61,7 +62,7 @@ func TestSprintCloseAsksOnATerminal(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("a")
-	addStartedSprint(te, "s1")
+	addStartedSprint(te)
 	te.ok("set", a.ID, "sprint=s1")
 
 	code, _, stderr := te.run("sprint", "close", "s1")
@@ -82,7 +83,7 @@ func TestSprintCloseAsksOnATerminal(t *testing.T) {
 func TestSprintCloseDoesNotAskWithNothingOpen(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
-	addStartedSprint(te, "s1")
+	addStartedSprint(te)
 	te.terminal = true
 	if got := te.ok("sprint", "close", "s1"); strings.Contains(got, "moved") {
 		t.Errorf("close:\n%s", got)

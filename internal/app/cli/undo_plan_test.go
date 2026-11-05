@@ -9,7 +9,7 @@ func TestUndoPlanningOperations(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	a := te.addJSON("a")
-	addStartedSprint(te, "s1")
+	addStartedSprint(te)
 	te.ok("sprint", "add", "s2")
 	te.ok("set", a.ID, "sprint=s1")
 
