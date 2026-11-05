@@ -143,6 +143,33 @@ func TestStoreInitWritesTheRulesInACommitOfOpInit(t *testing.T) {
 	}
 }
 
+func TestStoreInitPushesTheRulesToTheRemote(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	bare := filepath.Join(t.TempDir(), "rules.git")
+	if err := gitrepo.InitBare(bare); err != nil {
+		t.Fatal(err)
+	}
+	in := stores.StoreInitInput{Name: "team", Prefix: "TM", Schema: schema.Dev(), Automations: automation.DevRules(), Remotes: []string{bare}}
+	if _, err := stores.StoreInit(ts.Session, in); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(t.TempDir(), "clone")
+	r, err := gitrepo.Clone(bare, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = r.Close() }()
+	b, err := os.ReadFile(filepath.Join(dir, model.AutomationsPath)) //nolint:gosec // a file of the test clone
+	if err != nil {
+		t.Fatalf("the remote has no %s: %v", model.AutomationsPath, err)
+	}
+	f, err := automation.Decode(b)
+	if err != nil || len(f.Rules) != 4 {
+		t.Errorf("rules at the remote = %+v, %v", f, err)
+	}
+}
+
 func TestStoreInitPushesToRemotes(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)

@@ -208,7 +208,10 @@ func edit(ss *usecase.Session, detail string, change func(*index.Index, *automat
 			return err
 		}
 		sc := s.Schema()
-		known := problems(cur, sc, ix)
+		var known []string
+		for _, p := range problems(cur, sc, ix) {
+			known = append(known, p.Msg)
+		}
 		next, err := s.Automations()
 		if err != nil {
 			return invalid(err)
@@ -216,10 +219,14 @@ func edit(ss *usecase.Session, detail string, change func(*index.Index, *automat
 		if err := change(ix, next); err != nil {
 			return mapErr(err)
 		}
+		// Compare the messages as a multiset: the paths hold indexes, which a
+		// removal in front of a problem shifts.
 		var fresh []string
 		for _, p := range problems(next, sc, ix) {
-			if !slices.Contains(known, p) {
-				fresh = append(fresh, p)
+			if i := slices.Index(known, p.Msg); i >= 0 {
+				known = slices.Delete(known, i, i+1)
+			} else {
+				fresh = append(fresh, p.String())
 			}
 		}
 		if len(fresh) > 0 {
@@ -238,23 +245,19 @@ func edit(ss *usecase.Session, detail string, change func(*index.Index, *automat
 	return err
 }
 
-// problems are the defects Check finds in f, as text.
-func problems(f *automation.File, sc *schema.Schema, ix *index.Index) []string {
+// problems are the defects Check finds in f.
+func problems(f *automation.File, sc *schema.Schema, ix *index.Index) []schema.Problem {
 	isProject := func(u model.ULID) bool {
 		e, ok := ix.Task(u)
 		return ok && e.DeletedAt == nil && e.Kind == usecase.ProjectKind
 	}
-	var out []string
-	for _, p := range f.Check(sc, isProject) {
-		out = append(out, p.String())
-	}
-	return out
+	return f.Check(sc, isProject)
 }
 
 // projectEntry resolves the project arg names. The task has to be a project
 // and not deleted.
 func projectEntry(ss *usecase.Session, ix *index.Index, arg string) (*index.Entry, error) {
-	e, err := ss.Resolve(ix, arg)
+	e, err := ss.ResolveRef(ix, arg)
 	if err != nil {
 		return nil, err
 	}

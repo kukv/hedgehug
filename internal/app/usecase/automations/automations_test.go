@@ -287,3 +287,57 @@ func TestAProblemThatWasThereBeforeDoesNotStopAnEdit(t *testing.T) {
 		t.Fatalf("Add = %v", err)
 	}
 }
+
+func TestRemoveInFrontOfABrokenRuleIsNotRefused(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.CommitRawFile(model.AutomationsPath, "rules:\n  - {id: a, on: pr.opened, set: {status: done}}\n  - {id: b, on: pr.opened, set: {status: gone}}\n")
+	if err := automations.Remove(ts.Session, "a"); err != nil {
+		t.Fatalf("Remove = %v", err)
+	}
+	// a new problem of the same text is still refused
+	err := automations.Add(ts.Session, automations.AddInput{ID: "c", On: "pr.opened", Status: "gone"})
+	if code(err) != "automation.invalid" {
+		t.Errorf("Add of a second broken rule: %v (%s)", err, code(err))
+	}
+}
+
+func TestEnableInFrontOfABrokenScopedIsNotRefused(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	p := ts.AddProject("Web")
+	q := ts.AddProject("API")
+	ts.CommitRawFile(model.AutomationsPath, "rules:\n  - {id: a, on: pr.opened, set: {status: done}}\n"+
+		"scoped:\n  - {where: 'project:"+p.String()+"', disable: [a]}\n  - {where: 'project:"+q.String()+"', disable: [nope]}\n")
+	if err := automations.SetEnabled(ts.Session, "a", p.String(), true); err != nil {
+		t.Fatalf("SetEnabled = %v", err)
+	}
+	if strings.Contains(yamlOf(t, ts), p.String()) {
+		t.Errorf("automations.yaml = %s", yamlOf(t, ts))
+	}
+}
+
+func TestProjectTakesAStoreQualifiedID(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.AddProject("Web")
+	if err := automations.Add(ts.Session, automations.AddInput{ID: "a", On: "pr.opened", Status: "done", Project: "me:ME-1"}); err != nil {
+		t.Fatalf("a store-qualified id: %v", err)
+	}
+	if rs, err := automations.List(ts.Session, "me:ME-1"); err != nil || len(rs) != 1 {
+		t.Errorf("List = %+v, %v", rs, err)
+	}
+}
+
+func TestProjectInAnotherStoreIsRefusedWithItsName(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.NewTwoStore(t)
+	a := ts.ForStore("org-a")
+	for _, arg := range []string{"WEB-1", "org-b:WEB-1"} {
+		err := automations.Add(a, automations.AddInput{ID: "x", On: "pr.opened", Status: "done", Project: arg})
+		usecasetest.WantCode(t, arg, err, usecase.KindInvalid, "ref.cross_store")
+		if err != nil && !strings.Contains(err.Error(), "org-b") {
+			t.Errorf("%s: %v does not name the store", arg, err)
+		}
+	}
+}
