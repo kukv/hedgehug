@@ -108,6 +108,45 @@ type IssueFields struct {
 	Props       map[string]string `yaml:"props,omitempty"`
 }
 
+// issueFieldsY is IssueFields as the file holds it: a key the file lacks and
+// whose value is the default is left out, so that an edit of one key does not
+// write the others. A key that the file has stays, even when it is empty.
+type issueFieldsY struct {
+	DefaultSync *string           `yaml:"default_sync,omitempty"`
+	Push        *[]string         `yaml:"push,omitempty"`
+	Mirror      *[]string         `yaml:"mirror,omitempty"`
+	Props       map[string]string `yaml:"props,omitempty"`
+}
+
+// wire returns i as the file holds it; old is the issue_fields node that was
+// read, or nil.
+func (i IssueFields) wire(old *yaml.Node) issueFieldsY {
+	def := defaultIssueFields()
+	has := func(key string) bool {
+		if old == nil || old.Kind != yaml.MappingNode {
+			return false
+		}
+		for j := 0; j+1 < len(old.Content); j += 2 {
+			if old.Content[j].Value == key {
+				return true
+			}
+		}
+		return false
+	}
+	var w issueFieldsY
+	if has("default_sync") || i.DefaultSync != def.DefaultSync {
+		w.DefaultSync = &i.DefaultSync
+	}
+	if has("push") || !slices.Equal(i.Push, def.Push) {
+		w.Push = &i.Push
+	}
+	if has("mirror") || !slices.Equal(i.Mirror, def.Mirror) {
+		w.Mirror = &i.Mirror
+	}
+	w.Props = i.Props
+	return w
+}
+
 // IssueFieldsChange is a change to issue_fields. A nil part is left as it is.
 // A key of Props is set to its value, or taken off when the value is empty.
 type IssueFieldsChange struct {
@@ -191,7 +230,8 @@ func (f *File) Encode() ([]byte, error) {
 	e := f.doc.Encoder()
 	e.Put("rules", rules, len(rules) == 0)
 	e.Put("scoped", f.Scoped, len(f.Scoped) == 0)
-	e.Put("issue_fields", f.IssueFields, reflect.DeepEqual(f.IssueFields, defaultIssueFields()))
+	fields := f.IssueFields.wire(f.doc.Get("issue_fields"))
+	e.Put("issue_fields", fields, reflect.DeepEqual(fields, issueFieldsY{}))
 	return e.Bytes(f.Extra)
 }
 

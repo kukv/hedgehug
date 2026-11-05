@@ -220,7 +220,7 @@ GitHub Enterprise Server の GraphQL の場所は、`Host` の API の URL か�
 - すでに目的のステータスなら何もしない。`set: {category: c}` は、今のステータスがそのカテゴリなら何もしない（既定でない完了のステータスを既定に戻さない）。違えば `c` の既定のステータスにする
 - `ValidateTransition` で、プロジェクトの上書きを含めて判定する。拒否されたらステータスは変えない
 - 同じ取得でルールが複数当たるときは、順に当てて途中の値から `ValidateTransition` する。拒否されたルールは記録して飛ばし、次のルールへ進む。コミットは最後に通った値へ1つで、trailer は最後に通ったルールを書く
-- `when: all_linked_prs_merged` は、`off` でない PR のリンクすべてが取り込み後の `gh.prs` で `merged` のとき成り立つ。`gh` にまだ入っていない PR と `closed` の PR は満たさない
+- `when: all_linked_prs_merged` は、`off` でない PR のリンクが1件以上あり、そのすべてが取り込み後の `gh.prs` で `merged` のとき成り立つ。`gh` にまだ入っていない PR と `closed` の PR は満たさない
 - ルールの評価は取り込みのコミットの中で行う。拒否をそのコミットの trailer に書くためである。ステータスのコミットまでストアのロックを持ち続ける
 - ステータスの変更はタスクごとに1コミットにする。op は `set`、author は `hedgehug-automation（実行したメンバー）`、trailer は `Hedgehug-Automation: <rule id> <event>`。`hh undo` は1件ずつ効く
 - 拒否は、取り込みのコミットの trailer に `Hedgehug-Automation-Rejected: <ULID> <rule id> <理由>` と書く

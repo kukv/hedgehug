@@ -335,6 +335,7 @@ func (e *Encoder) Put(key string, v any, zero bool) {
 			e.err = fmt.Errorf("%s: %w", key, err)
 			return
 		}
+		unquoteBoolKeys(nv)
 	}
 	switch {
 	case !ok:
@@ -345,6 +346,27 @@ func (e *Encoder) Put(key string, v any, zero bool) {
 		styleLike(nv, old)
 	}
 	e.fields = append(e.fields, Field{key, nv})
+}
+
+// yaml11Bools are the words that YAML 1.1 reads as booleans. The encoder
+// quotes them as keys ('on': x), but the decoder here reads them as strings,
+// so a key such as on is written bare, as people write it.
+var yaml11Bools = []string{"y", "n", "yes", "no", "on", "off"}
+
+// unquoteBoolKeys writes the keys of the mappings under n that are one of
+// yaml11Bools without quotes.
+func unquoteBoolKeys(n *yaml.Node) {
+	if n.Kind == yaml.MappingNode {
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			k := n.Content[i]
+			if k.Kind == yaml.ScalarNode && slices.Contains(yaml11Bools, strings.ToLower(k.Value)) {
+				k.Style = 0
+			}
+		}
+	}
+	for _, c := range n.Content {
+		unquoteBoolKeys(c)
+	}
 }
 
 // decodesTo reports whether n decodes to a value deeply equal to v. An

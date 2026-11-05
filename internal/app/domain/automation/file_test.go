@@ -117,6 +117,44 @@ func TestDevRules(t *testing.T) {
 	if !strings.Contains(out, "set: {status: in_progress}") || strings.Contains(out, "enabled") {
 		t.Errorf("out =\n%s", out)
 	}
+	if !strings.Contains(out, "on: pr.opened") || strings.Contains(out, "'on'") || strings.Contains(out, `"on"`) {
+		t.Errorf("on is quoted:\n%s", out)
+	}
+}
+
+func TestAddRuleDoesNotQuoteOn(t *testing.T) {
+	t.Parallel()
+	f := mustDecode(t, "rules:\n- {id: a, on: pr.opened, set: {status: todo}}\n")
+	if err := f.AddRule(Rule{ID: "b", On: PRMerged, Set: Set{Status: "done"}, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	out := mustEncode(t, f)
+	if !strings.Contains(out, "on: pr.merged") || strings.Contains(out, "'on'") {
+		t.Errorf("on is quoted:\n%s", out)
+	}
+}
+
+func TestPartialIssueFieldsStayPartial(t *testing.T) {
+	t.Parallel()
+	for _, src := range []string{
+		"issue_fields:\n  default_sync: mirror\n",
+		"issue_fields:\n  push: [title]\n",
+		"issue_fields:\n  push: []\n",
+		"issue_fields:\n  props: {milestone: target}\n",
+	} {
+		if out := mustEncode(t, mustDecode(t, src)); out != src {
+			t.Errorf("%q came back as %q", src, out)
+		}
+	}
+	// An edit writes only what the file or the edit holds.
+	f := mustDecode(t, "issue_fields:\n  default_sync: mirror\n")
+	push := []string{"title"}
+	if err := f.SetIssueFields(IssueFieldsChange{Push: &push}); err != nil {
+		t.Fatal(err)
+	}
+	if out, want := mustEncode(t, f), "issue_fields:\n  default_sync: mirror\n  push: [title]\n"; out != want {
+		t.Errorf("out = %q, want %q", out, want)
+	}
 }
 
 func TestAddRule(t *testing.T) {
