@@ -112,6 +112,40 @@ func TestCollectAutomationAssignedToo(t *testing.T) {
 	}
 }
 
+func TestCollectIssueOverwritten(t *testing.T) {
+	t.Parallel()
+	a, b := twoClones(t)
+	x := addTask(t, a, "x", func(x *model.Task) { x.Assignees = []string{"github.com/b"} })
+	other := addTask(t, a, "other", nil)
+	syncBoth(t, a, b)
+	note := func(u model.ULID, fields ...string) {
+		t.Helper()
+		if _, err := a.s.Update(a.op("gh-push", u), func(tx *store.Tx) error {
+			tx.AllowEmpty()
+			for _, f := range fields {
+				tx.AddTrailer(automation.TrailerIssueOverwritten, automation.IssueOverwrittenTrailer(u, "github.com/o/r/issues/1", automation.Overwrite{Field: f, Side: automation.SideGitHub, Lost: []string{"old\nline"}}))
+			}
+			tx.AddTrailer(automation.TrailerIssueOverwritten, "not one of ours")
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	items := collectAfter(t, a, func() { note(x.ULID, "title", "body") }, "github.com/b")
+	if len(items) != 2 || items[0].Kind != IssueOverwritten || items[0].Task != x.ULID || items[0].To != "github.com/b" || items[0].ID != x.ID {
+		t.Fatalf("items = %+v", items)
+	}
+	if want := `{"ref":"github.com/o/r/issues/1","field":"body","side":"github","lost":["old\nline"]}`; string(items[1].Detail) != want {
+		t.Errorf("detail = %s", items[1].Detail)
+	}
+	if key(items[0]) == key(items[1]) {
+		t.Error("two values of a commit are one item")
+	}
+	if items := collectAfter(t, a, func() { note(other.ULID, "title") }, "github.com/b"); len(items) != 0 {
+		t.Errorf("a task b has no part in: items = %+v", items)
+	}
+}
+
 func TestCollectAutomationRejected(t *testing.T) {
 	t.Parallel()
 	a, b := twoClones(t)

@@ -43,6 +43,8 @@ describe("opLabel", () => {
       "unlink",
       "start",
       "gh-fetch",
+      "gh-mirror",
+      "gh-push",
     ];
     for (const op of ops) expect(opLabel(op), op).not.toBe(op);
   });
