@@ -63,7 +63,7 @@ func (c *Code) Branch() (name string, ok bool, err error) {
 	if ref.Type() != plumbing.SymbolicReference || !ref.Target().IsBranch() {
 		return "", false, nil
 	}
-	return ref.Target().Short(), true, nil
+	return strings.TrimPrefix(string(ref.Target()), "refs/heads/"), true, nil
 }
 
 // HasBranch reports whether the branch name exists.
@@ -106,7 +106,7 @@ func (c *Code) Branches(match func(string) bool) ([]string, error) {
 	defer it.Close()
 	var out []string
 	err = it.ForEach(func(ref *plumbing.Reference) error {
-		if n := ref.Name().Short(); match(n) {
+		if n := strings.TrimPrefix(string(ref.Name()), "refs/heads/"); match(n) {
 			out = append(out, n)
 		}
 		return nil
