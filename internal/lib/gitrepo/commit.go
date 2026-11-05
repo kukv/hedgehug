@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -12,6 +11,8 @@ import (
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/format/index"
+
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // ErrNothingToCommit means a commit named no paths, or its paths are the
@@ -90,7 +91,7 @@ func (r *Repo) Commit(c Commit) (h plumbing.Hash, err error) {
 // on disk is added; one that is not is dropped from the index.
 func (r *Repo) stage(w *git.Worktree, paths []string) error {
 	for _, p := range paths {
-		_, err := os.Lstat(filepath.Join(r.dir, filepath.FromSlash(p)))
+		_, err := osfs.Lstat(filepath.Join(r.dir, filepath.FromSlash(p)))
 		switch {
 		case err == nil:
 			// SkipStatus is ignored for a missing path, which is why removals

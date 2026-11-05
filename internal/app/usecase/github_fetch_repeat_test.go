@@ -1,9 +1,8 @@
-package integration_test
+package usecase_test
 
 import (
 	"io"
 	"net/http"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -14,7 +13,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/ghstate"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/integration"
-	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
@@ -49,7 +47,7 @@ func (c *counting) RoundTrip(r *http.Request) (*http.Response, error) {
 // read is told by GitHub's own times.
 func TestFetchScansFromTheTimeGitHubGave(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	fake.SetNow(func() time.Time { return ts.Now().Add(-time.Hour) })
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	if _, err := fake.OpenPull("org-a/web", "other", "A", "", false); err != nil {
@@ -90,7 +88,7 @@ func TestFetchDoesNotAskAgainAFailureWithinTheInterval(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			ts, fake := withFake(t)
+			ts, fake := usecasetest.GitHubSession(t)
 			if c.bad {
 				ts.Env["HH_TOKEN"] = "unknown"
 			}
@@ -132,7 +130,7 @@ func TestFetchDoesNotAskAgainAFailureWithinTheInterval(t *testing.T) {
 // next read, as a failure is, so that it does not fill the log of the GUI.
 func TestFetchTellsAgainWhatTheLastReadFound(t *testing.T) {
 	t.Parallel()
-	ts, _ := withFake(t)
+	ts, _ := usecasetest.GitHubSession(t)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	if _, err := integrationLinkIssue(ts, 7); err != nil {
 		t.Fatal(err)
@@ -151,72 +149,9 @@ func TestFetchTellsAgainWhatTheLastReadFound(t *testing.T) {
 	}
 }
 
-func TestSyncPushesOnceToEachRemote(t *testing.T) {
-	t.Parallel()
-	ts, fake := withFake(t)
-	usecasetest.AddBareRemote(t, ts)
-	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
-	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
-		t.Fatal(err)
-	}
-	r, err := replication.SyncOne(ts.Session)
-	if err != nil || r.Err != nil {
-		t.Fatalf("sync: %v, %v", err, r.Err)
-	}
-	if len(r.Pushed) == 0 {
-		t.Fatal("nothing pushed")
-	}
-	sorted := slices.Sorted(slices.Values(r.Pushed))
-	if len(slices.Compact(slices.Clone(sorted))) != len(sorted) {
-		t.Errorf("pushed = %q", r.Pushed)
-	}
-}
-
-// The push of what GitHub gave fails: the sync has succeeded, and the commit
-// is pushed by the next one.
-func TestSyncWithAFailedPushOfWhatGitHubGave(t *testing.T) {
-	t.Parallel()
-	ts, fake := withFake(t)
-	remote := usecasetest.AddBareRemote(t, ts)
-	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
-	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
-		t.Fatal(err)
-	}
-	away := remote + ".away"
-	ts.BeforeUpdate = func() { // the remote goes away after the sync, before the push
-		ts.BeforeUpdate = nil
-		if err := os.Rename(remote, away); err != nil {
-			t.Error(err)
-		}
-	}
-	r, err := replication.SyncOne(ts.Session)
-	if err != nil || r.Err != nil {
-		t.Fatalf("sync: %v, %v", err, r.Err)
-	}
-	if !slices.ContainsFunc(r.Warnings, func(w string) bool { return strings.Contains(w, "push the values from GitHub") }) {
-		t.Fatalf("warnings = %q", r.Warnings)
-	}
-	s, err := ts.OpenStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n, err := usecase.Unpushed(s); err != nil || n == 0 {
-		t.Fatalf("unpushed = %d, %v", n, err)
-	}
-	if err := os.Rename(away, remote); err != nil {
-		t.Fatal(err)
-	}
-	if r, err := replication.SyncOne(ts.Session); err != nil || r.Err != nil {
-		t.Fatalf("next sync: %v, %v", err, r.Err)
-	}
-	if n, err := usecase.Unpushed(s); err != nil || n != 0 {
-		t.Errorf("unpushed = %d, %v", n, err)
-	}
-}
-
 func TestFetchReadsEveryPageOfTheScan(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	if _, err := fake.OpenPull("org-a/web", "other", "first", "", false); err != nil {
 		t.Fatal(err)
@@ -238,7 +173,7 @@ func TestFetchReadsEveryPageOfTheScan(t *testing.T) {
 // changes links and gh of the task as the store has it then.
 func TestFetchKeepsAWriteMadeDuringIt(t *testing.T) {
 	t.Parallel()
-	ts, fake := withFake(t)
+	ts, fake := usecasetest.GitHubSession(t)
 	task := ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
 	if _, err := fake.OpenPull("org-a/web", "hh/ME-1-a", "A", "", false); err != nil {
 		t.Fatal(err)

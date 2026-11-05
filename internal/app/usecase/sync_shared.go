@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"strings"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // SyncReport is what a sync of one store did, as --json prints it.
@@ -69,7 +69,7 @@ func (ss *Session) FinishRebuild(e config.StoreEntry) error {
 	s, err := store.Open(e.Path)
 	if err != nil {
 		// No store (or a broken one) to lock: the swap is finished as it is.
-		if _, serr := os.Lstat(e.Path); errors.Is(serr, fs.ErrNotExist) {
+		if _, serr := osfs.Lstat(e.Path); errors.Is(serr, fs.ErrNotExist) {
 			return ss.finishLeftover(e, l)
 		}
 		return nil // the store's own problem; the sync tells of it

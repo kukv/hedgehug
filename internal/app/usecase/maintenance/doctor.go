@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
-	"os"
 	"path"
 	"path/filepath"
 	"slices"
@@ -174,7 +173,7 @@ func checkMergeDriver(dir string, repo *gitrepo.Repo, path string) []usecase.Fin
 // apart: the advice for it is to remove the file.
 func checkInbox(dir string) []usecase.Finding {
 	root := filepath.Join(dir, filepath.FromSlash(inbox.RecordsPath))
-	entries, err := os.ReadDir(root)
+	entries, err := osfs.ReadDir(root)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil
@@ -427,7 +426,7 @@ func checkFile(dir, root, rel string) (string, error) {
 		if got != child {
 			return bad("the ulid in the file is %s, which differs from the ulid in the path", got)
 		}
-		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(model.TaskPath(task)))); errors.Is(err, fs.ErrNotExist) {
+		if _, err := osfs.Stat(filepath.Join(dir, filepath.FromSlash(model.TaskPath(task)))); errors.Is(err, fs.ErrNotExist) {
 			return bad("there is no task file for task %s", task)
 		} else if err != nil {
 			return "", err

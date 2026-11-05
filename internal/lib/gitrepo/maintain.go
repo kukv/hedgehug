@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -40,7 +39,7 @@ func (r *Repo) smallPacks(packCap int64) ([]smallPack, error) {
 	}
 	var out []smallPack
 	for _, ix := range idxs {
-		fi, err := os.Stat(strings.TrimSuffix(ix, ".idx") + ".pack")
+		fi, err := osfs.Stat(strings.TrimSuffix(ix, ".idx") + ".pack")
 		if errors.Is(err, fs.ErrNotExist) {
 			continue // being removed
 		}
@@ -90,7 +89,7 @@ func pickGeometric(sizes []int64) int {
 
 // packObjects lists the objects of the pack whose index is at idxPath.
 func packObjects(idxPath string) ([]plumbing.Hash, error) {
-	f, err := os.Open(idxPath) //nolint:gosec // G304: a pack of this repository
+	f, err := osfs.Open(idxPath)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +246,7 @@ func (r *Repo) writePack(objs []plumbing.Hash) (base string, err error) {
 			}
 		}
 	}()
-	pack, err := os.CreateTemp(dir, "tmp_hh_pack_*")
+	pack, err := osfs.CreateTemp(dir, "tmp_hh_pack_*")
 	if err != nil {
 		return "", err
 	}
@@ -269,7 +268,7 @@ func (r *Repo) writePack(objs []plumbing.Hash) (base string, err error) {
 	if err != nil {
 		return "", err
 	}
-	ix, err := os.CreateTemp(dir, "tmp_hh_idx_*")
+	ix, err := osfs.CreateTemp(dir, "tmp_hh_idx_*")
 	if err != nil {
 		return "", err
 	}
@@ -285,7 +284,7 @@ func (r *Repo) writePack(objs []plumbing.Hash) (base string, err error) {
 		return "", err
 	}
 	base = filepath.Join(dir, "pack-"+sum.String())
-	if _, serr := os.Stat(base + ".idx"); serr == nil {
+	if _, serr := osfs.Stat(base + ".idx"); serr == nil {
 		// The same pack is already there; packs are named by their content.
 		for _, t := range tmps {
 			_ = osfs.Remove(t)
@@ -297,7 +296,7 @@ func (r *Repo) writePack(objs []plumbing.Hash) (base string, err error) {
 	// Read-only for everyone, as git writes them, so that the other users of
 	// a shared repository can read them.
 	for _, t := range tmps {
-		if err := os.Chmod(t, packMode); err != nil {
+		if err := osfs.Chmod(t, packMode); err != nil {
 			return "", err
 		}
 	}
@@ -317,13 +316,13 @@ const packMode = 0o444
 // removeReadOnly removes a file writePack made, which may be read-only by
 // then; Windows does not remove a read-only file.
 func removeReadOnly(p string) {
-	_ = os.Chmod(p, 0o600)
+	_ = osfs.Chmod(p, 0o600)
 	_ = osfs.Remove(p)
 }
 
 // indexPack reads the pack at path and returns its index.
 func indexPack(path string) (*idxfile.MemoryIndex, error) {
-	f, err := os.Open(path) //nolint:gosec // G304: a temporary file writePack made
+	f, err := osfs.Open(path)
 	if err != nil {
 		return nil, err
 	}

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -649,7 +648,7 @@ func (c *Config) Save() error {
 	if err := osfs.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(dir, ".config.yaml.tmp-*")
+	f, err := osfs.CreateTemp(dir, ".config.yaml.tmp-*")
 	if err != nil {
 		return err
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"iter"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -158,7 +157,7 @@ func (s *Store) Worklogs(task model.ULID) iter.Seq2[*model.Worklog, error] {
 func (s *Store) NoteFiles(task model.ULID) (map[string][]byte, error) {
 	out := map[string][]byte{}
 	for _, dir := range []string{path.Dir(model.CommentPath(task, model.ULID{})), path.Dir(model.WorklogPath(task, model.ULID{}))} {
-		entries, err := os.ReadDir(s.path(dir))
+		entries, err := osfs.ReadDir(s.path(dir))
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}

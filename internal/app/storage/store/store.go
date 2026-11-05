@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -184,7 +183,7 @@ func Create(dir string, meta *model.StoreMeta, sc *schema.Schema, ws *model.Work
 // ensureEmpty makes sure dir is an empty directory, creating it when it is
 // missing. made tells whether it created it.
 func ensureEmpty(dir string) (made bool, err error) {
-	entries, err := os.ReadDir(dir)
+	entries, err := osfs.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return true, osfs.MkdirAll(dir, 0o750)
 	}
@@ -203,7 +202,7 @@ func undoCreate(dir string, made bool) error {
 	if made {
 		return osfs.RemoveAll(dir)
 	}
-	entries, err := os.ReadDir(dir)
+	entries, err := osfs.ReadDir(dir)
 	if err != nil {
 		return err
 	}

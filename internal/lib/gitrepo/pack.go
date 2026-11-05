@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 
 	"github.com/go-git/go-git/v5/plumbing"
+
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // idxMagic heads a pack index of version 2 or later; idxVersion is the only
@@ -43,7 +45,7 @@ type pack struct {
 }
 
 func openPack(base string) (*pack, error) {
-	idx, err := os.Open(base + ".idx") //nolint:gosec // G304: a pack index of the repository
+	idx, err := osfs.Open(base + ".idx")
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +61,7 @@ func openPack(base string) (*pack, error) {
 		_ = idx.Close()
 		return nil, errSkipPack
 	}
-	data, err := os.Open(base + ".pack") //nolint:gosec // G304: a pack of the repository
+	data, err := osfs.Open(base + ".pack")
 	if err != nil {
 		_ = idx.Close()
 		return nil, err

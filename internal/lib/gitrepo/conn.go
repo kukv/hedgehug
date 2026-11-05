@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -94,7 +93,7 @@ func IsHTTP(u string) bool {
 // Writable reports whether a file can be made and removed in dir/objects,
 // which a push to the bare repository dir needs.
 func Writable(dir string) bool {
-	f, err := os.CreateTemp(filepath.Join(dir, "objects"), ".hedgehug-write-test-*") //nolint:gosec // G703: dir is the bare repository of a remote in config.yaml
+	f, err := osfs.CreateTemp(filepath.Join(dir, "objects"), ".hedgehug-write-test-*")
 	if err != nil {
 		return false
 	}
