@@ -208,10 +208,7 @@ func edit(ss *usecase.Session, detail string, change func(*index.Index, *automat
 			return err
 		}
 		sc := s.Schema()
-		var known []string
-		for _, p := range problems(cur, sc, ix) {
-			known = append(known, p.Msg)
-		}
+		known := problems(cur, sc, ix)
 		next, err := s.Automations()
 		if err != nil {
 			return invalid(err)
@@ -219,15 +216,9 @@ func edit(ss *usecase.Session, detail string, change func(*index.Index, *automat
 		if err := change(ix, next); err != nil {
 			return mapErr(err)
 		}
-		// Compare the messages as a multiset: the paths hold indexes, which a
-		// removal in front of a problem shifts.
 		var fresh []string
-		for _, p := range problems(next, sc, ix) {
-			if i := slices.Index(known, p.Msg); i >= 0 {
-				known = slices.Delete(known, i, i+1)
-			} else {
-				fresh = append(fresh, p.String())
-			}
+		for _, p := range automation.Fresh(known, problems(next, sc, ix)) {
+			fresh = append(fresh, p.String())
 		}
 		if len(fresh) > 0 {
 			return usecase.NewErr(usecase.KindInvalid, "automation.invalid",

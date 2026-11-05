@@ -9,6 +9,25 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 )
 
+// Fresh are the problems of after that before does not have. The messages are
+// compared as a multiset: the paths hold indexes, which an edit in front of a
+// problem shifts.
+func Fresh(before, after []schema.Problem) []schema.Problem {
+	known := make([]string, len(before))
+	for i, p := range before {
+		known[i] = p.Msg
+	}
+	var fresh []schema.Problem
+	for _, p := range after {
+		if i := slices.Index(known, p.Msg); i >= 0 {
+			known = slices.Delete(known, i, i+1)
+		} else {
+			fresh = append(fresh, p)
+		}
+	}
+	return fresh
+}
+
 // Check lists the defects of f against sc. project says whether a ULID is a
 // project of the store that is not deleted.
 func (f *File) Check(sc *schema.Schema, project func(model.ULID) bool) []schema.Problem {

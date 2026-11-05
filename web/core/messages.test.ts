@@ -105,6 +105,12 @@ describe("errorMessage", () => {
     ).toBe("ここには移せません: org-b refuses");
   });
 
+  it("says that automations.yaml stopped a move", () => {
+    expect(errorMessage(err("automation.invalid", { store: "org-a" }, "boom"))).toBe(
+      "automations.yaml に問題があります: boom",
+    );
+  });
+
   it("asks for the choices of a move by what they are", () => {
     expect(
       errorMessage(err("choice.required", { what: "--workspace", candidates: ["a", "b"] })),

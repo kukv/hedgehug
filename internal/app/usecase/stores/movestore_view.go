@@ -19,7 +19,7 @@ type MovePlanView struct {
 	Tasks     []MoveTaskView    `json:"tasks" nullable:"false" doc:"The root first, every parent before its children; id is as the source shows it"`
 	Unlinked  []MoveUnlinkView  `json:"unlinked" nullable:"false" doc:"The references the move cuts"`
 	Hidden    []string          `json:"hidden" nullable:"false" doc:"Accounts that can read the source and not the destination; empty when either list is unknown"`
-	Scoped    *MoveScopedView   `json:"scoped,omitempty" doc:"Present when a project moved has a scoped schema"`
+	Scoped    *MoveScopedView   `json:"scoped,omitempty" doc:"Present when a project moved has a scoped schema or automations of its own"`
 }
 
 // MoveWorkspaceView names a workspace of the destination.
@@ -48,11 +48,12 @@ type MoveUnlinkView struct {
 	Target MoveTargetView `json:"target"`
 }
 
-// MoveScopedView is the scoped schema the tasks moved bring with them.
+// MoveScopedView is the scoped schema and the where rules of automations.yaml
+// that the tasks moved bring with them.
 type MoveScopedView struct {
 	Required bool     `json:"required" doc:"A choice is still needed: scoped was not given"`
 	Choice   string   `json:"choice,omitempty" enum:"carry,drop" doc:"The choice that was given"`
-	Dropped  []string `json:"dropped" nullable:"false" doc:"What carrying leaves out, as \"<what> <name>\" (status, transitions, required, prop, template, kind); empty unless carried"`
+	Dropped  []string `json:"dropped" nullable:"false" doc:"What carrying leaves out, as \"<what> <name>\" (status, transitions, required, prop, template, kind, rule, disable); empty unless carried"`
 }
 
 // GUIView is the plan as the GUI shows it.

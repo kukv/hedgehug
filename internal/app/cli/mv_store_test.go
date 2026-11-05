@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
@@ -113,6 +114,30 @@ func TestMvStoreScopedQuestion(t *testing.T) {
 
 	te.stdin = "c\ny\n"
 	te.goldenRun("carried", 0, "mv", p.ID, "--store", "bravo-long")
+}
+
+// The rules of a project are a choice of their own when the project has no
+// scoped schema, and the plan says what they lose.
+func TestMvStoreScopedAutomations(t *testing.T) {
+	t.Parallel()
+	te := newMoveStoreEnv(t)
+	p := te.addJSON("--store", "alpha", "Ruled project", "--kind", "project")
+	te.ok("automation", "add", "--store", "alpha", "--id", "global", "--on", "pr.opened", "--status", "in_progress")
+	te.ok("automation", "add", "--store", "alpha", "--id", "mine", "--on", "pr.merged", "--status", "done", "--project", p.ID)
+	te.ok("automation", "disable", "--store", "alpha", "global", "--project", p.ID)
+
+	te.goldenRun("no-scoped", 2, "mv", p.ID, "--store", "bravo-long", "--yes")
+
+	te.terminal = true
+	te.stdin = "c\ny\n"
+	te.goldenRun("carried", 0, "mv", p.ID, "--store", "bravo-long")
+	te.terminal = false
+	if out := te.ok("automation", "list", "--store", "bravo-long"); !strings.Contains(out, "mine") || strings.Contains(out, "global") {
+		t.Errorf("rules of bravo-long:\n%s", out)
+	}
+	if out := te.ok("automation", "list", "--store", "alpha"); strings.Contains(out, "mine") || !strings.Contains(out, "global") {
+		t.Errorf("rules of alpha:\n%s", out)
+	}
 }
 
 func TestMvStoreScopedDrop(t *testing.T) {

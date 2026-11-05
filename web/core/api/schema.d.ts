@@ -1109,7 +1109,7 @@ export interface components {
             hidden: string[];
             /** @description The parent in the destination, when one was given; id is as the destination shows it */
             parent?: components["schemas"]["MoveTaskView"];
-            /** @description Present when a project moved has a scoped schema */
+            /** @description Present when a project moved has a scoped schema or automations of its own */
             scoped?: components["schemas"]["MoveScopedView"];
             /** @description The root first, every parent before its children; id is as the source shows it */
             tasks: components["schemas"]["MoveTaskView"][];
@@ -1133,7 +1133,7 @@ export interface components {
              * @enum {string}
              */
             choice?: "carry" | "drop";
-            /** @description What carrying leaves out, as "<what> <name>" (status, transitions, required, prop, template, kind); empty unless carried */
+            /** @description What carrying leaves out, as "<what> <name>" (status, transitions, required, prop, template, kind, rule, disable); empty unless carried */
             dropped: string[];
             /** @description A choice is still needed: scoped was not given */
             required: boolean;
@@ -1142,7 +1142,7 @@ export interface components {
             /** @description A task of that store to put the task under: an ID or a ULID */
             parent?: string;
             /**
-             * @description Whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required
+             * @description Whether the scoped schema and the automations of the projects moved go along; without it the plan says scoped.required, and the move is 400 choice.required
              * @enum {string}
              */
             scoped?: "carry" | "drop";
@@ -1157,7 +1157,7 @@ export interface components {
             /** @description A task of that store to put the task under: an ID or a ULID */
             parent?: string;
             /**
-             * @description Whether the scoped schema of the projects moved goes along; without it the plan says scoped.required, and the move is 400 choice.required
+             * @description Whether the scoped schema and the automations of the projects moved go along; without it the plan says scoped.required, and the move is 400 choice.required
              * @enum {string}
              */
             scoped?: "carry" | "drop";

@@ -217,6 +217,8 @@ type MoveIn struct {
 	Notes     map[string][]byte // the comment and worklog files of the tasks, by path (same paths here)
 	Unlinked  []Unlink
 	Scoped    []schema.Scoped // to add to this store's schema.yaml
+	// Automations is the new automations.yaml of this store; nil leaves it.
+	Automations []byte
 }
 
 // MoveIn writes in in tx: each task with its workspace set to in.Workspace,
@@ -289,6 +291,12 @@ func (tx *Tx) MoveIn(in MoveIn) error {
 			sc.Scoped = append(sc.Scoped, add)
 		}
 		if err := tx.PutSchema(sc); err != nil {
+			return err
+		}
+	}
+
+	if in.Automations != nil {
+		if err := tx.PutFile(model.AutomationsPath, in.Automations); err != nil {
 			return err
 		}
 	}
@@ -366,14 +374,16 @@ type MoveOut struct {
 	Tasks    []model.ULID // the tasks moved; the root first
 	Unlinked []Unlink
 	Scoped   []string // the where (project:<ULID>) of the scoped entries to remove
+	// Automations is the new automations.yaml of this store; nil leaves it.
+	Automations []byte
 }
 
 // MoveOut writes out in tx: each task file becomes a forward to out.To (with
 // the time of the move as moved_at), its comments and worklog entries go, the
 // tasks that stay lose their references to them (out.Unlinked), numbers.yaml
 // keeps their numbers (D13: those of the prefixes of this store's
-// workspaces), and the scoped entry goes. It adds the trailers of spec step 8
-// and D11: Hedgehug-Task for each task (the root first; not the root when
+// workspaces), the scoped entry goes and out.Automations is written. It adds
+// the trailers of spec step 8 and D11: Hedgehug-Task for each task (the root first; not the root when
 // Op.Task names it), Hedgehug-Moved-To and Hedgehug-Unlinked. The caller
 // gives the operation its Detail (D11).
 func (tx *Tx) MoveOut(out MoveOut) error {
@@ -447,6 +457,11 @@ func (tx *Tx) MoveOut(out MoveOut) error {
 			if err := tx.PutSchema(sc); err != nil {
 				return err
 			}
+		}
+	}
+	if out.Automations != nil {
+		if err := tx.PutFile(model.AutomationsPath, out.Automations); err != nil {
+			return err
 		}
 	}
 

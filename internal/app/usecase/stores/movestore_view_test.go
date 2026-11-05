@@ -68,7 +68,7 @@ func TestScopedPlanLines(t *testing.T) {
 	if len(none.Lines("org-b")) != 0 {
 		t.Error("a nil plan has lines")
 	}
-	sp := &stores.ScopedPlan{Dropped: []string{"status review", "transitions backlog", "required todo", "prop gone", "template nope", "kind alien"}}
+	sp := &stores.ScopedPlan{Dropped: []string{"status review", "transitions backlog", "required todo", "prop gone", "template nope", "kind alien", "rule pr-opened", "disable base"}}
 	want := []string{
 		`scoped: dropped status "review" (not in org-b)`,
 		`scoped: dropped transitions from "backlog" (no target in org-b)`,
@@ -76,6 +76,8 @@ func TestScopedPlanLines(t *testing.T) {
 		`scoped: dropped prop "gone" (not in org-b)`,
 		`scoped: dropped template "nope" (not in org-b)`,
 		`scoped: dropped kind "alien" (not in org-b)`,
+		`scoped: dropped rule "pr-opened" (does not fit org-b)`,
+		`scoped: dropped the disable of rule "base" (no such rule in org-b)`,
 	}
 	if got := sp.Lines("org-b"); !slices.Equal(got, want) {
 		t.Errorf("lines = %q, want %q", got, want)
