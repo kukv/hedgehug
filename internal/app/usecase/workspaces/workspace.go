@@ -232,6 +232,12 @@ func WorkspaceRemove(ss *usecase.Session, arg string) (WorkspaceResult, error) {
 		return WorkspaceResult{}, usecase.NewErr(usecase.KindConflict, "workspace.not_empty",
 			fmt.Errorf("workspace %[1]s still has %[2]s; move %[3]s with hedgehug mv --workspace, or delete %[3]s with hedgehug rm and remove %[3]s with hedgehug purge --older-than 0d --store <store>", ws.Name, plural.Count(n, "task"), plural.Pick(n, "it", "them")), "tasks", n)
 	}
+	sprints, releases := len(ix.Sprints(ws.ULID)), len(ix.Releases(ws.ULID))
+	if sprints+releases > 0 {
+		return WorkspaceResult{}, usecase.NewErr(usecase.KindConflict, "workspace.not_empty",
+			fmt.Errorf("workspace %s still has %s and %s; remove them with hedgehug sprint rm and hedgehug release rm", ws.Name, plural.Count(sprints, "sprint"), plural.Count(releases, "release")),
+			"tasks", 0, "sprints", sprints, "releases", releases)
+	}
 	w := ws
 	hash, err := ss.UpdateCommit(s, workspaceOp(ws.ULID), func(tx *store.Tx) error {
 		var err error

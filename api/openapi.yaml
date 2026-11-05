@@ -1688,6 +1688,86 @@ components:
         - id
         - title
       type: object
+    ReleaseAddInputBody:
+      additionalProperties: false
+      properties:
+        date:
+          description: YYYY-MM-DD
+          type: string
+        name:
+          type: string
+        workspace:
+          description: Without it, the only one of the store
+          type: string
+      required:
+        - name
+      type: object
+    ReleaseNotesOutputBody:
+      additionalProperties: false
+      properties:
+        notes:
+          description: In Markdown
+          type: string
+      required:
+        - notes
+      type: object
+    ReleasePatchInputBody:
+      additionalProperties: false
+      properties:
+        date:
+          description: YYYY-MM-DD; empty clears it
+          type: string
+        name:
+          type: string
+        state:
+          enum:
+            - unreleased
+            - released
+            - archived
+          type: string
+      type: object
+    ReleaseView:
+      additionalProperties: false
+      properties:
+        date:
+          type: string
+        done:
+          description: Those of them in the done category
+          format: int64
+          type: integer
+        name:
+          type: string
+        state:
+          type: string
+        tasks:
+          description: The tasks in the release, not deleted
+          format: int64
+          type: integer
+        ulid:
+          type: string
+        workspace:
+          $ref: "#/components/schemas/WorkspaceRef"
+      required:
+        - ulid
+        - workspace
+        - name
+        - state
+        - tasks
+        - done
+      type: object
+    ReleaseWrite:
+      additionalProperties: false
+      properties:
+        commit:
+          type:
+            - string
+            - "null"
+        release:
+          $ref: "#/components/schemas/ReleaseView"
+      required:
+        - release
+        - commit
+      type: object
     Repaired:
       additionalProperties: false
       properties:
@@ -2108,6 +2188,104 @@ components:
         - updated
         - deleted_at
         - problems
+      type: object
+    SprintAddInputBody:
+      additionalProperties: false
+      properties:
+        end:
+          description: YYYY-MM-DD
+          type: string
+        goal:
+          type: string
+        name:
+          type: string
+        start:
+          description: YYYY-MM-DD
+          type: string
+        workspace:
+          description: Without it, the only one of the store
+          type: string
+      required:
+        - name
+      type: object
+    SprintCloseInputBody:
+      additionalProperties: false
+      properties:
+        to:
+          description: "Where the unfinished tasks go: next, backlog or the name of a sprint; may be left out when none is left"
+          type: string
+      type: object
+    SprintPatchInputBody:
+      additionalProperties: false
+      properties:
+        end:
+          description: YYYY-MM-DD; empty clears it
+          type: string
+        goal:
+          type: string
+        name:
+          type: string
+        start:
+          description: YYYY-MM-DD; empty clears it
+          type: string
+      type: object
+    SprintView:
+      additionalProperties: false
+      properties:
+        done:
+          description: Those of them in the done category
+          format: int64
+          type: integer
+        end:
+          type: string
+        goal:
+          type: string
+        name:
+          type: string
+        points:
+          description: The sum of the points of the tasks
+          format: double
+          type: number
+        start:
+          type: string
+        state:
+          type: string
+        tasks:
+          description: The tasks in the sprint, not deleted
+          format: int64
+          type: integer
+        ulid:
+          type: string
+        workspace:
+          $ref: "#/components/schemas/WorkspaceRef"
+      required:
+        - ulid
+        - workspace
+        - name
+        - state
+        - tasks
+        - done
+        - points
+      type: object
+    SprintWrite:
+      additionalProperties: false
+      properties:
+        commit:
+          type:
+            - string
+            - "null"
+        moved:
+          description: "Closing: the tasks moved out of the sprint"
+          format: int64
+          type: integer
+        sprint:
+          $ref: "#/components/schemas/SprintView"
+        to:
+          description: "Closing: where they went: backlog, or the name of a sprint"
+          type: string
+      required:
+        - sprint
+        - commit
       type: object
     StatusDef:
       additionalProperties: false
@@ -2806,6 +2984,21 @@ components:
         - transitions
         - required
       type: object
+    WorklogAddInputBody:
+      additionalProperties: false
+      properties:
+        date:
+          description: YYYY-MM-DD; without it, today
+          type: string
+        duration:
+          description: Such as 1h30m
+          minLength: 1
+          type: string
+        note:
+          type: string
+      required:
+        - duration
+      type: object
     WorklogTotal:
       additionalProperties: false
       properties:
@@ -2818,6 +3011,43 @@ components:
       required:
         - total
         - count
+      type: object
+    WorklogView:
+      additionalProperties: false
+      properties:
+        author:
+          type: string
+        body:
+          description: The note
+          type: string
+        date:
+          type: string
+        duration:
+          type: string
+        task:
+          description: The ULID of the task
+          type: string
+        ulid:
+          type: string
+      required:
+        - ulid
+        - task
+        - author
+        - date
+        - duration
+      type: object
+    WorklogWrite:
+      additionalProperties: false
+      properties:
+        commit:
+          type:
+            - string
+            - "null"
+        worklog:
+          $ref: "#/components/schemas/WorklogView"
+      required:
+        - worklog
+        - commit
       type: object
     WorkspaceAddInputBody:
       additionalProperties: false
@@ -2867,6 +3097,12 @@ components:
         prefix_set:
           format: date-time
           type: string
+        releases:
+          format: int64
+          type: integer
+        sprints:
+          format: int64
+          type: integer
         tasks:
           format: int64
           type: integer
@@ -2879,6 +3115,8 @@ components:
         - prefix_set
         - tasks
         - deleted
+        - sprints
+        - releases
       type: object
     WorkspaceWrite:
       additionalProperties: false
@@ -4027,6 +4265,211 @@ paths:
       summary: Remove, for good, what the confirmed plan lists, as hh purge after its question
       tags:
         - maintenance
+  /api/releases:
+    get:
+      operationId: list-releases
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: Only this workspace
+          explode: false
+          in: query
+          name: workspace
+          schema:
+            description: Only this workspace
+            type: string
+        - description: Only this state
+          explode: false
+          in: query
+          name: state
+          schema:
+            description: Only this state
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/ReleaseView"
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: List the releases, as hh release ls
+      tags:
+        - planning
+    post:
+      operationId: add-release
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReleaseAddInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseWrite"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Add a release, as hh release add
+      tags:
+        - planning
+  /api/releases/{id}:
+    delete:
+      operationId: remove-release
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ULID or the name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ULID or the name
+            type: string
+        - description: The workspace, when the name is in several
+          explode: false
+          in: query
+          name: workspace
+          schema:
+            description: The workspace, when the name is in several
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Delete a release, as hh release rm
+      tags:
+        - planning
+    patch:
+      operationId: update-release
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ULID or the name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ULID or the name
+            type: string
+        - description: The workspace, when the name is in several
+          explode: false
+          in: query
+          name: workspace
+          schema:
+            description: The workspace, when the name is in several
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReleasePatchInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Change a release, as hh release set
+      tags:
+        - planning
+  /api/releases/{id}/notes:
+    get:
+      operationId: get-release-notes
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ULID or the name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ULID or the name
+            type: string
+        - description: The workspace, when the name is in several
+          explode: false
+          in: query
+          name: workspace
+          schema:
+            description: The workspace, when the name is in several
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReleaseNotesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Read the release notes, as hh release notes
+      tags:
+        - planning
   /api/repo-accounts:
     get:
       operationId: get-repo-accounts
@@ -4230,6 +4673,258 @@ paths:
       summary: Change the override of a project, as hh schema scope set
       tags:
         - schema
+  /api/sprints:
+    get:
+      operationId: list-sprints
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: Only this workspace
+          explode: false
+          in: query
+          name: workspace
+          schema:
+            description: Only this workspace
+            type: string
+        - description: Only this state
+          explode: false
+          in: query
+          name: state
+          schema:
+            description: Only this state
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/SprintView"
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: List the sprints, as hh sprint ls
+      tags:
+        - planning
+    post:
+      operationId: add-sprint
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SprintAddInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SprintWrite"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Add a sprint, as hh sprint add
+      tags:
+        - planning
+  /api/sprints/{id}:
+    delete:
+      operationId: remove-sprint
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ULID or the name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ULID or the name
+            type: string
+        - description: The workspace, when the name is in several
+          explode: false
+          in: query
+          name: workspace
+          schema:
+            description: The workspace, when the name is in several
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SprintWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Delete a sprint, as hh sprint rm
+      tags:
+        - planning
+    patch:
+      operationId: update-sprint
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ULID or the name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ULID or the name
+            type: string
+        - description: The workspace, when the name is in several
+          explode: false
+          in: query
+          name: workspace
+          schema:
+            description: The workspace, when the name is in several
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SprintPatchInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SprintWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Change a sprint, as hh sprint set
+      tags:
+        - planning
+  /api/sprints/{id}/close:
+    post:
+      operationId: close-sprint
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ULID or the name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ULID or the name
+            type: string
+        - description: The workspace, when the name is in several
+          explode: false
+          in: query
+          name: workspace
+          schema:
+            description: The workspace, when the name is in several
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SprintCloseInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SprintWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Close a sprint, as hh sprint close
+      tags:
+        - planning
+  /api/sprints/{id}/start:
+    post:
+      operationId: start-sprint
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ULID or the name
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ULID or the name
+            type: string
+        - description: The workspace, when the name is in several
+          explode: false
+          in: query
+          name: workspace
+          schema:
+            description: The workspace, when the name is in several
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SprintWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Start a sprint, as hh sprint start
+      tags:
+        - planning
   /api/stores:
     get:
       operationId: list-stores
@@ -5298,6 +5993,124 @@ paths:
       summary: Watch a task, as hh watch
       tags:
         - tasks
+  /api/tasks/{id}/worklogs:
+    get:
+      operationId: list-worklogs
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/WorklogView"
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: List the time spent on a task, as hh worklog ls
+      tags:
+        - planning
+    post:
+      operationId: add-worklog
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WorklogAddInputBody"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorklogWrite"
+          description: Created
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Record time spent on a task, as hh worklog
+      tags:
+        - planning
+  /api/tasks/{id}/worklogs/{log}:
+    delete:
+      operationId: remove-worklog
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The ID, a former ID, or the ULID of the task
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The ID, a former ID, or the ULID of the task
+            type: string
+        - description: The ULID of the entry
+          in: path
+          name: log
+          required: true
+          schema:
+            description: The ULID of the entry
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorklogWrite"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Delete a worklog entry, as hh worklog rm
+      tags:
+        - planning
   /api/undo:
     post:
       operationId: undo

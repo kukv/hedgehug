@@ -426,6 +426,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the releases, as hh release ls */
+        get: operations["list-releases"];
+        put?: never;
+        /** Add a release, as hh release add */
+        post: operations["add-release"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/releases/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a release, as hh release rm */
+        delete: operations["remove-release"];
+        options?: never;
+        head?: never;
+        /** Change a release, as hh release set */
+        patch: operations["update-release"];
+        trace?: never;
+    };
+    "/api/releases/{id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the release notes, as hh release notes */
+        get: operations["get-release-notes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/repo-accounts": {
         parameters: {
             query?: never;
@@ -508,6 +561,76 @@ export interface paths {
         post?: never;
         /** Remove the override of a project, as hh schema scope rm */
         delete: operations["delete-scoped"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sprints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the sprints, as hh sprint ls */
+        get: operations["list-sprints"];
+        put?: never;
+        /** Add a sprint, as hh sprint add */
+        post: operations["add-sprint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sprints/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a sprint, as hh sprint rm */
+        delete: operations["remove-sprint"];
+        options?: never;
+        head?: never;
+        /** Change a sprint, as hh sprint set */
+        patch: operations["update-sprint"];
+        trace?: never;
+    };
+    "/api/sprints/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close a sprint, as hh sprint close */
+        post: operations["close-sprint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sprints/{id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a sprint, as hh sprint start */
+        post: operations["start-sprint"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -877,6 +1000,41 @@ export interface paths {
         post?: never;
         /** Stop watching a task, as hh unwatch */
         delete: operations["unwatch-task"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{id}/worklogs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the time spent on a task, as hh worklog ls */
+        get: operations["list-worklogs"];
+        put?: never;
+        /** Record time spent on a task, as hh worklog */
+        post: operations["add-worklog"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{id}/worklogs/{log}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a worklog entry, as hh worklog rm */
+        delete: operations["remove-worklog"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1635,12 +1793,22 @@ export interface components {
             props?: {
                 [key: string]: unknown;
             };
+            /** @description Replaces the releases: names in the workspace of the task, or ULIDs */
+            releases?: string[];
             /** @description Replaces the repos */
             repos?: string[];
+            /** @description The sprint: a name in the workspace of the task, or a ULID; empty takes it off */
+            sprint?: string;
             status?: string;
             title?: string;
             /** @description Replaces the watchers */
             watchers?: string[];
+        };
+        PlanRef: {
+            /** @description Empty when the store has no such file */
+            name?: string;
+            state?: string;
+            ulid: string;
         };
         PresenceInputBody: {
             /** @description The client that hello gave */
@@ -1713,6 +1881,45 @@ export interface components {
             id: string;
             title: string;
             ulid: string;
+        };
+        ReleaseAddInputBody: {
+            /** @description YYYY-MM-DD */
+            date?: string;
+            name: string;
+            /** @description Without it, the only one of the store */
+            workspace?: string;
+        };
+        ReleaseNotesOutputBody: {
+            /** @description In Markdown */
+            notes: string;
+        };
+        ReleasePatchInputBody: {
+            /** @description YYYY-MM-DD; empty clears it */
+            date?: string;
+            name?: string;
+            /** @enum {string} */
+            state?: "unreleased" | "released" | "archived";
+        };
+        ReleaseView: {
+            date?: string;
+            /**
+             * Format: int64
+             * @description Those of them in the done category
+             */
+            done: number;
+            name: string;
+            state: string;
+            /**
+             * Format: int64
+             * @description The tasks in the release, not deleted
+             */
+            tasks: number;
+            ulid: string;
+            workspace: components["schemas"]["WorkspaceRef"];
+        };
+        ReleaseWrite: {
+            commit: string | null;
+            release: components["schemas"]["ReleaseView"];
         };
         Repaired: {
             author?: string;
@@ -1837,11 +2044,13 @@ export interface components {
             };
             rank: string;
             referenced_by: components["schemas"]["Ref"][] | null;
+            releases?: components["schemas"]["PlanRef"][];
             repos: string[] | null;
             reverse: {
                 [key: string]: components["schemas"]["Ref"][] | null;
             };
             scope?: string;
+            sprint?: components["schemas"]["PlanRef"];
             status: string;
             store: string;
             title: string;
@@ -1849,7 +2058,65 @@ export interface components {
             /** Format: date-time */
             updated: string;
             watchers: string[] | null;
+            worklog?: components["schemas"]["WorklogTotal"];
             workspace: components["schemas"]["WorkspaceRef"];
+        };
+        SprintAddInputBody: {
+            /** @description YYYY-MM-DD */
+            end?: string;
+            goal?: string;
+            name: string;
+            /** @description YYYY-MM-DD */
+            start?: string;
+            /** @description Without it, the only one of the store */
+            workspace?: string;
+        };
+        SprintCloseInputBody: {
+            /** @description Where the unfinished tasks go: next, backlog or the name of a sprint; may be left out when none is left */
+            to?: string;
+        };
+        SprintPatchInputBody: {
+            /** @description YYYY-MM-DD; empty clears it */
+            end?: string;
+            goal?: string;
+            name?: string;
+            /** @description YYYY-MM-DD; empty clears it */
+            start?: string;
+        };
+        SprintView: {
+            /**
+             * Format: int64
+             * @description Those of them in the done category
+             */
+            done: number;
+            end?: string;
+            goal?: string;
+            name: string;
+            /**
+             * Format: double
+             * @description The sum of the points of the tasks
+             */
+            points: number;
+            start?: string;
+            state: string;
+            /**
+             * Format: int64
+             * @description The tasks in the sprint, not deleted
+             */
+            tasks: number;
+            ulid: string;
+            workspace: components["schemas"]["WorkspaceRef"];
+        };
+        SprintWrite: {
+            commit: string | null;
+            /**
+             * Format: int64
+             * @description Closing: the tasks moved out of the sprint
+             */
+            moved?: number;
+            sprint: components["schemas"]["SprintView"];
+            /** @description Closing: where they went: backlog, or the name of a sprint */
+            to?: string;
         };
         StatusDef: {
             category: string;
@@ -2014,7 +2281,9 @@ export interface components {
                 [key: string]: unknown;
             };
             rank: string;
+            releases?: components["schemas"]["PlanRef"][];
             scope?: string;
+            sprint?: components["schemas"]["PlanRef"];
             status: string;
             store: string;
             title: string;
@@ -2115,6 +2384,33 @@ export interface components {
                 [key: string]: string[] | null;
             };
         };
+        WorklogAddInputBody: {
+            /** @description YYYY-MM-DD; without it, today */
+            date?: string;
+            /** @description Such as 1h30m */
+            duration: string;
+            note?: string;
+        };
+        WorklogTotal: {
+            /** Format: int64 */
+            count: number;
+            /** @description The time spent, such as 1h30m */
+            total: string;
+        };
+        WorklogView: {
+            author: string;
+            /** @description The note */
+            body?: string;
+            date: string;
+            duration: string;
+            /** @description The ULID of the task */
+            task: string;
+            ulid: string;
+        };
+        WorklogWrite: {
+            commit: string | null;
+            worklog: components["schemas"]["WorklogView"];
+        };
         WorkspaceAddInputBody: {
             name: string;
             prefix: string;
@@ -2137,6 +2433,10 @@ export interface components {
             name: string;
             /** Format: date-time */
             prefix_set: string;
+            /** Format: int64 */
+            releases: number;
+            /** Format: int64 */
+            sprints: number;
             /** Format: int64 */
             tasks: number;
             ulid: string;
@@ -3234,6 +3534,193 @@ export interface operations {
             };
         };
     };
+    "list-releases": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+                /** @description Only this workspace */
+                workspace?: string;
+                /** @description Only this state */
+                state?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseView"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "add-release": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseAddInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseWrite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "remove-release": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+                /** @description The workspace, when the name is in several */
+                workspace?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ULID or the name */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseWrite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "update-release": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+                /** @description The workspace, when the name is in several */
+                workspace?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ULID or the name */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleasePatchInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseWrite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "get-release-notes": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+                /** @description The workspace, when the name is in several */
+                workspace?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ULID or the name */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseNotesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     "get-repo-accounts": {
         parameters: {
             query?: never;
@@ -3457,6 +3944,234 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScopedView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "list-sprints": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+                /** @description Only this workspace */
+                workspace?: string;
+                /** @description Only this state */
+                state?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SprintView"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "add-sprint": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SprintAddInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SprintWrite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "remove-sprint": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+                /** @description The workspace, when the name is in several */
+                workspace?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ULID or the name */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SprintWrite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "update-sprint": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+                /** @description The workspace, when the name is in several */
+                workspace?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ULID or the name */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SprintPatchInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SprintWrite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "close-sprint": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+                /** @description The workspace, when the name is in several */
+                workspace?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ULID or the name */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SprintCloseInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SprintWrite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "start-sprint": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+                /** @description The workspace, when the name is in several */
+                workspace?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ULID or the name */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SprintWrite"];
                 };
             };
             /** @description Error */
@@ -4531,6 +5246,117 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskWrite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "list-worklogs": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ID, a former ID, or the ULID of the task */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorklogView"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "add-worklog": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ID, a former ID, or the ULID of the task */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorklogAddInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorklogWrite"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    "remove-worklog": {
+        parameters: {
+            query?: {
+                /** @description The store; without it, the one hedgehug picks as the CLI does */
+                store?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ID, a former ID, or the ULID of the task */
+                id: string;
+                /** @description The ULID of the entry */
+                log: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorklogWrite"];
                 };
             };
             /** @description Error */
