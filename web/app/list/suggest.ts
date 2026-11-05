@@ -20,6 +20,7 @@ const QUERY_KEYS = [
   "blocked_by",
   "blocks",
   "is",
+  "has",
   "store",
   "sort",
   "group",

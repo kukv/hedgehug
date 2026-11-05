@@ -568,3 +568,32 @@ func TestLogViewOfAndCurrentSubject(t *testing.T) {
 		t.Errorf("view of a plain commit = %+v", pv)
 	}
 }
+
+func TestShowLinks(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	x := ts.AddTask("a", func(x *model.Task) {
+		x.Links = []model.Link{
+			{Type: model.LinkPR, Ref: "github.com/org-a/web/pull/1", Sync: model.SyncMirror},
+			{Type: model.LinkPR, Ref: "github.com/org-a/web/pull/2", Sync: model.SyncOff},
+			{Type: model.LinkIssue, Ref: "github.com/org-a/web/issues/3", Sync: model.SyncLink},
+		}
+		if err := x.SetGitHub(model.GitHubState{PRs: []model.PRState{{Ref: "github.com/org-a/web/pull/1", State: "open", Review: "pending", Checks: "success"}}}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	v, err := browse.Show(ts.Session, x.ULID.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(v.Links) != 2 {
+		t.Fatalf("links = %+v", v.Links)
+	}
+	p, i := v.Links[0], v.Links[1]
+	if p.Label != "org-a/web#1" || p.Type != model.LinkPR || p.State != "open" || p.Review != "pending" || p.Checks != "success" {
+		t.Errorf("pull = %+v", p)
+	}
+	if i.Label != "org-a/web#3" || i.Sync != model.SyncLink || i.State != "" {
+		t.Errorf("issue = %+v", i)
+	}
+}

@@ -175,6 +175,27 @@ func TestRunIsInvalid(t *testing.T) {
 	}
 }
 
+func TestRunHasPR(t *testing.T) {
+	t.Parallel()
+	s := newStore(t)
+	linked, unlinked, issue, none := newTask("linked"), newTask("unlinked"), newTask("issue"), newTask("none")
+	linked.Links = []model.Link{{Type: model.LinkPR, Ref: "github.com/o/r/pull/1", Sync: model.SyncMirror}}
+	unlinked.Links = []model.Link{{Type: model.LinkPR, Ref: "github.com/o/r/pull/2", Sync: model.SyncOff}}
+	issue.Links = []model.Link{{Type: model.LinkIssue, Ref: "github.com/o/r/issues/1", Sync: model.SyncLink}}
+	put(t, s, linked, unlinked, issue, none)
+	ix := mustOpen(t, s)
+	if got := run(t, ix, "has:pr", Options{}); len(got) != 1 || !slices.Equal(got[0], []string{"linked"}) {
+		t.Errorf("has:pr = %v", got)
+	}
+	q, err := Parse("has:wiki")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Run(ix, q, Options{}); err == nil {
+		t.Error("has:wiki is accepted")
+	}
+}
+
 func TestRunErrors(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)

@@ -295,7 +295,12 @@ func TestLoopLogsNoTargetsOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	l := ts.srv.loop
-	lines := func() int { return strings.Count(ts.log.String(), "sync: ") }
+	// A step that finds a store due starts its sync in the background, which
+	// also writes the log: wait for it before the log is read.
+	lines := func() int {
+		l.waitUntil(time.Now().Add(10 * time.Second))
+		return strings.Count(ts.log.String(), "sync: ")
+	}
 
 	// config.yaml reads but names no store: the same failure every minute is one line.
 	l.step()

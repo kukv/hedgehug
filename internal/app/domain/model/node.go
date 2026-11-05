@@ -228,6 +228,17 @@ func (d *Doc) mapping() *yaml.Node { return d.root.Content[0] }
 // Get returns the value of key, or nil when it is absent.
 func (d *Doc) Get(key string) *yaml.Node { return fieldsOf(d.mapping()).Get(key) }
 
+// drop removes key from the mapping, so that the file no longer has it.
+func (d *Doc) drop(key string) {
+	m := d.mapping()
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == key {
+			m.Content = append(m.Content[:i:i], m.Content[i+2:]...)
+			return
+		}
+	}
+}
+
 // Decode reads the value of key into out. An absent key or null leaves out
 // unchanged. Strings and lists of strings are read as written, so a title
 // such as 2026-11-03 stays a string. A **yaml.Node gets the node itself.

@@ -11,7 +11,7 @@ import (
 // config.yaml: the intervals, and the stores it syncs.
 type Schedule struct {
 	usecase.SyncIntervals
-	Stores []string // the stores synced in the background (those with a remote)
+	Stores []string // the stores synced in the background: all of them; one with no remote is only read from GitHub
 }
 
 // LoadSchedule reads the schedule as config.yaml has it now.
@@ -26,16 +26,22 @@ func LoadSchedule(ss *usecase.Session) (Schedule, error) {
 	}
 	sch := Schedule{SyncIntervals: usecase.SyncIntervals{Interval: c.Sync.Interval, PushInterval: c.Sync.PushInterval}}
 	for _, e := range all {
-		if SyncsInBackground(e) {
-			sch.Stores = append(sch.Stores, e.Name)
-		}
+		// A store with no remote is in the list too: the loop reads GitHub for
+		// it at each interval, and SyncStore does nothing when its tasks name
+		// no repository. Whether they do is not asked here, as the list is
+		// made at every write.
+		sch.Stores = append(sch.Stores, e.Name)
 	}
 	return sch, nil
 }
 
 // PendingSince is the first write of the session's store not pushed; zero
-// when there is none or sync.json does not read.
+// when there is none, the store has no remote, or sync.json does not read.
 func PendingSince(ss *usecase.Session) time.Time {
+	// A store with no remote has nothing to push, although a write marks it.
+	if _, e, err := ss.Entry(); err != nil || !SyncsInBackground(e) {
+		return time.Time{}
+	}
 	s, err := ss.OpenStore()
 	if err != nil {
 		return time.Time{}

@@ -149,6 +149,32 @@ func (ss *Session) GitHub(c *config.Config, acct config.Account, host string) (*
 	return github.New(c.Host(host).GitHub(), tok, ss.HTTPClient), nil
 }
 
+// GitHubForRepo is a client for the repository id (<host>/<owner>/<repo>),
+// with the account repo_accounts picks, else the account of the store e,
+// else the only account. It returns the account too, for the messages.
+func (ss *Session) GitHubForRepo(c *config.Config, e config.StoreEntry, id string) (*github.Client, config.Account, error) {
+	host, _, _ := strings.Cut(id, "/")
+	name, ok := c.RepoAccountFor(id)
+	if !ok {
+		name = e.Account
+	}
+	acct, ok, err := ss.PickAccount(c, name)
+	if err != nil {
+		return nil, config.Account{}, err
+	}
+	if !ok {
+		return nil, config.Account{}, NewErr(KindConflict, "account.none",
+			fmt.Errorf("no account can read %s; set repo_accounts in config.yaml", id), "repo", id)
+	}
+	if !config.SameHost(acct.Host, host) {
+		return nil, config.Account{}, NewErr(KindInvalid, "account.host",
+			fmt.Errorf("account %s is of %s, so it cannot read %s; set repo_accounts in config.yaml", acct.Name, acct.Host, id),
+			"repo", id, "account", acct.Name)
+	}
+	cl, err := ss.GitHub(c, acct, host)
+	return cl, acct, err
+}
+
 // PickAccount is the account name names, or the only one when name is empty;
 // ok is false when there is none to pick. A name that is no account is
 // KindNotFound, "account.not_found".

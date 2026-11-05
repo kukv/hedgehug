@@ -39,6 +39,9 @@ describe("opLabel", () => {
       "merge",
       "repair",
       "replay",
+      "link",
+      "unlink",
+      "gh-fetch",
     ];
     for (const op of ops) expect(opLabel(op), op).not.toBe(op);
   });

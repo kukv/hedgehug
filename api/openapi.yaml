@@ -572,6 +572,43 @@ components:
         - role
         - parents
       type: object
+    LinkView:
+      additionalProperties: false
+      properties:
+        checks:
+          type: string
+        label:
+          description: "The ref as people write it: org-a/web#123"
+          type: string
+        merged_at:
+          format: date-time
+          type: string
+        ref:
+          type: string
+        review:
+          type: string
+        state:
+          description: Empty until GitHub is read
+          type: string
+        state_reason:
+          type: string
+        sync:
+          enum:
+            - mirror
+            - push
+            - link
+          type: string
+        type:
+          enum:
+            - github_pr
+            - github_issue
+          type: string
+      required:
+        - type
+        - ref
+        - label
+        - sync
+      type: object
     LogTrailer:
       additionalProperties: false
       properties:
@@ -1550,6 +1587,11 @@ components:
           type:
             - array
             - "null"
+        links:
+          description: The pull requests and issues linked, with what GitHub says of them
+          items:
+            $ref: "#/components/schemas/LinkView"
+          type: array
         parent:
           type:
             - string
@@ -1849,6 +1891,8 @@ components:
       properties:
         error:
           type: string
+        github_updated:
+          type: boolean
         invalid:
           items:
             type: string

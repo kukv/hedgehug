@@ -182,3 +182,30 @@ func TestServeOn(t *testing.T) {
 		t.Errorf("serveOn returned %v, want the listener closed", err)
 	}
 }
+
+func TestPullAndIssueCommands(t *testing.T) {
+	t.Parallel()
+	s := fakegh.New(fakegh.State{Repos: []*fakegh.Repo{{Owner: "o", Name: "r"}}})
+	srv := httptest.NewServer(s)
+	t.Cleanup(srv.Close)
+	for _, args := range [][]string{
+		{"pr", "open", "o/r", "--branch", "hh/WEB-1-a", "--title", "A", "--server", srv.URL},
+		{"pr", "review", "o/r#1", "--request", "--server", srv.URL},
+		{"pr", "review", "o/r#1", "--state", "approved", "--server", srv.URL},
+		{"pr", "checks", "o/r#1", "success", "--server", srv.URL},
+		{"pr", "comment", "o/r#1", "--body", "see WEB-2", "--server", srv.URL},
+		{"pr", "merge", "o/r#1", "--server", srv.URL},
+		{"issue", "open", "o/r", "--title", "I", "--server", srv.URL},
+		{"issue", "edit", "o/r#2", "--title", "J", "--server", srv.URL},
+		{"issue", "close", "o/r#2", "--reason", "not_planned", "--server", srv.URL},
+	} {
+		var out, errs strings.Builder
+		if code := run(args, &out, &errs); code != 0 {
+			t.Fatalf("%v: %d %s", args, code, errs.String())
+		}
+	}
+	r, ok := s.Repo("o/r")
+	if !ok || r.Pulls[0].State != "merged" || r.Issues[0].State != "closed" || r.Issues[0].Title != "J" {
+		t.Errorf("repo = %+v", r)
+	}
+}

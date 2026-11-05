@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,6 +26,14 @@ const (
   fakegh device approve <user_code> --user <login>
   fakegh token add <token> --user <login>
   fakegh token expire <login>
+  fakegh pr open <owner/repo> --branch <b> [--title t] [--body b] [--draft]
+  fakegh pr review <owner/repo#n> (--request | --state approved|changes_requested)
+  fakegh pr checks <owner/repo#n> <success|failure|pending>
+  fakegh pr comment <owner/repo#n> --body <b>
+  fakegh pr merge <owner/repo#n>
+  fakegh issue open <owner/repo> --title <t> [--body b]
+  fakegh issue edit <owner/repo#n> [--title t] [--body b]
+  fakegh issue close <owner/repo#n> [--reason completed|not_planned]
 The commands but serve take --server (default http://127.0.0.1:7777).`
 	defaultServer = "http://127.0.0.1:7777"
 )
@@ -149,6 +158,109 @@ func dispatch(args []string, stdout io.Writer) error {
 			return err
 		}
 		return admin(*server).ExpireTokens(pos[0])
+	case "pr open":
+		fs := flagSet("fakegh pr open")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		branch := fs.String("branch", "", "the branch")
+		title := fs.String("title", "", "the title")
+		body := fs.String("body", "", "the body")
+		draft := fs.Bool("draft", false, "open it as a draft")
+		pos, err := parse(fs, rest, 1)
+		if err != nil {
+			return err
+		}
+		if *branch == "" {
+			return usageError{errors.New("--branch is required")}
+		}
+		return admin(*server).Pull("open", fakegh.AdminBody{Repo: pos[0], Head: *branch, Title: *title, Body: *body, Draft: *draft})
+	case "pr review":
+		fs := flagSet("fakegh pr review")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		request := fs.Bool("request", false, "ask for a review")
+		state := fs.String("state", "", "approved or changes_requested")
+		pos, err := parse(fs, rest, 1)
+		if err != nil {
+			return err
+		}
+		repo, n, err := repoNumber(pos[0])
+		if err != nil {
+			return err
+		}
+		return admin(*server).Pull("review", fakegh.AdminBody{Repo: repo, Number: n, Request: *request, State: *state})
+	case "pr checks":
+		fs := flagSet("fakegh pr checks")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		pos, err := parse(fs, rest, 2)
+		if err != nil {
+			return err
+		}
+		repo, n, err := repoNumber(pos[0])
+		if err != nil {
+			return err
+		}
+		return admin(*server).Pull("checks", fakegh.AdminBody{Repo: repo, Number: n, State: pos[1]})
+	case "pr comment":
+		fs := flagSet("fakegh pr comment")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		body := fs.String("body", "", "the comment")
+		pos, err := parse(fs, rest, 1)
+		if err != nil {
+			return err
+		}
+		repo, n, err := repoNumber(pos[0])
+		if err != nil {
+			return err
+		}
+		return admin(*server).Pull("comment", fakegh.AdminBody{Repo: repo, Number: n, Body: *body})
+	case "pr merge":
+		fs := flagSet("fakegh pr merge")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		pos, err := parse(fs, rest, 1)
+		if err != nil {
+			return err
+		}
+		repo, n, err := repoNumber(pos[0])
+		if err != nil {
+			return err
+		}
+		return admin(*server).Pull("merge", fakegh.AdminBody{Repo: repo, Number: n})
+	case "issue open":
+		fs := flagSet("fakegh issue open")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		title := fs.String("title", "", "the title")
+		body := fs.String("body", "", "the body")
+		pos, err := parse(fs, rest, 1)
+		if err != nil {
+			return err
+		}
+		return admin(*server).Issue("open", fakegh.AdminBody{Repo: pos[0], Title: *title, Body: *body})
+	case "issue edit":
+		fs := flagSet("fakegh issue edit")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		title := fs.String("title", "", "the title")
+		body := fs.String("body", "", "the body")
+		pos, err := parse(fs, rest, 1)
+		if err != nil {
+			return err
+		}
+		repo, n, err := repoNumber(pos[0])
+		if err != nil {
+			return err
+		}
+		return admin(*server).Issue("edit", fakegh.AdminBody{Repo: repo, Number: n, Title: *title, Body: *body})
+	case "issue close":
+		fs := flagSet("fakegh issue close")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		reason := fs.String("reason", "completed", "completed or not_planned")
+		pos, err := parse(fs, rest, 1)
+		if err != nil {
+			return err
+		}
+		repo, n, err := repoNumber(pos[0])
+		if err != nil {
+			return err
+		}
+		return admin(*server).Issue("close", fakegh.AdminBody{Repo: repo, Number: n, Reason: *reason})
 	}
 	return usageError{fmt.Errorf("unknown command %q", cmd)}
 }
@@ -179,4 +291,14 @@ func serveCmd(args []string, stdout io.Writer) error {
 func serveOn(ln net.Listener, h http.Handler) error {
 	srv := &http.Server{Handler: h, ReadHeaderTimeout: 10 * time.Second}
 	return srv.Serve(ln)
+}
+
+// repoNumber splits owner/repo#n.
+func repoNumber(s string) (string, int, error) {
+	repo, num, ok := strings.Cut(s, "#")
+	n, err := strconv.Atoi(num)
+	if !ok || err != nil {
+		return "", 0, usageError{fmt.Errorf("want owner/repo#n, got %q", s)}
+	}
+	return repo, n, nil
 }

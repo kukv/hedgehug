@@ -29,8 +29,23 @@ func (h Host) GitHub() github.Options { return github.Options{API: h.API, Web: h
 type URLRewrite struct{ From, To string }
 
 // RepoAccount picks the account for the repositories whose repo ID matches
-// Match (a path.Match pattern; "*" matches every ID). Phase 5 uses it.
+// Match (a path.Match pattern; "*" matches every ID).
 type RepoAccount struct{ Match, Account string }
+
+// RepoAccountFor returns the account of the first rule that matches the
+// repo ID, without case; "*" matches every ID.
+func (c *Config) RepoAccountFor(id string) (string, bool) {
+	id = strings.ToLower(id)
+	for _, r := range c.RepoAccounts {
+		if r.Match == "*" {
+			return r.Account, true
+		}
+		if ok, err := path.Match(strings.ToLower(r.Match), id); err == nil && ok {
+			return r.Account, true
+		}
+	}
+	return "", false
+}
 
 // SameHost reports whether a and b name the same host. Hosts are compared
 // without case and kept as they are written.

@@ -38,3 +38,23 @@ func TestIsGitHubHost(t *testing.T) {
 		t.Errorf("github.com default = %+v", h)
 	}
 }
+
+func TestRepoAccountFor(t *testing.T) {
+	t.Parallel()
+	c := &Config{RepoAccounts: []RepoAccount{
+		{Match: "github.com/org-a/*", Account: "work"},
+		{Match: "*", Account: "personal"},
+	}}
+	for id, want := range map[string]string{
+		"github.com/org-a/web": "work",
+		"github.com/ORG-A/Web": "work",
+		"github.com/org-b/ops": "personal",
+	} {
+		if got, ok := c.RepoAccountFor(id); !ok || got != want {
+			t.Errorf("%s = %q, %v", id, got, ok)
+		}
+	}
+	if _, ok := (&Config{}).RepoAccountFor("github.com/o/r"); ok {
+		t.Error("no rules match")
+	}
+}

@@ -202,6 +202,8 @@ func (c *compiler) term(t Term) (pred, error) {
 		return c.inverse(t, "blocked_by")
 	case "is":
 		return c.is(t)
+	case "has":
+		return c.has(t)
 	}
 	if p, ok := c.sc.Prop(t.Key); ok {
 		return c.prop(t, p)
@@ -655,6 +657,20 @@ func (c *compiler) is(t Term) (pred, error) {
 		default:
 			return nil, c.fail(t, "unknown condition is:%s", v)
 		}
+	}
+	return anyOf(ps), nil
+}
+
+// has matches what a task is linked to.
+func (c *compiler) has(t Term) (pred, error) {
+	var ps []pred
+	for _, v := range t.Values {
+		if v != "pr" {
+			return nil, c.fail(t, "unknown condition has:%s", v)
+		}
+		ps = append(ps, func(e *index.Entry) bool {
+			return slices.ContainsFunc(e.Links, func(l model.Link) bool { return l.Type == model.LinkPR && l.Live() })
+		})
 	}
 	return anyOf(ps), nil
 }

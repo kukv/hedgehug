@@ -284,3 +284,35 @@ func TestShowAMovedTask(t *testing.T) {
 		t.Errorf("show org-a:%s: exit %d, stdout %q, stderr %q; want exit 1 and the move named", moved.ID, code, out, stderr)
 	}
 }
+
+func TestShowPrintsLinks(t *testing.T) {
+	t.Parallel()
+	te := newStoreEnv(t)
+	a := te.addJSON("a")
+	te.ok("link", a.ID, "--pr", "org-a/web#1")
+	if out := te.ok("show", a.ID); !strings.Contains(out, "Links:\n  pull request  org-a/web#1  not read yet\n") {
+		t.Errorf("show:\n%s", out)
+	}
+	if out := te.ok("show", a.ID, "--json"); !strings.Contains(out, `"label": "org-a/web#1"`) {
+		t.Errorf("json:\n%s", out)
+	}
+}
+
+func TestLinkLine(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		name string
+		in   usecase.LinkView
+		want string
+	}{
+		{"pull request not read", usecase.LinkView{Type: "github_pr", Label: "o/r#1"}, "pull request  o/r#1  not read yet"},
+		{"pull request with checks", usecase.LinkView{Type: "github_pr", Label: "o/r#1", State: "open", Review: "approved", Checks: "success"}, "pull request  o/r#1  open  review: approved  checks: success"},
+		{"pull request without checks", usecase.LinkView{Type: "github_pr", Label: "o/r#1", State: "merged", Review: "none"}, "pull request  o/r#1  merged  review: none"},
+		{"issue", usecase.LinkView{Type: "github_issue", Label: "o/r#2", State: "closed", Sync: "push"}, "issue  o/r#2  closed  sync: push"},
+		{"issue not read", usecase.LinkView{Type: "github_issue", Label: "o/r#2", Sync: "link"}, "issue  o/r#2  not read yet"},
+	} {
+		if got := linkLine(c.in); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+}
