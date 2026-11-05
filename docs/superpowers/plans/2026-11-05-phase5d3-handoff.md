@@ -4,10 +4,7 @@
 
 ## plan から変えた点
 
-1. `gh のトークンで代わりに使う` は Device Flow のアカウントに限らず、gh でないアカウントに出す。E2E のアカウントは keychain で、App のトークンを貼った人もいる
-2. `repo_accounts` の並べ替えは自前の関数でなく、pragmatic-drag-and-drop の `reorder` と `getReorderDestinationIndex` を使った
-3. Go を 1 箇所直した。`automations.List` が空のとき `null` を返していたので `[]` にした（`hh automation list --json`）。server の穴埋めは要らなくなった
-4. プロジェクトの設定の「すべて Store の値に戻す」は、自動化の停止と専用のルールを外さない。自動化は別の API で即時に書くため（plan の決定 10）
+実装中に変えた点（決定 14、`reorder`、Go の `[]`）は plan に反映した。プロジェクトの設定の「すべて Store の値に戻す」は、自動化の停止と専用のルールを外さない（決定 10 の帰結）。
 
 ## 実装で分かったこと
 

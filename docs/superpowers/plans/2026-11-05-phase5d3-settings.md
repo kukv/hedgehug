@@ -16,7 +16,7 @@
 
 - コミットの署名は 1Password。失敗したら index に積んで利用者に知らせる
 - `make` は `MAKEFLAGS=-j10`。E2E は `make e2e`
-- 既存のテストの期待値は、この plan が明示したものの他は変えない（`SettingsNav` の項目が 1 つ増える）
+- 既存のテストの期待値は、この plan が明示したものの他は変えない（`SettingsNav` の項目が 1 つ増える。`ProjectSettings.test` と `SettingsAccounts.test` の「自動化・GitHub 連携が出ない」という断定を外す）
 - Go は `automations.List` が空のとき `null` でなく `[]` を返す直しだけ。API の形は変わらない
 - 閲覧のみの Store は `useReadOnlySentence` で書き込みを無効にし、`why` で理由を出す
 
