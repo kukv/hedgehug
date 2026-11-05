@@ -381,11 +381,9 @@ func TestStoreDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	before, _ := os.ReadFile(p.ConfigFile)
-	ts.BeforeUpdate = func() { t.Error("config.yaml is updated for the same name") }
 	if name, err := stores.StoreDefault(ts.Session, "me"); err != nil || name != "me" {
 		t.Errorf("same = %q, %v", name, err)
 	}
-	ts.BeforeUpdate = nil
 	if fi, _ := os.Stat(p.ConfigFile); !fi.ModTime().Equal(old) {
 		t.Errorf("modified: %v", fi.ModTime())
 	}

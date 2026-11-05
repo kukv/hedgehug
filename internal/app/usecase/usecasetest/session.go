@@ -1267,6 +1267,33 @@ func StoreDirOf(t *testing.T, ts *Session, name string) string {
 	return filepath.Join(p.StoresDir, name)
 }
 
+// FreezeConfig sets the modification time of config.yaml to the past and
+// returns the check that the file was not written since: its time and its
+// bytes are what they were. what says what must not have written it.
+func (ts *Session) FreezeConfig(what string) (unchanged func()) {
+	ts.T.Helper()
+	p := filepath.Join(ts.Env["HEDGEHUG_HOME"], "config.yaml")
+	old := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(p, old, old); err != nil {
+		ts.T.Fatal(err)
+	}
+	before, err := os.ReadFile(p) //nolint:gosec // the config of the test
+	if err != nil {
+		ts.T.Fatal(err)
+	}
+	return func() {
+		ts.T.Helper()
+		if fi, err := os.Stat(p); err != nil {
+			ts.T.Error(err)
+		} else if !fi.ModTime().Equal(old) {
+			ts.T.Errorf("config.yaml was written by %s: modified %v", what, fi.ModTime())
+		}
+		if after, _ := os.ReadFile(p); string(after) != string(before) { //nolint:gosec // the config of the test
+			ts.T.Errorf("config.yaml changed by %s:\n%s", what, after)
+		}
+	}
+}
+
 // HookConfigWrite makes ts write config.yaml through another Config, right
 // before the operation updates it, as another process could.
 func HookConfigWrite(t *testing.T, ts *Session, fn func(*config.Config) error) {
