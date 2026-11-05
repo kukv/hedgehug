@@ -356,6 +356,90 @@ components:
         - field
         - message
       type: object
+    BurndownDay:
+      additionalProperties: false
+      properties:
+        added:
+          description: What joined that day, after the sprint started
+          format: double
+          type: number
+        date:
+          type: string
+        done:
+          format: double
+          type: number
+        remaining:
+          format: double
+          type: number
+        scope:
+          description: What the sprint holds at the end of the day
+          format: double
+          type: number
+      required:
+        - date
+        - scope
+        - done
+        - remaining
+        - added
+      type: object
+    BurndownView:
+      additionalProperties: false
+      properties:
+        by:
+          description: "What the numbers are: points or count"
+          type: string
+        days:
+          items:
+            $ref: "#/components/schemas/BurndownDay"
+          type:
+            - array
+            - "null"
+        note:
+          type: string
+        sprint:
+          $ref: "#/components/schemas/SprintRef"
+      required:
+        - sprint
+        - by
+        - days
+      type: object
+    CFDDay:
+      additionalProperties: false
+      properties:
+        counts:
+          additionalProperties:
+            format: int64
+            type: integer
+          type: object
+        date:
+          type: string
+      required:
+        - date
+        - counts
+      type: object
+    CFDView:
+      additionalProperties: false
+      properties:
+        by:
+          type: string
+        columns:
+          description: The keys of counts in the order of the schema
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        days:
+          items:
+            $ref: "#/components/schemas/CFDDay"
+          type:
+            - array
+            - "null"
+      required:
+        - by
+        - columns
+        - days
+      type: object
     Candidate:
       additionalProperties: false
       properties:
@@ -523,6 +607,31 @@ components:
           description: The repository, as [<host>/]owner/repo; without it, the one the task names. A task with none or several needs it
           type: string
       type: object
+    CycleView:
+      additionalProperties: false
+      properties:
+        cycle:
+          $ref: "#/components/schemas/TimeStats"
+          description: From first entering doing to the last entering done
+        lead:
+          $ref: "#/components/schemas/TimeStats"
+          description: From the creation to the last entering done
+        since:
+          type: string
+        until:
+          type: string
+        warnings:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - since
+        - until
+        - cycle
+        - lead
+      type: object
     DefaultView:
       additionalProperties: false
       properties:
@@ -622,6 +731,44 @@ components:
           type: string
         value:
           description: The value at the given location
+      type: object
+    EstimateRow:
+      additionalProperties: false
+      properties:
+        actual:
+          type: string
+        estimate:
+          type: string
+        id:
+          type: string
+        title:
+          type: string
+        ulid:
+          type: string
+      required:
+        - ulid
+        - id
+        - title
+      type: object
+    EstimateView:
+      additionalProperties: false
+      properties:
+        actual:
+          description: The sum of the time logged
+          type: string
+        estimate:
+          description: The sum of the estimates
+          type: string
+        tasks:
+          items:
+            $ref: "#/components/schemas/EstimateRow"
+          type:
+            - array
+            - "null"
+      required:
+        - tasks
+        - estimate
+        - actual
       type: object
     FieldsView:
       additionalProperties: false
@@ -2373,6 +2520,26 @@ components:
           description: YYYY-MM-DD; empty clears it
           type: string
       type: object
+    SprintRef:
+      additionalProperties: false
+      properties:
+        end:
+          description: The last day
+          type: string
+        name:
+          type: string
+        start:
+          description: The first day
+          type: string
+        state:
+          type: string
+        ulid:
+          type: string
+      required:
+        - ulid
+        - name
+        - state
+      type: object
     SprintView:
       additionalProperties: false
       properties:
@@ -3037,6 +3204,22 @@ components:
             - array
             - "null"
       type: object
+    TimeStats:
+      additionalProperties: false
+      properties:
+        count:
+          format: int64
+          type: integer
+        median:
+          description: Such as 1h30m
+          type: string
+        p85:
+          type: string
+      required:
+        - count
+        - median
+        - p85
+      type: object
     UndoKept:
       additionalProperties: false
       properties:
@@ -3093,6 +3276,27 @@ components:
           type: integer
       required:
         - count
+      type: object
+    VelocityRow:
+      additionalProperties: false
+      properties:
+        points:
+          format: double
+          type: number
+        sprint:
+          $ref: "#/components/schemas/SprintRef"
+        tasks:
+          format: int64
+          type: integer
+        unpointed:
+          description: Those of the tasks with no points, which count as 0
+          format: int64
+          type: integer
+      required:
+        - sprint
+        - points
+        - tasks
+        - unpointed
       type: object
     ViewPatchInputBody:
       additionalProperties: false
@@ -4716,6 +4920,217 @@ paths:
       summary: Replace repo_accounts of config.yaml
       tags:
         - accounts
+  /api/reports/burndown:
+    get:
+      operationId: report-burndown
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - description: The sprint; without it, the only active one
+          explode: false
+          in: query
+          name: sprint
+          schema:
+            description: The sprint; without it, the only active one
+            type: string
+        - explode: false
+          in: query
+          name: workspace
+          schema:
+            type: string
+        - description: points (default) or count
+          explode: false
+          in: query
+          name: by
+          schema:
+            description: points (default) or count
+            enum:
+              - points
+              - count
+              - ""
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BurndownView"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: A sprint day by day, as hh report burndown
+      tags:
+        - reports
+  /api/reports/cfd:
+    get:
+      operationId: report-cfd
+      parameters:
+        - description: category (default) or status
+          explode: false
+          in: query
+          name: by
+          schema:
+            description: category (default) or status
+            enum:
+              - category
+              - status
+              - ""
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CFDView"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: A cumulative flow diagram, as hh report cfd
+      tags:
+        - reports
+  /api/reports/cycle:
+    get:
+      operationId: report-cycle
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - explode: false
+          in: query
+          name: workspace
+          schema:
+            type: string
+        - description: The first day; without it, 30 days ago
+          explode: false
+          in: query
+          name: since
+          schema:
+            description: The first day; without it, 30 days ago
+            type: string
+        - description: The last day; without it, today
+          explode: false
+          in: query
+          name: until
+          schema:
+            description: The last day; without it, today
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CycleView"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Cycle and lead time, as hh report cycle
+      tags:
+        - reports
+  /api/reports/estimate:
+    get:
+      operationId: report-estimate
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - explode: false
+          in: query
+          name: workspace
+          schema:
+            type: string
+        - description: Only the tasks of this sprint
+          explode: false
+          in: query
+          name: sprint
+          schema:
+            description: Only the tasks of this sprint
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstimateView"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: Estimates against the time logged, as hh report estimate
+      tags:
+        - reports
+  /api/reports/velocity:
+    get:
+      operationId: report-velocity
+      parameters:
+        - description: The store; without it, the one hedgehug picks as the CLI does
+          explode: false
+          in: query
+          name: store
+          schema:
+            description: The store; without it, the one hedgehug picks as the CLI does
+            type: string
+        - explode: false
+          in: query
+          name: workspace
+          schema:
+            type: string
+        - description: How many sprints; 0 for 10
+          explode: false
+          in: query
+          name: last
+          schema:
+            description: How many sprints; 0 for 10
+            format: int64
+            minimum: 0
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: "#/components/schemas/VelocityRow"
+                type:
+                  - array
+                  - "null"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Error
+      summary: What the closed sprints finished, as hh report velocity
+      tags:
+        - reports
   /api/schema:
     get:
       operationId: get-schema
@@ -5070,7 +5485,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/SprintCloseInputBody"
-        required: true
       responses:
         "200":
           content:

@@ -127,6 +127,7 @@ func (s *Server) register() {
 	s.registerComments()
 	s.registerPlanning()
 	s.registerTemplates()
+	s.registerReports()
 	s.registerActivity()
 	s.registerPurge()
 	s.registerMoveStore()

@@ -354,6 +354,18 @@ func (h *History) All() []Commit {
 // Path returns the commits that changed the file p, newest first.
 func (h *History) Path(p string) []Commit { return h.sorted(h.byPath[p]) }
 
+// Paths returns the paths under prefix that a commit changed, sorted.
+func (h *History) Paths(prefix string) []string {
+	var out []string
+	for p := range h.byPath {
+		if strings.HasPrefix(p, prefix) {
+			out = append(out, p)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // Task returns the commits that changed the file of the task u, its
 // comments or its worklog entries, newest first.
 func (h *History) Task(u model.ULID) []Commit {

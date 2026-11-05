@@ -100,7 +100,7 @@ func ReleaseList(ss *usecase.Session, workspace, state string) ([]ReleaseView, e
 	if err != nil {
 		return nil, err
 	}
-	ws, err := pickWorkspace(ss, ix, workspace)
+	ws, err := usecase.PickWorkspace(ss, ix, workspace)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func ReleaseSet(ss *usecase.Session, name, workspace string, assigns []usecase.A
 	if err != nil {
 		return ReleaseWrite{}, err
 	}
-	found, err := findRelease(ss, ix, name, workspace)
+	found, err := usecase.FindRelease(ss, ix, name, workspace)
 	if err != nil {
 		return ReleaseWrite{}, err
 	}
@@ -178,7 +178,7 @@ func ReleaseNotes(ss *usecase.Session, name, workspace string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	r, err := findRelease(ss, ix, name, workspace)
+	r, err := usecase.FindRelease(ss, ix, name, workspace)
 	if err != nil {
 		return "", err
 	}
@@ -231,7 +231,7 @@ func ReleaseRemove(ss *usecase.Session, name, workspace string) (ReleaseWrite, e
 	if err != nil {
 		return ReleaseWrite{}, err
 	}
-	r, err := findRelease(ss, ix, name, workspace)
+	r, err := usecase.FindRelease(ss, ix, name, workspace)
 	if err != nil {
 		return ReleaseWrite{}, err
 	}
