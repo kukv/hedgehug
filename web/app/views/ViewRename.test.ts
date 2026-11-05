@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../core/api/client";
 import { cliViewRename } from "../../core/cli";
-import { DEFAULT_KANBAN, DEFAULT_TABLE, type ViewDraft } from "../../core/views";
+import { DEFAULT_GANTT, DEFAULT_KANBAN, DEFAULT_TABLE, type ViewDraft } from "../../core/views";
 import { resetToasts, toasts } from "../toast.svelte";
 import { takeCarriedDraft } from "./dialogs-state.svelte";
 import { makeViews, mountWithViews, viewEntry } from "./testkit";
@@ -14,6 +14,7 @@ const unsaved: ViewDraft = {
   layout: "table",
   query: "assignee:@me",
   kanban: DEFAULT_KANBAN,
+  gantt: DEFAULT_GANTT,
   table: DEFAULT_TABLE,
 };
 

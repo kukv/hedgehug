@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, describe, expect, it } from "vitest";
-import { DEFAULT_KANBAN, DEFAULT_TABLE, type ViewDraft } from "../../core/views";
+import { DEFAULT_GANTT, DEFAULT_KANBAN, DEFAULT_TABLE, type ViewDraft } from "../../core/views";
 import {
   closeViewDialog,
   openViewDelete,
@@ -15,6 +15,7 @@ const draft: ViewDraft = {
   layout: "kanban",
   query: "assignee:@me",
   kanban: DEFAULT_KANBAN,
+  gantt: DEFAULT_GANTT,
   table: DEFAULT_TABLE,
 };
 

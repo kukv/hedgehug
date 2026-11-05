@@ -3,6 +3,7 @@
   import { errorMessage } from "../../core/messages";
   import {
     draftOf,
+    type GanttSettings,
     type KanbanSettings,
     sameDraft,
     saveBodyOf,
@@ -10,6 +11,7 @@
     type ViewDraft,
   } from "../../core/views";
   import { core } from "../context";
+  import GanttView from "../gantt/GanttView.svelte";
   import Icon from "../icons/Icon.svelte";
   import KanbanView from "../kanban/KanbanView.svelte";
   import type { ListScope } from "../list/scope";
@@ -63,7 +65,7 @@
 
   let busy = $state(false);
 
-  function edit(part: Partial<Pick<ViewDraft, "query" | "kanban" | "table">>) {
+  function edit(part: Partial<Pick<ViewDraft, "query" | "kanban" | "table" | "gantt">>) {
     if (draft) local = { ...draft, ...part };
   }
 
@@ -95,9 +97,10 @@
     }
   }
 
-  // The server refuses the tree for a saved query that has a sort: or a group: (view.tree_order).
+  // The server refuses the tree and the gantt for a saved query that has a sort: or a group:
+  // (view.tree_order).
   const treeBlock = $derived(
-    saved && saved.layout !== "tree"
+    saved && saved.layout !== "tree" && saved.layout !== "gantt"
       ? treeOrderProblem({ layout: "tree", query: saved.query })
       : null,
   );
@@ -110,7 +113,8 @@
       disabled:
         t.layout === saved?.layout
           ? undefined
-          : (off ?? (t.layout === "tree" ? (treeBlock ?? undefined) : undefined)),
+          : (off ??
+            (t.layout === "tree" || t.layout === "gantt" ? (treeBlock ?? undefined) : undefined)),
     })),
   );
 
@@ -213,6 +217,15 @@
           onsettings={(s: TableSettings) => edit({ table: s })}
           cli={showCli}
           saved={{ name, store }}
+        />
+      {:else if saved.layout === "gantt"}
+        <GanttView
+          view={everywhere}
+          query={draft.query}
+          onquery={(q) => edit({ query: q })}
+          settings={draft.gantt}
+          onsettings={(s: GanttSettings) => edit({ gantt: s })}
+          cli={showCli}
         />
       {:else}
         <TreeView

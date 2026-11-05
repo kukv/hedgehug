@@ -284,6 +284,9 @@ export function cliViewSave(i: { name: Arg; store?: string; body: ViewSaveBody }
     const limits = Object.entries(b.kanban_wip).map(([k, v]) => `${k}=${v}`);
     a.push("--wip", limits.join(","));
   }
+  if (b.gantt_start !== undefined) a.push("--gantt-start", b.gantt_start);
+  if (b.gantt_end !== undefined) a.push("--gantt-end", b.gantt_end);
+  if (b.gantt_roadmap !== undefined) a.push(b.gantt_roadmap ? "--roadmap" : "--roadmap=false");
   if (i.store) a.push("--store", i.store);
   return withPositionals(["view", "save"], [i.name], a, true);
 }
@@ -349,6 +352,39 @@ export const cliReleaseNotes = (name: string, store: string): string =>
 
 export const cliReleaseRm = (name: string, store: string): string =>
   cliLine(scoped(["release", "rm", name], store));
+
+type ReportWhere = { workspace: string; store: string };
+
+export const cliReportBurndown = (i: ReportWhere & { sprint: string; by: string }): string =>
+  cliLine(scoped(["report", "burndown", i.sprint, "--by", i.by], i.store, i.workspace));
+
+export const cliReportVelocity = (i: ReportWhere & { last: number }): string =>
+  cliLine(scoped(["report", "velocity", "--last", String(i.last)], i.store, i.workspace));
+
+export const cliReportCfd = (
+  i: ReportWhere & { since: string; until: string; by: string },
+): string =>
+  cliLine(
+    scoped(
+      ["report", "cfd", "--since", i.since, "--until", i.until, "--by", i.by],
+      i.store,
+      i.workspace,
+    ),
+  );
+
+export const cliReportCycle = (i: ReportWhere & { since: string; until: string }): string =>
+  cliLine(
+    scoped(["report", "cycle", "--since", i.since, "--until", i.until], i.store, i.workspace),
+  );
+
+export const cliReportEstimate = (i: ReportWhere & { sprint?: string }): string =>
+  cliLine(
+    scoped(
+      ["report", "estimate", ...(i.sprint ? ["--sprint", i.sprint] : [])],
+      i.store,
+      i.workspace,
+    ),
+  );
 
 export function cliWorklog(i: { id: string; time: Arg; note?: string; date?: string }): string {
   const a: Arg[] = ["worklog", i.id, i.time];

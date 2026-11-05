@@ -1,6 +1,7 @@
 <script lang="ts">
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
+  import GanttTab from "../gantt/GanttTab.svelte";
   import Icon from "../icons/Icon.svelte";
   import ListTab from "../list/ListTab.svelte";
   import TreeTab from "../list/TreeTab.svelte";
@@ -85,6 +86,12 @@
           <ListTab
             view={{ kind: "workspace", store, ulid }}
             layout={tab}
+            {query}
+            onquery={(q) => (query = q)}
+          />
+        {:else if tab === "gantt"}
+          <GanttTab
+            view={{ kind: "workspace", store, ulid }}
             {query}
             onquery={(q) => (query = q)}
           />

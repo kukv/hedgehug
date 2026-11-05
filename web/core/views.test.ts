@@ -3,9 +3,11 @@ import type { TaskCache } from "./cache";
 import type { StoreDirectory, StoreTone } from "./stores";
 import { FakeConn, fakeApi, problem, settle } from "./testing";
 import {
+  DEFAULT_GANTT,
   DEFAULT_KANBAN,
   DEFAULT_TABLE,
   draftOf,
+  type Layout,
   type SavedView,
   sameDraft,
   saveBodyOf,
@@ -19,6 +21,7 @@ const view = (name: string, over: Partial<SavedView> = {}): SavedView => ({
   query: "status:todo",
   table: { columns: ["id", "title", "due"], group_by: "parent" },
   kanban: { columns: "category", swimlane: "assignee" },
+  gantt: { start: "start", end: "due", roadmap: false },
   ...over,
 });
 
@@ -29,13 +32,14 @@ describe("draftOf", () => {
       query: "status:todo",
       kanban: { columns: "category", swimlane: "assignee" },
       table: { columns: ["id", "title", "due"], groupBy: "parent" },
+      gantt: DEFAULT_GANTT,
     });
   });
 
   it("takes the default for a value it does not know, and for columns that are none", () => {
     const d = draftOf(
       view("a", {
-        layout: "gantt",
+        layout: "timeline",
         table: { columns: null, group_by: "sprint" },
         kanban: { columns: "wip", swimlane: "team" },
       }),
@@ -484,6 +488,7 @@ describe("kanban.wip", () => {
     query: "",
     table: { columns: ["id"], group_by: "none" },
     kanban: { columns: "status", swimlane: "none", wip },
+    gantt: { start: "start", end: "due", roadmap: false },
   });
   it("keeps the limits through the draft and the body of a save", () => {
     const d = draftOf(view({ doing: 3 }));
@@ -497,5 +502,24 @@ describe("kanban.wip", () => {
     const with4 = { ...d, kanban: { ...d.kanban, wip: { doing: 4 } } };
     expect(sameDraft(d, with4)).toBe(false);
     expect(sameDraft(d, draftOf(view({ doing: 3 })))).toBe(true);
+  });
+});
+
+describe("gantt", () => {
+  const body = (layout: Layout) => saveBodyOf({ ...draftOf(view("g")), layout });
+
+  it("reads the section, and sends it only for a gantt", () => {
+    const d = draftOf(
+      view("g", { layout: "gantt", gantt: { start: "a", end: "b", roadmap: true } }),
+    );
+    expect(d.layout).toBe("gantt");
+    expect(d.gantt).toEqual({ start: "a", end: "b", roadmap: true });
+    expect(saveBodyOf(d)).toMatchObject({ gantt_start: "a", gantt_end: "b", gantt_roadmap: true });
+    expect(body("table")).not.toHaveProperty("gantt_start");
+  });
+
+  it("counts a change of the section as a change", () => {
+    const d = draftOf(view("g"));
+    expect(sameDraft(d, { ...d, gantt: { ...d.gantt, roadmap: true } })).toBe(false);
   });
 });

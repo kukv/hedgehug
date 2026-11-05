@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { TaskView } from "../../core/api/client";
+  import { hasPlans } from "../../core/planning";
   import type { WorkspaceEntry } from "../../core/stores";
   import { core } from "../context";
   import Icon from "../icons/Icon.svelte";
@@ -24,6 +25,10 @@
     { label: "ツリー", href: at("tree"), current: tab === "tree" },
     { label: "カンバン", href: at("kanban"), current: tab === "kanban" },
     { label: "テーブル", href: at("table"), current: tab === "table" },
+    // As on the workspace: a chart for those that plan with sprints or releases.
+    ...(workspace && hasPlans(workspace)
+      ? [{ label: "ガント", href: at("gantt"), current: tab === "gantt" }]
+      : []),
   ]);
   const end = $derived({
     label: "設定",

@@ -11,9 +11,10 @@ export function plansWritten(): void {
 
 /**
  * The sprints and the releases of a workspace. Any commit of the Store reads them again: a commit
- * that changes neither a task nor the schema comes as tasks.changed, with no task in it.
+ * that changes neither a task nor the schema comes as tasks.changed, with no task in it. where is
+ * null while the screen has no one workspace: the lists are empty then.
  */
-export function usePlans(where: () => { store: string; name: string }): {
+export function usePlans(where: () => { store: string; name: string } | null): {
   readonly sprints: Sprint[];
   readonly releases: Release[];
   readonly loaded: boolean;
@@ -27,7 +28,8 @@ export function usePlans(where: () => { store: string; name: string }): {
   let rev = $state(0);
 
   $effect(() => {
-    const { store } = where();
+    const store = where()?.store;
+    if (store === undefined) return;
     const offs = [
       c.conn.on("tasks.changed", (e) => {
         if (e.store === store) rev++;
@@ -40,9 +42,17 @@ export function usePlans(where: () => { store: string; name: string }): {
   });
 
   $effect(() => {
-    const { store, name } = where();
+    const at = where();
     void rev;
     void written;
+    if (!at) {
+      sprints = [];
+      releases = [];
+      error = null;
+      loaded = true;
+      return;
+    }
+    const { store, name } = at;
     let live = true;
     const query = { store, workspace: name };
     Promise.all([

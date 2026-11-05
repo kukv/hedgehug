@@ -523,6 +523,7 @@ describe("CommandPalette", () => {
         query: "status:doing assignee:@me",
         kanban: { columns: "status", swimlane: "none" },
         table: { columns: ["id", "title", "status", "assignee", "due"], groupBy: "none" },
+        gantt: { start: "start", end: "due", roadmap: false },
       },
     });
     expect(palette.open).toBe(false);

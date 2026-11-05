@@ -1,6 +1,6 @@
 import { fireEvent, screen, within } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_KANBAN, DEFAULT_TABLE } from "../../core/views";
+import { DEFAULT_GANTT, DEFAULT_KANBAN, DEFAULT_TABLE } from "../../core/views";
 import type { Layout } from "../router";
 import { closeViewDialog, viewDialog } from "./dialogs-state.svelte";
 import QueryPage from "./QueryPage.svelte";
@@ -91,6 +91,7 @@ describe("QueryPage", () => {
         query: "assignee:@me",
         kanban: DEFAULT_KANBAN,
         table: { ...DEFAULT_TABLE, groupBy: "parent" },
+        gantt: DEFAULT_GANTT,
       },
       store: undefined,
     });

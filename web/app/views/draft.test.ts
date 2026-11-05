@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_KANBAN, DEFAULT_TABLE, type ViewDraft } from "../../core/views";
+import { DEFAULT_GANTT, DEFAULT_KANBAN, DEFAULT_TABLE, type ViewDraft } from "../../core/views";
 import { newDraft, sameViewName, summaryOf, treeOrderProblem } from "./draft";
 
 const draft = (over: Partial<ViewDraft> = {}): ViewDraft => ({
   layout: "tree",
   query: "",
   kanban: DEFAULT_KANBAN,
+  gantt: DEFAULT_GANTT,
   table: DEFAULT_TABLE,
   ...over,
 });
@@ -57,6 +58,7 @@ describe("newDraft", () => {
       query: "q",
       kanban: DEFAULT_KANBAN,
       table: DEFAULT_TABLE,
+      gantt: DEFAULT_GANTT,
     });
   });
 });

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import GanttTab from "../gantt/GanttTab.svelte";
   import ListTab from "../list/ListTab.svelte";
   import { useListScope } from "../list/scope.svelte";
   import TreeTab from "../list/TreeTab.svelte";
@@ -31,6 +32,8 @@
       <ProjectOverview {ulid} />
     {:else if tab === "tree"}
       <TreeTab {view} {query} onquery={(q) => (query = q)} />
+    {:else if tab === "gantt"}
+      <GanttTab {view} {query} onquery={(q) => (query = q)} />
     {:else if tab === "settings"}
       <ProjectSettings {ulid} />
     {:else}
