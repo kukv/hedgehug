@@ -36,6 +36,13 @@ import { expect, type Locator, type Page } from "@playwright/test";
 //               "未保存の変更" and the button "ビューを更新", the button "ビューの操作（改名・削除）"),
 //               /query/<layout>?q= (heading "クエリ"), the sidebar region "保存済みビュー", the
 //               dialogs "ビューを保存" / "ビュー <名前> を改名" / "ビュー <名前> を削除"
+//   Gantt       the tab "ガント" (/workspaces/<store>/<ulid>/gantt, /projects/<ULID>/gantt, /query/gantt): the list
+//               "ガントのタスク"; a bar that moves is a button named "<ID> <題名> <開始> – <終了>。…", the others
+//               are svg groups with a title, and every bar has data-ulid, data-kind (work, sprint, rollup)
+//               and data-fill; the list "ガントの警告"; the group "表示する種類", the selects "開始", "終了", "目盛り"
+//   Reports     the tab "レポート" (/workspaces/<store>/<ulid>/reports): the regions バーンダウン, ベロシティ, 累積
+//               フロー図, サイクルタイム, 見積もりと実績; a chart is the img named by its report, and its details
+//               "表で見る" holds the same numbers as a table; each region has the line of hh report
 //   Project     /projects/<ULID>/settings is the tab "設定" at the right end of the navigation
 //               "ビューの切り替え": the groups "表示するステータス" and "必須の項目を足す", the button "保存"
 //   My tasks    /my (heading "マイタスク"); the groups are regions named "今日", "今週", ...; the sidebar

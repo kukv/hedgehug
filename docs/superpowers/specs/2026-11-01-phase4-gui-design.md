@@ -157,7 +157,7 @@ web/
 
 ```yaml
 # views/今週のリリース作業.yaml（ファイル名から .yaml を除いたものがビューの名前）
-layout: table            # tree | kanban | table
+layout: table            # tree | kanban | table | gantt
 query: "project:SH-3 -status:canceled sort:due"
 table:
   columns: [id, title, status, assignee, points, due]
