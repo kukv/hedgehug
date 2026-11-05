@@ -125,8 +125,11 @@ test("the detail of a task has the sprint, the release and the time spent", asyn
   await page.getByRole("textbox", { name: "メモ" }).fill("調査");
   await page.getByRole("button", { name: "記録" }).click();
   await expect(page.getByText("2h / 見積 6h")).toBeVisible();
-  await expect(page.getByText("調査")).toBeVisible();
+  await expect(page.getByText("調査", { exact: true })).toBeVisible();
   expect(hh.hh("worklog", "ls", "DM-1")).toContain("調査");
+  await page.getByRole("button", { name: /の記録を削除/ }).click();
+  await expect(page.getByText("調査", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("0m / 見積 6h")).toBeVisible();
 
   await page.getByRole("button", { name: "スプリント" }).click();
   await page.getByRole("menuitem", { name: "Sprint 1" }).click();
@@ -215,4 +218,43 @@ test("a workspace with a sprint says so where it cannot be removed", async ({ pa
   hh.hh("sprint", "add", "Sprint 1");
   await openTab(page, hh, "settings");
   await expect(page.getByText(/スプリント 1 件が残っているため削除できません/)).toBeVisible();
+});
+
+test("two active sprints are picked at the top of the board", async ({ page, hh }) => {
+  hh.hh("sprint", "add", "Sprint 1", "--start", "2026-11-02", "--end", "2027-01-01");
+  hh.hh("sprint", "add", "Sprint 2", "--start", "2026-11-02", "--end", "2027-01-01");
+  hh.hh("add", "in one", "--sprint", "Sprint 1");
+  hh.hh("add", "in two", "--sprint", "Sprint 2");
+  hh.hh("sprint", "start", "Sprint 1");
+  hh.hh("sprint", "start", "Sprint 2");
+  await openTab(page, hh, "sprints");
+  const board = page.getByLabel("カンバンの盤面");
+  await expect(board).toContainText("in one");
+  await expect(board).not.toContainText("in two");
+  await page.getByRole("button", { name: "Sprint 2", exact: true }).click();
+  await expect(board).toContainText("in two");
+  await expect(board).not.toContainText("in one");
+});
+
+test("a project limits its templates", async ({ page, hh }) => {
+  hh.hh("add", "p", "--kind", "project");
+  const { ulid } = hh.json<{ ulid: string }>("show", "DM-1");
+  await hh.open(page, "/settings/schema/demo?tab=templates");
+  for (const name of ["a", "b"]) {
+    await page.getByRole("button", { name: "＋ テンプレート" }).click();
+    await page.getByLabel("テンプレートの名前").fill(name);
+    await page.getByRole("button", { name: "開く" }).click();
+    await page.getByLabel("テンプレートのファイル").fill("---\nkind: task\n---\n本文\n");
+    await page.getByRole("button", { name: "保存" }).click();
+    await expect(page.getByRole("button", { name: new RegExp(`^${name} `) })).toBeVisible();
+  }
+  await hh.open(page, `/projects/${ulid}/settings`);
+  await page.getByRole("checkbox", { name: "a", exact: true }).check();
+  await page.getByRole("button", { name: "保存" }).click();
+  await expect(page.getByText("プロジェクトの設定を保存しました")).toBeVisible();
+  await hh.open(page, `/projects/${ulid}`);
+  await page.keyboard.press("c");
+  const select = page.getByLabel("テンプレート");
+  await expect(select.getByRole("option", { name: "a" })).toHaveCount(1);
+  await expect(select.getByRole("option", { name: "b" })).toHaveCount(0);
 });

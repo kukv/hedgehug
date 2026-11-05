@@ -15,7 +15,7 @@ const pollInterval = 300 * time.Millisecond
 
 type tasksChanged struct {
 	Store   string   `json:"store"`
-	ULIDs   []string `json:"ulids" doc:"The tasks whose file or comments changed"`
+	ULIDs   []string `json:"ulids" doc:"The tasks whose file, comments or worklogs changed"`
 	Removed []string `json:"removed" doc:"The tasks whose file is gone (purged)"`
 	Commit  string   `json:"commit" doc:"The commit of the change: HEAD, or one of the commits since the last look"`
 	Op      string   `json:"op" doc:"The Hedgehug-Op of the commit; empty for a commit made by hand"`
