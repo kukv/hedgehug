@@ -16,12 +16,11 @@ func TestTemplateAndBulkFlow(t *testing.T) {
 	alice, bob := devUserOf(t, bin, devenv, dev, "alice"), devUserOf(t, bin, devenv, dev, "bob")
 	const org = "--store=org-a"
 
-	content := filepath.Join(t.TempDir(), "bug.md")
-	if err := os.WriteFile(content, []byte("---\nkind: task\ntitle: Bug\nlabels: [bug]\nchildren:\n  - title: Reproduce\n    labels: [bug]\n  - title: Fix\n    labels: [bug]\n---\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	// The editor uses only what the shell has: a CI job runs this with no
+	// commands on PATH.
+	const content = "---\nkind: task\ntitle: Bug\nlabels: [bug]\nchildren:\n  - title: Reproduce\n    labels: [bug]\n  - title: Fix\n    labels: [bug]\n---\n"
 	editor := filepath.Join(t.TempDir(), "editor.sh")
-	if err := os.WriteFile(editor, []byte("#!/bin/sh\ncp '"+content+"' \"$1\"\n"), 0o700); err != nil { //nolint:gosec // the editor of the test runs
+	if err := os.WriteFile(editor, []byte("#!/bin/sh\nprintf '%s' '"+content+"' > \"$1\"\n"), 0o700); err != nil { //nolint:gosec // the editor of the test runs
 		t.Fatal(err)
 	}
 	alice.env = append(alice.env, "EDITOR="+editor)
