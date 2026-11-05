@@ -119,6 +119,9 @@ func (in LinkInput) link(s *store.Store, t *model.Task, ref model.GitHubRef) err
 	}
 	t.Links = slices.Clone(t.Links)
 	t.Links[i].Sync = sync
+	if !live {
+		t.Links[i].Via = "" // this link is of a person now
+	}
 	if live {
 		return dropSynced(t, ref) // what the old mode compared is no base for the new one
 	}

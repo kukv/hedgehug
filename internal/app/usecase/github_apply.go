@@ -28,11 +28,11 @@ type applied struct {
 // in any form (an unlinked one stays unlinked), and rewrites gh from what was
 // fetched. What was not fetched keeps its value; an item of gh with no link
 // in use goes.
-func apply(t *model.Task, got fetched, auto []string) (applied, error) {
+func apply(t *model.Task, got fetched, auto []autoLink) (applied, error) {
 	linked := false
-	for _, ref := range auto {
-		if !slices.ContainsFunc(t.Links, func(l model.Link) bool { return model.CanonRef(l.Ref) == model.CanonRef(ref) }) {
-			t.Links = append(t.Links, model.Link{Type: model.LinkPR, Ref: ref, Sync: model.SyncMirror})
+	for _, a := range auto {
+		if !slices.ContainsFunc(t.Links, func(l model.Link) bool { return model.CanonRef(l.Ref) == model.CanonRef(a.ref) }) {
+			t.Links = append(t.Links, model.Link{Type: model.LinkPR, Ref: a.ref, Sync: model.SyncMirror, Via: a.via})
 			linked = true
 		}
 	}
@@ -85,12 +85,13 @@ func apply(t *model.Task, got fetched, auto []string) (applied, error) {
 }
 
 func withPull(s model.PRState, p github.Pull) model.PRState {
+	s.Title, s.Branch = p.Title, p.Head
 	s.State, s.Review, s.Checks, s.MergedAt = p.State, p.Review, p.Checks, utc(p.MergedAt)
 	return s
 }
 
 func withIssue(s model.IssueState, x github.Issue) model.IssueState {
-	s.State, s.StateReason = x.State, nil
+	s.Title, s.State, s.StateReason = x.Title, x.State, nil
 	if x.StateReason != "" {
 		s.StateReason = &x.StateReason
 	}

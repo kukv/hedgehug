@@ -241,7 +241,7 @@ func linkPushed(t *model.Task, ref model.GitHubRef, vals model.IssueValues) erro
 	if err != nil {
 		return err
 	}
-	x := model.IssueState{Ref: ref.String(), State: "open"}
+	x := model.IssueState{Ref: ref.String(), Title: t.Title, State: "open"}
 	if v, ok := vals["status"]; ok {
 		state, reason := usecase.IssueState(v[0])
 		x.State = state

@@ -46,6 +46,9 @@ type Link struct {
 	Ref    string   `yaml:"ref"`
 	Sync   string   `yaml:"sync,omitempty"`
 	Fields []string `yaml:"fields,omitempty,flow"`
+	// Via is what the automatic linking found the task by: LinkVia*. It is
+	// empty for a link made by hand.
+	Via string `yaml:"via,omitempty"`
 }
 
 var taskKeys = []string{
