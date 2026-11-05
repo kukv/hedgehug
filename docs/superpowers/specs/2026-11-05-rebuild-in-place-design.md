@@ -21,6 +21,10 @@ Windows 版の実装は含めない。この spec は、Windows で壊れやす�
 | 4 | 戻せなかった変更 | 今と同じ `<path>.kept-<UTC 時刻>` に、書き換えの前の Store をコピーして残す（2026-11-05） |
 | 5 | ロック | `sync.lock` と Store のロックを最初から適用の終わりまで持つ（2026-11-05 の設計の承認） |
 | 6 | 途中の失敗 | 適用を始めたら元に戻さず、前に進めて完了させる（同上） |
+| 7 | 適用中の書き込み | `apply` の Store への書き込みと同期は、ロックを取った直後に `LeftoverError` で断る。事前に開いていたコマンドが古い HEAD にコミットして再開できなくなるのを防ぐ（2026-11-05 最終レビュー後に利用者が決定） |
+| 8 | GUI サーバー | Store を手放すのは `rebuild.json` を書いた後、適用の直前。poll は `rebuild.json` がある間は Store を開かない（同上） |
+| 9 | 文言 | CLI の出力・ヘルプ・ヒントと GUI の「clone し直した」を実態に合わせて直す。`--json` の項目名は変えない（同上） |
+| 10 | 消した内容が戻る経路 | 同期も直す。書き換えていないミラーを止め、fetch の直後に落ちても force push を見逃さない（同上） |
 
 ## 流れ
 
@@ -50,6 +54,7 @@ push はしない。次の同期に任せる（今と同じ）。読み取り専
 | `mark` | inbox の mark（今の `FindSameCommit` の結果か新しい先頭） |
 | `items` | inbox に足す通知。`inbox.Box.Add` は同じキーを足さないので、再開で重ならない |
 | `kept` | 古い Store をコピーした先。なければ空 |
+| `mirrors` | 保留にするミラーの URL |
 
 型は `replicate` に置く。`store` は `phase` だけを読む小さな関数を持つ（`store` は `inbox` より下の層なので `items` の型を知らない）。
 
@@ -63,6 +68,10 @@ push はしない。次の同期に任せる（今と同じ）。読み取り専
 | --- | --- | --- |
 | `apply` | 開かない。`LeftoverError`（今の `<path>` がないときと同じ扱い）で `Skipped` | 開始時に続きを行う |
 | `prune` | 開いて、今と同じ警告（`Unfinished`） | 開始時に掃除を再試行する |
+
+GUI サーバーの poll は、`rebuild.json` がある間（`apply`・`prune`）は Store を開かない。開いたままの pack が掃除を止めないようにするためである。
+
+Store を開いた後で作り直しが止まった場合に備え、`UpdateCommit`・`lockedAtHead`（ロックの取得後）と同期（`sync.lock` の取得後）も `apply` を確かめ、`LeftoverError` で断る。
 
 `store.Open` 自体は今までどおり状態を知らない。再開の処理は `store.Open` で開いて `sync.lock`、Store のロックの順に取る。
 
@@ -81,6 +90,20 @@ doctor の `--fix` なしの検査も `apply` の Store を開かない。半端
 - 消せないファイルがあれば `phase: "prune"` のまま warning を出す。次の `doctor --fix` か同期の開始時に再試行する。
 - 他の remote の追跡 ref とタグも消す（clone し直す今の方式と同じ結果）。mirror の追跡 ref は次の fetch で作り直される。
 - `<path>.kept-<時刻>` は消さない。戻せなかった変更がある場合に限り、消した内容がここに残るのは今と同じである。
+
+## 消した内容を同期で戻さない
+
+### ミラー
+
+- 作り直しは、`opt.Remotes[1:]` のミラーの URL を `rebuild.json` の `mirrors` に入れ、適用で `.hedgehug/local/mirrors-held.json` に書く（既にあれば和をとる）。
+- 同期は、保留中のミラーを fetch・マージ・push しない。fetch の前に remote の先頭だけを読み、その commit が手元にあれば（ミラーも書き換えられた）保留を解いて通常どおり扱う。手元になければ `down` に入れ、`the mirror <URL> still has the old history; rewrite it as origin was` の warning を出す。origin との同期は続ける。
+- ミラーがなければファイルを書かない。
+- 新しい clone は保留を知らないので、ミラーの書き換えが要ることは手順の文書に書く（親設計）。
+
+### fetch の直後に落ちたとき
+
+- origin の fetch の前に、追跡 ref の値を `.hedgehug/local/origin-before-fetch` に書き、`checkOrigin` の後に消す。
+- 同期と作り直しは、開始時にこのファイルがあれば前の実行が途中で落ちたとして、追跡 ref をその値に戻してから始める。
 
 ## 部品の変更
 
@@ -112,14 +135,14 @@ doctor の `--fix` なしの検査も `apply` の Store を開かない。半端
 
 ### `internal/app/usecase`・`server`
 
-- `Session.BeforeSwap` を `BeforeRebuild` に改名して残す。GUI サーバーが開いたままの Store を手放し、作り直しの後に開き直して変更を通知するために必要である。
+- `Session.BeforeSwap` を `BeforeRebuild` に改名して残す。GUI サーバーが開いたままの Store を手放し、作り直しの後に開き直して変更を通知するために必要である。呼ぶのは適用の直前（`replicate.Options.BeforeApply`）で、origin が子孫に戻っていた場合は呼ばれない。
 - `FinishRebuild` は `phase` を見て再開する。`rebuild.json` がなければ何もしない。
 - `maintenance.rebuildStore` は `Rebuilt` の形（`replayed`・`dropped`・`kept`）を変えない。`--json` と GUI の表示は変わらない。
 - 再開で `kept` があるときの warning は今と同じ文言で出す。
 
 ### 文言
 
-`ErrForcePush` の `to clone it again`、`Rebuilt` の説明、`cli/doctor.go` の説明など、実態が変わる箇所を直す。`--json` の項目名と GUI の表示は変えない。`ErrForcePush` の文言が変わるので、golden と web のテストの文字列も同じ PR で確かめる。
+`ErrForcePush` の `to clone it again`、`Rebuilt` の説明、`cli/doctor.go` の説明など、実態が変わる箇所を直す。CLI の出力は `Rebuilt %s on the history of origin; put back ...`、GUI は「Store を origin の新しい履歴に揃えました」「origin の新しい履歴に揃えました」にする。`--json` の項目名は変えない。`ErrForcePush` の文言が変わるので、golden と web のテストの文字列も同じ PR で確かめる。
 
 ## 文書の更新
 
