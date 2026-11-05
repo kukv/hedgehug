@@ -61,10 +61,13 @@ func EventsOf(old, next model.GitHubState) []string {
 
 // Input is what Evaluate needs: the events of one task, the task with the
 // gh it has after the fetch, its ancestors (the projects among them select
-// the where of the rules), and the schema.
+// the where of the rules), and the schema. Status is where the task is when
+// the rules start, when that is not Task.Status: the sync of an issue moved it
+// before them.
 type Input struct {
 	Events    []string
 	Task      *model.Task
+	Status    string
 	Ancestors []model.ULID
 	Schema    *schema.Schema
 }
@@ -92,7 +95,11 @@ func (f *File) Evaluate(in Input) Outcome {
 		return out
 	}
 	e := in.Schema.For(in.Ancestors)
-	cur := in.Task.Status
+	start := in.Status
+	if start == "" {
+		start = in.Task.Status
+	}
+	cur := start
 	for _, event := range in.Events {
 		for _, r := range f.rulesFor(event, in.Ancestors) {
 			if r.When == AllLinkedPRsMerged && !allMerged(in.Task) {
@@ -114,7 +121,7 @@ func (f *File) Evaluate(in Input) Outcome {
 			out.Change = &Change{r.ID, event, to}
 		}
 	}
-	if out.Change != nil && out.Change.Status == in.Task.Status {
+	if out.Change != nil && out.Change.Status == start {
 		out.Change = nil
 	}
 	return out
