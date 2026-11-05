@@ -49,6 +49,8 @@ var ops = []op{
 	{"comment", opComment},
 	{"body", opBody},
 	{"label", opLabel},
+	{"link", opLink},
+	{"gh", opGH},
 	{"schema", opSchema},
 	{"workspace add", opWSAdd},
 	{"workspace prefix", opWSPrefix},
@@ -509,6 +511,55 @@ func opLabel(c *cluster, i int, rnd *rand.Rand) []write {
 		return nil
 	}
 	return []write{{i, h, t.ULID, "labels", label}}
+}
+
+// opLink links a task to one of a few pull requests, or unlinks it: clones
+// change the same link at the same time. It keeps no write: a value that
+// loses is recorded, and the check of the clones being the same covers it.
+func opLink(c *cluster, i int, rnd *rand.Rand) []write {
+	t := c.view(i).pickTask(rnd, live)
+	if t == nil {
+		return nil
+	}
+	ref := fmt.Sprintf("github.com/o/r/pull/%d", rnd.IntN(3)+1)
+	sync := []string{model.SyncMirror, model.SyncOff}[rnd.IntN(2)]
+	c.update(i, c.taskOp(i, "link", t.ULID), func(tx *store.Tx) error {
+		x, err := tx.Task(t.ULID)
+		if err != nil {
+			return err
+		}
+		x.Links = slices.DeleteFunc(slices.Clone(x.Links), func(l model.Link) bool { return l.Ref == ref })
+		x.Links = append(x.Links, model.Link{Type: model.LinkPR, Ref: ref, Sync: sync})
+		return tx.PutTask(x)
+	})
+	return nil
+}
+
+// opGH writes what a fetch writes: the state of one of a few pull requests.
+func opGH(c *cluster, i int, rnd *rand.Rand) []write {
+	t := c.view(i).pickTask(rnd, live)
+	if t == nil {
+		return nil
+	}
+	ref := fmt.Sprintf("github.com/o/r/pull/%d", rnd.IntN(3)+1)
+	state := []string{"open", "draft", "merged", "closed"}[rnd.IntN(4)]
+	c.update(i, c.taskOp(i, "gh-fetch", t.ULID), func(tx *store.Tx) error {
+		x, err := tx.Task(t.ULID)
+		if err != nil {
+			return err
+		}
+		g, err := x.GitHub()
+		if err != nil {
+			return err
+		}
+		g.PRs = slices.DeleteFunc(slices.Clone(g.PRs), func(p model.PRState) bool { return p.Ref == ref })
+		g.PRs = append(g.PRs, model.PRState{Ref: ref, State: state, Review: "none"})
+		if err := x.SetGitHub(g); err != nil {
+			return err
+		}
+		return tx.PutTask(x)
+	})
+	return nil
 }
 
 // opSchema adds a status or a prop to schema.yaml.

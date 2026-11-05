@@ -29,7 +29,7 @@ type Task struct {
 	Releases  []ULID
 	Links     []Link
 	Props     Fields     // typed by the schema, not here
-	GH        *yaml.Node // values from GitHub, read-only; typed in phase 5
+	GH        *yaml.Node // values from GitHub, read-only; read them with GitHub
 	Created   time.Time
 	CreatedBy string
 	Updated   time.Time
@@ -42,9 +42,10 @@ type Task struct {
 
 // Link ties a task to a pull request or an issue.
 type Link struct {
-	Type string `yaml:"type"`
-	Ref  string `yaml:"ref"`
-	Sync string `yaml:"sync,omitempty"`
+	Type   string   `yaml:"type"`
+	Ref    string   `yaml:"ref"`
+	Sync   string   `yaml:"sync,omitempty"`
+	Fields []string `yaml:"fields,omitempty,flow"`
 }
 
 var taskKeys = []string{
