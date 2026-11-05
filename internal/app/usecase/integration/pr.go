@@ -118,16 +118,6 @@ func push(code *gitrepo.Code, branch string, conn gitrepo.Conn) error {
 	return err
 }
 
-// prBody is the body of the pull request of t: its own, and the mark that
-// points back at it.
-func prBody(t *model.Task) string {
-	mark := "hedgehug:" + t.ULID.String()
-	if b := strings.TrimRight(t.Body, " \t\r\n"); b != "" {
-		return b + "\n\n" + mark
-	}
-	return mark
-}
-
 // openPull finds the open pull request of branch, or opens one.
 func openPull(cl *github.Client, acct config.Account, r codeRepo, branch string, t *model.Task, draft bool) (n int, created bool, err error) {
 	n, ok, err := cl.OpenPullFor(r.owner, r.name, branch)
@@ -142,7 +132,7 @@ func openPull(cl *github.Client, acct config.Account, r codeRepo, branch string,
 		return 0, false, usecase.GithubErr(err, acct, "read "+r.id)
 	}
 	n, err = cl.CreatePull(r.owner, r.name, github.NewPull{
-		Title: t.Title, Body: prBody(t), Head: branch, Base: repo.DefaultBranch, Draft: draft,
+		Title: t.Title, Body: model.MarkedBody(t.ULID, t.Body), Head: branch, Base: repo.DefaultBranch, Draft: draft,
 	})
 	if errors.Is(err, github.ErrPullExists) {
 		// Another run opened it since the look above.
