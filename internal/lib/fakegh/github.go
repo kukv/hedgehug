@@ -31,6 +31,7 @@ func cloneIssues(in []*Issue) []*Issue {
 	out := make([]*Issue, len(in))
 	for i, x := range in {
 		c := *x
+		c.Assignees, c.Labels = slices.Clone(x.Assignees), slices.Clone(x.Labels)
 		out[i] = &c
 	}
 	return out
@@ -214,7 +215,25 @@ func issueJSON(i *Issue) map[string]any {
 	if i.StateReason != "" {
 		reason = strings.ToUpper(i.StateReason)
 	}
-	return map[string]any{"number": i.Number, "state": strings.ToUpper(i.State), "stateReason": reason, "updatedAt": i.UpdatedAt}
+	assignees := make([]map[string]string, len(i.Assignees))
+	for n, a := range i.Assignees {
+		assignees[n] = map[string]string{"login": a}
+	}
+	labels := make([]map[string]string, len(i.Labels))
+	for n, l := range i.Labels {
+		labels[n] = map[string]string{"name": l}
+	}
+	var milestone any
+	if i.Milestone != "" {
+		milestone = map[string]string{"title": i.Milestone}
+	}
+	return map[string]any{
+		"number": i.Number, "title": i.Title, "body": i.Body, "state": strings.ToUpper(i.State),
+		"stateReason": reason, "updatedAt": i.UpdatedAt,
+		"assignees": map[string]any{"nodes": assignees},
+		"labels":    map[string]any{"nodes": labels},
+		"milestone": milestone,
+	}
 }
 
 // graphql answers the two queries of internal/lib/github: ScanPulls and
@@ -230,6 +249,13 @@ func (s *Server) graphql(w http.ResponseWriter, r *http.Request, login string) {
 	}
 	owner, _ := body.Variables["owner"].(string)
 	name, _ := body.Variables["name"].(string)
+	if s.restricted[strings.ToLower(owner)] {
+		writeJSON(w, 200, map[string]any{
+			"data":   map[string]any{"rateLimit": s.rate, "repository": nil},
+			"errors": []map[string]any{{"type": "FORBIDDEN", "path": []string{"repository"}, "message": "Resource not accessible by integration"}},
+		})
+		return
+	}
 	x := s.find(owner + "/" + name)
 	if x == nil || perm(x, login) == "" {
 		writeJSON(w, 200, map[string]any{
@@ -247,6 +273,8 @@ func (s *Server) graphql(w http.ResponseWriter, r *http.Request, login string) {
 		problems = check(top, scanShape, "Query")
 	case kind == "Linked":
 		problems = checkLinked(top)
+	case kind == "OpenIssues":
+		problems = check(top, openIssuesShape, "Query")
 	default:
 		problems = []string{"unknown query " + kind}
 	}
@@ -258,12 +286,16 @@ func (s *Server) graphql(w http.ResponseWriter, r *http.Request, login string) {
 		writeJSON(w, 200, map[string]any{"errors": errs})
 		return
 	}
-	if kind == "ScanPulls" {
-		after, _ := body.Variables["after"].(string)
+	after, _ := body.Variables["after"].(string)
+	switch kind {
+	case "ScanPulls":
 		s.scanPulls(w, x, after)
-		return
+	case "OpenIssues":
+		label, _ := body.Variables["label"].(string)
+		s.openIssues(w, x, label, after)
+	default:
+		s.linked(w, x, top)
 	}
-	s.linked(w, x, top)
 }
 
 func (s *Server) scanPulls(w http.ResponseWriter, x *Repo, after string) {

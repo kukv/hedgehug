@@ -19,10 +19,11 @@ import (
 
 // What the recorder keeps of what the watcher tells, in the order it tells.
 type (
-	storesChanged struct{}
-	schemaChanged struct{ Store string }
-	viewsChanged  struct{ Store string }
-	unreadEvent   struct{ Count int }
+	storesChanged      struct{}
+	schemaChanged      struct{ Store string }
+	viewsChanged       struct{ Store string }
+	automationsChanged struct{ Store string }
+	unreadEvent        struct{ Count int }
 )
 
 // recorder is a Sink that keeps every call as a value in ch.
@@ -39,6 +40,7 @@ func (r recorder) StoresChanged()                     { r.put(storesChanged{}) }
 func (r recorder) TasksChanged(c watch.Change)        { r.put(c) }
 func (r recorder) SchemaChanged(store string)         { r.put(schemaChanged{Store: store}) }
 func (r recorder) ViewsChanged(store string)          { r.put(viewsChanged{Store: store}) }
+func (r recorder) AutomationsChanged(store string)    { r.put(automationsChanged{Store: store}) }
 func (r recorder) SyncState(v usecase.SyncStatusView) { r.put(v) }
 func (r recorder) Unread(count int)                   { r.put(unreadEvent{Count: count}) }
 

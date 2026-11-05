@@ -32,7 +32,10 @@ const (
   fakegh pr comment <owner/repo#n> --body <b>
   fakegh pr merge <owner/repo#n>
   fakegh issue open <owner/repo> --title <t> [--body b]
-  fakegh issue edit <owner/repo#n> [--title t] [--body b]
+  fakegh issue edit <owner/repo#n> [--title t] [--body b] [--assignee a]... [--label l]... [--milestone m]
+  fakegh repo label <owner/repo> <name>
+  fakegh repo milestone <owner/repo> <title>
+  fakegh repo restrict <owner>
   fakegh issue close <owner/repo#n> [--reason completed|not_planned]
 The commands but serve take --server (default http://127.0.0.1:7777).`
 	defaultServer = "http://127.0.0.1:7777"
@@ -126,6 +129,25 @@ func dispatch(args []string, stdout io.Writer) error {
 			return err
 		}
 		return admin(*server).AddRepo(pos[0], ts, *public)
+	case "repo restrict":
+		fs := flagSet("fakegh repo restrict")
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		pos, err := parse(fs, rest, 1)
+		if err != nil {
+			return err
+		}
+		return admin(*server).RestrictApp(pos[0])
+	case "repo label", "repo milestone":
+		fs := flagSet("fakegh " + cmd)
+		server := fs.String("server", defaultServer, "the URL of the running fake")
+		pos, err := parse(fs, rest, 2)
+		if err != nil {
+			return err
+		}
+		if cmd == "repo label" {
+			return admin(*server).AddLabel(pos[0], pos[1])
+		}
+		return admin(*server).AddMilestone(pos[0], pos[1])
 	case "device approve":
 		fs := flagSet("fakegh device approve")
 		server := fs.String("server", defaultServer, "the URL of the running fake")
@@ -239,6 +261,10 @@ func dispatch(args []string, stdout io.Writer) error {
 		server := fs.String("server", defaultServer, "the URL of the running fake")
 		title := fs.String("title", "", "the title")
 		body := fs.String("body", "", "the body")
+		var assignees, labels topics
+		fs.Var(&assignees, "assignee", "an assignee; give it again for more")
+		fs.Var(&labels, "label", "a label; give it again for more")
+		milestone := fs.String("milestone", "", "the milestone; - takes it off")
 		pos, err := parse(fs, rest, 1)
 		if err != nil {
 			return err
@@ -247,7 +273,7 @@ func dispatch(args []string, stdout io.Writer) error {
 		if err != nil {
 			return err
 		}
-		return admin(*server).Issue("edit", fakegh.AdminBody{Repo: repo, Number: n, Title: *title, Body: *body})
+		return admin(*server).Issue("edit", fakegh.AdminBody{Repo: repo, Number: n, Title: *title, Body: *body, Assignees: assignees, Labels: labels, Milestone: *milestone})
 	case "issue close":
 		fs := flagSet("fakegh issue close")
 		server := fs.String("server", defaultServer, "the URL of the running fake")

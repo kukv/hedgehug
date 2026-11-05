@@ -11,6 +11,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
+	"github.com/kukv/hedgehug/internal/app/storage/ghstate"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
@@ -287,6 +288,8 @@ type StoreStatus struct {
 	Error        string     `json:"error,omitempty"`     // the store could not be read
 	Unpushed     *int       `json:"unpushed,omitempty"`  // absent when the store has no remote
 	ReadOnly     string     `json:"read_only,omitempty"` // why the store is read-only, in words; absent when it is not
+	// GitHub is how the reads of GitHub go; absent before the first.
+	GitHub *GitHubSummary `json:"github,omitempty"`
 }
 
 // SyncStatus reads how the syncs of every store went. A store that cannot be
@@ -322,6 +325,9 @@ func storeStatus(ss *Session, e config.StoreEntry) StoreStatus {
 	}
 	x.LastError = st.LastError
 	x.ReadOnly = ReadOnlyWhy(s) // a reason in ReadOnly, not an error that hides the rest
+	if gh, err := ghstate.Read(s); err == nil {
+		x.GitHub = githubSummary(gh, ss.Now())
+	}
 	x.PendingSince, x.LastAttempt, x.LastSuccess = TimePtr(st.PendingSince), TimePtr(st.LastAttempt), TimePtr(st.LastSuccess)
 	if len(e.Remotes) > 0 {
 		n, err := Unpushed(s)

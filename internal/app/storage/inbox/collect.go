@@ -50,6 +50,8 @@ func Collect(s *store.Store, before, after plumbing.Hash, me []string) ([]Item, 
 				err = c.applied(t.Value)
 			case automation.TrailerRejected:
 				err = c.rejected(t.Value)
+			case automation.TrailerIssueOverwritten:
+				err = c.issueOverwritten(t.Value)
 			}
 			if err != nil {
 				return nil, err
@@ -113,7 +115,7 @@ func (c *commit) dropCoveredWatches() {
 	covered := func(w Item) bool {
 		return slices.ContainsFunc(c.items, func(x Item) bool {
 			// Account IDs are compared without case (spec: 共通の決まり, 大文字小文字); inbox does not import config, so strings.EqualFold, like config.SameAccount.
-			return (x.Kind == Assigned || x.Kind == Mention || x.Kind == Automation) && x.Task == w.Task && strings.EqualFold(x.To, w.To)
+			return (x.Kind == Assigned || x.Kind == Mention || x.Kind == Automation || x.Kind == IssueOverwritten) && x.Task == w.Task && strings.EqualFold(x.To, w.To)
 		})
 	}
 	c.items = slices.DeleteFunc(c.items, func(it Item) bool { return it.Kind == Watch && covered(it) })
@@ -201,6 +203,27 @@ func (c *commit) rejected(v string) error {
 		Reason string `json:"reason"`
 	}{r.Rule, r.Reason})
 	c.tell(t, Item{Kind: AutomationRejected, Task: u, Detail: detail})
+	return nil
+}
+
+// issueOverwritten reads a value that a sync of an issue wrote over, and tells
+// the task's assignees and watchers among me.
+func (c *commit) issueOverwritten(v string) error {
+	u, ref, o, ok := automation.ParseIssueOverwritten(v)
+	if !ok {
+		return nil
+	}
+	t, err := readTask(c.r, c.tree, u)
+	if err != nil || t == nil {
+		return err
+	}
+	detail := mustJSON(struct {
+		Ref   string   `json:"ref"`
+		Field string   `json:"field"`
+		Side  string   `json:"side"`
+		Lost  []string `json:"lost"`
+	}{ref, o.Field, o.Side, o.Lost})
+	c.tell(t, Item{Kind: IssueOverwritten, Task: u, Detail: detail})
 	return nil
 }
 

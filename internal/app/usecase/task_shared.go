@@ -9,6 +9,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/remote/replicate"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
@@ -87,7 +88,43 @@ func WatchInTx(tx *store.Tx, task model.ULID, accts ...string) error {
 	return tx.PutTask(t)
 }
 
-// NotDeleted refuses to change the task e when it is deleted, and points
+// DefaultKind is the kind of a new task that names none.
+func DefaultKind(sc *schema.Schema) (string, error) {
+	k, ok := sc.DefaultKind()
+	if !ok {
+		return "", NewErr(KindInvalid, "schema.no_default", errors.New("the schema has no default kind; give one with --kind"), "what", "kind")
+	}
+	return k.Name, nil
+}
+
+// DefaultTodo is the status of a new task that names none.
+func DefaultTodo(sc *schema.Schema) (string, error) {
+	st, ok := sc.DefaultStatus(schema.CategoryTodo)
+	if !ok {
+		return "", NewErr(KindInvalid, "schema.no_default", errors.New("the schema has no default todo status; give one with --status"), "what", "status")
+	}
+	return st.Name, nil
+}
+
+// OnlyWorkspace is the workspace of a new task that names none: the one the
+// store has.
+func OnlyWorkspace(ix *index.Index) (model.ULID, error) {
+	wss := ix.Workspaces()
+	if len(wss) == 0 {
+		return model.ULID{}, NewErr(KindConflict, "workspace.none", errors.New("the store has no workspace; add one with hedgehug workspace add <name> --prefix <PREFIX>"))
+	}
+	if len(wss) != 1 {
+		names := make([]string, len(wss))
+		for i, w := range wss {
+			names[i] = fmt.Sprintf("%s (%s)", w.Name, w.IDPrefix)
+		}
+		// KindInvalid, not KindUsage: the CLI exits 1 here.
+		return model.ULID{}, NewErr(KindInvalid, "workspace.choose", errors.New("there are several workspaces; give one with --workspace: "+strings.Join(names, ", ")), "names", names)
+	}
+	return wss[0].ULID, nil
+}
+
+// NotDeletedrefuses to change the task e when it is deleted, and points
 // to restore.
 func NotDeleted(ix *index.Index, e *index.Entry) error {
 	if e.DeletedAt != nil {

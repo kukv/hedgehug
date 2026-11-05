@@ -20,6 +20,11 @@ const (
 	SyncPush   = "push"
 	SyncLink   = "link"
 	SyncOff    = "off" // unlinked: kept so that the automatic linking does not link it again
+
+	LinkViaBranch  = "branch"  // the branch of the pull request
+	LinkViaMark    = "mark"    // hedgehug:<ULID> in its title or body
+	LinkViaID      = "id"      // the id of the task in its title or body
+	LinkViaComment = "comment" // a mark or an id in a comment
 )
 
 // Live reports whether the link is in use.
@@ -81,6 +86,8 @@ func (r GitHubRef) Label() string {
 // stay in the file: SetGitHub merges into the nodes that are there.
 type PRState struct {
 	Ref      string     `yaml:"ref"`
+	Title    string     `yaml:"title,omitempty"`
+	Branch   string     `yaml:"branch,omitempty"`
 	State    string     `yaml:"state"`            // open, draft, merged, closed
 	Review   string     `yaml:"review"`           // none, pending, approved, changes_requested
 	Checks   string     `yaml:"checks,omitempty"` // success, failure, pending; empty with no checks
@@ -91,6 +98,7 @@ type PRState struct {
 // were last made the same, which the issue sync of 5c reads and writes.
 type IssueState struct {
 	Ref         string     `yaml:"ref"`
+	Title       string     `yaml:"title,omitempty"`
 	State       string     `yaml:"state"` // open, closed
 	StateReason *string    `yaml:"state_reason"`
 	Synced      *yaml.Node `yaml:"synced,omitempty"`
@@ -126,8 +134,23 @@ func (t *Task) GitHub() (GitHubState, error) {
 		if x := &g.Issues[i]; x.StateReason != nil && *x.StateReason == "" {
 			x.StateReason = nil
 		}
+		// The decoder leaves a *yaml.Node empty: take the node from the file.
+		g.Issues[i].Synced = nil
+		if items := nodeAt(t.GH, "issues"); items != nil && i < len(items.Content) {
+			g.Issues[i].Synced = nodeAt(items.Content[i], "synced")
+		}
 	}
 	return g, nil
+}
+
+// nodeAt is the value of key in the mapping n, or nil.
+func nodeAt(n *yaml.Node, key string) *yaml.Node {
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		if n.Content[i].Value == key {
+			return n.Content[i+1]
+		}
+	}
+	return nil
 }
 
 // SetGitHub writes prs and issues of gh and keeps the rest as it is: the

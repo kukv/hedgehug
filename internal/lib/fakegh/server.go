@@ -41,6 +41,10 @@ type Server struct {
 	refresh map[string]string  // refresh token → login
 	nextID  int
 	rate    rateLimit
+
+	noIssueEdits bool // each PATCH of an issue fails
+
+	restricted map[string]bool // owners the GitHub App is not installed on, in lower case
 }
 
 // New makes a fake with the state st.
@@ -281,6 +285,17 @@ func (s *Server) repoRoute(w http.ResponseWriter, r *http.Request, parts []strin
 		s.createPull(w, r, x, login)
 	case r.Method == "GET" && len(parts) == 4 && parts[3] == "pulls":
 		s.listPulls(w, r, x)
+	case r.Method == "POST" && len(parts) == 4 && parts[3] == "issues":
+		s.createIssue(w, r, x, login)
+	case r.Method == "PATCH" && len(parts) == 5 && parts[3] == "issues":
+		s.patchIssue(w, r, x, parts[4], login)
+	case r.Method == "GET" && len(parts) == 4 && parts[3] == "labels":
+		s.page(w, r, len(x.Labels), func(i int) any { return map[string]string{"name": x.Labels[i]} })
+	case r.Method == "GET" && len(parts) == 4 && parts[3] == "assignees":
+		out := assignable(x)
+		s.page(w, r, len(out), func(i int) any { return map[string]string{"login": out[i]} })
+	case r.Method == "GET" && len(parts) == 4 && parts[3] == "milestones":
+		s.page(w, r, len(x.Milestones), func(i int) any { return map[string]any{"number": i + 1, "title": x.Milestones[i]} })
 	default:
 		fail(w, http.StatusNotFound, "Not Found")
 	}

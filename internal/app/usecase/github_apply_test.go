@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -60,7 +61,7 @@ func TestApplyLinksAutomatically(t *testing.T) {
 	t.Parallel()
 	x := &model.Task{Links: []model.Link{{Type: model.LinkPR, Ref: prRef(2), Sync: model.SyncOff}}}
 	got := fetched{pulls: map[string]github.Pull{prRef(1): {State: "open", Review: "none"}, prRef(2): {State: "open", Review: "none"}}}
-	if _, err := apply(x, got, []string{prRef(1), prRef(2)}); err != nil {
+	if _, err := apply(x, got, []autoLink{{ref: prRef(1)}, {ref: prRef(2)}}); err != nil {
 		t.Fatal(err)
 	}
 	if len(x.Links) != 2 || x.Links[1].Ref != prRef(1) || x.Links[1].Sync != model.SyncMirror || x.Links[0].Sync != model.SyncOff {
@@ -117,16 +118,71 @@ func TestTasksOfPull(t *testing.T) {
 		"mark in a line":    {github.Pull{Body: "WEB-2\nsee hedgehug:" + u}, []string{u, "WEB-2"}},
 		"short mark last":   {github.Pull{Body: "WEB-2\nhh:" + u}, []string{u, "WEB-2"}},
 	} {
-		got := mentioned(c.p, []string{"WEB"})
-		if len(got) != len(c.want) {
+		var got []string
+		for _, m := range mentioned(c.p, []string{"WEB"}) {
+			got = append(got, m.name)
+		}
+		if !slices.Equal(got, c.want) {
 			t.Errorf("%s = %v", name, got)
-			continue
 		}
-		for i := range got {
-			if got[i] != c.want[i] {
-				t.Errorf("%s = %v", name, got)
-			}
+	}
+}
+
+func TestMentionedSaysWhatFoundIt(t *testing.T) {
+	t.Parallel()
+	u := "01JBZ7XXH2M4Q8R1T5V9W3Y6ZA"
+	for name, c := range map[string]struct {
+		p    github.Pull
+		want string
+	}{
+		"branch":        {github.Pull{Head: "hh/WEB-42-a"}, model.LinkViaBranch},
+		"branch first":  {github.Pull{Head: "hh/WEB-42-a", Body: "WEB-42", Comments: []string{"WEB-42"}}, model.LinkViaBranch},
+		"mark":          {github.Pull{Body: "see hh:" + u}, model.LinkViaMark},
+		"own mark":      {github.Pull{Body: "text\n\nhedgehug:" + u}, model.LinkViaMark},
+		"id in a title": {github.Pull{Title: "WEB-7"}, model.LinkViaID},
+		"id in a body":  {github.Pull{Body: "WEB-7"}, model.LinkViaID},
+		"comment id":    {github.Pull{Comments: []string{"WEB-7"}}, model.LinkViaComment},
+		"comment mark":  {github.Pull{Comments: []string{"hh:" + u}}, model.LinkViaComment},
+	} {
+		got := mentioned(c.p, []string{"WEB"})
+		if len(got) == 0 || got[0].via != c.want {
+			t.Errorf("%s = %v, want %s", name, got, c.want)
 		}
+	}
+}
+
+func TestApplyWritesTitleAndBranch(t *testing.T) {
+	t.Parallel()
+	x := &model.Task{Links: []model.Link{{Type: model.LinkPR, Ref: prRef(1), Sync: model.SyncMirror}}}
+	got := fetched{pulls: map[string]github.Pull{prRef(1): {Number: 1, Title: "one", Head: "hh/WEB-1", State: "open", Review: "none"}}}
+	if _, err := apply(x, got, nil); err != nil {
+		t.Fatal(err)
+	}
+	g, err := x.GitHub()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := g.PRs[0]; p.Title != "one" || p.Branch != "hh/WEB-1" {
+		t.Errorf("gh = %+v", p)
+	}
+	got.pulls[prRef(1)] = github.Pull{Number: 1, Title: "two", Head: "hh/WEB-1", State: "open", Review: "none"}
+	a, err := apply(x, got, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.Changed {
+		t.Error("a new title is a change")
+	}
+}
+
+func TestApplyLinksWithVia(t *testing.T) {
+	t.Parallel()
+	x := &model.Task{}
+	if _, err := apply(x, fetched{}, []autoLink{{prRef(2), model.LinkViaBranch}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(x.Links) != 1 || x.Links[0].Via != model.LinkViaBranch {
+		t.Errorf("links = %+v", x.Links)
 	}
 }
 
@@ -134,7 +190,7 @@ func TestApplyMatchesRefsInAnyCase(t *testing.T) {
 	t.Parallel()
 	x := &model.Task{Links: []model.Link{{Type: model.LinkPR, Ref: prRef(1), Sync: model.SyncMirror}}}
 	got := fetched{pulls: map[string]github.Pull{prRef(1): {State: "open", Review: "none"}}}
-	if _, err := apply(x, got, []string{strings.ToUpper(prRef(1))}); err != nil {
+	if _, err := apply(x, got, []autoLink{{ref: strings.ToUpper(prRef(1))}}); err != nil {
 		t.Fatal(err)
 	}
 	if len(x.Links) != 1 {

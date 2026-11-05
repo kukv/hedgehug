@@ -44,35 +44,46 @@ func markOf(body string) string {
 	return ""
 }
 
+// mention is an id or ULID a pull request points at a task by, and where it
+// found it (model.LinkVia*).
+type mention struct{ name, via string }
+
+// autoLink is a link to make: the ref and what found it.
+type autoLink struct{ ref, via string }
+
 // mentioned returns the ids and ULIDs by which p points at a task: its
 // branch, and in its title, body and comments a mark or an id with one of
 // the prefixes. A body that ends in hedgehug:<ULID> names its task there: the
 // rest of it and the title are the text of that task, which may speak of
 // others, and are not read. Each is there once.
-func mentioned(p github.Pull, prefixes []string) []string {
-	var out []string
-	add := func(s string) {
-		if !slices.Contains(out, s) {
-			out = append(out, s)
+func mentioned(p github.Pull, prefixes []string) []mention {
+	var out []mention
+	add := func(s, via string) {
+		if !slices.ContainsFunc(out, func(m mention) bool { return m.name == s }) {
+			out = append(out, mention{s, via})
 		}
 	}
 	if m := branchMark.FindStringSubmatch(p.Head); m != nil {
-		add(m[1])
+		add(m[1], model.LinkViaBranch)
 	}
-	texts := append([]string{p.Title, p.Body}, p.Comments...)
-	if u := markOf(p.Body); u != "" {
-		add(u)
-		texts = p.Comments
-	}
-	for _, text := range texts {
+	read := func(text, markVia, idVia string) {
 		for _, u := range found(ulidMark, text) {
-			add(strings.ToUpper(u))
+			add(strings.ToUpper(u), markVia)
 		}
 		for _, id := range found(idMark, text) {
 			if i := strings.LastIndex(id, "-"); slices.Contains(prefixes, id[:i]) {
-				add(id)
+				add(id, idVia)
 			}
 		}
+	}
+	if u := markOf(p.Body); u != "" {
+		add(u, model.LinkViaMark)
+	} else {
+		read(p.Title, model.LinkViaMark, model.LinkViaID)
+		read(p.Body, model.LinkViaMark, model.LinkViaID)
+	}
+	for _, text := range p.Comments {
+		read(text, model.LinkViaComment, model.LinkViaComment)
 	}
 	return out
 }
@@ -100,23 +111,23 @@ func prefixesOf(ix *index.Index) []string {
 }
 
 // autoLinks finds the tasks of ix the pull requests of repo point at: by
-// task, the refs to link. Ids of the past count, as ix.Resolve finds them.
-func autoLinks(ix *index.Index, repo string, pulls []github.Pull) map[model.ULID][]string {
+// task, the links to make. Ids of the past count, as ix.Resolve finds them.
+func autoLinks(ix *index.Index, repo string, pulls []github.Pull) map[model.ULID][]autoLink {
 	repo = strings.ToLower(repo) // as hh link writes the ref
 	prefixes := prefixesOf(ix)
-	out := map[model.ULID][]string{}
+	out := map[model.ULID][]autoLink{}
 	for _, p := range pulls {
 		ref := model.GitHubRef{Repo: repo, Kind: model.LinkPR, Number: p.Number}.String()
-		for _, name := range mentioned(p, prefixes) {
-			u, err := ix.Resolve(name)
+		for _, m := range mentioned(p, prefixes) {
+			u, err := ix.Resolve(m.name)
 			if err != nil {
 				continue // a task of no store here, or a number that only looks like an id
 			}
 			if e, ok := ix.Task(u); !ok || e.DeletedAt != nil || e.Broken != "" {
 				continue
 			}
-			if !slices.Contains(out[u], ref) {
-				out[u] = append(out[u], ref)
+			if !slices.ContainsFunc(out[u], func(l autoLink) bool { return l.ref == ref }) {
+				out[u] = append(out[u], autoLink{ref, m.via})
 			}
 		}
 	}

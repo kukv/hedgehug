@@ -74,6 +74,8 @@ describe("opLabel", () => {
     expect(opLabel("start")).toBe("作業の開始");
     expect(opLabel("automation")).toBe("自動化の変更");
     expect(opLabel("gh-fetch")).toBe("GitHub の取り込み");
+    expect(opLabel("gh-mirror")).toBe("Issue の反映");
+    expect(opLabel("gh-push")).toBe("Issue への反映");
     expect(opLabel("something-new")).toBe("something-new");
     expect(opLabel(null)).toBe("変更");
   });

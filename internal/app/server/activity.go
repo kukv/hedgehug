@@ -21,6 +21,8 @@ type activityInput struct {
 	Limit  int    `query:"limit" default:"100" minimum:"1" maximum:"1000"`
 	Author string `query:"author" doc:"Only the commits of this account (its ID)"`
 	Sync   string `query:"sync" enum:"only,exclude" doc:"only: the merges and repairs of syncs; exclude: all but them"`
+	// Automation with Sync=exclude leaves what people did.
+	Automation string `query:"automation" enum:"only,exclude" doc:"only: what GitHub and the rules wrote, and the fetches that note a refused rule; exclude: all but them"`
 	// Workspace is a comma-separated string, as confirm is.
 	Workspace string `query:"workspace" doc:"Only the commits of these workspaces (ULID, name or id prefix), comma-separated, as hh log --workspace"`
 }
@@ -59,7 +61,7 @@ type notificationReadInput struct {
 type notificationReadOutput struct{ Body notifications.ReadResult }
 
 // syncOps are the ops of the commits a sync makes.
-var syncOps = []string{"merge", "repair", "gh-fetch"}
+var syncOps = []string{"merge", "repair"}
 
 func (s *Server) registerActivity() {
 	huma.Register(s.api, huma.Operation{
@@ -81,7 +83,7 @@ func (s *Server) registerActivity() {
 	}, func(_ context.Context, in *activityInput) (*activityOutput, error) {
 		// Without a filter the first Limit commits are the answer.
 		limit := 0
-		if in.Author == "" && in.Sync == "" {
+		if in.Author == "" && in.Sync == "" && in.Automation == "" {
 			limit = in.Limit
 		}
 		var workspaces []string
@@ -99,8 +101,11 @@ func (s *Server) registerActivity() {
 			op, _ := l.Trailer("Hedgehug-Op")
 			author, _ := l.Trailer("Hedgehug-Author")
 			isSync := slices.Contains(syncOps, op)
+			isAutomated := usecase.AutomatedCommit(l.Trailer)
 			switch {
 			case in.Sync == "only" && !isSync, in.Sync == "exclude" && isSync:
+				continue
+			case in.Automation == "only" && !isAutomated, in.Automation == "exclude" && isAutomated:
 				continue
 			case in.Author != "" && author != in.Author:
 				continue

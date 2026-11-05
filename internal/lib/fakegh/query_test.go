@@ -109,7 +109,7 @@ func TestGraphQLChecksTheShapeOfTheQuery(t *testing.T) {
 		{"wrong field order", scan, "field: UPDATED_AT", "field: CREATED_AT"},
 		{"page size", scan, "pullRequests(first: 100", "pullRequests(first: 50"},
 		{"comments size", scan, "comments(first: 100)", "comments(first: 10)"},
-		{"stateReason", linked, "number state stateReason updatedAt", "number state updatedAt"},
+		{"stateReason", linked, "body state stateReason updatedAt", "body state updatedAt"},
 		{"issue typo", linked, "stateReason", "stateReasons"},
 		{"alias mismatch", linked, "p1: pullRequest(number: 1)", "p1: pullRequest(number: 3)"},
 		{"alias kind", linked, "i2: issue(number: 2)", "i2: pullRequest(number: 2)"},

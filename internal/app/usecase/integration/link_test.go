@@ -172,6 +172,29 @@ func TestLinkClearsWhatGHHoldsOfTheRef(t *testing.T) {
 	}
 }
 
+func TestCreateIssueWithoutARepositoryToTell(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.AddTask("a", nil)
+	_, err := integration.CreateIssue(ts.Session, "ME-1", integration.IssueInput{})
+	usecasetest.MustCode(t, err, usecase.KindInvalid, "issue.repo_required")
+}
+
+func TestLinkAgainDropsWhatFoundIt(t *testing.T) {
+	t.Parallel()
+	const ref = "github.com/o/r/pull/1"
+	ts := usecasetest.New(t)
+	ts.AddTask("a", func(x *model.Task) {
+		x.Links = []model.Link{{Type: model.LinkPR, Ref: ref, Sync: model.SyncOff, Via: model.LinkViaBranch}}
+	})
+	if _, err := integration.Link(ts.Session, "ME-1", integration.LinkInput{PR: "o/r#1"}); err != nil {
+		t.Fatal(err)
+	}
+	if l := taskIn(t, ts, "me", "ME-1").Links; len(l) != 1 || l[0].Via != "" || !l[0].Live() {
+		t.Errorf("links = %+v", l)
+	}
+}
+
 func TestLinkInputs(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)

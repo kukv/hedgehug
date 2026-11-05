@@ -31,6 +31,7 @@ func (s *Server) registerEvents() {
 		"notifications.unread": unreadEvent{},
 		"schema.changed":       schemaChanged{},
 		"views.changed":        viewsChanged{},
+		"automations.changed":  automationsChanged{},
 		"stores.changed":       storesChanged{},
 		"auth.device":          authDeviceEvent{},
 	}, func(ctx context.Context, _ *struct{}, send sse.Sender) {

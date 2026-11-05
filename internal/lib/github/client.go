@@ -20,8 +20,11 @@ import (
 var (
 	ErrUnauthorized = errors.New("GitHub refused the token (401)")
 	ErrForbidden    = errors.New("GitHub denied it (403)")
-	ErrNotFound     = errors.New("GitHub has no such thing, or it is not visible to the token (404)")
-	ErrExists       = errors.New("a repository of that name exists")
+	// ErrNotAccessible is an ErrForbidden that says the GitHub App is not
+	// installed where the repository is.
+	ErrNotAccessible = fmt.Errorf("%w: %s", ErrForbidden, notAccessible)
+	ErrNotFound      = errors.New("GitHub has no such thing, or it is not visible to the token (404)")
+	ErrExists        = errors.New("a repository of that name exists")
 )
 
 // RateLimitError means the rate limit is used up until Reset.
@@ -154,6 +157,18 @@ func requestErr(method, u string, err error) error {
 	return fmt.Errorf("%s %s: %w", method, u, err)
 }
 
+// notAccessible is what GitHub answers a token of a GitHub App with, for a
+// repository the App is not installed on.
+const notAccessible = "Resource not accessible by integration"
+
+// forbidden is the error of a 403 that says msg.
+func forbidden(msg string) error {
+	if strings.Contains(msg, notAccessible) {
+		return ErrNotAccessible
+	}
+	return fmt.Errorf("%w: %s", ErrForbidden, msg)
+}
+
 func statusError(res *http.Response, data []byte) error {
 	if res.StatusCode >= 200 && res.StatusCode < 300 {
 		return nil
@@ -181,7 +196,7 @@ func statusError(res *http.Response, data []byte) error {
 		if msg.Message == "" {
 			return ErrForbidden
 		}
-		return fmt.Errorf("%w: %s", ErrForbidden, msg.Message)
+		return forbidden(msg.Message)
 	case http.StatusNotFound:
 		return ErrNotFound
 	case http.StatusUnprocessableEntity:
