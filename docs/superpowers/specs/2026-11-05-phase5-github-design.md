@@ -209,14 +209,19 @@ GitHub Enterprise Server の GraphQL の場所は、`Host` の API の URL か�
 
 `hh unlink` は `gh` から要素を外すので、そのあと同じ PR を `hh link` し直すと、`gh` に新しく入る。そのため `pr.opened` が発火する。
 
+`gh` に前の値がない要素は、`state` は未定、`review` は `none` として判定する。取得の間に開いてマージされた PR を初めて見たときも `pr.merged` が発火する。
+
 ### ルールの実行
 
 - 適用の順は、Store のルール → `where` 付きのルール。それぞれファイルの上から順に当て、後が勝つ。GUI の一覧もこの順に出す
 - 同じ取得で複数のイベントが起きたら、上の表の順に処理する
 - `enabled: false` のルールと、`scoped` の `disable` に入っているルールは飛ばす
 - 削除済みのタスクは飛ばす
-- すでに目的のステータスなら何もしない
+- すでに目的のステータスなら何もしない。`set: {category: c}` は、今のステータスがそのカテゴリなら何もしない（既定でない完了のステータスを既定に戻さない）。違えば `c` の既定のステータスにする
 - `ValidateTransition` で、プロジェクトの上書きを含めて判定する。拒否されたらステータスは変えない
+- 同じ取得でルールが複数当たるときは、順に当てて途中の値から `ValidateTransition` する。拒否されたルールは記録して飛ばし、次のルールへ進む。コミットは最後に通った値へ1つで、trailer は最後に通ったルールを書く
+- `when: all_linked_prs_merged` は、`off` でない PR のリンクすべてが取り込み後の `gh.prs` で `merged` のとき成り立つ。`gh` にまだ入っていない PR と `closed` の PR は満たさない
+- ルールの評価は取り込みのコミットの中で行う。拒否をそのコミットの trailer に書くためである。ステータスのコミットまでストアのロックを持ち続ける
 - ステータスの変更はタスクごとに1コミットにする。op は `set`、author は `hedgehug-automation（実行したメンバー）`、trailer は `Hedgehug-Automation: <rule id> <event>`。`hh undo` は1件ずつ効く
 - 拒否は、取り込みのコミットの trailer に `Hedgehug-Automation-Rejected: <ULID> <rule id> <理由>` と書く
 
@@ -229,13 +234,17 @@ inbox に種類 `automation`（結果）と `automation_rejected`（拒否）を
 親設計の方針どおり、`git` コマンドを使わず go-git で行う。
 
 - カレントのリポジトリの HEAD から `hh/<ID>-<slug>` を作り、HEAD をそこへ向ける。コミットは同じなので作業ツリーのファイルは変わらない
+- `slug` はタイトルを小文字にし、ASCII の英数字の並びを `-` でつないだもので、40 文字まで。空なら `hh/<ID>` とする
+- すでに `doing` カテゴリのタスクは、ステータスを動かさない
 - すでにそのブランチにいるなら、ブランチの操作はしない
 - ブランチがあり別のブランチにいるなら、切り替えない。`git switch <ブランチ>` を案内し、担当者とステータスの更新だけ行う
 - 担当者とステータスの更新は、1回の書き込みにする。`doing` への遷移が制約で拒否されたら、ブランチは残し、理由を出して終わる
 
 ### `hh pr`
 
-- ブランチは、作業中のブランチが `hh/<ID>-` で始まればそれを使う。違えば `hh/<ID>-` で始まるローカルのブランチを探す。なければ `hh start` を案内して止める
+- ブランチは、作業中のブランチが `hh/<ID>` か `hh/<ID>-` で始まるものならそれを使う。違えばローカルのブランチから同じ形のものを探す。なければ `hh start` を案内して止める
+- push は fast-forward だけ行う。拒否されたら止める
+- そのブランチに開いた PR があれば、作らずにリンクする。push の後で失敗しても、打ち直せば続きから進む
 - push はコードの repo の `origin` へ、`repo_accounts` のアカウントで行う
 - PR の向き先は repo の既定のブランチ。タイトルと本文はタスクから作り、本文の末尾に `hedgehug:<ULID>` を入れる
 - `--draft` で draft にする
@@ -251,11 +260,11 @@ inbox に種類 `automation`（結果）と `automation_rejected`（拒否）を
 | `hh automation add --id <id> --on <event> (--status <s>\|--category <c>) [--when <w>] [--project <id>]` | ルールを足す |
 | `hh automation rm <id>` | ルールを消す |
 | `hh automation disable <id> [--project <id>]`・`enable` | `--project` がなければ `enabled` を、あれば `scoped` の `disable` を変える |
-| `hh automation fields ...` | `issue_fields` を変える |
+| `hh automation fields [--default-sync <mode>] [--push <a,b>] [--mirror <a,b>] [--prop <key=value>]` | `issue_fields` を出す。フラグがあれば変える |
 
 ### `hh mv --store`
 
-今の `scoped` の「持っていく／捨てる」の選択に、`automations.yaml` の `where` 付きルールと `scoped` の `disable` も含める。移動先に合わないものは外して一覧に出す。
+今の `scoped` の「持っていく／捨てる」の選択に、`automations.yaml` の `where` 付きルールと `scoped` の `disable` も含める。`automations.yaml` にだけ対象があるときも選択を求める。元の Store からは、どちらを選んでも消す。移動先に合わないもの（ステータスやカテゴリがないルール、`id` が重なるルール、移動先にない `id` を指す `disable`）は外して一覧に出す。
 
 ## 5c Issue 同期
 
