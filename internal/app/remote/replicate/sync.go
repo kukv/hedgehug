@@ -49,6 +49,11 @@ type Options struct {
 	GitHub     *GitHubRepo  // origin on GitHub; nil when it is not
 	Explicit   bool         // hh sync, not the background one: a push_denied is tried again
 
+	// The zero value of each is its default.
+	RetryWait time.Duration // the first wait after a rejected push; it doubles (default 500ms)
+	RepackAt  int           // consolidate when there are more loose objects (default 6700)
+	PacksAt   int           // or more packs below gitrepo.PackCap (default 16)
+
 	// origin, when set, is the commit the repair takes as the main of origin
 	// (the replay after a history rewrite, where it is not the one tracked).
 	origin plumbing.Hash
@@ -87,12 +92,23 @@ const (
 
 // Replaced by tests.
 var (
-	retryWait    = 500 * time.Millisecond // the first wait after a rejected push; it doubles
-	repackAt     = 6700                   // consolidate when there are more loose objects
-	packsAt      = 16                     // or more packs below gitrepo.PackCap
-	beforeCommit = func() {}              // runs before each fast-forward, merge or repair commit
-	onFullRepair = func() {}              // runs when the repair reads every file of HEAD
+	beforeCommit = func() {} // runs before each fast-forward, merge or repair commit
+	onFullRepair = func() {} // runs when the repair reads every file of HEAD
 )
+
+const (
+	defaultRetryWait = 500 * time.Millisecond
+	defaultRepackAt  = 6700
+	defaultPacksAt   = 16
+)
+
+// orDefault is v, or def when v is zero.
+func orDefault[T int | time.Duration](v, def T) T {
+	if v == 0 {
+		return def
+	}
+	return v
+}
 
 // Run syncs the store once. A store with no remote does nothing. Whether
 // it succeeds or not, it then fills the inbox from what HEAD gained.
@@ -159,7 +175,7 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 	if err := r.RegisterMergeDriver(); err != nil {
 		return res, err
 	}
-	wait := retryWait
+	wait := orDefault(opt.RetryWait, defaultRetryWait)
 	// A mirror that cannot be reached is left out, and told of as a
 	// warning; origin is the remote the sync is for.
 	down := map[string]error{}
@@ -258,7 +274,7 @@ func Run(s *store.Store, opt Options) (res Result, err error) {
 	warn("count the loose objects", err)
 	packs, perr := r.SmallPacks()
 	warn("count the packs", perr)
-	if (err == nil && n > repackAt) || (perr == nil && packs > packsAt) {
+	if (err == nil && n > orDefault(opt.RepackAt, defaultRepackAt)) || (perr == nil && packs > orDefault(opt.PacksAt, defaultPacksAt)) {
 		warn("consolidate the packs", r.Consolidate())
 	}
 	return res, nil

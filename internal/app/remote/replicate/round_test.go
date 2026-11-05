@@ -219,7 +219,7 @@ func TestPushRoundsRunOut(t *testing.T) {
 
 func TestConsolidateByLooseObjects(t *testing.T) {
 	c := newCluster(t, 1)
-	replace(t, &repackAt, 0)
+	c.opts[0].RepackAt = 1 // consolidate with more than one loose object
 	c.addTask(0, "a")
 	r := c.sync(0)
 	if n, err := c.stores[0].Repo().LooseObjects(); err != nil || n != 0 || len(r.Warnings) != 0 {
@@ -229,22 +229,24 @@ func TestConsolidateByLooseObjects(t *testing.T) {
 
 func TestConsolidateByPackCount(t *testing.T) {
 	c := newCluster(t, 1)
-	replace(t, &repackAt, 0)
+	c.opts[0].RepackAt = 1 // consolidate with more than one loose object
 	c.addTask(0, "a")
 	c.sync(0)
-	if n, err := c.stores[0].Repo().SmallPacks(); err != nil || n == 0 {
-		t.Fatalf("packs %d, %v", n, err)
+	c.addTask(0, "b")
+	c.sync(0) // the loose objects of b make a second pack; the first is left
+	if n, err := c.stores[0].Repo().SmallPacks(); err != nil || n != 2 {
+		t.Fatalf("packs %d, %v; want 2", n, err)
 	}
 	// few loose objects, and as many packs as the limit: nothing happens
-	replace(t, &repackAt, 1<<20)
-	replace(t, &packsAt, 1<<20)
-	c.addTask(0, "b")
+	c.opts[0].RepackAt = 1 << 20
+	c.opts[0].PacksAt = 1 << 20
+	c.addTask(0, "c")
 	c.sync(0)
 	if n, _ := c.stores[0].Repo().LooseObjects(); n == 0 {
 		t.Fatal("consolidated below both limits")
 	}
 	// more packs than the limit
-	replace(t, &packsAt, 0)
+	c.opts[0].PacksAt = 1
 	r := c.sync(0)
 	if n, err := c.stores[0].Repo().LooseObjects(); err != nil || n != 0 || len(r.Warnings) != 0 {
 		t.Errorf("loose objects %d, %v; warnings %v", n, err, r.Warnings)
