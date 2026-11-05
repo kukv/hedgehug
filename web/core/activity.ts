@@ -18,6 +18,8 @@ const OP_LABELS: Readonly<Record<string, string>> = {
   start: "作業の開始",
   automation: "自動化の変更",
   "gh-fetch": "GitHub の取り込み",
+  "gh-mirror": "Issue の反映",
+  "gh-push": "Issue への反映",
   watch: "ウォッチ",
   unwatch: "ウォッチの解除",
   mv: "移動",

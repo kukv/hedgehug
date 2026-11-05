@@ -383,6 +383,8 @@ func TestInboxContent(t *testing.T) {
 		{"watch of a comment", inbox.Item{Kind: inbox.Watch, Detail: detail(`{"comment":"x"}`)}, "new comment"},
 		{"automation", inbox.Item{Kind: inbox.Automation, Detail: detail(`{"rule":"merged","event":"pr.merged","status":"done"}`)}, "rule merged moved it to done (pr.merged)"},
 		{"automation rejected", inbox.Item{Kind: inbox.AutomationRejected, Detail: detail(`{"rule":"merged","reason":"points is required"}`)}, "rule merged did not move it: points is required"},
+		{"issue overwritten: the task", inbox.Item{Kind: inbox.IssueOverwritten, Detail: detail(`{"ref":"github.com/a/b/issues/1","field":"title","side":"task","lost":["mine"]}`)}, `the title "mine" of the task was written over by a/b#1`},
+		{"issue overwritten: GitHub", inbox.Item{Kind: inbox.IssueOverwritten, Detail: detail(`{"ref":"github.com/a/b/issues/1","field":"labels","side":"github","lost":["x","y"]}`)}, `the labels "x, y" on a/b#1 was written over by the task`},
 		{"revived", inbox.Item{Kind: inbox.Revived}, "deleted by you, but changed on the other side, so it is back"},
 		{"repaired", inbox.Item{Kind: inbox.Repaired, Detail: detail(`{"kind":"id_prefix","value":"web"}`)}, `id_prefix (was "web")`},
 		{"unknown kind", inbox.Item{Kind: "other", Detail: detail(`{"a":1}`)}, `{"a":1}`},

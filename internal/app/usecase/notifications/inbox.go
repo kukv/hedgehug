@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/app/domain/automation"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
@@ -522,6 +523,24 @@ func detailWorkspace(ix *index.Index, it inbox.Item) (*model.Workspace, bool) {
 	return ix.Workspace(d.Workspace)
 }
 
+// issueOverwrittenContent says which value a sync of an issue wrote over.
+func issueOverwrittenContent(it inbox.Item) string {
+	var d struct {
+		Ref, Field, Side string
+		Lost             []string
+	}
+	_ = json.Unmarshal(it.Detail, &d)
+	label := d.Ref
+	if r, ok := model.ParseGitHubRef(d.Ref); ok {
+		label = r.Label()
+	}
+	lost := strconv.Quote(strings.Join(d.Lost, ", "))
+	if d.Side == automation.SideGitHub {
+		return fmt.Sprintf("the %s %s on %s was written over by the task", d.Field, lost, label)
+	}
+	return fmt.Sprintf("the %s %s of the task was written over by %s", d.Field, lost, label)
+}
+
 // InboxContent says what happened, by the kind of the item. An item that
 // tells who caused it ends with "by <account>"; the ones from trailers and
 // records do not know.
@@ -571,6 +590,8 @@ func InboxContent(ix *index.Index, it inbox.Item, storeName string, manyStores b
 		var d struct{ Rule, Reason string }
 		_ = json.Unmarshal(it.Detail, &d)
 		return fmt.Sprintf("rule %s did not move it: %s", d.Rule, d.Reason)
+	case inbox.IssueOverwritten:
+		return issueOverwrittenContent(it)
 	case inbox.Revived:
 		return "deleted by you, but changed on the other side, so it is back"
 	case inbox.Repaired:

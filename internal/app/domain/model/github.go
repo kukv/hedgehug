@@ -126,8 +126,23 @@ func (t *Task) GitHub() (GitHubState, error) {
 		if x := &g.Issues[i]; x.StateReason != nil && *x.StateReason == "" {
 			x.StateReason = nil
 		}
+		// The decoder leaves a *yaml.Node empty: take the node from the file.
+		g.Issues[i].Synced = nil
+		if items := nodeAt(t.GH, "issues"); items != nil && i < len(items.Content) {
+			g.Issues[i].Synced = nodeAt(items.Content[i], "synced")
+		}
 	}
 	return g, nil
+}
+
+// nodeAt is the value of key in the mapping n, or nil.
+func nodeAt(n *yaml.Node, key string) *yaml.Node {
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		if n.Content[i].Value == key {
+			return n.Content[i+1]
+		}
+	}
+	return nil
 }
 
 // SetGitHub writes prs and issues of gh and keeps the rest as it is: the

@@ -36,6 +36,9 @@ const (
 	// AutomationRejected of a rule whose move the workflow refused.
 	Automation         Kind = "automation"
 	AutomationRejected Kind = "automation_rejected"
+	// IssueOverwritten tells of a value on one side of a synced issue that
+	// the other side wrote over.
+	IssueOverwritten Kind = "issue_overwritten"
 )
 
 // Item is one notice.
@@ -58,7 +61,8 @@ type Item struct {
 	// {"kind","workspace","value"} (workspace for a workspace's repair);
 	// watch {"changed":[...]} or {"comment"}; mention {"comment"} when a
 	// comment mentions; automation {"rule","event","status"};
-	// automation_rejected {"rule","reason"}.
+	// automation_rejected {"rule","reason"}; issue_overwritten
+	// {"ref","field","side","lost"}.
 	Detail json.RawMessage `json:"detail,omitempty"`
 }
 
@@ -533,8 +537,8 @@ func key(it Item) string {
 		var d repairDetail
 		_ = json.Unmarshal(it.Detail, &d)
 		k = []any{it.Kind, it.Task.String(), it.Path, d.Kind, d.Workspace.String(), compact(d.Value)}
-	case AutomationRejected:
-		// A commit can carry several rules' rejections of one task.
+	case AutomationRejected, IssueOverwritten:
+		// A commit can carry several of one task.
 		k = []any{it.Kind, it.Commit, it.Task.String(), strings.ToLower(it.To), compact(it.Detail)}
 	default:
 		k = []any{it.Kind, it.Commit, it.Task.String(), strings.ToLower(it.To)}

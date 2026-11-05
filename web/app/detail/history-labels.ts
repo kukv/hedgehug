@@ -30,6 +30,8 @@ const labels: Record<string, string> = {
   unlink: "リンク解除",
   start: "作業開始",
   "gh-fetch": "GitHub の取り込み",
+  "gh-mirror": "Issue の反映",
+  "gh-push": "Issue への反映",
 };
 
 // opLabel names the Hedgehug-Op of a commit; an op it does not know is shown as it is.

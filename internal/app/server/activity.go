@@ -59,7 +59,7 @@ type notificationReadInput struct {
 type notificationReadOutput struct{ Body notifications.ReadResult }
 
 // syncOps are the ops of the commits a sync makes.
-var syncOps = []string{"merge", "repair", "gh-fetch"}
+var syncOps = []string{"merge", "repair", "gh-fetch", usecase.OpGitHubMirror, usecase.OpGitHubPush}
 
 func (s *Server) registerActivity() {
 	huma.Register(s.api, huma.Operation{

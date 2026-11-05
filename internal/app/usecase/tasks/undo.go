@@ -71,7 +71,7 @@ func Undo(ss *usecase.Session) (UndoResult, error) {
 
 // undoSkip are the operations undo does not pick: the ones that bring work
 // together or set a store up, which are not something a person did.
-var undoSkip = []string{"merge", "repair", "setup", "undo", "init", "gh-fetch"}
+var undoSkip = []string{"merge", "repair", "setup", "undo", "init", "gh-fetch", usecase.OpGitHubMirror, usecase.OpGitHubPush}
 
 // undoScanner finds the commit to undo, one entry at a time, newest first,
 // along the first parents: the newest that the writer made by an operation

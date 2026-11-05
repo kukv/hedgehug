@@ -167,7 +167,7 @@ issue_fields:
 | アカウント | `repo_accounts` を上から当てはめる。一致しなければ Store の `account`。読めなければ repo 名を付けて警告する |
 | 失敗 | 警告だけを出し、同期は成功のままにする |
 | author | `hedgehug-automation（実行したメンバー）` |
-| コミット | 1回の取得につき1つ。op は `gh-fetch`。`hh undo` の対象にしない |
+| コミット | 1回の取得につき1つ。op は `gh-fetch`。`hh undo` の対象にしない。Issue の反映はその後のタスクごとのコミット（op は `gh-mirror`・`gh-push`）で、同じく `hh undo` の対象にしない |
 | アクティビティ | 5a〜5c の間は「同期」に入れる。5d-1 で「自動化」の絞り込みを作るときに移す |
 
 GitHub Enterprise Server の GraphQL の場所は、`Host` の API の URL から求める（`/api/v3` を `/api/graphql` に置き換える。github.com は `/graphql`）。
@@ -280,7 +280,21 @@ inbox に種類 `automation`（結果）と `automation_rejected`（拒否）を
 | `push` | タスク → GitHub | タイトル・本文・状態・担当者・ラベル |
 | `link` | なし | `gh.issues[].state` の取り込みだけ |
 
-反映するフィールドは、リンクの `fields`、`issue_fields` の順に見る。
+反映するフィールドは、リンクの `fields`、`issue_fields` の順に見る。知らない名前は飛ばす。同じタスクに `mirror` のリンクが複数あるときは、フィールドごとに `links` の先頭のリンクが持つ。後のリンクはそのフィールドを見ない。
+
+`hh link --sync` でモードを変えたら `synced` を消す。古い基準が手編集に見えるためである。
+
+### 実行の順
+
+取り込みの順番の 5 は次の順で動く。
+
+1. 取り込みのトランザクションの中で `mirror` を比べ、ルールを評価する。ルールは `mirror` の後のステータスと値から評価する
+2. タスクごとの `gh-mirror` のコミットに、フィールド、ステータス、`synced`、trailer をまとめる。author は `hedgehug-automation（実行したメンバー）`。ここまでストアのロックを持ち続ける
+3. ルールの `set` のコミットを書く。`gh-mirror` に失敗したタスクは飛ばす
+4. ロックを放し、`push` のリンクを比べて `PATCH` する。ルールが動かした後のステータスが同じ同期で届く
+5. 書けたものをタスクごとの `gh-push` のコミットにする。`synced` と、書いた `state`・`state_reason` を `gh` に写す
+
+`gh-mirror` が schema の検証に落ちたら警告にする。`synced` が進まないので、次の取得で比べ直す。
 
 ### アダプタ
 
@@ -300,6 +314,15 @@ inbox に種類 `automation`（結果）と `automation_rejected`（拒否）を
 | `mirror` | タスクへ反映する | 次の反映で GitHub の値に戻し、inbox に出す |
 | `push` | タスクの値で上書きし、inbox に出す | GitHub へ反映する |
 
+`synced` のキーは `title`・`body`・`status`・`assignees`・`labels`・`milestone`。`status` は `open`・`completed`・`not_planned`。比べる値は GitHub 側の表現に揃える。
+
+- login とラベルは小文字にして整列して比べる。送るときは GitHub の表記にする
+- 本文は印を除き、CRLF を LF にし、末尾の空白を落として比べる。`push` の本文に印がなければ、本文が同じでも書き直す
+- 別の host の担当者は比べない。`mirror` は残し、`push` は除いて警告する
+- `synced` にないフィールドは基準がない。モードの向きへ黙って揃え、inbox に出さない
+
+手編集の上書きは、コミットの trailer `Hedgehug-Issue-Overwritten: <ULID> <field> <ref> <side> <JSON の値>` に書く。`side` は上書きされた側（`task`・`github`）である。inbox の種類は `issue_overwritten`、宛先は `automation` と同じ担当者とウォッチャーで、詳細は `{ref, field, side, lost}`。`Hedgehug-Overwritten` は負けた author 宛てで、ここには author がいないので使わない。
+
 ### 状態の対応
 
 | モード | 対応 |
@@ -307,21 +330,25 @@ inbox に種類 `automation`（結果）と `automation_rejected`（拒否）を
 | `push` | `done` カテゴリ → closed（completed）、`canceled` カテゴリ → closed（not_planned）、それ以外 → open |
 | `mirror` | closed（completed）→ `done` の既定、closed（not_planned）→ `canceled` の既定、open → `todo` の既定 |
 
-`mirror` の open は、タスクが `todo` か `doing` のカテゴリにあるなら動かさない。`mirror` の変更は `ValidateTransition` を通し、拒否されたら自動化と同じ trailer と通知にする。`issue-closed` のルールは `mirror` の反映の後に当てる。
+`mirror` の open は、タスクが `todo` か `doing` のカテゴリにあるなら動かさない。同じカテゴリの既定でないステータスは既定に戻さない。`mirror` の変更は `ValidateTransition` を通し、拒否されたら自動化と同じ trailer と通知にする。rule は `mirror`、通った変更の trailer は `Hedgehug-Automation: mirror issue.mirror` とする。`issue-closed` のルールは `mirror` の反映の後に当てる。
+
+拒否の通知は GitHub が基準から変わった回だけ出し、`synced` は GitHub の値へ進める。タスクが基準と違うまま拒否され続ける間は何も書かない。ワークフローが許すようになれば、次の反映で揃う。
+
+ステータスを `mirror` するリンクで not_planned に閉じた Issue は、`issue.closed` を発火しない。`issue-closed` の `set: {category: done}` が `canceled` を `done` に変え、次の反映で手編集として戻るためである。ステータスを `mirror` しないリンクでは発火する。
 
 ### 失敗したとき
 
 | 場面 | 動き |
 |---|---|
-| 存在しないラベル、割り当てできない人 | 除いて反映し、警告する。作らない |
+| 存在しないラベル、割り当てできない人、ないマイルストーン | 除いて反映し、警告する。作らない。除いた値を `synced` に書くので、上書きの通知にならない。警告は同期のたびに出る |
 | GitHub への書き込みの失敗 | 警告する。差分が残るので次の同期で再試行する |
 | Issue が消えた | 警告する。リンクは残す |
 | タスクを削除した | Issue は触らず、反映を止める |
 
 ### コマンド
 
-- `hh issue <id> [--repo org/repo]`: `push` モードで Issue を作る。repo はタスクの `repos` から決める。複数あれば `--repo` を求める。なければカレントの repo を使う
-- `hh gh import <org/repo> --label <label> [--parent <id>] [--dry-run]`: 開いている Issue を `mirror` のタスクにする。本文は最初の1回だけ写す。リンク済みの Issue は飛ばす。`--dry-run` は件数だけを返す
+- `hh issue <id> [--repo org/repo]`: `push` モードで Issue を作る。repo はタスクの `repos` から決める。複数あれば `--repo` を求める。なければカレントの repo を使う。`issue_fields.push` のフィールドを渡し、閉じる側のタスクなら作成の後に閉じる。閉じられなくてもリンクは書き、基準を `open` にして警告する（次の同期で閉じる。打ち直して Issue が二重にならない）。`synced` と `gh` を同じコミットに書くので、次の同期で差分が出ない。op は `issue`。その repo の使用中の Issue リンクがあれば `link.exists`
+- `hh gh import <org/repo> --label <label> [--parent <id>] [--workspace <name>] [--dry-run]`: 開いている Issue を `mirror` のタスクにする。本文は最初の1回だけ写す。リンク済みの Issue は飛ばす（`off` を含む）。`--dry-run` は件数だけを返す。タスクごとに op `add` の1コミットにするので、途中で落ちても打ち直せる。終わったらその repo を取り込み、担当者と状態を揃える
 
 ## 5d の画面
 
