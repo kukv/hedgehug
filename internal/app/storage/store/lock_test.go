@@ -20,7 +20,7 @@ func acquire(path string, wait time.Duration) (*osfs.Lock, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return nil, err
 	}
-	return lockFile(path, wait)
+	return lockFile(path, wait, nil)
 }
 
 func TestLockExcludes(t *testing.T) {

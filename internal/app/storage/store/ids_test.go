@@ -140,14 +140,13 @@ func TestIDNumbersHook(t *testing.T) {
 
 func TestConcurrentAddsGetDistinctIDs(t *testing.T) {
 	t.Parallel()
-	s := newTestStore(t)
+	// the test checks that no ID is given twice, not how long a writer waits
+	s := newTestStore(t, WithLockWait(time.Minute))
 	ws := testWorkspace(t, s)
-	other, err := Open(s.dir) // a second handle: only the file lock serializes them
+	other, err := Open(s.dir, WithLockWait(time.Minute)) // a second handle: only the file lock serializes them
 	if err != nil {
 		t.Fatal(err)
 	}
-	// the test checks that no ID is given twice, not how long a writer waits
-	s.lockWait, other.lockWait = time.Minute, time.Minute
 	var wg sync.WaitGroup
 	tasks := make([]*model.Task, 20)
 	for i := range tasks {

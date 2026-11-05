@@ -13,8 +13,7 @@ import (
 // Update, which needs s.mu, goes through at once.
 func TestCommitMergeWaitsWithoutHoldingTheMutex(t *testing.T) {
 	// 直列: パッケージ変数 onLockWait の差し替え
-	s := newTestStore(t)
-	s.lockWait = 3 * time.Second
+	s := newTestStore(t, WithLockWait(3*time.Second))
 	head, err := s.repo.Head()
 	if err != nil {
 		t.Fatal(err)

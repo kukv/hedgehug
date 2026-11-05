@@ -23,10 +23,10 @@ var (
 )
 
 // newTestStore creates a store in a temporary directory, with a fixed clock.
-func newTestStore(t *testing.T) *Store {
+func newTestStore(t *testing.T, opts ...Option) *Store {
 	t.Helper()
 	meta := &model.StoreMeta{ULID: model.NewULID(), Name: "test"}
-	s, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, &model.Workspace{ULID: testWorkspaceULID, Name: "test", IDPrefix: "TST"}, testAuthor, "", time.Now)
+	s, err := Create(filepath.Join(t.TempDir(), "store"), meta, nil, &model.Workspace{ULID: testWorkspaceULID, Name: "test", IDPrefix: "TST"}, testAuthor, "", time.Now, opts...)
 	if err != nil {
 		t.Fatal(err)
 	}

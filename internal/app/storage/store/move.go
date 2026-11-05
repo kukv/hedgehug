@@ -180,7 +180,7 @@ func LockInOrder(ss ...*Store) (*Locked, error) {
 	})
 	l := &Locked{}
 	for _, s := range uniq {
-		fl, err := acquireStore(s.dir, s.path(lockPath), s.lockWait)
+		fl, err := acquireStore(s.dir, s.path(lockPath), s.lockWait, nil)
 		if err != nil {
 			l.Release()
 			return nil, fmt.Errorf("lock %s: %w", s.meta.Name, err)

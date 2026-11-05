@@ -95,8 +95,13 @@ func TestIDNumbersIsAFreshMap(t *testing.T) {
 // stay distinct because Update counts with the index under the store's lock.
 func TestConcurrentAddsThroughIndexes(t *testing.T) {
 	t.Parallel()
-	s1, dir := newStore(t)
-	s2, err := store.Open(dir)
+	_, dir := newStore(t)
+	wait := store.WithLockWait(time.Minute) // 16 writers queue on the lock; -race makes each commit slow
+	s1, err := store.Open(dir, wait)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s2, err := store.Open(dir, wait)
 	if err != nil {
 		t.Fatal(err)
 	}
