@@ -45,7 +45,12 @@ type Options struct {
 	Others     []OtherStore // the other stores in config, for prefix duplicates across stores
 	Conn       gitrepo.Conn // how the remotes are reached: url_rewrites and the token
 	BeforePush func()       // a test hook: another clone pushes here
-	Name       string       // the store's name in config, for the read-only error
+	// BeforeApply is called by RebuildStore after rebuild.json is written and
+	// before the rebuild is applied, with the store lock and sync.lock held:
+	// whoever holds the store open lets go of it. It is not called when origin
+	// follows the store again.
+	BeforeApply func()
+	Name      string       // the store's name in config, for the read-only error
 	GitHub     *GitHubRepo  // origin on GitHub; nil when it is not
 	Explicit   bool         // hh sync, not the background one: a push_denied is tried again
 

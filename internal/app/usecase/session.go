@@ -48,10 +48,12 @@ type Session struct {
 	// index and before it writes, or write config.yaml after an operation
 	// read it and before it updates it, as another process could.
 	BeforeUpdate func()
-	// BeforeRebuild is told the path of a store before doctor --fix rebuilds the
-	// directory of a rebuild in for it (after a force push): whoever holds
-	// that store open, such as the GUI server's index, lets go of it.
-	// ForStore copies it. nil does nothing.
+	// BeforeRebuild is told the path of a store when doctor --fix is about to
+	// apply a rebuild to it (after a force push), with rebuild.json written
+	// and the store lock and sync.lock held: whoever holds that store open,
+	// such as the GUI server's index, lets go of it. It is not told when
+	// origin follows the store again, and must not wait for anything those
+	// locks guard. ForStore copies it. nil does nothing.
 	BeforeRebuild func(path string)
 	// Spawn starts the background sync as a process; nil starts it detached.
 	// ForStore copies it.

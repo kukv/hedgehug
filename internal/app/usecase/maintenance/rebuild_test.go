@@ -30,6 +30,7 @@ import (
 type forcePushFx struct {
 	ts, clone        *usecasetest.Session
 	remote           string
+	oldOrigin        string // the head of origin before it was rewritten
 	keep, gone, mine *model.Task
 }
 
@@ -60,7 +61,7 @@ func newForcePushFx(t *testing.T, editGone bool) *forcePushFx {
 			t.Fatal(err)
 		}
 	}
-	gitrepotest.RewriteRemote(t, f.remote, model.TaskPath(f.gone.ULID), path.Dir(model.CommentPath(f.gone.ULID, model.ULID{})))
+	f.oldOrigin, _ = gitrepotest.RewriteRemote(t, f.remote, model.TaskPath(f.gone.ULID), path.Dir(model.CommentPath(f.gone.ULID, model.ULID{})))
 	return f
 }
 
@@ -179,6 +180,11 @@ func TestDoctorFixRebuildsTheStore(t *testing.T) {
 		if _, err := os.Stat(p); err != nil {
 			t.Errorf("the store is gone before BeforeRebuild: %v", err)
 		}
+		// Told right before the apply, with rebuild.json written: a poll does
+		// not open the store from now on.
+		if ph := store.RebuildPhaseIn(p); ph != store.RebuildApply {
+			t.Errorf("phase when BeforeRebuild is told = %q, want apply", ph)
+		}
 	}
 	if _, err := replication.Sync(f.clone.Session, false, true); !errors.Is(err, replicate.ErrForcePush) {
 		t.Fatalf("Sync = %v, want ErrForcePush", err)
@@ -225,6 +231,26 @@ func TestDoctorFixRebuildsTheStore(t *testing.T) {
 	}
 	if got, want := originHead(t, f.remote), mustHead(t, s); got != want {
 		t.Errorf("origin is at %s, the clone at %s", got, want)
+	}
+}
+
+// origin that follows the store again needs no rebuild, and nothing holding
+// the store is told to let go of it.
+func TestDoctorFixDoesNotReleaseWhenOriginFollowsAgain(t *testing.T) {
+	t.Parallel()
+	f := newForcePushFx(t, false)
+	var told []string
+	f.clone.BeforeRebuild = func(p string) { told = append(told, p) }
+	if _, err := replication.Sync(f.clone.Session, false, true); !errors.Is(err, replicate.ErrForcePush) {
+		t.Fatalf("Sync = %v, want ErrForcePush", err)
+	}
+	gitrepotest.SetRemoteMain(t, f.remote, f.oldOrigin)
+	rs, err := maintenance.Doctor(f.clone.Session, true)
+	if err != nil || len(rs) != 1 || rs[0].Rebuilt != nil {
+		t.Fatalf("Doctor = %+v, %v; want no rebuild", rs, err)
+	}
+	if len(told) != 0 {
+		t.Errorf("BeforeRebuild was told %v", told)
 	}
 }
 

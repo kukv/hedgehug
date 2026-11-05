@@ -120,6 +120,9 @@ func RebuildStore(s *store.Store, opt Options) (*Rebuild, error) {
 	if err != nil || rec == nil {
 		return nil, err
 	}
+	if opt.BeforeApply != nil {
+		opt.BeforeApply()
+	}
 	if err := finish(s, rec, b); err != nil {
 		return nil, err
 	}

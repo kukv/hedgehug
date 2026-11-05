@@ -35,7 +35,9 @@ func rebuildStore(ss *usecase.Session, c *config.Config, e config.StoreEntry) (*
 		return nil, err
 	}
 	dir := s.Dir()
-	ss.ReleaseForRebuild(dir)
+	// Whoever holds the store lets go of it once rebuild.json is written, not
+	// before: a store that is not rebuilt is not released.
+	opt.BeforeApply = func() { ss.ReleaseForRebuild(dir) }
 	var b *replicate.Rebuild
 	err = s.WithLocalLock("sync.lock", usecase.SyncLockWait, func() error {
 		var err error

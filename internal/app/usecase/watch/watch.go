@@ -279,6 +279,12 @@ func (w *Watcher) pollLocked(publish bool) {
 		if st == nil || !osfs.SamePath(st.path, e.Path) {
 			// This session is not closed: the store it opens is kept in
 			// w.stores, and closed when it is dropped.
+			// A store being rebuilt is left alone, as one that does not open: a
+			// pack held open would stop the prune. It is opened on a poll after
+			// the rebuild, and released tells the clients then.
+			if store.RebuildPhaseIn(e.Path) != store.RebuildNone {
+				continue
+			}
 			s, err := w.session(e.Name).OpenStore()
 			if err != nil {
 				continue
@@ -489,6 +495,11 @@ func (w *Watcher) refresh(st *polled) {
 // concurrent use); it goes on, for a few rounds, until the index is at the
 // HEAD it sees when it ends. The index is a cache, so a failure is ignored.
 func (w *Watcher) buildHistory(st *polled) {
+	// A rebuild stopped in its apply phase while the store was held: its work
+	// tree is part old, part new, as mount.Open treats it.
+	if store.RebuildPhaseIn(st.path) == store.RebuildApply {
+		return
+	}
 	if !st.histBusy.CompareAndSwap(false, true) {
 		return
 	}
