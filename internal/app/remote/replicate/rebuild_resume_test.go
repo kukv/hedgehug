@@ -362,3 +362,68 @@ func TestAWriteIsRefusedWhileApplyIsStopped(t *testing.T) {
 	}
 	checkRebuilt(t, c, sc)
 }
+
+// HEAD off main is found before rebuild.json is written, while the store is
+// still as it was: nothing is half done.
+func TestRebuildStopsBeforeTheRecordWhenHeadIsOffMain(t *testing.T) {
+	t.Parallel()
+	c := newCluster(t, 2)
+	gone := c.addTask(0, "gone")
+	c.addTask(0, "keep")
+	c.sync(0)
+	c.sync(1)
+	c.rewriteOrigin(gone.ULID)
+	if _, err := Run(c.stores[1], c.opts[1]); !errors.Is(err, ErrForcePush) {
+		t.Fatalf("sync = %v, want ErrForcePush", err)
+	}
+	s := c.stores[1]
+	head := mustHead(t, s)
+	if err := os.WriteFile(filepath.Join(s.Dir(), ".git", "HEAD"), []byte(head.String()+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RebuildStore(s, c.opts[1]); !errors.Is(err, gitrepo.ErrWorkTreeChanged) {
+		t.Fatalf("RebuildStore = %v, want ErrWorkTreeChanged", err)
+	}
+	if p := store.RebuildPhaseIn(s.Dir()); p != store.RebuildNone {
+		t.Errorf("phase = %q", p)
+	}
+	c.reopen() // the store still opens
+}
+
+// A rebuild that stopped after the caller looked is finished from its
+// rebuild.json, and the result is the one of the first.
+func TestRebuildStoreFinishesAStoppedRebuild(t *testing.T) {
+	t.Parallel()
+	c := newCluster(t, 2)
+	sc := newStoppedScene(t, c, false)
+	b, err := RebuildStore(c.stores[1], c.opts[1])
+	if err != nil || b == nil {
+		t.Fatalf("RebuildStore = %+v, %v", b, err)
+	}
+	checkRebuilt(t, c, sc)
+}
+
+// A rebuild finished meanwhile (force-push.json is gone) is not done again.
+func TestRebuildStoreDoesNothingWithoutForcePush(t *testing.T) {
+	t.Parallel()
+	c := newCluster(t, 2)
+	gone := c.addTask(0, "gone")
+	c.addTask(0, "keep")
+	c.sync(0)
+	c.sync(1)
+	c.rewriteOrigin(gone.ULID)
+	if _, err := Run(c.stores[1], c.opts[1]); !errors.Is(err, ErrForcePush) {
+		t.Fatalf("sync = %v, want ErrForcePush", err)
+	}
+	s := c.stores[1]
+	head := mustHead(t, s)
+	if err := s.RemoveLocal(forcePushFile); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := RebuildStore(s, c.opts[1]); err != nil || b != nil {
+		t.Fatalf("RebuildStore = %+v, %v; want nothing", b, err)
+	}
+	if got := mustHead(t, s); got != head {
+		t.Errorf("HEAD = %s, want %s", got, head)
+	}
+}

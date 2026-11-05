@@ -48,7 +48,8 @@ func WriteAtomicInDir(path string, data []byte) error {
 }
 
 // CopyTree copies the directory src to dst, which must not exist: its
-// directories, regular files and symbolic links, with their permissions.
+// directories, regular files and symbolic links, with their permissions;
+// the directories also get the owner's rwx, so that the copy can be written.
 // skip names what is left out, by its slash-separated path relative to src;
 // nil leaves out nothing.
 func CopyTree(src, dst string, skip func(rel string) bool) error {

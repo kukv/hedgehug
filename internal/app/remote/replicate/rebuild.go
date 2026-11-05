@@ -116,6 +116,24 @@ func RebuildStore(s *store.Store, opt Options) (*Rebuild, error) {
 		return nil, err
 	}
 	defer held.Release()
+	// What the caller saw may have changed while it waited for the locks: a
+	// rebuild that stopped is finished from its record, and one that was done
+	// has no force-push.json left.
+	if rec, ok, err := readRecord(s); err != nil {
+		return nil, err
+	} else if ok {
+		b := &Rebuild{Kept: rec.Kept}
+		if opt.BeforeApply != nil && rec.Phase == store.RebuildApply {
+			opt.BeforeApply()
+		}
+		if err := finish(s, rec, b); err != nil {
+			return nil, err
+		}
+		return b, nil
+	}
+	if _, ok, err := ReadForcePush(s); err != nil || !ok {
+		return nil, err
+	}
 	rec, b, err := prepare(s, opt)
 	if err != nil || rec == nil {
 		return nil, err
@@ -144,6 +162,11 @@ func prepare(s *store.Store, opt Options) (rec *rebuildRecord, b *Rebuild, err e
 	}
 	if len(st) > 0 {
 		return nil, nil, ErrDirtyRebuild
+	}
+	// Main is moved later, past the point of no return: a HEAD that is not on
+	// main would be found only then.
+	if err := r.HeadOnMain(); err != nil {
+		return nil, nil, err
 	}
 	oldHead, err := r.Head()
 	if err != nil {
@@ -211,6 +234,11 @@ func prepare(s *store.Store, opt Options) (rec *rebuildRecord, b *Rebuild, err e
 		Origin: head.String(), Mark: mark.String(), Items: items, Kept: b.Kept,
 	}
 	if err := writeRecord(s, rec); err != nil {
+		// Nothing has changed yet, and nothing would name the copy.
+		if b.Kept != "" {
+			err = errors.Join(err, osfs.RemoveAll(b.Kept))
+			b.Kept = ""
+		}
 		return nil, nil, err
 	}
 	return rec, b, nil
@@ -341,9 +369,9 @@ func taskOfPath(p string) (model.ULID, bool) {
 
 // replay puts the unpushed changes of oldHead back on head, the new head of
 // origin, as one commit off main; it returns that commit, or head when there
-// is nothing to put back. The files of
-// the tasks the new history lacks are left out of the merge, and a task of
-// them that the unpushed commits changed goes to b.Purged.
+// is nothing to put back. The files of the tasks the new history lacks are
+// left out of the merge, and a task of them that the unpushed commits changed
+// goes to b.Purged.
 func replay(s *store.Store, tracked, oldHead, head plumbing.Hash, opt Options, b *Rebuild) (plumbing.Hash, error) {
 	r := s.Repo()
 	mine, err := r.Between(oldHead, tracked)
@@ -370,7 +398,7 @@ func replay(s *store.Store, tracked, oldHead, head plumbing.Hash, opt Options, b
 		return ok && dropped[u]
 	}
 	// The merge is computed from the new head's side, so that its files are
-	// the changes to make to the clone; the rule is symmetric.
+	// the changes to make to the new head; the rule is symmetric.
 	opt.origin, opt.skip = head, skip
 	m, err := mergeTrees(r, nil, base, head, oldHead, opt) // head is new on origin: no index has it
 	if err != nil {

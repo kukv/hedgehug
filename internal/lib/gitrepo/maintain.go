@@ -319,8 +319,11 @@ func (r *Repo) reachable() ([]plumbing.Hash, error) {
 // PruneUnreachable leaves only what the references reach: it writes that as
 // one new pack, then removes every other pack and every loose object. Run it
 // after a history was rewritten, so that what the rewrite removed is gone
-// from the disk too. A file that cannot be removed (Windows, open file) is an
-// error; the others are removed, and running it again finishes it.
+// from the disk too, and after KeepMainRefs: the walk reads each reference as
+// a commit and does not follow a reference to a tag object, so one that is
+// left would not keep what it names. A file that cannot be removed (Windows,
+// open file) is an error; the others are removed, and running it again
+// finishes it.
 func (r *Repo) PruneUnreachable() error {
 	los, ok := r.r.Storer.(storer.LooseObjectStorer)
 	if !ok {

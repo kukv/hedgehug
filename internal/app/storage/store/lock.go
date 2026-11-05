@@ -26,9 +26,9 @@ func lockFile(path string, wait time.Duration, onMiss func()) (*osfs.Lock, error
 	return osfs.LockFile(path, wait, lockPoll, onMiss)
 }
 
-// ErrStoreGone means the directory of the store was removed or replaced (by
-// doctor --fix's rebuild, for one), before the lock was taken or while it was
-// waited for.
+// ErrStoreGone means the directory of the store was removed or replaced
+// before the lock was taken or while it was waited for. A rebuild after a
+// force push no longer replaces it.
 var ErrStoreGone = errors.New("the store directory was removed or replaced; run the command again")
 
 // acquireStore takes the lock file at path in the store at dir. onMiss, when

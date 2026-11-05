@@ -340,7 +340,7 @@ func (r *Repo) moveMain(h plumbing.Hash, paths []string, check func(data [][]byt
 		return err
 	}
 	if tree.IsZero() {
-		return errors.New("fast-forward to the zero commit")
+		return errors.New("move main to the zero commit")
 	}
 	data := make([][]byte, len(paths))
 	inTree := make([]bool, len(paths))
@@ -390,18 +390,27 @@ func (r *Repo) moveMain(h plumbing.Hash, paths []string, check func(data [][]byt
 
 var mainRef = plumbing.NewBranchReferenceName("main")
 
-// checkFastForward returns ErrWorkTreeChanged unless HEAD is a symbolic
-// reference to main, h descends from HEAD, and each path on disk is the same
-// as in HEAD or as in h, given by data and inTree (a path missing from both
-// is the same). A path already as in h is what a fast-forward that stopped
-// before moving the reference leaves; this one finishes it.
-func (r *Repo) checkFastForward(h plumbing.Hash, paths []string, data [][]byte, inTree []bool) error {
+// HeadOnMain returns ErrWorkTreeChanged unless HEAD is a symbolic reference
+// to main: a move of main would leave a HEAD elsewhere where it was.
+func (r *Repo) HeadOnMain() error {
 	ref, err := r.r.Storer.Reference(plumbing.HEAD)
 	if err != nil {
 		return err
 	}
 	if ref.Type() != plumbing.SymbolicReference || ref.Target() != mainRef {
 		return fmt.Errorf("%w: HEAD is not on main", ErrWorkTreeChanged)
+	}
+	return nil
+}
+
+// checkFastForward returns ErrWorkTreeChanged unless HEAD is a symbolic
+// reference to main, h descends from HEAD, and each path on disk is the same
+// as in HEAD or as in h, given by data and inTree (a path missing from both
+// is the same). A path already as in h is what a fast-forward that stopped
+// before moving the reference leaves; this one finishes it.
+func (r *Repo) checkFastForward(h plumbing.Hash, paths []string, data [][]byte, inTree []bool) error {
+	if err := r.HeadOnMain(); err != nil {
+		return err
 	}
 	head, err := r.Head()
 	if err != nil {
@@ -438,14 +447,10 @@ func (r *Repo) checkFastForward(h plumbing.Hash, paths []string, data [][]byte, 
 
 // checkMoveMain returns ErrWorkTreeChanged unless HEAD is a symbolic
 // reference to main at from or to, and each path on disk is as in from or as
-// in h, given by data and inTree.
+// in to, given by data and inTree.
 func (r *Repo) checkMoveMain(from, to plumbing.Hash, paths []string, data [][]byte, inTree []bool) error {
-	ref, err := r.r.Storer.Reference(plumbing.HEAD)
-	if err != nil {
+	if err := r.HeadOnMain(); err != nil {
 		return err
-	}
-	if ref.Type() != plumbing.SymbolicReference || ref.Target() != mainRef {
-		return fmt.Errorf("%w: HEAD is not on main", ErrWorkTreeChanged)
 	}
 	head, err := r.Head()
 	if err != nil {
