@@ -257,7 +257,7 @@ func (s *Server) graphql(w http.ResponseWriter, r *http.Request, login string) {
 		return
 	}
 	x := s.find(owner + "/" + name)
-	if x == nil || perm(x, login) == "" {
+	if x == nil || perm(x, login) == "" || s.uninstalled[strings.ToLower(owner)] {
 		writeJSON(w, 200, map[string]any{
 			"data":   map[string]any{"rateLimit": s.rate, "repository": nil},
 			"errors": []map[string]any{{"type": "NOT_FOUND", "path": []string{"repository"}, "message": "Could not resolve to a Repository"}},

@@ -45,6 +45,9 @@ type Server struct {
 	noIssueEdits bool // each PATCH of an issue fails
 
 	restricted map[string]bool // owners the GitHub App is not installed on, in lower case
+	// uninstalled are the owners whose repositories GitHub hides from the
+	// token of the App, in lower case; restricted ones it refuses instead.
+	uninstalled map[string]bool
 }
 
 // New makes a fake with the state st.
@@ -211,6 +214,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.graphql(w, r, login)
 	case r.Method == "GET" && r.URL.Path == "/user":
 		writeJSON(w, 200, map[string]string{"login": login})
+	case r.Method == "GET" && r.URL.Path == "/user/installations":
+		writeJSON(w, 200, map[string]any{"installations": s.installations(login)})
 	case r.Method == "GET" && r.URL.Path == "/user/repos":
 		var out []*Repo
 		for _, x := range s.st.Repos {

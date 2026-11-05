@@ -85,6 +85,8 @@ func (s *Server) admin(w http.ResponseWriter, r *http.Request) {
 		}
 	case "/_fakegh/restrict":
 		s.RestrictApp(b.Repo)
+	case "/_fakegh/uninstall":
+		s.UninstallApp(b.Repo)
 	case "/_fakegh/rate":
 		s.SetRateLimit(b.Remaining, b.Limit, time.Now().Add(time.Duration(b.ResetIn)*time.Second))
 	case "/_fakegh/label":
@@ -173,6 +175,11 @@ func (a Admin) SetRateLimit(remaining, limit int, resetIn time.Duration) error {
 // RestrictApp makes GitHub answer as for a GitHub App not installed on owner.
 func (a Admin) RestrictApp(owner string) error {
 	return a.post("/_fakegh/restrict", AdminBody{Repo: owner})
+}
+
+// UninstallApp makes GitHub hide the repositories of owner from the App.
+func (a Admin) UninstallApp(owner string) error {
+	return a.post("/_fakegh/uninstall", AdminBody{Repo: owner})
 }
 
 func (a Admin) Pull(what string, b AdminBody) error  { return a.post("/_fakegh/pr/"+what, b) }

@@ -378,7 +378,7 @@ inbox に種類 `automation`（結果）と `automation_rejected`（拒否）を
 - チップは1つの状態を、merged → draft → CI 失敗 → 修正依頼 → approved → open の順で選ぶ。PR が複数あるタスクは、マージされていない PR を先に見せ、残りを `+n` で示す
 - `review: none` と draft のレビューは `—` と出す
 - チップの位置は Foundations の順（状態の警告 → PR → 優先度 → 期限 → 担当者）
-- GitHub App の未インストールは、取得の 403 の応答（`Resource not accessible by integration`）で判定し、`ghstate` に残す
+- GitHub App の未インストールは、取得の 403 の応答（`Resource not accessible by integration`）か、404 のあとに `GET /user/installations` で App がその repo に届かないと分かったときに判定し、`ghstate` に残す。GitHub は private repo を App のないトークンから隠すので 404 になる（2026-11-05 に実物で確認）。App のトークンでなければ一覧は 403 で、判定しない
 - ルールの回数は、history の索引から `Hedgehug-Automation` の trailer を数える
 - アクティビティの拒否は、拒否を書いた取り込みのコミットを指して表示する
 

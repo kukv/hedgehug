@@ -37,9 +37,8 @@
 <div class="warn" role="note">
   <Icon name="warning" size={15} />
   <span class="text">
-    {missing.owner}
-    に Hedgehug の GitHub App がインストールされていません。{missing.repos.join("・")}
-    の PR と Issue の状態を取り込めません。
+    {missing.repos.join("・")}
+    に Hedgehug の GitHub App が入っていません。PR と Issue の状態を取り込めません。
   </span>
   {#if canSwitch}
     <Button size="sm" disabled={busy} onclick={() => void useGh()}>

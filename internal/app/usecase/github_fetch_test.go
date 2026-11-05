@@ -203,6 +203,23 @@ func TestGitHubStatusListsWhatWasNotReadYet(t *testing.T) {
 	}
 }
 
+func TestFetchNotesTheAppOfAPrivateRepositoryGitHubHides(t *testing.T) {
+	t.Parallel()
+	ts, fake := usecasetest.GitHubSession(t)
+	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web} })
+	fake.UninstallApp("org-a")
+	if r := fetch(t, ts); len(r.Warnings) != 1 {
+		t.Fatalf("warnings = %q", r.Warnings)
+	}
+	vs, err := usecase.GitHubStatus(ts.Session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vs) != 1 || !vs[0].AppMissing {
+		t.Fatalf("status = %+v", vs)
+	}
+}
+
 func TestFetchForgetsTheRepositoryNoTaskNames(t *testing.T) {
 	t.Parallel()
 	ts, fake := usecasetest.GitHubSession(t)

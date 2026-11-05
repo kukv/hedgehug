@@ -174,13 +174,13 @@ test("repo_accounts is edited and ordered, by the drag too", async ({ page, hh }
 test("the GitHub App that is not installed is told on the account", async ({ page, hh }) => {
   connect(hh);
   await repoTask(hh, "Read me");
-  hh.fakegh("repo", "restrict", "org-a");
+  hh.fakegh("repo", "uninstall", "org-a");
   hh.hh("sync");
 
   await hh.open(page, "/settings/accounts");
   await expect(page.getByRole("link", { name: /アカウントと認証/ })).toContainText("1");
   const warn = page.getByRole("article", { name: LOGIN }).getByRole("note");
-  await expect(warn).toContainText("org-a");
+  await expect(warn).toContainText("org-a/web");
   await expect(warn.getByRole("link", { name: "管理者にインストールを依頼" })).toHaveAttribute(
     "href",
     `https://github.com/organizations/org-a/settings/installations`,

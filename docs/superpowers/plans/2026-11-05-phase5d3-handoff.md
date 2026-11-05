@@ -8,6 +8,8 @@
 
 ## 実装で分かったこと
 
+- GitHub は App の入っていない private repo を 403 でなく 404 で隠す。`GET /user/installations` は GitHub App のトークン以外に 403 を返す（gh のトークンで確認）ので、トークンの種類で分けなくても判定できる
+- `fakegh repo restrict` は 403、`fakegh repo uninstall` は 404 の応答を作る
 - Svelte の変数に `set` と付けて `bind:value` すると、生成コードの `$.set` と衝突して落ちる（`source.equals is not a function`）
 - 依頼のリンクは Org の設定ページなので、個人 owner の repo では開けない。GitHub のエラーページになる
 - `gh のトークンで代わりに使う` の後も、警告は次の取得が成功するまで残る
@@ -17,6 +19,6 @@
 検証用 Org で次を行い、結果をここに書く。
 
 - [ ] `hh auth login <name>` の Device Flow でログインし、8 時間の期限の前にトークンが更新されることを `hh auth status` の残り時間で確かめる
-- [ ] Hedgehug の GitHub App を入れた Org で、`hh sync` が `hh-live` の PR を取り込む
-- [ ] App を外した Org の repo で、repo 名付きの警告が出て同期が成功のままで、`app_missing` が立って設定の画面に警告が出る（`Resource not accessible by integration` の応答）
+- [x] Hedgehug の GitHub App を入れた Org で、`hh sync` が `hh-live` の PR を取り込む（2026-11-05。Device Flow のトークンで `bright-room-sandbox/hh-live#1` のタイトル・ブランチ・状態が入った）
+- [x] App を外した Org の repo で、repo 名付きの警告が出て同期が成功のままで、`app_missing` が立つ（2026-11-05）。実物の private repo は 403 でなく 404 を返したので判定を足した（plan の決定 17）。画面の表示は E2E で確かめた
 - [ ] リポジトリに secret `HH_LIVE_ORG`・`HH_LIVE_TOKEN` を入れ、`hh-live` に PR を 1 件以上置き、`github-live` を `workflow_dispatch` で流して通る

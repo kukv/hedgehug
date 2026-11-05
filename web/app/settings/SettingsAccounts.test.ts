@@ -71,10 +71,7 @@ describe("SettingsAccounts: the GitHub App", () => {
   it("warns on the account that reads the repository, and links to the organization", async () => {
     mount({ list: [acct("a")], github: [missing] });
     const warn = await within(card("a")).findByRole("note");
-    expect(warn.textContent).toMatch(
-      /org-b\s+に Hedgehug の GitHub App がインストールされていません/,
-    );
-    expect(warn.textContent).toMatch(/org-b\/ops\s+の PR と Issue/);
+    expect(warn.textContent).toMatch(/org-b\/ops\s+に Hedgehug の GitHub App が入っていません/);
     expect(within(warn).getByRole("link", { name: "管理者にインストールを依頼" })).toHaveAttribute(
       "href",
       "https://github.com/organizations/org-b/settings/installations",

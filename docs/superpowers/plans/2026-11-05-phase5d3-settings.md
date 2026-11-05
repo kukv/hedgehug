@@ -17,7 +17,7 @@
 - コミットの署名は 1Password。失敗したら index に積んで利用者に知らせる
 - `make` は `MAKEFLAGS=-j10`。E2E は `make e2e`
 - 既存のテストの期待値は、この plan が明示したものの他は変えない（`SettingsNav` の項目が 1 つ増える。`ProjectSettings.test` と `SettingsAccounts.test` の「自動化・GitHub 連携が出ない」という断定を外す）
-- Go は `automations.List` が空のとき `null` でなく `[]` を返す直しだけ。API の形は変わらない
+- Go は `automations.List` の `[]` と決定 17 の判定だけ。API の形は変わらない
 - 閲覧のみの Store は `useReadOnlySentence` で書き込みを無効にし、`why` で理由を出す
 
 ## この回で決めたこと
@@ -39,6 +39,7 @@
 | 13 | `repo_accounts` | ドラッグと `上へ`・`下へ` のボタン、削除、`ルールを追加`。操作のたびに全体を `PUT`。CliLine はなし | CLI がない。ボタンはキーボードの代わり |
 | 14 | App の警告 | アカウントの `app_missing` の repo を owner でまとめて出す。`gh のトークンで代わりに使う` は gh のアカウントには出さない | すでに gh を使っている |
 | 15 | ナビのバッジ | `アカウントと認証` に App が入っていない repo の数。`sync.state` の `github.app_missing` の合計 | キャンバス。新しい読み取りが要らない |
+| 17 | 未インストールの判定 | 404 のあと `GET /user/installations`（選択した repo のときは `/user/installations/{id}/repositories`）で確かめる | 実物の GitHub は private repo に 403 でなく 404 を返した。手の確認で判明。2026-11-05 利用者が決定 |
 | 16 | 取得時刻の見出し | `fetchLine` と「レート制限 4,812 / 5,000」。残りが最も少ない repo の値。読めていなければ出さない | キャンバス |
 
 ## 5d の表との対応
