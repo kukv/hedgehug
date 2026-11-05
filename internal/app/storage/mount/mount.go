@@ -90,6 +90,10 @@ func (m *Mounted) IndexOpened() bool {
 
 // reopen opens the store and its index again; With holds m.use.
 func (m *Mounted) reopen() (*index.Index, error) {
+	// As Open: a work tree part old, part new is not read.
+	if store.RebuildPhaseIn(m.Entry.Path) == store.RebuildApply {
+		return nil, &store.LeftoverError{Name: m.Name}
+	}
 	s, err := store.Open(m.Entry.Path)
 	if err != nil {
 		return nil, err
@@ -201,6 +205,9 @@ func Open(c *config.Config, opt Options) *Set {
 func SharedPrefixes(c *config.Config) func(prefix string) bool {
 	seen := map[string]int{} // upper-cased prefix: number of stores
 	for _, e := range c.Stores {
+		if store.RebuildPhaseIn(e.Path) == store.RebuildApply {
+			continue // Open skips it too
+		}
 		s, err := store.Open(e.Path)
 		if err != nil {
 			continue

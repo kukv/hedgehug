@@ -8,8 +8,32 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/storage/mount/mounttest"
 
+	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 )
+
+// A store held open when its rebuild stopped in the apply phase is not opened
+// again by With, and does not count for the prefixes the stores share.
+func TestAStoppedApplyIsNotOpenedAgain(t *testing.T) {
+	t.Parallel()
+	a := mounttest.NewStoreAt(t, "org-a", "API")
+	b := mounttest.NewStoreAt(t, "org-b", "API")
+	c := &config.Config{Stores: []config.StoreEntry{a, b}}
+	if !SharedPrefixes(c)("API") {
+		t.Fatal("API is not shared by two stores that open")
+	}
+	set := Open(c, Options{})
+	m := set.Stores[0]
+	writeRebuild(t, b.Path, "apply")
+	if SharedPrefixes(c)("API") {
+		t.Error("a store in the apply phase counts for the prefix")
+	}
+	writeRebuild(t, a.Path, "apply")
+	var le *store.LeftoverError
+	if _, err := m.reopen(); !errors.As(err, &le) || le.Name != "org-a" {
+		t.Errorf("reopen = %v, want a LeftoverError of org-a", err)
+	}
+}
 
 func writeRebuild(t *testing.T, dir, phase string) {
 	t.Helper()
