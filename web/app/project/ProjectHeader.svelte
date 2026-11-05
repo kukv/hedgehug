@@ -20,6 +20,7 @@
   const did = useDisplayId(c.stores);
   const at = (t: ProjectTab) => router.href({ name: "project", ulid, tab: t });
   const items = $derived([
+    { label: "概要", href: at("overview"), current: tab === "overview" },
     { label: "ツリー", href: at("tree"), current: tab === "tree" },
     { label: "カンバン", href: at("kanban"), current: tab === "kanban" },
     { label: "テーブル", href: at("table"), current: tab === "table" },

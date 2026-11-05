@@ -1,8 +1,10 @@
 <script lang="ts">
+  import type { ImportTarget } from "../../core/github";
   import Icon from "../icons/Icon.svelte";
   import { kbdLabel } from "../keys";
   import Button from "../ui/Button.svelte";
   import CliLine from "../ui/CliLine.svelte";
+  import IssueImportDialog from "./IssueImportDialog.svelte";
 
   type Props = {
     variant: "empty" | "nomatch" | "noworkspace" | "notfound";
@@ -11,6 +13,7 @@
     note?: string;
     onCreate?: () => void;
     createOff?: string; // why the create button cannot be used (it stays, disabled)
+    importTarget?: ImportTarget; // an empty project can take in issues
     onClear?: () => void;
     onHome?: () => void;
     commands?: string[];
@@ -22,10 +25,13 @@
     note,
     onCreate,
     createOff,
+    importTarget,
     onClear,
     onHome,
     commands = [],
   }: Props = $props();
+
+  let importing = $state(false);
 
   const notfoundLabel = $derived(
     scope === "project"
@@ -51,6 +57,9 @@
       <Button variant="primary" disabled={!!createOff} why={createOff} onclick={onCreate}>
         タスクを作成 <kbd>{kbdLabel("c")}</kbd>
       </Button>
+    {/if}
+    {#if importTarget}
+      <Button onclick={() => (importing = true)}>Issue から取り込む</Button>
     {/if}
   </div>
 {:else if variant === "notfound"}
@@ -80,6 +89,10 @@
       <Button size="sm" onclick={onClear}>フィルタを解除</Button>
     {/if}
   </div>
+{/if}
+
+{#if importing && importTarget}
+  <IssueImportDialog target={importTarget} onclose={() => (importing = false)} />
 {/if}
 
 <style>

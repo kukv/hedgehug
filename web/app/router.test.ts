@@ -57,6 +57,7 @@ describe("parseRoute", () => {
     ["/inbox", { name: "inbox", tab: "all" }],
     ["/inbox/", { name: "inbox", tab: "all" }],
     ["/inbox/extra", { name: "home" }],
+    ["/projects/P1/overview", { name: "project", ulid: "P1", tab: "overview" }],
     ["/activity", { name: "activity", workspaces: [], sync: "" }],
     ["/activity/", { name: "activity", workspaces: [], sync: "" }],
     ["/activity/extra", { name: "home" }],

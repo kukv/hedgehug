@@ -6,6 +6,7 @@
   import StoreBands from "../states/StoreBands.svelte";
   import { NO_CANCELED } from "../tree/filter";
   import ProjectHeader from "./ProjectHeader.svelte";
+  import ProjectOverview from "./ProjectOverview.svelte";
   import ProjectSettings from "./ProjectSettings.svelte";
 
   // The page of a project: the heading with the tabs, and the tab. The tabs read the project
@@ -26,7 +27,9 @@
   {/if}
   <ProjectHeader {ulid} project={scope.project} workspace={scope.workspace} {tab} />
   <div class="body">
-    {#if tab === "tree"}
+    {#if tab === "overview"}
+      <ProjectOverview {ulid} />
+    {:else if tab === "tree"}
       <TreeTab {view} {query} onquery={(q) => (query = q)} />
     {:else if tab === "settings"}
       <ProjectSettings {ulid} />

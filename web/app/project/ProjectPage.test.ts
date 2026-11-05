@@ -125,7 +125,7 @@ describe("ProjectPage", () => {
     // as the heading of the tree did: no title yet, but the tabs do not pop in later
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("");
     const tabs = screen.getByRole("navigation", { name: "ビューの切り替え" });
-    expect(within(tabs).getAllByRole("link")).toHaveLength(4);
+    expect(within(tabs).getAllByRole("link")).toHaveLength(5);
     expect(within(tabs).getByRole("link", { name: "カンバン" })).toHaveAttribute(
       "aria-current",
       "page",

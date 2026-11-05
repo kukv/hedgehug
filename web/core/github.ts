@@ -58,6 +58,12 @@ export function prChip(links: readonly Link[] | undefined): PrChip | null {
 /** <host>/<owner>/<repo> of a ref. */
 export const repoOf = (ref: string): string => ref.split("/").slice(0, 3).join("/");
 
+/** The repository as the reads name it: <host>/<owner>/<repo>, github.com when no host is written. */
+export function fullRepo(repo: string): string {
+  const r = repo.trim().toLowerCase();
+  return r.split("/").length === 2 ? `github.com/${r}` : r;
+}
+
 /** The repository without github.com, as people write it. */
 export const repoLabel = (repo: string): string => repo.replace(/^github\.com\//, "");
 
@@ -173,6 +179,9 @@ export function ruleHint(r: Rule): string | null {
   }
   return null;
 }
+
+/** Where issues are taken in: a project of a Store. */
+export type ImportTarget = { store: string; parent: string; parentId: string };
 
 export type FetchTimes = { last?: string; next?: string; slowedUntil?: string };
 

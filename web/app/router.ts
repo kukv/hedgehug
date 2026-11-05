@@ -4,7 +4,7 @@ import type { Layout } from "../core/views";
 
 export type { Layout };
 export type WorkspaceTab = "overview" | "tree" | "kanban" | "table" | "settings";
-export type ProjectTab = "tree" | "kanban" | "table" | "settings";
+export type ProjectTab = "overview" | "tree" | "kanban" | "table" | "settings";
 // "general", "accounts" and "stores" are of this machine and names no Store; the pages of a Store carry it.
 // The first tab of each is the one without ?tab=.
 export const SCHEMA_TABS = ["statuses", "kinds", "props", "workflow"] as const;
@@ -33,7 +33,7 @@ export type Route =
   | ({ name: "settings" } & SettingsPage);
 
 const WORKSPACE_TABS: readonly string[] = ["tree", "kanban", "table", "settings"];
-const PROJECT_TABS: readonly string[] = ["tree", "kanban", "table", "settings"];
+const PROJECT_TABS: readonly string[] = ["overview", "tree", "kanban", "table", "settings"];
 const LAYOUTS: readonly string[] = ["tree", "kanban", "table"];
 
 function decode(s: string): string {

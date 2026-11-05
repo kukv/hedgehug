@@ -5,6 +5,7 @@ import {
   fetchedText,
   fetchLine,
   fetchTimes,
+  fullRepo,
   type GitHubRepo,
   issueState,
   type Link,
@@ -90,6 +91,11 @@ describe("the addresses of a link", () => {
     expect(repoLabel("github.com/org-a/web")).toBe("org-a/web");
     expect(repoLabel("ghe.example.com/org-a/web")).toBe("ghe.example.com/org-a/web");
     expect(linkUrl(pr(88))).toBe("https://github.com/org-a/web/pull/88");
+  });
+
+  it("writes a repository with its host", () => {
+    expect(fullRepo(" Org-A/Web ")).toBe("github.com/org-a/web");
+    expect(fullRepo("ghe.example.com/org-a/web")).toBe("ghe.example.com/org-a/web");
   });
 
   it("names the host of a link that is not on github.com", () => {
