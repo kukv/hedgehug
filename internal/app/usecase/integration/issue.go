@@ -178,6 +178,15 @@ func CreateIssue(ss *usecase.Session, arg string, in IssueInput) (IssueResult, e
 		return IssueResult{}, usecase.GithubErr(err, acct, "open an issue in "+repo)
 	}
 	ref := model.GitHubRef{Repo: repo, Kind: model.LinkIssue, Number: n}
+	// The issue is there: from here it gets linked, or a second run would
+	// open another. If it does not close, the base says open, and the next
+	// sync closes it.
+	if v, ok := vals["status"]; ok && v[0] != automation.IssueOpen {
+		if err := closeIssue(cl, repo, n, v[0]); err != nil {
+			warnings = append(warnings, usecase.GithubErr(err, acct, "close "+ref.Label()).Error())
+			vals["status"] = []string{automation.IssueOpen}
+		}
+	}
 	tr, err := writeLink(ss, s, ix, e, "issue", ref, func(_ *store.Store, t *model.Task, ref model.GitHubRef) error {
 		return linkPushed(t, ref, vals)
 	})
@@ -187,12 +196,14 @@ func CreateIssue(ss *usecase.Session, arg string, in IssueInput) (IssueResult, e
 	return IssueResult{TaskResult: tr, Ref: ref, Warnings: warnings}, nil
 }
 
-// openIssue opens the issue of t with vals, and closes it when vals say so.
+// openIssue opens the issue of t with vals. It opens as open, whatever vals
+// say of its status.
 func openIssue(cl *github.Client, res *usecase.IssueResolver, t *model.Task, repo string, vals model.IssueValues) (int, error) {
 	owner, name := ownerName(repo)
 	send := model.IssueValues{}
 	for f, v := range vals {
-		if f != "status" && f != "title" && !(model.IsIssueList(f) && len(v) == 0) && !(f == "milestone" && v[0] == "") {
+		nothing := len(v) == 0 || f == "milestone" && v[0] == ""
+		if f != "status" && f != "title" && !nothing {
 			send[f] = v
 		}
 	}
@@ -213,17 +224,14 @@ func openIssue(cl *github.Client, res *usecase.IssueResolver, t *model.Task, rep
 	if u.Milestone != nil {
 		in.Milestone = *u.Milestone
 	}
-	n, err := cl.CreateIssue(owner, name, in)
-	if err != nil {
-		return 0, err
-	}
-	if v, ok := vals["status"]; ok && v[0] != automation.IssueOpen {
-		state, reason := usecase.IssueState(v[0])
-		if err := cl.UpdateIssue(owner, name, n, github.IssueUpdate{State: &state, StateReason: &reason}); err != nil {
-			return n, fmt.Errorf("issue %d is open and could not be closed: %w", n, err)
-		}
-	}
-	return n, nil
+	return cl.CreateIssue(owner, name, in)
+}
+
+// closeIssue closes the issue n as the token says.
+func closeIssue(cl *github.Client, repo string, n int, token string) error {
+	owner, name := ownerName(repo)
+	state, reason := usecase.IssueState(token)
+	return cl.UpdateIssue(owner, name, n, github.IssueUpdate{State: &state, StateReason: &reason})
 }
 
 // linkPushed links t to the new issue ref, with vals as what the two hold.

@@ -18,18 +18,18 @@ import (
 
 const web = "github.com/org-a/web"
 
-func issueOn(t *testing.T, fake *fakegh.Server, n int) *fakegh.Issue {
+func firstIssue(t *testing.T, fake *fakegh.Server) *fakegh.Issue {
 	t.Helper()
 	r, ok := fake.Repo("org-a/web")
 	if !ok {
 		t.Fatal("no repository")
 	}
 	for _, x := range r.Issues {
-		if x.Number == n {
+		if x.Number == 1 {
 			return x
 		}
 	}
-	t.Fatalf("no issue %d", n)
+	t.Fatal("no issue 1")
 	return nil
 }
 
@@ -84,7 +84,7 @@ func TestCreateIssue(t *testing.T) {
 	if op := usecasetest.LastOp(t, ts); op != "issue" {
 		t.Errorf("op %s", op)
 	}
-	got := issueOn(t, fake, 1)
+	got := firstIssue(t, fake)
 	if got.Title != "a" || got.Body != "text\n\nhedgehug:"+x.ULID.String() || !slices.Equal(got.Labels, []string{"bug"}) || !slices.Equal(got.Assignees, []string{"alice"}) {
 		t.Errorf("issue %+v", got)
 	}
@@ -106,7 +106,7 @@ func TestCreateIssue(t *testing.T) {
 	if op := usecasetest.LastOp(t, ts); op != before {
 		t.Errorf("op after the read: %s", op)
 	}
-	if issueOn(t, fake, 1).UpdatedAt != at {
+	if firstIssue(t, fake).UpdatedAt != at {
 		t.Error("the issue was written again")
 	}
 }
@@ -118,7 +118,7 @@ func TestCreateIssueForAClosedTask(t *testing.T) {
 	if _, err := integration.CreateIssue(ts.Session, "ME-1", integration.IssueInput{}); err != nil {
 		t.Fatal(err)
 	}
-	if got := issueOn(t, fake, 1); got.State != "closed" || got.StateReason != "not_planned" {
+	if got := firstIssue(t, fake); got.State != "closed" || got.StateReason != "not_planned" {
 		t.Errorf("issue %+v", got)
 	}
 	g, err := taskAt(t, ts, "ME-1").GitHub()
@@ -126,6 +126,32 @@ func TestCreateIssueForAClosedTask(t *testing.T) {
 		t.Errorf("gh %+v, %v", g, err)
 	}
 	reread(t, ts)
+}
+
+// The issue is there when it does not close: it is linked, so that a second
+// run opens no other, and the next sync closes it.
+func TestCreateIssueThatDoesNotClose(t *testing.T) {
+	t.Parallel()
+	ts, fake := usecasetest.GitHubSession(t)
+	ts.AddTask("a", func(x *model.Task) { x.Repos = []string{web}; x.Status = "done" })
+	fake.RefuseIssueEdits(true)
+	r, err := integration.CreateIssue(ts.Session, "ME-1", integration.IssueInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "close org-a/web#1") {
+		t.Errorf("warnings %v", r.Warnings)
+	}
+	cur := taskAt(t, ts, "ME-1")
+	g, err := cur.GitHub()
+	if err != nil || len(cur.Links) != 1 || g.Issues[0].State != "open" {
+		t.Fatalf("links %+v, gh %+v, %v", cur.Links, g, err)
+	}
+	fake.RefuseIssueEdits(false)
+	reread(t, ts)
+	if got := firstIssue(t, fake); got.State != "closed" {
+		t.Errorf("issue %+v", got)
+	}
 }
 
 func TestCreateIssueLeavesOutWhatGitHubDoesNotKnow(t *testing.T) {
@@ -141,7 +167,7 @@ func TestCreateIssueLeavesOutWhatGitHubDoesNotKnow(t *testing.T) {
 	if w := strings.Join(r.Warnings, "\n"); !strings.Contains(w, `label "ghost"`) || !strings.Contains(w, `assignee "nobody"`) {
 		t.Errorf("warnings %v", r.Warnings)
 	}
-	if got := issueOn(t, fake, 1); len(got.Labels) != 0 || len(got.Assignees) != 0 {
+	if got := firstIssue(t, fake); len(got.Labels) != 0 || len(got.Assignees) != 0 {
 		t.Errorf("issue %+v", got)
 	}
 }
@@ -158,7 +184,7 @@ func TestCreateIssueChoosesTheRepository(t *testing.T) {
 	if _, err := integration.CreateIssue(ts.Session, "ME-1", integration.IssueInput{Repo: "org-a/web"}); err != nil {
 		t.Fatal(err)
 	}
-	issueOn(t, fake, 1)
+	firstIssue(t, fake)
 	// A second issue in the repository is a mistake.
 	_, err = integration.CreateIssue(ts.Session, "ME-1", integration.IssueInput{Repo: "org-a/web"})
 	if !errors.As(err, &ue) || ue.Code != "link.exists" {

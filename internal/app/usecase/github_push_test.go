@@ -97,6 +97,23 @@ func TestPushDoesNotSeeLineEndings(t *testing.T) {
 	}
 }
 
+// GitHub trims a title.
+func TestPushDoesNotSeeWhiteSpaceAroundTheTitle(t *testing.T) {
+	t.Parallel()
+	ts, fake := usecasetest.GitHubSession(t)
+	ts.AddTask("a ", func(x *model.Task) { x.Repos = []string{web} })
+	n, err := fake.OpenIssue("org-a/web", "a", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	link(t, ts, n, model.SyncPush)
+	at := onGitHub(t, fake, n).UpdatedAt
+	refetch(t, ts)
+	if onGitHub(t, fake, n).UpdatedAt != at {
+		t.Error("the issue was written again")
+	}
+}
+
 func TestPushFollowsTheTask(t *testing.T) {
 	t.Parallel()
 	ts, fake := usecasetest.GitHubSession(t)

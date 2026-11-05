@@ -20,14 +20,14 @@ func (te *testEnv) withIssues() *fakegh.Server {
 	return fake
 }
 
-// fails runs a command that ends in code, and returns what it said.
-func (te *testEnv) fails(code int, args ...string) (stdout, stderr string) {
+// misused runs a command that ends in a usage error, and returns what it said.
+func (te *testEnv) misused(args ...string) string {
 	te.t.Helper()
-	got, stdout, stderr := te.run(args...)
-	if got != code {
-		te.t.Errorf("%v: code %d, want %d\n%s", args, got, code, stderr)
+	code, _, stderr := te.run(args...)
+	if code != 2 {
+		te.t.Errorf("%v: code %d, want 2\n%s", args, code, stderr)
 	}
-	return stdout, stderr
+	return stderr
 }
 
 func TestIssueCommand(t *testing.T) {
@@ -58,10 +58,10 @@ func TestIssueCommandErrors(t *testing.T) {
 	te := newTestEnv(t)
 	te.withIssues()
 	te.ok("add", "a")
-	if _, errOut := te.fails(2, "issue"); !strings.Contains(errOut, "accepts 1 arg") && errOut == "" {
+	if errOut := te.misused("issue"); !strings.Contains(errOut, "accepts 1 arg") && errOut == "" {
 		t.Errorf("no argument: %s", errOut)
 	}
-	if _, errOut := te.fails(2, "issue", "ME-1", "--repo", "nope"); !strings.Contains(errOut, "want owner/repo") {
+	if errOut := te.misused("issue", "ME-1", "--repo", "nope"); !strings.Contains(errOut, "want owner/repo") {
 		t.Errorf("bad repo: %s", errOut)
 	}
 }
@@ -95,10 +95,10 @@ func TestGHImportCommand(t *testing.T) {
 	if r.Skipped != 2 || r.Created == nil || r.Warnings == nil {
 		t.Errorf("json %+v", r)
 	}
-	if _, errOut := te.fails(2, "gh", "import", "org-a/web"); !strings.Contains(errOut, "label") {
+	if errOut := te.misused("gh", "import", "org-a/web"); !strings.Contains(errOut, "label") {
 		t.Errorf("no label: %s", errOut)
 	}
-	if _, errOut := te.fails(2, "gh"); !strings.Contains(errOut, "a subcommand is needed") {
+	if errOut := te.misused("gh"); !strings.Contains(errOut, "a subcommand is needed") {
 		t.Errorf("no subcommand: %s", errOut)
 	}
 }

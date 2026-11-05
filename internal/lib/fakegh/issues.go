@@ -9,6 +9,13 @@ import (
 	"strings"
 )
 
+// RefuseIssueEdits makes each PATCH of an issue fail, or stops that.
+func (s *Server) RefuseIssueEdits(on bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.noIssueEdits = on
+}
+
 // ReopenIssue opens a closed issue.
 func (s *Server) ReopenIssue(repo string, number int) error {
 	return s.changeIssue(repo, number, func(i *Issue) { i.State, i.StateReason = "open", "" })
@@ -185,6 +192,10 @@ func (s *Server) createIssue(w http.ResponseWriter, r *http.Request, x *Repo, lo
 }
 
 func (s *Server) patchIssue(w http.ResponseWriter, r *http.Request, x *Repo, number, login string) {
+	if s.noIssueEdits {
+		fail(w, http.StatusBadGateway, "Server Error")
+		return
+	}
 	if rank(perm(x, login)) < rank("write") {
 		fail(w, http.StatusForbidden, "Resource not accessible by personal access token")
 		return

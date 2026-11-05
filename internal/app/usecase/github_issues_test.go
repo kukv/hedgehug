@@ -379,6 +379,25 @@ func TestTwoMirrorsTheFirstHasTheField(t *testing.T) {
 	}
 }
 
+// The first link keeps its fields while it cannot be read.
+func TestAnIssueThatIsGoneKeepsItsFields(t *testing.T) {
+	t.Parallel()
+	ts, fake := usecasetest.GitHubSession(t)
+	first := issueTask(t, ts, fake, model.SyncMirror)
+	m, err := fake.OpenIssue("org-a/web", "other", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	link(t, ts, m, model.SyncMirror)
+	if err := fake.DropIssue("org-a/web", first); err != nil {
+		t.Fatal(err)
+	}
+	refetch(t, ts)
+	if got := taskIn(t, ts, "me", "ME-1").Title; got != "a" {
+		t.Errorf("title %s", got)
+	}
+}
+
 func TestLinkModeTouchesNothing(t *testing.T) {
 	t.Parallel()
 	ts, fake := usecasetest.GitHubSession(t)

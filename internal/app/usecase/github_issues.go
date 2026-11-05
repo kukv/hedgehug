@@ -48,7 +48,7 @@ func IssueToken(state, reason string) string {
 // GitHubIssueValues is what x holds, as it compares.
 func GitHubIssueValues(x github.Issue) model.IssueValues {
 	return model.IssueValues{
-		"title":     {x.Title},
+		"title":     {strings.TrimSpace(x.Title)},
 		"body":      {model.StripMark(x.Body)},
 		"status":    {IssueToken(x.State, x.StateReason)},
 		"assignees": sortedLower(x.Assignees),
@@ -90,7 +90,7 @@ func TaskIssueValues(t *model.Task, rules *automation.File, e *schema.Effective,
 		}
 	}
 	return model.IssueValues{
-		"title":     {t.Title},
+		"title":     {strings.TrimSpace(t.Title)},
 		"body":      {model.StripMark(t.Body)},
 		"status":    {automation.StatusToken(st.Category)},
 		"assignees": sortedLower(logins),
@@ -174,6 +174,15 @@ func planMirror(t *model.Task, got fetched, rules *automation.File, e *schema.Ef
 		if l.Type != model.LinkIssue || l.Sync != model.SyncMirror {
 			continue
 		}
+		// A link that was not read keeps its fields: the next link does not
+		// get them for one fetch.
+		var fields []string
+		for _, f := range rules.IssueFields.For(l) {
+			if !taken[f] {
+				taken[f] = true
+				fields = append(fields, f)
+			}
+		}
 		ref := model.CanonRef(l.Ref)
 		x, read := got.issues[ref]
 		at := slices.IndexFunc(g.Issues, func(i model.IssueState) bool { return model.CanonRef(i.Ref) == ref })
@@ -183,13 +192,6 @@ func planMirror(t *model.Task, got fetched, rules *automation.File, e *schema.Ef
 		base, err := g.Issues[at].Values()
 		if err != nil {
 			return nil, err
-		}
-		var fields []string
-		for _, f := range rules.IssueFields.For(l) {
-			if !taken[f] {
-				taken[f] = true
-				fields = append(fields, f)
-			}
 		}
 		host := repoHost(repoOf(ref))
 		gh := GitHubIssueValues(x)

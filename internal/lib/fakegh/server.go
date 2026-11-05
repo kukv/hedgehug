@@ -41,6 +41,8 @@ type Server struct {
 	refresh map[string]string  // refresh token → login
 	nextID  int
 	rate    rateLimit
+
+	noIssueEdits bool // each PATCH of an issue fails
 }
 
 // New makes a fake with the state st.
