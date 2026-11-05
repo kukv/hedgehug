@@ -93,7 +93,6 @@ const (
 // Replaced by tests.
 var (
 	beforeCommit = func() {} // runs before each fast-forward, merge or repair commit
-	onFullRepair = func() {} // runs when the repair reads every file of HEAD
 )
 
 const (
@@ -844,7 +843,6 @@ func repairHead(s *store.Store, ix *index.Index, opt Options, res *Result) error
 		}
 		prefix := "workspaces/"
 		if full {
-			onFullRepair()
 			prefix = ""
 		}
 		snap, err := newSnapshot(r, tree, prefix, nil)

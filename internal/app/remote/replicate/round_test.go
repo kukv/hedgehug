@@ -97,20 +97,19 @@ func TestSetupReadsAttributes(t *testing.T) {
 	}
 }
 
+// A clean store reads the workspaces alone: a task file that cannot be read
+// does not stop the sync, as it would if the repair read every file.
 func TestCleanStoreSkipsFullRepair(t *testing.T) {
 	c := newCluster(t, 1)
-	n := 0
-	replace(t, &onFullRepair, func() { n++ })
 	a := c.addTask(0, "a")
 	c.sync(0)
-	if n != 0 {
-		t.Errorf("a clean store read every file %d times", n)
-	}
 	b := c.addTask(0, "b")
 	c.set(0, b.ULID, func(t *model.Task) { t.ID = a.ID })
-	if r := c.sync(0); n != 1 || len(r.Repaired) != 1 {
-		t.Errorf("full repairs %d, repaired %+v", n, r.Repaired)
+	if r := c.sync(0); len(r.Repaired) != 1 {
+		t.Errorf("repaired %+v", r.Repaired)
 	}
+	c.hideFile(0, model.TaskPath(a.ULID))
+	c.sync(0)
 }
 
 func TestHeadMovedCapped(t *testing.T) {
@@ -136,14 +135,15 @@ func TestHeadMovedCapped(t *testing.T) {
 // file.
 func TestPrefixDuplicateInHeadBeforeSync(t *testing.T) {
 	c := newCluster(t, 1)
-	n := 0
-	replace(t, &onFullRepair, func() { n++ })
+	x := c.addTask(0, "x")
+	c.sync(0) // the index of HEAD is built; a later sync reads what changed
 	w := &model.Workspace{ULID: model.NewULID(), Name: "api", IDPrefix: "WEB", Created: time.Now(), PrefixSet: time.Now()}
 	b, err := w.Encode()
 	if err != nil {
 		t.Fatal(err)
 	}
 	c.putFile(0, model.WorkspacePath(w.ULID), string(b))
+	c.hideFile(0, model.TaskPath(x.ULID)) // a task file that cannot be read
 	for i := range 2 {
 		r := c.sync(0)
 		if !slices.ContainsFunc(r.Repaired, func(x merge.Repaired) bool {
@@ -151,9 +151,6 @@ func TestPrefixDuplicateInHeadBeforeSync(t *testing.T) {
 		}) {
 			t.Errorf("sync %d: repaired = %+v", i, r.Repaired)
 		}
-	}
-	if n != 0 {
-		t.Errorf("read every file %d times", n)
 	}
 }
 
