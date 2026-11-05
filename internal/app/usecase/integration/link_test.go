@@ -89,6 +89,56 @@ func TestLinkIssueModes(t *testing.T) {
 	}
 }
 
+func TestLinkIssueDefaultModeIsTheFiles(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.AddTask("a", nil)
+	ts.WriteAndCommit(model.AutomationsPath, "issue_fields:\n  default_sync: mirror\n")
+	if _, err := integration.Link(ts.Session, "ME-1", integration.LinkInput{Issue: "o/r#1"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := integration.Link(ts.Session, "ME-1", integration.LinkInput{Issue: "o/r#2", Sync: "push"}); err != nil {
+		t.Fatal(err)
+	}
+	if l := linksOf(t, ts.Session, "ME-1"); l[0].Sync != model.SyncMirror || l[1].Sync != model.SyncPush {
+		t.Fatalf("links = %+v", l)
+	}
+	// Linking again without a mode is not a change to the default.
+	_, err := integration.Link(ts.Session, "ME-1", integration.LinkInput{Issue: "o/r#2"})
+	usecasetest.MustCode(t, err, usecase.KindInvalid, "link.exists")
+}
+
+// The mode goes into the task, so it is not guessed from a file that cannot
+// be read. What does not need the file goes on.
+func TestLinkIssueWithAnUnusableFile(t *testing.T) {
+	t.Parallel()
+	for name, c := range map[string]struct {
+		file string
+		code string
+	}{
+		"broken":        {file: "rules: 3\n", code: "automation.invalid"},
+		"unknown value": {file: "issue_fields:\n  default_sync: off\n", code: "automation.invalid"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			ts := usecasetest.New(t)
+			ts.AddTask("a", nil)
+			ts.WriteAndCommit(model.AutomationsPath, c.file)
+			_, err := integration.Link(ts.Session, "ME-1", integration.LinkInput{Issue: "o/r#1"})
+			usecasetest.MustCode(t, err, usecase.KindInvalid, c.code)
+			if l := linksOf(t, ts.Session, "ME-1"); len(l) != 0 {
+				t.Fatalf("links = %+v", l)
+			}
+			if _, err := integration.Link(ts.Session, "ME-1", integration.LinkInput{Issue: "o/r#1", Sync: "link"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := integration.Link(ts.Session, "ME-1", integration.LinkInput{PR: "o/r#2"}); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func TestLinkInputs(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
