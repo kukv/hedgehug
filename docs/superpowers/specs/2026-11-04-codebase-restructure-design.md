@@ -117,7 +117,7 @@ api/openapi.yaml            今のまま
 
 ### 2.3 usecase の分け方
 
-直下（パッケージ `usecase`）は、どの領域からも使う土台にする。領域は 16 個（11 個に回 4 で watch を足し、フェーズ 5a で integration、5b で automations、6a で planning と worklogs を足した）。
+直下（パッケージ `usecase`）は、どの領域からも使う土台にする。領域は 17 個（11 個に回 4 で watch を足し、フェーズ 5a で integration、5b で automations、6a で planning と worklogs、6b で templates を足した）。
 
 - session（Store を開く、書き手、1 操作 1 コミット）、errors、TaskView などの返す型（旧 view.go）、readonly、conn（GitHub への接続とアカウントの選択）、ResolveRef（旧 mount_ops.go）
 - mount から移す ID の解決、context から移す行き先の判断
