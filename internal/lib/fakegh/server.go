@@ -39,6 +39,7 @@ type Server struct {
 	access  map[string]issued  // access tokens it issued
 	refresh map[string]string  // refresh token → login
 	nextID  int
+	rate    rateLimit
 }
 
 // New makes a fake with the state st.
@@ -69,6 +70,7 @@ func (s *Server) Reset(st State) {
 		if c.Perms == nil {
 			c.Perms = map[string]string{}
 		}
+		c.Pulls, c.Issues = clonePulls(r.Pulls), cloneIssues(r.Issues)
 		s.nextID++
 		c.id = s.nextID
 		repos = append(repos, &c)
@@ -76,6 +78,7 @@ func (s *Server) Reset(st State) {
 	st.Repos = repos
 	s.st = st
 	s.devices, s.access, s.refresh = map[string]*device{}, map[string]issued{}, map[string]string{}
+	s.rate = rateLimit{Limit: 5000, Remaining: 5000, ResetAt: time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)}
 }
 
 // SetNow replaces the clock.
@@ -95,6 +98,7 @@ func (s *Server) Repo(full string) (*Repo, bool) {
 	}
 	c := *r
 	c.Topics = slices.Clone(r.Topics)
+	c.Pulls, c.Issues = clonePulls(r.Pulls), cloneIssues(r.Issues)
 	c.Perms = map[string]string{}
 	for k, v := range r.Perms {
 		c.Perms[k] = v
@@ -198,6 +202,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	switch {
+	case r.Method == "POST" && r.URL.Path == "/graphql":
+		s.graphql(w, r, login)
 	case r.Method == "GET" && r.URL.Path == "/user":
 		writeJSON(w, 200, map[string]string{"login": login})
 	case r.Method == "GET" && r.URL.Path == "/user/repos":

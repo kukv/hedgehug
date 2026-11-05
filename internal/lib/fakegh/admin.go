@@ -8,7 +8,8 @@ import (
 	"net/http"
 )
 
-type adminBody struct {
+// AdminBody is the JSON body of the /_fakegh/ endpoints.
+type AdminBody struct {
 	Repo     string   `json:"repo,omitempty"`
 	Login    string   `json:"login,omitempty"`
 	Perm     string   `json:"perm,omitempty"`
@@ -16,11 +17,19 @@ type adminBody struct {
 	Public   bool     `json:"public,omitempty"`
 	UserCode string   `json:"user_code,omitempty"`
 	Token    string   `json:"token,omitempty"`
+	Number   int      `json:"number,omitempty"`
+	Head     string   `json:"head,omitempty"`
+	Title    string   `json:"title,omitempty"`
+	Body     string   `json:"body,omitempty"`
+	Draft    bool     `json:"draft,omitempty"`
+	State    string   `json:"state,omitempty"`
+	Reason   string   `json:"reason,omitempty"`
+	Request  bool     `json:"request,omitempty"`
 }
 
 // admin serves /_fakegh/, what the fakegh command calls to change the state.
 func (s *Server) admin(w http.ResponseWriter, r *http.Request) {
-	var b adminBody
+	var b AdminBody
 	if r.Method != "POST" || json.NewDecoder(r.Body).Decode(&b) != nil {
 		fail(w, http.StatusBadRequest, "want POST with a JSON body")
 		return
@@ -41,6 +50,26 @@ func (s *Server) admin(w http.ResponseWriter, r *http.Request) {
 		s.AddToken(b.Token, b.Login)
 	case "/_fakegh/token/expire":
 		s.ExpireTokens(b.Login)
+	case "/_fakegh/pr/open":
+		_, err = s.OpenPull(b.Repo, b.Head, b.Title, b.Body, b.Draft)
+	case "/_fakegh/pr/merge":
+		err = s.MergePull(b.Repo, b.Number)
+	case "/_fakegh/pr/review":
+		if b.Request {
+			err = s.RequestReview(b.Repo, b.Number)
+		} else {
+			err = s.ReviewPull(b.Repo, b.Number, b.State)
+		}
+	case "/_fakegh/pr/checks":
+		err = s.SetChecks(b.Repo, b.Number, b.State)
+	case "/_fakegh/pr/comment":
+		err = s.CommentPull(b.Repo, b.Number, b.Body)
+	case "/_fakegh/issue/open":
+		_, err = s.OpenIssue(b.Repo, b.Title, b.Body)
+	case "/_fakegh/issue/close":
+		err = s.CloseIssue(b.Repo, b.Number, b.Reason)
+	case "/_fakegh/issue/edit":
+		err = s.EditIssue(b.Repo, b.Number, b.Title, b.Body)
 	default:
 		fail(w, http.StatusNotFound, "Not Found")
 		return
@@ -58,7 +87,7 @@ type Admin struct {
 	HTTP *http.Client
 }
 
-func (a Admin) post(path string, b adminBody) error {
+func (a Admin) post(path string, b AdminBody) error {
 	data, err := json.Marshal(b)
 	if err != nil {
 		return err
@@ -81,25 +110,29 @@ func (a Admin) post(path string, b adminBody) error {
 
 // SetPerm sets what login may do with repo (owner/name).
 func (a Admin) SetPerm(repo, login, perm string) error {
-	return a.post("/_fakegh/perm", adminBody{Repo: repo, Login: login, Perm: perm})
+	return a.post("/_fakegh/perm", AdminBody{Repo: repo, Login: login, Perm: perm})
 }
 
 // AddRepo adds the repository owner/name.
 func (a Admin) AddRepo(repo string, topics []string, public bool) error {
-	return a.post("/_fakegh/repo", adminBody{Repo: repo, Topics: topics, Public: public})
+	return a.post("/_fakegh/repo", AdminBody{Repo: repo, Topics: topics, Public: public})
 }
 
 // ApproveDevice approves the device code shown as userCode for login.
 func (a Admin) ApproveDevice(userCode, login string) error {
-	return a.post("/_fakegh/device/approve", adminBody{UserCode: userCode, Login: login})
+	return a.post("/_fakegh/device/approve", AdminBody{UserCode: userCode, Login: login})
 }
 
 // AddToken makes token a token of login.
 func (a Admin) AddToken(token, login string) error {
-	return a.post("/_fakegh/token", adminBody{Token: token, Login: login})
+	return a.post("/_fakegh/token", AdminBody{Token: token, Login: login})
 }
 
 // ExpireTokens makes the access tokens issued to login expired.
 func (a Admin) ExpireTokens(login string) error {
-	return a.post("/_fakegh/token/expire", adminBody{Login: login})
+	return a.post("/_fakegh/token/expire", AdminBody{Login: login})
 }
+
+// Pull calls /_fakegh/pr/<what> with b; Issue calls /_fakegh/issue/<what>.
+func (a Admin) Pull(what string, b AdminBody) error  { return a.post("/_fakegh/pr/"+what, b) }
+func (a Admin) Issue(what string, b AdminBody) error { return a.post("/_fakegh/issue/"+what, b) }

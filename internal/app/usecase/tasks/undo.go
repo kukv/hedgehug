@@ -69,7 +69,7 @@ func Undo(ss *usecase.Session) (UndoResult, error) {
 
 // undoSkip are the operations undo does not pick: the ones that bring work
 // together or set a store up, which are not something a person did.
-var undoSkip = []string{"merge", "repair", "setup", "undo", "init"}
+var undoSkip = []string{"merge", "repair", "setup", "undo", "init", "gh-fetch"}
 
 // undoScanner finds the commit to undo, one entry at a time, newest first,
 // along the first parents: the newest that the writer made by an operation
@@ -353,7 +353,8 @@ func (u *undoer) keep(p string, files [3][]byte, oursT *model.Task) error {
 	if err != nil {
 		return fmt.Errorf("the version c wrote does not read: %w", err)
 	}
-	changed := merge.TaskChanges(baseT, oursT)
+	// gh is a machine's value (gh-fetch writes it): no one kept it by hand.
+	changed := slices.DeleteFunc(merge.TaskChanges(baseT, oursT), func(f string) bool { return f == "gh" || strings.HasPrefix(f, "gh.") })
 	if len(changed) == 0 {
 		return nil
 	}

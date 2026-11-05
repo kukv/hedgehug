@@ -532,6 +532,9 @@ func (ss *Session) UpdateCommit(s *store.Store, op store.Op, fn func(*store.Tx) 
 		return plumbing.ZeroHash, ErrNoAccounts
 	}
 	op.Author = config.CommitAuthor(acct)
+	if op.Automated {
+		op.Author = config.AutomationAuthor(acct)
+	}
 	op.Account = acct.ID()
 	if ss.BeforeUpdate != nil {
 		ss.BeforeUpdate()

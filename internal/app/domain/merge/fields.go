@@ -38,6 +38,9 @@ type field[X any] struct {
 	// names lists, as TaskChanges names them, what differs between a and b
 	// when same says they differ; nil for a kind that does not report it.
 	names func(a, b *X) []string
+	// machine marks a field only a machine writes, which does not count as
+	// an edit of the file.
+	machine bool
 }
 
 // one names a field that is a single value.

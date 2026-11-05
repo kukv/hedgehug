@@ -69,6 +69,9 @@ describe("opLabel", () => {
     expect(opLabel("init")).toBe("Store の作成");
     expect(opLabel("setup")).toBe("同期の設定");
     expect(opLabel("replay")).toBe("同期のやり直し");
+    expect(opLabel("link")).toBe("リンク");
+    expect(opLabel("unlink")).toBe("リンクの解除");
+    expect(opLabel("gh-fetch")).toBe("GitHub の取り込み");
     expect(opLabel("something-new")).toBe("something-new");
     expect(opLabel(null)).toBe("変更");
   });

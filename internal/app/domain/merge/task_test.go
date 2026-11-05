@@ -2,6 +2,7 @@ package merge
 
 import (
 	"bytes"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -9,6 +10,9 @@ import (
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 )
+
+// sameLink compares links, which hold a slice and so are not comparable.
+func sameLink(a, b model.Link) bool { return reflect.DeepEqual(a, b) }
 
 func TestTaskOneSide(t *testing.T) {
 	base := task("2026-10-31T10:00:00Z", "title: a", "status: todo")
@@ -197,7 +201,7 @@ func TestTaskLinks(t *testing.T) {
 	r := mergeTask(t, side(base, ""), side(ours, "a"), side(theirs, "b"))
 	x := decoded(t, r.Data)
 	want := []model.Link{{Type: "issue", Ref: "o/r#1"}, {Type: "issue", Ref: "o/r#3"}}
-	if !slices.Equal(x.Links, want) {
+	if !slices.EqualFunc(x.Links, want, sameLink) {
 		t.Errorf("links = %v", x.Links) // #2 removed by theirs, #3 added by ours, #1 changed on both
 	}
 	ow := []Overwritten{{Path: taskPath, Field: "links", Value: `{"ref":"o/r#1","sync":"status","type":"pr"}`, Author: "a"}}
@@ -336,7 +340,7 @@ func TestTaskLinkRemovedAndChanged(t *testing.T) {
 	theirs := task("2026-10-31T12:00:00Z", "links: [{type: pr, ref: o/r#1}, {type: issue, ref: o/r#2}]")
 	r := mergeTask(t, side(base, ""), side(ours, "a"), side(theirs, "b"))
 	want := []model.Link{{Type: "pr", Ref: "o/r#1", Sync: "status"}, {Type: "issue", Ref: "o/r#2"}}
-	if x := decoded(t, r.Data); !slices.Equal(x.Links, want) || len(r.Overwritten) != 0 {
+	if x := decoded(t, r.Data); !slices.EqualFunc(x.Links, want, sameLink) || len(r.Overwritten) != 0 {
 		t.Errorf("links %v overwritten %v", x.Links, r.Overwritten) // ours removed #2, theirs changed it: the change stays
 	}
 }

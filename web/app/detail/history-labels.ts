@@ -26,6 +26,9 @@ const labels: Record<string, string> = {
   view: "ビューの変更",
   setup: "同期の準備",
   replay: "同期で再適用",
+  link: "リンク",
+  unlink: "リンク解除",
+  "gh-fetch": "GitHub の取り込み",
 };
 
 // opLabel names the Hedgehug-Op of a commit; an op it does not know is shown as it is.

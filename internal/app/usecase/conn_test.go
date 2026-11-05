@@ -12,6 +12,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
+	"github.com/kukv/hedgehug/internal/lib/fakegh"
 )
 
 func TestConn(t *testing.T) {
@@ -296,5 +297,55 @@ func TestPickAccount(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), `"nobody"`) || !strings.Contains(err.Error(), "a, b") {
 		t.Errorf("message = %q", err)
+	}
+}
+
+func TestGitHubForRepoFollowsRepoAccounts(t *testing.T) {
+	t.Parallel()
+	ts, _ := usecasetest.FakeSession(t, fakegh.State{Tokens: map[string]string{"t-work": "bob", "t-alice": "alice"}}, "")
+	ts.Env["T_WORK"] = "t-work"
+	ts.AppendConfig("accounts:\n" +
+		"  - {name: me, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n" +
+		"  - {name: work, host: github.com, login: bob, token: \"env:T_WORK\"}\n" +
+		"repo_accounts:\n  - {match: github.com/org-a/*, account: work}\n")
+	c, _, err := ts.Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := config.StoreEntry{Account: "me"}
+	_, acct, err := ts.GitHubForRepo(c, e, "github.com/org-a/web")
+	if err != nil || acct.Name != "work" {
+		t.Fatalf("org-a = %+v, %v", acct, err)
+	}
+	_, acct, err = ts.GitHubForRepo(c, e, "github.com/org-b/ops")
+	if err != nil || acct.Name != "me" {
+		t.Fatalf("the store's account = %+v, %v", acct, err)
+	}
+	// An account of another host never gets the token sent there: neither
+	// the store's account nor the only account.
+	for _, e := range []config.StoreEntry{{Account: "me"}, {}} {
+		cl, _, err := ts.GitHubForRepo(c, e, "ghe.example.com/org-b/ops")
+		if cl != nil || err == nil || !strings.Contains(err.Error(), "ghe.example.com/org-b/ops") {
+			t.Errorf("other host (store account %q) = %v, %v", e.Account, cl, err)
+		}
+	}
+}
+
+func TestGitHubForRepoRejectsOtherHost(t *testing.T) {
+	t.Parallel()
+	ts, _ := usecasetest.FakeSession(t, fakegh.State{}, "")
+	ts.AppendConfig("accounts:\n  - {name: me, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n" +
+		"repo_accounts:\n  - {match: \"*\", account: me}\n")
+	c, _, err := ts.Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cl, _, err := ts.GitHubForRepo(c, config.StoreEntry{}, "ghe.example.com/o/r")
+	if cl != nil || err == nil || !strings.Contains(err.Error(), "me") || !strings.Contains(err.Error(), "ghe.example.com/o/r") {
+		t.Errorf("repo_accounts, other host = %v, %v", cl, err)
+	}
+	cl, _, err = ts.GitHubForRepo(c, config.StoreEntry{}, "github.com/o/r")
+	if cl == nil || err != nil {
+		t.Errorf("same host = %v, %v", cl, err)
 	}
 }

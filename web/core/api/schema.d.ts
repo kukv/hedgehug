@@ -1021,6 +1021,22 @@ export interface components {
             role: string;
             template?: string;
         };
+        LinkView: {
+            checks?: string;
+            /** @description The ref as people write it: org-a/web#123 */
+            label: string;
+            /** Format: date-time */
+            merged_at?: string;
+            ref: string;
+            review?: string;
+            /** @description Empty until GitHub is read */
+            state?: string;
+            state_reason?: string;
+            /** @enum {string} */
+            sync: "mirror" | "push" | "link";
+            /** @enum {string} */
+            type: "github_pr" | "github_issue";
+        };
         LogTrailer: {
             key: string;
             value: string;
@@ -1399,6 +1415,8 @@ export interface components {
             in_cycle?: boolean;
             kind: string;
             labels: string[] | null;
+            /** @description The pull requests and issues linked, with what GitHub says of them */
+            links?: components["schemas"]["LinkView"][];
             parent: string | null;
             problems: components["schemas"]["IndexProblem"][] | null;
             progress?: components["schemas"]["Count"];
@@ -1499,6 +1517,7 @@ export interface components {
         StoresChanged: Record<string, never>;
         SyncReport: {
             error?: string;
+            github_updated?: boolean;
             invalid: string[] | null;
             /** Format: int64 */
             merges: number;
