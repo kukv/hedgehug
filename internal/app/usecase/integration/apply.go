@@ -17,11 +17,18 @@ type fetched struct {
 	issues map[string]github.Issue
 }
 
+// applied is what apply did to a task: whether it changed, and gh before and
+// after.
+type applied struct {
+	Changed   bool
+	Old, Next model.GitHubState
+}
+
 // apply brings t up to date: it adds the links in auto that it does not have
 // in any form (an unlinked one stays unlinked), and rewrites gh from what was
 // fetched. What was not fetched keeps its value; an item of gh with no link
-// in use goes. It reports whether t changed.
-func apply(t *model.Task, got fetched, auto []string) (bool, error) {
+// in use goes.
+func apply(t *model.Task, got fetched, auto []string) (applied, error) {
 	linked := false
 	for _, ref := range auto {
 		if !slices.ContainsFunc(t.Links, func(l model.Link) bool { return model.CanonRef(l.Ref) == model.CanonRef(ref) }) {
@@ -31,7 +38,7 @@ func apply(t *model.Task, got fetched, auto []string) (bool, error) {
 	}
 	old, err := t.GitHub()
 	if err != nil {
-		return false, err
+		return applied{}, err
 	}
 	var next model.GitHubState
 	for _, l := range t.Links {
@@ -67,12 +74,14 @@ func apply(t *model.Task, got fetched, auto []string) (bool, error) {
 	}
 	same, err := sameState(old, next)
 	if err != nil {
-		return false, err
+		return applied{}, err
 	}
+	a := applied{Changed: linked, Old: old, Next: next}
 	if same {
-		return linked, nil
+		return a, nil
 	}
-	return true, t.SetGitHub(next)
+	a.Changed = true
+	return a, t.SetGitHub(next)
 }
 
 func withPull(s model.PRState, p github.Pull) model.PRState {

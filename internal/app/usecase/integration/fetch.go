@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/app/domain/automation"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/ghstate"
@@ -29,9 +30,21 @@ type target struct{ pulls, issues []int }
 
 // Fetch reads the repositories of the store e that are due, links the pull
 // requests that point at a task, and writes what GitHub says to gh, as one
-// commit. A repository that cannot be read is a warning: the others go on.
-// A read-only store is not fetched.
+// commit, followed by a commit for each task whose status the rules of
+// automations.yaml change. A repository that cannot be read is a warning: the
+// others go on. A read-only store is not fetched.
 func Fetch(ss *usecase.Session, c *config.Config, e config.StoreEntry) (FetchReport, error) {
+	return fetchStore(ss, c, e, "")
+}
+
+// FetchRepo is Fetch of the one repository repo, a repo ID, whether it is due
+// or not. The other repositories of the store are left for their time.
+func FetchRepo(ss *usecase.Session, c *config.Config, e config.StoreEntry, repo string) (FetchReport, error) {
+	return fetchStore(ss, c, e, strings.ToLower(repo))
+}
+
+// fetchStore is Fetch, or FetchRepo when force names a repository.
+func fetchStore(ss *usecase.Session, c *config.Config, e config.StoreEntry, force string) (FetchReport, error) {
 	ss = ss.ForStore(e.Name)
 	ss.BackgroundSync = false // the sync that called this pushes what it writes
 	var rep FetchReport
@@ -51,12 +64,12 @@ func Fetch(ss *usecase.Session, c *config.Config, e config.StoreEntry) (FetchRep
 		if err != nil {
 			return err
 		}
-		return fetchLocked(ss, c, e, s, ix, &rep)
+		return fetchLocked(ss, c, e, s, ix, force, &rep)
 	})
 	return rep, err
 }
 
-func fetchLocked(ss *usecase.Session, c *config.Config, e config.StoreEntry, s *store.Store, ix *index.Index, rep *FetchReport) error {
+func fetchLocked(ss *usecase.Session, c *config.Config, e config.StoreEntry, s *store.Store, ix *index.Index, force string, rep *FetchReport) error {
 	state, err := ghstate.Read(s)
 	if err != nil {
 		return err
@@ -73,8 +86,11 @@ func fetchLocked(ss *usecase.Session, c *config.Config, e config.StoreEntry, s *
 	// was lost must be read again from its old time.
 	read := map[string]ghstate.Repo{}
 	for _, repo := range slices.Sorted(maps.Keys(targets)) {
+		if force != "" && repo != force {
+			continue
+		}
 		st := state.Repos[repo]
-		if !st.Due(now) {
+		if force == "" && !st.Due(now) {
 			// Not asked again, and what the last read said is said again.
 			if st.Warning != "" {
 				rep.Warnings = append(rep.Warnings, strings.Split(st.Warning, "\n")...)
@@ -145,6 +161,22 @@ func fetchLocked(ss *usecase.Session, c *config.Config, e config.StoreEntry, s *
 		maps.Copy(state.Repos, read) // nothing to write; a rate limit may be noted
 		return ghstate.Write(s, state)
 	}
+	// The store lock is held from here to the last status, and not during the
+	// reads above: what the rules decide is not overtaken by another writer
+	// before it is written.
+	held, err := store.LockInOrder(s)
+	if err == nil {
+		defer held.Release()
+		err = ix.Refresh()
+	}
+	if err != nil {
+		return errors.Join(err, ghstate.Write(s, state)) // as for a commit that failed, below
+	}
+	rules, err := s.Automations()
+	if err != nil {
+		rep.Warnings = append(rep.Warnings, err.Error())
+		rules = automation.Default() // the fetch goes on, without rules
+	}
 	// Only a task with a link to something that was read, or one to link, has
 	// anything to write.
 	ulids := make([]model.ULID, 0)
@@ -161,13 +193,14 @@ func fetchLocked(ss *usecase.Session, c *config.Config, e config.StoreEntry, s *
 	}
 	slices.SortFunc(ulids, func(a, b model.ULID) int { return cmp.Compare(a.String(), b.String()) })
 	failed := map[string][]string{} // repositories whose result a task could not take, with why
-	hash, err := ss.UpdateCommit(s, store.Op{Name: "gh-fetch", Automated: true}, func(tx *store.Tx) error {
+	var changes []taskChange
+	hash, err := ss.UpdateCommit(s, store.Op{Name: "gh-fetch", Automated: true, Locked: held}, func(tx *store.Tx) error {
 		for _, u := range ulids {
 			t, err := tx.Task(u)
 			if err != nil {
 				return err
 			}
-			changed, err := apply(t, got, auto[u])
+			a, err := apply(t, got, auto[u])
 			if err != nil {
 				rep.Warnings = append(rep.Warnings, u.String()+": "+err.Error())
 				for _, ref := range auto[u] {
@@ -178,10 +211,14 @@ func fetchLocked(ss *usecase.Session, c *config.Config, e config.StoreEntry, s *
 				}
 				continue
 			}
-			if changed {
-				if err := tx.PutTask(t); err != nil {
-					return err
-				}
+			if !a.Changed {
+				continue
+			}
+			if err := tx.PutTask(t); err != nil {
+				return err
+			}
+			if c := runRules(tx, rules, ix, s.Schema(), t, a); c != nil {
+				changes = append(changes, *c)
 			}
 		}
 		return nil
@@ -191,7 +228,9 @@ func fetchLocked(ss *usecase.Session, c *config.Config, e config.StoreEntry, s *
 		// them again. What was read stays unmarked: it must be read again.
 		return errors.Join(err, ghstate.Write(s, state))
 	}
-	rep.Committed = !hash.IsZero()
+	if rep.Committed = !hash.IsZero(); rep.Committed {
+		applyChanges(ss, s, held, changes, rep)
+	}
 	for repo, st := range read {
 		if why, bad := failed[repo]; bad {
 			// Read again from the old time. The warning was told already.

@@ -77,39 +77,47 @@ func (in LinkInput) sync() (string, error) {
 // Link links the task arg names. Linking again what is unlinked brings it
 // back; linking an issue again with another Sync changes its mode.
 func Link(ss *usecase.Session, arg string, in LinkInput) (usecase.TaskResult, error) {
-	return change(ss, arg, "link", in, func(links []model.Link, ref model.GitHubRef) ([]model.Link, error) {
+	return change(ss, arg, "link", in, func(t *model.Task, ref model.GitHubRef) error {
 		sync, err := in.sync()
 		if err != nil {
-			return nil, err
+			return err
 		}
-		i := slices.IndexFunc(links, func(l model.Link) bool { return model.CanonRef(l.Ref) == ref.String() })
+		i := slices.IndexFunc(t.Links, func(l model.Link) bool { return model.CanonRef(l.Ref) == ref.String() })
 		if i < 0 {
-			return append(slices.Clone(links), model.Link{Type: ref.Kind, Ref: ref.String(), Sync: sync}), nil
+			t.Links = append(slices.Clone(t.Links), model.Link{Type: ref.Kind, Ref: ref.String(), Sync: sync})
+			return nil
 		}
-		if links[i].Live() && (in.Sync == "" || links[i].Sync == sync) {
-			return nil, usecase.NewErr(usecase.KindInvalid, "link.exists", fmt.Errorf("%s is linked already", ref.Label()))
+		if t.Links[i].Live() && (in.Sync == "" || t.Links[i].Sync == sync) {
+			return usecase.NewErr(usecase.KindInvalid, "link.exists", fmt.Errorf("%s is linked already", ref.Label()))
 		}
-		out := slices.Clone(links)
-		out[i].Sync = sync
-		return out, nil
+		t.Links = slices.Clone(t.Links)
+		t.Links[i].Sync = sync
+		return nil
 	})
 }
 
 // Unlink turns a link off. It stays in the file, so that the automatic
-// linking does not link the pull request again.
+// linking does not link the pull request again; what gh holds of it goes, so
+// that linking it again is a new item.
 func Unlink(ss *usecase.Session, arg string, in LinkInput) (usecase.TaskResult, error) {
-	return change(ss, arg, "unlink", in, func(links []model.Link, ref model.GitHubRef) ([]model.Link, error) {
-		i := slices.IndexFunc(links, func(l model.Link) bool { return model.CanonRef(l.Ref) == ref.String() && l.Live() })
+	return change(ss, arg, "unlink", in, func(t *model.Task, ref model.GitHubRef) error {
+		i := slices.IndexFunc(t.Links, func(l model.Link) bool { return model.CanonRef(l.Ref) == ref.String() && l.Live() })
 		if i < 0 {
-			return nil, usecase.NewErr(usecase.KindInvalid, "link.not_found", fmt.Errorf("%s is not linked", ref.Label()))
+			return usecase.NewErr(usecase.KindInvalid, "link.not_found", fmt.Errorf("%s is not linked", ref.Label()))
 		}
-		out := slices.Clone(links)
-		out[i].Sync = model.SyncOff
-		return out, nil
+		t.Links = slices.Clone(t.Links)
+		t.Links[i].Sync = model.SyncOff
+		g, err := t.GitHub()
+		if err != nil {
+			return err
+		}
+		g.PRs = slices.DeleteFunc(g.PRs, func(p model.PRState) bool { return model.CanonRef(p.Ref) == ref.String() })
+		g.Issues = slices.DeleteFunc(g.Issues, func(x model.IssueState) bool { return model.CanonRef(x.Ref) == ref.String() })
+		return t.SetGitHub(g)
 	})
 }
 
-func change(ss *usecase.Session, arg, op string, in LinkInput, fn func([]model.Link, model.GitHubRef) ([]model.Link, error)) (usecase.TaskResult, error) {
+func change(ss *usecase.Session, arg, op string, in LinkInput, fn func(*model.Task, model.GitHubRef) error) (usecase.TaskResult, error) {
 	ts, arg, err := ss.ForTask(arg)
 	if err != nil {
 		return usecase.TaskResult{}, err
@@ -141,7 +149,7 @@ func change(ss *usecase.Session, arg, op string, in LinkInput, fn func([]model.L
 		if err != nil {
 			return err
 		}
-		if t.Links, err = fn(t.Links, ref); err != nil {
+		if err := fn(t, ref); err != nil {
 			return err
 		}
 		return tx.PutTask(t)
