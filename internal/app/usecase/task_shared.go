@@ -24,6 +24,9 @@ type TaskResult struct {
 	ULID      model.ULID
 	Committed bool
 	Commit    string // hex hash of the commit made; "" when nothing was committed
+	// What a template added: the tasks under the task, and what it took off.
+	Children int
+	Detached []Detached
 }
 
 // NewTaskResult is the result of a write to the task ulid, read through ix,

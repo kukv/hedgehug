@@ -45,6 +45,9 @@ type Op struct {
 	// SkipRequired skips the check of workflow.required, for an operation
 	// that puts a task back as it was, field by field.
 	SkipRequired bool
+	// CheckOnly runs fn and checks what it wrote, without writing: a violation
+	// of any task comes back in a *ValidationErrors, and no commit is made.
+	CheckOnly bool
 	// Trailers and AllowEmpty are set from inside fn, by AddTrailer and
 	// AllowEmpty, because what they hold is read under the store lock.
 	Trailers   []gitrepo.Trailer
@@ -489,6 +492,9 @@ func (s *Store) UpdateCommit(op Op, fn func(*Tx) error) (hash plumbing.Hash, err
 	}
 	if err := tx.validate(sc); err != nil {
 		return plumbing.ZeroHash, err
+	}
+	if op.CheckOnly {
+		return plumbing.ZeroHash, nil
 	}
 
 	now := s.now().Truncate(time.Second)

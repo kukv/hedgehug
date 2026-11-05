@@ -1,1 +1,1 @@
-hedgehug: give --statuses, --transition or --required
+hedgehug: give --statuses, --transition, --required, --templates or --template-default

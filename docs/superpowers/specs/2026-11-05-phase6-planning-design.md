@@ -159,7 +159,7 @@
 |---|---|
 | `GET /api/templates`、`GET`・`PUT`・`DELETE /api/templates/{name}` | テンプレートの一覧と読み書き。`PUT` の本文はファイルの内容 |
 | `POST /api/tasks` の `template` | テンプレートの展開 |
-| `POST /api/tasks/bulk` | 本文は `ulids` か `query` のどちらかと `assigns`、`dry_run`。応答は対象、違反、結果 |
+| `POST /api/tasks/bulk` | 本文は `ulids` か `query` のどちらかと、`PATCH /api/tasks/{id}` と同じ項目、`dry_run`。応答は対象、違反、結果 |
 
 ## 6c レポート
 

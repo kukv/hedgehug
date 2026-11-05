@@ -375,6 +375,41 @@ func Clone(t *testing.T, ts *Session, remote string, now time.Time) *Session {
 	return c
 }
 
+// EditSchema rewrites schema.yaml of the test store by fn.
+func (ts *Session) EditSchema(fn func(string) string) {
+	ts.T.Helper()
+	_, text := ts.StoreSchema()
+	ts.WriteAndCommit("schema.yaml", fn(text))
+}
+
+// AddedInStore adds a task to the store name and returns its ULID.
+func (ts *Session) AddedInStore(name, title string) model.ULID {
+	ts.T.Helper()
+	r, err := tasks.Add(ts.ForStore(name), tasks.AddInput{Title: title})
+	if err != nil {
+		ts.T.Fatal(err)
+	}
+	return r.ULID
+}
+
+// ForStoreEditSchema rewrites schema.yaml of the store name by fn.
+func (ts *Session) ForStoreEditSchema(name string, fn func(string) string) {
+	ts.T.Helper()
+	s, err := ts.ForStore(name).OpenStore()
+	if err != nil {
+		ts.T.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(s.Dir(), "schema.yaml")) //nolint:gosec // a file of the test's store
+	if err != nil {
+		ts.T.Fatal(err)
+	}
+	if _, err := ts.ForStore(name).Update(s, store.Op{Name: "test"}, func(tx *store.Tx) error {
+		return tx.PutFile("schema.yaml", []byte(fn(string(b))))
+	}); err != nil {
+		ts.T.Fatal(err)
+	}
+}
+
 // WriteAndCommit writes data to rel in the test store and commits it, as a
 // hand edit that was committed would be.
 func (ts *Session) WriteAndCommit(rel, data string) {

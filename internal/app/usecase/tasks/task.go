@@ -36,6 +36,10 @@ type AddInput struct {
 	// unless the task has it already (AddHere with Repo).
 	FirstRepo string
 	Assigns   []usecase.Assign
+	// Template names the template to expand; without it, the kind's default
+	// is, unless NoTemplate.
+	Template   string
+	NoTemplate bool
 }
 
 // Add adds a task.
@@ -118,6 +122,29 @@ func Add(ss *usecase.Session, in AddInput) (usecase.TaskResult, error) {
 			return usecase.TaskResult{}, err
 		}
 	}
+	tpl, err := templateFor(ss, s, ix, in, t)
+	if err != nil {
+		return usecase.TaskResult{}, err
+	}
+	var x expanded
+	if tpl != nil {
+		if in.Kind == "" && tpl.Item.Kind != "" {
+			t.Kind = tpl.Item.Kind
+		}
+		if in.Status == "" && tpl.Item.Status != "" {
+			t.Status = tpl.Item.Status
+		}
+		var inherited []string
+		if t.Parent != nil {
+			if p, ok := ix.Task(*t.Parent); ok {
+				inherited = p.Assignees
+			}
+		}
+		applyItem(t, &tpl.Item, inherited)
+		if d, ok := dropForeign(ix, t); ok {
+			x.detached = append(x.detached, d)
+		}
+	}
 	for _, as := range in.Assigns {
 		if err := usecase.ApplyTaskAssign(t, as, ix, ss.ResolveULID(ix)); err != nil {
 			return usecase.TaskResult{}, err
@@ -136,11 +163,30 @@ func Add(ss *usecase.Session, in AddInput) (usecase.TaskResult, error) {
 		usecase.AddWatchers(t, t.CreatedBy)
 	}
 	usecase.WatchNewAssignees(t, nil)
-	hash, err := ss.UpdateCommit(s, store.Op{Name: "add", Task: t.ULID}, func(tx *store.Tx) error { return tx.PutTask(t) })
+	if tpl != nil {
+		if err := x.expand(ix, t, tpl.Item.Children); err != nil {
+			return usecase.TaskResult{}, err
+		}
+	}
+	hash, err := ss.UpdateCommit(s, store.Op{Name: "add", Task: t.ULID}, func(tx *store.Tx) error {
+		if err := tx.PutTask(t); err != nil {
+			return err
+		}
+		for _, c := range x.tasks {
+			if err := tx.PutTask(c); err != nil {
+				return err
+			}
+			tx.AddTrailer("Hedgehug-Task", c.ULID.String())
+		}
+		return nil
+	})
 	if err != nil {
 		return usecase.TaskResult{}, err
 	}
-	return usecase.NewTaskResult(ix, t.ULID, hash), nil
+	r := usecase.NewTaskResult(ix, t.ULID, hash)
+	r.Children = len(x.tasks)
+	r.Detached = x.detachedWithIDs(t)
+	return r, nil
 }
 
 // Set applies assigns to the task arg names.

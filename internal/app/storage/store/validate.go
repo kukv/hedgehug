@@ -48,6 +48,18 @@ func (e *ValidationError) Error() string {
 	return fmt.Sprintf("task %s: %s", e.Task, strings.Join(msgs, "; "))
 }
 
+// ValidationErrors is what an operation with CheckOnly finds: every task the
+// write would bring violations into, in the order they were put.
+type ValidationErrors struct{ Tasks []*ValidationError }
+
+func (e *ValidationErrors) Error() string {
+	msgs := make([]string, len(e.Tasks))
+	for i, t := range e.Tasks {
+		msgs[i] = t.Error()
+	}
+	return strings.Join(msgs, "\n")
+}
+
 // validate checks every task put in the operation against sc. The rules are
 // schema.ValidateWrite's; this only gathers what it needs: the task as it is
 // on disk, and for both it and the task being written the kind of the
@@ -60,6 +72,7 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 	if err := tx.validateSprintsAndReleases(); err != nil {
 		return err
 	}
+	var found []*ValidationError
 	for _, ulid := range tx.taskOrder {
 		t := tx.tasks[ulid]
 		if t == nil {
@@ -112,8 +125,15 @@ func (tx *Tx) validate(sc *schema.Schema) error {
 		vs = append(vs, wvs...)
 		vs = append(vs, svs...)
 		if vs = append(vs, rvs...); len(vs) > 0 {
-			return &ValidationError{Task: ulid, Violations: vs}
+			ve := &ValidationError{Task: ulid, Violations: vs}
+			if !tx.op.CheckOnly {
+				return ve
+			}
+			found = append(found, ve)
 		}
+	}
+	if len(found) > 0 {
+		return &ValidationErrors{Tasks: found}
 	}
 	return nil
 }

@@ -50,6 +50,41 @@ func TestPutFile(t *testing.T) {
 	}
 }
 
+func TestCheckOnlyFindsEveryViolation(t *testing.T) {
+	t.Parallel()
+	s := newTestStore(t)
+	ws := testWorkspace(t, s)
+	mk := func(status string) *model.Task {
+		return &model.Task{ULID: model.NewULID(), Kind: "task", Title: "t", Status: status, Workspace: ws.ULID}
+	}
+	head, err := s.Repo().Head()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad1, good, bad2 := mk("nope"), mk("todo"), mk("nor this")
+	h, err := s.UpdateCommit(Op{Name: "check", Author: testAuthor, CheckOnly: true}, func(tx *Tx) error {
+		return errors.Join(tx.PutTask(bad1), tx.PutTask(good), tx.PutTask(bad2))
+	})
+	var ve *ValidationErrors
+	if !errors.As(err, &ve) || len(ve.Tasks) != 2 || ve.Tasks[0].Task != bad1.ULID || ve.Tasks[1].Task != bad2.ULID {
+		t.Fatalf("err = %v", err)
+	}
+	if !h.IsZero() {
+		t.Errorf("hash = %s", h)
+	}
+
+	h, err = s.UpdateCommit(Op{Name: "check", Author: testAuthor, CheckOnly: true}, func(tx *Tx) error { return tx.PutTask(good) })
+	if err != nil || !h.IsZero() {
+		t.Fatalf("hash %s, err %v", h, err)
+	}
+	if now, _ := s.Repo().Head(); now != head {
+		t.Error("a check made a commit")
+	}
+	if _, err := s.Task(good.ULID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a check wrote the task: %v", err)
+	}
+}
+
 func TestUpdateCommitsOnce(t *testing.T) {
 	t.Parallel()
 	s := newTestStore(t)

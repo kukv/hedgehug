@@ -122,7 +122,8 @@ func LogViewOf(ix *index.Index, e gitrepo.LogEntry) LogView {
 	if v, ok := e.Trailer("Hedgehug-Op"); ok {
 		j.Op = &v
 	}
-	if v, ok := e.Trailer("Hedgehug-Task"); ok {
+	op, _ := e.Trailer("Hedgehug-Op")
+	if v, ok := e.Trailer("Hedgehug-Task"); ok && op != OpBulkSet {
 		j.Task = &v
 		if ulid, err := model.ParseULID(v); err == nil {
 			if t, ok := ix.Task(ulid); ok && t.ID != "" {
@@ -165,6 +166,10 @@ func CommitWorkspace(ix *index.Index, ws, task string) (model.ULID, bool) {
 	return model.ULID{}, false
 }
 
+// OpBulkSet is the op of a bulk update. Its commit is on many tasks, and its
+// subject names none of them.
+const OpBulkSet = "bulk-set"
+
 // subjectNow gives the subject of a Hedgehug commit with the task's current
 // id and ULID in place of the label it was written with: the subject is
 // "hedgehug: <op> <label> <title>". Other subjects, and tasks the index does
@@ -174,7 +179,7 @@ func subjectNow(ix *index.Index, le gitrepo.LogEntry) string {
 	taskULID, ok2 := le.Trailer("Hedgehug-Task")
 	head := "hedgehug: " + op + " "
 	rest, ok3 := strings.CutPrefix(le.Subject, head)
-	if !ok1 || !ok2 || !ok3 {
+	if !ok1 || !ok2 || !ok3 || op == OpBulkSet {
 		return le.Subject
 	}
 	ulid, err := model.ParseULID(taskULID)
