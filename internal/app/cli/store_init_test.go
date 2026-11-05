@@ -44,6 +44,45 @@ func TestStoreInitDev(t *testing.T) {
 	if _, ok := te.uc().SchemaOf("dev").Status("review"); !ok {
 		t.Error("a dev store has no review status")
 	}
+	out := te.ok("--store", "dev", "automation", "list")
+	for _, id := range []string{"pr-opened", "pr-review", "pr-merged", "issue-closed"} {
+		on := false
+		for _, line := range strings.Split(out, "\n") {
+			if strings.HasPrefix(line, id+" ") && strings.HasSuffix(line, "  on") {
+				on = true
+			}
+		}
+		if !on {
+			t.Errorf("rule %s is not on:\n%s", id, out)
+		}
+	}
+	if out := te.ok("--store", "dev", "doctor"); strings.Contains(out, "automation") {
+		t.Errorf("doctor finds a problem in the rules:\n%s", out)
+	}
+	// init is not a write of mine that undo takes back
+	te.ok("--store", "dev", "add", "One")
+	te.ok("--store", "dev", "undo")
+	if out := te.ok("--store", "dev", "automation", "list"); !strings.Contains(out, "pr-opened") {
+		t.Errorf("undo took the rules back:\n%s", out)
+	}
+	if out := te.ok("--store", "dev", "undo"); !strings.Contains(out, "Nothing to undo") {
+		t.Errorf("undo took an init back: %s", out)
+	}
+	if _, err := os.Stat(filepath.Join(te.storeDir("dev"), "automations.yaml")); err != nil {
+		t.Errorf("automations.yaml: %v", err)
+	}
+}
+
+func TestStoreInitWithoutTemplateHasNoRules(t *testing.T) {
+	t.Parallel()
+	te := newTestEnv(t)
+	te.ok("store", "init", "plain", "--prefix", "PL")
+	if _, err := os.Stat(filepath.Join(te.storeDir("plain"), "automations.yaml")); !os.IsNotExist(err) {
+		t.Errorf("automations.yaml: %v", err)
+	}
+	if out := te.ok("--store", "plain", "automation", "list"); !strings.Contains(out, "No rule") {
+		t.Errorf("list = %q", out)
+	}
 }
 
 func TestStoreInitJSON(t *testing.T) {

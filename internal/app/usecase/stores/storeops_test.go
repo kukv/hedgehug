@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kukv/hedgehug/internal/app/domain/automation"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/storage/config"
@@ -111,6 +112,34 @@ func TestStoreInitWorkspaceNameAndSchema(t *testing.T) {
 	}
 	if _, ok := s.Schema().Status("review"); !ok {
 		t.Error("the dev template has no review status")
+	}
+}
+
+func TestStoreInitWritesTheRulesInACommitOfOpInit(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	if _, err := stores.StoreInit(ts.Session, stores.StoreInitInput{Name: "team", Prefix: "TM", Schema: schema.Dev(), Automations: automation.DevRules()}); err != nil {
+		t.Fatal(err)
+	}
+	sub := &usecase.Session{Getenv: ts.Getenv, Now: ts.Now, StoreName: "team"}
+	s, err := sub.OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := s.Automations()
+	if err != nil || len(f.Rules) != 4 {
+		t.Fatalf("Automations = %+v, %v", f, err)
+	}
+	head, err := s.Repo().Head()
+	if err != nil {
+		t.Fatal(err)
+	}
+	log, err := s.Repo().LogFrom(head, 1)
+	if err != nil || len(log) != 1 {
+		t.Fatalf("log = %+v, %v", log, err)
+	}
+	if op, _ := log[0].Trailer("Hedgehug-Op"); op != "init" {
+		t.Errorf("newest commit op = %q, want init", op)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kukv/hedgehug/internal/app/cli/prompt"
+	"github.com/kukv/hedgehug/internal/app/domain/automation"
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
@@ -39,14 +40,15 @@ func (a *app) storeInitCmd() *cobra.Command {
 				return usageErrorf("--prefix is required: the id prefix of the first workspace, such as WEB")
 			}
 			var sc *schema.Schema
+			var rules *automation.File
 			switch template {
 			case "":
 			case "dev":
-				sc = schema.Dev()
+				sc, rules = schema.Dev(), automation.DevRules()
 			default:
 				return usageErrorf("--template: %q is not a template; the one there is is dev", template)
 			}
-			return a.storeInit(stores.StoreInitInput{Name: args[0], Prefix: prefix, Workspace: wsName, Schema: sc, Remotes: remotes, Account: account, Path: path})
+			return a.storeInit(stores.StoreInitInput{Name: args[0], Prefix: prefix, Workspace: wsName, Schema: sc, Automations: rules, Remotes: remotes, Account: account, Path: path})
 		},
 	}
 	cmd.Flags().StringVar(&prefix, "prefix", "", "the id prefix of the first workspace, such as WEB")
@@ -54,7 +56,7 @@ func (a *app) storeInitCmd() *cobra.Command {
 	cmd.Flags().StringArrayVar(&remotes, "remote", nil, "a remote to push the store to, which must be empty; the first is origin, the others are mirrors")
 	cmd.Flags().StringVar(&account, "account", "", "the account that writes the store and makes its GitHub repository (default: the only account)")
 	cmd.Flags().StringVar(&path, "path", "", "where to make the store (default: under the data directory)")
-	cmd.Flags().StringVar(&template, "template", "", "start from a template: dev adds a review status")
+	cmd.Flags().StringVar(&template, "template", "", "start from a template: dev adds a review status and the rules that move a task with its pull request")
 	return cmd
 }
 
