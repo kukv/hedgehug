@@ -64,9 +64,6 @@ func (s *Server) registerAutomations() {
 		if err != nil {
 			return nil, problemOf(err)
 		}
-		if out == nil {
-			out = []automations.RuleView{}
-		}
 		return &automationsOutput{out}, nil
 	}
 

@@ -32,10 +32,10 @@
     });
   });
 
-  const now = new Date();
   const times = $derived(fetchTimes(repos.current, new Set(repos.current.map((r) => r.repo))));
+  const line = $derived(fetchLine(times, new Date()));
   const rate = $derived(rateLine(repos.current));
-  const slowed = $derived(slowedText(times.slowedUntil, now));
+  const slowed = $derived(slowedText(times.slowedUntil, new Date()));
 
   let adding = $state(false);
 </script>
@@ -53,7 +53,7 @@
       </p>
     </div>
     <span class="reads">
-      <span>{fetchLine(times, now)}</span>
+      <span>{line}</span>
       {#if rate}
         <span class="mono">{rate}</span>
       {/if}

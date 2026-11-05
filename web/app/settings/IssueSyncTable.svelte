@@ -17,6 +17,8 @@
   const c = core();
   const many = useManyStores(c.stores);
   let busy = $state(false);
+  // Counts the writes of the default mode that failed: the radios are made again from what is held.
+  let refused = $state(0);
 
   const MODES = ["mirror", "push", "link"].flatMap((v) => SYNC_MODES.filter((m) => m.value === v));
   const key = $derived(fields.props.milestone ?? "");
@@ -83,24 +85,21 @@
 
 <div class="modes" role="radiogroup" aria-label="新しくリンクするときの既定">
   <span class="cap">新しくリンクするときの既定</span>
-  {#each MODES as m (m.value)}
-    <label class="mode" class:on={fields.default_sync === m.value}>
-      <input
-        type="radio"
-        name="default-sync-{store}"
-        value={m.value}
-        checked={fields.default_sync === m.value}
-        disabled={busy || off !== null}
-        onchange={(e) => {
-          const el = e.currentTarget;
-          void write({ default_sync: m.value }, () => {
-            el.checked = false;
-          });
-        }}
-      >
-      {m.label}
-    </label>
-  {/each}
+  {#key refused}
+    {#each MODES as m (m.value)}
+      <label class="mode" class:on={fields.default_sync === m.value}>
+        <input
+          type="radio"
+          name="default-sync-{store}"
+          value={m.value}
+          checked={fields.default_sync === m.value}
+          disabled={busy || off !== null}
+          onchange={() => void write({ default_sync: m.value }, () => refused++)}
+        >
+        {m.label}
+      </label>
+    {/each}
+  {/key}
   <span class="hint">PR は常に GitHub が正本です</span>
 </div>
 

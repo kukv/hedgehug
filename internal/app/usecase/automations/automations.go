@@ -111,7 +111,8 @@ func List(ss *usecase.Session, project string) ([]RuleView, error) {
 			scoped = append(scoped, v)
 		}
 	}
-	return append(storeWide, scoped...), nil
+	out := make([]RuleView, 0, len(storeWide)+len(scoped))
+	return append(append(out, storeWide...), scoped...), nil
 }
 
 // Add appends a rule, in one commit (op automation). An id that is taken is

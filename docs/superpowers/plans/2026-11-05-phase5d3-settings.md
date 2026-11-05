@@ -4,7 +4,7 @@
 
 **Goal:** 自動化の設定、プロジェクトの設定、`repo_accounts`、GitHub App の警告、Issue の取り込みと作成をブラウザで動かし、フェーズ5の CLI の操作を GUI でもできるようにする（spec の 5d-3 の完了条件。E2E で確かめる）。
 
-**Architecture:** API は 5d-1 で揃っているので、変えるのは web だけ。文言と判定は `web/core/automations.ts`・`web/core/github.ts` に置き、画面はそれを呼ぶ。読み取りは `web/app/github.svelte.ts` の `useRules`・`useIssueFields`・`useGitHubRepos` に `useRuleStats`・全 Store の読み取りを足す。
+**Architecture:** API は 5d-1 で揃っているので、変えるのは web が中心。文言と判定は `web/core/automations.ts`・`web/core/github.ts` に置き、画面はそれを呼ぶ。読み取りは `web/app/github.svelte.ts` の `useRules`・`useIssueFields`・`useGitHubRepos` に `useRuleStats`・全 Store の読み取りを足す。
 
 **Tech Stack:** Svelte 5、pragmatic-drag-and-drop、vitest、Playwright、fakegh。
 
@@ -17,7 +17,7 @@
 - コミットの署名は 1Password。失敗したら index に積んで利用者に知らせる
 - `make` は `MAKEFLAGS=-j10`。E2E は `make e2e`
 - 既存のテストの期待値は、この plan が明示したものの他は変えない（`SettingsNav` の項目が 1 つ増える）
-- Go は変えない。変える必要が出たら `go generate ./internal/app/server` と `pnpm gen` を走らせる
+- Go は `automations.List` が空のとき `null` でなく `[]` を返す直しだけ。API の形は変わらない
 - 閲覧のみの Store は `useReadOnlySentence` で書き込みを無効にし、`why` で理由を出す
 
 ## この回で決めたこと
@@ -76,51 +76,51 @@
 
 ### Task 1: 土台
 
-- [ ] `router.test.ts`: `/settings/automations/shared` の往復
-- [ ] `router.ts`、`SettingsNav`（「自動化と GitHub」）、`SettingsRoute`
-- [ ] `messages.ts` のコード（`messages.test.ts`）
-- [ ] `cli.ts`（`cli.test.ts`）
-- [ ] `github.svelte.ts` に `useRuleStats`・`useAllGitHubRepos`
+- [x] `router.test.ts`: `/settings/automations/shared` の往復
+- [x] `router.ts`、`SettingsNav`（「自動化と GitHub」）、`SettingsRoute`
+- [x] `messages.ts` のコード（`messages.test.ts`）
+- [x] `cli.ts`（`cli.test.ts`）
+- [x] `github.svelte.ts` に `useRuleStats`・`useAllGitHubRepos`
 
 ### Task 2: ルールの一覧
 
-- [ ] `core/automations.test.ts`: 表形式で `setLabel`・`whenLabel`・`ruleYaml`・`statLabel`・`requiredNote`
-- [ ] `RuleList.svelte`: チップ、`disabled_in`・`project` のリンク、回数、`有効`、削除、注記
-- [ ] `RuleDialog.svelte`: 追加（決定 4）。`automation.exists` をフォームに出す
+- [x] `core/automations.test.ts`: 表形式で `setLabel`・`whenLabel`・`ruleYaml`・`statLabel`・`requiredNote`
+- [x] `RuleList.svelte`: チップ、`disabled_in`・`project` のリンク、回数、`有効`、削除、注記
+- [x] `RuleDialog.svelte`: 追加（決定 4）。`automation.exists` をフォームに出す
 
 ### Task 3: ページの枠と Issue の同期
 
-- [ ] `core/github.test.ts`: `rateLine`
-- [ ] `SettingsAutomations.svelte`: 見出し、取得時刻、レート制限、延長の表示
-- [ ] `IssueSyncTable.svelte`: 既定のモード、6 行の表、マイルストーンのキー（決定 6・7）
+- [x] `core/github.test.ts`: `rateLine`
+- [x] `SettingsAutomations.svelte`: 見出し、取得時刻、レート制限、延長の表示
+- [x] `IssueSyncTable.svelte`: 既定のモード、6 行の表、マイルストーンのキー（決定 6・7）
 
 ### Task 4: 取り込み
 
-- [ ] `issue-import.svelte.ts`・`IssueImportFields.svelte` に分ける。`IssueImportDialog.test.ts` は変えずに通す
-- [ ] `IssueImportSection.svelte`: 置き場所の選択（決定 8）、`cliGhImport` の `workspace`
+- [x] `issue-import.svelte.ts`・`IssueImportFields.svelte` に分ける。`IssueImportDialog.test.ts` は変えずに通す
+- [x] `IssueImportSection.svelte`: 置き場所の選択（決定 8）、`cliGhImport` の `workspace`
 
 ### Task 5: プロジェクトの設定
 
-- [ ] `core/automations.test.ts`: `projectRuleRow`（決定 11）
-- [ ] `ProjectAutomations.svelte` と `ProjectSettings.svelte` への配置
+- [x] `core/automations.test.ts`: `projectRuleRow`（決定 11）
+- [x] `ProjectAutomations.svelte` と `ProjectSettings.svelte` への配置
 
 ### Task 6: アカウント
 
-- [ ] `core/github.test.ts`: `installUrl`・`missingByOwner`
-- [ ] `RepoAccounts.svelte`: 一覧、ドラッグ、ボタン、追加、削除。並べ替えは pragmatic-drag-and-drop の `reorder`
-- [ ] `AppWarning.svelte` と `AccountCard` への配置、`SettingsNav` のバッジ
+- [x] `core/github.test.ts`: `installUrl`・`missingByOwner`
+- [x] `RepoAccounts.svelte`: 一覧、ドラッグ、ボタン、追加、削除。並べ替えは pragmatic-drag-and-drop の `reorder`
+- [x] `AppWarning.svelte` と `AccountCard` への配置、`SettingsNav` のバッジ
 
 ### Task 7: Issue の作成
 
-- [ ] `IssueCreateDialog.svelte` と `GitHubSection` のボタン
+- [x] `IssueCreateDialog.svelte` と `GitHubSection` のボタン
 
 ### Task 8: E2E
 
-- [ ] `settings-github.spec.ts`: ルールの追加・停止・削除が `hh automation list` に出る、回数、フィールドの変更が `hh automation fields` に出る、設定からの取り込み、プロジェクトの停止とルールの追加、`repo_accounts` の追加と並べ替えが config に書かれる、App の警告と `gh のトークンで代わりに使う`、タスク詳細からの Issue の作成
+- [x] `settings-github.spec.ts`: ルールの追加・停止・削除が `hh automation list` に出る、回数、フィールドの変更が `hh automation fields` に出る、設定からの取り込み、プロジェクトの停止とルールの追加、`repo_accounts` の追加と並べ替えが config に書かれる、App の警告と `gh のトークンで代わりに使う`、タスク詳細からの Issue の作成
 
 ### Task 9: 仕上げ
 
-- [ ] `make web-check`、`make check`、`make e2e`
-- [ ] 引き継ぎ `docs/superpowers/plans/2026-11-05-phase5d3-handoff.md`
-- [ ] 5a の手の確認（決定 2）
+- [x] `make web-check`、`make check`、`make e2e`
+- [x] 引き継ぎ `docs/superpowers/plans/2026-11-05-phase5d3-handoff.md`
+- [ ] 5a の手の確認（決定 2。利用者と行う。項目は引き継ぎ）
 - [ ] PR
