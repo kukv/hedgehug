@@ -74,7 +74,7 @@ func TestPollBuildsTheHistoryIndex(t *testing.T) {
 }
 
 // Release cancels a build of the history index that is running and returns
-// once it ended, before the repository is closed and the directory swapped.
+// once it ended, before the repository is closed and the store rebuilt.
 func TestReleaseCancelsTheHistoryBuild(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t) // its watcher does not run: Poll is called by hand
@@ -248,6 +248,6 @@ func TestPollerReleaseForKeepsPollsOut(t *testing.T) {
 		t.Error("the poll after ReleaseFor did not open the store again")
 	}
 	if watch.Released(f.w, e.Name) {
-		t.Error("a store taken out for good is still marked as swapped")
+		t.Error("a store taken out for good is still marked as rebuilt")
 	}
 }

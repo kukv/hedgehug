@@ -21,7 +21,7 @@ func TestStoreAddBuildsTheHistoryIndex(t *testing.T) {
 	requireHistoryAtHead(t, bob, "org")
 }
 
-// doctor --fix builds the history index of the store it cloned again.
+// doctor --fix builds the history index of the store it rebuilt.
 func TestDoctorFixBuildsTheHistoryIndex(t *testing.T) {
 	t.Parallel()
 	_, bob, remote := twoUsers(t)

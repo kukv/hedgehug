@@ -76,7 +76,7 @@ func newPoller(s *Server, hub *Hub) *Poller {
 }
 
 // Release lets go of the store at path, whose directory is about to be
-// swapped for a rebuild after a force push (D26); see watch.Watcher.Release.
+// rebuilt after a force push (D26); see watch.Watcher.Release.
 func (p *Poller) Release(path string) { p.w.Release(path) }
 
 // ReleaseFor lets go of the store at path and runs fn before any poll can

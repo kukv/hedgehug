@@ -99,7 +99,7 @@ type Watcher struct {
 
 	mu       sync.Mutex // the state below
 	stores   map[string]*polled
-	released map[string]bool // stores swapped for a rebuild, to tell the clients once
+	released map[string]bool // stores rebuilt, to tell the clients once
 	restored map[string]bool // stores let go for a removal that failed; opened again without a word
 	unread   int
 	looked   bool   // a poll has run
@@ -126,7 +126,7 @@ type polled struct {
 
 	// histBusy is true while a goroutine brings the history index of the
 	// store to HEAD; histDone is that goroutine's. Whoever lets go of the
-	// store (its directory may be swapped or removed) waits for histDone.
+	// store (its directory may be rebuilt or removed) waits for histDone.
 	histBusy   atomic.Bool
 	histDone   sync.WaitGroup
 	histCancel chan struct{} // closed to stop the build
@@ -145,7 +145,7 @@ func (st *polled) stopHistory() {
 }
 
 // Release lets go of the store at path, whose directory is about to be
-// swapped for a rebuild after a force push (D26): its index and its
+// rebuilt after a force push (D26): its index and its
 // repository files are closed, and the next poll opens the store again and
 // tells the clients that its tasks changed. It waits for a poll that is
 // reading, and cancels the build of the history index of the store and waits
@@ -191,7 +191,7 @@ func (w *Watcher) releaseLocked(path string) []string {
 // removal of the store: its directory goes) before any poll can look again,
 // so that no poll opens the store again while its config entry is still
 // there. When fn succeeds the store is gone for good, so it is no longer
-// marked as swapped for a rebuild (a store of that name that comes later is
+// marked as rebuilt (a store of that name that comes later is
 // new). When fn fails the store is still there: the next poll opens it again
 // without telling the clients anything (it is the same store, not a rebuilt
 // one). fn must not wait for a poll.
@@ -295,13 +295,13 @@ func (w *Watcher) pollLocked(publish bool) {
 			st = newPolled(e.Path, s)
 			fresh = true
 			w.mu.Lock()
-			swapped := w.released[e.Name]
+			rebuilt := w.released[e.Name]
 			delete(w.released, e.Name)
 			restored := w.restored[e.Name]
 			delete(w.restored, e.Name)
 			scanned := w.scanned
 			w.mu.Unlock()
-			if (swapped || scanned) && !restored && publish {
+			if (rebuilt || scanned) && !restored && publish {
 				// The store was made again, or it appeared after the first look: the
 				// commits made before this look are not known (a page that made a
 				// task in a store just created would never be told), so the clients

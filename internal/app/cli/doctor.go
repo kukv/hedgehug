@@ -100,8 +100,8 @@ func (a *app) writeDoctor(r maintenance.DoctorReport, fix, heading, first bool) 
 	return a.writeFindings(r.Findings)
 }
 
-// writeRebuilt tells of a store that was cloned again from origin after a
-// force push, on lines of their own: what was put back, then, when some
+// writeRebuilt tells of a store that was rebuilt on the history of origin
+// after a force push, on lines of their own: what was put back, then, when some
 // changes could not be, where the old store is.
 func (a *app) writeRebuilt(store string, b *maintenance.Rebuilt) error {
 	if _, err := fmt.Fprintf(a.stdout, "Cloned %s again from origin; put back %s\n", store, plural.Count(b.Replayed, "unpushed commit")); err != nil {

@@ -441,7 +441,7 @@ describe("DoctorSection: the repair", () => {
     expect(within(region()).queryByText("parent: the parent is deleted")).toBeNull();
   });
 
-  it("tells a store cloned again from origin", async () => {
+  it("tells a store rebuilt on the history of origin", async () => {
     const { api } = setup({ reports: { a: report({ findings: [fileFinding] }) } });
     await within(region()).findByText("does not decode");
     api.POST.mockImplementation(() =>

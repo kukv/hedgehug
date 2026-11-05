@@ -9,7 +9,7 @@ import (
 )
 
 // The whole round: origin is force pushed, hh sync stops and says why, hh
-// doctor tells of it, hh doctor --fix clones the store again with the
+// doctor tells of it, hh doctor --fix rebuilds the store with the
 // unpushed work put back, and the sync after it pushes that work.
 func TestDoctorFixClonesAForcePushedStoreAgain(t *testing.T) {
 	t.Parallel()
