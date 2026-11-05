@@ -130,6 +130,18 @@ export const cliWatch = (id: string, on: boolean): string =>
   cliLine([on ? "watch" : "unwatch", id]);
 
 // cliInbox is hh inbox; all also lists the items read.
+// cliStart and cliPr are what the GUI only copies: it has no repository to make a branch in or to push.
+export const cliStart = (id: string): string => cliLine(["start", id]);
+export const cliPr = (id: string): string => cliLine(["pr", id]);
+
+export function cliLink(i: { id: string; kind: "pr" | "issue"; ref: Arg }): string {
+  return cliLine(["link", i.id, `--${i.kind}`, i.ref]);
+}
+
+export function cliGhImport(i: { repo: Arg; label: Arg; parent: string }): string {
+  return cliLine(["gh", "import", i.repo, "--label", i.label, "--parent", i.parent]);
+}
+
 export function cliInbox(i: { all?: boolean; store?: string } = {}): string {
   const a: string[] = ["inbox"];
   if (i.all) a.push("--all");
