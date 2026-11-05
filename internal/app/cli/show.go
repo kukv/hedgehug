@@ -85,6 +85,16 @@ func (a *app) showText(v *usecase.ShowView) string {
 		field("repos", v.Repos...)
 	}
 	field("blocked_by", names(v.BlockedBy)...)
+	if v.Sprint != nil {
+		field("sprint", v.Sprint.Text())
+	}
+	if len(v.Releases) > 0 {
+		rels := make([]string, len(v.Releases))
+		for i, r := range v.Releases {
+			rels[i] = r.Text()
+		}
+		field("releases", rels...)
+	}
 	for _, p := range v.PropList {
 		if p.IsRef {
 			field(p.Key, names(p.Refs)...)

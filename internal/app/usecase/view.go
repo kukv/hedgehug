@@ -30,6 +30,8 @@ type TaskView struct {
 	Assignees []string       `json:"assignees"`
 	Labels    []string       `json:"labels"`
 	BlockedBy []Ref          `json:"blocked_by"`
+	Sprint    *PlanRef       `json:"sprint,omitempty"`
+	Releases  []PlanRef      `json:"releases,omitempty" nullable:"false"`
 	Props     map[string]any `json:"props"`
 	Created   time.Time      `json:"created"`
 	Updated   time.Time      `json:"updated"`
@@ -134,6 +136,13 @@ func TaskViewOf(ix *index.Index, e *index.Entry) *TaskView {
 	j.Scope = scopeOf(ix, e)
 	for _, b := range e.BlockedBy {
 		j.BlockedBy = append(j.BlockedBy, RefOf(ix, b))
+	}
+	if e.Sprint != nil {
+		r := sprintRef(ix, *e.Sprint)
+		j.Sprint = &r
+	}
+	for _, u := range e.Releases {
+		j.Releases = append(j.Releases, releaseRef(ix, u))
 	}
 	sc := ix.Schema()
 	for _, p := range e.Props {

@@ -18,7 +18,8 @@ func (a *app) setCmd() *cobra.Command {
   key+=value  add to a list
   key-=value  remove from a list
 
-Fields: title, kind, status, assignees, watchers, labels, repos, blocked_by.
+Fields: title, kind, status, assignees, watchers, labels, repos, blocked_by,
+sprint, releases (a name in the workspace of the task).
 Any other key is a property of the schema. Use hedgehug mv for the parent
 and the order.`,
 		Args: minArgs(2),

@@ -50,7 +50,7 @@ func Patch(ss *usecase.Session, arg string, in PatchInput) (usecase.TaskResult, 
 		}
 		assignees := slices.Clone(t.Assignees)
 		for _, as := range in.Assigns {
-			if err := usecase.ApplyAssign(t, as, ix.Schema(), ss.ResolveULID(ix)); err != nil {
+			if err := usecase.ApplyTaskAssign(t, as, ix, ss.ResolveULID(ix)); err != nil {
 				return err
 			}
 		}

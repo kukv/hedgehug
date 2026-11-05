@@ -67,6 +67,8 @@ type Fields struct {
 	Labels    *[]string      `json:"labels,omitempty" doc:"Replaces the labels"`
 	Repos     *[]string      `json:"repos,omitempty" doc:"Replaces the repos"`
 	BlockedBy *[]string      `json:"blocked_by,omitempty" doc:"Replaces the blockers: IDs or ULIDs"`
+	Sprint    *string        `json:"sprint,omitempty" doc:"The sprint: a name in the workspace of the task, or a ULID; empty takes it off"`
+	Releases  *[]string      `json:"releases,omitempty" doc:"Replaces the releases: names in the workspace of the task, or ULIDs"`
 	Props     map[string]any `json:"props,omitempty" doc:"Property name to value; null clears it, a list replaces a multiple value"`
 }
 
@@ -81,7 +83,7 @@ func (f *Fields) assigns() ([]usecase.Assign, error) {
 	for _, sc := range []struct {
 		key string
 		v   *string
-	}{{"title", f.Title}, {"kind", f.Kind}, {"status", f.Status}} {
+	}{{"title", f.Title}, {"kind", f.Kind}, {"status", f.Status}, {"sprint", f.Sprint}} {
 		if sc.v != nil {
 			if err := add(sc.key, *sc.v); err != nil {
 				return nil, err
@@ -91,7 +93,7 @@ func (f *Fields) assigns() ([]usecase.Assign, error) {
 	for _, l := range []struct {
 		key string
 		v   *[]string
-	}{{"assignees", f.Assignees}, {"watchers", f.Watchers}, {"labels", f.Labels}, {"repos", f.Repos}, {"blocked_by", f.BlockedBy}} {
+	}{{"assignees", f.Assignees}, {"watchers", f.Watchers}, {"labels", f.Labels}, {"repos", f.Repos}, {"releases", f.Releases}, {"blocked_by", f.BlockedBy}} {
 		if l.v != nil {
 			items := make([]any, len(*l.v))
 			for i, s := range *l.v {

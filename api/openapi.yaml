@@ -1464,11 +1464,19 @@ components:
           additionalProperties: {}
           description: Property name to value; null clears it, a list replaces a multiple value
           type: object
+        releases:
+          description: "Replaces the releases: names in the workspace of the task, or ULIDs"
+          items:
+            type: string
+          type: array
         repos:
           description: Replaces the repos
           items:
             type: string
           type: array
+        sprint:
+          description: "The sprint: a name in the workspace of the task, or a ULID; empty takes it off"
+          type: string
         status:
           type: string
         title:
@@ -1478,6 +1486,19 @@ components:
           items:
             type: string
           type: array
+      type: object
+    PlanRef:
+      additionalProperties: false
+      properties:
+        name:
+          description: Empty when the store has no such file
+          type: string
+        state:
+          type: string
+        ulid:
+          type: string
+      required:
+        - ulid
       type: object
     PresenceInputBody:
       additionalProperties: false
@@ -2019,6 +2040,10 @@ components:
           type:
             - array
             - "null"
+        releases:
+          items:
+            $ref: "#/components/schemas/PlanRef"
+          type: array
         repos:
           items:
             type: string
@@ -2035,6 +2060,8 @@ components:
           type: object
         scope:
           type: string
+        sprint:
+          $ref: "#/components/schemas/PlanRef"
         status:
           type: string
         store:
@@ -2509,8 +2536,14 @@ components:
           type: object
         rank:
           type: string
+        releases:
+          items:
+            $ref: "#/components/schemas/PlanRef"
+          type: array
         scope:
           type: string
+        sprint:
+          $ref: "#/components/schemas/PlanRef"
         status:
           type: string
         store:
