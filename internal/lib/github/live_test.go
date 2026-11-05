@@ -12,9 +12,9 @@ import (
 // must exist, and the answers must decode. .github/workflows/github-live.yaml
 // runs it on a schedule. It only reads.
 func TestLiveQueries(t *testing.T) {
-	org, token := os.Getenv("HH_LIVE_ORG"), os.Getenv("HH_LIVE_TOKEN")
+	org, token := os.Getenv("HEDGEHUG_LIVE_ORG"), os.Getenv("HEDGEHUG_LIVE_TOKEN")
 	if org == "" || token == "" {
-		t.Log("HH_LIVE_ORG or HH_LIVE_TOKEN is not set: nothing to check")
+		t.Log("HEDGEHUG_LIVE_ORG or HEDGEHUG_LIVE_TOKEN is not set: nothing to check")
 		return
 	}
 	c := New(Options{API: "https://api.github.com"}, token, nil)
