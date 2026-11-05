@@ -3,7 +3,6 @@ package store
 import (
 	"errors"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -85,6 +84,6 @@ func mkdirInStore(dir, path string) error {
 }
 
 func storeHere(dir string) bool {
-	_, err := os.Stat(filepath.Join(dir, ".git"))
+	_, err := osfs.Stat(filepath.Join(dir, ".git"))
 	return err == nil
 }

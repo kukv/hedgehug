@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -31,7 +30,7 @@ type Entry struct {
 // .yaml extension, are not views and are left out; doctor reports them.
 func List(storeDir string) ([]Entry, error) {
 	dir := filepath.Join(storeDir, model.ViewsDir)
-	des, err := os.ReadDir(dir)
+	des, err := osfs.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}

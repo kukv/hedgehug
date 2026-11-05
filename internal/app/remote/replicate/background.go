@@ -174,7 +174,7 @@ func (b *BoundedLog) Write(p []byte) (int, error) {
 // trimLog keeps the last half of a log over logMax. It rewrites the file in
 // place, so that a child that has it open for appending goes on writing to it.
 func trimLog(path string) error {
-	fi, err := os.Stat(path)
+	fi, err := osfs.Stat(path)
 	if errors.Is(err, os.ErrNotExist) || (err == nil && fi.Size() <= logMax) {
 		return nil
 	}

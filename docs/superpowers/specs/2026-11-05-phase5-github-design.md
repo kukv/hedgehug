@@ -33,7 +33,7 @@
 | `lib/gitrepo` | HEAD から作るブランチの作成、作業中のブランチの読み取り、コード repo の push |
 | `lib/fakegh`・`cmd/fakegh` | PR・Issue・レビュー・checks、GraphQL、操作用のコマンド |
 | `storage/ghstate`（新規） | repo ごとの最終取得時刻、走査の起点（`Since`）、失敗した試行の時刻と警告、レート制限の状態。`.hedgehug/local/github.json` に置く（Store の履歴には入らない） |
-| `usecase`（土台） | 同期（`replication`）から呼ぶもの: 取り込み（`FetchGitHub`）、自動リンク、Issue 同期、ルールの実行。領域どうしは import しないため（構成見直しの spec 決定 20。2026-11-05 利用者が決定） |
+| `usecase`（土台） | 同期（`replication`）から呼ぶもの: 取り込み（`FetchGitHub`）、自動リンク、取り込みの順番の 5 のルールの実行と Issue 同期のモードの反映（5b・5c）。領域どうしは import しないため（構成見直しの spec 決定 20。2026-11-05 利用者が決定） |
 | `usecase/integration`（新規） | リンクの付け外し、`hh start`・`hh pr`・`hh issue`・`hh gh import` |
 | `usecase/automations`（新規） | ルールの編集 |
 

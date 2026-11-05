@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -93,7 +92,7 @@ func (o *objectReader) has(h plumbing.Hash) (bool, error) {
 			return p != nil, err
 		}
 		if !again {
-			_, err := os.Stat(loosePath(o.dir, h))
+			_, err := osfs.Stat(loosePath(o.dir, h))
 			if err == nil {
 				return true, nil
 			}
@@ -133,7 +132,7 @@ func (o *objectReader) list(again bool) ([]*pack, error) {
 	if o.listed && !again {
 		return o.packs, nil
 	}
-	des, err := os.ReadDir(filepath.Join(o.dir, "pack"))
+	des, err := osfs.ReadDir(filepath.Join(o.dir, "pack"))
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, err
 	}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -611,10 +610,10 @@ func FinishLeftoverKept(dir string, l store.Leftover) (kept []string, err error)
 }
 
 func finishLeftover(dir string, l store.Leftover, keptPaths *[]string) error {
-	if _, err := os.Lstat(dir); errors.Is(err, fs.ErrNotExist) {
+	if _, err := osfs.Lstat(dir); errors.Is(err, fs.ErrNotExist) {
 		stale := false
 		if l.New != "" {
-			_, merr := os.Lstat(filepath.Join(l.New, staleMarker))
+			_, merr := osfs.Lstat(filepath.Join(l.New, staleMarker))
 			stale = merr == nil
 		}
 		switch {
@@ -659,7 +658,7 @@ func finishLeftover(dir string, l store.Leftover, keptPaths *[]string) error {
 			errs = append(errs, fmt.Errorf("carry over the local files of %s (it is left): %w", p, err))
 			continue
 		}
-		if _, err := os.Lstat(filepath.Join(p, filepath.FromSlash(store.LocalDir), keepMarker)); err == nil {
+		if _, err := osfs.Lstat(filepath.Join(p, filepath.FromSlash(store.LocalDir), keepMarker)); err == nil {
 			// The old store holds changes the rebuild did not put back: it
 			// is kept, never removed.
 			kept := dir + keptPrefix + strings.TrimPrefix(filepath.Base(p), filepath.Base(dir)+beforePrefix)
@@ -700,7 +699,7 @@ func carryMissing(from, to string) error {
 			}
 			continue
 		}
-		_, err := os.Lstat(filepath.Join(to, filepath.FromSlash(store.LocalDir), filepath.FromSlash(name)))
+		_, err := osfs.Lstat(filepath.Join(to, filepath.FromSlash(store.LocalDir), filepath.FromSlash(name)))
 		if err == nil {
 			continue
 		}

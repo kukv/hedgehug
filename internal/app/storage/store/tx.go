@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path"
 	"path/filepath"
 	"slices"
@@ -360,7 +359,7 @@ func (tx *Tx) noteFiles(ulid model.ULID) ([]string, error) {
 		}
 	}
 	for _, dir := range []string{path.Dir(model.CommentPath(ulid, model.ULID{})), path.Dir(model.WorklogPath(ulid, model.ULID{}))} {
-		entries, err := os.ReadDir(tx.s.path(dir))
+		entries, err := osfs.ReadDir(tx.s.path(dir))
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}

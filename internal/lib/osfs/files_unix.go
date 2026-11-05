@@ -47,6 +47,15 @@ func Mkdir(path string, perm os.FileMode) error { return os.Mkdir(path, perm) }
 // MkdirAll makes the directory path and the parents it lacks, with perm.
 func MkdirAll(path string, perm os.FileMode) error { return os.MkdirAll(path, perm) }
 
+// Stat describes the file at path, following a symbolic link.
+func Stat(path string) (os.FileInfo, error) { return os.Stat(path) }
+
+// Lstat describes the file at path; a symbolic link is described itself.
+func Lstat(path string) (os.FileInfo, error) { return os.Lstat(path) }
+
+// ReadDir lists the directory path, sorted by name.
+func ReadDir(path string) ([]os.DirEntry, error) { return os.ReadDir(path) }
+
 // Chmod sets the mode of the file at path.
 func Chmod(path string, mode os.FileMode) error { return os.Chmod(path, mode) }
 

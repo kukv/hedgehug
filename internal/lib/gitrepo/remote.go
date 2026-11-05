@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -251,14 +250,14 @@ func CloneWith(url, dir string, c Conn) (*Repo, error) {
 // returns the topmost of dir and its parents that does not exist, the path the
 // clone will create; it returns "" for an existing empty directory.
 func checkCloneTarget(dir string) (created string, err error) {
-	fi, err := os.Lstat(dir)
+	fi, err := osfs.Lstat(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		created = dir
 		for p := filepath.Dir(created); p != created; p = filepath.Dir(created) {
-			if _, err := os.Lstat(p); !errors.Is(err, fs.ErrNotExist) {
+			if _, err := osfs.Lstat(p); !errors.Is(err, fs.ErrNotExist) {
 				// Windows says "not found" for a path below a file, where Unix says
 				// "not a directory"; either way the clone could not make dir.
-				if pi, err := os.Stat(p); err == nil && !pi.IsDir() {
+				if pi, err := osfs.Stat(p); err == nil && !pi.IsDir() {
 					return "", fmt.Errorf("%s: %s is not a directory", dir, p)
 				}
 				break
@@ -273,7 +272,7 @@ func checkCloneTarget(dir string) (created string, err error) {
 	if !fi.IsDir() {
 		return "", fmt.Errorf("%s exists and is not a directory", dir)
 	}
-	entries, err := os.ReadDir(dir)
+	entries, err := osfs.ReadDir(dir)
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", dir, err)
 	}
@@ -289,7 +288,7 @@ func removeCreated(dir, created string) {
 		_ = osfs.RemoveAll(created)
 		return
 	}
-	entries, err := os.ReadDir(dir)
+	entries, err := osfs.ReadDir(dir)
 	if err != nil {
 		return
 	}

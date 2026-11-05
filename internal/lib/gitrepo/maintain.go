@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -40,7 +39,7 @@ func (r *Repo) smallPacks(packCap int64) ([]smallPack, error) {
 	}
 	var out []smallPack
 	for _, ix := range idxs {
-		fi, err := os.Stat(strings.TrimSuffix(ix, ".idx") + ".pack")
+		fi, err := osfs.Stat(strings.TrimSuffix(ix, ".idx") + ".pack")
 		if errors.Is(err, fs.ErrNotExist) {
 			continue // being removed
 		}
@@ -285,7 +284,7 @@ func (r *Repo) writePack(objs []plumbing.Hash) (base string, err error) {
 		return "", err
 	}
 	base = filepath.Join(dir, "pack-"+sum.String())
-	if _, serr := os.Stat(base + ".idx"); serr == nil {
+	if _, serr := osfs.Stat(base + ".idx"); serr == nil {
 		// The same pack is already there; packs are named by their content.
 		for _, t := range tmps {
 			_ = osfs.Remove(t)

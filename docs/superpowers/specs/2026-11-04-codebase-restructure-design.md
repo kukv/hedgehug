@@ -37,8 +37,8 @@
 | 17 | 領域どうしの import | depguard で、本番のファイルだけ禁止する。テストは準備に別の領域の操作を使ってよい。usecasetest は対象外（2026-11-05 利用者が決定） |
 | 18 | テストのための差し込み口 | 本番のコードにあるテストのためだけの差し込み口を直す。本番で誰も呼ばない関数は消すかテストへ移す。普通の引数・設定にできるものはそうする（本番でも本物の値を渡す）。本物の手段（`.git/index.lock` を置く、object を退避する、別のハンドルでロックを取る など）で確かめられるものは、テストを書き直して外す（書き直したテストが元の不具合を検出できることを確かめる。テストが遅くなるのは了承）。特定の一瞬への割り込み（読んだ後・書く前、rename の直前など）は外から作れないので残す。PR 5b で行う（2026-11-05 利用者が決定） |
 | 19 | 壊れた Store のエラー | 調べる途中で見つけた不具合を PR 5b で直す。`gitrepo.Files` は下の tree が読めないと一覧を黙って切り（go-git の `TreeWalker` が io.EOF を返すため）、`gitrepo.ReadFile` は blob が欠けても「ファイルなし」を返し、replicate の `snapshot.Read` は読み取りのエラーをすべて「ファイルなし」にしていた。object が欠けた Store では、一覧・読み取り・同期をエラーで止める（挙動の変化。壊れていない Store は変わらない。2026-11-05 利用者が決定） |
-| 20 | GitHub の取り込み | 同期（replication）から呼ぶ GitHub の取り込み（`FetchGitHub`・`HasGitHubTargets` と、それだけが使う自動リンクと gh への書き込み）は土台に置く。integration に残るのはリンクの付け外し。フェーズ 5b で同期から呼ぶもの（Issue 同期、ルールの実行）も土台に置く。PR 6 で、フェーズ 5a が integration に置いた取り込みを replication が import していたのを見つけて直した（2026-11-05 利用者が決定。replication だけを例外にする案は採らない） |
-| 21 | OS の境界の名前 | forbidigo の一覧に `os.Open`・`os.CreateTemp`・`os.MkdirTemp`・`os.Mkdir`・`os.Chmod` を足し、osfs の外の 15 か所を osfs に寄せる（PR 6。2026-11-05 利用者が決定） |
+| 20 | GitHub の取り込み | 同期（replication）から呼ぶ GitHub の取り込み（`FetchGitHub`・`HasGitHubTargets` と、それだけが使う自動リンクと gh への書き込み）は土台に置く。integration に残るのはリンクの付け外し。フェーズ 5b・5c で同期から呼ぶもの（フェーズ 5 の設計の取り込みの順番の 5: ルールの実行と Issue 同期のモードの反映）も土台に置く。PR 6 で、フェーズ 5a が integration に置いた取り込みを replication が import していたのを見つけて直した（2026-11-05 利用者が決定。replication だけを例外にする案は採らない） |
+| 21 | OS の境界の名前 | forbidigo の一覧に `os.Open`・`os.CreateTemp`・`os.MkdirTemp`・`os.Mkdir`・`os.Chmod`・`os.Stat`・`os.Lstat`・`os.ReadDir` を足し、osfs の外の本番の呼び出し（前の 5 つが 15 か所、後の 3 つが 41 か所）を osfs に寄せる（PR 6。2026-11-05 利用者が決定） |
 
 ## 1. 今の状態（main f965465）
 
@@ -159,8 +159,7 @@ api/openapi.yaml            今のまま
 
 - `lib/osfs` にこれらの薄い関数を置き、OS ごとの差は osfs の `_unix.go` の中だけに置く。atomicfile は osfs に統合する。
 - `store.WithFileLock` を osfs に移す。auth と config から store への依存がなくなる。
-- forbidigo で、osfs 以外が `os.Rename`・`os.Remove`・`os.RemoveAll`・`os.ReadFile`・`os.WriteFile`・`os.Open`・`os.OpenFile`・`os.CreateTemp`・`os.MkdirTemp`・`os.Mkdir`・`os.MkdirAll`・`os.Chmod`・`exec.Command`・`syscall`（`golang.org/x/sys/unix` を含む）を呼ぶことを禁止する（`Open`・`CreateTemp`・`MkdirTemp`・`Mkdir`・`Chmod` は PR 6 で足した。決定 21）。テストのファイルと、テスト用のパッケージ（gitrepotest・historytest・testenv・fakegh・usecasetest）は対象外にする。
-- `os.Stat`・`os.Lstat`・`os.ReadDir` は、ファイルの有無と一覧を読むだけで OS によって振る舞いが変わらないので、対象にしない。
+- forbidigo で、osfs 以外が `os.Rename`・`os.Remove`・`os.RemoveAll`・`os.ReadFile`・`os.WriteFile`・`os.Open`・`os.OpenFile`・`os.CreateTemp`・`os.MkdirTemp`・`os.Mkdir`・`os.MkdirAll`・`os.Chmod`・`os.Stat`・`os.Lstat`・`os.ReadDir`・`exec.Command`・`syscall`（`golang.org/x/sys/unix` を含む）を呼ぶことを禁止する（`Open`・`CreateTemp`・`MkdirTemp`・`Mkdir`・`Chmod`・`Stat`・`Lstat`・`ReadDir` は PR 6 で足した。決定 21）。テストのファイルと、テスト用のパッケージ（gitrepotest・historytest・testenv・fakegh・usecasetest）は対象外にする。
 - 呼び方は今と同じにする（関数の置き換えだけ）。Windows 版は書かない。
 
 ## 4. 入口の境界（提案 A・F・G・H）
@@ -216,7 +215,7 @@ CLI の本体を `internal/app/cli` に移し、`cmd/hedgehug/main.go` は `cli.
 | 4. 入口の境界 | 4.2〜4.4、Poller の中身を usecase/watch へ（決定 15）。cli・server のテストの書き直し（決定 11）。cli・server の depguard のルール（4.2、テストを含む）を有効にする | 4.3 の `--json` の形だけ変わる |
 | 5a. テストと仕上げ | 5 節（差し込み口を除く）、depguard の残りのルール（2 節の層の向き、決定 17）を有効にする、shard の見直し、親設計の書き直し（8 節） | 変わらない |
 | 5b. テストのための差し込み口 | 決定 18・19 | 決定 19 の、壊れた Store でエラーになることだけ変わる |
-| 6. 最終確認 | PR 5 のマージ後の main で `go list` から層別のパッケージ構成と依存を作り直し、層別構成の Artifact（https://claude.ai/artifact/WFTVztg3Wvhgj4UnCwzsiH）を更新する。2.1 の配置・2 節の層の向き・4.2 の禁止と突き合わせ、ずれと層の向きに反する依存の一覧を添えて利用者に見せる。利用者が最終判断をする。直すものが出たら、この PR で直す（2026-11-05 の結果: 領域どうしの依存 1 件を決定 20 で、OS の境界の外の呼び出し 15 か所を決定 21 で直した。tools/restructure を消した） | 変わらない |
+| 6. 最終確認 | PR 5 のマージ後の main で `go list` から層別のパッケージ構成と依存を作り直し、層別構成の Artifact（https://claude.ai/artifact/WFTVztg3Wvhgj4UnCwzsiH）を更新する。2.1 の配置・2 節の層の向き・4.2 の禁止と突き合わせ、ずれと層の向きに反する依存の一覧を添えて利用者に見せる。利用者が最終判断をする。直すものが出たら、この PR で直す（2026-11-05 の結果: 領域どうしの依存 1 件を決定 20 で、OS の境界の外の呼び出し 56 か所を決定 21 で直した。tools/restructure を消した） | 変わらない |
 
 - 途中残りの検出を storage へ移すのは PR 3 で行い、E には依存させない。
 - PR 4 で Poller の中身を watch へ移すとき、server のテスト 2 つは確かめ方が変わる（決定 11 の例外。2026-11-04 利用者が了承）: `TestTestServerWaitsForTheHistoryBuild` は watch の `Wait` のテストになり server からなくなる。`TestSessionBeforeSwapReleasesTheStore` は開き直した look の tasks.changed が来ることで確かめる。

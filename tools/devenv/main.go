@@ -197,7 +197,7 @@ func resolveDir(dir, cwd string) (string, error) {
 // findRoot walks up from dir to the directory that holds go.mod.
 func findRoot(dir string) (string, error) {
 	for d := dir; ; {
-		if _, err := os.Stat(filepath.Join(d, "go.mod")); err == nil {
+		if _, err := osfs.Stat(filepath.Join(d, "go.mod")); err == nil {
 			return d, nil
 		}
 		parent := filepath.Dir(d)
@@ -209,7 +209,7 @@ func findRoot(dir string) (string, error) {
 }
 
 func initEnv(dir, fakeghURL string, stdout io.Writer) error {
-	if _, err := os.Lstat(dir); err == nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+	if _, err := osfs.Lstat(dir); err == nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return fmt.Errorf("%s already exists; run `devenv reset` to recreate it", dir)
 	}
 	if err := osfs.MkdirAll(dir, 0o750); err != nil {
@@ -443,8 +443,8 @@ func addDevStore(p config.Paths, ds devStore) error {
 // reset removes dir when it is a devenv (it holds the marker file) and
 // creates it again. A missing dir is only created.
 func reset(dir, fakeghURL string, stdout io.Writer) error {
-	if _, err := os.Lstat(dir); err == nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
-		if _, err := os.Stat(filepath.Join(dir, markerFile)); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+	if _, err := osfs.Lstat(dir); err == nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+		if _, err := osfs.Stat(filepath.Join(dir, markerFile)); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 			return fmt.Errorf("%s was not made by devenv (no %s in it); not removing it", dir, markerFile)
 		}
 		if err := osfs.RemoveAll(dir); err != nil {
@@ -459,7 +459,7 @@ func printEnv(dir, user string, stdout io.Writer) error {
 	if !slices.Contains(users, user) {
 		return fmt.Errorf("no user named %q (users: %s)", user, strings.Join(users, ", "))
 	}
-	if _, err := os.Stat(home); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
+	if _, err := osfs.Stat(home); err != nil { //nolint:gosec // G703: the path comes from the developer own --dir or cwd in a local dev tool
 		return fmt.Errorf("%s: %w; run `devenv init` first", home, err)
 	}
 	var b strings.Builder

@@ -4,9 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/kukv/hedgehug/internal/lib/osfs"
 )
 
 // What a rebuild after a history rewrite (replicate.Rebuild) leaves beside
@@ -39,7 +40,7 @@ func FindLeftover(dir string) (Leftover, error) {
 // looks at several stores reads each directory once. A missing directory
 // has no entries.
 func ReadParent(dir string) ([]fs.DirEntry, error) {
-	entries, err := os.ReadDir(filepath.Dir(filepath.Clean(dir)))
+	entries, err := osfs.ReadDir(filepath.Dir(filepath.Clean(dir)))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}

@@ -115,7 +115,7 @@ func (s *Store) LocalFiles(dir string) ([]string, error) {
 	if err := validLocalName(dir); err != nil {
 		return nil, err
 	}
-	entries, err := os.ReadDir(s.path(LocalDir + "/" + dir))
+	entries, err := osfs.ReadDir(s.path(LocalDir + "/" + dir))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}

@@ -18,8 +18,8 @@
 
 ## 利用者の決定（2026-11-05）
 
-1. 取り込みは spec 2.3 のとおり土台に下ろす（replication だけを例外にする案は採らない）。integration に残るのはリンクの付け外し。フェーズ 5b で同期から呼ぶもの（Issue 同期、ルールの実行）も土台に置く
-2. 15 か所の OS の呼び出しは osfs に寄せ、forbidigo に 5 つの名前を足す
+1. 取り込みは spec 2.3 のとおり土台に下ろす（replication だけを例外にする案は採らない）。integration に残るのはリンクの付け外し。フェーズ 5b・5c で同期から呼ぶもの（取り込みの順番の 5: ルールの実行と Issue 同期のモードの反映）も土台に置く
+2. 15 か所の OS の呼び出しは osfs に寄せ、forbidigo に 5 つの名前を足す。続けて、`os.Stat`・`os.Lstat`・`os.ReadDir`（osfs の外の本番に 41 か所）も同じく寄せる（plan で対象外としていたのを利用者が変えた）
 
 ## Task 1: 取り込みを土台へ
 
@@ -36,7 +36,7 @@
 
 - osfs の `files_unix.go` に `Open`・`CreateTemp`・`MkdirTemp`・`Mkdir`・`Chmod` を足す（os の同名を呼ぶだけ）
 - 15 か所を置き換える: gitrepo（maintain.go 93・250・272・300・320・326、pack.go 46・62、objects.go 248、refs.go 42、conn.go 97）、store/lock.go 77、config/config.go 652、cli/editor.go 43、tools/devenv/main.go 331
-- forbidigo の 1 つ目の pattern に 5 つの名前を足す。spec 3 節の禁止の一覧も同じにする。`Stat`・`Lstat`・`ReadDir` は OS で振る舞いが違わない読み取りなので対象外のまま（spec 3 節に書く）
+- forbidigo の 1 つ目の pattern に 5 つの名前と `Stat`・`Lstat`・`ReadDir` を足し、osfs にも同じ 3 つを足して 41 か所を置き換える。spec 3 節の禁止の一覧も同じにする。transport.go は go-billy の osfs を `billyosfs` の名前で import する
 - 確かめ方: `make lint` が 0 件。置き換えを 1 か所戻すと forbidigo が止める
 
 ## Task 4: 仕上げ
@@ -51,4 +51,5 @@
 - Task 1〜4 を実施。usecase 系のテストは移す前後で 669 件（usecase 155→181、integration 40→7、replication 17→24）。共通の補助は `usecasetest.GitHubSession` にした
 - forbidigo は、置き換えた 1 か所を `os.Mkdir` に戻すと止めることを確かめた。置き換えで要らなくなった `//nolint:gosec`（G304・G703）を外した
 - 親設計の「パッケージ構成」に、フェーズ 5a で増えた `storage/ghstate`・`usecase/integration` と、土台の GitHub の取り込みを足した（rev 376）
+- forbidigo の対象の名前（12 個）は、osfs とテスト用の部品の外の本番で 0 件
 - `go build`・`go vet`・`make lint`（0 件）・`make fmt-check`・`make tidy-check`・`go test -race ./...`（全 44 パッケージ通過）

@@ -122,7 +122,7 @@ linters:
       analyze-types: true
       forbid:
         # OS に触る呼び出しは internal/lib/osfs を通す（spec: OS の境界）。
-        - pattern: ^os\.(Rename|Remove|RemoveAll|ReadFile|WriteFile|Open|OpenFile|CreateTemp|MkdirTemp|Mkdir|MkdirAll|Chmod)$
+        - pattern: ^os\.(Rename|Remove|RemoveAll|ReadFile|WriteFile|Open|OpenFile|CreateTemp|MkdirTemp|Mkdir|MkdirAll|Chmod|Stat|Lstat|ReadDir)$
           msg: use the function of the same name in internal/lib/osfs
         - pattern: ^exec\.Command$
           msg: use osfs.Command
