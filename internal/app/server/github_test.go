@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kukv/hedgehug/internal/app/storage/ghstate"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/accounts"
 	"github.com/kukv/hedgehug/internal/app/usecase/integration"
@@ -196,18 +195,17 @@ func TestGetGitHub(t *testing.T) {
 	if len(sts) != 1 || sts[0].GitHub == nil || sts[0].GitHub.AppMissing != 1 {
 		t.Fatalf("sync = %+v", sts)
 	}
-	fake.UnrestrictApp("org-a")
-	s, err := ts.session().OpenStore()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = s.Repo().Close() }()
-	if err := ghstate.Write(s, ghstate.State{Repos: map[string]ghstate.Repo{}}); err != nil {
-		t.Fatal(err)
-	}
+}
+
+func TestGetGitHubAfterARead(t *testing.T) {
+	t.Parallel()
+	ts, _ := newGitHubServer(t)
+	id := ts.add("a", "")
+	ts.call("PATCH", "/api/tasks/"+id, map[string]any{"repos": []string{webRepo}}, 200, nil)
 	ts.sync()
+	var out []usecase.GitHubRepoView
 	ts.call("GET", "/api/github", nil, 200, &out)
-	if len(out) != 1 || out[0].AppMissing || out[0].LastFetch == nil || out[0].Limit == 0 {
+	if len(out) != 1 || out[0].AppMissing || out[0].LastFetch == nil || out[0].NextFetch == nil || out[0].Limit == 0 {
 		t.Errorf("read = %+v", out)
 	}
 }
