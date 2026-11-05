@@ -50,6 +50,7 @@ spec に書いていなかった細部を、コードを読んで次のとおり
 | 19 | web の inbox | 5b では触らない。`describe` の既定の分岐が `種類: automation` と出す | タブと文言は spec の 5d-2 |
 | 20 | `hh mv --store` の選択 | `automations.yaml` に対象があるだけでも `--scoped` を求める。元の Store からは、持っていくときも捨てるときも消す | `schema.yaml` の `scoped` と同じ扱いにする |
 | 21 | `hh link --issue` と使えない `automations.yaml` | ファイルが読めないか `default_sync` が不正なら、`--sync` なしの指定は `automation.invalid` で失敗する。`--sync` の指定と `--pr` はファイルを読まないので通る | モードはタスクに残る値なので推測しない。決定 16 は同期を止めないための決まりで、利用者がその場で直せるこの操作には当てはめない |
+| 22 | `hh start` と古い slug のブランチ | `hh/<ID>` か `hh/<ID>-` で始まるブランチがあれば新しく作らない。そこにいれば何もせず、別のブランチにいれば `git switch` を案内する | タイトルを変えた後に打つと2本目ができ、`hh pr` が選べなくなる |
 
 ## File Structure
 

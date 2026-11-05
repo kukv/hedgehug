@@ -12,6 +12,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/domain/automation"
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/storage/index"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
 )
@@ -99,30 +100,33 @@ func dropGH(t *model.Task, ref model.GitHubRef) error {
 	return t.SetGitHub(g)
 }
 
-// Link links the task arg names. Linking again what is unlinked brings it
+// link adds the link to ref to t. Linking again what is unlinked brings it
 // back; linking an issue again with another Sync changes its mode.
-func Link(ss *usecase.Session, arg string, in LinkInput) (usecase.TaskResult, error) {
-	return change(ss, arg, "link", in, func(s *store.Store, t *model.Task, ref model.GitHubRef) error {
-		sync, err := in.sync(s)
-		if err != nil {
-			return err
-		}
-		i := slices.IndexFunc(t.Links, func(l model.Link) bool { return model.CanonRef(l.Ref) == ref.String() })
-		if i < 0 {
-			t.Links = append(slices.Clone(t.Links), model.Link{Type: ref.Kind, Ref: ref.String(), Sync: sync})
-			return dropGH(t, ref)
-		}
-		live := t.Links[i].Live()
-		if live && (in.Sync == "" || t.Links[i].Sync == sync) {
-			return usecase.NewErr(usecase.KindInvalid, "link.exists", fmt.Errorf("%s is linked already", ref.Label()))
-		}
-		t.Links = slices.Clone(t.Links)
-		t.Links[i].Sync = sync
-		if live {
-			return nil
-		}
+func (in LinkInput) link(s *store.Store, t *model.Task, ref model.GitHubRef) error {
+	sync, err := in.sync(s)
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(t.Links, func(l model.Link) bool { return model.CanonRef(l.Ref) == ref.String() })
+	if i < 0 {
+		t.Links = append(slices.Clone(t.Links), model.Link{Type: ref.Kind, Ref: ref.String(), Sync: sync})
 		return dropGH(t, ref)
-	})
+	}
+	live := t.Links[i].Live()
+	if live && (in.Sync == "" || t.Links[i].Sync == sync) {
+		return usecase.NewErr(usecase.KindInvalid, "link.exists", fmt.Errorf("%s is linked already", ref.Label()))
+	}
+	t.Links = slices.Clone(t.Links)
+	t.Links[i].Sync = sync
+	if live {
+		return nil
+	}
+	return dropGH(t, ref)
+}
+
+// Link links the task arg names.
+func Link(ss *usecase.Session, arg string, in LinkInput) (usecase.TaskResult, error) {
+	return change(ss, arg, "link", in, in.link)
 }
 
 // Unlink turns a link off. It stays in the file, so that the automatic
@@ -167,6 +171,11 @@ func change(ss *usecase.Session, arg, op string, in LinkInput, fn func(*store.St
 	if err != nil {
 		return usecase.TaskResult{}, err
 	}
+	return writeLink(ss, s, ix, e, op, ref, fn)
+}
+
+// writeLink runs fn on the task e, as one commit.
+func writeLink(ss *usecase.Session, s *store.Store, ix *index.Index, e *index.Entry, op string, ref model.GitHubRef, fn func(*store.Store, *model.Task, model.GitHubRef) error) (usecase.TaskResult, error) {
 	hash, err := ss.UpdateCommit(s, store.Op{Name: op, Task: e.ULID}, func(tx *store.Tx) error {
 		t, err := tx.Task(e.ULID)
 		if err != nil {
