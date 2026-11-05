@@ -15,8 +15,9 @@ import (
 // refreshBefore is how long before its end an access token is refreshed.
 const refreshBefore = 5 * time.Minute
 
-// lockWait is how long a refresh waits for another one to end.
-var lockWait = 30 * time.Second
+// defaultLockWait is how long a refresh waits for another one to end, when
+// Options.LockWait is not set.
+const defaultLockWait = 30 * time.Second
 
 // Prompt shows the user the code and where to enter it.
 type Prompt func(dc *github.DeviceCode)
@@ -93,7 +94,7 @@ func WithLock(opt Options, fn func() error) error {
 	if opt.LockFile == "" {
 		return errors.New("auth: LockFile is not set")
 	}
-	err := osfs.WithFileLock(opt.LockFile, lockWait, fn)
+	err := osfs.WithFileLock(opt.LockFile, opt.lockWait(), fn)
 	if errors.Is(err, osfs.ErrLocked) {
 		return fmt.Errorf("another hedgehug is refreshing or changing the token; wait a little and try again: %w", err)
 	}
