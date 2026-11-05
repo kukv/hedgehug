@@ -1,5 +1,5 @@
 import { type Api, type TaskView, unwrap } from "../../core/api/client";
-import { quoteArg } from "../../core/cli";
+import { cliStart, quoteArg } from "../../core/cli";
 import { searchTasks as findTasks } from "../../core/search";
 import type { WorkspaceEntry } from "../../core/stores";
 import type { ViewEntry } from "../../core/views";
@@ -50,6 +50,7 @@ export type CommandItem = {
   key: string;
   label: string;
   icon:
+    | "copy"
     | "sync"
     | "plus"
     | "status"
@@ -207,6 +208,7 @@ export type CommandEnv = {
   project: { ulid: string; title: string } | null; // the project the screen is of (its page or its detail)
   recent: TaskView[]; // the tasks opened last, the latest first
   pickStatus: (t: TaskView) => void;
+  copyCommand: (command: string) => void;
   moveTask: (t: TaskView) => void;
   moveStoreTask: (t: TaskView) => void;
   readOnly: (store: string) => string | null; // why a store cannot be written, or null
@@ -232,6 +234,13 @@ export function taskCommands(env: CommandEnv, t: TaskView): PaletteGroup {
               icon: "status" as const,
               keepOpen: true,
               run: () => env.pickStatus(t),
+            },
+            {
+              type: "command" as const,
+              key: `task-start:${t.ulid}`,
+              label: `ブランチを作って始める（${cliStart(env.displayId(t.store, t.id))}）`,
+              icon: "copy" as const,
+              run: () => env.copyCommand(cliStart(env.displayId(t.store, t.id))),
             },
             {
               type: "command" as const,

@@ -16,6 +16,7 @@
   import { useDisplayId, useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
   import { patchTask } from "../tree/actions";
+  import { copyText } from "../ui/clipboard";
   import StoreBadge from "../ui/StoreBadge.svelte";
   import { routeStore, runUndo } from "../undo";
   import { openViewSave } from "../views/dialogs-state.svelte";
@@ -215,6 +216,10 @@
         return t && storeShown(c.stores, t.store) ? [t] : [];
       }),
       pickStatus,
+      copyCommand: (command) =>
+        void copyText(command).then((ok) =>
+          toast({ message: ok ? `${command} をコピーしました` : "コピーできませんでした" }),
+        ),
       moveTask: (t) => openWorkspaceMove(t),
       moveStoreTask: (t) => openStoreMove(t),
       readOnly: (store) => readOnlyNow(c.stores, store),

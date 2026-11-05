@@ -303,6 +303,7 @@ function env(over: Partial<CommandEnv> = {}): CommandEnv {
     project: null,
     recent: [],
     pickStatus: vi.fn(),
+    copyCommand: vi.fn(),
     moveTask: vi.fn(),
     moveStoreTask: vi.fn(),
     readOnly: () => null,
@@ -381,7 +382,7 @@ describe("buildCommands", () => {
     const other = buildCommands(env(), ">同期")[0]?.items[0];
     expect(other).toMatchObject({ kbd: "Ctrl+Shift+S" });
     const task = taskCommands(env(), { ulid: "T1", id: "REL-6" } as TaskView);
-    expect(task.items[2]).toMatchObject({ kbd: "Ctrl+↵" });
+    expect(task.items[3]).toMatchObject({ kbd: "Ctrl+↵" });
   });
 
   it("runs a command and goes to a workspace or a project with a URL for a new tab", () => {
@@ -641,7 +642,7 @@ describe("taskCommands", () => {
   it("offers no move when the store has no other workspace, and none in another store", () => {
     const t = task("T1", "task", null, { id: "REL-6" });
     const none = taskCommands(env(), t);
-    expect(none.items).toHaveLength(3);
+    expect(none.items).toHaveLength(4);
     const elsewhere = taskCommands(
       env({ workspaces: [ws, { ...ws, store: "backend", ulid: "W2", name: "ops" }] }),
       t,
@@ -654,8 +655,11 @@ describe("taskCommands", () => {
     const t = task("T1", "task", null, { id: "REL-6" });
     const g = taskCommands(e, t);
     expect(g.name).toBe("REL-6 に対して");
-    const [status, child, detail, move] = g.items;
-    expect(g.items).toHaveLength(4);
+    const [status, start, child, detail, move] = g.items;
+    expect(g.items).toHaveLength(5);
+    expect(start).toMatchObject({ label: "ブランチを作って始める（hh start REL-6）" });
+    if (start?.type === "command") start.run();
+    expect(e.copyCommand).toHaveBeenCalledWith("hh start REL-6");
     expect(move).toMatchObject({
       key: "task-move:T1",
       label: "別のワークスペースへ移動…",
