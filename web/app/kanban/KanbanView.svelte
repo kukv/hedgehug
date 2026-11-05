@@ -7,6 +7,7 @@
   import type { KanbanSettings } from "../../core/views";
   import { core } from "../context";
   import { openCreate } from "../create-state.svelte";
+  import { useRules } from "../github.svelte";
   import { storeShown } from "../hidden";
   import Icon from "../icons/Icon.svelte";
   import StatusIcon from "../icons/StatusIcon.svelte";
@@ -26,7 +27,7 @@
   import Avatar from "../ui/Avatar.svelte";
   import CliLine from "../ui/CliLine.svelte";
   import Menu from "../ui/Menu.svelte";
-  import { buildBoard, type Column, NO_LANE } from "./board";
+  import { autoHints, buildBoard, type Column, NO_LANE } from "./board";
   import { boardAutoScroll, boardDragEnd, cardDnd, cellDnd, type DragSource } from "./dnd";
   import { type DropDecision, decideDrop, scopedStatusesOf } from "./drop";
   import KanbanCard from "./KanbanCard.svelte";
@@ -196,6 +197,18 @@
       store: ls.store,
     }),
   );
+  // What the rules bring to a column; a board of several Stores has no one set of rules.
+  const boardProject = $derived(scope.kind === "project" ? scope.ulid : undefined);
+  const rules = useRules(
+    () => ls.store,
+    () => boardProject,
+  );
+  const hints = $derived.by(() => {
+    const sc = ls.store ? schemas.get(ls.store) : undefined;
+    return sc && rules.current
+      ? autoHints(rules.current, sc, settings.columns, boardProject)
+      : new Map<string, string>();
+  });
   // How many tasks a column has: a task with two assignees is in two rows but counts once.
   const counts = $derived(
     board.columns.map(
@@ -512,6 +525,9 @@
                     <span id="{uid}-add-off-{i}" class="sr">{readOnlySentence(addLocked)}</span>
                   {/if}
                 {/if}
+                {#if hints.has(col.key)}
+                  <p class="auto">{hints.get(col.key)}</p>
+                {/if}
               </div>
             {/each}
           </div>
@@ -689,10 +705,18 @@
   }
   .head {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
+    align-content: flex-start;
     gap: var(--space-8);
     min-width: 0;
     padding: 0 var(--space-4);
+  }
+  .auto {
+    flex: 0 0 100%;
+    margin: 0;
+    color: var(--muted);
+    font-size: var(--fs-11);
   }
   .name {
     font-size: var(--fs-13);

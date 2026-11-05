@@ -33,8 +33,11 @@ describe("tabsOf", () => {
     ["prefix_duplicate", ["all", "repair"]],
     ["rewrite_applied", ["all", "repair"]],
     ["purged_change", ["all", "repair"]],
-    ["assigned", ["all"]],
-    ["watch", ["all"]],
+    ["assigned", ["all", "assigned"]],
+    ["watch", ["all", "watch"]],
+    ["automation", ["all", "automation"]],
+    ["automation_rejected", ["all", "automation"]],
+    ["issue_overwritten", ["all", "automation"]],
     ["something_new", ["all"]],
   ])("%s", (kind, tabs) => {
     expect(tabsOf(kind)).toEqual(tabs);
@@ -69,7 +72,15 @@ describe("tabCounts and filterByTab", () => {
     n({ ulid: "6", kind: "watch", read: true }),
   ];
   it("counts the unread of each tab", () => {
-    expect(tabCounts(items)).toEqual({ all: 4, overwritten: 1, mention: 1, repair: 1 });
+    expect(tabCounts(items)).toEqual({
+      all: 4,
+      mention: 1,
+      assigned: 1,
+      watch: 0,
+      overwritten: 1,
+      automation: 0,
+      repair: 1,
+    });
   });
   it("assigned and watch are in the all tab only", () => {
     expect(filterByTab(items, "all")).toHaveLength(6);
@@ -80,6 +91,57 @@ describe("tabCounts and filterByTab", () => {
 });
 
 describe("notificationText", () => {
+  it("names the rule, the status and the event of an automation", () => {
+    const t = notificationText(
+      n({
+        ulid: "1",
+        kind: "automation",
+        detail: { rule: "pr-opened", event: "pr.opened", status: "in_progress" },
+      }),
+      { statusLabel: (s) => (s === "in_progress" ? "進行中" : s) },
+    );
+    expect(t).toEqual({
+      label: "自動化",
+      text: "ルール pr-opened が 進行中 にしました（PR が開かれた）",
+    });
+  });
+
+  it("tells why a rule was refused", () => {
+    const t = notificationText(
+      n({
+        ulid: "1",
+        kind: "automation_rejected",
+        detail: { rule: "pr-merged", reason: "points: required" },
+      }),
+    );
+    expect(t).toEqual({
+      label: "自動化を拒否",
+      text: "ルール pr-merged で動かせませんでした: points: required",
+    });
+  });
+
+  it("tells which side of an issue was written over, and what was lost", () => {
+    const item = (side: string) =>
+      n({
+        ulid: "1",
+        kind: "issue_overwritten",
+        detail: {
+          ref: "github.com/org-a/web/issues/45",
+          field: "title",
+          side,
+          lost: ["手で直した題"],
+        },
+      });
+    expect(notificationText(item("github"))).toEqual({
+      label: "自動化",
+      text: "org-a/web#45 のタイトルが GitHub 上で手で編集されていたため、Hedgehug の値で上書きしました",
+      mine: "タイトル: 手で直した題",
+    });
+    expect(notificationText(item("task")).text).toBe(
+      "タスクのタイトルが手で編集されていたため、org-a/web#45 の値に戻しました",
+    );
+  });
+
   it("overwritten: the field, and my value as it was", () => {
     const t = notificationText(
       n({ ulid: "1", kind: "overwritten", detail: { field: "points", value: 2 } }),

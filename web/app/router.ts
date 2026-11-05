@@ -4,7 +4,7 @@ import type { Layout } from "../core/views";
 
 export type { Layout };
 export type WorkspaceTab = "overview" | "tree" | "kanban" | "table" | "settings";
-export type ProjectTab = "tree" | "kanban" | "table" | "settings";
+export type ProjectTab = "overview" | "tree" | "kanban" | "table" | "settings";
 // "general", "accounts" and "stores" are of this machine and names no Store; the pages of a Store carry it.
 // The first tab of each is the one without ?tab=.
 export const SCHEMA_TABS = ["statuses", "kinds", "props", "workflow"] as const;
@@ -16,8 +16,9 @@ export type SettingsPage =
   | { page: "workspaces"; store: string }
   | { page: "schema"; store: string; tab: SchemaTab };
 
-// "" is every commit; exclude is the ones of people, only the ones of syncs.
-export type ActivitySync = "" | "exclude" | "only";
+// "" is every commit; exclude is the ones of people, only the ones of syncs, automation the ones of
+// the automations (the fetches, the rules and the issues).
+export type ActivitySync = "" | "exclude" | "only" | "automation";
 
 export type Route =
   | { name: "home" }
@@ -32,7 +33,7 @@ export type Route =
   | ({ name: "settings" } & SettingsPage);
 
 const WORKSPACE_TABS: readonly string[] = ["tree", "kanban", "table", "settings"];
-const PROJECT_TABS: readonly string[] = ["tree", "kanban", "table", "settings"];
+const PROJECT_TABS: readonly string[] = ["overview", "tree", "kanban", "table", "settings"];
 const LAYOUTS: readonly string[] = ["tree", "kanban", "table"];
 
 function decode(s: string): string {
@@ -78,7 +79,7 @@ function matchRoute(pathname: string, search: string): Route | null {
     return {
       name: "activity",
       workspaces: (p.get("workspace") ?? "").split(",").filter(Boolean),
-      sync: sync === "exclude" || sync === "only" ? sync : "",
+      sync: sync === "exclude" || sync === "only" || sync === "automation" ? sync : "",
     };
   }
   if (head === "settings" && (seg.length === 1 || (seg.length === 2 && a === "general"))) {

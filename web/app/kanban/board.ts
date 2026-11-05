@@ -1,6 +1,7 @@
 import type { TaskView } from "../../core/api/client";
 import { CATEGORIES, CATEGORY_LABEL, type Category, categoryOf } from "../../core/categories";
-import type { SchemaView } from "../../core/schema";
+import { type Rule, ruleHint } from "../../core/github";
+import { defaultStatusIn, type SchemaView } from "../../core/schema";
 import { compareStatusPlace, type StatusPlace, statusPlace } from "../../core/status-order";
 import type { KanbanSettings } from "../../core/views";
 
@@ -161,4 +162,27 @@ export function buildBoard(tasks: readonly TaskView[], o: BoardOptions): Board {
     }
   }
   return { columns, lanes };
+}
+
+/**
+ * The words of the columns the rules of a board bring tasks to, by the key of the column. A rule
+ * that is off, and a rule of a project the board is not of, say nothing; several rules on one
+ * column are joined.
+ */
+export function autoHints(
+  rules: readonly Rule[],
+  schema: SchemaView,
+  mode: KanbanSettings["columns"],
+  project: string | undefined,
+): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const r of rules) {
+    const hint = ruleHint(r);
+    if (hint === null || !r.enabled || (r.project && r.project.ulid !== project)) continue;
+    const status = r.status ?? defaultStatusIn(schema, r.category ?? "");
+    const key = mode === "category" ? categoryOf(schema, status) : status;
+    const had = out.get(key);
+    if (had !== hint) out.set(key, had ? `${had} · ${hint}` : hint);
+  }
+  return out;
 }

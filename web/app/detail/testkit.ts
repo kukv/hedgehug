@@ -208,7 +208,7 @@ export function makeCore(opts: FakeCoreOptions = {}) {
     subscribe,
   };
   const schema = { get: vi.fn(() => schemaView), load: vi.fn(async () => schemaView), subscribe };
-  const conn = { state: "open", subscribe, on: vi.fn(() => () => {}) };
+  const conn = { state: "open", sync: new Map(), subscribe, on: vi.fn(() => () => {}) };
   return {
     api,
     cache,

@@ -210,6 +210,21 @@ func TestAdmin(t *testing.T) {
 // TestAdminDeviceApproveAndExpire goes through the two endpoints the other
 // tests reach by calling the server's methods: /_fakegh/device/approve and
 // /_fakegh/token/expire.
+func TestAdminRateLimit(t *testing.T) {
+	t.Parallel()
+	s := New(State{})
+	srv := httptest.NewServer(s)
+	t.Cleanup(srv.Close)
+	if err := (Admin{URL: srv.URL}).SetRateLimit(10, 5000, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.rate.Remaining != 10 || s.rate.Limit != 5000 || time.Until(s.rate.ResetAt) < 59*time.Minute {
+		t.Errorf("rate = %+v", s.rate)
+	}
+}
+
 func TestAdminDeviceApproveAndExpire(t *testing.T) {
 	t.Parallel()
 	s := New(seed())

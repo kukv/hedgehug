@@ -63,24 +63,32 @@ describe("ProjectHeader", () => {
     expect(screen.getByRole("heading", { level: 1 })).toBeTruthy();
   });
 
-  it("has the tabs tree, kanban and table as links, the current one marked", () => {
+  it("has the tabs overview, tree, kanban and table as links, the current one marked", () => {
     mount({ tab: "kanban" });
     const links = within(screen.getByRole("navigation", { name: "ビューの切り替え" })).getAllByRole(
       "link",
     );
     expect(links.map((a) => a.textContent?.trim())).toEqual([
+      "概要",
       "ツリー",
       "カンバン",
       "テーブル",
       "設定",
     ]);
     expect(links.map((a) => a.getAttribute("href"))).toEqual([
+      "/projects/P1/overview",
       "/projects/P1",
       "/projects/P1/kanban",
       "/projects/P1/table",
       "/projects/P1/settings",
     ]);
-    expect(links.map((a) => a.getAttribute("aria-current"))).toEqual([null, "page", null, null]);
+    expect(links.map((a) => a.getAttribute("aria-current"))).toEqual([
+      null,
+      null,
+      "page",
+      null,
+      null,
+    ]);
   });
 
   it("draws the tabs and an empty heading before the project is read", () => {

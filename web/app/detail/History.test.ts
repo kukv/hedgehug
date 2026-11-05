@@ -13,6 +13,7 @@ const log = (hash: string, op: string, date: string, subject: string) => ({
   id: "REL-6",
   store: "shared",
   author: { name: "koki", email: "k@example.com" },
+  trailers: [],
 });
 const logs = [
   log("bbbbbbb1", "set", "2026-11-04T11:42:00Z", "set REL-6"),
@@ -39,6 +40,24 @@ function setup(readonly = false, at = then) {
 
 describe("History", () => {
   beforeEach(() => resetToasts());
+
+  it("says which rule made a commit, and which rule was refused for this task", async () => {
+    const k = makeCore({ show });
+    const trailers = [
+      { key: "Hedgehug-Automation", value: "pr-opened pr.opened" },
+      { key: "Hedgehug-Automation-Rejected", value: "U6 pr-merged points: required" },
+      { key: "Hedgehug-Automation-Rejected", value: "U7 pr-merged about another task" },
+    ];
+    k.api.GET.mockImplementation(() => ok([{ ...logs[0], trailers }]));
+    mount(History, { show, readonly: false }, k);
+    expect(
+      await screen.findByText("自動化 · PR が開かれた · ルール pr-opened"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("自動化を拒否 · ルール pr-merged · points: required"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/about another task/)).toBeNull();
+  });
 
   it("loads the commits of the task, newest first, with the operation in Japanese", async () => {
     const { k } = setup();

@@ -1,5 +1,6 @@
 import type { ApiError, TaskView } from "../../core/api/client";
 import { quoteArg } from "../../core/cli";
+import type { ImportTarget } from "../../core/github";
 import type { SchemaView } from "../../core/schema";
 import type { WorkspaceEntry } from "../../core/stores";
 import { core } from "../context";
@@ -82,6 +83,12 @@ export function useListScope(get: () => ListScope) {
   const emptyScope = $derived<"project" | "workspace">(
     get().kind === "project" ? "project" : "workspace",
   );
+  // An empty project can start from the issues of a repository, unless its Store only reads.
+  const importTarget = $derived.by<ImportTarget | undefined>(() => {
+    storesRev.current;
+    if (!project || c.stores.readOnly(project.store) !== null) return undefined;
+    return { store: project.store, parent: project.ulid, parentId: project.id };
+  });
   const notFoundName = $derived.by(() => {
     const s = get();
     return s.kind === "workspace" ? s.ulid : "";
@@ -123,8 +130,12 @@ export function useListScope(get: () => ListScope) {
       return crumbTitle;
     },
     /** Props for Empty. A spread in the screen, because Biome reads a prop called scope as the HTML attribute. */
-    get emptyProps(): { scope: "project" | "workspace"; name: string } {
-      return { scope: emptyScope, name: crumbTitle };
+    get emptyProps(): {
+      scope: "project" | "workspace";
+      name: string;
+      importTarget?: ImportTarget;
+    } {
+      return { scope: emptyScope, name: crumbTitle, importTarget };
     },
     /** Props for NotFound: the ULID of a workspace is what the address named. */
     get notFoundProps(): { scope: "project" | "workspace"; name: string } {

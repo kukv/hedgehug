@@ -13,6 +13,7 @@
   import { onLinkClick, router } from "../router";
   import { useDisplayId } from "../svelte-store";
   import IdLabel from "../ui/IdLabel.svelte";
+  import PrChip from "../ui/PrChip.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
   import { type ColumnSpec, isBuiltinColumn, patchFieldOf } from "./columns";
 
@@ -100,6 +101,8 @@
 
 {#if col.id === "@store"}
   <StoreBadge store={task.store} {tone} compact />
+{:else if col.id === "pr"}
+  <PrChip links={task.links} />
 {:else if col.id === "id"}
   <IdLabel
     id={task.id}

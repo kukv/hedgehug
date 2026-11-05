@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 // AdminBody is the JSON body of the /_fakegh/ endpoints.
@@ -30,6 +31,10 @@ type AdminBody struct {
 	Assignees []string `json:"assignees,omitempty"`
 	Labels    []string `json:"labels,omitempty"`
 	Milestone string   `json:"milestone,omitempty"`
+	// What fakegh rate set sets.
+	Remaining int `json:"remaining,omitempty"`
+	Limit     int `json:"limit,omitempty"`
+	ResetIn   int `json:"reset_in,omitempty"` // seconds from now
 }
 
 // admin serves /_fakegh/, what the fakegh command calls to change the state.
@@ -80,6 +85,8 @@ func (s *Server) admin(w http.ResponseWriter, r *http.Request) {
 		}
 	case "/_fakegh/restrict":
 		s.RestrictApp(b.Repo)
+	case "/_fakegh/rate":
+		s.SetRateLimit(b.Remaining, b.Limit, time.Now().Add(time.Duration(b.ResetIn)*time.Second))
 	case "/_fakegh/label":
 		err = s.AddLabel(b.Repo, b.Title)
 	case "/_fakegh/milestone":
@@ -155,6 +162,11 @@ func (a Admin) AddLabel(repo, name string) error {
 // AddMilestone adds a milestone to repo.
 func (a Admin) AddMilestone(repo, title string) error {
 	return a.post("/_fakegh/milestone", AdminBody{Repo: repo, Title: title})
+}
+
+// SetRateLimit sets what GraphQL says of the rate limit; it resets resetIn from now.
+func (a Admin) SetRateLimit(remaining, limit int, resetIn time.Duration) error {
+	return a.post("/_fakegh/rate", AdminBody{Remaining: remaining, Limit: limit, ResetIn: int(resetIn.Seconds())})
 }
 
 // Pull calls /_fakegh/pr/<what> with b; Issue calls /_fakegh/issue/<what>.

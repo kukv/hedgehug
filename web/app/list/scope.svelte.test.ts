@@ -60,6 +60,7 @@ function setup(world: World = {}) {
       subscribe: stores.subscribe,
       workspace: (s: string, u: string) => w.workspaces.find((x) => x.store === s && x.ulid === u),
       workspaces: () => w.workspaces,
+      readOnly: () => null,
       stores: () => w.stores.map((name) => ({ name })),
       loaded: () => w.loaded,
     },
@@ -309,7 +310,11 @@ describe("useListScope: what the empty and not-found screens are told", () => {
     setup({ tasks: { P1: task() } });
     const { scope, stop } = use(() => ({ kind: "project", ulid: "P1" }));
     expect(scope.crumbTitle).toBe("リリース準備");
-    expect(scope.emptyProps).toEqual({ scope: "project", name: "リリース準備" });
+    expect(scope.emptyProps).toEqual({
+      scope: "project",
+      name: "リリース準備",
+      importTarget: { store: task().store, parent: task().ulid, parentId: task().id },
+    });
     expect(scope.notFoundProps).toEqual({ scope: "project", name: "" });
     stop();
   });

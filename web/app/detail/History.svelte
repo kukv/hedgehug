@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { automationOf, rejectionsOf } from "../../core/activity";
   import { type Schemas, type ShowView, unwrap } from "../../core/api/client";
   import { cliRestoreAt } from "../../core/cli";
   import { formatDateTime } from "../../core/format";
+  import { eventLabel } from "../../core/github";
   import { diffForRestore, type RestoreChange, showAt } from "../../core/history";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
@@ -117,6 +119,13 @@
         <span class="time">{when(l)}</span>
         <div class="main">
           <p>{l.author.name} · {opLabel(l.op)} <span class="subject">{l.subject}</span></p>
+          {#if automationOf(l)}
+            {@const a = automationOf(l)}
+            <p class="auto">自動化 · {eventLabel(a?.event ?? "")} · ルール {a?.rule}</p>
+          {/if}
+          {#each rejectionsOf(l).filter((r) => r.task === show.ulid) as r (r.rule)}
+            <p class="auto">自動化を拒否 · ルール {r.rule} · {r.reason}</p>
+          {/each}
           <p class="trailer">Hedgehug-Op: {l.op ?? "-"} · {l.hash.slice(0, 7)}</p>
         </div>
         {#if i > 0 && !readonly}
@@ -189,6 +198,7 @@
   }
   .hint,
   .subject,
+  .auto,
   .trailer,
   .muted {
     font-size: var(--fs-12);

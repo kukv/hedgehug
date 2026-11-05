@@ -57,6 +57,7 @@ describe("parseRoute", () => {
     ["/inbox", { name: "inbox", tab: "all" }],
     ["/inbox/", { name: "inbox", tab: "all" }],
     ["/inbox/extra", { name: "home" }],
+    ["/projects/P1/overview", { name: "project", ulid: "P1", tab: "overview" }],
     ["/activity", { name: "activity", workspaces: [], sync: "" }],
     ["/activity/", { name: "activity", workspaces: [], sync: "" }],
     ["/activity/extra", { name: "home" }],
@@ -132,6 +133,11 @@ describe("hrefOf", () => {
       sync: "exclude",
     });
     // a sync that is none of the two is "all", and empty items of the list are dropped
+    expect(parseRoute("/activity", "?sync=automation")).toEqual({
+      name: "activity",
+      workspaces: [],
+      sync: "automation",
+    });
     expect(parseRoute("/activity", "?workspace=A,,&sync=x")).toEqual({
       name: "activity",
       workspaces: ["A"],

@@ -183,6 +183,19 @@ func TestServeOn(t *testing.T) {
 	}
 }
 
+func TestRateSet(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(fakegh.New(fakegh.State{}))
+	t.Cleanup(srv.Close)
+	var out, errs strings.Builder
+	if code := run([]string{"rate", "set", "10", "5000", "--reset", "60", "--server", srv.URL}, &out, &errs); code != 0 {
+		t.Fatalf("rate set: %d %s", code, errs.String())
+	}
+	if code := run([]string{"rate", "set", "x", "5000", "--server", srv.URL}, &out, &errs); code != 2 {
+		t.Errorf("rate set x: code = %d, want 2", code)
+	}
+}
+
 func TestPullAndIssueCommands(t *testing.T) {
 	t.Parallel()
 	s := fakegh.New(fakegh.State{Repos: []*fakegh.Repo{{Owner: "o", Name: "r"}}})

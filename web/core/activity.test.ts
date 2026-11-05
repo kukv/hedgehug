@@ -1,5 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { authorLabel, groupByDay, type Log, opLabel, trailerLine } from "./activity";
+import {
+  authorLabel,
+  automationOf,
+  groupByDay,
+  type Log,
+  opLabel,
+  rejectionsOf,
+  trailerLine,
+} from "./activity";
+
+describe("the trailers of the automations", () => {
+  const trailers = [
+    { key: "Hedgehug-Op", value: "gh-fetch" },
+    { key: "Hedgehug-Automation", value: "pr-opened pr.opened" },
+    { key: "Hedgehug-Automation-Rejected", value: "U1 pr-merged points: required" },
+    { key: "Hedgehug-Automation-Rejected", value: "U2 pr-merged points: required" },
+  ];
+
+  it("reads the rule and the refusals", () => {
+    const l = log({ trailers });
+    expect(automationOf(l)).toEqual({ rule: "pr-opened", event: "pr.opened" });
+    expect(rejectionsOf(l).map((r) => r.task)).toEqual(["U1", "U2"]);
+  });
+
+  it("finds nothing on a commit of a person", () => {
+    const l = log({ trailers: [{ key: "Hedgehug-Op", value: "set" }] });
+    expect(automationOf(l)).toBeNull();
+    expect(rejectionsOf(l)).toEqual([]);
+  });
+});
 
 function log(over: Partial<Log> = {}): Log {
   return {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { type ShowView, unwrap } from "../../core/api/client";
-  import { cliLine } from "../../core/cli";
+  import { cliLine, cliStart } from "../../core/cli";
   import { formatDateTime } from "../../core/format";
   import { errorMessage } from "../../core/messages";
   import { core } from "../context";
@@ -29,6 +29,7 @@
   import { toggleChecklistLine } from "./checklist-items";
   import DeleteDialogs from "./DeleteDialogs.svelte";
   import FieldInput from "./FieldInput.svelte";
+  import GitHubSection from "./GitHubSection.svelte";
   import History from "./History.svelte";
   import { ancestorChain, type Crumb, collapseCrumbs, createLookup, crumbsSig } from "./lookup";
   import PropsPanel from "./PropsPanel.svelte";
@@ -255,6 +256,9 @@
         {#if saveState.current.kind === "error"}
           <Button size="sm" onclick={() => void save.flush(ulid)}>やり直す</Button>
         {/if}
+        {#if s.deleted_at == null && !s.broken}
+          <CliLine command={cliStart(did.current(s.store, s.id))} />
+        {/if}
         <Button
           size="sm"
           onclick={toggleWatch}
@@ -376,6 +380,7 @@
           </section>
           <Checklist body={liveBody ?? s.body} readonly={locked} ontoggle={toggleCheck} />
           <Relations show={s} readonly={locked} />
+          <GitHubSection show={s} readonly={locked} />
           <Comments show={s} readonly={locked} />
           <History show={s} readonly={locked} />
         </article>

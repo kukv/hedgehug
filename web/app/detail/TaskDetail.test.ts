@@ -158,7 +158,9 @@ describe("TaskDetail", () => {
 
   it("rules out the kinds the parent cannot hold even when the cache lacks the parent", async () => {
     const k = makeCore({ show: base, account: "github.com/koki", tasks: [] });
-    k.api.GET.mockImplementation(() => ok(showView({ ...parent, kind: "task" })));
+    k.api.GET.mockImplementation((path: string) =>
+      ok(path === "/api/github" ? [] : showView({ ...parent, kind: "task" })),
+    );
     mount(TaskDetail, { ulid: U }, k);
     await screen.findByText("API v2 への移行");
     await fireEvent.click(screen.getByRole("button", { name: "種類" }));

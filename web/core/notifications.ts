@@ -2,14 +2,25 @@
 // item, made from its kind and detail (the server sends no text; the words are the screen's).
 import type { Schemas } from "./api/client";
 import { daysAgo, formatDateTime, pad } from "./format";
+import { eventLabel, fieldLabel, refLabel } from "./github";
 
 export type Notification = Schemas["Notification"];
-export type InboxTab = "all" | "overwritten" | "mention" | "repair";
+export type InboxTab =
+  | "all"
+  | "mention"
+  | "assigned"
+  | "watch"
+  | "overwritten"
+  | "automation"
+  | "repair";
 
 export const INBOX_TABS: readonly { tab: InboxTab; label: string }[] = [
   { tab: "all", label: "すべて" },
-  { tab: "overwritten", label: "上書き" },
   { tab: "mention", label: "メンション" },
+  { tab: "assigned", label: "割り当て" },
+  { tab: "watch", label: "ウォッチ" },
+  { tab: "overwritten", label: "上書き" },
+  { tab: "automation", label: "自動化" },
   { tab: "repair", label: "同期の修復" },
 ];
 
@@ -22,10 +33,19 @@ const REPAIR_KINDS: readonly string[] = [
   "purged_change",
 ];
 
-/** The tabs an item of the kind is in. Every item is in "all"; assigned and watch only there. */
+const AUTOMATION_KINDS: readonly string[] = [
+  "automation",
+  "automation_rejected",
+  "issue_overwritten",
+];
+
+/** The tabs an item of the kind is in. Every item is in "all". */
 export function tabsOf(kind: string): InboxTab[] {
   if (kind === "overwritten") return ["all", "overwritten"];
   if (kind === "mention") return ["all", "mention"];
+  if (kind === "assigned") return ["all", "assigned"];
+  if (kind === "watch") return ["all", "watch"];
+  if (AUTOMATION_KINDS.includes(kind)) return ["all", "automation"];
   if (REPAIR_KINDS.includes(kind)) return ["all", "repair"];
   return ["all"];
 }
@@ -36,7 +56,7 @@ export function filterByTab(items: Notification[], tab: InboxTab): Notification[
 
 /** The number of unread items in each tab. */
 export function tabCounts(items: Notification[]): Record<InboxTab, number> {
-  const counts: Record<InboxTab, number> = { all: 0, overwritten: 0, mention: 0, repair: 0 };
+  const counts = Object.fromEntries(INBOX_TABS.map((t) => [t.tab, 0])) as Record<InboxTab, number>;
   for (const n of items) {
     if (n.read) continue;
     for (const t of tabsOf(n.kind)) counts[t]++;
@@ -58,6 +78,11 @@ export function sortNotifications(items: Notification[]): Notification[] {
 export function taskOf(n: Notification): Notification["task"] | null {
   const t = n.task as Notification["task"] | null | undefined;
   return t?.ulid ? t : null;
+}
+
+/** The rule an item of a refused rule is about. */
+export function ruleOf(n: Notification): string {
+  return str(obj(n.detail).rule);
 }
 
 /** The field an overwritten item is about (empty when its detail does not tell). */
@@ -134,7 +159,10 @@ function repairedText(detail: Obj): string {
  */
 export function notificationText(
   n: Notification,
-  opts: { workspaceName?: (ulid: string) => string | undefined } = {},
+  opts: {
+    workspaceName?: (ulid: string) => string | undefined;
+    statusLabel?: (status: string) => string;
+  } = {},
 ): NotificationText {
   const detail = obj(n.detail);
   const who = n.author ? `${n.author} が` : "";
@@ -172,6 +200,31 @@ export function notificationText(
         };
       }
       return { label: "ウォッチ", text: who ? `${who}コメントしました` : "コメントがありました" };
+    }
+    case "automation": {
+      const status = str(detail.status);
+      return {
+        label: "自動化",
+        text: `ルール ${str(detail.rule)} が ${opts.statusLabel?.(status) ?? status} にしました（${eventLabel(str(detail.event))}）`,
+      };
+    }
+    case "automation_rejected":
+      return {
+        label: "自動化を拒否",
+        text: `ルール ${str(detail.rule)} で動かせませんでした: ${str(detail.reason)}`,
+      };
+    case "issue_overwritten": {
+      const field = fieldLabel(str(detail.field));
+      const ref = refLabel(str(detail.ref));
+      const lost = Array.isArray(detail.lost) ? detail.lost.map(String).join(", ") : "";
+      return {
+        label: "自動化",
+        text:
+          str(detail.side) === "github"
+            ? `${ref} の${field}が GitHub 上で手で編集されていたため、Hedgehug の値で上書きしました`
+            : `タスクの${field}が手で編集されていたため、${ref} の値に戻しました`,
+        mine: lost ? `${field}: ${lost}` : undefined,
+      };
     }
     case "repaired":
       return { label: "同期の修復", text: repairedText(detail) };

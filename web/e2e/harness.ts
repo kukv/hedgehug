@@ -5,6 +5,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -162,6 +163,23 @@ export class Hedgehug {
   get fakeGitHubURL(): string {
     if (!this.gh) throw new Error("the fake of GitHub is not running: use github: true");
     return this.gh.url;
+  }
+
+  /**
+   * Lets the reads of GitHub of the store come again: a repository is read every 5 minutes, so the
+   * last reads are put an hour back (what the scenario tests in Go do).
+   */
+  expireFetch(store: string): void {
+    const path = join(this.home, "hh", "stores", store, ".hedgehug", "local", "github.json");
+    const state = JSON.parse(readFileSync(path, "utf8")) as {
+      repos: Record<string, { last_fetch?: string; last_try?: string }>;
+    };
+    const past = new Date(Date.now() - 3_600_000).toISOString();
+    for (const r of Object.values(state.repos)) {
+      r.last_fetch = past;
+      delete r.last_try;
+    }
+    writeFileSync(path, JSON.stringify(state));
   }
 
   /** Runs fakegh against the fake of this test (github: true) and returns its standard output. */

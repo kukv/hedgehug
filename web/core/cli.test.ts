@@ -6,11 +6,14 @@ import {
   cliAuthLogout,
   cliComment,
   cliDoctor,
+  cliGhImport,
   cliInbox,
+  cliLink,
   cliLog,
   cliLs,
   cliMv,
   cliMvStore,
+  cliPr,
   cliPurge,
   cliRestore,
   cliRestoreAt,
@@ -20,6 +23,7 @@ import {
   cliScopeRm,
   cliScopeSet,
   cliSet,
+  cliStart,
   cliStoreAdd,
   cliStoreDefault,
   cliStoreDiscover,
@@ -102,6 +106,17 @@ describe("commands", () => {
   });
 
   it("writes hh inbox", () => {
+    expect(cliStart("REL-6")).toBe("hh start REL-6");
+    expect(cliPr("REL-6")).toBe("hh pr REL-6");
+    expect(cliLink({ id: "REL-6", kind: "issue", ref: "org-a/web#45" })).toBe(
+      'hh link REL-6 --issue "org-a/web#45"',
+    );
+    expect(cliLink({ id: "REL-6", kind: "pr", ref: new Placeholder("org/repo#123") })).toBe(
+      "hh link REL-6 --pr <org/repo#123>",
+    );
+    expect(cliGhImport({ repo: "org-a/web", label: "v2", parent: "REL-1" })).toBe(
+      "hh gh import org-a/web --label v2 --parent REL-1",
+    );
     expect(cliInbox()).toBe("hh inbox");
     expect(cliInbox({ all: true })).toBe("hh inbox --all");
     expect(cliInbox({ all: true, store: "shared" })).toBe("hh inbox --all --store shared");

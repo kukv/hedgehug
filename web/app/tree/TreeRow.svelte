@@ -9,6 +9,7 @@
   import StatusIcon from "../icons/StatusIcon.svelte";
   import Avatar from "../ui/Avatar.svelte";
   import IdLabel from "../ui/IdLabel.svelte";
+  import PrChip from "../ui/PrChip.svelte";
   import StoreBadge from "../ui/StoreBadge.svelte";
   import type { FlatRow } from "./flatten";
   import { problemLabel, propText } from "./marks";
@@ -145,6 +146,7 @@
     {#if blockedBy}
       <span class="blocked"><Icon name="forbid" size={12} />{blockedBy} 待ち</span>
     {/if}
+    <PrChip links={task.links} tabbable={false} />
     {#if priority}
       <span class="priority {priority}">{priority}</span>
     {/if}
