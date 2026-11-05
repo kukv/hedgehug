@@ -73,6 +73,9 @@ type rebuildRecord struct {
 	Mark    string             `json:"mark"`     // the commit the inbox goes on from
 	Items   []inbox.Item       `json:"items"`    // for the inbox; Add leaves out what it has
 	Kept    string             `json:"kept,omitempty"`
+	// Mirrors are the URLs of the mirrors that have the old history; apply
+	// holds them (mirrors-held.json).
+	Mirrors []string `json:"mirrors,omitempty"`
 }
 
 func writeRecord(s *store.Store, rec *rebuildRecord) error {
@@ -172,12 +175,6 @@ func prepare(s *store.Store, opt Options) (rec *rebuildRecord, b *Rebuild, err e
 	if err != nil {
 		return nil, nil, err
 	}
-	// What the store followed: the sync that found the force push put the
-	// tracking ref back.
-	tracked, err := r.RemoteHead("origin")
-	if err != nil {
-		return nil, nil, err
-	}
 	dir := s.Dir()
 	if err := osfs.RemoveAll(dir + keptNew); err != nil {
 		return nil, nil, err
@@ -185,8 +182,19 @@ func prepare(s *store.Store, opt Options) (rec *rebuildRecord, b *Rebuild, err e
 	if err := r.SetRemotes(opt.Remotes); err != nil {
 		return nil, nil, err
 	}
+	// What the store followed: the sync that found the force push put the
+	// tracking ref back, and one that died after its fetch left the value in
+	// origin-before-fetch.
+	tracked, err := beginFetch(s)
+	if err != nil {
+		return nil, nil, err
+	}
 	head, err := r.Fetch("origin")
-	if serr := r.SetTracking("origin", tracked); err == nil {
+	serr := r.SetTracking("origin", tracked)
+	if serr == nil {
+		serr = endFetch(s) // the ref is back: the marker is no longer needed
+	}
+	if err == nil {
 		err = serr
 	}
 	if err != nil {
@@ -232,6 +240,9 @@ func prepare(s *store.Store, opt Options) (rec *rebuildRecord, b *Rebuild, err e
 	rec = &rebuildRecord{
 		Phase: store.RebuildApply, OldHead: oldHead.String(), Target: target.String(),
 		Origin: head.String(), Mark: mark.String(), Items: items, Kept: b.Kept,
+	}
+	if len(opt.Remotes) > 1 {
+		rec.Mirrors = opt.Remotes[1:]
 	}
 	if err := writeRecord(s, rec); err != nil {
 		// Nothing has changed yet, and nothing would name the copy.
@@ -315,6 +326,9 @@ func apply(s *store.Store, rec *rebuildRecord, b *Rebuild) error {
 		return err
 	}
 	if err := r.SetTracking("origin", plumbing.NewHash(rec.Origin)); err != nil {
+		return err
+	}
+	if err := holdMirrors(s, rec.Mirrors); err != nil {
 		return err
 	}
 	box := inbox.Open(s)

@@ -87,6 +87,9 @@ func checkRebuilt(t *testing.T, c *cluster, sc *stoppedScene) {
 	if _, ok, err := ReadForcePush(s); err != nil || ok {
 		t.Errorf("force-push.json = %v, %v", ok, err)
 	}
+	if exists(t, filepath.Join(dir, filepath.FromSlash(store.LocalDir), mirrorsHeldFile)) {
+		t.Error("mirrors-held.json was written for a store with no mirror")
+	}
 	if got := c.task(1, sc.mine.ULID); got == nil {
 		t.Error("the unpushed task is lost")
 	}
