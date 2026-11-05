@@ -235,3 +235,39 @@ func TestHelpersSameTimeSameULID(t *testing.T) {
 		t.Error("sameTime is wrong")
 	}
 }
+
+func TestEditIsOneCall(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	es, err := tasks.BeginEdit(ts.Session, "ME-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := tasks.Edit(ts.Session, "ME-1", bytes.Replace(es.Bytes, []byte("title: a"), []byte("title: b"), 1))
+	if err != nil || !r.Committed || len(r.Commit) != 40 {
+		t.Fatalf("Edit = %+v, %v", r, err)
+	}
+	v, err := r.View()
+	if err != nil || v.Title != "b" {
+		t.Errorf("View after Edit = %+v, %v; want title b", v, err)
+	}
+	// The same bytes again change nothing.
+	es, err = tasks.BeginEdit(ts.Session, "ME-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err = tasks.Edit(ts.Session, "ME-1", es.Bytes)
+	if err != nil || r.Committed || r.Commit != "" {
+		t.Errorf("Edit of the same bytes = %+v, %v; want no commit", r, err)
+	}
+	// What CheckEdit refuses, Edit refuses, before anything is written.
+	_, err = tasks.Edit(ts.Session, "ME-1", bytes.Replace(es.Bytes, []byte("id: ME-1"), []byte("id: ME-7"), 1))
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "edit.invalid")
+	_, err = tasks.Edit(ts.Session, "ME-1", []byte("not a task"))
+	usecasetest.WantErr(t, err, usecase.KindInvalid, "edit.invalid")
+	_, err = tasks.Edit(ts.Session, "ME-9", es.Bytes)
+	usecasetest.WantErr(t, err, usecase.KindNotFound, "task.not_found")
+}

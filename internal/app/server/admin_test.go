@@ -6,12 +6,11 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/schemas"
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
-	"github.com/kukv/hedgehug/internal/app/usecase/workspaces"
 )
 
 type workspaceBody struct {
-	Workspace workspaces.WorkspaceView `json:"workspace"`
-	Commit    *string                  `json:"commit"`
+	Workspace usecase.WorkspaceView `json:"workspace"`
+	Commit    *string               `json:"commit"`
 	IDs       []struct {
 		Old string `json:"old"`
 		New string `json:"new"`
@@ -22,7 +21,7 @@ func TestWorkspaces(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
 	ts.add("one", "")
-	var list []workspaces.WorkspaceView
+	var list []usecase.WorkspaceView
 	ts.call("GET", "/api/workspaces", nil, 200, &list)
 	if len(list) != 1 || list[0].IDPrefix != "ME" || list[0].Tasks != 1 {
 		t.Fatalf("workspaces = %+v", list)

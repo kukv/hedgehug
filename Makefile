@@ -70,11 +70,13 @@ cover:
 clean-cache:
 	go clean -cache -testcache
 
-# Measure the history index and pack consolidation on a synthesized store of
-# 100,000 commits (not part of check or CI; see the history-growth spec).
-# The store is made once in $HH_BENCH_CACHE (default: hh-bench in the user cache directory).
+# Measure the history index, pack consolidation, and the commands that read
+# the history (show, log, undo, restore --at, one write) on a synthesized store
+# of 100,000 commits (not part of check or CI; see the history-growth spec).
+# The store is made once in $HH_BENCH_CACHE (default: hh-bench in the user
+# cache directory). -p 1 keeps the packages from measuring at the same time.
 bench-history:
-	HH_BENCH=1 go test ./internal/app/storage/history -run '^$$' -bench . -benchtime 5x -timeout 60m
+	HH_BENCH=1 go test -p 1 ./internal/app/storage/history ./internal/app/usecase ./internal/app/usecase/browse ./internal/app/usecase/tasks -run '^$$' -bench . -benchtime 5x -timeout 60m
 
 # Run everything the CI checks, locally.
 check: tidy-check lint fmt-check test web-check

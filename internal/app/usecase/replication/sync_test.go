@@ -14,6 +14,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/browse"
 	"github.com/kukv/hedgehug/internal/app/usecase/replication"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
@@ -260,5 +261,37 @@ func TestSyncsInBackground(t *testing.T) {
 	t.Parallel()
 	if replication.SyncsInBackground(config.StoreEntry{}) || !replication.SyncsInBackground(config.StoreEntry{Remotes: []string{"x"}}) {
 		t.Error("SyncsInBackground should be true only with a remote")
+	}
+}
+
+// A sync that fails for a store that does not open says so in its report;
+// the cross-store check of the other stores does not say it again.
+func TestSyncDoesNotWarnTwiceOfAStoreItReports(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.NewTwoStore(t)
+	ts.AddGoneStore(t, true)
+	rs, err := replication.Sync(ts.Session, true, true)
+	if err == nil {
+		t.Fatal("Sync of a store that does not open succeeded")
+	}
+	var failed bool
+	for _, r := range rs {
+		if r.Store == "gone" && r.Err != nil {
+			failed = true
+		}
+	}
+	if !failed {
+		t.Fatalf("reports = %+v; want gone to have failed", rs)
+	}
+	if n := usecasetest.CountContaining(ts.Warns, "cannot open gone"); n != 0 {
+		t.Errorf("warnings %q repeat what the report of gone says", ts.Warns)
+	}
+	// the silence was for the sync only
+	ts.Warns = nil
+	if _, err := browse.List(ts.Session, ""); err != nil {
+		t.Fatal(err)
+	}
+	if n := usecasetest.CountContaining(ts.Warns, "cannot open gone"); n != 1 {
+		t.Errorf("List after the sync warned %d times of gone: %q", n, ts.Warns)
 	}
 }

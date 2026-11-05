@@ -2,7 +2,7 @@
 // tests of a package a temporary directory of their own process and removes
 // the directories of test processes that are gone, so that a run stopped half
 // way leaves nothing behind once the next one has run. WaitFor waits for a
-// condition.
+// condition, and Build builds a command for the tests to run.
 package testenv
 
 import (
@@ -10,9 +10,12 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -108,4 +111,66 @@ func WaitFor(t testing.TB, what string, cond func() bool) {
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
+}
+
+// builds are the binaries Build made in this process, by package.
+var (
+	buildsMu sync.Mutex
+	builds   = map[string]*built{}
+)
+
+type built struct {
+	once sync.Once
+	path string
+	err  error
+}
+
+// Build builds the main package pkg (an import path, or a path relative to
+// the directory of the test) once in this process, as a binary called name in
+// a temporary directory of its own, and returns its path. The build has -race
+// when the test binary has it: the packages are then in the build cache from
+// the build of the tests, and are not compiled again.
+func Build(tb testing.TB, pkg, name string) string {
+	tb.Helper()
+	buildsMu.Lock()
+	b := builds[pkg]
+	if b == nil {
+		b = &built{}
+		builds[pkg] = b
+	}
+	buildsMu.Unlock()
+	b.once.Do(func() {
+		dir, err := os.MkdirTemp("", name+"-bin-")
+		if err != nil {
+			b.err = err
+			return
+		}
+		b.path = filepath.Join(dir, name)
+		args := []string{"build"}
+		if raceEnabled() {
+			args = append(args, "-race")
+		}
+		args = append(args, "-o", b.path, pkg)
+		if out, err := exec.Command("go", args...).CombinedOutput(); err != nil { //nolint:gosec // the arguments are the caller's
+			b.err = fmt.Errorf("go build %s: %w\n%s", pkg, err, out)
+		}
+	})
+	if b.err != nil {
+		tb.Fatal(b.err)
+	}
+	return b.path
+}
+
+// raceEnabled reports whether this binary was built with -race.
+func raceEnabled() bool {
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return false
+	}
+	for _, s := range bi.Settings {
+		if s.Key == "-race" && s.Value == "true" {
+			return true
+		}
+	}
+	return false
 }

@@ -721,3 +721,58 @@ func TestQueryOptionsMarksOverwrittenTasks(t *testing.T) {
 		t.Errorf("Overwritten = %v; want only ME-1 (%s)", opt.Overwritten, e.ULID)
 	}
 }
+
+// inbox leaves out a store that does not open, with a warning, but not the
+// one --store names.
+func TestInboxSkipsAStoreThatDoesNotOpen(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{"list", "read", "revert"} {
+		ts := usecasetest.NewTwoStore(t)
+		ts.AddGoneStore(t, false)
+		var err error
+		switch name {
+		case "list":
+			_, _, err = notifications.InboxList(ts.Session, false)
+		case "read":
+			_, err = notifications.InboxRead(ts.Session, nil, true)
+		case "revert":
+			_, err = notifications.InboxRevert(ts.Session, "01JZZZZZZZZZZZZZZZZZZZZZZZ")
+			usecasetest.WantCode(t, "inbox revert of an unknown item", err, usecase.KindNotFound, "inbox.not_found")
+			err = nil
+		}
+		if err != nil {
+			t.Fatalf("inbox %s: %v", name, err)
+		}
+		if n := usecasetest.CountContaining(ts.Warns, "cannot open gone: "); n != 1 {
+			t.Errorf("inbox %s warned %d times of gone: %q", name, n, ts.Warns)
+		}
+		// the store --store names is an error
+		ts.StoreName = "gone"
+		ts.Warns = nil
+		if _, _, err := notifications.InboxList(ts.Session, false); err == nil || !strings.Contains(err.Error(), "gone") {
+			t.Errorf("inbox %s --store gone err = %v; want an error", name, err)
+		}
+	}
+}
+
+// A store whose inbox cannot be taken in is warned of as that, not as one
+// that does not open.
+func TestInboxStoreWhoseInboxCannotBeReadIsWarnedOf(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.NewTwoStore(t)
+	s, err := ts.ForStore("org-b").OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// a directory where the items file is, so that taking in fails
+	if err := os.MkdirAll(filepath.Join(s.Dir(), store.LocalDir, "inbox.jsonl"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	stores, err := notifications.InboxStores(ts.Session)
+	if err != nil || len(stores) != 1 || stores[0].Name != "org-a" {
+		t.Fatalf("InboxStores = %v, %v; want org-a only", stores, err)
+	}
+	if n := usecasetest.CountContaining(ts.Warns, "cannot read the inbox of org-b: "); n != 1 || usecasetest.CountContaining(ts.Warns, "cannot open") != 0 {
+		t.Errorf("warnings = %q", ts.Warns)
+	}
+}

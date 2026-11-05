@@ -6,8 +6,13 @@ import (
 	"testing"
 
 	"github.com/kukv/hedgehug/internal/app/domain/schema"
+	"github.com/kukv/hedgehug/internal/app/remote/replicate"
+	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/store"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/comments"
+	"github.com/kukv/hedgehug/internal/app/usecase/notifications"
+	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
 func TestErrorKeepsMessage(t *testing.T) {
@@ -96,4 +101,69 @@ func TestProblemCode(t *testing.T) {
 	if got := usecase.ProblemCode(errors.New("boom")); got != "internal" {
 		t.Errorf("ProblemCode(other) = %q; want internal", got)
 	}
+}
+
+func TestAsError(t *testing.T) {
+	t.Parallel()
+	if usecase.AsError(nil) != nil {
+		t.Error("AsError(nil) is not nil")
+	}
+	// The outermost *Error of the chain.
+	inner := usecase.NewErr(usecase.KindNotFound, "task.not_found", errors.New("x"), "input", "ME-9")
+	if got := usecase.AsError(fmt.Errorf("wrapped: %w", inner)); got != inner {
+		t.Errorf("AsError(wrapped) = %+v; want the inner *Error", got)
+	}
+	// A lower-layer error is classified: Kind and Code from the chain.
+	cases := []struct {
+		err  error
+		kind usecase.Kind
+		code string
+	}{
+		{fmt.Errorf("x: %w", store.ErrNotFound), usecase.KindNotFound, "not_found"},
+		{&store.ValidationError{}, usecase.KindInvalid, "schema.violation"},
+		{store.ErrLocked, usecase.KindConflict, "store.locked"},
+		{store.ErrStoreGone, usecase.KindConflict, "store.gone"},
+		{fmt.Errorf("a: %w", replicate.ErrDirty), usecase.KindConflict, "sync.dirty"},
+		{fmt.Errorf("a: %w", replicate.ErrUnrelated), usecase.KindConflict, "sync.unrelated"},
+		{fmt.Errorf("a: %w", replicate.ErrForcePush), usecase.KindConflict, "sync.force_push"},
+		{config.ErrNoStores, usecase.KindConflict, "store.none"},
+		{errors.New("other"), usecase.KindUnknown, ""},
+	}
+	for _, c := range cases {
+		got := usecase.AsError(c.err)
+		if got == nil || got.Kind != c.kind || got.Code != c.code || got.Error() != c.err.Error() {
+			t.Errorf("AsError(%v) = %+v; want %v %q with the same message", c.err, got, c.kind, c.code)
+		}
+		if usecase.KindOf(c.err) != c.kind {
+			t.Errorf("KindOf(%v) = %v; want %v", c.err, usecase.KindOf(c.err), c.kind)
+		}
+	}
+}
+
+// A task that is not found says task.not_found; a store error for something
+// else does not.
+func TestNotFoundCodes(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	_, ix, err := ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = ts.Resolve(ix, "ME-9")
+	usecasetest.WantErr(t, err, usecase.KindNotFound, "task.not_found")
+	if e := usecase.AsError(err); e.Args["input"] != "ME-9" {
+		t.Errorf("Args = %v; want input ME-9", e.Args)
+	}
+	s, err := ts.OpenStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.TaskBytes(ix.Workspaces()[0].ULID) // no task has this ULID
+	usecasetest.WantErr(t, err, usecase.KindNotFound, "not_found")
+	_, err = comments.OpenComment(ts.Session, "01JZZZZZZZZZZZZZZZZZZZZZZZ")
+	usecasetest.WantErr(t, err, usecase.KindNotFound, "comment.not_found")
+	_, err = usecase.ResolveWorkspace(ix, "nope")
+	usecasetest.WantErr(t, err, usecase.KindNotFound, "workspace.not_found")
+	_, err = notifications.InboxRead(ts.Session, []string{"01JZZZZZZZZZZZZZZZZZZZZZZZ"}, false)
+	usecasetest.WantErr(t, err, usecase.KindNotFound, "inbox.not_found")
 }

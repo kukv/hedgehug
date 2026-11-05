@@ -27,12 +27,16 @@
 | 7 | JSON の形 | CLI の `--json` を server と同じ usecase の型に一本化する。CLI にしかない項目は足す。server の書き込み応答の包み（`{task, commit}` など）も usecase に移し、CLI もその形で出す（2026-11-04 利用者が決定。4.3） |
 | 8 | Windows | 実装は含めない。osfs の `_unix.go` に閉じ込めるところまで |
 | 9 | spec の単位 | 構成（本 spec）と E を分ける |
-| 10 | PR | 6 つに分け、機械的な移動を最初に行う。最後の PR 6 は、完了後のパッケージ構成を見て利用者が最終判断をする回（6 節。PR 6 は 2026-11-04 利用者が追加） |
+| 10 | PR | 6 回に分け、機械的な移動を最初に行う。最後の PR 6 は、完了後のパッケージ構成を見て利用者が最終判断をする回（6 節。PR 6 は 2026-11-04 利用者が追加）。回 5 は 5a・5b の 2 つの PR に分ける（決定 18。2026-11-05 利用者が決定） |
 | 11 | cli・server のテスト | テストも usecase を通す。データの準備と書き込み結果の確認を usecase の操作で書き直し、4.2 のルールをテストにもかける。回 4 で本体と一緒に行う（2026-11-04 利用者が決定） |
 | 12 | テスト用の部品 | `lib/testenv`・`lib/fakegh`・`lib/gitrepo/gitrepotest`・`storage/history/historytest`・`storage/mount/mounttest`（回 3 の plan で追加）は、どの層のテストからも import してよい（2026-11-04 利用者が決定） |
 | 13 | 領域の操作の呼び方 | Go では別パッケージに `Session` のメソッドを置けないため、領域の操作は `tasks.Assign(ss, in)` のように `*usecase.Session` を引数に取る関数にする（2026-11-04 利用者が決定。領域ごとに Session を包む型を作る案は採らない） |
 | 14 | usecase のテスト | 共通のテストの補助を `usecase/usecasetest` に切り出し、決定 12 の部品に加える。usecase のテストは、コードと一緒に PR 3 で領域へ移す（2026-11-04 利用者が決定）。移したテストは外部テストパッケージ（`package tasks_test` など）にし、非公開の名前は `export_test.go` の別名で使う（回 3 の plan で決定。usecasetest が領域を import するため） |
 | 15 | 変化の監視 | server の Poller の中身（Store を開いて持つ、HEAD と差分の読み取り、inbox の変化、history の索引の構築）は、新しい領域 `usecase/watch` に移す。配信・間隔・イベントの JSON の形は server に残す（2026-11-04 利用者が決定） |
+| 16 | cli/scenario | 組み立てたバイナリ（hedgehug・devenv）だけを相手にする通しのテストを置く。cli の中身を直接呼ぶテスト（`TestScenario`・`TestE2EAuthLoginAndStatus`）は cli に残す。cli の中身をテストのために公開しない。`golden_test.go` は golden ファイルを比べる補助なので cli に残す（2026-11-05 利用者が決定。テストに左右される作りにしない） |
+| 17 | 領域どうしの import | depguard で、本番のファイルだけ禁止する。テストは準備に別の領域の操作を使ってよい。usecasetest は対象外（2026-11-05 利用者が決定） |
+| 18 | テストのための差し込み口 | 本番のコードにあるテストのためだけの差し込み口を直す。本番で誰も呼ばない関数は消すかテストへ移す。普通の引数・設定にできるものはそうする（本番でも本物の値を渡す）。本物の手段（`.git/index.lock` を置く、object を退避する、別のハンドルでロックを取る など）で確かめられるものは、テストを書き直して外す（書き直したテストが元の不具合を検出できることを確かめる。テストが遅くなるのは了承）。特定の一瞬への割り込み（読んだ後・書く前、rename の直前など）は外から作れないので残す。PR 5b で行う（2026-11-05 利用者が決定） |
+| 19 | 壊れた Store のエラー | 調べる途中で見つけた不具合を PR 5b で直す。`gitrepo.Files` は下の tree が読めないと一覧を黙って切り（go-git の `TreeWalker` が io.EOF を返すため）、`gitrepo.ReadFile` は blob が欠けても「ファイルなし」を返し、replicate の `snapshot.Read` は読み取りのエラーをすべて「ファイルなし」にしていた。object が欠けた Store では、一覧・読み取り・同期をエラーで止める（挙動の変化。壊れていない Store は変わらない。2026-11-05 利用者が決定） |
 
 ## 1. 今の状態（main f965465）
 
@@ -83,7 +87,7 @@ internal/app/
     stores/ replication/ notifications/ accounts/ maintenance/ watch/
   cli/                      旧 cmd/hedgehug の本体
     prompt/                 確認と選択の部品（4.4）
-    scenario/               コマンドをまたぐ通しのテスト（テストだけのパッケージ。5 節）
+    scenario/               組み立てたバイナリを動かす通しのテスト（テストだけのパッケージ。5 節、決定 16）
   server/ (+openapigen/)
 web/                        今のまま
 api/openapi.yaml            今のまま
@@ -186,10 +190,11 @@ CLI の本体を `internal/app/cli` に移し、`cmd/hedgehug/main.go` は `cli.
 
 ## 5. テストの整理（提案 I）
 
-- `history/bench_test.go` の `ops.Session` を使う計測は `usecase/browse` のベンチに移す。history のベンチは history の API だけで測る。
-- depguard の層のルールはテストのファイルにもかける。例外は決定 12 のテスト用の部品だけ。
+- `history/bench_test.go` の `ops.Session` を使う計測は、測っている操作の場所のベンチに移す（Show・Log は `usecase/browse`、Undo・RestoreAt は `usecase/tasks`、1 回の書き込みの固定費は `usecase` 直下。2026-11-05 決定）。history のベンチは history の API だけで測る。`make bench-history` は移した先も動かす。
+- depguard の層のルールはテストのファイルにもかける。例外は決定 12 のテスト用の部品だけ。領域どうしの import の禁止は本番のファイルだけにかける（決定 17）。
 - `final_review_test.go`・`final_fixes_test.go`（ops）と `final_review_test.go`（cmd）は、中のテストを、試している操作のテストファイルに配り直す。
-- コマンドをまたぐ通しのテスト（`e2e_test`・`e2e_3a`・`e2e_3b`・`e2e_3c`・`scenario_test`・`golden_test`）を `cli/scenario` に移す。
+- 組み立てたバイナリを動かす通しのテスト（`e2e_test`・`e2e_3a`（`TestE2EAuthLoginAndStatus` を除く）・`e2e_3b`・`e2e_3c`）を `cli/scenario` に移す。バイナリを組み立てる補助は `lib/testenv` に置く。`scenario_test`（`TestScenario`）・`TestE2EAuthLoginAndStatus`・`golden_test` は cli に残す（決定 16）。
+- 本番のコードにあるテストのためだけの差し込み口を、決定 18 のとおり直す（PR 5b）。
 - ops のテストは 2.3 の領域ごとに分ける。コードと一緒に PR 3 で移す（決定 14）。共通の補助は `usecase/usecasetest` に置く。
 
 ## 6. 入れる順番
@@ -202,19 +207,21 @@ CLI の本体を `internal/app/cli` に移し、`cmd/hedgehug/main.go` は `cli.
 | 2. OS の境界 | 3 節。github を `github.Options`（API と web の URL）で受け取る形にし、平文 HTTP の判定（IsLoopback・PlainHTTP）を config から github に移す（2026-11-04 利用者が決定）。forbidigo を有効にする | 変わらない |
 | 3. usecase の再編 | mount と context の解体（2.2）、途中残りの検出を storage/store へ、2.3 の領域分け、領域の操作を関数にする（決定 13）、usecase のテストを領域へ移す（決定 14） | 変わらない |
 | 4. 入口の境界 | 4.2〜4.4、Poller の中身を usecase/watch へ（決定 15）。cli・server のテストの書き直し（決定 11）。cli・server の depguard のルール（4.2、テストを含む）を有効にする | 4.3 の `--json` の形だけ変わる |
-| 5. テストと仕上げ | 5 節、depguard の残りのルール（2 節の層の向き）を有効にする、shard の見直し、親設計の書き直し（8 節） | 変わらない |
+| 5a. テストと仕上げ | 5 節（差し込み口を除く）、depguard の残りのルール（2 節の層の向き、決定 17）を有効にする、shard の見直し、親設計の書き直し（8 節） | 変わらない |
+| 5b. テストのための差し込み口 | 決定 18・19 | 決定 19 の、壊れた Store でエラーになることだけ変わる |
 | 6. 最終確認 | PR 5 のマージ後の main で `go list` から層別のパッケージ構成と依存を作り直し、層別構成の Artifact（https://claude.ai/artifact/WFTVztg3Wvhgj4UnCwzsiH）を更新する。2.1 の配置・2 節の層の向き・4.2 の禁止と突き合わせ、ずれと層の向きに反する依存の一覧を添えて利用者に見せる。利用者が最終判断をする。直すものが出たら、この PR で直す | 変わらない |
 
 - 途中残りの検出を storage へ移すのは PR 3 で行い、E には依存させない。
 - PR 4 で Poller の中身を watch へ移すとき、server のテスト 2 つは確かめ方が変わる（決定 11 の例外。2026-11-04 利用者が了承）: `TestTestServerWaitsForTheHistoryBuild` は watch の `Wait` のテストになり server からなくなる。`TestSessionBeforeSwapReleasesTheStore` は開き直した look の tasks.changed が来ることで確かめる。
-- CI の shard は、PR 1 でパスだけを書き換える（`ops` → `internal/app/usecase`、`cli` → `internal/app/cli`、`sync` → `internal/app/remote/replicate`）。ここで作るのは `internal/app/usecase` と `internal/app/cli` の単一パッケージで、サブパッケージ（仮置きの mount・current、maintenance、のちの 11 の usecase 領域）は PR 5 で shard を作り直すまで `others` に入る。PR 5 で、CI の要約に出るパッケージごとの時間を見て shard の分け方を決め直す。必須チェックの名前（`test`）は変えない。
+- CI の shard は、PR 1 でパスだけを書き換える（`ops` → `internal/app/usecase`、`cli` → `internal/app/cli`、`sync` → `internal/app/remote/replicate`）。ここで作るのは `internal/app/usecase` と `internal/app/cli` の単一パッケージで、サブパッケージ（仮置きの mount・current、maintenance、のちの 11 の usecase 領域）は PR 5a で shard を作り直すまで `others` に入る。PR 5a で、CI の要約に出るパッケージごとの時間を見て shard の分け方を決め直す。必須チェックの名前（`test`）は変えない。
 
 ## 7. 確かめ方
 
 - 各 PR で `go build ./...`・`go vet ./...`・golangci-lint を通す。全テストは各 PR の仕上げに 1 回回す。
 - PR 1〜3・5・6 は挙動を変えないので、既存のテストがそのまま通ることで確かめる。テストの中身の変更は import と型の名前の書き換えだけにする。
 - PR 4 は 4.3 のとおり、形が変わるコマンドは先にテストを書き、それ以外は今の出力と同じことをテストで確かめる。cli・server のテストの書き直し（決定 11）は、準備と確認の手段を usecase に替えるだけで、確かめる内容（期待する出力・ファイル・コミット）は変えない。PR 4 で cli・server の depguard を有効にした時点で、4.2 の禁止がテストを含めて lint で通ることを確かめる。
-- PR 5 で depguard の残りのルールを有効にした時点で、2 節の層の向きが lint で通ることを確かめる。
+- PR 5a で depguard の残りのルールを有効にした時点で、2 節の層の向きが lint で通ることを確かめる。
+- PR 5b は決定 19 の他は挙動を変えない。決定 19 は、不具合を再現するテスト（今のコードで落ちる）を先に書いてから直す。テストは、確かめる状態の作り方（決定 18）だけを変える。本物の手段に書き直したテストは、実装をわざと壊すと落ちることを確かめる。
 
 ## 8. 親設計への反映
 

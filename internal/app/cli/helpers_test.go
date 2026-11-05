@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"testing"
@@ -323,47 +322,11 @@ func (te *testEnv) handEdit(name, id, old, replacement string) { //nolint:unpara
 	gitrepotest.CommitFiles(te.t, dir, "hand edit", "Alice", "alice@example.com", te.now, filepath.ToSlash(rel))
 }
 
-var (
-	buildOnce sync.Once
-	builtBin  string
-	buildErr  error
-)
-
 // buildHedgehug builds the command once for all tests and returns the path of
 // the binary, which is named hedgehug so that a merge driver finds it on PATH.
 func buildHedgehug(t *testing.T) string {
 	t.Helper()
-	buildOnce.Do(func() {
-		builtDir, err := os.MkdirTemp("", "hedgehug-bin-")
-		if err != nil {
-			buildErr = err
-			return
-		}
-		name := "hedgehug"
-		builtBin = filepath.Join(builtDir, name)
-		if out, err := exec.Command("go", goBuildArgs(builtBin, "../../../cmd/hedgehug")...).CombinedOutput(); err != nil { //nolint:gosec // the arguments are ours
-			buildErr = fmt.Errorf("go build: %w\n%s", err, out)
-		}
-	})
-	if buildErr != nil {
-		t.Fatal(buildErr)
-	}
-	return builtBin
-}
-
-// goBuildArgs returns the arguments of go build for pkg into out, with -race
-// when this test binary has it: the packages are then in the build cache
-// from the build of the tests, and are not compiled again.
-func goBuildArgs(out, pkg string) []string {
-	args := []string{"build"}
-	if bi, ok := debug.ReadBuildInfo(); ok {
-		for _, s := range bi.Settings {
-			if s.Key == "-race" && s.Value == "true" {
-				args = append(args, "-race")
-			}
-		}
-	}
-	return append(args, "-o", out, pkg)
+	return testenv.Build(t, "github.com/kukv/hedgehug/cmd/hedgehug", "hedgehug")
 }
 
 // bare makes an empty bare repository next to the test's directories and
@@ -565,4 +528,12 @@ func (te *testEnv) tempFiles() []string {
 		out = append(out, filepath.Join(te.tmp, e.Name()))
 	}
 	return out
+}
+
+// breakStore makes the store name stop opening: its repository goes away.
+func (te *testEnv) breakStore(name string) {
+	te.t.Helper()
+	if err := os.RemoveAll(filepath.Join(te.storeDir(name), ".git")); err != nil {
+		te.t.Fatal(err)
+	}
 }

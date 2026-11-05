@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
+	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
-	"github.com/kukv/hedgehug/internal/app/usecase/workspaces"
 )
 
 // meanwhile makes fn write to the store once the next command has read its
@@ -215,7 +215,7 @@ func TestPurgeSeesATaskRestoredMeanwhile(t *testing.T) {
 func TestMvSeesAWorkspaceMoveMeanwhile(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
-	var api workspaces.WorkspaceView
+	var api usecase.WorkspaceView
 	te.wsJSON(&api, "add", "api", "--prefix", "API")
 	apiULID := mustULID(t, api.ULID)
 	p := te.addJSON("p", "--workspace", "me")
@@ -253,7 +253,7 @@ func TestWorkspaceSubjectsSeeARenameMeanwhile(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	me := mustULID(t, te.addJSON("a").Workspace.ULID)
-	var tmp workspaces.WorkspaceView
+	var tmp usecase.WorkspaceView
 	te.wsJSON(&tmp, "add", "tmp", "--prefix", "TMP")
 	rename := func(ulid model.ULID, name string) func(*usecasetest.Tx) error {
 		return func(tx *usecasetest.Tx) error {

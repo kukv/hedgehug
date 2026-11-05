@@ -234,3 +234,24 @@ func TestStoreInitRemoteFirstCommit(t *testing.T) {
 	}
 	te.goldenOK("status", "sync", "--status", "--json")
 }
+
+// A sync tells of a reference to another store once, with the store's name
+// in front, as the other warnings of a sync have it.
+func TestSyncWarnsOfACrossStoreRefOnce(t *testing.T) {
+	t.Parallel()
+	te := newTestEnv(t)
+	remote := te.bare("shared")
+	te.ok("store", "init", "alpha", "--prefix", "AA", "--remote", remote)
+	te.ok("store", "init", "bravo-long", "--prefix", "BB")
+	target := te.addJSON("--store", "bravo-long", "Bravo target")
+	te.addJSON("--store", "alpha", "Alpha task")
+	te.handEdit("alpha", "AA-1", "\nkind: ", "\nblocked_by: ["+target.ULID+"]\nkind: ")
+	code, _, stderr := te.run("sync")
+	if code != 0 {
+		t.Fatalf("sync: exit %d\nstderr %s", code, stderr)
+	}
+	want := "warning: alpha: AA-1 blocked_by points at bravo-long's BB-1; references stay inside a store\n"
+	if stderr != want {
+		t.Errorf("stderr = %q; want %q", stderr, want)
+	}
+}

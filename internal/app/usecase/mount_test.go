@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/browse"
@@ -102,5 +103,58 @@ func TestNoStoreNameWarnsOnceAndUsesTheOthers(t *testing.T) {
 	}
 	if _, ok := set.Get("org-b"); ok {
 		t.Error("org-b is mounted")
+	}
+}
+
+// A command about one store does not warn of a store it is not about.
+func TestStoreNameKeepsTheWarningsOfOtherStoresQuiet(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.NewTwoStore(t)
+	ts.AddGoneStore(t, false)
+	ts.StoreName = "org-a"
+	if _, err := browse.List(ts.Session, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.Mount(); err != nil {
+		t.Fatal(err)
+	}
+	if n := usecasetest.CountContaining(ts.Warns, "cannot open gone"); n != 0 {
+		t.Errorf("--store org-a warned %d times of gone: %q", n, ts.Warns)
+	}
+	// without --store it still does, once
+	ts.StoreName = ""
+	if _, err := browse.List(ts.Session, ""); err != nil {
+		t.Fatal(err)
+	}
+	if n := usecasetest.CountContaining(ts.Warns, "cannot open gone"); n != 1 {
+		t.Errorf("List warned %d times of gone: %q", n, ts.Warns)
+	}
+}
+
+// Warn may call back into the session: nothing is held while it runs.
+func TestWarnMayCallBackIntoTheSession(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.NewTwoStore(t)
+	ts.AddGoneStore(t, false)
+	ts.Warn = func(m string) {
+		ts.Warns = append(ts.Warns, m)
+		if _, err := ts.Mount(); err != nil {
+			t.Errorf("Mount inside Warn: %v", err)
+		}
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if _, err := ts.Mount(); err != nil {
+			t.Error(err)
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Mount deadlocked with a Warn that calls Mount")
+	}
+	if n := usecasetest.CountContaining(ts.Warns, "cannot open gone"); n != 1 {
+		t.Errorf("warnings = %q; want gone once", ts.Warns)
 	}
 }

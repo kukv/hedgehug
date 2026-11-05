@@ -1413,3 +1413,39 @@ func (f *MoveFx) AddSprint(t *testing.T) model.ULID {
 	}
 	return sprint
 }
+
+// AddGoneStore sets up a store called gone in config.yaml at a path where
+// there is no store, with a remote when withRemote.
+func (ts *Session) AddGoneStore(t *testing.T, withRemote bool) {
+	t.Helper()
+	c, _, err := ts.Config()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var remotes []string
+	if withRemote {
+		remotes = []string{filepath.Join(t.TempDir(), "remote.git")}
+	}
+	if err := c.AddStore("gone", filepath.Join(t.TempDir(), "gone"), remotes); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.SetStoreAccount("gone", "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatal(err)
+	}
+	ts.DropMount()
+	ts.Warns = nil
+}
+
+// CountContaining is how many of warns have sub in them.
+func CountContaining(warns []string, sub string) int {
+	var n int
+	for _, w := range warns {
+		if strings.Contains(w, sub) {
+			n++
+		}
+	}
+	return n
+}

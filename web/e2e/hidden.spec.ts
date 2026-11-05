@@ -30,7 +30,7 @@ test("a hidden Store is left out of the sidebar, the tree and the palette, and c
 }) => {
   hh.add("Demo task");
   hh.hh("store", "init", "second", "--prefix", "SC");
-  const second = hh.json<{ id: string; ulid: string }>("add", "Second task", "--store", "second");
+  const second = hh.add("Second task", "--store", "second");
   expect(second.id).toBe("SC-1");
 
   // Before: both Stores are listed and found.

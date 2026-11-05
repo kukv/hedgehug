@@ -246,3 +246,11 @@ func setDefaultStore(t *testing.T, ts *usecasetest.Session, name string) {
 		t.Fatal(err)
 	}
 }
+
+// An unknown store given to add is said as the other commands say it.
+func TestAddHereUnknownStoreIsStoreNotFound(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.NewTwoStore(t)
+	_, _, _, err := tasks.AddHere(ts.Session, tasks.AddHereInput{Context: usecase.Input{Store: "nope"}, Task: tasks.AddInput{Title: "x"}})
+	usecasetest.WantCode(t, "AddHere in nope", err, usecase.KindNotFound, "store.not_found")
+}

@@ -12,7 +12,6 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase/stores"
 	"github.com/kukv/hedgehug/internal/app/usecase/tasks"
 	"github.com/kukv/hedgehug/internal/app/usecase/views"
-	"github.com/kukv/hedgehug/internal/app/usecase/workspaces"
 )
 
 type migrated struct {
@@ -126,7 +125,7 @@ func TestWorkspaceErrors(t *testing.T) {
 		t.Errorf("removed without prefix_set: %+v", out)
 	}
 	var made struct {
-		Workspace workspaces.WorkspaceView `json:"workspace"`
+		Workspace usecase.WorkspaceView `json:"workspace"`
 	}
 	ts.call("POST", "/api/stores", map[string]any{"name": "team", "prefix": "TM"}, 201, &made)
 	if made.Workspace.PrefixSet.IsZero() {
@@ -139,7 +138,7 @@ func TestSecondStore(t *testing.T) {
 	ts := newTestServer(t)
 	ts.add("one", "")
 	ts.call("POST", "/api/stores", map[string]any{"name": "team", "prefix": "TM"}, 201, nil)
-	var list []workspaces.WorkspaceView
+	var list []usecase.WorkspaceView
 	ts.call("GET", "/api/workspaces?store=team", nil, 200, &list)
 	if len(list) != 1 || list[0].IDPrefix != "TM" || list[0].Tasks != 0 {
 		t.Errorf("workspaces of team = %+v", list)

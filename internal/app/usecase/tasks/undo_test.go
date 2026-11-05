@@ -179,7 +179,7 @@ func TestUndoRestoresARemovedWorkspace(t *testing.T) {
 	}
 }
 
-func listsWorkspace(wss []workspaces.WorkspaceView, name string) bool {
+func listsWorkspace(wss []usecase.WorkspaceView, name string) bool {
 	for _, w := range wss {
 		if w.Name == name {
 			return true

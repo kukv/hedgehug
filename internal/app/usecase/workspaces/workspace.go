@@ -5,7 +5,6 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
-	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
 	"github.com/kukv/hedgehug/internal/app/storage/index"
@@ -14,37 +13,12 @@ import (
 	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
-// WorkspaceView is a workspace as the CLI prints it with --json.
-type WorkspaceView struct {
-	ULID      string    `json:"ulid"`
-	Name      string    `json:"name"`
-	IDPrefix  string    `json:"id_prefix"`
-	PrefixSet time.Time `json:"prefix_set"`
-	Tasks     int       `json:"tasks"`   // not deleted
-	Deleted   int       `json:"deleted"` // deleted and not purged yet
-}
-
-// WorkspaceViewOf is w as ix counts its tasks.
-func WorkspaceViewOf(ix *index.Index, w *model.Workspace) WorkspaceView {
-	var live, deleted int
-	for _, e := range ix.Tasks() {
-		switch {
-		case e.Workspace != w.ULID:
-		case e.DeletedAt == nil:
-			live++
-		default:
-			deleted++
-		}
-	}
-	return WorkspaceView{ULID: w.ULID.String(), Name: w.Name, IDPrefix: w.IDPrefix, PrefixSet: w.PrefixSet, Tasks: live, Deleted: deleted}
-}
-
 // WorkspaceWrite is what a write to a workspace answers, in the CLI's --json
 // and in the server's response.
 type WorkspaceWrite struct {
-	Workspace WorkspaceView      `json:"workspace"`
-	Commit    *string            `json:"commit"`
-	IDs       []usecase.IDChange `json:"ids,omitempty" doc:"With a new prefix: the IDs the tasks had and have now"`
+	Workspace usecase.WorkspaceView `json:"workspace"`
+	Commit    *string               `json:"commit"`
+	IDs       []usecase.IDChange    `json:"ids,omitempty" doc:"With a new prefix: the IDs the tasks had and have now"`
 }
 
 // WorkspaceResult is what a workspace operation did. Index is the index the
@@ -64,7 +38,9 @@ type WorkspaceResult struct {
 // View is the workspace as the write left it. It counts the tasks from the
 // index the operation read (refreshed after a renumbering), so that a write
 // that is committed is never answered with an error.
-func (r WorkspaceResult) View() WorkspaceView { return WorkspaceViewOf(r.Index, r.Workspace) }
+func (r WorkspaceResult) View() usecase.WorkspaceView {
+	return usecase.WorkspaceViewOf(r.Index, r.Workspace)
+}
 
 // Write is the answer to the write: the workspace, the commit and the ids
 // renumbered.
@@ -273,15 +249,15 @@ func WorkspaceRemove(ss *usecase.Session, arg string) (WorkspaceResult, error) {
 
 // WorkspaceList lists the workspaces of the store, by name, with the number
 // of their tasks that are not deleted.
-func WorkspaceList(ss *usecase.Session) ([]WorkspaceView, error) {
+func WorkspaceList(ss *usecase.Session) ([]usecase.WorkspaceView, error) {
 	_, ix, err := ss.Open()
 	if err != nil {
 		return nil, err
 	}
 	wss := ix.Workspaces()
-	out := make([]WorkspaceView, len(wss))
+	out := make([]usecase.WorkspaceView, len(wss))
 	for i, w := range wss {
-		out[i] = WorkspaceViewOf(ix, w)
+		out[i] = usecase.WorkspaceViewOf(ix, w)
 	}
 	return out, nil
 }

@@ -34,7 +34,7 @@ func TestWorkspaceDeletedCount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var docs *workspaces.WorkspaceView
+	var docs *usecase.WorkspaceView
 	for i := range wss {
 		if wss[i].Name == "docs" {
 			docs = &wss[i]
@@ -79,8 +79,8 @@ func TestWorkspaceAddRenamePrefixRemove(t *testing.T) {
 	if !r.Committed || r.Renumbered != 1 || !slices.Equal(r.IDs, []usecase.IDChange{{Old: "WEB-1", New: "FE-1"}}) || r.Workspace.IDPrefix != "FE" {
 		t.Errorf("WorkspacePrefix = %+v (%+v)", r, r.Workspace)
 	}
-	if workspaces.WorkspaceViewOf(r.Index, r.Workspace).Tasks != 1 {
-		t.Errorf("the refreshed index counts %d tasks; want 1", workspaces.WorkspaceViewOf(r.Index, r.Workspace).Tasks)
+	if usecase.WorkspaceViewOf(r.Index, r.Workspace).Tasks != 1 {
+		t.Errorf("the refreshed index counts %d tasks; want 1", usecase.WorkspaceViewOf(r.Index, r.Workspace).Tasks)
 	}
 	_, ix, _ := ts.Open()
 	if e, err := ts.Resolve(ix, "FE-1"); err != nil || e.Title != "a" {

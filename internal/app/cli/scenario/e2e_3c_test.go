@@ -1,4 +1,4 @@
-package cli
+package scenario
 
 import (
 	"encoding/json"

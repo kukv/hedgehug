@@ -446,3 +446,26 @@ func TestAuthLoginDeviceNeedsClientID(t *testing.T) {
 		t.Errorf("config.yaml = %s; want no token written", b)
 	}
 }
+
+// TestE2EAuthLoginAndStatus logs in with the device flow, which the fake
+// approves, and checks the login with auth status. It runs the commands in
+// this process, with go-keyring's mock as the keychain: a built binary would
+// use the keychain of the machine the tests run on.
+func TestE2EAuthLoginAndStatus(t *testing.T) {
+	keyring.MockInit()
+	zero := 0
+	srv := httptest.NewServer(fakegh.New(fakegh.State{Users: []string{"carol"}, AutoApprove: "carol", DeviceInterval: &zero}))
+	defer srv.Close()
+	te := newTestEnv(t)
+	te.writeConfigYAML("hosts:\n  - {host: github.com, api: \"" + srv.URL + "\", web: \"" + srv.URL + "\", client_id: Iv23e2e}\n")
+	code, out, errs := te.run("auth", "login")
+	if code != 0 || !strings.Contains(errs, "enter the code") || !strings.Contains(out, "Logged in as github.com/carol") {
+		t.Fatalf("auth login: exit %d\nstdout: %s\nstderr: %s", code, out, errs)
+	}
+	if out := te.ok("auth", "status"); !strings.Contains(out, "github.com/carol") || !strings.Contains(out, "device") || !strings.Contains(out, " ok") {
+		t.Errorf("auth status:\n%s", out)
+	}
+	if out := te.ok("auth", "status", "--json"); !strings.Contains(out, `"state": "ok"`) {
+		t.Errorf("auth status --json:\n%s", out)
+	}
+}

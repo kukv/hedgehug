@@ -1,24 +1,16 @@
-package cli
+package scenario
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
-)
-
-var (
-	devenvOnce sync.Once
-	devenvBin  string
-	devenvErr  error
+	"github.com/kukv/hedgehug/internal/lib/testenv"
 )
 
 // sleepToNextSecond waits past the start of the next second. Commit times are
@@ -33,22 +25,7 @@ func sleepToNextSecond() {
 // the binary.
 func buildDevenv(t *testing.T) string {
 	t.Helper()
-	devenvOnce.Do(func() {
-		devenvDir, err := os.MkdirTemp("", "devenv-bin-")
-		if err != nil {
-			devenvErr = err
-			return
-		}
-		name := "devenv"
-		devenvBin = filepath.Join(devenvDir, name)
-		if out, err := exec.Command("go", goBuildArgs(devenvBin, "../../../tools/devenv")...).CombinedOutput(); err != nil { //nolint:gosec // the arguments are ours
-			devenvErr = fmt.Errorf("go build devenv: %w\n%s", err, out)
-		}
-	})
-	if devenvErr != nil {
-		t.Fatal(devenvErr)
-	}
-	return devenvBin
+	return testenv.Build(t, "github.com/kukv/hedgehug/tools/devenv", "devenv")
 }
 
 // devUser is a user of a devenv environment: the command, run with the
