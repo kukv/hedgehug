@@ -635,11 +635,11 @@ func mergeSeq(old, nv *yaml.Node, v reflect.Value) *yaml.Node {
 	return nv
 }
 
-// idKey returns the YAML key that names an item of the struct t: name or
-// where, or "" when it has neither.
+// idKey returns the YAML key that names an item of the struct t: name, id or
+// where, or "" when it has none of them.
 func idKey(t reflect.Type) string {
 	keys := structKeys(t)
-	for _, k := range []string{"name", "where"} {
+	for _, k := range []string{"name", "id", "where"} {
 		if _, ok := keys[k]; ok {
 			return k
 		}
