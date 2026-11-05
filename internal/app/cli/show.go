@@ -9,6 +9,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/browse"
+	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
 func (a *app) showCmd() *cobra.Command {
@@ -101,6 +102,9 @@ func (a *app) showText(v *usecase.ShowView) string {
 			continue
 		}
 		field(p.Key, p.Values...)
+	}
+	if v.Worklog != nil {
+		field("worklog", fmt.Sprintf("%s (%s)", v.Worklog.Total, plural.Count(v.Worklog.Count, "log")))
 	}
 	by := "-"
 	if v.CreatedBy != "" {

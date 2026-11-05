@@ -336,6 +336,25 @@ func treeViewOf(ix *index.Index, n *treeNode) *usecase.TaskView {
 // ShowHistory is how many commits show lists under History.
 const ShowHistory = 5
 
+// worklogTotal adds up the live worklog entries of task; nil when it has none.
+func worklogTotal(s *store.Store, task model.ULID) (*usecase.WorklogTotal, error) {
+	var total model.Duration
+	n := 0
+	for w, err := range s.Worklogs(task) {
+		if err != nil {
+			return nil, err
+		}
+		if w.DeletedAt == nil {
+			total += w.Duration
+			n++
+		}
+	}
+	if n == 0 {
+		return nil, nil
+	}
+	return &usecase.WorklogTotal{Total: total.String(), Count: n}, nil
+}
+
 // Show reads the task arg names. The Body, Watchers, Repos and Comments of a
 // task whose file does not decode are empty.
 func Show(ss *usecase.Session, arg string) (*usecase.ShowView, error) {
@@ -368,6 +387,9 @@ func Show(ss *usecase.Session, arg string) (*usecase.ShowView, error) {
 		}
 		for _, c := range cs {
 			j.Comments = append(j.Comments, usecase.CommentView{ULID: c.ULID.String(), Author: c.Author, Created: c.Created, Body: c.Body})
+		}
+		if j.Worklog, err = worklogTotal(s, e.ULID); err != nil {
+			return nil, err
 		}
 	}
 	j.Relations = reverse(ix, e.ULID)

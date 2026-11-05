@@ -2079,6 +2079,8 @@ components:
           type:
             - array
             - "null"
+        worklog:
+          $ref: "#/components/schemas/WorklogTotal"
         workspace:
           $ref: "#/components/schemas/WorkspaceRef"
       required:
@@ -2803,6 +2805,19 @@ components:
       required:
         - transitions
         - required
+      type: object
+    WorklogTotal:
+      additionalProperties: false
+      properties:
+        count:
+          format: int64
+          type: integer
+        total:
+          description: The time spent, such as 1h30m
+          type: string
+      required:
+        - total
+        - count
       type: object
     WorkspaceAddInputBody:
       additionalProperties: false

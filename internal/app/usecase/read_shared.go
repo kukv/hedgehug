@@ -56,10 +56,18 @@ type ShowView struct {
 	// ReferencedBy are the tasks whose body or comments write this one as #<ID>.
 	ReferencedBy []Ref     `json:"referenced_by"`
 	History      []LogView `json:"history"`
+	// Worklog adds up the time logged on the task; left out when none is.
+	Worklog *WorklogTotal `json:"worklog,omitempty"`
 
 	// For the text.
 	CreatedBy string         `json:"-"` // who created the task; empty when the file does not say
 	Relations []RelationView `json:"-"` // Reverse in the order the text lists them
+}
+
+// WorklogTotal is what the worklog entries of a task add up to.
+type WorklogTotal struct {
+	Total string `json:"total" doc:"The time spent, such as 1h30m"`
+	Count int    `json:"count"`
 }
 
 // RelationView is one kind of task pointing at the task shown.
