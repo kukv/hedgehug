@@ -15,6 +15,8 @@ type WorkspaceView struct {
 	PrefixSet time.Time `json:"prefix_set"`
 	Tasks     int       `json:"tasks"`   // not deleted
 	Deleted   int       `json:"deleted"` // deleted and not purged yet
+	Sprints   int       `json:"sprints"`
+	Releases  int       `json:"releases"`
 }
 
 // WorkspaceViewOf is w as ix counts its tasks.
@@ -29,5 +31,5 @@ func WorkspaceViewOf(ix *index.Index, w *model.Workspace) WorkspaceView {
 			deleted++
 		}
 	}
-	return WorkspaceView{ULID: w.ULID.String(), Name: w.Name, IDPrefix: w.IDPrefix, PrefixSet: w.PrefixSet, Tasks: live, Deleted: deleted}
+	return WorkspaceView{ULID: w.ULID.String(), Name: w.Name, IDPrefix: w.IDPrefix, PrefixSet: w.PrefixSet, Tasks: live, Deleted: deleted, Sprints: len(ix.Sprints(w.ULID)), Releases: len(ix.Releases(w.ULID))}
 }

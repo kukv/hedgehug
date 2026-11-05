@@ -7,7 +7,9 @@
     "id_prefix": "ORG",
     "prefix_set": "<TIME>",
     "tasks": 0,
-    "deleted": 0
+    "deleted": 0,
+    "sprints": 0,
+    "releases": 0
   },
   "remotes": [
     "<TMP>/001/one.git",

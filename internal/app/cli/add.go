@@ -13,9 +13,9 @@ import (
 )
 
 func (a *app) addCmd() *cobra.Command {
-	var parent, project, kind, status, workspace, body, before, after string
+	var parent, project, kind, status, workspace, body, before, after, sprint string
 	var withRepo bool
-	var props []string
+	var props, releases []string
 	cmd := &cobra.Command{
 		Use:   "add <title>",
 		Short: "Add a task",
@@ -27,6 +27,12 @@ func (a *app) addCmd() *cobra.Command {
 			assigns, err := usecase.ParseAssigns(props)
 			if err != nil {
 				return err
+			}
+			if sprint != "" {
+				assigns = append(assigns, usecase.Assign{Key: "sprint", Op: "=", Value: sprint})
+			}
+			for _, r := range releases {
+				assigns = append(assigns, usecase.Assign{Key: "releases", Op: "+=", Value: r})
 			}
 			return a.add(tasks.AddHereInput{
 				Context: usecase.Input{Parent: parent, Project: project, Workspace: workspace},
@@ -45,6 +51,8 @@ func (a *app) addCmd() *cobra.Command {
 	f.StringVar(&after, "after", "", "put it just after this sibling (without --parent, under the sibling's parent)")
 	f.StringVar(&body, "body", "", "the body, in Markdown")
 	f.BoolVar(&withRepo, "repo", false, "put the current repository on the task (the repo ID of its remote: origin, else another remote)")
+	f.StringVar(&sprint, "sprint", "", "put it in this sprint of its workspace")
+	f.StringArrayVar(&releases, "release", nil, "put it in this release of its workspace (repeatable)")
 	f.StringArrayVarP(&props, "prop", "p", nil, "set a field or a property, as in hedgehug set (repeatable)")
 	return cmd
 }

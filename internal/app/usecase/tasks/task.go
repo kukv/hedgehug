@@ -119,7 +119,7 @@ func Add(ss *usecase.Session, in AddInput) (usecase.TaskResult, error) {
 		}
 	}
 	for _, as := range in.Assigns {
-		if err := usecase.ApplyAssign(t, as, sc, ss.ResolveULID(ix)); err != nil {
+		if err := usecase.ApplyTaskAssign(t, as, ix, ss.ResolveULID(ix)); err != nil {
 			return usecase.TaskResult{}, err
 		}
 	}
@@ -170,7 +170,7 @@ func Set(ss *usecase.Session, arg string, assigns []usecase.Assign) (usecase.Tas
 		}
 		assignees := slices.Clone(t.Assignees)
 		for _, as := range assigns {
-			if err := usecase.ApplyAssign(t, as, ix.Schema(), ss.ResolveULID(ix)); err != nil {
+			if err := usecase.ApplyTaskAssign(t, as, ix, ss.ResolveULID(ix)); err != nil {
 				return err
 			}
 		}

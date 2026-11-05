@@ -175,7 +175,7 @@ func TestWorkspaceJSON(t *testing.T) {
 	t.Parallel()
 	te := newStoreEnv(t)
 	te.addJSON("a")
-	want := []string{"deleted", "id_prefix", "name", "prefix_set", "tasks", "ulid"}
+	want := []string{"deleted", "id_prefix", "name", "prefix_set", "releases", "sprints", "tasks", "ulid"}
 	// A write prints {workspace, commit, ids?}.
 	write := func(args ...string) (ws map[string]any, w map[string]any) {
 		te.t.Helper()
@@ -225,7 +225,7 @@ func TestStoreInitJSONHasTheWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	w := got.Workspace
-	if !slices.Equal(fieldNames(w), []string{"deleted", "id_prefix", "name", "prefix_set", "tasks", "ulid"}) || w["name"] != "main" || w["id_prefix"] != "ME" {
+	if !slices.Equal(fieldNames(w), []string{"deleted", "id_prefix", "name", "prefix_set", "releases", "sprints", "tasks", "ulid"}) || w["name"] != "main" || w["id_prefix"] != "ME" {
 		t.Fatalf("workspace = %v", w)
 	}
 	if _, err := model.ParseULID(w["ulid"].(string)); err != nil {

@@ -41,6 +41,8 @@ type Index struct {
 
 	// Read from the tree each time it changes; the cache does not hold them.
 	workspaces map[model.ULID]*model.Workspace
+	sprints    map[model.ULID]*model.Sprint
+	releases   map[model.ULID]*model.Release
 
 	// Derived from tasks by derive.
 	children map[model.ULID][]*Entry
@@ -58,7 +60,7 @@ func Open(s *store.Store) (*Index, error) {
 		return nil, err
 	}
 	// The problems depend on the workspaces, so read them first.
-	if err := ix.readWorkspaces(head); err != nil {
+	if err := errors.Join(ix.readWorkspaces(head), ix.readPlans(head)); err != nil {
 		return nil, err
 	}
 	tree, ok := ix.load()
@@ -118,7 +120,7 @@ func (ix *Index) Refresh() error {
 	if head == ix.tree {
 		return nil
 	}
-	if err := ix.readWorkspaces(head); err != nil {
+	if err := errors.Join(ix.readWorkspaces(head), ix.readPlans(head)); err != nil {
 		return err
 	}
 	err = ix.update(ix.tree, head)

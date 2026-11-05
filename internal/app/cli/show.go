@@ -9,6 +9,7 @@ import (
 
 	"github.com/kukv/hedgehug/internal/app/usecase"
 	"github.com/kukv/hedgehug/internal/app/usecase/browse"
+	"github.com/kukv/hedgehug/internal/lib/plural"
 )
 
 func (a *app) showCmd() *cobra.Command {
@@ -85,12 +86,25 @@ func (a *app) showText(v *usecase.ShowView) string {
 		field("repos", v.Repos...)
 	}
 	field("blocked_by", names(v.BlockedBy)...)
+	if v.Sprint != nil {
+		field("sprint", v.Sprint.Text())
+	}
+	if len(v.Releases) > 0 {
+		rels := make([]string, len(v.Releases))
+		for i, r := range v.Releases {
+			rels[i] = r.Text()
+		}
+		field("releases", rels...)
+	}
 	for _, p := range v.PropList {
 		if p.IsRef {
 			field(p.Key, names(p.Refs)...)
 			continue
 		}
 		field(p.Key, p.Values...)
+	}
+	if v.Worklog != nil {
+		field("worklog", fmt.Sprintf("%s (%s)", v.Worklog.Total, plural.Count(v.Worklog.Count, "log")))
 	}
 	by := "-"
 	if v.CreatedBy != "" {
