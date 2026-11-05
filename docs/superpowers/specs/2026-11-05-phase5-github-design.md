@@ -32,7 +32,7 @@
 | `lib/github` | GraphQL のクライアント、PR の作成、Issue の作成と更新、ラベル・担当者・マイルストーンの読み取り |
 | `lib/gitrepo` | HEAD から作るブランチの作成、作業中のブランチの読み取り、コード repo の push |
 | `lib/fakegh`・`cmd/fakegh` | PR・Issue・レビュー・checks、GraphQL、操作用のコマンド |
-| `storage/ghstate`（新規） | repo ごとの最終取得時刻、レート制限の状態。`.hedgehug/local/github.json` に置く（Store の履歴には入らない） |
+| `storage/ghstate`（新規） | repo ごとの最終取得時刻、走査の起点（`Since`）、失敗した試行の時刻と警告、レート制限の状態。`.hedgehug/local/github.json` に置く（Store の履歴には入らない） |
 | `usecase/integration`（新規） | リンク、取り込み、自動リンク、Issue 同期、`hh start`・`hh pr`・`hh issue`・`hh gh import` |
 | `usecase/automations`（新規） | ルールの実行と編集 |
 
@@ -70,20 +70,22 @@ gh:
 | `gh.prs[].checks` | `success`・`failure`・`pending`。CI がない PR では書かない |
 | `gh.prs[].merged_at` | マージ日時 |
 | `gh.issues[].state` | `open`・`closed` |
-| `gh.issues[].state_reason` | `completed`・`not_planned`（親設計に追加） |
+| `gh.issues[].state_reason` | `completed`・`not_planned`（親設計に追加）。open では書かない。`DUPLICATE` は `not_planned`、理由のない古い closed は `completed` |
 | `gh.issues[].synced` | 最後に揃えたときの各フィールドの値（親設計に追加） |
 
 `review` の `none` は、レビュー依頼がない状態を表す。`pending` と区別しないと `pr.review_requested` を判定できない。
+
+`review` は次の順で決める。GitHub の `reviewDecision` が `APPROVED`・`CHANGES_REQUESTED` ならそれ。必須レビューのない repo では `reviewDecision` が null になるので、それ以外のときは各レビュアーの最新のレビューを見て、`CHANGES_REQUESTED` があれば `changes_requested`、なければ `APPROVED` があれば `approved`。どちらもなく、レビュー依頼が1件以上あれば `pending`。ほかは `none`（`REVIEW_REQUIRED` で依頼が0件のときも `none`）。
 
 `sync` の値は `mirror`・`push`・`link`・`off` である。PR の `sync` は常に `mirror` で、`off` だけに変えられる。
 
 `hh unlink` はリンクを消さず、`sync: off` にする。`off` のリンクは、表示と取得から外す。自動リンクは `off` の ref を飛ばす。消してしまうと、本文に `hedgehug:<ULID>` が残っている PR が次の走査でまた紐付く。
 
-`model.Task.GH` は `*yaml.Node` のまま持ち、`GitHub()`・`SetGitHub()` で型付きの値を読み書きする。知らないキーは保持する。今の形（`number`・`state` など）を含め、`prs`・`issues` 以外のキーは読めて、そのまま書き戻せるようにする。`merge/task_test.go`・`model` のテストは変えずに通す。
+`model.Task.GH` は `*yaml.Node` のまま持ち、`GitHub()`・`SetGitHub()` で型付きの値を読み書きする。知らないキーは保持する。今の形（`number`・`state` など）を含め、`prs`・`issues` 以外のキーは読めて、そのまま書き戻せるようにする。`model` のテストは変えずに通す。`merge/task_test.go` は、`Link` が `Fields` を持って comparable でなくなるため、`Link` の比較の2箇所だけ直す（期待値は変えない）。`prs`・`issues` の要素は、変えない部分を元のノードのまま残す（知らないキー、`1.0`、日付の形、コメント）。
 
 ### マージ
 
-`gh.prs`・`gh.issues` は `ref` で要素を見分け、要素ごとにキー単位でマージする。値が衝突したら新しい時刻の側を採る。`gh` の衝突は inbox に出さない。次の取得で GitHub の値に戻るためである。
+`gh.prs`・`gh.issues` は `ref` で要素を見分け、要素ごとにキー単位でマージする。値が衝突したら新しい時刻の側を採る。`gh` の衝突は inbox に出さない。次の取得で GitHub の値に戻るためである。`gh` だけの変更は、削除との競合で編集に数えない。別のメンバーが消したタスクを、取り込みが復活させないためである（`links` は人の値なので、数える）。
 
 `links` のマージは今のまま（`ref` を見分ける集合）。同じ `ref` で `sync`・`fields` が両側で違うときは、タスクの `updated` が新しい側を採り、負けた値は上書きの記録に入る。`unlink` と別のメンバーのモード変更が同時に起きても、どちらかの値に収束する。5a のテストでこの動きを固定する。
 
@@ -153,8 +155,12 @@ issue_fields:
 
 | 項目 | 決まり |
 |---|---|
-| 対象の repo | タスクの `repos` と、`off` でないリンク先の repo |
+| 対象の repo | タスクの `repos` と、`off` でないリンク先の repo。対象の repo を持たない Store は、全体を飛ばす |
 | 間隔 | repo ごとに5分。明示の `hh sync` でも守る。初回の走査は更新の新しい 100 件まで |
+| 走査の起点 | repo ごとの `Since`。走査で見た PR の `updatedAt` の最大値（GitHub の時計）で、更新がなければ据え置く。手元の時計は間隔の判定だけに使う |
+| 失敗の繰り返し | 失敗した試行の時刻 `LastTry` と警告文 `Warning` を `ghstate` に残す。間隔は `LastFetch` と `LastTry` の新しいほうから数え、間隔内は問い合わせずに `Warning` を再掲する。読めたら消す。自動リンク先が GitHub にない警告も同じように再掲する |
+| 取得時刻 | 取得に成功し、見つけたものを書けたときだけ進める。タスクに書けなかった repo は進めない |
+| remote のない Store | `hh sync`（引数なし）、`hh sync --store`、GUI の定期同期のどれでも取り込む（push はしない）。`hh sync`（引数なし）の対象は、remote のない Store のうち取得対象の repo を持つもの。GUI の定期同期は書き込みのたびに対象を決めるので、索引を開かずにすべての Store を回し、対象の repo がなければ同期の中で何もしない。remote のない Store への書き込みは push の待ちにせず、次の取り込みは interval 後とする |
 | レート制限 | 取得の応答の `rateLimit` を `ghstate` に残す。残量が 10% を切ったら間隔を3倍にし、回復の時刻まで延ばす |
 | 閲覧のみの Store | 取り込まない |
 | アカウント | `repo_accounts` を上から当てはめる。一致しなければ Store の `account`。読めなければ repo 名を付けて警告する |
@@ -200,6 +206,8 @@ GitHub Enterprise Server の GraphQL の場所は、`Host` の API の URL か�
 | `pr.review_requested` | `review` が `none` から `pending` になった |
 | `pr.merged` | `state` が `merged` になった |
 | `issue.closed` | Issue の `state` が `closed` になった |
+
+`hh unlink` は `gh` から要素を外すので、そのあと同じ PR を `hh link` し直すと、`gh` に新しく入る。そのため `pr.opened` が発火する。
 
 ### ルールの実行
 

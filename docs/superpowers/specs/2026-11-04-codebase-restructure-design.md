@@ -22,7 +22,7 @@
 | 2 | 層 | lib → domain → storage → remote → usecase → cli / server。各グループは自分・下の層・lib だけを import する |
 | 3 | view | domain ではなく storage に置く（Store の中のファイルの形式と読み書きなので） |
 | 4 | mount と current | 責務ごとに解体して既存の層に配る。新しい層は作らない |
-| 5 | usecase の分け方 | 直下を土台にし、領域ごとのサブパッケージ 11 個に分ける（2.3）。回 4 で watch を足して 12 個（決定 15） |
+| 5 | usecase の分け方 | 直下を土台にし、領域ごとのサブパッケージ 11 個に分ける（2.3）。回 4 で watch を足して 12 個（決定 15）。フェーズ 5a で integration を足して 13 個、5b で automations を足して 14 個 |
 | 6 | 名前 | ops → usecase、sync → replicate、context → current。usecase の領域名は下の層と同じ名前にしない |
 | 7 | JSON の形 | CLI の `--json` を server と同じ usecase の型に一本化する。CLI にしかない項目は足す。server の書き込み応答の包み（`{task, commit}` など）も usecase に移し、CLI もその形で出す（2026-11-04 利用者が決定。4.3） |
 | 8 | Windows | 実装は含めない。osfs の `_unix.go` に閉じ込めるところまで |
@@ -75,12 +75,13 @@ internal/app/
     view/
     mount/                  マウント中の Store の集合の開け閉め（旧 mount の Open・Set・Mounted）
     current/                context.json の読み書き（旧 context の State・Load・Save）
+    ghstate/                フェーズ 5a で追加。GitHub から読んだ状態の保存
   remote/
     replicate/              旧 sync
     auth/
   usecase/                  土台（2.3）
     tasks/ comments/ browse/ views/ schemas/ workspaces/
-    stores/ replication/ notifications/ accounts/ maintenance/ watch/
+    stores/ replication/ notifications/ accounts/ maintenance/ watch/ integration/
   cli/                      旧 cmd/hedgehug の本体
     prompt/                 確認と選択の部品（4.4）
     scenario/               コマンドをまたぐ通しのテスト（テストだけのパッケージ。5 節）
@@ -108,7 +109,7 @@ api/openapi.yaml            今のまま
 
 ### 2.3 usecase の分け方
 
-直下（パッケージ `usecase`）は、どの領域からも使う土台にする。領域は 12 個（11 個に回 4 で watch を足した。決定 15）。
+直下（パッケージ `usecase`）は、どの領域からも使う土台にする。領域は 13 個（11 個に回 4 で watch を足し、フェーズ 5a で integration を足した。フェーズ 5b で automations を足して 14 個になる）。
 
 - session（Store を開く、書き手、1 操作 1 コミット）、errors、TaskView などの返す型（旧 view.go）、readonly、conn（GitHub への接続とアカウントの選択）、ResolveRef（旧 mount_ops.go）
 - mount から移す ID の解決、context から移す行き先の判断
@@ -128,6 +129,7 @@ api/openapi.yaml            今のまま
 | accounts | auth |
 | maintenance | maintain の Doctor, purge, rebuild ＋ 旧 doctor |
 | watch | server の poll（回 4 で移す。決定 15） |
+| integration | フェーズ 5a で追加。GitHub の Issue・PR のリンク、取り込み、自動のリンク付け |
 
 領域どうしの import は、土台を通すのを基本にする。領域から別の領域を呼ぶ必要が出たら、その関数を土台に下ろす。
 
