@@ -27,6 +27,8 @@ type Entry struct {
 	Watchers  []string
 	Labels    []string
 	BlockedBy []model.ULID
+	Sprint    *model.ULID
+	Releases  []model.ULID
 	Repos     []string          // the repositories of the task
 	Links     []model.Link      // the links, those unlinked included
 	GitHub    model.GitHubState // what GitHub says of them, without synced
@@ -102,6 +104,8 @@ func EntryOf(t *model.Task) *Entry {
 		Watchers:  t.Watchers,
 		Labels:    t.Labels,
 		BlockedBy: t.BlockedBy,
+		Sprint:    t.Sprint,
+		Releases:  t.Releases,
 		Repos:     t.Repos,
 		Links:     t.Links,
 		GitHub:    githubOf(t),
