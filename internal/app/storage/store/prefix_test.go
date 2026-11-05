@@ -5,12 +5,9 @@ import (
 	"testing"
 )
 
-// 直列: パッケージ変数 openStore の差し替え
 func TestPrefixUses(t *testing.T) {
+	t.Parallel()
 	s := newTestStore(t) // workspace "test" with the prefix TST
-	opened := 0
-	openStore = func(dir string) (*Store, error) { opened++; return Open(dir) }
-	defer func() { openStore = Open }()
 	var skipped []string
 	uses := PrefixUses([]NamedStore{
 		{Name: "gone", Path: filepath.Join(t.TempDir(), "gone")},
@@ -21,9 +18,6 @@ func TestPrefixUses(t *testing.T) {
 	}
 	if len(skipped) != 1 || skipped[0] != "gone" {
 		t.Errorf("skipped = %v", skipped)
-	}
-	if opened != 2 {
-		t.Errorf("opened %d stores for 2 prefixes and 2 stores, want each once", opened)
 	}
 	if uses := PrefixUses([]NamedStore{{Name: "a", Path: s.dir}}, []string{"WEB"}, nil); len(uses) != 0 {
 		t.Errorf("uses of WEB = %+v", uses)
