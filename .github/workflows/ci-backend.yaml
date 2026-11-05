@@ -97,7 +97,7 @@ jobs:
             race: -race
             report: true
           - os: ubuntu-latest
-            shard: cli-replicate
+            shard: replicate
             race: -race
             report: true
           - os: ubuntu-latest
@@ -152,9 +152,9 @@ jobs:
 
       # 何を回すかは、パッケージごとの時間（下の Package times）で均した分け方:
       # usecase-storage = internal/app/usecase/... と internal/app/storage/...、
-      # cli-replicate = internal/app/cli/... と internal/app/remote/replicate/...（property テストは seed が多く重い）、
+      # replicate = internal/app/remote/replicate/...（property テストは seed が多く重い）、
       # core = 上の 2 つを合わせたもの（macOS 用）、
-      # others = 残りのパッケージすべて（server を含む。新しいパッケージは何もしなくても
+      # others = 残りのパッケージすべて（cli と server を含む。新しいパッケージは何もしなくても
       # 上のどこかの下か others に入る）。
       # 復元したキャッシュには main のテスト結果も入っているので、-count=1 で毎回テストを実行する。
       - name: Test
@@ -168,9 +168,9 @@ jobs:
           # shellcheck disable=SC2207 # package paths have no spaces
           case "$SHARD" in
             usecase-storage) args=("$mod/internal/app/usecase/..." "$mod/internal/app/storage/...") ;;
-            cli-replicate) args=("$mod/internal/app/cli/..." "$mod/internal/app/remote/replicate/...") ;;
-            core) args=("$mod/internal/app/usecase/..." "$mod/internal/app/storage/..." "$mod/internal/app/cli/..." "$mod/internal/app/remote/replicate/...") ;;
-            others) args=($(go list ./... | grep -vE "^$mod/internal/app/(usecase|storage|cli|remote/replicate)(/|\$)")) ;;
+            replicate) args=("$mod/internal/app/remote/replicate/...") ;;
+            core) args=("$mod/internal/app/usecase/..." "$mod/internal/app/storage/..." "$mod/internal/app/remote/replicate/...") ;;
+            others) args=($(go list ./... | grep -vE "^$mod/internal/app/(usecase|storage|remote/replicate)(/|\$)")) ;;
             *) echo "unknown shard $SHARD"; exit 1 ;;
           esac
           cover=()
