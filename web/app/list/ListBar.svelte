@@ -35,10 +35,11 @@
 <style>
   .row {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
   }
   .filter {
-    flex: 1;
+    flex: 1 1 20rem;
     min-width: 0;
   }
   /* The bar has its own gutter at both ends; the side takes the right one. */
@@ -46,7 +47,8 @@
     padding-right: 0.75rem;
   }
   .side {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 0.75rem;
@@ -58,5 +60,6 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    min-width: 0;
   }
 </style>

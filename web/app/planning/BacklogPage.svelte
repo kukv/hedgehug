@@ -174,6 +174,9 @@
 
 <style>
   .page {
+    box-sizing: border-box;
+    height: 100%;
+    overflow-y: auto;
     display: grid;
     grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
     gap: var(--space-16);

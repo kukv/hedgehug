@@ -106,6 +106,8 @@ describe("the tasks of a plan", () => {
     const b = tv("B", "b", { props: { points: "x" } });
     expect(pointsOf(a)).toBe(3);
     expect(pointsOf(b)).toBeNull();
+    expect(pointsOf(tv("D", "d", { props: { points: "5" } }))).toBe(5);
+    expect(pointsOf(tv("E", "e"))).toBeNull();
     expect(sumPoints([a, b, tv("C", "c", { props: { points: 1.5 } })])).toBe(4.5);
     expect(ptLabel(4.5)).toBe("4.5 pt");
   });

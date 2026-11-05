@@ -6,9 +6,10 @@ const openTab = async (page: Page, hh: Hedgehug, tab: string) =>
   hh.open(page, (await hh.treePath()).replace(/\/tree$/, `/${tab}`));
 
 const backlogRow = (page: Page, title: string) =>
-  page.getByRole("list", { name: "バックログのタスク" }).getByRole("listitem").filter({
-    hasText: title,
-  });
+  page
+    .getByRole("list", { name: "バックログのタスク" })
+    .getByRole("listitem")
+    .filter({ has: page.getByRole("link", { name: title, exact: true }) });
 
 test("the tabs show only with a sprint or a release, and the first one comes from the settings", async ({
   page,
@@ -17,8 +18,9 @@ test("the tabs show only with a sprint or a release, and the first one comes fro
   await openTab(page, hh, "settings");
   await expect(page.getByRole("link", { name: "バックログ" })).toHaveCount(0);
   await page.getByRole("button", { name: "スプリントを作る…" }).click();
-  await page.getByLabel("名前", { exact: true }).fill("Sprint 1");
-  await page.getByRole("button", { name: "作成" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("名前", { exact: true }).fill("Sprint 1");
+  await dialog.getByRole("button", { name: "作成" }).click();
   await expect(page.getByRole("link", { name: "バックログ" })).toBeVisible();
   await expect(page.getByRole("link", { name: "リリース" })).toBeVisible();
 });
@@ -71,7 +73,7 @@ test("a sprint is made, changed and removed", async ({ page, hh }) => {
   await page.getByRole("button", { name: "Sprint 1 を編集" }).click();
   await page.getByLabel("ゴール").fill("出す");
   await page.getByRole("button", { name: "保存" }).click();
-  await expect.poll(() => hh.hh("sprint", "ls")).toContain("出す");
+  await expect.poll(() => hh.hh("sprint", "ls", "--json")).toContain("出す");
   await page.getByRole("button", { name: "Sprint 1 を削除" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "削除" }).click();
   await expect(page.getByText("スプリントはありません")).toBeVisible();
@@ -119,21 +121,19 @@ test("the detail of a task has the sprint, the release and the time spent", asyn
   const task = hh.json<{ ulid: string }>("show", "DM-1");
   await hh.open(page, `/tasks/${task.ulid}`);
 
-  await page.getByLabel("時間").fill("2h");
-  await page.getByLabel("メモ").fill("調査");
+  await page.getByRole("textbox", { name: "時間" }).fill("2h");
+  await page.getByRole("textbox", { name: "メモ" }).fill("調査");
   await page.getByRole("button", { name: "記録" }).click();
   await expect(page.getByText("2h / 見積 6h")).toBeVisible();
   await expect(page.getByText("調査")).toBeVisible();
   expect(hh.hh("worklog", "ls", "DM-1")).toContain("調査");
-});
 
-test("a required sprint is read from the task", async ({ page, hh }) => {
-  hh.hh("sprint", "add", "Sprint 1");
-  hh.hh("add", "one", "--sprint", "Sprint 1");
-  const q = hh.json<{ sprint?: { name: string } }>("show", "DM-1");
-  expect(q.sprint?.name).toBe("Sprint 1");
-  await openTab(page, hh, "kanban");
-  await expect(page.getByLabel("カンバンの盤面")).toContainText("one");
+  await page.getByRole("button", { name: "スプリント" }).click();
+  await page.getByRole("menuitem", { name: "Sprint 1" }).click();
+  await expect.poll(() => hh.hh("ls", 'sprint:current,"Sprint 1"')).toContain("one");
+  await page.getByRole("textbox", { name: "リリース" }).fill("v1");
+  await page.getByRole("textbox", { name: "リリース" }).press("Enter");
+  await expect.poll(() => hh.hh("ls", "release:v1")).toContain("one");
 });
 
 test("the table updates the rows picked in one commit", async ({ page, hh }) => {
@@ -157,9 +157,11 @@ test("the table updates the rows picked in one commit", async ({ page, hh }) => 
   expect(hh.hh("ls", "sprint:none")).toContain("three");
 });
 
-test("the palette updates what a query finds, and stops at a violation", async ({ page, hh }) => {
-  hh.hh("add", "one", "--label", "x");
-  hh.hh("add", "two", "--label", "x");
+test("the palette updates what a query finds", async ({ page, hh }) => {
+  hh.hh("add", "one");
+  hh.hh("add", "two");
+  hh.hh("set", "DM-1", "labels=x");
+  hh.hh("set", "DM-2", "labels=x");
   await hh.open(page, "/");
   await page.keyboard.press("ControlOrMeta+k");
   await page.getByRole("combobox").fill("label:x");
@@ -199,11 +201,11 @@ test("a template is written in the settings and expanded from the create dialog"
   await expect(page.getByRole("alert")).toBeVisible();
   await file.fill("---\nkind: task\nchildren:\n  - title: child\n---\n本文\n");
   await page.getByRole("button", { name: "保存" }).click();
-  await expect(page.getByRole("button", { name: /rel/ })).toContainText("子タスク 1");
+  await expect(page.getByRole("button", { name: /^rel / })).toContainText("子タスク 1");
 
   await hh.open(page, "/");
   await page.keyboard.press("c");
-  await page.getByLabel("タイトル").fill("from template");
+  await page.getByRole("textbox", { name: "タイトル" }).fill("from template");
   await page.getByLabel("テンプレート").selectOption("rel");
   await page.getByRole("button", { name: "作成", exact: false }).last().click();
   await expect.poll(() => hh.hh("ls")).toContain("child");

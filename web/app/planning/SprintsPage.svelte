@@ -161,6 +161,9 @@
 
 <style>
   .page {
+    box-sizing: border-box;
+    height: 100%;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: var(--space-16);
@@ -234,9 +237,11 @@
     font-weight: 600;
   }
   .board {
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
-    min-height: 420px;
+    height: 60vh;
+    min-height: 320px;
   }
   .list {
     display: flex;

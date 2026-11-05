@@ -2613,7 +2613,7 @@ export interface components {
             /** @description The tasks whose file is gone (purged) */
             removed: string[] | null;
             store: string;
-            /** @description The tasks whose file or comments changed */
+            /** @description The tasks whose file, comments or worklogs changed */
             ulids: string[] | null;
         };
         TemplateFile: {
