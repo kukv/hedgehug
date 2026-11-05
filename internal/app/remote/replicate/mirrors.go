@@ -89,8 +89,13 @@ func syncHeld(s *store.Store, urls []string) ([]string, error) {
 // mirrorHeld tells whether the mirror at url, which is held, is still to be
 // left alone. It is not when its main is a commit the store has (or it has
 // no main): the mirror was rewritten as origin was, and is let go. An error
-// is that of asking the mirror.
+// is that of asking the mirror. While a rebuild is not over it stays held
+// without asking: the old head may still be on the disk (a prune that keeps
+// failing), and a mirror that has it would look rewritten.
 func mirrorHeld(s *store.Store, name, url string, held *[]string) (bool, error) {
+	if store.RebuildPhaseIn(s.Dir()) != store.RebuildNone {
+		return true, nil
+	}
 	r := s.Repo()
 	main, err := r.RemoteMain(name)
 	if err != nil {

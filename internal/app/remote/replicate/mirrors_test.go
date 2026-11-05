@@ -116,3 +116,48 @@ func TestHeldMirrorLeavesWhenTheConfigDropsIt(t *testing.T) {
 		t.Errorf("mirrors-held.json is left: %v", err)
 	}
 }
+
+// While the prune of a rebuild keeps failing, the old head is still on the
+// disk: a mirror that has it must stay held, or the sync would let it go and
+// merge the old history back. Once the rebuild is over it is released.
+func TestHeldMirrorStaysHeldWhileThePruneIsLeft(t *testing.T) {
+	t.Parallel()
+	c := newCluster(t, 1)
+	mirror := filepath.Join(t.TempDir(), "m.git")
+	if err := gitrepo.InitBare(mirror); err != nil {
+		t.Fatal(err)
+	}
+	c.opts[0].Remotes = append(c.opts[0].Remotes, mirror)
+	c.addTask(0, "keep")
+	c.sync(0)
+	c.sync(0) // the mirror's main is now a commit the store has
+	s := c.stores[0]
+	if err := holdMirrors(s, []string{mirror}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WriteLocal(store.RebuildFile, []byte(`{"phase":"prune"}`+"\n")); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		r := c.sync(0)
+		if !hasWarning(r, "the mirror "+mirror+" still has the old history") {
+			t.Errorf("warnings = %q", r.Warnings)
+		}
+		if slices.Contains(r.Pushed, "mirror1") {
+			t.Errorf("pushed %v to a held mirror", r.Pushed)
+		}
+		if held, err := readHeld(s); err != nil || !slices.Equal(held, []string{mirror}) {
+			t.Fatalf("held = %v, %v", held, err)
+		}
+	}
+	if err := s.RemoveLocal(store.RebuildFile); err != nil {
+		t.Fatal(err)
+	}
+	r := c.sync(0)
+	if hasWarning(r, "still has the old history") {
+		t.Errorf("warnings = %q", r.Warnings)
+	}
+	if held, err := readHeld(s); err != nil || len(held) != 0 {
+		t.Errorf("held = %v, %v", held, err)
+	}
+}
