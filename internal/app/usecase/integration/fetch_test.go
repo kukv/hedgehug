@@ -26,7 +26,7 @@ func withFake(t *testing.T) (*usecasetest.Session, *fakegh.Server) {
 		Repos:  []*fakegh.Repo{{Owner: "org-a", Name: "web", Perms: map[string]string{"alice": "write"}}},
 	}, "")
 	ts.AppendConfig("accounts:\n  - {name: me, host: github.com, login: alice, token: \"env:HH_TOKEN\"}\n")
-	ts.ForgetWriter()
+	ts.Renew()
 	fake.SetNow(func() time.Time { return ts.Now() })
 	return ts, fake
 }
