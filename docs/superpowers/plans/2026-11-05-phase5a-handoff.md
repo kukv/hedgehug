@@ -79,7 +79,7 @@ plan の「この回で決めたこと」13 項目と、各 Task の本文に記
 4. 5b は、5a のマージ後の main から plan を切って書く。5b が使うものは次のとおり
    - `integration.Fetch` の差分の取り方（`Since` 以降の PR と、リンク済みの PR・Issue を毎回すべて読む）。5b の「ルールの実行」は取り込みの後（spec の取り込みの順番の 5）に呼ぶ
    - `store.Op.Automated`（取り込み以外の自動化のコミットにも同じ author を使う）
-   - `usecase/integration/link.go` の `defaultIssueSync`。いまは `link` 固定で、5b で `issue_fields.default_sync` を読む形に置き換える（plan の決定 4）
+   - `usecase/integration/link.go` の `defaultIssueSync`。いまは `link` 固定で、5b で `issue_fields.default_sync` を読む形に置き換える（plan の決定 4）。5b で置き換えた
    - `integration.apply` は、5b のイベント（`pr.opened` など）の判定に `gh` の取り込み前後の差分が要るので、`old` と `next`（取り込み前後の `GitHubState`）を返す形に変える。いまは変わったかどうかの `bool` だけを返す
    - `hh unlink` は `gh` から要素を外すので、そのあと同じ PR を `hh link` し直すと `gh` に新しく入り、`pr.opened` が発火する（5b の spec のイベントの節に書いた）
    - `synced`・`state_reason`・`Link.Fields` は型とマージだけを入れてある。5b 以降が値を書く
