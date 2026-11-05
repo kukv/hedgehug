@@ -76,14 +76,20 @@ func (a *app) sync() error {
 // printSync writes what a sync did as text.
 func (a *app) printSync(r usecase.SyncReport) error {
 	var b strings.Builder
-	if r.NoRemote {
+	switch {
+	case r.NoRemote && r.GitHubUpdated:
+		fmt.Fprintf(&b, "Read GitHub for %s: links and gh updated (no remote, nothing to push)\n", r.Store)
+	case r.NoRemote:
 		fmt.Fprintf(&b, "Nothing to sync: %s has no remote\n", r.Store)
-	} else {
+	default:
 		fmt.Fprintf(&b, "Synced %s: %s", r.Store, plural.Count(r.Merges, "merge"))
 		if len(r.Pushed) > 0 {
 			b.WriteString(", pushed to " + strings.Join(r.Pushed, ", "))
 		}
 		b.WriteString("\n")
+		if r.GitHubUpdated {
+			b.WriteString("  GitHub: links and gh updated\n")
+		}
 	}
 	if r.Unpushable > 0 {
 		fmt.Fprintf(&b, "  read-only: %s not pushed\n", plural.Count(r.Unpushable, "commit"))

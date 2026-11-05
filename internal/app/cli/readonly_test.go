@@ -29,6 +29,8 @@ func TestReadOnlyRefusesWrites(t *testing.T) {
 		{"purge", "--older-than", "0d", "--yes"},
 		{"undo"},
 		{"mv", "ME-1", "--root"},
+		{"link", "ME-1", "--pr", "o/r#1"},
+		{"unlink", "ME-1", "--pr", "o/r#1"},
 	} {
 		code, _, errs := te.run(args...)
 		if code != 1 || !strings.Contains(errs, "me is read-only (the GitHub permission is read)") {

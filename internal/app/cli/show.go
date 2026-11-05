@@ -119,6 +119,12 @@ func (a *app) showText(v *usecase.ShowView) string {
 			b.WriteString("  " + x.Name() + "\n")
 		}
 	}
+	if len(v.Links) > 0 {
+		b.WriteString("\nLinks:\n")
+		for _, l := range v.Links {
+			b.WriteString("  " + linkLine(l) + "\n")
+		}
+	}
 	if v.Broken != "" {
 		b.WriteString("\nbroken: " + v.Broken + "\n")
 	}
@@ -142,4 +148,25 @@ func (a *app) showText(v *usecase.ShowView) string {
 		b.WriteString("\nHistory:\n" + logText(v.History))
 	}
 	return b.String()
+}
+
+// linkLine is one link of hedgehug show.
+func linkLine(l usecase.LinkView) string {
+	kind := "issue"
+	if l.Type == "github_pr" {
+		kind = "pull request"
+	}
+	parts := []string{kind, l.Label}
+	switch {
+	case l.State == "":
+		parts = append(parts, "not read yet")
+	case l.Type == "github_pr":
+		parts = append(parts, l.State, "review: "+l.Review)
+		if l.Checks != "" {
+			parts = append(parts, "checks: "+l.Checks)
+		}
+	default:
+		parts = append(parts, l.State, "sync: "+l.Sync)
+	}
+	return strings.Join(parts, "  ")
 }
