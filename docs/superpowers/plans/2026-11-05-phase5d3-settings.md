@@ -124,4 +124,4 @@
 - [x] `make web-check`、`make check`、`make e2e`
 - [x] 引き継ぎ `docs/superpowers/plans/2026-11-05-phase5d3-handoff.md`
 - [ ] 5a の手の確認（決定 2。利用者と行う。項目は引き継ぎ）
-- [ ] PR
+- [x] PR
