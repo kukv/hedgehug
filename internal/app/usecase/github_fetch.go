@@ -195,6 +195,7 @@ func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.St
 	slices.SortFunc(ulids, func(a, b model.ULID) int { return cmp.Compare(a.String(), b.String()) })
 	failed := map[string][]string{} // repositories whose result a task could not take, with why
 	var changes []taskChange
+	var plans []*mirrorPlan
 	// A store with no remote is never synced, so nothing else starts its
 	// inbox: the commits below must not fall before where it starts.
 	if head, err := s.Repo().Head(); err != nil {
@@ -219,13 +220,21 @@ func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.St
 				}
 				continue
 			}
+			x, _ := ix.Task(u) // chosen from ix above
+			plan, err := planMirror(t, got, rules, s.Schema().For(ix.Ancestors(x)))
+			if err != nil {
+				rep.Warnings = append(rep.Warnings, u.String()+": "+err.Error())
+			}
+			if plan != nil {
+				plans = append(plans, plan)
+			}
 			if !a.Changed {
 				continue
 			}
 			if err := tx.PutTask(t); err != nil {
 				return err
 			}
-			if c := runRules(tx, rules, ix, s.Schema(), t, a); c != nil {
+			if c := runRules(tx, rules, ix, s.Schema(), t, a, plan); c != nil {
 				changes = append(changes, *c)
 			}
 		}
@@ -236,9 +245,9 @@ func fetchLocked(ss *Session, c *config.Config, e config.StoreEntry, s *store.St
 		// them again. What was read stays unmarked: it must be read again.
 		return errors.Join(err, ghstate.Write(s, state))
 	}
-	if rep.Committed = !hash.IsZero(); rep.Committed {
-		applyChanges(ss, s, held, changes, rep)
-	}
+	rep.Committed = !hash.IsZero()
+	skip := applyMirror(ss, s, held, plans, rep)
+	applyChanges(ss, s, held, changes, skip, rep)
 	for repo, st := range read {
 		if why, bad := failed[repo]; bad {
 			// Read again from the old time. The warning was told already.

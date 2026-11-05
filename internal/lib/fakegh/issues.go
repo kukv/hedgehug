@@ -9,6 +9,11 @@ import (
 	"strings"
 )
 
+// ReopenIssue opens a closed issue.
+func (s *Server) ReopenIssue(repo string, number int) error {
+	return s.changeIssue(repo, number, func(i *Issue) { i.State, i.StateReason = "open", "" })
+}
+
 // TagIssue sets the assignees, the labels and the milestone of an issue. A
 // nil list or an empty milestone stays; the milestone "-" goes.
 func (s *Server) TagIssue(repo string, number int, assignees, labels []string, milestone string) error {

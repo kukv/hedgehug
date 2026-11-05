@@ -114,7 +114,7 @@ func (f *File) Evaluate(in Input) Outcome {
 				continue
 			}
 			if vs := schema.ValidateTransition(cur, to, in.Task, e); len(vs) > 0 {
-				out.Rejected = append(out.Rejected, Rejection{r.ID, joined(vs)})
+				out.Rejected = append(out.Rejected, Rejection{r.ID, Joined(vs)})
 				continue
 			}
 			cur = to
@@ -207,7 +207,8 @@ func allMerged(t *model.Task) bool {
 	return linked > 0
 }
 
-func joined(vs []schema.Violation) string {
+// Joined is the reasons of vs on one line.
+func Joined(vs []schema.Violation) string {
 	s := make([]string, len(vs))
 	for i, v := range vs {
 		s[i] = v.String()
