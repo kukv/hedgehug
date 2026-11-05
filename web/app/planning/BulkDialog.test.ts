@@ -52,6 +52,23 @@ describe("BulkDialog", () => {
     expect(button().disabled).toBe(true);
   });
 
+  it("offers the statuses of every Store for a query", async () => {
+    const { api } = fakeApi(() => ({ tasks: [] }));
+    const of = (name: string) => ({ statuses: [{ name, category: "todo" }], props: {} });
+    renderWithCore(
+      BulkDialog,
+      { target: { query: "label:x" }, onclose: () => {} },
+      {
+        api,
+        cache,
+        schema: { ...schema, get: (s: string) => of(s === "a" ? "todo" : "review") },
+        stores: { subscribe: () => () => {}, stores: () => [{ name: "a" }, { name: "b" }] },
+      },
+    );
+    expect(await screen.findByRole("option", { name: "todo" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "review" })).toBeInTheDocument();
+  });
+
   it("does not ask before a status is chosen", async () => {
     const { calls } = setup(() => ({ tasks: [] }));
     await new Promise((r) => setTimeout(r, 250));

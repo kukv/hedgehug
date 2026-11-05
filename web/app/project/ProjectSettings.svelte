@@ -178,7 +178,16 @@
   }
 
   const cliStore = $derived(manyStores.current ? store : undefined);
-  const setCli = $derived(project ? cliScopeSet({ id: project.id, ...body, store: cliStore }) : "");
+  const setCli = $derived(
+    project
+      ? cliScopeSet({
+          id: project.id,
+          ...body,
+          templateDefaults: body.template_defaults,
+          store: cliStore,
+        })
+      : "",
+  );
   const rmCli = $derived(project ? cliScopeRm(project.id, cliStore) : "");
   const hasOverride = $derived(held !== undefined);
 </script>

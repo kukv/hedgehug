@@ -2,6 +2,7 @@
   import { type Schemas, unwrap } from "../../core/api/client";
   import { cliSetQuery } from "../../core/cli";
   import { errorMessage } from "../../core/messages";
+  import type { SchemaView } from "../../core/schema";
   import { core } from "../context";
   import { useSubscribe } from "../svelte-store";
   import { toast } from "../toast.svelte";
@@ -19,14 +20,22 @@
   const c = core();
   const uid = $props.id();
   const schemaRev = useSubscribe(c.schema, () => ({}));
-  const store = $derived(target.store ?? c.stores.stores()[0]?.name ?? "");
+  // A query may find tasks of every Store: the choices are what any of them has, and the server
+  // says which tasks a value does not fit.
+  const names = $derived(target.store ? [target.store] : c.stores.stores().map((s) => s.name));
   $effect(() => {
-    if (store) void c.schema.load(store).catch(() => undefined);
+    for (const s of names) void c.schema.load(s).catch(() => undefined);
   });
-  const schema = $derived.by(() => {
+  const schemas = $derived.by(() => {
     schemaRev.current;
-    return c.schema.get(store);
+    return names.flatMap((s) => c.schema.get(s) ?? []);
   });
+  const statuses = $derived([
+    ...new Map(schemas.flatMap((s) => s.statuses ?? []).map((s) => [s.name, s])).values(),
+  ]);
+  const defs = $derived<NonNullable<SchemaView["props"]>>(
+    Object.assign({}, ...schemas.map((s) => s.props ?? {})),
+  );
 
   const BUILTINS = [
     { value: "status", label: "ステータス" },
@@ -37,7 +46,7 @@
   ];
   const fields = $derived([
     ...BUILTINS,
-    ...Object.keys(schema?.props ?? {})
+    ...Object.keys(defs)
       .sort()
       .map((p) => ({ value: `props.${p}`, label: p })),
   ]);
@@ -52,9 +61,8 @@
   // An empty value takes the field off, except a status, which every task has.
   const ready = $derived(field !== "status" || value !== "");
   const propOf = (name: string): unknown => {
-    const def = schema?.props?.[name];
     if (value === "") return null;
-    return def?.type === "number" ? Number(value) : value;
+    return defs[name]?.type === "number" ? Number(value) : value;
   };
   const change = $derived.by<Partial<Body>>(() => {
     if (field === "status") return { status: value };
@@ -155,7 +163,7 @@
         {#if field === "status"}
           <select id="{uid}-v" {value} onchange={(e) => (value = e.currentTarget.value)}>
             <option value="">選んでください</option>
-            {#each schema?.statuses ?? [] as s (s.name)}
+            {#each statuses as s (s.name)}
               <option value={s.name}>{s.label || s.name}</option>
             {/each}
           </select>
