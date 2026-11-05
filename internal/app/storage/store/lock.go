@@ -24,14 +24,6 @@ var lockPoll = 50 * time.Millisecond
 // lock file open; tests use it to know a waiter is blocked.
 var afterLockMiss = func() {}
 
-func acquire(path string, wait time.Duration) (*osfs.Lock, error) {
-	path = filepath.Clean(path)
-	if err := osfs.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		return nil, err
-	}
-	return lockFile(path, wait)
-}
-
 // lockFile takes the lock on the file at path, made when missing, in a
 // directory that exists.
 func lockFile(path string, wait time.Duration) (*osfs.Lock, error) {
