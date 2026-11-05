@@ -399,7 +399,7 @@ inbox に種類 `automation`（結果）と `automation_rejected`（拒否）を
 - **usecase**: fakegh を相手に、取り込み、自動リンク、`repo_accounts`、レート制限、失敗の警告、`hh unlink` の後に自動リンクが戻らないこと、別のメンバーが書いた遷移で発火しないことを確かめる
 - **CLI**: 新しいコマンドのゴールデンテスト。`cli/scenario` に、`hh start` から PR のマージまでの通しのテストを足す。PATH から git を外した CI ジョブでも通す
 - **Issue 同期**: モードとフィールドの組み合わせを表形式で確かめ、手編集の上書きと inbox を確かめる
-- **実 API**: 親設計の検証用 Org に対する定期実行のワークフローを 5a で足し、GraphQL のクエリが実際の GitHub の応答と合うことと、レート制限の値を確かめる。固定のリポジトリ `hh-live` に PR を1件以上置き、secret は `HH_LIVE_ORG`・`HH_LIVE_TOKEN` とする。Device Flow と GitHub App の権限は人の操作が要るので、5a の仕上げで検証用 Org を使って手で確かめ、結果を引き継ぎに書く
+- **実 API**: 親設計の検証用 Org に対する定期実行のワークフローを 5a で足し、GraphQL のクエリが実際の GitHub の応答と合うことと、レート制限の値を確かめる。固定のリポジトリ `hh-live` に PR を1件以上置き、変数は `HEDGEHUG_LIVE_ORG`、secret は `HEDGEHUG_LIVE_TOKEN` とする。Device Flow と GitHub App の権限は人の操作が要るので、5a の仕上げで検証用 Org を使って手で確かめ、結果を引き継ぎに書く
 - **web**: vitest と Playwright の E2E。fakegh で状態を動かし、チップ・タスク詳細・通知が変わることを確かめる
 
 ## 親設計の修正
