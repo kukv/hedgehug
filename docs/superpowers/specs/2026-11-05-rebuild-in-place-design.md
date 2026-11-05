@@ -136,7 +136,7 @@ doctor の `--fix` なしの検査も `apply` の Store を開かない。半端
 - 手作業の編集: `apply` の途中で別の内容になったパスがあれば `ErrWorkTreeChanged` で止まり、そのファイルが残る。
 - 開く入口: `apply` の Store は `OpenStore`・`mount.Open`・doctor で開かず、`prune` の Store は警告つきで開く。壊れた `rebuild.json` は `apply` と同じに扱う。
 - 掃除: 消した内容の文字列が `.git` のどのファイルにも残らない。`refs/heads/main` と `refs/remotes/origin/*` だけが残る。実際の `git fsck` が通る。ファイルを消せないときは `prune` のまま残り、次で完了する。
-- 同時実行: 作り直しの間、書き込みコマンドはロック待ちになり、完了後のコミットが新しい履歴に載る。
+- 同時実行: 適用の開始前に Store を開いていた書き込みはロック待ちになり、完了後のコミットが新しい履歴に載る。適用中に新しく起動したコマンドは待たず、`LeftoverError` で止まる（`rebuild.json` だけでは、適用中と落ちた後を区別できないため）。適用が終われば再実行で動く。
 - GUI サーバー: 作り直しの前に Store を手放し、後で開き直して `tasks.changed` が届く（今の `TestSessionBeforeSwapReleasesTheStore` の引き継ぎ）。
 
 対象の既存テスト: `replicate/rebuild*_test.go`、`maintenance/rebuild*_test.go`、`mount/leftover_test.go`、`cli/doctor_rewrite_test.go`、`usecasetest/edit.go` の `NoLeftover`。
