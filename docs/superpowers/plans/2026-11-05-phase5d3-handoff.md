@@ -18,7 +18,7 @@
 
 検証用 Org で次を行い、結果をここに書く。
 
-- [ ] `hh auth login <name>` の Device Flow でログインし、8 時間の期限の前にトークンが更新されることを `hh auth status` の残り時間で確かめる
+- [ ] `hh auth login <name>` の Device Flow でログインし、期限を過ぎた後の `hh sync` でトークンが更新されることを `hh auth status` の期限で確かめる（2026-11-05 20:29 にログイン済み。期限は 11-06 04:29）。更新はトークンを使う操作の中で、期限の 5 分前から行われる
 - [x] Hedgehug の GitHub App を入れた Org で、`hh sync` が `hh-live` の PR を取り込む（2026-11-05。Device Flow のトークンで `bright-room-sandbox/hh-live#1` のタイトル・ブランチ・状態が入った）
-- [x] App を外した Org の repo で、repo 名付きの警告が出て同期が成功のままで、`app_missing` が立つ（2026-11-05）。実物の private repo は 403 でなく 404 を返したので判定を足した（plan の決定 17）。画面の表示は E2E で確かめた
-- [ ] リポジトリに secret `HH_LIVE_ORG`・`HH_LIVE_TOKEN` を入れ、`hh-live` に PR を 1 件以上置き、`github-live` を `workflow_dispatch` で流して通る
+- [x] App を外した Org の repo で、repo 名付きの警告が出て同期が成功のままで、`app_missing` が立つ（2026-11-05）。実物の private repo は 403 でなく 404 を返したので判定を足した（plan の決定 17）。App を入れ直すと警告は消え、対象の repo から `hh-live` を外すと 404 で再び `app_missing` が立つことも確かめた。画面の表示は E2E で確かめた
+- [x] リポジトリに secret `HH_LIVE_ORG`・`HH_LIVE_TOKEN` を入れ、`hh-live` に PR を 1 件以上置き、`github-live` を `workflow_dispatch` で流して通る（2026-11-05、run 42022483828）。`bright-room-sandbox/hh-live` は `bright-room-sandbox/structure` の Terraform で管理する
