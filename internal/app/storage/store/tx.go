@@ -30,6 +30,9 @@ type Op struct {
 	// Account is the ID of the writer's account (host/login), for the
 	// Hedgehug-Author trailer; empty if the store has none.
 	Account string
+	// Automated says that Hedgehug wrote this on its own: the session makes
+	// hedgehug-automation the author. Account stays the one who ran it.
+	Automated bool
 	// Detail ends the subject when there is no Task, saying what changed,
 	// such as "add web (WEB)".
 	Detail string

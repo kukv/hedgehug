@@ -32,8 +32,11 @@ type SyncReport struct {
 	Warnings    []string      `json:"warnings"`
 	// Unpushable is the number of commits not pushed because the store is
 	// read-only.
-	Unpushable int   `json:"unpushable,omitempty"`
-	Err        error `json:"-"` // why the sync failed; the report holds what is known
+	Unpushable int `json:"unpushable,omitempty"`
+	// GitHubUpdated is whether the sync wrote what it read from GitHub (links
+	// and gh) to the store.
+	GitHubUpdated bool  `json:"github_updated,omitempty"`
+	Err           error `json:"-"` // why the sync failed; the report holds what is known
 }
 
 // JSONValue is v as JSON when it is, else as a string: the values of the

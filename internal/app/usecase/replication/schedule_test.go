@@ -11,17 +11,26 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
-func TestLoadScheduleSkipsStoresWithoutRemote(t *testing.T) {
+func TestLoadScheduleListsStoresWithoutRemote(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
 	sch, err := replication.LoadSchedule(ts.Session)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sch.Stores) != 0 {
-		t.Errorf("Stores = %v; want none for a store without a remote", sch.Stores)
+	if len(sch.Stores) != 1 || sch.Stores[0] != "me" {
+		t.Errorf("Stores = %v; want [me]: GitHub is read for a store without a remote", sch.Stores)
+	}
+	// A write marks the store, but there is nothing to push.
+	ts.AddTask("a", nil)
+	if got := replication.PendingSince(ts.Session); !got.IsZero() {
+		t.Errorf("PendingSince = %v; want zero for a store without a remote", got)
 	}
 	usecasetest.AddBareRemote(t, ts)
+	ts.AddTask("b", nil)
+	if got := replication.PendingSince(ts.Session); got.IsZero() {
+		t.Error("PendingSince is zero for a write to a store with a remote")
+	}
 	sch, err = replication.LoadSchedule(ts.Session)
 	if err != nil {
 		t.Fatal(err)

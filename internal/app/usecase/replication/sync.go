@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/kukv/hedgehug/internal/app/domain/model"
@@ -13,6 +14,7 @@ import (
 	"github.com/kukv/hedgehug/internal/app/storage/config"
 	"github.com/kukv/hedgehug/internal/app/storage/inbox"
 	"github.com/kukv/hedgehug/internal/app/usecase"
+	"github.com/kukv/hedgehug/internal/app/usecase/integration"
 )
 
 // Sync syncs the stores SyncTargets names and describes what each did. A
@@ -28,6 +30,9 @@ func Sync(ss *usecase.Session, all, explicit bool) ([]usecase.SyncReport, error)
 	targets, err := ss.SyncTargets(c, all)
 	if err != nil {
 		return nil, err
+	}
+	if ss.StoreName == "" && !all {
+		targets = append(targets, fetchOnly(ss, c, targets)...)
 	}
 	// A store that cannot be opened is reported by its sync; the mount that
 	// the cross-store check of the other stores opens need not say it again.
@@ -67,6 +72,7 @@ func SyncStore(ss *usecase.Session, c *config.Config, e config.StoreEntry, expli
 	r := usecase.SyncReport{Store: e.Name, Pushed: []string{}, Overwritten: []usecase.Overwritten{}, Repaired: []usecase.Repaired{}, Invalid: []string{}, Notices: []inbox.Item{}, Warnings: []string{}}
 	if len(e.Remotes) == 0 {
 		r.NoRemote = true
+		fetchGitHub(ss, c, e, &r, nil)
 		return r, nil
 	}
 	// A swap that stopped is finished first.
@@ -141,7 +147,44 @@ func SyncStore(ss *usecase.Session, c *config.Config, e config.StoreEntry, expli
 		r.Invalid = append(r.Invalid, u.String())
 	}
 	r.Warnings = append(r.Warnings, ss.CrossStoreWarnings(e.Name)...)
+	fetchGitHub(ss, c, e, &r, func() (replicate.Result, error) {
+		again, err := ss.OpenStoreAt(e.Path)
+		if err != nil {
+			return replicate.Result{}, err
+		}
+		defer func() { _ = again.Repo().Close() }()
+		return ss.RunSync(again, opt, true)
+	})
 	return r, nil
+}
+
+// fetchGitHub reads GitHub for the store e after its sync. push sends what it
+// wrote; nil for a store with no remote. What fails here is a warning, as
+// the sync is done.
+func fetchGitHub(ss *usecase.Session, c *config.Config, e config.StoreEntry, r *usecase.SyncReport, push func() (replicate.Result, error)) {
+	f, err := integration.Fetch(ss, c, e)
+	r.GitHubUpdated = f.Committed
+	r.Warnings = append(r.Warnings, f.Warnings...)
+	if err != nil {
+		r.Warnings = append(r.Warnings, "read GitHub: "+err.Error())
+		return
+	}
+	if !f.Committed || push == nil {
+		return
+	}
+	res, err := push()
+	if err != nil {
+		r.Warnings = append(r.Warnings, "push the values from GitHub: "+err.Error())
+		return
+	}
+	r.Merges += res.Merges
+	for _, remote := range res.Pushed {
+		if !slices.Contains(r.Pushed, remote) {
+			r.Pushed = append(r.Pushed, remote)
+		}
+	}
+	r.Warnings = append(r.Warnings, res.Warnings...)
+	r.Notices = append(r.Notices, res.Notices...)
 }
 
 // NoticeField is the field an overwritten item of the inbox is about.
@@ -243,4 +286,17 @@ func BeforeCommand(ss *usecase.Session, report func(store, msg string)) {
 		}
 		_ = s.Repo().Close()
 	}
+}
+
+// fetchOnly are the stores with no remote that name a repository on GitHub:
+// they have nothing to sync, but GitHub is read for them. Those in done are
+// left out.
+func fetchOnly(ss *usecase.Session, c *config.Config, done []config.StoreEntry) []config.StoreEntry {
+	var out []config.StoreEntry
+	for _, e := range c.Stores {
+		if len(e.Remotes) == 0 && !slices.ContainsFunc(done, func(d config.StoreEntry) bool { return d.Name == e.Name }) && integration.HasTargets(ss, e) {
+			out = append(out, e)
+		}
+	}
+	return out
 }

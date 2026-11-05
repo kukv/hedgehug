@@ -43,6 +43,79 @@ func TestUndoTakesBackMyLastWrite(t *testing.T) {
 	}
 }
 
+func TestUndoSkipsTheFetchOfGitHub(t *testing.T) {
+	t.Parallel()
+	ts := usecasetest.New(t)
+	ts.AppendConfig(usecasetest.AliceAccount)
+	if _, err := tasks.Add(ts.Session, tasks.AddInput{Title: "a"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tasks.Set(ts.Session, "ME-1", []usecase.Assign{{Key: "title", Op: "=", Value: "b"}}); err != nil {
+		t.Fatal(err)
+	}
+	s, ix, err := ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := ts.Resolve(ix, "ME-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ts.Update(s, store.Op{Name: "gh-fetch", Automated: true}, func(tx *store.Tx) error {
+		x, err := tx.Task(e.ULID)
+		if err != nil {
+			return err
+		}
+		if err := x.SetGitHub(model.GitHubState{PRs: []model.PRState{{Ref: "github.com/o/r/pull/1", State: "open", Review: "none"}}}); err != nil {
+			return err
+		}
+		return tx.PutTask(x)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	log, err := usecasetest.LogOf(s.Repo(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(log[0].Author.Name, "hedgehug-automation") {
+		t.Errorf("author = %q", log[0].Author.Name)
+	}
+	if v, _ := log[0].Trailer("Hedgehug-Author"); v == "" {
+		t.Error("no Hedgehug-Author: who ran it is not told")
+	}
+	res, err := tasks.Undo(ts.Session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Undone == nil || res.Undone.Op == nil || *res.Undone.Op != "set" {
+		t.Errorf("undone = %+v", res.Undone)
+	}
+	// gh is a machine's value, which nobody touched: it is not reported as kept.
+	for _, k := range res.Kept {
+		if k.Field == "gh" || strings.HasPrefix(k.Field, "gh.") {
+			t.Errorf("Kept has %+v", k)
+		}
+	}
+	_, ix, err = ts.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err = ts.Resolve(ix, "ME-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Title != "a" {
+		t.Errorf("title after undo = %q; want a", e.Title)
+	}
+	tk, err := s.Task(e.ULID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g, err := tk.GitHub(); err != nil || len(g.PRs) != 1 {
+		t.Errorf("gh after undo = %+v, %v; want the pr kept", g, err)
+	}
+}
+
 func TestUndoOnEmptyHistoryIsConflict(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)

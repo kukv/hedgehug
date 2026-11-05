@@ -68,6 +68,11 @@ func TestOpenCacheEqualsRebuild(t *testing.T) {
 	child.Labels = []string{"x", "y"}
 	other := newTask("other")
 	other.BlockedBy = []model.ULID{child.ULID}
+	other.Repos = []string{"github.com/o/r"}
+	other.Links = []model.Link{
+		{Type: model.LinkPR, Ref: "github.com/o/r/pull/1", Sync: model.SyncMirror},
+		{Type: model.LinkIssue, Ref: "github.com/o/r/issues/2", Sync: model.SyncOff},
+	}
 	gone := newTask("gone")
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	gone.DeletedAt = &now
@@ -83,6 +88,9 @@ func TestOpenCacheEqualsRebuild(t *testing.T) {
 
 	if len(fresh.Tasks()) != 5 {
 		t.Errorf("tasks = %d, want 5", len(fresh.Tasks()))
+	}
+	if e, ok := fresh.Task(other.ULID); !ok || len(e.Links) != 2 || len(e.Repos) != 1 {
+		t.Errorf("links and repos are not in the entry: %+v", e)
 	}
 	if a, b := byULID(cached.Tasks()), byULID(fresh.Tasks()); !reflect.DeepEqual(a, b) {
 		t.Errorf("entries differ between the cache and a rebuild:\ncache:   %+v\nrebuild: %+v", a, b)

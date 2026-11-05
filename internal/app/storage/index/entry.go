@@ -27,7 +27,9 @@ type Entry struct {
 	Watchers  []string
 	Labels    []string
 	BlockedBy []model.ULID
-	Props     []Prop // in file order; queries read them by the schema's types
+	Repos     []string     // the repositories of the task
+	Links     []model.Link // the links, those unlinked included
+	Props     []Prop       // in file order; queries read them by the schema's types
 	Created   time.Time
 	Updated   time.Time
 	DeletedAt *time.Time
@@ -99,6 +101,8 @@ func EntryOf(t *model.Task) *Entry {
 		Watchers:  t.Watchers,
 		Labels:    t.Labels,
 		BlockedBy: t.BlockedBy,
+		Repos:     t.Repos,
+		Links:     t.Links,
 		Created:   t.Created,
 		Updated:   t.Updated,
 		DeletedAt: t.DeletedAt,

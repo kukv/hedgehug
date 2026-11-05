@@ -135,6 +135,8 @@ func CheckEdit(ix *index.Index, ulid model.ULID, old *model.Task, edited []byte)
 		return nil, moved("rank")
 	case !slices.Equal(t.FormerIDs, old.FormerIDs):
 		return nil, fixed("former_ids")
+	case !model.NodeEqual(t.GH, old.GH):
+		return nil, fixed("gh")
 	case t.Workspace != old.Workspace && hasWorkspace(ix, old.Workspace):
 		return nil, editInvalid(fmt.Errorf("workspace cannot be changed here; use hedgehug mv --workspace"), "workspace")
 	}

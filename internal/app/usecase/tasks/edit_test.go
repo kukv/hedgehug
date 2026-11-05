@@ -12,6 +12,24 @@ import (
 	"github.com/kukv/hedgehug/internal/app/usecase/usecasetest"
 )
 
+func TestCheckEditRefusesGH(t *testing.T) {
+	t.Parallel()
+	const head = "---\nulid: 01JBZ8K3QW7M2X9V4T6R5N8P0A\nid: ME-1\ntitle: a\n"
+	old, err := model.DecodeTask([]byte(head + "gh:\n  prs:\n    - {ref: github.com/o/r/pull/1, state: open, review: none, merged_at: null}\n---\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := []byte(head + "gh:\n  prs:\n    - {ref: github.com/o/r/pull/1, state: merged, review: none, merged_at: null}\n---\n")
+	_, err = tasks.CheckEdit(nil, old.ULID, old, edited)
+	if err == nil || !strings.Contains(err.Error(), "gh cannot be changed") {
+		t.Fatalf("err = %v", err)
+	}
+	same := []byte(head + "gh:\n  prs:\n    - {ref: github.com/o/r/pull/1, state: open, review: none, merged_at: null}\n---\n")
+	if _, err := tasks.CheckEdit(nil, old.ULID, old, same); err != nil {
+		t.Fatalf("the same gh: %v", err)
+	}
+}
+
 func TestEditChangesTitleAndRefusesULIDChange(t *testing.T) {
 	t.Parallel()
 	ts := usecasetest.New(t)
