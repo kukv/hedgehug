@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"errors"
 	"maps"
 	"slices"
 	"strings"
@@ -68,7 +69,7 @@ func repoView(store, repo string, r ghstate.Repo, now time.Time) GitHubRepoView 
 // GitHubStatus reads how the reads of the repositories go, store by store: of
 // ss.StoreName, or of every store. The repositories are those a fetch reads,
 // so one that was not read yet is here too. A store that does not open has
-// none.
+// none, nor has a read-only store, which is not fetched.
 func GitHubStatus(ss *Session) ([]GitHubRepoView, error) {
 	c, _, err := ss.Config()
 	if err != nil {
@@ -88,6 +89,12 @@ func GitHubStatus(ss *Session) ([]GitHubRepoView, error) {
 		}
 		views, err := func(s *store.Store) ([]GitHubRepoView, error) {
 			defer func() { _ = s.Repo().Close() }()
+			var ro *ReadOnlyError
+			if err := es.CheckWritable(s); errors.As(err, &ro) {
+				return nil, nil
+			} else if err != nil {
+				return nil, err
+			}
 			ix, err := es.IndexOf(e.Name, s)
 			if err != nil {
 				return nil, err

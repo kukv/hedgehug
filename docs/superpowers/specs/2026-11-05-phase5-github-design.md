@@ -175,7 +175,7 @@ issue_fields:
 | 失敗 | 警告だけを出し、同期は成功のままにする |
 | author | `hedgehug-automation（実行したメンバー）` |
 | コミット | 1回の取得につき1つ。op は `gh-fetch`。`hh undo` の対象にしない。Issue の反映はその後のタスクごとのコミット（op は `gh-mirror`・`gh-push`）で、同じく `hh undo` の対象にしない |
-| アクティビティ | 5a〜5c の間は「同期」に入れた。5d-1 で「自動化」の絞り込みへ移す |
+| アクティビティ | 5a〜5c の間は「同期」に入れた。5d-1 で「自動化」の絞り込み（`?automation=`）へ移した |
 
 GitHub Enterprise Server の GraphQL の場所は、`Host` の API の URL から求める（`/api/v3` を `/api/graphql` に置き換える。github.com は `/graphql`）。
 

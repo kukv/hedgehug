@@ -235,6 +235,9 @@ func TestFetchSkipsAReadOnlyStore(t *testing.T) {
 	if r := fetch(t, ts); r.Committed || len(r.Warnings) != 0 {
 		t.Fatalf("report = %+v", r)
 	}
+	if vs, err := usecase.GitHubStatus(ts.Session); err != nil || len(vs) != 0 {
+		t.Errorf("status = %+v, %v", vs, err)
+	}
 }
 
 // A member who reads what another one wrote already has nothing to write.

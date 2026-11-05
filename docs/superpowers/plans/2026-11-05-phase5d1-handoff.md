@@ -11,6 +11,7 @@
 5. `ActivityPage.svelte` は `sync=exclude` に `automation=exclude` を足して問い合わせる。「人」のタブに自動化のコミットが混ざらないようにするため。「同期」のタブは `merge`・`repair` だけになる。「自動化」のタブは 5d-2
 6. `gh-push` は、書いたタイトルも `gh` に写す。次の取り込みで差分のコミットが出ないようにするため
 7. `fakegh` に `UnrestrictApp` を足した。読めるようになる流れのテストに使う
+8. `GET /api/github` は閲覧のみの Store の repo を返さない。取り込まないので、未取得のまま出続けるため
 
 ## 5d-2・5d-3 が使うもの
 
